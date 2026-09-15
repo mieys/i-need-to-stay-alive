@@ -24,17 +24,33 @@ const SMOKE_VARIANTS := [
 	preload("res://assets/generated/fx_burn_smoke_c_frames.tres"),
 ]
 
-## DÜZELTME (kullanıcı isteği: "ateşi %60 dumanı %30 opaklık seviyesine
-## indir") - iki katman da tam opak (1.0) duruyordu, çok göz dolduruyordu.
-const FIRE_OPACITY := 0.6
+## DÜZELTME (kullanıcı isteği: "yangının opaklığı %100 de kalsın duman
+## aynı kalsın ama opaklık olarak") - ateş tekrar tam opak, duman %30'da
+## kalıyor (önceki "ikisi de indir" isteğinin ateş kısmı geri alındı).
+const FIRE_OPACITY := 1.0
 const SMOKE_OPACITY := 0.3
+
+## DÜZELTME (kullanıcı isteği: "yanma efektini dumanla beraber %10 küçült",
+## sonra "yangını efekti %10 daha küçült dumanı da") - ateş VE duman
+## birlikte, aynı oranda küçülsün diye kök Node2D'ye uygulanıyor (alt kenar
+## hizalaması _ready() sonunda doku piksel boyutlarından hesaplandığı için
+## bu ölçeklemeden etkilenmiyor, orantı korunuyor). İki ardışık %10 küçültme
+## kümülatif: 0.9 * 0.9 = 0.81.
+const EFFECT_SCALE := 0.81
+
+## DÜZELTME (kullanıcı isteği: "yangın ve dumanı biraz yukarı taşı") - kök
+## Node2D'nin Y konumu (enemy.gd tarafında hep Vector2.ZERO'ya sabitlenen
+## position'ın ÜZERİNE, kendi negatif Y'siyle) - ikisini BİRLİKTE (aralarındaki
+## alt-kenar hizalamasını bozmadan) yukarı kaydırır.
+const VERTICAL_OFFSET := -12.0
 
 @onready var _smoke: AnimatedSprite2D = $Smoke
 @onready var _fire: AnimatedSprite2D = $Fire
 
 
 func _ready() -> void:
-	position = Vector2.ZERO
+	position = Vector2(0.0, VERTICAL_OFFSET)
+	scale = Vector2(EFFECT_SCALE, EFFECT_SCALE)
 
 	_smoke.sprite_frames = SMOKE_VARIANTS[randi() % SMOKE_VARIANTS.size()]
 	_smoke.modulate.a = SMOKE_OPACITY

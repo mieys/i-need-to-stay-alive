@@ -665,12 +665,16 @@ func _remove_burn_status_fx() -> void:
 ## yavaşlatma simülasyonuna DOKUNMAZ, sadece göstergeyi kurar/tazeler.
 ## fx_duration, istemcinin kendi başına sayacağı görsel ömürdür (host'un
 ## yenileme süresiyle aynı gönderilir, bkz. enemy.gd apply_slow).
-func _spawn_slow_status_fx(fx_duration: float = SLOW_FX_DEFAULT_DURATION) -> void:
-	if not _slow_status_fx or not is_instance_valid(_slow_status_fx):
-		_slow_status_fx = SlowStatusFxScene.instantiate()
-		_slow_status_fx.position = Vector2(0, get_overhead_bar_offset() * 0.5)
-		add_child(_slow_status_fx)
-	_slow_fx_time_left = max(_slow_fx_time_left, fx_duration)
+##
+## DÜZELTME (kullanıcı isteği: "karakterler slow yiyince üstlerinde çıkan
+## mor şeyi kaldır") - mor girdap ikonu (fx_void_slow_status.tscn) artık
+## gösterilmiyor. Yavaşlatma EFEKTİNİN kendisi (apply_slow/_process_slow,
+## hareket hızı azaltması) tamamen aynı şekilde çalışmaya devam ediyor -
+## kaldırılan SADECE bu görsel gösterge. Tek chokepoint burada olduğu için
+## (apply_slow'un yerel çağrısı VE ağdan gelen "slow_start" ikisi de bu
+## fonksiyona düşüyor) başka hiçbir yeri değiştirmeye gerek yok.
+func _spawn_slow_status_fx(_fx_duration: float = SLOW_FX_DEFAULT_DURATION) -> void:
+	return
 
 func _remove_slow_status_fx() -> void:
 	_slow_fx_time_left = 0.0

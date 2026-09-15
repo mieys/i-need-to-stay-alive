@@ -41,6 +41,24 @@ const INTRO_TIME := 0.35
 const OUTRO_TIME := 0.45
 const LOOP_FRAME_TIME := 0.09
 
+## DÜZELTME (kullanıcı isteği geçmişi: 1.0 -> 0.3 -> 0.15 -> son olarak
+## "opaklığını %80 düzeyine sabitle") - sabit, hiç değişmeyen bir opaklık
+## (bkz. _ready() - bir kez set edilip intro/loop/outro boyunca hiç
+## dokunulmuyor, "sabit" zaten böyle çalışıyordu, sadece hedef değer değişti).
+const AURA_OPACITY := 0.8
+
+## DÜZELTME (kullanıcı isteği: "karakterin ayaklarından başlaması gerekiyor
+## efektin konumu çok yanlış") - bu sprite dikey uzun bir ışık/parıltı sütunu
+## (16x48 piksel/kare) ve centered=true (varsayılan) olduğu için Vector2.ZERO'
+## da (oyuncunun GÖVDE MERKEZİ - bkz. player.tscn Shadow node'unun position=
+## (0,55) olması, yani gerçek ayak hizası kökten 55px AŞAĞIDA) simetrik
+## çizilince kafanın üstünden ayakların epey altına kadar uzanan dev bir dikey
+## şerit gibi görünüyordu. FOOT_LEVEL, aynı player.tscn Shadow referansı -
+## _ready() sonunda dokunun (scale dahil) GERÇEK piksel yüksekliğinden bu
+## noktaya göre yukarı kaydırılıyor, böylece efekt ayaklardan başlayıp yukarı
+## doğru yükseliyor (aşağı taşmıyor).
+const FOOT_LEVEL := 55.0
+
 var _duration: float = 6.0
 var _elapsed: float = 0.0
 var _loop_timer: float = 0.0
@@ -51,9 +69,17 @@ var _outro_elapsed: float = 0.0
 
 
 func _ready() -> void:
-	position = Vector2.ZERO
 	animation = "all"
 	frame = 0
+	modulate.a = AURA_OPACITY
+	## bkz. FOOT_LEVEL üstündeki kök neden notu - centered=true sprite'ı
+	## kendi (ölçeklenmiş) piksel yüksekliğinin yarısı kadar yukarı kaydırıp
+	## alt kenarını tam ayak hizasına oturtuyor.
+	position = Vector2.ZERO
+	var tex: Texture2D = sprite_frames.get_frame_texture("all", 0) if sprite_frames else null
+	if tex:
+		var scaled_height: float = tex.get_size().y * scale.y
+		position = Vector2(0.0, FOOT_LEVEL - scaled_height * 0.5)
 
 
 func setup(duration: float) -> void:

@@ -4,7 +4,7 @@
 [ext_resource type="SpriteFrames" path="res://assets/generated/fx_melek_heal_aura_frames.tres" id="2"]
 
 [node name="FxMelekHealAura" type="AnimatedSprite2D"]
-scale = Vector2(2, 2)
+scale = Vector2(3.9, 3.9)
 z_index = 56
 sprite_frames = ExtResource("2")
 script = ExtResource("1")
