@@ -1824,6 +1824,23 @@ func _apply_yay_tier(w, level: int) -> void:
 ## Eski cap 30 idi (10 değil) ve raw `level` (clamp yok) kullanıyordu - bu
 ## yüzden temel büyüme _tier_from_level10 (eski 1..10 aralığı) DEĞİL, eski
 ## 1..30 aralığını 1..100'e yayan kendi oranıyla (29/99) ölçekleniyor.
+## Ateş Asası pasifi (kullanıcı isteği: "ateş asasına yeni pasif ekliyoruz,
+## isabet ettiğinde düşmanları 3 saniye boyunca yakarak her saniye saldırı
+## gücünün %10'u kadar hasar versin") - Hançer'in bleed_tick_damage_per_
+## stack'i / Tüftüf'ün zehir ramp'iyle AYNI desen: saldırı gücünden
+## (damage_bonus) pay alan bir tik hasarı, tier değişince VE her Hasar
+## kartında (bkz. _apply_weapon_bonuses_to) yeniden hesaplanır. Süre sabit
+## 3sn (tier'e göre büyümez, bkz. weapon.gd/projectile.gd BURN_ON_HIT_
+## DURATION).
+const FIRE_STAFF_BURN_ATTACK_POWER_RATIO := 0.10
+
+func _refresh_fire_staff_burn(w) -> void:
+	if not is_instance_valid(w):
+		return
+	if "burn_on_hit_tick_damage" in w:
+		w.burn_on_hit_tick_damage = damage_bonus * FIRE_STAFF_BURN_ATTACK_POWER_RATIO
+
+
 func _apply_fire_staff_tier(w, level: int) -> void:
 	## DÜZELTME (100->20 level rebalance): uç noktalar (level 1 ve level 20)
 	## AYNI kalsın diye clamp/payda 99'dan 19'a çekildi - bkz.
@@ -1849,6 +1866,7 @@ func _apply_fire_staff_tier(w, level: int) -> void:
 		w.set_tier_damage_mult(milestone_mult)
 	if w.has_method("set_weapon_tier"):
 		w.set_weapon_tier(_visual_tier_from_level(lvl))
+	_refresh_fire_staff_burn(w)
 
 
 ## All weapons currently equipped (başlangıç silahı DAHİL, hepsi
@@ -1930,6 +1948,8 @@ func _apply_weapon_bonuses_to(w) -> void:
 		_refresh_tuftuf_poison(w)
 	elif w.get_meta("shop_key", "") == "dagger":
 		_refresh_hancer_bleed(w)
+	elif w.get_meta("shop_key", "") == "fire_staff":
+		_refresh_fire_staff_burn(w)
 
 
 func _apply_weapon_bonuses() -> void:

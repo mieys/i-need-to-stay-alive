@@ -151,6 +151,10 @@ func _explode() -> void:
 		_play_impact_sound()
 		queue_free()
 		return
+	## Şaman pasifi (Totem Auraları): bu patlama TEK bir "saldırı" sayılır -
+	## yakma EN FAZLA 1 düşmanda tetiklenebilir (bkz. enemy.gd
+	## try_shaman_weapon_burn() üstündeki kök neden notu).
+	var _shaman_burn_applied: bool = false
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
@@ -158,6 +162,8 @@ func _explode() -> void:
 			continue
 		if global_position.distance_to(e.global_position) <= splash_radius:
 			e.take_damage(damage, is_crit, shield_pen_percent)
+			if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
+				_shaman_burn_applied = e.try_shaman_weapon_burn()
 	_spawn_impact()
 	_play_impact_sound()
 	if is_instance_valid(return_callback_target) and return_callback_target.has_method("_on_ranged_projectile_landed"):

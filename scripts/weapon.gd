@@ -89,6 +89,14 @@ var _claimed_frost_target: Node2D = null
 ## 0 = bu silah donma uygulamaz.
 var chill_stacks_per_hit: int = 0
 
+## Ateş Asası pasifi: her isabette hedefi 3sn yakar (bkz. projectile.gd
+## burn_on_hit_tick_damage, enemy.gd apply_burn) - saniye başına hasar,
+## saldırı gücünün (damage_bonus) FIRE_STAFF_BURN_ATTACK_POWER_RATIO'su
+## olarak player.gd _refresh_fire_staff_burn()'de hesaplanıp buraya
+## yazılır (Hançer'in bleed_tick_damage_per_stack'iyle AYNI desen). 0 = bu
+## silah yakma uygulamaz (diğer tüm silahler).
+var burn_on_hit_tick_damage: float = 0.0
+
 ## Tüftüf'ün zehiri: isabet eden mermi hedefi zehirler (bkz. projectile.gd,
 ## enemy.gd apply_poison) - 0 = bu silah zehir uygulamaz (diğer tüm silahler).
 ## poison_tick_damage her saniye verilen hasar, poison_ramp_per_tick bu
@@ -1041,6 +1049,10 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 	## get_enemies_near ile (bkz. enemy.gd) sadece kılıcın o anki yakınındaki
 	## yaratıklar geliyor.
 	if is_inside_tree():
+		## Şaman pasifi: bu vuruş penceresi (bir fizik karesi) kapsamında
+		## yakma EN FAZLA 1 düşmanda tetiklenebilir - bkz. enemy.gd
+		## try_shaman_weapon_burn() üstündeki kök neden notu.
+		var _shaman_burn_applied: bool = false
 		for e in Enemy.get_enemies_near(get_tree(), sword_pos, collision_radius):
 			var id: int = e.get_instance_id()
 			if not _hit_cooldowns.has(id):
@@ -1048,6 +1060,8 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 				if e.has_method("take_damage"):
 					e.take_damage(final_damage, is_crit, shield_pen)
 					_spawn_orbit_hit_fx(e.global_position)
+					if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
+						_shaman_burn_applied = e.try_shaman_weapon_burn()
 
 
 func _spawn_orbit_hit_fx(pos: Vector2) -> void:
@@ -1678,8 +1692,14 @@ func _deal_beam_tick(target: Node2D) -> void:
 	final_damage *= 1.0 + _player_stat("item_damage_mult_bonus")
 	shield_pen += _player_stat("shield_pen_percent")
 	target.take_damage(final_damage, is_crit, shield_pen)
+	## Şaman pasifi: bu tik = 1 "saldırı" (bkz. enemy.gd try_shaman_weapon_burn
+	## üstündeki not) - yakma bu tikte EN FAZLA 1 düşmanda (birincil hedef ya
+	## da bir sekme hedefi) tetiklenebilir, aşağı _apply_chain_jumps'a taşınır.
+	var _shaman_burn_applied: bool = false
+	if target.has_method("try_shaman_weapon_burn"):
+		_shaman_burn_applied = target.try_shaman_weapon_burn()
 	if chain_jump_count > 0:
-		_apply_chain_jumps(target, final_damage * chain_damage_percent, is_crit, shield_pen)
+		_apply_chain_jumps(target, final_damage * chain_damage_percent, is_crit, shield_pen, _shaman_burn_applied)
 	fired.emit((target.global_position - global_position).normalized())
 	_apply_item_slow_on_hit(target)
 
@@ -1689,7 +1709,7 @@ func _deal_beam_tick(target: Node2D) -> void:
 ## bir önceki hedeften yeni hedefe görsel bir elektrik arkı (fx_lightning_
 ## chain) bırakır - önceden bu efekt hiç oluşturulmuyordu (bkz.
 ## FxLightningChainScene yorumu), sıçrama tamamen görünmezdi.
-func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shield_pen: float) -> void:
+func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shield_pen: float, shaman_burn_applied: bool = false) -> void:
 	var candidates: Array = []
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e == primary or not is_instance_valid(e) or e.get("is_dead") == true:
@@ -1711,6 +1731,8 @@ func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shi
 	for i in range(n):
 		var chain_to: Node2D = candidates[i]
 		chain_to.take_damage(chain_damage, is_crit, shield_pen)
+		if not shaman_burn_applied and chain_to.has_method("try_shaman_weapon_burn"):
+			shaman_burn_applied = chain_to.try_shaman_weapon_burn()
 		_spawn_chain_lightning_fx(chain_from, chain_to)
 		chain_from = chain_to
 
@@ -1754,6 +1776,11 @@ func _apply_item_slow_on_hit(target: Node2D) -> void:
 
 
 func _fire_at(target: Node2D) -> void:
+	## Şaman pasifi (Totem Auraları): bu TEK saldırı (bu _fire_at() çağrısı -
+	## alan hasarlı bir yakın dövüş vuruşu birden fazla düşmana değebilir)
+	## kapsamında yakma EN FAZLA 1 düşmanda tetiklenebilir - bkz. enemy.gd
+	## try_shaman_weapon_burn() üstündeki kök neden notu.
+	var _shaman_burn_applied: bool = false
 	## Tabanca (Revolver): mermi tükenmişse ateş etmeden reload'a gir (normalde
 	## _on_fire_timer_timeout zaten reload sırasında buraya hiç girmez, bu
 	## sadece güvenlik amaçlı). Mermi varsa bu atışı düşür; sıfıra inerse
@@ -1890,6 +1917,8 @@ func _fire_at(target: Node2D) -> void:
 			## silahlerde lifesteal_percent=0, no-op (bkz. _apply_weapon_lifesteal).
 			if lifesteal_percent > 0.0:
 				_apply_weapon_lifesteal(final_damage)
+			if target.has_method("try_shaman_weapon_burn"):
+				_shaman_burn_applied = target.try_shaman_weapon_burn()
 		## Hafif alan hasarı: hedefin çevresindeki diğer düşmanlar da
 		## savuruştan pay alır (tam hasarın melee_aoe_damage_percent'i).
 		## DÜZELTME (kullanıcı bildirimi: "yaratıklara tam saldırırken anlık
@@ -1912,6 +1941,11 @@ func _fire_at(target: Node2D) -> void:
 				## tüm silahlerde bleed_max_stacks=0, no-op).
 				if bleed_max_stacks > 0 and e.has_method("apply_bleed"):
 					e.apply_bleed(bleed_tick_damage_per_stack, bleed_stacks_per_hit, bleed_max_stacks)
+				## Şaman pasifi: kullanıcı isteği - alan hasarlı bir savuruş
+				## değdiği TÜM düşmanları değil, bu saldırı başına SADECE 1
+				## düşmanı yakabilir (bkz. _shaman_burn_applied üstündeki not).
+				if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
+					_shaman_burn_applied = e.try_shaman_weapon_burn()
 		## Efektler artık YUKARIDA (hasar/knockback'ten ÖNCE) spawn edildi -
 		## bkz. melee_effect_hold ve _do_melee_swing çağrısı.
 		fired.emit(direction)
@@ -1923,6 +1957,8 @@ func _fire_at(target: Node2D) -> void:
 			target.take_damage(final_damage, is_crit, shield_pen)
 			_apply_knockback(target)
 			_apply_item_slow_on_hit(target)
+			if target.has_method("try_shaman_weapon_burn"):
+				_shaman_burn_applied = target.try_shaman_weapon_burn()
 		if impact_scene:
 			var fx = impact_scene.instantiate()
 			get_tree().current_scene.add_child(fx)
@@ -2013,6 +2049,10 @@ func _fire_at(target: Node2D) -> void:
 	## _on_body_entered, enemy.gd apply_chill).
 	if chill_stacks_per_hit > 0 and "chill_stacks" in proj:
 		proj.chill_stacks = chill_stacks_per_hit
+	## Ateş Asası pasifi: her isabette hedefi yakar (bkz. projectile.gd
+	## _on_body_entered/_apply_splash_damage, enemy.gd apply_burn).
+	if burn_on_hit_tick_damage > 0.0 and "burn_on_hit_tick_damage" in proj:
+		proj.burn_on_hit_tick_damage = burn_on_hit_tick_damage
 	## Fişek: hedefin ateş anındaki SABİT konumu (aşağıda knockback ile
 	## değişebilecek target.global_position değil, en üstte bir kez yakalanan
 	## target_pos_at_attack) - mermi her zaman bu noktaya iner (bkz.

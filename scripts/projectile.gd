@@ -63,6 +63,18 @@ var mark_max_stacks: int = 0
 ## (0 = bu mermi donma uygulamaz) - bkz. enemy.gd apply_chill.
 var chill_stacks: int = 0
 
+## Ateş Asası pasifi: etkinse her isabette hedefi 3sn yakar (0 = bu mermi
+## yakma uygulamaz) - bkz. weapon.gd burn_on_hit_tick_damage, enemy.gd
+## apply_burn.
+var burn_on_hit_tick_damage: float = 0.0
+const BURN_ON_HIT_DURATION := 3.0
+
+## Şaman pasifi (Totem Auraları): bu MERMİNİN TÜM ömrü (delici mermide
+## birden fazla _on_body_entered çağrısı + splash) TEK bir "saldırı" sayılır
+## - yakma bu mermi başına EN FAZLA 1 düşmanda tetiklenebilir (bkz. enemy.gd
+## try_shaman_weapon_burn() üstündeki kök neden notu).
+var _shaman_burn_used: bool = false
+
 ## Arcane Asası pasifi: bu mermiyi ateşleyen weapon.gd düğümü - hedef bu
 ## mermiyle ölürse notify_kill() ile bildirilir (bkz. _on_body_entered sonu).
 ## null veya "notify_kill" metodu olmayan her şeyde no-op (diğer tüm mermiler).
@@ -168,6 +180,14 @@ func _on_body_entered(body: Node) -> void:
 		body.apply_poison(poison_tick_damage, poison_ramp_per_tick, poison_duration)
 	if slow_percent > 0.0 and body.has_method("apply_slow"):
 		body.apply_slow(slow_percent, slow_duration)
+	## Ateş Asası pasifi: bu mermi yakma uyguluyorsa çarptığı HER hedefi
+	## (birincil + delme ile vurduğu ek hedefler) yakar - "1 düşman" sınırı
+	## YOK, bu Şaman pasifinden bağımsız, silahın kendi doğal pasifi.
+	if burn_on_hit_tick_damage > 0.0 and body.has_method("apply_burn"):
+		body.apply_burn(burn_on_hit_tick_damage, BURN_ON_HIT_DURATION)
+	## Şaman pasifi: bu mermi başına (splash dahil) EN FAZLA 1 düşman.
+	if not _shaman_burn_used and body.has_method("try_shaman_weapon_burn"):
+		_shaman_burn_used = body.try_shaman_weapon_burn()
 	_apply_knockback(body)
 	if splash_radius > 0.0:
 		_apply_splash_damage(body)
@@ -209,6 +229,12 @@ func _apply_splash_damage(direct_hit: Node) -> void:
 			continue
 		if global_position.distance_to(e.global_position) <= splash_radius:
 			e.take_damage(damage, is_crit, shield_pen_percent)
+			## Ateş Asası pasifi: patlamanın değdiği HER düşman yanar.
+			if burn_on_hit_tick_damage > 0.0 and e.has_method("apply_burn"):
+				e.apply_burn(burn_on_hit_tick_damage, BURN_ON_HIT_DURATION)
+			## Şaman pasifi: bu mermi başına (bkz. _on_body_entered) EN FAZLA 1 düşman.
+			if not _shaman_burn_used and e.has_method("try_shaman_weapon_burn"):
+				_shaman_burn_used = e.try_shaman_weapon_burn()
 
 
 func _spawn_impact() -> void:

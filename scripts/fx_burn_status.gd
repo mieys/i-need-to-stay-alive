@@ -24,6 +24,11 @@ const SMOKE_VARIANTS := [
 	preload("res://assets/generated/fx_burn_smoke_c_frames.tres"),
 ]
 
+## DÜZELTME (kullanıcı isteği: "ateşi %60 dumanı %30 opaklık seviyesine
+## indir") - iki katman da tam opak (1.0) duruyordu, çok göz dolduruyordu.
+const FIRE_OPACITY := 0.6
+const SMOKE_OPACITY := 0.3
+
 @onready var _smoke: AnimatedSprite2D = $Smoke
 @onready var _fire: AnimatedSprite2D = $Fire
 
@@ -32,8 +37,10 @@ func _ready() -> void:
 	position = Vector2.ZERO
 
 	_smoke.sprite_frames = SMOKE_VARIANTS[randi() % SMOKE_VARIANTS.size()]
+	_smoke.modulate.a = SMOKE_OPACITY
 	_smoke.play("burn")
 	_fire.sprite_frames = FIRE_VARIANTS[randi() % FIRE_VARIANTS.size()]
+	_fire.modulate.a = FIRE_OPACITY
 	_fire.play("burn")
 
 	## Alt kenarları hizala (ikisi de centered=true varsayılanıyla merkezden

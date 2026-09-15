@@ -76,6 +76,13 @@ var _traveled: float = 0.0
 var _returning: bool = false
 var _hit_this_leg: Array = []
 
+## Şaman pasifi (Totem Auraları): bu FIRLATMANIN TÜMÜ (gidiş + dönüş legi
+## birlikte) TEK bir "saldırı" sayılır - yakma bu bumerang atışı başına EN
+## FAZLA 1 düşmanda tetiklenebilir (bkz. enemy.gd try_shaman_weapon_burn()
+## üstündeki kök neden notu). Leg değişince SIFIRLANMAZ (_hit_this_leg'in
+## aksine) - iki leg birlikte tek saldırı.
+var _shaman_burn_used: bool = false
+
 @onready var bullet: Sprite2D = get_node_or_null("Bullet")
 @onready var spin_fx: AnimatedSprite2D = get_node_or_null("SpinFx")
 ## Bullet'in kafadaki ikonla aynı "dinlenme" ölçeği (.tscn'den okunur) -
@@ -211,6 +218,8 @@ func _on_body_entered(body: Node) -> void:
 		return
 	_hit_this_leg.append(body)
 	body.take_damage(damage, is_crit, shield_pen_percent)
+	if not _shaman_burn_used and body.has_method("try_shaman_weapon_burn"):
+		_shaman_burn_used = body.try_shaman_weapon_burn()
 	_spawn_impact()
 	_play_impact_sound()
 

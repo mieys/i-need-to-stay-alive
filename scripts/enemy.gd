@@ -712,6 +712,43 @@ func _remove_stun_status_fx() -> void:
 		_stun_status_fx = null
 
 
+## Shaman pasifi (Totem Auraları): "totemlerine yakın olan dostların SİLAH
+## saldırıları düşmanlara yakma etkisi bırakır" - vuran (ATTACKER, yani bu
+## vuruşu tetikleyen bu client'ın kendi oyuncusu) herhangi bir Shaman
+## totemine yakınsa (kendi totemi ya da bir müttefiğin totemi - bkz.
+## totem_base.gd "shaman_totems" grubu, kozmetik kopyalar da bu grupta),
+## isabet ettiği düşmana yakma bırakır.
+##
+## DÜZELTME (kullanıcı isteği: "yetenekler şamanın pasifinden gelen buffla
+## etkinleşmemeli, sadece her silahın her saldırısı başına 1 yaratıkta
+## çalışacak şekilde olmalı") - eskiden bu kontrol take_damage()'ın genel
+## chokepoint'indeydi, yani totem/ability/pet hasarı dahil HER take_damage()
+## çağrısı yakma tetikliyordu (ör. Şaman'ın kendi Saldırı Totemi her zaman
+## kendi totem yarıçapının içinde olduğu için HER totem vuruşu da otomatik
+## yakma bırakıyordu - istenmeyen bir "double dip"). Artık bu fonksiyon
+## take_damage()'tan ÇAĞRILMIYOR - SADECE gerçek silah saldırısı kod
+## yollarının (weapon.gd/projectile.gd/boomerang_projectile.gd/
+## firework_projectile.gd) bilerek çağırdığı ayrı bir fonksiyon. "Aynı
+## saldırı birden fazla düşmanı yakmasın" kuralı çağıran tarafın
+## sorumluluğunda: bir "saldırı" (bir kılıç savuruşu, bir mermi, bir ışın
+## tiği) kapsamında bu fonksiyon EN FAZLA 1 düşmanda başarılı (true dönene
+## kadar) çağrılmalı - dönüş değeri true olunca o saldırı için durdurulmalı.
+func try_shaman_weapon_burn() -> bool:
+	var dealer: Node = get_tree().get_first_node_in_group("player")
+	if not (dealer and "damage_bonus" in dealer and dealer is Node2D):
+		return false
+	for totem in get_tree().get_nodes_in_group("shaman_totems"):
+		if not is_instance_valid(totem) or not (totem is Node2D):
+			continue
+		var totem_r: float = float(totem.get("totem_radius")) if "totem_radius" in totem else 0.0
+		if totem_r <= 0.0:
+			continue
+		if (totem as Node2D).global_position.distance_to((dealer as Node2D).global_position) <= totem_r:
+			apply_burn(float(dealer.damage_bonus) * 0.10, 3.0)
+			return true
+	return false
+
+
 ## Shaman pasifi - bkz. burn_tick_damage üstündeki yorum. apply_poison()'un
 ## host-forward guard'ıyla BİREBİR AYNI desen.
 func apply_burn(tick_damage: float, duration: float) -> void:
@@ -2668,25 +2705,6 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 	var _dealer: Node = get_tree().get_first_node_in_group("player")
 	if amount > 0.0 and _dealer and "match_damage_dealt" in _dealer:
 		_dealer.match_damage_dealt += amount
-
-	## Shaman pasifi (Totem Auraları): "totemlerine yakın olan dostların
-	## saldırıları düşmanlara yakma etkisi bırakır" - vuran (ATTACKER, yani
-	## bu vuruşu tetikleyen bu client'ın kendi oyuncusu) herhangi bir Shaman
-	## totemine yakınsa (kendi totemi ya da bir müttefiğin totemi - bkz.
-	## totem_base.gd "shaman_totems" grubu, kozmetik kopyalar da bu grupta),
-	## isabet ettiği düşmana yakma bırakır. AYNI take_damage() çağrısı - bu
-	## yüzden weapon.gd/projectile.gd/totem_attack.gd/ability kodlarının
-	## HİÇBİRİNE ayrı ayrı dokunmaya gerek yok, tek chokepoint.
-	if amount > 0.0 and _dealer and "damage_bonus" in _dealer and _dealer is Node2D:
-		for totem in get_tree().get_nodes_in_group("shaman_totems"):
-			if not is_instance_valid(totem) or not (totem is Node2D):
-				continue
-			var totem_r: float = float(totem.get("totem_radius")) if "totem_radius" in totem else 0.0
-			if totem_r <= 0.0:
-				continue
-			if (totem as Node2D).global_position.distance_to((_dealer as Node2D).global_position) <= totem_r:
-				apply_burn(float(_dealer.damage_bonus) * 0.10, 3.0)
-				break
 
 	## Multiplayer: non-host clients route damage through the host so there is
 	## a single authoritative enemy health pool. Without this every peer fights
