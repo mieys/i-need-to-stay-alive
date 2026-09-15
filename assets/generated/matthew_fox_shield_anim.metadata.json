@@ -1,0 +1,70 @@
+{
+	"animation_name": "subtle_motion",
+	"animation_style": "",
+	"animation_type": "subtle_motion",
+	"columns": 8,
+	"directions": [],
+	"frame_count": 8,
+	"frame_height": 64,
+	"frame_paths": [],
+	"frame_regions": [
+		{
+			"h": 64,
+			"w": 64,
+			"x": 0,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 64,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 128,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 192,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 256,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 320,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 384,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 448,
+			"y": 0
+		}
+	],
+	"frame_width": 64,
+	"name": "matthew_fox_shield_anim",
+	"prompt": "pulsing magical energy, shimmering orange aura, glowing fox ears, swirling orbital light particles",
+	"rows": 1,
+	"source_image": "res://assets/generated/matthew_fox_shield_bubble_frame_0.png",
+	"source_tool": "animate_sprite",
+	"spritesheet_height": 64,
+	"spritesheet_path": "res://assets/generated/matthew_fox_shield_anim.png",
+	"spritesheet_width": 512,
+	"type": "animation"
+}

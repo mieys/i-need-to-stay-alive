@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/projectile.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/weapons/arcane/spin_frames.tres" id="2"]
+[ext_resource type="AudioStream" path="res://assets/audio/arcane_attack.mp3" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/fx_hit_purple_burst.tscn" id="4"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 14.0
+
+[node name="ArcaneProjectile" type="Area2D"]
+collision_layer = 0
+collision_mask = 4
+script = ExtResource("1")
+face_direction = true
+impact_scene = ExtResource("4")
+impact_sounds = Array[AudioStream]([ExtResource("3")])
+impact_sound_volume_db = -6.79
+
+[node name="Anim" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(1.8, 1.8)
+sprite_frames = ExtResource("2")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")

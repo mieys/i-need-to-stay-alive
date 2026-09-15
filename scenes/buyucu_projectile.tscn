@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/projectile.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/weapons/buyucu/projectile_frames.tres" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 14.0
+
+[node name="BuyucuProjectile" type="Area2D"]
+collision_layer = 0
+collision_mask = 4
+script = ExtResource("1")
+face_direction = true
+impact_rotation_flip = true
+
+[node name="Anim" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(0.7, 0.7)
+sprite_frames = ExtResource("2")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")

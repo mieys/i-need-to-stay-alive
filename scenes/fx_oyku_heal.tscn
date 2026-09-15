@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://cxv8py02tqkw1"]
+
+[ext_resource type="Script" uid="uid://dh4h1d77x2n3p" path="res://scripts/fx_oyku_heal.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://dqh0urvhuemb" path="res://assets/audio/shield_regen.wav" id="2"]
+
+[node name="FxOykuHeal" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Sound" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("2")
+volume_db = -5.0
+max_distance = 1500.0

@@ -1,0 +1,91 @@
+# Proje notu: Multiplayer'da "yeni yetenek eklerken eskisi kalıyor" hatası
+
+Bu proje Godot 4 tabanlı, co-op multiplayer bir top-down 2D oyun
+(`scripts/network_manager.gd` + `scripts/player.gd` + `scripts/remote_player.gd`
+üçlüsü ağ senkronunu yönetiyor). Bu dosya, tekrar tekrar karşılaşılan TEK bir
+hata sınıfını ve onu nasıl önleyeceğini anlatıyor — yeni bir yetenek/efekt/
+animasyon eklerken **mutlaka** oku.
+
+## Hata sınıfı
+
+Kaster (yeteneği kullanan oyuncu) kendi ekranında yeni efekti/animasyonu
+doğru görür, ama **diğer oyuncularda eski efekt kalır ya da hiçbir şey
+görünmez.** `scripts/player.gd` içindeki geçmiş yorumlarda bunun tam olarak
+aynı kök nedenle defalarca yaşandığı görülüyor (ör. `_spawn_buyucu_meteor_
+strike`'ın üstündeki "ziva agent" notu, `remote_player.gd`'deki "Meteor
+kanalı uzak ekranlarda donuyor" notu, `_weapon_is_orbit_sword` notu).
+
+**Kök neden:** Bu proje mimarisinde her oyuncunun görsel efektleri/
+animasyonları KENDİ istemcisinde üretilir, sonra `NetworkManager.
+broadcast_player_vfx` RPC'siyle (ya da senkronize edilen bir state/anim
+adıyla) diğer istemcilere AYRICA bildirilir. Yani neredeyse her yeni yetenek
+için **iki ayrı yerde** aynı bilgiye (bir sahne yolu, bir animasyon adı, bir
+formül) referans verilir. Biri eklenirken/değiştirilirken diğeri unutulursa,
+diğer oyuncularda eski/hiç görsel kalır.
+
+## Yeni bir yetenek/efekt eklerken kontrol listesi
+
+1. **Tek seferlik, karaktere bağlı bir FX sahnesi mi?** (ör. bir büyü
+   overlay'i, bir buff parıltısı) → `player.gd`'deki
+   **`_play_and_broadcast_skill_fx(scene: PackedScene)`** yardımcısını
+   kullan. Bu fonksiyon local `instantiate()`'ı VE broadcast'i tek çağrıda
+   yapar, yolu `scene.resource_path`'ten okur — elle ikinci bir String yol
+   yazmana gerek YOK, yani bu iki yer birbirinden sapamaz.
+   ```gdscript
+   # Eskiden (İKİ ayrı referans, biri unutulabilir):
+   if FxYeniEfekt:
+       var fx := FxYeniEfekt.instantiate() as Node2D
+       add_child(fx)
+   _broadcast_skill_scene("res://scenes/fx_yeni_efekt.tscn")
+
+   # Şimdi (TEK referans):
+   _play_and_broadcast_skill_fx(FxYeniEfekt)
+   ```
+
+2. **Dünya konumunda sabit duran bir efekt mi?** (meteor, patlama,
+   telegraph halkası) → `_spawn_world_explosion_fx` / `_spawn_local_
+   telegraph_ring` gibi mevcut konum-tabanlı yardımcıları örnek al; bunlar
+   zaten `NetworkManager.broadcast_player_vfx.rpc(...)` çağırıyor.
+   `network_manager.gd`'deki `broadcast_player_vfx` fonksiyonunun `match
+   vfx_type:` bloğuna yeni bir dal eklemen gerekebilir — eklersen, o dalın
+   üstündeki yorumdaki `vfx_type` listesine de ekle (bkz. fonksiyonun
+   hemen üstündeki liste).
+
+3. **Sürekli/karede-karede simüle edilen bir görsel mi?** (ör. dönen
+   silah, orbit eden bir mermi) → Bunlar performans için AĞDAN POZİSYON
+   ALMAZ, her istemci KENDİ kopyasını AYNI formülle hesaplar (bkz.
+   `scripts/weapon_orbit_math.gd`). Bu tür bir şey eklersen, formülü
+   `weapon.gd` (yetkili/gerçek) VE `remote_player.gd` (kozmetik kopya)
+   içine AYRI AYRI YAZMA — `weapon_orbit_math.gd` gibi paylaşılan bir
+   `static func` çıkar, iki taraf da onu çağırsın. Böylece formülü
+   değiştirdiğinde tek yeri değiştirmen yeterli olur.
+
+4. **Yeni bir animasyon adı mı ekliyorsun?** (ör. yeni bir `spellcast_*`
+   ya da `attack_*` klibi) → `remote_player.gd`'nin `update_position_and_
+   anim_from_net` fonksiyonu, gelen animasyon adı o karakterin
+   `SpriteFrames`'inde YOKSA **sessizce hiçbir şey yapmaz** (`anim.sprite_
+   frames.has_animation(cur_anim)` kontrolü) — hata vermez, sadece diğer
+   oyuncuda eski kare donmuş kalır. Yeni animasyonu eklerken karakterin
+   `SpriteFrames` kaynağına da (bkz. `characters.gd`) eklediğinden emin ol,
+   yoksa bu TAM OLARAK "yanlış/eski animasyon" belirtisini verir.
+
+5. **Sürekli döngüde oynaması gereken bir animasyon mu?** (kanal/channel
+   efektleri, örn. büyücünün meteor kanalı) → `update_position_and_anim_
+   from_net`, animasyon ADI DEĞİŞMEDİĞİ sürece `anim.play()` çağırmaz.
+   Kanal boyunca aynı animasyon adını tekrar tekrar gönderiyorsan, bitince
+   kendi kendine döngü yapmayan (`loop=false` / tek karede duran) bir
+   animasyonsa, `player.gd`'deki ilgili `_process_*` fonksiyonunda
+   `anim.play(...)`'ı `not anim.is_playing()` kontrolüyle yeniden
+   tetiklediğinden VE `remote_player.gd`'de de aynı `elif cur_anim.begins_
+   with("...") and not anim.is_playing(): anim.play(cur_anim)` dalının
+   olduğundan emin ol (bkz. `_process_buyucu_meteor` / `update_position_
+   and_anim_from_net` içindeki mevcut örnek — meteor kanalı bu yüzden
+   donuyordu, aynı deseni yeni yetenekte de tekrarlama).
+
+## Test/doğrulama
+
+Yeni bir yetenek/efekt eklediğinde, TEK bilgisayarda iki pencere açıp
+(host + client, ya da `Co-op.exe` ile ikinci bir istemci) yeteneği HOST
+OLMAYAN oyuncuyla kullan ve diğer pencerede doğru göründüğünü kontrol et —
+kendi ekranında (kaster tarafında) her zaman doğru görünür, gerçek test
+DİĞER istemcide izlemektir.

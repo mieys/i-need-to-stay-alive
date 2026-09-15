@@ -1,0 +1,54 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy.gd" id="1"]
+[ext_resource type="Texture2D" path="res://visuals/Yaratıklar/Tüm Yaratıklar/Lich 2/PNG/Lich2/With_shadow/Lich2_Walk_with_shadow.png" id="2"]
+[ext_resource type="Texture2D" path="res://visuals/Yaratıklar/Tüm Yaratıklar/Lich 2/PNG/Lich2/With_shadow/Lich2_Hurt_with_shadow.png" id="3"]
+[ext_resource type="Texture2D" path="res://visuals/Yaratıklar/Tüm Yaratıklar/Lich 2/PNG/Lich2/With_shadow/Lich2_Death_with_shadow.png" id="4"]
+[ext_resource type="Texture2D" path="res://visuals/Yaratıklar/Tüm Yaratıklar/Lich 2/PNG/Lich2/With_shadow/Lich2_Attack_with_shadow.png" id="5"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 22.1
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hit"]
+radius = 28.7
+
+[node name="Enemy_Lich2" type="CharacterBody2D" groups=["enemies"]]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("1")
+speed = 72.4
+max_health = 80.3
+contact_damage = 20.2
+xp_value = 16.0
+orb_count = 2
+gold_chance = 0.255
+gold_min = 3
+gold_max = 5
+sprite_fps = 8.6
+cell_size = 64
+walk_texture = ExtResource("2")
+hurt_texture = ExtResource("3")
+death_texture = ExtResource("4")
+attack_texture = ExtResource("5")
+is_ranged = true
+ranged_range = 112.5
+ranged_attack_interval = 2.0
+projectile_tint = Color(0.5, 1.0, 0.55, 1)
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(1.52325, 1.52325)
+texture = ExtResource("2")
+hframes = 6
+vframes = 4
+offset = Vector2(0, -7.8)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="HitArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="HitCollision" type="CollisionShape2D" parent="HitArea"]
+shape = SubResource("CircleShape2D_hit")

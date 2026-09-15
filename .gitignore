@@ -1,0 +1,9 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Export edilmiş oyun derlemeleri ve büyük eklenti araçları - kaynak kod
+# değiller, GitHub'ın 100MB dosya sınırını aşıyorlar (Co-op.exe/Co-op
+# (guncel).exe/zivacode.exe). Godot editöründen "Export" ile her zaman
+# yeniden üretilebilirler, git'te tutulmalarına gerek yok.
+*.exe

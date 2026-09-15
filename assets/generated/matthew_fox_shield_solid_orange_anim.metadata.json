@@ -1,0 +1,58 @@
+{
+	"animation_name": "subtle_motion",
+	"animation_style": "",
+	"animation_type": "subtle_motion",
+	"columns": 6,
+	"directions": [],
+	"frame_count": 6,
+	"frame_height": 80,
+	"frame_paths": [],
+	"frame_regions": [
+		{
+			"h": 80,
+			"w": 80,
+			"x": 0,
+			"y": 0
+		},
+		{
+			"h": 80,
+			"w": 80,
+			"x": 80,
+			"y": 0
+		},
+		{
+			"h": 80,
+			"w": 80,
+			"x": 160,
+			"y": 0
+		},
+		{
+			"h": 80,
+			"w": 80,
+			"x": 240,
+			"y": 0
+		},
+		{
+			"h": 80,
+			"w": 80,
+			"x": 320,
+			"y": 0
+		},
+		{
+			"h": 80,
+			"w": 80,
+			"x": 400,
+			"y": 0
+		}
+	],
+	"frame_width": 80,
+	"name": "matthew_fox_shield_solid_orange_anim",
+	"prompt": "gentle warm breathing amber pulse, soft fox ear twitch, subtle calm energy shimmer",
+	"rows": 1,
+	"source_image": "res://assets/generated/matthew_fox_shield_solid_orange_frame_0.png",
+	"source_tool": "animate_sprite",
+	"spritesheet_height": 80,
+	"spritesheet_path": "res://assets/generated/matthew_fox_shield_solid_orange_anim.png",
+	"spritesheet_width": 480,
+	"type": "animation"
+}

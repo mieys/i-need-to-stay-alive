@@ -1,0 +1,23 @@
+[remap]
+
+importer="YATI"
+type="PackedScene"
+uid="uid://ck8whcbns1re"
+path="res://.godot/imported/Lich1.tmx-7f2caf25e79df7b6c914bf8769465c84.tscn"
+
+[deps]
+
+source_file="res://visuals/Yaratıklar/Tüm Yaratıklar/Lich 1/Tiled_files/Lich1.tmx"
+dest_files=["res://.godot/imported/Lich1.tmx-7f2caf25e79df7b6c914bf8769465c84.tscn"]
+
+[params]
+
+use_default_filter=false
+add_class_as_metadata=false
+add_id_as_metadata=false
+no_alternative_tiles=false
+map_wangset_to_terrain=false
+custom_data_prefix="data_"
+tiled_project_file=""
+post_processor=""
+save_tileset_to=""

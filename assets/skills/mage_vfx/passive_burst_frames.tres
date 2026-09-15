@@ -1,0 +1,53 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://ds2qulwpl5axm"]
+
+[ext_resource type="Texture2D" uid="uid://btx8ia38qo3c8" path="res://assets/generated/mage_passive_starburst_anim.png" id="1_iwlwk"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_yirge"]
+atlas = ExtResource("1_iwlwk")
+region = Rect2(0, 0, 56, 56)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6p6fj"]
+atlas = ExtResource("1_iwlwk")
+region = Rect2(56, 0, 56, 56)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2a6lk"]
+atlas = ExtResource("1_iwlwk")
+region = Rect2(112, 0, 56, 56)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_o4vq1"]
+atlas = ExtResource("1_iwlwk")
+region = Rect2(168, 0, 56, 56)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_st5fr"]
+atlas = ExtResource("1_iwlwk")
+region = Rect2(224, 0, 56, 56)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_dw92m"]
+atlas = ExtResource("1_iwlwk")
+region = Rect2(280, 0, 56, 56)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_yirge")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6p6fj")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2a6lk")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_o4vq1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_st5fr")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_dw92m")
+}],
+"loop": 0,
+"name": &"default",
+"speed": 14.0
+}]

@@ -1,0 +1,23 @@
+[remap]
+
+importer="YATI"
+type="PackedScene"
+uid="uid://bjb3vhr2m0jkj"
+path="res://.godot/imported/Ent1.tmx-270280a45ebe97496076a92a61ffe6ea.tscn"
+
+[deps]
+
+source_file="res://visuals/Yaratıklar/Tüm Yaratıklar/Ağaç Canavarı 1/Tiled_files/Ent1.tmx"
+dest_files=["res://.godot/imported/Ent1.tmx-270280a45ebe97496076a92a61ffe6ea.tscn"]
+
+[params]
+
+use_default_filter=false
+add_class_as_metadata=false
+add_id_as_metadata=false
+no_alternative_tiles=false
+map_wangset_to_terrain=false
+custom_data_prefix="data_"
+tiled_project_file=""
+post_processor=""
+save_tileset_to=""

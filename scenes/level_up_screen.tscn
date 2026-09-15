@@ -1,0 +1,377 @@
+[gd_scene format=3 uid="uid://0dhrk4yr507x"]
+
+[ext_resource type="Script" uid="uid://krtyh8gjafik" path="res://scripts/level_up_screen.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://boa1jfiv6y5rw" path="res://assets/audio/levelup.wav" id="2"]
+[ext_resource type="Script" uid="uid://bkrgady81j21j" path="res://scripts/stat_icon.gd" id="3"]
+[ext_resource type="Theme" uid="uid://ceslvnp1x5pxb" path="res://assets/fonts/theme_original.tres" id="4"]
+[ext_resource type="Material" path="res://shaders/backdrop_blur_material.tres" id="5"]
+
+[sub_resource type="StyleBoxFlat" id="CardStyle_transparent"]
+bg_color = Color(0, 0, 0, 0)
+
+[sub_resource type="StyleBoxFlat" id="SelectGlowStyle"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 6
+border_width_top = 6
+border_width_right = 6
+border_width_bottom = 6
+border_color = Color(0.22, 0.62, 0.2, 1)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+shadow_color = Color(0.22, 0.62, 0.2, 0.55)
+shadow_size = 10
+
+[sub_resource type="StyleBoxFlat" id="CountdownPanelStyle"]
+content_margin_left = 18.0
+content_margin_top = 10.0
+content_margin_right = 18.0
+content_margin_bottom = 10.0
+bg_color = Color(0.32, 0.2, 0.11, 0.95)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.6, 0.45, 0.2, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(0, 0, 0, 0.35)
+shadow_size = 2
+shadow_offset = Vector2(3, 4)
+
+[node name="LevelUpScreen" type="CanvasLayer" unique_id=732736043]
+process_mode = 3
+layer = 1
+script = ExtResource("1")
+
+[node name="LevelUpSound" type="AudioStreamPlayer" parent="." unique_id=1086930990]
+stream = ExtResource("2")
+volume_db = -4.0
+
+[node name="BlurBG" type="ColorRect" parent="." unique_id=447604263]
+material = ExtResource("5")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Dim" type="ColorRect" parent="." unique_id=1259208155]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 1
+color = Color(0, 0, 0, 0.6)
+
+[node name="Title" type="Label" parent="." unique_id=165848844]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -320.0
+offset_top = 30.0
+offset_right = 320.0
+offset_bottom = 90.0
+theme_override_font_sizes/font_size = 122
+text = "SEVİYE ATLADIN!"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="CardsContainer" type="HBoxContainer" parent="." unique_id=310569008]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -470.0
+offset_top = -240.0
+offset_right = 470.0
+offset_bottom = 240.0
+theme = ExtResource("4")
+theme_override_constants/separation = 20
+
+[node name="Card1" type="Button" parent="CardsContainer" unique_id=2095304497]
+custom_minimum_size = Vector2(300, 480)
+clip_contents = false
+layout_mode = 2
+theme_override_styles/normal = SubResource("CardStyle_transparent")
+theme_override_styles/pressed = SubResource("CardStyle_transparent")
+theme_override_styles/hover = SubResource("CardStyle_transparent")
+theme_override_styles/disabled = SubResource("CardStyle_transparent")
+
+[node name="Frame" type="TextureRect" parent="CardsContainer/Card1"]
+layout_mode = 0
+offset_right = 300.0
+offset_bottom = 480.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="CardsContainer/Card1"]
+clip_contents = true
+layout_mode = 0
+offset_left = 28.0
+offset_top = 54.0
+offset_right = 272.0
+offset_bottom = 428.0
+mouse_filter = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="Category" type="Label" parent="CardsContainer/Card1/Content" unique_id=1053889397]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.78, 1)
+theme_override_font_sizes/font_size = 30
+text = "Kategori"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Icon" type="Control" parent="CardsContainer/Card1/Content" unique_id=401474661]
+custom_minimum_size = Vector2(84, 84)
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+script = ExtResource("3")
+
+[node name="Title" type="Label" parent="CardsContainer/Card1/Content" unique_id=599063725]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.94, 0.85, 1)
+theme_override_font_sizes/font_size = 38
+text = "Başlık"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Desc" type="RichTextLabel" parent="CardsContainer/Card1/Content" unique_id=675826936]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/default_color = Color(0.85, 0.79, 0.7, 1)
+theme_override_font_sizes/normal_font_size = 24
+bbcode_enabled = true
+text = "Açıklama"
+fit_content = true
+scroll_active = false
+horizontal_alignment = 1
+
+[node name="CountLabel" type="Label" parent="CardsContainer/Card1/Content" unique_id=1567894076]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.68, 0.62, 0.54, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="SelectGlow" type="Panel" parent="CardsContainer/Card1"]
+visible = false
+layout_mode = 0
+offset_left = -10.0
+offset_top = -10.0
+offset_right = 310.0
+offset_bottom = 490.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("SelectGlowStyle")
+
+[node name="Card2" type="Button" parent="CardsContainer" unique_id=16198505]
+custom_minimum_size = Vector2(300, 480)
+clip_contents = false
+layout_mode = 2
+theme_override_styles/normal = SubResource("CardStyle_transparent")
+theme_override_styles/pressed = SubResource("CardStyle_transparent")
+theme_override_styles/hover = SubResource("CardStyle_transparent")
+theme_override_styles/disabled = SubResource("CardStyle_transparent")
+
+[node name="Frame" type="TextureRect" parent="CardsContainer/Card2"]
+layout_mode = 0
+offset_right = 300.0
+offset_bottom = 480.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="CardsContainer/Card2"]
+clip_contents = true
+layout_mode = 0
+offset_left = 28.0
+offset_top = 54.0
+offset_right = 272.0
+offset_bottom = 428.0
+mouse_filter = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="Category" type="Label" parent="CardsContainer/Card2/Content" unique_id=1246031899]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.78, 1)
+theme_override_font_sizes/font_size = 30
+text = "Kategori"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Icon" type="Control" parent="CardsContainer/Card2/Content" unique_id=417001396]
+custom_minimum_size = Vector2(84, 84)
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+script = ExtResource("3")
+
+[node name="Title" type="Label" parent="CardsContainer/Card2/Content" unique_id=160101562]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.94, 0.85, 1)
+theme_override_font_sizes/font_size = 38
+text = "Başlık"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Desc" type="RichTextLabel" parent="CardsContainer/Card2/Content" unique_id=78758476]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/default_color = Color(0.85, 0.79, 0.7, 1)
+theme_override_font_sizes/normal_font_size = 24
+bbcode_enabled = true
+text = "Açıklama"
+fit_content = true
+scroll_active = false
+horizontal_alignment = 1
+
+[node name="CountLabel" type="Label" parent="CardsContainer/Card2/Content" unique_id=1358971759]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.68, 0.62, 0.54, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="SelectGlow" type="Panel" parent="CardsContainer/Card2"]
+visible = false
+layout_mode = 0
+offset_left = -10.0
+offset_top = -10.0
+offset_right = 310.0
+offset_bottom = 490.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("SelectGlowStyle")
+
+[node name="Card3" type="Button" parent="CardsContainer" unique_id=1925278977]
+custom_minimum_size = Vector2(300, 480)
+clip_contents = false
+layout_mode = 2
+theme_override_styles/normal = SubResource("CardStyle_transparent")
+theme_override_styles/pressed = SubResource("CardStyle_transparent")
+theme_override_styles/hover = SubResource("CardStyle_transparent")
+theme_override_styles/disabled = SubResource("CardStyle_transparent")
+
+[node name="Frame" type="TextureRect" parent="CardsContainer/Card3"]
+layout_mode = 0
+offset_right = 300.0
+offset_bottom = 480.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="CardsContainer/Card3"]
+clip_contents = true
+layout_mode = 0
+offset_left = 28.0
+offset_top = 54.0
+offset_right = 272.0
+offset_bottom = 428.0
+mouse_filter = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="Category" type="Label" parent="CardsContainer/Card3/Content" unique_id=1260325768]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.78, 1)
+theme_override_font_sizes/font_size = 30
+text = "Kategori"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Icon" type="Control" parent="CardsContainer/Card3/Content" unique_id=36868238]
+custom_minimum_size = Vector2(84, 84)
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+script = ExtResource("3")
+
+[node name="Title" type="Label" parent="CardsContainer/Card3/Content" unique_id=394644445]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.94, 0.85, 1)
+theme_override_font_sizes/font_size = 38
+text = "Başlık"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Desc" type="RichTextLabel" parent="CardsContainer/Card3/Content" unique_id=1843563072]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/default_color = Color(0.85, 0.79, 0.7, 1)
+theme_override_font_sizes/normal_font_size = 24
+bbcode_enabled = true
+text = "Açıklama"
+fit_content = true
+scroll_active = false
+horizontal_alignment = 1
+
+[node name="CountLabel" type="Label" parent="CardsContainer/Card3/Content" unique_id=1562968938]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.68, 0.62, 0.54, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="SelectGlow" type="Panel" parent="CardsContainer/Card3"]
+visible = false
+layout_mode = 0
+offset_left = -10.0
+offset_top = -10.0
+offset_right = 310.0
+offset_bottom = 490.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("SelectGlowStyle")
+
+[node name="RerollButton" type="Button" parent="." unique_id=1332204354]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -280.0
+offset_top = 255.0
+offset_right = 280.0
+offset_bottom = 303.0
+theme = ExtResource("4")
+theme_override_font_sizes/font_size = 56
+text = "Yeniden Karıştır (2)"
+clip_text = true
+
+[node name="CountdownPanel" type="PanelContainer" parent="." unique_id=1399523948]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -140.0
+offset_top = 323.0
+offset_right = 140.0
+offset_bottom = 391.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("CountdownPanelStyle")
+
+[node name="VBox" type="VBoxContainer" parent="CountdownPanel" unique_id=1588021869]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="WaitingLabel" type="Label" parent="CountdownPanel/VBox" unique_id=690334728]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.78, 1)
+theme_override_font_sizes/font_size = 32
+text = "Diğer oyuncular bekleniyor"
+horizontal_alignment = 1
+
+[node name="CountdownLabel" type="Label" parent="CountdownPanel/VBox" unique_id=541012274]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 58
+text = "25s"
+horizontal_alignment = 1

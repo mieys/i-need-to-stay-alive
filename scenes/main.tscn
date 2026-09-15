@@ -1,0 +1,111 @@
+[gd_scene format=3 uid="uid://cj5bn4qevjkwt"]
+
+[ext_resource type="Script" uid="uid://c3pw4sbpiaxfc" path="res://scripts/main.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://c5i4o3ajt2266" path="res://scenes/player.tscn" id="2"]
+[ext_resource type="PackedScene" uid="uid://31p0ga60cd0x" path="res://scenes/hud.tscn" id="3"]
+[ext_resource type="Script" uid="uid://bppbn55inuopp" path="res://scripts/enemy_spawner.gd" id="6_spawner"]
+[ext_resource type="PackedScene" uid="uid://drmsfvq12lbis" path="res://scenes/harita_baked.tscn" id="11_harita"]
+[ext_resource type="PackedScene" uid="uid://bbfx3q46vfnif" path="res://scenes/vignette_overlay.tscn" id="12_vignette"]
+[ext_resource type="Script" uid="uid://bne58yj7o5p68" path="res://scripts/house_interior.gd" id="13_houseinterior"]
+[ext_resource type="Script" path="res://scripts/traveling_merchant.gd" id="14_merchant"]
+
+[sub_resource type="Shader" id="Shader_o6xl0"]
+code = "shader_type canvas_item;
+
+uniform vec4 dirt_color : source_color = vec4(0.25, 0.20, 0.15, 1.0);
+uniform float dirt_opacity : hint_range(0.0, 1.0) = 0.35;
+uniform float dirt_scale : hint_range(0.0001, 0.05) = 0.005; // Dünya koordinatları için ölçek küçüldü!
+uniform float noise_threshold : hint_range(0.0, 1.0) = 0.4;
+
+// Varying ile Dünya koordinatını fragment aşamasına taşıyoruz
+varying vec2 world_position;
+
+void vertex() {
+    // Model koordinatını dünya koordinatına çevir (TileMap position)
+    world_position = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
+}
+
+float hash(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}
+
+float value_noise(vec2 st) {
+    vec2 i = floor(st);
+    vec2 f = fract(st);
+
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+}
+
+// 4 Katmanlı FBM (Daha detaylı ve organik rastgelelik)
+float fbm(vec2 st) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    for (int i = 0; i < 4; i++) {
+        value += amplitude * value_noise(st);
+        st *= 2.0;
+        amplitude *= 0.5;
+    }
+    return value;
+}
+
+void fragment() {
+    vec4 texture_color = texture(TEXTURE, UV);
+
+    // UV yerine dünya koordinatlarını (world_position) kullanıyoruz!
+    vec2 dirt_uv = world_position * dirt_scale;
+    float noise_val = fbm(dirt_uv);
+
+    float dirt_mask = smoothstep(noise_threshold, noise_threshold + 0.3, noise_val);
+    vec3 final_rgb = mix(texture_color.rgb, dirt_color.rgb, dirt_mask * dirt_opacity);
+
+    COLOR = vec4(final_rgb, texture_color.a);
+}"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cp5u8"]
+shader = SubResource("Shader_o6xl0")
+shader_parameter/dirt_color = Color(0.25, 0.2, 0.15, 1)
+shader_parameter/dirt_opacity = 0.3350000159125
+shader_parameter/dirt_scale = 100.0
+shader_parameter/noise_threshold = 0.3450000163875
+
+[sub_resource type="TileSet" id="TileSet_ns3ce"]
+
+[node name="Main" type="Node2D" unique_id=28232047]
+script = ExtResource("1")
+
+[node name="Player" parent="." unique_id=402087049 instance=ExtResource("2")]
+z_index = 1
+position = Vector2(3016, 1920)
+scale = Vector2(0.5, 0.5)
+disable_mode = 2
+collision_layer = 2
+
+[node name="VignetteOverlay" parent="." unique_id=1551978368 instance=ExtResource("12_vignette")]
+
+[node name="HUD" parent="." unique_id=1262643970 instance=ExtResource("3")]
+
+[node name="EnemySpawner" type="Node2D" parent="." unique_id=832409863]
+script = ExtResource("6_spawner")
+
+[node name="HouseInterior" type="Node2D" parent="." unique_id=1858161347]
+script = ExtResource("13_houseinterior")
+
+[node name="TravelingMerchant" type="Node2D" parent="."]
+script = ExtResource("14_merchant")
+
+[node name="Harita" parent="." unique_id=2073148302 instance=ExtResource("11_harita")]
+material = SubResource("ShaderMaterial_cp5u8")
+position = Vector2(-2, 21)
+
+[node name="Node2D" type="Node2D" parent="." unique_id=1593142293]
+
+[node name="TileMapLayer" type="TileMapLayer" parent="Node2D" unique_id=174340305]
+tile_set = SubResource("TileSet_ns3ce")

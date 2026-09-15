@@ -1,0 +1,46 @@
+{
+	"animation_name": "destroy",
+	"animation_style": "",
+	"animation_type": "destroy",
+	"columns": 4,
+	"directions": [],
+	"frame_count": 4,
+	"frame_height": 48,
+	"frame_paths": [],
+	"frame_regions": [
+		{
+			"h": 48,
+			"w": 48,
+			"x": 0,
+			"y": 0
+		},
+		{
+			"h": 48,
+			"w": 48,
+			"x": 48,
+			"y": 0
+		},
+		{
+			"h": 48,
+			"w": 48,
+			"x": 96,
+			"y": 0
+		},
+		{
+			"h": 48,
+			"w": 48,
+			"x": 144,
+			"y": 0
+		}
+	],
+	"frame_width": 48,
+	"name": "mage_passive_burst_anim",
+	"prompt": "bursting outward and quickly fading into particles",
+	"rows": 1,
+	"source_image": "res://assets/generated/mage_passive_burst_base_frame_0.png",
+	"source_tool": "animate_sprite",
+	"spritesheet_height": 48,
+	"spritesheet_path": "res://assets/generated/mage_passive_burst_anim.png",
+	"spritesheet_width": 192,
+	"type": "animation"
+}

@@ -1,0 +1,39 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://ctt7pbinsf384"]
+
+[ext_resource type="Texture2D" uid="uid://c20fylbdcgiu6" path="res://assets/generated/mage_tornado_anim.png" id="1_5jimx"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_0uq6f"]
+atlas = ExtResource("1_5jimx")
+region = Rect2(0, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sum1x"]
+atlas = ExtResource("1_5jimx")
+region = Rect2(48, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_dimuv"]
+atlas = ExtResource("1_5jimx")
+region = Rect2(96, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4na6t"]
+atlas = ExtResource("1_5jimx")
+region = Rect2(144, 0, 48, 48)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_0uq6f")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sum1x")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_dimuv")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4na6t")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 12.0
+}]

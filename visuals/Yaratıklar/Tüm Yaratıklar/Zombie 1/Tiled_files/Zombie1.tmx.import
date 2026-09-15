@@ -1,0 +1,23 @@
+[remap]
+
+importer="YATI"
+type="PackedScene"
+uid="uid://ccxm2vkm76tww"
+path="res://.godot/imported/Zombie1.tmx-eb380adc651d97485e654b2bbc9b13e0.tscn"
+
+[deps]
+
+source_file="res://visuals/Yaratıklar/Tüm Yaratıklar/Zombie 1/Tiled_files/Zombie1.tmx"
+dest_files=["res://.godot/imported/Zombie1.tmx-eb380adc651d97485e654b2bbc9b13e0.tscn"]
+
+[params]
+
+use_default_filter=false
+add_class_as_metadata=false
+add_id_as_metadata=false
+no_alternative_tiles=false
+map_wangset_to_terrain=false
+custom_data_prefix="data_"
+tiled_project_file=""
+post_processor=""
+save_tileset_to=""

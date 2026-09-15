@@ -1,0 +1,29 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/weapons/lightning/icon_v2.png" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/fx_lightning_beam.tscn" id="3"]
+
+[node name="WeaponLightning" type="Node2D"]
+script = ExtResource("1")
+fire_rate = 1.4444
+damage = 0.0
+crit_chance = 0.05
+crit_damage = 1.5
+attack_range = 168.0
+sprite_forward_angle_deg = -45.57884214978765
+card_damage_bonus_ratio = 0.819
+continuous_beam = true
+beam_scene = ExtResource("3")
+beam_tick_interval = 0.3703703
+
+[node name="FireTimer" type="Timer" parent="."]
+autostart = true
+
+[node name="Icon" type="Sprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(0.331361, 0.331361)
+texture = ExtResource("2")
+
+[node name="Muzzle" type="Marker2D" parent="Icon"]
+position = Vector2(81, -79)

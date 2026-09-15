@@ -1,0 +1,23 @@
+[remap]
+
+importer="YATI"
+type="PackedScene"
+uid="uid://cemcob4i02h8f"
+path="res://.godot/imported/Seyyar satıcı.tmx-fc103c2c13c12d2e5905a250854e29ce.tscn"
+
+[deps]
+
+source_file="res://harita/Seyyar satıcı.tmx"
+dest_files=["res://.godot/imported/Seyyar satıcı.tmx-fc103c2c13c12d2e5905a250854e29ce.tscn"]
+
+[params]
+
+use_default_filter=false
+add_class_as_metadata=false
+add_id_as_metadata=false
+no_alternative_tiles=false
+map_wangset_to_terrain=false
+custom_data_prefix="data_"
+tiled_project_file=""
+post_processor=""
+save_tileset_to=""

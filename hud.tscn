@@ -1,0 +1,327 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://scripts/hud.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/skill_icon.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/shop_panel.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/mine_fill_bar.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/shop_item_icon.gd" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/stats_panel.tscn" id="7"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop_frame.png" id="8"]
+[ext_resource type="Script" path="res://scripts/sprite_bar.gd" id="9"]
+[ext_resource type="Texture2D" path="res://assets/ui/health_bar_frame.png" id="10"]
+[ext_resource type="Texture2D" path="res://assets/ui/health_bar_fill.png" id="11"]
+[ext_resource type="Texture2D" path="res://assets/ui/shield_bar_frame.png" id="12"]
+[ext_resource type="Texture2D" path="res://assets/ui/shield_bar_fill.png" id="13"]
+[ext_resource type="Texture2D" path="res://assets/ui/xp_bar_frame.png" id="14"]
+[ext_resource type="Texture2D" path="res://assets/ui/xp_bar_fill.png" id="15"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1")
+
+[node name="FPSLabel" type="Label" parent="."]
+offset_left = 8.0
+offset_top = 2.0
+offset_right = 100.0
+offset_bottom = 20.0
+theme_override_font_sizes/font_size = 20
+text = "FPS: 60"
+
+[node name="LevelLabel" type="Label" parent="."]
+offset_left = 20.0
+offset_top = 12.0
+offset_right = 130.0
+offset_bottom = 46.0
+theme_override_font_sizes/font_size = 44
+text = "Lv 1"
+
+[node name="HealthBar" type="Control" parent="."]
+offset_left = 20.0
+offset_top = 50.0
+offset_right = 239.0
+offset_bottom = 107.0
+script = ExtResource("9")
+frame_texture = ExtResource("10")
+fill_texture = ExtResource("11")
+
+[node name="ItemShieldBar" type="Control" parent="."]
+offset_left = 20.0
+offset_top = 115.0
+offset_right = 239.0
+offset_bottom = 172.0
+script = ExtResource("9")
+frame_texture = ExtResource("14")
+fill_texture = ExtResource("15")
+visible = false
+
+[node name="StatsLabel" type="Label" parent="."]
+offset_left = 20.0
+offset_top = 249.0
+offset_right = 620.0
+offset_bottom = 275.0
+theme_override_font_sizes/font_size = 29
+text = "Hız: 300  Zırh: 0  Hasar: 10  Ateş Hızı: 1.00/sn"
+
+[node name="SkillIcon" type="Control" parent="."]
+offset_left = 20.0
+offset_top = 281.0
+offset_right = 74.0
+offset_bottom = 335.0
+script = ExtResource("3")
+skill_id = 1
+
+[node name="SkillLabel" type="Label" parent="."]
+offset_left = 84.0
+offset_top = 297.0
+offset_right = 480.0
+offset_bottom = 323.0
+theme_override_font_sizes/font_size = 31
+text = "Yetenek: HAZIR (F)"
+
+[node name="TimerLabel" type="Label" parent="."]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -140.0
+offset_top = 12.0
+offset_right = -20.0
+offset_bottom = 46.0
+theme_override_font_sizes/font_size = 48
+horizontal_alignment = 2
+text = "00:00"
+
+[node name="GoldLabel" type="Label" parent="."]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -200.0
+offset_top = 52.0
+offset_right = -20.0
+offset_bottom = 78.0
+theme_override_font_sizes/font_size = 37
+horizontal_alignment = 2
+text = "Altın: 0"
+
+[node name="StatsToggleButton" type="Button" parent="."]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -200.0
+offset_top = 82.0
+offset_right = -20.0
+offset_bottom = 116.0
+theme_override_font_sizes/font_size = 26
+text = "STATLAR"
+
+[node name="StatsPanelInstance" parent="." instance=ExtResource("7")]
+visible = false
+
+[node name="XPBar" type="Control" parent="."]
+offset_left = 20.0
+offset_top = 180.0
+offset_right = 239.0
+offset_bottom = 237.0
+script = ExtResource("9")
+frame_texture = ExtResource("12")
+fill_texture = ExtResource("13")
+
+[node name="ShopPanel" type="Control" parent="."]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -300.0
+offset_top = 128.0
+offset_right = -12.0
+offset_bottom = 620.0
+script = ExtResource("4")
+
+[node name="Frame" type="NinePatchRect" parent="ShopPanel"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+texture = ExtResource("8")
+patch_margin_left = 28
+patch_margin_top = 28
+patch_margin_right = 28
+patch_margin_bottom = 28
+
+[node name="Margin" type="MarginContainer" parent="ShopPanel"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 34
+theme_override_constants/margin_top = 34
+theme_override_constants/margin_right = 34
+theme_override_constants/margin_bottom = 34
+
+[node name="Scroll" type="ScrollContainer" parent="ShopPanel/Margin"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="ShopPanel/Margin/Scroll"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="ShopPanel/Margin/Scroll/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "DÜKKAN"
+horizontal_alignment = 1
+
+[node name="MineCard" type="PanelContainer" parent="ShopPanel/Margin/Scroll/VBox"]
+layout_mode = 2
+
+[node name="Inner" type="MarginContainer" parent="ShopPanel/Margin/Scroll/VBox/MineCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="CardVBox" type="VBoxContainer" parent="ShopPanel/Margin/Scroll/VBox/MineCard/Inner"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="IconWrap" type="CenterContainer" parent="ShopPanel/Margin/Scroll/VBox/MineCard/Inner/CardVBox"]
+layout_mode = 2
+
+[node name="Icon" type="Control" parent="ShopPanel/Margin/Scroll/VBox/MineCard/Inner/CardVBox/IconWrap"]
+custom_minimum_size = Vector2(60, 60)
+layout_mode = 2
+script = ExtResource("6")
+item_type = "mine"
+
+[node name="NameLabel" type="Label" parent="ShopPanel/Margin/Scroll/VBox/MineCard/Inner/CardVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 27
+horizontal_alignment = 1
+text = "Maden Lv0/100"
+
+[node name="DescLabel" type="Label" parent="ShopPanel/Margin/Scroll/VBox/MineCard/Inner/CardVBox"]
+layout_mode = 2
+autowrap_mode = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 20
+text = "Seviyeye göre sıklıkla 1'er altın üretir"
+
+[node name="FillBar" type="Control" parent="ShopPanel/Margin/Scroll/VBox/MineCard/Inner/CardVBox"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+script = ExtResource("5")
+
+[node name="BuyRow" type="HBoxContainer" parent="ShopPanel/Margin/Scroll/VBox/MineCard/Inner/CardVBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="CoinIcon" type="Control" parent="ShopPanel/Margin/Scroll/VBox/MineCard/Inner/CardVBox/BuyRow"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+script = ExtResource("6")
+item_type = "mine"
+
+[node name="BuyButton" type="Button" parent="ShopPanel/Margin/Scroll/VBox/MineCard/Inner/CardVBox/BuyRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 38)
+text = "10"
+
+[node name="SprayCard" type="PanelContainer" parent="ShopPanel/Margin/Scroll/VBox"]
+layout_mode = 2
+
+[node name="Inner" type="MarginContainer" parent="ShopPanel/Margin/Scroll/VBox/SprayCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="CardVBox" type="VBoxContainer" parent="ShopPanel/Margin/Scroll/VBox/SprayCard/Inner"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="IconWrap" type="CenterContainer" parent="ShopPanel/Margin/Scroll/VBox/SprayCard/Inner/CardVBox"]
+layout_mode = 2
+
+[node name="Icon" type="Control" parent="ShopPanel/Margin/Scroll/VBox/SprayCard/Inner/CardVBox/IconWrap"]
+custom_minimum_size = Vector2(60, 60)
+layout_mode = 2
+script = ExtResource("6")
+item_type = "spray"
+
+[node name="NameLabel" type="Label" parent="ShopPanel/Margin/Scroll/VBox/SprayCard/Inner/CardVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 27
+horizontal_alignment = 1
+text = "İtici Sprey Lv0/10"
+
+[node name="DescLabel" type="Label" parent="ShopPanel/Margin/Scroll/VBox/SprayCard/Inner/CardVBox"]
+layout_mode = 2
+autowrap_mode = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 20
+text = "10sn'de bir yakını iter"
+
+[node name="BuyRow" type="HBoxContainer" parent="ShopPanel/Margin/Scroll/VBox/SprayCard/Inner/CardVBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="CoinIcon" type="Control" parent="ShopPanel/Margin/Scroll/VBox/SprayCard/Inner/CardVBox/BuyRow"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+script = ExtResource("6")
+item_type = "mine"
+
+[node name="BuyButton" type="Button" parent="ShopPanel/Margin/Scroll/VBox/SprayCard/Inner/CardVBox/BuyRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 38)
+text = "50"
+
+[node name="ShieldCard" type="PanelContainer" parent="ShopPanel/Margin/Scroll/VBox"]
+layout_mode = 2
+
+[node name="Inner" type="MarginContainer" parent="ShopPanel/Margin/Scroll/VBox/ShieldCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="CardVBox" type="VBoxContainer" parent="ShopPanel/Margin/Scroll/VBox/ShieldCard/Inner"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="IconWrap" type="CenterContainer" parent="ShopPanel/Margin/Scroll/VBox/ShieldCard/Inner/CardVBox"]
+layout_mode = 2
+
+[node name="Icon" type="Control" parent="ShopPanel/Margin/Scroll/VBox/ShieldCard/Inner/CardVBox/IconWrap"]
+custom_minimum_size = Vector2(60, 60)
+layout_mode = 2
+script = ExtResource("6")
+item_type = "shield"
+
+[node name="NameLabel" type="Label" parent="ShopPanel/Margin/Scroll/VBox/ShieldCard/Inner/CardVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 27
+horizontal_alignment = 1
+text = "Sihirli Kalkan Lv0/100"
+
+[node name="DescLabel" type="Label" parent="ShopPanel/Margin/Scroll/VBox/ShieldCard/Inner/CardVBox"]
+layout_mode = 2
+autowrap_mode = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 20
+text = "Ayrı can havuzu, hasarı önce o emer"
+
+[node name="BuyRow" type="HBoxContainer" parent="ShopPanel/Margin/Scroll/VBox/ShieldCard/Inner/CardVBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="CoinIcon" type="Control" parent="ShopPanel/Margin/Scroll/VBox/ShieldCard/Inner/CardVBox/BuyRow"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+script = ExtResource("6")
+item_type = "mine"
+
+[node name="BuyButton" type="Button" parent="ShopPanel/Margin/Scroll/VBox/ShieldCard/Inner/CardVBox/BuyRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 38)
+text = "15"
+

@@ -1,0 +1,67 @@
+[gd_resource type="Theme" format=3 uid="uid://ceslvnp1x5pxb"]
+
+[ext_resource type="FontFile" uid="uid://buuvwvb3ccc16" path="res://assets/fonts/m5x7.ttf" id="3"]
+[ext_resource type="Texture2D" uid="uid://bdi0wdc804r2c" path="res://assets/ui/newui/button_wood.png" id="4"]
+
+[sub_resource type="StyleBoxTexture" id="OSBF_disabled"]
+texture = ExtResource("4")
+texture_margin_left = 16.0
+texture_margin_top = 8.0
+texture_margin_right = 16.0
+texture_margin_bottom = 8.0
+modulate_color = Color(0.55, 0.55, 0.55, 0.75)
+
+[sub_resource type="StyleBoxTexture" id="OSBF_hover"]
+texture = ExtResource("4")
+texture_margin_left = 16.0
+texture_margin_top = 8.0
+texture_margin_right = 16.0
+texture_margin_bottom = 8.0
+modulate_color = Color(1.22, 1.14, 1.04, 1)
+
+[sub_resource type="StyleBoxTexture" id="OSBF_normal"]
+texture = ExtResource("4")
+texture_margin_left = 16.0
+texture_margin_top = 8.0
+texture_margin_right = 16.0
+texture_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxTexture" id="OSBF_pressed"]
+texture = ExtResource("4")
+texture_margin_left = 16.0
+texture_margin_top = 8.0
+texture_margin_right = 16.0
+texture_margin_bottom = 8.0
+modulate_color = Color(0.72, 0.68, 0.64, 1)
+
+[sub_resource type="StyleBoxFlat" id="OSBF_panel"]
+bg_color = Color(0.13, 0.11, 0.09, 0.92)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.32, 0.2, 0.11, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
+[resource]
+default_font = ExtResource("3")
+default_font_size = 88
+Button/colors/font_color = Color(0.95, 0.9, 0.78, 1)
+Button/colors/font_disabled_color = Color(0.55, 0.5, 0.45, 1)
+Button/colors/font_hover_color = Color(1, 0.95, 0.8, 1)
+Button/colors/font_pressed_color = Color(0.85, 0.8, 0.65, 1)
+Button/fonts/font = ExtResource("3")
+Button/styles/disabled = SubResource("OSBF_disabled")
+Button/styles/hover = SubResource("OSBF_hover")
+Button/styles/normal = SubResource("OSBF_normal")
+Button/styles/pressed = SubResource("OSBF_pressed")
+Label/colors/font_color = Color(0.95, 0.92, 0.85, 1)
+Label/fonts/font = ExtResource("3")
+Panel/styles/panel = SubResource("OSBF_panel")
+PanelContainer/styles/panel = SubResource("OSBF_panel")
+ProgressBar/fonts/font = ExtResource("3")
+TooltipLabel/font_sizes/font_size = 22
+TooltipLabel/fonts/font = ExtResource("3")

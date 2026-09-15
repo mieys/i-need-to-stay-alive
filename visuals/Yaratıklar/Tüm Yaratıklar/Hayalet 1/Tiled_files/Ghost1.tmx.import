@@ -1,0 +1,23 @@
+[remap]
+
+importer="YATI"
+type="PackedScene"
+uid="uid://bh52xc8pvojjk"
+path="res://.godot/imported/Ghost1.tmx-4e6f0dd3cd63856e3f5b2b0048fe189e.tscn"
+
+[deps]
+
+source_file="res://visuals/Yaratıklar/Tüm Yaratıklar/Hayalet 1/Tiled_files/Ghost1.tmx"
+dest_files=["res://.godot/imported/Ghost1.tmx-4e6f0dd3cd63856e3f5b2b0048fe189e.tscn"]
+
+[params]
+
+use_default_filter=false
+add_class_as_metadata=false
+add_id_as_metadata=false
+no_alternative_tiles=false
+map_wangset_to_terrain=false
+custom_data_prefix="data_"
+tiled_project_file=""
+post_processor=""
+save_tileset_to=""

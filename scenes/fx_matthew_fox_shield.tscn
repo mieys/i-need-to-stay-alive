@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://crtaftdojn27q"]
+
+[ext_resource type="Script" uid="uid://bt0nnhojecmpl" path="res://scripts/fx_matthew_fox_shield.gd" id="1"]
+
+[node name="FxMatthewFoxShield" type="Node2D" unique_id=1067932130]
+z_index = 55
+script = ExtResource("1")

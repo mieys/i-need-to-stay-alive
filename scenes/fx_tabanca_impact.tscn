@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_animation.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/weapons/tabanca/impact_v2/impact_frames_v2.tres" id="2"]
+
+[node name="FxTabancaImpact" type="AnimatedSprite2D"]
+texture_filter = 1
+scale = Vector2(0.18, 0.18)
+z_index = 60
+sprite_frames = ExtResource("2")
+script = ExtResource("1")

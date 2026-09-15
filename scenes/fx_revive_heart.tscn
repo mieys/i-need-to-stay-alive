@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_revive_heart.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/generated/fx_revive_heart_frames.tres" id="2"]
+
+[node name="FxReviveHeart" type="AnimatedSprite2D"]
+position = Vector2(0, -165)
+z_index = 58
+sprite_frames = ExtResource("2")
+script = ExtResource("1")

@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dgfj1sfljw7h2"
+path="res://.godot/imported/Sandık açma sesi.mp3-3d88e00de23b72444a2f541274a6921a.mp3str"
+
+[deps]
+
+source_file="res://assets/audio/Sandık açma sesi.mp3"
+dest_files=["res://.godot/imported/Sandık açma sesi.mp3-3d88e00de23b72444a2f541274a6921a.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

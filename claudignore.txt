@@ -1,0 +1,32 @@
+# Hassas Bilgiler ve Anahtarlar (Güvenlik İçin En Önemlisi)
+.env
+.env.*
+*.pem
+*.key
+*.cert
+secrets.json
+
+# Bağımlılıklar ve Kütüphaneler (Gereksiz Bağlam/Context Harcamamak İçin)
+node_modules/
+venv/
+.venv/
+vendor/
+
+# Derleme ve Çıktı Klasörleri
+dist/
+build/
+out/
+.next/
+.nuxt/
+
+# Sistem ve Editör Dosyaları
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Büyük Log ve Veri Dosyaları
+*.log
+*.sqlite
+*.db
+*.csv

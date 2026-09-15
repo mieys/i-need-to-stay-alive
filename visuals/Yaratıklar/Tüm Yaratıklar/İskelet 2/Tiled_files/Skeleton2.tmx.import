@@ -1,0 +1,23 @@
+[remap]
+
+importer="YATI"
+type="PackedScene"
+uid="uid://bmy6frwykmdt6"
+path="res://.godot/imported/Skeleton2.tmx-1dbb08aab584b01391abebe6d43c8354.tscn"
+
+[deps]
+
+source_file="res://visuals/Yaratıklar/Tüm Yaratıklar/İskelet 2/Tiled_files/Skeleton2.tmx"
+dest_files=["res://.godot/imported/Skeleton2.tmx-1dbb08aab584b01391abebe6d43c8354.tscn"]
+
+[params]
+
+use_default_filter=false
+add_class_as_metadata=false
+add_id_as_metadata=false
+no_alternative_tiles=false
+map_wangset_to_terrain=false
+custom_data_prefix="data_"
+tiled_project_file=""
+post_processor=""
+save_tileset_to=""

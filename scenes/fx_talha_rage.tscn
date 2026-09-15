@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://c83jny02kqt12"]
+
+[ext_resource type="Script" uid="uid://d74h1d77x2n4q" path="res://scripts/fx_talha_rage.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://c2f3nxqev371u" path="res://assets/audio/topuz_hit.mp3" id="2"]
+
+[node name="FxTalhaRage" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Sound" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("2")
+volume_db = -5.0
+max_distance = 1500.0

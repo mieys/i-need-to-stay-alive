@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://cuswd4b85t0lf"]
+
+[ext_resource type="Shader" uid="uid://fcyufq7kts1o" path="res://shaders/cloud_shadows.gdshader" id="1"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/shadow_strength = 0.1450000068875
+shader_parameter/cloud_scale = 900.0
+shader_parameter/softness = 0.02
+shader_parameter/movement_speed = 0.004
+shader_parameter/pixel_size = 3.00800009538

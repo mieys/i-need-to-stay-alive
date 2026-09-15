@@ -1,0 +1,58 @@
+{
+	"animation_name": "magic_energy_burst_growing_outward_and_fading_away",
+	"animation_style": "",
+	"animation_type": "magic energy burst growing outward and fading away",
+	"columns": 6,
+	"directions": [],
+	"frame_count": 6,
+	"frame_height": 64,
+	"frame_paths": [],
+	"frame_regions": [
+		{
+			"h": 64,
+			"w": 64,
+			"x": 0,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 64,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 128,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 192,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 256,
+			"y": 0
+		},
+		{
+			"h": 64,
+			"w": 64,
+			"x": 320,
+			"y": 0
+		}
+	],
+	"frame_width": 64,
+	"name": "shaman_totem_rune_flash",
+	"prompt": "magic energy burst growing outward and fading away",
+	"rows": 1,
+	"source_image": "res://assets/generated/shaman_totem_rune_flash_base2.png",
+	"source_tool": "animate_sprite",
+	"spritesheet_height": 64,
+	"spritesheet_path": "res://assets/generated/shaman_totem_rune_flash.png",
+	"spritesheet_width": 384,
+	"type": "animation"
+}

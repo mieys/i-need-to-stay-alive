@@ -1,0 +1,62 @@
+[gd_scene format=3 uid="uid://c8hl4evojcv84"]
+
+[ext_resource type="Script" uid="uid://b421v3f2k23jc" path="res://scripts/fx_totem_burst.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://bkjcssinehcy8" path="res://assets/generated/shaman_totem_rune_flash.png" id="1_kg8fx"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3nvmt"]
+atlas = ExtResource("1_kg8fx")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6reqk"]
+atlas = ExtResource("1_kg8fx")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_m60xr"]
+atlas = ExtResource("1_kg8fx")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ml7d0"]
+atlas = ExtResource("1_kg8fx")
+region = Rect2(192, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_g2f2x"]
+atlas = ExtResource("1_kg8fx")
+region = Rect2(256, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_dtes5"]
+atlas = ExtResource("1_kg8fx")
+region = Rect2(320, 0, 64, 64)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_04ejw"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3nvmt")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6reqk")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_m60xr")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ml7d0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_g2f2x")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_dtes5")
+}],
+"loop": 0,
+"name": &"magic_energy_burst_growing_outward_and_fading_away",
+"speed": 16.0
+}]
+
+[node name="FxShamanCastShield" type="AnimatedSprite2D" unique_id=1699951273]
+modulate = Color(0.35, 0.65, 1, 1)
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_04ejw")
+animation = &"magic_energy_burst_growing_outward_and_fading_away"
+autoplay = "magic_energy_burst_growing_outward_and_fading_away"
+script = ExtResource("1")
