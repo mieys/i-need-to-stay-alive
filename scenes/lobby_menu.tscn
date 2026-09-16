@@ -1,0 +1,334 @@
+[gd_scene format=3 uid="uid://uxendny65f3t"]
+
+[ext_resource type="Script" uid="uid://bthilkt0a35d3" path="res://scripts/lobby_menu.gd" id="1_lobby"]
+[ext_resource type="Theme" uid="uid://ceslvnp1x5pxb" path="res://assets/fonts/theme_original.tres" id="2_theme"]
+[ext_resource type="Texture2D" uid="uid://b7mx27ywwqu7s" path="res://assets/ui/lobby_bg.png" id="4_bg"]
+[ext_resource type="Script" uid="uid://cyee276hu5q6r" path="res://scripts/skill_icon.gd" id="5_skillicon"]
+
+[node name="LobbyMenu" type="Control" unique_id=1474517384]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_lobby")
+
+[node name="BackgroundImage" type="TextureRect" parent="." unique_id=2117844304]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("4_bg")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Background" type="ColorRect" parent="." unique_id=2117844303]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.07, 0.08, 0.4)
+
+[node name="TopBar" type="HBoxContainer" parent="." unique_id=1754383019]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 40.0
+offset_top = 20.0
+offset_right = -40.0
+offset_bottom = 80.0
+grow_horizontal = 2
+theme_override_constants/separation = 20
+
+[node name="BackBtn" type="Button" parent="TopBar" unique_id=1588431511]
+custom_minimum_size = Vector2(160, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 43
+text = "< GERİ DÖN"
+
+[node name="Title" type="Label" parent="TopBar" unique_id=1691609366]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 83
+text = "ÇOK OYUNCULU LOBİ"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="TopBar" unique_id=1127454748]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.85, 0.4, 1)
+theme_override_font_sizes/font_size = 36
+text = "Sunucu kurun veya bir adrese katılın"
+horizontal_alignment = 2
+autowrap_mode = 3
+
+[node name="LeftPanel" type="PanelContainer" parent="." unique_id=1993549264]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_left = 40.0
+offset_top = 100.0
+offset_right = 440.0
+offset_bottom = -40.0
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="LeftPanel" unique_id=55126323]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="LeftPanel/Margin" unique_id=719074034]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="ProfileHeader" type="Label" parent="LeftPanel/Margin/VBox" unique_id=980327491]
+layout_mode = 2
+theme_override_font_sizes/font_size = 38
+text = "Oyuncu Profili"
+horizontal_alignment = 1
+
+[node name="NameHBox" type="VBoxContainer" parent="LeftPanel/Margin/VBox" unique_id=1722922177]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NameLabel" type="Label" parent="LeftPanel/Margin/VBox/NameHBox" unique_id=239585413]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Kullanıcı Adı:"
+
+[node name="PlayerNameInput" type="LineEdit" parent="LeftPanel/Margin/VBox/NameHBox" unique_id=196193923]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "Oyuncu 1"
+placeholder_text = "Adınızı girin..."
+
+[node name="HSeparator1" type="HSeparator" parent="LeftPanel/Margin/VBox" unique_id=154860972]
+layout_mode = 2
+
+[node name="RoomHeader" type="Label" parent="LeftPanel/Margin/VBox" unique_id=527540651]
+layout_mode = 2
+theme_override_font_sizes/font_size = 38
+text = "Oda İşlemleri"
+horizontal_alignment = 1
+
+[node name="CreateBtn" type="Button" parent="LeftPanel/Margin/VBox" unique_id=1372215373]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+text = "+ SUNUCU KUR"
+
+[node name="OrLabel" type="Label" parent="LeftPanel/Margin/VBox" unique_id=772587557]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1)
+theme_override_font_sizes/font_size = 29
+text = "VEYA"
+horizontal_alignment = 1
+
+[node name="JoinHBox" type="HBoxContainer" parent="LeftPanel/Margin/VBox" unique_id=1758839264]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RoomCodeInput" type="LineEdit" parent="LeftPanel/Margin/VBox/JoinHBox" unique_id=834938349]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 36
+placeholder_text = "ODA KODU (ör. 482913)"
+alignment = 1
+max_length = 40
+
+[node name="JoinBtn" type="Button" parent="LeftPanel/Margin/VBox/JoinHBox" unique_id=1573865432]
+custom_minimum_size = Vector2(110, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "KATIL"
+
+[node name="HSeparator2" type="HSeparator" parent="LeftPanel/Margin/VBox" unique_id=811186824]
+layout_mode = 2
+
+[node name="RoomInfoLabel" type="Label" parent="LeftPanel/Margin/VBox" unique_id=1490450452]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.9, 0.4, 1)
+theme_override_font_sizes/font_size = 40
+text = "Oda: Henüz Bağlı Değil"
+horizontal_alignment = 1
+
+[node name="PublicIpLabel" type="Label" parent="LeftPanel/Margin/VBox" unique_id=835480706]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 29
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="PlayerListTitle" type="Label" parent="LeftPanel/Margin/VBox" unique_id=1458580646]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "Odadaki Oyuncular:"
+
+[node name="PlayerScroll" type="ScrollContainer" parent="LeftPanel/Margin/VBox" unique_id=1019550814]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="PlayerListVBox" type="VBoxContainer" parent="LeftPanel/Margin/VBox/PlayerScroll" unique_id=60717417]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="ReadyBtn" type="Button" parent="LeftPanel/Margin/VBox" unique_id=1225955164]
+visible = false
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 43
+text = "HAZIRIM"
+
+[node name="CloseRoomBtn" type="Button" parent="LeftPanel/Margin/VBox" unique_id=2036695637]
+visible = false
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.35, 0.3, 1)
+theme_override_font_sizes/font_size = 40
+text = "ODAYI KAPAT"
+
+[node name="StartGameBtn" type="Button" parent="LeftPanel/Margin/VBox" unique_id=1572822328]
+visible = false
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 1, 0.4, 1)
+theme_override_font_sizes/font_size = 47
+text = "OYUNU BAŞLAT (HOST)"
+
+[node name="RightArea" type="Control" parent="." unique_id=1647729510]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 470.0
+offset_top = 90.0
+offset_right = -40.0
+offset_bottom = -40.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="RightArea" unique_id=1958483109]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 460.0
+grow_horizontal = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="Title" type="Label" parent="RightArea/VBox" unique_id=1619406915]
+layout_mode = 2
+theme_override_font_sizes/font_size = 72
+text = "Karakterini Seç"
+horizontal_alignment = 1
+
+[node name="Grid" type="GridContainer" parent="RightArea/VBox" unique_id=1451114947]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 4
+
+[node name="InfoPanel" type="PanelContainer" parent="RightArea" unique_id=1239215747]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -253.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="InfoMargin" type="MarginContainer" parent="RightArea/InfoPanel" unique_id=1269945816]
+layout_mode = 2
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 22
+theme_override_constants/margin_bottom = 12
+
+[node name="InfoVBoxOuter" type="VBoxContainer" parent="RightArea/InfoPanel/InfoMargin" unique_id=1927866051]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="NameLabel" type="Label" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter" unique_id=1589464511]
+layout_mode = 2
+theme_override_font_sizes/font_size = 44
+text = "Karakter"
+
+[node name="TextScroll" type="ScrollContainer" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter" unique_id=1325154075]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="RowsVBox" type="VBoxContainer" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll" unique_id=1512844692]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="UltiRow" type="HBoxContainer" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox" unique_id=829986486]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SkillIcon1" type="Control" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/UltiRow" unique_id=433380382]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+script = ExtResource("5_skillicon")
+
+[node name="UltiDescLabel" type="Label" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/UltiRow" unique_id=1053743567]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.8, 0.8, 0.85, 1)
+theme_override_font_sizes/font_size = 32
+autowrap_mode = 2
+
+[node name="TemelRow" type="HBoxContainer" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox" unique_id=1667456290]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SkillIcon2" type="Control" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow" unique_id=349946533]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+script = ExtResource("5_skillicon")
+
+[node name="TemelDescLabel" type="Label" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow" unique_id=1476100259]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.8, 0.8, 0.85, 1)
+theme_override_font_sizes/font_size = 32
+autowrap_mode = 2
+
+[node name="PassiveRow" type="HBoxContainer" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox" unique_id=1227577984]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PassiveIcon" type="Control" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/PassiveRow" unique_id=1430037035]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+script = ExtResource("5_skillicon")
+
+[node name="PassiveDescLabel" type="Label" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/PassiveRow" unique_id=766693261]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.8, 0.8, 0.85, 1)
+theme_override_font_sizes/font_size = 32
+autowrap_mode = 2
+
+[node name="StatsLabel" type="Label" parent="RightArea/InfoPanel/InfoMargin/InfoVBoxOuter" unique_id=1561347781]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
+theme_override_font_sizes/font_size = 28
+autowrap_mode = 3

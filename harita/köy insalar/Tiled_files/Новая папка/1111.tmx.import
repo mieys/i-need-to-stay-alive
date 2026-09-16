@@ -1,0 +1,23 @@
+[remap]
+
+importer="YATI"
+type="PackedScene"
+uid="uid://bys2ubed2p58j"
+path="res://.godot/imported/1111.tmx-c78fd1df37e78833159178798a760643.tscn"
+
+[deps]
+
+source_file="res://harita/köy insalar/Tiled_files/Новая папка/1111.tmx"
+dest_files=["res://.godot/imported/1111.tmx-c78fd1df37e78833159178798a760643.tscn"]
+
+[params]
+
+use_default_filter=false
+add_class_as_metadata=false
+add_id_as_metadata=false
+no_alternative_tiles=false
+map_wangset_to_terrain=false
+custom_data_prefix="data_"
+tiled_project_file=""
+post_processor=""
+save_tileset_to=""

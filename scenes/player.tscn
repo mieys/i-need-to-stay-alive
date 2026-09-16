@@ -1,0 +1,120 @@
+[gd_scene format=3 uid="uid://c5i4o3ajt2266"]
+
+[ext_resource type="Script" uid="uid://dk2bp73py7bpx" path="res://scripts/player.gd" id="1"]
+[ext_resource type="Script" uid="uid://bv357ieieu4pe" path="res://scripts/shield_visual.gd" id="5"]
+[ext_resource type="AudioStream" uid="uid://dx7bobrwytl7v" path="res://assets/audio/fire.mp3" id="6"]
+[ext_resource type="Script" uid="uid://c1yhbklktfh6d" path="res://scripts/shadow_blob.gd" id="7"]
+[ext_resource type="AudioStream" uid="uid://b1aw5yjtieulm" path="res://assets/audio/xp_pickup.mp3" id="8"]
+[ext_resource type="AudioStream" uid="uid://dxlagnflwm8ow" path="res://assets/audio/shield_damage.wav" id="9"]
+[ext_resource type="Script" uid="uid://bi5mnvkbou2d6" path="res://scripts/overhead_bar.gd" id="10"]
+[ext_resource type="Script" uid="uid://d185etts5jt6s" path="res://scripts/remote_player_name.gd" id="11_name"]
+[ext_resource type="SpriteFrames" uid="uid://cta55xjsqi3a8" path="res://assets/fx/shield_bubble/bubble_frames.tres" id="12"]
+[ext_resource type="AudioStream" uid="uid://eemy3wbj7q68" path="res://assets/audio/buyucu_ulti.wav" id="13"]
+[ext_resource type="AudioStream" uid="uid://cva5u03wv8xhs" path="res://assets/audio/shield_break.wav" id="14"]
+[ext_resource type="AudioStream" uid="uid://dqh0urvhuemb" path="res://assets/audio/shield_regen.wav" id="15"]
+[ext_resource type="Script" uid="uid://bycu7dsvuila3" path="res://scripts/downed_timer_label.gd" id="16_downed"]
+[ext_resource type="AudioStream" uid="uid://b2je1vsf4q0jo" path="res://assets/audio/yürüme sesi 1.mp3" id="18_walk1"]
+[ext_resource type="AudioStream" uid="uid://djjcyc6lmp0ec" path="res://assets/audio/yürüme sesi 2.mp3" id="19_walk2"]
+[ext_resource type="AudioStream" uid="uid://ccdf4mqx7w32p" path="res://assets/audio/yürüme sesi 3.mp3" id="20_walk3"]
+[ext_resource type="AudioStream" uid="uid://dr504qlhygtwt" path="res://assets/audio/yürüme sesi 4.mp3" id="21_walk4"]
+[ext_resource type="AudioStream" uid="uid://7fmk66hjvtcp" path="res://assets/audio/kalkansız hasar alma.mp3" id="22_noshield"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 16.0
+
+[node name="Player" type="CharacterBody2D" unique_id=1004575886 groups=["player"]]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("1")
+speed = 91.0
+
+[node name="Shadow" type="Node2D" parent="." unique_id=1784007402]
+position = Vector2(0, 55)
+scale = Vector2(20, 8)
+script = ExtResource("7")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=72550131]
+texture_filter = 1
+scale = Vector2(1.27575, 1.27575)
+offset = Vector2(0, -5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1072439634]
+position = Vector2(0, 2)
+shape = SubResource("CircleShape2D_1")
+
+[node name="ShieldVisual" type="Node2D" parent="." unique_id=2122196971]
+script = ExtResource("5")
+
+[node name="BubbleSprite" type="AnimatedSprite2D" parent="ShieldVisual" unique_id=656465645]
+texture_filter = 1
+scale = Vector2(4.37475, 4.37475)
+sprite_frames = ExtResource("12")
+animation = &"loop"
+frame = 3
+
+[node name="BreakSound" type="AudioStreamPlayer2D" parent="ShieldVisual" unique_id=1711881811]
+stream = ExtResource("14")
+volume_db = -8.0
+max_distance = 1500.0
+
+[node name="RegenSound" type="AudioStreamPlayer2D" parent="ShieldVisual" unique_id=515363636]
+stream = ExtResource("15")
+volume_db = -10.0
+max_distance = 1500.0
+
+[node name="NameLabel" type="Label" parent="." unique_id=1874142294]
+script = ExtResource("11_name")
+
+[node name="OverheadBar" type="Node2D" parent="." unique_id=719039371]
+script = ExtResource("10")
+
+[node name="DownedTimerLabel" type="Label" parent="." unique_id=329204391]
+script = ExtResource("16_downed")
+
+[node name="FireSound" type="AudioStreamPlayer2D" parent="." unique_id=873886964]
+stream = ExtResource("6")
+volume_db = -10.0
+max_distance = 1500.0
+
+[node name="XPPickupSound" type="AudioStreamPlayer2D" parent="." unique_id=522973309]
+stream = ExtResource("8")
+volume_db = -16.0
+max_distance = 1500.0
+
+[node name="ShieldHitSound" type="AudioStreamPlayer2D" parent="." unique_id=179380933]
+stream = ExtResource("9")
+volume_db = -14.42
+max_distance = 1500.0
+
+[node name="NoShieldDamageSound" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("22_noshield")
+volume_db = -12.0
+max_distance = 1500.0
+
+[node name="BuyucuUltiSound" type="AudioStreamPlayer2D" parent="." unique_id=917616091]
+stream = ExtResource("13")
+volume_db = -8.0
+max_distance = 1500.0
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1787155744]
+zoom = Vector2(2.0, 2.0)
+
+[node name="WalkSound1" type="AudioStreamPlayer2D" parent="." unique_id=1446737827]
+stream = ExtResource("18_walk1")
+volume_db = -12.04
+max_distance = 1500.0
+
+[node name="WalkSound2" type="AudioStreamPlayer2D" parent="." unique_id=1353279266]
+stream = ExtResource("19_walk2")
+volume_db = -12.04
+max_distance = 1500.0
+
+[node name="WalkSound3" type="AudioStreamPlayer2D" parent="." unique_id=995787899]
+stream = ExtResource("20_walk3")
+volume_db = -12.04
+max_distance = 1500.0
+
+[node name="WalkSound4" type="AudioStreamPlayer2D" parent="." unique_id=1983955473]
+stream = ExtResource("21_walk4")
+volume_db = -12.04
+max_distance = 1500.0

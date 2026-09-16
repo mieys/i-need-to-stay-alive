@@ -1,0 +1,61 @@
+[gd_scene format=3 uid="uid://cxp6sxfncw0gv"]
+
+[ext_resource type="Script" uid="uid://b421v3f2k23jc" path="res://scripts/fx_totem_burst.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://bstjp5gyhbq2y" path="res://assets/generated/shaman_totem_plant_dust.png" id="1_w5fd6"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_b0v21"]
+atlas = ExtResource("1_w5fd6")
+region = Rect2(0, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_41kkc"]
+atlas = ExtResource("1_w5fd6")
+region = Rect2(48, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_abq2t"]
+atlas = ExtResource("1_w5fd6")
+region = Rect2(96, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_laof3"]
+atlas = ExtResource("1_w5fd6")
+region = Rect2(144, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_517ar"]
+atlas = ExtResource("1_w5fd6")
+region = Rect2(192, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_yqt1s"]
+atlas = ExtResource("1_w5fd6")
+region = Rect2(240, 0, 48, 48)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_qlvx2"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_b0v21")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_41kkc")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_abq2t")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_laof3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_517ar")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_yqt1s")
+}],
+"loop": 0,
+"name": &"dirt_clumps_and_roots_bursting_upward_then_falling_back_down",
+"speed": 14.0
+}]
+
+[node name="FxTotemPlantDust" type="AnimatedSprite2D" unique_id=834624152]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_qlvx2")
+animation = &"dirt_clumps_and_roots_bursting_upward_then_falling_back_down"
+autoplay = "dirt_clumps_and_roots_bursting_upward_then_falling_back_down"
+script = ExtResource("1")

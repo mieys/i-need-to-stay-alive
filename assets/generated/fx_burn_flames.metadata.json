@@ -1,0 +1,58 @@
+{
+	"animation_name": "flickering_rising_flames_with_embers_drifting_upward",
+	"animation_style": "",
+	"animation_type": "flickering rising flames with embers drifting upward",
+	"columns": 6,
+	"directions": [],
+	"frame_count": 6,
+	"frame_height": 32,
+	"frame_paths": [],
+	"frame_regions": [
+		{
+			"h": 32,
+			"w": 32,
+			"x": 0,
+			"y": 0
+		},
+		{
+			"h": 32,
+			"w": 32,
+			"x": 32,
+			"y": 0
+		},
+		{
+			"h": 32,
+			"w": 32,
+			"x": 64,
+			"y": 0
+		},
+		{
+			"h": 32,
+			"w": 32,
+			"x": 96,
+			"y": 0
+		},
+		{
+			"h": 32,
+			"w": 32,
+			"x": 128,
+			"y": 0
+		},
+		{
+			"h": 32,
+			"w": 32,
+			"x": 160,
+			"y": 0
+		}
+	],
+	"frame_width": 32,
+	"name": "fx_burn_flames",
+	"prompt": "flickering rising flames with embers drifting upward",
+	"rows": 1,
+	"source_image": "res://assets/generated/fx_burn_status_base.png",
+	"source_tool": "animate_sprite",
+	"spritesheet_height": 32,
+	"spritesheet_path": "res://assets/generated/fx_burn_flames.png",
+	"spritesheet_width": 192,
+	"type": "animation"
+}

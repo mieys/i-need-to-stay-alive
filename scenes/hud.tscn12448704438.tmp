@@ -1,0 +1,610 @@
+[gd_scene format=3 uid="uid://31p0ga60cd0x"]
+
+[ext_resource type="Script" uid="uid://bncclvy5bcpre" path="res://scripts/hud.gd" id="1_hud"]
+[ext_resource type="Script" uid="uid://cyee276hu5q6r" path="res://scripts/skill_icon.gd" id="3"]
+[ext_resource type="Texture2D" uid="uid://cab1vmjy7asun" path="res://assets/character_ui/skill_bari.png" id="3_5pdws"]
+[ext_resource type="PackedScene" uid="uid://cnq07idbmed2x" path="res://scenes/stats_panel.tscn" id="7"]
+[ext_resource type="PackedScene" uid="uid://c0m4k7sxkrio5" path="res://scenes/shop_panel.tscn" id="16"]
+[ext_resource type="PackedScene" uid="uid://8gvwech4dc5h" path="res://scenes/inventory_panel.tscn" id="24"]
+[ext_resource type="Script" uid="uid://keugaujfmu0h" path="res://scripts/minimap.gd" id="minimap_script"]
+[ext_resource type="Texture2D" uid="uid://dqmopkcqha3m0" path="res://assets/character_ui/can_bari.png" id="tex_can_new"]
+[ext_resource type="Texture2D" uid="uid://br5vtbmsq6tyy" path="res://assets/ui/newui/icon_ingot.png" id="tex_gold_ingot"]
+[ext_resource type="Texture2D" uid="uid://c2osyuwinqfhd" path="res://assets/character_ui/kalkan_bari.png" id="tex_kalkan_new"]
+[ext_resource type="Texture2D" uid="uid://dwgni6qdg16m4" path="res://assets/character_ui/progress_fill.png" id="tex_mp"]
+[ext_resource type="Texture2D" uid="uid://ctf7guysx6wrw" path="res://assets/character_ui/karakter_avatari.png" id="tex_port"]
+
+[sub_resource type="StyleBoxFlat" id="SBF_gold_indicator"]
+bg_color = Color(0.47, 0.39, 0.23, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.25, 0.15, 0.08, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[node name="HUD" type="CanvasLayer" unique_id=857248905]
+process_mode = 3
+script = ExtResource("1_hud")
+
+[node name="ShopToggleButton" type="Button" parent="." unique_id=1848250707]
+process_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -178.0
+offset_top = 184.0
+offset_right = -10.0
+offset_bottom = 227.0
+theme_override_font_sizes/font_size = 25
+text = "DÜKKAN"
+clip_text = true
+
+[node name="EnvanterToggleButton" type="Button" parent="." unique_id=1848250708]
+process_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -178.0
+offset_top = 237.0
+offset_right = -10.0
+offset_bottom = 280.0
+theme_override_font_sizes/font_size = 25
+text = "ENVANTER"
+clip_text = true
+
+[node name="BottomBar" type="Control" parent="." unique_id=-1293556197]
+layout_mode = 3
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -110.0
+offset_top = -70.0
+offset_right = 110.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 0
+scale = Vector2(1.3, 1.3)
+pivot_offset = Vector2(110, 26)
+
+[node name="ShieldModeBarBG" type="Control" parent="BottomBar" unique_id=2004411010]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ShieldModeSlot1" type="Button" parent="BottomBar/ShieldModeBarBG" unique_id=2004411011]
+layout_mode = 0
+offset_right = 52.0
+offset_bottom = 52.0
+mouse_default_cursor_shape = 2
+flat = true
+
+[node name="Icon" type="TextureRect" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot1" unique_id=1219027788]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = -6.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BG" type="TextureRect" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot1" unique_id=9871231]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_5pdws")
+expand_mode = 1
+
+[node name="KeyLabel" type="Label" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot1" unique_id=139852512]
+layout_mode = 0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -16.0
+offset_top = -18.0
+theme_override_colors/font_color = Color(1, 1, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+text = "1"
+
+[node name="ShieldModeSlot2" type="Button" parent="BottomBar/ShieldModeBarBG" unique_id=2004411012]
+layout_mode = 0
+offset_left = 56.0
+offset_right = 108.0
+offset_bottom = 52.0
+mouse_default_cursor_shape = 2
+flat = true
+
+[node name="Icon" type="TextureRect" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot2" unique_id=1935469623]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = -6.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BG" type="TextureRect" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot2" unique_id=9871232]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_5pdws")
+expand_mode = 1
+
+[node name="KeyLabel" type="Label" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot2" unique_id=1067272288]
+layout_mode = 0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -16.0
+offset_top = -18.0
+theme_override_colors/font_color = Color(1, 1, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+text = "2"
+
+[node name="ShieldModeSlot3" type="Button" parent="BottomBar/ShieldModeBarBG" unique_id=2004411013]
+layout_mode = 0
+offset_left = 112.0
+offset_right = 164.0
+offset_bottom = 52.0
+mouse_default_cursor_shape = 2
+flat = true
+
+[node name="Icon" type="TextureRect" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot3" unique_id=1118373486]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = -6.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BG" type="TextureRect" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot3" unique_id=9871233]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_5pdws")
+expand_mode = 1
+
+[node name="KeyLabel" type="Label" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot3" unique_id=627207779]
+layout_mode = 0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -16.0
+offset_top = -18.0
+theme_override_colors/font_color = Color(1, 1, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+text = "3"
+
+[node name="ShieldModeSlot4" type="Button" parent="BottomBar/ShieldModeBarBG" unique_id=2004411014]
+layout_mode = 0
+offset_left = 168.0
+offset_right = 220.0
+offset_bottom = 52.0
+mouse_default_cursor_shape = 2
+flat = true
+
+[node name="Icon" type="TextureRect" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot4" unique_id=444709908]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = -6.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BG" type="TextureRect" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot4" unique_id=9871234]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_5pdws")
+expand_mode = 1
+
+[node name="KeyLabel" type="Label" parent="BottomBar/ShieldModeBarBG/ShieldModeSlot4" unique_id=954865261]
+layout_mode = 0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -16.0
+offset_top = -18.0
+theme_override_colors/font_color = Color(1, 1, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+text = "4"
+
+[node name="CharacterCluster" type="Control" parent="." unique_id=2004411001]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 320.0
+offset_bottom = 120.0
+scale = Vector2(1.2, 1.2)
+
+[node name="HealthBar" type="TextureProgressBar" parent="CharacterCluster" unique_id=597508541]
+layout_mode = 0
+offset_left = 120.0
+offset_top = 23.0
+offset_right = 290.0
+offset_bottom = 38.0
+nine_patch_stretch = true
+texture_progress = ExtResource("tex_mp")
+
+[node name="HealthBarFrame" type="TextureRect" parent="CharacterCluster" unique_id=332902434]
+layout_mode = 0
+offset_left = 96.0
+offset_top = 16.0
+offset_right = 296.0
+offset_bottom = 44.0
+texture = ExtResource("tex_can_new")
+expand_mode = 1
+
+[node name="HealthValueLabel" type="Label" parent="CharacterCluster" unique_id=520088711]
+layout_mode = 0
+offset_left = 125.0
+offset_top = 21.0
+offset_right = 289.0
+offset_bottom = 37.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ShieldBar" type="TextureProgressBar" parent="CharacterCluster" unique_id=1149960901]
+layout_mode = 0
+offset_left = 120.0
+offset_top = 57.0
+offset_right = 290.0
+offset_bottom = 72.0
+nine_patch_stretch = true
+texture_progress = ExtResource("tex_mp")
+
+[node name="ShieldBarFrame" type="TextureRect" parent="CharacterCluster" unique_id=39150647]
+layout_mode = 0
+offset_left = 96.0
+offset_top = 50.0
+offset_right = 296.0
+offset_bottom = 78.0
+texture = ExtResource("tex_kalkan_new")
+expand_mode = 1
+
+[node name="ShieldValueLabel" type="Label" parent="CharacterCluster" unique_id=1054103400]
+layout_mode = 0
+offset_left = 125.0
+offset_top = 55.0
+offset_right = 289.0
+offset_bottom = 71.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PortraitClip" type="Control" parent="CharacterCluster" unique_id=2004411002]
+clip_contents = true
+anchors_preset = 0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 80.0
+offset_bottom = 80.0
+mouse_filter = 2
+
+[node name="Portrait" type="TextureRect" parent="CharacterCluster/PortraitClip" unique_id=2004411003]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="PortraitFrame" type="TextureRect" parent="CharacterCluster" unique_id=2004411004]
+z_index = 2
+layout_mode = 0
+offset_left = 2.0
+offset_top = 2.0
+offset_right = 88.0
+offset_bottom = 88.0
+texture = ExtResource("tex_port")
+expand_mode = 1
+
+[node name="LevelLabel" type="Label" parent="CharacterCluster" unique_id=2047139106]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 88.0
+offset_right = 80.0
+offset_bottom = 114.0
+theme_override_colors/font_color = Color(1, 0.9, 0.3, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+
+[node name="SkillBar" type="Control" parent="." unique_id=-1293556196]
+layout_mode = 3
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -54.0
+offset_top = -155.0
+offset_right = 54.0
+offset_bottom = -95.0
+grow_horizontal = 2
+grow_vertical = 0
+scale = Vector2(1.5, 1.5)
+pivot_offset = Vector2(54, 30)
+
+[node name="SkillIcon" type="TextureRect" parent="SkillBar" unique_id=-467923746]
+layout_mode = 0
+offset_right = 52.0
+offset_bottom = 52.0
+expand_mode = 1
+script = ExtResource("3")
+
+[node name="BG" type="TextureRect" parent="SkillBar/SkillIcon" unique_id=9871236]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_5pdws")
+expand_mode = 1
+
+[node name="Cooldown" type="Label" parent="SkillBar/SkillIcon" unique_id=-239327883]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_outline_size = 4
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="KeyLabel" type="Label" parent="SkillBar/SkillIcon" unique_id=-826456073]
+layout_mode = 0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -16.0
+offset_top = -18.0
+theme_override_colors/font_color = Color(1, 1, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+text = "Q"
+
+[node name="PassiveIcon" type="TextureRect" parent="SkillBar" unique_id=-987654321]
+layout_mode = 0
+offset_left = -38.0
+offset_top = 10.0
+offset_right = -6.0
+offset_bottom = 42.0
+expand_mode = 1
+script = ExtResource("3")
+
+[node name="BG" type="TextureRect" parent="SkillBar/PassiveIcon" unique_id=9871235]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_5pdws")
+expand_mode = 1
+
+[node name="Cooldown" type="Label" parent="SkillBar/PassiveIcon" unique_id=-239327884]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_outline_size = 4
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="KeyLabel" type="Label" parent="SkillBar/PassiveIcon" unique_id=-826456074]
+layout_mode = 0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -16.0
+offset_top = -18.0
+theme_override_colors/font_color = Color(1, 1, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 10
+text = "P"
+
+[node name="Skill2Icon" type="TextureRect" parent="SkillBar" unique_id=-1303837943]
+layout_mode = 0
+offset_left = 56.0
+offset_right = 108.0
+offset_bottom = 52.0
+expand_mode = 1
+script = ExtResource("3")
+
+[node name="BG" type="TextureRect" parent="SkillBar/Skill2Icon" unique_id=9871237]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_5pdws")
+expand_mode = 1
+
+[node name="Cooldown" type="Label" parent="SkillBar/Skill2Icon" unique_id=-1892520330]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_outline_size = 4
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="KeyLabel" type="Label" parent="SkillBar/Skill2Icon" unique_id=-1303837944]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -16.0
+offset_top = -18.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+text = "E"
+
+[node name="StatsPanelInstance" parent="." unique_id=1217615335 instance=ExtResource("7")]
+visible = false
+offset_left = -600.0
+offset_top = -314.5
+offset_right = 50.0
+offset_bottom = 314.5
+
+[node name="InventoryPanelInstance" parent="." unique_id=1217615336 instance=ExtResource("24")]
+process_mode = 3
+visible = false
+offset_left = 80.0
+offset_top = -247.5
+offset_right = 600.0
+offset_bottom = 247.5
+
+[node name="ShopPanel" parent="." unique_id=1126973307 instance=ExtResource("16")]
+process_mode = 3
+visible = false
+offset_left = -680.0
+offset_top = 340.0
+offset_right = -100.0
+offset_bottom = 1040.0
+
+[node name="GoldIndicator" type="PanelContainer" parent="." unique_id=1688887143]
+process_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -730.0
+offset_top = 910.0
+offset_right = -210.0
+offset_bottom = 960.0
+theme_override_styles/panel = SubResource("SBF_gold_indicator")
+
+[node name="GoldMargin" type="MarginContainer" parent="GoldIndicator" unique_id=116749079]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
+
+[node name="GoldHBox" type="HBoxContainer" parent="GoldIndicator/GoldMargin" unique_id=573464043]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="GoldIndicator/GoldMargin/GoldHBox" unique_id=1392887287]
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("tex_gold_ingot")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="GoldIndicator/GoldMargin/GoldHBox" unique_id=117262466]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.35, 1)
+theme_override_colors/font_outline_color = Color(0.2, 0.11, 0.05, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 22
+text = "0"
+
+[node name="MinimapControl" type="Control" parent="." unique_id=-346765449]
+custom_minimum_size = Vector2(164, 164)
+layout_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -184.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 174.0
+grow_horizontal = 0
+mouse_filter = 2
+script = ExtResource("minimap_script")

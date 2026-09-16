@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_blood_splatter.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/generated/fx_blood_splatter_frames.tres" id="2"]
+
+[node name="FxBloodSplatter" type="AnimatedSprite2D"]
+z_index = 53
+scale = Vector2(1.3, 1.3)
+sprite_frames = ExtResource("2")
+script = ExtResource("1")

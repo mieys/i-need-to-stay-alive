@@ -1,0 +1,53 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/arrow_projectile.tscn" id="2"]
+[ext_resource type="SpriteFrames" path="res://assets/weapons/yay/draw_frames.tres" id="3"]
+[ext_resource type="Texture2D" path="res://assets/weapons/yay/arrow.png" id="4"]
+[ext_resource type="AudioStream" path="res://Sound FX Starter Pack Vol. 1/Medieval/Channel Power Up Loop.wav" id="5"]
+[ext_resource type="Script" path="res://scripts/random_sfx_player.gd" id="6"]
+[ext_resource type="AudioStream" path="res://assets/audio/yay_fire_1.mp3" id="7"]
+[ext_resource type="AudioStream" path="res://assets/audio/yay_fire_2.mp3" id="8"]
+
+[node name="WeaponYay" type="Node2D"]
+script = ExtResource("1")
+projectile_scene = ExtResource("2")
+fire_rate = 0.7844
+damage = 0.0
+crit_chance = 0.05
+crit_damage = 1.5
+attack_range = 266.0
+sprite_forward_angle_deg = 0.0
+ranged_projectile_rotation_offset = 0.0
+card_damage_bonus_ratio = 0.6435
+draw_before_fire = true
+draw_anim_base_duration = 0.625
+draw_anim_speed_scale_max = 8.0
+draw_sound_base_duration = 0.6
+draw_sound_pitch_scale_max = 3.0
+held_arrow_offsets = Array[float]([0.0, -12.0, -24.0, -38.0, -58.0])
+
+[node name="FireTimer" type="Timer" parent="."]
+autostart = true
+
+[node name="Icon" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(0.307395, 0.307395)
+sprite_frames = ExtResource("3")
+animation = &"draw"
+
+[node name="HeldArrow" type="Sprite2D" parent="Icon"]
+texture_filter = 1
+scale = Vector2(3.0, 3.0)
+texture = ExtResource("4")
+visible = false
+
+[node name="DrawSound" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("5")
+volume_db = -10.0
+max_distance = 1500.0
+
+[node name="AttackSound" type="Node2D" parent="."]
+script = ExtResource("6")
+streams = Array[AudioStream]([ExtResource("7"), ExtResource("8")])
+volume_db = -8.0

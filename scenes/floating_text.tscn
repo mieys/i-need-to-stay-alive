@@ -1,0 +1,51 @@
+[gd_scene format=3 uid="uid://cgperwfnrgt0n"]
+
+[ext_resource type="Script" uid="uid://cggko6em7u88o" path="res://scripts/floating_text.gd" id="1"]
+
+[node name="FloatingText" type="Node2D" unique_id=875259207]
+script = ExtResource("1")
+
+[node name="Outline1" type="Label" parent="." unique_id=90000002]
+offset_left = -80.0
+offset_top = -22.0
+offset_right = 80.0
+offset_bottom = 22.0
+theme_override_font_sizes/font_size = 126
+text = "0"
+horizontal_alignment = 1
+
+[node name="Outline3" type="Label" parent="." unique_id=90000004]
+offset_left = -80.0
+offset_top = -22.0
+offset_right = 80.0
+offset_bottom = 22.0
+theme_override_font_sizes/font_size = 126
+text = "0"
+horizontal_alignment = 1
+
+[node name="Outline4" type="Label" parent="." unique_id=90000005]
+offset_left = -80.0
+offset_top = -22.0
+offset_right = 80.0
+offset_bottom = 22.0
+theme_override_font_sizes/font_size = 126
+text = "0"
+horizontal_alignment = 1
+
+[node name="Outline6" type="Label" parent="." unique_id=90000007]
+offset_left = -80.0
+offset_top = -22.0
+offset_right = 80.0
+offset_bottom = 22.0
+theme_override_font_sizes/font_size = 126
+text = "0"
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="." unique_id=201301765]
+offset_left = -80.0
+offset_top = -22.0
+offset_right = 80.0
+offset_bottom = 22.0
+theme_override_font_sizes/font_size = 126
+text = "0"
+horizontal_alignment = 1

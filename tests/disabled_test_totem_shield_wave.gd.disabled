@@ -1,0 +1,64 @@
+extends Node
+
+## TotemShield dalga efektinin (kozmetik) gerçek totem akışını bozmadığını
+## doğrulayan minimal test: sahte caster ile totemi örnekler, _tick'in
+## kalkan mantığını çağırır ve dalga spawn'ının çökmediğini kontrol eder.
+
+class FakeCaster extends Node2D:
+	var damage_bonus: float = 50.0
+	var item_shield_max: float = 100.0
+	var item_shield_hp: float = 0.0
+	var shield_heals: Array = []
+
+	func heal_shield(amount: float) -> void:
+		shield_heals.append(amount)
+
+
+func test_wave_spawn_and_tick_no_crash() -> bool:
+	var scene_root: Node2D = Node2D.new()
+	add_child(scene_root)
+	var caster := FakeCaster.new()
+	caster.global_position = Vector2(100, 100)
+	scene_root.add_child(caster)
+
+	var totem_script: Script = load("res://scripts/totem_shield.gd")
+	var totem: Node2D = totem_script.new()
+	totem.position = Vector2(120, 100)
+	scene_root.add_child(totem)
+	totem.setup_from_player(caster)
+
+	# _tick: kalkan mantığı hâlâ çalışıyor mu? (1 tick = 1 saniyelik kalkan)
+	totem._tick()
+	var ok_tick: bool = caster.shield_heals.size() == 1
+	var expected: float = 100.0 * 0.005 + 50.0 * 0.10
+	var ok_amount: bool = absf(caster.shield_heals[0] - expected) < 0.001
+
+	# Dalga spawn'ı: menzildeki bir müttefik kukla ekle
+	var ally := FakeCaster.new()
+	ally.global_position = Vector2(300, 100)
+	ally.add_to_group("player_ally")
+	scene_root.add_child(ally)
+	totem._spawn_shield_waves()
+
+	var waves: Array = []
+	for child in scene_root.get_children():
+		if child is TotemShieldWave:
+			waves.append(child)
+	var ok_wave: bool = waves.size() == 1
+
+	# Dalga node'u ilerleyip kendi kendini temizlemeli
+	if ok_wave:
+		(waves[0] as TotemShieldWave).travel_time = 0.05
+		(waves[0] as TotemShieldWave).ripple_time = 0.05
+
+	await get_tree().create_timer(0.3).timeout
+	var ok_cleanup: bool = not is_instance_valid(waves[0]) or waves[0].is_queued_for_deletion()
+
+	print("tick_calisiyor=%s kalkan_miktari=%s dalga_olustu=%s temizlik=%s" % [ok_tick, ok_amount, ok_wave, ok_cleanup])
+	return ok_tick and ok_amount and ok_wave and ok_cleanup
+
+
+func _ready() -> void:
+	var ok: bool = await test_wave_spawn_and_tick_no_crash()
+	print("TEST %s" % ("PASSED" if ok else "FAILED"))
+	get_tree().quit(0 if ok else 1)

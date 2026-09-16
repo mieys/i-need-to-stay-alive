@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="10" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="1">
+ <tileset firstgid="1" source="../../Harita içerikleri/seyyar satıcı/Tiled_files/Seyyar satıcı parçaları.tsx"/>
+ <tileset firstgid="1081" source="../../Harita içerikleri/seyyar satıcı/Tiled_files/Seyyar satıcı parçaları.tsx"/>
+ <tileset firstgid="2161" source="../../Harita içerikleri/seyyar satıcı/Tiled_files/Horse_with_shadow.tsx"/>
+ <layer id="1" name="Desen Katmanı 1" width="10" height="10">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,962,963,964,965,0,
+0,0,0,0,0,992,993,994,995,0,
+0,0,0,0,0,1022,1023,1024,1025,0,
+0,0,0,0,0,1052,1053,1054,1055,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0
+</data>
+ </layer>
+ <layer id="2" name="At" width="10" height="10">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,2833,2834,2835,2836,0,0,0,0,
+0,0,2857,2858,2859,2860,0,0,0,0,
+0,0,2881,2882,2883,2884,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0
+</data>
+ </layer>
+ <layer id="3" name="Araba parça" width="10" height="10">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,961,0,0,0,0,0,
+0,0,0,0,991,0,0,0,0,0,
+0,0,0,0,1021,1022,0,0,0,0,
+0,0,0,0,1051,1052,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0
+</data>
+ </layer>
+</map>

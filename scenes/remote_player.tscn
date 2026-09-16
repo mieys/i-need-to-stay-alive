@@ -1,0 +1,75 @@
+[gd_scene format=3 uid="uid://cbkx2q8yvnm2e"]
+
+[ext_resource type="Script" uid="uid://b00g7qwyj3h8f" path="res://scripts/remote_player.gd" id="1_remote"]
+[ext_resource type="Script" uid="uid://c6s78w221s8vj" path="res://scripts/shadow_blob.gd" id="2_shadow"]
+[ext_resource type="Script" uid="uid://dfw4p8b0v84x1" path="res://scripts/shield_visual.gd" id="3_shield"]
+[ext_resource type="Script" uid="uid://bsh25h8y0v2xq" path="res://scripts/overhead_bar.gd" id="4_overhead"]
+[ext_resource type="Script" path="res://scripts/remote_player_name.gd" id="5_name"]
+[ext_resource type="SpriteFrames" uid="uid://cta55xjsqi3a8" path="res://assets/fx/shield_bubble/bubble_frames.tres" id="6_bubble"]
+[ext_resource type="AudioStream" uid="uid://cva5u03wv8xhs" path="res://assets/audio/shield_break.wav" id="7_break"]
+[ext_resource type="AudioStream" uid="uid://dqh0urvhuemb" path="res://assets/audio/shield_regen.wav" id="8_regen"]
+[ext_resource type="Script" path="res://scripts/downed_timer_label.gd" id="9_downed"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_remote"]
+radius = 12.0
+
+[node name="RemotePlayer" type="CharacterBody2D" groups=["player_ally"]]
+scale = Vector2(0.5, 0.5)
+## DÜZELTME (kullanıcı bildirimi: "menzilli hasar veren düşmanlar sadece
+## hosta hasar verebiliyor katılımcılara hasar veremiyorlar") - kök neden:
+## host'un GERÇEK Player'ı main.tscn'de instance-override ile collision_
+## layer=2'ye taşınmıştı (bkz. scenes/main.tscn Player node'u), yani "layer
+## 2" projede tutarlı bir "bu bir oyuncu" katmanı - enemy_projectile.tscn
+## (mermi, mask=2), TÜM toplama eşyaları (xp_orb/gold_drop/food_drop/
+## chest_drop/magnet_drop, hepsi mask=2) ve düşmanların kendi HitArea'sı
+## (mask=2) hep bunu arıyor. Bu sahne (RemotePlayer - katılımcıların host
+## ekranındaki kuklası) hâlâ eski/kullanılmayan layer=1'deydi - hiçbir
+## sistemin maskesi 1'i içermediği için host'un ekranındaki menzilli
+## mermiler bir katılımcının kuklasının TAM İÇİNDEN geçip gidiyor,
+## body_entered hiç tetiklenmiyordu (hasar zaten doğru şekilde RemotePlayer.
+## take_damage() -> NetworkManager.forward_damage_to_peer ile o oyuncuya
+## yönlendiriliyordu, ama bu fonksiyon hiç ÇAĞRILMIYORDU çünkü çarpışma
+## algılanmıyordu). Artık gerçek Player ile AYNI layer=2.
+collision_layer = 2
+collision_mask = 0
+script = ExtResource("1_remote")
+
+[node name="Shadow" type="Node2D" parent="."]
+script = ExtResource("2_shadow")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_remote")
+
+[node name="ShieldVisual" type="Node2D" parent="."]
+visible = false
+script = ExtResource("3_shield")
+
+[node name="BubbleSprite" type="AnimatedSprite2D" parent="ShieldVisual"]
+texture_filter = 1
+scale = Vector2(4.37475, 4.37475)
+sprite_frames = ExtResource("6_bubble")
+animation = &"loop"
+frame = 3
+
+[node name="BreakSound" type="AudioStreamPlayer2D" parent="ShieldVisual"]
+stream = ExtResource("7_break")
+volume_db = -8.0
+max_distance = 1500.0
+
+[node name="RegenSound" type="AudioStreamPlayer2D" parent="ShieldVisual"]
+stream = ExtResource("8_regen")
+volume_db = -10.0
+max_distance = 1500.0
+
+[node name="NameLabel" type="Label" parent="."]
+layout_mode = 0
+script = ExtResource("5_name")
+
+[node name="OverheadBar" type="Node2D" parent="."]
+script = ExtResource("4_overhead")
+
+[node name="DownedTimerLabel" type="Label" parent="."]
+layout_mode = 0
+script = ExtResource("9_downed")

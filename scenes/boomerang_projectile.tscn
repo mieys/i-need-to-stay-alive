@@ -1,0 +1,66 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/boomerang_projectile.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/weapons/boomerang/icon.png" id="2"]
+[ext_resource type="AudioStream" path="res://assets/audio/boomerang_spin.mp3" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/fx_hit_blood_1.tscn" id="5"]
+[ext_resource type="SpriteFrames" uid="uid://duf87lh6u22n2" path="res://assets/weapons/boomerang/spin_frames.tres" id="6"]
+[ext_resource type="AudioStream" uid="uid://dnm20dl5qaak8" path="res://assets/audio/boomerang isabet.mp3" id="7_isabet"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 8.0
+
+[node name="BoomerangProjectile" type="Area2D"]
+collision_layer = 0
+collision_mask = 4
+script = ExtResource("1")
+speed = 368.0
+throw_distance = 252.0
+spin_speed_deg = 900.0
+impact_scene = ExtResource("5")
+impact_sounds = Array[AudioStream]([ExtResource("7_isabet")])
+impact_sound_volume_db = -8.79
+
+[node name="SpinFx" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(1.72, 1.72)
+sprite_frames = ExtResource("6")
+animation = &"trail"
+
+[node name="Trail1" type="AnimatedSprite2D" parent="."]
+top_level = true
+texture_filter = 1
+scale = Vector2(1.32, 1.32)
+modulate = Color(1, 1, 1, 0.6)
+sprite_frames = ExtResource("6")
+animation = &"trail"
+
+[node name="Trail2" type="AnimatedSprite2D" parent="."]
+top_level = true
+texture_filter = 1
+scale = Vector2(0.92, 0.92)
+modulate = Color(1, 1, 1, 0.38)
+sprite_frames = ExtResource("6")
+animation = &"trail"
+
+[node name="Trail3" type="AnimatedSprite2D" parent="."]
+top_level = true
+texture_filter = 1
+scale = Vector2(0.55, 0.55)
+modulate = Color(1, 1, 1, 0.2)
+sprite_frames = ExtResource("6")
+animation = &"trail"
+
+[node name="Bullet" type="Sprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(0.4125, 0.4125)
+texture = ExtResource("2")
+
+[node name="Sound" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("4")
+volume_db = -10.48
+max_distance = 1500.0
+autoplay = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")

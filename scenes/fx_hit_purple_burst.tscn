@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_animation.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/fx/hit_effects/purple_burst/purple_burst_frames.tres" id="2"]
+
+[node name="FxHitPurpleBurst" type="AnimatedSprite2D"]
+texture_filter = 1
+scale = Vector2(1.4, 1.4)
+z_index = 150
+sprite_frames = ExtResource("2")
+script = ExtResource("1")

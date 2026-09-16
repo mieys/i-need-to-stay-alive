@@ -1,0 +1,39 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/generated/mage_frost_nova_anim.png" id="1_u4g28"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_0pp7u"]
+atlas = ExtResource("1_u4g28")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_mnurb"]
+atlas = ExtResource("1_u4g28")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8efh2"]
+atlas = ExtResource("1_u4g28")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_0bqv5"]
+atlas = ExtResource("1_u4g28")
+region = Rect2(192, 0, 64, 64)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_0pp7u")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_mnurb")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8efh2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_0bqv5")
+}],
+"loop": 0,
+"name": &"default",
+"speed": 12.0
+}]

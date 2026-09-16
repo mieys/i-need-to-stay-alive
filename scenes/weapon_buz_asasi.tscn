@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/ice_bolt_projectile.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://assets/weapons/buz_asasi/icon.png" id="3"]
+[ext_resource type="AudioStream" path="res://assets/audio/buz_asasi_fire.mp3" id="4"]
+
+[node name="WeaponBuzAsasi" type="Node2D"]
+script = ExtResource("1")
+projectile_scene = ExtResource("2")
+fire_rate = 1.09425
+damage = 0.0
+crit_chance = 0.05
+crit_damage = 1.5
+attack_range = 168.0
+target_prefer_unfrozen = true
+sprite_forward_angle_deg = -46.41213883988584
+ranged_projectile_rotation_offset = 0.0
+card_damage_bonus_ratio = 0.693
+
+[node name="FireTimer" type="Timer" parent="."]
+autostart = true
+
+[node name="Icon" type="Sprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(0.331361, 0.331361)
+texture = ExtResource("3")
+
+[node name="AttackSound" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("4")
+volume_db = -9.0
+max_distance = 1500.0

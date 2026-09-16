@@ -1,0 +1,62 @@
+[gd_scene format=3 uid="uid://ctpsphloqxd2f"]
+
+[ext_resource type="Script" uid="uid://b421v3f2k23jc" path="res://scripts/fx_totem_burst.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://bkjcssinehcy8" path="res://assets/generated/shaman_totem_rune_flash.png" id="1_v256j"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4e78n"]
+atlas = ExtResource("1_v256j")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4xyla"]
+atlas = ExtResource("1_v256j")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_18npj"]
+atlas = ExtResource("1_v256j")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_rbrir"]
+atlas = ExtResource("1_v256j")
+region = Rect2(192, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_o6ddb"]
+atlas = ExtResource("1_v256j")
+region = Rect2(256, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hhttt"]
+atlas = ExtResource("1_v256j")
+region = Rect2(320, 0, 64, 64)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_yjhwc"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4e78n")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4xyla")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_18npj")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_rbrir")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_o6ddb")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hhttt")
+}],
+"loop": 0,
+"name": &"magic_energy_burst_growing_outward_and_fading_away",
+"speed": 16.0
+}]
+
+[node name="FxShamanCastAttack" type="AnimatedSprite2D" unique_id=1109023186]
+modulate = Color(1, 0.55, 0.25, 1)
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_yjhwc")
+animation = &"magic_energy_burst_growing_outward_and_fading_away"
+autoplay = "magic_energy_burst_growing_outward_and_fading_away"
+script = ExtResource("1")

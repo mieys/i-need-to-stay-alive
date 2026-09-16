@@ -1,0 +1,50 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy.gd" id="1"]
+[ext_resource type="Texture2D" path="res://visuals/Yaratıklar/Tüm Yaratıklar/Hayalet 1/PNG/Ghost1/With_shadow/Ghost1_Walk_with_shadow.png" id="2"]
+[ext_resource type="Texture2D" path="res://visuals/Yaratıklar/Tüm Yaratıklar/Hayalet 1/PNG/Ghost1/With_shadow/Ghost1_Hurt_with_shadow.png" id="3"]
+[ext_resource type="Texture2D" path="res://visuals/Yaratıklar/Tüm Yaratıklar/Hayalet 1/PNG/Ghost1/With_shadow/Ghost1_Death_with_shadow.png" id="4"]
+[ext_resource type="Texture2D" path="res://visuals/Yaratıklar/Tüm Yaratıklar/Hayalet 1/PNG/Ghost1/With_shadow/Ghost1_Attack_with_shadow.png" id="5"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 18.7
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hit"]
+radius = 24.3
+
+[node name="Enemy_Hayalet1" type="CharacterBody2D" groups=["enemies"]]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("1")
+speed = 119.6
+max_health = 108.0
+contact_damage = 34.8
+xp_value = 28.0
+orb_count = 4
+gold_chance = 0.5832
+gold_min = 5
+gold_max = 9
+sprite_fps = 8.6
+cell_size = 64
+walk_texture = ExtResource("2")
+hurt_texture = ExtResource("3")
+death_texture = ExtResource("4")
+attack_texture = ExtResource("5")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(1.28925, 1.28925)
+texture = ExtResource("2")
+hframes = 6
+vframes = 4
+offset = Vector2(0, -6.6)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="HitArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="HitCollision" type="CollisionShape2D" parent="HitArea"]
+shape = SubResource("CircleShape2D_hit")

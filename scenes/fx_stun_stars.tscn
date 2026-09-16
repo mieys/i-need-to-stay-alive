@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_stun_stars.gd" id="1_stun"]
+[ext_resource type="SpriteFrames" path="res://assets/generated/fx_stun_new_frames.tres" id="2_frames"]
+
+[node name="FxStunStars" type="AnimatedSprite2D"]
+z_index = 56
+sprite_frames = ExtResource("2_frames")
+script = ExtResource("1_stun")

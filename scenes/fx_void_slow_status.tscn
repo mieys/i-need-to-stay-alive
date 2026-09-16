@@ -1,0 +1,60 @@
+[gd_scene format=3 uid="uid://dhg1goienrtrk"]
+
+[ext_resource type="Texture2D" uid="uid://dffym2dm6gca6" path="res://assets/generated/fx_void_slow_status.png" id="1_0ewfd"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_v7po6"]
+atlas = ExtResource("1_0ewfd")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_bl4g6"]
+atlas = ExtResource("1_0ewfd")
+region = Rect2(32, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qcs6p"]
+atlas = ExtResource("1_0ewfd")
+region = Rect2(64, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_j0rc8"]
+atlas = ExtResource("1_0ewfd")
+region = Rect2(96, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_e8odg"]
+atlas = ExtResource("1_0ewfd")
+region = Rect2(128, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ihb47"]
+atlas = ExtResource("1_0ewfd")
+region = Rect2(160, 0, 32, 32)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_dlh7m"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_v7po6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_bl4g6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_qcs6p")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_j0rc8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_e8odg")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ihb47")
+}],
+"loop": 1,
+"name": &"swirling_rotating_vortex_with_motes_orbiting_around_it",
+"speed": 5.0
+}]
+
+[node name="FxVoidSlowStatus" type="AnimatedSprite2D" unique_id=355409451]
+z_index = 54
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_dlh7m")
+animation = &"swirling_rotating_vortex_with_motes_orbiting_around_it"
+autoplay = "swirling_rotating_vortex_with_motes_orbiting_around_it"

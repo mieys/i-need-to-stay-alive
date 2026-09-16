@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://c0ed3opxbael2"]
+
+[ext_resource type="Script" uid="uid://c3pw4sbpiaxfc" path="res://scripts/main.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://c5i4o3ajt2266" path="res://scenes/player.tscn" id="2"]
+[ext_resource type="PackedScene" uid="uid://cs8e1lfvap58s" path="res://visuals/tileler/Forest.tmx" id="2_jyhfs"]
+[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="3"]
+
+[node name="Main" type="Node2D" unique_id=28232047]
+script = ExtResource("1")
+
+[node name="Forest" parent="." unique_id=2095338960 instance=ExtResource("2_jyhfs")]
+position = Vector2(-275, -283)
+
+[node name="Player" parent="." unique_id=402087049 instance=ExtResource("2")]
+scale = Vector2(0.5, 0.5)
+disable_mode = 2
+collision_layer = 1
+collision_mask = 16
+speed = 150.0
+
+[node name="HUD" parent="." unique_id=1262643970 instance=ExtResource("3")]
+
+[node name="EnemySpawner" type="Node2D" parent="." unique_id=832409863]

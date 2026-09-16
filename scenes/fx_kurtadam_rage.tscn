@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://bvk7g6w28q25f"]
+
+[ext_resource type="Script" uid="uid://cd74h1d77x2n4" path="res://scripts/fx_kurtadam_rage.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://cgmw722woq75e" path="res://assets/audio/claw_slash.mp3" id="2"]
+
+[node name="FxKurtadamRage" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Sound" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("2")
+volume_db = -5.0
+max_distance = 1500.0

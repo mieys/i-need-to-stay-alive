@@ -1,0 +1,5 @@
+[gd_scene format=3 uid="uid://diwxkrnnevmmw"]
+
+[ext_resource type="PackedScene" uid="uid://i1ad468lq7ka" path="res://harita/Harita.tmx" id="1_st4bh"]
+
+[node name="Harita" unique_id=660492998 instance=ExtResource("1_st4bh")]

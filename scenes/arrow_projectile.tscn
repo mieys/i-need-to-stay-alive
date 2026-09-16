@@ -1,0 +1,33 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/projectile.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/weapons/yay/arrow.png" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/fx_hit_blood_2.tscn" id="10"]
+[ext_resource type="AudioStream" path="res://assets/audio/tabanca_hit_1.mp3" id="3"]
+[ext_resource type="AudioStream" path="res://assets/audio/tabanca_hit_2.mp3" id="4"]
+[ext_resource type="AudioStream" path="res://assets/audio/tabanca_hit_3.mp3" id="5"]
+[ext_resource type="AudioStream" path="res://assets/audio/tabanca_hit_4.mp3" id="6"]
+[ext_resource type="AudioStream" path="res://assets/audio/tabanca_hit_5.mp3" id="7"]
+[ext_resource type="AudioStream" path="res://assets/audio/tabanca_hit_6.mp3" id="8"]
+[ext_resource type="AudioStream" path="res://assets/audio/tabanca_hit_7.mp3" id="9"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 3.0
+
+[node name="ArrowProjectile" type="Area2D"]
+collision_layer = 0
+collision_mask = 4
+script = ExtResource("1")
+speed = 620.0
+face_direction = true
+impact_scene = ExtResource("10")
+impact_sounds = Array[AudioStream]([ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9")])
+impact_sound_volume_db = -20.79
+
+[node name="Bullet" type="Sprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(0.49368, 0.49368)
+texture = ExtResource("2")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")

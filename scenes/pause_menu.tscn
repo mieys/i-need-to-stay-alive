@@ -1,0 +1,173 @@
+[gd_scene format=3 uid="uid://bro7txsim0hex"]
+
+[ext_resource type="Script" uid="uid://prk828u6pom1" path="res://scripts/pause_menu.gd" id="1"]
+
+[node name="PauseMenu" type="CanvasLayer" unique_id=1162140989]
+script = ExtResource("1")
+
+[node name="Dim" type="ColorRect" parent="." unique_id=2073368806]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.65)
+
+[node name="Panel" type="Panel" parent="." unique_id=1215931321]
+clip_contents = true
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -240.0
+offset_top = -210.0
+offset_right = 240.0
+offset_bottom = 210.0
+
+[node name="VBox" type="VBoxContainer" parent="Panel" unique_id=1564761212]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = -24.0
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="Title" type="Label" parent="Panel/VBox" unique_id=351364381]
+layout_mode = 2
+theme_override_font_sizes/font_size = 61
+text = "DURAKLATILDI"
+horizontal_alignment = 1
+autowrap_mode = 2
+clip_text = true
+
+[node name="ResumeButton" type="Button" parent="Panel/VBox" unique_id=830640558]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_font_sizes/font_size = 47
+text = "Devam Et"
+clip_text = true
+
+[node name="RestartButton" type="Button" parent="Panel/VBox" unique_id=1055773279]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_font_sizes/font_size = 47
+text = "Yeniden Başla"
+clip_text = true
+
+[node name="MenuButton" type="Button" parent="Panel/VBox" unique_id=953824004]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_font_sizes/font_size = 47
+text = "Ana Menü"
+clip_text = true
+
+[node name="SettingsButton" type="Button" parent="Panel/VBox" unique_id=562872041]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_font_sizes/font_size = 47
+text = "Ayarlar"
+clip_text = true
+
+[node name="SettingsPanel" type="Panel" parent="." unique_id=1108315144]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -270.0
+offset_top = -235.0
+offset_right = 290.0
+offset_bottom = 225.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="SettingsPanel" unique_id=1501570052]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 25.0
+offset_right = 530.0
+offset_bottom = 70.0
+theme_override_font_sizes/font_size = 65
+text = "AYARLAR"
+horizontal_alignment = 1
+
+[node name="VolumeLabel" type="Label" parent="SettingsPanel" unique_id=50561650]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 95.0
+offset_right = 240.0
+offset_bottom = 135.0
+theme_override_font_sizes/font_size = 47
+text = "Oyun Sesi"
+
+[node name="VolumeValue" type="Label" parent="SettingsPanel" unique_id=1791449602]
+layout_mode = 0
+offset_left = 430.0
+offset_top = 95.0
+offset_right = 520.0
+offset_bottom = 135.0
+theme_override_font_sizes/font_size = 47
+text = "100%"
+horizontal_alignment = 2
+
+[node name="VolumeSlider" type="HSlider" parent="SettingsPanel" unique_id=607381607]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 145.0
+offset_right = 520.0
+offset_bottom = 185.0
+value = 100.0
+
+[node name="FullscreenLabel" type="Label" parent="SettingsPanel" unique_id=1371692577]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 195.0
+offset_right = 280.0
+offset_bottom = 235.0
+theme_override_font_sizes/font_size = 47
+text = "Tam Ekran"
+
+[node name="FullscreenCheck" type="CheckButton" parent="SettingsPanel" unique_id=1640756986]
+layout_mode = 0
+offset_left = 430.0
+offset_top = 195.0
+offset_right = 520.0
+offset_bottom = 235.0
+button_pressed = true
+
+[node name="ResolutionLabel" type="Label" parent="SettingsPanel" unique_id=738404322]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 245.0
+offset_right = 280.0
+offset_bottom = 285.0
+theme_override_font_sizes/font_size = 47
+text = "Çözünürlük"
+
+[node name="ResolutionOption" type="OptionButton" parent="SettingsPanel" unique_id=566511667]
+layout_mode = 0
+offset_left = 290.0
+offset_top = 245.0
+offset_right = 520.0
+offset_bottom = 285.0
+theme_override_font_sizes/font_size = 32
+
+[node name="KeybindButton" type="Button" parent="SettingsPanel" unique_id=1043463125]
+layout_mode = 0
+offset_left = 100.0
+offset_top = 295.0
+offset_right = 460.0
+offset_bottom = 337.0
+theme_override_font_sizes/font_size = 34
+text = "Tuş Atamaları"
+
+[node name="CloseButton" type="Button" parent="SettingsPanel" unique_id=138319698]
+layout_mode = 0
+offset_left = 180.0
+offset_top = 347.0
+offset_right = 380.0
+offset_bottom = 397.0
+theme_override_font_sizes/font_size = 43
+text = "KAPAT"

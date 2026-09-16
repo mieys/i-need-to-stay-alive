@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://cj5bn4qevjkwt"]
+
+[ext_resource type="Script" uid="uid://c3pw4sbpiaxfc" path="res://scripts/main.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://c5i4o3ajt2266" path="res://scenes/player.tscn" id="2"]
+[ext_resource type="PackedScene" uid="uid://31p0ga60cd0x" path="res://scenes/hud.tscn" id="3"]
+[ext_resource type="Script" uid="uid://bppbn55inuopp" path="res://scripts/enemy_spawner.gd" id="6_spawner"]
+[ext_resource type="PackedScene" path="res://scenes/debug_tuning_panel.tscn" id="10_debugtuning"]
+[ext_resource type="PackedScene" uid="uid://28ua78aejwk1" path="res://harita/Harita.tmx" id="11_harita"]
+[ext_resource type="PackedScene" uid="uid://bbfx3q46vfnif" path="res://scenes/vignette_overlay.tscn" id="12_vignette"]
+
+[sub_resource type="TileSet" id="TileSet_ns3ce"]
+
+[node name="Main" type="Node2D" unique_id=28232047]
+script = ExtResource("1")
+
+[node name="Player" parent="." unique_id=402087049 instance=ExtResource("2")]
+z_index = 1
+position = Vector2(3016, 1920)
+scale = Vector2(0.5, 0.5)
+disable_mode = 2
+collision_layer = 2
+
+[node name="VignetteOverlay" parent="." unique_id=1551978368 instance=ExtResource("12_vignette")]
+
+[node name="HUD" parent="." unique_id=1262643970 instance=ExtResource("3")]
+
+[node name="DebugTuningPanel" parent="." unique_id=251595590 instance=ExtResource("10_debugtuning")]
+
+[node name="EnemySpawner" type="Node2D" parent="." unique_id=832409863]
+script = ExtResource("6_spawner")
+
+[node name="Harita" parent="." unique_id=2073148302 instance=ExtResource("11_harita")]
+
+[node name="Node2D" type="Node2D" parent="." unique_id=1593142293]
+
+[node name="TileMapLayer" type="TileMapLayer" parent="Node2D" unique_id=174340305]
+tile_set = SubResource("TileSet_ns3ce")
