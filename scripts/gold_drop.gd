@@ -28,7 +28,6 @@ const EXPIRE_SECONDS := 300.0
 func _ready() -> void:
 	add_to_group("gold_drops")
 	body_entered.connect(_on_body_entered)
-	queue_redraw()
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
 
 
@@ -128,12 +127,6 @@ func _resolve_attraction_target() -> Node2D:
 			best_dist = d
 			best = rp
 	return best
-
-
-func _draw() -> void:
-	draw_circle(Vector2.ZERO, 6.5, Color(0.55, 0.4, 0.08))
-	draw_circle(Vector2.ZERO, 5.0, Color(1.0, 0.85, 0.2))
-	draw_circle(Vector2(-1.5, -1.5), 1.6, Color(1.0, 0.95, 0.6, 0.8))
 
 
 func _on_body_entered(body: Node) -> void:
