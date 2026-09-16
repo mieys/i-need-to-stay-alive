@@ -125,3 +125,33 @@ AÇIKKA kalıp kullanıcı sonradan editörden "Kaydet"e basarsa, editördeki ES
 bellek içi hali senin değişikliğinin ÜZERİNE yazıp onu sessizce geri
 alabilir - bu ihtimali unutma, şüpheli bir "değişiklik kayboldu" durumunda
 bunu da sorgula.
+
+## Proje artık paylaşılıyor: arkadaşla birlikte, ikisi de kendi Claude'uyla
+
+Kullanıcı bildirimi (2026-09-17): GitHub'daki mieys/i-need-to-stay-alive
+reposu bir arkadaşla (collaborator olarak) paylaşılıyor - o da kendi Claude
+Code oturumundan bu projede değişiklik yapacak. Bilinçli tercih: branch/PR
+akışı YOK, ikisi de DOĞRUDAN master'a push ediyor. Bu dosyayı okuyan HER
+Claude oturumu (kullanıcının ya da arkadaşının) şunları uygulamalı:
+
+1. **Bir göreve başlamadan ÖNCE `git fetch` + `git status` çalıştır, yerel
+   değişiklik yoksa `git pull` ile çek.** Diğer kişi senin son
+   baktığından beri push etmiş olabilir; onu çekmeden üstüne kod yazarsan
+   ya push reddedilir ya da (daha kötüsü) onun değişikliğinin üzerine
+   yazarsın. Bu adım salt-okunur/geri alınabilir (fast-forward) olduğu
+   için ayrıca onay gerektirmez.
+2. **Görev bitince commit edilmemiş değişiklik varsa kullanıcıya söyle ve
+   push etmek isteyip istemediğini SOR** - otomatik commit/push YOK, genel
+   kural budur (yalnızca kullanıcı açıkça isteyince commit/push et). Ama
+   bu repo artık paylaşıldığı için bu hatırlatmayı ATLAMA: değişiklik push
+   edilmeden diğer kişide GÖRÜNMEZ - "sürekli güncel kalma" beklentisi tam
+   burada kırılıyor.
+3. **Push reddedilirse ("! [rejected]" / "fetch first")** asla `--force`
+   KULLANMA - diğer kişinin işini SİLEBİLİR. Bunun yerine `git pull`
+   (merge) yap; gerçek bir çakışma çıkarsa kullanıcıya göster, kendi
+   başına "kazananı" seçme.
+4. **Binary asset dosyaları (`.png`, ses dosyaları, `.import`) git'te satır
+   satır BİRLEŞTİRİLEMEZ** - iki taraf aynı asset'i aynı anda değiştirirse
+   biri diğerini sessizce ezer, git bunu bir "conflict" olarak bile
+   göstermeyebilir (sadece son push kazanır). `git pull` sonrası "both
+   modified" bir binary dosya görürsen kullanıcıya sor, tahmin etme.

@@ -7,3 +7,9 @@
 # (guncel).exe/zivacode.exe). Godot editöründen "Export" ile her zaman
 # yeniden üretilebilirler, git'te tutulmalarına gerek yok.
 *.exe
+
+# Antivirüs/dosya kilidi gibi arka plan işlemlerinin addons/ziva_agent
+# altında bıraktığı geçici dosyalar (ör. ~libziva_agent...~RF168eef5c.TMP)
+# - proje dosyası değil, iki kişi paylaşınca yanlışlıkla commit edilmesin.
+~*.TMP
+~*.tmp
