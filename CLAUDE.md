@@ -89,3 +89,39 @@ Yeni bir yetenek/efekt eklediğinde, TEK bilgisayarda iki pencere açıp
 OLMAYAN oyuncuyla kullan ve diğer pencerede doğru göründüğünü kontrol et —
 kendi ekranında (kaster tarafında) her zaman doğru görünür, gerçek test
 DİĞER istemcide izlemektir.
+
+## Kod değişikliği = exe'ye otomatik yansımaz (export ELLE/KOMUTLA yapılan ayrı bir adım)
+
+Kullanıcı bildirimi (2026-09-16): kod dosyalarını düzelttikten sonra
+kullanıcı oyunu exportlayıp oynadığında değişiklikler bazen hiç görünmüyordu
+- "aynı eski sürümü oynamak gibi" hissi veriyordu. Kök neden KOD hatası
+DEĞİLDİ: Godot'ta script/sahne dosyalarını değiştirmek exportlanmış .exe'yi
+OTOMATİK güncellemiyor - export, o ANKİ proje durumunun ELLE/KOMUTLA alınan
+bir "anlık görüntüsü". Masaüstünde kullanıcının test ettiği en az iki ayrı
+.exe kopyası var:
+- `../../Oynanabilir versiyon/I need to stay alive.exe` (export_presets.cfg
+  "Windows Desktop" preset'inin gerçek export_path'i - tek oyunculu/genel
+  test için kullanılan "asıl" build)
+- Proje klasörünün İÇİNDE bir "Co-op (isim değişebilir).exe" - yukarıdaki
+  "Test/doğrulama" bölümünün bahsettiği İKİNCİ multiplayer test istemcisi
+  (aynı .exe'nin ikinci bir kopyası, host olmayan oyuncu rolünde açılıyor)
+
+**DÜZELTME (kullanıcı bildirimi, aynı gün): "bundan sonra bir değişiklik
+yaptığında... projeyi exportlamıyosundur umarım, ben sadece export ayarı
+olarak projenin güncel halini exportlasın istedim, her seferinde ben
+exportladığımda Godot'tan."** - yukarıdaki "her görev sonunda otomatik
+export al" kuralı YANLIŞ anlaşılmıştı ve GERİ ALINDI. Claude BUNDAN SONRA
+kod değiştirdikten sonra KENDİLİĞİNDEN export ALMAZ/exe'nin üzerine
+YAZMAZ - export tamamen kullanıcının kendi kontrolünde, Godot editöründen
+kendisi ne zaman isterse o zaman alır. Yukarıdaki export komutu/yol bilgisi
+sadece REFERANS için burada duruyor (kullanıcı "export'u sen al" diye
+AÇIKÇA isterse kullanılır) - varsayılan davranış DEĞİL. Kod bir görevi
+bitirdiğinde kullanıcıya sadece "değişiklikler kaydedildi, test etmeden
+önce Godot'tan yeniden export almayı unutma" gibi bir hatırlatma yeterli.
+
+Ayrıca: kullanıcı Godot EDİTÖRÜNÜ projede AÇIK tutuyor olabilir. Bir .tscn
+dosyasını editör dışından (metin olarak) düzenlersen ve o sahne editörde
+AÇIKKA kalıp kullanıcı sonradan editörden "Kaydet"e basarsa, editördeki ESKİ
+bellek içi hali senin değişikliğinin ÜZERİNE yazıp onu sessizce geri
+alabilir - bu ihtimali unutma, şüpheli bir "değişiklik kayboldu" durumunda
+bunu da sorgula.

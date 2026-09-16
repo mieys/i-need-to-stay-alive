@@ -30,6 +30,16 @@ extends AnimatedSprite2D
 ##
 ## 3 fazlı elle sürülen kare kontrolü - Ice.png'deki (fx_ice_freeze_status.gd)
 ## AYNI teknik.
+##
+## DÜZELTME (kullanıcı bildirimi: "kenarlarına smooth eklemeni istemiştim...
+## keskin bir şekilde bitiyordu") - texture_filter=1 (Linear, .tscn'de) SADECE
+## piksel ÖRNEKLEMESİNİ (scale=3.9 ile büyütülünce oluşan pikselli görünümü)
+## yumuşatıyordu, kaynak PNG'deki sert alfa kesimini (parıltıların keskin
+## bitmesi) DEĞİŞTİRMİYORDU - o yüzden fark edilmiyordu. assets/generated/
+## fx_melek_heal_aura.png/fx_melek_shield_aura.png artık HER KARE kendi
+## sınırları içinde ayrı ayrı (kareler arası bulaşma olmadan) hafif bir
+## Gaussian blur ile yeniden üretildi (bkz. kenar yumuşatma script'i, tek
+## seferlik - kaynak .tres/.tscn hiç değişmedi, sadece piksel verisi).
 
 const FRAME_COUNT := 13
 const INTRO_END := 3   ## 0..3 intro (4 kare)

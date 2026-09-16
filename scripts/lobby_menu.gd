@@ -67,6 +67,12 @@ func _ready() -> void:
 	## player_name).
 	player_name_input.text_submitted.connect(_on_player_name_submitted)
 	player_name_input.focus_exited.connect(func(): _on_player_name_submitted(player_name_input.text))
+	## DÜZELTME (kullanıcı isteği: "oyunda isim profili olsun 1 kere ismini
+	## yazınca bi daha yazman gerekmesin") - NetworkManager _ready()'de daha
+	## önce kaydedilmiş bir isim varsa (bkz. _load_saved_player_name) onu
+	## zaten local_player_name'e yüklemiş oluyor, burada sadece alana
+	## yansıtılıyor - kullanıcı bir daha hiç yazmak zorunda kalmıyor.
+	player_name_input.text = NetworkManager.local_player_name
 
 	# Dynamically add LAN controls to the UI
 	var vbox: VBoxContainer = $LeftPanel/Margin/VBox as VBoxContainer

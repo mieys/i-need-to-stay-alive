@@ -33,9 +33,12 @@ const SKILL_TIMING := {
 	## kendisini erken bitirip cooldown'a sokuyor.
 	## Kullanıcı isteği: bekleme süresi 120sn'ye düşürüldü (eskiden 180sn).
 	11: {"duration": 60.0, "cooldown": 120.0},
-	## Elara ULTİ: 25sn boyunca tüm silahlar 2 kez tetiklenir (bkz.
-	## weapon.gd elara_double_fire_active), 120sn bekleme.
-	12: {"duration": 25.0, "cooldown": 120.0},
+	## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
+	## değiştir") - eskiden Çift Tetik buradaydı (bkz. SKILL3_TIMING[31]
+	## şimdi orada), id 12 artık Kalkan Sıçraması'nın (bkz. player.gd
+	## _skill_elara_dash_refill) yeni evi - "duration" Talon'un Hamle
+	## Vuruşu'yla (id 38) AYNI desen, sadece kısa hamle penceresi.
+	12: {"duration": 0.12, "cooldown": 6.0},
 	## Kurt Adam ULTİ: Kudurmuş Saldırı - kontrolsüz otomatik saldırı (bkz.
 	## _skill_kurtadam_berserk/_kurtadam_berserk_direction). DÜZELTME
 	## (kullanıcı isteği #45: "kurt adam ultisi sonsuza kadar sürüyor 20
@@ -158,9 +161,12 @@ const SKILL3_TIMING := {
 	## Shaman'ın 3 totemi de burada - id'ler characters.gd DEFS[12]'deki
 	## "skill"/"skill2"/"skill3" alanlarıyla eşleşiyor (bkz. orada).
 	28: {"duration": 0.0, "cooldown": 45.0}, ## Alan Totemi - bkz. SKILL_TIMING[26] üstündeki DÜZELTME notu (artık "duration" kullanılmıyor + 45sn bekleme)
-	## Kullanıcı isteği: Elara'nın yeni 3. yeteneği (Kalkan Sıçraması, id 31) -
-	## "duration" sadece kısa hamle penceresi, gerçek kısıt 6sn bekleme.
-	31: {"duration": 0.12, "cooldown": 6.0},
+	## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
+	## değiştir") - eskiden Kalkan Sıçraması buradaydı (bkz. SKILL_TIMING[12]
+	## şimdi orada), id 31 artık Çift Tetik'in (bkz. player.gd
+	## _skill_elara_double_fire) yeni evi - "duration" 25sn'lik gerçek buff
+	## süresiyle birebir eşleşiyor, 120sn bekleme.
+	31: {"duration": 25.0, "cooldown": 120.0},
 	## Kullanıcı isteği: Assasin Çocuk'un yeni 3. yeteneği (Görünmezlik, id 30).
 	30: {"duration": 6.0, "cooldown": 60.0},
 	## Kullanıcı isteği: Melek'in yeni 3. yeteneği (Korku, id 32) - "duration"
@@ -2219,7 +2225,14 @@ func _physics_process(delta: float) -> void:
 	_refresh_local_barrier_link_visual()
 	_process_merchant_zone_state()
 
-	if Input.is_action_just_pressed("skill") and not is_chat_typing:
+	## DÜZELTME (kullanıcı bildirimi: "kalkanın içindeyken yetenek de
+	## kullanılamamalı") - seyyar satıcının güvenli bölgesi (bkz.
+	## is_in_merchant_zone/GameManager.merchant_zone_*) hem yaratıkların hem
+	## artık oyuncunun kendi saldırganlığının devre dışı kaldığı KARŞILIKLI
+	## bir ateşkes bölgesi olmalı - üç yetenek girişi de (ve aşağıdaki tüm
+	## bypass dalları: Oakley Çiçek, Korsan bomba, Assasin hamle, Büyücü
+	## varyasyonları, Necro yarasa sürüsü DAHİL) bölgedeyken tamamen engellenir.
+	if Input.is_action_just_pressed("skill") and not is_chat_typing and not is_in_merchant_zone:
 		## Oakley'nin Çiçek yeteneği (Q, skill id 1) - Korsan/Necromancer/
 		## Assasin'in yük tabanlı TEMEL'leriyle AYNI desen, standart
 		## skill_state == "ready" bekleme makinesi BAŞTAN devre dışı (bkz.
@@ -2239,7 +2252,7 @@ func _physics_process(delta: float) -> void:
 		## dokunulmuyor.
 		elif skill_state == "active" and get_skill_character_id() in [11, 14]:
 			_cancel_active_skill_early()
-	if Input.is_action_just_pressed("skill2") and not is_chat_typing:
+	if Input.is_action_just_pressed("skill2") and not is_chat_typing and not is_in_merchant_zone:
 		var skill2_id_pressed: int = get_skill2_id()
 		## Korsan (Saatli Bomba, id 17) ve Necromancer (İskelet Çağır, id 19)
 		## bekleme süresi YERİNE şarj/ruh ile çalışır - standart
@@ -2266,7 +2279,7 @@ func _physics_process(delta: float) -> void:
 	## Üçüncü aktif yetenek (R) - bkz. dosya başındaki SKILL3_TIMING notu.
 	## skill3 alanı olmayan karakterlerde get_skill3_id() 0 döner, tuş
 	## hiçbir şey yapmaz.
-	if Input.is_action_just_pressed("skill3") and not is_chat_typing:
+	if Input.is_action_just_pressed("skill3") and not is_chat_typing and not is_in_merchant_zone:
 		var skill3_id_pressed: int = get_skill3_id()
 		## Büyücü Kız'ın R'si (bkz. BUYUCU_SET_R_VARIATIONS) - E'nin skill2
 		## dalıyla (yukarıda, "elif skill2_id_pressed in BUYUCU_VARIATION_
@@ -3181,6 +3194,7 @@ func _on_matthew_pet_died() -> void:
 func on_enemy_killed(enemy: Node) -> void:
 	var is_boss_kill: bool = is_instance_valid(enemy) and enemy.get("is_boss") == true
 	_apply_kill_heal_item()
+	_distribute_arcane_stack(enemy.global_position if is_instance_valid(enemy) else global_position)
 	match get_skill_character_id():
 		18: _korsan_on_kill()
 		20: _necro_on_kill(is_boss_kill)
@@ -3202,6 +3216,7 @@ func on_enemy_killed(enemy: Node) -> void:
 ## (bkz. network_manager.gd notify_kill_passive/enemy.gd die()).
 func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZERO) -> void:
 	_apply_kill_heal_item()
+	_distribute_arcane_stack(death_pos)
 	match get_skill_character_id():
 		18: _korsan_on_kill()
 		20: _necro_on_kill(is_boss_kill)
@@ -3215,6 +3230,29 @@ func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZER
 func _apply_kill_heal_item() -> void:
 	if item_kill_heal_amount > 0.0:
 		heal(item_kill_heal_amount)
+
+
+## Arcane Asası pasifi (bkz. weapon.gd add_arcane_stack üstündeki DÜZELTME
+## notu, kullanıcı isteği: "kendi öldürdüğü değil etrafta ölen düşmanlara
+## göre stacklensin... 1 ölüm 5 asaya da stack vermemeli yani sadece
+## rasgele 1 arcane asasına 1 stack olacak") - _apply_kill_heal_item() ile
+## AYNI desen: on_enemy_killed/_remote'un HER İKİ yolundan da çağrılır ki
+## host olmayan bir oyuncu da KENDİ silahları üzerinden pasifini alsın.
+## Menzili (attack_range) ölüm konumunu kapsayan SAHİP OLUNAN Arcane
+## kopyalarından SADECE rastgele BİRİNE 1 stack eklenir.
+func _distribute_arcane_stack(death_pos: Vector2) -> void:
+	var candidates: Array = []
+	for w in owned_weapon_nodes:
+		if not is_instance_valid(w) or not ("_is_arcane" in w) or not w._is_arcane:
+			continue
+		var w_range: float = float(w.attack_range) if "attack_range" in w else 0.0
+		if w_range <= 0.0 or w.global_position.distance_to(death_pos) <= w_range:
+			candidates.append(w)
+	if candidates.is_empty():
+		return
+	var chosen: Node = candidates[randi() % candidates.size()]
+	if chosen.has_method("add_arcane_stack"):
+		chosen.add_arcane_stack()
 
 
 ## Korsan pasifi: "Her öldürmede %10 ihtimalle 1 altın kazanırsın. Bu şans
@@ -4538,6 +4576,18 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## hasar işlenmemeli.
 	if is_in_merchant_zone:
 		return
+	## DÜZELTME (kullanıcı bildirimi: "assasin çocuk görünmez olunca
+	## yaratıklar onu görebiliyor ve hasar verebiliyor hala") - enemy.gd
+	## normalde görünmez oyuncuyu hiç HEDEFLEMİYOR (bkz. _find_closest_
+	## target_player/_physics_process player_is_invisible kontrolü), ama
+	## zaten fırlatılmış bir mermi/homing saldırı (bkz. enemy_projectile.gd
+	## "asla ıskalamaz" notu) ya da hedefleme kararı hasar isabet etmeden
+	## HEMEN ÖNCE görünmezliğe geçiş gibi bir yarış durumu yine de buraya
+	## ulaşabiliyordu. is_indoors/is_in_merchant_zone ile AYNI güvenlik
+	## deseni: hasar kaynağı ne olursa olsun (temas/mermi/yetenek fark
+	## etmeksizin) görünmezken hiçbir hasar işlenmemeli.
+	if is_invisible:
+		return
 	if is_assasin_dashing:
 		return
 	if is_revive_invulnerable:
@@ -4724,7 +4774,13 @@ func die() -> void:
 	## _finalize_death() ile SİLİNİYORDU. Artık hak burada, downed'a girerken
 	## HEMEN rezerve ediliyor - downed'a giren biri artık KESİN olarak
 	## dirilme hakkına sahip, _complete_revive() bir daha host'a sormuyor.
-	if NetworkManager.is_multiplayer_active and GameManager.revives_remaining > 0:
+	## DÜZELTME (kullanıcı isteği: "multiplayerda canların takım canı değil
+	## kişisel olmasını istiyorum") - paylaşılan GameManager.revives_remaining
+	## YERİNE bu oyuncunun KENDİ peer_revives hakkı kontrol ediliyor (bkz.
+	## network_manager.gd _consume_revive_authoritative) - aksi halde bu
+	## kontrol hiç azalmayan eski paylaşılan alanı okuyup HERKESİ sonsuza
+	## kadar "hakkı var" sanardı.
+	if NetworkManager.is_multiplayer_active and GameManager.get_peer_revives(multiplayer.get_unique_id()) > 0:
 		if await NetworkManager.try_use_revive():
 			_go_down()
 			return
@@ -5475,7 +5531,18 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 
 # ---------- Skills ----------
 
+## DÜZELTME (kullanıcı isteği: "Melek karakterinin Q yeteneğinin bekleme
+## süresini %30 arttır") - skill id 1 (Can Basma) Oakley'yle PAYLAŞILIYOR
+## (bkz. characters.gd DEFS[10]/DEFS[2] "skill":1 notu, _skill2_timing_for
+## id 10'daki AYNI paylaşım deseni) - SKILL_TIMING[1]'i doğrudan değiştirmek
+## Oakley'yi de etkilerdi, bu yüzden Melek için ayrı bir bekleme süresi
+## döndürülüyor, Oakley (ve varsayılan) SKILL_TIMING[1]'deki 20sn'de kalıyor.
+const MELEK_CAN_BASMA_COOLDOWN := 26.0 ## 20sn * 1.3
+
 func _skill_timing_for(char_id: int) -> Dictionary:
+	if char_id == 1 and GameManager.selected_char_id == 10:
+		var base: Dictionary = SKILL_TIMING.get(1, {"duration": DEFAULT_SKILL_DURATION, "cooldown": DEFAULT_SKILL_COOLDOWN})
+		return {"duration": base.get("duration", DEFAULT_SKILL_DURATION), "cooldown": MELEK_CAN_BASMA_COOLDOWN}
 	return SKILL_TIMING.get(char_id, {"duration": DEFAULT_SKILL_DURATION, "cooldown": DEFAULT_SKILL_COOLDOWN})
 
 
@@ -5491,6 +5558,10 @@ func _skill_timing_for(char_id: int) -> Dictionary:
 ## aynı) paylaşılan tablodan geliyor.
 const SOVALYE_KALKAN_YENILEME_COOLDOWN := 50.0
 const OAKLEY_VINES_COOLDOWN := 16.0
+## DÜZELTME (kullanıcı isteği: "Melek karakterinin E yeteneğinin bekleme
+## süresini %15 arttır") - üstteki Şovalye/Oakley ayrımıyla AYNI desen,
+## Melek'in kendi Kalkan Yenileme'si (id 10, paylaşılan varsayılan 15sn).
+const MELEK_KALKAN_YENILEME_COOLDOWN := 17.25 ## 15sn * 1.15
 
 func _skill2_timing_for(skill2_id: int) -> Dictionary:
 	if skill2_id == 10:
@@ -5499,6 +5570,8 @@ func _skill2_timing_for(skill2_id: int) -> Dictionary:
 			return {"duration": base.get("duration", DEFAULT_SKILL2_DURATION), "cooldown": SOVALYE_KALKAN_YENILEME_COOLDOWN}
 		if GameManager.selected_char_id == 2:
 			return {"duration": base.get("duration", DEFAULT_SKILL2_DURATION), "cooldown": OAKLEY_VINES_COOLDOWN}
+		if GameManager.selected_char_id == 10:
+			return {"duration": base.get("duration", DEFAULT_SKILL2_DURATION), "cooldown": MELEK_KALKAN_YENILEME_COOLDOWN}
 	return SKILL2_TIMING.get(skill2_id, {"duration": DEFAULT_SKILL2_DURATION, "cooldown": DEFAULT_SKILL2_COOLDOWN})
 
 
@@ -5666,18 +5739,23 @@ func _activate_skill3() -> void:
 	var skill3_id: int = get_skill3_id()
 	if skill3_id == 0:
 		return
-	if skill3_id != 31:
-		## DÜZELTME (bkz. _activate_skill()'teki eşleşen not) - Talon'un Ayna
-		## Formu (R, id 37) burada ARTIK TEMEL tarifesini DEĞİL, genel ULTİ
-		## tarifesini (SKILL_SHIELD_COST_*) ödüyor: 120sn bekleme süreli,
-		## gerçekten ulti hissi veren yetenek bu, ağır bedeli hak ediyor -
-		## Hamle Vuruşu (Q, id 38) ise artık BURADAKİ hafif tarifeyi ödüyor.
-		var use_ulti_tier: bool = (skill3_id == 37)
-		var skill3_shield_cost: float = (item_shield_max * (SKILL_SHIELD_COST_PERCENT_OF_MAX if use_ulti_tier else SKILL2_SHIELD_COST_PERCENT_OF_MAX) + (SKILL_SHIELD_COST_FLAT if use_ulti_tier else SKILL2_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
-		if not _has_enough_ability_shield(skill3_shield_cost):
-			_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
-			return
-		_spend_ability_shield_cost(skill3_shield_cost)
+	## DÜZELTME (bkz. _activate_skill()'teki eşleşen not) - Talon'un Ayna
+	## Formu (R, id 37) burada ARTIK TEMEL tarifesini DEĞİL, genel ULTİ
+	## tarifesini (SKILL_SHIELD_COST_*) ödüyor: 120sn bekleme süreli,
+	## gerçekten ulti hissi veren yetenek bu, ağır bedeli hak ediyor -
+	## Hamle Vuruşu (Q, id 38) ise artık BURADAKİ hafif tarifeyi ödüyor.
+	## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
+	## değiştir") - eskiden burada "skill3_id != 31" muafiyetiyle Kalkan
+	## Sıçraması bedelsizdi; o artık Q'da (bkz. _activate_skill()'teki yeni
+	## "char_id != 12" muafiyeti), id 31 şimdi Çift Tetik'in yeni evi ve
+	## Ayna Formu gibi genel ULTİ tarifesini ödüyor - muafiyet tamamen
+	## kaldırıldı.
+	var use_ulti_tier: bool = (skill3_id == 37 or skill3_id == 31)
+	var skill3_shield_cost: float = (item_shield_max * (SKILL_SHIELD_COST_PERCENT_OF_MAX if use_ulti_tier else SKILL2_SHIELD_COST_PERCENT_OF_MAX) + (SKILL_SHIELD_COST_FLAT if use_ulti_tier else SKILL2_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
+	if not _has_enough_ability_shield(skill3_shield_cost):
+		_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
+		return
+	_spend_ability_shield_cost(skill3_shield_cost)
 	item_shield_ability_slow_timer = _shield_hit_regen_delay()
 	var timing: Dictionary = _skill3_timing_for(skill3_id)
 	_skill3_duration = timing["duration"]
@@ -5691,7 +5769,11 @@ func _activate_skill3() -> void:
 		anim.play("spellcast_" + facing)
 	match skill3_id:
 		28: _skill_shaman_area_totem()
-		31: _skill_elara_dash_refill()
+		## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
+		## değiştir") - Çift Tetik (eskiden Q/skill id 12) artık R'de, bkz.
+		## _activate_skill()'teki eşleşen düzeltme (Kalkan Sıçraması artık
+		## orada).
+		31: _skill_elara_double_fire()
 		30: _skill_assasin_invisibility_r()
 		32: _skill_melek_fear()
 		29: _skill_paladin_barrier()
@@ -5708,6 +5790,12 @@ func _end_skill3_effects() -> void:
 			_end_assasin_invisibility_r()
 		29:
 			_end_paladin_barrier()
+		## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
+		## değiştir") - Çift Tetik'in temizliği eskiden _end_skill_effects()
+		## (Q/skill_state) tarafında koşulsuzdu, artık R/skill3_state'te bitiyor.
+		31:
+			if elara_double_fire_active:
+				_end_elara_double_fire()
 		## Talon'un Ayna Formu (kullanıcı isteği: "R ile Q'nun yerini değiştir"
 		## sonrası artık skill3/R'de) - bkz. _skill_talon_mirror_form.
 		37:
@@ -5774,8 +5862,16 @@ func _activate_skill() -> void:
 	## düzeltme) ile birebir aynı, hafif TEMEL tarifesi (SKILL2_SHIELD_COST_*)
 	## ödüyor artık - gerçek "ulti" (uzun bekleme süreli, ağır) davranışı
 	## SADECE R'ye ait olsun diye ikisi kasıtlı olarak yer değiştirdi.
+	## DÜZELTME (kullanıcı bildirimi: "Melek yeteneğinin Q yeteneğinin mana
+	## bedeli ulti mana bedeli olarak algılanıyor, o temel yeteneklerden biri
+	## sadece") - Can Basma (id 1) Oakley'yle PAYLAŞILAN bir id olduğu için
+	## (bkz. _skill_timing_for üstündeki AYNI paylaşım notu) SADECE Melek
+	## (selected_char_id 10) için hafif/TEMEL tarifeye düşürülüyor - Oakley'nin
+	## KENDİ Can Basma kullanımı (id 1, roster id 2) ağır/ULTİ tarifesinde
+	## değişmeden kalıyor.
+	var is_melek_can_basma: bool = (char_id == 1 and GameManager.selected_char_id == 10)
 	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
-	var skill_shield_cost: float = (item_shield_max * (SKILL2_SHIELD_COST_PERCENT_OF_MAX if char_id == 38 else SKILL_SHIELD_COST_PERCENT_OF_MAX) + (SKILL2_SHIELD_COST_FLAT if char_id == 38 else SKILL_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
+	var skill_shield_cost: float = (item_shield_max * (SKILL2_SHIELD_COST_PERCENT_OF_MAX if (char_id == 38 or is_melek_can_basma) else SKILL_SHIELD_COST_PERCENT_OF_MAX) + (SKILL2_SHIELD_COST_FLAT if (char_id == 38 or is_melek_can_basma) else SKILL_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
 	## Kullanıcı isteği: "Kurt adamın yetenekleri kalkan harcamamalı" - Kudurmuş
 	## Saldırı (ULTİ, id 14) artık Koruma Baloncuğu/Feda Kalkanı/Büyü Değişimi
 	## (11/9/3) ile AYNI şekilde bu bedelden muaf.
@@ -5786,7 +5882,17 @@ func _activate_skill() -> void:
 	## Alan Totemi (id 28) için geçerliydi, Kalkan Totemi bambaşka bir
 	## dispatch (_activate_skill) üzerinden çalışıyor ve o zamana kadar
 	## muafiyet listesine hiç eklenmemişti.
-	if char_id != 11 and char_id != 9 and char_id != 3 and char_id != 14 and char_id != 26:
+	## DÜZELTME (kullanıcı isteği: "talonun Q yeteneğinin mana bedelini
+	## kaldır") - Hamle Vuruşu (id 38) artık Koruma Baloncuğu/Feda Kalkanı/
+	## Büyü Değişimi/Kudurmuş Saldırı/Kalkan Totemi (11/9/3/14/26) ile AYNI
+	## şekilde bu bedelden tamamen muaf - eskiden sadece HAFİF (ulti değil
+	## temel) tarifeye düşürülmüştü (bkz. yukarıdaki skill_shield_cost
+	## hesabı), artık hiç kalkan harcamıyor.
+	## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
+	## değiştir") - Kalkan Sıçraması (id 12) "Kalkan harcamaz" - eskiden R/
+	## skill3'teyken _activate_skill3()'ün "skill3_id != 31" muafiyetiyle
+	## bedelsizdi, şimdi Q'ya taşındığı için AYNI muafiyet burada.
+	if char_id != 11 and char_id != 9 and char_id != 3 and char_id != 14 and char_id != 26 and char_id != 38 and char_id != 12:
 		## Kullanıcı isteği: "yetenekler kullanım bedeli için gereken kalkan
 		## olmazsa çalışmayacak" - yetersizse bekleme süresine hiç girmeden
 		## tetiklenmeden çıkılıyor (yukarıdaki ruh/bomba kontrolleriyle AYNI
@@ -5845,7 +5951,15 @@ func _activate_skill() -> void:
 		## tablosunda çağrılıyor (bkz. o fonksiyon).
 		9: _skill_shield_dome()
 		11: _skill_paladin_ulti()
-		12: _skill_elara_double_fire()
+		## DÜZELTME (kullanıcı bildirimi: "Elaranın skilleri bozuldu Q artık
+		## çalışmıyor dash atması lazımdı Q ile çünkü yerlerini değiştirmiştik
+		## R ile") - bu case YANLIŞLIKLA _activate_skill2()'ye eklenmişti
+		## (id 12 hiçbir zaman bir skill2_id DEĞİL - Q burada, gerçek "skill"
+		## dispatch'i), asıl BURAYA (Q/skill tablosu) hiç eklenmemişti, bu
+		## yüzden Q hâlâ eski Çift Tetik'i çağırıyordu. Kalkan Sıçraması
+		## (eskiden R/skill3 id 31) artık Q'da, bkz. _activate_skill3()'teki
+		## eşleşen düzeltme (Çift Tetik artık orada).
+		12: _skill_elara_dash_refill()
 		14: _skill_kurtadam_berserk()
 		18: _skill_korsan_detonate_all()
 		20: _skill_necro_summon_golem()
@@ -5921,8 +6035,8 @@ func _end_skill_effects() -> void:
 		_pop_matthew_dome(false) ## 15s ran out on its own, no explosion
 	if paladin_zone_active:
 		_end_paladin_ulti()
-	if elara_double_fire_active:
-		_end_elara_double_fire()
+	## Çift Tetik'in temizliği artık R'ye taşındığı için (kullanıcı isteği:
+	## "Elaranın R ile Q yeteneğinin yerini değiştir") _end_skill3_effects()'te.
 	if _kurtadam_berserk_active:
 		_end_kurtadam_berserk()
 
@@ -8164,9 +8278,24 @@ func _talon_set_weapons_circular(radius: float, angle_offset: float) -> void:
 		## hedefe-dönme mantığını (_update_aim) geçici olarak devre dışı
 		## bırakıp rotasyonu burada elle veriyoruz (bkz. weapon.gd
 		## icon_faces_target - _talon_restore_weapon_aim() sonunda geri açar).
+		## DÜZELTME (kullanıcı bildirimi: "namlu uçları içe doğru bakıyor
+		## dışarı doğru bakması gerekiyor") - "slot.angle - forward" _update_
+		## aim()'deki (hedefe dönük bakma) formülüyle AYNIYDI ama namlunun
+		## kendi ucu sprite'ta merkeze doğru çizilmiş olduğu için sonuç ters
+		## (içe dönük) çıkıyordu - +PI ile 180° çevrilip dışa dönük hale
+		## getirildi (bkz. remote_player.gd _update_talon_formation - AYNI
+		## düzeltme orada da uygulandı, formül iki dosyada asla sapamaz).
 		if "icon_faces_target" in w:
 			w.icon_faces_target = false
 		if w.icon_sprite:
+			## DÜZELTME (kullanıcı bildirimi: "silahların dışa bakması
+			## gerekirken içe bakıyorlar") - slot["angle"] compute_slot'ta
+			## zaten merkezden dışa bakan açı (offset de aynı açıyla
+			## hesaplanıyor, bkz. talon_formation_math.gd), _update_aim'deki
+			## genel "rotation = hedef_açısı - forward" kuralıyla AYNI
+			## formül kullanılmalı. Eski +PI fazladan 180° ekleyip namluları
+			## içe (karaktere doğru) çeviriyordu - remote_player.gd
+			## _update_talon_formation'daki AYNI düzeltme.
 			w.icon_sprite.rotation = slot["angle"] - deg_to_rad(float(w.sprite_forward_angle_deg))
 
 

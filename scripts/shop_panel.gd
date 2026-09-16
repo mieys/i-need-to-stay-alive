@@ -424,6 +424,14 @@ const BUTTON_WOOD_TINT_NORMAL := Color(1.0, 1.0, 1.0, 1.0)
 const BUTTON_WOOD_TINT_HOVER := Color(1.22, 1.14, 1.04, 1.0)
 const BUTTON_WOOD_TINT_PRESSED := Color(0.72, 0.68, 0.64, 1.0)
 const BUTTON_WOOD_TINT_DISABLED := Color(0.55, 0.55, 0.55, 0.75)
+## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - "focus" stili
+## eskiden BUTTON_WOOD_TINT_NORMAL ile AYNIYDI (bkz. aşağıdaki _apply_*
+## fonksiyonları), yani klavye/gamepad odağı oyunda HİÇBİR yerde görünmüyordu
+## (bu iki fonksiyon neredeyse her ekranın kendi butonlarında kullanılıyor,
+## bkz. UISound.apply_wood_buttons). Belirgin ama göz yormayan altın bir
+## parlaklık - mouse tıklamasından sonra da kısaca görünür (Godot'un
+## varsayranı budur), bilerek yumuşak tutuldu.
+const BUTTON_WOOD_TINT_FOCUS := Color(1.4, 1.15, 0.6, 1.0)
 
 static func _make_wood_button_style(tint: Color = BUTTON_WOOD_TINT_NORMAL) -> StyleBoxTexture:
 	var sb := StyleBoxTexture.new()
@@ -447,7 +455,7 @@ static func _apply_wood_button_style(btn: Button) -> void:
 	btn.add_theme_stylebox_override("hover", _make_wood_button_style(BUTTON_WOOD_TINT_HOVER))
 	btn.add_theme_stylebox_override("pressed", _make_wood_button_style(BUTTON_WOOD_TINT_PRESSED))
 	btn.add_theme_stylebox_override("disabled", _make_wood_button_style(BUTTON_WOOD_TINT_DISABLED))
-	btn.add_theme_stylebox_override("focus", _make_wood_button_style(BUTTON_WOOD_TINT_NORMAL))
+	btn.add_theme_stylebox_override("focus", _make_wood_button_style(BUTTON_WOOD_TINT_FOCUS))
 
 
 ## Kullanıcı isteği: "dükkan kategori butonları veya aşırı dar olan butonlar
@@ -486,7 +494,7 @@ static func _apply_mini_wood_button_style(btn: Button) -> void:
 	btn.add_theme_stylebox_override("hover", _make_mini_wood_button_style(BUTTON_WOOD_TINT_HOVER))
 	btn.add_theme_stylebox_override("pressed", _make_mini_wood_button_style(BUTTON_WOOD_TINT_PRESSED))
 	btn.add_theme_stylebox_override("disabled", _make_mini_wood_button_style(BUTTON_WOOD_TINT_DISABLED))
-	btn.add_theme_stylebox_override("focus", _make_mini_wood_button_style(BUTTON_WOOD_TINT_NORMAL))
+	btn.add_theme_stylebox_override("focus", _make_mini_wood_button_style(BUTTON_WOOD_TINT_FOCUS))
 
 
 ## Dükkanın tüm arkaplan/kenarlık stillerini envanter ve istatistik
@@ -647,6 +655,13 @@ func _ready() -> void:
 	if _ready_done:
 		return
 	_ready_done = true
+	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - bu panel bilerek
+	## get_tree().paused kullanmıyor (takım arkadaşları dışarıda oynamaya
+	## devam edebilsin diye), bu yüzden main.gd'nin genel ui_cancel/pause-
+	## toggle kontrolü bu panel açıkken de çalışıp pause menüsünü ÜSTÜNE
+	## açardı - artık GameManager'a kaydolup (bkz. o dosyadaki "ENGELLEYİCİ
+	## PANEL KAYDI" notu) kendi ui_cancel'ını kendi _process()'inde işliyor.
+	GameManager.register_blocking_panel(self)
 	pivot_offset = size * 0.5
 	## Kullanıcı isteği (#34, ve tekrar: "dükkan paneli ekranın ortasında
 	## açılsın sağ altta değil") - eskiden burada .tscn'deki köşe anchor'ına
@@ -896,6 +911,12 @@ func _process(_delta: float) -> void:
 	## (mine_fill_bar/gold_collector_fill_bar) güncelleniyordu - ikisi de
 	## kullanıcı isteğiyle kaldırıldı (bkz. yukarıdaki aynı not).
 	_refresh_price_labels()
+	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - bkz. _ready()
+	## içindeki register_blocking_panel notu; bu panel kendi ui_cancel'ını
+	## kendi işliyor (main.gd'nin genel pause-toggle'ı bu panel açıkken
+	## atlanıyor, bkz. GameManager.is_any_blocking_panel_open).
+	if visible and Input.is_action_just_pressed("ui_cancel"):
+		_on_close_pressed()
 
 
 ## Her kartın altındaki PriceLabel'ı günceller (bkz. _ready() içindeki

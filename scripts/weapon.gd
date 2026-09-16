@@ -519,16 +519,31 @@ func _measure_icon_pixel_size() -> Vector2:
 ## Arcane Asası pasifleri (bkz. kullanıcı isteği):
 ## 1) "Canı %30'un altındaki düşmanlara %30 daha fazla hasar" - _fire_at()
 ##    içinde final_damage'a uygulanıyor.
-## 2) "Her 10 öldürmeden sonra menzil içindeki rastgele düşmanlara aniden
-##    10 kere saldırsın" - notify_kill() ile sayaç artırılıyor, eşiğe
-##    ulaşınca _trigger_arcane_burst() menzildeki rastgele düşmanlara
-##    normal _fire_at() akışıyla (aynı hasar/efekt/ses) art arda ateş ediyor.
+## 2) menzil içindeki rastgele düşmanlara aniden 10 kere saldırır - bkz.
+##    add_arcane_stack/_process_arcane_burst_cooldown üstündeki DÜZELTME
+##    notu (kullanıcı isteği: "kendi öldürdüğü değil etrafta ölen
+##    düşmanlara göre stacklensin, 6sn bekleme süresi olsun").
 const ARCANE_EXECUTE_HP_THRESHOLD := 0.30
 const ARCANE_EXECUTE_DAMAGE_MULT := 1.3
-const ARCANE_BURST_KILL_THRESHOLD := 10
 const ARCANE_BURST_ATTACK_COUNT := 10
+## DÜZELTME (kullanıcı bildirimi: "Arcane asası kendi öldürdüğü değil
+## etrafta ölen düşmanlara göre stacklensin (belli bi stackten sonra
+## ateşleme yapıyordu çünkü) ve bunun bekleme süresi 6 saniye olsun ve bu
+## bekleme süresi bekleme süresinde azalmaya göre azalabilsin. Her arcane
+## asasının kendi bekleme süresi ve kendi etrafta yaratık ölünce stack
+## birikmesi olsun") - eski sistem SADECE bu silahın KENDİ mermisiyle
+## öldürdüğü düşmanları sayıyordu (bkz. eski notify_kill), bu yüzden nadir/
+## tahmin edilemezdi. Artık player.gd _distribute_arcane_stack() (bkz. o
+## dosyadaki on_enemy_killed/_remote çağrıları) menzil (attack_range)
+## içindeki SAHİP OLUNAN Arcane kopyalarından rastgele BİRİNE (kim
+## öldürürse öldürsün, "1 ölüm 5 asaya da stack vermemeli") add_arcane_
+## stack() ile 1 stack ekliyor; her kopya KENDİ stack sayacını ve KENDİ
+## 6sn'lik (cooldown_reduction_percent'e tabi) bekleme süresini bağımsız
+## işletip hazır olduğunda birikmiş TÜM stack'i tek seferde patlatıyor.
+const ARCANE_BURST_COOLDOWN := 8.0
 var _is_arcane: bool = false
-var _arcane_kill_count: int = 0
+var _arcane_stacks: int = 0
+var _arcane_burst_cooldown_timer: float = 0.0
 var _is_uzunkilic: bool = false
 var _orbit_angle: float = 0.0
 var _hit_cooldowns: Dictionary = {}
@@ -539,17 +554,38 @@ const HitClawFxScene := preload("res://scenes/fx_pence_slash.tscn")
 ## kök neden notu).
 
 
-## projectile.gd (bkz. source_weapon) bir hedefi öldürdüğünde çağırır - SADECE
-## Arcane Asası bu metodu anlamlı kullanır, diğer tüm silahlerde no-op
-## (has_method kontrolüyle her silahta çağrılabilir olsa da _is_arcane
-## false olduğu için hiçbir şey yapmaz).
-func notify_kill() -> void:
+## player.gd _distribute_arcane_stack() çağırır (bkz. dosya başındaki
+## ARCANE_BURST_COOLDOWN üstündeki DÜZELTME notu) - SADECE Arcane Asası bu
+## metodu anlamlı kullanır, diğer tüm silahlerde no-op (has_method
+## kontrolüyle her silahta çağrılabilir olsa da _is_arcane false olduğu
+## için hiçbir şey yapmaz).
+func add_arcane_stack() -> void:
 	if not _is_arcane:
 		return
-	_arcane_kill_count += 1
-	if _arcane_kill_count >= ARCANE_BURST_KILL_THRESHOLD:
-		_arcane_kill_count = 0
-		_trigger_arcane_burst()
+	_arcane_stacks += 1
+
+
+## _process()'ten her karede çağrılır - bkz. ARCANE_BURST_COOLDOWN üstündeki
+## DÜZELTME notu. Bekleme süresi dolduğunda VE en az 1 stack birikmişse
+## patlamayı tetikleyip stack'i sıfırlıyor, sonra bekleme süresini (oyuncunun
+## cooldown_reduction_percent'iyle ölçeklenmiş) yeniden başlatıyor - stack
+## yoksa bekleme süresi dolsa bile hiçbir şey olmaz (yakınında kimse
+## ölmediyse "boşa" ateş etmez).
+func _process_arcane_burst_cooldown(delta: float) -> void:
+	if not _is_arcane:
+		return
+	if _arcane_burst_cooldown_timer > 0.0:
+		_arcane_burst_cooldown_timer -= delta
+		return
+	if _arcane_stacks <= 0:
+		return
+	_arcane_stacks = 0
+	var reduction: float = 0.0
+	var owner_char: Node = get_parent()
+	if owner_char and "cooldown_reduction_percent" in owner_char:
+		reduction = owner_char.cooldown_reduction_percent
+	_arcane_burst_cooldown_timer = ARCANE_BURST_COOLDOWN * (1.0 - reduction)
+	_trigger_arcane_burst()
 
 
 ## Menzil içindeki düşmanlardan rastgele ARCANE_BURST_ATTACK_COUNT tanesine
@@ -1148,6 +1184,16 @@ func _process(delta: float) -> void:
 	var owner_node := get_parent()
 	if owner_node and (owner_node.get("is_dead") == true or owner_node.get("is_downed") == true):
 		return
+	## DÜZELTME (kullanıcı bildirimi: "Dükkanda yeni bir silah aldığımızda...
+	## kalkanın içinden düşmanlara o silahla ateş edebiliyoruz bunun olmaması
+	## gerekiyor") - seyyar satıcının güvenli bölgesi (bkz. player.gd
+	## is_in_merchant_zone) enemy.gd tarafında ZATEN karşılıklı sayılıyordu
+	## (yaratıklar bölgedeki oyuncuyu hiç hedeflemiyor/hasar veremiyor) ama
+	## oyuncunun KENDİ silahları bölgenin DIŞINDAKİ yaratıklara ateş etmeye
+	## devam edebiliyordu - artık gerçek bir ateşkes, silah da susuyor.
+	if owner_node and owner_node.get("is_in_merchant_zone") == true:
+		return
+	_process_arcane_burst_cooldown(delta)
 	## Şimşek Asası: FireTimer/fire_rate'i tamamen görmezden gelir, kendi
 	## sürekli ışın döngüsünü işler (bkz. _process_continuous_beam).
 	if continuous_beam:
@@ -1546,8 +1592,40 @@ func _get_nearest_unfrozen_enemy() -> Node2D:
 		result = nearest_unfrozen
 	else:
 		result = nearest
-	_claimed_frost_target = result
-	return result
+	## DÜZELTME (kullanıcı bildirimi: "Buz asası aynı hedefe ateş etmemesi
+	## gerekiyor (boss hariç) sürekli rasgele yakın başka DONMAMIŞ hedefleri
+	## dondurmaya çalışan bir item bu") - üstteki mantık result'ı HEP
+	## deterministik ("en yakın") seçiyordu, bu yüzden bir düşman tam donana
+	## kadar (donma birkaç isabet gerektirebiliyor) hep AYNI hedefe
+	## kilitleniyordu. Yukarıdaki hysteresis/sahiplenme/boss mantığı
+	## DEĞİŞMEDİ (hâlâ hangi BÖLGENİN hedefleneceğine karar veriyor) - sadece
+	## o bölgedeki KESİN seçim artık _pick_random_nearby_unfrozen ile
+	## rastgele, isabetler farklı yaratıklara yayılıyor.
+	var final_target: Node2D = _pick_random_nearby_unfrozen(result, claimed_by_siblings)
+	_claimed_frost_target = final_target
+	return final_target
+
+
+## bkz. _get_nearest_unfrozen_enemy üstündeki DÜZELTME notu - preferred
+## ZATEN donmuşsa (son çare fallback'i, uygun donmamış alternatif hiç
+## yoktu) rastgeleliğe gerek yok, doğrudan onu döndürür. Değilse preferred'e
+## PREFER_UNFROZEN_MAX_EXTRA_DIST içindeki AYNI şekilde uygun (donmamış,
+## boss değilse sahiplenilmemiş) diğer adaylarla birlikte bir havuz kurup
+## rastgele birini seçer.
+func _pick_random_nearby_unfrozen(preferred: Node2D, claimed_by_siblings: Array) -> Node2D:
+	if not is_instance_valid(preferred) or preferred.get("is_frozen") == true:
+		return preferred
+	var pool: Array = [preferred]
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == preferred or not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		if e.get("is_frozen") == true:
+			continue
+		if e.get("is_boss") != true and claimed_by_siblings.has(e):
+			continue
+		if preferred.global_position.distance_to(e.global_position) <= PREFER_UNFROZEN_MAX_EXTRA_DIST:
+			pool.append(e)
+	return pool[randi() % pool.size()]
 
 
 ## Tüftüf: "canı en yüksek düşmana öncelik verir" - her ateşte (ve her

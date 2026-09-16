@@ -257,20 +257,31 @@ const DEFS := {
 	},
 	8: {
 		"name": "Elara",
+		## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
+		## değiştir") - Talon'un AYNI isteğiyle (bkz. characters.gd DEFS[1]
+		## üstündeki "R ile Q'nun yerini değiştir" notu) BİREBİR aynı desen:
+		## id NUMARALARI (12=Çift Tetik, 31=Kalkan Sıçraması) ve "skill"/
+		## "skill3" alanlarının HANGİ id'yi taşıdığı DEĞİŞMEDİ - SADECE
+		## player.gd'de hangi fonksiyonun/bekleme süresinin/bedelin hangi
+		## id'ye bağlı olduğu swap edildi (bkz. _activate_skill/
+		## _activate_skill3 match blokları, SKILL_TIMING[12]/SKILL3_TIMING[31]
+		## üstündeki eşleşen notlar) - Kalkan Sıçraması artık Q'da (hafif/
+		## sık), Çift Tetik artık R'de (ağır/gerçek ulti). Buradaki metin
+		## alanları da buna göre yer değiştirdi.
 		"skill": 12,
-		"skill_name": "Çift Tetik",
-		"skill_desc": "ULTİ: 25 saniye boyunca saldırılar 2 kez tetiklenir ama %60 hasar verir. (120sn bekleme)",
-		"skill_icon": "res://assets/skills/elara_cift_tetik_icon.png",
+		"skill_name": "Kalkan Sıçraması",
+		"skill_desc": "YETENEK: İleri kısa bir hamle atar ve anında kalkanının %12'sini yeniler. Kalkan harcamaz. (6sn bekleme)",
+		## Kalkan Sıçraması'nın kendi ikon dosyası hiç olmadı (eskiden R'de
+		## de yoktu, bkz. hud.gd _setup_ability_icons - def.has("skill_icon")
+		## yoksa skill_icon.gd kendi vektör simgesine düşer, hatasız).
 		"skill2": 11,
 		"skill2_name": "Gerçek Hasar",
 		"skill2_desc": "TEMEL: Sonraki 6 saldırı %50 fazla hasar vurur ve kalkanı yok sayar. (35sn bekleme)",
 		"skill2_icon": "res://assets/skills/elara_gercek_hasar_icon.png",
-		## Kullanıcı isteği: Elara'nın yeni 3. yeteneği (skill3, R tuşu) -
-		## ileri kısa bir hamle atar ve anında kalkanının %12'sini yeniler
-		## (bkz. player.gd _skill_elara_dash_refill, skill id 31).
 		"skill3": 31,
-		"skill3_name": "Kalkan Sıçraması",
-		"skill3_desc": "3. YETENEK: İleri kısa bir hamle atar ve anında kalkanının %12'sini yeniler. Kalkan harcamaz. (6sn bekleme)",
+		"skill3_name": "Çift Tetik",
+		"skill3_desc": "ULTİ: 25 saniye boyunca saldırılar 2 kez tetiklenir ama %60 hasar verir. (120sn bekleme)",
+		"skill3_icon": "res://assets/skills/elara_cift_tetik_icon.png",
 		"passive": "Seviye başına %1 saldırı hızı kazanır. (En fazla %50)",
 		"passive_icon": "res://assets/skills/elara_passive_icon.png",
 		"frames": "res://assets/characters/elara_frames.tres",

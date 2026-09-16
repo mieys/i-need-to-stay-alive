@@ -123,7 +123,17 @@ func _build_static_ui() -> void:
 	## başka çocuklara dokunmaz), bu yüzden buton en üste onun içine ekleniyor.
 	_stats_button = Button.new()
 	_stats_button.text = "İstatistik"
-	_stats_button.custom_minimum_size = Vector2(0, 26)
+	_stats_button.custom_minimum_size = Vector2(0, 32)
+	## DÜZELTME (kullanıcı bildirimi: "grup paneli çok genişledi... istatistikler
+	## butonu eklediğin için yanlışlıkla genişletmişsin") - bu butonun font_size
+	## override'ı hiç yoktu, yani proje varsayılan temasının (theme.tres)
+	## default_font_size=88'ini miras alıyordu - "İstatistik" metni 88px'te
+	## panelin PANEL_WIDTH'ini (216) çok aşan bir minimum genişlik dayatıyordu,
+	## bu yüzden TÜM panel genişlemiş görünüyordu. PANEL_WIDTH'in kendisi hiç
+	## değişmemişti, sadece bu eksik override sorunun asıl kaynağıydı.
+	## DÜZELTME (kullanıcı bildirimi: "istatistikler yazısı çok zor okunuyor") -
+	## 16'dan 20'ye büyütüldü, buton yüksekliği de (26->32) buna uyacak şekilde arttı.
+	_stats_button.add_theme_font_size_override("font_size", 20)
 	_stats_button.tooltip_text = "Kimin ne kadar hasar verdiğini göster"
 	_stats_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_stats_button.pressed.connect(_on_stats_button_pressed)
@@ -166,20 +176,26 @@ func _build_gift_popup() -> void:
 	var presets_box := HBoxContainer.new()
 	presets_box.add_theme_constant_override("separation", 4)
 	vbox.add_child(presets_box)
+	## DÜZELTME: bu butonların da (aşağı bkz. _stats_button üstündeki not ile
+	## AYNI kök neden) font_size override'ı yoktu, tema varsayılanı (88px)
+	## miras alıp devasa/taşan görünüyorlardı.
 	for amount in [10, 50, 100]:
 		var btn := Button.new()
 		btn.text = str(amount)
 		btn.custom_minimum_size = Vector2(44, 30)
+		btn.add_theme_font_size_override("font_size", 16)
 		btn.pressed.connect(_on_gift_amount_pressed.bind(amount))
 		presets_box.add_child(btn)
 	var all_btn := Button.new()
 	all_btn.text = "Hepsi"
 	all_btn.custom_minimum_size = Vector2(50, 30)
+	all_btn.add_theme_font_size_override("font_size", 16)
 	all_btn.pressed.connect(_on_gift_amount_pressed.bind(-1))
 	presets_box.add_child(all_btn)
 
 	var cancel_btn := Button.new()
 	cancel_btn.text = "İptal"
+	cancel_btn.add_theme_font_size_override("font_size", 16)
 	cancel_btn.pressed.connect(_hide_gift_popup)
 	vbox.add_child(cancel_btn)
 
@@ -214,20 +230,25 @@ func _build_stats_popup() -> void:
 	vbox.add_theme_constant_override("separation", 5)
 	_stats_popup.add_child(vbox)
 
+	## DÜZELTME (kullanıcı bildirimi: "istatistikler butonuna tıklayınca açılan
+	## paneli de biraz büyüt o da çok zor okunuyor ve ufacık") - başlık/satır
+	## font boyutları ve listenin minimum genişliği büyütüldü (bkz. aşağıdaki
+	## _refresh_stats_popup'taki satır etiketleri - AYNI oranda büyütüldü).
 	var title := Label.new()
 	title.text = "Hasar Sıralaması"
 	title.add_theme_color_override("font_color", Color(1, 0.92, 0.7))
-	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(title)
 
 	_stats_list = VBoxContainer.new()
-	_stats_list.add_theme_constant_override("separation", 3)
-	_stats_list.custom_minimum_size = Vector2(180, 0)
+	_stats_list.add_theme_constant_override("separation", 5)
+	_stats_list.custom_minimum_size = Vector2(240, 0)
 	vbox.add_child(_stats_list)
 
 	var close_btn := Button.new()
 	close_btn.text = "Kapat"
-	close_btn.custom_minimum_size = Vector2(0, 26)
+	close_btn.custom_minimum_size = Vector2(0, 30)
+	close_btn.add_theme_font_size_override("font_size", 16)
 	close_btn.pressed.connect(_hide_stats_popup)
 	ShopPanel._apply_mini_wood_button_style(close_btn)
 	vbox.add_child(close_btn)
@@ -244,10 +265,15 @@ func _process(delta: float) -> void:
 		if _stats_popup and _stats_popup.visible:
 			_refresh_stats_popup()
 	_update_rows()
-## Popup açıkken dışına tıklanırsa kapatır - Button'lar kendi tıklamalarını
+## Hediye popup'ı dışına tıklanırsa kapatır - Button'lar kendi tıklamalarını
 ## zaten GUI input aşamasında tükettiği için (bkz. Godot input akışı), bu
 ## SADECE popup'ın dışına yapılan tıklamalarda tetiklenir, popup'ı açan
 ## tıklamayla çakışmaz.
+## DÜZELTME (kullanıcı bildirimi: "İstatistikler penceresi kapat tuşuna
+## basmamama rağmen başka bişeye basınca kapanıyor") - istatistik popup'ı
+## eskiden hediye popup'ıyla AYNI "dışına tıklayınca kapan" davranışını
+## paylaşıyordu; artık SADECE kendi Kapat butonuyla (bkz. _hide_stats_popup
+## çağıran yerler) kapanıyor.
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton and event.pressed):
 		return
@@ -255,10 +281,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		var gift_rect := Rect2(_gift_popup.global_position, _gift_popup.size)
 		if not gift_rect.has_point(event.global_position):
 			_hide_gift_popup()
-	if _stats_popup and _stats_popup.visible:
-		var stats_rect := Rect2(_stats_popup.global_position, _stats_popup.size)
-		if not stats_rect.has_point(event.global_position):
-			_hide_stats_popup()
 
 
 func _current_allies() -> Array:
@@ -553,36 +575,36 @@ func _refresh_stats_popup() -> void:
 	if entries.is_empty():
 		var empty_lbl := Label.new()
 		empty_lbl.text = "Veri yok"
-		empty_lbl.add_theme_font_size_override("font_size", 13)
+		empty_lbl.add_theme_font_size_override("font_size", 16)
 		empty_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.75))
 		_stats_list.add_child(empty_lbl)
 		return
 	for i in entries.size():
 		var entry: Dictionary = entries[i]
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
+		row.add_theme_constant_override("separation", 8)
 		_stats_list.add_child(row)
 
 		var rank_lbl := Label.new()
 		rank_lbl.text = "%d." % (i + 1)
-		rank_lbl.custom_minimum_size = Vector2(18, 0)
-		rank_lbl.add_theme_font_size_override("font_size", 13)
+		rank_lbl.custom_minimum_size = Vector2(24, 0)
+		rank_lbl.add_theme_font_size_override("font_size", 16)
 		rank_lbl.add_theme_color_override("font_color", Color(0.83, 0.56, 0.30) if i == 0 else Color(0.8, 0.8, 0.75))
 		row.add_child(rank_lbl)
 
 		var name_lbl := Label.new()
 		name_lbl.text = str(entry.get("name", "?"))
 		name_lbl.clip_text = true
-		name_lbl.custom_minimum_size = Vector2(90, 0)
+		name_lbl.custom_minimum_size = Vector2(120, 0)
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_lbl.add_theme_font_size_override("font_size", 13)
+		name_lbl.add_theme_font_size_override("font_size", 16)
 		name_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		row.add_child(name_lbl)
 
 		var dmg_lbl := Label.new()
 		dmg_lbl.text = "%d" % int(round(float(entry.get("dealt", 0.0))))
 		dmg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		dmg_lbl.custom_minimum_size = Vector2(46, 0)
-		dmg_lbl.add_theme_font_size_override("font_size", 13)
+		dmg_lbl.custom_minimum_size = Vector2(58, 0)
+		dmg_lbl.add_theme_font_size_override("font_size", 16)
 		dmg_lbl.add_theme_color_override("font_color", Color(1, 0.55, 0.35))
 		row.add_child(dmg_lbl)

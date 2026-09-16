@@ -478,9 +478,16 @@ func _setup_portrait() -> void:
 			portrait.texture = tex
 
 
+## DÜZELTME (kullanıcı isteği: "multiplayerda canların takım canı değil
+## kişisel olmasını istiyorum") - multiplayer'da başlangıç değeri artık
+## paylaşılan GameManager.revives_remaining DEĞİL, bu istemcinin KENDİ
+## peer_id'sine ait GameManager.get_peer_revives() - revives_updated sinyali
+## zaten (bkz. network_manager.gd sync_revive_consumed) SADECE kendi hakkımız
+## değişince tetikleniyor, bu yüzden abone olma kısmı değişmedi.
 func _setup_revive_display() -> void:
 	if revive_hearts and revive_hearts.has_method("set_revives"):
-		revive_hearts.set_revives(GameManager.revives_remaining)
+		var initial: int = GameManager.get_peer_revives(multiplayer.get_unique_id()) if NetworkManager.is_multiplayer_active else GameManager.revives_remaining
+		revive_hearts.set_revives(initial)
 		GameManager.revives_updated.connect(revive_hearts.set_revives)
 
 

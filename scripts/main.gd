@@ -112,7 +112,14 @@ func _ready() -> void:
 	player.stats_changed.connect(_update_stats_display)
 	player.died.connect(_on_player_died)
 	NetworkManager.server_disconnected.connect(_on_multiplayer_server_disconnected)
-	NetworkManager.multiplayer_level_up_all_chosen.connect(_on_multiplayer_level_up_all_chosen)
+	## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini
+	## beklemeden tüm kartlarını seçebilsin... hepsi ortak bir bekleme
+	## süresine bağlı olacak") - level_up_pending_peers/multiplayer_level_up_
+	## all_chosen tabanlı ESKİ "her turda kilitlen" mekanizması, chest_busy_
+	## peers ile AYNI desene (bkz. network_manager.gd "KART/SİLAH/KALKAN SEÇİM
+	## KUYRUĞU SENKRONİZASYONU" notu) taşındı.
+	NetworkManager.level_up_busy_state_changed.connect(_on_level_up_busy_state_changed)
+	NetworkManager.multiplayer_level_up_timer_tick.connect(_on_level_up_countdown_tick)
 	NetworkManager.merchant_spawned.connect(_on_merchant_spawned)
 	NetworkManager.merchant_departed.connect(_on_merchant_departed)
 	_merchant_arrow = Control.new()
@@ -135,6 +142,12 @@ func _ready() -> void:
 	## bekleme süresi olmalı" - bekleme overlay'indeki geri sayım etiketini
 	## günceller (bkz. _show_chest_wait_overlay/_on_chest_countdown_tick).
 	NetworkManager.chest_countdown_tick.connect(_on_chest_countdown_tick)
+	## Kullanıcı isteği: "host oyunu yeniden başlatabilsin fakat önce diğer
+	## oyunculara onayı sorulsun" - bkz. network_manager.gd "YENİDEN BAŞLATMA
+	## ONAYI" bloğu. İlki (client) gelen isteğe Onayla/Reddet diyaloğu
+	## gösterir, ikincisi (herkes) oylama sonucunu bildirir.
+	NetworkManager.restart_request_received.connect(_on_restart_request_received)
+	NetworkManager.restart_vote_result.connect(_on_restart_vote_result)
 	NetworkManager.host_left_game.connect(_on_host_left_game)
 	NetworkManager.player_left_game.connect(_on_player_left_game)
 	## DÜZELTME (kullanıcı bildirimi: "ölüm ekranı yok"): bkz. network_manager.gd
@@ -241,7 +254,13 @@ func _apply_cloud_shadows_recursive(node: Node) -> int:
 
 
 func _process(delta: float) -> void:
-	if Input.is_action_just_pressed("ui_cancel") and not GameManager.is_game_over:
+	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - shop_panel.gd/
+	## merchant_shop_screen.gd gibi BİLEREK get_tree().paused kullanmayan
+	## ekranlar açıkken bu genel ui_cancel kontrolü hâlâ çalışıp pause
+	## menüsünü ÜSTLERİNE açardı (o ekranlar artık kendi ui_cancel'larını
+	## kendileri işliyor, bkz. GameManager "ENGELLEYİCİ PANEL KAYDI" notu).
+	if Input.is_action_just_pressed("ui_cancel") and not GameManager.is_game_over \
+			and not GameManager.is_any_blocking_panel_open():
 		_toggle_pause()
 	
 	if NetworkManager.is_multiplayer_active and is_instance_valid(player):
@@ -483,10 +502,30 @@ func _process_multiplayer_sync(delta: float) -> void:
 ## döndüğünü hiç göremiyordu. Artık geçersiz/silinmiş kayıtlar tespit edilip
 ## temizleniyor, _spawn_remote_player() kendi "zaten var" korumasına
 ## takılmadan yeni bir kukla kurabiliyor.
-func _get_or_spawn_remote_player(sender_id: int) -> RemotePlayer:
+## DÜZELTME (kullanıcı bildirimi: "biri ölünce ve can hakkı kalmayınca
+## karakter aniden spawnlanıp yok oluyor spawnlanıp yok oluyor tuhaf bir
+## buga giriyor" + "birini diriltsek can hakkı olmasına rağmen bidaha
+## diriltemiyoruz ve yok oluyor") - KÖK NEDEN bulundu: bu fonksiyon her
+## çağrıldığında (özellikle _rpc_update_player_transform - GÜVENİLMEZ kanal,
+## SANİYEDE 20 KEZ gönderiliyor) kayıtlı kukla geçersizse (kalıcı ölen bir
+## oyuncunun kuklası ölüm animasyonu bitince queue_free() olur, bkz.
+## remote_player.gd _play_death_animation) HİÇ SORGUSUZ yeni bir kukla
+## spawn ediyordu. O yeni kukla ise ANINDA aynı "dead=true" durumunu alıp
+## (bir sonraki extra_state paketinde, en geç ~2sn içinde) tekrar ölüm
+## animasyonuna girip tekrar queue_free() ediliyordu - transform paketi
+## saniyede 20 kez geldiği için bu spawn/despawn döngüsü sürekli tekrarlanıp
+## "spawnlanıp yok oluyor spawnlanıp yok oluyor" hissi veriyordu. allow_spawn
+## artık SADECE gerçekten yeni bir kukla gerektiren durumlarda true - transform
+## paketleri (aşağıda) hiçbir zaman kendi başına spawn edemez, extra_state
+## paketleri SADECE oyuncu GERÇEKTEN hayattaysa/downed'sa (dead=false) spawn
+## edebilir - dead=true iken kukla yoksa (zaten kalıcı öldüyse) paket
+## sessizce yok sayılır. Gerçek bir "yeniden spawn" SADECE dükkandan
+## diriltme satın alınca (dead=false'a dönünce, bkz. _on_mini_shop_revive_
+## pressed/player.gd revive_from_permadeath) meydana gelir.
+func _get_or_spawn_remote_player(sender_id: int, allow_spawn: bool = true) -> RemotePlayer:
 	if _remote_players.has(sender_id) and not is_instance_valid(_remote_players[sender_id]):
 		_remote_players.erase(sender_id)
-	if not _remote_players.has(sender_id):
+	if allow_spawn and not _remote_players.has(sender_id):
 		var pinfo: Dictionary = NetworkManager.lobby_players.get(sender_id, {})
 		_spawn_remote_player(sender_id, pinfo.get("char_id", 1), pinfo.get("name", "Oyuncu"))
 	return _remote_players.get(sender_id, null)
@@ -497,7 +536,9 @@ func _rpc_update_player_transform(pos: Vector2, cur_anim: String) -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		return
-	var rp: RemotePlayer = _get_or_spawn_remote_player(sender_id)
+	## bkz. _get_or_spawn_remote_player üstündeki DÜZELTME notu - saf konum
+	## paketi TEK BAŞINA asla yeni bir kukla oluşturamaz.
+	var rp: RemotePlayer = _get_or_spawn_remote_player(sender_id, false)
 	if rp and is_instance_valid(rp):
 		rp.update_position_and_anim_from_net(pos, cur_anim)
 
@@ -507,7 +548,10 @@ func _rpc_update_player_extra_state(hp: float, max_hp: float, s_hp: float, s_max
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		return
-	var rp: RemotePlayer = _get_or_spawn_remote_player(sender_id)
+	## bkz. _get_or_spawn_remote_player üstündeki DÜZELTME notu - dead=true
+	## iken (oyuncu GERÇEKTEN kalıcı ölüyken) kukla yoksa YENİDEN spawn
+	## edilmiyor, paket sessizce yok sayılıyor.
+	var rp: RemotePlayer = _get_or_spawn_remote_player(sender_id, not dead)
 	if rp and is_instance_valid(rp):
 		rp.update_extra_state_from_net(hp, max_hp, s_hp, s_max, p_zone, dead, weapon_keys, extra)
 
@@ -596,39 +640,47 @@ func _start_initial_loadout_selection() -> void:
 	if is_instance_valid(player) and player.has_method("clear_input_state"):
 		player.call("clear_input_state")
 	get_tree().paused = true
-	_show_item_select_screen("weapon", func(): _show_item_select_screen("shield", func(): _show_mini_shop_screen()))
+	_show_item_select_screen("weapon", func(): _show_item_select_screen("shield", _finish_item_select_chain))
 
 
-## `on_done`, bu ekran (ve varsa çok oyunculu bekleme) tamamen bitince
-## çağrılır - başlangıç akışında bir sonraki ekrana zincirlemek, kilometre
-## taşı silah seçiminde ise sandık kuyruğuna devam etmek için kullanılıyor.
+## `on_done`, bu ekran seçilir seçilmez (ağ beklemesi OLMADAN, bkz. aşağıdaki
+## kök neden notu) hemen çağrılır - başlangıç akışında bir sonraki ekrana
+## zincirlemek için kullanılıyor.
 func _show_item_select_screen(mode: String, on_done: Callable) -> void:
 	get_tree().paused = true
+	## bkz. _show_level_up_screen'deki AYNI koruma notu.
+	_hide_level_up_wait_overlay()
 	var screen: CanvasLayer = WeaponSelectScreenScript.new()
 	screen.mode = mode
 	screen.player_ref = player
 	screen.name = "WeaponSelectScreen" if mode == "weapon" else "ShieldSelectScreen"
 	add_child(screen)
 	_active_item_select_screen = screen
+	## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini
+	## beklemeden tüm kartlarını seçebilsin") - eskiden burada (multiplayer
+	## dalında) on_done HİÇ çağrılmıyordu, NetworkManager.multiplayer_level_up_
+	## all_chosen (TÜM oyuncular seçene kadar) beklenip main.gd _on_multiplayer_
+	## level_up_all_chosen'da tetikleniyordu - yani silah seçilse bile kalkan
+	## ekranı diğer oyuncu(lar) silahını seçmeden AÇILMIYORDU. Artık on_done
+	## HER ZAMAN hemen çağrılıyor (silah seçilir seçilmez kalkan ekranı
+	## açılır) - ağ senkronu SADECE zincirin gerçekten bittiği noktada
+	## (bkz. _finish_item_select_chain) devreye giriyor.
 	screen.item_chosen.connect(func(key: String):
 		_grant_selected_item(mode, key)
-		if not NetworkManager.is_multiplayer_active:
-			if _active_item_select_screen != null and is_instance_valid(_active_item_select_screen):
-				_active_item_select_screen.queue_free()
-			_active_item_select_screen = null
-			on_done.call()
+		if _active_item_select_screen != null and is_instance_valid(_active_item_select_screen):
+			_active_item_select_screen.queue_free()
+		_active_item_select_screen = null
+		on_done.call()
 	)
 	if NetworkManager.is_multiplayer_active:
-		_pending_item_select_on_done = on_done
-		NetworkManager.start_team_level_up_waiting()
-	else:
-		_pending_item_select_on_done = Callable()
+		NetworkManager.set_level_up_busy(true)
+		NetworkManager.start_level_up_countdown()
 
 
-## Sadece çok oyunculu modda kullanılıyor (bkz. _on_multiplayer_level_up_all_
-## chosen) - tüm eşler seçimini yapınca hangi devam adımının çağrılacağını
-## tutar.
-var _pending_item_select_on_done: Callable = Callable()
+## Silah + kalkan seçim zincirinin GERÇEK sonu (bkz. _show_item_select_screen
+## çağrı zinciri) - bkz. _finish_level_up_phase.
+func _finish_item_select_chain() -> void:
+	_finish_level_up_phase(_show_mini_shop_screen)
 
 
 func _grant_selected_item(mode: String, key: String) -> void:
@@ -648,6 +700,17 @@ func _grant_selected_item(mode: String, key: String) -> void:
 ## ==============================================================================
 var _pending_level_ups: int = 0
 var _active_level_up_screen: Node = null
+## Bu oyuncunun kart/silah/kalkan seçim kuyruğu (bkz. _finish_level_up_phase)
+## TAMAMEN bitti ama diğer oyuncu(lar) hâlâ meşgulken - "artık kimse meşgul
+## değil" anını yakalayınca (bkz. _on_level_up_busy_state_changed) bir kez
+## çağrılıp temizlenecek devam adımı (ör. sandık kuyruğuna geçiş, ya da mini
+## dükkanı açma).
+var _level_up_wait_resume_action: Callable = Callable()
+## chest_wait_overlay ile AYNI görsel desen (bkz. _show_chest_wait_overlay) -
+## sadece kart/silah/kalkan seçim kuyruğu için.
+var _level_up_wait_overlay: CanvasLayer = null
+var _level_up_wait_countdown_label: Label = null
+var _level_up_wait_label: Label = null
 ## Kullanıcı isteği: "mini dükkan yerine direk dükkan açılsın" - artık ayrı
 ## bir MiniShopScreen sahnesi YOK, periyodik mola hud.gd'nin PAYLAŞILAN
 ## dükkan panelini açıyor (bkz. _show_mini_shop_screen). Bu bayrak o molanın
@@ -1046,6 +1109,12 @@ func _show_level_up_screen(new_level: int) -> void:
 		player.call("clear_input_state")
 	hud.update_level(new_level)
 	get_tree().paused = true
+	## Kendi kartımızı seçip bir sonraki turu HEMEN (ağı beklemeden) açarken
+	## (bkz. _advance_level_up_queue) çok kısa bir pencerede başka bir eşin
+	## meşgul-durumu değişikliği (bkz. _on_level_up_busy_state_changed) bizi
+	## hâlâ meşgulken bile "bekleme" overlay'ini göstermiş olabilir - kendi
+	## ekranımız gerçekten açıldığında bunu kesin olarak temizliyoruz.
+	_hide_level_up_wait_overlay()
 	## DÜZELTME (kullanıcı isteği: "Dükkan her level atladığında açılıyor
 	## sadece 5 dakika bekleme süresi dolunca level atladıktan sonra
 	## çıkmalı.") - eskiden HER level atlamasında koşulsuz true'ydu; artık
@@ -1059,44 +1128,27 @@ func _show_level_up_screen(new_level: int) -> void:
 	screen.upgrade_chosen.connect(_on_upgrade_chosen)
 	_active_level_up_screen = screen
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.start_team_level_up_waiting()
+		NetworkManager.set_level_up_busy(true)
+		NetworkManager.start_level_up_countdown()
 
 
+## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini beklemeden
+## tüm kartlarını falan seçebilsin FAKAT hepsini seçtikten sonra bekleme
+## süresi başlayacak") - eskiden multiplayer'da burada ekran hiç kapanmıyor,
+## NetworkManager.mark_local_upgrade_chosen() ile TÜM oyuncular o TEK turu
+## bitirene kadar bekleniyordu - kendi kuyruğunda 5 kart olan bir oyuncu bile
+## HER kartı diğer oyuncu(lar) aynı turu bitirmeden bir sonrakini
+## GÖREMİYORDU. Artık singleplayer/multiplayer FARK ETMEKSİZİN ekran hemen
+## kapanıp _advance_level_up_queue çağrılıyor - o fonksiyon, bu oyuncunun
+## kendi kuyruğu bitmediyse ağı hiç beklemeden bir sonraki kartı hemen açar;
+## kuyruk BİTTİYSE ancak o zaman (ve sadece o zaman) ağa "meşgul değilim"
+## diye bildirir.
 func _on_upgrade_chosen(id: String, tier: int) -> void:
 	if is_instance_valid(player):
 		player.apply_upgrade(id, tier)
-	if NetworkManager.is_multiplayer_active:
-		NetworkManager.mark_local_upgrade_chosen()
-	else:
-		if _active_level_up_screen != null and is_instance_valid(_active_level_up_screen):
-			_active_level_up_screen.queue_free()
-		_active_level_up_screen = null
-		## DÜZELTME (kullanıcı isteği #18: "sandık açılışında oyun durmalı"):
-		## oyun burada artık HEMEN açılmıyor - bkz. _advance_level_up_queue,
-		## sıradaki bekleyen bir sandık varsa duraklama sandık ekranı kapanana
-		## kadar KESİNTİSİZ devam ediyor.
-		_advance_level_up_queue()
-
-
-func _on_multiplayer_level_up_all_chosen() -> void:
-	## Silah/kalkan seçim ekranları da AYNI NetworkManager bekleme mekanizmasını
-	## kullanıyor (bkz. weapon_select_screen.gd) - ikisi asla aynı anda aktif
-	## olmadığı için önce bunu kontrol etmek güvenli.
-	if _active_item_select_screen != null and is_instance_valid(_active_item_select_screen):
-		_active_item_select_screen.queue_free()
-		_active_item_select_screen = null
-		var on_done: Callable = _pending_item_select_on_done
-		_pending_item_select_on_done = Callable()
-		if on_done.is_valid():
-			on_done.call()
-		return
 	if _active_level_up_screen != null and is_instance_valid(_active_level_up_screen):
 		_active_level_up_screen.queue_free()
 	_active_level_up_screen = null
-	_finish_level_up_transition()
-
-
-func _finish_level_up_transition() -> void:
 	_advance_level_up_queue()
 
 
@@ -1109,18 +1161,6 @@ func _advance_level_up_queue() -> void:
 		## görünsün, level atlayınca biriken sandıklar otomatik açılsın" -
 		## kuyruktaki TÜM seviye atlama ekranları bitince (yani burada
 		## artık bekleyen bir sonraki yok), biriken sandıklar sırayla açılır.
-		## DÜZELTME (#18: "sandık açılışında oyun durmalı" - eskiden burada
-		## get_tree().paused = false çağrılıp OYUN AÇILIYORDU, sandık menüsü
-		## bunun ÜSTÜNE açılıyordu - yani sandık seçimi yaparken arka planda
-		## yaratıklar/oyun normal şekilde koşuyordu. Artık duraklama, TÜM
-		## sandıklar bitene kadar (bkz. _try_open_next_pending_chest'in
-		## sonundaki gerçek "kuyruk boş" dalı) kesintisiz sürüyor.
-		## #58 DÜZELTME: bu artık her koşulda (kendi kuyruğumuz boş olsa
-		## bile) _try_open_next_pending_chest()'e yönlendiriliyor - o fonksiyon
-		## artık NetworkManager.is_any_chest_busy() ile DİĞER oyuncuların hâlâ
-		## sandık açıp açmadığını da kontrol ediyor, kendi kuyruğumuz boşsa
-		## bile başkaları bitirmeden get_tree().paused = false YAPMIYOR.
-		##
 		## DÜZELTME (kullanıcı isteği: "level aralarında gelen silah
 		## seçimlerini kaldır, sadece ilk levelde silah ve kalkan seçim ekranı
 		## olacak") - burada 5/10/15/20. levellerde araya bir silah seçim
@@ -1131,7 +1171,52 @@ func _advance_level_up_queue() -> void:
 		## bu, taze bir sandık kuyruğu turunun BAŞLANGICI (level atlama
 		## kart(lar)ı burada zaten bitti).
 		_chest_queue_batch_start_msec = Time.get_ticks_msec()
-		_try_open_next_pending_chest()
+		_finish_level_up_phase(_try_open_next_pending_chest)
+
+
+## Bu oyuncunun kart/silah/kalkan seçim kuyruğu TAMAMEN bitti (bkz.
+## _advance_level_up_queue/_finish_item_select_chain) - chest_busy_peers/
+## _try_open_next_pending_chest'teki AYNI desen (bkz. network_manager.gd
+## "KART/SİLAH/KALKAN SEÇİM KUYRUĞU SENKRONİZASYONU" notu): EN SON biten
+## oyuncu da bitirene kadar next_step çağrılmaz, o ana kadar bir bekleme
+## overlay'i gösterilir (bkz. _on_level_up_busy_state_changed).
+func _finish_level_up_phase(next_step: Callable) -> void:
+	if not NetworkManager.is_multiplayer_active:
+		next_step.call()
+		return
+	NetworkManager.set_level_up_busy(false)
+	if not NetworkManager.is_any_level_up_busy():
+		NetworkManager.stop_level_up_countdown()
+		_hide_level_up_wait_overlay()
+		next_step.call()
+	else:
+		_level_up_wait_resume_action = next_step
+		_show_level_up_wait_overlay()
+
+
+## Herhangi bir eşte (kendimiz DAHİL) kart/silah/kalkan kuyruğu meşgul/boş
+## durumu değiştiğinde tetiklenir - bkz. _on_chest_busy_state_changed ile
+## AYNI desen. Kendi ekranımız (level-up kartı ya da silah/kalkan seçimi)
+## hâlâ açıksa burada ekstra bir şey yapmaya gerek yok - o akış zaten kendi
+## paused/overlay durumunu yönetiyor.
+func _on_level_up_busy_state_changed() -> void:
+	if not NetworkManager.is_multiplayer_active:
+		return
+	if NetworkManager.is_any_level_up_busy():
+		get_tree().paused = true
+		if _active_level_up_screen == null and _active_item_select_screen == null:
+			_show_level_up_wait_overlay()
+	else:
+		_hide_level_up_wait_overlay()
+		## Artık kimse meşgul değil - bu oyuncunun kendi kuyruğu daha önce
+		## bitip bekleyen bir devam adımı varsa (bkz. _finish_level_up_phase)
+		## şimdi tetiklenir. Kuyruğumuz henüz bitmediyse (bu sinyal başka bir
+		## eşin durumu yüzünden geldiyse) _level_up_wait_resume_action zaten
+		## boş, hiçbir şey olmaz.
+		if _level_up_wait_resume_action.is_valid():
+			var action: Callable = _level_up_wait_resume_action
+			_level_up_wait_resume_action = Callable()
+			action.call()
 
 
 ## Bekleyen sandıklardan (bkz. GameManager.pending_chest_tiers -
@@ -1357,6 +1442,175 @@ func _on_chest_countdown_tick(remaining: float) -> void:
 		_chest_wait_countdown_label.text = "%ds" % int(ceil(remaining))
 	if _chest_wait_label and is_instance_valid(_chest_wait_label):
 		_chest_wait_label.text = _chest_wait_message()
+
+
+## Host bir yeniden başlatma isteği gönderdiğinde (bkz. pause_menu.gd
+## _on_restart/network_manager.gd request_restart_vote) HER client'ta
+## (host'un kendisi HARİÇ - o isteği zaten kendi onayıyla başlattı)
+## tetiklenir - pause menüsü açık olmasa bile görünmesi gerektiği için
+## (host oyuncu her an yeniden başlatabilir) main.gd'nin kendi her-zaman-
+## aktif katmanında, ayrı bir onay diyaloğu olarak gösteriliyor.
+var _restart_confirm_dialog: CanvasLayer = null
+## bkz. _show_death_overlay/_on_death_overlay_restart_pressed - ölüm
+## overlay'indeki "Yeniden Başla" butonuna referans, host onay beklerken
+## metnini/disabled durumunu güncelleyebilmek için (bkz. _on_restart_vote_result).
+var _death_overlay_restart_btn: Button = null
+
+func _on_restart_request_received() -> void:
+	if _restart_confirm_dialog and is_instance_valid(_restart_confirm_dialog):
+		return
+	get_tree().paused = true
+	_restart_confirm_dialog = CanvasLayer.new()
+	_restart_confirm_dialog.process_mode = Node.PROCESS_MODE_ALWAYS
+	_restart_confirm_dialog.layer = 95
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.6)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_restart_confirm_dialog.add_child(dim)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.13, 0.11, 0.09, 0.96)
+	style.border_width_left = 3
+	style.border_width_top = 3
+	style.border_width_right = 3
+	style.border_width_bottom = 3
+	style.border_color = Color(0.6, 0.45, 0.2, 1)
+	style.set_corner_radius_all(12)
+	style.content_margin_left = 24
+	style.content_margin_right = 24
+	style.content_margin_top = 20
+	style.content_margin_bottom = 20
+	panel.add_theme_stylebox_override("panel", style)
+	_restart_confirm_dialog.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 14)
+	panel.add_child(vbox)
+
+	var msg := Label.new()
+	msg.text = "Host oyunu yeniden başlatmak istiyor.\nOnaylıyor musunuz?"
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg.add_theme_font_size_override("font_size", 24)
+	msg.add_theme_color_override("font_color", Color(0.95, 0.9, 0.78))
+	vbox.add_child(msg)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	vbox.add_child(btn_row)
+
+	var approve_btn := Button.new()
+	approve_btn.text = "Onayla"
+	approve_btn.custom_minimum_size = Vector2(140, 44)
+	approve_btn.add_theme_font_size_override("font_size", 20)
+	ShopPanel._apply_wood_button_style(approve_btn)
+	approve_btn.pressed.connect(func():
+		NetworkManager.submit_restart_vote(true)
+		_hide_restart_confirm_dialog()
+	)
+	btn_row.add_child(approve_btn)
+
+	var reject_btn := Button.new()
+	reject_btn.text = "Reddet"
+	reject_btn.custom_minimum_size = Vector2(140, 44)
+	reject_btn.add_theme_font_size_override("font_size", 20)
+	ShopPanel._apply_wood_button_style(reject_btn)
+	reject_btn.pressed.connect(func():
+		NetworkManager.submit_restart_vote(false)
+		_hide_restart_confirm_dialog()
+	)
+	btn_row.add_child(reject_btn)
+
+	add_child(_restart_confirm_dialog)
+	UISound.connect_all_buttons(_restart_confirm_dialog)
+
+
+func _hide_restart_confirm_dialog() -> void:
+	if _restart_confirm_dialog and is_instance_valid(_restart_confirm_dialog):
+		_restart_confirm_dialog.queue_free()
+	_restart_confirm_dialog = null
+
+
+## Oylama sonucu (bkz. network_manager.gd _rpc_broadcast_restart_vote_result) -
+## TÜM peer'lerde (host dahil, "call_local") tetiklenir. Onaylandıysa host
+## zaten _rpc_start_game() ile sahneyi değiştirecek (bkz. o fonksiyon), burada
+## ekstra bir şey yapmaya gerek yok. Reddedildiyse/zaman aşımına
+## uğradıysa oyun kaldığı yerden devam eder.
+func _on_restart_vote_result(approved: bool, rejecter_name: String) -> void:
+	_hide_restart_confirm_dialog()
+	## bkz. pause_menu.gd'nin AYNI restart_vote_result dinleyicisi - oylama
+	## reddedilirse/zaman aşımına uğrarsa (ya da onaylanırsa, sahne zaten
+	## değişeceği için zararsız) ölüm overlay'indeki buton "Onay bekleniyor..."
+	## donuk halinde kalmasın.
+	if _death_overlay_restart_btn and is_instance_valid(_death_overlay_restart_btn):
+		_death_overlay_restart_btn.disabled = false
+		_death_overlay_restart_btn.text = "Yeniden Başla"
+	if approved:
+		return
+	get_tree().paused = false
+	if rejecter_name != "":
+		_show_network_toast("%s yeniden başlatmayı reddetti." % rejecter_name)
+	else:
+		_show_network_toast("Yeniden başlatma onaylanmadı (süre doldu).")
+
+
+## _show_chest_wait_overlay ile BİREBİR AYNI görsel desen - kart/silah/kalkan
+## seçim kuyruğu için (bkz. _finish_level_up_phase).
+func _show_level_up_wait_overlay() -> void:
+	if _level_up_wait_overlay and is_instance_valid(_level_up_wait_overlay):
+		return
+	_level_up_wait_overlay = CanvasLayer.new()
+	_level_up_wait_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+	_level_up_wait_overlay.layer = 90
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_level_up_wait_overlay.add_child(dim)
+	_level_up_wait_label = Label.new()
+	_level_up_wait_label.text = _level_up_wait_message()
+	_level_up_wait_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_level_up_wait_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_level_up_wait_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_level_up_wait_label.offset_bottom = -40.0
+	_level_up_wait_label.add_theme_font_size_override("font_size", 28)
+	_level_up_wait_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	_level_up_wait_overlay.add_child(_level_up_wait_label)
+	_level_up_wait_countdown_label = Label.new()
+	_level_up_wait_countdown_label.text = "%ds" % int(ceil(NetworkManager.level_up_countdown)) if NetworkManager.level_up_timer_active else ""
+	_level_up_wait_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_level_up_wait_countdown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_level_up_wait_countdown_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_level_up_wait_countdown_label.offset_top = 40.0
+	_level_up_wait_countdown_label.add_theme_font_size_override("font_size", 32)
+	_level_up_wait_countdown_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))
+	_level_up_wait_overlay.add_child(_level_up_wait_countdown_label)
+	add_child(_level_up_wait_overlay)
+
+
+func _hide_level_up_wait_overlay() -> void:
+	if _level_up_wait_overlay and is_instance_valid(_level_up_wait_overlay):
+		_level_up_wait_overlay.queue_free()
+	_level_up_wait_overlay = null
+	_level_up_wait_countdown_label = null
+	_level_up_wait_label = null
+
+
+func _level_up_wait_message() -> String:
+	var names: String = NetworkManager.get_level_up_busy_names() if NetworkManager.is_multiplayer_active else ""
+	if names != "":
+		return "Seçim yapılıyor: %s\nLütfen bekleyin" % names
+	return "Bir oyuncu seçim yapıyor...\nLütfen bekleyin"
+
+
+func _on_level_up_countdown_tick(remaining: float) -> void:
+	if _level_up_wait_countdown_label and is_instance_valid(_level_up_wait_countdown_label):
+		_level_up_wait_countdown_label.text = "%ds" % int(ceil(remaining))
+	if _level_up_wait_label and is_instance_valid(_level_up_wait_label):
+		_level_up_wait_label.text = _level_up_wait_message()
 
 
 
@@ -1650,6 +1904,24 @@ func _on_death_overlay_menu_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
+## bkz. _show_death_overlay üstündeki DÜZELTME notu - pause_menu.gd
+## _on_restart() ile BİREBİR AYNI mantık (host-onaylı oylama), lobiye hiç
+## dönmeden doğrudan bu ekrandan yeniden başlatmayı sağlıyor.
+func _on_death_overlay_restart_pressed() -> void:
+	if NetworkManager.is_multiplayer_active:
+		if not NetworkManager.is_host or NetworkManager.restart_vote_pending:
+			return
+		NetworkManager.request_restart_vote()
+		get_tree().paused = true
+		if _death_overlay_restart_btn and is_instance_valid(_death_overlay_restart_btn):
+			_death_overlay_restart_btn.disabled = true
+			_death_overlay_restart_btn.text = "Onay bekleniyor..."
+		return
+	get_tree().paused = false
+	GameManager.reset()
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
+
+
 ## bkz. network_manager.gd sync_game_over/game_over_synced sinyali - takımın
 ## GERİ KALANI (bizden önce ölüp hâlâ "izleyicisin" yazısını görenler) son
 ## kişi de öldüğünde bu şekilde "OYUN BİTTİ"ye geçer.
@@ -1762,12 +2034,38 @@ func _show_death_overlay(is_final: bool) -> void:
 		stats_grid.add_theme_constant_override("h_separation", 24)
 		stats_box.add_child(stats_grid)
 
+		var death_btn_row := HBoxContainer.new()
+		death_btn_row.name = "DeathButtonRow"
+		death_btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		death_btn_row.add_theme_constant_override("separation", 16)
+		box.add_child(death_btn_row)
+
+		## DÜZELTME (kullanıcı bildirimi: "Oyunda herkes ölünce oyun buga
+		## giriyor ve bitmek yerine oyunu bozuyor yeniden başlatma bile mümkün
+		## olmuyor bazen menü açılmıyor") - kök neden: is_game_over true olunca
+		## main.gd'nin genel ui_cancel/pause-toggle kontrolü (bkz. _process)
+		## KASITLI olarak devre dışı kalıyor (ölüm overlay'iyle çakışmasın diye)
+		## - ama bu overlay'in eskiden TEK çıkışı "Ana Menüye Dön"dü, oyuncular
+		## tekrar oynamak için TÜM lobiyi yeniden kurmak zorunda kalıyordu.
+		## pause_menu.gd _on_restart() ile BİREBİR AYNI host-onaylı oylama akışı
+		## (bkz. _on_death_overlay_restart_pressed), sadece tetikleyici burası.
+		_death_overlay_restart_btn = Button.new()
+		_death_overlay_restart_btn.name = "RestartButton"
+		_death_overlay_restart_btn.text = "Yeniden Başla"
+		_death_overlay_restart_btn.custom_minimum_size = Vector2(200, 0)
+		_death_overlay_restart_btn.pressed.connect(_on_death_overlay_restart_pressed)
+		## pause_menu.gd _ready() ile AYNI kural: çok oyunculuda SADECE host
+		## yeniden başlatmayı tetikleyebilir, client'larda gizli.
+		if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+			_death_overlay_restart_btn.visible = false
+		death_btn_row.add_child(_death_overlay_restart_btn)
+
 		var menu_btn := Button.new()
 		menu_btn.name = "BackToMenuButton"
 		menu_btn.text = "Ana Menüye Dön"
 		menu_btn.custom_minimum_size = Vector2(200, 0)
 		menu_btn.pressed.connect(_on_death_overlay_menu_pressed)
-		box.add_child(menu_btn)
+		death_btn_row.add_child(menu_btn)
 
 		## DÜZELTME (kullanıcı isteği: "Button resmini oyunumdaki tüm
 		## butonlarla değiştir") - ölüm ekranındaki izleyici ok butonları ve

@@ -9,7 +9,12 @@ class_name Enemy
 @export var orb_count: int = 1
 
 ## Chance (0-1) to drop a gold pickup on death, and how much gold it's worth.
-@export var gold_chance: float = 0.2
+## DÜZELTME (kullanıcı isteği: "yaratıkların altın düşürme şansını mevcut
+## şanstan %20 arttır") - taban varsayılan ×1.2 (0.2 -> 0.24); her yaratık
+## türünün kendi .tscn'de override ettiği GERÇEK değer de (bkz. scenes/
+## creatures/enemy_*.tscn) AYNI oranla ayrı ayrı çarpıldı, buradaki sadece
+## hiçbir .tscn'in override etmediği bir Enemy oluşursa kullanılacak taban.
+@export var gold_chance: float = 0.288
 @export var gold_min: int = 1
 @export var gold_max: int = 1
 
@@ -442,6 +447,21 @@ func _schedule_melee_hit(delay: float, target_player: Node) -> void:
 	if is_dead or not is_instance_valid(target_player):
 		return
 	if not target_player.has_method("take_damage"):
+		return
+	## DÜZELTME (kullanıcı bildirimi: "assasin çocuk görünmezken yaratıklara
+	## dokununca hasar alabiliyor, sadece yaratıkların skillerinden hasar
+	## alabilmeli") - vuruş çağrıldığı anda (bkz. _physics_process'teki
+	## player_is_invisible kontrolü) hedef görünürdü, ama bu fonksiyon
+	## en az 1 kare (delay=0 olsa bile create_timer bir kare bekletir)
+	## SONRA çalışıyor - hedef bu arada görünmezliğe geçmiş olabilir. Temas
+	## hasarı (bu fonksiyon) burada TEKRAR kontrol edip iptal ediyor;
+	## yaratıkların yetenek/mermi hasarları bu kontrolden BAĞIMSIZ, onlar
+	## görünmezken de isabet edebilmeye devam ediyor (istek sadece temas
+	## hasarıyla ilgiliydi).
+	var target_is_invisible: bool = (target_player.has_method("is_invisible_now") and target_player.is_invisible_now()) \
+		or (target_player.has_method("is_indoors_now") and target_player.is_indoors_now()) \
+		or (target_player.has_method("is_in_merchant_zone_now") and target_player.is_in_merchant_zone_now())
+	if target_is_invisible:
 		return
 	var d: float = global_position.distance_to(target_player.global_position)
 	## true_contact_separation _physics_process içinde yerel bir değişken -

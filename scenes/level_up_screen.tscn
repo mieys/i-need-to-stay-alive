@@ -93,7 +93,7 @@ theme_override_constants/separation = 20
 
 [node name="Card1" type="Button" parent="CardsContainer" unique_id=2095304497]
 custom_minimum_size = Vector2(300, 480)
-clip_contents = false
+clip_contents = true
 layout_mode = 2
 theme_override_styles/normal = SubResource("CardStyle_transparent")
 theme_override_styles/pressed = SubResource("CardStyle_transparent")
@@ -172,7 +172,7 @@ theme_override_styles/panel = SubResource("SelectGlowStyle")
 
 [node name="Card2" type="Button" parent="CardsContainer" unique_id=16198505]
 custom_minimum_size = Vector2(300, 480)
-clip_contents = false
+clip_contents = true
 layout_mode = 2
 theme_override_styles/normal = SubResource("CardStyle_transparent")
 theme_override_styles/pressed = SubResource("CardStyle_transparent")
@@ -251,7 +251,7 @@ theme_override_styles/panel = SubResource("SelectGlowStyle")
 
 [node name="Card3" type="Button" parent="CardsContainer" unique_id=1925278977]
 custom_minimum_size = Vector2(300, 480)
-clip_contents = false
+clip_contents = true
 layout_mode = 2
 theme_override_styles/normal = SubResource("CardStyle_transparent")
 theme_override_styles/pressed = SubResource("CardStyle_transparent")

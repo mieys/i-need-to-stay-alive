@@ -76,6 +76,18 @@ var is_indoors: bool = false
 ## güvenli bölgesi, is_indoors ile AYNI amaç/desen (kullanıcı isteği:
 ## "oyuncular o bölgeye girince yaratıklar tarafından görünmez olurlar").
 var is_in_merchant_zone: bool = false
+## DÜZELTME (kullanıcı bildirimi: "assasin çocuk görünmezken hala
+## görebiliyorlar vuramıyorlar ama görebiliyorlar") - kök neden: bu alan
+## HİÇ YOKTU, update_position_and_anim_from_net() extra["is_invisible"]'ı
+## SADECE modulate (saydamlık) için satır içi okuyordu, gerçek bir üye
+## değişkene hiç YAZMIYORDU. enemy.gd'nin hedefleme kontrolü ("is_invisible"
+## in rp) is_indoors/is_in_merchant_zone İLE AYNI desende bu üye değişkeni
+## okuyor - o yüzden host olmayan bir oyuncu görünmez olunca (host'un
+## çalıştırdığı enemy.gd AÇISINDAN) HİÇBİR ZAMAN görünmez sayılmıyordu,
+## yaratıklar onu normal hedefleyip kovalamaya/bakmaya devam ediyordu -
+## sadece hasar (player.gd take_damage(), HER ZAMAN kendi istemcisinde
+## çalışır) doğru şekilde engelleniyordu.
+var is_invisible: bool = false
 ## bkz. main.gd state_snapshot "dmg_dealt" (kullanıcı isteği: "grup
 ## penceresinde canlı hasar istatistik paneli") - party_panel.gd
 ## _build_stats_popup bu müttefiğin canlı toplam verdiği hasarını buradan
@@ -640,6 +652,14 @@ func _update_talon_formation(delta: float) -> void:
 		var slot: Dictionary = TalonFormationMath.compute_slot(i, count, radius, _talon_salvo_angle)
 		icon.position = slot["offset"]
 		var forward: float = deg_to_rad(_weapon_forward_angle_deg[i] if i < _weapon_forward_angle_deg.size() else 0.0)
+		## DÜZELTME (kullanıcı bildirimi: "silahların dışa bakması gerekirken
+		## içe bakıyorlar") - bkz. player.gd _talon_set_weapons_circular
+		## üstündeki AYNI düzeltme notu: slot["angle"] KENDİSİ zaten merkezden
+		## dışa bakan açı (bkz. talon_formation_math.gd compute_slot - offset
+		## de aynı açıyla hesaplanıyor), weapon.gd _update_aim'deki genel
+		## "rotation = hedef_açısı - forward" kuralıyla AYNI formül kullanılmalı.
+		## Önceki +PI fazladan 180° ekleyip namluları içe (karaktere doğru)
+		## çeviriyordu.
 		icon.rotation = slot["angle"] - forward
 		if not icon.visible:
 			icon.visible = true
@@ -816,6 +836,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	_update_revive_rewind_fx()
 	is_indoors = extra.get("is_indoors", false)
 	is_in_merchant_zone = extra.get("is_in_merchant_zone", false)
+	is_invisible = extra.get("is_invisible", false)
 	match_damage_dealt = extra.get("dmg_dealt", 0.0)
 	if downed_timer_label:
 		downed_timer_label.set_remaining_seconds(extra.get("downed_remaining", 0.0) if is_downed else 0.0)

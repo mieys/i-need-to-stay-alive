@@ -34,11 +34,27 @@ func _ready() -> void:
 	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	resolution_option.item_selected.connect(_on_resolution_selected)
 	settings_panel.visible = false
-	## Çok oyunculuda "Yeniden Başlat" güvenli değil (sadece kendi ekranını
-	## resetler, diğer peer'leri koptuğunu bilmeden askıda bırakır) - bkz.
-	## _on_menu/_on_restart üstündeki notlar, bu yüzden o modda gizleniyor.
-	if NetworkManager.is_multiplayer_active:
+	## DÜZELTME (kullanıcı isteği: "Multiplayerda host oyunu yeniden
+	## başlatabilsin eskiden yeniden başlatmayı seçerek fakat önce diğer
+	## oyunculara onayı sorulsun") - eskiden çok oyunculuda bu buton
+	## TAMAMEN gizliydi (sadece kendi ekranını resetleyip diğer peer'leri
+	## askıda bırakırdı). Artık SADECE host görebiliyor (client'larda hâlâ
+	## gizli - onlar isteği başlatamaz, sadece gelen onay isteğine cevap
+	## verir, bkz. main.gd _on_restart_request_received) ve host'un basması
+	## gerçek bir yeniden başlatma YERİNE bir onay oylaması başlatıyor (bkz.
+	## _on_restart, NetworkManager.request_restart_vote).
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		$Panel/VBox/RestartButton.visible = false
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		## Oylama reddedilirse/zaman aşımına uğrarsa (bkz. main.gd
+		## _on_restart_vote_result - asıl toast/unpause işini o yapar) bu menü
+		## hâlâ açıksa butonu "Onay bekleniyor..." donuk halinde bırakmamak
+		## için normale döndürür.
+		NetworkManager.restart_vote_result.connect(func(_approved: bool, _rejecter: String):
+			if is_instance_valid(self):
+				$Panel/VBox/RestartButton.disabled = false
+				$Panel/VBox/RestartButton.text = "Yeniden Başla"
+		)
 
 
 ## #28 DÜZELTME: main.gd _toggle_pause() artık multiplayer'da get_tree().
@@ -59,8 +75,53 @@ func _on_resume() -> void:
 	queue_free()
 
 
+## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle" - kök neden analizi
+## sırasında bulunan mevcut hata): tekli oyuncuda menü açılınca get_tree().
+## paused=true olur, ve bunu tetikleyen main.gd'nin KENDİ _process()'i
+## (varsayılan PROCESS_MODE_PAUSABLE) tam o anda duraklar - yani main.gd
+## İKİNCİ bir ESC/gamepad-B basışını GÖREMEZ, menü bugüne kadar SADECE
+## "Devam Et" butonuyla kapanabiliyordu. Bu panel zaten PROCESS_MODE_ALWAYS
+## olduğu için (bkz. _ready()) kendi kontrolünü ekliyoruz.
+##
+## Çift tetiklenme YOK: bu kontrol SADECE get_tree().paused iken çalışıyor -
+## bu sadece tekli oyuncuda true olabiliyor (_on_restart()'ın çok oyunculu
+## dalı HARİÇ, bkz. aşağıdaki restart_vote_pending koruması), ve tam o anda
+## main.gd'nin kendi _process'i zaten donmuş durumda - ikisi asla aynı
+## karede aktif olamaz. Çok oyunculuda (normal durumda) bu her zaman no-op
+## (ağaç hiç duraklamıyor), mevcut multiplayer-güvenli davranış korunuyor.
+func _process(_delta: float) -> void:
+	if not get_tree().paused:
+		return
+	## İSTİSNA: host bir "yeniden başlatma onayı" bekliyorken de (çok
+	## oyunculuda BİLEREK) get_tree().paused=true olur (bkz. _on_restart()
+	## aşağıda) - bu bekleme durumu ui_cancel ile ERKEN kapatılmamalı, oylama
+	## sonucu main.gd _on_restart_vote_result üzerinden merkezi olarak
+	## yönetiliyor (reddedilirse/zaman aşımında ORADA açılıyor).
+	if NetworkManager.is_multiplayer_active and NetworkManager.restart_vote_pending:
+		return
+	if Input.is_action_just_pressed("ui_cancel"):
+		_on_resume()
+
+
+## DÜZELTME (kullanıcı isteği: "Multiplayerda host oyunu yeniden başlatabilsin
+## fakat önce diğer oyunculara onayı sorulsun") - multiplayer'da (SADECE
+## host bu butonu görebiliyor, bkz. _ready) artık doğrudan resetlemek yerine
+## bir onay oylaması başlatılıyor (bkz. network_manager.gd "YENİDEN BAŞLATMA
+## ONAYI" bloğu) - gerçek yeniden başlatma SADECE herkes onaylarsa, sonucu
+## main.gd _on_restart_vote_result üzerinden işleyip _rpc_start_game()
+## çağırınca gerçekleşir.
 func _on_restart() -> void:
 	if NetworkManager.is_multiplayer_active:
+		if not NetworkManager.is_host or NetworkManager.restart_vote_pending:
+			return
+		NetworkManager.request_restart_vote()
+		## Diğer oyuncular cevap verene kadar oyunu duraklat (bkz. main.gd
+		## _on_restart_request_received - client'larda AYNI şekilde duraklıyor,
+		## _on_restart_vote_result reddedilirse/zaman aşımında herkes için
+		## açıyor) - host da dahil, kimse oylama bitmeden ilerlemesin.
+		get_tree().paused = true
+		$Panel/VBox/RestartButton.disabled = true
+		$Panel/VBox/RestartButton.text = "Onay bekleniyor..."
 		return
 	_unlock_local_input()
 	GameManager.reset()

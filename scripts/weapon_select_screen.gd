@@ -8,11 +8,11 @@ extends CanvasLayer
 ## levelde de yine silah seçme hakkı gelecek."
 ##
 ## Bu ekran level_up_screen.gd'nin KART GÖRSELİ / GİRİŞ ANİMASYONU / ÇOK
-## OYUNCULU BEKLEME desenini birebir taklit eder (aynı StyleBoxFlat
-## renkleri+kart boyutu, aynı NetworkManager.start_team_level_up_waiting/
-## mark_local_upgrade_chosen/multiplayer_level_up_all_chosen mekanizması -
-## o RPC katmanı seçimin NE olduğunu hiç bilmiyor, sadece "bu eş seçti mi"
-## takip ediyor, bu yüzden yeni bir NetworkManager değişikliği gerekmedi).
+## OYUNCULU KUYRUK desenini birebir taklit eder (aynı StyleBoxFlat renkleri+
+## kart boyutu, aynı NetworkManager.set_level_up_busy/start_level_up_
+## countdown mekanizması - bkz. network_manager.gd "KART/SİLAH/KALKAN SEÇİM
+## KUYRUĞU SENKRONİZASYONU" notu - o RPC katmanı seçimin NE olduğunu hiç
+## bilmiyor, sadece "bu eş hâlâ meşgul mü" takip ediyor).
 ## İki modu var: "weapon" (3 kart, WEAPON_KEYS havuzundan) ve "shield"
 ## (2 kart, SHIELD_KEYS havuzundan) - level_up_screen'in aksine reroll ALTIN
 ## MALİYETLİ DEĞİL, sabit REROLL_MAX hakkı var, ekran her açıldığında
@@ -106,11 +106,6 @@ var _card_tweens: Array = []
 var _reroll_left: int = REROLL_MAX
 var _has_chosen: bool = false
 
-## Kullanıcı isteği: "otomatik seçilen kartın etrafı yeşil parlasa görsek
-## bence güzel olur" - level_up_screen.gd ile AYNI desen (bkz. orada
-## _chosen_card/_apply_chosen_card_highlight).
-var _chosen_card: Button = null
-
 var _reroll_button: Button = null
 var _countdown_panel: PanelContainer = null
 var _countdown_label: Label = null
@@ -150,13 +145,19 @@ func _ready() -> void:
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self)
 
+	## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini
+	## beklemeden tüm kartlarını seçebilsin") - set_level_up_busy(true)/
+	## start_level_up_countdown() artık burada DEĞİL, main.gd
+	## _show_item_select_screen'de (bu ekranı add_child ettiği yerde)
+	## çağrılıyor - tek sorumluluk noktası (bkz. o dosyadaki kök neden notu).
 	if NetworkManager.is_multiplayer_active:
 		NetworkManager.multiplayer_level_up_timer_tick.connect(_on_timer_tick)
+		if _waiting_label:
+			_waiting_label.text = "Süre dolarsa otomatik seçilir"
 		if _countdown_panel:
 			_countdown_panel.visible = NetworkManager.level_up_timer_active
 			if _countdown_panel.visible and _countdown_label:
 				_countdown_label.text = "%ds" % int(ceil(NetworkManager.level_up_countdown))
-		NetworkManager.start_team_level_up_waiting()
 
 
 func _on_timer_tick(remaining: float) -> void:
@@ -164,18 +165,8 @@ func _on_timer_tick(remaining: float) -> void:
 		_countdown_panel.visible = true
 	if _countdown_label:
 		_countdown_label.text = "%ds" % int(ceil(remaining))
-	_refresh_waiting_label()
 	if remaining <= 0.0 and not _has_chosen:
 		_auto_pick_random_card()
-
-
-## bkz. level_up_screen.gd _refresh_waiting_label - AYNI desen (kullanıcı
-## isteği: "kimi beklediğimiz yazsın").
-func _refresh_waiting_label() -> void:
-	if not _waiting_label:
-		return
-	var names: String = NetworkManager.get_level_up_pending_names()
-	_waiting_label.text = ("Bekleniyor: %s" % names) if names != "" else "Diğer oyuncular bekleniyor"
 
 
 func _auto_pick_random_card() -> void:
@@ -547,43 +538,16 @@ func _on_reroll_pressed() -> void:
 	_animate_cards_in()
 
 
-func _on_card_pressed(key: String, card: Button) -> void:
+## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini beklemeden
+## tüm kartlarını seçebilsin") - bkz. level_up_screen.gd _on_card_pressed
+## üstündeki AYNI kök neden notu: ekran artık burada AÇIK tutulup
+## kilitlenmiyor, main.gd _grant_selected_item/on_done zinciri (bkz.
+## _show_item_select_screen) seçim anında hemen bir sonraki adıma geçiyor.
+func _on_card_pressed(key: String, _card: Button) -> void:
 	if _has_chosen:
 		return
 	_has_chosen = true
-	_chosen_card = card
 	item_chosen.emit(key)
-	if NetworkManager.is_multiplayer_active:
-		NetworkManager.mark_local_upgrade_chosen()
-		_enter_waiting_state()
-
-
-func _enter_waiting_state() -> void:
-	for card: Button in _cards:
-		card.disabled = true
-	_reroll_button.disabled = true
-	if is_instance_valid(_chosen_card):
-		_apply_chosen_card_highlight(_chosen_card)
-	if _countdown_panel and NetworkManager.level_up_timer_active:
-		_countdown_panel.visible = true
-		if _countdown_label:
-			_countdown_label.text = "%ds" % int(ceil(NetworkManager.level_up_countdown))
-	_refresh_waiting_label()
-
-
-## bkz. level_up_screen.gd _apply_chosen_card_highlight - aynı desen: mevcut
-## disabled stilini duplicate edip yeşil kenarlık ekliyoruz (duplicate ŞART -
-## disabled_style burada tüm kartlar arasında PAYLAŞILAN tek bir kaynak,
-## bkz. _populate_cards, elle mutasyon hepsini birden yeşile boyardı).
-func _apply_chosen_card_highlight(card: Button) -> void:
-	var base: StyleBox = card.get_theme_stylebox("disabled")
-	var style: StyleBoxFlat = (base.duplicate() as StyleBoxFlat) if base is StyleBoxFlat else StyleBoxFlat.new()
-	style.border_color = Color(0.22, 0.62, 0.2, 1.0)
-	style.border_width_left = 6
-	style.border_width_top = 6
-	style.border_width_right = 6
-	style.border_width_bottom = 6
-	card.add_theme_stylebox_override("disabled", style)
 
 
 ## ==============================================================================

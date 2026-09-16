@@ -71,6 +71,27 @@ var is_host: bool = false
 var local_player_name: String = "Oyuncu"
 var local_char_id: int = 1
 
+## DÜZELTME (kullanıcı isteği: "oyunda isim profili olsun 1 kere ismini
+## yazınca bi daha yazman gerekmesin") - UISound'un ses/ekran ayarları
+## için kullandığı AYNI ConfigFile deseni (bkz. ui_sound.gd SETTINGS_PATH).
+## Kaydedilen isim _ready()'de local_player_name'e yüklenir (lobby_menu.gd
+## bunu LineEdit'e önceden doldurur), her isim değişikliğinde (join_room/
+## host_lan/join_lan/update_local_player_name) tekrar kaydedilir.
+const PLAYER_NAME_CONFIG_PATH := "user://player_settings.cfg"
+
+func _save_local_player_name() -> void:
+	var config := ConfigFile.new()
+	config.set_value("player", "name", local_player_name)
+	config.save(PLAYER_NAME_CONFIG_PATH)
+
+
+func _load_saved_player_name() -> void:
+	var config := ConfigFile.new()
+	if config.load(PLAYER_NAME_CONFIG_PATH) == OK:
+		var saved: String = str(config.get_value("player", "name", "")).strip_edges()
+		if not saved.is_empty():
+			local_player_name = saved
+
 ## Key: peer_id (int), Value: { "name": String, "char_id": int, "is_ready": bool, "is_host": bool }
 var lobby_players: Dictionary = {}
 
@@ -168,6 +189,7 @@ var _drop_remove_timer: float = 0.0
 const DROP_REMOVE_INTERVAL := 0.05 ## Saniyede max 20 kez toplu drop silme
 
 func _ready() -> void:
+	_load_saved_player_name()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -194,6 +216,9 @@ func _process(delta: float) -> void:
 	## Mini dükkan (bkz. aşağıdaki "MİNİ DÜKKAN SENKRONİZASYONU" bloğu) -
 	## level atlama/sandık geri sayımlarıyla AYNI şekilde koşulsuz tiklenir.
 	update_mini_shop_timer(delta)
+	## Yeniden başlatma onay oylaması (bkz. "YENİDEN BAŞLATMA ONAYI" bloğu) -
+	## sadece host'ta ve bir oylama sürerken bir şey yapar.
+	update_restart_vote_timer(delta)
 
 	## bkz. _sweep_stale_throttle_keys üstündeki not - FPS'in zamanla düşmesi
 	## bugu için düzeltme.
@@ -263,11 +288,12 @@ func join_room(address: String, player_name: String = "Oyuncu", char_id: int = 1
 	local_player_name = player_name.strip_edges()
 	if local_player_name.is_empty():
 		local_player_name = "Oyuncu"
+	_save_local_player_name()
 	local_char_id = char_id
-	
+
 	room_code = code
 	is_multiplayer_active = true
-	
+
 	return _start_relay_client(code)
 
 
@@ -278,6 +304,7 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 	local_player_name = player_name.strip_edges()
 	if local_player_name.is_empty():
 		local_player_name = "Oyuncu"
+	_save_local_player_name()
 	local_char_id = char_id
 	is_host = true
 	_host_peer = 1
@@ -313,6 +340,7 @@ func join_lan(ip: String = "127.0.0.1", port: int = 7777, player_name: String = 
 	local_player_name = player_name.strip_edges()
 	if local_player_name.is_empty():
 		local_player_name = "Oyuncu"
+	_save_local_player_name()
 	local_char_id = char_id
 	is_host = false
 	_host_peer = 1
@@ -375,7 +403,7 @@ func _clear_peer_state() -> void:
 	## #58: bir sonraki oda/oyuna eski odadan kalma "biri hâlâ sandık açıyor"
 	## durumuyla girilmesin diye.
 	chest_busy_peers.clear()
-	level_up_pending_peers.clear()
+	level_up_busy_peers.clear()
 	level_up_timer_active = false
 	## bkz. _is_game_in_progress/_is_rejoining_midgame üstündeki DÜZELTME
 	## notu - eski odadan kalan bu bayraklarla yeni bir odaya girilmesin.
@@ -559,6 +587,7 @@ func update_local_player_name(new_name: String) -> void:
 	if trimmed.is_empty():
 		return
 	local_player_name = trimmed
+	_save_local_player_name()
 	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	if my_id > 0 and lobby_players.has(my_id):
 		lobby_players[my_id]["name"] = trimmed
@@ -612,6 +641,124 @@ func all_players_loading_done() -> bool:
 		if not _loading_done.get(pid, false):
 			return false
 	return true
+
+
+## ==============================================================================
+## YENİDEN BAŞLATMA ONAYI (kullanıcı isteği: "Multiplayerda host oyunu
+## yeniden başlatabilsin eskiden yeniden başlatmayı seçerek fakat önce diğer
+## oyunculara onayı sorulsun") - SADECE host isteği başlatabilir; TÜM
+## bağlı oyunculara bir Onayla/Reddet sorusu gider, HERKES onaylarsa
+## (host'un kendi isteği zaten kendiliğinden bir "evet" sayılır) yeniden
+## başlatma gerçekleşir - _rpc_start_game() ÇAĞRILIR (lobiden ilk başlatmayla
+## BİREBİR AYNI, kanıtlanmış mekanizma: GameManager.reset() + karakter
+## kurulumu + yükleme ekranı senkronu), ayrı bir "restart" akışı YOK.
+## Herhangi biri reddederse ya da RESTART_VOTE_TIMEOUT içinde herkes cevap
+## vermezse istek İPTAL edilir, kimse yeniden başlatılmaz.
+## ==============================================================================
+var restart_vote_pending: bool = false
+var restart_vote_responses: Dictionary = {} ## peer_id -> bool (onayladı mı)
+const RESTART_VOTE_TIMEOUT := 20.0
+var _restart_vote_timer: float = 0.0
+
+signal restart_request_received ## client: host onay istiyor, bir Onayla/Reddet diyaloğu göster
+signal restart_vote_result(approved: bool, rejecter_name: String) ## herkes: oylama bitti, sonucu bildir
+
+
+## Sadece host tarafından çağrılır (bkz. pause_menu.gd _on_restart).
+func request_restart_vote() -> void:
+	if not is_host or not is_multiplayer_active or restart_vote_pending:
+		return
+	restart_vote_pending = true
+	restart_vote_responses.clear()
+	_restart_vote_timer = RESTART_VOTE_TIMEOUT
+	## Host isteği başlattığı için zaten onaylamış sayılır - kendine ayrıca
+	## bir diyalog gösterilmez.
+	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	if my_id > 0:
+		restart_vote_responses[my_id] = true
+	_rpc_request_restart_vote.rpc()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_restart_vote() -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != _host_peer_id():
+		return
+	restart_request_received.emit()
+
+
+## Her client (host HARİÇ - kendi oyu request_restart_vote()'ta zaten
+## verildi) diyalogdaki cevabını bununla host'a gönderir.
+func submit_restart_vote(approved: bool) -> void:
+	if not is_multiplayer_active or is_host:
+		return
+	_rpc_submit_restart_vote.rpc_id(_host_peer_id(), multiplayer.get_unique_id(), approved)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_submit_restart_vote(peer_id: int, approved: bool) -> void:
+	if not is_host or not restart_vote_pending:
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return
+	restart_vote_responses[peer_id] = approved
+	## Biri reddettiyse geri kalanları beklemeye gerek yok, hemen iptal et.
+	if not approved:
+		_finish_restart_vote(peer_id)
+		return
+	_check_restart_vote_complete()
+
+
+func _check_restart_vote_complete() -> void:
+	if not restart_vote_pending:
+		return
+	for pid in lobby_players.keys():
+		if not restart_vote_responses.has(pid):
+			return ## hâlâ birinin cevabı bekleniyor
+	_finish_restart_vote(0)
+
+
+## rejecter_peer_id > 0 ise İSTEK O KİŞİ YÜZÜNDEN reddedildi demektir (erken
+## çıkış); 0 ise ya herkes onayladı ya da zaman aşımı (bkz. update_restart_
+## vote_timer) - iki durumda da mevcut restart_vote_responses'a bakılarak
+## nihai karar hesaplanır (zaman aşımında cevap vermeyenler "onaylamadı"
+## sayılır, bkz. o fonksiyon).
+func _finish_restart_vote(rejecter_peer_id: int) -> void:
+	if not restart_vote_pending:
+		return
+	restart_vote_pending = false
+	var all_approved: bool = rejecter_peer_id <= 0
+	if all_approved:
+		for approved in restart_vote_responses.values():
+			if not approved:
+				all_approved = false
+				break
+	var rejecter_name: String = get_player_names([rejecter_peer_id]) if rejecter_peer_id > 0 else ""
+	_rpc_broadcast_restart_vote_result.rpc(all_approved, rejecter_name)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_broadcast_restart_vote_result(approved: bool, rejecter_name: String) -> void:
+	restart_vote_pending = false
+	restart_vote_result.emit(approved, rejecter_name)
+	if approved and is_host:
+		_rpc_start_game.rpc()
+
+
+## network_manager.gd _process()'inden koşulsuz her karede tiklenir (diğer
+## geri sayımlarla - level atlama/sandık/mini dükkan - AYNI desen).
+func update_restart_vote_timer(delta: float) -> void:
+	if not restart_vote_pending or not is_host:
+		return
+	_restart_vote_timer -= delta
+	if _restart_vote_timer <= 0.0:
+		## Zaman aşımı - cevap vermeyen herkes "onaylamadı" sayılır, bu
+		## yüzden en az bir eksik varsa sonuç otomatik olarak "reddedildi".
+		for pid in lobby_players.keys():
+			if not restart_vote_responses.has(pid):
+				restart_vote_responses[pid] = false
+		_finish_restart_vote(0)
 
 
 func close_room() -> void:
@@ -693,8 +840,13 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		## oyuncu ölmek yerine bağlantısı koparsa, geride kalan (zaten kalıcı
 		## ölü) takım sonsuza dek "izleyicisin" ekranında takılı kalmasın.
 		_check_all_players_dead()
-	if level_up_pending_peers.has(peer_id):
-		level_up_pending_peers.erase(peer_id)
+	## DÜZELTME: ayrılan peer kart/silah/kalkan seçerken kopmuşsa (level_up_
+	## busy_peers'ta kalmış olabilir) TEMİZLENMEZSE geri kalan herkes
+	## SONSUZA KADAR "bir oyuncu seçim yapıyor" bekleme durumunda donup
+	## kalırdı - chest_busy_peers ile AYNI düzeltme.
+	if level_up_busy_peers.has(peer_id):
+		level_up_busy_peers.erase(peer_id)
+		level_up_busy_state_changed.emit()
 	## #58 DÜZELTME: ayrılan peer sandık seçerken kopmuşsa (chest_busy_peers'ta
 	## kalmış olabilir) TEMİZLENMEZSE geri kalan herkes SONSUZA KADAR "bir
 	## oyuncu sandık açıyor" bekleme ekranında donup kalırdı.
@@ -715,8 +867,6 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	## zamanlayıcı/oylama gerekmez (bkz. dosya başı notu).
 	_refresh_host()
 	lobby_updated.emit()
-	if is_host:
-		_check_all_upgrades_chosen()
 	## Kullanıcı bildirimi: "katılımcılar oyundan çıkınca veya bağlantısı
 	## kesilince oyundan çıktığını gösteren bir bildirim yok" - kalan
 	## herkese kimin ayrıldığını gösteren bir toast bildirimi tetikler.
@@ -756,119 +906,91 @@ func _rpc_sync_player_info(p_name: String, p_char_id: int, p_is_host: bool) -> v
 
 
 ## ==============================================================================
-## ORTAK TAKIM SEVİYESİ / LEVEL UP SENKRONİZASYONU
+## KART/SİLAH/KALKAN SEÇİM KUYRUĞU SENKRONİZASYONU (level atlama kartları +
+## başlangıç silah/kalkan seçimi)
 ## ==============================================================================
-var level_up_pending_peers: Dictionary = {} ## peer_id -> bool (has chosen upgrade)
+## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini beklemeden
+## tüm kartlarını seçebilsin FAKAT hepsini seçtikten sonra bekleme süresi
+## başlayacak... hepsi ortak bir bekleme süresine bağlı olacak ve bu bekleme
+## süresi son kartı seçtikten sonra başlayacak") - eskiden bu ekranlar (bkz.
+## silinen level_up_pending_peers/start_team_level_up_waiting/mark_local_
+## upgrade_chosen/_check_all_upgrades_chosen) HER TUR (her tek kart seçimi)
+## ayrı bir "herkes bu turu seçti mi" turu açıp kapatıyordu - bir oyuncunun
+## kendi kuyruğunda (main.gd _pending_level_ups) 5 kart olsa bile HER kartı
+## diğer oyuncu(lar) da AYNI turu bitirmeden bir sonrakini GÖREMİYORDU.
+##
+## Artık chest_busy_peers/start_chest_countdown ile BİREBİR AYNI, KANITLANMIŞ
+## deseni kullanıyor (bkz. o bloktaki kök neden notu - sandık kuyruğu zaten
+## bu deseni kullanıyordu): HER oyuncu kendi kuyruğunu TAMAMEN kendi hızında,
+## ağdan bağımsız olarak bitirir (main.gd _advance_level_up_queue artık
+## ağı hiç beklemeden bir sonraki kartı hemen açıyor); sadece kuyruğu
+## TÜKENİNCE "meşgul değilim" diye bildirir - oyun, EN SON biten oyuncu da
+## bitirene kadar devam etmez. Geri sayım (level_up_countdown) sandığınkiyle
+## AYNI şekilde HER yeni kart/silah/kalkan ekranı açıldığında 25sn'ye
+## resetlenir - biri hâlâ (kendi kuyruğundaki bir sonraki) kartı seçtiği
+## sürece kimse zaman aşımına uğramaz.
+var level_up_busy_peers: Dictionary = {} ## peer_id -> true (kuyruğu hâlâ dolu)
 var level_up_timer_active: bool = false
 var level_up_countdown: float = 25.0
 
-signal multiplayer_level_up_start
+signal level_up_busy_state_changed
 signal multiplayer_level_up_timer_tick(remaining: float)
-signal multiplayer_level_up_all_chosen
 
 
-## Herhangi bir eşte (özellikle yerel oyuncu) seçim ekranı açıldığında çağrılır.
-## BUG DÜZELTMESİ (kullanıcı bildirimi: "bazen bir anda tüm yaratıklar
-## donuyor") - mini_shop_pending_peers ile AYNI kök neden/aynı düzeltme:
-## eskiden level_up_timer_active SADECE biri gerçekten bir kart seçince
-## (_rpc_peer_chose_upgrade) devreye giriyordu. Takımdaki HERKES ekran
-## açıldığı anda AFK/dikkatsizse (ör. hepsi aynı anda savaşa dönmüşse) sayaç
-## hiç başlamıyor, ne auto-pick (bkz. level_up_screen.gd/weapon_select_
-## screen.gd _on_timer_tick) ne de get_tree().paused'ın açılması hiç
-## tetiklenmiyordu. Artık sayaç, ekran açılır açılmaz (her client kendi
-## local açılışında bunu çağırıyor) koşulsuz başlıyor - 25sn içinde ya biri
-## seçer ya da auto-pick devreye girer.
-func start_team_level_up_waiting() -> void:
+## main.gd _advance_level_up_queue()/_show_item_select_screen() tarafından
+## çağrılır - yerel kart/silah/kalkan kuyruğu meşgul/boş olduğunda TÜM
+## peer'lere (kendimiz DAHİL, "call_local") bildirir. bkz. set_chest_busy
+## ile AYNI desen.
+func set_level_up_busy(busy: bool) -> void:
 	if not is_multiplayer_active:
 		return
-	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
-	## DÜZELTME (kullanıcı bildirimi: "bazen seçmesen de level atlama
-	## kartları kendi kendine seçiliyor") - kök neden: aşağıdaki döngü SADECE
-	## dictionary'de HİÇ OLMAYAN peer'leri false'a ilklendiriyordu. Bir
-	## peer'in kaydı bir ÖNCEKİ turdan (ör. art arda birden fazla level
-	## atlanıp _advance_level_up_queue hemen bir sonraki turu açtığında,
-	## _rpc_broadcast_level_up_all_chosen'ın .clear()'ı ile bu fonksiyonun
-	## çağrısı arasındaki herhangi bir zamanlama sapmasında) hâlâ true olarak
-	## duruyorsa bu satır ona HİÇ dokunmuyordu - yeni tur o peer'i "zaten
-	## seçti" sanıp, GERÇEKTE kimse yeni turda seçim yapmadan bile
-	## _check_all_upgrades_chosen()'ı erken "hepsi bitti" sandırıp turu
-	## ANINDA kapatabiliyordu (kullanıcıya "kartım kendi kendine seçildi"
-	## gibi görünüyordu). Artık GERÇEKTEN yeni bir tur başlıyorsa
-	## (level_up_timer_active henüz false'sa) TÜM bilinen peer'ler KOŞULSUZ
-	## false'a sıfırlanıyor - hâlâ açık bir tur varsa (redundant çağrı)
-	## eskisi gibi sadece eksik peer'ler eklenip diğerlerine dokunulmuyor.
-	var is_fresh_round: bool = not level_up_timer_active
-	for pid in lobby_players.keys():
-		if is_fresh_round or not level_up_pending_peers.has(pid):
-			level_up_pending_peers[pid] = false
-	if my_id >= 1 and (is_fresh_round or not level_up_pending_peers.has(my_id)):
-		level_up_pending_peers[my_id] = false
-	if level_up_pending_peers.is_empty() and my_id >= 1:
-		level_up_pending_peers[my_id] = false
-	if is_fresh_round:
-		level_up_timer_active = true
-		level_up_countdown = 25.0
-
-
-func mark_local_upgrade_chosen() -> void:
-	if not is_multiplayer_active:
-		return
-	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
-	level_up_pending_peers[my_id] = true
-	_rpc_peer_chose_upgrade.rpc(my_id)
+	_rpc_set_level_up_busy.rpc(multiplayer.get_unique_id(), busy)
 
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_peer_chose_upgrade(p_id: int) -> void:
-	var sender_id: int = multiplayer.get_remote_sender_id()
-	if sender_id != 0 and sender_id != p_id:
-		return
-	level_up_pending_peers[p_id] = true
-	if not level_up_timer_active:
+func _rpc_set_level_up_busy(peer_id: int, busy: bool) -> void:
+	if busy:
+		level_up_busy_peers[peer_id] = true
+	else:
+		level_up_busy_peers.erase(peer_id)
+	level_up_busy_state_changed.emit()
+
+
+func is_any_level_up_busy() -> bool:
+	return not level_up_busy_peers.is_empty()
+
+
+## bkz. start_chest_countdown ile AYNI desen: TEK bir "reliable"+"call_local"
+## RPC TÜM peer'lerde geri sayımı aynı anda 25sn'ye başlatır/resetler, her
+## istemci kendi _process()'inde BAĞIMSIZ tikler. Her YENİ kart/silah/kalkan
+## ekranı açıldığında (main.gd _show_level_up_screen/_show_item_select_screen)
+## tekrar çağrılır - biri hâlâ kendi kuyruğundaki bir sonrakini seçtiği
+## sürece kimse zaman aşımına uğramaz.
+func start_level_up_countdown() -> void:
+	if is_multiplayer_active:
+		_rpc_start_level_up_countdown.rpc()
+	else:
 		level_up_timer_active = true
 		level_up_countdown = 25.0
-	_check_all_upgrades_chosen()
 
 
-func _check_all_upgrades_chosen() -> void:
-	if not is_host:
-		return
-	# Ensure all active lobby players are in the pending list
-	for pid in lobby_players.keys():
-		if not level_up_pending_peers.has(pid):
-			level_up_pending_peers[pid] = false
-	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
-	if my_id >= 1 and not level_up_pending_peers.has(my_id):
-		level_up_pending_peers[my_id] = false
-		
-	if level_up_pending_peers.is_empty():
-		return
-	var all_done: bool = true
-	for pid in level_up_pending_peers.keys():
-		if not level_up_pending_peers[pid]:
-			all_done = false
-			break
-	if all_done:
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_start_level_up_countdown() -> void:
+	level_up_timer_active = true
+	level_up_countdown = 25.0
+
+
+func stop_level_up_countdown() -> void:
+	if is_multiplayer_active:
+		_rpc_stop_level_up_countdown.rpc()
+	else:
 		level_up_timer_active = false
-		level_up_pending_peers.clear()
-		_rpc_broadcast_level_up_all_chosen.rpc()
 
 
-## BUG DÜZELTMESİ (kullanıcı bildirimi: "oyun başında bir oyuncu seçip
-## diğeri seçmediğinde ona otomatik seçim gelmiyor") - kök neden: host,
-## KENDİ yerel sayacı tam sıfıra indiği anda, henüz seçmemiş eşin auto-pick
-## RPC'sinin (_on_timer_tick -> _auto_pick_random_card -> _on_card_pressed
-## -> mark_local_upgrade_chosen -> _rpc_peer_chose_upgrade) kendisine
-## ulaşmasını HİÇ beklemeden koşulsuz _rpc_broadcast_level_up_all_chosen
-## yayınlıyordu. Sayaç her istemcide BAĞIMSIZ tikleniyor (aynı RPC ile
-## sıfırlanıp başlıyor ama sonrası tamamen yerel _process); host'un kendi
-## karesi, eşin round-trip'inden bir kare bile önce sıfıra inerse eş HİÇBİR
-## ŞEY seçmeden ekranı kaybediyordu. Artık sıfırdan sonra kısa bir tolerans
-## payı (LEVEL_UP_TIMEOUT_GRACE) tanınıyor - bu süre boyunca her karede
-## gerçek "herkes seçti mi" durumu (_check_all_upgrades_chosen) kontrol
-## ediliyor, sadece payın SONUNDA hâlâ eksik biri varsa (örn. bağlantısı
-## kopmuş bir eş) zorla kapatılıyor.
-const LEVEL_UP_TIMEOUT_GRACE := 1.5
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_stop_level_up_countdown() -> void:
+	level_up_timer_active = false
+
 
 ## Kullanıcı isteği: "25 saniyelik bekleme sürelerinde (kart seçim, sandık
 ## seçim, dükkan vb) kimi beklediğimiz yazsın" - verilen peer_id listesini
@@ -885,14 +1007,10 @@ func get_player_names(peer_ids: Array) -> String:
 	return ", ".join(names)
 
 
-## Level atlama/silah/kalkan seçim ekranlarında henüz seçim yapmamış
-## oyuncuların isimleri (bkz. get_player_names).
-func get_level_up_pending_names() -> String:
-	var pending: Array = []
-	for pid in level_up_pending_peers.keys():
-		if not level_up_pending_peers[pid]:
-			pending.append(pid)
-	return get_player_names(pending)
+## Şu an kart/silah/kalkan kuyruğu dolu (hâlâ seçim yapmakla meşgul)
+## oyuncuların isimleri - bkz. get_chest_busy_names ile AYNI desen.
+func get_level_up_busy_names() -> String:
+	return get_player_names(level_up_busy_peers.keys())
 
 
 ## Mini dükkanı henüz kapatmamış oyuncuların isimleri.
@@ -912,24 +1030,8 @@ func get_chest_busy_names() -> String:
 func update_level_up_timer(delta: float) -> void:
 	if not level_up_timer_active:
 		return
-	level_up_countdown = max(-LEVEL_UP_TIMEOUT_GRACE, level_up_countdown - delta)
-	multiplayer_level_up_timer_tick.emit(max(0.0, level_up_countdown))
-	if level_up_countdown <= 0.0:
-		if is_host:
-			_check_all_upgrades_chosen() ## gerçekten hepsi seçtiyse burada zaten kapatır
-			if level_up_timer_active and level_up_countdown <= -LEVEL_UP_TIMEOUT_GRACE:
-				level_up_timer_active = false
-				level_up_pending_peers.clear()
-				_rpc_broadcast_level_up_all_chosen.rpc()
-		elif level_up_countdown <= -LEVEL_UP_TIMEOUT_GRACE:
-			level_up_timer_active = false
-
-
-@rpc("any_peer", "call_local", "reliable")
-func _rpc_broadcast_level_up_all_chosen() -> void:
-	level_up_timer_active = false
-	level_up_pending_peers.clear()
-	multiplayer_level_up_all_chosen.emit()
+	level_up_countdown = max(0.0, level_up_countdown - delta)
+	multiplayer_level_up_timer_tick.emit(level_up_countdown)
 
 
 ## ==============================================================================
@@ -2451,12 +2553,18 @@ func sync_team_xp(current_xp: float, needed_xp: float, current_level: int) -> vo
 	GameManager.set_team_xp_state(current_xp, needed_xp, current_level)
 
 
-## Shared Revive sync: when a player dies, if revives remain, a revive is consumed
-## and synced across all peers.
+## DÜZELTME (kullanıcı isteği: "multiplayerda canların takım canı değil
+## kişisel olmasını istiyorum") - eskiden TEK new_remaining tüm takıma
+## uygulanıyordu. Artık HANGİ oyuncunun hakkının değiştiğini de taşıyor -
+## bkz. GameManager.peer_revives. Her istemci kendi peer_revives kopyasını
+## günceller ama revives_updated sinyalini (HUD'un dinlediği) SADECE
+## KENDİ hakkı değiştiyse yayınlar - böylece herkes SADECE kendi kalan
+## canını görür, başkasınınkini değil.
 @rpc("any_peer", "call_local", "reliable")
-func sync_revive_consumed(new_remaining: int) -> void:
-	GameManager.revives_remaining = new_remaining
-	GameManager.revives_updated.emit(new_remaining)
+func sync_revive_consumed(peer_id: int, new_remaining: int) -> void:
+	GameManager.peer_revives[peer_id] = new_remaining
+	if peer_id == multiplayer.get_unique_id():
+		GameManager.revives_updated.emit(new_remaining)
 
 
 ## Kullanıcı isteği: "birini diriltince 3 saniye boyunca ölümsüzlük veren bir
@@ -2488,7 +2596,7 @@ var _revive_request_seq: int = 0
 
 func try_use_revive() -> bool:
 	if not is_multiplayer_active or is_host:
-		return _consume_revive_authoritative()
+		return _consume_revive_authoritative(multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0)
 
 	_revive_request_seq += 1
 	var request_id: int = _revive_request_seq
@@ -2507,20 +2615,32 @@ func try_use_revive() -> bool:
 	## Host'tan zamanında yanıt gelmedi (ör. tam bu sırada host değişti) -
 	## sonsuza dek beklemek yerine eski (iyimser/yerel) davranışa düşülüyor.
 	push_warning("[NetworkManager] Revive isteğine host'tan yanıt gelmedi, yerel yedek kullanıldı.")
-	return _consume_revive_authoritative()
+	return _consume_revive_authoritative(multiplayer.get_unique_id())
 
 
 ## Gerçek azaltma/yayın burada, TEK yerde yapılır - host kendi isteği için
 ## doğrudan, request_use_revive üzerinden client istekleri için de bunu
 ## çağırır, tekli oyuncuda da (is_multiplayer_active false) aynı fonksiyon.
-func _consume_revive_authoritative() -> bool:
-	if GameManager.revives_remaining <= 0:
-		return false
-	GameManager.revives_remaining -= 1
-	if is_multiplayer_active:
-		sync_revive_consumed.rpc(GameManager.revives_remaining)
-	else:
+## DÜZELTME (kullanıcı isteği: "multiplayerda canların takım canı değil
+## kişisel olmasını istiyorum herkesin 3 canı olacak") - artık HANGİ
+## oyuncunun (peer_id) hakkının tüketileceği parametre olarak alınıyor,
+## GameManager.peer_revives üzerinden HER OYUNCUYA AYRI tutuluyor. Tekli
+## oyunculuda (is_multiplayer_active false) eski paylaşılan/tek revives_
+## remaining alanı hâlâ kullanılıyor (zaten tek oyuncu olduğu için "kişisel"
+## davranışıyla birebir aynı sonucu veriyor).
+func _consume_revive_authoritative(peer_id: int) -> bool:
+	if not is_multiplayer_active:
+		if GameManager.revives_remaining <= 0:
+			return false
+		GameManager.revives_remaining -= 1
 		GameManager.revives_updated.emit(GameManager.revives_remaining)
+		return true
+	var remaining: int = GameManager.get_peer_revives(peer_id)
+	if remaining <= 0:
+		return false
+	remaining -= 1
+	GameManager.peer_revives[peer_id] = remaining
+	sync_revive_consumed.rpc(peer_id, remaining)
 	return true
 
 
@@ -2529,7 +2649,7 @@ func request_use_revive(request_id: int) -> void:
 	if not is_host:
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
-	var granted: bool = _consume_revive_authoritative()
+	var granted: bool = _consume_revive_authoritative(sender_id)
 	_respond_use_revive.rpc_id(sender_id, request_id, granted)
 
 

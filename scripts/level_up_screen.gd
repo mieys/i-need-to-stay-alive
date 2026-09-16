@@ -131,13 +131,6 @@ var _card_tweens: Array = [null, null, null]
 ## durumundaki) tekrar seçim yapılmaz.
 var _has_chosen: bool = false
 
-## Kullanıcı isteği: "otomatik seçilen kartın etrafı yeşil parlasa görsek
-## bence güzel olur" - süre dolunca (ya da manuel tıklamayla) hangi kartın
-## seçildiği artık _enter_waiting_state() içinde bu karta yeşil bir kenarlık
-## uygulanarak işaretleniyor (bkz. character_select.gd
-## _build_select_frame_style - aynı yeşil, Color(0.22, 0.62, 0.2, 1.0)).
-var _chosen_card: Button = null
-
 
 func _ready() -> void:
 	UISound.connect_all_buttons(self)
@@ -155,10 +148,14 @@ func _ready() -> void:
 	
 	if NetworkManager.is_multiplayer_active:
 		NetworkManager.multiplayer_level_up_timer_tick.connect(_on_level_up_timer_tick)
-		## Geri sayım, en az bir oyuncu kart seçtiğinde başlar (bkz.
-		## NetworkManager._rpc_peer_chose_upgrade / level_up_timer_active) -
-		## bu ekran açıldığında biri BİZDEN ÖNCE zaten seçmiş olabilir, o
-		## durumda panel baştan görünür başlar.
+		## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini
+		## beklemeden tüm kartlarını seçebilsin") - bu ekran artık kart
+		## seçilir seçilmez ANINDA kapanıyor (bkz. main.gd _on_upgrade_chosen),
+		## "diğer oyuncular bekleniyor" durumu hiç yaşanmıyor - panel SADECE bu
+		## oyuncunun KENDİ 25sn'lik karar süresini gösteriyor (bkz.
+		## waiting_label'a atanan sabit ipucu metni).
+		if waiting_label:
+			waiting_label.text = "Süre dolarsa otomatik seçilir"
 		if countdown_panel:
 			countdown_panel.visible = NetworkManager.level_up_timer_active
 			if countdown_panel.visible and countdown_label:
@@ -227,13 +224,11 @@ func _on_level_up_timer_tick(remaining: float) -> void:
 		countdown_panel.visible = true
 	if countdown_label:
 		countdown_label.text = "%ds" % int(ceil(remaining))
-	_refresh_waiting_label()
 	## Süre dolduğunda ("25 saniye içinde otomatik seçilmesi gerekiyor
 	## eğer seçmezse" - kullanıcı isteği): bu oyuncu henüz bir kart
 	## seçmediyse, kendi adına rastgele bir kart otomatik seçilir - böylece
 	## oyun herkes için normal şekilde devam eder, kimse sonsuza kadar
-	## beklemede kalmaz. Zaten seçmiş oyuncu (bekleme panelindeki) için
-	## no-op.
+	## beklemede kalmaz.
 	if remaining <= 0.0 and not _has_chosen:
 		_auto_pick_random_card()
 
@@ -505,74 +500,20 @@ func _on_reroll_pressed() -> void:
 	_animate_cards_in()
 
 
-func _on_card_pressed(id: String, tier: int, card: Button) -> void:
+## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini beklemeden
+## tüm kartlarını seçebilsin FAKAT hepsini seçtikten sonra bekleme süresi
+## başlayacak") - eskiden çok oyunculuda burada ekran AÇIK kalıp (kartlar
+## kilitlenip yeşil bir "seçildi" vurgusuyla) tüm oyuncular seçene kadar
+## bekleniyordu - bir oyuncunun kendi kuyruğunda başka kartlar olsa bile
+## HER kart seçiminde bu bekleme tekrarlanıyordu. Artık singleplayer/
+## multiplayer FARK ETMEKSİZİN ekran ANINDA kapanıyor (bkz. main.gd
+## _on_upgrade_chosen) - kuyruk bitmediyse bir sonraki kart hemen açılır,
+## kuyruk BİTTİYSE main.gd ayrı bir "diğer oyuncular bekleniyor" ekranı
+## gösterir (bkz. main.gd _show_level_up_wait_overlay).
+func _on_card_pressed(id: String, tier: int, _card: Button) -> void:
 	_has_chosen = true
-	_chosen_card = card
+	## Ekranın kendisini serbest bırakmak main.gd'nin _on_upgrade_chosen'ına
+	## bırakılıyor (o zaten _active_level_up_screen'i - yani bu sahneyi -
+	## queue_free() ediyor) - burada AYRICA çağırmak zararsız ama gereksiz
+	## tekrar olurdu.
 	upgrade_chosen.emit(id, tier)
-	## Tek oyunculuda seçim anında ekranı kapatıp oyunu devam ettirmek doğru
-	## (bkz. main.gd _on_upgrade_chosen tek oyunculu dalı) - ama çok
-	## oyunculuda ESKİDEN de aynı şey oluyordu: ekran hemen queue_free
-	## ediliyor, bu yüzden ilk seçen oyuncu diğerlerini beklerken hiçbir şey
-	## GÖRMÜYORDU (kart seçme panelinin arkasındaki donmuş oyun ekranıyla baş
-	## başa kalıyordu) - kullanıcı isteği: "diğer oyuncuların level
-	## atlamasını beklerken ekranda görünecek bir geri sayım olmalı". Artık
-	## çok oyunculuda ekran (bulanıklaştırma + karartma dahil) AÇIK kalıyor,
-	## kartlar/yeniden karıştır kilitleniyor, ve tüm oyuncular seçince
-	## main.gd _on_multiplayer_level_up_all_chosen ekranı kapatıyor.
-	if NetworkManager.is_multiplayer_active:
-		_enter_waiting_state()
-	else:
-		queue_free()
-
-
-## Yerel oyuncu seçimini yaptıktan sonra, diğerleri seçene kadar ekranı
-## (bulanıklaştırma + karartma + geri sayım paneli) açık tutup etkileşimi
-## kilitler.
-func _enter_waiting_state() -> void:
-	for card: Button in cards:
-		card.disabled = true
-		## Eskiden Button'ın kendi "disabled" StyleBox'ı otomatik koyulaşıp
-		## seçilmemiş kartları görsel olarak soluklaştırıyordu - artık kart
-		## arka planı saydam olduğu için (bkz. CardStyle_transparent) bu
-		## otomatik geri bildirim yok, çerçeve dokusunu elle karartıyoruz.
-		## Seçilen kart (_apply_chosen_card_highlight aşağıda) hariç.
-		if card != _chosen_card:
-			var frame: TextureRect = card.get_node_or_null("Frame")
-			if frame:
-				frame.modulate = Color(0.45, 0.45, 0.45, 1.0)
-	reroll_button.disabled = true
-	if is_instance_valid(_chosen_card):
-		_apply_chosen_card_highlight(_chosen_card)
-	if countdown_panel and NetworkManager.level_up_timer_active:
-		countdown_panel.visible = true
-		if countdown_label:
-			countdown_label.text = "%ds" % int(ceil(NetworkManager.level_up_countdown))
-	_refresh_waiting_label()
-
-
-## Kullanıcı isteği: "25 saniyelik bekleme sürelerinde kimi beklediğimiz
-## yazsın" - jenerik "Diğer oyuncular bekleniyor" yerine hâlâ seçim
-## yapmamış oyuncuların isimlerini gösterir (bkz. network_manager.gd
-## get_level_up_pending_names).
-func _refresh_waiting_label() -> void:
-	if not waiting_label:
-		return
-	var names: String = NetworkManager.get_level_up_pending_names()
-	waiting_label.text = ("Bekleniyor: %s" % names) if names != "" else "Diğer oyuncular bekleniyor"
-
-
-## Kullanıcı isteği: seçilen (manuel ya da süre dolunca otomatik) kartın
-## etrafına yeşil bir kenarlık uygular, böylece bekleme durumunda tüm
-## kartlar aynı "disabled" görünümüne bürünse bile hangisinin seçildiği
-## belli olur. Eskiden "disabled" stilinin border'ı yeşile boyanıyordu -
-## artık kartın kendi arka planı saydam (görünen çerçeve tier dokusu), bu
-## yüzden aynı fikir ayrı bir "SelectGlow" panelinin (bkz. level_up_screen.
-## tscn - kartın biraz dışına taşan, sadece kenarlığı boyalı bir Panel)
-## görünür yapılmasıyla uygulanıyor; çerçeve dokusu da hafifçe parlatılıyor.
-func _apply_chosen_card_highlight(card: Button) -> void:
-	var glow: Control = card.get_node_or_null("SelectGlow")
-	if glow:
-		glow.visible = true
-	var frame: TextureRect = card.get_node_or_null("Frame")
-	if frame:
-		frame.modulate = Color(1.2, 1.2, 1.1, 1.0)

@@ -156,7 +156,15 @@ const FINAL_CREATURES := [
 ## darboğaz sayının kendisi değil, algoritmaydı.
 @export var base_interval: float = 0.6
 @export var min_interval: float = 0.16
-@export var difficulty_ramp: float = 0.006
+## DÜZELTME (kullanıcı bildirimi: "yaratıklar çok hızlı bir şekilde çoğalıyorlar
+## ve aşırı fazla oluyorlar, biraz daha yavaş ilerlemesi gerek") - eskiden
+## 0.006 ile spawn aralığı base_interval'den min_interval'e (0.6 -> 0.16)
+## sadece ~73 saniyede (t * difficulty_ramp), yani tier_duration=100sn olan
+## Kademe 1 BİLE bitmeden, iniyordu - maçın geri kalan ~24 dakikası boyunca
+## zaten en yüksek yoğunlukta düz gidiyordu. Yarıya indirilince aynı tavana
+## (0.16sn, hâlâ AYNI nihai zorluk) ~147 saniyede (Kademe 2 civarı) ulaşılıyor -
+## erken oyun daha kademeli hissettiriyor, nihai zorluk değişmedi.
+@export var difficulty_ramp: float = 0.003
 ## Kullanıcı isteği: "yaratık sayısını %50 arttır" - eskiden 42, ×1.5 (63).
 ## Kullanıcı isteği: "yaratık spawnını %150 arttır" - 63 -> 158 (×2.5).
 ## DÜZELTME (kullanıcı bildirimi: optimizasyonlar sonrası bile hâlâ kasıyor,
@@ -515,8 +523,22 @@ func _player_count() -> int:
 	return max(1, NetworkManager.lobby_players.size())
 
 
+## DÜZELTME (kullanıcı bildirimi: "Yaratıklar ilk tierlarda çok gereksiz
+## kalabalık geliyor kalabalıklaşma olayı ilerleyen tierlarda artsın") - eski
+## tavan (max_concurrent_enemies + oyuncu başı ekstra) Kademe 1'den itibaren
+## SABİTTİ, yani ilk dakikalarda bile ekran 150 yaratığa kadar dolabiliyordu.
+## Artık bu tavan Kademe 1'de TIER_1_CAP_SCALE oranına sıkışıyor ve Kademe
+## 15'e kadar doğrusal olarak tam tavana çıkıyor - kalabalıklaşma artık
+## erken değil, geç oyunda hissediliyor.
+const TIER_1_CAP_SCALE := 0.35
+
+func _tier_crowding_scale() -> float:
+	var tier: int = _current_tier()
+	return lerp(TIER_1_CAP_SCALE, 1.0, float(tier - 1) / 14.0)
+
 func _scaled_enemy_cap() -> int:
-	return max_concurrent_enemies + (_player_count() - 1) * EXTRA_PLAYER_ENEMY_CAP
+	var base_cap: int = max_concurrent_enemies + (_player_count() - 1) * EXTRA_PLAYER_ENEMY_CAP
+	return max(1, int(round(base_cap * _tier_crowding_scale())))
 
 
 func _current_interval() -> float:

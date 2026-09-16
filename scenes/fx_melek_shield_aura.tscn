@@ -6,5 +6,6 @@
 [node name="FxMelekShieldAura" type="AnimatedSprite2D"]
 scale = Vector2(3.9, 3.9)
 z_index = 56
+texture_filter = 1
 sprite_frames = ExtResource("2")
 script = ExtResource("1")

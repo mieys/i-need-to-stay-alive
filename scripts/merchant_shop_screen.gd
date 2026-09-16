@@ -100,7 +100,11 @@ var _reroll_btn: Button = null
 ## seviyesi (her AL bir seviye daha yükseltir) tekrar tekrar satın alınabilir
 ## OLMAK ÜZERE tasarlandı, o ikisine dokunulmadı. Stok index'ine göre tutulur
 ## (aynı eşya/tier iki farklı karttaysa ikisi ayrı sayılır).
-var _sold_item_indices: Array = []
+## DÜZELTME (kullanıcı bildirimi: "dükkanı kapatıp tekrar açınca aynı şeyi
+## tekrar alabiliyoruz") - bu dizi ARTIK burada YAŞAMIYOR, bkz. traveling_
+## merchant.gd sold_item_indices (bu ekran her açılışta sıfırdan kurulup
+## kapanışta queue_free() olduğu için burada tutmak ziyaret boyunca kalıcı
+## olamıyordu) - _merchant üzerinden okunup yazılıyor.
 
 var _details_name: Label
 var _details_tier: Label
@@ -114,8 +118,22 @@ var _details_price: Label
 func setup(player: Node, stock: Array, merchant: Node = null) -> void:
 	_player = player
 	_stock = stock
+	## Kullanıcı isteği: "Dükkandaki eşyaların fiyatı oyunun süresine göre
+	## ucuzdan pahalıya göre sıralanmalı" - bkz. _sort_stock_by_cost/
+	## _entry_cost.
+	_sort_stock_by_cost()
 	_merchant = merchant
 	_build_ui()
+	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - bkz. shop_panel.gd
+	## _ready()'deki AYNI kök neden notu: bu ekran BİLİNÇLİ OLARAK get_tree().
+	## paused kullanmıyor, bu yüzden main.gd'nin genel ui_cancel/pause-toggle
+	## kontrolü bu ekran açıkken de çalışıp pause menüsünü ÜSTÜNE açardı.
+	GameManager.register_blocking_panel(self)
+
+
+func _process(_delta: float) -> void:
+	if Input.is_action_just_pressed("ui_cancel"):
+		_on_close_pressed()
 
 
 func _build_ui() -> void:
@@ -320,6 +338,11 @@ func _build_card(index: int) -> PanelContainer:
 	style.shadow_offset = Vector2(2, 3)
 	card.add_theme_stylebox_override("panel", style)
 	card.gui_input.connect(_on_card_gui_input.bind(index))
+	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - bu PanelContainer
+	## bir Button OLMADIĞI için motor "focus" stilini kendiliğinden çizmiyor,
+	## GamepadFocusHelper kendi kenarlığını ekliyor (bkz. o dosyadaki not).
+	card.focus_mode = Control.FOCUS_ALL
+	GamepadFocusHelper.add_focus_ring(card)
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 8)
@@ -468,7 +491,11 @@ func _add_icon(holder: Control, entry: Dictionary) -> void:
 
 
 func _on_card_gui_input(event: InputEvent, index: int) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - ui_accept (A/
+	## Enter/Boşluk) artık kart odaktayken sol tık ile AYNI seçim eylemini
+	## tetikliyor.
+	if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
+			or event.is_action_pressed("ui_accept"):
 		_select_index(index)
 
 
@@ -518,19 +545,49 @@ func _refresh_details() -> void:
 ## yüzden üst tier eşyalar (bkz. Items.ITEM_TIER_POWER, %100/%150/%200/%250
 ## güç) taban fiyatın AYNI oranında daha PAHALI satılıyor ki bir Efsanevi
 ## eşya bir Sıradan eşyayla aynı fiyata "bedavadan" güçlü olmasın.
+## DÜZELTME (kullanıcı isteği: "Oyunun ekonomisi kazanca göre şekillenmeli.
+## En düşük 20 altından başlamalı eşya fiyatları kazanç arttıkça artacak
+## fiyatlar.") - eski taban fiyatlar (WEAPON_COST_BASE/Items cost_base)
+## SABİTTİ, oyunun neresinde olursanız olun aynı kalıyordu. Artık bu
+## tabanlar SADECE eşyalar arası GÖRECELİ "şekli" korumak için kullanılıyor
+## (Yıldırım Asası hep Bıçak'tan pahalı kalsın diye) - gerçek Altın miktarı
+## enemy_spawner.gd _current_tier() ile AYNI game_time/tier_duration
+## mantığıyla o anki Kademeye göre ölçekleniyor: erken oyunda taban fiyatın
+## sadece bir kısmı istenir (küçük eşyalar 20 altın tabanına sıkışır),
+## Kademe ilerledikçe (oyuncular daha çok kazandıkça) fiyat da katlanarak
+## artar.
+const MERCHANT_PRICE_TIER_DURATION := 100.0 ## enemy_spawner.gd tier_duration ile AYNI değer
+const MERCHANT_PRICE_MIN := 20
+const MERCHANT_PRICE_EARLY_SCALE := 0.25 ## Kademe 1'de taban fiyatın ~%25'i istenir
+const MERCHANT_PRICE_PER_TIER_GROWTH := 0.12 ## Kademe başına +%12
+
+func _merchant_price_tier() -> int:
+	var t: float = GameManager.game_time
+	return clampi(1 + int(t / MERCHANT_PRICE_TIER_DURATION), 1, 15)
+
+func _scale_merchant_price(base_shape: float) -> int:
+	var scale: float = MERCHANT_PRICE_EARLY_SCALE + float(_merchant_price_tier() - 1) * MERCHANT_PRICE_PER_TIER_GROWTH
+	return max(MERCHANT_PRICE_MIN, int(round(base_shape * scale)))
+
 func _entry_cost(entry: Dictionary) -> int:
 	var key: String = entry.get("key", "")
 	match entry.get("type"):
 		"item":
 			var base_cost: int = int(Items.get_def(key).get("cost_base", 50))
 			var power_mult: float = Items.ITEM_TIER_POWER[int(entry.get("tier", 1)) - 1]
-			return int(round(base_cost * power_mult))
+			return _scale_merchant_price(base_cost * power_mult)
 		"weapon":
-			return WEAPON_COST_BASE.get(key, 100)
+			return _scale_merchant_price(float(WEAPON_COST_BASE.get(key, 100)))
 		"shield":
 			var next_level: int = int(GameManager.get(key + "_level")) + 1
-			return ShopScript._upgrade_cost(key, next_level)
+			return _scale_merchant_price(float(ShopScript._upgrade_cost(key, next_level)))
 	return 0
+
+
+## bkz. _entry_cost üstündeki DÜZELTME notu - kullanıcı isteği: "fiyatı
+## ucuzdan pahalıya göre sıralanmalı".
+func _sort_stock_by_cost() -> void:
+	_stock.sort_custom(func(a, b): return _entry_cost(a) < _entry_cost(b))
 
 
 func _owned_shield_type() -> String:
@@ -540,8 +597,16 @@ func _owned_shield_type() -> String:
 	return ""
 
 
+## bkz. _sold_item_indices üstündeki DÜZELTME notu - kalıcı depo artık
+## _merchant (TravelingMerchant) üzerinde, _merchant geçersizse (olağanüstü
+## bir durum, normalde setup() ile hep geçerli bir referans gelir) hiçbir
+## şey satılmamış gibi güvenli bir varsayılana düşer.
+func _sold_indices() -> Array:
+	return _merchant.sold_item_indices if _merchant and is_instance_valid(_merchant) else []
+
+
 func _entry_can_buy(entry: Dictionary, index: int) -> bool:
-	if entry.get("type") == "item" and _sold_item_indices.has(index):
+	if entry.get("type") == "item" and _sold_indices().has(index):
 		return false
 	var key: String = entry.get("key", "")
 	var cost: int = _entry_cost(entry)
@@ -581,7 +646,7 @@ func _on_buy_pressed(index: int) -> void:
 			if _player and _player.has_method("buy_item") and _player.buy_item(key, power_mult):
 				GameManager.gold -= cost
 				GameManager.owned_items.append({"key": key, "spent": cost, "power": power_mult, "tier": int(entry.get("tier", 1))})
-				_sold_item_indices.append(index)
+				_sold_indices().append(index)
 		"weapon":
 			## bkz. shop_panel.gd _on_buy_copy / chest_menu.gd _on_al_pressed
 			## AYNI sıra: önce deftere ekle, sonra gerçek silah node'unu spawn et.
@@ -603,7 +668,7 @@ func _on_buy_pressed(index: int) -> void:
 func _refresh_all_buy_states() -> void:
 	for i in range(_stock.size()):
 		var entry: Dictionary = _stock[i]
-		var sold: bool = entry.get("type") == "item" and _sold_item_indices.has(i)
+		var sold: bool = entry.get("type") == "item" and _sold_indices().has(i)
 		_buy_buttons[i].disabled = not _entry_can_buy(entry, i)
 		_buy_buttons[i].text = "SATILDI" if sold else "AL"
 		_price_labels[i].text = "%d Altın" % _entry_cost(entry)
@@ -631,7 +696,9 @@ func _on_reroll_pressed() -> void:
 	if new_stock == null:
 		return
 	_stock = new_stock
-	_sold_item_indices.clear()
+	_sort_stock_by_cost()
+	## bkz. traveling_merchant.gd try_reroll_stock() - "satıldı" kaydı ARTIK
+	## orada, reroll çağrısının kendisi zaten sıfırlıyor.
 	_selected_index = -1
 	_rebuild_grid()
 	_refresh_all_buy_states()
@@ -641,5 +708,6 @@ func _on_reroll_pressed() -> void:
 
 
 func _on_close_pressed() -> void:
+	GameManager.unregister_blocking_panel(self)
 	closed.emit()
 	queue_free()

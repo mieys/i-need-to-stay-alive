@@ -219,6 +219,16 @@ const REBINDABLE_ACTIONS := [
 ## doldurulur; _bind() varsa bunu, yoksa kendi varsayılanını kullanır.
 var _keybind_overrides: Dictionary = {}
 
+## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - klavye override'ları
+## ile AYNI mantık ama TAMAMEN AYRI depolama (action_name -> Dictionary
+## descriptor, bkz. _make_joypad_event). _bind_joypad() varsa bunu, yoksa
+## kendi varsayılanını kullanır. Klavye ve gamepad override'larının birbirini
+## SİLMEMESİ (bkz. set_keybind_override/set_keybind_joypad_override'daki
+## kök neden notu) için bilerek iki ayrı Dictionary.
+var _joypad_overrides: Dictionary = {}
+
+enum JoypadKind { BUTTON, AXIS }
+
 
 func _ready() -> void:
 	_load_keybind_overrides()
@@ -229,25 +239,66 @@ func _load_keybind_overrides() -> void:
 	var config := ConfigFile.new()
 	if config.load(KEYBIND_SETTINGS_PATH) != OK:
 		return
-	if not config.has_section("keybinds"):
-		return
-	for action_name in config.get_section_keys("keybinds"):
-		_keybind_overrides[action_name] = int(config.get_value("keybinds", action_name))
+	if config.has_section("keybinds"):
+		for action_name in config.get_section_keys("keybinds"):
+			_keybind_overrides[action_name] = int(config.get_value("keybinds", action_name))
+	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - AYNI dosyada
+	## ayrı bir bölüm; ConfigFile Dictionary değerlerini native serileştirdiği
+	## için descriptor'lar (bkz. _make_joypad_event) doğrudan yazılıp okunabiliyor.
+	if config.has_section("keybinds_joypad"):
+		for action_name in config.get_section_keys("keybinds_joypad"):
+			_joypad_overrides[action_name] = config.get_value("keybinds_joypad", action_name)
 
 
-## keybind_menu.gd'den çağrılır - bir action'ın tuşunu anında değiştirir VE
-## diske kaydeder (bkz. ui_sound.gd set_master_volume_percent - AYNI
-## ConfigFile deseni).
+## Bir action'ın event listesinden SADECE istenen türdeki (klavye YA DA
+## gamepad) event'leri siler, diğer türü DOKUNMADAN bırakır.
+## DÜZELTME (kullanıcı bildirimi/kök neden - eskiden set_keybind_override()
+## InputMap.action_erase_events() ile TÜM event'leri (klavye + varsa gamepad)
+## siliyordu; bir action'a gamepad ataması eklendikten sonra o action'ın
+## klavye tuşu değiştirilirse gamepad ataması da sessizce kaybolurdu, ve
+## tam tersi) - artık her iki set_keybind_*_override() SADECE kendi türünü
+## siliyor.
+func _erase_events_of_kind(action_name: String, want_key: bool) -> void:
+	for event in InputMap.action_get_events(action_name):
+		var is_key: bool = event is InputEventKey
+		var is_joy: bool = event is InputEventJoypadButton or event is InputEventJoypadMotion
+		if (want_key and is_key) or (not want_key and is_joy):
+			InputMap.action_erase_event(action_name, event)
+
+
+## Aynı KEYBIND_SETTINGS_PATH dosyasına ekleyerek yazar (diğer action'ların/
+## diğer bölümün override'larını korumak için önce yükler) - ui_sound.gd
+## set_master_volume_percent ile AYNI ConfigFile deseni.
+func _save_override(section: String, action_name: String, value) -> void:
+	var config := ConfigFile.new()
+	config.load(KEYBIND_SETTINGS_PATH)
+	config.set_value(section, action_name, value)
+	config.save(KEYBIND_SETTINGS_PATH)
+
+
+## keybind_menu.gd'den çağrılır - bir action'ın KLAVYE tuşunu anında
+## değiştirir VE diske kaydeder. Gamepad ataması varsa (bkz. yukarıdaki kök
+## neden notu) artık DOKUNULMUYOR.
 func set_keybind_override(action_name: String, keycode: int) -> void:
 	_keybind_overrides[action_name] = keycode
-	InputMap.action_erase_events(action_name)
+	_erase_events_of_kind(action_name, true)
 	var ev := InputEventKey.new()
 	ev.physical_keycode = keycode
 	InputMap.action_add_event(action_name, ev)
-	var config := ConfigFile.new()
-	config.load(KEYBIND_SETTINGS_PATH) ## var olan diğer action'ların override'larını da korumak için önce yükle
-	config.set_value("keybinds", action_name, keycode)
-	config.save(KEYBIND_SETTINGS_PATH)
+	_save_override("keybinds", action_name, keycode)
+
+
+## keybind_menu.gd'den çağrılır - bir action'ın GAMEPAD atamasını anında
+## değiştirir VE diske kaydeder. `descriptor`: {"kind":JoypadKind.BUTTON,
+## "button":JoyButton} ya da {"kind":JoypadKind.AXIS,"axis":JoyAxis,
+## "sign":1.0/-1.0}. Klavye atamasına DOKUNMUYOR.
+func set_keybind_joypad_override(action_name: String, descriptor: Dictionary) -> void:
+	_joypad_overrides[action_name] = descriptor
+	_erase_events_of_kind(action_name, false)
+	var ev: InputEvent = _make_joypad_event(descriptor)
+	if ev:
+		InputMap.action_add_event(action_name, ev)
+	_save_override("keybinds_joypad", action_name, descriptor)
 
 
 ## Bir action'a şu an atanmış fiziksel tuş kodunu döndürür (yoksa KEY_NONE).
@@ -258,29 +309,88 @@ func get_keybind_keycode(action_name: String) -> int:
 	return KEY_NONE
 
 
+## Bir action'a şu an atanmış gamepad tanımlayıcısını döndürür (yoksa boş
+## Dictionary) - keybind_menu.gd'nin gamepad sütununu doldurmak için.
+func get_keybind_joypad_descriptor(action_name: String) -> Dictionary:
+	for event in InputMap.action_get_events(action_name):
+		if event is InputEventJoypadButton:
+			return {"kind": JoypadKind.BUTTON, "button": event.button_index}
+		if event is InputEventJoypadMotion:
+			return {"kind": JoypadKind.AXIS, "axis": event.axis, "sign": signf(event.axis_value)}
+	return {}
+
+
+## descriptor Dictionary'sinden gerçek bir InputEvent üretir (set_keybind_
+## joypad_override/_bind_joypad ORTAK fabrikası - iki yer asla sapamaz).
+## device = -1: HANGİ kumandanın kaçıncı slotta takılı olduğuna bakmaz,
+## bağlı herhangi bir kumandadan gelen basışı kabul eder (tek oyuncu bir
+## makinede tek kumanda kullandığı için cihaz numarası ayırt etmeye gerek yok).
+func _make_joypad_event(d: Dictionary) -> InputEvent:
+	match int(d.get("kind", -1)):
+		JoypadKind.BUTTON:
+			var e := InputEventJoypadButton.new()
+			e.button_index = int(d.get("button", -1)) as JoyButton
+			e.device = -1
+			return e
+		JoypadKind.AXIS:
+			var e2 := InputEventJoypadMotion.new()
+			e2.axis = int(d.get("axis", -1)) as JoyAxis
+			e2.axis_value = float(d.get("sign", 1.0))
+			e2.device = -1
+			return e2
+	return null
+
+
 func _setup_input_actions() -> void:
 	_bind("move_left", KEY_A)
+	_bind_joypad("move_left", [
+		{"kind": JoypadKind.AXIS, "axis": JOY_AXIS_LEFT_X, "sign": -1.0},
+		{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_DPAD_LEFT},
+	])
 	_bind("move_right", KEY_D)
+	_bind_joypad("move_right", [
+		{"kind": JoypadKind.AXIS, "axis": JOY_AXIS_LEFT_X, "sign": 1.0},
+		{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_DPAD_RIGHT},
+	])
 	_bind("move_up", KEY_W)
+	_bind_joypad("move_up", [
+		{"kind": JoypadKind.AXIS, "axis": JOY_AXIS_LEFT_Y, "sign": -1.0},
+		{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_DPAD_UP},
+	])
 	_bind("move_down", KEY_S)
+	_bind_joypad("move_down", [
+		{"kind": JoypadKind.AXIS, "axis": JOY_AXIS_LEFT_Y, "sign": 1.0},
+		{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_DPAD_DOWN},
+	])
 	## Tüm karakterlerde: TEMEL yetenek E, ULTİ (ana "skill" alanı) Q.
 	## "skill2" alanı olmayan karakterlerde E tuşuna basmanın hiçbir etkisi
 	## yok (bkz. player.gd get_skill2_id()/_activate_skill2()).
 	_bind("skill", KEY_Q)
+	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle... yetenek
+	## tuşlarını da buna göre ayarla") - A/B zaten motorun ui_accept/
+	## ui_cancel varsayılanı (dokunulmuyor), bu yüzden 3 yetenek X/Y/RB'ye,
+	## interact LB'ye dağıtıldı - hepsi kolayca yeniden atanabilir.
+	_bind_joypad("skill", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_Y}])
 	_bind("skill2", KEY_E)
+	_bind_joypad("skill2", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_X}])
 	## Üçüncü aktif yetenek slotu (bkz. player.gd SKILL3_TIMING notu -
 	## kullanıcı isteği: Shaman'ın 3 BAĞIMSIZ totem yeteneği var). "skill3"
 	## alanı olmayan karakterlerde R tuşuna basmanın hiçbir etkisi yok.
 	_bind("skill3", KEY_R)
+	_bind_joypad("skill3", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_RIGHT_SHOULDER}])
 	## Ev'e girip çıkma etkileşimi (bkz. scripts/house_interior.gd) -
 	## kullanıcı isteği: "yaklaşınca F'ye basarak içeri girilsin".
 	_bind("interact", KEY_F)
+	_bind_joypad("interact", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_LEFT_SHOULDER}])
 	## Test/geliştirme paneli: saldırı efektlerinin rotasyon/boyutunu oyun
-	## içinden ayarlamak için (bkz. debug_tuning_panel.gd).
+	## içinden ayarlamak için (bkz. debug_tuning_panel.gd). Dev-only - gamepad
+	## varsayılanı bilerek yok.
 	_bind("debug_tuning", KEY_F9)
 	## Alt bardaki kalkan modu seçici kısayolları (bkz. hud.gd
 	## _refresh_shield_mode_slots/_unhandled_input) - kullanıcı isteğiyle
 	## 1-2-3-4-5 tuşlarıyla o an görünen kalkan modu slotu seçilebiliyor.
+	## Bu özellik artık KULLANILMIYOR (bkz. hud.gd shield_mode_slots notu -
+	## bar kalıcı gizli) - gamepad varsayılanı bilerek eklenmedi.
 	_bind("shield_mode_slot_1", KEY_1)
 	_bind("shield_mode_slot_2", KEY_2)
 	_bind("shield_mode_slot_3", KEY_3)
@@ -291,6 +401,8 @@ func _setup_input_actions() -> void:
 	## açıkken (LineEdit odaktayken) Enter'a basmak LineEdit'in KENDİ
 	## text_submitted sinyalini tetikler (bu action'ı hiç TEKRAR tetiklemez,
 	## çünkü odaklı bir Control tuşu önce kendi _gui_input'unda işler).
+	## Serbest metin yazımı gamepad'de karşılığı olmadığı için (kullanıcı
+	## kararı: sanal klavye YOK) gamepad varsayılanı bilerek eklenmedi.
 	_bind("chat", KEY_ENTER)
 
 
@@ -308,6 +420,35 @@ func _bind(action_name: String, keycode: Key) -> void:
 	InputMap.action_add_event(action_name, ev)
 
 
+## _bind()'ın gamepad karşılığı - `defaults`, bu action için gamepad
+## atanmamışsa kullanılacak descriptor listesi (bkz. _make_joypad_event) -
+## ör. hareket action'ları hem analog çubuk HEM D-pad'i (2 event) alıyor,
+## yetenekler tek bir buton (1 event) alıyor. Kayıtlı bir kullanıcı
+## override'ı varsa (bkz. _joypad_overrides) TÜM varsayılanların yerine
+## SADECE o kullanılır (_bind()'taki "override varsa öncelikli" mantığıyla
+## birebir aynı).
+func _bind_joypad(action_name: String, defaults: Array) -> void:
+	if not InputMap.has_action(action_name):
+		InputMap.add_action(action_name)
+	var effective: Array = [_joypad_overrides[action_name]] if _joypad_overrides.has(action_name) else defaults
+	for d in effective:
+		var ev: InputEvent = _make_joypad_event(d)
+		if ev == null:
+			continue
+		var already_present: bool = false
+		for existing in InputMap.action_get_events(action_name):
+			if existing is InputEventJoypadButton and ev is InputEventJoypadButton \
+					and existing.button_index == ev.button_index:
+				already_present = true
+				break
+			if existing is InputEventJoypadMotion and ev is InputEventJoypadMotion \
+					and existing.axis == ev.axis and is_equal_approx(existing.axis_value, ev.axis_value):
+				already_present = true
+				break
+		if not already_present:
+			InputMap.action_add_event(action_name, ev)
+
+
 ## ---------- Seyyar Satıcı güvenli bölgesi ----------
 ## Kullanıcı isteği: "Dükkanın olduğu alanda ... 3 kat daha geniş[tir] ...
 ## Dışardaki yaratıklar oyuncular bariyerin içindeyken geçirilen zamanla
@@ -317,8 +458,14 @@ func _bind(action_name: String, keycode: Key) -> void:
 var merchant_zone_active: bool = false
 var merchant_zone_pos: Vector2 = Vector2.ZERO
 ## Şovalye Adam'ın Koruma Baloncuğu'nun (bkz. player.gd PALADIN_ULTI_ZONE_
-## RADIUS = 126.0) TAM 3 katı (kullanıcı isteği: "3 kat daha geniştir").
-const MERCHANT_ZONE_RADIUS := 378.0
+## RADIUS = 126.0) eskiden TAM 3 katıydı (kullanıcı isteği: "3 kat daha
+## geniştir"). DÜZELTME (kullanıcı isteği: "seyyar satıcının kalkan
+## bariyerini %30 küçült") - görsel bariyer (bkz. traveling_merchant.gd
+## _create_protection_bubble, bubble.radius = MERCHANT_ZONE_RADIUS) bu
+## değere DOĞRUDAN bağlı, o yüzden gerçek güvenli bölge de birlikte
+## küçültüldü - aksi halde görünen bariyer ile gerçekte güvenli olan alan
+## birbirini tutmazdı. 378.0 * 0.7 = 264.6.
+const MERCHANT_ZONE_RADIUS := 264.6
 
 func is_position_in_merchant_zone(pos: Vector2) -> bool:
 	return merchant_zone_active and merchant_zone_pos.distance_to(pos) <= MERCHANT_ZONE_RADIUS
@@ -375,7 +522,24 @@ func _process(delta: float) -> void:
 
 
 var max_revives: int = 3
+## Tek oyunculu (ve multiplayer'da eski/yedek yol) için - tek oyuncu olduğu
+## için zaten "kişisel" sayılır, dokunulmadı.
 var revives_remaining: int = 3
+
+## DÜZELTME (kullanıcı isteği: "multiplayerda canların takım canı değil
+## kişisel olmasını istiyorum herkesin 3 canı olacak") - eskiden yukarıdaki
+## TEK revives_remaining TÜM takımın PAYLAŞILAN canlanma hakkıydı (biri
+## harcayınca herkesin hakkı azalıyordu). Artık multiplayer'da her oyuncunun
+## KENDİ bağımsız hakkı bu sözlükte (peer_id -> kalan hak) tutuluyor - bkz.
+## network_manager.gd _consume_revive_authoritative/sync_revive_consumed.
+## Henüz hiç harcanmamış bir peer_id burada YOK demektir, o yüzden
+## get_peer_revives() görmediği bir id için max_revives döndürür (yeni
+## katılan/henüz hiç ölmemiş oyuncu için ayrıca bir "başlangıç" ataması
+## gerekmiyor).
+var peer_revives: Dictionary = {}
+
+func get_peer_revives(peer_id: int) -> int:
+	return int(peer_revives.get(peer_id, max_revives))
 
 signal revives_updated(remaining: int)
 
@@ -545,7 +709,43 @@ func is_position_blocked_by_terrain(world_pos: Vector2) -> bool:
 	return false
 
 
+## ==============================================================================
+## ENGELLEYİCİ PANEL KAYDI (kullanıcı isteği: "gamepad desteği ekle") -
+## shop_panel.gd/merchant_shop_screen.gd gibi ekranlar BİLEREK get_tree().
+## paused KULLANMIYOR (takım arkadaşları dışarıda oynamaya devam edebilsin
+## diye) - bu yüzden main.gd'nin global ui_cancel/pause-toggle kontrolü
+## (bkz. main.gd _process) bu ekranlar açıkken de koşulsuz çalışıp pause
+## menüsünü ÜSTLERİNE açardı. Bu ekranlar artık kendi ui_cancel'larını
+## KENDİLERİ işleyip kapanıyor (bkz. ilgili script'lerdeki _process); main.gd
+## ise "şu an açık bir engelleyici panel var mı" diye burayı sorup varsa
+## kendi pause-toggle'ını atlıyor. Input.is_action_just_pressed() bir input
+## event'i DEĞİL, global bir "bu karede basıldı mı" bayrağı olduğu için
+## normal set_input_as_handled() ile bastırılamıyor - bu yüzden olay tabanlı
+## değil, DURUM tabanlı (bu Array) bir koruma kullanılıyor.
+## ==============================================================================
+var _blocking_panels: Array = []
+
+func register_blocking_panel(panel: Node) -> void:
+	if not _blocking_panels.has(panel):
+		_blocking_panels.append(panel)
+
+
+func unregister_blocking_panel(panel: Node) -> void:
+	_blocking_panels.erase(panel)
+
+
+func is_any_blocking_panel_open() -> bool:
+	for i in range(_blocking_panels.size() - 1, -1, -1):
+		if not is_instance_valid(_blocking_panels[i]):
+			_blocking_panels.remove_at(i) ## sahne değişimiyle sessizce geçersizleşenleri süpür
+	for panel in _blocking_panels:
+		if panel.visible:
+			return true
+	return false
+
+
 func reset() -> void:
+	_blocking_panels.clear()
 	_terrain_su_layer = null
 	_terrain_ev_layer = null
 	_terrain_layers_searched = false
@@ -560,6 +760,7 @@ func reset() -> void:
 	team_xp_needed = BASE_XP_NEEDED
 	team_xp_changed.emit(team_xp, team_xp_needed)
 	revives_remaining = max_revives
+	peer_revives.clear()
 	revives_updated.emit(revives_remaining)
 	gold = 0
 	spray_level = 0

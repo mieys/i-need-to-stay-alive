@@ -39,12 +39,17 @@ class_name TravelingMerchant
 ## AYRICA aynı sinyalden bildirim/minimap işaretini günceller (bkz. o
 ## dosyadaki _on_merchant_spawned/_on_merchant_departed).
 
-## Kullanıcı isteği: "tüccar 4 dakika boyunca orada bekler."
-const VISIT_DURATION := 240.0
-## Kullanıcı ziyaretler arası süreyi belirtmedi - makul, rastgele bir
-## bekleme (kolayca ayarlanabilir varsayılan).
-const COOLDOWN_MIN := 180.0
-const COOLDOWN_MAX := 360.0
+## DÜZELTME (kullanıcı isteği: "dükkanın spawnlanma sıklığını 2 dakikaya
+## düşür ve kalma süresi de 2 dakika olsun") - eskiden 4 dakika (240.0)
+## bekliyordu, artık 2 dakika (120.0).
+const VISIT_DURATION := 180.0
+## DÜZELTME (aynı istek: "2 dakika kaldıktan sonra gidip 2 dakika sonra
+## tekrar gelcek") - eskiden 3-6 dakika arası RASTGELE bir bekleme vardı
+## (kullanıcı ilk turda süreyi belirtmemişti); artık MIN=MAX=120.0 olduğu
+## için randf_range(COOLDOWN_MIN, COOLDOWN_MAX) her zaman tam 2 dakika
+## döndürüyor - sabit bir döngü.
+const COOLDOWN_MIN := 120.0
+const COOLDOWN_MAX := 120.0
 ## İlk ziyaret oyunun tam başında değil, biraz oynadıktan sonra gelsin diye.
 ## GEÇİCİ TEST DEĞERİ (kullanıcı isteği: "deneme açısından oyun ilk
 ## başladığında ... seyyar satıcı spawnlansın") - bildirim/ok/görsel
@@ -96,6 +101,20 @@ var _visit_timer: float = 0.0
 var _cooldown_timer: float = 0.0
 var _visual: Node2D = null
 var _current_stock: Array = []
+## DÜZELTME (kullanıcı bildirimi: "Dükkanda birşey aldığımızda dükkanın
+## alanından çıkıp veya kapatıp tekrar açınca aynı şeyi tekrar alabiliyoruz
+## bunun olmaması gerekiyor çünkü tüccarın her gelişi başına her itemden
+## sadece 1 tane alabilmeliydik") - kök neden: bu dizi eskiden merchant_
+## shop_screen.gd'nin KENDİ üzerinde yaşıyordu, o ekran her açılışta baştan
+## kuruluyordu (kapanışta queue_free()) - yani ekranı kapatıp AYNI ziyaret
+## içinde tekrar açmak "satıldı" kaydını sıfırlıyordu. _current_stock İLE
+## AYNI şekilde bu TravelingMerchant node'unda (ziyaret boyunca kalıcı)
+## yaşıyor artık - bkz. merchant_shop_screen.gd _entry_can_buy/
+## _on_buy_pressed/_refresh_all_buy_states (artık burayı okuyup yazıyorlar).
+## Reroll SADECE bunu sıfırlar (kullanıcı isteği: "rerolla tekrar o itemden
+## gelirse bu alamama sınırına dahil değildir") - bkz. _on_merchant_spawned/
+## try_reroll_stock.
+var sold_item_indices: Array = []
 ## bkz. dosya başı "REROLL_MAX_CHARGES" notu - SADECE bu istemcinin/oyuncunun
 ## kendi yerel hakkı (ağdan senkronize edilmiyor, tıpkı stok gibi kişisel).
 var _reroll_charges: int = 0
@@ -212,6 +231,7 @@ func _on_merchant_spawned(_pos: Vector2, _stock: Array) -> void:
 	_active = true
 	_visit_timer = VISIT_DURATION
 	_current_stock = _generate_stock()
+	sold_item_indices = []
 	## Kullanıcı isteği: "1 reroll hakkı olucak her oyuncunun her seyyar
 	## satıcı geldiğinde" - bu ziyaret için hak DAHA ÖNCE verilmediyse (bkz.
 	## _reroll_granted_this_visit üstündeki yorum) +1, en fazla
@@ -259,6 +279,7 @@ func try_reroll_stock() -> Variant:
 		return null
 	_reroll_charges -= 1
 	_current_stock = _generate_stock()
+	sold_item_indices = []
 	return _current_stock
 
 

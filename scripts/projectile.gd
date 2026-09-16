@@ -165,13 +165,6 @@ func _on_body_entered(body: Node) -> void:
 	if mark_max_stacks > 0 and body.has_method("get_mark_damage_mult"):
 		hit_damage *= body.get_mark_damage_mult()
 	body.take_damage(hit_damage, is_crit, shield_pen_percent)
-	## Arcane Asası pasifi: take_damage() ölümcülse ÖLÜME kadar tamamen
-	## senkron çalışır (bkz. enemy.gd take_damage/die - yield/await yok), bu
-	## yüzden hemen ardından is_dead kontrolü güvenilir bir "bu vuruş öldürdü
-	## mü" testi. source_weapon null/notify_kill'siz her mermide no-op.
-	if body.get("is_dead") == true and is_instance_valid(source_weapon) \
-			and source_weapon.has_method("notify_kill"):
-		source_weapon.notify_kill()
 	if mark_max_stacks > 0 and body.has_method("apply_mark_stack"):
 		body.apply_mark_stack(mark_max_stacks)
 	if chill_stacks > 0 and body.has_method("apply_chill"):
