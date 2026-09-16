@@ -13,3 +13,4 @@
 # - proje dosyası değil, iki kişi paylaşınca yanlışlıkla commit edilmesin.
 ~*.TMP
 ~*.tmp
+~*
