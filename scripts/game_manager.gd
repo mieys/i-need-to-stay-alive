@@ -583,17 +583,22 @@ var team_xp: float = 0.0
 ## RAMP_STEPS=10) KORUYUP çıktının HER seviyede aynı oranda (×5/3) daha
 ## fazla XP istemesini sağlıyor - "erken kolay, geç hafif zor" karakteri
 ## aynen kalıyor, sadece tamamı ~%67 daha zorlaştı.
-const BASE_XP_NEEDED := 50.0
+## DÜZELTME (kullanıcı isteği: "level atlamayı genel olarak %50 zorlaştır") -
+## bkz. hemen üstteki DÜZELTME notuyla AYNI yöntem: eğrinin 4 sabiti de
+## (BASE/MIN/GROWTH/MAX) AYNI ×1.5 çarpanıyla büyütüldü - şekil (RAMP_STEPS,
+## kaç seviyede tavana ulaşılacağı) korunuyor, sadece her seviye %50 daha
+## fazla XP istiyor.
+const BASE_XP_NEEDED := 75.0
 ## Seviye 1'den 2'ye geçiş için gereken ilk artış - düşük tutulur ki erken
 ## oyun hızlı ve kolay hissettirsin.
-const MIN_XP_INCREMENT := 10.0
+const MIN_XP_INCREMENT := 15.0
 ## Her sonraki seviye atlayışında bir önceki artışa eklenen miktar - eğrinin
 ## "hafifçe zorlaşan" kısmı. Büyütmek zorlaşmayı hızlandırır.
-const XP_INCREMENT_GROWTH := 3.3333
+const XP_INCREMENT_GROWTH := 5.0
 ## Seviye başına artışın asla aşamayacağı tavan - eğrinin "aşırı zor
 ## olmasın" kısmı. Bu tavana ulaşıldıktan sonra her seviye SABİT bu kadar
 ## XP daha ister (doğrusal büyüme), üstel/patlayan bir artış YOK.
-const MAX_XP_INCREMENT := 40.0
+const MAX_XP_INCREMENT := 60.0
 ## Artışın MIN_XP_INCREMENT'ten MAX_XP_INCREMENT'e ulaşması kaç seviye
 ## sürer (6, 8, 10, ..., 24 -> 10 adım). MAX_XP_INCREMENT/MIN_XP_INCREMENT/
 ## XP_INCREMENT_GROWTH değiştirilirse bu da elle güncellenmeli.

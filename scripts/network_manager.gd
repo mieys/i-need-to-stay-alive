@@ -2068,6 +2068,43 @@ func broadcast_pet_state(player_id: int, instance_id: String, pos: Vector2, is_a
 		rp._update_pet_visual_state(instance_id, pos, is_attacking, health_ratio, shield_ratio, sprite_row)
 
 
+## Kullanıcı isteği: "senkronize et, ben nasıl görüyosam diğer oyuncular da
+## öyle görmeli" - Oakley'in Sarmaşıklar yeteneği (bkz. oakley_vine.gd) eskiden
+## SADECE döken oyuncunun kendi istemcisinde vardı (kozmetik yayın yoktu,
+## hasar/sabitleme enemy.gd üzerinden zaten senkronize oluyordu ama sarmaşığın
+## KENDİSİ diğer oyunculara hiç görünmüyordu). broadcast_pet_spawn/despawn/
+## state ile BİREBİR AYNI desen (bkz. o üçünün üstündeki notlar) - tek fark,
+## sarmaşığın Line2D'si sadece kendi konumuna değil O ANKİ hedefine de bağlı
+## olduğu için state mesajı hedef konumunu da taşıyor (kozmetik kopyanın
+## gerçek bir Enemy referansı yok, bu yüzden hedefin KENDİSİ değil ANLIK
+## KONUMU gönderiliyor).
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_oakley_vine_spawn(player_id: int, instance_id: String) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if not rp:
+		return
+	if rp.has_method("_spawn_vine_visual"):
+		rp._spawn_vine_visual(instance_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_oakley_vine_despawn(player_id: int, instance_id: String) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if not rp:
+		return
+	if rp.has_method("_despawn_vine_visual"):
+		rp._despawn_vine_visual(instance_id)
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func broadcast_oakley_vine_state(player_id: int, instance_id: String, pos: Vector2, target_pos: Vector2, has_target: bool) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if not rp:
+		return
+	if rp.has_method("_update_vine_visual_state"):
+		rp._update_vine_visual_state(instance_id, pos, target_pos, has_target)
+
+
 @rpc("any_peer", "call_remote", "unreliable")
 func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_data: Dictionary) -> void:
 	var rp: RemotePlayer = _find_remote_player(player_id)
@@ -2144,6 +2181,23 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 					impact_fx.call("setup", pos)
 				elif extra_data.has("radius"):
 					impact_fx.call("setup", float(extra_data.get("radius", 80.0)), Color(extra_data.get("color", Color.WHITE)))
+		## Oakley'in Arı Sürüsü yeteneği - bkz. oakley_bee_swarm.gd/player.gd
+		## _skill_oakley_bee_swarm() dosya başı DÜZELTME notu. SADECE görsel
+		## halkayı (oakley_bee_swarm_ring.gd) oluşturur - gerçek yük/hasar
+		## VERMEZ, o SADECE döken oyuncunun kendi istemcisindeki oakley_bee_
+		## swarm.gd'de gerçekleşir (enemy.gd host-yetkili olduğu için burada
+		## da apply_bee_poison çağrılırsa hasar/yük KATLANIRDI).
+		"oakley_bee_swarm_spawn":
+			var ring := Node2D.new()
+			ring.set_script(preload("res://scripts/oakley_bee_swarm_ring.gd"))
+			get_tree().current_scene.add_child(ring)
+			ring.global_position = pos
+			if ring.has_method("setup"):
+				ring.call("setup", OakleyBeeSwarm.RADIUS)
+			get_tree().create_timer(OakleyBeeSwarm.DURATION).timeout.connect(func() -> void:
+				if is_instance_valid(ring):
+					ring.queue_free()
+			)
 		## Oakley'in Çiçek yeteneği - bkz. player.gd _try_oakley_flower/
 		## scripts/oakley_flower.gd. chain_lightning/arcane_skull_bounce ile
 		## AYNI desen: uzak istemcide gerçek Oakley referansı olmadığı için
@@ -2474,7 +2528,7 @@ func sync_ally_heal(target_peer_id: int, amount: float) -> void:
 ## BUG DÜZELTMESİ (kullanıcı bildirimi: "oakley ve meleğin kalkan yenileme
 ## yeteneği takım arkadaşlarına kalkan vermiyor") - sync_ally_heal'in (can)
 ## BİREBİR AYNI deseni, sadece kalkan için. Eskiden player.gd
-## _process_oakley_shield_tick() müttefik hedefine DOĞRUDAN .heal_shield()
+## _process_healer_shield_tick() müttefik hedefine DOĞRUDAN .heal_shield()
 ## çağırıyordu - hedef bir RemotePlayer (gerçek uzak oyuncu) ise bu SADECE
 ## caster'ın ekranındaki kozmetik kuklayı değiştiriyordu, gerçek oyuncunun
 ## kendi istemcisindeki kalkanı hiç artmıyordu (bkz. player.gd

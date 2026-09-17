@@ -9,7 +9,7 @@ const DEFAULT_SKILL_COOLDOWN := 20.0
 const SKILL_TIMING := {
 	## Oakley ULTİ (Can Basma): anında %15 can + sonraki 6sn boyunca saniyede
 	## bir kendine/müttefikine can yenileyen tik (bkz. _skill_heal/
-	## _process_oakley_heal_tick).
+	## _process_healer_heal_tick).
 	1: {"duration": 6.0, "cooldown": 20.0},
 	7: {"duration": 6.0, "cooldown": 60.0}, ## artık kullanılmıyor (eski _skill_heal_aura eşlemesi) ama zararsız
 	## #56 DÜZELTME: id 8 (100sn bekleme) eski bir ULTİ zamanlaması kalıntısıydı
@@ -103,7 +103,7 @@ const DEFAULT_SKILL2_COOLDOWN := 15.0
 const SKILL2_TIMING := {
 	## Oakley + Şovalye (Paladin) TEMEL: Kalkan Yenileme - artık 5sn değil 6sn
 	## sürüyor (kullanıcı isteği: "6 saniye boyunca her saniye ... kalkan
-	## yenilesin", bkz. _skill_kalkan_yenileme/_process_oakley_shield_tick).
+	## yenilesin", bkz. _skill_kalkan_yenileme/_process_healer_shield_tick).
 	10: {"duration": 6.0, "cooldown": 15.0},
 	## Elara TEMEL: sabit süresi YOK, "sonraki 6 saldırı" (silah başına)
 	## tüketilene kadar sürer (bkz. _process_elara_true_damage) - "duration"
@@ -327,7 +327,7 @@ const PALADIN_ULTI_RANGE_MULT := 1.3
 const PALADIN_ULTI_SHIELD_COST_MULT := 0.10 ## kalkanın aldığı hasar %90 azalır
 const PALADIN_TAUNT_RADIUS := 500.0
 
-@export var speed: float = 252.0 ## genel hız ayarı: 300'den %20 düşürülüp, kullanıcı isteğiyle %5 artırıldı (240 -> 252)
+@export var speed: float = Characters.BASE_MOVE_SPEED ## genel hız ayarı: 300'den %20 düşürülüp, kullanıcı isteğiyle %5 artırıldı (240 -> 252) - artık Characters.BASE_MOVE_SPEED'ten okunuyor (remote_player.gd ile PAYLAŞILAN tek kaynak, bkz. oradaki not)
 @export var max_health: float = 100.0
 @export var pickup_range: float = 60.0
 
@@ -951,6 +951,13 @@ const WALK_STEP_INTERVAL := 0.45
 ## 1.8 = çok hızlı (sık/tiz adımlar).
 const WALK_SPEED_RATIO_MIN := 0.85
 const WALK_SPEED_RATIO_MAX := 1.8
+## Kullanıcı bildirimi: "hareket hızı artınca adım sesleri çok gereksiz hızlı
+## spamlanıyor, daha yavaş etkilenmesi gerek hareket hızından" - adımların
+## ARALIĞI artık speed_ratio'yu DOĞRUDAN değil, 1.0'a bu oranda yaklaştırılmış
+## (dampened) haliyle bölüyor (bkz. _update_walk_sound). Sesin TİZLİĞİ hâlâ
+## tam speed_ratio'yu kullanıyor (bununla ilgili bir şikayet yoktu) - sadece
+## adımların SIKLIĞI hıza daha az duyarlı.
+const WALK_STEP_INTERVAL_SPEED_INFLUENCE := 0.5
 ## Her adımda pitch'e eklenen ÇOK KÜÇÜK rastgele sapma (±%4 ≈ 0.7 yarım perde):
 ## aynı sesin tekrar tekrar çalındığı belli olmasın, ama kulağa "farklı ses"
 ## gibi de gelmesin (kullanıcı isteği: "fark edilmeyecek derecede çok az").
@@ -2218,7 +2225,7 @@ func _physics_process(delta: float) -> void:
 	_process_item_shield(delta)
 	_process_item_passives(delta)
 	_process_kalkan_yenileme(delta)
-	_process_oakley_heal_tick(delta)
+	_process_healer_heal_tick(delta)
 	_process_oakley_flower_charges(delta)
 	_process_temp_speed_boost(delta)
 	_process_shield_regen_tick(delta)
@@ -2634,7 +2641,7 @@ func _process_item_passives(delta: float) -> void:
 ## Şovalye (Paladin)'in TEMEL yeteneği (skill2 id 10): saniye başına %5 +
 ## zırhının %500'ü kadar kalkan, HER KAREDE sürekli (Oakley aynı id'yi
 ## kullanır ama kendi ayrı tik tabanlı formülüne sahiptir - bkz. aşağıdaki
-## karakter ayrımı ve _process_oakley_shield_tick).
+## karakter ayrımı ve _process_healer_shield_tick).
 ## DÜZELTME (kullanıcı isteği: "şovalye adamın kalkan yenilenme skilinin
 ## saldırı gücü oranını silip zırh oranının %500ü olarak değiştir yani 1
 ## zırhı varsa skill açıkken her saniye 5 kalkan yenilenecek") - eskiden
@@ -2657,6 +2664,15 @@ const KALKAN_YENILEME_PERCENT_PER_SEC := 0.05
 ## çok güçlüydü).
 const OAKLEY_E_TICK_PERCENT := 0.01 ## saniyede: hedefin kendi max kalkanının %1'i
 const OAKLEY_E_TICK_ATTACK_RATIO := 0.6 ## saniyede: + Oakley'nin saldırı gücünün %60'ı
+## DÜZELTME (kullanıcı isteği: "Melekin kalkan yeteneğinin saldırı gücü
+## oranını %40'a düşür" + "oakley ve melek farklı karakterler, isim hatasına
+## yol açan her neyi düzelt") - bu tik SADECE Oakley (roster 2) DEĞİL, Melek
+## (roster 10) tarafından da kullanılıyor (bkz. _process_kalkan_yenileme),
+## ama oranın TEK bir OAKLEY_* sabitinden okunması Melek'e özel bir ayar
+## yapmayı Oakley'i de değiştirmeden imkansız kılıyordu. Artık Melek KENDİ
+## oranını kullanıyor (bkz. _process_healer_shield_tick'teki seçim) - Oakley
+## OAKLEY_E_TICK_ATTACK_RATIO'da (%60) AYNEN kalıyor.
+const MELEK_E_TICK_ATTACK_RATIO := 0.4 ## saniyede: Melek'in saldırı gücünün %40'ı (Oakley'den AYRI, bkz. yukarıdaki not)
 const OAKLEY_E_RANGE := 300.0
 const OAKLEY_E_TICK_INTERVAL := 1.0
 var _oakley_e_tick_timer: float = 0.0
@@ -2676,7 +2692,7 @@ func _process_kalkan_yenileme(delta: float) -> void:
 	## düşüyordu - Şovalye/diğer skill2=10 sahipleri (sadece Şovalye) bundan
 	## tamamen ayrı kalmaya devam ediyor.
 	if GameManager.selected_char_id == 2 or GameManager.selected_char_id == 10:
-		_process_oakley_shield_tick(delta)
+		_process_healer_shield_tick(delta)
 		return
 	if item_shield_max <= 0:
 		return
@@ -2693,14 +2709,18 @@ func _process_kalkan_yenileme(delta: float) -> void:
 ## Oakley'nin TEMEL yeteneği için saniyede bir tetiklenen tik - hem Oakley'yi
 ## hem de (hâlâ menzilde/geçerliyse) _skill_kalkan_yenileme()'de kilitlenen
 ## müttefiği aynı anda kalkan yönünden iyileştirir.
-func _process_oakley_shield_tick(delta: float) -> void:
+func _process_healer_shield_tick(delta: float) -> void:
 	var ability_slow_mult: float = 0.5 if item_shield_ability_slow_timer > 0.0 else 1.0
 	_oakley_e_tick_timer -= delta
 	if _oakley_e_tick_timer > 0.0:
 		return
 	_oakley_e_tick_timer += OAKLEY_E_TICK_INTERVAL
 
-	var attack_power_bonus: float = damage_bonus * OAKLEY_E_TICK_ATTACK_RATIO * ability_slow_mult
+	## bkz. MELEK_E_TICK_ATTACK_RATIO üstündeki DÜZELTME notu - Melek (roster
+	## 10) KENDİ oranını kullanır, Oakley (roster 2, aynı fonksiyonu paylaşan
+	## tek diğer karakter) OAKLEY_E_TICK_ATTACK_RATIO'da değişmeden kalır.
+	var attack_ratio: float = MELEK_E_TICK_ATTACK_RATIO if GameManager.selected_char_id == 10 else OAKLEY_E_TICK_ATTACK_RATIO
+	var attack_power_bonus: float = damage_bonus * attack_ratio * ability_slow_mult
 	## bkz. _skill_heal()'deki AYNI Melek düzeltmesi ("Q ve E ... kendisine
 	## %50 daha az") - SADECE self_tick'e uygulanıyor, ally_tick (aşağısı)
 	## attack_power_bonus'u TAM olarak kullanır.
@@ -2881,17 +2901,26 @@ var _matthew_pet_alive: bool = false
 var _matthew_respawn_timer: float = 0.0 ## starts at 0 so the pet spawns on the very first tick
 const MATTHEW_RESPAWN_DELAY := 30.0
 
-const OAKLEY_PASSIVE_RANGE := 300.0
+## DÜZELTME (kullanıcı isteği: "oakley ve melek farklı karakterler, bunları
+## bağlayan veya isim hatasına yol açan her neyi düzelt - eskiden Oakley'nin
+## yetenekleri Melek'e geçti diye kodlar hala Oakley'e ait sanıyor, Melek'in
+## yeteneklerinin adı Melek'le alakalı olmalı") - bu pasif fonksiyon/sabitler
+## PRATİKTE SADECE Melek'e ait (Oakley roster id 2 yukarıdaki dispatch'te
+## AYRI _process_oakley_passive'e gidiyor, buraya hiç düşmüyor) ama hala
+## "OAKLEY_" önekini taşıyorlardı - MELEK_ olarak yeniden adlandırıldı.
+const MELEK_PASSIVE_RANGE := 300.0
 ## DÜZELTME (kullanıcı isteği: "Melek'in pasifi %0.5 can yerine saldırı
 ## gücünün %5'si olarak güncelle. Yani 100 saldırı gücü varsa 5 can
 ## yenileyecek yakınındaki herkes.") - eskiden HER hedefin KENDİ max canının
-## %0.5'iydi (bkz. _passive_oakley - herkese FARKLI, kendi canına göre bir
+## %0.5'iydi (bkz. _passive_melek - herkese FARKLI, kendi canına göre bir
 ## miktar); artık Melek'in KENDİ saldırı gücünün (damage_bonus) sabit bir
 ## yüzdesi - TEK bir ortak miktar, hem Melek'in kendisine hem her müttefike
 ## AYNI şekilde uygulanıyor.
-const OAKLEY_PASSIVE_ATTACK_POWER_PERCENT := 0.05 ## saldırı gücünün %5'i/sn
-const OAKLEY_PASSIVE_TICK_INTERVAL := 1.0
-var _oakley_passive_tick_timer: float = 0.0
+## DÜZELTME (kullanıcı isteği: "Melek'in pasifinin can yenilenmesi saldırı
+## gücü oranını %5'ten %2'ye düşür") - %5 çok güçlü bulundu.
+const MELEK_PASSIVE_ATTACK_POWER_PERCENT := 0.02 ## saldırı gücünün %2'si/sn
+const MELEK_PASSIVE_TICK_INTERVAL := 1.0
+var _melek_passive_tick_timer: float = 0.0
 
 ## Talon: "her yetenek kullandığında yığılan güç" - kullanıcı isteği (YENİ
 ## KİT, eski "canı azalınca saldırı hızı artışı" pasifi TAMAMEN kaldırıldı):
@@ -2918,15 +2947,15 @@ func _process_character_passive(delta: float) -> void:
 		## ve Melek aynı karakter değil, Melek'e dokunma") - skill id 1 (Q/ULTİ
 		## yuvası) Oakley (roster 2) VE Melek (roster 10) arasında paylaşılıyor.
 		## Melek eski pasifini ("kendini+müttefikleri %0.5/sn yeniler",
-		## _passive_oakley) AYNEN koruyor; Oakley'nin YENİ pasifi (düşük canda
+		## _passive_melek) AYNEN koruyor; Oakley'nin YENİ pasifi (düşük canda
 		## ani kalkan + 6sn'lik can patlaması, 120sn bekleme) SADECE roster
 		## id 2 için ayrı bir fonksiyona (_process_oakley_passive) yönleniyor.
 		1:
 			if GameManager.selected_char_id == 2:
 				_process_oakley_passive(delta)
 			else:
-				_passive_oakley(delta)
-		7: _passive_oakley(delta) ## artık kullanılmıyor ama zararsız - eski/olası gelecek eşleme
+				_passive_melek(delta)
+		7: _passive_melek(delta) ## artık kullanılmıyor ama zararsız - eski/olası gelecek eşleme
 		## DÜZELTME: bu dispatch ESKİDEN "8" idi (Talon'un ESKİ ulti id'si,
 		## Devleşme/Yer Sarsıntısı takası öncesinden kalma) - Talon'un GERÇEK
 		## ulti id'si uzun süredir 15'ti (şimdi 38, bkz. characters.gd), yani
@@ -2947,17 +2976,20 @@ func _process_character_passive(delta: float) -> void:
 ## zaten her zaman "menzilde"). DÜZELTME (kullanıcı isteği: "Melek'in pasifi
 ## %0.5 can yerine saldırı gücünün %5'si olarak güncelle") - miktar artık
 ## hedefin KENDİ max canının %0.5'i DEĞİL, Melek'in KENDİ saldırı gücünün
-## (damage_bonus) %5'i - bkz. OAKLEY_PASSIVE_ATTACK_POWER_PERCENT.
-func _passive_oakley(delta: float) -> void:
-	_oakley_passive_tick_timer += delta
-	if _oakley_passive_tick_timer < OAKLEY_PASSIVE_TICK_INTERVAL:
+## (damage_bonus) %5'i - bkz. MELEK_PASSIVE_ATTACK_POWER_PERCENT.
+## DÜZELTME (kullanıcı isteği: "oakley ve melek farklı karakterler, isim
+## hatasına yol açan her neyi düzelt") - fonksiyon _passive_oakley'den
+## _passive_melek'e yeniden adlandırıldı (zaten SADECE Melek çağırıyordu).
+func _passive_melek(delta: float) -> void:
+	_melek_passive_tick_timer += delta
+	if _melek_passive_tick_timer < MELEK_PASSIVE_TICK_INTERVAL:
 		return
-	_oakley_passive_tick_timer -= OAKLEY_PASSIVE_TICK_INTERVAL
+	_melek_passive_tick_timer -= MELEK_PASSIVE_TICK_INTERVAL
 
-	## bkz. OAKLEY_PASSIVE_ATTACK_POWER_PERCENT üstündeki DÜZELTME notu - TEK
+	## bkz. MELEK_PASSIVE_ATTACK_POWER_PERCENT üstündeki DÜZELTME notu - TEK
 	## bir miktar, Melek'in KENDİ damage_bonus'undan hesaplanır, hem kendisine
 	## hem her müttefike (aşağısı) AYNI şekilde uygulanır.
-	var passive_heal: float = damage_bonus * OAKLEY_PASSIVE_ATTACK_POWER_PERCENT
+	var passive_heal: float = damage_bonus * MELEK_PASSIVE_ATTACK_POWER_PERCENT
 	if max_health > 0.0 and health < max_health:
 		health = min(max_health, health + passive_heal)
 		health_changed.emit(health, max_health)
@@ -2965,7 +2997,7 @@ func _passive_oakley(delta: float) -> void:
 	for ally: Node in get_tree().get_nodes_in_group("player_ally"):
 		if not is_instance_valid(ally):
 			continue
-		if global_position.distance_to(ally.global_position) > OAKLEY_PASSIVE_RANGE:
+		if global_position.distance_to(ally.global_position) > MELEK_PASSIVE_RANGE:
 			continue
 		if not ally.has_method("heal") or not ("max_health" in ally):
 			continue
@@ -4391,6 +4423,16 @@ func _update_facing(input_direction: Vector2) -> void:
 ## bu katına çıkarsa (Rüzgar Hızı, Şimşek Hız Modu, hız kartları vb.)
 ## yürüme yerine koşma oynar.
 const RUN_ANIM_SPEED_RATIO := 1.25
+## Kullanıcı isteği: "hareket hızı azalınca/artınca yürüme animasyonunun
+## sprite sheetleri de birazcık daha hızlı/yavaş gerçekleşsin, hızlı
+## yürüdüğü görsel açıdan belli olsun" - koşma klibine GEÇMEDEN önce bile
+## (RUN_ANIM_SPEED_RATIO eşiğinin altında), aynı "walk_" klibi hıza göre
+## biraz daha hızlı/yavaş oynatılır. Üst sınır RUN_ANIM_SPEED_RATIO ile
+## aynı: tam eşikte zaten run_ klibine geçildiği için ikisi arasında ani bir
+## hız sıçraması olmaz. Alt sınır yavaşlatıcı etkilerde animasyonun aşırı
+## ağırlaşmasını (neredeyse durmuş görünmesini) engeller.
+const WALK_ANIM_SPEED_SCALE_MIN := 0.7
+const WALK_ANIM_SPEED_SCALE_MAX := RUN_ANIM_SPEED_RATIO
 var _anim_base_speed: float = 300.0
 ## Karakter tanımından gelir (Characters.DEFS "always_walk"): true ise hız ne
 ## olursa olsun koşma animasyonuna geçilmez (ör. Büyücü Kız hep yürür).
@@ -4469,10 +4511,17 @@ func _update_animation(is_moving: bool) -> void:
 	## Saldırı ve yetenek (spellcast) animasyonları bitene kadar ezilmez.
 	var current := String(anim.animation)
 	if (current.begins_with("attack") or current.begins_with("spellcast")) and anim.is_playing():
+		## Aşağıdaki WALK_ANIM_SPEED_SCALE mantığı yürüme dışında hiç
+		## çalışmayacağı için, hızlı yürürkenki speed_scale'in buraya SIZIP
+		## bu animasyonları da hızlandırmasını engellemek için burada da
+		## sıfırlanıyor (anim.speed_scale sprite node'unun PAYLAŞILAN bir
+		## özelliği, sadece walk_ klibine özel değil).
+		anim.speed_scale = 1.0
 		return
 	var prefix := "idle_"
+	var effective_speed: float = speed
 	if is_moving:
-		var effective_speed: float = speed * skill_speed_multiplier * skill2_speed_multiplier * shield_mode_speed_mult * (1.0 + item_speed_percent + speed_card_percent)
+		effective_speed = speed * skill_speed_multiplier * skill2_speed_multiplier * shield_mode_speed_mult * (1.0 + item_speed_percent + speed_card_percent)
 		## DÜZELTME (kullanıcı isteği: "matthewin koşma animasyonu varsa bu
 		## yetenek aktifken aktif olsun") - Vahşi Hız hareket hızını sadece
 		## %15 arttırıyor (MATTHEW_HASTE_MOVE_SPEED_MULT), bu tek başına
@@ -4492,6 +4541,9 @@ func _update_animation(is_moving: bool) -> void:
 	var target_anim := prefix + facing
 	if anim.animation != target_anim:
 		anim.play(target_anim)
+	## bkz. WALK_ANIM_SPEED_SCALE_MIN/MAX üstündeki not - sadece walk_
+	## klibindeyken uygulanır, idle_/run_'da her zaman normal (1.0) hızda.
+	anim.speed_scale = clampf(effective_speed / _anim_base_speed, WALK_ANIM_SPEED_SCALE_MIN, WALK_ANIM_SPEED_SCALE_MAX) if prefix == "walk_" else 1.0
 
 
 func _on_weapon_fired(_direction: Vector2) -> void:
@@ -5363,9 +5415,13 @@ func _update_walk_sound(is_moving: bool, delta: float) -> void:
 	_walk_step_timer -= delta
 	if _walk_step_timer > 0.0:
 		return
-	## Hız arttıkça aralık kısalır - karakter hızlandıkça adımlar hem sıklaşır
-	## hem tizleşir (aynı hız oranı pitch'e de uygulanıyor).
-	_walk_step_timer = WALK_STEP_INTERVAL / speed_ratio
+	## Hız arttıkça aralık kısalır - karakter hızlandıkça adımlar sıklaşır -
+	## ama bkz. WALK_STEP_INTERVAL_SPEED_INFLUENCE üstündeki not: aralık
+	## speed_ratio'nun SÖNÜMLENMİŞ (1.0'a yaklaştırılmış) haline bölünüyor,
+	## yoksa yüksek hızlarda adımlar "spamlanıyor" gibi geliyordu. Pitch
+	## (_play_walk_step) hâlâ tam speed_ratio'yu kullanıyor.
+	var interval_speed_ratio: float = 1.0 + (speed_ratio - 1.0) * WALK_STEP_INTERVAL_SPEED_INFLUENCE
+	_walk_step_timer = WALK_STEP_INTERVAL / interval_speed_ratio
 	_play_walk_step(speed_ratio)
 
 
@@ -6107,7 +6163,7 @@ func _end_skill_effects() -> void:
 	_oakley_q_tick_timer = 0.0
 	## Kullanıcı isteği ("efekt sistemi" - iyileşme.png): yetenek süresi
 	## dolduğunda (bağ kopmasa BİLE) hem müttefikteki hem kendi üzerindeki
-	## aura kapanmalı - _process_oakley_heal_tick artık skill_state!="active"
+	## aura kapanmalı - _process_healer_heal_tick artık skill_state!="active"
 	## olunca hiç çağrılmayacağı için o geçişi kendi başına yakalayamaz,
 	## temizlik burada garanti ediliyor.
 	if _melek_heal_ally_aura_on and is_instance_valid(_oakley_q_ally_target):
@@ -6159,10 +6215,17 @@ func _cancel_active_skill_early() -> void:
 ## yenilemesi versin. %'lik can yenileme HEDEFİN KENDİSİNE özgüdür, saldırı
 ## gücü oranı ise Oakley'nin saldırı gücünden hesaplanır." Multiplayer'da
 ## doğru çalışması için hedef (ally) referansı saklanıp her tikte canlılığı/
-## menzili yeniden kontrol ediliyor (bkz. _process_oakley_heal_tick).
+## menzili yeniden kontrol ediliyor (bkz. _process_healer_heal_tick).
 const OAKLEY_Q_INSTANT_PERCENT := 0.15 ## anında: hedefin kendi max canının %15'i
 const OAKLEY_Q_TICK_PERCENT := 0.01 ## saniyede: hedefin kendi max canının %1'i
 const OAKLEY_Q_TICK_ATTACK_RATIO := 0.60 ## saniyede: + Oakley'nin saldırı gücünün %60'ı
+## DÜZELTME (kullanıcı isteği: "Melek'in can verme yeteneğinin (Q) saldırı
+## gücü oranını %30'a düşür" + "oakley ve melek farklı karakterler, isim
+## hatasına yol açan her neyi düzelt") - bkz. MELEK_E_TICK_ATTACK_RATIO
+## üstündeki AYNI not: bu tik de Oakley VE Melek arasında paylaşılıyor, Melek
+## artık KENDİ oranını kullanıyor (bkz. _process_healer_heal_tick'teki
+## seçim), Oakley OAKLEY_Q_TICK_ATTACK_RATIO'da (%60) AYNEN kalıyor.
+const MELEK_Q_TICK_ATTACK_RATIO := 0.30 ## saniyede: Melek'in saldırı gücünün %30'u (Oakley'den AYRI)
 const OAKLEY_Q_RANGE := 300.0
 const OAKLEY_Q_TICK_INTERVAL := 1.0
 var _oakley_q_tick_timer: float = 0.0
@@ -6179,7 +6242,7 @@ var _oakley_q_ally_target: Node2D = null
 const FxMelekHealAuraScene := preload("res://scenes/fx_melek_heal_aura.tscn")
 const FxMelekShieldAuraScene := preload("res://scenes/fx_melek_shield_aura.tscn")
 var _ally_aura_fx: Dictionary = {}
-## _process_oakley_heal_tick/_process_oakley_shield_tick'teki "bağ hâlâ
+## _process_healer_heal_tick/_process_healer_shield_tick'teki "bağ hâlâ
 ## menzilde mi" geçişlerini izlemek için - aura start/stop'u sadece GERÇEK
 ## bir değişiklikte tetikler, her saniyelik tik'te tekrar tetiklemez.
 var _melek_heal_ally_aura_on: bool = false
@@ -6301,7 +6364,7 @@ func _skill_heal() -> void:
 ## her ~50ms'de bir Oakley'nin ekranındaki kuklayı o gerçek değerle EZER, yani
 ## can hiç artmamış gibi görünür/titrer. Bu yüzden hedefin "peer_id"si varsa
 ## NetworkManager.sync_ally_heal ile doğrudan o oyuncunun kendi istemcisine
-## RPC gönderilir (bkz. _passive_oakley'deki aynı desen) - gerçek can orada
+## RPC gönderilir (bkz. _passive_melek'teki aynı desen) - gerçek can orada
 ## değişir ve normal senkronizasyonla herkese yayılır. peer_id'si olmayan
 ## yerel müttefikler (ör. Matthew'in yaratığı) eskisi gibi doğrudan .heal()
 ## alır.
@@ -6321,7 +6384,7 @@ func _apply_heal_to_ally(ally: Node2D, amount: float) -> void:
 ## BUG DÜZELTMESİ (kullanıcı bildirimi: "oakley ve meleğin kalkan yenileme
 ## yeteneği takım arkadaşlarına kalkan vermiyor") - _apply_heal_to_ally
 ## (can) ile BİREBİR AYNI desen, sadece kalkan için (bkz. network_manager.gd
-## sync_ally_shield_heal). _process_oakley_shield_tick() eskiden müttefik
+## sync_ally_shield_heal). _process_healer_shield_tick() eskiden müttefik
 ## hedefine DOĞRUDAN .heal_shield() çağırıyordu - RemotePlayer hedeflerde bu
 ## sadece kozmetik kuklayı etkiliyordu.
 func _apply_shield_heal_to_ally(ally: Node2D, amount: float) -> void:
@@ -6361,7 +6424,7 @@ func _spawn_wave_beam_to_ally(target: Node2D, wave_type: String) -> void:
 ## OAKLEY_Q_TICK_INTERVAL) - hem Oakley'yi hem de (hâlâ menzilde/canlıysa)
 ## _skill_heal()'de kilitlenen müttefiği aynı anda iyileştirir. Sadece
 ## Oakley'nin ULTİ'si aktifken çalışır (bkz. get_skill_character_id()==1).
-func _process_oakley_heal_tick(delta: float) -> void:
+func _process_healer_heal_tick(delta: float) -> void:
 	if skill_state != "active" or get_skill_character_id() != 1:
 		return
 	_oakley_q_tick_timer -= delta
@@ -6369,7 +6432,11 @@ func _process_oakley_heal_tick(delta: float) -> void:
 		return
 	_oakley_q_tick_timer += OAKLEY_Q_TICK_INTERVAL
 
-	var attack_power_bonus: float = damage_bonus * OAKLEY_Q_TICK_ATTACK_RATIO
+	## bkz. MELEK_Q_TICK_ATTACK_RATIO üstündeki DÜZELTME notu - Melek (roster
+	## 10) KENDİ oranını kullanır, Oakley OAKLEY_Q_TICK_ATTACK_RATIO'da
+	## değişmeden kalır.
+	var attack_ratio: float = MELEK_Q_TICK_ATTACK_RATIO if GameManager.selected_char_id == 10 else OAKLEY_Q_TICK_ATTACK_RATIO
+	var attack_power_bonus: float = damage_bonus * attack_ratio
 	## bkz. _skill_heal()'deki AYNI Melek düzeltmesi - SADECE self_tick'e
 	## uygulanıyor, ally_tick (aşağısı) attack_power_bonus'u TAM olarak kullanır.
 	var self_amount_mult: float = 0.5 if GameManager.selected_char_id == 10 else 1.0
@@ -8014,37 +8081,50 @@ func _try_oakley_flower() -> void:
 
 ## Oakley: Sarmaşıklar yeteneği (TEMEL/E, skill2 id 10 - _skill_kalkan_
 ## yenileme() tarafından yönlendiriliyor, bkz. o fonksiyonun üstündeki not).
-## En yakın 3 canlı yaratığa (varsa daha az) doğru birer sarmaşık fırlatır.
-## KAPSAM SINIRI: bkz. oakley_vine.gd dosya başı notu - kozmetik olarak
-## SADECE döken oyuncunun kendi istemcisinde görünür (diğer istemcilere
-## broadcast edilmiyor), hasar/sabitleme etkisi yine de enemy.gd'nin
-## host-yetkili senkronuyla tüm istemcilere doğru yansır.
+## 3 sarmaşık oluşturur - HER biri kendi hedefini yakındaki yaratıklardan
+## RASTGELE seçer (bkz. oakley_vine.gd _pick_new_target), 3'ü de en yakın
+## AYNI yaratığa kilitlenip "sıraya girmez". DÜZELTME (kullanıcı isteği:
+## "senkronize et, diğer oyuncular da öyle görmeli") - necro pet'lerle
+## BİREBİR AYNI görev ayrımı (bkz. _broadcast_necro_pet_spawn): burada SADECE
+## spawn/despawn yayınlanır, sarmaşığın KENDİSİ konum/hedef durumunu kendi
+## _process'inde periyodik olarak yayınlar (bkz. oakley_vine.gd
+## _broadcast_network_state).
 const OAKLEY_VINES_COUNT := 3
+var _oakley_vine_id_counter: int = 0
 
 func _skill_oakley_vines() -> void:
-	var candidates: Array = []
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if is_instance_valid(e) and e.get("is_dead") != true:
-			candidates.append(e)
-	candidates.sort_custom(func(a, b): return global_position.distance_to(a.global_position) < global_position.distance_to(b.global_position))
-	for i in range(min(OAKLEY_VINES_COUNT, candidates.size())):
+	for i in range(OAKLEY_VINES_COUNT):
 		var vine := Node2D.new()
 		vine.set_script(preload("res://scripts/oakley_vine.gd"))
 		get_tree().current_scene.add_child(vine)
 		vine.global_position = global_position
-		vine.call("setup", candidates[i], damage_bonus)
+		vine.call("setup", damage_bonus)
+		if NetworkManager.is_multiplayer_active:
+			_oakley_vine_id_counter += 1
+			var vine_id: String = "%d_%d" % [multiplayer.get_unique_id(), _oakley_vine_id_counter]
+			vine.network_instance_id = vine_id
+			NetworkManager.broadcast_oakley_vine_spawn.rpc(multiplayer.get_unique_id(), vine_id)
+			vine.tree_exiting.connect(func() -> void:
+				if NetworkManager.is_multiplayer_active:
+					NetworkManager.broadcast_oakley_vine_despawn.rpc(multiplayer.get_unique_id(), vine_id)
+			)
 	_spawn_burst(Color(0.35, 0.75, 0.3))
 
 
 ## Oakley: Arı Sürüsü yeteneği (3. Yetenek/R, skill3 id 33 - bkz.
-## _activate_skill3()'teki match dalı). KAPSAM SINIRI: oakley_vine.gd ile
-## AYNI sebeple SADECE döken oyuncunun kendi istemcisinde görünür.
+## _activate_skill3()'teki match dalı). DÜZELTME (kullanıcı isteği:
+## "senkronize et, diğer oyuncular da öyle görmeli") - bkz. oakley_bee_
+## swarm.gd dosya başı notu: sabit konumda durduğu için TEK SEFERLİK bir
+## "skill_ring"/"hitscan_impact" tarzı broadcast yeterli, sürekli senkron
+## gerekmiyor (oakley_vine.gd'nin aksine).
 func _skill_oakley_bee_swarm() -> void:
 	var swarm := Node2D.new()
 	swarm.set_script(preload("res://scripts/oakley_bee_swarm.gd"))
 	get_tree().current_scene.add_child(swarm)
 	swarm.global_position = global_position
 	swarm.call("setup", damage_bonus)
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "oakley_bee_swarm_spawn", global_position, {})
 
 
 ## Çiçek alındığında 2sn boyunca azalarak kaybolan geçici hareket hızı

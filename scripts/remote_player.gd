@@ -197,6 +197,30 @@ var _weapon_slash_fx_above_offset: Array = []
 var _weapon_recoil_distance: Array = []
 var _weapon_hit_segments: Array = []
 
+## Kullanıcı isteği: "Ölünce silahlar yere düşsün ... dirilince ease ease
+## normal yerlerine geri dönsün" - weapon.gd'deki AYNI düşme/dönüş efektinin
+## bu KOZMETİK kopyası (bkz. CLAUDE.md "kaster görür diğerleri görmez" hata
+## sınıfı - orada sadece LOKAL weapon.gd'ye eklense diğer oyuncular ölen
+## oyuncunun silahlarının havada asılı kaldığını görürdü). İkonlar burada
+## top_level DEĞİL (RemotePlayer'ın normal çocukları), yani konum/rotasyon
+## YEREL uzayda - weapon.gd'nin dünya-uzayı fiziğiyle AYNI formülü
+## (WeaponDeathDropMath, bkz. o dosyanın kök neden notu) kullanır ama
+## icon.position/rotation üzerinde, parent ölçeğini elle çarpmaya gerek
+## kalmadan (normal Godot parent-child kalıtımı zaten hallediyor).
+var _weapon_grounded: Array[bool] = []
+var _weapon_falling: Array[bool] = []
+var _weapon_rising: Array[bool] = []
+var _weapon_pre_drop_rotation: Array[float] = []
+var _weapon_drop_height: Array[float] = []
+var _weapon_drop_v_speed: Array[float] = []
+var _weapon_drop_spin_speed: Array[float] = []
+var _weapon_drop_elapsed: Array[float] = []
+var _weapon_drop_start_pos: Array[Vector2] = []
+var _weapon_drop_ground_pos: Array[Vector2] = []
+var _weapon_rise_start_pos: Array[Vector2] = []
+var _weapon_rise_elapsed: Array[float] = []
+var _was_incapacitated_for_weapons: bool = false
+
 const WEAPON_ICON_SLOTS: Array[Vector2] = [
 	Vector2(0, -125), Vector2(62, -70), Vector2(-62, -70),
 	Vector2(92, -28), Vector2(-92, -28),
@@ -309,6 +333,12 @@ func _load_character_frames() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	## Kullanıcı isteği: "Ölünce silahlar yere düşsün ... dirilince ease ease
+	## normal yerlerine geri dönsün" - bkz. _process_weapon_death_drop_
+	## transition üstündeki not. Düşme/yerde durma fazları TAM is_dead=true
+	## iken gerçekleştiği için bu çağrı aşağıdaki "if is_dead: return"
+	## erken dönüşünden ÖNCE yapılıyor, yoksa hiç çalışmazdı.
+	_process_weapon_drop_physics_all(delta)
 	if is_dead:
 		return
 	# Smoothly interpolate position towards target
@@ -410,6 +440,19 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 	_weapon_slash_fx_above_offset.clear()
 	_weapon_recoil_distance.clear()
 	_weapon_hit_segments.clear()
+	_weapon_grounded.clear()
+	_weapon_falling.clear()
+	_weapon_rising.clear()
+	_weapon_pre_drop_rotation.clear()
+	_weapon_drop_height.clear()
+	_weapon_drop_v_speed.clear()
+	_weapon_drop_spin_speed.clear()
+	_weapon_drop_elapsed.clear()
+	_weapon_drop_start_pos.clear()
+	_weapon_drop_ground_pos.clear()
+	_weapon_rise_start_pos.clear()
+	_weapon_rise_elapsed.clear()
+	_was_incapacitated_for_weapons = false
 	_weapon_is_orbit_sword.clear()
 	_weapon_fire_rate.clear()
 	_weapon_orbit_angle.clear()
@@ -493,6 +536,18 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 		_weapon_icons.append(icon)
 		_weapon_base_scales.append(icon.scale)
 		_weapon_fire_tweens.append(null)
+		_weapon_grounded.append(false)
+		_weapon_falling.append(false)
+		_weapon_rising.append(false)
+		_weapon_pre_drop_rotation.append(0.0)
+		_weapon_drop_height.append(0.0)
+		_weapon_drop_v_speed.append(0.0)
+		_weapon_drop_spin_speed.append(0.0)
+		_weapon_drop_elapsed.append(0.0)
+		_weapon_drop_start_pos.append(Vector2.ZERO)
+		_weapon_drop_ground_pos.append(Vector2.ZERO)
+		_weapon_rise_start_pos.append(Vector2.ZERO)
+		_weapon_rise_elapsed.append(0.0)
 		## weapon_root silinmeden ÖNCE kendi nişan açısı ayarlarını yakala -
 		## bkz. _update_local_weapon_aim (artık ağdan gelmiyor, her silahın
 		## KENDİ sprite_forward_angle_deg/mirror_icon_when_aiming_left'i
@@ -767,7 +822,21 @@ func update_position_and_anim_from_net(pos: Vector2, cur_anim: String) -> void:
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(cur_anim):
 		if anim.animation != cur_anim:
 			anim.play(cur_anim)
-		elif cur_anim.begins_with("spellcast") and not anim.is_playing():
+		## Kullanıcı isteği: hareket hızı artınca yürüme animasyonu (aynı klip
+		## içinde) biraz hızlansın - player.gd _update_animation'daki AYNI
+		## efekt burada da uygulanmalı, yoksa sadece kaster kendi ekranında
+		## hızlanmış görür, diğer istemcilerde eski/normal hızda donuk kalır
+		## (bkz. CLAUDE.md "kaster görür, diğerleri görmez" hata sınıfı).
+		## Yeni bir ağ alanı EKLEMİYORUZ: zaten dead-reckoning için tutulan
+		## _network_velocity (gözlemlenen GERÇEK konum değişimi) player.gd'nin
+		## kullandığı "effective_speed"in doğal karşılığı - iki taraf da AYNI
+		## Characters.BASE_MOVE_SPEED'e bölüyor (bkz. player.gd
+		## WALK_ANIM_SPEED_SCALE_MIN/MAX ile birebir aynı sınırlar).
+		if cur_anim.begins_with("walk_"):
+			anim.speed_scale = clampf(_network_velocity.length() / Characters.BASE_MOVE_SPEED, 0.7, 1.25)
+		else:
+			anim.speed_scale = 1.0
+		if cur_anim.begins_with("spellcast") and not anim.is_playing():
 			## DÜZELTME (derin multiplayer görsel denetimi: "Büyücü Kız'ın
 			## Meteor kanalı uzak ekranlarda donuyor") - spellcast animasyonu
 			## kendi kendine döngü yapmıyor (bkz. player.gd
@@ -834,6 +903,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	is_downed = extra.get("is_downed", false)
 	_update_death_status_fx()
 	_update_revive_rewind_fx()
+	_process_weapon_death_drop_transition()
 	is_indoors = extra.get("is_indoors", false)
 	is_in_merchant_zone = extra.get("is_in_merchant_zone", false)
 	is_invisible = extra.get("is_invisible", false)
@@ -1202,6 +1272,168 @@ func _update_pet_visual_state(instance_id: String, pos: Vector2, is_attacking: b
 		p.update_network_golem_state(pos, is_attacking, health_ratio, shield_ratio, sprite_row)
 	elif p.has_method("update_network_pet_state"):
 		p.update_network_pet_state(pos, is_attacking, sprite_row)
+
+
+## Kullanıcı isteği: "senkronize et, ben nasıl görüyosam diğer oyuncular da
+## öyle görmeli" - Oakley'in Sarmaşıkları (bkz. oakley_vine.gd dosya başı
+## DÜZELTME notu) için _pet_visuals ile BİREBİR AYNI desen, ayrı bir sözlükte
+## (id çakışması olmasın diye). Sahne dosyası YOK (oakley_vine.gd düz bir
+## Node2D script'i, player.gd'nin GERÇEK sarmaşığı oluşturduğu şekliyle
+## BİREBİR aynı - Node2D.new() + set_script) - bkz. network_manager.gd
+## broadcast_oakley_vine_spawn/despawn/state.
+var _vine_visuals: Dictionary = {} ## instance_id(String) -> Node2D
+
+func _spawn_vine_visual(instance_id: String) -> void:
+	_despawn_vine_visual(instance_id)
+	var vine := Node2D.new()
+	vine.set_script(preload("res://scripts/oakley_vine.gd"))
+	## bkz. _spawn_pet_visual'daki AYNI DÜZELTME notu - RemotePlayer'ın kendi
+	## (kuklayı küçültmek için) gizli scale'ini miras almasın diye sahnenin
+	## KÖKÜNE, GERÇEK sarmaşıkla (player.gd _skill_oakley_vines) aynı şekilde ekleniyor.
+	get_tree().current_scene.add_child(vine)
+	vine.global_position = global_position
+	if vine.has_method("mark_as_network_visual"):
+		vine.mark_as_network_visual()
+	_vine_visuals[instance_id] = vine
+	vine.tree_exiting.connect(func() -> void:
+		if _vine_visuals.get(instance_id) == vine:
+			_vine_visuals.erase(instance_id)
+	)
+
+
+func _despawn_vine_visual(instance_id: String) -> void:
+	if not _vine_visuals.has(instance_id):
+		return
+	var v = _vine_visuals[instance_id]
+	if is_instance_valid(v):
+		v.queue_free()
+	_vine_visuals.erase(instance_id)
+
+
+func _update_vine_visual_state(instance_id: String, pos: Vector2, target_pos: Vector2, has_target: bool) -> void:
+	if not _vine_visuals.has(instance_id):
+		return
+	var v = _vine_visuals[instance_id]
+	if not is_instance_valid(v) or not v.has_method("update_network_vine_state"):
+		return
+	v.update_network_vine_state(pos, target_pos, has_target)
+
+
+## Kullanıcı isteği: "Ölünce silahlar yere düşsün ... dirilince ease ease
+## normal yerlerine geri dönsün", sonra bildirim: "düşme animasyonu doğal
+## değil, Minecraft'ta itemlerin düşmesi gibi olmalı, gölgeler görünmüyor,
+## ruhsuz" - weapon.gd'deki AYNI WeaponDeathDropMath fiziğinin (bkz. o
+## dosyanın ve weapon.gd'nin kök neden notları) bu KOZMETİK/YEREL-uzay
+## kopyası. update_extra_state_from_net'ten (is_dead/is_downed GEÇİŞİNDE,
+## reaktif - _update_death_status_fx ile AYNI çağrı yeri) tetiklenir, her
+## karede _physics_process'teki _process_weapon_drop_physics_all ile
+## ilerletilir (is_dead iken bile - bkz. _physics_process'teki sıralama notu).
+func _process_weapon_death_drop_transition() -> void:
+	var incapacitated: bool = is_dead or is_downed
+	if incapacitated == _was_incapacitated_for_weapons:
+		return
+	for i in range(_weapon_icons.size()):
+		if not is_instance_valid(_weapon_icons[i]):
+			continue
+		if incapacitated:
+			_start_remote_weapon_drop(i)
+		else:
+			_start_remote_weapon_rise(i)
+	_was_incapacitated_for_weapons = incapacitated
+
+
+func _start_remote_weapon_drop(i: int) -> void:
+	var icon: Node2D = _weapon_icons[i]
+	_weapon_falling[i] = true
+	_weapon_rising[i] = false
+	_weapon_grounded[i] = false
+	_weapon_drop_elapsed[i] = 0.0
+	_weapon_drop_start_pos[i] = icon.position
+	_weapon_drop_height[i] = 0.0
+	_weapon_drop_v_speed[i] = randf_range(WeaponDeathDropMath.INITIAL_UP_SPEED_MIN, WeaponDeathDropMath.INITIAL_UP_SPEED_MAX)
+	_weapon_drop_spin_speed[i] = randf_range(WeaponDeathDropMath.SPIN_SPEED_MIN, WeaponDeathDropMath.SPIN_SPEED_MAX) * (1.0 if randf() < 0.5 else -1.0)
+	_weapon_pre_drop_rotation[i] = icon.rotation
+	var angle: float = randf_range(0.0, TAU)
+	var radius: float = randf_range(WeaponDeathDropMath.SCATTER_RADIUS_MIN, WeaponDeathDropMath.SCATTER_RADIUS_MAX)
+	var rest_pos: Vector2 = WEAPON_ICON_SLOTS[min(i, WEAPON_ICON_SLOTS.size() - 1)]
+	_weapon_drop_ground_pos[i] = rest_pos + Vector2(cos(angle), sin(angle)) * radius
+
+
+func _start_remote_weapon_rise(i: int) -> void:
+	var icon: Node2D = _weapon_icons[i]
+	_weapon_falling[i] = false
+	_weapon_rising[i] = true
+	_weapon_grounded[i] = false
+	_weapon_rise_elapsed[i] = 0.0
+	_weapon_rise_start_pos[i] = icon.position
+
+
+## bkz. weapon.gd _physics_process'teki AYNI çağrı deseni - is_dead sırasında
+## bile (falling/grounded fazları TAM burada olur) çalışması gerektiği için
+## RemotePlayer._physics_process'in "if is_dead: return" erken dönüşünden
+## ÖNCE çağrılır (bkz. o fonksiyondaki sıralama).
+func _process_weapon_drop_physics_all(delta: float) -> void:
+	for i in range(_weapon_icons.size()):
+		if not is_instance_valid(_weapon_icons[i]):
+			continue
+		if _weapon_falling[i]:
+			_process_remote_weapon_fall(i, delta)
+		elif _weapon_rising[i]:
+			_process_remote_weapon_rise(i, delta)
+		_refresh_remote_weapon_shadow(i)
+
+
+## Yatayda (icon.position, YEREL uzay) hedef "yere saçılmış" noktaya ease-out
+## ile süzülür, dikeyde (WeaponDeathDropMath.step_bounce) gerçek bir
+## yerçekimi/sekme simülasyonu yaşar - weapon.gd _process_weapon_fall_physics
+## ile BİREBİR aynı formül, sadece world-space yerine local position üzerinde.
+func _process_remote_weapon_fall(i: int, delta: float) -> void:
+	var icon: Node2D = _weapon_icons[i]
+	_weapon_drop_elapsed[i] += delta
+	var bounce: Dictionary = WeaponDeathDropMath.step_bounce(_weapon_drop_height[i], _weapon_drop_v_speed[i], delta, false)
+	_weapon_drop_height[i] = bounce["height"]
+	_weapon_drop_v_speed[i] = bounce["v_speed"]
+	var xy_t: float = WeaponDeathDropMath.ease_out_cubic(_weapon_drop_elapsed[i] / WeaponDeathDropMath.XY_DURATION)
+	var xy_pos: Vector2 = _weapon_drop_start_pos[i].lerp(_weapon_drop_ground_pos[i], xy_t)
+	icon.position = xy_pos + Vector2(0.0, -_weapon_drop_height[i])
+	icon.rotation += _weapon_drop_spin_speed[i] * delta
+	if bounce["settled"] and xy_t >= 1.0:
+		_weapon_falling[i] = false
+		_weapon_grounded[i] = true
+		icon.rotation = wrapf(icon.rotation, -PI, PI)
+
+
+## bkz. weapon.gd _process_weapon_rise_physics ile BİREBİR aynı mantık.
+func _process_remote_weapon_rise(i: int, delta: float) -> void:
+	var icon: Node2D = _weapon_icons[i]
+	_weapon_rise_elapsed[i] += delta
+	var t: float = WeaponDeathDropMath.ease_out_cubic(_weapon_rise_elapsed[i] / WeaponDeathDropMath.XY_DURATION)
+	var rest_pos: Vector2 = WEAPON_ICON_SLOTS[min(i, WEAPON_ICON_SLOTS.size() - 1)]
+	icon.position = _weapon_rise_start_pos[i].lerp(rest_pos, t)
+	## Rotasyon: menzilli silahlarda _update_local_weapon_aim (is_dead kalkınca
+	## otomatik devreye girer) zaten kendi lerp'iyle aynı işi yapıyor; ikisi
+	## birden dönerse rotasyon titreşir. SADECE o fonksiyonun atladığı yakın
+	## dövüş silahları (_weapon_melee) için burada eski rotasyona dönülüyor.
+	if i < _weapon_melee.size() and _weapon_melee[i]:
+		icon.rotation = lerp_angle(icon.rotation, _weapon_pre_drop_rotation[i], clampf(delta * 10.0, 0.0, 1.0))
+	_weapon_drop_height[i] = lerpf(_weapon_drop_height[i], 0.0, clampf(delta * 10.0, 0.0, 1.0))
+	if t >= 1.0:
+		_weapon_rising[i] = false
+		_weapon_drop_height[i] = 0.0
+
+
+## bkz. weapon.gd _update_icon_shadow'daki AYNI kök neden notu - gölge
+## DOĞRUDAN simüle edilen sekme yüksekliğini okur, kullanıcı bildirimi
+## "gölgeler görünmüyor" ayrı/kopuk bir "progress" değişkeninden kaynaklanan
+## senkron sorunuydu.
+func _refresh_remote_weapon_shadow(i: int) -> void:
+	if i >= _weapon_shadows.size() or not is_instance_valid(_weapon_shadows[i]):
+		return
+	const REMOTE_SHADOW_GAP := 62.0
+	var gap: float = REMOTE_SHADOW_GAP
+	if _weapon_falling[i] or _weapon_grounded[i] or _weapon_rising[i]:
+		gap = _weapon_drop_height[i]
+	_weapon_shadows[i].position = _weapon_icons[i].position + Vector2(0, gap)
 
 
 ## BUG DÜZELTMESİ (derin multiplayer denetimi bulgusu: "boomerang ve fişek

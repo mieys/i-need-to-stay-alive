@@ -74,7 +74,16 @@ func _draw() -> void:
 	if dir.length() < 1.0:
 		return
 	dir = dir.normalized()
-	var anchor: Vector2 = Vector2(size.x * 0.5, ANCHOR_TOP_OFFSET)
+	## DÜZELTME (kullanıcı bildirimi: "ok alakasız bir şekilde ekranın sol üst
+	## dışında kalıyor, orta üst kısımlarında olmalı") - bu Control'ün ebeveyni
+	## bir CanvasLayer (main.gd, Control DEĞİL), yani PRESET_FULL_RECT'in
+	## dayandığı "size" bazı durumlarda (ör. bu düğüm sahneden değil elle
+	## Control.new()+add_child ile kurulduğu için, bkz. main.gd) viewport'un
+	## GERÇEK genişliğine hiç eşitlenmeyip küçük/varsayılan kalabiliyordu -
+	## bu da "ortalanmış" hesaplanan X'i aslında sıfıra yakın (ekranın en
+	## soluna) düşürüyordu. get_viewport_rect() Control'ün kendi "size"ına
+	## bağlı olmadığı için GERÇEK ekran genişliğini garanti veriyor.
+	var anchor: Vector2 = Vector2(get_viewport_rect().size.x * 0.5, ANCHOR_TOP_OFFSET)
 	var perp: Vector2 = Vector2(-dir.y, dir.x)
 	var tip: Vector2 = anchor + dir * (ARROW_LENGTH * 0.5)
 	var base_l: Vector2 = anchor - dir * (ARROW_LENGTH * 0.5) + perp * (ARROW_WIDTH * 0.5)

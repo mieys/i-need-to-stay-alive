@@ -6,9 +6,20 @@ extends Node2D
 ## içindeki yaratıklara
 ## saniyede 1 zehir yükü (en fazla 10) biriktirir.
 ##
-## NOT (kapsam sınırı): bkz. oakley_vine.gd dosya başı notu - AYNI sebeple
-## bu efekt de sadece döken oyuncunun kendi istemcisinde görünür, hasar/yük
-## etkisi yine de host-yetkili olarak tüm istemcilere doğru yansır.
+## DÜZELTME (kullanıcı isteği: "senkronize et, ben nasıl görüyosam diğer
+## oyuncular da öyle görmeli") - bu efekt SABİT bir konumda durduğu için
+## (oakley_vine.gd'nin aksine hareket etmiyor) sürekli konum senkronuna hiç
+## gerek yok: player.gd _skill_oakley_bee_swarm() artık "hitscan_impact"/
+## "skill_ring" ile AYNI TEK SEFERLİK broadcast_player_vfx deseniyle
+## (network_manager.gd "oakley_bee_swarm_spawn" dalı) diğer istemcilere de
+## SADECE görsel halkayı (oakley_bee_swarm_ring.gd) gösteriyor - bu KOZMETİK
+## kopya asla apply_bee_poison() ÇAĞIRMAZ (enemy.gd host-yetkili olduğu için
+## her istemcinin kendi kopyası aynı yaratıklara ayrı ayrı istek gönderirse
+## hasar/yük KATLANIRDI - gerçek yük/hasar SADECE döken oyuncunun kendi
+## istemcisindeki bu script çalışır).
+## class_name: RADIUS/DURATION'ın network_manager.gd'de İKİNCİ bir kopyası
+## YAZILMASIN diye (bkz. CLAUDE.md paylaşılan sabit kuralı).
+class_name OakleyBeeSwarm
 
 const RADIUS := 130.0
 const DURATION := 10.0

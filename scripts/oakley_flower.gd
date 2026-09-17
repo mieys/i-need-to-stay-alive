@@ -25,14 +25,28 @@ const GROWTH_INTERVAL := 5.0
 const GROWTH_STAGE_BONUS := 0.40 ## her büyümede TABAN değere +%40 (kümülatif, en fazla 2 büyüme)
 const PICKUP_RADIUS := 26.0
 const HEAL_RATIO_OF_ATTACK := 0.50 ## can = saldırı gücünün %50'si (büyüme öncesi taban)
+## DÜZELTME (kullanıcı isteği: "Oakleyin Q yeteneğinin can vermesiyle beraber
+## aynı zamanda alan kişinin %2 maksimum kalkanı ve oakleyin %15 saldırı gücü
+## statı kadar kalkan yenilemeli ve bu etkinin gücü can vermede olduğu gibi
+## bitki büyüdükçe artmalı") - can ile AYNI büyüme çarpanını (GROWTH_STAGE_
+## BONUS) kullanan AYRI bir kalkan miktarı, bkz. _current_shield_amount.
+const SHIELD_PERCENT_OF_TARGET_MAX := 0.02 ## alanın kendi max kalkanının %2'si
+const SHIELD_RATIO_OF_ATTACK := 0.15 ## + Oakley'nin saldırı gücünün %15'i
 const PICKUP_SPEED_BONUS := 0.25
 const PICKUP_SPEED_DURATION := 2.0
+## Kullanıcı bildirimi: "Oakley yere bitki bırakamıyor çünkü bıraktığı anda
+## tüketiliyor" - çiçek caster'ın TAM konumunda spawn olduğu için _process
+## ilk karede zaten PICKUP_RADIUS içinde buluyordu, hiç yere düşmeden
+## kayboluyordu. Bırakıldıktan sonra bu kadar süre alım kontrolü tamamen
+## devre dışı, herkes (caster dahil) sadece bu süre geçtikten sonra alabilir.
+const PICKUP_DELAY := 0.5
 
 var flower_id: String = ""
 var _caster_damage_bonus: float = 0.0
 var _growth_stage: int = 0 ## 0, 1, 2
 var _lifetime_remaining: float = LIFETIME
 var _growth_timer: float = GROWTH_INTERVAL
+var _pickup_delay_remaining: float = PICKUP_DELAY
 var _picked: bool = false
 
 var _sprite: AnimatedSprite2D = null
@@ -68,11 +82,14 @@ func setup(caster_damage_bonus: float, p_flower_id: String) -> void:
 func _process(delta: float) -> void:
 	if _picked:
 		return
-	var local_player: Node = get_tree().get_first_node_in_group("player")
-	if local_player and is_instance_valid(local_player) and local_player is Node2D \
-			and global_position.distance_to((local_player as Node2D).global_position) <= PICKUP_RADIUS:
-		_pick_up(local_player)
-		return
+	if _pickup_delay_remaining > 0.0:
+		_pickup_delay_remaining -= delta
+	else:
+		var local_player: Node = get_tree().get_first_node_in_group("player")
+		if local_player and is_instance_valid(local_player) and local_player is Node2D \
+				and global_position.distance_to((local_player as Node2D).global_position) <= PICKUP_RADIUS:
+			_pick_up(local_player)
+			return
 	_lifetime_remaining -= delta
 	if _lifetime_remaining <= 0.0:
 		queue_free()
@@ -91,6 +108,15 @@ func _current_heal_amount() -> float:
 	return _caster_damage_bonus * HEAL_RATIO_OF_ATTACK * (1.0 + GROWTH_STAGE_BONUS * _growth_stage)
 
 
+## bkz. SHIELD_PERCENT_OF_TARGET_MAX üstündeki DÜZELTME notu - can miktarıyla
+## AYNI büyüme çarpanını kullanır, ama alanın KENDİ max kalkanına da bağlı
+## olduğu için (can'ın aksine) body parametre alıyor.
+func _current_shield_amount(body: Node) -> float:
+	var target_max_shield: float = float(body.item_shield_max) if "item_shield_max" in body else 0.0
+	return (target_max_shield * SHIELD_PERCENT_OF_TARGET_MAX + _caster_damage_bonus * SHIELD_RATIO_OF_ATTACK) \
+			* (1.0 + GROWTH_STAGE_BONUS * _growth_stage)
+
+
 func _pick_up(body: Node) -> void:
 	_picked = true
 	var heal_amount: float = _current_heal_amount()
@@ -98,6 +124,13 @@ func _pick_up(body: Node) -> void:
 		body.health = min(body.max_health, body.health + heal_amount)
 		if body.has_signal("health_changed"):
 			body.health_changed.emit(body.health, body.max_health)
+	## DÜZELTME (kullanıcı isteği: "can vermesiyle beraber aynı zamanda ...
+	## kalkan yenilemeli") - can ile AYNI anda, ayrı bir kalkan miktarı.
+	if "item_shield_hp" in body and "item_shield_max" in body and float(body.item_shield_max) > 0.0:
+		var shield_amount: float = _current_shield_amount(body)
+		body.item_shield_hp = min(body.item_shield_max, body.item_shield_hp + shield_amount)
+		if body.has_signal("item_shield_changed"):
+			body.item_shield_changed.emit(body.item_shield_hp, body.item_shield_max)
 	if body.has_method("apply_temp_speed_boost"):
 		body.call("apply_temp_speed_boost", PICKUP_SPEED_BONUS, PICKUP_SPEED_DURATION)
 	if body.has_method("_spawn_floating_text"):

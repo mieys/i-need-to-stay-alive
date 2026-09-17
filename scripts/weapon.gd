@@ -968,6 +968,140 @@ var _floaty_global_pos: Vector2 = Vector2.ZERO
 ## en son hesaplanan bob degeri saklaniyor - bkz. _physics_process.
 var _last_bob: float = 0.0
 
+## Kullanıcı isteği: "Ölünce silahlar yere düşsün (düşme hareketine uygun
+## yere düşüp hafif zıplayıp dağılma animasyonları da ekle) dirilince de ease
+## ease şeklinde normal yerlerine geri dönsün silahlar. Gölgenin konumunu
+## buna göre ayarla, düşünce gölgesi tam altında olmalı yere düştüğü için."
+##
+## DÜZELTME (kullanıcı bildirimi: "düşme animasyonu doğal değil, Minecraft'ta
+## ölünce itemlerin yere düşmesi gibi düşmeleri gerekiyor, gölgeler
+## görünmüyor ve çok ruhsuz") - bkz. weapon_death_drop_math.gd dosya başı kök
+## neden notu: ilk deneme (tek bir TRANS_BOUNCE tween'iyle global_position'ı
+## düz bir çizgide interpolasyon) gerçek bir dikey sekme DEĞİL, çizgi
+## üzerinde ileri-geri kayma gibi görünüyordu. Artık YATAY (XY, karaktere
+## göre hedef noktaya ease-out ile) ve DİKEY (yerçekimi + sekme, WeaponDeath
+## DropMath.step_bounce) TAMAMEN AYRI simüle ediliyor - gölgenin boşluğu da
+## (bkz. _update_icon_shadow) DOĞRUDAN bu dikey yüksekliği (_drop_height)
+## okuyor, ayrı/kopuk bir "progress" değişkeni YOK, o yüzden ikisi ASLA
+## birbirinden kopamaz.
+##
+## Oyuncu is_dead/is_downed olunca silah düşmeye başlar - bu süre boyunca
+## (ve yerdeyken/dönerken) normal hover takibi (_update_hover_follow)
+## TAMAMEN durur (bkz. _physics_process), yoksa hover her karede konumu
+## canlı hedefe geri çekip animasyonu anında iptal ederdi.
+var _weapon_grounded: bool = false
+var _falling: bool = false
+var _rising: bool = false
+var _was_owner_incapacitated: bool = false
+## Düşüş: dikey (sekme) durumu.
+var _drop_height: float = 0.0
+var _drop_v_speed: float = 0.0
+var _drop_spin_speed: float = 0.0
+var _drop_elapsed: float = 0.0
+var _drop_start_pos: Vector2 = Vector2.ZERO
+var _drop_ground_local_offset: Vector2 = Vector2.ZERO
+## Dönüş: normal hover hedefine ease-out ile giden AYRI bir geçiş.
+var _rise_start_pos: Vector2 = Vector2.ZERO
+var _rise_elapsed: float = 0.0
+## Sadece yakın dövüş ikonları için (bkz. _process_weapon_rise) - ölmeden
+## HEMEN önceki ikon rotasyonu, dirilince buna geri dönülür.
+var _pre_drop_icon_rotation: float = 0.0
+
+
+## Her fizik karesinde (orbit kılıç HARİÇ) çağrılır - is_dead/is_downed
+## GEÇİŞLERİNİ yakalayıp düşme/dönüş animasyonlarını tetikler.
+func _process_death_drop() -> void:
+	var owner_node: Node = get_parent()
+	var incapacitated: bool = owner_node != null \
+			and (owner_node.get("is_dead") == true or owner_node.get("is_downed") == true)
+	if incapacitated and not _was_owner_incapacitated:
+		_start_weapon_drop()
+	elif not incapacitated and _was_owner_incapacitated:
+		_start_weapon_rise()
+	_was_owner_incapacitated = incapacitated
+
+
+func _start_weapon_drop() -> void:
+	_falling = true
+	_rising = false
+	_weapon_grounded = false
+	_drop_elapsed = 0.0
+	_drop_start_pos = global_position
+	_drop_height = 0.0
+	## Rastgele bir ilk fırlama hızı - 3 silah da AYNI tepe noktasına
+	## zıplamasın diye (kullanıcı isteği: "dağılma animasyonları").
+	_drop_v_speed = randf_range(WeaponDeathDropMath.INITIAL_UP_SPEED_MIN, WeaponDeathDropMath.INITIAL_UP_SPEED_MAX)
+	_drop_spin_speed = randf_range(WeaponDeathDropMath.SPIN_SPEED_MIN, WeaponDeathDropMath.SPIN_SPEED_MAX) * (1.0 if randf() < 0.5 else -1.0)
+	_pre_drop_icon_rotation = icon_sprite.rotation if icon_sprite else 0.0
+	var angle: float = randf_range(0.0, TAU)
+	var radius: float = randf_range(WeaponDeathDropMath.SCATTER_RADIUS_MIN, WeaponDeathDropMath.SCATTER_RADIUS_MAX)
+	_drop_ground_local_offset = _target_local_offset + Vector2(cos(angle), sin(angle)) * radius
+
+
+func _start_weapon_rise() -> void:
+	_falling = false
+	_rising = true
+	_weapon_grounded = false
+	_rise_elapsed = 0.0
+	_rise_start_pos = global_position
+
+
+## Yatayda (XY) karakterin ANLIK konumuna göre hedef "yere saçılmış" noktaya
+## ease-out ile süzülür, dikeyde (WeaponDeathDropMath.step_bounce) gerçek bir
+## yerçekimi/sekme simülasyonu yaşar - Minecraft'taki item drop hissi tam
+## olarak bu ikisinin AYRIŞTIRILMASINDAN geliyor.
+func _process_weapon_fall_physics(delta: float) -> void:
+	_drop_elapsed += delta
+	var bounce: Dictionary = WeaponDeathDropMath.step_bounce(_drop_height, _drop_v_speed, delta, false)
+	_drop_height = bounce["height"]
+	_drop_v_speed = bounce["v_speed"]
+	var xy_t: float = WeaponDeathDropMath.ease_out_cubic(_drop_elapsed / WeaponDeathDropMath.XY_DURATION)
+	var parent_node: Node = get_parent()
+	var ground_target: Vector2 = _drop_start_pos
+	if parent_node is Node2D:
+		var p2d := parent_node as Node2D
+		ground_target = p2d.global_position + _drop_ground_local_offset * p2d.scale
+	var xy_pos: Vector2 = _drop_start_pos.lerp(ground_target, xy_t)
+	global_position = xy_pos + Vector2(0.0, -_drop_height) ## height yukarı = ekranda Y azalır
+	if icon_sprite:
+		icon_sprite.rotation += _drop_spin_speed * delta
+	if bounce["settled"] and xy_t >= 1.0:
+		_falling = false
+		_weapon_grounded = true
+		if icon_sprite:
+			## Minecraft'taki gibi rastgele bir açıda yatarak dursun - sürekli
+			## dönmeyi burada kesip son karedeki açıyı (normalize edilmiş) sabitliyoruz.
+			icon_sprite.rotation = wrapf(icon_sprite.rotation, -PI, PI)
+
+
+## Dirilince "ease ease" normal hover hedefine dönüş - hover_follow'un KENDİ
+## lerp'ine bırakmak YETERSİZ: o fonksiyondaki max_drift (20px*scale) sınırı
+## SADECE küçük/sürekli sapmalar için var, silah yerden (100+ px uzakta
+## olabilir) hedefe dönerken ilk karede hemen bu sınıra SIÇRAYIP "ease ease"
+## hissini yok ederdi - bu yüzden dönüş de kendi ayrı geçişiyle yapılıyor.
+func _process_weapon_rise_physics(delta: float) -> void:
+	_rise_elapsed += delta
+	var t: float = WeaponDeathDropMath.ease_out_cubic(_rise_elapsed / WeaponDeathDropMath.XY_DURATION)
+	var parent_node: Node = get_parent()
+	var target_global: Vector2 = _rise_start_pos
+	if parent_node is Node2D:
+		var p2d := parent_node as Node2D
+		target_global = p2d.global_position + _target_local_offset * p2d.scale
+	global_position = _rise_start_pos.lerp(target_global, t)
+	## Rotasyon: menzilli silahlarda _update_aim (is_dead kalkınca otomatik
+	## devreye girer) zaten kendi AIM_EASE_RATE'iyle aynı işi yapıyor; ama
+	## yakın dövüş ikonları (melee=true) hiç _update_aim çağırmıyor, o yüzden
+	## SADECE onlar için burada eski (ölmeden önceki) rotasyona dönülüyor.
+	if melee and icon_sprite:
+		icon_sprite.rotation = lerp_angle(icon_sprite.rotation, _pre_drop_icon_rotation, clampf(delta * 10.0, 0.0, 1.0))
+	## Gölge boşluğu da (bkz. _update_icon_shadow) aynı hızla sıfıra iniyor -
+	## "yerden kalkıp normal süzülüşe dönme" hissi.
+	_drop_height = lerpf(_drop_height, 0.0, clampf(delta * 10.0, 0.0, 1.0))
+	if t >= 1.0:
+		_rising = false
+		_floaty_global_pos = global_position
+		_drop_height = 0.0
+
 func _update_hover_follow(delta: float) -> void:
 	if not icon_sprite:
 		return
@@ -1024,7 +1158,16 @@ func _physics_process(delta: float) -> void:
 	if _is_uzunkilic:
 		_process_uzunkilic_orbit(delta)
 	else:
-		_update_hover_follow(delta)
+		_process_death_drop()
+		## Düşerken/yerdeyken/dönerken hover takibi TAMAMEN durur (bkz.
+		## _process_death_drop üstündeki kök neden notu) - kendi fizik/geçiş
+		## simülasyonları global_position'ı zaten dolduruyor.
+		if _falling:
+			_process_weapon_fall_physics(delta)
+		elif _rising:
+			_process_weapon_rise_physics(delta)
+		elif not _weapon_grounded:
+			_update_hover_follow(delta)
 		_update_icon_shadow()
 
 
@@ -1152,9 +1295,21 @@ func _update_icon_shadow() -> void:
 	## sadece ince bir organik titreşim veriyor, "uçuyor" hissini ezmiyor.
 	## bob > 0 -> silah şu an biraz YUKARIDA -> gölgeden biraz daha uzaklaşır (gap büyür, gölge küçülür)
 	## bob < 0 -> silah biraz AŞAĞIDA -> gölgeye biraz daha yaklaşır (gap küçülür, gölge büyür)
-	var bob_norm: float = _last_bob / max(0.001, HOVER_BOB_AMPLITUDE) ## -1..1
-	var gap: float = (HOVER_SHADOW_GAP + bob_norm * 3.0) * scale.y
-	var bob_factor: float = 1.0 - bob_norm * 0.05
+	## Kullanıcı isteği: "gölgenin konumunu buna göre ayarla, düşünce gölgesi
+	## tam altında olmalı yere düştüğü için" + bildirim: "gölgeler görünmüyor" -
+	## bkz. weapon_death_drop_math.gd kök neden notu: eski ayrı "progress"
+	## değişkeni gerçek konumdan kopuyordu. Artık düşerken/yerdeyken/dönerken
+	## boşluk DOĞRUDAN simüle edilen sekme yüksekliğini (_drop_height, bkz.
+	## _process_weapon_fall_physics) okuyor - ikisi ASLA birbirinden kopamaz.
+	var gap: float
+	var bob_factor: float
+	if _falling or _weapon_grounded or _rising:
+		gap = _drop_height * scale.y
+		bob_factor = 1.0
+	else:
+		var bob_norm: float = _last_bob / max(0.001, HOVER_BOB_AMPLITUDE) ## -1..1
+		gap = (HOVER_SHADOW_GAP + bob_norm * 3.0) * scale.y
+		bob_factor = 1.0 - bob_norm * 0.05
 
 	## Kullanıcı isteği: "gölgelerin silahın boyutlarına göre genişleyip
 	## uzamasını istiyorum çünkü bazı silahlar çok ince bazıları kalın veya
