@@ -1523,6 +1523,17 @@ func _on_fire_timer_timeout() -> void:
 	var owner_node := get_parent()
 	if owner_node and (owner_node.get("is_dead") == true or owner_node.get("is_downed") == true):
 		return
+	## DÜZELTME (kullanıcı bildirimi: "Fişek tüfek ve bıçak market alanın
+	## içinde saldırı yapmaya devam ediyor") - _process()'teki AYNI kontrol
+	## sadece _process()'in KENDİ mantığını (namlu takibi vb.) atlıyordu,
+	## FireTimer'ın kendisi (bu node'un çocuğu, ayrı bir engine zamanlayıcısı)
+	## hâlâ tikleyip _fire_at()'i tetikleyebiliyordu - asıl hasarın verildiği
+	## yer burasıydı ve hiç koruması yoktu (bkz. player.gd buy_weapon_copy'deki
+	## eşleşen düzeltme - kök neden, bölgedeyken satın alınan silahın hiç
+	## devre dışı bırakılmaması). Doğrudan koruma - totem_base.gd/
+	## player_pet.gd'deki AYNI desen.
+	if owner_node and owner_node.get("is_in_merchant_zone") == true:
+		return
 	if continuous_beam:
 		## Şimşek Asası: FireTimer bu modda hiç kullanılmaz (bkz. _process,
 		## _process_continuous_beam).
@@ -2428,6 +2439,16 @@ func _deal_melee_damage(target: Node, total_damage: float, is_crit: bool, shield
 
 
 func _apply_delayed_segment(target: Node, amount: float, is_crit: bool, shield_pen: float) -> void:
+	## DÜZELTME (kullanıcı bildirimi: "Fişek tüfek ve bıçak market alanın
+	## içinde saldırı yapmaya devam ediyor") - bu get_tree().create_timer()
+	## ile gecikmeli tetiklendiği için (bkz. _deal_melee_damage), silahın
+	## KENDİ process_mode'undan bağımsız çalışır - bir vuruş tam bölgeye
+	## girerken başlamışsa sonraki parçaları hâlâ hasar verebiliyordu
+	## (bıçağın 3 parçası en savunmasız - bkz. Characters.MAIN_WEAPON
+	## melee_hit_segments).
+	var owner_node := get_parent()
+	if owner_node and owner_node.get("is_in_merchant_zone") == true:
+		return
 	if is_instance_valid(target) and target.has_method("take_damage"):
 		target.take_damage(amount, is_crit, shield_pen)
 

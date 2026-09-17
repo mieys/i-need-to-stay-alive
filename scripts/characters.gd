@@ -72,47 +72,57 @@ const DEFS := {
 	## DÜZELTME (kullanıcı isteği: "Oakley yeni yetenekleri", sonra "Oakley ve
 	## Melek aynı karakter değil, sadece aynı yetenekleri kullanıyorlardı -
 	## Melek'e sakın dokunma") - eski kit (Can Basma ULTİ + Kalkan Yenileme
-	## TEMEL, ikisi de kendine+müttefiğe can/kalkan yenileyen destek
-	## yetenekleriydi) SADECE Oakley'de TAMAMEN yeni bir kitle değiştirildi:
-	## Çiçek (Q, yük tabanlı), Sarmaşıklar (E, sabitleme), Arı Sürüsü (R, YENİ
-	## - Oakley'nin ilk kez sahip olduğu 3. yetenek). Melek (char 10) KENDİ
-	## eski kitini (Can Basma/Kalkan Yenileme/pasif/Kutsal Korku) AYNEN
-	## koruyor - iki karakter geçmişte skill/skill2 numaralarını (1/10)
-	## PAYLAŞIYORDU (bkz. player.gd'deki dispatch tabloları) ama bu SADECE
-	## sayısal id paylaşımıydı, ayrı karakterler olarak ayrı kitleri var;
-	## player.gd tarafında Oakley'e özel dallar artık SADECE
-	## "GameManager.selected_char_id == 2" kontrolüyle ayrılıyor, Melek'in
-	## roster id'si (10) bu yeni yeteneklere hiç dahil değil.
+	## TEMEL) SADECE Oakley'de TAMAMEN yeni bir kitle değiştirilmişti: Çiçek
+	## (Q, yük tabanlı), Sarmaşıklar (E), Arı Sürüsü (R). Melek (char 10)
+	## KENDİ eski kitini AYNEN koruyor - iki karakter geçmişte skill/skill2
+	## numaralarını (1/10) PAYLAŞIYORDU ama bu SADECE sayısal id paylaşımıydı.
+	## SONRAKİ TAM KİT DEĞİŞİKLİĞİ (kullanıcı isteği: "Oakleyin pasifi
+	## silinecek ve Q su bundan sonra pasifi olacak... Oakleyin R yeteneği
+	## artık boşta kalan Q yeteneği olacak... Yeni R yeteneği ise canı en az
+	## olan arkadaşına koruyucu bir büyü yapar") - üç yönlü rotasyon: Çiçek
+	## (eski Q, id 1) artık bir tuş yeteneği DEĞİL, tamamen otomatik bir
+	## PASİF (bkz. player.gd _process_oakley_passive/_spawn_oakley_flower_
+	## auto - 2 yük sistemi kaldırıldı, artık tek sabit aralıkla kendiliğinden
+	## düşüyor); Arı Sürüsü (eski R, id 33) Q'ya taşındı; yepyeni bir yetenek
+	## (Koruyucu Büyü, id 39) R'nin yeni sahibi. Eski düşük-can tetiklemeli
+	## kalkan/can pasifi TAMAMEN silindi. player.gd tarafında Oakley'e özel
+	## dallar SADECE "GameManager.selected_char_id == 2" kontrolüyle
+	## ayrılıyor, Melek'in roster id'si (10) bunların hiçbirine dahil değil.
 	2: {
 		"name": "Oakley",
-		"skill": 1,
-		"skill_name": "Çiçek",
-## DÜZELTME (kullanıcı isteği: "can vermesiyle beraber aynı zamanda alan
-		## kişinin %2 maksimum kalkanı ve oakleyin %15 saldırı gücü statı kadar
-		## kalkan yenilemeli, bu etki de bitki büyüdükçe artmalı") - bkz.
-		## oakley_flower.gd SHIELD_PERCENT_OF_TARGET_MAX/SHIELD_RATIO_OF_ATTACK.
-		"skill_desc": "Yere bir çiçek bırakır (kendisi veya bir dost alabilir, 180sn yerde kalır). Alınırsa saldırı gücünün %50'si kadar can + alanın %2 max kalkanı ve saldırı gücünün %15'i kadar kalkan yeniler, ayrıca alanı 2sn boyunca azalarak kaybolan %25 hıza kavuşturur; alınmazsa 5sn'de bir büyüyüp verdiği can/kalkanı kümülatif %40 arttırır (en fazla 2 büyüme). 2 yük, yük başına 18sn.",
-		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
-		## Melek ile AYNI geçici "oyku_ulti_can_basma_icon.png" dosyasını
-		## paylaşıyordu, artık kendi özel ikonu var.
-		"skill_icon": "res://assets/skills/oakley_cicek_icon.png",
+		## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
+		## yeteneği olacak") - Arı Sürüsü buraya taşındı, id/metin/ikon
+		## DEĞİŞMEDİ (bkz. eski skill3 alanları, artık burada).
+		"skill": 33,
+		"skill_name": "Arı Sürüsü",
+		"skill_desc": "Bulunduğu konuma 10sn süren bir arı sürüsü salar. İçindeki yaratıklar saniyede 1 zehir yükü biriktirir (en fazla 10), her yük 4sn boyunca toplam saldırı gücünün %20'si kadar hasar verir. (20sn bekleme)",
+		"skill_icon": "res://assets/skills/oakley_ari_suru_icon.png",
 		"skill2": 10,
 		"skill2_name": "Sarmaşıklar",
 		"skill2_desc": "TEMEL: Yakındaki yaratıklara doğru ilerleyen 3 sarmaşık yaratır (6sn). İsabet eden yaratığı 4sn yere sabitler (hareket edemez, saldırabilir) ve saldırı gücünün %60'ı kadar hasar verir. Bosslar sabitlenmez, bunun yerine %30 yavaşlar. (16sn bekleme)",
-		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
-		## Melek'in E'si VE kendi R'siyle AYNI geçici
-		## "oyku_kalkan_yenileme_icon.png" dosyasını paylaşıyordu, artık kendi
-		## özel ikonu var.
 		"skill2_icon": "res://assets/skills/oakley_sarmasik_icon.png",
-		"skill3": 33,
-		"skill3_name": "Arı Sürüsü",
-		"skill3_desc": "3. YETENEK: Bulunduğu konuma 10sn süren bir arı sürüsü salar. İçindeki yaratıklar saniyede 1 zehir yükü biriktirir (en fazla 10), her yük 4sn boyunca toplam saldırı gücünün %20'si kadar hasar verir. (20sn bekleme)",
-		"skill3_icon": "res://assets/skills/oakley_ari_suru_icon.png",
-		"passive": "Canı %20'nin altına düşünce anında %40 kalkan kazanır ve 6sn içinde maksimum canının %25'ini yeniler. (120sn bekleme, bekleme süresi azaltmadan etkilenmez)",
+		## DÜZELTME (kullanıcı isteği: "Yeni R yeteneği ise canı en az olan
+		## arkadaşına koruyucu bir büyü yapar...") - bkz. player.gd
+		## _skill_oakley_bond/OAKLEY_BOND_* sabitleri. Gerçek sanat eseri ikonu
+		## henüz yok (bkz. Elara'nın Q'su/eski Assasin R'si ile AYNI durum -
+		## skill_icon.gd def.has() kontrolüyle hatasız vektör/boş ikona düşer).
+		"skill3": 39,
+		"skill3_name": "Koruyucu Büyü",
+		"skill3_desc": "ULTİ: Canı en az olan dostuna (kendisi dahil, önceliklidir) koruyucu bir büyü yapar. 8sn boyunca hedef her hasar aldığında Oakley'nin saldırı gücünün %10'u kadar can, %5'i kadar kalkan yeniler ve %20 hasar azaltma kazanır. (60sn bekleme)",
+		## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su
+		## bundan sonra pasifi olacak, ve otomatik olarak yakınlarına çiçek
+		## bırakacak... 2 yük olayı falan yok bunda dolduğu anda oakleyin
+		## yakınında rasgele yerlere bıraksın") - eski düşük-can tetiklemeli
+		## kalkan/can pasifi TAMAMEN kaldırıldı, yerine Çiçek geldi (bkz.
+		## player.gd _process_oakley_passive/OAKLEY_FLOWER_AUTO_INTERVAL).
+		## Çiçeğin ALINDIĞINDA verdiği etkiler (can/kalkan/hız, büyüme) hiç
+		## değişmedi - bkz. oakley_flower.gd, SADECE tetikleme yöntemi
+		## (yük yerine otomatik zamanlayıcı + rastgele yakın konum) değişti.
+		"passive": "Her 18 saniyede bir yakınına rastgele bir noktaya kendiliğinden bir çiçek bırakır (kendisi veya bir dost alabilir, 180sn yerde kalır, sihirli yeşil bir aurayla haritadaki dekorlardan ayırt edilir). Alınırsa saldırı gücünün %50'si kadar can + alanın %2 max kalkanı ve saldırı gücünün %15'i kadar kalkan yeniler, ayrıca alanı 2sn boyunca azalarak kaybolan %25 hıza kavuşturur; alınmazsa 5sn'de bir büyüyüp verdiği can/kalkanı kümülatif %40 arttırır (en fazla 2 büyüme).",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
-		## Melek ile AYNI geçici "oyku_passive_icon.png" dosyasını
-		## paylaşıyordu, artık kendi özel ikonu var.
-		"passive_icon": "res://assets/skills/oakley_passive_icon.png",
+		## Melek ile AYNI geçici "oyku_ulti_can_basma_icon.png" dosyasını
+		## paylaşıyordu, artık pasif haline gelen Çiçek'in KENDİ ikonu.
+		"passive_icon": "res://assets/skills/oakley_cicek_icon.png",
 		"frames": "res://assets/characters/oyku_frames.tres",
 		"portrait": "res://assets/characters/oyku_portrait.png",
 	},

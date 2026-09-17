@@ -519,6 +519,14 @@ func _process(delta: float) -> void:
 			game_time += delta
 		if _mini_shop_cooldown_remaining > 0.0:
 			_mini_shop_cooldown_remaining -= delta
+	## Kullanıcı isteği: "Multiplayerda her oyuncu 3 yeniden canlanma hakkına
+	## sahip olmalı ve 1 yeniden canlanma hakkı kaldığında 3 dakikada bir bir
+	## yeniden canlanma hakkı kazanmalı" - max_revives zaten 3 (bkz. yukarısı),
+	## eksik olan sadece bu zamanlayıcıydı. Host-yetkili (bkz.
+	## network_manager.gd _consume_revive_authoritative ile AYNI mimari),
+	## sadece multiplayer'da çalışır.
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		_process_revive_regen(delta)
 
 
 var max_revives: int = 3
@@ -542,6 +550,29 @@ func get_peer_revives(peer_id: int) -> int:
 	return int(peer_revives.get(peer_id, max_revives))
 
 signal revives_updated(remaining: int)
+
+## Kullanıcı isteği: "1 yeniden canlanma hakkı kaldığında 3 dakikada bir bir
+## yeniden canlanma hakkı kazanmalı" - SADECE tam 1 hak kalmışken sayaç
+## işler (0'a düşen kalıcı sayılır, hiç yenilenmez; 2/3 zaten "tam" sayılır,
+## saymaya gerek yok). peer_id -> o an biriken saniye.
+const REVIVE_REGEN_INTERVAL := 180.0 ## 3 dakika
+var _revive_regen_timers: Dictionary = {}
+
+func _process_revive_regen(delta: float) -> void:
+	for peer_id in NetworkManager.lobby_players.keys():
+		var remaining: int = get_peer_revives(peer_id)
+		if remaining != 1:
+			## Hak 0'a düştü (kalıcı) ya da zaten tam (2/3) - sayaç anlamsız,
+			## bir dahaki "tam olarak 1" anına temiz başlasın diye sıfırlanır.
+			_revive_regen_timers.erase(peer_id)
+			continue
+		var t: float = float(_revive_regen_timers.get(peer_id, 0.0)) + delta
+		if t >= REVIVE_REGEN_INTERVAL:
+			t -= REVIVE_REGEN_INTERVAL
+			var new_remaining: int = min(remaining + 1, max_revives)
+			peer_revives[peer_id] = new_remaining
+			NetworkManager.sync_revive_consumed.rpc(peer_id, new_remaining)
+		_revive_regen_timers[peer_id] = t
 
 
 ## Ortak Takım Seviyesi ve EXP Havuzu (Multiplayer & Tek Oyunculu)
@@ -766,6 +797,7 @@ func reset() -> void:
 	team_xp_changed.emit(team_xp, team_xp_needed)
 	revives_remaining = max_revives
 	peer_revives.clear()
+	_revive_regen_timers.clear()
 	revives_updated.emit(revives_remaining)
 	gold = 0
 	spray_level = 0

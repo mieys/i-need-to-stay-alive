@@ -407,9 +407,15 @@ func _create_skill3_icon() -> void:
 	## taşırıyordu (bkz. hud.tscn'deki aynı düzeltme, SkillIcon/PassiveIcon/
 	## Skill2Icon'un StackBadge'leri) - artık ikonun kendi 52x52 sınırının
 	## İÇİNDE duruyor.
-	stack_badge.offset_left = 4.0
+	## SONRAKİ DÜZELTME (kullanıcı isteği: "yük göstergeleri... sağ üstünde
+	## belirtilmeli") - sol üstten sağ üste taşındı (hud.tscn'deki diğer üç
+	## StackBadge ile AYNI, bu sefer koddan kurulduğu için anchor_*
+	## property'leriyle).
+	stack_badge.anchor_left = 1.0
+	stack_badge.anchor_right = 1.0
+	stack_badge.offset_left = -30.0
 	stack_badge.offset_top = 4.0
-	stack_badge.offset_right = 30.0
+	stack_badge.offset_right = -4.0
 	stack_badge.offset_bottom = 28.0
 	stack_badge.add_theme_color_override("font_color", Color(0.6, 0.95, 1, 1))
 	stack_badge.add_theme_font_size_override("font_size", 32)
@@ -926,7 +932,13 @@ func _process(delta: float) -> void:
 				if skill2_icon.has_method("set_charge_progress"):
 					skill2_icon.set_charge_progress(-1.0)
 		if passive_icon.has_method("set_stack_count"):
-			if player.has_method("get_necro_souls") and player.get_skill_character_id() == 20:
+			## DÜZELTME (kullanıcı bildirimi: "Necromancer ölen düşmanlardan
+			## ruh toplayamıyor" araştırması sırasında bulunan İKİNCİ bir
+			## kurbanı - bkz. player.gd on_enemy_killed()'taki AYNI düzeltme
+			## notu): burası da Golem'in eski Q/skill id'sine (20) göre
+			## dallanıyordu, Golem R'ye taşınınca (Q artık İskelet, id 19)
+			## ruh rozeti hiç gösterilmez olmuştu. Roster id'sine (11) göre.
+			if player.has_method("get_necro_souls") and GameManager.selected_char_id == 11:
 				passive_icon.set_stack_count(player.get_necro_souls())
 			else:
 				passive_icon.set_stack_count(-1)

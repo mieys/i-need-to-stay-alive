@@ -242,9 +242,15 @@ text = "Q"
 [node name="StackBadge" type="Label" parent="SkillBar/SkillIcon" unique_id=-826456075]
 visible = false
 layout_mode = 0
-offset_left = 4.0
+## DÜZELTME (kullanıcı isteği: "genel olarak yük göstergeleri yanlış
+## konumda... sağ üstünde yük ifadeleri belirtilmeli") - sol üstten sağ
+## üste taşındı (KeyLabel'in sağ-alt köşe için kullandığı AYNI
+## anchor+negatif-offset deseni, bkz. bu ikonun KeyLabel düğümü).
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -30.0
 offset_top = 4.0
-offset_right = 30.0
+offset_right = -4.0
 offset_bottom = 28.0
 theme_override_colors/font_color = Color(0.6, 0.95, 1, 1)
 theme_override_font_sizes/font_size = 32
@@ -295,9 +301,13 @@ text = "P"
 [node name="StackBadge" type="Label" parent="SkillBar/PassiveIcon" unique_id=-826456076]
 visible = false
 layout_mode = 0
-offset_left = 3.0
+## DÜZELTME (kullanıcı isteği: "yük göstergeleri... sağ üstünde
+## belirtilmeli") - sol üstten sağ üste taşındı.
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -23.0
 offset_top = 3.0
-offset_right = 23.0
+offset_right = -3.0
 offset_bottom = 19.0
 theme_override_colors/font_color = Color(0.6, 0.95, 1, 1)
 theme_override_font_sizes/font_size = 22
@@ -350,9 +360,13 @@ text = "E"
 [node name="StackBadge" type="Label" parent="SkillBar/Skill2Icon" unique_id=-1303837945]
 visible = false
 layout_mode = 0
-offset_left = 4.0
+## DÜZELTME (kullanıcı isteği: "yük göstergeleri... sağ üstünde
+## belirtilmeli") - sol üstten sağ üste taşındı.
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -30.0
 offset_top = 4.0
-offset_right = 30.0
+offset_right = -4.0
 offset_bottom = 28.0
 theme_override_colors/font_color = Color(0.6, 0.95, 1, 1)
 theme_override_font_sizes/font_size = 32

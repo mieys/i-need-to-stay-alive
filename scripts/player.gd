@@ -88,6 +88,11 @@ const SKILL_TIMING := {
 	## _enter_shaman_totem_cooldown) bu değer artık hiç kullanılmıyor, 0
 	## bırakıldı. Bekleme süresi de 60 -> 45sn (kullanıcı isteği).
 	26: {"duration": 0.0, "cooldown": 45.0},
+	## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
+	## yeteneği olacak") - Arı Sürüsü (skill id 33): eskiden SKILL3_TIMING[33]
+	## idi (R iken), "Bulunduğu konuma 10sn süren bir arı sürüsü salar", 20sn
+	## bekleme - sayılar DEĞİŞMEDİ, sadece taşındı.
+	33: {"duration": 10.0, "cooldown": 20.0},
 }
 var _skill_duration: float = DEFAULT_SKILL_DURATION
 var _skill_cooldown: float = DEFAULT_SKILL_COOLDOWN
@@ -193,11 +198,13 @@ const SKILL3_TIMING := {
 	## Kullanıcı isteği: Şovalye Adam'ın yeni 3. yeteneği (Koruma Bariyeri,
 	## id 29) - 15sn boyunca aktif, 60sn bekleme.
 	29: {"duration": 15.0, "cooldown": 60.0},
-	## Kullanıcı isteği: Oakley'nin yeni 3. yeteneği (Arı Sürüsü, id 33 - bkz.
-	## characters.gd DEFS[2], SADECE Oakley, Melek kendi skill3'ünü - Kutsal
-	## Korku, 32 - koruyor). "duration" sürünün gerçek 10sn'lik ömrüyle
-	## eşleşiyor ki ikon "aktif" çerçevesi sürü aktifken doğru görünsün.
-	33: {"duration": 10.0, "cooldown": 20.0},
+	## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
+	## yeteneği olacak") - Arı Sürüsü (eskiden burada, id 33) Q'ya taşındı
+	## (bkz. SKILL_TIMING[33] şimdi orada). Yeni R (Koruyucu Büyü, id 39):
+	## "8 saniye boyunca aktif kalır... (60 saniye bekleme süresi)" - kullanıcı
+	## isteği. "duration" gerçek 8sn'lik buff süresiyle birebir eşleşiyor ki
+	## ikon "aktif" çerçevesi buf aktifken doğru görünsün.
+	39: {"duration": 8.0, "cooldown": 60.0},
 	## Kullanıcı isteği: Korsan'ın yeni 3. yeteneği (Bombardıman, id 34) -
 	## "etrafındaki büyük bir alana 8 saniye boyunca bombardımana alır, her
 	## saniye %150 saldırı gücü kadar hasar verir." Standart skill3_state
@@ -1133,7 +1140,15 @@ func buy_weapon_copy(key: String, level: int) -> bool:
 	## _enter_house()'daki gizleme SADECE o an zaten var olan silahları
 	## kapsıyor - buraya sonradan eklenen bir kopyayı da aynı görünmez/donuk
 	## duruma sokmak için burada ayrıca kontrol ediliyor.
-	if is_indoors:
+	## DÜZELTME (kullanıcı bildirimi: "Fişek tüfek ve bıçak market alanın
+	## içinde saldırı yapmaya devam ediyor") - dükkan SADECE seyyar satıcının
+	## güvenli bölgesinin içinden açılabildiği için (etkileşim yarıçapı 80 <
+	## bölge yarıçapı 264.6, bkz. traveling_merchant.gd/game_manager.gd) yeni
+	## satın alınan HER silah is_in_merchant_zone=true İKEN doğuyordu - ama
+	## set_combat_active() sadece bölgeye GİRİŞ/ÇIKIŞ GEÇİŞİNDE çalıştığı
+	## için (bkz. _process_merchant_zone_state), zaten bölgedeyken doğan bu
+	## yeni node hiç devre dışı bırakılmıyordu. is_indoors ile AYNI kontrol.
+	if is_indoors or is_in_merchant_zone:
 		w.visible = false
 		w.process_mode = Node.PROCESS_MODE_DISABLED
 	return true
@@ -2226,7 +2241,6 @@ func _physics_process(delta: float) -> void:
 	_process_item_passives(delta)
 	_process_kalkan_yenileme(delta)
 	_process_healer_heal_tick(delta)
-	_process_oakley_flower_charges(delta)
 	_process_temp_speed_boost(delta)
 	_process_shield_regen_tick(delta)
 	_process_paladin_ulti(delta)
@@ -2245,6 +2259,7 @@ func _physics_process(delta: float) -> void:
 	_process_matthew_speed_lines(delta)
 	_process_buyucu(delta)
 	_process_skill3(delta)
+	_process_oakley_bond(delta)
 	_process_damage_redirect_range_check(delta)
 	_refresh_local_barrier_link_visual()
 	_process_merchant_zone_state()
@@ -2257,14 +2272,11 @@ func _physics_process(delta: float) -> void:
 	## bypass dalları: Oakley Çiçek, Korsan bomba, Assasin hamle, Büyücü
 	## varyasyonları, Necro yarasa sürüsü DAHİL) bölgedeyken tamamen engellenir.
 	if Input.is_action_just_pressed("skill") and not is_chat_typing and not is_in_merchant_zone:
-		## Oakley'nin Çiçek yeteneği (Q, skill id 1) - Korsan/Necromancer/
-		## Assasin'in yük tabanlı TEMEL'leriyle AYNI desen, standart
-		## skill_state == "ready" bekleme makinesi BAŞTAN devre dışı (bkz.
-		## _try_oakley_flower üstündeki not). SADECE roster id 2 - Melek
-		## (aynı skill id 1'i paylaşan) bu bypass'a hiç girmez, her zaman
-		## normal _activate_skill() -> _skill_heal() yolunu kullanır.
-		if GameManager.selected_char_id == 2:
-			_try_oakley_flower()
+		## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su
+		## bundan sonra pasifi olacak") - Çiçek artık burada DEĞİL, tamamen
+		## otomatik bir pasif (bkz. _process_oakley_passive). Oakley'nin Q'su
+		## artık Arı Sürüsü (eskiden R) - standart skill_state makinesini
+		## kullanır, burada özel bir bypass dalına ihtiyacı yok.
 		## DÜZELTME (kullanıcı isteği: "Necromancer in Q skillini iskelet
 		## çıkarma skilli ile değiştir") - İskelet Çağır (id 19) Korsan'ın
 		## bomba şarjıyla AYNI desen, bekleme süresi YERİNE ruh + kendi 1sn'lik
@@ -2272,7 +2284,7 @@ func _physics_process(delta: float) -> void:
 		## üstündeki not) - eskiden E/skill2'deydi (bkz. aşağıdaki skill2
 		## dalı), standart skill_state == "ready" makinesini BAŞTAN bypass
 		## ediyor.
-		elif get_skill_character_id() == 19:
+		if get_skill_character_id() == 19:
 			_skill_necro_summon_skeleton()
 		elif skill_state == "ready":
 			_activate_skill()
@@ -2942,19 +2954,22 @@ var _talon_passive_decay_timer: float = 0.0
 
 
 func _process_character_passive(delta: float) -> void:
+	## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su bundan
+	## sonra pasifi olacak") - eskiden Oakley'nin pasifi skill id 1'e (Q/ULTİ
+	## yuvası) göre dallanıyordu, Melek'le PAYLAŞILAN bu id'ye bağlı olduğu
+	## için _process_character_passive'in _process_oakley_passive'e giden
+	## kısmı Oakley'nin "skill" alanı Arı Sürüsü'ne (id 33) taşınınca hiç
+	## tetiklenmeyecekti - Necromancer'ın ruh toplama bug'ıyla (bkz. o
+	## düzeltmenin notu) AYNI hata sınıfı. Artık Oakley roster id'sine (2)
+	## göre DOĞRUDAN, en başta ayrılıyor - hangi yetenek Q/E/R'de olursa
+	## olsun bozulmaz.
+	if GameManager.selected_char_id == 2:
+		_process_oakley_passive(delta)
+		return
 	match get_skill_character_id():
-		## DÜZELTME (kullanıcı isteği: "Oakley yeni yetenekleri", sonra "Oakley
-		## ve Melek aynı karakter değil, Melek'e dokunma") - skill id 1 (Q/ULTİ
-		## yuvası) Oakley (roster 2) VE Melek (roster 10) arasında paylaşılıyor.
 		## Melek eski pasifini ("kendini+müttefikleri %0.5/sn yeniler",
-		## _passive_melek) AYNEN koruyor; Oakley'nin YENİ pasifi (düşük canda
-		## ani kalkan + 6sn'lik can patlaması, 120sn bekleme) SADECE roster
-		## id 2 için ayrı bir fonksiyona (_process_oakley_passive) yönleniyor.
-		1:
-			if GameManager.selected_char_id == 2:
-				_process_oakley_passive(delta)
-			else:
-				_passive_melek(delta)
+		## _passive_melek) AYNEN koruyor - skill id 1 artık SADECE Melek'in.
+		1: _passive_melek(delta)
 		7: _passive_melek(delta) ## artık kullanılmıyor ama zararsız - eski/olası gelecek eşleme
 		## DÜZELTME: bu dispatch ESKİDEN "8" idi (Talon'un ESKİ ulti id'si,
 		## Devleşme/Yer Sarsıntısı takası öncesinden kalma) - Talon'un GERÇEK
@@ -3012,42 +3027,66 @@ func _passive_melek(delta: float) -> void:
 				NetworkManager.sync_ally_heal.rpc(target_peer_id, ally_heal)
 
 
-## Oakley'nin YENİ pasifi (kullanıcı isteği: "Oakley yeni yetenekleri" -
-## "Oakley'in canı %20'nin altına düştüğünde anında %40 kalkan kazanır ve 6
-## saniye içinde maksimum canının %25'ini yeniler. (120 saniye bekleme
-## süresi) (bekleme süresinde azalmadan etkilenmez)"). SADECE roster id 2
-## (bkz. _process_character_passive) - "bekleme süresinde azalmadan
-## etkilenmez" için cooldown_reduction_percent kasıtlı olarak HİÇ
-## uygulanmıyor (diğer yeteneklerin *_cooldown = timing["cooldown"] * (1.0 -
-## cooldown_reduction_percent) deseninin AKSİNE).
-const OAKLEY_PASSIVE_HP_THRESHOLD := 0.20
-const OAKLEY_PASSIVE_SHIELD_PERCENT := 0.40 ## anında: maksimum kalkanın %40'ı
-const OAKLEY_PASSIVE_HEAL_PERCENT := 0.25 ## HEAL_DURATION'a yayılı: maksimum canın %25'i
-const OAKLEY_PASSIVE_HEAL_DURATION := 6.0
-const OAKLEY_PASSIVE_COOLDOWN := 120.0
-var _oakley_passive_cooldown_remaining: float = 0.0
-var _oakley_passive_heal_remaining: float = 0.0
-var _oakley_passive_heal_per_sec: float = 0.0
+## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su bundan sonra
+## pasifi olacak, ve otomatik olarak yakınlarına çiçek bırakacak... 2 yük
+## olayı falan yok bunda dolduğu anda oakleyin yakınında rasgele yerlere
+## bıraksın") - eski düşük-can tetiklemeli kalkan/can pasifi TAMAMEN
+## kaldırıldı. Çiçek artık oyuncunun BASTIĞI bir yetenek değil (bkz. eski
+## _try_oakley_flower/OAKLEY_FLOWER_MAX_CHARGES - 2 yük sistemi silindi),
+## SADECE bu zamanlayıcı üzerinden kendiliğinden düşüyor - eski yük
+## yenilenme süresi (18sn) yeni tek/sabit aralık olarak korundu (dengeyi
+## büyük ölçüde değiştirmesin diye).
+const OAKLEY_FLOWER_AUTO_INTERVAL := 18.0
+## "yakınında rasgele yerlere" - Oakley'nin TAM konumu yerine bu yarıçap
+## içinde rastgele bir noktaya düşer (bkz. _spawn_buyucu_meteor_strike/
+## _apply_korsan_bombardment_tick ile AYNI "rastgele açı + rastgele mesafe"
+## deseni).
+const OAKLEY_FLOWER_DROP_RADIUS := 70.0
+var _oakley_flower_auto_timer: float = OAKLEY_FLOWER_AUTO_INTERVAL
+var _oakley_flower_id_counter: int = 0
 
 func _process_oakley_passive(delta: float) -> void:
-	if _oakley_passive_cooldown_remaining > 0.0:
-		_oakley_passive_cooldown_remaining -= delta
-	if _oakley_passive_heal_remaining > 0.0:
-		var tick_heal: float = _oakley_passive_heal_per_sec * delta
-		if tick_heal > 0.0 and health < max_health:
-			health = min(max_health, health + tick_heal)
-			health_changed.emit(health, max_health)
-		_oakley_passive_heal_remaining -= delta
-	if _oakley_passive_cooldown_remaining > 0.0 or max_health <= 0.0:
+	_oakley_flower_auto_timer -= delta
+	if _oakley_flower_auto_timer > 0.0:
 		return
-	if health / max_health >= OAKLEY_PASSIVE_HP_THRESHOLD:
-		return
-	_oakley_passive_cooldown_remaining = OAKLEY_PASSIVE_COOLDOWN
-	if item_shield_max > 0.0:
-		heal_shield(item_shield_max * OAKLEY_PASSIVE_SHIELD_PERCENT)
-	_oakley_passive_heal_remaining = OAKLEY_PASSIVE_HEAL_DURATION
-	_oakley_passive_heal_per_sec = (max_health * OAKLEY_PASSIVE_HEAL_PERCENT) / OAKLEY_PASSIVE_HEAL_DURATION
-	_spawn_burst(Color(0.4, 0.8, 1.0))
+	_oakley_flower_auto_timer = OAKLEY_FLOWER_AUTO_INTERVAL
+	_spawn_oakley_flower_auto()
+
+
+## bkz. _process_oakley_passive üstündeki DÜZELTME notu. Eski _try_oakley_
+## flower() ile BİREBİR AYNI kurulum (çiçeğin kendisi/ağ yayını), sadece
+## konum artık Oakley'nin TAM üstü değil rastgele yakın bir nokta, ve
+## bırakma anında kısa bir "sihirli bağ" efekti eşlik ediyor (kullanıcı
+## isteği: "çiçek bırakırken bıraktığı yere doğru... ince bir sihirli bağ
+## efekti oluşacak anlık").
+func _spawn_oakley_flower_auto() -> void:
+	var angle: float = randf() * TAU
+	var dist: float = randf_range(0.0, OAKLEY_FLOWER_DROP_RADIUS)
+	var drop_pos: Vector2 = global_position + Vector2(cos(angle), sin(angle)) * dist
+	_oakley_flower_id_counter += 1
+	var flower_id: String = "%d_%d" % [multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0, _oakley_flower_id_counter]
+	var flower := Node2D.new()
+	flower.set_script(preload("res://scripts/oakley_flower.gd"))
+	get_tree().current_scene.add_child(flower)
+	flower.global_position = drop_pos
+	flower.call("setup", damage_bonus, flower_id)
+	var bond := Node2D.new()
+	bond.set_script(preload("res://scripts/fx_oakley_flower_bond.gd"))
+	get_tree().current_scene.add_child(bond)
+	bond.call("setup", global_position, drop_pos)
+	## bkz. eski _try_oakley_flower() üstündeki AYNI yorum - uzak istemcide
+	## gerçek Oakley referansı olmadığı için gereken tüm veri extra_data ile
+	## taşınıyor. "oakley_flower_spawn" işleneni değişmedi (remote_player.gd),
+	## sadece konum artık drop_pos (global_position değil).
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "oakley_flower_spawn", drop_pos, {
+			"caster_damage_bonus": damage_bonus,
+			"flower_id": flower_id
+		})
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "oakley_flower_bond", global_position, {
+			"end_pos": drop_pos
+		})
+	_spawn_burst(Color(1.0, 0.7, 0.85))
 
 
 ## Herhangi bir yetenek (skill/skill2/skill3) BAŞARIYLA aktifleştiğinde
@@ -3262,9 +3301,21 @@ func on_enemy_killed(enemy: Node) -> void:
 	var is_boss_kill: bool = is_instance_valid(enemy) and enemy.get("is_boss") == true
 	_apply_kill_heal_item()
 	_distribute_arcane_stack(enemy.global_position if is_instance_valid(enemy) else global_position)
+	## DÜZELTME (kullanıcı bildirimi: "Necromancer ölen düşmanlardan ruh
+	## toplayamıyor") - kök neden: burada Necromancer id 20'ye (Golem Çağır'ın
+	## SKILL id'si) göre dallanıyordu - bu SADECE Golem Q/skill slotundayken
+	## doğruydu. "Necromancer in R sini golem çıkarma ile değiştir"
+	## isteğiyle Golem R'ye taşınınca (artık Q'da İskelet, id 19) bu case bir
+	## daha HİÇ eşleşmedi, ruh kazanımı tamamen durdu. get_skill_character_id()
+	## (GameManager.selected_character, Q slotunun id'si) yerine roster
+	## id'sine (GameManager.selected_char_id == 11) bakılıyor artık - hangi
+	## yetenek hangi tuşta olursa olsun Necromancer'ın ruh kazanımı bundan
+	## hiç etkilenmesin diye (bkz. Talon pasifinde daha önce yaşanmış AYNI
+	## hata sınıfı).
+	if GameManager.selected_char_id == 11:
+		_necro_on_kill(is_boss_kill)
 	match get_skill_character_id():
 		18: _korsan_on_kill()
-		20: _necro_on_kill(is_boss_kill)
 		## Büyücü Kız pasifi (Kadim Patlama) - bkz. _buyucu_on_kill. Burada
 		## (host bizzat öldürdüğünde) gerçek Enemy node'u hâlâ geçerli
 		## olduğu için konumu doğrudan ondan okunuyor.
@@ -3284,9 +3335,12 @@ func on_enemy_killed(enemy: Node) -> void:
 func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZERO) -> void:
 	_apply_kill_heal_item()
 	_distribute_arcane_stack(death_pos)
+	## bkz. on_enemy_killed() üstündeki AYNI düzeltme notu - roster id'sine
+	## göre, artık hangi yetenek Q/E/R'de olursa olsun doğru çalışır.
+	if GameManager.selected_char_id == 11:
+		_necro_on_kill(is_boss_kill)
 	match get_skill_character_id():
 		18: _korsan_on_kill()
-		20: _necro_on_kill(is_boss_kill)
 		3: _buyucu_on_kill(death_pos)
 
 
@@ -4708,6 +4762,24 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## dalı) bu bir gelen hasarı savuşturmaktır, takım adına "tanklamak"
 	## sayılır.
 	match_damage_taken += amount
+	## Oakley'nin Koruyucu Büyü'sü (skill3 id 39, bkz. _skill_oakley_bond/
+	## _apply_oakley_bond_to_target) - kullanıcı isteği: "kişi her hasar
+	## aldığında oakley'in saldırı gücünün %10'u kadar can yeniler ve aynı
+	## şekilde her hasar aldığında oakley'in saldırı gücünün %5'i kadar
+	## kalkan yeniler ayrıca dost birey bu esnada %20 hasar azaltma
+	## kazanır". "Her hasar aldığında" - is_shielded/kalkan havuzu bu isabeti
+	## SONRADAN tamamen emse BİLE (yani cana hiç işlemese bile) yine de bir
+	## "hasar alma" anı sayılır, bu yüzden burada, TÜM aşağıdaki emilim/
+	## azaltma mantığından ÖNCE işleniyor - hem heal/kalkan proc'u hem de
+	## %20 azaltma (ham "amount" üzerinden, aşağıdaki HER mitigasyon
+	## katmanından önce) buradan geçer.
+	if oakley_bond_active:
+		amount *= (1.0 - oakley_bond_damage_reduction)
+		if oakley_bond_heal_per_hit > 0.0 and health < max_health:
+			health = min(max_health, health + oakley_bond_heal_per_hit)
+			health_changed.emit(health, max_health)
+		if oakley_bond_shield_per_hit > 0.0 and item_shield_max > 0.0:
+			heal_shield(oakley_bond_shield_per_hit)
 	if is_shielded:
 		## Kalkan hasarı tamamen yuttu: baloncukta hasarın geldiği yönde
 		## ekstra parlak bir parıltı çaktır (bkz. shield_visual.gd flash()).
@@ -5623,7 +5695,14 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 			## azalt (Kurt Adam ve Pençe hariç)") - +%1 -> +%0.3 (Kurt Adam'ın
 			## kendi pasifi/öfke bonusu ve Pençe'nin silah-içi can çalması bu
 			## genel karttan bağımsız, DOKUNULMADI).
-			lifesteal_percent += _nice_up(0.01 * 0.3, 0.001) * tier_mult
+			## SONRAKİ DÜZELTME (kullanıcı isteği: "Can çalmanı statların 1.
+			## kademede 0.3 kademe başına 0.3 arttırarak tekrar düzenle") -
+			## diğer TÜM statların kullandığı paylaşılan tier_mult (1.0/1.3/
+			## 1.6/1.9, bkz. fonksiyon başı) yerine BİLEREK ham kademe sayısıyla
+			## (tier) çarpılıyor - 1.=0.3, 2.=0.6, 3.=0.9, 4.=1.2 düz artış.
+			## level_up_screen.gd _scaled_desc_value()'daki "lifesteal" özel
+			## dalı bu formülle BİREBİR AYNI kalmalı (bkz. orada).
+			lifesteal_percent += 0.003 * float(tier)
 		"shield_amount":
 			shield_max_percent += _nice_up(0.05 * 1.3, 0.005) * tier_mult ## eskiden 0.05 (ondan önce 0.10), +%30 -> 0.065
 			refresh_shield_stats()
@@ -5902,7 +5981,12 @@ func _activate_skill3() -> void:
 	## SONRAKİ DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem
 	## çıkarma ile değiştir") - Golem Çağır (id 20) da AYNI sebeple
 	## (eskiden Q'nun varsayılan AĞIR tarifesini ödüyordu) eklendi.
-	var use_ulti_tier: bool = (skill3_id == 37 or skill3_id == 31 or skill3_id == 16 or skill3_id == 20)
+	## Oakley'nin yeni R'si (Koruyucu Büyü, id 39) de AYNI listeye eklendi -
+	## eski R (Arı Sürüsü) hafif tarifedeydi ama bu yeni yetenek gerçek bir
+	## ULTİ hissi veriyor (60sn bekleme, güçlü koruma) - diğer karakterlerin
+	## R'deki gerçek ultileriyle (Ayna Formu/Çift Tetik/Gölge Hücumu/Golem
+	## Çağır) AYNI tarife.
+	var use_ulti_tier: bool = (skill3_id == 37 or skill3_id == 31 or skill3_id == 16 or skill3_id == 20 or skill3_id == 39)
 	var skill3_shield_cost: float = (item_shield_max * (SKILL_SHIELD_COST_PERCENT_OF_MAX if use_ulti_tier else SKILL2_SHIELD_COST_PERCENT_OF_MAX) + (SKILL_SHIELD_COST_FLAT if use_ulti_tier else SKILL2_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
 	if not _has_enough_ability_shield(skill3_shield_cost):
 		_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
@@ -5932,7 +6016,11 @@ func _activate_skill3() -> void:
 		16: _skill_assasin_dash()
 		32: _skill_melek_fear()
 		29: _skill_paladin_barrier()
-		33: _skill_oakley_bee_swarm()
+		## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
+		## yeteneği olacak") - Arı Sürüsü (id 33) Q'ya taşındı (bkz.
+		## _activate_skill()'teki eşleşen düzeltme), yeni R (Koruyucu Büyü,
+		## id 39) buraya geldi.
+		39: _skill_oakley_bond()
 		34: _skill_korsan_bombardment()
 		## Talon'un yeni 3. yeteneği (Ayna Formu, id 37) - kullanıcı isteği: "R
 		## ile Q'nun yerini değiştir" - eskiden R'de Hamle Vuruşu vardı.
@@ -5946,9 +6034,28 @@ func _end_skill3_effects() -> void:
 	match get_skill3_id():
 		## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
 		## yerini değiştir") - Gölge Adımı'nın (id 30) temizliği artık Q'da
-		## (bkz. _end_skill_effects()), Gölge Hücumu bu id'nin (16) yeni
-		## sahibi ama onun burada özel bir temizliğe ihtiyacı yok (bkz.
-		## _skill_assasin_dash - tek seferlik bir sıçrayış).
+		## (bkz. _end_skill_effects()). Gölge Hücumu'nun (id 16) BURADA hiç
+		## temizliği YOKTU - yanlışlıkla "tek seferlik bir sıçrayış, temizliğe
+		## gerek yok" sanılmıştı, oysa is_assasin_dashing/_assasin_dash_fx/
+		## modulate sıfırlaması eskiden Q'nun genel _end_skill_effects()'i
+		## İÇİNDE koşulsuz yaşıyordu (dash o zaman Q'daydı). Taşıma sonrası
+		## KULLANICI BİLDİRİMİ ("Assasin çocuğun q ve r si görünmezlik
+		## veriyor" - aslında R "görünmez" değil, dash'in başında set edilen
+		## koyu/%60 saydam modulate hiç sıfırlanmadığı için KARAKTER KALICI
+		## OLARAK yarı saydam/koyu kalıyordu, görünmezlikle karıştırılmıştı):
+		## kök neden buydu, artık burada da AYNI temizlik yapılıyor.
+		16:
+			is_assasin_dashing = false
+			if _assasin_dash_fx and is_instance_valid(_assasin_dash_fx):
+				if _assasin_dash_fx.has_method("stop"):
+					_assasin_dash_fx.stop()
+				_assasin_dash_fx = null
+			## bkz. _end_skill_effects()'teki AYNI çapraz-slot koruması - Q'nun
+			## Gölge Adımı'sı (id 30) HÂLÂ aktifken (kendi modulate.a=0.35
+			## saydamlığını kullanıyor) buraya girilirse onu ZAMANINDAN ÖNCE
+			## sıfırlamayalım.
+			if not (skill_state == "active" and get_skill_character_id() == 30):
+				modulate = Color(1, 1, 1, 1)
 		29:
 			_end_paladin_barrier()
 		## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
@@ -6026,8 +6133,14 @@ func _activate_skill() -> void:
 	## (Q'nun varsayılanı AĞIR) aynı hafif tarifeyi korumak için id 38 ile
 	## AYNI istisnaya eklendi.
 	var is_assasin_shadow_step: bool = (char_id == 30)
+	## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
+	## yeteneği olacak") - Arı Sürüsü (id 33) R'den Q'ya taşındı, eskiden
+	## R'nin varsayılan hafif tarifesini ödüyordu (33, _activate_skill3()'teki
+	## use_ulti_tier listesinde hiç YOKTU), aynı hafif tarifeyi korumak için
+	## buraya eklendi.
+	var is_oakley_bee_swarm: bool = (char_id == 33)
 	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
-	var skill_shield_cost: float = (item_shield_max * (SKILL2_SHIELD_COST_PERCENT_OF_MAX if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step) else SKILL_SHIELD_COST_PERCENT_OF_MAX) + (SKILL2_SHIELD_COST_FLAT if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step) else SKILL_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
+	var skill_shield_cost: float = (item_shield_max * (SKILL2_SHIELD_COST_PERCENT_OF_MAX if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step or is_oakley_bee_swarm) else SKILL_SHIELD_COST_PERCENT_OF_MAX) + (SKILL2_SHIELD_COST_FLAT if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step or is_oakley_bee_swarm) else SKILL_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
 	## Kullanıcı isteği: "Kurt adamın yetenekleri kalkan harcamamalı" - Kudurmuş
 	## Saldırı (ULTİ, id 14) artık Koruma Baloncuğu/Feda Kalkanı/Büyü Değişimi
 	## (11/9/3) ile AYNI şekilde bu bedelden muaf.
@@ -6121,6 +6234,10 @@ func _activate_skill() -> void:
 		12: _skill_elara_dash_refill()
 		14: _skill_kurtadam_berserk()
 		18: _skill_korsan_detonate_all()
+		## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
+		## yeteneği olacak") - Arı Sürüsü (id 33) artık burada, eskiden R/
+		## skill3'teydi (bkz. _activate_skill3()'teki eşleşen düzeltme).
+		33: _skill_oakley_bee_swarm()
 		## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
 		## değiştir") - Golem Çağır (id 20) artık R/skill3'te (bkz.
 		## _activate_skill3()), İskelet Çağır (id 19) Q'ya taşındı ama kendi
@@ -6193,8 +6310,10 @@ func _end_skill_effects() -> void:
 	## Formu (R, skill3 id 37) HÂLÂ aktifken buraya girilirse (çok olağan bir
 	## durum, R 15sn sürüyor) bu satır kızıl tonu ZAMANINDAN ÖNCE
 	## sıfırlardı - is_invisible'ın aşağıdaki AYNI korumasıyla (skill3 id 30
-	## için) BİREBİR aynı desen.
-	if not (skill3_state == "active" and get_skill3_id() == 37):
+	## için) BİREBİR aynı desen. Gölge Hücumu (id 16, dash'in koyu/%60 saydam
+	## tonu - bkz. _skill_assasin_dash/_end_skill3_effects) da AYNI sebeple
+	## eklendi.
+	if not (skill3_state == "active" and (get_skill3_id() == 37 or get_skill3_id() == 16)):
 		modulate = Color(1, 1, 1, 1)
 	knockback_force = knockback_stat ## öfke bonusu düşer, kalıcı stat kalır
 	damage_taken_mult = 1.0
@@ -8035,66 +8154,11 @@ func _skill_heal_aura() -> void:
 	_broadcast_skill_scene("res://scenes/fx_oyku_heal.tscn")
 
 
-## Oakley: Çiçek yeteneği (Q/ULTİ, skill id 1 - SADECE roster id 2, Melek
-## hâlâ bu id'de eski Can Basma'yı kullanıyor, bkz. _process_character_
-## passive üstündeki AYNI ayrım). Korsan'ın Saatli Bomba'sıyla (bkz.
-## korsan_bomb_charges/_process_korsan_bombs) AYNI yük/şarj deseni - standart
-## skill_state == "ready" bekleme makinesi BAŞTAN devre dışı, bkz.
-## _physics_process'teki "GameManager.selected_char_id == 2" dalı.
-const OAKLEY_FLOWER_MAX_CHARGES := 2
-const OAKLEY_FLOWER_RECHARGE_TIME := 18.0
-var oakley_flower_charges: int = OAKLEY_FLOWER_MAX_CHARGES
-var _oakley_flower_recharge_timer: float = 0.0
-var _oakley_flower_id_counter: int = 0
-
-func _process_oakley_flower_charges(delta: float) -> void:
-	if GameManager.selected_char_id != 2:
-		return
-	if oakley_flower_charges < OAKLEY_FLOWER_MAX_CHARGES:
-		_oakley_flower_recharge_timer -= delta
-		if _oakley_flower_recharge_timer <= 0.0:
-			oakley_flower_charges += 1
-			_oakley_flower_recharge_timer = OAKLEY_FLOWER_RECHARGE_TIME if oakley_flower_charges < OAKLEY_FLOWER_MAX_CHARGES else 0.0
-
-
-## Kullanıcı isteği: "yük biriken yeteneği olan karakterlerde ... yetenek
-## birikirken kaç yük olduğunun yanında bir çember/sayaç olsun" - bkz.
-## get_korsan_bomb_charge_fraction() ile AYNI desen (şu an HUD'a bağlanmadı,
-## ileride Çiçek ikonuna aynı çember için hazır).
-func get_oakley_flower_charge_fraction() -> float:
-	if oakley_flower_charges >= OAKLEY_FLOWER_MAX_CHARGES:
-		return 1.0
-	if OAKLEY_FLOWER_RECHARGE_TIME <= 0.0:
-		return 1.0
-	return clamp(1.0 - (_oakley_flower_recharge_timer / OAKLEY_FLOWER_RECHARGE_TIME), 0.0, 1.0)
-
-
-func _try_oakley_flower() -> void:
-	if oakley_flower_charges <= 0:
-		_spawn_floating_text("ÇİÇEK YOK", Color(1.0, 0.4, 0.4))
-		return
-	oakley_flower_charges -= 1
-	if _oakley_flower_recharge_timer <= 0.0:
-		_oakley_flower_recharge_timer = OAKLEY_FLOWER_RECHARGE_TIME
-	_oakley_flower_id_counter += 1
-	var flower_id: String = "%d_%d" % [multiplayer.get_unique_id(), _oakley_flower_id_counter]
-	var flower := Node2D.new()
-	flower.set_script(preload("res://scripts/oakley_flower.gd"))
-	get_tree().current_scene.add_child(flower)
-	flower.global_position = global_position
-	flower.call("setup", damage_bonus, flower_id)
-	## bkz. network_manager.gd broadcast_player_vfx() "oakley_flower_spawn"
-	## dalı - uzak istemcide gerçek Oakley referansı olmadığı için gerekli
-	## tüm veri (saldırı gücü snapshot'ı + benzersiz kimlik) extra_data ile
-	## taşınıyor.
-	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "oakley_flower_spawn", global_position, {
-			"caster_damage_bonus": damage_bonus,
-			"flower_id": flower_id
-		})
-	_spawn_burst(Color(1.0, 0.7, 0.85))
-
-
+## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su bundan sonra
+## pasifi olacak") - Çiçek artık bir Q/skill yeteneği DEĞİL, tamamen otomatik
+## bir pasif (bkz. _process_oakley_passive/_spawn_oakley_flower_auto,
+## yukarıda) - eski 2-yük/18sn şarj sistemi (OAKLEY_FLOWER_MAX_CHARGES/
+## oakley_flower_charges/_try_oakley_flower) ve Q girdisi tamamen kaldırıldı.
 ## Oakley: Sarmaşıklar yeteneği (TEMEL/E, skill2 id 10 - _skill_kalkan_
 ## yenileme() tarafından yönlendiriliyor, bkz. o fonksiyonun üstündeki not).
 ## 3 sarmaşık oluşturur - HER biri kendi hedefini yakındaki yaratıklardan
@@ -8141,6 +8205,111 @@ func _skill_oakley_bee_swarm() -> void:
 	swarm.call("setup", damage_bonus)
 	if NetworkManager.is_multiplayer_active:
 		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "oakley_bee_swarm_spawn", global_position, {})
+
+
+## ---------- Oakley YENİ R: Koruyucu Büyü (skill3 id 39) ----------
+## Kullanıcı isteği: "Yeni R yeteneği ise canı en az olan arkadaşına koruyucu
+## bir büyü yapar bu büyü 8 saniye boyunca aktif kalır ve kişi her hasar
+## aldığında oakley'in saldırı gücünün %10'u kadar can yeniler ve aynı
+## şekilde her hasar aldığında oakley'in saldırı gücünün %5'i kadar kalkan
+## yeniler ayrıca dost birey bu esnada %20 hasar azaltma kazanır. Eğer canı
+## en az olan kişi oakleyse bu büyüyü kendisine yapar. Canı en az olan
+## önceliklidir. (60 saniye bekleme süresi)"
+##
+## Heal/kalkan miktarları CAST ANINDA Oakley'nin o anki saldırı gücünden
+## SABİTLENİR (flower/arı sürüsünün "caster_damage_bonus" anlık görüntüsüyle
+## AYNI desen) - böylece hedef başka bir peer'sa bile her isabet için
+## Oakley'nin GÜNCEL statlarına ağ üzerinden erişmeye gerek kalmaz, hedef
+## kendi take_damage()'ında tamamen yerel olarak uygular (bkz. aşağıdaki
+## oakley_bond_* alanları/take_damage() içindeki kullanım).
+const OAKLEY_BOND_RANGE := 400.0 ## bkz. PALADIN_BARRIER_BREAK_RANGE ile aynı mertebe
+const OAKLEY_BOND_DURATION := 8.0
+const OAKLEY_BOND_HEAL_RATIO := 0.10
+const OAKLEY_BOND_SHIELD_RATIO := 0.05
+const OAKLEY_BOND_DAMAGE_REDUCTION := 0.20
+
+## Bu oyuncu ŞU AN birinin Koruyucu Büyü hedefiyse (kendi büyüsü de dahil)
+## dolu olan alanlar - take_damage() bunları okur, _process_oakley_bond
+## süresini işler.
+var oakley_bond_active: bool = false
+var oakley_bond_heal_per_hit: float = 0.0
+var oakley_bond_shield_per_hit: float = 0.0
+var oakley_bond_damage_reduction: float = 0.0
+var oakley_bond_timer: float = 0.0
+
+
+func _skill_oakley_bond() -> void:
+	var target: Node2D = _oakley_lowest_hp_bond_target(OAKLEY_BOND_RANGE)
+	if not target:
+		return
+	var heal_per_hit: float = damage_bonus * OAKLEY_BOND_HEAL_RATIO
+	var shield_per_hit: float = damage_bonus * OAKLEY_BOND_SHIELD_RATIO
+	_apply_oakley_bond_to_target(target, heal_per_hit, shield_per_hit, OAKLEY_BOND_DAMAGE_REDUCTION, OAKLEY_BOND_DURATION)
+	_spawn_wave_beam_to_ally(target, "shield")
+	_spawn_burst(Color(0.4, 1.0, 0.55))
+
+
+## "Canı en az olan önceliklidir" - kendisi DAHİL (bkz. kullanıcı isteği:
+## "Eğer canı en az olan kişi oakleyse bu büyüyü kendisine yapar"), oran
+## bazlı (health/max_health), downed/dead olanlar hariç (downed iken health/
+## max_health GERÇEK can yerine diriltme oranını taşır - bkz. get_revive_
+## progress_ratio üstündeki yorum, bu yüzden burada anlamsız/yanıltıcı
+## olurdu). Sadece gerçek oyuncular (peer_id'si olanlar) hedeflenir, evcil
+## hayvanlar/yaratıklar DEĞİL - _apply_oakley_bond_to_target zaten sadece
+## self ya da peer_id'li bir hedefle çalışabiliyor.
+func _oakley_lowest_hp_bond_target(max_range: float) -> Node2D:
+	var best: Node2D = null
+	var best_ratio: float = INF
+	if not is_dead and not is_downed and max_health > 0.0:
+		best = self
+		best_ratio = health / max_health
+	for ally in get_tree().get_nodes_in_group("player_ally"):
+		if not is_instance_valid(ally) or not ("max_health" in ally) or not ("health" in ally):
+			continue
+		if not ("peer_id" in ally):
+			continue
+		if ally.get("is_dead") == true or ally.get("is_downed") == true:
+			continue
+		if float(ally.get("max_health")) <= 0.0:
+			continue
+		if global_position.distance_to(ally.global_position) > max_range:
+			continue
+		var ratio: float = float(ally.get("health")) / float(ally.get("max_health"))
+		if ratio < best_ratio:
+			best = ally
+			best_ratio = ratio
+	return best
+
+
+## Hedef kendisiyse doğrudan yerel alanlara yazar; başka bir peer'sa (bkz.
+## _apply_damage_redirect_to_ally ile AYNI desen, network_manager.gd
+## sync_damage_redirect_buff) hedefin KENDİ istemcisine RPC ile iletir - o
+## istemci kendi take_damage()'ında tamamen yerel olarak uygular.
+func _apply_oakley_bond_to_target(target: Node2D, heal_per_hit: float, shield_per_hit: float, reduction: float, duration: float) -> void:
+	if target == self:
+		oakley_bond_active = true
+		oakley_bond_heal_per_hit = heal_per_hit
+		oakley_bond_shield_per_hit = shield_per_hit
+		oakley_bond_damage_reduction = reduction
+		oakley_bond_timer = duration
+		return
+	if not is_instance_valid(target) or not ("peer_id" in target):
+		return
+	var target_peer_id: int = int(target.get("peer_id"))
+	if target_peer_id <= 0 or not NetworkManager.is_multiplayer_active:
+		return
+	NetworkManager.sync_oakley_bond_buff.rpc(target_peer_id, heal_per_hit, shield_per_hit, reduction, duration)
+
+
+func _process_oakley_bond(delta: float) -> void:
+	if not oakley_bond_active:
+		return
+	oakley_bond_timer -= delta
+	if oakley_bond_timer <= 0.0:
+		oakley_bond_active = false
+		oakley_bond_heal_per_hit = 0.0
+		oakley_bond_shield_per_hit = 0.0
+		oakley_bond_damage_reduction = 0.0
 
 
 ## Çiçek alındığında 2sn boyunca azalarak kaybolan geçici hareket hızı

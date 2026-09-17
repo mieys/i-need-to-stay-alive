@@ -51,8 +51,8 @@ class_name Enemy
 ## 260'tı, artık daha yakına gelmeden büyü atamıyorlar.
 ## DÜZELTME (kullanıcı isteği #22: "menzilli karakter/yaratık menzilleri
 ## genel olarak çok uzun" - seçilen oran: %25 azalt): 150 -> 112.5. Bu tek
-## değer _process_ranged_attack/_process_homing_attack'taki 1.6x/2.5x
-## çarpanlar sayesinde tetikleme mesafelerini de orantılı olarak küçültüyor.
+## değer _process_ranged_attack'taki 1.6x/2.5x çarpanlar sayesinde tetikleme
+## mesafelerini de orantılı olarak küçültüyor.
 @export var ranged_range: float = 112.5 ## preferred distance kept from the player
 @export var ranged_attack_interval: float = 2.2
 @export var ranged_damage: float = 0.0 ## 0 = reuse contact_damage
@@ -69,8 +69,11 @@ const RANGED_SPELL_DAMAGE_MULT := 0.4
 @export var normal_attack_interval: float = 1.15
 @export var normal_attack_damage_mult: float = 0.35 ## büyü hasarının (yukarısı) bu oranı
 
+## Kullanıcı bildirimi: "Menzilli düşmanlar hem aynı anda birden çok
+## ateşleme yapıyor sadece 1 adet ateşleme yapsın" - büyü VE "garanti
+## isabet" atışı eskiden ayrı zamanlayıcı kullanıyordu, artık ikisi de bu
+## TEK paylaşılan sayacı kullanıyor (bkz. _process_ranged_attack).
 var _ranged_timer: float = 0.0
-var _normal_attack_timer: float = 0.0
 const EnemyProjectileScene := preload("res://scenes/enemy_projectile.tscn")
 
 ## Only used for enemies whose visual is a plain Sprite2D with hframes/vframes
@@ -2138,7 +2141,6 @@ func _physics_process(delta: float) -> void:
 				_update_facing(dir)
 				if is_ranged:
 					_process_ranged_attack(delta, player, dist, dir)
-					_process_homing_attack(delta, player, dist)
 			else:
 				## Kullanıcı isteği: "yaratıkların hedefi yokken etrafta
 				## arada rasgele dolanmalı bazen de durmalılar ve doğal
@@ -2373,13 +2375,29 @@ func _physics_process(delta: float) -> void:
 ## Casts periodically once the player is roughly within range - a bit of
 ## slack (1.6x) beyond ranged_range so it keeps firing while the player is
 ## drifting in and out rather than needing to be exactly in the sweet spot.
+## DÜZELTME (kullanıcı bildirimi: "Menzilli düşmanlar hem aynı anda birden
+## çok ateşleme yapıyor sadece 1 adet ateşleme yapsın") - eskiden bu fonksiyon
+## VE _process_homing_attack (aşağıda kaldırıldı) TAMAMEN BAĞIMSIZ iki ayrı
+## zamanlayıcıydı (_ranged_timer/_normal_attack_timer), ikisi de 0.0'dan
+## başladığı için oyuncu her iki menzile de girer girmez AYNI karede iki
+## mermi (büyü + "garanti isabet" atışı) birden fırlıyordu. Artık TEK bir
+## paylaşılan zamanlayıcı (_ranged_timer) var - her tikte İKİSİNDEN SADECE
+## BİRİ ateşleniyor: oyuncu büyü menzilindeyse (1.6x) büyü, sadece daha
+## geniş "garanti isabet" menzilindeyse (2.5x, büyü menzili dışında) o -
+## ikisinin "geniş ağ" amacı (kaçarak menzil dışına çıkan oyuncuyu hâlâ
+## tehdit etme) korunuyor, sadece artık aynı anda değil.
 func _process_ranged_attack(delta: float, _player: Node2D, dist: float, dir: Vector2) -> void:
-	if dist > ranged_range * 1.6:
+	if dist > ranged_range * 2.5:
 		return
 	_ranged_timer -= delta
-	if _ranged_timer <= 0.0:
+	if _ranged_timer > 0.0:
+		return
+	if dist <= ranged_range * 1.6:
 		_ranged_timer = ranged_attack_interval
 		_fire_ranged_attack(dir)
+	else:
+		_ranged_timer = normal_attack_interval
+		_fire_homing_attack()
 
 
 func _fire_ranged_attack(dir: Vector2) -> void:
@@ -2407,19 +2425,10 @@ func _fire_ranged_attack(dir: Vector2) -> void:
 		NetworkManager.broadcast_enemy_projectile.rpc(global_position, dir, false, projectile_tint, net_id)
 
 
-## İKİNCİ, daha zayıf, GARANTİ İSABETLİ (homing) normal atış - büyüden (yukarısı)
-## tamamen ayrı bir kd üzerinde çalışır. Büyünün 1.6x menzil toleransından daha
-## geniş bir alanda tetiklenir ki yaratık büyü menzili dışındayken de oyuncuyu
-## bu zayıf ama kaçınılmaz saldırıyla tehdit etsin.
-func _process_homing_attack(delta: float, _player: Node2D, dist: float) -> void:
-	if dist > ranged_range * 2.5:
-		return
-	_normal_attack_timer -= delta
-	if _normal_attack_timer <= 0.0:
-		_normal_attack_timer = normal_attack_interval
-		_fire_homing_attack()
-
-
+## İKİNCİ, daha zayıf, GARANTİ İSABETLİ atış - büyüden farklı hasar/görsel
+## kullanır ama artık AYRI bir zamanlayıcısı yok (bkz. _process_ranged_attack
+## üstündeki DÜZELTME notu - ikisi artık paylaşılan _ranged_timer'dan sırayla
+## tetikleniyor, hiç aynı anda değil).
 ## DÜZELTME (kullanıcı bildirimi: "uzaktan kesin bir şekilde hasar
 ## verebilen büyücü düşmanlar var hala garanti vuran menzilli silahları
 ## var") - bu "ikinci, zayıf ama garanti isabetli" atış artık homing=true

@@ -444,7 +444,7 @@ const STAT_TITLE_COLORS := {
 ## apply_upgrade tier_mult) birebir eşleşmesi için AYNI "taban × tier"
 ## mantığı burada da tekrarlanıyor (ikisi de tek bir kaynaktan - upgrade["desc"]
 ## ve tier parametresinden - türediği için asla sapamaz).
-func _scaled_desc_value(raw_desc: String, tier: int) -> String:
+func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 	var sign_str: String = "+"
 	var rest: String = raw_desc
 	if rest.begins_with("+") or rest.begins_with("-"):
@@ -458,7 +458,12 @@ func _scaled_desc_value(raw_desc: String, tier: int) -> String:
 	## AYNI formül (tier_mult) - ikisi de tier1=×1.0, tier2=×1.3, tier3=×1.6,
 	## tier4=×1.9 versin diye TEK kaynaktan (raw_desc ve tier) türüyor, asla
 	## sapamaz.
-	var scaled: float = rest.to_float() * (1.0 + float(tier - 1) * 0.3)
+	## SONRAKİ DÜZELTME (kullanıcı isteği: "Can çalmanı statların 1. kademede
+	## 0.3 kademe başına 0.3 arttırarak tekrar düzenle") - "lifesteal" bu
+	## paylaşılan tier_mult eğrisinden BİLEREK çıkarıldı (bkz. player.gd
+	## apply_upgrade "lifesteal" dalı), burada da AYNI özel dal olmadan
+	## gösterilen sayı gerçek uygulanan değerden sapardı.
+	var scaled: float = rest.to_float() * (float(tier) if id == "lifesteal" else (1.0 + float(tier - 1) * 0.3))
 	var formatted: String
 	if is_equal_approx(scaled, round(scaled)):
 		formatted = str(int(round(scaled)))

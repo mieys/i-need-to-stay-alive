@@ -89,6 +89,22 @@ offset_right = 490.0
 offset_bottom = -20.0
 grow_horizontal = 2
 grow_vertical = 0
+## DÜZELTME (kullanıcı isteği: "skill iconlarının olduğu kısımdaki uzun
+## kahverengi arka plan olayı düzelmemiş") - önceki tur SADECE skill_icon.gd
+## ikonlarının kendi 72x72 karesini (size_flags_vertical=4) düzeltmişti;
+## asıl büyüyüp küçülen bu panelin KENDİ arka planıydı (theme_original.tres
+## PanelContainer/styles/panel, aynı koyu kahverengi renk - ikisi neredeyse
+## ayırt edilemez, o yüzden karıştırılmıştı). clip_contents olmadan, içindeki
+## TextScroll (ScrollContainer) sabit 320px'lik bu bütçeyi aşan içerikte
+## KAYDIRMAK yerine PanelContainer'ın kendisini BÜYÜTÜYORDU (Godot'un
+## varsayılan "minimum boyutu aşarsa büyü" davranışı). Projedeki HER DİĞER
+## sabit boyutlu panel (shop_panel.tscn, level_up_screen.tscn,
+## inventory_panel.tscn, stats_panel.tscn, pause_menu.tscn, hud.tscn) zaten
+## clip_contents=true kullanıyor - burada eksikti. 3. yetenek satırı
+## eklenince (4 satır artık 3 satırlık eski bütçeye sığmıyor) bu eksiklik
+## belirgin hale geldi. Artık panel HER ZAMAN sabit 320px kalıyor, taşan
+## içerik ScrollContainer'ın KENDİ amacı olan kaydırmayla görülüyor.
+clip_contents = true
 
 [node name="InfoMargin" type="MarginContainer" parent="InfoPanel" unique_id=1101979809]
 layout_mode = 2

@@ -153,18 +153,24 @@ func _broadcast_network_state() -> void:
 	NetworkManager.broadcast_oakley_vine_state.rpc(multiplayer.get_unique_id(), network_instance_id, global_position, target_point, is_instance_valid(_target))
 
 
-## En yakına değil, menzildeki (cooldown'da olmayan) yaratıklardan RASTGELE
-## birine kilitlenir - bkz. RETARGET_SEARCH_RADIUS üstündeki not.
+## DÜZELTME (kullanıcı isteği: "Oakleyin sarmaşıkları en yakın düşmana
+## öncelik vermeli") - eskiden menzildeki (cooldown'da olmayan) yaratıklardan
+## RASTGELE birine kilitleniyordu (bkz. RETARGET_SEARCH_RADIUS üstündeki
+## eski not - 3 sarmaşığın aynı yaratığa üşüşmemesi içindi). Artık en
+## yakın olan seçiliyor.
 func _pick_new_target() -> void:
-	var candidates: Array = []
+	var best: Node2D = null
+	var best_dist: float = INF
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if _recent_hits.has(e.get_instance_id()):
 			continue
-		if global_position.distance_to(e.global_position) <= RETARGET_SEARCH_RADIUS:
-			candidates.append(e)
-	_target = candidates.pick_random() if not candidates.is_empty() else null
+		var d: float = global_position.distance_to(e.global_position)
+		if d <= RETARGET_SEARCH_RADIUS and d < best_dist:
+			best = e
+			best_dist = d
+	_target = best
 
 
 func _on_hit() -> void:

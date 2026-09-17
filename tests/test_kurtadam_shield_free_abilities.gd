@@ -46,11 +46,16 @@ func test_temel_does_not_spend_shield() -> void:
 
 
 ## Kontrol: muafiyet SADECE Kurt Adam'a özel bir istisna değil, genel
-## mekanizma bozulmamış - başka bir karakterin (Oakley, ULTİ id 1) yeteneği
-## hâlâ normal şekilde kalkan harcamalı.
+## mekanizma bozulmamış - başka bir karakterin (Melek, TEMEL id 1 - Can
+## Basma) yeteneği hâlâ normal şekilde kalkan harcamalı.
+## NOT: bu test eskiden "Oakley" olarak etiketlenmişti (id 1'i o zamanki
+## Oakley'nin Q'suyla - Çiçek - paylaşıyordu, bkz. player.gd
+## _process_character_passive üstündeki AYNI eski çakışma notu); Oakley'nin
+## bugünkü kiti (Arı Sürüsü/Sarmaşıklar/Koruyucu Büyü) id 1'i hiç kullanmıyor,
+## id 1 artık SADECE Melek'in Can Basma'sı - etiket buna göre düzeltildi.
 func test_other_character_still_spends_shield() -> void:
-	GameManager.selected_char_id = 2 ## Oakley
-	GameManager.selected_character = 1 ## Oakley'nin ULTİ id'si (Can Basma)
+	GameManager.selected_char_id = 10 ## Melek
+	GameManager.selected_character = 1 ## Melek'in TEMEL id'si (Can Basma)
 	var player: Node = PlayerScene.instantiate()
 	add_child(player)
 	player.item_shield_max = 100.0
@@ -60,6 +65,6 @@ func test_other_character_still_spends_shield() -> void:
 	player._activate_skill()
 
 	assert(player.item_shield_hp < before,
-		"Oakley'nin ULTİ'si hâlâ kalkan harcamalı (genel mekanizma bozulmuş olabilir)")
+		"Melek'in Can Basma'sı hâlâ kalkan harcamalı (genel mekanizma bozulmuş olabilir)")
 
 	player.queue_free()

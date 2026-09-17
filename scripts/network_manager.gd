@@ -2213,6 +2213,20 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			flower.global_position = pos
 			if flower.has_method("setup"):
 				flower.call("setup", float(extra_data.get("caster_damage_bonus", 0.0)), str(extra_data.get("flower_id", "")))
+		## Oakley'nin pasifinin çiçek bırakma anındaki anlık "sihirli bağ"
+		## çizgisi (kullanıcı isteği: "çiçek bırakırken bıraktığı yere doğru
+		## bıraktığı esnada ince bir sihirli bağ efekti oluşacak anlık") -
+		## "oakley_flower_spawn" ile AYNI desen, pos=Oakley'nin konumu,
+		## extra_data.end_pos=çiçeğin düştüğü nokta.
+		"oakley_flower_bond":
+			var bond_scene: Script = load("res://scripts/fx_oakley_flower_bond.gd")
+			if not bond_scene:
+				return
+			var bond := Node2D.new()
+			bond.set_script(bond_scene)
+			get_tree().current_scene.add_child(bond)
+			if bond.has_method("setup"):
+				bond.call("setup", pos, Vector2(extra_data.get("end_pos", pos)))
 		"chain_lightning":
 			## Şimşek Asası'nın düşmandan düşmana sıçrama efekti (bkz.
 			## weapon.gd _spawn_chain_lightning_fx) - uzak oyuncularda gerçek
@@ -2566,6 +2580,28 @@ func sync_damage_redirect_buff(target_peer_id: int, source_peer_id: int, percent
 	else:
 		local_player.damage_redirect_percent = 0.0
 		local_player.damage_redirect_peer_id = 0
+
+
+## Oakley'nin YENİ R'si (Koruyucu Büyü, skill3 id 39) - sync_damage_redirect_
+## buff ile AYNI "hedefin kendi peer_id'sine RPC, hedefin KENDİ Player'ındaki
+## alanları set et" deseni (bkz. player.gd _apply_oakley_bond_to_target/
+## take_damage/_process_oakley_bond). Heal/kalkan miktarları CAST ANINDA
+## Oakley'nin saldırı gücünden sabitlenmiş halde geliyor - hedef bundan sonra
+## tamamen yerel çalışır, Oakley'nin GÜNCEL statlarına bir daha erişmeye
+## gerek yok.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_oakley_bond_buff(target_peer_id: int, heal_per_hit: float, shield_per_hit: float, reduction: float, duration: float) -> void:
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	if local_id != target_peer_id:
+		return
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if not local_player or not ("oakley_bond_active" in local_player):
+		return
+	local_player.oakley_bond_active = true
+	local_player.oakley_bond_heal_per_hit = heal_per_hit
+	local_player.oakley_bond_shield_per_hit = shield_per_hit
+	local_player.oakley_bond_damage_reduction = reduction
+	local_player.oakley_bond_timer = duration
 
 
 ## Koruma Bariyeri'nin gerçek etkisi - buflanmış dostun take_damage()'ı
