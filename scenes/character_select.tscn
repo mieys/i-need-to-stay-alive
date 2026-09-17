@@ -124,6 +124,7 @@ theme_override_constants/separation = 14
 [node name="SkillIcon1" type="Control" parent="InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/UltiRow" unique_id=35691074]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
+size_flags_vertical = 4
 script = ExtResource("3")
 
 [node name="UltiDescLabel" type="Label" parent="InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/UltiRow" unique_id=266295391]
@@ -140,6 +141,7 @@ theme_override_constants/separation = 14
 [node name="SkillIcon2" type="Control" parent="InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow" unique_id=1434448726]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
+size_flags_vertical = 4
 script = ExtResource("3")
 
 [node name="TemelDescLabel" type="Label" parent="InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow" unique_id=525254964]
@@ -156,6 +158,7 @@ theme_override_constants/separation = 14
 [node name="PassiveIcon" type="Control" parent="InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/PassiveRow" unique_id=692036253]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
+size_flags_vertical = 4
 script = ExtResource("3")
 
 [node name="PassiveDescLabel" type="Label" parent="InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/PassiveRow" unique_id=1943082495]

@@ -52,7 +52,10 @@ const DEFS := {
 		"skill3": 37,
 		"skill3_name": "Ayna Formu",
 		"skill3_desc": "ULTİ: 15sn boyunca her silahının bir aynalı kopyası belirir (silah sayısı 2 katına çıkar, hepsi eşit aralıklarla etrafını sarar) - her kopya bağımsız ateş eder. Kopya başına saldırı gücü %8 azalır. (120sn bekleme)",
-		"skill3_icon": "res://assets/skills/talon_devlesme_icon.png",
+		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
+		## Q ile AYNI geçici "talon_devlesme_icon.png" dosyasını paylaşıyordu,
+		## artık kendi özel ikonu var.
+		"skill3_icon": "res://assets/skills/talon_ayna_formu_icon.png",
 		"passive": "Yetenek kullandıkça yığılan güç: her kullanımda 6sn süren bir yük kazanır (en fazla 5, +%6 saldırı gücü / +%4 hasar azaltma her yük) - yetenek kullanılmazsa yükler 2sn'de bir azalır.",
 		"passive_icon": "res://assets/skills/talon_passive_icon.png",
 		"frames": "res://assets/characters/talha_frames.tres",
@@ -77,17 +80,27 @@ const DEFS := {
 		"skill": 1,
 		"skill_name": "Çiçek",
 		"skill_desc": "Yere bir çiçek bırakır (kendisi veya bir dost alabilir, 180sn yerde kalır). Alınırsa saldırı gücünün %50'si kadar can yeniler ve alanı 2sn boyunca azalarak kaybolan %25 hıza kavuşturur; alınmazsa 5sn'de bir büyüyüp verdiği canı kümülatif %40 arttırır (en fazla 2 büyüme). 2 yük, yük başına 18sn.",
-		"skill_icon": "res://assets/skills/oyku_ulti_can_basma_icon.png",
+		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
+		## Melek ile AYNI geçici "oyku_ulti_can_basma_icon.png" dosyasını
+		## paylaşıyordu, artık kendi özel ikonu var.
+		"skill_icon": "res://assets/skills/oakley_cicek_icon.png",
 		"skill2": 10,
 		"skill2_name": "Sarmaşıklar",
 		"skill2_desc": "TEMEL: Yakındaki yaratıklara doğru ilerleyen 3 sarmaşık yaratır (6sn). İsabet eden yaratığı 4sn yere sabitler (hareket edemez, saldırabilir) ve saldırı gücünün %60'ı kadar hasar verir. Bosslar sabitlenmez, bunun yerine %30 yavaşlar. (16sn bekleme)",
-		"skill2_icon": "res://assets/skills/oyku_kalkan_yenileme_icon.png",
+		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
+		## Melek'in E'si VE kendi R'siyle AYNI geçici
+		## "oyku_kalkan_yenileme_icon.png" dosyasını paylaşıyordu, artık kendi
+		## özel ikonu var.
+		"skill2_icon": "res://assets/skills/oakley_sarmasik_icon.png",
 		"skill3": 33,
 		"skill3_name": "Arı Sürüsü",
 		"skill3_desc": "3. YETENEK: Bulunduğu konuma 10sn süren bir arı sürüsü salar. İçindeki yaratıklar saniyede 1 zehir yükü biriktirir (en fazla 10), her yük 4sn boyunca toplam saldırı gücünün %20'si kadar hasar verir. (20sn bekleme)",
-		"skill3_icon": "res://assets/skills/oyku_kalkan_yenileme_icon.png",
+		"skill3_icon": "res://assets/skills/oakley_ari_suru_icon.png",
 		"passive": "Canı %20'nin altına düşünce anında %40 kalkan kazanır ve 6sn içinde maksimum canının %25'ini yeniler. (120sn bekleme, bekleme süresi azaltmadan etkilenmez)",
-		"passive_icon": "res://assets/skills/oyku_passive_icon.png",
+		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
+		## Melek ile AYNI geçici "oyku_passive_icon.png" dosyasını
+		## paylaşıyordu, artık kendi özel ikonu var.
+		"passive_icon": "res://assets/skills/oakley_passive_icon.png",
 		"frames": "res://assets/characters/oyku_frames.tres",
 		"portrait": "res://assets/characters/oyku_portrait.png",
 	},
@@ -171,32 +184,39 @@ const DEFS := {
 	},
 	5: {
 		"name": "Assasin Çocuk",
-		## Kullanıcı isteği: "assasin çocuğun yeni bir yeteneği olucak,
-		## görünmezlik yeteneği artık temel yeteneğiyken ultisi ise etraftaki
-		## 25 yaratığa hızlı bir şekilde üzerlerine gidip onlara çarpıp sıra
-		## sıra maksimum 25 yaratığa aynı hareketi yapmalı" - eski ULTİ
-		## (Görünmezlik, id 5) TEMEL/E slotuna taşındı (bkz. skill2 aşağıda,
-		## SKILL2_TIMING[5], _activate_skill2()), yeni bir ULTİ (Gölge
-		## Hücumu, id 16) onun yerini aldı (bkz. player.gd
-		## _skill_assasin_dash/SKILL_TIMING[16]).
-		"skill": 16,
-		"skill_name": "Gölge Hücumu",
-		"skill_desc": "ULTİ: Yakındaki yaratıklara sırayla hızla çarpar (en fazla 25 yaratık), her çarpışta tüm silahlarının toplam hasarı kadar 1 kez hasar verir, bitince kullandığı konuma geri döner. (90sn bekleme)",
-		"skill_icon": "res://assets/skills/assasin_golge_hucumu_icon.png",
+		## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
+		## yerini değiştir") - Talon'un "R ile Q'nun yerini değiştir" isteğiyle
+		## AYNI desen (bkz. o karakterin DEFS'indeki üstteki not): id NUMARALARI
+		## (16=Q/ULTİ, 30=skill3/R) AYNI kaldı, sadece HANGİ fonksiyonun hangi
+		## id'ye bağlı olduğu player.gd'de swap edildi (bkz. _activate_skill/
+		## _activate_skill3 match blokları, SKILL_TIMING[16]/SKILL3_TIMING[30],
+		## use_ulti_tier/hafif tarife istisnası) - Gölge Adımı artık Q'da,
+		## Gölge Hücumu artık R'de. Eski yorum (aşağıda referans için
+		## bırakıldı): eski ULTİ (Görünmezlik, id 5) TEMEL/E slotuna taşınmıştı
+		## (bkz. skill2 aşağıda, SKILL2_TIMING[5], _activate_skill2()), yeni
+		## bir ULTİ (Gölge Hücumu, id 16) onun yerini almıştı (bkz. player.gd
+		## _skill_assasin_dash/SKILL_TIMING[16]) - o değişiklik E'yi
+		## ETKİLEMEDİ, hâlâ geçerli.
+		"skill": 30,
+		"skill_name": "Gölge Adımı",
+		"skill_desc": "YETENEK: 6 saniye boyunca görünmez olur ve yaratıkların içinden geçebilir. Görünmezken saldırı gücü %30 artar. (60sn bekleme)",
+		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
+		## E ile AYNI geçici "assasin_gorunmezlik_icon.png" dosyasını
+		## paylaşıyordu, artık kendi özel ikonu var.
+		"skill_icon": "res://assets/skills/assasin_golge_adimi_icon.png",
 		## DÜZELTME (kullanıcı isteği: yeni temel yetenek) - Görünmezlik'in
 		## yerine 8 yönlü, 3 yüklü bir hamle geldi (bkz. player.gd
 		## ASSASIN_DASH2_*/_try_assasin_dash2/SKILL2_TIMING[5] üstündeki not).
 		"skill2": 5,
 		"skill2_name": "Şahin Hamlesi",
 		"skill2_desc": "TEMEL: Yürüdüğü yöne (8 yön) hızla hamle yapıp içinden geçtiği düşmanlara saldırı gücünün %150'si kadar hasar verir. 3 yükü vardır, her yük ayrı ayrı 12sn'de yenilenir.",
-		"skill2_icon": "res://assets/skills/assasin_gorunmezlik_icon.png",
-		## Kullanıcı isteği: Assasin Çocuk'un yeni 3. yeteneği (skill3, R
-		## tuşu) - 6sn görünmez olur, yaratıkların içinden geçebilir,
-		## saldırı gücü %30 artar (bkz. player.gd
-		## _skill_assasin_invisibility_r, skill id 30).
-		"skill3": 30,
-		"skill3_name": "Gölge Adımı",
-		"skill3_desc": "3. YETENEK: 6 saniye boyunca görünmez olur ve yaratıkların içinden geçebilir. Görünmezken saldırı gücü %30 artar. (60sn bekleme)",
+		"skill2_icon": "res://assets/skills/assasin_sahin_hamlesi_icon.png",
+		## Kullanıcı isteği: Assasin Çocuk'un eski ULTİ'si (Gölge Hücumu) -
+		## yakındaki yaratıklara sırayla hızla çarpar (bkz. player.gd
+		## _skill_assasin_dash, skill id 16) - artık 3. yetenek/R'de.
+		"skill3": 16,
+		"skill3_name": "Gölge Hücumu",
+		"skill3_desc": "ULTİ: Yakındaki yaratıklara sırayla hızla çarpar (en fazla 25 yaratık), her çarpışta tüm silahlarının toplam hasarı kadar 1 kez hasar verir, bitince kullandığı konuma geri döner. (90sn bekleme)",
 		"passive": "Bıçak Uzmanlığı: yetenek kullanımından sonraki 3 saniye boyunca garantili kritik vurur.",
 		"passive_icon": "res://assets/skills/assasin_passive_icon.png",
 		"frames": "res://assets/characters/assasin_frames.tres",
@@ -341,11 +361,17 @@ const DEFS := {
 		"skill": 1,
 		"skill_name": "Can Basma",
 		"skill_desc": "ULTİ: Anında %15 can yeniler, sonraki 6sn boyunca saniyede %1 can + saldırı gücünün %60'ı kadar can yeniler (kendine+müttefiğe). (20sn bekleme)",
-		"skill_icon": "res://assets/skills/oyku_ulti_can_basma_icon.png",
+		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
+		## Oakley ile AYNI geçici "oyku_ulti_can_basma_icon.png" dosyasını
+		## paylaşıyordu, artık kendi özel ikonu var.
+		"skill_icon": "res://assets/skills/melek_can_basma_icon.png",
 		"skill2": 10,
 		"skill2_name": "Kalkan Yenileme",
 		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede %1 kalkan + saldırı gücünün %60'ı kadar kalkan yeniler (kendine+müttefiğe). (15sn bekleme)",
-		"skill2_icon": "res://assets/skills/oyku_kalkan_yenileme_icon.png",
+		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
+		## Oakley'nin E/R'siyle AYNI geçici "oyku_kalkan_yenileme_icon.png"
+		## dosyasını paylaşıyordu, artık kendi özel ikonu var.
+		"skill2_icon": "res://assets/skills/melek_kalkan_yenileme_icon.png",
 		## Kullanıcı isteği: Melek'in yeni 3. yeteneği (skill3, R tuşu) -
 		## kendi etrafında VE can basma/kalkan yenileme ile bağ kurduğu
 		## dostun etrafında yakındaki tüm yaratıkları korkutup kaçırır
@@ -353,12 +379,16 @@ const DEFS := {
 		"skill3": 32,
 		"skill3_name": "Kutsal Korku",
 		"skill3_desc": "3. YETENEK: Kendi etrafındaki (ve bağ kurduğu dostun etrafındaki) tüm yaratıkları 4 saniye boyunca korkutup kaçırır. (45sn bekleme)",
+		"skill3_icon": "res://assets/skills/melek_kutsal_korku_icon.png",
 		## DÜZELTME (kullanıcı isteği: "Melek'in pasifi %0.5 can yerine saldırı
 		## gücünün %5'si olarak güncelle. Yani 100 saldırı gücü varsa 5 can
 		## yenileyecek yakınındaki herkes.") - bkz. player.gd _passive_oakley/
 		## OAKLEY_PASSIVE_ATTACK_POWER_PERCENT.
 		"passive": "Kendisinin ve yakındaki takım arkadaşlarının canını saniyede saldırı gücünün %5'i kadar yeniler.",
-		"passive_icon": "res://assets/skills/oyku_passive_icon.png",
+		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
+		## Oakley ile AYNI geçici "oyku_passive_icon.png" dosyasını
+		## paylaşıyordu, artık kendi özel ikonu var.
+		"passive_icon": "res://assets/skills/melek_passive_icon.png",
 		"frames": "res://assets/characters/melek_frames.tres",
 		"portrait": "res://assets/characters/melek_portrait.png",
 		## Bkz. Korsan'daki "always_walk" notu - Melek'in atlas'ında da "run"
@@ -368,41 +398,49 @@ const DEFS := {
 	11: {
 		"name": "Necromancer",
 		## Kullanıcı isteği (beni oku.txt): Pasif yakında ölen her düşmandan
-		## ruh biriktirir (bkz. player.gd on_enemy_killed/_necro_gain_soul),
-		## TEMEL 10 ruh karşılığında iskelet çağırır (bekleme süresi yok, bkz.
-		## SKILL2_TIMING[19]/_skill_necro_summon_skeleton - kullanıcı isteği
-		## üzerine artık 1sn bekleme süresi eklendi, bkz. NECRO_SKELETON_
-		## COOLDOWN), ULTİ 100 ruh karşılığında bir Golem çağırır (10sn bekleme,
-		## bkz. SKILL_TIMING[20]/_skill_necro_summon_golem). Ruh yoksa hiçbiri
-		## tetiklenmez, ikisi de kalkan tüketmez (bkz. _activate_skill/
-		## _activate_skill2'deki id 20/19 muafiyeti). Ruh bedelleri sonradan
-		## kullanıcı isteğiyle (İskelet 3->10, Golem 10->100) tekrar güncellendi
-		## - bkz. player.gd NECRO_SKELETON_SOUL_COST/NECRO_GOLEM_SOUL_COST.
-		## DÜZELTME (kullanıcı isteği: "necromancerın ultisi hayalet yerine
-		## golem çağırsın") - ULTİ eskiden Hortlak (menzilli, kaçan) çağırıyordu,
-		## artık necro'nun statlarının/canının %200'üne sahip, kalkanlı, 6sn'de
-		## bir çevresini sersemleten bir Golem çağırıyor (bkz. golem_pet.gd).
-		## DÜZELTME (kullanıcı bildirimi: "golemi aşırı hızlı hareket ediyor...
-		## saldırı hızı azaltmasını %50 den %20 ye düşür") - buradaki yüzde
-		## golem_pet.gd'deki GOLEM_ATTACK_SLOWDOWN_PERCENT ile AYNI kalmalı,
-		## %50 -> %20 olarak güncellendi.
-		"skill": 20,
-		"skill_name": "Golem Çağır",
-		"skill_desc": "ULTİ: 100 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %50 oranında), kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 6sn'de bir çevresindeki yaratıkları 1sn sersemletir, 120sn yaşar). (10sn bekleme)",
-		"skill_icon": "res://assets/skills/necromancer_hortlak_cagir_icon.png",
-		"skill2": 19,
-		"skill2_name": "İskelet Çağır",
-		"skill2_desc": "TEMEL: 10 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (statlarının %30'u, canının %100'ü, kalkansız, 60sn yaşar). Toplamda (iskelet+golem) en fazla 10 yaratığa sahip olabilirsin. (1sn bekleme)",
-		"skill2_icon": "res://assets/skills/necromancer_iskelet_cagir_icon.png",
-		## Kullanıcı isteği: Necromancer'ın yeni 3. yeteneği (Yarasa Sürüsü,
-		## skill3 id 35, R tuşu) - basılıp kapatılabilen bir TOGGLE, standart
-		## skill3_state makinesini KULLANMAZ (bkz. player.gd _necro_toggle_bats/
-		## _process_necro_bats). Her saniye %1 maks kalkan + 25 kalkan tüketip
-		## menzildeki yaratıklara yarasa gönderir, yarasalar hedefe vurup geri
-		## döner.
-		"skill3": 35,
-		"skill3_name": "Yarasa Sürüsü",
-		"skill3_desc": "3. YETENEK (BASILIP KAPATILABİLİR): Açıkken her saniye %1 maksimum kalkan + 25 kalkan tüketerek etrafındaki yaratıklara yarasa gönderir. Yarasalar hedefe saldırı gücünün %80'i kadar hasar verip sana geri döner (hızları hareket hızınla eşittir). Kalkanın biterse kendiliğinden kapanır.",
+		## ruh biriktirir (bkz. player.gd on_enemy_killed/_necro_gain_soul).
+		## DÜZELTME (kullanıcı isteği: "Necromancer in Q skillini iskelet
+		## çıkarma skilli ile değiştir E sini yarasa sürüsü çağırma ile
+		## değiştir ve R sini golem çıkarma ile değiştir") - Talon/Assasin'in
+		## Q/R takaslarıyla AYNI desen: id NUMARALARI (19=İskelet, 35=Yarasa,
+		## 20=Golem) her zaman AYNI yeteneği temsil eder, sadece HANGİ tuşa
+		## (skill/skill2/skill3) bağlı oldukları characters.gd'de VE
+		## player.gd'de (bkz. _physics_process bypass dalları,
+		## _activate_skill/_activate_skill3 match blokları/ön kontrolleri,
+		## SKILL_TIMING/SKILL2_TIMING/SKILL3_TIMING, _necro_toggle_bats'teki
+		## skill2_state, get_skill2_progress/get_skill3_progress'teki
+		## char_id==11 özel dalı) üç yönlü rotasyonla değiştirildi: İskelet
+		## Çağır artık Q'da (eskiden E, bekleme süresi yok, sadece ruh +
+		## NECRO_SKELETON_COOLDOWN 1sn iç bekleme), Yarasa Sürüsü artık E'de
+		## (eskiden R, basılıp kapatılabilen TOGGLE, bkz. player.gd
+		## _necro_toggle_bats/_process_necro_bats), Golem Çağır artık R'de
+		## (eskiden Q, 100 ruh + 10sn bekleme, standart skill3_state
+		## makinesini kullanır). Ruh yoksa hiçbiri tetiklenmez. Ruh bedelleri
+		## sonradan kullanıcı isteğiyle (İskelet 3->10, Golem 10->100) tekrar
+		## güncellendi - bkz. player.gd NECRO_SKELETON_SOUL_COST/NECRO_GOLEM_
+		## SOUL_COST. DÜZELTME (kullanıcı isteği: "necromancerın ultisi
+		## hayalet yerine golem çağırsın") - Golem eskiden Hortlak (menzilli,
+		## kaçan) çağırıyordu, artık necro'nun statlarının/canının %200'üne
+		## sahip, kalkanlı, 6sn'de bir çevresini sersemleten bir Golem
+		## çağırıyor (bkz. golem_pet.gd). DÜZELTME (kullanıcı bildirimi:
+		## "golemi aşırı hızlı hareket ediyor... saldırı hızı azaltmasını %50
+		## den %20 ye düşür") - buradaki yüzde golem_pet.gd'deki GOLEM_ATTACK_
+		## SLOWDOWN_PERCENT ile AYNI kalmalı, %50 -> %20 olarak güncellendi.
+		"skill": 19,
+		"skill_name": "İskelet Çağır",
+		"skill_desc": "YETENEK: 10 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (statlarının %30'u, canının %100'ü, kalkansız, 60sn yaşar). Toplamda (iskelet+golem) en fazla 10 yaratığa sahip olabilirsin. (1sn bekleme)",
+		"skill_icon": "res://assets/skills/necromancer_iskelet_cagir_icon.png",
+		"skill2": 35,
+		"skill2_name": "Yarasa Sürüsü",
+		"skill2_desc": "TEMEL (BASILIP KAPATILABİLİR): Açıkken her saniye %1 maksimum kalkan + 25 kalkan tüketerek etrafındaki yaratıklara yarasa gönderir. Yarasalar hedefe saldırı gücünün %80'i kadar hasar verip sana geri döner (hızları hareket hızınla eşittir). Kalkanın biterse kendiliğinden kapanır.",
+		"skill2_icon": "res://assets/skills/necromancer_yarasa_suru_icon.png",
+		## Kullanıcı isteği: Necromancer'ın ULTİ'si (Golem Çağır, skill3 id
+		## 20, R tuşu) - standart skill3_state makinesini kullanır (bkz.
+		## player.gd _skill_necro_summon_golem).
+		"skill3": 20,
+		"skill3_name": "Golem Çağır",
+		"skill3_desc": "ULTİ: 100 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %50 oranında), kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 6sn'de bir çevresindeki yaratıkları 1sn sersemletir, 120sn yaşar). (10sn bekleme)",
+		"skill3_icon": "res://assets/skills/necromancer_hortlak_cagir_icon.png",
 		"passive": "Etrafta ölen her düşman 1 ruh biriktirir (bosslar 5 ruh). Biriken ruh sayısı pasif ikonunun üstünde görünür.",
 		"passive_icon": "res://assets/skills/necromancer_passive_icon.png",
 		"frames": "res://assets/characters/necromancer_frames.tres",

@@ -1183,6 +1183,13 @@ func _process(delta: float) -> void:
 	## saldırmaya devam ediyor".
 	var owner_node := get_parent()
 	if owner_node and (owner_node.get("is_dead") == true or owner_node.get("is_downed") == true):
+		if continuous_beam:
+			## Şimşek Asası: hedefe kilitliyken oyuncu ölür/yere düşerse ışın
+			## FX'i (get_tree().current_scene altına parent'lanmış, bu node'un
+			## kendi görünürlüğünden bağımsız) sahipsiz kalıp sonsuza dek
+			## çalışmaya devam ediyordu - bkz. _end_beam() aşağıdaki aynı
+			## düzeltme (market bölgesi) ile aynı hata sınıfı.
+			_end_beam()
 		return
 	## DÜZELTME (kullanıcı bildirimi: "Dükkanda yeni bir silah aldığımızda...
 	## kalkanın içinden düşmanlara o silahla ateş edebiliyoruz bunun olmaması
@@ -1192,6 +1199,14 @@ func _process(delta: float) -> void:
 	## oyuncunun KENDİ silahları bölgenin DIŞINDAKİ yaratıklara ateş etmeye
 	## devam edebiliyordu - artık gerçek bir ateşkes, silah da susuyor.
 	if owner_node and owner_node.get("is_in_merchant_zone") == true:
+		if continuous_beam:
+			## Kullanıcı bildirimi: "Yıldırım asasına sahipken market alanının
+			## içine girince effekt çıkmaya devam ediyor ama hasar vermiyor" -
+			## process_mode zaten player.gd:set_combat_active() ile DISABLED
+			## yapılıyor (bu satırın altına asla inemeyecek kadar erken), ama
+			## o geçiş anıyla bu _process() çağrısı arasında bir kare farkı
+			## olabilecek durumlar için burada da aynı temizliği yapıyoruz.
+			_end_beam()
 		return
 	_process_arcane_burst_cooldown(delta)
 	## Şimşek Asası: FireTimer/fire_rate'i tamamen görmezden gelir, kendi

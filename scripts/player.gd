@@ -54,7 +54,11 @@ const SKILL_TIMING := {
 	## characters.gd'de "skill": 16 olarak güncellendi (bkz. o dosyadaki
 	## yorum) ama bu zamanlama kaydı 5'te unutulmuştu - _skill_timing_for(16)
 	## bunu bulamayıp varsayılana (10sn/20sn) düşüyordu. Artık doğru id'de.
-	16: {"duration": 15.0, "cooldown": 90.0},
+	## SONRAKİ DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q
+	## skillinin yerini değiştir") - Gölge Hücumu artık R/skill3'te, bu
+	## kayıt SKILL3_TIMING[16]'ya taşındı (bkz. aşağısı), Gölge Adımı'nın
+	## (id 30) eski SKILL3_TIMING kaydı da buraya taşındı.
+	30: {"duration": 6.0, "cooldown": 60.0},
 	## Korsan ULTİ (Patlat, skill id 18): bırakılmış tüm bombaları anında
 	## patlatır - "duration" sadece kısa bir görsel/güvenlik penceresi,
 	## gerçek kısıt bekleme süresi (bkz. _skill_korsan_detonate_all).
@@ -62,10 +66,9 @@ const SKILL_TIMING := {
 	## için ulti artık daha sık, daha tatmin edici kullanılabiliyor - bkz.
 	## KORSAN_BOMB_RECHARGE_TIME).
 	18: {"duration": 0.4, "cooldown": 20.0},
-	## Necromancer ULTİ (Hortlak Çağır, skill id 20): 10 Ruh karşılığında
-	## hortlak çağırır - ruh kontrolü _activate_skill() başında yapılır,
-	## burada sadece bekleme süresi (10sn, bkz. _skill_necro_summon_golem).
-	20: {"duration": 0.4, "cooldown": 10.0},
+	## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
+	## değiştir") - Golem Çağır (id 20) artık R/skill3'te, bu kayıt
+	## SKILL3_TIMING[20]'ye taşındı (bkz. aşağısı).
 	## Büyücü Kız ULTİ (Büyü Değişimi, skill id 3): kullanıcı isteğiyle eski
 	## "Hızlı Ateş" (10sn saldırı hızı buff'ı) TAMAMEN kaldırıldı - artık
 	## sadece TEMEL yeteneğin 4 varyasyonu arasında sırayla geçiş yapıyor
@@ -143,6 +146,17 @@ const SKILL2_TIMING := {
 	## SKILL_TIMING[26] üstündeki AYNI not (eksik kayıt + artık "duration"
 	## kullanılmıyor + 45sn bekleme).
 	27: {"duration": 0.0, "cooldown": 45.0},
+	## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü
+	## çağırma ile değiştir") - Yarasa Sürüsü (skill2 id 35): eskiden
+	## SKILL3_TIMING[35]'teydi (R iken), "basılıp kapatılabilir" bir TOGGLE,
+	## standart skill2_state makinesini KULLANMIYOR (bkz. player.gd
+	## _necro_toggle_bats/_process_necro_bats - girdi bloğunda id
+	## kontrolüyle bypass edilir, Korsan bombasıyla AYNI mimari desen).
+	## Burada SADECE _skill2_timing_for()'un varsayılana düşmemesi için var -
+	## gerçek "süre" yok (kalkan bitene ya da tekrar basılana kadar sürer),
+	## "cooldown" da 0 (bekleme süresi yok, sadece kalkan yeterliliği
+	## kısıtlar).
+	35: {"duration": 9999.0, "cooldown": 0.0},
 }
 var _skill2_duration: float = DEFAULT_SKILL2_DURATION
 var _skill2_cooldown: float = DEFAULT_SKILL2_COOLDOWN
@@ -167,8 +181,11 @@ const SKILL3_TIMING := {
 	## _skill_elara_double_fire) yeni evi - "duration" 25sn'lik gerçek buff
 	## süresiyle birebir eşleşiyor, 120sn bekleme.
 	31: {"duration": 25.0, "cooldown": 120.0},
-	## Kullanıcı isteği: Assasin Çocuk'un yeni 3. yeteneği (Görünmezlik, id 30).
-	30: {"duration": 6.0, "cooldown": 60.0},
+	## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
+	## yerini değiştir") - eskiden Gölge Adımı (id 30) buradaydı (bkz.
+	## SKILL_TIMING[30] şimdi orada), id 16 artık Gölge Hücumu'nun
+	## (bkz. player.gd _skill_assasin_dash) yeni evi.
+	16: {"duration": 15.0, "cooldown": 90.0},
 	## Kullanıcı isteği: Melek'in yeni 3. yeteneği (Korku, id 32) - "duration"
 	## sadece büyü animasyonu penceresi, gerçek etki (4sn korku) enemy.gd'nin
 	## kendi _fear_timer'ında ayrıca tutulur.
@@ -188,20 +205,20 @@ const SKILL3_TIMING := {
 	## bir kanal) - "duration" gerçek 8sn'lik bombardıman süresiyle birebir
 	## eşleşiyor (bkz. KORSAN_BOMBARDMENT_DURATION, _skill_korsan_bombardment).
 	34: {"duration": 8.0, "cooldown": 40.0},
-	## Kullanıcı isteği: Necromancer'ın yeni 3. yeteneği (Yarasa Sürüsü, id
-	## 35) - "basılıp kapatılabilir" bir TOGGLE, standart skill3_state
-	## makinesini KULLANMIYOR (bkz. player.gd _necro_toggle_bats/
-	## _process_necro_bats - girdi bloğunda id kontrolüyle bypass edilir,
-	## Korsan bombası/Necro iskeleti ile AYNI mimari desen). Burada SADECE
-	## _skill3_timing_for()'un varsayılana düşmemesi için var - gerçek "süre"
-	## yok (kalkan bitene ya da tekrar basılana kadar sürer), "cooldown" da
-	## 0 (bekleme süresi yok, sadece kalkan yeterliliği kısıtlar).
-	35: {"duration": 9999.0, "cooldown": 0.0},
+	## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü
+	## çağırma ile değiştir") - Yarasa Sürüsü (id 35) artık E/skill2'de, bu
+	## kayıt SKILL2_TIMING[35]'e taşındı (bkz. yukarısı).
 	## Talon'un yeni 3. yeteneği (Ayna Formu, skill3 id 37) - kullanıcı isteği:
 	## "R ile Q'nun yerini değiştir" (eskiden Hamle Vuruşu buradaydı, bkz.
 	## SKILL_TIMING[38] şimdi orada). "15sn boyunca her silahının bir aynalı
 	## kopyası belirir" (bkz. _skill_talon_mirror_form), 120sn bekleme.
 	37: {"duration": 15.0, "cooldown": 120.0},
+	## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
+	## değiştir") - Golem Çağır (skill3 id 20): eskiden SKILL_TIMING[20]'deydi
+	## (Q iken), 100 Ruh karşılığında golem çağırır - ruh kontrolü
+	## _activate_skill3() başında yapılır, burada sadece bekleme süresi
+	## (10sn, bkz. _skill_necro_summon_golem).
+	20: {"duration": 0.4, "cooldown": 10.0},
 }
 var _skill3_duration: float = DEFAULT_SKILL2_DURATION
 var _skill3_cooldown: float = DEFAULT_SKILL2_COOLDOWN
@@ -2241,6 +2258,15 @@ func _physics_process(delta: float) -> void:
 		## normal _activate_skill() -> _skill_heal() yolunu kullanır.
 		if GameManager.selected_char_id == 2:
 			_try_oakley_flower()
+		## DÜZELTME (kullanıcı isteği: "Necromancer in Q skillini iskelet
+		## çıkarma skilli ile değiştir") - İskelet Çağır (id 19) Korsan'ın
+		## bomba şarjıyla AYNI desen, bekleme süresi YERİNE ruh + kendi 1sn'lik
+		## iç bekleme sayacıyla çalışır (bkz. _skill_necro_summon_skeleton
+		## üstündeki not) - eskiden E/skill2'deydi (bkz. aşağıdaki skill2
+		## dalı), standart skill_state == "ready" makinesini BAŞTAN bypass
+		## ediyor.
+		elif get_skill_character_id() == 19:
+			_skill_necro_summon_skeleton()
 		elif skill_state == "ready":
 			_activate_skill()
 		## DÜZELTME (kullanıcı isteği #42: "şovalyenin ve kurt adamın
@@ -2254,15 +2280,21 @@ func _physics_process(delta: float) -> void:
 			_cancel_active_skill_early()
 	if Input.is_action_just_pressed("skill2") and not is_chat_typing and not is_in_merchant_zone:
 		var skill2_id_pressed: int = get_skill2_id()
-		## Korsan (Saatli Bomba, id 17) ve Necromancer (İskelet Çağır, id 19)
-		## bekleme süresi YERİNE şarj/ruh ile çalışır - standart
-		## skill2_state == "ready" makinesini BAŞTAN devre dışı bırakıp
-		## doğrudan kendi fonksiyonlarına yönlendiriyoruz (bkz. o
-		## fonksiyonların üstündeki yorumlar).
+		## Korsan (Saatli Bomba, id 17) bekleme süresi YERİNE şarj ile çalışır -
+		## standart skill2_state == "ready" makinesini BAŞTAN devre dışı
+		## bırakıp doğrudan kendi fonksiyonuna yönlendiriyoruz (bkz. o
+		## fonksiyonun üstündeki yorum).
 		if skill2_id_pressed == 17:
 			_korsan_try_place_bomb()
-		elif skill2_id_pressed == 19:
-			_skill_necro_summon_skeleton()
+		## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü
+		## çağırma ile değiştir") - Yarasa Sürüsü (id 35) "basılıp
+		## kapatılabilir" bir TOGGLE - eskiden R/skill3'teydi (bkz. aşağıdaki
+		## skill3 dalındaki taşınma notu), standart skill2_state == "ready"
+		## bekleme makinesini BAŞTAN bypass ediyor, her basış açar/kapatır
+		## (bkz. _necro_toggle_bats - artık skill3_state yerine skill2_state
+		## kullanıyor).
+		elif skill2_id_pressed == 35:
+			_necro_toggle_bats()
 		## Assasin Çocuk TEMEL (id 5, yeni 8 yönlü hamle) - Korsan'ın bomba
 		## şarjıyla AYNI desen, standart bekleme makinesi yerine kendi
 		## yük sayacını kullanır (bkz. ASSASIN_DASH2_*/_try_assasin_dash2).
@@ -2289,12 +2321,13 @@ func _physics_process(delta: float) -> void:
 		## için HİÇ ÇAĞRILMAZ.
 		if skill3_id_pressed in BUYUCU_VARIATION_SKILL2_IDS:
 			_buyucu_try_activate_variation_r()
-		## Kullanıcı isteği: Necromancer'ın Yarasa Sürüsü (id 35) "basılıp
-		## kapatılabilir" bir TOGGLE - Korsan bombası (skill2 id 17)/Necro
-		## iskeleti (skill2 id 19) ile AYNI desen: standart skill3_state
-		## bekleme makinesini BAŞTAN bypass ediyor, her basış açar/kapatır.
-		elif skill3_id_pressed == 35:
-			_necro_toggle_bats()
+		## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
+		## değiştir") - Yarasa Sürüsü (eskiden burada, id 35) artık E/skill2'de
+		## (bkz. yukarısı) - Golem Çağır (id 20) standart skill3_state
+		## bekleme makinesini KULLANIYOR (bkz. _activate_skill()'teki eski
+		## ön kontroller artık _activate_skill3()'te), bu yüzden burada özel
+		## bir bypass dalına ihtiyacı yok, aşağıdaki genel "ready" dalından
+		## geçiyor.
 		elif skill3_state == "ready" and skill3_id_pressed != 0:
 			_activate_skill3()
 
@@ -3092,9 +3125,11 @@ const NECRO_GOLEM_SOUL_COST := 100
 ## Kullanıcı isteği: "necromancerın iskelet çağırma skiline 1 saniye bekleme
 ## süresi ekle" - eskiden TEMEL'in (İskelet Çağır) hiç bekleme süresi yoktu,
 ## sadece ruh sayısı/yaratık sınırı kısıtlıyordu (bkz. yukarıdaki "Necromancer"
-## bloğu yorumu). Standart skill2_state makinesi bu yetenek için hâlâ
-## KULLANILMIYOR (bkz. _physics_process, skill2_id_pressed == 19 dalı) - bu
-## yüzden bekleme süresi ayrı bir zamanlayıcı ile (bkz. _necro_skeleton_cooldown_timer/
+## bloğu yorumu). Standart skill_state makinesi bu yetenek için hâlâ
+## KULLANILMIYOR (bkz. _physics_process, get_skill_character_id() == 19 dalı -
+## kullanıcı isteğiyle "R si ile Q skillinin yerini değiştir"deki AYNI desenle
+## artık E yerine Q'da) - bu yüzden bekleme süresi ayrı bir zamanlayıcı ile
+## (bkz. _necro_skeleton_cooldown_timer/
 ## _process_necro_skeleton_cooldown) Korsan'ın bomba şarj sistemiyle AYNI
 ## desende uygulanıyor.
 const NECRO_SKELETON_COOLDOWN := 1.0
@@ -3525,19 +3560,22 @@ func _skill_necro_summon_golem() -> void:
 	_broadcast_necro_pet_spawn(pet, "res://scenes/golem_pet.tscn")
 
 
-## Necromancer'ın yeni 3. yeteneği (Yarasa Sürüsü, skill3 id 35, R tuşu) -
+## Necromancer'ın TEMEL yeteneği (Yarasa Sürüsü, skill2 id 35, E tuşu) -
 ## "Basılıp kapatılabilir. Basıldığında her saniye %1 maks kalkan + 25 kalkan
 ## tüketerek etrafındaki yaratıklara yarasa gönderir, yarasalar yaratıklara
 ## vurup Necromancer'a geri döner (yarasaların hızı Necromancer'la eşdeğerdir).
 ## Yarasalar her yaratığa çarptığında %80 saldırı gücü kadar hasar verir."
-## TOGGLE olduğu için standart skill3_state makinesini KULLANMIYOR - Korsan'ın
-## bombası/kendi İskelet Çağır'ıyla AYNI mimari desen (bkz. _physics_process
-## skill3_id_pressed == 35 dalı). skill3_state SADECE HUD ikonunun "aktif"
-## parlamasını (bkz. is_skill3_active üstündeki id==11 dalı) tetiklemek için
-## ödünç kullanılıyor - skill3_timer'a HİÇ dokunulmuyor (0'da kalıyor), yani
-## _process_skill3() içindeki standart süre/bekleme geçişleri bu karakter
-## için asla çalışmıyor (bkz. o fonksiyonun "if skill3_timer <= 0: return"
-## koruması).
+## TOGGLE olduğu için standart skill2_state makinesini KULLANMIYOR - Korsan'ın
+## bombasıyla AYNI mimari desen (bkz. _physics_process skill2_id_pressed == 35
+## dalı). skill2_state SADECE HUD ikonunun "aktif" parlamasını (bkz.
+## is_skill2_active) tetiklemek için ödünç kullanılıyor - skill2_timer'a HİÇ
+## dokunulmuyor (0'da kalıyor), yani _process_skill2() içindeki standart
+## süre/bekleme geçişleri bu karakter için asla çalışmıyor.
+## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü çağırma
+## ile değiştir") - eskiden R/skill3 id 35'ti (bkz. get_skill3_progress()
+## karşılığı artık get_skill2_progress()'teki char_id==11 özel dalı), aşağıda
+## skill3_state/skill3_timer kullanan tüm satırlar skill2_state/skill2_timer
+## olarak güncellendi.
 const NECRO_BATS_SHIELD_DRAIN_PERCENT_OF_MAX := 0.01 ## %1 maks kalkan/sn
 const NECRO_BATS_SHIELD_DRAIN_FLAT := 25.0 ## +25 kalkan/sn
 const NECRO_BATS_DAMAGE_RATIO := 0.8 ## %80 saldırı gücü/isabet
@@ -3555,14 +3593,14 @@ var _necro_bats_tick_timer: float = 0.0
 func _necro_toggle_bats() -> void:
 	if _necro_bats_active:
 		_necro_bats_active = false
-		skill3_state = "ready"
+		skill2_state = "ready"
 		return
 	if item_shield_hp <= 0.0:
 		_spawn_floating_text("KALKAN YOK", Color(0.4, 0.7, 1.0))
 		return
 	_necro_bats_active = true
 	_necro_bats_tick_timer = 0.0 ## ilk tik hemen bu karede düşsün
-	skill3_state = "active" ## SADECE HUD ikonu için - bkz. yukarıdaki dosya başı notu
+	skill2_state = "active" ## SADECE HUD ikonu için - bkz. yukarıdaki dosya başı notu
 	_spawn_ring_sized(NECRO_BATS_RADIUS, Color(0.55, 0.15, 0.65))
 
 
@@ -3575,7 +3613,7 @@ func _process_necro_bats(delta: float) -> void:
 		return
 	if is_dead or is_downed:
 		_necro_bats_active = false
-		skill3_state = "ready"
+		skill2_state = "ready"
 		return
 	_necro_bats_tick_timer -= delta
 	if _necro_bats_tick_timer > 0.0:
@@ -3585,7 +3623,7 @@ func _process_necro_bats(delta: float) -> void:
 	_spend_ability_shield_cost(drain)
 	if item_shield_hp <= 0.0:
 		_necro_bats_active = false
-		skill3_state = "ready"
+		skill2_state = "ready"
 		_spawn_floating_text("KALKAN BİTTİ", Color(0.4, 0.7, 1.0))
 		return
 	_launch_necro_bats()
@@ -4173,6 +4211,16 @@ func get_skill2_progress() -> float:
 		if cd <= 0.0:
 			return 1.0
 		return clamp(1.0 - (_buyucu_variation_cooldowns[buyucu_variation] / cd), 0.0, 1.0)
+	## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü
+	## çağırma ile değiştir") - Necromancer'ın Yarasa Sürüsü (bkz.
+	## _necro_toggle_bats) bir TOGGLE - gerçek bekleme süresi yok (sadece
+	## kalkan yeterliliği kısıtlar), her zaman "hazır" sayılır. Bunun ÖZEL
+	## DALI olmasa skill2_total_elapsed (bkz. _process_skill2, skill2_state
+	## != "ready" iken sınırsız birikiyor) yüzünden yanıltıcı bir "dolan
+	## bekleme" göstergesi oluşurdu - eskiden bu dal get_skill3_progress()'te
+	## R/skill3 için vardı (Yarasa Sürüsü orada iken), artık burada.
+	if GameManager.selected_char_id == 11:
+		return 1.0
 	if get_skill2_id() == 0:
 		return 1.0
 	if skill2_state == "ready":
@@ -4248,13 +4296,13 @@ func get_skill3_progress() -> float:
 		if cd <= 0.0:
 			return 1.0
 		return clamp(1.0 - (_buyucu_variation_cooldowns[BUYUCU_SET_R_VARIATIONS[buyucu_variation_set]] / cd), 0.0, 1.0)
-	## Necromancer'ın Yarasa Sürüsü (bkz. _necro_toggle_bats) bir TOGGLE -
-	## gerçek bekleme süresi yok (sadece kalkan yeterliliği kısıtlar), her
-	## zaman "hazır" sayılır. Bunun ÖZEL DALI olmasa skill3_total_elapsed
-	## (bkz. _process_skill3, skill3_state != "ready" iken sınırsız birikiyor)
-	## yüzünden yanıltıcı bir "dolan bekleme" göstergesi oluşurdu.
-	if GameManager.selected_char_id == 11:
-		return 1.0
+	## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
+	## değiştir") - eskiden burada Necromancer'ın Yarasa Sürüsü (bir TOGGLE,
+	## bkz. _necro_toggle_bats) için "her zaman hazır sayılır" özel bir dal
+	## vardı - Yarasa Sürüsü artık E/skill2'de (bkz. get_skill2_progress()'teki
+	## karşılığı), R'de artık standart skill3_state makinesini kullanan Golem
+	## Çağır var, bu yüzden özel dal kaldırıldı - normal ilerleme hesabı
+	## geçerli.
 	if get_skill3_id() == 0:
 		return 1.0
 	if skill3_state == "ready":
@@ -4502,6 +4550,16 @@ func set_combat_active(active: bool) -> void:
 		if is_instance_valid(w):
 			w.visible = active
 			w.process_mode = mode
+			## Kullanıcı bildirimi: "Yıldırım asasına sahipken market alanının
+			## içine girince effekt çıkmaya devam ediyor ama hasar vermiyor" -
+			## process_mode = DISABLED, weapon.gd'nin _process() döngüsünü
+			## (ve içindeki _end_beam() çağrısını) tamamen durdurduğu için
+			## zaten açık olan ışın FX'i (get_tree().current_scene altında,
+			## bu node'dan bağımsız) sahipsiz kalıp sonsuza dek çalışmaya
+			## devam ediyordu. Devre dışı bırakılan TEK ortak nokta burası
+			## olduğundan ışını kapatmak da burada olmalı.
+			if not active and w.get("continuous_beam") == true and w.has_method("_end_beam"):
+				w._end_beam()
 	if "_necro_active_pets" in self:
 		for p in _necro_active_pets:
 			if is_instance_valid(p):
@@ -5739,6 +5797,19 @@ func _activate_skill3() -> void:
 	var skill3_id: int = get_skill3_id()
 	if skill3_id == 0:
 		return
+	## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
+	## değiştir") - Golem Çağır'ın (id 20) ön kontrolleri eskiden
+	## _activate_skill()'deydi (Q iken), buraya taşındı - bkz.
+	## _skill_necro_summon_golem.
+	if skill3_id == 20 and necro_souls < NECRO_GOLEM_SOUL_COST:
+		_spawn_floating_text("RUH YETERSİZ", Color(0.6, 0.9, 0.5))
+		return
+	if skill3_id == 20 and _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
+		_spawn_floating_text("YARATIK SINIRI (10)", Color(0.9, 0.6, 0.3))
+		return
+	if skill3_id == 20 and _necro_active_golem_count() >= NECRO_MAX_GOLEMS:
+		_spawn_floating_text("GOLEM SINIRI (2)", Color(0.75, 0.5, 1.0))
+		return
 	## DÜZELTME (bkz. _activate_skill()'teki eşleşen not) - Talon'un Ayna
 	## Formu (R, id 37) burada ARTIK TEMEL tarifesini DEĞİL, genel ULTİ
 	## tarifesini (SKILL_SHIELD_COST_*) ödüyor: 120sn bekleme süreli,
@@ -5750,7 +5821,16 @@ func _activate_skill3() -> void:
 	## "char_id != 12" muafiyeti), id 31 şimdi Çift Tetik'in yeni evi ve
 	## Ayna Formu gibi genel ULTİ tarifesini ödüyor - muafiyet tamamen
 	## kaldırıldı.
-	var use_ulti_tier: bool = (skill3_id == 37 or skill3_id == 31)
+	## SONRAKİ DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q
+	## skillinin yerini değiştir") - Gölge Hücumu (id 16) Q'dan R'ye taşındı,
+	## eskiden Q'nun varsayılan AĞIR tarifesini ödüyordu (herhangi bir
+	## istisnaya girmiyordu) - burada (R'nin varsayılanı HAFİF) aynı ağır/
+	## ULTİ tarifeyi korumak için Ayna Formu/Çift Tetik ile AYNI listeye
+	## eklendi.
+	## SONRAKİ DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem
+	## çıkarma ile değiştir") - Golem Çağır (id 20) da AYNI sebeple
+	## (eskiden Q'nun varsayılan AĞIR tarifesini ödüyordu) eklendi.
+	var use_ulti_tier: bool = (skill3_id == 37 or skill3_id == 31 or skill3_id == 16 or skill3_id == 20)
 	var skill3_shield_cost: float = (item_shield_max * (SKILL_SHIELD_COST_PERCENT_OF_MAX if use_ulti_tier else SKILL2_SHIELD_COST_PERCENT_OF_MAX) + (SKILL_SHIELD_COST_FLAT if use_ulti_tier else SKILL2_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
 	if not _has_enough_ability_shield(skill3_shield_cost):
 		_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
@@ -5774,7 +5854,10 @@ func _activate_skill3() -> void:
 		## _activate_skill()'teki eşleşen düzeltme (Kalkan Sıçraması artık
 		## orada).
 		31: _skill_elara_double_fire()
-		30: _skill_assasin_invisibility_r()
+		## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
+		## yerini değiştir") - Gölge Adımı (id 30) artık Q'da (bkz.
+		## _activate_skill()), Gölge Hücumu (id 16) buraya taşındı.
+		16: _skill_assasin_dash()
 		32: _skill_melek_fear()
 		29: _skill_paladin_barrier()
 		33: _skill_oakley_bee_swarm()
@@ -5782,12 +5865,18 @@ func _activate_skill3() -> void:
 		## Talon'un yeni 3. yeteneği (Ayna Formu, id 37) - kullanıcı isteği: "R
 		## ile Q'nun yerini değiştir" - eskiden R'de Hamle Vuruşu vardı.
 		37: _skill_talon_mirror_form()
+		## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
+		## değiştir") - Golem Çağır (id 20) artık burada, eskiden Q'da.
+		20: _skill_necro_summon_golem()
 
 
 func _end_skill3_effects() -> void:
 	match get_skill3_id():
-		30:
-			_end_assasin_invisibility_r()
+		## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
+		## yerini değiştir") - Gölge Adımı'nın (id 30) temizliği artık Q'da
+		## (bkz. _end_skill_effects()), Gölge Hücumu bu id'nin (16) yeni
+		## sahibi ama onun burada özel bir temizliğe ihtiyacı yok (bkz.
+		## _skill_assasin_dash - tek seferlik bir sıçrayış).
 		29:
 			_end_paladin_barrier()
 		## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
@@ -5805,23 +5894,11 @@ func _end_skill3_effects() -> void:
 
 func _activate_skill() -> void:
 	var char_id: int = get_skill_character_id()
-	## Necromancer'ın ULTİ'si (Hortlak Çağır, id 20) 10 Ruh gerektirir -
-	## yetersizse yetenek HİÇ tetiklenmez (bekleme süresine girmez, kalkan da
-	## harcanmaz), bkz. _skill_necro_summon_golem.
-	if char_id == 20 and necro_souls < NECRO_GOLEM_SOUL_COST:
-		_spawn_floating_text("RUH YETERSİZ", Color(0.6, 0.9, 0.5))
-		return
-	## Kullanıcı isteği: "necromancerın yaratık spawnlama sınırını 10 ile
-	## sınırla" - sınıra ulaşıldıysa ulti hiç tetiklenmez (bekleme süresine
-	## girmez), tıpkı ruh yetersizliğinde olduğu gibi.
-	if char_id == 20 and _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
-		_spawn_floating_text("YARATIK SINIRI (10)", Color(0.9, 0.6, 0.3))
-		return
-	## Kullanıcı isteği: "necromancer en fazla 2 golem çağırabilsin" - genel
-	## yaratık sınırından AYRI, Golem'e özgü ikinci bir sınır.
-	if char_id == 20 and _necro_active_golem_count() >= NECRO_MAX_GOLEMS:
-		_spawn_floating_text("GOLEM SINIRI (2)", Color(0.75, 0.5, 1.0))
-		return
+	## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
+	## değiştir") - Golem Çağır'ın (id 20) ruh/yaratık-sınırı/golem-sınırı ön
+	## kontrolleri artık _activate_skill3()'te (bkz. orada), Q artık İskelet
+	## Çağır'ın (id 19) evi ve o kendi ruh/sınır kontrollerini
+	## _skill_necro_summon_skeleton() içinde ZATEN kendi yapıyor.
 	## Kullanıcı isteği: "şovalye adamın koruma baloncuğunu aktifleştirebilmek
 	## için en az %20 kalkan değeri olmalı (kalkan harcamıcak sadece en az
 	## %20 kalkanının olması gerek)" - Koruma Baloncuğu (id 11) kalkanı
@@ -5870,8 +5947,15 @@ func _activate_skill() -> void:
 	## KENDİ Can Basma kullanımı (id 1, roster id 2) ağır/ULTİ tarifesinde
 	## değişmeden kalıyor.
 	var is_melek_can_basma: bool = (char_id == 1 and GameManager.selected_char_id == 10)
+	## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
+	## yerini değiştir") - Gölge Adımı (id 30) R'den Q'ya taşındı, eskiden
+	## R'nin varsayılan hafif tarifesini (SKILL2_SHIELD_COST_*) ödüyordu
+	## (bkz. _activate_skill3()'teki use_ulti_tier - 30 orada YOKTU), burada
+	## (Q'nun varsayılanı AĞIR) aynı hafif tarifeyi korumak için id 38 ile
+	## AYNI istisnaya eklendi.
+	var is_assasin_shadow_step: bool = (char_id == 30)
 	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
-	var skill_shield_cost: float = (item_shield_max * (SKILL2_SHIELD_COST_PERCENT_OF_MAX if (char_id == 38 or is_melek_can_basma) else SKILL_SHIELD_COST_PERCENT_OF_MAX) + (SKILL2_SHIELD_COST_FLAT if (char_id == 38 or is_melek_can_basma) else SKILL_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
+	var skill_shield_cost: float = (item_shield_max * (SKILL2_SHIELD_COST_PERCENT_OF_MAX if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step) else SKILL_SHIELD_COST_PERCENT_OF_MAX) + (SKILL2_SHIELD_COST_FLAT if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step) else SKILL_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
 	## Kullanıcı isteği: "Kurt adamın yetenekleri kalkan harcamamalı" - Kudurmuş
 	## Saldırı (ULTİ, id 14) artık Koruma Baloncuğu/Feda Kalkanı/Büyü Değişimi
 	## (11/9/3) ile AYNI şekilde bu bedelden muaf.
@@ -5939,7 +6023,10 @@ func _activate_skill() -> void:
 		## gelmediği için en alttaki "_: _skill_heal()" varsayılanına
 		## düşüyordu, yani Assasin'in Q'su GERÇEKTEN Oakley'nin Can Basma'sını
 		## (id 1) çalıştırıyordu. Artık doğru id (16) dinleniyor.
-		16: _skill_assasin_dash()
+		## SONRAKİ DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q
+		## skillinin yerini değiştir") - Gölge Hücumu (id 16) artık R'de
+		## (bkz. _activate_skill3()), Gölge Adımı (id 30) buraya taşındı.
+		30: _skill_assasin_invisibility_r()
 		## Shaman ULTİ (Kalkan Totemi) - bkz. characters.gd DEFS[12].
 		26: _skill_shaman_shield_totem()
 		6: _skill_haste()
@@ -5962,7 +6049,11 @@ func _activate_skill() -> void:
 		12: _skill_elara_dash_refill()
 		14: _skill_kurtadam_berserk()
 		18: _skill_korsan_detonate_all()
-		20: _skill_necro_summon_golem()
+		## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
+		## değiştir") - Golem Çağır (id 20) artık R/skill3'te (bkz.
+		## _activate_skill3()), İskelet Çağır (id 19) Q'ya taşındı ama kendi
+		## bypass dalından çağrıldığı için (bkz. _physics_process) burada bir
+		## case'e hiç ihtiyacı yok.
 		_: _skill_heal()
 
 
@@ -5976,6 +6067,12 @@ func _end_skill_effects() -> void:
 			w.fire_rate_multiplier = 1.0
 		if "aoe_radius_multiplier" in w:
 			w.aoe_radius_multiplier = 1.0
+	## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
+	## yerini değiştir") - Gölge Adımı'nın (id 30) temizliği eskiden
+	## _end_skill3_effects()'teydi (R/skill3_state), şimdi id buraya (Q/
+	## skill_state) taşındığı için temizliği de burada.
+	if get_skill_character_id() == 30:
+		_end_assasin_invisibility_r()
 	## eski Talon ULTİ (Devleşme) temizliği burada YAŞIYORDU - "Talon yeni
 	## skilleri" isteğiyle yerini Hamle Vuruşu (id 38, bkz. _skill_talon_dash)
 	## aldı, o da tek seferlik bir hamle olduğu için burada özel bir temizliğe
