@@ -29,6 +29,13 @@ const BASE_STATS := "Can:100  Hız:240  Hasar:10  AteşHızı:1.0/sn"
 @onready var temel_row: HBoxContainer = $InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow
 @onready var skill_icon_2 = $InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow/SkillIcon2
 @onready var temel_desc_label: Label = $InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow/TemelDescLabel
+## 3. yetenek (R tuşu) satırı - Characters.DEFS'te "skill3" alanı olan
+## karakterler için (bkz. characters.gd). Eskiden bu ekranda hiç
+## gösterilmiyordu, sadece skill/skill2/passive vardı (kullanıcı bildirimi:
+## "karakterler artık 3 yeteneğe sahip, güncellenmesi gerekiyor").
+@onready var skill3_row: HBoxContainer = $InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/Skill3Row
+@onready var skill_icon_3 = $InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/Skill3Row/SkillIcon3
+@onready var skill3_desc_label: Label = $InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/Skill3Row/Skill3DescLabel
 ## Kullanıcı isteği: "karakterlerin pasiflerinin ikonu da görünmeli" - hud.gd
 ## _setup_ability_icons() ile birebir aynı mantık: skill_id = -1 (pasifin
 ## kendine ait bir vektör-fallback'i yok, tüm karakterlerin gerçek
@@ -314,6 +321,16 @@ func _on_character_pressed(char_id: int) -> void:
 		skill_icon_2.custom_texture = load(def["skill2_icon"]) if def.has("skill2_icon") else null
 		skill_icon_2.queue_redraw()
 		temel_desc_label.text = "%s (E tuşu): %s" % [def.get("skill2_name", "Temel"), def["skill2_desc"]]
+
+	## 3. yetenek satırı (R tuşu) - temel_row ile birebir aynı desen, bkz.
+	## yukarıdaki skill3_row alan tanımı üstündeki not.
+	var has_skill3: bool = def.has("skill3")
+	skill3_row.visible = has_skill3
+	if has_skill3:
+		skill_icon_3.skill_id = def.get("skill3", 1)
+		skill_icon_3.custom_texture = load(def["skill3_icon"]) if def.has("skill3_icon") else null
+		skill_icon_3.queue_redraw()
+		skill3_desc_label.text = "%s (R tuşu): %s" % [def.get("skill3_name", "3. Yetenek"), def["skill3_desc"]]
 
 	## Pasif satırı: hud.gd _setup_ability_icons() ile aynı mantık - pasifi
 	## olmayan karakterlerde (ör. Büyücü Kız) satır tamamen gizlenir.

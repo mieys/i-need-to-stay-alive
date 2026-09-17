@@ -51,11 +51,17 @@ const INTRO_TIME := 0.35
 const OUTRO_TIME := 0.45
 const LOOP_FRAME_TIME := 0.09
 
-## DÜZELTME (kullanıcı isteği geçmişi: 1.0 -> 0.3 -> 0.15 -> son olarak
-## "opaklığını %80 düzeyine sabitle") - sabit, hiç değişmeyen bir opaklık
-## (bkz. _ready() - bir kez set edilip intro/loop/outro boyunca hiç
-## dokunulmuyor, "sabit" zaten böyle çalışıyordu, sadece hedef değer değişti).
-const AURA_OPACITY := 0.8
+## DÜZELTME (kullanıcı isteği geçmişi: 1.0 -> 0.3 -> 0.15 -> "opaklığını %80
+## düzeyine sabitle") - sabit, hiç değişmeyen bir opaklık (bkz. _ready() - bir
+## kez set edilip intro/loop/outro boyunca hiç dokunulmuyor, "sabit" zaten
+## böyle çalışıyordu, sadece hedef değer değişti).
+## DÜZELTME (kullanıcı bildirimi: "görünürlüğünü arttır çok saydam nerdeyse
+## hiç görünmüyor") - %80 hâlâ çok soluk bulundu, tam opak (%100) yapıldı.
+## Kaynak PNG'lerin (fx_melek_heal_aura.png/fx_melek_shield_aura.png) alfa
+## kanalı da AYRICA "shift edge" (kenarları dilate edip SONRA blur uygulama -
+## sadece blur, alanı küçültüp söndürür) tekniğiyle hem daha yumuşak hem daha
+## belirgin hale getirildi (tek seferlik, kaynak .tres/.tscn değişmedi).
+const AURA_OPACITY := 1.0
 
 ## DÜZELTME (kullanıcı isteği: "karakterin ayaklarından başlaması gerekiyor
 ## efektin konumu çok yanlış") - bu sprite dikey uzun bir ışık/parıltı sütunu

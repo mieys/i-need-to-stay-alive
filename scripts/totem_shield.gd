@@ -97,7 +97,7 @@ func _tick() -> void:
 			caster.heal_shield(self_amount)
 
 	## Etraftaki müttefikler - Oakley'nin pasif can yenileme döngüsüyle
-	## (player.gd _process_oakley_shield_tick benzeri) AYNI "player_ally"
+	## (player.gd _process_healer_shield_tick benzeri) AYNI "player_ally"
 	## grubu taraması.
 	for ally in caster.get_tree().get_nodes_in_group("player_ally"):
 		if not is_instance_valid(ally):

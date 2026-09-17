@@ -177,7 +177,10 @@ const FINAL_CREATURES := [
 ## bişey denicem") - performans düzeltmeleri kalıcı olduğu için (yukarıdaki
 ## not) tavan tekrar denemek amacıyla 90 -> 150 yükseltildi. EXTRA_PLAYER_
 ## ENEMY_CAP (aşağısı) BİLEREK dokunulmadı - sadece bu tek sayı istendi.
-@export var max_concurrent_enemies: int = 150
+## SONRAKİ TUR (kullanıcı isteği: "maksimum yaratık sayısını 80'e düşür") -
+## 150 -> 80. EXTRA_PLAYER_ENEMY_CAP yine BİLEREK dokunulmadı - sadece bu
+## tek sayı istendi.
+@export var max_concurrent_enemies: int = 80
 ## Multiplayer enemy scaling: solo keeps the original cap; each additional
 ## player adds room for more creatures and slightly increases spawn frequency.
 ## Kullanıcı isteği: "oyuncu başına yaratık sayısı %50 [artsın]" - eskiden 18, ×1.5 (27).

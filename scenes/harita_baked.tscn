@@ -6074,9 +6074,9 @@ shader_parameter/sat_shift_amount = 0.15
 shader_parameter/val_shift_amount = 0.0
 shader_parameter/shadow_offset = Vector2(0.03, 4.4)
 shader_parameter/shadow_color = Color(0, 0, 0, 0.6)
-shader_parameter/shadow_opacity = 0.418000019855
+shader_parameter/shadow_opacity = 0.0800000038
 shader_parameter/shadow_rotation = 0.0
-shader_parameter/shadow_blur = 0.450000021375
+shader_parameter/shadow_blur = 0.0
 
 [sub_resource type="Shader" id="Shader_lbyyu"]
 code = "shader_type canvas_item;
@@ -6222,9 +6222,9 @@ shader_parameter/sat_shift_amount = 0.15
 shader_parameter/val_shift_amount = 0.0
 shader_parameter/shadow_offset = Vector2(0.03, 4.4)
 shader_parameter/shadow_color = Color(0, 0, 0, 0.6)
-shader_parameter/shadow_opacity = 0.418000019855
+shader_parameter/shadow_opacity = 0.0800000038
 shader_parameter/shadow_rotation = 0.0
-shader_parameter/shadow_blur = 0.450000021375
+shader_parameter/shadow_blur = 0.0
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_p0iv8"]
 

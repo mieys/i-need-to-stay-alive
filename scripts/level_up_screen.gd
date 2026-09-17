@@ -135,6 +135,7 @@ var _has_chosen: bool = false
 func _ready() -> void:
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir (kart butonları "icon slot" gibi dikey orantılı oldukları için bu zaten atlıyor, bkz. o dosyadaki _looks_like_icon_slot)
+	_apply_reroll_button_style() ## RerollButton'ı SADECE burada, wood stilinin ÜSTÜNE kendi görseliyle geçersiz kılıyor - bkz. fonksiyonun üstündeki not.
 	_populate_cards()
 	_wire_card_hover_feedback()
 	reroll_button.pressed.connect(_on_reroll_pressed)
@@ -485,6 +486,38 @@ func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
 ## her takım seviye atlayışında kazanılan +1 altınla (bkz. game_manager.gd
 ## LEVEL_UP_GOLD_REWARD) biriktirilip kullanılabiliyor.
 const LEVEL_UP_REROLL_COST := 5
+
+## Kullanıcı isteği: "level atlama kartlarındaki karıştırma butonunu bununla
+## değiştir, aynı boyutta olduğundan emin ol, ekstra bişey olmasın üstünde"
+## - RerollButton normalde (bkz. _ready() -> UISound.apply_wood_buttons)
+## diğer TÜM butonlarla aynı paylaşılan ahşap dokuyu alırdı; burada SADECE
+## bunun ÜSTÜNE, aynı 9-patch (StyleBoxTexture + texture_margin) mantığıyla
+## (bkz. shop_panel.gd _make_wood_button_style - TEK fark doku kaynağı) yeni
+## görseli uyguluyoruz. Görsel sadece kırpılmış/küçültülmüş haliyle (assets/
+## ui/reroll_button.png, 420x104) buton rect'inin içine 9-patch olarak
+## geriliyor, ekstra bir modülasyon/renk tonu YOK (metin okunurluğunu
+## bozmasın diye).
+## DÜZELTME (kullanıcı isteği: "yazılarla beraber %40 küçült") - buton rect'i
+## (.tscn'deki offset'ler) ve font_size ×0.6 küçültüldü; texture_margin da
+## AYNI oranda küçültülmezse (16px, eski 48px yüksekliğe göre ayarlanmıştı)
+## yeni ~29px'lik yükseklikte üst+alt kenarlık üst üste binip 9-patch'in orta
+## (esneyen) bölgesini negatife düşürürdü - o yüzden bu da ×0.6.
+const RerollButtonTexture := preload("res://assets/ui/reroll_button.png")
+const REROLL_BUTTON_MARGIN := 9.6
+
+func _apply_reroll_button_style() -> void:
+	var sb := StyleBoxTexture.new()
+	sb.texture = RerollButtonTexture
+	sb.texture_margin_left = REROLL_BUTTON_MARGIN
+	sb.texture_margin_right = REROLL_BUTTON_MARGIN
+	sb.texture_margin_top = REROLL_BUTTON_MARGIN
+	sb.texture_margin_bottom = REROLL_BUTTON_MARGIN
+	reroll_button.add_theme_stylebox_override("normal", sb)
+	reroll_button.add_theme_stylebox_override("hover", sb)
+	reroll_button.add_theme_stylebox_override("pressed", sb)
+	reroll_button.add_theme_stylebox_override("disabled", sb)
+	reroll_button.add_theme_stylebox_override("focus", sb)
+
 
 func _refresh_reroll_button() -> void:
 	reroll_button.text = "Yeniden Karıştır (%d altın)" % LEVEL_UP_REROLL_COST

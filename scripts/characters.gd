@@ -17,6 +17,14 @@ class_name Characters
 ## Yeni karakter eklemek için: atlas/frames/portre dosyalarını üret,
 ## DEFS'e yeni bir kayıt ekle - seçim ekranı kartı otomatik oluşturur.
 
+## TÜM karakterlerin PAYLAŞILAN taban hareket hızı (bkz. player.gd "speed"
+## export'unun varsayılanı, oradan buraya taşındı). remote_player.gd, hızlı
+## hareket ederken yürüme animasyonunu (speed_scale) player.gd ile AYNI
+## oranda hızlandırabilmek için gözlemlediği ağ hızını bu değere bölüyor -
+## iki tarafın da AYNI sayıyı ayrı ayrı yazmaması için (bkz. CLAUDE.md
+## paylaşılan formül kuralı) tek kaynak burası.
+const BASE_MOVE_SPEED := 252.0
+
 const DEFS := {
 	1: {
 		"name": "Talon",
@@ -79,7 +87,11 @@ const DEFS := {
 		"name": "Oakley",
 		"skill": 1,
 		"skill_name": "Çiçek",
-		"skill_desc": "Yere bir çiçek bırakır (kendisi veya bir dost alabilir, 180sn yerde kalır). Alınırsa saldırı gücünün %50'si kadar can yeniler ve alanı 2sn boyunca azalarak kaybolan %25 hıza kavuşturur; alınmazsa 5sn'de bir büyüyüp verdiği canı kümülatif %40 arttırır (en fazla 2 büyüme). 2 yük, yük başına 18sn.",
+## DÜZELTME (kullanıcı isteği: "can vermesiyle beraber aynı zamanda alan
+		## kişinin %2 maksimum kalkanı ve oakleyin %15 saldırı gücü statı kadar
+		## kalkan yenilemeli, bu etki de bitki büyüdükçe artmalı") - bkz.
+		## oakley_flower.gd SHIELD_PERCENT_OF_TARGET_MAX/SHIELD_RATIO_OF_ATTACK.
+		"skill_desc": "Yere bir çiçek bırakır (kendisi veya bir dost alabilir, 180sn yerde kalır). Alınırsa saldırı gücünün %50'si kadar can + alanın %2 max kalkanı ve saldırı gücünün %15'i kadar kalkan yeniler, ayrıca alanı 2sn boyunca azalarak kaybolan %25 hıza kavuşturur; alınmazsa 5sn'de bir büyüyüp verdiği can/kalkanı kümülatif %40 arttırır (en fazla 2 büyüme). 2 yük, yük başına 18sn.",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## Melek ile AYNI geçici "oyku_ulti_can_basma_icon.png" dosyasını
 		## paylaşıyordu, artık kendi özel ikonu var.
@@ -360,14 +372,20 @@ const DEFS := {
 		## yenileme/_process_oakley_passive.
 		"skill": 1,
 		"skill_name": "Can Basma",
-		"skill_desc": "ULTİ: Anında %15 can yeniler, sonraki 6sn boyunca saniyede %1 can + saldırı gücünün %60'ı kadar can yeniler (kendine+müttefiğe). (20sn bekleme)",
+		## DÜZELTME (kullanıcı isteği: "Melek'in can verme yeteneğinin (Q)
+		## saldırı gücü oranını %30'a düşür") - bkz. player.gd
+		## MELEK_Q_TICK_ATTACK_RATIO (Oakley'nin kendi %60'ı DEĞİŞMEDİ).
+		"skill_desc": "ULTİ: Anında %15 can yeniler, sonraki 6sn boyunca saniyede %1 can + saldırı gücünün %30'u kadar can yeniler (kendine+müttefiğe). (20sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## Oakley ile AYNI geçici "oyku_ulti_can_basma_icon.png" dosyasını
 		## paylaşıyordu, artık kendi özel ikonu var.
 		"skill_icon": "res://assets/skills/melek_can_basma_icon.png",
 		"skill2": 10,
 		"skill2_name": "Kalkan Yenileme",
-		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede %1 kalkan + saldırı gücünün %60'ı kadar kalkan yeniler (kendine+müttefiğe). (15sn bekleme)",
+		## DÜZELTME (kullanıcı isteği: "Melekin kalkan yeteneğinin saldırı gücü
+		## oranını %40'a düşür") - bkz. player.gd MELEK_E_TICK_ATTACK_RATIO
+		## (Oakley'nin kendi %60'ı DEĞİŞMEDİ).
+		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede %1 kalkan + saldırı gücünün %40'ı kadar kalkan yeniler (kendine+müttefiğe). (15sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## Oakley'nin E/R'siyle AYNI geçici "oyku_kalkan_yenileme_icon.png"
 		## dosyasını paylaşıyordu, artık kendi özel ikonu var.
@@ -382,9 +400,11 @@ const DEFS := {
 		"skill3_icon": "res://assets/skills/melek_kutsal_korku_icon.png",
 		## DÜZELTME (kullanıcı isteği: "Melek'in pasifi %0.5 can yerine saldırı
 		## gücünün %5'si olarak güncelle. Yani 100 saldırı gücü varsa 5 can
-		## yenileyecek yakınındaki herkes.") - bkz. player.gd _passive_oakley/
-		## OAKLEY_PASSIVE_ATTACK_POWER_PERCENT.
-		"passive": "Kendisinin ve yakındaki takım arkadaşlarının canını saniyede saldırı gücünün %5'i kadar yeniler.",
+		## yenileyecek yakınındaki herkes.") - bkz. player.gd _passive_melek/
+		## MELEK_PASSIVE_ATTACK_POWER_PERCENT.
+		## DÜZELTME (kullanıcı isteği: "Melek'in pasifinin can yenilenmesi
+		## saldırı gücü oranını %5'ten %2'ye düşür").
+		"passive": "Kendisinin ve yakındaki takım arkadaşlarının canını saniyede saldırı gücünün %2'si kadar yeniler.",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## Oakley ile AYNI geçici "oyku_passive_icon.png" dosyasını
 		## paylaşıyordu, artık kendi özel ikonu var.
