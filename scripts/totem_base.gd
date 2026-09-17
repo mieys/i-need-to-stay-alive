@@ -192,6 +192,15 @@ func _process(delta: float) -> void:
 		return
 	if not is_instance_valid(caster):
 		return
+	## DÜZELTME (kullanıcı bildirimi: "Shopta kalkan baloncuğunun içinde
+	## silahlar ateş etmesin") - totemler owned_weapon_nodes/_necro_active_
+	## pets'te DEĞİL (bkz. player.gd _spawn_shaman_totem, doğrudan sahneye
+	## eklenir), bu yüzden set_combat_active()'in devre dışı bıraktığı
+	## silahların/necro yaratıklarının aksine, sahibi seyyar satıcının güvenli
+	## bölgesine girse BİLE tik atıp hasar vermeye devam ediyorlardı. Silahlar
+	## için weapon.gd _process()'teki AYNI kontrol.
+	if caster.get("is_in_merchant_zone") == true:
+		return
 	_tick_timer -= delta
 	if _tick_timer > 0.0:
 		return

@@ -66,8 +66,12 @@ const CHEST_OPEN_FRAME_DELAY := 0.15 ## dünya sandığındaki 0.08sn'den biraz 
 ## gerekecek... silah almak istemeyen silahı satabilir" - kullanıcının
 ## seçtiği yaklaşım: "hem eşya hem silah karışık gelsin", yani her sandık
 ## kartı ayrı ayrı rastgele bir EŞYA ya da bir SİLAH olabilir). Bu liste
-## shop_panel.gd'deki WEAPON_KEYS/UPGRADE_NAMES/WEAPON_ICON_TEXTURES/
-## COPY_COST_BASE ile BİREBİR aynı verinin bilinçli bir kopyası - shop_panel.gd
+## shop_panel.gd'deki WEAPON_KEYS/UPGRADE_NAMES/WEAPON_ICON_TEXTURES ile
+## BİREBİR aynı verinin bilinçli bir kopyası (WEAPON_COST_BASE aşağıda,
+## shop_panel.gd'nin ESKİ COPY_COST_BASE taban fiyatlarının bir kopyasıydı -
+## dükkan fiyatlandırması kullanıcı isteğiyle silah sayısına göre kademeli
+## hale geldiğinden ayrıldı, ama sandık ÖNİZLEME değeri için bu sabit taban
+## fiyatlar hâlâ doğru/yeterli, kasıtlı olarak DEĞİŞTİRİLMEDİ) - shop_panel.gd
 ## bir class_name TANIMLAMADIĞI için oradaki const'lara güvenli/açık bir
 ## şekilde erişmenin en basit yolu bu (diğer script'lerdeki paralel
 ## const kopyalama deseniyle tutarlı).

@@ -831,6 +831,18 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	if dead and not is_dead:
 		_play_death_animation()
 	is_dead = dead
+	## Kullanıcı isteği: "öldüğü konum ve body si yerinde durmalı" - ceset
+	## artık kalıcı olarak sahnede kaldığı için (bkz. yukarıdaki _play_death_
+	## animation notu) can/kalkan çubuğu artık anlamsız (hep 0) hale geliyor,
+	## çarpışması da kapatılmalı ki kimse cesede takılmasın - is_dead'e göre
+	## HER güncellemede yeniden hesaplanıyor ki dükkandan diriltme
+	## (revive_from_permadeath, is_dead tekrar false olur) sonrasında ikisi
+	## de otomatik geri açılsın.
+	if overhead_bar:
+		overhead_bar.visible = not is_dead
+	var col: CollisionShape2D = get_node_or_null("CollisionShape2D")
+	if col:
+		col.set_deferred("disabled", is_dead)
 	is_downed = extra.get("is_downed", false)
 	_update_death_status_fx()
 	_update_revive_rewind_fx()
@@ -936,31 +948,40 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 		## gösteriyordu. Artık gönderen tarafın gerçek _bubble_active kararını
 		## (bkz. main.gd extra["shield_bubble_visible"] / player.gd
 		## _update_shield_bubble) doğrudan kullanıyoruz.
-		shield_visual.visible = extra.get("shield_bubble_visible", item_shield_hp > 0.0 or paladin_zone_active)
+		## DÜZELTME (kullanıcı isteği: "body si yerinde durmalı") - kalıcı
+		## ölen bir oyuncunun kalkan baloncuğu artık HİÇ gösterilmemeli (bkz.
+		## yukarıdaki overhead_bar/collision ile AYNI gerekçe).
+		shield_visual.visible = not is_dead and extra.get("shield_bubble_visible", item_shield_hp > 0.0 or paladin_zone_active)
 	## Şovalye Adam'ın Koruma Bariyeri (skill3 id 29) - bkz. main.gd extra
 	## dict/fx_paladin_barrier_link.gd. shield_bubble_visible ile AYNI
 	## desen, sadece basit bir spawn/despawn child (hazır sahne node'u yok).
 	_refresh_barrier_link_visual(extra.get("barrier_link_active", false))
 
 
+## DÜZELTME (kullanıcı bildirimi: "Ölen oyuncu multiplayerda bir süre sonra
+## tamamen yok oluyor öldüğü konum ve body si yerinde durmalı") - eskiden
+## burada 0.6sn'de saydamlaşıp queue_free() ile bu kukla (collision, sprite,
+## UI - HEPSİ) sahneden komple siliniyordu. Peer GERÇEKTEN ayrılınca zaten
+## AYRI bir yol (bkz. main.gd _remote_players.erase/queue_free, "oyuncu
+## ayrılınca" notu) kuklayı temizliyor - burada silmeye hiç gerek yoktu,
+## sadece kalıcı ölüm ile "peer ayrıldı" birbirine karıştırılmıştı. Artık
+## kukla hiç silinmiyor/saydamlaşmıyor - ölüm animasyonu son karede donuk
+## kalıp bir ceset gibi öldüğü konumda kalıcı duruyor. Can/kalkan çubuğu ve
+## çarpışmanın gizlenmesi/kapatılması BURADA değil update_extra_state_from_
+## net()'te (bkz. orada "is_dead" bloğu) - dükkandan diriltme satın alınıp
+## (revive_from_permadeath) is_dead tekrar false olursa o değerlerin GERİ
+## açılması gerekiyor, bu yüzden tek seferlik burada değil, her senkron
+## güncellemesinde is_dead'e göre yeniden hesaplanan bir yerde olmaları
+## lazım (downed_timer_label/shield_visual zaten kendi kendini böyle
+## yönetiyordu, bkz. set_remaining_seconds/"shield_bubble_visible" - aynı
+## deseni overhead_bar ve çarpışmaya da uyguluyoruz).
 func _play_death_animation() -> void:
 	var anim_name: String = "death"
 	if anim and anim.sprite_frames and not anim.sprite_frames.has_animation("death") and anim.sprite_frames.has_animation("hurt"):
 		anim_name = "hurt"
-		
+
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(anim_name):
 		anim.play(anim_name)
-		var tw := create_tween()
-		tw.tween_property(anim, "modulate:a", 0.0, 0.6).set_delay(0.8)
-		tw.tween_callback(queue_free)
-	else:
-		# No death animation - just fade and free
-		var tw := create_tween()
-		var target_node: CanvasItem = anim
-		if target_node == null:
-			target_node = self
-		tw.tween_property(target_node, "modulate:a", 0.0, 0.6)
-		tw.tween_callback(queue_free)
 
 
 # Matthew dome visual (simplified - just a colored circle indicator)

@@ -11,6 +11,13 @@ extends Node
 const PlayerScript = preload("res://scripts/player.gd")
 
 
+## DÜZELTME (bu test dosyası, iki AYRI daha önceki kullanıcı isteğinden beri
+## bayattı: "necromancerın ultisi hayalet yerine golem çağırsın" - fonksiyon
+## _skill_necro_summon_wraith'ten _skill_necro_summon_golem'a yeniden
+## adlandırılmıştı ama bu testler hiç güncellenmemişti; SONRA da "Necromancer
+## in R sini golem çıkarma ile değiştir" isteğiyle golem (id 20) Q/skill'den
+## R/skill3'e taşındı - bkz. player.gd _activate_skill3()'teki match
+## skill3_id bloğu, artık _activate_skill()'in match char_id'sinde YOK).
 func test_korsan_ulti_maps_to_bomb_detonate_not_heal() -> void:
 	# Match ifadesinin kaynak kodunu okuyarak "18" case'inin _skill_heal
 	# DEĞİL _skill_korsan_detonate_all'a gittiğini doğrula.
@@ -20,7 +27,9 @@ func test_korsan_ulti_maps_to_bomb_detonate_not_heal() -> void:
 	var idx: int = content.find("match char_id:")
 	var match_block: String = content.substr(idx, 400)
 	assert("18: _skill_korsan_detonate_all()" in match_block, "Korsan ULTİ (id 18) artık _skill_korsan_detonate_all'a gitmeli")
-	assert("20: _skill_necro_summon_wraith()" in match_block, "Necromancer ULTİ (id 20) artık _skill_necro_summon_wraith'e gitmeli")
+	var idx3: int = content.find("match skill3_id:")
+	var match_block3: String = content.substr(idx3, 700)
+	assert("20: _skill_necro_summon_golem()" in match_block3, "Necromancer ULTİ (id 20) artık R/skill3'teki _skill_necro_summon_golem'a gitmeli")
 
 
 func test_korsan_and_necro_functions_exist() -> void:
@@ -28,7 +37,7 @@ func test_korsan_and_necro_functions_exist() -> void:
 	assert(p.has_method("_korsan_try_place_bomb"), "Korsan bomba bırakma fonksiyonu olmalı")
 	assert(p.has_method("_skill_korsan_detonate_all"), "Korsan patlatma fonksiyonu olmalı")
 	assert(p.has_method("_skill_necro_summon_skeleton"), "Necromancer iskelet çağırma fonksiyonu olmalı")
-	assert(p.has_method("_skill_necro_summon_wraith"), "Necromancer hortlak çağırma fonksiyonu olmalı")
+	assert(p.has_method("_skill_necro_summon_golem"), "Necromancer golem çağırma fonksiyonu olmalı")
 	assert(p.has_method("on_enemy_killed"), "Öldürme bildirim hook'u olmalı")
 	assert(p.has_method("get_necro_souls"), "Ruh sayısını okuyan getter olmalı")
 	p.free()
@@ -66,14 +75,19 @@ func test_necro_souls_start_at_zero_and_accumulate_on_kill() -> void:
 	p.free()
 
 
-func test_necro_skeleton_summon_requires_three_souls() -> void:
+## DÜZELTME: ruh bedeli sonradan kullanıcı isteğiyle 3'ten 10'a
+## (NECRO_SKELETON_SOUL_COST) güncellenmişti, bu test hâlâ eski "3"ü
+## sınıyordu - artık sabitin kendisinden okunuyor ki ileride tekrar
+## dengelenirse test kendiliğinden güncel kalsın.
+func test_necro_skeleton_summon_requires_correct_souls() -> void:
 	var p := PlayerScript.new()
 	add_child(p)
-	p.necro_souls = 2
+	var cost: int = PlayerScript.NECRO_SKELETON_SOUL_COST
+	p.necro_souls = cost - 1
 	p.global_position = Vector2.ZERO
 	p._skill_necro_summon_skeleton()
-	assert(p.necro_souls == 2, "Yetersiz ruhla iskelet çağrılmamalı, ruh harcanmamalı")
+	assert(p.necro_souls == cost - 1, "Yetersiz ruhla iskelet çağrılmamalı, ruh harcanmamalı")
 
-	p.necro_souls = 3
+	p.necro_souls = cost
 	p._skill_necro_summon_skeleton()
-	assert(p.necro_souls == 0, "3 ruh ile iskelet çağrılınca ruhlar harcanmalı")
+	assert(p.necro_souls == 0, "Yeterli ruhla iskelet çağrılınca ruhlar harcanmalı")

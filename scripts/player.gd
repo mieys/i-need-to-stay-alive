@@ -5104,6 +5104,13 @@ func _finalize_death() -> void:
 	health = 0
 	if downed_timer_label:
 		downed_timer_label.set_remaining_seconds(0.0)
+	## Kullanıcı isteği: "öldüğü konum ve body si yerinde durmalı" - ceset
+	## artık kalıcı olarak sahnede kaldığı için (bkz. aşağıdaki #47/#44
+	## düzeltmesi) fiziksel çarpışması da kapatılıyor ki kimse cesede takılıp
+	## kalmasın (remote_player.gd _play_death_animation'daki AYNI düzeltme).
+	var col: CollisionShape2D = get_node_or_null("CollisionShape2D")
+	if col:
+		col.set_deferred("disabled", true)
 	died.emit()
 	## DÜZELTME (kullanıcı bildirimi: "öldüğümüz zaman mapin sol üst kısmına
 	## geliyor kamera ve orda sabit kalıyor"): bu fonksiyonun sonunda TÜM
@@ -5156,14 +5163,18 @@ func _detach_death_camera() -> void:
 	## main.gd (bkz. _begin_spectate_mode/_process) devralıp seçilen bir
 	## müttefiği takip ettiriyor ve ömrünü kendisi yönetiyor - burada süreli
 	## bir otomatik silme YOK.
-	## Ölme animasyonu (LPC hurt satırı: yere yığılma, 6 kare ~0.75sn) bitene
-	## kadar bekleyip sonra soluklaştır - animasyon yoksa eski davranış kalır.
-	var fade_delay := 0.0
+	## Ölme animasyonu (LPC hurt satırı: yere yığılma, 6 kare ~0.75sn).
 	if anim.sprite_frames and anim.sprite_frames.has_animation("death"):
 		anim.play("death")
-		fade_delay = 0.8
-	var tw := create_tween()
-	tw.tween_property(anim, "modulate:a", 0.0, 0.6).set_delay(fade_delay)
+	## DÜZELTME (kullanıcı bildirimi: "Ölen oyuncu multiplayerda bir süre
+	## sonra tamamen yok oluyor öldüğü konum ve body si yerinde durmalı") -
+	## burada eskiden anim.modulate:a 0.0'a soluklaştırılıyordu, yani Player
+	## node'u (bkz. hemen altındaki düzeltme) sahnede kalsa BİLE tamamen
+	## görünmez oluyordu - "ceset" hiçbir zaman görünür değildi. Artık hiç
+	## soluklaştırılmıyor, ölüm animasyonunun son karesinde donuk kalıp
+	## öldüğü konumda görünür bir ceset gibi duruyor. revive_from_permadeath()
+	## zaten kendi modulate'ini koşulsuz sıfırlayıp yeniden fade-in yapıyor
+	## (bkz. orası), bu yüzden burada hiç soluklaştırmamak canlanmayı bozmaz.
 	## BUG DÜZELTMESİ (kullanıcı bildirimi: "1-2 dakika diriltmediğimizde
 	## oyuncu yok oluyor ve bir daha diriltilemiyor") - kök neden: buradaki
 	## `tween_callback(queue_free)` niyet olarak kamerayı (death_camera)
@@ -5195,6 +5206,11 @@ func revive_from_permadeath() -> void:
 	is_dead = false
 	_downed_time = 0.0
 	_revive_progress = 0.0
+	## bkz. _finalize_death() üstündeki AYNI düzeltme - ceset olurken kapatılan
+	## çarpışma canlanınca geri açılmalı.
+	var col: CollisionShape2D = get_node_or_null("CollisionShape2D")
+	if col:
+		col.set_deferred("disabled", false)
 	health = max_health
 	if item_shield_max > 0.0:
 		item_shield_hp = item_shield_max

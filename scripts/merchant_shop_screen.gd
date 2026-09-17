@@ -70,10 +70,6 @@ const WEAPON_ICON_TEXTURES := {
 	"topuz": "res://assets/weapons/topuz/icon.png",
 	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
 }
-const WEAPON_COST_BASE := {
-	"dagger": 60, "fire_staff": 80, "lightning_staff": 120, "tabanca": 100, "tuftuf": 90, "tufek": 100, "arcane": 110, "yay": 100,
-	"crossbow": 100, "boomerang": 110, "buz_asasi": 95, "fisek": 120, "pence": 90, "topuz": 105, "uzunkilic": 100,
-}
 const SHIELD_NAMES := {
 	"shield_standart": "Standart Kalkan", "shield_enerji": "Enerji Kalkanı",
 	"shield_kale": "Kale Kalkanı", "shield_savas": "Savaş Kalkanı",
@@ -577,7 +573,16 @@ func _entry_cost(entry: Dictionary) -> int:
 			var power_mult: float = Items.ITEM_TIER_POWER[int(entry.get("tier", 1)) - 1]
 			return _scale_merchant_price(base_cost * power_mult)
 		"weapon":
-			return _scale_merchant_price(float(WEAPON_COST_BASE.get(key, 100)))
+			## DÜZELTME (kullanıcı isteği: "Multiplayerda ilk seçtiğimiz
+			## silahtan sonra alacağımız 2. silah ucuz olacak 3. 4 .5 silahı
+			## 80 gold civarında başlat") - artık silah TÜRÜNDEN değil
+			## (WEAPON_COST_BASE artık kullanılmıyor), shop_panel.gd'deki
+			## AYNI kademeli taban fiyatı (bkz. ShopScript._copy_cost) sahip
+			## olunan TOPLAM silah sayısına göre kullanıyor - üstüne bu
+			## dükkana özgü Kademe/zaman ölçeklemesi (_scale_merchant_price)
+			## hâlâ AYNI şekilde uygulanıyor.
+			var next_total: int = GameManager.owned_weapons.size() + 1
+			return _scale_merchant_price(float(ShopScript._copy_cost(key, next_total)))
 		"shield":
 			var next_level: int = int(GameManager.get(key + "_level")) + 1
 			return _scale_merchant_price(float(ShopScript._upgrade_cost(key, next_level)))
@@ -619,6 +624,12 @@ func _entry_can_buy(entry: Dictionary, index: int) -> bool:
 				max_slots = _player.get_max_item_slots()
 			return GameManager.owned_items.size() < max_slots
 		"weapon":
+			## DÜZELTME (kullanıcı isteği: "shopta ki shop page den aynı
+			## silah birden fazla alınmaz") - kalkanın hemen altındaki
+			## "owned == '' or owned == key" deseniyle AYNI fikir: zaten
+			## sahip olunan bir silah türü bir daha satın alınamaz.
+			if GameManager.owned_weapons.any(func(w): return w.get("key", "") == key):
+				return false
 			var max_w: int = MAX_OWNED_WEAPONS
 			if _player and _player.has_method("get_max_owned_weapons"):
 				max_w = _player.get_max_owned_weapons()

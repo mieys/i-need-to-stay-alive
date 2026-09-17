@@ -413,6 +413,15 @@ func _process_attack(delta: float) -> void:
 	_attack_timer -= delta * _get_attack_speed_mult()
 	if _attack_timer > 0.0:
 		return
+	## DÜZELTME (kullanıcı bildirimi: "Shopta kalkan baloncuğunun içinde
+	## silahlar ateş etmesin") - Matthew'in tilkisi hiçbir zaman _necro_
+	## active_pets'e kaydedilmiyordu (bkz. player.gd _spawn_matthew_pet), bu
+	## yüzden set_combat_active()'in devre dışı bıraktığı silahların/necro
+	## yaratıklarının aksine, Matthew seyyar satıcının güvenli bölgesine
+	## girse BİLE saldırmaya devam ediyordu - totem_base.gd _process()'teki
+	## AYNI kontrol.
+	if is_instance_valid(owner_player) and owner_player.get("is_in_merchant_zone") == true:
+		return
 	if not _focus_target or not is_instance_valid(_focus_target) or _focus_target.get("is_dead") == true:
 		return
 	var to_target: Vector2 = _focus_target.global_position - global_position

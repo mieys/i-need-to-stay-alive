@@ -94,15 +94,6 @@ const WEAPON_ICON_TEXTURES := {
 	"topuz": "res://assets/weapons/topuz/icon.png",
 	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
 }
-## "Silahlar" sekmesinde bağımsız bir KOPYA daha satın almanın taban fiyatı
-## (bkz. _copy_cost) - eskiden "seviye" denen tek fiyat tablosunun tabanları
-## burada KOPYA fiyatı olarak kullanılıyor. Seviye maliyeti (_upgrade_cost,
-## aşağıda) tamamen ayrı - her kopyanın KENDİNE ÖZEL bir seviyesi var, hiçbir
-## şey paylaşılmıyor (bkz. player.gd owned_weapon_nodes).
-const COPY_COST_BASE := {
-	"dagger": 60, "fire_staff": 80, "lightning_staff": 120, "tabanca": 100, "tuftuf": 90, "tufek": 100, "arcane": 110, "yay": 100,
-	"crossbow": 100, "boomerang": 110, "buz_asasi": 95, "fisek": 120, "pence": 90, "topuz": 105, "uzunkilic": 100,
-}
 const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic"]
 ## player.gd MAX_OWNED_WEAPONS ile birebir aynı olmalı - dükkandan satın
 ## alınabilecek/başlangıçta sahip olunan, türü karışık olabilecek en fazla
@@ -950,10 +941,14 @@ func _display_cost_text(key: String) -> String:
 			return "DOLU"
 		return "%d Altın" % _item_cost(key, owned_count + 1)
 	else:
-		var count: int = _count_owned(key)
+		## Kullanıcı isteği: "shopta ki shop page den aynı silah birden fazla
+		## alınmaz" - zaten sahip olunan bir silah türü bir daha satın
+		## alınamaz (bkz. _on_buy_copy/_refresh_preview'daki AYNI kontrol).
+		if _count_owned(key) > 0:
+			return "SAHİPSİN"
 		if GameManager.owned_weapons.size() >= _max_owned_weapons():
 			return "DOLU"
-		return "%d Altın" % _copy_cost(key, count + 1)
+		return "%d Altın" % _copy_cost(key, GameManager.owned_weapons.size() + 1)
 
 
 ## Cost to go from the current level to next_level. Every item uses the same
@@ -1070,21 +1065,27 @@ static func _upgrade_cost(item: String, next_level: int) -> int:
 	return next_level
 
 
-## "Silahlar" sekmesinde YENİ, bağımsız bir kopya satın almanın maliyeti -
-## COPY_COST_BASE'teki tabanlar eskiden _upgrade_cost'un "silahı ilk kez
-## açma" fiyatıydı, aynı "base * next_count^2" şekliyle burada yeniden
-## kullanıldı. Seviye maliyetinden (_upgrade_cost) tamamen ayrı bir sayaç.
-static func _copy_cost(item: String, _next_count: int) -> int:
+## "Silahlar" sekmesinde YENİ, bağımsız bir silah satın almanın maliyeti.
+## DÜZELTME (kullanıcı isteği: "Multiplayerda ilk seçtiğimiz silahtan sonra
+## alacağımız 2. silah ucuz olacak 3. 4 .5 silahı 80 gold civarında
+## başlat") - artık silah TÜRÜNDEN (eski COPY_COST_BASE tablosu artık hiç
+## kullanılmadığı için kaldırıldı) TAMAMEN bağımsız, sahip olunan TOPLAM silah
+## sayısına göre kademeli: karakterin başlangıç silahı zaten 1. silah
+## olduğu için dükkandan alınan İLK kopya (next_total_count=2) 2. silah
+## olur ve ucuza gelir, ondan sonraki her kopya (next_total_count 3/4/5,
+## aynı zamanda aynı türden ikinci bir kopya artık hiç satın alınamadığı
+## için - bkz. _on_buy_copy/_refresh_preview'daki "zaten sahipsin"
+## kontrolü - en fazla 5 silaha kadar mümkün) ~80 altın. "item" parametresi
+## artık fiyata etki etmiyor, imza çağıran yerlerle uyumlu kalsın diye
+## korundu.
+const SECOND_WEAPON_COST := 30
+const LATER_WEAPON_COST := 80
+static func _copy_cost(_item: String, next_total_count: int) -> int:
 	if DEBUG_ALL_COSTS_ONE:
 		return 1
-	## Kullanıcı isteği: "silahlardan fazladan kopya (en fazla 5) almak fiyatı
-	## ARTTIRMASIN, hepsi aynı taban fiyattan satılsın" - eskiden her ek kopya
-	## taban fiyatın yarısı kadar daha pahalıya geliyordu (1.=base, 2.=1.5*base,
-	## ...), artık next_count'tan TAMAMEN bağımsız, hep aynı taban fiyat.
-	## Seviye/tier yükseltme maliyeti (_upgrade_cost) buna dahil DEĞİL, kendi
-	## karesel eğrisini korumaya devam ediyor - bu SADECE yeni bir kopya SATIN
-	## ALMA fiyatı için.
-	return int(COPY_COST_BASE.get(item, 100))
+	if next_total_count <= 2:
+		return SECOND_WEAPON_COST
+	return LATER_WEAPON_COST
 
 
 ## O eşyadan (Items.KEYS'ten biri) şu an kaç kopya sahip olunduğunu sayar -
@@ -1213,8 +1214,14 @@ func _max_owned_weapons() -> int:
 func _on_buy_copy(item: String) -> void:
 	if GameManager.owned_weapons.size() >= _max_owned_weapons():
 		return
-	var count: int = _count_owned(item)
-	var cost: int = _copy_cost(item, count + 1)
+	## Kullanıcı isteği: "shopta ki shop page den aynı silah birden fazla
+	## alınmaz" - önizleme paneli/kart etiketi (bkz. _refresh_preview/
+	## _display_cost_text) buton devre dışı bırakıp bunu zaten engelliyor,
+	## ama ikisi de sadece GÖRSEL - hızlı art arda tıklama gibi durumlara
+	## karşı gerçek satın alma burada da AYRICA korunuyor.
+	if _count_owned(item) > 0:
+		return
+	var cost: int = _copy_cost(item, GameManager.owned_weapons.size() + 1)
 	if GameManager.gold < cost:
 		return
 	GameManager.gold -= cost
@@ -1434,11 +1441,18 @@ func _refresh_preview() -> void:
 		preview_sell_button.visible = false
 		var count: int = _count_owned(selected_key)
 		preview_status_label.text = "Sahip olunan: %d" % count
-		if GameManager.owned_weapons.size() >= _max_owned_weapons():
+		## Kullanıcı isteği: "shopta ki shop page den aynı silah birden fazla
+		## alınmaz" - kalkanın "Önce X Sat" desenindeki AYNI fikir, ama
+		## satılabilir bir şey olmadığı için burada sadece devre dışı
+		## bırakılıp "zaten sahipsin" gösteriliyor.
+		if count > 0:
+			preview_buy_button.text = "ZATEN SAHİPSİN"
+			preview_buy_button.disabled = true
+		elif GameManager.owned_weapons.size() >= _max_owned_weapons():
 			preview_buy_button.text = "DOLU"
 			preview_buy_button.disabled = true
 		else:
-			var cost: int = _copy_cost(selected_key, count + 1)
+			var cost: int = _copy_cost(selected_key, GameManager.owned_weapons.size() + 1)
 			preview_buy_button.text = "Satın Al (%d)" % cost
 			preview_buy_button.disabled = GameManager.gold < cost
 

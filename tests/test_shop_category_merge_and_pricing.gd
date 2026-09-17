@@ -5,7 +5,11 @@ extends Node
 ## 10) "Diğer" -> "İşlevsellik"; Savunma (kalkan) sekmesi tamamen silinip
 ##     İşlevsellik'e taşındı.
 ## 11) Karakterin en fazla 1 kalkan yuvası + 2 işlevsellik yuvası olmalı.
-## 12) Silahlardan fazladan kopya (en fazla 5) almak fiyatı arttırmamalı.
+## 12) DÜZELTME (SONRAKİ kullanıcı isteği: "Multiplayerda ilk seçtiğimiz
+##     silahtan sonra alacağımız 2. silah ucuz olacak 3. 4 .5 silahı 80 gold
+##     civarında başlat") - eski #12 ("fazladan kopya fiyatı artırmamalı")
+##     kasıtlı olarak TERS ÇEVRİLDİ: artık toplam sahip olunan silah
+##     sayısına göre kademeli fiyatlanıyor (bkz. aşağıdaki test).
 
 const ShopPanelScene: PackedScene = preload("res://scenes/shop_panel.tscn")
 const InventoryPanelScene: PackedScene = preload("res://scenes/inventory_panel.tscn")
@@ -56,16 +60,43 @@ func test_page_headers_renamed() -> void:
 	panel.queue_free()
 
 
-func test_copy_cost_does_not_scale_with_owned_count() -> void:
+## DÜZELTME (kullanıcı isteği: "Multiplayerda ilk seçtiğimiz silahtan sonra
+## alacağımız 2. silah ucuz olacak 3. 4 .5 silahı 80 gold civarında
+## başlat") - artık silah TÜRÜNDEN bağımsız, sahip olunan TOPLAM silah
+## sayısına (next_total_count) göre kademeli: 2. silah ucuz, 3.+ ~80 altın.
+func test_copy_cost_scales_with_total_owned_count() -> void:
 	var panel: Control = ShopPanelScene.instantiate()
 	add_child(panel)
-	var first: int = panel._copy_cost("dagger", 1)
-	var second: int = panel._copy_cost("dagger", 2)
-	var fifth: int = panel._copy_cost("dagger", 5)
-	assert(first == second and second == fifth,
-		"_copy_cost artik sabit olmali, bulunan: 1.=%s 2.=%s 5.=%s" % [first, second, fifth])
-	assert(first == ShopPanelScript.COPY_COST_BASE["dagger"],
-		"_copy_cost taban fiyata esit olmali, bulunan: %s beklenen: %s" % [first, ShopPanelScript.COPY_COST_BASE["dagger"]])
+	var second_weapon: int = panel._copy_cost("dagger", 2)
+	var third_weapon: int = panel._copy_cost("tabanca", 3)
+	var fifth_weapon: int = panel._copy_cost("yay", 5)
+	assert(second_weapon == ShopPanelScript.SECOND_WEAPON_COST,
+		"2. silah ucuz tarifeyi odemeli, bulunan: %s beklenen: %s" % [second_weapon, ShopPanelScript.SECOND_WEAPON_COST])
+	assert(third_weapon == ShopPanelScript.LATER_WEAPON_COST and fifth_weapon == ShopPanelScript.LATER_WEAPON_COST,
+		"3./5. silah ~80 tarifesini odemeli, bulunan: 3.=%s 5.=%s beklenen: %s" % [third_weapon, fifth_weapon, ShopPanelScript.LATER_WEAPON_COST])
+	assert(second_weapon < third_weapon, "2. silah 3./4./5.'den ucuz olmali")
+	panel.queue_free()
+
+
+## DÜZELTME (kullanıcı isteği: "shopta ki shop page den aynı silah birden
+## fazla alınmaz") - zaten sahip olunan bir silah türü bir daha
+## satın alınamamalı, dükkan bunu hem fiyat etiketinde ("SAHİPSİN") hem de
+## gerçek satın alma fonksiyonunda (_on_buy_copy) engellemeli.
+func test_owned_weapon_cannot_be_bought_again() -> void:
+	var panel: Control = ShopPanelScene.instantiate()
+	add_child(panel)
+	panel._ready()
+	GameManager.owned_weapons = [{"key": "dagger", "level": 1, "spent": 0}]
+	assert(panel._count_owned("dagger") == 1, "dagger zaten sahip olunmali")
+	assert(panel._display_cost_text("dagger") == "SAHİPSİN",
+		"Sahip olunan silahin fiyat etiketi 'SAHIPSIN' olmali, bulunan: %s" % panel._display_cost_text("dagger"))
+	var gold_before: int = GameManager.gold
+	var count_before: int = GameManager.owned_weapons.size()
+	panel._on_buy_copy("dagger")
+	assert(GameManager.owned_weapons.size() == count_before,
+		"Zaten sahip olunan silah tekrar satin alinmamali")
+	assert(GameManager.gold == gold_before,
+		"Engellenen satin almada altin harcanmamali")
 	panel.queue_free()
 
 
