@@ -25,6 +25,27 @@ extends SceneTree
 ## Bu sayede ileride eklenecek HERHANGİ bir yeni shader/node da otomatik
 ## korunur - bu script'in bir daha güncellenmesine gerek kalmaz.
 ##
+## GÖRÜNÜM ÖZELLİKLERİ (y_sort_enabled, visible, modulate...): materyalle aynı
+## mantıkla, Tiled'da karşılığı olan node'larda ESKİ sahnedeki değer yenisine
+## yazılır (bkz. CARRIED_PRESENTATION_PROPS). Sebep 1: y_sort_enabled Tiled'da
+## YOK, Godot editöründe elle veriliyor ("Shader Eklenecek"/"Çalılar1" -
+## taşınmazsa ağaç/çalı çizim sırası sessizce bozulur). Sebep 2: Tiled'da
+## bir grubu gizlemek/saydamlaştırmak çoğunlukla sadece editördeki çalışma
+## kolaylığı (ör. köprü çizerken ağaçları gizlemek) - YATI bunu olduğu gibi
+## visible/modulate'a çevirdiği için taşınmazsa oyundaki TÜM ağaç/çalı
+## görünmez olurdu ve su shader'ının alpha'sı ayrıca Su katmanının Tiled
+## opaklığıyla çarpılırdı. Oyundaki görünüm Godot'ta belirlenir; Tiled
+## SADECE tile içeriğini/katman yapısını belirler. Eski sahnede olmayan
+## (yeni) katmanlar Tiled'daki değerleriyle gelir.
+##
+## GÖMÜLÜ TEXTURE: Proje klasörünün DIŞINDAKİ (res:// altında olmayan) bir
+## tileset PNG'sini (ör. ../../Harita içerikleri/...) YATI sahneye HAM
+## RGBA8 ImageTexture olarak gömer: Bridges.png + bataklık spritesheet.png
+## sahneyi 2.7 MB'tan 26 MB'a, yüklemeyi 0.4 sn'den 3.4 sn'ye çıkardı. Bu
+## texture'lar kayıpsız sıkıştırılmış, kendi içinde tam bir
+## PortableCompressedTexture2D'ye çevrilir (piksel aynı, import adımı ve
+## tsx'lerde yol değişikliği gerekmez, git'e ek asset girmez).
+##
 ## SINIRLAMA: eşleştirme node İSMİYLE yapılıyor - Tiled'da bir katmanı
 ## yeniden adlandırırsanız, o katmanın üzerindeki materyal/eklenti "eski isim"
 ## bulunamadığı için otomatik taşınmaz (o durumda eski isimdeki elle eklenmiş
@@ -35,8 +56,17 @@ const TMX_PATH := "res://harita/Harita.tmx"
 const OLD_BAKED_PATH := "res://scenes/harita_baked.tscn"
 const NEW_BAKED_PATH := "res://scenes/harita_baked_new.tscn"
 
+## Tiled'ın sahibi olmadığı (ya da oyun içinde Godot'ta belirlenen) görünüm
+## özellikleri - eşleşen node'larda eski sahnedeki değer KOŞULSUZ korunur.
+const CARRIED_PRESENTATION_PROPS: PackedStringArray = [
+	"visible", "modulate", "self_modulate", "y_sort_enabled",
+	"z_index", "z_as_relative", "show_behind_parent", "light_mask",
+]
+
 var _carried_material_count: int = 0
 var _carried_node_count: int = 0
+var _carried_property_count: int = 0
+var _compacted_texture_count: int = 0
 
 
 func _init() -> void:
@@ -59,6 +89,8 @@ func _init() -> void:
 			_carried_material_count += 1
 		_merge_customizations(old_root, new_root, new_root)
 
+	_compact_embedded_textures(new_root, {})
+
 	var packed_scene: PackedScene = PackedScene.new()
 	var pack_result: Error = packed_scene.pack(new_root)
 	new_root.free()
@@ -73,7 +105,7 @@ func _init() -> void:
 		printerr("Harita bake başarısız: ResourceSaver sonucu %s" % save_result)
 		quit(1)
 		return
-	print("Harita bake tamamlandı: %s (korunan materyal: %d, korunan ekstra node: %d)" % [NEW_BAKED_PATH, _carried_material_count, _carried_node_count])
+	print("Harita bake tamamlandı: %s (korunan materyal: %d, korunan ekstra node: %d, korunan görünüm özelliği: %d, sıkıştırılan gömülü texture: %d)" % [NEW_BAKED_PATH, _carried_material_count, _carried_node_count, _carried_property_count, _compacted_texture_count])
 	quit(0)
 
 
@@ -83,6 +115,7 @@ func _merge_customizations(old_parent: Node, new_parent: Node, new_root: Node) -
 	for old_child: Node in old_parent.get_children():
 		var new_child: Node = new_parent.get_node_or_null(NodePath(String(old_child.name)))
 		if new_child:
+			_carry_presentation(old_child, new_child)
 			## Tiled'da karşılığı var - üzerinde (hangi shader/kaynak olursa
 			## olsun) bir materyal varsa aynen taşı, sonra çocuklarına in.
 			if ("material" in old_child) and old_child.material != null:
@@ -98,6 +131,42 @@ func _merge_customizations(old_parent: Node, new_parent: Node, new_root: Node) -
 			_set_owner_recursive(dup, new_root)
 			_make_carried_material_visible(dup)
 			_carried_node_count += 1
+
+
+## Eski sahnedeki görünüm özelliklerini (bkz. CARRIED_PRESENTATION_PROPS) yeni
+## node'a yazar. Değer zaten aynıysa dokunmaz (sayaç sadece gerçek farkı sayar).
+func _carry_presentation(old_node: Node, new_node: Node) -> void:
+	for prop: String in CARRIED_PRESENTATION_PROPS:
+		if not (prop in old_node) or not (prop in new_node):
+			continue
+		var old_value: Variant = old_node.get(prop)
+		if new_node.get(prop) != old_value:
+			new_node.set(prop, old_value)
+			_carried_property_count += 1
+
+
+## Sahnedeki TileSet'lerin gömülü (res:// yolu olmayan) ham ImageTexture'larını
+## kayıpsız sıkıştırılmış PortableCompressedTexture2D'ye çevirir - nedeni için
+## dosya başındaki "GÖMÜLÜ TEXTURE" notuna bak. TÜM katmanlar aynı TileSet'i
+## paylaşıyor; `seen` aynı TileSet'in iki kez işlenmesini engeller.
+func _compact_embedded_textures(node: Node, seen: Dictionary) -> void:
+	if node is TileMapLayer:
+		var tile_set: TileSet = (node as TileMapLayer).tile_set
+		if tile_set != null and not seen.has(tile_set):
+			seen[tile_set] = true
+			for i: int in tile_set.get_source_count():
+				var source := tile_set.get_source(tile_set.get_source_id(i)) as TileSetAtlasSource
+				if source == null or not (source.texture is ImageTexture):
+					continue
+				var packed := PortableCompressedTexture2D.new()
+				## Kaydedilebilmesi için sıkıştırılmış buffer'ın tutulması şart -
+				## create_from_image'den ÖNCE ayarlanmalı, yoksa sahneye veri yazılmaz.
+				packed.keep_compressed_buffer = true
+				packed.create_from_image(source.texture.get_image(), PortableCompressedTexture2D.COMPRESSION_MODE_LOSSLESS)
+				source.texture = packed
+				_compacted_texture_count += 1
+	for child: Node in node.get_children():
+		_compact_embedded_textures(child, seen)
 
 
 ## Taşınan/çoğaltılan bir materyalin GERÇEKTEN görünmesini garanti eder.
