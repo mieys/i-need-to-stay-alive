@@ -1674,31 +1674,31 @@ func _steer_around_obstacle(dir: Vector2) -> Vector2:
 	return (perp * 0.75 + dir * 0.25).normalized()
 
 
-## GEÇİCİ OLARAK DEVRE DIŞI (kullanıcı isteği: "oyundaki collision shapeleri
+## SU/EV İÇİN HÂLÂ KAPALI (kullanıcı isteği: "oyundaki collision shapeleri
 ## kaldır haritada istediğimiz yere hareket edebilelim sonra sıfırdan
 ## collision shape dizicem çünkü") - player.gd'deki AYNI isteğin BİREBİR
-## eşleniği (bkz. orada _block_movement_into_terrain üstündeki DÜZELTME
-## notu), ama o zaman SADECE oyuncu tarafı kapatılmış, yaratık tarafı
-## unutulmuştu - bu yüzden "ben de yaratıklar da suyu geçemiyoruz" şikayeti
-## hâlâ geçerliydi (yaratıklar su/ev karolarında hâlâ duruyordu, üstelik su
-## kenarında yığılan yaratık gövdeleri oyuncuyu da fiziksel olarak geri
-## itip suya giremiyormuş HİSSİ veriyordu). Artık yaratıklar da su/ev
-## karolarına bakılmaksızın haritanın HER yerinde serbestçe hareket
-## edebilir. Yeni collision shape'ler elle dizilince bu erken return
-## SATIRI kaldırılıp fonksiyon eskisi gibi (aşağıdaki mantık hâlâ olduğu
-## gibi duruyor) tekrar aktif edilmeli.
+## eşleniği (bkz. orada _block_movement_into_terrain üstündeki not): yaratıklar
+## su/ev karolarında serbest, ama yeniden dizmenin İLK ADIMI olan orman katmanı
+## ("Orman parçaları/Orman parçaları" - kullanıcı isteği: "orman parçaları
+## layerını collision shape ile kaplamanı istiyorum") geçilmez. Bu yüzden
+## is_position_blocked_by_FOREST kullanılıyor, is_position_blocked_by_terrain
+## (su+ev+orman) DEĞİL. Su/ev de açılacaksa üç çağrıyı ona çevirmek yeterli.
 func _block_movement_into_terrain() -> void:
-	return
 	if velocity.length() < 0.1:
+		return
+	## Zaten duvarın İÇİNDEYSE (ör. eskiden kalma bir konum, knockback) engelleme
+	## atlanır - yoksa prob her yönde yine karonun içine denk gelip yaratığı
+	## SONSUZA DEK hapseder (bkz. player.gd'deki AYNI güvenlik ağı).
+	if GameManager.is_position_blocked_by_forest(global_position):
 		return
 	var probe_dist: float = 10.0
 	if velocity.x != 0.0:
 		var probe_x: Vector2 = global_position + Vector2(sign(velocity.x) * probe_dist, 0.0)
-		if GameManager.is_position_blocked_by_terrain(probe_x):
+		if GameManager.is_position_blocked_by_forest(probe_x):
 			velocity.x = 0.0
 	if velocity.y != 0.0:
 		var probe_y: Vector2 = global_position + Vector2(0.0, sign(velocity.y) * probe_dist)
-		if GameManager.is_position_blocked_by_terrain(probe_y):
+		if GameManager.is_position_blocked_by_forest(probe_y):
 			velocity.y = 0.0
 
 ## DÜZELTME (kullanıcı isteği, sonraki tur: "necromancerin yaratıkları

@@ -22,6 +22,12 @@ const WeaponSelectScreenScript = preload("res://scripts/weapon_select_screen.gd"
 const MerchantArrowScript := preload("res://scripts/merchant_arrow.gd")
 var _merchant_arrow: Control = null
 
+## Kullanıcı isteği: LoL tarzı görüş alanı / savaş sisi - bkz. vision_fog.gd.
+## Sahneye (main.tscn) elle eklenmiyor, kodla kuruluyor: Godot editörü main.tscn'i
+## açık tutarken dışarıdan yapılan .tscn düzenlemeleri editörün "Kaydet"i ile
+## sessizce ezilebiliyor (bkz. CLAUDE.md).
+const VisionFogScript := preload("res://scripts/vision_fog.gd")
+
 ## Haritaya "gökyüzündeki bulutlar yer yer gölge düşürmüş" görünümü veren
 ## materyal. TEK bir paylaşılan kaynak (.tres) olarak tutuluyor - böylece
 ## koyuluk/leke boyutu gibi ayarlar tek bir dosyadan (editörde de canlı)
@@ -170,7 +176,16 @@ func _ready() -> void:
 	
 	if NetworkManager.is_multiplayer_active:
 		_setup_multiplayer_players()
-	
+
+	## Görüş alanı sisi: dünyanın üstünde, HUD'un ALTINDA. VignetteOverlay ve HUD
+	## aynı CanvasLayer katmanında (1) olduğu için çizim sırasını ağaç sırası
+	## belirliyor - bu yüzden sisi HUD'dan hemen ÖNCEYE taşıyoruz, yoksa
+	## add_child() onu en sona koyar ve HUD'un ÜSTÜNE çizerdi (arayüz kararırdı).
+	var vision_fog: CanvasLayer = VisionFogScript.new()
+	vision_fog.name = "VisionFog"
+	add_child(vision_fog)
+	move_child(vision_fog, hud.get_index())
+
 	# Add loopable breezy cozy forest ambient sound
 	var ambient: Node = preload("res://scripts/wind_breeze_ambient.gd").new()
 	ambient.name = "WindBreezeAmbient"

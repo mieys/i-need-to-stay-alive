@@ -712,6 +712,7 @@ func set_team_xp_state(new_xp: float, new_needed: float, new_level: int) -> void
 ## bir post-bake düzeltmesi gerekmez, animation_columns/ekstra 2 gibi).
 var _terrain_su_layer: TileMapLayer = null
 var _terrain_ev_layer: TileMapLayer = null
+var _terrain_forest_layer: TileMapLayer = null
 var _terrain_layers_searched: bool = false
 
 
@@ -727,11 +728,37 @@ func _find_terrain_layers() -> void:
 		return
 	_terrain_su_layer = harita.get_node_or_null("Su/Su") as TileMapLayer
 	_terrain_ev_layer = harita.get_node_or_null("ev/Ev") as TileMapLayer
+	_terrain_forest_layer = harita.get_node_or_null("Orman parçaları/Orman parçaları") as TileMapLayer
 
 
-## world_pos'ta (Harita/Su/Su ya da Harita/ev/Ev katmanında) bir karo varsa
-## true döner - "su" veya "ev" (dış bina) alanına giriliyor demektir. Ana
-## harita sahnede yoksa (ör. ana menü, ev içi ayrı bir bake) her zaman false.
+## Kullanıcı isteği: "Orman parçaları Node2D'nin içindeki 'Orman parçaları'
+## layerını collision shape ile kaplamanı istiyorum ve bu ayrıca görüş alanını
+## da kısıtlayacak, bunun ardındaki hiçbir şeyi görememeliyiz" - bu katman
+## (plato/uçurum kaya duvarları) HEM geçilmez (bkz. is_position_blocked_by_forest)
+## HEM görüşü keser (bkz. vision_fog.gd / vision_occluders.gd, katmanı buradan
+## alıyorlar - yolun TEK kaynağı burası). Ana harita sahnede yoksa null.
+func get_forest_layer() -> TileMapLayer:
+	_find_terrain_layers()
+	return _terrain_forest_layer if is_instance_valid(_terrain_forest_layer) else null
+
+
+## world_pos'ta orman katmanında (Harita/Orman parçaları/Orman parçaları) bir
+## karo varsa true. player.gd/enemy.gd'nin hareket engellemesi SADECE bunu
+## kullanıyor: su/ev engeli oyuncu ve yaratıklar için hâlâ bilerek KAPALI (bkz.
+## oradaki "GEÇİCİ OLARAK DEVRE DIŞI" notu - kullanıcı o collision'ları
+## sıfırdan, parça parça yeniden diziyor; orman ilk parça).
+func is_position_blocked_by_forest(world_pos: Vector2) -> bool:
+	var forest: TileMapLayer = get_forest_layer()
+	if forest == null:
+		return false
+	var cell: Vector2i = forest.local_to_map(forest.to_local(world_pos))
+	return forest.get_cell_source_id(cell) != -1
+
+
+## world_pos'ta (Harita/Su/Su, Harita/ev/Ev ya da orman katmanında) bir karo
+## varsa true döner - "su", "ev" (dış bina) ya da orman duvarı alanına
+## giriliyor demektir. Ana harita sahnede yoksa (ör. ana menü, ev içi ayrı
+## bir bake) her zaman false. Spawner/satıcı yerleşimi/pet'ler bunu kullanır.
 func is_position_blocked_by_terrain(world_pos: Vector2) -> bool:
 	_find_terrain_layers()
 	if is_instance_valid(_terrain_su_layer):
@@ -742,7 +769,7 @@ func is_position_blocked_by_terrain(world_pos: Vector2) -> bool:
 		var cell2: Vector2i = _terrain_ev_layer.local_to_map(_terrain_ev_layer.to_local(world_pos))
 		if _terrain_ev_layer.get_cell_source_id(cell2) != -1:
 			return true
-	return false
+	return is_position_blocked_by_forest(world_pos)
 
 
 ## ==============================================================================
@@ -784,6 +811,7 @@ func reset() -> void:
 	_blocking_panels.clear()
 	_terrain_su_layer = null
 	_terrain_ev_layer = null
+	_terrain_forest_layer = null
 	_terrain_layers_searched = false
 	game_time = 0.0
 	is_game_over = false

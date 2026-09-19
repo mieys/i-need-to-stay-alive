@@ -4,6 +4,8 @@ class_name Minimap
 ## Yuvarlak minimap: harita üzerinde oyuncu konumunu, düşmanları ve harita
 ## sınırlarını gösterir.
 
+const VisionFogScript := preload("res://scripts/vision_fog.gd")
+
 const RADIUS: float = 80.0
 
 const MAP_MIN: Vector2 = Vector2(0.0, 0.0)
@@ -99,11 +101,18 @@ func _process(delta: float) -> void:
 		if player_indoors:
 			_enemy_dots = []
 		else:
+			## Kullanıcı isteği (LoL tarzı görüş alanı): sisin içindeki düşman
+			## ekranda gizleniyorsa/soluyorsa minimap'te de nokta olarak
+			## görünmemeli, yoksa minimap karanlıktaki düşmanı ele verir. Sis
+			## düşmanı yönetmiyorsa (katman yok / ev içi) fog_visibility_of 1
+			## döner - o durumlarda davranış eskisi gibi.
 			var dots: Array = []
 			for enemy: Node in get_tree().get_nodes_in_group("enemies"):
 				if not is_instance_valid(enemy) or not ("global_position" in enemy):
 					continue
 				if enemy.get("is_dead") == true:
+					continue
+				if VisionFogScript.fog_visibility_of(enemy) < VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY:
 					continue
 				var is_boss: bool = false
 				if "is_boss" in enemy:

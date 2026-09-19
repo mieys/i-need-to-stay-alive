@@ -1,5 +1,7 @@
 extends Node2D
 
+const VisionFogScript := preload("res://scripts/vision_fog.gd")
+
 ## Karakterin (oyuncu/düşman) TAM ÜSTÜNDE belirir, SADECE hafifçe yukarı
 ## kayar, sonra söner. Başka hiçbir hareket yok: yana kaymaz, zıplamaz,
 ## büyüyüp küçülmez, "nabız" atmaz - tek animasyonu bu küçük, yavaş, tek
@@ -89,6 +91,14 @@ func setup(text: String, color: Color, big: bool = false) -> void:
 func _process(_delta: float) -> void:
 	if follow_target and is_instance_valid(follow_target):
 		_last_known_origin = follow_target.global_position + follow_offset
+		## Görüş alanı sisinde gizlenen/solan bir düşmanın hasar sayısı karanlıkta
+		## tek başına süzülüp düşmanın yerini ele vermesin (bkz. vision_fog.gd).
+		## Sayı düşmanın çocuğu DEĞİL, sahne köküne ekleniyor - bu yüzden
+		## görünürlüğü elle takip etmesi gerekiyor. SADECE sisin yönettiği
+		## görünürlüğe bakılıyor (is_visible_in_tree DEĞİL): başka bir sebeple
+		## gizlenen bir hedefin (ör. görünmez oyuncu) sayıları eskisi gibi çıkmaya
+		## devam etmeli.
+		visible = VisionFogScript.fog_visibility_of(follow_target) >= VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY
 	global_position = _last_known_origin - Vector2(0, _rise_offset)
 
 

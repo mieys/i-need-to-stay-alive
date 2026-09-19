@@ -20,6 +20,10 @@ var homing: bool = false
 @onready var visual = $Visual
 
 func _ready() -> void:
+	## Görüş alanı sisi (bkz. vision_fog.gd HIDEABLE_GROUPS): sisin içinde
+	## kalan düşman mermileri de düşmanlar gibi gizlenir, karanlıktan gelen
+	## ateş top yalnızca görüş alanına girince belirir.
+	add_to_group("enemy_projectiles")
 	body_entered.connect(_on_body_entered)
 	if visual:
 		visual.glow_color = tint

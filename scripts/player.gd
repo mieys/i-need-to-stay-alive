@@ -2501,17 +2501,18 @@ func _block_movement_into_players() -> void:
 ## boyutundan bağımsız, sabit ve küçük bir tampon kullanılıyor - blok alanı
 ## artık su/ev karolarının GERÇEK sınırına çok daha yakın (sadece bir
 ## karenin geçişini önlemeye yetecek kadar pay bırakılıyor).
-## GEÇİCİ OLARAK DEVRE DIŞI (kullanıcı isteği: "oyundaki collision
+## SU/EV İÇİN HÂLÂ KAPALI (kullanıcı isteği: "oyundaki collision
 ## shapeleri kaldır haritada istediğimiz yere hareket edebilelim sonra
 ## sıfırdan collision shape dizicem çünkü") - haritada gerçek CollisionShape2D
 ## hiç yok (bkz. yukarıdaki dosya başı notu), "collision shape" burada bu
-## fonksiyonun su/ev karo-sorgusu anlamına geliyor. Oyuncu artık su/ev
-## karolarına bakılmaksızın haritanın HER yerinde serbestçe hareket edebilir.
-## Yeni collision shape'ler elle dizilince bu erken return SATIRI kaldırılıp
-## fonksiyon eskisi gibi (aşağıdaki mantık hâlâ olduğu gibi duruyor) tekrar
-## aktif edilmeli.
+## fonksiyonun karo-sorgusu anlamına geliyor. Yeniden dizme İLK ADIM: orman
+## katmanı ("Orman parçaları/Orman parçaları", plato/uçurum duvarları) -
+## kullanıcı isteği: "orman parçaları layerını collision shape ile kaplamanı
+## istiyorum". Bu yüzden aşağıda is_position_blocked_by_TERRAIN (su+ev+orman)
+## DEĞİL is_position_blocked_by_FOREST kullanılıyor: oyuncu su/ev karolarında
+## hâlâ serbest, orman duvarından geçemiyor. Su/ev de yeniden açılacaksa
+## aşağıdaki üç çağrıyı is_position_blocked_by_terrain'e çevirmek yeterli.
 func _block_movement_into_terrain() -> void:
-	return
 	if velocity.length() < 0.1:
 		return
 	## DÜZELTME (kullanıcı bildirimi: "düşmanlar bizi hala itip duvara
@@ -2525,16 +2526,16 @@ func _block_movement_into_terrain() -> void:
 	## bakıyor, zaten içerideyken bu her yönde yine karonun içine denk
 	## gelebiliyor). Zaten içerideyse blok mantığı TAMAMEN atlanır, oyuncu
 	## kısıtlanmadan hareket edip dışarı çıkabilir.
-	if GameManager.is_position_blocked_by_terrain(global_position):
+	if GameManager.is_position_blocked_by_forest(global_position):
 		return
 	var probe_dist: float = 10.0
 	if velocity.x != 0.0:
 		var probe_x: Vector2 = global_position + Vector2(sign(velocity.x) * probe_dist, 0.0)
-		if GameManager.is_position_blocked_by_terrain(probe_x):
+		if GameManager.is_position_blocked_by_forest(probe_x):
 			velocity.x = 0.0
 	if velocity.y != 0.0:
 		var probe_y: Vector2 = global_position + Vector2(0.0, sign(velocity.y) * probe_dist)
-		if GameManager.is_position_blocked_by_terrain(probe_y):
+		if GameManager.is_position_blocked_by_forest(probe_y):
 			velocity.y = 0.0
 
 
