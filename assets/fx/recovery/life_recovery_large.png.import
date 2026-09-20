@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bc3gsbqvikgp3"
-path="res://.godot/imported/Interior_objects.png-1f1d7eddc65084b398815213322e2f69.ctex"
+uid="uid://b0w1s71jw1tfp"
+path="res://.godot/imported/life_recovery_large.png-ec96b7560d540438a0193dbadc4013b1.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://harita/Ev içi/Interior_objects.png"
-dest_files=["res://.godot/imported/Interior_objects.png-1f1d7eddc65084b398815213322e2f69.ctex"]
+source_file="res://assets/fx/recovery/life_recovery_large.png"
+dest_files=["res://.godot/imported/life_recovery_large.png-ec96b7560d540438a0193dbadc4013b1.ctex"]
 
 [params]
 

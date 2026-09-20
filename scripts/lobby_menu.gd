@@ -5,9 +5,6 @@ const BASE_STATS := "Can:100  Hız:240  Hasar:10  AteşHızı:1.0/sn"
 @onready var status_label: Label = $TopBar/StatusLabel
 @onready var back_btn: Button = $TopBar/BackBtn
 @onready var player_name_input: LineEdit = $LeftPanel/Margin/VBox/NameHBox/PlayerNameInput
-@onready var create_btn: Button = $LeftPanel/Margin/VBox/CreateBtn
-@onready var join_btn: Button = $LeftPanel/Margin/VBox/JoinHBox/JoinBtn
-@onready var room_code_input: LineEdit = $LeftPanel/Margin/VBox/JoinHBox/RoomCodeInput
 @onready var room_info_label: Label = $LeftPanel/Margin/VBox/RoomInfoLabel
 @onready var public_ip_label: Label = $LeftPanel/Margin/VBox/PublicIpLabel
 @onready var player_list_container: VBoxContainer = $LeftPanel/Margin/VBox/PlayerScroll/PlayerListVBox
@@ -42,15 +39,9 @@ var _select_frame_style_on: StyleBoxFlat
 var _lan_host_btn: Button = null
 var _lan_join_btn: Button = null
 var _lan_ip_input: LineEdit = null
-var _lan_separator: HSeparator = null
-var _lan_title: Label = null
-var _mode_select_panel: PanelContainer = null
-var current_mode: String = ""
 
 
 func _ready() -> void:
-	create_btn.pressed.connect(_on_create_room_pressed)
-	join_btn.pressed.connect(_on_join_room_pressed)
 	start_game_btn.pressed.connect(_on_start_game_pressed)
 	ready_btn.pressed.connect(_on_ready_pressed)
 	close_room_btn.pressed.connect(_on_close_room_pressed)
@@ -74,36 +65,26 @@ func _ready() -> void:
 	## yansıtılıyor - kullanıcı bir daha hiç yazmak zorunda kalmıyor.
 	player_name_input.text = NetworkManager.local_player_name
 
-	# Dynamically add LAN controls to the UI
+	## Kullanıcı isteği: "multiplayerdan ziva altyapısını kaldır, ziva seçeneği de olmayacak" - oda
+	## kodu (Ziva) kontrolleri ve mod seçim ekranı kalktı; tek bağlantı yolu LAN/IP. LAN
+	## kontrolleri sahnedeki "RoomHeader" (Bağlantı başlığı) etiketinin hemen altına eklenir.
 	var vbox: VBoxContainer = $LeftPanel/Margin/VBox as VBoxContainer
-	var join_hbox_node = $LeftPanel/Margin/VBox/JoinHBox
-	var insert_idx: int = join_hbox_node.get_index() + 1
-	
-	_lan_separator = HSeparator.new()
-	vbox.add_child(_lan_separator)
-	vbox.move_child(_lan_separator, insert_idx)
-	
-	_lan_title = Label.new()
-	_lan_title.text = "LAN (Yerel Ağ) Bağlantısı"
-	_lan_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_lan_title.add_theme_font_size_override("font_size", 20)
-	vbox.add_child(_lan_title)
-	vbox.move_child(_lan_title, insert_idx + 1)
-	
+	var insert_idx: int = $LeftPanel/Margin/VBox/RoomHeader.get_index() + 1
+
 	# Row 1: LineEdit for IP:Port
 	_lan_ip_input = LineEdit.new()
 	_lan_ip_input.placeholder_text = "IP:Port (örn. 192.168.1.50:7777)"
 	_lan_ip_input.text = "127.0.0.1:7777"
 	_lan_ip_input.custom_minimum_size = Vector2(0, 44)
 	vbox.add_child(_lan_ip_input)
-	vbox.move_child(_lan_ip_input, insert_idx + 2)
+	vbox.move_child(_lan_ip_input, insert_idx)
 	
 	# Row 2: HBox for buttons
 	var lan_hbox := HBoxContainer.new()
 	lan_hbox.name = "LanHBox"
 	lan_hbox.add_theme_constant_override("separation", 10)
 	vbox.add_child(lan_hbox)
-	vbox.move_child(lan_hbox, insert_idx + 3)
+	vbox.move_child(lan_hbox, insert_idx + 1)
 	
 	_lan_host_btn = Button.new()
 	_lan_host_btn.text = "LAN Kur"
@@ -125,7 +106,7 @@ func _ready() -> void:
 	lan_info_lbl.add_theme_font_size_override("font_size", 14)
 	lan_info_lbl.add_theme_color_override("font_color", Color(0.65, 0.65, 0.7))
 	vbox.add_child(lan_info_lbl)
-	vbox.move_child(lan_info_lbl, insert_idx + 4)
+	vbox.move_child(lan_info_lbl, insert_idx + 2)
 	
 	_lan_host_btn.pressed.connect(func():
 		var parts: Array = _lan_ip_input.text.split(":")
@@ -152,10 +133,10 @@ func _ready() -> void:
 		NetworkManager.join_lan(ip, port, pname, selected_char_id)
 	)
 	
-	# Initial UI State: Hide panels, show Mode Selection!
-	$LeftPanel.visible = false
-	$RightArea.visible = false
-	_create_mode_select_ui()
+	## Mod seçim ekranı (Ziva Cloud / LAN) kaldırıldı: doğrudan LAN lobisi.
+	$LeftPanel.visible = true
+	$RightArea.visible = true
+	$TopBar/Title.text = "YEREL AĞ (LAN) LOBİSİ"
 	
 	_populate_character_grid()
 	_update_lobby_ui()
@@ -163,131 +144,6 @@ func _ready() -> void:
 	
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
-
-
-func _create_mode_select_ui() -> void:
-	if _mode_select_panel:
-		_mode_select_panel.queue_free()
-		
-	_mode_select_panel = PanelContainer.new()
-	_mode_select_panel.custom_minimum_size = Vector2(600, 480)
-	_mode_select_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_mode_select_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_mode_select_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_mode_select_panel.offset_left = -300
-	_mode_select_panel.offset_right = 300
-	_mode_select_panel.offset_top = -240
-	_mode_select_panel.offset_bottom = 240
-	add_child(_mode_select_panel)
-	
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.12, 0.12, 0.16, 0.95)
-	panel_style.border_width_left = 4
-	panel_style.border_width_top = 4
-	panel_style.border_width_right = 4
-	panel_style.border_width_bottom = 4
-	panel_style.border_color = Color(0.4, 0.35, 0.25, 1.0)
-	panel_style.corner_radius_top_left = 16
-	panel_style.corner_radius_top_right = 16
-	panel_style.corner_radius_bottom_right = 16
-	panel_style.corner_radius_bottom_left = 16
-	## Kullanıcı isteği: gölge tüm oyun pencerelerinde tutarlı olsun (pixel
-	## stili: keskin, sağ-alta kayan hafif gölge).
-	panel_style.shadow_color = Color(0, 0, 0, 0.35)
-	panel_style.shadow_size = 2
-	panel_style.shadow_offset = Vector2(3, 4)
-	_mode_select_panel.add_theme_stylebox_override("panel", panel_style)
-	
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 30)
-	margin.add_theme_constant_override("margin_right", 30)
-	margin.add_theme_constant_override("margin_top", 30)
-	margin.add_theme_constant_override("margin_bottom", 30)
-	_mode_select_panel.add_child(margin)
-	
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 24)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	margin.add_child(vbox)
-	
-	var title := Label.new()
-	title.text = "ÇOK OYUNCULU MODU SEÇ"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	## Kullanıcı isteği: "çok oyunculu modu seçim ekranındaki fontları %50
-	## büyüt" - bu panelin tüm font_size'ları (başlık/buton/açıklama) x1.5.
-	title.add_theme_font_size_override("font_size", 48)
-	title.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
-	vbox.add_child(title)
-
-	# Ziva Cloud Button
-	var ziva_btn := Button.new()
-	ziva_btn.text = "ZIVA CLOUD (Bulut Lobi)"
-	ziva_btn.custom_minimum_size = Vector2(0, 70)
-	ziva_btn.add_theme_font_size_override("font_size", 36)
-	vbox.add_child(ziva_btn)
-
-	var ziva_desc := Label.new()
-	ziva_desc.text = "Oda koduyla internet üzerinden port yönlendirmesiz hızlı bağlantı."
-	ziva_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ziva_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
-	ziva_desc.add_theme_font_size_override("font_size", 24)
-	ziva_desc.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
-	vbox.add_child(ziva_desc)
-
-	# LAN Button
-	var lan_btn := Button.new()
-	lan_btn.text = "LAN (Yerel Ağ Bağlantısı)"
-	lan_btn.custom_minimum_size = Vector2(0, 70)
-	lan_btn.add_theme_font_size_override("font_size", 36)
-	vbox.add_child(lan_btn)
-
-	var lan_desc := Label.new()
-	lan_desc.text = "Aynı ev/ofis ağındaki bilgisayarlar için IP adresiyle doğrudan bağlantı."
-	lan_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lan_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
-	lan_desc.add_theme_font_size_override("font_size", 24)
-	lan_desc.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
-	vbox.add_child(lan_desc)
-	
-	ziva_btn.pressed.connect(func():
-		_enter_lobby_mode("ziva")
-	)
-	
-	lan_btn.pressed.connect(func():
-		_enter_lobby_mode("lan")
-	)
-	
-	if is_inside_tree():
-		UISound.connect_all_buttons(self)
-		UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
-
-
-func _enter_lobby_mode(mode: String) -> void:
-	current_mode = mode
-	if _mode_select_panel:
-		_mode_select_panel.visible = false
-	
-	$LeftPanel.visible = true
-	$RightArea.visible = true
-	
-	# Set visibility of host/join controls based on mode
-	create_btn.visible = (mode == "ziva")
-	$LeftPanel/Margin/VBox/OrLabel.visible = (mode == "ziva")
-	join_btn.get_parent().visible = (mode == "ziva") # JoinHBox
-	
-	if _lan_title: _lan_title.visible = (mode == "lan")
-	if _lan_ip_input: _lan_ip_input.visible = (mode == "lan")
-	if _lan_separator: _lan_separator.visible = (mode == "lan")
-	
-	var vbox: VBoxContainer = $LeftPanel/Margin/VBox as VBoxContainer
-	var lan_hbox = vbox.get_node_or_null("LanHBox")
-	if lan_hbox: lan_hbox.visible = (mode == "lan")
-	var lan_info_lbl = vbox.get_node_or_null("LanInfoLbl")
-	if lan_info_lbl: lan_info_lbl.visible = (mode == "lan")
-	
-	# Update Title
-	$TopBar/Title.text = "ZIVA BULUT LOBİSİ" if mode == "ziva" else "YEREL AĞ (LAN) LOBİSİ"
-	_update_lobby_ui()
 
 
 ## Kullanıcı isteği: "çok oyunculu karakter seçim ekranındaki karakter
@@ -478,27 +334,6 @@ func _on_character_pressed(char_id: int) -> void:
 	NetworkManager.update_local_character(char_id)
 
 
-func _on_create_room_pressed() -> void:
-	var pname: String = player_name_input.text.strip_edges()
-	if pname.is_empty():
-		pname = "Oyuncu 1"
-	## Ziva relay'inde yeni bir oda kodu üretip o odaya katılır (bkz.
-	## NetworkManager create_room / _generate_room_code).
-	NetworkManager.create_room(0, pname, selected_char_id)
-
-
-func _on_join_room_pressed() -> void:
-	## Host'un paylaştığı oda kodu giriliyor (relay tabanlı - IP/port DEĞİL).
-	var code: String = room_code_input.text.strip_edges()
-	var pname: String = player_name_input.text.strip_edges()
-	if pname.is_empty():
-		pname = "Oyuncu 2"
-	if code.is_empty():
-		status_label.text = "Lütfen oda kodunu girin!"
-		return
-	NetworkManager.join_room(code, pname, selected_char_id)
-
-
 func _on_start_game_pressed() -> void:
 	NetworkManager.start_multiplayer_game()
 
@@ -530,16 +365,7 @@ func _on_back_pressed() -> void:
 		NetworkManager.disconnect_from_room()
 		_update_lobby_ui()
 		return
-		
-	if current_mode != "":
-		current_mode = ""
-		$LeftPanel.visible = false
-		$RightArea.visible = false
-		if _mode_select_panel:
-			_mode_select_panel.visible = true
-		$TopBar/Title.text = "ÇOK OYUNCULU LOBİ"
-		return
-		
+	
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
@@ -547,13 +373,10 @@ func _on_status_changed(status_text: String) -> void:
 	status_label.text = status_text
 
 
-## Ziva/LAN üzerinden bağlantı bilgisi
+## LAN/IP bağlantı bilgisi
 func _refresh_public_ip_label() -> void:
 	public_ip_label.visible = true
-	if NetworkManager.is_lan_mode:
-		public_ip_label.text = "LAN bağlantısı kuruldu. IP:Port : %s" % NetworkManager.room_code
-	else:
-		public_ip_label.text = "Arkadaşların katılması için bu oda kodunu paylaş: %s" % NetworkManager.room_code
+	public_ip_label.text = "LAN bağlantısı kuruldu. IP:Port : %s" % NetworkManager.room_code
 
 
 func _update_lobby_ui() -> void:
@@ -562,14 +385,12 @@ func _update_lobby_ui() -> void:
 		start_game_btn.visible = false
 		ready_btn.visible = false
 		close_room_btn.visible = false
-		create_btn.disabled = false
-		join_btn.disabled = false
 		public_ip_label.visible = false
 		if _lan_host_btn: _lan_host_btn.disabled = false
 		if _lan_join_btn: _lan_join_btn.disabled = false
 		if _lan_ip_input: _lan_ip_input.editable = true
 	else:
-		room_info_label.text = "Oda Kodu: %s (%s)" % [NetworkManager.room_code, "Host" if NetworkManager.is_host else "Katılımcı"]
+		room_info_label.text = "Bağlantı: %s (%s)" % [NetworkManager.room_code, "Host" if NetworkManager.is_host else "Katılımcı"]
 		start_game_btn.visible = NetworkManager.is_host
 		start_game_btn.disabled = not NetworkManager.all_players_ready()
 		ready_btn.visible = not NetworkManager.is_host
@@ -577,8 +398,6 @@ func _update_lobby_ui() -> void:
 		var local_ready: bool = NetworkManager.lobby_players.get(my_id, {}).get("is_ready", false)
 		ready_btn.text = "HAZIR DEĞİLİM" if local_ready else "HAZIRIM"
 		close_room_btn.visible = NetworkManager.is_host
-		create_btn.disabled = true
-		join_btn.disabled = true
 		if _lan_host_btn: _lan_host_btn.disabled = true
 		if _lan_join_btn: _lan_join_btn.disabled = true
 		if _lan_ip_input: _lan_ip_input.editable = false

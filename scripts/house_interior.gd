@@ -4,6 +4,10 @@ class_name HouseInterior
 ## Başlangıç evine "F" ile girip çıkma sistemi (kullanıcı isteği: "haritamda
 ## başlangıç kısmında bir ev var, çok yaklaşınca F'ye basarak içeri
 ## girilsin, içerideyken aşağıya yaklaşınca F'ye basıp çıkılabilsin").
+## GÜNCEL: F sadece DIŞARIDAN İÇERİ girmek için; içeriden çıkış artık iç haritadaki "Kapı"
+## katmanına basınca (bkz. _create_exit_trigger). İç haritanın çarpışmaları da (Kapı, Eşya
+## alt, zemin, İç oda giriş HARİÇ tüm katmanlar) çalışma anında üretilir (bkz.
+## _add_interior_collisions).
 ##
 ## Yaratıkların içeri saldıramaması (kullanıcı isteği) BURADA değil,
 ## player.gd'nin is_indoors bayrağı + enemy.gd'nin _find_closest_target_player
@@ -43,16 +47,44 @@ const VIGNETTE_SIZE := 3000.0
 
 ## Oyuncu içeri girince belirdiği nokta - odanın ortası olarak güncellendi.
 const INTERIOR_SPAWN_POS := Vector2(160.0, 200.0)
-## Çıkış tetikleme alanı - kapıya (güney duvara) yakın olduğu için giriş
-## noktasıyla neredeyse aynı bölge.
-const INTERIOR_EXIT_POS := Vector2(160.0, 306.0)
-const INTERIOR_EXIT_RADIUS := 50.0
+## Kullanıcı isteği (ev içi güncellemesi): dışarı çıkış artık F ile DEĞİL - iç haritadaki
+## "Kapı" katmanına (Tiled'da "Kapı" adlı tile layer) basınca oluyor; F sadece DIŞARIDAN
+## içeri girmek için kalıyor. Çıkış tetikleyicisi çalışma anında bu katmanın hücrelerinden
+## üretilir (bkz. _create_exit_trigger) - kapı Tiled'da taşınırsa kod değişikliği gerekmez.
+const INTERIOR_DOOR_LAYER := "Kapı"
+## SADECE "Kapı" katmanı iç sahnede bulunamazsa (eski bake, katman yeniden adlandırılmış)
+## kullanılan yedek çıkış alanı: eski kapı bölgesi. Oyuncu içeride hapsolmasın diye.
+const FALLBACK_INTERIOR_EXIT_POS := Vector2(160.0, 306.0)
+const FALLBACK_INTERIOR_EXIT_RADIUS := 50.0
 
-## Dışarıdaki evin konumu (bkz. scenes/harita_baked.tscn "ev/Ev" katmanı,
-## piksel sınırları x:[2944,3120] y:[1792,1920]) - alt (güney) duvarın orta
-## noktası, oyuncunun oyun başlangıcı konumuyla (main.tscn Player
-## position=3016,1920) örtüşüyor.
-const EXTERIOR_ENTRANCE_POS := Vector2(3032.0, 1912.0)
+## Kullanıcı isteği (ev içi güncellemesi): "kapı, eşya alt, zemin ve iç oda giriş haricindeki
+## TÜM layerlara collision shape ile kapla, eşyaları ve duvarları kapsadığı için oyuncular
+## içinden geçememeli". Çarpışması OLMAYAN katmanlar (Tiled'daki tam adlarıyla) - bunların
+## DIŞINDAKİ her TileMapLayer (Duvarlar, Duvarlar -1, iki "ekstra" ...) kaplanır. Dışlama
+## listesi bilerek: aynı adlı ikinci "ekstra" katmanı Godot'ta otomatik ad aldığı için
+## ("@TileMapLayer@3") isimle "dahil etme" yerine isimle "hariç tutma" güvenilir.
+const INTERIOR_NO_COLLISION_LAYERS: Array[String] = ["Kapı", "Eşya alt", "zemin", "İç oda giriş"]
+## Ev içi çarpışma gövdelerinin (InteriorBounds + InteriorCollision) fizik katmanı BİT DEĞERİ
+## (8 = 4. katman). KÖK NEDEN NOTU (kullanıcı bildirimi: "evin duvarlarını collision shape ile
+## kaplamamışsın"): player.tscn'de collision_mask = 0 (yaratıklar oyuncuyu duvara
+## sıkıştırmasın diye bilerek sıfırlandı, bkz. player.gd _block_movement_into_enemies notu) -
+## yani oyuncunun fizik gövdesi HİÇBİR statik gövdeye çarpmıyor. Eskiden burada 4 kullanılıyordu
+## ("player'ın maskesi 4" varsayımı bayattı; 4 aynı zamanda yaratık katmanı): şekiller ve
+## çevre duvarı oyuncuyu hiç durdurmuyordu. Artık ayrı, başka hiçbir yerde kullanılmayan bir
+## katman (8) ve oyuncunun maskesine SADECE içerideyken eklenir (bkz. _do_enter_house/
+## _do_exit_house) - dışarıdaki oyuncu/yaratık davranışı hiç değişmez.
+const INTERIOR_COLLISION_LAYER := 8
+
+## DÜZELTME (kullanıcı bildirimi: "evden çıkınca eski konumundan çıkıyor, evin
+## konumu değişti"): dışarıdaki evin konumu eskiden BURADA sabit koordinatlarla
+## tutuluyordu (3032,1912) - ev Tiled'da taşınınca (şimdi x:[1854,2030] y:[1237,1365])
+## giriş tetikleyicisi ve oyun başındaki dönüş noktası eski yerde kaldı. Artık ikisi
+## de çalışma anında haritadaki "ev/Ev" katmanından türetiliyor (bkz.
+## _locate_exterior_house) - ev bir daha taşınırsa kod değişikliği gerekmez. Aşağıdaki
+## iki FALLBACK sabiti SADECE harita sahnede yokken (testler, ana menü) kullanılır;
+## yeni evin ölçülmüş konumudur (main.tscn'deki (-2,21) harita kaymasıyla dünya
+## koordinatı).
+const FALLBACK_EXTERIOR_ENTRANCE_POS := Vector2(1942.0, 1357.0)
 const EXTERIOR_ENTRANCE_RADIUS := 55.0
 
 ## Kullanıcı bildirimi: "oyun başında evden çıkarken evin kapısında takılı
@@ -60,15 +92,27 @@ const EXTERIOR_ENTRANCE_RADIUS := 55.0
 ## kullanır, ve bu değer normal (F ile) girişte oyuncunun O ANDA GERÇEKTEN
 ## DURDUĞU - yürüyerek ulaştığı, dolayısıyla çarpışmasız - konumdan alınır.
 ## Ama oyun başlangıcındaki OTOMATİK girişte (bkz. _ready()) oyuncu hiç
-## yürümedi; sahnede tanımlı ham başlangıç konumu (main.tscn Player
-## position=3016,1920) tam olarak evin güney duvarının çizgisinde duruyor
-## (bkz. yukarısı - ev kutusu y:[1792,1920]). Oyuncu oraya ışınlanınca
-## duvarın/kapı eşiğinin çarpışma sınırına gömülüp bir daha kıpırdayamıyordu.
-## Oyun başlangıcı için, evin biraz GÜNEYİNE (avluya, duvardan kesin uzak)
-## sabit bir dönüş noktası kullanılıyor - hâlâ EXTERIOR_ENTRANCE_RADIUS
-## içinde kalıyor, yani "eve girmek için F'ye bas" ipucu istenirse hemen
-## tekrar çıkıyor.
-const EXTERIOR_SAFE_RETURN_POS := Vector2(3016.0, 1950.0)
+## yürümedi; sahnede tanımlı ham başlangıç konumu (main.tscn Player) evin
+## güney duvarına denk gelebiliyor ve oyuncu oraya ışınlanınca duvarın/kapı
+## eşiğinin çarpışma sınırına gömülüp kıpırdayamıyordu. Oyun başlangıcı için
+## evin biraz GÜNEYİNDE, duvardan kesin uzak, su/ev/orman karosu OLMAYAN bir
+## dönüş noktası kullanılıyor (bkz. _locate_exterior_house) - hâlâ
+## EXTERIOR_ENTRANCE_RADIUS içinde kalıyor.
+const FALLBACK_EXTERIOR_SAFE_RETURN_POS := Vector2(1926.0, 1389.0)
+
+## Haritadaki evin (Tiled "ev" grubundaki "Ev" katmanı) sahne yolu - HouseInterior
+## main.tscn'de Harita'nın kardeşi. Su/orman katmanları güvenli dönüş noktasının
+## engelsiz olduğunu doğrulamak için.
+const HOUSE_LAYER_PATH := "../Harita/ev/Ev"
+const BLOCKING_LAYER_PATHS: Array[String] = [
+	"../Harita/ev/Ev",
+	"../Harita/Su/Su",
+	"../Harita/Orman parçaları/Orman parçaları",
+]
+
+## _locate_exterior_house() tarafından haritadan çözülür (bkz. oradaki not).
+var _exterior_entrance_pos: Vector2 = FALLBACK_EXTERIOR_ENTRANCE_POS
+var _exterior_safe_return_pos: Vector2 = FALLBACK_EXTERIOR_SAFE_RETURN_POS
 
 var _player: CharacterBody2D = null
 var _interior_instance: Node2D = null
@@ -77,7 +121,6 @@ var _exit_area: Area2D = null
 var _prompt_label: Label = null
 
 var _near_entrance: bool = false
-var _near_exit: bool = false
 
 ## Kullanıcı isteği: "oyunda evin içindeyken ortam müziğinin çalmasını
 ## istemiyorum ve rüzgar efektinin olduğu canvaslayer'ın gözükmesini
@@ -148,6 +191,7 @@ var _transitioning: bool = false
 
 func _ready() -> void:
 	_player = get_tree().get_first_node_in_group("player")
+	_locate_exterior_house()
 	_spawn_interior()
 	_create_entrance_trigger()
 	_create_exit_trigger()
@@ -159,12 +203,87 @@ func _ready() -> void:
 	# anlamlı (bkz. _enter_house/_exit_house).
 	if is_instance_valid(_player):
 		_do_enter_house()
-		## bkz. EXTERIOR_SAFE_RETURN_POS üstündeki not - _do_enter_house()'un
-		## az önce yakaladığı ham (duvar hattındaki) başlangıç konumunu,
-		## dışarı çıkınca takılmayacakları güvenli bir konumla değiştiriyoruz.
-		_exterior_return_pos = EXTERIOR_SAFE_RETURN_POS
-		# Kapıdan girmedikleri için kapı ipucunu sıfırlayalım.
-		_near_exit = false
+		## bkz. FALLBACK_EXTERIOR_SAFE_RETURN_POS üstündeki not - _do_enter_house()'un
+		## az önce yakaladığı ham (main.tscn'deki, eski evin yerinde kalmış olabilen)
+		## başlangıç konumunu, haritadaki GÜNCEL evin güneyindeki güvenli bir
+		## konumla değiştiriyoruz.
+		_exterior_return_pos = _exterior_safe_return_pos
+
+
+## Dışarıdaki evin giriş noktasını ve oyun başındaki güvenli dönüş noktasını
+## haritadaki "ev/Ev" katmanından çözer (bkz. FALLBACK_EXTERIOR_ENTRANCE_POS üstündeki
+## DÜZELTME notu). Harita/katman yoksa ya da boşsa FALLBACK değerleri kalır.
+##  - Ev = katmandaki EN BÜYÜK bitişik (8 komşuluk) hücre kümesi; ev dışında kalmış
+##    tek tük artık karolar (Tiled'da ev taşınırken geride bırakılanlar) yok sayılır.
+##  - Giriş = evin güney (alt) duvarının orta hücresi, hücrenin dünya merkezi
+##    (harita kaymasıyla birlikte - katmanın global dönüşümü kullanılır).
+##  - Güvenli dönüş = girişin 2-6 hücre güneyinde, su/ev/orman karosu olmayan ilk
+##    hücre (önce bir hücre batıya, eski düzenle aynı, sonra doğuya/yanlara).
+func _locate_exterior_house() -> void:
+	_exterior_entrance_pos = FALLBACK_EXTERIOR_ENTRANCE_POS
+	_exterior_safe_return_pos = FALLBACK_EXTERIOR_SAFE_RETURN_POS
+	var house_layer: TileMapLayer = get_node_or_null(HOUSE_LAYER_PATH) as TileMapLayer
+	if house_layer == null:
+		return
+	var rect: Rect2i = _largest_cluster_rect(house_layer)
+	if rect.size == Vector2i.ZERO:
+		return
+	var door_cell := Vector2i(rect.position.x + rect.size.x / 2, rect.end.y - 1)
+	_exterior_entrance_pos = house_layer.to_global(house_layer.map_to_local(door_cell))
+	_exterior_safe_return_pos = _exterior_entrance_pos + Vector2(-16.0, 32.0)
+	var blockers: Array[TileMapLayer] = []
+	for path: String in BLOCKING_LAYER_PATHS:
+		var layer: TileMapLayer = get_node_or_null(path) as TileMapLayer
+		if layer != null:
+			blockers.append(layer)
+	for dy: int in range(2, 7):
+		for dx: int in [-1, 0, 1, -2, 2]:
+			var world: Vector2 = house_layer.to_global(house_layer.map_to_local(door_cell + Vector2i(dx, dy)))
+			if _cell_is_free(blockers, world):
+				_exterior_safe_return_pos = world
+				return
+
+
+## `world` konumundaki hücre verilen katmanların HİÇBİRİNDE dolu değilse true.
+func _cell_is_free(layers: Array[TileMapLayer], world: Vector2) -> bool:
+	for layer: TileMapLayer in layers:
+		if layer.get_cell_source_id(layer.local_to_map(layer.to_local(world))) != -1:
+			return false
+	return true
+
+
+## `layer`daki en büyük 8-komşuluklu bitişik hücre kümesinin hücre dikdörtgeni
+## (son hücre DAHİL; katman boşsa boş Rect2i).
+static func _largest_cluster_rect(layer: TileMapLayer) -> Rect2i:
+	var remaining: Dictionary = {}
+	var used: Array[Vector2i] = layer.get_used_cells()
+	for cell: Vector2i in used:
+		remaining[cell] = true
+	var best_size: int = 0
+	var best_rect := Rect2i()
+	for start: Vector2i in used:
+		if not remaining.has(start):
+			continue
+		remaining.erase(start)
+		var stack: Array[Vector2i] = [start]
+		var count: int = 0
+		var min_cell: Vector2i = start
+		var max_cell: Vector2i = start
+		while not stack.is_empty():
+			var cell: Vector2i = stack.pop_back()
+			count += 1
+			min_cell = Vector2i(mini(min_cell.x, cell.x), mini(min_cell.y, cell.y))
+			max_cell = Vector2i(maxi(max_cell.x, cell.x), maxi(max_cell.y, cell.y))
+			for dy: int in range(-1, 2):
+				for dx: int in range(-1, 2):
+					var neighbor := Vector2i(cell.x + dx, cell.y + dy)
+					if remaining.has(neighbor):
+						remaining.erase(neighbor)
+						stack.append(neighbor)
+		if count > best_size:
+			best_size = count
+			best_rect = Rect2i(min_cell, max_cell - min_cell + Vector2i.ONE)
+	return best_rect
 
 
 func _spawn_interior() -> void:
@@ -179,7 +298,7 @@ func _spawn_interior() -> void:
 	## boş/karanlık alana yürüyebilirdi.
 	var walls := StaticBody2D.new()
 	walls.name = "InteriorBounds"
-	walls.collision_layer = 4 ## player.tscn'in collision_mask'ı (4) ile eşleşir
+	walls.collision_layer = INTERIOR_COLLISION_LAYER
 	walls.collision_mask = 0
 	walls.position = INTERIOR_OFFSET
 	add_child(walls)
@@ -190,6 +309,7 @@ func _spawn_interior() -> void:
 	_add_wall_segment(walls, Vector2(ROOM_MIN.x - WALL_THICKNESS * 0.5, center.y), Vector2(WALL_THICKNESS, size.y + WALL_THICKNESS * 2.0))
 	_add_wall_segment(walls, Vector2(ROOM_MAX.x + WALL_THICKNESS * 0.5, center.y), Vector2(WALL_THICKNESS, size.y + WALL_THICKNESS * 2.0))
 
+	_add_interior_collisions()
 	_add_black_backdrop()
 
 
@@ -231,7 +351,7 @@ func _create_entrance_trigger() -> void:
 	_entrance_area.name = "HouseEntranceTrigger"
 	_entrance_area.collision_layer = 0
 	_entrance_area.collision_mask = 2 ## bkz. main.tscn Player collision_layer = 2
-	_entrance_area.position = EXTERIOR_ENTRANCE_POS
+	_entrance_area.position = _exterior_entrance_pos
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
 	circle.radius = EXTERIOR_ENTRANCE_RADIUS
@@ -242,20 +362,132 @@ func _create_entrance_trigger() -> void:
 	_entrance_area.body_exited.connect(_on_entrance_body_exited)
 
 
+## Kullanıcı isteği (ev içi güncellemesi) - bkz. INTERIOR_NO_COLLISION_LAYERS. İç sahnedeki
+## çarpışması olması gereken TÜM TileMapLayer'ların dolu hücrelerini TEK bir doluluk
+## ızgarasında birleştirip (katmanlar üst üste binse de çift şekil olmasın) hücreye TAM
+## oturan dikdörtgen çarpışma şekillerine böler: yatay olarak bitişik hücreler önce
+## satır parçalarına, aynı genişlikteki üst üste satırlar da tek dikdörtgene birleşir.
+## Bu, birebir hücre-hücre kare koymaya göre AYNI alanı kaplar ama şekiller arası dikişleri
+## azaltır (CharacterBody2D'nin dikişlerde takılması azalır). Çalışma anında üretildiği
+## için ev içi Tiled'da değişip yeniden bake edilse de otomatik güncel kalır.
+func _add_interior_collisions() -> void:
+	var cells: Dictionary = {} ## Vector2i (dünya hücresi, iç sahne yerelinde) -> true
+	var tile_size := Vector2i(16, 16)
+	var origin := Vector2.ZERO
+	var found_layer: bool = false
+	for child: Node in _interior_instance.get_children():
+		var layer := child as TileMapLayer
+		if layer == null or INTERIOR_NO_COLLISION_LAYERS.has(String(layer.name)):
+			continue
+		if layer.tile_set != null:
+			tile_size = layer.tile_set.tile_size
+		origin = layer.position
+		found_layer = true
+		for cell: Vector2i in layer.get_used_cells():
+			cells[cell] = true
+	if not found_layer or cells.is_empty():
+		return
+	var body := StaticBody2D.new()
+	body.name = "InteriorCollision"
+	body.collision_layer = INTERIOR_COLLISION_LAYER
+	body.collision_mask = 0
+	body.position = INTERIOR_OFFSET
+	add_child(body)
+	for rect: Rect2i in _merge_cells_into_rects(cells):
+		var shape := CollisionShape2D.new()
+		var box := RectangleShape2D.new()
+		box.size = Vector2(rect.size.x * tile_size.x, rect.size.y * tile_size.y)
+		shape.shape = box
+		shape.position = origin + Vector2(rect.position.x * tile_size.x, rect.position.y * tile_size.y) + box.size * 0.5
+		body.add_child(shape)
+
+
+## Hücre kümesini (Vector2i -> true) çakışmayan hücre dikdörtgenlerine böler: satır satır
+## (soldan sağa) bitişik hücre parçaları, aynı [x0,x1] aralığına sahip ardışık satırlar
+## dikeyde birleştirilir.
+static func _merge_cells_into_rects(cells: Dictionary) -> Array[Rect2i]:
+	var rows: Dictionary = {} ## y -> Array[int] (sıralı x'ler)
+	for cell: Vector2i in cells:
+		if not rows.has(cell.y):
+			rows[cell.y] = []
+		rows[cell.y].append(cell.x)
+	var ys: Array = rows.keys()
+	ys.sort()
+	var result: Array[Rect2i] = []
+	var open_runs: Dictionary = {} ## Vector2i(x0, x1) -> başlangıç y (henüz kapanmamış dikdörtgen)
+	var prev_y: int = 0
+	for y: int in ys:
+		var xs: Array = rows[y]
+		xs.sort()
+		## Bu satırın bitişik hücre parçaları
+		var runs: Array[Vector2i] = []
+		var start: int = xs[0]
+		var last: int = xs[0]
+		for i: int in range(1, xs.size()):
+			if xs[i] == last + 1:
+				last = xs[i]
+			else:
+				runs.append(Vector2i(start, last))
+				start = xs[i]
+				last = xs[i]
+		runs.append(Vector2i(start, last))
+		## Bir önceki satırla bitişik değilse (arada boş satır) açık dikdörtgenlerin hepsini kapat.
+		if not open_runs.is_empty() and y != prev_y + 1:
+			for key: Vector2i in open_runs:
+				var y0: int = open_runs[key]
+				result.append(Rect2i(key.x, y0, key.y - key.x + 1, prev_y - y0 + 1))
+			open_runs.clear()
+		var next_open: Dictionary = {}
+		for run: Vector2i in runs:
+			if open_runs.has(run):
+				next_open[run] = open_runs[run] ## aynı aralık: dikeyde uzat
+				open_runs.erase(run)
+			else:
+				next_open[run] = y
+		## Devam etmeyenleri kapat
+		for key: Vector2i in open_runs:
+			var y0: int = open_runs[key]
+			result.append(Rect2i(key.x, y0, key.y - key.x + 1, prev_y - y0 + 1))
+		open_runs = next_open
+		prev_y = y
+	for key: Vector2i in open_runs:
+		var y0: int = open_runs[key]
+		result.append(Rect2i(key.x, y0, key.y - key.x + 1, prev_y - y0 + 1))
+	return result
+
+
+## Kullanıcı isteği (ev içi güncellemesi): dışarı çıkış "Kapı" katmanına basınca - bkz.
+## INTERIOR_DOOR_LAYER. Katmanın her dolu hücresi için bir dikdörtgen alan (oyuncunun
+## gövdesi kapı karosuna değince tetiklenir). Katman yoksa yedek dairesel alan.
 func _create_exit_trigger() -> void:
 	_exit_area = Area2D.new()
 	_exit_area.name = "HouseExitTrigger"
 	_exit_area.collision_layer = 0
 	_exit_area.collision_mask = 2
-	_exit_area.position = INTERIOR_OFFSET + INTERIOR_EXIT_POS
-	var shape := CollisionShape2D.new()
-	var circle := CircleShape2D.new()
-	circle.radius = INTERIOR_EXIT_RADIUS
-	shape.shape = circle
-	_exit_area.add_child(shape)
+	_exit_area.position = INTERIOR_OFFSET
+	var door_layer: TileMapLayer = _interior_instance.get_node_or_null(INTERIOR_DOOR_LAYER) as TileMapLayer
+	var door_cells: Array[Vector2i] = []
+	if door_layer != null:
+		door_cells = door_layer.get_used_cells()
+	if door_cells.is_empty():
+		push_warning("HouseInterior: iç sahnede '%s' katmanı yok/boş - yedek çıkış alanı kullanılıyor" % INTERIOR_DOOR_LAYER)
+		var fallback := CollisionShape2D.new()
+		var circle := CircleShape2D.new()
+		circle.radius = FALLBACK_INTERIOR_EXIT_RADIUS
+		fallback.shape = circle
+		fallback.position = FALLBACK_INTERIOR_EXIT_POS
+		_exit_area.add_child(fallback)
+	else:
+		var tile_size := Vector2(door_layer.tile_set.tile_size) if door_layer.tile_set != null else Vector2(16.0, 16.0)
+		for cell: Vector2i in door_cells:
+			var shape := CollisionShape2D.new()
+			var box := RectangleShape2D.new()
+			box.size = tile_size
+			shape.shape = box
+			shape.position = door_layer.position + door_layer.map_to_local(cell)
+			_exit_area.add_child(shape)
 	add_child(_exit_area)
 	_exit_area.body_entered.connect(_on_exit_body_entered)
-	_exit_area.body_exited.connect(_on_exit_body_exited)
 
 
 func _create_prompt_ui() -> void:
@@ -288,14 +520,13 @@ func _on_entrance_body_exited(body: Node) -> void:
 		_near_entrance = false
 
 
+## Oyuncunun gövdesi "Kapı" katmanının bir karosuna değdi -> dışarı çık (F GEREKMEZ).
 func _on_exit_body_entered(body: Node) -> void:
-	if body.is_in_group("player"):
-		_near_exit = true
-
-
-func _on_exit_body_exited(body: Node) -> void:
-	if body.is_in_group("player"):
-		_near_exit = false
+	if not body.is_in_group("player") or _transitioning:
+		return
+	if not bool(body.get("is_indoors")):
+		return
+	_exit_house()
 
 
 func _process(_delta: float) -> void:
@@ -326,11 +557,6 @@ func _process(_delta: float) -> void:
 		_prompt_label.visible = true
 		if f_just_pressed:
 			_enter_house()
-	elif indoors and _near_exit:
-		_prompt_label.text = "Dışarı çıkmak için F'ye bas"
-		_prompt_label.visible = true
-		if f_just_pressed:
-			_exit_house()
 	else:
 		_prompt_label.visible = false
 
@@ -345,7 +571,6 @@ func _enter_house() -> void:
 
 
 func _exit_house() -> void:
-	_near_exit = false
 	_transitioning = true
 	await _fade_transition(_do_exit_house)
 	_transitioning = false
@@ -358,9 +583,10 @@ func _do_enter_house() -> void:
 	_exterior_return_pos = _player.global_position
 	_player.global_position = INTERIOR_OFFSET + INTERIOR_SPAWN_POS
 	_player.is_indoors = true
+	## Oyuncu fizik gövdesi içeride duvarlara/eşyalara çarpsın (bkz. INTERIOR_COLLISION_LAYER).
+	_player.collision_mask = int(_player.collision_mask) | INTERIOR_COLLISION_LAYER
 	_interior_instance.visible = true
 	_near_entrance = false
-	_near_exit = true ## oyuncu tam kapının hemen iç tarafında beliriyor
 	_set_combat_visuals_hidden(true)
 	## Kullanıcı isteği: içerideyken ortam müziği çalmasın ve rüzgar efekti
 	## katmanı görünmesin (bkz. _set_outdoor_atmosphere_enabled).
@@ -370,8 +596,8 @@ func _do_enter_house() -> void:
 func _do_exit_house() -> void:
 	_player.global_position = _exterior_return_pos
 	_player.is_indoors = false
+	_player.collision_mask = int(_player.collision_mask) & ~INTERIOR_COLLISION_LAYER
 	_interior_instance.visible = false
-	_near_exit = false
 	_set_combat_visuals_hidden(false)
 	## Dışarı çıkınca ortam müziği ve rüzgar efekti geri gelir.
 	_set_outdoor_atmosphere_enabled(true)

@@ -57,9 +57,3 @@ theme/custom="res://assets/fonts/theme.tres"
 
 rendering_device/pipeline_cache/save_chunk_size_mb=5.078001
 textures/canvas_textures/default_texture_filter=0
-
-[ziva]
-
-multiplayer/user_id="mffSjilTjWa9njkr9ie515RSyAdLgezt"
-multiplayer/relay_url="wss://ziva-multiplayer.ziva-multiplayer.workers.dev"
-multiplayer/game_id="20f2c71ea0012e02b084d658721"

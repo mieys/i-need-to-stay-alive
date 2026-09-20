@@ -31,6 +31,9 @@ extends Node2D
 ## çiziyor. Spawn/despawn yayını player.gd _skill_oakley_vines()'ta yapılıyor
 ## (bkz. oradaki not - necro pet'lerle AYNI "player.gd spawn/despawn yayınlar,
 ## pet/vine kendi state'ini yayınlar" görev ayrımı).
+## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
+const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
+
 const NETWORK_STATE_THROTTLE := 0.2 ## saniyede ~5 kez - skeleton_pet.gd _broadcast_network_state ile AYNI aralık
 
 ## player.gd _skill_oakley_vines() tarafından atanır - broadcast_oakley_vine_
@@ -165,6 +168,8 @@ func _pick_new_target() -> void:
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if _recent_hits.has(e.get_instance_id()):
+			continue
+		if not VisionFogScript.can_target(e):
 			continue
 		var d: float = global_position.distance_to(e.global_position)
 		if d <= RETARGET_SEARCH_RADIUS and d < best_dist:

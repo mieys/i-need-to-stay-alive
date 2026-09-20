@@ -51,15 +51,12 @@ var _picked: bool = false
 
 var _sprite: AnimatedSprite2D = null
 
-## DÜZELTME (kullanıcı isteği: "çiçeklerin üstüne sihirli yeşil bir efekt koy
-## oyunun haritasındaki diğer çiçeklerden farkı olduğu belli olsun diye") -
-## totem_base.gd'nin AYNI "visual_time biriktir + _draw()'da nabız gibi
-## salınan bir halka çiz" deseni - haritada gerçek bir "çiçek" dekor objesi
-## YOK (bkz. assets/decor/ - çalı/mantar/taş var, çiçek yok), ama ileride
-## eklenirse ya da oyuncu haritadaki başka sarı/pembe tonlu objelerle
-## karıştırırsa diye bu büyülü yeşil halka çiçeği KESİN olarak ayırt
-## ettiriyor.
-var _visual_time: float = 0.0
+## NOT: eskiden burada _draw() ile çizilen yumuşak (vektör) bir yeşil halka +
+## dönen kıvılcımlar vardı ("çiçeklerin üstüne sihirli yeşil bir efekt koy,
+## haritadaki diğer çiçeklerden farkı belli olsun" isteği). Yerine pixel-art
+## Life Recovery çemberi geçti (bkz. _ready() ve FlowerRecoveryFxScene) - aynı
+## amacı (çiçeği sıradan dekordan ayırmak) görüntü diliyle uyumlu şekilde
+## karşılıyor, ikisi üst üste binince yumuşak halka piksel efektle çelişiyordu.
 
 ## DÜZELTME (kullanıcı isteği: "efekt sistemi" - Oakley'nin çiçek yeteneğinin
 ## 3 dönüşümü için gerçek bir sprite eklendi) - eskiden burada gerçek sanat
@@ -69,11 +66,20 @@ var _visual_time: float = 0.0
 ## karenin gösterileceğini doğrudan belirliyor, "stage%d" adlandırması bunun
 ## için seçildi.
 const FlowerStagesFrames := preload("res://assets/generated/fx_oakley_flower_stages_frames.tres")
+## bkz. _ready() - çiçeğin altında sürekli dönen Life Recovery büyü çemberi.
+const FlowerRecoveryFxScene := preload("res://scenes/fx_recovery_life_flower.tscn")
 
 
 func _ready() -> void:
 	add_to_group("oakley_flowers")
 	z_index = 5
+	## Kullanıcı isteği (CraftPix Life Recovery): "oakleyin bitkisinin üstünde de
+	## sürekli aktif olacak bu efekt alınana kadar" - çiçeğin ÇOCUĞU olduğu için
+	## çiçek alınınca (_pick_up/remove_remotely -> queue_free) ya da ömrü dolunca
+	## kendiliğinden yok olur, ayrıca stop çağırmaya gerek yok. Bu node her
+	## istemcide kendi _ready()'sini çalıştırdığı için (bkz. dosya başı AĞ DESENİ)
+	## efekt diğer oyuncularda da otomatik görünür, ayrı RPC gerekmez.
+	add_child(FlowerRecoveryFxScene.instantiate())
 	_sprite = AnimatedSprite2D.new()
 	_sprite.sprite_frames = FlowerStagesFrames
 	_sprite.play("stage0")
@@ -90,8 +96,6 @@ func setup(caster_damage_bonus: float, p_flower_id: String) -> void:
 
 
 func _process(delta: float) -> void:
-	_visual_time += delta
-	queue_redraw()
 	if _picked:
 		return
 	if _pickup_delay_remaining > 0.0:
@@ -159,20 +163,3 @@ func remove_remotely() -> void:
 		return
 	_picked = true
 	queue_free()
-
-
-## bkz. _sprite üstündeki DÜZELTME notu - sihirli yeşil halka. _sprite bu
-## node'un ÇOCUĞU olduğu için Godot çizim sırasında bu _draw() (ebeveynin
-## kendi çizimi) ÖNCE, sprite ÜSTÜNE sonra gelir - halka doğal olarak
-## çiçeğin ARKASINDA kalır.
-func _draw() -> void:
-	var pulse: float = 0.5 + 0.5 * sin(_visual_time * 2.2)
-	var glow_col := Color(0.45, 1.0, 0.5, 0.20 + 0.12 * pulse)
-	draw_circle(Vector2.ZERO, 15.0 + pulse * 2.0, glow_col)
-	draw_arc(Vector2.ZERO, 12.0 + pulse * 2.0, 0.0, TAU, 24, Color(0.55, 1.0, 0.6, 0.55 + 0.25 * pulse), 2.0, true)
-	## Yavaşça dönen 4 küçük büyü kıvılcımı - haritadaki sıradan bir dekordan
-	## kesin olarak ayrılması için.
-	for i in 4:
-		var a: float = _visual_time * 1.4 + float(i) * TAU / 4.0
-		var spark_pos: Vector2 = Vector2(cos(a), sin(a)) * (16.0 + pulse * 2.0)
-		draw_circle(spark_pos, 1.6, Color(0.7, 1.0, 0.75, 0.8))

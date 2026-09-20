@@ -1,24 +1,18 @@
 extends Node
 
-## NetworkManager: Ziva'nın bulut relay'i (WebSocketMultiplayerPeer) üzerinden
-## eşler arası (peer <-> peer) bağlantı kurar. Kullanıcı isteğiyle eski
-## davranışa (relay) geri dönüldü - bkz. proje ayarları "ziva/multiplayer/*"
-## (user_id, game_id, relay_url), setup_multiplayer ile sağlanır.
+## NetworkManager: Godot'nun yerleşik ENet çoklu oyuncu altyapısı üzerinden DOĞRUDAN
+## (host <-> client) bağlantı kurar. Kullanıcı isteği: "multiplayerdan ziva altyapısını
+## kaldır, üyeliğimi iptal ettim, multiplayerda ziva seçeneği de olmayacak" - bulut
+## relay'i (WebSocketMultiplayerPeer, oda kodu, "en düşük id host olur" seçimi, yeniden
+## bağlanma denemeleri) TAMAMEN kaldırıldı; tek bağlantı yolu artık host_lan/join_lan.
 ##
-## Relay'de GERÇEK bir sunucu YOKTUR - sadece bir mesaj anahtarlama noktasıdır.
-## Peer id 1, relay'in kendi "hayalet" slotudur, hiçbir gerçek client'a ait
-## değildir. Gerçek peer'ler her zaman id > 1 alır. Bu yüzden "host" (dünya
-## durumunu/lobiyi yöneten otorite) DETERMİNİSTİK olarak seçilir: mevcut
-## gerçek peer'ler arasındaki EN DÜŞÜK id. Yeni bir odaya giren ilk client id
-## 2'yi alır (ondan düşük gerçek bir peer olamayacağı KANITLIDIR), bu yüzden
-## o an bağlanır bağlanmaz kendini host sayabilir. Sonraki her katılımcı,
-## rosteri öğrendikten birkaç kare sonra host tarafından reaktif olarak
-## belirlenir (bkz. _refresh_host). Host ayrılırsa bir sonraki en düşük id
-## otomatik olarak yeni host olur (bkz. Ziva dokümanı "Reactive failover").
+## Host = ENet sunucusu = HER ZAMAN peer id 1 (bkz. _refresh_host). Host oyundan ayrılırsa
+## oyun biter (host devri yok): katılımcılar server_disconnected/host_left_game sinyaliyle
+## ana menüye döner. İnternet üzerinden oynamak için host'un portu (varsayılan 7777, UDP)
+## yönlendirmesi ya da bir sanal ağ aracı (Radmin/Hamachi/ZeroTier vb.) gerekir.
 ##
-## "Oda kodu" (room_code) artık bir IP:port DEĞİL, kullanıcının seçtiği/
-## paylaştığı serbest bir metin kimliğidir - relay'de aynı oda koduna
-## bağlanan herkes aynı odada buluşur.
+## "Oda kodu" (room_code) artık sadece bağlantı bilgisi metnidir: host'ta "LAN:<port>",
+## katılımcıda "<ip>:<port>" - lobide gösterilir.
 
 signal lobby_updated
 signal connection_status_changed(status_text: String)
@@ -61,12 +55,9 @@ signal became_host
 signal peer_needs_game_catchup(peer_id: int)
 
 var is_multiplayer_active: bool = false
-var is_lan_mode: bool = false
-## Odanın kimliği - host tarafından oluşturulur (bkz. create_room), diğer
-## oyuncularla paylaşılır ve join_room'a bu değer girilir.
+## Bağlantı bilgisi metni (bkz. dosya başı not) - lobide gösterilir.
 var room_code: String = ""
-## Dinamik olarak hesaplanır (bkz. _refresh_host) - gerçek peer'ler arasındaki
-## en düşük id olan bu client mi?
+## Bu istemci host mu? ENet sunucusu (peer id 1) = host (bkz. _refresh_host).
 var is_host: bool = false
 var local_player_name: String = "Oyuncu"
 var local_char_id: int = 1
@@ -75,8 +66,8 @@ var local_char_id: int = 1
 ## yazınca bi daha yazman gerekmesin") - UISound'un ses/ekran ayarları
 ## için kullandığı AYNI ConfigFile deseni (bkz. ui_sound.gd SETTINGS_PATH).
 ## Kaydedilen isim _ready()'de local_player_name'e yüklenir (lobby_menu.gd
-## bunu LineEdit'e önceden doldurur), her isim değişikliğinde (join_room/
-## host_lan/join_lan/update_local_player_name) tekrar kaydedilir.
+## bunu LineEdit'e önceden doldurur), her isim değişikliğinde (host_lan/
+## join_lan/update_local_player_name) tekrar kaydedilir.
 const PLAYER_NAME_CONFIG_PATH := "user://player_settings.cfg"
 
 func _save_local_player_name() -> void:
@@ -107,12 +98,6 @@ var lobby_players: Dictionary = {}
 var _loading_done: Dictionary = {} ## peer_id (int) -> true
 
 var _peer: MultiplayerPeer = null
-var _is_connecting: bool = false
-var _connect_started_at: float = 0.0
-var _retry_wait: float = 0.0
-var _retry_attempts: int = 0
-const CONNECT_TIMEOUT_SECONDS := 15.0
-const MAX_RETRY_ATTEMPTS := 3
 
 const MAX_PLAYERS := 8
 
@@ -229,77 +214,10 @@ func _process(delta: float) -> void:
 
 	if is_multiplayer_active and is_host:
 		_process_batched_syncs(delta)
-	if _retry_wait > 0.0:
-		_retry_wait -= delta
-		if _retry_wait <= 0.0 and is_multiplayer_active:
-			_start_relay_client(room_code)
-		return
-	if not _is_connecting:
-		return
-	if _connect_started_at <= 0.0:
-		return
-	if Time.get_ticks_msec() / 1000.0 - _connect_started_at > CONNECT_TIMEOUT_SECONDS:
-		_on_connection_timeout()
-
-
-func _on_connection_timeout() -> void:
-	if not _is_connecting:
-		return
-	_schedule_reconnect("Bağlantı zaman aşımına uğradı")
-
-
-func _schedule_reconnect(reason: String) -> void:
-	_is_connecting = false
-	_connect_started_at = 0.0
-	if _retry_attempts >= MAX_RETRY_ATTEMPTS:
-		is_multiplayer_active = false
-		connection_status_changed.emit("%s. Yeniden denemeler başarısız oldu." % reason)
-		_clear_peer_state()
-		return
-	_retry_attempts += 1
-	var delay: float = 1.5 * float(_retry_attempts)
-	var code: String = room_code
-	_clear_peer_state()
-	room_code = code
-	is_multiplayer_active = true
-	_retry_wait = delay
-	connection_status_changed.emit("%s. %d/%d yeniden deneniyor..." % [reason, _retry_attempts, MAX_RETRY_ATTEMPTS])
-
-
-## Yeni bir oda kodu üretip o odaya katılır. Relay'de gerçek bir "sunucu"
-## yoktur (bkz. dosya başındaki not) - "host" olmak sadece odaya katılan
-## gerçek peer'ler arasında EN DÜŞÜK id'ye sahip olmaktır, bu da bağlandıktan
-## sonra _refresh_host tarafından otomatik/dinamik olarak belirlenir.
-func create_room(_port: int = 0, player_name: String = "Oyuncu", char_id: int = 1) -> bool:
-	return join_room(_generate_room_code(), player_name, char_id)
-
-
-## Var olan bir oda koduna (host'un paylaştığı metin) katılır.
-func join_room(address: String, player_name: String = "Oyuncu", char_id: int = 1) -> bool:
-	var code: String = address.strip_edges().to_upper()
-	if code.is_empty():
-		connection_status_changed.emit("Geçersiz oda kodu!")
-		return false
-	
-	disconnect_from_room(false)
-	_retry_attempts = 0
-	_retry_wait = 0.0
-	
-	local_player_name = player_name.strip_edges()
-	if local_player_name.is_empty():
-		local_player_name = "Oyuncu"
-	_save_local_player_name()
-	local_char_id = char_id
-
-	room_code = code
-	is_multiplayer_active = true
-
-	return _start_relay_client(code)
 
 
 func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1) -> bool:
 	disconnect_from_room(false)
-	is_lan_mode = true
 	is_multiplayer_active = true
 	local_player_name = player_name.strip_edges()
 	if local_player_name.is_empty():
@@ -314,7 +232,6 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 	var err: Error = peer.create_server(port, MAX_PLAYERS)
 	if err != OK:
 		is_multiplayer_active = false
-		is_lan_mode = false
 		connection_status_changed.emit("LAN Sunucu başlatılamadı: %s" % error_string(err))
 		return false
 		
@@ -335,7 +252,6 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 
 func join_lan(ip: String = "127.0.0.1", port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1) -> bool:
 	disconnect_from_room(false)
-	is_lan_mode = true
 	is_multiplayer_active = true
 	local_player_name = player_name.strip_edges()
 	if local_player_name.is_empty():
@@ -350,7 +266,6 @@ func join_lan(ip: String = "127.0.0.1", port: int = 7777, player_name: String = 
 	var err: Error = peer.create_client(ip, port)
 	if err != OK:
 		is_multiplayer_active = false
-		is_lan_mode = false
 		connection_status_changed.emit("LAN Sunucuya bağlanılamadı: %s" % error_string(err))
 		return false
 		
@@ -360,38 +275,19 @@ func join_lan(ip: String = "127.0.0.1", port: int = 7777, player_name: String = 
 	return true
 
 
-## #38 DÜZELTME (kullanıcı isteği: "Katılma kodlarını kolaylaştır (kelime
-## bazlı/isim bazlı kodlar)"): eskiden rastgele 6 karakterlik alfanümerik bir
-## kod üretiliyordu (ör. "X7K2QP") - sesli sohbette söylemesi/yazması zor,
-## kolayca karıştırılabiliyordu (0/O, 1/I gibi). Sonra iki hayvan isminden
-## oluşan kelime bazlı kodlara geçildi ("KAPLAN-ASLAN").
-## SONRAKİ TUR (kullanıcı isteği: "oda katılma kodlarını 6 haneli sayılardan
-## yap"): kelime bazlı kodlar terk edildi, artık düz 6 haneli bir sayı
-## (000000-999999, sıfırla dolgulu) üretiliyor - yazması/söylemesi kelime
-## kodları kadar kolay, ama daha kısa ve tanıdık (telefon PIN'i gibi).
-## Kullanıcı isteği: "katılma kodlarını 4 haneli yap" - eskiden 6 haneliydi.
-func _generate_room_code() -> String:
-	return "%04d" % (randi() % 10000)
-
-
 func disconnect_from_room(show_status: bool = true) -> void:
-	_retry_wait = 0.0
-	_retry_attempts = MAX_RETRY_ATTEMPTS
 	_clear_peer_state()
 	if show_status:
 		connection_status_changed.emit("Bağlantı kesildi.")
 
 
 func _clear_peer_state() -> void:
-	_is_connecting = false
-	_connect_started_at = 0.0
 	if _peer:
 		_peer.close()
 		_peer = null
 	multiplayer.multiplayer_peer = null
 	is_multiplayer_active = false
 	is_host = false
-	is_lan_mode = false
 	_host_peer = 0
 	room_code = ""
 	lobby_players.clear()
@@ -411,124 +307,47 @@ func _clear_peer_state() -> void:
 	_is_rejoining_midgame = false
 
 
-## Ziva relay'ine WebSocketMultiplayerPeer ile bağlanır. "room_id" ile aynı
-## odaya bağlanan tüm client'lar aynı relay odasında buluşur (bkz. Ziva
-## multiplayer dokümanı "Connecting").
-func _start_relay_client(room_id: String) -> bool:
-	_is_connecting = true
-	_connect_started_at = Time.get_ticks_msec() / 1000.0
-	connection_status_changed.emit("Sunucuya bağlanılıyor (oda: %s)..." % room_id)
-	
-	var user_id: String = ProjectSettings.get_setting("ziva/multiplayer/user_id", "")
-	var game_id: String = ProjectSettings.get_setting("ziva/multiplayer/game_id", "")
-	var relay_url: String = ProjectSettings.get_setting("ziva/multiplayer/relay_url", "")
-	if user_id.is_empty() or game_id.is_empty() or relay_url.is_empty():
-		push_error("[NetworkManager] Ziva multiplayer ayarları eksik.")
-		connection_status_changed.emit("Multiplayer yapılandırması eksik!")
-		is_multiplayer_active = false
-		return false
-	
-	var url: String = "%s/r/%s?u=%s&g=%s&v=1" % [relay_url, room_id, user_id, game_id]
-	var peer := WebSocketMultiplayerPeer.new()
-	## WebSocketMultiplayerPeer tamponları (varsayılan 64KB ve 4096 paket) yoğun
-	## aksiyon anlarında veya web export'ta WebSocket paketi yığıldığında
-	## "Buffer payload full! Dropping data." hatasına ve WebAssembly out of bounds
-	## çöküşüne yol açabiliyor. Tamponları 4MB'a, max paket sayısını 16384'e çıkarıyoruz.
-	peer.inbound_buffer_size = 4 * 1024 * 1024
-	peer.outbound_buffer_size = 4 * 1024 * 1024
-	peer.max_queued_packets = 16384
-	## WebSocketMultiplayerPeer'ın varsayılan el sıkışma zaman aşımı (3sn) relay'e
-	## (Cloudflare Workers üzerinden TLS + WS handshake) bazen yetersiz kalıyor -
-	## bağlantı henüz açılmadan "connection_failed" tetiklenip gereksiz yere
-	## yeniden deneme döngüsüne giriyordu. CONNECT_TIMEOUT_SECONDS ile aynı
-	## mertebeye çekiliyor.
-	peer.handshake_timeout = CONNECT_TIMEOUT_SECONDS
-	var err: Error = peer.create_client(url)
-	if err != OK:
-		_schedule_reconnect("Bağlantı hatası: %s" % error_string(err))
-		return false
-	
-	_peer = peer
-	multiplayer.multiplayer_peer = _peer
-	return true
-
-
 func _on_connected_to_server() -> void:
-	_is_connecting = false
-	_connect_started_at = 0.0
-	_retry_wait = 0.0
-	_retry_attempts = 0
 	var my_id: int = multiplayer.get_unique_id()
-	
-	if is_lan_mode:
-		is_host = false
-		_host_peer = 1
-	else:
-		_refresh_host(true)
-	
+	## Sunucu (host) her zaman peer id 1'dir; bu callback sadece client'ta tetiklenir.
+	is_host = false
+	_host_peer = 1
+
 	lobby_players[my_id] = {
 		"name": local_player_name,
 		"char_id": local_char_id,
 		"is_ready": is_host,
 		"is_host": is_host
 	}
-	
-	connection_status_changed.emit("Sunucuya bağlanıldı! Oda: " + room_code)
+
+	connection_status_changed.emit("Sunucuya bağlanıldı! Adres: " + room_code)
 	lobby_updated.emit()
-	
+
 	# Broadcast our info to everyone in the room
 	_rpc_sync_player_info.rpc(local_player_name, local_char_id, is_host)
 
 
-## Gerçek peer'ler (relay'in hayalet id 1'i HARİÇ) - bkz. dosya başındaki not.
+## Bağlı diğer peer'ler (Godot'nun multiplayer.get_peers() davranışı gereği KENDİMİZ hariç).
 func _real_peers() -> Array:
 	var out: Array = []
 	if not multiplayer.has_multiplayer_peer():
 		return out
 	for p in multiplayer.get_peers():
-		if is_lan_mode:
-			out.append(int(p))
-		else:
-			if int(p) > 1:
-				out.append(int(p))
+		out.append(int(p))
 	return out
 
 
-## Host'u (gerçek peer'ler arasındaki en düşük id) yeniden hesaplar.
-## "include_self_floor": kendi id'mizi aday kümesine dahil et. id 2 için
-## bağlantı anında true'dur (KANITLI en düşük id, bkz. _on_connected_to_server
-## yorumu) - diğer herkes rosteri (peer_connected sinyalleri) öğrenene kadar
-## kendini host sanmamalı, aksi halde gerçek host'un mesajlarını/RPC'lerini
-## yetkisiz sanıp reddedebilir.
-func _refresh_host(include_self_floor: bool = true) -> void:
+## Host'u belirler: ENet sunucusu = peer id 1 = host, host devri YOK (bkz. dosya başı not).
+## Parametre eski çağıranlarla uyum için duruyor, artık bir anlamı yok.
+func _refresh_host(_include_self_floor: bool = true) -> void:
 	if not multiplayer.has_multiplayer_peer():
 		return
 	var was_host: bool = is_host
-	if is_lan_mode:
-		var me: int = multiplayer.get_unique_id()
-		_host_peer = 1
-		is_host = (me == 1)
-		if lobby_players.has(me):
-			lobby_players[me]["is_host"] = is_host
-		if is_host and not was_host:
-			_on_became_host()
-		return
-
-	var cands: Array = _real_peers()
 	var me: int = multiplayer.get_unique_id()
-	if include_self_floor and me > 1:
-		cands.append(me)
-	cands.sort()
-	if cands.is_empty():
-		return
-	var new_host: int = int(cands[0])
-	if new_host != _host_peer:
-		_host_peer = new_host
-	is_host = (me == _host_peer) and _host_peer > 0
-	for pid in lobby_players.keys():
-		lobby_players[pid]["is_host"] = (pid == _host_peer)
-		if pid == _host_peer:
-			lobby_players[pid]["is_ready"] = true
+	_host_peer = 1
+	is_host = (me == 1)
+	if lobby_players.has(me):
+		lobby_players[me]["is_host"] = is_host
 	if is_host and not was_host:
 		_on_became_host()
 
@@ -551,8 +370,6 @@ func _on_became_host() -> void:
 @rpc("any_peer", "reliable")
 func _rpc_set_player_ready(is_ready: bool) -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
-	if not is_lan_mode and sender_id <= 1:
-		return
 	if lobby_players.has(sender_id):
 		lobby_players[sender_id]["is_ready"] = is_ready
 		lobby_updated.emit()
@@ -576,8 +393,8 @@ func set_local_ready(is_ready: bool) -> void:
 
 
 ## Kullanıcı isteği: "insanlar lobiye girdikten sonra ismini değiştiremiyor"
-## - kök neden: local_player_name/lobby_players sadece create_room/join_room/
-## host_lan/join_lan sırasında BİR KEZ yazılıyordu, odaya girdikten SONRA
+## - kök neden: local_player_name/lobby_players sadece host_lan/
+## join_lan sırasında BİR KEZ yazılıyordu, odaya girdikten SONRA
 ## ismi değiştirip yeniden yayınlayan hiçbir yol yoktu (bkz. lobby_menu.gd
 ## PlayerNameInput - text_submitted artık bunu çağırıyor). Boşsa yok sayılır,
 ## host DAHİL herkes için çalışır (host da _rpc_sync_player_info ile kendi
@@ -781,46 +598,28 @@ func _rpc_close_room() -> void:
 	disconnect_from_room()
 
 
-## Relay'de host, gerçek peer'ler arasındaki en düşük id'dir - bkz.
-## _refresh_host. Henüz belirlenmediyse (bağlı değilsek) 0 döner.
+## Host = ENet sunucusu = HER ZAMAN peer id 1 - bkz. _refresh_host.
+## Henüz belirlenmediyse (bağlı değilsek) 0 döner.
 func _host_peer_id() -> int:
 	return _host_peer
 
 
 func _on_connection_failed() -> void:
-	if not _is_connecting and not is_multiplayer_active:
+	if not is_multiplayer_active:
 		return
-	_schedule_reconnect("Sunucuya bağlanılamadı")
+	_clear_peer_state()
+	connection_status_changed.emit("Sunucuya bağlanılamadı. IP/port doğru mu ve host sunucuyu kurdu mu?")
 
 
 func _on_server_disconnected() -> void:
-	if not _is_connecting and not is_multiplayer_active:
-		return
-	_schedule_reconnect("Sunucu bağlantısı koptu")
 	if not is_multiplayer_active:
-		server_disconnected.emit()
+		return
+	_clear_peer_state()
+	connection_status_changed.emit("Sunucu bağlantısı koptu.")
+	server_disconnected.emit()
 
 
 func _on_peer_connected(peer_id: int) -> void:
-	if not is_lan_mode and peer_id <= 1:
-		return
-	if not is_lan_mode:
-		## DÜZELTME (kullanıcı bildirimi: "biri oyuna katılınca host yok
-		## oluyor oyunu başlatamıyoruz") - burada bir önceki turda YANLIŞLIKLA
-		## _refresh_host(false) (include_self_floor=false) çağrılmaya
-		## başlanmıştı. Bu YANLIŞTI: multiplayer.get_peers() (bkz.
-		## _real_peers()) Godot'ta HER ZAMAN çağıranın KENDİ id'sini HARİÇ
-		## TUTAR - yani HOST'UN KENDİSİ bu fonksiyonu çağırdığında (biri
-		## katıldığında HOST DA bu sinyali alır), _real_peers() host'un kendi
-		## id'sini ASLA içermez. include_self_floor=false ile host kendi
-		## id'sini adaylığa katamayınca, "en düşük id" hesaplaması host'u
-		## DEVRE DIŞI BIRAKIP ondan daha yüksek id'li bir client'ı yanlışlıkla
-		## yeni host seçiyordu - gerçek host anında "host değilim" duruma
-		## düşüyor, kimse oyunu başlatamıyordu. include_self_floor=true
-		## (varsayılan) her zaman güvenli/doğrudur burada: bu fonksiyon
-		## çağrıldığında ben zaten ÖNCEDEN bağlıyımdır (yeni gelen ben
-		## değilim), kendi id'mi adaylığa katmak her zaman doğru sonucu verir.
-		_refresh_host()
 	# Send our info to the newly joined peer
 	var my_info: Dictionary = lobby_players.get(multiplayer.get_unique_id(), {
 		"name": local_player_name,
@@ -889,8 +688,6 @@ func _on_peer_disconnected(peer_id: int) -> void:
 @rpc("any_peer", "reliable")
 func _rpc_sync_player_info(p_name: String, p_char_id: int, p_is_host: bool) -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
-	if not is_lan_mode and sender_id <= 1:
-		return
 	var prev_ready: bool = false
 	if lobby_players.has(sender_id):
 		prev_ready = lobby_players[sender_id].get("is_ready", false)

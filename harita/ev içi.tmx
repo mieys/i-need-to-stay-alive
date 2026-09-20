@@ -1,15 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="20" height="20" tilewidth="16" tileheight="16" infinite="0" nextlayerid="11" nextobjectid="1">
- <editorsettings>
-  <export target="../ev içi.tmx" format="tmx"/>
- </editorsettings>
- <tileset firstgid="1" source="Interior_walls_floor.tsx"/>
- <tileset firstgid="181" source="House_interior.tsx"/>
- <tileset firstgid="334" source="Interior.tsx"/>
- <tileset firstgid="712" source="Walls_floor.tsx"/>
- <tileset firstgid="852" source="Candles.tsx"/>
- <tileset firstgid="900" source="Interior_objects.tsx"/>
- <tileset firstgid="1260" source="Fireplace.tsx"/>
+ <tileset firstgid="1" source="Ev içi/Interior_walls_floor.tsx"/>
+ <tileset firstgid="181" source="Ev içi/House_interior.tsx"/>
+ <tileset firstgid="334" source="Ev içi/Interior.tsx"/>
+ <tileset firstgid="712" source="Ev içi/Walls_floor.tsx"/>
+ <tileset firstgid="852" source="Ev içi/Candles.tsx"/>
+ <tileset firstgid="900" source="Ev içi/Interior_objects.tsx"/>
+ <tileset firstgid="1260" source="Ev içi/Fireplace.tsx"/>
  <layer id="2" name="zemin" width="20" height="20">
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,

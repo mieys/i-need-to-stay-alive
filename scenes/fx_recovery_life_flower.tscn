@@ -1,0 +1,13 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_recovery_aura.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/fx/recovery/life_recovery_small_frames.tres" id="2"]
+
+[node name="FxRecoveryLifeFlower" type="AnimatedSprite2D"]
+z_index = -1
+position = Vector2(0, 14)
+texture_filter = 1
+sprite_frames = ExtResource("2")
+animation = &"loop"
+script = ExtResource("1")
+max_lifetime = 0.0

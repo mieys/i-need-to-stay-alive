@@ -5,10 +5,15 @@ extends SceneTree
 ## elle çalıştırılıyor), çünkü bu tmx de proje içinde normal import akışına
 ## sokulmamış, kaynak Tiled dosyası olarak duruyor.
 
+## Kullanıcı isteği: ev içi haritası artık "harita/ev içi.tmx" dosyasından güncelleniyor
+## (eskiden "harita/Ev içi/ev denemesi.tmx"). Tileset'ler "Ev içi/" klasöründe kalıyor.
+const TMX_PATH := "res://harita/ev içi.tmx"
+
+
 func _init() -> void:
 	var creator_script: GDScript = preload("res://addons/YATI/TilemapCreator.gd")
 	var creator: RefCounted = creator_script.new()
-	var map_node: Node = creator.create("res://harita/Ev içi/ev denemesi.tmx") as Node
+	var map_node: Node = creator.create(TMX_PATH) as Node
 	if map_node == null:
 		printerr("Ev içi bake başarısız: TilemapCreator boş node döndürdü.")
 		quit(1)

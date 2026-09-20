@@ -84,6 +84,13 @@ const EnemyProjectileScene := preload("res://scenes/enemy_projectile.tscn")
 @export var sprite_fps: float = 8.0
 @export var cell_size: int = 128
 @export var walk_texture: Texture2D
+## Kullanıcı bildirimi: "yaratıklar hareket etmediğinde / sabitlendiğinde / agrosu yokken
+## idle pozisyonunda durmuyor, yürüme pozisyonunda takılı kalıyor" - kök neden: durum
+## makinesinde IDLE HİÇ YOKTU (WALK/HURT/ATTACK/DEATH), yani durmuş bir yaratık da yürüme
+## karelerini oynamaya devam ediyordu. Boşsa _ready() walk_texture'ın yolundan
+## ("..._Walk_..." -> "..._Idle_...") türetir - 49 yaratık sahnesinin hepsinin klasöründe
+## aynı düzende bir Idle sayfası var, sahneleri tek tek düzenlemek gerekmiyor.
+@export var idle_texture: Texture2D
 @export var hurt_texture: Texture2D
 @export var death_texture: Texture2D
 @export var attack_texture: Texture2D
@@ -324,7 +331,8 @@ const ROW_UP := 1
 const ROW_LEFT := 2
 const ROW_RIGHT := 3
 
-enum State { WALK, HURT, ATTACK, DEATH }
+## IDLE sona eklendi (mevcut sayısal değerler değişmesin diye).
+enum State { WALK, HURT, ATTACK, DEATH, IDLE }
 
 var health: float
 var is_dead: bool = false
@@ -347,6 +355,18 @@ var _sprite_row: int = ROW_DOWN
 
 var _state: int = State.WALK
 var _state_duration: float = 0.0
+
+## --- Hareket edip etmediğine göre WALK <-> IDLE (bkz. idle_texture üstündeki not) ---
+## Hareket, hem host'ta hem istemci (puppet) dalında AYNI şekilde GERÇEK yer değiştirmeden
+## ölçülür: donma/kök/sersemleme, duvara dayanma, min_separation'da bekleme, hedefsizken
+## rastgele dolaşmadaki duraklamalar hepsi tek kuralla "durdu" sayılır.
+const IDLE_SPEED_THRESHOLD := 6.0 ## px/sn: bunun altı "yürümüyor"
+const IDLE_ENTER_DELAY := 0.12 ## sn: kısa duraksamalarda pozun titremesin diye bu kadar durunca IDLE
+const IDLE_SPEED_SMOOTHING := 20.0 ## hız ölçümünün yumuşatma katsayısı (paket/kare gürültüsüne karşı)
+var _loco_prev_pos: Vector2 = Vector2.ZERO
+var _loco_initialized: bool = false
+var _loco_speed: float = 0.0
+var _idle_timer: float = 0.0
 
 const FloatingText := preload("res://scenes/floating_text.tscn")
 const XpOrb := preload("res://scenes/xp_orb.tscn")
@@ -1567,6 +1587,29 @@ var _stuck_side_sign: float = 1.0
 const STUCK_CHECK_INTERVAL := 0.4
 const STUCK_MIN_DISPLACEMENT := 12.0 ## bu süre içinde bu kadar bile ilerlemediyse "sıkışmış" say
 
+## --- Duvar dolanma / yol bulma (kullanıcı bildirimi: "yaratıklar collision
+## shapelerin etrafından dolanıp beni bulmayı akıl edemiyor") ---
+## Kök neden: yaratık oyuncuya DÜZ çizgide yürüyor, _block_movement_into_terrain
+## sadece duvara giren ekseni iptal ediyor -> içbükey bir kayalığın önünde/cebinde
+## sonsuza dek takılıyor (_steer_around_obstacle rastgele yana döner ama büyük bir
+## duvarın ötesini göremez). Artık oyuncuya düz çizgi bir orman duvarıyla kesilince
+## enemy_pathing.gd'nin A* yolunun dönüş noktaları izleniyor; çizgi AÇIKKEN hiçbir şey
+## değişmez (bugünkü davranış). Simülasyon zaten sadece host'ta çalışıyor.
+const EnemyPathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
+const ROUTE_LINE_CHECK_INTERVAL := 0.2 ## düz çizgi engelli mi kontrolü (sn, yaratık başına faz kaydırmalı)
+const ROUTE_REPLAN_INTERVAL := 1.0 ## engelliyken yolu yenileme aralığı (sn)
+const ROUTE_RETRY_AFTER_FAIL := 2.5 ## yol bulunamazsa (kapalı cep vb.) tekrar deneme bekleme süresi
+const ROUTE_WAYPOINT_REACHED := 10.0 ## dönüş noktasına bu kadar yaklaşınca sıradakine geç
+const ROUTE_GOAL_MOVED_REPLAN := 48.0 ## hedef yol sonundan bu kadar uzaklaşırsa hemen yeniden planla
+var _route: PackedVector2Array = PackedVector2Array()
+var _route_index: int = 0
+var _route_goal_pos: Vector2 = Vector2.ZERO
+var _route_line_timer: float = 0.0
+var _route_replan_timer: float = 0.0
+var _route_line_blocked: bool = false
+## True iken bu karede hareket yönü dönüş noktasına doğru (bkz. _route_direction).
+var _route_active: bool = false
+
 
 ## weapon.gd/projectile.gd tarafından çağrılır - dir yönünde force kadar bir
 ## itiş hızı ekler (üst üste birikebilir, ama toplam KNOCKBACK_MAX_SPEED'i
@@ -1672,6 +1715,42 @@ func _steer_around_obstacle(dir: Vector2) -> Vector2:
 		return dir
 	var perp: Vector2 = dir.rotated(PI * 0.5 * _stuck_side_sign)
 	return (perp * 0.75 + dir * 0.25).normalized()
+
+
+## Oyuncuya "doğrudan" yönü (dir) alır; aradaki orman duvarı yüzünden düz çizgi engelliyse
+## A* yolunun sıradaki dönüş noktasına doğru yönü döndürür, değilse dir'i aynen. Bkz.
+## dosya başındaki "Duvar dolanma" notu. Yol bulunamazsa/yoksa da dir döner (eski davranış).
+func _route_direction(dir: Vector2, target_pos: Vector2, delta: float) -> Vector2:
+	_route_active = false
+	if not EnemyPathingScript.enabled:
+		return dir
+	if global_position.distance_to(target_pos) > EnemyPathingScript.MAX_ROUTE_DISTANCE:
+		_route = PackedVector2Array()
+		return dir
+	_route_line_timer -= delta
+	if _route_line_timer <= 0.0:
+		## Yaratıklar aynı karede hesaplamasın diye süre yaratık başına kaydırılıyor.
+		_route_line_timer = ROUTE_LINE_CHECK_INTERVAL * randf_range(0.8, 1.2)
+		_route_line_blocked = EnemyPathingScript.line_blocked(global_position, target_pos)
+		if not _route_line_blocked:
+			_route = PackedVector2Array()
+	if not _route_line_blocked:
+		return dir
+	_route_replan_timer -= delta
+	var goal_moved: bool = not _route.is_empty() and _route_goal_pos.distance_to(target_pos) > ROUTE_GOAL_MOVED_REPLAN
+	if (_route.is_empty() or _route_replan_timer <= 0.0 or goal_moved) and EnemyPathingScript.can_request():
+		_route = EnemyPathingScript.find_path(global_position, target_pos)
+		_route_index = 0
+		_route_goal_pos = target_pos
+		_route_replan_timer = (ROUTE_REPLAN_INTERVAL if not _route.is_empty() else ROUTE_RETRY_AFTER_FAIL) * randf_range(0.8, 1.3)
+	if _route.is_empty():
+		return dir
+	while _route_index < _route.size() and global_position.distance_to(_route[_route_index]) < ROUTE_WAYPOINT_REACHED:
+		_route_index += 1
+	if _route_index >= _route.size():
+		return dir
+	_route_active = true
+	return (_route[_route_index] - global_position).normalized()
 
 
 ## SU/EV İÇİN HÂLÂ KAPALI (kullanıcı isteği: "oyundaki collision shapeleri
@@ -1925,6 +2004,8 @@ func _ready() -> void:
 
 	if frame_sprite and not walk_texture:
 		walk_texture = frame_sprite.texture
+	if frame_sprite and idle_texture == null:
+		idle_texture = _derive_idle_texture(walk_texture)
 
 	if anim_sprite and anim_sprite.sprite_frames and anim_sprite.sprite_frames.has_animation("walk"):
 		anim_sprite.play("walk")
@@ -2047,6 +2128,7 @@ func _physics_process(delta: float) -> void:
 		## donuk kalması tam olarak bu asimetriden kaynaklanıyordu. Artık
 		## host'la BİREBİR aynı şekilde is_dead'den bağımsız çağrılıyor
 		## (_update_state_timer zaten State.DEATH'te kendi kendine no-op).
+		_update_locomotion_state(delta)
 		_update_state_timer(delta)
 		if frame_sprite:
 			_advance_frame_sprite(delta)
@@ -2090,6 +2172,7 @@ func _physics_process(delta: float) -> void:
 				var to_player: Vector2 = player.global_position - global_position
 				dist = to_player.length()
 				var dir: Vector2 = to_player.normalized() if dist > 0.1 else Vector2.ZERO
+				var face_dir: Vector2 = dir
 				## Body block: gövde yarıçapları toplamının altına inince
 				## artık oyuncuya doğru ilerlemiyor - bkz. PLAYER_BODY_RADIUS
 				## notu, karakterin içine girmesini engelliyor. _true_contact_
@@ -2127,8 +2210,17 @@ func _physics_process(delta: float) -> void:
 					## büküyoruz, aksi halde her karede aynı düz yönü deneyip
 					## sonsuza dek orada kalırdı.
 					_update_stuck_state(delta, true)
-					var steered_dir: Vector2 = _steer_around_obstacle(dir)
+					var routed_dir: Vector2 = _route_direction(dir, player.global_position, delta)
+					## Rota izlenirken _steer_around_obstacle ATLANIR: yol zaten duvarı
+					## hesaba katıyor, üstelik yavaş yaratıklar (28 px/s x 0.4 sn < 12 px)
+					## sürekli "sıkışmış" sayılıp yönü rastgele yana büküyor ve rotadan
+					## saptırıyordu. Rota yokken (düz çizgi açık ya da yol bulunamadı)
+					## eski davranış aynen.
+					var steered_dir: Vector2 = routed_dir if _route_active else _steer_around_obstacle(routed_dir)
 					velocity = steered_dir * speed * _chill_speed_mult() * _slow_speed_mult() * _rage_speed_mult()
+					## Duvarı dolanırken hedefe değil yürüdüğü yöne baksın.
+					if _route_active:
+						face_dir = steered_dir
 				## DÜZELTME (kullanıcı isteği #35: "yaratıklar saldırırken
 				## hareket ediyor, saldırı animasyonu anında hareket
 				## edememeliler") - _state == State.ATTACK süresince (bkz.
@@ -2138,7 +2230,7 @@ func _physics_process(delta: float) -> void:
 				## yine itilebiliyor, sadece kendi isteğiyle yürüyemiyor.
 				if _state == State.ATTACK:
 					velocity = Vector2.ZERO
-				_update_facing(dir)
+				_update_facing(face_dir)
 				if is_ranged:
 					_process_ranged_attack(delta, player, dist, dir)
 			else:
@@ -2366,6 +2458,7 @@ func _physics_process(delta: float) -> void:
 		## görmezden geliyor (bkz. _on_hit_area_body_entered), o yüzden bu
 		## dal kaldırıldı.
 
+	_update_locomotion_state(delta)
 	_update_state_timer(delta)
 
 	if frame_sprite:
@@ -2459,6 +2552,48 @@ func _fire_homing_attack() -> void:
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		NetworkManager.broadcast_enemy_projectile.rpc(global_position, proj.direction, false, proj.tint, net_id)
+
+
+## walk_texture'ın yolundan ("..._Walk_..." -> "..._Idle_...") aynı klasördeki Idle sayfasını
+## bulur; yoksa null (o zaman IDLE, walk sayfasının 0. karesinde bekler). Dosya adı yazımı
+## yaratığa göre değişiyor (Ent1_Walk_with_shadow / orc1_walk_with_shadow ...), dört varyant denenir.
+static func _derive_idle_texture(walk: Texture2D) -> Texture2D:
+	if walk == null:
+		return null
+	var path: String = walk.resource_path
+	if path.is_empty():
+		return null
+	for pair: Array in [["_Walk_", "_Idle_"], ["_walk_", "_idle_"], ["Walk", "Idle"], ["walk", "idle"]]:
+		if not path.contains(String(pair[0])):
+			continue
+		var candidate: String = path.replace(String(pair[0]), String(pair[1]))
+		if candidate != path and ResourceLoader.exists(candidate):
+			return load(candidate) as Texture2D
+	return null
+
+
+## Gerçek yer değiştirmeye bakıp WALK <-> IDLE geçişini yapar (bkz. IDLE_SPEED_THRESHOLD üstündeki
+## not). HURT/ATTACK/DEATH önceliklidir: onlar sürerken durum değişmez ama ölçüm sürer, böylece
+## saldırı/vuruş bitip WALK'a dönünce yaratık hâlâ duruyorsa hemen IDLE'a geçer (saldırılar
+## arasında yürüme pozunda takılmaz). Host'ta ve istemci (puppet) dalında AYNI çağrılır.
+func _update_locomotion_state(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	if not _loco_initialized:
+		_loco_prev_pos = global_position
+		_loco_initialized = true
+		return
+	var moved_speed: float = global_position.distance_to(_loco_prev_pos) / delta
+	_loco_prev_pos = global_position
+	_loco_speed = lerpf(_loco_speed, moved_speed, minf(1.0, delta * IDLE_SPEED_SMOOTHING))
+	if _loco_speed < IDLE_SPEED_THRESHOLD:
+		_idle_timer += delta
+	else:
+		_idle_timer = 0.0
+	if _state == State.WALK and _idle_timer >= IDLE_ENTER_DELAY:
+		_enter_state(State.IDLE)
+	elif _state == State.IDLE and _idle_timer <= 0.0:
+		_enter_state(State.WALK)
 
 
 func _update_state_timer(delta: float) -> void:
@@ -2614,6 +2749,8 @@ func _texture_for_state(state: int) -> Texture2D:
 			return death_texture if death_texture else walk_texture
 		State.ATTACK:
 			return attack_texture if attack_texture else walk_texture
+		State.IDLE:
+			return idle_texture if idle_texture else walk_texture
 		_:
 			return walk_texture
 
@@ -2626,6 +2763,8 @@ func _anim_name_for_state(state: int) -> String:
 			return "death"
 		State.ATTACK:
 			return "attack1"
+		State.IDLE:
+			return "idle"
 		_:
 			return "walk"
 
@@ -2655,6 +2794,10 @@ func _advance_frame_sprite(delta: float) -> void:
 	var col: int
 	if _state == State.WALK:
 		col = int(_frame_time) % cols
+	elif _state == State.IDLE:
+		## Idle sayfası varsa döngüde oynar; yoksa (yedek: walk sayfası) yürüme karelerini
+		## döndürmek yerine duruş karesinde (0) bekler.
+		col = int(_frame_time) % cols if idle_texture else 0
 	else:
 		col = min(int(_frame_time), cols - 1)
 	frame_sprite.frame = _sprite_row * cols + col

@@ -38,21 +38,18 @@ var _cell_size: float = 16.0
 var _texture: ImageTexture = null
 
 
-## `layer`'daki DOLU hücreler engel olur - ama sadece birbirine bitişik (8 komşuluk)
-## en az `min_cluster_size` hücrelik KÜMELERİN parçası olanlar. Sebep: orman katmanı
-## uzun kaya duvarların yanında haritaya dağılmış küçük dekorları da (taş, mantar, çalı;
-## 212 kümenin 147'si <=9 hücre) içeriyor - bir taşın arkasında görüşün kesilip düşmanın
-## görünmez olması ve ekranda sert kenarlı uzun bir gölge bandı çıkması hata gibi durur.
-## Çarpışma (GameManager.is_position_blocked_by_forest) bundan ETKİLENMEZ, katmanın
-## tamamı geçilmezdir. 1 = filtre yok. Boş/null katmanda ızgara boş kalır.
-func build(layer: TileMapLayer, min_cluster_size: int = 1) -> void:
+## `layer`'daki DOLU hücrelerin HEPSİ engel olur (çarpışmayla aynı küme, bkz.
+## GameManager.is_position_blocked_by_forest). Kullanıcı isteği: "küçük parçaların
+## görüşü engellememe sınırını kaldır, onları haritadan kaldırdım, bu layerdaki HER ŞEY
+## görüşü engellesin" - eskiden burada bitişik hücre kümelerinden küçük olanlar (taş,
+## mantar, çalı gibi dağınık dekorlar) eleniyordu; o filtre kaldırıldı. Boş/null katmanda
+## ızgara boş kalır.
+func build(layer: TileMapLayer) -> void:
 	_cells = PackedByteArray()
 	_texture = null
 	if layer == null or layer.tile_set == null:
 		return
 	var used: Array[Vector2i] = layer.get_used_cells()
-	if min_cluster_size > 1:
-		used = _keep_large_clusters(used, min_cluster_size)
 	if used.is_empty():
 		return
 	var rect := Rect2i(used[0], Vector2i.ONE)
@@ -67,32 +64,6 @@ func build(layer: TileMapLayer, min_cluster_size: int = 1) -> void:
 	for cell: Vector2i in used:
 		var rel: Vector2i = cell - _grid_origin
 		_cells[rel.y * _grid_size.x + rel.x] = 255
-
-
-## Bitişik (8 komşuluk) hücre kümelerinden boyutu `min_size`'ın altında kalanları eler.
-static func _keep_large_clusters(cells: Array[Vector2i], min_size: int) -> Array[Vector2i]:
-	var remaining: Dictionary = {}
-	for cell: Vector2i in cells:
-		remaining[cell] = true
-	var kept: Array[Vector2i] = []
-	for start: Vector2i in cells:
-		if not remaining.has(start):
-			continue
-		remaining.erase(start)
-		var cluster: Array[Vector2i] = []
-		var stack: Array[Vector2i] = [start]
-		while not stack.is_empty():
-			var cell: Vector2i = stack.pop_back()
-			cluster.append(cell)
-			for dy: int in range(-1, 2):
-				for dx: int in range(-1, 2):
-					var neighbor := Vector2i(cell.x + dx, cell.y + dy)
-					if remaining.has(neighbor):
-						remaining.erase(neighbor)
-						stack.append(neighbor)
-		if cluster.size() >= min_size:
-			kept.append_array(cluster)
-	return kept
 
 
 func is_empty() -> bool:

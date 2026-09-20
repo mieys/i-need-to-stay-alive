@@ -17,6 +17,9 @@ class_name TotemAttack
 ## DÜZELTME (kullanıcı isteği: "shamanın tek hedefli saldırı yeteneğinin
 ## saldırı gücü %150 olmalı") - eskiden 1.0 (yani caster.damage_bonus'un
 ## %100'ü) idi, artık 1.5.
+## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
+const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
+
 const ATTACK_POWER_RATIO := 1.5
 
 ## Yeteneğe özgü saldırı efekti (KOZMETİK - hasarla hiçbir ilgisi yok):
@@ -97,6 +100,8 @@ func _find_nearest_enemy() -> Node2D:
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if not (e is Node2D):
+			continue
+		if not VisionFogScript.can_target(e):
 			continue
 		var d: float = global_position.distance_to((e as Node2D).global_position)
 		if d <= nearest_dist:

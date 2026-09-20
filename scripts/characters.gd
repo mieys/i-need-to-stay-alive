@@ -103,12 +103,15 @@ const DEFS := {
 		"skill2_icon": "res://assets/skills/oakley_sarmasik_icon.png",
 		## DÜZELTME (kullanıcı isteği: "Yeni R yeteneği ise canı en az olan
 		## arkadaşına koruyucu bir büyü yapar...") - bkz. player.gd
-		## _skill_oakley_bond/OAKLEY_BOND_* sabitleri. Gerçek sanat eseri ikonu
-		## henüz yok (bkz. Elara'nın Q'su/eski Assasin R'si ile AYNI durum -
-		## skill_icon.gd def.has() kontrolüyle hatasız vektör/boş ikona düşer).
+		## _skill_oakley_bond/OAKLEY_BOND_* sabitleri.
+		## Kullanıcı isteği: "oakleyin ultisinin ikonunu 1-2 gün önce yüklediğimiz ve sonra
+		## kaldırdığımız pasif ikonu olarak göster" - oakley_passive_icon.png 17 Eylül'de
+		## eklenmişti, pasif Çiçek'e dönüşünce (bkz. "passive_icon" aşağıda, artık
+		## oakley_cicek_icon.png) kullanımdan çıkmıştı; ULTİ (Koruyucu Büyü) ikonu olarak geri geldi.
 		"skill3": 39,
 		"skill3_name": "Koruyucu Büyü",
-		"skill3_desc": "ULTİ: Canı en az olan dostuna (kendisi dahil, önceliklidir) koruyucu bir büyü yapar. 8sn boyunca hedef her hasar aldığında Oakley'nin saldırı gücünün %10'u kadar can, %5'i kadar kalkan yeniler ve %20 hasar azaltma kazanır. (60sn bekleme)",
+		"skill3_icon": "res://assets/skills/oakley_passive_icon.png",
+		"skill3_desc": "ULTİ: Yakınındaki dostlar arasında canı (oran olarak) en az olana (kendisi dahil, önceliklidir) koruyucu bir büyü yapar. 10sn boyunca hedef her hasar aldığında Oakley'nin saldırı gücünün %20'si kadar can, %10'u kadar kalkan yeniler ve %20 hasar azaltma kazanır. (60sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su
 		## bundan sonra pasifi olacak, ve otomatik olarak yakınlarına çiçek
 		## bırakacak... 2 yük olayı falan yok bunda dolduğu anda oakleyin

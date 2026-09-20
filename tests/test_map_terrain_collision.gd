@@ -21,10 +21,12 @@ const EnemySpawnerScript = preload("res://scripts/enemy_spawner.gd")
 ## Bilinen hücreler (bkz. get_tilemap_layout ile doğrulanmış):
 ## - (8,8) piksel -> tile (0,0): Su/Su katmanında dolu (su).
 ## - Ev katmanı tile (189,119) -> piksel (3024,1904): dolu (ev duvarı).
-## - Ev'in hemen güneyi tile (188/189,120) -> piksel (3016,1930): tamamen boş.
+## "Temiz" nokta artık sabit bir koordinat DEĞİL (bkz. _find_clear_point_near_house): eskiden
+## Ev'in güneyi (3016,1930) "tamamen boş" diye sabitlenmişti, ama orman katmanı
+## (plato/uçurum duvarları) sonradan oraya da uzandı (hem önceki hem yeni bake'te
+## dolu) ve Tiled'da harita her düzenlendiğinde böyle bir sabit yeniden bayatlar.
 const WATER_POINT := Vector2(8.0, 8.0)
 const HOUSE_POINT := Vector2(3024.0, 1904.0)
-const CLEAR_POINT := Vector2(3016.0, 1930.0)
 
 
 func _inject_map_into_game_manager() -> Node:
@@ -183,6 +185,29 @@ func test_spawner_never_picks_forest_position() -> void:
 	_clear_game_manager_map()
 
 
+## HOUSE_POINT'e EN YAKIN, su/ev/orman katmanlarının HİÇBİRİNDE dolu olmayan hücrenin
+## dünya merkezi (yoksa Vector2.INF). Katmanlara doğrudan bakar, test edilen
+## GameManager.is_position_blocked_by_terrain'i kullanmaz.
+func _find_clear_point_near_house(harita: Node) -> Vector2:
+	var layers: Array = [harita.get_node("Su/Su"), harita.get_node("ev/Ev"), harita.get_node("Orman parçaları/Orman parçaları")]
+	var ev: TileMapLayer = layers[1]
+	var origin_cell: Vector2i = ev.local_to_map(ev.to_local(HOUSE_POINT))
+	for r: int in range(1, 60):
+		for dy: int in range(-r, r + 1):
+			for dx: int in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var world: Vector2 = ev.to_global(ev.map_to_local(origin_cell + Vector2i(dx, dy)))
+				var clear: bool = true
+				for layer: TileMapLayer in layers:
+					if layer.get_cell_source_id(layer.local_to_map(layer.to_local(world))) != -1:
+						clear = false
+						break
+				if clear:
+					return world
+	return Vector2.INF
+
+
 func test_is_position_blocked_by_terrain_core_lookup() -> void:
 	var harita: Node = _inject_map_into_game_manager()
 
@@ -190,8 +215,10 @@ func test_is_position_blocked_by_terrain_core_lookup() -> void:
 		"Su karosu blok olarak algılanmadı")
 	assert(GameManager.is_position_blocked_by_terrain(HOUSE_POINT) == true,
 		"Ev karosu blok olarak algılanmadı")
-	assert(GameManager.is_position_blocked_by_terrain(CLEAR_POINT) == false,
-		"Temiz (su/ev olmayan) hücre yanlışlıkla blok sayıldı")
+	var clear_point: Vector2 = _find_clear_point_near_house(harita)
+	assert(clear_point != Vector2.INF, "Ev'in yakınında su/ev/orman olmayan temiz bir hücre bulunamadı")
+	assert(GameManager.is_position_blocked_by_terrain(clear_point) == false,
+		"Temiz (su/ev/orman olmayan) hücre yanlışlıkla blok sayıldı: %s" % str(clear_point))
 
 	harita.queue_free()
 	_clear_game_manager_map()

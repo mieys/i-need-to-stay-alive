@@ -169,34 +169,34 @@ func test_grazing_a_wall_corner_does_not_block_but_crossing_the_body_does() -> v
 	_cleanup()
 
 
-func test_small_clusters_are_filtered_only_when_asked() -> void:
+## Kullanıcı isteği: "küçük parçaların görüşü engellememe sınırını kaldır, onları
+## haritadan kaldırdım, bu layerdaki her şey görüşü engellesin" - eskiden 20 hücreden
+## küçük kümeler (taş/mantar/çalı) elenirdi; artık kümenin büyüklüğü ne olursa olsun
+## katmandaki HER hücre engel.
+func test_every_layer_cell_blocks_regardless_of_cluster_size() -> void:
 	var cells: Array[Vector2i] = WallLayerFactory.rect_cells(0, 10, 20, 10) ## 21 hücrelik uzun duvar
-	cells.append_array(WallLayerFactory.rect_cells(5, 20, 7, 22)) ## 3x3 = 9 hücrelik dekor
+	cells.append_array(WallLayerFactory.rect_cells(5, 20, 7, 22)) ## 3x3 = 9 hücrelik parça
 	cells.append(Vector2i(30, 30)) ## tek hücre
-	## Köşegen zincir: 8 komşulukla TEK küme sayılmalı (12 hücre).
-	for i: int in range(12):
+	for i: int in range(12): ## köşegen zincir (12 hücre)
 		cells.append(Vector2i(40 + i, 40 + i))
 	var layer: TileMapLayer = _layer(cells)
+	var occ: RefCounted = _occluders(layer)
 
-	var all_cells: RefCounted = VisionOccludersScript.new()
-	all_cells.build(layer)
-	var filtered: RefCounted = VisionOccludersScript.new()
-	filtered.build(layer, 10)
+	for cell: Vector2i in cells:
+		assert(occ.blocks_cell(cell), "Katmandaki her hücre engel olmalı, olmayan: %s" % cell)
 
 	var blob_source: Vector2 = _world(layer, Vector2(6.5, 24.5))
 	var blob_behind: Vector2 = _world(layer, Vector2(6.5, 18.5))
-	assert(all_cells.is_ray_blocked(blob_source, blob_behind), "Filtresiz ızgara dekorun arkasını kesmeliydi")
-	assert(not filtered.is_ray_blocked(blob_source, blob_behind), "Küçük dekor (9 hücre) filtreyle görüşü kesmemeli")
-	assert(not filtered.blocks_cell(Vector2i(30, 30)), "Tek hücre filtreyle engel olmamalı")
-	assert(filtered.blocks_cell(Vector2i(10, 10)), "Uzun duvar filtreyle de engel kalmalı")
-	assert(filtered.is_ray_blocked(_world(layer, Vector2(10.5, 12.5)), _world(layer, Vector2(10.5, 8.5))),
-		"Uzun duvar filtreyle de görüşü kesmeli")
-	assert(filtered.blocks_cell(Vector2i(45, 45)), "Köşegen zincir 8 komşulukla tek küme sayılıp korunmalıydı")
-	assert(filtered.blocks_cell(Vector2i(6, 21)) == false, "Dekorun hücresi filtreyle engel olmamalı")
-	## Hepsi elenirse ızgara boş.
-	var none: RefCounted = VisionOccludersScript.new()
-	none.build(_layer([Vector2i(1, 1), Vector2i(50, 50)]), 5)
-	assert(none.is_empty(), "Tüm kümeler elenince ızgara boş olmalı")
+	assert(occ.is_ray_blocked(blob_source, blob_behind), "Küçük parçanın (9 hücre) arkası da görünmez olmalı")
+	assert(occ.is_ray_blocked(_world(layer, Vector2(30.5, 34.5)), _world(layer, Vector2(30.5, 26.5))),
+		"Tek hücrelik parçanın arkası da görünmez olmalı")
+	assert(occ.is_ray_blocked(_world(layer, Vector2(10.5, 12.5)), _world(layer, Vector2(10.5, 8.5))),
+		"Uzun duvarın arkası görünmez kalmalı")
+
+	## Filtre kodu da gerçekten kalkmış olmalı (eşik geri dönmesin).
+	assert(not occ.has_method("_keep_large_clusters"), "küme filtresi kaldırılmış olmalı")
+	var fog_src: String = FileAccess.get_file_as_string("res://scripts/vision_fog.gd")
+	assert(not fog_src.contains("MIN_WALL_CLUSTER_CELLS"), "vision_fog.gd'de küme eşiği sabiti kalmamalı")
 	_cleanup()
 
 

@@ -26,11 +26,12 @@ const FOG_DESATURATION := 0.3
 ## Düşman gizleme eşikleri
 const HIDE_BELOW := 0.02
 const SIDE_ELEMENT_MIN_VISIBILITY := 0.5
-
-## Görüşü kesen duvar (orman katmanı) sayılması için bitişik hücre kümesinin en az
-## kaç hücre olması gerektiği: uzun kaya duvarlar ve büyük oluşumlar keser, dağınık küçük
-## dekorlar (taş, mantar, çalı) kesmez (bkz. vision_occluders.gd build). 1 = katmanın TAMAMI keser.
-const MIN_WALL_CLUSTER_CELLS := 20
+## Silah/yetenek HEDEF SEÇİMİ için asgari görünürlük (bkz. can_target): oyuncunun
+## GERÇEKTEN gördüğü (sisin yaratık için hesapladığı VIS_META, takım görüşü DAHİL)
+## bir yaratık hedeflenebilir; görmediğimiz (duvarın ardı / görüş elipsinin dışı)
+## hedeflenemez. Kullanıcı isteği: "göremediğimiz yaratıklara saldıramamalıyız,
+## silahlar ve yetenekler onları hedef alamamalı".
+const TARGETABLE_MIN_VISIBILITY := 0.5
 
 ## Duvar gölgesi kenarlarının yumuşatma yarıçapı (DÜNYA birimi; ~1.5 karo). Duvar
 ## gölgesi hücre-hücre/ikili hesaplandığı için ham hâli merdiven basamaklı ve sert çıkıyor;
@@ -163,7 +164,27 @@ static func visibility_from_distance(normalized: float, softness: float) -> floa
 func is_world_pos_visible(world_pos: Vector2) -> bool:
 	if not _active:
 		return true
-	return _target_visibility(world_pos) >= 0.5
+	return _target_visibility(world_pos) >= TARGETABLE_MIN_VISIBILITY
+
+
+## Bu yaratık (ya da düşman mermisi) silah/yetenek tarafından HEDEF olarak seçilebilir mi?
+## Silahlar/yetenekler hedef SEÇERKEN (en yakın/rastgele/en canlı düşman, zincir
+## sıçraması, totem/sarmaşık/hortum/yarasa hedefi...) bunu kontrol etmeli. Alan hasarı
+## (nova, itme, patlama), mermi/kılıç çarpışması ve hareket engelleme hedef SEÇMEDİĞİ için
+## bunu kullanmaz.
+##  - Sis yaratığı zaten yönetiyorsa (VIS_META var) o değer kullanılır: oyuncunun ekranda
+##    gördüğüyle BİREBİR aynı, ve takım arkadaşlarının görüşü de dahil (SOURCE_GROUPS).
+##  - Henüz yönetilmemişse (yeni doğmuş, sis o karede daha çalışmadı) sisin geometrik
+##    hesabına sorulur; sis yoksa/kapalıysa (ana menü, ev içi, testler) her şey hedeflenebilir.
+static func can_target(node: Node) -> bool:
+	if node.has_meta(VIS_META):
+		return float(node.get_meta(VIS_META)) >= TARGETABLE_MIN_VISIBILITY
+	if not node.is_inside_tree() or not (node is Node2D):
+		return true
+	var fog: Node = node.get_tree().get_first_node_in_group(FOG_GROUP)
+	if fog == null or not fog.has_method("is_world_pos_visible"):
+		return true
+	return fog.is_world_pos_visible((node as Node2D).global_position)
 
 
 func update_fog(delta: float = -1.0) -> void:
@@ -258,7 +279,11 @@ func _ensure_occluders() -> void:
 		return
 	_occluders_searched = true
 	var built: RefCounted = VisionOccludersScript.new()
-	built.build(layer, MIN_WALL_CLUSTER_CELLS)
+	## Kullanıcı isteği: "küçük parçaların görüşü engellememe sınırını kaldır, onları
+	## haritadan kaldırdım, bu layerdaki HER ŞEY görüşü engellesin" - eskiden 20
+	## hücreden küçük kümeler (taş/mantar/çalı) eleniyordu, artık katmanın tüm
+	## hücreleri keser (çarpışmayla, bkz. GameManager.is_position_blocked_by_forest, aynı küme).
+	built.build(layer)
 	set_occluders(built)
 
 

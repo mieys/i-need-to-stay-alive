@@ -25,6 +25,17 @@ extends SceneTree
 ## Bu sayede ileride eklenecek HERHANGİ bir yeni shader/node da otomatik
 ## korunur - bu script'in bir daha güncellenmesine gerek kalmaz.
 ##
+## İSTİSNA - TILED'DAN SİLİNEN KATMANLAR (bkz. _is_tiled_derived): "karşılığı
+## yok" iki ANLAMA gelebilir: (1) Godot'ta elle eklendi, (2) kullanıcı o
+## katmanı/grubu Tiled'dan SİLDİ. (2)'yi de "elle eklenmiş" sanıp geri
+## getirmek hataydı (2026-09-19: Tiled'dan silinen "Ağaç 0-2" ve "Yalı" grubu,
+## eski TileSet'iyle birlikte yeni haritaya diriltildi -> ikinci bir TileSet
+## gömüldü, yüklemede 180 "Cannot create tile" hatası). Tiled'ın sahibi olduğu
+## tür (TileMapLayer ve sadece bunları/boş grupları içeren script'siz düz
+## Node2D grupları) eşleşmiyorsa Tiled'dan silinmiş sayılır ve TAŞINMAZ; atlanan
+## adlar bake sonunda raporlanır. Script'li/başka türde (CanvasLayer, ColorRect...)
+## node'lar eskisi gibi taşınmaya devam eder.
+##
 ## GÖRÜNÜM ÖZELLİKLERİ (y_sort_enabled, visible, modulate...): materyalle aynı
 ## mantıkla, Tiled'da karşılığı olan node'larda ESKİ sahnedeki değer yenisine
 ## yazılır (bkz. CARRIED_PRESENTATION_PROPS). Sebep 1: y_sort_enabled Tiled'da
@@ -67,6 +78,8 @@ var _carried_material_count: int = 0
 var _carried_node_count: int = 0
 var _carried_property_count: int = 0
 var _compacted_texture_count: int = 0
+## Tiled'dan silindiği için (bkz. dosya başı İSTİSNA notu) yeni sahneye taşınmayan eski node yolları.
+var _dropped_tiled_paths: PackedStringArray = PackedStringArray()
 
 
 func _init() -> void:
@@ -106,6 +119,8 @@ func _init() -> void:
 		quit(1)
 		return
 	print("Harita bake tamamlandı: %s (korunan materyal: %d, korunan ekstra node: %d, korunan görünüm özelliği: %d, sıkıştırılan gömülü texture: %d)" % [NEW_BAKED_PATH, _carried_material_count, _carried_node_count, _carried_property_count, _compacted_texture_count])
+	if not _dropped_tiled_paths.is_empty():
+		print("Tiled'dan silindiği için TAŞINMAYAN eski katman/gruplar (%d): %s" % [_dropped_tiled_paths.size(), ", ".join(_dropped_tiled_paths)])
 	quit(0)
 
 
@@ -123,6 +138,10 @@ func _merge_customizations(old_parent: Node, new_parent: Node, new_root: Node) -
 				_carried_material_count += 1
 				_make_carried_material_visible(new_child)
 			_merge_customizations(old_child, new_child, new_root)
+		elif _is_tiled_derived(old_child):
+			## Tiled'ın sahibi olduğu türde ve karşılığı yok = kullanıcı Tiled'dan
+			## sildi (bkz. dosya başı İSTİSNA notu) - geri getirme, sadece raporla.
+			_dropped_tiled_paths.append(_scene_path(old_child))
 		else:
 			## Tiled'da HİÇ karşılığı yok - elle eklenmiş bir node (script,
 			## materyal, çocukları dahil) - olduğu gibi yeni sahneye taşı.
@@ -131,6 +150,35 @@ func _merge_customizations(old_parent: Node, new_parent: Node, new_root: Node) -
 			_set_owner_recursive(dup, new_root)
 			_make_carried_material_visible(dup)
 			_carried_node_count += 1
+
+
+## Tiled'ın ürettiği türde mi (bkz. dosya başı İSTİSNA notu)? TileMapLayer, ya da
+## script'siz, düz Node2D olan ve tüm çocukları da bu kurala uyan (boş dahil) grup.
+## Script'li ya da başka türdeki (CanvasLayer, ColorRect, Sprite2D...) her şey
+## Godot'ta elle eklenmiş sayılır. Bir grubun altında tek bir elle eklenmiş çocuk
+## bile varsa grup taşınır (elle eklenen çocuk kaybolmasın) - o durumda içindeki
+## eski TileMapLayer'lar da onunla gelir; "korunan ekstra node" sayısından fark edilir.
+func _is_tiled_derived(node: Node) -> bool:
+	if node.get_script() != null:
+		return false
+	if node is TileMapLayer:
+		return true
+	if node.get_class() != "Node2D":
+		return false
+	for child: Node in node.get_children():
+		if not _is_tiled_derived(child):
+			return false
+	return true
+
+
+## Sahne köküne göre "Grup/Alt grup/Katman" biçiminde yol (rapor için).
+func _scene_path(node: Node) -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	var cur: Node = node
+	while cur != null and cur.get_parent() != null:
+		parts.insert(0, String(cur.name))
+		cur = cur.get_parent()
+	return "/".join(parts)
 
 
 ## Eski sahnedeki görünüm özelliklerini (bkz. CARRIED_PRESENTATION_PROPS) yeni

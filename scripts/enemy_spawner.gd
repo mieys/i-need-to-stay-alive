@@ -1,5 +1,8 @@
 extends Node2D
 
+## Yaratıkların duvar dolanma yol ızgarası (bkz. _ready / enemy_pathing.gd).
+const EnemyPathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
+
 ## Full 15-Kademe (+ Final Kademe) creature roster, built from
 ## visuals/yaratıklar/. Every id here matches scenes/creatures/enemy_<id>.tscn.
 const SCENES := {
@@ -335,6 +338,19 @@ var _last_dead_sent: Dictionary = {} ## network_enemy_id -> bool
 func _ready() -> void:
 	NetworkManager.became_host.connect(_on_became_host)
 	NetworkManager.peer_needs_game_catchup.connect(_on_peer_needs_game_catchup)
+	## Yaratıkların duvar dolanma yol ızgarası (bkz. enemy_pathing.gd) ilk duvar
+	## karşılaşmasında değil, harita yüklenirken kurulsun - ilk kurulum ~onlarca ms.
+	call_deferred("_prepare_enemy_pathing")
+
+
+func _prepare_enemy_pathing() -> void:
+	## Sadece harita sahnede VARKEN: GameManager.get_forest_layer() harita yokken bir kez
+	## "arandı" diye işaretlenip oturum boyunca bir daha aramayı bırakıyor (bkz. game_manager.gd
+	## _find_terrain_layers) - ana menüde çağırıp bunu zehirlememek için.
+	var scene: Node = get_tree().current_scene
+	if scene == null or scene.get_node_or_null("Harita") == null:
+		return
+	EnemyPathingScript.prepare()
 
 
 ## Kullanıcı isteği: "oyundan çıkmış biri ... oyundaki son haliyle oyuna

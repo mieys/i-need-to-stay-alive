@@ -4,6 +4,9 @@ extends CharacterBody2D
 ## Öykü/Talha/Matthew (7-9) each need their own numbers instead, so the fixed
 ## duration/cooldown became per-character - see _skill_duration/_skill_cooldown
 ## and _skill_timing_for(). DEFAULT_* keeps 1-6 behaving exactly as before.
+## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
+const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
+
 const DEFAULT_SKILL_DURATION := 10.0
 const DEFAULT_SKILL_COOLDOWN := 20.0
 const SKILL_TIMING := {
@@ -201,10 +204,11 @@ const SKILL3_TIMING := {
 	## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
 	## yeteneği olacak") - Arı Sürüsü (eskiden burada, id 33) Q'ya taşındı
 	## (bkz. SKILL_TIMING[33] şimdi orada). Yeni R (Koruyucu Büyü, id 39):
-	## "8 saniye boyunca aktif kalır... (60 saniye bekleme süresi)" - kullanıcı
-	## isteği. "duration" gerçek 8sn'lik buff süresiyle birebir eşleşiyor ki
-	## ikon "aktif" çerçevesi buf aktifken doğru görünsün.
-	39: {"duration": 8.0, "cooldown": 60.0},
+	## "... aktif kalır... (60 saniye bekleme süresi)" - kullanıcı isteği; süre
+	## ilk istekte 8 yazılmıştı, kullanıcı düzeltmesiyle (2026-09-20) 10sn oldu.
+	## "duration" gerçek buff süresiyle (OAKLEY_BOND_DURATION) AYNI sabite bağlı - iki ayrı
+	## sayı olmasın, ikon "aktif" çerçevesi buf aktifken doğru görünsün.
+	39: {"duration": OAKLEY_BOND_DURATION, "cooldown": 60.0},
 	## Kullanıcı isteği: Korsan'ın yeni 3. yeteneği (Bombardıman, id 34) -
 	## "etrafındaki büyük bir alana 8 saniye boyunca bombardımana alır, her
 	## saniye %150 saldırı gücü kadar hasar verir." Standart skill3_state
@@ -3725,6 +3729,8 @@ func _launch_necro_bats() -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
+		if not VisionFogScript.can_target(e):
+			continue
 		var d: float = global_position.distance_to(e.global_position)
 		if d <= NECRO_BATS_RADIUS:
 			candidates.append([d, e])
@@ -6344,6 +6350,18 @@ func _cancel_active_skill_early() -> void:
 	skill_timer = _skill_cooldown
 
 
+## _cancel_active_skill_early()'nin R (skill3) slotu karşılığı: yetenek süresi dolmadan
+## (Gölge Hücumu zinciri bitince) R'yi _process_skill3'ün "active -> cooldown" geçişiyle
+## AYNI şekilde bitirir (temizlik + bekleme süresi). Sadece R hâlâ aktifse çalışır: süre
+## zaten dolup _process_skill3 geçişi yaptıysa bekleme sayacı yeniden sıfırlanmasın.
+func _cancel_active_skill3_early() -> void:
+	if skill3_state != "active":
+		return
+	_end_skill3_effects()
+	skill3_state = "cooldown"
+	skill3_timer = _skill3_cooldown
+
+
 ## Oakley ULTİ (Can Basma, id 1) - kullanıcı isteği ile yeniden tasarlandı:
 ## "kendini ve yakınındaki en düşük cana sahip müttefiği maks canın %15'ini
 ## anında yenilesin, sonraki 6 saniye boyunca her saniye kendinin veya
@@ -6368,15 +6386,21 @@ var _oakley_q_tick_timer: float = 0.0
 var _oakley_q_ally_target: Node2D = null
 
 ## --- Melek Can Basma/Kalkan Yenileme aura efektleri ("efekt sistemi") ---
-## bkz. fx_melek_ally_aura.gd dosya başı notu. _ally_aura_fx bu OYUNCUNUN
+## bkz. fx_recovery_aura.gd dosya başı notu. _ally_aura_fx bu OYUNCUNUN
 ## KENDİ üzerinde gösterilen aura'ları tutar (aura_type -> Node) - hem Melek
 ## kendi kendine çağırdığında (kendi client'ında) HEM DE ağ üzerinden başka
 ## bir oyuncunun bize kalkan/can gönderdiği bildirimi geldiğinde
 ## (broadcast_ally_aura_start/stop, bkz. network_manager.gd) aynı iki
 ## fonksiyon kullanılıyor - "ally" burada HER ZAMAN "self" demek (bu Node'un
 ## ÜZERİNDE gösterilen aura), kimin başlattığı önemli değil.
-const FxMelekHealAuraScene := preload("res://scenes/fx_melek_heal_aura.tscn")
-const FxMelekShieldAuraScene := preload("res://scenes/fx_melek_shield_aura.tscn")
+## DÜZELTME (kullanıcı isteği: CraftPix Life/Mana Recovery efektleri): eski
+## intro/loop/outro'lu iyileşme.png/kalkan.png aura'sı yerine tam döngülü
+## pixel-art büyü çemberleri (bkz. fx_recovery_aura.gd) - Can Basma = Life
+## (yeşil), Kalkan Yenileme = Mana (mavi). Sahne yolu SADECE burada ve
+## remote_player.gd'de (aynı iki satır) geçiyor; yayın yolu zaten
+## scene.resource_path'ten okunuyor (bkz. _play_and_broadcast_skill_fx).
+const FxMelekHealAuraScene := preload("res://scenes/fx_recovery_life.tscn")
+const FxMelekShieldAuraScene := preload("res://scenes/fx_recovery_mana.tscn")
 var _ally_aura_fx: Dictionary = {}
 ## _process_healer_heal_tick/_process_healer_shield_tick'teki "bağ hâlâ
 ## menzilde mi" geçişlerini izlemek için - aura start/stop'u sadece GERÇEK
@@ -6947,6 +6971,8 @@ func _find_closest_enemy_in_range(origin: Vector2, max_range: float, exclude: Ar
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if e in exclude:
+			continue
+		if not VisionFogScript.can_target(e):
 			continue
 		var d: float = origin.distance_to(e.global_position)
 		if d <= min_d:
@@ -7610,6 +7636,8 @@ func _kurtadam_berserk_direction() -> Vector2:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
+		if not VisionFogScript.can_target(e):
+			continue
 		var d: float = global_position.distance_to(e.global_position)
 		if d < target_dist:
 			target_dist = d
@@ -7987,7 +8015,15 @@ func _skill_assasin_dash() -> void:
 	var hit_enemies: Array[Node] = []
 	while assasin_dash_hits < max_hits:
 		# Check if player is dead or game ended or skill is no longer active
-		if not is_inside_tree() or skill_state != "active" or is_dead:
+		## DÜZELTME (kullanıcı bildirimi: "assasin çocuğun ultisi yine çalışmıyor, R'ye basınca
+		## karakter siyaha dönüyor ama saldırmıyor"): Gölge Hücumu "Q ile R'nin yerini değiştir"
+		## isteğiyle R'ye (skill3, id 16) taşınmıştı ama bu döngü hâlâ Q'nun durumuna
+		## (skill_state) bakıyordu - Q aktif OLMADIĞI için döngü İLK turda "break" edip hiç
+		## saldırmıyor, karakter de dash'in başında set edilen koyu tonda ve hareket kilidinde
+		## (is_assasin_dashing) R'nin 15 sn'lik süresi dolana kadar takılı kalıyordu; üstelik sonda
+		## Q'yu (Gölge Adımı) yanlışlıkla bekleme süresine sokuyordu (bkz. aşağıdaki
+		## _cancel_active_skill3_early). Artık R'nin kendi durumu (skill3_state) kullanılıyor.
+		if not is_inside_tree() or skill3_state != "active" or is_dead:
 			break
 
 		# Sum weapon damage once per dash tick
@@ -8017,6 +8053,8 @@ func _skill_assasin_dash() -> void:
 			if e in hit_enemies:
 				continue
 			if e.get("is_dead") == true:
+				continue
+			if not VisionFogScript.can_target(e):
 				continue
 			if e is Node2D:
 				var dist: float = origin_pos.distance_to((e as Node2D).global_position)
@@ -8107,7 +8145,7 @@ func _skill_assasin_dash() -> void:
 	if death_camera and is_instance_valid(death_camera):
 		death_camera.position_smoothing_enabled = _dash_cam_was_smoothing
 		death_camera.position_smoothing_speed = _dash_cam_prev_speed
-	_cancel_active_skill_early()
+	_cancel_active_skill3_early()
 
 
 func _skill_haste() -> void:
@@ -8216,6 +8254,24 @@ func _skill_oakley_bee_swarm() -> void:
 ## yeniler ayrıca dost birey bu esnada %20 hasar azaltma kazanır. Eğer canı
 ## en az olan kişi oakleyse bu büyüyü kendisine yapar. Canı en az olan
 ## önceliklidir. (60 saniye bekleme süresi)"
+## GÜNCEL DEĞERLER (sonraki kullanıcı düzeltmeleri): süre 8 -> 10 saniye ("10 saniye
+## sürmesi gerek, 8'i ilk istekte ben yazmıştım", 2026-09-20); can/kalkan oranları 2 kat
+## (0.20 / 0.10). Hasar azaltma %20 ve 60sn bekleme değişmedi.
+##
+## ÇALIŞMA MANTIĞI (tek kayıt - açıklama metni characters.gd DEFS[2] "skill3_desc",
+## testi tests/test_oakley_abilities.gd):
+##  1. R'ye basınca ULTİ tarifesiyle kalkan bedeli ödenir (bkz. _activate_skill3 use_ulti_tier),
+##     60sn bekleme başlar (skill3_state "active" süresi = buff süresi, bkz. SKILL3_TIMING[39]).
+##  2. Hedef: OAKLEY_BOND_RANGE (400) içindeki gerçek oyuncular (peer_id'liler; evcil hayvan/
+##     yaratık DEĞİL) + kendisi arasında health/max_health ORANI en düşük olan; ölü/yere
+##     düşmüş olanlar hariç. Eşitlikte/kimse yoksa Oakley kendisidir.
+##  3. Buff süresi boyunca HEDEF her hasar aldığında (kalkan hasarı tamamen yutsa bile),
+##     take_damage() içinde ham hasardan ÖNCE: hasar %20 azalır, hedef Oakley'nin (cast
+##     anındaki) saldırı gücünün %20'si kadar can (maks canı aşmadan) ve %10'u kadar
+##     kalkan (sadece kalkan kapasitesi varsa) yeniler.
+##  4. Buff hedefin KENDİ istemcisinde işler (bkz. network_manager.gd sync_oakley_bond_buff);
+##     süre dolunca (oakley_bond_timer) tüm alanlar sıfırlanır. Oakley ölse/skill3 bitse de
+##     buff kendi süresini tamamlar (skill3'ten bağımsız zamanlayıcı).
 ##
 ## Heal/kalkan miktarları CAST ANINDA Oakley'nin o anki saldırı gücünden
 ## SABİTLENİR (flower/arı sürüsünün "caster_damage_bonus" anlık görüntüsüyle
@@ -8224,9 +8280,13 @@ func _skill_oakley_bee_swarm() -> void:
 ## kendi take_damage()'ında tamamen yerel olarak uygular (bkz. aşağıdaki
 ## oakley_bond_* alanları/take_damage() içindeki kullanım).
 const OAKLEY_BOND_RANGE := 400.0 ## bkz. PALADIN_BARRIER_BREAK_RANGE ile aynı mertebe
-const OAKLEY_BOND_DURATION := 8.0
-const OAKLEY_BOND_HEAL_RATIO := 0.10
-const OAKLEY_BOND_SHIELD_RATIO := 0.05
+## Buff süresi (sn) - SKILL3_TIMING[39]["duration"] da bu sabiti kullanır, açıklama metni "10sn".
+const OAKLEY_BOND_DURATION := 10.0
+## Kullanıcı isteği: "oakleyin ultisinin saldırı gücü oranlarını 2 kat arttır" - can 0.10 ->
+## 0.20, kalkan 0.05 -> 0.10 (hasar azaltma bir saldırı gücü oranı DEĞİL, aşağıda aynen %20).
+## Metin karşılığı: characters.gd DEFS[2] "skill3_desc" (ikisi birlikte güncellenmeli).
+const OAKLEY_BOND_HEAL_RATIO := 0.20
+const OAKLEY_BOND_SHIELD_RATIO := 0.10
 const OAKLEY_BOND_DAMAGE_REDUCTION := 0.20
 
 ## Bu oyuncu ŞU AN birinin Koruyucu Büyü hedefiyse (kendi büyüsü de dahil)
@@ -9083,9 +9143,17 @@ func _play_and_broadcast_skill_fx(scene: PackedScene) -> Node:
 	var fx: Node = scene.instantiate()
 	add_child(fx)
 	if NetworkManager.is_multiplayer_active and not scene.resource_path.is_empty():
+		## DÜZELTME (çok oyunculu senkron testi): uzak kopyanın konumu eskiden HER ZAMAN
+		## Vector2.ZERO'ya eziliyordu, ama bazı sahnelerin kökü ofsetli çiziliyor (Life/Mana
+		## Recovery aura'ları (0, 30) - halka karakterin ayak gölgesinde). Kaster halkayı
+		## ayağının altında, diğer oyuncular 30 birim yukarıda görüyordu. Artık kasterin
+		## kendi kopyasının GERÇEK yerel konumu gönderiliyor - iki taraf yapısal olarak aynı.
+		var fx_local_position: Vector2 = Vector2.ZERO
+		if fx is Node2D:
+			fx_local_position = (fx as Node2D).position
 		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_scene", global_position, {
 			"scene_path": scene.resource_path,
-			"position": Vector2.ZERO
+			"position": fx_local_position
 		})
 	return fx
 

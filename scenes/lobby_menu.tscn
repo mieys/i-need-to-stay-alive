@@ -117,40 +117,8 @@ layout_mode = 2
 [node name="RoomHeader" type="Label" parent="LeftPanel/Margin/VBox" unique_id=527540651]
 layout_mode = 2
 theme_override_font_sizes/font_size = 38
-text = "Oda İşlemleri"
+text = "LAN (Yerel Ağ) Bağlantısı"
 horizontal_alignment = 1
-
-[node name="CreateBtn" type="Button" parent="LeftPanel/Margin/VBox" unique_id=1372215373]
-custom_minimum_size = Vector2(0, 48)
-layout_mode = 2
-theme_override_font_sizes/font_size = 40
-text = "+ SUNUCU KUR"
-
-[node name="OrLabel" type="Label" parent="LeftPanel/Margin/VBox" unique_id=772587557]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1)
-theme_override_font_sizes/font_size = 29
-text = "VEYA"
-horizontal_alignment = 1
-
-[node name="JoinHBox" type="HBoxContainer" parent="LeftPanel/Margin/VBox" unique_id=1758839264]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="RoomCodeInput" type="LineEdit" parent="LeftPanel/Margin/VBox/JoinHBox" unique_id=834938349]
-custom_minimum_size = Vector2(0, 44)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 36
-placeholder_text = "ODA KODU (ör. 482913)"
-alignment = 1
-max_length = 40
-
-[node name="JoinBtn" type="Button" parent="LeftPanel/Margin/VBox/JoinHBox" unique_id=1573865432]
-custom_minimum_size = Vector2(110, 44)
-layout_mode = 2
-theme_override_font_sizes/font_size = 36
-text = "KATIL"
 
 [node name="HSeparator2" type="HSeparator" parent="LeftPanel/Margin/VBox" unique_id=811186824]
 layout_mode = 2

@@ -1,5 +1,8 @@
 extends Node2D
 
+## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
+const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
+
 ## Büyücü Kız'ın TEMEL yeteneğinin 3. varyasyonu ("Hortum") için bağımsız
 ## bir hortum varlığı - bkz. player.gd _skill_buyucu_tornado(). Oyuncunun
 ## etrafında BUYUCU_TORNADO_RADIUS yarıçapında rastgele yaratıklara doğru
@@ -76,6 +79,8 @@ func _pick_new_target() -> void:
 	var candidates: Array = []
 	for e: Node in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		if not VisionFogScript.can_target(e):
 			continue
 		if origin.distance_to(e.global_position) <= wander_radius:
 			candidates.append(e)

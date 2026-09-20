@@ -41,6 +41,9 @@ var chain_damage_percent: float = 0.5
 ## göre en yakın olanları seçiyordu ama bir MENZİL sınırı hiç yoktu, yani
 ## haritanın öbür ucundaki tek düşmana bile sıçrayabiliyordu. Artık sadece bu
 ## yarıçap içindeki düşmanlar aday sayılıyor.
+## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
+const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
+
 const CHAIN_JUMP_RANGE := 220.0
 
 ## Zincir sıçrama görsel efekti (bkz. _apply_chain_jumps) - her sıçramada
@@ -597,6 +600,8 @@ func _trigger_arcane_burst() -> void:
 	var in_range: Array = []
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		if not VisionFogScript.can_target(e):
 			continue
 		if attack_range <= 0.0 or origin.distance_to(e.global_position) <= attack_range:
 			in_range.append(e)
@@ -1626,6 +1631,8 @@ func _get_nearest_enemy() -> Node2D:
 		# instead of the actual nearest live threat.
 		if e.get("is_dead") == true:
 			continue
+		if not VisionFogScript.can_target(e):
+			continue
 		var d := origin.distance_to(e.global_position)
 		if d < nearest_dist:
 			nearest_dist = d
@@ -1734,6 +1741,8 @@ func _get_nearest_unfrozen_enemy() -> Node2D:
 			continue
 		if e.get("is_dead") == true:
 			continue
+		if not VisionFogScript.can_target(e):
+			continue
 		var d := origin.distance_to(e.global_position)
 		if d < nearest_dist:
 			nearest_dist = d
@@ -1800,6 +1809,8 @@ func _pick_random_nearby_unfrozen(preferred: Node2D, claimed_by_siblings: Array)
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e == preferred or not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
+		if not VisionFogScript.can_target(e):
+			continue
 		if e.get("is_frozen") == true:
 			continue
 		if e.get("is_boss") != true and claimed_by_siblings.has(e):
@@ -1823,6 +1834,8 @@ func _get_highest_health_enemy() -> Node2D:
 	var best_health: float = -INF
 	for e in enemies:
 		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		if not VisionFogScript.can_target(e):
 			continue
 		if attack_range > 0.0 and origin.distance_to(e.global_position) > attack_range:
 			continue
@@ -1974,6 +1987,8 @@ func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shi
 		if e == primary or not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if not e.has_method("take_damage"):
+			continue
+		if not VisionFogScript.can_target(e):
 			continue
 		## DÜZELTME: sekme artık sadece birincil hedefin CHAIN_JUMP_RANGE
 		## yarıçapı içindeki yaratıkları aday sayıyor (bkz. sabit üstündeki not).

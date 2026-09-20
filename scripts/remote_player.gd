@@ -46,8 +46,10 @@ var _was_downed_for_heart_fx: bool = false
 ## client'ta ally olarak hedeflenirse (yani BU oyuncu -kendi client'ında
 ## yerel Player olan biri- bir müttefiğini iyileştiriyorsa VE İZLEYEN
 ## client'ta o müttefik bir RemotePlayer kuklasıysa) burası çağrılır.
-const FxMelekHealAuraScene := preload("res://scenes/fx_melek_heal_aura.tscn")
-const FxMelekShieldAuraScene := preload("res://scenes/fx_melek_shield_aura.tscn")
+## bkz. player.gd'deki AYNI iki preload satırı (Life/Mana Recovery pixel-art
+## aura'ları) - ikisi birlikte güncellenmeli.
+const FxMelekHealAuraScene := preload("res://scenes/fx_recovery_life.tscn")
+const FxMelekShieldAuraScene := preload("res://scenes/fx_recovery_mana.tscn")
 var _ally_aura_fx: Dictionary = {}
 
 func start_ally_aura_fx(aura_type: String) -> void:
