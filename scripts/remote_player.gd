@@ -717,7 +717,16 @@ func _update_talon_formation(delta: float) -> void:
 		## "rotation = hedef_açısı - forward" kuralıyla AYNI formül kullanılmalı.
 		## Önceki +PI fazladan 180° ekleyip namluları içe (karaktere doğru)
 		## çeviriyordu.
-		icon.rotation = slot["angle"] - forward
+		## bkz. talon_formation_math.gd compute_icon_pose - aynalanan
+		## silahlar (tabanca/tüfek) için flip_h da slot açısına göre
+		## belirlenir (yoksa bayat flip_h namluyu içe çevirirdi).
+		var mirrors: bool = _weapon_mirror_aim[i] if i < _weapon_mirror_aim.size() else false
+		var pose: Dictionary = TalonFormationMath.compute_icon_pose(slot["angle"], forward, mirrors)
+		icon.rotation = pose["rotation"]
+		if mirrors:
+			icon.set("flip_h", pose["flip_h"])
+			if i < _weapon_icon_flipped.size():
+				_weapon_icon_flipped[i] = pose["flip_h"]
 		if not icon.visible:
 			icon.visible = true
 

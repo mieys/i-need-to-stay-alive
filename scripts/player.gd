@@ -335,8 +335,19 @@ const PALADIN_ULTI_RANGE_MULT := 1.3
 ## da GERÇEKTE %80 azaltıyordu) idi, artık gerçekten %95 azaltıyor.
 ## SONRAKİ TUR (kullanıcı isteği: "şovalye adamın ultisi açıkkenki hasar
 ## azaltmasını %95'ten %90'a düşür"): 0.05 (%95 azaltım) -> 0.10 (%90 azaltım).
-const PALADIN_ULTI_SHIELD_COST_MULT := 0.10 ## kalkanın aldığı hasar %90 azalır
+## SONRAKİ TUR (kullanıcı isteği: "şovalye adamın kalkan baloncuğunun hasar
+## azaltımını %95'e yükselt (eğer zaten %95 se %97 ye yükselt)"): kod o an
+## %90'daydı (0.10, yukarıdaki notun sonucu), yani "%95'e" dalı geçerli oldu:
+## 0.10 -> 0.05. Bu sabit hem take_damage()'daki kalkan-havuzu maliyetini hem
+## take_paladin_barrier_damage()'daki baloncuk hasarını yönetiyor (başka kopyası
+## yok) - characters.gd skill_desc'teki "%95" metni buna bağlı, birlikte tut.
+const PALADIN_ULTI_SHIELD_COST_MULT := 0.05 ## kalkanın aldığı hasar %95 azalır
 const PALADIN_TAUNT_RADIUS := 500.0
+## Kullanıcı isteği: "şovalye adamın E yeteneğini aktifleştirdiğinde etrafındaki
+## yaratıkların agrosunu 5 saniye boyunca kendine çekmelidir" - E (skill2 id 10,
+## Kalkan Yenileme) kendi 6sn'lik kalkan yenilemesine EK olarak bu süreyle
+## kışkırtır (bkz. _skill_kalkan_yenileme/_skill_paladin_taunt).
+const PALADIN_TAUNT_DURATION := 5.0
 
 @export var speed: float = Characters.BASE_MOVE_SPEED ## genel hız ayarı: 300'den %20 düşürülüp, kullanıcı isteğiyle %5 artırıldı (240 -> 252) - artık Characters.BASE_MOVE_SPEED'ten okunuyor (remote_player.gd ile PAYLAŞILAN tek kaynak, bkz. oradaki not)
 @export var max_health: float = 100.0
@@ -511,12 +522,20 @@ const SHIELD_TYPES := {
 ## delay_per_level), SADECE regen_per_level 1.5 katına çıkarıldı (%50).
 ## Taban (seviye 1) değerleri (power/delay/regen/absorption) DEĞİŞMEDİ -
 ## bunlar "seviye başına" değil, başlangıç değeri.
+## DÜZELTME (kullanıcı isteği: "Tüm kalkanların kalkan soğurmasını %5 arttır"):
+## dört türün "absorption" tabanı da +5 PUAN arttı (0.60->0.65, 0.50->0.55,
+## 0.70->0.75, 0.55->0.60) - soğurma zaten bir yüzde olduğu için (kartlar da
+## "+%4 puan" ekliyor) "%5 arttır" puan olarak yorumlandı. Bu değerlerin TEK
+## kaynağı burası (_recompute_shield_protection/apply_upgrade buradan okuyor);
+## shop_panel.tscn'deki kalkan tooltip metinlerindeki "%XX hasar emilimi"
+## yazıları görsel kopya, birlikte güncellenmeli. En yüksek taban (Kale 0.75)
+## hâlâ SHIELD_PROTECTION_CAP (0.92) altında.
 	"shield_standart": {
 		"name": "Standart Kalkan",
 		"power": 150.0, "power_per_level": 61.0528,
 		"delay": 8.0, "delay_per_level": -0.6106,
 		"regen": 10.0, "regen_per_level": 4.57845,
-		"absorption": 0.60,
+		"absorption": 0.65,
 		"always_regen": false,
 	},
 	"shield_enerji": {
@@ -524,7 +543,7 @@ const SHIELD_TYPES := {
 		"power": 90.0, "power_per_level": 48.8414,
 		"delay": 4.5, "delay_per_level": -0.6106,
 		"regen": 12.0, "regen_per_level": 9.15855,
-		"absorption": 0.50,
+		"absorption": 0.55,
 		"always_regen": false,
 	},
 	"shield_kale": {
@@ -532,7 +551,7 @@ const SHIELD_TYPES := {
 		"power": 180.0, "power_per_level": 97.6848,
 		"delay": 9.0, "delay_per_level": -0.6106,
 		"regen": 8.0, "regen_per_level": 9.15855,
-		"absorption": 0.70,
+		"absorption": 0.75,
 		"always_regen": false,
 	},
 	"shield_savas": {
@@ -551,7 +570,7 @@ const SHIELD_TYPES := {
 		## tekrar büyütüldü (0.7030 -> 3.6630), ve şimdi "yenilenme oranlarını
 		## %50 arttır" isteğiyle bir kez daha büyütüldü (3.6630 -> 5.4945).
 		"regen": 3.6, "regen_per_level": 5.4945,
-		"absorption": 0.55,
+		"absorption": 0.60,
 		"always_regen": true, ## savaştayken de (hasar sonrası bekleme olmadan) yenilenir
 	},
 }
@@ -1699,11 +1718,11 @@ func _apply_fisek_tier(w, level: int) -> void:
 
 ## Pençe: kısa menzilli, alan hasarsız (aslında hafif AOE var, bkz.
 ## _configure_pence_melee) yakın dövüş - SADECE bu silahın kendi hasarından
-## can çalar (bkz. weapon.gd lifesteal_percent/_apply_weapon_lifesteal,
-## Pençeler Özellikleri.txt).
+## "can emme" ile can yenilenir: verilen hasarın yüzdesi (bkz. weapon.gd
+## lifesteal_percent/_apply_weapon_lifesteal, Pençeler Özellikleri.txt).
 ##   hasar: tier başına +20, %100 saldırı gücü (oran tier'e göre değişmez -
 ##   weapon_pence.tscn'de card_damage_bonus_ratio = 1.0 sabit).
-##   can çalma: taban %0.3, dönüm noktalarında (3/5/7/10) KÜMÜLATİF +%0.2.
+##   can emme (verilen hasarın %'si): taban %0.3, dönüm noktalarında (3/5/7/10) KÜMÜLATİF +%0.2.
 func _apply_pence_tier(w, level: int) -> void:
 	var tier: float = _tier_from_level10(level)
 	var dmg_bonus: float = (tier - 1.0) * 20.0
@@ -5426,13 +5445,22 @@ func on_xp_collected() -> void:
 ## DÜZELTME (kullanıcı isteği: "Level başına karakterlere verilen saldırı
 ## gücü miktarını 2 ye çıkarıp kazanılan can miktarını da 5'e çıkar.") - +1/+1
 ## yerine artık +2 saldırı gücü/+5 can her seviyede.
+## SONRAKİ TUR (kullanıcı isteği: "Level başına gelen can oranını 10 dan 20 ye
+## yükseltip level başına artan saldırı gücü oranını da 1 den 2 ye yükselt"):
+## hedef değerler +20 can / +2 saldırı gücü. Kod bu turdan ÖNCE +5 can / +2
+## saldırı gücü idi (kullanıcının andığı 10/1 değerleri kodda hiç yoktu) - yani
+## saldırı gücü zaten hedefteydi, sadece can 5 -> 20 oldu. İki değer de tek
+## yerde, sabit olarak burada duruyor (başka kopyası yok).
+const LEVEL_UP_HEALTH_GAIN := 20.0
+const LEVEL_UP_DAMAGE_GAIN := 2.0
+
 func on_team_leveled_up(new_level: int) -> void:
 	level = new_level
 	max_item_slots = level
-	max_health += 5.0
-	health += 5.0
+	max_health += LEVEL_UP_HEALTH_GAIN
+	health += LEVEL_UP_HEALTH_GAIN
 	health_changed.emit(health, max_health)
-	damage_bonus += 2.0
+	damage_bonus += LEVEL_UP_DAMAGE_GAIN
 	_apply_weapon_bonuses()
 
 
@@ -5709,7 +5737,10 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 			## (tier) çarpılıyor - 1.=0.3, 2.=0.6, 3.=0.9, 4.=1.2 düz artış.
 			## level_up_screen.gd _scaled_desc_value()'daki "lifesteal" özel
 			## dalı bu formülle BİREBİR AYNI kalmalı (bkz. orada).
-			lifesteal_percent += 0.003 * float(tier)
+			## SONRAKİ DÜZELTME (kullanıcı isteği: "can çalma tier 1: %1, tier 2:
+			## %1.5, tier 3: %2, tier 4: %2.5") - artık TierSystem.lifesteal_
+			## percent_for_tier() (kartta gösterilen sayıyla TEK kaynak).
+			lifesteal_percent += TierSystem.lifesteal_percent_for_tier(tier)
 		"shield_amount":
 			shield_max_percent += _nice_up(0.05 * 1.3, 0.005) * tier_mult ## eskiden 0.05 (ondan önce 0.10), +%30 -> 0.065
 			refresh_shield_stats()
@@ -7517,16 +7548,24 @@ func _paladin_barrier_break() -> void:
 
 
 ## Şovalye (Paladin) TEMEL - Kışkırtma: menzildeki tüm yaratıkları (bkz.
-## PALADIN_TAUNT_RADIUS) _skill2_duration boyunca kışkırtır - is_ranged
-## yaratıklar bile normalde koruduğu "uzak dur" mesafesini bırakıp doğrudan
-## üstüne yürür (bkz. enemy.gd apply_taunt/_taunt_timer).
+## PALADIN_TAUNT_RADIUS) PALADIN_TAUNT_DURATION boyunca kışkırtır: bu süre
+## boyunca hedef seçimi Şovalye'ye KİLİTLENİR (yakınlarındaki başka bir oyuncu
+## ne kadar yakın olursa olsun agro Şovalye'de kalır) ve is_ranged yaratıklar
+## bile normalde koruduğu "uzak dur" mesafesini bırakıp doğrudan üstüne yürür
+## (bkz. enemy.gd apply_taunt/_taunt_timer/_taunt_target).
+## DÜZELTME (kullanıcı isteği: "E yeteneğini aktifleştirdiğinde etrafındaki
+## yaratıkların agrosunu 5 saniye boyunca kendine çekmelidir"): bu fonksiyon
+## eskiden HİÇBİR yerden çağrılmıyordu (E artık Kalkan Yenileme, kışkırtma
+## sonradan sahipsiz kalmıştı) ve apply_taunt de hedef seçimini değiştirmiyordu,
+## sadece menzilli davranışını - artık _skill_kalkan_yenileme() Şovalye için
+## bunu çağırıyor.
 func _skill_paladin_taunt() -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if global_position.distance_to(e.global_position) <= PALADIN_TAUNT_RADIUS:
 			if e.has_method("apply_taunt"):
-				e.apply_taunt(_skill2_duration)
+				e.apply_taunt(PALADIN_TAUNT_DURATION, self)
 	_spawn_burst(Color(1.0, 0.85, 0.3))
 
 
@@ -8416,6 +8455,10 @@ func _skill_kalkan_yenileme() -> void:
 	if GameManager.selected_char_id == 2:
 		_skill_oakley_vines()
 		return
+	## Şovalye Adam: kalkan yenilemesine EK olarak çevresindeki yaratıkların
+	## agrosunu 5sn kendine çeker (bkz. _skill_paladin_taunt).
+	if GameManager.selected_char_id == 7:
+		_skill_paladin_taunt()
 	is_kalkan_yenileme_active = true
 	_oakley_e_tick_timer = 0.0
 	## DÜZELTME (#25): eskiden yanlışlıkla _lowest_health_ally_in_range()
@@ -8719,7 +8762,18 @@ func _talon_set_weapons_circular(radius: float, angle_offset: float) -> void:
 			## formül kullanılmalı. Eski +PI fazladan 180° ekleyip namluları
 			## içe (karaktere doğru) çeviriyordu - remote_player.gd
 			## _update_talon_formation'daki AYNI düzeltme.
-			w.icon_sprite.rotation = slot["angle"] - deg_to_rad(float(w.sprite_forward_angle_deg))
+			## DÜZELTME (kullanıcı bildirimi: "Talonun E yeteneğinin animasyonları
+			## yine bozuldu, ... namlu uçları içe doğru dönük") - aynalanan
+			## silahlar (tabanca/tüfek) için flip_h da slot açısına göre
+			## belirlenmeli, bkz. TalonFormationMath.compute_icon_pose.
+			var mirrors: bool = "mirror_icon_when_aiming_left" in w and bool(w.mirror_icon_when_aiming_left)
+			var pose: Dictionary = TalonFormationMath.compute_icon_pose(slot["angle"], deg_to_rad(float(w.sprite_forward_angle_deg)), mirrors)
+			w.icon_sprite.rotation = pose["rotation"]
+			if mirrors:
+				w.icon_sprite.flip_h = pose["flip_h"]
+				## weapon.gd _update_aim() dizilim bitince kaldığı yerden devam
+				## ederken kendi aynalama takibiyle (_icon_flipped) tutarlı olsun.
+				w._icon_flipped = pose["flip_h"]
 
 
 ## Yukarıdaki fonksiyonun icon_faces_target=false yaptığı TÜM silahlarda

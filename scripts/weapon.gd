@@ -239,7 +239,13 @@ var bleed_max_stacks: int = 0
 ## (zırhtan ÖNCEKİ) final_damage üzerinden hesaplanır - enemy.take_damage()'ı
 ## mitigasyon SONRASI değeri geri döndürecek şekilde değiştirmek çok daha
 ## invaziv olacağı için bilinçli bir basitleştirme (bkz. Pençeler
-## Özellikleri.txt). 0 = bu silah can çalmaz (diğer tüm silahler).
+## Özellikleri.txt). 0 = bu silah can emmez (diğer tüm silahler).
+## Kullanıcı isteği: "Pençenin can çalması can emme olarak gösterilecek ve
+## hesaplanacak, yani verilen hasarın %'liği olarak can yenileyecek" - bu alan
+## artık ("Can Emme") verilen hasarın YÜZDESİ (0.011 = %1.1): her isabette
+## hasar * lifesteal_percent kadar can yenilenir (bkz. _apply_weapon_lifesteal).
+## Alan adı (lifesteal_percent) player.gd/weapon_select/tooltip'lerle uyum için
+## korundu, sadece anlamı olasılıktan hasar-yüzdesine döndü.
 var lifesteal_percent: float = 0.0
 
 ## Tüfeğin delici mermisi: birincil hedeften SONRA bu kadar EK düşmana daha
@@ -383,6 +389,13 @@ var melee_slash_fx_scale_mult: float = 1.0
 ## kesilir). 0 = hızlandırma yapılmaz.
 @export var draw_sound_base_duration: float = 0.0
 @export var draw_sound_pitch_scale_max: float = 3.0
+## NOT (kullanıcı bildirimi: "arkada sürekli çalan, benim eklemediğim bir kalkan sesi ... savaşta
+## yay kullanırken oluyordu"): weapon_yay.tscn'in DrawSound'u kullanıcının bilerek sildiği
+## yay_draw.mp3'ün yerine konmuş 8,95 sn'lik bir "Channel Power Up LOOP" dosyasıydı - her atışta
+## baştan başlatılıp savaş boyunca sürekli bir vızıltı gibi çalıyordu. Yayın çekme sesi artık YOK
+## (düğüm sahneden kaldırıldı, bu değişken null kalır ve aşağıdaki `if draw_sound` korumaları
+## sessizce atlar). Yeni bir çekme sesi eklenecekse KISA (~1 sn altı, döngü olmayan) bir dosya olmalı
+## (bkz. tests/test_weapon_sounds_not_long.gd).
 @onready var draw_sound: AudioStreamPlayer2D = get_node_or_null("DrawSound")
 ## Ok görseli çekiliş sırasında yayın üzerinde durur - atış anında gizlenir,
 ## bir sonraki çekilişte tekrar görünür olur (bkz. weapon_yay.tscn Icon/
@@ -2481,12 +2494,16 @@ func _apply_weapon_lifesteal(amount: float) -> void:
 	var max_hp: float = parent.get("max_health")
 	if cur_health >= max_hp or amount <= 0.0:
 		return
-	## DÜZELTME (kullanıcı isteği: "can çalma sistemi komple değişiyor" - bkz.
-	## player.gd::on_damage_dealt üstündeki AYNI DÜZELTME notu) - artık
-	## hasardan bağımsız, sabit 1 can yenileme İHTİMALİ.
-	if randf() >= lifesteal_percent:
-		return
-	var new_health: float = min(max_hp, cur_health + 1.0)
+	## Kullanıcı isteği: "Pençenin can çalması can emme olarak gösterilecek ve
+	## hesaplanacak yani bu can emme verilen hasarın %'liği olarak can
+	## yenileyecek (tıpkı kurt adamdaki gibi)". ESKİ DÜZELTME (bkz. player.gd::
+	## on_damage_dealt - genel Can Çalma kartı/eşyası için "%X ihtimalle 1 can")
+	## Pençe'nin KENDİ can emmesini de olasılığa çevirmişti; bu geri alındı:
+	## Pençe artık DETERMİNİSTİK, vurduğu hasarın lifesteal_percent'i kadar
+	## can yeniler (Kurt Adam'ın Vahşi Kesik'i gibi hasar tabanlı; oradaki genel
+	## %33 GameManager.LIFESTEAL_EFFECTIVENESS çarpanı BİLEREK uygulanmıyor -
+	## silah kartında/tooltip'inde yazan yüzde ile gerçekte yenilenen aynı olsun).
+	var new_health: float = min(max_hp, cur_health + amount * lifesteal_percent)
 	parent.set("health", new_health)
 	if parent.has_signal("health_changed"):
 		parent.emit_signal("health_changed", new_health, max_hp)

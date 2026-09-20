@@ -131,10 +131,14 @@ const DEFS := {
 		"name": "Vampir Dişi",
 		## Kullanıcı isteği: "Can çalma veren tüm statları %70 azalt (Kurt Adam
 		## ve Pençe hariç)" - 0.01 -> 0.003.
-		"desc": "%0.3 can çalma.\nPasif: Bir hedefi katletmek 1 can yeniler.",
+		## SONRAKİ TUR (kullanıcı isteği: "can çalma tier 1: %1, tier 2: %1.5, tier 3:
+		## %2, tier 4: %2.5"): taban 0.003 -> 0.01; ITEM_TIER_POWER (x1/1.5/2/2.5)
+		## ile çarpılınca tam bu merdiveni veriyor (bkz. TierSystem.lifesteal_
+		## percent_for_tier - level atlama kartıyla aynı sayılar).
+		"desc": "%1 can çalma.\nPasif: Bir hedefi katletmek 1 can yeniler.",
 		"cost_base": 55,
 		"stats": {
-			"lifesteal_percent": 0.003,
+			"lifesteal_percent": 0.01,
 			"item_kill_heal_amount": 1.0,
 		},
 	},

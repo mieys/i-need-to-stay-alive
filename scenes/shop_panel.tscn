@@ -1138,13 +1138,13 @@ custom_minimum_size = Vector2(114, 185)
 clip_contents = true
 layout_mode = 2
 tooltip_text = "Ekstra silah, yakın dövüş.
-Kendi verdiği hasardan can
-çalar. Hasar 20 +
+Verdiği hasarın yüzdesi kadar
+can emer. Hasar 20 +
 tier başına +20, menzil
-110. Can çalma tabanı
+110. Can emme tabanı
 %0.3, 10 seviyeye kadar
 yükseltilebilir; 3/5/7/10. seviyelerde kümülatif
-+%0.2 can çalma bonusu
++%0.2 can emme bonusu
 eklenir (10. seviyede %1.1'e
 ulaşır)."
 mouse_default_cursor_shape = 2
@@ -1487,7 +1487,7 @@ custom_minimum_size = Vector2(114, 185)
 clip_contents = true
 layout_mode = 2
 tooltip_text = "Dengeli bir kalkan. 150 kalkan
-gücü, %60 hasar emilimi.
+gücü, %65 hasar emilimi.
 Vurulduktan 8 saniye sonra
 yenilenmeye başlar (10/sn).
 Her seviye +10 güç, +1
@@ -1537,7 +1537,7 @@ custom_minimum_size = Vector2(114, 185)
 clip_contents = true
 layout_mode = 2
 tooltip_text = "Hızlı yenilenen ama zayıf bir
-kalkan. 90 kalkan gücü, %50
+kalkan. 90 kalkan gücü, %55
 hasar emilimi. Vurulduktan 4.5
 saniye sonra yenilenmeye
 başlar (12/sn). Her seviye +8
@@ -1589,7 +1589,7 @@ clip_contents = true
 layout_mode = 2
 tooltip_text = "Çok güçlü ama yavaş yenilenen
 bir kalkan. 180 kalkan gücü,
-%70 hasar emilimi. Vurulduktan
+%75 hasar emilimi. Vurulduktan
 9 saniye sonra yenilenmeye
 başlar (8/sn). Her seviye +16
 güç, +2 yenilenme, -0.1sn
@@ -1640,7 +1640,7 @@ clip_contents = true
 layout_mode = 2
 tooltip_text = "Savaş sırasında da yenilenir,
 hiç bekleme süresi yok. 100
-kalkan gücü, %55 hasar emilimi,
+kalkan gücü, %60 hasar emilimi,
 sürekli 6/sn yenilenir. Her
 seviye +10 güç, +2 yenilenme.
 30 seviyeye kadar
@@ -2625,7 +2625,7 @@ clip_contents = true
 layout_mode = 2
 tooltip_text = "Eşya - silah değil, sadece
 pasif stat/özellik sağlar.
-%0.3 can çalma. Pasif:
+%1 can çalma. Pasif:
 bir hedefi katletmek
 1 can yeniler.
 Geliştirilemez, fazladan kopya alınabilir,

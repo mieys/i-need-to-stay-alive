@@ -90,7 +90,7 @@ const WEAPON_DESCRIPTIONS := {
 	"boomerang": "HASAR: 16 + %90 saldırı gücü · Ateş hızı 0.3sn · Menzil 167 · Gidip döner, 2 kez vurabilir\nKADEME (100): +16 hasar/kademe. 30/50/70/100'da kümülatif +%10 fırlatma/dönüş hızı (10'da +%40).",
 	"buz_asasi": "HASAR: 12 + %77 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Her isabette boss olmayan hedefi 3sn dondurur · Donmamış hedefleri önceliklendirir\nKADEME (100): +12 hasar ve +%6 ateş hızı/kademe. Donma süresi ve donmamış hedef önceliği değişmez.",
 	"fisek": "HASAR: 14 + %230 saldırı gücü (sadece alan hasarı) · Ateş hızı 3.7sn · Menzil 252\nKADEME (100): Hasar kademeyle büyümez. 30/50/70/100'da kümülatif +%15 patlama yarıçapı (10'da +%60).",
-	"pence": "HASAR: 20 + %100 saldırı gücü · Yakın dövüş (menzil 110) · Kendi hasarından can çalar\nKADEME (100): +20 hasar/kademe. Can çalma tabanı %0.3; 30/50/70/100'da +%0.2 (10'da %1.1).",
+	"pence": "HASAR: 20 + %100 saldırı gücü · Yakın dövüş (menzil 110) · Verdiği hasarın yüzdesi kadar can emer\nKADEME (100): +20 hasar/kademe. Can emme tabanı %0.3; 30/50/70/100'da +%0.2 (10'da %1.1).",
 	"topuz": "HASAR: 20 + %105 saldırı gücü · Yakın dövüş (menzil 120) · Geniş alan hasarı\nKADEME (100): +20 hasar/kademe. 30/50/70/100'da kümülatif +%10 kalkan delme (10'da +%40).",
 	"uzunkilic": "HASAR: 18 + %100 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş\nKADEME (100): Hasar kademeyle büyümez. +%5 kalkan delme/kademe. 30/50/70/100'da kümülatif +%10 ekstra silah hasarı (10'da +%40).",
 }

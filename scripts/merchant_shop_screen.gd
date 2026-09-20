@@ -11,9 +11,13 @@ extends CanvasLayer
 ## aynı teknikle (hiç .tscn yok, weapon_select_screen.gd gibi tamamen kodla
 ## inşa ediliyor) kuruluyor - ama chest_menu.gd'nin aksine (1 kart, seç-ve-
 ## kapan) burası GERÇEK bir dükkan: 6 kart AYNI ANDA gösterilir, her kartın
-## KENDİ mini "AL" butonu var (kullanıcı isteği), istenildiği kadar satın
-## alınabilir, "AL" tekrar tekrar kullanılabilir (chest_menu.gd'deki gibi
-## bir kere seçip kapanmıyor).
+## KENDİ mini "AL" butonu var (kullanıcı isteği), kapanmadan birden fazla
+## kart alınabilir (chest_menu.gd'deki gibi bir kere seçip kapanmıyor).
+## Kullanıcı isteği: "tüccarın her gelişi başına her itemden sadece 1 tane
+## alabilmeliydik (rerolla tekrar o itemden gelirse bu alamama sınırına dahil
+## değildir)" - HER kart (eşya, silah, kalkan) ziyaret başına kişi başı SADECE
+## 1 kez alınabilir, sonra "SATILDI" olur (bkz. entry["sold"]). Sahip olunan bir
+## silahın dükkandaki kartı da alınabilir (yeni bağımsız kopya, boş slot varsa).
 ##
 ## BİLİNÇLİ OLARAK get_tree().paused = true YOK (chest_menu.gd/level_up_
 ## screen.gd'nin AKSİNE): sandık/level kartı TÜM takımın senkronize karar
@@ -90,17 +94,21 @@ var _merchant: Node = null
 var _grid: GridContainer = null
 var _reroll_btn: Button = null
 
-## Kullanıcı isteği: "seyyar satıcıda çıkan itemlerin her biri sadece 1 kez
-## satın alınabilir" - SADECE "item" tipi (pasif eşya) kartlar için: silah
-## kopyası (birden fazla kopya = level yükseltme malzemesi) ve kalkan
-## seviyesi (her AL bir seviye daha yükseltir) tekrar tekrar satın alınabilir
-## OLMAK ÜZERE tasarlandı, o ikisine dokunulmadı. Stok index'ine göre tutulur
-## (aynı eşya/tier iki farklı karttaysa ikisi ayrı sayılır).
-## DÜZELTME (kullanıcı bildirimi: "dükkanı kapatıp tekrar açınca aynı şeyi
-## tekrar alabiliyoruz") - bu dizi ARTIK burada YAŞAMIYOR, bkz. traveling_
-## merchant.gd sold_item_indices (bu ekran her açılışta sıfırdan kurulup
-## kapanışta queue_free() olduğu için burada tutmak ziyaret boyunca kalıcı
-## olamıyordu) - _merchant üzerinden okunup yazılıyor.
+## "Satıldı" kaydı KARTIN KENDİSİNDE tutulur (entry["sold"], bkz. _entry_sold):
+## entry Dictionary'leri TravelingMerchant._current_stock içinde yaşar ve bu ekran
+## AYNI Array/Dictionary nesnelerini paylaşır - ekranı kapatıp AYNI ziyaret içinde
+## tekrar açmak kaydı sıfırlamaz (bkz. kullanıcı bildirimi: "dükkanı kapatıp tekrar
+## açınca aynı şeyi tekrar alabiliyoruz"), reroll ya da yeni ziyaret taze
+## Dictionary'ler üretir, yani hak kendiliğinden yenilenir.
+## DÜZELTME (kullanıcı bildirimi: "envanterimizde sahip olduğumuz silahları bir
+## daha alamıyoruz ... her yenilendiğinde herkesin 1 kez alma hakkı olmalıydı"):
+## eskiden kural SADECE "item" kartlarına uygulanıyordu, silah kartı için bunun
+## yerine "zaten sahipsen alamazsın" engeli konmuştu (yanlış yorum) - artık her
+## kart tipi aynı "ziyaret başına 1 kez" kuralına tabi, sahiplik engeli yok.
+## Eskiden kayıt stok INDEX'ine göre TravelingMerchant.sold_item_indices'teydi;
+## _sort_stock_by_cost() her açılışta diziyi YERİNDE yeniden sıraladığı ve silah
+## fiyatı sahip olunan silah sayısına bağlı olduğu için (bkz. _entry_cost) index
+## kayıtları başka bir karta kayabiliyordu.
 
 var _details_name: Label
 var _details_tier: Label
@@ -602,16 +610,13 @@ func _owned_shield_type() -> String:
 	return ""
 
 
-## bkz. _sold_item_indices üstündeki DÜZELTME notu - kalıcı depo artık
-## _merchant (TravelingMerchant) üzerinde, _merchant geçersizse (olağanüstü
-## bir durum, normalde setup() ile hep geçerli bir referans gelir) hiçbir
-## şey satılmamış gibi güvenli bir varsayılana düşer.
-func _sold_indices() -> Array:
-	return _merchant.sold_item_indices if _merchant and is_instance_valid(_merchant) else []
+## bkz. yukarıdaki "Satıldı kaydı" notu.
+func _entry_sold(entry: Dictionary) -> bool:
+	return bool(entry.get("sold", false))
 
 
-func _entry_can_buy(entry: Dictionary, index: int) -> bool:
-	if entry.get("type") == "item" and _sold_indices().has(index):
+func _entry_can_buy(entry: Dictionary, _index: int) -> bool:
+	if _entry_sold(entry):
 		return false
 	var key: String = entry.get("key", "")
 	var cost: int = _entry_cost(entry)
@@ -624,12 +629,9 @@ func _entry_can_buy(entry: Dictionary, index: int) -> bool:
 				max_slots = _player.get_max_item_slots()
 			return GameManager.owned_items.size() < max_slots
 		"weapon":
-			## DÜZELTME (kullanıcı isteği: "shopta ki shop page den aynı
-			## silah birden fazla alınmaz") - kalkanın hemen altındaki
-			## "owned == '' or owned == key" deseniyle AYNI fikir: zaten
-			## sahip olunan bir silah türü bir daha satın alınamaz.
-			if GameManager.owned_weapons.any(func(w): return w.get("key", "") == key):
-				return false
+			## Sahip olunan bir silah türü de alınabilir ("ateş asam var, boş slotum var
+			## ama dükkandaki ateş asasını alamıyorum" bildirimi) - kural "kart başına
+			## ziyaret başına 1 kez" (bkz. _entry_sold), sahiplik engeli DEĞİL.
 			var max_w: int = MAX_OWNED_WEAPONS
 			if _player and _player.has_method("get_max_owned_weapons"):
 				max_w = _player.get_max_owned_weapons()
@@ -657,7 +659,7 @@ func _on_buy_pressed(index: int) -> void:
 			if _player and _player.has_method("buy_item") and _player.buy_item(key, power_mult):
 				GameManager.gold -= cost
 				GameManager.owned_items.append({"key": key, "spent": cost, "power": power_mult, "tier": int(entry.get("tier", 1))})
-				_sold_indices().append(index)
+				entry["sold"] = true
 		"weapon":
 			## bkz. shop_panel.gd _on_buy_copy / chest_menu.gd _on_al_pressed
 			## AYNI sıra: önce deftere ekle, sonra gerçek silah node'unu spawn et.
@@ -665,12 +667,14 @@ func _on_buy_pressed(index: int) -> void:
 			GameManager.owned_weapons.append({"key": key, "level": 1, "spent": cost})
 			if _player and _player.has_method("buy_weapon_copy"):
 				_player.buy_weapon_copy(key, 1)
+			entry["sold"] = true
 		"shield":
 			var next_level: int = int(GameManager.get(key + "_level")) + 1
 			GameManager.gold -= cost
 			GameManager.set(key + "_level", next_level)
 			if _player and _player.has_method("refresh_shield_stats"):
 				_player.refresh_shield_stats()
+			entry["sold"] = true
 	_refresh_all_buy_states()
 	if _selected_index == index:
 		_refresh_details()
@@ -679,7 +683,7 @@ func _on_buy_pressed(index: int) -> void:
 func _refresh_all_buy_states() -> void:
 	for i in range(_stock.size()):
 		var entry: Dictionary = _stock[i]
-		var sold: bool = entry.get("type") == "item" and _sold_indices().has(i)
+		var sold: bool = _entry_sold(entry)
 		_buy_buttons[i].disabled = not _entry_can_buy(entry, i)
 		_buy_buttons[i].text = "SATILDI" if sold else "AL"
 		_price_labels[i].text = "%d Altın" % _entry_cost(entry)

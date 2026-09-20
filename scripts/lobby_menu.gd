@@ -141,6 +141,11 @@ func _ready() -> void:
 	_populate_character_grid()
 	_update_lobby_ui()
 	_on_character_pressed(1)
+	## Yeniden başlatma onaylandıysa (bkz. network_manager.gd _return_to_lobby_for_restart) herkes
+	## buraya döner: karakter seçimi yeniden yapılır, hazır olunur, host oyunu başlatır.
+	if NetworkManager.restart_returned_to_lobby:
+		NetworkManager.restart_returned_to_lobby = false
+		status_label.text = "Yeniden başlatma onaylandı: karakterini yeniden seç ve hazır ol, host oyunu başlatsın."
 	
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir

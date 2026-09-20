@@ -39,6 +39,17 @@ const WEIGHTS := [60.0, 16.0, 5.0, 1.0]
 ## traveling_merchant.gd) varsayılan luck=0 ile eskisi gibi ETKİLENMİYOR.
 const TIER_LUCK_WEIGHT_BONUS_PER_POINT := 0.015
 
+## Kullanıcı isteği: "Can çalma statlarını düzenliyoruz, tier 1: %1, tier 2: %1.5,
+## tier 3: %2, tier 4: %2.5 can çalma" - level atlama kartındaki "Can Çalma"
+## (bkz. player.gd apply_upgrade "lifesteal" dalı ve level_up_screen.gd
+## _scaled_desc_value ile kartta gösterilen sayı) İÇİN TEK kaynak. Vampir Dişi
+## eşyasının (bkz. items.gd) tier basamakları da ITEM_TIER_POWER (x1/1.5/2/2.5)
+## ile bu AYNI %1/%1.5/%2/%2.5 merdivenini veriyor (eşya tabanı %1) - iki
+## kaynak aynı sayıları üretsin diye eşya tabanı bu merdivenin ilk basamağına
+## eşitlendi.
+static func lifesteal_percent_for_tier(tier: int) -> float:
+	return 0.01 + 0.005 * float(clampi(tier, 1, NAMES.size()) - 1)
+
 ## Kart arkaplanı: level atlama kartlarının çizilmiş 4 tier çerçevesi
 ## (eskiden SADECE level_up_screen.gd'nin kendi TIER_FRAME_TEXTURES'ıydı).
 ## Kullanıcı isteği: "seyyar satıcı eşyalarının / sandık ödülü kartının

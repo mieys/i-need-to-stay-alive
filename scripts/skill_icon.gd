@@ -35,6 +35,8 @@ var tooltip_panel: PanelContainer = null
 func _ready() -> void:
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
+	resized.connect(_layout_stack_badge)
+	_layout_stack_badge()
 
 func _process(delta: float) -> void:
 	if tooltip_panel and is_instance_valid(tooltip_panel) and tooltip_panel.visible:
@@ -102,6 +104,41 @@ func _on_mouse_entered() -> void:
 		## gömülü "(Xsn bekleme)" sayısı artık yukarıda zaten hesaplanmış GERÇEK
 		## current_cd ile değiştiriliyor, cd_text ile TUTARLI olsun diye.
 		desc = _apply_live_cooldown_to_desc(desc, current_cd)
+	elif name == "Skill3Icon":
+		## DÜZELTME (kullanıcı bildirimi: "Tüm ultilerin yetenek açıklamalarında
+		## ... sorun var, ulti açıklamaları yanlış gösteriliyor") - R ikonu
+		## (Skill3Icon) için bu zincirde HİÇ dal yoktu, aşağıdaki genel "else"
+		## (TEMEL/E) dalına düşüp E yeteneğinin adını/açıklamasını/bekleme
+		## süresini ve "[E]" tuş etiketini gösteriyordu. Artık R'nin kendi
+		## skill3_* alanları ve SKILL3_TIMING kullanılıyor.
+		title = def.get("skill3_name", "3. Yetenek") as String
+		if not name_override.is_empty():
+			title = name_override
+		desc = def.get("skill3_desc", "3. yetenek açıklaması bulunmuyor.") as String
+		if not desc_override.is_empty():
+			desc = desc_override
+		keybind_text = "R"
+
+		var base_cd3: float = 15.0
+		var current_cd3: float = 15.0
+		var skill3_id_val: int = def.get("skill3", 0) as int
+		if player and is_instance_valid(player) and player.has_method("get_skill3_id"):
+			skill3_id_val = player.get_skill3_id()
+		if player and is_instance_valid(player) and "SKILL3_TIMING" in player:
+			## Büyücü Kız'ın R varyasyonları (Hortum/Meteor) SKILL3_TIMING'de değil,
+			## E ile paylaşılan SKILL2_TIMING kimlik uzayında (bkz. player.gd
+			## BUYUCU_VARIATION_SKILL2_IDS) - orada da aranır.
+			var timing3: Dictionary = player.SKILL3_TIMING.get(skill3_id_val, player.SKILL2_TIMING.get(skill3_id_val, {"cooldown": 15.0})) as Dictionary
+			base_cd3 = timing3["cooldown"] as float
+			var cdr3: float = float(player.cooldown_reduction_percent) if "cooldown_reduction_percent" in player else 0.0
+			current_cd3 = base_cd3 * (1.0 - cdr3)
+		else:
+			current_cd3 = base_cd3
+		if current_cd3 != base_cd3:
+			cd_text = "Bekleme Süresi: %.1fs [color=#88ff88](Base: %.1fs)[/color]" % [current_cd3, base_cd3]
+		else:
+			cd_text = "Bekleme Süresi: %.1fs" % base_cd3
+		desc = _apply_live_cooldown_to_desc(desc, current_cd3)
 	else:
 		## DÜZELTME (Büyücü Kız'ın 4 varyasyonlu TEMEL yeteneği): name_override/
 		## desc_override doluysa (hud.gd _process, sadece Büyücü Kız seçiliyken)
@@ -373,6 +410,53 @@ func set_stack_count(n: int) -> void:
 		return
 	stack_badge.text = str(n)
 	stack_badge.visible = true
+	_layout_stack_badge()
+
+
+## Rozetin ikonun SAĞ-ÜST köşesinde, ikonun İÇİNDE durmasını KODDAN garanti eder.
+## DÜZELTME (kullanıcı bildirimi: "yük göstergeleri skill çerçevesinin dışında
+## gösteriliyor tam skill penceresinin üstünde olmalı", daha önce de iki kez
+## "içinde/sağ üstte olmalı" denmişti) - kök neden: hud.tscn'deki StackBadge
+## Label'larında `layout_mode = 0` iken `anchor_left = 1.0` yazılı ama Godot
+## yüklerken anchor_left'i 0.0'a geri çekiyor (çalışma anında ölçüldü:
+## anchors L/R = 0.0/1.0, pos=(-30,4), size=(78,26)) - yani rozet 78px genişliğinde
+## ve ikonun SOLUNA taşan bir kutu oluyordu, _draw_charge_ring de tam bu kutunun
+## etrafına çerçeve çizip Q/E ikonlarının üstüne taşıyordu. .tscn'deki anchor/
+## offset değerlerine hiç güvenilmiyor: anchor'lar sol-üste sabitlenip konum ve
+## boyut ikonun KENDİ boyutundan hesaplanıyor (hem hud.tscn'deki üç hem
+## hud.gd'nin kodla kurduğu R ikonu için aynı yol).
+## GÖRÜNEN çerçeve ikon kontrolünün KENDİ kenarında değil, BORDER (7px) içeride
+## (bkz. _draw: inner = outer.grow(-BORDER)) - rozet+halka (3px pay) bu iç alanın
+## içinde kalsın diye kenardan BORDER + halka payı (3) + 1 = 11px içeride.
+const STACK_BADGE_MARGIN := 11.0
+## Küçük ikonlarda (32px pasif ikonu: iç alan sadece 18px) yük halkası çizilmediği
+## için halka payı ayrılmıyor, sadece çerçeve kalınlığı (BORDER) + 1px kalıyor.
+const STACK_BADGE_MARGIN_SMALL := 8.0
+const STACK_BADGE_MIN_FONT := 10
+var _badge_base_font_size: int = -1
+
+func _layout_stack_badge() -> void:
+	if stack_badge == null or not is_instance_valid(stack_badge):
+		return
+	stack_badge.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	stack_badge.autowrap_mode = TextServer.AUTOWRAP_OFF
+	stack_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	stack_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var margin: float = STACK_BADGE_MARGIN if size.x >= 44.0 else STACK_BADGE_MARGIN_SMALL
+	## Sahnede verilen font boyutu ilk seferde hatırlanır; sayı genişleyip (ör. 2-3
+	## haneli ruh sayısı) çerçevenin iç alanına sığmazsa font kademeli küçültülür.
+	if _badge_base_font_size < 0:
+		_badge_base_font_size = stack_badge.get_theme_font_size("font_size")
+	var fit_width: float = size.x - 2.0 * margin
+	var font_size: int = _badge_base_font_size
+	stack_badge.add_theme_font_size_override("font_size", font_size)
+	while font_size > STACK_BADGE_MIN_FONT and stack_badge.get_combined_minimum_size().x > fit_width:
+		font_size -= 2
+		stack_badge.add_theme_font_size_override("font_size", font_size)
+	var badge_size: Vector2 = stack_badge.get_combined_minimum_size()
+	stack_badge.size = badge_size
+	stack_badge.position = Vector2(size.x - margin - badge_size.x, margin)
+	queue_redraw()
 
 
 ## Kullanıcı isteği: "yük biriken yeteneği olan karakterlerde (assasin,

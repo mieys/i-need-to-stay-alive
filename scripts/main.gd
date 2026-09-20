@@ -1506,7 +1506,7 @@ func _on_restart_request_received() -> void:
 	panel.add_child(vbox)
 
 	var msg := Label.new()
-	msg.text = "Host oyunu yeniden başlatmak istiyor.\nOnaylıyor musunuz?"
+	msg.text = "Host oyunu yeniden başlatmak istiyor.\nOnaylarsanız herkes odaya dönüp\nkarakterini yeniden seçecek. Onaylıyor musunuz?"
 	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	msg.add_theme_font_size_override("font_size", 24)
 	msg.add_theme_color_override("font_color", Color(0.95, 0.9, 0.78))
@@ -1550,10 +1550,10 @@ func _hide_restart_confirm_dialog() -> void:
 
 
 ## Oylama sonucu (bkz. network_manager.gd _rpc_broadcast_restart_vote_result) -
-## TÜM peer'lerde (host dahil, "call_local") tetiklenir. Onaylandıysa host
-## zaten _rpc_start_game() ile sahneyi değiştirecek (bkz. o fonksiyon), burada
-## ekstra bir şey yapmaya gerek yok. Reddedildiyse/zaman aşımına
-## uğradıysa oyun kaldığı yerden devam eder.
+## TÜM peer'lerde (host dahil, "call_local") tetiklenir. Onaylandıysa
+## NetworkManager._return_to_lobby_for_restart() herkesi odaya (lobi) döndürür
+## (duraklatmayı da orada kaldırır), burada ekstra bir şey yapmaya gerek yok.
+## Reddedildiyse/zaman aşımına uğradıysa oyun kaldığı yerden devam eder.
 func _on_restart_vote_result(approved: bool, rejecter_name: String) -> void:
 	_hide_restart_confirm_dialog()
 	## bkz. pause_menu.gd'nin AYNI restart_vote_result dinleyicisi - oylama

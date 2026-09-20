@@ -1,10 +1,9 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/weapon.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/arrow_projectile.tscn" id="2"]
 [ext_resource type="SpriteFrames" path="res://assets/weapons/yay/draw_frames.tres" id="3"]
 [ext_resource type="Texture2D" path="res://assets/weapons/yay/arrow.png" id="4"]
-[ext_resource type="AudioStream" path="res://Sound FX Starter Pack Vol. 1/Medieval/Channel Power Up Loop.wav" id="5"]
 [ext_resource type="Script" path="res://scripts/random_sfx_player.gd" id="6"]
 [ext_resource type="AudioStream" path="res://assets/audio/yay_fire_1.mp3" id="7"]
 [ext_resource type="AudioStream" path="res://assets/audio/yay_fire_2.mp3" id="8"]
@@ -41,11 +40,6 @@ texture_filter = 1
 scale = Vector2(3.0, 3.0)
 texture = ExtResource("4")
 visible = false
-
-[node name="DrawSound" type="AudioStreamPlayer2D" parent="."]
-stream = ExtResource("5")
-volume_db = -10.0
-max_distance = 1500.0
 
 [node name="AttackSound" type="Node2D" parent="."]
 script = ExtResource("6")

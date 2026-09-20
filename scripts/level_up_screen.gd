@@ -90,7 +90,7 @@ const UPGRADES = [
 	## apply_upgrade "lifesteal" dalı - mekanizma zaten vardı, kart yoktu).
 	{"id": "knockback", "title": "Geri Tepme", "desc": "+19.5", "cat": "Saldırı", "color": CAT_ATTACK},
 	## Kullanıcı isteği: "Can çalma veren tüm statları %70 azalt" - +%1 -> +%0.3.
-	{"id": "lifesteal", "title": "Can Çalma", "desc": "+%0.3", "cat": "Saldırı", "color": CAT_ATTACK},
+	{"id": "lifesteal", "title": "Can Çalma", "desc": "+%1", "cat": "Saldırı", "color": CAT_ATTACK},
 ]
 ## Kullanıcı isteği (1. tur): "kalkan emilimini ve geri tepmeyi kaldır, can
 ## yenilenmesini ekle" - "shield_protection" (o zamanki adıyla "Kalkan
@@ -463,7 +463,16 @@ func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 	## paylaşılan tier_mult eğrisinden BİLEREK çıkarıldı (bkz. player.gd
 	## apply_upgrade "lifesteal" dalı), burada da AYNI özel dal olmadan
 	## gösterilen sayı gerçek uygulanan değerden sapardı.
-	var scaled: float = rest.to_float() * (float(tier) if id == "lifesteal" else (1.0 + float(tier - 1) * 0.3))
+	## SONRAKİ DÜZELTME (kullanıcı isteği: "can çalma tier 1: %1 ... tier 4:
+	## %2.5") - bkz. TierSystem.lifesteal_percent_for_tier (player.gd apply_upgrade
+	## ile TEK kaynak). Ayrıca _get_friendly_desc bu fonksiyona eskiden `id`
+	## GEÇMİYORDU (yani üstteki özel dal kartta hiç çalışmıyordu, ekranda
+	## paylaşılan x1.3 eğrisiyle yanlış sayı görünüyordu) - artık geçiliyor.
+	var scaled: float
+	if id == "lifesteal":
+		scaled = TierSystem.lifesteal_percent_for_tier(tier) * 100.0
+	else:
+		scaled = rest.to_float() * (1.0 + float(tier - 1) * 0.3)
 	var formatted: String
 	if is_equal_approx(scaled, round(scaled)):
 		formatted = str(int(round(scaled)))
@@ -473,7 +482,7 @@ func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 
 
 func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
-	var value: String = _scaled_desc_value(upgrade["desc"] as String, tier)
+	var value: String = _scaled_desc_value(upgrade["desc"] as String, tier, str(upgrade["id"]))
 	var clean_val: String = value.replace("+", "").replace("-", "")
 	var title_name: String = upgrade["title"] as String
 	var title_color: String = STAT_TITLE_COLORS.get(upgrade["id"], "#f0e6d2")

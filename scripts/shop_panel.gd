@@ -941,11 +941,10 @@ func _display_cost_text(key: String) -> String:
 			return "DOLU"
 		return "%d Altın" % _item_cost(key, owned_count + 1)
 	else:
-		## Kullanıcı isteği: "shopta ki shop page den aynı silah birden fazla
-		## alınmaz" - zaten sahip olunan bir silah türü bir daha satın
-		## alınamaz (bkz. _on_buy_copy/_refresh_preview'daki AYNI kontrol).
-		if _count_owned(key) > 0:
-			return "SAHİPSİN"
+		## Sahip olunan bir silah türü de tekrar alınabilir (kullanıcı düzeltmesi: "envanterimizde
+		## sahip olduğumuz silahları bir daha alamıyoruz" - "aynı silah birden fazla alınmaz"
+		## isteği aslında seyyar satıcıda kart başına ziyaret başına 1 kez alma hakkıydı, bkz.
+		## merchant_shop_screen.gd _entry_sold; bu kalıcı dükkanda sadece slot sınırı geçerli).
 		if GameManager.owned_weapons.size() >= _max_owned_weapons():
 			return "DOLU"
 		return "%d Altın" % _copy_cost(key, GameManager.owned_weapons.size() + 1)
@@ -1214,13 +1213,6 @@ func _max_owned_weapons() -> int:
 func _on_buy_copy(item: String) -> void:
 	if GameManager.owned_weapons.size() >= _max_owned_weapons():
 		return
-	## Kullanıcı isteği: "shopta ki shop page den aynı silah birden fazla
-	## alınmaz" - önizleme paneli/kart etiketi (bkz. _refresh_preview/
-	## _display_cost_text) buton devre dışı bırakıp bunu zaten engelliyor,
-	## ama ikisi de sadece GÖRSEL - hızlı art arda tıklama gibi durumlara
-	## karşı gerçek satın alma burada da AYRICA korunuyor.
-	if _count_owned(item) > 0:
-		return
 	var cost: int = _copy_cost(item, GameManager.owned_weapons.size() + 1)
 	if GameManager.gold < cost:
 		return
@@ -1441,14 +1433,8 @@ func _refresh_preview() -> void:
 		preview_sell_button.visible = false
 		var count: int = _count_owned(selected_key)
 		preview_status_label.text = "Sahip olunan: %d" % count
-		## Kullanıcı isteği: "shopta ki shop page den aynı silah birden fazla
-		## alınmaz" - kalkanın "Önce X Sat" desenindeki AYNI fikir, ama
-		## satılabilir bir şey olmadığı için burada sadece devre dışı
-		## bırakılıp "zaten sahipsin" gösteriliyor.
-		if count > 0:
-			preview_buy_button.text = "ZATEN SAHİPSİN"
-			preview_buy_button.disabled = true
-		elif GameManager.owned_weapons.size() >= _max_owned_weapons():
+		## Sahip olunan silah da tekrar alınabilir (bkz. _display_cost_text notu) - sadece slot sınırı.
+		if GameManager.owned_weapons.size() >= _max_owned_weapons():
 			preview_buy_button.text = "DOLU"
 			preview_buy_button.disabled = true
 		else:

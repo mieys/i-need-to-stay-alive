@@ -205,6 +205,24 @@ const EXTRA_PLAYER_SPAWN_RATE := 0.25
 const DIRECTIONAL_SPAWN_CHANCE := 0.6 ## bu olasılıkla dar bir açıda ÖNDEN, kalanı eskisi gibi tam rastgele 360°
 const DIRECTIONAL_SPAWN_ARC_DEG := 100.0 ## yön-yanlı spawn'ın merkez yönün etrafında kaç derecelik bir yelpazeye yayılabileceği
 
+## Kullanıcı isteği: "tüm yaratıkların canını ve kalkanını %10 azalt ancak tekrar spawnlanma hızlarını
+## arttır" - _current_interval() bu çarpana bölünür (1.5 = %50 daha sık). Çarpan burada (export'lardan
+## AYRI) tutuluyor ki sahnede/ayarlarda ezilmiş base_interval/min_interval değerleri bunu etkisiz kılmasın.
+const SPAWN_RATE_MULT := 1.5
+
+## Kullanıcı isteği: "davranışsal olarak gittiğim yönlerdeki duvarların arkasında hızlı hızlı çok sayıda
+## spawnlanıp önünü kesmeye çalışsınlar oyuncuların" - oyuncu HAREKET EDERKEN, gittiği yönün önündeki bir
+## orman duvarının ARKASINDA (düz çizgi duvara çarpan, dolayısıyla sisle de gizli bir nokta) bir "pusu paketi"
+## (AMBUSH_PACK_MIN..MAX yaratık, dar bir kümede) belirir. Duvar-arkası uygun nokta bulunamazsa (açık arazi)
+## paket YOK, normal tek spawn olur. Pakette de yaratık sayısı yine _scaled_enemy_cap() ile sınırlı.
+const AMBUSH_PACK_CHANCE := 0.45 ## hareket eden oyuncu için bir spawn tetiklenişinin pusu paketi olma olasılığı
+const AMBUSH_PACK_MIN := 2
+const AMBUSH_PACK_MAX := 4
+const AMBUSH_PACK_SPREAD := 70.0 ## paket üyelerinin pusu noktasına en fazla uzaklığı
+const AMBUSH_ARC_DEG := 80.0 ## pusu noktası, oyuncunun gittiği yönün etrafında bu yelpazede aranır
+const AMBUSH_EXTRA_DISTANCE := 200.0 ## max_spawn_distance'ın ÖTESİNDE de aranır (duvarın arkası daha uzakta olabilir)
+const AMBUSH_ATTEMPTS := 14 ## duvar-arkası nokta için rastgele deneme sayısı
+
 ## Kullanıcı isteği: "karakter çok güçlüyse normalden daha fazla
 ## spawnlansın" - takım seviyesi o anki Kademe için "beklenenden" epey
 ## yüksekse (oyuncular zorluğa göre fazlasıyla güçlenmiş demektir) her
@@ -235,7 +253,13 @@ const POWER_MAX_EXTRA_SPAWNS := 4 ## tek tetiklenişte eklenebilecek en fazla ek
 ## yüzdeyle çarpıldı (kalkan havuzu = max_health × ratio olduğu için, bkz.
 ## enemy.gd enable_item_shield, ikisini ÜST ÜSTE bindirmek 2. turun istediği
 ## %20'den daha fazla bir kalkan düşüşüne yol açardı).
-const BOSS_HEALTH_MULT := 158.4 ## eskiden 176.0 (kullanıcı isteği: can %10 azalt)
+## Kullanıcı isteği (DÖRDÜNCÜ tur): "bossların canını ve kalkanını %20 düşür (şuanki değerlerini direkt %20
+## azalt)" - BOSS_HEALTH_MULT 158.4 -> 126.72 (×0.8). Boss kalkan havuzu max_health × BOSS_SHIELD_RATIO'dan
+## TÜRETİLDİĞİ için (bkz. enemy.gd enable_item_shield) kalkan da kendiliğinden tam %20 iner - BOSS_SHIELD_RATIO
+## BİLEREK değiştirilmedi (ikisi de çarpılsaydı kalkan %36 düşerdi, üçüncü turdaki notla AYNI tuzak).
+## Bosslar ayrıca aşağıdaki "tüm yaratıklar %10" azaltmasına (HEALTH_SHIELD_MULT) DAHİL EDİLMEDİ, kendi
+## çarpanları BOSS_HEALTH_SHIELD_MULT: iki azaltma üst üste binip %28 düşüş yapmasın, "direkt %20" olsun.
+const BOSS_HEALTH_MULT := 126.72 ## eskiden 158.4
 const BOSS_DAMAGE_MULT := 2.4 ## eskiden 1.8
 const BOSS_SCALE_MULT := 1.7
 
@@ -290,7 +314,12 @@ const GLOBAL_DEFENSE_BUFF := 1.2 ## eskiden 1.45 - can, kalkan için
 ## %10 arttır") - 2.4 -> 2.64 (×1.1). Bu çarpan boss'lara da _apply_global_
 ## buff üzerinden uygulandığı için (bkz. o fonksiyon), "tüm" isteği hem
 ## normal hem boss yaratıkları kapsıyor.
-const HEALTH_SHIELD_MULT := 2.64
+## Kullanıcı isteği: "Tüm yaratıkların canını ve kalkanını %10 azalt" - normal yaratıklar için 2.64 -> 2.376
+## (×0.9). Bosslar için bkz. BOSS_HEALTH_SHIELD_MULT.
+const HEALTH_SHIELD_MULT := 2.376
+## Bosslara uygulanan can/kalkan çarpanı - normal yaratıkların ESKİ değeri (2.64), yani bosslar "tüm
+## yaratıklar %10" azaltmasından muaf (bkz. BOSS_HEALTH_MULT üstündeki not: bosslar TAM %20 azalır).
+const BOSS_HEALTH_SHIELD_MULT := 2.64
 ## DÜZELTME (kullanıcı isteği: "yaratıkların hasarını %60 arttır") - 1.05 ->
 ## 1.68 (1.05 * 1.6).
 const GLOBAL_DAMAGE_BUFF := 1.68 ## sadece hasar için (eskiden ortak 1.3)
@@ -564,7 +593,7 @@ func _current_interval() -> float:
 	var t: float = GameManager.game_time
 	var solo_interval: float = max(min_interval, base_interval - t * difficulty_ramp)
 	var player_multiplier: float = 1.0 + float(_player_count() - 1) * EXTRA_PLAYER_SPAWN_RATE
-	return max(min_interval * 0.65, solo_interval / player_multiplier)
+	return max(min_interval * 0.65, solo_interval / player_multiplier) / SPAWN_RATE_MULT
 
 
 ## DÜZELTME (KRİTİK - kullanıcı bildirimi #30: "bir süre sonra yaratıklar
@@ -689,30 +718,142 @@ func _power_extra_spawn_count() -> int:
 	return clampi(int(levels_over / POWER_EXTRA_SPAWN_PER_LEVELS_OVER), 0, POWER_MAX_EXTRA_SPAWNS)
 
 
+## ==============================================================================
+## KADEME KAPISI (kullanıcı isteği: "Kademe ilerlemelerinde öldüremediğim yaratıkların yerini yeni kademe
+## yaratıklar alıyor, eskilerini öldürmeden yeni kademedekilerin gelememesi lazım")
+## Kademe zamana göre ilerler (_current_tier) ama SPAWN kademesi (_spawn_tier) ona ancak önceki kademelerin
+## SAĞ KALAN normal yaratıkları öldürülünce yetişir. Kapı kapalıyken yeni yaratık HİÇ doğmaz (eski kademeyi
+## sonsuz doğurmak temizlemeyi imkânsız kılardı); son yaratık ölünce yeni kademenin listesiyle spawn başlar.
+## Bosslar bu kapıya tabi DEĞİL: kendi zaman tetikleyicileriyle (BOSS_TIERS/FINAL_TIER) gelmeye devam eder ve
+## sağ kalan bir boss kapıyı tutmaz. Oyun süresi/boss zamanlaması hiçbir zaman durmaz - en kötü ihtimalle
+## (ör. ulaşılamayan tek bir eski yaratık) yeni yaratık gelmez, oyun kilitlenmez.
+## Sağ kalan yaratık "spawn_tier" meta'sıyla (bkz. _spawn_regular_enemy) işaretlenir; meta'sı olmayanlar
+## (bosslar, sonradan çağrılanlar, test yaratıkları) saymaz.
+## ==============================================================================
+var _spawn_tier: int = 1
+
+
+func _older_tier_survivor_count(time_tier: int) -> int:
+	var n: int = 0
+	for e: Node in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or e.get("is_dead") == true or e.is_in_group("boss"):
+			continue
+		var t: int = int(e.get_meta("spawn_tier", 0))
+		if t > 0 and t < time_tier:
+			n += 1
+	return n
+
+
+## Şu an spawn'da kullanılacak kademe; kapı kapalıysa (eski kademeden sağ kalan var) 0.
+func _resolve_spawn_tier() -> int:
+	var time_tier: int = _current_tier()
+	if _spawn_tier < time_tier and _older_tier_survivor_count(time_tier) == 0:
+		_spawn_tier = time_tier
+	return _spawn_tier if _spawn_tier >= time_tier else 0
+
+
+## Yeni kademe şu an eski kademenin sağ kalanlarını mı bekliyor (HUD/test için).
+func is_tier_gate_waiting() -> bool:
+	var time_tier: int = _current_tier()
+	return _spawn_tier < time_tier and _older_tier_survivor_count(time_tier) > 0
+
+
+## Spawn çapası olabilecek TÜM canlı, dışarıdaki oyuncular (yerel + uzak) - bkz. _find_any_living_player_anchor
+## (aynı "içerideki/satıcı bölgesindeki oyuncu dışarıda sayılmaz" kuralı).
+func _outdoor_living_players() -> Array[Node]:
+	var out: Array[Node] = []
+	var local_p: Node = get_tree().get_first_node_in_group("player")
+	if local_p and is_instance_valid(local_p) and local_p.get("is_dead") != true:
+		var indoors: bool = local_p.has_method("is_indoors_now") and local_p.is_indoors_now()
+		var in_zone: bool = local_p.has_method("is_in_merchant_zone_now") and local_p.is_in_merchant_zone_now()
+		if not indoors and not in_zone:
+			out.append(local_p)
+	if NetworkManager.is_multiplayer_active:
+		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+			if not is_instance_valid(rp) or rp.get("is_dead") == true:
+				continue
+			var rp_indoors: bool = rp.get("is_indoors") if "is_indoors" in rp else false
+			var rp_zone: bool = rp.get("is_in_merchant_zone") if "is_in_merchant_zone" in rp else false
+			if not rp_indoors and not rp_zone:
+				out.append(rp)
+	return out
+
+
+## Kullanıcı isteği: "önünü kesmeye çalışsınlar oyuncuların" (çoğul) - birden fazla dışarıdaki oyuncu varsa
+## her spawn için biri rastgele seçilir, böylece baskı sadece host'un karakterine değil herkese dağılır.
+## Tek oyuncu / kimse dışarıda değilse eski davranış (_find_any_living_player_anchor).
+func _pick_spawn_anchor() -> Node:
+	var candidates: Array[Node] = _outdoor_living_players()
+	if candidates.size() > 1:
+		return candidates[randi() % candidates.size()]
+	return _find_any_living_player_anchor()
+
+
+## Pusu noktası: center'dan bias_dir yönünde, oyuncuyla arasında bir orman duvarı olan (düz çizgi duvara
+## çarpan) serbest bir konum. Bulunamazsa null (çağıran normal spawn'a düşer).
+func _ambush_spawn_position(center: Vector2, bias_dir: Vector2) -> Variant:
+	var half_arc: float = deg_to_rad(AMBUSH_ARC_DEG) * 0.5
+	for _attempt in range(AMBUSH_ATTEMPTS):
+		var angle: float = bias_dir.angle() + randf_range(-half_arc, half_arc)
+		var dist: float = randf_range(min_spawn_distance, max_spawn_distance + AMBUSH_EXTRA_DISTANCE)
+		var pos: Vector2 = center + Vector2(cos(angle), sin(angle)) * dist
+		if GameManager.is_position_blocked_by_terrain(pos):
+			continue
+		if EnemyPathingScript.line_blocked(center, pos):
+			return pos
+	return null
+
+
+## Paketin i. üyesinin konumu: 0. üye pusu noktasının kendisi, diğerleri çevresinde dar bir kümede.
+func _ambush_pack_member_position(base: Vector2, index: int) -> Vector2:
+	if index == 0:
+		return base
+	for _attempt in range(6):
+		var candidate: Vector2 = base + Vector2.from_angle(randf() * TAU) * randf_range(20.0, AMBUSH_PACK_SPREAD)
+		if not GameManager.is_position_blocked_by_terrain(candidate):
+			return candidate
+	return base
+
+
 func _spawn_regular_enemy() -> void:
-	var anchor: Node = _find_any_living_player_anchor()
+	var anchor: Node = _pick_spawn_anchor()
 	if not anchor:
 		return
 	var anchor_pos: Vector2 = anchor.global_position
 	var bias_dir: Vector2 = _anchor_movement_direction(anchor)
 
-	var tier: int = _current_tier()
+	## Kademe kapısı (bkz. yukarıdaki not): eski kademeden sağ kalan varken yeni yaratık doğmaz.
+	var tier: int = _resolve_spawn_tier()
+	if tier <= 0:
+		return
 	var roster: Array = TIER_ROSTER.get(tier, [])
 	if roster.is_empty():
 		return
 	## kullanıcı isteği: "karakter çok güçlüyse normalden daha fazla
 	## spawnlansın" - bkz. _power_extra_spawn_count üstündeki not.
 	var spawn_count: int = 1 + _power_extra_spawn_count()
+	## Pusu paketi (bkz. AMBUSH_PACK_CHANCE): oyuncu hareket ediyorsa ve gittiği yönde duvar-arkası uygun bir
+	## nokta varsa tek yaratık yerine 2-4 kişilik bir küme orada doğar.
+	var ambush_pos: Variant = null
+	if bias_dir != Vector2.ZERO and randf() < AMBUSH_PACK_CHANCE:
+		ambush_pos = _ambush_spawn_position(anchor_pos, bias_dir)
+		if ambush_pos != null:
+			spawn_count += randi_range(AMBUSH_PACK_MIN, AMBUSH_PACK_MAX) - 1
 	for i in range(spawn_count):
 		if get_tree().get_nodes_in_group("enemies").size() >= _scaled_enemy_cap():
 			return
 		var id: String = roster[randi() % roster.size()]
-		var spawn_pos: Vector2 = _random_spawn_position(anchor_pos, false, bias_dir)
+		var spawn_pos: Vector2
+		if ambush_pos != null:
+			spawn_pos = _ambush_pack_member_position(Vector2(ambush_pos), i)
+		else:
+			spawn_pos = _random_spawn_position(anchor_pos, false, bias_dir)
 		var network_id: int = _next_network_enemy_id
 		_next_network_enemy_id += 1
 		var enemy = _spawn_creature(id, spawn_pos, network_id)
 		if not enemy:
 			continue
+		enemy.set_meta("spawn_tier", tier) ## bkz. Kademe kapısı notu (_older_tier_survivor_count)
 		if enemy.has_method("apply_tier_scaling"):
 			enemy.apply_tier_scaling(tier)
 		if tier >= REGULAR_SHIELD_MIN_TIER and enemy.has_method("enable_item_shield"):
@@ -895,7 +1036,8 @@ func _random_spawn_position(center: Vector2, is_boss: bool = false, bias_dir: Ve
 func _apply_global_buff(enemy: Node) -> void:
 	var extra_players: int = max(0, _player_count() - 1)
 	var multiplayer_defense_mult: float = 1.0 + float(extra_players) * 0.30
-	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * HEALTH_SHIELD_MULT
+	var health_shield_mult: float = BOSS_HEALTH_SHIELD_MULT if enemy.is_boss else HEALTH_SHIELD_MULT
+	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult
 	enemy.health = enemy.max_health
 	enemy.contact_damage *= GLOBAL_DAMAGE_BUFF
 	if enemy.ranged_damage > 0.0:
@@ -904,7 +1046,7 @@ func _apply_global_buff(enemy: Node) -> void:
 	# için item_shield_max ve item_shield_hp'yi de aynı (savunma) çarpanla
 	# büyütüyoruz.
 	if enemy.item_shield_max > 0.0:
-		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * HEALTH_SHIELD_MULT
+		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult
 		enemy.item_shield_hp = enemy.item_shield_max
 		enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
 	enemy.health_changed.emit(enemy.health, enemy.max_health)

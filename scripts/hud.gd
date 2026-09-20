@@ -369,7 +369,14 @@ func _create_skill3_icon() -> void:
 	icon.offset_bottom = 52.0
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.set_script(preload("res://scripts/skill_icon.gd"))
-	bar.add_child(icon)
+	## DÜZELTME (kullanıcı bildirimi: "Tüm ultilerin ... bekleme süreleri
+	## gösterilmiyor onun yerine içinde koyu bir bar doluyor") - kök neden:
+	## icon burada AĞACA EKLENİP çocukları (Cooldown/StackBadge...) ANCAK SONRA
+	## kuruluyordu; skill_icon.gd'nin `@onready var cooldown_label/stack_badge =
+	## get_node_or_null(...)` referansları ağaca girerken (_ready öncesi) çözülür,
+	## o an çocuklar henüz yoktu -> ikisi de null kalıyor, sayısal geri sayım ve
+	## yük rozeti R ikonunda HİÇ çalışmıyordu (sadece koyu "bekleme örtüsü"
+	## çiziliyordu). Artık çocuklar önce eklenir, ikon EN SON ağaca girer.
 
 	var bg := TextureRect.new()
 	bg.name = "BG"
@@ -422,6 +429,7 @@ func _create_skill3_icon() -> void:
 	stack_badge.text = "0"
 	icon.add_child(stack_badge)
 
+	bar.add_child(icon)
 	skill3_icon = icon
 
 

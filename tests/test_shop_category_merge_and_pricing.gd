@@ -78,25 +78,42 @@ func test_copy_cost_scales_with_total_owned_count() -> void:
 	panel.queue_free()
 
 
-## DÜZELTME (kullanıcı isteği: "shopta ki shop page den aynı silah birden
-## fazla alınmaz") - zaten sahip olunan bir silah türü bir daha
-## satın alınamamalı, dükkan bunu hem fiyat etiketinde ("SAHİPSİN") hem de
-## gerçek satın alma fonksiyonunda (_on_buy_copy) engellemeli.
-func test_owned_weapon_cannot_be_bought_again() -> void:
+## DÜZELTME (kullanıcı bildirimi: "dükkanda envanterimizde sahip olduğumuz silahları bir daha
+## alamıyoruz ... ateş asası varsa ve boş silah slotum olmasına rağmen dükkandaki ateş asasını
+## alamıyorum") - "aynı silah birden fazla alınmaz" isteği yanlış anlaşılmıştı: asıl kural seyyar
+## satıcıda kart başına ziyaret başına 1 kez alma hakkı (bkz. test_merchant_one_purchase_per_visit).
+## Bu kalıcı dükkanda sahip olunan silah TEKRAR alınabilmeli, sadece slot sınırı geçerli.
+func test_owned_weapon_can_be_bought_again_while_slots_remain() -> void:
 	var panel: Control = ShopPanelScene.instantiate()
 	add_child(panel)
 	panel._ready()
 	GameManager.owned_weapons = [{"key": "dagger", "level": 1, "spent": 0}]
+	GameManager.gold = 100000
 	assert(panel._count_owned("dagger") == 1, "dagger zaten sahip olunmali")
-	assert(panel._display_cost_text("dagger") == "SAHİPSİN",
-		"Sahip olunan silahin fiyat etiketi 'SAHIPSIN' olmali, bulunan: %s" % panel._display_cost_text("dagger"))
+	var label: String = panel._display_cost_text("dagger")
+	assert(label != "SAHİPSİN" and label.ends_with("Altın"),
+		"Sahip olunan silahin fiyat etiketi normal fiyat olmali, bulunan: %s" % label)
 	var gold_before: int = GameManager.gold
-	var count_before: int = GameManager.owned_weapons.size()
 	panel._on_buy_copy("dagger")
-	assert(GameManager.owned_weapons.size() == count_before,
-		"Zaten sahip olunan silah tekrar satin alinmamali")
-	assert(GameManager.gold == gold_before,
-		"Engellenen satin almada altin harcanmamali")
+	assert(GameManager.owned_weapons.size() == 2, "Sahip olunan silahin ikinci kopyasi alinabilmeli")
+	assert(GameManager.gold < gold_before, "Satin almada altin harcanmali")
+	GameManager.owned_weapons = []
+	panel.queue_free()
+
+
+## Slot doluysa (5/5) yine de alınamaz - sahiplik değil SLOT sınırı.
+func test_weapon_purchase_is_still_blocked_only_by_the_slot_cap() -> void:
+	var panel: Control = ShopPanelScene.instantiate()
+	add_child(panel)
+	panel._ready()
+	GameManager.owned_weapons = []
+	for i in range(ShopPanelScript.MAX_OWNED_WEAPONS):
+		GameManager.owned_weapons.append({"key": "dagger", "level": 1, "spent": 0})
+	GameManager.gold = 100000
+	assert(panel._display_cost_text("dagger") == "DOLU", "Slotlar doluyken etiket 'DOLU' olmali")
+	panel._on_buy_copy("dagger")
+	assert(GameManager.owned_weapons.size() == ShopPanelScript.MAX_OWNED_WEAPONS, "Slot siniri asilmamali")
+	GameManager.owned_weapons = []
 	panel.queue_free()
 
 

@@ -465,10 +465,19 @@ func all_players_loading_done() -> bool:
 ## yeniden başlatabilsin eskiden yeniden başlatmayı seçerek fakat önce diğer
 ## oyunculara onayı sorulsun") - SADECE host isteği başlatabilir; TÜM
 ## bağlı oyunculara bir Onayla/Reddet sorusu gider, HERKES onaylarsa
-## (host'un kendi isteği zaten kendiliğinden bir "evet" sayılır) yeniden
-## başlatma gerçekleşir - _rpc_start_game() ÇAĞRILIR (lobiden ilk başlatmayla
-## BİREBİR AYNI, kanıtlanmış mekanizma: GameManager.reset() + karakter
-## kurulumu + yükleme ekranı senkronu), ayrı bir "restart" akışı YOK.
+## (host'un kendi isteği zaten kendiliğinden bir "evet" sayılır) HERKES odaya
+## (lobi ekranına) döner: bağlantı ve oyuncu listesi korunur, "hazır" durumları
+## sıfırlanır, herkes karakterini YENİDEN seçip hazır olur ve host "OYUNU
+## BAŞLAT"a basınca normal start akışıyla (_rpc_start_game) yeni oyun başlar.
+## DÜZELTME (kullanıcı bildirimi: "yeniden başlat butonuna basıp onay alınca oyun
+## yeniden başlamıyor, ben zaten direkt aynı oyunu yeniden başlatsın istemiyorum,
+## odaya atıp var olan oyuncularla tekrar karakter seçimi yaparak başlasın"):
+##  1) kök neden - oylama sırasında ağaç DURAKLATILIYOR (pause_menu.gd/main.gd),
+##     onaylanınca kimse duraklatmayı kaldırmıyordu; eskiden doğrudan
+##     _rpc_start_game() ile açılan yükleme ekranı duraklı ağaçta hiç ilerlemeden
+##     (_process çalışmıyor) sonsuza dek takılıyordu. Artık _return_to_lobby_for_restart
+##     duraklatmayı kaldırır.
+##  2) akış - aynı oyuna doğrudan yeniden giriş yerine oda ekranı.
 ## Herhangi biri reddederse ya da RESTART_VOTE_TIMEOUT içinde herkes cevap
 ## vermezse istek İPTAL edilir, kimse yeniden başlatılmaz.
 ## ==============================================================================
@@ -557,10 +566,56 @@ func _finish_restart_vote(rejecter_peer_id: int) -> void:
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_broadcast_restart_vote_result(approved: bool, rejecter_name: String) -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != _host_peer_id():
+		return
 	restart_vote_pending = false
 	restart_vote_result.emit(approved, rejecter_name)
-	if approved and is_host:
-		_rpc_start_game.rpc()
+	## Onaylandıysa HER peer (host dahil) bu sonucu kendi tarafında işleyip odaya döner -
+	## sonuç zaten tüm peer'lere güvenilir kanaldan gidiyor, ayrıca bir "başlat" RPC'sine gerek yok.
+	if approved:
+		_return_to_lobby_for_restart()
+
+
+## true iken lobby_menu.gd açılışta "yeniden başlatma onaylandı" bilgisini gösterir (bir kez).
+var restart_returned_to_lobby: bool = false
+
+
+## Yeniden başlatma onaylanınca oyun oturumuna ait TÜM durumu sıfırlar - bağlantı (lobby_players,
+## isimler, host) KORUNUR. Sahne değiştirmez (bkz. _return_to_lobby_for_restart), böylece
+## tek başına test edilebilir.
+func _reset_for_restart_lobby() -> void:
+	get_tree().paused = false
+	GameManager.reset()
+	restart_vote_pending = false
+	restart_vote_responses.clear()
+	_restart_vote_timer = 0.0
+	_loading_done.clear()
+	_is_game_in_progress = false
+	_is_rejoining_midgame = false
+	## Önceki oyundan kalma "biri hâlâ sandık/level/dükkan ekranında" bekleme durumları yeni oyuna sızmasın.
+	chest_busy_peers.clear()
+	chest_countdown_active = false
+	level_up_busy_peers.clear()
+	level_up_timer_active = false
+	mini_shop_pending_peers.clear()
+	mini_shop_timer_active = false
+	_mini_shop_first_close_happened = false
+	_confirmed_dead_peers.clear()
+	_pending_revive_responses.clear()
+	_pending_removed_drops.clear()
+	_visual_drops.clear()
+	_pending_xp_sync = false
+	## Lobideki ilk halinin aynısı: sadece host hazır, herkes karakterini yeniden seçip "HAZIRIM"a basar.
+	for pid in lobby_players.keys():
+		lobby_players[pid]["is_ready"] = (int(pid) == _host_peer_id())
+	restart_returned_to_lobby = true
+
+
+func _return_to_lobby_for_restart() -> void:
+	_reset_for_restart_lobby()
+	lobby_updated.emit()
+	get_tree().change_scene_to_file("res://scenes/lobby_menu.tscn")
 
 
 ## network_manager.gd _process()'inden koşulsuz her karede tiklenir (diğer
@@ -1660,6 +1715,14 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 		"fear":
 			if target_enemy.has_method("apply_fear"):
 				target_enemy.apply_fear(Vector2(param2, param3), param1)
+		## Şovalye'nin E yeteneği (Kışkırtma, bkz. enemy.gd apply_taunt) -
+		## param1=süre, param2=kışkırtan oyuncunun peer id'si (host o peer'in
+		## oyuncu node'unu kendi tarafında bulup yaratığın hedefi yapar).
+		"taunt":
+			if target_enemy.has_method("apply_taunt"):
+				var taunter_peer: int = int(param2)
+				var taunter: Node = _find_player_by_peer_id(taunter_peer) if taunter_peer > 0 else null
+				target_enemy.apply_taunt(param1, taunter as Node2D)
 
 
 ## Broadcast enemy status VFX so all peers see poison/freeze/chill visuals.

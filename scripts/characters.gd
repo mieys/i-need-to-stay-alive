@@ -273,11 +273,11 @@ const DEFS := {
 		"name": "Şovalye Adam",
 		"skill": 11,
 		"skill_name": "Koruma Baloncuğu",
-		"skill_desc": "ULTİ: Kalkanı bitene kadar içine düşman/mermi girmeyen koruma alanı açar (%30 menzil, kalkan hasarı %90 azalır). Hareket edemez. (120sn bekleme)",
+		"skill_desc": "ULTİ: Kalkanı bitene kadar içine düşman/mermi girmeyen koruma alanı açar (%30 menzil, kalkan hasarı %95 azalır). Hareket edemez. (120sn bekleme)",
 		"skill_icon": "res://assets/skills/sovalye_ulti_koruma_baloncugu_icon.png",
 		"skill2": 10,
 		"skill2_name": "Kalkan Yenileme",
-		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede EKSİK kalkanının %5'ini yeniler. (50sn bekleme)",
+		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede EKSİK kalkanının %5'ini yeniler ve çevrendeki yaratıkların dikkatini 5 saniye boyunca üzerine çeker. (50sn bekleme)",
 		"skill2_icon": "res://assets/skills/sovalye_kiskirtma_icon.png",
 		## Kullanıcı bildirimi: "bazı karakterlerin pasifi oyun içindeyken
 		## görünmüyor" - kök neden Şovalye Adam'ın hiç pasifi olmamasıydı

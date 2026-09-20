@@ -426,8 +426,12 @@ var _network_time_since_update: float = 0.0
 
 ## Şovalye (Paladin) TEMEL yeteneği "Kışkırtma" tarafından ayarlanır (bkz.
 ## player.gd _skill_paladin_taunt/apply_taunt) - sıfırın üstündeyken is_ranged
-## yaratıklar bile normal "uzak dur" davranışını bırakıp üstüne yürür.
+## yaratıklar bile normal "uzak dur" davranışını bırakıp üstüne yürür VE hedef
+## seçimi _taunt_target'a (kışkırtan oyuncu) kilitlenir (bkz. _get_target_player/
+## _apply_aggro_overrides). Yalnızca host/tek oyunculuda anlamlı (yaratık AI'ı
+## host'ta çalışır) - client'taki kuklalarda hiç ilerlemez.
 var _taunt_timer: float = 0.0
+var _taunt_target: Node2D = null
 
 
 ## Every enemy gets a LITTLE tougher the longer the run has been going, on
@@ -456,8 +460,29 @@ func _apply_difficulty_scaling() -> void:
 ## (item_shield_hp > 0) varken çağrılıyor, bkz. çağrı yeri (_physics_process).
 ## player.gd _skill_paladin_taunt() menzildeki her yaratıkta bunu çağırır -
 ## var olan bir kışkırtma varsa süreyi UZATIR, kısaltmaz (max ile).
-func apply_taunt(duration: float) -> void:
+## DÜZELTME (kullanıcı isteği: "şovalye adamın E yeteneğini aktifleştirdiğinde
+## etrafındaki yaratıkların agrosunu 5 saniye boyunca kendine çekmelidir"):
+## eskiden bu fonksiyon SADECE _taunt_timer'ı ayarlıyordu (menzilli davranışı) -
+## kimi hedef aldığı hiç değişmiyordu; üstelik yaratık AI'ı host'ta çalıştığı
+## için host olmayan bir Şovalye'nin çağrısı kukla yaratığa gidip kayboluyordu.
+## Artık kışkırtan oyuncu (taunter) hatırlanıyor (bkz. _apply_aggro_overrides) ve
+## client'tan gelen çağrı apply_root/apply_fear ile AYNI yolla host'a taşınıyor
+## (bkz. network_manager.gd request_enemy_effect "taunt" - kışkırtanın peer id'si
+## param2 olarak gidiyor, host oyuncu node'unu oradan bulur).
+func apply_taunt(duration: float, taunter: Node2D = null) -> void:
+	if is_dead:
+		return
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			var taunter_peer: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+			if taunter != null and is_instance_valid(taunter) and "peer_id" in taunter:
+				taunter_peer = int(taunter.peer_id)
+			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "taunt", duration, float(taunter_peer), 0.0)
+		return
 	_taunt_timer = max(_taunt_timer, duration)
+	if taunter != null and is_instance_valid(taunter):
+		_taunt_target = taunter
 
 
 ## Kullanıcı isteği: yakın dövüşçülerin hasarı artık menzile girer girmez
@@ -1310,7 +1335,88 @@ func _get_target_player() -> Node2D:
 	var stale_dead: bool = _cached_target_player != null and (not is_instance_valid(_cached_target_player) or _cached_target_player.get("is_dead") == true)
 	if stale_dead or Engine.get_physics_frames() % TARGET_UPDATE_INTERVAL_FRAMES == get_instance_id() % TARGET_UPDATE_INTERVAL_FRAMES:
 		_cached_target_player = _find_closest_target_player()
-	return _cached_target_player
+	## "En yakın" seçimi (yukarıdaki önbellek) ucuzluk için 4 karede bir yenilenir,
+	## ama aşağıdaki zorunlu agro kuralları (kışkırtma, Şovalye baloncuğu) HER
+	## karede önbelleğin ÜSTÜNE uygulanır - önbelleği bozmadan, yani kural
+	## biter bitmez yaratık kendiliğinden normal "en yakın hedef"ine döner.
+	return _apply_aggro_overrides(_cached_target_player)
+
+
+## Zorunlu agro kuralları - _find_closest_target_player()'ın "en yakın oyuncu"
+## seçimini iki durumda ezer (öncelik sırasıyla):
+## 1) KIŞKIRTMA (bkz. apply_taunt): _taunt_timer sürerken hedef, kışkırtan
+##    oyuncudur - kim daha yakın olursa olsun. Kışkırtan ölmüş/görünmez/ev içi/
+##    satıcı bölgesindeyse kural sessizce bırakılır (yaratık boş kalıp dolanmasın).
+## 2) ŞOVALYE BALONCUĞU ODAĞI (bkz. _paladin_zone_focus_target): hedef bir
+##    dostsa ve baloncuğun içindeyse hedef, baloncuğun sahibi Şovalye olur.
+func _apply_aggro_overrides(target: Node2D) -> Node2D:
+	if _taunt_timer > 0.0 and _taunt_target != null:
+		if _is_targetable_player(_taunt_target):
+			target = _taunt_target
+		else:
+			_taunt_target = null
+	var focus: Node2D = _paladin_zone_focus_target(target)
+	return focus if focus != null else target
+
+
+## _find_closest_target_player()'ın aday eleme koşullarıyla AYNI (ölü, görünmez,
+## yerde yatan, ev içi, seyyar satıcı bölgesi) - yerel oyuncu (metot tabanlı) ve
+## RemotePlayer kuklası (alan tabanlı) için ayrı ayrı bakılıyor.
+func _is_targetable_player(p: Node) -> bool:
+	if p == null or not is_instance_valid(p):
+		return false
+	if p.get("is_dead") == true or p.get("is_downed") == true:
+		return false
+	if p.has_method("is_invisible_now") and p.is_invisible_now():
+		return false
+	if p.has_method("is_indoors_now") and p.is_indoors_now():
+		return false
+	if p.has_method("is_in_merchant_zone_now") and p.is_in_merchant_zone_now():
+		return false
+	if p.get("is_invisible") == true or p.get("is_indoors") == true or p.get("is_in_merchant_zone") == true:
+		return false
+	return true
+
+
+## Baloncuğun yarıçapına eklenen pay: hedefin bir adım dışına çıkıp girmesi her
+## karede odağı açıp kapatmasın (sınırda titreme olmasın) diye.
+const ZONE_FOCUS_MARGIN := 24.0
+
+## Kullanıcı isteği: "kalkan baloncuğuna giren kim olursa olsun kalkan baloncuğuna
+## doğru yürüyen TÜM düşmanların daima kalkan baloncuğuna focus atmaları
+## gerekmektedir". Kök neden: hedef, "en yakın oyuncu" olarak seçiliyor - baloncuğa
+## giren bir dost Şovalye'den daha yakınsa yaratık DOSTA doğru yürüyor, ama
+## baloncuğun sert sınırı (bkz. _physics_process "sert yapıştırma") onu içeri
+## sokmuyor: yaratık sınırda yürüyüp duruyor, üstelik "player" Şovalye olmadığı
+## için kalkana saldırı bloğu (paladin_shield_up) hiç çalışmıyor ve yakın dövüş
+## menzili de dosta yetmiyor - yani kimseye vurmuyordu.
+## Artık hedef bir Şovalye baloncuğunun (+ZONE_FOCUS_MARGIN) İÇİNDEYSE hedef o
+## baloncuğun sahibi yapılır: yaratık sahibe yürür, sınıra gelince kalkana saldırır.
+## Birden fazla baloncuk varsa yaratığa en yakın olanı seçilir. Hedef zaten
+## baloncuğun sahibiyse ya da hiçbir baloncuk açık değilse null (kural yok) döner.
+func _paladin_zone_focus_target(target: Node2D) -> Node2D:
+	if target == null or not is_instance_valid(target):
+		return null
+	var zone_owners: Array = _paladin_zone_owners()
+	if zone_owners.is_empty():
+		return null
+	var best: Node2D = null
+	var best_dist: float = INF
+	for zone_owner in zone_owners:
+		if not is_instance_valid(zone_owner) or zone_owner.get("is_dead") == true:
+			continue
+		if zone_owner == target:
+			return null
+		var zone_radius: float = float(zone_owner.get("paladin_zone_radius"))
+		if zone_radius <= 0.0:
+			continue
+		if target.global_position.distance_to(zone_owner.global_position) > zone_radius + ZONE_FOCUS_MARGIN:
+			continue
+		var own_dist: float = global_position.distance_to(zone_owner.global_position)
+		if own_dist < best_dist:
+			best_dist = own_dist
+			best = zone_owner as Node2D
+	return best
 
 
 ## En yakın geçerli oyuncuyu (yerel oyuncu veya RemotePlayer kuklaları) bulur.
@@ -1407,6 +1513,12 @@ func _find_closest_target_player() -> Node2D:
 ## arasında paylaşılıyor.
 static var _zone_owners_cache: Array = []
 static var _zone_owners_cache_frame: int = -1
+
+## Önbelleği elle sıfırlar - fizik karesi ilerlemeyen test ortamları (bkz. tests/
+## test_paladin_aggro_talon_pose_and_stat_tweaks.gd) için; oyunda çağrılmaz.
+static func reset_zone_owners_cache() -> void:
+	_zone_owners_cache = []
+	_zone_owners_cache_frame = -1
 
 func _paladin_zone_owners() -> Array:
 	var frame: int = Engine.get_physics_frames()
@@ -2404,7 +2516,7 @@ func _physics_process(delta: float) -> void:
 		## Şovalye ultisi aktifken oyuncuya dokunan/dokunamayan TÜM yakın
 		## dövüşçü yaratıklar KALKANA SALDIRIYOR: attack animasyonu oynatıp
 		## periyodik olarak (contact_interval'da) kalkana hasar veriyor - bu
-		## hasar PALADIN_ULTI_SHIELD_COST_MULT sayesinde zaten %90 azaltılmış
+		## hasar PALADIN_ULTI_SHIELD_COST_MULT sayesinde zaten %95 azaltılmış
 		## şekilde kalkana işleniyor, ayrıca baloncukta bir "isabet" parlaması
 		## tetikliyor (bkz. player.gd flash_paladin_barrier). Menzilliler
 		## normalde kendi projectile'larıyla saldırır (bkz. _process_ranged_
@@ -2443,7 +2555,7 @@ func _physics_process(delta: float) -> void:
 				_contact_timer = contact_interval
 				## take_damage() DEĞİL - o akış shield_protection stat'ına bağlı ve
 				## kalkan item'ı yoksa hasarı direkt cana geçiriyordu (bkz. kullanıcı
-				## bildirimi). take_paladin_barrier_damage() sabit %10 oranla SADECE
+				## bildirimi). take_paladin_barrier_damage() sabit oranla (PALADIN_ULTI_SHIELD_COST_MULT) SADECE
 				## gerçek kalkanı (item_shield_hp) yıpratır, cana hiç dokunmaz.
 				if player.has_method("take_paladin_barrier_damage"):
 					player.take_paladin_barrier_damage(contact_damage, self)
