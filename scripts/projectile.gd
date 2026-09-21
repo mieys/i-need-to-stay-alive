@@ -40,10 +40,10 @@ var knockback_force: float = 0.0 ## Talon'un öfkesinden VEYA Kitelama Seti eşy
 var slow_percent: float = 0.0
 var slow_duration: float = 5.0
 
-## Tüftüf'ün zehiri (bkz. weapon.gd poison_tick_damage/poison_ramp_per_tick/
+## Tüftüf'ün zehiri (bkz. weapon.gd poison_tick_damage/poison_max_stacks/
 ## poison_duration) - 0 = bu mermi zehir uygulamaz (diğer tüm mermiler).
 var poison_tick_damage: float = 0.0
-var poison_ramp_per_tick: float = 0.0
+var poison_max_stacks: int = 0
 var poison_duration: float = 0.0
 
 ## Tüfeğin delici mermisi: birincil hedeften (her zaman TAM hasar
@@ -170,7 +170,7 @@ func _on_body_entered(body: Node) -> void:
 	if chill_stacks > 0 and body.has_method("apply_chill"):
 		body.apply_chill(chill_stacks)
 	if poison_tick_damage > 0.0 and body.has_method("apply_poison"):
-		body.apply_poison(poison_tick_damage, poison_ramp_per_tick, poison_duration)
+		body.apply_poison(poison_tick_damage, float(poison_max_stacks), poison_duration)
 	if slow_percent > 0.0 and body.has_method("apply_slow"):
 		body.apply_slow(slow_percent, slow_duration)
 	## Ateş Asası pasifi: bu mermi yakma uyguluyorsa çarptığı HER hedefi

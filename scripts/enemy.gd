@@ -110,20 +110,25 @@ var item_shield_regen_delay: float = 0.0
 const ITEM_SHIELD_REGEN_DELAY := 14.0 ## seconds of no hits before it starts regenerating - long on purpose
 const ITEM_SHIELD_REGEN_RATE := 0.02 ## fraction of max shield regenerated per second - very slow on purpose
 
-## Tüftüf'ün zehiri (bkz. weapon.gd/projectile.gd poison_tick_damage): isabet
-## eden her dart bu düşmanı zehirler, saniyede bir tık hasar verir ve bu hasar
-## süre boyunca her tık poison_ramp kadar artar. Yeni bir dart isabet ederse
-## zehir YENİLENİR (süre ve tık hasarı sıfırdan başlar) - üst üste binmez,
-## bkz. apply_poison().
-var poison_tick_damage: float = 0.0 ## bu tıktaki hasar, bir sonraki tıkte poison_ramp kadar artar
-var poison_ramp: float = 0.0 ## her tıkte poison_tick_damage'a eklenen miktar
-var poison_time_left: float = 0.0
+## Tüftüf'ün zehiri (bkz. weapon.gd/projectile.gd poison_tick_damage/
+## poison_max_stacks/poison_duration). Kullanıcı isteği: "Tüftüfün zehri 100
+## defaya kadar stacklenebilsin ve zehir 20 saniye boyunca her saniye saldırı
+## gücünün %5'i kadar hasar versin" - isabet eden her dart bu düşmana bir
+## YÜK ekler; her yük KENDİ süresini (poison_duration) bağımsız sayar ve o
+## süre boyunca saniyede kendi hasarını (saldırı gücünün %5'i, yük eklendiği
+## andaki değerle) verir. Eskiden tek bir zehir vardı: her isabet onu
+## yeniliyor ve tık hasarı her saniye artıyordu (üst üste binmiyordu).
+## Yük sayısı üst sınıra (max_stacks) ulaşınca yeni bir isabet en ESKİ yükü
+## tazeler (süre yenilenir) - zehir sürekli vurulan hedefte kesilmez.
+var _poison_stack_time: PackedFloat32Array = PackedFloat32Array() ## her yükün kalan ömrü (sn)
+var _poison_stack_dps: PackedFloat32Array = PackedFloat32Array() ## her yükün saniyelik hasarı
+var _poison_damage_accum: float = 0.0 ## henüz uygulanmamış birikmiş zehir hasarı (saniyede bir topluca uygulanır)
 var _poison_tick_timer: float = 0.0
 const POISON_TICK_INTERVAL := 1.0
 
 ## Zehir aktifken hedefin üzerinde sürekli oynayan döngülü efekt (bkz.
 ## scenes/fx_poison_status.tscn) - apply_poison() ile beliriyor, zehir bitince
-## (_process_poison'da poison_time_left <= 0 olunca) kayboluyor. Yeni bir dart
+## (_process_poison'da tüm yükler bitince) kayboluyor. Yeni bir dart
 ## isabet edip zehri yenilerse (efekt zaten varsa) tekrar oluşturulmaz, sadece
 ## kalmaya devam eder.
 const PoisonStatusFxScene := preload("res://scenes/fx_poison_status.tscn")
@@ -671,22 +676,33 @@ func _process_item_shield(delta: float) -> void:
 		item_shield_changed.emit(item_shield_hp, item_shield_max)
 
 
-## Tüftüf'ün dart'ı isabet ettiğinde çağrılır (bkz. projectile.gd). Zehir
-## YENİLENİR: önceki zehrin kalan süresi/tık hasarı ne olursa olsun, bu
-## çağrıyla süre ve tık hasarı sıfırdan başlar - aynı anda birden fazla zehir
-## efekti üst üste binmez.
-func apply_poison(initial_tick_damage: float, ramp_per_tick: float, duration: float) -> void:
+## Tüftüf'ün dart'ı isabet ettiğinde çağrılır (bkz. projectile.gd) - bkz. yukarıdaki
+## "yük" modeli notu. dps_per_stack: bu yükün saniyelik hasarı, max_stacks: bu
+## düşmandaki toplam yük üst sınırı, duration: yükün ömrü (sn). (Parametreler
+## network_manager.gd request_enemy_effect "poison" üzerinden aynı sırayla,
+## float olarak taşınıyor.)
+func apply_poison(dps_per_stack: float, max_stacks: float, duration: float) -> void:
 	if is_dead:
 		return
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		if net_id > 0:
-			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "poison", initial_tick_damage, ramp_per_tick, duration)
+			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "poison", dps_per_stack, max_stacks, duration)
 		return
-	poison_tick_damage = initial_tick_damage
-	poison_ramp = ramp_per_tick
-	poison_time_left = duration
-	_poison_tick_timer = POISON_TICK_INTERVAL
+	var stack_cap: int = maxi(1, int(round(max_stacks)))
+	if _poison_stack_time.size() >= stack_cap:
+		## Üst sınırda: en eski (en az ömrü kalan) yükü tazele.
+		var oldest: int = 0
+		for i in range(1, _poison_stack_time.size()):
+			if _poison_stack_time[i] < _poison_stack_time[oldest]:
+				oldest = i
+		_poison_stack_time[oldest] = duration
+		_poison_stack_dps[oldest] = dps_per_stack
+	else:
+		if _poison_stack_time.is_empty():
+			_poison_tick_timer = POISON_TICK_INTERVAL
+		_poison_stack_time.append(duration)
+		_poison_stack_dps.append(dps_per_stack)
 	if not _poison_status_fx or not is_instance_valid(_poison_status_fx):
 		_poison_status_fx = PoisonStatusFxScene.instantiate()
 		_poison_status_fx.position = Vector2(0, get_overhead_bar_offset() * 0.5)
@@ -875,18 +891,51 @@ func _process_burn(delta: float) -> void:
 					NetworkManager.broadcast_enemy_vfx.rpc(net_id, "burn_stop")
 
 
+## Yük sayısı (sadece host/tek oyunculuda anlamlı - AI ve hasar hostta işlenir).
+func get_poison_stack_count() -> int:
+	return _poison_stack_time.size()
+
+
+## Bu düşman şu an zehirli mi - istemcilerde de (kukla yaratıklarda) doğru
+## çalışsın diye yük dizisine DEĞİL, zehir efektinin varlığına bakıyor: efekt
+## host'ta apply_poison ile, kuklalarda "poison_start"/"poison_stop" yayınıyla
+## (bkz. _spawn_poison_status_fx/_remove_poison_status_fx) kurulup kaldırılıyor.
+## weapon.gd/remote_player.gd Tüftüf hedef seçimi (bkz. tuftuf_targeting.gd) bunu okur.
+func is_poisoned() -> bool:
+	return _poison_status_fx != null and is_instance_valid(_poison_status_fx)
+
+
 func _process_poison(delta: float) -> void:
-	if poison_time_left <= 0.0:
+	if _poison_stack_time.is_empty():
 		return
-	poison_time_left -= delta
+	## Her yük kendi süresince (kalan ömrüyle sınırlı, karenin geri kalanı hariç)
+	## hasar biriktirir - böylece bir yük tam olarak poison_duration sn boyunca
+	## saniyede dps verir, süre tık sınırına denk gelmese bile son kesir kaybolmaz.
+	for i in range(_poison_stack_time.size() - 1, -1, -1):
+		var active_dt: float = minf(delta, _poison_stack_time[i])
+		_poison_damage_accum += _poison_stack_dps[i] * active_dt
+		_poison_stack_time[i] -= delta
+		if _poison_stack_time[i] <= 0.0:
+			_poison_stack_time.remove_at(i)
+			_poison_stack_dps.remove_at(i)
 	_poison_tick_timer -= delta
+	var all_expired: bool = _poison_stack_time.is_empty()
 	if _poison_tick_timer <= 0.0:
 		_poison_tick_timer += POISON_TICK_INTERVAL
-		take_damage(poison_tick_damage)
-		poison_tick_damage += poison_ramp
-	if poison_time_left <= 0.0:
-		poison_tick_damage = 0.0
-		poison_ramp = 0.0
+		## _apply_damage() her vuruşa EN AZ 1 hasar uyguluyor (max(remaining, 1.0)) -
+		## küçük bir tık (ör. tek yük x düşük saldırı gücü = 0.5) 1'e şişirilir, yani
+		## zehir yazılandan 2 kat vururdu. Bu yüzden SADECE tam sayı kısmı uygulanıp
+		## kesir bir sonraki tike devrediliyor - toplam hasar birikenle birebir aynı.
+		var whole_damage: float = floorf(_poison_damage_accum)
+		if whole_damage >= 1.0:
+			_poison_damage_accum -= whole_damage
+			take_damage(whole_damage)
+	if all_expired:
+		## Son kesir (<1): en yakın tam sayıya yuvarlanıp uygulanır (0.5+ ise 1).
+		var rest_damage: float = roundf(_poison_damage_accum)
+		_poison_damage_accum = 0.0
+		if rest_damage >= 1.0:
+			take_damage(rest_damage)
 		if _poison_status_fx and is_instance_valid(_poison_status_fx):
 			_poison_status_fx.queue_free()
 			_poison_status_fx = null

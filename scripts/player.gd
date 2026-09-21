@@ -691,14 +691,29 @@ var is_dead: bool = false
 ## tekrar hasarı bloklamak için, bkz. _physics_process/take_damage) true
 ## yapılır; _process_downed() bir müttefik REVIVE_RANGE içinde kaldığı
 ## sürece REVIVE_CHANNEL_TIME kadar ilerleyen bir kanal başlatır - tamamlanırsa
-## gerçek canlanma (_complete_revive), DOWNED_BLEEDOUT_TIME içinde kimse
-## gelmezse kalıcı ölüm (_finalize_death) gerçekleşir.
+## gerçek canlanma (_complete_revive) gerçekleşir.
+## DÜZELTME (kullanıcı bildirimi: "Oyuncular öldükten sonra diğerleri onu
+## diriltmediğinde 1 dakika sonra falan kalıcı olarak ölüyor ve diriltilemeyip
+## izleyiciye atılıyor, böyle olmaması lazım") - eskiden burada 30sn'lik bir
+## "kanama" süresi (DOWNED_BLEEDOUT_TIME) vardı, dolunca _finalize_death()
+## ile KALICI ölüme (izleyici modu) düşülüyordu. Artık yere düşen oyuncu
+## SÜRE SINIRI OLMADAN diriltilmeyi bekler. Kalıcı ölüm SADECE diriltebilecek
+## hayatta (yerde olmayan) hiçbir takım arkadaşı kalmadığında olur (bkz.
+## DOWNED_NO_RESCUER_GRACE/_process_downed) - yoksa herkes yerdeyken oyun hiç
+## bitmezdi (host "herkes kalıcı öldü mü" kararını _finalize_death'teki died
+## bildirimlerine göre veriyor, bkz. network_manager.gd _check_all_players_dead).
 var is_downed: bool = false
 var _downed_time: float = 0.0
 var _revive_progress: float = 0.0
 const REVIVE_CHANNEL_TIME := 3.0
 const REVIVE_RANGE := 90.0
-const DOWNED_BLEEDOUT_TIME := 30.0
+## Diriltebilecek hayatta hiçbir müttefik YOKKEN kalıcı ölüme düşmeden önce
+## beklenen süre - bağlantı/spawn zamanlaması yüzünden "remote_players" grubunun
+## anlık boş görünmesi (bkz. die() üstündeki eski not) ya da bir müttefikin tam
+## o an yeniden bağlanması yüzünden haksız yere kalıcı ölüme düşülmesin diye pay
+## bırakılıyor. Süre boyunca oyuncunun solundaki geri sayım bu payı gösterir.
+const DOWNED_NO_RESCUER_GRACE := 10.0
+var _no_rescuer_time: float = 0.0
 ## Kullanıcı isteği: "birini diriltince 3 saniye boyunca ölümsüzlük veren bir
 ## buff olmalı dirilten ve diriltilen kişide" - bkz. _complete_revive()
 ## (diriltilen, yerel olarak) ve network_manager.gd grant_revive_
@@ -1407,15 +1422,18 @@ func apply_owned_weapon_tier(w, key: String, level: int) -> void:
 ##   başına +5) set_shop_damage_bonus ile ekleniyor).
 ##   ateş hızı: tier başına %8 daha hızlı (tier 10'da ~%72 daha hızlı,
 ##   min. çarpan 0.3 ile sınırlı) - değişmedi.
-## Zehirin "saniye başına artan hasarı" (ramp) da aynı şablonu izler: tier
-## başına 1 + saldırı gücünün %1'i, 3/5/7/10. seviyelerde KÜMÜLATİF +%50
-## (bkz. _refresh_tuftuf_poison - "Dönüm noktalarındaki her tierın sağladığı
-## stata önceki tier dönüm noktasının sağladığı statlar dahildir" -> tier
-## 3-4: x1.5, 5-6: x2.0, 7-9: x2.5, 10: x3.0). Zehrin İLK tıkı da bu ramp
-## değeriyle başlar (1x, 2x, 3x... diye büyüyen düz bir merdiven).
-const TUFTUF_POISON_RAMP_PER_TIER := 1.0
-const TUFTUF_POISON_RAMP_ATTACK_POWER_RATIO := 0.01
-const TUFTUF_BASE_POISON_DURATION := 30.0
+## ZEHİR (kullanıcı isteği: "Tüftüfün zehri 100 defaya kadar stacklenebilsin ve
+## zehir 20 saniye boyunca her saniye saldırı gücünün %5'i kadar hasar versin"):
+## eskiden tek bir zehir vardı (her isabet yeniliyor, tık hasarı tier + %1
+## saldırı gücü kadar her saniye artıyor, 3/5/7/10. tier'da x1.5..x3 çarpanı).
+## Artık her isabet bir YÜK ekler (en fazla TUFTUF_POISON_MAX_STACKS), her yük
+## TUFTUF_POISON_DURATION sn boyunca saniyede saldırı gücünün
+## TUFTUF_POISON_DPS_ATTACK_POWER_RATIO'su kadar hasar verir (bkz. enemy.gd
+## apply_poison). Zehir artık tier'e BAĞLI DEĞİL - kullanıcı sabit, tier'siz bir
+## formül verdi; tier sadece dart hasarını ve ateş hızını büyütmeye devam ediyor.
+const TUFTUF_POISON_DPS_ATTACK_POWER_RATIO := 0.05
+const TUFTUF_POISON_MAX_STACKS := 100
+const TUFTUF_POISON_DURATION := 20.0
 
 func _apply_tuftuf_tier(w, level: int) -> void:
 	## Matthew'in başlangıç Tüftüf'ü DAHİL, her Tüftüf kopyası aynı kuralı
@@ -1433,32 +1451,19 @@ func _apply_tuftuf_tier(w, level: int) -> void:
 	_refresh_tuftuf_poison(w)
 
 
-## Zehrin "saniye başına artan hasarı" da (tıpkı silahın kendi hasarı gibi)
-## saldırı gücünden (damage_bonus) pay alıyor - bu yüzden SADECE tier
-## değiştiğinde (_apply_tuftuf_tier) değil, HER Hasar kartı alındığında da
-## (damage_bonus güncellendiğinde, bkz. _apply_weapon_bonuses_to) yeniden
-## hesaplanmalı, yoksa run ilerledikçe zehir "eski" kalır. Tier, silahın
-## kendi set_weapon_tier() ile sakladığı _current_tier'dan okunur.
+## Zehir yükünün saniyelik hasarı saldırı gücünden (damage_bonus) pay alıyor - bu
+## yüzden SADECE silah kurulurken (_apply_tuftuf_tier) değil, HER Hasar kartı
+## alındığında da (damage_bonus güncellendiğinde, bkz. _apply_weapon_bonuses_to)
+## yeniden hesaplanmalı, yoksa run ilerledikçe yeni yükler "eski" hasarla eklenir.
 func _refresh_tuftuf_poison(w) -> void:
 	if not is_instance_valid(w):
 		return
-	var tier: int = int(w.get("_current_tier") if "_current_tier" in w else 1)
-	var milestone_mult: float = 1.0
-	if tier >= 10:
-		milestone_mult = 3.0
-	elif tier >= 7:
-		milestone_mult = 2.5
-	elif tier >= 5:
-		milestone_mult = 2.0
-	elif tier >= 3:
-		milestone_mult = 1.5
-	var ramp: float = (tier * TUFTUF_POISON_RAMP_PER_TIER + damage_bonus * TUFTUF_POISON_RAMP_ATTACK_POWER_RATIO) * milestone_mult
 	if "poison_tick_damage" in w:
-		w.poison_tick_damage = ramp
-	if "poison_ramp_per_tick" in w:
-		w.poison_ramp_per_tick = ramp
+		w.poison_tick_damage = damage_bonus * TUFTUF_POISON_DPS_ATTACK_POWER_RATIO
+	if "poison_max_stacks" in w:
+		w.poison_max_stacks = TUFTUF_POISON_MAX_STACKS
 	if "poison_duration" in w:
-		w.poison_duration = TUFTUF_BASE_POISON_DURATION
+		w.poison_duration = TUFTUF_POISON_DURATION
 
 
 ## Arcane Asası: Tüftüf/Tüfek gibi 10 tier'e kapalı - bkz. Arcane asasının
@@ -1798,8 +1803,12 @@ func _apply_uzunkilic_tier(w, level: int) -> void:
 
 ## Şimşek Asası (2026 güncellemesi): kesintisiz ışın - bkz. weapon.gd
 ## continuous_beam/_process_continuous_beam, Şimşek asası özellikleri.txt.
-##   hasar: HER SANİYE tier başına +12, %65 saldırı gücü (oran tier'e göre
-##   değişmez - weapon_lightning.tscn'de card_damage_bonus_ratio = 0.65 sabit).
+##   hasar: HER SANİYE tier başına +12, %140 saldırı gücü (oran tier'e göre
+##   değişmez - weapon_lightning.tscn'de card_damage_bonus_ratio = 1.4 sabit).
+##   Kullanıcı isteği: "Yıldırım asasının saldırı gücünü %140 seviyesine
+##   yükselt" - GERÇEKTE uygulanan oran (sahnedeki değer) öncesinde 1.2285
+##   idi (eski %65 x sonraki hasar artışları x %10 azaltma); metinlerdeki
+##   "%65" eskiydi. Artık sahne değeri ve metinler AYNI: %140 (1.4).
 ##   Bu toplam saniyelik hasar artık TEK bir tik yerine saniyede 3 küçük tike
 ##   bölünerek geliyor (her tik tam hasarın %33'ü, bkz. weapon.gd
 ##   BEAM_TICK_DAMAGE_RATIO/beam_tick_interval) - toplamı DEĞİŞMEZ, sadece
@@ -4972,8 +4981,9 @@ func die() -> void:
 	## TAMAMEN atlanıp direkt aşağıdaki "anında canlan" dalına düşülüyordu,
 	## GERÇEKTE hayatta müttefik varken bile. Artık multiplayer'da tek şart
 	## hakkın (revives_remaining) olması - kimse gelip kurtarmazsa zaten
-	## DOWNED_BLEEDOUT_TIME sonunda otomatik kalıcı ölüme düşülüyor (bkz.
-	## _process_downed), _has_living_teammate() gereksizdi.
+	## kalıcı ölüme düşülüyor (bkz. _process_downed; artık süre sınırı yok,
+	## SADECE hayatta diriltebilecek kimse kalmayınca), _has_living_teammate()
+	## gereksizdi.
 	## 2) Hak eskiden SADECE burada "var mı" diye KONTROL ediliyor, gerçek
 	## tüketim 3 saniye SONRA _complete_revive()'da yapılıyordu. Bu pencerede
 	## başka bir oyuncu da aynı hakkı "boş" görüp downed'a girebiliyordu;
@@ -5018,6 +5028,21 @@ func die() -> void:
 		return
 
 	_finalize_death()
+
+
+## Yerde yatan oyuncuyu diriltebilecek durumda (ölü DEĞİL, yerde DEĞİL) en az bir
+## gerçek müttefik var mı - _process_downed'ın "kalıcı ölüm" kararının tek girdisi.
+## NOT: yerdeki bir katılımcı ağa is_dead=false olarak bildirilir (bkz. main.gd
+## state_snapshot), yani is_dead tek başına yetmez, is_downed da bakılmalı -
+## _has_living_teammate() bunu ayırt etmiyordu.
+func _has_living_rescuer() -> bool:
+	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+		if not is_instance_valid(rp):
+			continue
+		if rp.get("is_dead") == true or rp.get("is_downed") == true:
+			continue
+		return true
+	return false
 
 
 ## En az bir RemotePlayer (gerçek uzak katılımcı) hayatta mı - "downed"
@@ -5118,6 +5143,7 @@ func _go_down() -> void:
 	is_dead = true
 	health = 0
 	_downed_time = 0.0
+	_no_rescuer_time = 0.0
 	_revive_progress = 0.0
 	_spawn_floating_text("DÜŞTÜN!", Color(1.0, 0.3, 0.3))
 	if overhead_bar:
@@ -5135,13 +5161,19 @@ func _go_down() -> void:
 
 
 ## "downed" iken _physics_process'in normal dalı yerine HER karede çağrılır
-## (bkz. oradaki dallanma) - kanalı ilerletir/geriletir, süre dolarsa kalıcı
-## ölüme düşer.
+## (bkz. oradaki dallanma) - kanalı ilerletir/geriletir. Süre sınırı YOK (bkz.
+## is_downed üstündeki DÜZELTME notu); multiplayer'da diriltebilecek hayatta
+## kimse kalmadıysa DOWNED_NO_RESCUER_GRACE sonunda kalıcı ölüme düşer.
 func _process_downed(delta: float) -> void:
 	_downed_time += delta
-	if _downed_time >= DOWNED_BLEEDOUT_TIME:
-		_finalize_death()
-		return
+	if NetworkManager.is_multiplayer_active:
+		if _has_living_rescuer():
+			_no_rescuer_time = 0.0
+		else:
+			_no_rescuer_time += delta
+			if _no_rescuer_time >= DOWNED_NO_RESCUER_GRACE:
+				_finalize_death()
+				return
 	## DÜZELTME (kullanıcı isteği: "efekt sistemi" - singleplayerda da 3
 	## saniyelik diriltme süreci) - tek oyunculuda gerçek bir müttefik/
 	## rescuer hiç yok ("remote_players" grubu hep boş), bu yüzden kanal
@@ -5175,15 +5207,19 @@ func get_revive_progress_ratio() -> float:
 
 
 ## Kullanıcı isteği: "birisi düştüğünde diğerleri onu canlandırmak için bir
-## süre var ama o süre görünmüyor" - kalıcı ölüme (bkz. DOWNED_BLEEDOUT_TIME)
-## kadar kalan saniye. bkz. main.gd state_snapshot "extra" torbası ve
+## süre var ama o süre görünmüyor" - kalıcı ölüme kadar kalan saniye. Artık
+## yerde kalma süresi SINIRSIZ olduğu için (bkz. is_downed üstündeki DÜZELTME
+## notu) bu değer SADECE diriltebilecek kimse kalmadığında (bkz.
+## DOWNED_NO_RESCUER_GRACE) sayar, diğer zamanlarda 0 döner (etiket gizlenir). bkz. main.gd state_snapshot "extra" torbası ve
 ## downed_timer_label.gd - hem bu oyuncunun kendi ekranında (player.gd
 ## _process_downed) hem müttefiklerin ekranında (remote_player.gd, ağdan
 ## gelen extra.downed_remaining ile) AYNI değeri göstermek için kullanılıyor.
 func get_downed_remaining_seconds() -> float:
 	if not is_downed:
 		return 0.0
-	return max(0.0, DOWNED_BLEEDOUT_TIME - _downed_time)
+	if _no_rescuer_time <= 0.0:
+		return 0.0
+	return max(0.0, DOWNED_NO_RESCUER_GRACE - _no_rescuer_time)
 
 
 func _complete_revive() -> void:
@@ -5197,6 +5233,7 @@ func _complete_revive() -> void:
 	is_downed = false
 	is_dead = false
 	_downed_time = 0.0
+	_no_rescuer_time = 0.0
 	_revive_progress = 0.0
 	if downed_timer_label:
 		downed_timer_label.set_remaining_seconds(0.0)
@@ -5252,6 +5289,7 @@ func _finalize_death() -> void:
 	is_downed = false
 	is_dead = true
 	health = 0
+	_no_rescuer_time = 0.0
 	if downed_timer_label:
 		downed_timer_label.set_remaining_seconds(0.0)
 	## Kullanıcı isteği: "öldüğü konum ve body si yerinde durmalı" - ceset

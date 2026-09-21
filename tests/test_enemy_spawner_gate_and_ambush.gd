@@ -157,11 +157,13 @@ func test_bosses_and_unmarked_creatures_do_not_hold_the_gate() -> void:
 
 
 ## ---------------------------------------------------------------- 2) boss -%20, normal -%10
+## Sonraki tur (kullanıcı isteği: "Bossların canını %15 kalkanını %10 azalt") bu testteki hedefleri güncelledi:
+## OLD_* = %20 turundan ÖNCEKİ değerler; şimdiki = OLD x 0.8 (dördüncü tur) x 0.85 can, kalkan x 0.8 x 0.9.
 func test_boss_health_and_shield_are_exactly_twenty_percent_lower() -> void:
-	assert(is_equal_approx(SpawnerScript.BOSS_HEALTH_MULT, OLD_BOSS_HEALTH_MULT * 0.8),
-		"BOSS_HEALTH_MULT eskisinin %%80'i olmalı: %s" % SpawnerScript.BOSS_HEALTH_MULT)
-	assert(is_equal_approx(SpawnerScript.BOSS_SHIELD_RATIO, 1.3),
-		"BOSS_SHIELD_RATIO değişmemeli (kalkan candan türetilir, ikisini birden düşürmek %%36 yapardı)")
+	assert(is_equal_approx(SpawnerScript.BOSS_HEALTH_MULT, OLD_BOSS_HEALTH_MULT * 0.8 * 0.85),
+		"BOSS_HEALTH_MULT eskisinin %%80'inin %%85'i olmalı: %s" % SpawnerScript.BOSS_HEALTH_MULT)
+	assert(is_equal_approx(SpawnerScript.BOSS_SHIELD_RATIO, 1.3 * 0.9 / 0.85),
+		"BOSS_SHIELD_RATIO can %%15, kalkan %%10 düşecek şekilde 1.3 x 0.9 / 0.85 olmalı: %s" % SpawnerScript.BOSS_SHIELD_RATIO)
 	assert(is_equal_approx(SpawnerScript.BOSS_HEALTH_SHIELD_MULT, OLD_HEALTH_SHIELD_MULT),
 		"Bosslar 'tüm yaratıklar %%10' azaltmasına dahil olmamalı (bosslar tam %%20 iner)")
 
@@ -176,11 +178,11 @@ func test_boss_health_and_shield_are_exactly_twenty_percent_lower() -> void:
 	var mult: Dictionary = SpawnerScript.FAMILY_MULT.get(family, {"hp": 1.0, "dmg": 1.0})
 	var raw: float = (10.0 + 3.0 * 9.0) * float(mult["hp"])
 	var expected_old_health: float = raw * OLD_BOSS_HEALTH_MULT * SpawnerScript.GLOBAL_DEFENSE_BUFF * OLD_HEALTH_SHIELD_MULT
-	assert(absf(float(boss.max_health) - expected_old_health * 0.8) < 0.01,
-		"Boss canı eski değerin TAM %%80'i olmalı: %s (eski %s)" % [boss.max_health, expected_old_health])
-	assert(absf(float(boss.item_shield_max) - expected_old_health * SpawnerScript.BOSS_SHIELD_RATIO * 0.8) < 0.01,
-		"Boss kalkanı eski değerin TAM %%80'i olmalı: %s" % boss.item_shield_max)
-	assert(absf(float(boss.item_shield_max) / float(boss.max_health) - 1.3) < 0.001, "Boss kalkan/can oranı 1.3 olarak kalmalı")
+	assert(absf(float(boss.max_health) - expected_old_health * 0.8 * 0.85) < 0.01,
+		"Boss canı eski değerin x0.8 x0.85'i olmalı: %s (eski %s)" % [boss.max_health, expected_old_health])
+	assert(absf(float(boss.item_shield_max) - expected_old_health * 1.3 * 0.8 * 0.9) < 0.01,
+		"Boss kalkanı eski (x0.8'lik) kalkanın TAM %%90'ı olmalı: %s" % boss.item_shield_max)
+	assert(absf(float(boss.item_shield_max) / float(boss.max_health) - 1.3 * 0.9 / 0.85) < 0.001, "Boss kalkan/can oranı 1.3x0.9/0.85 olmalı")
 	_cleanup()
 
 

@@ -703,21 +703,19 @@ custom_minimum_size = Vector2(114, 185)
 clip_contents = true
 layout_mode = 2
 tooltip_text = "Ekstra silah, menzilli. Dart
-atar, canı en yüksek düşmanı
-hedefler ve sürekli hedef
-değiştirir. İsabet ettiği düşman
-zehirlenir: zehir her saniye
-artan hasar verir (30sn sürer).
-Hasar tier başına 5 + saldırı
-gücünün %50'si, ateş hızı 1.4
-saniyede bir, menzil 340.
+atar, önce canı yüksek, sonra
+hiç zehirlenmemiş, sonra tüm
+düşmanları hedefler. Her isabet
+1 zehir yükü ekler (en fazla 100);
+her yük 20sn boyunca saniyede
+saldırı gücünün %5'i kadar hasar
+verir. Hasar tier başına 5 +
+saldırı gücünün %50'si, ateş hızı
+1.4 saniyede bir, menzil 340.
 10 seviyeye kadar yükseltilebilir:
 her seviye +5 hasar ve %8 daha
-hızlı ateş eder; zehrin saniyelik
-artışı da tier başına büyür
-(+ saldırı gücünün %1'i) ve
-3/5/7/10. seviyelerde kümülatif
-%50 daha sıçrar. İkonu ve dart'ın
+hızlı ateş eder (zehir tier'e bağlı
+değil). İkonu ve dart'ın
 görünüşü seviyeyle değişir."
 mouse_default_cursor_shape = 2
 theme_override_styles/panel = SubResource("SBT_itemcard")

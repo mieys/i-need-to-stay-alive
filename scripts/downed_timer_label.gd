@@ -3,8 +3,10 @@ extends Label
 ## Kullanıcı isteği: "birisi düştüğünde diğerleri onu canlandırmak için bir
 ## süre var ama o süre görünmüyor hem düşen oyuncuda hem hayatta olan
 ## oyuncularda solda karakterin yanında yazsa iyi olabilir" - kalıcı ölüme
-## kadar kalan saniyeyi (bkz. player.gd DOWNED_BLEEDOUT_TIME/
-## get_downed_remaining_seconds) karakterin SOLUNDA gösterir.
+## kadar kalan saniyeyi (bkz. player.gd get_downed_remaining_seconds)
+## karakterin SOLUNDA gösterir. Yerde yatma süresi artık sınırsız olduğu için
+## (bkz. player.gd is_downed üstündeki DÜZELTME notu) bu sayaç SADECE
+## diriltebilecek hayatta kimse kalmadığında (DOWNED_NO_RESCUER_GRACE) görünür.
 ##
 ## Hem player.gd (kendi düşme durumu, _process_downed içinde her karede) hem
 ## remote_player.gd (ağdan gelen extra.downed_remaining ile, bkz. main.gd

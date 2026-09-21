@@ -43,6 +43,7 @@ var chain_damage_percent: float = 0.5
 ## yarıçap içindeki düşmanlar aday sayılıyor.
 ## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
 const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
+const TuftufTargetingScript: GDScript = preload("res://scripts/tuftuf_targeting.gd")
 
 const CHAIN_JUMP_RANGE := 220.0
 
@@ -68,10 +69,11 @@ var _beam_tick_timer: float = 0.0
 @export var muzzle_flash_scene: PackedScene
 @export var muzzle_flash_offset: float = 0.0
 
-## Tüftüf: en yakın düşman yerine CANI EN YÜKSEK düşmanı hedefler - hedef her
-## ateşte tazelendiği için (bkz. _get_target_enemy) en yüksek canlı düşman
-## değiştikçe kendiliğinden "sürekli hedef değiştirir" hissi verir, ayrı bir
-## takip mantığına gerek yok.
+## Tüftüf: en yakın düşman yerine zehir önceliğine göre hedefler - kullanıcı
+## isteği: "canı yüksek > hiç zehirlenmemiş > tüm yaratıklar" (bkz. tuftuf_
+## targeting.gd; alan adı eski "en yüksek can" isteğinden kaldı). Hedef her
+## ateşte tazelendiği için hedefin canı düştükçe/yeni yaratıklar geldikçe
+## kendiliğinden "sürekli hedef değiştirir" hissi verir.
 @export var target_highest_health: bool = false
 
 ## Buz Asası: DONMAMIŞ düşmanlara öncelik verir - menzildeki en yakın donmamış
@@ -102,11 +104,15 @@ var burn_on_hit_tick_damage: float = 0.0
 
 ## Tüftüf'ün zehiri: isabet eden mermi hedefi zehirler (bkz. projectile.gd,
 ## enemy.gd apply_poison) - 0 = bu silah zehir uygulamaz (diğer tüm silahler).
-## poison_tick_damage her saniye verilen hasar, poison_ramp_per_tick bu
-## hasarın her saniye ne kadar arttığı, poison_duration zehrin kaç saniye
-## süreceği (bkz. tüftüf özellikleri.txt).
+## Kullanıcı isteği: "Tüftüfün zehri 100 defaya kadar stacklenebilsin ve zehir
+## 20 saniye boyunca her saniye saldırı gücünün %5'i kadar hasar versin" -
+## poison_tick_damage HER YÜKÜN saniyelik hasarı (player.gd _refresh_tuftuf_
+## poison saldırı gücünden hesaplar), poison_max_stacks bir düşmandaki toplam
+## yük üst sınırı, poison_duration bir yükün ömrü (sn) - bkz. enemy.gd
+## apply_poison. (Eskiden poison_ramp_per_tick vardı: tek zehir + saniyede
+## artan hasar; yük modeliyle kaldırıldı.)
 @export var poison_tick_damage: float = 0.0
-@export var poison_ramp_per_tick: float = 0.0
+@export var poison_max_stacks: int = 0
 @export var poison_duration: float = 0.0
 
 ## Kullanıcı isteği: "Tüftüfün hasarını gerçek hasara çevir" - bu silahın
@@ -1833,30 +1839,17 @@ func _pick_random_nearby_unfrozen(preferred: Node2D, claimed_by_siblings: Array)
 	return pool[randi() % pool.size()]
 
 
-## Tüftüf: "canı en yüksek düşmana öncelik verir" - her ateşte (ve her
-## _update_aim karesinde) yeniden hesaplandığı için, hedefin canı düştükçe ya
-## da yeni (daha canlı) bir düşman belirdikçe hedef kendiliğinden değişir,
-## "sürekli hedef değiştirir" isteğini ayrı bir takip mantığı gerektirmeden
-## karşılar.
+## Tüftüf: hedef önceliği "canı yüksek > hiç zehirlenmemiş > tüm yaratıklar"
+## (kullanıcı isteği) - kural TEK yerde, bkz. tuftuf_targeting.gd (remote_player.gd
+## kozmetik kopyası da aynısını çağırıyor). Her ateşte (ve her _update_aim karesinde)
+## yeniden hesaplandığı için hedefin canı düştükçe ya da yeni bir yaratık zehirlenip/
+## belirdikçe hedef kendiliğinden değişir, ayrı bir takip mantığı gerekmez. Fonksiyon
+## adı eski "en yüksek can" isteğinden kaldı (test_vision_targeting.gd kullanıyor).
 func _get_highest_health_enemy() -> Node2D:
 	var enemies := get_tree().get_nodes_in_group("enemies")
 	if enemies.is_empty():
 		return null
-	var origin: Vector2 = _attack_origin()
-	var best: Node2D = null
-	var best_health: float = -INF
-	for e in enemies:
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
-		if not VisionFogScript.can_target(e):
-			continue
-		if attack_range > 0.0 and origin.distance_to(e.global_position) > attack_range:
-			continue
-		var h: float = e.get("health") if "health" in e else 0.0
-		if h > best_health:
-			best_health = h
-			best = e
-	return best
+	return TuftufTargetingScript.pick(enemies, _attack_origin(), attack_range, func(e: Node) -> bool: return VisionFogScript.can_target(e))
 
 
 ## Şimşek Asası: her karede menzildeki hedefi tazeler - hedef değişirse
@@ -2321,7 +2314,7 @@ func _fire_at(target: Node2D) -> void:
 		proj.get_node("Bullet").texture = tier_dart_textures[idx]
 	if poison_tick_damage > 0.0 and "poison_tick_damage" in proj:
 		proj.poison_tick_damage = poison_tick_damage
-		proj.poison_ramp_per_tick = poison_ramp_per_tick
+		proj.poison_max_stacks = poison_max_stacks
 		proj.poison_duration = poison_duration
 	## Tüfek: delici mermi - birincil hedeften sonra pierce_count kadar ek
 	## düşmana daha (azalan yüzde hasarla) çarpar (bkz. projectile.gd).

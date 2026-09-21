@@ -1675,6 +1675,8 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 	if not target_enemy or not is_instance_valid(target_enemy):
 		return
 	match effect_type:
+		## Tüftüf zehri - param1=yükün saniyelik hasarı, param2=yük üst sınırı,
+		## param3=yükün ömrü (bkz. enemy.gd apply_poison).
 		"poison":
 			if target_enemy.has_method("apply_poison"):
 				target_enemy.apply_poison(param1, param2, param3)

@@ -35,6 +35,7 @@ var is_downed: bool = false
 ## yorum) - yani bu istemci kendi yerel efektini TAMAMEN bu senkronize
 ## veriden üretebiliyor.
 const FxDeathScene := preload("res://scenes/fx_death.tscn")
+const TuftufTargetingScript: GDScript = preload("res://scripts/tuftuf_targeting.gd")
 const FxReviveRewindScene := preload("res://scenes/fx_revive_rewind.tscn")
 const FxReviveHeartScene := preload("res://scenes/fx_revive_heart.tscn")
 var _death_status_fx: Node = null
@@ -629,7 +630,14 @@ func _update_local_weapon_aim(delta: float) -> void:
 			target = _get_target_for_weapon(i, icon.global_position)
 			_cached_aim_targets[i] = target
 		else:
-			target = _cached_aim_targets[i] if i < _cached_aim_targets.size() else null
+			## Önbellekteki hedef iki yeniden-hedefleme arasında (AIM_RETARGET_INTERVAL)
+			## queue_free() ile silinmiş olabilir - silinmiş bir nesneyi doğrudan
+			## "Node2D" tipli değişkene atamak "previously freed instance" hatası
+			## verip fonksiyonun geri kalanını (diğer silahların nişanı) atlatıyordu
+			## (2 süreçli multiplayer testinde ölen yaratıklarda görüldü). Önce
+			## Variant olarak okunup geçerliyse atanıyor.
+			var cached_target: Variant = _cached_aim_targets[i] if i < _cached_aim_targets.size() else null
+			target = cached_target if is_instance_valid(cached_target) else null
 		if not target or not is_instance_valid(target):
 			## weapon.gd _update_aim ile birebir aynı davranış: menzilde hedef
 			## yoksa döndürmeyi bırak, son açısında kalsın - rastgele/uzak bir
@@ -789,23 +797,14 @@ func _get_nearest_unfrozen_enemy_from(origin: Vector2, max_range: float) -> Node
 	return nearest
 
 
-## weapon.gd::_get_highest_health_enemy() ile birebir aynı - Tüftüf için.
+## weapon.gd::_get_highest_health_enemy() ile AYNI seçim - Tüftüf için "canı
+## yüksek > hiç zehirlenmemiş > tüm yaratıklar" kuralı TEK yerde (bkz.
+## tuftuf_targeting.gd), iki taraf da onu çağırır.
 func _get_highest_health_enemy_from(origin: Vector2, max_range: float) -> Node2D:
 	var enemies := get_tree().get_nodes_in_group("enemies")
 	if enemies.is_empty():
 		return null
-	var best: Node2D = null
-	var best_health: float = -INF
-	for e in enemies:
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
-		if max_range > 0.0 and origin.distance_to(e.global_position) > max_range:
-			continue
-		var h: float = e.get("health") if "health" in e else 0.0
-		if h > best_health:
-			best_health = h
-			best = e
-	return best
+	return TuftufTargetingScript.pick(enemies, origin, max_range)
 
 
 ## SÜREKLİ kanal (bkz. main.gd _rpc_update_player_transform, unreliable,

@@ -113,6 +113,9 @@ func test_creature_far_from_bubble_keeps_normal_target() -> void:
 	## Baloncuk kapalıyken hiçbir şey değişmemeli.
 	paladin.paladin_zone_active = false
 	_reset_zone_cache()
+	## Öndeki (600px) dostu kaldır: yaratığın "en yakın hedef" yenilemesi (4 karede bir, instance id'ye bağlı) rastgele
+	## bir karede tetiklenirse en yakın olan seçilir - testin kendi kurulumundaki bu belirsizliği ortadan kaldırıyor.
+	ally.free()
 	var inside_ally := _make_player(Vector2(60.0, 0.0), "player_allies")
 	enemy._cached_target_player = inside_ally
 	assert(enemy._get_target_player() == inside_ally, "Baloncuk kapalıyken hedef değişmemeli")
@@ -134,19 +137,19 @@ func test_taunt_locks_target_for_five_seconds_even_if_ally_is_closer() -> void:
 	## 4.5sn sonra hâlâ kilitli, 5sn'yi geçince serbest.
 	var t: float = 0.0
 	while t < 4.5:
-		ally.global_position = enemy.global_position + Vector2(10.0, 0.0) ## dost hep en yakın aday kalsın
+		ally.global_position = enemy.global_position + Vector2(0.5, 0.0) ## dost hep en yakın aday kalsın (0.5px: yaratık Şovalye'ye yapışınca 10px'lik mesafe eşitliği hedefi Şovalye'ye kaydırıp testi dalgalandırıyordu)
 		enemy._cached_target_player = ally
 		enemy._physics_process(DT)
 		t += DT
-	ally.global_position = enemy.global_position + Vector2(10.0, 0.0)
+	ally.global_position = enemy.global_position + Vector2(0.5, 0.0)
 	enemy._cached_target_player = ally
 	assert(enemy._get_target_player() == paladin, "4.5sn sonra kışkırtma sürmeli")
 	while t < 5.4:
-		ally.global_position = enemy.global_position + Vector2(10.0, 0.0)
+		ally.global_position = enemy.global_position + Vector2(0.5, 0.0)
 		enemy._cached_target_player = ally
 		enemy._physics_process(DT)
 		t += DT
-	ally.global_position = enemy.global_position + Vector2(10.0, 0.0)
+	ally.global_position = enemy.global_position + Vector2(0.5, 0.0)
 	enemy._cached_target_player = ally
 	assert(enemy._get_target_player() == ally, "5sn sonra yaratık normal hedefine dönmeli")
 	_cleanup()

@@ -259,8 +259,17 @@ const POWER_MAX_EXTRA_SPAWNS := 4 ## tek tetiklenişte eklenebilecek en fazla ek
 ## BİLEREK değiştirilmedi (ikisi de çarpılsaydı kalkan %36 düşerdi, üçüncü turdaki notla AYNI tuzak).
 ## Bosslar ayrıca aşağıdaki "tüm yaratıklar %10" azaltmasına (HEALTH_SHIELD_MULT) DAHİL EDİLMEDİ, kendi
 ## çarpanları BOSS_HEALTH_SHIELD_MULT: iki azaltma üst üste binip %28 düşüş yapmasın, "direkt %20" olsun.
-const BOSS_HEALTH_MULT := 126.72 ## eskiden 158.4
-const BOSS_DAMAGE_MULT := 2.4 ## eskiden 1.8
+## Kullanıcı isteği (BEŞİNCİ tur): "Bossların canını %15 kalkanını %10 azalt" - BOSS_HEALTH_MULT 126.72 ->
+## 107.712 (×0.85). Boss kalkan havuzu max_health × BOSS_SHIELD_RATIO'dan türetildiği için can düşünce kalkan da
+## kendiliğinden %15 iner; kalkanın toplamda TAM %10 azalması için BOSS_SHIELD_RATIO aşağıda
+## 1.3 × 0.9 / 0.85 yapıldı (yeni kalkan = 0.85 can × oran = eski kalkanın 0.9'u). Dördüncü turdaki "ikisini
+## birden çarpma" tuzağının tersi: burada iki yüzde FARKLI olduğu için oran ayrıca ayarlanmak ZORUNDA.
+## Kullanıcı isteği: "Bossların hasarını %10 arttırıp tüm yaratıkların hasarını %10 azalt" - BOSS_DAMAGE_MULT
+## 2.4 -> 2.64 (×1.1), GLOBAL_DAMAGE_BUFF (aşağıda) 1.68 -> 1.512 (×0.9). GLOBAL_DAMAGE_BUFF _apply_global_buff
+## ile bosslara da uygulandığı için bosslar için net etki ×1.1 × 0.9 = ×0.99 (kullanıcı sırasıyla "arttırıp ...
+## tüm yaratıkların azalt" dedi); normal yaratıklar tam ×0.9.
+const BOSS_HEALTH_MULT := 107.712 ## eskiden 126.72
+const BOSS_DAMAGE_MULT := 2.64 ## eskiden 2.4
 const BOSS_SCALE_MULT := 1.7
 
 ## Item shield (see enemy.gd's enable_item_shield): kullanıcı isteği -
@@ -292,7 +301,7 @@ const SHIELD_PROTECTION := 0.3 ## eskiden 0.4 - normal yaratıklarda sabit %30 h
 ## yoksa boss, kalkanı bitmeden canı biter ve kalkan boşa gider.
 const BOSS_SHIELD_PROTECTION := 0.90
 const REGULAR_SHIELD_RATIO := 1.15 ## eskiden 1.3 - kalkan canından %15 daha fazla
-const BOSS_SHIELD_RATIO := 1.3 ## kullanıcı isteği: "bossların kalkanlarını canlarından %30 daha fazla olacak şekilde dengele" - shield = health * 1.3 (eskiden 6.24, ~6.2x can)
+const BOSS_SHIELD_RATIO := 1.3 * 0.9 / 0.85 ## (BEŞİNCİ tur: can ×0.85, kalkan ×0.9 - bkz. BOSS_HEALTH_MULT üstündeki not) eskiden 1.3. Kullanıcı isteği: "bossların kalkanlarını canlarından %30 daha fazla olacak şekilde dengele" - shield = health * 1.3 (eskiden 6.24, ~6.2x can)
 
 ## Tüm düşmanlara uygulanan global güçlendirme çarpanı - kullanıcı isteğiyle
 ## ("hasarlarının artışını azaltıp dayanıklılıklarını arttıralım") artık
@@ -322,7 +331,9 @@ const HEALTH_SHIELD_MULT := 2.376
 const BOSS_HEALTH_SHIELD_MULT := 2.64
 ## DÜZELTME (kullanıcı isteği: "yaratıkların hasarını %60 arttır") - 1.05 ->
 ## 1.68 (1.05 * 1.6).
-const GLOBAL_DAMAGE_BUFF := 1.68 ## sadece hasar için (eskiden ortak 1.3)
+## Kullanıcı isteği: "tüm yaratıkların hasarını %10 azalt" - 1.68 -> 1.512 (×0.9), bosslar DAHİL (bkz.
+## BOSS_DAMAGE_MULT üstündeki not).
+const GLOBAL_DAMAGE_BUFF := 1.512 ## sadece hasar için (eskiden 1.68, ondan önce ortak 1.3)
 
 ## Kullanıcı isteği (#26): "yaratıklardan çok az altın düşüyor, altın düşme
 ## oranını arttır." Her yaratık sahnesinin (scenes/creatures/enemy_*.tscn)
@@ -560,9 +571,56 @@ func _broadcast_enemy_states_with_interest_management() -> void:
 ## has been reached (tier 15's roster keeps providing "trash" spawns
 ## alongside the one-time Final Kademe boss dump).
 func _current_tier() -> int:
-	var t: float = GameManager.game_time
-	var tier: int = 1 + int(t / tier_duration)
+	var tier: int = 1 + int(_tier_time() / tier_duration)
 	return clamp(tier, 1, 15)
+
+
+## ==============================================================================
+## KADEME BOSS KAPISI (kullanıcı isteği: "mevcut kademenin boss'unu öldürmeden diğer kademeye atlanmamalı")
+## Kademe (roster, ölçekleme, sonraki bossların ve Final Kademe'nin tetik zamanı) artık ham game_time'a değil,
+## _tier_time()'a bağlı: game_time ile birlikte akar AMA bir kademenin (BOSS_TIERS) boss'u/bosslarından biri
+## HÂLÂ SAĞKEN o kademenin bitiş sınırında (kademe N için N * tier_duration) DURUR - boss(lar) ölene kadar
+## kademe N'de kalınır (yeni kademenin yaratıkları, sonraki kademenin bossu, Final gelmez), ölünce saat kaldığı
+## yerden devam eder (kademe atlamaz, birden fazla kademe birden atlanmaz). Boss sınırdan ÖNCE öldürülürse
+## hiçbir şey değişmez. Boss hiç doğmadıysa (ör. spawn anında canlı oyuncu çapası yoktu) tutulacak boss da yok,
+## kapı açık kalır (oyun kilitlenmez). Oyun süresi/zorluk ramp'i (game_time) etkilenmez, sadece Kademe saati.
+## ==============================================================================
+const TIER_HOLD_EPSILON := 0.001
+var _tier_bosses: Dictionary = {} ## kademe -> o kademenin doğan boss node'ları
+var _held_total: float = 0.0 ## Kademe saatinin bosslar yüzünden geride tutulduğu toplam süre (sn)
+
+
+func _tier_boss_alive(tier: int) -> bool:
+	for b in _tier_bosses.get(tier, []):
+		if is_instance_valid(b) and b.get("is_dead") != true:
+			return true
+	return false
+
+
+## Kademe saati: game_time - bosslar yüzünden tutulan süre. Her çağrıda (ucuz: en fazla 5 kademe) sınır kontrol
+## edildiği için çağıran hangi karede olursa olsun tutarlı sonuç alır.
+func _tier_time() -> float:
+	var effective: float = GameManager.game_time - _held_total
+	if effective < 0.0: ## yeni oyun: game_time sıfırlandı
+		_held_total = 0.0
+		effective = GameManager.game_time
+	for tier in _tier_bosses.keys():
+		if not _tier_boss_alive(int(tier)):
+			continue
+		var boundary: float = float(tier) * tier_duration - TIER_HOLD_EPSILON
+		if effective > boundary:
+			_held_total += effective - boundary
+			effective = boundary
+	return effective
+
+
+## Kademe şu an sağ bir boss yüzünden bekletiliyor mu (HUD/test için).
+func is_tier_held_by_boss() -> bool:
+	var effective: float = _tier_time()
+	for tier in _tier_bosses.keys():
+		if _tier_boss_alive(int(tier)) and effective >= float(tier) * tier_duration - TIER_HOLD_EPSILON * 2.0:
+			return true
+	return false
 
 
 func _player_count() -> int:
@@ -868,7 +926,7 @@ func _spawn_regular_enemy() -> void:
 
 
 func _check_boss_tiers() -> void:
-	var t: float = GameManager.game_time
+	var t: float = _tier_time() ## Kademe saati (boss kapısı - bkz. _tier_time)
 	for tier in BOSS_TIERS.keys():
 		if _boss_tiers_spawned.has(tier):
 			continue
@@ -882,7 +940,7 @@ func _check_final_tier() -> void:
 	if _final_spawned:
 		return
 	var trigger_time: float = (FINAL_TIER - 1) * tier_duration
-	if GameManager.game_time >= trigger_time:
+	if _tier_time() >= trigger_time: ## 15. kademenin bossları ölmeden Final gelmez (bkz. _tier_time)
 		_final_spawned = true
 		_spawn_boss_group(FINAL_CREATURES, FINAL_TIER)
 
@@ -891,12 +949,14 @@ func _spawn_boss_group(ids: Array, tier: int) -> void:
 	var anchor_pos = _find_any_living_player_position()
 	if anchor_pos == null:
 		return
+	var spawned_bosses: Array = []
 	for id in ids:
 		var network_id: int = _next_network_enemy_id
 		_next_network_enemy_id += 1
 		var enemy = _spawn_creature(id, _random_spawn_position(anchor_pos, true), network_id)
 		if not enemy:
 			continue
+		spawned_bosses.append(enemy)
 		enemy.add_to_group("boss")
 		var family: String = ID_FAMILY.get(id, "")
 		var mult: Dictionary = FAMILY_MULT.get(family, {"hp": 1.0, "dmg": 1.0})
@@ -911,6 +971,10 @@ func _spawn_boss_group(ids: Array, tier: int) -> void:
 		_attach_boss_bar(enemy)
 		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 			_rpc_client_spawn_creature.rpc(id, enemy.global_position, tier, true, network_id)
+	## Kademe boss kapısı (bkz. _tier_time): bu kademenin bossları ölene kadar Kademe saati o kademenin
+	## sonunda bekler. (Final Kademe'nin bossları kapıdan sonra gelir, tutulacak bir sonraki kademe yok.)
+	if BOSS_TIERS.has(tier) and not spawned_bosses.is_empty():
+		_tier_bosses[tier] = spawned_bosses
 
 
 @rpc("any_peer", "call_remote", "reliable")

@@ -80,9 +80,9 @@ const SHIELD_KEYS := ["shield_standart", "shield_enerji", "shield_kale", "shield
 const WEAPON_DESCRIPTIONS := {
 	"dagger": "HASAR: 10 + %85 saldırı gücü · Yakın dövüş, hedefe kanama yükü bırakır\nKADEME (100): Kanama kapasitesi kademeyle artar (1→10). 30/50/70/100'da isabet başına +1 kanama yükü. Kanama: kademe + %5 saldırı gücü/sn.",
 	"fire_staff": "HASAR: 13 + %100 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Patlayıcı mermi\nKADEME (100): Her seviye ufak hasar ve hafif ateş hızı artışı. 30/50/70/100'de kümülatif +%8 hasar (100'de +%32).",
-	"lightning_staff": "HASAR: 12/sn + %65 saldırı gücü · Menzil 168 · Kesintisiz ışın\nKADEME (100): +12 saniyelik hasar/kademe. 30/50/70/100'da +1 zincir sıçrama (2→5 hedefe).",
+	"lightning_staff": "HASAR: 12/sn + %140 saldırı gücü · Menzil 168 · Kesintisiz ışın\nKADEME (100): +12 saniyelik hasar/kademe. 30/50/70/100'da +1 zincir sıçrama (2→5 hedefe).",
 	"tabanca": "HASAR: 17 + %99 saldırı gücü · Ateş hızı 0.9sn · Menzil 210 · Aynı hedefe isabet yükü biriktirir (tavan %70)\nKADEME (100): 30/50/70'de +%10 ateş hızı +%5 yük; 100'de +%12 ateş hızı +%5 yük (tavan %90'a çıkar).",
-	"tuftuf": "HASAR: 5 + %55 saldırı gücü · Ateş hızı 1.4sn · Menzil 238 · Hedefi zehirler (30sn)\nKADEME (100): +5 hasar ve +%8 ateş hızı/kademe. Zehir: kademe + %1 saldırı gücü/sn; 30/50/70/100'da zehir x1.5/x2/x2.5/x3.",
+	"tuftuf": "HASAR: 5 + %55 saldırı gücü · Ateş hızı 1.4sn · Menzil 238 · Hedefi zehirler: her isabet 1 yük ekler (en fazla 100 yük), her yük 20sn boyunca saniyede saldırı gücünün %5'i kadar hasar verir · Öncelik: canı yüksek > hiç zehirlenmemiş > tümü\nKADEME (100): +5 hasar ve +%8 ateş hızı/kademe (zehir kademeye bağlı değil).",
 	"tufek": "HASAR: 22 + %195 saldırı gücü · Ateş hızı 1.3sn · Menzil 336 · Delici mermi\nKADEME (100): +20 hasar ve +%3 kalkan delme/kademe. 30/50/70/100'da delme sayısı 2/3/4/5, delici hasar %40/50/60/70.",
 	"arcane": "HASAR: 16 + %110 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Kuyruklu yıldız mermisi\nKADEME (100): +16 hasar/kademe. 30/50/70/100'da kümülatif +%8 hasar (10'da +%32).",
 	"yay": "HASAR: 14 + %70 saldırı gücü · Ateş hızı 0.8sn · Menzil 266 · Ateşten önce ok çeker\nKADEME (100): +10 hasar/kademe, ateş hızı artar. Her 3. atışta ekstra ok; 30/50/70/100'da +1 ekstra ok (→+5).",
@@ -95,10 +95,10 @@ const WEAPON_DESCRIPTIONS := {
 	"uzunkilic": "HASAR: 18 + %100 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş\nKADEME (100): Hasar kademeyle büyümez. +%5 kalkan delme/kademe. 30/50/70/100'da kümülatif +%10 ekstra silah hasarı (10'da +%40).",
 }
 const SHIELD_DESCRIPTIONS := {
-	"shield_standart": "Dengeli bir kalkan. 150 kalkan gücü, %60 hasar emilimi. Vurulduktan 8 saniye sonra yenilenmeye başlar (10/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar (+10 güç, +1 yenilenme, -0.1sn bekleme/eski-seviye). 100 seviyeye kadar geliştirilebilir.",
-	"shield_enerji": "Hızlı yenilenen ama zayıf bir kalkan. 90 kalkan gücü, %50 hasar emilimi. Vurulduktan 4.5 saniye sonra yenilenmeye başlar (12/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar. 100 seviyeye kadar geliştirilebilir.",
-	"shield_kale": "Çok güçlü ama yavaş yenilenen bir kalkan. 180 kalkan gücü, %70 hasar emilimi. Vurulduktan 9 saniye sonra yenilenmeye başlar (8/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar. 100 seviyeye kadar geliştirilebilir.",
-	"shield_savas": "Savaş sırasında da yenilenir, hiç bekleme süresi yok. 100 kalkan gücü, %55 hasar emilimi, sürekli 3.6/sn yenilenir. Her seviye ufak ufak +güç/+yenilenme - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar. 100 seviyeye kadar geliştirilebilir.",
+	"shield_standart": "Dengeli bir kalkan. 150 kalkan gücü, %65 hasar emilimi. Vurulduktan 8 saniye sonra yenilenmeye başlar (10/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar (+10 güç, +1 yenilenme, -0.1sn bekleme/eski-seviye). 100 seviyeye kadar geliştirilebilir.",
+	"shield_enerji": "Hızlı yenilenen ama zayıf bir kalkan. 90 kalkan gücü, %55 hasar emilimi. Vurulduktan 4.5 saniye sonra yenilenmeye başlar (12/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar. 100 seviyeye kadar geliştirilebilir.",
+	"shield_kale": "Çok güçlü ama yavaş yenilenen bir kalkan. 180 kalkan gücü, %75 hasar emilimi. Vurulduktan 9 saniye sonra yenilenmeye başlar (8/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar. 100 seviyeye kadar geliştirilebilir.",
+	"shield_savas": "Savaş sırasında da yenilenir, hiç bekleme süresi yok. 100 kalkan gücü, %60 hasar emilimi, sürekli 3.6/sn yenilenir. Her seviye ufak ufak +güç/+yenilenme - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar. 100 seviyeye kadar geliştirilebilir.",
 }
 
 var _cards: Array = []
