@@ -30,7 +30,7 @@ const SKILL_TIMING := {
 	## yerini değiştir" (eskiden Ayna Formu buradaydı, bkz. SKILL3_TIMING[37]
 	## şimdi orada). "duration" Elara'nın Kalkan Sıçraması'yla (id 31) AYNI
 	## desen - sadece kısa hamle penceresi, gerçek kısıt 4sn bekleme.
-	38: {"duration": 0.16, "cooldown": 4.0},
+	38: {"duration": TalonFormationMath.DASH_TIME, "cooldown": 4.0}, ## atılış süresiyle AYNI sabit (fx_talon_dash.gd de okur)
 	9: {"duration": 15.0, "cooldown": 120.0}, ## Matthew: up to 15s shield dome
 	## Şovalye (Paladin): Koruma Baloncuğu - sabit bir süresi YOK, kalkanı
 	## (item_shield_hp) tükenene kadar sürer (bkz. _process_paladin_ulti).
@@ -836,6 +836,15 @@ const UzunkilicWeaponScene := preload("res://scenes/weapon_uzunkilic.tscn")
 ## Skill VFX sahneleri - runtime load() yerine preload() (frame drop önler)
 const FxOykuHealScene := preload("res://scenes/fx_oyku_heal.tscn")
 const FxWaveBeamScene := preload("res://scenes/fx_wave_beam.tscn")
+## Korsan pixel FX'leri (bomba/patlama/bombardiman mermisi/alan) ve ortak sayilari - bkz. korsan_fx_math.gd, pixel_draw.gd.
+const KorsanFxMath := preload("res://scripts/korsan_fx_math.gd")
+const PixelDrawScript := preload("res://scripts/pixel_draw.gd")
+const FxKorsanStrikeScene := preload("res://scenes/fx_korsan_strike.tscn")
+const FxKorsanZoneScene := preload("res://scenes/fx_korsan_zone.tscn")
+## Talon pixel FX'leri (Q dash izi, E zincirli bag, R ofke formu) - bkz. _skill_talon_dash/_skill_talon_weapon_salvo/_skill_talon_mirror_form.
+const FxTalonDashScene := preload("res://scenes/fx_talon_dash.tscn")
+const FxTalonChainsScene := preload("res://scenes/fx_talon_chains.tscn")
+const FxTalonFormScene := preload("res://scenes/fx_talon_form.tscn")
 const FxBuyucuFastfireScene := preload("res://scenes/fx_buyucu_fastfire.tscn")
 const FxShieldActiveScene := preload("res://scenes/fx_shield_active.tscn")
 const FxPaladinCastScene := preload("res://scenes/fx_paladin_cast.tscn")
@@ -2229,7 +2238,7 @@ func _physics_process(delta: float) -> void:
 	## Büyücü Kız'ın "Meteor Patlaması" varyasyonu (bkz. _skill_buyucu_meteor):
 	## 5sn boyunca yerinde kalıp odaklanması gerekiyor - Assasin Çocuk'un
 	## dash'iyle AYNI desende hareket kontrolü alınıyor.
-	if _paladin_movement_locked or _menu_input_locked or is_assasin_dashing or is_buyucu_channeling or is_chat_typing:
+	if _paladin_movement_locked or _menu_input_locked or is_assasin_dashing or _talon_dashing or is_buyucu_channeling or is_chat_typing:
 		velocity = Vector2.ZERO
 		effective_direction = Vector2.ZERO
 	else:
@@ -2457,6 +2466,10 @@ func _block_movement_into_enemies() -> void:
 	## fonksiyon SADECE manuel "yaklaşmayı engelle" itmesini iptal eder).
 	if is_invisible:
 		return
+	## Vampir Çocuk'un Yarasa Formu (E): yaratıkların içinden geçer (kullanıcı isteği). Yaratık tarafındaki karşılığı
+	## enemy.gd'nin sert yapıştırma bloğu (is_ghost_now).
+	if _vampir_bat_form_active:
+		return
 	if velocity.length() < 0.1:
 		return
 	var still_overlapping: Array = []
@@ -2539,6 +2552,9 @@ func _block_movement_into_players() -> void:
 ## aşağıdaki üç çağrıyı is_position_blocked_by_terrain'e çevirmek yeterli.
 func _block_movement_into_terrain() -> void:
 	if velocity.length() < 0.1:
+		return
+	## Vampir Çocuk'un Yarasa Formu (E): duvarların (orman/uçurum karoları) içinden de geçer (kullanıcı isteği).
+	if _vampir_bat_form_active:
 		return
 	## DÜZELTME (kullanıcı bildirimi: "düşmanlar bizi hala itip duvara
 	## sıkıştırıyor ve bir daha çıkamıyoruz duvarın içinden oyun bitene
@@ -2806,7 +2822,7 @@ func _process_healer_shield_tick(delta: float) -> void:
 ## _oakley_e_ally_target) etrafında yakındaki tüm yaratıkları 4sn korkutup
 ## kaçırır. _do_repel()/_skill_berserk() (AOE tarama + mesafe kontrolü)
 ## deseninin çok-merkezli versiyonu.
-const MELEK_FEAR_RADIUS := 260.0
+const MELEK_FEAR_RADIUS := MelekHolyScript.RADIUS ## fx_melek_holy.gd sok halkasi ayni yaricapa kadar genisler (tek kaynak)
 const MELEK_FEAR_DURATION := 4.0
 
 func _skill_melek_fear() -> void:
@@ -2824,8 +2840,15 @@ func _skill_melek_fear() -> void:
 				if e.has_method("apply_fear"):
 					e.apply_fear(center, MELEK_FEAR_DURATION)
 					feared.append(e)
-	_spawn_burst(Color(1.0, 0.95, 0.6))
-	_spawn_ring(Color(1.0, 0.95, 0.6))
+	## Kullanıcı isteği: Melek'in ultisinde etrafında sarı, güçlü pixel parıltı; can/kalkan bağı kurduğu dostun etrafında da
+	## çıksın. Kendi üstünde: _play_and_broadcast_skill_fx (yerel + diğer oyuncular). Dost üstünde: _set_ally_aura "holy"
+	## (dostun kendi istemcisi + üçüncü izleyiciler dahil, ağ üzerinden). Eski yumuşak parçacık/halka kaldırıldı.
+	_play_and_broadcast_skill_fx(FxMelekHolyScene)
+	var linked: Array = []
+	for ally in [_oakley_q_ally_target, _oakley_e_ally_target]:
+		if is_instance_valid(ally) and not linked.has(ally):
+			linked.append(ally)
+			_set_ally_aura(ally, "holy", true)
 
 
 ## Baloncuk iki ayrı kaynaktan görünür olabilir: Şovalye Adam'ın R-tuşu
@@ -3470,7 +3493,8 @@ func _korsan_try_place_bomb() -> void:
 	if "owner_player" in bomb:
 		bomb.owner_player = self
 	_korsan_bombs.append(bomb)
-	_spawn_burst(Color(1.0, 0.6, 0.15))
+	## Kullanıcı isteği: Korsan efektleri sıfırdan pixel-art - bomba bırakınca yerde pixel toz bulutu.
+	_korsan_pixel_burst(global_position + Vector2(0, 8), "dust", 12, 95.0, 0.4)
 	## DÜZELTME (görünmezlik): önceden _broadcast_skill_scene() kullanılıyordu
 	## - o, kozmetik kopyayı atan oyuncunun RemotePlayer'ının ÇOCUĞU yapıp
 	## (0,0) yerel konuma sabitliyordu, yani bomba dünyada bırakıldığı yerde
@@ -3493,35 +3517,40 @@ func _korsan_try_place_bomb() -> void:
 ## tetiklenmeyeceği için (bkz. _activate_skill() başındaki #39 kontrolü)
 ## aşağıdaki "any_detonated" kontrolü artık salt savunma amaçlı.
 func _skill_korsan_detonate_all() -> void:
-	var bombs_to_detonate: Array = _korsan_bombs.duplicate()
+	var bombs_to_detonate: Array = _korsan_bombs.filter(func(x): return is_instance_valid(x) and x.has_method("detonate"))
 	_korsan_bombs.clear()
+	## Kullanıcı isteği: Korsan efektleri sıfırdan pixel-art. Patlat: dedonatör kıvılcımı + bombalar KORSAN'A EN YAKINDAN
+	## UZAĞA doğru zincirleme (KorsanFxMath.CHAIN_DELAY arayla) patlar - "hepsini tetikledim" hissi.
+	var origin: Vector2 = global_position
+	bombs_to_detonate.sort_custom(func(x, y): return origin.distance_squared_to(x.global_position) < origin.distance_squared_to(y.global_position))
+	if not bombs_to_detonate.is_empty():
+		_korsan_pixel_burst(global_position + Vector2(0, -6), "spark", 12, 150.0, 0.4)
 	var any_detonated: bool = false
-	for b in bombs_to_detonate:
-		if is_instance_valid(b) and b.has_method("detonate"):
-			## DÜZELTME: gerçek bomba SADECE bırakan istemcide detonate()
-			## ediliyor (patlama efekti de sadece onun ekranına ekleniyor).
-			## Diğer katılımcılardaki kozmetik kopya (artık broadcast_drop
-			## "korsan_bomb" ile dünya konumunda duruyor - bkz. yukarısı)
-			## kendi başına asla patlamaz/kaybolmaz. Konumu detonate()
-			## (queue_free çağırır) ÇAĞRILMADAN ÖNCE yakalayıp: (1) diğer
-			## isabet efektlerinin kullandığı genel dünya-konumlu VFX
-			## yayınıyla ("hitscan_impact") patlama animasyonunu herkesin
-			## ekranında da oynatıyoruz, (2) remove_drop ile kozmetik bomba
-			## kopyasını da kaldırıyoruz ki sonsuza dek yerde yanıp sönerek
-			## kalmasın.
-			var bomb_pos: Vector2 = b.global_position
-			var bomb_net_id: int = int(b.get_meta("korsan_bomb_network_id", 0))
-			b.detonate()
-			any_detonated = true
-			if NetworkManager.is_multiplayer_active:
-				NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", bomb_pos, {
-					"scene_path": "res://scenes/fx_korsan_explosion.tscn"
-				})
-				if bomb_net_id > 0:
-					NetworkManager.remove_drop.rpc(bomb_net_id)
+	for i in range(bombs_to_detonate.size()):
+		if i > 0:
+			await get_tree().create_timer(KorsanFxMath.CHAIN_DELAY).timeout
+		var b: Node = bombs_to_detonate[i]
+		if not is_instance_valid(b) or not is_inside_tree():
+			continue
+		## DÜZELTME: gerçek bomba SADECE bırakan istemcide detonate() ediliyor; diğer katılımcılardaki kozmetik kopya
+		## (broadcast_drop "korsan_bomb") kendi başına asla patlamaz/kaybolmaz. Konum/yarıçap detonate() (queue_free
+		## çağırır) ÇAĞRILMADAN ÖNCE yakalanır: (1) patlama görseli genel dünya-konumlu VFX yayınıyla ("hitscan_impact")
+		## herkesin ekranında oynar, (2) remove_drop ile kozmetik bomba kopyası kaldırılır.
+		var bomb_pos: Vector2 = b.global_position
+		var bomb_radius: float = float(b.radius) if "radius" in b else KorsanFxMath.BOMB_RADIUS
+		var bomb_net_id: int = int(b.get_meta("korsan_bomb_network_id", 0))
+		b.detonate()
+		any_detonated = true
+		if NetworkManager.is_multiplayer_active:
+			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", bomb_pos, {
+				"scene_path": "res://scenes/fx_korsan_explosion.tscn",
+				"radius": bomb_radius,
+				"color": Color(1.0, 0.6, 0.2),
+			})
+			if bomb_net_id > 0:
+				NetworkManager.remove_drop.rpc(bomb_net_id)
 	if not any_detonated:
 		_spawn_floating_text("BOMBA YOK", Color(1.0, 0.4, 0.4))
-	_spawn_burst(Color(1.0, 0.5, 0.1))
 
 
 ## Korsan'ın yeni 3. yeteneği (Bombardıman, skill3 id 34, R tuşu) - "etrafındaki
@@ -3532,8 +3561,8 @@ func _skill_korsan_detonate_all() -> void:
 ## _skill_buyucu_meteor/_process_buyucu_meteor) AYNI desende, KENDİ ayrı
 ## zamanlayıcısıyla yürütülüyor (_process()'te _process_korsan_bombardment
 ## çağrısı, bkz. dosyanın _physics_process bloğu).
-const KORSAN_BOMBARDMENT_RADIUS := 380.0
-const KORSAN_BOMBARDMENT_DURATION := 8.0
+const KORSAN_BOMBARDMENT_RADIUS := KorsanFxMath.BOMBARDMENT_RADIUS ## fx_korsan_zone.gd de aynı sayıyı buradan okur
+const KORSAN_BOMBARDMENT_DURATION := KorsanFxMath.BOMBARDMENT_DURATION
 const KORSAN_BOMBARDMENT_TICK_INTERVAL := 1.0
 const KORSAN_BOMBARDMENT_DAMAGE_RATIO := 1.5 ## %150 saldırı gücü
 
@@ -3549,8 +3578,10 @@ func _skill_korsan_bombardment() -> void:
 	## ama kanalın kendisi ANINDA görsel olarak belli olsun diye alan
 	## yarıçapını gösteren bir halka hemen çiziliyor.
 	_korsan_bombardment_tick_timer = KORSAN_BOMBARDMENT_TICK_INTERVAL
-	_spawn_ring_sized(KORSAN_BOMBARDMENT_RADIUS, Color(1.0, 0.5, 0.15))
-	_spawn_burst(Color(1.0, 0.5, 0.1))
+	## Kullanıcı isteği: Korsan efektleri sıfırdan pixel-art - kanal boyunca yarıçapı gösteren pixel uyarı çemberi
+	## (fx_korsan_zone.gd, yerel + diğer oyuncular AYNI sahneyi doğurur) + başlangıçta koyu pixel duman.
+	_play_and_broadcast_skill_fx(FxKorsanZoneScene)
+	_korsan_pixel_burst(global_position, "smoke", 16, 120.0, 0.6)
 
 
 ## Kanal boyunca (bkz. yukarısı) her saniye Korsan'ın GÜNCEL konumu
@@ -3570,8 +3601,27 @@ func _process_korsan_bombardment(delta: float) -> void:
 
 
 func _apply_korsan_bombardment_tick() -> void:
-	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir" - tek bir
-	## tik, tek bir kritik zarı (Korsan'ın bomba patlamasıyla AYNI desen).
+	## Görsel: her tikte KorsanFxMath.STRIKES_PER_TICK mermi düşer - alandaki rastgele yaratıkların üstüne (yaratık yoksa
+	## alanda rastgele noktaya). Hasar AYNI (tüm alan, %150 saldırı gücü) ama mermiler yere indiği anda uygulanır
+	## (STRIKE_FALL_TIME sonra) - yaratık patlamadan önce ölmesin diye.
+	var in_range: Array = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(e) and e.get("is_dead") != true and global_position.distance_to(e.global_position) <= KORSAN_BOMBARDMENT_RADIUS:
+			in_range.append(e)
+	in_range.shuffle()
+	for i in range(KorsanFxMath.STRIKES_PER_TICK):
+		var strike_pos: Vector2
+		if i < in_range.size():
+			strike_pos = in_range[i].global_position + Vector2(randf_range(-22.0, 22.0), randf_range(-22.0, 22.0))
+		else:
+			var angle: float = randf() * TAU
+			var dist: float = randf_range(0.0, KORSAN_BOMBARDMENT_RADIUS)
+			strike_pos = global_position + Vector2(cos(angle), sin(angle)) * dist
+		_spawn_korsan_bombardment_strike_fx(strike_pos)
+	await get_tree().create_timer(KorsanFxMath.STRIKE_FALL_TIME).timeout
+	if not is_instance_valid(self) or is_dead or not is_inside_tree():
+		return
+	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir" - tek bir tik, tek bir kritik zarı.
 	var is_crit: bool = _roll_ability_crit()
 	var dmg: float = _apply_ability_crit(damage_bonus * KORSAN_BOMBARDMENT_DAMAGE_RATIO, is_crit)
 	for e in get_tree().get_nodes_in_group("enemies"):
@@ -3580,25 +3630,30 @@ func _apply_korsan_bombardment_tick() -> void:
 		if global_position.distance_to(e.global_position) > KORSAN_BOMBARDMENT_RADIUS:
 			continue
 		if e.has_method("take_damage"):
-			e.take_damage(dmg, is_crit)
-	## Görsel: bombardıman hissi için alan içinde rastgele 2 patlama - Korsan'ın
-	## kendi bomba patlaması FX'iyle AYNI ("hitscan_impact" ile herkese
-	## yayınlanır, bkz. _skill_korsan_detonate_all üstündeki AYNI desen).
-	for i in range(2):
-		var angle: float = randf() * TAU
-		var dist: float = randf_range(0.0, KORSAN_BOMBARDMENT_RADIUS)
-		var strike_pos: Vector2 = global_position + Vector2(cos(angle), sin(angle)) * dist
-		_spawn_korsan_bombardment_strike_fx(strike_pos)
+			e.take_damage(dmg, is_crit, 0.0, true)
 
 
 func _spawn_korsan_bombardment_strike_fx(pos: Vector2) -> void:
-	if FxKorsanExplosionScene:
-		var fx: Node2D = FxKorsanExplosionScene.instantiate() as Node2D
+	if FxKorsanStrikeScene:
+		var fx: Node2D = FxKorsanStrikeScene.instantiate() as Node2D
 		get_tree().current_scene.add_child(fx)
 		fx.global_position = pos
+		if fx.has_method("setup"):
+			fx.setup(KorsanFxMath.STRIKE_RADIUS, Color(1.0, 0.6, 0.2))
 	if NetworkManager.is_multiplayer_active:
 		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {
-			"scene_path": "res://scenes/fx_korsan_explosion.tscn",
+			"scene_path": "res://scenes/fx_korsan_strike.tscn",
+			"radius": KorsanFxMath.STRIKE_RADIUS,
+			"color": Color(1.0, 0.6, 0.2),
+		})
+
+
+## Korsan pixel parçacık patlaması (yerel + diğer oyuncular): pixel_draw.gd spawn_burst + network_manager.gd "pixel_burst".
+func _korsan_pixel_burst(pos: Vector2, palette: String, count: int, speed: float, life: float) -> void:
+	PixelDrawScript.spawn_burst(get_tree().current_scene, pos, palette, count, speed, life)
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "pixel_burst", pos, {
+			"palette": palette, "count": count, "speed": speed, "life": life,
 		})
 
 
@@ -5458,10 +5513,13 @@ func revive_from_permadeath() -> void:
 ## geri veren bir ÇARPANDI. Artık hasar MİKTARINDAN tamamen BAĞIMSIZ: her
 ## gerçek isabette (amount>0) sabit 1 can yenileme İHTİMALİ.
 ## LIFESTEAL_EFFECTIVENESS eski formüle özgüydü, burada artık kullanılmıyor.
-func on_damage_dealt(amount: float) -> void:
+func on_damage_dealt(amount: float, is_area: bool = false) -> void:
 	if is_dead or lifesteal_percent <= 0.0 or amount <= 0.0 or health >= max_health:
 		return
-	if randf() < lifesteal_percent:
+	## KULLANICI İSTEĞİ (2026-09-21): "Can emme bundan sonra alan hasarı vuran skillerde ve silahlarda sadece %33 geçerli
+	## olmalı" - alan hasarı isabetlerinde şans, LIFESTEAL_EFFECTIVENESS ile çarpılır (tek hedefli isabetlerde tam).
+	var chance: float = lifesteal_percent * (GameManager.LIFESTEAL_EFFECTIVENESS if is_area else 1.0)
+	if randf() < chance:
 		health = min(max_health, health + 1.0)
 		health_changed.emit(health, max_health)
 
@@ -6494,6 +6552,9 @@ var _oakley_q_ally_target: Node2D = null
 ## scene.resource_path'ten okunuyor (bkz. _play_and_broadcast_skill_fx).
 const FxMelekHealAuraScene := preload("res://scenes/fx_recovery_life.tscn")
 const FxMelekShieldAuraScene := preload("res://scenes/fx_recovery_mana.tscn")
+## Melek R (Kutsal Korku) sari pixel parilti - bkz. fx_melek_holy.gd. "holy" aura tipi start_ally_aura_fx ile ally uzerinde de cikar.
+const FxMelekHolyScene := preload("res://scenes/fx_melek_holy.tscn")
+const MelekHolyScript := preload("res://scripts/fx_melek_holy.gd")
 var _ally_aura_fx: Dictionary = {}
 ## _process_healer_heal_tick/_process_healer_shield_tick'teki "bağ hâlâ
 ## menzilde mi" geçişlerini izlemek için - aura start/stop'u sadece GERÇEK
@@ -6504,7 +6565,7 @@ var _melek_shield_ally_aura_on: bool = false
 func start_ally_aura_fx(aura_type: String) -> void:
 	if _ally_aura_fx.has(aura_type) and is_instance_valid(_ally_aura_fx[aura_type]):
 		return
-	var scene: PackedScene = FxMelekHealAuraScene if aura_type == "heal" else (FxMelekShieldAuraScene if aura_type == "shield" else null)
+	var scene: PackedScene = FxMelekHealAuraScene if aura_type == "heal" else (FxMelekShieldAuraScene if aura_type == "shield" else (FxMelekHolyScene if aura_type == "holy" else null))
 	if not scene:
 		return
 	var fx := scene.instantiate()
@@ -7015,7 +7076,7 @@ func _buyucu_on_kill(pos: Vector2) -> void:
 		if pos.distance_to(e.global_position) > BUYUCU_PASSIVE_EXPLOSION_RADIUS:
 			continue
 		if e.has_method("take_damage"):
-			e.take_damage(dmg, false)
+			e.take_damage(dmg, false, 0.0, true)
 	_spawn_world_explosion_fx(pos)
 
 
@@ -7213,7 +7274,7 @@ func _skill_buyucu_frost_nova() -> void:
 			continue
 		hit_any = true
 		if e.has_method("take_damage"):
-			e.take_damage(_apply_ability_crit(dmg, is_crit), is_crit)
+			e.take_damage(_apply_ability_crit(dmg, is_crit), is_crit, 0.0, true)
 		if e.has_method("apply_freeze_full"):
 			e.apply_freeze_full(BUYUCU_NOVA_FREEZE_DURATION)
 	## DÜZELTME (kullanıcı bildirimi: "büyücü kızın don nova yeteneği sanırım
@@ -7356,7 +7417,7 @@ func _spawn_buyucu_meteor_strike() -> void:
 		if strike_pos.distance_to(e.global_position) > BUYUCU_METEOR_IMPACT_RADIUS:
 			continue
 		if e.has_method("take_damage"):
-			e.take_damage(_apply_ability_crit(dmg, is_crit), is_crit)
+			e.take_damage(_apply_ability_crit(dmg, is_crit), is_crit, 0.0, true)
 
 
 func _skill_shield() -> void:
@@ -7918,7 +7979,7 @@ func _assasin_dash2_execute() -> void:
 			continue
 		if e.has_method("take_damage"):
 			var is_crit: bool = _roll_ability_crit()
-			e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit)
+			e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
 			_spawn_assasin_dash_hit_fx((e as Node2D).global_position, dash_dir)
 
 
@@ -8729,7 +8790,9 @@ func _skill_talon_weapon_salvo() -> void:
 		if "fire_in_facing_direction" in w:
 			w.fire_in_facing_direction = true
 	_talon_set_weapons_circular(TALON_SALVO_RADIUS, 0.0)
-	_spawn_burst(Color(1.0, 0.6, 0.2))
+	## Kullanıcı isteği: E'ye basılır basılmaz karakter ile silahlar arasında kırmızı/turuncu pixel zincirli bağ, silahlarla
+	## birlikte dönsün. TEK referans: _play_and_broadcast_skill_fx (yerel + diğer oyuncular AYNI sahneyi doğurur).
+	_play_and_broadcast_skill_fx(FxTalonChainsScene)
 
 
 ## _process_talon_weapon_salvo (bkz. _physics_process çağrısı) her karede
@@ -8784,7 +8847,7 @@ func _talon_salvo_damage_tick() -> void:
 				continue
 			if e.has_method("take_damage"):
 				var is_crit: bool = _roll_ability_crit()
-				e.call("take_damage", _apply_ability_crit(weapon_tick_damage, is_crit), is_crit)
+				e.call("take_damage", _apply_ability_crit(weapon_tick_damage, is_crit), is_crit, 0.0, true)
 
 
 ## _end_skill2_effects() (skill2 süresi dolunca) tarafından çağrılır - silah
@@ -8810,12 +8873,18 @@ func _end_talon_weapon_salvo() -> void:
 ## çizgi-tabanlı isabet tespiti şablonu, kalkan yenilemesi Elara'nın
 ## _skill_elara_dash_refill()'iyle AYNI heal_shield() çağrısı.
 const TALON_DASH_DISTANCE := 160.0
-const TALON_DASH_TIME := 0.16
+const TALON_DASH_TIME := TalonFormationMath.DASH_TIME ## bkz. talon_formation_math.gd DASH_TIME notu
 const TALON_DASH_HIT_WIDTH := 48.0
 const TALON_DASH_DAMAGE_MULT := 0.6 ## saldırı gücünün %60'ı
 const TALON_DASH_SHIELD_REFILL_PERCENT := 0.04 ## isabet başına eksik kalkanın %4'ü
+## Atılış sürerken hareket girdisi kilitlenir (yoksa move_and_slide tween'le çekişir) - bkz. _physics_process.
+var _talon_dashing: bool = false
 
 
+## KULLANICI İSTEĞİ: "anında ışınlanır gibi dash atmamalı, anında atılıyor gibi atmalı + kırmızı/turuncu pixel dash izi".
+## Eski hal: 0.16sn DOĞRUSAL hareket (~10 kare) - 160px'i o kadar kısa sürede kat edince ışınlanma gibi görünüyordu, üstelik
+## uzak istemcilerde 20Hz paketle 3 örnek = tam ışınlanma. Şimdi 0.3sn, QUART ease-out (ilk karede hızlı fırlar, sonra
+## yavaşlar) ve hasar tüm yolun sonunda değil, dash düşmanın yanından geçerken uygulanır.
 func _skill_talon_dash() -> void:
 	var input_dir: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var raw_dir: Vector2 = input_dir if input_dir.length() > 0.1 else _facing_to_vector(facing)
@@ -8832,31 +8901,48 @@ func _skill_talon_dash() -> void:
 		total_damage = 10.0
 	var hit_damage: float = total_damage * TALON_DASH_DAMAGE_MULT
 
-	var hit_enemies: Array = []
+	## Vurulacaklar (yol çizgisine TALON_DASH_HIT_WIDTH içinde), yol üzerindeki konumlarına (0..1) göre.
+	var pending: Array = [] ## [enemy, t_along_path]
 	for e: Node in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
 			continue
 		var epos: Vector2 = (e as Node2D).global_position
 		var closest: Vector2 = Geometry2D.get_closest_point_to_segment(epos, start_pos, end_pos)
 		if epos.distance_to(closest) <= TALON_DASH_HIT_WIDTH:
-			hit_enemies.append(e)
+			pending.append([e, clampf((closest - start_pos).length() / TALON_DASH_DISTANCE, 0.0, 1.0)])
 
-	_spawn_burst(Color(1.0, 0.55, 0.2))
+	_talon_dashing = true
+	_play_and_broadcast_skill_fx(FxTalonDashScene)
 	var dash_tween := create_tween()
 	dash_tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
-	dash_tween.tween_method(func(p: Vector2): global_position = p, start_pos, end_pos, TALON_DASH_TIME)
+	dash_tween.set_trans(Tween.TRANS_QUART)
+	dash_tween.set_ease(Tween.EASE_OUT)
+	dash_tween.tween_method(func(f: float) -> void:
+		if not is_instance_valid(self):
+			return
+		global_position = start_pos.lerp(end_pos, f)
+		_talon_dash_apply_hits(pending, f, hit_damage)
+	, 0.0, 1.0, TALON_DASH_TIME)
 	await dash_tween.finished
+	_talon_dashing = false
 	if not is_instance_valid(self) or is_dead:
 		return
+	_talon_dash_apply_hits(pending, 1.01, hit_damage) ## tween kareyi atlamışsa kalanlar da vurulsun
 
-	for e in hit_enemies:
-		if not is_instance_valid(e) or e.get("is_dead") == true or not is_inside_tree():
-			continue
-		if e.has_method("take_damage"):
-			var is_crit: bool = _roll_ability_crit()
-			e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit)
-			if item_shield_max > 0.0:
-				heal_shield((item_shield_max - item_shield_hp) * TALON_DASH_SHIELD_REFILL_PERCENT)
+
+## Yolu (path_fraction) dash'in geçtiği düşmanlara hasar + kalkan yenilemesi uygular; vurulanlar listeden düşer.
+func _talon_dash_apply_hits(pending: Array, path_fraction: float, hit_damage: float) -> void:
+	var i: int = pending.size() - 1
+	while i >= 0:
+		if float(pending[i][1]) <= path_fraction:
+			var e: Node = pending[i][0]
+			pending.remove_at(i)
+			if is_instance_valid(e) and e.get("is_dead") != true and e.has_method("take_damage") and is_inside_tree():
+				var is_crit: bool = _roll_ability_crit()
+				e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
+				if item_shield_max > 0.0:
+					heal_shield((item_shield_max - item_shield_hp) * TALON_DASH_SHIELD_REFILL_PERCENT)
+		i -= 1
 
 
 ## ---------- Ayna Formu (3. yetenek/R, skill3 id 37 - kullanıcı isteği: "R
@@ -8892,7 +8978,11 @@ func _skill_talon_mirror_form() -> void:
 			_talon_mirror_copies.append(owned_weapon_nodes[owned_weapon_nodes.size() - 1])
 	_talon_recompute_damage_bonus()
 	_talon_set_weapons_circular(TALON_MIRROR_RADIUS, 0.0)
-	_spawn_burst(Color(0.65, 0.35, 1.0))
+	## Kullanıcı isteği: R'ye basınca anime "öfke formu" gibi turuncu/kırmızı parıldayan pixel alev aurası, karakter ve
+	## silahlar %10 büyür. Aura/dönüşüm görseli fx_talon_form.gd (yerel + diğer oyuncular AYNI sahneyi doğurur), boyut
+	## artışı _talon_form_apply_scale (uzak kopya: remote_player.gd, AYNI TalonFormationMath.FORM_SCALE_MULT çarpanı).
+	_talon_form_apply_scale(true)
+	_play_and_broadcast_skill_fx(FxTalonFormScene)
 	## kullanıcı isteği: "Talonun ultisi açıkken kendisi ve silahları kırmızı
 	## tonlarında parlamalı" (Ayna Formu/R, 15sn - bkz. AskUserQuestion cevabı).
 	## Kök `modulate`e uygulanıyor: Godot'ta CanvasItem modulate alt öğelere
@@ -8906,7 +8996,7 @@ func _skill_talon_mirror_form() -> void:
 	## BİLEREK bunu ES GEÇİYOR (bkz. o fonksiyondaki skill3 koruması), yoksa
 	## Talon'un Q'sunu (0.16sn'lik ayrı bir zamanlayıcı) her kullanışında bu
 	## kırmızı ton ZAMANINDAN ÖNCE (R hâlâ sürerken) sıfırlanırdı.
-	modulate = Color(1.0, 0.4, 0.4, 1.0)
+	modulate = Color(1.0, 0.62, 0.36, 1.0) ## turuncu-kırmızı (eskiden düz kırmızı 1.0/0.4/0.4)
 
 
 ## Sabit dairesel dizilim (Silah Salvosu'nun aksine DÖNMÜYOR) - her karede
@@ -8915,6 +9005,10 @@ func _skill_talon_mirror_form() -> void:
 func _process_talon_mirror_form(_delta: float) -> void:
 	if not _talon_mirror_form_active:
 		return
+	## Silahların boyutu %10 büyük (yeni eklenen kopyalar dahil - bkz. weapon.gd form_scale_mult).
+	for w in owned_weapon_nodes:
+		if is_instance_valid(w) and "form_scale_mult" in w:
+			w.form_scale_mult = TalonFormationMath.FORM_SCALE_MULT
 	## DÜZELTME (kullanıcı bildirimi: "E skilinin animasyonu R skili açıkken
 	## gerçekleşmiyor") - Silah Salvosu (E) aynı anda aktifse onun dönen
 	## dizilimi ÖNCELİKLİ olmalı. İkisi de _talon_set_weapons_circular
@@ -8945,9 +9039,31 @@ func _end_talon_mirror_form() -> void:
 	_talon_recompute_damage_bonus()
 	_talon_restore_weapon_aim()
 	_reposition_weapon_icons()
+	_talon_form_apply_scale(false)
 	## bkz. _skill_talon_mirror_form()'daki kırmızı ton notu - GERÇEK bitiş
 	## burası, kızıl parlamayı burada söndürüyoruz.
 	modulate = Color(1, 1, 1, 1)
+## Ayna Formu boyut artışı: karakter (char_base_anim_scale TABAN olduğu için ateş sarsıntısı/_end_skill_effects sonrası da
+## korunur) + tüm silahlar (weapon.gd form_scale_mult). Kapatınca orijinal taban geri gelir.
+var _talon_form_orig_scale: Vector2 = Vector2.ZERO
+
+
+func _talon_form_apply_scale(on: bool) -> void:
+	if on:
+		if _talon_form_orig_scale == Vector2.ZERO:
+			_talon_form_orig_scale = char_base_anim_scale
+		char_base_anim_scale = _talon_form_orig_scale * TalonFormationMath.FORM_SCALE_MULT
+		if is_instance_valid(anim):
+			anim.scale = char_base_anim_scale
+	else:
+		if _talon_form_orig_scale != Vector2.ZERO:
+			char_base_anim_scale = _talon_form_orig_scale
+			_talon_form_orig_scale = Vector2.ZERO
+			if is_instance_valid(anim):
+				anim.scale = char_base_anim_scale
+		for w in owned_weapon_nodes:
+			if is_instance_valid(w) and "form_scale_mult" in w:
+				w.form_scale_mult = 1.0
 ## ================= /Talon YENİ KİT =================
 
 
@@ -9034,7 +9150,7 @@ func _matthew_dome_explosion() -> void:
 		if d > RADIUS:
 			continue
 		if e.has_method("take_damage"):
-			e.take_damage(dmg, is_crit)
+			e.take_damage(dmg, is_crit, 0.0, true)
 		if d > 0.1:
 			var dir: Vector2 = (e.global_position - global_position).normalized()
 			if e.has_method("apply_knockback_force"):
@@ -9179,7 +9295,7 @@ func _spawn_floating_text(text: String, color: Color, big: bool = false, y_offse
 ## Vampir Çocuk (roster id 13, bkz. characters.gd DEFS[13])
 ## =====================================================================================
 ## Kullanıcı isteği (2026-09-21): yetenekleri kalkan YERİNE CAN harcar - Q ve E maksimum canın %4'ü,
-## R (ulti) açıkken her saniye maksimum canın %3'ü. Pasif: %4 can emme + her 1 saldırı gücü için 1 can.
+## R (ulti) açıkken her saniye maksimum canın %5'i. Pasif: %2 can emme + her 1 saldırı gücü için 1 can.
 ## Q: yakındaki 3 düşmanın kanını emer (%130 saldırı gücü), kalıcı +1 maksimum can (8sn).
 ## E: 5sn büyük yarasa formu (%60 hız, %80 hasar azaltma, temas hasarı %80, silahlar gövdeye çekilir) (22sn).
 ## R: 6 küçük yarasa (%60 hasar, dönünce %5 saldırı gücü kadar can, hızları saldırı hızıyla artar).
@@ -9190,8 +9306,8 @@ func _spawn_floating_text(text: String, color: Color, big: bool = false, y_offse
 ##  - Q/temas/geçiş efektleri: broadcast_player_vfx "vampir_fx" (network_manager.gd)
 ##  - R yarasaları: main.gd ~20Hz konum paketi (vampir_bat_swarm.gd kozmetik mod)
 const VAMPIR_SKILL_COST_PERCENT := 0.04 ## Q ve E: maksimum canın %4'ü
-const VAMPIR_ULTI_COST_PERCENT_PER_SEC := 0.03 ## R açıkken saniyede maksimum canın %3'ü
-const VAMPIR_LIFESTEAL_RATIO := 0.04 ## pasif: verdiği hasarın %4'ü kadar can emme
+const VAMPIR_ULTI_COST_PERCENT_PER_SEC := 0.05 ## R açıkken saniyede maksimum canın %5'i (kullanıcı isteği: %3'ten %5'e)
+const VAMPIR_LIFESTEAL_RATIO := 0.02 ## pasif: verdiği hasarın %2'si kadar can emme (kullanıcı isteği: %4'ten %2'ye)
 const VAMPIR_HEALTH_PER_ATTACK_POWER := 1.0 ## pasif: her 1 saldırı gücü = 1 maksimum can
 const VAMPIR_Q_TARGET_COUNT := 3
 const VAMPIR_Q_RADIUS := 320.0
@@ -9206,7 +9322,8 @@ const VAMPIR_BAT_CONTACT_REACH := 38.0 ## yaratık gövde yarıçapına eklenen 
 const VAMPIR_R_DAMAGE_RATIO := 0.6
 const VAMPIR_R_HEAL_RATIO := 0.05
 const VAMPIR_R_RADIUS := 260.0
-const VAMPIR_R_BASE_BAT_SPEED := 320.0
+## Kullanıcı isteği (2026-09-21): "yarasalar daha yavaş uçup geri dönsün" - eskiden 320 (dönüş 1.1x = 352).
+const VAMPIR_R_BASE_BAT_SPEED := 190.0
 const VAMPIR_HEAL_TEXT_INTERVAL := 0.5
 
 var _vampir_bat_form_active: bool = false
@@ -9223,6 +9340,12 @@ var _vampir_weapon_rest_offsets: Dictionary = {}
 
 func _is_vampir() -> bool:
 	return GameManager.selected_char_id == VampirMath.CHAR_ID
+
+
+## enemy.gd (host'un yaratık simülasyonu) bu oyuncunun/kuklasının "içinden geçilebilir" olup olmadığını buradan öğrenir
+## (remote_player.gd is_ghost_now'ın karşılığı) - aksi halde yaratık, üstüne binen yarasayı sert yapıştırmayla dışarı iterdi.
+func is_ghost_now() -> bool:
+	return _vampir_bat_form_active
 
 
 func vampir_can_target(e: Node) -> bool:
@@ -9263,10 +9386,14 @@ func _vampir_add_heal(amount: float) -> void:
 
 ## enemy.gd take_damage() TAM OLARAK vuran istemcide çağırır (dealer-side, bkz. match_damage_dealt notu) -
 ## pasif can emme host'a değil vuran Vampir'in kendisine işler (genel on_damage_dealt host-only'dir).
-func on_dealer_hit(amount: float) -> void:
+func on_dealer_hit(amount: float, is_area: bool = false) -> void:
+	## Genel can emme (kart/eşya, şans tabanlı) - eskiden enemy._apply_damage'ın host-only çağrısıydı, artık vuran istemcide.
+	on_damage_dealt(amount, is_area)
 	if not _is_vampir():
 		return
-	_vampir_add_heal(amount * VAMPIR_LIFESTEAL_RATIO)
+	## Kullanıcı isteği: alan hasarı vuran skill/silahlarda can emme sadece %33 geçerli (LIFESTEAL_EFFECTIVENESS).
+	var scale_mult: float = GameManager.LIFESTEAL_EFFECTIVENESS if is_area else 1.0
+	_vampir_add_heal(amount * VAMPIR_LIFESTEAL_RATIO * scale_mult)
 
 
 ## Pasif: her 1 saldırı gücü için 1 maksimum can. Saldırı gücü değiştikçe (level, kart, eşya) FARK
@@ -9338,7 +9465,7 @@ func _skill_vampir_blood_drain() -> void:
 		var is_crit: bool = _roll_ability_crit()
 		var dmg: float = _apply_ability_crit(damage_bonus * VAMPIR_Q_DAMAGE_RATIO, is_crit)
 		if t.has_method("take_damage"):
-			t.take_damage(dmg, is_crit)
+			t.take_damage(dmg, is_crit, 0.0, true) ## 3 hedefe birden: çoklu hedefli = alan
 		points.append(t.global_position)
 	if points.is_empty():
 		return
@@ -9415,7 +9542,7 @@ func _vampir_process_contact(delta: float) -> void:
 		var is_crit: bool = _roll_ability_crit()
 		var dmg: float = _apply_ability_crit(damage_bonus * VAMPIR_BAT_CONTACT_DAMAGE_RATIO, is_crit)
 		if e.has_method("take_damage"):
-			e.take_damage(dmg, is_crit)
+			e.take_damage(dmg, is_crit, 0.0, true) ## temas: birden çok yaratığa değer = alan
 		_vampir_hit_fx(e.global_position)
 
 

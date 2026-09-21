@@ -62,7 +62,7 @@ func _process(delta: float) -> void:
 			continue
 		_hit_timers[id] = hit_interval
 		if e.has_method("take_damage"):
-			e.take_damage(damage_amount, false)
+			e.take_damage(damage_amount, false, 0.0, true)
 
 	for ft in _feathers:
 		ft["angle"] += ft["speed"] * delta

@@ -16,12 +16,15 @@ const FOOD_TIER_TEXTURES: Dictionary = {
 	5: "res://assets/food/pie.png",
 }
 
-const FOOD_TIER_HEAL: Dictionary = {
-	1: 15.0,
-	2: 20.0,
-	3: 25.0,
-	4: 35.0,
-	5: 50.0,
+## KULLANICI İSTEĞİ (2026-09-21): "Yiyeceklerin verdiği canı değiştiriyoruz: 1. kademe %8, 2. %16, 3. %24, 4. %32, 5. %40
+## can yeniler". Eskiden sabit can miktarıydı (15/20/25/35/50) - artık yiyen oyuncunun MAKSİMUM canının yüzdesi.
+## TEK kaynak burası: food_drop (yerel/uzak oyuncu) ve network_manager.gd (host'un istemci adına işlediği yol) get_heal_amount()'u çağırır.
+const FOOD_TIER_HEAL_PERCENT: Dictionary = {
+	1: 0.08,
+	2: 0.16,
+	3: 0.24,
+	4: 0.32,
+	5: 0.40,
 }
 
 const DEFAULT_TIER := 1
@@ -41,8 +44,13 @@ var _last_bob_offset: float = 0.0
 var sprite: Sprite2D = null
 
 
-func get_heal_amount() -> float:
-	return FOOD_TIER_HEAL.get(tier, FOOD_TIER_HEAL[DEFAULT_TIER])
+func get_heal_percent() -> float:
+	return FOOD_TIER_HEAL_PERCENT.get(tier, FOOD_TIER_HEAL_PERCENT[DEFAULT_TIER])
+
+
+## eater_max_health: yiyen oyuncunun maksimum canı (yüzde onun üzerinden hesaplanır).
+func get_heal_amount(eater_max_health: float = 100.0) -> float:
+	return get_heal_percent() * eater_max_health
 
 
 ## bkz. xp_orb.gd üstündeki AYNI BUG DÜZELTMESİ notu (kullanıcı bildirimi:
@@ -133,7 +141,7 @@ func _on_body_entered(body: Node) -> void:
 	## sonucu her zaman ilgili tarafın kendi kodu üretir).
 	if body.is_in_group("player"):
 		if body.has_method("take_damage"):
-			var healed: float = min(get_heal_amount(), body.max_health - body.health)
+			var healed: float = min(get_heal_amount(body.max_health), body.max_health - body.health)
 			if healed > 0:
 				body.health += healed
 				body.health_changed.emit(body.health, body.max_health)
@@ -150,7 +158,7 @@ func _on_body_entered(body: Node) -> void:
 						NetworkManager.sync_food_heal.rpc(healed, target_peer)
 	elif body.is_in_group("remote_players"):
 		if body.has_method("heal"):
-			body.heal(get_heal_amount())
+			body.heal(get_heal_amount(float(body.max_health) if "max_health" in body else 100.0))
 	else:
 		return
 

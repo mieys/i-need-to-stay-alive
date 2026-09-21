@@ -156,6 +156,45 @@ func test_bosses_and_unmarked_creatures_do_not_hold_the_gate() -> void:
 	_cleanup()
 
 
+## KULLANICI BİLDİRİMİ: "bazen seyyar satıcı spawnlandığında veya kademe atlandığında yaratıklar spawnlanmamaya başlıyor".
+## Kök neden: kapı, ulaşılamaz/uzakta takılı TEK bir eski yaratık yüzünden süresiz kapalı kalabiliyordu.
+func test_gate_ignores_survivors_far_from_every_player() -> void:
+	var sp: Node = _spawner()
+	var player: FakePlayer = _player(Vector2(500.0, 500.0))
+	GameManager.game_time = TIER_SECONDS * 2.0 + 5.0 ## zaman kademesi 3
+	sp._spawn_tier = 1
+	var far: FakeEnemy = _survivor(1)
+	far.global_position = player.global_position + Vector2(sp.GATE_SURVIVOR_RADIUS + 500.0, 0.0) ## çok uzakta takılı kalmış
+	sp._spawn_regular_enemy()
+	assert(sp._spawn_tier == 3, "Oyunculardan çok uzaktaki eski yaratık kapıyı tutmamalı (spawn kademesi: %d)" % sp._spawn_tier)
+	assert(not _real_enemies().is_empty(), "Kapı açık olduğu için yeni kademe yaratıkları doğmalı")
+	## Yakındaki eski yaratık ise (asıl amaç) kapıyı hâlâ tutar.
+	sp._spawn_tier = 1
+	for e: Node in _real_enemies():
+		e.free()
+	far.global_position = player.global_position + Vector2(300.0, 0.0)
+	sp._spawn_regular_enemy()
+	assert(sp._spawn_tier == 1 and _real_enemies().is_empty(), "Yakındaki eski yaratık kapıyı tutmaya devam etmeli")
+	_cleanup()
+
+
+func test_gate_opens_after_the_wait_limit_even_if_a_survivor_never_dies() -> void:
+	var sp: Node = _spawner()
+	_player(Vector2(500.0, 500.0))
+	GameManager.game_time = TIER_SECONDS * 2.0 + 5.0
+	sp._spawn_tier = 1
+	_survivor(1) ## yakında ama hiç ölmeyecek (ör. duvar dibinde sıkışmış)
+	sp._spawn_regular_enemy()
+	assert(sp._spawn_tier == 1 and _real_enemies().is_empty(), "Süre dolmadan kapı kapalı")
+	assert(sp._gate_wait_started_msec > 0, "bekleme sayacı başladı")
+	sp._gate_wait_started_msec = Time.get_ticks_msec() - sp.GATE_MAX_WAIT_MSEC - 10
+	sp._spawn_regular_enemy()
+	assert(sp._spawn_tier == 3, "Bekleme sınırı dolunca kapı açılmalı (spawn kademesi: %d)" % sp._spawn_tier)
+	assert(not _real_enemies().is_empty(), "Yeni kademe yaratıkları artık doğuyor")
+	assert(sp._gate_wait_started_msec == 0, "sayaç sıfırlandı")
+	_cleanup()
+
+
 ## ---------------------------------------------------------------- 2) boss -%20, normal -%10
 ## Sonraki tur (kullanıcı isteği: "Bossların canını %15 kalkanını %10 azalt") bu testteki hedefleri güncelledi:
 ## OLD_* = %20 turundan ÖNCEKİ değerler; şimdiki = OLD x 0.8 (dördüncü tur) x 0.85 can, kalkan x 0.8 x 0.9.

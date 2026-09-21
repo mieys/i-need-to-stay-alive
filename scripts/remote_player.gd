@@ -56,12 +56,13 @@ var _was_downed_for_heart_fx: bool = false
 ## aura'ları) - ikisi birlikte güncellenmeli.
 const FxMelekHealAuraScene := preload("res://scenes/fx_recovery_life.tscn")
 const FxMelekShieldAuraScene := preload("res://scenes/fx_recovery_mana.tscn")
+const FxMelekHolyScene := preload("res://scenes/fx_melek_holy.tscn")
 var _ally_aura_fx: Dictionary = {}
 
 func start_ally_aura_fx(aura_type: String) -> void:
 	if _ally_aura_fx.has(aura_type) and is_instance_valid(_ally_aura_fx[aura_type]):
 		return
-	var scene: PackedScene = FxMelekHealAuraScene if aura_type == "heal" else (FxMelekShieldAuraScene if aura_type == "shield" else null)
+	var scene: PackedScene = FxMelekHealAuraScene if aura_type == "heal" else (FxMelekShieldAuraScene if aura_type == "shield" else (FxMelekHolyScene if aura_type == "holy" else null))
 	if not scene:
 		return
 	var fx := scene.instantiate()
@@ -119,6 +120,10 @@ var _talon_formation: String = ""
 ## SADECE "salvo" formasyonunun dönüş açısı (bkz. talon_formation_math.gd
 ## advance_salvo_angle) - "mirror" sabit bir dizilim olduğu için kullanılmaz.
 var _talon_salvo_angle: float = 0.0
+## Talon Ayna Formu (R): main.gd extra["talon_form"] - karakter + silah ikonları %10 büyür (TalonFormationMath.FORM_SCALE_MULT,
+## player.gd _talon_form_apply_scale ile AYNI çarpan). fx_talon_form.gd bu bayrağı okuyup alev aurasını sürdürür.
+var _talon_form_active: bool = false
+var _talon_form_scale_applied: float = 1.0
 
 ## Vampir Çocuk Yarasa Formu (bkz. player.gd _skill_vampir_bat_form): "bat_*" animasyon adı geldiği sürece
 ## silahlar gövdeye çekilir (0 = normal yerinde, 1 = tamamen içeride) - anim ADI zaten transform
@@ -557,6 +562,7 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 		add_child(icon)
 		_weapon_icons.append(icon)
 		_weapon_base_scales.append(icon.scale)
+		_talon_form_scale_applied = 1.0 ## ikonlar yeniden yaratıldı: taban ölçek sıfırlandı, _apply_talon_form_scale yeniden uygular
 		_weapon_fire_tweens.append(null)
 		_weapon_grounded.append(false)
 		_weapon_falling.append(false)
@@ -734,7 +740,7 @@ func _update_talon_formation(delta: float) -> void:
 		if not is_instance_valid(icon):
 			continue
 		var slot: Dictionary = TalonFormationMath.compute_slot(i, count, radius, _talon_salvo_angle)
-		icon.position = slot["offset"]
+		icon.position = slot["offset"] + _formation_kick_offset(i)
 		var forward: float = deg_to_rad(_weapon_forward_angle_deg[i] if i < _weapon_forward_angle_deg.size() else 0.0)
 		## DÜZELTME (kullanıcı bildirimi: "silahların dışa bakması gerekirken
 		## içe bakıyorlar") - bkz. player.gd _talon_set_weapons_circular
@@ -978,6 +984,30 @@ func _update_revive_rewind_fx() -> void:
 	_was_downed_for_heart_fx = is_downed
 
 
+## Talon Ayna Formu (R) boyutu: karakter sprite'ı + silah ikonları (taban ölçekleri de) FORM_SCALE_MULT kadar büyür.
+## Oran (yeni/eski) uygulanır, böylece ateş animasyonlarının döndüğü _weapon_base_scales de tutarlı kalır.
+func _apply_talon_form_scale() -> void:
+	var want: float = TalonFormationMath.FORM_SCALE_MULT if _talon_form_active else 1.0
+	if is_equal_approx(want, _talon_form_scale_applied):
+		return
+	var ratio: float = want / _talon_form_scale_applied
+	_talon_form_scale_applied = want
+	if anim and is_instance_valid(anim):
+		anim.scale = _base_anim_scale * want
+	for i in range(_weapon_icons.size()):
+		var icon: Node2D = _weapon_icons[i]
+		if is_instance_valid(icon):
+			icon.scale *= ratio
+		if i < _weapon_base_scales.size():
+			_weapon_base_scales[i] = _weapon_base_scales[i] * ratio
+
+
+## Vampir Çocuk yarasa formundayken (anim adı bat_*) yaratıklar bu kuklanın içinden geçilebilir sayar - player.gd is_ghost_now ile aynı
+## sözleşme (enemy.gd host'ta çalışır, uzak Vampir'i bu kukla temsil eder).
+func is_ghost_now() -> bool:
+	return _vampir_bat_form
+
+
 func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary = {}) -> void:
 	update_weapon_visuals(weapon_keys, extra.get("weapon_tiers", {}))
 	health = hp
@@ -1092,6 +1122,8 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	if new_talon_formation != "" and _talon_formation != new_talon_formation:
 		_talon_salvo_angle = 0.0
 	_talon_formation = new_talon_formation
+	_talon_form_active = bool(extra.get("talon_form", false))
+	_apply_talon_form_scale()
 
 	if overhead_bar:
 		overhead_bar.set_health(health, max_health)
@@ -1566,6 +1598,38 @@ func _set_weapon_icon_visible(slot_index: int, is_visible: bool) -> void:
 			shadow.visible = is_visible
 
 
+## KULLANICI BİLDİRİMİ: "Talon'un ultisi açıkken silahlarının yarattığı geri tepme diğer oyunculara çok daha yoğun
+## gösteriliyor, silahlar yerlerinden fırlıyor gibi". KÖK NEDEN: _animate_weapon_recoil/_animate_weapon_fire_full ikon
+## konumunu HER ZAMAN sabit WEAPON_ICON_SLOTS (kafanın üstündeki 5 nokta) tabanına göre tween'liyor. Talon'un Silah
+## Salvosu/Ayna Formu sırasında ikonlar ise karakter ETRAFINDA bir çemberde (_update_talon_formation her fizik karesinde
+## konumu yeniden yazıyor) - yani her ateş olayında ikon çemberden slot konumuna fırlatılıp (ve yakın dövüşte hedefe kadar
+## savrulup) sonra çembere geri yazılıyordu; Ayna Formu silah sayısını 2'ye katladığı için çok daha sık. Caster'da bu
+## hareket ikon spritenin YEREL ofsetiydi (weapon node'u formasyondaydı), uzak kopyada ise ikonun kendisi. Formasyon
+## sürerken artık ikon konumuna DOKUNULMUYOR: sadece küçük, hızla sönen bir ofset (formasyon konumuna EKLENİR).
+var _formation_kick: Array = [] ## ikon başına Vector2, _update_talon_formation konuma ekler
+const FORMATION_KICK_MAX := 6.0 ## px
+const FORMATION_KICK_TIME := 0.12
+
+
+func _formation_kick_offset(i: int) -> Vector2:
+	return _formation_kick[i] if i < _formation_kick.size() else Vector2.ZERO
+
+
+func _kick_formation_icon(slot_index: int, fire_dir: Vector2, recoil_dist: float) -> void:
+	while _formation_kick.size() <= slot_index:
+		_formation_kick.append(Vector2.ZERO)
+	var start: Vector2 = -fire_dir.normalized() * minf(recoil_dist, FORMATION_KICK_MAX) if fire_dir.length() > 0.001 else Vector2.ZERO
+	if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
+		(_weapon_fire_tweens[slot_index] as Tween).kill()
+	var tw := create_tween()
+	tw.tween_method(func(v: Vector2) -> void:
+		if slot_index < _formation_kick.size():
+			_formation_kick[slot_index] = v
+	, start, Vector2.ZERO, FORMATION_KICK_TIME)
+	if slot_index < _weapon_fire_tweens.size():
+		_weapon_fire_tweens[slot_index] = tw
+
+
 ## Weapon icon recoil animation for remote players. recoil_dist artık ağdan
 ## gelmiyor - bu silahın KENDİ sabit recoil_distance'ı (bkz.
 ## _weapon_recoil_distance) kullanılıyor.
@@ -1576,6 +1640,9 @@ func _animate_weapon_recoil(slot_index: int) -> void:
 	if not is_instance_valid(icon):
 		return
 	var recoil_dist: float = _weapon_recoil_distance[slot_index] if slot_index < _weapon_recoil_distance.size() else 10.0
+	if _talon_formation != "" or _vampir_pull > 0.0:
+		_kick_formation_icon(slot_index, Vector2.UP, recoil_dist) ## bkz. _formation_kick notu
+		return
 	var base_pos: Vector2 = WEAPON_ICON_SLOTS[slot_index] if slot_index < WEAPON_ICON_SLOTS.size() else icon.position
 	# Quick kick-back tween
 	var tw := create_tween()
@@ -1606,8 +1673,13 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		dir = Vector2.UP
 	else:
 		dir = dir.normalized()
+	## Talon formasyonu (Salvo/Ayna Formu) ya da Vampir'in silah çekilmesi sürerken ikon konumu başka bir sistemin (formül) elinde:
+	## slot tabanlı savurma/geri tepme tween'i onunla çekişip silahı fırlatıyordu - sadece küçük ofset uygula (bkz. _formation_kick).
+	var formation_owns_position: bool = _talon_formation != "" or _vampir_pull > 0.0
 
-	if is_melee:
+	if is_melee and formation_owns_position:
+		_kick_formation_icon(slot_index, dir, float(_weapon_recoil_distance[slot_index]) if slot_index < _weapon_recoil_distance.size() else 8.0)
+	elif is_melee:
 		var target_pos := Vector2(float(data.get("target_pos_x", 0.0)), float(data.get("target_pos_y", 0.0)))
 		var reps: int = _weapon_hit_segments[slot_index] if slot_index < _weapon_hit_segments.size() else 3
 		var forward: float = deg_to_rad(_weapon_forward_angle_deg[slot_index] if slot_index < _weapon_forward_angle_deg.size() else 0.0)
@@ -1666,6 +1738,9 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 					icon.play("draw")
 			)
 		
+		if formation_owns_position:
+			_kick_formation_icon(slot_index, dir, recoil_dist)
+			return
 		## Önceki ateşten kalan (henüz bitmemiş) tween varsa öldürülür - üst
 		## üste binen tween'ler aynı sabit hedeflere gittiği için artık
 		## büyümeye katkı yapamaz, ama yine de titremeyi önlemek için kesilir.

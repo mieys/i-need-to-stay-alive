@@ -24,9 +24,8 @@ const OUTLINE := 2.0 ## kalın, piksel-sanatı tarzı siyah çerçeve
 ## Kullanıcı isteği (yeni tur): "40 can başına bir çizgi olmalı ama çizgi
 ## sayısı 20'yi geçmemeli" - SEGMENT_HP tekrar 40'a döndü, aşırı yüksek canlı
 ## yaratıklarda (bkz. boss) çizgi patlamasını/simsiyah görünümü önleyen üst
-## sınır (MAX_SEGMENT_LINES) 20'ye çekildi (bkz. _draw_health_segments -
-## health_max > 20*40=800 olan yaratıklarda çizgiler ilk 800 canla sınırlı
-## kalır, geri kalan bar çizgisiz düz görünür).
+## sınır (MAX_SEGMENT_LINES) 20'ye çekildi. (2026-09-21: 800 canı aşan yaratıklarda çizgiler artık ilk 800 canda yığılmıyor - 20 çizgi
+## de tüm çubuğa EŞİT aralıkla yayılıyor, bkz. _draw_health_segments.)
 const SEGMENT_HP := 40.0
 const MAX_SEGMENT_LINES := 20
 
@@ -112,21 +111,47 @@ func _draw_pixel_bar(rect: Rect2, ratio: float, fill_color: Color, bg_color: Col
 			draw_style_box(glow_style, glow_rect)
 
 
-## LoL tarzı bölme çizgileri: max_value SEGMENT_HP'den büyükse, her katında
-## (40, 80, 120, ...) çubuğun tamamını (dolu/boş fark etmeksizin) dikey ince
-## bir çizgiyle böler - büyük can havuzlu yaratıklarda/oyuncuda can çubuğunun
-## kaç "parça" olduğu anında okunabilir olur.
+## LoL tarzı bölme çizgileri: can havuzu büyüdükçe çubuk daha çok dilime bölünür (yaklaşık her SEGMENT_HP canda bir çizgi,
+## en fazla MAX_SEGMENT_LINES çizgi) - büyük can havuzlu yaratıklarda/oyuncuda can çubuğunun kaç "parça" olduğu anında okunur.
+##
+## KULLANICI BİLDİRİMİ (2026-09-21): "can barlarında belli bir miktar can başına çıkan çizgi simetrik durmuyor, kaç çizgi olursa
+## olsun aralarındaki mesafe aynı olmalı." KÖK NEDENLER (eski hâl her çizgiyi x = genişlik * (40 * k / max_can) yuvarlayarak koyuyordu):
+##  1) max_can 40'ın katı değilse son dilim diğerlerinden KISA kalıyordu (ör. 100 canda 40/40/20 oranında);
+##  2) max_can > 800'de çizgiler yalnızca ilk 800 canın üstüne yığılıyor, barın geri kalanı çizgisiz düz kalıyordu;
+##  3) kesirli konum piksele yuvarlanınca komşu aralıklar 8-9-8-9 piksel gibi dönüşümlü farklı çıkıyordu.
+## Şimdi: çizgi sayısı can havuzundan hesaplanır (bkz. _segment_line_count), çizgiler barı EŞİT dilimlere böler ve aralık
+## TAM PİKSEL (hepsi birebir aynı) tutulur; artan birkaç piksel iki uca simetrik olarak paylaştırılır (bkz. _segment_line_offsets).
+static func _segment_line_count(max_health: float) -> int:
+	if max_health <= SEGMENT_HP:
+		return 0
+	return mini(int(ceil(max_health / SEGMENT_HP)) - 1, MAX_SEGMENT_LINES)
+
+
+## Çubuğun sol kenarından (iç genişlik `width` piksel) itibaren `lines` çizginin piksel konumları; ardışık iki çizgi arası hep aynı.
+static func _segment_line_offsets(width: float, lines: int) -> Array[float]:
+	var out: Array[float] = []
+	if lines <= 0:
+		return out
+	var slices: int = lines + 1
+	var gap: float = floor(width / float(slices))
+	if gap < 1.0:
+		return out ## çubuk bu kadar çizgiyi sığdıramaz
+	var leftover: float = width - gap * float(slices)
+	var first: float = gap + floor(leftover * 0.5)
+	for i in range(lines):
+		out.append(first + gap * float(i))
+	return out
+
+
 func _draw_health_segments(rect: Rect2) -> void:
-	if health_max <= SEGMENT_HP:
+	var lines: int = _segment_line_count(health_max)
+	if lines <= 0:
 		return
 	var r := Rect2(rect.position.round(), rect.size.round())
-	var seg: float = SEGMENT_HP
-	var lines_drawn: int = 0
-	while seg < health_max and lines_drawn < MAX_SEGMENT_LINES:
-		var x: float = round(r.position.x + r.size.x * (seg / health_max))
-		draw_line(Vector2(x, r.position.y), Vector2(x, r.position.y + r.size.y), Color(0, 0, 0, 0.7), 1.0)
-		seg += SEGMENT_HP
-		lines_drawn += 1
+	for off: float in _segment_line_offsets(r.size.x, lines):
+		var x: float = r.position.x + off
+		## draw_rect (tam 1 piksel) - 1 px'lik draw_line tam piksel koordinatında iki piksele yarıya bölünüp aralıkları eşitsiz gösterebilir
+		draw_rect(Rect2(x, r.position.y, 1.0, r.size.y), Color(0, 0, 0, 0.7))
 
 
 func _draw() -> void:

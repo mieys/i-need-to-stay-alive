@@ -2444,7 +2444,10 @@ func _physics_process(delta: float) -> void:
 		## Aktif bir knockback sürerken (itiş hızı hâlâ belirginken) bu sert
 		## yapıştırma ATLANIR - yoksa yumuşak itiş her karede bu klemensle
 		## boğuşup yine "ışınlanma" hissi verirdi.
-		if not is_frozen and player and is_instance_valid(player) and min_separation > 0.0 and _knockback_velocity.length() < 40.0:
+		## Yarasa Formu'ndaki Vampir'in içinden geçilebilir (player.gd/remote_player.gd is_ghost_now): sert yapıştırma onu
+		## "gövde" saymamalı, yoksa yarasa üstünden geçerken yaratık dışarı fırlatılırdı.
+		var target_is_ghost: bool = player != null and is_instance_valid(player) and player.has_method("is_ghost_now") and player.is_ghost_now()
+		if not is_frozen and player and is_instance_valid(player) and not target_is_ghost and min_separation > 0.0 and _knockback_velocity.length() < 40.0:
 			var post_to_player: Vector2 = player.global_position - global_position
 			var post_dist: float = post_to_player.length()
 			if post_dist < min_separation:
@@ -3028,7 +3031,9 @@ func update_network_state(net_position: Vector2, net_dead: bool = false, net_hea
 		die()
 
 
-func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float = 0.0) -> void:
+## is_area: bu isabet bir ALAN hasarından mı geliyor (patlama, sıçrama, dönen kılıç, çoklu hedefli yetenek...). Sadece CAN EMME
+## hesabı için (bkz. player.gd on_dealer_hit): alan hasarında can emme GameManager.LIFESTEAL_EFFECTIVENESS (%33) kadar geçerli.
+func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float = 0.0, is_area: bool = false) -> void:
 	if is_dead:
 		return
 
@@ -3046,7 +3051,7 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 	## on_damage_dealt (aşağıdaki _apply_damage) SADECE host'ta çalıştığı için istemci Vampir'i
 	## iyileştiremezdi; burası tam vuran istemcide çalışıyor.
 	if amount > 0.0 and _dealer and _dealer.has_method("on_dealer_hit"):
-		_dealer.on_dealer_hit(amount)
+		_dealer.on_dealer_hit(amount, is_area)
 
 	## Multiplayer: non-host clients route damage through the host so there is
 	## a single authoritative enemy health pool. Without this every peer fights
@@ -3123,9 +3128,8 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 		_enter_rage_mode()
 	## Can çalma (kart/eşya/silah): oyuncuya, yaratığın gerçekten yediği
 	## hasar üzerinden bildirim - pasifsiz karakterlerde no-op.
-	var lifesteal_player := get_tree().get_first_node_in_group("player")
-	if lifesteal_player and lifesteal_player.has_method("on_damage_dealt"):
-		lifesteal_player.on_damage_dealt(effective_amount)
+	## Can emme artık VURAN istemcide (take_damage -> player.on_dealer_hit) hesaplanıyor: burası SADECE host'ta çalıştığı için
+	## istemci vuruşları host oyuncusuna yanlış atfediliyor ve alan hasarı ayırt edilemiyordu.
 	_spawn_floating_text(effective_amount, is_crit)
 	# Broadcast damage number to clients
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:

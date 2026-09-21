@@ -714,6 +714,8 @@ var _terrain_su_layer: TileMapLayer = null
 var _terrain_ev_layer: TileMapLayer = null
 var _terrain_forest_layer: TileMapLayer = null
 var _terrain_layers_searched: bool = false
+var _map_world_rect: Rect2 = Rect2()
+var _map_world_rect_searched: bool = false
 
 
 func _find_terrain_layers() -> void:
@@ -729,6 +731,46 @@ func _find_terrain_layers() -> void:
 	_terrain_su_layer = harita.get_node_or_null("Su/Su") as TileMapLayer
 	_terrain_ev_layer = harita.get_node_or_null("ev/Ev") as TileMapLayer
 	_terrain_forest_layer = harita.get_node_or_null("Orman parçaları/Orman parçaları") as TileMapLayer
+
+
+## KULLANICI İSTEĞİ (2026-09-21): "Oyuncular haritanın dışını görememeli" - ana haritanın (sahnedeki "Harita" düğümü)
+## DÜNYA koordinatlarındaki sınırları: içindeki tüm TileMapLayer'ların dolu karo alanlarının birleşimi. Sınırı elle bir
+## sabite yazmak yerine karolardan okumak, harita Tiled'da büyütülüp yeniden bake edilince kendiliğinden güncel kalır.
+## Harita sahnede yoksa (ana menü, testler) Rect2() döner ve sonuç ÖNBELLEĞE ALINMAZ (harita sonradan gelirse bulunur).
+## Tüketici: camera_map_limits.gd.
+func get_map_world_rect() -> Rect2:
+	if _map_world_rect_searched:
+		return _map_world_rect
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree == null or tree.current_scene == null:
+		return Rect2()
+	var harita: Node = tree.current_scene.get_node_or_null("Harita")
+	if harita == null:
+		return Rect2()
+	var total: Rect2 = Rect2()
+	var found: bool = false
+	var stack: Array[Node] = [harita]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		for c: Node in n.get_children():
+			stack.append(c)
+		if not (n is TileMapLayer):
+			continue
+		var layer: TileMapLayer = n
+		var used: Rect2i = layer.get_used_rect()
+		if used.size == Vector2i.ZERO:
+			continue
+		var half: Vector2 = (Vector2(layer.tile_set.tile_size) if layer.tile_set != null else Vector2(16.0, 16.0)) * 0.5
+		var top_left: Vector2 = layer.to_global(layer.map_to_local(used.position) - half)
+		var bottom_right: Vector2 = layer.to_global(layer.map_to_local(used.position + used.size - Vector2i.ONE) + half)
+		var r: Rect2 = Rect2(top_left, Vector2.ZERO).expand(bottom_right)
+		total = r if not found else total.merge(r)
+		found = true
+	if not found:
+		return Rect2()
+	_map_world_rect = total
+	_map_world_rect_searched = true
+	return _map_world_rect
 
 
 ## Kullanıcı isteği: "Orman parçaları Node2D'nin içindeki 'Orman parçaları'
@@ -813,6 +855,8 @@ func reset() -> void:
 	_terrain_ev_layer = null
 	_terrain_forest_layer = null
 	_terrain_layers_searched = false
+	_map_world_rect = Rect2()
+	_map_world_rect_searched = false
 	game_time = 0.0
 	is_game_over = false
 	## Önceki oyundan kalma bir seyyar satıcı bölgesi yeni oyuna sızmasın.

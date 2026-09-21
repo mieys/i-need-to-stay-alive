@@ -1,7 +1,7 @@
 extends Node
 
 ## Kullanıcı isteği (2026-09-21): yeni karakter "Vampir Çocuk" (roster id 13) - yetenekleri kalkan yerine can harcar
-## (Q/E maks. canın %4'ü, R açıkken saniyede %3'ü), pasif %4 can emme + her 1 saldırı gücü için 1 can.
+## (Q/E maks. canın %4'ü, R açıkken saniyede %5'i), pasif %2 can emme + her 1 saldırı gücü için 1 can.
 ##   Q: yakındaki 3 düşmana %130 hasar + kalıcı +1 maks. can (8sn)
 ##   E: 5sn yarasa formu: %60 hız, %80 hasar azaltma, temas hasarı %80, silahlar gövdeye çekilir (22sn)
 ##   R: 6 küçük yarasa, %60 hasar, dönünce saldırı gücünün %5'i kadar can, hız saldırı hızıyla artar
@@ -23,7 +23,7 @@ class FakeEnemy extends Node2D:
 	var _body_radius: float = 20.0
 	var hits: Array = []
 
-	func take_damage(amount: float, _is_crit: bool = false, _pen: float = 0.0) -> void:
+	func take_damage(amount: float, _is_crit: bool = false, _pen: float = 0.0, _is_area: bool = false) -> void:
 		hits.append(amount)
 
 
@@ -119,7 +119,7 @@ func test_timing_tables() -> void:
 	assert(float(P.SKILL_TIMING[40]["cooldown"]) == 8.0, "Q 8sn")
 	assert(float(P.SKILL2_TIMING[41]["duration"]) == 5.0 and float(P.SKILL2_TIMING[41]["cooldown"]) == 22.0, "E 5sn süre / 22sn bekleme")
 	assert(float(P.SKILL3_TIMING[42]["cooldown"]) == 0.0, "R toggle: bekleme yok")
-	assert(P.VAMPIR_SKILL_COST_PERCENT == 0.04 and P.VAMPIR_ULTI_COST_PERCENT_PER_SEC == 0.03)
+	assert(P.VAMPIR_SKILL_COST_PERCENT == 0.04 and P.VAMPIR_ULTI_COST_PERCENT_PER_SEC == 0.05)
 	assert(P.VAMPIR_Q_DAMAGE_RATIO == 1.3 and P.VAMPIR_BAT_CONTACT_DAMAGE_RATIO == 0.8)
 	assert(P.VAMPIR_R_DAMAGE_RATIO == 0.6 and P.VAMPIR_R_HEAL_RATIO == 0.05)
 	assert(P.VAMPIR_BAT_SPEED_MULT == 1.6 and P.VAMPIR_BAT_DAMAGE_TAKEN_MULT == 0.2)
@@ -139,7 +139,7 @@ func test_shared_pull_math() -> void:
 
 # ------------------------------------------------------------------ pasif
 
-func test_passive_max_health_follows_attack_power_and_lifesteal_is_four_percent() -> void:
+func test_passive_max_health_follows_attack_power_and_lifesteal_is_two_percent() -> void:
 	var player: Node = _make_player()
 	var before: float = player.max_health
 	var ap: float = player.damage_bonus
@@ -153,11 +153,11 @@ func test_passive_max_health_follows_attack_power_and_lifesteal_is_four_percent(
 	player.damage_bonus -= 7.0
 	player._process_vampir(0.016)
 	assert(is_equal_approx(player.max_health, mid), "AP geri düşünce maks. can geri düşer")
-	## Can emme: hasarın %4'ü.
+	## Can emme: hasarın %2'si (kullanıcı isteği: %4'ten %2'ye düşürüldü).
 	player.health = player.max_health - 50.0
 	var h0: float = player.health
 	player.on_dealer_hit(100.0)
-	assert(is_equal_approx(player.health, h0 + 4.0), "100 hasar -> 4 can emme, bulunan +%s" % str(player.health - h0))
+	assert(is_equal_approx(player.health, h0 + 2.0), "100 hasar -> 2 can emme (%%2), bulunan +%s" % str(player.health - h0))
 	_cleanup()
 
 
@@ -295,7 +295,7 @@ func test_r_toggle_pays_per_second_and_bats_attack_and_heal() -> void:
 	_ready_player(player)
 	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE ## kritik yok (taban %5 de sıfırlanır)
 	var enemy: FakeEnemy = _make_enemy(player.global_position + Vector2(140, 0))
-	var per_sec: float = player.max_health * 0.03
+	var per_sec: float = player.max_health * 0.05
 	player._vampir_toggle_bats()
 	assert(player._vampir_bats_active and player.is_skill3_active(), "R açık")
 	assert(is_equal_approx(player.health, player.max_health - per_sec), "aktivasyonda ilk saniyenin bedeli")
@@ -337,7 +337,7 @@ func test_r_refuses_when_it_would_kill_and_stops_itself_when_health_runs_out() -
 	player.health = 2.0
 	player._vampir_toggle_bats()
 	assert(not player._vampir_bats_active, "can yetmiyorsa açılmaz (kendini öldürmez)")
-	player.health = player.max_health * 0.035 ## ilk saniyeyi öder, ikincisine yetmez
+	player.health = player.max_health * 0.055 ## ilk saniyeyi (%5) öder, ikincisine yetmez
 	player._vampir_toggle_bats()
 	assert(player._vampir_bats_active, "açılır")
 	for i in range(200):

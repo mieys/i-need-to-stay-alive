@@ -22,14 +22,15 @@ const HOME_ARRIVE_DISTANCE := 16.0
 const RELAUNCH_DELAY := 0.35
 const HOME_FOLLOW_RATE := 14.0
 const NET_FOLLOW_RATE := 22.0
-## Yarasa sprite'ı 16 sanat pikseli - dünyada karakter dokusundan ~1.5 kat büyük çizilir (küçük ama okunur).
-const DRAW_TEXEL := 1.8
+## Yarasa sprite'ı 16 sanat pikseli. Kullanıcı isteği (2026-09-21): önce "%60 küçült" (1.8 -> 0.72), sonra "çok küçüldü,
+## küçültmeyi %40'a düşürelim" = eski boyutun %60'ı kalır: 1.8 x 0.6 = 1.08.
+const DRAW_TEXEL := 1.08
 const FRAME_SEQUENCE := [0, 1, 2, 1]
 
 var authoritative: bool = false
 var caster: Node2D = null
 var launch_radius: float = 260.0
-var bat_speed: float = 320.0 ## caster her karede saldırı hızına göre günceller
+var bat_speed: float = 190.0 ## caster her karede saldırı hızına göre günceller (player.gd VAMPIR_R_BASE_BAT_SPEED)
 var retiring: bool = false
 
 var _pos: PackedVector2Array = PackedVector2Array()
@@ -156,7 +157,7 @@ func _simulate(delta: float) -> void:
 					_state[i] = BatState.HOME
 					_delay[i] = RELAUNCH_DELAY
 				else:
-					_pos[i] += to_h.normalized() * minf(bat_speed * 1.1 * delta, to_h.length())
+					_pos[i] += to_h.normalized() * minf(bat_speed * delta, to_h.length())
 	if retiring and not any_flying:
 		var all_hidden: bool = true
 		for a in _active:

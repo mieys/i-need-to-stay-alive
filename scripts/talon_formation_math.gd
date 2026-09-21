@@ -13,6 +13,13 @@ const SALVO_DURATION: float = 3.0
 const SALVO_ROTATIONS: float = 2.0
 const MIRROR_RADIUS: float = 110.0
 
+## Hamle Vuruşu'nun (Q) süresi: player.gd TALON_DASH_TIME/SKILL_TIMING[38] ve fx_talon_dash.gd (iz efekti) AYNI sayıyı
+## buradan okur. Kullanıcı isteği: "anında ışınlanır gibi değil, anında ATILIYOR gibi dash atmalı" - eskiden 0.16sn
+## doğrusal (10 kare, ışınlanma gibi) idi; artık 0.3sn'de hızlı başlayıp yavaşlayan bir atılış.
+const DASH_TIME: float = 0.3
+## Ayna Formu'nda (R) karakterin ve silahlarının boyut çarpanı (kullanıcı isteği: "%10 artsın").
+const FORM_SCALE_MULT: float = 1.1
+
 
 ## count silahı merkez etrafına eşit açılarla dizer; i'inci silahın parent'a
 ## göre yerel/izafi konumunu ("offset") ve namlunun dışa bakması için ikon

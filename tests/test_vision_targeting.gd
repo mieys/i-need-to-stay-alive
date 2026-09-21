@@ -34,7 +34,7 @@ class FakeEnemy extends Node2D:
 	var health: float = 100.0
 	var damage_taken: float = 0.0
 
-	func take_damage(amount: float, _crit: bool = false, _pen: float = 0.0) -> void:
+	func take_damage(amount: float, _crit: bool = false, _pen: float = 0.0, _is_area: bool = false) -> void:
 		damage_taken += amount
 
 

@@ -980,6 +980,9 @@ func set_icon_offset(offset: Vector2) -> void:
 ## birebir aynı hizada) - üstüne eklenen tek şey, hıza/harekete HİÇ bağlı
 ## olmayan, sabit küçük genlikli (HOVER_BOB_AMPLITUDE) bir salınım, o yüzden
 ## asla "geride kalmış" gibi görünmez, sadece nazikçe süzülür.
+## Talon'un Ayna Formu'nda (R) silahlar %10 büyür (TalonFormationMath.FORM_SCALE_MULT) - player.gd her karede yazar,
+## form bitince 1.0'a döner. scale atanan her yerde (hover takibi, dönen kılıç) çarpılır ki gölge/menzil hesabı tutarlı kalsın.
+var form_scale_mult: float = 1.0
 const HOVER_BOB_AMPLITUDE := 3.5 ## px
 const HOVER_BOB_SPEED := 2.2 ## rad/sn
 var _target_local_offset: Vector2 = Vector2.ZERO
@@ -1141,9 +1144,9 @@ func _update_hover_follow(delta: float) -> void:
 			## asalar (fire/lightning/buz) hâlâ 0.3, sadece Arcane için ek
 			## %15 küçültme (0.3 * 0.85 = 0.255).
 			var wand_scale: float = 0.255 if _is_arcane else 0.3
-			scale = parent_node.scale * wand_scale
+			scale = parent_node.scale * wand_scale * form_scale_mult
 		else:
-			scale = parent_node.scale
+			scale = parent_node.scale * form_scale_mult
 		
 		# Karakterin ölçeğini mesafeye (offset) de uygulayarak yakın kalmalarını sağlıyoruz
 		var target_global_pos = parent_node.global_position + (_target_local_offset + Vector2(0, bob)) * parent_node.scale
@@ -1208,7 +1211,7 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 
 	# Compute range multiplier based on attack range
 	var range_mult: float = attack_range / max(0.001, _base_attack_range)
-	scale = parent_node.scale * range_mult
+	scale = parent_node.scale * range_mult * form_scale_mult
 
 	## Dönüş/pozisyon formülü artık weapon_orbit_math.gd'de TEK yerde -
 	## remote_player.gd _update_local_uzunkilic_orbit AYNI fonksiyonu
@@ -1261,7 +1264,7 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 			if not _hit_cooldowns.has(id):
 				_hit_cooldowns[id] = 1.0
 				if e.has_method("take_damage"):
-					e.take_damage(final_damage, is_crit, shield_pen)
+					e.take_damage(final_damage, is_crit, shield_pen, true) ## donen kilic: cevresindeki herkese = alan
 					_spawn_orbit_hit_fx(e.global_position)
 					if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
 						_shaman_burn_applied = e.try_shaman_weapon_burn()
@@ -2010,7 +2013,7 @@ func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shi
 	var chain_from: Node2D = primary
 	for i in range(n):
 		var chain_to: Node2D = candidates[i]
-		chain_to.take_damage(chain_damage, is_crit, shield_pen)
+		chain_to.take_damage(chain_damage, is_crit, shield_pen, true) ## zincir sıçraması = alan
 		if not shaman_burn_applied and chain_to.has_method("try_shaman_weapon_burn"):
 			shaman_burn_applied = chain_to.try_shaman_weapon_burn()
 		_spawn_chain_lightning_fx(chain_from, chain_to)
@@ -2212,7 +2215,7 @@ func _fire_at(target: Node2D) -> void:
 			if e.has_method("take_damage"):
 				## Kullanıcı isteği: alan hasarı global %33 etkinlik (bkz.
 				## GameManager.AOE_DAMAGE_EFFECTIVENESS).
-				e.take_damage(final_damage * melee_aoe_damage_percent * GameManager.AOE_DAMAGE_EFFECTIVENESS, false, shield_pen)
+				e.take_damage(final_damage * melee_aoe_damage_percent * GameManager.AOE_DAMAGE_EFFECTIVENESS, false, shield_pen, true)
 				_apply_knockback(e)
 				_apply_item_slow_on_hit(e)
 				## Hançer: kullanıcı isteği - kanama sadece isabet ettiği İLK

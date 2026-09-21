@@ -58,6 +58,27 @@ const CHEST_TEXTURES := {
 	4: "res://assets/sprites/chest_tier_9_10.png",
 	5: "res://assets/sprites/chest_tier_11_up.png",
 }
+## KULLANICI BİLDİRİMİ (2026-09-21): "Sandık açıldığında sandık özelliklerini gösteren kart ufakken yazılar kocaman kalıyor bu
+## yüzden doğru düzgün görünmüyor yazıları." KÖK NEDEN: kart içeriği kenardan sadece 16 px içeride başlıyordu ama çerçeve dokusunun
+## (TierSystem.FRAME_TEXTURES) süslü kenarları/mücevheri çok daha içeride - başlık çerçevenin üstüne biniyor, açıklama çerçeve
+## çizgilerinin dışına taşıyor, AL/SAT butonları alt çerçeveyi örtüyordu; uzun açıklamalı eşyalarda ise sabit 24 px yazı kartı
+## uzatıyordu. Artık içerik, çerçevenin İÇİNDEKİ alana oturuyor (level_up_screen.tscn Content kutusu 28/54/28/52'ydi ama yan çubuklara
+## değiyordu - burada biraz daha dar); yazı boyutları o alana göre seçiliyor (_fit_card_texts: isim tek satıra, açıklama alana SIĞANA kadar küçülür).
+const CARD_SIZE := Vector2(300, 480)
+## Yanlar 46: çerçevenin yan çubukları kart kenarından ~32-42 px arasında (28 olunca yazı/butonlar çubuğa biniyordu); üst 64: üstteki
+## elmas süsü kart içine ~57 px sarkıyor (54'te tier yazısı elmasın altına giriyordu).
+const CARD_PAD_LEFT := 46
+const CARD_PAD_RIGHT := 46
+const CARD_PAD_TOP := 64
+const CARD_PAD_BOTTOM := 52
+const CARD_TIER_FONT_SIZE := 20
+const CARD_NAME_FONT_SIZE := 34
+const CARD_NAME_MIN_FONT_SIZE := 20
+const CARD_DESC_FONT_SIZE := 24
+const CARD_DESC_MIN_FONT_SIZE := 13
+const CARD_ICON_SIZE := 64.0
+const CARD_BUTTON_HEIGHT := 38.0
+const CARD_BUTTON_FONT_SIZE := 24
 const CHEST_ICON_DISPLAY_SIZE := 176.0 ## kullanıcı isteği: "biraz görünür olmalı boyut olarak"
 const CHEST_OPEN_FRAME_DELAY := 0.15 ## dünya sandığındaki 0.08sn'den biraz daha yavaş - UI'da daha net okunsun diye
 
@@ -239,11 +260,14 @@ func _chest_frame_texture(full_tex: Texture2D, frame: int) -> Texture2D:
 func _reveal_reward_card(candidate: Dictionary) -> void:
 	if cards_container:
 		var card = _build_card(candidate)
+		## Yazı boyutu yerleşim bittikten sonra ayarlanıyor (bkz. _fit_card_texts) - o bir kareye kadar ayarsız yazı görünmesin.
+		card.modulate.a = 0.0
 		cards_container.add_child(card)
 		cards_container.visible = true
 		await get_tree().process_frame
 		if not is_instance_valid(self):
 			return
+		_fit_card_texts(card)
 		if card is Control:
 			card.pivot_offset = card.size * 0.5
 			var final_pos: Vector2 = card.position
@@ -344,7 +368,7 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	## eşleşmeye devam etsin diye AYNI şekilde 300x480'e döndürüldü (eski
 	## 238x406'ya DEĞİL - o değer zaten level kartlarıyla eşleşmiyordu, bu
 	## yüzden ilk etapta düzeltilmişti).
-	card.custom_minimum_size = Vector2(300, 480) # Match level up card dimensions
+	card.custom_minimum_size = CARD_SIZE # Match level up card dimensions
 
 	var sb := StyleBoxFlat.new()
 	## Kullanıcı isteği: "sandık ödülü seçme kartı da tiera bağlı olarak level
@@ -382,15 +406,16 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 
 	# 2. Margin Container
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_bottom", 16)
+	## Çerçeve dokusunun süslü kenarlarının İÇİ (bkz. CARD_PAD_* notu) - eskiden hepsi 16'ydı, içerik çerçevenin üstüne biniyordu.
+	margin.add_theme_constant_override("margin_left", CARD_PAD_LEFT)
+	margin.add_theme_constant_override("margin_right", CARD_PAD_RIGHT)
+	margin.add_theme_constant_override("margin_top", CARD_PAD_TOP)
+	margin.add_theme_constant_override("margin_bottom", CARD_PAD_BOTTOM)
 	card.add_child(margin)
 	
 	# 3. VBox
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", 6)
 	margin.add_child(vbox)
 	
 	# 4. Tier badge (SADECE eşyalar - bkz. _build_card üstündeki not)
@@ -398,7 +423,7 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 		var tier_lbl := Label.new()
 		tier_lbl.text = "%s (%%%d güç)" % [TierSystem.NAMES[_reward_tier - 1], int(round(power_mult * 100.0))]
 		tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		tier_lbl.add_theme_font_size_override("font_size", 22)
+		tier_lbl.add_theme_font_size_override("font_size", CARD_TIER_FONT_SIZE)
 		tier_lbl.add_theme_color_override("font_color", TierSystem.COLORS[_reward_tier - 1])
 		vbox.add_child(tier_lbl)
 
@@ -412,17 +437,21 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	## isimleri ("Yıldırım Asası" gibi) bu büyük fontta tek satıra sığmayıp
 	## kartın dışına taşabilirdi (kullanıcı isteği: "dışarı taşmasınlar
 	## sakın kelime uzunsa aşağıdan devam etsin").
-	name_lbl.add_theme_font_size_override("font_size", 46)
+	## (2026-09-21) 46 -> 34: kart iç alanı 244 px genişliğinde (bkz. CARD_PAD_*); isim önce tek satıra sığacak şekilde küçültülür
+	## (_fit_card_texts), o da yetmeyen çok uzun isimler alt satıra kayar (autowrap).
+	name_lbl.add_theme_font_size_override("font_size", CARD_NAME_FONT_SIZE)
 	name_lbl.add_theme_color_override("font_color", PAL_ACCENT)
-	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	name_lbl.clip_text = false
 	vbox.add_child(name_lbl)
+	card.set_meta("name_label", name_lbl)
 
 	# 5. Icon
 	var icon_rect := TextureRect.new()
 	## Kullanıcı isteği: level atlama kartlarının ikon boyutuyla (bkz.
 	## level_up_screen.tscn Icon custom_minimum_size) aynı - büyütme geri
 	## alınınca (kullanıcı isteği) bu da 84'e döndü.
-	icon_rect.custom_minimum_size = Vector2(84, 84) # Proportional icon size
+	icon_rect.custom_minimum_size = Vector2(CARD_ICON_SIZE, CARD_ICON_SIZE) # Proportional icon size
 	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
 		icon_rect.texture = load(icon_path) as Texture2D
 	icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -431,18 +460,22 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	vbox.add_child(icon_rect)
 
 	# 6. Description
-	var desc_lbl := Label.new()
-	desc_lbl.text = desc_text
-	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	## Kullanıcı isteği: level atlama kartlarının Desc'iyle (bkz.
-	## level_up_screen.gd CARD_DESCRIPTION_FONT_SIZE) aynı boyuta getirildi -
-	## büyütme geri alınınca (kullanıcı isteği) bu da 24'e döndü.
-	desc_lbl.add_theme_font_size_override("font_size", 24)
+	## (2026-09-21) Label -> RichTextLabel (level atlama kartlarındaki Desc ile aynı tür): autowrap'lı bir Label metnin yüksekliğini
+	## kartın MİNİMUM boyutuna yansıtıp kartı uzatıyordu; fit_content'siz RichTextLabel ise kalan alana sabit sığar ve
+	## _fit_card_texts uzun açıklamayı o alana SIĞANA kadar küçültür.
+	var desc_lbl := RichTextLabel.new()
+	desc_lbl.bbcode_enabled = true
+	desc_lbl.fit_content = false
+	desc_lbl.scroll_active = false
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desc_lbl.text = "[center]%s[/center]" % desc_text.replace("[", "[lb]")
+	desc_lbl.add_theme_color_override("default_color", Color(0.96, 0.93, 0.86, 1.0))
+	_set_desc_font_size(desc_lbl, CARD_DESC_FONT_SIZE)
 	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(desc_lbl)
-	
+	card.set_meta("desc_label", desc_lbl)
+
 	# Check slots limit (SİLAH ve EŞYA için AYRI limitler - bkz. is_weapon)
 	var has_slots: bool = true
 	var gm = _get_game_manager()
@@ -472,8 +505,8 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	## birlikte küçüldü (50->44) ama büyüyen 28px fontu hâlâ rahat sığdıracak
 	## kadar bırakıldı.
 	var al_btn := Button.new()
-	al_btn.custom_minimum_size = Vector2(0, 44)
-	al_btn.add_theme_font_size_override("font_size", 28)
+	al_btn.custom_minimum_size = Vector2(0, CARD_BUTTON_HEIGHT)
+	al_btn.add_theme_font_size_override("font_size", CARD_BUTTON_FONT_SIZE)
 	## DÜZELTME (kullanıcı isteği: "butonlardaki yazıların rengini beyaz
 	## yapıp dışlarına siyah kontür ekle") - eskiden burada krem rengi bir
 	## font_color override'ı vardı, artık kaldırıldı ki tüm butonlarla AYNI
@@ -493,8 +526,8 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	# 8. Sat Button
 	var refund_gold: int = int(round(cost_base * 0.7))
 	var sat_btn := Button.new()
-	sat_btn.custom_minimum_size = Vector2(0, 44)
-	sat_btn.add_theme_font_size_override("font_size", 28)
+	sat_btn.custom_minimum_size = Vector2(0, CARD_BUTTON_HEIGHT)
+	sat_btn.add_theme_font_size_override("font_size", CARD_BUTTON_FONT_SIZE)
 	## bkz. al_btn üstündeki ayni not - font_color override'i kaldirildi.
 	ShopPanel._apply_wood_button_style(sat_btn)
 	sat_btn.text = "SAT (+%d Altın)" % refund_gold
@@ -502,6 +535,33 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	vbox.add_child(sat_btn)
 	
 	return card
+
+static func _set_desc_font_size(desc_lbl: RichTextLabel, font_size: int) -> void:
+	for key in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size", "mono_font_size"]:
+		desc_lbl.add_theme_font_size_override(key, font_size)
+
+
+## Kart yerleşimi bittikten SONRA (etiketlerin gerçek boyutu belli) yazıları kartın iç alanına sığdırır: isim tek satıra sığana
+## kadar küçülür (alt sınır CARD_NAME_MIN_FONT_SIZE, o da yetmezse alt satıra kayar); açıklama CARD_DESC_FONT_SIZE'dan başlayıp
+## metnin yüksekliği ayrılan alana SIĞANA kadar (alt sınır CARD_DESC_MIN_FONT_SIZE) küçülür. Kısa metinler tam boyutta kalır.
+func _fit_card_texts(card: Control) -> void:
+	var name_lbl: Label = card.get_meta("name_label", null) as Label
+	if name_lbl and is_instance_valid(name_lbl) and name_lbl.size.x > 0.0:
+		var font: Font = name_lbl.get_theme_font("font")
+		var fs: int = CARD_NAME_FONT_SIZE
+		while fs > CARD_NAME_MIN_FONT_SIZE and font.get_string_size(name_lbl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > name_lbl.size.x:
+			fs -= 1
+		name_lbl.add_theme_font_size_override("font_size", fs)
+		if font.get_string_size(name_lbl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > name_lbl.size.x:
+			name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var desc_lbl: RichTextLabel = card.get_meta("desc_label", null) as RichTextLabel
+	if desc_lbl and is_instance_valid(desc_lbl) and desc_lbl.size.y > 0.0:
+		var dfs: int = CARD_DESC_FONT_SIZE
+		_set_desc_font_size(desc_lbl, dfs)
+		while dfs > CARD_DESC_MIN_FONT_SIZE and float(desc_lbl.get_content_height()) > desc_lbl.size.y:
+			dfs -= 1
+			_set_desc_font_size(desc_lbl, dfs)
+
 
 ## DÜZELTME/YENİ ÖZELLİK: artık candidate dict alıyor ({"type","key"}, bkz.
 ## setup() üstündeki not) - type=="weapon" ise bedava bir silah kopyası

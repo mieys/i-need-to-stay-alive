@@ -134,11 +134,21 @@ func _refresh() -> void:
 
 	shield_pen_percent_value.text = "%%%d" % int(round(player.shield_pen_percent * 100))
 	exp_gain_value.text = "%%%d" % int(round(player.exp_gain_percent * 100))
-	luck_value.text = "%%%d" % int(round(player.luck * 100))
+	luck_value.text = format_luck(player.luck)
 	range_value.text = "+%d" % int(player.weapon_range_bonus)
 	dodge_value.text = "%%%d" % int(round(player.dodge_chance * 100))
 	knockback_value.text = str(int(player.knockback_stat))
 	shield_amount_value.text = "+%%%d" % int(round(player.shield_max_percent * 100))
+
+
+## KULLANICI BİLDİRİMİ (2026-09-21): "şans buga girmiş veya çok bozuk %1500lere kadar ulaşılabiliyor, çok şans alınmamasına
+## rağmen". KÖK NEDEN: Şans bir PUAN sayacı (kart +1.5 puan, Şanslı Zar +2 puan; oyuncu.luck = toplam puan) ama panel onu yüzdeymiş
+## gibi x100 yazıyordu - 15 puan "%1500" görünüyordu, oysa gerçek etkisi puan başına %0.2 düşme şansı (bkz. enemy.gd
+## _player_luck_drop_bonus). Etki değerlerine dokunulmadı; gösterge kartlardaki/eşyalardaki birimle (puan) aynı olacak şekilde düzeltildi.
+static func format_luck(points: float) -> String:
+	if is_equal_approx(points, round(points)):
+		return "%d" % int(round(points))
+	return "%.1f" % points
 
 
 func _setup_stat_tooltips() -> void:
@@ -150,7 +160,7 @@ func _setup_stat_tooltips() -> void:
 		"crit_chance": "Kritik Oran/Hasar: Kritik vuruş yapma şansını ve kritik hasar çarpanını arttırır.",
 		"shield_pen_percent": "Kalkan Delme: Düşmanların kalkan soğurmasını yüzde olarak yok sayar.",
 		"exp_gain": "Tecrübe Kazanımı: Kazanılan tecrübe puanını (XP) arttırır.",
-		"luck": "Şans: Düşmanlardan altın, yiyecek veya sandık düşme ihtimalini arttırır.",
+		"luck": "Şans (puan): Her 1 puan altın/yemek/mıknatıs düşme ihtimalini %0.2, sandık düşme ihtimalini %0.04, kartlarda üst kademe çıkma ağırlığını %1.5 arttırır.",
 		"range": "Menzil: Silahların vuruş ve menzil uzaklığını arttırır.",
 		"dodge": "Sıvışma: Saldırılardan kaçınma şansı verir (Maks %60, fazlası boşa gider).",
 		"knockback": "Geri Tepme: Silahların düşmanları geri itme gücünü arttırır.",

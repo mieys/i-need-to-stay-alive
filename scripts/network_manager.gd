@@ -2,6 +2,7 @@ extends Node
 
 ## Vampir Çocuk FX yardımcısı (broadcast_player_vfx "vampir_fx" dalı).
 const VampirMathScript := preload("res://scripts/vampir_math.gd")
+const PixelDrawScript := preload("res://scripts/pixel_draw.gd")
 
 ## NetworkManager: Godot'nun yerleşik ENet çoklu oyuncu altyapısı üzerinden DOĞRUDAN
 ## (host <-> client) bağlantı kurar. Kullanıcı isteği: "multiplayerdan ziva altyapısını
@@ -2240,6 +2241,9 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		## patlaması), "puff" (Yarasa Formu geçişi), "drain" (Kan Emme - "points" kaynak konumları,
 		## damlalar bu kukla'ya akar; "text" varsa "+1 Maks. Can" gibi kukla üstünde yazı).
 		## Yarasa formunun kendisi/silahların çekilmesi bu kanaldan DEĞİL, animasyon adından gelir.
+		## Genel pixel parçacık patlaması (pixel_draw.gd spawn_burst) - Korsan bomba tozu/duman/kıvılcımı vb.
+		"pixel_burst":
+			PixelDrawScript.spawn_burst(get_tree().current_scene, pos, str(extra_data.get("palette", "fire")), int(extra_data.get("count", 14)), float(extra_data.get("speed", 140.0)), float(extra_data.get("life", 0.5)))
 		"vampir_fx":
 			var vampir_kind: String = str(extra_data.get("kind", "hit"))
 			var vampir_opts: Dictionary = {}
@@ -2842,16 +2846,18 @@ func request_drop_pickup(drop_network_id: int, drop_type: String) -> void:
 		match drop_type:
 			"food":
 				# Yemek: host drop'u işler ve iyileşmeyi istek atan client'a senkronize eder
-				var heal_amount: float = real_drop.get_heal_amount() if real_drop.has_method("get_heal_amount") else 25.0
-				# Host tarafında gerçek player'ı bul (sender_id host'un kendisiyse)
+				## Yemek can yüzdesi yiyenin MAKSİMUM canına göre (bkz. food_drop.gd FOOD_TIER_HEAL_PERCENT): yiyen host'un kendisiyse
+				## kendi max_health'i, uzak bir istemciyse host'taki kuklasının (state kanalından gelen) max_health'i.
 				var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
-				if sender_id == local_id or sender_id == 0:
-					var lp: Node = get_tree().get_first_node_in_group("player")
-					if lp and lp.has_method("heal"):
-						lp.heal(heal_amount)
+				var eater_is_host: bool = sender_id == local_id or sender_id == 0
+				var eater: Node = get_tree().get_first_node_in_group("player") if eater_is_host else _find_remote_player(sender_id)
+				var eater_max: float = float(eater.max_health) if (eater != null and "max_health" in eater) else 100.0
+				var heal_amount: float = real_drop.get_heal_amount(eater_max) if real_drop.has_method("get_heal_amount") else 0.16 * eater_max
+				if eater_is_host:
+					if eater and eater.has_method("heal"):
+						eater.heal(heal_amount)
 				else:
-					# Uzaktaki oyuncuya heal sync gönder
-					sync_food_heal.rpc(heal_amount, sender_id)
+					sync_food_heal.rpc(heal_amount, sender_id) ## uzaktaki oyuncuya heal sync gönder
 				real_drop.queue_free()
 			"magnet":
 				## #32 DÜZELTME (kullanıcı bildirimi: "Mıknatısla çekilen

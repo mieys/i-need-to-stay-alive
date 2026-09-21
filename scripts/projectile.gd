@@ -221,7 +221,7 @@ func _apply_splash_damage(direct_hit: Node) -> void:
 		if not e.has_method("take_damage"):
 			continue
 		if global_position.distance_to(e.global_position) <= splash_radius:
-			e.take_damage(damage, is_crit, shield_pen_percent)
+			e.take_damage(damage, is_crit, shield_pen_percent, true) ## patlama alanı
 			## Ateş Asası pasifi: patlamanın değdiği HER düşman yanar.
 			if burn_on_hit_tick_damage > 0.0 and e.has_method("apply_burn"):
 				e.apply_burn(burn_on_hit_tick_damage, BURN_ON_HIT_DURATION)

@@ -135,7 +135,7 @@ func _process(delta: float) -> void:
 			if owner_player and is_instance_valid(owner_player) and owner_player.has_method("_roll_ability_crit"):
 				is_crit = owner_player._roll_ability_crit()
 				dmg = owner_player._apply_ability_crit(dmg, is_crit)
-			e.take_damage(dmg, is_crit)
+			e.take_damage(dmg, is_crit, 0.0, true)
 
 	_broadcast_network_state()
 

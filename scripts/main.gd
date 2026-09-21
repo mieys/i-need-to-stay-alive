@@ -40,6 +40,7 @@ const CloudShadowMaterial := preload("res://shaders/cloud_shadows_material.tres"
 ## yapılan elle override'ları kaydederken düşürüyor). Bu yüzden materyal
 ## çalışma zamanında burada atanıyor.
 const MAP_ROOT_PATH := "Harita"
+const CameraMapLimitsScript: GDScript = preload("res://scripts/camera_map_limits.gd")
 
 ## ÖNEMLİ: TileMapLayer haritayı "rendering quadrant"lara böler ve HER
 ## quadrant AYRI bir CanvasItem olarak çizilir. Shader dünya konumunu
@@ -178,6 +179,11 @@ func _ready() -> void:
 	
 	if NetworkManager.is_multiplayer_active:
 		_setup_multiplayer_players()
+
+	## Kamera haritanın dışını göstermesin (bkz. camera_map_limits.gd).
+	var camera_limits: Node = CameraMapLimitsScript.new()
+	camera_limits.name = "CameraMapLimits"
+	add_child(camera_limits)
 
 	## Görüş alanı sisi: dünyanın üstünde, HUD'un ALTINDA. VignetteOverlay ve HUD
 	## aynı CanvasLayer katmanında (1) olduğu için çizim sırasını ağaç sırası
@@ -382,6 +388,9 @@ func _process_multiplayer_sync(delta: float) -> void:
 			"is_shielded": player.is_shielded if "is_shielded" in player else false,
 			"elara_double": player.elara_double_fire_active if "elara_double_fire_active" in player else false,
 			"talon_giant": player._talon_ulti_active if "_talon_ulti_active" in player else false,
+			## Talon Ayna Formu (R) aktif mi - diger oyuncularda +%10 boyut ve alev aurasi icin (remote_player.gd _talon_form_active).
+			## "talon_formation" bunun yerine gecmez: Silah Salvosu (E) acikken o "salvo" doner, R bilgisi kaybolurdu.
+			"talon_form": player._talon_mirror_form_active if "_talon_mirror_form_active" in player else false,
 			## Talon'un Silah Salvosu (E)/Ayna Formu (R) yetenekleri silahları
 			## karakter etrafında dairesel dizer (bkz. player.gd
 			## _talon_set_weapons_circular) - bu SADECE yerel/yetkili weapon.gd
@@ -811,6 +820,9 @@ var _chest_wait_label: Label = null
 ## yerine bu zaman damgası XP_PICKUP_SETTLE_DELAY kadar SESSİZ kalana kadar
 ## (yani toplama gerçekten durana kadar) beklenir.
 const XP_PICKUP_SETTLE_DELAY := 1.0
+## KULLANICI İSTEĞİ (2026-09-21): "level atlama için gereken exp toplamama bekleme süresini multiplayerda 0.5 saniyeye
+## düşür" - çok oyunculuda ekran 0.5 sn sessizlikten sonra açılır (tek oyunculu 1 sn olarak kalır).
+const XP_PICKUP_SETTLE_DELAY_MULTIPLAYER := 0.5
 var _last_xp_gain_time: float = 0.0
 ## Ekranı açma kararı zaten bekleme aşamasındaysa (settle süresi dolmayı
 ## bekliyorsa) aynı anda ikinci bir bekleme döngüsü başlatılmasın diye - bu
@@ -853,7 +865,8 @@ func _on_team_leveled_up(new_level: int) -> void:
 func _open_level_up_screen_after_xp_settles() -> void:
 	while is_inside_tree():
 		var elapsed: float = (Time.get_ticks_msec() / 1000.0) - _last_xp_gain_time
-		var remaining: float = XP_PICKUP_SETTLE_DELAY - elapsed
+		var settle_delay: float = XP_PICKUP_SETTLE_DELAY_MULTIPLAYER if NetworkManager.is_multiplayer_active else XP_PICKUP_SETTLE_DELAY
+		var remaining: float = settle_delay - elapsed
 		if remaining <= 0.0:
 			break
 		await get_tree().create_timer(remaining).timeout

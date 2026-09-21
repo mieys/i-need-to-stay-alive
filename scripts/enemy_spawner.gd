@@ -790,23 +790,70 @@ func _power_extra_spawn_count() -> int:
 ## ==============================================================================
 var _spawn_tier: int = 1
 
+## KULLANICI BİLDİRİMİ: "bazen seyyar satıcı spawnlandığında veya kademe atlandığında yaratıklar spawnlanmamaya başlıyor".
+## KÖK NEDEN (Kademe kapısı, yukarıdaki not): kapı, eski kademeden sağ kalan HER yaratık ölene kadar kapalı kalıyordu.
+## Kademe geçişinde ekranda hep onlarca eski yaratık vardır; biri bile ulaşılamaz/uzakta takılı kalırsa (satıcı bariyerinin
+## kenarında, oyuncular bölgeye girip onu hedef dışı bırakınca terk edilmiş, duvar dibinde sıkışmış, çok uzağa savrulmuş...)
+## kapı SÜRESİZ kapalı kalıp hiçbir yeni yaratık doğmuyordu - üstelik tek kalan yaratığın nerede olduğunu oyuncu göremiyor.
+## İki güvenlik eklendi (kapının asıl amacı - "eskiler temizlenmeden yenileri gelmesin" - yakındaki yaratıklar için aynen duruyor):
+##  1) SADECE herhangi bir canlı oyuncunun GATE_SURVIVOR_RADIUS'u içindeki eski yaratıklar kapıyı tutar; çok uzaktakiler sayılmaz.
+##  2) Kapı en fazla GATE_MAX_WAIT_MSEC bekler; süre dolunca (kimse öldürmese bile) yeni kademe için açılır.
+const GATE_SURVIVOR_RADIUS := 1600.0
+const GATE_MAX_WAIT_MSEC := 30000
+var _gate_wait_started_msec: int = 0
+
+
+## Canlı TÜM oyuncuların (yerel + uzak; ev içi/satıcı bölgesi dahil) dünya konumları - kapının "yakınlık" ölçütü için.
+func _living_player_positions() -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var local_p: Node = get_tree().get_first_node_in_group("player")
+	if local_p and is_instance_valid(local_p) and local_p.get("is_dead") != true:
+		out.append((local_p as Node2D).global_position)
+	if NetworkManager.is_multiplayer_active:
+		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+			if is_instance_valid(rp) and rp.get("is_dead") != true:
+				out.append((rp as Node2D).global_position)
+	return out
+
 
 func _older_tier_survivor_count(time_tier: int) -> int:
 	var n: int = 0
+	var anchors: Array[Vector2] = _living_player_positions()
+	var radius_sq: float = GATE_SURVIVOR_RADIUS * GATE_SURVIVOR_RADIUS
 	for e: Node in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true or e.is_in_group("boss"):
 			continue
 		var t: int = int(e.get_meta("spawn_tier", 0))
 		if t > 0 and t < time_tier:
+			## Hiçbir oyuncunun yakınında olmayan yaratık kapıyı tutmaz (oyuncu listesi boşsa - ör. testler - hepsi sayılır).
+			if not anchors.is_empty():
+				var near: bool = false
+				for ap in anchors:
+					if ap.distance_squared_to((e as Node2D).global_position) <= radius_sq:
+						near = true
+						break
+				if not near:
+					continue
 			n += 1
 	return n
 
 
-## Şu an spawn'da kullanılacak kademe; kapı kapalıysa (eski kademeden sağ kalan var) 0.
+## Şu an spawn'da kullanılacak kademe; kapı kapalıysa (eski kademeden yakında sağ kalan var) 0.
 func _resolve_spawn_tier() -> int:
 	var time_tier: int = _current_tier()
-	if _spawn_tier < time_tier and _older_tier_survivor_count(time_tier) == 0:
-		_spawn_tier = time_tier
+	if _spawn_tier < time_tier:
+		if _older_tier_survivor_count(time_tier) == 0:
+			_spawn_tier = time_tier
+			_gate_wait_started_msec = 0
+		else:
+			var now_msec: int = Time.get_ticks_msec()
+			if _gate_wait_started_msec == 0:
+				_gate_wait_started_msec = now_msec
+			elif now_msec - _gate_wait_started_msec >= GATE_MAX_WAIT_MSEC:
+				_spawn_tier = time_tier ## zaman aşımı: eski yaratıklar yüzünden spawn asla durmasın
+				_gate_wait_started_msec = 0
+	else:
+		_gate_wait_started_msec = 0
 	return _spawn_tier if _spawn_tier >= time_tier else 0
 
 

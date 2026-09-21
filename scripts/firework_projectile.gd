@@ -161,7 +161,7 @@ func _explode() -> void:
 		if not e.has_method("take_damage"):
 			continue
 		if global_position.distance_to(e.global_position) <= splash_radius:
-			e.take_damage(damage, is_crit, shield_pen_percent)
+			e.take_damage(damage, is_crit, shield_pen_percent, true) ## patlama alanı
 			if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
 				_shaman_burn_applied = e.try_shaman_weapon_burn()
 	_spawn_impact()
