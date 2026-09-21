@@ -3,7 +3,7 @@ extends Node2D
 ## Korsan'ın TEMEL yeteneği (Saatli Bomba, skill2 id 17, bkz. player.gd
 ## _korsan_try_place_bomb/characters.gd DEFS[9]) ile bırakılan saatli bomba.
 ## Kendisi hiçbir çarpışma/Area2D içermez - patlama hasarı doğrudan bir
-## mesafe taramasıyla (bkz. detonate(), Kurt Adam'ın Vahşi Kesik'i/Talon'un
+## mesafe taramasıyla (bkz. detonate(), Talon'un
 ## Yer Sarsıntısı'yla AYNI desen) uygulanır.
 ##
 ## Multiplayer notu: bu sahne HEM gerçek bombayı (bırakan istemcide,

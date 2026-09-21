@@ -3042,6 +3042,11 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 	var _dealer: Node = get_tree().get_first_node_in_group("player")
 	if amount > 0.0 and _dealer and "match_damage_dealt" in _dealer:
 		_dealer.match_damage_dealt += amount
+	## Vampir Çocuk'un pasif can emmesi (verilen hasarın %4'ü) - bkz. player.gd on_dealer_hit. Genel
+	## on_damage_dealt (aşağıdaki _apply_damage) SADECE host'ta çalıştığı için istemci Vampir'i
+	## iyileştiremezdi; burası tam vuran istemcide çalışıyor.
+	if amount > 0.0 and _dealer and _dealer.has_method("on_dealer_hit"):
+		_dealer.on_dealer_hit(amount)
 
 	## Multiplayer: non-host clients route damage through the host so there is
 	## a single authoritative enemy health pool. Without this every peer fights
@@ -3116,7 +3121,7 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 	if not is_raging and not is_ranged and not is_boss and _current_tier >= 2 \
 			and health > 0.0 and health <= max_health * RAGE_HP_THRESHOLD:
 		_enter_rage_mode()
-	## Can çalma pasifi (Kurt Adam): oyuncuya, yaratığın gerçekten yediği
+	## Can çalma (kart/eşya/silah): oyuncuya, yaratığın gerçekten yediği
 	## hasar üzerinden bildirim - pasifsiz karakterlerde no-op.
 	var lifesteal_player := get_tree().get_first_node_in_group("player")
 	if lifesteal_player and lifesteal_player.has_method("on_damage_dealt"):
@@ -3215,7 +3220,7 @@ func die() -> void:
 
 	## Korsan (öldürmede altın şansı) / Necromancer (ruh biriktirme) pasifleri:
 	## oyuncuya bu yaratığın öldüğünü bildir - bkz. player.gd on_enemy_killed
-	## (on_damage_dealt/Kurt Adam can çalma İLE AYNI desen). Pasifi olmayan
+	## (on_damage_dealt İLE AYNI desen). Pasifi olmayan
 	## karakterlerde no-op.
 	## DÜZELTME (multiplayer KRİTİK): die() SADECE host'ta çalışır (bkz. dosya
 	## başı host-authoritative notu), bu yüzden get_first_node_in_group

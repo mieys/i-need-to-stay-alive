@@ -134,7 +134,10 @@ func _on_mouse_entered() -> void:
 			current_cd3 = base_cd3 * (1.0 - cdr3)
 		else:
 			current_cd3 = base_cd3
-		if current_cd3 != base_cd3:
+		if base_cd3 <= 0.0:
+			## Bekleme süresi olmayan TOGGLE'lar (Vampir Çocuk R'si) - "0.0s" yerine "Yok".
+			cd_text = "Bekleme Süresi: Yok"
+		elif current_cd3 != base_cd3:
 			cd_text = "Bekleme Süresi: %.1fs [color=#88ff88](Base: %.1fs)[/color]" % [current_cd3, base_cd3]
 		else:
 			cd_text = "Bekleme Süresi: %.1fs" % base_cd3
@@ -501,7 +504,7 @@ func _draw() -> void:
 	## Kullanıcı bildirimi: "bazı karakterlerin yetenek ikonları
 	## transparan. transparan olmaması gerekiyor kare şeklinde içi dolu
 	## bir ikon olması gerekiyor". Bu dolgu sayesinde tüm transparan
-	## ikonlar (Elara, Kurt Adam, Assasin, Büyücü vb.) ve vektörler otomatik
+	## ikonlar (Elara, Assasin, Büyücü vb.) ve vektörler otomatik
 	## olarak kare şeklinde içi dolu piksel-art tarzında görünür.
 	draw_rect(inner, Color(0.12, 0.09, 0.07), true)
 
@@ -658,10 +661,6 @@ func _draw_icon(inner: Rect2) -> void:
 			_icon_invisibility(c, s)
 		6:
 			_icon_haste(c, s)
-		13:
-			_icon_claw_slash(c, s)
-		14:
-			_icon_feral_berserk(c, s)
 		15:
 			_icon_giant_growth(c, s)
 		16:
@@ -734,24 +733,6 @@ func _icon_haste(c: Vector2, s: float) -> void:
 		var off: float = (i - 1) * s * 0.45
 		draw_line(c + Vector2(-s * 0.8, off - s * 0.25), c + Vector2(s * 0.5, off), col, 3.0)
 		draw_line(c + Vector2(s * 0.5, off), c + Vector2(s * 0.1, off + s * 0.3), col, 3.0)
-
-
-## Kurt Adam TEMEL (Vahşi Kesik) - üç paralel pençe izi.
-func _icon_claw_slash(c: Vector2, s: float) -> void:
-	var col := Color(0.85, 0.15, 0.15)
-	for i in range(3):
-		var off: float = (i - 1) * s * 0.5
-		draw_line(c + Vector2(-s * 0.8, off - s * 0.55), c + Vector2(s * 0.8, off + s * 0.55), col, 4.0)
-
-
-## Kurt Adam ULTİ (Kudurmuş Saldırı) - vahşi, kızıl bir kurt kafası silueti.
-func _icon_feral_berserk(c: Vector2, s: float) -> void:
-	var col := Color(1.0, 0.2, 0.1)
-	draw_colored_polygon(PackedVector2Array([
-		c + Vector2(0, -s), c + Vector2(s * 0.6, s * 0.3), c + Vector2(0, s * 0.9), c + Vector2(-s * 0.6, s * 0.3)
-	]), col)
-	draw_circle(c + Vector2(-s * 0.25, -s * 0.15), s * 0.12, Color(1.0, 1.0, 0.3))
-	draw_circle(c + Vector2(s * 0.25, -s * 0.15), s * 0.12, Color(1.0, 1.0, 0.3))
 
 
 ## Talon YENİ ULTİ (Devleşme) - gerçek sanat eseri ikon henüz yok, bu yüzden

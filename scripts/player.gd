@@ -6,6 +6,9 @@ extends CharacterBody2D
 ## and _skill_timing_for(). DEFAULT_* keeps 1-6 behaving exactly as before.
 ## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
 const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
+## Vampir Çocuk: silah çekilme/yarasa yörüngesi formülleri remote_player.gd ile PAYLAŞILIR.
+const VampirMath := preload("res://scripts/vampir_math.gd")
+const VampirBatSwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.gd")
 
 const DEFAULT_SKILL_DURATION := 10.0
 const DEFAULT_SKILL_COOLDOWN := 20.0
@@ -42,16 +45,6 @@ const SKILL_TIMING := {
 	## _skill_elara_dash_refill) yeni evi - "duration" Talon'un Hamle
 	## Vuruşu'yla (id 38) AYNI desen, sadece kısa hamle penceresi.
 	12: {"duration": 0.12, "cooldown": 6.0},
-	## Kurt Adam ULTİ: Kudurmuş Saldırı - kontrolsüz otomatik saldırı (bkz.
-	## _skill_kurtadam_berserk/_kurtadam_berserk_direction). DÜZELTME
-	## (kullanıcı isteği #45: "kurt adam ultisi sonsuza kadar sürüyor 20
-	## saniye sürmesi gerekirdi") - 30 -> 20. Not: bu değer zaten SABİT/SONLU
-	## idi (Şovalye'nin aksine erken-bitiş koşulu yok) - "sonsuza kadar
-	## sürüyor" hissi muhtemelen _kurtadam_berserk_direction()'daki menzil
-	## hesabı bug'ından (aşağıda düzeltildi) kaynaklanıyordu; karakter hedefe
-	## hiç yaklaşamadığı için beceri "hiç işe yaramıyor/bitmiyor" gibi
-	## görünüyor olabilirdi.
-	14: {"duration": 20.0, "cooldown": 90.0},
 	## DÜZELTME (kullanıcı bildirimi: "assasin çocuğun Q'su oakleyin Q su gibi
 	## çalışıyor"): Assasin Çocuk'un ULTİ'si (Gölge Hücumu) eskiden id 5'ti,
 	## characters.gd'de "skill": 16 olarak güncellendi (bkz. o dosyadaki
@@ -96,6 +89,9 @@ const SKILL_TIMING := {
 	## idi (R iken), "Bulunduğu konuma 10sn süren bir arı sürüsü salar", 20sn
 	## bekleme - sayılar DEĞİŞMEDİ, sadece taşındı.
 	33: {"duration": 10.0, "cooldown": 20.0},
+	## Vampir Çocuk Q'su (Kan Emme, skill id 40): anlık bir aksiyon - "duration" sadece kısa bir
+	## görsel pencere, gerçek kısıt 8sn bekleme (bkz. _skill_vampir_blood_drain).
+	40: {"duration": 0.4, "cooldown": 8.0},
 }
 var _skill_duration: float = DEFAULT_SKILL_DURATION
 var _skill_cooldown: float = DEFAULT_SKILL_COOLDOWN
@@ -124,9 +120,6 @@ const SKILL2_TIMING := {
 	## "matthewin E yeteneği kendinde işlemiyor ve onda efektler çalışmıyor"):
 	## eksik olan SADECE Matthew'in KENDİSİNE uygulanan kısmıydı).
 	21: {"duration": 10.0, "cooldown": 35.0},
-	## Kurt Adam TEMEL: Vahşi Kesik - anlık AOE darbe, duration sadece
-	## savuruş animasyonu için kısa bir pencere.
-	13: {"duration": 1.0, "cooldown": 15.0},
 	## Assasin Çocuk TEMEL (id 5) eski Görünmezlik'in yerine gelen yeni yük-
 	## tabanlı (3 yük, 12sn/yük) 8 yönlü hamle - Korsan/Necromancer'ın şarj
 	## tabanlı TEMEL'leriyle AYNI mimari desen, bu yüzden standart skill2_state
@@ -165,6 +158,9 @@ const SKILL2_TIMING := {
 	## "cooldown" da 0 (bekleme süresi yok, sadece kalkan yeterliliği
 	## kısıtlar).
 	35: {"duration": 9999.0, "cooldown": 0.0},
+	## Vampir Çocuk TEMEL (Yarasa Formu, skill2 id 41): 5sn dönüşüm, ardından 22sn bekleme -
+	## standart skill2_state makinesini kullanır (bkz. _skill_vampir_bat_form/_end_skill2_effects).
+	41: {"duration": 5.0, "cooldown": 22.0},
 }
 var _skill2_duration: float = DEFAULT_SKILL2_DURATION
 var _skill2_cooldown: float = DEFAULT_SKILL2_COOLDOWN
@@ -230,6 +226,11 @@ const SKILL3_TIMING := {
 	## _activate_skill3() başında yapılır, burada sadece bekleme süresi
 	## (10sn, bkz. _skill_necro_summon_golem).
 	20: {"duration": 0.4, "cooldown": 10.0},
+	## Vampir Çocuk ULTİ (Kan Yarasaları, skill3 id 42): basılıp kapatılan bir TOGGLE, bekleme süresi
+	## YOK (kısıt: açıkken saniyede maksimum canın %3'ü) - Necromancer'ın Yarasa Sürüsü (id 35) ile
+	## AYNI desen, standart skill3_state makinesini KULLANMAZ (bkz. _vampir_toggle_bats). Burada
+	## sadece _skill3_timing_for()'un varsayılana düşmemesi ve tooltip için var.
+	42: {"duration": 9999.0, "cooldown": 0.0},
 }
 var _skill3_duration: float = DEFAULT_SKILL2_DURATION
 var _skill3_cooldown: float = DEFAULT_SKILL2_COOLDOWN
@@ -243,12 +244,6 @@ var _skill3_cooldown: float = DEFAULT_SKILL2_COOLDOWN
 var paladin_zone_active: bool = false
 var paladin_zone_radius: float = 0.0
 
-## ---------- Kurt Adam: Kudurmuş Saldırı (Q) ----------
-## true iken oyuncu hareketini kontrol edemez - _physics_process karakteri
-## en kısa menzilli silahına göre en yakın yaratığa doğru otomatik yürütür
-## (bkz. _kurtadam_berserk_direction). Yetenek/kalkan modu/eşya kullanımı
-## bundan ETKİLENMEZ, sadece hareket.
-var _kurtadam_berserk_active: bool = false
 var _paladin_movement_locked: bool = false
 ## #28 DÜZELTME: multiplayer'da ESC menüsü artık get_tree().paused KULLANMIYOR
 ## (bkz. main.gd _toggle_pause notu - tüm sahne ağacını durdurmak host'ta
@@ -841,7 +836,6 @@ const UzunkilicWeaponScene := preload("res://scenes/weapon_uzunkilic.tscn")
 ## Skill VFX sahneleri - runtime load() yerine preload() (frame drop önler)
 const FxOykuHealScene := preload("res://scenes/fx_oyku_heal.tscn")
 const FxWaveBeamScene := preload("res://scenes/fx_wave_beam.tscn")
-const FxKurtadamRageScene := preload("res://scenes/fx_kurtadam_rage.tscn")
 const FxBuyucuFastfireScene := preload("res://scenes/fx_buyucu_fastfire.tscn")
 const FxShieldActiveScene := preload("res://scenes/fx_shield_active.tscn")
 const FxPaladinCastScene := preload("res://scenes/fx_paladin_cast.tscn")
@@ -2012,7 +2006,7 @@ func _apply_weapon_bonuses_to(w) -> void:
 		## _talon_passive_fire_rate_mult, artık silindi) burada çarpılıyordu -
 		## yeni pasif (bkz. _passive_talon) saldırı hızını DEĞİL, saldırı
 		## gücünü/hasar azaltmayı etkiliyor, bu yüzden bu formülden çıkarıldı.
-		w.set_fire_rate_mult(fire_rate_mult * _elara_passive_fire_rate_mult() * _kurtadam_berserk_fire_rate_mult() * safe_item_mult)
+		w.set_fire_rate_mult(fire_rate_mult * _elara_passive_fire_rate_mult() * safe_item_mult)
 	if w.has_method("set_crit_chance_bonus"):
 		w.set_crit_chance_bonus(crit_chance_bonus)
 	if w.has_method("set_crit_damage_bonus"):
@@ -2205,6 +2199,10 @@ func _physics_process(delta: float) -> void:
 	## kendi üstündeki DÜZELTME notları.
 	_update_death_status_fx()
 	_update_revive_rewind_fx()
+	## Vampir Çocuk (sadece o karakterde iş yapar): ölürken/düşerken formu ve yarasaları kapatır,
+	## silah çekilme animasyonunu ilerletir. Aşağıdaki is_downed/is_dead erken dönüşlerinden ÖNCE
+	## olmalı - yoksa ölen bir oyuncunun silahları hiç geri gelmezdi.
+	_process_vampir(delta)
 	## Adım sesleri burada da güncelleniyor: aşağıdaki erken dönüşler
 	## _update_walk_sound'a hiç ulaşmadığı için, yürürken ölürsen/düşersen
 	## adım planlaması durdurulmazdı (bkz. fonksiyonun "is_moving=false" dalı).
@@ -2220,17 +2218,12 @@ func _physics_process(delta: float) -> void:
 	## Şovalye'nin Koruma Baloncuğu ultisi aktifken tamamen hareketsiz kalır
 	## (bkz. _skill_paladin_ulti) - input okunmaya devam eder ki animasyon/
 	## yön sistemi bozulmasın, sadece gerçek hareket engellenir.
-	## Kurt Adam'ın Kudurmuş Saldırı ultisi aktifken de hareket kontrolü
-	## oyuncudan alınır - input yerine _kurtadam_berserk_direction()
-	## (en kısa menzilli silahına göre en yakın yaratığa otomatik yürüme)
-	## kullanılır (bkz. kullanıcı isteği: "hareketlerini oyuncu kontrol
-	## edemez ancak yetenek ve kalkan modu kullanabilir").
 	var effective_direction: Vector2 = input_direction
 	## DÜZELTME (Assasin Çocuk'un Gölge Hücumu ultisi - bkz. _skill_assasin_
 	## dash): dash sırasında global_position her 0.07sn'de bir doğrudan
 	## hedef yaratığa ışınlanıyor - hareket girdisi/move_and_slide() bunu
-	## engellemesin/üstüne binmesin diye Şovalye'nin Koruma Baloncuğu ve Kurt
-	## Adam'ın Kudurmuş Saldırı'sıyla AYNI desende oyuncudan hareket kontrolü
+	## engellemesin/üstüne binmesin diye Şovalye'nin Koruma Baloncuğu ile
+	## AYNI desende oyuncudan hareket kontrolü
 	## alınıyor (input yine okunuyor ki yön/animasyon bozulmasın, sadece
 	## gerçek hareket engelleniyor).
 	## Büyücü Kız'ın "Meteor Patlaması" varyasyonu (bkz. _skill_buyucu_meteor):
@@ -2239,9 +2232,6 @@ func _physics_process(delta: float) -> void:
 	if _paladin_movement_locked or _menu_input_locked or is_assasin_dashing or is_buyucu_channeling or is_chat_typing:
 		velocity = Vector2.ZERO
 		effective_direction = Vector2.ZERO
-	elif _kurtadam_berserk_active:
-		effective_direction = _kurtadam_berserk_direction()
-		velocity = effective_direction * speed * skill_speed_multiplier * skill2_speed_multiplier * shield_mode_speed_mult * (1.0 + item_speed_percent + speed_card_percent + _current_temp_speed_boost())
 	else:
 		## Deri Çizme/Kitelama Seti: item_speed_percent (additive %hareket
 		## hızı havuzu). speed_card_percent: "Hız" level-up kartı, aynı
@@ -2320,14 +2310,12 @@ func _physics_process(delta: float) -> void:
 			_skill_necro_summon_skeleton()
 		elif skill_state == "ready":
 			_activate_skill()
-		## DÜZELTME (kullanıcı isteği #42: "şovalyenin ve kurt adamın
-		## kendilerini hareketsiz bırakan yetenekleri yeteneğe tekrar
-		## tıklanarak iptal edilebilsin") - Şovalye'nin Koruma Baloncuğu
-		## (id 11, tam hareketsiz kalır) ve Kurt Adam'ın Kudurmuş Saldırısı
-		## (id 14, kontrolü kaybedip otomatik saldırır) süresi dolmadan
-		## erken iptal edilebilir; diğer karakterlerin yeteneklerine
+		## DÜZELTME (kullanıcı isteği #42: "şovalyenin kendini hareketsiz
+		## bırakan yeteneği yeteneğe tekrar tıklanarak iptal edilebilsin") -
+		## Şovalye'nin Koruma Baloncuğu (id 11, tam hareketsiz kalır) süresi
+		## dolmadan erken iptal edilebilir; diğer karakterlerin yeteneklerine
 		## dokunulmuyor.
-		elif skill_state == "active" and get_skill_character_id() in [11, 14]:
+		elif skill_state == "active" and get_skill_character_id() == 11:
 			_cancel_active_skill_early()
 	if Input.is_action_just_pressed("skill2") and not is_chat_typing and not is_in_merchant_zone:
 		var skill2_id_pressed: int = get_skill2_id()
@@ -2372,6 +2360,11 @@ func _physics_process(delta: float) -> void:
 		## için HİÇ ÇAĞRILMAZ.
 		if skill3_id_pressed in BUYUCU_VARIATION_SKILL2_IDS:
 			_buyucu_try_activate_variation_r()
+		## Vampir Çocuk'un R'si (Kan Yarasaları, id 42) "basılıp kapatılabilir" bir TOGGLE -
+		## Necromancer'ın Yarasa Sürüsü'yle AYNI desen: standart skill3_state == "ready"
+		## bekleme makinesini BAŞTAN bypass eder (bkz. _vampir_toggle_bats).
+		elif skill3_id_pressed == 42:
+			_vampir_toggle_bats()
 		## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
 		## değiştir") - Yarasa Sürüsü (eskiden burada, id 35) artık E/skill2'de
 		## (bkz. yukarısı) - Golem Çağır (id 20) standart skill3_state
@@ -3164,7 +3157,7 @@ func _talon_recompute_damage_bonus() -> void:
 
 
 ## take_damage()'taki effective_damage hesabına çarpımsal olarak eklenir.
-## damage_taken_mult'un AKSİNE (Kurt Adam berserk'i de kullanıyor,
+## damage_taken_mult'un AKSİNE (genel yetenek çarpanı,
 ## _end_skill_effects()'te KOŞULSUZ 1.0'a sıfırlanıyor) bu değer HER ZAMAN
 ## canlı yük sayısından taze hesaplanır - Talon'un KENDİ yeteneklerinden
 ## biri bitince (_end_skill_effects/_end_skill2_effects/_end_skill3_effects)
@@ -4417,6 +4410,10 @@ func get_skill3_progress() -> float:
 		if cd <= 0.0:
 			return 1.0
 		return clamp(1.0 - (_buyucu_variation_cooldowns[BUYUCU_SET_R_VARIATIONS[buyucu_variation_set]] / cd), 0.0, 1.0)
+	## Vampir Çocuk'un R'si bir TOGGLE, bekleme süresi yok - her zaman "hazır" (bkz. get_skill2_progress
+	## içindeki Necromancer karşılığı: aksi halde skill3_total_elapsed'den yanıltıcı bir dolan bar çıkar).
+	if GameManager.selected_char_id == VampirMath.CHAR_ID:
+		return 1.0
 	## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
 	## değiştir") - eskiden burada Necromancer'ın Yarasa Sürüsü (bir TOGGLE,
 	## bkz. _necro_toggle_bats) için "her zaman hazır sayılır" özel bir dal
@@ -4437,6 +4434,8 @@ func is_skill3_active() -> bool:
 		## kanalı artık R'nin (skill3) sorumluluğunda - bkz. is_skill2_active()
 		## üstündeki taşıma notu.
 		return _buyucu_meteor_channel_active or not _buyucu_active_tornadoes.is_empty()
+	if GameManager.selected_char_id == VampirMath.CHAR_ID:
+		return _vampir_bats_active
 	return skill3_state == "active"
 
 
@@ -4451,6 +4450,9 @@ func get_skill3_active_fraction() -> float:
 	## Aktifken tam dolu (1.0) göster - "toggle açık" en doğru okunuşu bu.
 	if GameManager.selected_char_id == 11:
 		return 1.0 if _necro_bats_active else 0.0
+	## Vampir Çocuk'un Kan Yarasaları (toggle) - aynı gerekçe: sabit süre yok, açıkken tam dolu.
+	if GameManager.selected_char_id == VampirMath.CHAR_ID:
+		return 1.0 if _vampir_bats_active else 0.0
 	if skill3_state != "active" or _skill3_duration <= 0.0:
 		return 0.0
 	return clamp(skill3_timer / _skill3_duration, 0.0, 1.0)
@@ -4527,10 +4529,11 @@ var _anim_base_speed: float = 300.0
 ## olursa olsun koşma animasyonuna geçilmez (ör. Büyücü Kız hep yürür).
 var _always_walk: bool = false
 ## Karakter tanımından gelir (Characters.DEFS "melee"): true ise temel silah
-## pençe modundadır ve vuruşlarda slash animasyonu oynar (Kurt Adam).
+## pençe modundadır ve vuruşlarda slash animasyonu oynar.
 var _melee: bool = false
 ## Karakter tanımından gelir (Characters.DEFS "lifesteal"): 0'dan büyükse
-## yaratıklara verilen hasarın bu oranı kadar can yenilenir (Kurt Adam pasifi).
+## yaratıklara verilen hasarın bu oranı kadar can yenilenir (kart/eşya/silah kaynaklı
+## can çalma da buraya eklenir).
 var lifesteal_percent: float = 0.0
 ## Karakter tanımından gelir (Characters.DEFS "thorns_reflect_percent"):
 ## 0'dan büyükse cana işleyen hasarın bu oranı saldırgana geri yansıtılır
@@ -4597,6 +4600,16 @@ func _process_damage_redirect_range_check(delta: float) -> void:
 
 
 func _update_animation(is_moving: bool) -> void:
+	## Vampir Çocuk'un Yarasa Formu: bat_<yön> döngüsü her şeyin (idle/walk/spellcast) önüne geçer.
+	## Anim ADI ağdan diğer istemcilere gittiği için (bkz. main.gd cur_anim) remote_player.gd de
+	## aynı adı görüp hem klibi oynatır hem silahları gövdeye çeker (VampirMath.is_bat_anim).
+	if _vampir_bat_form_active:
+		var bat_anim: String = VampirMath.BAT_ANIM_PREFIX + facing
+		if anim.sprite_frames and anim.sprite_frames.has_animation(bat_anim):
+			if anim.animation != bat_anim:
+				anim.play(bat_anim)
+			anim.speed_scale = 1.0
+			return
 	## Saldırı ve yetenek (spellcast) animasyonları bitene kadar ezilmez.
 	var current := String(anim.animation)
 	if (current.begins_with("attack") or current.begins_with("spellcast")) and anim.is_playing():
@@ -4808,6 +4821,10 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## azaltma mantığından ÖNCE işleniyor - hem heal/kalkan proc'u hem de
 	## %20 azaltma (ham "amount" üzerinden, aşağıdaki HER mitigasyon
 	## katmanından önce) buradan geçer.
+	## Vampir Çocuk'un Yarasa Formu: form aktifken gelen HER hasar %80 azalır (kalkan/dodge
+	## katmanlarından ÖNCE, ham miktar üzerinden - Oakley'nin Koruyucu Büyü'sü ile aynı yer).
+	if _vampir_bat_form_active:
+		amount *= VAMPIR_BAT_DAMAGE_TAKEN_MULT
 	if oakley_bond_active:
 		amount *= (1.0 - oakley_bond_damage_reduction)
 		if oakley_bond_heal_per_hit > 0.0 and health < max_health:
@@ -4918,8 +4935,8 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## indirimi vardı, artık zırh yok, tam remaining hasarı işleniyor (yine de
 	## en az 1 hasar garanti edilir).
 	## Talon pasifi (bkz. _talon_passive_damage_taken_mult) - damage_taken_mult
-	## ile ÇARPIMSAL olarak birleşir, ikisi ayrı kaynaklardan (Kurt Adam
-	## berserk'i / Talon yükleri) geldiği için birbirini EZMEZ.
+	## ile ÇARPIMSAL olarak birleşir, ikisi ayrı kaynaklardan (genel
+	## çarpan / Talon yükleri) geldiği için birbirini EZMEZ.
 	var effective_damage: float = max(remaining, 1.0) * damage_taken_mult * _talon_passive_damage_taken_mult()
 	## Şovalye Adam'ın Koruma Bariyeri (skill3 id 29, bkz. _skill_paladin_
 	## barrier/_apply_damage_redirect_to_ally) - bu oyuncu buflanmışsa
@@ -5440,10 +5457,7 @@ func revive_from_permadeath() -> void:
 ## GameManager.LIFESTEAL_EFFECTIVENESS ile ölçeklenmiş bir KATINI can olarak
 ## geri veren bir ÇARPANDI. Artık hasar MİKTARINDAN tamamen BAĞIMSIZ: her
 ## gerçek isabette (amount>0) sabit 1 can yenileme İHTİMALİ.
-## LIFESTEAL_EFFECTIVENESS eski formüle özgüydü, burada artık kullanılmıyor
-## (Kurt Adam'ın Vahşi Kesik'i KENDİ ayrı/sabit hasar-bazlı can çalmasında
-## onu hâlâ kullanıyor - bkz. orası, bu değişiklik o AYRI mekanizmayı
-## KAPSAMIYOR).
+## LIFESTEAL_EFFECTIVENESS eski formüle özgüydü, burada artık kullanılmıyor.
 func on_damage_dealt(amount: float) -> void:
 	if is_dead or lifesteal_percent <= 0.0 or amount <= 0.0 or health >= max_health:
 		return
@@ -5760,14 +5774,13 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 		"lifesteal":
 			## Kullanıcı isteği: "kart seçimlerine can çalma statını ekle" -
 			## lifesteal_percent zaten tam çalışan bir mekanizma (bkz.
-			## on_damage_dealt, Kurt Adam'ın pasifi/öfke bonusu bunu kullanıyor),
+			## on_damage_dealt),
 			## sadece kartla büyütülebilen bir yolu yoktu. Diğer küçük yüzdesel
 			## kartlarla (crit_chance +%2.5, dodge +%2.5) kıyasla lifesteal daha
 			## güçlü bir stat olduğu için +%1 seçildi.
 			## DÜZELTME (kullanıcı isteği: "Can çalma veren tüm statları %70
-			## azalt (Kurt Adam ve Pençe hariç)") - +%1 -> +%0.3 (Kurt Adam'ın
-			## kendi pasifi/öfke bonusu ve Pençe'nin silah-içi can çalması bu
-			## genel karttan bağımsız, DOKUNULMADI).
+			## azalt (Kurt Adam ve Pençe hariç)") - +%1 -> +%0.3 (Pençe'nin
+			## silah-içi can çalması bu genel karttan bağımsız, DOKUNULMADI).
 			## SONRAKİ DÜZELTME (kullanıcı isteği: "Can çalmanı statların 1.
 			## kademede 0.3 kademe başına 0.3 arttırarak tekrar düzenle") -
 			## diğer TÜM statların kullandığı paylaşılan tier_mult (1.0/1.3/
@@ -5915,10 +5928,12 @@ func _activate_skill2() -> void:
 	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
 	var skill2_shield_cost: float = (item_shield_max * SKILL2_SHIELD_COST_PERCENT_OF_MAX + SKILL2_SHIELD_COST_FLAT) * (1.0 - item_skill_shield_cost_reduction)
 	var is_shield_related_skill2: bool = (skill2_id == 10 and GameManager.selected_char_id != 2)
-	## Kullanıcı isteği: "Kurt adamın yetenekleri kalkan harcamamalı" - Vahşi
-	## Kesik (TEMEL, skill2 id 13) Şovalye'nin Kalkan Yenileme'siyle AYNI
-	## şekilde bu bedelden muaf.
-	if not is_shield_related_skill2 and skill2_id != 13:
+	## Vampir Çocuk TEMEL'i (Yarasa Formu, id 41) kalkan YERİNE maksimum canın %4'ünü harcar - can
+	## yetmiyorsa hiç tetiklenmez (bkz. _vampir_try_pay_health), kalkan bedeli ödenmez.
+	if skill2_id == 41:
+		if not _vampir_try_pay_health(_vampir_skill_health_cost(VAMPIR_SKILL_COST_PERCENT), true):
+			return
+	elif not is_shield_related_skill2:
 		## Kullanıcı isteği: "yetenekler kullanım bedeli için gereken kalkan
 		## olmazsa çalışmayacak" - yetersizse bekleme süresine HİÇ girmeden
 		## (Necromancer'ın ruh/korsan'ın bomba kontrolleriyle AYNI desen)
@@ -5947,8 +5962,9 @@ func _activate_skill2() -> void:
 	## - _activate_skill() (ULTİ) bunu zaten yapıyordu, TEMEL (E) için AYNI
 	## tetikleme burada eksikti (Büyücü Kız'ın kendi bypass yolu -
 	## _buyucu_try_activate_variation - hariç, o zaten kendi spellcast'ini
-	## çalıyor, buraya hiç ulaşmıyor).
-	if is_instance_valid(anim) and anim.sprite_frames and anim.sprite_frames.has_animation("spellcast_" + facing):
+	## çalıyor, buraya hiç ulaşmıyor). Vampir'in Yarasa Formu (id 41) hariç: dönüşüm kendi
+	## "bat_*" animasyonunu oynatır (bkz. _skill_vampir_bat_form).
+	if skill2_id != 41 and is_instance_valid(anim) and anim.sprite_frames and anim.sprite_frames.has_animation("spellcast_" + facing):
 		anim.play("spellcast_" + facing)
 	match skill2_id:
 		## id 5 (Assasin Çocuk TEMEL) artık BURAYA hiç ulaşmıyor - bkz.
@@ -5960,13 +5976,17 @@ func _activate_skill2() -> void:
 		36: _skill_talon_weapon_salvo()
 		10: _skill_kalkan_yenileme()
 		11: _skill_elara_true_damage()
-		13: _skill_kurtadam_slash()
 		21: _skill_matthew_haste()
 		## Shaman TEMEL (Saldırı Totemi) - bkz. characters.gd DEFS[12].
 		27: _skill_shaman_attack_totem()
+		## Vampir Çocuk TEMEL (Yarasa Formu) - bkz. characters.gd DEFS[13].
+		41: _skill_vampir_bat_form()
 
 
 func _end_skill2_effects() -> void:
+	## Vampir Çocuk'un Yarasa Formu süresi dolunca insan formuna döner (bkz. _end_vampir_bat_form).
+	if _vampir_bat_form_active:
+		_end_vampir_bat_form()
 	## Talon TEMEL (Silah Salvosu, id 36) biterken silah ikonlarını normal
 	## konumuna döndürür (bkz. _skill_talon_weapon_salvo/_end_talon_weapon_salvo).
 	if _talon_weapon_salvo_active:
@@ -6019,7 +6039,7 @@ func _end_skill2_effects() -> void:
 ## Kullanıcı isteği: Elara'nın yeni 3. yeteneği (id 31, Kalkan Sıçraması)
 ## kalkan VEREN bir yetenek olduğu için (kullanıcı isteği: "bu yetenek
 ## kalkan harcamaz") - _activate_skill()'in Paladin/Matthew/Büyücü
-## Kız/Kurt Adam muafiyet listesiyle AYNI desen.
+## Kız muafiyet listesiyle AYNI desen.
 func _activate_skill3() -> void:
 	var skill3_id: int = get_skill3_id()
 	if skill3_id == 0:
@@ -6172,6 +6192,15 @@ func _activate_skill() -> void:
 	if char_id == 18 and _korsan_bombs.is_empty():
 		_spawn_floating_text("BOMBA YOK", Color(1.0, 0.4, 0.4))
 		return
+	## Vampir Çocuk Q'su (Kan Emme, id 40) kalkan YERİNE maksimum canın %4'ünü harcar (bkz.
+	## VAMPIR_SKILL_COST_PERCENT) - Korsan'ın "BOMBA YOK" kontrolüyle AYNI desen: hedef yoksa ya da
+	## can yetmiyorsa yetenek hiç tetiklenmez, bekleme süresine girmez, can harcanmaz.
+	if char_id == 40:
+		if _vampir_q_targets().is_empty():
+			_spawn_floating_text("HEDEF YOK", Color(1.0, 0.4, 0.4))
+			return
+		if not _vampir_try_pay_health(_vampir_skill_health_cost(VAMPIR_SKILL_COST_PERCENT), true):
+			return
 	## Paladin'in ULTİ'si (id 11, Koruma Baloncuğu / kalkan yenilenmesi) VE
 	## Matthew'ün ULTİ'si (id 9, Feda Kalkanı - yaratığı feda edip kalkan
 	## çemberi kurar) kalkanla İLGİLİ/kalkan VEREN yetenekler oldukları için
@@ -6217,9 +6246,6 @@ func _activate_skill() -> void:
 	var is_oakley_bee_swarm: bool = (char_id == 33)
 	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
 	var skill_shield_cost: float = (item_shield_max * (SKILL2_SHIELD_COST_PERCENT_OF_MAX if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step or is_oakley_bee_swarm) else SKILL_SHIELD_COST_PERCENT_OF_MAX) + (SKILL2_SHIELD_COST_FLAT if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step or is_oakley_bee_swarm) else SKILL_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
-	## Kullanıcı isteği: "Kurt adamın yetenekleri kalkan harcamamalı" - Kudurmuş
-	## Saldırı (ULTİ, id 14) artık Koruma Baloncuğu/Feda Kalkanı/Büyü Değişimi
-	## (11/9/3) ile AYNI şekilde bu bedelden muaf.
 	## DÜZELTME (kullanıcı isteği: "Shamanın kalkan yeteneği kalkan
 	## harcamamalı") - Kalkan Totemi (ULTİ, id 26) da kalkan VEREN bir yetenek
 	## (bkz. totem_shield.gd) - üstteki "Shaman'ın totemleri kalkanla ilgili
@@ -6229,7 +6255,7 @@ func _activate_skill() -> void:
 	## muafiyet listesine hiç eklenmemişti.
 	## DÜZELTME (kullanıcı isteği: "talonun Q yeteneğinin mana bedelini
 	## kaldır") - Hamle Vuruşu (id 38) artık Koruma Baloncuğu/Feda Kalkanı/
-	## Büyü Değişimi/Kudurmuş Saldırı/Kalkan Totemi (11/9/3/14/26) ile AYNI
+	## Büyü Değişimi/Kalkan Totemi (11/9/3/26) ile AYNI
 	## şekilde bu bedelden tamamen muaf - eskiden sadece HAFİF (ulti değil
 	## temel) tarifeye düşürülmüştü (bkz. yukarıdaki skill_shield_cost
 	## hesabı), artık hiç kalkan harcamıyor.
@@ -6237,7 +6263,8 @@ func _activate_skill() -> void:
 	## değiştir") - Kalkan Sıçraması (id 12) "Kalkan harcamaz" - eskiden R/
 	## skill3'teyken _activate_skill3()'ün "skill3_id != 31" muafiyetiyle
 	## bedelsizdi, şimdi Q'ya taşındığı için AYNI muafiyet burada.
-	if char_id != 11 and char_id != 9 and char_id != 3 and char_id != 14 and char_id != 26 and char_id != 38 and char_id != 12:
+	## Vampir Çocuk (id 40) da muaf: bedelini yukarıda CAN olarak ödedi (bkz. _vampir_try_pay_health).
+	if char_id != 11 and char_id != 9 and char_id != 3 and char_id != 26 and char_id != 38 and char_id != 12 and char_id != 40:
 		## Kullanıcı isteği: "yetenekler kullanım bedeli için gereken kalkan
 		## olmazsa çalışmayacak" - yetersizse bekleme süresine hiç girmeden
 		## tetiklenmeden çıkılıyor (yukarıdaki ruh/bomba kontrolleriyle AYNI
@@ -6270,7 +6297,6 @@ func _activate_skill() -> void:
 	## kaldırılmadı - zararsız, ileride başka bir amaçla kullanılabilir).
 	match char_id:
 		1: _skill_heal()
-		2: _skill_rage()
 		3: _skill_buyucu_switch_variation()
 		4: _skill_shield()
 		## eski Talon ULTİ'si (Devleşme, id 15) - "Talon yeni skilleri" isteğiyle
@@ -6308,12 +6334,13 @@ func _activate_skill() -> void:
 		## (eskiden R/skill3 id 31) artık Q'da, bkz. _activate_skill3()'teki
 		## eşleşen düzeltme (Çift Tetik artık orada).
 		12: _skill_elara_dash_refill()
-		14: _skill_kurtadam_berserk()
 		18: _skill_korsan_detonate_all()
 		## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
 		## yeteneği olacak") - Arı Sürüsü (id 33) artık burada, eskiden R/
 		## skill3'teydi (bkz. _activate_skill3()'teki eşleşen düzeltme).
 		33: _skill_oakley_bee_swarm()
+		## Vampir Çocuk Q'su (Kan Emme) - bkz. characters.gd DEFS[13].
+		40: _skill_vampir_blood_drain()
 		## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
 		## değiştir") - Golem Çağır (id 20) artık R/skill3'te (bkz.
 		## _activate_skill3()), İskelet Çağır (id 19) Q'ya taşındı ama kendi
@@ -6401,16 +6428,13 @@ func _end_skill_effects() -> void:
 		_end_paladin_ulti()
 	## Çift Tetik'in temizliği artık R'ye taşındığı için (kullanıcı isteği:
 	## "Elaranın R ile Q yeteneğinin yerini değiştir") _end_skill3_effects()'te.
-	if _kurtadam_berserk_active:
-		_end_kurtadam_berserk()
 
 
 ## DÜZELTME (kullanıcı isteği #42) - _process_paladin_ulti()'nin kalkan
 ## bitince yaptığı "erken bitiş"iyle AYNI akış (bkz. _end_skill_effects,
 ## skill_state/skill_timer sıfırlaması), sadece tetikleyici burada oyuncunun
-## yetenek tuşuna TEKRAR basması. _end_skill_effects() zaten hem Şovalye'nin
-## (paladin_zone_active) hem Kurt Adam'ın (_kurtadam_berserk_active) kendine
-## özgü temizliğini kapsıyor.
+## yetenek tuşuna TEKRAR basması. _end_skill_effects() zaten Şovalye'nin
+## (paladin_zone_active) kendine özgü temizliğini kapsıyor.
 func _cancel_active_skill_early() -> void:
 	if paladin_zone_active:
 		_paladin_barrier_break()
@@ -6699,21 +6723,6 @@ func _process_healer_heal_tick(delta: float) -> void:
 		_set_ally_aura(_oakley_q_ally_target, "heal", false)
 		_melek_heal_ally_aura_on = false
 
-
-
-func _skill_rage() -> void:
-	for w in owned_weapon_nodes:
-		if not is_instance_valid(w):
-			continue
-		if "rage_multiplier" in w:
-			w.rage_multiplier = 1.3
-	modulate = Color(1.0, 0.55, 0.55, 1.0)
-	_spawn_burst(Color(1.0, 0.2, 0.2))
-	
-	if FxKurtadamRageScene:
-		var fx := FxKurtadamRageScene.instantiate() as Node2D
-		add_child(fx)
-		_broadcast_skill_scene("res://scenes/fx_kurtadam_rage.tscn")
 
 
 ## ---------- Büyücü Kız (roster 4, "skill": 3, TEMEL: 4 varyasyon) ----------
@@ -7640,93 +7649,6 @@ func _elara_passive_fire_rate_mult() -> float:
 	return 1.0 - min(level * ELARA_PASSIVE_ATK_SPEED_PER_LEVEL, ELARA_PASSIVE_ATK_SPEED_CAP)
 
 
-const KURTADAM_BERSERK_DAMAGE_TAKEN_MULT := 0.5 ## -%50 hasar
-const KURTADAM_BERSERK_LIFESTEAL_BONUS := 0.10 ## +%10 can çalma
-const KURTADAM_BERSERK_FIRE_RATE_BONUS := 0.30 ## +%30 saldırı hızı
-const KURTADAM_BERSERK_SPEED_MULT := 1.3 ## +%30 hareket hızı (kullanıcı isteği)
-
-
-## Kurt Adam ULTİ (skill id 14): "30 saniye boyunca kontrolünü kaybetmesini
-## sağlar ve silahlarının menziline bağlı olarak yaratıklara yaklaşıp
-## onlara kontrolsüzce saldırmasına neden olur" - hareketi _physics_
-## process'te _kurtadam_berserk_direction() ile otomatik yönetilir (bkz.
-## _kurtadam_berserk_active). Oyuncu bu süre boyunca yetenek/kalkan
-## modu/eşya kullanmaya devam edebilir, sadece hareketi kontrol edemez.
-func _skill_kurtadam_berserk() -> void:
-	_kurtadam_berserk_active = true
-	damage_taken_mult = KURTADAM_BERSERK_DAMAGE_TAKEN_MULT
-	lifesteal_percent += KURTADAM_BERSERK_LIFESTEAL_BONUS
-	skill_speed_multiplier = KURTADAM_BERSERK_SPEED_MULT
-	_apply_weapon_bonuses()
-	modulate = Color(1.0, 0.4, 0.35, 1.0)
-	_spawn_burst(Color(1.0, 0.15, 0.1))
-	
-	if FxKurtadamRageScene:
-		var fx := FxKurtadamRageScene.instantiate() as Node2D
-		add_child(fx)
-	_broadcast_skill_scene("res://scenes/fx_kurtadam_rage.tscn")
-
-
-func _end_kurtadam_berserk() -> void:
-	_kurtadam_berserk_active = false
-	lifesteal_percent -= KURTADAM_BERSERK_LIFESTEAL_BONUS
-	_apply_weapon_bonuses()
-
-
-## bkz. _elara_passive_fire_rate_mult() ile aynı desen - Kudurmuş Saldırı
-## aktifken +%30 saldırı hızı verir (mult <1.0 = daha hızlı saldırı).
-func _kurtadam_berserk_fire_rate_mult() -> float:
-	if not _kurtadam_berserk_active:
-		return 1.0
-	return max(0.1, 1.0 - KURTADAM_BERSERK_FIRE_RATE_BONUS)
-
-
-## Kudurmuş Saldırı aktifken oyuncunun otomatik hareket yönünü hesaplar:
-## "silahlarının menziline bağlı olarak yaratıklara yaklaşıp onlara
-## kontrolsüzce saldırmasına neden olur (en kısa menzilli silah
-## önceliklidir)" - en kısa attack_range'e sahip silahını baz alıp en
-## yakın yaratığa doğru yürür; o yaratık zaten menzildeyse yerinde durur
-## (silahlar kendi ateşleme mantığıyla otomatik vurur).
-func _kurtadam_berserk_direction() -> Vector2:
-	var shortest_range: float = INF
-	for w in owned_weapon_nodes:
-		if not is_instance_valid(w):
-			continue
-		## DÜZELTME (kullanıcı isteği #45: "kurt adam ultisini açıp kontrolünü
-		## kaybettiğinde yaratıklara saldıracağı zaman saldırabileceği menzile
-		## doğru gitmiyor") - attack_range == 0.0 "SINIRSIZ menzil" anlamına
-		## gelir (bkz. weapon.gd dosya başı yorumu), SIFIR mesafe değil. Eskiden
-		## bu istisna hesaba katılmadığı için, oyuncu sınırsız menzilli
-		## herhangi bir silaha (tabanca/tüfek/yay vb.) sahipse shortest_range
-		## anında 0.0'a düşüyordu - bu da "hedefe 0 birim kalana kadar
-		## yaklaş" gibi imkansız bir koşula dönüşüp Kurt Adam'ın asla gerçek
-		## bir saldırı menziline "varmış" sayılmamasına, sürekli yaratığın
-		## üstüne yürümeye çalışmasına yol açıyordu. Artık sınırsız menzilli
-		## silahlar bu hesaba hiç katılmıyor.
-		if "attack_range" in w and w.attack_range > 0.0 and w.attack_range < shortest_range:
-			shortest_range = w.attack_range
-	if shortest_range == INF:
-		shortest_range = 0.0
-	
-	var target: Node2D = null
-	var target_dist: float = INF
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
-		if not VisionFogScript.can_target(e):
-			continue
-		var d: float = global_position.distance_to(e.global_position)
-		if d < target_dist:
-			target_dist = d
-			target = e
-	
-	if target == null:
-		return Vector2.ZERO
-	if target_dist <= shortest_range:
-		return Vector2.ZERO
-	return (target.global_position - global_position).normalized()
-
-
 func _skill_elara_double_fire() -> void:
 	elara_double_fire_active = true
 	_spawn_burst(Color(0.95, 0.75, 0.25))
@@ -8202,7 +8124,7 @@ func _skill_assasin_dash() -> void:
 	## kalıyordu - is_assasin_dashing hiç false'a dönmediği için karakter
 	## hareketsiz kalıyor (bkz. _physics_process hareket kilidi), modulate de
 	## hiç sıfırlanmadığı için karanlık "gölge" tonunda takılı kalıyordu.
-	## Artık _cancel_active_skill_early() (Şovalye/Kurt Adam'ın kendini
+	## Artık _cancel_active_skill_early() (Şovalye'nin kendini
 	## erken iptal etmesiyle AYNI, doğrulanmış yardımcı fonksiyon) çağrılıyor -
 	## bu doğrudan _end_skill_effects()'i (modulate/is_assasin_dashing/dash FX
 	## sıfırlaması dahil) çalıştırıp state'i "cooldown"a alıyor, yarış
@@ -8523,65 +8445,6 @@ func _skill_kalkan_yenileme() -> void:
 		add_child(fx)
 	_broadcast_skill_scene("res://scenes/fx_kalkan_yenileme.tscn")
 
-
-
-const KURTADAM_SLASH_RADIUS := 140.0
-const KURTADAM_SLASH_DAMAGE_MULT := 1.2 ## saldırı gücünün %120'si
-const KURTADAM_SLASH_LIFESTEAL_PERCENT := 0.04 ## verilen hasarın %4'ü can çalar
-
-
-## Kurt Adam'ın "saldırı gücü" olarak Pençe silahının (bkz. shop_key meta)
-## o anki tam hesaplanmış hasarı (temel + kart + dükkan bonusları dahil)
-## kullanılır - sahibi değilse (olmamalı, ama güvenlik için) ilk silahına,
-## o da yoksa düz damage_bonus statına düşer.
-func _kurtadam_attack_power() -> float:
-	for w in owned_weapon_nodes:
-		if not is_instance_valid(w):
-			continue
-		if w.get_meta("shop_key", "") == "pence" and "damage" in w:
-			return w.damage
-	if owned_weapon_nodes.size() > 0 and is_instance_valid(owned_weapon_nodes[0]) and "damage" in owned_weapon_nodes[0]:
-		return owned_weapon_nodes[0].damage
-	return damage_bonus
-
-
-## Kurt Adam TEMEL (skill2 id 13): "etrafındakileri büyük bir slash ile
-## kesip saldırı gücünün %120si kadar hasar verir ve bu yetenekle verdiği
-## hasarın %4ü kadar can çalar."
-func _skill_kurtadam_slash() -> void:
-	var attack_power: float = _kurtadam_attack_power()
-	## Kullanıcı isteği: alan hasarı global %33 etkinlik (bkz. GameManager.
-	## AOE_DAMAGE_EFFECTIVENESS) - bu yetenek etraftaki TÜM düşmanlara vurduğu
-	## için alan hasarı sayılıyor.
-	var slash_damage: float = attack_power * KURTADAM_SLASH_DAMAGE_MULT * GameManager.AOE_DAMAGE_EFFECTIVENESS
-	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir" - can
-	## çalma (lifesteal) hasara bağlı olduğu için (aşağıda total_dealt
-	## üzerinden) kritik burada zaten otomatik olarak iyileştirmeye de yansır.
-	var is_crit: bool = _roll_ability_crit()
-	slash_damage = _apply_ability_crit(slash_damage, is_crit)
-	var total_dealt: float = 0.0
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
-		if global_position.distance_to(e.global_position) <= KURTADAM_SLASH_RADIUS:
-			if e.has_method("take_damage"):
-				e.take_damage(slash_damage, is_crit)
-				total_dealt += slash_damage
-	if total_dealt > 0.0:
-		## Kullanıcı isteği: can çalma global %33 etkinlik (bkz. GameManager.
-		## LIFESTEAL_EFFECTIVENESS). total_dealt zaten yukarıdaki AOE
-		## çarpanını içeren slash_damage'dan geliyor, bu ayrı bir can çalma
-		## çarpanı.
-		var healed: float = total_dealt * KURTADAM_SLASH_LIFESTEAL_PERCENT * GameManager.LIFESTEAL_EFFECTIVENESS
-		health = min(max_health, health + healed)
-		health_changed.emit(health, max_health)
-		_spawn_floating_text("%d" % int(round(healed)), Color(0.4, 0.9, 0.45), true)
-	_spawn_burst(Color(1.0, 0.15, 0.1))
-	
-	if FxKurtadamRageScene:
-		var fx := FxKurtadamRageScene.instantiate() as Node2D
-		add_child(fx)
-	_broadcast_skill_scene("res://scenes/fx_kurtadam_rage.tscn")
 
 
 ## Matthew TEMEL (Vahşi Hız, skill2 id 21) - "kendine ve tilkisine 10 saniye
@@ -9035,8 +8898,7 @@ func _skill_talon_mirror_form() -> void:
 	## Kök `modulate`e uygulanıyor: Godot'ta CanvasItem modulate alt öğelere
 	## ÇARPIMSAL yayılır, anim VE owned_weapon_nodes ikisi de Player'ın
 	## çocuğu olduğu için TEK bu satır hem karakteri hem silahları kırmızıya
-	## boyuyor - Kurt Adam'ın Kudurmuş Saldırı'sıyla (bkz.
-	## _skill_kurtadam_berserk) AYNI teknik. main.gd zaten bu kök modulate'i
+	## boyuyor. main.gd zaten bu kök modulate'i
 	## (anim.modulate ile çarpıp) diğer oyunculara yayınlıyor (bkz.
 	## _process_multiplayer_sync extra["modulate"]) - ekstra senkron kodu
 	## GEREKMİYOR. Geri alma _end_talon_mirror_form()'da (gerçek 15sn
@@ -9303,10 +9165,393 @@ func _spawn_ring(color: Color) -> void:
 		})
 
 
-func _spawn_floating_text(text: String, color: Color, big: bool = false) -> void:
+func _spawn_floating_text(text: String, color: Color, big: bool = false, y_offset: float = -30.0) -> void:
 	var ft = FloatingText.instantiate()
 	get_tree().current_scene.add_child(ft)
 	ft.follow_target = self
-	ft.follow_offset = Vector2(0, -30)
-	ft.global_position = global_position + Vector2(0, -30)
+	ft.follow_offset = Vector2(0, y_offset)
+	ft.global_position = global_position + Vector2(0, y_offset)
 	ft.setup(text, color, big)
+
+
+
+## =====================================================================================
+## Vampir Çocuk (roster id 13, bkz. characters.gd DEFS[13])
+## =====================================================================================
+## Kullanıcı isteği (2026-09-21): yetenekleri kalkan YERİNE CAN harcar - Q ve E maksimum canın %4'ü,
+## R (ulti) açıkken her saniye maksimum canın %3'ü. Pasif: %4 can emme + her 1 saldırı gücü için 1 can.
+## Q: yakındaki 3 düşmanın kanını emer (%130 saldırı gücü), kalıcı +1 maksimum can (8sn).
+## E: 5sn büyük yarasa formu (%60 hız, %80 hasar azaltma, temas hasarı %80, silahlar gövdeye çekilir) (22sn).
+## R: 6 küçük yarasa (%60 hasar, dönünce %5 saldırı gücü kadar can, hızları saldırı hızıyla artar).
+##
+## MULTIPLAYER: yetenekler/hasar/can SADECE bu (yetkili) istemcide işlenir; diğerleri şunları görür:
+##  - yarasa formu: "bat_<yön>" animasyon ADI zaten ağdan gidiyor (main.gd cur_anim) -> remote_player.gd
+##    aynı klibi oynatır VE silahları gövdeye çeker (VampirMath, ortak formül)
+##  - Q/temas/geçiş efektleri: broadcast_player_vfx "vampir_fx" (network_manager.gd)
+##  - R yarasaları: main.gd ~20Hz konum paketi (vampir_bat_swarm.gd kozmetik mod)
+const VAMPIR_SKILL_COST_PERCENT := 0.04 ## Q ve E: maksimum canın %4'ü
+const VAMPIR_ULTI_COST_PERCENT_PER_SEC := 0.03 ## R açıkken saniyede maksimum canın %3'ü
+const VAMPIR_LIFESTEAL_RATIO := 0.04 ## pasif: verdiği hasarın %4'ü kadar can emme
+const VAMPIR_HEALTH_PER_ATTACK_POWER := 1.0 ## pasif: her 1 saldırı gücü = 1 maksimum can
+const VAMPIR_Q_TARGET_COUNT := 3
+const VAMPIR_Q_RADIUS := 320.0
+const VAMPIR_Q_DAMAGE_RATIO := 1.3
+const VAMPIR_Q_MAX_HEALTH_GAIN := 1.0
+const VAMPIR_BAT_SPEED_MULT := 1.6 ## Yarasa Formu: %60 hareket hızı
+const VAMPIR_BAT_DAMAGE_TAKEN_MULT := 0.2 ## Yarasa Formu: aldığı hasar %80 azalır
+const VAMPIR_BAT_CONTACT_DAMAGE_RATIO := 0.8
+## Aynı yaratığa temas hasarı bu aralıkla tekrarlanır (yaratığın içinde durmak her karede vurmasın).
+const VAMPIR_BAT_CONTACT_INTERVAL := 0.6
+const VAMPIR_BAT_CONTACT_REACH := 38.0 ## yaratık gövde yarıçapına eklenen "yarasa kanadı" payı
+const VAMPIR_R_DAMAGE_RATIO := 0.6
+const VAMPIR_R_HEAL_RATIO := 0.05
+const VAMPIR_R_RADIUS := 260.0
+const VAMPIR_R_BASE_BAT_SPEED := 320.0
+const VAMPIR_HEAL_TEXT_INTERVAL := 0.5
+
+var _vampir_bat_form_active: bool = false
+var _vampir_bats_active: bool = false
+var _vampir_pull: float = 0.0
+var _vampir_r_tick_timer: float = 0.0
+var _vampir_swarm: Node2D = null
+var _vampir_contact_cooldowns: Dictionary = {}
+var _vampir_ap_health_applied: float = 0.0
+var _vampir_heal_display_accum: float = 0.0
+var _vampir_heal_text_timer: float = 0.0
+var _vampir_weapon_rest_offsets: Dictionary = {}
+
+
+func _is_vampir() -> bool:
+	return GameManager.selected_char_id == VampirMath.CHAR_ID
+
+
+func vampir_can_target(e: Node) -> bool:
+	return VisionFogScript.can_target(e)
+
+
+## Yetenek maliyeti (can): maksimum canın yüzdesi, Yetenek Kitabı (kalkan bedelini azaltan eşya) can
+## bedelini de aynı oranda azaltır.
+func _vampir_skill_health_cost(percent: float) -> float:
+	return max_health * percent * maxf(0.0, 1.0 - item_skill_shield_cost_reduction)
+
+
+## Kendini ÖLDÜRMEZ: can bedele eşit/altındaysa yetenek tetiklenmez (Necromancer'ın "RUH YETERSİZ"
+## kontrolüyle aynı desen).
+func _vampir_try_pay_health(cost: float, show_text: bool) -> bool:
+	if cost <= 0.0:
+		return true
+	if health <= cost:
+		_spawn_floating_text("CAN YETERSİZ", Color(1.0, 0.35, 0.35))
+		return false
+	health -= cost
+	health_changed.emit(health, max_health)
+	if show_text:
+		_spawn_floating_text("-%d" % int(round(cost)), Color(0.85, 0.15, 0.2))
+	return true
+
+
+## Can yenilemeyi (can emme / yarasa dönüşü) her seferinde ayrı yazı çıkarmadan biriktirip
+## VAMPIR_HEAL_TEXT_INTERVAL'de bir toplu gösterir (silahlar saniyede onlarca kez vurabilir).
+func _vampir_add_heal(amount: float) -> void:
+	if is_dead or is_downed or amount <= 0.0 or health >= max_health:
+		return
+	var before: float = health
+	health = minf(max_health, health + amount)
+	health_changed.emit(health, max_health)
+	_vampir_heal_display_accum += health - before
+
+
+## enemy.gd take_damage() TAM OLARAK vuran istemcide çağırır (dealer-side, bkz. match_damage_dealt notu) -
+## pasif can emme host'a değil vuran Vampir'in kendisine işler (genel on_damage_dealt host-only'dir).
+func on_dealer_hit(amount: float) -> void:
+	if not _is_vampir():
+		return
+	_vampir_add_heal(amount * VAMPIR_LIFESTEAL_RATIO)
+
+
+## Pasif: her 1 saldırı gücü için 1 maksimum can. Saldırı gücü değiştikçe (level, kart, eşya) FARK
+## uygulanır - maksimum can üzerinde başka kaynaklar (level +20, kartlar, kalıcı Q kazancı) da
+## çalıştığı için taban değer yeniden yazılmaz, sadece delta eklenip çıkarılır.
+func _sync_vampir_attack_power_health() -> void:
+	var want: float = floorf(damage_bonus * VAMPIR_HEALTH_PER_ATTACK_POWER)
+	var delta: float = want - _vampir_ap_health_applied
+	if absf(delta) < 0.5:
+		return
+	_vampir_ap_health_applied = want
+	max_health = maxf(1.0, max_health + delta)
+	if delta > 0.0:
+		health += delta
+	health = clampf(health, 0.0, max_health)
+	health_changed.emit(health, max_health)
+
+
+func _process_vampir(delta: float) -> void:
+	if not _is_vampir():
+		return
+	if is_dead or is_downed:
+		if _vampir_bat_form_active:
+			_end_vampir_bat_form()
+			skill2_state = "cooldown"
+			skill2_timer = _skill2_cooldown
+		if _vampir_bats_active:
+			_vampir_stop_bats()
+	elif _vampir_bats_active and (is_in_merchant_zone or is_indoors):
+		_vampir_stop_bats()
+	_process_vampir_weapon_pull(delta)
+	if is_dead:
+		return
+	_sync_vampir_attack_power_health()
+	if _vampir_bat_form_active:
+		_vampir_process_contact(delta)
+	if _vampir_bats_active:
+		_vampir_process_bats(delta)
+	_vampir_heal_text_timer -= delta
+	if _vampir_heal_text_timer <= 0.0:
+		_vampir_heal_text_timer = VAMPIR_HEAL_TEXT_INTERVAL
+		if _vampir_heal_display_accum >= 1.0:
+			var shown: int = int(_vampir_heal_display_accum)
+			_vampir_heal_display_accum -= float(shown)
+			_spawn_floating_text("+%d" % shown, Color(0.4, 0.9, 0.45), true)
+
+
+## ---------- Q: Kan Emme ----------
+func _vampir_q_targets() -> Array:
+	var cands: Array = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		if not VisionFogScript.can_target(e):
+			continue
+		var d: float = global_position.distance_to(e.global_position)
+		if d <= VAMPIR_Q_RADIUS:
+			cands.append([d, e])
+	cands.sort_custom(func(a, b): return a[0] < b[0])
+	var out: Array = []
+	for i in range(mini(cands.size(), VAMPIR_Q_TARGET_COUNT)):
+		out.append(cands[i][1])
+	return out
+
+
+func _skill_vampir_blood_drain() -> void:
+	var points := PackedVector2Array()
+	for t in _vampir_q_targets():
+		var is_crit: bool = _roll_ability_crit()
+		var dmg: float = _apply_ability_crit(damage_bonus * VAMPIR_Q_DAMAGE_RATIO, is_crit)
+		if t.has_method("take_damage"):
+			t.take_damage(dmg, is_crit)
+		points.append(t.global_position)
+	if points.is_empty():
+		return
+	## Kalıcı +1 maksimum can (cast başına; en az 1 hedef vurulduysa) - yeni can da +1 eklenir.
+	max_health += VAMPIR_Q_MAX_HEALTH_GAIN
+	health = minf(max_health, health + VAMPIR_Q_MAX_HEALTH_GAIN)
+	health_changed.emit(health, max_health)
+	var gain_text: String = "+%d Maks. Can" % int(VAMPIR_Q_MAX_HEALTH_GAIN)
+	## Can emme yazısıyla (aynı anda +N) üst üste binmesin diye biraz daha yukarıda.
+	_spawn_floating_text(gain_text, Color(0.95, 0.25, 0.35), true, -62.0)
+	VampirMath.spawn_fx(get_tree().current_scene, "drain", global_position, {"points": points, "sink": self})
+	_vampir_broadcast_fx("drain", global_position, points, gain_text)
+
+
+## ---------- E: Yarasa Formu ----------
+func _skill_vampir_bat_form() -> void:
+	_vampir_bat_form_active = true
+	skill2_speed_multiplier = VAMPIR_BAT_SPEED_MULT
+	_vampir_contact_cooldowns.clear()
+	_vampir_capture_weapon_offsets()
+	## Silahlar HEMEN durur (ateş etmez) - gövdeye çekilme animasyonu _process_vampir_weapon_pull'da.
+	_vampir_set_weapons_processing(false)
+	_vampir_puff()
+
+
+func _end_vampir_bat_form() -> void:
+	_vampir_bat_form_active = false
+	skill2_speed_multiplier = 1.0
+	_vampir_contact_cooldowns.clear()
+	_vampir_puff()
+
+
+func _vampir_puff() -> void:
+	var pos: Vector2 = global_position + VampirMath.BODY_CENTER
+	VampirMath.spawn_fx(get_tree().current_scene, "puff", pos)
+	_vampir_broadcast_fx("puff", pos)
+
+
+func _vampir_hit_fx(pos: Vector2) -> void:
+	VampirMath.spawn_fx(get_tree().current_scene, "hit", pos)
+	if not NetworkManager.should_throttle("vampir_hit", 0.06):
+		_vampir_broadcast_fx("hit", pos)
+
+
+func _vampir_broadcast_fx(kind: String, pos: Vector2, points: PackedVector2Array = PackedVector2Array(), text: String = "") -> void:
+	if not NetworkManager.is_multiplayer_active:
+		return
+	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "vampir_fx", pos, {
+		"kind": kind,
+		"points": points,
+		"text": text,
+	})
+
+
+## Temas hasarı: form boyunca değdiği her yaratığa saldırı gücünün %80'i (aynı yaratığa
+## VAMPIR_BAT_CONTACT_INTERVAL'de bir).
+func _vampir_process_contact(delta: float) -> void:
+	for id in _vampir_contact_cooldowns.keys():
+		_vampir_contact_cooldowns[id] -= delta
+		if _vampir_contact_cooldowns[id] <= 0.0:
+			_vampir_contact_cooldowns.erase(id)
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		var reach: float = (float(e._body_radius) if "_body_radius" in e else 20.0) + VAMPIR_BAT_CONTACT_REACH
+		if global_position.distance_squared_to(e.global_position) > reach * reach:
+			continue
+		if not VisionFogScript.can_target(e):
+			continue
+		var id: int = e.get_instance_id()
+		if _vampir_contact_cooldowns.has(id):
+			continue
+		_vampir_contact_cooldowns[id] = VAMPIR_BAT_CONTACT_INTERVAL
+		var is_crit: bool = _roll_ability_crit()
+		var dmg: float = _apply_ability_crit(damage_bonus * VAMPIR_BAT_CONTACT_DAMAGE_RATIO, is_crit)
+		if e.has_method("take_damage"):
+			e.take_damage(dmg, is_crit)
+		_vampir_hit_fx(e.global_position)
+
+
+## Form sırasında silah ikonları gövdeye çekilir/geri çıkar - formül vampir_math.gd'de (remote_player.gd
+## AYNISINI çağırır). Çekilme SIRASINDA ve geri çıkma bitene kadar silahlar process_mode=DISABLED
+## (ateş etmez); animasyon bitince (pull 0'a dönünce) normal işleyişe döner.
+func _vampir_iconed_weapons() -> Array:
+	var out: Array = []
+	for w in owned_weapon_nodes:
+		if is_instance_valid(w) and w.has_method("set_icon_offset") and "icon_sprite" in w and w.icon_sprite != null:
+			out.append(w)
+	return out
+
+
+func _vampir_set_weapons_processing(enabled: bool) -> void:
+	var mode: ProcessMode = Node.PROCESS_MODE_INHERIT if enabled else Node.PROCESS_MODE_DISABLED
+	for w in owned_weapon_nodes:
+		if not is_instance_valid(w):
+			continue
+		w.process_mode = mode
+		## Şimşek Asası'nın açık ışını (dünyaya bağlı FX) devre dışı kalan silahtan sahipsiz kalmasın
+		## (bkz. set_combat_active'teki AYNI koruma).
+		if not enabled and w.get("continuous_beam") == true and w.has_method("_end_beam"):
+			w._end_beam()
+
+
+func _vampir_capture_weapon_offsets() -> void:
+	_vampir_weapon_rest_offsets.clear()
+	var inv_scale: float = 1.0 / maxf(scale.x, 0.001)
+	for w in _vampir_iconed_weapons():
+		_vampir_weapon_rest_offsets[w.get_instance_id()] = (w.global_position - global_position) * inv_scale
+
+
+func _vampir_slot_for(w: Node, index: int) -> Vector2:
+	## Dönen kılıç (orbit) sabit bir slotta durmaz - çekilmeden önceki gerçek konumundan çekilip aynı yere çıkar.
+	if w.get("_is_uzunkilic") == true and _vampir_weapon_rest_offsets.has(w.get_instance_id()):
+		return _vampir_weapon_rest_offsets[w.get_instance_id()]
+	return WEAPON_ICON_SLOTS[mini(index, WEAPON_ICON_SLOTS.size() - 1)]
+
+
+func _process_vampir_weapon_pull(delta: float) -> void:
+	var prev: float = _vampir_pull
+	_vampir_pull = VampirMath.step_pull(_vampir_pull, _vampir_bat_form_active, delta)
+	if _vampir_pull <= 0.0:
+		if prev > 0.0:
+			## Geri çıkış bitti: silahlar normal işleyişe döner, ikon konumu/saydamlık sıfırlanır.
+			_vampir_set_weapons_processing(true)
+			for w in owned_weapon_nodes:
+				if not is_instance_valid(w):
+					continue
+				w.modulate.a = 1.0
+				if w.get("shadow_sprite") != null:
+					w.shadow_sprite.modulate.a = 0.4
+				## Hover takibi bayat konumdan kayarak gelmesin, doğrudan yerine otursun.
+				if "_floaty_global_pos" in w:
+					w._floaty_global_pos = Vector2.ZERO
+			_reposition_weapon_icons()
+			_vampir_weapon_rest_offsets.clear()
+		return
+	var alpha: float = VampirMath.icon_alpha(_vampir_pull)
+	var iconed: Array = _vampir_iconed_weapons()
+	for i in range(iconed.size()):
+		var w: Node2D = iconed[i]
+		w.global_position = global_position + VampirMath.icon_offset(_vampir_slot_for(w, i), _vampir_pull) * scale
+		w.modulate.a = alpha
+		var sh: Variant = w.get("shadow_sprite")
+		if sh != null and is_instance_valid(sh):
+			sh.modulate.a = 0.4 * alpha
+			if w.has_method("_update_icon_shadow"):
+				w._update_icon_shadow()
+
+
+## ---------- R: Kan Yarasaları ----------
+func _vampir_toggle_bats() -> void:
+	if _vampir_bats_active:
+		_vampir_stop_bats()
+		return
+	## İlk saniyenin bedeli aktivasyonda ödenir, sonraki her saniye _vampir_process_bats'te.
+	if not _vampir_try_pay_health(_vampir_skill_health_cost(VAMPIR_ULTI_COST_PERCENT_PER_SEC), false):
+		return
+	_vampir_bats_active = true
+	_vampir_r_tick_timer = 1.0
+	if is_instance_valid(_vampir_swarm):
+		_vampir_swarm.unretire()
+	else:
+		var swarm := Node2D.new()
+		swarm.set_script(VampirBatSwarmScript)
+		swarm.set("authoritative", true)
+		swarm.set("caster", self)
+		swarm.set("launch_radius", VAMPIR_R_RADIUS)
+		add_child(swarm)
+		_vampir_swarm = swarm
+
+
+func _vampir_stop_bats() -> void:
+	_vampir_bats_active = false
+	## Yarasalar uçuşlarını bitirip (döndüklerinde can yenileyerek) kaybolur - bkz. swarm.retire().
+	if is_instance_valid(_vampir_swarm):
+		_vampir_swarm.retire()
+
+
+## Yarasaların hızı saldırı hızına göre artar (fire_rate_mult ne kadar DÜŞÜKSE o kadar hızlı).
+func _vampir_attack_speed_mult() -> float:
+	var interval_mult: float = fire_rate_mult * maxf(0.1, 1.0 - item_fire_rate_percent)
+	return clampf(1.0 / maxf(0.1, interval_mult), 0.5, 4.0)
+
+
+func _vampir_process_bats(delta: float) -> void:
+	if is_instance_valid(_vampir_swarm):
+		_vampir_swarm.set("bat_speed", VAMPIR_R_BASE_BAT_SPEED * _vampir_attack_speed_mult())
+	_vampir_r_tick_timer -= delta
+	if _vampir_r_tick_timer > 0.0:
+		return
+	_vampir_r_tick_timer += 1.0
+	if not _vampir_try_pay_health(_vampir_skill_health_cost(VAMPIR_ULTI_COST_PERCENT_PER_SEC), false):
+		_vampir_stop_bats() ## can bitti: "CAN YETERSİZ" yazısı _vampir_try_pay_health'ten geldi
+
+
+## Yarasa sürüsü bir yaratığa ulaştı (swarm.gd çağırır).
+func vampir_bat_hit(target: Node, pos: Vector2) -> void:
+	if not is_instance_valid(target) or target.get("is_dead") == true:
+		return
+	var is_crit: bool = _roll_ability_crit()
+	var dmg: float = _apply_ability_crit(damage_bonus * VAMPIR_R_DAMAGE_RATIO, is_crit)
+	if target.has_method("take_damage"):
+		target.take_damage(dmg, is_crit)
+	_vampir_hit_fx(pos)
+
+
+## Yarasa geri döndü (swarm.gd çağırır): saldırı gücünün %5'i kadar can.
+func vampir_bat_returned(_pos: Vector2) -> void:
+	_vampir_add_heal(damage_bonus * VAMPIR_R_HEAL_RATIO)
+
+
+## main.gd ağ yayını için: yarasa konumları (sürü yoksa boş dizi).
+func get_vampir_swarm_net_positions() -> PackedVector2Array:
+	if is_instance_valid(_vampir_swarm) and _vampir_swarm.has_method("get_net_positions"):
+		return _vampir_swarm.get_net_positions()
+	return PackedVector2Array()

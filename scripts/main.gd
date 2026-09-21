@@ -67,6 +67,8 @@ const MAP_QUADRANT_SIZE := 512
 
 var pause_menu_instance: Node = null
 var _sync_timer: float = 0.0
+## Vampir Çocuk R yarasa konum paketi: bir önceki gönderim dolu muydu (kapanışta tek bir boş paket için).
+var _vampir_bats_last_sent_nonempty: bool = false
 const SYNC_INTERVAL := 0.05
 var _remote_players: Dictionary = {}
 
@@ -360,6 +362,17 @@ func _process_multiplayer_sync(delta: float) -> void:
 			cur_anim,
 		)
 
+		## Vampir Çocuk'un R yarasaları (bkz. vampir_bat_swarm.gd): 6 yarasanın dünya konumu bu SÜREKLİ
+		## (unreliable, ~20Hz) kanaldan gider - hedef seçimi/hasar SADECE bu istemcide olduğu için diğer
+		## istemcilerin yarasaları görebilmesinin tek yolu konumlarının yayınlanması. Sürü kapandığında
+		## bir kez BOŞ dizi gönderilir (uzak kopya kendini siler; paket kaybolursa uzak taraf zaman
+		## aşımıyla da siler, bkz. remote_player.gd VAMPIR_BATS_TIMEOUT).
+		if player.has_method("get_vampir_swarm_net_positions"):
+			var bat_positions: PackedVector2Array = player.get_vampir_swarm_net_positions()
+			if not bat_positions.is_empty() or _vampir_bats_last_sent_nonempty:
+				_rpc_update_vampir_bats.rpc(bat_positions)
+			_vampir_bats_last_sent_nonempty = not bat_positions.is_empty()
+
 		# 2) DURUM kanalı: can, kalkan, silah envanteri, durum efektleri gibi
 		# NADİREN değişen veriler artık burada toplanıp SADECE bir öncekinden
 		# farklıysa (ya da aşağıdaki heartbeat'te) gönderiliyor - bkz. yukarıki
@@ -368,7 +381,6 @@ func _process_multiplayer_sync(delta: float) -> void:
 			"is_invisible": player.is_invisible if "is_invisible" in player else false,
 			"is_shielded": player.is_shielded if "is_shielded" in player else false,
 			"elara_double": player.elara_double_fire_active if "elara_double_fire_active" in player else false,
-			"berserk": player._kurtadam_berserk_active if "_kurtadam_berserk_active" in player else false,
 			"talon_giant": player._talon_ulti_active if "_talon_ulti_active" in player else false,
 			## Talon'un Silah Salvosu (E)/Ayna Formu (R) yetenekleri silahları
 			## karakter etrafında dairesel dizer (bkz. player.gd
@@ -434,8 +446,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 		}
 		# Character modulate color for status effects
 		## DÜZELTME (derin multiplayer görsel denetimi): bazı yetenekler
-		## (ör. Büyücü Kız Don Nova/Meteor, Assasin Görünmezlik/Gölge Hücumu,
-		## Kurt Adam Kudurmuş Saldırı) tonu KÖK `player.modulate` üzerine
+		## (ör. Büyücü Kız Don Nova/Meteor, Assasin Görünmezlik/Gölge Hücumu)
+		## tonu KÖK `player.modulate` üzerine
 		## uyguluyor, `player.anim.modulate` üzerine değil - Godot'ta
 		## CanvasItem modulate alt öğelere çarpımsal olarak yayıldığı için
 		## caster'ın kendi ekranında ikisi de doğru görünüyordu ama eskiden
@@ -556,6 +568,17 @@ func _rpc_update_player_transform(pos: Vector2, cur_anim: String) -> void:
 	var rp: RemotePlayer = _get_or_spawn_remote_player(sender_id, false)
 	if rp and is_instance_valid(rp):
 		rp.update_position_and_anim_from_net(pos, cur_anim)
+
+
+## Vampir Çocuk R yarasa konumları (bkz. _process_multiplayer_sync) - kozmetik sürüyü sürer.
+@rpc("any_peer", "unreliable")
+func _rpc_update_vampir_bats(positions: PackedVector2Array) -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		return
+	var rp: RemotePlayer = _get_or_spawn_remote_player(sender_id, false)
+	if rp and is_instance_valid(rp) and rp.has_method("update_vampir_bats_from_net"):
+		rp.update_vampir_bats_from_net(positions)
 
 
 @rpc("any_peer", "reliable")

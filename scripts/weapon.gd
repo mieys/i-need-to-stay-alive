@@ -240,8 +240,8 @@ var bleed_stacks_per_hit: int = 1
 var bleed_max_stacks: int = 0
 
 ## Pençe: SADECE bu silahın kendi hasarından can çalar - oyuncunun genel
-## lifesteal_percent/on_damage_dealt pasifinden (bkz. player.gd, Kurt Adam'ın
-## can çalma pasifi) TAMAMEN bağımsız, ayrı bir silaha-özel yüzde. Ön-mitigasyon
+## lifesteal_percent/on_damage_dealt pasifinden (bkz. player.gd, kart/eşya
+## can çalması) TAMAMEN bağımsız, ayrı bir silaha-özel yüzde. Ön-mitigasyon
 ## (zırhtan ÖNCEKİ) final_damage üzerinden hesaplanır - enemy.take_damage()'ı
 ## mitigasyon SONRASI değeri geri döndürecek şekilde değiştirmek çok daha
 ## invaziv olacağı için bilinçli bir basitleştirme (bkz. Pençeler
@@ -265,7 +265,7 @@ var lifesteal_percent: float = 0.0
 ## düzeltme açısı (radyan).
 @export var muzzle_flash_rotation_offset: float = 0.0
 
-## Yakın dövüş modu (Kurt Adam): mermi yerine anında pençe vuruşu - hedefe
+## Yakın dövüş modu: mermi yerine anında pençe vuruşu - hedefe
 ## tam hasar, hedefin çevresindeki düşmanlara (melee_aoe_radius içinde) hafif
 ## alan hasarı uygulanır ve savuruş efekti (fx_slash.gd) çizilir.
 @export var melee: bool = false
@@ -2392,7 +2392,7 @@ func _fire_at(target: Node2D) -> void:
 var melee_slash_fx_scene: String = ""
 ## Efektin karakter merkezinden ne kadar dışa kaydırılacağı (karaktere özel;
 ## bkz. Characters.DEFS "slash_fx_offset"). 0 = tam merkezde, sadece
-## saldırı yönüne döner (ör. Kurt Adam'ın hilal efekti).
+## saldırı yönüne döner (ör. hilal efekti).
 var melee_slash_fx_offset: float = 95.0
 ## Efekt VE savuruş ikonu (bıçak) ikisi de hedefin bu kadar üzerine
 ## (ekrana göre sabit, yukarı) kaydırılır - ikisi de AYNI sabitten okuduğu
@@ -2489,13 +2489,13 @@ func _apply_weapon_lifesteal(amount: float) -> void:
 		return
 	## Kullanıcı isteği: "Pençenin can çalması can emme olarak gösterilecek ve
 	## hesaplanacak yani bu can emme verilen hasarın %'liği olarak can
-	## yenileyecek (tıpkı kurt adamdaki gibi)". ESKİ DÜZELTME (bkz. player.gd::
+	## yenileyecek". ESKİ DÜZELTME (bkz. player.gd::
 	## on_damage_dealt - genel Can Çalma kartı/eşyası için "%X ihtimalle 1 can")
 	## Pençe'nin KENDİ can emmesini de olasılığa çevirmişti; bu geri alındı:
 	## Pençe artık DETERMİNİSTİK, vurduğu hasarın lifesteal_percent'i kadar
-	## can yeniler (Kurt Adam'ın Vahşi Kesik'i gibi hasar tabanlı; oradaki genel
-	## %33 GameManager.LIFESTEAL_EFFECTIVENESS çarpanı BİLEREK uygulanmıyor -
-	## silah kartında/tooltip'inde yazan yüzde ile gerçekte yenilenen aynı olsun).
+	## can yeniler (hasar tabanlı; genel %33 GameManager.LIFESTEAL_EFFECTIVENESS
+	## çarpanı BİLEREK uygulanmıyor - silah kartında/tooltip'inde yazan yüzde ile
+	## gerçekte yenilenen aynı olsun).
 	var new_health: float = min(max_hp, cur_health + amount * lifesteal_percent)
 	parent.set("health", new_health)
 	if parent.has_signal("health_changed"):

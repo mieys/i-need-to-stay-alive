@@ -18,7 +18,7 @@ const BODY_BLOCK_SCALE := 0.48
 ## olsun" - GLOBAL kapsamda (eşyalar + karakter pasifleri/yetenekleri +
 ## silahlar, hepsi) uygulanıyor. player.gd VE weapon.gd'deki TÜM can
 ## çalma/alan hasarı hesaplarının (on_damage_dealt, _apply_weapon_lifesteal,
-## _skill_kurtadam_slash, weapon.gd melee AoE splash, _buyucu_on_kill)
+## weapon.gd melee AoE splash, _buyucu_on_kill)
 ## çarptığı TEK ortak sabit - BODY_BLOCK_SCALE ile aynı sebepten burada:
 ## birden fazla dosyada aynı sayı elle kopyalanırsa biri güncellenirken
 ## diğeri unutulabilir.

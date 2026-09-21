@@ -1,6 +1,6 @@
 extends Node2D
 
-## Kurt Adam'ın yakın dövüş pençe savuruşu: saldırı yönüne doğru hızla
+## Yakın dövüş pençe savuruşu: saldırı yönüne doğru hızla
 ## süpürülüp sönen üç paralel pençe izi + hafif dış ışıma. Tamamen
 ## prosedürel (draw_arc), doku gerektirmez. Weapon._spawn_slash_fx tarafından
 ## oyuncunun konumunda, saldırı yönüne döndürülmüş olarak yaratılır.
@@ -38,5 +38,5 @@ func _draw() -> void:
 	draw_arc(Vector2.ZERO, RADIUS - 12.0, -0.42, 0.5, 20, Color(1.0, 1.0, 1.0, 0.85), 3.0, true)
 	draw_arc(Vector2.ZERO, RADIUS, -0.5, 0.55, 20, Color(1.0, 1.0, 1.0, 0.95), 3.5, true)
 	draw_arc(Vector2.ZERO, RADIUS + 12.0, -0.45, 0.48, 20, Color(1.0, 1.0, 1.0, 0.8), 3.0, true)
-	## uçlarda kızıl bir iz - kurt pençesi hissi
+	## uçlarda kızıl bir iz - pençe hissi
 	draw_arc(Vector2.ZERO, RADIUS, 0.35, 0.58, 10, Color(0.95, 0.35, 0.3, 0.6), 3.0, true)

@@ -4,7 +4,7 @@ class_name AssasinDashFx
 ## Assasin Çocuk'un yeni ULTİ'si (Gölge Hücumu) aktifken oyuncuya eklenen
 ## "piksel tarzı" (retro, ızgaraya oturan/chunky) mor renkli hızlı savrulma
 ## izi - bkz. player.gd _skill_assasin_dash/_assasin_dash_direction. Diğer
-## tüm FX'lerin aksine (fx_kurtadam_rage.gd, fx_assasin_stealth.gd gibi)
+## tüm FX'lerin aksine (fx_assasin_stealth.gd gibi)
 ## sabit bir "duration" ile kendi kendine kapanmaz - oyuncu bu süre boyunca
 ## SÜREKLİ hareket ettiği için hedefe göre değişken uzunlukta sürer, bu
 ## yüzden player.gd hücum bitince stop() çağırır (bkz. _end_skill_effects).

@@ -36,6 +36,11 @@ var is_downed: bool = false
 ## veriden üretebiliyor.
 const FxDeathScene := preload("res://scenes/fx_death.tscn")
 const TuftufTargetingScript: GDScript = preload("res://scripts/tuftuf_targeting.gd")
+## Vampir Çocuk: silah çekilme formülü player.gd ile PAYLAŞILAN (bkz. vampir_math.gd üstündeki not).
+const VampirMath := preload("res://scripts/vampir_math.gd")
+const VampirBatSwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.gd")
+## Son yarasa konum paketinden bu kadar süre (sn) geçtiyse (kapanış paketi kaybolduysa) kozmetik sürü silinir.
+const VAMPIR_BATS_TIMEOUT := 1.0
 const FxReviveRewindScene := preload("res://scenes/fx_revive_rewind.tscn")
 const FxReviveHeartScene := preload("res://scenes/fx_revive_heart.tscn")
 var _death_status_fx: Node = null
@@ -114,6 +119,15 @@ var _talon_formation: String = ""
 ## SADECE "salvo" formasyonunun dönüş açısı (bkz. talon_formation_math.gd
 ## advance_salvo_angle) - "mirror" sabit bir dizilim olduğu için kullanılmaz.
 var _talon_salvo_angle: float = 0.0
+
+## Vampir Çocuk Yarasa Formu (bkz. player.gd _skill_vampir_bat_form): "bat_*" animasyon adı geldiği sürece
+## silahlar gövdeye çekilir (0 = normal yerinde, 1 = tamamen içeride) - anim ADI zaten transform
+## kanalından geliyor, ek ağ alanı yok.
+var _vampir_bat_form: bool = false
+var _vampir_pull: float = 0.0
+var _vampir_rest_positions: Array = []
+var _vampir_swarm: Node2D = null
+var _vampir_bats_last_msec: int = 0
 
 var _target_position: Vector2 = Vector2.ZERO
 ## Ölü hesaplama (dead reckoning) - kullanıcı bildirimi: "multiplayerda
@@ -342,6 +356,7 @@ func _physics_process(delta: float) -> void:
 	## iken gerçekleştiği için bu çağrı aşağıdaki "if is_dead: return"
 	## erken dönüşünden ÖNCE yapılıyor, yoksa hiç çalışmazdı.
 	_process_weapon_drop_physics_all(delta)
+	_process_vampir_remote(delta)
 	if is_dead:
 		return
 	# Smoothly interpolate position towards target
@@ -363,7 +378,11 @@ func _physics_process(delta: float) -> void:
 	## oyunun zaten bildiği bir kural olduğu için ağdan hiç veri gerektirmez.
 	## Talon Silah Salvosu/Ayna Formu aktifken silahlar normal nişan/orbit
 	## mantığı YERİNE dairesel formasyonda tutulur (bkz. _update_talon_formation).
-	if _talon_formation != "":
+	## Vampir Yarasa Formu: silahlar gövdeye çekilirken/geri çıkarken (pull > 0) nişan/orbit
+	## güncellemesi konumu EZMESİN diye atlanır - bkz. _process_vampir_remote.
+	if _vampir_pull > 0.0:
+		pass
+	elif _talon_formation != "":
 		_update_talon_formation(delta)
 	else:
 		_update_local_weapon_aim(delta)
@@ -739,6 +758,66 @@ func _update_talon_formation(delta: float) -> void:
 			icon.visible = true
 
 
+## Vampir Çocuk'un Yarasa Formu (bkz. player.gd _process_vampir_weapon_pull - AYNI formül,
+## VampirMath'ten): form sürerken silah ikonları gövdeye çekilip solar, bitince geri çıkar. Dinlenme
+## konumu çekilme başlarken ikonun kendi o anki konumundan yakalanır (dönen kılıç gibi sabit slotu
+## olmayan silahlar da doğru yere döner).
+func _process_vampir_remote(delta: float) -> void:
+	var prev: float = _vampir_pull
+	_vampir_pull = VampirMath.step_pull(_vampir_pull, _vampir_bat_form and not is_dead, delta)
+	if _vampir_pull > 0.0:
+		if prev <= 0.0:
+			_vampir_rest_positions.clear()
+			for icon: Node2D in _weapon_icons:
+				_vampir_rest_positions.append(icon.position if is_instance_valid(icon) else Vector2.ZERO)
+		var alpha: float = VampirMath.icon_alpha(_vampir_pull)
+		for i in range(_weapon_icons.size()):
+			var icon: Node2D = _weapon_icons[i]
+			if not is_instance_valid(icon):
+				continue
+			var rest: Vector2 = _vampir_rest_positions[i] if i < _vampir_rest_positions.size() else icon.position
+			icon.position = VampirMath.icon_offset(rest, _vampir_pull)
+			icon.modulate.a = alpha
+			if i < _weapon_shadows.size() and is_instance_valid(_weapon_shadows[i]):
+				_weapon_shadows[i].modulate.a = 0.4 * alpha
+				_refresh_remote_weapon_shadow(i)
+	elif prev > 0.0:
+		for i in range(_weapon_icons.size()):
+			var icon: Node2D = _weapon_icons[i]
+			if not is_instance_valid(icon):
+				continue
+			if i < _vampir_rest_positions.size():
+				icon.position = _vampir_rest_positions[i]
+			icon.modulate.a = 1.0
+			if i < _weapon_shadows.size() and is_instance_valid(_weapon_shadows[i]):
+				_weapon_shadows[i].modulate.a = 0.4
+				_refresh_remote_weapon_shadow(i)
+		_vampir_rest_positions.clear()
+	if _vampir_swarm != null and is_instance_valid(_vampir_swarm):
+		if is_dead or Time.get_ticks_msec() - _vampir_bats_last_msec > int(VAMPIR_BATS_TIMEOUT * 1000.0):
+			_vampir_swarm.queue_free()
+			_vampir_swarm = null
+
+
+## main.gd _rpc_update_vampir_bats: R yarasalarının konumları (boş dizi = sürü kapandı). Sürü
+## burada SADECE görsel (authoritative=false) - hasar/can hiçbir şey yapmaz, bkz. vampir_bat_swarm.gd.
+func update_vampir_bats_from_net(positions: PackedVector2Array) -> void:
+	if positions.is_empty():
+		if _vampir_swarm != null and is_instance_valid(_vampir_swarm):
+			_vampir_swarm.queue_free()
+		_vampir_swarm = null
+		return
+	_vampir_bats_last_msec = Time.get_ticks_msec()
+	if _vampir_swarm == null or not is_instance_valid(_vampir_swarm):
+		var swarm := Node2D.new()
+		swarm.set_script(VampirBatSwarmScript)
+		swarm.set("authoritative", false)
+		swarm.set("caster", self)
+		add_child(swarm)
+		_vampir_swarm = swarm
+	_vampir_swarm.apply_net_positions(positions)
+
+
 ## weapon.gd::_get_target_enemy() ile BİREBİR aynı seçim mantığı - hangi
 ## hedefleme moduna (en yakın / en yüksek can / donmamış tercih) göre
 ## saldıracağı, o silahın kendi (weapon_root'tan yakalanan) export
@@ -829,6 +908,7 @@ func update_position_and_anim_from_net(pos: Vector2, cur_anim: String) -> void:
 	_network_time_since_update = 0.0
 	_position_received = true
 	_target_position = pos
+	_vampir_bat_form = VampirMath.is_bat_anim(cur_anim)
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(cur_anim):
 		if anim.animation != cur_anim:
 			anim.play(cur_anim)
@@ -966,18 +1046,18 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 		_remove_matthew_dome_visual()
 
 	## DÜZELTME (derin multiplayer görsel denetimi): Elara'nın "Çift Tetik"
-	## ve Kurt Adam'ın "Kudurmuş Saldırı" efektleri TEK SEFERLİK (kısa süreli,
+	## efekti TEK SEFERLİK (kısa süreli,
 	## kendi kendini yok eden) sahnelerdir - aktivasyon anında zaten
 	## _broadcast_skill_scene ile doğru şekilde bir kez yayınlanıyor (bkz.
-	## player.gd _skill_elara_double_fire / _skill_kurtadam_ulti). Burada
+	## player.gd _skill_elara_double_fire). Burada
 	## "extra" durum bayrağı true kaldığı sürece (25s / 30s boyunca) bu
 	## tek-seferlik sahneyi _ensure_overlay ile tekrar tekrar yeniden
 	## başlatıyorduk - efekt kendi kendine bitip _ensure_overlay'in
 	## is_instance_valid kontrolünü geçersiz kıldığı anda, bir sonraki durum
 	## güncellemesinde yeniden doğuyordu. Sonuç: uzak oyuncular caster'ın
 	## SADECE BİR KEZ gördüğü patlama/parıltı efektini ~1.3-2 saniyede bir
-	## tekrar tekrar (sesiyle birlikte) görüyordu. Kurt Adam'ın kalıcı kızıl
-	## tonu artık yukarıdaki "modulate" senkronuyla zaten doğru gösteriliyor;
+	## tekrar tekrar (sesiyle birlikte) görüyordu. Kalıcı renk tonları
+	## artık yukarıdaki "modulate" senkronuyla zaten doğru gösteriliyor;
 	## Elara'nın 25s'lik etkisi için ayrıca kalıcı bir görsel yoktu (caster da
 	## sadece aktivasyon anında görüyor), o yüzden burada hiçbir şey
 	## eklemiyoruz - eski hatalı tekrar mantığını tamamen kaldırıyoruz.

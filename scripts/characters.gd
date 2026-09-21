@@ -247,28 +247,6 @@ const DEFS := {
 		"frames": "res://assets/characters/assasin_frames.tres",
 		"portrait": "res://assets/characters/assasin_portrait.png",
 	},
-	6: {
-		"name": "Kurt Adam",
-		"skill": 14,
-		"skill_name": "Kudurmuş Saldırı",
-		"skill_desc": "ULTİ: 20sn kudurup en yakındakilere otomatik vurur. %50 az hasar alır, %30 hızlı vurur, %30 hızlı koşar, %10 can çalma şansı kazanır. (90sn bekleme)",
-		"skill_icon": "res://assets/skills/kurtadam_kudurmus_saldiri_icon.png",
-		"skill2": 13,
-		"skill2_name": "Vahşi Kesik",
-		"skill2_desc": "TEMEL: Etrafına %120 pençe hasarı vurur ve %4 can çalar. (15sn bekleme)",
-		"skill2_icon": "res://assets/skills/kurtadam_vahsi_kesik_icon.png",
-		## DÜZELTME (kullanıcı isteği: "can çalma sistemi komple değişiyor, artık
-		## verilen hasarın %'liğini yenilemiyor - %X can çalma = %X ihtimalle
-		## isabet halinde 1 can yeniler") - metin eski ("hasarın %X'i kadar can
-		## yeniler") mekaniği anlatıyordu, yeni mekaniğe göre güncellendi (bkz.
-		## player.gd on_damage_dealt).
-		"passive": "Can Çalma: isabet başına %1 ihtimalle 1 can yeniler.",
-		"passive_icon": "res://assets/skills/kurtadam_passive_icon.png",
-		"lifesteal": 0.01,
-		"frames": "res://assets/characters/kurtadam_frames.tres",
-		"portrait": "res://assets/characters/kurtadam_portrait.png",
-		"always_walk": true,
-	},
 	7: {
 		"name": "Şovalye Adam",
 		"skill": 11,
@@ -359,7 +337,7 @@ const DEFS := {
 		"frames": "res://assets/characters/korsan_frames.tres",
 		"portrait": "res://assets/characters/korsan_portrait.png",
 		## Yeni karakterlerin atlas'ında (beni oku.txt - sadece Idle/Hurt/
-		## Spellcast/Walk) "run" animasyonu YOK - Büyücü Kız/Kurt Adam'da
+		## Spellcast/Walk) "run" animasyonu YOK - Büyücü Kız'da
 		## olduğu gibi always_walk=true olmazsa, hız bir eşiği (bkz. player.gd
 		## RUN_ANIM_SPEED_RATIO) aşınca _update_animation() var olmayan
 		## "run_*" animasyonunu oynatmaya çalışır, AnimatedSprite2D'nin
@@ -511,6 +489,35 @@ const DEFS := {
 		## "run" animasyonu yok - bkz. Korsan/Melek/Necromancer'daki AYNI
 		## "always_walk" notu, yoksa hız eşiği aşılınca karakter TAMAMEN
 		## GÖRÜNMEZ olur.
+		"always_walk": true,
+	},
+	13: {
+		"name": "Vampir Çocuk",
+		## Kullanıcı isteği: yeni karakter Vampir Çocuk - yetenekleri kalkan YERİNE CAN harcar
+		## (Q ve E maksimum canın %4'ü, R aktifken her saniye maksimum canın %3'ü, bkz.
+		## player.gd VAMPIR_*). Skill id'leri: Q=40 (Kan Emme, SKILL_TIMING[40]), E=41 (Yarasa
+		## Formu, SKILL2_TIMING[41]), R=42 (Kan Yarasaları, SKILL3_TIMING[42], basılıp
+		## kapatılan toggle - Necromancer'ın Yarasa Sürüsü ile aynı desen).
+		## Görsel: assets/characters/vampir/ (tools/gen_vampir_assets.py + gen_vampir_frames.py).
+		"skill": 40,
+		"skill_name": "Kan Emme",
+		"skill_desc": "YETENEK (maksimum canının %4'ünü harcar): Yakınındaki en yakın 3 düşmanın kanını emip kendine çeker, her birine saldırı gücünün %130'u kadar hasar verir ve maksimum canını oyun boyunca kalıcı olarak 1 arttırır (karakterin üstünde +1 Maks. Can yazar). (8sn bekleme)",
+		"skill_icon": "res://assets/skills/vampir_kan_emme_icon.png",
+		"skill2": 41,
+		"skill2_name": "Yarasa Formu",
+		"skill2_desc": "TEMEL (maksimum canının %4'ünü harcar): 5sn boyunca büyük bir yarasaya dönüşür - %60 hareket hızı kazanır, aldığı hasar %80 azalır ve temas ettiği her yaratığa saldırı gücünün %80'i kadar hasar verir. Bu esnada silahlarını kullanamaz: silahlar karakterin içine çekilip kaybolur, form bitince geri çıkar. (22sn bekleme)",
+		"skill2_icon": "res://assets/skills/vampir_yarasa_formu_icon.png",
+		"skill3": 42,
+		"skill3_name": "Kan Yarasaları",
+		"skill3_desc": "ULTİ (BASILIP KAPATILABİLİR): Açıkken her saniye maksimum canının %3'ünü harcar. Yakınındaki yaratıklara 6 küçük yarasa gönderir; yarasalar vurup saldırı gücünün %60'ı kadar hasar verir ve sana geri döner (hızları saldırı hızınla artar). Yarasalar her döndüğünde saldırı gücünün %5'i kadar can yenilenir.",
+		"skill3_icon": "res://assets/skills/vampir_kan_yarasalari_icon.png",
+		"passive": "Kan Emme: %4 can emme kazanır (verdiği hasarın %4'ü kadar can yenilenir) ve her 1 saldırı gücü için 1 maksimum can kazanır.",
+		"passive_icon": "res://assets/skills/vampir_passive_icon.png",
+		"frames": "res://assets/characters/vampir_frames.tres",
+		"portrait": "res://assets/characters/vampir_portrait.png",
+		## LPC standart set: "run" animasyonu yok - bkz. Korsan/Shaman'daki AYNI "always_walk" notu,
+		## yoksa hız eşiği aşılınca karakter TAMAMEN GÖRÜNMEZ olur (Yarasa Formu'nda %60 hız bonusu
+		## bu eşiği kolayca aşıyor).
 		"always_walk": true,
 	},
 }

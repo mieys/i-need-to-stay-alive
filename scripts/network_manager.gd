@@ -1,5 +1,8 @@
 extends Node
 
+## Vampir Çocuk FX yardımcısı (broadcast_player_vfx "vampir_fx" dalı).
+const VampirMathScript := preload("res://scripts/vampir_math.gd")
+
 ## NetworkManager: Godot'nun yerleşik ENet çoklu oyuncu altyapısı üzerinden DOĞRUDAN
 ## (host <-> client) bağlantı kurar. Kullanıcı isteği: "multiplayerdan ziva altyapısını
 ## kaldır, üyeliğimi iptal ettim, multiplayerda ziva seçeneği de olmayacak" - bulut
@@ -2233,6 +2236,20 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				hit_fx.position = Vector2.ZERO
 				if hit_fx.has_method("setup"):
 					hit_fx.setup(flash_angle)
+		## Vampir Çocuk pixel FX'i (bkz. vampir_math.gd spawn_fx / vampir_fx.gd): kind = "hit" (vuruş
+		## patlaması), "puff" (Yarasa Formu geçişi), "drain" (Kan Emme - "points" kaynak konumları,
+		## damlalar bu kukla'ya akar; "text" varsa "+1 Maks. Can" gibi kukla üstünde yazı).
+		## Yarasa formunun kendisi/silahların çekilmesi bu kanaldan DEĞİL, animasyon adından gelir.
+		"vampir_fx":
+			var vampir_kind: String = str(extra_data.get("kind", "hit"))
+			var vampir_opts: Dictionary = {}
+			if vampir_kind == "drain":
+				vampir_opts["points"] = extra_data.get("points", PackedVector2Array())
+				vampir_opts["sink"] = rp
+			VampirMathScript.spawn_fx(get_tree().current_scene, vampir_kind, pos, vampir_opts)
+			var vampir_text: String = str(extra_data.get("text", ""))
+			if not vampir_text.is_empty() and rp.has_method("_spawn_floating_text"):
+				rp._spawn_floating_text(vampir_text, Color(0.95, 0.25, 0.35), true)
 
 
 ## DÜZELTME (kullanıcı bildirimi: "multiplayerda genel olarak bazı hosta
