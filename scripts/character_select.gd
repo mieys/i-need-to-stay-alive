@@ -4,6 +4,7 @@ extends Control
 ## oluşturur. Kart seçilince yetenek bilgisi gösterilir, BAŞLA oyunu başlatır.
 
 const BASE_STATS := "Can:100  Hız:240  Hasar:10  AteşHızı:1.0/sn"
+const SpiritualPickerScript: GDScript = preload("res://scripts/spiritual_picker.gd")
 
 @onready var grid: GridContainer = $VBox/Grid
 ## Bilgi paneli artık VBox'ın dışında, ekranın altına sabit, kendi başına
@@ -157,6 +158,10 @@ static func _build_select_frame_style(highlighted: bool) -> StyleBoxFlat:
 
 
 func _ready() -> void:
+	## Kullanıcı isteği (2026-09-21): büyük bilgi paneli UIKit ahşap pencere çerçevesinde (konum/boyut DEĞİŞMEDİ).
+	var info_panel_node: Control = get_node_or_null("InfoPanel") as Control
+	if info_panel_node:
+		info_panel_node.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 	var portrait_style := _build_portrait_card_style()
 	var name_style := _build_name_card_style()
 	_select_frame_style_off = _build_select_frame_style(false)
@@ -267,6 +272,13 @@ func _ready() -> void:
 	back_button.pressed.connect(_on_back_pressed)
 	start_button.disabled = true
 	_on_character_pressed(1)
+	## Ruhani Yetenek seçici (kullanıcı isteği: oyun başında karakter seçim ekranında herkes 1 tane seçer) - sol boş alanda,
+	## karakter ızgarasının ve bilgi panelinin dışında. Seçim doğrudan GameManager.selected_spiritual'a yazılır.
+	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
+	spirit_picker.custom_minimum_size = Vector2(420, 0)
+	spirit_picker.position = Vector2(40, 110)
+	add_child(spirit_picker)
+	spirit_picker.setup(3)
 	## Karakter kartları YUKARIDA runtime'da oluşturuluyor - connect_all_buttons
 	## bu yüzden döngüden SONRA çağrılmalı, yoksa henüz var olmayan butonları
 	## kaçırır (bkz. UISound autoload).

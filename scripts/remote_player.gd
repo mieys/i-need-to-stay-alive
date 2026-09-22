@@ -1,6 +1,8 @@
 extends CharacterBody2D
 class_name RemotePlayer
 
+const OakleyLeafBarrierScene: PackedScene = preload("res://scenes/fx_oakley_leaf_barrier.tscn")
+
 ## Remote player puppet for multiplayer.
 ## Receives synced transform, animation, health and visual state from the network.
 
@@ -39,6 +41,8 @@ const TuftufTargetingScript: GDScript = preload("res://scripts/tuftuf_targeting.
 ## Vampir Çocuk: silah çekilme formülü player.gd ile PAYLAŞILAN (bkz. vampir_math.gd üstündeki not).
 const VampirMath := preload("res://scripts/vampir_math.gd")
 const VampirBatSwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.gd")
+## Klip adı kuralları (player.gd ile ortak) - bkz. char_anim.gd.
+const CharAnim := preload("res://scripts/char_anim.gd")
 ## Son yarasa konum paketinden bu kadar süre (sn) geçtiyse (kapanış paketi kaybolduysa) kozmetik sürü silinir.
 const VAMPIR_BATS_TIMEOUT := 1.0
 const FxReviveRewindScene := preload("res://scenes/fx_revive_rewind.tscn")
@@ -124,11 +128,18 @@ var _talon_salvo_angle: float = 0.0
 ## player.gd _talon_form_apply_scale ile AYNI çarpan). fx_talon_form.gd bu bayrağı okuyup alev aurasını sürdürür.
 var _talon_form_active: bool = false
 var _talon_form_scale_applied: float = 1.0
+## Oakley Koruyucu Büyü (R) hedefi mi (main.gd extra["oakley_bond"]) - true iken çocuk olarak yeşil yaprak bariyeri FX'i durur
+## (fx_oakley_leaf_barrier.gd bayrağı ve sağlık düşüşünü buradan okur).
+var _oakley_bond_on: bool = false
+var _oakley_bond_fx: Node = null
 
 ## Vampir Çocuk Yarasa Formu (bkz. player.gd _skill_vampir_bat_form): "bat_*" animasyon adı geldiği sürece
 ## silahlar gövdeye çekilir (0 = normal yerinde, 1 = tamamen içeride) - anim ADI zaten transform
 ## kanalından geliyor, ek ağ alanı yok.
 var _vampir_bat_form: bool = false
+## Elara'nın Sıvışma'sı (bkz. main.gd extra dict, update_extra_state_from_net) - Vampir'in Yarasa Formu'nun
+## AKSİNE özel bir animasyonu olmadığı için animasyon adından ÇIKARILAMIYOR, AYRI bir ağ bayrağı gerekiyor.
+var _elara_evasion: bool = false
 var _vampir_pull: float = 0.0
 var _vampir_rest_positions: Array = []
 var _vampir_swarm: Node2D = null
@@ -345,6 +356,8 @@ func _load_character_frames() -> void:
 	anim.scale = def.get("scale", Vector2(1.27575, 1.27575)) * EntityScale.SIZE
 	_base_anim_scale = anim.scale
 	anim.offset = def.get("offset", Vector2(0, -5))
+	## Ayak gölgesi (Vampir): yerel oyuncuyla AYNI yardımcı/DEFS değerleri (bkz. ground_shadow.gd) - uzak ekranda da görünsün.
+	GroundShadow.apply_to(get_node_or_null("Shadow") as Node2D, def)
 	var frames_path: String = def.get("frames", "")
 	if ResourceLoader.exists(frames_path):
 		var res = load(frames_path)
@@ -741,6 +754,13 @@ func _update_talon_formation(delta: float) -> void:
 			continue
 		var slot: Dictionary = TalonFormationMath.compute_slot(i, count, radius, _talon_salvo_angle)
 		icon.position = slot["offset"] + _formation_kick_offset(i)
+		## Ayna Formu (R) TEK BAŞINA: sadece konum çember, namlular normal nişanla en yakın yaratığa döner
+		## (kullanıcı isteği: sabit dışa-bakan duruş SADECE E ile kombine ettiğinde) - bkz. player.gd
+		## _talon_set_weapons_circular face_outward. Nişan döngü sonunda _update_local_weapon_aim ile yapılır.
+		if _talon_formation != "salvo":
+			if not icon.visible:
+				icon.visible = true
+			continue
 		var forward: float = deg_to_rad(_weapon_forward_angle_deg[i] if i < _weapon_forward_angle_deg.size() else 0.0)
 		## DÜZELTME (kullanıcı bildirimi: "silahların dışa bakması gerekirken
 		## içe bakıyorlar") - bkz. player.gd _talon_set_weapons_circular
@@ -762,6 +782,8 @@ func _update_talon_formation(delta: float) -> void:
 				_weapon_icon_flipped[i] = pose["flip_h"]
 		if not icon.visible:
 			icon.visible = true
+	if _talon_formation != "salvo":
+		_update_local_weapon_aim(delta)
 
 
 ## Vampir Çocuk'un Yarasa Formu (bkz. player.gd _process_vampir_weapon_pull - AYNI formül,
@@ -915,6 +937,7 @@ func update_position_and_anim_from_net(pos: Vector2, cur_anim: String) -> void:
 	_position_received = true
 	_target_position = pos
 	_vampir_bat_form = VampirMath.is_bat_anim(cur_anim)
+	_apply_vampir_bat_scale()
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(cur_anim):
 		if anim.animation != cur_anim:
 			anim.play(cur_anim)
@@ -932,11 +955,12 @@ func update_position_and_anim_from_net(pos: Vector2, cur_anim: String) -> void:
 			anim.speed_scale = clampf(_network_velocity.length() / Characters.BASE_MOVE_SPEED, 0.7, 1.25)
 		else:
 			anim.speed_scale = 1.0
-		if cur_anim.begins_with("spellcast") and not anim.is_playing():
+		if CharAnim.is_cast_anim(cur_anim) and not anim.is_playing():
 			## DÜZELTME (derin multiplayer görsel denetimi: "Büyücü Kız'ın
 			## Meteor kanalı uzak ekranlarda donuyor") - spellcast animasyonu
 			## kendi kendine döngü yapmıyor (bkz. player.gd
-			## _process_buyucu_meteor'daki yerel zorla-yeniden-oynatma). Bu
+			## _process_buyucu_meteor'daki yerel zorla-yeniden-oynatma; yeni
+			## sprite setlerinde aynı klip "shrug_<yön>", bkz. CharAnim.CAST_PREFIXES). Bu
 			## fonksiyon animasyon ADI DEĞİŞMEDİĞİ sürece play() çağırmadığı
 			## için 5 saniyelik kanal boyunca uzak oyuncular karakterin son
 			## karede donduğunu görüyordu - burada da aynı şekilde yeniden
@@ -1002,10 +1026,23 @@ func _apply_talon_form_scale() -> void:
 			_weapon_base_scales[i] = _weapon_base_scales[i] * ratio
 
 
+## Vampir Çocuk Yarasa Formu (E) boyutu: yarasa kareleri (96x112) insan karelerinden büyük olduğu
+## için form boyunca sprite %30 küçülür - yerel oyuncuyla AYNI çarpan (bkz. vampir_math.gd
+## BAT_FORM_SCALE_MULT ve player.gd _update_animation'ın yarasa dalı) yoksa uzak ekranda devasa
+## görünürdü. SADECE Vampir'e dokunur: başka karakterin kuklasında anim.scale'e HİÇ yazmaz
+## (Talon'un Ayna Formu ölçeklemesini - _apply_talon_form_scale - ezmesin).
+func _apply_vampir_bat_scale() -> void:
+	if char_id != VampirMath.CHAR_ID:
+		return
+	if not (anim and is_instance_valid(anim)):
+		return
+	anim.scale = _base_anim_scale * (VampirMath.BAT_FORM_SCALE_MULT if _vampir_bat_form else 1.0)
+
+
 ## Vampir Çocuk yarasa formundayken (anim adı bat_*) yaratıklar bu kuklanın içinden geçilebilir sayar - player.gd is_ghost_now ile aynı
 ## sözleşme (enemy.gd host'ta çalışır, uzak Vampir'i bu kukla temsil eder).
 func is_ghost_now() -> bool:
-	return _vampir_bat_form
+	return _vampir_bat_form or _elara_evasion
 
 
 func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary = {}) -> void:
@@ -1039,6 +1076,9 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	is_indoors = extra.get("is_indoors", false)
 	is_in_merchant_zone = extra.get("is_in_merchant_zone", false)
 	is_invisible = extra.get("is_invisible", false)
+	## Elara'nın Sıvışma'sı (bkz. main.gd extra dict/player.gd _elara_evasion_timer üstündeki AYNI not) -
+	## is_ghost_now()'da okunuyor ki enemy.gd bu oyuncuya sert yapışmasın.
+	_elara_evasion = extra.get("elara_evasion", false)
 	match_damage_dealt = extra.get("dmg_dealt", 0.0)
 	if downed_timer_label:
 		downed_timer_label.set_remaining_seconds(extra.get("downed_remaining", 0.0) if is_downed else 0.0)
@@ -1124,6 +1164,10 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	_talon_formation = new_talon_formation
 	_talon_form_active = bool(extra.get("talon_form", false))
 	_apply_talon_form_scale()
+	_oakley_bond_on = bool(extra.get("oakley_bond", false))
+	if _oakley_bond_on and not is_instance_valid(_oakley_bond_fx):
+		_oakley_bond_fx = OakleyLeafBarrierScene.instantiate()
+		add_child(_oakley_bond_fx)
 
 	if overhead_bar:
 		overhead_bar.set_health(health, max_health)
@@ -1168,11 +1212,12 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 ## yönetiyordu, bkz. set_remaining_seconds/"shield_bubble_visible" - aynı
 ## deseni overhead_bar ve çarpışmaya da uyguluyoruz).
 func _play_death_animation() -> void:
-	var anim_name: String = "death"
-	if anim and anim.sprite_frames and not anim.sprite_frames.has_animation("death") and anim.sprite_frames.has_animation("hurt"):
-		anim_name = "hurt"
-
-	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(anim_name):
+	if not (anim and anim.sprite_frames):
+		return
+	## player.gd ölüm klibiyle AYNI öncelik: death_<yön> (yeni setler; yön kuklanın son klibinden okunur),
+	## yönsüz "death" (eski atlas karakterler), o da yoksa "hurt" (eski LPC).
+	var anim_name: String = CharAnim.pick(anim.sprite_frames, ["death_" + CharAnim.dir_of(String(anim.animation)), "death", "hurt"])
+	if anim_name != "":
 		anim.play(anim_name)
 
 
@@ -1405,7 +1450,7 @@ func _despawn_pet_visual(instance_id: String = "") -> void:
 ## Matthew'in tilkisi) - o zaman eskisi gibi genel update_network_pet_state'e
 ## düşülür. 0.0-1.0 arası GERÇEK bir oran geldiyse VE kozmetik kopya Golem'e
 ## özgü update_network_golem_state metoduna sahipse ONUN üzerinden gidilir.
-func _update_pet_visual_state(instance_id: String, pos: Vector2, is_attacking: bool, health_ratio: float = -1.0, shield_ratio: float = -1.0, sprite_row: int = -1) -> void:
+func _update_pet_visual_state(instance_id: String, pos: Vector2, is_attacking: bool, health_ratio: float = -1.0, shield_ratio: float = -1.0, sprite_row: int = -1, teleport: bool = false) -> void:
 	if not _pet_visuals.has(instance_id):
 		return
 	var p = _pet_visuals[instance_id]
@@ -1414,7 +1459,7 @@ func _update_pet_visual_state(instance_id: String, pos: Vector2, is_attacking: b
 	if health_ratio >= 0.0 and p.has_method("update_network_golem_state"):
 		p.update_network_golem_state(pos, is_attacking, health_ratio, shield_ratio, sprite_row)
 	elif p.has_method("update_network_pet_state"):
-		p.update_network_pet_state(pos, is_attacking, sprite_row)
+		p.update_network_pet_state(pos, is_attacking, sprite_row, teleport)
 
 
 ## Kullanıcı isteği: "senkronize et, ben nasıl görüyosam diğer oyuncular da

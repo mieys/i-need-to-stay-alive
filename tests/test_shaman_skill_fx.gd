@@ -1,7 +1,8 @@
 extends Node
 
-## Shaman yetenek efektleri - AŞAMA 2 doğrulaması: TOTEM DİKİLME / SÖNME /
-## CAST (yetenek atma) efektlerinin pixel-art dönüşümü.
+## Shaman totem yetenekleri - SIFIRDAN pixel tasarım doğrulaması (2026-09-21, kullanıcı isteği: "shamanın skil totemlerinin efektlerini,
+## ikonlarını ve seslerini sıfırdan tasarla, pixel tarzda 48x48"): totem sprite'ları, cast/dikilme/sönme/rün efektleri, ikonlar, sesler.
+## (Eski AŞAMA 2 hali: sprite sheet'li efektler - artık prosedürel 1 texel efektler, bkz. fx_shaman_cast.gd / fx_totem_puff.gd.)
 ##
 ## Kullanıcı istekleri:
 ##   "Shaman adlı karakterin skill efektlerini skil uygun şekilde tasarla"
@@ -15,11 +16,32 @@ extends Node
 const PLANT_SCENE := "res://scenes/fx_totem_plant_dust.tscn"
 const COLLAPSE_SCENE := "res://scenes/fx_totem_collapse_dust.tscn"
 const RUNE_SCENE := "res://scenes/fx_totem_rune_flash.tscn"
+## Ağ yayını yalnızca sahne YOLUNU taşıdığı için yetenek türü SAHNEYE gömülü `kind` olmalı (CLAUDE.md hata sınıfı).
 const CAST_SCENES := {
-	"res://scenes/fx_shaman_cast_shield.tscn": Color(0.35, 0.65, 1),
-	"res://scenes/fx_shaman_cast_attack.tscn": Color(1, 0.55, 0.25),
-	"res://scenes/fx_shaman_cast_area.tscn": Color(0.65, 0.35, 0.85),
+	"res://scenes/fx_shaman_cast_shield.tscn": "shield",
+	"res://scenes/fx_shaman_cast_attack.tscn": "attack",
+	"res://scenes/fx_shaman_cast_area.tscn": "area",
 }
+const PUFF_SCENES := {
+	"res://scenes/fx_totem_plant_dust.tscn": "plant",
+	"res://scenes/fx_totem_collapse_dust.tscn": "collapse",
+	"res://scenes/fx_totem_rune_flash.tscn": "rune",
+}
+const TOTEM_SCENES := [
+	"res://scenes/totem_shield.tscn",
+	"res://scenes/totem_attack.tscn",
+	"res://scenes/totem_area.tscn",
+]
+const SKILL_ICONS := [
+	"res://assets/skills/shaman_kalkan_totemi_icon.png",
+	"res://assets/skills/shaman_saldiri_totemi_icon.png",
+	"res://assets/skills/shaman_alan_totemi_icon.png",
+]
+const SFX_PATH := "res://scripts/shaman_sfx.gd"
+const SMOOTH_DRAW_SCRIPTS := [
+	"res://scripts/fx_shaman_cast.gd", "res://scripts/fx_totem_puff.gd", "res://scripts/fx_totem_fire_bolt.gd",
+	"res://scripts/totem_shield_wave.gd", "res://scripts/totem_base.gd", "res://scripts/totem_area.gd",
+]
 const TOTEM_BASE_PATH := "res://scripts/totem_base.gd"
 const PLAYER_PATH := "res://scripts/player.gd"
 
@@ -44,53 +66,66 @@ func _strip_comments(src: String) -> String:
 	return "\n".join(out)
 
 
-func _assert_pixel_art_fx_scene(path: String) -> AnimatedSprite2D:
+func _assert_procedural_fx_scene(path: String, expected_kind: String) -> Node2D:
 	var packed: PackedScene = load(path)
 	assert(packed != null, "%s yüklenebilmeli" % path)
 	var inst: Node = packed.instantiate()
-	assert(inst is AnimatedSprite2D, "%s kökü AnimatedSprite2D olmalı" % path)
-	var spr: AnimatedSprite2D = inst
-	assert(spr.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST,
-		"%s pixel-art olmalı (texture_filter NEAREST), bulunan: %s" % [path, spr.texture_filter])
-	assert(spr.sprite_frames != null, "%s SpriteFrames taşımalı" % path)
-	assert(spr.sprite_frames.get_animation_names().size() == 1,
-		"%s tek animasyon taşımalı" % path)
-	var anim: StringName = spr.sprite_frames.get_animation_names()[0]
-	assert(spr.sprite_frames.get_frame_count(anim) == 6,
-		"%s 6 kare olmalı" % path)
-	## Bunlar TEK SEFERLİK patlamalar - döngülü olurlarsa animation_finished
-	## hiç gelmez ve efekt sahnede sonsuza kadar asılı kalırdı.
-	assert(not spr.sprite_frames.get_animation_loop(anim),
-		"%s DÖNGÜSÜZ olmalı (tek seferlik patlama)" % path)
-	return spr
+	assert(inst is Node2D, "%s kökü Node2D olmalı" % path)
+	assert(inst.get_script() != null, "%s script taşımalı" % path)
+	assert(String(inst.get("kind")) == expected_kind,
+		"%s türü sahneye gömülü olmalı (bulunan %s, beklenen %s)" % [path, inst.get("kind"), expected_kind])
+	return inst as Node2D
 
 
-func test_totem_plant_and_collapse_dust_are_pixel_art() -> void:
-	var plant: AnimatedSprite2D = _assert_pixel_art_fx_scene(PLANT_SCENE)
-	plant.free()
-	var collapse: AnimatedSprite2D = _assert_pixel_art_fx_scene(COLLAPSE_SCENE)
-	collapse.free()
-
-
-func test_rune_flash_is_pixel_art() -> void:
-	var rune: AnimatedSprite2D = _assert_pixel_art_fx_scene(RUNE_SCENE)
-	rune.free()
-
-
-## Cast parlamaları: her yeteneğin rengi SAHNEYE GÖMÜLÜ olmalı - ağ yayını
-## yalnızca sahne yolunu taşıdığı için renk kodda verilirse diğer
-## oyuncularda renksiz görünürdü (projenin bilinen hata sınıfı).
-func test_cast_flashes_are_pixel_art_with_baked_colours() -> void:
+func test_cast_scenes_carry_their_kind() -> void:
 	for path: String in CAST_SCENES.keys():
-		var spr: AnimatedSprite2D = _assert_pixel_art_fx_scene(path)
-		var expected: Color = CAST_SCENES[path]
-		assert(spr.modulate.r > 0.0 or spr.modulate.g > 0.0 or spr.modulate.b > 0.0,
-			"%s renk tonu taşımalı" % path)
-		assert(absf(spr.modulate.r - expected.r) < 0.02
-			and absf(spr.modulate.g - expected.g) < 0.02
-			and absf(spr.modulate.b - expected.b) < 0.02,
-			"%s beklenen yetenek rengini taşımalı (bulunan %s, beklenen %s)" % [path, spr.modulate, expected])
-		spr.free()
+		_assert_procedural_fx_scene(path, CAST_SCENES[path]).free()
+
+
+func test_plant_collapse_and_rune_puffs_carry_their_kind() -> void:
+	for path: String in PUFF_SCENES.keys():
+		var fx: Node2D = _assert_procedural_fx_scene(path, PUFF_SCENES[path])
+		assert(fx.has_method("setup_tint"), "%s setup_tint taşımalı (rün rengi için)" % path)
+		fx.free()
+
+
+## Totem sahneleri: 48x64 karelik 6 kareli döngü, NEAREST, TotemSprite adıyla (TotemBase bulur).
+func test_totem_scenes_use_48px_pixel_sprites() -> void:
+	for path: String in TOTEM_SCENES:
+		var inst: Node = (load(path) as PackedScene).instantiate()
+		var spr: AnimatedSprite2D = inst.get_node_or_null("TotemSprite")
+		assert(spr != null, "%s 'TotemSprite' taşımalı" % path)
+		assert(spr.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "%s NEAREST olmalı" % path)
+		var anim: StringName = spr.animation
+		assert(spr.sprite_frames.get_frame_count(anim) == 6, "%s 6 kare olmalı" % path)
+		assert(spr.sprite_frames.get_animation_loop(anim), "%s idle döngüsü olmalı" % path)
+		var tex: Texture2D = spr.sprite_frames.get_frame_texture(anim, 0)
+		assert(tex.get_width() == 48 and tex.get_height() == 64, "%s kareleri 48x64 olmalı - v2 totem tasarımı, bkz. tools/shaman_totem_art.py (bulunan %s)" % [path, tex.get_size()])
+		inst.free()
+
+
+func test_skill_icons_are_48px() -> void:
+	for path: String in SKILL_ICONS:
+		var tex: Texture2D = load(path)
+		assert(tex != null, "%s yüklenebilmeli" % path)
+		assert(tex.get_width() == 48 and tex.get_height() == 48, "%s 48x48 olmalı (bulunan %s)" % [path, tex.get_size()])
+
+
+func test_shaman_sounds_exist() -> void:
+	var sfx: Object = load(SFX_PATH)
+	assert(sfx != null, "shaman_sfx.gd yüklenebilmeli")
+	var paths: Array = sfx.PLANT.values() + [sfx.EXPIRE, sfx.SHIELD_PULSE, sfx.BOLT_SHOT, sfx.BOLT_HIT, sfx.AREA_PULSE]
+	for path: String in paths:
+		assert(load(path) is AudioStream, "%s ses dosyası yüklenebilmeli" % path)
+
+
+## Sıfırdan pixel tasarım: düzgün daire/yay/çizgi çizimleri (yumuşak vektör) Shaman efekt kodunda KALMAMALI.
+func test_shaman_fx_code_has_no_smooth_vector_drawing() -> void:
+	for path: String in SMOOTH_DRAW_SCRIPTS:
+		var src: String = _strip_comments(_read(path))
+		assert(not src.is_empty(), "%s okunabilmeli" % path)
+		for banned in ["draw_circle(", "draw_arc(", "draw_polyline(", "draw_line(", "draw_colored_polygon(", "CPUParticles2D"]:
+			assert(not src.contains(banned), "%s içinde yumuşak çizim (%s) OLMAMALI - pixel tarzı" % [path, banned])
 
 
 ## DÖNÜŞÜM: yumuşak ölçek tween'i ve ondalıklı-ölçekli partikül GİTMELİ;

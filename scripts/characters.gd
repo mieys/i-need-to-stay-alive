@@ -68,6 +68,19 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/talon_passive_icon.png",
 		"frames": "res://assets/characters/talha_frames.tres",
 		"portrait": "res://assets/characters/talha_portrait.png",
+		## Kullanıcı isteği (2026-09-22, new characters.zip): yeni 48x48 sprite sayfaları (idle/walk/run/eat/hurt/read/shrug/downed/death + kullanılmayan
+		## strike/chop/pickup - tools/import_character_sheets.py). Gömülü gölge YOK: piksel elips ayak gölgesi (ground_shadow.gd).
+		## Kullanıcı isteği (boyut): "Elara, büyücü kız, vampir çocuk, talon, melek ve korsan ... boyutunu %25 arttır" -
+		## ölçek 1.78947 x 1.25 = 2.2368375 (EntityScale 0.95 ile oyun içi 2.125 px/sanat pikseli).
+		## Karakter büyüyünce ayaklar aşağı kayacağı için offset.y telafi edildi: (41 - 24 - 1.8) x 2.125 = 32.3 px,
+		## yani ayaklar eskisi gibi zemin çizgisinde kalır ve gölge (ground_shadow_y = 32.5) aynı yerde durur.
+		## Gölge yarıçapı da karakterle orantılı büyütüldü (x1.25).
+		## "run" klibi hareket hızı bonusu %15'i aşınca oynar (talimat) - eski "always_walk" kaldırıldı.
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(17.5, 6.25),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
 	},
 	## DÜZELTME (kullanıcı isteği: "Oakley yeni yetenekleri", sonra "Oakley ve
 	## Melek aynı karakter değil, sadece aynı yetenekleri kullanıyorlardı -
@@ -131,14 +144,24 @@ const DEFS := {
 	},
 	3: {
 		"name": "Matthew",
-		"skill": 9,
-		"skill_name": "Feda Kalkanı",
-		"skill_desc": "ULTİ: Yaratığı feda edip 15sn süren koruyucu bir kalkan çemberi kurar. (120sn bekleme)",
+		## Kullanıcı isteği (2026-09-22): "Matthew'in yeni skili (diğer yeteneklerini bozmadan bunu Q'ya
+		## yerleştir hız yeteneğini E'ye kalkan yeteneğini de R'ye yerleştir)" - Tilki Hücumu (yeni, id 43)
+		## Q'ya geldi, Vahşi Hız (id 21) E'de DEĞİŞMEDEN kaldı, Feda Kalkanı (id 9) R/skill3'e taşındı
+		## (bkz. player.gd _activate_skill/_activate_skill3 - eşleşen "Matthew Q/R yer değişimi" notları).
+		"skill": 43,
+		"skill_name": "Tilki Hücumu",
+		"skill_desc": "YETENEK: Tilkisini anında yanına ışınlayıp yakınındaki en fazla 6 düşmana dash saldırısı attırır, saldırı gücünün %110'u kadar hasar verir ve onları kendinden uzağa iter. (8sn bekleme)",
+		## İkon dosyası HENÜZ YOK (Talon'un yeni kitindeki AYNI durum, bkz. DEFS[1] üstündeki not) - gerçek
+		## sanat gelene kadar geçici olarak Feda Kalkanı'nın ikonu paylaşılıyor.
 		"skill_icon": "res://assets/skills/matthew_feda_kalkani_icon.png",
 		"skill2": 21,
 		"skill2_name": "Vahşi Hız",
 		"skill2_desc": "TEMEL: Kendine ve tilkisine 10 saniye boyunca %40 saldırı hızı ve %15 hareket hızı kazandırır. (35sn bekleme)",
 		"skill2_icon": "res://assets/skills/matthew_vahsi_hiz_icon.png",
+		"skill3": 9,
+		"skill3_name": "Feda Kalkanı",
+		"skill3_desc": "ULTİ: Yaratığı feda edip 15sn süren koruyucu bir kalkan çemberi kurar. (120sn bekleme)",
+		"skill3_icon": "res://assets/skills/matthew_feda_kalkani_icon.png",
 		"passive": "Statlarının %50'siyle saldıran bir yaratığa sahipsin. Ölürse 30sn sonra yeniden doğar.",
 		"passive_icon": "res://assets/skills/matthew_passive_icon.png",
 		"frames": "res://assets/characters/matthew_frames.tres",
@@ -203,7 +226,18 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/buyucu_passive_kadim_patlama_icon.png",
 		"frames": "res://assets/characters/buyucu_frames.tres",
 		"portrait": "res://assets/characters/buyucu_portrait.png",
-		"always_walk": true,
+		## Kullanıcı isteği (2026-09-22, new characters.zip): yeni 48x48 sprite sayfaları (idle/walk/run/eat/hurt/read/shrug/downed/death + kullanılmayan
+		## strike/chop/pickup - tools/import_character_sheets.py). Gömülü gölge YOK: piksel elips ayak gölgesi (ground_shadow.gd).
+		## Kullanıcı isteği (boyut): "%25 büyüt" - ölçek 1.78947 x 1.25 = 2.2368375 (EntityScale 0.95 ile oyun içi 2.125 px/sanat pikseli).
+		## Ayaklar zemin çizgisinde (~32 px) kalsın diye offset.y = -1.8: (41 - 24 - 1.8) x 2.125 = 32.3 px.
+		## Gölge yarıçapı da orantılı büyütüldü (x1.25); ground_shadow_y aynı kaldı (ayak çizgisi değişmedi).
+		## "run" klibi hareket hızı bonusu %15'i aşınca oynar (talimat) - eski "always_walk" kaldırıldı.
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(18.75, 6.875),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
+		## (eski "always_walk" kaldırıldı: yeni sayfalarda gerçek "run" klibi var)
 		"projectile_scene": "res://scenes/buyucu_projectile.tscn",
 		"projectile_rotation_offset": -2.3999243,
 	},
@@ -291,9 +325,13 @@ const DEFS := {
 		## üstündeki eşleşen notlar) - Kalkan Sıçraması artık Q'da (hafif/
 		## sık), Çift Tetik artık R'de (ağır/gerçek ulti). Buradaki metin
 		## alanları da buna göre yer değiştirdi.
+		## SONRAKİ DÜZELTME (kullanıcı isteği 2026-09-22): "Elaranın Q yeteneği artık dash atmak yerine
+		## azalarak kaybolacak şekilde 3sn boyunca %60 hareket hızı, %50 sıvışma ve birimlerin içinden
+		## geçebilme kazandırır (sıvışma sınırını aşabilir), 10sn bekleme" - Kalkan Sıçraması (dash) TAMAMEN
+		## kaldırıldı, id 12 AYNI kaldı (bkz. player.gd _skill_elara_evasion).
 		"skill": 12,
-		"skill_name": "Kalkan Sıçraması",
-		"skill_desc": "YETENEK: İleri kısa bir hamle atar ve anında kalkanının %12'sini yeniler. Kalkan harcamaz. (6sn bekleme)",
+		"skill_name": "Sıvışma",
+		"skill_desc": "YETENEK: 3 saniye boyunca (azalarak kaybolacak şekilde) %60 hareket hızı, %50 sıvışma kazandırır ve yaratıkların içinden geçebilmeni sağlar (sıvışma sınırını aşabilir). Kalkan harcamaz. (10sn bekleme)",
 		## Kalkan Sıçraması'nın kendi ikon dosyası hiç olmadı (eskiden R'de
 		## de yoktu, bkz. hud.gd _setup_ability_icons - def.has("skill_icon")
 		## yoksa skill_icon.gd kendi vektör simgesine düşer, hatasız).
@@ -309,6 +347,17 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/elara_passive_icon.png",
 		"frames": "res://assets/characters/elara_frames.tres",
 		"portrait": "res://assets/characters/elara_portrait.png",
+		## Kullanıcı isteği (2026-09-22, new characters.zip): yeni 48x48 sprite sayfaları (idle/walk/run/eat/hurt/read/shrug/downed/death + kullanılmayan
+		## strike/chop/pickup - tools/import_character_sheets.py). Gömülü gölge YOK: piksel elips ayak gölgesi (ground_shadow.gd).
+		## Kullanıcı isteği (boyut): "%25 büyüt" - ölçek 1.78947 x 1.25 = 2.2368375 (EntityScale 0.95 ile oyun içi 2.125 px/sanat pikseli).
+		## Ayaklar zemin çizgisinde (~32 px) kalsın diye offset.y = -1.8: (41 - 24 - 1.8) x 2.125 = 32.3 px.
+		## Gölge yarıçapı da orantılı büyütüldü (x1.25); ground_shadow_y aynı kaldı (ayak çizgisi değişmedi).
+		## "run" klibi hareket hızı bonusu %15'i aşınca oynar (talimat) - eski "always_walk" kaldırıldı.
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(17.5, 6.25),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
 	},
 	9: {
 		"name": "Korsan",
@@ -318,7 +367,10 @@ const DEFS := {
 		## bombaları patlatır (bkz. _skill_korsan_detonate_all/SKILL_TIMING[18]).
 		"skill": 18,
 		"skill_name": "Patlat",
-		"skill_desc": "ULTİ: Bırakılmış tüm saatli bombaları patlatır. (20sn bekleme)",
+		## Kullanıcı isteği (2026-09-22): "Korsanın Q'sunun bekleme süresini kaldır ve mana bedelini de
+		## kaldır" - bkz. player.gd SKILL_TIMING[18] (cooldown 0.0) ve _activate_skill()'teki kalkan
+		## bedeli muafiyet listesi (char_id != 18 eklendi).
+		"skill_desc": "ULTİ: Bırakılmış tüm saatli bombaları patlatır. (Bekleme yok, kalkan harcamaz)",
 		"skill_icon": "res://assets/skills/korsan_patlat_icon.png",
 		"skill2": 17,
 		"skill2_name": "Saatli Bomba",
@@ -332,10 +384,26 @@ const DEFS := {
 		"skill3": 34,
 		"skill3_name": "Bombardıman",
 		"skill3_desc": "3. YETENEK: Etrafındaki büyük bir alanı 8 saniye boyunca bombardımana tutar, her saniye saldırı gücünün %150'si kadar hasar verir. (40sn bekleme)",
+		## DÜZELTME (kullanıcı bildirimi 2026-09-22: "Korsanın ultisinin skill ikonu yok") - skill3_icon hiç
+		## eklenmemişti, HUD'da R slotu boş/placeholder kalıyordu (bkz. hud.gd "def.has(\"skill3_icon\")" kontrolü).
+		## Diğer üç Korsan ikonuyle (halka: siyah/renkli/siyah) AYNI şablon, sadece renkli halka koyu kırmızı
+		## (topçu/tehlike) - bkz. tools/gen_korsan_bombardment_icon.py.
+		"skill3_icon": "res://assets/skills/korsan_bombardiman_icon.png",
 		"passive": "Her öldürmede %10 ihtimalle 1 altın kazanırsın. Bu şans her level için +%1 artar (en fazla %100).",
 		"passive_icon": "res://assets/skills/korsan_passive_icon.png",
 		"frames": "res://assets/characters/korsan_frames.tres",
 		"portrait": "res://assets/characters/korsan_portrait.png",
+		## Kullanıcı isteği (2026-09-22, new characters.zip): yeni 48x48 sprite sayfaları (idle/walk/run/eat/hurt/read/shrug/downed/death + kullanılmayan
+		## strike/chop/pickup - tools/import_character_sheets.py). Gömülü gölge YOK: piksel elips ayak gölgesi (ground_shadow.gd).
+		## Kullanıcı isteği (boyut): "%25 büyüt" - ölçek 1.78947 x 1.25 = 2.2368375 (EntityScale 0.95 ile oyun içi 2.125 px/sanat pikseli).
+		## Ayaklar zemin çizgisinde (~32 px) kalsın diye offset.y = -1.8: (41 - 24 - 1.8) x 2.125 = 32.3 px.
+		## Gölge yarıçapı da orantılı büyütüldü (x1.25); ground_shadow_y aynı kaldı (ayak çizgisi değişmedi).
+		## "run" klibi hareket hızı bonusu %15'i aşınca oynar (talimat) - eski "always_walk" kaldırıldı.
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(21.25, 6.875),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
 		## Yeni karakterlerin atlas'ında (beni oku.txt - sadece Idle/Hurt/
 		## Spellcast/Walk) "run" animasyonu YOK - Büyücü Kız'da
 		## olduğu gibi always_walk=true olmazsa, hız bir eşiği (bkz. player.gd
@@ -345,7 +413,7 @@ const DEFS := {
 		## (hareket/saldırı/can vs. hepsi normal çalışmaya devam eder, sadece
 		## sprite kaybolur) - kullanıcı bildirimi "son 3 karakter oyunun
 		## içinde görünmüyor" bunun sonucuydu.
-		"always_walk": true,
+		## (eski "always_walk" kaldırıldı: yeni sayfalarda gerçek "run" klibi var)
 	},
 	10: {
 		"name": "Melek",
@@ -402,9 +470,20 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/melek_passive_icon.png",
 		"frames": "res://assets/characters/melek_frames.tres",
 		"portrait": "res://assets/characters/melek_portrait.png",
+		## Kullanıcı isteği (2026-09-22, new characters.zip): yeni 48x48 sprite sayfaları (idle/walk/run/eat/hurt/read/shrug/downed/death + kullanılmayan
+		## strike/chop/pickup - tools/import_character_sheets.py). Gömülü gölge YOK: piksel elips ayak gölgesi (ground_shadow.gd).
+		## Kullanıcı isteği (boyut): "%25 büyüt" - ölçek 1.78947 x 1.25 = 2.2368375 (EntityScale 0.95 ile oyun içi 2.125 px/sanat pikseli).
+		## Ayaklar zemin çizgisinde (~32 px) kalsın diye offset.y = -1.8: (41 - 24 - 1.8) x 2.125 = 32.3 px.
+		## Gölge yarıçapı da orantılı büyütüldü (x1.25); ground_shadow_y aynı kaldı (ayak çizgisi değişmedi).
+		## "run" klibi hareket hızı bonusu %15'i aşınca oynar (talimat) - eski "always_walk" kaldırıldı.
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(20.0, 6.875),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
 		## Bkz. Korsan'daki "always_walk" notu - Melek'in atlas'ında da "run"
 		## animasyonu yok, aynı görünmezlik hatasını önlemek için gerekli.
-		"always_walk": true,
+		## (eski "always_walk" kaldırıldı: yeni sayfalarda gerçek "run" klibi var)
 	},
 	11: {
 		"name": "Necromancer",
@@ -501,11 +580,11 @@ const DEFS := {
 		## Görsel: assets/characters/vampir/ (tools/gen_vampir_assets.py + gen_vampir_frames.py).
 		"skill": 40,
 		"skill_name": "Kan Emme",
-		"skill_desc": "YETENEK (maksimum canının %4'ünü harcar): Yakınındaki en yakın 3 düşmanın kanını emip kendine çeker, her birine saldırı gücünün %130'u kadar hasar verir ve maksimum canını oyun boyunca kalıcı olarak 1 arttırır (karakterin üstünde +1 Maks. Can yazar). (8sn bekleme)",
+		"skill_desc": "YETENEK (maksimum canının %4'ünü harcar): Yakınındaki en yakın 3 düşmanın kanını emip kendine çeker, her birine saldırı gücünün %130'u kadar hasar verir ve maksimum canını oyun boyunca kalıcı olarak 1 arttırır (karakterin üstünde +1 Maks. Can yazar). (6sn bekleme)",
 		"skill_icon": "res://assets/skills/vampir_kan_emme_icon.png",
 		"skill2": 41,
 		"skill2_name": "Yarasa Formu",
-		"skill2_desc": "TEMEL (maksimum canının %4'ünü harcar): 5sn boyunca büyük bir yarasaya dönüşür - %60 hareket hızı kazanır, aldığı hasar %80 azalır, yaratıkların ve duvarların içinden geçebilir ve temas ettiği her yaratığa saldırı gücünün %80'i kadar hasar verir. Bu esnada silahlarını kullanamaz: silahlar karakterin içine çekilip kaybolur, form bitince geri çıkar. (22sn bekleme)",
+		"skill2_desc": "TEMEL (maksimum canının %4'ünü harcar): 5sn boyunca büyük bir yarasaya dönüşür - %60 hareket hızı kazanır, aldığı hasar %80 azalır, yaratıkların ve duvarların içinden geçebilir ve temas ettiği her yaratığa saldırı gücünün %80'i kadar hasar verir. Bu esnada silahlarını kullanamaz: silahlar karakterin içine çekilip kaybolur, form bitince geri çıkar. E'ye tekrar basarak süre dolmadan normal forma dönebilirsin (bekleme o an başlar). (22sn bekleme)",
 		"skill2_icon": "res://assets/skills/vampir_yarasa_formu_icon.png",
 		"skill3": 42,
 		"skill3_name": "Kan Yarasaları",
@@ -515,10 +594,29 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/vampir_passive_icon.png",
 		"frames": "res://assets/characters/vampir_frames.tres",
 		"portrait": "res://assets/characters/vampir_portrait.png",
-		## LPC standart set: "run" animasyonu yok - bkz. Korsan/Shaman'daki AYNI "always_walk" notu,
-		## yoksa hız eşiği aşılınca karakter TAMAMEN GÖRÜNMEZ olur (Yarasa Formu'nda %60 hız bonusu
-		## bu eşiği kolayca aşıyor).
-		"always_walk": true,
+		## Yeni karakter tasarımı (kullanıcı sprite sayfaları): 48x48 kareler (eski LPC seti 64x64'tü) ve
+		## "run" DAHİL tüm klipler var - bu yüzden artık "always_walk" YOK, hız bonusu eşiği aşınca gerçek
+		## koşma klibi oynar (bkz. run_speed_ratio). DEFAULT_ANIM_OFFSET (0,-5) 64 px'lik karelere göre
+		## ayarlıydı; 48 px'lik karede ayaklar 41. satırda olduğu için karakter aynı zemin çizgisine
+		## (ayaklar orijinin ~33 px altında) otursun diye offset.y = 10 (41 - 24 + 10 = 27 texel x 1.212 ~ 33 px).
+		## Kullanıcı isteği (2026-09-22): "Vampirin boyutunu %30 büyüt ve altına gölge ekle", sonra "%10 daha", sonra "%15 daha" - ölçek varsayılanın
+		## (1.27575) x 1.3 x 1.1 x 1.15 = x1.6445 = 2.09797 (oyun içi 0.95 küçültmesiyle 1.993 px/sanat pikseli). Ayaklar aynı zemin çizgisinde (~33 px)
+		## kalsın diye offset.y = 0: (41 - 24 + 0) x 1.993 = 33.9 px (eskiden (41-24+10) x 1.212 = 32.7). Yarasa Formu kareleri de aynı klip
+		## setinde olduğu için onlar da büyür. (vampir_fx.gd FX'leri kendi TEXEL'ini korur.)
+		## Yarasa Formu kareleri (96x112) eski offset'e göre çizilmişti, bkz. tools/gen_vampir_assets.py BAT_CANVAS.
+		"scale": Vector2(2.09797, 2.09797),
+		"offset": Vector2(0, 0),
+		## Kullanıcı isteği (boyut): "Elara, büyücü kız, vampir çocuk, talon, melek ve korsan ... boyutunu %25 arttır" isteği
+		## Vampir için GERİ ALINDI (kullanıcı: "Vampir çocuğa yaptığın büyüklük değişimini geri al, diğerlerine dokunma") -
+		## Vampir eski ölçeğinde (2.09797; ayaklar ~33.9 px) ve eski gölge yarıçapında kalıyor.
+		## Yeni sprite sayfalarında gömülü gölge YOK (diğer karakterlerin karelerinde var) - kullanıcı isteğiyle ayrı piksel elips gölge
+		## (bkz. scripts/ground_shadow.gd): yarıçap (px) ve ayak çizgisine göre y konumu. Hem yerel (player.gd) hem uzak (remote_player.gd)
+		## oyuncu bunu ground_shadow.gd apply_to() ile aynı şekilde uygular.
+		"ground_shadow": Vector2(19.0, 7.0),
+		"ground_shadow_y": 33.4,
+		## Kullanıcı isteği (animasyon talimatı): "run animasyonları hareket hızı bonusu %20'yi geçince
+		## oynatılmalı (skiller, statlar vb.)" - genel eşik (player.gd RUN_ANIM_SPEED_RATIO) 1.25, bu karakter için 1.2.
+		"run_speed_ratio": 1.15,
 	},
 }
 

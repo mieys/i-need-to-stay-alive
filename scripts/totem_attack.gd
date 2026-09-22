@@ -25,8 +25,8 @@ const ATTACK_POWER_RATIO := 1.5
 ## Yeteneğe özgü saldırı efekti (KOZMETİK - hasarla hiçbir ilgisi yok):
 ## her atışta totemin tepesinden hedefe bir alev oku uçar (bkz.
 ## fx_totem_fire_bolt.gd). Mermi başlangıcı totem sprite'ının tepesine denk
-## gelen nokta (bkz. totem_attack.tscn - TotemSprite y=-24'te, 64px sprite).
-const BOLT_ORIGIN_OFFSET := Vector2(0, -44)
+## gelen nokta (bkz. totem_attack.tscn - yeni 48x48 sprite, boynuzlu maskenin üstündeki alev; kullanıcı isteği 2026-09-21).
+const BOLT_ORIGIN_OFFSET := Vector2(0, -56) ## yeni totem (48x64 kare): yaşayan alev orbunun merkezi (bkz. tools/shaman_totem_art.py)
 
 ## Ağ GÖRSEL kopyalarında (gerçek totem başka bir client'ta) atışları göstermek
 ## için ayrı kozmetik zamanlayıcı - gerçek atış TICK_INTERVAL'le aynı ritimde.
@@ -35,6 +35,7 @@ var _visual_shot_timer: float = 0.0
 
 
 func _init() -> void:
+	totem_kind = "attack"
 	totem_color = Color(1.0, 0.55, 0.25)
 	totem_radius = 260.0
 

@@ -3468,6 +3468,7 @@ func _drop_gold() -> void:
 		_queue_drop_spawn(func() -> void:
 			var drop = GoldDrop.instantiate()
 			drop.amount = amount
+			drop.is_boss_gold = is_boss ## boss altını çok oyunculuda eşit paylaşılır (bkz. gold_drop.gd)
 			drop.global_position = drop_pos
 			if NetworkManager.is_multiplayer_active:
 				var drop_id: int = NetworkManager._gen_drop_id()

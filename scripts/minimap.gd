@@ -7,6 +7,10 @@ class_name Minimap
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
 
 const RADIUS: float = 80.0
+## Kullanıcı isteği (2026-09-21): minimap çerçevesi yeniden tasarlandı - 92 sanat pikseli (184 px) ahşap halka + altın perçinler
+## (assets/ui/kit/hud_minimap_ring.png, tools/gen_ui_kit.py). İç yarıçapı RADIUS'a (80 px) denk gelir, harita dairesini üstten örter.
+const RING_TEXTURE := preload("res://assets/ui/kit/hud_minimap_ring.png")
+const RING_HALF: float = 92.0
 
 const MAP_MIN: Vector2 = Vector2(0.0, 0.0)
 const MAP_MAX: Vector2 = Vector2(4096.0, 4096.0)
@@ -149,7 +153,9 @@ func _draw() -> void:
 		var is_boss: bool = dot["is_boss"] as bool
 		var ecol: Color = COLOR_BOSS if is_boss else COLOR_ENEMY
 		var esize: float = 5.0 if is_boss else 3.0
-		draw_circle(epos, esize, ecol)
+		var half: float = float(int(esize)) # kare nokta (2 px ızgarasına oturur)
+		draw_rect(Rect2((epos - Vector2(half, half)).round(), Vector2(half * 2.0, half * 2.0)), Color(0.15, 0.04, 0.04, 0.9))
+		draw_rect(Rect2((epos - Vector2(half - 1.0, half - 1.0)).round(), Vector2((half - 1.0) * 2.0, (half - 1.0) * 2.0)), ecol)
 
 	# --- Tüm oyuncu noktaları ---
 	for dot: Dictionary in _player_dots:
@@ -196,8 +202,8 @@ func _draw() -> void:
 	draw_string(ThemeDB.fallback_font, north_pos + Vector2(-3.0, 4.0), "N",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.1, 0.1, 0.1, 1.0))
 
-	# --- Kenarlık ---
-	draw_arc(center, RADIUS, 0.0, TAU, 64, COLOR_BORDER, 2.5, true)
+	# --- Piksel ahşap halka çerçeve (kenarlık) ---
+	draw_texture(RING_TEXTURE, center - Vector2(RING_HALF, RING_HALF))
 
 func _world_to_map(world: Vector2) -> Vector2:
 	var center: Vector2 = Vector2(RADIUS + 2.0, RADIUS + 2.0)

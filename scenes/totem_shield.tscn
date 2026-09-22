@@ -1,42 +1,56 @@
 [gd_scene format=3 uid="uid://bjxqrvk3jtyep"]
 
 [ext_resource type="Script" uid="uid://b5pm7h8knq3sd" path="res://scripts/totem_shield.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://rm5qn31etdb8" path="res://assets/generated/shaman_totem_shield_idle_3.png" id="2_vxy8o"]
+[ext_resource type="Texture2D" uid="uid://ca1vtuk6mnrl6" path="res://assets/shaman/totem_shield_idle.png" id="2_sheet"]
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_ajb5p"]
-atlas = ExtResource("2_vxy8o")
-region = Rect2(0, 0, 64, 64)
+[sub_resource type="AtlasTexture" id="Atlas_0"]
+atlas = ExtResource("2_sheet")
+region = Rect2(0, 0, 48, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_hefkl"]
-atlas = ExtResource("2_vxy8o")
-region = Rect2(64, 0, 64, 64)
+[sub_resource type="AtlasTexture" id="Atlas_1"]
+atlas = ExtResource("2_sheet")
+region = Rect2(48, 0, 48, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_ehanb"]
-atlas = ExtResource("2_vxy8o")
-region = Rect2(128, 0, 64, 64)
+[sub_resource type="AtlasTexture" id="Atlas_2"]
+atlas = ExtResource("2_sheet")
+region = Rect2(96, 0, 48, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_fxlkj"]
-atlas = ExtResource("2_vxy8o")
-region = Rect2(192, 0, 64, 64)
+[sub_resource type="AtlasTexture" id="Atlas_3"]
+atlas = ExtResource("2_sheet")
+region = Rect2(144, 0, 48, 64)
 
-[sub_resource type="SpriteFrames" id="SpriteFrames_haxgf"]
+[sub_resource type="AtlasTexture" id="Atlas_4"]
+atlas = ExtResource("2_sheet")
+region = Rect2(192, 0, 48, 64)
+
+[sub_resource type="AtlasTexture" id="Atlas_5"]
+atlas = ExtResource("2_sheet")
+region = Rect2(240, 0, 48, 64)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_idle"]
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_ajb5p")
+"texture": SubResource("Atlas_0")
 }, {
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_hefkl")
+"texture": SubResource("Atlas_1")
 }, {
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_ehanb")
+"texture": SubResource("Atlas_2")
 }, {
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_fxlkj")
+"texture": SubResource("Atlas_3")
+}, {
+"duration": 1.0,
+"texture": SubResource("Atlas_4")
+}, {
+"duration": 1.0,
+"texture": SubResource("Atlas_5")
 }],
-"loop": 1,
-"name": &"subtle_motion",
-"speed": 5.0
+"loop": true,
+"name": &"idle",
+"speed": 7.0
 }]
 
 [node name="TotemShield" type="Node2D" unique_id=1127917831]
@@ -44,7 +58,8 @@ script = ExtResource("1")
 
 [node name="TotemSprite" type="AnimatedSprite2D" parent="." unique_id=811971026]
 texture_filter = 1
-position = Vector2(0, -24)
-sprite_frames = SubResource("SpriteFrames_haxgf")
-animation = &"subtle_motion"
-autoplay = "subtle_motion"
+position = Vector2(0, -32)
+scale = Vector2(1.212, 1.212)
+sprite_frames = SubResource("SpriteFrames_idle")
+animation = &"idle"
+autoplay = "idle"

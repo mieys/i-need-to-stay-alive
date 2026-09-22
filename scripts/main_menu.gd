@@ -14,6 +14,9 @@ func _ready() -> void:
 	DisplayServer.window_set_title("I Need to Stay Alive")
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
+	## Kullanıcı geri bildirimi (2026-09-22): menü butonları zor okunuyordu - büyük yazıya kalın koyu kontur (okunaklılık).
+	for menu_btn: Button in [$VBoxContainer/StartButton, $VBoxContainer/MultiplayerButton, $VBoxContainer/SettingsButton, $VBoxContainer/ExitButton]:
+		menu_btn.add_theme_constant_override("outline_size", 8)
 	$VBoxContainer/StartButton.pressed.connect(_on_start_pressed)
 	$VBoxContainer/MultiplayerButton.pressed.connect(_on_multiplayer_pressed)
 	$VBoxContainer/SettingsButton.pressed.connect(_on_settings_pressed)
@@ -34,6 +37,8 @@ func _ready() -> void:
 	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	resolution_option.item_selected.connect(_on_resolution_selected)
 	settings_panel.visible = false
+	## Kullanıcı isteği (2026-09-21): ayarlar paneli UIKit ahşap pencere çerçevesinde (konum/boyut aynı).
+	settings_panel.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
 	$VBoxContainer/StartButton.grab_focus()
 
 

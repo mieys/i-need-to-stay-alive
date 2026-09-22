@@ -22,7 +22,11 @@ extends Node2D
 ## çizgisi, hızla sönen (bkz. _draw()). Bu, appear/dismiss/show_instant/
 ## hide_instant'tan bağımsız, HER hasarda (baloncuk zaten görünürken de) çalışır.
 
+const PixelDraw := preload("res://scripts/pixel_draw.gd")
+
 const RADIUS := 77.0
+## Kıvılcımların çıktığı nokta: baloncuğun GÖRÜNEN kenarı (fx_shield_hit.gd RADIUS ile aynı sayı).
+const FLASH_RADIUS := 40.0
 ## "pop" animasyonu artık kare sayfasının son %10'u (9 kare, 12 fps) - bkz.
 ## assets/fx/shield_bubble/bubble_frames.tres (grow ilk %10, loop orta %10-90,
 ## pop son %10 olacak şekilde yeniden bölündü - "kalkan hasar alırken
@@ -175,7 +179,17 @@ func _process(delta: float) -> void:
 	if _flash <= 0.0 or not visible:
 		return
 	_flash = max(0.0, _flash - delta * 2.5)
+	_apply_flare()
 	queue_redraw()
+
+
+## Kullanıcı isteği (2026-09-22): "kalkan hasar alınca hafif çatlama ve BARİYER BALONCUĞU efekti çıkmalıydı" - gerçek baloncuk sprite'ı
+## hasar anında bir an PARLAR (mavi-beyaza doğru aydınlanır) ve söner; çatlak/yüzey dalgası ayrıca fx_shield_hit.gd'de çizilir.
+func _apply_flare() -> void:
+	if not bubble:
+		return
+	var f: float = _flash * _flash
+	bubble.self_modulate = Color(1.0 + 0.7 * f, 1.0 + 0.9 * f, 1.0 + 1.3 * f, 1.0)
 
 
 ## angle: hasarın geldiği yön (radyan, player.gd take_damage()'da hesaplanır) -
@@ -188,15 +202,11 @@ func flash(angle: float = INF) -> void:
 		var spark_len: float = randf_range(8.0, 18.0)
 		_sparks.append(Vector2(jitter, spark_len))
 	_flash = 1.0
+	_apply_flare()
 	queue_redraw()
 
 
 func _draw() -> void:
-	## Halka çizimi fx_shield_hit.gd'ye taşındı - ikisi üst üste gelmesin.
-	## Sadece küçük kıvılcımlar burada kalıyor.
-	if _flash <= 0.0:
-		return
-	var impact_point: Vector2 = Vector2.RIGHT.rotated(_flash_angle) * RADIUS
-	for s in _sparks:
-		var spark_dir: Vector2 = Vector2.RIGHT.rotated(_flash_angle + s.x)
-		draw_line(impact_point, impact_point + spark_dir * s.y, Color(0.85, 0.98, 1.0, 0.85 * _flash), 2.0)
+	## Eski kıvılcım çizgileri kaldırıldı (2026-09-22): hasar görseli artık fx_shield_hit.gd (baloncuk + yüzey dalgası + çatlak) ve
+	## yukarıdaki baloncuk parlaması (_apply_flare) - üst üste binip karışmasın diye burada çizim yok.
+	pass

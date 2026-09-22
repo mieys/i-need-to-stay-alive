@@ -69,10 +69,49 @@ func _ready() -> void:
 		player.stats_changed.connect(_refresh)
 	for stat_id in _icon_nodes:
 		_icon_nodes[stat_id].setup(stat_id, ICON_ROW_COLOR)
+	_apply_kit_style()
 	_apply_text_colors()
 	_setup_stat_tooltips()
 	pivot_offset = size * 0.5
 	_refresh()
+
+
+## Kullanıcı isteği (2026-09-22): "stat arayüzü dahil, envanteri seyyar satıcı gibi pixel tarzda yap" - pencere/başlık/satır zemini UIKit
+## ile, yazılar m5x7 için 16'nın katı boyutlarda (38/50 -> 32/48), Grid'in eski offset_transform ölçeği kaldırıldı.
+func _apply_kit_style() -> void:
+	var frame: PanelContainer = $Frame as PanelContainer
+	frame.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+	var margin: MarginContainer = $Frame/Margin as MarginContainer
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 6)
+	var title: Label = $Frame/Margin/VBox/Title as Label
+	title.add_theme_stylebox_override("normal", UIKit.panel_style("plaque"))
+	UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_TEXT, 4)
+	title.text = "ÖZELLİKLER"
+	var hint: Label = get_node_or_null("Frame/Margin/VBox/CloseHint") as Label
+	if hint:
+		UIKit.style_label(hint, UIKit.FS_BODY, UIKit.C_TEXT_DIM, 2)
+	var scroll: ScrollContainer = $Frame/Margin/VBox/GridScroll as ScrollContainer
+	scroll.add_theme_stylebox_override("panel", UIKit.panel_style("inset"))
+	var grid: GridContainer = $Frame/Margin/VBox/GridScroll/Grid as GridContainer
+	grid.offset_transform_enabled = false
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 12)
+	var kids: Array[Node] = grid.get_children()
+	for i in range(0, kids.size(), 3):
+		if i + 2 >= kids.size():
+			break
+		var icon_node: Control = kids[i] as Control
+		if icon_node:
+			icon_node.custom_minimum_size = Vector2(40, 40)
+		for j in [1, 2]:
+			var lbl: Label = kids[i + j] as Label
+			if lbl:
+				lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+				lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+				lbl.add_theme_constant_override("outline_size", 3)
+				if j == 2:
+					lbl.custom_minimum_size = Vector2(120, 0)
 
 
 ## Grid'deki her satırın adını/değerini krem zemine göre okunur renklere
@@ -135,7 +174,7 @@ func _refresh() -> void:
 	shield_pen_percent_value.text = "%%%d" % int(round(player.shield_pen_percent * 100))
 	exp_gain_value.text = "%%%d" % int(round(player.exp_gain_percent * 100))
 	luck_value.text = format_luck(player.luck)
-	range_value.text = "+%d" % int(player.weapon_range_bonus)
+	range_value.text = "+%%%d" % int(round(player.weapon_range_bonus * 100.0))
 	dodge_value.text = "%%%d" % int(round(player.dodge_chance * 100))
 	knockback_value.text = str(int(player.knockback_stat))
 	shield_amount_value.text = "+%%%d" % int(round(player.shield_max_percent * 100))

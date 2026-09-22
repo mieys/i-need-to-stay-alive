@@ -1,5 +1,7 @@
 extends Control
 
+const SpiritualPickerScript: GDScript = preload("res://scripts/spiritual_picker.gd")
+
 const BASE_STATS := "Can:100  Hız:240  Hasar:10  AteşHızı:1.0/sn"
 
 @onready var status_label: Label = $TopBar/StatusLabel
@@ -42,6 +44,19 @@ var _lan_ip_input: LineEdit = null
 
 
 func _ready() -> void:
+	## Kullanıcı isteği (2026-09-21): büyük paneller UIKit ahşap pencere çerçevesinde (konumlar/boyutlar DEĞİŞMEDİ, sadece görünüm).
+	for panel_path in ["LeftPanel", "RightArea/InfoPanel"]:
+		var panel_node: Control = get_node_or_null(panel_path) as Control
+		if panel_node:
+			panel_node.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+	## Ruhani Yetenek seçici (kullanıcı isteği: karakter seçerken herkes 1 ruhani yetenek seçer) - karakter ızgarasının SAĞINDAki
+	## boş alanda. Seçim yerel bir oyuncu tercihi (GameManager.selected_spiritual), ağdan gitmesi gerekmez: etkileri kendi
+	## istemcisinde işler, FX'leri zaten skill_scene/vfx ile herkese yayılır.
+	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
+	spirit_picker.custom_minimum_size = Vector2(345, 0)
+	spirit_picker.position = Vector2(1535, 150)
+	add_child(spirit_picker)
+	spirit_picker.setup(3)
 	start_game_btn.pressed.connect(_on_start_game_pressed)
 	ready_btn.pressed.connect(_on_ready_pressed)
 	close_room_btn.pressed.connect(_on_close_room_pressed)

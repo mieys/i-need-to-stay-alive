@@ -28,51 +28,64 @@ const WISP_PARTICLES := 5
 
 
 func _init() -> void:
+	totem_kind = "area"
 	totem_color = Color(0.65, 0.35, 0.85)
 	totem_radius = 180.0
-	## Yavaşlatma bölgesinin İÇİ hafif mor dolgun görünsün (TotemBase._draw).
-	aura_fill_alpha = 0.07
+	## Yavaşlatma bölgesinin İÇİ hafif mor pixel "toz" noktalarıyla dolsun (TotemBase._draw - aura_fill_alpha > 0 ise).
+	aura_fill_alpha = 0.0
+	use_custom_aura = true ## menzil halkası/dolgu/spiral artık TotemBase'te değil, aşağıdaki shader aurada (bkz. _build_void_aura)
+
+
+## Kullanıcı isteği (2026-09-22): "mor totemin etrafında açtığı aura çok kötü, pixel tarzda yeniden tasarla" - eski aura seyrek noktalı soluk halka +
+## dağınık spiral noktalarıydı. Yeni: shaders/totem_void_aura.gdshader (texel ızgarasına oturan büyü çemberi + dönen rünler + dither boşluk
+## girdabı + yükselen kıvılcımlar). Gerçek totemde de, ağ kopyasında da AYNI kurulur (salt görsel).
+const AURA_SHADER := preload("res://shaders/totem_void_aura.gdshader")
+var _aura: ColorRect = null
 
 
 func _ready() -> void:
 	super()
-	## Alandan yükselen boşluk parçacıkları - yavaşlatma bölgesinin "yaşayan
-	## bir boşluk" olduğunu hissettirir. Salt görsel, ağ kopyalarında da çalışır.
-	var motes := CPUParticles2D.new()
-	motes.amount = 14
-	motes.lifetime = 2.2
-	motes.preprocess = 2.2
-	motes.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	motes.emission_sphere_radius = totem_radius * 0.8
-	motes.direction = Vector2.UP
-	motes.spread = 20.0
-	motes.initial_velocity_min = 12.0
-	motes.initial_velocity_max = 30.0
-	motes.gravity = Vector2.ZERO
-	motes.scale_amount_min = 1.5
-	motes.scale_amount_max = 3.0
-	motes.color = Color(totem_color.r, totem_color.g, totem_color.b, 0.55)
-	motes.z_index = -1
-	add_child(motes)
+	_build_void_aura()
 
 
-## Alan Totemi'nin girdabı - yavaşlatma alanının içinde yavaşça dönen 3
-## sarmal kol. TotemBase._draw (aura + dolgu) ÇİZİLMEYE DEVAM EDER, bu ekstra
-## katman onun üstüne biner (super._draw() çağrısıyla).
-func _draw() -> void:
-	super()
-	var spiral_alpha: float = 0.35
-	for arm in 3:
-		var start_angle: float = visual_time * 1.1 + float(arm) * TAU / 3.0
-		var points := PackedVector2Array()
-		var steps := 22
-		for i in steps + 1:
-			var t: float = float(i) / float(steps)
-			var r: float = lerpf(22.0, totem_radius * 0.9, t)
-			var angle: float = start_angle + t * 2.4 ## sarmal burulması
-			points.append(Vector2.from_angle(angle) * r)
-		var arm_color := Color(totem_color.r, totem_color.g, totem_color.b, spiral_alpha * (1.0 - 0.3 * float(arm) / 3.0))
-		draw_polyline(points, arm_color, 2.0, true)
+func _build_void_aura() -> void:
+	var size_px: float = totem_radius * 2.0 + 20.0
+	_aura = ColorRect.new()
+	_aura.name = "VoidAura"
+	_aura.color = Color(1, 1, 1, 1)
+	_aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_aura.size = Vector2(size_px, size_px)
+	_aura.position = -_aura.size * 0.5
+	var mat := ShaderMaterial.new()
+	mat.shader = AURA_SHADER
+	mat.set_shader_parameter("radius_px", totem_radius)
+	mat.set_shader_parameter("texel", PixelDraw.TEXEL)
+	mat.set_shader_parameter("quad_size", Vector2(size_px, size_px))
+	_aura.material = mat
+	add_child(_aura)
+	move_child(_aura, 0) ## totem gövdesinin (TotemSprite) ARKASINDA çizilsin
+	_aura.modulate.a = 0.0
+	create_tween().tween_property(_aura, "modulate:a", 1.0, 0.8)
+
+
+## Her tik'te (TICK_INTERVAL) girdap nabzı: totemin etrafında yayılan mor pixel halka + alçak "vızıltı". Gerçek totemde de, ağ
+## kopyasında da çalışır (salt görsel/ses - oyun durumu paylaşmaz), yani herkes alanın "çalıştığını" görür ve duyar.
+var _pulse_timer: float = 0.0
+
+func _process(delta: float) -> void:
+	super(delta)
+	_pulse_timer -= delta
+	if _pulse_timer > 0.0:
+		return
+	_pulse_timer += TICK_INTERVAL
+	var scene: Node = get_tree().current_scene
+	if scene == null or not is_instance_valid(scene):
+		return
+	TotemShieldWave.spawn_pulse(scene, global_position, totem_color)
+	ShamanSfx.play_at(scene, ShamanSfx.AREA_PULSE, global_position, -18.0, 0.05)
+
+
+const TotemShieldWave := preload("res://scripts/totem_shield_wave.gd")
 
 
 ## Hasar tikinde düşmanın üstünde kısa süreli boşluk perisi - "bu düşman şu
@@ -81,27 +94,7 @@ func _spawn_void_wisp(enemy_pos: Vector2) -> void:
 	var scene: Node = get_tree().current_scene
 	if scene == null or not is_instance_valid(scene):
 		return
-	var wisp := CPUParticles2D.new()
-	wisp.position = enemy_pos + Vector2(0, -10)
-	wisp.one_shot = true
-	wisp.emitting = true
-	wisp.explosiveness = 0.9
-	wisp.amount = WISP_PARTICLES
-	wisp.lifetime = 0.45
-	wisp.direction = Vector2.UP
-	wisp.spread = 40.0
-	wisp.initial_velocity_min = 30.0
-	wisp.initial_velocity_max = 80.0
-	wisp.gravity = Vector2(0, -40) ## hafif yukarı süzülme
-	wisp.scale_amount_min = 1.5
-	wisp.scale_amount_max = 3.0
-	wisp.color = Color(totem_color.r, totem_color.g, totem_color.b, 0.8)
-	wisp.z_index = 5
-	scene.add_child(wisp)
-	get_tree().create_timer(1.0).timeout.connect(func() -> void:
-		if is_instance_valid(wisp):
-			wisp.queue_free()
-	)
+	PixelDraw.spawn_burst(scene, enemy_pos + Vector2(0, -10), "void", WISP_PARTICLES + 3, 70.0, 0.45)
 
 
 func _tick() -> void:

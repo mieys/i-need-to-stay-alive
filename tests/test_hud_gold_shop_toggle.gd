@@ -70,21 +70,21 @@ func test_gold_indicator_click_opens_shop() -> void:
 
 
 func test_envanter_button_matches_gold_indicator_palette() -> void:
+	## Kullanıcı isteği (2026-09-21): ENVANTER butonu ve altın göstergesi artık aynı piksel UI kitinden (assets/ui/kit) geliyor -
+	## buton ahşap plaka dokusu, gösterge başlık tahtası (plaque) dokusu; ikisi de StyleBoxTexture ve kit klasöründen.
 	var hud: Node = _make_hud()
 	var envanter_btn: Button = hud.get_node("EnvanterToggleButton")
 	var gold_indicator: PanelContainer = hud.get_node("GoldIndicator")
 
-	var envanter_style: StyleBoxFlat = envanter_btn.get_theme_stylebox("normal") as StyleBoxFlat
-	var gold_style: StyleBoxFlat = gold_indicator.get_theme_stylebox("panel") as StyleBoxFlat
+	var envanter_style: StyleBoxTexture = envanter_btn.get_theme_stylebox("normal") as StyleBoxTexture
+	var gold_style: StyleBoxTexture = gold_indicator.get_theme_stylebox("panel") as StyleBoxTexture
 
-	assert(envanter_style != null, "ENVANTER butonu icin normal stil bekleniyordu")
-	assert(gold_style != null, "Altin gostergesi icin panel stili bekleniyordu")
-	assert(envanter_style.bg_color.is_equal_approx(PAL_WINDOW_BG),
-		"ENVANTER arkaplani beklenen ahsap rengiyle ayni degil: %s" % envanter_style.bg_color)
-	assert(gold_style.bg_color.is_equal_approx(PAL_WINDOW_BG),
-		"Altin gostergesi arkaplani beklenen ahsap rengiyle ayni degil: %s" % gold_style.bg_color)
-	assert(envanter_style.bg_color.is_equal_approx(gold_style.bg_color),
-		"ENVANTER ve altin gostergesi arkaplan renkleri birbirinden farkli")
+	assert(envanter_style != null, "ENVANTER butonu icin normal stil (StyleBoxTexture) bekleniyordu")
+	assert(gold_style != null, "Altin gostergesi icin panel stili (StyleBoxTexture) bekleniyordu")
+	assert(envanter_style.texture.resource_path.begins_with("res://assets/ui/kit/"),
+		"ENVANTER butonu kit dokusunu kullanmiyor: %s" % envanter_style.texture.resource_path)
+	assert(gold_style.texture.resource_path.begins_with("res://assets/ui/kit/"),
+		"Altin gostergesi kit dokusunu kullanmiyor: %s" % gold_style.texture.resource_path)
 	hud.queue_free()
 
 

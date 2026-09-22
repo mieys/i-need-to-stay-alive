@@ -57,6 +57,46 @@ const MODE_TEXTURES := {
 ## yapısıyla (bkz. _create_skill3_icon) kod içinde PartyPanel'le AYNI
 ## "programatik Control + set_script + add_child" deseniyle kuruluyor.
 var skill3_icon = null
+## Ruhani Yetenek butonu (F tuşu, bkz. spiritual_skills.gd/_create_spirit_icon) - 3. butonun sağında, diğer butonlar
+## arasındaki boşlukla, biraz büyük ve farklı (mor-altın) çerçeve renginde.
+## DÜZELTME (kullanıcı isteği 2026-09-22: "ruhani skillin boyutunu biraz ufalt") - eskiden %20 büyüktü (1.2051),
+## artık %10 (1.10) - hâlâ diğerlerinden hafifçe ayırt edilebiliyor ama daha az baskın.
+var spirit_icon = null
+const SPIRIT_ICON_SCALE := 1.10
+const SPIRIT_ICON_BASE_SIZE := 52.0 ## diğer yetenek butonlarının boyutu (hud.tscn SkillIcon 52x52)
+## DÜZELTME (kullanıcı isteği 2026-09-22: "skiller arasındaki mesafeyi arttır... arkaplanını da biraz
+## genişletmen gerekiyor") - TÜM yetenek yuvaları arasındaki (Q-E, E-R, R-F) TEK paylaşılan boşluk sabiti,
+## eskiden 4 idi. hud.tscn'deki Skill2Icon'un offset_left/right'ı VE _create_skill3_icon()'daki sabitler bu
+## değere göre ELLE hesaplanmış sayılardır (52 + ABILITY_ICON_GAP katları) - burayı değiştirirsen o iki yeri de
+## güncellemen gerekir (bkz. oradaki notlar). Arkaplan çerçevesi (_update_ability_bar_frame) zaten görünür
+## ikonların gerçek dikdörtgenlerinin BİRLEŞİMİNİ aldığı için ayrıca büyütülmesine gerek YOK - boşluk artınca
+## kendiliğinden genişler.
+const ABILITY_ICON_GAP := 12.0
+const SPIRIT_ICON_GAP := ABILITY_ICON_GAP
+const SPIRIT_FRAME_TINT := Color(1, 1, 1, 1) ## artık tint yok: mor-altın çerçeve kendi dokusu (hud_skill_frame_spirit.png)
+const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+## Kullanıcı isteği (2026-09-22): "skill kutucuklarının olduğu yere arkasını kaplayacak bir çerçeve" - SkillBar'ın
+## İLK çocuğu olarak eklenen, o anki GÖRÜNÜR ikonların (P/Q/E/R/F) etrafını saran tek bir "çukur" panel (bkz.
+## _create_ability_bar_frame/_update_ability_bar_frame). Ayrı bir sahne/asset değil, UIKit.panel_style("inset")
+## ile diğer paneller (envanter/stat/dükkan) ile AYNI dokuyu paylaşıyor.
+var ability_bar_frame: Panel = null
+## Kullanıcı isteği: "çerçeveler falan oval olmalı" - panel_ability_bar.png'nin köşeleri oval şeklinde
+## büyük yarıçaplı (bkz. tools/gen_ui_kit.py), bu yüzden pay düz dikdörtgen bir panelden biraz daha geniş
+## tutuluyor ki oval köşe köşedeki ikonun (P/F) üstüne binmesin. DÜZELTME (kullanıcı bildirimi: "çerçeve çok
+## kalın, skiller içinde çok büyük görünüyor") - ilk denemenin 22'si (çok büyük bir yarıçapla birlikte)
+## gereğinden kalın duruyordu, hem yarıçap hem bu pay küçültüldü (12'ye). SONRAKİ DÜZELTME (kullanıcı
+## bildirimi: "arkaplanı biraz daha genişlet çok köşede durdu skiller") - 12 bu sefer TERSİNE çok DARDI,
+## uçlardaki ikonlar (P/F) oval köşeye fazla yakın duruyordu - 20'ye çıkarıldı. SONRAKİ DÜZELTME (kullanıcı
+## isteği: "şimdi çok az kısalt boyutunu... uzunluğunu" - barın toplam UZUNLUĞU) - 20 bu sefer biraz fazla
+## geldi, 16'ya (aradaki bir değere) çekildi.
+const ABILITY_BAR_FRAME_PAD := 16.0
+## Kullanıcı isteği (2026-09-22): "buffların sağladığı etkiler... skill barın üstünde mini bir durum etkileri
+## satırında olacak... bufflar solda debufflar sağda görünmeli" - bkz. _create_status_bar/_update_status_bar,
+## rozetlerin kendisi scripts/status_effect_badge.gd.
+var status_bar: Control = null
+var status_buff_row: HBoxContainer = null
+var status_debuff_row: HBoxContainer = null
+const StatusEffectBadgeScene: PackedScene = preload("res://scenes/status_effect_badge.tscn")
 @onready var shop_panel = $ShopPanel
 @onready var revive_hearts = $ReviveHearts
 ## Dükkanın altındaki altın göstergesi (bkz. kullanıcı isteği: "dükkanın
@@ -123,6 +163,8 @@ func _connect_once(sig: Signal, callable: Callable) -> void:
 func _ready() -> void:
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
+	if passive_icon:
+		passive_icon.frame_border = 4.0 ## küçük pasif çerçeve: 3 sanat pikseli kenar (bkz. skill_icon.gd frame_border)
 	## DÜZELTME (kullanıcı isteği: "kategori butonları veya aşırı dar olan
 	## butonlar için mini button dosyasını kullan") - kalkan modu slotları
 	## (52x52, kare ikon butonları) custom_minimum_size YERİNE offset ile
@@ -154,6 +196,9 @@ func _ready() -> void:
 		if player.has_signal("item_shield_changed"):
 			player.item_shield_changed.connect(_on_item_shield_changed)
 	_create_skill3_icon()
+	_create_spirit_icon()
+	_create_ability_bar_frame()
+	_create_status_bar()
 	_setup_ability_icons()
 	_setup_portrait()
 	_setup_revive_display()
@@ -267,7 +312,7 @@ func _layout_shop_inventory_buttons() -> void:
 	envanter_toggle_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	envanter_toggle_button.offset_right = right_edge
 	envanter_toggle_button.offset_left = right_edge - btn_w
-	envanter_toggle_button.add_theme_font_size_override("font_size", 45)
+	envanter_toggle_button.add_theme_font_size_override("font_size", 32)
 	envanter_toggle_button.clip_text = true
 	envanter_toggle_button.offset_top = top_y
 	envanter_toggle_button.offset_bottom = top_y + btn_h
@@ -309,7 +354,7 @@ func _layout_shop_inventory_buttons() -> void:
 const PAL_WINDOW_BG := Color(0.47, 0.39, 0.23, 1.0)
 const PAL_WINDOW_BORDER := Color(0.25, 0.15, 0.08, 1.0)
 const PAL_ACCENT := Color(0.83, 0.56, 0.30, 1.0)
-var _gold_indicator_normal_style: StyleBoxFlat
+var _gold_indicator_normal_style: StyleBox
 var _gold_indicator_hover_style: StyleBoxFlat
 
 func _make_toggle_style(bg: Color, border: Color) -> StyleBoxFlat:
@@ -338,7 +383,8 @@ func _style_envanter_and_gold_buttons() -> void:
 	## Altın göstergesi artık SADECE bir gösterge (kullanıcı isteği: "sadece
 	## göstergeye çevir") - tıklanabilirlik/hover davranışı kaldırıldı, kendi
 	## sabit rengi (PAL_WINDOW_BG, bkz. hud.tscn) korunuyor.
-	_gold_indicator_normal_style = _make_toggle_style(PAL_WINDOW_BG, PAL_WINDOW_BORDER)
+	## Kullanıcı isteği (2026-09-21): tüm arayüz UIKit kitiyle uyumlu - altın göstergesi başlık tahtası (plaque) stilinde.
+	_gold_indicator_normal_style = UIKit.panel_style("plaque")
 	gold_indicator.add_theme_stylebox_override("panel", _gold_indicator_normal_style)
 	_set_mouse_ignore_recursive(gold_indicator)
 
@@ -363,9 +409,11 @@ func _create_skill3_icon() -> void:
 		return
 	var icon := TextureRect.new()
 	icon.name = "Skill3Icon"
-	icon.offset_left = 112.0
+	## DÜZELTME (kullanıcı isteği: "skiller arasındaki mesafeyi arttır") - Q (0-52) ve E'nin (bkz. hud.tscn
+	## Skill2Icon, AYNI ABILITY_ICON_GAP'e göre elle hesaplanmış) hemen sağında, 2 tam yuva + 2 boşluk ötede.
+	icon.offset_left = 2.0 * (SPIRIT_ICON_BASE_SIZE + ABILITY_ICON_GAP)
 	icon.offset_top = 0.0
-	icon.offset_right = 164.0
+	icon.offset_right = icon.offset_left + SPIRIT_ICON_BASE_SIZE
 	icon.offset_bottom = 52.0
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.set_script(preload("res://scripts/skill_icon.gd"))
@@ -381,8 +429,8 @@ func _create_skill3_icon() -> void:
 	var bg := TextureRect.new()
 	bg.name = "BG"
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.texture = preload("res://assets/character_ui/skill_bari.png")
-	bg.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	bg.texture = preload("res://assets/ui/kit/hud_skill_frame.png")
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.add_child(bg)
 
 	var cooldown := Label.new()
@@ -433,6 +481,72 @@ func _create_skill3_icon() -> void:
 	skill3_icon = icon
 
 
+## Ruhani Yetenek ikonu (F) - _create_skill3_icon ile AYNI düğüm yapısı (BG/Cooldown/KeyLabel/StackBadge, önce çocuklar sonra ikon
+## ağaca girer - aynı @onready nedeni), ama: %20 büyük, mor-altın çerçeve tonu, tuş etiketi "F". Konumu her karede
+## _place_spirit_icon() ile son GÖRÜNÜR yetenek butonunun sağına oturtulur (Q/E/R'nin hepsi olmayan karakterlerde boşluk kalmasın).
+func _create_spirit_icon() -> void:
+	if not is_inside_tree():
+		return
+	var bar: Control = get_node_or_null("SkillBar")
+	if not bar or bar.has_node("SpiritIcon"):
+		return
+	var icon := TextureRect.new()
+	icon.name = "SpiritIcon"
+	var size_px: float = SPIRIT_ICON_BASE_SIZE * SPIRIT_ICON_SCALE
+	icon.offset_left = 168.0
+	icon.offset_right = 168.0 + size_px
+	icon.offset_top = (SPIRIT_ICON_BASE_SIZE - size_px) * 0.5
+	icon.offset_bottom = icon.offset_top + size_px
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.set_script(preload("res://scripts/skill_icon.gd"))
+
+	var bg := TextureRect.new()
+	bg.name = "BG"
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.texture = preload("res://assets/ui/kit/hud_skill_frame_spirit.png")
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.modulate = SPIRIT_FRAME_TINT ## farklı çerçeve rengi (kullanıcı isteği)
+	icon.add_child(bg)
+
+	var cooldown := Label.new()
+	cooldown.name = "Cooldown"
+	cooldown.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cooldown.add_theme_font_size_override("font_size", 50)
+	cooldown.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cooldown.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon.add_child(cooldown)
+
+	var key_label := Label.new()
+	key_label.name = "KeyLabel"
+	key_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	key_label.offset_left = -16.0
+	key_label.offset_top = -18.0
+	key_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	key_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	key_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7, 1))
+	key_label.add_theme_font_size_override("font_size", 25)
+	key_label.text = GameManager.get_action_key_label("skill4")
+	icon.add_child(key_label)
+
+	bar.add_child(icon)
+	spirit_icon = icon
+	icon.frame_border = 8.0 ## 6 sanat pikseli (=12 px) kalınlığındaki mor-altın çerçeve (SkillBar x1.5 => 8 birim)
+
+
+## Ruhani ikonu son görünür yetenek butonunun (R, yoksa E, yoksa Q) sağına, aynı 4px boşlukla yerleştirir.
+func _place_spirit_icon() -> void:
+	if spirit_icon == null:
+		return
+	var left: float = SPIRIT_ICON_BASE_SIZE + SPIRIT_ICON_GAP ## Q'nun sağı
+	if skill2_icon.visible:
+		left = 2.0 * (SPIRIT_ICON_BASE_SIZE + SPIRIT_ICON_GAP)
+	if skill3_icon and skill3_icon.visible:
+		left = 3.0 * (SPIRIT_ICON_BASE_SIZE + SPIRIT_ICON_GAP)
+	var width: float = SPIRIT_ICON_BASE_SIZE * SPIRIT_ICON_SCALE
+	spirit_icon.offset_left = left
+	spirit_icon.offset_right = left + width
+
+
 ## characters.gd "skill2" alanı olan karakterlerde (ör. Oakley) ikinci bir
 ## yetenek ikonu da gösterilir - alanı olmayan karakterlerde Skill2Icon
 ## gizli kalır.
@@ -463,6 +577,18 @@ func _setup_ability_icons() -> void:
 				if tex3:
 					skill3_icon.custom_texture = tex3
 
+	## Ruhani Yetenek: her karakterde görünür (seçilen yeteneğin ikonu). Pasif olan (Para) için de ikon gösterilir, sadece
+	## bekleme/aktiflik çizilmez.
+	if spirit_icon:
+		var spirit_def: Dictionary = SpiritualSkillsScript.get_def(GameManager.selected_spiritual)
+		spirit_icon.visible = SpiritualSkillsScript.is_valid(GameManager.selected_spiritual)
+		spirit_icon.skill_id = -2
+		if spirit_def.has("icon"):
+			var spirit_tex: Texture2D = load(str(spirit_def["icon"]))
+			if spirit_tex:
+				spirit_icon.custom_texture = spirit_tex
+		_place_spirit_icon()
+
 	var has_passive: bool = def.has("passive") and not str(def["passive"]).is_empty()
 	passive_icon.visible = has_passive
 	if has_passive:
@@ -480,6 +606,154 @@ func _setup_ability_icons() -> void:
 			var p_tex: Texture2D = load(def["passive_icon"])
 			if p_tex:
 				passive_icon.custom_texture = p_tex
+	_update_ability_bar_frame()
+
+
+## Kullanıcı isteği (2026-09-22): "skill kutucuklarının olduğu yere arkasını kaplayacak bir çerçeve" - SkillBar'a
+## _create_skill3_icon/_create_spirit_icon ile AYNI "programatik Control + add_child" desenle, ama İLK çocuk
+## olarak (move_child ile) eklenir ki diğer ikonların ARKASINDA kalsın.
+func _create_ability_bar_frame() -> void:
+	if not is_inside_tree():
+		return
+	var bar: Control = get_node_or_null("SkillBar")
+	if not bar or bar.has_node("AbilityBarFrame"):
+		return
+	var frame := Panel.new()
+	frame.name = "AbilityBarFrame"
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_theme_stylebox_override("panel", UIKit.panel_style("ability_bar"))
+	bar.add_child(frame)
+	bar.move_child(frame, 0)
+	ability_bar_frame = frame
+
+
+## O anki karakterde GÖRÜNÜR olan yetenek ikonlarının (P/Q/E/R/F, hangileri varsa) yerel dikdörtgenlerinin
+## birleşimini alıp çerçeveyi ona (+pay) oturtur - _setup_ability_icons() görünürlükleri/_place_spirit_icon()
+## konumu belirledikten SONRA (o fonksiyonun sonunda) çağrılır, karakter değişmediği sürece bir daha gerekmez.
+func _update_ability_bar_frame() -> void:
+	if not is_instance_valid(ability_bar_frame):
+		return
+	var bar: Control = ability_bar_frame.get_parent()
+	if not bar:
+		return
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for child in bar.get_children():
+		if child == ability_bar_frame or not (child is Control):
+			continue
+		var c: Control = child
+		if not c.visible:
+			continue
+		lo.x = minf(lo.x, c.offset_left)
+		lo.y = minf(lo.y, c.offset_top)
+		hi.x = maxf(hi.x, c.offset_right)
+		hi.y = maxf(hi.y, c.offset_bottom)
+	if lo.x == INF:
+		ability_bar_frame.visible = false
+		return
+	ability_bar_frame.visible = true
+	ability_bar_frame.offset_left = lo.x - ABILITY_BAR_FRAME_PAD
+	ability_bar_frame.offset_top = lo.y - ABILITY_BAR_FRAME_PAD
+	ability_bar_frame.offset_right = hi.x + ABILITY_BAR_FRAME_PAD
+	ability_bar_frame.offset_bottom = hi.y + ABILITY_BAR_FRAME_PAD
+	_update_status_bar_layout()
+
+
+## Kullanıcı isteği (2026-09-22): "bufflar solda debufflar sağda görünmeli" - iki HBoxContainer, biri sola
+## yaslı (soldan sağa büyür), biri sağa yaslı (sağdan sola büyür); ability_bar_frame'in TAM ÜSTÜNE, onunla AYNI
+## genişlikte oturur (bkz. _update_status_bar_layout).
+func _create_status_bar() -> void:
+	if not is_inside_tree():
+		return
+	var bar: Control = get_node_or_null("SkillBar")
+	if not bar or bar.has_node("StatusBar"):
+		return
+	var root := Control.new()
+	root.name = "StatusBar"
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(root)
+	status_bar = root
+
+	var buffs := HBoxContainer.new()
+	buffs.name = "BuffRow"
+	buffs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	buffs.add_theme_constant_override("separation", 4)
+	buffs.alignment = BoxContainer.ALIGNMENT_BEGIN
+	root.add_child(buffs)
+	status_buff_row = buffs
+
+	var debuffs := HBoxContainer.new()
+	debuffs.name = "DebuffRow"
+	debuffs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	debuffs.add_theme_constant_override("separation", 4)
+	debuffs.alignment = BoxContainer.ALIGNMENT_END
+	root.add_child(debuffs)
+	status_debuff_row = debuffs
+
+
+## StatusBar'ı (ve içindeki iki yarı) ability_bar_frame'in hemen üstüne, onunla AYNI genişlikte yerleştirir.
+## Yükseklik status_effect_badge.tscn'in kendi boyuyla (HEIGHT, altındaki süre şeridi dahil) eşleşiyor.
+const STATUS_ROW_HEIGHT := 42.0
+
+
+func _update_status_bar_layout() -> void:
+	if not is_instance_valid(status_bar) or not is_instance_valid(ability_bar_frame):
+		return
+	var w: float = ability_bar_frame.offset_right - ability_bar_frame.offset_left
+	status_bar.offset_left = ability_bar_frame.offset_left
+	status_bar.offset_right = ability_bar_frame.offset_right
+	status_bar.offset_bottom = ability_bar_frame.offset_top - 6.0
+	status_bar.offset_top = status_bar.offset_bottom - STATUS_ROW_HEIGHT
+	if status_buff_row:
+		status_buff_row.offset_left = 0.0
+		status_buff_row.offset_right = w * 0.5
+		status_buff_row.offset_top = 0.0
+		status_buff_row.offset_bottom = STATUS_ROW_HEIGHT
+	if status_debuff_row:
+		status_debuff_row.offset_left = w * 0.5
+		status_debuff_row.offset_right = w
+		status_debuff_row.offset_top = 0.0
+		status_debuff_row.offset_bottom = STATUS_ROW_HEIGHT
+
+
+## Her karede player.gd get_status_effects()'i okuyup iki satırı (buff/debuff) senkron tutar - bkz. player.gd
+## üstündeki AYNI notta yeni bir efekt eklemenin nasıl BURAYA hiç dokunmadan çalıştığı.
+func _update_status_bar() -> void:
+	if not is_instance_valid(status_buff_row) or not is_instance_valid(status_debuff_row):
+		return
+	if not player or not is_instance_valid(player) or not player.has_method("get_status_effects"):
+		_sync_status_row(status_buff_row, [])
+		_sync_status_row(status_debuff_row, [])
+		return
+	var effects: Array = player.get_status_effects()
+	var buffs: Array = []
+	var debuffs: Array = []
+	for e in effects:
+		if bool(e.get("is_buff", true)):
+			buffs.append(e)
+		else:
+			debuffs.append(e)
+	_sync_status_row(status_buff_row, buffs)
+	_sync_status_row(status_debuff_row, debuffs)
+
+
+func _sync_status_row(row: HBoxContainer, effects: Array) -> void:
+	var seen: Dictionary = {}
+	for e in effects:
+		var id: String = str(e.get("id", ""))
+		if id.is_empty():
+			continue
+		seen[id] = true
+		var badge: Control = row.get_node_or_null(id)
+		if not is_instance_valid(badge):
+			badge = StatusEffectBadgeScene.instantiate()
+			badge.name = id
+			row.add_child(badge)
+		if badge.has_method("apply"):
+			badge.call("apply", e)
+	for child in row.get_children():
+		if not seen.has(child.name):
+			child.queue_free()
 
 
 ## Karakter panosunun ortasındaki madalyona seçili karakterin portresini
@@ -674,6 +948,8 @@ func update_xp(current: float, needed: float) -> void:
 
 func update_level(level: int) -> void:
 	level_label.text = str(level)
+	## 3 haneli seviyelerde rozetin içine sığması için yazıyı bir kademe küçült (m5x7: 16 = 1x, 32 = 2x).
+	level_label.add_theme_font_size_override("font_size", 32 if level < 100 else 16)
 
 
 ## main.gd hâlâ bu fonksiyonu çağırıyor - HUD'da artık ayrı bir "hızlı
@@ -884,6 +1160,7 @@ func _process(delta: float) -> void:
 	## üstteki DÜKKAN/ENVANTER buton yığınının hemen altında, dükkan
 	## açık/kapalı farketmeksizin) - sadece metni her karede güncelleniyor.
 	gold_indicator_label.text = str(GameManager.gold)
+	_update_status_bar()
 	if _mode_switch_cooldown_remaining > 0.0:
 		_mode_switch_cooldown_remaining = max(0.0, _mode_switch_cooldown_remaining - delta)
 		_refresh_shield_mode_slots()
@@ -976,3 +1253,7 @@ func _process(delta: float) -> void:
 				skill3_icon.name_override = ""
 				skill3_icon.desc_override = ""
 				skill3_icon.update_state(player.get_skill3_progress(), player.is_skill3_active(), player.skill3_timer, player.get_skill3_active_fraction())
+		## Ruhani Yetenek ikonu (F) - kendi durum makinesi (bkz. player.gd get_spirit_*).
+		if spirit_icon and player.has_method("get_spirit_progress"):
+			_place_spirit_icon()
+			spirit_icon.update_state(player.get_spirit_progress(), player.is_spirit_active(), player.get_spirit_cooldown_remaining(), player.get_spirit_active_fraction())

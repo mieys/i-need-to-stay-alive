@@ -547,13 +547,13 @@ func _process(_delta: float) -> void:
 	## sonra bu blok her karede sadece iki null kontrolü yapar.
 	if indoors and (_wind_layer == null or _ambient_player == null):
 		_set_outdoor_atmosphere_enabled(false)
-	## "interact" (F) - bkz. game_manager.gd _setup_input_actions. Chat kutusu
+	## "interact" (varsayılan BOŞLUK) - bkz. game_manager.gd _setup_input_actions. Chat kutusu
 	## açıkken (bkz. player.gd is_chat_typing) mesaj içindeki "f" harfi
 	## yanlışlıkla eve girip çıkmayı tetiklemesin.
 	var f_just_pressed: bool = Input.is_action_just_pressed("interact") and not bool(_player.get("is_chat_typing"))
 
 	if not indoors and _near_entrance:
-		_prompt_label.text = "Eve girmek için F'ye bas"
+		_prompt_label.text = "Eve girmek için %s tuşuna bas" % GameManager.get_action_key_label("interact")
 		_prompt_label.visible = true
 		if f_just_pressed:
 			_enter_house()

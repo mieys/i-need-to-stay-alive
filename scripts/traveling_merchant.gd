@@ -66,18 +66,15 @@ const BUSH_LAYER_PATHS := [
 const SPAWN_CLEARANCE_RADIUS := 90.0
 const SPAWN_CANDIDATE_ATTEMPTS := 30
 
-## Kullanıcı isteği (İKİNCİ tur): "Seyyar satıcı dükkandan rasgele 6 item
+## Kullanıcı isteği (İKİNCİ tur): "Seyyar satıcı dükkandan rasgele 8 item
 ## gösterecek. Ekstralar, silahlar, kalkanlar dahil." - satıcı BELİRİRKEN
 ## (bkz. _generate_stock) bu üç havuzdan (bkz. items.gd Items.KEYS + bu iki
 ## "deliberate copy" liste - shop_panel.gd/chest_menu.gd/merchant_shop_
-## screen.gd ile AYNI desen) 6 benzersiz giriş rastgele seçilir.
-const STOCK_SIZE := 6
+## screen.gd ile AYNI desen) 8 benzersiz giriş rastgele seçilir.
+## Kullanıcı isteği (2026-09-21): "Seyyar satıcıda sadece 6 item sunuluyor bunu 8'e çıkarmanı istiyorum".
+const STOCK_SIZE := 8
 const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic"]
 const SHIELD_TYPE_KEYS := ["shield_standart", "shield_enerji", "shield_kale", "shield_savas"]
-## Kullanıcı isteği: "oyun başında seçtiğimiz silahın ... çıkma olasılığı
-## daha fazla olmalı" - _generate_stock()'taki ağırlıklı havuzda oyuncunun
-## başlangıç silahının kaç kat daha sık göründüğü (bkz. o fonksiyon).
-const WEAPON_START_WEIGHT := 4
 ## Kullanıcı isteği: "seyyar satıcı herkese aynı eşyayı satıyor, herkese
 ## farklı şeyler çıkmalıydı" - _generate_stock() artık HOST'ta bir kere
 ## üretilip ağdan dağıtılmıyor, HER istemci kendi stokunu KENDİ yerel
@@ -217,7 +214,7 @@ func _broadcast_departed() -> void:
 ## herkese farklı şeyler çıkmalıydı") - ağdan gelen "stock" parametresi artık
 ## KULLANILMIYOR (SADECE RPC/sinyal imzasını değiştirmemek için hâlâ duruyor,
 ## bkz. dosya başı notu) - her istemci kendi stokunu burada YEREL olarak
-## üretir, böylece host dahil her oyuncu birbirinden bağımsız/farklı 6 eşya
+## üretir, böylece host dahil her oyuncu birbirinden bağımsız/farklı 8 eşya
 ## görür.
 func _on_merchant_spawned(_pos: Vector2, _stock: Array) -> void:
 	_active = true
@@ -286,46 +283,38 @@ func _owned_shield_type() -> String:
 	return ""
 
 
-## bkz. dosya başı "STOCK_SIZE/WEAPON_START_WEIGHT" notu.
+## bkz. dosya başı "STOCK_SIZE" notu.
 ## DÜZELTME (kullanıcı bildirimi: "Seyyar satıcıda kalkan da çıkmalı") -
 ## kalkanlar havuzda sadece 4/32 giriş olduğu için saf rastgele seçimde
-## ziyaretlerin ~%42'sinde HİÇ çıkmıyorlardı - artık 6 slottan 1 tanesi HER
+## ziyaretlerin ~%42'sinde HİÇ çıkmıyorlardı - artık slotlardan 1 tanesi HER
 ## ZAMAN bir kalkan. DÜZELTME (kullanıcı bildirimi: "oyun başında
 ## seçtiğimiz ... kalkanının çıkma olasılığı daha fazla olmalı") - bu
 ## garantili slot oyuncunun ZATEN SAHİP OLDUĞU türü kullanır (henüz hiç
 ## kalkanı yoksa rastgele bir türle başlar) - FARKLI bir tür göstermek
 ## zaten anlamsız olurdu (yukarıdaki _owned_shield_type() notuna bkz.,
 ## satın alınamaz).
-## Kalan 5 slot Items.KEYS + WEAPON_KEYS + (kalan) SHIELD_TYPE_KEYS'ten
-## ağırlıklı bir havuzla çekilir: oyuncunun başlangıç silahı (kullanıcı
-## isteği: "oyun başında seçtiğimiz silahın ... çıkma olasılığı daha fazla
-## olmalı") WEAPON_START_WEIGHT kat daha sık havuza eklenir - bu SADECE bir
-## ağırlık (garanti DEĞİL, silahlar birbirini dışlamaz, çeşitlilik önemli),
-## kalkanlarınkinin AKSİNE.
+## Kalan slotlar Items.KEYS + WEAPON_KEYS + (kalan) SHIELD_TYPE_KEYS'ten
+## EŞİT olasılıkla çekilir. Kullanıcı isteği (2026-09-21): eskiden oyuncunun
+## başlangıç silahı burada 4 kat daha sık çıkıyordu ("daha önce aldığın itemlerin
+## çıkma olasılığı yükseltilsin"), kullanıcı bunu KALKAN DIŞINDAKİ eşyalar için
+## geri aldırdı: "her item aynı olasılıkla çıkacak". Kalkan garantisi aynen duruyor.
 func _generate_stock() -> Array:
 	var stock: Array = []
 	var owned_shield: String = _owned_shield_type()
 	var guaranteed_shield_key: String = owned_shield if owned_shield != "" else SHIELD_TYPE_KEYS[randi() % SHIELD_TYPE_KEYS.size()]
 	stock.append({"type": "shield", "key": guaranteed_shield_key})
 
-	var starting_weapon_key: String = ""
-	if not GameManager.owned_weapons.is_empty():
-		starting_weapon_key = str((GameManager.owned_weapons[0] as Dictionary).get("key", ""))
-
 	var pool: Array = []
 	for k in Items.KEYS:
 		pool.append({"type": "item", "key": k})
 	for k in WEAPON_KEYS:
-		var weight: int = WEAPON_START_WEIGHT if k == starting_weapon_key else 1
-		for _i in range(weight):
-			pool.append({"type": "weapon", "key": k})
+		pool.append({"type": "weapon", "key": k})
 	for k in SHIELD_TYPE_KEYS:
 		if k != guaranteed_shield_key:
 			pool.append({"type": "shield", "key": k})
 	pool.shuffle()
 
-	## Ağırlık için havuza kopyalanmış girişler (ör. başlangıç silahı) aynı
-	## eşyayı stokta İKİ KEZ göstermesin diye (type, key) bazında tekilleştir.
+	## Aynı eşyayı stokta İKİ KEZ göstermemek için (type, key) bazında tekilleştir.
 	var used: Dictionary = {"shield:" + guaranteed_shield_key: true}
 	for raw_entry in pool:
 		if stock.size() >= STOCK_SIZE:
@@ -534,7 +523,7 @@ func _create_interaction(pos: Vector2) -> void:
 	_prompt_layer.name = "MerchantPromptLayer"
 	_prompt_layer.layer = 50
 	_prompt_label = Label.new()
-	_prompt_label.text = "Seyyar Satıcı ile konuşmak için F'ye bas"
+	_prompt_label.text = "Seyyar Satıcı ile konuşmak için %s tuşuna bas" % GameManager.get_action_key_label("interact")
 	_prompt_label.add_theme_font_size_override("font_size", 24)
 	_prompt_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

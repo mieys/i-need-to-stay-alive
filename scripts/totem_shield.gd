@@ -29,6 +29,7 @@ var _wave_timer: float = 0.0
 
 
 func _init() -> void:
+	totem_kind = "shield"
 	totem_color = Color(0.35, 0.65, 1.0)
 	totem_radius = 220.0
 
@@ -83,6 +84,8 @@ func _spawn_shield_waves() -> void:
 	## Totemin kendisinde kısa bir "yayılma" halkası - her tick'te kalkan
 	## verildiğini TÜM modlarda (tek oyunculu dahil) her açıdan görünür kılar.
 	TotemShieldWave.spawn_pulse(get_tree().current_scene, global_position, totem_color)
+	## Her tik'te çok kısık, ince bir "kalkan cıngırtısı" (30sn boyunca saniyede bir - rahatsız etmesin diye çok yumuşak).
+	ShamanSfx.play_at(get_tree().current_scene, ShamanSfx.SHIELD_PULSE, global_position, -19.0, 0.04)
 
 
 func _tick() -> void:

@@ -47,8 +47,13 @@ offset_top = -40.0
 offset_right = 520.0
 offset_bottom = 40.0
 theme_override_colors/font_color = Color(0.99, 0.95, 0.82, 1)
+theme_override_colors/font_outline_color = Color(0.13, 0.07, 0.03, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.45)
+theme_override_constants/outline_size = 18
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 10
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 122
+theme_override_font_sizes/font_size = 128
 text = "I NEED TO STAY ALIVE"
 horizontal_alignment = 1
 autowrap_mode = 3
@@ -60,40 +65,40 @@ anchor_left = 0.5
 anchor_top = 0.55
 anchor_right = 0.5
 anchor_bottom = 0.55
-offset_left = -160.0
+offset_left = -210.0
 offset_top = -60.0
-offset_right = 160.0
+offset_right = 210.0
 offset_bottom = 80.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 16
 
 [node name="StartButton" type="Button" parent="VBoxContainer" unique_id=726510352]
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 68)
 layout_mode = 2
 offset_transform_enabled = true
-theme_override_font_sizes/font_size = 58
+theme_override_font_sizes/font_size = 64
 text = "TEK OYUNCULU"
 clip_text = true
 
 [node name="MultiplayerButton" type="Button" parent="VBoxContainer" unique_id=1659447905]
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 68)
 layout_mode = 2
-theme_override_font_sizes/font_size = 58
+theme_override_font_sizes/font_size = 64
 text = "ÇOK OYUNCULU"
 clip_text = true
 
 [node name="SettingsButton" type="Button" parent="VBoxContainer" unique_id=1976820222]
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 68)
 layout_mode = 2
-theme_override_font_sizes/font_size = 58
+theme_override_font_sizes/font_size = 64
 text = "AYARLAR"
 clip_text = true
 
 [node name="ExitButton" type="Button" parent="VBoxContainer" unique_id=2113566407]
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 68)
 layout_mode = 2
-theme_override_font_sizes/font_size = 58
+theme_override_font_sizes/font_size = 64
 text = "ÇIKIŞ"
 clip_text = true
 

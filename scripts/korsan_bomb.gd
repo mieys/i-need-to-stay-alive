@@ -81,9 +81,10 @@ func _draw() -> void:
 	elif _life < DROP_TIME + BOUNCE_TIME:
 		var b: float = (_life - DROP_TIME) / BOUNCE_TIME
 		lift = -sin(b * PI) * 5.0
-	## Gölge (dither): bomba yükseldikçe küçülür
-	var shadow_r: float = 9.0 * (1.0 - clampf(-lift / 60.0, 0.0, 0.4))
-	PixelDraw.disc_dither(self, Vector2(0, 8.0), shadow_r, Color(0.02, 0.02, 0.04, 0.55), 0, 1)
+	## Gölge: standart mini ayak gölgesi (kullanıcı isteği 2026-09-22: eski dama/dither desenli "kare kare" gölge
+	## yerine PixelDraw.ground_shadow - karakterlerle AYNI çizim), bomba yükseldikçe küçülür.
+	var shrink: float = 1.0 - clampf(-lift / 60.0, 0.0, 0.4)
+	PixelDraw.ground_shadow(self, Vector2(0, 8.0), Vector2(7.0, 2.6) * shrink)
 	var center := Vector2(0, lift - 1.0)
 	PixelDraw.art(self, center, BODY_ART, BODY_PAL, 1.0)
 	## Kuru kafa gözleri: kurulu bomba - saniyede bir kısa kırmızı yanıp söner

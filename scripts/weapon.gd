@@ -744,6 +744,7 @@ var _last_range_bonus: float = 0.0
 ## Called by Player whenever the "menzil" upgrade changes, and once when a
 ## newly-bought weapon is attached, so every weapon shares the same range
 ## bonus. attack_range = 0 keeps meaning "unlimited" regardless of bonus.
+## bonus = KESİR (0.12 = taban menzilin +%12'si); yakıncı silahlarda MELEE_RANGE_BONUS_FACTOR kadar payı uygulanır.
 func set_range_bonus(bonus: float) -> void:
 	_last_range_bonus = bonus
 	_recompute_attack_range()
@@ -759,7 +760,8 @@ func _recompute_attack_range() -> void:
 		return
 	## Yakıncı silahlar menzil bonusundan kısılmış pay alır.
 	var effective_bonus: float = _last_range_bonus * (MELEE_RANGE_BONUS_FACTOR if melee else 1.0)
-	attack_range = (_base_attack_range + effective_bonus) * _temp_range_mult
+	## weapon_range_bonus artık KESİR (0.12 = +%12, bkz. player.gd) - taban menzil üstüne çarpan olarak biner.
+	attack_range = _base_attack_range * (1.0 + effective_bonus) * _temp_range_mult
 
 
 ## The following four are the same idea as set_range_bonus, but for the
@@ -1677,13 +1679,49 @@ func _get_nearest_enemy() -> Node2D:
 ## normal şekilde hasar verir.
 var _facing_direction_target: Node2D = null
 
+## Yakın dövüş silahları "hayalet" hedefe savurunca hiçbir yaratığa vurmaz (hayalet take_damage'sizdir) - sadece
+## hayaletin etrafındaki melee alan payı uygulanırdı. Talon Silah Salvosu'nda bu, "silah ne kadar vuruyorsa o kadar
+## vursun" kuralını bozuyordu; bu yüzden ışının üstünde (menzil içinde) gerçek bir yaratık varsa o hedef seçilir.
+## Yaratığın gövde yarıçapına eklenen ışın payı (px):
+const FACING_MELEE_RAY_MARGIN := 24.0
+
+func _find_enemy_on_facing_ray(origin: Vector2, dir: Vector2, reach: float) -> Node2D:
+	var ray_end: Vector2 = origin + dir * reach
+	var best: Node2D = null
+	var best_along: float = INF
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
+			continue
+		if not VisionFogScript.can_target(e):
+			continue
+		var epos: Vector2 = (e as Node2D).global_position
+		var closest: Vector2 = Geometry2D.get_closest_point_to_segment(epos, origin, ray_end)
+		var body_radius: float = float(e._body_radius) if "_body_radius" in e else 20.0
+		if epos.distance_to(closest) > body_radius + FACING_MELEE_RAY_MARGIN:
+			continue
+		var along: float = origin.distance_to(closest)
+		if along < best_along:
+			best_along = along
+			best = e
+	return best
+
+
 func _make_facing_direction_target() -> Node2D:
 	if not _facing_direction_target:
 		_facing_direction_target = Node2D.new()
 	var forward: float = deg_to_rad(sprite_forward_angle_deg)
+	## Aynalanan ikonlarda (tabanca/tüfek, mirror_icon_when_aiming_left) sola bakarken rotasyon değil flip_h kullanılır:
+	## _update_aim'deki "rotation = açı - PI + forward" formülünün tersi burada (namlu ters yöne ateş etmesin).
 	var facing_angle: float = icon_sprite.rotation + forward
+	if mirror_icon_when_aiming_left and icon_sprite.get("flip_h") == true:
+		facing_angle = icon_sprite.rotation + PI - forward
+	var facing_dir: Vector2 = Vector2(cos(facing_angle), sin(facing_angle))
 	var reach: float = attack_range if attack_range > 0.0 else 400.0
-	_facing_direction_target.position = global_position + Vector2(cos(facing_angle), sin(facing_angle)) * reach
+	if melee:
+		var on_ray: Node2D = _find_enemy_on_facing_ray(global_position, facing_dir, reach)
+		if on_ray:
+			return on_ray
+	_facing_direction_target.position = global_position + facing_dir * reach
 	return _facing_direction_target
 
 
@@ -1971,7 +2009,7 @@ func _deal_beam_tick(target: Node2D) -> void:
 	## item_damage_mult_bonus (%hasar artışı) - bkz. items.gd.
 	final_damage += _player_stat("item_flat_hit_damage")
 	final_damage *= 1.0 + _player_stat("item_damage_mult_bonus")
-	shield_pen += _player_stat("shield_pen_percent")
+	shield_pen += _player_stat("shield_pen_percent") + _player_stat("spirit_shield_pen") ## + Ruhani Yetenek "Adc" (%15)
 	target.take_damage(final_damage, is_crit, shield_pen)
 	## Şaman pasifi: bu tik = 1 "saldırı" (bkz. enemy.gd try_shaman_weapon_burn
 	## üstündeki not) - yakma bu tikte EN FAZLA 1 düşmanda (birincil hedef ya
@@ -2181,7 +2219,7 @@ func _fire_at(target: Node2D) -> void:
 	## shield_pen_percent genel kalkan delme.
 	final_damage += _player_stat("item_flat_hit_damage")
 	final_damage *= 1.0 + _player_stat("item_damage_mult_bonus")
-	shield_pen += _player_stat("shield_pen_percent")
+	shield_pen += _player_stat("shield_pen_percent") + _player_stat("spirit_shield_pen") ## + Ruhani Yetenek "Adc" (%15)
 
 	if melee:
 		if target.has_method("take_damage"):
@@ -2209,7 +2247,10 @@ func _fire_at(target: Node2D) -> void:
 		## (158'e kadar) tarayıp mesafe hesaplıyordu; artık Enemy.
 		## get_enemies_near ile (bkz. enemy.gd - ayrışma ızgarasının genel
 		## amaçlı sürümü) SADECE gerçekten menzildeki yaratıklar geliyor.
-		for e in Enemy.get_enemies_near(get_tree(), target.global_position, melee_aoe_radius * aoe_radius_multiplier):
+		## Hayalet hedefe (Talon Salvosu, ışında yaratık yok) savurulmuşsa gerçek bir vuruş yok: etrafına
+		## alan payı da dağıtılmaz (aksi halde boşa atan silah alan hasarı veriyordu).
+		var aoe_victims: Array = Enemy.get_enemies_near(get_tree(), target.global_position, melee_aoe_radius * aoe_radius_multiplier) if target.has_method("take_damage") else []
+		for e in aoe_victims:
 			if e == target:
 				continue
 			if e.has_method("take_damage"):

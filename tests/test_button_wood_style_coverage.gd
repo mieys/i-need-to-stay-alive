@@ -9,8 +9,9 @@ extends Node
 ## main.gd ölüm ekranı) ve global tema güvenlik ağını (theme.tres) kontrol
 ## eder.
 
-const ButtonPngPath := "res://assets/ui/new shop design/Button.png"
-const MiniButtonPngPath := "res://assets/ui/new shop design/mini button.png"
+## Kullanıcı isteği (2026-09-21): butonlar piksel UI kitine (assets/ui/kit, scripts/ui_kit.gd) taşındı - eski Button.png/mini button.png yerine.
+const ButtonPngPath := "res://assets/ui/kit/btn_wood_normal.png"
+const MiniButtonPngPath := "res://assets/ui/kit/btn_mini_wood_normal.png"
 
 
 func _style_texture_path(btn: Button, style_name: String) -> String:

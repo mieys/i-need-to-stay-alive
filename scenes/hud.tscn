@@ -2,7 +2,10 @@
 
 [ext_resource type="Script" uid="uid://bncclvy5bcpre" path="res://scripts/hud.gd" id="1_hud"]
 [ext_resource type="Script" uid="uid://cyee276hu5q6r" path="res://scripts/skill_icon.gd" id="3"]
-[ext_resource type="Texture2D" uid="uid://cab1vmjy7asun" path="res://assets/character_ui/skill_bari.png" id="3_5pdws"]
+[ext_resource type="Texture2D" path="res://assets/ui/kit/hud_skill_frame.png" id="3_5pdws"]
+[ext_resource type="Texture2D" path="res://assets/ui/kit/hud_skill_frame_small.png" id="tex_skill_small"]
+[ext_resource type="Texture2D" path="res://assets/ui/kit/hud_bar_under.png" id="tex_bar_under"]
+[ext_resource type="Texture2D" path="res://assets/ui/kit/hud_level_badge.png" id="tex_level_badge"]
 [ext_resource type="PackedScene" uid="uid://cnq07idbmed2x" path="res://scenes/stats_panel.tscn" id="7"]
 [ext_resource type="Script" uid="uid://bvxo7un4sgehs" path="res://scripts/shop_panel.gd" id="11_3swnk"]
 [ext_resource type="PackedScene" uid="uid://c0m4k7sxkrio5" path="res://scenes/shop_panel.tscn" id="16"]
@@ -10,11 +13,11 @@
 [ext_resource type="Script" uid="uid://brqwtg2kay76k" path="res://scripts/bottom_exp_bar.gd" id="bottom_exp_bar_script"]
 [ext_resource type="Script" uid="uid://keugaujfmu0h" path="res://scripts/minimap.gd" id="minimap_script"]
 [ext_resource type="Script" uid="uid://btlr6id8elxjb" path="res://scripts/revive_hearts_hud.gd" id="revive_hearts_script"]
-[ext_resource type="Texture2D" uid="uid://dqmopkcqha3m0" path="res://assets/character_ui/can_bari.png" id="tex_can_new"]
+[ext_resource type="Texture2D" path="res://assets/ui/kit/hud_bar_frame_hp.png" id="tex_can_new"]
 [ext_resource type="Texture2D" uid="uid://br5vtbmsq6tyy" path="res://assets/ui/newui/icon_ingot.png" id="tex_gold_ingot"]
-[ext_resource type="Texture2D" uid="uid://c2osyuwinqfhd" path="res://assets/character_ui/kalkan_bari.png" id="tex_kalkan_new"]
-[ext_resource type="Texture2D" uid="uid://dwgni6qdg16m4" path="res://assets/character_ui/progress_fill.png" id="tex_mp"]
-[ext_resource type="Texture2D" uid="uid://ctf7guysx6wrw" path="res://assets/character_ui/karakter_avatari.png" id="tex_port"]
+[ext_resource type="Texture2D" path="res://assets/ui/kit/hud_bar_frame_shield.png" id="tex_kalkan_new"]
+[ext_resource type="Texture2D" path="res://assets/ui/kit/hud_bar_fill.png" id="tex_mp"]
+[ext_resource type="Texture2D" path="res://assets/ui/kit/hud_avatar_frame.png" id="tex_port"]
 
 [sub_resource type="StyleBoxFlat" id="SBF_gold_indicator"]
 bg_color = Color(0.47, 0.39, 0.23, 1)
@@ -42,7 +45,7 @@ offset_top = 184.0
 offset_right = -4.0
 offset_bottom = 228.0
 grow_horizontal = 0
-theme_override_font_sizes/font_size = 45
+theme_override_font_sizes/font_size = 32
 text = "DÜKKAN"
 clip_text = true
 
@@ -55,7 +58,7 @@ offset_left = -178.0
 offset_top = 237.0
 offset_right = -10.0
 offset_bottom = 280.0
-theme_override_font_sizes/font_size = 45
+theme_override_font_sizes/font_size = 32
 text = "ENVANTER"
 
 [node name="BottomBar" type="Control" parent="." unique_id=-1293556197]
@@ -80,75 +83,82 @@ layout_mode = 3
 anchors_preset = 0
 offset_left = 20.0
 offset_top = 20.0
-offset_right = 320.0
-offset_bottom = 120.0
-scale = Vector2(1.2, 1.2)
+offset_right = 444.0
+offset_bottom = 134.0
 
 [node name="HealthBar" type="TextureProgressBar" parent="CharacterCluster" unique_id=597508541]
 layout_mode = 0
-offset_left = 120.0
-offset_top = 23.0
-offset_right = 290.0
-offset_bottom = 38.0
+offset_left = 134.0
+offset_top = 18.0
+offset_right = 414.0
+offset_bottom = 42.0
 nine_patch_stretch = true
+texture_under = ExtResource("tex_bar_under")
 texture_progress = ExtResource("tex_mp")
 
-[node name="HealthBarFrame" type="TextureRect" parent="CharacterCluster" unique_id=332902434]
+[node name="HealthBarFrame" type="NinePatchRect" parent="CharacterCluster" unique_id=332902434]
 layout_mode = 0
-offset_left = 96.0
-offset_top = 16.0
-offset_right = 296.0
-offset_bottom = 44.0
+offset_left = 104.0
+offset_top = 12.0
+offset_right = 424.0
+offset_bottom = 48.0
 texture = ExtResource("tex_can_new")
-expand_mode = 1
+patch_margin_left = 30
+patch_margin_right = 10
 
 [node name="HealthValueLabel" type="Label" parent="CharacterCluster" unique_id=520088711]
 layout_mode = 0
-offset_left = 125.0
-offset_top = 21.0
-offset_right = 289.0
-offset_bottom = 37.0
+offset_left = 134.0
+offset_top = 14.0
+offset_right = 414.0
+offset_bottom = 46.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_colors/font_outline_color = Color(0.1, 0.05, 0.03, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 32
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="ShieldBar" type="TextureProgressBar" parent="CharacterCluster" unique_id=1149960901]
 layout_mode = 0
-offset_left = 120.0
-offset_top = 57.0
-offset_right = 290.0
-offset_bottom = 72.0
+offset_left = 134.0
+offset_top = 64.0
+offset_right = 414.0
+offset_bottom = 88.0
 nine_patch_stretch = true
+texture_under = ExtResource("tex_bar_under")
 texture_progress = ExtResource("tex_mp")
 
-[node name="ShieldBarFrame" type="TextureRect" parent="CharacterCluster" unique_id=39150647]
+[node name="ShieldBarFrame" type="NinePatchRect" parent="CharacterCluster" unique_id=39150647]
 layout_mode = 0
-offset_left = 96.0
-offset_top = 50.0
-offset_right = 296.0
-offset_bottom = 78.0
+offset_left = 104.0
+offset_top = 58.0
+offset_right = 424.0
+offset_bottom = 94.0
 texture = ExtResource("tex_kalkan_new")
-expand_mode = 1
+patch_margin_left = 30
+patch_margin_right = 10
 
 [node name="ShieldValueLabel" type="Label" parent="CharacterCluster" unique_id=1054103400]
 layout_mode = 0
-offset_left = 125.0
-offset_top = 55.0
-offset_right = 289.0
-offset_bottom = 71.0
+offset_left = 134.0
+offset_top = 60.0
+offset_right = 414.0
+offset_bottom = 92.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_colors/font_outline_color = Color(0.1, 0.05, 0.03, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 32
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="PortraitClip" type="Control" parent="CharacterCluster" unique_id=2004411002]
 clip_contents = true
 anchors_preset = 0
-offset_left = 10.0
-offset_top = 10.0
-offset_right = 80.0
-offset_bottom = 80.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 84.0
+offset_bottom = 84.0
 mouse_filter = 2
 
 [node name="Portrait" type="TextureRect" parent="CharacterCluster/PortraitClip" unique_id=2004411003]
@@ -165,22 +175,35 @@ stretch_mode = 6
 [node name="PortraitFrame" type="TextureRect" parent="CharacterCluster" unique_id=2004411004]
 z_index = 2
 layout_mode = 0
-offset_left = 2.0
-offset_top = 2.0
-offset_right = 88.0
-offset_bottom = 88.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 96.0
+offset_bottom = 96.0
 texture = ExtResource("tex_port")
+expand_mode = 1
+
+[node name="LevelBadge" type="TextureRect" parent="CharacterCluster" unique_id=2004411099]
+z_index = 3
+layout_mode = 0
+offset_left = 22.0
+offset_top = 70.0
+offset_right = 74.0
+offset_bottom = 122.0
+mouse_filter = 2
+texture = ExtResource("tex_level_badge")
 expand_mode = 1
 
 [node name="LevelLabel" type="Label" parent="CharacterCluster" unique_id=2047139106]
 layout_mode = 0
-offset_left = 10.0
-offset_top = 88.0
-offset_right = 80.0
-offset_bottom = 114.0
+z_index = 4
+offset_left = 22.0
+offset_top = 70.0
+offset_right = 74.0
+offset_bottom = 122.0
 theme_override_colors/font_color = Color(1, 0.9, 0.3, 1)
-theme_override_font_sizes/font_size = 29
+theme_override_font_sizes/font_size = 32
 horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="SkillBar" type="Control" parent="." unique_id=-1293556196]
 process_mode = 1
@@ -196,7 +219,7 @@ offset_right = 54.0
 offset_bottom = -95.0
 grow_horizontal = 2
 grow_vertical = 0
-scale = Vector2(1.5, 1.5)
+scale = Vector2(1.275, 1.275)
 pivot_offset = Vector2(54, 30)
 
 [node name="SkillIcon" type="TextureRect" parent="SkillBar" unique_id=-467923746]
@@ -272,7 +295,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-texture = ExtResource("3_5pdws")
+texture = ExtResource("tex_skill_small")
 expand_mode = 1
 
 [node name="Cooldown" type="Label" parent="SkillBar/PassiveIcon" unique_id=-239327884]
@@ -315,8 +338,8 @@ text = "0"
 
 [node name="Skill2Icon" type="TextureRect" parent="SkillBar" unique_id=-1303837943]
 layout_mode = 0
-offset_left = 56.0
-offset_right = 108.0
+offset_left = 64.0
+offset_right = 116.0
 offset_bottom = 52.0
 expand_mode = 1
 script = ExtResource("3")
@@ -374,18 +397,18 @@ text = "0"
 
 [node name="StatsPanelInstance" parent="." unique_id=1217615335 instance=ExtResource("7")]
 visible = false
-offset_left = -600.0
-offset_top = -314.5
-offset_right = 50.0
-offset_bottom = 314.5
+offset_left = -730.0
+offset_top = -400.0
+offset_right = -30.0
+offset_bottom = 400.0
 
 [node name="InventoryPanelInstance" parent="." unique_id=1217615336 instance=ExtResource("24")]
 process_mode = 3
 visible = false
-offset_left = 80.0
-offset_top = -247.5
-offset_right = 600.0
-offset_bottom = 247.5
+offset_left = 30.0
+offset_top = -400.0
+offset_right = 730.0
+offset_bottom = 400.0
 
 [node name="ShopPanel" type="Control" parent="." unique_id=1126973307 instance=ExtResource("16")]
 process_mode = 3
@@ -447,10 +470,10 @@ layout_mode = 3
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -184.0
-offset_top = 10.0
-offset_right = -10.0
-offset_bottom = 174.0
+offset_left = -200.0
+offset_top = 22.0
+offset_right = -36.0
+offset_bottom = 186.0
 grow_horizontal = 0
 mouse_filter = 2
 script = ExtResource("minimap_script")

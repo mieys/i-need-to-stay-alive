@@ -14,6 +14,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
+	## Kullanıcı isteği (2026-09-21): duraklatma/ayar panelleri UIKit ahşap pencere çerçevesinde (konum/boyut aynı).
+	$Panel.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
+	$SettingsPanel.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
 	$Panel/VBox/ResumeButton.pressed.connect(_on_resume)
 	$Panel/VBox/RestartButton.pressed.connect(_on_restart)
 	$Panel/VBox/MenuButton.pressed.connect(_on_menu)

@@ -1,5 +1,7 @@
 extends Control
 
+const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+
 @export var skill_id: int = 1
 ## Verilirse vektörel çizim yerine bu doku kullanılır (gerçek sanat eseri
 ## ikonlar için - bkz. Öykü'nün skill_icon/skill2_icon alanları,
@@ -104,6 +106,19 @@ func _on_mouse_entered() -> void:
 		## gömülü "(Xsn bekleme)" sayısı artık yukarıda zaten hesaplanmış GERÇEK
 		## current_cd ile değiştiriliyor, cd_text ile TUTARLI olsun diye.
 		desc = _apply_live_cooldown_to_desc(desc, current_cd)
+	elif name == "SpiritIcon":
+		## Ruhani Yetenek (F, bkz. spiritual_skills.gd): karakterden bağımsız, kendi tanımından okunur. Bekleme süresi
+		## "Bekleme Süresi Azaltma" statından etkilenmez (kullanıcı isteği) - bu yüzden "Base" karşılaştırması yok.
+		var spirit_def: Dictionary = SpiritualSkillsScript.get_def(GameManager.selected_spiritual)
+		title = "Ruhani Yetenek - %s" % str(spirit_def.get("name", ""))
+		desc = str(spirit_def.get("desc", ""))
+		var spirit_cd: float = float(spirit_def.get("cooldown", 0.0))
+		if bool(spirit_def.get("active", false)):
+			keybind_text = GameManager.get_action_key_label("skill4")
+			cd_text = "Bekleme Süresi: %.0fs (bekleme süresi azaltmadan etkilenmez)" % spirit_cd
+		else:
+			keybind_text = "PASİF"
+			cd_text = "Bekleme Süresi: Yok"
 	elif name == "Skill3Icon":
 		## DÜZELTME (kullanıcı bildirimi: "Tüm ultilerin yetenek açıklamalarında
 		## ... sorun var, ulti açıklamaları yanlış gösteriliyor") - R ikonu
@@ -492,11 +507,14 @@ func _update_cooldown_label() -> void:
 ## Kare çerçeve: yeni skill_bari.png çerçevesinin içine sığması için marj
 ## BORDER artırıldı (7.0). Arka plan düz çizimleri kaldırıldı, böylece
 ## arkasındaki ahşap çerçeve görünür.
-const BORDER := 7.0
+## Kullanıcı isteği (2026-09-21): skill çerçeveleri yeniden tasarlandı (assets/ui/kit/hud_skill_frame*.png, 2 px'lik sanat pikselleri) -
+## çerçeve kalınlığı artık ikon başına ayarlanabilir: normal 39 sanat pikseli çerçeve = 5 px sanat kenarı = 10 ekran px = 6.67 birim
+## (SkillBar x1.5 ölçekli), küçük pasif çerçeve 3 sanat px = 4 birim, ruhani (F) 6 sanat px = 8 birim (hud.gd ayarlar).
+var frame_border: float = 6.667
 
 func _draw() -> void:
 	var outer := Rect2(Vector2.ZERO, size)
-	var inner := outer.grow(-BORDER)
+	var inner := outer.grow(-frame_border)
 
 	## Yetenek ikonlarının (PNG dosyalarının VEYA fallback vektörel
 	## çizimlerin) arkası transparan kalıp arkasındaki ahşap HUD barını

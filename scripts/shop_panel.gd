@@ -329,6 +329,13 @@ const OPEN_ANIM_START_SCALE := 0.9
 var _open_tween: Tween = null
 
 
+const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
+## Dükkan paneli görünürken (hud.gd open_shop_panel) karakter okuma (read) pozuna geçer - panel kalıcı bir
+## HUD düğümü olduğu için "açık" olması görünürlüğe bakılarak anlaşılır, bkz. ReadingUiWatcher.
+func _enter_tree() -> void:
+	add_to_group(ReadingUiWatcher.GROUP)
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED and visible:
 		_play_open_animation()
@@ -405,9 +412,6 @@ static func _make_flat(bg: Color, border: Color, border_width: int, radius: int,
 ## damar deseninin sol/sağ kenardan ~20px içeri kadar uzandığı ortaya çıktı
 ## (bkz. y=7/11/15/18 satırlarındaki koyu pikseller x=19'a kadar gidiyor) -
 ## eski 7px margin bu deseni ortadan kesip esneyen bölgeye sızdırıyordu.
-const ButtonWoodTexture := preload("res://assets/ui/new shop design/Button.png")
-const BUTTON_WOOD_MARGIN_H := 20.0
-const BUTTON_WOOD_MARGIN_V := 4.0
 ## Durum başına ton (bkz. yukarıdaki not) - normal=doku olduğu gibi,
 ## hover=hafif aydınlık, pressed=belirgin koyu/basılmış hissi, disabled=soluk/
 ## gri-mat. Tıpkı theme.tres'teki SBT_disabled'ın modulate_color'ı gibi.
@@ -424,68 +428,38 @@ const BUTTON_WOOD_TINT_DISABLED := Color(0.55, 0.55, 0.55, 0.75)
 ## varsayranı budur), bilerek yumuşak tutuldu.
 const BUTTON_WOOD_TINT_FOCUS := Color(1.4, 1.15, 0.6, 1.0)
 
+## Kullanıcı isteği (2026-09-21): "oyundaki butonları pixel tarzında cozy ve level atlama kartlarıyla aşırı uyumsuz olmayacak şekilde
+## yeniden tasarla, doğal dursunlar ve esnemeden kaynaklı kalite kaybı yaşanmasın" - eski Button.png/mini button.png (83x23 / 30x30, damar
+## desenli, 9-slice'ta esneyip bozuluyordu) yerine artık TEK kaynak UIKit (assets/ui/kit, bkz. scripts/ui_kit.gd). Bu fonksiyonların
+## imzaları/adları ESKİSİYLE AYNI kaldı ki oyundaki ~15 ekran (UISound.apply_wood_buttons dahil) hiç değişmeden yeni görünümü alsın.
+## tint -> kit durumu eşlemesi: TINT_HOVER=hover, TINT_PRESSED=pressed, TINT_DISABLED=disabled, TINT_FOCUS=focus, diğer=normal.
+static func _state_for_tint(tint: Color) -> String:
+	if tint.is_equal_approx(BUTTON_WOOD_TINT_HOVER):
+		return "hover"
+	if tint.is_equal_approx(BUTTON_WOOD_TINT_PRESSED):
+		return "pressed"
+	if tint.is_equal_approx(BUTTON_WOOD_TINT_DISABLED):
+		return "disabled"
+	if tint.is_equal_approx(BUTTON_WOOD_TINT_FOCUS):
+		return "focus"
+	return "normal"
+
+
+## Çağıran taraf (ör. chat_bubble.gd) içerik boşluklarını değiştirebildiği için önbellekteki paylaşılan stil DEĞİL, kopyası döner.
 static func _make_wood_button_style(tint: Color = BUTTON_WOOD_TINT_NORMAL) -> StyleBoxTexture:
-	var sb := StyleBoxTexture.new()
-	sb.texture = ButtonWoodTexture
-	sb.texture_margin_left = BUTTON_WOOD_MARGIN_H
-	sb.texture_margin_right = BUTTON_WOOD_MARGIN_H
-	sb.texture_margin_top = BUTTON_WOOD_MARGIN_V
-	sb.texture_margin_bottom = BUTTON_WOOD_MARGIN_V
-	sb.modulate_color = tint
-	return sb
+	return UIKit.button_style("wood", _state_for_tint(tint), false).duplicate() as StyleBoxTexture
 
 
-## bkz. _make_wood_button_style üstündeki notlar - herhangi bir Button'a TEK
-## çağrıda normal/hover/pressed/disabled (+ focus, normal'le aynı) ahşap
-## stilini uygular. Oyundaki HER dosyanın kendi 4 satırlık tekrar eden
-## add_theme_stylebox_override bloğu yerine bunu çağırması yeterli.
 static func _apply_wood_button_style(btn: Button) -> void:
-	if not is_instance_valid(btn):
-		return
-	btn.add_theme_stylebox_override("normal", _make_wood_button_style(BUTTON_WOOD_TINT_NORMAL))
-	btn.add_theme_stylebox_override("hover", _make_wood_button_style(BUTTON_WOOD_TINT_HOVER))
-	btn.add_theme_stylebox_override("pressed", _make_wood_button_style(BUTTON_WOOD_TINT_PRESSED))
-	btn.add_theme_stylebox_override("disabled", _make_wood_button_style(BUTTON_WOOD_TINT_DISABLED))
-	btn.add_theme_stylebox_override("focus", _make_wood_button_style(BUTTON_WOOD_TINT_FOCUS))
+	UIKit.style_button(btn, "wood", false)
 
-
-## Kullanıcı isteği: "dükkan kategori butonları veya aşırı dar olan butonlar
-## için mini button dosyasını kullan" - Button.png GENİŞ bir dikdörtgen
-## (83x23); kare/ikon-benzeri butonlara (kategori sekmeleri, kapat ikonları,
-## kalkan modu slotları gibi) uygulanırsa kenarlığı orantısız/yassı görünürdü.
-## mini button.png (30x30, KARE) bu tür butonlar için ayrı bir doku - aynı
-## normal/hover/pressed/disabled tonlama tekniği, sadece kaynak dokusu ve
-## kenarlık ölçüsü farklı. DÜZELTME (bkz. BUTTON_WOOD_MARGIN_H üstündeki
-## "DÜZELTME 2" notu - AYNI ölçüm hatası burada da vardı): görselin TÜM
-## piksellerini tarayınca ahşap damar deseninin her kenardan ~15px içeri
-## kadar (30x30'luk görselin neredeyse TAMAMI) uzandığı ortaya çıktı - ama tam
-## 15 kullanılınca (sol+sağ = tam 30 = kaynağın TAMAMI, orta esneme payı SIFIR)
-## en küçük hedef boyutlarda (40x40 gibi) köşeler arasında BOŞLUK/delik
-## oluştu (görsel olarak simüle edilip doğrulandı). 11 hem deseni byük ölçüde
-## koruyor hem 40x40'tan büyük TÜM gerçek kullanım boyutlarında (40-64px)
-## delik oluşturmuyor.
-const MiniButtonWoodTexture := preload("res://assets/ui/new shop design/mini button.png")
-const BUTTON_MINI_WOOD_MARGIN := 11.0
 
 static func _make_mini_wood_button_style(tint: Color = BUTTON_WOOD_TINT_NORMAL) -> StyleBoxTexture:
-	var sb := StyleBoxTexture.new()
-	sb.texture = MiniButtonWoodTexture
-	sb.texture_margin_left = BUTTON_MINI_WOOD_MARGIN
-	sb.texture_margin_right = BUTTON_MINI_WOOD_MARGIN
-	sb.texture_margin_top = BUTTON_MINI_WOOD_MARGIN
-	sb.texture_margin_bottom = BUTTON_MINI_WOOD_MARGIN
-	sb.modulate_color = tint
-	return sb
+	return UIKit.button_style("wood", _state_for_tint(tint), true).duplicate() as StyleBoxTexture
 
 
 static func _apply_mini_wood_button_style(btn: Button) -> void:
-	if not is_instance_valid(btn):
-		return
-	btn.add_theme_stylebox_override("normal", _make_mini_wood_button_style(BUTTON_WOOD_TINT_NORMAL))
-	btn.add_theme_stylebox_override("hover", _make_mini_wood_button_style(BUTTON_WOOD_TINT_HOVER))
-	btn.add_theme_stylebox_override("pressed", _make_mini_wood_button_style(BUTTON_WOOD_TINT_PRESSED))
-	btn.add_theme_stylebox_override("disabled", _make_mini_wood_button_style(BUTTON_WOOD_TINT_DISABLED))
-	btn.add_theme_stylebox_override("focus", _make_mini_wood_button_style(BUTTON_WOOD_TINT_FOCUS))
+	UIKit.style_button(btn, "wood", true)
 
 
 ## Dükkanın tüm arkaplan/kenarlık stillerini envanter ve istatistik
@@ -1012,7 +986,13 @@ static func _get_max_level(item: String) -> int:
 static func _weapon_upgrade_cost(base: int, next_level: int) -> int:
 	return int(round(base * pow(float(next_level) * LEVEL_SCALE_TO_OLD_100, WEAPON_UPGRADE_COST_EXPONENT) * WEAPON_UPGRADE_COST_MULT))
 
+## Kullanıcı isteği (2026-09-21): Ruhani Yetenek "Para" pasifi dükkandaki altın bedellerini %10 düşürür - üç fiyat
+## fonksiyonunun (_upgrade_cost/_copy_cost/_item_cost) ham hesabı *_raw'da, herkesin çağırdığı ad indirimden geçirir.
 static func _upgrade_cost(item: String, next_level: int) -> int:
+	return GameManager.apply_shop_discount(_upgrade_cost_raw(item, next_level))
+
+
+static func _upgrade_cost_raw(item: String, next_level: int) -> int:
 	if DEBUG_ALL_COSTS_ONE:
 		return 1
 	match item:
@@ -1080,6 +1060,10 @@ static func _upgrade_cost(item: String, next_level: int) -> int:
 const SECOND_WEAPON_COST := 30
 const LATER_WEAPON_COST := 80
 static func _copy_cost(_item: String, next_total_count: int) -> int:
+	return GameManager.apply_shop_discount(_copy_cost_raw(_item, next_total_count))
+
+
+static func _copy_cost_raw(_item: String, next_total_count: int) -> int:
 	if DEBUG_ALL_COSTS_ONE:
 		return 1
 	if next_total_count <= 2:
@@ -1100,6 +1084,10 @@ func _item_count_owned(key: String) -> int:
 ## Eşya kopyası fiyatı - _copy_cost ile birebir aynı "base * next_count^2"
 ## şekli, taban Items.DEFS[key]["cost_base"]'ten geliyor.
 static func _item_cost(item: String, next_count: int) -> int:
+	return GameManager.apply_shop_discount(_item_cost_raw(item, next_count))
+
+
+static func _item_cost_raw(item: String, next_count: int) -> int:
 	if DEBUG_ALL_COSTS_ONE:
 		return 1
 	var base: int = int(Items.get_def(item).get("cost_base", 50))

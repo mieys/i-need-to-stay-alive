@@ -1,5 +1,7 @@
 extends Node
 
+const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+
 ## "Body block" sınırının (bkz. enemy.gd PLAYER_BODY_RADIUS/_body_radius ve
 ## player.gd'nin karşılık gelen engelleme kodu) her iki tarafta da AYNI
 ## mesafeyi kullanması gerektiği için burada tek bir yerden tanımlanıyor.
@@ -55,6 +57,12 @@ var is_game_over: bool = false
 ## (_skill_heal, Oakley/Melek'in Can Basma'sı) düşüyordu.
 var selected_char_id: int = 1
 var selected_character: int = 38
+
+## Ruhani Yetenek (F tuşu, bkz. spiritual_skills.gd) - karakter seçim ekranında/lobide seçilir, oyun boyunca sabit.
+## reset() bunu BİLEREK sıfırlamaz: seçim oyun başlamadan ÖNCE yapılır. Karakter seçim ekranı/lobi (spiritual_picker.gd)
+## açılınca varsayılan (Para) otomatik seçili gelir, yani normal akışta kimse ruhani yeteneksiz başlamaz; boş "" değer
+## seçim ekranından hiç geçilmediği (ör. editörden doğrudan main.tscn, testler) anlamına gelir -> ruhani yetenek yok.
+var selected_spiritual: String = ""
 
 var gold: int = 0
 ## Kullanıcı isteği: "altın toplayıcı ve madeni oyundan tamamen kaldır ve
@@ -206,6 +214,7 @@ const REBINDABLE_ACTIONS := [
 	{"action": "skill", "label": "Ulti (Ana Yetenek)"},
 	{"action": "skill2", "label": "Temel Yetenek"},
 	{"action": "skill3", "label": "3. Yetenek"},
+	{"action": "skill4", "label": "Ruhani Yetenek"},
 	{"action": "interact", "label": "Etkileşim / Eve Gir"},
 	{"action": "shield_mode_slot_1", "label": "Kalkan Modu 1"},
 	{"action": "shield_mode_slot_2", "label": "Kalkan Modu 2"},
@@ -380,8 +389,13 @@ func _setup_input_actions() -> void:
 	_bind_joypad("skill3", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_RIGHT_SHOULDER}])
 	## Ev'e girip çıkma etkileşimi (bkz. scripts/house_interior.gd) -
 	## kullanıcı isteği: "yaklaşınca F'ye basarak içeri girilsin".
-	_bind("interact", KEY_F)
+	## Kullanıcı isteği (2026-09-21): "dükkan açma gibi etkileşim tuşu artık space oluyor çünkü yeni skiller geldi" -
+	## F artık Ruhani Yetenek (skill4, bkz. spiritual_skills.gd). Gamepad: etkileşim LB'de kaldı (alışkanlık bozulmasın),
+	## ruhani yetenek sağ analog çubuğa basmaya (R3) atandı - A/B motorun ui_accept/ui_cancel'ı olduğu için boş kalan düğme.
+	_bind("interact", KEY_SPACE)
 	_bind_joypad("interact", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_LEFT_SHOULDER}])
+	_bind("skill4", KEY_F)
+	_bind_joypad("skill4", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_RIGHT_STICK}])
 	## Test/geliştirme paneli: saldırı efektlerinin rotasyon/boyutunu oyun
 	## içinden ayarlamak için (bkz. debug_tuning_panel.gd). Dev-only - gamepad
 	## varsayılanı bilerek yok.
@@ -447,6 +461,24 @@ func _bind_joypad(action_name: String, defaults: Array) -> void:
 				break
 		if not already_present:
 			InputMap.action_add_event(action_name, ev)
+
+
+## Bir action'ın ekranda gösterilecek tuş adı (ipucu yazıları için: "Eve girmek için BOŞLUK tuşuna bas").
+func get_action_key_label(action_name: String) -> String:
+	var code: int = get_keybind_keycode(action_name)
+	if code == KEY_NONE:
+		return "?"
+	if code == KEY_SPACE:
+		return "BOŞLUK"
+	return OS.get_keycode_string(code as Key).to_upper()
+
+
+## Ruhani Yetenek "Para" pasifi: dükkandaki altın bedelleri %10 azalır (kullanıcı isteği). Tüm dükkan fiyatları
+## (shop_panel.gd _upgrade_cost/_copy_cost/_item_cost, merchant_shop_screen.gd _entry_cost) son adımda buradan geçer.
+func apply_shop_discount(cost: int) -> int:
+	if selected_spiritual != SpiritualSkillsScript.PARA or cost <= 1:
+		return cost
+	return maxi(1, int(round(float(cost) * (1.0 - SpiritualSkillsScript.PARA_SHOP_DISCOUNT))))
 
 
 ## ---------- Seyyar Satıcı güvenli bölgesi ----------

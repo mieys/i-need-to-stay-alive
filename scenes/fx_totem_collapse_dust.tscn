@@ -1,61 +1,7 @@
 [gd_scene format=3 uid="uid://3pete7e8x81a"]
 
-[ext_resource type="Script" uid="uid://b421v3f2k23jc" path="res://scripts/fx_totem_burst.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://ckcskf1rll0j2" path="res://assets/generated/shaman_totem_collapse_dust.png" id="1_p6o8d"]
+[ext_resource type="Script" uid="uid://c7t44yyc1sps8" path="res://scripts/fx_totem_puff.gd" id="1"]
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_thoeu"]
-atlas = ExtResource("1_p6o8d")
-region = Rect2(0, 0, 48, 48)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_v470x"]
-atlas = ExtResource("1_p6o8d")
-region = Rect2(48, 0, 48, 48)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_mb25a"]
-atlas = ExtResource("1_p6o8d")
-region = Rect2(96, 0, 48, 48)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_ld26q"]
-atlas = ExtResource("1_p6o8d")
-region = Rect2(144, 0, 48, 48)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_a71qp"]
-atlas = ExtResource("1_p6o8d")
-region = Rect2(192, 0, 48, 48)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_58k5k"]
-atlas = ExtResource("1_p6o8d")
-region = Rect2(240, 0, 48, 48)
-
-[sub_resource type="SpriteFrames" id="SpriteFrames_5c4sc"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_thoeu")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_v470x")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_mb25a")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_ld26q")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_a71qp")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_58k5k")
-}],
-"loop": 0,
-"name": &"dust_puff_spreading_outward_then_settling_down",
-"speed": 14.0
-}]
-
-[node name="FxTotemCollapseDust" type="AnimatedSprite2D" unique_id=10770414]
-texture_filter = 1
-sprite_frames = SubResource("SpriteFrames_5c4sc")
-animation = &"dust_puff_spreading_outward_then_settling_down"
-autoplay = "dust_puff_spreading_outward_then_settling_down"
+[node name="FxTotemCollapseDust" type="Node2D" unique_id=10770414]
 script = ExtResource("1")
+kind = "collapse"

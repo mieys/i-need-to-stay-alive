@@ -2,7 +2,7 @@ extends Node2D
 
 ## Genel pixel parçacık patlaması (bkz. pixel_draw.gd spawn_burst): kare parçacıklar dışa saçılır, sürtünmeyle
 ## yavaşlar, ömrün sonunda küçülüp yok olur. palette: "fire" (sarı-turuncu-kırmızı), "smoke" (koyu gri),
-## "spark" (beyaz-sarı kıvılcım), "dust" (toprak tozu).
+## "spark" (beyaz-sarı kıvılcım), "dust" (toprak tozu), "void" (mor boşluk - Alan Totemi).
 
 const PixelDraw := preload("res://scripts/pixel_draw.gd")
 
@@ -35,6 +35,8 @@ func _palette_colors(name: String) -> Array:
 			return [Color(0.2, 0.19, 0.22), Color(0.32, 0.3, 0.34), Color(0.45, 0.43, 0.47), Color(0.14, 0.13, 0.16)]
 		"spark":
 			return [Color(1.0, 0.98, 0.8), Color(1.0, 0.85, 0.3), Color(1.0, 0.6, 0.15)]
+		"void":
+			return [Color(0.94, 0.8, 1.0), Color(0.72, 0.4, 0.95), Color(0.45, 0.2, 0.75), Color(0.2, 0.08, 0.4)]
 		"dust":
 			return [Color(0.55, 0.45, 0.32), Color(0.7, 0.6, 0.44), Color(0.4, 0.32, 0.22)]
 		_:

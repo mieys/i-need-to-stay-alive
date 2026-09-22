@@ -85,14 +85,17 @@ func _on_body_entered(body: Node) -> void:
 	## aynı notu: host'un GERÇEK sandığı bir uzak oyuncunun host'taki gerçek
 	## kuklasına fiziksel olarak değerse (RPC bir sebeple hiç gelmese bile)
 	## artık burada da doğrudan güvenlik ağı olarak, doğru sahibi için açılıyor.
-	if body.is_in_group("remote_players"):
+	## Kullanıcı isteği (2026-09-21): çok oyunculuda sandığı KİM toplarsa toplasın kazanan rastgele belirlenir
+	## (bkz. _open_for_player / NetworkManager.host_award_chest) - tek oyunculuda eskisi gibi toplayan alır.
+	if body.is_in_group("remote_players") or NetworkManager.is_multiplayer_active:
 		_open_for_player(body)
 	else:
 		_open_chest_for(body)
 
 
-## Sandığı belirtilen oyuncu için açar (hem singleplayer hem multiplayer host).
-func _open_chest_for(body: Node) -> void:
+## Sandığı belirtilen oyuncu için açar (hem singleplayer hem multiplayer host). award_to_local=false: sadece açılış
+## animasyonu/sesi + drop temizliği, kuyruğa ekleme YAPMAZ (çok oyunculuda sandığın sahibini host_award_chest belirler).
+func _open_chest_for(body: Node, award_to_local: bool = true) -> void:
 	# Play chest opening sound (wooden creak pitched down)
 	## DÜZELTME (KRİTİK - oyunun export'ta hiç açılmamasının kök nedeni):
 	## burada eskiden `res://assets/audio/yay_draw.mp3` yükleniyordu ama o dosya
@@ -128,7 +131,8 @@ func _open_chest_for(body: Node) -> void:
 	## GameManager.pending_chest_tiers'e ekleniyor (bkz. main.gd
 	## _try_open_next_pending_chest - takım seviye atladığında sırayla açılır).
 	tw.tween_callback(func():
-		GameManager.add_pending_chest(chest_tier)
+		if award_to_local:
+			GameManager.add_pending_chest(chest_tier)
 		if NetworkManager.is_multiplayer_active:
 			var drop_id: int = int(get_meta("drop_network_id", 0))
 			if drop_id > 0:
@@ -147,21 +151,27 @@ func _open_chest_for(body: Node) -> void:
 ## kademede bir sandık aç" diye bir RPC gönderiyor - itemler o client'ın
 ## kendi GameManager'ına (kişisel envanterine) eklenir.
 func _open_for_player(player_node: Node) -> void:
-	if player_node and is_instance_valid(player_node) and player_node.is_in_group("player"):
-		# Toplayan host'un kendi yerel oyuncusu - eskisi gibi yerel aç.
-		_open_chest_for(player_node)
-		return
-	if player_node and is_instance_valid(player_node) and "peer_id" in player_node and player_node.peer_id > 0:
-		## Uzak bir client topladı - itemi host DEĞİL, o client kendi
-		## ekranında seçsin diye RPC ile onun tarafında chest menü açılır.
-		NetworkManager.open_chest_for_peer.rpc_id(player_node.peer_id, chest_tier)
-		var drop_id2: int = int(get_meta("drop_network_id", 0))
-		if drop_id2 > 0:
-			NetworkManager.remove_drop.rpc(drop_id2)
+	## Kullanıcı isteği (2026-09-21): "Yaratıklardan sandık düştüğünde bir oyuncu sandığı alırsa o sandık rasgele olacak
+	## şekilde birine verilir, herkesin eşit şansı vardır ... sadece 1 kişi alınan sandığı alabilir. Her sandıkta bu yeniden
+	## hesaplanır." Toplayan kim olursa olsun kazanan NetworkManager.host_award_chest'te (1/N) belirlenir: kazanan host'sa
+	## kendi kuyruğuna, uzak bir client'sa open_chest_for_peer ile onun kuyruğuna eklenir. Tek oyunculu (multiplayer kapalı)
+	## akışta eskisi gibi toplayan alır.
+	if not NetworkManager.is_multiplayer_active:
+		if player_node and is_instance_valid(player_node) and player_node.is_in_group("player"):
+			_open_chest_for(player_node)
+			return
 		queue_free()
 		return
-	# Fallback: sandığı sessizce yok et
-	var drop_id: int = int(get_meta("drop_network_id", 0))
-	if drop_id > 0:
-		NetworkManager.remove_drop.rpc(drop_id)
+	var winner_id: int = NetworkManager.host_award_chest(chest_tier)
+	if winner_id == 0 and player_node and is_instance_valid(player_node) and player_node.is_in_group("player"):
+		## Katılımcı listesi boş (ör. herkes ölü): yine de host'un yerel oyuncusuna ver, sandık boşa gitmesin.
+		GameManager.add_pending_chest(chest_tier)
+	if player_node and is_instance_valid(player_node) and player_node.is_in_group("player"):
+		## Toplayan host'un kendisiyse açılış animasyonu/sesi oynasın (ödül yukarıda dağıtıldı).
+		_open_chest_for(player_node, false)
+		return
+	## Toplayan uzak bir client (ya da bulunamadı): host'ta animasyon yok, sandık hemen kalkar.
+	var drop_id2: int = int(get_meta("drop_network_id", 0))
+	if drop_id2 > 0:
+		NetworkManager.remove_drop.rpc(drop_id2)
 	queue_free()

@@ -118,7 +118,19 @@ func flash(attacker: Node2D = null) -> void:
 				_spawn_shards_at(rand_angle)
 
 
+## Kullanıcı isteği (2026-09-21): "kalkanların hasar alma efektleri pixel tarzı, mavi ve yarı saydam bir bariyer hasarı efekti
+## olsun" - eskiden burada düzgün çizgili çatlak + cam kırığı çiziliyordu; artık oyuncu kalkanıyla AYNI pixel efekt
+## (fx_shield_hit.gd, bu bariyerin kendi yarıçapıyla) doğuyor. Eski çatlak/kırık kodu aşağıda kullanılmıyor (erken dönüş).
+func _spawn_pixel_hit(angle: float) -> void:
+	var fx := Node2D.new()
+	fx.set_script(load("res://scripts/fx_shield_hit.gd"))
+	add_child(fx)
+	fx.call("setup", angle, radius)
+
+
 func _spawn_crack(angle: float) -> void:
+	_spawn_pixel_hit(angle)
+	return
 	var dir := Vector2(cos(angle), sin(angle))
 	
 	# Darbenin merkez vuruş noktası (çeperin üzerinde)
@@ -170,7 +182,9 @@ func _spawn_crack(angle: float) -> void:
 	})
 
 
-func _spawn_shards_at(angle: float) -> void:
+func _spawn_shards_at(_angle: float) -> void:
+	return
+	var angle: float = _angle
 	# Darbenin merkez vuruş noktası
 	var start_pos := Vector2(cos(angle), sin(angle)) * radius
 	

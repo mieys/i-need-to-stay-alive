@@ -129,6 +129,12 @@ func _card_count() -> int:
 	return 3 if mode == "weapon" else 2
 
 
+const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
+## Başlangıç silah/kalkan kart seçimi açıkken karakter okuma (read) pozuna geçer - bkz. ReadingUiWatcher.
+func _enter_tree() -> void:
+	add_to_group(ReadingUiWatcher.GROUP)
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 1

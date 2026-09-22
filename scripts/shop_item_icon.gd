@@ -90,31 +90,45 @@ func _draw_spray(c: Vector2, s: float) -> void:
 		draw_colored_polygon(PackedVector2Array([tip, base + side, base - side]), arrow_col)
 
 
+## Kullanıcı isteği (2026-09-21): "kalkanlar için kalkan türleri ve çalışma biçimleriyle uyumlu kalkan ikonları" - eski tek vektörel mavi
+## kalkan yerine 4 türün (Standart/Enerji/Kale/Savaş) kendi 48x48 piksel ikonu (assets/ui/shields/type_*.png, tools/gen_shield_icons.py).
+## Tür açıkça verilmediyse (shop_panel.tscn'deki satırlarda verilmiyor) ata düğümlerin adından çıkarılır (StandartShieldRow, EnerjiShieldRow...).
+@export var shield_type: String = ""
+## preload ŞART: _draw() içinde ilk kez load() edilen doku o karede hazır olmuyor ve beyaz kare çiziliyordu (bir daha da çizilmez).
+const SHIELD_TEXTURES := {
+	"shield_standart": preload("res://assets/ui/shields/type_standart.png"),
+	"shield_enerji": preload("res://assets/ui/shields/type_enerji.png"),
+	"shield_kale": preload("res://assets/ui/shields/type_kale.png"),
+	"shield_savas": preload("res://assets/ui/shields/type_savas.png"),
+}
+
+
+func _guess_shield_type() -> String:
+	var n: Node = self
+	for i in range(8):
+		if n == null:
+			break
+		var nm: String = String(n.name).to_lower()
+		if nm.contains("enerji"):
+			return "shield_enerji"
+		if nm.contains("kale"):
+			return "shield_kale"
+		if nm.contains("savas") or nm.contains("savaş"):
+			return "shield_savas"
+		if nm.contains("standart"):
+			return "shield_standart"
+		n = n.get_parent()
+	return "shield_standart"
+
+
 func _draw_shield(c: Vector2, s: float) -> void:
-	var col := Color(0.35, 0.65, 1.0)
-	draw_colored_polygon(PackedVector2Array([
-		c + Vector2(-s * 0.75, -s * 0.6), c + Vector2(s * 0.75, -s * 0.6), c + Vector2(s * 0.75, s * 0.1),
-		c + Vector2(0, s * 1.0), c + Vector2(-s * 0.75, s * 0.1)
-	]), Color(0.6, 0.6, 0.65))
-	draw_colored_polygon(PackedVector2Array([
-		c + Vector2(-s * 0.6, -s * 0.48), c + Vector2(s * 0.6, -s * 0.48), c + Vector2(s * 0.6, s * 0.06),
-		c + Vector2(0, s * 0.85), c + Vector2(-s * 0.6, s * 0.06)
-	]), col)
-	draw_colored_polygon(PackedVector2Array([
-		c + Vector2(-s * 0.32, -s * 0.28), c + Vector2(s * 0.32, -s * 0.28), c + Vector2(s * 0.32, 0),
-		c + Vector2(0, s * 0.5), c + Vector2(-s * 0.32, 0)
-	]), Color(0.65, 0.85, 1.0))
-	## Kıvılcımlar artık ikonun kendi sınırları içinde kalıyor (s*1.0 maks,
-	## çapraz uzunluk da s ile ölçekleniyor - eskiden sabit 4px'ti, küçük
-	## ikonlarda sorun değildi ama büyük önizleme ikonunda (140px) kutudan
-	## taşıyordu, bkz. kullanıcı bildirimi "dükkan arayüzünde kalkan ikonları
-	## dışarı taşmış"). _draw_spray'deki aynı desen.
-	var spark_col := Color(0.7, 0.9, 1.0, 0.9)
-	var cross: float = s * 0.06
-	for off in [Vector2(-s * 0.82, -s * 0.15), Vector2(s * 0.8, -s * 0.35), Vector2(s * 0.72, s * 0.38), Vector2(-s * 0.72, s * 0.42)]:
-		var p: Vector2 = c + off
-		draw_line(p + Vector2(-cross, 0), p + Vector2(cross, 0), spark_col, 2.0)
-		draw_line(p + Vector2(0, -cross), p + Vector2(0, cross), spark_col, 2.0)
+	var key: String = shield_type if shield_type != "" else _guess_shield_type()
+	var tex: Texture2D = SHIELD_TEXTURES.get(key, SHIELD_TEXTURES["shield_standart"])
+	## Kare, ortalı; boyut tam sayı katına yuvarlanır (48 -> x1/x2/x3) ki pikseller net kalsın (küçük ikonlarda >= 1x).
+	var side: float = s * 2.0
+	var scale_i: float = maxf(1.0, floorf(side / 48.0))
+	var draw_side: float = 48.0 * scale_i if side >= 48.0 else side
+	draw_texture_rect(tex, Rect2((c - Vector2(draw_side, draw_side) * 0.5).round(), Vector2(draw_side, draw_side)), false)
 
 
 ## Eşyalar (bkz. scripts/items.gd) için paylaşılan tek vektör ikonu - kalkan

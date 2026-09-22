@@ -92,6 +92,29 @@ static func art(ci: CanvasItem, center: Vector2, rows: Array, palette: Dictionar
 			ci.draw_rect(Rect2(origin + Vector2(float(xx), float(yy)) * cell, Vector2(cell, cell)), palette[ch])
 
 
+## Standart "ayak/mini gölge" elipsi - sert pixel kenar, ortada koyu ikinci kat (bkz. ground_shadow.gd - karakterler
+## GroundShadow.apply_to ile bunu kullanır). Dünya nesneleri (bomba vb.) _draw() içinden DOĞRUDAN çağırabilir ki
+## gölge her yerde AYNI görünsün (kullanıcı isteği 2026-09-22: "standart normal mini gölgelerden ekle" - Korsan
+## bombasındaki dither/dama desenli "kare kare" gölge yerine). radius = (yatay, dikey) yarıçap, dünya birimi.
+static func ground_shadow(ci: CanvasItem, center: Vector2, radius: Vector2, edge_color: Color = Color(0.0, 0.0, 0.0, 0.28), core_color: Color = Color(0.0, 0.0, 0.0, 0.2)) -> void:
+	if radius.x <= 0.0 or radius.y <= 0.0:
+		return
+	var rows: int = int(ceil(radius.y / TEXEL))
+	for iy in range(-rows, rows + 1):
+		var f: float = (float(iy) * TEXEL) / radius.y
+		if absf(f) > 1.0:
+			continue
+		var hw: float = radius.x * sqrt(1.0 - f * f)
+		var w: float = roundf(hw / TEXEL) * TEXEL
+		if w <= 0.0:
+			continue
+		var y: float = center.y + float(iy) * TEXEL - TEXEL * 0.5
+		ci.draw_rect(Rect2(center.x - w, y, w * 2.0, TEXEL), edge_color)
+		var wc: float = roundf(w * 0.68 / TEXEL) * TEXEL
+		if wc > 0.0:
+			ci.draw_rect(Rect2(center.x - wc, y, wc * 2.0, TEXEL), core_color)
+
+
 ## Ateş renk rampası: t 0 (en sıcak, sarı-beyaz) -> 1 (soğuk, koyu kırmızı).
 static func fire_color(t: float) -> Color:
 	var stops: Array[Color] = [

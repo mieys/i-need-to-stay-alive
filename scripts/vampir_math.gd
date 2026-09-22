@@ -24,6 +24,13 @@ const TEXEL := 1.212
 
 const BAT_ANIM_PREFIX := "bat_"
 
+## Kullanıcı isteği (2026-09-21): "vampir çocuğun E yeteneğindeki yarasa formunun boyutunu %30 küçült".
+## Yarasa Formu kareleri (96x112) insan karelerinden (48x48) çok daha büyük olduğu için karakterin tam
+## ölçeğinde devasa görünüyordu. Yerel oyuncu (player.gd _update_animation yarasa dalı +
+## _end_vampir_bat_form) ve uzak oyuncu (remote_player.gd _apply_vampir_bat_scale) AYNI bu çarpanı
+## kullanır - iki taraf sapmaz (bkz. CLAUDE.md paylaşılan formül kuralı).
+const BAT_FORM_SCALE_MULT := 0.7
+
 
 static func is_bat_anim(anim_name: String) -> bool:
 	return anim_name.begins_with(BAT_ANIM_PREFIX)

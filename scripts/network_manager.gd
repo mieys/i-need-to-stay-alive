@@ -1470,8 +1470,8 @@ func broadcast_chat_message(peer_id: int, player_name: String, text: String) -> 
 ## karar verir (ne zaman/nerede, bkz. traveling_merchant.gd _process), "call_
 ## local" sayesinde host da KENDİ kararını bu sinyalden alır - chat_message_
 ## received ile AYNI desen.
-## Kullanıcı isteği (İKİNCİ tur): "Seyyar satıcı dükkandan rasgele 6 item
-## gösterecek." - stok (hangi 6 eşya/silah/kalkan, eşyalarınsa hangi tier'da)
+## Kullanıcı isteği (İKİNCİ tur): "Seyyar satıcı dükkandan rasgele 8 item
+## gösterecek." - stok (hangi 8 eşya/silah/kalkan, eşyalarınsa hangi tier'da)
 ## satıcı BELİRİRKEN host tarafından bir kez çekilir (bkz. traveling_
 ## merchant.gd _generate_stock) ve TÜM peer'lerin AYNI stoku görmesi için
 ## bu sinyalin payload'ına eklendi - her Dictionary {"type","key"} ve
@@ -1925,13 +1925,23 @@ func broadcast_pet_despawn(player_id: int, instance_id: String) -> void:
 ## sprite_row eklendi (bkz. skeleton_pet.gd/golem_pet.gd update_network_
 ## pet_state/update_network_golem_state üstündeki notlar) - eskiden yön hiç
 ## yayınlanmıyordu, kozmetik kopya kendi hareketinden yanlış tahmin ediyordu.
+## DÜZELTME (kullanıcı isteği 2026-09-22: "tüm bu değişikliklerin multiplayerda
+## da geçerli olmasını istiyorum, senkronizasyon kontrolü") - Matthew'in yeni
+## Q'su (Tilki Hücumu) tilkiyi ANINDA ışınlıyor; kozmetik kopya normalde
+## player_pet.gd _process_network_visual'da HER ZAMAN yumuşakça kayıyor
+## (lerp), yani ışınlanma diğer oyunculara "Matthew'in tilkisi 0.3-0.5sn'de
+## süzülerek geldi" gibi görünüyordu - kasterin ekranındaki ANINDA ışınlanmadan
+## FARKLI (CLAUDE.md'deki "kaster doğru görür, diğerleri farklı görür" hata
+## sınıfının bir varyasyonu). "teleport" eklendi: true ise kozmetik kopya
+## _network_target_position'a kaymak YERİNE konuma ANINDA sıçrar (bkz.
+## player_pet.gd update_network_pet_state).
 @rpc("any_peer", "call_remote", "unreliable")
-func broadcast_pet_state(player_id: int, instance_id: String, pos: Vector2, is_attacking: bool, health_ratio: float = -1.0, shield_ratio: float = -1.0, sprite_row: int = -1) -> void:
+func broadcast_pet_state(player_id: int, instance_id: String, pos: Vector2, is_attacking: bool, health_ratio: float = -1.0, shield_ratio: float = -1.0, sprite_row: int = -1, teleport: bool = false) -> void:
 	var rp: RemotePlayer = _find_remote_player(player_id)
 	if not rp:
 		return
 	if rp.has_method("_update_pet_visual_state"):
-		rp._update_pet_visual_state(instance_id, pos, is_attacking, health_ratio, shield_ratio, sprite_row)
+		rp._update_pet_visual_state(instance_id, pos, is_attacking, health_ratio, shield_ratio, sprite_row, teleport)
 
 
 ## Kullanıcı isteği: "senkronize et, ben nasıl görüyosam diğer oyuncular da
@@ -2242,6 +2252,19 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		## damlalar bu kukla'ya akar; "text" varsa "+1 Maks. Can" gibi kukla üstünde yazı).
 		## Yarasa formunun kendisi/silahların çekilmesi bu kanaldan DEĞİL, animasyon adından gelir.
 		## Genel pixel parçacık patlaması (pixel_draw.gd spawn_burst) - Korsan bomba tozu/duman/kıvılcımı vb.
+		## Ruhani Yetenekler (bkz. spiritual_skills.gd, player.gd _spirit_* bloğu): "spirit_blink" = ışınlanma efekti
+		## (kind "streak": Taktiksel, from=pos -> extra.to; kind "column": Dükkan, pos'ta ışık sütunu), "spirit_cancel" =
+		## Dükkan odaklanması iptal (kukladaki kanal FX'ini adıyla bulup kapatır). Karakter-bağlı aura FX'leri (adc/tank/taktik/
+		## dukkan) `skill_scene` ile, Can'ın takım FX'i _rpc_spirit_team_buff ile gider.
+		"spirit_blink":
+			var blink := Node2D.new()
+			blink.set_script(load("res://scripts/fx_spirit_blink.gd"))
+			get_tree().current_scene.add_child(blink)
+			blink.call("setup", str(extra_data.get("kind", "streak")), pos, Vector2(extra_data.get("to", pos)))
+		"spirit_cancel":
+			var cancel_target: Node = rp.get_node_or_null(str(extra_data.get("node", "FxSpiritDukkan")))
+			if cancel_target != null and cancel_target.has_method("cancel"):
+				cancel_target.call("cancel")
 		"pixel_burst":
 			PixelDrawScript.spawn_burst(get_tree().current_scene, pos, str(extra_data.get("palette", "fire")), int(extra_data.get("count", 14)), float(extra_data.get("speed", 140.0)), float(extra_data.get("life", 0.5)))
 		"vampir_fx":
@@ -2342,6 +2365,158 @@ func forward_damage_to_peer(amount: float, enemy_net_id: int, is_barrier_damage:
 @rpc("any_peer", "call_remote", "reliable")
 func open_chest_for_peer(chest_tier: int) -> void:
 	GameManager.add_pending_chest(chest_tier)
+
+
+## ---------- Ortak ödül dağıtımı (kullanıcı isteği, 2026-09-21) ----------
+## Sandık: "bir oyuncu sandığı alırsa o sandık RASTGELE birine verilir, herkesin eşit şansı vardır, sadece 1 kişi
+## alabilir, her sandıkta yeniden hesaplanır". Boss altını: "biri aldığında diğer oyuncular arasında eşit paylaştırılır
+## (herkesin payı kendisine doğru uçar)". İkisi de SADECE host'ta çalışır (gerçek drop host'ta yaşar, bkz. chest_drop.gd/
+## gold_drop.gd) - tek oyunculuda hiçbir şey değişmez.
+##
+## Katılımcılar: host'un yerel oyuncusu + tüm uzak oyuncular; kalıcı olarak ölmüş (is_dead) olanlar dışarıda
+## (ödülü kullanamazlar). [{"peer_id": int, "node": Node}]
+func get_reward_participants() -> Array:
+	var out: Array = []
+	var local_p: Node = get_tree().get_first_node_in_group("player")
+	if local_p and is_instance_valid(local_p) and local_p.get("is_dead") != true:
+		out.append({"peer_id": multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1, "node": local_p})
+	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+		if not is_instance_valid(rp) or rp.get("is_dead") == true or not ("peer_id" in rp) or int(rp.peer_id) <= 0:
+			continue
+		out.append({"peer_id": int(rp.peer_id), "node": rp})
+	return out
+
+
+## Sandığı katılımcılardan RASTGELE birine verir (herkesin şansı 1/N). Döner: kazanan peer id (0 = kimse yok, çağıran
+## kendi yerel yoluna düşer). Kazanan host'sa yerel kuyruğa eklenir, uzak bir client ise open_chest_for_peer ile.
+func host_award_chest(chest_tier: int) -> int:
+	if not is_host:
+		return 0
+	var participants: Array = get_reward_participants()
+	if participants.is_empty():
+		return 0
+	var candidate_ids: Array = []
+	for p: Dictionary in participants:
+		candidate_ids.append(int(p["peer_id"]))
+	var winner_id: int = pick_chest_winner(candidate_ids)
+	if winner_id == (multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1):
+		GameManager.add_pending_chest(chest_tier)
+	else:
+		open_chest_for_peer.rpc_id(winner_id, chest_tier)
+	_rpc_announce_chest_winner.rpc(winner_id)
+	return winner_id
+
+
+## Sandık kazananı: her katılımcının şansı EŞİT (1/N), ağırlık yok. Test edilebilsin diye ayrı saf fonksiyon.
+static func pick_chest_winner(peer_ids: Array) -> int:
+	if peer_ids.is_empty():
+		return 0
+	return int(peer_ids[randi() % peer_ids.size()])
+
+
+## Boss altını payları: amount, katılımcılara EŞİT bölünür; artan (amount % N) toplayana (yoksa ilk katılımcıya) gider.
+## Toplam her zaman amount'a eşit kalır. Dönen: peer_id -> pay.
+static func compute_gold_shares(amount: int, peer_ids: Array, picker_id: int) -> Dictionary:
+	var shares: Dictionary = {}
+	if peer_ids.is_empty() or amount <= 0:
+		return shares
+	var count: int = peer_ids.size()
+	@warning_ignore("integer_division")
+	var base_share: int = amount / count
+	var remainder: int = amount - base_share * count
+	for pid in peer_ids:
+		shares[int(pid)] = base_share
+	var remainder_to: int = picker_id if shares.has(picker_id) else int(peer_ids[0])
+	shares[remainder_to] = int(shares[remainder_to]) + remainder
+	return shares
+
+
+## Sandığın kime düştüğü HERKESİN ekranında kazananın üstünde yazar (kazanan kendi ekranında "SANDIK SENİN!").
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_announce_chest_winner(winner_id: int) -> void:
+	var node: Node = _find_player_by_peer_id(winner_id)
+	if node == null or not is_instance_valid(node) or not (node is Node2D):
+		return
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	var text: String = "SANDIK SENİN!" if winner_id == local_id else "%s sandığı kazandı" % get_player_names([winner_id])
+	var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
+	if ft_scene == null or get_tree().current_scene == null:
+		return
+	var ft: Node2D = ft_scene.instantiate() as Node2D
+	get_tree().current_scene.add_child(ft)
+	ft.global_position = (node as Node2D).global_position + Vector2(0, -52)
+	if ft.has_method("setup"):
+		ft.call("setup", text, Color(1.0, 0.85, 0.3))
+
+
+## Ruhani Yetenek "Can" (bkz. player.gd _spirit_cast_can): kaster bunu çağırır, HER istemci (kaster dahil, call_local) kendi yerel
+## oyuncusuna %8 can + %15 kalkan + 3sn dokunulmazlık uygular (apply_spirit_can_buff) ve herkesin üzerinde şifa/bariyer efektini gösterir.
+## "Mesafe fark etmeksizin": RPC herkese gittiği için menzil kontrolü yok. Ölmüş oyuncular etkilenmez (apply_spirit_can_buff kendi içinde eler).
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_spirit_team_buff(_caster_id: int) -> void:
+	var local_p: Node = get_tree().get_first_node_in_group("player")
+	if local_p and is_instance_valid(local_p) and local_p.has_method("apply_spirit_can_buff"):
+		local_p.apply_spirit_can_buff()
+	## Efekt: yerelde apply_spirit_can_buff kendi oyuncumuza doğurdu; burada SADECE uzak kuklalara.
+	var scene: PackedScene = load("res://scenes/fx_spirit_can.tscn") as PackedScene
+	if scene == null:
+		return
+	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+		if is_instance_valid(rp) and rp.get("is_dead") != true:
+			rp.add_child(scene.instantiate())
+
+
+## Boss altınını toplayan (picker) dahil tüm katılımcılar arasında EŞİT böler; artan (amount % N) toplayana gider.
+## Her pay ilgili oyuncunun KİŞİSEL altınına eklenir (bkz. grant_personal_gold) ve HERKESİN ekranında toplanma noktasından
+## payın sahibine doğru bir altın uçar (bkz. _rpc_gold_share_fx / fx_gold_share.gd). Döner: false = paylaşılacak kimse yok
+## (tek katılımcı) - çağıran altını eskisi gibi doğrudan verir.
+func host_share_boss_gold(amount: int, from_pos: Vector2, picker: Node) -> bool:
+	if not is_host or amount <= 0:
+		return false
+	var participants: Array = get_reward_participants()
+	if participants.size() <= 1:
+		return false
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	var picker_id: int = local_id
+	if picker != null and is_instance_valid(picker) and not picker.is_in_group("player") and "peer_id" in picker:
+		picker_id = int(picker.peer_id)
+	var peer_ids: Array = []
+	for p: Dictionary in participants:
+		peer_ids.append(int(p["peer_id"]))
+	var shares: Dictionary = compute_gold_shares(amount, peer_ids, picker_id)
+	for pid in shares.keys():
+		var share: int = int(shares[pid])
+		if share <= 0:
+			continue
+		if int(pid) == local_id:
+			grant_personal_gold(share)
+		else:
+			grant_personal_gold.rpc_id(int(pid), share)
+	var fx_shares: Dictionary = {}
+	for pid in shares.keys():
+		if int(shares[pid]) > 0:
+			fx_shares[pid] = shares[pid]
+	_rpc_gold_share_fx.rpc(from_pos, fx_shares)
+	return true
+
+
+## Herkesin ekranında: toplanma noktasından her payın sahibine doğru uçan altınlar (kozmetik, altın host'ta zaten verildi).
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_gold_share_fx(from_pos: Vector2, shares: Dictionary) -> void:
+	var root: Node = get_tree().current_scene
+	if root == null:
+		return
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	var index: int = 0
+	for pid in shares.keys():
+		var target: Node = _find_player_by_peer_id(int(pid))
+		if target == null or not is_instance_valid(target) or not (target is Node2D):
+			continue
+		var fx := Node2D.new()
+		fx.set_script(load("res://scripts/fx_gold_share.gd"))
+		root.add_child(fx)
+		fx.call("setup", from_pos, target, index, int(pid) == local_id)
+		index += 1
 
 
 ## Şans faktörüyle her oyuncunun kişisel altınına doğrudan ekleme yapar -
@@ -2485,6 +2660,8 @@ func sync_oakley_bond_buff(target_peer_id: int, heal_per_hit: float, shield_per_
 	local_player.oakley_bond_shield_per_hit = shield_per_hit
 	local_player.oakley_bond_damage_reduction = reduction
 	local_player.oakley_bond_timer = duration
+	if local_player.has_method("ensure_oakley_leaf_barrier"):
+		local_player.ensure_oakley_leaf_barrier()
 
 
 ## Koruma Bariyeri'nin gerçek etkisi - buflanmış dostun take_damage()'ı

@@ -2,7 +2,7 @@ extends Node
 
 ## Kullanıcı isteği (2026-09-21): yeni karakter "Vampir Çocuk" (roster id 13) - yetenekleri kalkan yerine can harcar
 ## (Q/E maks. canın %4'ü, R açıkken saniyede %5'i), pasif %2 can emme + her 1 saldırı gücü için 1 can.
-##   Q: yakındaki 3 düşmana %130 hasar + kalıcı +1 maks. can (8sn)
+##   Q: yakındaki 3 düşmana %130 hasar + kalıcı +1 maks. can (6sn)
 ##   E: 5sn yarasa formu: %60 hız, %80 hasar azaltma, temas hasarı %80, silahlar gövdeye çekilir (22sn)
 ##   R: 6 küçük yarasa, %60 hasar, dönünce saldırı gücünün %5'i kadar can, hız saldırı hızıyla artar
 ## Bu test oyun mantığını (player.gd), paylaşılan formülleri (vampir_math.gd) ve diğer istemcideki kozmetik kopyayı
@@ -12,6 +12,9 @@ const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const RemotePlayerScene: PackedScene = preload("res://scenes/remote_player.tscn")
 const VampirMath: GDScript = preload("res://scripts/vampir_math.gd")
 const SwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.gd")
+const CharAnim: GDScript = preload("res://scripts/char_anim.gd")
+const ReadingUiWatcher: GDScript = preload("res://scripts/reading_ui_watcher.gd")
+const FoodScene: PackedScene = preload("res://scenes/food_drop.tscn")
 
 var _spawned: Array[Node] = []
 var _prev_char_id: int = 1
@@ -93,7 +96,15 @@ func test_roster_entry_and_files() -> void:
 	var def: Dictionary = Characters.DEFS[13]
 	assert(str(def["name"]) == "Vampir Çocuk", "isim: %s" % str(def["name"]))
 	assert(int(def["skill"]) == 40 and int(def["skill2"]) == 41 and int(def["skill3"]) == 42, "skill id'leri 40/41/42 olmalı")
-	assert(bool(def.get("always_walk", false)), "LPC setinde run animasyonu yok: always_walk şart (yoksa karakter görünmez olur)")
+	assert(not bool(def.get("always_walk", false)), "yeni sette run_* var: always_walk olmamalı (yoksa koşma klibi hiç oynamaz)")
+	## Kullanıcı isteği (2026-09-22): Vampir %30, sonra %10, sonra %15 daha büyütüldü (scale 1.27575 x 1.3 x 1.1 x 1.15) -> ayaklar aynı
+	## zemin çizgisinde kalsın diye offset.y = 0 ((41 - 24) x 1.993 ~ 34 px), ayrıca piksel elips ayak gölgesi (ground_shadow.gd) tanımlı olmalı.
+	## NOT: sonraki "%25 daha büyüt" isteği Vampir için GERİ ALINDI (kullanıcı: "Vampir çocuğa yaptığın büyüklük değişimini
+	## geri al, diğerlerine dokunma") - ölçek/offset/gölge yeniden eski değerlerinde.
+	assert(def["offset"] == Vector2(0, 0), "büyütülmüş Vampir'in ayaklarını zemin çizgisine oturtmak için offset.y = 0 ister")
+	assert(absf(def["scale"].x - 1.27575 * 1.3 * 1.1 * 1.15) < 0.001, "Vampir ölçeği varsayılanın x1.6445'i olmalı")
+	assert(def.has("ground_shadow") and def.has("ground_shadow_y"), "Vampir'in ayak gölgesi tanımlı olmalı")
+	assert(is_equal_approx(float(def["run_speed_ratio"]), 1.15), "koşma: hareket hızı bonusu %15'i geçince (talimat 2026-09-22)")
 	for key in ["skill_icon", "skill2_icon", "skill3_icon", "passive_icon", "frames", "portrait"]:
 		assert(ResourceLoader.exists(str(def[key])), "dosya yok: %s" % str(def[key]))
 	for txt in ["skill_desc", "skill2_desc", "skill3_desc", "passive"]:
@@ -103,20 +114,30 @@ func test_roster_entry_and_files() -> void:
 func test_sprite_frames_have_every_animation_the_game_asks_for() -> void:
 	var frames: SpriteFrames = load(str(Characters.DEFS[13]["frames"]))
 	assert(frames != null, "vampir_frames.tres yüklenemedi")
+	## (klip, kare sayısı, döngü) - sayfalar 48x48 hücre, satırlar aşağı/sol/sağ/yukarı (tools/gen_vampir_frames.py).
+	var expected: Array = [
+		["idle_", 4, true], ["walk_", 6, true], ["run_", 6, true], ["eat_", 3, false], ["hurt_", 2, false],
+		["read_", 4, true], ["shrug_", 4, false], ["downed_", 2, false], ["death_", 3, false],
+		["strike_", 4, false], ["chop_", 4, false], ["pickup_", 4, false], ["bat_", 4, true],
+	]
 	for dir in ["up", "left", "down", "right"]:
-		for prefix in ["idle_", "walk_", "spellcast_", "bat_"]:
-			assert(frames.has_animation(prefix + dir), "eksik animasyon: %s%s" % [prefix, dir])
-		assert(frames.get_frame_count("bat_" + dir) == 4, "bat_%s 4 kare olmalı" % dir)
-		assert(frames.get_animation_loop("bat_" + dir), "bat_%s döngü olmalı (E 5sn boyunca dönüyor)" % dir)
-		assert(frames.get_frame_count("walk_" + dir) == 9 and frames.get_frame_count("spellcast_" + dir) == 7)
-	assert(frames.has_animation("hurt"), "hurt yok")
-	## remote_player.gd'nin sessizce yok saydığı hata sınıfı: DEFS.always_walk true iken run_* gerekmez.
-	assert(not frames.has_animation("run_down"))
+		for e in expected:
+			var clip: String = str(e[0]) + dir
+			assert(frames.has_animation(clip), "eksik animasyon: %s" % clip)
+			assert(frames.get_frame_count(clip) == int(e[1]), "%s %d kare olmalı: %d" % [clip, int(e[1]), frames.get_frame_count(clip)])
+			assert(frames.get_animation_loop(clip) == bool(e[2]), "%s döngü=%s olmalı" % [clip, str(e[2])])
+		## Kullanıcı isteği: eat ~0.5 sn sürmeli.
+		var eat_secs: float = float(frames.get_frame_count("eat_" + dir)) / frames.get_animation_speed("eat_" + dir)
+		assert(is_equal_approx(eat_secs, 0.5), "eat_%s süresi 0.5 sn olmalı: %s" % [dir, str(eat_secs)])
+		assert(frames.get_frame_texture("idle_" + dir, 0).get_size() == Vector2(48, 48), "karakter kareleri 48x48")
+		assert(frames.get_frame_texture("bat_" + dir, 0).get_size() == Vector2(96, 112), "yarasa kareleri 96x112 (offset'e göre kaydırılmış tuval)")
+	## Eski (LPC) yönsüz "hurt" yok: hasar klibi hurt_<yön>, yere düşme downed_<yön>.
+	assert(not frames.has_animation("hurt"))
 
 
 func test_timing_tables() -> void:
 	var P: GDScript = load("res://scripts/player.gd")
-	assert(float(P.SKILL_TIMING[40]["cooldown"]) == 8.0, "Q 8sn")
+	assert(float(P.SKILL_TIMING[40]["cooldown"]) == 6.0, "Q 6sn")
 	assert(float(P.SKILL2_TIMING[41]["duration"]) == 5.0 and float(P.SKILL2_TIMING[41]["cooldown"]) == 22.0, "E 5sn süre / 22sn bekleme")
 	assert(float(P.SKILL3_TIMING[42]["cooldown"]) == 0.0, "R toggle: bekleme yok")
 	assert(P.VAMPIR_SKILL_COST_PERCENT == 0.04 and P.VAMPIR_ULTI_COST_PERCENT_PER_SEC == 0.05)
@@ -456,4 +477,194 @@ func test_vfx_nodes_spawn_and_free_themselves() -> void:
 	await get_tree().process_frame
 	for fx in fx_list:
 		assert(not is_instance_valid(fx), "efektler kendi kendini silmeli")
+	_cleanup()
+
+
+# ------------------------------------------------------------------ animasyon talimatı (Animasyon talimatlar.txt)
+# hurt / eat / walk-run / read / shrug / downed - ve klip ADI ağdan gittiği için diğer istemcideki kukla.
+
+func test_char_anim_helpers() -> void:
+	for n in ["attack_down", "spellcast_left", "shrug_up", "hurt_right", "eat_down"]:
+		assert(CharAnim.is_action_anim(n), "%s aksiyon klibi (bitene kadar ezilmez)" % n)
+	for n in ["idle_down", "walk_left", "run_up", "read_right", "bat_down", "downed_down", "death_left"]:
+		assert(not CharAnim.is_action_anim(n), "%s aksiyon klibi DEĞİL (döngü/kalıcı poz)" % n)
+	assert(CharAnim.is_cast_anim("shrug_down") and CharAnim.is_cast_anim("spellcast_down") and not CharAnim.is_cast_anim("hurt_down"))
+	assert(CharAnim.dir_of("walk_left") == "left" and CharAnim.dir_of("death") == "down")
+
+
+func test_hurt_plays_without_shield_at_most_once_per_two_seconds() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	player.facing = "left"
+	player.take_damage(5.0)
+	assert(str(player.anim.animation) == "hurt_left", "kalkansız hasarda hurt_<yön>: %s" % str(player.anim.animation))
+	## 2 sn dolmadan ikinci hasar: klip TEKRAR oynamaz (150 ms'lik dokunulmazlık penceresi bu testin konusu değil).
+	player.anim.play("idle_left")
+	player._last_damage_taken_at_msec = -999999
+	player.take_damage(5.0)
+	assert(str(player.anim.animation) == "idle_left", "2 sn dolmadan tekrar oynamamalı: %s" % str(player.anim.animation))
+	## 2 sn geçti: yine oynar.
+	player._last_hurt_anim_msec -= 2001
+	player._last_damage_taken_at_msec = -999999
+	player.take_damage(5.0)
+	assert(str(player.anim.animation) == "hurt_left", "2 sn sonra yine oynar")
+	## Bitene kadar yürüme/bekleme ezmez.
+	player._update_animation(true)
+	assert(str(player.anim.animation) == "hurt_left", "hurt bitmeden walk/idle ezmemeli")
+	_cleanup()
+
+
+func test_hurt_does_not_play_when_the_shield_absorbs_the_hit() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	player.item_shield_max = 200.0
+	player.item_shield_hp = 200.0
+	player.shield_protection = 0.6
+	player.take_damage(10.0)
+	assert(player.item_shield_hp < 200.0, "kalkan hasarı emdi")
+	assert(not str(player.anim.animation).begins_with("hurt_"), "kalkan varken hurt oynamaz: %s" % str(player.anim.animation))
+	_cleanup()
+
+
+func test_eat_plays_when_food_is_picked_up_and_lasts_half_a_second() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	player.facing = "up"
+	var food: Node = FoodScene.instantiate()
+	add_child(food)
+	_spawned.append(food)
+	food._on_body_entered(player) ## yerden yemek alma anı (food_drop.gd)
+	assert(str(player.anim.animation) == "eat_up", "yemek alınınca eat_<yön>: %s" % str(player.anim.animation))
+	var frames: SpriteFrames = player.anim.sprite_frames
+	assert(is_equal_approx(float(frames.get_frame_count("eat_up")) / frames.get_animation_speed("eat_up"), 0.5), "eat ~0.5 sn")
+	assert(is_equal_approx(player.anim.speed_scale, 1.0), "süre yürüme hız çarpanından etkilenmemeli")
+	player._update_animation(true)
+	assert(str(player.anim.animation) == "eat_up", "eat bitene kadar yürüme ezmemeli")
+	_cleanup()
+
+
+func test_walk_at_normal_speed_and_run_when_speed_bonus_exceeds_twenty_percent() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	player.facing = "down"
+	player._update_animation(true)
+	assert(str(player.anim.animation) == "walk_down", "standart hızda walk: %s" % str(player.anim.animation))
+	player.item_speed_percent = 0.19
+	player._update_animation(true)
+	assert(str(player.anim.animation) == "walk_down", "%%19 bonus hâlâ walk")
+	player.item_speed_percent = 0.21
+	player._update_animation(true)
+	assert(str(player.anim.animation) == "run_down", "%%21 bonus (stat) run: %s" % str(player.anim.animation))
+	player.item_speed_percent = 0.0
+	player.skill_speed_multiplier = 1.3 ## yetenek kaynaklı bonus
+	player._update_animation(true)
+	assert(str(player.anim.animation) == "run_down", "yetenek hız bonusu da sayılır")
+	player.skill_speed_multiplier = 1.0
+	player.spirit_speed_bonus = 0.3 ## geçici hız bonusu (Taktiksel ruhani yetenek)
+	player._update_animation(true)
+	assert(str(player.anim.animation) == "run_down", "geçici hız bonusu da sayılır")
+	player.spirit_speed_bonus = 0.0
+	player._update_animation(false)
+	assert(str(player.anim.animation) == "idle_down", "durunca idle")
+	_cleanup()
+
+
+func test_shrug_plays_on_q_and_r_but_not_on_e() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	var target: FakeEnemy = _make_enemy(Vector2(1050, 1000))
+	assert(target != null)
+	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE
+	player._activate_skill()
+	assert(player.skill_state == "active", "Q tetiklenmeli")
+	assert(str(player.anim.animation) == "shrug_down", "Q: shrug_<yön>: %s" % str(player.anim.animation))
+	player._update_animation(true)
+	assert(str(player.anim.animation) == "shrug_down", "shrug bitene kadar yürüme ezmemeli")
+	## R: standart _activate_skill3'ü bypass eden toggle - shrug elle oynatılıyor.
+	player.anim.play("idle_down")
+	player._vampir_toggle_bats()
+	assert(str(player.anim.animation) == "shrug_down", "R: shrug_<yön>: %s" % str(player.anim.animation))
+	player._vampir_stop_bats()
+	## E: yarasaya dönüşüm kendi bat_* klibini oynatır, shrug oynamaz.
+	player.anim.play("idle_down")
+	player._activate_skill2()
+	assert(str(player.anim.animation) == "idle_down", "E'de shrug yok: %s" % str(player.anim.animation))
+	_cleanup()
+
+
+func test_read_pose_while_a_shop_or_card_screen_is_open_and_ends_when_it_closes() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	assert(player.has_node("ReadingUiWatcher"), "read_ klibi olan karakterde izleyici kurulur")
+	var watcher: Node = player.get_node("ReadingUiWatcher")
+	watcher._process(0.016)
+	assert(not player._reading_ui_active, "ekran yokken okumaz")
+	var screen := CanvasLayer.new()
+	screen.add_to_group(ReadingUiWatcher.GROUP)
+	add_child(screen)
+	_spawned.append(screen)
+	watcher._process(0.016)
+	assert(player._reading_ui_active and str(player.anim.animation) == "read_down", "ekran açılınca read_<yön>: %s" % str(player.anim.animation))
+	assert(player.anim.process_mode == Node.PROCESS_MODE_ALWAYS, "level/sandık ekranları oyunu duraklatır: sprite duraklamada da oynamalı")
+	player._update_animation(false)
+	assert(str(player.anim.animation) == "read_down", "ayaktayken okumaya devam")
+	player._update_animation(true) ## dükkan oyunu duraklatmaz: yürüyünce normal klip
+	assert(str(player.anim.animation) == "walk_down")
+	player._update_animation(false)
+	assert(str(player.anim.animation) == "read_down", "durunca tekrar okuma")
+	## Ekran kapanınca (görünmez YA DA silinmiş) biter.
+	screen.visible = false
+	watcher._process(0.016)
+	assert(not player._reading_ui_active, "ekran kapanınca okuma biter")
+	assert(player.anim.process_mode == Node.PROCESS_MODE_INHERIT, "sprite duraklama muafiyeti kalkar")
+	assert(str(player.anim.animation) == "idle_down", "okuma klibi ekranda takılı kalmamalı: %s" % str(player.anim.animation))
+	screen.visible = true
+	watcher._process(0.016)
+	assert(player._reading_ui_active)
+	screen.queue_free() ## is_queued_for_deletion(): silinmeyi beklerken de "açık" sayılmaz
+	watcher._process(0.016)
+	assert(not player._reading_ui_active, "silinen ekran okumayı bitirir")
+	_cleanup()
+
+
+func test_every_shop_and_card_screen_registers_for_the_read_pose() -> void:
+	for path in ["res://scripts/level_up_screen.gd", "res://scripts/chest_menu.gd", "res://scripts/weapon_select_screen.gd", "res://scripts/merchant_shop_screen.gd", "res://scripts/shop_panel.gd"]:
+		var src: String = (load(path) as GDScript).source_code
+		assert(src.contains("add_to_group(ReadingUiWatcher.GROUP)"), "%s okuma grubuna eklenmiyor" % path)
+
+
+func test_downed_pose_and_remote_death_direction() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	player.facing = "right"
+	player._go_down()
+	assert(str(player.anim.animation) == "downed_right", "yere düşünce downed_<yön>: %s" % str(player.anim.animation))
+	if get_tree().current_scene == null:
+		get_tree().current_scene = self
+	var rp: Node = RemotePlayerScene.instantiate()
+	add_child(rp)
+	_spawned.append(rp)
+	rp.setup(99, 13, "Vamp")
+	rp.update_position_and_anim_from_net(Vector2(500, 500), "walk_left")
+	rp._play_death_animation()
+	assert(str(rp.anim.animation) == "death_left", "kukla ölümü son yönde oynatır: %s" % str(rp.anim.animation))
+	_cleanup()
+
+
+func test_remote_puppet_plays_the_new_clip_names_and_keeps_shrug_looping() -> void:
+	if get_tree().current_scene == null:
+		get_tree().current_scene = self
+	var rp: Node = RemotePlayerScene.instantiate()
+	add_child(rp)
+	_spawned.append(rp)
+	rp.setup(99, 13, "Vamp")
+	## Klip adı transform kanalıyla gelir (CLAUDE.md: SpriteFrames'te yoksa sessizce yok sayılırdı).
+	for clip in ["eat_down", "hurt_left", "read_up", "run_right", "shrug_down", "downed_down"]:
+		rp.update_position_and_anim_from_net(Vector2(500, 500), clip)
+		assert(str(rp.anim.animation) == clip, "kukla %s oynatmalı: %s" % [clip, str(rp.anim.animation)])
+	## Kanal yeteneği: ad değişmeden klip biterse yeniden başlar (bkz. player.gd _play_cast_animation döngüsü).
+	rp.update_position_and_anim_from_net(Vector2(500, 500), "shrug_down")
+	rp.anim.stop()
+	rp.update_position_and_anim_from_net(Vector2(500, 500), "shrug_down")
+	assert(rp.anim.is_playing(), "bitmiş shrug klibi aynı adla gelince yeniden başlamalı")
 	_cleanup()

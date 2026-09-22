@@ -34,6 +34,7 @@ extends Node2D
 ## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
 const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
 
+const PixelDrawScript: GDScript = preload("res://scripts/pixel_draw.gd")
 const NETWORK_STATE_THROTTLE := 0.2 ## saniyede ~5 kez - skeleton_pet.gd _broadcast_network_state ile AYNI aralık
 
 ## player.gd _skill_oakley_vines() tarafından atanır - broadcast_oakley_vine_
@@ -68,7 +69,8 @@ const TARGET_HIT_COOLDOWN := 1.5
 var _damage_bonus: float = 0.0
 var _lifetime_remaining: float = LIFETIME
 var _target: Node2D = null
-var _visual: Line2D = null
+## Pixel tarzı dikenli sarmaşık görseli (bkz. oakley_vine_visual.gd) - eskiden Line2D'ydi; `points` arayüzü aynı kaldı.
+var _visual: Node2D = null
 var _recent_hits: Dictionary = {} ## instance_id -> kalan cooldown süresi
 var _wander_point: Vector2 = Vector2.ZERO
 var _has_wander_point: bool = false
@@ -80,10 +82,14 @@ func setup(caster_damage_bonus: float) -> void:
 
 func _ready() -> void:
 	z_index = 4
-	_visual = Line2D.new()
-	_visual.width = 5.0
-	_visual.default_color = Color(0.25, 0.65, 0.2, 0.9)
+	## Kardeş sarmaşıklar birbirinin hedefini görebilsin (bkz. _pick_new_target - aynı yaratığa üşüşmesinler).
+	if not _is_network_visual:
+		add_to_group("oakley_vines")
+	_visual = Node2D.new()
+	_visual.set_script(preload("res://scripts/oakley_vine_visual.gd"))
 	add_child(_visual)
+	## Toprağın içinden çıkış: küçük toprak patlaması (gerçek + kozmetik kopyada aynı).
+	PixelDrawScript.spawn_burst(get_tree().current_scene, global_position, "dust", 8, 70.0, 0.4)
 	_pick_new_target()
 
 
@@ -162,8 +168,21 @@ func _broadcast_network_state() -> void:
 ## eski not - 3 sarmaşığın aynı yaratığa üşüşmemesi içindi). Artık en
 ## yakın olan seçiliyor.
 func _pick_new_target() -> void:
+	## Kullanıcı isteği (2026-09-21): "Oakley'in sarmaşıkları 3 tane olmalı" - 3 sarmaşık zaten oluşuyordu ama üçü de EN YAKIN
+	## AYNI yaratığa kilitlenip aynı yerde üst üste biniyor, ekranda tek sarmaşık gibi görünüyordu. Artık her sarmaşık, kardeşlerinin
+	## henüz KİLİTLENMEDİĞİ en yakın yaratığı seçer (en yakın önceliği korunur); hepsi doluysa (yaratık sayısı 3'ten azsa) yine
+	## en yakına gider.
+	var claimed: Dictionary = {}
+	for other in get_tree().get_nodes_in_group("oakley_vines"):
+		if other == self or not is_instance_valid(other):
+			continue
+		var other_target: Variant = other.get("_target")
+		if other_target != null and is_instance_valid(other_target):
+			claimed[(other_target as Node).get_instance_id()] = true
 	var best: Node2D = null
 	var best_dist: float = INF
+	var best_any: Node2D = null
+	var best_any_dist: float = INF
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
@@ -172,10 +191,15 @@ func _pick_new_target() -> void:
 		if not VisionFogScript.can_target(e):
 			continue
 		var d: float = global_position.distance_to(e.global_position)
-		if d <= RETARGET_SEARCH_RADIUS and d < best_dist:
+		if d > RETARGET_SEARCH_RADIUS:
+			continue
+		if d < best_any_dist:
+			best_any = e
+			best_any_dist = d
+		if not claimed.has(e.get_instance_id()) and d < best_dist:
 			best = e
 			best_dist = d
-	_target = best
+	_target = best if best != null else best_any
 
 
 func _on_hit() -> void:

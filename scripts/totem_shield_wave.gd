@@ -18,6 +18,23 @@ class_name TotemShieldWave
 ## spawn_pulse (start==end) HİÇ ÇİZİLMİYORDU - nabız halkası artık kendi
 ## _draw_pulse moduyla gerçekten görünür.
 
+## Kullanıcı isteği (2026-09-21): Shaman totem efektleri SIFIRDAN pixel tarzında (1 texel detay, bkz. hafıza "Pixel density 48x48"):
+## düzgün çizgi/daire/çokgen çizimleri kaldırıldı, hepsi PixelDraw ile ızgaraya oturan pixel'ler. API (spawn/spawn_pulse/_glyph_*/_draw_*)
+## korundu.
+const PixelDraw := preload("res://scripts/pixel_draw.gd")
+
+## Uçan pixel kalkan simgesi (7x8): k = koyu hat, b = ana renk, w = parlak, . = boş
+const SHIELD_ART := [
+	"kkkkkkk",
+	"kbbwbbk",
+	"kbwwwbk",
+	"kbbwbbk",
+	"kbbbbbk",
+	".kbbbk.",
+	"..kbk..",
+	"...k...",
+]
+
 var start_pos: Vector2 = Vector2.ZERO
 ## Dalga hedefi (Player/RemotePlayer). Takip ederken konumunu canlı okuruz;
 ## hedef sahneden silinirse en son bilinen konumda ripple ile biter.
@@ -149,30 +166,30 @@ func _draw_travel() -> void:
 	elif t > 0.9:
 		alpha = (1.0 - t) / 0.1
 	var light := wave_color.lightened(0.45)
+	var dark := wave_color.darkened(0.45)
 
-	## 1) Arkada kalan sönümlenen parıltılar.
+	## 1) Arkada kalan sönümlenen pixel parıltılar.
 	for p in _trail:
 		var a: float = 1.0 - float(p["age"]) / float(p["life"])
-		draw_circle(p["pos"] as Vector2, float(p["size"]),
-			Color(light.r, light.g, light.b, a * 0.55 * alpha))
+		PixelDraw.px(self, p["pos"] as Vector2, 1, Color(light.r, light.g, light.b, a * 0.8 * alpha))
 
-	## 2) Simgenin yörüngesinde dönen iki küçük cini.
+	## 2) Simgenin yörüngesinde dönen iki minik pixel.
 	for i in 2:
 		var oa := _elapsed * 6.0 + float(i) * PI
 		var mopos := head + Vector2.from_angle(oa) * 9.0
-		draw_circle(mopos, 2.0, Color(wave_color.r, wave_color.g, wave_color.b, 0.8 * alpha))
-		draw_circle(mopos, 0.9, Color(1, 1, 1, 0.9 * alpha))
+		PixelDraw.px(self, mopos, 1, Color(wave_color.r, wave_color.g, wave_color.b, 0.9 * alpha))
+		PixelDraw.px(self, mopos + Vector2(PixelDraw.TEXEL, 0), 1, Color(1, 1, 1, 0.8 * alpha))
 
-	## 3) Kalkan simgesi - hafif sallanarak süzülür; üç katman kontur
-	## (kalın saydam -> orta -> ince parlak) hale hissi verir.
-	var sway := sin(_elapsed * 9.0) * 0.12
-	var pts := _glyph_outline(head, sway)
-	draw_polyline(pts, Color(wave_color.r, wave_color.g, wave_color.b, 0.22 * alpha), 7.0, true)
-	draw_polyline(pts, Color(wave_color.r, wave_color.g, wave_color.b, 0.65 * alpha), 3.0, true)
-	draw_polyline(pts, Color(light.r, light.g, light.b, alpha), 1.5, true)
-	draw_colored_polygon(pts, Color(wave_color.r, wave_color.g, wave_color.b, 0.25 * alpha))
-	## Simge üstündeki parlak çekirdek.
-	draw_circle(head + Vector2(0, -3).rotated(sway), 2.0, Color(1, 1, 1, 0.85 * alpha))
+	## 3) Pixel kalkan simgesi - hafif sallanarak süzülür (bkz. SHIELD_ART).
+	var sway: float = sin(_elapsed * 9.0) * PixelDraw.TEXEL * 0.8
+	var pal := {
+		"k": Color(dark.r, dark.g, dark.b, alpha),
+		"b": Color(wave_color.r, wave_color.g, wave_color.b, alpha),
+		"w": Color(light.r, light.g, light.b, alpha),
+	}
+	PixelDraw.art(self, head + Vector2(sway, 0), SHIELD_ART, pal, 1.0)
+	## Simge üstünde kısa bir parlama çizgisi
+	PixelDraw.px(self, head + Vector2(sway - PixelDraw.TEXEL, -PixelDraw.TEXEL * 2.0), 1, Color(1, 1, 1, 0.85 * alpha))
 
 
 ## ---------- Varış ----------
@@ -190,36 +207,33 @@ func _burst_arrival_sparks() -> void:
 		})
 
 
+func _hex_ring(center: Vector2, radius: float, rot: float, col: Color) -> void:
+	var prev: Vector2 = center + Vector2.from_angle(rot) * radius
+	for i in range(1, 7):
+		var nxt: Vector2 = center + Vector2.from_angle(rot + float(i) * TAU / 6.0) * radius
+		PixelDraw.line(self, prev, nxt, col, 1)
+		prev = nxt
+
+
 func _draw_arrival() -> void:
 	var t := clampf((_elapsed - travel_time) / ripple_time, 0.0, 1.0)
 	var fade := 1.0 - t
 	var light := wave_color.lightened(0.45)
 
-	## 1) Yukarı savrulan kıvılcımlar.
+	## 1) Yukarı savrulan pixel kıvılcımlar.
 	for p in _sparks:
 		var a: float = 1.0 - float(p["age"]) / float(p["life"])
-		draw_circle(p["pos"] as Vector2, float(p["size"]),
-			Color(light.r, light.g, light.b, a * 0.8))
+		PixelDraw.px(self, p["pos"] as Vector2, 1 if float(p["size"]) < 2.2 else 2, Color(light.r, light.g, light.b, a * 0.9))
 
-	## 2) Dönen altıgen halka (kalkan simgesinin büyüyüp dağılması).
+	## 2) Dönen pixel altıgen halka (kalkanın oturması) - iki halka, içteki ters döner.
 	var radius := 10.0 + 26.0 * t
-	var rot := t * 0.7
-	var pts := PackedVector2Array()
-	for i in 7:
-		var a := rot + float(i % 6) * TAU / 6.0
-		pts.append(end_pos + Vector2.from_angle(a) * radius)
-	draw_polyline(pts, Color(wave_color.r, wave_color.g, wave_color.b, fade * 0.9), 2.5, true)
+	_hex_ring(end_pos, radius, t * 0.7, Color(wave_color.r, wave_color.g, wave_color.b, fade * 0.95))
+	_hex_ring(end_pos, radius * 0.62, -t * 1.1, Color(light.r, light.g, light.b, fade * 0.55))
 
-	## 3) İçe dolan dolgu flaşı.
-	var fill_pts := PackedVector2Array()
-	for i in 7:
-		var a := -rot * 0.6 + float(i % 6) * TAU / 6.0
-		fill_pts.append(end_pos + Vector2.from_angle(a) * radius * (1.0 - t * 0.45))
-	draw_colored_polygon(fill_pts, Color(wave_color.r, wave_color.g, wave_color.b, fade * 0.22))
-
-	## 4) Merkez parlaması.
-	draw_circle(end_pos, 10.0 + 14.0 * t, Color(wave_color.r, wave_color.g, wave_color.b, fade * 0.25))
-	draw_circle(end_pos, 6.0 * (1.0 - t) + 2.0, Color(1, 1, 1, fade * 0.7))
+	## 3) Merkez parlaması: kısa dither + parlak çekirdek.
+	if t < 0.5:
+		PixelDraw.disc_dither(self, end_pos, 12.0 * (1.0 - t), Color(wave_color.r, wave_color.g, wave_color.b, 0.55 * fade), int(_elapsed * 40.0), 1)
+	PixelDraw.px(self, end_pos, 2 if t < 0.4 else 1, Color(1, 1, 1, fade * 0.9))
 
 
 ## ---------- Totemin kendi nabız halkası (spawn_pulse) ----------
@@ -229,21 +243,22 @@ func _draw_pulse() -> void:
 	var fade := 1.0 - t
 	var light := wave_color.lightened(0.45)
 
-	## Yumuşak merkez parlaması.
-	draw_circle(start_pos, 8.0 + 10.0 * t, Color(wave_color.r, wave_color.g, wave_color.b, fade * 0.18))
+	## Kısa merkez parlaması (dither).
+	if t < 0.4:
+		PixelDraw.disc_dither(self, start_pos, 8.0 + 8.0 * t, Color(wave_color.r, wave_color.g, wave_color.b, 0.4 * (1.0 - t / 0.4)), int(_elapsed * 40.0), 1)
 
-	## Büyüyen çift halka.
+	## Büyüyen çift pixel halka (yer düzlemine hafif basık - 3/4 görünüm).
 	var radius := 8.0 + 34.0 * t
-	draw_arc(start_pos, radius, 0.0, TAU, 40, Color(wave_color.r, wave_color.g, wave_color.b, fade * 0.7), 2.0, true)
-	draw_arc(start_pos, radius * 0.62, 0.0, TAU, 32, Color(light.r, light.g, light.b, fade * 0.45), 1.5, true)
+	PixelDraw.ring(self, start_pos, radius, Color(wave_color.r, wave_color.g, wave_color.b, fade * 0.85), 1)
+	PixelDraw.ring(self, start_pos, radius * 0.62, Color(light.r, light.g, light.b, fade * 0.55), 1, 3, 2, _elapsed * 16.0)
 
-	## Dönen 6 ışıyan çizgi.
+	## Dönen 6 ışıyan pixel işaret.
 	var rot := t * 1.2
 	for i in 6:
 		var a := rot + float(i) * TAU / 6.0
-		var from := start_pos + Vector2.from_angle(a) * (radius * 0.85)
+		var from := start_pos + Vector2.from_angle(a) * (radius * 0.9)
 		var to := start_pos + Vector2.from_angle(a) * (radius * 1.15)
-		draw_line(from, to, Color(light.r, light.g, light.b, fade * 0.55), 2.0, true)
+		PixelDraw.line(self, from, to, Color(light.r, light.g, light.b, fade * 0.7), 1)
 
 
 ## ---------- Parçacık ortak güncelleme ----------

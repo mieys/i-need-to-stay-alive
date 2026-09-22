@@ -239,9 +239,14 @@ func mark_as_network_visual() -> void:
 ## _network_target_position/_network_state_received HİÇBİR ZAMAN set
 ## edilmiyordu - tilki diğer oyuncularda spawn noktasında sonsuza dek
 ## hareketsiz/idle kalıyordu.
-func update_network_pet_state(pos: Vector2, _is_attacking: bool, _sprite_row: int = -1) -> void:
+## DÜZELTME (kullanıcı isteği 2026-09-22: multiplayer senkron kontrolü, bkz. _broadcast_network_state/
+## notify_teleport üstündeki notlar) - "teleport" true ise (Matthew'in Tilki Hücumu gibi ANINDA konum
+## değişiklikleri) kozmetik kopya _process_network_visual'ın yumuşak kaymasını BEKLEMEDEN direkt ışınlanır.
+func update_network_pet_state(pos: Vector2, _is_attacking: bool, _sprite_row: int = -1, teleport: bool = false) -> void:
 	_network_target_position = pos
 	_network_state_received = true
+	if teleport:
+		global_position = pos
 
 
 ## Kozmetik kopyanın fizik adımı: kendi (zaten owner_player'sız çalışmayan)
@@ -274,9 +279,23 @@ func _process_network_visual(delta: float) -> void:
 func _broadcast_network_state() -> void:
 	if not NetworkManager.is_multiplayer_active or network_instance_id.is_empty():
 		return
-	if NetworkManager.should_throttle("petpos_%s" % network_instance_id, 0.15):
+	## bkz. notify_teleport() - ışınlanmadan sonraki İLK yayın throttle'ı ATLAR (aksi halde en fazla 0.15sn
+	## eski konumda kalabilirdi) ve "teleport" bayrağını taşır ki kozmetik kopya da ANINDA sıçrasın.
+	if not _pending_teleport_broadcast and NetworkManager.should_throttle("petpos_%s" % network_instance_id, 0.15):
 		return
-	NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, global_position, false)
+	var is_teleport: bool = _pending_teleport_broadcast
+	_pending_teleport_broadcast = false
+	NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, global_position, false, -1.0, -1.0, -1, is_teleport)
+
+
+## Matthew'in Tilki Hücumu (player.gd _skill_matthew_fox_strike) gibi tilkiyi ANINDA ışınlayan yetenekler
+## bunu çağırır - bir sonraki _broadcast_network_state() throttle'ı atlayıp "teleport" bayrağıyla gönderir,
+## diğer istemcilerdeki kozmetik kopya yumuşak kaymak yerine AYNI ANDA ışınlanır (bkz. update_network_pet_state).
+var _pending_teleport_broadcast: bool = false
+
+
+func notify_teleport() -> void:
+	_pending_teleport_broadcast = true
 
 
 ## Matthew'a (sahibine) EN YAKIN, FOCUS_RADIUS içindeki yaratığı seçer -

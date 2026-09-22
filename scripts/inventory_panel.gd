@@ -66,6 +66,41 @@ signal closed
 ]
 @onready var items_grid: GridContainer = $Frame/ItemsScroll/ItemsGrid
 
+## Kullanıcı isteği (2026-09-22): "Envanter arayüzünü seyyar satıcı gibi pixel tarzda, diğer arayüzlerle uyumlu yap" - yuvalar artık
+## seyyar satıcıdaki gibi TierSystem.MINI_FRAME_TEXTURES çerçeveli 96 px kareler (ikon alanı 64 px = eşya ikonları 2x), pencere/başlık/altın
+## alanı UIKit (assets/ui/kit) ile. Satış/sürükleme mantığı DEĞİŞMEDİ.
+const SLOT_SIZE := 80.0
+const SLOT_INSET := 8.0
+
+
+## Yuva düğmesi: kendi stili boş (çerçeveyi biz çiziyoruz), çerçeve dokusu çocuk TextureRect; fare üstüne gelince çerçeve parlar.
+func _decorate_slot(btn: Button) -> void:
+	var empty := StyleBoxEmpty.new()
+	for st in ["normal", "hover", "pressed", "focus", "disabled"]:
+		btn.add_theme_stylebox_override(st, empty)
+	var frame := TextureRect.new()
+	frame.name = "SlotFrame"
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	frame.stretch_mode = TextureRect.STRETCH_SCALE
+	frame.texture = TierSystem.MINI_FRAME_TEXTURES[0]
+	btn.add_child(frame)
+	btn.mouse_entered.connect(func() -> void:
+		if is_instance_valid(frame):
+			frame.self_modulate = Color(1.25, 1.18, 1.05, frame.self_modulate.a))
+	btn.mouse_exited.connect(func() -> void:
+		if is_instance_valid(frame):
+			frame.self_modulate = Color(1, 1, 1, frame.self_modulate.a))
+	UISound.connect_all_buttons(btn)
+
+
+func _dim_slot(btn: Button) -> void:
+	var frame: Node = btn.get_node_or_null("SlotFrame")
+	if frame:
+		(frame as TextureRect).self_modulate = Color(1, 1, 1, 0.55)
+
+
 var player: Node = null
 
 ## GameManager.owned_items'ın son bilinen "imzası" (anahtarların sıralı
@@ -202,7 +237,7 @@ func _ready() -> void:
 	## için ui_sound.gd'nin _looks_like_icon_slot kontrolünü atlayıp yukarıdaki
 	## taramadan GENİŞ Button.png stiliyle çıkıyordu - kare olduğu için KARE
 	## mini button.png stiliyle EZİLİYOR.
-	ShopPanel._apply_mini_wood_button_style(close_button)
+	_apply_kit_layout()
 	if not close_button.pressed.is_connected(_on_close_pressed):
 		close_button.pressed.connect(_on_close_pressed)
 	if is_inside_tree() and get_tree() != null:
@@ -225,12 +260,12 @@ func _ready() -> void:
 
 	# Build MMORPG layout
 	var main_scroll: ScrollContainer = ScrollContainer.new()
-	main_scroll.custom_minimum_size = Vector2(492, 380)
+	main_scroll.custom_minimum_size = Vector2(640, 420)
 	main_scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
-	main_scroll.offset_left = 14
-	main_scroll.offset_top = 64
-	main_scroll.offset_right = -14
-	main_scroll.offset_bottom = -64
+	main_scroll.offset_left = 30
+	main_scroll.offset_top = 96
+	main_scroll.offset_right = -30
+	main_scroll.offset_bottom = -104
 	$Frame.add_child(main_scroll)
 	
 	main_layout = VBoxContainer.new()
@@ -241,8 +276,7 @@ func _ready() -> void:
 	# 1. Silahlar
 	var title_weapons: Label = Label.new()
 	title_weapons.text = "SİLAHLAR (Satmak için tıklayın)"
-	title_weapons.add_theme_font_size_override("font_size", 16)
-	title_weapons.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	UIKit.style_label(title_weapons, UIKit.FS_BODY, UIKit.C_ACCENT, 3)
 	main_layout.add_child(title_weapons)
 	
 	weapons_grid = HBoxContainer.new()
@@ -252,32 +286,20 @@ func _ready() -> void:
 	# 2. Ekipmanlar (Shield & Utility/İşlevsellik)
 	var title_equip: Label = Label.new()
 	title_equip.text = "EKİPMANLAR (Satmak için tıklayın)"
-	title_equip.add_theme_font_size_override("font_size", 16)
-	title_equip.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	UIKit.style_label(title_equip, UIKit.FS_BODY, UIKit.C_ACCENT, 3)
 	main_layout.add_child(title_equip)
 	
 	equip_grid = HBoxContainer.new()
 	equip_grid.add_theme_constant_override("separation", 10)
 	main_layout.add_child(equip_grid)
 
-	# 3. Savaş Modları
-	var title_mods: Label = Label.new()
-	title_mods.text = "SAVAŞ MODLARI (Kısayol slotuna sürükleyin)"
-	title_mods.add_theme_font_size_override("font_size", 16)
-	title_mods.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
-	main_layout.add_child(title_mods)
-	
-	mods_grid = GridContainer.new()
-	mods_grid.columns = 7
-	mods_grid.add_theme_constant_override("h_separation", 10)
-	mods_grid.add_theme_constant_override("v_separation", 10)
-	main_layout.add_child(mods_grid)
+	# 3. Savaş Modları - kullanıcı isteği (2026-09-22): "Envanterde savaş modları gözüküyor onları kaldır" - bölüm artık kurulmuyor
+	# (mods_grid null kalır, bkz. _refresh_mods'taki koruma). Modların kendisi (dükkan satın alımı/aktif mod) etkilenmez.
 
 	# 4. Pasif Eşyalar
 	var title_items: Label = Label.new()
 	title_items.text = "PASİF EŞYALAR (Satmak için tıklayın)"
-	title_items.add_theme_font_size_override("font_size", 16)
-	title_items.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	UIKit.style_label(title_items, UIKit.FS_BODY, UIKit.C_ACCENT, 3)
 	main_layout.add_child(title_items)
 	
 	items_grid_box = GridContainer.new()
@@ -288,6 +310,59 @@ func _ready() -> void:
 
 	_refresh()
 
+
+## Kullanıcı isteği (2026-09-22): pencere çerçevesi/başlık tahtası/kapat/alt bilgi UIKit ile (bkz. seyyar satıcı ekranı, merchant_shop_screen.gd).
+func _apply_kit_layout() -> void:
+	$Frame.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+	var header: Panel = $Frame.get_node_or_null("HeaderBar") as Panel
+	if header:
+		header.add_theme_stylebox_override("panel", UIKit.panel_style("plaque"))
+		header.offset_left = 26.0
+		header.offset_right = -26.0
+		header.offset_top = 22.0
+		header.offset_bottom = 78.0
+		var title: Label = header.get_node_or_null("Title") as Label
+		if title:
+			UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_TEXT, 4)
+			title.offset_left = 24.0
+	close_button.icon = null
+	close_button.text = "X"
+	close_button.offset_left = -86.0
+	close_button.offset_top = 26.0
+	close_button.offset_right = -32.0
+	close_button.offset_bottom = 74.0
+	UIKit.style_button(close_button, "red", true, UIKit.FS_BODY)
+	## Altın / tecrübe alt bilgisi: koyu çukur zemin + büyük pixel yazı
+	var footer_bg := Panel.new()
+	footer_bg.name = "FooterBG"
+	footer_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	footer_bg.offset_left = 28.0
+	footer_bg.offset_right = -28.0
+	footer_bg.offset_top = -92.0
+	footer_bg.offset_bottom = -28.0
+	footer_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	footer_bg.add_theme_stylebox_override("panel", UIKit.panel_style("inset"))
+	$Frame.add_child(footer_bg)
+	$Frame.move_child(footer_bg, gold_label.get_parent().get_children().find($Frame.get_node("GoldIcon")))
+	var gi: Control = $Frame.get_node("GoldIcon") as Control
+	var xi: Control = $Frame.get_node("XPIcon") as Control
+	for c: Control in [gi, xi]:
+		c.offset_top = -80.0
+		c.offset_bottom = -40.0
+	gi.offset_left = 48.0
+	gi.offset_right = 88.0
+	gold_label.offset_left = 98.0
+	gold_label.offset_right = 300.0
+	xi.offset_left = 340.0
+	xi.offset_right = 380.0
+	xp_label.offset_left = 390.0
+	xp_label.offset_right = 600.0
+	for l: Label in [gold_label, xp_label]:
+		l.offset_top = -86.0
+		l.offset_bottom = -34.0
+		l.add_theme_font_size_override("font_size", UIKit.FS_TITLE)
+		l.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+		l.add_theme_constant_override("outline_size", 4)
 
 func _on_close_pressed() -> void:
 	visible = false
@@ -336,9 +411,8 @@ func _refresh_weapons() -> void:
 	
 	for i: int in range(5):
 		var btn: Button = Button.new()
-		btn.custom_minimum_size = Vector2(62, 62)
-		btn.add_theme_stylebox_override("normal", style_box)
-		btn.add_theme_stylebox_override("focus", style_box)
+		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+		_decorate_slot(btn)
 		
 		if i < GameManager.owned_weapons.size():
 			var entry: Dictionary = GameManager.owned_weapons[i]
@@ -357,34 +431,37 @@ func _refresh_weapons() -> void:
 				icon_tr.texture = icon_tex
 				icon_tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				icon_tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-				icon_tr.custom_minimum_size = Vector2(42, 42)
+				icon_tr.custom_minimum_size = Vector2(64, 64)
 				icon_tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				icon_tr.anchor_left = 0.5
 				icon_tr.anchor_right = 0.5
 				icon_tr.anchor_top = 0.5
 				icon_tr.anchor_bottom = 0.5
-				icon_tr.offset_left = -21
-				icon_tr.offset_right = 21
-				icon_tr.offset_top = -21
-				icon_tr.offset_bottom = 21
+				icon_tr.offset_left = -32
+				icon_tr.offset_right = 32
+				icon_tr.offset_top = -32
+				icon_tr.offset_bottom = 32
 				btn.add_child(icon_tr)
 				
 				var lvl_lbl: Label = Label.new()
-				lvl_lbl.text = "Lv%d" % level
-				lvl_lbl.add_theme_font_size_override("font_size", 10)
-				lvl_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+				lvl_lbl.text = "Sv%d" % level
+				lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+				lvl_lbl.add_theme_color_override("font_color", UIKit.C_GOLD)
+				lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+				lvl_lbl.add_theme_constant_override("outline_size", 4)
 				lvl_lbl.anchor_left = 1.0
 				lvl_lbl.anchor_top = 1.0
 				lvl_lbl.anchor_right = 1.0
 				lvl_lbl.anchor_bottom = 1.0
-				lvl_lbl.offset_left = -28
-				lvl_lbl.offset_top = -14
-				lvl_lbl.offset_right = -4
-				lvl_lbl.offset_bottom = -2
+				lvl_lbl.offset_left = -70
+				lvl_lbl.offset_top = -38
+				lvl_lbl.offset_right = -10
+				lvl_lbl.offset_bottom = -8
 				lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 				btn.add_child(lvl_lbl)
 		else:
 			btn.tooltip_text = "Silah Yuvası (Boş)"
+			_dim_slot(btn)
 			
 		weapons_grid.add_child(btn)
 
@@ -468,9 +545,8 @@ func _refresh_equipments() -> void:
 	
 	# 1. Shield slot
 	var shield_btn: Button = Button.new()
-	shield_btn.custom_minimum_size = Vector2(62, 62)
-	shield_btn.add_theme_stylebox_override("normal", style_box)
-	shield_btn.add_theme_stylebox_override("focus", style_box)
+	shield_btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+	_decorate_slot(shield_btn)
 	
 	if shield_key != "":
 		var level: int = int(GameManager.get(shield_key + "_level"))
@@ -486,35 +562,38 @@ func _refresh_equipments() -> void:
 		var icon: Control = Control.new()
 		icon.set_script(load("res://scripts/shop_item_icon.gd"))
 		icon.item_type = "shield"
-		icon.modulate = _get_shield_modulate(shield_key)
-		icon.custom_minimum_size = Vector2(42, 42)
+		icon.shield_type = shield_key ## yeni tür ikonları (assets/ui/shields) kendi renginde - eski tint modülasyonu kaldırıldı
+		icon.custom_minimum_size = Vector2(64, 64)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon.anchor_left = 0.5
 		icon.anchor_right = 0.5
 		icon.anchor_top = 0.5
 		icon.anchor_bottom = 0.5
-		icon.offset_left = -21
-		icon.offset_right = 21
-		icon.offset_top = -21
-		icon.offset_bottom = 21
+		icon.offset_left = -32
+		icon.offset_right = 32
+		icon.offset_top = -32
+		icon.offset_bottom = 32
 		shield_btn.add_child(icon)
 		
 		var lvl_lbl: Label = Label.new()
-		lvl_lbl.text = "Lv%d" % level
-		lvl_lbl.add_theme_font_size_override("font_size", 10)
-		lvl_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+		lvl_lbl.text = "Sv%d" % level
+		lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+		lvl_lbl.add_theme_color_override("font_color", UIKit.C_GOLD)
+		lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+		lvl_lbl.add_theme_constant_override("outline_size", 4)
 		lvl_lbl.anchor_left = 1.0
 		lvl_lbl.anchor_top = 1.0
 		lvl_lbl.anchor_right = 1.0
 		lvl_lbl.anchor_bottom = 1.0
-		lvl_lbl.offset_left = -28
-		lvl_lbl.offset_top = -14
-		lvl_lbl.offset_right = -4
-		lvl_lbl.offset_bottom = -2
+		lvl_lbl.offset_left = -70
+		lvl_lbl.offset_top = -38
+		lvl_lbl.offset_right = -10
+		lvl_lbl.offset_bottom = -8
 		lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		shield_btn.add_child(lvl_lbl)
 	else:
 		shield_btn.tooltip_text = "Kalkan Yuvası (Boş)"
+		_dim_slot(shield_btn)
 		
 	equip_grid.add_child(shield_btn)
 	
@@ -528,9 +607,8 @@ func _refresh_equipments() -> void:
 
 	for slot_index: int in range(MAX_UTILITY_SLOTS):
 		var util_btn: Button = Button.new()
-		util_btn.custom_minimum_size = Vector2(62, 62)
-		util_btn.add_theme_stylebox_override("normal", style_box)
-		util_btn.add_theme_stylebox_override("focus", style_box)
+		util_btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+		_decorate_slot(util_btn)
 
 		if slot_index < owned_utility_keys.size():
 			var utility_key: String = owned_utility_keys[slot_index]
@@ -547,34 +625,37 @@ func _refresh_equipments() -> void:
 			var icon: Control = Control.new()
 			icon.set_script(load("res://scripts/shop_item_icon.gd"))
 			icon.item_type = utility_key
-			icon.custom_minimum_size = Vector2(42, 42)
+			icon.custom_minimum_size = Vector2(64, 64)
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			icon.anchor_left = 0.5
 			icon.anchor_right = 0.5
 			icon.anchor_top = 0.5
 			icon.anchor_bottom = 0.5
-			icon.offset_left = -21
-			icon.offset_right = 21
-			icon.offset_top = -21
-			icon.offset_bottom = 21
+			icon.offset_left = -32
+			icon.offset_right = 32
+			icon.offset_top = -32
+			icon.offset_bottom = 32
 			util_btn.add_child(icon)
 
 			var lvl_lbl: Label = Label.new()
-			lvl_lbl.text = "Lv%d" % utility_level
-			lvl_lbl.add_theme_font_size_override("font_size", 10)
-			lvl_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+			lvl_lbl.text = "Sv%d" % utility_level
+			lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+			lvl_lbl.add_theme_color_override("font_color", UIKit.C_GOLD)
+			lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+			lvl_lbl.add_theme_constant_override("outline_size", 4)
 			lvl_lbl.anchor_left = 1.0
 			lvl_lbl.anchor_top = 1.0
 			lvl_lbl.anchor_right = 1.0
 			lvl_lbl.anchor_bottom = 1.0
-			lvl_lbl.offset_left = -28
-			lvl_lbl.offset_top = -14
-			lvl_lbl.offset_right = -4
-			lvl_lbl.offset_bottom = -2
+			lvl_lbl.offset_left = -70
+			lvl_lbl.offset_top = -38
+			lvl_lbl.offset_right = -10
+			lvl_lbl.offset_bottom = -8
 			lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			util_btn.add_child(lvl_lbl)
 		else:
 			util_btn.tooltip_text = "İşlevsellik Yuvası (Boş)"
+			_dim_slot(util_btn)
 
 		equip_grid.add_child(util_btn)
 
@@ -643,7 +724,7 @@ func _do_sell_utility_equip(key: String) -> void:
 
 
 func _refresh_mods() -> void:
-	if not main_layout or not is_instance_valid(main_layout):
+	if not main_layout or not is_instance_valid(main_layout) or mods_grid == null:
 		return
 		
 	var sig: String = ""
@@ -666,9 +747,8 @@ func _refresh_mods() -> void:
 	
 	for mode: String in MODE_KEYS:
 		var btn: Button = Button.new()
-		btn.custom_minimum_size = Vector2(62, 62)
-		btn.add_theme_stylebox_override("normal", style_box)
-		btn.add_theme_stylebox_override("focus", style_box)
+		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+		_decorate_slot(btn)
 		
 		btn.set_script(preload("res://scripts/inventory_mod_drag_source.gd"))
 		btn.setup(mode, MOD_ICON_TEXTURES[mode] as Texture2D)
@@ -682,30 +762,32 @@ func _refresh_mods() -> void:
 			icon_tr.texture = MOD_ICON_TEXTURES[mode] as Texture2D
 			icon_tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon_tr.custom_minimum_size = Vector2(42, 42)
+			icon_tr.custom_minimum_size = Vector2(64, 64)
 			icon_tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			icon_tr.anchor_left = 0.5
 			icon_tr.anchor_right = 0.5
 			icon_tr.anchor_top = 0.5
 			icon_tr.anchor_bottom = 0.5
-			icon_tr.offset_left = -21
-			icon_tr.offset_right = 21
-			icon_tr.offset_top = -21
-			icon_tr.offset_bottom = 21
+			icon_tr.offset_left = -32
+			icon_tr.offset_right = 32
+			icon_tr.offset_top = -32
+			icon_tr.offset_bottom = 32
 			btn.add_child(icon_tr)
 			
 			var lvl_lbl: Label = Label.new()
-			lvl_lbl.text = "Lv%d" % level
-			lvl_lbl.add_theme_font_size_override("font_size", 10)
-			lvl_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+			lvl_lbl.text = "Sv%d" % level
+			lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+			lvl_lbl.add_theme_color_override("font_color", UIKit.C_GOLD)
+			lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+			lvl_lbl.add_theme_constant_override("outline_size", 4)
 			lvl_lbl.anchor_left = 1.0
 			lvl_lbl.anchor_top = 1.0
 			lvl_lbl.anchor_right = 1.0
 			lvl_lbl.anchor_bottom = 1.0
-			lvl_lbl.offset_left = -28
-			lvl_lbl.offset_top = -14
-			lvl_lbl.offset_right = -4
-			lvl_lbl.offset_bottom = -2
+			lvl_lbl.offset_left = -70
+			lvl_lbl.offset_top = -38
+			lvl_lbl.offset_right = -10
+			lvl_lbl.offset_bottom = -8
 			lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			btn.add_child(lvl_lbl)
 		else:
@@ -714,17 +796,17 @@ func _refresh_mods() -> void:
 			icon_tr.texture = MOD_ICON_TEXTURES[mode] as Texture2D
 			icon_tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon_tr.custom_minimum_size = Vector2(42, 42)
+			icon_tr.custom_minimum_size = Vector2(64, 64)
 			icon_tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			icon_tr.modulate = Color(1.0, 1.0, 1.0, 0.25)
 			icon_tr.anchor_left = 0.5
 			icon_tr.anchor_right = 0.5
 			icon_tr.anchor_top = 0.5
 			icon_tr.anchor_bottom = 0.5
-			icon_tr.offset_left = -21
-			icon_tr.offset_right = 21
-			icon_tr.offset_top = -21
-			icon_tr.offset_bottom = 21
+			icon_tr.offset_left = -32
+			icon_tr.offset_right = 32
+			icon_tr.offset_top = -32
+			icon_tr.offset_bottom = 32
 			btn.add_child(icon_tr)
 			
 		mods_grid.add_child(btn)
@@ -772,15 +854,11 @@ func _refresh_items_grid() -> void:
 		var refund: int = int(round(int(entry.get("spent", 0)) * 0.7))
 
 		var btn: Button = Button.new()
-		btn.custom_minimum_size = Vector2(62, 62)
+		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+		_decorate_slot(btn)
 		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		btn.tooltip_text = "%s\n%s\n\nSatmak için tıkla (+%d altın)" % [def.get("name", key), def.get("desc", ""), refund]
 		btn.pressed.connect(_on_sell_item.bind(i))
-
-		btn.add_theme_stylebox_override("normal", style_box)
-		btn.add_theme_stylebox_override("hover", style_hover)
-		btn.add_theme_stylebox_override("pressed", style_pressed)
-		btn.add_theme_stylebox_override("focus", style_box)
 
 		var icon: Control = Control.new()
 		icon.set_script(load("res://scripts/shop_item_icon.gd"))
@@ -788,16 +866,16 @@ func _refresh_items_grid() -> void:
 		if "item_key" in icon:
 			icon.item_key = key
 		icon.modulate = Color(1, 1, 1, 1)
-		icon.custom_minimum_size = Vector2(42, 42)
+		icon.custom_minimum_size = Vector2(64, 64)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon.anchor_left = 0.5
 		icon.anchor_right = 0.5
 		icon.anchor_top = 0.5
 		icon.anchor_bottom = 0.5
-		icon.offset_left = -21
-		icon.offset_right = 21
-		icon.offset_top = -21
-		icon.offset_bottom = 21
+		icon.offset_left = -32
+		icon.offset_right = 32
+		icon.offset_top = -32
+		icon.offset_bottom = 32
 		btn.add_child(icon)
 
 		items_grid_box.add_child(btn)

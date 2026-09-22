@@ -25,6 +25,14 @@ class_name TotemBase
 
 signal died
 
+const PixelDraw := preload("res://scripts/pixel_draw.gd")
+const ShamanSfx := preload("res://scripts/shaman_sfx.gd")
+## "shield" | "attack" | "area" - alt sınıflar _init'te atar: dikilme sesini, rün biçimini ve aura görünümünü seçer.
+var totem_kind: String = "shield"
+## Aura yalnızca ~20 kez/sn yeniden çizilir (halka çizimi pahalı, gerisi Godot'nun önceki çizimi tutmasıyla bedava).
+const REDRAW_INTERVAL := 0.05
+var _redraw_acc: float = 0.0
+
 var caster: Node = null
 var network_instance_id: String = ""
 ## Kullanıcı isteği: "shamanın totemleri 30 saniye boyunca dursun" (eskiden
@@ -42,6 +50,8 @@ var totem_radius: float = 220.0
 ## Alan Totemi'nin (TotemArea) içi hafif dolgun göstermesi için - diğer
 ## totemlerde 0 kalır (sadece halka çizilir). Kozmetiktir.
 var aura_fill_alpha: float = 0.0
+## true => menzil halkası/rünleri/dolgu TotemBase tarafından ÇİZİLMEZ (alt sınıf kendi aurasını çizer - ör. Alan Totemi'nin shader aurası).
+var use_custom_aura: bool = false
 ## Aura halkasının dönen rünleri ve nabız animasyonu için - KOZMETİK zaman
 ## biriktirici. _process zaten hem gerçek totemde hem ağ görsel kopyasında
 ## çalışır (mantık _tick'te korumalı), bu yüzden animasyon HER client'ta akar.
@@ -70,6 +80,9 @@ func _ready() -> void:
 	## üyeliği başka bir client'ın hesaplamasını etkilemez.
 	add_to_group("shaman_totems")
 	get_tree().create_timer(duration).timeout.connect(_on_expire)
+	## Dikilme sesi: konum player.gd'de add_child'dan HEMEN SONRA atandığı için ses bir kare ertelenir. Kozmetik ağ kopyaları da
+	## _ready çalıştırdığı için ses her oyuncuda aynı çalar (kastta doğru, diğerlerinde yok hatası olmasın).
+	call_deferred("_play_plant_sound")
 	## DÜZELTME (kullanıcı bildirimi: "yeni totem assetleri oyunda
 	## görünmüyor") - buradaki z_index=-1, player.gd _talon_aura_sprite'ın
 	## AYNISI OLARAK eklenmişti ama o örnek yanlış kıyastı: Talon'un aurası
@@ -89,22 +102,13 @@ func _ready() -> void:
 
 ## ---------- Pixel-art efektler (kullanıcı isteği: "efektleri pixel-art yap") ----
 ## Üç tek-seferlik piksel-art patlama sahnesi - hepsi aynı
-## scripts/fx_totem_burst.gd davranışını paylaşır (bir kez oynat, kendini sil).
+## scripts/fx_totem_puff.gd davranışını paylaşır (bir kez oynat, kendini sil).
 const PlantDustScene := preload("res://scenes/fx_totem_plant_dust.tscn")
 const CollapseDustScene := preload("res://scenes/fx_totem_collapse_dust.tscn")
 const RuneFlashScene := preload("res://scenes/fx_totem_rune_flash.tscn")
 
 ## Dikilirken totemin "topraktan yükselme" mesafesi (piksel).
 const PLANT_RISE_PIXELS := 14.0
-
-## Aura çevresinde dönen 6 KÜÇÜK PİKSEL-ART rün işareti (eskiden antialias'lı
-## draw_arc yaylarıydı - bkz. _draw üstündeki pixel-art notu). Sprite'lar
-## kod ile oluşturulur: 3 totem sahnesine ayrı ayrı node eklemeye gerek yok
-## ve kozmetik ağ kopyalarında da otomatik belirirler.
-const RuneTexture := preload("res://assets/generated/shaman_totem_rune.png")
-const RUNE_COUNT := 6
-var _rune_sprites: Array[Sprite2D] = []
-
 
 ## Dikilme anı: totem topraktan PİKSEL ADIMLARIYLA yükselerek belirir +
 ## tabanında toprak patlaması + yetenek renginde rün parlaması.
@@ -174,8 +178,15 @@ func _spawn_dust_sibling(scene: PackedScene) -> void:
 	burst.global_position = global_position + Vector2(0, 2)
 
 
+func _play_plant_sound() -> void:
+	if not is_inside_tree():
+		return
+	ShamanSfx.play_at(get_tree().current_scene, str(ShamanSfx.PLANT.get(totem_kind, ShamanSfx.PLANT["shield"])), global_position, -4.0)
+
+
 func _on_expire() -> void:
 	died.emit()
+	ShamanSfx.play_at(get_tree().current_scene, ShamanSfx.EXPIRE, global_position, -6.0)
 	## Süre dolunca totem toprağa "çöker" - piksel-art toz savrulması.
 	## Sahneye KARDEŞ olarak eklenir (bkz. _spawn_dust_sibling üstündeki
 	## düzeltme notu: çocuk olarak eklenirse totemle birlikte yok oluyordu).
@@ -187,7 +198,10 @@ func _process(delta: float) -> void:
 	## Aura nabzı/dönen rünler için kozmetik saat - ağ görsel kopyalarında DA
 	## işler (çizim sadece çizimdir, oyun durumu paylaşmaz; bkz. dosya başı).
 	visual_time += delta
-	queue_redraw()
+	_redraw_acc += delta
+	if _redraw_acc >= REDRAW_INTERVAL:
+		_redraw_acc = 0.0
+		queue_redraw()
 	if _is_network_visual:
 		return
 	if not is_instance_valid(caster):
@@ -226,27 +240,71 @@ func _current_tick_interval() -> float:
 
 
 func _draw() -> void:
-	## Eski "kristal totem" silueti KALDIRILDI - totemlerin bespoke sprite'ı
-	## (totem_*.tscn içindeki AnimatedSprite2D) gövdeyi çizer. _draw artık
-	## SADECE yetenek menzilini ve aura sihrini gösterir.
-	##
-	## Toprak gölgesi - totemin yere oturmasını sağlar (bas kısmı).
-	draw_set_transform(Vector2(0, 6), 0.0, Vector2(1.0, 0.45))
-	draw_circle(Vector2.ZERO, 15.0, Color(0, 0, 0, 0.25))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	##
-	## Aura sınırı - oyuncuların etki yarıçapını görebilmesi için. Hafif
-	## nabız: yarıçap +/-4px salınır (kozmetik, görsel canlılık).
-	var pulse: float = sin(visual_time * 2.0) * 4.0
-	draw_arc(Vector2.ZERO, totem_radius + pulse, 0.0, TAU, 64, Color(totem_color.r, totem_color.g, totem_color.b, 0.35), 3.0, true)
-	## İç dolgu (Alan Totemi kullanır - alandaki yavaşlatma bölgesini gösterir).
+	## Kullanıcı isteği (2026-09-21): totem görsellerini SIFIRDAN pixel tarzında (1 texel detay, bkz. hafıza "Pixel density 48x48").
+	## Totemin gövdesini yeni 48x48 sprite (totem_*.tscn) çizer; burası SADECE zemin gölgesi + yetenek menzili/aura sihri:
+	##  - kaide altında 1 texel dither elips gölge
+	##  - menzil sınırı: totem_radius'ta nabız atan NOKTALI pixel halka + içte küçük ikinci halka
+	##  - halkada yavaşça dönen 6 rün (yetenek türüne göre biçim)
+	##  - alan totemi: alanın içi seyrek pixel "toz" noktalarıyla yanıp söner (eski düz dolgu yerine)
+	var texel: float = PixelDraw.TEXEL
+	## Zemin gölgesi
+	for iy in range(-3, 4):
+		var hw: int = int(round(sqrt(maxf(0.0, 1.0 - pow(float(iy) / 3.5, 2.0))) * 12.0))
+		for ix in range(-hw, hw + 1):
+			if ((ix + iy) & 1) == 0:
+				continue
+			PixelDraw.px(self, Vector2(float(ix) * texel, float(iy) * texel + 6.0), 1, Color(0.0, 0.0, 0.0, 0.32))
+	if use_custom_aura:
+		return
+	var pulse: float = sin(visual_time * 2.0) * 3.0
+	var ring_col := Color(totem_color.r, totem_color.g, totem_color.b, 0.85)
+	_draw_dotted_ring(totem_radius + pulse, ring_col, 3.0, visual_time * 6.0)
+	_draw_dotted_ring(totem_radius + pulse - 3.0, Color(ring_col.r, ring_col.g, ring_col.b, 0.22), 6.0, -visual_time * 4.0)
+	var inner_pulse: float = sin(visual_time * 2.0 + PI * 0.5) * 2.0
+	_draw_dotted_ring(26.0 + inner_pulse, Color(ring_col.r, ring_col.g, ring_col.b, 0.42), 2.0, visual_time * 8.0)
+	## Dönen rünler
+	var rune_alpha: float = 0.65 + 0.25 * sin(visual_time * 3.0)
+	for i in range(6):
+		var ang: float = visual_time * 0.6 + float(i) * TAU / 6.0
+		_draw_rune(Vector2(cos(ang), sin(ang)) * (totem_radius + pulse), ang, Color(totem_color.r, totem_color.g, totem_color.b, rune_alpha))
+	## İç dolgu (Alan Totemi): seyrek yanıp sönen pixel noktaları
 	if aura_fill_alpha > 0.0:
-		draw_circle(Vector2.ZERO, totem_radius, Color(totem_color.r, totem_color.g, totem_color.b, aura_fill_alpha))
-	## Dönen rün halkası - aura çevresinde yavaşça dönen 6 rün kısa yayı.
-	var rune_alpha: float = 0.5 + 0.2 * sin(visual_time * 3.0)
-	for i in 6:
-		var rune_angle: float = visual_time * 0.6 + float(i) * TAU / 6.0
-		draw_arc(Vector2.ZERO, totem_radius + pulse, rune_angle - 0.09, rune_angle + 0.09, 8, Color(totem_color.r, totem_color.g, totem_color.b, rune_alpha), 4.0, true)
-	## Totemin dibinde ikinci, iç halka - canlı totem hissi.
-	var inner_pulse: float = sin(visual_time * 2.0 + PI * 0.5) * 3.0
-	draw_arc(Vector2.ZERO, 26.0 + inner_pulse, 0.0, TAU, 32, Color(totem_color.r, totem_color.g, totem_color.b, 0.28), 2.0, true)
+		var dots: int = int(totem_radius * totem_radius * 0.011)
+		for i in range(dots):
+			var rr: float = totem_radius * sqrt(PixelDraw.hash01(i * 3 + 1))
+			var aa: float = TAU * PixelDraw.hash01(i * 5 + 7)
+			var tw: float = 0.5 + 0.5 * sin(visual_time * 2.0 + float(i) * 1.7)
+			PixelDraw.px(self, Vector2(cos(aa), sin(aa)) * rr, 1, Color(totem_color.r, totem_color.g, totem_color.b, aura_fill_alpha * 7.0 * tw))
+
+
+## Noktalı pixel halka: her `step_texels` texel'de bir nokta (kesikli/noktalı görünüm, ucuz).
+func _draw_dotted_ring(radius: float, col: Color, step_texels: float, phase: float) -> void:
+	var count: int = maxi(12, int(TAU * radius / (PixelDraw.TEXEL * step_texels)))
+	var offset: float = phase / float(count)
+	for i in range(count):
+		var a: float = TAU * (float(i) / float(count)) + offset
+		var p: Vector2 = Vector2(cos(a), sin(a)) * radius
+		## Koyu 1 texel alt gölge: açık çim üstünde de okunur (pixel-art kontur mantığı)
+		PixelDraw.px(self, p + Vector2(0, PixelDraw.TEXEL), 1, Color(col.r * 0.25, col.g * 0.25, col.b * 0.25, col.a * 0.55))
+		PixelDraw.px(self, p, 1, col)
+
+
+## Halkadaki küçük rün: shield = artı, attack = alev üçgeni, area = sarmal nokta çifti (her biri 5-6 texel).
+func _draw_rune(pos: Vector2, ang: float, col: Color) -> void:
+	var t: float = PixelDraw.TEXEL
+	PixelDraw.px(self, pos, 1, col.lerp(Color(1, 1, 1, col.a), 0.5))
+	match totem_kind:
+		"attack":
+			PixelDraw.px(self, pos + Vector2(-t, t), 1, col)
+			PixelDraw.px(self, pos + Vector2(t, t), 1, col)
+			PixelDraw.px(self, pos + Vector2(0, -t), 1, col)
+			PixelDraw.px(self, pos + Vector2(0, -t * 2.0), 1, col)
+		"area":
+			var d: Vector2 = Vector2(cos(ang * 2.0), sin(ang * 2.0)) * t * 1.6
+			PixelDraw.px(self, pos + d, 1, col)
+			PixelDraw.px(self, pos - d, 1, col)
+		_:
+			PixelDraw.px(self, pos + Vector2(t, 0), 1, col)
+			PixelDraw.px(self, pos - Vector2(t, 0), 1, col)
+			PixelDraw.px(self, pos + Vector2(0, t), 1, col)
+			PixelDraw.px(self, pos - Vector2(0, t), 1, col)

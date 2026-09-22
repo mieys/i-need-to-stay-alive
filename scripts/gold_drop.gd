@@ -6,6 +6,9 @@ const ATTRACT_ACCEL := 720.0 ## genel hız ayarı: %20 düşürüldü
 const MAX_ATTRACT_SPEED := 496.0
 
 var amount: int = 1
+## Kullanıcı isteği (2026-09-21): bosslardan düşen altın, biri aldığında TÜM oyuncular arasında eşit paylaşılır
+## (bkz. NetworkManager.host_share_boss_gold). enemy.gd _drop_gold boss için true yapar; SADECE host'taki gerçek drop'ta anlamlı.
+var is_boss_gold: bool = false
 var bob_time: float = 0.0
 var _last_bob_offset: float = 0.0
 var is_magnetized: bool = false
@@ -160,7 +163,11 @@ func _on_body_entered(body: Node) -> void:
 	## SADECE o client'a RPC ile eklenir (bkz. remote_player.gd collect_gold)
 	## - eskiden burada share_gold.rpc() TÜM peer'lere aynı miktarı
 	## yayınlıyordu (ortak/paylaşımlı para), bu artık kaldırıldı.
-	if body.is_in_group("player"):
+	## Boss altını: çok oyunculuda tüm katılımcılar arasında eşit bölünür, her pay sahibine doğru uçar.
+	var shared: bool = is_boss_gold and NetworkManager.is_multiplayer_active 			and NetworkManager.host_share_boss_gold(amount, global_position, body)
+	if shared:
+		pass
+	elif body.is_in_group("player"):
 		GameManager.gold += amount
 		var ft = FloatingText.instantiate()
 		get_tree().current_scene.add_child(ft)

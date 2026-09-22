@@ -2,19 +2,20 @@
 """Vampir Cocuk icin oyun assetlerini uretir.
 
 Kullanim (repo kokunden):
-    python tools/gen_vampir_assets.py --src <Vampire.zip'in acilmis klasoru>
+    python tools/gen_vampir_assets.py --src <animasyon sayfalarinin (Idle.png, Walk.png ...) oldugu klasor>
 
-1) LPC generator export'unu (standard/idle|walk|spellcast|hurt/<yon>/<n>.png) Shaman'in kullandigi
-   isimlendirmeye (idle_up_1.png, walk_left_3.png, hurt_1.png ...) cevirip assets/characters/vampir/
-   altina kopyalar.
-2) "Buyuk yarasa" formunu (E yetenegi) 96x96 PIXEL-ART kareler olarak cizer: bat_<yon>_<1..4>.png.
+1) Kullanicinin verdigi animasyon sayfalarini (her hucre 288x288 = 48x48 piksel sanatinin 6 kat buyutulmusu;
+   satirlar yukaridan asagiya: asagi, sol, sag, yukari) KAYIPSIZ olarak 48x48 hucrelere indirip
+   assets/characters/vampir/sheets/<ad>.png olarak yazar (SpriteFrames bunlari AtlasTexture ile okur,
+   bkz. tools/gen_vampir_frames.py). Kaynak sayfa tam 6x buyutme degilse durur.
+2) "Buyuk yarasa" formunu (E yetenegi) PIXEL-ART kareler olarak cizer: bat_<yon>_<1..4>.png.
 3) Yetenek/pasif ikonlarini (32x32 sanat -> 128x128 NEAREST) cizer.
-4) Portreyi (idle_down_1) kopyalar.
+4) Portreyi (Idle sayfasi, asagi bakan ilk kare) yazar.
+--src verilmezse sadece 2) ve 3) (ve mini yarasalar) uretilir.
 SpriteFrames (.tres) burada uretilmez, bkz. tools/gen_vampir_frames.py.
 """
 import argparse
 import os
-import shutil
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -22,10 +23,26 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_CHAR = os.path.join(ROOT, "assets", "characters")
 OUT_DIR = os.path.join(OUT_CHAR, "vampir")
+OUT_SHEETS = os.path.join(OUT_DIR, "sheets")
 OUT_SKILL = os.path.join(ROOT, "assets", "skills")
 
-DIRS = ["up", "left", "down", "right"]
-ANIMS = {"idle": 2, "walk": 9, "spellcast": 7}
+CELL = 48  # bir animasyon karesi (piksel sanati boyutu)
+SRC_SCALE = 6  # kaynak sayfalar 6x buyutulmus gelir
+# oyundaki sayfa adi -> kaynak dosya adi (uzantisiz, buyuk/kucuk harf fark etmez)
+SHEET_SOURCES = {
+    "idle": "Idle",
+    "walk": "Walk",
+    "run": "Run",
+    "eat": "Eat",
+    "hurt": "Hurt",
+    "read": "Read",
+    "shrug": "Shrug",
+    "downed": "Down",
+    "death": "death",
+    "strike": "Strike",
+    "chop": "Chop",
+    "pickup": "Pickup",
+}
 
 OUTLINE = (22, 8, 16, 255)
 FUR_D = (44, 20, 38, 255)
@@ -44,18 +61,24 @@ BLOOD_D = (120, 12, 28, 255)
 BLOOD_L = (255, 96, 96, 255)
 
 
-def copy_character_frames(src):
-    os.makedirs(OUT_DIR, exist_ok=True)
-    std = os.path.join(src, "standard")
-    for anim, count in ANIMS.items():
-        for d in DIRS:
-            for i in range(1, count + 1):
-                s = os.path.join(std, anim, d, f"{i}.png")
-                shutil.copyfile(s, os.path.join(OUT_DIR, f"{anim}_{d}_{i}.png"))
-    # hurt sadece "up" klasorunde var (Shaman'daki gibi yonsuz tek "hurt")
-    for i in range(1, 7):
-        shutil.copyfile(os.path.join(std, "hurt", "up", f"{i}.png"), os.path.join(OUT_DIR, f"hurt_{i}.png"))
-    shutil.copyfile(os.path.join(std, "idle", "down", "1.png"), os.path.join(OUT_CHAR, "vampir_portrait.png"))
+def import_sheets(src):
+    os.makedirs(OUT_SHEETS, exist_ok=True)
+    found = {f.lower(): f for f in os.listdir(src)}
+    for name, src_name in SHEET_SOURCES.items():
+        fn = found.get(src_name.lower() + ".png")
+        if fn is None:
+            raise SystemExit(f"eksik animasyon sayfasi: {src_name}.png ({src})")
+        a = np.array(Image.open(os.path.join(src, fn)).convert("RGBA"))
+        if a.shape[0] % (CELL * SRC_SCALE) or a.shape[1] % (CELL * SRC_SCALE):
+            raise SystemExit(f"{fn}: boyut {a.shape[1]}x{a.shape[0]}, {CELL * SRC_SCALE} px'lik hucrelerin kati olmali")
+        small = a[::SRC_SCALE, ::SRC_SCALE]
+        if not (np.repeat(np.repeat(small, SRC_SCALE, axis=0), SRC_SCALE, axis=1) == a).all():
+            raise SystemExit(f"{fn}: tam {SRC_SCALE}x buyutulmus piksel sanati degil, kayipsiz kucultulemez")
+        Image.fromarray(small).save(os.path.join(OUT_SHEETS, name + ".png"))
+        print(f"  {name}.png  {small.shape[1] // CELL} kare x {small.shape[0] // CELL} yon")
+    # Portre: Idle sayfasi, ilk satir (asagi) ilk kare - diger karakterlerdeki gibi tam kare.
+    idle = Image.open(os.path.join(OUT_SHEETS, "idle.png"))
+    idle.crop((0, 0, CELL, CELL)).save(os.path.join(OUT_CHAR, "vampir_portrait.png"))
 
 
 def new_layer(size=96):
@@ -188,6 +211,21 @@ def bat_side(phase):
     return outline(img)
 
 
+# Yarasa kareleri ayni SpriteFrames'te oldugu icin karakterin anim.offset'ini paylasir (bkz. characters.gd
+# Vampir "offset": (0, 10) - 48x48 karakter karelerinin ayaklari yerde dursun diye asagi kaydirilmis).
+# Eski 64x64 karakterde offset (0, -5) idi ve 96x96 yarasa gorunumu ayaklarin ~9 texel ustunde havada
+# duruyordu. Ayni yuksekligi korumak icin yarasa 96x112 tuvale, 7 piksel yukari kaydirilarak yerlestirilir:
+#   dunya y (texel) = (govde_merkezi_satiri - tuval_yuksekligi / 2) + offset_y = (37 - 56) + 10 = -9  (eskisi: 44 - 48 - 5 = -9)
+BAT_CANVAS = (96, 112)
+BAT_SHIFT_Y = -7
+
+
+def _to_bat_canvas(frame):
+    canvas = Image.new("RGBA", BAT_CANVAS, (0, 0, 0, 0))
+    canvas.paste(frame, (0, BAT_SHIFT_Y))
+    return canvas
+
+
 def make_bat_frames():
     os.makedirs(OUT_DIR, exist_ok=True)
     for phase in range(4):
@@ -195,10 +233,10 @@ def make_bat_frames():
         back = bat_front(phase, back=True)
         side_r = bat_side(phase)
         side_l = side_r.transpose(Image.FLIP_LEFT_RIGHT)
-        front.save(os.path.join(OUT_DIR, f"bat_down_{phase + 1}.png"))
-        back.save(os.path.join(OUT_DIR, f"bat_up_{phase + 1}.png"))
-        side_r.save(os.path.join(OUT_DIR, f"bat_right_{phase + 1}.png"))
-        side_l.save(os.path.join(OUT_DIR, f"bat_left_{phase + 1}.png"))
+        _to_bat_canvas(front).save(os.path.join(OUT_DIR, f"bat_down_{phase + 1}.png"))
+        _to_bat_canvas(back).save(os.path.join(OUT_DIR, f"bat_up_{phase + 1}.png"))
+        _to_bat_canvas(side_r).save(os.path.join(OUT_DIR, f"bat_right_{phase + 1}.png"))
+        _to_bat_canvas(side_l).save(os.path.join(OUT_DIR, f"bat_left_{phase + 1}.png"))
 
 
 # ---------------------------------------------------------------- ikonlar (32x32 sanat -> 128x128)
@@ -352,10 +390,10 @@ def make_icons():
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", help="Vampire.zip'in acilmis klasoru (icinde standard/ olmali); verilmezse sadece yarasa+ikonlar uretilir")
+    ap.add_argument("--src", help="animasyon sayfalarinin (Idle.png, Walk.png ...) oldugu klasor; verilmezse sadece yarasa+ikonlar uretilir")
     args = ap.parse_args()
     if args.src:
-        copy_character_frames(args.src)
+        import_sheets(args.src)
     make_bat_frames()
     make_mini_bats()
     make_icons()

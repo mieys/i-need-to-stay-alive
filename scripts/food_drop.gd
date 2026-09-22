@@ -117,6 +117,10 @@ func _on_body_entered(body: Node) -> void:
 		# oyuncusu tetiklesin (bkz. xp_orb.gd aynı notu).
 		if not body.is_in_group("player"):
 			return
+		## Yerden yemek alındığı AN "eat" animasyonu (bkz. player.gd on_food_picked_up) - klip adı
+		## transform kanalıyla diğer oyunculara da gider, ayrıca bir ağ çağrısı gerekmez.
+		if body.has_method("on_food_picked_up"):
+			body.on_food_picked_up()
 		var drop_id: int = int(get_meta("drop_network_id", 0))
 		if drop_id > 0:
 			## Verimlilik notu (derin multiplayer denetimi bulgusu) - bkz.
@@ -140,6 +144,9 @@ func _on_body_entered(body: Node) -> void:
 	## halleder (mimari: host sadece "iyileştir" olgusunu iletir, görsel
 	## sonucu her zaman ilgili tarafın kendi kodu üretir).
 	if body.is_in_group("player"):
+		## bkz. yukarıdaki client dalındaki aynı not - tek oyunculu/host'un kendi oyuncusu için "eat" anı.
+		if body.has_method("on_food_picked_up"):
+			body.on_food_picked_up()
 		if body.has_method("take_damage"):
 			var healed: float = min(get_heal_amount(body.max_health), body.max_health - body.health)
 			if healed > 0:

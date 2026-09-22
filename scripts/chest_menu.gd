@@ -135,6 +135,12 @@ func _get_ui_sound() -> Node:
 		return null
 	return get_node_or_null("/root/UISound")
 
+const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
+## Sandık kart seçimi açıkken karakter okuma (read) pozuna geçer - bkz. ReadingUiWatcher.
+func _enter_tree() -> void:
+	add_to_group(ReadingUiWatcher.GROUP)
+
+
 func setup(player: Node, chest_tier: int) -> void:
 	_player = player
 	_chest_tier = chest_tier

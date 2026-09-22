@@ -67,11 +67,11 @@ const UPGRADES = [
 	## AYNI "+%X miktar" formatında ve player.gd'deki gerçek uygulanan
 	## değerle (_nice_up(0.125*1.3,0.005)=0.165 -> %16.5) birebir eşleşiyor.
 	{"id": "crit_damage", "title": "Kritik Hasar", "desc": "+%16.5", "cat": "Saldırı", "color": CAT_ATTACK},
-	{"id": "pickup_range", "title": "Toplama Mesafesi", "desc": "+15", "cat": "Yardımcı", "color": CAT_UTILITY},
+	{"id": "pickup_range", "title": "Toplama Mesafesi", "desc": "+%30", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "shield_pen_percent", "title": "Kalkan Delme", "desc": "+%5", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "exp_gain", "title": "Tecrübe Kazanımı", "desc": "+%7.5", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "luck", "title": "Şans", "desc": "+1", "cat": "Yardımcı", "color": CAT_UTILITY},
-	{"id": "range", "title": "Menzil", "desc": "+30", "cat": "Saldırı", "color": CAT_ATTACK},
+	{"id": "range", "title": "Menzil", "desc": "+%12", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "dodge", "title": "Sıvışma", "desc": "+%2.5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "shield_amount", "title": "Kalkan Miktarı", "desc": "+%5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "cooldown_reduction", "title": "Bekleme Süresi Azaltma", "desc": "-%4", "cat": "Yardımcı", "color": CAT_UTILITY},
@@ -130,6 +130,12 @@ var _card_tweens: Array = [null, null, null]
 ## için otomatik bir kart seçilir; zaten seçmiş oyuncu için (bekleme
 ## durumundaki) tekrar seçim yapılmaz.
 var _has_chosen: bool = false
+
+
+const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
+## Kart seçim ekranı açıkken karakter okuma (read) pozuna geçer - bkz. ReadingUiWatcher.
+func _enter_tree() -> void:
+	add_to_group(ReadingUiWatcher.GROUP)
 
 
 func _ready() -> void:

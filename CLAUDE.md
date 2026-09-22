@@ -82,6 +82,23 @@ diğer oyuncularda eski/hiç görsel kalır.
    and_anim_from_net` içindeki mevcut örnek — meteor kanalı bu yüzden
    donuyordu, aynı deseni yeni yetenekte de tekrarlama).
 
+6. **Klip ADI kuralları artık TEK yerde: `scripts/char_anim.gd`.** Yetenek
+   klibi (`shrug_<yön>` yeni setlerde, `spellcast_<yön>` eskilerde) ve
+   "bitene kadar ezilmez" aksiyon klipleri (`attack`/`spellcast`/`shrug_`/
+   `hurt_`/`eat_`) buradaki `CAST_PREFIXES`/`ACTION_PREFIXES`'ten okunur —
+   hem `player.gd` (`_update_animation`, `_play_cast_animation`) hem
+   `remote_player.gd` (`is_cast_anim`) aynı listeyi kullanır. Yeni bir
+   tek seferlik aksiyon klibi (ör. `pickup_`/`strike_`) oyuna bağlarsan ön
+   ekini `ACTION_PREFIXES`'e ekle, yoksa yürüme/bekleme klibi onu yarıda
+   keser. Bir yetenek `_activate_skill*` makinesini bypass ediyorsa
+   (Vampir R gibi toggle'lar) cast klibini kendi fonksiyonunda
+   `_play_cast_animation()` ile elle oynat.
+   Dükkan/kart ekranı açıkken oynayan `read_` klibi bir ekran-grubuna
+   bağlıdır: yeni bir dükkan/kart ekranı eklersen `_enter_tree()`'de
+   `add_to_group(ReadingUiWatcher.GROUP)` yap (bkz.
+   `scripts/reading_ui_watcher.gd`) — `get_tree().paused` yapan ekranlarda
+   bile çalışır, ekran kapanınca kendiliğinden biter.
+
 ## Test/doğrulama
 
 Yeni bir yetenek/efekt eklediğinde, TEK bilgisayarda iki pencere açıp

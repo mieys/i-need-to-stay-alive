@@ -386,6 +386,11 @@ func _process_multiplayer_sync(delta: float) -> void:
 		var extra: Dictionary = {
 			"is_invisible": player.is_invisible if "is_invisible" in player else false,
 			"is_shielded": player.is_shielded if "is_shielded" in player else false,
+			## Elara'nın Sıvışma'sı (Q, id 12) - "yaratıkların içinden geçebilme" isteği diğer istemcilerde
+			## de doğru çalışsın diye (bkz. remote_player.gd is_ghost_now/enemy.gd sert yapıştırma kontrolü).
+			## Vampir'in Yarasa Formu'ndaki AYNI ihtiyaç animasyon adından çıkarılabiliyordu (bkz. remote_
+			## player.gd _vampir_bat_form), Elara'nın özel bir animasyonu olmadığı için AYRI bir bayrak gerekiyor.
+			"elara_evasion": player._elara_evasion_timer > 0.0 if "_elara_evasion_timer" in player else false,
 			"elara_double": player.elara_double_fire_active if "elara_double_fire_active" in player else false,
 			"talon_giant": player._talon_ulti_active if "_talon_ulti_active" in player else false,
 			## Talon Ayna Formu (R) aktif mi - diger oyuncularda +%10 boyut ve alev aurasi icin (remote_player.gd _talon_form_active).
@@ -399,6 +404,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## (bkz. remote_player.gd _update_talon_formation).
 			"talon_formation": ("salvo" if ("_talon_weapon_salvo_active" in player and player._talon_weapon_salvo_active) else ("mirror" if ("_talon_mirror_form_active" in player and player._talon_mirror_form_active) else "")),
 			"matthew_dome": player.matthew_dome_active if "matthew_dome_active" in player else false,
+			## Oakley Koruyucu Büyü (R) hedefi mi - diğer oyuncularda yeşil yaprak bariyeri için (remote_player.gd _oakley_bond_on).
+			"oakley_bond": player.oakley_bond_active if "oakley_bond_active" in player else false,
 			## Klasik canlanma sistemi (bkz. player.gd is_downed) - diğer
 			## oyuncuların bu bayrağı görebilmesi lazım ki hem enemy.gd hedef
 			## seçiminde downed oyuncuyu atlayabilsin hem de remote_player.gd
