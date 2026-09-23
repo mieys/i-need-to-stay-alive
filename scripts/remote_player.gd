@@ -140,6 +140,8 @@ var _vampir_bat_form: bool = false
 ## Elara'nın Sıvışma'sı (bkz. main.gd extra dict, update_extra_state_from_net) - Vampir'in Yarasa Formu'nun
 ## AKSİNE özel bir animasyonu olmadığı için animasyon adından ÇIKARILAMIYOR, AYRI bir ağ bayrağı gerekiyor.
 var _elara_evasion: bool = false
+## Ruhani Yetenek "Savaş Şevki" - bkz. main.gd extra dict/enemy.gd _attacker_has_savas_sevki üstündeki AYNI not.
+var has_savas_sevki: bool = false
 var _vampir_pull: float = 0.0
 var _vampir_rest_positions: Array = []
 var _vampir_swarm: Node2D = null
@@ -1079,6 +1081,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	## Elara'nın Sıvışma'sı (bkz. main.gd extra dict/player.gd _elara_evasion_timer üstündeki AYNI not) -
 	## is_ghost_now()'da okunuyor ki enemy.gd bu oyuncuya sert yapışmasın.
 	_elara_evasion = extra.get("elara_evasion", false)
+	has_savas_sevki = extra.get("has_savas_sevki", false)
 	match_damage_dealt = extra.get("dmg_dealt", 0.0)
 	if downed_timer_label:
 		downed_timer_label.set_remaining_seconds(extra.get("downed_remaining", 0.0) if is_downed else 0.0)
@@ -1192,6 +1195,13 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	## dict/fx_paladin_barrier_link.gd. shield_bubble_visible ile AYNI
 	## desen, sadece basit bir spawn/despawn child (hazır sahne node'u yok).
 	_refresh_barrier_link_visual(extra.get("barrier_link_active", false))
+	## Ruhani Yetenek "Kalkan Bağı" - BUG DÜZELTMESİ (derin multiplayer denetimi): bağın FX'i eskiden SADECE
+	## bağın kendi iki tarafının player.gd'sinde (_ensure_kalkan_bagi_link_fx) kuruluyordu - bağa dahil
+	## OLMAYAN üçüncü bir oyuncunun ekranında iki tarafın kuklaları arasında HİÇBİR ŞEY görünmüyordu (tam
+	## CLAUDE.md'nin "kaster/karşı taraf görür, geri kalan oyuncular görmez" hata sınıfı - bkz.
+	## _barrier_link_fx üstteki AYNI satırla düzeltilen Paladin bariyer örneği, buraya birebir kopyalandı).
+	_kalkan_bagi_partner_peer_id = int(extra.get("kalkan_bagi_partner_peer_id", 0))
+	_refresh_kalkan_bagi_link_visual(_kalkan_bagi_partner_peer_id > 0)
 
 
 ## DÜZELTME (kullanıcı bildirimi: "Ölen oyuncu multiplayerda bir süre sonra
@@ -1287,6 +1297,24 @@ func _refresh_barrier_link_visual(active: bool) -> void:
 	elif _barrier_link_fx and is_instance_valid(_barrier_link_fx):
 		_barrier_link_fx.queue_free()
 		_barrier_link_fx = null
+
+
+## Ruhani Yetenek "Kalkan Bağı" - bkz. update_extra_state_from_net()'teki çağrı. fx_kalkan_bagi_link.gd
+## `_owner_ref.get("_kalkan_bagi_partner_peer_id")`'i duck-typing ile okuduğu için player.gd'deki AYNI
+## isimli alanla değişiklik gerektirmeden çalışıyor - sadece "remote_players" grubunda doğru peer_id'yi arıyor.
+var _kalkan_bagi_partner_peer_id: int = 0
+var _kalkan_bagi_link_fx: Node2D = null
+
+func _refresh_kalkan_bagi_link_visual(active: bool) -> void:
+	if active:
+		if not _kalkan_bagi_link_fx or not is_instance_valid(_kalkan_bagi_link_fx):
+			_kalkan_bagi_link_fx = Node2D.new()
+			_kalkan_bagi_link_fx.set_script(load("res://scripts/fx_kalkan_bagi_link.gd"))
+			add_child(_kalkan_bagi_link_fx)
+			_kalkan_bagi_link_fx.call("setup", self)
+	elif _kalkan_bagi_link_fx and is_instance_valid(_kalkan_bagi_link_fx):
+		_kalkan_bagi_link_fx.queue_free()
+		_kalkan_bagi_link_fx = null
 
 
 ## Network VFX helpers — called by broadcast_player_vfx RPC.

@@ -38,6 +38,8 @@ const INFO := {
 	"invuln": ["Yenilmezlik", "Ruhani Yetenek \"Kalkan\" aktif - bu süre boyunca hiç hasar almazsın."],
 	"bat": ["Yarasa Formu", "Vampir Çocuk'un yarasa formu aktif: daha hızlısın ama sürekli can harcarsın."],
 	"shield_slow": ["Kalkan Yenilemesi Yavaş", "Bir yetenek kullandın - kalkan yenilenme hızın kısa süreliğine %50 düştü."],
+	"savas_sevki": ["Savaş Şevki", "Öldürdükçe yığılan savaş şevki - 50'de kalıcı +1 saldırı gücüne dönüşür."],
+	"kalkan_bagi": ["Kalkan Bağı", "Arkadaşınla kalkanınız birbirine bağlı - hasar/bedel/artış %50-%50 paylaşılıyor, ikinizin de kalkanı daha hızlı yenileniyor."],
 }
 
 @onready var panel: Panel = $Panel
@@ -71,9 +73,13 @@ func _exit_tree() -> void:
 ## def: player.gd get_status_effects()'in tek bir girişi (bkz. orada).
 func apply(def: Dictionary) -> void:
 	_def = def
-	icon.texture = _icon_for(str(def.get("kind", "")))
+	## Kullanıcı isteği: "Savaş Şevki"nin biriken yığını ikon olarak yeteneğin KENDİ gerçek ikonunu
+	## kullanmalı - "icon_path" varsa assets/ui/status/<kind>.png setinin YERİNE doğrudan o dosya yüklenir
+	## (bkz. player.gd get_status_effects, spiritual_skills.gd DEFS "icon" alanları).
+	var icon_path: String = str(def.get("icon_path", ""))
+	icon.texture = (load(icon_path) as Texture2D) if not icon_path.is_empty() else _icon_for(str(def.get("kind", "")))
 	var stacks: int = int(def.get("stacks", 0))
-	stack_label.visible = stacks > 1
+	stack_label.visible = stacks > 0
 	stack_label.text = str(stacks)
 	var remaining: float = float(def.get("remaining", -1.0))
 	if remaining >= 0.0:
@@ -85,50 +91,46 @@ func apply(def: Dictionary) -> void:
 		_refresh_tooltip_text()
 
 
+## DÜZELTME (kullanıcı bildirimi 2026-09-23: "Skill açıklama penceresi (buff debuff dahil) fontlar çok ufak
+## çok zor okunuyor ve oyunun arayüz temasıyla çok uyumsuz") - skill_icon.gd'nin tooltip'iyle AYNI kök neden
+## ve AYNI düzeltme (bkz. o dosyadaki BİREBİR AYNI not): düz siyah StyleBoxFlat -> UIKit.panel_style
+## ("window_tight") (ana ekranlarla AYNI ahşap çerçeve), 14-16px -> UIKit.FS_BODY (m5x7'nin standart 32px
+## ölçeği) + UIKit renk paleti.
 func _on_mouse_entered() -> void:
 	_hide_tooltip()
 	var layer: Node = _find_canvas_layer()
 	if not layer:
 		return
 	_tooltip = PanelContainer.new()
-	_tooltip.custom_minimum_size = Vector2(260, 0)
+	_tooltip.custom_minimum_size = Vector2(420, 0)
 	_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.06, 0.06, 0.08, 0.95)
-	sb.border_width_left = 2
-	sb.border_width_right = 2
-	sb.border_width_top = 2
-	sb.border_width_bottom = 2
-	sb.border_color = Color(0.78, 0.63, 0.35, 1.0)
-	sb.corner_radius_top_left = 5
-	sb.corner_radius_top_right = 5
-	sb.corner_radius_bottom_right = 5
-	sb.corner_radius_bottom_left = 5
-	sb.content_margin_left = 10
-	sb.content_margin_right = 10
-	sb.content_margin_top = 8
-	sb.content_margin_bottom = 8
-	_tooltip.add_theme_stylebox_override("panel", sb)
+	_tooltip.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 6)
 	vbox.name = "Box"
 	_tooltip.add_child(vbox)
 	var title_lbl := Label.new()
 	title_lbl.name = "Title"
-	title_lbl.add_theme_font_size_override("font_size", 16)
-	title_lbl.add_theme_color_override("font_color", Color(0.9, 0.8, 0.5))
+	title_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+	title_lbl.add_theme_color_override("font_color", UIKit.C_GOLD)
+	title_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+	title_lbl.add_theme_constant_override("outline_size", 4)
 	vbox.add_child(title_lbl)
 	var desc_lbl := Label.new()
 	desc_lbl.name = "Desc"
-	desc_lbl.add_theme_font_size_override("font_size", 14)
-	desc_lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	desc_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+	desc_lbl.add_theme_color_override("font_color", UIKit.C_TEXT)
+	desc_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+	desc_lbl.add_theme_constant_override("outline_size", 3)
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	desc_lbl.custom_minimum_size = Vector2(240, 0)
+	desc_lbl.custom_minimum_size = Vector2(400, 0)
 	vbox.add_child(desc_lbl)
 	var extra_lbl := Label.new()
 	extra_lbl.name = "Extra"
-	extra_lbl.add_theme_font_size_override("font_size", 14)
+	extra_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
 	extra_lbl.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
+	extra_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+	extra_lbl.add_theme_constant_override("outline_size", 3)
 	vbox.add_child(extra_lbl)
 	layer.add_child(_tooltip)
 	_refresh_tooltip_text()

@@ -213,6 +213,51 @@ def icon_dukkan():
     finish(base, e, "dukkan")
 
 
+def icon_savas_sevki():
+    # Kullanici istegi (2026-09-23): "Savas sevki" - olum vurusu/infaz + kalici guc kazanma teması, sicak
+    # kirmizi-turuncu (savas cosku) paleti - alevli, yukari dogru kalkan bir kilic.
+    base = medallion((210, 60, 30, 255), (255, 150, 90, 255), (110, 24, 10, 255), (34, 10, 8, 255), (60, 18, 12, 255))
+    e = new_canvas()
+    d = ImageDraw.Draw(e)
+    STEEL, STEEL_L, STEEL_D = (222, 228, 236, 255), (255, 255, 255, 255), (140, 148, 168, 255)
+    GOLD, GOLD_D = (255, 208, 90, 255), (170, 110, 30, 255)
+    d.polygon([(24, 5), (28, 12), (28, 30), (20, 30), (20, 12)], fill=STEEL)
+    d.polygon([(24, 5), (28, 12), (24, 12)], fill=STEEL_L)
+    d.line((23, 10, 23, 28), fill=STEEL_D, width=1)
+    d.rectangle((13, 30, 35, 33), fill=GOLD)
+    d.rectangle((13, 30, 35, 31), fill=(255, 232, 160, 255))
+    d.rectangle((21, 34, 27, 41), fill=(120, 70, 30, 255))
+    d.ellipse((19, 40, 29, 46), fill=GOLD_D)
+    d.ellipse((22, 42, 26, 45), fill=GOLD)
+    for (fx, fy) in [(13, 25), (35, 21), (10, 15), (38, 13), (16, 8), (32, 6), (24, 3)]:
+        put(e, [(fx, fy), (fx + 1, fy)], (255, 140, 40, 255))
+        put(e, [(fx, fy - 2)], (255, 210, 100, 255))
+    sparkle(e, 7, 34, (255, 220, 180, 255), (255, 140, 60, 255), 2)
+    sparkle(e, 41, 30, (255, 220, 180, 255), (255, 140, 60, 255), 2)
+    finish(base, e, "savas_sevki")
+
+
+def icon_kalkan_bagi():
+    # Kullanici istegi: "Kalkan bagi" - iki ayri kalkanin ortak bir zincirle/baglantiyla birlestigi görsel.
+    base = medallion((70, 130, 220, 255), (170, 210, 255, 255), (24, 60, 120, 255), (10, 22, 40, 255), (18, 40, 70, 255))
+    e = new_canvas()
+    d = ImageDraw.Draw(e)
+    BLU, BLU_L, BLU_D = (100, 160, 230, 255), (200, 230, 255, 255), (40, 80, 150, 255)
+    GOLD = (255, 214, 110, 255)
+    d.polygon([(7, 10), (19, 7), (19, 25), (13, 35), (7, 25)], fill=BLU_D)
+    d.polygon([(8, 11), (18, 9), (18, 24), (13, 33), (8, 24)], fill=BLU)
+    d.polygon([(8, 11), (13, 10), (13, 33), (8, 24)], fill=BLU_L)
+    d.polygon([(41, 10), (29, 7), (29, 25), (35, 35), (41, 25)], fill=BLU_D)
+    d.polygon([(40, 11), (30, 9), (30, 24), (35, 33), (40, 24)], fill=BLU)
+    d.polygon([(40, 11), (35, 10), (35, 33), (40, 24)], fill=(230, 245, 255, 255))
+    for (cx, cy) in [(20, 17), (24, 19), (28, 17), (20, 24), (24, 26), (28, 24)]:
+        d.ellipse((cx - 2, cy - 2, cx + 2, cy + 2), outline=GOLD, width=1)
+    put(e, [(24, 21), (24, 22)], (255, 245, 210, 255))
+    sparkle(e, 6, 38, (220, 240, 255, 255), (150, 210, 255, 255), 2)
+    sparkle(e, 41, 38, (220, 240, 255, 255), (150, 210, 255, 255), 2)
+    finish(base, e, "kalkan_bagi")
+
+
 def make_icons():
     os.makedirs(OUT_SKILL, exist_ok=True)
     icon_para()
@@ -221,6 +266,8 @@ def make_icons():
     icon_tank()
     icon_taktik()
     icon_dukkan()
+    icon_savas_sevki()
+    icon_kalkan_bagi()
 
 
 # ------------------------------------------------------------------ sesler
@@ -396,6 +443,24 @@ def snd_teleport():
     save_wav("spirit_teleport.wav", add_reverb(sweep * 0.9 + sp, 0.3))
 
 
+def snd_kalkan_bagi():
+    # Iki ayri "kalkan" notasinin birlesip tek bir uyumlu akorda donustugu kisa bir "baglanma" sesi.
+    sec = 0.7
+    t = t_axis(sec)
+    a = tone(392.0, sec, harmonics=((1, 1.0), (2, 0.25))) * env_ad(len(t), 0.02, 2.0)
+    b = tone(523.25, sec, harmonics=((1, 1.0), (2, 0.25))) * env_ad(len(t), 0.02, 2.0)
+    glide_in = np.minimum(1.0, t / 0.18)
+    out = (a * (1.0 - 0.4 * (1.0 - glide_in)) + b * glide_in) * 0.6
+    shimmer = np.zeros(len(t))
+    rs = np.random.RandomState(9)
+    for i in range(10):
+        s = int(SR * rs.uniform(0.05, 0.5))
+        m = min(int(SR * 0.15), len(t) - s)
+        tt = np.arange(m) / SR
+        shimmer[s:s + m] += 0.12 * np.sin(2 * np.pi * rs.choice([1568, 1976, 2349]) * tt) * np.exp(-tt * 18)
+    save_wav("spirit_kalkan_bagi.wav", add_reverb(out + shimmer, 0.3))
+
+
 def make_sounds():
     snd_can()
     snd_adc()
@@ -404,6 +469,7 @@ def make_sounds():
     snd_taktik()
     snd_dukkan()
     snd_teleport()
+    snd_kalkan_bagi()
 
 
 if __name__ == "__main__":

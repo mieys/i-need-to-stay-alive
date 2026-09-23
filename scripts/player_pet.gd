@@ -52,9 +52,10 @@ const COMBAT_SPEED_MULT := 2.2
 ## isabet alsın.
 const ATTACK_RADIUS := 60.0
 const ATTACK_ARC_DEG := 180.0
-## Efekt olarak Uzunkılıç'ın savuruş animasyonu kullanılıyor ama turuncu
-## tonda (bkz. fx_matthew_pet_slash.tscn modulate) - kullanıcı isteği.
-const SlashFxScene := preload("res://scenes/fx_matthew_pet_slash.tscn")
+## Kullanıcı isteği (2026-09-23): "oto saldırılarına özel pixel tarzda bir slash-pençe tarzı bir saldırı
+## efekti hazırla" - eskiden Pençe silahının slash_frames.tres'i turuncu tonlanmış olarak yeniden
+## kullanılıyordu (bkz. fx_matthew_claw_slash.gd dosya üstü notu), artık kendi özel PixelDraw çizimi var.
+const SlashFxScene := preload("res://scenes/fx_matthew_claw_slash.tscn")
 const ATTACK_INTERVAL := 1.0
 const FOLLOW_DISTANCE := 90.0 ## hedefi yokken sahibe bu kadar yakın durur
 ## Eskiden 260.0 idi - kullanıcı bildirimi "Matthew'i düzgün takip edemiyor,
@@ -155,6 +156,11 @@ func _physics_process(delta: float) -> void:
 	if _is_network_visual:
 		_process_network_visual(delta)
 		return
+	if _dash_strike_active:
+		## bkz. begin_dash_strike() - player.gd _matthew_fox_dash_sequence() tilkiyi dash_to() ile yönetiyor.
+		## Periyodik konum yayını bu sırada BİLEREK yapılmıyor: dash_to() varış noktasını kendisi yayınlıyor,
+		## ara konumlar gönderilseydi kozmetik kopya kendi dash'ini bitirince eski bir ara noktaya geri kayardı.
+		return
 	_update_focus_target()
 	_process_movement(delta)
 	_process_attack(delta)
@@ -172,6 +178,7 @@ func _physics_process(delta: float) -> void:
 
 ## bkz. yukarıdaki _is_network_visual sınıf üstü notu.
 func begin_matthew_shield_form(owner: Node2D) -> void:
+	_stop_dash()
 	_matthew_shield_form = true
 	_matthew_shield_owner = owner
 	_focus_target = null
@@ -239,19 +246,21 @@ func mark_as_network_visual() -> void:
 ## _network_target_position/_network_state_received HİÇBİR ZAMAN set
 ## edilmiyordu - tilki diğer oyuncularda spawn noktasında sonsuza dek
 ## hareketsiz/idle kalıyordu.
-## DÜZELTME (kullanıcı isteği 2026-09-22: multiplayer senkron kontrolü, bkz. _broadcast_network_state/
-## notify_teleport üstündeki notlar) - "teleport" true ise (Matthew'in Tilki Hücumu gibi ANINDA konum
-## değişiklikleri) kozmetik kopya _process_network_visual'ın yumuşak kaymasını BEKLEMEDEN direkt ışınlanır.
-func update_network_pet_state(pos: Vector2, _is_attacking: bool, _sprite_row: int = -1, teleport: bool = false) -> void:
+## "dash" true ise (ağdaki adı hâlâ "teleport" - bkz. network_manager.gd broadcast_pet_state) gerçek tilki
+## Tilki Hücumu'nda pos'a atılıyor demektir: kozmetik kopya yumuşak kaymak yerine AYNI dash_to() görselini
+## (hızlı hareket + hız çizgileri + hayalet izler) kendisi oynatır - efekt her istemcide AYNI koddan çıkar.
+func update_network_pet_state(pos: Vector2, _is_attacking: bool, _sprite_row: int = -1, dash: bool = false) -> void:
 	_network_target_position = pos
 	_network_state_received = true
-	if teleport:
-		global_position = pos
+	if dash:
+		dash_to(pos)
 
 
 ## Kozmetik kopyanın fizik adımı: kendi (zaten owner_player'sız çalışmayan)
 ## takip/savaş mantığı yerine gerçek tilkinin bildirdiği konuma kayar.
 func _process_network_visual(delta: float) -> void:
+	if _dash_moving:
+		return ## dash_to()'nun tween'i konumu ve "run" klibini yönetiyor
 	if not _network_state_received:
 		velocity = Vector2.ZERO
 		_update_animation()
@@ -279,23 +288,101 @@ func _process_network_visual(delta: float) -> void:
 func _broadcast_network_state() -> void:
 	if not NetworkManager.is_multiplayer_active or network_instance_id.is_empty():
 		return
-	## bkz. notify_teleport() - ışınlanmadan sonraki İLK yayın throttle'ı ATLAR (aksi halde en fazla 0.15sn
-	## eski konumda kalabilirdi) ve "teleport" bayrağını taşır ki kozmetik kopya da ANINDA sıçrasın.
-	if not _pending_teleport_broadcast and NetworkManager.should_throttle("petpos_%s" % network_instance_id, 0.15):
+	if NetworkManager.should_throttle("petpos_%s" % network_instance_id, 0.15):
 		return
-	var is_teleport: bool = _pending_teleport_broadcast
-	_pending_teleport_broadcast = false
-	NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, global_position, false, -1.0, -1.0, -1, is_teleport)
+	NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, global_position, false, -1.0, -1.0, -1, false)
 
 
-## Matthew'in Tilki Hücumu (player.gd _skill_matthew_fox_strike) gibi tilkiyi ANINDA ışınlayan yetenekler
-## bunu çağırır - bir sonraki _broadcast_network_state() throttle'ı atlayıp "teleport" bayrağıyla gönderir,
-## diğer istemcilerdeki kozmetik kopya yumuşak kaymak yerine AYNI ANDA ışınlanır (bkz. update_network_pet_state).
-var _pending_teleport_broadcast: bool = false
+## ---------- Tilki Hücumu dash görseli (kullanıcı isteği 2026-09-23) ----------
+## "tilki dash atarken arkasında dash çizgisi olmalı ve tilkinin arkasında kendi görüntüsü gibi parça parça
+## izler olmalı". Önceki sürüm tilkiyi hedefler arasında IŞINLIYORDU - görünür bir hareket yoktu, iz ve
+## hayaletler ışınlanma anında hepsi birden, statik şekilde beliriyordu. Artık tilki kısa bir tween ile
+## GERÇEKTEN hedefe atılıyor; hareket sürerken arkasında hız çizgileri (fx_matthew_dash_lines.gd, tilkinin
+## çocuğu) duruyor ve yol boyunca aralıklarla kendi o anki karesinin sönen kopyalarını bırakıyor
+## (fx_matthew_fox_afterimage.gd). Hem gerçek tilki hem kozmetik kopya bu AYNI fonksiyonu çalıştırır.
+const DASH_HOP_TIME := 0.09
+const DASH_AFTERIMAGE_INTERVAL := 0.02
+const FoxAfterimageScene := preload("res://scenes/fx_matthew_fox_afterimage.tscn")
+const DashLinesScript := preload("res://scripts/fx_matthew_dash_lines.gd")
+var _dash_tween: Tween = null
+var _dash_moving: bool = false
+var _afterimage_timer: float = 0.0
+var _dash_lines: Node2D = null
 
 
-func notify_teleport() -> void:
-	_pending_teleport_broadcast = true
+func dash_to(dest: Vector2) -> void:
+	var travel: Vector2 = dest - global_position
+	if travel.length() > 0.5:
+		_update_facing(travel)
+	if anim:
+		anim.visible = true
+		anim.play("run_" + facing)
+	if _dash_tween and _dash_tween.is_valid():
+		_dash_tween.kill()
+	velocity = Vector2.ZERO
+	_dash_moving = true
+	_afterimage_timer = DASH_AFTERIMAGE_INTERVAL
+	_spawn_afterimage()
+	if not is_instance_valid(_dash_lines):
+		_dash_lines = DashLinesScript.new()
+		add_child(_dash_lines)
+		move_child(_dash_lines, 0) ## AnimatedSprite2D'den önce çizilsin = gövdenin arkasında
+	_dash_lines.call("start", travel)
+	_dash_tween = create_tween()
+	_dash_tween.tween_property(self, "global_position", dest, DASH_HOP_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_dash_tween.finished.connect(_on_dash_finished)
+	## Gerçek tilki varış noktasını anında yayınlar - kozmetik kopyalar aynı dash'i kendileri oynatır.
+	if not _is_network_visual and NetworkManager.is_multiplayer_active and not network_instance_id.is_empty():
+		NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, dest, false, -1.0, -1.0, -1, true)
+
+
+func _on_dash_finished() -> void:
+	_dash_moving = false
+	if is_instance_valid(_dash_lines):
+		_dash_lines.call("stop")
+
+
+func _stop_dash() -> void:
+	if _dash_tween and _dash_tween.is_valid():
+		_dash_tween.kill()
+	_on_dash_finished()
+
+
+func _process(delta: float) -> void:
+	if not _dash_moving:
+		return
+	_afterimage_timer -= delta
+	if _afterimage_timer <= 0.0:
+		_afterimage_timer = DASH_AFTERIMAGE_INTERVAL
+		_spawn_afterimage()
+
+
+func _spawn_afterimage() -> void:
+	if not anim or not is_inside_tree():
+		return
+	var ghost: Sprite2D = FoxAfterimageScene.instantiate() as Sprite2D
+	get_tree().current_scene.add_child(ghost)
+	ghost.global_position = anim.global_position
+	ghost.call("setup", anim)
+
+
+## Matthew'in Tilki Hücumu (Q, bkz. player.gd _matthew_fox_dash_sequence) sırasında tilkiyi kendi normal
+## takip/savaş yapay zekasından (_update_focus_target/_process_movement/_process_attack) ÇIKARIR - o
+## coroutine konumu/yönü/animasyonu elle (her dash sıçramasında) kontrol ederken ikisi ÇAKIŞMASIN diye
+## (bkz. _matthew_shield_form ile AYNI "askıya al" deseni, _physics_process'teki erken dönüş).
+var _dash_strike_active: bool = false
+
+
+func begin_dash_strike() -> void:
+	_dash_strike_active = true
+	_focus_target = null
+	_in_melee_stance = false
+	velocity = Vector2.ZERO
+
+
+func end_dash_strike() -> void:
+	_stop_dash()
+	_dash_strike_active = false
 
 
 ## Matthew'a (sahibine) EN YAKIN, FOCUS_RADIUS içindeki yaratığı seçer -
@@ -476,11 +563,29 @@ func _do_cone_attack(attack_dir: Vector2) -> void:
 			e.take_damage(BASE_DAMAGE)
 
 
+## BUG DÜZELTMESİ (derin multiplayer denetimi bulgusu, CLAUDE.md'nin "kaster görür diğeri görmez" hata
+## sınıfı): bu fonksiyon SADECE GERÇEK tilkinin (Matthew'in kendi makinesinde) çalıştığı _process_attack()
+## tarafından çağrılır (bkz. _is_network_visual erken dönüşü) - eskiden burada hiç broadcast YOKTU, yani
+## tilkinin oto saldırı efektini SADECE Matthew kendi ekranında görüyordu, diğer oyuncular hiçbir şey
+## görmüyordu. weapon.gd _spawn_muzzle_flash ile AYNI desen: yerel spawn + "muzzle_flash" vfx_type'ıyla
+## world-space konum/rotasyon broadcast (bkz. network_manager.gd broadcast_player_vfx, rotation zaten
+## destekliyor).
 func _spawn_slash_fx(attack_dir: Vector2) -> void:
+	var pos: Vector2 = global_position + attack_dir * (ATTACK_RADIUS * 0.5)
+	var rot: float = attack_dir.angle()
+	_spawn_claw_slash_at(pos, rot)
+	if NetworkManager.is_multiplayer_active and not network_instance_id.is_empty():
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "muzzle_flash", pos, {
+			"scene_path": SlashFxScene.resource_path,
+			"rotation": rot,
+		})
+
+
+func _spawn_claw_slash_at(pos: Vector2, rot: float) -> void:
 	var fx: Node2D = SlashFxScene.instantiate() as Node2D
 	get_tree().current_scene.add_child(fx)
-	fx.global_position = global_position + attack_dir * (ATTACK_RADIUS * 0.5)
-	fx.rotation = attack_dir.angle()
+	fx.global_position = pos
+	fx.rotation = rot
 
 
 func heal(amount: float) -> void:

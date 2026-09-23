@@ -75,6 +75,7 @@ const RANGED_SPELL_DAMAGE_MULT := 0.4
 ## TEK paylaşılan sayacı kullanıyor (bkz. _process_ranged_attack).
 var _ranged_timer: float = 0.0
 const EnemyProjectileScene := preload("res://scenes/enemy_projectile.tscn")
+const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 
 ## Only used for enemies whose visual is a plain Sprite2D with hframes/vframes
 ## set (e.g. the boss and the rat), instead of an AnimatedSprite2D with a
@@ -351,6 +352,24 @@ var is_dead: bool = false
 ## can/ölüm senkronu hiç uygulanmıyordu) - katılımcıların yaratıkları
 ## göremeyip oyunun bozulmasının asıl nedeni muhtemelen buydu.
 var last_attacker_peer_id: int = 0
+
+## Ruhani Yetenek "Savaş Şevki"nin infaz kontrolü (bkz. _apply_damage() içindeki kullanımı) - "bu isabeti
+## verenin seçtiği ruhani yetenek Savaş Şevki mi" sorusuna cevap verir. GameManager.selected_spiritual HER
+## İSTEMCİDE SADECE KENDİ SEÇİMİNİ bilir (kasıtlı olarak ağa gitmez, bkz. lobby_menu.gd notu) - bu yüzden üç
+## durum var: (1) tek oyunculu ya da vuran BU makinenin kendi oyuncusuysa (host kendi vuruşunu işliyor)
+## doğrudan yerel oyuncuya sor; (2) vuran BAŞKA bir peer'sa (host bir istemcinin isabetini işliyor) o peer'ın
+## RemotePlayer kuklasındaki senkronize bayrağa bak (bkz. main.gd extra dict "has_savas_sevki",
+## remote_player.gd has_savas_sevki).
+func _attacker_has_savas_sevki() -> bool:
+	var local_id: int = multiplayer.get_unique_id() if (NetworkManager.is_multiplayer_active and multiplayer.has_multiplayer_peer()) else 0
+	if last_attacker_peer_id <= 0 or last_attacker_peer_id == local_id or not NetworkManager.is_multiplayer_active:
+		var local_p: Node = get_tree().get_first_node_in_group("player")
+		return local_p != null and local_p.has_method("has_savas_sevki") and local_p.call("has_savas_sevki") == true
+	for rp in get_tree().get_nodes_in_group("remote_players"):
+		if is_instance_valid(rp) and "peer_id" in rp and int(rp.peer_id) == last_attacker_peer_id:
+			return rp.get("has_savas_sevki") == true
+	return false
+
 
 var _contact_timer: float = 0.0
 var _player_in_hit_area: Node2D = null
@@ -3141,6 +3160,14 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 		## bu salt kozmetik olduğu için kayıp fark edilmez ama flood'u önler.
 		if net_id > 0 and not NetworkManager.should_throttle("dmgnum_%d" % net_id, 0.1):
 			NetworkManager.broadcast_enemy_vfx.rpc(net_id, "damage_number", {"amount": effective_amount, "is_crit": is_crit})
+	## Ruhani Yetenek "Savaş Şevki": bu isabeti verenin seçtiği ruhani yetenek buysa, normal hasardan sonra
+	## hâlâ hayattaysa ama kalan can oranı eşiğin altındaysa anında öldürülür (bkz. _attacker_has_savas_sevki,
+	## spiritual_skills.gd SAVAS_SEVKI_EXECUTE_PERCENT*). die() zaten aşağıda "health <= 0" ile tetiklenir,
+	## burada SADECE canı sıfırlıyoruz - ikinci bir ölüm yolu açmıyoruz.
+	if health > 0.0 and max_health > 0.0 and _attacker_has_savas_sevki():
+		var execute_percent: float = SpiritualSkillsScript.SAVAS_SEVKI_EXECUTE_PERCENT_BOSS if is_boss else SpiritualSkillsScript.SAVAS_SEVKI_EXECUTE_PERCENT
+		if (health / max_health) < execute_percent:
+			health = 0.0
 	if health <= 0:
 		die()
 	else:

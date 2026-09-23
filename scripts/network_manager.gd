@@ -2682,6 +2682,36 @@ func sync_redirected_damage(target_peer_id: int, amount: float) -> void:
 		local_player.take_damage(amount)
 
 
+## Ruhani Yetenek "Kalkan Bağı" - iki oyuncu arasında BAĞIMSIZ, iki taraflı bir bağ (Oakley'nin Koruyucu
+## Büyü'sünden farklı: TEK yönlü bir "hedef" YOK, ikisi de birbirine eşit şekilde bağlı). Bağı KURAN taraf
+## kendi tarafını doğrudan yerel olarak set eder (bkz. player.gd _spirit_cast_kalkan_bagi), bu RPC SADECE
+## PARTNERİN kendi client'ında AYNI bayrakları set etmesi için (active=false = bağ bitti, hem toggle-kapatma
+## hem mesafe kopması BURADAN geçer, bkz. player.gd _end_kalkan_bagi).
+@rpc("any_peer", "call_remote", "reliable")
+func sync_kalkan_bagi_bond(target_peer_id: int, source_peer_id: int, active: bool) -> void:
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	if local_id != target_peer_id:
+		return
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if local_player and local_player.has_method("receive_kalkan_bagi_bond"):
+		local_player.receive_kalkan_bagi_bond(source_peer_id, active)
+
+
+## Kalkan Bağı'nın gerçek mekaniği: bu oyuncunun kalkanında GERÇEKTEN işleyen (clamp sonrası) her
+## artış/azalışın %50'si (bkz. spiritual_skills.gd KALKAN_BAGI_MIRROR_RATIO) partnerin kalkanına da uygulanır
+## - "her türlü kalkan değişikliği" (hasar/yetenek bedeli/kalkan artışı) TEK bir yoldan geçtiği için (bkz.
+## player.gd heal_shield/_spend_ability_shield_cost/take_damage - hepsi _kalkan_bagi_mirror() çağırır) burada
+## ikinci bir kaynak YOK, sadece o TEK fonksiyonun sonucu iletiliyor.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_kalkan_bagi_shield_delta(target_peer_id: int, delta_amount: float) -> void:
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	if local_id != target_peer_id:
+		return
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if local_player and local_player.has_method("receive_kalkan_bagi_shield_delta"):
+		local_player.receive_kalkan_bagi_shield_delta(delta_amount)
+
+
 ## Host otoritesinde ortak takım EXP toplama
 func host_collect_xp(amount: float) -> void:
 	if not is_host:

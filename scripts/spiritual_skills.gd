@@ -16,9 +16,11 @@ const ADC := "adc"
 const TANK := "tank"
 const TAKTIK := "taktik"
 const DUKKAN := "dukkan"
+const SAVAS_SEVKI := "savas_sevki"
+const KALKAN_BAGI := "kalkan_bagi"
 
 ## Seçim ekranındaki sıra.
-const ORDER := [PARA, CAN, ADC, TANK, TAKTIK, DUKKAN]
+const ORDER := [PARA, CAN, ADC, TANK, TAKTIK, DUKKAN, SAVAS_SEVKI, KALKAN_BAGI]
 ## Seçim yapılmamışsa (ör. editörden doğrudan sahne açılırsa) kullanılan varsayılan.
 const DEFAULT_ID := PARA
 
@@ -53,6 +55,25 @@ const DUKKAN_COOLDOWN := 120.0
 ## Odaklanma iptal edilirse (hareket/hasar) kısa bir kilit - ışınlanma tamamlanmadığı için tam bekleme süresi YOK, ama
 ## art arda basıp spam'lenmesin.
 const DUKKAN_CANCEL_LOCKOUT := 4.0
+
+## Kullanıcı isteği (2026-09-23): "Savaş şevki (Pasif)". PARA gibi "active": false - F tuşuna basmaya gerek yok, sürekli işler.
+const SAVAS_SEVKI_KILL_STACK := 1 ## normal düşman öldürünce
+const SAVAS_SEVKI_BOSS_KILL_STACK := 25 ## boss öldürünce
+const SAVAS_SEVKI_STACKS_FOR_AP := 50 ## bu kadar yığılınca dönüşür
+const SAVAS_SEVKI_AP_PER_THRESHOLD := 1.0 ## ... kalıcı +1 saldırı gücüne
+const SAVAS_SEVKI_EXECUTE_PERCENT := 0.06 ## normal düşman: canı bunun altındaysa anında ölür
+const SAVAS_SEVKI_EXECUTE_PERCENT_BOSS := 0.03 ## boss: daha düşük eşik
+
+## Kullanıcı isteği (2026-09-23): "Kalkan bağı" - açılıp kapanan (toggle) bir bağ, sabit bir aktif süresi YOK
+## (Paladin ultisi/Vampir R gibi "active": true ama güvenlik tavanı sonsuza yakın, bkz. player.gd KALKAN_BAGI_ACTIVE_CAP).
+const KALKAN_BAGI_RANGE := 400.0 ## bağ kurulabilecek/bağın kopmadan kalabileceği azami mesafe (Oakley Koruyucu Büyü/Paladin bariyeriyle AYNI mertebe)
+const KALKAN_BAGI_MIRROR_RATIO := 0.50 ## hasar/bedel/artış her türlü kalkan değişikliğinin yansıyan payı
+const KALKAN_BAGI_REGEN_PERCENT_PER_SEC := 0.01 ## aktifken ikisinin de saniyede yenilenen maksimum kalkan payı
+const KALKAN_BAGI_ABSORPTION_BONUS := 0.10 ## aktifken ikisinin de kazandığı ekstra kalkan hasar soğurması
+const KALKAN_BAGI_COOLDOWN := 60.0 ## bağ koparsa/kapatılırsa
+## "active" fazının güvenlik tavanı - Paladin ultisi/Vampir R toggle'larıyla AYNI desen (bkz. o SKILL_TIMING
+## kayıtlarının "9999.0" notları): gerçek süre YOK, tekrar kapatılana/bağ koparana kadar sürer.
+const KALKAN_BAGI_ACTIVE_CAP := 99999.0
 
 const DEFS := {
 	PARA: {
@@ -106,6 +127,21 @@ const DEFS := {
 		"icon": "res://assets/skills/spirit_dukkan_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_dukkan.wav",
 		"desc": "3 saniye odaklanıp dükkana (seyyar satıcıya) ışınlanırsın. Odaklanırken hareket eder ya da hasar alırsan iptal olur; satıcı yokken kullanılamaz. (120sn bekleme)",
+	},
+	SAVAS_SEVKI: {
+		"name": "Savaş Şevki",
+		"active": false,
+		"cooldown": 0.0,
+		"icon": "res://assets/skills/spirit_savas_sevki_icon.png",
+		"desc": "PASİF: Her düşman öldürmede 1 savaş şevki kazanırsın (bosslar 25 verir). 50 savaş şevkine ulaşınca maç boyunca kalıcı +1 saldırı gücü kazanırsın (yükler sıfırlanıp yeniden birikmeye başlar). Ayrıca canı %6'dan az olan düşmanları (bosslarda %3) anında katledersin.",
+	},
+	KALKAN_BAGI: {
+		"name": "Kalkan Bağı",
+		"active": true,
+		"cooldown": KALKAN_BAGI_COOLDOWN,
+		"icon": "res://assets/skills/spirit_kalkan_bagi_icon.png",
+		"sound": "res://assets/audio/spiritual/spirit_kalkan_bagi.wav",
+		"desc": "En yakın arkadaşınla kalkan bağı kurarsın: hasarlar, yetenek bedelinden giden kalkanlar ve kalkan artışları gibi her türlü kalkan değişikliği %50-%50 birbirinize yansır. Aktifken ikinizin de kalkanı saniyede %1 yenilenir ve %10 kalkan hasar soğurması kazanırsınız. Tekrar kullanana ya da uzaklaşıp bağ kopana kadar sürer. (60sn bekleme)",
 	},
 }
 

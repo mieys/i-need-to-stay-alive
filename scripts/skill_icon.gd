@@ -211,63 +211,62 @@ func _on_mouse_entered() -> void:
 	## okunmuyor ... bazıları aşırı küçük" - bu tooltip'in metinleri (aşağıda)
 	## oyunun geri kalanına göre çok küçük kalıyordu, büyütüldü; panel
 	## genişliği de o kadar metne göre orantılı büyütüldü.
+	## DÜZELTME (kullanıcı bildirimi 2026-09-23: "fontlar çok ufak çok zor
+	## okunuyor ve oyunun arayüz temasıyla çok uyumsuz") - kök neden İKİ
+	## KATMANLIYDI: (1) yazı boyutu (17px) oyunun geri kalanının kullandığı
+	## m5x7 piksel fontunun standart ölçeğinden (UIKit.FS_BODY=32, 16'nın
+	## katları - bkz. ui_kit.gd dosya üstü notu) NEREDEYSE YARISI kadardı;
+	## (2) arkaplan düz siyah bir StyleBoxFlat'tı, merchant/envanter/stat gibi
+	## HİÇBİR ekranın kullanmadığı bambaşka bir görsel dil (bkz. ui_kit.gd
+	## panel_style "window"/"inset" notundaki AYNI ders: düz panel SADECE
+	## küçük iç çukurlar için, ana çerçeve HER ZAMAN ahşap+demir "window"
+	## dokusu). Artık ikisi de UIKit'ten: panel UIKit.panel_style
+	## ("window_tight") (ana ekranlarla AYNI ahşap çerçeve, dar iç boşluklu
+	## varyant), yazılar UIKit.FS_BODY/UIKit renk paleti.
 	tooltip_panel = PanelContainer.new()
-	tooltip_panel.custom_minimum_size = Vector2(400, 0)
-	
-	# Apply stylebox
-	var sb: StyleBoxFlat = StyleBoxFlat.new()
-	sb.bg_color = Color(0.06, 0.06, 0.08, 0.95)
-	sb.border_width_left = 2
-	sb.border_width_right = 2
-	sb.border_width_top = 2
-	sb.border_width_bottom = 2
-	sb.border_color = Color(0.78, 0.63, 0.35, 1.0) # Gold border
-	sb.corner_radius_top_left = 5
-	sb.corner_radius_top_right = 5
-	sb.corner_radius_bottom_right = 5
-	sb.corner_radius_bottom_left = 5
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 10
-	tooltip_panel.add_theme_stylebox_override("panel", sb)
-	
+	tooltip_panel.custom_minimum_size = Vector2(480, 0)
+	tooltip_panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+
 	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_theme_constant_override("separation", 8)
 	tooltip_panel.add_child(vbox)
-	
+
 	# Header (Title + Keybind)
 	var header: HBoxContainer = HBoxContainer.new()
 	vbox.add_child(header)
-	
+
 	## Kullanıcı isteği: "hepsini aynı boyuta getir" - başlık/tuş rozeti de
 	## artık açıklama/bekleme metniyle (TOOLTIP_BODY_FONT_SIZE, aşağıda
 	## tanımlanmadan önce burada da aynı sabit değer kullanılıyor) BİREBİR
 	## aynı font boyutunda; aralarındaki ayrım artık sadece renk/büyük harf
 	## ile yapılıyor, boyutla değil.
-	const TOOLTIP_HEADER_FONT_SIZE := 17
+	const TOOLTIP_HEADER_FONT_SIZE := UIKit.FS_BODY
 	var lbl_title: Label = Label.new()
 	lbl_title.text = title.to_upper()
 	lbl_title.add_theme_font_size_override("font_size", TOOLTIP_HEADER_FONT_SIZE)
-	lbl_title.add_theme_color_override("font_color", Color(0.9, 0.8, 0.5))
+	lbl_title.add_theme_color_override("font_color", UIKit.C_GOLD)
+	lbl_title.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+	lbl_title.add_theme_constant_override("outline_size", 4)
 	header.add_child(lbl_title)
-	
+
 	var spacer: Control = Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(spacer)
-	
+
 	var lbl_key: Label = Label.new()
 	lbl_key.text = "[" + keybind_text + "]"
 	lbl_key.add_theme_font_size_override("font_size", TOOLTIP_HEADER_FONT_SIZE)
-	lbl_key.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	lbl_key.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
+	lbl_key.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+	lbl_key.add_theme_constant_override("outline_size", 4)
 	header.add_child(lbl_key)
-	
+
 	# Divider
 	var div: ColorRect = ColorRect.new()
 	div.color = Color(0.3, 0.25, 0.15)
-	div.custom_minimum_size = Vector2(0, 1)
+	div.custom_minimum_size = Vector2(0, 2)
 	vbox.add_child(div)
-	
+
 	# Cooldown
 	## DÜZELTME (kullanıcı bildirimi: "yetenek açıklamaları penceresindeki
 	## yazılar çok dengesiz, bazıları kocaman bazıları ufacık") - asıl neden:
@@ -281,7 +280,7 @@ func _on_mouse_entered() -> void:
 	## (ULTİ/TEMEL/PASİF, sayılar SARILI DEĞİL ama [b] kullanan başka
 	## kelimeler) aniden 88px oluyordu. Artık normal/bold/italics/bold_italics
 	## HEPSİ AYNI boyuta sabitleniyor, tüm metin tutarlı tek bir boyutta.
-	const TOOLTIP_BODY_FONT_SIZE := 17
+	const TOOLTIP_BODY_FONT_SIZE := UIKit.FS_BODY
 	var lbl_cd: RichTextLabel = RichTextLabel.new()
 	lbl_cd.bbcode_enabled = true
 	lbl_cd.text = "[color=#55ccff]" + cd_text + "[/color]"
@@ -292,8 +291,11 @@ func _on_mouse_entered() -> void:
 	lbl_cd.add_theme_font_size_override("italics_font_size", TOOLTIP_BODY_FONT_SIZE)
 	lbl_cd.add_theme_font_size_override("bold_italics_font_size", TOOLTIP_BODY_FONT_SIZE)
 	lbl_cd.add_theme_font_size_override("mono_font_size", TOOLTIP_BODY_FONT_SIZE)
+	lbl_cd.add_theme_color_override("default_color", UIKit.C_TEXT)
+	lbl_cd.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+	lbl_cd.add_theme_constant_override("outline_size", 3)
 	vbox.add_child(lbl_cd)
-	
+
 	# Description
 	var lbl_desc: RichTextLabel = RichTextLabel.new()
 	lbl_desc.bbcode_enabled = true
@@ -305,10 +307,12 @@ func _on_mouse_entered() -> void:
 	lbl_desc.add_theme_font_size_override("italics_font_size", TOOLTIP_BODY_FONT_SIZE)
 	lbl_desc.add_theme_font_size_override("bold_italics_font_size", TOOLTIP_BODY_FONT_SIZE)
 	lbl_desc.add_theme_font_size_override("mono_font_size", TOOLTIP_BODY_FONT_SIZE)
+	lbl_desc.add_theme_color_override("default_color", UIKit.C_TEXT)
+	lbl_desc.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+	lbl_desc.add_theme_constant_override("outline_size", 3)
 	vbox.add_child(lbl_desc)
-	
+
 	hud_layer.add_child(tooltip_panel)
-	tooltip_panel.size = Vector2(320, 0)
 	tooltip_panel.reset_size()
 	_update_tooltip_position()
 

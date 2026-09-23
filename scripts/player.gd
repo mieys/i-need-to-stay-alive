@@ -3276,6 +3276,15 @@ func get_status_effects() -> Array:
 	## yavaşlar (bkz. item_shield_ability_slow_timer/_process_item_shield) - hangi karakter olursa olsun aynı.
 	if item_shield_ability_slow_timer > 0.0:
 		out.append({"id": "shield_slow", "kind": "shield_slow", "is_buff": false, "stacks": 0, "remaining": item_shield_ability_slow_timer, "duration": maxf(_shield_hit_regen_delay(), 0.01)})
+	## Ruhani Yetenek "Savaş Şevki" - biriken yığın (kullanıcı isteği: "Biriken saldırı güçleri skillbarın
+	## üstündeki buff göstergelerinde gösterilmeli, ikon olarak bu yeteneğin ikonu görünmeli") - "icon_path"
+	## ile status_effect_badge.gd bu yeteneğin GERÇEK ikonunu kullanır (bkz. orada, kendi 5 harfli setinin
+	## dışında bir istisna).
+	if get_spirit_id() == SpiritualSkillsScript.SAVAS_SEVKI and _savas_sevki_stacks > 0:
+		out.append({"id": "savas_sevki", "kind": "savas_sevki", "icon_path": str(SpiritualSkillsScript.get_def(SpiritualSkillsScript.SAVAS_SEVKI).get("icon", "")), "is_buff": true, "stacks": _savas_sevki_stacks, "remaining": -1.0, "duration": -1.0})
+	## Ruhani Yetenek "Kalkan Bağı" - bağ kurulu olduğu sürece görünür (bkz. _kalkan_bagi_active).
+	if _kalkan_bagi_active:
+		out.append({"id": "kalkan_bagi", "kind": "kalkan_bagi", "icon_path": str(SpiritualSkillsScript.get_def(SpiritualSkillsScript.KALKAN_BAGI).get("icon", "")), "is_buff": true, "stacks": 0, "remaining": -1.0, "duration": -1.0})
 	return out
 
 
@@ -3439,6 +3448,7 @@ func _on_matthew_pet_died() -> void:
 func on_enemy_killed(enemy: Node) -> void:
 	var is_boss_kill: bool = is_instance_valid(enemy) and enemy.get("is_boss") == true
 	_apply_kill_heal_item()
+	_savas_sevki_on_kill(is_boss_kill)
 	_distribute_arcane_stack(enemy.global_position if is_instance_valid(enemy) else global_position)
 	## DÜZELTME (kullanıcı bildirimi: "Necromancer ölen düşmanlardan ruh
 	## toplayamıyor") - kök neden: burada Necromancer id 20'ye (Golem Çağır'ın
@@ -3473,6 +3483,7 @@ func on_enemy_killed(enemy: Node) -> void:
 ## (bkz. network_manager.gd notify_kill_passive/enemy.gd die()).
 func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZERO) -> void:
 	_apply_kill_heal_item()
+	_savas_sevki_on_kill(is_boss_kill)
 	_distribute_arcane_stack(death_pos)
 	## bkz. on_enemy_killed() üstündeki AYNI düzeltme notu - roster id'sine
 	## göre, artık hangi yetenek Q/E/R'de olursa olsun doğru çalışır.
@@ -3490,6 +3501,31 @@ func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZER
 func _apply_kill_heal_item() -> void:
 	if item_kill_heal_amount > 0.0:
 		heal(item_kill_heal_amount)
+
+
+## Ruhani Yetenek "Savaş Şevki" (pasif) - karakterden bağımsız, _apply_kill_heal_item() ile AYNI desen:
+## on_enemy_killed/_remote'un HER İKİ yolundan da çağrılır ki host olmayan bir oyuncu da pasifini alsın.
+## Kullanıcı isteği: "Her düşman katlettiğinde 1 savaş şevki kazanır (bosslar 25), 50 savaş şevki olduğunda
+## kalıcı olarak 1 saldırı gücü kazanır (Karakterin üstünde +1 saldırı gücü diye yazmalı)."
+var _savas_sevki_stacks: int = 0
+
+func _savas_sevki_on_kill(is_boss_kill: bool) -> void:
+	if get_spirit_id() != SpiritualSkillsScript.SAVAS_SEVKI:
+		return
+	_savas_sevki_stacks += SpiritualSkillsScript.SAVAS_SEVKI_BOSS_KILL_STACK if is_boss_kill else SpiritualSkillsScript.SAVAS_SEVKI_KILL_STACK
+	while _savas_sevki_stacks >= SpiritualSkillsScript.SAVAS_SEVKI_STACKS_FOR_AP:
+		_savas_sevki_stacks -= SpiritualSkillsScript.SAVAS_SEVKI_STACKS_FOR_AP
+		damage_bonus += SpiritualSkillsScript.SAVAS_SEVKI_AP_PER_THRESHOLD
+		_apply_weapon_bonuses()
+		_spawn_floating_text("+%d saldırı gücü" % int(SpiritualSkillsScript.SAVAS_SEVKI_AP_PER_THRESHOLD), Color(1.0, 0.55, 0.2))
+
+
+## Ruhani Yetenek "Savaş Şevki"nin infaz kısmı - enemy.gd _apply_damage() bu oyuncu bir düşmana isabet
+## ettirdiğinde (last_attacker_peer_id eşleşince) çağırır. Kendi seçimimize (GameManager üzerinden) doğrudan
+## bakıyoruz - bu fonksiyon SADECE "ben gerçekten bu vuruşu yapan mıyım" onaylandıktan SONRA çağrılır
+## (bkz. enemy.gd _attacker_has_savas_sevki), yani her zaman DOĞRU oyuncunun seçimini okur.
+func has_savas_sevki() -> bool:
+	return get_spirit_id() == SpiritualSkillsScript.SAVAS_SEVKI
 
 
 ## Arcane Asası pasifi (bkz. weapon.gd add_arcane_stack üstündeki DÜZELTME
@@ -5027,11 +5063,18 @@ func heal(amount: float) -> void:
 ## Genel kalkan yenileme - Öykü'nün TEMEL (E) yeteneğinin "müttefik" hedefi
 ## multiplayer'da başka bir oyuncu olursa diye (bkz. heal() üstündeki aynı
 ## gerekçe) - item_shield_max <= 0 ise (kalkan sahibi değilse) no-op.
-func heal_shield(amount: float) -> void:
+## mirror: false SADECE Kalkan Bağı'nın kendi RPC'sinden gelen (zaten mirror'lanmış) bir artışı uygularken
+## kullanılır (bkz. receive_kalkan_bagi_shield_delta) - aksi halde sonsuz "sen bana yansıt, ben sana yansıt"
+## döngüsü olurdu. Her ZAMAN "true" olan normal çağrılarda (heal, pickup, regen vb.) bu artış Kalkan Bağı
+## aktifse partnere de yansır (bkz. _kalkan_bagi_mirror).
+func heal_shield(amount: float, mirror: bool = true) -> void:
 	if is_dead or amount <= 0.0 or item_shield_max <= 0.0:
 		return
+	var before: float = item_shield_hp
 	item_shield_hp = min(item_shield_max, item_shield_hp + amount)
 	item_shield_changed.emit(item_shield_hp, item_shield_max)
+	if mirror:
+		_kalkan_bagi_mirror(item_shield_hp - before)
 
 
 ## Kullanıcı bildirimi: "Yaratıklara dokununca üst üste çok sayıda hasar
@@ -5172,8 +5215,11 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## azaltma oranı) 10 puan düşer - kalkan HAVUZU çok daha dayanıklı olduğu
 	## için (bkz. aşağıdaki shield_cost_mult) bu bir denge bedeli.
 	var paladin_absorption_penalty: float = 0.10 if paladin_zone_active else 0.0
+	## Ruhani Yetenek "Kalkan Bağı" (F): aktifken +%10 kalkan hasar soğurması (bkz. spiritual_skills.gd
+	## KALKAN_BAGI_ABSORPTION_BONUS) - diğer bonus/penaltı katmanlarıyla AYNI havuza girer.
+	var kalkan_bagi_bonus: float = SpiritualSkillsScript.KALKAN_BAGI_ABSORPTION_BONUS if _kalkan_bagi_active else 0.0
 	var effective_protection: float = clamp(
-		shield_protection + shield_mode_protection_bonus + shield_mode_thorny_intake_bonus - paladin_absorption_penalty,
+		shield_protection + shield_mode_protection_bonus + shield_mode_thorny_intake_bonus - paladin_absorption_penalty + kalkan_bagi_bonus,
 		0.0, SHIELD_MODE_PROTECTION_CAP
 	)
 	if item_shield_hp > 0 and effective_protection > 0.0:
@@ -5187,6 +5233,8 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 		## PALADIN_ULTI_SHIELD_COST_MULT).
 		var shield_cost_mult: float = PALADIN_ULTI_SHIELD_COST_MULT if paladin_zone_active else 1.0
 		item_shield_hp -= absorbed * shield_cost_mult
+		## Kullanıcı isteği (Kalkan Bağı): "alınan hasarlar... kalkanlarına yansıtılır".
+		_kalkan_bagi_mirror(-(absorbed * shield_cost_mult))
 		remaining -= absorbed
 		shield_absorbed_hit = true ## bkz. yukarıdaki "kalkansız hasar" sesi notu
 		item_shield_regen_delay = _shield_hit_regen_delay()
@@ -6213,8 +6261,11 @@ func _has_enough_ability_shield(cost: float) -> bool:
 func _spend_ability_shield_cost(amount: float) -> void:
 	if amount <= 0.0 or item_shield_hp <= 0.0:
 		return
+	var before: float = item_shield_hp
 	item_shield_hp = max(0.0, item_shield_hp - amount)
 	item_shield_changed.emit(item_shield_hp, item_shield_max)
+	## Kullanıcı isteği (Kalkan Bağı): "yetenek bedellerinden giden kalkanlar... yansıtılır".
+	_kalkan_bagi_mirror(item_shield_hp - before)
 
 
 func _activate_skill2() -> void:
@@ -6568,8 +6619,14 @@ func _activate_skill() -> void:
 	## use_ulti_tier listesinde hiç YOKTU), aynı hafif tarifeyi korumak için
 	## buraya eklendi.
 	var is_oakley_bee_swarm: bool = (char_id == 33)
+	## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-23: "matthewin Q su temel yetenek gibi değil ultiymiş gibi
+	## kalkan harcıyor temel yeteneklerde harcandığı kadar kalkan harcamalı") - Tilki Hücumu (id 43) Matthew'in
+	## YENİ Q'su, ama Q/"skill" alanının BURADAKİ varsayılanı hâlâ eski "gerçek ulti" tarifesi (SKILL_SHIELD_
+	## COST_*, id 38/30/33 ile AYNI kök neden - bu alana yeni taşınan bir yetenek istisna listesine EKLENMEDEN
+	## otomatik olarak ağır tarifeyi miras alıyor). Diğerleriyle AYNI istisna deseni.
+	var is_matthew_fox_strike: bool = (char_id == 43)
 	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
-	var skill_shield_cost: float = (item_shield_max * (SKILL2_SHIELD_COST_PERCENT_OF_MAX if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step or is_oakley_bee_swarm) else SKILL_SHIELD_COST_PERCENT_OF_MAX) + (SKILL2_SHIELD_COST_FLAT if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step or is_oakley_bee_swarm) else SKILL_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
+	var skill_shield_cost: float = (item_shield_max * (SKILL2_SHIELD_COST_PERCENT_OF_MAX if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step or is_oakley_bee_swarm or is_matthew_fox_strike) else SKILL_SHIELD_COST_PERCENT_OF_MAX) + (SKILL2_SHIELD_COST_FLAT if (char_id == 38 or is_melek_can_basma or is_assasin_shadow_step or is_oakley_bee_swarm or is_matthew_fox_strike) else SKILL_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
 	## DÜZELTME (kullanıcı isteği: "Shamanın kalkan yeteneği kalkan
 	## harcamamalı") - Kalkan Totemi (ULTİ, id 26) da kalkan VEREN bir yetenek
 	## (bkz. totem_shield.gd) - üstteki "Shaman'ın totemleri kalkanla ilgili
@@ -8050,6 +8107,10 @@ const ELARA_EVASION_SPEED_PERCENT := 0.60
 const ELARA_EVASION_DODGE_PERCENT := 0.50
 var _elara_evasion_timer: float = 0.0
 var _elara_evasion_duration: float = 0.0
+## Kullanıcı isteği: "arkasında hız çizgileri olsun" - Matthew'in Vahşi Hız'ıyla AYNI desen/sahne (bkz.
+## _process_matthew_speed_lines/_spawn_speed_line), sadece Elara'nın kendi rengiyle (burst'üyle AYNI mavi).
+var _elara_speed_line_timer: float = 0.0
+const ELARA_EVASION_LINE_COLOR := Color(0.4, 0.85, 1.0, 0.75)
 
 
 func _skill_elara_evasion() -> void:
@@ -8070,6 +8131,12 @@ func _process_elara_evasion(delta: float) -> void:
 	if _elara_evasion_timer <= 0.0:
 		return
 	_elara_evasion_timer = max(0.0, _elara_evasion_timer - delta)
+	## bkz. _process_matthew_speed_lines üstündeki AYNI desen - sadece hareket halindeyken, 0.05sn'de bir.
+	if velocity.length() > 20.0:
+		_elara_speed_line_timer -= delta
+		if _elara_speed_line_timer <= 0.0:
+			_elara_speed_line_timer = 0.05
+			_spawn_speed_line(velocity, ELARA_EVASION_LINE_COLOR)
 
 
 func _skill_invisibility() -> void:
@@ -8836,6 +8903,9 @@ func _skill_matthew_haste() -> void:
 		if "fire_rate_multiplier" in w:
 			w.fire_rate_multiplier = 1.0 / MATTHEW_HASTE_ATTACK_SPEED_MULT
 	_spawn_burst(Color(1.0, 0.75, 0.15))
+	## Kullanıcı isteği (2026-09-23): "ses efekti de ekle matthewin skilleri için tüm" - Vahşi Hız'ın hiç
+	## aktivasyon sesi yoktu (bkz. tools/gen_matthew_sounds.py snd_matthew_haste).
+	_play_networked_sound("res://assets/audio/matthew_haste.wav", randf_range(0.97, 1.05), -6.0)
 
 
 ## Matthew YENİ Q (Tilki Hücumu, skill id 43, kullanıcı isteği 2026-09-22): "tilkisini anında dashlı bir
@@ -8843,49 +8913,141 @@ func _skill_matthew_haste() -> void:
 ## gücü kadar hasar verip onları Matthewdan uzağa iter." Eski Feda Kalkanı (id 9) Q'nun yerini bıraktı, R'ye
 ## taşındı (bkz. _skill_shield_dome/_activate_skill3()); Vahşi Hız (id 21) E'de DEĞİŞMEDEN kaldı. Tilki yoksa
 ## _activate_skill() başındaki "YARATIK YOK" kontrolü yetenek hiç tetiklenmeden çıkar (bkz. orada).
+## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-23: "tilkisinin hızlı bir şekilde 6 düşmana dash atıp onlara
+## vurarak geriye itmesini sağlamıyor") - eski sürüm tilkiyi SADECE Matthew'in yanına ışınlıyordu, gerçek
+## hasar/itme Matthew'in KENDİ konumu merkezli anlık bir alan etkisiydi - tilki hiçbir düşmana GÖRÜNÜR
+## şekilde dash ATMIYORDU, sadece bir patlama FX'i oynuyordu. Artık _matthew_fox_dash_sequence() tilkiyi
+## SIRAYLA her hedefin yanına hızla ışınlayıp (gerçek "dash" hareketi) orada vurup itiyor - aşağıya bkz.
 const MATTHEW_FOX_STRIKE_DAMAGE_RATIO := 1.10 ## %110 saldırı gücü
 const MATTHEW_FOX_STRIKE_RADIUS := 150.0 ## "yakınındaki" - Melek'in Kutsal Korku'suyla (fear) aynı büyüklük mertebesi
 const MATTHEW_FOX_STRIKE_MAX_TARGETS := 6
 const MATTHEW_FOX_STRIKE_KNOCKBACK := 260.0
+## Dash'in kendisi (hareket süresi) player_pet.gd DASH_HOP_TIME'da - hem gerçek tilki hem kozmetik kopya
+## AYNI değeri kullansın diye TEK yerde. Bu, her isabetten sonra tilkinin hedefin dibinde kısacık durduğu an:
+## vuruşun "oturması" için (hepsi art arda akıp gitseydi isabetler hissedilmiyordu). 6 hedef * (0.09 + 0.07)
+## ≈ en fazla ~1sn.
+const MATTHEW_FOX_HIT_PAUSE := 0.07
+const PlayerPetScript := preload("res://scripts/player_pet.gd")
 const FxMatthewFoxStrikeScene := preload("res://scenes/fx_matthew_fox_strike.tscn")
+const FxMatthewClawSlashScene := preload("res://scenes/fx_matthew_claw_slash.tscn")
 
 
 func _skill_matthew_fox_strike() -> void:
 	if not (_matthew_pet_alive and _matthew_pet and is_instance_valid(_matthew_pet)):
 		return ## _activate_skill() zaten "YARATIK YOK" ile burayı hiç çağırmaz - çift güvenlik.
-	## Tilki anında (dash hissiyle) Matthew'in yanına ışınlanır - gerçek konum burada değişir, kozmetik
-	## kopyalar tilkinin kendi periyodik konum yayınından alır (bkz. player_pet.gd _broadcast_network_state).
-	## DÜZELTME (multiplayer senkron kontrolü): notify_teleport() olmadan kozmetik kopya normal yumuşak
-	## kaymayla (12/sn lerp) gelirdi - diğer oyuncular tilkinin süzülerek geldiğini görürdü, kasterin
-	## ANINDA ışınlanmasından FARKLI. notify_teleport() bir sonraki yayını throttle'sız ve "anında sıçra"
-	## bayrağıyla gönderir (bkz. player_pet.gd notify_teleport/update_network_pet_state).
-	_matthew_pet.global_position = global_position + _facing_to_vector(facing) * 26.0
-	if _matthew_pet.has_method("notify_teleport"):
-		_matthew_pet.notify_teleport()
-	## En yakın en fazla MATTHEW_FOX_STRIKE_MAX_TARGETS düşman (yarıçap içinde) - Talon'un Hamle Vuruşu'yla
-	## (_skill_talon_dash/_talon_dash_apply_hits) AYNI hasar/kritik deseni.
+	## DÜZELTME (kullanıcı bildirimi 2026-09-23: "hala çok iğrenç") - kök neden: burada AYRICA
+	## _spawn_burst() çağrılıyordu, o genel amaçlı bir yardımcı (bkz. tanımı) - Godot'un düz CPUParticles2D'si
+	## (pixel ızgarasına oturmayan, rastgele boyutlu/pozisyonlu kare parçacıklar) + iki tane draw_arc() tabanlı
+	## YUMUŞAK/anti-aliased halka (fx_ring.gd) çiziyor. Bu, TAM O ANDA aynı yerde oynayan GERÇEKTEN pixel-art
+	## fx_matthew_fox_strike.gd (PixelDraw tabanlı pençe izi+toz+parlama) ile ÜST ÜSTE biniyordu - ekranda iki
+	## farklı görsel dilin (biri pixel, biri pürüzsüz parçacık/halka) çakışması "iğrenç" görünümün asıl
+	## kaynağıydı. _spawn_burst çok karakter/yetenek tarafından paylaşılan genel bir yardımcı olduğu için
+	## KENDİSİ değiştirilmedi - Matthew'in Q'su için çağrısı kaldırıldı, fx_matthew_fox_strike.gd zaten
+	## kendi başına yeterli/tutarlı bir aktivasyon efekti.
+	_play_and_broadcast_skill_fx(FxMatthewFoxStrikeScene)
+	## En yakın en fazla MATTHEW_FOX_STRIKE_MAX_TARGETS düşman - BUG DÜZELTMESİ (kullanıcı bildirimi
+	## 2026-09-23: "matthewin yakınında kimse yoksa çalışmıyor"): eskiden SADECE Matthew'in kendi konumuna
+	## göre ölçülüyordu, ama dash atan (ve genelde savaşarak Matthew'den uzaklaşmış olabilen) asıl tilki -
+	## Matthew biraz gerideyken tilkinin hemen yanında düşman olsa bile yetenek "boş" tetikleniyordu. Artık
+	## bir düşman Matthew'E YA DA tilkinin GÜNCEL konumuna yakınsa (ikisinden biri yeterli) aday sayılıyor.
 	var candidates: Array = []
 	for e: Node in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
 			continue
-		var d: float = global_position.distance_to((e as Node2D).global_position)
+		var ep: Vector2 = (e as Node2D).global_position
+		var d: float = minf(global_position.distance_to(ep), _matthew_pet.global_position.distance_to(ep))
 		if d <= MATTHEW_FOX_STRIKE_RADIUS:
 			candidates.append([e, d])
 	candidates.sort_custom(func(a, b): return float(a[1]) < float(b[1]))
-	var hit_damage: float = damage_bonus * MATTHEW_FOX_STRIKE_DAMAGE_RATIO
+	var targets: Array = []
 	for i in range(mini(MATTHEW_FOX_STRIKE_MAX_TARGETS, candidates.size())):
-		var e: Node = candidates[i][0]
+		targets.append(candidates[i][0])
+	## Menzilde düşman yoksa da sekans çalışır - boş hedef listesiyle tilki sadece Matthew'in yanına atılır.
+	_matthew_fox_dash_sequence(targets)
+
+
+## Tilki Hücumu'nun asıl sekansı (bkz. yukarıdaki BUG DÜZELTMESİ notu). _skill_matthew_fox_strike() bunu
+## await'lemeden düz bir ifade olarak çağırır - GDScript'te bu, _activate_skill()'in geri kalanını
+## BLOKLAMADAN arka planda devam eden bir coroutine başlatmak için güvenlidir.
+## Kullanıcı isteği (2026-09-23): "tilki dash atarken arkasında dash çizgisi olmalı ve tilkinin arkasında
+## kendi görüntüsü gibi parça parça izler olmalı. vurduğu anda da gerçekten hasar verdiği hissedilmeli" -
+## önceki sürüm tilkiyi hedefler arasında IŞINLIYORDU (görünür hareket yoktu, izler ışınlanma anında hepsi
+## birden statik olarak beliriyordu). Artık ritim: tilki hedefe GERÇEKTEN atılır (player_pet.gd dash_to -
+## hareket + arkasında hız çizgileri + yol boyunca kendi karesinin sönen kopyaları) -> VARDIĞI anda vuruş
+## (hasar/itme + darbe patlaması + darbe sesi) -> hedefin dibinde kısacık durur -> sıradakine atılır.
+func _matthew_fox_dash_sequence(targets: Array) -> void:
+	if not _matthew_fox_can_dash():
+		return
+	## Tilkinin KENDİ normal takip/savaş yapay zekası bu sekansla ÇAKIŞMASIN diye askıya alınır (bkz.
+	## player_pet.gd begin_dash_strike - _matthew_shield_form ile AYNI "askıya al" deseni).
+	_matthew_pet.call("begin_dash_strike")
+	var hit_damage: float = damage_bonus * MATTHEW_FOX_STRIKE_DAMAGE_RATIO
+	for target: Node in targets:
+		if not _matthew_fox_can_dash():
+			_matthew_fox_end_dash() ## Sekans ortasında tilki kaybolursa/feda edilirse sessizce dur.
+			return
+		if not is_instance_valid(target) or target.get("is_dead") == true or not (target is Node2D):
+			continue
+		var e: Node2D = target as Node2D
+		## Hedefin tilkiye bakan tarafına, yakın dövüş mesafesine atılır.
+		var approach_dir: Vector2 = _matthew_pet.global_position - e.global_position
+		if approach_dir.length() < 1.0:
+			approach_dir = -_facing_to_vector(facing)
+		approach_dir = approach_dir.normalized()
+		_matthew_pet.call("dash_to", e.global_position + approach_dir * 26.0)
+		await get_tree().create_timer(PlayerPetScript.DASH_HOP_TIME).timeout
+		if not _matthew_fox_can_dash():
+			_matthew_fox_end_dash()
+			return
 		if not is_instance_valid(e) or e.get("is_dead") == true or not e.has_method("take_damage"):
 			continue
 		var is_crit: bool = _roll_ability_crit()
 		e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
 		if e.has_method("apply_knockback_force"):
-			var away_dir: Vector2 = (e as Node2D).global_position - global_position
+			var away_dir: Vector2 = e.global_position - global_position
 			if away_dir.length() < 1.0:
 				away_dir = _facing_to_vector(facing)
 			e.call("apply_knockback_force", away_dir.normalized(), MATTHEW_FOX_STRIKE_KNOCKBACK)
-	_spawn_burst(Color(0.95, 0.55, 0.15))
-	_play_and_broadcast_skill_fx(FxMatthewFoxStrikeScene)
+		_spawn_matthew_claw_hit_fx(e.global_position, -approach_dir)
+		## Her isabetin kendi kısa/darbeli sesi (bkz. tools/gen_matthew_sounds.py snd_matthew_fox_impact).
+		_play_networked_sound("res://assets/audio/matthew_fox_impact.wav", randf_range(0.92, 1.12), -3.0)
+		await get_tree().create_timer(MATTHEW_FOX_HIT_PAUSE).timeout
+	## Son olarak (hedef hiç yoksa doğrudan) Matthew'in yanına geri atılır, sonra normal yapay zekaya döner.
+	if not _matthew_fox_can_dash():
+		_matthew_fox_end_dash()
+		return
+	_matthew_pet.call("dash_to", global_position + _facing_to_vector(facing) * 26.0)
+	await get_tree().create_timer(PlayerPetScript.DASH_HOP_TIME).timeout
+	_matthew_fox_end_dash()
+
+
+func _matthew_fox_can_dash() -> bool:
+	return _matthew_pet_alive and _matthew_pet != null and is_instance_valid(_matthew_pet) \
+		and _matthew_pet.get("_matthew_shield_form") != true and _matthew_pet.get("is_dead") != true
+
+
+## Sekans erken bitse bile (tilki feda edildi vb.) askıdaki yapay zeka MUTLAKA geri açılmalı - yoksa feda
+## formu bitince tilki _dash_strike_active'te sonsuza dek donuk kalırdı. Feda formu sırasında çağrılması
+## zararsız (_physics_process önce _matthew_shield_form'a bakıyor).
+func _matthew_fox_end_dash() -> void:
+	if _matthew_pet and is_instance_valid(_matthew_pet) and _matthew_pet.has_method("end_dash_strike"):
+		_matthew_pet.call("end_dash_strike")
+
+
+## Q'nun her dash isabetinde dünya konumunda pençe FX'i - player_pet.gd _spawn_slash_fx'in kullandığı AYNI
+## fx_matthew_claw_slash.tscn/"muzzle_flash" broadcast deseni (bkz. _spawn_world_explosion_fx ile AYNI
+## dünya-konumlu tek seferlik FX yayını) - _play_and_broadcast_skill_fx KULLANILAMAZ çünkü o kasterin
+## (Matthew'in) konumuna sabit, buradaki her isabet FARKLI bir dünya konumunda (hedefin yanında) oluyor.
+func _spawn_matthew_claw_hit_fx(pos: Vector2, dir: Vector2) -> void:
+	var fx: Node2D = FxMatthewClawSlashScene.instantiate() as Node2D
+	get_tree().current_scene.add_child(fx)
+	fx.global_position = pos
+	fx.rotation = dir.angle()
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "muzzle_flash", pos, {
+			"scene_path": FxMatthewClawSlashScene.resource_path,
+			"rotation": fx.rotation,
+		})
 
 
 ## player_pet.gd _physics_process'teki tilki hız çizgisi kontrolüyle BİREBİR
@@ -8909,20 +9071,27 @@ func _process_matthew_speed_lines(delta: float) -> void:
 ## istemcilere hiç yayınlanmıyordu (network_manager.gd'ye yeni "speed_line"
 ## vfx_type'ı eklendi, bkz. orada).
 func _spawn_matthew_speed_line(dir: Vector2) -> void:
+	_spawn_speed_line(dir, Color(1.0, 0.75, 0.15, 0.75))
+
+
+## Kullanıcı isteği (2026-09-22, Elara'nın Sıvışma'sı: "arkasında hız çizgileri olsun") - Matthew'in hız
+## çizgisiyle AYNI sahne/deseni PAYLAŞAN genel yardımcı, sadece renk parametreli (ikinci bir kopya YOK, bkz.
+## CLAUDE.md "her istemci kendi kopyasını AYNI formülle hesaplar" ruhu - burada asıl paylaşılan şey konum/ağ
+## yayını mantığı, renk her karakterin kendi FX'ine göre değişiyor).
+func _spawn_speed_line(dir: Vector2, color: Color) -> void:
 	if not FxSpeedLineScene:
 		return
 	var fx := FxSpeedLineScene.instantiate() as Node2D
 	get_tree().current_scene.add_child(fx)
 	var offset := Vector2(randf_range(-4.0, 4.0), randf_range(-6.0, 6.0))
 	var spawn_pos: Vector2 = global_position + offset
-	var line_color := Color(1.0, 0.75, 0.15, 0.75)
 	fx.global_position = spawn_pos
-	fx.setup(dir, line_color)
+	fx.setup(dir, color)
 	if NetworkManager.is_multiplayer_active:
 		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "speed_line", spawn_pos, {
 			"scene_path": "res://scenes/fx_speed_line.tscn",
 			"direction": dir,
-			"color": line_color,
+			"color": color,
 		})
 
 
@@ -10125,6 +10294,10 @@ func _process_spirit(delta: float) -> void:
 	var id: String = get_spirit_id()
 	if _spirit_invuln_timer > 0.0:
 		_spirit_invuln_timer = maxf(0.0, _spirit_invuln_timer - delta)
+	## Kalkan Bağı KOŞULSUZ çalışır - bkz. sınıf üstü not: PASİF taraf (bağın diğer ucu) kendi spirit_state/id
+	## alanlarıyla İLGİSİZ olabilir (başka bir ruhani yetenek seçmiş olabilir), bu yüzden aşağıdaki id/
+	## spirit_state'e bağlı erken dönüşlerin HİÇBİRİNE girmeden en başta işlenir.
+	_process_kalkan_bagi(delta)
 	if is_dead or is_downed:
 		if spirit_state == "active":
 			_spirit_end_active()
@@ -10168,6 +10341,11 @@ func _try_spirit_skill() -> void:
 	if id == SpiritualSkillsScript.DUKKAN and _spirit_channeling:
 		_spirit_cancel_channel("İPTAL")
 		return
+	## Kalkan Bağı bir TOGGLE (bkz. sınıf üstü not) - aktifken tekrar F'ye basmak KAPATIR, DUKKAN'ın odaklanma
+	## iptaliyle AYNI "spirit_state != ready kontrolünden ÖNCE" deseni.
+	if id == SpiritualSkillsScript.KALKAN_BAGI and spirit_state == "active":
+		_end_kalkan_bagi("KAPATILDI")
+		return
 	if spirit_state != "ready":
 		return
 	match id:
@@ -10181,6 +10359,8 @@ func _try_spirit_skill() -> void:
 			_spirit_cast_taktik()
 		SpiritualSkillsScript.DUKKAN:
 			_spirit_cast_dukkan()
+		SpiritualSkillsScript.KALKAN_BAGI:
+			_spirit_cast_kalkan_bagi()
 
 
 func _spirit_begin_active(active_time: float, cooldown: float) -> void:
@@ -10205,6 +10385,10 @@ func _spirit_end_active() -> void:
 	elif id == SpiritualSkillsScript.DUKKAN and _spirit_channeling:
 		_spirit_cancel_channel("")
 		return
+	elif id == SpiritualSkillsScript.KALKAN_BAGI:
+		## Pratikte SADECE ölüm/yere düşme yoluyla buraya girilir (bkz. _process_spirit) - normal
+		## toggle-kapatma/mesafe kopması _end_kalkan_bagi() üzerinden gider, buraya hiç uğramaz.
+		_clear_kalkan_bagi_bond()
 	spirit_state = "cooldown"
 	spirit_timer = _spirit_cooldown_total
 
@@ -10405,3 +10589,157 @@ func _spirit_merchant_landing_spot() -> Vector2:
 		if not GameManager.is_position_blocked_by_forest(p):
 			return p
 	return center
+
+
+## ---------- Kalkan Bağı (kullanıcı isteği 2026-09-23) ----------
+## Oakley'nin Koruyucu Büyü'sünden (bkz. oakley_bond_*) TEMEL FARKI: o tek yönlü bir "hedefi buffla" büyüsü,
+## bu İKİ TARAFLI simetrik bir bağ - ikisi de birbirine EŞİT şekilde bağlı, "kalkan artışları gibi her türlü
+## kalkan değişikliği" iki yöne de akar. Bağı KURAN taraf kendi F/spirit_state makinesini kullanır (ready ->
+## active -> cooldown, active fazının süresi KALKAN_BAGI_ACTIVE_CAP - gerçek bir süre değil, Paladin ultisi/
+## Vampir R toggle'larıyla AYNI "tekrar kapatılana kadar sürer" deseni). PASİF taraf (bağın diğer ucu) KENDİ
+## spirit_state'ine HİÇ dokunmaz (belki başka bir ruhani yetenek kullanıyordur, onu bozmamalı) - SADECE
+## _kalkan_bagi_active/_partner_peer_id alanları set edilir (bkz. receive_kalkan_bagi_bond).
+var _kalkan_bagi_active: bool = false
+var _kalkan_bagi_partner_peer_id: int = 0
+var _kalkan_bagi_link_fx: Node2D = null
+
+func _spirit_cast_kalkan_bagi() -> void:
+	if _kalkan_bagi_active:
+		return
+	var target: Node2D = _kalkan_bagi_nearest_ally(SpiritualSkillsScript.KALKAN_BAGI_RANGE)
+	if not target or not ("peer_id" in target):
+		_spawn_floating_text("ARKADAŞ YOK", Color(1.0, 0.4, 0.4))
+		return
+	var target_peer_id: int = int(target.get("peer_id"))
+	if target_peer_id <= 0 or not NetworkManager.is_multiplayer_active:
+		_spawn_floating_text("ARKADAŞ YOK", Color(1.0, 0.4, 0.4))
+		return
+	_spirit_begin_active(SpiritualSkillsScript.KALKAN_BAGI_ACTIVE_CAP, SpiritualSkillsScript.KALKAN_BAGI_COOLDOWN)
+	_kalkan_bagi_active = true
+	_kalkan_bagi_partner_peer_id = target_peer_id
+	_ensure_kalkan_bagi_link_fx()
+	NetworkManager.sync_kalkan_bagi_bond.rpc(target_peer_id, multiplayer.get_unique_id(), true)
+	_spawn_burst(Color(0.4, 0.75, 1.0))
+	_spirit_play_sound(str(SpiritualSkillsScript.get_def(SpiritualSkillsScript.KALKAN_BAGI).get("sound", "")))
+
+
+## "En yakın arkadaşın" - Oakley'nin "canı en az olan" seçimiNDEN farklı, SADECE mesafeye göre (kullanıcı
+## isteğinin metni birebir: "en yakın arkadaşınla"). Kendisi hariç, sadece gerçek oyuncular (peer_id'liler).
+func _kalkan_bagi_nearest_ally(max_range: float) -> Node2D:
+	var best: Node2D = null
+	var best_dist: float = INF
+	for ally in get_tree().get_nodes_in_group("player_ally"):
+		if not is_instance_valid(ally) or not ("peer_id" in ally):
+			continue
+		if ally.get("is_dead") == true:
+			continue
+		var d: float = global_position.distance_to(ally.global_position)
+		if d <= max_range and d < best_dist:
+			best = ally
+			best_dist = d
+	return best
+
+
+## Bağın KARŞI ucundaki oyuncunun KENDİ client'ında çağrılır (bkz. network_manager.gd sync_kalkan_bagi_bond) -
+## kendi spirit_state'ine DOKUNMAZ (bkz. sınıf üstü not), SADECE bağ bayraklarını/görselini günceller.
+func receive_kalkan_bagi_bond(source_peer_id: int, active: bool) -> void:
+	if active:
+		_kalkan_bagi_active = true
+		_kalkan_bagi_partner_peer_id = source_peer_id
+		_ensure_kalkan_bagi_link_fx()
+	else:
+		_kalkan_bagi_active = false
+		_kalkan_bagi_partner_peer_id = 0
+		_remove_kalkan_bagi_link_fx()
+
+
+## Bağı BU tarafta bitirir (toggle kapatma VEYA mesafe kopması, bkz. _process_kalkan_bagi) - partnere de
+## RPC ile bildirir (partner kendi tarafını AYNI şekilde temizler, bkz. receive_kalkan_bagi_bond). Bu
+## oyuncunun KENDİ F becerisi bu bağsa (yani bağı BEN kurmuşsam ya da BEN de Kalkan Bağı seçiliyse) bekleme
+## süresine sokar - pasif taraf başka bir ruhani yetenek kullanıyorsa onun bekleme süresine ASLA dokunmaz.
+## Bağı bu tarafta temizler (partnere bildirir, görseli kaldırır) - spirit_state'e DOKUNMAZ, bkz. çağıranlar:
+## _end_kalkan_bagi (tam "kapat + bekleme süresine sok") VE _spirit_end_active (ölüm/normal bitişte zaten
+## kendi ortak tail'inde cooldown'a sokuyor, burada tekrar etmeye gerek yok).
+func _clear_kalkan_bagi_bond() -> void:
+	if not _kalkan_bagi_active:
+		return
+	var partner_id: int = _kalkan_bagi_partner_peer_id
+	_kalkan_bagi_active = false
+	_kalkan_bagi_partner_peer_id = 0
+	_remove_kalkan_bagi_link_fx()
+	if NetworkManager.is_multiplayer_active and partner_id > 0:
+		NetworkManager.sync_kalkan_bagi_bond.rpc(partner_id, multiplayer.get_unique_id(), false)
+
+
+func _end_kalkan_bagi(reason: String) -> void:
+	if not _kalkan_bagi_active:
+		return
+	_clear_kalkan_bagi_bond()
+	if not reason.is_empty():
+		_spawn_floating_text(reason, Color(0.5, 0.8, 1.0))
+	if spirit_state == "active" and get_spirit_id() == SpiritualSkillsScript.KALKAN_BAGI:
+		spirit_state = "cooldown"
+		_spirit_cooldown_total = SpiritualSkillsScript.KALKAN_BAGI_COOLDOWN
+		spirit_timer = _spirit_cooldown_total
+
+
+## Her fizik karesi (bkz. _process_spirit): +%1/sn maksimum kalkan yenilenmesi (mirror=false - bu regen HER
+## İKİ TARAFTA da AYRI AYRI kendi item_shield_max'ine göre çalışıyor, mirror'lanırsa çift sayılır) + mesafe
+## kontrolü (bkz. _process_damage_redirect_range_check ile AYNI "remote_players" grubunda peer_id ara" deseni).
+func _process_kalkan_bagi(delta: float) -> void:
+	if not _kalkan_bagi_active:
+		return
+	if item_shield_max > 0.0:
+		heal_shield(item_shield_max * SpiritualSkillsScript.KALKAN_BAGI_REGEN_PERCENT_PER_SEC * delta, false)
+	var partner: Node2D = null
+	for rp in get_tree().get_nodes_in_group("remote_players"):
+		if is_instance_valid(rp) and "peer_id" in rp and int(rp.peer_id) == _kalkan_bagi_partner_peer_id:
+			partner = rp
+			break
+	if partner == null or global_position.distance_to(partner.global_position) > SpiritualSkillsScript.KALKAN_BAGI_RANGE:
+		_end_kalkan_bagi("KALKAN BAĞI KOPTU")
+
+
+## Kullanıcı isteği: "alınan hasarlar, yetenek bedellerinden giden kalkanlar ve kalkan artışları gibi her
+## türlü kalkan değişikliği birbirinizin kalkanına yarı yarıya yansıtılır" - TEK giriş noktası: heal_shield()/
+## _spend_ability_shield_cost()/take_damage()'ın kalkan emilimi HEPSİ buraya, GERÇEKTEN uygulanan (clamp
+## SONRASI) delta ile uğrar. delta_amount pozitif = artış, negatif = azalış.
+func _kalkan_bagi_mirror(delta_amount: float) -> void:
+	if not _kalkan_bagi_active or delta_amount == 0.0 or not NetworkManager.is_multiplayer_active:
+		return
+	var mirrored: float = delta_amount * SpiritualSkillsScript.KALKAN_BAGI_MIRROR_RATIO
+	if _kalkan_bagi_partner_peer_id > 0:
+		NetworkManager.sync_kalkan_bagi_shield_delta.rpc(_kalkan_bagi_partner_peer_id, mirrored)
+
+
+## Partnerden gelen yansımış kalkan değişikliğini uygular (bkz. network_manager.gd sync_kalkan_bagi_shield_
+## delta) - mirror=false ile heal_shield çağrılır (aksi halde bu ZATEN yansımış değer bir kez daha yansırdı,
+## sonsuz "sen bana ben sana" döngüsü olurdu).
+func receive_kalkan_bagi_shield_delta(delta_amount: float) -> void:
+	if not _kalkan_bagi_active or item_shield_max <= 0.0:
+		return
+	if delta_amount > 0.0:
+		heal_shield(delta_amount, false)
+	elif delta_amount < 0.0:
+		item_shield_hp = max(0.0, item_shield_hp + delta_amount)
+		item_shield_changed.emit(item_shield_hp, item_shield_max)
+
+
+## Bağın PİKSEL TARZI görseli (kullanıcı isteği: "Kalkan bağı için pixel tarzda bir kalkan bağı efekti
+## hazırla") - HER İKİ oyuncunun da KENDİ üstünde duran (bkz. FxPaladinBarrierLink'in "kaster görür,
+## diğerleri görmez" hatasına düşmeme deseni), partnerin CANLI konumuna bakıp aralarına gerilen ince
+## piksel-zincir çizen bir efekt (bkz. fx_kalkan_bagi_link.gd) - Şovalye'nin bariyer halkasının aksine
+## GERÇEKTEN iki noktayı birbirine bağlıyor.
+func _ensure_kalkan_bagi_link_fx() -> void:
+	if is_instance_valid(_kalkan_bagi_link_fx):
+		return
+	_kalkan_bagi_link_fx = Node2D.new()
+	_kalkan_bagi_link_fx.set_script(load("res://scripts/fx_kalkan_bagi_link.gd"))
+	add_child(_kalkan_bagi_link_fx)
+	_kalkan_bagi_link_fx.call("setup", self)
+
+
+func _remove_kalkan_bagi_link_fx() -> void:
+	if is_instance_valid(_kalkan_bagi_link_fx):
+		_kalkan_bagi_link_fx.queue_free()
+	_kalkan_bagi_link_fx = null

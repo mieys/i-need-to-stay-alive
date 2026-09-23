@@ -391,6 +391,10 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## Vampir'in Yarasa Formu'ndaki AYNI ihtiyaç animasyon adından çıkarılabiliyordu (bkz. remote_
 			## player.gd _vampir_bat_form), Elara'nın özel bir animasyonu olmadığı için AYRI bir bayrak gerekiyor.
 			"elara_evasion": player._elara_evasion_timer > 0.0 if "_elara_evasion_timer" in player else false,
+			## Ruhani Yetenek "Savaş Şevki" - infaz kontrolünün diğer istemcilerde de doğru çalışması için
+			## (bkz. enemy.gd _attacker_has_savas_sevki, remote_player.gd has_savas_sevki). Seçim kendisi
+			## ("hangi ruhani yetenek") ağa hiç gitmiyor (bkz. lobby_menu.gd notu) - sadece bu TEK bayrak.
+			"has_savas_sevki": player.has_savas_sevki() if player.has_method("has_savas_sevki") else false,
 			"elara_double": player.elara_double_fire_active if "elara_double_fire_active" in player else false,
 			"talon_giant": player._talon_ulti_active if "_talon_ulti_active" in player else false,
 			## Talon Ayna Formu (R) aktif mi - diger oyuncularda +%10 boyut ve alev aurasi icin (remote_player.gd _talon_form_active).
@@ -448,6 +452,11 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## ile AYNI desen, sadece görsel bir bayrak, gerçek mekanik
 			## (hasar yansıtma) zaten player.gd take_damage()'ında.
 			"barrier_link_active": player.has_active_damage_redirect_barrier() if player.has_method("has_active_damage_redirect_barrier") else false,
+			## Ruhani Yetenek "Kalkan Bağı" - BUG DÜZELTMESİ (bkz. remote_player.gd _refresh_kalkan_bagi_link_
+			## visual üstündeki not): barrier_link_active ile AYNI desen, ama bir bool yerine partnerin
+			## peer_id'sini taşıyor çünkü fx_kalkan_bagi_link.gd karşı ucun KONUMUNU bulmak için buna ihtiyaç
+			## duyuyor - salt "aktif mi" yetmiyor.
+			"kalkan_bagi_partner_peer_id": player._kalkan_bagi_partner_peer_id if "_kalkan_bagi_partner_peer_id" in player else 0,
 			## Kullanıcı isteği: "istatistiklerin oyun içinde de gözükebilsin,
 			## grup penceresinde bir buton olacak, kimin ne kadar vurduğu
 			## gösterilecek" - bkz. party_panel.gd _build_stats_popup. Maç

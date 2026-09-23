@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://bv357ieieu4pe" path="res://scripts/shield_visual.gd" id="5"]
 [ext_resource type="AudioStream" uid="uid://dx7bobrwytl7v" path="res://assets/audio/fire.mp3" id="6"]
 [ext_resource type="Script" uid="uid://c1yhbklktfh6d" path="res://scripts/shadow_blob.gd" id="7"]
-[ext_resource type="AudioStream" uid="uid://b1aw5yjtieulm" path="res://assets/audio/xp_pickup.mp3" id="8"]
+[ext_resource type="AudioStream" uid="uid://ib4cu3j8rbpe" path="res://assets/audio/xp_pickup.wav" id="8"]
 [ext_resource type="AudioStream" uid="uid://dxlagnflwm8ow" path="res://assets/audio/shield_damage.wav" id="9"]
 [ext_resource type="Script" uid="uid://bi5mnvkbou2d6" path="res://scripts/overhead_bar.gd" id="10"]
 [ext_resource type="Script" uid="uid://d185etts5jt6s" path="res://scripts/remote_player_name.gd" id="11_name"]
