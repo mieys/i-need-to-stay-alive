@@ -115,6 +115,14 @@ const TRAIL_COLORS := {
 	"dart_projectile": Color(0.74, 1.0, 0.66), ## tüftüf: açık zehir yeşili
 }
 const TRAIL_CRIT_COLOR := Color(1.0, 0.72, 0.52)
+## PARÇACIK İZİ (kullanıcı isteği 2026-09-24: "ateş asası, buz asası ateşlendiğinde attığı atışın arkasında kendine
+## uygun partiküller olsun" - pixel + spritesheet, bkz. fx_particle_trail.gd / tools/gen_projectile_trail_fx.py).
+## TRAIL_COLORS ile AYNI desen: sahne dosya adı -> iz stili, .tscn'lere dokunulmadı.
+const ParticleTrail := preload("res://scripts/fx_particle_trail.gd")
+const PARTICLE_TRAILS := {
+	"fire_projectile": "fire", ## Ateş Asası: yükselen alev dilleri + kor
+	"ice_bolt_projectile": "ice", ## Buz Asası: buz kristali parıltısı + kar kırıntısı + sis
+}
 const TRAIL_SCALE := 1.212 ## 1 sanat pikseli = PixelDraw.TEXEL dünya birimi
 var _trail: AnimatedSprite2D = null
 var _trail_oriented: bool = false
@@ -151,6 +159,9 @@ func _ready() -> void:
 		scale *= 1.4
 
 	_setup_trail()
+	var particle_style: String = str(PARTICLE_TRAILS.get(scene_file_path.get_file().get_basename(), ""))
+	if particle_style != "":
+		ParticleTrail.attach(self, particle_style)
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation("appear"):
 		anim.animation_finished.connect(_on_appear_finished, CONNECT_ONE_SHOT)
 		anim.play("appear")

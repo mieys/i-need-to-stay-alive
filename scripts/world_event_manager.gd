@@ -12,8 +12,8 @@ class_name WorldEventManager
 ##  - Defend tree: gerçek büyüme-fazlı sprite paketi hâlâ yok (zip konumu bulunamadı) -
 ##    mission_tree.gd prosedürel bir yer tutucu çiziyor, faz geçişinde SADECE ölçek değişiyor.
 ##    Ayrıca ateş topu mermisinin GÖRSELİ şu an sadece host'ta görünür (bkz. o dosyanın notu).
-##  - Kill your copy: gerçek silah ateşlemiyor, temas hasarı kullanıyor (bkz.
-##    mission_player_copy.gd dosya başı notu - weapon.gd'yi bir NPC'ye bağlamak riskli/pahalı).
+##  - Kill your copy: weapon.gd takılmıyor; kopya silah sahnelerinin aralık/menzil/oranıyla kendi saldırısını
+##    yapıyor (bkz. mission_player_copy.gd dosya başı notu - weapon.gd'yi bir NPC'ye bağlamak riskli/pahalı).
 ##  - Escort the van / Kill your copy / Defend tree ödül miktarları da diğer ikisi gibi tahmini.
 ##
 ## AĞ MİMARİSİ (seyyar satıcıyla BİREBİR aynı desen, bkz. traveling_merchant.gd dosya başı):
@@ -54,9 +54,11 @@ const HIDDEN_LOCATION_KINDS := [MissionKind.KILL_YOUR_COPY, MissionKind.COLLECT]
 ## aktif -> bekleme) işletir.
 const SLOT_COUNT := 2
 const WARN_SECONDS := 60.0 ## "1 dakika önce bildirim" (kullanıcı isteği, sabit)
-## VARSAYILAN/tahmini.
-const COOLDOWN_MIN := 90.0
-const COOLDOWN_MAX := 180.0
+## Kullanıcı bildirimi (2026-09-24): "görevler sürekli spawnlanıyor daha yavaş spawnlanmalı" - iki slot bağımsız döndüğü
+## için eski 90-180sn'lik bekleme pratikte ~1 dakikada bir yeni görev uyarısı demekti. 90-180 -> 240-360sn; ayrıca 2. slot
+## artık oturumun başında da tam bir bekleme süresiyle başlar (bkz. _ready), ikisi birden erken tetiklenmesin.
+const COOLDOWN_MIN := 240.0
+const COOLDOWN_MAX := 360.0
 ## DÜZELTME (kullanıcı bildirimi: "görevlerin hiçbiri başlamıyor, 1 dakika bekledim,
 ## bildirim/uyarı vermiyor") - mekanizma BOZUK DEĞİL (gerçek zamanlı + zorla-ilerletme
 ## testiyle doğrulandı, bkz. hafıza project_world_events_mission_system notu): oturumun
@@ -139,8 +141,14 @@ const ESCORT_BASE_SPEED := 8.0 ## dünya birimi/sn - "çok hızlı olmasın"
 const ESCORT_RETREAT_RATIO := 0.2 ## "%20si kadar"
 const ESCORT_SPEED_PER_EXTRA_PLAYER := 0.15 ## "biraz hızı artabilir"
 const ESCORT_MAX_SPEED_MULT := 1.6
-const ESCORT_MIN_DISTANCE := 500.0
-const ESCORT_MAX_DISTANCE := 900.0
+## Kullanıcı isteği (2026-09-24): "arabayı götüreceğimiz yerler çok daha uzak olmalı görevler çok kolay ve hızlı
+## bitiyor süreleri uzamalı" - eskiden 500-900 birimlik DÜZ bir çizgiydi (8 u/sn'de ~1-2 dk). Artık ROTA UZUNLUĞU
+## (duvarları dolanan yol, bkz. _escort_route) 1600-2600 birim (~3.5-5.5 dk kesintisiz itme; geri kaymalarla daha uzun).
+const ESCORT_MIN_DISTANCE := 1600.0
+const ESCORT_MAX_DISTANCE := 2600.0
+## Bulunan yol düz çizgiden en fazla bu kadar uzun olabilir (çok dolambaçlı, geri dönen rotalar elensin).
+const ESCORT_MAX_DETOUR := 1.6
+const EnemyPathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
 const ESCORT_TIMEOUT_BUFFER := 2.6 ## süre = mesafe/hız * bu çarpan (geri kaymalara pay)
 const ESCORT_REWARD_GOLD := 180
 const VanScript := preload("res://scripts/mission_van.gd")
@@ -155,7 +163,7 @@ const TreeScript := preload("res://scripts/mission_tree.gd")
 ## Kill Your Copy (kullanıcı isteği: %90 az hasar alır/verir, %20 yavaş, yetenek yok, renk
 ## tersine çevrilmiş, 5 dakika, öldürülmezse yok olur).
 const COPY_LIFETIME := 300.0
-const COPY_BASE_CONTACT_DAMAGE := 10.0 ## BASE_STATS "Hasar:10" ile aynı taban (bkz. lobby_menu.gd)
+const COPY_BASE_DAMAGE := 10.0 ## kaynağın damage_bonus'u okunamazsa: BASE_STATS "Hasar:10" ile aynı taban (bkz. lobby_menu.gd)
 const COPY_REWARD_GOLD := 250
 const CopyScript := preload("res://scripts/mission_player_copy.gd")
 
@@ -168,7 +176,10 @@ var _rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	_rng.randomize()
 	for i in range(SLOT_COUNT):
-		_slots[i] = {"state": "cooldown", "timer": _rng.randf_range(INITIAL_DELAY_MIN, INITIAL_DELAY_MAX)}
+		var first: float = _rng.randf_range(INITIAL_DELAY_MIN, INITIAL_DELAY_MAX)
+		if i > 0:
+			first += _rng.randf_range(COOLDOWN_MIN, COOLDOWN_MAX)
+		_slots[i] = {"state": "cooldown", "timer": first}
 	GameManager.enemy_died.connect(_on_enemy_died)
 	NetworkManager.world_event_item_collected.connect(_on_item_collected)
 
@@ -320,16 +331,19 @@ func _activate_mission(slot_i: int) -> void:
 			extra["collect_target"] = int(slot["target"])
 		MissionKind.ESCORT_VAN:
 			var start_pos: Vector2 = slot["pos"]
-			var end_pos: Vector2 = _escort_end_position(start_pos)
-			var dist: float = start_pos.distance_to(end_pos)
+			var route: PackedVector2Array = _escort_route(start_pos)
+			var end_pos: Vector2 = route[route.size() - 1]
+			var dist: float = VanScript.path_length(route)
 			slot["start_pos"] = start_pos
 			slot["end_pos"] = end_pos
+			slot["route"] = route
 			slot["distance"] = dist
 			slot["timer"] = (dist / ESCORT_BASE_SPEED) * ESCORT_TIMEOUT_BUFFER
 			slot["target"] = dist
 			slot["progress"] = 0.0
 			extra["start"] = start_pos
 			extra["end"] = end_pos
+			extra["route"] = route
 			extra["push_radius"] = ESCORT_PUSH_RADIUS
 		MissionKind.DEFEND_TREE:
 			slot["timer"] = float(TREE_NUM_PHASES) * TREE_PHASE_DURATION
@@ -674,26 +688,77 @@ func _scatter_positions(center: Vector2, radius: float, count: int) -> PackedVec
 	return out
 
 
-## Escort the Van: başlangıçtan ESCORT_MIN_DISTANCE-ESCORT_MAX_DISTANCE arası, engelsiz bir
-## bitiş noktası. Bulunamazsa (harita küçük/kenar) mesafeyi kademeli düşürerek tekrar dener.
+## Escort the Van rotası: [başlangıç, dönüş noktaları..., bitiş]. Haritada engelsiz rastgele bir bitiş seçilir,
+## yaratıkların A*'ı (enemy_pathing.gd - orman duvarlarını dolanır) ile yol bulunur; yol uzunluğu ESCORT_MIN/MAX_DISTANCE
+## aralığında, düz çizgiye göre en fazla ESCORT_MAX_DETOUR kat uzun ve her parçası su/ev/orman'dan açık olmalı.
+## ÖLÇÜM (2026-09-24, iki süreçli test + gerçek harita 4096x4096 üzerinde 30 başlangıç x 14 deneme): A* ızgarası SADECE
+## ormanı bilir - yollar suyu/evleri kesebiliyor ve köşelerde ormana sıfır mesafeden geçiyor; eskiden her parçada
+## "genişliğin yarısı" payı istenince 30 başlangıcın 0'ında rota bulunuyor, görev HEP eski 500-900'lük düz çizgiye
+## düşüyordu. Artık önce geniş paylı (ESCORT_ROUTE_WIDE_CLEARANCE) bir rota aranır; yoksa o turda bulunan ilk "merkez
+## çizgisi açık" (su/ev/orman'a hiç girmeyen) rota kullanılır (ölçüm: 26/30 başlangıçta rota). Bulunamazsa uzunluk alt
+## sınırı kademeli gevşetilir; en son eski düz çizgi yedeğine düşülür.
+const ESCORT_ROUTE_ATTEMPTS := 20
+const ESCORT_ROUTE_WIDE_CLEARANCE := 12.0
+
+func _escort_route(start_pos: Vector2) -> PackedVector2Array:
+	var clearance: float = float(SPAWN_CLEARANCE[MissionKind.ESCORT_VAN])
+	for min_len: float in [ESCORT_MIN_DISTANCE, ESCORT_MIN_DISTANCE * 0.7, ESCORT_MIN_DISTANCE * 0.45]:
+		var narrow_route := PackedVector2Array()
+		for _attempt in range(ESCORT_ROUTE_ATTEMPTS):
+			var end_pos: Vector2 = _random_map_position(clearance)
+			if end_pos == Vector2.ZERO:
+				continue
+			var straight: float = start_pos.distance_to(end_pos)
+			if straight < min_len * 0.85 or straight > ESCORT_MAX_DISTANCE:
+				continue
+			var route := PackedVector2Array([start_pos])
+			if EnemyPathingScript.line_blocked(start_pos, end_pos):
+				var waypoints: PackedVector2Array = EnemyPathingScript.find_path(start_pos, end_pos)
+				if waypoints.is_empty():
+					continue
+				route.append_array(waypoints)
+			else:
+				route.append(end_pos)
+			var length: float = VanScript.path_length(route)
+			if length < min_len or length > ESCORT_MAX_DISTANCE * 1.2:
+				continue
+			if length > start_pos.distance_to(route[route.size() - 1]) * ESCORT_MAX_DETOUR:
+				continue
+			if _route_clear(route, ESCORT_ROUTE_WIDE_CLEARANCE):
+				return route
+			if narrow_route.is_empty() and _route_clear(route, 0.0):
+				narrow_route = route
+		if not narrow_route.is_empty():
+			return narrow_route
+	return PackedVector2Array([start_pos, _escort_end_position(start_pos)])
+
+
+func _route_clear(route: PackedVector2Array, clearance: float) -> bool:
+	for i in range(route.size() - 1):
+		if not _is_path_clear(route[i], route[i + 1], clearance):
+			return false
+	return true
+
+
+## Eski düz çizgi yedeği (bkz. _escort_route): başlangıçtan 500-900 arası engelsiz bir bitiş noktası.
 func _escort_end_position(start_pos: Vector2) -> Vector2:
 	var rect: Rect2 = GameManager.get_map_world_rect()
-	for min_dist: float in [ESCORT_MIN_DISTANCE, ESCORT_MIN_DISTANCE * 0.6, ESCORT_MIN_DISTANCE * 0.3]:
+	for min_dist: float in [500.0, 300.0, 150.0]:
 		for _attempt in range(16):
 			var ang: float = _rng.randf() * TAU
-			var dist: float = _rng.randf_range(min_dist, ESCORT_MAX_DISTANCE)
+			var dist: float = _rng.randf_range(min_dist, 900.0)
 			var pos: Vector2 = start_pos + Vector2(cos(ang), sin(ang)) * dist
 			if rect.size != Vector2.ZERO and not rect.grow(-150.0).has_point(pos):
 				continue
 			if not _is_path_clear(start_pos, pos, float(SPAWN_CLEARANCE[MissionKind.ESCORT_VAN])):
 				continue
 			return pos
-	return start_pos + Vector2(ESCORT_MIN_DISTANCE, 0.0) ## son çare - engellenmiş olsa bile ilerlemeyi durdurmasın
+	return start_pos + Vector2(500.0, 0.0) ## son çare - engellenmiş olsa bile ilerlemeyi durdurmasın
 
 
+## Arabanın şu anki konumu - istemcilerin çizimiyle AYNI fonksiyon (mission_van.gd point_on_path).
 func _escort_current_pos(slot: Dictionary) -> Vector2:
-	var t: float = clamp(slot["progress"] / maxf(slot["distance"], 0.001), 0.0, 1.0)
-	return (slot["start_pos"] as Vector2).lerp(slot["end_pos"], t)
+	return VanScript.point_on_path(slot["route"], float(slot["progress"]))
 
 
 ## Kill Your Copy: her canlı oyuncu için (yerel "player" + "remote_players") kendi karakterinin
@@ -734,14 +799,19 @@ func _spawn_copies(mission_id: int) -> Dictionary:
 			var spd: float = float(p.call("get_base_move_speed")) if p.has_method("get_base_move_speed") else Characters.BASE_MOVE_SPEED
 			var maxhp_v: Variant = p.get("max_health")
 			var maxhp: float = float(maxhp_v) if maxhp_v != null else 100.0
+			## Kalkan (kullanıcı isteği 2026-09-24: "kopyanın kalkanı yok") - yerel Player ve RemotePlayer'da aynı alan adı.
+			var maxsh_v: Variant = p.get("item_shield_max")
+			var maxsh: float = float(maxsh_v) if maxsh_v != null else 0.0
+			var dmg_v: Variant = p.get("damage_bonus")
+			var dmg: float = float(dmg_v) if dmg_v != null else COPY_BASE_DAMAGE
 			var copy: CharacterBody2D = CopyScript.new()
 			get_tree().current_scene.add_child(copy)
 			copy.global_position = pos
-			copy.setup(mission_id, idx, char_id, maxhp, spd, COPY_BASE_CONTACT_DAMAGE, true)
+			copy.setup(mission_id, idx, char_id, maxhp, maxsh, spd, dmg, true)
 			copy.set("source_player", p)
 			var weapon_keys: Array = _copy_weapon_keys_of(p)
 			copy.set_weapon_keys(weapon_keys)
 			copies.append(copy)
-			meta.append({"char_id": char_id, "pos": pos, "weapons": weapon_keys})
+			meta.append({"char_id": char_id, "pos": pos, "weapons": weapon_keys, "max_hp": maxhp, "max_shield": maxsh})
 			idx += 1
 	return {"nodes": copies, "meta": meta}

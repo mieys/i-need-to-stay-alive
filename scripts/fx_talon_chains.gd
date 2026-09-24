@@ -31,6 +31,63 @@ const C_WHITE_HOT := Color(1.0, 0.95, 0.7, 1.0)
 var _host: Node2D = null
 var _t: float = 0.0
 
+## PERF (kullanıcı bildirimi 2026-09-24: "talon oyunu çok kastırıyor yetenek kullandığında"): ÖLÇÜM (gerçek render,
+## 60 yaratık + 5 silah): Silah Salvosu sırasında bu FX tek başına ~2.3 ms/kare (168 -> 122 fps; Ayna Formu'nun 10
+## silahıyla iki katı). Kök neden: her halka ~14 noktalı bir ovalin 3 katı (gölge/kontur/ısı) = halka başına ~40 ayrı
+## PixelDraw.px (draw_rect) çağrısı. Zincirler hareketli silahlara bağlı olduğu için tek bir spritesheet'e pişirilemez;
+## bunun yerine halka ŞEKİLLERİ (oval kontur, oval iç, kenar çubuk, çubuk sırtı) 16 yön için BİR KEZ, aynı piksel
+## matematiğiyle küçük beyaz dokulara çizilir (static önbellek) ve her halka rengine göre modulate edilen 2-3
+## draw_texture_rect ile çizilir. Görünüm aynı (yön 22.5 derecelik adıma yuvarlanır).
+const LINK_DIRS := 16
+const LINK_TEX_SIZE := 11 ## texel
+const LINK_TEX_CENTER := 5
+static var _link_tex: Dictionary = {} ## "oval_outer"/"oval_inner"/"bar"/"bar_hi" -> Array[ImageTexture] (LINK_DIRS)
+
+
+static func _dir_index(dir: Vector2) -> int:
+	return posmod(int(round(dir.angle() / (TAU / float(LINK_DIRS)))), LINK_DIRS)
+
+
+static func _ensure_link_textures() -> void:
+	if not _link_tex.is_empty():
+		return
+	var kinds: Array = ["oval_outer", "oval_inner", "bar", "bar_hi"]
+	for kind in kinds:
+		_link_tex[kind] = []
+	for d in range(LINK_DIRS):
+		var a0: float = float(d) * TAU / float(LINK_DIRS)
+		var dir := Vector2(cos(a0), sin(a0))
+		var normal := Vector2(-dir.y, dir.x)
+		for kind in kinds:
+			var img := Image.create(LINK_TEX_SIZE, LINK_TEX_SIZE, false, Image.FORMAT_RGBA8)
+			var cells: Array = []
+			match kind:
+				"oval_outer", "oval_inner":
+					var hl: float = LINK_HALF_LEN if kind == "oval_outer" else LINK_HALF_LEN - 0.9
+					var hw: float = LINK_HALF_WID if kind == "oval_outer" else LINK_HALF_WID - 0.6
+					for k in range(14):
+						var a: float = TAU * float(k) / 14.0
+						cells.append(dir * cos(a) * hl + normal * sin(a) * hw)
+				"bar":
+					for s in [-1.5, -0.5, 0.5, 1.5]:
+						cells.append(dir * s)
+				"bar_hi":
+					cells.append(normal * -0.7)
+			for c in cells:
+				var x: int = int(round(c.x)) + LINK_TEX_CENTER
+				var y: int = int(round(c.y)) + LINK_TEX_CENTER
+				if x >= 0 and y >= 0 and x < LINK_TEX_SIZE and y < LINK_TEX_SIZE:
+					img.set_pixel(x, y, Color.WHITE)
+			(_link_tex[kind] as Array).append(ImageTexture.create_from_image(img))
+
+
+## Halka dokusunu `center`e (texel ızgarasına oturtulmuş) `col` rengiyle çizer.
+func _link(kind: String, center: Vector2, dir_i: int, col: Color) -> void:
+	var texel: float = PixelDraw.TEXEL
+	var size: float = float(LINK_TEX_SIZE) * texel
+	var origin: Vector2 = PixelDraw.snap(center) - Vector2(float(LINK_TEX_CENTER) + 0.5, float(LINK_TEX_CENTER) + 0.5) * texel
+	draw_texture_rect((_link_tex[kind] as Array)[dir_i], Rect2(origin, Vector2(size, size)), false, col)
+
 
 func _ready() -> void:
 	top_level = true
@@ -38,6 +95,7 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_host = get_parent() as Node2D
 	global_position = Vector2.ZERO
+	_ensure_link_textures()
 
 
 func _life() -> float:
@@ -67,26 +125,9 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-## Zincir yönüne döndürülmüş ince oval (halka) çerçevesi: pixel'lere oturtulmuş noktalar.
-func _oval(center: Vector2, dir: Vector2, half_len: float, half_wid: float, col: Color) -> void:
-	var texel: float = PixelDraw.TEXEL
-	var normal := Vector2(-dir.y, dir.x)
-	const SAMPLES := 14
-	for k in range(SAMPLES):
-		var a: float = TAU * float(k) / float(SAMPLES)
-		var p: Vector2 = center + dir * cos(a) * half_len * texel + normal * sin(a) * half_wid * texel
-		PixelDraw.px(self, p, 1, col)
-
-
-## Kenardan görünen halka: zincir yönünde kısa çubuk (+ üstte 1 texel parlak sırt).
-func _bar(center: Vector2, dir: Vector2, col: Color, hi: Color) -> void:
-	var texel: float = PixelDraw.TEXEL
-	var normal := Vector2(-dir.y, dir.x)
-	for s in [-1.5, -0.5, 0.5, 1.5]:
-		PixelDraw.px(self, center + dir * texel * s, 1, col)
-	PixelDraw.px(self, center + normal * texel * -0.7, 1, hi)
-
-
+## Halka şekilleri (eskiden _oval/_bar her karede noktası noktasına çiziyordu): _ensure_link_textures'ta yön başına bir
+## kez pişirilir - "oval_*" zincir yönüne döndürülmüş ince oval (yüzü bize dönük halka), "bar*" kenardan görünen halka
+## (zincir yönünde kısa çubuk + 1 texel parlak sırt).
 func _heat_color(h: float) -> Color:
 	return C_IRON.lerp(C_HEAT_LO, clampf(h * 2.0, 0.0, 1.0)).lerp(C_HEAT_HI, clampf(h * 2.0 - 1.0, 0.0, 1.0))
 
@@ -116,6 +157,7 @@ func _draw() -> void:
 			continue
 		var dir: Vector2 = v / length
 		var normal := Vector2(-dir.y, dir.x)
+		var dir_i: int = _dir_index(dir)
 		var start_off: float = belt_r ## zincir kemerin kenarından başlar
 		var usable: float = length - start_off - texel * 3.5 ## silah ucundaki kelepçeye kadar
 		var reach: float = usable * extent
@@ -138,12 +180,14 @@ func _draw() -> void:
 			## Yer gölgesi
 			var shadow := Color(0.05, 0.03, 0.03, 0.35 * extent)
 			if i % 2 == 0:
-				_oval(c + Vector2(0, texel * 1.6), dir, LINK_HALF_LEN, LINK_HALF_WID, shadow)
-				_oval(c, dir, LINK_HALF_LEN, LINK_HALF_WID, C_IRON_D)
-				_oval(c, dir, LINK_HALF_LEN - 0.9, LINK_HALF_WID - 0.6, col)
+				_link("oval_outer", c + Vector2(0, texel * 1.6), dir_i, shadow)
+				_link("oval_outer", c, dir_i, C_IRON_D)
+				_link("oval_inner", c, dir_i, col)
 			else:
-				_bar(c + Vector2(0, texel * 1.6), dir, shadow, shadow)
-				_bar(c, dir, col, C_WHITE_HOT if heat > 0.8 else C_HEAT_HI)
+				_link("bar", c + Vector2(0, texel * 1.6), dir_i, shadow)
+				_link("bar_hi", c + Vector2(0, texel * 1.6), dir_i, shadow)
+				_link("bar", c, dir_i, col)
+				_link("bar_hi", c, dir_i, C_WHITE_HOT if heat > 0.8 else C_HEAT_HI)
 		## Kor kıvılcımı: zincirden yükselen tek pixel
 		var seed_i: int = int(_t * 10.0) * 7 + j * 31
 		if count > 2 and PixelDraw.hash01(seed_i) < 0.6:

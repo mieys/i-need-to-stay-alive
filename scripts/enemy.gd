@@ -661,6 +661,12 @@ func _schedule_melee_hit(delay: float, target_player: Node) -> void:
 	## sonra korkutulduysa zamanlanmış vuruş da iptal.
 	if is_feared:
 		return
+	## Necromancer yaratıkları (player_allies) hasarı KENDİ yakın-temas tikleriyle alır (skeleton_pet.gd/golem_pet.gd
+	## _process_incoming_damage - sahibinin istemcisinde, yani çok oyunculuda da doğru yerde). Buradan da vurulursa tek
+	## oyunculuda çift hasar olur, çok oyunculuda ise host'taki kozmetik kopyaya vurulur - yaratık saldırı animasyonunu
+	## yapar ama hasarı yalnızca o tik verir.
+	if target_player.is_in_group("player_allies"):
+		return
 	## DÜZELTME (kullanıcı bildirimi: "assasin çocuk görünmezken yaratıklara
 	## dokununca hasar alabiliyor, sadece yaratıkların skillerinden hasar
 	## alabilmeli") - vuruş çağrıldığı anda (bkz. _physics_process'teki
@@ -1565,6 +1571,9 @@ var _ai_min_sep: float = 0.0
 var _ai_accum_delta: float = 0.0
 
 const TARGET_UPDATE_INTERVAL_FRAMES := 4
+## Necromancer yaratıklarının (player_allies) agro önceliği - bkz. _find_closest_target_player.
+const ALLY_AGGRO_RADIUS := 160.0
+const ALLY_AGGRO_BIAS := 0.35
 var _cached_target_player: Node2D = null
 
 func _get_target_player() -> Node2D:
@@ -1733,12 +1742,19 @@ func _find_closest_target_player() -> Node2D:
 	## yaratıkların onlara doğru YÜRÜMESİYDİ, bu da tam olarak burada
 	## (hedef seçiminde) eksikti. Artık gerçek bir oyuncudan daha yakınsa
 	## necromancer yaratığı da hedef olarak seçilebiliyor.
+	## Kullanıcı isteği (2026-09-24): "necromancerın yaratıkları daha çok ilgi çeksin yaratıklardan onları görmezden
+	## gelmemeliler yakınlarındalarsa" - eskiden müttefik SADECE oyuncudan kesinlikle daha yakınsa seçiliyordu; oyuncu biraz
+	## daha yakınsa yaratık yanındaki iskeletin önünden geçip gidiyordu. Artık ALLY_AGGRO_RADIUS içindeki müttefiğin mesafesi
+	## ALLY_AGGRO_BIAS ile küçültülerek karşılaştırılır: yakındaki iskelet/golem, oyuncu neredeyse temas mesafesinde değilse
+	## hedef olur. Menzil dışındaki müttefik eski kuralla (gerçek mesafe) yarışır.
 	for ally: Node in get_tree().get_nodes_in_group("player_allies"):
 		if not is_instance_valid(ally):
 			continue
 		var is_d2: bool = ally.get("is_dead") if "is_dead" in ally else false
 		if not is_d2:
 			var d2: float = global_position.distance_to(ally.global_position)
+			if d2 <= ALLY_AGGRO_RADIUS:
+				d2 *= ALLY_AGGRO_BIAS
 			if d2 < min_d:
 				min_d = d2
 				closest = ally as Node2D
@@ -2086,7 +2102,20 @@ func apply_knockback_force(dir: Vector2, force: float) -> void:
 ## (v0 = sqrt(2 * decay * mesafe) - 40 px ~0.24 sn'de yumuşakça). Diğer itişler (oyuncunun gövdeyle itmesi, yaratıkların
 ## çarpışma sekmesi) zaten hız cinsinden ayarlı, apply_knockback_force'ta kalıyor. Çok oyunculuda istemcinin vuruşu
 ## (burada kukla) host'taki GERÇEK yaratığa iletilir - eskiden kuklada kalıp host'un konum yayınıyla siliniyordu.
-const KNOCKBACK_DISTANCE_MAX := 120.0 ## tek isabette en fazla bu kadar px (çok sayıda Kitelama Seti yığılsa bile)
+const KNOCKBACK_DISTANCE_MAX := 60.0 ## tek isabette en fazla bu kadar px (çok sayıda Kitelama Seti yığılsa bile) - 2026-09-24: 120 -> 60
+## Kullanıcı isteği (2026-09-24): "geri tepme aşırı güçlenmiş gücünü %70 nerflemen gerekiyor" - mesafe tabanlı itişe
+## geçince (yukarıdaki düzeltme) istenen px'in tamamı gerçekten kat edilir oldu; tüm silah/mermi itişleri %30'una iner.
+## Host tarafında TEK kez uygulanır (istemci isteği RPC ile ham mesafeyi taşır).
+## Kullanıcı bildirimi (2026-09-24, ikinci tur): "Geri tepme hala çok güçlü ve çok geriye itiyor". Kök neden tek vuruşun
+## büyüklüğü değil BİRİKİMDİ: her isabet itişi baştan başlatıyordu - birkaç silah saniyede birkaç kez vurunca (1 kart =
+## 70 x 0.3 = 21 px her ~0.2 sn) yaratık ~100 px/sn geriye kayıyordu, çoğu yaratığın yürüme hızından fazla -> hiç
+## yaklaşamıyorlardı. Artık: taban çarpan 0.30 -> 0.20, tavan 120 -> 60 px, ve aynı yaratığa KNOCKBACK_REPEAT_WINDOW
+## içinde gelen her ek itiş KNOCKBACK_REPEAT_MULT'la küçülür (ilk vuruş hissedilir, sürekli ateş yaratığı tutamaz:
+## 1 kartla ilk vuruş 14 px, ardından ~3.5 px'lik küçük sarsıntılar).
+const KNOCKBACK_DISTANCE_MULT := 0.20
+const KNOCKBACK_REPEAT_WINDOW := 0.7 ## sn
+const KNOCKBACK_REPEAT_MULT := 0.25
+var _last_knockback_msec: int = -100000
 
 func apply_knockback_distance(dir: Vector2, distance: float) -> void:
 	if distance <= 0.0:
@@ -2097,7 +2126,10 @@ func apply_knockback_distance(dir: Vector2, distance: float) -> void:
 			NetworkManager.request_enemy_knockback.rpc_id(NetworkManager._host_peer_id(), net_id, dir, distance)
 		return
 	var d: Vector2 = dir.normalized() if dir.length() > 0.001 else Vector2.RIGHT
-	var v0: float = sqrt(2.0 * KNOCKBACK_DECAY * minf(distance, KNOCKBACK_DISTANCE_MAX))
+	var now_msec: int = Time.get_ticks_msec()
+	var repeat_mult: float = KNOCKBACK_REPEAT_MULT if (now_msec - _last_knockback_msec) < int(KNOCKBACK_REPEAT_WINDOW * 1000.0) else 1.0
+	_last_knockback_msec = now_msec
+	var v0: float = sqrt(2.0 * KNOCKBACK_DECAY * minf(distance * KNOCKBACK_DISTANCE_MULT * repeat_mult, KNOCKBACK_DISTANCE_MAX))
 	## Birikim: mevcut itişin bu yöndeki bileşeninden hızlıysa eklenir, değilse (zaten daha hızlı itiliyorsa) dokunulmaz.
 	var along: float = _knockback_velocity.dot(d)
 	if along < v0:
@@ -2205,7 +2237,15 @@ func _route_direction(dir: Vector2, target_pos: Vector2, delta: float) -> Vector
 	_route_active = false
 	if not EnemyPathingScript.enabled:
 		return dir
-	if global_position.distance_to(target_pos) > EnemyPathingScript.MAX_ROUTE_DISTANCE:
+	## DÜZELTME (kullanıcı bildirimi 2026-09-24: "ağacı koruma görevinde ... duvarlara doğru yürüyorlar dolanmak
+	## yerine"): ağaç haritanın herhangi bir yerinde olabilir ve TÜM yaratıklar ona yürür - MAX_ROUTE_DISTANCE'tan
+	## (oyuncu kovalamaya göre ayarlı, doğuş halkası ~640) uzaktakiler hiç yol aramadan düz çizgide duvara
+	## dayanıyordu. Hedef sabit duran ağaçken mesafe sınırı yok (yol bir kez bulunup izleniyor, hedef kaymadığı
+	## için yeniden planlama seyrek; kare bütçesi MAX_NEW_PATHS_PER_FRAME aynen geçerli).
+	var static_mission_target: bool = false
+	if GameManager.defend_tree_active and is_instance_valid(GameManager.defend_tree_ref):
+		static_mission_target = target_pos == GameManager.defend_tree_ref.global_position
+	if not static_mission_target and global_position.distance_to(target_pos) > EnemyPathingScript.MAX_ROUTE_DISTANCE:
 		_route = PackedVector2Array()
 		return dir
 	## LOD: uzaktaki (bkz. _ensure_lod_classification) yaratıklar düz-çizgi/
@@ -2834,6 +2874,7 @@ func _create_overhead_bar() -> void:
 		return
 	_overhead_bar = Node2D.new()
 	_overhead_bar.set_script(preload("res://scripts/overhead_bar.gd"))
+	_overhead_bar.set("health_color", _overhead_bar.HEALTH_COLOR_ENEMY) ## düşman boss: kırmızı can barı
 	add_child(_overhead_bar)
 	_overhead_bar.set_offset(get_overhead_bar_offset())
 	_overhead_bar.set_health(health, max_health)
@@ -2934,7 +2975,16 @@ func _physics_process(delta: float) -> void:
 				## saldırdığı oyuncuya değil rastgele bir yöne bakıyormuş gibi görünür. Host'un kendi mantığıyla
 				## AYNI kural (durunca GERÇEK hedefe bak) burada da - AI_THINK_INTERVAL_FRAMES'te bir (host'un
 				## kendi throttle'ıyla AYNI kaydırma deseni), sadece kozmetik/ucuz bir oyuncu araması.
-				var facing_target: Node2D = _find_closest_target_player()
+				## DÜZELTME (kullanıcı bildirimi 2026-09-24: "ağacı koruma görevinde ... bazılarının yüzü oyunculara
+				## dönüyor"): "Ağacı Koru" sürerken host'taki yaratıklar AĞACI hedefler (bkz. _apply_aggro_overrides) ama
+				## bu kozmetik dal hep en yakın OYUNCUYA baktırıyordu - ağaca yürürken yavaşlayan/duvara takılan ya da
+				## ağaca vuran (durmuş) yaratıklar istemcide oyuncuya dönüyordu. İstemcideki kozmetik ağaç main.gd'de
+				## GameManager.defend_tree_ref'e yazılır (defend_tree_active sadece host'ta).
+				var facing_target: Node2D = null
+				if is_instance_valid(GameManager.defend_tree_ref):
+					facing_target = GameManager.defend_tree_ref
+				else:
+					facing_target = _find_closest_target_player()
 				if facing_target and is_instance_valid(facing_target):
 					var to_facing: Vector2 = facing_target.global_position - global_position
 					if to_facing.length() > 2.0:

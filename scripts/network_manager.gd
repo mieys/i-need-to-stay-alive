@@ -1384,6 +1384,10 @@ func broadcast_weapon_attack(source_pos: Vector2, target_pos: Vector2, shop_key:
 		var dir: Vector2 = (target_pos - source_pos).normalized()
 		slash.global_position = target_pos - dir * 18.0
 		slash.rotation = dir.angle()
+		## DÜZELTME (2026-09-24, pençe efekti yenilenirken bulundu): kasterin kendi ekranında weapon.gd _spawn_slash_fx
+		## efekti oyuncu kökünün ölçeğiyle (0.5, main.tscn) çarpıyor, bu kozmetik kopya çarpmıyordu - diğer oyuncular
+		## TÜM yakın dövüş savuruşlarını 2 kat büyük görüyordu. Uzak kukla da aynı 0.5 ölçekte (remote_player.tscn).
+		slash.scale *= (local_player as Node2D).scale
 
 
 
@@ -1720,11 +1724,12 @@ func broadcast_world_event_item_collected(mission_id: int, item_index: int) -> v
 ## health_ratio: kopyanın can oranı (0..1) - kozmetik kopyaların can barı da güncellensin diye
 ## (yoksa host olmayan oyuncular barı hep DOLU görür, bkz. CLAUDE.md "kaster görür, diğerleri
 ## görmez" hata sınıfı).
-signal world_event_copy_state(mission_id: int, copy_index: int, pos: Vector2, alive: bool, health_ratio: float)
+## shield_ratio: kalkan oranı (0..1) - kopyanın kalkanı var (oyuncununkinin 3 katı, bkz. mission_player_copy.gd).
+signal world_event_copy_state(mission_id: int, copy_index: int, pos: Vector2, alive: bool, health_ratio: float, shield_ratio: float)
 
 @rpc("any_peer", "call_local", "unreliable")
-func broadcast_world_event_copy_state(mission_id: int, copy_index: int, pos: Vector2, alive: bool, health_ratio: float = 1.0) -> void:
-	world_event_copy_state.emit(mission_id, copy_index, pos, alive, health_ratio)
+func broadcast_world_event_copy_state(mission_id: int, copy_index: int, pos: Vector2, alive: bool, health_ratio: float = 1.0, shield_ratio: float = 0.0) -> void:
+	world_event_copy_state.emit(mission_id, copy_index, pos, alive, health_ratio, shield_ratio)
 
 ## Host olmayan istemcinin kozmetik kopyaya verdiği hasar -> host'taki gerçek kopya (bkz. mission_player_copy.gd take_damage).
 signal world_event_copy_damage_requested(mission_id: int, copy_index: int, amount: float)
@@ -1734,6 +1739,14 @@ func request_world_event_copy_damage(mission_id: int, copy_index: int, amount: f
 	if not is_host:
 		return
 	world_event_copy_damage_requested.emit(mission_id, copy_index, amount)
+
+## Kopyanın yakın dövüş savuruşu (bkz. mission_player_copy.gd _process_attacks) - hasar host'ta verilir, bu yayın
+## diğer istemcilerdeki kozmetik kopyanın silah ikonlarının da AYNI anda savrulmasını sağlar.
+signal world_event_copy_swing(mission_id: int, copy_index: int, dir: Vector2)
+
+@rpc("any_peer", "call_remote", "unreliable")
+func broadcast_world_event_copy_swing(mission_id: int, copy_index: int, dir: Vector2) -> void:
+	world_event_copy_swing.emit(mission_id, copy_index, dir)
 
 ## Kopyanın menzilli mermisi (bkz. mission_player_copy.gd _fire_at) - host'ta gerçek mermi zaten
 ## hasar veriyor; bu yayın diğer istemcilerde AYNI atışın hasarsız, salt görsel kopyasını çizer.
@@ -3107,6 +3120,14 @@ func sync_revive_consumed(peer_id: int, new_remaining: int) -> void:
 	GameManager.peer_revives[peer_id] = new_remaining
 	if peer_id == multiplayer.get_unique_id():
 		GameManager.revives_updated.emit(new_remaining)
+
+
+## Dirilme hakkı yenilenme sayacı (bkz. GameManager._process_revive_regen) - host, bir oyuncunun hakkı 0'a düşüp
+## 5 dakikalık sayaç başlayınca ve sonra periyodik olarak kalan süreyi yayınlar; istemciler kalbin altındaki geri
+## sayımı buradan gösterir. seconds_left < 0: sayaç bitti/iptal.
+@rpc("authority", "call_remote", "reliable")
+func sync_revive_regen(peer_id: int, seconds_left: float) -> void:
+	GameManager.apply_revive_regen_sync(peer_id, seconds_left)
 
 
 ## Kullanıcı isteği: "birini diriltince 3 saniye boyunca ölümsüzlük veren bir

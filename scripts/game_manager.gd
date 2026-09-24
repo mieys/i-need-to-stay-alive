@@ -564,13 +564,8 @@ func _process(delta: float) -> void:
 			game_time += delta
 		if _mini_shop_cooldown_remaining > 0.0:
 			_mini_shop_cooldown_remaining -= delta
-	## Kullanıcı isteği: "Multiplayerda her oyuncu 3 yeniden canlanma hakkına
-	## sahip olmalı ve 1 yeniden canlanma hakkı kaldığında 3 dakikada bir bir
-	## yeniden canlanma hakkı kazanmalı" - max_revives zaten 3 (bkz. yukarısı),
-	## eksik olan sadece bu zamanlayıcıydı. Host-yetkili (bkz.
-	## network_manager.gd _consume_revive_authoritative ile AYNI mimari),
-	## sadece multiplayer'da çalışır.
-	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+	## Dirilme hakkı yenilenmesi - bkz. _process_revive_regen üstündeki not.
+	if not is_game_over:
 		_process_revive_regen(delta)
 
 
@@ -596,28 +591,77 @@ func get_peer_revives(peer_id: int) -> int:
 
 signal revives_updated(remaining: int)
 
-## Kullanıcı isteği: "1 yeniden canlanma hakkı kaldığında 3 dakikada bir bir
-## yeniden canlanma hakkı kazanmalı" - SADECE tam 1 hak kalmışken sayaç
-## işler (0'a düşen kalıcı sayılır, hiç yenilenmez; 2/3 zaten "tam" sayılır,
-## saymaya gerek yok). peer_id -> o an biriken saniye.
-const REVIVE_REGEN_INTERVAL := 180.0 ## 3 dakika
-var _revive_regen_timers: Dictionary = {}
+## Kullanıcı isteği (2026-09-24, eski "1 hak kalınca 3 dakikada bir +1" kuralının YERİNE): "Son 1 canı kalan kişi
+## öldüğünde son canı da ölüp cansız kaldığında 1 tane kalp 5 dakikalık bir yenilenme sürecine girsin bu sadece 1 can
+## bile kalmadığında olsun. yani yenilenme sadece 1 can verebilir ... altında da bekleme süresi görünsün." - sayaç
+## SADECE hak tam 0'ken işler, dolunca hakkı 1 yapar (asla 1'in üstüne çıkarmaz); 1+ hak varken hiç işlemez. Tek
+## oyunculuda (anahtar 0 -> revives_remaining) ve çok oyunculuda (peer_id -> peer_revives) aynı kural. Çok oyunculuda
+## host yetkili (bkz. network_manager.gd _consume_revive_authoritative ile AYNI mimari); istemciler kalan süreyi
+## NetworkManager.sync_revive_regen'den alıp HUD için yerelde sayar (bkz. get_revive_regen_left).
+## Kalıcı ölmüş (izleyici) bir oyuncuda da işler - hak kendiliğinden diriltmez, sadece sonraki ölüm için hazır bekler
+## (dükkandan diriltme satın alınırsa işe yarar).
+const REVIVE_REGEN_INTERVAL := 300.0 ## 5 dakika
+const REVIVE_REGEN_SYNC_INTERVAL := 5.0 ## host, istemci aynasını bu aralıkla düzeltir (kayma birikmesin)
+## Anahtar -> kalan saniye (tek oyunculu: 0, çok oyunculu: peer_id). Host/tek oyunculuda gerçek sayaç, istemcide ayna.
+var _revive_regen_left: Dictionary = {}
+var _revive_regen_sync_timer: float = 0.0
+
 
 func _process_revive_regen(delta: float) -> void:
+	if not NetworkManager.is_multiplayer_active:
+		if revives_remaining > 0:
+			_revive_regen_left.erase(0)
+			return
+		var left: float = float(_revive_regen_left.get(0, REVIVE_REGEN_INTERVAL)) - delta
+		if left <= 0.0:
+			_revive_regen_left.erase(0)
+			revives_remaining = 1
+			revives_updated.emit(revives_remaining)
+		else:
+			_revive_regen_left[0] = left
+		return
+	if not NetworkManager.is_host:
+		## İstemci aynası: sadece HUD göstergesi için geri sayar; hakkı host verir (sync_revive_consumed).
+		for key in _revive_regen_left.keys():
+			_revive_regen_left[key] = maxf(0.0, float(_revive_regen_left[key]) - delta)
+		return
+	_revive_regen_sync_timer -= delta
+	var periodic_sync: bool = _revive_regen_sync_timer <= 0.0
+	if periodic_sync:
+		_revive_regen_sync_timer = REVIVE_REGEN_SYNC_INTERVAL
 	for peer_id in NetworkManager.lobby_players.keys():
-		var remaining: int = get_peer_revives(peer_id)
-		if remaining != 1:
-			## Hak 0'a düştü (kalıcı) ya da zaten tam (2/3) - sayaç anlamsız,
-			## bir dahaki "tam olarak 1" anına temiz başlasın diye sıfırlanır.
-			_revive_regen_timers.erase(peer_id)
+		if get_peer_revives(peer_id) > 0:
+			if _revive_regen_left.has(peer_id):
+				_revive_regen_left.erase(peer_id)
+				NetworkManager.sync_revive_regen.rpc(peer_id, -1.0)
 			continue
-		var t: float = float(_revive_regen_timers.get(peer_id, 0.0)) + delta
-		if t >= REVIVE_REGEN_INTERVAL:
-			t -= REVIVE_REGEN_INTERVAL
-			var new_remaining: int = min(remaining + 1, max_revives)
-			peer_revives[peer_id] = new_remaining
-			NetworkManager.sync_revive_consumed.rpc(peer_id, new_remaining)
-		_revive_regen_timers[peer_id] = t
+		var started: bool = not _revive_regen_left.has(peer_id)
+		var left: float = float(_revive_regen_left.get(peer_id, REVIVE_REGEN_INTERVAL)) - delta
+		if left <= 0.0:
+			_revive_regen_left.erase(peer_id)
+			peer_revives[peer_id] = 1
+			NetworkManager.sync_revive_consumed.rpc(peer_id, 1)
+			NetworkManager.sync_revive_regen.rpc(peer_id, -1.0)
+			continue
+		_revive_regen_left[peer_id] = left
+		if started or periodic_sync:
+			NetworkManager.sync_revive_regen.rpc(peer_id, left)
+
+
+## İstemcide host'tan gelen kalan süre (bkz. NetworkManager.sync_revive_regen); seconds_left < 0 = sayaç yok.
+func apply_revive_regen_sync(peer_id: int, seconds_left: float) -> void:
+	if seconds_left < 0.0:
+		_revive_regen_left.erase(peer_id)
+	else:
+		_revive_regen_left[peer_id] = seconds_left
+
+
+## Bu istemcinin KENDİ kalbinin yenilenmesine kalan saniye; sayaç yoksa -1 (HUD, revive_hearts_hud.gd okur).
+func get_local_revive_regen_left() -> float:
+	var key: int = 0
+	if NetworkManager.is_multiplayer_active:
+		key = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	return float(_revive_regen_left.get(key, -1.0))
 
 
 ## Ortak Takım Seviyesi ve EXP Havuzu (Multiplayer & Tek Oyunculu)
@@ -929,7 +973,8 @@ func reset() -> void:
 	team_xp_changed.emit(team_xp, team_xp_needed)
 	revives_remaining = max_revives
 	peer_revives.clear()
-	_revive_regen_timers.clear()
+	_revive_regen_left.clear()
+	_revive_regen_sync_timer = 0.0
 	revives_updated.emit(revives_remaining)
 	gold = 0
 	spray_level = 0

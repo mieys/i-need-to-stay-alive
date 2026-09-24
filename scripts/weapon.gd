@@ -2712,6 +2712,10 @@ func _spawn_slash_fx(direction: Vector2, at_position: Vector2, speed_scale: floa
 		fx.set("flip_v", direction.y < 0.0)
 	if "speed_scale" in fx:
 		fx.speed_scale = speed_scale
+	## Pençe efekti (fx_claw_slash.gd) savuruşun MERKEZİNE hizalanır - konumu savuruşun son noktası (yukarısı), izler
+	## ikonun süpürdüğü yol boyunca yırtılsın diye (kullanıcı isteği 2026-09-24: "saldırı animasyonuyla uyumlu").
+	if is_image_fx and fx.has_method("align_to_swing"):
+		fx.align_to_swing(-_melee_final_swing_offset(direction))
 	return fx
 
 
@@ -2762,12 +2766,20 @@ func _fx_playback_duration(fx: Node2D, speed_scale: float) -> float:
 	if fx == null or not is_instance_valid(fx) or not ("sprite_frames" in fx):
 		return 0.0
 	var frames: SpriteFrames = fx.get("sprite_frames")
-	if not frames or not frames.has_animation("play"):
+	if not frames:
 		return 0.0
-	var fps: float = frames.get_animation_speed("play")
+	## Varyantlı efektler (ör. fx_claw_slash.gd "v0/v1/v2") kendi _ready'sinde başka bir animasyon oynatır - o an oynayan
+	## animasyon varsa onun süresi, yoksa klasik "play".
+	var anim_name: StringName = &"play"
+	var current: Variant = fx.get("animation")
+	if current != null and frames.has_animation(StringName(str(current))) and fx.has_method("is_playing") and fx.call("is_playing"):
+		anim_name = StringName(str(current))
+	if not frames.has_animation(anim_name):
+		return 0.0
+	var fps: float = frames.get_animation_speed(anim_name)
 	if fps <= 0.0:
 		return 0.0
-	var count: int = frames.get_frame_count("play")
+	var count: int = frames.get_frame_count(anim_name)
 	return (count / fps) / max(0.01, speed_scale)
 
 

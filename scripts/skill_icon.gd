@@ -206,6 +206,9 @@ func _on_mouse_entered() -> void:
 		## TEMEL yeteneğin açıklamasındaki gömülü bekleme metni de artık canlı.
 		desc = _apply_live_cooldown_to_desc(desc, current_cd)
 
+	if locked_level > 0:
+		cd_text = "[color=#ffb070]Seviye %d'de açılır[/color]\n%s" % [locked_level, cd_text]
+
 	# Build Tooltip UI
 	## Kullanıcı isteği: "oyundaki skill göstergelerinin açıklamaları hiç
 	## okunmuyor ... bazıları aşırı küçük" - bu tooltip'in metinleri (aşağıda)
@@ -409,6 +412,38 @@ func _format_lol_style(text: String) -> String:
 @onready var cooldown_label: Label = get_node_or_null("Cooldown")
 
 
+## Yetenek yuvası kilidi (kullanıcı isteği 2026-09-24: "kapalı oldukları vaziyette üstlerinde 5 levelde açılacağı ve
+## 10 levelde açılacağı level numaralarıyla yazsın") - > 0 iken ikon karartılır, üstte piksel asma kilit, altında açılış
+## seviyesi yazar; bekleme örtüsü/sayacı gizlenir. hud.gd her karede player.get_skill_slot_unlock_level ile ayarlar.
+var locked_level: int = 0
+var _lock_label: Label = null
+
+func set_locked_level(lv: int) -> void:
+	if lv == locked_level:
+		return
+	locked_level = lv
+	if lv > 0 and _lock_label == null:
+		_lock_label = Label.new()
+		_lock_label.name = "LockLabel"
+		_lock_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_lock_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_lock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_lock_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		_lock_label.offset_bottom = -frame_border * 0.5
+		UIKit.style_label(_lock_label, 24, Color(1.0, 0.86, 0.55), 4)
+		add_child(_lock_label)
+	## Kullanıcı isteği (2026-09-24): "yetenekler level atlamasıyla açılmadan üstlerinde hangi tuşla kullanıldığı yazmasın
+	## (E ve R)" - kilitliyken tuş etiketi gizli, açılınca geri gelir.
+	var key_label: Node = get_node_or_null("KeyLabel")
+	if key_label is CanvasItem:
+		(key_label as CanvasItem).visible = lv <= 0
+	if _lock_label:
+		_lock_label.visible = lv > 0
+		_lock_label.text = str(lv) ## sadece sayı: 52 px ikona "Lv10" sığmıyor (m5x7 24px = 18 px/harf), kilit simgesi zaten "kapalı" diyor
+	_update_cooldown_label()
+	queue_redraw()
+
+
 func update_state(p_progress: float, p_active: bool, p_remaining: float = 0.0, p_active_fraction: float = 0.0) -> void:
 	progress = p_progress
 	is_active = p_active
@@ -427,9 +462,19 @@ func update_state(p_progress: float, p_active: bool, p_remaining: float = 0.0, p
 ## gizler (diğer TÜM karakterlerde varsayılan/etkisiz durum budur).
 @onready var stack_badge: Label = get_node_or_null("StackBadge")
 
+## DÜZELTME (kullanıcı bildirimi 2026-09-24: "necromancerın ruh pasifindeki sayı göstergesi bozuk titreşimli görünüyor"):
+## hud.gd bunu HER KAREDE çağırıyor; eskiden her çağrı rozeti baştan yerleştiriyordu (font önce taban boyuta
+## sıfırlanıp sığana kadar küçültülüyordu, ama Label'ın minimum boyutu override'dan hemen sonra güncellenmediği için
+## ölçüm bir önceki boyuta göre yapılıyordu) -> font kareden kareye 22 <-> 20 arasında gidip geliyordu. Artık yalnızca
+## sayı değişince yerleşim yapılıyor ve genişlik fontun kendisinden (get_string_size) ölçülüyor.
+var _last_stack_count: int = -2
+
 func set_stack_count(n: int) -> void:
 	if stack_badge == null:
 		return
+	if n == _last_stack_count and stack_badge.visible == (n >= 0):
+		return
+	_last_stack_count = n
 	if n < 0:
 		stack_badge.visible = false
 		return
@@ -473,12 +518,17 @@ func _layout_stack_badge() -> void:
 	if _badge_base_font_size < 0:
 		_badge_base_font_size = stack_badge.get_theme_font_size("font_size")
 	var fit_width: float = size.x - 2.0 * margin
+	var font: Font = stack_badge.get_theme_font("font")
 	var font_size: int = _badge_base_font_size
-	stack_badge.add_theme_font_size_override("font_size", font_size)
-	while font_size > STACK_BADGE_MIN_FONT and stack_badge.get_combined_minimum_size().x > fit_width:
+	while font_size > STACK_BADGE_MIN_FONT and font != null \
+			and font.get_string_size(stack_badge.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > fit_width:
 		font_size -= 2
-		stack_badge.add_theme_font_size_override("font_size", font_size)
-	var badge_size: Vector2 = stack_badge.get_combined_minimum_size()
+	stack_badge.add_theme_font_size_override("font_size", font_size)
+	var badge_size: Vector2 = Vector2.ZERO
+	if font != null:
+		badge_size = Vector2(ceilf(font.get_string_size(stack_badge.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x), ceilf(font.get_height(font_size)))
+	else:
+		badge_size = stack_badge.get_combined_minimum_size()
 	stack_badge.size = badge_size
 	stack_badge.position = Vector2(size.x - margin - badge_size.x, margin)
 	queue_redraw()
@@ -503,6 +553,9 @@ func set_charge_progress(fraction: float) -> void:
 ## klasik geri sayım hissi için.
 func _update_cooldown_label() -> void:
 	if cooldown_label == null:
+		return
+	if locked_level > 0:
+		cooldown_label.visible = false
 		return
 	if not is_active and progress < 1.0 and remaining_seconds > 0.05:
 		cooldown_label.text = str(int(ceil(remaining_seconds)))
@@ -534,6 +587,10 @@ func _draw() -> void:
 	draw_rect(inner, Color(0.12, 0.09, 0.07), true)
 
 	_draw_icon(inner)
+
+	if locked_level > 0:
+		_draw_lock(inner)
+		return
 
 	## Buğulu bekleme örtüsü SADECE cooldown'dayken (aktif değilken) çizilir -
 	## aktif süre artık kendi ayrı, kenarları daralan çerçevesiyle (aşağıda)
@@ -571,6 +628,27 @@ func _draw() -> void:
 		_draw_rect_perimeter_partial(outer, active_fraction, Color(1.0, 0.9, 0.4, 0.95), 3.0)
 
 	_draw_charge_ring()
+
+
+## Kilitli yuva: koyu örtü + üst yarıda piksel asma kilit (gövde + halka, 1 px koyu kontur). Seviye numarası _lock_label.
+func _draw_lock(inner: Rect2) -> void:
+	draw_rect(inner, Color(0.04, 0.03, 0.02, 0.72), true)
+	var px: float = maxf(1.0, round(inner.size.x / 22.0))
+	var c := Vector2(inner.position.x + inner.size.x * 0.5, inner.position.y + inner.size.y * 0.36)
+	var body := Rect2(c + Vector2(-4.0, -1.0) * px, Vector2(8.0, 6.0) * px)
+	var outline := Color(0.08, 0.05, 0.03, 1.0)
+	var gold := Color(0.93, 0.74, 0.3, 1.0)
+	var gold_d := Color(0.7, 0.5, 0.18, 1.0)
+	## halka (ters U)
+	draw_rect(Rect2(c + Vector2(-4.0, -6.0) * px, Vector2(8.0, 6.0) * px), outline, true)
+	draw_rect(Rect2(c + Vector2(-3.0, -5.0) * px, Vector2(6.0, 5.0) * px), gold_d, true)
+	draw_rect(Rect2(c + Vector2(-2.0, -4.0) * px, Vector2(4.0, 4.0) * px), outline, true)
+	draw_rect(Rect2(c + Vector2(-1.0, -3.0) * px, Vector2(2.0, 3.0) * px), Color(0.04, 0.03, 0.02, 1.0), true)
+	## gövde
+	draw_rect(body.grow(px), outline, true)
+	draw_rect(body, gold, true)
+	draw_rect(Rect2(body.position + Vector2(0.0, body.size.y - px), Vector2(body.size.x, px)), gold_d, true)
+	draw_rect(Rect2(c + Vector2(-0.5, 1.0) * px, Vector2(1.0, 2.0) * px), outline, true) ## anahtar deliği
 
 
 ## bkz. set_charge_progress üstündeki kullanıcı isteği notu - StackBadge'in

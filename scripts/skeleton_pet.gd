@@ -48,7 +48,11 @@ const SPRITE_FPS := 8.6
 const SEEK_RADIUS := 420.0
 const MELEE_STOP_RANGE := 42.0
 const MELEE_RESUME_CHASE_RANGE := 70.0
-const ATTACK_INTERVAL := 1.0
+## Kullanıcı bildirimi (2026-09-24): "necromancerın iskeleti çok yavaş az vuruyor ve güçsüz" - kök neden (vuruş sıklığı):
+## bekleme eskiden saldırı animasyonu (9 kare / 8.6 fps = 1.05sn) BİTTİKTEN sonra sayılmaya başlıyordu, gerçek aralık ~2sn
+## idi. Artık bekleme vuruş ANINDA başlar ve animasyon ondan kısa sürer: 0.75sn'de bir vuruş (~2.7 kat daha sık).
+const ATTACK_INTERVAL := 0.75
+const ATTACK_ANIM_FPS := 15.0 ## 9 kare -> 0.6sn (ATTACK_INTERVAL'den kısa, bir sonraki vuruşu geciktirmez)
 const FOLLOW_DISTANCE := 90.0
 const CATCH_UP_DISTANCE := 320.0
 
@@ -67,6 +71,12 @@ var attack_power: float = 5.0 ## melee vuruş başına hasar (necro'nun saldır�
 ## tscn'deki (aynı 64px hücreli) düşman İskelet'in gerçek CollisionShape2D
 ## yarıçapıyla (18.7) AYNI tutuldu, tutarlılık için.
 var _body_radius: float = 18.7
+
+## Duvar dolanma (bkz. pet_router.gd) - hedefe/sahibine giden düz çizgiyi orman duvarı kesince A* rotası.
+const PetRouterScript := preload("res://scripts/pet_router.gd")
+## Sahibinden çok uzakta ve arada duvar varken rotayı bu hız çarpanıyla izler (ışınlanır gibi lerp duvardan geçirirdi).
+const CATCH_UP_ROUTE_SPEED_MULT := 2.5
+var _router = PetRouterScript.new()
 
 var owner_player: Node2D = null
 var is_dead: bool = false
@@ -124,14 +134,17 @@ func _ready() -> void:
 ## %30). hp_percent: canın oranı (İskelet için %100, bkz. beni oku.txt).
 ## NOT: Necromancer'ın kalkanı bu yaratığa hiç kopyalanmıyor - beni oku.txt:
 ## "İskelet ... fakat kalkanları yoktur."
-func setup_from_player(player: Node, stat_percent: float, hp_percent: float, life: float) -> void:
+## speed_percent >= 0: hareket hızı stat_percent'ten BAĞIMSIZ bu oranla ölçeklenir (golem_pet.gd'deki AYNI desen). Kullanıcı
+## bildirimi (2026-09-24, "iskelet çok yavaş"): hız eskiden saldırı oranıyla (%30) ölçekleniyordu - Necro 252 iken iskelet
+## ~76 birim/sn ile düşmanlara zor yetişiyordu.
+func setup_from_player(player: Node, stat_percent: float, hp_percent: float, life: float, speed_percent: float = -1.0) -> void:
 	owner_player = player
 	lifespan = life
 	if "max_health" in player:
 		max_health = max(1.0, float(player.max_health) * hp_percent)
 	health = max_health
 	if "speed" in player:
-		speed = max(30.0, float(player.speed) * stat_percent)
+		speed = max(30.0, float(player.speed) * (speed_percent if speed_percent >= 0.0 else stat_percent))
 	if "damage_bonus" in player:
 		attack_power = max(1.0, float(player.damage_bonus) * stat_percent)
 
@@ -178,7 +191,7 @@ func mark_as_network_visual() -> void:
 ## remote_player.gd _update_pet_visual_state() üzerinden buraya ulaşır.
 var _last_network_is_attacking: bool = false
 
-func update_network_pet_state(pos: Vector2, is_attacking: bool, sprite_row: int = -1) -> void:
+func update_network_pet_state(pos: Vector2, is_attacking: bool, sprite_row: int = -1, _teleport: bool = false) -> void:
 	_network_target_position = pos
 	_network_state_received = true
 	if sprite_row >= 0:
@@ -252,17 +265,25 @@ func _update_focus_target() -> void:
 ## enemy.gd/player.gd zaten bunu çağırıyordu, bu pet script'i hiç
 ## çağırmıyordu - bkz. enemy.gd _block_movement_into_terrain() ile BİREBİR
 ## AYNI fonksiyon.
+## DÜZELTME (kullanıcı bildirimi 2026-09-24: "Necromancerın tüm yaratıkları duvarları dolanmayı bilmiyor"): eskiden
+## is_position_blocked_by_TERRAIN (su + ev + orman) kullanılıyordu - oyuncu ve yaratıklar ise yıllardır SADECE ormanla
+## engelleniyor (su/ev bilerek açık, bkz. enemy.gd _block_movement_into_terrain notu) ve duvar dolanma A*'ı da
+## (pet_router.gd / enemy_pathing.gd) sadece ormanı bilir - su/ev engeli rotayı izleyen peti suyun kıyısında
+## hapsederdi. Artık oyuncu/yaratıklarla aynı kural: sadece orman. Zaten ormanın İÇİNDEYSE engelleme atlanır
+## (sonsuza dek hapsolmasın - enemy.gd/player.gd ile aynı güvenlik ağı).
 func _block_movement_into_terrain() -> void:
 	if velocity.length() < 0.1:
+		return
+	if GameManager.is_position_blocked_by_forest(global_position):
 		return
 	var probe_dist: float = 10.0
 	if velocity.x != 0.0:
 		var probe_x: Vector2 = global_position + Vector2(sign(velocity.x) * probe_dist, 0.0)
-		if GameManager.is_position_blocked_by_terrain(probe_x):
+		if GameManager.is_position_blocked_by_forest(probe_x):
 			velocity.x = 0.0
 	if velocity.y != 0.0:
 		var probe_y: Vector2 = global_position + Vector2(0.0, sign(velocity.y) * probe_dist)
-		if GameManager.is_position_blocked_by_terrain(probe_y):
+		if GameManager.is_position_blocked_by_forest(probe_y):
 			velocity.y = 0.0
 
 
@@ -284,10 +305,12 @@ func _process_movement(delta: float) -> void:
 		elif dist <= MELEE_STOP_RANGE:
 			_in_melee_stance = true
 		if not _in_melee_stance:
-			velocity = to_target.normalized() * speed + separation
+			## Duvar arkasındaki hedefe A* rotasıyla dolanır (bkz. pet_router.gd); rota izlerken yürüdüğü yöne bakar.
+			var chase_dir: Vector2 = _router.direction(global_position, _focus_target.global_position, delta)
+			velocity = chase_dir * speed + separation
 			_block_movement_into_terrain()
 			move_and_slide()
-			_update_facing(to_target)
+			_update_facing(chase_dir if _router.following_route else to_target)
 		else:
 			velocity = separation
 			_block_movement_into_terrain()
@@ -310,14 +333,24 @@ func _process_movement(delta: float) -> void:
 		## yayınlandığı için (bkz. _broadcast_network_state) uzak
 		## istemcilerdeki kozmetik kopya da otomatik olarak düzeliyor, ayrıca
 		## bir değişikliğe gerek yok.
-		var catch_up_target: Vector2 = owner_player.global_position - to_owner.normalized() * FOLLOW_DISTANCE
-		global_position = global_position.lerp(catch_up_target, min(1.0, delta * 6.0))
-		velocity = Vector2.ZERO
+		## Sahibiyle arasında orman duvarı varsa yumuşak yakalama (lerp) peti duvarın İÇİNDEN geçirirdi - o durumda
+		## rotayı hızlandırılmış yürüyüşle izler (bkz. pet_router.gd), düz çizgi açıkken eski hızlı yakalama aynen.
+		var catch_dir: Vector2 = _router.direction(global_position, owner_player.global_position, delta)
+		if _router.following_route:
+			velocity = catch_dir * speed * CATCH_UP_ROUTE_SPEED_MULT + separation
+			_block_movement_into_terrain()
+			move_and_slide()
+			_update_facing(catch_dir)
+		else:
+			var catch_up_target: Vector2 = owner_player.global_position - to_owner.normalized() * FOLLOW_DISTANCE
+			global_position = global_position.lerp(catch_up_target, min(1.0, delta * 6.0))
+			velocity = Vector2.ZERO
 	elif dist_owner > FOLLOW_DISTANCE:
-		velocity = to_owner.normalized() * speed + separation
+		var follow_dir: Vector2 = _router.direction(global_position, owner_player.global_position, delta)
+		velocity = follow_dir * speed + separation
 		_block_movement_into_terrain()
 		move_and_slide()
-		_update_facing(to_owner)
+		_update_facing(follow_dir)
 	else:
 		velocity = separation
 		_block_movement_into_terrain()
@@ -394,7 +427,8 @@ func _advance_animation(delta: float) -> void:
 	if _animation_state == "death" or _animation_state == "attack":
 		var action_texture: Texture2D = DEATH_TEXTURE if _animation_state == "death" else ATTACK_TEXTURE
 		var action_frames: int = max(int(action_texture.get_width() / float(CELL_SIZE)), 1)
-		var action_duration: float = action_frames / SPRITE_FPS
+		var action_fps: float = SPRITE_FPS if _animation_state == "death" else ATTACK_ANIM_FPS
+		var action_duration: float = action_frames / action_fps
 		if _animation_elapsed >= action_duration:
 			if _animation_state == "death":
 				queue_free()
@@ -402,7 +436,7 @@ func _advance_animation(delta: float) -> void:
 			_set_locomotion_state("walk" if (velocity.length() > 0.1 and not _in_melee_stance) else "idle")
 			_animation_elapsed = 0.0
 		else:
-			sprite.frame = _sprite_row * action_frames + min(int(_animation_elapsed * SPRITE_FPS), action_frames - 1)
+			sprite.frame = _sprite_row * action_frames + min(int(_animation_elapsed * action_fps), action_frames - 1)
 			return
 	## DÜZELTME (kullanıcı bildirimi: "necromancerın iskeletleri yürümeleri
 	## gerekmese bile yürüme animasyonu yapıyorlar yaratıklara doğru"): eskiden
@@ -455,9 +489,10 @@ func _play_attack_animation() -> void:
 
 
 func _process_attack(delta: float) -> void:
+	## Bekleme animasyon sırasında da akar (bkz. ATTACK_INTERVAL notu); yeni vuruş yine de önceki animasyon bitince başlar.
+	_attack_timer -= delta
 	if _animation_state == "attack":
 		return
-	_attack_timer -= delta
 	if _attack_timer > 0.0:
 		return
 	if not _focus_target or not is_instance_valid(_focus_target) or _focus_target.get("is_dead") == true:

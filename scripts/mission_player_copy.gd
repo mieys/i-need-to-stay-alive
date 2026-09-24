@@ -7,14 +7,10 @@ class_name MissionPlayerCopy
 ## RGB invert shader yerine COPY_TINT_SHADER_CODE: mor "gölge klonu" tonu (bkz. orada).
 ## 5 dakika sürer, öldürülmezse yok olur (ödülsüz).
 ##
-## GERÇEK SİLAH ATEŞLEMEZ (bilinen basitleştirme, bkz. world_event_manager.gd dosya başı notu):
-## weapon.gd tamamen Player'a bağlı (attack_power/skills/vs. okuyor), bir NPC'ye güvenle
-## takmak ciddi bir ek risk/efor - onun yerine temas hasarı (basit kovalama + değme) kullanıldı.
-## GÜNCELLEME (kullanıcı bildirimi 2026-09-24: "kopyanın silahları görünmüyor ... tıpkı benim gibi silahları olmalı
-## fakat yetenek kullanamamalı"): kopya artık kaynak oyuncunun silahlarını (remote_player.gd'deki kozmetik ikonlarla
-## AYNI doku/ölçek/yerleşim kuralı) üstünde taşır, hedefe nişan alır; menzilli saldırıları sırayla bu silahların
-## namlusundan çıkar (geri tepmeyle), yakın dövüş silahları temasta savrulur. Hasar dengesi eskisiyle aynı (bkz.
-## _fire_next_weapon). Silah listesi world_event_manager.gd _spawn_copies'te kaynaktan okunur, istemcilere meta ile gider.
+## weapon.gd'nin KENDİSİ TAKILMAZ (tamamen Player'a bağlı - attack_power/skills/vs. okuyor). Kopya kaynak oyuncunun
+## silahlarını (remote_player.gd'deki kozmetik ikonlarla AYNI doku/ölçek/yerleşim kuralı) üstünde taşır ve her silah
+## sahnesinin kendi atış aralığı/menzil/hasar oranıyla saldırır (bkz. aşağıdaki "saldıramıyor" notu). Silah listesi
+## world_event_manager.gd _spawn_copies'te kaynaktan okunur, istemcilere meta ile gider.
 ##
 ## HASAR ALMA UYUMLULUĞU: enemy.gd'deki GERÇEK yaratıklarla AYNI çağrı imzası
 ## (take_damage(amount, is_crit, shield_pen_percent, is_area)) - weapon.gd zaten TÜM hedeflerini
@@ -24,25 +20,63 @@ class_name MissionPlayerCopy
 ## hedefleyip vurabilmesini sağlıyor.
 ##
 ## AĞ MİMARİSİ: SADECE host gerçek simüle eder (hareket/hasar/ölüm) - bkz. enemy.gd'nin AYNI
-## deseni. Diğer istemcilerde bu Node salt kozmetik, konumunu/canlılığını
+## deseni. Diğer istemcilerde bu Node salt kozmetik, konumunu/canlılığını/can-kalkan oranını
 ## NetworkManager.world_event_copy_state'ten alır (bkz. network_manager.gd notu).
 
 const DAMAGE_TAKEN_MULT := 0.10
 const DAMAGE_DEALT_MULT := 0.10
 const SPEED_MULT := 0.80
-const CONTACT_RANGE := 34.0
-const CONTACT_INTERVAL := 0.8
 const LIFETIME := 300.0
 const SYNC_INTERVAL := 0.15
-## DÜZELTME (kullanıcı bildirimi: "kopyanın ... silahları yok bize saldıramıyorlar bu yüzden") -
-## dosya başı nottaki bilinen basitleştirme ("gerçek silah ateşlemez, sadece temas hasarı")
-## kopyayı neredeyse zararsız yapıyordu (oyuncu menzilli silahla kolayca kaçıp öldürebiliyor,
-## kopya asla yaklaşamıyor). weapon.gd'yi bir NPC'ye bağlamak hâlâ riskli (Player'a sıkı bağımlı,
-## bkz. o not) - onun yerine mission_tree.gd _try_fire_at_nearest_enemy ile AYNI, zaten kanıtlanmış
-## "basit mermi at" deseni kullanılıyor: kopya artık menzilden de gerçek bir tehdit.
-const RANGED_RANGE := 320.0
-const RANGED_INTERVAL := 1.4
-const ProjectileScene := preload("res://scenes/projectile.tscn")
+## Kullanıcı isteği (2026-09-24): "Kopyanın canı ve kalkanı normal oyuncunun 3 katı olmalı" + "kopyanın kalkanı yok".
+## Kalkan = kaynak oyuncunun kalkan maksimumu (item_shield_max) x3; oyuncunun kalkanı yoksa (henüz kalkan eşyası
+## seçilmemiş) canının SHIELD_FALLBACK_OF_HP oranı taban alınır ki kopya yine kalkansız doğmasın. Hasar önce kalkandan
+## düşer (mission_tree.gd ile aynı), SHIELD_REGEN_DELAY sn hasar almayınca saniyede max'ın SHIELD_REGEN_PER_SEC'i dolar.
+const HEALTH_MULT := 3.0
+const SHIELD_MULT := 3.0
+const SHIELD_FALLBACK_OF_HP := 0.3
+const SHIELD_REGEN_DELAY := 7.0
+const SHIELD_REGEN_PER_SEC := 0.05
+
+## DÜZELTME (kullanıcı bildirimi 2026-09-24: "kopyanın silahları var ama saldıramıyor"). Kök nedenler: (1) mermi, hedefin
+## ATEŞ ANINDAKİ noktasına uçup SADECE orada 28 px içinde kalan oyuncuya vuruyordu - 340 px/sn mermi 300 px'i ~0.9 sn'de
+## alıyor, bu sürede yürüyen oyuncu ~75 px uzaklaşıyor: hareket eden oyuncuya neredeyse hiç isabet etmiyordu; (2) tüm
+## silahlar TEK ortak 1.4 sn sayaçla sırayla ateşliyordu, sadece yakın dövüş silahı olan kopya HİÇ mermi atmıyordu;
+## (3) yakın dövüş sadece 34 px temasla vuruyordu ama kopya oyuncudan %20 yavaş olduğu için hiç yetişemiyordu.
+## Artık HER silah kendi sahnesindeki atış aralığı/menzil/hasar oranıyla (weapon.gd'deki fire_rate, attack_range x0.9,
+## card_damage_bonus_ratio) bağımsız saldırır; menzilli mermi hedefin gideceği yere hafif önden nişan alır ve yolu
+## boyunca değdiği İLK oyuncuya vurur (bkz. mission_copy_bolt.gd); yakın dövüş silahları kendi erişimi içinde doğrudan
+## vurur. Hasar: kaynak oyuncunun taban "Hasar" statı (damage_bonus) x silah oranı x DAMAGE_DEALT_MULT (orijinal
+## "%90 az hasar" kuralı aynen - kopya oyuncuyla birlikte güçlenir).
+const MELEE_REACH := 62.0
+const UZUNKILIC_REACH := 115.0 ## weapon.gd _ready: uzunkılıç attack_range = 115
+const DEFAULT_RANGED_RANGE := 260.0 ## sahnede attack_range = 0 (sınırsız) olan menzilli silahlar için
+const BOLT_SPEED := 340.0 ## mission_copy_bolt.gd SPEED ile aynı
+const AIM_LEAD := 0.6 ## hedefin hızına göre önden nişan oranı (1 = kusursuz; <1 = kaçılabilir)
+
+## DÜZELTME (kullanıcı bildirimi 2026-09-24: "kopya sapık gibi karakteri anlık takip ediyor daha farklı olmalı
+## hareketleri"). Eskiden her karede hedefin O ANKİ konumuna dümdüz yürüyordu. Artık bir oyuncu gibi dövüşür:
+## - Tepki gecikmesi: hedefin konumunu REACTION_MIN..MAX sn'de bir (küçük bir sapmayla) "görür", arada eski bilgiyle
+##   hareket eder - ani yön değişimlerine gecikmeli tepki verir.
+## - Mesafe tutma: menzilli silahı varsa en kısa menzilinin ~%70'inde durup çevresinde dolaşır (strafe), çok yakına
+##   gelinirse geri çekilir; sadece yakın dövüş silahı varsa yaklaşıp etrafında döner.
+## - Davranış kipleri (MODE_*): yana kayma (yön ara ara değişir), kısa duraklama (nişan alıyormuş gibi), rastgele
+##   bir açıya yeniden konumlanma; uzaktaysa (FAR_CHASE_DIST) doğrudan yaklaşır.
+## - İvme: hız anında değil ACCEL ile değişir (keskin zikzak yerine yumuşak dönüşler).
+## - Duvarlar: orman duvarına girmez; araya duvar girerse yaratıklarla aynı A* yol bulmayı (enemy_pathing.gd) kullanır.
+const REACTION_MIN := 0.25
+const REACTION_MAX := 0.5
+const PERCEPTION_JITTER := 20.0
+const ACCEL := 650.0
+const FAR_CHASE_DIST := 600.0
+const MELEE_PREFERRED_DIST := 36.0
+const MODE_APPROACH := 0
+const MODE_STRAFE := 1
+const MODE_HOLD := 2
+const MODE_REPOSITION := 3
+const ROUTE_REPLAN := 1.0
+const ROUTE_WAYPOINT_REACHED := 12.0
+const EnemyPathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
 
 ## Mor gölge klonu tonu: rengin %72'si parlaklığa göre mor bir rampaya kayar (koyular derin mor, açıklar soluk
 ## lavanta) - karakter ve silahları tanınır kalır ama oyuncudan net ayrışır (eskiden koyu karakterlerde sadece
@@ -72,15 +106,32 @@ var is_dead: bool = false
 var _is_host_simulated: bool = true
 var health: float = 100.0
 var max_health: float = 100.0
-var contact_damage: float = 6.0 ## bkz. dosya başı not - setup() içinde ZATEN %10'a indirilmiş
+var shield: float = 0.0
+var max_shield: float = 0.0
+var _no_damage_timer: float = 0.0
+## Kaynak oyuncunun taban "Hasar" statı (setup'ta; host'ta her saldırıda source_player'dan tazelenir).
+var damage_bonus: float = 10.0
 var move_speed: float = 200.0
 var _lifetime_left: float = LIFETIME
-var _contact_timer: float = 0.0
-var _ranged_timer: float = 0.0
 var _sync_timer: float = 0.0
 var _target: Node2D = null
-## Kopyalanan oyuncu (host'ta; yerel Player ya da RemotePlayer kuklası). Hız her karede ondan okunur - bkz. _physics_process.
+## Kopyalanan oyuncu (host'ta; yerel Player ya da RemotePlayer kuklası). Hız/hasar ondan okunur - bkz. _physics_process.
 var source_player: Node2D = null
+## Hareket yapay zekâsı (bkz. yukarıdaki "sapık gibi takip" notu).
+var _perceived_pos: Vector2 = Vector2.ZERO
+var _has_perception: bool = false
+var _reaction_timer: float = 0.0
+var _target_vel: Vector2 = Vector2.ZERO
+var _target_last_pos: Vector2 = Vector2.ZERO
+var _mode: int = MODE_APPROACH
+var _mode_timer: float = 0.0
+var _strafe_sign: float = 1.0
+var _reposition_point: Vector2 = Vector2.ZERO
+var _preferred_dist: float = MELEE_PREFERRED_DIST
+var _route: PackedVector2Array = PackedVector2Array()
+var _route_index: int = 0
+var _route_timer: float = 0.0
+var _fallback_attack_timer: float = 0.0
 ## Kullanıcı bildirimi (2026-09-24): "kopya ... normal bir şekilde hareket etmesi gerekiyor" - kopya her zaman idle_down
 ## oynatıp kayıyordu, istemcide de host'tan saniyede ~7 kez (SYNC_INTERVAL) gelen konuma her pakette SIÇRIYORDU.
 ## Artık yöne göre walk_/idle_ klibi oynar, istemcide konum son gelen hedefe yumuşakça yaklaşır (NET_SMOOTHING).
@@ -91,17 +142,13 @@ var _net_pos: Vector2 = Vector2.ZERO
 var _has_net_pos: bool = false
 
 var anim: AnimatedSprite2D = null
-## Kullanıcı isteği: "kopyanın canı kalkanı görünmüyor" - enemy.gd/mission_tree.gd ile AYNI
-## paylaşılan overhead_bar.gd (bkz. o dosyaların _create_overhead_bar/_ready deseni). Kopyada
-## kalkan STAT'ı yok (health/max_health dışında hiç eklenmedi) - set_shield(0,0) ile çubuğun
-## kalkan bölümü boş/gizli kalır, bu YENİ bir mekanik icat etmez, sadece can çubuğunu gösterir.
+## enemy.gd/mission_tree.gd ile AYNI paylaşılan overhead_bar.gd (can + kalkan).
 var _overhead_bar: Node2D = null
 var _visual_root: Node2D = null
 var _tint_material: ShaderMaterial = null
-## Silah ikonları: her giriş {"icon": Node2D, "key": String, "melee": bool, "forward": float (rad), "mirror": bool,
-## "slot": Vector2, "recoil": float}
+## Silah ikonları + saldırı verileri: her giriş {"icon": Node2D, "key": String, "melee": bool, "forward": float (rad),
+## "mirror": bool, "slot": Vector2, "recoil": float, "interval": float (sn), "ratio": float, "reach": float, "timer": float}
 var _weapons: Array = []
-var _next_weapon: int = 0
 var _hover_t: float = 0.0
 
 
@@ -133,22 +180,32 @@ func _ready() -> void:
 	_overhead_bar.visible = true
 	_overhead_bar.call("set_offset", -30.0)
 	_overhead_bar.call("set_health", health, max_health)
-	_overhead_bar.call("set_shield", 0.0, 0.0)
+	_overhead_bar.call("set_shield", shield, max_shield)
 	set_physics_process(true)
 	NetworkManager.world_event_copy_state.connect(_on_net_state)
 	NetworkManager.world_event_copy_damage_requested.connect(_on_remote_damage)
+	NetworkManager.world_event_copy_swing.connect(_on_net_swing)
 
 
-func setup(mid: int, idx: int, char_id: int, p_max_health: float, p_speed: float, p_contact_damage: float, simulated: bool) -> void:
+## p_max_health / p_max_shield: KAYNAK oyuncunun değerleri (x3 burada uygulanır). İstemcideki kozmetik kopyada can/kalkan
+## ORANLARI ağdan geldiği için bu değerler sadece çubuğun kalkan bölümünün görünmesi için önemli.
+func setup(mid: int, idx: int, char_id: int, p_max_health: float, p_max_shield: float, p_speed: float,
+		p_damage_bonus: float, simulated: bool) -> void:
 	mission_id = mid
 	copy_index = idx
 	_is_host_simulated = simulated
-	max_health = maxf(20.0, p_max_health)
+	var base_hp: float = p_max_health if p_max_health >= 20.0 else 100.0 ## yerdeyken max_hp 1.0 senkronlanıyor
+	max_health = base_hp * HEALTH_MULT
 	health = max_health
+	var base_shield: float = p_max_shield if p_max_shield > 0.0 else base_hp * SHIELD_FALLBACK_OF_HP
+	max_shield = base_shield * SHIELD_MULT
+	shield = max_shield
 	move_speed = p_speed * SPEED_MULT
-	contact_damage = p_contact_damage * DAMAGE_DEALT_MULT
+	damage_bonus = p_damage_bonus
+	_strafe_sign = 1.0 if randf() < 0.5 else -1.0
 	if _overhead_bar:
 		_overhead_bar.call("set_health", health, max_health)
+		_overhead_bar.call("set_shield", shield, max_shield)
 	var def: Dictionary = Characters.get_def(char_id)
 	var path: String = def.get("frames", "")
 	if path != "" and ResourceLoader.exists(path):
@@ -162,20 +219,20 @@ func setup(mid: int, idx: int, char_id: int, p_max_health: float, p_speed: float
 
 
 ## Kaynak oyuncunun silahları (shop anahtarları, ör. ["dagger", "yay"]) - host'ta world_event_manager.gd, istemcide
-## main.gd (meta "weapons") çağırır. Kozmetik ikon + atış çıkış noktası; weapon.gd'nin kendisi TAKILMAZ (Player'a bağlı).
+## main.gd (meta "weapons") çağırır. Kozmetik ikon + saldırı verileri; weapon.gd'nin kendisi TAKILMAZ (Player'a bağlı).
 func set_weapon_keys(keys: Array) -> void:
 	for w in _weapons:
 		if is_instance_valid(w["icon"]):
 			w["icon"].queue_free()
 	_weapons.clear()
-	_next_weapon = 0
 	var slots: Array[Vector2] = RemotePlayerScript.WEAPON_ICON_SLOTS
 	for i in range(mini(keys.size(), slots.size())):
 		var key: String = str(keys[i])
 		var scene: PackedScene = RemotePlayerScript.WEAPON_SCENES.get(key)
 		if scene == null:
 			continue
-		## Sahne AĞACA EKLENMEDEN örneklenir (weapon.gd _ready/zamanlayıcıları hiç çalışmaz), sadece Icon alınır.
+		## Sahne AĞACA EKLENMEDEN örneklenir (weapon.gd _ready/zamanlayıcıları hiç çalışmaz), sadece Icon + dışa
+		## aktarılan saldırı değerleri okunur.
 		var root: Node = scene.instantiate()
 		var icon: Node2D = root.get_node_or_null("Icon") as Node2D
 		if icon == null:
@@ -184,6 +241,18 @@ func set_weapon_keys(keys: Array) -> void:
 		root.remove_child(icon)
 		var forward: float = deg_to_rad(float(root.get("sprite_forward_angle_deg"))) if "sprite_forward_angle_deg" in root else 0.0
 		var mirror: bool = bool(root.get("mirror_icon_when_aiming_left")) if "mirror_icon_when_aiming_left" in root else false
+		## Saldırı verileri - weapon.gd _ready'deki AYNI düzeltmelerle (yay aralığı /0.85, menzilli menzil x0.9).
+		var interval: float = float(root.get("fire_rate")) if "fire_rate" in root else 1.0
+		if key == "yay":
+			interval /= 0.85
+		var ratio: float = float(root.get("card_damage_bonus_ratio")) if "card_damage_bonus_ratio" in root else 1.0
+		var is_melee: bool = key in MELEE_KEYS
+		var reach: float = MELEE_REACH
+		if key == "uzunkilic":
+			reach = UZUNKILIC_REACH
+		elif not is_melee:
+			var ar: float = float(root.get("attack_range")) if "attack_range" in root else 0.0
+			reach = ar * 0.9 if ar > 0.0 else DEFAULT_RANGED_RANGE
 		root.free()
 		## remote_player.gd update_weapon_visuals ile AYNI doku/ölçek kuralı (asalar v3 ikon + x0.3, diğerleri x0.9).
 		var wand_tex: String = ""
@@ -204,8 +273,20 @@ func set_weapon_keys(keys: Array) -> void:
 		icon.position = slots[i]
 		icon.material = _tint_material
 		_visual_root.add_child(icon)
-		_weapons.append({"icon": icon, "key": key, "melee": key in MELEE_KEYS, "forward": forward, "mirror": mirror,
-			"slot": slots[i], "recoil": 0.0})
+		interval = maxf(0.25, interval)
+		_weapons.append({"icon": icon, "key": key, "melee": is_melee, "forward": forward, "mirror": mirror,
+			"slot": slots[i], "recoil": 0.0, "interval": interval, "ratio": ratio, "reach": reach,
+			"timer": randf_range(0.3, 1.0) * interval})
+	_recompute_preferred_dist()
+
+
+## Menzilli silahı varsa en KISA menzilinin ~%70'i (hepsi ateş edebilsin), yoksa yakın dövüş mesafesi.
+func _recompute_preferred_dist() -> void:
+	var min_ranged: float = INF
+	for w in _weapons:
+		if not w["melee"]:
+			min_ranged = minf(min_ranged, float(w["reach"]))
+	_preferred_dist = clampf(min_ranged * 0.7, 110.0, 230.0) if min_ranged < INF else MELEE_PREFERRED_DIST
 
 
 ## Her karede (host ve istemci): silahlar hedefe nişan alır, hafifçe süzülür, geri tepme söner.
@@ -228,7 +309,7 @@ func _update_weapon_icons(delta: float) -> void:
 		var bob: float = sin(_hover_t * 2.4 + float(i) * 1.3) * HOVER_BOB
 		icon.position = (w["slot"] as Vector2) + Vector2(0.0, bob) - dir * float(w["recoil"])
 		if w["melee"]:
-			continue ## yakın dövüş silahı dinlenme açısında kalır, temasta savrulur (_swing_melee)
+			continue ## yakın dövüş silahı dinlenme açısında kalır, vuruşta savrulur (_swing_melee_icon)
 		var flip: bool = bool(w["mirror"]) and dir.x < 0.0
 		var target_rot: float = (dir.angle() - PI + float(w["forward"])) if flip else (dir.angle() - float(w["forward"]))
 		if icon is Sprite2D:
@@ -236,32 +317,65 @@ func _update_weapon_icons(delta: float) -> void:
 		icon.rotation = lerp_angle(icon.rotation, target_rot, clampf(delta * AIM_EASE_RATE, 0.0, 1.0))
 
 
-## Menzilli saldırı: sıradaki MENZİLLİ silahın konumundan bolt (hasar/aralık eskisiyle aynı - toplam DPS değişmedi).
-## Silahı yoksa (ör. yaratıkla doğmuş eski kayıt) eskisi gibi gövdeden atar; sadece yakın dövüş silahı varsa atmaz.
-func _fire_next_weapon(target: Node2D) -> void:
-	var ranged: Array = _weapons.filter(func(w: Dictionary) -> bool: return not w["melee"] and is_instance_valid(w["icon"]))
+## Her silah kendi sayacıyla saldırır (bkz. dosya başı "saldıramıyor" notu). Silahı hiç yoksa gövdeyle yakın dövüş
+## vuruşu yapar (eski kayıtlar/bozuk anahtar listesi için emniyet).
+func _process_attacks(delta: float, target: Node2D, dist: float) -> void:
+	if source_player and is_instance_valid(source_player):
+		var db: Variant = source_player.get("damage_bonus")
+		if db != null:
+			damage_bonus = float(db)
 	if _weapons.is_empty():
-		_fire_at(target, global_position)
+		_fallback_attack_timer -= delta
+		if dist <= MELEE_REACH and _fallback_attack_timer <= 0.0:
+			_fallback_attack_timer = 1.0
+			_melee_hit(target, _weapon_hit_damage(1.0))
 		return
-	if ranged.is_empty():
-		return
-	var w: Dictionary = ranged[_next_weapon % ranged.size()]
-	_next_weapon += 1
-	w["recoil"] = RECOIL_DISTANCE
-	_fire_at(target, (w["icon"] as Node2D).global_position)
-
-
-## Temas vuruşunda yakın dövüş silahları hedefe doğru kısa bir savuruş yapar (kozmetik).
-func _swing_melee(target: Node2D) -> void:
+	var shot_checked: bool = false
+	var shot_clear: bool = false
 	for w in _weapons:
-		if not w["melee"] or not is_instance_valid(w["icon"]):
+		if not is_instance_valid(w["icon"]):
 			continue
-		var icon: Node2D = w["icon"]
-		var dir: Vector2 = (target.global_position - global_position).normalized() if target else Vector2.RIGHT
-		var tw := create_tween()
-		tw.tween_property(icon, "rotation", dir.angle() + 1.2, 0.08)
-		tw.tween_property(icon, "rotation", dir.angle() - 0.9, 0.1)
-		tw.tween_property(icon, "rotation", 0.0, 0.18)
+		w["timer"] = float(w["timer"]) - delta
+		if float(w["timer"]) > 0.0 or dist > float(w["reach"]):
+			continue
+		if not w["melee"]:
+			## Orman duvarı arkasındaki hedefe mermi harcamasın (yaratıkların görüş hattı kuralıyla aynı katman).
+			if not shot_checked:
+				shot_checked = true
+				shot_clear = not EnemyPathingScript.line_blocked(global_position, target.global_position)
+			if not shot_clear:
+				continue
+		w["timer"] = float(w["interval"]) * randf_range(0.95, 1.1)
+		var dmg: float = _weapon_hit_damage(float(w["ratio"]))
+		if w["melee"]:
+			var swing_dir: Vector2 = (target.global_position - global_position).normalized()
+			_swing_melee_icon(w, swing_dir)
+			_melee_hit(target, dmg)
+			if NetworkManager.is_multiplayer_active:
+				NetworkManager.broadcast_world_event_copy_swing.rpc(mission_id, copy_index, swing_dir)
+		else:
+			w["recoil"] = RECOIL_DISTANCE
+			_fire_at(target, (w["icon"] as Node2D).global_position, dmg)
+
+
+func _weapon_hit_damage(ratio: float) -> float:
+	return maxf(1.0, damage_bonus * ratio * DAMAGE_DEALT_MULT)
+
+
+func _melee_hit(target: Node2D, dmg: float) -> void:
+	if target and is_instance_valid(target) and target.has_method("take_damage"):
+		target.take_damage(dmg, self)
+
+
+## Yakın dövüş silahı hedefe doğru kısa bir savuruş yapar (kozmetik).
+func _swing_melee_icon(w: Dictionary, dir: Vector2) -> void:
+	var icon: Node2D = w["icon"]
+	if dir.length() < 0.01:
+		dir = Vector2.RIGHT
+	var tw := create_tween()
+	tw.tween_property(icon, "rotation", dir.angle() + 1.2, 0.08)
+	tw.tween_property(icon, "rotation", dir.angle() - 0.9, 0.1)
+	tw.tween_property(icon, "rotation", 0.0, 0.18)
 
 
 func _physics_process(delta: float) -> void:
@@ -272,74 +386,195 @@ func _physics_process(delta: float) -> void:
 		if _has_net_pos:
 			var before: Vector2 = global_position
 			global_position = global_position.lerp(_net_pos, 1.0 - exp(-NET_SMOOTHING * delta))
-			_update_move_anim((global_position - before) / maxf(delta, 0.0001))
+			var near: Node2D = _find_nearest_player()
+			var face: Vector2 = (near.global_position - global_position) * 0.001 if near else Vector2.ZERO
+			_update_move_anim((global_position - before) / maxf(delta, 0.0001), face)
 		_update_weapon_icons(delta)
 		return
 	_lifetime_left -= delta
 	if _lifetime_left <= 0.0:
 		_expire()
 		return
-	_contact_timer -= delta
-	_ranged_timer -= delta
-	if not _target or not is_instance_valid(_target) or _target.get("is_dead") == true:
+	_process_shield_regen(delta)
+	if not _target or not is_instance_valid(_target) or _target.get("is_dead") == true or _target.get("is_downed") == true:
 		_target = _find_nearest_player()
-	## Kullanıcı isteği (2026-09-24): "hareket hızı kopyaladığı kişinin hızından %20 daha az olmalı" - setup'taki TEK
-	## seferlik değer yerine kopyalanan oyuncunun O ANKİ gerçek hızı (hız kartı/eşya/yetenek buff'ları dahil).
-	## DÜZELTME (kullanıcı bildirimi 2026-09-24: "ben yetenek kullanınca onda da aktif oluyor ... yetenek kullanamamalı"):
-	## eskiden get_effective_move_speed() okunuyordu - o, oyuncunun yetenek/ruhani/geçici hız buff'larını da içerdiği
-	## için (Elara Q, Matthew E, Taktiksel...) oyuncu yetenek kullanınca kopya da aynı anda hızlanıyordu. Artık SADECE
-	## kalıcı hız (taban + kart + eşya) kopyalanır (bkz. player.gd/remote_player.gd get_base_move_speed).
+		_has_perception = false
+	## Kullanıcı isteği (2026-09-24): "hareket hızı kopyaladığı kişinin hızından %20 daha az olmalı" - kalıcı hız (taban +
+	## kart + eşya; yetenek buff'ları HARİÇ - "yetenek kullanamamalı", bkz. player.gd/remote_player.gd
+	## get_base_move_speed) her karede yeniden okunur.
 	if source_player and is_instance_valid(source_player) and source_player.has_method("get_base_move_speed"):
 		move_speed = float(source_player.call("get_base_move_speed")) * SPEED_MULT
+	var desired := Vector2.ZERO
 	if _target:
-		var to_target: Vector2 = _target.global_position - global_position
-		var dist: float = to_target.length()
-		velocity = to_target.normalized() * move_speed if dist > 2.0 else Vector2.ZERO
-		move_and_slide()
-		_update_move_anim(velocity)
-		if dist <= CONTACT_RANGE and _contact_timer <= 0.0 and _target.has_method("take_damage"):
-			_contact_timer = CONTACT_INTERVAL
-			_target.take_damage(contact_damage, self)
-			_swing_melee(_target)
-		elif dist <= RANGED_RANGE and _ranged_timer <= 0.0:
-			_ranged_timer = RANGED_INTERVAL
-			_fire_next_weapon(_target)
-	else:
-		velocity = Vector2.ZERO
-		_update_move_anim(Vector2.ZERO)
+		_track_target(delta)
+		desired = _desired_direction(delta)
+		_process_attacks(delta, _target, global_position.distance_to(_target.global_position))
+	velocity = velocity.move_toward(desired * move_speed, ACCEL * delta)
+	_block_walls()
+	move_and_slide()
+	_clamp_to_map()
+	var look: Vector2 = Vector2.ZERO
+	if _target:
+		look = (_target.global_position - global_position) * 0.001 ## dururken hedefe bak (eşik altı: idle klibi)
+	_update_move_anim(velocity, look)
 	_update_weapon_icons(delta)
 	_sync_timer -= delta
 	if _sync_timer <= 0.0:
 		_sync_timer = SYNC_INTERVAL
 		if NetworkManager.is_multiplayer_active:
-			NetworkManager.broadcast_world_event_copy_state.rpc(mission_id, copy_index, global_position, true, health / max_health)
+			NetworkManager.broadcast_world_event_copy_state.rpc(mission_id, copy_index, global_position, true,
+				health / max_health, shield / maxf(max_shield, 0.001))
+
+
+func _process_shield_regen(delta: float) -> void:
+	_no_damage_timer += delta
+	if _no_damage_timer < SHIELD_REGEN_DELAY or shield >= max_shield:
+		return
+	shield = minf(max_shield, shield + max_shield * SHIELD_REGEN_PER_SEC * delta)
+	if _overhead_bar:
+		_overhead_bar.call("set_shield", shield, max_shield)
+
+
+## Hedefin hızını tahmin eder (nişan için) ve tepki gecikmesiyle "algılanan" konumunu günceller.
+func _track_target(delta: float) -> void:
+	var tp: Vector2 = _target.global_position
+	if _has_perception:
+		var inst_vel: Vector2 = (tp - _target_last_pos) / maxf(delta, 0.0001)
+		if inst_vel.length() < 1000.0: ## ışınlanma/yeniden doğuş sıçramasını yok say
+			_target_vel = _target_vel.lerp(inst_vel, clampf(delta * 6.0, 0.0, 1.0))
+	_target_last_pos = tp
+	_reaction_timer -= delta
+	if not _has_perception or _reaction_timer <= 0.0:
+		_reaction_timer = randf_range(REACTION_MIN, REACTION_MAX)
+		_perceived_pos = tp + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * PERCEPTION_JITTER
+		_has_perception = true
+
+
+func _desired_direction(delta: float) -> Vector2:
+	var to_t: Vector2 = _perceived_pos - global_position
+	var dist: float = to_t.length()
+	if dist < 0.5:
+		return Vector2.ZERO
+	var to_n: Vector2 = to_t / dist
+	## Araya duvar girdiyse önce dolan (yaratıklarla aynı A*); kipler ancak açık alanda.
+	if EnemyPathingScript.line_blocked(global_position, _perceived_pos):
+		var routed: Vector2 = _route_dir(delta)
+		return routed if routed != Vector2.ZERO else to_n
+	_route = PackedVector2Array()
+	_mode_timer -= delta
+	if dist > FAR_CHASE_DIST:
+		_mode = MODE_APPROACH
+		_mode_timer = 0.0
+	elif _mode_timer <= 0.0 or _mode == MODE_APPROACH:
+		_pick_mode(to_n)
+	match _mode:
+		MODE_HOLD:
+			if dist < _preferred_dist * 0.5:
+				return -to_n ## çok yakına gelindiyse dururken bile geri adım at
+			return Vector2.ZERO
+		MODE_REPOSITION:
+			var to_p: Vector2 = _reposition_point - global_position
+			if to_p.length() < 14.0:
+				_mode_timer = 0.0
+				return Vector2.ZERO
+			return to_p.normalized()
+		MODE_STRAFE:
+			## Radyal bileşen tercih edilen mesafeyi korur, teğet bileşen hedefin etrafında dolaştırır.
+			var radial: float = clampf((dist - _preferred_dist) / 70.0, -1.0, 1.0)
+			var tangent: Vector2 = to_n.orthogonal() * _strafe_sign
+			return (to_n * radial + tangent * 0.85).normalized()
+	return to_n
+
+
+func _pick_mode(to_n: Vector2) -> void:
+	var r: float = randf()
+	var melee_only: bool = _preferred_dist <= MELEE_PREFERRED_DIST
+	if r < (0.6 if melee_only else 0.5):
+		_mode = MODE_STRAFE
+		_mode_timer = randf_range(1.0, 2.6)
+		if randf() < 0.55:
+			_strafe_sign = -_strafe_sign
+	elif r < (0.75 if melee_only else 0.72):
+		_mode = MODE_HOLD
+		_mode_timer = randf_range(0.35, 0.9)
+	else:
+		_mode = MODE_REPOSITION
+		_mode_timer = randf_range(1.0, 2.0)
+		## Hedefin çevresinde, mevcut açıdan 40-100 derece sapmış, tercih edilen mesafede bir nokta.
+		var ang: float = (-to_n).angle() + randf_range(0.7, 1.75) * (1.0 if randf() < 0.5 else -1.0)
+		var d: float = _preferred_dist * randf_range(0.85, 1.2)
+		_reposition_point = _perceived_pos + Vector2.from_angle(ang) * d
+		if GameManager.is_position_blocked_by_forest(_reposition_point):
+			_mode = MODE_STRAFE
+
+
+func _route_dir(delta: float) -> Vector2:
+	_route_timer -= delta
+	if (_route.is_empty() or _route_timer <= 0.0) and EnemyPathingScript.can_request():
+		_route = EnemyPathingScript.find_path(global_position, _perceived_pos)
+		_route_index = 0
+		_route_timer = ROUTE_REPLAN
+	while _route_index < _route.size() and global_position.distance_to(_route[_route_index]) < ROUTE_WAYPOINT_REACHED:
+		_route_index += 1
+	if _route_index >= _route.size():
+		return Vector2.ZERO
+	return (_route[_route_index] - global_position).normalized()
+
+
+## Orman duvarına girmesin (collision_mask = 0 - fiziksel çarpışma yok; oyuncu/yaratıklarla aynı katman kuralı, bkz.
+## enemy.gd _block_movement_into_terrain). Duvara dayanınca yana kayma yönünü de çevirir. Zaten duvarın içindeyse
+## engelleme atlanır (sonsuza dek hapsolmasın - enemy.gd'deki aynı güvenlik ağı).
+func _block_walls() -> void:
+	if velocity.length_squared() < 0.01 or GameManager.is_position_blocked_by_forest(global_position):
+		return
+	var probe: float = 12.0
+	if velocity.x != 0.0 and GameManager.is_position_blocked_by_forest(global_position + Vector2(signf(velocity.x) * probe, 0.0)):
+		velocity.x = 0.0
+		_strafe_sign = -_strafe_sign
+	if velocity.y != 0.0 and GameManager.is_position_blocked_by_forest(global_position + Vector2(0.0, signf(velocity.y) * probe)):
+		velocity.y = 0.0
+		_strafe_sign = -_strafe_sign
+
+
+func _clamp_to_map() -> void:
+	var rect: Rect2 = GameManager.get_map_world_rect()
+	if rect.size == Vector2.ZERO:
+		return
+	global_position = global_position.clamp(rect.position, rect.end)
 
 
 const BoltScript := preload("res://scripts/mission_copy_bolt.gd")
 
 
-## Hareket vektörüne göre yürüme/bekleme klibi (4 yön, karakterlerin walk_/idle_<yön> adlandırması - bkz. char_anim.gd
-## DIRECTIONS). Klip yoksa (ör. eski bir SpriteFrames) sessizce mevcut klipte kalır.
-func _update_move_anim(move: Vector2) -> void:
+## Yürüme/bekleme klibi (4 yön, karakterlerin walk_/idle_<yön> adlandırması - bkz. char_anim.gd DIRECTIONS). Hareket
+## ederken hareket yönüne, dururken `face` yönüne (hedefe) bakar. Klip yoksa sessizce mevcut klipte kalır.
+func _update_move_anim(move: Vector2, face: Vector2 = Vector2.ZERO) -> void:
 	if anim == null or anim.sprite_frames == null:
 		return
 	var moving: bool = move.length() > 5.0
-	if moving:
-		if absf(move.x) > absf(move.y):
-			_facing = "right" if move.x > 0.0 else "left"
+	var look: Vector2 = move if moving else face
+	if look.length() > 0.0001:
+		if absf(look.x) > absf(look.y):
+			_facing = "right" if look.x > 0.0 else "left"
 		else:
-			_facing = "down" if move.y > 0.0 else "up"
+			_facing = "down" if look.y > 0.0 else "up"
 	var clip: String = ("walk_" if moving else "idle_") + _facing
 	if anim.sprite_frames.has_animation(clip) and anim.animation != clip:
 		anim.play(clip)
 
 
-func _fire_at(target: Node2D, from_pos: Vector2) -> void:
-	spawn_bolt(from_pos, target.global_position, contact_damage, self, false)
+## Hedefin gideceği yere (hızının AIM_LEAD oranında) önden nişan; mermi nişan noktasının biraz ötesine kadar uçar.
+func _fire_at(target: Node2D, from_pos: Vector2, dmg: float) -> void:
+	var tp: Vector2 = target.global_position
+	var t_flight: float = from_pos.distance_to(tp) / BOLT_SPEED
+	var aim: Vector2 = tp + _target_vel * t_flight * AIM_LEAD
+	var dir: Vector2 = (aim - from_pos).normalized() if aim.distance_to(from_pos) > 1.0 else Vector2.RIGHT
+	var end_pos: Vector2 = from_pos + dir * (from_pos.distance_to(aim) + 140.0)
+	spawn_bolt(from_pos, end_pos, dmg, self, false)
 	## Mermi SADECE host'ta gerçek (hasar veren) - diğer istemciler aynı atışın hasarsız
 	## kozmetik kopyasını görsün (bkz. CLAUDE.md "kaster görür, diğerleri görmez" sınıfı).
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_world_event_copy_bolt.rpc(from_pos, target.global_position)
+		NetworkManager.broadcast_world_event_copy_bolt.rpc(from_pos, end_pos)
 
 
 static func spawn_bolt(from_pos: Vector2, to_pos: Vector2, damage: float, source: Node2D, cosmetic: bool) -> void:
@@ -366,7 +601,7 @@ func _find_nearest_player() -> Node2D:
 	return best
 
 
-## Enemy.gd ile AYNI imza (bkz. dosya başı not) - gerçek oyuncu silahları bunu çağırır.
+## Enemy.gd ile AYNI imza (bkz. dosya başı not) - gerçek oyuncu silahları bunu çağırır. Hasar önce kalkandan düşer.
 func take_damage(amount: float, _is_crit: bool = false, _shield_pen_percent: float = 0.0, _is_area: bool = false) -> void:
 	if is_dead:
 		return
@@ -377,9 +612,16 @@ func take_damage(amount: float, _is_crit: bool = false, _shield_pen_percent: flo
 		if NetworkManager.is_multiplayer_active:
 			NetworkManager.request_world_event_copy_damage.rpc_id(NetworkManager._host_peer_id(), mission_id, copy_index, amount)
 		return
-	health = max(0.0, health - amount * DAMAGE_TAKEN_MULT)
+	var dmg: float = amount * DAMAGE_TAKEN_MULT
+	_no_damage_timer = 0.0
+	if shield > 0.0:
+		var absorbed: float = minf(shield, dmg)
+		shield -= absorbed
+		dmg -= absorbed
+	health = max(0.0, health - dmg)
 	if _overhead_bar:
 		_overhead_bar.call("set_health", health, max_health)
+		_overhead_bar.call("set_shield", shield, max_shield)
 	if health <= 0.0:
 		_die()
 
@@ -389,7 +631,7 @@ func _die() -> void:
 		return
 	is_dead = true
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_world_event_copy_state.rpc(mission_id, copy_index, global_position, false, 0.0)
+		NetworkManager.broadcast_world_event_copy_state.rpc(mission_id, copy_index, global_position, false, 0.0, 0.0)
 	queue_free()
 
 
@@ -398,8 +640,17 @@ func _expire() -> void:
 		return
 	is_dead = true
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_world_event_copy_state.rpc(mission_id, copy_index, global_position, false, 0.0)
+		NetworkManager.broadcast_world_event_copy_state.rpc(mission_id, copy_index, global_position, false, 0.0, 0.0)
 	queue_free()
+
+
+## Kozmetik kopyada: host'taki gerçek kopya yakın dövüş vuruşu yaptı - yakın dövüş ikonlarını aynı yöne savur.
+func _on_net_swing(mid: int, idx: int, dir: Vector2) -> void:
+	if _is_host_simulated or is_dead or mid != mission_id or idx != copy_index:
+		return
+	for w in _weapons:
+		if w["melee"] and is_instance_valid(w["icon"]):
+			_swing_melee_icon(w, dir)
 
 
 ## Host'ta: bir istemcinin kozmetik kopyaya verdiği hasar (bkz. take_damage) gerçek kopyaya uygulanır.
@@ -409,8 +660,8 @@ func _on_remote_damage(mid: int, idx: int, amount: float) -> void:
 	take_damage(amount)
 
 
-## Kozmetik kopyalarda (bkz. dosya başı not) - host'un gerçek kopyasından gelen konum/canlılık/can.
-func _on_net_state(mid: int, idx: int, pos: Vector2, alive: bool, health_ratio: float) -> void:
+## Kozmetik kopyalarda (bkz. dosya başı not) - host'un gerçek kopyasından gelen konum/canlılık/can/kalkan.
+func _on_net_state(mid: int, idx: int, pos: Vector2, alive: bool, health_ratio: float, shield_ratio: float) -> void:
 	if _is_host_simulated or mid != mission_id or idx != copy_index:
 		return
 	if not alive:
@@ -422,5 +673,7 @@ func _on_net_state(mid: int, idx: int, pos: Vector2, alive: bool, health_ratio: 
 	_net_pos = pos
 	_has_net_pos = true
 	health = max_health * clampf(health_ratio, 0.0, 1.0)
+	shield = max_shield * clampf(shield_ratio, 0.0, 1.0)
 	if _overhead_bar:
 		_overhead_bar.call("set_health", health, max_health)
+		_overhead_bar.call("set_shield", shield, max_shield)

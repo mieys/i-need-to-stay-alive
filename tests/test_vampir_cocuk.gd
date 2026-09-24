@@ -1,7 +1,7 @@
 extends Node
 
 ## Kullanıcı isteği (2026-09-21): yeni karakter "Vampir Çocuk" (roster id 13) - yetenekleri kalkan yerine can harcar
-## (Q/E maks. canın %4'ü, R açıkken saniyede %5'i), pasif %2 can emme + her 1 saldırı gücü için 1 can.
+## (Q/E maks. canın %4'ü, R açıkken saniyede %5'i), pasif %1 can emme + her 1 saldırı gücü için 1 can.
 ##   Q: yakındaki 3 düşmana %130 hasar + kalıcı +1 maks. can (6sn)
 ##   E: 5sn yarasa formu: %60 hız, %80 hasar azaltma, temas hasarı %80, silahlar gövdeye çekilir (22sn)
 ##   R: 6 küçük yarasa, %60 hasar, dönünce saldırı gücünün %5'i kadar can, hız saldırı hızıyla artar
@@ -174,11 +174,11 @@ func test_passive_max_health_follows_attack_power_and_lifesteal_is_two_percent()
 	player.damage_bonus -= 7.0
 	player._process_vampir(0.016)
 	assert(is_equal_approx(player.max_health, mid), "AP geri düşünce maks. can geri düşer")
-	## Can emme: hasarın %2'si (kullanıcı isteği: %4'ten %2'ye düşürüldü).
+	## Can emme: hasarın %1'i (kullanıcı isteği: %4 -> %2 -> 2026-09-24 %1).
 	player.health = player.max_health - 50.0
 	var h0: float = player.health
 	player.on_dealer_hit(100.0)
-	assert(is_equal_approx(player.health, h0 + 2.0), "100 hasar -> 2 can emme (%%2), bulunan +%s" % str(player.health - h0))
+	assert(is_equal_approx(player.health, h0 + 1.0), "100 hasar -> 1 can emme (%%1), bulunan +%s" % str(player.health - h0))
 	_cleanup()
 
 

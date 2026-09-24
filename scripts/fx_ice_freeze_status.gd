@@ -66,7 +66,23 @@ func _ready() -> void:
 ## enemy.gd bunu ekledikten hemen sonra çağırır. body_radius verilmezse
 ## (ör. eski bir çağrı yeri güncellenmemişse) REFERENCE_RADIUS'a düşer,
 ## yani scale=1.0 - hiç çökmez, sadece eski sabit boyuta benzer davranır.
+## DÜZELTME (kullanıcı isteği 2026-09-24: "yaratıklar tekrar dondurulduğunda donma efekti tekrar başlamasın donuk halde
+## kalsın süresi resetleniyor sadece"): donmuş bir yaratık yeniden donunca enemy.gd (_start_freeze / istemcide
+## _spawn_freeze_status_fx) MEVCUT efektte setup()'ı tekrar çağırıyor - eskiden _elapsed = 0 ile buz oluşma (intro)
+## animasyonu baştan oynuyordu. Artık ikinci ve sonraki setup'larda sadece KALAN SÜRE yenilenir: giriş hâlâ
+## sürüyorsa kaldığı yerden devam eder, donuk (hold) karedeyse orada kalır, çözülmeye (outro) başlamışsa donuk kareye
+## geri döner - buz kütlesi hiç yeniden "oluşmaz".
+var _setup_done: bool = false
+
 func setup(duration: float, body_radius: float = REFERENCE_RADIUS) -> void:
+	if _setup_done:
+		var remaining: float = max(duration, 0.1)
+		if _elapsed > _intro_time:
+			_elapsed = _intro_time ## donuk kareye (outro'daysa geri) sabitle
+		_duration = _elapsed + remaining
+		_outro_time = min(OUTRO_TIME, remaining * 0.45)
+		return
+	_setup_done = true
 	_duration = max(duration, 0.1)
 	_elapsed = 0.0
 	## Çok kısa donmalarda intro+outro süreyi aşmasın diye orantılı sıkıştır.

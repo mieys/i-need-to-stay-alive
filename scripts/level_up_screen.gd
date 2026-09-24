@@ -516,20 +516,15 @@ func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
 ## DÜZELTME (kullanıcı isteği 2026-09-24 denge turu: "oyunun ekonomisine bağlı olarak karıştırma fiyatı düşük
 ## pahalılıkta başlayıp rolladıkça fiyatı yükselsin") - eskiden sabit 5 altın/sınırsız: altını olan Efsanevi kart
 ## bulana kadar çevirebiliyordu. Artık:
-##   taban = LEVEL_UP_REROLL_BASE_COST x satıcı fiyat ölçeği (seyyar satıcıyla AYNI Kademe/zaman eğrisi, bkz.
-##           merchant_shop_screen.gd MERCHANT_PRICE_* - Kademe 1'de 3, Kademe 5'te ~9, Kademe 15'te ~23 altın)
-##   fiyat = taban x (1 + bu ekranda yapılan reroll sayısı) -> 3, 6, 9, 12 ...
+##   fiyat = 3 altın tabanlı, Kademe/zamanla büyüyen ve her karıştırmada artan (3, 6, 9, 12 ...) formül - formülün
+##   TEK kaynağı merchant_shop_screen.gd reroll_cost (seyyar satıcının karıştırması da aynısını kullanır).
 ## Her seviye atlayışında ekran yeniden oluşturulduğu için sayaç kendiliğinden sıfırlanır.
-const LEVEL_UP_REROLL_BASE_COST := 3.0
 const MerchantShopScript := preload("res://scripts/merchant_shop_screen.gd")
 var _rerolls_this_screen: int = 0
 
 
 func _reroll_cost() -> int:
-	var tier: int = clampi(1 + int(GameManager.game_time / MerchantShopScript.MERCHANT_PRICE_TIER_DURATION), 1, 15)
-	var price_scale: float = (MerchantShopScript.MERCHANT_PRICE_EARLY_SCALE + float(tier - 1) * MerchantShopScript.MERCHANT_PRICE_PER_TIER_GROWTH) / MerchantShopScript.MERCHANT_PRICE_EARLY_SCALE
-	var base: int = maxi(1, int(round(LEVEL_UP_REROLL_BASE_COST * price_scale)))
-	return base * (1 + _rerolls_this_screen)
+	return MerchantShopScript.reroll_cost(_rerolls_this_screen)
 
 ## Kullanıcı isteği (2026-09-24): oyun içi TÜM arayüzler menülerle aynı bej/ahşap kite geçti - karıştır butonu da artık
 ## kitin ten (tan) butonu (eski assets/ui/reroll_button.png görseli yerine; eskiden %40 küçültülmüş 29 px'lik yüksekliği

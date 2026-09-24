@@ -73,6 +73,8 @@ const THORNS_RADIUS := 42.0
 ## --- Zombi ("ölünce patlayarak yere 4 saniyeliğine zehirli asit bırakıp oraya basanlara normal hasarı kadar hasar
 ## versin") - ölüm kancası bu sınıfın statik spawn_world_fx'ini kullanır (bkz. enemy.gd die()).
 const ACID_DURATION := 4.0
+## Kullanıcı isteği (2026-09-24): "zombinin zehrinin hasarını %50 azalt" - tik başına hasar = temas hasarı x bu çarpan.
+const ACID_DAMAGE_MULT := 0.5
 
 ## Oyuncu gövde yarıçapı (enemy.gd PLAYER_BODY_RADIUS ile aynı mertebe) - alan/çizgi isabet toleransı.
 const TARGET_BODY_RADIUS := 12.0
@@ -293,7 +295,7 @@ static func _broadcast_world_fx(kind: String, pos: Vector2, data: Dictionary) ->
 ## Zombi ölüm kancası (enemy.gd die(), SADECE host): asit gölünü yetkili olarak doğurur ve istemcilere yayınlar.
 static func spawn_zombie_acid(tree: SceneTree, pos: Vector2, damage: float, source: Node2D) -> void:
 	var data: Dictionary = {"duration": ACID_DURATION}
-	spawn_world_fx(tree, "acid", pos, data, true, source, damage)
+	spawn_world_fx(tree, "acid", pos, data, true, source, damage * ACID_DAMAGE_MULT)
 	_broadcast_world_fx("acid", pos, data)
 
 
@@ -325,7 +327,23 @@ static func spawn_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Di
 	node.position = pos
 	tree.current_scene.add_child(node)
 	node.global_position = pos
+	if kind == "acid":
+		place_on_ground(tree, node)
 	return node
+
+
+## DÜZELTME (kullanıcı bildirimi: "zehirler yaratıkların üstünde görünüyor zeminde görünmüyor"): sahnede y-sort yok,
+## aynı z'deki kardeşler AĞAÇ SIRASIYLA çizilir. Yaratıklar current_scene'e çalışma anında eklendiği için sona
+## eklenen bir zemin efekti o ana kadar doğmuş HER yaratığın üstünde kalıyordu. Zemin efektini haritanın ("Harita")
+## hemen arkasına taşı: zeminin üstünde, sonradan eklenen tüm yaratık/oyuncuların altında çizilir.
+static func place_on_ground(tree: SceneTree, node: Node) -> void:
+	var root: Node = tree.current_scene
+	if root == null or node.get_parent() != root:
+		return
+	var harita: Node = root.get_node_or_null("Harita")
+	if harita == null:
+		return
+	root.move_child(node, harita.get_index() + 1)
 
 
 ## Hasar alabilecek oyuncular: yerel oyuncu + (host'ta) uzak oyuncu kuklaları. Kukladaki take_special_damage hasarı

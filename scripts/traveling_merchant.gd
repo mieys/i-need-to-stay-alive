@@ -86,11 +86,10 @@ const SHIELD_TYPE_KEYS := ["shield_standart", "shield_enerji", "shield_kale", "s
 ## çağrısıyla üretiyor (bkz. _on_merchant_spawned) - her istemci ayrı bir
 ## işlem olduğu için Godot'un varsayılan (otomatik tohumlanmış) global rastgele
 ## sayı üreticisi zaten birbirinden bağımsız/farklı sonuçlar verir.
-## Kullanıcı isteği: "Seyyar satıcıdaki eşyaları rerollama butonu ekle, 1
-## reroll hakkı olucak her oyuncunun her seyyar satıcı geldiğinde. Önceki
-## gelişindeki reroll kullanılmazsa sonrakine eklenerek 2 reroll hakkı olacak.
-## (en fazla 3 olabilir)" - bkz. try_reroll_stock()/_reroll_charges.
-const REROLL_MAX_CHARGES := 3
+## Kullanıcı isteği (2026-09-24): "seyyar satıcı marketindeki rerollama hakkı tıpkı level atlama kartlarındaki gibi
+## altınla olacak ve fiyatı da onun gibi artacak" - eski ziyaret başına +1 (en fazla 3) ücretsiz hak sistemi kaldırıldı.
+## Karıştırma artık sınırsız ama altınla: fiyat merchant_shop_screen.gd reroll_cost (level atlama ekranıyla AYNI formül),
+## her karıştırmada artar, her yeni ziyarette başa döner (bkz. _rerolls_this_visit).
 
 ## Kullanıcı isteği: "Seyyar satıcı ile etkileşime girip item alabilecez" -
 ## house_interior.gd _create_entrance_trigger/_create_prompt_ui ile AYNI
@@ -109,14 +108,12 @@ var _current_stock: Array = []
 ## _current_stock içinde yaşadığı için ekranı kapatıp tekrar açmak kaydı sıfırlamaz,
 ## yeni ziyaret/reroll taze kartlar üretip hakkı kendiliğinden yeniler. (Eskiden burada
 ## stok index'ine göre bir sold_item_indices dizisi vardı.)
-## bkz. dosya başı "REROLL_MAX_CHARGES" notu - SADECE bu istemcinin/oyuncunun
-## kendi yerel hakkı (ağdan senkronize edilmiyor, tıpkı stok gibi kişisel).
-var _reroll_charges: int = 0
-## Bir ziyarette birden fazla kez _on_merchant_spawned tetiklenirse (ör.
-## sonradan katılan bir oyuncu için _on_peer_needs_game_catchup) AYNI ziyaret
-## için ikinci kez +1 hak verilmesin diye - bkz. _on_merchant_spawned/
-## _on_merchant_departed.
-var _reroll_granted_this_visit: bool = false
+## Bu ziyarette yapılan karıştırma sayısı (fiyatı belirler) - SADECE bu istemcinin/oyuncunun kendi yerel sayacı
+## (ağdan senkronize edilmiyor, tıpkı stok gibi kişisel).
+var _rerolls_this_visit: int = 0
+## Bir ziyarette birden fazla kez _on_merchant_spawned tetiklenirse (ör. sonradan katılan bir oyuncu için
+## _on_peer_needs_game_catchup) aynı ziyaretin sayacı sıfırlanıp fiyat başa dönmesin diye.
+var _visit_started: bool = false
 
 ## Kullanıcı isteği: "deneme açısından oyun ilk başladığında eve yakın
 ## biyerde seyyar satıcı spawnlansın" - SADECE oturumun İLK ziyareti için
@@ -225,13 +222,10 @@ func _on_merchant_spawned(_pos: Vector2, _stock: Array) -> void:
 	_active = true
 	_visit_timer = VISIT_DURATION
 	_current_stock = _generate_stock()
-	## Kullanıcı isteği: "1 reroll hakkı olucak her oyuncunun her seyyar
-	## satıcı geldiğinde" - bu ziyaret için hak DAHA ÖNCE verilmediyse (bkz.
-	## _reroll_granted_this_visit üstündeki yorum) +1, en fazla
-	## REROLL_MAX_CHARGES'a kadar.
-	if not _reroll_granted_this_visit:
-		_reroll_granted_this_visit = true
-		_reroll_charges = min(REROLL_MAX_CHARGES, _reroll_charges + 1)
+	## Yeni ziyaret: karıştırma fiyatı başa döner (bkz. _visit_started).
+	if not _visit_started:
+		_visit_started = true
+		_rerolls_this_visit = 0
 	GameManager.merchant_zone_active = true
 	GameManager.merchant_zone_pos = _pos
 	_spawn_visual(_pos)
@@ -243,11 +237,7 @@ func _on_merchant_departed() -> void:
 	_cooldown_timer = randf_range(COOLDOWN_MIN, COOLDOWN_MAX)
 	GameManager.merchant_zone_active = false
 	_current_stock = []
-	## Kullanıcı isteği: "Önceki gelişindeki reroll kullanılmazsa sonrakine
-	## eklenerek..." - kullanılmayan _reroll_charges BİLEREK sıfırlanmıyor,
-	## bir sonraki ziyarette üstüne +1 eklenecek (bkz. _on_merchant_spawned).
-	## SADECE "bu ziyaret için hak zaten verildi" bayrağı sıfırlanıyor.
-	_reroll_granted_this_visit = false
+	_visit_started = false
 	_free_visual()
 	_free_interaction()
 	if _shop_screen and is_instance_valid(_shop_screen):
@@ -255,22 +245,19 @@ func _on_merchant_departed() -> void:
 	_shop_screen = null
 
 
-func get_reroll_charges() -> int:
-	return _reroll_charges
+## Sıradaki karıştırmanın altın fiyatı (bkz. dosya başı not).
+func get_reroll_cost() -> int:
+	return MerchantShopScreenScript.reroll_cost(_rerolls_this_visit)
 
 
-func get_reroll_max() -> int:
-	return REROLL_MAX_CHARGES
-
-
-## merchant_shop_screen.gd'nin "Yeniden Çevir" butonu tarafından çağrılır -
-## hakkı varsa 1 harcayıp TAZE bir stok üretir ve döner, yoksa null döner
-## (çağıran taraf butonu zaten 0 haktayken disabled bıraktığı için bu SADECE
-## bir güvenlik payı).
+## merchant_shop_screen.gd'nin "Yeniden Çevir" butonu tarafından çağrılır - altını yetiyorsa fiyatı düşüp TAZE bir
+## stok üretir ve döner, yetmiyorsa null döner (buton zaten altın yetmezken disabled - bu SADECE bir güvenlik payı).
 func try_reroll_stock() -> Variant:
-	if _reroll_charges <= 0:
+	var cost: int = get_reroll_cost()
+	if GameManager.gold < cost:
 		return null
-	_reroll_charges -= 1
+	GameManager.gold -= cost
+	_rerolls_this_visit += 1
 	_current_stock = _generate_stock()
 	return _current_stock
 

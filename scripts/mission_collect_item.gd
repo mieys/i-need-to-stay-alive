@@ -19,6 +19,8 @@ const PICKUP_RADIUS := 30.0
 ## draw_colored_polygon ile yumuşak kenarlı bir elmas çiziliyordu. Artık tools/gen_collect_item_sprite.py'nin pişirdiği
 ## 6 karelik kristal döngüsü (1 sanat pikseli = PixelDraw.TEXEL, karakterlerle aynı yoğunluk).
 const CrystalFrames := preload("res://assets/fx/mission_collect/crystal_frames.tres")
+## Toplanınca oynayan parıltı (tools/gen_collect_item_sprite.py pickup_* - 40x40, kristal gövdesi karenin ortasında).
+const PickupFrames := preload("res://assets/fx/mission_collect/pickup_frames.tres")
 const TEXEL := 1.212 ## PixelDraw.TEXEL
 var _sprite: AnimatedSprite2D = null
 
@@ -86,10 +88,27 @@ func mark_collected() -> void:
 ## topladığımız obje sadece gizlenip görev bitene kadar görünmez olarak sahnede kalıyordu.
 var _fading: bool = false
 
+## GÜNCELLEME (kullanıcı isteği 2026-09-24: "topladığımız şey saydamlaşarak yok olmak yerine toplama efektine benzer bir
+## parıltı falan olsun") - saydamlaşma yerine kristal beyaz parlayıp 4 kollu yıldıza ve yukarı süzülen parıltılara
+## dönüşür (pixel spritesheet, tek seferlik 0.5 sn), bitince obje silinir. Hem kendi toplamamızda hem başka oyuncu
+## toplayınca (mark_collected) aynı efekt - herkes aynı şeyi görür.
 func _fade_out() -> void:
 	if _fading:
 		return
 	_fading = true
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.25)
-	tw.tween_callback(queue_free)
+	set_process(false)
+	if _sprite:
+		_sprite.visible = false
+	var burst := AnimatedSprite2D.new()
+	burst.sprite_frames = PickupFrames
+	burst.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	burst.scale = Vector2.ONE * TEXEL
+	## Kristal gövdesinin ortası: kristal karesinde merkezin ~2 sanat pikseli üstü + kristalin offset'i (-8) -> -10.
+	burst.offset = Vector2(0, -10)
+	burst.z_index = 5
+	add_child(burst)
+	burst.play("pickup")
+	burst.animation_finished.connect(queue_free)
+	get_tree().create_timer(1.5).timeout.connect(func() -> void:
+		if is_instance_valid(self):
+			queue_free())

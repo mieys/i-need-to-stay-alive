@@ -1,11 +1,11 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/fx_animation.gd" id="1"]
-[ext_resource type="SpriteFrames" path="res://assets/weapons/pence/slash/slash_frames.tres" id="2"]
+[ext_resource type="Script" path="res://scripts/fx_claw_slash.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/fx/claw/claw_frames.tres" id="2"]
 
 [node name="FxPenceSlash" type="AnimatedSprite2D"]
 texture_filter = 1
-scale = Vector2(1.2, 1.2)
+scale = Vector2(2.424, 2.424)
 z_index = 60
 sprite_frames = ExtResource("2")
 script = ExtResource("1")

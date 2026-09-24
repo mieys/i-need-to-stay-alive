@@ -84,7 +84,11 @@ func _cached_texture(path: String) -> Texture2D:
 ## DÜZELTME (kullanıcı isteği 2026-09-22: "ruhani skillin boyutunu biraz ufalt") - eskiden %20 büyüktü (1.2051),
 ## artık %10 (1.10) - hâlâ diğerlerinden hafifçe ayırt edilebiliyor ama daha az baskın.
 var spirit_icon = null
-const SPIRIT_ICON_SCALE := 1.10
+## Kullanıcı isteği (2026-09-24): "skill bar ve nerf buff barları pek uygun görünmüyor daha simetrik ve düzgün
+## tasarlanmalı" - F artık diğer yuvalarla AYNI boyutta (1.10 -> 1.0); mor-altın çerçevesi zaten ayırt ediyor.
+const SPIRIT_ICON_SCALE := 1.0
+## Pasif (P) ve ruhani (F) yuvalarını Q-E-R grubundan ayıran, iki uçta EŞİT boşluk (bkz. _layout_ability_icons).
+const ABILITY_GROUP_GAP := 22.0
 const SPIRIT_ICON_BASE_SIZE := 52.0 ## diğer yetenek butonlarının boyutu (hud.tscn SkillIcon 52x52)
 ## DÜZELTME (kullanıcı isteği 2026-09-22: "skiller arasındaki mesafeyi arttır... arkaplanını da biraz
 ## genişletmen gerekiyor") - TÜM yetenek yuvaları arasındaki (Q-E, E-R, R-F) TEK paylaşılan boşluk sabiti,
@@ -569,17 +573,58 @@ func _create_spirit_icon() -> void:
 
 
 ## Ruhani ikonu son görünür yetenek butonunun (R, yoksa E, yoksa Q) sağına, aynı 4px boşlukla yerleştirir.
+## (Eski ad korunuyor - hud.gd her karede çağırıyor.) Artık TÜM yetenek yuvalarını simetrik dizer: bkz. _layout_ability_icons.
 func _place_spirit_icon() -> void:
-	if spirit_icon == null:
-		return
-	var left: float = SPIRIT_ICON_BASE_SIZE + SPIRIT_ICON_GAP ## Q'nun sağı
-	if skill2_icon.visible:
-		left = 2.0 * (SPIRIT_ICON_BASE_SIZE + SPIRIT_ICON_GAP)
+	if _layout_ability_icons():
+		_update_ability_bar_frame()
+
+
+## Kullanıcı isteği (2026-09-24): simetrik yetenek çubuğu. Görünür yuvalar soldan sağa P | Q E R | F dizilir - hepsi
+## AYNI boyutta (52), Q-E-R arası ABILITY_ICON_GAP, P ve F grubun iki ucunda EŞİT ABILITY_GROUP_GAP ile; bütün grup
+## ekranın tam yatay ortasına oturur (eskiden Q yerel 0'dan başlıyordu, pasif 32 px'ti, F %10 büyüktü -> çubuk
+## merkezden kayık ve iki ucu farklı görünüyordu). Yerleşim değiştiyse true döner (çerçeve/durum satırı güncellensin).
+var _ability_layout_sig: String = ""
+
+func _layout_ability_icons() -> bool:
+	var bar: Control = get_node_or_null("SkillBar")
+	if bar == null or skill_icon == null:
+		return false
+	var slots: Array = [] ## [Control, gap_before]
+	var sz: float = SPIRIT_ICON_BASE_SIZE
+	var group: Array = [skill_icon]
+	if skill2_icon and skill2_icon.visible:
+		group.append(skill2_icon)
 	if skill3_icon and skill3_icon.visible:
-		left = 3.0 * (SPIRIT_ICON_BASE_SIZE + SPIRIT_ICON_GAP)
-	var width: float = SPIRIT_ICON_BASE_SIZE * SPIRIT_ICON_SCALE
-	spirit_icon.offset_left = left
-	spirit_icon.offset_right = left + width
+		group.append(skill3_icon)
+	if passive_icon and passive_icon.visible:
+		slots.append([passive_icon, 0.0])
+	for i in group.size():
+		var gap: float = 0.0
+		if not slots.is_empty():
+			gap = ABILITY_GROUP_GAP if i == 0 else ABILITY_ICON_GAP
+		slots.append([group[i], gap])
+	if spirit_icon and spirit_icon.visible:
+		slots.append([spirit_icon, ABILITY_GROUP_GAP])
+	var total: float = 0.0
+	for sl in slots:
+		total += float(sl[1]) + sz
+	var sx: float = maxf(absf(bar.scale.x), 0.01)
+	var local_center: float = (bar.get_viewport_rect().size.x * 0.5 - bar.global_position.x) / sx
+	var x: float = roundf(local_center - total * 0.5)
+	var sig: String = str(x) + "|" + str(slots.size())
+	for sl in slots:
+		var c: Control = sl[0]
+		x += float(sl[1])
+		c.offset_left = x
+		c.offset_right = x + sz
+		c.offset_top = 0.0
+		c.offset_bottom = sz
+		sig += "," + c.name
+		x += sz
+	if sig == _ability_layout_sig:
+		return false
+	_ability_layout_sig = sig
+	return true
 
 
 ## characters.gd "skill2" alanı olan karakterlerde (ör. Oakley) ikinci bir
@@ -641,6 +686,8 @@ func _setup_ability_icons() -> void:
 			var p_tex: Texture2D = load(def["passive_icon"])
 			if p_tex:
 				passive_icon.custom_texture = p_tex
+	_ability_layout_sig = ""
+	_layout_ability_icons()
 	_update_ability_bar_frame()
 
 
@@ -674,7 +721,9 @@ func _update_ability_bar_frame() -> void:
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
 	for child in bar.get_children():
-		if child == ability_bar_frame or not (child is Control):
+		## Durum satırı (StatusBar) çerçevenin ÜSTÜNE, çerçeveye göre yerleşir - birleşime katılırsa çerçeve her
+		## güncellemede kendini yukarı doğru büyütüyordu.
+		if child == ability_bar_frame or child == status_bar or not (child is Control):
 			continue
 		var c: Control = child
 		if not c.visible:
@@ -713,7 +762,8 @@ func _create_status_bar() -> void:
 	buffs.name = "BuffRow"
 	buffs.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	buffs.add_theme_constant_override("separation", 4)
-	buffs.alignment = BoxContainer.ALIGNMENT_BEGIN
+	## Merkezden SOLA büyür (çubuğun ortasına yaslı) - debufflar merkezden SAĞA; iki taraf simetrik.
+	buffs.alignment = BoxContainer.ALIGNMENT_END
 	root.add_child(buffs)
 	status_buff_row = buffs
 
@@ -721,7 +771,7 @@ func _create_status_bar() -> void:
 	debuffs.name = "DebuffRow"
 	debuffs.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	debuffs.add_theme_constant_override("separation", 4)
-	debuffs.alignment = BoxContainer.ALIGNMENT_END
+	debuffs.alignment = BoxContainer.ALIGNMENT_BEGIN
 	root.add_child(debuffs)
 	status_debuff_row = debuffs
 
@@ -729,6 +779,7 @@ func _create_status_bar() -> void:
 ## StatusBar'ı (ve içindeki iki yarı) ability_bar_frame'in hemen üstüne, onunla AYNI genişlikte yerleştirir.
 ## Yükseklik status_effect_badge.tscn'in kendi boyuyla (HEIGHT, altındaki süre şeridi dahil) eşleşiyor.
 const STATUS_ROW_HEIGHT := 42.0
+const STATUS_CENTER_GAP := 4.0 ## buff ve debuff sıraları çubuğun ortasında bu kadar aralıkla karşılaşır
 
 
 func _update_status_bar_layout() -> void:
@@ -741,11 +792,11 @@ func _update_status_bar_layout() -> void:
 	status_bar.offset_top = status_bar.offset_bottom - STATUS_ROW_HEIGHT
 	if status_buff_row:
 		status_buff_row.offset_left = 0.0
-		status_buff_row.offset_right = w * 0.5
+		status_buff_row.offset_right = w * 0.5 - STATUS_CENTER_GAP
 		status_buff_row.offset_top = 0.0
 		status_buff_row.offset_bottom = STATUS_ROW_HEIGHT
 	if status_debuff_row:
-		status_debuff_row.offset_left = w * 0.5
+		status_debuff_row.offset_left = w * 0.5 + STATUS_CENTER_GAP
 		status_debuff_row.offset_right = w
 		status_debuff_row.offset_top = 0.0
 		status_debuff_row.offset_bottom = STATUS_ROW_HEIGHT
@@ -1363,6 +1414,13 @@ func _process(delta: float) -> void:
 		_refresh_shield_mode_slots()
 
 	if player and is_instance_valid(player) and player.has_method("get_skill_progress"):
+		## Yetenek yuvası kilidi (bkz. player.gd is_skill_slot_unlocked / skill_icon.gd set_locked_level).
+		if player.has_method("is_skill_slot_unlocked"):
+			var slot_icons: Array = [["skill", skill_icon], ["skill2", skill2_icon], ["skill3", skill3_icon]]
+			for pair in slot_icons:
+				var ic: Node = pair[1]
+				if ic and is_instance_valid(ic) and ic.has_method("set_locked_level"):
+					ic.set_locked_level(0 if player.is_skill_slot_unlocked(pair[0]) else player.get_skill_slot_unlock_level(pair[0]))
 		skill_icon.update_state(player.get_skill_progress(), player.is_skill_active(), player.skill_timer, player.get_skill_active_fraction())
 		if skill2_icon.visible and player.has_method("get_skill2_progress"):
 			## Büyücü Kız'ın TEMEL yeteneği artık 4 varyasyonlu ve standart

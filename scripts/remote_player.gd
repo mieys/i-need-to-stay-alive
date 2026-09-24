@@ -25,6 +25,9 @@ var max_health: float = 100.0
 ## Sahibinin gerçek yürüme hızı (main.gd extra["move_speed"]); henüz paket gelmediyse 0 (bkz. get_effective_move_speed).
 var synced_move_speed: float = 0.0
 var synced_base_move_speed: float = 0.0 ## bkz. get_base_move_speed
+## Sahibinin taban "Hasar" statı (player.gd damage_bonus, main.gd extra["dmg"]) - host'taki "Kopyanı Öldür" kopyası
+## silah hasarını bundan türetir (bkz. mission_player_copy.gd _weapon_hit_damage). Yerel oyuncuyla aynı alan adı.
+var damage_bonus: float = 10.0
 var item_shield_hp: float = 0.0
 var item_shield_max: float = 0.0
 var is_dead: bool = false
@@ -1089,6 +1092,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	update_weapon_visuals(weapon_keys, extra.get("weapon_tiers", {}))
 	synced_move_speed = float(extra.get("move_speed", synced_move_speed))
 	synced_base_move_speed = float(extra.get("base_speed", synced_base_move_speed))
+	damage_bonus = float(extra.get("dmg", damage_bonus))
 	health = hp
 	max_health = max_hp
 	item_shield_hp = s_hp
@@ -1530,7 +1534,20 @@ func _update_pet_visual_state(instance_id: String, pos: Vector2, is_attacking: b
 	if health_ratio >= 0.0 and p.has_method("update_network_golem_state"):
 		p.update_network_golem_state(pos, is_attacking, health_ratio, shield_ratio, sprite_row)
 	elif p.has_method("update_network_pet_state"):
-		p.update_network_pet_state(pos, is_attacking, sprite_row, teleport)
+		## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-24: "Necromancerın iskeletleri diğer oyuncularda sabit ve donuk
+		## gözüküyor senkronize değil"): 2026-09-22'de Matthew'in tilkisi için "teleport" 4. argümanı eklenmiş, çağrı
+		## HER pet'e 4 argümanla yapılıyordu - ama skeleton_pet.gd / papagan_pet.gd / fx_buyucu_tornado.gd /
+		## wraith_pet.gd'nin update_network_pet_state'i 3 argüman alıyordu. Fazla argümanlı çağrı GDScript'te çalışma
+		## anı hatası -> konum/yön/saldırı güncellemesi HİÇ uygulanmıyor, kozmetik kopya doğduğu yerde donuk kalıyordu
+		## (iskelet, Büyücü'nün hortumu, papağan). Artık hedef metodun gerçek argüman sayısına göre çağrılıyor - ileride
+		## bir pet'e yeni argüman eklense de diğerleri kırılmaz.
+		var argc: int = p.get_method_argument_count("update_network_pet_state")
+		if argc >= 4:
+			p.update_network_pet_state(pos, is_attacking, sprite_row, teleport)
+		elif argc == 3:
+			p.update_network_pet_state(pos, is_attacking, sprite_row)
+		else:
+			p.update_network_pet_state(pos, is_attacking)
 
 
 ## Kullanıcı isteği: "senkronize et, ben nasıl görüyosam diğer oyuncular da

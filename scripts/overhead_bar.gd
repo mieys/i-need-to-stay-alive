@@ -38,6 +38,11 @@ var y_offset: float = -62.0
 var health_current: float = 1.0
 var health_max: float = 1.0
 var health_ratio: float = 1.0
+## Can dolgusunun rengi - varsayılan yeşil (oyuncu/müttefik/görev objeleri); düşman bosslar kırmızı (kullanıcı isteği
+## 2026-09-24: "düşman bossların can barı kırmızı renkte gözüksün" - bkz. enemy.gd _create_overhead_bar).
+const HEALTH_COLOR_DEFAULT := Color(0.30, 0.82, 0.24, 1.0)
+const HEALTH_COLOR_ENEMY := Color(0.88, 0.2, 0.17, 1.0)
+var health_color: Color = HEALTH_COLOR_DEFAULT
 
 var shield_current: float = 0.0
 var shield_max: float = 0.0
@@ -157,7 +162,7 @@ func _draw_health_segments(rect: Rect2) -> void:
 func _draw() -> void:
 	var half_w: float = WIDTH * 0.5
 	var health_rect := Rect2(Vector2(-half_w, y_offset), Vector2(WIDTH, HEIGHT))
-	_draw_pixel_bar(health_rect, health_ratio, Color(0.30, 0.82, 0.24, 1.0), Color(0.12, 0.04, 0.04, 1.0))
+	_draw_pixel_bar(health_rect, health_ratio, health_color, Color(0.12, 0.04, 0.04, 1.0))
 	_draw_health_segments(health_rect)
 
 	if show_shield:

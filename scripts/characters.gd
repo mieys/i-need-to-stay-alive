@@ -199,6 +199,8 @@ const DEFS := {
 		## _skill_buyucu_switch_variation - buyucu_variation_set 0<->1).
 		"skill": 3,
 		"skill_name": "Büyü Değişimi",
+		## Kullanıcı isteği (2026-09-24): Büyücü Kız'ın E'si de 1. seviyede açık (diğerlerinde 5) - bkz. skill_unlock_level.
+		"skill2_unlock_level": 1,
 		"skill_desc": "ULTİ: TEMEL (E) ve 3. yeteneğin (R) setini birlikte değiştirir (Set 1: Arcane Lanet + Hortum <-> Set 2: Don Nova + Meteor Patlaması). (1sn bekleme)",
 		## DÜZELTME (kullanıcı bildirimi: "büyücü kızın skill ikonları
 		## görünmüyor"): eskiden hem ULTİ hem pasif ikonu, ULTİ tamamen
@@ -554,13 +556,13 @@ const DEFS := {
 		## Yarasa Sürüsü (35) ve necro_bat.gd/tscn tamamen silindi - yukarıdaki geçmiş notlar eski dizilimleri anlatır.
 		"skill": 19,
 		"skill_name": "İskelet Çağır",
-		"skill_desc": "YETENEK: 10 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (statlarının %30'u, canının %100'ü, kalkansız, 60sn yaşar). Toplamda (iskelet+golem) en fazla 20 yaratığa sahip olabilirsin. (1sn bekleme)",
+		"skill_desc": "YETENEK: 10 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (saldırı gücünün %50'si kadar vurur, saniyede ~1.3 kez saldırır, hareket hızının %90'ı, canının %100'ü, kalkansız, 60sn yaşar). Ruhun yetmezse bedel temel yetenek kadar kalkandan ödenir. Toplamda (iskelet+golem) en fazla 20 yaratığa sahip olabilirsin. (1sn bekleme)",
 		"skill_icon": "res://assets/skills/necromancer_iskelet_cagir_icon.png",
 		## Kullanıcı isteği (2026-09-24): "iskelet Q golem E kafatası da R olmalı yarasayı ... yok et" - Golem Çağır
 		## (id 20) R'den E'ye taşındı (standart skill2 makinesi, E kalkan tarifesi), Yarasa Sürüsü (id 35) tamamen silindi.
 		"skill2": 20,
 		"skill2_name": "Golem Çağır",
-		"skill2_desc": "TEMEL: 100 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %50 oranında), kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 6sn'de bir çevresindeki yaratıkları 1sn sersemletir, 120sn yaşar). (10sn bekleme)",
+		"skill2_desc": "TEMEL: 50 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %50 oranında), kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 6sn'de bir çevresindeki yaratıkları 1sn sersemletir, 120sn yaşar). Ruhun yetmezse ruh yerine ulti kadar kalkan harcar. (10sn bekleme)",
 		"skill2_icon": "res://assets/skills/necromancer_hortlak_cagir_icon.png",
 		## Kullanıcı isteği (2026-09-24): Necromancer'ın ULTİ'si artık Lanetli Kafatası (skill3 id 44, R tuşu) - Golem Çağır'ın
 		## (id 20) yerine. Standart skill3_state makinesi (10sn aktif + 60sn bekleme, bkz. player.gd SKILL3_TIMING[44] /
@@ -639,7 +641,7 @@ const DEFS := {
 		"skill3_name": "Kan Yarasaları",
 		"skill3_desc": "ULTİ (BASILIP KAPATILABİLİR): Açıkken her saniye maksimum canının %5'ini harcar. Yakınındaki yaratıklara 6 küçük yarasa gönderir; yarasalar vurup saldırı gücünün %60'ı kadar hasar verir ve sana geri döner (hızları saldırı hızınla artar). Yarasalar her döndüğünde saldırı gücünün %5'i kadar can yenilenir.",
 		"skill3_icon": "res://assets/skills/vampir_kan_yarasalari_icon.png",
-		"passive": "Kan Emme: %2 can emme kazanır (verdiği hasarın %2'si kadar can yenilenir) ve her 1 saldırı gücü için 1 maksimum can kazanır.",
+		"passive": "Kan Emme: %1 can emme kazanır (verdiği hasarın %1'i kadar can yenilenir) ve her 1 saldırı gücü için 1 maksimum can kazanır.",
 		"passive_icon": "res://assets/skills/vampir_passive_icon.png",
 		"frames": "res://assets/characters/vampir_frames.tres",
 		"portrait": "res://assets/characters/vampir_portrait.png",
@@ -704,3 +706,16 @@ const MAIN_WEAPON := {
 
 static func get_def(char_id: int) -> Dictionary:
 	return DEFS.get(char_id, DEFS[1])
+
+
+## Kullanıcı isteği (2026-09-24): "karakterlerin q yeteneği 1. levelde e yeteneği 5. levelde R yetenekleri ise 10.
+## levelde açılacak ... (büyücü kızın Q ve E yeteneği 1 levelde açık olmalı R ise 10 levelde açılacak)". Yetenek
+## yuvası -> açıldığı TAKIM seviyesi (player.gd `level`, GameManager.team_level ile senkron). Anahtarlar input
+## action adlarıyla aynı: "skill" = Q, "skill2" = E, "skill3" = R. Karaktere özel istisna DEFS'te
+## "<yuva>_unlock_level" alanıyla (bkz. Büyücü Kız "skill2_unlock_level"). Tek kaynak: player.gd kilidi (girişi
+## engeller) ve hud.gd kilit görseli (ikon üstünde seviye numarası) ikisi de buradan okur.
+const SKILL_UNLOCK_LEVELS := {"skill": 1, "skill2": 5, "skill3": 10}
+
+
+static func skill_unlock_level(char_id: int, slot: String) -> int:
+	return int(get_def(char_id).get(slot + "_unlock_level", SKILL_UNLOCK_LEVELS.get(slot, 1)))

@@ -163,7 +163,7 @@ const SKILL2_TIMING := {
 	27: {"duration": 0.0, "cooldown": 45.0},
 	## Necromancer E = Golem Çağır (id 20) - kullanıcı isteği (2026-09-24): "iskelet Q golem E kafatası da R olmalı
 	## yarasayı ... yok et". Eskiden SKILL3_TIMING[20]'deydi (R iken); Yarasa Sürüsü (id 35) tamamen silindi.
-	## 100 Ruh + 10sn bekleme, standart skill2_state makinesi (ön kontroller _activate_skill2 başında).
+	## 50 Ruh (NECRO_GOLEM_SOUL_COST) + 10sn bekleme, standart skill2_state makinesi (ön kontroller _activate_skill2 başında).
 	20: {"duration": 0.4, "cooldown": 10.0},
 	## Vampir Çocuk TEMEL (Yarasa Formu, skill2 id 41): 5sn dönüşüm, ardından 22sn bekleme -
 	## standart skill2_state makinesini kullanır (bkz. _skill_vampir_bat_form/_end_skill2_effects).
@@ -2351,7 +2351,7 @@ func _physics_process(delta: float) -> void:
 	## bir ateşkes bölgesi olmalı - üç yetenek girişi de (ve aşağıdaki tüm
 	## bypass dalları: Oakley Çiçek, Korsan bomba, Assasin hamle, Büyücü
 	## varyasyonları, Necro yarasa sürüsü DAHİL) bölgedeyken tamamen engellenir.
-	if Input.is_action_just_pressed("skill") and not is_chat_typing and not is_in_merchant_zone:
+	if Input.is_action_just_pressed("skill") and not is_chat_typing and not is_in_merchant_zone and _skill_slot_unlocked_or_warn("skill"):
 		## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su
 		## bundan sonra pasifi olacak") - Çiçek artık burada DEĞİL, tamamen
 		## otomatik bir pasif (bkz. _process_oakley_passive). Oakley'nin Q'su
@@ -2375,7 +2375,7 @@ func _physics_process(delta: float) -> void:
 		## dokunulmuyor.
 		elif skill_state == "active" and get_skill_character_id() == 11:
 			_cancel_active_skill_early()
-	if Input.is_action_just_pressed("skill2") and not is_chat_typing and not is_in_merchant_zone:
+	if Input.is_action_just_pressed("skill2") and not is_chat_typing and not is_in_merchant_zone and _skill_slot_unlocked_or_warn("skill2"):
 		var skill2_id_pressed: int = get_skill2_id()
 		## Korsan (Saatli Bomba, id 17) bekleme süresi YERİNE şarj ile çalışır -
 		## standart skill2_state == "ready" makinesini BAŞTAN devre dışı
@@ -2403,7 +2403,7 @@ func _physics_process(delta: float) -> void:
 	## Üçüncü aktif yetenek (R) - bkz. dosya başındaki SKILL3_TIMING notu.
 	## skill3 alanı olmayan karakterlerde get_skill3_id() 0 döner, tuş
 	## hiçbir şey yapmaz.
-	if Input.is_action_just_pressed("skill3") and not is_chat_typing and not is_in_merchant_zone:
+	if Input.is_action_just_pressed("skill3") and not is_chat_typing and not is_in_merchant_zone and _skill_slot_unlocked_or_warn("skill3"):
 		var skill3_id_pressed: int = get_skill3_id()
 		## Büyücü Kız'ın R'si (bkz. BUYUCU_SET_R_VARIATIONS) - E'nin skill2
 		## dalıyla (yukarıda, "elif skill2_id_pressed in BUYUCU_VARIATION_
@@ -2423,6 +2423,30 @@ func _physics_process(delta: float) -> void:
 	## Ruhani Yetenek (F) - karakterden bağımsız, kendi durum makinesi (bkz. dosya sonundaki "RUHANİ YETENEKLER" bloğu).
 	if Input.is_action_just_pressed("skill4") and not is_chat_typing and not is_in_merchant_zone:
 		_try_spirit_skill()
+
+
+## Yetenek yuvası kilidi (kullanıcı isteği 2026-09-24: Q 1., E 5., R 10. seviyede açılır; Büyücü Kız'ın E'si 1.) -
+## seviyeler characters.gd skill_unlock_level'da (HUD'un kilit görseliyle TEK kaynak). slot: "skill"/"skill2"/"skill3".
+## Seviye takım seviyesidir (on_team_leveled_up), çok oyunculuda herkes aynı anda açar.
+func get_skill_slot_unlock_level(slot: String) -> int:
+	return Characters.skill_unlock_level(GameManager.selected_char_id, slot)
+
+
+func is_skill_slot_unlocked(slot: String) -> bool:
+	return level >= get_skill_slot_unlock_level(slot)
+
+
+## Kilitliyse tuşa basınca kısa bir uyarı (üst üste basınca yazı yığılmasın diye en fazla saniyede bir).
+var _skill_lock_warn_until: float = 0.0
+
+func _skill_slot_unlocked_or_warn(slot: String) -> bool:
+	if is_skill_slot_unlocked(slot):
+		return true
+	var now_s: float = Time.get_ticks_msec() / 1000.0
+	if now_s >= _skill_lock_warn_until:
+		_skill_lock_warn_until = now_s + 1.0
+		_spawn_floating_text("SEVİYE %d'DE AÇILIR" % get_skill_slot_unlock_level(slot), Color(1.0, 0.75, 0.4))
+	return false
 
 
 ## Kullanıcı bildirimi: "yaratıklarla çarpıştığımda yaratıkların geriye
@@ -3341,7 +3365,8 @@ const NECRO_SOUL_PER_BOSS_KILL := 5
 ## Kullanıcı isteği: "necromancerın iskelet çağırma bedelini 10 yap" /
 ## "necromancerın goleminin ruh bedelini 100 yap" - eskiden 3/10'du.
 const NECRO_SKELETON_SOUL_COST := 10
-const NECRO_GOLEM_SOUL_COST := 100
+## Kullanıcı isteği (2026-09-24): "golemi spawnlamak için gereken ruh da 50 ye düşsün" (100 -> 50).
+const NECRO_GOLEM_SOUL_COST := 50
 ## Kullanıcı isteği: "necromancerın iskelet çağırma skiline 1 saniye bekleme
 ## süresi ekle" - eskiden TEMEL'in (İskelet Çağır) hiç bekleme süresi yoktu,
 ## sadece ruh sayısı/yaratık sınırı kısıtlıyordu (bkz. yukarıdaki "Necromancer"
@@ -3353,7 +3378,10 @@ const NECRO_GOLEM_SOUL_COST := 100
 ## _process_necro_skeleton_cooldown) Korsan'ın bomba şarj sistemiyle AYNI
 ## desende uygulanıyor.
 const NECRO_SKELETON_COOLDOWN := 1.0
-const NECRO_SKELETON_STAT_PERCENT := 0.30
+## Kullanıcı bildirimi (2026-09-24): "iskeleti çok yavaş az vuruyor ve güçsüz" - saldırı gücü oranı %30 -> %50 (vuruş
+## sıklığı skeleton_pet.gd ATTACK_INTERVAL'de, hız aşağıdaki ayrı orandan). Artık SADECE saldırı gücünü ölçekler.
+const NECRO_SKELETON_STAT_PERCENT := 0.50
+const NECRO_SKELETON_SPEED_PERCENT := 0.90 ## hareket hızı: Necromancer'ın hızının %90'ı (eskiden %30 - bkz. setup_from_player)
 const NECRO_SKELETON_HP_PERCENT := 1.0
 const NECRO_SKELETON_LIFESPAN := 60.0
 ## Kullanıcı isteği: "golem necromancerin statlarının %200üne sahiptir" -
@@ -3642,15 +3670,26 @@ func _skill_korsan_detonate_all() -> void:
 	var bombs_to_detonate: Array = _korsan_bombs.filter(func(x): return is_instance_valid(x) and x.has_method("detonate"))
 	_korsan_bombs.clear()
 	## Kullanıcı isteği: Korsan efektleri sıfırdan pixel-art. Patlat: dedonatör kıvılcımı + bombalar KORSAN'A EN YAKINDAN
-	## UZAĞA doğru zincirleme (KorsanFxMath.CHAIN_DELAY arayla) patlar - "hepsini tetikledim" hissi.
+	## UZAĞA doğru, uzaklıkla orantılı gecikmeli bir dalga halinde patlar (bkz. KorsanFxMath.CHAIN_* / korsan_chain_delays
+	## - çok sayıda bomba tek karede patlayıp FPS düşürmesin).
 	var origin: Vector2 = global_position
 	bombs_to_detonate.sort_custom(func(x, y): return origin.distance_squared_to(x.global_position) < origin.distance_squared_to(y.global_position))
+	var dists: Array = bombs_to_detonate.map(func(x): return origin.distance_to(x.global_position))
+	var delays: Array = korsan_chain_delays(dists)
 	if not bombs_to_detonate.is_empty():
 		_korsan_pixel_burst(global_position + Vector2(0, -6), "spark", 12, 150.0, 0.4)
 	var any_detonated: bool = false
+	var elapsed: float = 0.0
+	var last_frame: int = -1
 	for i in range(bombs_to_detonate.size()):
-		if i > 0:
-			await get_tree().create_timer(KorsanFxMath.CHAIN_DELAY).timeout
+		var wait: float = float(delays[i]) - elapsed
+		if wait > 0.0:
+			await get_tree().create_timer(wait, false).timeout
+			elapsed = float(delays[i])
+		## Aynı karede ikinci bir patlama olmasın (zamanlayıcılar aynı kareye denk gelse bile).
+		while Engine.get_process_frames() == last_frame and is_inside_tree():
+			await get_tree().process_frame
+		last_frame = Engine.get_process_frames()
 		var b: Node = bombs_to_detonate[i]
 		if not is_instance_valid(b) or not is_inside_tree():
 			continue
@@ -3673,6 +3712,30 @@ func _skill_korsan_detonate_all() -> void:
 				NetworkManager.remove_drop.rpc(bomb_net_id)
 	if not any_detonated:
 		_spawn_floating_text("BOMBA YOK", Color(1.0, 0.4, 0.4))
+
+
+## Korsan'a uzaklıklarına göre SIRALI (artan) bomba mesafelerinden her bombanın patlama anını (sn, ilki 0) hesaplar:
+## uzaklıkla orantılı dalga (CHAIN_WAVE_SPEED) + ardışık iki patlama arasında en az bir aralık; toplam süre
+## CHAIN_MAX_TOTAL'ı aşıyorsa aralık daraltılır (CHAIN_MIN_GAP_FLOOR'a kadar) ve dalga süreye sığacak şekilde sıkıştırılır.
+static func korsan_chain_delays(sorted_dists: Array) -> Array:
+	var n: int = sorted_dists.size()
+	var out: Array = []
+	if n == 0:
+		return out
+	var gap: float = KorsanFxMath.CHAIN_MIN_GAP
+	if n > 1:
+		gap = clampf(KorsanFxMath.CHAIN_MAX_TOTAL / float(n - 1), KorsanFxMath.CHAIN_MIN_GAP_FLOOR, KorsanFxMath.CHAIN_MIN_GAP)
+	var d0: float = float(sorted_dists[0])
+	var span: float = (float(sorted_dists[n - 1]) - d0) / KorsanFxMath.CHAIN_WAVE_SPEED
+	var wave_scale: float = 1.0
+	if span > KorsanFxMath.CHAIN_MAX_TOTAL:
+		wave_scale = KorsanFxMath.CHAIN_MAX_TOTAL / span
+	var t: float = 0.0
+	for i in range(n):
+		var wave_t: float = (float(sorted_dists[i]) - d0) / KorsanFxMath.CHAIN_WAVE_SPEED * wave_scale
+		t = wave_t if i == 0 else maxf(wave_t, t + gap)
+		out.append(t)
+	return out
 
 
 ## Korsan'ın yeni 3. yeteneği (Bombardıman, skill3 id 34, R tuşu) - "etrafındaki
@@ -3811,21 +3874,28 @@ func _necro_on_kill(is_boss_kill: bool) -> void:
 func _skill_necro_summon_skeleton() -> void:
 	if _necro_skeleton_cooldown_timer > 0.0:
 		return
-	if necro_souls < NECRO_SKELETON_SOUL_COST:
-		_spawn_floating_text("RUH YETERSİZ", Color(0.6, 0.9, 0.5))
-		return
 	## Kullanıcı isteği: "necromancerın yaratık spawnlama sınırını 10 ile
 	## sınırla".
 	if _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
 		_spawn_floating_text("YARATIK SINIRI (%d)" % NECRO_MAX_ACTIVE_PETS, Color(0.9, 0.6, 0.3))
 		return
-	necro_souls -= NECRO_SKELETON_SOUL_COST
+	## Kullanıcı isteği (2026-09-24): "necromancerın ruhu yoksa yetenekleri kalkan ile kullanabilsin" - ruh yetmezse
+	## bedel TEMEL yetenek kadar kalkandan ödenir (bkz. _necro_shield_cost).
+	if necro_souls >= NECRO_SKELETON_SOUL_COST:
+		necro_souls -= NECRO_SKELETON_SOUL_COST
+	else:
+		var shield_cost: float = _necro_shield_cost(false)
+		if not _has_enough_ability_shield(shield_cost):
+			_spawn_floating_text("RUH / KALKAN YETERSİZ", Color(0.6, 0.9, 0.5))
+			return
+		_spend_ability_shield_cost(shield_cost)
+		item_shield_ability_slow_timer = _shield_hit_regen_delay()
 	_necro_skeleton_cooldown_timer = NECRO_SKELETON_COOLDOWN
 	var pet: Node2D = SkeletonPetScene.instantiate() as Node2D
 	get_tree().current_scene.add_child(pet)
 	pet.global_position = global_position
 	if pet.has_method("setup_from_player"):
-		pet.setup_from_player(self, NECRO_SKELETON_STAT_PERCENT, NECRO_SKELETON_HP_PERCENT, NECRO_SKELETON_LIFESPAN)
+		pet.setup_from_player(self, NECRO_SKELETON_STAT_PERCENT, NECRO_SKELETON_HP_PERCENT, NECRO_SKELETON_LIFESPAN, NECRO_SKELETON_SPEED_PERCENT)
 	_register_necro_pet(pet)
 	_spawn_necro_summon_fx(pet.global_position)
 	_broadcast_necro_pet_spawn(pet, "res://scenes/skeleton_pet.tscn")
@@ -3875,7 +3945,9 @@ func _skill_necro_skull() -> void:
 ## çağırsın") - eskiden WraithPetScene (Hortlak) çağırıyordu, artık
 ## GolemPetScene (%200 stat/can, kalkanlı, bkz. golem_pet.gd) çağırıyor.
 func _skill_necro_summon_golem() -> void:
-	necro_souls -= NECRO_GOLEM_SOUL_COST
+	## Ruh yetmiyorsa bedel _activate_skill2'de ULTİ kadar kalkandan ödendi (bkz. _necro_golem_pays_with_shield).
+	if necro_souls >= NECRO_GOLEM_SOUL_COST:
+		necro_souls -= NECRO_GOLEM_SOUL_COST
 	var pet: Node2D = GolemPetScene.instantiate() as Node2D
 	get_tree().current_scene.add_child(pet)
 	pet.global_position = global_position
@@ -3893,11 +3965,10 @@ func _skill_necro_summon_golem() -> void:
 	_broadcast_necro_pet_spawn(pet, "res://scenes/golem_pet.tscn")
 
 
-## Golem Çağır ön kontrolleri (100 ruh, toplam yaratık sınırı, en fazla NECRO_MAX_GOLEMS golem) - yetersizse sebebi yazar.
+## Golem Çağır ön kontrolleri (toplam yaratık sınırı, en fazla NECRO_MAX_GOLEMS golem) - yetersizse sebebi yazar.
+## Ruh yetmezse artık engel değil: kullanıcı isteği (2026-09-24) "ruhu yoksa yetenekleri kalkan ile kullanabilsin (E
+## yeteneği de ulti kadar kalkan harcar)" - bedel _activate_skill2'de ULTİ kademesi kalkandan ödenir.
 func _necro_golem_can_summon() -> bool:
-	if necro_souls < NECRO_GOLEM_SOUL_COST:
-		_spawn_floating_text("RUH YETERSİZ", Color(0.6, 0.9, 0.5))
-		return false
 	if _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
 		_spawn_floating_text("YARATIK SINIRI (%d)" % NECRO_MAX_ACTIVE_PETS, Color(0.9, 0.6, 0.3))
 		return false
@@ -3905,6 +3976,18 @@ func _necro_golem_can_summon() -> bool:
 		_spawn_floating_text("GOLEM SINIRI (%d)" % NECRO_MAX_GOLEMS, Color(0.75, 0.5, 1.0))
 		return false
 	return true
+
+
+func _necro_golem_pays_with_shield() -> bool:
+	return necro_souls < NECRO_GOLEM_SOUL_COST
+
+
+## Ruh yerine ödenen kalkan: ulti=false -> TEMEL (E) kademesi, true -> ULTİ kademesi (_activate_skill*'teki AYNI formül,
+## Yetenek Kitabı indirimi dahil).
+func _necro_shield_cost(ulti: bool) -> float:
+	var pct: float = SKILL_SHIELD_COST_PERCENT_OF_MAX if ulti else SKILL2_SHIELD_COST_PERCENT_OF_MAX
+	var flat: float = SKILL_SHIELD_COST_FLAT if ulti else SKILL2_SHIELD_COST_FLAT
+	return (item_shield_max * pct + flat) * (1.0 - item_skill_shield_cost_reduction)
 
 
 ## Kullanıcı isteği: "necromancerın yaratık spawnlama sınırını 10 ile
@@ -6310,6 +6393,9 @@ func _activate_skill2() -> void:
 	## kontrol ediliyor.
 	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
 	var skill2_shield_cost: float = (item_shield_max * SKILL2_SHIELD_COST_PERCENT_OF_MAX + SKILL2_SHIELD_COST_FLAT) * (1.0 - item_skill_shield_cost_reduction)
+	## Necromancer Golem Çağır ruhsuz kullanılırsa ruh yerine ULTİ kadar kalkan (bkz. _necro_golem_can_summon).
+	if skill2_id == 20 and _necro_golem_pays_with_shield():
+		skill2_shield_cost = _necro_shield_cost(true)
 	var is_shield_related_skill2: bool = (skill2_id == 10 and GameManager.selected_char_id != 2)
 	## Vampir Çocuk TEMEL'i (Yarasa Formu, id 41) kalkan YERİNE maksimum canın %4'ünü harcar - can
 	## yetmiyorsa hiç tetiklenmez (bkz. _vampir_try_pay_health), kalkan bedeli ödenmez.
@@ -9823,7 +9909,7 @@ func _spawn_floating_text(text: String, color: Color, big: bool = false, y_offse
 ## Vampir Çocuk (roster id 13, bkz. characters.gd DEFS[13])
 ## =====================================================================================
 ## Kullanıcı isteği (2026-09-21): yetenekleri kalkan YERİNE CAN harcar - Q ve E maksimum canın %4'ü,
-## R (ulti) açıkken her saniye maksimum canın %5'i. Pasif: %2 can emme + her 1 saldırı gücü için 1 can.
+## R (ulti) açıkken her saniye maksimum canın %5'i. Pasif: %1 can emme + her 1 saldırı gücü için 1 can.
 ## Q: yakındaki 3 düşmanın kanını emer (%130 saldırı gücü), kalıcı +1 maksimum can (6sn).
 ## E: 5sn büyük yarasa formu (%60 hız, %80 hasar azaltma, temas hasarı %80, silahlar gövdeye çekilir) (22sn).
 ## R: 6 küçük yarasa (%60 hasar, dönünce %5 saldırı gücü kadar can, hızları saldırı hızıyla artar).
@@ -9835,7 +9921,7 @@ func _spawn_floating_text(text: String, color: Color, big: bool = false, y_offse
 ##  - R yarasaları: main.gd ~20Hz konum paketi (vampir_bat_swarm.gd kozmetik mod)
 const VAMPIR_SKILL_COST_PERCENT := 0.04 ## Q ve E: maksimum canın %4'ü
 const VAMPIR_ULTI_COST_PERCENT_PER_SEC := 0.05 ## R açıkken saniyede maksimum canın %5'i (kullanıcı isteği: %3'ten %5'e)
-const VAMPIR_LIFESTEAL_RATIO := 0.02 ## pasif: verdiği hasarın %2'si kadar can emme (kullanıcı isteği: %4'ten %2'ye)
+const VAMPIR_LIFESTEAL_RATIO := 0.01 ## pasif: verdiği hasarın %1i kadar can emme (kullanıcı isteği: %4 -> %2 -> 2026-09-24 %1)
 const VAMPIR_HEALTH_PER_ATTACK_POWER := 1.0 ## pasif: her 1 saldırı gücü = 1 maksimum can
 const VAMPIR_Q_TARGET_COUNT := 3
 const VAMPIR_Q_RADIUS := 320.0

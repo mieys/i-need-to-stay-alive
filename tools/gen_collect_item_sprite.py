@@ -15,6 +15,7 @@ Cikti:
   assets/fx/mission_collect/crystal_frames.tres (SpriteFrames, "idle" dongu)
 Yeni PNG icin Godot'ta bir kez `--headless --import` gerekir.
 """
+import math
 import os
 import sys
 
@@ -98,6 +99,67 @@ def frame(i):
     return im
 
 
+# ------------------------------------------------------------------------------------------------ toplama parıltısı
+## Kullanici istegi (2026-09-24): "toplama gorevinde birsey toplarken topladigimiz sey saydamlasarak yok olmak yerine
+## toplama efektine benzer bir parilti falan olsun" - kristal beyaz parlar, buyuk turkuaz 4 kollu yildiza donusur,
+## cevresine 6 kucuk parilti sacilip yukari suzulerek soner. 40x40 sanat pikseli, 10 kare (tek seferlik, 20 fps).
+PW = PH = 40
+P_FRAMES = 10
+P_CX, P_CY = 20, 20  ## kristal govdesinin merkezi (mission_collect_item.gd offset'i buna gore)
+
+
+def _star(px, cx, cy, arm, core, edge):
+    for d in range(-arm, arm + 1):
+        c = core if abs(d) <= max(1, arm // 3) else (PAL["l"] if abs(d) < arm else edge)
+        for (x, y) in ((cx + d, cy), (cx, cy + d)):
+            if 0 <= x < PW and 0 <= y < PH:
+                px[x, y] = c
+    for dx, dy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
+        x, y = cx + dx, cy + dy
+        if arm >= 4 and 0 <= x < PW and 0 <= y < PH:
+            px[x, y] = PAL["l"]
+
+
+def pickup_frame(i):
+    im = Image.new("RGBA", (PW, PH), (0, 0, 0, 0))
+    px = im.load()
+    ox = P_CX - len(CRYSTAL[0]) // 2
+    oy = P_CY - len(CRYSTAL) // 2
+    if i <= 1:
+        ## kristal silueti beyaza/acik turkuaza parlar (i=1'de 1 px sisip dagilmaya baslar)
+        for y, row in enumerate(CRYSTAL):
+            for x, ch in enumerate(row):
+                if ch not in PAL:
+                    continue
+                c = SPARK if i == 0 and ch != "o" else (SHINE if ch in "ml" else PAL["l"])
+                if i == 1 and ch == "o":
+                    c = PAL["m"]
+                px[ox + x, oy + y] = c
+        if i == 1:
+            _star(px, P_CX, P_CY, 5, SPARK, PAL["m"])
+        return im
+    k = i - 2  ## 0..7
+    ## merkez yildiz: buyuk basla, kucul
+    arm = [9, 7, 5, 3, 2, 1, 0, 0][k]
+    if arm > 0:
+        _star(px, P_CX, P_CY - k, arm, SPARK, PAL["m"])
+    ## 6 parilti: disa acilip yukari suzulur, "+" -> nokta -> sonar
+    for s in range(6):
+        a = s * math.pi / 3.0 + 0.3
+        r = 5 + k * 2.2
+        x = int(round(P_CX + math.cos(a) * r))
+        y = int(round(P_CY + math.sin(a) * r * 0.8 - k * 1.6))
+        if k >= 6 and s % 2 == 1:
+            continue
+        if k <= 3:
+            for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+                if 0 <= x + dx < PW and 0 <= y + dy < PH:
+                    px[x + dx, y + dy] = SPARK if (dx, dy) == (0, 0) else PAL["l"]
+        elif 0 <= x < PW and 0 <= y < PH:
+            px[x, y] = PAL["l"] if k <= 5 else PAL["m"]
+    return im
+
+
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     sheet = Image.new("RGBA", (W * FRAMES, H), (0, 0, 0, 0))
@@ -112,6 +174,23 @@ def main():
         W, H,
         [("idle", (0, 0), FRAMES, True, 8.0)],
     )
+    psheet = Image.new("RGBA", (PW * P_FRAMES, PH), (0, 0, 0, 0))
+    for i in range(P_FRAMES):
+        psheet.paste(pickup_frame(i), (i * PW, 0))
+    ppath = os.path.join(OUT_DIR, "pickup_sheet.png")
+    psheet.save(ppath)
+    print("wrote", ppath, psheet.size)
+    write_sprite_frames(
+        os.path.join(OUT_DIR, "pickup_frames.tres"),
+        "res://assets/fx/mission_collect/pickup_sheet.png",
+        PW, PH,
+        [("pickup", (0, 0), P_FRAMES, False, 20.0)],
+    )
+    preview = os.environ.get("COLLECT_PREVIEW_DIR")
+    if preview:
+        bg = Image.new("RGBA", psheet.size, (70, 110, 60, 255))
+        bg.alpha_composite(psheet)
+        bg.resize((psheet.width * 4, psheet.height * 4), Image.NEAREST).save(os.path.join(preview, "pickup_preview.png"))
 
 
 if __name__ == "__main__":

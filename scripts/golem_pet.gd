@@ -364,18 +364,33 @@ func _update_focus_target() -> void:
 
 ## bkz. skeleton_pet.gd'deki BİREBİR AYNI fonksiyon/gerekçe ("oyuncuların
 ## yarattığı yaratıklar collision shapelerden geçebiliyor").
+## DÜZELTME (kullanıcı bildirimi 2026-09-24: "Necromancerın tüm yaratıkları duvarları dolanmayı bilmiyor"): eskiden
+## is_position_blocked_by_TERRAIN (su + ev + orman) kullanılıyordu - oyuncu ve yaratıklar ise yıllardır SADECE ormanla
+## engelleniyor (su/ev bilerek açık, bkz. enemy.gd _block_movement_into_terrain notu) ve duvar dolanma A*'ı da
+## (pet_router.gd / enemy_pathing.gd) sadece ormanı bilir - su/ev engeli rotayı izleyen peti suyun kıyısında
+## hapsederdi. Artık oyuncu/yaratıklarla aynı kural: sadece orman. Zaten ormanın İÇİNDEYSE engelleme atlanır
+## (sonsuza dek hapsolmasın - enemy.gd/player.gd ile aynı güvenlik ağı).
 func _block_movement_into_terrain() -> void:
 	if velocity.length() < 0.1:
+		return
+	if GameManager.is_position_blocked_by_forest(global_position):
 		return
 	var probe_dist: float = 10.0
 	if velocity.x != 0.0:
 		var probe_x: Vector2 = global_position + Vector2(sign(velocity.x) * probe_dist, 0.0)
-		if GameManager.is_position_blocked_by_terrain(probe_x):
+		if GameManager.is_position_blocked_by_forest(probe_x):
 			velocity.x = 0.0
 	if velocity.y != 0.0:
 		var probe_y: Vector2 = global_position + Vector2(0.0, sign(velocity.y) * probe_dist)
-		if GameManager.is_position_blocked_by_terrain(probe_y):
+		if GameManager.is_position_blocked_by_forest(probe_y):
 			velocity.y = 0.0
+
+
+## Duvar dolanma (bkz. pet_router.gd) - hedefe/sahibine giden düz çizgiyi orman duvarı kesince A* rotası.
+const PetRouterScript := preload("res://scripts/pet_router.gd")
+## Sahibinden çok uzakta ve arada duvar varken rotayı bu hız çarpanıyla izler (ışınlanır gibi lerp duvardan geçirirdi).
+const CATCH_UP_ROUTE_SPEED_MULT := 2.5
+var _router = PetRouterScript.new()
 
 
 func _process_movement(delta: float) -> void:
@@ -391,10 +406,12 @@ func _process_movement(delta: float) -> void:
 		elif dist <= MELEE_STOP_RANGE:
 			_in_melee_stance = true
 		if not _in_melee_stance:
-			velocity = to_target.normalized() * speed + separation
+			## Duvar arkasındaki hedefe A* rotasıyla dolanır (bkz. pet_router.gd); rota izlerken yürüdüğü yöne bakar.
+			var chase_dir: Vector2 = _router.direction(global_position, _focus_target.global_position, delta)
+			velocity = chase_dir * speed + separation
 			_block_movement_into_terrain()
 			move_and_slide()
-			_update_facing(to_target)
+			_update_facing(chase_dir if _router.following_route else to_target)
 		else:
 			velocity = separation
 			_block_movement_into_terrain()
@@ -412,14 +429,24 @@ func _process_movement(delta: float) -> void:
 		## bkz. skeleton_pet.gd'deki AYNI BUG DÜZELTMESİ notu ("bir anda
 		## necromancerin yanına ışınlanıyor") - anlık atama yerine yumuşak
 		## yakalama.
-		var catch_up_target: Vector2 = owner_player.global_position - to_owner.normalized() * FOLLOW_DISTANCE
-		global_position = global_position.lerp(catch_up_target, min(1.0, delta * 6.0))
-		velocity = Vector2.ZERO
+		## Sahibiyle arasında orman duvarı varsa yumuşak yakalama (lerp) peti duvarın İÇİNDEN geçirirdi - o durumda
+		## rotayı hızlandırılmış yürüyüşle izler (bkz. pet_router.gd), düz çizgi açıkken eski hızlı yakalama aynen.
+		var catch_dir: Vector2 = _router.direction(global_position, owner_player.global_position, delta)
+		if _router.following_route:
+			velocity = catch_dir * speed * CATCH_UP_ROUTE_SPEED_MULT + separation
+			_block_movement_into_terrain()
+			move_and_slide()
+			_update_facing(catch_dir)
+		else:
+			var catch_up_target: Vector2 = owner_player.global_position - to_owner.normalized() * FOLLOW_DISTANCE
+			global_position = global_position.lerp(catch_up_target, min(1.0, delta * 6.0))
+			velocity = Vector2.ZERO
 	elif dist_owner > FOLLOW_DISTANCE:
-		velocity = to_owner.normalized() * speed + separation
+		var follow_dir: Vector2 = _router.direction(global_position, owner_player.global_position, delta)
+		velocity = follow_dir * speed + separation
 		_block_movement_into_terrain()
 		move_and_slide()
-		_update_facing(to_owner)
+		_update_facing(follow_dir)
 	else:
 		velocity = separation
 		_block_movement_into_terrain()

@@ -305,11 +305,30 @@ func test_korsan_q_detonates_every_bomb_in_a_chain() -> void:
 		bombs.append(b)
 	var victim: FakeEnemy = _make_enemy(player.global_position + Vector2(120, 0))
 	player._skill_korsan_detonate_all()
-	await _wait(KorsanMath.CHAIN_DELAY * 3.0 + 0.2)
+	var delays: Array = player.korsan_chain_delays([60.0, 120.0, 180.0])
+	await _wait(float(delays[2]) + 0.2)
 	assert(player._korsan_bombs.is_empty(), "liste boşaldı")
 	for b in bombs:
 		assert(not is_instance_valid(b) or b.is_queued_for_deletion(), "her bomba patladı")
 	assert(victim.hits.size() >= 2, "ortadaki düşman birden çok bombanın alanında: %d" % victim.hits.size())
+	_cleanup()
+
+
+## Kullanıcı isteği (2026-09-24): çok sayıda bomba aynı anda patlayıp FPS düşürmesin - yakından uzağa, uzaklıkla
+## orantılı ve aralarında boşluk olan bir dalga; aynı yere yığılmışlar da art arda; toplam süre sınırlı.
+func test_korsan_chain_delays_spread_near_to_far() -> void:
+	var player: Node = _make_player(9, 18)
+	var wave: Array = player.korsan_chain_delays([0.0, 325.0, 650.0])
+	assert(is_equal_approx(float(wave[0]), 0.0), "ilk bomba hemen: %s" % str(wave))
+	assert(is_equal_approx(float(wave[1]), 325.0 / KorsanMath.CHAIN_WAVE_SPEED), "uzaklıkla orantılı: %s" % str(wave))
+	assert(is_equal_approx(float(wave[2]), 650.0 / KorsanMath.CHAIN_WAVE_SPEED), "uzaklıkla orantılı: %s" % str(wave))
+	var stacked: Array = []
+	for i in range(40):
+		stacked.append(50.0)
+	var d: Array = player.korsan_chain_delays(stacked)
+	for i in range(1, d.size()):
+		assert(float(d[i]) - float(d[i - 1]) >= KorsanMath.CHAIN_MIN_GAP_FLOOR - 0.0001, "üst üste bombalar da aralıklı: %s" % str(d))
+	assert(float(d[d.size() - 1]) <= KorsanMath.CHAIN_MAX_TOTAL + 0.0001, "toplam süre sınırlı: %f" % float(d[d.size() - 1]))
 	_cleanup()
 
 

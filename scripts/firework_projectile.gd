@@ -81,11 +81,15 @@ var _done: bool = false
 ## hareket yönünün açısına +PI/2 eklenerek "burun yukarı" sanatına kalibre
 ## ediliyor (bkz. _rotation_for_tangent).
 const ROTATION_CORRECTION := PI / 2.0
+## Kullanıcı isteği (2026-09-24): "füze ateşlendiğinde arkasında partiküller bıraksın füze olduğu hissedilsin" - kıvılcım ->
+## alev -> duman izi (pixel spritesheet, bkz. fx_particle_trail.gd "missile"). Patlayınca (_done) iz bırakmayı keser.
+const ParticleTrail := preload("res://scripts/fx_particle_trail.gd")
 
 
 func _ready() -> void:
 	if sparkle and sparkle.sprite_frames and sparkle.sprite_frames.has_animation("loop"):
 		sparkle.play("loop")
+	ParticleTrail.attach(self, "missile")
 
 
 ## weapon.gd _fire_at() önce add_child() çağırıp SONRA global_position/

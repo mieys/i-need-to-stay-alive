@@ -12,18 +12,14 @@ extends Node
 const MerchantScreenScript: GDScript = preload("res://scripts/merchant_shop_screen.gd")
 
 
-## Ekranın çağırdığı dükkan arayüzü: reroll hakkı + taze stok (bkz. traveling_merchant.gd).
+## Ekranın çağırdığı dükkan arayüzü: altınlı karıştırma + taze stok (bkz. traveling_merchant.gd).
 class FakeMerchant extends Node:
-	var charges: int = 1
 	var next_stock: Array = []
 
-	func get_reroll_charges() -> int:
-		return charges
+	func get_reroll_cost() -> int:
+		return 0
 
 	func try_reroll_stock() -> Variant:
-		if charges <= 0:
-			return null
-		charges -= 1
 		return next_stock
 
 

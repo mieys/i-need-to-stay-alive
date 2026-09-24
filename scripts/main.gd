@@ -21,9 +21,7 @@ const WeaponSelectScreenScript = preload("res://scripts/weapon_select_screen.gd"
 ## kullanıcı isteği: "varolduğu sürece konumu ok ile gösterilmeli."
 const MerchantArrowScript := preload("res://scripts/merchant_arrow.gd")
 var _merchant_arrow: Control = null
-const WorldEventMarkerScript := preload("res://scripts/world_event_marker.gd")
 const WorldEventBannerScript := preload("res://scripts/world_event_banner.gd")
-var _world_event_marker: Control = null
 var _world_event_banner: Control = null
 ## mission_id -> "capture_point"/"secure_area"/... (bkz. world_event_manager.gd
 ## MISSION_KIND_NAMES) - tamamlanma bildiriminde okunabilir bir isim göstermek için.
@@ -177,14 +175,8 @@ func _ready() -> void:
 	NetworkManager.world_event_progress.connect(_on_world_event_progress)
 	NetworkManager.world_event_completed.connect(_on_world_event_completed)
 	NetworkManager.world_event_item_collected.connect(_on_world_event_item_collected)
-	_world_event_marker = Control.new()
-	_world_event_marker.name = "WorldEventMarker"
-	_world_event_marker.set_script(WorldEventMarkerScript)
-	var world_event_layer := CanvasLayer.new()
-	world_event_layer.name = "WorldEventMarkerLayer"
-	world_event_layer.layer = 40
-	add_child(world_event_layer)
-	world_event_layer.add_child(_world_event_marker)
+	## (Ekranın üst-ortasındaki ayrı görev pusulası - world_event_marker.gd - kaldırıldı: kullanıcı isteğiyle (2026-09-24)
+	## görev konumu artık görev penceresinin İÇİNDE, her satırın yön oku + mesafesiyle - bkz. world_event_banner.gd.)
 	_world_event_banner = Control.new()
 	_world_event_banner.name = "WorldEventBanner"
 	_world_event_banner.set_script(WorldEventBannerScript)
@@ -528,6 +520,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 			"move_speed": player.get_effective_move_speed() if player.has_method("get_effective_move_speed") else 0.0,
 			## Kalıcı hız (yetenek buff'sız) - host'taki "Kopyanı Öldür" kopyası bunu kopyalar (bkz. mission_player_copy.gd).
 			"base_speed": player.get_base_move_speed() if player.has_method("get_base_move_speed") else 0.0,
+			## Taban "Hasar" statı - host'taki kopya bu oyuncunun silah hasarını bundan türetir (bkz. mission_player_copy.gd).
+			"dmg": player.damage_bonus,
 			## DÜZELTME (kullanıcı bildirimi #41: "Diğer oyuncuların kalkan
 			## baloncukları sürekli görünür kalıyor"): remote_player.gd eskiden
 			## sadece "item_shield_hp > 0.0" bakıyordu - bu, kalkan dolu/sabit
@@ -1952,11 +1946,11 @@ func _on_world_event_announced(mission_id: int, kind: String, pos: Vector2, _rad
 		var minimap: Node = hud.get_node_or_null("MinimapControl")
 		if minimap and minimap.has_method("set_mission_marker"):
 			minimap.set_mission_marker(mission_id, pos, Color(0.7, 0.85, 1.0), "?")
-		if _world_event_marker and is_instance_valid(_world_event_marker):
-			_world_event_marker.show_marker(mission_id, pos, label, Color(0.7, 0.85, 1.0), warn_seconds)
 	if _world_event_banner and is_instance_valid(_world_event_banner):
-		_world_event_banner.upsert(mission_id, "%s (yakında)" % label, true)
+		_world_event_banner.upsert(mission_id, label, true) ## uyarı aşaması: kırmızı başlık + başlamaya geri sayım
 		_world_event_banner.set_countdown(mission_id, warn_seconds)
+		if not NO_SINGLE_LOCATION_KINDS.has(kind):
+			_world_event_banner.set_target(mission_id, pos, _radius)
 
 
 func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radius: float, duration: float, extra: Dictionary) -> void:
@@ -1966,11 +1960,15 @@ func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radiu
 		var minimap: Node = hud.get_node_or_null("MinimapControl")
 		if minimap and minimap.has_method("set_mission_marker"):
 			minimap.set_mission_marker(mission_id, pos, Color(1.0, 0.4, 0.3), "!")
-		if _world_event_marker and is_instance_valid(_world_event_marker):
-			_world_event_marker.show_marker(mission_id, pos, label, Color(1.0, 0.4, 0.3), duration)
 	if _world_event_banner and is_instance_valid(_world_event_banner):
 		_world_event_banner.upsert(mission_id, label, false)
 		_world_event_banner.set_countdown(mission_id, duration) ## görevin bitişine geri sayım
+		## Kullanıcı isteği (2026-09-24): toplama görevinde çubuk yerine toplanması gereken miktar yazsın.
+		if kind == "collect":
+			_world_event_banner.set_count_mode(mission_id, true)
+			_world_event_banner.set_progress(mission_id, 0.0, float(extra.get("collect_target", 0)))
+		if not NO_SINGLE_LOCATION_KINDS.has(kind):
+			_world_event_banner.set_target(mission_id, pos, _radius)
 	## Görev türüne özgü görseller (bkz. dosya başındaki mission_*.gd preload'ları). Ağacı Koru/
 	## Kopyanı Öldür için GERÇEK (simüle edilen) düğüm world_event_manager.gd'de ZATEN bu
 	## istemcide oluşmuş olabilir (host/solo) - o durumda burada İKİNCİ bir kozmetik kopya
@@ -2002,7 +2000,8 @@ func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radiu
 		"escort_van":
 			var van: Node2D = MissionVanScript.new()
 			get_tree().current_scene.add_child(van)
-			van.setup(extra.get("start", pos), extra.get("end", pos), extra.get("push_radius", 130.0))
+			var route: PackedVector2Array = extra.get("route", PackedVector2Array([extra.get("start", pos), extra.get("end", pos)]))
+			van.setup(route, extra.get("push_radius", 130.0))
 			visuals["van"] = van
 		"defend_tree":
 			if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
@@ -2011,6 +2010,9 @@ func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radiu
 				tree.global_position = pos
 				tree.setup(1, false) ## simulated=false: sadece world_event_progress'ten can/kalkan alır
 				visuals["tree"] = tree
+				## Sadece kozmetik: istemcideki yaratıklar ağaca baksın (bkz. enemy.gd istemci bakış dalı). AI/hedef
+				## seçimi host'ta; defend_tree_active istemcide false kalır. Ağaç silinince is_instance_valid false olur.
+				GameManager.defend_tree_ref = tree
 				visuals["tree_max_health"] = extra.get("max_health", 3000.0)
 				visuals["tree_max_shield"] = extra.get("max_shield", 800.0)
 			else:
@@ -2024,7 +2026,8 @@ func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radiu
 					var copy: CharacterBody2D = MissionPlayerCopyScript.new()
 					get_tree().current_scene.add_child(copy)
 					copy.global_position = m.get("pos", Vector2.ZERO)
-					copy.setup(mission_id, i, int(m.get("char_id", 1)), 100.0, Characters.BASE_MOVE_SPEED, 0.0, false)
+					copy.setup(mission_id, i, int(m.get("char_id", 1)), float(m.get("max_hp", 100.0)),
+						float(m.get("max_shield", 0.0)), Characters.BASE_MOVE_SPEED, 0.0, false)
 					copy.set_weapon_keys(m.get("weapons", []))
 					copies.append(copy)
 				visuals["copies"] = copies
@@ -2092,8 +2095,6 @@ func _on_world_event_completed(mission_id: int, kind: String, success: bool) -> 
 		minimap.clear_mission_marker(mission_id)
 	if minimap and minimap.has_method("clear_collect_dots"):
 		minimap.call("clear_collect_dots", mission_id)
-	if _world_event_marker and is_instance_valid(_world_event_marker):
-		_world_event_marker.hide_marker(mission_id)
 	if _world_event_banner and is_instance_valid(_world_event_banner):
 		_world_event_banner.remove(mission_id)
 	## Görsel temizlik - SADECE bu istemcinin kendi kurduğu (client-cosmetic veya

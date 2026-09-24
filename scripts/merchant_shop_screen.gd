@@ -30,9 +30,9 @@ extends CanvasLayer
 ## boyunca sabit kalır - ekranı kapatıp tekrar açmak yeniden ÇEKMEZ) -
 ## setup()'a dışarıdan verilir, bu ekran SADECE gösterir/sattırır.
 ## Kullanıcı isteği: "Seyyar satıcıdaki eşyaları rerollama butonu ekle" -
-## TEK istisna: oyuncu kendi reroll hakkını kullanırsa (bkz. _on_reroll_
-## pressed) stok o anda YENİDEN çekilir - hak sayısı TravelingMerchant'ta
-## (bkz. _merchant) ziyaretler arası kalıcı/kişisel olarak tutulur.
+## TEK istisna: oyuncu altınla karıştırırsa (bkz. _on_reroll_pressed/reroll_cost)
+## stok o anda YENİDEN çekilir - ziyaret başına karıştırma sayacı TravelingMerchant'ta
+## (bkz. _merchant) kişisel olarak tutulur.
 
 signal closed
 
@@ -178,6 +178,7 @@ func _process(delta: float) -> void:
 	if _stats_timer <= 0.0:
 		_stats_timer = 0.25
 		_refresh_stats()
+		_refresh_reroll_button() ## altın dükkan açıkken de değişebilir (paylaşılan altın vb.)
 
 
 ## Kullanıcı isteği (2026-09-21): "seyyar satıcı arayüzünde itemler ve yazılar çok ufak kalıyor. Bu arayüzü daha kullanıcı dostu ve
@@ -237,8 +238,8 @@ func _build_ui() -> void:
 	inv_btn.pressed.connect(_open_inventory)
 	title_bar.add_child(inv_btn)
 
-	## Kullanıcı isteği: "Seyyar satıcıdaki eşyaları rerollama butonu ekle" - hak sayısı TravelingMerchant'ta tutuluyor
-	## (bkz. _merchant üstündeki yorum), burada sadece gösterilip _on_reroll_pressed ile tetikleniyor.
+	## Kullanıcı isteği: "Seyyar satıcıdaki eşyaları rerollama butonu ekle" - artık altınla (bkz. reroll_cost); ziyaret
+	## başına karıştırma sayacı TravelingMerchant'ta, burada sadece gösterilip _on_reroll_pressed ile tetikleniyor.
 	_reroll_btn = Button.new()
 	_reroll_btn.custom_minimum_size = Vector2(340, 64)
 	UIKit.style_button(_reroll_btn, "wood", false, UIKit.FS_BODY)
@@ -879,6 +880,23 @@ func _merchant_price_tier() -> int:
 	var t: float = GameManager.game_time
 	return clampi(1 + int(t / MERCHANT_PRICE_TIER_DURATION), 1, 15)
 
+## Kullanıcı isteği (2026-09-24): "seyyar satıcı marketindeki rerollama hakkı tıpkı level atlama kartlarındaki gibi
+## altınla olacak ve fiyatı da onun gibi artacak". Karıştırma fiyatının TEK kaynağı - level_up_screen.gd _reroll_cost da
+## bunu çağırır (iki ekranın formülü birbirinden sapmasın):
+##   taban = REROLL_BASE_COST x satıcı fiyat ölçeği (yukarıdaki Kademe/zaman eğrisi, Kademe 1'e göre oranlanmış -
+##           Kademe 1'de 3, Kademe 5'te ~9, Kademe 15'te ~23 altın)
+##   fiyat = taban x (1 + o ekranda/ziyarette yapılan karıştırma sayısı) -> 3, 6, 9, 12 ...
+## Level atlama ekranında sayaç ekran başına, seyyar satıcıda ziyaret başına (traveling_merchant.gd) sıfırlanır.
+const REROLL_BASE_COST := 3.0
+
+
+static func reroll_cost(rerolls_done: int) -> int:
+	var tier: int = clampi(1 + int(GameManager.game_time / MERCHANT_PRICE_TIER_DURATION), 1, 15)
+	var price_scale: float = (MERCHANT_PRICE_EARLY_SCALE + float(tier - 1) * MERCHANT_PRICE_PER_TIER_GROWTH) / MERCHANT_PRICE_EARLY_SCALE
+	var base: int = maxi(1, int(round(REROLL_BASE_COST * price_scale)))
+	return base * (1 + maxi(0, rerolls_done))
+
+
 func _scale_merchant_price(base_shape: float) -> int:
 	var scale: float = MERCHANT_PRICE_EARLY_SCALE + float(_merchant_price_tier() - 1) * MERCHANT_PRICE_PER_TIER_GROWTH
 	return max(MERCHANT_PRICE_MIN, int(round(base_shape * scale)))
@@ -992,6 +1010,7 @@ func _on_buy_pressed(index: int) -> void:
 				_player.refresh_shield_stats()
 			entry["sold"] = true
 	_refresh_all_buy_states()
+	_refresh_reroll_button()
 	if _selected_index == index:
 		_refresh_details()
 
@@ -1014,13 +1033,15 @@ func _refresh_reroll_button() -> void:
 	if not _merchant or not is_instance_valid(_merchant):
 		_reroll_btn.visible = false
 		return
-	var charges: int = int(_merchant.get_reroll_charges())
-	_reroll_btn.text = "YENİDEN ÇEVİR (%d)" % charges
-	_reroll_btn.disabled = charges <= 0
+	var cost: int = int(_merchant.get_reroll_cost())
+	var text: String = "YENİDEN ÇEVİR (%d altın)" % cost
+	if _reroll_btn.text != text:
+		_reroll_btn.text = text
+	_reroll_btn.disabled = GameManager.gold < cost
 
 
-## Kullanıcı isteği: "Seyyar satıcıdaki eşyaları rerollama butonu ekle" - 1
-## hak harcayıp TravelingMerchant'tan tamamen taze bir stok ister, tüm
+## Kullanıcı isteği: "Seyyar satıcıdaki eşyaları rerollama butonu ekle" - altın
+## ödeyip (bkz. reroll_cost) TravelingMerchant'tan tamamen taze bir stok ister, tüm
 ## kartları (ve "SATILDI" durumlarını - artık FARKLI eşyalar olduğu için
 ## eski durum anlamsız) sıfırdan kurar.
 func _on_reroll_pressed() -> void:
@@ -1037,6 +1058,7 @@ func _on_reroll_pressed() -> void:
 	_rebuild_grid()
 	_refresh_all_buy_states()
 	_refresh_reroll_button()
+	_refresh_stats()
 	if not _stock.is_empty():
 		_select_index(0)
 
