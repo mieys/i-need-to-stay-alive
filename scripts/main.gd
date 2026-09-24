@@ -21,6 +21,37 @@ const WeaponSelectScreenScript = preload("res://scripts/weapon_select_screen.gd"
 ## kullanıcı isteği: "varolduğu sürece konumu ok ile gösterilmeli."
 const MerchantArrowScript := preload("res://scripts/merchant_arrow.gd")
 var _merchant_arrow: Control = null
+const WorldEventMarkerScript := preload("res://scripts/world_event_marker.gd")
+const WorldEventBannerScript := preload("res://scripts/world_event_banner.gd")
+var _world_event_marker: Control = null
+var _world_event_banner: Control = null
+## mission_id -> "capture_point"/"secure_area"/... (bkz. world_event_manager.gd
+## MISSION_KIND_NAMES) - tamamlanma bildiriminde okunabilir bir isim göstermek için.
+var _world_event_kind_by_id: Dictionary = {}
+var _world_event_label_by_id: Dictionary = {} ## bkz. yukarıdaki not - announced'tan alınır
+## mission_id -> Dictionary (kind'e özgü görsel node/dizi referansları - bkz.
+## _on_world_event_started/_on_world_event_progress/_on_world_event_completed).
+var _world_event_visuals: Dictionary = {}
+const MissionVanScript := preload("res://scripts/mission_van.gd")
+const MissionTreeScript := preload("res://scripts/mission_tree.gd")
+const MissionCollectItemScript := preload("res://scripts/mission_collect_item.gd")
+const MissionPlayerCopyScript := preload("res://scripts/mission_player_copy.gd")
+const MissionZoneScript := preload("res://scripts/mission_zone.gd")
+## Kullanıcı bildirimi (2026-09-24): "görev açıklaması yanda yazarken yazı çok çabuk kayboluyor" - görev bildirimleri
+## (duyuru/başladı/bitti) artık genel 2.4sn yerine bu kadar ekranda kalıyor ve "BAŞLADI" bildirimi görevin ne
+## istediğini de yazıyor (bkz. MISSION_DESCRIPTIONS).
+const MISSION_TOAST_SECONDS := 9.0
+## Tek bir görev merkezi olmayan türler (bkz. world_event_manager.gd HIDDEN_LOCATION_KINDS): pusula oku/minimap "!" yok.
+## Topla'nın objeleri minimapte tek tek nokta olarak gösterilir (bkz. minimap.gd set_collect_dots).
+const NO_SINGLE_LOCATION_KINDS := ["kill_your_copy", "collect"]
+const MISSION_DESCRIPTIONS := {
+	"capture_point": "Bayrağın çevresindeki dairede durarak bayrağı direğin tepesine kadar kaldır.",
+	"secure_area": "İşaretli alanın içinde süre bitmeden yeterince yaratık öldür.",
+	"collect": "Haritanın dört bir yanına saçılmış kristallerden yeterince topla (minimapte işaretli).",
+	"escort_van": "Konvoyun çevresindeki dairede kalarak onu hedefe kadar it. Uzaklaşırsan geri kayar.",
+	"defend_tree": "Ağacı yaratıklardan koru - büyümesini tamamlayana kadar yok olmasın.",
+	"kill_your_copy": "Haritada bir yerde beliren renkleri ters kopyanı bul ve öldür.",
+}
 
 ## Kullanıcı isteği: LoL tarzı görüş alanı / savaş sisi - bkz. vision_fog.gd.
 ## Sahneye (main.tscn) elle eklenmiyor, kodla kuruluyor: Godot editörü main.tscn'i
@@ -139,6 +170,31 @@ func _ready() -> void:
 	merchant_arrow_layer.layer = 40
 	add_child(merchant_arrow_layer)
 	merchant_arrow_layer.add_child(_merchant_arrow)
+	## Görev sistemi (bkz. world_event_manager.gd) - satıcı okuyla AYNI CanvasLayer deseni,
+	## ayrı bir layer'da (aynı katmanda olsalar da iki script birbirinden habersiz, karışmasın).
+	NetworkManager.world_event_announced.connect(_on_world_event_announced)
+	NetworkManager.world_event_started.connect(_on_world_event_started)
+	NetworkManager.world_event_progress.connect(_on_world_event_progress)
+	NetworkManager.world_event_completed.connect(_on_world_event_completed)
+	NetworkManager.world_event_item_collected.connect(_on_world_event_item_collected)
+	_world_event_marker = Control.new()
+	_world_event_marker.name = "WorldEventMarker"
+	_world_event_marker.set_script(WorldEventMarkerScript)
+	var world_event_layer := CanvasLayer.new()
+	world_event_layer.name = "WorldEventMarkerLayer"
+	world_event_layer.layer = 40
+	add_child(world_event_layer)
+	world_event_layer.add_child(_world_event_marker)
+	_world_event_banner = Control.new()
+	_world_event_banner.name = "WorldEventBanner"
+	_world_event_banner.set_script(WorldEventBannerScript)
+	var world_event_banner_layer := CanvasLayer.new()
+	world_event_banner_layer.name = "WorldEventBannerLayer"
+	world_event_banner_layer.layer = 40
+	add_child(world_event_banner_layer)
+	world_event_banner_layer.add_child(_world_event_banner)
+	## Görev göstergeleri HUD'un sağ sütunundaki butonların altında dursun (bkz. world_event_banner.gd).
+	_world_event_banner.set("hud_anchor_controls", [hud.get("envanter_toggle_button"), hud.get("gold_indicator"), hud.get("_debug_button")])
 	## #58 DÜZELTME (kullanıcı bildirimi: "sandık açılımı esnasında oyun diğer
 	## oyuncularda devam ediyor gibi görünüyor, kart bekleme ekranının aktif
 	## kalması gerekiyor o esnada") - bkz. _on_chest_busy_state_changed().
@@ -288,6 +344,8 @@ func _process(delta: float) -> void:
 	
 	if NetworkManager.is_multiplayer_active and is_instance_valid(player):
 		_process_multiplayer_sync(delta)
+	if not _remote_players.is_empty():
+		_update_character_draw_order()
 	## #54: izleyici kamerasının seçili müttefiği takip etmesi - player node'u
 	## bu noktada zaten queue_free() edilmiş/geçersiz olabilir (bkz. player.gd
 	## die()), bu yüzden yukarıdaki "is_instance_valid(player)" şartından
@@ -317,6 +375,8 @@ func _spawn_remote_player(pid: int, char_id: int, p_name: String) -> void:
 	if _remote_players.has(pid):
 		return
 	var rp := RemotePlayerScene.instantiate() as RemotePlayer
+	## Yerel Player ile AYNI z katmanı (main.tscn'de z_index = 1) - bkz. _update_character_draw_order.
+	rp.z_index = player.z_index if is_instance_valid(player) else 1
 	add_child(rp)
 	rp.setup(pid, char_id, p_name)
 	## DÜZELTME (kullanıcı bildirimi: "spawn noktaları multiplayerda bazen
@@ -327,6 +387,32 @@ func _spawn_remote_player(pid: int, char_id: int, p_name: String) -> void:
 	## _rpc_update_player_transform), o yüzden gerçek gameplay'e etkisi yok.
 	rp.global_position = player.global_position + Vector2(randf_range(-150, 150), randf_range(-150, 150))
 	_remote_players[pid] = rp
+
+
+## DÜZELTME (kullanıcı bildirimi: "bir karakter haritada üstteyken arkasında görünmek yerine önünde görünüyor" -
+## Elara Talon'un üstündeyken fark edildi): sahnede y-sort YOK ve yerel Player z_index = 1 iken RemotePlayer
+## kuklaları z_index = 0'daydı - yerel oyuncu Y'den bağımsız HEP öndeydi, kuklalar arasında da sıra sadece
+## sahneye eklenme sırasıydı (bu yüzden her karakter çiftinde görülmüyordu). Main'e y_sort_enabled vermek
+## harita/sis/FX gibi TÜM çocukların sırasını değiştirirdi; bunun yerine SADECE oyuncu düğümleri (hepsi Main'in
+## doğrudan çocuğu, aynı z katmanında) kendi aralarında Y'ye göre (aşağıdaki önde) yeniden diziliyor. move_child
+## yalnızca sıra gerçekten bozulduğunda çağrılıyor.
+func _update_character_draw_order() -> void:
+	var chars: Array[Node2D] = []
+	if is_instance_valid(player) and player.get_parent() == self:
+		chars.append(player)
+	for rp in _remote_players.values():
+		if is_instance_valid(rp) and rp.get_parent() == self:
+			chars.append(rp)
+	if chars.size() < 2:
+		return
+	chars.sort_custom(func(a: Node2D, b: Node2D) -> bool: return a.global_position.y < b.global_position.y)
+	## Her karakter kendinden bir öncekinin (daha yukarıdakinin) ağaçta ARKASINDA olmalı. Öndeyse hemen
+	## arkasına taşınır: daha büyük bir indekse move_child, öncekini bir geri kaydırıp bunu onun hemen
+	## arkasına koyar; önceki çiftlerin göreli sırası bozulmaz.
+	for i in range(1, chars.size()):
+		var prev_idx: int = chars[i - 1].get_index()
+		if chars[i].get_index() < prev_idx:
+			move_child(chars[i], prev_idx)
 
 
 func _process_multiplayer_sync(delta: float) -> void:
@@ -431,6 +517,9 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## (bkz. player.gd is_in_merchant_zone üstündeki yorum).
 			"is_in_merchant_zone": player.is_in_merchant_zone if "is_in_merchant_zone" in player else false,
 			"weapon_tiers": weapon_tiers,
+			## Gerçek yürüme hızı (bkz. player.gd get_effective_move_speed) - host'taki "Kopyanı Öldür" kopyası bu
+			## oyuncuyu kopyalıyorsa hızını buradan alır (RemotePlayer'ın kendi hız bilgisi yok).
+			"move_speed": player.get_effective_move_speed() if player.has_method("get_effective_move_speed") else 0.0,
 			## DÜZELTME (kullanıcı bildirimi #41: "Diğer oyuncuların kalkan
 			## baloncukları sürekli görünür kalıyor"): remote_player.gd eskiden
 			## sadece "item_shield_hp > 0.0" bakıyordu - bu, kalkan dolu/sabit
@@ -1005,20 +1094,11 @@ func _refresh_mini_shop_revive_prompt() -> void:
 	panel.offset_bottom = -70.0
 	panel.offset_left = -220.0
 	panel.offset_right = 220.0
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.18, 0.13, 0.08, 0.97)
-	sb.border_width_left = 3
-	sb.border_width_top = 3
-	sb.border_width_right = 3
-	sb.border_width_bottom = 3
-	sb.border_color = Color(0.83, 0.56, 0.30, 1.0)
-	sb.set_corner_radius_all(10)
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 10
-	panel.add_theme_stylebox_override("panel", sb)
+	## 2026-09-24: oyun içi bej kit penceresi (menülerle aynı dil).
+	panel.theme = UIKit.theme()
+	panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 	_mini_shop_revive_button = Button.new()
+	_mini_shop_revive_button.add_theme_font_size_override("font_size", UIKit.FS_BODY)
 	_mini_shop_revive_button.text = "Diriltmeyi Satın Al (%d Altın)" % MINI_SHOP_REVIVE_COST
 	_mini_shop_revive_button.disabled = GameManager.gold < MINI_SHOP_REVIVE_COST
 	_mini_shop_revive_button.pressed.connect(_on_mini_shop_revive_pressed)
@@ -1088,6 +1168,21 @@ func _finish_mini_shop_close() -> void:
 		_advance_level_up_queue()
 
 
+## Bekleme ekranlarının (dükkan / sandık / level atlama - yalnız çok oyunculu) ortak arka planı: ekranın ortasında oyun içi
+## bej kit penceresi; mesaj ve geri sayım etiketleri tam ekran ortalanmış olduğu için bu pencerenin içine düşer.
+## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap dile geçti (eskiden karartma üstünde çıplak yazı).
+func _add_kit_wait_panel(layer: CanvasLayer) -> void:
+	var panel := Panel.new()
+	panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -360.0
+	panel.offset_right = 360.0
+	panel.offset_top = -110.0
+	panel.offset_bottom = 110.0
+	layer.add_child(panel)
+
+
 ## bkz. _chest_wait_overlay ile AYNI görsel desen - periyodik dükkan
 ## molasında çok oyunculuda "herkes kapatana kadar" bekleme ekranı.
 func _show_mini_shop_wait_overlay() -> void:
@@ -1097,18 +1192,19 @@ func _show_mini_shop_wait_overlay() -> void:
 	_mini_shop_wait_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
 	_mini_shop_wait_overlay.layer = 90
 	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.55)
+	dim.color = Color(0.12, 0.07, 0.03, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_mini_shop_wait_overlay.add_child(dim)
+	_add_kit_wait_panel(_mini_shop_wait_overlay)
 	_mini_shop_wait_label = Label.new()
 	_mini_shop_wait_label.text = "Diğer oyuncular alışverişi bitiriyor...\nLütfen bekleyin"
 	_mini_shop_wait_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_mini_shop_wait_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_mini_shop_wait_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_mini_shop_wait_label.offset_bottom = -40.0
-	_mini_shop_wait_label.add_theme_font_size_override("font_size", 28)
-	_mini_shop_wait_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	_mini_shop_wait_label.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+	_mini_shop_wait_label.add_theme_color_override("font_color", UIKit.C_TEXT)
 	_mini_shop_wait_overlay.add_child(_mini_shop_wait_label)
 	_mini_shop_wait_countdown_label = Label.new()
 	_mini_shop_wait_countdown_label.text = "%ds" % int(ceil(NetworkManager.mini_shop_countdown)) if NetworkManager.mini_shop_timer_active else ""
@@ -1117,7 +1213,7 @@ func _show_mini_shop_wait_overlay() -> void:
 	_mini_shop_wait_countdown_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_mini_shop_wait_countdown_label.offset_top = 40.0
 	_mini_shop_wait_countdown_label.add_theme_font_size_override("font_size", 32)
-	_mini_shop_wait_countdown_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))
+	_mini_shop_wait_countdown_label.add_theme_color_override("font_color", UIKit.C_GOLD)
 	_mini_shop_wait_overlay.add_child(_mini_shop_wait_countdown_label)
 	add_child(_mini_shop_wait_overlay)
 
@@ -1457,10 +1553,11 @@ func _show_chest_wait_overlay() -> void:
 	_chest_wait_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
 	_chest_wait_overlay.layer = 90
 	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.55)
+	dim.color = Color(0.12, 0.07, 0.03, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_chest_wait_overlay.add_child(dim)
+	_add_kit_wait_panel(_chest_wait_overlay)
 	_chest_wait_label = Label.new()
 	## Kullanıcı isteği: "kimi beklediğimiz yazsın" - bkz. network_manager.gd
 	## get_chest_busy_names, aynı desen level_up_screen.gd/mini_shop_screen.gd
@@ -1470,8 +1567,8 @@ func _show_chest_wait_overlay() -> void:
 	_chest_wait_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_chest_wait_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_chest_wait_label.offset_bottom = -40.0
-	_chest_wait_label.add_theme_font_size_override("font_size", 28)
-	_chest_wait_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	_chest_wait_label.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+	_chest_wait_label.add_theme_color_override("font_color", UIKit.C_TEXT)
 	_chest_wait_overlay.add_child(_chest_wait_label)
 	## Kullanıcı isteği: level kartı seçme ekranındaki "Diğer oyuncular
 	## bekleniyor" panelindeki geri sayımla AYNI fikir - bekleyen oyuncular da
@@ -1484,7 +1581,7 @@ func _show_chest_wait_overlay() -> void:
 	_chest_wait_countdown_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_chest_wait_countdown_label.offset_top = 40.0
 	_chest_wait_countdown_label.add_theme_font_size_override("font_size", 32)
-	_chest_wait_countdown_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))
+	_chest_wait_countdown_label.add_theme_color_override("font_color", UIKit.C_GOLD)
 	_chest_wait_overlay.add_child(_chest_wait_countdown_label)
 	add_child(_chest_wait_overlay)
 
@@ -1531,26 +1628,18 @@ func _on_restart_request_received() -> void:
 	_restart_confirm_dialog.process_mode = Node.PROCESS_MODE_ALWAYS
 	_restart_confirm_dialog.layer = 95
 	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.6)
+	dim.color = Color(0.12, 0.07, 0.03, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_restart_confirm_dialog.add_child(dim)
 
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.13, 0.11, 0.09, 0.96)
-	style.border_width_left = 3
-	style.border_width_top = 3
-	style.border_width_right = 3
-	style.border_width_bottom = 3
-	style.border_color = Color(0.6, 0.45, 0.2, 1)
-	style.set_corner_radius_all(12)
-	style.content_margin_left = 24
-	style.content_margin_right = 24
-	style.content_margin_top = 20
-	style.content_margin_bottom = 20
-	panel.add_theme_stylebox_override("panel", style)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	## 2026-09-24: oyun içi bej kit penceresi (menülerle aynı dil).
+	panel.theme = UIKit.theme()
+	panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 	_restart_confirm_dialog.add_child(panel)
 
 	var vbox := VBoxContainer.new()
@@ -1560,8 +1649,7 @@ func _on_restart_request_received() -> void:
 	var msg := Label.new()
 	msg.text = "Host oyunu yeniden başlatmak istiyor.\nOnaylarsanız herkes odaya dönüp\nkarakterini yeniden seçecek. Onaylıyor musunuz?"
 	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	msg.add_theme_font_size_override("font_size", 24)
-	msg.add_theme_color_override("font_color", Color(0.95, 0.9, 0.78))
+	UIKit.style_label(msg, 24, UIKit.C_TEXT, 0)
 	vbox.add_child(msg)
 
 	var btn_row := HBoxContainer.new()
@@ -1571,9 +1659,8 @@ func _on_restart_request_received() -> void:
 
 	var approve_btn := Button.new()
 	approve_btn.text = "Onayla"
-	approve_btn.custom_minimum_size = Vector2(140, 44)
-	approve_btn.add_theme_font_size_override("font_size", 20)
-	ShopPanel._apply_wood_button_style(approve_btn)
+	approve_btn.custom_minimum_size = Vector2(170, 48)
+	UIKit.style_button(approve_btn, "green", false, UIKit.FS_BODY)
 	approve_btn.pressed.connect(func():
 		NetworkManager.submit_restart_vote(true)
 		_hide_restart_confirm_dialog()
@@ -1582,9 +1669,8 @@ func _on_restart_request_received() -> void:
 
 	var reject_btn := Button.new()
 	reject_btn.text = "Reddet"
-	reject_btn.custom_minimum_size = Vector2(140, 44)
-	reject_btn.add_theme_font_size_override("font_size", 20)
-	ShopPanel._apply_wood_button_style(reject_btn)
+	reject_btn.custom_minimum_size = Vector2(170, 48)
+	UIKit.style_button(reject_btn, "red", false, UIKit.FS_BODY)
 	reject_btn.pressed.connect(func():
 		NetworkManager.submit_restart_vote(false)
 		_hide_restart_confirm_dialog()
@@ -1633,18 +1719,19 @@ func _show_level_up_wait_overlay() -> void:
 	_level_up_wait_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
 	_level_up_wait_overlay.layer = 90
 	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.55)
+	dim.color = Color(0.12, 0.07, 0.03, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_level_up_wait_overlay.add_child(dim)
+	_add_kit_wait_panel(_level_up_wait_overlay)
 	_level_up_wait_label = Label.new()
 	_level_up_wait_label.text = _level_up_wait_message()
 	_level_up_wait_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_level_up_wait_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_level_up_wait_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_level_up_wait_label.offset_bottom = -40.0
-	_level_up_wait_label.add_theme_font_size_override("font_size", 28)
-	_level_up_wait_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	_level_up_wait_label.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+	_level_up_wait_label.add_theme_color_override("font_color", UIKit.C_TEXT)
 	_level_up_wait_overlay.add_child(_level_up_wait_label)
 	_level_up_wait_countdown_label = Label.new()
 	_level_up_wait_countdown_label.text = "%ds" % int(ceil(NetworkManager.level_up_countdown)) if NetworkManager.level_up_timer_active else ""
@@ -1653,7 +1740,7 @@ func _show_level_up_wait_overlay() -> void:
 	_level_up_wait_countdown_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_level_up_wait_countdown_label.offset_top = 40.0
 	_level_up_wait_countdown_label.add_theme_font_size_override("font_size", 32)
-	_level_up_wait_countdown_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))
+	_level_up_wait_countdown_label.add_theme_color_override("font_color", UIKit.C_GOLD)
 	_level_up_wait_overlay.add_child(_level_up_wait_countdown_label)
 	add_child(_level_up_wait_overlay)
 
@@ -1749,27 +1836,15 @@ func _return_to_menu_after_disconnect() -> void:
 ## Basit, kendi kendini yok eden bir üst-orta bildirim etiketi (bkz.
 ## kullanıcı bildirimi: "oyundan çıktığını gösteren bir bildirim yok").
 ## Herhangi bir sahneye/panele bağımlı değil - doğrudan Main'e eklenir.
-func _show_network_toast(text: String) -> void:
+var _active_toast_panels: Array = [] ## ekrandaki bildirimler, eskiden yeniye - alt alta dizilirler
+
+func _show_network_toast(text: String, hold_seconds: float = 2.4) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 100
 	add_child(layer)
 	var panel := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.1, 0.08, 0.92)
-	style.border_width_left = 3
-	style.border_width_top = 3
-	style.border_width_right = 3
-	style.border_width_bottom = 3
-	style.border_color = Color(0.6, 0.45, 0.2, 1)
-	style.corner_radius_top_left = 10
-	style.corner_radius_top_right = 10
-	style.corner_radius_bottom_right = 10
-	style.corner_radius_bottom_left = 10
-	style.content_margin_left = 20
-	style.content_margin_right = 20
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	panel.add_theme_stylebox_override("panel", style)
+	## 2026-09-24: oyun içi bej kit penceresi (menülerle aynı dil) - koyu yazı.
+	panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 	## Kullanıcı isteği: "altın gönderildi bildiriminin dükkan butonunun
 	## altında görünmesini istiyorum" - eskiden ekranın üst-ortasında
 	## duruyordu ve hud.tscn'deki dükkan/envanter butonlarının (GoldIndicator,
@@ -1785,11 +1860,32 @@ func _show_network_toast(text: String) -> void:
 	lbl.text = text
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	lbl.add_theme_font_size_override("font_size", 20)
-	lbl.add_theme_color_override("font_color", Color(0.95, 0.9, 0.78))
+	UIKit.style_label(lbl, 24, UIKit.C_TEXT, 0)
 	panel.add_child(lbl)
+	## Sağ sütundaki görev satırlarının (bkz. world_event_banner.gd) üstüne binmesin - onların altına yerleşir;
+	## aynı anda birden fazla bildirim varsa (ör. iki görev aynı anda) üst üste binmek yerine ALT ALTA dizilir.
+	## Satırlar/bildirimler eklenip kalktıkça her karede konum güncellenir.
+	_active_toast_panels.append(panel)
+	var follow := func() -> void:
+		if not is_instance_valid(panel):
+			return
+		var y: float = 292.0
+		if _world_event_banner and is_instance_valid(_world_event_banner):
+			y = maxf(y, float(_world_event_banner.call("get_rows_bottom_y")) + 8.0)
+		for other in _active_toast_panels:
+			if other == panel:
+				break
+			if is_instance_valid(other):
+				y += (other as Control).size.y + 6.0
+		panel.offset_top = y
+	follow.call()
+	get_tree().process_frame.connect(follow)
+	layer.tree_exiting.connect(func() -> void:
+		_active_toast_panels.erase(panel)
+		if get_tree().process_frame.is_connected(follow):
+			get_tree().process_frame.disconnect(follow))
 	var tw := create_tween()
-	tw.tween_interval(2.4)
+	tw.tween_interval(hold_seconds)
 	tw.tween_property(panel, "modulate:a", 0.0, 0.6)
 	tw.tween_callback(layer.queue_free)
 
@@ -1825,6 +1921,195 @@ func _on_merchant_departed() -> void:
 		minimap.set_merchant_marker(Vector2.ZERO, false)
 	if _merchant_arrow and is_instance_valid(_merchant_arrow):
 		_merchant_arrow.set_target_active(Vector2.ZERO, false)
+
+
+## Rastgele dünya görevleri (bkz. world_event_manager.gd dosya başı notu) - satıcı
+## bildirimleriyle BİREBİR AYNI dört parça (toast + minimap işareti + ok + burada AYRICA
+## üst-orta ilerleme paneli): TÜM peer'lerde çalışır (call_local RPC, bkz. network_manager.gd).
+## "Görev nerede" işareti UYARI aşamasında da (aktifleşmeden 1 dakika önce) gösterilir -
+## kullanıcı isteği: "hangi görevin nerede başlayacağı ... haritada da gösterilecek".
+## "toplama görevinde toplanması gereken objeler ve kopyaların konumu gösterilmeyecek"
+## (kullanıcı isteği) - bu iki tür için pos=Vector2.ZERO/radius=0.0 gelir (bkz.
+## world_event_manager.gd HIDDEN_LOCATION_KINDS), minimap/ok işareti BİLEREK atlanır.
+func _on_world_event_announced(mission_id: int, kind: String, pos: Vector2, _radius: float, warn_seconds: float, label: String) -> void:
+	_world_event_kind_by_id[mission_id] = kind
+	_world_event_label_by_id[mission_id] = label
+	var loc_note: String = " Konumu haritada işaretlendi."
+	if kind == "kill_your_copy":
+		loc_note = ""
+	elif kind == "collect":
+		loc_note = " Kristaller başlayınca haritaya saçılacak."
+	_show_network_toast(("%s görevi %d saniye sonra başlayacak!" % [label, int(warn_seconds)]) + loc_note, MISSION_TOAST_SECONDS)
+	if not NO_SINGLE_LOCATION_KINDS.has(kind):
+		var minimap: Node = hud.get_node_or_null("MinimapControl")
+		if minimap and minimap.has_method("set_mission_marker"):
+			minimap.set_mission_marker(mission_id, pos, Color(0.7, 0.85, 1.0), "?")
+		if _world_event_marker and is_instance_valid(_world_event_marker):
+			_world_event_marker.show_marker(mission_id, pos, label, Color(0.7, 0.85, 1.0), warn_seconds)
+	if _world_event_banner and is_instance_valid(_world_event_banner):
+		_world_event_banner.upsert(mission_id, "%s (yakında)" % label, true)
+		_world_event_banner.set_countdown(mission_id, warn_seconds)
+
+
+func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radius: float, duration: float, extra: Dictionary) -> void:
+	var label: String = String(_world_event_label_by_id.get(mission_id, kind))
+	_show_network_toast("%s görevi BAŞLADI!\n%s" % [label, String(MISSION_DESCRIPTIONS.get(kind, ""))], MISSION_TOAST_SECONDS)
+	if not NO_SINGLE_LOCATION_KINDS.has(kind):
+		var minimap: Node = hud.get_node_or_null("MinimapControl")
+		if minimap and minimap.has_method("set_mission_marker"):
+			minimap.set_mission_marker(mission_id, pos, Color(1.0, 0.4, 0.3), "!")
+		if _world_event_marker and is_instance_valid(_world_event_marker):
+			_world_event_marker.show_marker(mission_id, pos, label, Color(1.0, 0.4, 0.3), duration)
+	if _world_event_banner and is_instance_valid(_world_event_banner):
+		_world_event_banner.upsert(mission_id, label, false)
+		_world_event_banner.set_countdown(mission_id, duration) ## görevin bitişine geri sayım
+	## Görev türüne özgü görseller (bkz. dosya başındaki mission_*.gd preload'ları). Ağacı Koru/
+	## Kopyanı Öldür için GERÇEK (simüle edilen) düğüm world_event_manager.gd'de ZATEN bu
+	## istemcide oluşmuş olabilir (host/solo) - o durumda burada İKİNCİ bir kozmetik kopya
+	## YARATILMAZ (bkz. aşağıdaki is_multiplayer_active/is_host kontrolü, enemy.gd'nin AYNI
+	## "sadece client kozmetik kurar" desenidir).
+	var visuals: Dictionary = {"kind": kind}
+	match kind:
+		"capture_point", "secure_area":
+			## Kullanıcı bildirimi (2026-09-24): bayrak/alan hiç çizilmiyordu - bkz. mission_zone.gd.
+			var zone: Node2D = MissionZoneScript.new()
+			get_tree().current_scene.add_child(zone)
+			zone.global_position = pos
+			zone.setup(kind, _radius)
+			visuals["zone"] = zone
+		"collect":
+			var items: Array = []
+			var positions: PackedVector2Array = extra.get("items", PackedVector2Array())
+			for i in range(positions.size()):
+				var item: Area2D = MissionCollectItemScript.new()
+				get_tree().current_scene.add_child(item)
+				item.global_position = positions[i]
+				item.mission_id = mission_id
+				item.item_index = i
+				items.append(item)
+			visuals["items"] = items
+			var mm: Node = hud.get_node_or_null("MinimapControl")
+			if mm and mm.has_method("set_collect_dots"):
+				mm.call("set_collect_dots", mission_id, positions)
+		"escort_van":
+			var van: Node2D = MissionVanScript.new()
+			get_tree().current_scene.add_child(van)
+			van.setup(extra.get("start", pos), extra.get("end", pos), extra.get("push_radius", 130.0))
+			visuals["van"] = van
+		"defend_tree":
+			if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+				var tree: Node2D = MissionTreeScript.new()
+				get_tree().current_scene.add_child(tree)
+				tree.global_position = pos
+				tree.setup(1, false) ## simulated=false: sadece world_event_progress'ten can/kalkan alır
+				visuals["tree"] = tree
+				visuals["tree_max_health"] = extra.get("max_health", 3000.0)
+				visuals["tree_max_shield"] = extra.get("max_shield", 800.0)
+			else:
+				visuals["tree"] = GameManager.defend_tree_ref ## gerçek ağaç zaten burada
+		"kill_your_copy":
+			if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+				var copies: Array = []
+				var copy_meta: Array = extra.get("copies", [])
+				for i in range(copy_meta.size()):
+					var m: Dictionary = copy_meta[i]
+					var copy: CharacterBody2D = MissionPlayerCopyScript.new()
+					get_tree().current_scene.add_child(copy)
+					copy.global_position = m.get("pos", Vector2.ZERO)
+					copy.setup(mission_id, i, int(m.get("char_id", 1)), 100.0, Characters.BASE_MOVE_SPEED, 0.0, false)
+					copies.append(copy)
+				visuals["copies"] = copies
+	_world_event_visuals[mission_id] = visuals
+
+
+func _on_world_event_progress(mission_id: int, value: float, target: float) -> void:
+	if _world_event_banner and is_instance_valid(_world_event_banner):
+		_world_event_banner.set_progress(mission_id, value, target)
+	var visuals: Dictionary = _world_event_visuals.get(mission_id, {})
+	match visuals.get("kind"):
+		"capture_point", "secure_area":
+			var zone: Node = visuals.get("zone")
+			if zone and is_instance_valid(zone):
+				zone.call("set_progress", value, target)
+		"escort_van":
+			var van: Node = visuals.get("van")
+			if van and is_instance_valid(van):
+				## _players_in_radius > 0 mu bilmiyoruz (sadece value/target geliyor) - basit bir
+				## ısı işareti: ilerleme SON karede ARTMIŞSA "itiliyor" say (görsel ipucu, oyunu
+				## etkilemez, bkz. mission_van.gd _pushed - sadece renk).
+				var prev: float = float(visuals.get("_last_progress", value))
+				van.call("set_progress", value, target, value >= prev)
+				visuals["_last_progress"] = value
+				_world_event_visuals[mission_id] = visuals
+		"defend_tree":
+			var tree: Node = visuals.get("tree")
+			## DÜZELTME (headless testte bulundu): "not is_host" TEK BAŞINA yanlıştı - tek
+			## oyunculu modda is_host hiç true olmuyor (bkz. network_manager.gd), yani bu
+			## dal SOLO'da da tetiklenip _activate_mission'ın genel (0.0, 1.0) ilk yayınıyla
+			## GERÇEK ağacın canını/kalkanını anında sıfırlıyordu. Diğer tüm host/client
+			## ayrımlarıyla (bkz. yukarıdaki _on_world_event_started) AYNI tam koşul gerekli:
+			## sadece GERÇEKTEN aktif bir çok oyunculu oturumda, host OLMAYAN bir istemci.
+			if tree and is_instance_valid(tree) and NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+				tree.call("apply_synced_health", value, target)
+
+
+func _on_world_event_item_collected(mission_id: int, item_index: int) -> void:
+	var visuals: Dictionary = _world_event_visuals.get(mission_id, {})
+	var items: Array = visuals.get("items", [])
+	if item_index >= 0 and item_index < items.size() and is_instance_valid(items[item_index]):
+		items[item_index].call("mark_collected")
+	var mm: Node = hud.get_node_or_null("MinimapControl")
+	if mm and mm.has_method("remove_collect_dot"):
+		mm.call("remove_collect_dot", mission_id, item_index)
+
+
+func _on_world_event_completed(mission_id: int, kind: String, success: bool) -> void:
+	var label: String = String(_world_event_label_by_id.get(mission_id, kind))
+	## DÜZELTME (kullanıcı bildirimi: "ağacın canı bittiğinde görev başarısız olmuyor") - mekanizma
+	## GERÇEKTEN çalışıyordu (headless testle doğrulandı: is_dead -> done/success=false -> bu
+	## fonksiyon success=false ile çağrılıyor) ama HER başarısızlık "süresi doldu" diye
+	## gösteriliyordu - defend_tree'de world_event_manager.gd _tick_mission "süre = hayatta kalma
+	## hedefi" olacak şekilde TERSİNE çevrilmiş (bkz. o dosyadaki not), yani bu görev türünde
+	## success=false SADECE ağaç öldüğünde olur, süre dolması asla değil - o yüzden burada AYRI,
+	## doğru bir mesaj gösterilebilir (ağ üzerinden yeni bir "sebep" alanı eklemeye gerek yok).
+	var fail_text: String = "%s görevi süresi doldu, iptal edildi." % label
+	if kind == "defend_tree" and not success:
+		fail_text = "%s görevi BAŞARISIZ! Ağaç yok edildi." % label
+	_show_network_toast(("%s görevi TAMAMLANDI! Ödül: altın + her oyuncuya 1 sandık." % label) if success else fail_text, MISSION_TOAST_SECONDS)
+	_world_event_kind_by_id.erase(mission_id)
+	_world_event_label_by_id.erase(mission_id)
+	var minimap: Node = hud.get_node_or_null("MinimapControl")
+	if minimap and minimap.has_method("clear_mission_marker"):
+		minimap.clear_mission_marker(mission_id)
+	if minimap and minimap.has_method("clear_collect_dots"):
+		minimap.call("clear_collect_dots", mission_id)
+	if _world_event_marker and is_instance_valid(_world_event_marker):
+		_world_event_marker.hide_marker(mission_id)
+	if _world_event_banner and is_instance_valid(_world_event_banner):
+		_world_event_banner.remove(mission_id)
+	## Görsel temizlik - SADECE bu istemcinin kendi kurduğu (client-cosmetic veya
+	## host/solo-gerçek referans) düğümleri; host/solo'nun GERÇEK ağaç/kopyaları zaten
+	## world_event_manager.gd _end_mission'da kendi queue_free()'lerini yapıyor - burada
+	## visuals["tree"]/["copies"] host/solo'da AYNI (referans) düğümlere işaret ediyor
+	## olabilir, is_instance_valid kontrolü çift-free'yi zararsız kılıyor.
+	var visuals: Dictionary = _world_event_visuals.get(mission_id, {})
+	## Görev bitince (başarı ya da başarısızlık) toplanmamış tüm kristaller kalkar (kullanıcı isteği 2026-09-24).
+	for item in visuals.get("items", []):
+		if is_instance_valid(item) and not item.is_queued_for_deletion():
+			(item as Node).queue_free()
+	var van: Node = visuals.get("van")
+	if van and is_instance_valid(van):
+		van.queue_free()
+	var zone: Node = visuals.get("zone")
+	if zone and is_instance_valid(zone):
+		zone.queue_free()
+	var tree: Node = visuals.get("tree")
+	if tree and is_instance_valid(tree) and NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		tree.queue_free() ## sadece client kozmetiği - host/solo'nunkini manager kendi siler
+	for copy in visuals.get("copies", []):
+		if is_instance_valid(copy) and NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+			copy.queue_free()
+	_world_event_visuals.erase(mission_id)
 
 
 func _on_player_died() -> void:
@@ -1922,17 +2207,16 @@ func _on_chat_message_received(peer_id: int, player_name: String, text: String) 
 func _refresh_match_stats_ui() -> void:
 	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
 		return
-	var grid: GridContainer = _death_overlay_layer.get_node_or_null("VBox/StatsBox/StatsGrid")
+	var grid: GridContainer = _death_overlay_layer.get_node_or_null("Window/VBox/StatsBox/StatsGrid")
 	if not grid:
 		return
 	for child in grid.get_children():
 		child.queue_free()
-	var header_col := Color(0.75, 0.7, 0.6)
+	## 2026-09-24: kit penceresinde (bej) koyu mürekkep tonları, 24 px (m5x7 3x) - eskiden 15-16 px açık renkler.
 	for header_text in ["Oyuncu", "Verdiği Hasar", "Tankladığı Hasar"]:
 		var h := Label.new()
 		h.text = header_text
-		h.add_theme_font_size_override("font_size", 15)
-		h.add_theme_color_override("font_color", header_col)
+		UIKit.style_label(h, 24, UIKit.C_TEXT_DIM, 0)
 		grid.add_child(h)
 	var peer_ids: Array = _match_stats_by_peer.keys()
 	peer_ids.sort_custom(func(a, b): return float(_match_stats_by_peer[a]["dealt"]) > float(_match_stats_by_peer[b]["dealt"]))
@@ -1940,19 +2224,17 @@ func _refresh_match_stats_ui() -> void:
 		var entry: Dictionary = _match_stats_by_peer[peer_id]
 		var name_lbl := Label.new()
 		name_lbl.text = str(entry.get("name", "?"))
-		name_lbl.add_theme_font_size_override("font_size", 16)
+		UIKit.style_label(name_lbl, 24, UIKit.C_TEXT, 0)
 		grid.add_child(name_lbl)
 		var dealt_lbl := Label.new()
 		dealt_lbl.text = "%d" % int(round(float(entry.get("dealt", 0.0))))
 		dealt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		dealt_lbl.add_theme_font_size_override("font_size", 16)
-		dealt_lbl.add_theme_color_override("font_color", Color(1.0, 0.6, 0.3))
+		UIKit.style_label(dealt_lbl, 24, Color(UIKit.INK["damage"]), 0)
 		grid.add_child(dealt_lbl)
 		var taken_lbl := Label.new()
 		taken_lbl.text = "%d" % int(round(float(entry.get("taken", 0.0))))
 		taken_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		taken_lbl.add_theme_font_size_override("font_size", 16)
-		taken_lbl.add_theme_color_override("font_color", Color(0.55, 0.8, 1.0))
+		UIKit.style_label(taken_lbl, 24, Color(UIKit.INK["shield"]), 0)
 		grid.add_child(taken_lbl)
 
 
@@ -2016,33 +2298,41 @@ func _show_death_overlay(is_final: bool) -> void:
 		add_child(_death_overlay_layer)
 
 		var dim := ColorRect.new()
-		dim.color = Color(0.05, 0.03, 0.02, 0.55)
+		dim.color = Color(0.12, 0.07, 0.03, 0.55)
 		dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 		dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_death_overlay_layer.add_child(dim)
 
+		## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap kite geçti - ölüm/izleyici ekranı
+		## artık bir kit penceresinde (eskiden dünya üstünde çıplak yazılar + 88 px'lik varsayılan fontla dev butonlar).
+		var window := PanelContainer.new()
+		window.name = "Window"
+		window.theme = UIKit.theme()
+		window.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+		window.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		window.offset_top = 80
+		window.offset_left = -330
+		window.offset_right = 330
+		window.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_death_overlay_layer.add_child(window)
+
 		var box := VBoxContainer.new()
 		box.name = "VBox"
-		box.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		box.offset_top = 90
-		box.offset_left = -260
-		box.offset_right = 260
 		box.alignment = BoxContainer.ALIGNMENT_CENTER
-		_death_overlay_layer.add_child(box)
+		box.add_theme_constant_override("separation", 12)
+		window.add_child(box)
 
 		var title := Label.new()
 		title.name = "Title"
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		title.add_theme_font_size_override("font_size", 42)
-		title.add_theme_color_override("font_color", Color(0.95, 0.25, 0.2))
+		UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_BAD, 0)
 		box.add_child(title)
 
 		var sub := Label.new()
 		sub.name = "Subtitle"
 		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		sub.autowrap_mode = TextServer.AUTOWRAP_WORD
-		sub.add_theme_font_size_override("font_size", 20)
-		sub.add_theme_color_override("font_color", Color(0.92, 0.88, 0.8))
+		UIKit.style_label(sub, 24, UIKit.C_TEXT_DIM, 0)
 		box.add_child(sub)
 
 		## #54: sadece takım hâlâ hayattayken (is_final=false) anlamlı olan
@@ -2058,20 +2348,23 @@ func _show_death_overlay(is_final: bool) -> void:
 		var prev_btn := Button.new()
 		prev_btn.name = "PrevButton"
 		prev_btn.text = "< Önceki"
+		prev_btn.custom_minimum_size = Vector2(0, 44)
+		prev_btn.add_theme_font_size_override("font_size", 24)
 		prev_btn.pressed.connect(_on_spectate_prev_pressed)
 		spectate_row.add_child(prev_btn)
 
 		var spectate_label := Label.new()
 		spectate_label.name = "SpectateLabel"
-		spectate_label.custom_minimum_size = Vector2(190, 0)
+		spectate_label.custom_minimum_size = Vector2(220, 0)
 		spectate_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		spectate_label.add_theme_font_size_override("font_size", 18)
-		spectate_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.55))
+		UIKit.style_label(spectate_label, 24, UIKit.C_GOLD, 0)
 		spectate_row.add_child(spectate_label)
 
 		var next_btn := Button.new()
 		next_btn.name = "NextButton"
 		next_btn.text = "Sonraki >"
+		next_btn.custom_minimum_size = Vector2(0, 44)
+		next_btn.add_theme_font_size_override("font_size", 24)
 		next_btn.pressed.connect(_on_spectate_next_pressed)
 		spectate_row.add_child(next_btn)
 
@@ -2091,14 +2384,14 @@ func _show_death_overlay(is_final: bool) -> void:
 		stats_title.name = "StatsTitle"
 		stats_title.text = "İSTATİSTİKLER"
 		stats_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stats_title.add_theme_font_size_override("font_size", 20)
-		stats_title.add_theme_color_override("font_color", Color(0.9, 0.85, 0.55))
+		UIKit.style_label(stats_title, UIKit.FS_BODY, UIKit.C_ACCENT, 0)
 		stats_box.add_child(stats_title)
 
 		var stats_grid := GridContainer.new()
 		stats_grid.name = "StatsGrid"
 		stats_grid.columns = 3
 		stats_grid.add_theme_constant_override("h_separation", 24)
+		stats_grid.add_theme_constant_override("v_separation", 4)
 		stats_box.add_child(stats_grid)
 
 		var death_btn_row := HBoxContainer.new()
@@ -2119,7 +2412,7 @@ func _show_death_overlay(is_final: bool) -> void:
 		_death_overlay_restart_btn = Button.new()
 		_death_overlay_restart_btn.name = "RestartButton"
 		_death_overlay_restart_btn.text = "Yeniden Başla"
-		_death_overlay_restart_btn.custom_minimum_size = Vector2(200, 0)
+		_death_overlay_restart_btn.custom_minimum_size = Vector2(240, 52)
 		_death_overlay_restart_btn.pressed.connect(_on_death_overlay_restart_pressed)
 		## pause_menu.gd _ready() ile AYNI kural: çok oyunculuda SADECE host
 		## yeniden başlatmayı tetikleyebilir, client'larda gizli.
@@ -2130,7 +2423,7 @@ func _show_death_overlay(is_final: bool) -> void:
 		var menu_btn := Button.new()
 		menu_btn.name = "BackToMenuButton"
 		menu_btn.text = "Ana Menüye Dön"
-		menu_btn.custom_minimum_size = Vector2(200, 0)
+		menu_btn.custom_minimum_size = Vector2(240, 52)
 		menu_btn.pressed.connect(_on_death_overlay_menu_pressed)
 		death_btn_row.add_child(menu_btn)
 
@@ -2140,13 +2433,16 @@ func _show_death_overlay(is_final: bool) -> void:
 		## ağacını değil sadece bu overlay'i taramak yeterli/daha ucuz.
 		UISound.connect_all_buttons(_death_overlay_layer)
 		UISound.apply_wood_buttons(_death_overlay_layer)
+		## Yeniden Başla = onay (adaçayı), Ana Menü = ten; yazılar okunur 32 px (eskiden varsayılan 88 px).
+		UIKit.style_button(_death_overlay_restart_btn, "green", false, UIKit.FS_BODY)
+		UIKit.style_button(menu_btn, "wood", false, UIKit.FS_BODY)
 
 		_death_overlay_label = title
 
-	var title_lbl: Label = _death_overlay_layer.get_node_or_null("VBox/Title")
-	var sub_lbl: Label = _death_overlay_layer.get_node_or_null("VBox/Subtitle")
-	var spectate_row_node: HBoxContainer = _death_overlay_layer.get_node_or_null("VBox/SpectateRow")
-	var stats_box_node: VBoxContainer = _death_overlay_layer.get_node_or_null("VBox/StatsBox")
+	var title_lbl: Label = _death_overlay_layer.get_node_or_null("Window/VBox/Title")
+	var sub_lbl: Label = _death_overlay_layer.get_node_or_null("Window/VBox/Subtitle")
+	var spectate_row_node: HBoxContainer = _death_overlay_layer.get_node_or_null("Window/VBox/SpectateRow")
+	var stats_box_node: VBoxContainer = _death_overlay_layer.get_node_or_null("Window/VBox/StatsBox")
 	if stats_box_node:
 		stats_box_node.visible = is_final
 	if is_final:
@@ -2208,7 +2504,7 @@ func _advance_spectate_target(direction: int) -> void:
 	var targets: Array = _get_living_allies_for_spectate()
 	var label: Label = null
 	if _death_overlay_layer and is_instance_valid(_death_overlay_layer):
-		label = _death_overlay_layer.get_node_or_null("VBox/SpectateRow/SpectateLabel")
+		label = _death_overlay_layer.get_node_or_null("Window/VBox/SpectateRow/SpectateLabel")
 	if targets.is_empty():
 		_spectate_target = null
 		_spectate_index = -1

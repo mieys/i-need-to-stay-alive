@@ -16,11 +16,15 @@ class_name TierSystem
 ## kendi güç formülünü kendi dosyasında tutuyor - burada sadece ORTAK olan
 ## isim/renk/nadirlik yaşıyor.
 const NAMES := ["Sıradan", "Nadir", "Epik", "Efsanevi"]
+## DÜZELTME (kullanıcı isteği 2026-09-24: oyun içi arayüzler bej/ahşap kite geçti, "tier bazlı kartların renklerinin buna
+## göre tasarlanması gerekiyor") - tier adları artık açık bej parşömen ÜSTÜNDE yazılıyor (level kartı, sandık, satıcı):
+## eski açık krem/açık mavi tonlar okunmuyordu, aynı renk ailesinin koyu/doygun tonları kullanılıyor. Kartların kendi tier
+## renkleri (emaye bant + taş) tools/gen_menu_kit.py TIER_PALS'ta - bu tonlar onların "md/dk" tonlarıyla eşleşir.
 const COLORS := [
-	Color(0.98, 0.94, 0.85, 1.0), ## Tier 1 - normal, özel vurgu YOK
-	Color(0.35, 0.55, 1.0, 1.0), ## Tier 2 - mavi
-	Color(0.68, 0.32, 0.96, 1.0), ## Tier 3 - mor
-	Color(1.0, 0.22, 0.2, 1.0), ## Tier 4 - kırmızı
+	Color("#5a3a20"), ## Tier 1 - Sıradan: koyu ahşap kahve (özel vurgu YOK)
+	Color("#2c56b0"), ## Tier 2 - Nadir: mavi
+	Color("#7430ac"), ## Tier 3 - Epik: mor
+	Color("#b0281e"), ## Tier 4 - Efsanevi: kırmızı
 ]
 ## Üst tierlar diğerlerine göre daha nadir çıksın diye ağırlıklı dağılım -
 ## kümülatif DEĞİL, roll() toplamı kendisi hesaplayıp normalize eder.
@@ -57,11 +61,14 @@ static func lifesteal_percent_for_tier(tier: int) -> float:
 ## değişmeli (aynı kartları kullan arkaplan için)" - isim/renk/nadirlikle
 ## AYNI gerekçeyle (bkz. dosya başı notu) buraya taşındı, üç taraf da
 ## (level atlama, seyyar satıcı, sandık) TEK bir kaynaktan okuyor.
+## Kullanıcı isteği (2026-09-24): kartlar oyun içi bej kitle AYNI dilde yeniden çizildi (tools/gen_menu_kit.py tier_card):
+## 300x480 px = 100x160 sanat px (level_up_screen.tscn Card*/Frame boyutu, 3 px texel) - ahşap dış çerçeve + tier renginde
+## emaye bant + parşömen iç + tier taşı. Eski 483x643 hazır çizimler (assets/sprites/level_card_tier_*.png) kaldırıldı.
 const FRAME_TEXTURES := [
-	preload("res://assets/sprites/level_card_tier_1.png"),
-	preload("res://assets/sprites/level_card_tier_2.png"),
-	preload("res://assets/sprites/level_card_tier_3.png"),
-	preload("res://assets/sprites/level_card_tier_4.png"),
+	preload("res://assets/ui/game/tier_card_1.png"),
+	preload("res://assets/ui/game/tier_card_2.png"),
+	preload("res://assets/ui/game/tier_card_3.png"),
+	preload("res://assets/ui/game/tier_card_4.png"),
 ]
 
 ## Küçük KARE ikon-slotu çerçevesi (seyyar satıcı mini kartlarındaki ikonun
@@ -69,11 +76,12 @@ const FRAME_TEXTURES := [
 ## tüm kartı değil, sadece ikonun oturduğu kare alanı kaplar. Tier'ı olmayan
 ## girişler (silah/kalkan) varsayılan olarak MINI_FRAME_TEXTURES[0] (tier 1)
 ## kullanır.
+## 96x96 px = 32x32 sanat px (tools/gen_menu_kit.py tier_slot): tier renginde çerçeve + çukur bej iç.
 const MINI_FRAME_TEXTURES := [
-	preload("res://assets/sprites/mini_slot_tier_1.png"),
-	preload("res://assets/sprites/mini_slot_tier_2.png"),
-	preload("res://assets/sprites/mini_slot_tier_3.png"),
-	preload("res://assets/sprites/mini_slot_tier_4.png"),
+	preload("res://assets/ui/game/tier_slot_1.png"),
+	preload("res://assets/ui/game/tier_slot_2.png"),
+	preload("res://assets/ui/game/tier_slot_3.png"),
+	preload("res://assets/ui/game/tier_slot_4.png"),
 ]
 
 static func roll(luck: float = 0.0) -> int:

@@ -20,9 +20,6 @@ extends Control
 ## Tek oyunculu modda bu grup hep boş olduğu için panel kendiliğinden gizli
 ## kalır, ekstra bir kontrol gerekmez.
 
-const PAL_WINDOW_BG := Color(0.47, 0.39, 0.23, 1.0)
-const PAL_WINDOW_BORDER := Color(0.25, 0.15, 0.08, 1.0)
-const PAL_ACCENT := Color(0.83, 0.56, 0.30, 1.0)
 
 const ROW_HEIGHT := 56.0
 const PANEL_WIDTH := 216.0
@@ -91,25 +88,12 @@ func _ready() -> void:
 
 
 func _build_static_ui() -> void:
+	theme = UIKit.theme()
 	var bg := PanelContainer.new()
 	bg.name = "Background"
 	bg.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
-	var style := StyleBoxFlat.new()
-	style.bg_color = PAL_WINDOW_BG
-	style.border_width_left = 3
-	style.border_width_top = 3
-	style.border_width_right = 3
-	style.border_width_bottom = 3
-	style.border_color = PAL_WINDOW_BORDER
-	style.corner_radius_top_left = 10
-	style.corner_radius_top_right = 10
-	style.corner_radius_bottom_right = 10
-	style.corner_radius_bottom_left = 10
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	bg.add_theme_stylebox_override("panel", style)
+	## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap kite geçti - küçük ahşap pencere + koyu yazı.
+	bg.add_theme_stylebox_override("panel", UIKit.panel_style("window_small"))
 	add_child(bg)
 
 	_list = VBoxContainer.new()
@@ -149,27 +133,14 @@ func _build_gift_popup() -> void:
 	_gift_popup.name = "GiftPopup"
 	_gift_popup.visible = false
 	_gift_popup.z_index = 100
-	var style := StyleBoxFlat.new()
-	style.bg_color = PAL_WINDOW_BG
-	style.border_width_left = 3
-	style.border_width_top = 3
-	style.border_width_right = 3
-	style.border_width_bottom = 3
-	style.border_color = PAL_ACCENT
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	_gift_popup.add_theme_stylebox_override("panel", style)
+	_gift_popup.add_theme_stylebox_override("panel", UIKit.panel_style("window_small"))
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
 	_gift_popup.add_child(vbox)
 
 	_gift_amount_label = Label.new()
-	_gift_amount_label.add_theme_color_override("font_color", Color(1, 0.92, 0.7))
-	_gift_amount_label.add_theme_font_size_override("font_size", 14)
+	UIKit.style_label(_gift_amount_label, 16, UIKit.C_ACCENT, 0)
 	_gift_amount_label.text = "Altın gönder"
 	vbox.add_child(_gift_amount_label)
 
@@ -212,19 +183,7 @@ func _build_stats_popup() -> void:
 	_stats_popup.name = "StatsPopup"
 	_stats_popup.visible = false
 	_stats_popup.z_index = 100
-	var style := StyleBoxFlat.new()
-	style.bg_color = PAL_WINDOW_BG
-	style.border_width_left = 3
-	style.border_width_top = 3
-	style.border_width_right = 3
-	style.border_width_bottom = 3
-	style.border_color = PAL_ACCENT
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	_stats_popup.add_theme_stylebox_override("panel", style)
+	_stats_popup.add_theme_stylebox_override("panel", UIKit.panel_style("window_small"))
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 5)
@@ -236,8 +195,7 @@ func _build_stats_popup() -> void:
 	## _refresh_stats_popup'taki satır etiketleri - AYNI oranda büyütüldü).
 	var title := Label.new()
 	title.text = "Hasar Sıralaması"
-	title.add_theme_color_override("font_color", Color(1, 0.92, 0.7))
-	title.add_theme_font_size_override("font_size", 18)
+	UIKit.style_label(title, 24, UIKit.C_ACCENT, 0)
 	vbox.add_child(title)
 
 	_stats_list = VBoxContainer.new()
@@ -328,14 +286,7 @@ func _create_row(peer_id: int) -> PartyRow:
 
 	var container := PanelContainer.new()
 	container.custom_minimum_size = Vector2(0, ROW_HEIGHT)
-	var row_style := StyleBoxFlat.new()
-	row_style.bg_color = Color(0, 0, 0, 0.25)
-	row_style.set_corner_radius_all(6)
-	row_style.content_margin_left = 4
-	row_style.content_margin_right = 4
-	row_style.content_margin_top = 4
-	row_style.content_margin_bottom = 4
-	container.add_theme_stylebox_override("panel", row_style)
+	container.add_theme_stylebox_override("panel", UIKit.panel_style("inset_tight"))
 	_list.add_child(container)
 	row.container = container
 
@@ -360,8 +311,7 @@ func _create_row(peer_id: int) -> PartyRow:
 	hbox.add_child(info_vbox)
 
 	var name_label := Label.new()
-	name_label.add_theme_font_size_override("font_size", 14)
-	name_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	UIKit.style_label(name_label, 16, UIKit.C_TEXT, 0)
 	name_label.clip_text = true
 	info_vbox.add_child(name_label)
 	row.name_label = name_label
@@ -382,8 +332,7 @@ func _create_row(peer_id: int) -> PartyRow:
 
 	var downed_label := Label.new()
 	downed_label.text = "İNDİRİLDİ"
-	downed_label.add_theme_font_size_override("font_size", 11)
-	downed_label.add_theme_color_override("font_color", Color(0.85, 0.3, 0.3))
+	UIKit.style_label(downed_label, 16, UIKit.C_BAD, 0)
 	downed_label.visible = false
 	info_vbox.add_child(downed_label)
 	row.downed_label = downed_label
@@ -575,8 +524,7 @@ func _refresh_stats_popup() -> void:
 	if entries.is_empty():
 		var empty_lbl := Label.new()
 		empty_lbl.text = "Veri yok"
-		empty_lbl.add_theme_font_size_override("font_size", 16)
-		empty_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.75))
+		UIKit.style_label(empty_lbl, 16, UIKit.C_TEXT_DIM, 0)
 		_stats_list.add_child(empty_lbl)
 		return
 	for i in entries.size():
@@ -588,8 +536,7 @@ func _refresh_stats_popup() -> void:
 		var rank_lbl := Label.new()
 		rank_lbl.text = "%d." % (i + 1)
 		rank_lbl.custom_minimum_size = Vector2(24, 0)
-		rank_lbl.add_theme_font_size_override("font_size", 16)
-		rank_lbl.add_theme_color_override("font_color", Color(0.83, 0.56, 0.30) if i == 0 else Color(0.8, 0.8, 0.75))
+		UIKit.style_label(rank_lbl, 16, UIKit.C_ACCENT if i == 0 else UIKit.C_TEXT_DIM, 0)
 		row.add_child(rank_lbl)
 
 		var name_lbl := Label.new()
@@ -597,14 +544,12 @@ func _refresh_stats_popup() -> void:
 		name_lbl.clip_text = true
 		name_lbl.custom_minimum_size = Vector2(120, 0)
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_lbl.add_theme_font_size_override("font_size", 16)
-		name_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+		UIKit.style_label(name_lbl, 16, UIKit.C_TEXT, 0)
 		row.add_child(name_lbl)
 
 		var dmg_lbl := Label.new()
 		dmg_lbl.text = "%d" % int(round(float(entry.get("dealt", 0.0))))
 		dmg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		dmg_lbl.custom_minimum_size = Vector2(58, 0)
-		dmg_lbl.add_theme_font_size_override("font_size", 16)
-		dmg_lbl.add_theme_color_override("font_color", Color(1, 0.55, 0.35))
+		UIKit.style_label(dmg_lbl, 16, Color(UIKit.INK["damage"]), 0)
 		row.add_child(dmg_lbl)

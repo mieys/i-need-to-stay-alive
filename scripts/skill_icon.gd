@@ -246,7 +246,7 @@ func _on_mouse_entered() -> void:
 	lbl_title.add_theme_font_size_override("font_size", TOOLTIP_HEADER_FONT_SIZE)
 	lbl_title.add_theme_color_override("font_color", UIKit.C_GOLD)
 	lbl_title.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-	lbl_title.add_theme_constant_override("outline_size", 4)
+	lbl_title.add_theme_constant_override("outline_size", 0)
 	header.add_child(lbl_title)
 
 	var spacer: Control = Control.new()
@@ -258,12 +258,12 @@ func _on_mouse_entered() -> void:
 	lbl_key.add_theme_font_size_override("font_size", TOOLTIP_HEADER_FONT_SIZE)
 	lbl_key.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
 	lbl_key.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-	lbl_key.add_theme_constant_override("outline_size", 4)
+	lbl_key.add_theme_constant_override("outline_size", 0)
 	header.add_child(lbl_key)
 
 	# Divider
 	var div: ColorRect = ColorRect.new()
-	div.color = Color(0.3, 0.25, 0.15)
+	div.color = MenuKit.C_LINE
 	div.custom_minimum_size = Vector2(0, 2)
 	vbox.add_child(div)
 
@@ -283,7 +283,7 @@ func _on_mouse_entered() -> void:
 	const TOOLTIP_BODY_FONT_SIZE := UIKit.FS_BODY
 	var lbl_cd: RichTextLabel = RichTextLabel.new()
 	lbl_cd.bbcode_enabled = true
-	lbl_cd.text = "[color=#55ccff]" + cd_text + "[/color]"
+	lbl_cd.text = "[color=%s]%s[/color]" % [UIKit.INK["cooldown"], cd_text]
 	lbl_cd.fit_content = true
 	lbl_cd.autowrap_mode = TextServer.AUTOWRAP_WORD
 	lbl_cd.add_theme_font_size_override("normal_font_size", TOOLTIP_BODY_FONT_SIZE)
@@ -293,7 +293,7 @@ func _on_mouse_entered() -> void:
 	lbl_cd.add_theme_font_size_override("mono_font_size", TOOLTIP_BODY_FONT_SIZE)
 	lbl_cd.add_theme_color_override("default_color", UIKit.C_TEXT)
 	lbl_cd.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-	lbl_cd.add_theme_constant_override("outline_size", 3)
+	lbl_cd.add_theme_constant_override("outline_size", 0)
 	vbox.add_child(lbl_cd)
 
 	# Description
@@ -309,7 +309,7 @@ func _on_mouse_entered() -> void:
 	lbl_desc.add_theme_font_size_override("mono_font_size", TOOLTIP_BODY_FONT_SIZE)
 	lbl_desc.add_theme_color_override("default_color", UIKit.C_TEXT)
 	lbl_desc.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-	lbl_desc.add_theme_constant_override("outline_size", 3)
+	lbl_desc.add_theme_constant_override("outline_size", 0)
 	vbox.add_child(lbl_desc)
 
 	hud_layer.add_child(tooltip_panel)
@@ -362,23 +362,26 @@ func _format_cd_number(v: float) -> String:
 	return "%.1f" % v
 
 
+## 2026-09-24: ipucu penceresi bej parşömen (oyun içi kit) - eski neon tonlar (#55ff55, #ffaa00...) okunmuyordu; renkler
+## parşömen üstünde okunan mürekkep tonları (TEK kaynak UIKit.INK, level kartları da aynılarını kullanır).
 func _format_lol_style(text: String) -> String:
+	var ink: Dictionary = UIKit.INK
 	# Replace keywords first
-	text = text.replace("ULTİ", "[color=#ff5555][b]ULTİ[/b][/color]")
-	text = text.replace("TEMEL", "[color=#33ccff][b]TEMEL[/b][/color]")
-	text = text.replace("PASİF", "[color=#ffcc33][b]PASİF[/b][/color]")
+	text = text.replace("ULTİ", "[color=%s][b]ULTİ[/b][/color]" % ink["damage"])
+	text = text.replace("TEMEL", "[color=%s][b]TEMEL[/b][/color]" % ink["shield"])
+	text = text.replace("PASİF", "[color=%s][b]PASİF[/b][/color]" % ink["passive"])
 	
 	# Highlight stats/mechanics
-	text = text.replace("hasar", "[color=#ff5555]hasar[/color]")
-	text = text.replace("Hasar", "[color=#ff5555]Hasar[/color]")
-	text = text.replace("can", "[color=#55ff55]can[/color]")
-	text = text.replace("Can", "[color=#55ff55]Can[/color]")
-	text = text.replace("kalkan", "[color=#55aaff]kalkan[/color]")
-	text = text.replace("Kalkan", "[color=#55aaff]Kalkan[/color]")
-	text = text.replace("zırh", "[color=#eebb55]zırh[/color]")
-	text = text.replace("Zırh", "[color=#eebb55]Zırh[/color]")
-	text = text.replace("saldırı hızı", "[color=#ffcc33]saldırı hızı[/color]")
-	text = text.replace("bekleme", "[color=#aaccff]bekleme[/color]")
+	text = text.replace("hasar", "[color=%s]hasar[/color]" % ink["damage"])
+	text = text.replace("Hasar", "[color=%s]Hasar[/color]" % ink["damage"])
+	text = text.replace("can", "[color=%s]can[/color]" % ink["health"])
+	text = text.replace("Can", "[color=%s]Can[/color]" % ink["health"])
+	text = text.replace("kalkan", "[color=%s]kalkan[/color]" % ink["shield"])
+	text = text.replace("Kalkan", "[color=%s]Kalkan[/color]" % ink["shield"])
+	text = text.replace("zırh", "[color=%s]zırh[/color]" % ink["shield_pen"])
+	text = text.replace("Zırh", "[color=%s]Zırh[/color]" % ink["shield_pen"])
+	text = text.replace("saldırı hızı", "[color=%s]saldırı hızı[/color]" % ink["attack_speed"])
+	text = text.replace("bekleme", "[color=%s]bekleme[/color]" % ink["cooldown"])
 
 	# Regex for numbers, percentages, durations (ignoring bbcode tags)
 	var regex: RegEx = RegEx.new()
@@ -392,7 +395,7 @@ func _format_lol_style(text: String) -> String:
 			if match_str.begins_with("["):
 				result += match_str
 			else:
-				result += "[color=#ffaa00]" + match_str + "[/color]"
+				result += "[color=%s]" % ink["value"] + match_str + "[/color]"
 			last_pos = m.get_end()
 		result += text.substr(last_pos)
 		text = result

@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+
 ## Characters 1-6's active skill always lasted 10s with a 20s total cooldown.
 ## Öykü/Talha/Matthew (7-9) each need their own numbers instead, so the fixed
 ## duration/cooldown became per-character - see _skill_duration/_skill_cooldown
@@ -1054,6 +1056,9 @@ func get_upgrade_count(id: String) -> int:
 
 
 func _ready() -> void:
+	## Fizik interpolasyonu (bkz. physics_interp.gd): _physics_process'te hareket ediyor; Camera2D ve
+	## silah kökleri (hover takibi _physics_process'te) de AÇIK kalır, diğer çocuklar KAPALI.
+	PhysicsInterp.opt_in(self, func(c: Node) -> bool: return c is Camera2D or c.has_method("_update_hover_follow"))
 	add_to_group("player")
 	## Kullanıcı isteği: "oyundaki tüm oynanabilir karakterleri ve yaratıkları
 	## v.s %5 küçültüp hareket hızlarını %10 azaltmanı istiyorum" - bkz.
@@ -2032,12 +2037,11 @@ func _apply_weapon_bonuses_to(w) -> void:
 		## mult = daha hızlı saldırı).
 		## item_fire_rate_percent üst sınırı %90 - aşırı yığılma negatif çarpana yol açmasın.
 		## Ruhani Yetenek "Adc": +%30 saldırı hızı aynı additive havuza girer (bkz. spirit_attack_speed).
-		var safe_item_mult: float = max(0.1, 1.0 - item_fire_rate_percent - spirit_attack_speed)
 		## Talon'un eski "canı azalınca saldırı hızı artışı" pasifi (bkz.
 		## _talon_passive_fire_rate_mult, artık silindi) burada çarpılıyordu -
 		## yeni pasif (bkz. _passive_talon) saldırı hızını DEĞİL, saldırı
 		## gücünü/hasar azaltmayı etkiliyor, bu yüzden bu formülden çıkarıldı.
-		w.set_fire_rate_mult(fire_rate_mult * _elara_passive_fire_rate_mult() * safe_item_mult)
+		w.set_fire_rate_mult(get_attack_interval_mult())
 	if w.has_method("set_crit_chance_bonus"):
 		w.set_crit_chance_bonus(crit_chance_bonus)
 	if w.has_method("set_crit_damage_bonus"):
@@ -2233,7 +2237,15 @@ func _configure_uzunkilic_melee(w) -> void:
 	w.configure_melee(115.0, 60.0, 0.5, [], "res://scenes/fx_uzunkilic_slash.tscn", 8.0, 0.0, 2, 1.0, -12.0, false, false)
 
 
+## Fizik interpolasyonu: bu adımdan ÖNCEKİ konum - _process'te buna yapışan görseller
+## (hasar sayıları, auralar) çizilen konumu bulsun diye (bkz. PhysicsInterp.visual_position).
+var _interp_prev_pos: Vector2 = Vector2.ZERO
+var _interp_prev_frame: int = -1
+
+
 func _physics_process(delta: float) -> void:
+	_interp_prev_pos = global_position ## bkz. PhysicsInterp.visual_position
+	_interp_prev_frame = Engine.get_physics_frames()
 	## "efekt sistemi" (ölüm.png/diriltme.png/kalp.png): durum ne olursa
 	## olsun HER karede reaktif olarak güncelleniyor - bkz. fonksiyonların
 	## kendi üstündeki DÜZELTME notları.
@@ -2279,7 +2291,7 @@ func _physics_process(delta: float) -> void:
 		## hızı havuzu). speed_card_percent: "Hız" level-up kartı, aynı
 		## additive mantık. _current_temp_speed_boost(): Oakley'nin Çiçek
 		## yeteneği alındığında verdiği azalarak kaybolan geçici hız bonusu.
-		velocity = input_direction * speed * skill_speed_multiplier * skill2_speed_multiplier * shield_mode_speed_mult * (1.0 + item_speed_percent + speed_card_percent + _current_temp_speed_boost())
+		velocity = input_direction * get_effective_move_speed()
 	
 	velocity += _knockback_velocity
 	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * delta)
@@ -2288,6 +2300,7 @@ func _physics_process(delta: float) -> void:
 	_block_movement_into_players()
 	_block_movement_into_terrain()
 	move_and_slide()
+	_clamp_to_map_bounds()
 
 	## Adım sesleri: animasyonun kullandığı AYNI "hareket ediyor mu" ölçütü
 	## (bkz. hemen alttaki _update_animation çağrısı) - yani adımlar tam olarak
@@ -3465,10 +3478,6 @@ func on_enemy_killed(enemy: Node) -> void:
 		_necro_on_kill(is_boss_kill)
 	match get_skill_character_id():
 		18: _korsan_on_kill()
-		## Büyücü Kız pasifi (Kadim Patlama) - bkz. _buyucu_on_kill. Burada
-		## (host bizzat öldürdüğünde) gerçek Enemy node'u hâlâ geçerli
-		## olduğu için konumu doğrudan ondan okunuyor.
-		3: _buyucu_on_kill(enemy.global_position if is_instance_valid(enemy) else global_position)
 
 
 ## DÜZELTME (KRİTİK - multiplayer öldürme pasifleri): enemy.gd die() SADECE
@@ -3491,7 +3500,6 @@ func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZER
 		_necro_on_kill(is_boss_kill)
 	match get_skill_character_id():
 		18: _korsan_on_kill()
-		3: _buyucu_on_kill(death_pos)
 
 
 ## Vampir Dişi pasifi: karakterden bağımsız, item_kill_heal_amount > 0 ise
@@ -3775,12 +3783,26 @@ func _spawn_korsan_bombardment_strike_fx(pos: Vector2) -> void:
 
 
 ## Korsan pixel parçacık patlaması (yerel + diğer oyuncular): pixel_draw.gd spawn_burst + network_manager.gd "pixel_burst".
-func _korsan_pixel_burst(pos: Vector2, palette: String, count: int, speed: float, life: float) -> void:
-	PixelDrawScript.spawn_burst(get_tree().current_scene, pos, palette, count, speed, life)
+## Kullanıcı isteği (2026-09-24): Korsan'ın TÜM efektleri spritesheet - toz/kıvılcım/duman patlamaları artık
+## pixel_draw.gd'nin kare-kare parçacıkları (fx_pixel_burst.gd) değil, tools/gen_korsan_fx_sprites.py'nin pişirdiği
+## tek seferlik animasyonlar (scenes/fx_korsan_puff_*.tscn). count/speed/life parametreleri eski çağrı yerleri değişmesin
+## diye duruyor; görünüm artık pişirilmiş sayfadan gelir. Diğer oyunculara konum-tabanlı "hitscan_impact" yayınıyla
+## (AYNI sahne yolu) gider - tek referans: KORSAN_PUFF_SCENES.
+const KORSAN_PUFF_SCENES := {
+	"dust": "res://scenes/fx_korsan_puff_dust.tscn",
+	"spark": "res://scenes/fx_korsan_puff_spark.tscn",
+	"smoke": "res://scenes/fx_korsan_puff_smoke.tscn",
+}
+
+func _korsan_pixel_burst(pos: Vector2, palette: String, _count: int, _speed: float, _life: float) -> void:
+	var path: String = String(KORSAN_PUFF_SCENES.get(palette, KORSAN_PUFF_SCENES["spark"]))
+	var scene: PackedScene = load(path) as PackedScene
+	if scene:
+		var fx: Node2D = scene.instantiate() as Node2D
+		get_tree().current_scene.add_child(fx)
+		fx.global_position = pos
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "pixel_burst", pos, {
-			"palette": palette, "count": count, "speed": speed, "life": life,
-		})
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {"scene_path": path})
 
 
 ## Necromancer pasifi: "Etrafta ölen her düşman 1 ruh biriktirir (bosslar 5
@@ -3941,8 +3963,7 @@ func _launch_necro_bats() -> void:
 	candidates.sort_custom(func(a, b): return a[0] < b[0])
 	## Yarasaların hızı Necromancer'ın KENDİ o anki hareket hızıyla eşdeğer -
 	## bkz. _physics_process'teki AYNI formül (velocity = ... * speed * ...).
-	var bat_speed: float = speed * skill_speed_multiplier * skill2_speed_multiplier * shield_mode_speed_mult \
-			* (1.0 + item_speed_percent + speed_card_percent + _current_temp_speed_boost())
+	var bat_speed: float = get_effective_move_speed()
 	for i in range(min(candidates.size(), NECRO_BATS_MAX_TARGETS_PER_TICK)):
 		var target: Node2D = candidates[i][1]
 		var bat: Node2D = NecroBatScene.instantiate() as Node2D
@@ -4417,6 +4438,13 @@ func _process_regen(delta: float) -> void:
 func _process_skill(delta: float) -> void:
 	if skill_state != "ready":
 		skill_total_elapsed += delta
+	## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-24: "Korsan bombalarını patlatamıyor") - bekleme süresi 0 olan
+	## bir yetenek (Korsan Patlat, SKILL_TIMING[18] cooldown 0.0) aktif süresi bitince "cooldown"a skill_timer = 0
+	## ile giriyordu; aşağıdaki "timer <= 0 ise çık" erken dönüşü yüzünden "cooldown -> ready" geçişine HİÇ
+	## ulaşılamıyor, Q ilk kullanımdan sonra sonsuza dek beklemede kalıyordu. Süresi dolmuş bekleme artık
+	## doğrudan hazıra döner (aynı koruma skill2/skill3'te de var - %100 bekleme azaltması da 0'a indirebilir).
+	if skill_state == "cooldown" and skill_timer <= 0.0:
+		skill_timer = 0.01
 	if skill_timer <= 0:
 		return
 	skill_timer -= delta
@@ -4479,6 +4507,9 @@ func get_skill_character_id() -> int:
 func _process_skill2(delta: float) -> void:
 	if skill2_state != "ready":
 		skill2_total_elapsed += delta
+	## bkz. _process_skill()'deki "0 bekleme süresinde cooldown'da takılma" düzeltmesi.
+	if skill2_state == "cooldown" and skill2_timer <= 0.0:
+		skill2_timer = 0.01
 	if skill2_timer <= 0:
 		return
 	skill2_timer -= delta
@@ -4566,6 +4597,9 @@ func get_skill2_id() -> int:
 func _process_skill3(delta: float) -> void:
 	if skill3_state != "ready":
 		skill3_total_elapsed += delta
+	## bkz. _process_skill()'deki "0 bekleme süresinde cooldown'da takılma" düzeltmesi.
+	if skill3_state == "cooldown" and skill3_timer <= 0.0:
+		skill3_timer = 0.01
 	if skill3_timer <= 0:
 		return
 	skill3_timer -= delta
@@ -4820,7 +4854,7 @@ func _update_animation(is_moving: bool) -> void:
 	if is_moving:
 		## Fiili hareket hızıyla (bkz. _physics_process velocity) AYNI çarpanlar - geçici hız bonusu (Çiçek,
 		## Taktiksel ruhani yetenek) da koşma eşiğine sayılır ("skiller, statlar vb.").
-		effective_speed = speed * skill_speed_multiplier * skill2_speed_multiplier * shield_mode_speed_mult * (1.0 + item_speed_percent + speed_card_percent + _current_temp_speed_boost())
+		effective_speed = get_effective_move_speed()
 		## DÜZELTME (kullanıcı isteği: "matthewin koşma animasyonu varsa bu
 		## yetenek aktifken aktif olsun") - Vahşi Hız hareket hızını sadece
 		## %15 arttırıyor (MATTHEW_HASTE_MOVE_SPEED_MULT), bu tek başına
@@ -5096,6 +5130,9 @@ const FxOakleyLeafBarrierScene := preload("res://scenes/fx_oakley_leaf_barrier.t
 
 func take_damage(amount: float, source: Node2D = null) -> void:
 	if is_dead:
+		return
+	## Debug modu (bkz. GameManager.debug_immortal notu) - sadece BU istemcinin kendi oyuncusu.
+	if GameManager.debug_immortal:
 		return
 	## Ruhani Yetenek "Can": 3sn boyunca hasar görmez (bkz. apply_spirit_can_buff).
 	if _spirit_invuln_timer > 0.0:
@@ -6208,7 +6245,7 @@ func _skill_timing_for(char_id: int) -> Dictionary:
 ## doğrudan değiştirmek Şovalye/Melek'i de etkilerdi, bu yüzden Şovalye ve
 ## Oakley için ayrı bekleme süresi döndürülüyor - "duration" (6sn, hepsinde
 ## aynı) paylaşılan tablodan geliyor.
-const SOVALYE_KALKAN_YENILEME_COOLDOWN := 50.0
+const SOVALYE_KALKAN_YENILEME_COOLDOWN := 25.0 ## kullanıcı isteği (2026-09-24): "Şovalye adamın E yeteneğinin bekleme süresini 25 saniyeye düşür" (eskiden 50)
 const OAKLEY_VINES_COOLDOWN := 16.0
 ## DÜZELTME (kullanıcı isteği: "Melek karakterinin E yeteneğinin bekleme
 ## süresini %15 arttır") - üstteki Şovalye/Oakley ayrımıyla AYNI desen,
@@ -7115,9 +7152,8 @@ func _process_healer_heal_tick(delta: float) -> void:
 
 ## ---------- Büyücü Kız (roster 4, "skill": 3, TEMEL: 4 varyasyon) ----------
 ## Kullanıcı isteği ile eklenen yeni kit:
-##   Pasif (Kadim Patlama): öldürdüğü her yaratık patlayıp çevresindeki diğer
-##     yaratıklara saldırı gücünün %20'si kadar alan hasarı verir (bkz.
-##     _buyucu_on_kill, on_enemy_killed/on_enemy_killed_remote).
+##   Pasif: YOK - eski "Kadim Patlama" (öldürülen yaratık patlayıp çevresine alan hasarı verirdi) kullanıcı
+##     isteğiyle (2026-09-23: "büyücü kızın pasifini sil direk onu sonra değiştiricem") tamamen silindi.
 ##   TEMEL (E): 4 farklı varyasyon, her birinin KENDİ bekleme süresi ayrı ayrı
 ##     işler (bkz. _buyucu_variation_cooldowns, _buyucu_try_activate_variation) -
 ##     standart skill2_state makinesini KULLANMAZ, Korsan/Necromancer'ın
@@ -7125,9 +7161,6 @@ func _process_healer_heal_tick(delta: float) -> void:
 ##   ULTİ (R): SADECE hangi varyasyonun aktif olduğunu değiştirir (bkz.
 ##     _skill_buyucu_switch_variation) - eski "Hızlı Ateş" (10sn saldırı hızı
 ##     buff'ı) TAMAMEN kaldırıldı.
-const BUYUCU_PASSIVE_EXPLOSION_RATIO := 0.20
-const BUYUCU_PASSIVE_EXPLOSION_RADIUS := 160.0
-
 const BUYUCU_VARIATION_COUNT := 4
 ## skill2 kimlik uzayında Büyücü'ye ayrılmış 4 sabit id (bkz. SKILL2_TIMING) -
 ## characters.gd'nin statik "skill2" alanı SADECE HUD ikonunun ilk karede
@@ -7382,27 +7415,6 @@ func _buyucu_try_activate_variation_r() -> void:
 	match variation:
 		2: _skill_buyucu_tornado()
 		3: _skill_buyucu_meteor()
-
-
-## Pasif (Kadim Patlama): "her bir yaratık öldürdüğünde yaratık patlayarak
-## etrafındaki diğer yaratıklara saldırı gücünün %20'si kadar alan hasarı
-## verir" - on_enemy_killed/on_enemy_killed_remote üzerinden hem host'ta
-## bizzat öldürülen hem de multiplayer'da bir istemcinin öldürdüğü
-## durumlarda tetiklenir (bkz. o fonksiyonlar).
-func _buyucu_on_kill(pos: Vector2) -> void:
-	## Kullanıcı isteği: alan hasarı global %33 etkinlik (bkz. GameManager.
-	## AOE_DAMAGE_EFFECTIVENESS).
-	var dmg: float = damage_bonus * BUYUCU_PASSIVE_EXPLOSION_RATIO * GameManager.AOE_DAMAGE_EFFECTIVENESS
-	if dmg <= 0.0:
-		return
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
-		if pos.distance_to(e.global_position) > BUYUCU_PASSIVE_EXPLOSION_RADIUS:
-			continue
-		if e.has_method("take_damage"):
-			e.take_damage(dmg, false, 0.0, true)
-	_spawn_world_explosion_fx(pos)
 
 
 ## Sabit bir DÜNYA konumunda (oyuncunun güncel konumu değil - öldürülen
@@ -8103,7 +8115,7 @@ func _process_elara_true_damage(_delta: float) -> void:
 ##      DOKUNULMADI). Elara'nın "içinden geçebilme"si TAMAMEN _block_movement_into_enemies()'teki
 ##      "_elara_evasion_timer > 0.0" erken çıkışından geliyor (bkz. orada) - collision_mask'a hiç dokunmuyoruz.
 const ELARA_EVASION_DURATION := 3.0
-const ELARA_EVASION_SPEED_PERCENT := 0.60
+const ELARA_EVASION_SPEED_PERCENT := 1.0 ## kullanıcı isteği (2026-09-24): azalarak kaybolan hız bonusu %60 -> %100
 const ELARA_EVASION_DODGE_PERCENT := 0.50
 var _elara_evasion_timer: float = 0.0
 var _elara_evasion_duration: float = 0.0
@@ -8945,25 +8957,45 @@ func _skill_matthew_fox_strike() -> void:
 	## KENDİSİ değiştirilmedi - Matthew'in Q'su için çağrısı kaldırıldı, fx_matthew_fox_strike.gd zaten
 	## kendi başına yeterli/tutarlı bir aktivasyon efekti.
 	_play_and_broadcast_skill_fx(FxMatthewFoxStrikeScene)
-	## En yakın en fazla MATTHEW_FOX_STRIKE_MAX_TARGETS düşman - BUG DÜZELTMESİ (kullanıcı bildirimi
-	## 2026-09-23: "matthewin yakınında kimse yoksa çalışmıyor"): eskiden SADECE Matthew'in kendi konumuna
-	## göre ölçülüyordu, ama dash atan (ve genelde savaşarak Matthew'den uzaklaşmış olabilen) asıl tilki -
-	## Matthew biraz gerideyken tilkinin hemen yanında düşman olsa bile yetenek "boş" tetikleniyordu. Artık
-	## bir düşman Matthew'E YA DA tilkinin GÜNCEL konumuna yakınsa (ikisinden biri yeterli) aday sayılıyor.
-	var candidates: Array = []
+	## Hedefler artık TEK SEFERDE değil, sekansın her adımında _matthew_fox_next_target() ile seçiliyor -
+	## bkz. oradaki not. Menzilde düşman yoksa da sekans çalışır, tilki sadece Matthew'in yanına atılır.
+	_matthew_fox_dash_sequence()
+
+
+## Tilki Hücumu'nun hedef uygunluğu - BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-23: "matthewin Q su görüş
+## alanında olduğu sürece yaratıklara ulaşabilmeli, yakınımda kimse yoksa vurmuyor"): eskiden Matthew'e ya da
+## tilkiye MATTHEW_FOX_STRIKE_RADIUS (150px) içindeki düşmanlar sayılıyordu - görüş alanı (vision_fog.gd
+## VISION_RADIUS 250 x VISION_WIDTH_SCALE 1.4 elips) bundan çok daha geniş olduğu için ekranda net görünen
+## düşmanlar "yakında kimse yok" sayılıyordu. Artık ölçü Matthew'in KENDİ görüş elipsi (sisle AYNI formül,
+## normalized_distance) + VisionFog.can_target (duvar arkası/sisteki düşman seçilmez - diğer hedef seçen
+## yeteneklerle aynı kural). Tilkiye yakınlık da hâlâ yeterli (eski düzeltme korunuyor).
+func _matthew_fox_target_ok(e: Node) -> bool:
+	if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D) or not e.has_method("take_damage"):
+		return false
+	if not VisionFogScript.can_target(e):
+		return false
+	var ep: Vector2 = (e as Node2D).global_position
+	if VisionFogScript.normalized_distance(ep - global_position, VisionFogScript.VISION_RADIUS, VisionFogScript.VISION_WIDTH_SCALE) <= 1.0:
+		return true
+	return is_instance_valid(_matthew_pet) and _matthew_pet.global_position.distance_to(ep) <= MATTHEW_FOX_STRIKE_RADIUS
+
+
+## Sıradaki hedef: henüz vurulmamış uygun düşmanlardan tilkinin O ANKİ konumuna en yakını. BUG DÜZELTMESİ
+## ("6 kişiye kadar vurmalı ama vurmuyor bazen"): eskiden 6 hedef en başta bir kez seçiliyordu - biri dash
+## sırasında ölürse (başka oyuncu/silah öldürdü) ya da önceki vuruşun itmesiyle uzaklaşırsa o vuruş hakkı
+## sessizce boşa gidiyordu. Artık her adımda yeniden seçiliyor, ölen hedefin yerine bir sonraki geçiyor.
+func _matthew_fox_next_target(already_hit: Dictionary) -> Node2D:
+	var from: Vector2 = _matthew_pet.global_position if is_instance_valid(_matthew_pet) else global_position
+	var best: Node2D = null
+	var best_d: float = INF
 	for e: Node in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
+		if already_hit.has(e.get_instance_id()) or not _matthew_fox_target_ok(e):
 			continue
-		var ep: Vector2 = (e as Node2D).global_position
-		var d: float = minf(global_position.distance_to(ep), _matthew_pet.global_position.distance_to(ep))
-		if d <= MATTHEW_FOX_STRIKE_RADIUS:
-			candidates.append([e, d])
-	candidates.sort_custom(func(a, b): return float(a[1]) < float(b[1]))
-	var targets: Array = []
-	for i in range(mini(MATTHEW_FOX_STRIKE_MAX_TARGETS, candidates.size())):
-		targets.append(candidates[i][0])
-	## Menzilde düşman yoksa da sekans çalışır - boş hedef listesiyle tilki sadece Matthew'in yanına atılır.
-	_matthew_fox_dash_sequence(targets)
+		var d: float = from.distance_squared_to((e as Node2D).global_position)
+		if d < best_d:
+			best_d = d
+			best = e as Node2D
+	return best
 
 
 ## Tilki Hücumu'nun asıl sekansı (bkz. yukarıdaki BUG DÜZELTMESİ notu). _skill_matthew_fox_strike() bunu
@@ -8975,20 +9007,26 @@ func _skill_matthew_fox_strike() -> void:
 ## birden statik olarak beliriyordu). Artık ritim: tilki hedefe GERÇEKTEN atılır (player_pet.gd dash_to -
 ## hareket + arkasında hız çizgileri + yol boyunca kendi karesinin sönen kopyaları) -> VARDIĞI anda vuruş
 ## (hasar/itme + darbe patlaması + darbe sesi) -> hedefin dibinde kısacık durur -> sıradakine atılır.
-func _matthew_fox_dash_sequence(targets: Array) -> void:
+func _matthew_fox_dash_sequence() -> void:
 	if not _matthew_fox_can_dash():
 		return
 	## Tilkinin KENDİ normal takip/savaş yapay zekası bu sekansla ÇAKIŞMASIN diye askıya alınır (bkz.
 	## player_pet.gd begin_dash_strike - _matthew_shield_form ile AYNI "askıya al" deseni).
 	_matthew_pet.call("begin_dash_strike")
 	var hit_damage: float = damage_bonus * MATTHEW_FOX_STRIKE_DAMAGE_RATIO
-	for target: Node in targets:
+	var already_hit: Dictionary = {} ## instance_id -> true (hem vurulanlar hem dash sırasında kaybedilenler)
+	var hits: int = 0
+	## Sonsuz döngü koruması: her deneme ya bir vuruş sayar ya da bir hedefi already_hit'e ekler, yine de bir tavan.
+	var attempts: int = 0
+	while hits < MATTHEW_FOX_STRIKE_MAX_TARGETS and attempts < MATTHEW_FOX_STRIKE_MAX_TARGETS * 3:
+		attempts += 1
 		if not _matthew_fox_can_dash():
 			_matthew_fox_end_dash() ## Sekans ortasında tilki kaybolursa/feda edilirse sessizce dur.
 			return
-		if not is_instance_valid(target) or target.get("is_dead") == true or not (target is Node2D):
-			continue
-		var e: Node2D = target as Node2D
+		var e: Node2D = _matthew_fox_next_target(already_hit)
+		if e == null:
+			break
+		already_hit[e.get_instance_id()] = true
 		## Hedefin tilkiye bakan tarafına, yakın dövüş mesafesine atılır.
 		var approach_dir: Vector2 = _matthew_pet.global_position - e.global_position
 		if approach_dir.length() < 1.0:
@@ -9003,6 +9041,7 @@ func _matthew_fox_dash_sequence(targets: Array) -> void:
 			continue
 		var is_crit: bool = _roll_ability_crit()
 		e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
+		hits += 1
 		if e.has_method("apply_knockback_force"):
 			var away_dir: Vector2 = e.global_position - global_position
 			if away_dir.length() < 1.0:
@@ -10155,10 +10194,9 @@ func _vampir_stop_bats() -> void:
 		_vampir_swarm.retire()
 
 
-## Yarasaların hızı saldırı hızına göre artar (fire_rate_mult ne kadar DÜŞÜKSE o kadar hızlı).
+## Yarasaların hızı saldırı hızına göre artar (aralık çarpanı ne kadar DÜŞÜKSE o kadar hızlı) - bkz. get_attack_interval_mult.
 func _vampir_attack_speed_mult() -> float:
-	var interval_mult: float = fire_rate_mult * maxf(0.1, 1.0 - item_fire_rate_percent - spirit_attack_speed)
-	return clampf(1.0 / maxf(0.1, interval_mult), 0.5, 4.0)
+	return clampf(1.0 / maxf(0.1, get_attack_interval_mult()), 0.5, 4.0)
 
 
 func _vampir_process_bats(delta: float) -> void:
@@ -10313,6 +10351,12 @@ func _process_spirit(delta: float) -> void:
 	if spirit_state == "ready":
 		return
 	if spirit_state == "active":
+		## Güvenlik ağı: Kalkan Bağı'nın "aktif" fazı gerçek bir süre değil (KALKAN_BAGI_ACTIVE_CAP ~ sonsuz), SADECE
+		## bağ sürdükçe anlamlı - bağ hangi yoldan kaybolmuş olursa olsun (bkz. receive_kalkan_bagi_bond notu)
+		## yetenek "aktif" takılı kalmasın, bekleme süresine girsin.
+		if id == SpiritualSkillsScript.KALKAN_BAGI and not _kalkan_bagi_active:
+			_kalkan_bagi_enter_cooldown("")
+			return
 		if _spirit_channeling:
 			_process_spirit_channel()
 			if spirit_state != "active":
@@ -10494,6 +10538,54 @@ func _spirit_walk_clear(from: Vector2, dir: Vector2, dist: float) -> Vector2:
 	return best
 
 
+## Kullanıcı bildirimi (2026-09-24): "oyuncular mapin dışına çıkabiliyor" - hareket engeli (bkz. _block_movement_into_
+## terrain) SADECE orman karolarına bakıyordu, haritanın dış kenarında karo yoksa oyuncu boşluğa yürüyebiliyordu. Her
+## hareket karesinden sonra konum haritanın dünya dikdörtgenine (GameManager.get_map_world_rect - kamera sınırlarıyla
+## AYNI kaynak) MAP_EDGE_INSET kadar içeriden kıstırılır; dash/ışınlanma gibi global_position'ı doğrudan değiştiren
+## yetenekler de bir sonraki karede buraya takılır. Ev içi (INTERIOR_OFFSET ile harita dışında duran ayrı bir alan)
+## ve harita olmayan sahneler (Rect2() - testler/menü) muaf.
+const MAP_EDGE_INSET := 16.0
+
+## Oyuncunun O ANKİ gerçek yürüme hızı (px/sn) - hareketin kendisi (_physics_process) ve "Kopyanı Öldür" kopyası
+## (mission_player_copy.gd, kullanıcı isteği 2026-09-24: "hareket hızı kopyaladığı kişinin hızından %20 daha az
+## olmalı") AYNI formülü okusun diye tek yerde. Diğer oyunculara main.gd extra["move_speed"] ile gider (bkz.
+## remote_player.gd get_effective_move_speed).
+## SALDIRI HIZI - TEK KAYNAK. Kullanıcı bildirimi (2026-09-24): "stat arayüzünde ... saldırı hızı yükseltmeme rağmen
+## azaldı veya azaldığı görünüyor" / "atış hızı ve saldırı hızı farklı algılanıyor". Oyunda TEK bir saldırı hızı havuzu
+## var ama iki adla anılıyordu: seviye kartı "Ateş Hızı" (fire_rate_mult'u çarparak küçültür), eşyalar/ruhani yetenek
+## "saldırı hızı" (item_fire_rate_percent/spirit_attack_speed, toplanarak düşülür) ve Elara pasifi. Hepsi burada tek bir
+## "atış ARALIĞI çarpanı"nda birleşir (düşük = hızlı); silahlar (_apply_weapon_bonuses), Vampir yarasaları ve stat
+## ekranları (get_attack_speed_bonus_percent) AYNI değeri okur. Eskiden stat ekranı bunun yerine SADECE ilk silahın
+## saniyedeki atışını gösteriyordu - ilk silah değişince/başka silah yükseltilince değer atlıyor ya da hiç değişmiyordu.
+func get_attack_interval_mult() -> float:
+	## item_fire_rate_percent + ruhani "Adc" toplamının üst sınırı %90 - aşırı yığılma negatif çarpana yol açmasın.
+	var safe_item_mult: float = maxf(0.1, 1.0 - item_fire_rate_percent - spirit_attack_speed)
+	return fire_rate_mult * _elara_passive_fire_rate_mult() * safe_item_mult
+
+
+## Toplam saldırı hızı bonusu (%): 1/aralık_çarpanı - 1. Kart/eşya aldıkça yalnızca ARTAR (geçici "Adc" bitince düşer).
+func get_attack_speed_bonus_percent() -> float:
+	return (1.0 / maxf(0.01, get_attack_interval_mult()) - 1.0) * 100.0
+
+
+func get_effective_move_speed() -> float:
+	return speed * skill_speed_multiplier * skill2_speed_multiplier * shield_mode_speed_mult * (1.0 + item_speed_percent + speed_card_percent + _current_temp_speed_boost())
+
+
+func _clamp_to_map_bounds() -> void:
+	if is_indoors:
+		return
+	var map_rect: Rect2 = GameManager.get_map_world_rect()
+	if map_rect.size == Vector2.ZERO:
+		return
+	var inner: Rect2 = map_rect.grow(-MAP_EDGE_INSET)
+	var clamped := Vector2(
+		clampf(global_position.x, inner.position.x, inner.end.x),
+		clampf(global_position.y, inner.position.y, inner.end.y))
+	if clamped != global_position:
+		global_position = clamped
+
+
 func _spirit_teleport_to(pos: Vector2) -> void:
 	global_position = pos
 	reset_physics_interpolation()
@@ -10648,9 +10740,20 @@ func receive_kalkan_bagi_bond(source_peer_id: int, active: bool) -> void:
 		_kalkan_bagi_partner_peer_id = source_peer_id
 		_ensure_kalkan_bagi_link_fx()
 	else:
+		## Başka (eski) bir partnerden gelen gecikmiş "bitti" paketi şu anki bağı koparmasın.
+		if _kalkan_bagi_active and source_peer_id != _kalkan_bagi_partner_peer_id:
+			return
+		var was_active: bool = _kalkan_bagi_active
 		_kalkan_bagi_active = false
 		_kalkan_bagi_partner_peer_id = 0
 		_remove_kalkan_bagi_link_fx()
+		## DÜZELTME (kullanıcı bildirimi: "kalkan bağı varken biri eve girince bağ koptu ama skill bekleme
+		## süresine girmedi"): eve giren oyuncu anında uzağa ışınlandığı için kopuşu ÇOĞU ZAMAN ilk O taraf
+		## algılıyor (bkz. _process_kalkan_bagi) ve buraya sadece bu RPC geliyor - bağı BEN kurduysam eskiden
+		## spirit_state "active" (KALKAN_BAGI_ACTIVE_CAP ~ sonsuz) kalıyordu: bekleme süresi hiç başlamıyor,
+		## F de _end_kalkan_bagi'nin "zaten aktif değil" kapısına takılıp hiçbir şey yapmıyordu.
+		if was_active:
+			_kalkan_bagi_enter_cooldown("KALKAN BAĞI KOPTU")
 
 
 ## Bağı BU tarafta bitirir (toggle kapatma VEYA mesafe kopması, bkz. _process_kalkan_bagi) - partnere de
@@ -10675,6 +10778,13 @@ func _end_kalkan_bagi(reason: String) -> void:
 	if not _kalkan_bagi_active:
 		return
 	_clear_kalkan_bagi_bond()
+	_kalkan_bagi_enter_cooldown(reason)
+
+
+## Bağ hangi taraftan koparsa kopsun (bkz. _end_kalkan_bagi / receive_kalkan_bagi_bond) ortak son adım: bu
+## oyuncunun KENDİ F becerisi Kalkan Bağı ve aktifse bekleme süresine sokar; pasif tarafın başka bir ruhani
+## yeteneğine dokunmaz.
+func _kalkan_bagi_enter_cooldown(reason: String) -> void:
 	if not reason.is_empty():
 		_spawn_floating_text(reason, Color(0.5, 0.8, 1.0))
 	if spirit_state == "active" and get_spirit_id() == SpiritualSkillsScript.KALKAN_BAGI:

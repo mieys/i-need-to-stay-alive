@@ -10,8 +10,9 @@ extends Node
 ## eder.
 
 ## Kullanıcı isteği (2026-09-21): butonlar piksel UI kitine (assets/ui/kit, scripts/ui_kit.gd) taşındı - eski Button.png/mini button.png yerine.
-const ButtonPngPath := "res://assets/ui/kit/btn_wood_normal.png"
-const MiniButtonPngPath := "res://assets/ui/kit/btn_mini_wood_normal.png"
+## 2026-09-24: oyun içi kit assets/ui/game'e taşındı (menülerle aynı bej/ahşap dil) - "wood" varyantı artık "tan" dokusu.
+const ButtonPngPath := "res://assets/ui/game/btn_tan_normal.png"
+const MiniButtonPngPath := "res://assets/ui/game/btn_mini_tan_normal.png"
 
 
 func _style_texture_path(btn: Button, style_name: String) -> String:
@@ -73,13 +74,14 @@ func test_weapon_select_screen_reroll_uses_wide_texture_and_cards_are_untouched(
 	var reroll: Button = wss.get_node("RerollButton")
 	assert(_style_texture_path(reroll, "normal") == ButtonPngPath,
 		"RerollButton yeni dokuyu almiyor: %s" % _style_texture_path(reroll, "normal"))
-	## Kartlar kendi ozel StyleBoxFlat'ini korumali (wood button style'la EZILMEMELI).
+	## Kartlar kendi kart cercevesini korumali (wood button style'la EZILMEMELI). 2026-09-24: kartlar artik StyleBoxFlat
+	## degil, oyun ici kitin kademe karti dokusu (assets/ui/game/tier_card_1.png) - buton dokusu OLMAMALI.
 	var cards_container: Control = wss.get_node("CardsContainer")
 	assert(cards_container.get_child_count() > 0, "Kartlar olusmamis")
 	var card: Button = cards_container.get_child(0) as Button
-	var card_style: StyleBox = card.get_theme_stylebox("normal")
-	assert(not (card_style is StyleBoxTexture),
-		"Kart yanlislikla ahsap buton dokusuyla eziliyor - _looks_like_icon_slot filtresi calismiyor")
+	var card_tex: String = _style_texture_path(card, "normal")
+	assert(card_tex != ButtonPngPath and card_tex.get_file().begins_with("tier_card_"),
+		"Kart yanlislikla ahsap buton dokusuyla eziliyor - _looks_like_icon_slot filtresi calismiyor (%s)" % card_tex)
 	wss.queue_free()
 
 

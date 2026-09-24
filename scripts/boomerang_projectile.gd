@@ -100,6 +100,23 @@ var _base_bullet_scale: Vector2 = Vector2.ONE
 ]
 const TRAIL_FOLLOW_SPEEDS := [22.0, 14.0, 9.0] ## büyük = az gecikme (ön), küçük = çok gecikme (kuyruk ucu)
 
+## YENİ GÖRÜNÜM (kullanıcı isteği 2026-09-24: "boomerangın görünüşünü yeniden tasarla (ikonuyla boomerangın oyun içi
+## görüntüsü aynı olmalı)" + "kılıç ve boomerang silahlarına özel çalışma biçimlerine uygun yeni özel efektler" + "pixel
+## sanatı ... spritesheet"): tools/gen_weapon_fx_sprites.py 48x48 bir bumerang çizer; icon.png onun TAM 4x büyütülmüşü,
+## burada da AYNI çizimin 12 önceden döndürülmüş karesi (RotSprite) kullanılır - kare dönüş açısına göre SEÇİLİR, sprite
+## kendisi döndürülmez (piksel ızgarası bozulmasın). SpinFx artık bumerangın etrafında dönen hava çizgileri; Trail1/2/3
+## (kuyruklu yıldız) artık beyaz girdap değil, AYNI bumerangın küçülerek solan "hayalet" kopyaları. Geri yakalanınca
+## kısa bir parıltı. Eski Bullet (icon.png'nin kendisi, düz döndürülen) gizlenir.
+const RotFrames := preload("res://assets/weapons/boomerang/rot_frames.tres")
+const WhooshFrames := preload("res://assets/fx/boomerang/whoosh_frames.tres")
+const CatchFrames := preload("res://assets/fx/boomerang/catch_frames.tres")
+const ROT_STEPS := 12
+const BODY_SCALE := 1.5 ## dünya birimi / sanat pikseli (eski bumerangla ~aynı ekran boyu)
+const WHOOSH_SCALE := 1.45
+const GHOST_SCALES := [0.8, 0.62, 0.45] ## Trail1/2/3 - gövdeye göre
+const GHOST_TINT := Color(1.0, 0.9, 0.75)
+var _body: AnimatedSprite2D = null
+
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
@@ -107,13 +124,30 @@ func _ready() -> void:
 	## havada asılı kalmasın diye bir güvenlik zaman aşımı.
 	get_tree().create_timer(6.0).timeout.connect(_on_timeout)
 	if bullet:
-		_base_bullet_scale = bullet.scale
-		_play_launch_punch()
+		bullet.visible = false ## bkz. "YENİ GÖRÜNÜM" notu
+	_body = AnimatedSprite2D.new()
+	_body.sprite_frames = RotFrames
+	_body.animation = &"spin"
+	_body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_body.scale = Vector2.ONE * BODY_SCALE
+	add_child(_body)
+	_base_bullet_scale = _body.scale
+	_play_launch_punch()
+	if spin_fx:
+		spin_fx.sprite_frames = WhooshFrames
+		spin_fx.scale = Vector2.ONE * WHOOSH_SCALE
+		spin_fx.play("loop")
+	for i in range(_trail_nodes.size()):
+		var tn: AnimatedSprite2D = _trail_nodes[i]
+		if tn:
+			tn.sprite_frames = RotFrames
+			tn.animation = &"spin"
+			tn.stop()
+			tn.scale = Vector2.ONE * BODY_SCALE * float(GHOST_SCALES[mini(i, GHOST_SCALES.size() - 1)])
+			tn.modulate = Color(GHOST_TINT.r, GHOST_TINT.g, GHOST_TINT.b, tn.modulate.a)
 	## SpinFx artık DÖNGÜLÜ (bkz. spin_frames.tres "trail" loop=true) - mermi
 	## havada olduğu sürece sürekli oynar, _finish()'te projeyle birlikte
 	## queue_free() olur. "Bir kez oynayıp donma" hatası artık mümkün değil.
-	if spin_fx and spin_fx.sprite_frames and spin_fx.sprite_frames.has_animation("trail"):
-		spin_fx.play("trail")
 	## Kuyruk halkaları top_level=true olduğu için _ready() anında henüz
 	## (0,0) dünya konumundalar - hemen fırlatma noktasına ışınlanmazsa ilk
 	## karede ekranın orta noktasından mermiye doğru "kayan" bir çizgi
@@ -122,8 +156,6 @@ func _ready() -> void:
 	for t in _trail_nodes:
 		if t:
 			t.global_position = global_position
-			if t.sprite_frames and t.sprite_frames.has_animation("trail"):
-				t.play("trail")
 
 
 ## Fırlatma anında kısacık bir büyü-küçül "punch" - Bullet'in KENDİ
@@ -131,9 +163,11 @@ func _ready() -> void:
 ## temizlendiği için SpinFx'teki gibi "donup ekranda kocaman kalma" hatasına
 ## yapısal olarak kapalıdır.
 func _play_launch_punch() -> void:
-	bullet.scale = _base_bullet_scale * launch_punch_scale_mult
+	if _body == null:
+		return
+	_body.scale = _base_bullet_scale * launch_punch_scale_mult
 	var tw := create_tween()
-	tw.tween_property(bullet, "scale", _base_bullet_scale, launch_punch_duration) \
+	tw.tween_property(_body, "scale", _base_bullet_scale, launch_punch_duration) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
@@ -150,6 +184,14 @@ func _physics_process(delta: float) -> void:
 	## bırakıyoruz.
 	if spin_fx:
 		spin_fx.rotation = -rotation
+	## Dönüş: kare açıya göre seçilir, gövde düz tutulur (bkz. "YENİ GÖRÜNÜM" notu). Hayaletler bir-iki kare geriden gelir.
+	var rot_frame: int = int(fposmod(rotation, TAU) / TAU * float(ROT_STEPS)) % ROT_STEPS
+	if _body:
+		_body.rotation = -rotation
+		_body.frame = rot_frame
+	for i in range(_trail_nodes.size()):
+		if _trail_nodes[i]:
+			(_trail_nodes[i] as AnimatedSprite2D).frame = (rot_frame - i - 1 + ROT_STEPS) % ROT_STEPS
 	if not _returning:
 		position += direction * speed * delta
 		_traveled += speed * delta
@@ -196,6 +238,7 @@ func _on_timeout() -> void:
 ## Mermi oyuncuya ulaşınca (veya güvenlik zaman aşımında) çağrılır - weapon.gd'ye
 ## "havadaki mermi bitti, yeni atışa izin ver" bilgisini verir.
 func _finish() -> void:
+	_spawn_catch_sparkle()
 	if get_meta("network_spawned", false):
 		# Network copies: skip callback, just clean up
 		queue_free()
@@ -203,6 +246,22 @@ func _finish() -> void:
 	if is_instance_valid(return_callback_target) and return_callback_target.has_method("_on_boomerang_returned"):
 		return_callback_target._on_boomerang_returned()
 	queue_free()
+
+
+## Geri yakalanma parıltısı (pişirilmiş 6 kare, tek sefer) - yakalayan oyuncunun üstünde. Hem gerçek hem kozmetik
+## (diğer istemcilerdeki) mermide oynar, ikisi de _finish'ten geçer.
+func _spawn_catch_sparkle() -> void:
+	if not is_inside_tree() or get_tree().current_scene == null:
+		return
+	var fx := AnimatedSprite2D.new()
+	fx.sprite_frames = CatchFrames
+	fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fx.scale = Vector2.ONE * 1.212
+	fx.z_index = 20
+	get_tree().current_scene.add_child(fx)
+	fx.global_position = (player_node.global_position if is_instance_valid(player_node) else global_position) + Vector2(0, -10)
+	fx.play("play")
+	fx.animation_finished.connect(fx.queue_free)
 
 
 func _on_body_entered(body: Node) -> void:

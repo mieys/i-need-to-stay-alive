@@ -45,7 +45,42 @@ static func compute(delta: float, angle_in: float, fire_rate: float, range_mult:
 	}
 
 
-## Kılıç sallanırken periyodik olarak bırakılan "slash streak" trail efektini
+## YÖRÜNGE İZİ (kullanıcı isteği 2026-09-24: "kılıç ve boomerang silahlarına özel çalışma biçimlerine uygun yeni özel
+## efektler ... pixel sanatı olacak ve spritesheete dönüştürülecek"): Uzunkılıç oyuncunun etrafında DÖNEN bir kılıç -
+## artık arkasından yörünge boyunca uzanan TEK bir hilal iz (tools/gen_weapon_fx_sprites.py gen_sword_arc, 4 karelik
+## döngü) çizilir. Eskiden bunun yerine her TRAIL_INTERVAL'de (0.045 sn) YENİ bir fx_hit_slash_streak sahnesi doğuyordu
+## (kılıç başına saniyede ~22 düğüm). Hem weapon.gd (yerel/yetkili) hem remote_player.gd (kozmetik kopya) bunu çağırır.
+## arc: önceki karede döndürülen düğüm (ilk çağrıda null) - yoksa host'un altında oluşturulur. center/sword: dünya
+## konumları (oyuncu merkezi, kılıç ikonu) - yarıçap ve açı bunlardan çıkar, ölçek taraf farkını kendiliğinden karşılar.
+const ARC_FRAMES := preload("res://assets/fx/sword_arc/arc_frames.tres")
+const ARC_BAKED_RADIUS := 60.0 ## gen_sword_arc R (sanat pikseli) - iz bu yarıçapta pişirildi
+
+static func update_arc(arc_in: Variant, host: Node, center: Vector2, sword: Vector2) -> AnimatedSprite2D:
+	var arc: AnimatedSprite2D = arc_in as AnimatedSprite2D if (arc_in != null and is_instance_valid(arc_in)) else null
+	if arc == null:
+		if host == null or not is_instance_valid(host):
+			return null
+		arc = AnimatedSprite2D.new()
+		arc.sprite_frames = ARC_FRAMES
+		arc.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		arc.top_level = true
+		arc.z_index = 4
+		arc.modulate = Color(1, 1, 1, 0.9)
+		host.add_child(arc)
+		arc.play("loop")
+	var v: Vector2 = sword - center
+	var r: float = v.length()
+	if r < 1.0:
+		arc.visible = false
+		return arc
+	arc.visible = true
+	arc.global_position = center
+	arc.global_rotation = v.angle() ## pişirilmiş izin başı 0 derecede - kılıcın bulunduğu açıya döner, kuyruk geride
+	arc.global_scale = Vector2.ONE * (r / ARC_BAKED_RADIUS)
+	return arc
+
+
+## (Eski - artık çağrılmıyor, bkz. update_arc.) Kılıç sallanırken periyodik olarak bırakılan "slash streak" trail efektini
 ## spawn eder - hem weapon.gd (yerel/yetkili silah) hem remote_player.gd
 ## (kozmetik kopya) tarafından çağrılır, İKİSİNDE DE AYNI sahne/renk/ölçek.
 ## `parent`: efektin ekleneceği node (genelde get_tree().current_scene).

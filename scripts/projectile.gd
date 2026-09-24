@@ -1,5 +1,7 @@
 extends Area2D
 
+const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+
 @export var speed: float = 400.0 ## genel hız ayarı: 500'den %20 düşürüldü
 @export var impact_scene: PackedScene
 ## impact_scene, çarpma anında yaratığın global_position'ında (yani genelde
@@ -99,8 +101,48 @@ var source_weapon: Node = null
 
 var _impacted: bool = false
 
+## MERMİ İZİ (kullanıcı isteği 2026-09-24: "yay, tüfek tabanca arbalet tüftüf gibi silahların mermilerinin atış anında
+## arkalarında mermilerinin rengine bağlı olacak şekilde açık renkte iz efekti hazırla ... mermilerin hızlı ve estetik
+## bir şekilde gittiğini hissedebilelim" + "pixel sanatı ... spritesheet"). tools/gen_weapon_fx_sprites.py'nin pişirdiği
+## BEYAZ iz ("launch": atış anında 4 karede uzar, "fly": titreşen döngü) mermi rengine göre boyanır. Hangi mermi sahnesi
+## hangi renk: TRAIL_COLORS (sahne dosya adı -> açık renk) - .tscn'lere dokunulmadı, yay+arbalet aynı ok sahnesini
+## paylaşır. Diğer istemcilerdeki kozmetik mermiler de AYNI sahne/script olduğu için iz orada da aynen görünür.
+const TrailFrames := preload("res://assets/fx/trails/trail_frames.tres")
+const TRAIL_COLORS := {
+	"arrow_projectile": Color(1.0, 0.95, 0.84), ## yay / arbalet: açık fildişi (tahta ok + tüy)
+	"tufek_projectile": Color(1.0, 0.93, 0.6), ## tüfek: açık altın (izli mermi)
+	"tabanca_projectile": Color(1.0, 0.85, 0.55), ## tabanca: açık kehribar
+	"dart_projectile": Color(0.74, 1.0, 0.66), ## tüftüf: açık zehir yeşili
+}
+const TRAIL_CRIT_COLOR := Color(1.0, 0.72, 0.52)
+const TRAIL_SCALE := 1.212 ## 1 sanat pikseli = PixelDraw.TEXEL dünya birimi
+var _trail: AnimatedSprite2D = null
+var _trail_oriented: bool = false
+
+
+func _setup_trail() -> void:
+	var key: String = scene_file_path.get_file().get_basename()
+	if not TRAIL_COLORS.has(key):
+		return
+	_trail = AnimatedSprite2D.new()
+	_trail.sprite_frames = TrailFrames
+	_trail.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_trail.show_behind_parent = true ## mermi sprite'ı izin üstünde kalsın
+	_trail.centered = true
+	_trail.offset = Vector2(-16.0, 0.0) ## iz karesi 32 px, başı (sağ uç) mermiye yapışsın
+	var col: Color = TRAIL_CRIT_COLOR if is_crit else TRAIL_COLORS[key]
+	_trail.modulate = Color(col.r, col.g, col.b, 0.9)
+	_trail.visible = false ## yönü ilk fizik adımında (direction belli olunca) ayarlanıp açılır
+	add_child(_trail)
+	_trail.play("launch")
+	_trail.animation_finished.connect(func() -> void:
+		if is_instance_valid(_trail) and _trail.animation == &"launch":
+			_trail.play("fly"))
+
 
 func _ready() -> void:
+	## Fizik interpolasyonu (bkz. physics_interp.gd): _physics_process'te hareket ediyor.
+	PhysicsInterp.opt_in(self)
 	body_entered.connect(_on_body_entered)
 	get_tree().create_timer(2.0).timeout.connect(func(): if is_instance_valid(self): queue_free())
 	if is_crit:
@@ -108,6 +150,7 @@ func _ready() -> void:
 			color_rect.color = Color(1.0, 0.35, 0.15, 1.0)
 		scale *= 1.4
 
+	_setup_trail()
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation("appear"):
 		anim.animation_finished.connect(_on_appear_finished, CONNECT_ONE_SHOT)
 		anim.play("appear")
@@ -129,7 +172,16 @@ func _on_appear_finished() -> void:
 
 func _physics_process(delta: float) -> void:
 	if _impacted:
+		if _trail and _trail.visible:
+			_trail.visible = false
 		return
+	## İz: weapon.gd merminin yönünü/rotasyonunu add_child'dan SONRA atıyor - ilk adımda (artık belli) uçuş yönüne göre
+	## global açıyla sabitlenir; mermi kendi ölçeğinden (kritikte x1.4) bağımsız sabit piksel yoğunluğunda kalır.
+	if _trail and not _trail_oriented:
+		_trail_oriented = true
+		_trail.global_rotation = direction.angle()
+		_trail.global_scale = Vector2.ONE * TRAIL_SCALE
+		_trail.visible = true
 	position += direction * speed * delta
 
 
@@ -208,7 +260,10 @@ func _apply_knockback(target: Node2D) -> void:
 	var dir: Vector2 = direction.normalized() if direction.length() > 0.001 else Vector2.RIGHT
 	## Artık anında ışınlama değil - enemy.gd'nin kendi yumuşak/sönümlenen
 	## itiş sistemine devrediliyor (bkz. enemy.gd apply_knockback_force).
-	if target.has_method("apply_knockback_force"):
+	## knockback_force = İTİŞ MESAFESİ (px) - bkz. enemy.gd apply_knockback_distance (yumuşak, sönümlenen).
+	if target.has_method("apply_knockback_distance"):
+		target.apply_knockback_distance(dir, min(knockback_force, 400.0))
+	elif target.has_method("apply_knockback_force"):
 		target.apply_knockback_force(dir, min(knockback_force, 400.0))
 	else:
 		target.global_position += dir * min(knockback_force, 400.0)
@@ -262,7 +317,10 @@ func _play_impact_sound() -> void:
 func _finish_or_play_impact() -> void:
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation("impact"):
 		_impacted = true
-		monitoring = false
+		## body_entered sinyali İÇİNDEN çağrılıyor - doğrudan atama Godot'ta
+		## "Function blocked during in/out signal" hatası veriyordu (her isabette).
+		## _impacted zaten ikinci bir isabeti engelliyor, erteleme güvenli.
+		set_deferred("monitoring", false)
 		if color_rect:
 			color_rect.visible = false
 		if impact_rotation_flip:

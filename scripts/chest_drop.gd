@@ -85,8 +85,8 @@ func _on_body_entered(body: Node) -> void:
 	## aynı notu: host'un GERÇEK sandığı bir uzak oyuncunun host'taki gerçek
 	## kuklasına fiziksel olarak değerse (RPC bir sebeple hiç gelmese bile)
 	## artık burada da doğrudan güvenlik ağı olarak, doğru sahibi için açılıyor.
-	## Kullanıcı isteği (2026-09-21): çok oyunculuda sandığı KİM toplarsa toplasın kazanan rastgele belirlenir
-	## (bkz. _open_for_player / NetworkManager.host_award_chest) - tek oyunculuda eskisi gibi toplayan alır.
+	## Çok oyunculuda ödül host'ta dağıtılır (bkz. _open_for_player / NetworkManager.host_award_chest) - 2026-09-24'ten
+	## beri sandık her zaman TOPLAYANA gider (eski "rastgele birine" kuralı kaldırıldı).
 	if body.is_in_group("remote_players") or NetworkManager.is_multiplayer_active:
 		_open_for_player(body)
 	else:
@@ -162,7 +162,15 @@ func _open_for_player(player_node: Node) -> void:
 			return
 		queue_free()
 		return
-	var winner_id: int = NetworkManager.host_award_chest(chest_tier)
+	## Kullanıcı isteği (2026-09-24): sandık TOPLAYANA gider (bkz. NetworkManager.host_award_chest) - toplayanın peer id'si:
+	## host'un kendi oyuncusuysa host'un id'si, uzak kuklaysa onun peer_id'si.
+	var picker_id: int = 0
+	if player_node and is_instance_valid(player_node):
+		if player_node.is_in_group("player"):
+			picker_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+		elif "peer_id" in player_node:
+			picker_id = int(player_node.peer_id)
+	var winner_id: int = NetworkManager.host_award_chest(chest_tier, picker_id)
 	if winner_id == 0 and player_node and is_instance_valid(player_node) and player_node.is_in_group("player"):
 		## Katılımcı listesi boş (ör. herkes ölü): yine de host'un yerel oyuncusuna ver, sandık boşa gitmesin.
 		GameManager.add_pending_chest(chest_tier)

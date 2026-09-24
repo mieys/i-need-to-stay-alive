@@ -33,6 +33,14 @@ CHARS = {
     "korsan": ("korsan", "korsan_frames.tres", "korsan_portrait.png"),
     "melek": ("melek", "melek_frames.tres", "melek_portrait.png"),
     "vampire new": ("vampir", "vampir_frames.tres", "vampir_portrait.png"),
+    # 2026-09-23 ikinci parti (new characters.zip #2): Necromancer/Sovalye
+    # Adam/Assasin/Matthew/Shaman - hepsi eski LPC atlasindan/uretilen
+    # sayfalardan bu yeni 48x48 kite geciyor.
+    "necromancer": ("necromancer", "necromancer_frames.tres", "necromancer_portrait.png"),
+    "sovalye adam": ("sovalye", "sovalye_frames.tres", "sovalye_portrait.png"),
+    "assasin": ("assasin", "assasin_frames.tres", "assasin_portrait.png"),
+    "matthew": ("matthew", "matthew_frames.tres", "matthew_portrait.png"),
+    "shaman": ("shaman", "shaman_frames.tres", "shaman_portrait.png"),
 }
 
 # (oyundaki sayfa adi, kaynak dosya adi adaylari, dongu, hiz fps)
@@ -142,6 +150,27 @@ def bbox(frame):
     return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
 
 
+# DUZELTME (kullanici bildirimi 2026-09-24, secim ekrani ekran goruntusu: "karakterler oyundaki gibi gorunmuyor
+# dusuk kalitede"): portre eskiden 48x48 hucreden 36x36'ya NEAREST ile KUCULTULUYORDU - bu her 4 satir/sutundan
+# birini ATIYOR (goz/yuz/kemer pikselleri kayboluyor/bozuluyor). Artik hucre 1:1 (48x48) yaziliyor; kartta
+# tam sayi katla buyutme UIKit.attach_pixel_portrait'te.
+PORTRAIT_SIZE = CELL
+
+# DUZELTME (kullanici bildirimi, ekran goruntusuyle 2026-09-23: "karakter portlerlerinde boyu uzun olan
+# karakterler sigmamis kutucuklarina ... gorunuslerini biraz uzaklastirman gerekiyor yani kucultmen"):
+# eskiden portre, karakterin GERCEK govde kutusuna (bbox) SIKI SIKIYA oturan sabit 36x36'lik bir pencereydi
+# (yukaridan sadece 2px pay, digger taraf CELL-36 ile kirpiliyordu) - kisa karakterlerde sorun cikmiyordu ama
+# kanat/miğfer/basluk gibi uzun govdeli karakterlerde (Melek/Necromancer/Vampir Cocuk) bu pencere govdenin
+# TAMAMINI kapsayamiyor, ust/alt kesiliyordu. Artik HERKES icin AYNI (tutarli "kamera mesafesi") - govdeye
+# sikica degil, TUM 48x48 hucreye (idle asagi ilk kare) gore kirpiliyor, sadece govdenin CIKTI karesinin
+# merkezine hizalaniyor - hicbir karakter artik kesilemiyor (kirpim penceresi kaynaktan asla buyuk degil),
+# bedeli: herkes portrede biraz daha kucuk/uzak gorunuyor (istenen "uzaklastirma" tam olarak bu).
+def make_portrait(idle_small, out_path):
+    fr = idle_small[0:CELL, 0:CELL]  # idle asagi, ilk kare - kirpim penceresi = TUM 48x48 hucre (bkz. yukaridaki not)
+    Image.fromarray(fr).save(out_path)  # yeniden boyutlandirma YOK (bkz. PORTRAIT_SIZE notu)
+    print(f"    portre: {os.path.basename(out_path)} (tam hucre {PORTRAIT_SIZE}x{PORTRAIT_SIZE}, 1:1, hicbir govde kesilmiyor)")
+
+
 def import_char(entry_key, src_dir):
     key, frames_name, portrait_name = CHARS[entry_key]
     print(f"== {key}  ({src_dir})")
@@ -165,15 +194,8 @@ def import_char(entry_key, src_dir):
             idle_small = small
         print(f"    {sheet}: {cols} kare x 4 yon (kaynak {k}x)")
     write_frames(key, frames_name, counts)
-    # portre: idle asagi ilk kare -> ust govde kirpimi (kafa + omuzlar, 36x36)
-    fr = idle_small[0:CELL, 0:CELL]
-    x0, y0, x1, y1 = bbox(fr)
-    cx = (x0 + x1) // 2
-    top = max(0, y0 - 2)
-    left = max(0, min(CELL - 36, cx - 18))
-    crop = fr[top : top + 36, left : left + 36]
-    Image.fromarray(crop).save(os.path.join(CHAR_DIR, portrait_name))
-    print(f"    portre: {portrait_name} (kirpim {left},{top} 36x36)")
+    make_portrait(idle_small, os.path.join(CHAR_DIR, portrait_name))
+    x0, y0, x1, y1 = bbox(idle_small[0:CELL, 0:CELL])  # sadece olcum/log amacli, portreyi ETKİLEMEZ (bkz. make_portrait)
     print(f"    OLCU idle_down: govde {x1 - x0 + 1}x{y1 - y0 + 1} sanat px, ayak satiri {y1}, x {x0}-{x1}")
 
 

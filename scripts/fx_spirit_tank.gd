@@ -1,27 +1,52 @@
 extends Node2D
 
 ## Ruhani Yetenek "Tank" (F): 10sn boyunca gövdeyi saran yarı saydam ÇELİK-MAVİ + ALTIN pixel bariyer (altıgen kalkan aurası).
-## (1 texel detay, bkz. hafıza "Pixel density 48x48"):
-##  - açılış: metalik beyaz-mavi şok halkası + içe toplanan 6 çizgi
-##  - süre boyunca: yavaş dönen ince altıgen çerçeve + köşelerinde altın perçinler + üstünden geçen parlak şerit + ince dither dolgu
-##  - pulse(): hasar yansıtıldığında (player.gd _spirit_tank_on_hit) çerçeve kısa süre parlar
+## DÜZELTME (2026-09-23, kalkan/arı/sarmaşık dönüşümünün devamı - "aynı şeyi ruhani büyüler için de yap"): steady-state altıgen
+## çerçeve+dither dolgu+perçinler HER karede ~1200+ draw_rect() çağrısıyla yeniden çiziliyordu, 10sn boyunca SÜREKLİ - birden
+## fazla oyuncu aynı anda Tank açarsa bu katlanıyordu. İki katman artık PNG'ye pişirildi (assets/fx/spirit_tank/hex_outer.png +
+## hex_inner.png, referans açı 0) ve script'te rotation/scale/modulate ile döndürülüp büyütülüyor/soluyor (bkz.
+## oakley_bee_swarm_ring.gd'deki AYNI "statik doku + script rotation" deseni) - draw_rect sayısı ~1200 -> 2'ye indi.
+## Açılış şok halkası (~0.55sn, tek seferlik) VE kenar parıltısı (sweep, 3 px()/kare - zaten ucuz) PROSEDÜREL bırakıldı;
+## asıl kazanç zaten SÜREKLİ çizilen kısımdaydı.
+##  - açılış: metalik beyaz-mavi şok halkası + içe toplanan 6 çizgi (prosedürel)
+##  - süre boyunca: yavaş dönen ince altıgen çerçeve + köşelerinde altın perçinler (baked, döndürülür) + üstünden geçen
+##    parlak şerit (prosedürel, ucuz)
+##  - pulse(): hasar yansıtıldığında (player.gd _spirit_tank_on_hit) çerçeve kısa süre parlar (self_modulate ile)
 ## Player/RemotePlayer'ın ÇOCUĞU, sabit ömürlü (DURATION = spiritual_skills.gd TANK_DURATION).
 
 const PixelDraw := preload("res://scripts/pixel_draw.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+const HEX_OUTER_TEX := preload("res://assets/fx/spirit_tank/hex_outer.png")
+const HEX_INNER_TEX := preload("res://assets/fx/spirit_tank/hex_inner.png")
 
 const BODY_CENTER := Vector2(0, -4)
 const FADE_OUT := 0.5
 const RADIUS := 36.0
+const ROT_SPEED := 0.35 ## rad/sn - eski `rot = _t*0.35` ile aynı
 
 var _t: float = 0.0
 var _duration: float = SpiritualSkillsScript.TANK_DURATION
 var _pulse: float = 0.0
 
+var _hex_outer: Sprite2D = null
+var _hex_inner: Sprite2D = null
+
 
 func _ready() -> void:
 	z_index = 2
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
+	_hex_outer = Sprite2D.new()
+	_hex_outer.texture = HEX_OUTER_TEX
+	_hex_outer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_hex_outer.position = BODY_CENTER
+	add_child(_hex_outer)
+
+	_hex_inner = Sprite2D.new()
+	_hex_inner.texture = HEX_INNER_TEX
+	_hex_inner.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_hex_inner.position = BODY_CENTER
+	add_child(_hex_inner)
 
 
 ## Hasar yansıyınca çağrılır: çerçeve ~0.25sn parlar.
@@ -35,6 +60,19 @@ func _process(delta: float) -> void:
 	if _t >= _duration + FADE_OUT:
 		queue_free()
 		return
+
+	var fade: float = clampf((_duration + FADE_OUT - _t) / FADE_OUT, 0.0, 1.0)
+	var open: float = clampf(_t / 0.25, 0.0, 1.0) * fade
+	var rot: float = _t * ROT_SPEED
+	var bright: float = 1.0 + (_pulse / 0.25) * 0.8
+
+	_hex_outer.rotation = rot
+	_hex_outer.scale = Vector2.ONE * open
+	_hex_outer.modulate = Color(bright, bright, bright, minf(1.0, open))
+	_hex_inner.rotation = -rot * 0.8
+	_hex_inner.scale = Vector2.ONE * open
+	_hex_inner.modulate.a = open
+
 	queue_redraw()
 
 
@@ -46,9 +84,8 @@ func _hex_points(radius: float, rot: float) -> Array:
 	return pts
 
 
+## Sadece açılış patlaması + kenar parıltısı (sweep) - steady-state çerçeve artık Sprite2D (bkz. _ready/_process).
 func _draw() -> void:
-	var fade: float = clampf((_duration + FADE_OUT - _t) / FADE_OUT, 0.0, 1.0)
-	var open: float = clampf(_t / 0.25, 0.0, 1.0) * fade
 	## Açılış: metalik şok halkası + içe toplanan çizgiler
 	if _t < 0.55:
 		var pk: float = _t / 0.55
@@ -58,27 +95,12 @@ func _draw() -> void:
 			var a: float = float(k) * TAU / 6.0 + 0.3
 			var r1: float = 70.0 * (1.0 - pk) + 14.0
 			PixelDraw.line(self, BODY_CENTER + Vector2(cos(a), sin(a)) * r1, BODY_CENTER + Vector2(cos(a), sin(a)) * (r1 + 14.0), Color(0.75, 0.9, 1.0, 1.0 - pk), 1)
+	var fade: float = clampf((_duration + FADE_OUT - _t) / FADE_OUT, 0.0, 1.0)
+	var open: float = clampf(_t / 0.25, 0.0, 1.0) * fade
 	if open <= 0.0:
 		return
-	var bright: float = 1.0 + (_pulse / 0.25) * 0.8
-	var rot: float = _t * 0.35
+	var rot: float = _t * ROT_SPEED
 	var outer: Array = _hex_points(RADIUS * open, rot)
-	var inner: Array = _hex_points((RADIUS - 3.0) * open, -rot * 0.8)
-	## Dither dolgu (ince)
-	PixelDraw.disc_dither(self, BODY_CENTER, (RADIUS - 2.0) * open, Color(0.55, 0.78, 1.0, 0.2 * bright), int(_t * 6.0), 1)
-	## Altıgen çerçeve (dış: çelik, iç: soluk)
-	for i in range(6):
-		var a_pt: Vector2 = outer[i]
-		var b_pt: Vector2 = outer[(i + 1) % 6]
-		var edge_col := Color(0.72, 0.88, 1.0, minf(1.0, 0.95 * open * bright))
-		PixelDraw.line(self, a_pt, b_pt, edge_col, 1)
-		var inward: Vector2 = (BODY_CENTER - (a_pt + b_pt) * 0.5).normalized() * PixelDraw.TEXEL
-		PixelDraw.line(self, a_pt + inward, b_pt + inward, Color(0.45, 0.65, 0.95, 0.75 * open), 1)
-		PixelDraw.line(self, inner[i], inner[(i + 1) % 6], Color(0.55, 0.72, 0.95, 0.4 * open), 1)
-	## Köşe perçinleri (altın)
-	for i in range(6):
-		PixelDraw.px(self, outer[i], 3, Color(1.0, 0.86, 0.4, open))
-		PixelDraw.px(self, outer[i], 1, Color(1.0, 0.98, 0.8, open))
 	## Kenarlardan geçen parlak şerit
 	var sweep: float = fmod(_t * 0.9, 1.0) * 6.0
 	var edge: int = int(sweep) % 6

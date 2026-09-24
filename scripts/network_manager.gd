@@ -219,6 +219,15 @@ func _process(delta: float) -> void:
 	if is_multiplayer_active and is_host:
 		_process_batched_syncs(delta)
 
+	## LAN OTOMATİK KEŞİF: host'ken periyodik "buradayım" yayını, herkeste (bağlı
+	## olsun olmasın, fonksiyonların kendisi no-op guard'lı) gelen paketleri dinleme.
+	if _discovery_send_peer != null:
+		_discovery_beacon_timer += delta
+		if _discovery_beacon_timer >= DISCOVERY_BEACON_INTERVAL:
+			_discovery_beacon_timer = 0.0
+			_send_lan_beacon()
+	_poll_lan_discovery()
+
 
 func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1) -> bool:
 	disconnect_from_room(false)
@@ -230,27 +239,39 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 	local_char_id = char_id
 	is_host = true
 	_host_peer = 1
-	room_code = "LAN:%d" % port
-	
+	## DÜZELTME (kullanıcı isteği: "ip adresimi otomatik olarak lan'da görünsün ipmi
+	## sürekli yazmak istemiyorum") - eskiden burası sadece "LAN:<port>" yazıyordu,
+	## gerçek IP'yi kullanıcı CMD'de "ipconfig" çalıştırıp KENDİSİ okuyup arkadaşına
+	## SÖYLEMEK zorundaydı. Artık get_local_lan_ip() ile yerel ağ IP'si OTOMATİK
+	## algılanıp buraya yazılıyor - lobby_menu.gd'deki bağlantı etiketi bunu doğrudan
+	## gösterir, hiçbir yerde elle IP aramak/yazmak gerekmiyor.
+	var detected_ip: String = get_local_lan_ip()
+	room_code = "%s:%d" % [detected_ip, port] if detected_ip != "" else "LAN:%d" % port
+
 	var peer := ENetMultiplayerPeer.new()
 	var err: Error = peer.create_server(port, MAX_PLAYERS)
 	if err != OK:
 		is_multiplayer_active = false
 		connection_status_changed.emit("LAN Sunucu başlatılamadı: %s" % error_string(err))
 		return false
-		
+
 	_peer = peer
 	multiplayer.multiplayer_peer = _peer
-	
+
 	lobby_players[1] = {
 		"name": local_player_name,
 		"char_id": local_char_id,
 		"is_ready": true,
 		"is_host": true
 	}
-	
+
 	connection_status_changed.emit("LAN Sunucu Kuruldu! Port: %d" % port)
 	lobby_updated.emit()
+	## Artık kendisi de ağda bir "beacon" (duyuru) yayınlar - bkz. LAN OTOMATİK KEŞİF
+	## bloğu altındaki _start_lan_beacon notu. Katılan taraf IP'yi hiç YAZMADAN, lobi
+	## ekranındaki "Bulunan Oyunlar" listesinden tıklayıp katılabilir.
+	stop_lan_discovery_listen()
+	_start_lan_beacon(port)
 	return true
 
 
@@ -265,18 +286,172 @@ func join_lan(ip: String = "127.0.0.1", port: int = 7777, player_name: String = 
 	is_host = false
 	_host_peer = 1
 	room_code = "%s:%d" % [ip, port]
-	
+
 	var peer := ENetMultiplayerPeer.new()
 	var err: Error = peer.create_client(ip, port)
 	if err != OK:
 		is_multiplayer_active = false
 		connection_status_changed.emit("LAN Sunucuya bağlanılamadı: %s" % error_string(err))
 		return false
-		
+
 	_peer = peer
 	multiplayer.multiplayer_peer = _peer
 	connection_status_changed.emit("LAN Sunucuya bağlanılıyor (%s:%d)..." % [ip, port])
+	stop_lan_discovery_listen()
 	return true
+
+
+## ============================================================================
+## LAN OTOMATİK KEŞİF (kullanıcı isteği: "ip adresimi otomatik olarak lan'da
+## görünsün ipmi sürekli yazmak istemiyorum")
+## ============================================================================
+## Oyunun asıl bağlantısı (ENet, host_lan/join_lan) bundan TAMAMEN BAĞIMSIZ - bu
+## katman SADECE aynı yerel ağdaki (LAN) host'ları BULUP IP:Port'u otomatik
+## doldurmak için var, kendi ayrı UDP portunu (DISCOVERY_PORT) kullanır:
+##   - Host: her ~1sn'de bir küçük bir "buradayım" paketini ağa YAYINLAR (broadcast).
+##   - Henüz bağlanmamış herkes (lobby_menu.gd açıkken) bu portu dinler, gelen
+##     paketlerin GÖNDEREN IP'sini (PacketPeerUDP.get_packet_ip() - istemcinin
+##     KENDİ yazması GEREKMEYEN kısım tam olarak bu) + paketteki port/isim'i
+##     "Bulunan Oyunlar" listesine ekler.
+## Güvenlik duvarı/farklı alt ağ gibi sebeplerle keşif paketleri ulaşmazsa (ya da
+## AYNI bilgisayarda ikinci bir test istemcisi zaten aynı portu dinliyorsa, bkz.
+## CLAUDE.md "Test/doğrulama" - host+client'ı tek PC'de test etme) sessizce hiçbir
+## şey BOZULMAZ: manuel IP:Port alanı her zaman olduğu gibi çalışmaya devam eder.
+const DISCOVERY_PORT := 7778
+const DISCOVERY_MAGIC := "INSA_LAN_v1"
+const DISCOVERY_BEACON_INTERVAL := 1.0
+const DISCOVERY_STALE_SEC := 4.0
+
+signal lan_games_updated
+
+var _discovery_send_peer: PacketPeerUDP = null
+var _discovery_beacon_timer: float = 0.0
+var _discovery_hosting_port: int = 0
+
+var _discovery_listen_peer: PacketPeerUDP = null
+var _discovery_listening: bool = false
+## key "ip:port" (String) -> {"ip":String, "port":int, "name":String, "last_seen_msec":int}
+var _discovered_games: Dictionary = {}
+
+
+## Yerel ağdaki (192.168.x.x / 10.x.x.x / 172.16-31.x.x) IPv4 adresini döner, yoksa "".
+## host_lan()'da room_code'a otomatik yazmak için kullanılır - kullanıcı bir daha CMD'de
+## "ipconfig" çalıştırıp kendi IP'sini aramak zorunda kalmasın diye.
+static func get_local_lan_ip() -> String:
+	for addr in IP.get_local_addresses():
+		if _is_private_lan_ipv4(addr):
+			return addr
+	return ""
+
+
+static func _is_private_lan_ipv4(ip: String) -> bool:
+	if ip.count(".") != 3:
+		return false
+	if ip.begins_with("192.168.") or ip.begins_with("10."):
+		return true
+	if ip.begins_with("172."):
+		var parts: PackedStringArray = ip.split(".")
+		if parts.size() == 4 and parts[1].is_valid_int():
+			var second: int = int(parts[1])
+			return second >= 16 and second <= 31
+	return false
+
+
+func _start_lan_beacon(port: int) -> void:
+	_discovery_hosting_port = port
+	_discovery_beacon_timer = 0.0
+	var peer := PacketPeerUDP.new()
+	peer.set_broadcast_enabled(true)
+	_discovery_send_peer = peer
+	_send_lan_beacon()
+
+
+func _stop_lan_beacon() -> void:
+	_discovery_send_peer = null
+	_discovery_hosting_port = 0
+
+
+func _send_lan_beacon() -> void:
+	if _discovery_send_peer == null:
+		return
+	## "|" ile ayrılan 3 alan: sihirli önek (rastgele ağ trafiğine yanlış tepki
+	## vermemek için) + host adı ("|" karakteri ismde olamaz, güvenlik için değiştirilir)
+	## + gerçek oyun (ENet) portu.
+	var safe_name: String = local_player_name.replace("|", " ")
+	var payload: PackedByteArray = ("%s|%s|%d" % [DISCOVERY_MAGIC, safe_name, _discovery_hosting_port]).to_utf8_buffer()
+	var peer: PacketPeerUDP = _discovery_send_peer
+	## DÜZELTME (gerçek makinede test edilip bulundu): genel yayın adresi
+	## (255.255.255.255) bu makinede bir VPN/sanal ağ bağdaştırıcısı (Radmin/Hamachi
+	## türü, bkz. dosya başı "internet üzerinden oynamak için..." notu) üzerinden
+	## çıkıyor - gerçek LAN'a hiç ulaşmayabiliyor. Alt ağa YÖNELİK yayın adresini de
+	## (ör. 192.168.1.255, /24 varsayımıyla - ev/ofis ağlarının BÜYÜK ÇOĞUNLUĞU) AYRICA
+	## gönderiyoruz; aynı küçük paket saniyede bir kez, ikisi de göndermek zararsız.
+	peer.set_dest_address("255.255.255.255", DISCOVERY_PORT)
+	peer.put_packet(payload)
+	var subnet_bcast: String = _guess_subnet_broadcast(get_local_lan_ip())
+	if subnet_bcast != "":
+		peer.set_dest_address(subnet_bcast, DISCOVERY_PORT)
+		peer.put_packet(payload)
+
+
+static func _guess_subnet_broadcast(local_ip: String) -> String:
+	if local_ip == "" or local_ip.count(".") != 3:
+		return ""
+	var parts: PackedStringArray = local_ip.split(".")
+	return "%s.%s.%s.255" % [parts[0], parts[1], parts[2]]
+
+
+## Lobi ekranı açıldığında (henüz bir odaya bağlanmamışken) çağrılır - bkz. lobby_menu.gd.
+## Bağlanınca (host olunca ya da katılınca) OTOMATİK durdurulur (host_lan/join_lan).
+func start_lan_discovery_listen() -> void:
+	if _discovery_listening:
+		return
+	var peer := PacketPeerUDP.new()
+	var err: Error = peer.bind(DISCOVERY_PORT)
+	if err != OK:
+		## Port başka bir yerel süreç tarafından tutuluyor olabilir (ör. AYNI PC'de
+		## açılmış ikinci bir test istemcisi, bkz. CLAUDE.md) - sessizce vazgeç,
+		## "Bulunan Oyunlar" listesi boş kalır ama manuel IP alanı bozulmaz.
+		return
+	_discovery_listen_peer = peer
+	_discovery_listening = true
+	_discovered_games.clear()
+
+
+func stop_lan_discovery_listen() -> void:
+	_discovery_listen_peer = null
+	_discovery_listening = false
+	_discovered_games.clear()
+
+
+func get_discovered_lan_games() -> Array:
+	var out: Array = _discovered_games.values()
+	out.sort_custom(func(a, b): return String(a["name"]) < String(b["name"]))
+	return out
+
+
+func _poll_lan_discovery() -> void:
+	if not _discovery_listening or _discovery_listen_peer == null:
+		return
+	var peer: PacketPeerUDP = _discovery_listen_peer
+	var changed: bool = false
+	while peer.get_available_packet_count() > 0:
+		var buf: PackedByteArray = peer.get_packet()
+		var parts: PackedStringArray = buf.get_string_from_utf8().split("|")
+		if parts.size() == 3 and parts[0] == DISCOVERY_MAGIC and parts[2].is_valid_int():
+			var ip: String = peer.get_packet_ip()
+			var g_port: int = int(parts[2])
+			var key: String = "%s:%d" % [ip, g_port]
+			_discovered_games[key] = {"ip": ip, "port": g_port, "name": parts[1], "last_seen_msec": Time.get_ticks_msec()}
+			changed = true
+	## Beacon'ı kesilen (host kapanmış/ayrılmış) oyunları listeden düşür.
+	var now: int = Time.get_ticks_msec()
+	for key in _discovered_games.keys():
+		if now - int(_discovered_games[key]["last_seen_msec"]) > int(DISCOVERY_STALE_SEC * 1000.0):
+			_discovered_games.erase(key)
+			changed = true
+	if changed:
+		lan_games_updated.emit()
 
 
 func disconnect_from_room(show_status: bool = true) -> void:
@@ -309,6 +484,10 @@ func _clear_peer_state() -> void:
 	## notu - eski odadan kalan bu bayraklarla yeni bir odaya girilmesin.
 	_is_game_in_progress = false
 	_is_rejoining_midgame = false
+	## Oda kapandı/bağlantı kesildi - host'sak artık "buradayım" yayınını durdur
+	## (bkz. LAN OTOMATİK KEŞİF bloğu). Dinleme YENİDEN başlatılmıyor burada -
+	## lobby_menu.gd _ready()'de zaten tekrar start_lan_discovery_listen() çağırır.
+	_stop_lan_beacon()
 
 
 func _on_connected_to_server() -> void:
@@ -1488,6 +1667,82 @@ func broadcast_merchant_departed() -> void:
 	merchant_departed.emit()
 
 
+## =====================================================================================
+## Rastgele dünya görevleri (bkz. world_event_manager.gd) - kullanıcı isteği (2026-09-23):
+## "Oyuna rasgele aralıklarla gerçekleşen bir görev sistemi ekliyoruz". Seyyar satıcı
+## AYNI deseni: karar HOST'ta (world_event_manager.gd, sadece NetworkManager.is_host'ta
+## çalışır), sonuç bu RPC'lerle TÜM istemcilere (host dahil, call_local) yayılır - hiçbir
+## istemci kendi başına görev seçmez/zamanlamaz, sadece host'un yayınını gösterir.
+## `extra` görev TÜRÜNE özgü kurulum verisi taşır (ör. Topla görevinde toplanacak obje
+## sayısı, Alanı Güvenceye Al'da hedef öldürme sayısı) - CLAUDE.md'nin uyardığı "iki ayrı
+## yer" hatasından kaçınmak için bu sabitler SADECE world_event_manager.gd'de tanımlı,
+## burada tekrar YAZILMIYOR.
+signal world_event_announced(mission_id: int, kind: String, pos: Vector2, radius: float, warn_seconds: float, label: String)
+signal world_event_started(mission_id: int, kind: String, pos: Vector2, radius: float, duration: float, extra: Dictionary)
+signal world_event_progress(mission_id: int, value: float, target: float)
+signal world_event_completed(mission_id: int, kind: String, success: bool)
+
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_world_event_announced(mission_id: int, kind: String, pos: Vector2, radius: float, warn_seconds: float, label: String) -> void:
+	world_event_announced.emit(mission_id, kind, pos, radius, warn_seconds, label)
+
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_world_event_started(mission_id: int, kind: String, pos: Vector2, radius: float, duration: float, extra: Dictionary) -> void:
+	world_event_started.emit(mission_id, kind, pos, radius, duration, extra)
+
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_world_event_progress(mission_id: int, value: float, target: float) -> void:
+	world_event_progress.emit(mission_id, value, target)
+
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_world_event_completed(mission_id: int, kind: String, success: bool) -> void:
+	world_event_completed.emit(mission_id, kind, success)
+
+## Topla (Collect) görevi: obje konumları sabit olduğu için her istemci world_event_started'ın
+## `extra["items"]` alanından KENDİ kozmetik kopyalarını kurar (bkz. mission_collect_item.gd) -
+## ayrı bir "spawn" RPC'sine gerek yok. Bu RPC sadece TOPLAMA anını taşır: hangi istemcinin
+## KENDİ yerel oyuncusu bir objeye dokunduysa "any_peer" ile burayı çağırır (host dahil kendi
+## objesi için de), host bunu dinleyip (bkz. world_event_manager.gd) ilerlemeyi ilerletir VE
+## bu AYNI RPC'nin call_local'ı sayesinde TÜM istemciler o objeyi (item_index) yerel kopyalarında
+## gizler - iki taraf da (mantık + görsel) aynı yayından besleniyor, ayrı bir "kaldır" RPC'si
+## gerekmiyor.
+signal world_event_item_collected(mission_id: int, item_index: int)
+
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_world_event_item_collected(mission_id: int, item_index: int) -> void:
+	world_event_item_collected.emit(mission_id, item_index)
+
+## "Kopyanı Öldür" (Kill your copy) - kopyalar sadece host'ta gerçek simüle edilir (enemy.gd'nin
+## AYNI host-authoritative deseni), diğer istemcilerde kozmetik bir kopya bu yayınla pozisyonunu/
+## canlılığını takip eder (bkz. mission_player_copy.gd) - enemy.gd'nin tam senkron sistemine
+## (network_enemy_id/interest management) girmiyor çünkü Enemy tipi DEĞİL; bunun yerine AYRI,
+## küçük, ilgi-alanı-YÖNETİMSİZ (kopya sayısı zaten oyuncu sayısı kadar, az) bir periyodik yayın.
+## health_ratio: kopyanın can oranı (0..1) - kozmetik kopyaların can barı da güncellensin diye
+## (yoksa host olmayan oyuncular barı hep DOLU görür, bkz. CLAUDE.md "kaster görür, diğerleri
+## görmez" hata sınıfı).
+signal world_event_copy_state(mission_id: int, copy_index: int, pos: Vector2, alive: bool, health_ratio: float)
+
+@rpc("any_peer", "call_local", "unreliable")
+func broadcast_world_event_copy_state(mission_id: int, copy_index: int, pos: Vector2, alive: bool, health_ratio: float = 1.0) -> void:
+	world_event_copy_state.emit(mission_id, copy_index, pos, alive, health_ratio)
+
+## Host olmayan istemcinin kozmetik kopyaya verdiği hasar -> host'taki gerçek kopya (bkz. mission_player_copy.gd take_damage).
+signal world_event_copy_damage_requested(mission_id: int, copy_index: int, amount: float)
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_world_event_copy_damage(mission_id: int, copy_index: int, amount: float) -> void:
+	if not is_host:
+		return
+	world_event_copy_damage_requested.emit(mission_id, copy_index, amount)
+
+## Kopyanın menzilli mermisi (bkz. mission_player_copy.gd _fire_at) - host'ta gerçek mermi zaten
+## hasar veriyor; bu yayın diğer istemcilerde AYNI atışın hasarsız, salt görsel kopyasını çizer.
+@rpc("any_peer", "call_remote", "unreliable")
+func broadcast_world_event_copy_bolt(from_pos: Vector2, to_pos: Vector2) -> void:
+	## load() (preload/class_name DEĞİL): autoload <-> mission_player_copy.gd döngüsel derleme bağımlılığı olmasın.
+	load("res://scripts/mission_player_copy.gd").spawn_bolt(from_pos, to_pos, 0.0, null, true)
+
+
 ## Remove a visual drop on all clients when it's collected on the host.
 ##
 ## NOT (kritik çökme düzeltmesi): "as Node2D" statik cast'i BİLEREK
@@ -1628,17 +1883,47 @@ func broadcast_ally_aura_stop(target_peer_id: int, aura_type: String) -> void:
 		target.stop_ally_aura_fx(aura_type)
 
 
+## PERF DÜZELTMESİ (kullanıcı bildirimi: "birisi bianda çok fazla yaratık öldürünce oyun laglanıyor ve yaratıklar
+## yerinde duruyor"): request_enemy_damage/request_enemy_effect/broadcast_enemy_vfx/forward_damage_to_peer/
+## broadcast_enemy_projectile yaratığı ağ kimliğiyle bulmak için HER ÇAĞRIDA "enemies" grubunun tamamını
+## kopyalayıp (get_nodes_in_group) tek tek get_meta ile tarıyordu. Tek bir alan hasarı onlarca yaratığı
+## öldürünce aynı karede yüzlerce bu RPC'den gelir (katılımcının her isabeti bir request_enemy_damage; host'tan
+## her yaratığa damage_number + hit_flash/death_state) - 300 yaratıkta tek karede on binlerce get_meta, yani tam
+## o anda uzun bir takılma. Artık kimlik atanırken (TEK yer: enemy_spawner.gd _spawn_creature) bu sözlüğe
+## kaydediliyor, sahneden çıkınca siliniyor - arama O(1).
+var _enemies_by_net_id: Dictionary = {} ## network_enemy_id -> Enemy node
+
+
+func register_enemy_net_id(enemy: Node, network_id: int) -> void:
+	if network_id <= 0 or enemy == null:
+		return
+	_enemies_by_net_id[network_id] = enemy
+	enemy.tree_exited.connect(_on_registered_enemy_exited.bind(network_id, enemy.get_instance_id()), CONNECT_ONE_SHOT)
+
+
+func _on_registered_enemy_exited(network_id: int, instance_id: int) -> void:
+	var cur: Variant = _enemies_by_net_id.get(network_id)
+	## Aynı kimlik bu arada başka bir yaratığa verilmişse (host göçü sonrası yeniden tohumlanan sayaç) ona dokunma.
+	if cur == null or not is_instance_valid(cur) or (cur as Object).get_instance_id() == instance_id:
+		_enemies_by_net_id.erase(network_id)
+
+
+func find_enemy_by_net_id(network_id: int) -> Node:
+	if network_id <= 0:
+		return null
+	var e: Variant = _enemies_by_net_id.get(network_id)
+	if e != null and is_instance_valid(e) and (e as Node).is_inside_tree():
+		return e as Node
+	return null
+
+
 ## Host-authoritative enemy damage: non-host clients send damage requests here.
 ## The host validates, applies damage to the enemy, and state syncs back to all peers.
 @rpc("any_peer", "call_remote", "reliable")
 func request_enemy_damage(network_id: int, amount: float, is_crit: bool, shield_pen_percent: float) -> void:
 	if not is_host or get_tree().paused:
 		return
-	var target_enemy: Node = null
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
-		if is_instance_valid(enemy) and int(enemy.get_meta("network_enemy_id", 0)) == network_id:
-			target_enemy = enemy
-			break
+	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("take_damage_host"):
 		## Gerçek saldıran katılımcının peer id'si - Korsan'ın "öldürdüğün her
 		## düşman 1 altın kazandırır" pasifi gibi öldürene özel ödüller için
@@ -1647,6 +1932,17 @@ func request_enemy_damage(network_id: int, amount: float, is_crit: bool, shield_
 		## olduğu için burada okunup parametre olarak taşınıyor.
 		var attacker_id: int = multiplayer.get_remote_sender_id()
 		target_enemy.take_damage_host(amount, is_crit, shield_pen_percent, attacker_id)
+
+
+## İstemcinin silah/mermi itişi -> host'taki gerçek yaratık (bkz. enemy.gd apply_knockback_distance). Konum host'ta
+## hesaplanıp normal yaratık konum yayınıyla herkese gider.
+@rpc("any_peer", "call_remote", "unreliable")
+func request_enemy_knockback(network_id: int, dir: Vector2, distance: float) -> void:
+	if not is_host or get_tree().paused:
+		return
+	var target_enemy: Node = find_enemy_by_net_id(network_id)
+	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("apply_knockback_distance"):
+		target_enemy.apply_knockback_distance(dir, distance)
 
 
 ## DÜZELTME (KRİTİK - multiplayer öldürme-bazlı pasifler): host, enemy.gd
@@ -1671,11 +1967,7 @@ func notify_kill_passive(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZERO) 
 func request_enemy_effect(network_id: int, effect_type: String, param1: float, param2: float, param3: float) -> void:
 	if not is_host or get_tree().paused:
 		return
-	var target_enemy: Node = null
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
-		if is_instance_valid(enemy) and int(enemy.get_meta("network_enemy_id", 0)) == network_id:
-			target_enemy = enemy
-			break
+	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if not target_enemy or not is_instance_valid(target_enemy):
 		return
 	match effect_type:
@@ -1734,7 +2026,7 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## Broadcast enemy status VFX so all peers see poison/freeze/chill visuals.
 ## Kullanıcı bildirimi: "yaratıklar single playerdaki ve hosttaki
 ## animasyonlarla gelmiyorlar katılımcılarda" - bu RPC saldırı/yaralanma
-## animasyonu tetiklemesini (attack_state/hurt_state) ve tüm durum efektlerini
+## animasyonu/parlamasını tetiklemesini (attack_state/hit_flash) ve tüm durum efektlerini
 ## (poison/rage/freeze/stun start-stop) taşıyor. "unreliable" olarak
 ## işaretliydi; relay'in bağlantı başına byte bütçesi/sel koruması (bkz.
 ## dosya başı notu) veya sıradan paket kaybı bu paketleri SESSİZCE
@@ -1749,11 +2041,7 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## bile 0.15sn sonraki paket zaten üzerine yazacak).
 @rpc("any_peer", "call_remote", "reliable")
 func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictionary = {}) -> void:
-	var target_enemy: Node = null
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
-		if is_instance_valid(enemy) and int(enemy.get_meta("network_enemy_id", 0)) == network_id:
-			target_enemy = enemy
-			break
+	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if not target_enemy or not is_instance_valid(target_enemy):
 		return
 	match vfx_type:
@@ -1827,9 +2115,11 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 			## _broadcast_attack_state notu).
 			if target_enemy.has_method("_enter_state_networked"):
 				target_enemy._enter_state_networked()
-		"hurt_state":
-			if target_enemy.has_method("_enter_hurt_state_networked"):
-				target_enemy._enter_hurt_state_networked()
+		"hit_flash":
+			## Yaratığın beyaz vuruş parlaması (eski "hurt_state" - HURT animasyonu
+			## kaldırıldı, bkz. enemy.gd _broadcast_hit_flash).
+			if target_enemy.has_method("_play_hit_flash_networked"):
+				target_enemy._play_hit_flash_networked()
 		"death_state":
 			## enemy.gd _broadcast_death_state notuna bkz.: die() zaten en
 			## başta is_dead kontrolüyle korunduğu için periyodik
@@ -2340,12 +2630,7 @@ func forward_damage_to_peer(amount: float, enemy_net_id: int, is_barrier_damage:
 	var local_player: Node = get_tree().get_first_node_in_group("player")
 	if not local_player or not is_instance_valid(local_player):
 		return
-	var enemy_node: Node2D = null
-	if enemy_net_id > 0:
-		for e: Node in get_tree().get_nodes_in_group("enemies"):
-			if is_instance_valid(e) and int(e.get_meta("network_enemy_id", 0)) == enemy_net_id:
-				enemy_node = e as Node2D
-				break
+	var enemy_node: Node2D = find_enemy_by_net_id(enemy_net_id) as Node2D
 	if is_barrier_damage:
 		if local_player.has_method("take_paladin_barrier_damage"):
 			local_player.take_paladin_barrier_damage(amount, enemy_node)
@@ -2387,9 +2672,12 @@ func get_reward_participants() -> Array:
 	return out
 
 
-## Sandığı katılımcılardan RASTGELE birine verir (herkesin şansı 1/N). Döner: kazanan peer id (0 = kimse yok, çağıran
-## kendi yerel yoluna düşer). Kazanan host'sa yerel kuyruğa eklenir, uzak bir client ise open_chest_for_peer ile.
-func host_award_chest(chest_tier: int) -> int:
+## Sandığı TOPLAYAN oyuncuya verir. Kullanıcı isteği (2026-09-24): "sandık alınca sandığın sandığı alan kişiye verilmesi
+## gerekiyor diğer oyunculara değil" - 2026-09-21'deki "rastgele birine (1/N)" kuralı KALDIRILDI. picker_peer_id
+## katılımcılar arasında değilse (bulunamadı/ölü) yedek olarak eski rastgele seçim kullanılır, sandık boşa gitmez.
+## Döner: kazanan peer id (0 = kimse yok, çağıran kendi yerel yoluna düşer). Kazanan host'sa yerel kuyruğa eklenir,
+## uzak bir client ise open_chest_for_peer ile.
+func host_award_chest(chest_tier: int, picker_peer_id: int = 0) -> int:
 	if not is_host:
 		return 0
 	var participants: Array = get_reward_participants()
@@ -2398,7 +2686,7 @@ func host_award_chest(chest_tier: int) -> int:
 	var candidate_ids: Array = []
 	for p: Dictionary in participants:
 		candidate_ids.append(int(p["peer_id"]))
-	var winner_id: int = pick_chest_winner(candidate_ids)
+	var winner_id: int = picker_peer_id if candidate_ids.has(picker_peer_id) else pick_chest_winner(candidate_ids)
 	if winner_id == (multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1):
 		GameManager.add_pending_chest(chest_tier)
 	else:
@@ -2983,10 +3271,9 @@ func broadcast_enemy_projectile(spawn_pos: Vector2, direction: Vector2, is_homin
 	proj.set_meta("network_spawned", true)
 	# Kaynak düşmanı bulup bağla (görsel amaçlı)
 	if enemy_net_id > 0 and "source" in proj:
-		for e: Node in get_tree().get_nodes_in_group("enemies"):
-			if is_instance_valid(e) and int(e.get_meta("network_enemy_id", 0)) == enemy_net_id:
-				proj.source = e
-				break
+		var src: Node = find_enemy_by_net_id(enemy_net_id)
+		if src:
+			proj.source = src
 
 
 ## Client drop toplama isteği: client bir drop'un üzerine yürüdüğünde

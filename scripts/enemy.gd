@@ -1,6 +1,8 @@
 extends CharacterBody2D
 class_name Enemy
 
+const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+
 @export var speed: float = 90.0
 @export var max_health: float = 20.0
 @export var contact_damage: float = 8.0
@@ -338,6 +340,8 @@ const ROW_LEFT := 2
 const ROW_RIGHT := 3
 
 ## IDLE sona eklendi (mevcut sayısal değerler değişmesin diye).
+## HURT artık hiç girilmiyor (kullanıcı isteğiyle kaldırıldı, bkz. _apply_damage) -
+## değer sırası değişmesin diye enum'da duruyor.
 enum State { WALK, HURT, ATTACK, DEATH, IDLE }
 
 var health: float
@@ -360,11 +364,20 @@ var last_attacker_peer_id: int = 0
 ## doğrudan yerel oyuncuya sor; (2) vuran BAŞKA bir peer'sa (host bir istemcinin isabetini işliyor) o peer'ın
 ## RemotePlayer kuklasındaki senkronize bayrağa bak (bkz. main.gd extra dict "has_savas_sevki",
 ## remote_player.gd has_savas_sevki).
+static var _local_savas_frame: int = -1
+static var _local_savas_cached: bool = false
+
 func _attacker_has_savas_sevki() -> bool:
 	var local_id: int = multiplayer.get_unique_id() if (NetworkManager.is_multiplayer_active and multiplayer.has_multiplayer_peer()) else 0
 	if last_attacker_peer_id <= 0 or last_attacker_peer_id == local_id or not NetworkManager.is_multiplayer_active:
-		var local_p: Node = get_tree().get_first_node_in_group("player")
-		return local_p != null and local_p.has_method("has_savas_sevki") and local_p.call("has_savas_sevki") == true
+		## PERF: yerel oyuncunun cevabı kare başına bir kez soruluyor (alan
+		## hasarında 200 vuruşun her biri için ayrı grup araması + çağrı yerine).
+		var f: int = Engine.get_physics_frames()
+		if f != _local_savas_frame:
+			_local_savas_frame = f
+			var local_p: Node = get_tree().get_first_node_in_group("player")
+			_local_savas_cached = local_p != null and local_p.has_method("has_savas_sevki") and local_p.call("has_savas_sevki") == true
+		return _local_savas_cached
 	for rp in get_tree().get_nodes_in_group("remote_players"):
 		if is_instance_valid(rp) and "peer_id" in rp and int(rp.peer_id) == last_attacker_peer_id:
 			return rp.get("has_savas_sevki") == true
@@ -392,7 +405,7 @@ var _loco_initialized: bool = false
 var _loco_speed: float = 0.0
 var _idle_timer: float = 0.0
 
-const FloatingText := preload("res://scenes/floating_text.tscn")
+const DamageNumbersScript := preload("res://scripts/damage_numbers.gd")
 const XpOrb := preload("res://scenes/xp_orb.tscn")
 const GoldDrop := preload("res://scenes/gold_drop.tscn")
 const FoodDrop := preload("res://scenes/food_drop.tscn")
@@ -416,7 +429,9 @@ const MagnetDrop := preload("res://scenes/magnet_drop.tscn")
 ## "biri yukarı biri aşağı" hissi vermesi mümkün değil). O kutucuğun kendi
 ## yükselişi (RISE) da sadece İLK vuruşta bir kez oynar, sonraki
 ## toplamalarda tekrar tetiklenmez - bkz. _spawn_floating_text.
-var _active_floating_text: Node2D = null
+## Kutucuk artık ayrı bir sahne değil, DamageNumbers'taki bir kayıt (bkz.
+## scripts/damage_numbers.gd) - burada sadece o kaydın kimliği tutuluyor.
+var _floating_text_id: int = 0
 var _floating_text_total: int = 0
 
 @onready var anim_sprite: AnimatedSprite2D = get_node_or_null("AnimatedSprite2D")
@@ -1396,12 +1411,28 @@ func _start_freeze(duration: float = FREEZE_DURATION) -> void:
 ## görünmez/ev içi/satıcı bölgesine girerse aynı kare içinde fark edilir.
 ## Tek istisna "is_dead": aşağıda AYRICA (ucuz, taramasız) kontrol ediliyor,
 ## bayat önbellek yeni ölmüş bir oyuncuyu KALICI hedef olarak tutmasın diye.
+## bkz. _physics_process içindeki AI_THINK PERF DÜZELTMESİ notu.
+const AI_THINK_INTERVAL_FRAMES := 3
+var _ai_has_decision: bool = false
+var _ai_wandering: bool = false
+var _ai_player: Node2D = null
+var _ai_velocity: Vector2 = Vector2.ZERO
+var _ai_true_contact: float = 0.0
+var _ai_min_sep: float = 0.0
+var _ai_accum_delta: float = 0.0
+
 const TARGET_UPDATE_INTERVAL_FRAMES := 4
 var _cached_target_player: Node2D = null
 
 func _get_target_player() -> Node2D:
+	## LOD: hiçbir oyuncuya yakın olmayan (bkz. _ensure_lod_classification)
+	## yaratıklar hedeflerini ENEMY_LOD_FAR_SLOWDOWN kat daha seyrek yeniler -
+	## zaten görünmüyorlar, "en yakın oyuncu" birkaç saniye bayat kalsa fark
+	## edilmez.
+	_ensure_lod_classification(get_tree())
+	var target_interval: int = TARGET_UPDATE_INTERVAL_FRAMES * (ENEMY_LOD_FAR_SLOWDOWN if _is_lod_far(get_instance_id()) else 1)
 	var stale_dead: bool = _cached_target_player != null and (not is_instance_valid(_cached_target_player) or _cached_target_player.get("is_dead") == true)
-	if stale_dead or Engine.get_physics_frames() % TARGET_UPDATE_INTERVAL_FRAMES == get_instance_id() % TARGET_UPDATE_INTERVAL_FRAMES:
+	if stale_dead or Engine.get_physics_frames() % target_interval == get_instance_id() % target_interval:
 		_cached_target_player = _find_closest_target_player()
 	## "En yakın" seçimi (yukarıdaki önbellek) ucuzluk için 4 karede bir yenilenir,
 	## ama aşağıdaki zorunlu agro kuralları (kışkırtma, Şovalye baloncuğu) HER
@@ -1418,6 +1449,12 @@ func _get_target_player() -> Node2D:
 ## 2) ŞOVALYE BALONCUĞU ODAĞI (bkz. _paladin_zone_focus_target): hedef bir
 ##    dostsa ve baloncuğun içindeyse hedef, baloncuğun sahibi Şovalye olur.
 func _apply_aggro_overrides(target: Node2D) -> Node2D:
+	## "Ağacı Koru" görevi (kullanıcı isteği: "Bu görev başladıktan sonra haritadaki
+	## yaratıklar bu ağaca saldırmaya odaklanırlar") - bkz. GameManager.defend_tree_active
+	## üstündeki not. EN YÜKSEK öncelik (taunt/paladin-zone'un bile önünde) - "odaklanırlar"
+	## istisnasız bir yönlendirme gibi okundu.
+	if GameManager.defend_tree_active and is_instance_valid(GameManager.defend_tree_ref):
+		return GameManager.defend_tree_ref
 	if _taunt_timer > 0.0 and _taunt_target != null:
 		if _is_targetable_player(_taunt_target):
 			target = _taunt_target
@@ -1733,10 +1770,18 @@ const ENEMY_SEPARATION_FORCE := 130.0
 ## büyük yaratık birbirinden neredeyse kendi gövdeleri kadar uzakta
 ## duruyordu. GameManager.BODY_BLOCK_SCALE'in oyuncu-yaratık ayrımı için
 ## yaptığı AYNI şeyi (yarıçap toplamını küçültme) burada yaratık-yaratık
-## ayrımı için yapıyor - min_gap artık yarıçap toplamının YARISI (+ sabit
-## boşluk), yani yaratıklar birbirlerinin gövdesine eskisinin iki katı kadar
-## yakınlaşabiliyor (aralarındaki zorunlu mesafe %50 azaldı).
-const ENEMY_SEPARATION_SCALE := 0.5
+## ayrımı için yapıyor - min_gap yarıçap toplamının YARISI (+ sabit boşluk)
+## olunca yaratıklar birbirlerinin gövdesine eskisinin iki katı kadar
+## yakınlaşabiliyordu (aralarındaki zorunlu mesafe %50 azalmıştı).
+## SONRAKİ TUR (kullanıcı bildirimi, ekran görüntüsüyle: "böyle üst üste
+## görünmeleri çirkin oluyor, aralığı arttırmak gerek") - separation
+## bug'ı (bkz. _cell_indices PackedInt32Array notu) düzelip yaratıklar
+## GERÇEKTEN bu 0.5 sınırına oturunca 0.5'in görsel olarak FAZLA sıkı
+## olduğu ortaya çıktı (önceden bug yüzünden hiç bu sınıra ulaşmıyorlardı,
+## o yüzden fark edilmemişti). 0.5 -> 0.75 - eski (bug'lı) hissettirdiği
+## "çok yakın" isteğinin bir kısmı korunuyor ama artık gövdeler görünür
+## şekilde üst üste binmiyor.
+const ENEMY_SEPARATION_SCALE := 0.75
 
 ## Knockback (Kitelama Seti vb.) artık ANINDA ışınlama değil (bkz. kullanıcı
 ## isteği: "itme yumuşak bir şekilde yavaşlayarak dursun, aniden ışınlanmasın")
@@ -1781,6 +1826,20 @@ const ROUTE_REPLAN_INTERVAL := 1.0 ## engelliyken yolu yenileme aralığı (sn)
 const ROUTE_RETRY_AFTER_FAIL := 2.5 ## yol bulunamazsa (kapalı cep vb.) tekrar deneme bekleme süresi
 const ROUTE_WAYPOINT_REACHED := 10.0 ## dönüş noktasına bu kadar yaklaşınca sıradakine geç
 const ROUTE_GOAL_MOVED_REPLAN := 48.0 ## hedef yol sonundan bu kadar uzaklaşırsa hemen yeniden planla
+## PERF (kullanıcı bildirimi: "oyunda hâlâ drop/fps düşüklüğü", profilde yaratık
+## fiziğinin ~yarısı yol bulma): hedef ROUTE_GOAL_MOVED_REPLAN kadar kayınca eskiden HER
+## duvar-arkası yaratık baştan A* istiyordu - oyuncu duvarlar arasında YÜRÜDÜKÇE kare
+## bütçesi (4 yol/adım, yol başına ~0.9 ms) hep doluydu. Ölçüm (190 yaratık, gerçek
+## harita, oyuncu yürürken): yol bulma ~3.1 -> ~0.8 ms/fizik adımı (bkz. enemy_pathing.gd
+## _cells_line_blocked'daki döngü düzeltmesiyle birlikte). Önceki perf testleri oyuncuyu
+## hiç yürütmediği için bunu kaçırmıştı. Artık yolun son noktasından yeni hedef düz
+## çizgiyle görünüyorsa hedef yola EKLENİR (tek kısa çizgi kontrolü); görünmüyorsa ya da
+## yol ROUTE_MAX_POINTS'e ulaştıysa eskisi gibi yeniden planlanır. ROUTE_REPLAN_INTERVAL
+## yenilemesi aynen duruyor, yani eklemeyle uzayan (dolambaçlı olabilecek) yol en geç
+## ~1 sn'de yeniden düzelir. (Yakın yaratıklar arasında yol PAYLAŞMA da denendi: oyuncu
+## dururken yaratıkların etrafında toplanmasını bozdu, kazancı gürültü seviyesindeydi -
+## geri alındı.)
+const ROUTE_MAX_POINTS := 24
 var _route: PackedVector2Array = PackedVector2Array()
 var _route_index: int = 0
 var _route_goal_pos: Vector2 = Vector2.ZERO
@@ -1801,6 +1860,33 @@ func apply_knockback_force(dir: Vector2, force: float) -> void:
 	_knockback_velocity += d * force
 	if _knockback_velocity.length() > KNOCKBACK_MAX_SPEED:
 		_knockback_velocity = _knockback_velocity.normalized() * KNOCKBACK_MAX_SPEED
+
+
+## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-24: "normal yaratıklarda geri tepme çalışmıyor sadece bosslarda ve
+## kopyalarda çalışıyor"): silah/mermi itişi (Kitelama Seti knockback_stat = 40, öfke/kart bonusları) eskiden "bu kadar
+## piksel ışınla" demekti; yumuşak itişe geçilirken AYNI sayı apply_knockback_force'a HIZ (px/sn) olarak verilmeye
+## başlandı - KNOCKBACK_DECAY (1400 px/sn²) ile 40 px/sn'lik itiş toplam 40²/(2*1400) = 0.57 px kaydırıyordu (görünmez).
+## Kopyanın apply_knockback_force'u olmadığı için hâlâ 40 px ışınlanıyordu - "kopyalarda çalışıyor" bundan. Artık silah/
+## mermi itişi MESAFE olarak bu fonksiyondan gelir: sönümlemeyle tam o mesafeyi kat edecek başlangıç hızı hesaplanır
+## (v0 = sqrt(2 * decay * mesafe) - 40 px ~0.24 sn'de yumuşakça). Diğer itişler (oyuncunun gövdeyle itmesi, yaratıkların
+## çarpışma sekmesi) zaten hız cinsinden ayarlı, apply_knockback_force'ta kalıyor. Çok oyunculuda istemcinin vuruşu
+## (burada kukla) host'taki GERÇEK yaratığa iletilir - eskiden kuklada kalıp host'un konum yayınıyla siliniyordu.
+const KNOCKBACK_DISTANCE_MAX := 120.0 ## tek isabette en fazla bu kadar px (çok sayıda Kitelama Seti yığılsa bile)
+
+func apply_knockback_distance(dir: Vector2, distance: float) -> void:
+	if distance <= 0.0:
+		return
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.request_enemy_knockback.rpc_id(NetworkManager._host_peer_id(), net_id, dir, distance)
+		return
+	var d: Vector2 = dir.normalized() if dir.length() > 0.001 else Vector2.RIGHT
+	var v0: float = sqrt(2.0 * KNOCKBACK_DECAY * minf(distance, KNOCKBACK_DISTANCE_MAX))
+	## Birikim: mevcut itişin bu yöndeki bileşeninden hızlıysa eklenir, değilse (zaten daha hızlı itiliyorsa) dokunulmaz.
+	var along: float = _knockback_velocity.dot(d)
+	if along < v0:
+		_knockback_velocity += d * (v0 - maxf(along, 0.0))
 
 
 ## Kullanıcı isteği: "yaratıkların hedefi yokken etrafta arada rasgele
@@ -1907,10 +1993,15 @@ func _route_direction(dir: Vector2, target_pos: Vector2, delta: float) -> Vector
 	if global_position.distance_to(target_pos) > EnemyPathingScript.MAX_ROUTE_DISTANCE:
 		_route = PackedVector2Array()
 		return dir
+	## LOD: uzaktaki (bkz. _ensure_lod_classification) yaratıklar düz-çizgi/
+	## A*-yeniden-planlama kontrollerini ENEMY_LOD_FAR_SLOWDOWN kat daha seyrek
+	## yapar - oyuncu yaklaşıp "yakın" hale gelene kadar tam hassasiyete gerek yok.
+	_ensure_lod_classification(get_tree())
+	var lod_mult: float = float(ENEMY_LOD_FAR_SLOWDOWN) if _is_lod_far(get_instance_id()) else 1.0
 	_route_line_timer -= delta
 	if _route_line_timer <= 0.0:
 		## Yaratıklar aynı karede hesaplamasın diye süre yaratık başına kaydırılıyor.
-		_route_line_timer = ROUTE_LINE_CHECK_INTERVAL * randf_range(0.8, 1.2)
+		_route_line_timer = ROUTE_LINE_CHECK_INTERVAL * lod_mult * randf_range(0.8, 1.2)
 		_route_line_blocked = EnemyPathingScript.line_blocked(global_position, target_pos)
 		if not _route_line_blocked:
 			_route = PackedVector2Array()
@@ -1918,11 +2009,16 @@ func _route_direction(dir: Vector2, target_pos: Vector2, delta: float) -> Vector
 		return dir
 	_route_replan_timer -= delta
 	var goal_moved: bool = not _route.is_empty() and _route_goal_pos.distance_to(target_pos) > ROUTE_GOAL_MOVED_REPLAN
+	if goal_moved and _route.size() < ROUTE_MAX_POINTS \
+			and not EnemyPathingScript.line_blocked(_route[_route.size() - 1], target_pos):
+		_route.append(target_pos)
+		_route_goal_pos = target_pos
+		goal_moved = false
 	if (_route.is_empty() or _route_replan_timer <= 0.0 or goal_moved) and EnemyPathingScript.can_request():
 		_route = EnemyPathingScript.find_path(global_position, target_pos)
 		_route_index = 0
 		_route_goal_pos = target_pos
-		_route_replan_timer = (ROUTE_REPLAN_INTERVAL if not _route.is_empty() else ROUTE_RETRY_AFTER_FAIL) * randf_range(0.8, 1.3)
+		_route_replan_timer = (ROUTE_REPLAN_INTERVAL if not _route.is_empty() else ROUTE_RETRY_AFTER_FAIL) * lod_mult * randf_range(0.8, 1.3)
 	if _route.is_empty():
 		return dir
 	while _route_index < _route.size() and global_position.distance_to(_route[_route_index]) < ROUTE_WAYPOINT_REACHED:
@@ -1943,22 +2039,106 @@ func _route_direction(dir: Vector2, target_pos: Vector2, delta: float) -> Vector
 ## is_position_blocked_by_FOREST kullanılıyor, is_position_blocked_by_terrain
 ## (su+ev+orman) DEĞİL. Su/ev de açılacaksa üç çağrıyı ona çevirmek yeterli.
 func _block_movement_into_terrain() -> void:
-	if velocity.length() < 0.1:
+	if velocity.length_squared() < 0.01:
+		return
+	if not _refresh_forest_cache():
 		return
 	## Zaten duvarın İÇİNDEYSE (ör. eskiden kalma bir konum, knockback) engelleme
 	## atlanır - yoksa prob her yönde yine karonun içine denk gelip yaratığı
 	## SONSUZA DEK hapseder (bkz. player.gd'deki AYNI güvenlik ağı).
-	if GameManager.is_position_blocked_by_forest(global_position):
+	if _forest_blocked(global_position):
 		return
 	var probe_dist: float = 10.0
 	if velocity.x != 0.0:
-		var probe_x: Vector2 = global_position + Vector2(sign(velocity.x) * probe_dist, 0.0)
-		if GameManager.is_position_blocked_by_forest(probe_x):
+		if _forest_blocked(global_position + Vector2(sign(velocity.x) * probe_dist, 0.0)):
 			velocity.x = 0.0
 	if velocity.y != 0.0:
-		var probe_y: Vector2 = global_position + Vector2(0.0, sign(velocity.y) * probe_dist)
-		if GameManager.is_position_blocked_by_forest(probe_y):
+		if _forest_blocked(global_position + Vector2(0.0, sign(velocity.y) * probe_dist)):
 			velocity.y = 0.0
+
+
+## PERF (kullanıcı bildirimi: 200 yaratıkta FPS çöküşü - profilde arazi+yapıştırma
+## bölümü 200 yaratıkta ~2.5ms/fizik adımı): eskiden her prob GameManager.
+## is_position_blocked_by_forest() üzerinden gidiyordu (autoload çağrısı +
+## _find_terrain_layers + is_instance_valid + to_local/local_to_map/get_cell_
+## source_id) - yaratık başına kare başına 3 kez. Orman katmanı ve ters dönüşümü
+## artık fizik karesi başına TEK sefer alınıyor, prob sadece 2 yerel çağrı.
+## Sonuç GameManager.is_position_blocked_by_forest ile BİREBİR aynı.
+static var _forest_layer: TileMapLayer = null
+static var _forest_inv: Transform2D = Transform2D.IDENTITY
+static var _forest_frame: int = -1
+
+static func _refresh_forest_cache() -> bool:
+	var f: int = Engine.get_physics_frames()
+	if f != _forest_frame:
+		_forest_frame = f
+		_forest_layer = GameManager.get_forest_layer()
+		if _forest_layer != null:
+			_forest_inv = _forest_layer.global_transform.affine_inverse()
+	return _forest_layer != null
+
+static func _forest_blocked(world_pos: Vector2) -> bool:
+	return _forest_layer.get_cell_source_id(_forest_layer.local_to_map(_forest_inv * world_pos)) != -1
+
+
+## GÖRÜŞ HATTI (kullanıcı bildirimi 2026-09-24: "yaratıklar duvarların arkasından ateş edebiliyor bunun olmaması
+## gerekiyor onlar bizi göremediğinde ateş edememeliler"). Duvar = orman/uçurum katmanı - oyuncunun görüşünü
+## (vision_fog) ve hareketini kesen AYNI katman (bkz. GameManager.get_forest_layer). Yaratıktan hedefe düz çizgi
+## LOS_SAMPLE_STEP aralıkla örneklenir; uç noktaların LOS_END_IGNORE yakınındaki örnekler sayılmaz (duvara yaslanmış
+## yaratık/oyuncu kendi karosunu "engel" saymasın). Sonuç hedef başına LOS_CACHE_MSEC boyunca önbellekte tutulur
+## (hareket kararı her düşünme tikinde soruyor, 200 yaratıkta ucuz kalsın).
+const LOS_SAMPLE_STEP := 10.0
+const LOS_END_IGNORE := 10.0
+const LOS_CACHE_MSEC := 150
+var _los_target_id: int = 0
+var _los_until_msec: int = 0
+var _los_value: bool = true
+
+func _has_line_of_sight(target: Node2D) -> bool:
+	if target == null or not is_instance_valid(target):
+		return false
+	var now: int = Time.get_ticks_msec()
+	var tid: int = target.get_instance_id()
+	if tid == _los_target_id and now < _los_until_msec:
+		return _los_value
+	_los_target_id = tid
+	_los_until_msec = now + LOS_CACHE_MSEC
+	_los_value = line_of_sight_clear(global_position, target.global_position)
+	return _los_value
+
+
+## Saf yardımcı (testler de çağırabilir): a ile b arasında orman/uçurum karosu yoksa true.
+static func line_of_sight_clear(a: Vector2, b: Vector2) -> bool:
+	if not _refresh_forest_cache():
+		return true
+	var length: float = a.distance_to(b)
+	if length <= LOS_END_IGNORE * 2.0:
+		return true
+	var dir: Vector2 = (b - a) / length
+	var d: float = LOS_END_IGNORE
+	while d <= length - LOS_END_IGNORE:
+		if _forest_blocked(a + dir * d):
+			return false
+		d += LOS_SAMPLE_STEP
+	return true
+
+
+## Hayalet (Vampir yarasa formu) durumu oyuncu başına fizik karesi başına TEK
+## sefer soruluyor - eskiden her yaratık her karede has_method+çağrı yapıyordu.
+static var _ghost_cache: Dictionary = {}
+static var _ghost_cache_frame: int = -1
+
+static func _is_ghost_cached(p: Node) -> bool:
+	var f: int = Engine.get_physics_frames()
+	if f != _ghost_cache_frame:
+		_ghost_cache_frame = f
+		_ghost_cache.clear()
+	var id: int = p.get_instance_id()
+	if _ghost_cache.has(id):
+		return _ghost_cache[id]
+	var v: bool = p.has_method("is_ghost_now") and p.is_ghost_now()
+	_ghost_cache[id] = v
+	return v
 
 ## DÜZELTME (kullanıcı isteği, sonraki tur: "necromancerin yaratıkları
 ## diğer yaratıklar itemez, onlar da necromancerı itemez") - "player_allies"
@@ -1987,10 +2167,68 @@ func _block_movement_into_terrain() -> void:
 ## yani aynı "iç içe girme" hatasını YENİDEN yaratmıyor.
 const SEPARATION_UPDATE_INTERVAL_FRAMES := 6
 var _cached_separation_push: Vector2 = Vector2.ZERO
+## DÜZELTME (kullanıcı bildirimi: "sürekli wiggle wiggle titriyorlar" - sıkı
+## paketlenmiş kümede test edip doğrulandı, kontrollü A/B testte eski kodda da
+## AYNI oranda var olan bir zayıflık, benim toplu geçişimin YENİ bir hatası
+## değil). Kök neden: _cached_separation_push HER SEPARATION_UPDATE_INTERVAL_
+## FRAMES(6) karede bir YENİ hedef değere ANİDEN "sıçrıyordu" - sıkışık/aşırı
+## kısıtlı bir kümede komşu itiş yönleri kare kareye küçük konum farklarıyla
+## ters dönebiliyor, bu da görünür bir "sallanma" oluşturuyor. Artık HEDEF
+## değer (_target_separation_push) yine 6 karede bir yenileniyor ama
+## UYGULANAN değer (_cached_separation_push) HER karede ona yumuşakça
+## (lerp) yaklaşıyor - ani yön sıçramaları kayboluyor, ortalama davranış aynı.
+var _target_separation_push: Vector2 = Vector2.ZERO
+## DÜZELTME (kullanıcı bildirimi: "hala bitişikken titriyor bi o yana bi bu
+## yana" - yumuşatma tek başına yetmedi). Kök neden farklı: sıkı paketlenmiş
+## (altıgen benzeri) bir kümede her yaratık AYNI ANDA birden çok komşuya
+## değiyor; komşular da KENDİ itişleriyle mikro hareket edince, hangi
+## komşu-çiftinin "tam sınırda" sayılacağı kare kareye değişip net itiş
+## yönünü gerçekten TERS ÇEVİREBİLİYOR (rastgele gürültü değil, gerçek
+## salınan bir denge arayışı - sıkışık/aşırı kısıtlı sistemlerde beklenen bir
+## davranış). İki parçalı düzeltme, ÖLÇÜLEREK (durgun/bitişik bir kümede
+## kaç kez yön tersine döndüğünü sayan headless test) ayarlandı: (1) yumuşatma
+## oranı ÖNEMLİ ÖLÇÜDE düşürüldü (0.35 -> 0.025 - ara değerler 0.18/0.06
+## denendi, yön-tersine-dönme sayısı ancak bu kadar agresif bir sönümlemeyle
+## belirgin şekilde azaldı: 30 yaratıklık bir kümede 3sn'de 124 -> 80 tersine
+## dönüş, örtüşme kalitesi BOZULMADI/hatta iyileşti - worst_ratio 0.993'ten
+## 1.0'ın üstüne çıktı), (2) itiş çok KÜÇÜKSE (yaratık zaten neredeyse doğru
+## mesafede, sadece milimetrik bir ihlal varsa) hedef DOĞRUDAN SIFIRA
+## yuvarlanıyor (bkz. ENEMY_SEPARATION_DEADZONE) - "neredeyse yerleşmiş" bir
+## yaratığın gürültü seviyesindeki bir itişin peşinden sürekli sağa sola
+## savrulmasını önlüyor, gerçek/belirgin bir çakışma varsa yine tam güçle
+## tepki veriliyor. (Denendi ama İYİLEŞTİRMEDİ: lerp'in matematiksel olarak
+## hiç sıfıra ulaşmayan "kuyruğunu" küçük değerlerde sıfıra yuvarlamak - bu
+## kendi başına küçük bir süreksizlik/sıçrama kaynağı oldu, tersine dönüş
+## sayısını azaltmak yerine artırdı, geri alındı.)
+const ENEMY_SEPARATION_SMOOTH := 0.025 ## karede-karede hedefe yaklaşma oranı (1.0 = eski anlık sıçrama davranışı)
+const ENEMY_SEPARATION_DEADZONE := 0.12 ## bu ham (kuvvet çarpanından ÖNCEKİ) büyüklüğün altındaki itişler SIFIR sayılır
 
+## PERF DÜZELTMESİ (kullanıcı isteği: yaratık sayısını ciddi artır, solo'da da
+## FPS düşüyordu) - eskiden HER "sırası gelen" yaratık kendi _physics_process'i
+## içinden AYRI AYRI ızgarayı tarıyordu (Node.get()/global_position gibi yavaş
+## dinamik erişimlerle). Artık aynı iş TEK bir toplu geçişte (bkz.
+## _batch_compute_separation_if_needed) düz PackedVector2Array/PackedFloat32Array
+## üzerinden hesaplanıp bir Dictionary'ye yazılıyor, burada sadece O(1) okunuyor.
+## Kuvvet formülü ve frekans/faz kaydırma AYNEN korunuyor (bkz. _flat_pairwise_pair
+## - _pairwise_separation_push ile BİREBİR aynı matematik), sadece Node yerine
+## ham sayılar üzerinden çalışıyor.
+## DÜZELTME (kullanıcı bildirimi: "yaratıklar birbirinin içine giriyor", 200
+## limitiyle test sonrası) - uzak (LOD) yaratıklarda separation'ı TAMAMEN
+## kapatmıştım; yaklaşan büyük bir sürü oyuncuya 1600px'den yakınlaşana kadar
+## HİÇ ayrışmadan kümeleniyor, "yakın" olduklarında da zaten iç içe girmiş
+## oluyorlardı - dosyadaki eski "16 komşu sınırı" hatasıyla (bkz. yukarısı,
+## _separation_push_from_enemy_grid üstündeki not) AYNI hata sınıfı: bir grup
+## yaratık separation'dan KALICI olarak muaf kalınca üst üste yığılıyor. Artık
+## hedef/yol bulma ile AYNI desen - uzak yaratıklarda separation KAPANMIYOR,
+## sadece ENEMY_LOD_FAR_SLOWDOWN kat daha seyrek (48 kare ~0.8sn) çalışıyor -
+## hiçbir yaratık kalıcı olarak es geçilmiyor.
 func _compute_enemy_separation() -> Vector2:
-	if Engine.get_physics_frames() % SEPARATION_UPDATE_INTERVAL_FRAMES == get_instance_id() % SEPARATION_UPDATE_INTERVAL_FRAMES:
-		_cached_separation_push = _separation_push_from_group("enemies") * ENEMY_SEPARATION_FORCE
+	_batch_compute_separation_if_needed(get_tree())
+	var interval: int = SEPARATION_UPDATE_INTERVAL_FRAMES * (ENEMY_LOD_FAR_SLOWDOWN if _is_lod_far(get_instance_id()) else 1)
+	if Engine.get_physics_frames() % interval == get_instance_id() % interval:
+		var raw_push: Vector2 = _separation_results.get(get_instance_id(), Vector2.ZERO)
+		_target_separation_push = Vector2.ZERO if raw_push.length() < ENEMY_SEPARATION_DEADZONE else raw_push * ENEMY_SEPARATION_FORCE
+	_cached_separation_push = _cached_separation_push.lerp(_target_separation_push, ENEMY_SEPARATION_SMOOTH)
 	return _cached_separation_push
 
 
@@ -1998,9 +2236,28 @@ func _compute_enemy_separation() -> Vector2:
 ## başına TEK SEFER burada kuruluyor. static var olduğu için TÜM enemy.gd
 ## örnekleri arasında paylaşılıyor; hangi yaratık önce çağırırsa ızgarayı o
 ## kurar, aynı karedeki geri kalan herkes hazır ızgarayı bulur.
-const SEPARATION_GRID_CELL_SIZE: float = 140.0 ## >= ENEMY_SEPARATION_CHECK_RADIUS olmalı (3x3 komşuluk taramasının menzili kaçırmaması için)
+const SEPARATION_GRID_CELL_SIZE: float = 140.0 ## hücre boyutunun ÜST sınırı - gerçek boyut her karede _sep_cell'de (bkz. _rebuild_separation_grid_if_needed)
+static var _sep_cell: float = SEPARATION_GRID_CELL_SIZE
 static var _separation_grid: Dictionary = {}
 static var _separation_grid_frame: int = -1
+
+## Yukarıdaki _separation_grid (Node referanslı Dictionary) get_enemies_near
+## için AYNEN korunuyor (çağıranlar gerçek Node referansı bekliyor, bkz.
+## weapon.gd:take_damage çağrıları). Bunun YANINDA, SADECE _compute_enemy_
+## separation'ın toplu geçişi için düz/paralel diziler de dolduruluyor - aynı
+## TEK taramada, ikinci bir get_nodes_in_group maliyeti YOK.
+static var _flat_positions: PackedVector2Array = PackedVector2Array()
+static var _flat_radii: PackedFloat32Array = PackedFloat32Array()
+static var _flat_nodes: Array = []
+## DÜZELTME (kullanıcı bildirimi: "yaratıklar hâlâ iç içe giriyor" - test edip
+## bulundu): bu ÖNCEDEN Dictionary değeri PackedInt32Array idi. GDScript'te
+## Packed*Array bir "value type" (Vector2/Color gibi) - _cell_indices[cell] ile
+## okumak KOPYA döndürür, o kopyaya .append() yapmak Dictionary'nin İÇİNDEKİ
+## gerçek diziyi HİÇ değiştirmiyordu - her hücre sonsuza dek boş kalıyordu,
+## yani _flat_pairwise_push HİÇBİR ZAMAN gerçek bir komşu bulamıyor, separation
+## sessizce her zaman Vector2.ZERO dönüyordu. Düz Array'e (REFERENCE type,
+## yukarıdaki _separation_grid'in ZATEN kullandığı desen) çevrildi.
+static var _cell_indices: Dictionary = {}
 
 static func _rebuild_separation_grid_if_needed(tree: SceneTree) -> void:
 	var frame: int = Engine.get_physics_frames()
@@ -2008,13 +2265,165 @@ static func _rebuild_separation_grid_if_needed(tree: SceneTree) -> void:
 		return
 	_separation_grid_frame = frame
 	_separation_grid.clear()
+	_flat_positions.resize(0)
+	_flat_radii.resize(0)
+	_flat_nodes.clear()
+	_cell_indices.clear()
+	var max_r: float = 0.0
 	for e in tree.get_nodes_in_group("enemies"):
-		if not is_instance_valid(e) or e.get("is_dead") == true:
+		if not is_instance_valid(e):
 			continue
-		var cell: Vector2i = Vector2i(floori(e.global_position.x / SEPARATION_GRID_CELL_SIZE), floori(e.global_position.y / SEPARATION_GRID_CELL_SIZE))
+		var r: float = 20.0
+		var en: Enemy = e as Enemy
+		if en != null:
+			## Tipli erişim - dinamik get("...") yerine (PERF).
+			if en.is_dead:
+				continue
+			r = en._body_radius
+		else:
+			if e.get("is_dead") == true:
+				continue
+			var r_variant = e.get("_body_radius")
+			if r_variant != null:
+				r = float(r_variant)
+		_flat_positions.append((e as Node2D).global_position)
+		_flat_radii.append(r)
+		_flat_nodes.append(e)
+		max_r = maxf(max_r, r)
+	## PERF DÜZELTMESİ (kullanıcı bildirimi: 200 yaratık oyuncunun etrafını
+	## sarınca 7-9 FPS - gerçek oyunda profillenip ölçüldü). Hücre eskiden SABİT
+	## 140px'ti; oysa iki yaratık arasında itiş SADECE mesafe < min_gap iken
+	## oluşuyor ve min_gap en büyük iki gövde için bile (2*max_r)*SCALE+GAP (fare/
+	## slime/zombi ~20-35px). 140px'lik 3x3 komşuluk (420x420) oyuncuyu saran
+	## yoğun bir kümede NEREDEYSE TÜM kümeyi kapsıyordu -> her yaratık ~200
+	## komşuyu tarıyordu (O(n²)). Hücre artık bu karedeki mümkün olan EN BÜYÜK
+	## min_gap'e eşit: 3x3 komşuluk hâlâ itiş verebilecek HER çifti kapsıyor
+	## (davranış birebir aynı), ama taranan alan ~20 kat küçük. Üst sınır eski
+	## 140 (dev bir boss varken eski davranıştan daha kötü olamaz).
+	_sep_cell = clampf((2.0 * max_r) * ENEMY_SEPARATION_SCALE + ENEMY_SEPARATION_GAP, 24.0, SEPARATION_GRID_CELL_SIZE)
+	for idx in range(_flat_positions.size()):
+		var pos: Vector2 = _flat_positions[idx]
+		var cell: Vector2i = Vector2i(floori(pos.x / _sep_cell), floori(pos.y / _sep_cell))
 		if not _separation_grid.has(cell):
 			_separation_grid[cell] = []
-		(_separation_grid[cell] as Array).append(e)
+			_cell_indices[cell] = []
+		(_separation_grid[cell] as Array).append(_flat_nodes[idx])
+		(_cell_indices[cell] as Array).append(idx)
+
+
+## --- LOD (uzak yaratıklar için ucuz mod) ---
+## Kullanıcı isteği: yaratık sayısını ciddi artır. enemy_spawner.gd'nin ağ
+## senkronu için zaten yaptığı "yakın/uzak" ayrımıyla (bkz. ENEMY_SYNC_NEAR_
+## RADIUS) AYNI fikir - hiçbir oyuncuya yakın olmayan bir yaratık zaten
+## görünmüyor, tam AI/separation/pathing hassasiyetine ihtiyacı yok. Bu SADECE
+## bir perf sınıflandırması - hedef seçimindeki asıl "kim görünmez/ev içi"
+## kurallarına (bkz. _find_closest_target_player) dokunmuyor, sadece NE SIKLIKLA
+## yeniden hesaplanacaklarını etkiliyor.
+const ENEMY_LOD_NEAR_RADIUS_SQ: float = 1600.0 * 1600.0
+const ENEMY_LOD_FAR_SLOWDOWN: int = 8 ## uzaktaki yaratıklarda hedef/yol kontrol aralığı kaç kat seyrekleşsin
+static var _lod_far_ids: Dictionary = {}
+static var _lod_frame: int = -1
+
+static func _ensure_lod_classification(tree: SceneTree) -> void:
+	var frame: int = Engine.get_physics_frames()
+	if frame == _lod_frame:
+		return
+	_lod_frame = frame
+	_lod_far_ids.clear()
+	var player_positions: Array[Vector2] = []
+	var local_p: Node = tree.get_first_node_in_group("player")
+	if local_p and is_instance_valid(local_p):
+		player_positions.append((local_p as Node2D).global_position)
+	for rp in tree.get_nodes_in_group("remote_players"):
+		if is_instance_valid(rp):
+			player_positions.append((rp as Node2D).global_position)
+	for ally in tree.get_nodes_in_group("player_allies"):
+		if is_instance_valid(ally):
+			player_positions.append((ally as Node2D).global_position)
+	if player_positions.is_empty():
+		## Hiç oyuncu bulunamadıysa (ör. çok erken bir kare) güvenli tarafta
+		## kal - kimseyi "uzak" işaretleme, hepsi tam hızda simüle edilsin.
+		return
+	## PERF: ayrışma ızgarasının bu kare ZATEN topladığı canlı yaratık konumları
+	## kullanılıyor (ikinci bir grup taraması + her yaratıkta get("is_dead") yok).
+	_rebuild_separation_grid_if_needed(tree)
+	for i in range(_flat_positions.size()):
+		var pos: Vector2 = _flat_positions[i]
+		var is_near: bool = false
+		for p in player_positions:
+			if pos.distance_squared_to(p) <= ENEMY_LOD_NEAR_RADIUS_SQ:
+				is_near = true
+				break
+		if not is_near:
+			_lod_far_ids[(_flat_nodes[i] as Node).get_instance_id()] = true
+
+static func _is_lod_far(instance_id: int) -> bool:
+	return _lod_far_ids.has(instance_id)
+
+
+## --- Toplu (batched) ayrışma geçişi ---
+## bkz. _compute_enemy_separation üstündeki PERF DÜZELTMESİ notu. Fizik karesi
+## başına TEK SEFER çalışır (ızgara/LOD ile AYNI "lazy static" deseni) - hangi
+## yaratık önce _compute_enemy_separation çağırırsa toplu geçişi o tetikler,
+## aynı karedeki geri kalan herkes hazır sonucu Dictionary'den okur.
+static var _separation_results: Dictionary = {}
+static var _separation_batch_frame: int = -1
+
+static func _batch_compute_separation_if_needed(tree: SceneTree) -> void:
+	var frame: int = Engine.get_physics_frames()
+	if frame == _separation_batch_frame:
+		return
+	_separation_batch_frame = frame
+	_rebuild_separation_grid_if_needed(tree)
+	_ensure_lod_classification(tree)
+	_separation_results.clear()
+	var count: int = _flat_nodes.size()
+	for i in range(count):
+		var e: Node = _flat_nodes[i]
+		var instance_id: int = e.get_instance_id()
+		var interval: int = SEPARATION_UPDATE_INTERVAL_FRAMES * (ENEMY_LOD_FAR_SLOWDOWN if _is_lod_far(instance_id) else 1)
+		if frame % interval != instance_id % interval:
+			continue
+		_separation_results[instance_id] = _flat_pairwise_push(i)
+
+
+## _pairwise_separation_push ile BİREBİR AYNI formül (bkz. orası) ama Node.get()
+## yerine düz dizilerden okuyor - iki yerde asla sapmasın diye burada TEK
+## ortak alt fonksiyona (_flat_pairwise_pair) çıkarıldı.
+static func _flat_pairwise_push(i: int) -> Vector2:
+	var pos: Vector2 = _flat_positions[i]
+	var radius: float = _flat_radii[i]
+	var my_cell: Vector2i = Vector2i(floori(pos.x / _sep_cell), floori(pos.y / _sep_cell))
+	var push: Vector2 = Vector2.ZERO
+	for dx in range(-1, 2):
+		for dy in range(-1, 2):
+			var cell: Vector2i = my_cell + Vector2i(dx, dy)
+			if not _cell_indices.has(cell):
+				continue
+			var indices: Array = _cell_indices[cell]
+			for j in indices:
+				if j == i:
+					continue
+				push += _flat_pairwise_pair(pos, radius, _flat_positions[j], _flat_radii[j])
+	return push
+
+
+static func _flat_pairwise_pair(pos_a: Vector2, radius_a: float, pos_b: Vector2, radius_b: float) -> Vector2:
+	var to_me: Vector2 = pos_a - pos_b
+	var dist_sq: float = to_me.length_squared()
+	if dist_sq >= ENEMY_SEPARATION_CHECK_RADIUS * ENEMY_SEPARATION_CHECK_RADIUS:
+		return Vector2.ZERO
+	var d: float = sqrt(dist_sq)
+	if d < 0.001:
+		to_me = Vector2(randf_range(-0.5, 0.5), randf_range(-0.5, 0.5))
+		d = to_me.length()
+		if d < 0.001:
+			return Vector2.ZERO
+	var min_gap: float = (radius_a + radius_b) * ENEMY_SEPARATION_SCALE + ENEMY_SEPARATION_GAP
+	if d < min_gap:
+		var overlap: float = (min_gap - d) / min_gap
+		return (to_me / d) * overlap
+	return Vector2.ZERO
 
 
 ## DÜZELTME (kullanıcı bildirimi: "yaratıklara tam saldırırken anlık fps
@@ -2038,8 +2447,8 @@ static func get_enemies_near(tree: SceneTree, pos: Vector2, radius: float) -> Ar
 	var result: Array = []
 	if radius <= 0.0:
 		return result
-	var cell_radius: int = maxi(1, ceili(radius / SEPARATION_GRID_CELL_SIZE))
-	var center_cell: Vector2i = Vector2i(floori(pos.x / SEPARATION_GRID_CELL_SIZE), floori(pos.y / SEPARATION_GRID_CELL_SIZE))
+	var cell_radius: int = maxi(1, ceili(radius / _sep_cell))
+	var center_cell: Vector2i = Vector2i(floori(pos.x / _sep_cell), floori(pos.y / _sep_cell))
 	var radius_sq: float = radius * radius
 	for dx in range(-cell_radius, cell_radius + 1):
 		for dy in range(-cell_radius, cell_radius + 1):
@@ -2109,7 +2518,7 @@ func _pairwise_separation_push(e: Node) -> Vector2:
 func _separation_push_from_enemy_grid() -> Vector2:
 	_rebuild_separation_grid_if_needed(get_tree())
 	var push: Vector2 = Vector2.ZERO
-	var my_cell: Vector2i = Vector2i(floori(global_position.x / SEPARATION_GRID_CELL_SIZE), floori(global_position.y / SEPARATION_GRID_CELL_SIZE))
+	var my_cell: Vector2i = Vector2i(floori(global_position.x / _sep_cell), floori(global_position.y / _sep_cell))
 	for dx in range(-1, 2):
 		for dy in range(-1, 2):
 			var cell: Vector2i = my_cell + Vector2i(dx, dy)
@@ -2159,6 +2568,8 @@ func _apply_global_size_scale() -> void:
 
 
 func _ready() -> void:
+	## Fizik interpolasyonu (bkz. physics_interp.gd): _physics_process'te hareket ediyor.
+	PhysicsInterp.opt_in(self)
 	add_to_group("enemies")
 	## Kullanıcı isteği: "tüm ... yaratıkları v.s %5 küçültüp hareket hızlarını
 	## %10 azaltmanı istiyorum" - EntityScale.SPEED buradaki zaten var olan
@@ -2238,7 +2649,17 @@ func _show_overhead_bar() -> void:
 	_overhead_bar.visible = true
 
 
+## Fizik interpolasyonu: bu adımdan ÖNCEKİ konum - _process'te buna yapışan görseller
+## (hasar sayıları, auralar) çizilen konumu bulsun diye (bkz. PhysicsInterp.visual_position).
+var _interp_prev_pos: Vector2 = Vector2.ZERO
+var _interp_prev_frame: int = -1
+
+
 func _physics_process(delta: float) -> void:
+	_interp_prev_pos = global_position ## bkz. PhysicsInterp.visual_position
+	_interp_prev_frame = Engine.get_physics_frames()
+	if _flash_time_left > 0.0:
+		_tick_hit_flash(delta)
 	## Relay multiplayer'da yaratık simülasyonu yalnızca host'ta çalışır.
 	## İstemciler kendi oyuncularına göre tekrar hareket ettirirse her peer'de
 	## farklı hedef/çarpışma sonucu oluşur ve yaratıklar ayrışır.
@@ -2287,6 +2708,22 @@ func _physics_process(delta: float) -> void:
 			## eklendi) yön güncelleniyor.
 			if _network_velocity.length() > 15.0 and to_target.length() > 2.0:
 				_update_facing(to_target.normalized())
+			elif Engine.get_physics_frames() % AI_THINK_INTERVAL_FRAMES == get_instance_id() % AI_THINK_INTERVAL_FRAMES:
+				## BUG DÜZELTMESİ (kullanıcı bildirimi, ekran görüntüsüyle: "bazı yaratıklar sıkıştıklarında
+				## arkalarına yana falan bakıp saldırı hareketi yapıyor" - host tarafı yukarıdaki "not think"
+				## dalında düzeltildi, ama bu SADECE host'un KENDİ ekranını düzeltiyordu). Katılımcı ekranında
+				## yaratığın yönü konum paketleri arasındaki farktan (_network_velocity) türetiliyor - host'taki
+				## yaratık DURUP saldırıya geçtiğinde (velocity=0, bkz. yukarısı) paketler arası fark küçülüp bu
+				## eşiğin (15.0) altına düşer, yani yön GÜNCELLENMEYİ TAMAMEN BIRAKIR ve yaratık SON GERÇEK
+				## hareketinin (kalabalıkta ayrışma/knockback'le saptırılmış olabilen) yönünde donup kalır -
+				## saldırdığı oyuncuya değil rastgele bir yöne bakıyormuş gibi görünür. Host'un kendi mantığıyla
+				## AYNI kural (durunca GERÇEK hedefe bak) burada da - AI_THINK_INTERVAL_FRAMES'te bir (host'un
+				## kendi throttle'ıyla AYNI kaydırma deseni), sadece kozmetik/ucuz bir oyuncu araması.
+				var facing_target: Node2D = _find_closest_target_player()
+				if facing_target and is_instance_valid(facing_target):
+					var to_facing: Vector2 = facing_target.global_position - global_position
+					if to_facing.length() > 2.0:
+						_update_facing(to_facing.normalized())
 			global_position = global_position.lerp(predicted_target, min(1.0, delta * 18.0))
 		## Görsel animasyon durumu (yürüme/saldırı) sadece kozmetiktir ve
 		## host'tan _enter_state_networked() ile tetiklenir (bkz. o fonksiyon
@@ -2341,86 +2778,138 @@ func _physics_process(delta: float) -> void:
 		else:
 			if _taunt_timer > 0.0:
 				_taunt_timer = max(0.0, _taunt_timer - delta)
-			## Hedef bul: Yerel oyuncu ve canlı RemotePlayer'lar arasından en yakınını seç
-			var target_player: Node2D = _get_target_player()
-			player = target_player
-			var player_is_invisible: bool = player != null and is_instance_valid(player) \
-				and ((player.has_method("is_invisible_now") and player.is_invisible_now()) \
-				or (player.has_method("is_indoors_now") and player.is_indoors_now()) \
-				or (player.has_method("is_in_merchant_zone_now") and player.is_in_merchant_zone_now()))
-			if player and is_instance_valid(player) and not player_is_invisible:
-				var to_player: Vector2 = player.global_position - global_position
-				dist = to_player.length()
-				var dir: Vector2 = to_player.normalized() if dist > 0.1 else Vector2.ZERO
-				var face_dir: Vector2 = dir
-				## Body block: gövde yarıçapları toplamının altına inince
-				## artık oyuncuya doğru ilerlemiyor - bkz. PLAYER_BODY_RADIUS
-				## notu, karakterin içine girmesini engelliyor. _true_contact_
-				## separation gerçek (zon ile şişirilmemiş) dokunma mesafesi -
-				## aşağıdaki melee_range hesabı BUNU kullanmalı, yoksa Şovalye
-				## ultisiyle genişleyen min_separation'ı yakın dövüş menzili
-				## sanıp yaratıklar 280px öteden "temas" hasarı vermeye
-				## başlıyor (bkz. kullanıcı bildirimi: "kendi kendine hasar
-				## almaya başlıyor"). GameManager.BODY_BLOCK_SCALE ile küçültülüyor
-				## (bkz. kullanıcı bildirimi: "daha dokunmadan dokunmuşum gibi
-				## itiliyor yaratıklar") - player.gd'nin kendi engelleme kodu da
-				## AYNI çarpanı kullanıyor, iki taraf hep tutarlı kalsın diye.
-				true_contact_separation = (_body_radius + PLAYER_BODY_RADIUS) * GameManager.BODY_BLOCK_SCALE
-				min_separation = true_contact_separation
-				## Şovalye (Paladin) ultisi aktifken oyuncunun etrafında
-				## hiçbir yaratığın giremeyeceği daha geniş bir alan var -
-				## bkz. player.gd paladin_zone_active/paladin_zone_radius.
-				## Bu SADECE hareketi durdurur, yakın dövüş menzilini değil.
-				if "paladin_zone_active" in player and player.paladin_zone_active:
-					min_separation = max(min_separation, player.paladin_zone_radius)
-				## Kışkırtılmışsa (bkz. apply_taunt) menzilli yaratıklar bile
-				## normal "uzak dur" davranışını bırakıp yakın dövüşçü gibi
-				## doğrudan üstüne yürür.
-				if is_ranged and dist <= ranged_range and _taunt_timer <= 0.0:
-					velocity = Vector2.ZERO
-					_update_stuck_state(delta, false)
-				elif dist <= min_separation:
-					velocity = Vector2.ZERO
-					_update_stuck_state(delta, false)
+			_ai_accum_delta += delta
+			## PERF DÜZELTMESİ (kullanıcı bildirimi: 200 yaratıkta 7-9 FPS - gerçek oyunda
+			## profillendi: bu karar bloğu 200 yaratıkta fizik adımı başına ~4.3ms, tek başına
+			## en büyük kalem). Hedef seçimi, oyuncunun görünmez/ev içi/satıcı bölgesi
+			## kontrolleri, yol bulma ve bakış yönü artık yaratık başına AI_THINK_INTERVAL_
+			## FRAMES karede bir (instance_id'ye göre kaydırmalı) hesaplanıyor; aradaki
+			## karelerde son karar (hız/hedef/mesafe sınırları) kullanılıyor. Mesafe, gövde
+			## engelleme, saldırı-anında-durma ve menzilli saldırı sayacı HER karede taze.
+			## Aradaki kare süreleri biriktirilip (_ai_accum_delta) karar anında takılma/rota
+			## zamanlayıcılarına veriliyor - o zamanlayıcıların gerçek süresi değişmiyor.
+			var think: bool = not _ai_has_decision or Engine.get_physics_frames() % AI_THINK_INTERVAL_FRAMES == get_instance_id() % AI_THINK_INTERVAL_FRAMES
+			if not think and not _ai_wandering and (_ai_player == null or not is_instance_valid(_ai_player) or _ai_player.get("is_dead") == true):
+				think = true
+			if not think:
+				if _ai_wandering:
+					velocity = _compute_wander_velocity(delta)
 				else:
-					## bkz. _is_stuck üstündeki BUG DÜZELTMESİ notu - oyuncuya
-					## gerçekten yaklaşmaya çalışırken engele sıkışmışsak
-					## (su/ev tile'ı, bkz. GameManager.is_position_blocked_by_
-					## terrain) yönü hafifçe engelin yanından dolanacak şekilde
-					## büküyoruz, aksi halde her karede aynı düz yönü deneyip
-					## sonsuza dek orada kalırdı.
-					_update_stuck_state(delta, true)
-					var routed_dir: Vector2 = _route_direction(dir, player.global_position, delta)
-					## Rota izlenirken _steer_around_obstacle ATLANIR: yol zaten duvarı
-					## hesaba katıyor, üstelik yavaş yaratıklar (28 px/s x 0.4 sn < 12 px)
-					## sürekli "sıkışmış" sayılıp yönü rastgele yana büküyor ve rotadan
-					## saptırıyordu. Rota yokken (düz çizgi açık ya da yol bulunamadı)
-					## eski davranış aynen.
-					var steered_dir: Vector2 = routed_dir if _route_active else _steer_around_obstacle(routed_dir)
-					velocity = steered_dir * speed * _chill_speed_mult() * _slow_speed_mult() * _rage_speed_mult()
-					## Duvarı dolanırken hedefe değil yürüdüğü yöne baksın.
-					if _route_active:
-						face_dir = steered_dir
-				## DÜZELTME (kullanıcı isteği #35: "yaratıklar saldırırken
-				## hareket ediyor, saldırı animasyonu anında hareket
-				## edememeliler") - _state == State.ATTACK süresince (bkz.
-				## _enter_state çağrıları, _state_duration ile otomatik WALK'a
-				## döner) yürüme hızı burada iptal ediliyor; ayrışma/knockback
-				## (aşağıda ayrıca eklenen) buna dokunmuyor, yani vurulunca
-				## yine itilebiliyor, sadece kendi isteğiyle yürüyemiyor.
-				if _state == State.ATTACK:
-					velocity = Vector2.ZERO
-				_update_facing(face_dir)
-				if is_ranged:
-					_process_ranged_attack(delta, player, dist, dir)
+					player = _ai_player
+					var to_p: Vector2 = player.global_position - global_position
+					dist = to_p.length()
+					true_contact_separation = _ai_true_contact
+					min_separation = _ai_min_sep
+					velocity = _ai_velocity
+					if dist <= min_separation or _state == State.ATTACK:
+						velocity = Vector2.ZERO
+					if is_ranged:
+						_process_ranged_attack(delta, player, dist, to_p.normalized() if dist > 0.1 else Vector2.ZERO)
+					## BUG DÜZELTMESİ (kullanıcı bildirimi, ekran görüntüsüyle: "bazı yaratıklar sıkıştıklarında
+					## arkalarına yana falan bakıp saldırı hareketi yapıyor"): _update_facing eskiden SADECE
+					## yukarıdaki "think" dalında (AI_THINK_INTERVAL_FRAMES'te 1 kez, kaydırmalı) çağrılıyordu -
+					## bu "not think" dalındaki diğer 2 karede yön HİÇ güncellenmiyordu. Kalabalıkta ayrışma/
+					## knockback (_compute_enemy_separation, aşağıda) yaratığı oyuncuya göre HIZLA farklı bir
+					## açıya itebiliyor; dist/saldırı tetiği HER karede taze olduğu için (yukarısı) yaratık
+					## gerçekte oyuncunun yanındayken/arkasındayken bile 2 kare önceki bakışla saldırı animasyonuna
+					## giriyordu. Artık think dalıyla AYNI kural (rota takip ediliyorsa hareket yönü, aksi halde
+					## oyuncu yönü) HER karede tazeleniyor - sadece ucuz vektör/satır hesabı, grup taraması YOK.
+					var not_think_face_dir: Vector2 = to_p.normalized() if dist > 0.1 else Vector2.ZERO
+					if _route_active and _ai_velocity.length() > 0.1:
+						not_think_face_dir = _ai_velocity.normalized()
+					_update_facing(not_think_face_dir)
 			else:
-				## Kullanıcı isteği: "yaratıkların hedefi yokken etrafta
-				## arada rasgele dolanmalı bazen de durmalılar ve doğal
-				## davranmalılar" - eskiden burada dümdüz velocity=ZERO ile
-				## donup kalıyorlardı (hedef yok/tüm oyuncular görünmez-ev
-				## içi-seyyar satıcı bölgesinde). Artık bkz. _compute_wander_
-				## velocity().
-				velocity = _compute_wander_velocity(delta)
+				var think_delta: float = _ai_accum_delta
+				_ai_accum_delta = 0.0
+				_ai_has_decision = true
+				_ai_wandering = false
+				## Hedef bul: Yerel oyuncu ve canlı RemotePlayer'lar arasından en yakınını seç
+				var target_player: Node2D = _get_target_player()
+				player = target_player
+				var player_is_invisible: bool = player != null and is_instance_valid(player) \
+					and ((player.has_method("is_invisible_now") and player.is_invisible_now()) \
+					or (player.has_method("is_indoors_now") and player.is_indoors_now()) \
+					or (player.has_method("is_in_merchant_zone_now") and player.is_in_merchant_zone_now()))
+				if player and is_instance_valid(player) and not player_is_invisible:
+					var to_player: Vector2 = player.global_position - global_position
+					dist = to_player.length()
+					var dir: Vector2 = to_player.normalized() if dist > 0.1 else Vector2.ZERO
+					var face_dir: Vector2 = dir
+					## Body block: gövde yarıçapları toplamının altına inince
+					## artık oyuncuya doğru ilerlemiyor - bkz. PLAYER_BODY_RADIUS
+					## notu, karakterin içine girmesini engelliyor. _true_contact_
+					## separation gerçek (zon ile şişirilmemiş) dokunma mesafesi -
+					## aşağıdaki melee_range hesabı BUNU kullanmalı, yoksa Şovalye
+					## ultisiyle genişleyen min_separation'ı yakın dövüş menzili
+					## sanıp yaratıklar 280px öteden "temas" hasarı vermeye
+					## başlıyor (bkz. kullanıcı bildirimi: "kendi kendine hasar
+					## almaya başlıyor"). GameManager.BODY_BLOCK_SCALE ile küçültülüyor
+					## (bkz. kullanıcı bildirimi: "daha dokunmadan dokunmuşum gibi
+					## itiliyor yaratıklar") - player.gd'nin kendi engelleme kodu da
+					## AYNI çarpanı kullanıyor, iki taraf hep tutarlı kalsın diye.
+					true_contact_separation = (_body_radius + PLAYER_BODY_RADIUS) * GameManager.BODY_BLOCK_SCALE
+					min_separation = true_contact_separation
+					## Şovalye (Paladin) ultisi aktifken oyuncunun etrafında
+					## hiçbir yaratığın giremeyeceği daha geniş bir alan var -
+					## bkz. player.gd paladin_zone_active/paladin_zone_radius.
+					## Bu SADECE hareketi durdurur, yakın dövüş menzilini değil.
+					if "paladin_zone_active" in player and player.paladin_zone_active:
+						min_separation = max(min_separation, player.paladin_zone_radius)
+					## Kışkırtılmışsa (bkz. apply_taunt) menzilli yaratıklar bile
+					## normal "uzak dur" davranışını bırakıp yakın dövüşçü gibi
+					## doğrudan üstüne yürür.
+					## Görüş hattı yoksa (duvar arkasındaysa) menzilli yaratık durup beklemez, yakın dövüşçü
+					## gibi yürümeye/dolanmaya devam eder - bkz. _has_line_of_sight.
+					if is_ranged and dist <= ranged_range and _taunt_timer <= 0.0 and _has_line_of_sight(player):
+						velocity = Vector2.ZERO
+						_update_stuck_state(think_delta, false)
+					elif dist <= min_separation:
+						velocity = Vector2.ZERO
+						_update_stuck_state(think_delta, false)
+					else:
+						## bkz. _is_stuck üstündeki BUG DÜZELTMESİ notu - oyuncuya
+						## gerçekten yaklaşmaya çalışırken engele sıkışmışsak
+						## (su/ev tile'ı, bkz. GameManager.is_position_blocked_by_
+						## terrain) yönü hafifçe engelin yanından dolanacak şekilde
+						## büküyoruz, aksi halde her karede aynı düz yönü deneyip
+						## sonsuza dek orada kalırdı.
+						_update_stuck_state(think_delta, true)
+						var routed_dir: Vector2 = _route_direction(dir, player.global_position, think_delta)
+						## Rota izlenirken _steer_around_obstacle ATLANIR: yol zaten duvarı
+						## hesaba katıyor, üstelik yavaş yaratıklar (28 px/s x 0.4 sn < 12 px)
+						## sürekli "sıkışmış" sayılıp yönü rastgele yana büküyor ve rotadan
+						## saptırıyordu. Rota yokken (düz çizgi açık ya da yol bulunamadı)
+						## eski davranış aynen.
+						var steered_dir: Vector2 = routed_dir if _route_active else _steer_around_obstacle(routed_dir)
+						velocity = steered_dir * speed * _chill_speed_mult() * _slow_speed_mult() * _rage_speed_mult()
+						## Duvarı dolanırken hedefe değil yürüdüğü yöne baksın.
+						if _route_active:
+							face_dir = steered_dir
+					## DÜZELTME (kullanıcı isteği #35: "yaratıklar saldırırken
+					## hareket ediyor, saldırı animasyonu anında hareket
+					## edememeliler") - _state == State.ATTACK süresince (bkz.
+					## _enter_state çağrıları, _state_duration ile otomatik WALK'a
+					## döner) yürüme hızı burada iptal ediliyor; ayrışma/knockback
+					## (aşağıda ayrıca eklenen) buna dokunmuyor, yani vurulunca
+					## yine itilebiliyor, sadece kendi isteğiyle yürüyemiyor.
+					if _state == State.ATTACK:
+						velocity = Vector2.ZERO
+					_update_facing(face_dir)
+					if is_ranged:
+						_process_ranged_attack(delta, player, dist, dir)
+				else:
+					## Kullanıcı isteği: "yaratıkların hedefi yokken etrafta
+					## arada rasgele dolanmalı bazen de durmalılar ve doğal
+					## davranmalılar" - eskiden burada dümdüz velocity=ZERO ile
+					## donup kalıyorlardı (hedef yok/tüm oyuncular görünmez-ev
+					## içi-seyyar satıcı bölgesinde). Artık bkz. _compute_wander_
+					## velocity().
+					_ai_wandering = true
+					velocity = _compute_wander_velocity(delta)
+				_ai_player = player if (not _ai_wandering and player != null and is_instance_valid(player)) else null
+				_ai_velocity = velocity
+				_ai_true_contact = true_contact_separation
+				_ai_min_sep = min_separation
 		## Yaratıklar arası doğal boşluk (bkz. _compute_enemy_separation
 		## yorumu) - donmuşken uygulanmaz, donuk yaratık tam "duraklamış"
 		## kalmalı.
@@ -2465,7 +2954,7 @@ func _physics_process(delta: float) -> void:
 		## boğuşup yine "ışınlanma" hissi verirdi.
 		## Yarasa Formu'ndaki Vampir'in içinden geçilebilir (player.gd/remote_player.gd is_ghost_now): sert yapıştırma onu
 		## "gövde" saymamalı, yoksa yarasa üstünden geçerken yaratık dışarı fırlatılırdı.
-		var target_is_ghost: bool = player != null and is_instance_valid(player) and player.has_method("is_ghost_now") and player.is_ghost_now()
+		var target_is_ghost: bool = player != null and is_instance_valid(player) and _is_ghost_cached(player)
 		if not is_frozen and player and is_instance_valid(player) and not target_is_ghost and min_separation > 0.0 and _knockback_velocity.length() < 40.0:
 			var post_to_player: Vector2 = player.global_position - global_position
 			var post_dist: float = post_to_player.length()
@@ -2513,16 +3002,30 @@ func _physics_process(delta: float) -> void:
 				var away_merchant: Vector2 = -to_merchant.normalized() if merchant_dist > 0.5 else Vector2(1.0, 0.0)
 				global_position = GameManager.merchant_zone_pos + away_merchant * GameManager.MERCHANT_ZONE_RADIUS
 
-		_process_item_shield(delta)
-		_process_poison(delta)
-		_process_burn(delta)
-		_process_mark(delta)
-		_process_bleed(delta)
-		_process_chill(delta)
-		_process_boss_chill(delta)
-		_process_slow(delta)
-		_process_root(delta)
-		_process_bee_poison(delta)
+		## PERF: her fonksiyonun KENDİ ilk satırındaki "aktif değilse çık"
+		## koşulu burada çağrı ÖNCESİ kontrol ediliyor - 200 yaratıkta kare
+		## başına 2000 boş fonksiyon çağrısı yerine 2000 basit karşılaştırma.
+		## Davranış birebir aynı; bir koşulu değiştirirsen fonksiyonun içindekini de değiştir.
+		if item_shield_max > 0.0:
+			_process_item_shield(delta)
+		if not _poison_stack_time.is_empty():
+			_process_poison(delta)
+		if burn_time_left > 0.0:
+			_process_burn(delta)
+		if mark_stacks > 0:
+			_process_mark(delta)
+		if bleed_stacks > 0:
+			_process_bleed(delta)
+		if chill_stacks > 0:
+			_process_chill(delta)
+		if _boss_chill_stacks > 0:
+			_process_boss_chill(delta)
+		if _slow_timer > 0.0 or _slow_fx_time_left > 0.0 or _slow_fx_broadcast_cooldown > 0.0:
+			_process_slow(delta)
+		if _root_timer > 0.0:
+			_process_root(delta)
+		if not _bee_poison_stacks.is_empty():
+			_process_bee_poison(delta)
 
 		## Oyuncuya olan yakın dövüş hasarı artık HitArea'nın (Area2D,
 		## mask=2) "temas halinde" algılamasına DEĞİL, doğrudan mesafeye
@@ -2668,6 +3171,11 @@ func _process_ranged_attack(delta: float, _player: Node2D, dist: float, dir: Vec
 	_ranged_timer -= delta
 	if _ranged_timer > 0.0:
 		return
+	## Kullanıcı bildirimi (2026-09-24): "yaratıklar duvarların arkasından ateş edebiliyor... onlar bizi göremediğinde
+	## ateş edememeliler" - hedefi göremiyorsa ateş etmez; sayaç hazır bekler, görüş açılınca hemen ateşler.
+	if not _has_line_of_sight(_player):
+		_ranged_timer = 0.0
+		return
 	if dist <= ranged_range * 1.6:
 		_ranged_timer = ranged_attack_interval
 		_fire_ranged_attack(dir)
@@ -2689,10 +3197,9 @@ func _fire_ranged_attack(dir: Vector2) -> void:
 	proj.damage = (ranged_damage if ranged_damage > 0.0 else contact_damage) * RANGED_SPELL_DAMAGE_MULT
 	proj.source = self
 	proj.tint = projectile_tint
-	## EnemyProjectile de (XpOrb/GoldDrop/FoodDrop gibi) Area2D+CollisionShape2D
-	## kökenli - bu da _physics_process içinden tetiklendiği için (bkz. kullanıcı
-	## bildirimi: "genel bir sorun var gibi") aynı fizik sorgu taşması riskine
-	## karşı savunma amaçlı call_deferred kullanılıyor.
+	## call_deferred: EnemyProjectile eskiden (XpOrb/GoldDrop gibi) Area2D idi ve _physics_process içinden
+	## eklenmesi fizik sorgu taşması riski taşıyordu. Artık fizik nesnesi olmayan düz bir Node2D (bkz.
+	## enemy_projectile.gd PERF notu) - erteleme zararsız olduğu için savunma amaçlı korunuyor.
 	get_tree().current_scene.call_deferred("add_child", proj)
 	
 	## Multiplayer: düşman mermisini client'lara broadcast et (görsel kopya)
@@ -2718,6 +3225,8 @@ func _fire_ranged_attack(dir: Vector2) -> void:
 func _fire_homing_attack() -> void:
 	var player := _find_closest_target_player()
 	if not player or not is_instance_valid(player):
+		return
+	if not _has_line_of_sight(player): ## en yakın oyuncu çağıranın hedefinden farklı olabilir - onu da görmeli
 		return
 	var proj = EnemyProjectileScene.instantiate()
 	proj.global_position = global_position
@@ -2815,9 +3324,14 @@ func _update_facing(dir: Vector2) -> void:
 func _enter_state(new_state: int, duration: float = 0.0) -> void:
 	if _state == State.DEATH:
 		return
+	## PERF: zaten bu durumdaysa (ör. alan hasarında art arda "hurt") sadece
+	## süreyi/kareyi yeniden başlat - doku/kare ızgarası/animasyon zaten doğru.
+	var same_state: bool = _state == new_state
 	_state = new_state
 	_state_duration = duration
 	_frame_time = 0.0
+	if same_state:
+		return
 
 	if frame_sprite:
 		var tex: Texture2D = _texture_for_state(new_state)
@@ -2861,26 +3375,18 @@ func _enter_state_networked() -> void:
 	_enter_state(State.ATTACK, dur if dur > 0.0 else 0.4)
 
 
-## Host bu yaratığın HURT (vuruş alma) pozuna girdiği anı istemcilere
-## yayınlar - _broadcast_attack_state ile BİREBİR AYNI mantık, sadece
-## "attack_state" yerine "hurt_state". DÜZELTME: network_manager.gd'nin
-## broadcast_enemy_vfx'inde "hurt_state" case'i VE bunun beklediği
-## _enter_hurt_state_networked() ismi ZATEN VARDI, ama bu tarafta (enemy.gd)
-## ne bu yayın çağrısı ne de hedef fonksiyon hiç tanımlıydı - yani mekanizma
-## kabloları hazırdı ama uçları hiç birleştirilmemişti, katılımcılar
-## yaratığın vuruş alma animasyonunu (host'un kendi ekranında oynayan,
-## sadece can/kalkan renkli yanıp sönmesiyle ["_flash"] eşlik eden) hiç
-## görmüyordu - bkz. kullanıcı bildirimi: "yaratıkların animasyonları
-## katılımcılarda yanlış görünüyor". Süre burada da (attack_state ile aynı
-## gerekçeyle) ağdan gönderilmiyor, istemci kendi hesaplıyor.
-func _broadcast_hurt_state() -> void:
+## Host'ta bir yaratık hasar alınca istemcilerde de beyaz vuruş parlaması (_flash)
+## oynasın diye yayınlanır (eskiden "hurt_state" adıyla HURT animasyonunu da
+## tetikliyordu - HURT kaldırıldı, bkz. _apply_damage). Bu yayın SİLİNMEMELİ: host'un
+## _flash() çağrısı sadece host'ta çalışır, istemciler parlamayı YALNIZCA buradan alır.
+func _broadcast_hit_flash() -> void:
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		## DÜZELTME (kullanıcı bildirimi: "multiplayerda katılımcılar yine lag
 		## sorunları yaşıyor yaratıklar bir yürüyüp bir duruyor ve bazen
 		## arkalarına dönüyorlar" + "multiplayerda katılımcıların fpsi çok
 		## düşüyor") - "damage_number" (bkz. _apply_damage) ZATEN should_
-		## throttle ile sınırlanmıştı ama "hurt_state" hiç sınırlanmamıştı:
+		## throttle ile sınırlanmıştı ama bu yayın ("hurt_state") hiç sınırlanmamıştı:
 		## hızlı ateş eden silahler/DOT tikleri aynı yaratığa saniyede onlarca
 		## "hurt_state" RPC'si (reliable) gönderebiliyordu. Bu, relay'in
 		## bağlantı başına mesaj/byte bütçesini pozisyon senkronuyla
@@ -2891,12 +3397,12 @@ func _broadcast_hurt_state() -> void:
 		## durumu değişimi tetiklediği için çok sayıda yaratık aynı anda
 		## vurulunca istemci FPS'i de düşüyordu. "damage_number" ile AYNI
 		## desenle sınırlandı - kozmetik olduğu için kayıp fark edilmez.
-		if net_id > 0 and not NetworkManager.should_throttle("hurt_%d" % net_id, 0.1):
-			NetworkManager.broadcast_enemy_vfx.rpc(net_id, "hurt_state", {})
+		if net_id > 0 and not NetworkManager.should_throttle("hitflash_%d" % net_id, 0.1):
+			NetworkManager.broadcast_enemy_vfx.rpc(net_id, "hit_flash", {})
 
 
-## _broadcast_attack_state/_broadcast_hurt_state İLE BİREBİR AYNI desen -
-## die()'ın en başından, tam "attack_state"/"hurt_state" gibi anında ve
+## _broadcast_attack_state/_broadcast_hit_flash İLE BİREBİR AYNI desen -
+## die()'ın en başından, tam "attack_state"/"hit_flash" gibi anında ve
 ## reliable olarak çağrılır (bkz. die() içindeki not). Karşı taraf
 ## broadcast_enemy_vfx'teki "death_state" case'i bunu alıp doğrudan
 ## target_enemy.die() çağırıyor - die() zaten en başta is_dead kontrolüyle
@@ -2909,25 +3415,21 @@ func _broadcast_death_state() -> void:
 			NetworkManager.broadcast_enemy_vfx.rpc(net_id, "death_state", {})
 
 
-## broadcast_enemy_vfx RPC'sinin "hurt_state" case'inin çağırdığı istemci
-## tarafı karşılığı.
+## broadcast_enemy_vfx RPC'sinin "hit_flash" case'inin çağırdığı istemci
+## tarafı karşılığı (HURT animasyonu kaldırıldı, sadece parlama).
 ## DÜZELTME (bkz. proje köküdeki CLAUDE.md - "kaster kendi ekranında doğru
 ## görür, diğer oyuncularda hiçbir şey görünmez" hata sınıfı): _flash()
 ## (beyaz hit-flash) SADECE host'ta çalışan _apply_damage()'dan
-## çağrılıyordu, host-olmayan istemciler bu "hurt_state" senkronunu
+## çağrılıyordu, host-olmayan istemciler bu senkronu
 ## alıyordu ama flaşı HİÇ tetiklemiyordu - bu yüzden onlarda yaratıklar
 ## hasar alırken hiç beyazlamıyordu. Artık host'un _apply_damage()'taki
 ## çağrısıyla AYNI şekilde burada da tetikleniyor.
-func _enter_hurt_state_networked() -> void:
+func _play_hit_flash_networked() -> void:
 	_flash()
-	var dur: float = _anim_length_for(State.HURT)
-	_enter_state(State.HURT, dur if dur > 0.0 else 0.3)
 
 
 func _texture_for_state(state: int) -> Texture2D:
 	match state:
-		State.HURT:
-			return hurt_texture if hurt_texture else walk_texture
 		State.DEATH:
 			return death_texture if death_texture else walk_texture
 		State.ATTACK:
@@ -2940,8 +3442,6 @@ func _texture_for_state(state: int) -> Texture2D:
 
 func _anim_name_for_state(state: int) -> String:
 	match state:
-		State.HURT:
-			return "hurt"
 		State.DEATH:
 			return "death"
 		State.ATTACK:
@@ -3171,24 +3671,13 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 	if health <= 0:
 		die()
 	else:
-		var dur: float = _anim_length_for(State.HURT)
-		var hurt_duration: float = dur if dur > 0.0 else 0.3
-		_enter_state(State.HURT, hurt_duration)
-		_broadcast_hurt_state()
+		## Kullanıcı isteği (2026-09-23): "yaratıkların hurt animasyonlarına gerek yok
+		## onları komple kaldıralım" - vuruş alınca artık HURT pozuna girilmiyor (hareketi
+		## zaten etkilemiyordu, salt görseldi). Beyaz vuruş parlaması (_flash) kalıyor;
+		## istemcilerde de görünsün diye sadece o yayınlanıyor.
+		_broadcast_hit_flash()
 
 
-## BUG DÜZELTMESİ: rage/chill tonu artık HER ZAMAN doğru görünüyor. Eskiden
-## bu tween'in HEDEF rengi (ikinci tween_property, _status_tint_color())
-## fonksiyon çağrıldığı ANDA sabitleniyordu - yani tam rage'e giren vuruşta
-## (health %30'un altına düşen o vuruşta) _flash() ÖNCE (eski, "beyaz/normal"
-## tonla) çalışıyor, _enter_rage_mode() SONRA tetiklenip modulate'i anında
-## kırmızıya çeviriyordu, ama bu ESKİ tween hâlâ arka planda çalışmaya devam
-## edip 0.15sn sonra modulate'i sessizce ESKİ (rage öncesi) tona geri
-## döndürüyordu - "rage rengi hiç görünmüyor/hemen kayboluyor" hissi buradan
-## geliyordu (bkz. kullanıcı bildirimi). Artık tween referansı saklanıp
-## _refresh_chill_tint() (rage/chill'in tek gerçek kaynağı) her çağrıldığında
-## bu YARIM KALMIŞ tween varsa öldürülüyor, tona asla tekrar üstüne binmiyor.
-var _flash_tween: Tween = null
 
 ## Kullanıcı isteği: "hasar alan yaratıkların anlık beyazlaması ... pixel
 ## oyunlarda kullanılan hasar alıncaki beyazlama efekti" - DÜZELTME: eskiden
@@ -3215,11 +3704,20 @@ func _flash() -> void:
 		_hit_flash_material = ShaderMaterial.new()
 		_hit_flash_material.shader = HitFlashShader
 		target.material = _hit_flash_material
-	if _flash_tween and _flash_tween.is_valid():
-		_flash_tween.kill()
+	## PERF (kullanıcı bildirimi: alan hasarında 200 yaratıkta FPS 60->40): eskiden
+	## HER vuruşta yeni bir Tween nesnesi oluşturuluyordu (200 yaratıklık bir alan
+	## hasarı = tek karede 200 Tween). Aynı 1.0 -> 0.0 doğrusal sönüm artık
+	## _tick_hit_flash() içinde basit bir sayaçla yapılıyor - görünüm birebir aynı.
 	_hit_flash_material.set_shader_parameter("flash_amount", 1.0)
-	_flash_tween = create_tween()
-	_flash_tween.tween_property(_hit_flash_material, "shader_parameter/flash_amount", 0.0, HIT_FLASH_DURATION)
+	_flash_time_left = HIT_FLASH_DURATION
+
+
+var _flash_time_left: float = 0.0
+
+func _tick_hit_flash(delta: float) -> void:
+	_flash_time_left = maxf(0.0, _flash_time_left - delta)
+	if _hit_flash_material:
+		_hit_flash_material.set_shader_parameter("flash_amount", _flash_time_left / HIT_FLASH_DURATION)
 
 
 func die() -> void:
@@ -3227,13 +3725,16 @@ func die() -> void:
 		return
 	is_dead = true
 	velocity = Vector2.ZERO
+	## Görev sistemi (bkz. world_event_manager.gd "Alanı Güvenceye Al") - bkz. GameManager.
+	## enemy_died üstündeki not.
+	GameManager.enemy_died.emit(global_position)
 
 	## DÜZELTME (kullanıcı bildirimi: "yaratıkların ölüm animasyonu
 	## katılımcılarda farklı görünüyor"): host'un ölümü katılımcılara
 	## eskiden SADECE enemy_spawner.gd'nin periyodik (0.15sn'de bir),
 	## "unreliable" _sync_enemy_positions paketindeki net_dead bayrağıyla
 	## ulaşıyordu - saldırı/vuruş animasyonlarının (bkz. _broadcast_attack_
-	## state/_broadcast_hurt_state) tersine, ölüm anında ANINDA/güvenilir
+	## state/_broadcast_hit_flash) tersine, ölüm anında ANINDA/güvenilir
 	## (reliable) bir bildirim YOKTU. Bu da katılımcının ölümü host'tan
 	## 150ms'ye kadar GEÇ öğrenmesine (ve o sürede yaratığın host'ta zaten
 	## durmuş olmasına rağmen katılımcıda hâlâ eski hedefe doğru kaymaya
@@ -3268,8 +3769,19 @@ func die() -> void:
 	## öldüren bir İSTEMCİYSE (host değilse) patlamanın nereye
 	## konumlandırılacağı hiç bilinemiyordu (bkz. player.gd
 	## on_enemy_killed_remote/_buyucu_on_kill).
+	## BUG DÜZELTMESİ (kullanıcı bildirimi: "birisi bianda çok fazla yaratık öldürünce oyun laglanıyor" araştırması
+	## sırasında bulundu): die() İSTEMCİDE de çalışıyor (death_state RPC'si / periyodik net_dead, bkz.
+	## update_network_state) ama bu blok host kapısı olmadan ÖNCEKİ yorumun "SADECE host'ta çalışır" varsayımıyla
+	## yazılmıştı. İstemcide last_attacker_peer_id kendi id'si ya da henüz 0 ise on_enemy_killed() yerel olarak
+	## BİR KEZ DAHA tetikleniyordu (host'un notify_kill_passive'ine EK olarak - Savaş Şevki yükü, Vampir Dişi
+	## iyileşmesi, Büyücü'nün öldürme patlaması, Necromancer ruhu çift sayılıyordu; üstelik host'un öldürdüğü
+	## yaratıklar bile istemciye "senin öldürmen" sayılıyordu); başkasının id'siyse o peer'e fazladan bir
+	## notify_kill_passive gönderiyordu. Toplu ölümde her istemci ölen HER yaratık için bunu yapıyordu (Büyücü'de
+	## her biri yeni bir alan hasarı = yeni RPC seli). Öldürme ödülü tek kaynaktan, host'tan dağıtılır.
 	var is_boss_kill: bool = is_boss
-	if NetworkManager.is_multiplayer_active and last_attacker_peer_id > 0 and last_attacker_peer_id != multiplayer.get_unique_id():
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		pass
+	elif NetworkManager.is_multiplayer_active and last_attacker_peer_id > 0 and last_attacker_peer_id != multiplayer.get_unique_id():
 		NetworkManager.notify_kill_passive.rpc_id(last_attacker_peer_id, is_boss_kill, global_position)
 	else:
 		var killer_player := get_tree().get_first_node_in_group("player")
@@ -3286,6 +3798,17 @@ func die() -> void:
 	var death_time: float = _anim_length_for(State.DEATH)
 	if death_time <= 0.0:
 		death_time = 0.4
+	## DÜZELTME (kullanıcı bildirimi: "biri anlık herkese alan hasarı veren bir
+	## skill kullandığında oyun drop yiyor" - ölçülüp doğrulandı, headless
+	## harness'te AoE sonrası 45 aynı-tür yaratık TAM AYNI karede _on_death_
+	## anim_done'a giriyordu, 39.5ms'lik normal kareyi ~135ms'ye çıkarıyordu).
+	## death_time aynı türdeki her yaratık için DETERMİNİSTİK/ÖZDEŞ (sadece
+	## dokudan hesaplanıyor) - AoE ile aynı karede ölen onlarca yaratık bu
+	## yüzden hepsi TAM AYNI karede tween+queue_free() tetikliyordu. _route_
+	## line_timer/_route_replan_timer'daki AYNI desen (randf_range ile faz
+	## kaydırma, bkz. _route_direction) - küçük bir rastgele gecikme
+	## eşzamanlılığı kırar, tek bir yaratıkta gözle fark edilmez.
+	death_time += randf_range(0.0, 0.15)
 	get_tree().create_timer(death_time).timeout.connect(_on_death_anim_done)
 
 
@@ -3300,9 +3823,21 @@ func _on_death_anim_done() -> void:
 	if target:
 		var tw := create_tween()
 		tw.tween_property(target, "modulate:a", 0.0, 0.25)
-		tw.tween_callback(queue_free)
+		tw.tween_callback(_free_when_drops_done)
 	else:
-		queue_free()
+		_free_when_drops_done()
+
+
+## bkz. _queue_drop_spawn üstündeki DÜZELTME notu - kuyrukta bu yaratığa ait
+## düşürme bekliyorsa (kapanışlar ona bağlı) silinmeyi kısa aralıklarla ertele.
+var _pending_queued_spawns: int = 0
+
+func _free_when_drops_done() -> void:
+	if _pending_queued_spawns > 0:
+		visible = false
+		get_tree().create_timer(0.1).timeout.connect(_free_when_drops_done)
+		return
+	queue_free()
 
 
 ## Kullanıcı isteği: "5 adet orb ... her orbun kendi tierı var ve yaratıklar
@@ -3394,14 +3929,30 @@ const ORB_TIER_XP_MULT := {1: 1.0, 2: 2.0, 3: 2.0, 4: 2.0, 5: 2.0}
 static var _drop_spawn_queue: Array[Callable] = []
 const DROP_SPAWN_PER_FRAME := 8
 
+## DÜZELTME (200 yaratıkla toplu ölümde bulundu - test "call on a null instance"
+## hatası yakaladı): bu kapanışlar _drop_* instance metodlarında oluşturulduğu
+## için GDScript onları yaratığa BAĞLIYOR - sadece değer yakalasalar bile yaratık
+## kuyruk boşalmadan silinirse çağrı patlıyor ve o XP/altın/yemek HİÇ düşmüyordu
+## (200 yaratıklık bir alan hasarı kuyruğa yüzlerce kapanış ekler). Artık her
+## yaratık kuyrukta bekleyen kendi ödül sayısını tutuyor (_pending_queued_spawns)
+## ve ölüm animasyonu bitince sayı sıfırlanana kadar (görünmez hâlde) silinmeyi
+## erteliyor - bkz. _free_when_drops_done.
 static func _queue_drop_spawn(spawn_cb: Callable) -> void:
+	var owner_obj: Object = spawn_cb.get_object()
+	if owner_obj is Enemy:
+		(owner_obj as Enemy)._pending_queued_spawns += 1
 	_drop_spawn_queue.append(spawn_cb)
 
 static func drain_drop_spawn_queue() -> void:
 	var drained: int = 0
 	while drained < DROP_SPAWN_PER_FRAME and not _drop_spawn_queue.is_empty():
 		var cb: Callable = _drop_spawn_queue.pop_front()
+		if not cb.is_valid():
+			continue
+		var owner_obj: Object = cb.get_object()
 		cb.call()
+		if is_instance_valid(owner_obj) and owner_obj is Enemy:
+			(owner_obj as Enemy)._pending_queued_spawns -= 1
 		drained += 1
 
 
@@ -3669,15 +4220,20 @@ const CRIT_COLOR := Color(1.0, 0.25, 0.2)
 func _spawn_floating_text(amount: float, is_crit: bool) -> void:
 	var color: Color = CRIT_COLOR if is_crit else DAMAGE_COLOR
 	var amt: int = int(round(amount))
-	if _active_floating_text and is_instance_valid(_active_floating_text):
-		_floating_text_total += amt
-		_active_floating_text.update_text("%d" % _floating_text_total, color)
+	var dn = DamageNumbersScript.get_instance(get_tree())
+	if dn == null:
 		return
-	var ft = FloatingText.instantiate()
-	get_tree().current_scene.add_child(ft)
-	ft.follow_target = self
-	ft.follow_offset = Vector2(0, -30)
-	ft.global_position = global_position + Vector2(0, -30)
+	if _floating_text_id != 0 and dn.is_alive(_floating_text_id):
+		_floating_text_total += amt
+		dn.update_text(_floating_text_id, "%d" % _floating_text_total, color)
+		return
+	## DÜZELTME (kullanıcı bildirimi: "alan hasarı alınca FPS 60'tan 40'a düşüyor" -
+	## gerçek oyunda 200 yaratıkla ölçüldü): her sayı eskiden ayrı bir floating_text
+	## sahnesiydi (6 node + 2 Tween); 200 yaratığa vuran bir alan hasarından sonra
+	## ~35 kare 20ms'yi aşıyordu, sayılar kapatılınca bu ~1'e iniyordu. Önce oluşturma
+	## kuyruğa alınmıştı, yetmedi - asıl maliyet 1000 Label'ın yaşaması/çizilmesiydi.
+	## Artık tüm yaratık hasar sayıları TEK bir DamageNumbers düğümünde kayıt olarak
+	## tutulup tek _draw'da çiziliyor (görünüm floating_text ile aynı). Node
+	## oluşturmadığı için fizik sorgu taşması sırasında da güvenle çağrılabilir.
 	_floating_text_total = amt
-	ft.setup("%d" % amt, color)
-	_active_floating_text = ft
+	_floating_text_id = dn.spawn(self, Vector2(0, -30), "%d" % amt, color)

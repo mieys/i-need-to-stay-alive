@@ -12,17 +12,29 @@ const RADIUS: float = 80.0
 const RING_TEXTURE := preload("res://assets/ui/kit/hud_minimap_ring.png")
 const RING_HALF: float = 92.0
 
-const MAP_MIN: Vector2 = Vector2(0.0, 0.0)
-const MAP_MAX: Vector2 = Vector2(4096.0, 4096.0)
+## Kullanıcı isteği (2026-09-24): "minimap arkaplanında harita düşük kalitede gözüksün. nerde olduğumu anlayamıyorum" -
+## minimap artık OYUNCU MERKEZLİ ve zemininde gerçek haritanın pikselli, düşük çözünürlüklü bir görüntüsü var. Doku
+## tools/bake_minimap.gd ile ÖNCEDEN üretilir (harita değişince yeniden çalıştır): 1 texel = MAP_TEXEL_WORLD dünya pikseli,
+## GameManager.get_map_world_rect() dikdörtgenini + her yanda MAP_PAD_TEXELS kenar payını kapsar. Çalışma anında maliyet
+## tek bir küçük doku + kare başına tek bir dokulu daire çokgeni.
+const MAP_TEXTURE_PATH := "res://assets/ui/minimap_map.png"
+const MAP_TEXEL_WORLD: float = 32.0
+const MAP_PAD_TEXELS: int = 32
+## Ekran pikseli başına dünya pikseli: 1 texel = 2 ekran pikseli (HUD'un 2 px sanat ızgarası). Yarıçap 80 px -> 1280 dünya
+## pikseli görünür (kamera zoom 2'de ekranın ~2.7 katı genişlik).
+const VIEW_WORLD_PER_PX: float = 16.0
+const CIRCLE_SEGMENTS: int = 64
 
-const COLOR_BG: Color = Color(0.06, 0.10, 0.08, 0.85)
+## Kullanıcı isteği (2026-09-24): "mini mapi ... unutma" - minimap de menülerle aynı dile geçti: içi PARŞÖMEN HARİTA (bej,
+## hafif koyu kenar + soluk menzil halkası), noktalar parşömen üstünde okunan koyu doygun tonlar; kuzey artık çerçevedeki
+## "N" levhası (tools/gen_ui_kit.py minimap_ring) - eski sarı nokta kaldırıldı.
+const COLOR_BG: Color = Color("#c8a878")
 const COLOR_BORDER: Color = Color(0.8, 0.75, 0.5, 0.9)
-const COLOR_PLAYER: Color = Color(0.2, 1.0, 0.4, 1.0)
-const COLOR_REMOTE_PLAYER: Color = Color(0.3, 0.6, 1.0, 1.0)
-const COLOR_ENEMY: Color = Color(1.0, 0.2, 0.2, 0.9)
-const COLOR_BOSS: Color = Color(1.0, 0.5, 0.0, 1.0)
-const COLOR_NORTH: Color = Color(1.0, 0.9, 0.4, 0.8)
-const COLOR_MERCHANT: Color = Color(1.0, 0.85, 0.2, 1.0)
+const COLOR_PLAYER: Color = Color("#ffe07a") ## yeşil haritada okunsun diye altın sarısı
+const COLOR_REMOTE_PLAYER: Color = Color("#2a58a8")
+const COLOR_ENEMY: Color = Color("#b8321e")
+const COLOR_BOSS: Color = Color("#d8661a")
+const COLOR_MERCHANT: Color = Color("#d6a23a")
 
 ## Seyyar satıcı belirdiğinde/ayrıldığında main.gd tarafından ayarlanır (bkz.
 ## traveling_merchant.gd -> NetworkManager.merchant_spawned/merchant_departed
@@ -36,13 +48,52 @@ func set_merchant_marker(pos: Vector2, active: bool) -> void:
 	_merchant_marker_active = active
 	queue_redraw()
 
+## Görev sistemi (bkz. world_event_manager.gd/world_event_marker.gd) - satıcının TEK
+## işaretinin aksine aynı anda en fazla 2 görev olabildiği için id'ye göre bir Dictionary.
+## symbol tek karakterlik bir harf/işaret (ör. "!" aktif, "?" uyarı aşaması).
+var _mission_markers: Dictionary = {} ## id -> {"pos": Vector2, "color": Color, "symbol": String}
+
+func set_mission_marker(id: int, pos: Vector2, color: Color, symbol: String) -> void:
+	_mission_markers[id] = {"pos": pos, "color": color, "symbol": symbol}
+	queue_redraw()
+
+func clear_mission_marker(id: int) -> void:
+	_mission_markers.erase(id)
+	queue_redraw()
+
+## "Topla" görevi kristalleri (bkz. world_event_manager.gd COLLECT_ITEM_RATIO notu): görev id -> {index: dünya konumu}.
+## Toplanan kristal remove_collect_dot ile, görev bitince hepsi clear_collect_dots ile kalkar.
+var _collect_dots: Dictionary = {}
+const COLOR_COLLECT := Color("#2f9a8e")
+
+func set_collect_dots(mission_id: int, positions: PackedVector2Array) -> void:
+	var d: Dictionary = {}
+	for i in range(positions.size()):
+		d[i] = positions[i]
+	_collect_dots[mission_id] = d
+	queue_redraw()
+
+func remove_collect_dot(mission_id: int, index: int) -> void:
+	if _collect_dots.has(mission_id):
+		(_collect_dots[mission_id] as Dictionary).erase(index)
+		queue_redraw()
+
+func clear_collect_dots(mission_id: int) -> void:
+	_collect_dots.erase(mission_id)
+	queue_redraw()
+
 var _player: Node = null
 var _enemy_refresh_timer: float = 0.0
 const ENEMY_REFRESH_INTERVAL: float = 0.2
 
 var _alpha: float = 1.0
 
-var _enemy_dots: Array = []
+var _enemy_dots: Array = [] ## {"node": Node2D, "is_boss": bool} - konum çizimde canlı okunur
+var _map_texture: Texture2D = null
+var _map_origin: Vector2 = Vector2.ZERO ## dokunun sol-üst köşesinin dünya konumu
+var _map_world_size: Vector2 = Vector2.ZERO
+## Görünümün dünya merkezi (yerel oyuncu). Ev içindeyken son dış konumda donar - ev içi haritanın dışında bir yerde.
+var _view_center: Vector2 = Vector2(2048.0, 2048.0)
 var _player_dots: Array = []
 var _has_any_player: bool = false
 
@@ -56,10 +107,31 @@ func _ready() -> void:
 	set_process(true)
 	custom_minimum_size = Vector2(RADIUS * 2.0 + 4.0, RADIUS * 2.0 + 4.0)
 	mouse_filter = MOUSE_FILTER_IGNORE
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	if ResourceLoader.exists(MAP_TEXTURE_PATH):
+		_map_texture = load(MAP_TEXTURE_PATH) as Texture2D
+
+
+## Harita dikdörtgeni harita sahnesi yüklenince bulunur (GameManager önbelleğe alır) - bulunana kadar her karede denenir.
+func _ensure_map_mapping() -> void:
+	if _map_world_size != Vector2.ZERO or _map_texture == null:
+		return
+	var rect: Rect2 = GameManager.get_map_world_rect()
+	if rect.size == Vector2.ZERO:
+		return
+	var pad: float = float(MAP_PAD_TEXELS) * MAP_TEXEL_WORLD
+	_map_origin = rect.position - Vector2(pad, pad)
+	_map_world_size = Vector2(_map_texture.get_size()) * MAP_TEXEL_WORLD
 
 func _process(delta: float) -> void:
 	if not _player or not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player")
+	_ensure_map_mapping()
+	if _player and is_instance_valid(_player) and not (_player.has_method("is_indoors_now") and _player.is_indoors_now()):
+		_view_center = (_player as Node2D).global_position
+	## Harita her karede kaymalı (5 Hz'de kayınca takılır) - çizim artık ucuz: tek dokulu çokgen + SADECE görünüm içindeki
+	## düşmanlar (dışarıdakiler çizilmiyor; eskiden hepsi kenara yığılıp çiziliyordu, asıl maliyet oydu).
+	queue_redraw()
 
 	# Collect ALL player positions (local + remote)
 	var player_dots: Array = []
@@ -121,10 +193,10 @@ func _process(delta: float) -> void:
 				var is_boss: bool = false
 				if "is_boss" in enemy:
 					is_boss = bool(enemy.is_boss)
-				dots.append({"pos": enemy.global_position, "is_boss": is_boss})
+				dots.append({"node": enemy, "is_boss": is_boss})
 			_enemy_dots = dots
 
-		## PERF DÜZELTMESİ (profiler: Minimap._draw tek çağrıda ~6ms, düşman
+		## (ESKİ NOT - 2026-09-24'ten beri redraw her kare, bkz. _process başı) PERF DÜZELTMESİ (profiler: Minimap._draw tek çağrıda ~6ms, düşman
 		## sayısı arttıkça büyüyor - immediate-mode draw_circle her nokta için
 		## ayrı bir RenderingServer çağrısı). Eskiden queue_redraw() HER FRAME
 		## (saniyede 60 kez) tetikleniyordu, halbuki düşman verisi zaten
@@ -133,28 +205,45 @@ func _process(delta: float) -> void:
 		## bağladık: minimap artık saniyede 5 kez çiziliyor, oyuncu noktaları
 		## da bu aralıkta güncelleniyor (küçük köşe UI'ı için gözle fark
 		## edilmez bir ödün, ama büyük CPU kazancı).
-		queue_redraw()
 
 func _draw() -> void:
 	var center: Vector2 = Vector2(RADIUS + 2.0, RADIUS + 2.0)
 
-	# --- Draw solid green-tinted background ---
+	# --- Zemin: pikselli harita dokusu (yoksa/harita henüz bulunamadıysa düz parşömen) ---
 	draw_circle(center, RADIUS, COLOR_BG)
-	draw_circle(center, RADIUS - 2.0, Color(0.15, 0.28, 0.12, 0.6))
+	if _map_texture and _map_world_size != Vector2.ZERO:
+		## Merkez 1 ekran pikseline (VIEW_WORLD_PER_PX) oturtuluyor - texel sınırları hep tam piksele düşer, kayarken
+		## texel genişlikleri 2/3 px arasında titremez.
+		var snapped_center: Vector2 = _map_origin + ((_view_center - _map_origin) / VIEW_WORLD_PER_PX).round() * VIEW_WORLD_PER_PX
+		var pts := PackedVector2Array()
+		var uvs := PackedVector2Array()
+		for i in CIRCLE_SEGMENTS:
+			var a: float = TAU * float(i) / float(CIRCLE_SEGMENTS)
+			var o: Vector2 = Vector2(cos(a), sin(a)) * RADIUS
+			pts.append(center + o)
+			uvs.append((snapped_center + o * VIEW_WORLD_PER_PX - _map_origin) / _map_world_size)
+		draw_polygon(pts, PackedColorArray([Color.WHITE]), uvs, _map_texture)
 
 	# --- Düşman noktaları ---
 	for dot: Dictionary in _enemy_dots:
-		var epos: Vector2 = _world_to_map(dot["pos"] as Vector2)
+		var enode_ref: Variant = dot["node"]
+		if not is_instance_valid(enode_ref):
+			continue
+		var enode: Node2D = enode_ref as Node2D
+		var is_boss: bool = dot["is_boss"] as bool
+		var epos: Vector2 = _world_to_map(enode.global_position)
 		var offset: Vector2 = epos - center
 		if offset.length() > RADIUS - 4.0:
+			## Görünüm dışındaki sıradan düşmanlar çizilmez; boss yön göstergesi olarak kenarda kalır.
+			if not is_boss:
+				continue
 			offset = offset.normalized() * (RADIUS - 4.0)
 			epos = center + offset
 
-		var is_boss: bool = dot["is_boss"] as bool
 		var ecol: Color = COLOR_BOSS if is_boss else COLOR_ENEMY
 		var esize: float = 5.0 if is_boss else 3.0
 		var half: float = float(int(esize)) # kare nokta (2 px ızgarasına oturur)
-		draw_rect(Rect2((epos - Vector2(half, half)).round(), Vector2(half * 2.0, half * 2.0)), Color(0.15, 0.04, 0.04, 0.9))
+		draw_rect(Rect2((epos - Vector2(half, half)).round(), Vector2(half * 2.0, half * 2.0)), Color("#3a2213"))
 		draw_rect(Rect2((epos - Vector2(half - 1.0, half - 1.0)).round(), Vector2((half - 1.0) * 2.0, (half - 1.0) * 2.0)), ecol)
 
 	# --- Tüm oyuncu noktaları ---
@@ -196,22 +285,35 @@ func _draw() -> void:
 		draw_string(ThemeDB.fallback_font, mpos + Vector2(-3.0, 3.0), "$",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.15, 0.1, 0.0, 1.0))
 
-	# --- Kuzey yönü göstergesi ---
-	var north_pos: Vector2 = center + Vector2(0, -(RADIUS - 8.0))
-	draw_circle(north_pos, 4.0, COLOR_NORTH)
-	draw_string(ThemeDB.fallback_font, north_pos + Vector2(-3.0, 4.0), "N",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.1, 0.1, 0.1, 1.0))
+	# --- "Topla" kristalleri: küçük turkuaz elmaslar (2 px ızgaraya oturan, koyu konturlu) ---
+	for mid in _collect_dots.keys():
+		for idx in (_collect_dots[mid] as Dictionary).keys():
+			var cpos: Vector2 = _world_to_map((_collect_dots[mid] as Dictionary)[idx]).round()
+			if cpos.distance_to(center) > RADIUS - 3.0:
+				continue
+			draw_rect(Rect2(cpos - Vector2(2, 2), Vector2(4, 4)), Color("#3a2213"))
+			draw_rect(Rect2(cpos - Vector2(1, 1), Vector2(2, 2)), COLOR_COLLECT)
+
+	# --- Görev işaretleri (bkz. world_event_manager.gd) ---
+	for id in _mission_markers.keys():
+		var m: Dictionary = _mission_markers[id]
+		var wpos: Vector2 = _world_to_map(m["pos"])
+		var woffset: Vector2 = wpos - center
+		if woffset.length() > RADIUS - 5.0:
+			woffset = woffset.normalized() * (RADIUS - 5.0)
+			wpos = center + woffset
+		draw_circle(wpos, 6.0, m["color"])
+		draw_circle(wpos, 6.0, Color(0.1, 0.1, 0.1, 0.6), false, 1.5)
+		draw_string(ThemeDB.fallback_font, wpos + Vector2(-3.0, 3.0), String(m["symbol"]),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.1, 0.05, 0.0, 1.0))
 
 	# --- Piksel ahşap halka çerçeve (kenarlık) ---
 	draw_texture(RING_TEXTURE, center - Vector2(RING_HALF, RING_HALF))
 
+## Oyuncu merkezli: görünüm merkezine göre dünya -> minimap. Daire dışına düşen noktayı çağıran taraf kenara kıstırır/eler.
 func _world_to_map(world: Vector2) -> Vector2:
 	var center: Vector2 = Vector2(RADIUS + 2.0, RADIUS + 2.0)
-	var map_size: Vector2 = MAP_MAX - MAP_MIN
-	var t: Vector2 = (world - MAP_MIN) / map_size
-	t = t.clamp(Vector2.ZERO, Vector2.ONE)
-	var usable: float = RADIUS - 5.0
-	return center + (t - Vector2(0.5, 0.5)) * 2.0 * usable
+	return center + (world - _view_center) / VIEW_WORLD_PER_PX
 
 ## #29: karakter portresini Characters.DEFS[char_id]["portrait"]'ten yükleyip
 ## önbelleğe alır. Bulunamazsa null döner (çağıran taraf eski nokta çizimine

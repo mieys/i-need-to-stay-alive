@@ -1,5 +1,6 @@
 extends Node
 
+const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 
 ## "Body block" sınırının (bkz. enemy.gd PLAYER_BODY_RADIUS/_body_radius ve
@@ -29,6 +30,16 @@ const AOE_DAMAGE_EFFECTIVENESS := 0.33
 
 var game_time: float = 0.0
 var is_game_over: bool = false
+
+## Debug modu (kullanıcı isteği, 2026-09-24): chate "baykusseverim" yazılınca (bkz. hud.gd
+## _on_chat_input_submitted) YA DA ana menüden "Debug Modu" ile başlayınca (bkz. main_menu.gd)
+## açılıyor - bkz. scripts/debug_menu.gd. Diğer sistemler (player.gd take_damage, enemy_spawner.gd
+## spawn tetikleyicisi) bu üç bayrağı doğrudan okuyor, ayrı bir sinyal/RPC gerekmiyor: hepsi SADECE
+## bu istemcinin KENDİ yerel deneyimini etkiliyor (ölümsüzlük/spawn kapatma başka oyunculara
+## YAYILMIYOR - bkz. debug_menu.gd dosya başı notu, çok oyunculuda bilerek böyle).
+var debug_mode_unlocked: bool = false
+var debug_immortal: bool = false
+var debug_enemy_spawns_enabled: bool = true
 
 ## DÜZELTME (kullanıcı isteği: "3 dakikada bir açılan dükkan sadece level
 ## atlama ekranından sonra çıkmalı, oyun daha başlamadan öyle açılmalı") -
@@ -240,6 +251,8 @@ enum JoypadKind { BUTTON, AXIS }
 
 
 func _ready() -> void:
+	## Fizik interpolasyonu: kökte KAPALI, sadece opt_in'li varlıklar açık (bkz. physics_interp.gd).
+	PhysicsInterp.setup_root(get_tree())
 	_load_keybind_overrides()
 	_setup_input_actions()
 
@@ -694,6 +707,18 @@ const LEVEL_UP_GOLD_REWARD := 1
 
 signal team_xp_changed(current: float, needed: float)
 signal team_leveled_up(new_level: int)
+## Görev sistemi (bkz. world_event_manager.gd) için: bir yaratık öldüğünde HOST'ta yayınlanır
+## (enemy.gd die() zaten sadece host'ta çalışıyor - bkz. o fonksiyonun dosya başı notu). "Alanı
+## Güvenceye Al" görevi bunu dinleyip ölüm konumu görev alanının içindeyse sayacı artırır.
+## Ayrı bir RPC/ağ senkronu GEREKMİYOR: world_event_manager zaten sadece host'ta sayıyor ve
+## ilerlemeyi (bkz. broadcast_world_event_progress) kendi standart yayınıyla istemcilere iletiyor.
+signal enemy_died(death_pos: Vector2)
+## "Ağacı Koru" görevi (bkz. world_event_manager.gd/mission_tree.gd) aktifken yaratıkların
+## _apply_aggro_overrides ile hedefini buraya yönlendirmesi için - merchant_zone_pos/active
+## İLE AYNI desen (paylaşılan global durum GameManager üzerinden). enemy.gd SADECE host'ta
+## çalıştığı için bu değer client'larda hiç okunmaz/önemli değildir.
+var defend_tree_active: bool = false
+var defend_tree_ref: Node2D = null
 
 func add_team_xp(amount: float) -> void:
 	if amount <= 0.0 or is_game_over:

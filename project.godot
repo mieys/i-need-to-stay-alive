@@ -38,6 +38,7 @@ window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/size/mode=3
 window/stretch/mode="canvas_items"
+window/vsync/vsync_mode=0
 
 [editor_plugins]
 
@@ -50,8 +51,8 @@ theme/custom="res://assets/fonts/theme.tres"
 [physics]
 
 2d/run_on_separate_thread=true
-"physics_interpolation kapalı + Camera2D.position_smoothing açık##(karaktertitriyordu-kamerakarakterinGERÃEKkonumunungerisindekalÄ±p##yumuÅakÃ§atakipettiÄiiÃ§inikisiarasÄ±ndasÃ¼reklibirkaymaoluÅuyordu)##Ã§Ã¶zÃ¼msÃ¼zdÃ¼.KameraPlayer'Ä±nDOÄRUDANÃ§ocuÄuolduÄuiÃ§in(bkz.player.tscn)##hiÃ§smoothing/lagOLMADANfizik-interpolasyonuaÃ§Ä±ksa,kameravekarakter##MATEMATÄ°KSELOLARAKbirbirinekilitlikalÄ±r(ikisideAYNIinterpolasyon##kesirinikullanÄ±r)-karakterekrandakusursuzsabitdurur,zeminde##(bkz.Camera2Dzoom"=2.0
-"shimmeroluÅmuyor).common/physics_interpolation"=true
+common/max_physics_steps_per_frame=3
+common/physics_interpolation=true
 
 [rendering]
 

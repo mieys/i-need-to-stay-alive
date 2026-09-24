@@ -2,7 +2,7 @@ extends Node2D
 
 ## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
 const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
-const PixelDraw := preload("res://scripts/pixel_draw.gd")
+const LoopFrames := preload("res://assets/fx/buyucu_tornado/loop_frames.tres")
 
 ## Büyücü Kız'ın TEMEL yeteneğinin 3. varyasyonu ("Hortum") için bağımsız
 ## bir hortum varlığı - bkz. player.gd _skill_buyucu_tornado(). Oyuncunun
@@ -19,6 +19,19 @@ const PixelDraw := preload("res://scripts/pixel_draw.gd")
 ## istemcide gerçek yapay zeka/hasar çalışır, diğer istemcilerde SADECE
 ## kozmetik bir kopya (mark_as_network_visual) son bildirilen konuma
 ## yumuşakça kayar.
+##
+## DÜZELTME (kullanıcı bildirimi 2026-09-24: "büyücü kızın hortumu... fps düşürüyor" - bkz.
+## performans denetimi): GÖRÜNÜM artık PROSEDUREL DEĞİL. Eskiden _draw() içinde huni gövdesi +
+## katmanlı halkalar + döküntü/kıvılcımlar karede ~1100 draw_rect() çağrısıyla YENİDEN
+## ÇİZİLİYORDU - bu varyasyon AYNI ANDA 3 hortum çağırdığı (BUYUCU_TORNADO_COUNT) ve her biri
+## 15 saniye yaşadığı için karede ~3300+ çağrı, Matthew'in kalkanıyla (kullanıcının zaten
+## bulduğu -100fps) AYNI CİDDİYETTE bir düşüşe yol açıyordu. Artık görünüm tools/gen_heavy_fx_
+## perf_sprite.py ile PNG'ye "pişirildi" (assets/fx/buyucu_tornado/loop_sheet.png, huninin
+## kendi dönüş hızıyla - TORNADO_SPIN_RATE=6.0 - TAM BİR periyot, 36 kare, ~1.05sn - SESSİZ
+## DÖNGÜ) ve tek bir AnimatedSprite2D çizimiyle oynatılıyor: draw_rect sayısı ~1100 -> 1'e indi.
+## ÖLÇEK NOTU: PNG "1 raster piksel = 1 world birimi" pişirildi (bkz. o script'in ÖLÇEK NOTU) -
+## PixelDraw.TEXEL ile AYRICA ölçeklenmez, sadece _ready()'deki mevcut 1.05 kullanıcı-boyut
+## çarpanı korunur.
 
 var owner_player: Node2D = null
 var origin: Vector2 = Vector2.ZERO
@@ -34,7 +47,6 @@ var _target_pos: Vector2 = Vector2.ZERO
 ## 170.0'ın %60'ı (170 * 0.6 = 102).
 var _speed: float = 102.0
 var _hit_timers: Dictionary = {} ## enemy instance_id -> kalan bekleme (sn)
-var _spin: float = 0.0
 
 ## bkz. skeleton_pet.gd dosya başındaki "kozmetik kopya" notu - AYNI desen.
 var network_instance_id: String = ""
@@ -47,16 +59,28 @@ func mark_as_network_visual() -> void:
 	_is_network_visual = true
 
 
-## Kullanıcı isteği: "hortumlarını ... %20 küçült" - node'un tüm çizimi
-## (_draw) kendi yerel orijinine göre yapılıyor, bu yüzden scale'i %80'e
-## indirmek görseli orantılı küçültüyor. touch_radius (isabet/hasar
-## menzili) BİLEREK değiştirilmedi - istek sadece görsel küçültme,
-## yeteneğin etki alanını değiştirmek değildi.
+## Kullanıcı isteği: "hortumlarını ... %20 küçült" - eski _draw() kendi yerel
+## orijinine göre çiziyordu, bu yüzden scale'i %80'e indirmek görseli
+## orantılı küçültüyordu; artık AnimatedSprite2D için AYNI scale kullanılıyor.
+## touch_radius (isabet/hasar menzili) BİLEREK değiştirilmedi - istek sadece
+## görsel küçültme, yeteneğin etki alanını değiştirmek değildi.
 ## DÜZELTME: bu artık _ready()'de (setup() DEĞİL) uygulanıyor - kozmetik
 ## kopyada hiç setup() çağrılmıyor (bkz. skeleton_pet.gd'deki AYNI desen),
 ## ama görsel ölçeği yine de doğru olmalı.
 func _ready() -> void:
 	scale = Vector2(1.05, 1.05)
+	var sprite := AnimatedSprite2D.new()
+	sprite.sprite_frames = LoopFrames
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.centered = false
+	## bkz. tools/gen_heavy_fx_perf_sprite.py gen_tornado() - PNG'de huninin YERE değdiği nokta
+	## (yerel (0,0)) raster (cx=70, cy=95) - offset bu noktayı node orijinine hizalar.
+	sprite.offset = Vector2(-70.0, -95.0)
+	## Her hortum örneği kendi rastgele başlangıç fazından başlasın (üçü aynı anda doğuyor,
+	## hepsi TIPATIP aynı karede olursa "tek hortumun 3 kopyası" hissi verir).
+	sprite.frame = randi() % LoopFrames.get_frame_count("loop")
+	add_child(sprite)
+	sprite.play("loop")
 
 
 func setup(p_owner: Node2D, p_origin: Vector2, p_radius: float, p_damage: float,
@@ -95,7 +119,6 @@ func _pick_new_target() -> void:
 
 
 func _process(delta: float) -> void:
-	queue_redraw()
 	if _is_network_visual:
 		_process_network_visual(delta)
 		return
@@ -103,7 +126,6 @@ func _process(delta: float) -> void:
 	if _elapsed >= lifetime:
 		queue_free()
 		return
-	_spin += delta * 6.0
 
 	var to_target: Vector2 = _target_pos - global_position
 	if to_target.length() < 24.0:
@@ -165,102 +187,5 @@ func update_network_pet_state(pos: Vector2, _is_attacking: bool, _sprite_row: in
 
 
 func _process_network_visual(delta: float) -> void:
-	_spin += delta * 6.0
 	if _network_state_received:
 		global_position = global_position.lerp(_network_target_position, min(1.0, delta * 10.0))
-	
-
-
-## ---------------------------------------------------------------- GÖRÜNÜM (kullanıcı isteği 2026-09-22: "hortum efektini sıfırdan, daha iyi, pixel tarzda")
-## Eski hâli 48x48 raster sprite'tı. Yeni hortum tamamen prosedürel 1-texel pixel-art (gerçek pet/kozmetik kopya AYNI sahneyi + script'i kurar,
-## yani her istemcide aynı görünür): sallanan koni gövde + yatay dönen rüzgar şeritleri (perspektifli: ön tarafta uzun/parlak, arkada kısa/soluk) +
-## kat kat dönen kesikli halkalar + tepede bulut başlığı + spiral yükselen döküntü + arcane (mor) kıvılcımlar + yerde toz halkası ve gölge.
-const FUNNEL_H := 84.0 ## huni yüksekliği (px)
-const R_BOTTOM := 5.0
-const R_TOP := 27.0
-const BASE_Y := 12.0 ## huni tabanının (yer temas noktası) node orijinine göre y'si
-const C_DARK := Color(0.26, 0.34, 0.62, 1.0)
-const C_MID := Color(0.56, 0.75, 0.96, 1.0)
-const C_LIGHT := Color(0.9, 0.97, 1.0, 1.0)
-const C_ARCANE := Color(0.84, 0.58, 1.0, 1.0)
-const C_DUST := Color(0.72, 0.66, 0.56, 1.0)
-
-
-func _funnel_radius(h: float) -> float:
-	return lerpf(R_BOTTOM, R_TOP, pow(h, 1.3))
-
-
-func _funnel_center(h: float) -> Vector2:
-	return Vector2(sin(_spin * 0.55 + h * 3.4) * 4.0 * h, BASE_Y - FUNNEL_H * h)
-
-
-## Perspektifli (yassı) elips halka: ön yarı (sin>0) parlak, arka yarı soluk; dashed ise her 3. nokta atlanır (dönüyormuş hissi için phase kayar).
-func _ellipse_ring(center: Vector2, rx: float, ry: float, phase: float, front_col: Color, back_col: Color, dashed: bool) -> void:
-	var n: int = maxi(16, int(TAU * rx / PixelDraw.TEXEL))
-	for i in range(n):
-		if dashed and (i % 3) == 0:
-			continue
-		var a: float = TAU * float(i) / float(n) + phase
-		var front: bool = sin(a) > 0.0
-		PixelDraw.px(self, center + Vector2(cos(a) * rx, sin(a) * ry), 1, front_col if front else back_col)
-
-
-func _draw() -> void:
-	var t: float = PixelDraw.TEXEL
-	## --- Yer gölgesi: yassı dither elips ---
-	var sh_rx: int = int(17.0 / t)
-	var sh_ry: int = int(5.5 / t)
-	for iy in range(-sh_ry, sh_ry + 1):
-		var hw: int = int(float(sh_rx) * sqrt(maxf(0.0, 1.0 - pow(float(iy) / float(maxi(sh_ry, 1)), 2.0))))
-		for ix in range(-hw, hw + 1):
-			if ((ix + iy) & 1) == 0:
-				PixelDraw.px(self, Vector2(float(ix) * t, BASE_Y + 3.0 + float(iy) * t), 1, Color(0.0, 0.0, 0.0, 0.34))
-	## --- Taban toz halkası (yatay dönen) ---
-	_ellipse_ring(Vector2(0, BASE_Y + 2.0), 15.0, 4.6, _spin * 1.4, Color(C_DUST, 0.75), Color(C_DUST, 0.3), true)
-	_ellipse_ring(Vector2(0, BASE_Y + 3.0), 21.0, 6.4, -_spin * 1.0, Color(C_DUST, 0.42), Color(C_DUST, 0.16), true)
-	## --- Gövde: satır satır (her satır 1 texel): yarı saydam koyu taban, kenar konturu, dönen rüzgar şeritleri ---
-	var rows: int = int(FUNNEL_H / t)
-	for r in range(rows + 1):
-		var h: float = float(r) / float(rows)
-		var c: Vector2 = _funnel_center(h)
-		var rad: float = _funnel_radius(h)
-		var half_w: int = int(rad / t)
-		if half_w < 1:
-			continue
-		PixelDraw.rect(self, c, half_w * 2, 1, Color(C_DARK, 0.4))
-		PixelDraw.px(self, c + Vector2(-rad, 0), 1, Color(C_DARK, 0.95))
-		PixelDraw.px(self, c + Vector2(rad, 0), 1, Color(C_DARK, 0.95))
-		PixelDraw.px(self, c + Vector2(-rad + t, 0), 1, Color(C_MID, 0.55)) ## ışık alan sol kenar
-		for k in range(4):
-			var theta: float = _spin * (1.5 + 0.6 * (1.0 - h)) - h * 7.0 + float(k) * TAU / 4.0
-			var cs: float = cos(theta)
-			if cs < -0.25:
-				continue ## arka yüz (gövdenin gerisinde) - çizilmez
-			var x: float = c.x + sin(theta) * rad * 0.92
-			var len_t: int = int(2.0 + 3.0 * absf(cs))
-			PixelDraw.rect(self, Vector2(x, c.y), len_t, 1, Color(C_LIGHT, 0.95) if cs > 0.2 else Color(C_MID, 0.6))
-	## --- Kat kat dönen kesikli halkalar (huniye hacim verir) ---
-	for h2 in [0.1, 0.28, 0.46, 0.64, 0.82, 1.0]:
-		var c2: Vector2 = _funnel_center(h2)
-		var rad2: float = _funnel_radius(h2)
-		_ellipse_ring(c2, rad2, rad2 * 0.3, _spin * (1.2 + h2) + h2 * 5.0, Color(C_LIGHT, 0.85), Color(C_MID, 0.3), true)
-	## --- Tepede bulut başlığı: geniş, koyu iki halka + arcane parıltı ---
-	var top: Vector2 = _funnel_center(1.0)
-	_ellipse_ring(top + Vector2(0, -2.0), R_TOP + 5.0, (R_TOP + 5.0) * 0.28, -_spin * 0.8, Color(C_DARK, 0.9), Color(C_DARK, 0.4), false)
-	_ellipse_ring(top + Vector2(0, -4.0), R_TOP - 6.0, (R_TOP - 6.0) * 0.26, _spin * 0.6, Color(C_ARCANE, 0.55), Color(C_ARCANE, 0.2), true)
-	## --- Spiral yükselen döküntü (yaprak/toz taneleri): yükseldikçe geniş ---
-	for i in range(11):
-		var hh: float = fposmod(float(i) * 0.37 + _spin * 0.06 * (1.0 + 0.25 * float(i % 3)), 1.0)
-		var ang: float = _spin * 2.6 + float(i) * 2.4
-		var cc: Vector2 = _funnel_center(hh)
-		var rr: float = _funnel_radius(hh) * 1.2
-		var p: Vector2 = cc + Vector2(cos(ang) * rr, sin(ang) * rr * 0.3)
-		var debris: Color = [Color(0.36, 0.26, 0.18), Color(0.4, 0.62, 0.3), C_LIGHT][i % 3]
-		PixelDraw.px(self, p, 1, Color(debris, 0.95 if sin(ang) > -0.2 else 0.4))
-	## --- Arcane (mor) kıvılcımlar: hızlı yörünge ---
-	for i in range(5):
-		var h3: float = 0.15 + 0.16 * float(i)
-		var ang2: float = -_spin * 3.6 + float(i) * 1.7
-		var c3: Vector2 = _funnel_center(h3)
-		var rr3: float = _funnel_radius(h3) * 1.05
-		PixelDraw.px(self, c3 + Vector2(cos(ang2) * rr3, sin(ang2) * rr3 * 0.3), 1, Color(C_ARCANE, 0.95))

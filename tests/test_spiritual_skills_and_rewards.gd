@@ -427,25 +427,35 @@ func test_oakley_r_leaf_barrier_follows_bond_flag_and_bursts_on_hit() -> void:
 	_cleanup()
 
 
-func test_shield_hit_fx_is_pixel_procedural_and_self_removes() -> void:
+## DÜZELTME (kullanıcı isteği 2026-09-23, "en ucuz olanı yap"): Şovalye bariyerini saran bir
+## yaratık sürüsünde her isabet bu efekti prosedürel olarak (~1200 draw_rect()/kare) yeniden
+## çiziyordu, FPS 10'a düşüyordu. GÖRÜNÜM AYNI kaldı (aynı baloncuk+çatlak tasarımı) ama artık
+## tools/gen_perf_sprite_fx.py ile PNG'ye pişirildi ve TEK bir AnimatedSprite2D ile oynatılıyor -
+## bu, eski "prosedürel kalsın" testinin (bu fonksiyonun eski hali) tam tersini doğruluyor; o
+## test farklı (beğenilmeyen, hexagon-hücreli) bir ESKİ sprite tasarımına karşı yazılmıştı, bu
+## AYNI güncel tasarımın sadece render yöntemini değiştiriyor.
+func test_shield_hit_fx_is_baked_sprite_and_self_removes() -> void:
 	var script: GDScript = load("res://scripts/fx_shield_hit.gd")
 	var fx: Node2D = Node2D.new()
 	fx.set_script(script)
 	add_child(fx)
 	_spawned.append(fx)
 	fx.setup(1.2)
-	assert(not ("_sprite" in fx), "eski sprite tabanlı efekt kalmamalı (artık prosedürel pixel)")
-	fx._process(0.1)
-	assert(not fx.is_queued_for_deletion(), "0.1sn'de hâlâ görünür")
-	fx._process(0.5)
-	assert(fx.is_queued_for_deletion(), "ömrü bitince kendini silmeli")
-	## Paladin bariyeri kendi yarıçapını verebilmeli.
+	assert(fx._sprite is AnimatedSprite2D, "artık baked AnimatedSprite2D ile oynatılıyor")
+	assert(fx._sprite.is_playing(), "setup() hemen bir varyant oynatmalı")
+	assert(is_equal_approx(fx._sprite.scale.x, 1.0), "varsayılan (REFERENCE_RADIUS) yarıçapta ölçek 1 olmalı")
+	## AnimatedSprite2D'nin kendi iç zamanlayıcısı manuel _process() çağrısına yanıt vermediği
+	## için gerçek 0.55sn'yi engine frame'i olmadan simüle edemeyiz - animation_finished ->
+	## queue_free() bağlantısını doğrudan sinyali tetikleyerek test ediyoruz.
+	fx._sprite.animation_finished.emit()
+	assert(fx.is_queued_for_deletion(), "animasyon bitince kendini silmeli")
+	## Paladin bariyeri kendi yarıçapını verebilmeli - artık _radius yerine sprite ölçeğine yansır.
 	var fx2: Node2D = Node2D.new()
 	fx2.set_script(script)
 	add_child(fx2)
 	_spawned.append(fx2)
 	fx2.setup(0.3, 126.0)
-	assert(is_equal_approx(fx2._radius, 126.0), "yarıçap parametresi")
+	assert(is_equal_approx(fx2._sprite.scale.x, 126.0 / 40.0), "yarıçap oranı sprite ölçeğine yansımalı")
 
 
 func test_oakley_vine_uses_pixel_visual_and_bee_ring_spawns_bees() -> void:

@@ -31,9 +31,6 @@ var _has_chosen: bool = false
 @onready var countdown_panel: PanelContainer = $CenterContainer/VBox/CountdownPanel
 @onready var countdown_label: Label = $CenterContainer/VBox/CountdownPanel/VBox/CountdownLabel
 
-const PAL_CONTENT_BG := Color(0.239, 0.2, 0.149, 1.0)
-const PAL_ACCENT := Color(0.83, 0.56, 0.30, 1.0)
-
 # Chest tier titles and borders
 const CHEST_TITLES := {
 	0: "KADEME 1-2 SANDIK",
@@ -65,19 +62,20 @@ const CHEST_TEXTURES := {
 ## uzatıyordu. Artık içerik, çerçevenin İÇİNDEKİ alana oturuyor (level_up_screen.tscn Content kutusu 28/54/28/52'ydi ama yan çubuklara
 ## değiyordu - burada biraz daha dar); yazı boyutları o alana göre seçiliyor (_fit_card_texts: isim tek satıra, açıklama alana SIĞANA kadar küçülür).
 const CARD_SIZE := Vector2(300, 480)
-## Yanlar 46: çerçevenin yan çubukları kart kenarından ~32-42 px arasında (28 olunca yazı/butonlar çubuğa biniyordu); üst 64: üstteki
-## elmas süsü kart içine ~57 px sarkıyor (54'te tier yazısı elmasın altına giriyordu).
-const CARD_PAD_LEFT := 46
-const CARD_PAD_RIGHT := 46
-const CARD_PAD_TOP := 64
-const CARD_PAD_BOTTOM := 52
-const CARD_TIER_FONT_SIZE := 20
+## 2026-09-24: kartlar oyun içi bej kitin tier kartları (tools/gen_menu_kit.py tier_card, 100x160 sanat px = 300x480) - çerçeve +
+## emaye bant tam 7 sanat px (21 px), üst taş kartın içine yalnız ~27 px sarkıyor; tier yazısı kartın tier renkli başlık bandına
+## (21..54 px) oturuyor. Eski süslü hazır çizim için gereken 46/64/52'lik geniş paylar artık gereksiz (iç alan daralıyordu).
+const CARD_PAD_LEFT := 27
+const CARD_PAD_RIGHT := 27
+const CARD_PAD_TOP := 24
+const CARD_PAD_BOTTOM := 27
+const CARD_TIER_FONT_SIZE := 24
 const CARD_NAME_FONT_SIZE := 34
 const CARD_NAME_MIN_FONT_SIZE := 20
 const CARD_DESC_FONT_SIZE := 24
 const CARD_DESC_MIN_FONT_SIZE := 13
 const CARD_ICON_SIZE := 64.0
-const CARD_BUTTON_HEIGHT := 38.0
+const CARD_BUTTON_HEIGHT := 44.0
 const CARD_BUTTON_FONT_SIZE := 24
 const CHEST_ICON_DISPLAY_SIZE := 176.0 ## kullanıcı isteği: "biraz görünür olmalı boyut olarak"
 const CHEST_OPEN_FRAME_DELAY := 0.15 ## dünya sandığındaki 0.08sn'den biraz daha yavaş - UI'da daha net okunsun diye
@@ -152,10 +150,28 @@ func setup(player: Node, chest_tier: int) -> void:
 	if cards_container:
 		cards_container.add_theme_constant_override("separation", 20)
 
-	# Load theme
-	var theme_res = load("res://assets/fonts/theme.tres")
-	if theme_res and has_node("Dim"):
-		$Dim.theme = theme_res
+	## 2026-09-24: oyun içi bej kit (menülerle aynı dil, bir ton koyu): sıcak karartma, kurdele başlık, kit penceresinde geri
+	## sayım; kart içi yazılar koyu (CanvasLayer temayı aktarmaz - kök Control'e verilir).
+	if has_node("Dim"):
+		($Dim as ColorRect).color = Color(0.12, 0.07, 0.03, 0.62)
+	var center_node: Control = get_node_or_null("CenterContainer") as Control
+	if center_node:
+		center_node.theme = UIKit.theme()
+	if title_label:
+		title_label.add_theme_stylebox_override("normal", UIKit.panel_style("banner"))
+		UIKit.style_label(title_label, UIKit.FS_TITLE, UIKit.C_TEXT, 0)
+		title_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		title_label.custom_minimum_size = Vector2(0, 72)
+		title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var cd_panel: PanelContainer = get_node_or_null("CenterContainer/VBox/CountdownPanel") as PanelContainer
+	if cd_panel:
+		cd_panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+		var wl: Label = cd_panel.get_node_or_null("VBox/WaitingLabel") as Label
+		if wl:
+			wl.add_theme_color_override("font_color", UIKit.C_TEXT)
+		var cl: Label = cd_panel.get_node_or_null("VBox/CountdownLabel") as Label
+		if cl:
+			cl.add_theme_color_override("font_color", UIKit.C_GOLD)
 
 	# Update Title
 	if title_label:
@@ -317,6 +333,33 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 				countdown_label.text = "%ds" % int(ceil(NetworkManager.chest_countdown))
 
 
+## Kullanıcı isteği (2026-09-24): "sandık açma kartında 1 tuşu alma tuşunu 2 tuşu satma tuşunu tetikleyecek şekilde
+## kısayollansın. butonlara dokunma" - level_up_screen.gd _unhandled_input'la AYNI desen: tuş, ilgili butonun pressed
+## sinyalini (fare tıklamasıyla birebir aynı yol) tetikler; butonların kendisi/görünümü değişmedi. Kart henüz açılış
+## animasyonundayken (kart yok), AL devre dışıyken (SLOTLAR DOLU) ya da sohbet yazılırken hiçbir şey yapmaz.
+func _unhandled_input(event: InputEvent) -> void:
+	if _has_chosen or not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	var meta_key: String = ""
+	match event.keycode:
+		KEY_1, KEY_KP_1:
+			meta_key = "al_button"
+		KEY_2, KEY_KP_2:
+			meta_key = "sat_button"
+	if meta_key == "" or not cards_container:
+		return
+	if _player and is_instance_valid(_player) and bool(_player.get("is_chat_typing")):
+		return
+	for card in cards_container.get_children():
+		if not card.has_meta(meta_key):
+			continue
+		var btn: Button = card.get_meta(meta_key)
+		if is_instance_valid(btn) and not btn.disabled:
+			get_viewport().set_input_as_handled()
+			btn.pressed.emit()
+		return
+
+
 func _on_countdown_tick(remaining: float) -> void:
 	if countdown_panel:
 		countdown_panel.visible = true
@@ -446,7 +489,7 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	## (2026-09-21) 46 -> 34: kart iç alanı 244 px genişliğinde (bkz. CARD_PAD_*); isim önce tek satıra sığacak şekilde küçültülür
 	## (_fit_card_texts), o da yetmeyen çok uzun isimler alt satıra kayar (autowrap).
 	name_lbl.add_theme_font_size_override("font_size", CARD_NAME_FONT_SIZE)
-	name_lbl.add_theme_color_override("font_color", PAL_ACCENT)
+	name_lbl.add_theme_color_override("font_color", UIKit.C_ACCENT)
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	name_lbl.clip_text = false
 	vbox.add_child(name_lbl)
@@ -476,7 +519,7 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	desc_lbl.text = "[center]%s[/center]" % desc_text.replace("[", "[lb]")
-	desc_lbl.add_theme_color_override("default_color", Color(0.96, 0.93, 0.86, 1.0))
+	desc_lbl.add_theme_color_override("default_color", UIKit.C_TEXT)
 	_set_desc_font_size(desc_lbl, CARD_DESC_FONT_SIZE)
 	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(desc_lbl)
@@ -517,7 +560,8 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	## yapıp dışlarına siyah kontür ekle") - eskiden burada krem rengi bir
 	## font_color override'ı vardı, artık kaldırıldı ki tüm butonlarla AYNI
 	## şekilde temanın (theme.tres) beyaz+siyah kontürlü varsayılanını alsın.
-	ShopPanel._apply_wood_button_style(al_btn)
+	## 2026-09-24: AL = onay (adaçayı), SAT = ten - kit butonları, koyu yazı.
+	UIKit.style_button(al_btn, "green", false, CARD_BUTTON_FONT_SIZE)
 	if has_slots:
 		al_btn.text = "AL"
 	else:
@@ -535,10 +579,11 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	sat_btn.custom_minimum_size = Vector2(0, CARD_BUTTON_HEIGHT)
 	sat_btn.add_theme_font_size_override("font_size", CARD_BUTTON_FONT_SIZE)
 	## bkz. al_btn üstündeki ayni not - font_color override'i kaldirildi.
-	ShopPanel._apply_wood_button_style(sat_btn)
+	UIKit.style_button(sat_btn, "wood", false, CARD_BUTTON_FONT_SIZE)
 	sat_btn.text = "SAT (+%d Altın)" % refund_gold
 	sat_btn.pressed.connect(_on_sat_pressed.bind(item_key, refund_gold))
 	vbox.add_child(sat_btn)
+	card.set_meta("sat_button", sat_btn) ## bkz. _unhandled_input (2 kısayolu)
 	
 	return card
 

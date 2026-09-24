@@ -582,6 +582,7 @@ func _exit_house() -> void:
 func _do_enter_house() -> void:
 	_exterior_return_pos = _player.global_position
 	_player.global_position = INTERIOR_OFFSET + INTERIOR_SPAWN_POS
+	_player.reset_physics_interpolation() ## ışınlama: kamera eski yerden kaymasın (bkz. physics_interp.gd)
 	_player.is_indoors = true
 	## Oyuncu fizik gövdesi içeride duvarlara/eşyalara çarpsın (bkz. INTERIOR_COLLISION_LAYER).
 	_player.collision_mask = int(_player.collision_mask) | INTERIOR_COLLISION_LAYER
@@ -595,6 +596,7 @@ func _do_enter_house() -> void:
 
 func _do_exit_house() -> void:
 	_player.global_position = _exterior_return_pos
+	_player.reset_physics_interpolation() ## ışınlama: kamera eski yerden kaymasın (bkz. physics_interp.gd)
 	_player.is_indoors = false
 	_player.collision_mask = int(_player.collision_mask) & ~INTERIOR_COLLISION_LAYER
 	_interior_instance.visible = false

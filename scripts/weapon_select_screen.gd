@@ -27,9 +27,10 @@ var player_ref: Node = null
 
 const REROLL_MAX := 2
 
-const CAT_MELEE_COLOR := Color(1.0, 0.6, 0.55)
-const CAT_RANGED_COLOR := Color(0.6, 0.85, 1.0)
-const CAT_SHIELD_COLOR := Color(0.55, 1.0, 0.6)
+## 2026-09-24: kartlar bej parşömen - kategori renkleri koyu tonlar (TEK kaynak UIKit, level kartlarıyla aynı).
+const CAT_MELEE_COLOR := UIKit.C_CAT_ATTACK
+const CAT_RANGED_COLOR := UIKit.C_CAT_UTILITY
+const CAT_SHIELD_COLOR := UIKit.C_CAT_DEFENSE
 
 ## bkz. chest_menu.gd üstündeki aynı not - shop_panel.gd bir class_name
 ## tanımlamadığı için oradaki const'lara erişmenin en basit/açık yolu bu
@@ -118,7 +119,10 @@ var _cards_container: HBoxContainer = null
 ## açacak şekilde büyütüldü. Aşağıdaki tüm dikey konumlar (kart kapsayıcısı/
 ## karıştır butonu/geri sayım paneli) CARD_SIZE.y'den TÜRETİLİYOR (bkz.
 ## _build_ui) - bu sabit tekrar değişirse hepsi otomatik doğru yerde kalır.
-const CARD_SIZE := Vector2(272, 486)
+## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap kite geçti - kart artık level atlama
+## kartlarıyla AYNI aileden: Sıradan tier'in ahşap kartı (tools/gen_menu_kit.py tier_card, 100x160 sanat px = 300x480),
+## dokunun kendi boyutunda çizildiği için her sanat pikseli tam 3 ekran pikseli.
+const CARD_SIZE := Vector2(300, 480)
 const CARD_ANIM_DURATION := 0.26
 const CARD_ANIM_STAGGER := 0.07
 const CARD_ANIM_RISE := 22.0
@@ -189,11 +193,12 @@ func _auto_pick_random_card() -> void:
 ## boyutu (bkz. o dosyadaki CardStyle_normal/pressed/hover/disabled).
 ## ==============================================================================
 func _build_ui() -> void:
-	var theme_res: Theme = load("res://assets/fonts/theme_original.tres")
+	## Oyun içi bej kit teması (CanvasLayer temayı çocuklarına aktarmaz - her üst düzey Control'e ayrı verilir).
+	var theme_res: Theme = UIKit.theme()
 
 	var dim := ColorRect.new()
 	dim.name = "Dim"
-	dim.color = Color(0, 0, 0, 0.6)
+	dim.color = Color(0.12, 0.07, 0.03, 0.55)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
@@ -202,17 +207,19 @@ func _build_ui() -> void:
 	title.name = "Title"
 	title.text = "SİLAHINI SEÇ" if mode == "weapon" else "KALKANINI SEÇ"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.autowrap_mode = TextServer.AUTOWRAP_WORD
-	title.add_theme_font_size_override("font_size", 96)
-	if theme_res:
-		title.theme = theme_res
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.theme = theme_res
+	## Başlık: menülerdeki gibi parşömen kurdele, koyu yazı (kurdele dokusunun kendi yüksekliği 72 px).
+	title.add_theme_stylebox_override("normal", UIKit.panel_style("banner"))
+	UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_TEXT, 0)
+	var title_w: float = MenuKit.font().get_string_size(title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIKit.FS_TITLE).x + 132.0
 	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	title.anchor_left = 0.5
 	title.anchor_right = 0.5
-	title.offset_left = -420.0
-	title.offset_right = 420.0
-	title.offset_top = 30.0
-	title.offset_bottom = 110.0
+	title.offset_left = -roundf(title_w * 0.5)
+	title.offset_right = roundf(title_w * 0.5)
+	title.offset_top = 24.0
+	title.offset_bottom = 96.0
 	add_child(title)
 
 	_cards_container = HBoxContainer.new()
@@ -237,7 +244,6 @@ func _build_ui() -> void:
 	_reroll_button.name = "RerollButton"
 	if theme_res:
 		_reroll_button.theme = theme_res
-	_reroll_button.add_theme_font_size_override("font_size", 40)
 	_reroll_button.clip_text = true
 	_reroll_button.set_anchors_preset(Control.PRESET_CENTER)
 	_reroll_button.anchor_left = 0.5
@@ -247,35 +253,18 @@ func _build_ui() -> void:
 	_reroll_button.offset_left = -220.0
 	_reroll_button.offset_right = 220.0
 	_reroll_button.offset_top = half_h + 20.0
-	_reroll_button.offset_bottom = half_h + 70.0
+	_reroll_button.offset_bottom = half_h + 68.0
+	_reroll_button.add_theme_font_size_override("font_size", UIKit.FS_BODY)
 	_reroll_button.pressed.connect(_on_reroll_pressed)
 	add_child(_reroll_button)
 	_refresh_reroll_button()
-
-	var countdown_style := StyleBoxFlat.new()
-	countdown_style.content_margin_left = 18.0
-	countdown_style.content_margin_top = 10.0
-	countdown_style.content_margin_right = 18.0
-	countdown_style.content_margin_bottom = 10.0
-	countdown_style.bg_color = Color(0.32, 0.2, 0.11, 0.95)
-	countdown_style.border_width_left = 3
-	countdown_style.border_width_top = 3
-	countdown_style.border_width_right = 3
-	countdown_style.border_width_bottom = 3
-	countdown_style.border_color = Color(0.6, 0.45, 0.2, 1)
-	countdown_style.corner_radius_top_left = 12
-	countdown_style.corner_radius_top_right = 12
-	countdown_style.corner_radius_bottom_right = 12
-	countdown_style.corner_radius_bottom_left = 12
-	countdown_style.shadow_color = Color(0, 0, 0, 0.35)
-	countdown_style.shadow_size = 2
-	countdown_style.shadow_offset = Vector2(3, 4)
 
 	_countdown_panel = PanelContainer.new()
 	_countdown_panel.name = "CountdownPanel"
 	_countdown_panel.visible = false
 	_countdown_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_countdown_panel.add_theme_stylebox_override("panel", countdown_style)
+	_countdown_panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+	_countdown_panel.theme = theme_res
 	_countdown_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_countdown_panel.anchor_left = 0.5
 	_countdown_panel.anchor_top = 0.5
@@ -294,7 +283,7 @@ func _build_ui() -> void:
 	_waiting_label = Label.new()
 	_waiting_label.text = "Diğer oyuncular bekleniyor"
 	_waiting_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_waiting_label.add_theme_color_override("font_color", Color(0.95, 0.9, 0.78, 1))
+	_waiting_label.add_theme_color_override("font_color", UIKit.C_TEXT)
 	_waiting_label.add_theme_font_size_override("font_size", 32)
 	cd_vbox.add_child(_waiting_label)
 
@@ -302,7 +291,7 @@ func _build_ui() -> void:
 	_countdown_label.name = "CountdownLabel"
 	_countdown_label.text = "25s"
 	_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_label.add_theme_color_override("font_color", Color(1, 0.85, 0.3, 1))
+	_countdown_label.add_theme_color_override("font_color", UIKit.C_GOLD)
 	_countdown_label.add_theme_font_size_override("font_size", 58)
 	cd_vbox.add_child(_countdown_label)
 
@@ -312,21 +301,11 @@ func _refresh_reroll_button() -> void:
 	_reroll_button.disabled = _reroll_left <= 0 or _has_chosen
 
 
-static func _build_card_style(bg: Color, border: Color) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_width_left = 4
-	style.border_width_top = 4
-	style.border_width_right = 4
-	style.border_width_bottom = 4
-	style.border_color = border
-	style.corner_radius_top_left = 12
-	style.corner_radius_top_right = 12
-	style.corner_radius_bottom_right = 12
-	style.corner_radius_bottom_left = 12
-	style.shadow_color = Color(0, 0, 0, 0.35)
-	style.shadow_size = 2
-	style.shadow_offset = Vector2(3, 4)
+## Kart zemini: Sıradan tier'in ahşap kartı (bkz. CARD_SIZE notu) - hover biraz aydınlık, basılı biraz koyu.
+static func _build_card_style(tint: Color) -> StyleBoxTexture:
+	var style := StyleBoxTexture.new()
+	style.texture = UIKit.game_tex("tier_card_1.png")
+	style.modulate_color = tint
 	return style
 
 
@@ -386,10 +365,10 @@ func _populate_cards() -> void:
 	_card_tweens.clear()
 
 	var pool: Array = _draw_pool(_card_count())
-	var normal_style := _build_card_style(Color(0.32, 0.2, 0.11, 1), Color(0.16, 0.09, 0.04, 1))
-	var pressed_style := _build_card_style(Color(0.22, 0.13, 0.06, 1), Color(0.16, 0.09, 0.04, 1))
-	var hover_style := _build_card_style(Color(0.42, 0.28, 0.15, 1), Color(0.6, 0.45, 0.2, 1))
-	var disabled_style := _build_card_style(Color(0.2, 0.18, 0.16, 1), Color(0.12, 0.1, 0.08, 1))
+	var normal_style := _build_card_style(Color(1, 1, 1, 1))
+	var pressed_style := _build_card_style(Color(0.88, 0.86, 0.82, 1))
+	var hover_style := _build_card_style(Color(1.1, 1.08, 1.04, 1))
+	var disabled_style := _build_card_style(Color(0.7, 0.68, 0.64, 1))
 
 	for key in pool:
 		var card := Button.new()
@@ -400,27 +379,30 @@ func _populate_cards() -> void:
 		card.add_theme_stylebox_override("pressed", pressed_style)
 		card.add_theme_stylebox_override("hover", hover_style)
 		card.add_theme_stylebox_override("disabled", disabled_style)
+		card.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		card.pressed.connect(_on_card_pressed.bind(key, card))
 
 		var category := Label.new()
-		category.add_theme_color_override("font_color", Color(0.95, 0.9, 0.78, 1))
-		category.add_theme_font_size_override("font_size", 37)
-		category.autowrap_mode = TextServer.AUTOWRAP_WORD
+		category.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+		category.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		category.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		category.set_anchors_preset(Control.PRESET_TOP_WIDE)
-		category.offset_left = 10.0
-		category.offset_top = 7.0
-		category.offset_right = -10.0
-		category.offset_bottom = 38.0
+		## Kart dokusunun başlık bandı: sanat satır 7..17 (21..54 px).
+		category.offset_left = 30.0
+		category.offset_top = 21.0
+		category.offset_right = -30.0
+		category.offset_bottom = 54.0
 
 		var content := VBoxContainer.new()
 		content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		content.add_theme_constant_override("separation", 12)
 		content.alignment = BoxContainer.ALIGNMENT_CENTER
 		content.set_anchors_preset(Control.PRESET_FULL_RECT)
-		content.offset_left = 8.0
-		content.offset_top = 43.0
-		content.offset_right = -8.0
-		content.offset_bottom = -8.0
+		## Parşömen iç alanı (çerçeve + emaye bant 7 sanat px = 21 px, başlık bandının altı 57 px).
+		content.offset_left = 27.0
+		content.offset_top = 60.0
+		content.offset_right = -27.0
+		content.offset_bottom = -27.0
 
 		var icon_holder := CenterContainer.new()
 		icon_holder.custom_minimum_size = Vector2(0, 100)
@@ -430,14 +412,14 @@ func _populate_cards() -> void:
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		name_label.add_theme_font_size_override("font_size", 40)
-		name_label.add_theme_color_override("font_color", Color(0.98, 0.94, 0.85, 1))
+		name_label.add_theme_color_override("font_color", UIKit.C_TEXT)
 		content.add_child(name_label)
 
 		var count_label := Label.new()
 		count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		count_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		count_label.add_theme_font_size_override("font_size", 24)
-		count_label.add_theme_color_override("font_color", Color(0.68, 0.62, 0.54, 1))
+		count_label.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
 		content.add_child(count_label)
 
 		## Kullanıcı isteği: "ayrıntıları direk kartın içine mini bir panel
@@ -447,27 +429,11 @@ func _populate_cards() -> void:
 		## kutusu. ScrollContainer kendi mouse_filter'ıyla tekerlek olayını
 		## kendi tüketir - bu yüzden içeriği kaydırmak alttaki kart Button'ının
 		## "pressed" sinyalini TETİKLEMEZ (bkz. _draw_pool üstündeki genel not).
-		var desc_style := StyleBoxFlat.new()
-		desc_style.content_margin_left = 8.0
-		desc_style.content_margin_top = 6.0
-		desc_style.content_margin_right = 8.0
-		desc_style.content_margin_bottom = 6.0
-		desc_style.bg_color = Color(0.239, 0.2, 0.149, 1)
-		desc_style.border_width_left = 2
-		desc_style.border_width_top = 2
-		desc_style.border_width_right = 2
-		desc_style.border_width_bottom = 2
-		desc_style.border_color = Color(0.169, 0.137, 0.102, 1)
-		desc_style.corner_radius_top_left = 8
-		desc_style.corner_radius_top_right = 8
-		desc_style.corner_radius_bottom_right = 8
-		desc_style.corner_radius_bottom_left = 8
-
 		var desc_scroll := ScrollContainer.new()
 		desc_scroll.custom_minimum_size = Vector2(0, 90)
 		desc_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		desc_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		desc_scroll.add_theme_stylebox_override("panel", desc_style)
+		desc_scroll.add_theme_stylebox_override("panel", UIKit.panel_style("inset"))
 		content.add_child(desc_scroll)
 
 		var desc_label := Label.new()
@@ -487,9 +453,10 @@ func _populate_cards() -> void:
 		## paragraf metninde ince piksel harflerin birbirine karışmaması için
 		## satır arası boşluk eklendi, metin rengi saf beyaza yakın çekilip
 		## kontrast arttırıldı.
-		desc_label.add_theme_color_override("font_color", Color(1.0, 0.98, 0.92, 1))
-		desc_label.add_theme_font_size_override("font_size", 28)
-		desc_label.add_theme_constant_override("line_spacing", 8)
+		## 2026-09-24: bej çukur kutuda koyu yazı; 24 px (m5x7 3x - keskin) + satır arası.
+		desc_label.add_theme_color_override("font_color", UIKit.C_TEXT)
+		desc_label.add_theme_font_size_override("font_size", 24)
+		desc_label.add_theme_constant_override("line_spacing", 6)
 		desc_label.add_theme_constant_override("outline_size", 0)
 		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		desc_scroll.add_child(desc_label)
@@ -497,7 +464,7 @@ func _populate_cards() -> void:
 		if mode == "weapon":
 			var cat_info: Dictionary = _weapon_category(key)
 			category.text = cat_info["label"]
-			category.modulate = cat_info["color"]
+			category.add_theme_color_override("font_color", cat_info["color"])
 			name_label.text = WEAPON_NAMES.get(key, key.capitalize())
 			var icon_path: String = WEAPON_ICON_TEXTURES.get(key, "")
 			if icon_path != "" and ResourceLoader.exists(icon_path):
@@ -513,7 +480,7 @@ func _populate_cards() -> void:
 			desc_label.text = WEAPON_DESCRIPTIONS.get(key, "")
 		else:
 			category.text = "Kalkan"
-			category.modulate = CAT_SHIELD_COLOR
+			category.add_theme_color_override("font_color", CAT_SHIELD_COLOR)
 			var shield_def: Dictionary = {}
 			if is_instance_valid(player_ref):
 				shield_def = player_ref.SHIELD_TYPES.get(key, {})

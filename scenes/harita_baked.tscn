@@ -4806,12 +4806,12 @@ shader_parameter/blade_density = 1.0
 shader_parameter/blade_opacity = 0.290000013775
 shader_parameter/point_color = Color(0.42, 0.32, 0.22, 1)
 shader_parameter/point_density = 0.0
-shader_parameter/point_opacity = 0.85
+shader_parameter/point_opacity = 0.814000038665
 shader_parameter/noise_color = Color(0.20043862, 0.30865487, 0.1151152, 1)
 shader_parameter/noise_opacity = 0.0730000034675
 shader_parameter/noise_pixel_size = 1.4770000226575
 shader_parameter/noise_scale = 0.22400000994148
-shader_parameter/noise_density = 0.6110000290225
+shader_parameter/noise_density = 0.3310000157225
 shader_parameter/noise_randomness = 0.3250000154375
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_2unvi"]

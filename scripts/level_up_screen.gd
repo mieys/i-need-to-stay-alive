@@ -2,9 +2,11 @@ extends CanvasLayer
 
 signal upgrade_chosen(id: String, tier: int)
 
-const CAT_ATTACK := Color(1.0, 0.6, 0.55)
-const CAT_DEFENSE := Color(0.55, 1.0, 0.6)
-const CAT_UTILITY := Color(0.6, 0.85, 1.0)
+## Kategori renkleri artık bej kart parşömeni ÜSTÜNDE okunan koyu tonlar (kullanıcı isteği 2026-09-24: oyun içi arayüzler
+## menülerle aynı bej/ahşap kite geçti) - TEK kaynak UIKit (silah seçim kartları da aynılarını kullanır).
+const CAT_ATTACK := UIKit.C_CAT_ATTACK
+const CAT_DEFENSE := UIKit.C_CAT_DEFENSE
+const CAT_UTILITY := UIKit.C_CAT_UTILITY
 
 ## Kullanıcı isteği: "level atlama kartlarının tier'ı olucak. 4 tier olucak...
 ## ilk tierın bir kat fazla hali olarak verecek her tierda... rasgele olarak
@@ -36,7 +38,7 @@ const CAT_UTILITY := Color(0.6, 0.85, 1.0)
 ## DÜZELTME (kullanıcı isteği: "kartları büyütmekle ilgili değişikliği geri
 ## al") - kart kutusu (level_up_screen.tscn) ve buradaki font/ikon boyutları
 ## eski (büyütme öncesi) değerlerine döndürüldü.
-const CARD_CATEGORY_FONT_SIZE := 30
+const CARD_CATEGORY_FONT_SIZE := 32
 const CARD_DESCRIPTION_FONT_SIZE := 24
 const CARD_COUNT_FONT_SIZE := 16
 
@@ -56,7 +58,9 @@ const UPGRADES = [
 	{"id": "speed", "title": "Hız", "desc": "+%4", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "max_health", "title": "Can", "desc": "+10", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "damage", "title": "Saldırı Gücü", "desc": "+6", "cat": "Saldırı", "color": CAT_ATTACK},
-	{"id": "fire_rate", "title": "Ateş Hızı", "desc": "+%6", "cat": "Saldırı", "color": CAT_ATTACK},
+	## "Ateş Hızı" -> "Saldırı Hızı" (2026-09-24): eşyalar/stat ekranı aynı stat için "saldırı hızı" diyordu, iki ayrı stat
+	## sanılıyordu (bkz. player.gd get_attack_interval_mult).
+	{"id": "fire_rate", "title": "Saldırı Hızı", "desc": "+%6", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "health_regen", "title": "Can Yenilenmesi", "desc": "+0.5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "crit_chance", "title": "Kritik Oran", "desc": "+%2.5", "cat": "Saldırı", "color": CAT_ATTACK},
 	## Kullanıcı isteği: "kritik hasar oranını arttıran kartta kritik hasar
@@ -141,7 +145,8 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir (kart butonları "icon slot" gibi dikey orantılı oldukları için bu zaten atlıyor, bkz. o dosyadaki _looks_like_icon_slot)
-	_apply_reroll_button_style() ## RerollButton'ı SADECE burada, wood stilinin ÜSTÜNE kendi görseliyle geçersiz kılıyor - bkz. fonksiyonun üstündeki not.
+	_apply_reroll_button_style()
+	_apply_kit_style()
 	_populate_cards()
 	_wire_card_hover_feedback()
 	reroll_button.pressed.connect(_on_reroll_pressed)
@@ -379,7 +384,8 @@ func _populate_cards() -> void:
 		## hesabı yapmadan sığıyor.
 		var category_label: Label = content.get_node("Category")
 		category_label.text = upgrade["cat"]
-		category_label.modulate = upgrade["color"]
+		category_label.modulate = Color(1, 1, 1, 1)
+		category_label.add_theme_color_override("font_color", upgrade["color"])
 		category_label.add_theme_font_size_override("font_size", CARD_CATEGORY_FONT_SIZE)
 
 		content.get_node("Icon").setup(upgrade["id"], upgrade["color"])
@@ -426,23 +432,25 @@ func _apply_card_tier_frame(card: Button, tier: int) -> void:
 ## (kullanıcı isteği: "can yazdığında can rengi yeşil görünüyor ya onun
 ## gibi") - böylece kartlar tek bakışta hangi kategoriye ait olduğunu
 ## belli eder. Sayı değeri her zaman altın turuncusuyla (#ffaa00) vurgulanır.
+## 2026-09-24: renkler parşömen üstünde okunan koyu "mürekkep" tonlarına çekildi (eski neon tonlar bej kartta kayboluyordu) -
+## TEK kaynak UIKit.INK (yetenek ipuçları da aynı tonları kullanır).
 const STAT_TITLE_COLORS := {
-	"speed": "#66ccff",
-	"max_health": "#55ff55",
-	"damage": "#ff5555",
-	"fire_rate": "#ffcc33",
-	"health_regen": "#55ff55",
-	"crit_chance": "#ff8866",
-	"crit_damage": "#ff5555",
-	"pickup_range": "#88ccff",
-	"shield_pen_percent": "#eebb55",
-	"exp_gain": "#cc99ff",
-	"luck": "#ffd700",
-	"range": "#ff9955",
-	"dodge": "#66ff99",
-	"shield_amount": "#55aaff",
-	"cooldown_reduction": "#aaccff",
-	"shield_protection": "#3388dd",
+	"speed": UIKit.INK["speed"],
+	"max_health": UIKit.INK["health"],
+	"damage": UIKit.INK["damage"],
+	"fire_rate": UIKit.INK["attack_speed"],
+	"health_regen": UIKit.INK["health"],
+	"crit_chance": UIKit.INK["crit"],
+	"crit_damage": UIKit.INK["damage"],
+	"pickup_range": UIKit.INK["speed"],
+	"shield_pen_percent": UIKit.INK["shield_pen"],
+	"exp_gain": UIKit.INK["exp"],
+	"luck": UIKit.INK["luck"],
+	"range": UIKit.INK["range"],
+	"dodge": UIKit.INK["health"],
+	"shield_amount": UIKit.INK["shield"],
+	"cooldown_reduction": UIKit.INK["cooldown"],
+	"shield_protection": UIKit.INK["shield"],
 }
 
 ## Kartta gösterilen sayı, upgrade["desc"]'teki (tier 1) ham sayının tier
@@ -491,9 +499,9 @@ func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
 	var value: String = _scaled_desc_value(upgrade["desc"] as String, tier, str(upgrade["id"]))
 	var clean_val: String = value.replace("+", "").replace("-", "")
 	var title_name: String = upgrade["title"] as String
-	var title_color: String = STAT_TITLE_COLORS.get(upgrade["id"], "#f0e6d2")
+	var title_color: String = STAT_TITLE_COLORS.get(upgrade["id"], UIKit.INK["text"])
 	var colored_title: String = "[color=%s][b]%s[/b][/color]" % [title_color, title_name]
-	var colored_val: String = "[color=#ffaa00]%s[/color]" % clean_val
+	var colored_val: String = "[color=%s]%s[/color]" % [UIKit.INK["value"], clean_val]
 	if upgrade["id"] == "cooldown_reduction":
 		return "%s %s azalır" % [colored_title, colored_val]
 	else:
@@ -507,36 +515,70 @@ func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
 ## LEVEL_UP_GOLD_REWARD) biriktirilip kullanılabiliyor.
 const LEVEL_UP_REROLL_COST := 5
 
-## Kullanıcı isteği: "level atlama kartlarındaki karıştırma butonunu bununla
-## değiştir, aynı boyutta olduğundan emin ol, ekstra bişey olmasın üstünde"
-## - RerollButton normalde (bkz. _ready() -> UISound.apply_wood_buttons)
-## diğer TÜM butonlarla aynı paylaşılan ahşap dokuyu alırdı; burada SADECE
-## bunun ÜSTÜNE, aynı 9-patch (StyleBoxTexture + texture_margin) mantığıyla
-## (bkz. shop_panel.gd _make_wood_button_style - TEK fark doku kaynağı) yeni
-## görseli uyguluyoruz. Görsel sadece kırpılmış/küçültülmüş haliyle (assets/
-## ui/reroll_button.png, 420x104) buton rect'inin içine 9-patch olarak
-## geriliyor, ekstra bir modülasyon/renk tonu YOK (metin okunurluğunu
-## bozmasın diye).
-## DÜZELTME (kullanıcı isteği: "yazılarla beraber %40 küçült") - buton rect'i
-## (.tscn'deki offset'ler) ve font_size ×0.6 küçültüldü; texture_margin da
-## AYNI oranda küçültülmezse (16px, eski 48px yüksekliğe göre ayarlanmıştı)
-## yeni ~29px'lik yükseklikte üst+alt kenarlık üst üste binip 9-patch'in orta
-## (esneyen) bölgesini negatife düşürürdü - o yüzden bu da ×0.6.
-const RerollButtonTexture := preload("res://assets/ui/reroll_button.png")
-const REROLL_BUTTON_MARGIN := 9.6
-
+## Kullanıcı isteği (2026-09-24): oyun içi TÜM arayüzler menülerle aynı bej/ahşap kite geçti - karıştır butonu da artık
+## kitin ten (tan) butonu (eski assets/ui/reroll_button.png görseli yerine; eskiden %40 küçültülmüş 29 px'lik yüksekliği
+## kit butonunun 9-slice payına (15+15) sığmıyordu, okunaklı 48 px'e büyütüldü - kartların altında, geri sayım panelinin
+## üstünde aynı boşlukta).
 func _apply_reroll_button_style() -> void:
-	var sb := StyleBoxTexture.new()
-	sb.texture = RerollButtonTexture
-	sb.texture_margin_left = REROLL_BUTTON_MARGIN
-	sb.texture_margin_right = REROLL_BUTTON_MARGIN
-	sb.texture_margin_top = REROLL_BUTTON_MARGIN
-	sb.texture_margin_bottom = REROLL_BUTTON_MARGIN
-	reroll_button.add_theme_stylebox_override("normal", sb)
-	reroll_button.add_theme_stylebox_override("hover", sb)
-	reroll_button.add_theme_stylebox_override("pressed", sb)
-	reroll_button.add_theme_stylebox_override("disabled", sb)
-	reroll_button.add_theme_stylebox_override("focus", sb)
+	UIKit.style_button(reroll_button, "wood", false, UIKit.FS_BODY)
+	reroll_button.offset_left = -198.0
+	reroll_button.offset_right = 198.0
+	reroll_button.offset_top = 258.0
+	reroll_button.offset_bottom = 306.0
+
+
+## Level atlama ekranı - oyun içi bej kit (bkz. UIKit): sıcak karartma, kurdele başlık, kartlarda koyu yazı (kart
+## çerçeveleri TierSystem.FRAME_TEXTURES), kit penceresinde geri sayım, altın seçim parıltısı. CanvasLayer temayı
+## çocuklarına aktarmadığı için tema her üst düzey Control'e ayrı verilir. .tscn'ye dokunulmadı (açık editör eski hâli
+## üstüne yazabilir) - görünüm tamamen buradan.
+func _apply_kit_style() -> void:
+	var game_theme: Theme = UIKit.theme()
+	var dim: ColorRect = get_node_or_null("Dim") as ColorRect
+	if dim:
+		dim.color = Color(0.12, 0.07, 0.03, 0.55)
+	var title: Label = get_node_or_null("Title") as Label
+	if title:
+		title.theme = game_theme
+		title.add_theme_stylebox_override("normal", UIKit.panel_style("banner"))
+		UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_TEXT, 0)
+		title.remove_theme_color_override("font_shadow_color")
+		title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		title.autowrap_mode = TextServer.AUTOWRAP_OFF
+		var w: float = MenuKit.font().get_string_size(title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIKit.FS_TITLE).x + 132.0
+		title.offset_left = -roundf(w * 0.5)
+		title.offset_right = roundf(w * 0.5)
+		title.offset_top = 24.0
+		title.offset_bottom = 96.0
+	var container: Control = get_node_or_null("CardsContainer") as Control
+	if container:
+		container.theme = game_theme
+	for card: Button in cards:
+		var glow: Panel = card.get_node_or_null("SelectGlow") as Panel
+		if glow:
+			var gs := StyleBoxFlat.new()
+			gs.bg_color = Color(0, 0, 0, 0)
+			gs.set_border_width_all(6)
+			gs.border_color = Color("#eab748")
+			gs.set_corner_radius_all(18)
+			gs.shadow_color = Color(0.92, 0.72, 0.28, 0.5)
+			gs.shadow_size = 10
+			glow.add_theme_stylebox_override("panel", gs)
+		var count_label: Label = card.get_node_or_null("Content/CountLabel") as Label
+		if count_label:
+			count_label.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
+		var desc: RichTextLabel = card.get_node_or_null("Content/Desc") as RichTextLabel
+		if desc:
+			desc.add_theme_color_override("default_color", UIKit.C_TEXT)
+	reroll_button.theme = game_theme
+	if countdown_panel:
+		countdown_panel.theme = game_theme
+		countdown_panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+		countdown_panel.offset_top = 318.0
+		countdown_panel.offset_bottom = 392.0
+	if waiting_label:
+		waiting_label.add_theme_color_override("font_color", UIKit.C_TEXT)
+	if countdown_label:
+		countdown_label.add_theme_color_override("font_color", UIKit.C_GOLD)
 
 
 func _refresh_reroll_button() -> void:

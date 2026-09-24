@@ -70,8 +70,9 @@ func test_gold_indicator_click_opens_shop() -> void:
 
 
 func test_envanter_button_matches_gold_indicator_palette() -> void:
-	## Kullanıcı isteği (2026-09-21): ENVANTER butonu ve altın göstergesi artık aynı piksel UI kitinden (assets/ui/kit) geliyor -
-	## buton ahşap plaka dokusu, gösterge başlık tahtası (plaque) dokusu; ikisi de StyleBoxTexture ve kit klasöründen.
+	## Kullanıcı isteği (2026-09-21): ENVANTER butonu ve altın göstergesi artık aynı piksel UI kitinden geliyor - buton ahşap
+	## plaka dokusu, gösterge başlık levhası (plaque) dokusu; ikisi de StyleBoxTexture. 2026-09-24: oyun içi kit
+	## assets/ui/game'e taşındı (menülerle aynı bej/ahşap dil, tools/gen_menu_kit.py build_game).
 	var hud: Node = _make_hud()
 	var envanter_btn: Button = hud.get_node("EnvanterToggleButton")
 	var gold_indicator: PanelContainer = hud.get_node("GoldIndicator")
@@ -81,9 +82,9 @@ func test_envanter_button_matches_gold_indicator_palette() -> void:
 
 	assert(envanter_style != null, "ENVANTER butonu icin normal stil (StyleBoxTexture) bekleniyordu")
 	assert(gold_style != null, "Altin gostergesi icin panel stili (StyleBoxTexture) bekleniyordu")
-	assert(envanter_style.texture.resource_path.begins_with("res://assets/ui/kit/"),
+	assert(envanter_style.texture.resource_path.begins_with("res://assets/ui/game/"),
 		"ENVANTER butonu kit dokusunu kullanmiyor: %s" % envanter_style.texture.resource_path)
-	assert(gold_style.texture.resource_path.begins_with("res://assets/ui/kit/"),
+	assert(gold_style.texture.resource_path.begins_with("res://assets/ui/game/"),
 		"Altin gostergesi kit dokusunu kullanmiyor: %s" % gold_style.texture.resource_path)
 	hud.queue_free()
 

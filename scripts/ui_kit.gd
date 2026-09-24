@@ -1,45 +1,86 @@
 class_name UIKit
 extends RefCounted
 
-## Cozy/RPG piksel UI kiti için TEK giriş noktası (kullanıcı isteği 2026-09-21: butonlar/paneller/HUD "doğal dursun, esnemeden
-## kaynaklı kalite kaybı olmasın, birbiriyle uyumlu olsun"). Dokular tools/gen_ui_kit.py ile üretilir -> assets/ui/kit/*.png.
-## Her sanat pikseli TAM 2 ekran pikselidir (dokular zaten x2 büyütülmüş kaydedilir); 9-slice'ın esneyen orta bölgesi düz renk
-## olduğu için hangi boyutta çizilirse çizilsin bulanıklık/bozulma olmaz. Yazı tipi m5x7 için 16'nın katı boyutlar (32/48/64)
-## yazı piksellerini de aynı 2 px ızgarasına oturtur - FS_* sabitlerini kullanın.
-## ShopPanel._apply_wood_button_style / _apply_mini_wood_button_style (oyundaki neredeyse her ekran bunları çağırıyor) artık
-## buraya yönlendiriliyor; yeni kod doğrudan UIKit.style_button / UIKit.panel_style kullanmalı.
+## Oyun içi arayüz kiti için TEK giriş noktası (dükkan, envanter, özellikler, seyyar satıcı, level atlama, sandık, silah
+## seçimi, duraklatma/ayarlar, tuş atamaları, debug, görev bandı, HUD panelleri...).
+## Kullanıcı isteği (2026-09-24): "aynı arayüz değişikliklerini tıpkı ana menülerde karakter seçimlerinde v.b yaptığın
+## tarzdaki gibi oyun içi tüm arayüzler için de tasarlamanı istiyorum fakat biraz daha koyu olmalı (level atlama kartları
+## v.b gibi tier bazlı kartların renklerinin buna göre tasarlanması gerekiyor)."
+## -> Menülerle (MenuKit) AYNI çizim dili ve AYNI stil/tema kodu, sadece doku klasörü (assets/ui/game, tools/gen_menu_kit.py
+##    build_game) ve renkler bir ton koyu (MenuKit.PAL_GAME): ahşap çerçeve + parşömen iç + pirinç çivi, koyu kahve yazı.
+## Kullanım: oyun içi bir panelin/ekranın KÖK Control'üne `theme = UIKit.theme()` (Label/Button/LineEdit/Slider/Scroll...
+## hepsi kit görünümünü ve koyu yazıyı alır). Projenin genel teması (assets/fonts/theme.tres) krem yazıyı korur - HUD'da oyun
+## dünyasının ÜSTÜNDE duran yazılar (altın, sayaçlar, bildirimler) koyu zeminde okunmaya devam eder.
+## API (panel_style / style_button / style_label / C_* / FS_*) eski kitle aynı - ~20 ekran değişmeden yeni görünümü aldı.
+## HUD çerçeveleri (can/kalkan barı, avatar, yetenek slotları, minimap halkası, yetenek çubuğu, buff rozeti) ayrı:
+## tools/gen_ui_kit.py -> assets/ui/kit (HUD yerleşimi o dokuların geometrisine bağlı, sadece paleti yeni kite uyarlandı).
 
-const KIT := "res://assets/ui/kit/"
+const KIT := "res://assets/ui/kit/"      ## HUD çerçeveleri (tools/gen_ui_kit.py)
+const GAME := MenuKit.GAME_DIR           ## paneller/butonlar/tier dokuları (tools/gen_menu_kit.py build_game)
 
-## Yazı boyutları (m5x7 piksel fontu: 16 = 1x, 32 = 2x, 48 = 3x ...).
+## Yazı boyutları (m5x7: 16'nın/8'in katları keskin).
 const FS_BODY := 32
 const FS_TITLE := 48
 const FS_BIG := 64
 
-## Renk paleti (tüm ekranlarda aynı).
-const C_TEXT := Color(0.98, 0.93, 0.80, 1.0)
-const C_TEXT_DIM := Color(0.80, 0.70, 0.56, 1.0)
-const C_ACCENT := Color(0.96, 0.66, 0.34, 1.0)
-const C_GOLD := Color(1.0, 0.85, 0.32, 1.0)
-const C_OUTLINE := Color(0.14, 0.08, 0.04, 1.0)
-const C_GOOD := Color(0.55, 0.86, 0.42, 1.0)
-const C_BAD := Color(0.94, 0.42, 0.36, 1.0)
+## Renk paleti: bej panel ÜSTÜNDE okunan koyu tonlar (MenuKit.PAL_GAME ile aynı).
+const C_TEXT := Color("#3a2212")
+const C_TEXT_DIM := Color("#5e3f24")
+const C_ACCENT := Color("#8a3f1e")   ## kiremit: başlıklar
+const C_GOLD := Color("#8a5608")     ## altın fiyat/sayılar (koyu altın - bej zeminde okunur)
+const C_OUTLINE := Color("#3a2212")
+const C_GOOD := Color("#3d6616")
+const C_BAD := Color("#a3301c")
+## Koyu zeminler (bark buton, oyun dünyası üstü) için açık yazı.
+const C_CREAM := Color("#fff0d6")
 
-## Buton dokusu 32x20 sanat pikseli (=64x40 px): 9-slice kenar payları px cinsinden, metin payları daha küçük (eski düzenlerin
-## yükseklik/genişlik varsayımları bozulmasın diye).
-const BTN_MARGIN_H := 20.0
-const BTN_MARGIN_V := 16.0
-const BTN_CONTENT_H := 18.0
-const BTN_CONTENT_V := 4.0
-const MINI_MARGIN := 16.0
-const MINI_CONTENT := 6.0
+## Parşömen üstünde okunan "mürekkep" renkleri (BBCode için hex) - eski koyu kitin parlak neon tonlarının (#55ff55,
+## #66ccff, #ffaa00...) bej zemindeki karşılıkları. TEK kaynak: level atlama kartı açıklamaları (level_up_screen.gd),
+## yetenek ipuçları (skill_icon.gd) ve kategori renkleri buradan okur.
+const INK := {
+	"health": "#2f7a1f",      ## can / yenilenme / sıvışma
+	"damage": "#a82a1e",      ## hasar / kritik hasar / saldırı gücü
+	"crit": "#b04a24",
+	"speed": "#1f6a96",       ## hareket hızı / toplama mesafesi
+	"attack_speed": "#96640a",
+	"shield": "#2a58a8",      ## kalkan miktarı / soğurma
+	"shield_pen": "#80580c",
+	"exp": "#6a3496",
+	"luck": "#86660a",
+	"range": "#a4501e",
+	"cooldown": "#3a5a8a",
+	"value": "#a0560a",       ## sayılar (eskiden altın turuncusu #ffaa00)
+	"passive": "#86660a",
+	"text": "#3a2212",
+}
+## Kategori renkleri (level kartı "Saldırı/Savunma/Yardımcı", silah kartı "Yakın Dövüş/Menzilli/Kalkan").
+const C_CAT_ATTACK := Color("#9a2e22")
+const C_CAT_DEFENSE := Color("#3d6616")
+const C_CAT_UTILITY := Color("#2c5c9a")
 
 const STATES := ["normal", "hover", "pressed", "disabled", "focus"]
+
+## Eski varyant adları -> oyun kiti buton paletleri (tools/gen_menu_kit.py GAME_BTN_PALS).
+const VARIANTS := {"wood": "tan", "green": "sage", "red": "rose", "dark": "bark"}
+## Buton payları: 24x16 sanat px doku, 9-slice payı 8/5 sanat px; içerik payları eski kitle aynı (sıkı yerleşimler bozulmasın).
+const BTN_MARGINS := [8, 5, 8, 5]
+const BTN_CONTENT := [18, 4, 18, 4]
+const BTN_CONTENT_PRESSED := [18, 6, 18, 2]
+## Mini (kare) buton: 12x12 sanat px, pay 4.
+const MINI_MARGINS := [4, 4, 4, 4]
+const MINI_CONTENT := [6, 6, 6, 6]
+const MINI_CONTENT_PRESSED := [6, 8, 6, 4]
 
 static var _tex_cache: Dictionary = {}
 static var _style_cache: Dictionary = {}
 
 
+## Oyun içi tema (bkz. dosya başı notu). Önbellekli - her ekran aynı Theme nesnesini paylaşır.
+static func theme() -> Theme:
+	return MenuKit.build_theme(MenuKit.PAL_GAME)
+
+
+## HUD dokusu (assets/ui/kit).
 static func tex(file: String) -> Texture2D:
 	if _tex_cache.has(file):
 		return _tex_cache[file]
@@ -48,111 +89,92 @@ static func tex(file: String) -> Texture2D:
 	return t
 
 
-static func button_style(variant: String = "wood", state: String = "normal", mini: bool = false) -> StyleBoxTexture:
-	var key: String = "b|%s|%s|%s" % [variant, state, mini]
-	if _style_cache.has(key):
-		return _style_cache[key]
-	var sb := StyleBoxTexture.new()
-	sb.texture = tex(("btn_mini_%s_%s.png" if mini else "btn_%s_%s.png") % [variant, state])
-	var m: float = MINI_MARGIN if mini else BTN_MARGIN_H
-	var mv: float = MINI_MARGIN if mini else BTN_MARGIN_V
-	sb.texture_margin_left = m
-	sb.texture_margin_right = m
-	sb.texture_margin_top = mv
-	sb.texture_margin_bottom = mv
-	## Kenar/orta bantlar (ahşap damarı + degrade) esnetilmeden karo olarak tekrarlanır - kalite kaybı/bulanıklık yok (bkz. tools/gen_ui_kit.py plank).
-	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
-	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
-	var ch: float = MINI_CONTENT if mini else BTN_CONTENT_H
-	var cv: float = MINI_CONTENT if mini else BTN_CONTENT_V
-	sb.content_margin_left = ch
-	sb.content_margin_right = ch
-	sb.content_margin_top = cv
-	sb.content_margin_bottom = cv
-	_style_cache[key] = sb
-	return sb
+## Oyun kiti dokusu (assets/ui/game): tier kartları/slotları vb.
+static func game_tex(file: String) -> Texture2D:
+	return MenuKit.tex(file, GAME)
 
 
-## Herhangi bir Button'a tek çağrıda 5 durumlu (normal/hover/pressed/disabled/focus) kit stilini + okunaklı yazı renklerini uygular.
-## variant: wood (varsayılan) / green (onay/satın al/başla) / dark (ikincil) / red (tehlikeli/kapat).
+static func button_style(variant: String = "wood", state: String = "normal", mini: bool = false) -> StyleBox:
+	var v: String = VARIANTS.get(variant, variant)
+	if mini:
+		return MenuKit.btn_style(GAME, "btn_mini_", v, state, MINI_MARGINS, MINI_CONTENT, MINI_CONTENT_PRESSED)
+	return MenuKit.btn_style(GAME, "btn_", v, state, BTN_MARGINS, BTN_CONTENT, BTN_CONTENT_PRESSED)
+
+
+## Herhangi bir Button'a tek çağrıda 5 durumlu kit stilini + varyantın yazı renklerini uygular.
+## variant: wood (varsayılan, ten) / green (onay/satın al/başla, adaçayı) / dark (ikincil, koyu ahşap + krem yazı) /
+## red (tehlikeli/kapat, kiremit). Yazı rengi VARYANTA göre her zaman yazılır (eski koyu kitte krem yazı sabitti; açık
+## butonlar üstünde krem okunmazdı) - özel bir renk isteyen çağıran, bu çağrıdan SONRA kendi rengini verir.
 static func style_button(btn: Button, variant: String = "wood", mini: bool = false, font_size: int = -1) -> void:
 	if not is_instance_valid(btn):
 		return
 	for st in STATES:
 		btn.add_theme_stylebox_override(st, button_style(variant, st, mini))
-	## Sahnede (tscn/kod) zaten özel yazı rengi/konturu verilmiş butonlara dokunma: sadece eksik olanları tamamla.
-	var colors := {
-		"font_color": C_TEXT, "font_hover_color": Color(1, 1, 0.9, 1), "font_pressed_color": Color(0.9, 0.82, 0.66, 1),
-		"font_focus_color": C_TEXT, "font_disabled_color": Color(0.74, 0.66, 0.56, 0.75), "font_outline_color": C_OUTLINE,
-	}
-	for k in colors:
-		if not btn.has_theme_color_override(k):
-			btn.add_theme_color_override(k, colors[k])
-	if not btn.has_theme_constant_override("outline_size"):
-		btn.add_theme_constant_override("outline_size", 4)
+	var v: String = VARIANTS.get(variant, variant)
+	var cols: Array = MenuKit.BTN_TEXT.get(v, MenuKit.BTN_TEXT["tan"])
+	btn.add_theme_color_override("font_color", cols[0])
+	btn.add_theme_color_override("font_hover_color", cols[1])
+	btn.add_theme_color_override("font_pressed_color", cols[0])
+	btn.add_theme_color_override("font_focus_color", cols[0])
+	btn.add_theme_color_override("font_hover_pressed_color", cols[0])
+	btn.add_theme_color_override("font_disabled_color", MenuKit.PAL_GAME["disabled_text"])
+	btn.add_theme_constant_override("outline_size", 0)
 	if font_size > 0:
 		btn.add_theme_font_size_override("font_size", font_size)
 
 
-## Panel türleri: window (ahşap çerçeve + demir köşe + deri iç), inset (koyu çukur), card / card_selected / card_sold, plaque (başlık tahtası).
-static func panel_style(kind: String = "window") -> StyleBoxTexture:
+## Panel türleri: window / window_tight (ahşap pencere + parşömen iç), inset (çukur bej alan), card / card_selected /
+## card_sold (eşya kartı), plaque (başlık levhası: parşömen şerit, koyu yazı), banner (kurdele), status_badge / ability_bar
+## (HUD, assets/ui/kit). İçerik payları eski kitle AYNI (mevcut ekranların yerleşimi değişmesin).
+static func panel_style(kind: String = "window") -> StyleBox:
 	var key: String = "p|" + kind
 	if _style_cache.has(key):
 		return _style_cache[key]
-	var sb := StyleBoxTexture.new()
+	var sb: StyleBox
 	match kind:
 		"window":
-			sb.texture = tex("panel_window.png")
-			_margins(sb, 36.0, 44.0)
+			sb = MenuKit._tex_style("panel.png", [10, 10, 10, 10], [44, 44, 44, 44], true, GAME)
 		"window_tight":
-			## Aynı ahşap pencere, ama iç boşluk küçük: büyük menü panelleri (lobi/karakter seçimi) için - içerik fazla daralmasın.
-			sb.texture = tex("panel_window.png")
-			_margins(sb, 36.0, 18.0)
+			sb = MenuKit._tex_style("panel.png", [10, 10, 10, 10], [18, 18, 18, 18], true, GAME)
+		"window_small":
+			## Küçük HUD pencereleri (takım listesi, hediye/istatistik açılır pencereleri) - aynı ahşap çerçeve, dar iç boşluk.
+			sb = MenuKit._tex_style("panel.png", [10, 10, 10, 10], [14, 12, 14, 12], true, GAME)
 		"inset":
-			sb.texture = tex("panel_inset.png")
-			_margins(sb, 12.0, 12.0)
-		"status_badge":
-			## Kullanıcı isteği (2026-09-22): "bunların da ince dış açık kahverengi çerçeveleri olsun" - buff/
-			## debuff rozetleri (status_effect_badge.gd) için ability_bar ile AYNI ince ahşap pervaz dili,
-			## küçük bir rozete sığacak kadar ince tek katman (bkz. tools/gen_ui_kit.py status_badge_panel).
-			sb.texture = tex("panel_status_badge.png")
-			_margins(sb, 10.0, 4.0)
-		"ability_bar":
-			## Kullanıcı isteği (2026-09-22): "skill kutucuklarının olduğu yere arkasını kaplayacak bir
-			## çerçeve... diğer arayüzlerle uyumlu olacak şekilde... çerçeveler oval olmalı" - "window" stiliyle
-			## (merchant/envanter/stat'ın kullandığı AYNI kalın ahşap+demir pervaz) BİREBİR aynı çerçeve,
-			## sadece köşe yarıçapı çok daha büyük (hap/oval uçlar) - bkz. tools/gen_ui_kit.py ability_bar_panel.
-			## Pay yarıçaptan (28 actual px, tools/gen_ui_kit.py ability_bar_panel'deki radius x2) küçük
-			## OLAMAZ yoksa eğri kesilip esnetilirdi. DÜZELTME (kullanıcı bildirimi: "çerçeve çok kalın") -
-			## ilk denemenin 46/36'sı gereğinden fazlaydı, radius küçülünce pay da küçüldü.
-			sb.texture = tex("panel_ability_bar.png")
-			sb.texture_margin_left = 30.0
-			sb.texture_margin_right = 30.0
-			sb.texture_margin_top = 26.0
-			sb.texture_margin_bottom = 26.0
-			sb.content_margin_left = 10.0
-			sb.content_margin_right = 10.0
-			sb.content_margin_top = 6.0
-			sb.content_margin_bottom = 6.0
+			sb = MenuKit._tex_style("inset.png", [4, 4, 4, 4], [12, 12, 12, 12], true, GAME)
+		"inset_tight":
+			sb = MenuKit._tex_style("inset.png", [4, 4, 4, 4], [6, 4, 6, 4], true, GAME)
 		"card":
-			sb.texture = tex("panel_card.png")
-			_margins(sb, 18.0, 14.0)
+			sb = MenuKit._tex_style("card_normal.png", [5, 5, 5, 5], [14, 14, 14, 14], true, GAME)
 		"card_selected":
-			sb.texture = tex("panel_card_selected.png")
-			_margins(sb, 18.0, 14.0)
+			sb = MenuKit._tex_style("card_selected.png", [5, 5, 5, 5], [14, 14, 14, 14], true, GAME)
 		"card_sold":
-			sb.texture = tex("panel_card_sold.png")
-			_margins(sb, 18.0, 14.0)
+			sb = MenuKit._tex_style("card_sold.png", [5, 5, 5, 5], [14, 14, 14, 14], true, GAME)
 		"plaque":
-			sb.texture = tex("panel_plaque.png")
-			sb.texture_margin_left = 20.0
-			sb.texture_margin_right = 20.0
-			sb.texture_margin_top = 16.0
-			sb.texture_margin_bottom = 16.0
-			sb.content_margin_left = 22.0
-			sb.content_margin_right = 22.0
-			sb.content_margin_top = 6.0
-			sb.content_margin_bottom = 6.0
+			sb = MenuKit._tex_style("plaque.png", [6, 5, 6, 5], [22, 6, 22, 6], false, GAME)
+		"banner":
+			sb = MenuKit.style("banner", GAME)
+		"status_badge":
+			## Buff/debuff rozetleri (status_effect_badge.gd) - HUD dokusu, bkz. tools/gen_ui_kit.py status_badge_panel.
+			var b := StyleBoxTexture.new()
+			b.texture = tex("panel_status_badge.png")
+			_margins(b, 10.0, 4.0)
+			sb = b
+		"ability_bar":
+			## Yetenek çubuğunun arkası (hud.gd _create_ability_bar_frame) - oval uçlu ince ahşap pervaz, HUD dokusu.
+			## Pay yarıçaptan küçük OLAMAZ yoksa eğri kesilip esnetilir (bkz. tools/gen_ui_kit.py ability_bar_panel).
+			var a := StyleBoxTexture.new()
+			a.texture = tex("panel_ability_bar.png")
+			a.texture_margin_left = 30.0
+			a.texture_margin_right = 30.0
+			a.texture_margin_top = 26.0
+			a.texture_margin_bottom = 26.0
+			a.content_margin_left = 10.0
+			a.content_margin_right = 10.0
+			a.content_margin_top = 6.0
+			a.content_margin_bottom = 6.0
+			sb = a
+		_:
+			sb = StyleBoxEmpty.new()
 	_style_cache[key] = sb
 	return sb
 
@@ -168,12 +190,15 @@ static func _margins(sb: StyleBoxTexture, tex_margin: float, content: float) -> 
 	sb.content_margin_bottom = content
 
 
-## Bir Label'a kit yazı stili (m5x7 için 16'nın katı boyut + koyu kontur) uygular.
+## Bir Label'a kit yazı stili uygular. outline > 0: yalnızca AÇIK renkli yazılarda (oyun dünyası/koyu zemin üstü) koyu
+## kontur çizilir - bej panel üstündeki koyu yazıya kontur eklemek harfleri kalınlaştırıp bulanıklaştırırdı.
 static func style_label(lbl: Label, font_size: int = FS_BODY, color: Color = C_TEXT, outline: int = 0) -> void:
 	if not is_instance_valid(lbl):
 		return
 	lbl.add_theme_font_size_override("font_size", font_size)
 	lbl.add_theme_color_override("font_color", color)
-	if outline > 0:
+	if outline > 0 and color.get_luminance() > 0.55:
 		lbl.add_theme_color_override("font_outline_color", C_OUTLINE)
 		lbl.add_theme_constant_override("outline_size", outline)
+	else:
+		lbl.add_theme_constant_override("outline_size", 0)

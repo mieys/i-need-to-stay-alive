@@ -1,6 +1,7 @@
 extends CharacterBody2D
 class_name RemotePlayer
 
+const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const OakleyLeafBarrierScene: PackedScene = preload("res://scenes/fx_oakley_leaf_barrier.tscn")
 
 ## Remote player puppet for multiplayer.
@@ -21,6 +22,8 @@ var _chat_bubble: Node2D = null
 
 var health: float = 100.0
 var max_health: float = 100.0
+## Sahibinin gerçek yürüme hızı (main.gd extra["move_speed"]); henüz paket gelmediyse 0 (bkz. get_effective_move_speed).
+var synced_move_speed: float = 0.0
 var item_shield_hp: float = 0.0
 var item_shield_max: float = 0.0
 var is_dead: bool = false
@@ -291,6 +294,8 @@ const WEAPON_SCENES := {
 
 
 func _ready() -> void:
+	## Fizik interpolasyonu (bkz. physics_interp.gd): _physics_process'te hareket ediyor.
+	PhysicsInterp.opt_in(self)
 	## ÖNEMLİ: RemotePlayer "player" grubuna EKLENMEMELİDİR.
 	## "player" grubu yalnızca bu istemcinin kendi yerel Player'ına aittir.
 	## RemotePlayer'ların bu grupta olması get_first_node_in_group("player")/
@@ -369,7 +374,15 @@ func _load_character_frames() -> void:
 
 
 
+## Fizik interpolasyonu: bu adımdan ÖNCEKİ konum - _process'te buna yapışan görseller
+## (hasar sayıları, auralar) çizilen konumu bulsun diye (bkz. PhysicsInterp.visual_position).
+var _interp_prev_pos: Vector2 = Vector2.ZERO
+var _interp_prev_frame: int = -1
+
+
 func _physics_process(delta: float) -> void:
+	_interp_prev_pos = global_position ## bkz. PhysicsInterp.visual_position
+	_interp_prev_frame = Engine.get_physics_frames()
 	## Kullanıcı isteği: "Ölünce silahlar yere düşsün ... dirilince ease ease
 	## normal yerlerine geri dönsün" - bkz. _process_weapon_death_drop_
 	## transition üstündeki not. Düşme/yerde durma fazları TAM is_dead=true
@@ -728,11 +741,10 @@ func _update_local_uzunkilic_orbit(delta: float) -> void:
 		icon.rotation = orbit["rotation"]
 		if not icon.visible:
 			icon.visible = true
-		_orbit_trail_timer -= delta
-		if _orbit_trail_timer <= 0.0:
-			_orbit_trail_timer = WeaponOrbitMath.TRAIL_INTERVAL
-			if get_tree().current_scene:
-				WeaponOrbitMath.spawn_trail(get_tree().current_scene, icon.global_position, icon.rotation, range_mult, scale.x)
+		## Yörünge izi - weapon.gd ile AYNI fonksiyon (bkz. WeaponOrbitMath.update_arc). İz ikonun çocuğu olarak tutulur,
+		## ikon silinince kendiliğinden gider.
+		var arc: AnimatedSprite2D = WeaponOrbitMath.update_arc(icon.get_meta("orbit_arc", null), icon, global_position, icon.global_position)
+		icon.set_meta("orbit_arc", arc)
 
 
 ## Talon'un Silah Salvosu (E)/Ayna Formu (R) yeteneklerindeki dairesel silah
@@ -1047,8 +1059,22 @@ func is_ghost_now() -> bool:
 	return _vampir_bat_form or _elara_evasion
 
 
+## player.gd get_effective_move_speed ile AYNI sözleşme. Durum paketi henüz gelmediyse yerel oyuncunun hızı (aynı
+## player.tscn tabanı) yedek olarak döner - eskiden kopya burada Characters.BASE_MOVE_SPEED (252) kullanıyordu, ama
+## oyuncunun gerçek taban hızı player.tscn'de 91 x EntityScale.SPEED = ~82: host olmayan oyuncunun kopyası ondan ~2.5
+## kat hızlıydı ("kopya sürekli karaktere ışınlanıyor ve bırakmıyor" bildiriminin kök nedeni).
+func get_effective_move_speed() -> float:
+	if synced_move_speed > 0.0:
+		return synced_move_speed
+	var local_p: Node = get_tree().get_first_node_in_group("player")
+	if local_p and local_p.has_method("get_effective_move_speed"):
+		return float(local_p.call("get_effective_move_speed"))
+	return Characters.BASE_MOVE_SPEED
+
+
 func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary = {}) -> void:
 	update_weapon_visuals(weapon_keys, extra.get("weapon_tiers", {}))
+	synced_move_speed = float(extra.get("move_speed", synced_move_speed))
 	health = hp
 	max_health = max_hp
 	item_shield_hp = s_hp

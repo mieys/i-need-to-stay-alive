@@ -142,15 +142,18 @@ def paste_mirror4(a, x, y, c):
 
 
 # ---------------------------------------------------------------- palet
-OUT = hexc('#24150c')
-W4 = hexc('#c9915a')
-W3 = hexc('#a96f3f')
-W2 = hexc('#82522d')
-W1 = hexc('#5b3820')
-W0 = hexc('#3f2615')
-LEATHER = hexc('#372818')
-LEATHER_D = hexc('#2a1e12')
-INSET = hexc('#20150d')
+# Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle AYNI bej/ahşap dile geçti ("biraz daha koyu") - bu palet
+# tools/gen_menu_kit.py GAME_PAL ile aynı tonlar (ahşap W*, kontur OUT); eski koyu deri iç (LEATHER/INSET) yerine parşömen.
+# HUD çerçeveleri (can/kalkan barı, avatar, yetenek slotları, minimap halkası, yetenek çubuğu, buff rozeti) buradan üretilir.
+OUT = hexc('#3a2213')
+W4 = hexc('#d8a56c')
+W3 = hexc('#b9844f')
+W2 = hexc('#976639')
+W1 = hexc('#734727')
+W0 = hexc('#55331b')
+LEATHER = hexc('#c8a878')
+LEATHER_D = hexc('#ae8e60')
+INSET = hexc('#b99a6b')
 GOLD_L = hexc('#ffe58a')
 GOLD = hexc('#eab440')
 GOLD_D = hexc('#9c6318')

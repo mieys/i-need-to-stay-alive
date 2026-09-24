@@ -57,6 +57,28 @@ const MODE_TEXTURES := {
 ## yapısıyla (bkz. _create_skill3_icon) kod içinde PartyPanel'le AYNI
 ## "programatik Control + set_script + add_child" deseniyle kuruluyor.
 var skill3_icon = null
+## PERF (kullanıcı bildirimi: "Büyücü kız Q ile faz değiştirdiğinde oyuna drop giriyor" -
+## ölçüm, gerçek renderer: değişimden HEMEN SONRAKİ karede ~80-90ms tek seferlik sıçrama,
+## HER basışta - FX/ses/parçacıklar tamamen MASUM çıktı, tek başına salt buyucu_variation_
+## set bayrağını değiştirmek bile aynı sıçramayı veriyordu). Kök neden: aşağıdaki `load(
+## v_icons[v_idx])`/`load(v_icons_r[...])` HER KAREDE (Büyücü Kız seçiliyken _process'te,
+## 60/sn) koşulsuz çağrılıyordu - `load()` sonucu skill_icon.gd'nin custom_texture'ına
+## atanıyor, başka hiçbir yerde GÜÇLÜ referans TUTULMUYOR; varyasyon değişince eski texture
+## custom_texture'dan düşüp Godot'un ResourceCache'inden (zayıf referans) DÜŞÜYOR - bir
+## SONRAKİ kez o varyasyona dönülünce disk+PNG decode+GPU upload'u SIFIRDAN tekrar
+## yapılıyordu (iki varyasyon arasında sürekli GİDİP-GELİNDİĞİ için bu HER basışta oluyordu,
+## sadece ilk kullanımda değil). Çözüm: ikonları burada KENDİ güçlü referansımızla
+## önbelleğe al - bir kez yüklendikten sonra ResourceCache'den asla düşmüyor.
+var _buyucu_variation_icon_cache: Dictionary = {}
+
+func _cached_texture(path: String) -> Texture2D:
+	var cached: Variant = _buyucu_variation_icon_cache.get(path)
+	if cached != null:
+		return cached
+	var tex: Texture2D = load(path)
+	if tex:
+		_buyucu_variation_icon_cache[path] = tex
+	return tex
 ## Ruhani Yetenek butonu (F tuşu, bkz. spiritual_skills.gd/_create_spirit_icon) - 3. butonun sağında, diğer butonlar
 ## arasındaki boşlukla, biraz büyük ve farklı (mor-altın) çerçeve renginde.
 ## DÜZELTME (kullanıcı isteği 2026-09-22: "ruhani skillin boyutunu biraz ufalt") - eskiden %20 büyüktü (1.2051),
@@ -106,6 +128,13 @@ const StatusEffectBadgeScene: PackedScene = preload("res://scenes/status_effect_
 ## _process()'te senkron tutulur.
 @onready var gold_indicator: Control = $GoldIndicator
 @onready var gold_indicator_label: Label = $GoldIndicator/GoldMargin/GoldHBox/Label
+## Kullanıcı isteği: "oyuna fps göstergesi ekle ayarlardan açılıp
+## kapatılabilsin" - görünürlük UISound.show_fps'e bağlı, ayarlar panelinden
+## (pause_menu.gd/main_menu.gd FpsCheck) her değiştiğinde bu HUD açıkken de
+## anında yansısın diye her karede senkronlanıyor (gold_indicator'ın dükkan
+## açık/kapalı senkronuyla AYNI desen, bkz. yukarısı).
+@onready var fps_label: Label = $FpsLabel
+var _fps_update_timer: float = 0.0
 @onready var shop_toggle_button: Button = $ShopToggleButton
 @onready var envanter_toggle_button: Button = $EnvanterToggleButton
 @onready var stats_panel_instance = $StatsPanelInstance
@@ -163,6 +192,7 @@ func _connect_once(sig: Signal, callable: Callable) -> void:
 func _ready() -> void:
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
+	_setup_debug_mode()
 	if passive_icon:
 		passive_icon.frame_border = 4.0 ## küçük pasif çerçeve: 3 sanat pikseli kenar (bkz. skill_icon.gd frame_border)
 	## DÜZELTME (kullanıcı isteği: "kategori butonları veya aşırı dar olan
@@ -201,6 +231,7 @@ func _ready() -> void:
 	_create_status_bar()
 	_setup_ability_icons()
 	_setup_portrait()
+	_layout_bar_kit()
 	_setup_revive_display()
 	_layout_shop_inventory_buttons()
 	_style_envanter_and_gold_buttons()
@@ -386,6 +417,10 @@ func _style_envanter_and_gold_buttons() -> void:
 	## Kullanıcı isteği (2026-09-21): tüm arayüz UIKit kitiyle uyumlu - altın göstergesi başlık tahtası (plaque) stilinde.
 	_gold_indicator_normal_style = UIKit.panel_style("plaque")
 	gold_indicator.add_theme_stylebox_override("panel", _gold_indicator_normal_style)
+	## 2026-09-24: levha artık bej parşömen (oyun içi kit) - sahnedeki açık sarı yazı okunmuyordu, koyu altın.
+	if gold_indicator_label:
+		gold_indicator_label.add_theme_color_override("font_color", UIKit.C_GOLD)
+		gold_indicator_label.add_theme_constant_override("outline_size", 0)
 	_set_mouse_ignore_recursive(gold_indicator)
 
 
@@ -758,12 +793,115 @@ func _sync_status_row(row: HBoxContainer, effects: Array) -> void:
 
 ## Karakter panosunun ortasındaki madalyona seçili karakterin portresini
 ## koyar (bkz. characters.gd "portrait" alanı).
+## Kullanıcı isteği (2026-09-24): "can ve kalkan barını da uyumlu şekilde yeniden tasarla" + "barlar hiç değişmemiş çok
+## çirkinler" - yeni levha dokusu (tools/gen_ui_kit.py bar_frame: 48x22 sanat px, 2x = 96x44): sağdaki ENVANTER/altın
+## levhalarıyla aynı parşömen dil, solda 40 px'lik ikon ucu, sağda 12 px'lik çivili uç, çubuk yuvası levhanın 12..32 px'i.
+## hud.tscn'deki eski ölçüler (pay 30/10, 36 px çerçeve, 24 px çubuk) yerine burada koddan uygulanıyor - .tscn editörde
+## açıkken kaydedilip ezilme riski olmasın. Levhalar avatar çerçevesinin (0..96) boyuna yerleşir: can 4..48, kalkan 52..96.
+const BAR_FRAME_PATCH_LEFT := 40
+const BAR_FRAME_PATCH_RIGHT := 12
+const BAR_FRAME_HEIGHT := 44.0
+const BAR_SLOT_TOP := 12.0 ## levha üstünden çubuk yuvasına (sanat satırı 6)
+const BAR_SLOT_HEIGHT := 20.0
+const BAR_FRAME_TOPS := [4.0, 52.0]
+const BAR_VALUE_FONT_SIZE := 24
+const BAR_TICK_COUNT := 10 ## %10'da bir çentik - miktar bir bakışta okunur
+
+
+func _layout_bar_kit() -> void:
+	var cluster: Node = get_node_or_null("CharacterCluster")
+	if cluster == null:
+		return
+	var sets := [["HealthBar", "HealthBarFrame", "HealthValueLabel"], ["ShieldBar", "ShieldBarFrame", "ShieldValueLabel"]]
+	for i in sets.size():
+		var names: Array = sets[i]
+		var bar: Control = cluster.get_node_or_null(names[0]) as Control
+		var frame: NinePatchRect = cluster.get_node_or_null(names[1]) as NinePatchRect
+		var lbl: Label = cluster.get_node_or_null(names[2]) as Label
+		if bar == null or frame == null:
+			continue
+		var top: float = BAR_FRAME_TOPS[i]
+		frame.patch_margin_left = BAR_FRAME_PATCH_LEFT
+		frame.patch_margin_right = BAR_FRAME_PATCH_RIGHT
+		frame.patch_margin_top = 0
+		frame.patch_margin_bottom = 0
+		frame.offset_top = top
+		frame.offset_bottom = top + BAR_FRAME_HEIGHT
+		bar.offset_left = frame.offset_left + BAR_FRAME_PATCH_LEFT
+		bar.offset_right = frame.offset_right - BAR_FRAME_PATCH_RIGHT
+		bar.offset_top = top + BAR_SLOT_TOP
+		bar.offset_bottom = bar.offset_top + BAR_SLOT_HEIGHT
+		_add_bar_ticks(bar)
+		if lbl:
+			lbl.offset_left = bar.offset_left
+			lbl.offset_right = bar.offset_right
+			lbl.offset_top = bar.offset_top - 4.0
+			lbl.offset_bottom = bar.offset_bottom + 4.0
+			lbl.add_theme_font_size_override("font_size", BAR_VALUE_FONT_SIZE)
+			lbl.add_theme_constant_override("outline_size", 6)
+
+
+## Çubuğun ÇOCUĞU olarak çizilir: dolgunun üstünde, levhanın (sonraki kardeş) altında. 2 px'lik koyu şerit, 2 px ızgarada.
+func _add_bar_ticks(bar: Control) -> void:
+	if bar.has_node("Ticks"):
+		return
+	var ticks := Control.new()
+	ticks.name = "Ticks"
+	ticks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ticks.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bar.add_child(ticks)
+	ticks.draw.connect(func() -> void:
+		for t in range(1, BAR_TICK_COUNT):
+			var x: float = round(ticks.size.x * float(t) / float(BAR_TICK_COUNT) * 0.5) * 2.0
+			ticks.draw_rect(Rect2(x - 2.0, 0.0, 2.0, ticks.size.y), Color(0.12, 0.06, 0.02, 0.3)))
+	ticks.resized.connect(ticks.queue_redraw)
+
+
 func _setup_portrait() -> void:
 	var def: Dictionary = Characters.get_def(GameManager.selected_char_id)
 	if def.has("portrait"):
 		var tex: Texture2D = load(def["portrait"])
 		if tex:
 			portrait.texture = tex
+			_fit_portrait_pixel_perfect(tex)
+	_add_portrait_backdrop()
+	## Seviye rozeti artık parşömen içli (tools/gen_ui_kit.py level_badge) - rakam koyu kahve, kontursuz.
+	level_label.add_theme_color_override("font_color", UIKit.C_TEXT)
+	level_label.add_theme_constant_override("outline_size", 0)
+
+
+## Kullanıcı isteği (2026-09-24): HUD avatarı da menülerle aynı dile geçti - portre oyun dünyasının önünde değil, menü
+## kartlarındaki gibi sıcak bir sahnenin (krem->bej degrade + çimen tümseği, tools/gen_ui_kit.py avatar_bg) önünde durur.
+func _add_portrait_backdrop() -> void:
+	var clip: Control = portrait.get_parent() as Control
+	if clip == null or clip.has_node("PortraitBG"):
+		return
+	var bg := TextureRect.new()
+	bg.name = "PortraitBG"
+	bg.texture = UIKit.tex("hud_avatar_bg.png")
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	clip.add_child(bg)
+	clip.move_child(bg, 0)
+
+
+## Portre eskiden 72x72 kutuyu "cover" ile dolduruyordu - 48 px'lik portrede 1.5x (eşit olmayan pikseller). Artık TAM SAYI
+## kat: 48x48 portreler 2x (96 px, kutu figürün 6..42 satırlarını gösterir - baş/gövde), 64x64 (Oakley) 1x.
+func _fit_portrait_pixel_perfect(tex: Texture2D) -> void:
+	var clip_size := Vector2(72, 72)
+	var k: float = 2.0 if tex.get_height() <= 48 else 1.0
+	var draw_size: Vector2 = tex.get_size() * k
+	portrait.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait.stretch_mode = TextureRect.STRETCH_SCALE
+	portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var pos: Vector2 = ((clip_size - draw_size) * 0.5).floor()
+	portrait.offset_left = pos.x
+	portrait.offset_top = pos.y
+	portrait.offset_right = pos.x + draw_size.x
+	portrait.offset_bottom = pos.y + draw_size.y
 
 
 ## DÜZELTME (kullanıcı isteği: "multiplayerda canların takım canı değil
@@ -927,7 +1065,8 @@ func update_health(current: float, max_value: float) -> void:
 	
 	# Şirin retro piksel renk geçişi (Emerald Green'den Crimson Red'e)
 	var pct: float = clamp(current / max(max_value, 1.0), 0.0, 1.0)
-	var health_color: Color = Color(0.76, 0.17, 0.25).lerp(Color(0.24, 0.73, 0.42), pct)
+	## 2026-09-24 bar yeniden tasarımı: parşömen levhada daha canlı piksel yeşili -> kırmızı (dolgu dokusu düz beyaz, ton burada).
+	var health_color: Color = Color(0.84, 0.22, 0.22).lerp(Color(0.36, 0.78, 0.29), pct)
 	health_bar.tint_progress = health_color
 
 
@@ -1066,18 +1205,11 @@ func _create_chat_ui() -> void:
 	_chat_input.placeholder_text = "Mesaj yazmak için Enter'a bas..."
 	_chat_input.max_length = 200
 	_chat_input.visible = false
-	var input_sb := StyleBoxFlat.new()
-	input_sb.bg_color = Color(0.1, 0.08, 0.08, 0.85)
-	input_sb.border_color = Color(0.83, 0.56, 0.30, 1.0)
-	input_sb.border_width_left = 2
-	input_sb.border_width_top = 2
-	input_sb.border_width_right = 2
-	input_sb.border_width_bottom = 2
-	input_sb.set_corner_radius_all(6)
-	input_sb.content_margin_left = 8.0
-	input_sb.content_margin_right = 8.0
-	_chat_input.add_theme_stylebox_override("normal", input_sb)
-	_chat_input.add_theme_stylebox_override("focus", input_sb)
+	## 2026-09-24: oyun içi bej kit (menülerle aynı dil) - bej çukur giriş kutusu + koyu yazı. (Eski koyu yarı saydam kutu,
+	## genel temadaki giriş yazısı koyulaşınca okunmaz olurdu.) 16 px = m5x7 2x, mesaj satırlarıyla uyumlu.
+	_chat_input.theme = UIKit.theme()
+	_chat_input.add_theme_stylebox_override("normal", UIKit.panel_style("inset_tight"))
+	_chat_input.add_theme_font_size_override("font_size", 16)
 	_chat_input.text_submitted.connect(_on_chat_input_submitted)
 	_chat_input.focus_exited.connect(_close_chat_input)
 	panel.add_child(_chat_input)
@@ -1099,6 +1231,12 @@ func _on_chat_input_submitted(text: String) -> void:
 	_close_chat_input()
 	var trimmed: String = text.strip_edges()
 	if trimmed.is_empty():
+		return
+	## Debug modu (kullanıcı isteği: chate "baykusseverim" yazılınca debug butonu belirsin) -
+	## GERÇEK bir sohbet mesajı olarak GÖNDERİLMİYOR (bkz. aşağıdaki return), sadece bu
+	## istemcide bir komut olarak tüketiliyor - bkz. GameManager.debug_mode_unlocked notu.
+	if trimmed.to_lower() == "baykusseverim":
+		_unlock_debug_mode()
 		return
 	_send_chat_message(trimmed)
 
@@ -1123,6 +1261,52 @@ func _send_chat_message(text: String) -> void:
 		NetworkManager.broadcast_chat_message.rpc(multiplayer.get_unique_id(), NetworkManager.local_player_name, text)
 	else:
 		NetworkManager.broadcast_chat_message(0, NetworkManager.local_player_name, text)
+
+
+## ===================================================================================
+## Debug modu (bkz. GameManager.debug_mode_unlocked notu / scripts/debug_menu.gd dosya başı
+## notu) - chate "baykusseverim" (bkz. _on_chat_input_submitted) YA DA ana menüden "Debug
+## Modu" (bkz. main_menu.gd) ile açılır. Buton kalıcı olarak KURULUR ama debug_mode_unlocked
+## true olana kadar GİZLİ kalır - main_menu.gd'den gelen otomatik açılış zaten bu bayrağı
+## sahne yüklenmeden önce true yapıyor, o yüzden burada sadece MEVCUT durumu okumak yeterli.
+const DebugMenuScript := preload("res://scripts/debug_menu.gd")
+var _debug_button: Button = null
+var _debug_menu: Control = null
+
+func _setup_debug_mode() -> void:
+	_debug_menu = Control.new()
+	_debug_menu.name = "DebugMenu"
+	_debug_menu.set_script(DebugMenuScript)
+	add_child(_debug_menu)
+
+	_debug_button = Button.new()
+	_debug_button.name = "DebugButton"
+	_debug_button.text = "DEBUG"
+	_debug_button.top_level = true ## bkz. world_event_banner.gd AYNI "CanvasLayer altında anchor güvenilmez" notu
+	_debug_button.custom_minimum_size = Vector2(90, 36)
+	_debug_button.visible = GameManager.debug_mode_unlocked
+	_debug_button.pressed.connect(func() -> void: _debug_menu.call("toggle"))
+	add_child(_debug_button)
+	_position_debug_button()
+
+
+func _position_debug_button() -> void:
+	if not _debug_button:
+		return
+	## DÜZELTME: hud.gd'nin kökü bir CanvasLayer (Control DEĞİL) - get_viewport_rect() burada
+	## yok, get_viewport().get_visible_rect() HER Node'da çalışır (bkz. bu hatanın headless
+	## testte "Parse Error: Function get_viewport_rect() not found" olarak yakalanması).
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	## DÜZELTME: custom_minimum_size (90) SADECE minimumdu - ortam temasının büyük
+	## font boyutu yüzünden buton GERÇEKTE daha geniş çiziliyordu (bkz. debug_menu.png'de
+	## "DEBUG" yerine sağdan kırpılmış "DEB" görünmesi). Gerçek genişlik için size.x kullan.
+	_debug_button.position = Vector2(vp.x - _debug_button.size.x - 20.0, 330.0)
+
+
+func _unlock_debug_mode() -> void:
+	GameManager.debug_mode_unlocked = true
+	if _debug_button:
+		_debug_button.visible = true
 
 
 ## main.gd _on_chat_message_received tarafından (hem yerel yankı hem uzak
@@ -1160,6 +1344,13 @@ func _process(delta: float) -> void:
 	## üstteki DÜKKAN/ENVANTER buton yığınının hemen altında, dükkan
 	## açık/kapalı farketmeksizin) - sadece metni her karede güncelleniyor.
 	gold_indicator_label.text = str(GameManager.gold)
+	_position_debug_button()
+	fps_label.visible = UISound.show_fps
+	if UISound.show_fps:
+		_fps_update_timer += delta
+		if _fps_update_timer >= 0.2:
+			_fps_update_timer = 0.0
+			fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
 	_update_status_bar()
 	if _mode_switch_cooldown_remaining > 0.0:
 		_mode_switch_cooldown_remaining = max(0.0, _mode_switch_cooldown_remaining - delta)
@@ -1188,7 +1379,7 @@ func _process(delta: float) -> void:
 				var v_idx: int = player.buyucu_variation if "buyucu_variation" in player else 0
 				var v_icons: Array = Characters.get_def(4).get("skill2_variation_icons", [])
 				if v_idx >= 0 and v_idx < v_icons.size():
-					var v_tex: Texture2D = load(v_icons[v_idx])
+					var v_tex: Texture2D = _cached_texture(v_icons[v_idx])
 					if v_tex:
 						skill2_icon.custom_texture = v_tex
 				skill2_icon.update_state(player.get_skill2_progress(), player.is_skill2_active(), player.get_buyucu_variation_cooldown_remaining(), player.get_skill2_active_fraction())
@@ -1245,7 +1436,7 @@ func _process(delta: float) -> void:
 				var v_icons_r: Array = Characters.get_def(4).get("skill3_variation_icons", [])
 				var v_local_idx_r: int = v_idx_r - 2
 				if v_local_idx_r >= 0 and v_local_idx_r < v_icons_r.size():
-					var v_tex_r: Texture2D = load(v_icons_r[v_local_idx_r])
+					var v_tex_r: Texture2D = _cached_texture(v_icons_r[v_local_idx_r])
 					if v_tex_r:
 						skill3_icon.custom_texture = v_tex_r
 				skill3_icon.update_state(player.get_skill3_progress(), player.is_skill3_active(), player.get_buyucu_variation_cooldown_remaining_r(), player.get_skill3_active_fraction())

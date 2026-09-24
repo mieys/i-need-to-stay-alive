@@ -313,7 +313,15 @@ func _ready() -> void:
 
 ## Kullanıcı isteği (2026-09-22): pencere çerçevesi/başlık tahtası/kapat/alt bilgi UIKit ile (bkz. seyyar satıcı ekranı, merchant_shop_screen.gd).
 func _apply_kit_layout() -> void:
+	## 2026-09-24: oyun içi bej kit teması (menülerle aynı dil, bir ton koyu) - etiketler varsayılan olarak koyu kahve.
+	theme = UIKit.theme()
 	$Frame.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+	## Sahnede krem verilmiş bölüm başlıkları (SİLAHLAR / EŞYALAR) bej zeminde okunmuyordu -> kiremit başlık rengi.
+	for sec_name in ["WeaponsTitle", "ItemsTitle"]:
+		var sec: Label = $Frame.get_node_or_null(sec_name) as Label
+		if sec:
+			sec.add_theme_color_override("font_color", UIKit.C_ACCENT)
+			sec.add_theme_constant_override("outline_size", 0)
 	var header: Panel = $Frame.get_node_or_null("HeaderBar") as Panel
 	if header:
 		header.add_theme_stylebox_override("panel", UIKit.panel_style("plaque"))
@@ -361,8 +369,9 @@ func _apply_kit_layout() -> void:
 		l.offset_top = -86.0
 		l.offset_bottom = -34.0
 		l.add_theme_font_size_override("font_size", UIKit.FS_TITLE)
-		l.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-		l.add_theme_constant_override("outline_size", 4)
+		l.add_theme_constant_override("outline_size", 0)
+	gold_label.add_theme_color_override("font_color", UIKit.C_GOLD)
+	xp_label.add_theme_color_override("font_color", Color(UIKit.INK["shield"]))
 
 func _on_close_pressed() -> void:
 	visible = false
@@ -446,7 +455,7 @@ func _refresh_weapons() -> void:
 				var lvl_lbl: Label = Label.new()
 				lvl_lbl.text = "Sv%d" % level
 				lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-				lvl_lbl.add_theme_color_override("font_color", UIKit.C_GOLD)
+				lvl_lbl.add_theme_color_override("font_color", UIKit.C_CREAM)
 				lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
 				lvl_lbl.add_theme_constant_override("outline_size", 4)
 				lvl_lbl.anchor_left = 1.0
@@ -578,7 +587,7 @@ func _refresh_equipments() -> void:
 		var lvl_lbl: Label = Label.new()
 		lvl_lbl.text = "Sv%d" % level
 		lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-		lvl_lbl.add_theme_color_override("font_color", UIKit.C_GOLD)
+		lvl_lbl.add_theme_color_override("font_color", UIKit.C_CREAM)
 		lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
 		lvl_lbl.add_theme_constant_override("outline_size", 4)
 		lvl_lbl.anchor_left = 1.0
@@ -640,7 +649,7 @@ func _refresh_equipments() -> void:
 			var lvl_lbl: Label = Label.new()
 			lvl_lbl.text = "Sv%d" % utility_level
 			lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-			lvl_lbl.add_theme_color_override("font_color", UIKit.C_GOLD)
+			lvl_lbl.add_theme_color_override("font_color", UIKit.C_CREAM)
 			lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
 			lvl_lbl.add_theme_constant_override("outline_size", 4)
 			lvl_lbl.anchor_left = 1.0
@@ -777,7 +786,7 @@ func _refresh_mods() -> void:
 			var lvl_lbl: Label = Label.new()
 			lvl_lbl.text = "Sv%d" % level
 			lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-			lvl_lbl.add_theme_color_override("font_color", UIKit.C_GOLD)
+			lvl_lbl.add_theme_color_override("font_color", UIKit.C_CREAM)
 			lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
 			lvl_lbl.add_theme_constant_override("outline_size", 4)
 			lvl_lbl.anchor_left = 1.0

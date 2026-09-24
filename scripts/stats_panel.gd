@@ -48,8 +48,9 @@ const ICON_ROW_COLOR := Color(0.85, 0.78, 0.65, 1.0)
 ## oturuyor; dükkanda da bu koyu zeminlerin üstündeki yazılar krem.
 ## Renkler burada tek merkezden veriliyor - 13 satırın .tscn içinde tek
 ## tek renklendirilmesi hem tekrar hem de bakımı zor olurdu.
-const LABEL_COLOR := Color(0.96, 0.89, 0.74, 1.0)  ## satır adı - dükkanın krem yazısı
-const VALUE_COLOR := Color(1.0, 0.85, 0.35, 1.0)   ## değer - altın sarısı, kolay seçilsin
+## 2026-09-24: satırlar artık bej çukur alanda (oyun içi kit, menülerle aynı dil) - koyu kahve ad + koyu altın değer.
+const LABEL_COLOR := UIKit.C_TEXT   ## satır adı
+const VALUE_COLOR := UIKit.C_GOLD   ## değer - koyu altın, kolay seçilsin
 
 var player: Node = null
 
@@ -79,6 +80,7 @@ func _ready() -> void:
 ## Kullanıcı isteği (2026-09-22): "stat arayüzü dahil, envanteri seyyar satıcı gibi pixel tarzda yap" - pencere/başlık/satır zemini UIKit
 ## ile, yazılar m5x7 için 16'nın katı boyutlarda (38/50 -> 32/48), Grid'in eski offset_transform ölçeği kaldırıldı.
 func _apply_kit_style() -> void:
+	theme = UIKit.theme()
 	var frame: PanelContainer = $Frame as PanelContainer
 	frame.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 	var margin: MarginContainer = $Frame/Margin as MarginContainer
@@ -108,8 +110,7 @@ func _apply_kit_style() -> void:
 			var lbl: Label = kids[i + j] as Label
 			if lbl:
 				lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-				lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-				lbl.add_theme_constant_override("outline_size", 3)
+				lbl.add_theme_constant_override("outline_size", 0)
 				if j == 2:
 					lbl.custom_minimum_size = Vector2(120, 0)
 
@@ -163,11 +164,12 @@ func _refresh() -> void:
 	var w = player.get_primary_weapon()
 	if w:
 		damage_value.text = str(int(w.damage))
-		fire_rate_value.text = "%.2f/sn" % (1.0 / w.fire_rate)
+		## bkz. player.gd get_attack_speed_bonus_percent - ilk silahın atış/sn'si DEĞİL, oyuncunun toplam saldırı hızı bonusu.
+		fire_rate_value.text = "+%%%d" % int(round(player.get_attack_speed_bonus_percent()))
 		crit_value.text = "%%%d (x%.2f)" % [int(w.crit_chance * 100), w.crit_damage]
 	else:
 		damage_value.text = "0"
-		fire_rate_value.text = "-"
+		fire_rate_value.text = "+%%%d" % int(round(player.get_attack_speed_bonus_percent()))
 		crit_value.text = "-"
 	shield_protection_value.text = "%%%d" % int(round(player.shield_protection * 100))
 
@@ -194,7 +196,7 @@ func _setup_stat_tooltips() -> void:
 	var descriptions: Dictionary = {
 		"speed": "Hız: Karakterin hareket hızını arttırır.",
 		"damage": "Saldırı Gücü: Tüm silahların verdiği hasarı arttırır.",
-		"fire_rate": "Ateş Hızı: Tüm silahların saldırı sıklığını/hızını arttırır.",
+		"fire_rate": "Saldırı Hızı: Tüm silahların saldırı sıklığını arttırır. Seviye kartları, eşyalar ve pasiflerden gelen toplam bonus.",
 		"shield_protection": "Kalkan Soğurma: Kalkanın hasar emme oranını arttırır.",
 		"crit_chance": "Kritik Oran/Hasar: Kritik vuruş yapma şansını ve kritik hasar çarpanını arttırır.",
 		"shield_pen_percent": "Kalkan Delme: Düşmanların kalkan soğurmasını yüzde olarak yok sayar.",

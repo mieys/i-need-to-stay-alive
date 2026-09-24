@@ -42,10 +42,47 @@ var _dots_timer: float = 0.0
 var _dots_count: int = 0
 
 func _ready() -> void:
+	_apply_kit_style()
 	status_label.text = "YÜKLENİYOR"
 	progress_bar.value = 0.0
 	NetworkManager.host_left_game.connect(_on_disconnected)
 	NetworkManager.server_disconnected.connect(_on_disconnected)
+
+
+## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap kite geçti - yükleme yazısı ve çubuğu ekranın
+## altında bir ahşap pencerede (koyu yazı, bej çukur çubuk + adaçayı dolgu), arka plan örtüsü sıcak ton. .tscn'ye dokunulmadı.
+func _apply_kit_style() -> void:
+	var darken: ColorRect = get_node_or_null("Darken") as ColorRect
+	if darken:
+		darken.color = Color(0.12, 0.07, 0.03, 0.45)
+	var window := Panel.new()
+	window.name = "KitWindow"
+	window.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+	window.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	window.anchor_left = 0.5
+	window.anchor_right = 0.5
+	window.anchor_top = 1.0
+	window.anchor_bottom = 1.0
+	window.offset_left = -470.0
+	window.offset_right = 470.0
+	window.offset_top = -204.0
+	window.offset_bottom = -48.0
+	add_child(window)
+	move_child(window, status_label.get_index())
+	UIKit.style_label(status_label, UIKit.FS_TITLE, UIKit.C_TEXT, 0)
+	status_label.offset_top = -186.0
+	status_label.offset_bottom = -130.0
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color("#88a24f")
+	fill.border_color = Color("#4f652d")
+	fill.set_border_width_all(3)
+	fill.set_corner_radius_all(3)
+	progress_bar.add_theme_stylebox_override("background", UIKit.panel_style("inset"))
+	progress_bar.add_theme_stylebox_override("fill", fill)
+	progress_bar.offset_left = -420.0
+	progress_bar.offset_right = 420.0
+	progress_bar.offset_top = -120.0
+	progress_bar.offset_bottom = -78.0
 
 
 func _process(delta: float) -> void:

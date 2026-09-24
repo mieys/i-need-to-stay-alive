@@ -46,7 +46,11 @@ const MAX_SOURCES := 8
 
 const FOG_GROUP := "vision_fog"
 const SOURCE_GROUPS: Array[String] = ["player", "remote_players"]
-const HIDEABLE_GROUPS: Array[String] = ["enemies", "enemy_projectiles"]
+## DÜZELTME (kullanıcı isteği 2026-09-23: "oyuncunun ve dostlarının görüş alanı dışındaki hiçbir şeyin
+## görünmesini istemiyorum, xp orb, sandık, altın v.b. yaratıkların görünmediği gibi onların da görünmemesini
+## istiyorum") - yerdeki düşürülen eşyalar da (bkz. drop_attraction.gd/xp_orb.gd/gold_drop.gd/food_drop.gd/
+## chest_drop.gd/magnet_drop.gd) artık düşmanlarla AYNI kurala tabi: görüş alanı dışında gizli.
+const HIDEABLE_GROUPS: Array[String] = ["enemies", "enemy_projectiles", "xp_orbs", "gold_drops", "food_drops", "chest_drops", "magnet_drops"]
 
 const HIDDEN_META := &"vision_fog_hidden"
 const ALPHA_META := &"vision_fog_alpha"
@@ -370,55 +374,65 @@ func _target_visibility(world_pos: Vector2) -> float:
 	return best
 
 
+## PERF (kullanıcı bildirimi: 200 yaratıkta FPS çöküşü - gerçek oyunda ölçüldü:
+## bu fonksiyon gerçek haritada kare başına ~3-4ms; oyuncuyu saran kümenin
+## tamamı görüş elipsinin içinde olduğu için HER yaratık için HER karede bir
+## duvar ışın taraması yapılıyordu). Artık her öğe MANAGE_INTERVAL_FRAMES karede
+## bir (instance_id'ye göre kaydırmalı) güncelleniyor - iş yükü 1/3. Görünürlük artık
+## İKİLİ olduğu için (bkz. _manage_item) bunun tek etkisi, sınırı geçen bir öğenin
+## görünüp/gizlenmesinin en fazla MANAGE_INTERVAL_FRAMES kare (~50ms) gecikmesi -
+## fark edilmeyecek kadar kısa. İlk kez görülen öğe (VIS_META yok) beklemeden hemen
+## işleniyor ki yeni doğan yaratık sisin içinde bir an bile görünür kalmasın.
+const MANAGE_INTERVAL_FRAMES := 3
+
 func _apply_enemy_visibility(enable: bool, delta: float) -> void:
 	if not enable and not _has_managed:
 		return
 	var any_managed: bool = false
+	var frame: int = Engine.get_process_frames()
 	for group_name: String in HIDEABLE_GROUPS:
 		for node: Node in get_tree().get_nodes_in_group(group_name):
 			var item: Node2D = node as Node2D
 			if item == null:
 				continue
 			if enable:
-				_manage_item(item, delta)
 				any_managed = true
+				if not item.has_meta(VIS_META):
+					_manage_item(item, delta)
+				elif (frame + item.get_instance_id()) % MANAGE_INTERVAL_FRAMES == 0:
+					_manage_item(item, delta * MANAGE_INTERVAL_FRAMES)
 			else:
 				_release_item(item)
 	_has_managed = any_managed
 
 
-func _manage_item(item: Node2D, delta: float) -> void:
+## DÜZELTME (kullanıcı isteği 2026-09-23: "görüş alanına giren veya görüş alanından çıkan şeyler (yaratıklar
+## dahil) opaklaşarak görünmesin bir anda görünsün") - eskiden move_toward ile FADE_IN_TIME (0.3sn)/FADE_OUT_TIME
+## (1.2sn) boyunca modulate.a yavaşça 0<->1 arasında YUMUŞAK geçiyordu. Artık görünürlük TAMAMEN İKİLİ: öğe
+## görüş alanına girdiği/çıktığı karede DOĞRUDAN tam görünür/tam gizli olur, ara bir "yarı saydam" durum YOK -
+## VIS_META hâlâ can_target()/is_world_pos_visible()/minimap.gd/floating_text.gd'nin okuduğu HAM (zaman
+## gecikmesiz) konumsal değeri taşıyor, o tarafların 0.5 eşiği DEĞİŞMEDİ.
+func _manage_item(item: Node2D, _delta: float) -> void:
 	var target: float = _target_visibility(item.global_position)
-	var vis: float = float(item.get_meta(VIS_META, target))
-	var rate: float = (1.0 / maxf(FADE_IN_TIME, 0.01)) if target > vis else (1.0 / maxf(FADE_OUT_TIME, 0.01))
-	vis = move_toward(vis, target, rate * delta)
-	item.set_meta(VIS_META, vis)
-
-	if vis <= HIDE_BELOW:
-		if item.visible:
-			item.visible = false
-			item.set_meta(HIDDEN_META, true)
+	## PERF DÜZELTMESİ (kullanıcı bildirimi: yaratık sayısı 200'e yaklaşırken FPS 20'lere düşüyordu) - bu fonksiyon
+	## HER "enemies"/"enemy_projectiles"/eşya üyesi için HER PROCESS KARESİNDE çağrılıyor (bkz.
+	## _apply_enemy_visibility), eleman sayısıyla DOĞRUSAL büyüyor. Oyuncudan uzak öğelerin büyük çoğunluğu
+	## zaten görünmez durumda KALICI olarak sabit kalıyor - hedef görünürlük 0 VE zaten gizliyse hiçbir şey
+	## değişmeyecek, get_meta/set_meta'ya bile gerek yok.
+	if target <= 0.0 and not item.visible:
 		return
-	if item.has_meta(HIDDEN_META):
-		item.remove_meta(HIDDEN_META)
-		item.visible = true
-	if not item.visible:
-		return
-	_set_alpha(item, vis)
-
-
-func _set_alpha(item: Node2D, vis: float) -> void:
-	var color: Color = item.modulate
-	if vis >= 0.999:
-		if item.has_meta(ALPHA_META):
-			item.remove_meta(ALPHA_META)
-			color.a = 1.0
-			item.modulate = color
-		return
-	if not is_equal_approx(color.a, vis):
-		color.a = vis
-		item.modulate = color
-	item.set_meta(ALPHA_META, true)
+	item.set_meta(VIS_META, target)
+	## Fog sadece KENDİ gizlediğini (HIDDEN_META) geri açar - başka bir sistemin (ör. ölüm, "sıyrılma"
+	## görünmezliği) visible=false yaptığı bir öğeye asla dokunmaz (bkz. test_fog_does_not_unhide_nodes_
+	## hidden_by_someone_else). Eski move_toward'lı sürümde bu, "vis 1'e sadece HIDDEN_META varsa görünür yap"
+	## dalıyla zımnen sağlanıyordu - ikili modelde de AYNI kural açıkça korunuyor.
+	if target > HIDE_BELOW:
+		if item.has_meta(HIDDEN_META):
+			item.remove_meta(HIDDEN_META)
+			item.visible = true
+	elif item.visible:
+		item.visible = false
+		item.set_meta(HIDDEN_META, true)
 
 
 func _release_item(item: Node2D) -> void:

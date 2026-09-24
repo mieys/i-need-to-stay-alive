@@ -238,29 +238,40 @@ static func _world_to_cell_f(world: Vector2) -> Vector2:
 ## Amanatides-Woo DDA: segmentin dokunduğu HER hücre ziyaret edilir (köşe sızması
 ## yok). Başlangıç ve bitiş hücreleri sayılmaz.
 static func _cells_line_blocked(a: Vector2, b: Vector2) -> bool:
+	## PERF: sıcak döngü (A* sadeleştirme + yaratık başına düz-çizgi kontrolü) - _is_solid/
+	## _in_bounds çağrıları ve Vector2i geçicileri yerine yerel int'lerle; davranış aynı.
 	var d: Vector2 = b - a
-	var cell := Vector2i(a.floor())
-	var end_cell := Vector2i(b.floor())
-	if cell == end_cell:
+	var cx: int = floori(a.x)
+	var cy: int = floori(a.y)
+	var ex: int = floori(b.x)
+	var ey: int = floori(b.y)
+	if cx == ex and cy == ey:
 		return false
-	var step := Vector2i(1 if d.x > 0.0 else -1, 1 if d.y > 0.0 else -1)
-	var inv := Vector2(1.0 / maxf(absf(d.x), 0.000001), 1.0 / maxf(absf(d.y), 0.000001))
-	var to_edge := Vector2(
-		(cell.x + 1 - a.x) if d.x > 0.0 else (a.x - cell.x),
-		(cell.y + 1 - a.y) if d.y > 0.0 else (a.y - cell.y))
-	var t_max: Vector2 = to_edge * inv
+	var sx: int = 1 if d.x > 0.0 else -1
+	var sy: int = 1 if d.y > 0.0 else -1
+	var inv_x: float = 1.0 / maxf(absf(d.x), 0.000001)
+	var inv_y: float = 1.0 / maxf(absf(d.y), 0.000001)
+	var t_x: float = ((cx + 1 - a.x) if d.x > 0.0 else (a.x - cx)) * inv_x
+	var t_y: float = ((cy + 1 - a.y) if d.y > 0.0 else (a.y - cy)) * inv_y
+	var ox: int = _origin.x
+	var oy: int = _origin.y
+	var w: int = _size.x
+	var h: int = _size.y
+	var blocked: PackedByteArray = _blocked
 	## Üst sınır: çizgi uzunluğu kadar hücre + pay (sonsuz döngüye karşı).
 	var max_steps: int = int(absf(d.x) + absf(d.y)) + 4
 	for _i: int in range(max_steps):
-		if t_max.x < t_max.y:
-			cell.x += step.x
-			t_max.x += inv.x
+		if t_x < t_y:
+			cx += sx
+			t_x += inv_x
 		else:
-			cell.y += step.y
-			t_max.y += inv.y
-		if cell == end_cell:
+			cy += sy
+			t_y += inv_y
+		if cx == ex and cy == ey:
 			return false
-		if _is_solid(cell):
+		var lx: int = cx - ox
+		var ly: int = cy - oy
+		if lx >= 0 and ly >= 0 and lx < w and ly < h and blocked[ly * w + lx] != 0:
 			return true
 	return false
 

@@ -79,7 +79,7 @@ anchor_bottom = 0.5
 offset_left = -270.0
 offset_top = -235.0
 offset_right = 290.0
-offset_bottom = 225.0
+offset_bottom = 260.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -163,11 +163,28 @@ offset_bottom = 337.0
 theme_override_font_sizes/font_size = 34
 text = "Tuş Atamaları"
 
+[node name="FpsLabel" type="Label" parent="SettingsPanel"]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 345.0
+offset_right = 280.0
+offset_bottom = 385.0
+theme_override_font_sizes/font_size = 47
+text = "FPS Göstergesi"
+
+[node name="FpsCheck" type="CheckButton" parent="SettingsPanel"]
+layout_mode = 0
+offset_left = 430.0
+offset_top = 345.0
+offset_right = 520.0
+offset_bottom = 385.0
+button_pressed = false
+
 [node name="CloseButton" type="Button" parent="SettingsPanel" unique_id=138319698]
 layout_mode = 0
 offset_left = 180.0
-offset_top = 347.0
+offset_top = 395.0
 offset_right = 380.0
-offset_bottom = 397.0
+offset_bottom = 445.0
 theme_override_font_sizes/font_size = 43
 text = "KAPAT"

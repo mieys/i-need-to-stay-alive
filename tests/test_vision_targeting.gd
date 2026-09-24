@@ -76,6 +76,11 @@ func _actor(group_name: String, pos: Vector2) -> FakeActor:
 func _make_fog() -> CanvasLayer:
 	var fog: CanvasLayer = VisionFogScript.new()
 	add_child(fog)
+	## bkz. test_vision_fog.gd _make_fog'taki AYNI DÜZELTME notu - vision_fog.gd process_mode = PROCESS_MODE_ALWAYS
+	## olduğu için sahnedeki fog kendi _process()'inden de update_fog() çağırır; bu, testin ELLE yaptığı
+	## çağrılarla yarışıp MANAGE_INTERVAL_FRAMES throttle'ının zamanlamasını bozabiliyordu (bir sonraki testin
+	## nesnelerine "sızarak" onu da başarısız gösterebiliyordu). Tamamen kapatılıyor - belirlenimci.
+	fog.set_process(false)
 	_track(fog)
 	return fog
 
@@ -83,6 +88,14 @@ func _make_fog() -> CanvasLayer:
 func _tick(fog: CanvasLayer, seconds: float) -> void:
 	for i: int in range(maxi(1, roundi(seconds / TICK_STEP))):
 		fog.update_fog(TICK_STEP)
+
+
+## bkz. test_vision_fog.gd _settle - throttle'ı bypass edip ilgili öğe(ler)i doğrudan yönetir, headless testte
+## Engine.get_process_frames()'in GERÇEK duvar-saatine bağlı, belirlenimsiz ilerlemesinden etkilenmez.
+func _settle(fog: CanvasLayer, items: Array = []) -> void:
+	fog.update_fog(TICK_STEP)
+	for item in items:
+		fog._manage_item(item, TICK_STEP)
 
 
 func _screen() -> Vector2:
@@ -148,15 +161,15 @@ func test_team_vision_makes_the_enemy_targetable() -> void:
 	add_child(enemy)
 	enemy.global_position = enemy_pos
 	_track(enemy)
-	_tick(fog, 0.2)
+	_settle(fog, [enemy])
 	assert(not VisionFogScript.can_target(enemy), "Müttefik yokken uzaktaki yaratık hedeflenememeli")
 	var ally := _actor("remote_players", enemy_pos - Vector2(30.0, 0.0))
-	_tick(fog, VisionFogScript.FADE_IN_TIME * 2.0)
+	_settle(fog, [enemy])
 	assert(fog.get_source_count() == 2, "Yerel oyuncu + müttefik = 2 görüş kaynağı")
 	assert(VisionFogScript.can_target(enemy), "Müttefiğin gördüğü yaratık benim için de hedeflenebilir olmalı (takım görüşü)")
-	## Müttefik ölürse görüş gider -> yaratık tekrar hedeflenemez (solma süresi kadar sonra).
+	## Müttefik ölürse görüş gider -> yaratık tekrar hedeflenemez (anında, artık solma yok).
 	ally.is_dead = true
-	_tick(fog, VisionFogScript.FADE_OUT_TIME * 1.5)
+	_settle(fog, [enemy])
 	assert(not VisionFogScript.can_target(enemy), "Müttefik görüşü kaybolunca yaratık tekrar hedeflenememeli")
 	_cleanup()
 

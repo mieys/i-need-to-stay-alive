@@ -1,5 +1,7 @@
 extends Area2D
 
+const DropAttraction := preload("res://scripts/drop_attraction.gd")
+
 var xp_value: float = 5.0
 ## Kullanıcı isteği: "oyundaki exp orblarını silip yerine bunu koy" - hangi
 ## GÖRSEL/renk kullanılacağını belirler (1=yeşil...5=kırmızı, bkz. TIERS).
@@ -121,19 +123,18 @@ func _setup_visual() -> void:
 func attract_to_player(target_peer_id: int = -1) -> void:
 	is_magnetized = true
 	magnet_target_peer_id = target_peer_id
+	DropAttraction.wake(self) ## uyuyorsa (bkz. drop_attraction.gd) mıknatıs anında uyandırır
 
 
 func _physics_process(delta: float) -> void:
-	var player := _resolve_attraction_target()
-	if not player or not is_instance_valid(player):
+	## Hedef seçimi + menzil kontrolü ortak/önbellekli yardımcıda (bkz. drop_attraction.gd PERF notu).
+	var player: Node2D = DropAttraction.attraction_target(self, is_magnetized, magnet_target_peer_id)
+	if player == null:
+		if DropAttraction.last_query_far:
+			DropAttraction.put_to_sleep(self) ## uyku/uyandırma: bkz. drop_attraction.gd
 		return
-	var pickup_range: float = 60.0
-	if player.has_method("get_pickup_range"):
-		pickup_range = player.get_pickup_range()
-	var dist := global_position.distance_to(player.global_position)
-	if is_magnetized or dist <= pickup_range:
-		attract_speed = min(attract_speed + ATTRACT_ACCEL * delta, MAX_ATTRACT_SPEED)
-		global_position = global_position.move_toward(player.global_position, attract_speed * delta)
+	attract_speed = min(attract_speed + ATTRACT_ACCEL * delta, MAX_ATTRACT_SPEED)
+	global_position = global_position.move_toward(player.global_position, attract_speed * delta)
 
 
 ## bkz. gold_drop.gd::_resolve_attraction_target aynı yorumu - XP takım
@@ -156,42 +157,8 @@ func _physics_process(delta: float) -> void:
 ## multiplayer aktifken HERKES (host'un gerçek nesnesi VE her istemcinin
 ## görsel kopyası) aynı "en yakın oyuncuyu bul" mantığını kullanıyor, böylece
 ## tüm ekranlarda orb her zaman GERÇEKTEN toplayan oyuncuya doğru gider.
-func _resolve_attraction_target() -> Node2D:
-	var local_player: Node2D = get_tree().get_first_node_in_group("player") as Node2D
-	if not NetworkManager.is_multiplayer_active:
-		return local_player
-
-	## #32 DÜZELTME (kullanıcı bildirimi: "Mıknatısla çekilen objeler her
-	## zaman mıknatısı tutana gitmeli"): eskiden mıknatıslanmış (is_magnetized)
-	## objeler de dahil HER ZAMAN "en yakın oyuncu" mantığı kullanılıyordu -
-	## bu sıradan menzil-içi çekim için doğru ama gerçek bir mıknatıs
-	## power-up'ı toplandığında YANLIŞ: o objeler mıknatısı ALAN oyuncuya
-	## gitmeli, o an tesadüfen en yakın olan oyuncuya değil. Artık geçerli
-	## bir magnet_target_peer_id varsa önce o SPESİFİK oyuncu bulunmaya
-	## çalışılıyor; bulunamazsa (ör. o oyuncu ayrılmış/ölmüş) eski "en yakın
-	## oyuncu" mantığına düşülüyor.
-	if is_magnetized and magnet_target_peer_id >= 0:
-		var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
-		if magnet_target_peer_id == local_id:
-			if local_player and is_instance_valid(local_player) and local_player.get("is_dead") != true:
-				return local_player
-		else:
-			for rp: Node in get_tree().get_nodes_in_group("remote_players"):
-				if is_instance_valid(rp) and rp.get("is_dead") != true and "peer_id" in rp and rp.peer_id == magnet_target_peer_id:
-					return rp
-
-	var best: Node2D = local_player
-	var best_dist: float = INF
-	if local_player and is_instance_valid(local_player):
-		best_dist = global_position.distance_to(local_player.global_position)
-	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
-		if not is_instance_valid(rp) or rp.get("is_dead") == true:
-			continue
-		var d: float = global_position.distance_to(rp.global_position)
-		if d < best_dist:
-			best_dist = d
-			best = rp
-	return best
+## (Eski _resolve_attraction_target bu dosyadan kaldırıldı - yukarıdaki kurallar artık drop_attraction.gd
+## attraction_target/_target_index'te, xp_orb.gd ile TEK ortak kopya.)
 
 
 func _on_body_entered(body: Node) -> void:

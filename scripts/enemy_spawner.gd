@@ -157,7 +157,10 @@ const FINAL_CREATURES := [
 ## artık ızgara/grid tabanlı, O(n)'e yakın). O kök neden düzeltildiği için
 ## spawn artışı kullanıcının ASIL istediği %150'ye (×2.5) geri getirildi -
 ## darboğaz sayının kendisi değil, algoritmaydı.
-@export var base_interval: float = 0.6
+## Kullanıcı bildirimi (2026-09-24): "Yaratıklar çok hızlı artıyor daha yavaş zorlanmalı oyun" - başlangıç
+## aralığı 0.6 -> 0.9 (SPAWN_RATE_MULT sonrası ilk dakikada 0.4sn -> 0.6sn, dakikada ~150 -> ~100 spawn).
+## min_interval (nihai/geç oyun yoğunluğu) DEĞİŞMEDİ - sadece oraya varış yavaşladı (bkz. difficulty_ramp).
+@export var base_interval: float = 0.9
 @export var min_interval: float = 0.16
 ## DÜZELTME (kullanıcı bildirimi: "yaratıklar çok hızlı bir şekilde çoğalıyorlar
 ## ve aşırı fazla oluyorlar, biraz daha yavaş ilerlemesi gerek") - eskiden
@@ -167,7 +170,10 @@ const FINAL_CREATURES := [
 ## zaten en yüksek yoğunlukta düz gidiyordu. Yarıya indirilince aynı tavana
 ## (0.16sn, hâlâ AYNI nihai zorluk) ~147 saniyede (Kademe 2 civarı) ulaşılıyor -
 ## erken oyun daha kademeli hissettiriyor, nihai zorluk değişmedi.
-@export var difficulty_ramp: float = 0.003
+## SONRAKİ TUR (kullanıcı bildirimi 2026-09-24: "Yaratıklar çok hızlı artıyor daha yavaş zorlanmalı oyun") -
+## 0.003 ile tavana hâlâ ~2.5 dakikada (Kademe 2) varılıyordu. 0.001 + yeni base_interval 0.9 ile
+## 0.9 -> 0.16 inişi ~740 saniye (~12 dk, Kademe 8 civarı) sürüyor - aynı nihai zorluk, çok daha yavaş yol.
+@export var difficulty_ramp: float = 0.001
 ## Kullanıcı isteği: "yaratık sayısını %50 arttır" - eskiden 42, ×1.5 (63).
 ## Kullanıcı isteği: "yaratık spawnını %150 arttır" - 63 -> 158 (×2.5).
 ## DÜZELTME (kullanıcı bildirimi: optimizasyonlar sonrası bile hâlâ kasıyor,
@@ -183,14 +189,24 @@ const FINAL_CREATURES := [
 ## SONRAKİ TUR (kullanıcı isteği: "maksimum yaratık sayısını 80'e düşür") -
 ## 150 -> 80. EXTRA_PLAYER_ENEMY_CAP yine BİLEREK dokunulmadı - sadece bu
 ## tek sayı istendi.
-@export var max_concurrent_enemies: int = 80
+## SONRAKİ TUR (kullanıcı isteği: "yaratık sayısını ciddi artır", perf
+## çalışması sonrası) - enemy.gd'deki ayrışma artık toplu/düz dizi üzerinden
+## hesaplanıyor VE oyuncudan uzak yaratıklar LOD ile neredeyse bedava (bkz.
+## enemy.gd ENEMY_LOD_NEAR_RADIUS_SQ notu), yani eski 80/150 denemelerindeki
+## darboğaz büyük ölçüde ortadan kalktı. 80 -> 220, SONRA kullanıcı isteğiyle
+## 220 -> 200 (test için yuvarlak sayı) - hâlâ SADECE bir test değeri,
+## profiler'la ölçüp gerekirse yine kullanıcı tercihine göre ayarlanmalı.
+@export var max_concurrent_enemies: int = 200
 ## Multiplayer enemy scaling: solo keeps the original cap; each additional
 ## player adds room for more creatures and slightly increases spawn frequency.
 ## Kullanıcı isteği: "oyuncu başına yaratık sayısı %50 [artsın]" - eskiden 18, ×1.5 (27).
 ## Kullanıcı isteği: "yaratık spawnını %150 arttır" - 27 -> 68 (×2.5).
 ## DÜZELTME (kullanıcı isteği: "spawn sınırını 90'a düşürelim") - 68 -> 39,
 ## max_concurrent_enemies ile AYNI oranda (158->90, ~×0.57) küçültüldü.
-const EXTRA_PLAYER_ENEMY_CAP := 39
+## SONRAKİ TUR (perf çalışması sonrası, bkz. max_concurrent_enemies üstündeki
+## not) - max_concurrent_enemies ile AYNI oranda (şimdi 200/80) yükseltildi,
+## yine sadece başlangıç test değeri.
+const EXTRA_PLAYER_ENEMY_CAP := 98
 const EXTRA_PLAYER_SPAWN_RATE := 0.25
 @export var min_spawn_distance: float = 480.0
 @export var max_spawn_distance: float = 640.0
@@ -349,6 +365,17 @@ const GOLD_DROP_CHANCE_MULT := 0.9 ## altın düşürme İHTİMALİNİ %50 azalt
 const GOLD_DROP_AMOUNT_MULT := 1.5 ## düşen altın MİKTARINI ~%50 arttır
 
 var _spawn_timer: float = 0.0
+## GEÇİCİ TEST AYARI (kullanıcı isteği: "oyunu açtığımda 1 dakikada yavaşça
+## artıcak şekilde 200 düşman spawnlansın") - stres/görsel testi için. Normal
+## Kademe/roster/ölçekleme mantığına HİÇ dokunmuyor (hâlâ _current_interval'ın
+## çağırdığı _spawn_regular_enemy() üzerinden, doğru tier ile spawn ediyor),
+## sadece bu pencerede spawn ARALIĞINI DEBUG_RAMP_TEST_TARGET'a
+## DEBUG_RAMP_TEST_SECONDS içinde ulaşacak şekilde hızlandırıyor. KALICI bir
+## oyun özelliği DEĞİL - test bitince DEBUG_RAMP_TEST_ENABLED'ı false yap.
+const DEBUG_RAMP_TEST_ENABLED := false
+const DEBUG_RAMP_TEST_SECONDS := 60.0
+const DEBUG_RAMP_TEST_TARGET := 200
+var _debug_ramp_elapsed: float = 0.0
 var _network_sync_timer: float = 0.0
 var _next_network_enemy_id: int = 1
 var _boss_tiers_spawned: Dictionary = {}
@@ -488,13 +515,21 @@ func _process(delta: float) -> void:
 			# Sync game time so clients use the same difficulty scaling as host.
 			NetworkManager.sync_game_time.rpc(GameManager.game_time)
 
-	_spawn_timer -= delta
-	if _spawn_timer <= 0.0:
-		_spawn_timer = _current_interval()
-		_spawn_regular_enemy()
+	if DEBUG_RAMP_TEST_ENABLED and _debug_ramp_elapsed < DEBUG_RAMP_TEST_SECONDS:
+		_debug_ramp_elapsed += delta
 
-	_check_boss_tiers()
-	_check_final_tier()
+	## Debug modu (kullanıcı isteği: "düşman spawnlarını aktif/kapalı" - bkz. GameManager.
+	## debug_enemy_spawns_enabled notu) - bu satırdan yukarısı zaten host-authoritative kapının
+	## İÇİNDE (bkz. fonksiyon başındaki "sadece host" erken dönüşü), o yüzden host kapatınca
+	## herkes için gerçekten kapanmış olur.
+	if GameManager.debug_enemy_spawns_enabled:
+		_spawn_timer -= delta
+		if _spawn_timer <= 0.0:
+			_spawn_timer = _current_interval()
+			_spawn_regular_enemy()
+
+		_check_boss_tiers()
+		_check_final_tier()
 
 
 ## Her gerçek uzak katılımcı için AYRI bir yaratık-durumu paketi hazırlar
@@ -636,18 +671,32 @@ func _player_count() -> int:
 ## Artık bu tavan Kademe 1'de TIER_1_CAP_SCALE oranına sıkışıyor ve Kademe
 ## 15'e kadar doğrusal olarak tam tavana çıkıyor - kalabalıklaşma artık
 ## erken değil, geç oyunda hissediliyor.
-const TIER_1_CAP_SCALE := 0.35
+## SONRAKİ TUR (kullanıcı bildirimi 2026-09-24: "Yaratıklar çok hızlı artıyor daha yavaş zorlanmalı oyun") -
+## 0.35 -> 0.25 (solo oyun başında 70 -> 50 yaratık) VE tavan artık Kademe sınırlarında basamak basamak
+## zıplamıyor: Kademe saatine (_tier_time, boss kapısında durur) göre SÜREKLİ büyüyor, Kademe 15'in başında
+## (14 x tier_duration) tam tavana ulaşıyor. Nihai tavan (max_concurrent_enemies) değişmedi.
+const TIER_1_CAP_SCALE := 0.25
 
 func _tier_crowding_scale() -> float:
-	var tier: int = _current_tier()
-	return lerp(TIER_1_CAP_SCALE, 1.0, float(tier - 1) / 14.0)
+	var progress: float = clampf(_tier_time() / (14.0 * tier_duration), 0.0, 1.0)
+	return lerp(TIER_1_CAP_SCALE, 1.0, progress)
 
 func _scaled_enemy_cap() -> int:
+	## bkz. DEBUG_RAMP_TEST_ENABLED üstündeki GEÇİCİ TEST notu - Kademe 1'in
+	## kasıtlı TIER_1_CAP_SCALE (0.35) kısıtlaması olmasa 200 hedefine hiç
+	## ulaşılamazdı (Kademe 1 süresi 100sn, test penceresi 60sn - tier hiç
+	## ilerlemeden 200'e çıkmak isteniyor). Test penceresinde bu kısıtlama
+	## BİLEREK atlanıyor, kalıcı davranış DEĞİL.
+	if DEBUG_RAMP_TEST_ENABLED and _debug_ramp_elapsed < DEBUG_RAMP_TEST_SECONDS:
+		return DEBUG_RAMP_TEST_TARGET
 	var base_cap: int = max_concurrent_enemies + (_player_count() - 1) * EXTRA_PLAYER_ENEMY_CAP
 	return max(1, int(round(base_cap * _tier_crowding_scale())))
 
 
 func _current_interval() -> float:
+	## bkz. DEBUG_RAMP_TEST_ENABLED üstündeki GEÇİCİ TEST notu.
+	if DEBUG_RAMP_TEST_ENABLED and _debug_ramp_elapsed < DEBUG_RAMP_TEST_SECONDS:
+		return DEBUG_RAMP_TEST_SECONDS / float(DEBUG_RAMP_TEST_TARGET)
 	var t: float = GameManager.game_time
 	var solo_interval: float = max(min_interval, base_interval - t * difficulty_ramp)
 	var player_multiplier: float = 1.0 + float(_player_count() - 1) * EXTRA_PLAYER_SPAWN_RATE
@@ -1071,12 +1120,91 @@ func _spawn_creature(id: String, pos: Vector2, network_id: int = 0) -> Node:
 	enemy.global_position = pos
 	if network_id > 0:
 		enemy.set_meta("network_enemy_id", network_id)
+		NetworkManager.register_enemy_net_id(enemy, network_id) ## O(1) arama - bkz. NetworkManager._enemies_by_net_id
 	## Kullanıcı isteği: "oyundan çıkmış biri ... oyundaki son haliyle oyuna
 	## katılmalı" - sonradan katılan bir oyuncuya hâlâ hayatta olan
 	## yaratıkları "yakalama" (catch-up) yayınıyla göstermek için (bkz.
 	## _on_peer_needs_game_catchup) hangi tür olduğu burada saklanıyor.
 	enemy.set_meta("creature_id", id)
 	return enemy
+
+
+## Debug menüsü (bkz. debug_menu.gd/scripts/game_manager.gd debug_mode_unlocked notu) -
+## "istediğimiz yaratığı istediğimiz kadar spawnlama" isteği. _spawn_regular_enemy()'nin AYNI
+## kurulum adımlarını (tier scaling/kalkan/global güçlendirme/istemcilere yayın) izler, tek
+## fark rastgele rota/kademe yerine ELLE seçilen id/tier ve rastgele bir kademe anchor'ı yerine
+## oyuncunun (ya da verilen konumun) etrafında doğması. Host-authoritative (bkz. enemy_spawner.gd
+## dosya başı "sadece host" deseni) - bir İSTEMCİ bunu çağırırsa (çok oyunculu, host değilse)
+## hiçbir şey olmaz, host'un kendi debug menüsünden çağırması gerekir.
+func debug_spawn_creature(id: String, tier: int, count: int, around_pos: Vector2) -> int:
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		return 0
+	if not SCENES.has(id):
+		return 0
+	var spawned := 0
+	for i in range(max(1, count)):
+		var angle: float = randf() * TAU
+		var dist: float = randf_range(60.0, 220.0)
+		var spawn_pos: Vector2 = around_pos + Vector2(cos(angle), sin(angle)) * dist
+		var network_id: int = _next_network_enemy_id
+		_next_network_enemy_id += 1
+		var enemy = _spawn_creature(id, spawn_pos, network_id)
+		if not enemy:
+			continue
+		enemy.set_meta("spawn_tier", tier)
+		if enemy.has_method("apply_tier_scaling"):
+			enemy.apply_tier_scaling(tier)
+		if tier >= REGULAR_SHIELD_MIN_TIER and enemy.has_method("enable_item_shield"):
+			enemy.enable_item_shield(SHIELD_PROTECTION, REGULAR_SHIELD_RATIO)
+		_apply_global_buff(enemy)
+		if NetworkManager.is_multiplayer_active:
+			_rpc_client_spawn_creature.rpc(id, spawn_pos, tier, false, network_id)
+		spawned += 1
+	return spawned
+
+
+## "Alanı Güvenceye Al" görevi (bkz. world_event_manager.gd SECURE_WAVE_*): görev bölgesinde oyuncu
+## varken bölgenin kenarından, O ANKİ kademenin rosterinden ek yaratık dalgası. Normal akış (yaratıklar
+## oyuncunun çevresinde, kademe kapısıyla seyrek doğar) 3 dakikada 300 öldürmeye yetmiyordu. Host-only,
+## _spawn_regular_enemy ile AYNI kurulum (kademe ölçekleme/kalkan/global güç/istemcilere yayın) ve
+## AYNI yaratık tavanı - tavan doluysa bu dalga da doğmaz.
+func spawn_mission_wave(center: Vector2, ring_radius: float, count: int) -> int:
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		return 0
+	var tier: int = max(1, _current_tier())
+	var roster: Array = TIER_ROSTER.get(tier, TIER_ROSTER.get(1, []))
+	if roster.is_empty():
+		return 0
+	var spawned := 0
+	for i in range(count):
+		if get_tree().get_nodes_in_group("enemies").size() >= _scaled_enemy_cap():
+			break
+		var id: String = roster[randi() % roster.size()]
+		var angle: float = randf() * TAU
+		var spawn_pos: Vector2 = center + Vector2(cos(angle), sin(angle)) * ring_radius
+		if GameManager.is_position_blocked_by_terrain(spawn_pos):
+			continue
+		var network_id: int = _next_network_enemy_id
+		_next_network_enemy_id += 1
+		var enemy = _spawn_creature(id, spawn_pos, network_id)
+		if not enemy:
+			continue
+		enemy.set_meta("spawn_tier", tier)
+		if enemy.has_method("apply_tier_scaling"):
+			enemy.apply_tier_scaling(tier)
+		if tier >= REGULAR_SHIELD_MIN_TIER and enemy.has_method("enable_item_shield"):
+			enemy.enable_item_shield(SHIELD_PROTECTION, REGULAR_SHIELD_RATIO)
+		_apply_global_buff(enemy)
+		if NetworkManager.is_multiplayer_active:
+			_rpc_client_spawn_creature.rpc(id, spawn_pos, tier, false, network_id)
+		spawned += 1
+	return spawned
+
+
+## Debug menüsündeki yaratık seçici listesi için - SCENES'in kendisi (const preload'lu Dictionary)
+## dışarıdan doğrudan da okunabilir ama isimlendirilmiş bir erişim daha temiz.
+func get_debug_creature_ids() -> Array:
+	return SCENES.keys()
 
 
 @rpc("any_peer", "call_remote", "unreliable")

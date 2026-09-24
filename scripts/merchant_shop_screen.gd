@@ -36,12 +36,6 @@ extends CanvasLayer
 
 signal closed
 
-const PAL_CONTENT_BG := Color(0.239, 0.2, 0.149, 1.0)
-const PAL_CONTENT_BORDER := Color(0.168, 0.137, 0.101, 1.0)
-const PAL_ACCENT := Color(0.83, 0.56, 0.30, 1.0)
-const PAL_WINDOW_BG := Color(0.47, 0.39, 0.23, 1.0)
-const PAL_WINDOW_BORDER := Color(0.25, 0.15, 0.08, 1.0)
-
 ## bkz. chest_menu.gd/weapon_select_screen.gd üstündeki AYNI not - shop_
 ## panel.gd'nin static yardımcı fonksiyonlarına (_apply_wood_button_style/
 ## _apply_mini_wood_button_style/MAX_LEVELS/_upgrade_cost) script referansı
@@ -123,6 +117,13 @@ var _stat_value_labels: Dictionary = {}
 var _stats_timer: float = 0.0
 var _inventory_overlay: Control = null
 var _inventory_body: VBoxContainer = null
+## Kullanıcı bildirimi (2026-09-24, ekran görüntüsüyle): "dükkanda envantere tıklayınca çok eşyamız varsa eşya gösterme
+## arayüzü aşağı kayıyor ve aşağıdaki eşyalar görünmüyor" - pencere içerik kadar uzuyor ve ekranın altından taşıyordu.
+## İçerik artık bu kaydırma alanında; yüksekliği içerik ile ekranın izin verdiği azami değerin küçüğü (bkz.
+## _fit_inventory_scroll) - az eşyada pencere eskisi gibi içerik kadar, çok eşyada ekrana sığıp kaydırılır.
+var _inventory_scroll: ScrollContainer = null
+const INVENTORY_SCREEN_MARGIN := 80.0 ## pencerenin ekranın üst+alt kenarından toplam boşluğu
+const INVENTORY_HEADER_ALLOWANCE := 150.0 ## başlık çubuğu + ayraç + pencere çerçeve payları
 
 
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
@@ -147,9 +148,24 @@ func setup(player: Node, stock: Array, merchant: Node = null) -> void:
 	## paused kullanmıyor, bu yüzden main.gd'nin genel ui_cancel/pause-toggle
 	## kontrolü bu ekran açıkken de çalışıp pause menüsünü ÜSTÜNE açardı.
 	GameManager.register_blocking_panel(self)
+	## bkz. _process başındaki "oyun duraklarken gizlen" düzeltmesi - duraklamada da çalışsın ki kendini gizleyip
+	## geri açabilsin.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
 func _process(delta: float) -> void:
+	## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-24: "seyyar satıcı arayüzü açıkken level atladığımızda yetenek ve
+	## sandık seçilmiyor ve hiçbir butona basamadan takılı kalıyoruz") - bu ekran 80. CanvasLayer'da ve tam ekran
+	## karartması (dim, MOUSE_FILTER_STOP) TÜM tıklamaları yutuyor; seviye atlama (level_up_screen.tscn layer 1),
+	## sandık (chest_menu) ve mola dükkanı ise ALTINDAKİ katmanlarda açılıp get_tree().paused = true yapıyor. Duraklama
+	## bu ekranın kendi _process'ini de durdurduğu için ESC ile kapatmak da mümkün değildi -> tam kilit. Artık oyun
+	## duraklatıldığı sürece (bu ekran oyunu hiç duraklatmaz, yani duraklama HER ZAMAN başka bir modal demek) ekran
+	## gizlenir (gizli CanvasLayer girdi almaz), duraklama bitince kaldığı yerden aynen geri gelir.
+	var paused_by_other: bool = get_tree().paused
+	if visible == paused_by_other:
+		visible = not paused_by_other
+	if paused_by_other:
+		return
 	if Input.is_action_just_pressed("ui_cancel"):
 		## Envanter penceresi açıksa ESC önce onu kapatır, dükkanı değil.
 		if _inventory_overlay and is_instance_valid(_inventory_overlay):
@@ -170,7 +186,7 @@ func _process(delta: float) -> void:
 ## (eskiden 14-18 = okunaksız/uneven), büyük kartlar (icon 96 px), sağda stat penceresi, üstte ENVANTER butonu (bkz. _open_inventory).
 func _build_ui() -> void:
 	var dim := ColorRect.new()
-	dim.color = Color(0.05, 0.03, 0.02, 0.78)
+	dim.color = Color(0.12, 0.07, 0.03, 0.62)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
@@ -178,6 +194,8 @@ func _build_ui() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	## 2026-09-24: oyun içi bej kit teması (koyu yazı, ten butonlar) - CanvasLayer temayı aktarmadığı için buradan.
+	center.theme = UIKit.theme()
 	add_child(center)
 
 	var window := PanelContainer.new()
@@ -297,7 +315,7 @@ func _build_details_panel() -> Control:
 	vbox.add_child(desc_scroll)
 	_details_desc = Label.new()
 	_details_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	UIKit.style_label(_details_desc, UIKit.FS_BODY, Color(0.9, 0.84, 0.72, 1.0))
+	UIKit.style_label(_details_desc, UIKit.FS_BODY, UIKit.C_TEXT_DIM)
 	_details_desc.custom_minimum_size = Vector2(320, 0)
 	_details_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desc_scroll.add_child(_details_desc)
@@ -609,20 +627,21 @@ func _build_stats_panel() -> Control:
 	return panel
 
 
-## Stat satırları (id -> _refresh_stats). Renkler: can/kalkan/altın kendi tonlarında, diğerleri krem.
+## Stat satırları (id -> _refresh_stats). Renkler: can/kalkan/hasar/şans/tecrübe kendi tonlarında, diğerleri koyu kahve -
+## 2026-09-24: bej parşömen üstünde okunan mürekkep tonları (TEK kaynak UIKit.INK).
 const STAT_ROWS := [
-	{"id": "health", "label": "Can", "color": Color(0.94, 0.42, 0.42, 1.0)},
-	{"id": "shield", "label": "Kalkan", "color": Color(0.45, 0.72, 1.0, 1.0)},
-	{"id": "damage", "label": "Hasar", "color": Color(1.0, 0.6, 0.35, 1.0)},
-	{"id": "fire_rate", "label": "Ateş Hızı", "color": Color(0.98, 0.93, 0.8, 1.0)},
-	{"id": "crit", "label": "Kritik", "color": Color(0.98, 0.93, 0.8, 1.0)},
-	{"id": "speed", "label": "Hız", "color": Color(0.98, 0.93, 0.8, 1.0)},
-	{"id": "range", "label": "Menzil", "color": Color(0.98, 0.93, 0.8, 1.0)},
-	{"id": "pickup", "label": "Toplama", "color": Color(0.98, 0.93, 0.8, 1.0)},
-	{"id": "absorb", "label": "Soğurma", "color": Color(0.98, 0.93, 0.8, 1.0)},
-	{"id": "dodge", "label": "Sıvışma", "color": Color(0.98, 0.93, 0.8, 1.0)},
-	{"id": "luck", "label": "Şans", "color": Color(0.55, 0.86, 0.42, 1.0)},
-	{"id": "xp", "label": "Tecrübe", "color": Color(0.85, 0.65, 1.0, 1.0)},
+	{"id": "health", "label": "Can", "color": Color(UIKit.INK["damage"])},
+	{"id": "shield", "label": "Kalkan", "color": Color(UIKit.INK["shield"])},
+	{"id": "damage", "label": "Hasar", "color": Color(UIKit.INK["range"])},
+	{"id": "fire_rate", "label": "Saldırı Hızı", "color": UIKit.C_TEXT},
+	{"id": "crit", "label": "Kritik", "color": UIKit.C_TEXT},
+	{"id": "speed", "label": "Hız", "color": UIKit.C_TEXT},
+	{"id": "range", "label": "Menzil", "color": UIKit.C_TEXT},
+	{"id": "pickup", "label": "Toplama", "color": UIKit.C_TEXT},
+	{"id": "absorb", "label": "Soğurma", "color": UIKit.C_TEXT},
+	{"id": "dodge", "label": "Sıvışma", "color": UIKit.C_TEXT},
+	{"id": "luck", "label": "Şans", "color": UIKit.C_GOOD},
+	{"id": "xp", "label": "Tecrübe", "color": Color(UIKit.INK["exp"])},
 ]
 
 
@@ -642,7 +661,8 @@ func _refresh_stats() -> void:
 	t["health"] = "%d/%d" % [int(p.health), int(p.max_health)]
 	t["shield"] = "%d/%d" % [int(p.item_shield_hp), int(p.item_shield_max)]
 	t["damage"] = str(int(w.damage)) if w else "-"
-	t["fire_rate"] = ("%.2f/sn" % (1.0 / w.fire_rate)) if (w and w.fire_rate > 0.0) else "-"
+	## bkz. player.gd get_attack_speed_bonus_percent (stat ekranıyla AYNI değer).
+	t["fire_rate"] = ("+%%%d" % int(round(p.get_attack_speed_bonus_percent()))) if p.has_method("get_attack_speed_bonus_percent") else "-"
 	t["crit"] = ("%%%d (x%.2f)" % [int(w.crit_chance * 100.0), w.crit_damage]) if w else "-"
 	t["speed"] = str(int(p.speed))
 	t["range"] = "+%%%d" % int(round(p.weapon_range_bonus * 100.0))
@@ -665,10 +685,11 @@ func _open_inventory() -> void:
 	_inventory_overlay = Control.new()
 	_inventory_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_inventory_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_inventory_overlay.theme = UIKit.theme()
 	add_child(_inventory_overlay)
 
 	var dim := ColorRect.new()
-	dim.color = Color(0.05, 0.03, 0.02, 0.6)
+	dim.color = Color(0.12, 0.07, 0.03, 0.5)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_inventory_overlay.add_child(dim)
@@ -706,9 +727,13 @@ func _open_inventory() -> void:
 	vbox.add_child(bar)
 	vbox.add_child(HSeparator.new())
 
+	_inventory_scroll = ScrollContainer.new()
+	_inventory_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_inventory_scroll.follow_focus = true ## gamepad ile odak aşağı inince kaydırsın
+	vbox.add_child(_inventory_scroll)
 	_inventory_body = VBoxContainer.new()
 	_inventory_body.add_theme_constant_override("separation", 12)
-	vbox.add_child(_inventory_body)
+	_inventory_scroll.add_child(_inventory_body)
 	_refresh_inventory()
 	UISound.connect_all_buttons(_inventory_overlay)
 
@@ -718,6 +743,7 @@ func _close_inventory() -> void:
 		_inventory_overlay.queue_free()
 	_inventory_overlay = null
 	_inventory_body = null
+	_inventory_scroll = null
 
 
 func _section_title(text: String) -> Label:
@@ -812,6 +838,20 @@ func _refresh_inventory() -> void:
 		else:
 			irow.add_child(_inventory_cell("", "", 1, "Boş", " "))
 	_inventory_body.add_child(irow)
+	_fit_inventory_scroll()
+
+
+## bkz. _inventory_scroll üstündeki not. İçeriğin gerçek (minimum) boyutu hesaplanıp kaydırma alanı ona göre
+## boyutlandırılır: genişlik = içerik (+ dikey kaydırma çubuğu payı), yükseklik = min(içerik, ekrana sığan).
+func _fit_inventory_scroll() -> void:
+	if not (_inventory_scroll and is_instance_valid(_inventory_scroll) and _inventory_body and is_instance_valid(_inventory_body)):
+		return
+	var content: Vector2 = _inventory_body.get_combined_minimum_size()
+	var vp_h: float = get_viewport().get_visible_rect().size.y
+	var max_h: float = maxf(200.0, vp_h - INVENTORY_SCREEN_MARGIN - INVENTORY_HEADER_ALLOWANCE)
+	var needs_scroll: bool = content.y > max_h
+	var bar_w: float = _inventory_scroll.get_v_scroll_bar().get_combined_minimum_size().x + 8.0 if needs_scroll else 0.0
+	_inventory_scroll.custom_minimum_size = Vector2(content.x + bar_w, minf(content.y, max_h))
 
 
 ## Kullanıcı bu bir DÜKKAN olduğu için fiyatın tier'a göre değişip

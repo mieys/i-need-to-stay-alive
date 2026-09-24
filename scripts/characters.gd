@@ -150,7 +150,7 @@ const DEFS := {
 		## (bkz. player.gd _activate_skill/_activate_skill3 - eşleşen "Matthew Q/R yer değişimi" notları).
 		"skill": 43,
 		"skill_name": "Tilki Hücumu",
-		"skill_desc": "YETENEK: Tilkisini anında yanına ışınlayıp yakınındaki en fazla 6 düşmana dash saldırısı attırır, saldırı gücünün %110'u kadar hasar verir ve onları kendinden uzağa iter. (8sn bekleme)",
+		"skill_desc": "YETENEK: Tilkisini anında yanına ışınlayıp görüş alanındaki en fazla 6 düşmana dash saldırısı attırır, saldırı gücünün %110'u kadar hasar verir ve onları kendinden uzağa iter. (8sn bekleme)",
 		## İkon dosyası HENÜZ YOK (Talon'un yeni kitindeki AYNI durum, bkz. DEFS[1] üstündeki not) - gerçek
 		## sanat gelene kadar geçici olarak Feda Kalkanı'nın ikonu paylaşılıyor.
 		"skill_icon": "res://assets/skills/matthew_feda_kalkani_icon.png",
@@ -166,6 +166,25 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/matthew_passive_icon.png",
 		"frames": "res://assets/characters/matthew_frames.tres",
 		"portrait": "res://assets/characters/matthew_portrait.png",
+		## Kullanıcı isteği (2026-09-23, new characters.zip #2): yeni 48x48 sprite sayfaları
+		## (idle/walk/run/eat/hurt/read/shrug/down/death + kullanılmayan strike/chop/pickup -
+		## tools/import_character_sheets.py). Diğer 48x48 kitin (Talon/Büyücü/Elara/Korsan/
+		## Melek) AYNI ölçek/offset/ground_shadow_y sabitleri kullanıldı - aynı üretici/kanvas
+		## düzeninden geldiği için (ayak satırı hepsinde 40/48) bu değerler karakterler arası
+		## SABİT, sadece gölge genişliği (ground_shadow.x) ölçülen gövde genişliğine göre değişir.
+		## DÜZELTME (kullanıcı isteği: "Matthew'in boyutunu %20 küçült") - "scale" x0.8
+		## (2.2368375 -> 1.78947, tam olarak diğer 48x48 karakterlerin %25 büyütülmeden ÖNCEki
+		## taban ölçeği). "offset" DEĞİŞMEDİ (art-piksel biriminde, sahne ölçeğiyle otomatik
+		## küçülür) ama "ground_shadow"/"ground_shadow_y" EKRAN piksели cinsinden SABİT
+		## değerlerdi - ölçekle orantılı küçültülmezse gölge artık ayakların altında değil
+		## daha AŞAĞIDA kalırdı, bu yüzden ikisi de AYNI x0.8 ile çarpıldı.
+		## Kullanıcı isteği (2026-09-23): "matthewi %10 büyüt" - scale x1.1 (1.78947 -> 1.968417); yukarıdaki
+		## gerekçeyle gölge (ground_shadow/ground_shadow_y, ekran pikseli) de AYNI x1.1 ile büyütüldü.
+		"scale": Vector2(1.968417, 1.968417),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(13.42, 5.5),
+		"ground_shadow_y": 28.6,
+		"run_speed_ratio": 1.15,
 	},
 	4: {
 		"name": "Büyücü Kız",
@@ -222,8 +241,8 @@ const DEFS := {
 			"res://assets/skills/buyucu_skill_hortum_icon.png",
 			"res://assets/skills/buyucu_skill_meteor_icon.png",
 		],
-		"passive": "Kadim Patlama: öldürdüğün her yaratık patlayıp çevresindeki diğer yaratıklara saldırı gücünün %20'si kadar alan hasarı verir.",
-		"passive_icon": "res://assets/skills/buyucu_passive_kadim_patlama_icon.png",
+		## Pasif YOK: eski "Kadim Patlama" kullanıcı isteğiyle silindi (2026-09-23) - "passive" alanı olmadığı için
+		## HUD/karakter seçimi/lobi pasif ikonunu ve açıklamasını otomatik gizler (bkz. hud.gd has_passive).
 		"frames": "res://assets/characters/buyucu_frames.tres",
 		"portrait": "res://assets/characters/buyucu_portrait.png",
 		## Kullanıcı isteği (2026-09-22, new characters.zip): yeni 48x48 sprite sayfaları (idle/walk/run/eat/hurt/read/shrug/downed/death + kullanılmayan
@@ -280,6 +299,13 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/assasin_passive_icon.png",
 		"frames": "res://assets/characters/assasin_frames.tres",
 		"portrait": "res://assets/characters/assasin_portrait.png",
+		## Kullanıcı isteği (2026-09-23, new characters.zip #2) - bkz. Matthew DEFS'indeki
+		## AYNI notun üstündeki gerekçe (ölçüm: OLCU idle_down govde 16x38, ayak satiri 40).
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(17.5, 6.25),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
 	},
 	7: {
 		"name": "Şovalye Adam",
@@ -289,7 +315,7 @@ const DEFS := {
 		"skill_icon": "res://assets/skills/sovalye_ulti_koruma_baloncugu_icon.png",
 		"skill2": 10,
 		"skill2_name": "Kalkan Yenileme",
-		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede EKSİK kalkanının %5'ini yeniler ve çevrendeki yaratıkların dikkatini 5 saniye boyunca üzerine çeker. (50sn bekleme)",
+		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede EKSİK kalkanının %5'ini yeniler ve çevrendeki yaratıkların dikkatini 5 saniye boyunca üzerine çeker. (25sn bekleme)",
 		"skill2_icon": "res://assets/skills/sovalye_kiskirtma_icon.png",
 		## Kullanıcı bildirimi: "bazı karakterlerin pasifi oyun içindeyken
 		## görünmüyor" - kök neden Şovalye Adam'ın hiç pasifi olmamasıydı
@@ -311,6 +337,13 @@ const DEFS := {
 		"skill3_desc": "3. YETENEK: Yakındaki dostların etrafında 15sn boyunca dönen bir bariyer oluşturur, aldıkları hasarın %30'unu kendine yansıtır (kendi kalkanından geçer). Dost çok uzaklaşırsa bariyeri kaybolur. (60sn bekleme)",
 		"frames": "res://assets/characters/sovalye_frames.tres",
 		"portrait": "res://assets/characters/sovalye_portrait.png",
+		## Kullanıcı isteği (2026-09-23, new characters.zip #2) - bkz. Matthew DEFS'indeki
+		## AYNI notun üstündeki gerekçe (ölçüm: OLCU idle_down govde 16x33, ayak satiri 40).
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(17.5, 6.25),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
 	},
 	8: {
 		"name": "Elara",
@@ -331,13 +364,14 @@ const DEFS := {
 		## kaldırıldı, id 12 AYNI kaldı (bkz. player.gd _skill_elara_evasion).
 		"skill": 12,
 		"skill_name": "Sıvışma",
-		"skill_desc": "YETENEK: 3 saniye boyunca (azalarak kaybolacak şekilde) %60 hareket hızı, %50 sıvışma kazandırır ve yaratıkların içinden geçebilmeni sağlar (sıvışma sınırını aşabilir). Kalkan harcamaz. (10sn bekleme)",
-		## Kalkan Sıçraması'nın kendi ikon dosyası hiç olmadı (eskiden R'de
-		## de yoktu, bkz. hud.gd _setup_ability_icons - def.has("skill_icon")
-		## yoksa skill_icon.gd kendi vektör simgesine düşer, hatasız).
+		"skill_desc": "YETENEK: 3 saniye boyunca (azalarak kaybolacak şekilde) %100 hareket hızı, %50 sıvışma kazandırır ve yaratıkların içinden geçebilmeni sağlar (sıvışma sınırını aşabilir). Kalkan harcamaz. (10sn bekleme)",
+		## Kullanıcı isteği (2026-09-24): Elara + Korsan'ın TÜM yetenek ikonları 48x48 piksel sanat olarak yeniden
+		## çizildi (tools/gen_elara_korsan_icons.py) - Q'nun (Sıvışma) daha önce hiç ikonu yoktu (vektör yedeğine
+		## düşüyordu), artık kanatlı çizme ikonu var.
+		"skill_icon": "res://assets/skills/elara_sivisma_icon.png",
 		"skill2": 11,
 		"skill2_name": "Gerçek Hasar",
-		"skill2_desc": "TEMEL: Sonraki 6 saldırı %50 fazla hasar vurur ve kalkanı yok sayar. (35sn bekleme)",
+		"skill2_desc": "TEMEL: Sonraki 6 saldırı %50 fazla hasar vurur, kalkanı yok sayar ve %100 saldırı hızıyla yapılır. (35sn bekleme)",
 		"skill2_icon": "res://assets/skills/elara_gercek_hasar_icon.png",
 		"skill3": 31,
 		"skill3_name": "Çift Tetik",
@@ -386,8 +420,8 @@ const DEFS := {
 		"skill3_desc": "3. YETENEK: Etrafındaki büyük bir alanı 8 saniye boyunca bombardımana tutar, her saniye saldırı gücünün %150'si kadar hasar verir. (40sn bekleme)",
 		## DÜZELTME (kullanıcı bildirimi 2026-09-22: "Korsanın ultisinin skill ikonu yok") - skill3_icon hiç
 		## eklenmemişti, HUD'da R slotu boş/placeholder kalıyordu (bkz. hud.gd "def.has(\"skill3_icon\")" kontrolü).
-		## Diğer üç Korsan ikonuyle (halka: siyah/renkli/siyah) AYNI şablon, sadece renkli halka koyu kırmızı
-		## (topçu/tehlike) - bkz. tools/gen_korsan_bombardment_icon.py.
+		## Kullanıcı isteği (2026-09-24): Korsan'ın 4 ikonu (Q/E/R/pasif) 48x48 piksel sanat kare ikon olarak yeniden
+		## çizildi - bkz. tools/gen_elara_korsan_icons.py (eski halka-rozet üreticisi gen_korsan_bombardment_icon.py silindi).
 		"skill3_icon": "res://assets/skills/korsan_bombardiman_icon.png",
 		"passive": "Her öldürmede %10 ihtimalle 1 altın kazanırsın. Bu şans her level için +%1 artar (en fazla %100).",
 		"passive_icon": "res://assets/skills/korsan_passive_icon.png",
@@ -535,9 +569,15 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/necromancer_passive_icon.png",
 		"frames": "res://assets/characters/necromancer_frames.tres",
 		"portrait": "res://assets/characters/necromancer_portrait.png",
-		## Bkz. Korsan'daki "always_walk" notu - Necromancer'ın atlas'ında da
-		## "run" animasyonu yok, aynı görünmezlik hatasını önlemek için gerekli.
-		"always_walk": true,
+		## Kullanıcı isteği (2026-09-23, new characters.zip #2): yeni 48x48 sprite sayfaları -
+		## bkz. Matthew DEFS'indeki AYNI notun üstündeki gerekçe (ölçüm: OLCU idle_down
+		## govde 30x36, ayak satiri 40). Eski "always_walk" KALDIRILDI: yeni sayfalarda
+		## gerçek "run" klibi var, artık %15 hız bonusunda run'a geçebilir.
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(20.0, 6.875),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
 	},
 	12: {
 		"name": "Shaman",
@@ -564,11 +604,16 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/shaman_passive_icon.png",
 		"frames": "res://assets/characters/shaman_frames.tres",
 		"portrait": "res://assets/characters/shaman_portrait.png",
-		## shaman.zip'in atlas'ında (standart LPC walk/idle/hurt/spellcast)
-		## "run" animasyonu yok - bkz. Korsan/Melek/Necromancer'daki AYNI
-		## "always_walk" notu, yoksa hız eşiği aşılınca karakter TAMAMEN
-		## GÖRÜNMEZ olur.
-		"always_walk": true,
+		## Kullanıcı isteği (2026-09-23, new characters.zip #2): eski LPC generator sayfaları
+		## (walk/idle/hurt/spellcast, tools/gen_shaman_assets.py) yerini yeni 48x48 sprite
+		## sayfalarına bıraktı - bkz. Matthew DEFS'indeki AYNI notun üstündeki gerekçe
+		## (ölçüm: OLCU idle_down govde 24x37, ayak satiri 40). Eski "always_walk" KALDIRILDI:
+		## yeni sayfalarda gerçek "run" klibi var, artık %15 hız bonusunda run'a geçebilir.
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(18.0, 6.875),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
 	},
 	13: {
 		"name": "Vampir Çocuk",

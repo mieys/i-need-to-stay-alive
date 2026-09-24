@@ -1,17 +1,24 @@
 extends Node2D
 
-## Oakley'in Sarmaşıklar (E) görseli - PIXEL tarzı DİKENLİ sarmaşık (kullanıcı isteği, 2026-09-21: "yerde pixel tarzda dikenli
-## sarmaşık parçaları toprakla bütünleşecek halde looplu olacak ve düşmanlara doğru uzanıyor gibi görünecek, yetenek sürekli
-## rotasyon değiştirdiği için efekt de ona uygun olmalı"). Eskiden düz yeşil bir Line2D'ydi.
-##  - GÖVDE: sarmaşığın az önce geçtiği yolu (iz) izleyen, dalgalı, dikenli ve yapraklı pixel gövde - toprakla bütünleşik: her parçanın
-##    altında toprak gölgesi, arada toprak parçacıkları, başın etrafında toprak yığını
-##  - UZANTI: baştan hedefe doğru uzanan, dalgalanan ince dikenli filiz (hedef değiştikçe yeni yöne UZANIR / geri çekilir) ve ucunda pençe gibi iki diken
-##  - Hepsi her karede geometriden çizilir (sprite yok) => sarmaşık hangi yöne dönerse dönsün (sürekli yön değiştirir) görsel ona uyar; dalgalanma
-##    zamana bağlı sinüsle sonsuz döngüde (loop).
-## oakley_vine.gd bu düğümü hem GERÇEK sarmaşıkta hem başka istemcilerdeki kozmetik kopyada kullanır (aynı dosya => iki taraf sapmaz).
+## Oakley'in Sarmaşıklar (E) görseli - GÖVDE (arkada bıraktığı hareket izi) hâlâ PROSEDÜREL
+## çizilir (kullanıcı kararı, 2026-09-23: iz sarmaşığın GERÇEK hareket yolunu birebir takip
+## ettiği için sabit bir sprite'a çevrilemez - bkz. proje kökündeki CLAUDE.md'ye eklenen not).
+## Ama BAŞ (toprak yığını + tomurcuk) ve UZANTI (hedefe doğru uzanan filiz) artık BAKED:
+##  - Toprak halkası: yönden BAĞIMSIZ statik bir Sprite2D (hiç dönmüyor).
+##  - Tomurcuk+yapraklar: küçük bir Sprite2D, `head_dir`e göre HER karede döndürülüyor.
+##  - Uzantı: bir Line2D + tekrarlanan (TILE) doku - `_tendril()`nin ürettiği nokta dizisini
+##    DOĞRUDAN kullanır, yani sarmaşık hangi yöne/mesafeye uzarsa uzasın (kullanıcı isteği:
+##    "yönlerini düşmanlara doğru ayarladığı için buna uygun olması lazım") Line2D otomatik
+##    doğru şekilde takip eder - sabit bir sprite döndürmekten farklı olarak dalgalı eğriyi de
+##    bozmadan çizer. Eskiden bu ikisi de her karede onlarca px()/line() çağrısıyla (bkz. eski
+##    _draw_head/_draw_strand(is_body=false)) çiziliyordu; artık 2 sprite + 1 Line2D (birkaç
+##    çizim) yeterli.
 ## `points`: eski Line2D arayüzüyle uyumlu - [Vector2.ZERO, hedefin yerel konumu] ya da boş (hedef yok).
 
 const PixelDraw := preload("res://scripts/pixel_draw.gd")
+const SOIL_RING_TEX := preload("res://assets/fx/oakley_vine/soil_ring.png")
+const BUD_TEX := preload("res://assets/fx/oakley_vine/bud.png")
+const TENDRIL_TILE_TEX := preload("res://assets/fx/oakley_vine/tendril_tile.png")
 
 const TRAIL_LENGTH := 70.0 ## dünya birimi: baştan geriye doğru gövde uzunluğu
 const TRAIL_SPACING := 3.0
@@ -33,12 +40,41 @@ var _trail: Array = [] ## dünya konumları (eskiden yeniye)
 var _t: float = 0.0
 var _grow: float = 0.0
 var _last_dir: Vector2 = Vector2.RIGHT
+var _body_pts: Array = [] ## _process()'te hesaplanan, _draw()'ın okuduğu gövde/iz noktaları
+
+var _bud_sprite: Sprite2D = null
+var _tendril_line: Line2D = null
+var _tendril_end: Vector2 = Vector2.ZERO
+var _tendril_dir: Vector2 = Vector2.RIGHT
+var _tendril_active: bool = false
 
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	z_index = 0
 	_trail.append(global_position)
+
+	var soil := Sprite2D.new()
+	soil.texture = SOIL_RING_TEX
+	soil.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(soil)
+
+	_bud_sprite = Sprite2D.new()
+	_bud_sprite.texture = BUD_TEX
+	_bud_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(_bud_sprite)
+
+	_tendril_line = Line2D.new()
+	_tendril_line.texture = TENDRIL_TILE_TEX
+	_tendril_line.texture_mode = Line2D.LINE_TEXTURE_TILE
+	_tendril_line.width = 10.0
+	_tendril_line.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	## z_index vermiyoruz: eşit z'de Godot önce PARENT'ın kendi _draw()'ını (soil_bed+body_strand,
+	## bkz. aşağıdaki _draw()), SONRA çocukları EKLENME sırasıyla çizer - soil/bud/tendril bu
+	## sırayla eklendiği için orijinal katman sırası (gövde altta, baş üstte, uzantı en üstte)
+	## ekstra z_index gerekmeden zaten doğru çıkıyor.
+	_tendril_line.visible = false
+	add_child(_tendril_line)
 
 
 func _process(delta: float) -> void:
@@ -58,6 +94,33 @@ func _process(delta: float) -> void:
 		_trail = _trail.slice(keep_from)
 	var has_target: bool = points.size() >= 2
 	_grow = move_toward(_grow, 1.0 if has_target else 0.0, GROW_SPEED * delta)
+
+	## --- GÖVDE (iz) - prosedürel çizim için body noktalarını hazırla ---
+	var texel: float = PixelDraw.TEXEL
+	var body_raw: Array = []
+	for w in _trail:
+		body_raw.append(to_local(w as Vector2))
+	body_raw.append(Vector2.ZERO)
+	_body_pts = _resample(body_raw, texel * SAMPLE_STEP)
+	var head_dir: Vector2 = _last_dir
+	if _body_pts.size() >= 2:
+		var d: Vector2 = (_body_pts[_body_pts.size() - 1] as Vector2) - (_body_pts[maxi(_body_pts.size() - 4, 0)] as Vector2)
+		if d.length() > 0.5:
+			head_dir = d.normalized()
+			_last_dir = head_dir
+	_bud_sprite.rotation = head_dir.angle()
+
+	## --- UZANTI (hedefe doğru) - Line2D noktalarını güncelle ---
+	_tendril_active = false
+	if _grow > 0.02 and points.size() >= 2:
+		var end: Vector2 = (points[1] as Vector2) * _ease(_grow)
+		if end.length() > 2.0:
+			var ten: Array = _tendril(Vector2.ZERO, end)
+			_tendril_line.points = PackedVector2Array(ten)
+			_tendril_end = end
+			_tendril_dir = (end - (ten[maxi(ten.size() - 3, 0)] as Vector2)).normalized()
+			_tendril_active = true
+	_tendril_line.visible = _tendril_active
 	queue_redraw()
 
 
@@ -84,33 +147,14 @@ func _resample(pts: Array, spacing: float) -> Array:
 	return out
 
 
+## Sadece GÖVDE (iz) + toprak yatağı + filiz ucundaki pençe artık burada çiziliyor - baş ve
+## uzantının gövdesi Sprite2D/Line2D'ye taşındı (bkz. sınıf üstü not).
 func _draw() -> void:
 	var texel: float = PixelDraw.TEXEL
-	## --- GÖVDE (iz) ---
-	var body_raw: Array = []
-	for w in _trail:
-		body_raw.append(to_local(w as Vector2))
-	body_raw.append(Vector2.ZERO)
-	var body: Array = _resample(body_raw, texel * SAMPLE_STEP)
-	var head_dir: Vector2 = _last_dir
-	if body.size() >= 2:
-		var d: Vector2 = (body[body.size() - 1] as Vector2) - (body[maxi(body.size() - 4, 0)] as Vector2)
-		if d.length() > 0.5:
-			head_dir = d.normalized()
-			_last_dir = head_dir
-	## Toprak yatağı: gövdenin altına toprak gölgesi + rastgele toprak parçacıkları (toprakla bütünleşik görünüm)
-	_draw_soil_bed(body, texel)
-	_draw_strand(body, texel, true, 1.3, 0.0)
-	## Baş: toprak yığını + tomurcuk
-	_draw_head(Vector2.ZERO, head_dir, texel)
-	## --- UZANTI (hedefe doğru) ---
-	if _grow > 0.02 and points.size() >= 2:
-		var end: Vector2 = (points[1] as Vector2) * _ease(_grow)
-		if end.length() > 2.0:
-			var ten: Array = _tendril(Vector2.ZERO, end)
-			_draw_shadow_only(ten, texel)
-			_draw_strand(ten, texel, false, 2.6, 4.0)
-			_draw_claw(end, (end - (ten[maxi(ten.size() - 3, 0)] as Vector2)).normalized(), texel)
+	_draw_soil_bed(_body_pts, texel)
+	_draw_strand(_body_pts, texel, 1.3, 0.0)
+	if _tendril_active:
+		_draw_claw(_tendril_end, _tendril_dir, texel)
 
 
 func _ease(v: float) -> float:
@@ -156,65 +200,33 @@ func _draw_soil_bed(pts: Array, texel: float) -> void:
 			PixelDraw.px(self, p + Vector2(texel * 3.0, texel * 2.0), 1, C_SOIL)
 
 
-func _draw_shadow_only(pts: Array, texel: float) -> void:
-	for i in range(pts.size()):
-		PixelDraw.px(self, (pts[i] as Vector2) + Vector2(0, texel * 2.0), 1, Color(C_SOIL.r, C_SOIL.g, C_SOIL.b, 0.45))
-
-
-## Sarmaşık gövdesi: koyu dış hat + orta ton + parlak çizgi, belirli aralıklarla diken ve yaprak. thick: gövdede 2 texel, uzantıda 1.
-func _draw_strand(pts: Array, texel: float, is_body: bool, amp: float, phase: float) -> void:
+## Sarmaşık gövdesi (iz): koyu dış hat + orta ton + parlak çizgi, belirli aralıklarla diken ve yaprak.
+func _draw_strand(pts: Array, texel: float, amp: float, phase: float) -> void:
 	var n: int = pts.size()
 	for i in range(n):
 		var u: float = float(i) / float(maxi(n - 1, 1))
 		var p: Vector2 = (pts[i] as Vector2) + _wave_offset(pts, i, u, amp, phase)
-		if is_body:
-			## Gövde: 3 texel koyu hat + 2 texel orta ton + 1 texel parlak sırt (baştan uzağa doğru incelir)
-			var thick: int = 3 if u > 0.18 else 2
-			PixelDraw.px(self, p + Vector2(0, texel * 0.6), thick, C_OUT)
-			PixelDraw.px(self, p, thick, C_DARK)
-			PixelDraw.px(self, p, thick - 1, C_MID)
-			if i % 3 == 0:
-				PixelDraw.px(self, p + Vector2(-texel * 0.5, -texel * 0.5), 1, C_LIGHT)
-		else:
-			## Uzantı: 2 texel koyu + 1 texel orta ton
-			PixelDraw.px(self, p + Vector2(0, texel * 0.6), 2, C_OUT)
-			PixelDraw.px(self, p, 2, C_DARK)
-			PixelDraw.px(self, p, 1, C_MID)
-			if i % 4 == 0:
-				PixelDraw.px(self, p + Vector2(-texel * 0.5, -texel * 0.5), 1, C_LIGHT)
-		## Dikenler: her 5. örnekte, iki yana sırayla, ileri doğru eğik (2 pixel: taban + uç)
+		## Gövde: 3 texel koyu hat + 2 texel orta ton + 1 texel parlak sırt (baştan uzağa doğru incelir)
+		var thick: int = 3 if u > 0.18 else 2
+		PixelDraw.px(self, p + Vector2(0, texel * 0.6), thick, C_OUT)
+		PixelDraw.px(self, p, thick, C_DARK)
+		PixelDraw.px(self, p, thick - 1, C_MID)
+		if i % 3 == 0:
+			PixelDraw.px(self, p + Vector2(-texel * 0.5, -texel * 0.5), 1, C_LIGHT)
+		## Dikenler: her 9. örnekte, iki yana sırayla, ileri doğru eğik (2 pixel: taban + uç)
 		if i % 9 == 4 and i > 1:
 			var side: float = 1.0 if floori(float(i) / 9.0) % 2 == 0 else -1.0
 			var nrm: Vector2 = _normal_at(pts, i)
 			var tng: Vector2 = ((pts[mini(i + 1, n - 1)] as Vector2) - (pts[maxi(i - 1, 0)] as Vector2)).normalized()
-			var base: Vector2 = p + nrm * side * texel * (2.0 if is_body else 1.5)
+			var base: Vector2 = p + nrm * side * texel * 2.0
 			PixelDraw.px(self, base, 1, C_THORN)
 			PixelDraw.px(self, base + nrm * side * texel * 1.2 + tng * texel * 0.8, 1, C_THORN_TIP)
-		## Yapraklar: her 9. örnekte küçük 2 pixel yaprak
-		if i % 17 == 11 and is_body:
+		## Yapraklar: her 17. örnekte küçük 2 pixel yaprak
+		if i % 17 == 11:
 			var lside: float = -1.0 if floori(float(i) / 17.0) % 2 == 0 else 1.0
 			var lp: Vector2 = p + _normal_at(pts, i) * lside * texel * 2.5
 			PixelDraw.px(self, lp, 1, C_LIGHT)
 			PixelDraw.px(self, lp + _normal_at(pts, i) * lside * texel, 1, C_MID)
-
-
-func _draw_head(pos: Vector2, dir: Vector2, texel: float) -> void:
-	## Toprak yığını (baş çevresi, yarı gömülü görünüm)
-	for k in range(9):
-		var a: float = float(k) * TAU / 9.0 + 0.4
-		var r: float = texel * (2.6 + PixelDraw.hash01(k * 7 + 2) * 2.2)
-		PixelDraw.px(self, pos + Vector2(cos(a) * r, sin(a) * r * 0.55 + texel * 1.6), 1, C_SOIL_L if k % 2 == 0 else C_SOIL)
-	## Tomurcuk: koyu hat + orta + parlak, yana bakan iki dikenli yaprak
-	PixelDraw.px(self, pos, 3, C_OUT)
-	PixelDraw.px(self, pos, 2, C_MID)
-	PixelDraw.px(self, pos + Vector2(-texel * 0.5, -texel * 0.5), 1, C_LIGHT)
-	var nrm: Vector2 = Vector2(-dir.y, dir.x)
-	var bob: float = sin(_t * 5.0) * texel * 0.6
-	for side in [-1.0, 1.0]:
-		var leaf_base: Vector2 = pos + nrm * side * texel * 2.4 - dir * texel * 1.5
-		PixelDraw.px(self, leaf_base, 1, C_MID)
-		PixelDraw.px(self, leaf_base + nrm * side * texel + dir * bob, 1, C_LIGHT)
-		PixelDraw.px(self, leaf_base + nrm * side * texel * 2.0 + dir * texel * 1.2, 1, C_THORN_TIP)
 
 
 ## Filizin ucunda "pençe": iki yana açılan diken çifti + parlak uç.

@@ -7,6 +7,7 @@ const KeybindMenuScript := preload("res://scripts/keybind_menu.gd")
 @onready var volume_value: Label = $SettingsPanel/VolumeValue
 @onready var fullscreen_check: CheckButton = $SettingsPanel/FullscreenCheck
 @onready var resolution_option: OptionButton = $SettingsPanel/ResolutionOption
+@onready var fps_check: CheckButton = $SettingsPanel/FpsCheck
 @onready var keybind_button: Button = $SettingsPanel/KeybindButton
 
 
@@ -17,6 +18,20 @@ func _ready() -> void:
 	## Kullanıcı isteği (2026-09-21): duraklatma/ayar panelleri UIKit ahşap pencere çerçevesinde (konum/boyut aynı).
 	$Panel.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
 	$SettingsPanel.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
+	## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap kite geçti - panellerin kendi teması
+	## (koyu yazı, kit kaydırıcı/açma-kapama/açılır liste), sıcak karartma, başlıklar kiremit vurgu renginde 48 px.
+	var game_theme: Theme = UIKit.theme()
+	$Panel.theme = game_theme
+	$SettingsPanel.theme = game_theme
+	$Dim.color = Color(0.12, 0.07, 0.03, 0.55)
+	for title: Label in [$Panel/VBox/Title, $SettingsPanel/Title]:
+		UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_ACCENT, 0)
+	## DÜZELTME: "DURAKLATILDI" başlığı hiç görünmüyordu - sahnede clip_text + autowrap birlikte açıktı, bu ikilide Label minimum
+	## yüksekliğini 1 px bildiriyor, VBox ona 1 px verip hiçbir satır çizilmiyordu (çalışma anında ölçüldü: rect yüksekliği 1,
+	## visible_lines 0). Tek satırlık kısa başlık - kaydırma/kırpmaya gerek yok.
+	var pause_title: Label = $Panel/VBox/Title
+	pause_title.clip_text = false
+	pause_title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	$Panel/VBox/ResumeButton.pressed.connect(_on_resume)
 	$Panel/VBox/RestartButton.pressed.connect(_on_restart)
 	$Panel/VBox/MenuButton.pressed.connect(_on_menu)
@@ -36,6 +51,10 @@ func _ready() -> void:
 	resolution_option.disabled = UISound.is_fullscreen
 	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	resolution_option.item_selected.connect(_on_resolution_selected)
+	## Kullanıcı isteği: "fps göstergesi ekle ayarlardan açılıp kapatılabilsin" -
+	## fullscreen_check ile BİREBİR AYNI desen (UISound'daki show_fps'e bağlı).
+	fps_check.button_pressed = UISound.show_fps
+	fps_check.toggled.connect(_on_fps_toggled)
 	settings_panel.visible = false
 	## DÜZELTME (kullanıcı isteği: "Multiplayerda host oyunu yeniden
 	## başlatabilsin eskiden yeniden başlatmayı seçerek fakat önce diğer
@@ -174,6 +193,10 @@ func _on_fullscreen_toggled(enabled: bool) -> void:
 
 func _on_resolution_selected(index: int) -> void:
 	UISound.set_resolution(index)
+
+
+func _on_fps_toggled(enabled: bool) -> void:
+	UISound.set_show_fps(enabled)
 
 
 ## Kullanıcı isteği: "tuş ataması için ayarlarda bir menü hazırla, ayarlar

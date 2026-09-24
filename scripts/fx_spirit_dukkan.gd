@@ -1,7 +1,13 @@
 extends Node2D
 
-## Ruhani Yetenek "Dükkan" (F): 3sn "odaklanma" (kanal) efekti (1 texel detay, bkz. hafıza "Pixel density 48x48"):
-##  - ayağın altında ince MOR elips sihir çemberi (kesikli, ters dönen iki halka + 6 rün işareti)
+## Ruhani Yetenek "Dükkan" (F): 3sn "odaklanma" (kanal) efekti.
+## DÜZELTME (2026-09-23, "aynı şeyi ruhani büyüler için de yap"): sihir çemberi (3 kesikli elips halkası + 6 rün) +
+## yükselen ışık sütunu HER karede ~1200+ draw_rect() maliyetine yol açıyordu, 3.25sn boyunca SÜREKLİ. Halkalar/rünler
+## artık statik dokular (script'te döndürülüyor, bkz. oakley_bee_swarm_ring.gd'deki AYNI desen); sütun NÖTR (beyaz)
+## pişirilip script'te scale.y (büyüme) + modulate (mor->altın renk geçişi + solma) ile kontrol ediliyor - hiçbiri
+## için ekstra kare gerekmedi. draw_rect sayısı ~1200+ -> 4'e indi. Yükselen kıvılcımlar (birkaç px()/parçacık) ve
+## bitiş parlaması (tek seferlik) PROSEDÜREL kaldı.
+##  - ayağın altında ince MOR elips sihir çemberi (kesikli, ters dönen iki halka + 6 rün işareti) - baked
 ##  - yukarı doğru büyüyen mor -> altın ışık sütunu (dither) ve sütuna yukarı çekilen ince altın kıvılcımlar
 ##  - cancel(): odaklanma iptal olursa hızla sönüp kaybolur
 ## Player/RemotePlayer'ın ÇOCUĞU. Sabit ömür = DUKKAN_CHANNEL; ışınlanma tamamlanınca (player.gd _spirit_dukkan_finish) FX zaten
@@ -9,10 +15,22 @@ extends Node2D
 
 const PixelDraw := preload("res://scripts/pixel_draw.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+const RING_VIOLET_TEX := preload("res://assets/fx/spirit_dukkan/ring_violet.png")
+const RING_GOLD_TEX := preload("res://assets/fx/spirit_dukkan/ring_gold.png")
+const RUNES_TEX := preload("res://assets/fx/spirit_dukkan/runes.png")
+const COLUMN_TEX := preload("res://assets/fx/spirit_dukkan/column.png")
 
 const GROUND := Vector2(0, 26)
 const CANCEL_FADE := 0.22
 const END_FLASH := 0.25
+const RING_VIOLET_SPIN := 0.9 ## eski phase=_t*12.0 ile aynı yön (iki mor halka da aynı hızda dönüyordu)
+const RING_GOLD_SPIN := -1.15 ## eski phase=-_t*16.0 ile aynı yön
+const RUNE_SPIN := 0.9 ## eski `a=_t*0.9+...`
+
+const VIOLET := Color(0.72, 0.5, 1.0)
+const GOLD := Color(1.0, 0.86, 0.45)
+const COL_W := 20.0
+const COL_H := 100.0
 
 var _t: float = 0.0
 var _duration: float = SpiritualSkillsScript.DUKKAN_CHANNEL
@@ -20,26 +38,42 @@ var _cancel_t: float = -1.0
 var _sparks: Array = [] ## [pos, age, life, start_x]
 var _acc: float = 0.0
 
+var _ring_violet: Sprite2D = null
+var _ring_gold: Sprite2D = null
+var _runes: Sprite2D = null
+var _column: Sprite2D = null
+
 
 func _ready() -> void:
 	z_index = 0
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
+	_ring_violet = _make_ring_sprite(RING_VIOLET_TEX)
+	_ring_gold = _make_ring_sprite(RING_GOLD_TEX)
+	_runes = _make_ring_sprite(RUNES_TEX)
+
+	_column = Sprite2D.new()
+	_column.texture = COLUMN_TEX
+	_column.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_column.centered = false
+	_column.offset = Vector2(-COL_W / 2.0, -COL_H)
+	_column.position = GROUND
+	_column.scale = Vector2(1.0, 0.0)
+	add_child(_column)
+
+
+func _make_ring_sprite(tex: Texture2D) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.texture = tex
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.position = GROUND
+	add_child(s)
+	return s
+
 
 func cancel() -> void:
 	if _cancel_t < 0.0:
 		_cancel_t = 0.0
-
-
-func _ellipse_ring(rx: float, ry: float, col: Color, dash_on: int, dash_off: int, phase: float) -> void:
-	var texel: float = PixelDraw.TEXEL
-	var count: int = maxi(24, int(TAU * maxf(rx, ry) / texel))
-	var period: int = dash_on + dash_off
-	for i in range(count):
-		if period > 0 and (int(float(i) + phase) % period) >= dash_on:
-			continue
-		var a: float = TAU * float(i) / float(count)
-		PixelDraw.px(self, GROUND + Vector2(cos(a) * rx, sin(a) * ry), 1, col)
 
 
 func _process(delta: float) -> void:
@@ -61,9 +95,31 @@ func _process(delta: float) -> void:
 	for s in _sparks:
 		s[1] += delta
 		var k: float = float(s[1]) / float(s[2])
-		## Sütuna doğru yukarı çekilir (x -> 0)
 		s[0] = Vector2(lerpf(float(s[3]), 0.0, k), GROUND.y - 96.0 * k * (0.6 + 0.4 * k))
 	_sparks = _sparks.filter(func(s): return float(s[1]) < float(s[2]))
+
+	var fade: float = 1.0
+	if _cancel_t >= 0.0:
+		fade = clampf(1.0 - _cancel_t / CANCEL_FADE, 0.0, 1.0)
+	elif _t > _duration:
+		fade = clampf(1.0 - (_t - _duration) / END_FLASH, 0.0, 1.0)
+	var progress: float = clampf(_t / _duration, 0.0, 1.0)
+	var open: float = clampf(_t / 0.3, 0.0, 1.0) * fade
+
+	_ring_violet.rotation = _t * RING_VIOLET_SPIN
+	_ring_violet.scale = Vector2.ONE * open
+	_ring_violet.modulate.a = open
+	_ring_gold.rotation = _t * RING_GOLD_SPIN
+	_ring_gold.scale = Vector2.ONE * open
+	_ring_gold.modulate.a = open
+	_runes.rotation = _t * RUNE_SPIN
+	_runes.scale = Vector2.ONE * open
+	_runes.modulate.a = open
+
+	_column.scale.y = progress
+	var tint: Color = VIOLET.lerp(GOLD, progress)
+	_column.modulate = Color(tint.r, tint.g, tint.b, (0.4 + 0.45 * progress) * open)
+
 	queue_redraw()
 
 
@@ -73,39 +129,10 @@ func _draw() -> void:
 		fade = clampf(1.0 - _cancel_t / CANCEL_FADE, 0.0, 1.0)
 	elif _t > _duration:
 		fade = clampf(1.0 - (_t - _duration) / END_FLASH, 0.0, 1.0)
-	var progress: float = clampf(_t / _duration, 0.0, 1.0)
-	var texel: float = PixelDraw.TEXEL
-	var open: float = clampf(_t / 0.3, 0.0, 1.0) * fade
-	if open <= 0.0:
-		return
-	## Sihir çemberi
-	var violet := Color(0.72, 0.5, 1.0, 0.9 * open)
-	_ellipse_ring(34.0 * open, 15.0 * open, violet, 5, 1, _t * 12.0)
-	_ellipse_ring(32.5 * open, 14.0 * open, Color(0.55, 0.35, 0.9, 0.6 * open), 5, 1, _t * 12.0)
-	_ellipse_ring(24.0 * open, 10.5 * open, Color(1.0, 0.85, 0.45, 0.75 * open), 3, 3, -_t * 16.0)
-	for k in range(6):
-		var a: float = _t * 0.9 + float(k) * TAU / 6.0
-		var p: Vector2 = GROUND + Vector2(cos(a) * 29.0, sin(a) * 12.7) * open
-		PixelDraw.px(self, p, 1, Color(1.0, 0.95, 0.75, open))
-		PixelDraw.px(self, p + Vector2(0, -texel), 1, Color(0.85, 0.7, 1.0, 0.8 * open))
-	## Yükselen ışık sütunu: yükseklik ilerledikçe büyür, mor -> altın; dither
-	var col_h: float = 100.0 * progress
-	var rows: int = int(col_h / texel)
-	var half_w: int = int(round(9.0 - 4.0 * progress))
-	var flick: int = int(_t * 20.0)
-	var tint: Color = Color(0.72, 0.5, 1.0).lerp(Color(1.0, 0.86, 0.45), progress)
-	for iy in range(rows):
-		var y: float = GROUND.y - float(iy) * texel
-		var taper: float = 1.0 - float(iy) / maxf(float(rows), 1.0) * 0.6
-		var hw: int = maxi(1, int(round(float(half_w) * taper)))
-		for ix in range(-hw, hw + 1):
-			if ((ix + iy + flick) & 1) == 0:
-				continue
-			PixelDraw.px(self, Vector2(float(ix) * texel, y), 1, Color(tint.r, tint.g, tint.b, (0.4 + 0.45 * progress) * open))
-	## Sütuna çekilen kıvılcımlar
+	## Sütuna çekilen kıvılcımlar (prosedürel, ucuz)
 	for s in _sparks:
 		var k2: float = float(s[1]) / float(s[2])
-		PixelDraw.px(self, s[0], 2 if k2 < 0.5 else 1, Color(1.0, 0.9, 0.5, (1.0 - k2 * 0.5) * open))
-	## Bitiş parlaması
+		PixelDraw.px(self, s[0], 2 if k2 < 0.5 else 1, Color(1.0, 0.9, 0.5, (1.0 - k2 * 0.5) * fade))
+	## Bitiş parlaması (tek seferlik, ucuz)
 	if _cancel_t < 0.0 and _t > _duration:
 		PixelDraw.disc_dither(self, Vector2(0, -6), 40.0, Color(1.0, 0.95, 0.8, 0.8 * fade), int(_t * 40.0), 1)

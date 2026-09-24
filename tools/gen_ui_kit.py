@@ -311,6 +311,17 @@ SHIELD = [
 SHIELD_PAL = {'k': hexc('#16305a'), 'B': hexc('#4c8de0'), 'h': hexc('#bfe0ff'), 'd': hexc('#2c62b0')}
 
 
+# ------------------------------------------------------------------ HUD (2026-09-24 yeniden çizim)
+# Kullanıcı isteği (2026-09-24): "mini mapi ve sol üstteki karakter kalkan can avatar çerçeve v.b unutma" - HUD parçaları da
+# menülerle aynı dile geçti: ahşap çerçeve + parşömen paspas/disk + pirinç çiviler + yaprak sarmaşığı. GEOMETRİ AYNI
+# (hud.tscn yerleşimi bu dokuların delik/pay ölçülerine bağlı: avatar deliği 6..42, bar deliği x15..34 y3..14, minimap iç
+# yarıçapı 40 sanat px) - sadece çizim değişti.
+LINE = hexc('#5a361d')
+PARCH_HI = hexc('#d9bd8f')
+PARCH_MID = hexc('#c8a878')
+PARCH_SH = hexc('#ae8e60')
+
+
 def blit(a, x0, y0, rows, pal):
     for y, row in enumerate(rows):
         for x, ch in enumerate(row):
@@ -318,78 +329,118 @@ def blit(a, x0, y0, rows, pal):
                 a.set(x0 + x, y0 + y, pal[ch])
 
 
+# Kullanıcı isteği (2026-09-24): "can ve kalkan barını da uyumlu şekilde yeniden tasarla lütfen çerçeveler iç bar v.b kötü",
+# ardından "barlar hiç değişmemiş çok çirkinler" (ilk deneme eskisine fazla benziyordu: disk + ince ahşap + koyu tüp).
+# Yeni tasarım sağdaki ENVANTER/altın levhalarıyla AYNI dil: ahşap kenarlı bej PARŞÖMEN LEVHA, sol ucunda levhanın üstünde
+# büyük kalp/kalkan ikonu, ortada levhaya gömülü (oyuk kenarlı) çubuk yuvası, sağ uçta pirinç çivi.
+# Geometri (sanat px, S=2) - hud.gd _layout_bar_kit aynı ölçüleri kullanır:
+#   doku 48x22 (96x44 px); NinePatch sol payı 20 (40 px), sağ payı 6 (12 px);
+#   satırlar: 0 kontur, 1 ahşap, 2 koyu çizgi, 3-4 parşömen, 5 oyuk üst kenarı, 6..15 ÇUBUK (10 satır = 20 px),
+#   16 oyuk alt ışığı, 17-18 parşömen, 19 koyu çizgi, 20 ahşap, 21 kontur.
+# Çubuk deliği ŞEFFAF DEĞİL: üstte iç gölge + parlama, altta koyulaşma (yarı saydam) - dolu ve boş kısma aynı hacmi verir;
+# satır bazlı olduğu için 9-slice'ın yatay esnemesinde bozulmaz. Dolgunun kendisi düz beyaz (hud.gd tint ile boyar).
+BAR_W, BAR_H = 48, 22
+BAR_PATCH_L, BAR_PATCH_R = 20, 6
+BAR_HOLE_Y0, BAR_HOLE_Y1 = 6, 15
+BAR_RECESS = hexc('#3a2616')
+BAR_GLOSS = {6: (30, 14, 4, 130), 7: (255, 250, 230, 95), 8: (255, 250, 230, 40), 13: (30, 14, 4, 40), 14: (30, 14, 4, 70),
+             15: (30, 14, 4, 105)}
+BAR_P_HI = hexc('#d9bd8f')
+BAR_P = hexc('#c8a878')
+BAR_P_SH = hexc('#ae8e60')
+BAR_IN_EDGE = hexc('#7f613b')
+BAR_IN_HI = hexc('#e2c99c')
+HEART11 = [
+    ".rrr...rrr.",
+    "rhhRr.rRRRr",
+    "rhRRRrRRRRr",
+    "rhRRRRRRRdr",
+    "rRRRRRRRRdr",
+    ".rRRRRRRdr.",
+    "..rRRRRdr..",
+    "...rRRdr...",
+    "....rdr....",
+    ".....r.....",
+]
+HEART11_PAL = {'r': hexc('#5e1016'), 'R': hexc('#d8404a'), 'h': hexc('#ffb4b0'), 'd': hexc('#962430')}
+SHIELD11 = [
+    "kkkkkkkkkkk",
+    "khhBBBBBBdk",
+    "khBBBhBBBdk",
+    "khBBhhhBBdk",
+    "khBBBhBBBdk",
+    "kBBBBBBBBdk",
+    ".kBBBBBBdk.",
+    "..kBBBBdk..",
+    "...kBBdk...",
+    "....kdk....",
+    ".....k.....",
+]
+SHIELD11_PAL = {'k': hexc('#172c52'), 'B': hexc('#4a86d6'), 'h': hexc('#bcdcff'), 'd': hexc('#2b5aa6')}
+
+
 def bar_frame(kind):
-    """40x18 sanat pikseli, uçları yuvarlak: sol uçta ikonlu ahşap 'boss', ortası yatayda esneyen çerçeve. Delik (dolgu) x=15..34, y=3..14."""
-    w, h = 40, 18
+    """Can/kalkan çubuğu levhası (48x22): ahşap kenarlı parşömen levha + solda ikon + ortada oyuk çubuk yuvası + sağda çivi."""
+    w, h = BAR_W, BAR_H
     a = Art(w, h)
-    accent = hexc('#8a2a36') if kind == 'hp' else hexc('#2f5f9f')
-    m = rr_mask(w, h, 8)
+    m = rr_mask(w, h, 6)
     d = depth_map(m)
-    hole = {(x, y) for y in range(3, 15) for x in range(15, w - 5)}
+    in_x0, in_x1 = BAR_PATCH_L - 1, w - BAR_PATCH_R  # oyuk kenar sütunları (19 ve 42)
+    in_y0, in_y1 = BAR_HOLE_Y0 - 1, BAR_HOLE_Y1 + 1   # oyuk kenar satırları (5 ve 16)
     for y in range(h):
         for x in range(w):
-            if d[y][x] < 0 or (x, y) in hole:
-                continue
             dd = d[y][x]
-            light = light_side(x, y, w, h)
+            if dd < 0:
+                continue
+            top = y < h / 2
             if dd == 0:
                 c = OUT
             elif dd == 1:
-                c = W4 if light else W1
+                c = W3 if top else W1
             elif dd == 2:
-                c = W3 if light else W2
+                c = LINE
+            elif dd == 3:
+                c = BAR_P_HI if top else BAR_P_SH
             else:
-                c = W2 if light else W1
-            a.set(x, y, c)
-    # deliğe bitişik ince vurgu çizgisi (can: bordo, kalkan: mavi)
-    for (x, y) in hole:
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            n = (x + dx, y + dy)
-            if n not in hole and 0 <= n[0] < w and 0 <= n[1] < h and a.get(n[0], n[1]) is not None and n[0] >= 15:
-                a.set(n[0], n[1], accent)
-    # sol boss (daire)
-    cx, cy, R = 7.5, 8.5, 8.0
-    for y in range(h):
-        for x in range(0, 16):
-            dx, dy = (x + 0.5) - (cx + 0.5), (y + 0.5) - (cy + 0.5)
-            r = math.hypot(dx, dy)
-            if r > R:
-                continue
-            if r > R - 1.0:
-                c = OUT
-            elif r > R - 2.0:
-                c = W4 if (dx + dy) < 0 else W1
-            elif r > R - 3.4:
-                c = W3 if (dx + dy) < 0 else W2
-            elif r > R - 4.4:
-                c = OUT
-            else:
-                c = hexc('#2a1a10')
-            a.set(x, y, c)
-    if kind == 'hp':
-        blit(a, 4, 5, HEART, HEART_PAL)
-    else:
-        blit(a, 4, 5, SHIELD, SHIELD_PAL)
-    a.set(4, 2, GOLD_L)
+                c = BAR_P
+            if in_x0 <= x <= in_x1 and in_y0 <= y <= in_y1:
+                if y == in_y0 or x == in_x0:
+                    c = BAR_IN_EDGE
+                elif y == in_y1 or x == in_x1:
+                    c = BAR_IN_HI
+                else:
+                    c = BAR_GLOSS.get(y)
+            if c is not None:
+                a.set(x, y, c)
+    # sağ uç: pirinç çivi (parşömen üstünde)
+    for (ox, oy, c) in ((0, 0, GOLD_L), (1, 0, GOLD), (0, 1, GOLD), (1, 1, GOLD_D)):
+        a.set(w - 4 + ox, 10 + oy, c)
+    # sol uç: ikon + 1 px parşömen gölgesi
+    rows, pal = (HEART11, HEART11_PAL) if kind == 'hp' else (SHIELD11, SHIELD11_PAL)
+    ix, iy = 5, 6 if kind == 'hp' else 5
+    for yy, row in enumerate(rows):
+        for xx, ch in enumerate(row):
+            if ch in pal and a.get(ix + xx + 1, iy + yy + 1) == BAR_P:
+                a.set(ix + xx + 1, iy + yy + 1, BAR_P_SH)
+    blit(a, ix, iy, rows, pal)
     return a
 
 
 def bar_under(w=4, h=12):
+    """Boş kısım: düz koyu çukur - hacim gölgesi çerçevenin deliğinde (BAR_GLOSS), burada tekrar edilmez."""
     a = Art(w, h)
     for y in range(h):
-        c = hexc('#140c07') if y == 0 else (hexc('#1d1209') if y == 1 else (hexc('#2c1d11') if y < h - 1 else hexc('#3c2918')))
         for x in range(w):
-            a.set(x, y, c)
+            a.set(x, y, BAR_RECESS)
     return a
 
 
 def bar_fill(w=4, h=12):
+    """Dolgu: düz beyaz (hud.gd tint_progress ile can rengine / kalkan mavisine boyanır); ışık/gölge çerçevedeki BAR_GLOSS'ta."""
     a = Art(w, h)
-    bright = [255, 246, 226, 226, 226, 226, 226, 190, 190, 190, 150, 118]
     for y in range(h):
-        v = bright[y]
         for x in range(w):
-            a.set(x, y, (v, v, v, 255))
+            a.set(x, y, (255, 255, 255, 255))
     return a
 
 
@@ -403,37 +454,40 @@ LEAF_PAL = {'g': hexc('#2f6a2a'), 'G': hexc('#6fc04a')}
 
 
 def avatar_frame(w=48, h=48, hole=6):
+    """Portre çerçevesi (delik 6..42 = hud.tscn PortraitClip 12..84 px): ahşap bevel + koyu iç çizgi + parşömen paspas,
+    kenar ortalarında pirinç çiviler, sol-üst ve sağ-alt köşelerde yaprak sarmaşığı."""
     a = Art(w, h)
     m = rr_mask(w, h, 12)
     d = depth_map(m)
     for y in range(h):
         for x in range(w):
             dd = d[y][x]
-            if dd < 0:
+            if dd < 0 or dd >= hole:
                 continue
             light = light_side(x, y, w, h)
-            if dd >= hole:
-                continue  # delik (portre görünür)
             if dd == 0:
                 c = OUT
             elif dd == 1:
                 c = W4 if light else W1
             elif dd == 2:
                 c = W3 if light else W2
-            elif dd in (3, 4):
-                c = W2 if light else W1
+            elif dd == 3:
+                c = LINE
+            elif dd == 4:
+                c = PARCH_HI if light else PARCH_MID
             else:
-                c = OUT
+                c = PARCH_SH if light else PARCH_MID
             a.set(x, y, c)
-    # iç gölge (deliğin üst/sol kenarı hafif karartılır - çukur hissi)
+    # portrenin üst/sol kenarına ince iç gölge (çukur hissi)
     for y in range(h):
         for x in range(w):
-            if d[y][x] == hole and (x <= hole + 1 or y <= hole + 1) and light_side(x, y, w, h):
-                a.set(x, y, (0, 0, 0, 90))
-    for (x, y, c) in ((2, 2, GOLD_L), (3, 2, GOLD), (2, 3, GOLD), (3, 3, GOLD_D)):
-        a.set(x, y, c)
-        a.set(w - 1 - x, h - 1 - y, c)
-    # yaprak sarmaşığı: sol-üst ve sağ-alt köşede
+            if d[y][x] == hole and light_side(x, y, w, h):
+                a.set(x, y, (40, 22, 10, 90))
+    # kenar ortalarında pirinç çiviler (ahşap bant üstünde)
+    mid = w // 2 - 1
+    for (x, y) in ((mid, 1), (mid, h - 3), (1, mid), (w - 3, mid)):
+        for (ox, oy, c) in ((0, 0, GOLD_L), (1, 0, GOLD), (0, 1, GOLD), (1, 1, GOLD_D)):
+            a.set(x + ox, y + oy, c)
     blit(a, 5, 1, LEAF, LEAF_PAL)
     blit(a, 1, 6, LEAF, LEAF_PAL)
     blit(a, w - 11, h - 5, LEAF, LEAF_PAL)
@@ -441,7 +495,34 @@ def avatar_frame(w=48, h=48, hole=6):
     return a
 
 
+def avatar_bg(w=36, h=36):
+    """Portrenin ARKASI (hud.gd PortraitClip'in ilk çocuğu, 72x72 px): menü kartlarının portre penceresiyle aynı sıcak krem ->
+    bej degrade (dither geçişli) + altta çimen tümseği; karakter oyun dünyası yerine bu sahnenin önünde durur."""
+    a = Art(w, h)
+    cols = [hexc('#eedab4'), hexc('#e5cea3'), hexc('#dcc193'), hexc('#d2b585')]
+    for y in range(h):
+        t = y / (h - 1)
+        idx = min(3, int(t * 4))
+        for x in range(w):
+            c = cols[idx]
+            if idx < 3 and int(((y + 1) / (h - 1)) * 4) != idx and ((x + y) & 1) == 0:
+                c = cols[idx + 1]
+            a.set(x, y, c)
+    cx, gy = w / 2.0, h - 3
+    for y in range(gy - 3, h):
+        for x in range(w):
+            dx = (x + 0.5 - cx) / 14.0
+            dy = (y + 0.5 - (gy + 0.5)) / 3.2
+            r = dx * dx + dy * dy
+            if r > 1.0:
+                continue
+            c = hexc('#b8c67e') if y <= gy - 2 else (hexc('#8fa25a') if r > 0.72 else hexc('#a2b46a'))
+            a.set(x, y, c)
+    return a
+
+
 def level_badge(size=26):
+    """Seviye rozeti: altın halka + koyu iç çizgi + parşömen iç (seviye rakamı koyu kahve yazılır - bkz. hud.gd)."""
     a = Art(size, size)
     c0 = (size - 1) / 2.0
     R = size / 2.0
@@ -458,9 +539,9 @@ def level_badge(size=26):
             elif r > R - 3.6:
                 c = GOLD
             elif r > R - 4.6:
-                c = OUT
+                c = LINE
             else:
-                c = hexc('#2b1c10')
+                c = PARCH_HI if (dx + dy) < -3.0 else PARCH_MID
             a.set(x, y, c)
     return a
 
@@ -502,6 +583,8 @@ def slot_frame(size, rim, pal, rivet=GOLD):
 
 
 def minimap_ring(size=92):
+    """Minimap çerçevesi (iç yarıçap 40 sanat px = minimap.gd RADIUS 80 px): ahşap bevel halka + ince parşömen pusula bandı
+    (30 derecede bir çentik, ana yönlerde uzun), üstte kuzey levhası (N), doğu/güney/batıda pirinç çiviler."""
     a = Art(size, size)
     c0 = (size - 1) / 2.0
     R = size / 2.0
@@ -517,54 +600,58 @@ def minimap_ring(size=92):
                 c = OUT
             elif r > R - 2.0:
                 c = W4 if lit else W1
-            elif r > R - 4.0:
+            elif r > R - 3.2:
                 c = W3 if lit else W2
-            elif r > R - 5.0:
-                c = W2 if lit else W1
+            elif r > R - 4.0:
+                c = LINE
+            elif r > r_in + 0.9:
+                c = PARCH_HI if lit else PARCH_MID
+                ang = (math.degrees(math.atan2(dy, dx)) + 360.0) % 30.0
+                if ang < 3.0 or ang > 27.0:
+                    c = LINE
             else:
                 c = OUT
             a.set(x, y, c)
-    # kuzey/doğu/güney/batı perçinleri + kuzeyde büyük altın taş
-    ring_r = 42.6
-    for ang in (0, 90, 180, 270):
-        rad = math.radians(ang - 90)
+    # doğu/güney/batı pirinç çiviler (ahşap bant üstünde)
+    ring_r = R - 2.2
+    for ang in (0, 90, 180):
+        rad = math.radians(ang)
         px = int(round(c0 + math.cos(rad) * ring_r))
         py = int(round(c0 + math.sin(rad) * ring_r))
         for (ox, oy, col) in ((0, 0, GOLD_L), (1, 0, GOLD), (0, 1, GOLD), (1, 1, GOLD_D)):
             a.set(px - 1 + ox, py - 1 + oy, col)
-    nx, ny = int(round(c0)), 1
-    for (ox, oy, col) in ((0, -1, GOLD_L), (-1, 0, GOLD), (0, 0, GOLD_L), (1, 0, GOLD_D), (0, 1, GOLD_D)):
-        pass
+    # kuzey levhası: küçük parşömen etiket + "N"
+    lx0, ly0, lw, lh = int(c0) - 4, 0, 10, 9
+    for y in range(ly0, ly0 + lh):
+        for x in range(lx0, lx0 + lw):
+            edge = x in (lx0, lx0 + lw - 1) or y in (ly0, ly0 + lh - 1)
+            corner = (x in (lx0, lx0 + lw - 1)) and (y in (ly0, ly0 + lh - 1))
+            if corner:
+                continue
+            a.set(x, y, OUT if edge else (PARCH_HI if y < ly0 + 3 else PARCH_MID))
+    for (x, y) in ((2, 2), (2, 3), (2, 4), (2, 5), (2, 6), (3, 3), (4, 4), (5, 5), (6, 2), (6, 3), (6, 4), (6, 5), (6, 6)):
+        a.set(lx0 + x - 0, ly0 + y - 0, LINE)
     return a
 
 
 def build():
-    # butonlar
-    for name, pal in (('wood', PAL_WOOD), ('green', PAL_GREEN), ('dark', PAL_DARK), ('red', PAL_RED)):
-        for st in ('normal', 'hover', 'pressed', 'disabled', 'focus'):
-            plank(32, 20, pal, st, studs=True).save(out('btn_%s_%s.png' % (name, st)))
-            plank(20, 20, pal, st, studs=False, radius=10).save(out('btn_mini_%s_%s.png' % (name, st)))
-    # paneller
-    window_panel().save(out('panel_window.png'))
-    inset_panel().save(out('panel_inset.png'))
+    """Yalnız HUD parçaları. Oyun içi PANEL/BUTON dokuları artık tools/gen_menu_kit.py build_game -> assets/ui/game
+    (kullanıcı isteği 2026-09-24: oyun içi arayüzler menülerle aynı bej/ahşap kite geçti); plank/window_panel/inset_panel/
+    card_panel/plaque_panel fonksiyonları yalnız ability_bar/HUD çizimlerinin ortak yardımcıları olarak duruyor."""
     ability_bar_panel().save(out('panel_ability_bar.png'))
     status_badge_panel().save(out('panel_status_badge.png'))
-    card_panel(state='normal').save(out('panel_card.png'))
-    card_panel(state='selected').save(out('panel_card_selected.png'))
-    card_panel(state='sold').save(out('panel_card_sold.png'))
-    plaque_panel().save(out('panel_plaque.png'))
-    # HUD
     bar_frame('hp').save(out('hud_bar_frame_hp.png'))
     bar_frame('shield').save(out('hud_bar_frame_shield.png'))
     bar_under().save(out('hud_bar_under.png'))
     bar_fill().save(out('hud_bar_fill.png'))
     avatar_frame().save(out('hud_avatar_frame.png'))
+    avatar_bg().save(out('hud_avatar_bg.png'))
     level_badge().save(out('hud_level_badge.png'))
     slot_frame(39, 5, PAL_SLOT_WOOD).save(out('hud_skill_frame.png'))
     slot_frame(47, 6, PAL_SLOT_SPIRIT).save(out('hud_skill_frame_spirit.png'))
     slot_frame(24, 3, PAL_SLOT_WOOD).save(out('hud_skill_frame_small.png'))
     minimap_ring().save(out('hud_minimap_ring.png'))
-    print('kit written to', os.path.abspath(OUTDIR))
+    print('HUD kit written to', os.path.abspath(OUTDIR))
 
 
 if __name__ == '__main__':

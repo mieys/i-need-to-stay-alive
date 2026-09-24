@@ -23,12 +23,32 @@ var _pulse_t: float = 0.0
 var _flash_t: float = 0.0
 const FLASH_DURATION := 0.22
 
+## Kullanıcı bildirimi (2026-09-23): "şovalye adamın kalkan baloncuğunu açtığımda fps 10'a
+## düşüyor çünkü çok sayıda kalkan hasar alma efekti oluyor" - baloncuğu saran her yaratık
+## KENDİ contact_interval'ıyla ayrı ayrı saldırıyor (bkz. enemy.gd take_paladin_barrier_damage
+## çağrısı), yani kalabalık bir sürüde saniyede onlarca hasar isabeti oluşabiliyor. Her isabet
+## eskiden TAM DETAYLI bir fx_shield_hit.gd (dither dolgu + tam çember halkalar + yüzey dalgası,
+## ~1200 draw_rect/kare) doğuruyordu - aynı anda çok sayısı üst üste binince FPS çöküyordu.
+## DÜZELTME (aynı gün, devamı): fx_shield_hit.gd artık PROSEDÜREL değil, PNG'ye pişirilmiş
+## (bkz. tools/gen_perf_sprite_fx.py) TEK bir AnimatedSprite2D çizimi - maliyet detaydan
+## bağımsız (~1 çizim/örnek) hale geldi, "light mod" ayrımı gereksizleşti. Yine de aşırı uç
+## bir durumda (yüzlerce yaratık) bile makul kalsın diye burada hâlâ aynı anda kaç tane çatlak
+## fx'i canlı olabileceği VE ne sıklıkla yeni bir tane doğabileceği sınırlı tutuluyor -
+## baloncuğun kendi flaş/nabız parıltısı (shader tabanlı, ayrıca ucuz) hâlâ HER isabette
+## tetiklenir, sadece fx örneği sınırlanır.
+const MAX_CONCURRENT_HIT_FX := 4
+const HIT_FX_MIN_INTERVAL := 0.05
+var _hit_fx_count: int = 0
+var _hit_fx_cooldown: float = 0.0
+
 var rect: ColorRect
 var mat: ShaderMaterial
 var overlay: Node2D
 
 # Çatlama ve parça dökülme verileri
 var cracks: Array[Dictionary] = []
+## Bariyer isabet efektinin (çatlak) sabit ölçeği - 1.0 = oyuncunun kendi kalkan baloncuğundaki çatlakla aynı boy.
+const PALADIN_CRACK_SCALE := 1.0
 var shards: Array[Dictionary] = []
 
 func _ready() -> void:
@@ -122,10 +142,19 @@ func flash(attacker: Node2D = null) -> void:
 ## olsun" - eskiden burada düzgün çizgili çatlak + cam kırığı çiziliyordu; artık oyuncu kalkanıyla AYNI pixel efekt
 ## (fx_shield_hit.gd, bu bariyerin kendi yarıçapıyla) doğuyor. Eski çatlak/kırık kodu aşağıda kullanılmıyor (erken dönüş).
 func _spawn_pixel_hit(angle: float) -> void:
+	## bkz. sınıf üstü MAX_CONCURRENT_HIT_FX/HIT_FX_MIN_INTERVAL notu - baloncuğun kendisi
+	## (_flash_t üstünden) yine de HER isabette parlar, sadece bu pahalı fx sınırlanıyor.
+	if _hit_fx_cooldown > 0.0 or _hit_fx_count >= MAX_CONCURRENT_HIT_FX:
+		return
+	_hit_fx_cooldown = HIT_FX_MIN_INTERVAL
+	_hit_fx_count += 1
 	var fx := Node2D.new()
 	fx.set_script(load("res://scripts/fx_shield_hit.gd"))
 	add_child(fx)
-	fx.call("setup", angle, radius)
+	fx.tree_exited.connect(func() -> void: _hit_fx_count -= 1)
+	## Kullanıcı bildirimi (2026-09-24): çatlaklar çok büyüktü (bariyer yarıçapıyla ölçekleniyordu, ~x3.2) - artık
+	## sabit PALADIN_CRACK_SCALE boyutunda, bariyerin kenarında (bkz. fx_shield_hit.gd setup crack_scale).
+	fx.call("setup", angle, radius, false, PALADIN_CRACK_SCALE)
 
 
 func _spawn_crack(angle: float) -> void:
@@ -220,6 +249,8 @@ func _process(delta: float) -> void:
 	_pulse_t += delta
 	if _flash_t > 0.0:
 		_flash_t = max(0.0, _flash_t - delta)
+	if _hit_fx_cooldown > 0.0:
+		_hit_fx_cooldown = max(0.0, _hit_fx_cooldown - delta)
 
 	# Çatlak sürelerini güncelle
 	var active_cracks: Array[Dictionary] = []

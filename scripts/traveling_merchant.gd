@@ -55,8 +55,13 @@ const COOLDOWN_MAX := 120.0
 ## başladığında ... seyyar satıcı spawnlansın") - bildirim/ok/görsel
 ## sistemini hemen doğrulayabilmek için 60-150sn yerine birkaç saniyeye
 ## çekildi. Test bitince eski değerlere (60.0 / 150.0) döndürülmeli.
-const INITIAL_DELAY_MIN := 3.0
-const INITIAL_DELAY_MAX := 5.0
+## DÜZELTME (kullanıcı bildirimi 2026-09-24: "seyyar satıcı oyun başlar başlamaz geliyor") - yukarıdaki geçici test
+## değerleri (3-5sn) hiç geri alınmamıştı; nottaki eski değerlere döndürüldü.
+const INITIAL_DELAY_MIN := 60.0
+const INITIAL_DELAY_MAX := 150.0
+## Aynı bildirim: "başlangıca çok uzak noktalarda doğuyor". Sonraki ziyaretler de (ilk ziyaret zaten en yakın
+## adaydan başlar) önce herhangi bir canlı oyuncuya bu mesafeden yakın çalı noktalarından seçilir; yoksa tüm harita.
+const VISIT_MAX_DISTANCE_FROM_PLAYERS := 1600.0
 
 const BUSH_LAYER_PATHS := [
 	"Shader Eklenecek/Çalılar",
@@ -351,11 +356,25 @@ func _pick_spawn_position() -> Vector2:
 	## bkz. dosya başı "_is_first_visit" notu - ilk ziyarette rastgele karıştırmak
 	## yerine eve en yakın adaylardan başlanır, sonraki tüm ziyaretler eskisi
 	## gibi tam rastgele.
-	if _is_first_visit:
+	## DÜZELTME (kullanıcı bildirimi 2026-09-24: "başlangıca çok uzak noktalarda doğuyor") - _home_position _ready()'de
+	## oyuncunun o anki konumundan okunuyordu, ama oyun EVİN İÇİNDE başlıyor: iç mekan haritanın çok dışında
+	## (house_interior.gd INTERIOR_OFFSET = x+20000) duruyor, yani "eve en yakın" aday aslında haritanın en sağ
+	## kenarındaki çalıydı. Referans artık spawn anında hesaplanıyor (bkz. _players_anchor_positions).
+	var anchors: Array[Vector2] = _players_anchor_positions()
+	if _is_first_visit and not anchors.is_empty():
+		var home: Vector2 = anchors[0]
 		candidates.sort_custom(func(a: Vector2, b: Vector2) -> bool:
-			return a.distance_squared_to(_home_position) < b.distance_squared_to(_home_position))
+			return a.distance_squared_to(home) < b.distance_squared_to(home))
 	else:
 		candidates.shuffle()
+		if not anchors.is_empty():
+			var near: Array = candidates.filter(func(c: Vector2) -> bool:
+				for a in anchors:
+					if c.distance_to(a) <= VISIT_MAX_DISTANCE_FROM_PLAYERS:
+						return true
+				return false)
+			if not near.is_empty():
+				candidates = near
 	var found: Vector2 = _first_valid_candidate(candidates, min(SPAWN_CANDIDATE_ATTEMPTS, candidates.size()))
 	if found != Vector2.ZERO:
 		return found
@@ -368,6 +387,30 @@ func _pick_spawn_position() -> Vector2:
 		rest.shuffle()
 		return _first_valid_candidate(rest, min(SPAWN_CANDIDATE_ATTEMPTS, rest.size()))
 	return Vector2.ZERO
+
+
+## Canlı oyuncuların HARİTADAKİ konumları: evin içindeki oyuncu için evin kapısı (house_interior.gd
+## _exterior_return_pos - çıkınca döneceği dış konum), iç mekan koordinatı değil.
+func _players_anchor_positions() -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var house: Node = get_tree().current_scene.get_node_or_null("HouseInterior")
+	for group_name in ["player", "remote_players"]:
+		for p in get_tree().get_nodes_in_group(group_name):
+			if not is_instance_valid(p) or p.get("is_dead") == true:
+				continue
+			if p.get("is_indoors") == true:
+				if house and house.get("_exterior_return_pos") is Vector2 and house.get("_exterior_return_pos") != Vector2.ZERO:
+					out.append(house.get("_exterior_return_pos"))
+				continue
+			var rect: Rect2 = GameManager.get_map_world_rect()
+			if rect.size != Vector2.ZERO and not rect.has_point((p as Node2D).global_position):
+				continue ## harita dışı (ör. iç mekan uzak oyuncu kuklası) - referans alınmaz
+			out.append((p as Node2D).global_position)
+	if out.is_empty() and _home_position != Vector2.ZERO:
+		var rect2: Rect2 = GameManager.get_map_world_rect()
+		if rect2.size == Vector2.ZERO or rect2.has_point(_home_position):
+			out.append(_home_position)
+	return out
 
 
 func _first_valid_candidate(candidates: Array, attempts: int) -> Vector2:

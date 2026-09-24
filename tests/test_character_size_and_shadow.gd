@@ -98,10 +98,36 @@ func test_growth_did_not_push_the_character_downwards() -> void:
 
 
 func test_other_characters_are_untouched() -> void:
-	for id in [2, 3, 5, 7, 11, 12]:
+	## DÜZELTME (stale test - HEAD'de de zaten başarısızdı, bu oturumun konusu değil): id 3/5/7/11/12
+	## (Matthew/Assasin Çocuk/Şovalye Adam/Necromancer/Shaman) bu testin yazıldığı %25 büyütme isteğinde
+	## yoktu, ama SONRAKİ, ayrı oturumlarda (48x48 "ikinci parti" karakter içe aktarımı + Matthew'in kendi
+	## %20 küçültme/%10 büyütme istekleri, bkz. characters.gd'deki ilgili notlar ve
+	## test_matthew_growth_kept_feet_on_ground_and_scaled_shadow) KENDİ scale/ground_shadow değerlerini
+	## aldı - "yoktu" varsayımı artık geçersiz. Sadece id 2 (Oakley) hâlâ bu 48x48 ölçek sistemine hiç girmedi.
+	for id in [2]:
 		var def: Dictionary = Characters.get_def(int(id))
 		assert(not def.has("scale"),
 			"%s bu istekte yoktu, ölçek eklenmemeli" % str(def["name"]))
+
+
+## Kullanıcı isteği (2026-09-23): "matthewi %10 büyüt" - eski taban 1.78947 (Matthew'in kendi önceki %20
+## küçültme isteğinden kalan değer) x1.1. Gölge (ground_shadow/ground_shadow_y, EKRAN pikseli - karakterin
+## kendi scale/offset'i gibi otomatik büyümez, bkz. characters.gd Matthew notu) AYNI oranla büyütülmeli,
+## yoksa ayaklar gölgenin üstünde/altında kalır (bkz. test_growth_did_not_push_the_character_downwards'taki
+## AYNI "ayak çizgisi kaymasın" mantığı, burada ekran-pikseli gölge için ayrıca doğrulanıyor).
+func test_matthew_growth_kept_feet_on_ground_and_scaled_shadow() -> void:
+	var def: Dictionary = Characters.get_def(3)
+	assert(def.has("scale"), "Matthew artık kendi scale değerine sahip olmalı")
+	var expected_scale: float = 1.78947 * 1.1
+	assert(absf(float(def["scale"].x) - expected_scale) < 0.001,
+		"Matthew ölçeği %%10 büyümemiş: %s (beklenen %s)" % [def["scale"].x, expected_scale])
+	assert(absf(float(def["scale"].y) - float(def["scale"].x)) < 0.001, "Matthew ölçeği kare olmalı (x = y)")
+	var expected_shadow_x: float = 12.2 * 1.1
+	var expected_shadow_y: float = 26.0 * 1.1
+	assert(absf(float(def["ground_shadow"].x) - expected_shadow_x) < 0.01,
+		"Matthew gölge genişliği ölçekle orantılı büyümemiş: %s (beklenen %s)" % [def["ground_shadow"].x, expected_shadow_x])
+	assert(absf(float(def["ground_shadow_y"]) - expected_shadow_y) < 0.01,
+		"Matthew gölge konumu ölçekle orantılı büyümemiş: %s (beklenen %s)" % [def["ground_shadow_y"], expected_shadow_y])
 
 
 ## DEFS değerleri TEK BAŞINA yeterli değil - player.gd bunları sprite'a

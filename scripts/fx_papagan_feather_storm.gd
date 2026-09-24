@@ -1,5 +1,7 @@
 extends Node2D
 
+const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+
 ## Papağan'ın ULTİ'si (Tüy Fırtınası, skill 22) için oyuncunun etrafında
 ## dönen yeşil/kırmızı tüy fırtınası. Oyuncunun global konumunu takip eder,
 ## içine giren yaratıklara saniyede en fazla 1 kez hasar verir, sonra solup
@@ -40,7 +42,8 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(owner_player):
 		queue_free()
 		return
-	global_position = owner_player.global_position
+	## Oyuncunun çizilen (interpolasyonlu) konumu - bkz. PhysicsInterp.visual_position.
+	global_position = PhysicsInterp.visual_position(owner_player)
 	_spin += delta * 5.0
 
 	if _elapsed >= lifetime:

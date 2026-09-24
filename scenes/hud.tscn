@@ -464,6 +464,25 @@ theme_override_colors/font_color = Color(1, 0.85, 0.35, 1)
 theme_override_font_sizes/font_size = 40
 text = "0"
 
+[node name="FpsLabel" type="Label" parent="." unique_id=-346765448]
+visible = false
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -70.0
+offset_top = 8.0
+offset_right = 70.0
+offset_bottom = 44.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.05, 0.03, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 28
+text = "FPS: 60"
+horizontal_alignment = 1
+
 [node name="MinimapControl" type="Control" parent="." unique_id=-346765449]
 custom_minimum_size = Vector2(164, 164)
 layout_mode = 3

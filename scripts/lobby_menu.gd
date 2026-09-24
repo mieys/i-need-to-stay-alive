@@ -1,159 +1,79 @@
 extends Control
 
+## Çok oyunculu (LAN) lobi. Kullanıcı isteği (2026-09-24): menülerin kartları/arka planları bej/cozy piksel kitle (MenuKit)
+## SIFIRDAN yeniden tasarlandı; ekran tamamen KODLA kurulur (.tscn sadece kök).
+## Yerleşim (1920x1080, tek oyunculu character_select.gd ile AYNI simetrik üç sütun):
+##   sol  : lobi paneli - oyuncu adı, bağlantı (durum, IP:Port, LAN Kur/Katıl, otomatik bulunan oyunlar), oda bilgisi,
+##          odadaki oyuncular (mini karakter + hazır rozeti), HAZIRIM / OYUNU BAŞLAT / ODAYI KAPAT
+##   orta : kurdele başlık + 6x2 karakter kartı + yetenek bilgi paneli (character_select.gd ile ORTAK bileşenler)
+##   sağ  : seçili karakterin küçük vitrini + Ruhani Yetenek seçici
+## Ağ davranışı (NetworkManager çağrıları, keşif dinleme, isim güncelleme, yeniden başlatma bayrağı) eskisiyle AYNI.
+
 const SpiritualPickerScript: GDScript = preload("res://scripts/spiritual_picker.gd")
+const RosterScript: GDScript = preload("res://scripts/menu_character_roster.gd")
+const DetailsScript: GDScript = preload("res://scripts/menu_character_details.gd")
+const ShowcaseScript: GDScript = preload("res://scripts/menu_character_showcase.gd")
+const PreviewScript: GDScript = preload("res://scripts/menu_character_preview.gd")
 
-const BASE_STATS := "Can:100  Hız:240  Hasar:10  AteşHızı:1.0/sn"
+## character_select.gd ile AYNI ızgara ölçüleri.
+const SCREEN := Vector2(1920, 1080)
+const EDGE := 16.0
+const GAP := 16.0
+const SIDE := 376.0
+const TOP := 108.0
+const BOTTOM := 16.0
 
-@onready var status_label: Label = $TopBar/StatusLabel
-@onready var back_btn: Button = $TopBar/BackBtn
-@onready var player_name_input: LineEdit = $LeftPanel/Margin/VBox/NameHBox/PlayerNameInput
-@onready var room_info_label: Label = $LeftPanel/Margin/VBox/RoomInfoLabel
-@onready var public_ip_label: Label = $LeftPanel/Margin/VBox/PublicIpLabel
-@onready var player_list_container: VBoxContainer = $LeftPanel/Margin/VBox/PlayerScroll/PlayerListVBox
-@onready var start_game_btn: Button = $LeftPanel/Margin/VBox/StartGameBtn
-@onready var ready_btn: Button = $LeftPanel/Margin/VBox/ReadyBtn
-@onready var close_room_btn: Button = $LeftPanel/Margin/VBox/CloseRoomBtn
+var status_label: Label
+var back_btn: Button
+var player_name_input: LineEdit
+var room_info_label: Label
+var public_ip_label: Label
+var player_list_container: VBoxContainer
+var start_game_btn: Button
+var ready_btn: Button
+var close_room_btn: Button
 
-@onready var grid: GridContainer = $RightArea/VBox/Grid
-## Kullanıcı isteği: "her açıklama ikonun yanında görünmeli açıklamalar
-## ikonlardan bağımsız konumdalar" - character_select.gd'deki ile birebir
-## aynı satır tabanlı yerleşim (bkz. lobby_menu.tscn UltiRow/TemelRow/
-## PassiveRow).
-@onready var name_label: Label = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/NameLabel
-@onready var stats_label: Label = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/StatsLabel
-@onready var ulti_row: HBoxContainer = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/UltiRow
-@onready var skill_icon_1 = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/UltiRow/SkillIcon1
-@onready var ulti_desc_label: Label = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/UltiRow/UltiDescLabel
-@onready var temel_row: HBoxContainer = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow
-@onready var skill_icon_2 = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow/SkillIcon2
-@onready var temel_desc_label: Label = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/TemelRow/TemelDescLabel
-## Kullanıcı isteği: "karakterlerin pasiflerinin ikonu da görünmeli" -
-## hud.gd _setup_ability_icons() ile aynı mantık (bkz. character_select.gd).
-@onready var passive_row: HBoxContainer = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/PassiveRow
-@onready var passive_icon = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/PassiveRow/PassiveIcon
-@onready var passive_desc_label: Label = $RightArea/InfoPanel/InfoMargin/InfoVBoxOuter/TextScroll/RowsVBox/PassiveRow/PassiveDescLabel
+var roster: GridContainer
+var details: PanelContainer
+var showcase: PanelContainer
 
 var selected_char_id: int = 1
-var cards: Dictionary = {}
-var _select_frame_style_off: StyleBoxFlat
-var _select_frame_style_on: StyleBoxFlat
 
 var _lan_host_btn: Button = null
 var _lan_join_btn: Button = null
 var _lan_ip_input: LineEdit = null
+## Kullanıcı isteği: "ip adresimi otomatik olarak lan'da görünsün ipmi sürekli
+## yazmak istemiyorum" - bkz. network_manager.gd LAN OTOMATİK KEŞİF bloğu; bu liste
+## ağdan bulunan host'ları gösterir, tıklanınca IP alanı otomatik doldurulup katılır.
+var _lan_found_vbox: VBoxContainer = null
+var _lan_found_header: Label = null
 
 
 func _ready() -> void:
-	## Kullanıcı isteği (2026-09-21): büyük paneller UIKit ahşap pencere çerçevesinde (konumlar/boyutlar DEĞİŞMEDİ, sadece görünüm).
-	for panel_path in ["LeftPanel", "RightArea/InfoPanel"]:
-		var panel_node: Control = get_node_or_null(panel_path) as Control
-		if panel_node:
-			panel_node.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
-	## Ruhani Yetenek seçici (kullanıcı isteği: karakter seçerken herkes 1 ruhani yetenek seçer) - karakter ızgarasının SAĞINDAki
-	## boş alanda. Seçim yerel bir oyuncu tercihi (GameManager.selected_spiritual), ağdan gitmesi gerekmez: etkileri kendi
-	## istemcisinde işler, FX'leri zaten skill_scene/vfx ile herkese yayılır.
-	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
-	spirit_picker.custom_minimum_size = Vector2(345, 0)
-	spirit_picker.position = Vector2(1535, 150)
-	add_child(spirit_picker)
-	spirit_picker.setup(3)
-	start_game_btn.pressed.connect(_on_start_game_pressed)
-	ready_btn.pressed.connect(_on_ready_pressed)
-	close_room_btn.pressed.connect(_on_close_room_pressed)
+	theme = MenuKit.theme()
+	MenuKit.add_background(self)
+
+	## NOT: her node ÖNCE ağaca eklenir, SONRA MenuKit.place ile offset olarak yerleştirilir (bkz. o fonksiyonun notu).
+	back_btn = MenuKit.make_button("< Geri Dön", "tan", MenuKit.FS_BODY, 56)
 	back_btn.pressed.connect(_on_back_pressed)
-	
+	add_child(back_btn)
+	_place(back_btn, Vector2(EDGE, 24), Vector2(200, 56))
+
+	var banner := MenuKit.make_banner("Çok Oyunculu Lobi")
+	add_child(banner)
+	var bs: Vector2 = banner.get_combined_minimum_size()
+	_place(banner, Vector2(roundf((SCREEN.x - bs.x) / 6.0) * 3.0, 18.0), bs)
+
+	_build_lobby_panel()
+	_build_center()
+	_build_right_column()
+
 	NetworkManager.lobby_updated.connect(_update_lobby_ui)
 	NetworkManager.connection_status_changed.connect(_on_status_changed)
+	NetworkManager.lan_games_updated.connect(_refresh_lan_found_list)
+	NetworkManager.start_lan_discovery_listen()
+	_refresh_lan_found_list()
 
-	## DÜZELTME (kullanıcı bildirimi: "insanlar lobiye girdikten sonra ismini
-	## değiştiremiyor") - bu alan eskiden sadece odaya girmeden ÖNCEki
-	## "başlangıç ismi"ni okuyordu, odadayken düzenlemenin hiçbir etkisi
-	## yoktu. Artık Enter'a basınca YA DA alandan çıkınca (zaten odadaysa)
-	## yeni isim herkese yayınlanıyor (bkz. NetworkManager.update_local_
-	## player_name).
-	player_name_input.text_submitted.connect(_on_player_name_submitted)
-	player_name_input.focus_exited.connect(func(): _on_player_name_submitted(player_name_input.text))
-	## DÜZELTME (kullanıcı isteği: "oyunda isim profili olsun 1 kere ismini
-	## yazınca bi daha yazman gerekmesin") - NetworkManager _ready()'de daha
-	## önce kaydedilmiş bir isim varsa (bkz. _load_saved_player_name) onu
-	## zaten local_player_name'e yüklemiş oluyor, burada sadece alana
-	## yansıtılıyor - kullanıcı bir daha hiç yazmak zorunda kalmıyor.
-	player_name_input.text = NetworkManager.local_player_name
-
-	## Kullanıcı isteği: "multiplayerdan ziva altyapısını kaldır, ziva seçeneği de olmayacak" - oda
-	## kodu (Ziva) kontrolleri ve mod seçim ekranı kalktı; tek bağlantı yolu LAN/IP. LAN
-	## kontrolleri sahnedeki "RoomHeader" (Bağlantı başlığı) etiketinin hemen altına eklenir.
-	var vbox: VBoxContainer = $LeftPanel/Margin/VBox as VBoxContainer
-	var insert_idx: int = $LeftPanel/Margin/VBox/RoomHeader.get_index() + 1
-
-	# Row 1: LineEdit for IP:Port
-	_lan_ip_input = LineEdit.new()
-	_lan_ip_input.placeholder_text = "IP:Port (örn. 192.168.1.50:7777)"
-	_lan_ip_input.text = "127.0.0.1:7777"
-	_lan_ip_input.custom_minimum_size = Vector2(0, 44)
-	vbox.add_child(_lan_ip_input)
-	vbox.move_child(_lan_ip_input, insert_idx)
-	
-	# Row 2: HBox for buttons
-	var lan_hbox := HBoxContainer.new()
-	lan_hbox.name = "LanHBox"
-	lan_hbox.add_theme_constant_override("separation", 10)
-	vbox.add_child(lan_hbox)
-	vbox.move_child(lan_hbox, insert_idx + 1)
-	
-	_lan_host_btn = Button.new()
-	_lan_host_btn.text = "LAN Kur"
-	_lan_host_btn.custom_minimum_size = Vector2(0, 44)
-	_lan_host_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lan_hbox.add_child(_lan_host_btn)
-	
-	_lan_join_btn = Button.new()
-	_lan_join_btn.text = "LAN Katıl"
-	_lan_join_btn.custom_minimum_size = Vector2(0, 44)
-	_lan_join_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lan_hbox.add_child(_lan_join_btn)
-	
-	# Row 3: Small helper text explaining where to get IP
-	var lan_info_lbl := Label.new()
-	lan_info_lbl.name = "LanInfoLbl"
-	lan_info_lbl.text = "NOT: LAN kurmak/katılmak için bilgisayarınızın yerel IP adresini (CMD -> ipconfig komutundan görebileceğiniz IPv4 adresini) kullanın."
-	lan_info_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	lan_info_lbl.add_theme_font_size_override("font_size", 14)
-	lan_info_lbl.add_theme_color_override("font_color", Color(0.65, 0.65, 0.7))
-	vbox.add_child(lan_info_lbl)
-	vbox.move_child(lan_info_lbl, insert_idx + 2)
-	
-	_lan_host_btn.pressed.connect(func():
-		var parts: Array = _lan_ip_input.text.split(":")
-		var port: int = 7777
-		if parts.size() > 1:
-			port = int(parts[1])
-		var pname: String = player_name_input.text.strip_edges()
-		if pname.is_empty():
-			pname = "Kurucu (LAN)"
-		NetworkManager.host_lan(port, pname, selected_char_id)
-	)
-	
-	_lan_join_btn.pressed.connect(func():
-		var parts: Array = _lan_ip_input.text.split(":")
-		var ip: String = "127.0.0.1"
-		var port: int = 7777
-		if parts.size() > 0:
-			ip = parts[0].strip_edges()
-		if parts.size() > 1:
-			port = int(parts[1])
-		var pname: String = player_name_input.text.strip_edges()
-		if pname.is_empty():
-			pname = "Katılımcı (LAN)"
-		NetworkManager.join_lan(ip, port, pname, selected_char_id)
-	)
-	
-	## Mod seçim ekranı (Ziva Cloud / LAN) kaldırıldı: doğrudan LAN lobisi.
-	$LeftPanel.visible = true
-	$RightArea.visible = true
-	$TopBar/Title.text = "YEREL AĞ (LAN) LOBİSİ"
-	
-	_populate_character_grid()
 	_update_lobby_ui()
 	_on_character_pressed(1)
 	## Yeniden başlatma onaylandıysa (bkz. network_manager.gd _return_to_lobby_for_restart) herkes
@@ -161,197 +81,182 @@ func _ready() -> void:
 	if NetworkManager.restart_returned_to_lobby:
 		NetworkManager.restart_returned_to_lobby = false
 		status_label.text = "Yeniden başlatma onaylandı: karakterini yeniden seç ve hazır ol, host oyunu başlatsın."
-	
+
 	UISound.connect_all_buttons(self)
-	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
 
 
-## Kullanıcı isteği: "çok oyunculu karakter seçim ekranındaki karakter
-## kartlarını tek oyunculudaki gibi yap" - aşağıdaki üç stil fonksiyonu ve
-## _populate_character_grid/_fit_label_font, character_select.gd'deki
-## _build_portrait_card_style / _build_name_card_style / _build_select_
-## frame_style / _ready-içi kart kurulumu / _fit_label_font ile birebir
-## aynı (portre+isim iki parçalı kaynaşık kart, seçim karartma yerine
-## yeşil çerçeveyle gösteriliyor - bkz. o dosyadaki notlar).
-static func _build_portrait_card_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.32, 0.2, 0.11, 1)
-	style.border_width_left = 3
-	style.border_width_top = 3
-	style.border_width_right = 3
-	style.border_width_bottom = 0
-	style.border_color = Color(0.16, 0.09, 0.04, 1)
-	style.corner_radius_top_left = 10
-	style.corner_radius_top_right = 10
-	style.corner_radius_bottom_right = 0
-	style.corner_radius_bottom_left = 0
-	return style
+func _place(c: Control, pos: Vector2, sz: Vector2) -> void:
+	MenuKit.place(c, pos, sz)
 
 
-static func _build_name_card_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.52, 0.34, 0.15, 1)
-	style.border_width_left = 3
-	style.border_width_top = 0
-	style.border_width_right = 3
-	style.border_width_bottom = 3
-	style.border_color = Color(0.16, 0.09, 0.04, 1)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_right = 10
-	style.corner_radius_bottom_left = 10
-	return style
+## ------------------------------------------------------------------ sol: lobi paneli
+func _build_lobby_panel() -> void:
+	var panel := MenuKit.make_panel("panel_tight")
+	panel.name = "LeftPanel"
+	add_child(panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	panel.add_child(v)
+
+	v.add_child(MenuKit.make_section_header("Oyuncu"))
+	player_name_input = LineEdit.new()
+	player_name_input.placeholder_text = "Adınızı girin..."
+	player_name_input.custom_minimum_size = Vector2(0, 48)
+	v.add_child(player_name_input)
+	## DÜZELTME (kullanıcı bildirimi: "insanlar lobiye girdikten sonra ismini
+	## değiştiremiyor") - Enter'a basınca YA DA alandan çıkınca (zaten odadaysa)
+	## yeni isim herkese yayınlanıyor (bkz. NetworkManager.update_local_player_name).
+	player_name_input.text_submitted.connect(_on_player_name_submitted)
+	player_name_input.focus_exited.connect(func(): _on_player_name_submitted(player_name_input.text))
+	## DÜZELTME (kullanıcı isteği: "oyunda isim profili olsun 1 kere ismini
+	## yazınca bi daha yazman gerekmesin") - NetworkManager kaydedilmiş ismi zaten
+	## local_player_name'e yüklüyor, burada sadece alana yansıtılıyor.
+	player_name_input.text = NetworkManager.local_player_name
+
+	v.add_child(MenuKit.make_section_header("Bağlantı"))
+	var status_box := MenuKit.make_panel("inset")
+	v.add_child(status_box)
+	status_label = MenuKit.make_label("Sunucu kurun veya bir adrese katılın", MenuKit.FS_BODY, MenuKit.C_TEXT_DIM)
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status_box.add_child(status_label)
+
+	## Kullanıcı isteği: "multiplayerdan ziva altyapısını kaldır" - tek bağlantı yolu LAN/IP.
+	_lan_ip_input = LineEdit.new()
+	_lan_ip_input.placeholder_text = "IP:Port (örn. 192.168.1.50:7777)"
+	_lan_ip_input.text = "127.0.0.1:7777"
+	_lan_ip_input.custom_minimum_size = Vector2(0, 48)
+	v.add_child(_lan_ip_input)
+
+	var lan_hbox := HBoxContainer.new()
+	lan_hbox.add_theme_constant_override("separation", 8)
+	v.add_child(lan_hbox)
+	_lan_host_btn = MenuKit.make_button("LAN Kur", "tan", MenuKit.FS_BODY, 48)
+	_lan_host_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lan_hbox.add_child(_lan_host_btn)
+	_lan_join_btn = MenuKit.make_button("LAN Katıl", "tan", MenuKit.FS_BODY, 48)
+	_lan_join_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lan_hbox.add_child(_lan_join_btn)
+	_lan_host_btn.pressed.connect(_on_lan_host_pressed)
+	_lan_join_btn.pressed.connect(_on_lan_join_pressed)
+
+	## DÜZELTME (kullanıcı isteği: "ip adresimi otomatik olarak lan'da görünsün") - host olunca IP otomatik algılanıp
+	## oda bilgisinde gösteriliyor VE aynı ağdaki host'lar aşağıdaki listede kendiliğinden beliriyor - manuel IP sadece
+	## keşif işe yaramazsa (güvenlik duvarı vb.) yedek.
+	var lan_info := MenuKit.make_label("Aynı ağdaki oyunlar aşağıda kendiliğinden belirir, tıklayıp katılabilirsin. Görünmezse (güvenlik duvarı vb.) host'un IP:Port'unu yukarıya yaz.", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
+	lan_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lan_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_child(lan_info)
+
+	_lan_found_header = MenuKit.make_label("Bulunan Oyunlar", MenuKit.FS_BODY, MenuKit.C_ACCENT)
+	v.add_child(_lan_found_header)
+	_lan_found_vbox = VBoxContainer.new()
+	_lan_found_vbox.add_theme_constant_override("separation", 4)
+	v.add_child(_lan_found_vbox)
+
+	v.add_child(MenuKit.make_section_header("Oda"))
+	room_info_label = MenuKit.make_label("Oda: Henüz Bağlı Değil", MenuKit.FS_BODY, MenuKit.C_GOOD)
+	room_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	room_info_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_child(room_info_label)
+	public_ip_label = MenuKit.make_label("", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
+	public_ip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	public_ip_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	public_ip_label.visible = false
+	v.add_child(public_ip_label)
+
+	var players_box := MenuKit.make_panel("inset")
+	players_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(players_box)
+	var player_scroll := ScrollContainer.new()
+	player_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	players_box.add_child(player_scroll)
+	player_list_container = VBoxContainer.new()
+	player_list_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	player_list_container.add_theme_constant_override("separation", 6)
+	player_scroll.add_child(player_list_container)
+
+	ready_btn = MenuKit.make_button("HAZIRIM", "sage", MenuKit.FS_BODY, 52)
+	ready_btn.visible = false
+	v.add_child(ready_btn)
+	start_game_btn = MenuKit.make_button("OYUNU BAŞLAT (HOST)", "sage", MenuKit.FS_BODY, 52)
+	start_game_btn.visible = false
+	v.add_child(start_game_btn)
+	close_room_btn = MenuKit.make_button("ODAYI KAPAT", "rose", MenuKit.FS_BODY, 52)
+	close_room_btn.visible = false
+	v.add_child(close_room_btn)
+	start_game_btn.pressed.connect(_on_start_game_pressed)
+	ready_btn.pressed.connect(_on_ready_pressed)
+	close_room_btn.pressed.connect(_on_close_room_pressed)
+
+	_place(panel, Vector2(EDGE, TOP), Vector2(SIDE, SCREEN.y - TOP - BOTTOM))
 
 
-static func _build_select_frame_style(highlighted: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0)
-	var w: int = 5 if highlighted else 0
-	style.border_width_left = w
-	style.border_width_top = w
-	style.border_width_right = w
-	style.border_width_bottom = w
-	style.border_color = Color(0.22, 0.62, 0.2, 1.0)
-	style.corner_radius_top_left = 14
-	style.corner_radius_top_right = 14
-	style.corner_radius_bottom_right = 14
-	style.corner_radius_bottom_left = 14
-	style.content_margin_left = 6
-	style.content_margin_top = 6
-	style.content_margin_right = 6
-	style.content_margin_bottom = 6
-	return style
+## ------------------------------------------------------------------ orta: kartlar + yetenek paneli
+func _build_center() -> void:
+	var center_x: float = EDGE + SIDE + GAP
+	var center_w: float = SCREEN.x - 2.0 * center_x
+	roster = RosterScript.new()
+	add_child(roster)
+	roster.build()
+	var grid_size: Vector2 = RosterScript.grid_size(Characters.DEFS.size())
+	_place(roster, Vector2(center_x + floorf((center_w - grid_size.x) * 0.5), TOP), grid_size)
+	roster.character_picked.connect(_on_character_pressed)
+
+	details = DetailsScript.new()
+	add_child(details)
+	var details_y: float = TOP + grid_size.y + GAP
+	_place(details, Vector2(center_x, details_y), Vector2(center_w, SCREEN.y - BOTTOM - details_y))
 
 
-func _populate_character_grid() -> void:
-	for child in grid.get_children():
-		child.queue_free()
-	cards.clear()
-
-	var portrait_style := _build_portrait_card_style()
-	var name_style := _build_name_card_style()
-	_select_frame_style_off = _build_select_frame_style(false)
-	_select_frame_style_on = _build_select_frame_style(true)
-
-	for char_id in Characters.DEFS:
-		var def: Dictionary = Characters.DEFS[char_id]
-
-		var outer := VBoxContainer.new()
-		outer.add_theme_constant_override("separation", 0)
-		outer.alignment = BoxContainer.ALIGNMENT_CENTER
-
-		var card_panel := PanelContainer.new()
-		card_panel.custom_minimum_size = Vector2(148, 140)
-		card_panel.clip_contents = true
-		card_panel.add_theme_stylebox_override("panel", portrait_style)
-
-		var margin := MarginContainer.new()
-		margin.add_theme_constant_override("margin_left", 6)
-		margin.add_theme_constant_override("margin_top", 6)
-		margin.add_theme_constant_override("margin_right", 6)
-		margin.add_theme_constant_override("margin_bottom", 6)
-		card_panel.add_child(margin)
-
-		var portrait_center := CenterContainer.new()
-		margin.add_child(portrait_center)
-
-		var button := TextureButton.new()
-		button.custom_minimum_size = Vector2(122, 122)
-		button.ignore_texture_size = true
-		button.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-		button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		if ResourceLoader.exists(def["portrait"]):
-			button.texture_normal = load(def["portrait"])
-		button.pressed.connect(_on_character_pressed.bind(char_id))
-		portrait_center.add_child(button)
-
-		outer.add_child(card_panel)
-
-		var name_card := PanelContainer.new()
-		name_card.custom_minimum_size = Vector2(148, 42)
-		name_card.clip_contents = true
-		name_card.add_theme_stylebox_override("panel", name_style)
-
-		var name_margin := MarginContainer.new()
-		name_margin.add_theme_constant_override("margin_left", 4)
-		name_margin.add_theme_constant_override("margin_top", 4)
-		name_margin.add_theme_constant_override("margin_right", 4)
-		name_margin.add_theme_constant_override("margin_bottom", 4)
-		name_card.add_child(name_margin)
-
-		var label := Label.new()
-		label.text = def["name"]
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.clip_text = true
-		label.add_theme_color_override("font_color", Color(1, 1, 1))
-		name_margin.add_child(label)
-		_fit_label_font(label, def["name"], 30, 18, 148 - 8)
-
-		outer.add_child(name_card)
-
-		var select_frame := PanelContainer.new()
-		select_frame.add_theme_stylebox_override("panel", _select_frame_style_off)
-		select_frame.add_child(outer)
-
-		grid.add_child(select_frame)
-		cards[char_id] = select_frame
-
-
-## bkz. character_select.gd _fit_label_font - birebir aynı.
-func _fit_label_font(label: Label, txt: String, start_size: int, min_size: int, max_width: float) -> void:
-	var font_size: int = start_size
-	var font: Font = label.get_theme_font("font")
-	if not font:
-		font = ThemeDB.fallback_font
-	while font_size > min_size:
-		var w: float = font.get_string_size(txt, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size).x
-		if w <= max_width:
-			break
-		font_size -= 1
-	label.add_theme_font_size_override("font_size", font_size)
+## ------------------------------------------------------------------ sağ: vitrin + ruhani yetenek
+func _build_right_column() -> void:
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 12)
+	add_child(col)
+	showcase = ShowcaseScript.new()
+	col.add_child(showcase)
+	showcase.build(false)
+	## Ruhani Yetenek seçici (kullanıcı isteği: karakter seçerken herkes 1 ruhani yetenek seçer) - seçim yerel bir
+	## oyuncu tercihi (GameManager.selected_spiritual), ağdan gitmesi gerekmez.
+	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
+	spirit_picker.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(spirit_picker)
+	spirit_picker.setup(3)
+	_place(col, Vector2(SCREEN.x - EDGE - SIDE, TOP), Vector2(SIDE, SCREEN.y - TOP - BOTTOM))
 
 
 func _on_character_pressed(char_id: int) -> void:
 	selected_char_id = char_id
-	var def: Dictionary = Characters.get_def(char_id)
-	name_label.text = def["name"]
-	## bkz. character_select.gd - artık tüm karakterler ortak silahla
-	## saldırdığı için "Sınıf: Yakıncı/Menzilli" etiketi kaldırıldı.
-	stats_label.text = BASE_STATS
-
-	skill_icon_1.skill_id = def.get("skill", 1)
-	skill_icon_1.custom_texture = load(def["skill_icon"]) if def.has("skill_icon") else null
-	skill_icon_1.queue_redraw()
-	ulti_desc_label.text = "%s (R tuşu): %s" % [def.get("skill_name", "Ulti"), def["skill_desc"]]
-
-	var has_skill2: bool = def.has("skill2")
-	temel_row.visible = has_skill2
-	if has_skill2:
-		skill_icon_2.skill_id = def.get("skill2", 1)
-		skill_icon_2.custom_texture = load(def["skill2_icon"]) if def.has("skill2_icon") else null
-		skill_icon_2.queue_redraw()
-		temel_desc_label.text = "%s (E tuşu): %s" % [def.get("skill2_name", "Temel"), def["skill2_desc"]]
-
-	## Pasif satırı: hud.gd _setup_ability_icons() ile aynı mantık.
-	var has_passive: bool = def.has("passive") and not str(def["passive"]).is_empty()
-	passive_row.visible = has_passive
-	if has_passive:
-		## bkz. hud.gd _setup_ability_icons() üstündeki AYNI DÜZELTME notu.
-		passive_icon.skill_id = def.get("passive_vector_id", -1)
-		var p_tex_path: String = def.get("passive_icon", "")
-		passive_icon.custom_texture = load(p_tex_path) if p_tex_path != "" and ResourceLoader.exists(p_tex_path) else null
-		passive_icon.queue_redraw()
-		passive_desc_label.text = "Pasif: %s" % def["passive"]
-
-	## Kullanıcı isteği: "tek oyunculudaki gibi yap" - character_select.gd'deki
-	## gibi karartma (modulate) değil, seçili karta yeşil çerçeve.
-	for id in cards:
-		var frame: PanelContainer = cards[id]
-		frame.add_theme_stylebox_override("panel", _select_frame_style_on if id == char_id else _select_frame_style_off)
-
+	roster.select(char_id)
+	details.show_character(char_id)
+	showcase.show_character(char_id)
 	NetworkManager.update_local_character(char_id)
+
+
+func _on_lan_host_pressed() -> void:
+	var parts: Array = _lan_ip_input.text.split(":")
+	var port: int = 7777
+	if parts.size() > 1:
+		port = int(parts[1])
+	var pname: String = player_name_input.text.strip_edges()
+	if pname.is_empty():
+		pname = "Kurucu (LAN)"
+	NetworkManager.host_lan(port, pname, selected_char_id)
+
+
+func _on_lan_join_pressed() -> void:
+	var parts: Array = _lan_ip_input.text.split(":")
+	var ip: String = "127.0.0.1"
+	var port: int = 7777
+	if parts.size() > 0:
+		ip = parts[0].strip_edges()
+	if parts.size() > 1:
+		port = int(parts[1])
+	var pname: String = player_name_input.text.strip_edges()
+	if pname.is_empty():
+		pname = "Katılımcı (LAN)"
+	NetworkManager.join_lan(ip, port, pname, selected_char_id)
 
 
 func _on_start_game_pressed() -> void:
@@ -385,7 +290,6 @@ func _on_back_pressed() -> void:
 		NetworkManager.disconnect_from_room()
 		_update_lobby_ui()
 		return
-	
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
@@ -396,7 +300,55 @@ func _on_status_changed(status_text: String) -> void:
 ## LAN/IP bağlantı bilgisi
 func _refresh_public_ip_label() -> void:
 	public_ip_label.visible = true
-	public_ip_label.text = "LAN bağlantısı kuruldu. IP:Port : %s" % NetworkManager.room_code
+	## room_code artık host'ta gerçek algılanan IP'yi taşıyor (bkz. network_manager.gd
+	## host_lan/get_local_lan_ip) - bu etiket kullanıcının arkadaşına söyleyebileceği
+	## IP'yi otomatik gösteriyor, "ipconfig"e gerek kalmıyor.
+	public_ip_label.text = "Bağlantı bilgisi (gerekirse paylaş): %s" % NetworkManager.room_code
+
+
+## NetworkManager.lan_games_updated sinyaliyle çağrılır, ağda bulunan host'ları listeler;
+## tıklanınca IP elle yazılmadan doğrudan katılır.
+func _refresh_lan_found_list() -> void:
+	if _lan_found_vbox == null:
+		return
+	for c in _lan_found_vbox.get_children():
+		c.queue_free()
+	var games: Array = NetworkManager.get_discovered_lan_games()
+	if games.is_empty():
+		var empty_lbl := MenuKit.make_label("(henüz bulunamadı - host aynı ağda olmalı)", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
+		empty_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_lan_found_vbox.add_child(empty_lbl)
+		return
+	for g in games:
+		var btn := MenuKit.make_button("%s   (%s:%d)" % [g["name"], g["ip"], g["port"]], "tan", MenuKit.FS_SMALL, 40)
+		## DÜZELTME (kullanıcı bildirimi: "soldaki oda kurma paneli oda bulduğunda kocaman büyüyen bir buton
+		## yüzünden dışa taşıyor") - clip_text + expand_fill: buton mevcut genişliği DOLDURUR, metne göre BÜYÜMEZ,
+		## sığmayan metin "..." ile kırpılır.
+		btn.clip_text = true
+		btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.tooltip_text = btn.text ## kırpılan tam metin ipucunda kalsın
+		btn.pressed.connect(_on_found_game_pressed.bind(String(g["ip"]), int(g["port"])))
+		_lan_found_vbox.add_child(btn)
+	UISound.connect_all_buttons(_lan_found_vbox)
+
+
+func _on_found_game_pressed(ip: String, port: int) -> void:
+	_lan_ip_input.text = "%s:%d" % [ip, port]
+	var pname: String = player_name_input.text.strip_edges()
+	if pname.is_empty():
+		pname = "Katılımcı (LAN)"
+	NetworkManager.join_lan(ip, port, pname, selected_char_id)
+
+
+func _exit_tree() -> void:
+	## Lobiden ayrılınca (ana menüye dönünce) dinlemeyi durdur ki UDP portu boşta
+	## kalıp gelecekteki bir oturumu (ya da AYNI PC'deki ikinci test istemcisini)
+	## engellemesin - bkz. network_manager.gd LAN OTOMATİK KEŞİF notu.
+	if NetworkManager.lan_games_updated.is_connected(_refresh_lan_found_list):
+		NetworkManager.lan_games_updated.disconnect(_refresh_lan_found_list)
+	NetworkManager.stop_lan_discovery_listen()
 
 
 func _update_lobby_ui() -> void:
@@ -409,6 +361,12 @@ func _update_lobby_ui() -> void:
 		if _lan_host_btn: _lan_host_btn.disabled = false
 		if _lan_join_btn: _lan_join_btn.disabled = false
 		if _lan_ip_input: _lan_ip_input.editable = true
+		## Henüz bağlanmadık (ör. host_lan/join_lan başarısız oldu, ya da bağlıyken
+		## "geri" ile lobiye dönüldü) - keşif dinlemesi AÇIK olmalı, bkz. _ready().
+		NetworkManager.start_lan_discovery_listen()
+		if _lan_found_header: _lan_found_header.visible = true
+		if _lan_found_vbox: _lan_found_vbox.visible = true
+		_refresh_lan_found_list()
 	else:
 		room_info_label.text = "Bağlantı: %s (%s)" % [NetworkManager.room_code, "Host" if NetworkManager.is_host else "Katılımcı"]
 		start_game_btn.visible = NetworkManager.is_host
@@ -421,20 +379,48 @@ func _update_lobby_ui() -> void:
 		if _lan_host_btn: _lan_host_btn.disabled = true
 		if _lan_join_btn: _lan_join_btn.disabled = true
 		if _lan_ip_input: _lan_ip_input.editable = false
+		## Zaten bağlandık - "Bulunan Oyunlar" listesi artık anlamsız, gizle
+		## (dinleme de NetworkManager.host_lan/join_lan içinde zaten durduruldu).
+		if _lan_found_header: _lan_found_header.visible = false
+		if _lan_found_vbox: _lan_found_vbox.visible = false
 		_refresh_public_ip_label()
-	
+
 	for child in player_list_container.get_children():
 		child.queue_free()
-	
+	if NetworkManager.lobby_players.is_empty():
+		var none := MenuKit.make_label("Odada henüz kimse yok", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
+		player_list_container.add_child(none)
 	for pid in NetworkManager.lobby_players.keys():
-		var pinfo: Dictionary = NetworkManager.lobby_players[pid]
-		var cdef: Dictionary = Characters.get_def(pinfo.get("char_id", 1))
-		var cname: String = cdef.get("name", "Karakter")
-		var host_tag: String = " [HOST]" if pinfo.get("is_host", false) else ""
-		
-		var lbl := Label.new()
-		var ready_tag: String = " [HAZIR]" if pinfo.get("is_ready", false) else " [HAZIR DEĞİL]"
-		lbl.text = "• %s (%s)%s%s" % [pinfo.get("name", "Oyuncu"), cname, host_tag, ready_tag]
-		lbl.add_theme_font_size_override("font_size", 20)
-		player_list_container.add_child(lbl)
+		player_list_container.add_child(_make_player_row(NetworkManager.lobby_players[pid]))
 
+
+## Odadaki bir oyuncu satırı: mini karakter (1x, idle ilk kare) + isim / karakter adı + HAZIR / BEKLİYOR rozeti.
+func _make_player_row(pinfo: Dictionary) -> Control:
+	var cdef: Dictionary = Characters.get_def(pinfo.get("char_id", 1))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+
+	var slot := MenuKit.make_panel("slot_normal")
+	row.add_child(slot)
+	var mini: Control = PreviewScript.new()
+	mini.custom_minimum_size = Vector2(48, 48)
+	slot.add_child(mini)
+	mini.setup(cdef, 1, 46.0)
+
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 0)
+	row.add_child(col)
+	var host_tag: String = "  [HOST]" if pinfo.get("is_host", false) else ""
+	var name_lbl := MenuKit.make_label("%s%s" % [pinfo.get("name", "Oyuncu"), host_tag], MenuKit.FS_BODY, MenuKit.C_TEXT)
+	name_lbl.clip_text = true
+	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	col.add_child(name_lbl)
+	col.add_child(MenuKit.make_label(str(cdef.get("name", "Karakter")), MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM))
+
+	var is_ready: bool = pinfo.get("is_ready", false)
+	var badge := MenuKit.make_panel("tag_pasif" if is_ready else "tag_ulti")
+	badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	badge.add_child(MenuKit.make_label("HAZIR" if is_ready else "BEKLİYOR", MenuKit.FS_SMALL, MenuKit.C_CREAM, HORIZONTAL_ALIGNMENT_CENTER))
+	row.add_child(badge)
+	return row

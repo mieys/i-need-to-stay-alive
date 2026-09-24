@@ -1,5 +1,7 @@
 extends Node2D
 
+const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+
 signal fired(direction: Vector2)
 
 @export var projectile_scene: PackedScene
@@ -166,6 +168,18 @@ var weapon_shield_pen_bonus: float = 0.0
 ## hep 0 - no-op.
 var _true_damage_charges: int = 0
 const TRUE_DAMAGE_BONUS_MULT := 1.5 ## +%50
+## Kullanıcı isteği (2026-09-24): "Elaranın E yeteneği aktifkenki yapacağı 6 saldırı buffu aynı zamanda %100 saldırı
+## hızı versin" - silahın hakları sürdüğü sürece atış aralığı bu çarpanla kısalır (0.5 = 2 kat hız = +%100).
+## fire_rate_multiplier'a YAZILMIYOR (o alanı Matthew/Talon yetenekleri de kullanıyor, bitişte 1.0'a sıfırlıyorlar).
+const TRUE_DAMAGE_FIRE_RATE_MULT := 0.5
+
+
+## Tüm atış aralığı hesaplarının (FireTimer, yay çekilişi, şimşek ışını tiki) TEK kaynağı.
+func _effective_fire_wait() -> float:
+	var wait: float = fire_rate * fire_rate_multiplier
+	if _true_damage_charges > 0:
+		wait *= TRUE_DAMAGE_FIRE_RATE_MULT
+	return wait
 ## Elara ULTİ (R): 25sn boyunca her atış bu oranda hasar verir (%60) - "2 kez
 ## tetiklenir" kısmı _on_fire_timer_timeout/_process'teki draw-ready dalında
 ## _fire_at()'in İKİ KEZ çağrılmasıyla sağlanıyor (bkz. player.gd
@@ -632,16 +646,25 @@ func _trigger_arcane_burst() -> void:
 		_fire_at(in_range[i])
 
 
+## Silah TÜRÜ tespiti için kaynak metin. BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-24: "saldırı hızı yükseltmeme rağmen
+## azaldı / atış hızı ve saldırı hızı farklı algılanıyor" araştırmasında ölçüldü): tür eskiden düğüm ADINDAN ("WeaponYay"
+## vb.) çıkarılıyordu, ama aynı silahın dükkandan alınan İKİNCİ kopyası aynı üst düğüme eklenince Godot çakışan adı
+## "@Node2D@23" gibi bir şeyle değiştiriyor - ikinci yay %15 yavaşlatmayı almıyordu (ilk yay 0.728 sn, alınan yay 0.619 sn)
+## ve ikinci bir Uzunkılıç/asa kopyası kendi özel davranışını tamamen kaybederdi. Sahne dosya yolu çakışmadan etkilenmez.
+var _type_src: String = ""
+
+
 func _ready() -> void:
-	_is_uzunkilic = name.containsn("uzunkilic") or name.containsn("kılıç") or name.containsn("kilic")
+	_type_src = scene_file_path if scene_file_path != "" else String(name)
+	_is_uzunkilic = _type_src.containsn("uzunkilic") or _type_src.containsn("kılıç") or _type_src.containsn("kilic")
 	if _is_uzunkilic:
 		## Kullanıcı isteği: "her silahın saldırı gücü oranını %10 azalt" -
 		## eskiden 1.8, %10 azaltılmış hali 1.62.
 		card_damage_bonus_ratio = 1.62
 		melee = false
 		attack_range = 115.0
-	_is_arcane = name.containsn("arcane")
-	if name.containsn("yay") or name.containsn("bow"):
+	_is_arcane = _type_src.containsn("arcane")
+	if _type_src.containsn("yay") or _type_src.containsn("bow"):
 		# Firing rate (saldırı hızı) %15 azaltılıyor (yani atış aralığı saniyesi %15 artıyor)
 		fire_rate = fire_rate / 0.85
 	
@@ -659,16 +682,16 @@ func _ready() -> void:
 	if icon_sprite:
 		# Asalar için yeni piksel-art görsellerini dinamik yükleme (tscn kilitlerini aşmak için)
 		# Yeni 32x32 piksel görsellerin aşırı küçülmesini önlemek için ikon ölçeğini (0.99, 0.99) yapıyoruz.
-		if name.containsn("arcane"):
+		if _type_src.containsn("arcane"):
 			icon_sprite.texture = load("res://assets/weapons/arcane/icon_v3.png")
 			icon_sprite.scale = Vector2(0.99, 0.99)
-		elif name.containsn("fire"):
+		elif _type_src.containsn("fire"):
 			icon_sprite.texture = load("res://assets/weapons/fire/firestaff_icon_v3.png")
 			icon_sprite.scale = Vector2(0.99, 0.99)
-		elif name.containsn("lightning"):
+		elif _type_src.containsn("lightning"):
 			icon_sprite.texture = load("res://assets/weapons/lightning/icon_v3.png")
 			icon_sprite.scale = Vector2(0.99, 0.99)
-		elif name.containsn("buz"):
+		elif _type_src.containsn("buz"):
 			icon_sprite.texture = load("res://assets/weapons/buz_asasi/icon_v3.png")
 			icon_sprite.scale = Vector2(0.99, 0.99)
 		else:
@@ -729,6 +752,9 @@ func _ready() -> void:
 		reload_anim.visible = false
 	if draw_before_fire:
 		_start_draw_cycle()
+	## Fizik interpolasyonu (bkz. physics_interp.gd): hover takibi ve gölge _physics_process'te
+	## -> kök + shadow_sprite AÇIK; icon_sprite KAPALI (nişan dönüşü _process'te, _update_aim).
+	PhysicsInterp.opt_in(self, func(c: Node) -> bool: return c == shadow_sprite)
 
 
 ## Kalıcı "menzil" kartı bonusundan SONRA üstüne binen geçici bir çarpan -
@@ -1140,7 +1166,7 @@ func _update_hover_follow(delta: float) -> void:
 	var parent_node: Node = get_parent()
 	if parent_node and parent_node is Node2D:
 		# Karakterin ölçeğini silaha uyguluyoruz (büyük görünmesini engeller)
-		var is_wand: bool = name.containsn("arcane") or name.containsn("fire") or name.containsn("lightning") or name.containsn("buz")
+		var is_wand: bool = _type_src.containsn("arcane") or _type_src.containsn("fire") or _type_src.containsn("lightning") or _type_src.containsn("buz")
 		if is_wand:
 			## Kullanıcı isteği: "Arcane Asası'nın boyutunu %15 düşür" - diğer
 			## asalar (fire/lightning/buz) hâlâ 0.3, sadece Arcane için ek
@@ -1200,6 +1226,8 @@ func _physics_process(delta: float) -> void:
 		_update_icon_shadow()
 
 
+var _orbit_arc: AnimatedSprite2D = null
+
 func _process_uzunkilic_orbit(delta: float) -> void:
 	# Update cooldowns
 	for id in _hit_cooldowns.keys():
@@ -1227,13 +1255,10 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 	if icon_sprite:
 		icon_sprite.visible = true
 
-	# Spawn sword swing slash streak trail periodically
+	## Yörünge izi: kılıcın arkasında TEK bir pişirilmiş hilal (bkz. WeaponOrbitMath.update_arc) - eskiden saniyede ~22
+	## ayrı iz sahnesi doğuyordu.
 	if is_inside_tree():
-		_trail_timer -= delta
-		if _trail_timer <= 0.0:
-			_trail_timer = WeaponOrbitMath.TRAIL_INTERVAL
-			var trail_parent: Node = get_tree().current_scene if get_tree().current_scene else get_parent()
-			WeaponOrbitMath.spawn_trail(trail_parent, global_position, rotation, range_mult, parent_node.scale.x)
+		_orbit_arc = WeaponOrbitMath.update_arc(_orbit_arc, self, (parent_node as Node2D).global_position, global_position)
 
 	# Collision detection with enemies
 	var sword_pos: Vector2 = global_position
@@ -1401,7 +1426,7 @@ func _process(delta: float) -> void:
 			_update_aim(delta)
 		return
 
-	var target_wait: float = max(0.05, fire_rate * fire_rate_multiplier)
+	var target_wait: float = max(0.05, _effective_fire_wait())
 	if abs(fire_timer.wait_time - target_wait) > 0.01:
 		fire_timer.wait_time = target_wait
 
@@ -1495,7 +1520,7 @@ func _start_draw_cycle() -> void:
 	if not draw_before_fire or not icon_sprite:
 		return
 	_draw_ready = false
-	var target_wait: float = max(0.05, fire_rate * fire_rate_multiplier)
+	var target_wait: float = max(0.05, _effective_fire_wait())
 	if held_arrow:
 		held_arrow.visible = true
 		held_arrow.position.x = 0.0
@@ -1921,7 +1946,7 @@ func _process_continuous_beam(delta: float) -> void:
 	if not target or not is_instance_valid(target):
 		_end_beam()
 		return
-	var rate_ratio: float = (fire_rate * fire_rate_multiplier) / _base_fire_rate if _base_fire_rate > 0.0 else 1.0
+	var rate_ratio: float = _effective_fire_wait() / _base_fire_rate if _base_fire_rate > 0.0 else 1.0
 	var effective_tick_interval: float = max(0.05, beam_tick_interval * rate_ratio)
 	if target != _beam_target:
 		_end_beam()
@@ -2773,9 +2798,10 @@ func _apply_knockback(target: Node2D) -> void:
 	if force <= 0.0 or not is_instance_valid(target):
 		return
 	var dir: Vector2 = (target.global_position - global_position).normalized()
-	## Artık anında ışınlama değil - enemy.gd'nin kendi yumuşak/sönümlenen
-	## itiş sistemine devrediliyor (bkz. enemy.gd apply_knockback_force).
-	if target.has_method("apply_knockback_force"):
+	## force = İTİŞ MESAFESİ (px) - bkz. enemy.gd apply_knockback_distance (yumuşak, sönümlenen, istemciden host'a iletilir).
+	if target.has_method("apply_knockback_distance"):
+		target.apply_knockback_distance(dir, force)
+	elif target.has_method("apply_knockback_force"):
 		target.apply_knockback_force(dir, force)
 	else:
 		target.global_position += dir * force

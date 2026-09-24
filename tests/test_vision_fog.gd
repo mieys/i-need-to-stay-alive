@@ -12,8 +12,10 @@ extends Node
 ##  - genişlik ayarı SADECE yatay menzili çarpıyor (sabiti değiştirmeden,
 ##    static normalized_distance ile),
 ##  - anlık hedef görünürlük: içeride 1, dışarıda 0, sınırda 0.5 (shader formülü),
-##  - düşmanlar görüşe GİRİNCE FADE_IN_TIME'da yavaşça belirir, ÇIKINCA
-##    FADE_OUT_TIME'da yavaşça solar ve ancak tamamen görünmez olunca gizlenir,
+##  - düşmanlar (ve yerdeki eşyalar - xp/altın/yemek/sandık/mıknatıs) görüşe GİRİNCE/ÇIKINCA
+##    ANINDA belirir/gizlenir - kullanıcı isteği (2026-09-23): "opaklaşarak görünmesin bir anda görünsün",
+##    ara bir yarı saydam durum YOK (eski FADE_IN_TIME/FADE_OUT_TIME'lı yumuşak açılma/sönme kaldırıldı -
+##    o iki sabit hâlâ var ama artık SADECE arka plandaki karartma maskesinin (shader) geçiş hızı için),
 ##  - yeni doğan düşman ilk karede hedefte başlar (sisin içinde "parlamaz"),
 ##  - sis kapanınca (ev içi) soluk/gizli her şey eski hâline döner,
 ##  - TAKIM GÖRÜŞÜ: müttefikin yanındaki düşman, biz uzaktayken de görünüyor,
@@ -92,6 +94,15 @@ func _approx(a: float, b: float, tolerance: float) -> bool:
 func _make_fog() -> CanvasLayer:
 	var fog: CanvasLayer = VisionFogScript.new()
 	add_child(fog)
+	## DÜZELTME: vision_fog.gd process_mode = PROCESS_MODE_ALWAYS, yani sahnedeki gerçek fog CanvasLayer'ı
+	## _process() üzerinden KENDİ KENDİNE de update_fog() çağırır. Bu test dosyası tüm ilerlemeyi ELLE
+	## (fog.update_fog(TICK_STEP)) yönetiyor - motor arka planda gerçek zamanlı kare(ler) geçirirse (headless
+	## bile olsa, ağır kurulum çağrıları - SubViewport/ShaderMaterial - sırasında gerçek duvar-saati süresi
+	## geçebiliyor) bu otomatik çağrı ELLE yapılan çağrılarla YARIŞA girip MANAGE_INTERVAL_FRAMES throttle'ının
+	## "kare eşleşmesi"ni beklenmedik şekilde kaydırabiliyordu (Görüş/görünürlük testlerinde ara sıra
+	## açıklanamayan başarısızlıklara yol açtığı bulundu). set_process(false) ile bu otomatik çağrı tamamen
+	## kapatılıyor - fog artık SADECE testin çağırdığı update_fog() kadar ilerliyor, tamamen belirlenimci.
+	fog.set_process(false)
 	_spawned.append(fog)
 	return fog
 
@@ -119,6 +130,21 @@ func _tick(fog: CanvasLayer, seconds: float) -> void:
 	var steps: int = maxi(1, roundi(seconds / TICK_STEP))
 	for i: int in range(steps):
 		fog.update_fog(TICK_STEP)
+
+
+## Bir konum/kaynak değişikliğinden sonra bir (ya da birkaç) öğenin görünürlüğünü GARANTİLİ şekilde tazeler.
+## _apply_enemy_visibility'nin PERF throttle'ı (MANAGE_INTERVAL_FRAMES'te bir, instance_id'ye göre kaydırmalı)
+## GERÇEK oyunda sorun değil (en fazla birkaç kare/~50ms gecikme, fark edilmez) ama Engine.get_process_frames()
+## bu headless test sürecinde GERÇEK duvar-saati zamanına bağlı ilerliyor (SubViewport/ShaderMaterial kurulumu
+## gibi ağır çağrılar sırasında motor arka planda kare "çiziyor") - yani testte kaç kez update_fog() çağrıldığı
+## ile throttle'ın "sırası geldi mi" sonucu ARASINDA belirlenimli bir ilişki YOK. Bu yüzden önce update_fog()
+## ile paylaşılan durumu (world_sources/_active) tazeleyip SONRA ilgili öğe(ler)i throttle'ı bypass ederek
+## DOĞRUDAN _manage_item() ile yönetiyoruz - test, _manage_item()'ın kendi mantığını (bu görevin asıl konusu)
+## doğruluyor, orkestrasyon katmanındaki performans throttle'ının ZAMANLAMASINI değil (o ayrı, dokunulmamış).
+func _settle(fog: CanvasLayer, items: Array = []) -> void:
+	fog.update_fog(TICK_STEP)
+	for item in items:
+		fog._manage_item(item, TICK_STEP)
 
 
 ## free() (queue_free DEĞİL): bir sonraki testin grupları önceki testten
@@ -206,18 +232,22 @@ func test_vision_matches_configured_radius_and_width() -> void:
 	_cleanup()
 
 
-func test_enemy_in_edge_band_is_half_transparent() -> void:
+func test_enemy_in_edge_band_is_fully_visible_not_faded() -> void:
+	## DÜZELTME (kullanıcı isteği 2026-09-23: "opaklaşarak görünmesin"): sınırdaki (hedef=0.5) düşman artık
+	## yarı saydam DEĞİL - ikili model, hedef HIDE_BELOW'ün üzerindeyse tam opak görünür.
 	var fog: CanvasLayer = _make_fog()
 	var center: Vector2 = _screen() * 0.5
 	_add_actor("player", center)
 	var enemy: Node2D = _add_enemy(center + Vector2(_half_width(), 0.0)) ## tam sınır -> hedef 0.5
 	fog.update_fog(TICK_STEP)
 	assert(enemy.visible, "Sınırdaki düşman gizlenmemeli")
-	assert(_approx(enemy.modulate.a, 0.5, 0.05), "Sınırdaki düşman yarı saydam olmalı: %.3f" % enemy.modulate.a)
+	assert(_approx(enemy.modulate.a, 1.0, 0.001), "Sınırdaki düşman soluklaşmadan tam opak görünmeli: %.3f" % enemy.modulate.a)
 	_cleanup()
 
 
-func test_enemy_fades_in_gradually_after_entering_vision() -> void:
+func test_enemy_appears_instantly_after_entering_vision() -> void:
+	## DÜZELTME (kullanıcı isteği 2026-09-23: "görüş alanına giren şeyler opaklaşarak görünmesin bir anda
+	## görünsün") - eski FADE_IN_TIME'lı yavaş açılma kaldırıldı, TEK karede tam görünür olmalı.
 	var fog: CanvasLayer = _make_fog()
 	var center: Vector2 = _screen() * 0.5
 	var w: float = _half_width()
@@ -227,18 +257,15 @@ func test_enemy_fades_in_gradually_after_entering_vision() -> void:
 	assert(not enemy.visible, "Sisteki düşman başta gizli olmalı")
 	## Görüşe gir.
 	enemy.global_position = center + Vector2(w * 0.3, 0.0)
-	_tick(fog, VisionFogScript.FADE_IN_TIME * 0.5)
-	assert(enemy.visible, "Görüşe giren düşman belirmeye başlamadı")
-	assert(enemy.modulate.a > 0.2 and enemy.modulate.a < 0.8,
-		"Görüşe giren düşman yarı sürede YARI belirmeli (yavaş açılma), alfa=%.3f" % enemy.modulate.a)
-	_tick(fog, VisionFogScript.FADE_IN_TIME)
-	assert(_approx(enemy.modulate.a, 1.0, 0.001), "Açılma süresi bitince düşman tam görünür olmalı")
-	assert(not enemy.has_meta(VisionFogScript.ALPHA_META), "Tam görününce alfa işareti temizlenmeli")
+	_settle(fog, [enemy])
+	assert(enemy.visible and _approx(enemy.modulate.a, 1.0, 0.001),
+		"Görüşe giren düşman (yavaş açılma olmadan, en fazla birkaç kare içinde) tam görünür olmalı, alfa=%.3f" % enemy.modulate.a)
 	assert(not enemy.has_meta(VisionFogScript.HIDDEN_META), "Görününce gizli işareti temizlenmeli")
 	_cleanup()
 
 
-func test_enemy_fades_out_gradually_after_leaving_vision() -> void:
+func test_enemy_disappears_instantly_after_leaving_vision() -> void:
+	## DÜZELTME (kullanıcı isteği 2026-09-23) - eski FADE_OUT_TIME'lı yavaş sönme kaldırıldı, TEK karede gizlenmeli.
 	var fog: CanvasLayer = _make_fog()
 	var center: Vector2 = _screen() * 0.5
 	var w: float = _half_width()
@@ -248,12 +275,8 @@ func test_enemy_fades_out_gradually_after_leaving_vision() -> void:
 	assert(enemy.visible and _approx(enemy.modulate.a, 1.0, 0.001), "Görüş içindeki düşman başta tam görünür olmalı")
 	## Görüşten çık.
 	enemy.global_position = center + Vector2(w * _outside_factor() * 1.3, 0.0)
-	_tick(fog, VisionFogScript.FADE_OUT_TIME * 0.5)
-	assert(enemy.visible, "Görüşten çıkan düşman ANINDA gizlenmemeli (yavaş sönme)")
-	assert(enemy.modulate.a > 0.2 and enemy.modulate.a < 0.8,
-		"Görüşten çıkan düşman yarı sürede YARI solmalı, alfa=%.3f" % enemy.modulate.a)
-	_tick(fog, VisionFogScript.FADE_OUT_TIME)
-	assert(not enemy.visible, "Sönme süresi bitince düşman tamamen gizlenmeli")
+	_settle(fog, [enemy])
+	assert(not enemy.visible, "Görüşten çıkan düşman (yavaş sönme olmadan, en fazla birkaç kare içinde) gizlenmeli")
 	assert(enemy.has_meta(VisionFogScript.HIDDEN_META), "Sisin gizlediği düşman işaretlenmeli")
 	_cleanup()
 
@@ -284,7 +307,7 @@ func test_team_vision_reveals_enemy_near_ally() -> void:
 	fog.update_fog(TICK_STEP)
 	assert(not enemy.visible, "Müttefik yokken uzaktaki düşman gizli olmalı")
 	_add_actor("remote_players", enemy_pos - Vector2(w * 0.2, 0.0))
-	_tick(fog, VisionFogScript.FADE_IN_TIME * 1.5)
+	_settle(fog, [enemy])
 	assert(fog.get_source_count() == 2, "Yerel oyuncu + müttefik = 2 görüş kaynağı olmalı")
 	assert(enemy.visible and _approx(enemy.modulate.a, 1.0, 0.001),
 		"Müttefiğin görüşündeki düşman (takım görüşü) görünmedi")
@@ -305,7 +328,7 @@ func test_dead_ally_gives_no_vision_but_downed_ally_does() -> void:
 	assert(not enemy.visible, "Ölü müttefiğin yanındaki düşman görünüyor")
 	## Yerde yatan: is_dead=true AMA is_downed=true (bkz. player.gd is_downed notu)
 	ally.is_downed = true
-	_tick(fog, VisionFogScript.FADE_IN_TIME * 1.5)
+	_settle(fog, [enemy])
 	assert(fog.get_source_count() == 2, "Yerde yatan (diriltilebilir) müttefik görüş vermeli")
 	assert(enemy.visible, "Yerde yatan müttefiğin yanındaki düşman görünmedi")
 	_cleanup()
@@ -317,17 +340,18 @@ func test_indoors_disables_fog_and_restores_enemies() -> void:
 	var w: float = _half_width()
 	var player: FakeActor = _add_actor("player", center)
 	var hidden_enemy: Node2D = _add_enemy(center + Vector2(w * _outside_factor() * 1.3, 0.0))
-	var faded_enemy: Node2D = _add_enemy(center + Vector2(w, 0.0)) ## sınır -> yarı saydam
+	var edge_enemy: Node2D = _add_enemy(center + Vector2(w, 0.0)) ## sınır -> hedef 0.5, ama artık İKİLİ (tam opak)
 	fog.update_fog(TICK_STEP)
 	assert(not hidden_enemy.visible, "Dışarıdayken uzak düşman gizli olmalı")
-	assert(faded_enemy.modulate.a < 0.9, "Dışarıdayken sınırdaki düşman soluk olmalı")
+	assert(edge_enemy.visible and _approx(edge_enemy.modulate.a, 1.0, 0.001),
+		"Sınırdaki düşman soluklaşmadan tam opak görünmeli (kullanıcı isteği: opaklaşarak görünmesin)")
 	player.is_indoors = true
 	fog.update_fog(TICK_STEP)
 	assert(not fog.is_active(), "Ev içindeyken sis kapalı olmalı")
 	assert(not fog._rect.visible, "Ev içindeyken karartma katmanı gizli olmalı")
 	assert(hidden_enemy.visible, "Ev içindeyken sis kapanınca gizlenen düşman geri açılmalı")
-	assert(_approx(faded_enemy.modulate.a, 1.0, 0.001), "Ev içindeyken soluk düşman tam görünür olmalı (alfa geri gelmeli)")
-	assert(not hidden_enemy.has_meta(VisionFogScript.VIS_META) and not faded_enemy.has_meta(VisionFogScript.ALPHA_META),
+	assert(_approx(edge_enemy.modulate.a, 1.0, 0.001), "Ev içindeyken düşman tam görünür kalmalı")
+	assert(not hidden_enemy.has_meta(VisionFogScript.VIS_META) and not edge_enemy.has_meta(VisionFogScript.VIS_META),
 		"Sis kapanınca tüm işaretler temizlenmeli")
 	player.is_indoors = false
 	fog.update_fog(TICK_STEP)
@@ -392,17 +416,19 @@ func test_fog_visibility_of_defaults_to_one() -> void:
 	node.free()
 
 
-func test_release_on_exit_restores_alpha_and_metas() -> void:
+func test_release_on_exit_restores_visibility_and_metas() -> void:
 	var fog: CanvasLayer = _make_fog()
 	var center: Vector2 = _screen() * 0.5
+	var w: float = _half_width()
 	_add_actor("player", center)
-	var enemy: Node2D = _add_enemy(center + Vector2(_half_width(), 0.0)) ## sınır -> yarı saydam
+	var enemy: Node2D = _add_enemy(center + Vector2(w * _outside_factor() * 1.3, 0.0)) ## sis içinde -> gizli
 	fog.update_fog(TICK_STEP)
-	assert(enemy.modulate.a < 0.9 and enemy.has_meta(VisionFogScript.ALPHA_META), "Ön koşul: düşman soluk olmalı")
+	assert(not enemy.visible and enemy.has_meta(VisionFogScript.HIDDEN_META), "Ön koşul: düşman sisin içinde gizli olmalı")
 	_spawned.erase(fog)
 	fog.free() ## _exit_tree -> hepsi eski hâline dönmeli
-	assert(_approx(enemy.modulate.a, 1.0, 0.001), "Sis kalkınca düşmanın alfası 1'e dönmeli")
-	assert(not enemy.has_meta(VisionFogScript.ALPHA_META) and not enemy.has_meta(VisionFogScript.VIS_META),
+	assert(enemy.visible, "Sis kalkınca gizlenen düşman geri açılmalı")
+	assert(_approx(enemy.modulate.a, 1.0, 0.001), "Sis kalkınca düşmanın alfası 1'de kalmalı")
+	assert(not enemy.has_meta(VisionFogScript.HIDDEN_META) and not enemy.has_meta(VisionFogScript.VIS_META),
 		"Sis kalkınca işaretler temizlenmeli")
 	_cleanup()
 
@@ -544,12 +570,14 @@ func test_fog_freezes_while_game_is_paused() -> void:
 	get_tree().paused = true
 	fog.update_fog(TICK_STEP)
 	fog.update_fog(TICK_STEP)
-	assert(_approx(enemy.modulate.a, 1.0, 0.001), "Oyun duraklatılmışken düşman solmaya devam etmemeli")
+	## DÜZELTME (kullanıcı isteği 2026-09-23: görünürlük artık ikili/anlık, bkz. _manage_item) - duraklatılmışken
+	## düşman hâlâ TAM görünür kalmalı (update_fog() paused iken hiçbir şeye dokunmuyor).
+	assert(enemy.visible and _approx(enemy.modulate.a, 1.0, 0.001), "Oyun duraklatılmışken düşman gizlenmeye başlamamalı")
 	assert(fog._mask_viewport.render_target_update_mode == SubViewport.UPDATE_DISABLED,
 		"Oyun duraklatılmışken maske durmalı (donmuş dünyada sis kaymasın)")
 	get_tree().paused = false
-	_tick(fog, VisionFogScript.FADE_OUT_TIME * 0.5)
-	assert(enemy.modulate.a < 0.9, "Duraklatma bitince sönme kaldığı yerden devam etmeli")
+	_settle(fog, [enemy])
+	assert(not enemy.visible, "Duraklatma bitince görüş dışındaki düşman gizlenmeli")
 	_cleanup()
 
 
@@ -606,14 +634,14 @@ func test_enemy_behind_wall_fades_out_and_reappears_when_wall_is_gone() -> void:
 	assert(behind.visible and _approx(behind.modulate.a, 1.0, 0.001), "Duvar yokken düşman görünür olmalı")
 
 	_give_fog_a_wall(fog, _wall_three_cells_above(src["cell"]))
-	_tick(fog, VisionFogScript.FADE_OUT_TIME * 1.5)
+	_settle(fog, [behind, front])
 	assert(not behind.visible, "Duvarın arkasındaki düşman sonunda gizlenmeliydi")
 	assert(front.visible and _approx(front.modulate.a, 1.0, 0.001), "Duvarın önündeki düşman etkilenmemeli")
 	assert(VisionFogScript.fog_visibility_of(behind) < VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY,
 		"Duvarın arkasındaki düşman minimap/hasar yazısı için de gizli sayılmalı")
 
 	fog.set_occluders(null)
-	_tick(fog, VisionFogScript.FADE_IN_TIME * 1.5)
+	_settle(fog, [behind])
 	assert(behind.visible and _approx(behind.modulate.a, 1.0, 0.001), "Duvar kalkınca düşman yeniden görünmeliydi")
 	_cleanup()
 

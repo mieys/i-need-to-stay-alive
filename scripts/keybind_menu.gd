@@ -14,8 +14,6 @@ extends CanvasLayer
 
 signal closed
 
-const PAL_ACCENT := Color(0.83, 0.56, 0.30, 1.0)
-const PAL_BG := Color(0.18, 0.13, 0.08, 0.97)
 
 ## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - artık her satırda
 ## İKİ buton var (klavye + gamepad), hangisinin yakalama modunda olduğunu
@@ -38,9 +36,11 @@ func _ready() -> void:
 	_build_ui()
 
 
+## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap kite geçti - ahşap pencere + parşömen,
+## kiremit başlık, bej çukur satırlar, ten tuş butonları, okunur boyutlar (16-22 px'lik yazılar 24/32/48'e).
 func _build_ui() -> void:
 	var dim := ColorRect.new()
-	dim.color = Color(0.03, 0.02, 0.02, 0.6)
+	dim.color = Color(0.12, 0.07, 0.03, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
@@ -48,28 +48,14 @@ func _build_ui() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.theme = UIKit.theme()
 	add_child(center)
 
 	var outer := PanelContainer.new()
 	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - ikinci (gamepad)
-	## sütununa yer açmak için 640 -> 760.
-	outer.custom_minimum_size = Vector2(760, 640)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = PAL_BG
-	sb.border_width_left = 4
-	sb.border_width_right = 4
-	sb.border_width_top = 4
-	sb.border_width_bottom = 4
-	sb.border_color = PAL_ACCENT
-	sb.corner_radius_top_left = 14
-	sb.corner_radius_top_right = 14
-	sb.corner_radius_bottom_right = 14
-	sb.corner_radius_bottom_left = 14
-	sb.content_margin_left = 26
-	sb.content_margin_right = 26
-	sb.content_margin_top = 20
-	sb.content_margin_bottom = 20
-	outer.add_theme_stylebox_override("panel", sb)
+	## sütununa yer açmak için 640 -> 760 (kit çerçevesi + daha büyük yazılarla 860x760).
+	outer.custom_minimum_size = Vector2(860, 760)
+	outer.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 	center.add_child(outer)
 
 	var main_vbox := VBoxContainer.new()
@@ -79,20 +65,18 @@ func _build_ui() -> void:
 	var title := Label.new()
 	title.text = "TUŞ ATAMALARI"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 32)
-	title.add_theme_color_override("font_color", PAL_ACCENT)
+	UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_ACCENT, 0)
 	main_vbox.add_child(title)
 
 	var hint := Label.new()
 	hint.text = "Değiştirmek istediğin tuşa/butona tıkla, ardından yeni tuşa ya da gamepad butonuna bas (İptal için ESC)."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 16)
-	hint.add_theme_color_override("font_color", Color(0.75, 0.7, 0.6))
+	UIKit.style_label(hint, 24, UIKit.C_TEXT_DIM, 0)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
 	main_vbox.add_child(hint)
 
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 420)
+	scroll.custom_minimum_size = Vector2(0, 500)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	main_vbox.add_child(scroll)
 
@@ -106,8 +90,8 @@ func _build_ui() -> void:
 
 	var close_btn := Button.new()
 	close_btn.text = "KAPAT"
-	close_btn.custom_minimum_size = Vector2(0, 46)
-	close_btn.add_theme_font_size_override("font_size", 22)
+	close_btn.custom_minimum_size = Vector2(0, 52)
+	close_btn.add_theme_font_size_override("font_size", UIKit.FS_BODY)
 	close_btn.pressed.connect(_on_close_pressed)
 	main_vbox.add_child(close_btn)
 
@@ -124,22 +108,7 @@ func _build_ui() -> void:
 
 func _build_row(action_name: String, label_text: String) -> PanelContainer:
 	var row := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.26, 0.19, 0.12, 1.0)
-	sb.border_width_left = 2
-	sb.border_width_right = 2
-	sb.border_width_top = 2
-	sb.border_width_bottom = 2
-	sb.border_color = Color(0.45, 0.35, 0.22)
-	sb.corner_radius_top_left = 8
-	sb.corner_radius_top_right = 8
-	sb.corner_radius_bottom_right = 8
-	sb.corner_radius_bottom_left = 8
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
-	row.add_theme_stylebox_override("panel", sb)
+	row.add_theme_stylebox_override("panel", UIKit.panel_style("inset"))
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 12)
@@ -148,12 +117,13 @@ func _build_row(action_name: String, label_text: String) -> PanelContainer:
 	var name_lbl := Label.new()
 	name_lbl.text = label_text
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.add_theme_font_size_override("font_size", 20)
+	UIKit.style_label(name_lbl, 24, UIKit.C_TEXT, 0)
+	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	hbox.add_child(name_lbl)
 
 	var key_btn := Button.new()
-	key_btn.custom_minimum_size = Vector2(150, 40)
-	key_btn.add_theme_font_size_override("font_size", 18)
+	key_btn.custom_minimum_size = Vector2(190, 44)
+	key_btn.add_theme_font_size_override("font_size", 24)
 	key_btn.text = OS.get_keycode_string(GameManager.get_keybind_keycode(action_name))
 	key_btn.pressed.connect(_on_key_button_pressed.bind(action_name, key_btn))
 	hbox.add_child(key_btn)
@@ -164,8 +134,8 @@ func _build_row(action_name: String, label_text: String) -> PanelContainer:
 	## Ölü kalkan-modu action'larına (bkz. _NO_JOYPAD_ACTIONS) eklenmiyor.
 	if not _NO_JOYPAD_ACTIONS.has(action_name):
 		var joy_btn := Button.new()
-		joy_btn.custom_minimum_size = Vector2(150, 40)
-		joy_btn.add_theme_font_size_override("font_size", 18)
+		joy_btn.custom_minimum_size = Vector2(190, 44)
+		joy_btn.add_theme_font_size_override("font_size", 24)
 		joy_btn.text = _joypad_label(GameManager.get_keybind_joypad_descriptor(action_name))
 		joy_btn.pressed.connect(_on_joy_button_pressed.bind(action_name, joy_btn))
 		hbox.add_child(joy_btn)

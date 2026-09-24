@@ -39,6 +39,10 @@ const DEFAULT_RESOLUTION_INDEX := 2 ## 1920x1080 - project.godot'un varsayılan�
 
 var is_fullscreen: bool = true
 var resolution_index: int = DEFAULT_RESOLUTION_INDEX
+## Kullanıcı isteği: "oyuna fps göstergesi ekle ayarlardan açılıp
+## kapatılabilsin" - is_fullscreen/resolution_index ile AYNI "display" bölümü/
+## ConfigFile'ı paylaşıyor, ayrı bir dosya/autoload YOK.
+var show_fps: bool = false
 
 
 func _ready() -> void:
@@ -151,6 +155,11 @@ func set_resolution(index: int) -> void:
 	_save_display_settings()
 
 
+func set_show_fps(enabled: bool) -> void:
+	show_fps = enabled
+	_save_display_settings()
+
+
 func get_resolution_labels() -> Array[String]:
 	var labels: Array[String] = []
 	for r in RESOLUTIONS:
@@ -169,6 +178,7 @@ func _save_display_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()
 	config.set_value("display", "is_fullscreen", is_fullscreen)
 	config.set_value("display", "resolution_index", resolution_index)
+	config.set_value("display", "show_fps", show_fps)
 	config.save(DISPLAY_SETTINGS_PATH)
 
 
@@ -177,6 +187,7 @@ func _load_display_settings() -> void:
 	if config.load(DISPLAY_SETTINGS_PATH) == OK:
 		is_fullscreen = bool(config.get_value("display", "is_fullscreen", true))
 		resolution_index = clamp(int(config.get_value("display", "resolution_index", DEFAULT_RESOLUTION_INDEX)), 0, RESOLUTIONS.size() - 1)
+		show_fps = bool(config.get_value("display", "show_fps", false))
 	if is_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:

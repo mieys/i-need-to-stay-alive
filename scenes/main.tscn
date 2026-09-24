@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" uid="uid://bbfx3q46vfnif" path="res://scenes/vignette_overlay.tscn" id="12_vignette"]
 [ext_resource type="Script" uid="uid://bne58yj7o5p68" path="res://scripts/house_interior.gd" id="13_houseinterior"]
 [ext_resource type="Script" uid="uid://dqodewtm2in70" path="res://scripts/traveling_merchant.gd" id="14_merchant"]
+[ext_resource type="Script" path="res://scripts/world_event_manager.gd" id="15_worldevents"]
 
 [sub_resource type="Shader" id="Shader_o6xl0"]
 code = "shader_type canvas_item;
@@ -100,6 +101,9 @@ script = ExtResource("13_houseinterior")
 
 [node name="TravelingMerchant" type="Node2D" parent="." unique_id=282758878]
 script = ExtResource("14_merchant")
+
+[node name="WorldEventManager" type="Node2D" parent="." unique_id=3287104520]
+script = ExtResource("15_worldevents")
 
 [node name="Harita" parent="." unique_id=2073148302 instance=ExtResource("11_harita")]
 material = SubResource("ShaderMaterial_cp5u8")
