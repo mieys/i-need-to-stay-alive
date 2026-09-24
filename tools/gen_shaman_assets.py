@@ -4,7 +4,7 @@
 Kullanim (repo kokunden):  python tools/gen_shaman_assets.py
 
 Cikti:
-  assets/shaman/totem_{shield,attack,area}_idle.png   6 kareli (288x64) bosta animasyonu - her kare 48x64 (v2 tasarim: tools/shaman_totem_art.py)
+  assets/shaman/totem_{shield,attack,area}_idle.png   6 kareli (288x64) bosta animasyonu - her kare 48x64 (v3 mistik tasarim: tools/shaman_totem_art.py)
   assets/skills/shaman_{kalkan,saldiri,alan}_totemi_icon.png  48x48 madalyon -> 3x = 144x144 (eski dosyalarin uzerine yazar)
   assets/audio/shaman/*.wav                           prosedurel (numpy) ses efektleri (kisa; uzun/loop YOK)
 Yeni PNG/WAV icin Godot'ta bir kez `--headless --import` gerekir. Kullanici geri bildirimi: oyun 48x48 piksel yogunlugunda
@@ -73,7 +73,10 @@ BONE = rgba(232, 222, 196)
 BONE_D = rgba(170, 156, 130)
 
 
-# ------------------------------------------------------------------ TOTEMLER + IKONLAR (v2: tools/shaman_totem_art.py)
+# ------------------------------------------------------------------ TOTEMLER + IKONLAR (v3: tools/shaman_totem_art.py)
+# v3 (2026-09-24, "şuanki görünümleri çok teknolojik"): baykus / koc kafatasi / hilal+ruh kapani mistik totemler.
+# Sadece totem+ikon yenilemek icin (sesleri yeniden uretmeden): python -c "import gen_shaman_assets as g; g.make_icons(g.make_totems())"
+# (tools/ klasorunden).
 # Kullanici geri bildirimi (2026-09-22): "totemleri beğenmedim, baştan tasarla, gerçekten sihirli totemlere benzesinler" - eski tabela/kafatasi/
 # kure tasarimi kaldirildi; oyma direk + yuz + parlayan run + havada suzulen buyulu odak (kristal / yasayan alev / bosluk kuresi).
 import sys

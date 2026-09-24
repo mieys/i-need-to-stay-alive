@@ -364,5 +364,6 @@ def gen_matthew_shield():
 
 if __name__ == "__main__":
     gen_tornado()
-    gen_matthew_shield()
+    ## 2026-09-24: Matthew kalkani pixel-art olarak yeniden tasarlandi -> tools/gen_matthew_shield_fx.py uretiyor.
+    ## gen_matthew_shield() artik CAGRILMIYOR (cagrilirsa yeni sayfalarin uzerine eski tasarimi yazardi).
     print("ok")

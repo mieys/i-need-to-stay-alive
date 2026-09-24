@@ -227,6 +227,11 @@ def _to_bat_canvas(frame):
 
 
 def make_bat_frames():
+    ## 2026-09-24: yarasa formu yeniden tasarlandi ve TEK spritesheet'e (bat_sheet.png) tasindi - artik
+    ## tools/gen_vampir_bat_form.py uretiyor. Asagidaki eski cizim (16 ayri PNG) KULLANILMIYOR, sadece referans.
+    import gen_vampir_bat_form
+    gen_vampir_bat_form.write_sheet()
+    return
     os.makedirs(OUT_DIR, exist_ok=True)
     for phase in range(4):
         front = bat_front(phase, back=False)

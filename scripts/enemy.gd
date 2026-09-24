@@ -29,9 +29,9 @@ const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 ## isteği: "Yemek düşme oranını %80 azalt.") - taban oran ×0.2 ölçeklendi
 ## (0.01275 -> 0.00255). DÜZELTME (kullanıcı isteği: "çok fazla yemek
 ## düşüyor, şuanki düşme ihtimalini %80 azalt") - taban oran BİR KEZ DAHA
-## ×0.2 ölçeklendi (0.00255 -> 0.00051). _drop_food()'daki
-## _player_luck_drop_bonus() (bkz. orada, luck nerfi sonrası artık %0.2/
-## puan) HÂLÂ ve TEK artış yolu, burada dokunulmadı.
+## ×0.2 ölçeklendi (0.00255 -> 0.00051). _drop_food()'daki şans çarpanı
+## (bkz. LUCK_DROP_MULT_PER_POINT - 2026-09-24'ten beri çarpımsal, 20 şans =
+## 2 kat) HÂLÂ ve TEK artış yolu, burada dokunulmadı.
 @export var food_chance: float = 0.00051
 
 ## Chance (0-1) to drop a magnet pickup on death - bkz. yukarıdaki MagnetDrop
@@ -165,6 +165,10 @@ var mark_stacks: int = 0
 var _mark_timer: float = 0.0
 const MARK_DURATION := 20.0
 const MARK_PERCENT_PER_STACK := 0.01
+## Kullanıcı isteği (2026-09-24 denge turu: Tabanca işareti "yük başına +%1 -> +%2, tavan %70 aynı") - her isabet 2 yük
+## ekler (yük başı %1 ve yük tavanı aynı kaldığı için tavan birebir aynı: %70, dönüm noktalarıyla %90); tavana 70 yerine
+## 35 isabette ulaşılır.
+const MARK_STACKS_PER_HIT := 2
 
 ## Hançer'in kanama yükü: her isabette 1+ yük eklenir (bleed_max_stacks'e
 ## kadar, bkz. weapon.gd apply_bleed çağrısı) - poison'un aksine süresi
@@ -200,7 +204,10 @@ const CHILL_MAX_STACKS := 1
 ## zaman aşımı" deseni, bkz. _process_boss_chill) sayaç sıfırlanır.
 var _boss_chill_stacks: int = 0
 var _boss_chill_timer: float = 0.0
-const BOSS_CHILL_HITS_REQUIRED := 5
+## Kullanıcı isteği (2026-09-24 denge turu): 5 asayla boss zamanın %73-85'i donuk kalıyordu - eşik 5 -> 10 isabet,
+## boss donması 3sn -> 1.5sn (BOSS_CHILL_FREEZE_DURATION). Normal yaratıkların 3sn donması (CHILL_DURATION) aynı.
+const BOSS_CHILL_HITS_REQUIRED := 10
+const BOSS_CHILL_FREEZE_DURATION := 1.5
 
 ## Kitelama Seti (bkz. scripts/items.gd/weapon.gd _apply_item_slow_on_hit):
 ## chill'den farklı olarak stack YAPMAZ - her isabet süreyi ve yüzdeyi
@@ -237,6 +244,19 @@ var is_feared: bool = false
 var _fear_timer: float = 0.0
 var _fear_source_pos: Vector2 = Vector2.ZERO
 const FEAR_DURATION := 4.0
+## Necromancer ULTİ (Lanetli Kafatası, 2026-09-24): "korkan düşmanlar etrafa rasgele yönlerde yürümeye çalışır ve hasar
+## veremez" - Melek'in "kaynaktan kaç" korkusundan AYRI bir mod (bkz. apply_fear_wander). Korkunun her iki modunda da yaratık
+## hedef seçmez, saldırmaz, yeteneği tetiklenmez ve zaten başlamış bir yakın dövüş vuruşu da iptal olur (_schedule_melee_hit).
+var _fear_wander: bool = false
+var _fear_wander_dir: Vector2 = Vector2.RIGHT
+var _fear_wander_retarget: float = 0.0
+const FEAR_WANDER_SPEED_MULT := 0.7 ## "yürümeye çalışır" - koşmaz, normal hızının %70'iyle sendeleyerek dolaşır
+const FEAR_WANDER_TURN_MIN := 0.45
+const FEAR_WANDER_TURN_MAX := 1.0
+## Korku göstergesi (başının üstünde titreyen küçük hayalet) - her iki korku modunda da, host'ta başlatılıp
+## broadcast_enemy_vfx "fear_start"/"fear_stop" ile diğer istemcilere yayınlanır (bkz. _set_fear_visual).
+const FearStatusFxScene := preload("res://scenes/fx_fear_status.tscn")
+var _fear_status_fx: Node2D = null
 
 ## Sersemletme (Stun) takibi için değişkenler (bkz. apply_stun, _spawn_stun_status_fx)
 var is_stunned: bool = false
@@ -272,6 +292,96 @@ const RAGE_TINT_COLOR := Color(1.7, 0.3, 0.3, 1.0)
 ## ilk Kademelerin (düşük taban hız) yanında bile "aşırı" hissettiriyordu.
 ## Biraz aşağı çekildi.
 const RAGE_SPEED_MULT := 2.0
+## Kullanıcı isteği (2026-09-24 yaratık yetenekleri): "Orkların ragesi %50 canın altında gerçekleşir, bu esnada hareket
+## hızları normal rageye göre 1.5 kat daha fazla artar" - normal öfke +%100 (x2.0) -> ork +%150 (x2.5).
+const ORK_RAGE_HP_THRESHOLD := 0.50
+const ORK_RAGE_SPEED_MULT := 1.0 + (RAGE_SPEED_MULT - 1.0) * 1.5
+
+## ---------- Yaratık yetenekleri (kullanıcı isteği 2026-09-24, bkz. enemy_abilities.gd) ----------
+const EnemyAbilitiesScript := preload("res://scripts/enemy_abilities.gd")
+## Görünmez hayaletin sprite opaklığı - kullanıcı tercihi (2026-09-24): "%25 soluk gölge" (hedef alınamaz ama nerede olduğu tahmin edilebilir).
+const GHOST_INVISIBLE_ALPHA := 0.25
+## Hayalet görünmezken hedef alınamaz (bkz. vision_fog.gd can_target) - bu meta ile işaretlenir.
+const UNTARGETABLE_META := &"untargetable"
+var _abilities = null ## EnemyAbilities (RefCounted) - sadece yetenekli ailelerde, bkz. _init_abilities
+var _abilities_checked: bool = false
+var _family_cache: String = ""
+## >0 iken yaratık yetenek kanalındadır (Röntgen lazeri) - yerinde durur.
+var ability_move_lock: float = 0.0
+## Hayaletin yetenek görünmezliği: görünmez, hedef alınamaz, hasar almaz ve VEREMEZ (bkz. temas saldırısı dalı).
+var is_ability_invisible: bool = false
+
+
+## creature_id'nin (enemy_spawner.gd _spawn_creature meta'sı, ör. "vampire2") rakamsız kısmı - "vampire".
+static func family_of_id(creature_id: String) -> String:
+	var i: int = creature_id.length()
+	while i > 0 and creature_id[i - 1] >= "0" and creature_id[i - 1] <= "9":
+		i -= 1
+	return creature_id.substr(0, i)
+
+
+func creature_family() -> String:
+	if _family_cache.is_empty() and has_meta("creature_id"):
+		_family_cache = family_of_id(str(get_meta("creature_id")))
+	return _family_cache
+
+
+func _init_abilities() -> void:
+	_abilities_checked = true
+	if not has_meta("creature_id"):
+		_abilities_checked = false ## meta henüz atanmadı (spawn'ın ilk karesi) - bir sonraki karede tekrar dene
+		return
+	var fam: String = creature_family()
+	if EnemyAbilitiesScript.family_has_ability(fam):
+		_abilities = EnemyAbilitiesScript.new()
+		_abilities.setup(self, fam)
+
+
+## Yetenek kullanırken saldırı animasyonu (host + istemciler) - lazer/ateş topu/diken.
+func _play_ability_attack_anim() -> void:
+	var dur: float = _anim_length_for(State.ATTACK)
+	_enter_state(State.ATTACK, dur if dur > 0.0 else 0.4)
+	_broadcast_attack_state()
+
+
+## Hayaletin görünmezliği (host: enemy_abilities.gd; istemci: on_ability_vfx). Sprite'ın self_modulate'ı kullanılır -
+## modulate durum tonu/vuruş parlaması (_refresh_chill_tint/_flash) ve kök visible sisin (vision_fog.gd) elinde.
+func set_ability_invisible(on: bool) -> void:
+	is_ability_invisible = on
+	var a: float = GHOST_INVISIBLE_ALPHA if on else 1.0
+	for spr: CanvasItem in [anim_sprite, frame_sprite]:
+		if spr:
+			spr.self_modulate.a = a
+	if on:
+		set_meta(UNTARGETABLE_META, true)
+		if _overhead_bar and is_instance_valid(_overhead_bar):
+			_overhead_bar.visible = false
+	elif has_meta(UNTARGETABLE_META):
+		remove_meta(UNTARGETABLE_META)
+
+
+## İstemci tarafı: host'un broadcast_enemy_vfx ile gönderdiği yetenek olayları (bkz. network_manager.gd).
+func on_ability_vfx(kind: String, data: Dictionary) -> void:
+	var scene_root: Node = get_tree().current_scene if is_inside_tree() else null
+	match kind:
+		"ghost_vanish":
+			set_ability_invisible(true)
+			if scene_root:
+				EnemyAbilitiesScript.FxScript.spawn(scene_root, global_position, EnemyAbilitiesScript.GHOST_FRAMES, &"vanish", 2)
+		"ghost_reveal":
+			set_ability_invisible(false)
+			if scene_root:
+				EnemyAbilitiesScript.FxScript.spawn(scene_root, global_position, EnemyAbilitiesScript.GHOST_FRAMES, &"appear", 2)
+		"vampire_blink":
+			var from: Vector2 = Vector2(data.get("from", global_position))
+			var to: Vector2 = Vector2(data.get("to", global_position))
+			## Ani ışınlanma: konum enterpolasyonu (lerp) yüzünden kayarak gitmesin, doğrudan yeni yere atlasın.
+			global_position = to
+			_network_target_position = to
+			_network_velocity = Vector2.ZERO
+			if scene_root:
+				EnemyAbilitiesScript.FxScript.spawn(scene_root, from, EnemyAbilitiesScript.VAMPIRE_FRAMES, &"blink", 2)
+				EnemyAbilitiesScript.FxScript.spawn(scene_root, to, EnemyAbilitiesScript.VAMPIRE_FRAMES, &"blink", 2)
 
 ## Flat armor scaling as Kademe rises - see apply_tier_scaling(). Kademe
 ## (tier) itself now ALSO scales health/damage directly (TIER_HEALTH_RAMP_*/
@@ -312,6 +422,18 @@ const TIER_HEALTH_RAMP_LINEAR := 0.065 ## eskiden 0.10 - +6.5%/Kademe ...
 const TIER_HEALTH_RAMP_QUAD := 0.011 ## eskiden 0.020 - ... plus +1.1%*(Kademe-1)^2
 const TIER_DAMAGE_RAMP_LINEAR := 0.035 ## +3.5%/Kademe ...
 const TIER_DAMAGE_RAMP_QUAD := 0.006 ## ... plus +0.6%*(Kademe-1)^2 (eskiden 0.004), ölçülü bir artış
+## Kullanıcı isteği (2026-09-24 denge turu, "ilk 2 kademe zorlaşmamalı"): Kademe 3'ten itibaren EK hasar artışı -
+## (Kademe-2) üzerinden hesaplandığı için Kademe 1-2'de tam 0. Kademe 3: +%2.8, Kademe 8: +%18, Kademe 15'te toplam
+## hasar çarpanı x2.67 -> x3.6. Kök neden: yaratık hasarı 15 kademede sadece x2.67 büyürken oyuncu canı 15-30 kat.
+const TIER_DAMAGE_RAMP_LATE_LINEAR := 0.0242
+const TIER_DAMAGE_RAMP_LATE_QUAD := 0.0037
+## Kullanıcı isteği (2026-09-24 denge turu: yaratık canı "zamana bağlı olarak giderek yavaşça artsın", Kademe 1-2
+## zorlaşmasın): Kademe 3+ normal yaratıkların canı (kalkan da candan türediği için o da) oyun saatinin
+## TIME_HEALTH_GROWTH_START'ı geçtiği her dakika için +%1 - 25. dakikada ~+%22. Bosslar hariç (apply_boss_stats
+## bu fonksiyonu çağırmaz; boss canı kullanıcı tarafından defalarca ayrıca ayarlandı).
+const TIME_HEALTH_GROWTH_MIN_TIER := 3
+const TIME_HEALTH_GROWTH_START := 200.0 ## sn - Kademe 3'ün nominal başlangıcı (2 x tier_duration)
+const TIME_HEALTH_GROWTH_PER_MIN := 0.01
 ## Kullanıcı isteği: "ileri kademedeki yaratıkların hareket hızını arttır" -
 ## eskiden Kademe hareket hızını HİÇ etkilemiyordu (sadece can/hasar
 ## ölçekleniyordu). Doğrusal, ölçülü bir artış - Kademe 15'te taban hızın
@@ -535,6 +657,10 @@ func _schedule_melee_hit(delay: float, target_player: Node) -> void:
 		return
 	if not target_player.has_method("take_damage"):
 		return
+	## Korkmuş yaratık hasar veremez (Necromancer ULTİ: "korkan düşmanlar ... hasar veremez") - saldırı başladıktan hemen
+	## sonra korkutulduysa zamanlanmış vuruş da iptal.
+	if is_feared:
+		return
 	## DÜZELTME (kullanıcı bildirimi: "assasin çocuk görünmezken yaratıklara
 	## dokununca hasar alabiliyor, sadece yaratıkların skillerinden hasar
 	## alabilmeli") - vuruş çağrıldığı anda (bkz. _physics_process'teki
@@ -676,6 +802,11 @@ func apply_tier_scaling(tier: int) -> void:
 		return
 	var health_mult: float = 1.0 + steps * TIER_HEALTH_RAMP_LINEAR + steps * steps * TIER_HEALTH_RAMP_QUAD
 	var damage_mult: float = 1.0 + steps * TIER_DAMAGE_RAMP_LINEAR + steps * steps * TIER_DAMAGE_RAMP_QUAD
+	## bkz. TIER_DAMAGE_RAMP_LATE_* üstündeki not - (steps - 1) Kademe 2'de 0, yani Kademe 1-2 hiç etkilenmez.
+	var late_steps: int = max(steps - 1, 0)
+	damage_mult += late_steps * TIER_DAMAGE_RAMP_LATE_LINEAR + late_steps * late_steps * TIER_DAMAGE_RAMP_LATE_QUAD
+	if tier >= TIME_HEALTH_GROWTH_MIN_TIER:
+		health_mult *= 1.0 + TIME_HEALTH_GROWTH_PER_MIN * maxf(0.0, GameManager.game_time - TIME_HEALTH_GROWTH_START) / 60.0
 	max_health *= health_mult
 	health = max_health
 	contact_damage *= damage_mult
@@ -911,7 +1042,7 @@ func _process_burn(delta: float) -> void:
 	_burn_tick_timer -= delta
 	if _burn_tick_timer <= 0.0:
 		_burn_tick_timer += BURN_TICK_INTERVAL
-		take_damage(burn_tick_damage)
+		_take_dot_damage(burn_tick_damage)
 	if burn_time_left <= 0.0:
 		burn_tick_damage = 0.0
 		## GÖRSEL: yakma bitti - alev sprite'ı kaldırılır (poison'ın
@@ -963,13 +1094,13 @@ func _process_poison(delta: float) -> void:
 		var whole_damage: float = floorf(_poison_damage_accum)
 		if whole_damage >= 1.0:
 			_poison_damage_accum -= whole_damage
-			take_damage(whole_damage)
+			_take_dot_damage(whole_damage)
 	if all_expired:
 		## Son kesir (<1): en yakın tam sayıya yuvarlanıp uygulanır (0.5+ ise 1).
 		var rest_damage: float = roundf(_poison_damage_accum)
 		_poison_damage_accum = 0.0
 		if rest_damage >= 1.0:
-			take_damage(rest_damage)
+			_take_dot_damage(rest_damage)
 		if _poison_status_fx and is_instance_valid(_poison_status_fx):
 			_poison_status_fx.queue_free()
 			_poison_status_fx = null
@@ -990,8 +1121,14 @@ func apply_mark_stack(max_stacks: int) -> void:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		if net_id > 0:
 			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "mark", float(max_stacks), 0.0, 0.0)
+		## ÇOK OYUNCULU DÜZELTME (2026-09-24 senkron analizi): işaretin hasar bonusu vuran istemcinin KENDİ mermisinde
+		## hesaplanıyor (projectile.gd get_mark_damage_mult) ama yükler sadece host'ta tutuluyordu - istemcideki kopyada
+		## mark_stacks hep 0 kalıyor, host olmayan oyuncunun Tabancası pasifinden HİÇ faydalanmıyordu. Artık istemci kendi
+		## isabetlerinin yükünü yerel kopyada da tutar (süresi istemci dalında _process_mark ile düşer).
+		mark_stacks = min(mark_stacks + MARK_STACKS_PER_HIT, max_stacks)
+		_mark_timer = MARK_DURATION
 		return
-	mark_stacks = min(mark_stacks + 1, max_stacks)
+	mark_stacks = min(mark_stacks + MARK_STACKS_PER_HIT, max_stacks)
 	_mark_timer = MARK_DURATION
 
 
@@ -1029,7 +1166,7 @@ func _process_bleed(delta: float) -> void:
 	_bleed_tick_timer -= delta
 	if _bleed_tick_timer <= 0.0:
 		_bleed_tick_timer += BLEED_TICK_INTERVAL
-		take_damage(bleed_tick_damage_per_stack * bleed_stacks)
+		_take_dot_damage(bleed_tick_damage_per_stack * bleed_stacks)
 		_spawn_bleed_fx()
 		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 			var net_id: int = int(get_meta("network_enemy_id", 0))
@@ -1073,7 +1210,7 @@ func apply_chill(_stacks_to_add: int) -> void:
 		_boss_chill_timer = CHILL_DURATION
 		if _boss_chill_stacks >= BOSS_CHILL_HITS_REQUIRED:
 			_boss_chill_stacks = 0
-			_start_freeze(CHILL_DURATION)
+			_start_freeze(BOSS_CHILL_FREEZE_DURATION)
 		return
 	_start_freeze(CHILL_DURATION)
 
@@ -1231,7 +1368,7 @@ func _process_bee_poison(delta: float) -> void:
 	_bee_poison_tick_timer -= delta
 	if _bee_poison_tick_timer <= 0.0:
 		_bee_poison_tick_timer += BEE_POISON_TICK_INTERVAL
-		take_damage(_bee_poison_stacks.size() * _bee_poison_per_tick_damage)
+		_take_dot_damage(_bee_poison_stacks.size() * _bee_poison_per_tick_damage)
 
 
 func _slow_speed_mult() -> float:
@@ -1265,7 +1402,13 @@ func _enter_rage_mode() -> void:
 
 
 func _rage_speed_mult() -> float:
-	return RAGE_SPEED_MULT if is_raging else 1.0
+	if not is_raging:
+		return 1.0
+	return ORK_RAGE_SPEED_MULT if creature_family() == "ork" else RAGE_SPEED_MULT
+
+
+func _rage_hp_threshold() -> float:
+	return ORK_RAGE_HP_THRESHOLD if creature_family() == "ork" else RAGE_HP_THRESHOLD
 
 
 func _refresh_chill_tint() -> void:
@@ -1674,9 +1817,34 @@ func apply_fear(source_pos: Vector2, duration: float = FEAR_DURATION) -> void:
 		if net_id > 0:
 			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "fear", duration, source_pos.x, source_pos.y)
 		return
-	is_feared = true
-	_fear_source_pos = source_pos
+	## DÜZELTME: eskiden `max(duration, _fear_timer if is_feared else 0.0)` is_feared=true atamasından SONRA okunuyordu
+	## (koşul hep doğru) - sonuç aynıydı ama niyet belirsizdi; artık açıkça "kalan süreden kısa bir korku onu kısaltmaz".
+	var was_feared: bool = is_feared
 	_fear_timer = max(duration, _fear_timer if is_feared else 0.0)
+	is_feared = true
+	_fear_wander = false
+	_fear_source_pos = source_pos
+	_set_fear_visual(true, _fear_timer, not was_feared)
+
+
+## Necromancer ULTİ (Lanetli Kafatası) korkusu: yaratık kaynaktan kaçmak yerine RASTGELE yönlerde yürür (her 0.45-1sn'de bir
+## yön değiştirir, engellerden kayar) ve hasar veremez. affect_boss=false iken bosslar, Melek korkusundaki AYNI kuralla
+## (bosslar korkmaz) muaf kalır - bkz. necro_skull.gd FEAR_AFFECTS_BOSSES. apply_fear ile AYNI host-yönlendirme deseni
+## (network_manager.gd request_enemy_effect "fear_wander": param1=süre, param2=boss dahil mi).
+func apply_fear_wander(duration: float, affect_boss: bool = false) -> void:
+	if is_dead or (is_boss and not affect_boss):
+		return
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "fear_wander", duration, 1.0 if affect_boss else 0.0, 0.0)
+		return
+	var was_feared: bool = is_feared
+	_fear_timer = max(duration, _fear_timer if is_feared else 0.0)
+	is_feared = true
+	_fear_wander = true
+	_fear_wander_retarget = 0.0
+	_set_fear_visual(true, _fear_timer, not was_feared)
 
 
 func _process_fear(delta: float) -> void:
@@ -1685,6 +1853,53 @@ func _process_fear(delta: float) -> void:
 	_fear_timer -= delta
 	if _fear_timer <= 0.0:
 		is_feared = false
+		_fear_wander = false
+		_set_fear_visual(false)
+
+
+## Rastgele yürüme yönü (korku - apply_fear_wander): kısa aralıklarla yeni bir rastgele yön seçer.
+func _fear_wander_velocity(delta: float) -> Vector2:
+	_fear_wander_retarget -= delta
+	if _fear_wander_retarget <= 0.0:
+		_fear_wander_retarget = randf_range(FEAR_WANDER_TURN_MIN, FEAR_WANDER_TURN_MAX)
+		_fear_wander_dir = Vector2.from_angle(randf() * TAU)
+	var steered: Vector2 = _steer_around_obstacle(_fear_wander_dir)
+	_update_facing(_fear_wander_dir)
+	return steered * speed * FEAR_WANDER_SPEED_MULT * _chill_speed_mult() * _slow_speed_mult()
+
+
+## Korku göstergesi: SADECE host (ya da tek oyunculu) karar verir, diğer istemcilere broadcast_enemy_vfx ile yayınlar.
+## Ağ trafiği: kafatası aynı kalabalığa saniyede birkaç kez çarpıp korkuyu TAZELER - her tazelemede reliable RPC atmamak
+## için yalnızca korku BAŞLARKEN (announce) ve BİTERKEN yayınlanır. Uzak kopyadaki gösterge bu yüzden kendi süresiyle
+## değil "fear_stop" ile kalkar (FEAR_REMOTE_VISUAL_SAFETY sadece emniyet).
+const FEAR_REMOTE_VISUAL_SAFETY := 30.0
+
+func _set_fear_visual(on: bool, duration: float = 0.0, announce: bool = true) -> void:
+	if on:
+		_spawn_fear_status_fx(duration)
+	else:
+		_remove_fear_status_fx()
+	if (announce or not on) and NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			if on:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "fear_start", {"duration": FEAR_REMOTE_VISUAL_SAFETY})
+			else:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "fear_stop")
+
+
+func _spawn_fear_status_fx(duration: float) -> void:
+	if not _fear_status_fx or not is_instance_valid(_fear_status_fx):
+		_fear_status_fx = FearStatusFxScene.instantiate()
+		add_child(_fear_status_fx)
+	if _fear_status_fx.has_method("setup"):
+		_fear_status_fx.setup(duration)
+
+
+func _remove_fear_status_fx() -> void:
+	if _fear_status_fx and is_instance_valid(_fear_status_fx):
+		_fear_status_fx.queue_free()
+	_fear_status_fx = null
 
 
 ## Rough on-screen height (post any boss scale_mult) used to place a boss's
@@ -2747,6 +2962,8 @@ func _physics_process(delta: float) -> void:
 		## (_update_state_timer zaten State.DEATH'te kendi kendine no-op).
 		_update_locomotion_state(delta)
 		_update_state_timer(delta)
+		if mark_stacks > 0:
+			_process_mark(delta) ## bkz. apply_mark_stack istemci dalı
 		if frame_sprite:
 			_advance_frame_sprite(delta)
 		return
@@ -2766,6 +2983,10 @@ func _physics_process(delta: float) -> void:
 		## tamamen "duraklamış" gibi davranır (bkz. apply_chill/_start_freeze).
 		if is_frozen:
 			velocity = Vector2.ZERO
+		elif is_feared and _fear_wander:
+			## Lanetli Kafatası korkusu (Necromancer ULTİ, bkz. apply_fear_wander) - rastgele yönlerde yürür; hedef
+			## seçimi/saldırı YOK (Melek korkusuyla aynı şekilde kovalama mantığının tamamen dışında).
+			velocity = _fear_wander_velocity(delta)
 		elif is_feared:
 			## Kutsal Korku (Melek skill3, bkz. apply_fear) - hedefe doğru
 			## DEĞİL, korku kaynağından UZAĞA kaçar; hedef seçimi/saldırı YOK,
@@ -2922,6 +3143,16 @@ func _physics_process(delta: float) -> void:
 		## dahil) sıfırlanıyor - "hareket edemez ama saldırabilir".
 		if is_rooted:
 			velocity = Vector2.ZERO
+		## Yaratık yetenekleri (bkz. enemy_abilities.gd) - host/tek oyunculu. Donmuş/korkmuş/sersemlemişken kullanılmaz.
+		if not _abilities_checked:
+			_init_abilities()
+		if _abilities != null and not is_frozen and not is_feared and not is_stunned:
+			_abilities.process(delta, player, dist)
+		elif is_ability_invisible and _abilities != null:
+			_abilities.ghost_reveal(false) ## donan/korkan/sersemleyen hayalet görünmez kalmasın
+		if ability_move_lock > 0.0:
+			ability_move_lock -= delta
+			velocity = Vector2.ZERO
 		_block_movement_into_terrain()
 		## PERF DÜZELTMESİ (kullanıcı bildirimi: "kasmanın asıl nedeni physics" -
 		## araştırma sonucu): move_and_slide() burada boşa gidiyordu. Yaratıkların
@@ -3058,7 +3289,11 @@ func _physics_process(delta: float) -> void:
 			## Kullanıcı isteği: "yakın dövüşçülerin saldırı menzili biraz
 			## uzasın" - sadece is_ranged=false yaratıklarda +10 yerine +26.
 			var melee_range: float = true_contact_separation + (26.0 if not is_ranged else 10.0)
-			if dist <= melee_range and _contact_timer <= 0.0:
+			if dist <= melee_range and _contact_timer <= 0.0 and is_ability_invisible and _abilities != null:
+				## Hayalet: "görünmezken saldıramazlar ve hasar veremezler" + "saldırdığı anda görünmezliği gider" -
+				## saldırı mesafesine girince önce görünür olur, asıl vuruş GHOST_REVEAL_ATTACK_DELAY sonra gelir.
+				_abilities.ghost_reveal(true)
+			elif dist <= melee_range and _contact_timer <= 0.0:
 				_contact_timer = contact_interval
 				if not is_ranged:
 					## Kullanıcı isteği (1. tur): "hasar anlık değme yerine
@@ -3555,6 +3790,9 @@ func update_network_state(net_position: Vector2, net_dead: bool = false, net_hea
 func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float = 0.0, is_area: bool = false) -> void:
 	if is_dead:
 		return
+	## Görünmez hayalet hedef alınamaz VE vurulamaz (alan hasarı dahil) - bkz. set_ability_invisible.
+	if is_ability_invisible:
+		return
 
 	## Oyun sonu istatistik ekranı (bkz. player.gd match_damage_dealt üstündeki
 	## yorum): take_damage() TAM OLARAK vuran client'ın kendi kodunun çağırdığı
@@ -3596,8 +3834,28 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 
 
 ## Called by NetworkManager.request_enemy_damage RPC on the host only.
+## ÇOK OYUNCULU DÜZELTME (2026-09-24 senkron analizi): yaratığın ÜSTÜNDEKİ sürekli hasarlar (zehir/yanma/kanama/arı
+## zehri) sadece host'ta tikliyor. Eskiden bu tikler take_damage()'ı çağırıyordu - o da HER tikte last_attacker_peer_id'yi
+## host'a yazıyor, tik hasarını host'un maç istatistiğine ekliyor ve host'a can emme şansı veriyordu. Yani bir İSTEMCİNİN
+## Tüftüf zehriyle ölen yaratıkta öldürme ödülü (şans, Korsan altını, Necromancer ruhu, Savaş Şevki) ve can emme host'a
+## gidiyordu. Artık tik, son DOĞRUDAN vuranın kimliğini korur (etkiyi genelde o uygulamıştır); istatistik/can emme sadece
+## o kişi bu makinenin oyuncusuysa (tek oyunculu ya da host'un kendi vuruşu) burada işlenir.
+func _take_dot_damage(amount: float) -> void:
+	if is_dead or is_ability_invisible or amount <= 0.0:
+		return
+	var local_owner: bool = not NetworkManager.is_multiplayer_active or last_attacker_peer_id <= 0 \
+			or (multiplayer.has_multiplayer_peer() and last_attacker_peer_id == multiplayer.get_unique_id())
+	if local_owner:
+		var dealer: Node = get_tree().get_first_node_in_group("player")
+		if dealer and "match_damage_dealt" in dealer:
+			dealer.match_damage_dealt += amount
+		if dealer and dealer.has_method("on_dealer_hit"):
+			dealer.on_dealer_hit(amount, false)
+	_apply_damage(amount, false, 0.0)
+
+
 func take_damage_host(amount: float, is_crit: bool, shield_pen_percent: float, attacker_id: int = 0) -> void:
-	if is_dead:
+	if is_dead or is_ability_invisible:
 		return
 	if attacker_id > 0:
 		last_attacker_peer_id = attacker_id
@@ -3643,7 +3901,7 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 	## yakın dövüşçü, boss olmayan bir yaratık canı %30'un altına düşünce BİR
 	## KEZE mahsus tetiklenir.
 	if not is_raging and not is_ranged and not is_boss and _current_tier >= 2 \
-			and health > 0.0 and health <= max_health * RAGE_HP_THRESHOLD:
+			and health > 0.0 and health <= max_health * _rage_hp_threshold():
 		_enter_rage_mode()
 	## Can çalma (kart/eşya/silah): oyuncuya, yaratığın gerçekten yediği
 	## hasar üzerinden bildirim - pasifsiz karakterlerde no-op.
@@ -3725,6 +3983,17 @@ func die() -> void:
 		return
 	is_dead = true
 	velocity = Vector2.ZERO
+	## Yaratık yetenekleri (2026-09-24): görünmez ölen hayalet ölüm animasyonunu görünür oynatsın; zombi ölünce
+	## patlayıp yere 4 sn zehirli asit bırakır (sadece host/tek oyunculu yetkili örnek doğurur ve yayınlar - istemcide
+	## die() de çalıştığı için orada ikinci bir göl DOĞMAZ, görsel kopya RPC ile gelir).
+	if is_ability_invisible:
+		set_ability_invisible(false)
+	## Korku göstergesi ölüm animasyonunda kalmasın (her istemcide yerel - die() istemcide de çalışır).
+	is_feared = false
+	_fear_wander = false
+	_remove_fear_status_fx()
+	if creature_family() == "zombie" and (not NetworkManager.is_multiplayer_active or NetworkManager.is_host) and is_inside_tree():
+		EnemyAbilitiesScript.spawn_zombie_acid(get_tree(), global_position, contact_damage, self)
 	## Görev sistemi (bkz. world_event_manager.gd "Alanı Güvenceye Al") - bkz. GameManager.
 	## enemy_died üstündeki not.
 	GameManager.enemy_died.emit(global_position)
@@ -3963,6 +4232,11 @@ func _drop_xp() -> void:
 		return
 	var count: int = max(orb_count, 1)
 	var per_orb: float = xp_value / float(count)
+	## Kullanıcı isteği (2026-09-24 denge turu): ortak takım seviyesinde HER oyuncu her seviyede tam kart/stat alıyor ama
+	## havuz TÜM oyuncuların öldürmeleriyle doluyordu - 2 oyuncuda seviyeler ~2.3 kat hızlı geliyordu. Kademe 3+
+	## yaratıklarının XP'si oyuncu sayısına bölünür (oyuncu başı seviye hızı tek oyuncuya eşitlenir); Kademe 1-2 aynen.
+	if NetworkManager.is_multiplayer_active and _current_tier >= MP_XP_SPLIT_MIN_TIER:
+		per_orb /= float(maxi(1, NetworkManager.lobby_players.size()))
 	var scene_root: Node = get_tree().current_scene
 	for i in range(count):
 		## Her orb KENDİ tier'ını ayrı ayrı zar atarak seçiyor (bkz.
@@ -3997,33 +4271,46 @@ func _drop_xp() -> void:
 		)
 
 
-## Oyuncunun "şans" statı artık ÇARPIMSAL değil DÜZ ekleniyor - her 1 şans
-## puanı (bkz. player.gd apply_upgrade "luck" dalı, artık +1/kart) yaratığın
-## birşey (altın/meyve) düşürme ihtimalini düz +%1 arttırır (kullanıcı isteği:
-## "Her 1 şans yaratıkların birşey düşürme ihtimalini %1 arttırır").
-## DÜZELTME (kullanıcı isteği: "şans çok güçlü, %80 nerflemen gerekiyor") -
-## oran (her luck puanı için altın/yemek/mıknatıs düşme şansına eklenen
-## bonus) 0.01 -> 0.002 (×0.2).
-func _player_luck_drop_bonus() -> float:
-	var player := get_tree().get_first_node_in_group("player")
-	if player and is_instance_valid(player) and "luck" in player:
-		return player.luck * 0.002
+## ŞANS - YENİDEN TASARIM (kullanıcı isteği 2026-09-24 denge turu: "şans çok bozuk", "10 şans 2 kat değil 20 şans
+## 2 kat yapsın", "öldüren oyuncunun şansı").
+## KÖK NEDEN: şans eskiden düşme ihtimaline DÜZ +%0.2/puan ekliyordu; yemek (%0.051) ve mıknatıs (%0.12) tabanları
+## defalarca nerf'lenip çok küçüldüğü için tek bir şans puanı yemeği +%390, mıknatısı +%167 arttırıyordu (10 şans =
+## 40 kat yemek). Artık ÇARPIMSAL: yemek/mıknatıs/sandık = taban x (1 + %5 x şans) -> 20 şans = 2 kat; altın = taban x
+## (1 + %1 x şans) (altın tabanı zaten büyük, %13-%59). Eski düz toplama (_player_luck_drop_bonus/
+## LUCK_CHEST_BONUS_PER_POINT) kaldırıldı.
+## ÇOK OYUNCULU HATA DÜZELTMESİ: eskiden get_first_node_in_group("player") kullanılıyordu - düşme kararı SADECE host'ta
+## verildiği için her zaman HOST'un şansı sayılıyor, diğer oyuncuların şansı boşa gidiyordu. Artık yaratığı öldüren
+## oyuncunun (last_attacker_peer_id) şansı - uzak oyuncununki durum kanalından kuklasına senkronlanan değer
+## (bkz. main.gd extra dict "luck", remote_player.gd luck).
+const LUCK_DROP_MULT_PER_POINT := 0.05
+const LUCK_GOLD_MULT_PER_POINT := 0.01
+## bkz. _drop_xp - çok oyunculu XP bölmesi bu Kademe'den itibaren.
+const MP_XP_SPLIT_MIN_TIER := 3
+
+
+## Bu yaratığı öldüren oyuncu: tek oyunculuda / öldüren bu makinenin kendisiyse yerel Player, uzak bir peer ise
+## host'taki RemotePlayer kuklası. Bulunamazsa (ör. öldüren oyundan çıktı) yerel oyuncuya düşer.
+func _killer_node() -> Node:
+	var local_p: Node = get_tree().get_first_node_in_group("player")
+	if not NetworkManager.is_multiplayer_active or last_attacker_peer_id <= 0:
+		return local_p
+	if multiplayer.has_multiplayer_peer() and last_attacker_peer_id == multiplayer.get_unique_id():
+		return local_p
+	for rp in get_tree().get_nodes_in_group("remote_players"):
+		if is_instance_valid(rp) and "peer_id" in rp and int(rp.peer_id) == last_attacker_peer_id:
+			return rp
+	return local_p
+
+
+func _killer_stat(stat_name: String) -> float:
+	var killer: Node = _killer_node()
+	if killer and is_instance_valid(killer) and stat_name in killer:
+		return float(killer.get(stat_name))
 	return 0.0
 
 
-## Kullanıcı isteği: "şans statı sandık düşme ihtimalini de arttırsın, ama
-## %1 değil %0.2 arttırsın her 1 şans başına" - yukarıdaki genel
-## _player_luck_drop_bonus() (altın/meyve için %1/şans) ile KARIŞTIRILMASIN,
-## sandığa özel, daha küçük bir oran - bkz. _drop_chest().
-## DÜZELTME (kullanıcı isteği: "şans çok güçlü, %80 nerflemen gerekiyor") -
-## 0.002 -> 0.0004 (×0.2).
-const LUCK_CHEST_BONUS_PER_POINT := 0.0004
-
-func _player_luck_chest_bonus() -> float:
-	var player := get_tree().get_first_node_in_group("player")
-	if player and is_instance_valid(player) and "luck" in player:
-		return player.luck * LUCK_CHEST_BONUS_PER_POINT
-	return 0.0
+func _luck_mult(per_point: float) -> float:
+	return 1.0 + maxf(0.0, _killer_stat("luck")) * per_point
 
 
 ## NOT: GoldDrop/FoodDrop de (XpOrb gibi) Area2D+CollisionShape2D kökenli -
@@ -4038,7 +4325,7 @@ func _player_luck_chest_bonus() -> float:
 func _drop_gold() -> void:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		return
-	var chance: float = gold_chance + _player_luck_drop_bonus()
+	var chance: float = gold_chance * _luck_mult(LUCK_GOLD_MULT_PER_POINT)
 	if chance > 0.0 and randf() <= chance:
 		var amount: int = randi_range(gold_min, max(gold_min, gold_max))
 		var drop_pos: Vector2 = global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-10.0, 10.0))
@@ -4060,11 +4347,11 @@ func _drop_gold() -> void:
 ## Şanslı Zar: temel altın düşme şansından TAMAMEN BAĞIMSIZ - "düşmanlar %4
 ## ihtimalle FAZLADAN 1 altın düşürür" (kullanıcı isteği), yani üsttekinin
 ## tetiklenip tetiklenmediğine bakılmaksızın ayrıca kendi şansını dener.
+## DÜZELTME (2026-09-24 denge turu, şansla birlikte): eskiden host'un kendi Şanslı Zar'ı okunuyordu (bkz. yukarıdaki
+## "öldüren oyuncunun şansı" notu) ve çok oyunculuda bu ekstra altın HİÇ yayınlanmıyordu - sadece host'un ekranında
+## vardı, bir istemci göremiyor/toplayamıyordu. Artık öldürenin eşyası sayılır ve normal altınla AYNI şekilde yayınlanır.
 func _roll_extra_item_gold() -> void:
-	var player := get_tree().get_first_node_in_group("player")
-	if not player or not is_instance_valid(player) or not ("item_extra_gold_chance" in player):
-		return
-	var extra_chance: float = player.item_extra_gold_chance
+	var extra_chance: float = _killer_stat("item_extra_gold_chance")
 	if extra_chance <= 0.0 or randf() > extra_chance:
 		return
 	var drop_pos: Vector2 = global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-10.0, 10.0))
@@ -4073,6 +4360,10 @@ func _roll_extra_item_gold() -> void:
 		var drop = GoldDrop.instantiate()
 		drop.amount = 1
 		drop.global_position = drop_pos
+		if NetworkManager.is_multiplayer_active:
+			var drop_id: int = NetworkManager._gen_drop_id()
+			drop.set_meta("drop_network_id", drop_id)
+			NetworkManager.broadcast_drop.rpc("gold", drop.global_position, drop.amount, drop_id)
 		scene_root.call_deferred("add_child", drop)
 	)
 
@@ -4106,7 +4397,7 @@ func _roll_food_tier() -> int:
 func _drop_food() -> void:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		return
-	var chance: float = food_chance + _player_luck_drop_bonus()
+	var chance: float = food_chance * _luck_mult(LUCK_DROP_MULT_PER_POINT)
 	if chance <= 0.0 or randf() > chance:
 		return
 	var food_tier: int = _roll_food_tier()
@@ -4133,7 +4424,7 @@ func _drop_food() -> void:
 func _drop_magnet() -> void:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		return
-	var chance: float = magnet_chance + _player_luck_drop_bonus()
+	var chance: float = magnet_chance * _luck_mult(LUCK_DROP_MULT_PER_POINT)
 	if chance <= 0.0 or randf() > chance:
 		return
 	var drop_pos: Vector2 = global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-10.0, 10.0))
@@ -4165,7 +4456,6 @@ const CHEST_DROP_RATE_MULT := 0.12
 func _drop_chest() -> void:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		return
-	var bonus: float = _player_luck_chest_bonus()
 	var base_chance: float = 0.005
 	if _current_tier <= 2:
 		base_chance = 0.005
@@ -4180,7 +4470,8 @@ func _drop_chest() -> void:
 	else:
 		base_chance = 0.010
 
-	var chance: float = 1.0 if is_boss else (base_chance + bonus) * CHEST_DROP_RATE_MULT
+	## Şans artık çarpımsal (bkz. LUCK_DROP_MULT_PER_POINT) - 20 şans = 2 kat sandık.
+	var chance: float = 1.0 if is_boss else base_chance * _luck_mult(LUCK_DROP_MULT_PER_POINT) * CHEST_DROP_RATE_MULT
 	if randf() <= chance:
 		var chest_tier: int = _get_chest_tier_from_enemy_tier()
 		var drop_pos: Vector2 = global_position + Vector2(randf_range(-12.0, 12.0), randf_range(-12.0, 12.0))

@@ -207,7 +207,8 @@ const FINAL_CREATURES := [
 ## not) - max_concurrent_enemies ile AYNI oranda (şimdi 200/80) yükseltildi,
 ## yine sadece başlangıç test değeri.
 const EXTRA_PLAYER_ENEMY_CAP := 98
-const EXTRA_PLAYER_SPAWN_RATE := 0.25
+## Kullanıcı isteği (2026-09-24 denge turu: "her kademe için oyuncu başına %30 spawn ve %50 can") - 0.25 -> 0.30.
+const EXTRA_PLAYER_SPAWN_RATE := 0.30
 @export var min_spawn_distance: float = 480.0
 @export var max_spawn_distance: float = 640.0
 
@@ -243,7 +244,9 @@ const AMBUSH_ATTEMPTS := 14 ## duvar-arkası nokta için rastgele deneme sayıs�
 ## spawnlansın" - takım seviyesi o anki Kademe için "beklenenden" epey
 ## yüksekse (oyuncular zorluğa göre fazlasıyla güçlenmiş demektir) her
 ## tetiklenişte normal TEK yaratığın yanına ekstra yaratıklar da eklenir.
-const POWER_LEVEL_PER_TIER := 2.5 ## bu Kademe'de "normal" sayılan kabaca takım seviyesi
+## Kullanıcı isteği (2026-09-24 denge turu): 2.5 -> 4. Gerçekte Kademe başına ~5 seviye atlandığı için 2.5 ile mekanizma
+## hep maksimumda (+4) çalışıyor, güçlü/zayıf takımı ayırt etmiyordu.
+const POWER_LEVEL_PER_TIER := 4.0 ## bu Kademe'de "normal" sayılan kabaca takım seviyesi
 const POWER_EXTRA_SPAWN_PER_LEVELS_OVER := 4.0 ## beklenenin kaç seviye üstünde her ekstra yaratık gelir
 const POWER_MAX_EXTRA_SPAWNS := 4 ## tek tetiklenişte eklenebilecek en fazla ekstra yaratık
 
@@ -285,7 +288,9 @@ const POWER_MAX_EXTRA_SPAWNS := 4 ## tek tetiklenişte eklenebilecek en fazla ek
 ## ile bosslara da uygulandığı için bosslar için net etki ×1.1 × 0.9 = ×0.99 (kullanıcı sırasıyla "arttırıp ...
 ## tüm yaratıkların azalt" dedi); normal yaratıklar tam ×0.9.
 const BOSS_HEALTH_MULT := 107.712 ## eskiden 126.72
-const BOSS_DAMAGE_MULT := 2.64 ## eskiden 2.4
+## Kullanıcı isteği (2026-09-24 denge turu: "Kademe 3 ve öncesi de dahil hepsi +%60") - boss vuruşu Kademe 15'te bile sıradan
+## bir geç oyun yaratığı kadardı. 2.64 -> 4.224 (x1.6), tüm bosslar.
+const BOSS_DAMAGE_MULT := 4.224 ## eskiden 2.64
 const BOSS_SCALE_MULT := 1.7
 
 ## Item shield (see enemy.gd's enable_item_shield): kullanıcı isteği -
@@ -440,6 +445,12 @@ func _on_peer_needs_game_catchup(peer_id: int) -> void:
 		var is_boss_enemy: bool = enemy.is_in_group("boss")
 		var enemy_tier: int = int(enemy.get("_current_tier")) if "_current_tier" in enemy else 1
 		_rpc_client_spawn_creature.rpc_id(peer_id, creature_id, enemy.global_position, enemy_tier, is_boss_enemy, net_id)
+		## ÇOK OYUNCULU DÜZELTME (2026-09-24 senkron analizi): istemci maks can/kalkanı kendisi hesaplıyor, ama sonradan
+		## katılan oyuncu için bu hesap ŞİMDİKİ oyun saati (Kademe 3+ zamanla artan can) ve ŞİMDİKİ oyuncu sayısıyla
+		## yapılıyor - eski yaratıkların barı dolu can'da bile boş görünüyordu. Host'un gerçek değerleri + görünmez hayalet
+		## durumu ayrıca gönderilir (aynı düğümden reliable RPC'ler sırayla varır).
+		_rpc_client_catchup_enemy_state.rpc_id(peer_id, net_id, float(enemy.max_health), float(enemy.item_shield_max),
+				enemy.get("is_ability_invisible") == true)
 
 
 ## BUG DÜZELTMESİ (derin multiplayer denetimi bulgusu - host migrasyonu):
@@ -1074,6 +1085,21 @@ func _spawn_boss_group(ids: Array, tier: int) -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
+func _rpc_client_catchup_enemy_state(network_id: int, max_hp: float, shield_max: float, invisible: bool) -> void:
+	var enemy: Node = NetworkManager.find_enemy_by_net_id(network_id)
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	enemy.max_health = max_hp
+	enemy.health = minf(float(enemy.health), max_hp)
+	enemy.item_shield_max = shield_max
+	enemy.item_shield_hp = minf(float(enemy.item_shield_hp), shield_max)
+	enemy.health_changed.emit(enemy.health, enemy.max_health)
+	enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
+	if invisible and enemy.has_method("set_ability_invisible"):
+		enemy.set_ability_invisible(true)
+
+
+@rpc("any_peer", "call_remote", "reliable")
 func _rpc_client_spawn_creature(id: String, pos: Vector2, tier: int, is_boss: bool, network_id: int) -> void:
 	var enemy = _spawn_creature(id, pos, network_id)
 	if not enemy:
@@ -1272,11 +1298,28 @@ func _random_spawn_position(center: Vector2, is_boss: bool = false, bias_dir: Ve
 ## eskiden tek bir ortak GLOBAL_BUFF kullanılıyordu. Kalkan apply_tier_
 ## scaling/apply_boss_stats sonrası max_health üzerinden hesaplandığından
 ## onu da (savunma çarpanıyla) güncelliyoruz.
+const EXTRA_PLAYER_DEFENSE_MULT := 0.50
+
+## Yaratık yetenekleri (kullanıcı isteği 2026-09-24) - statla çözülen aile özellikleri (bosslar dahil, çünkü tüm spawn
+## yolları _apply_global_buff'tan geçer):
+##  - golem: "çok dayanıklıdır fakat biraz yavaştır (kalkan ve can oranları %30 arttır, hızlarını %20 azalt)"
+##  - zombie: "zombilerin canı %30 daha fazla olsun" (sadece can; ölüm asidi enemy.gd die()'da)
+const FAMILY_TRAITS := {
+	"golem": {"health": 1.3, "shield": 1.3, "speed": 0.8},
+	"zombie": {"health": 1.3},
+}
+
 func _apply_global_buff(enemy: Node) -> void:
 	var extra_players: int = max(0, _player_count() - 1)
-	var multiplayer_defense_mult: float = 1.0 + float(extra_players) * 0.30
+	## Kullanıcı isteği (2026-09-24 denge turu): ekstra oyuncu başına can/kalkan +%30 -> +%50 (her kademede).
+	var multiplayer_defense_mult: float = 1.0 + float(extra_players) * EXTRA_PLAYER_DEFENSE_MULT
 	var health_shield_mult: float = BOSS_HEALTH_SHIELD_MULT if enemy.is_boss else HEALTH_SHIELD_MULT
-	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult
+	## Aile özellikleri (bkz. FAMILY_TRAITS) - kalkan çarpanı candan AYRI tutulur (zombide sadece can artar).
+	var fam_trait: Dictionary = FAMILY_TRAITS.get(Enemy.family_of_id(str(enemy.get_meta("creature_id", ""))), {})
+	var trait_health: float = float(fam_trait.get("health", 1.0))
+	var trait_shield: float = float(fam_trait.get("shield", 1.0))
+	enemy.speed *= float(fam_trait.get("speed", 1.0))
+	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_health
 	enemy.health = enemy.max_health
 	enemy.contact_damage *= GLOBAL_DAMAGE_BUFF
 	if enemy.ranged_damage > 0.0:
@@ -1285,7 +1328,8 @@ func _apply_global_buff(enemy: Node) -> void:
 	# için item_shield_max ve item_shield_hp'yi de aynı (savunma) çarpanla
 	# büyütüyoruz.
 	if enemy.item_shield_max > 0.0:
-		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult
+		## Kalkan zaten (trait'siz) candan türetilmişti: GLOBAL çarpanlar + ailenin KENDİ kalkan çarpanı.
+		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_shield
 		enemy.item_shield_hp = enemy.item_shield_max
 		enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
 	enemy.health_changed.emit(enemy.health, enemy.max_health)

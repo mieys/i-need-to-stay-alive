@@ -181,6 +181,9 @@ func is_world_pos_visible(world_pos: Vector2) -> bool:
 ##  - Henüz yönetilmemişse (yeni doğmuş, sis o karede daha çalışmadı) sisin geometrik
 ##    hesabına sorulur; sis yoksa/kapalıysa (ana menü, ev içi, testler) her şey hedeflenebilir.
 static func can_target(node: Node) -> bool:
+	## Yaratık yeteneği (2026-09-24): görünmez hayalet hedef alınamaz (bkz. enemy.gd set_ability_invisible).
+	if node.has_meta(&"untargetable"):
+		return false
 	if node.has_meta(VIS_META):
 		return float(node.get_meta(VIS_META)) >= TARGETABLE_MIN_VISIBILITY
 	if not node.is_inside_tree() or not (node is Node2D):

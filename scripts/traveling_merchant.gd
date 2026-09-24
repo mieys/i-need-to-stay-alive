@@ -303,6 +303,11 @@ func _owned_shield_type() -> String:
 ## başlangıç silahı burada 4 kat daha sık çıkıyordu ("daha önce aldığın itemlerin
 ## çıkma olasılığı yükseltilsin"), kullanıcı bunu KALKAN DIŞINDAKİ eşyalar için
 ## geri aldırdı: "her item aynı olasılıkla çıkacak". Kalkan garantisi aynen duruyor.
+func _local_player_luck() -> float:
+	var p: Node = get_tree().get_first_node_in_group("player")
+	return float(p.luck) if (p != null and "luck" in p) else 0.0
+
+
 func _generate_stock() -> Array:
 	var stock: Array = []
 	var owned_shield: String = _owned_shield_type()
@@ -331,7 +336,9 @@ func _generate_stock() -> Array:
 		used[dedup_key] = true
 		var final_entry: Dictionary = entry.duplicate()
 		if final_entry["type"] == "item":
-			final_entry["tier"] = TierSystem.roll()
+			## Kullanıcı isteği (2026-09-24 denge turu: "şans iyi kartlar çıkarma oranını arttırmalı") - stok her
+			## oyuncunun KENDİ makinesinde üretiliyor (bkz. _on_merchant_spawned), yani yerel oyuncunun şansı doğru kişi.
+			final_entry["tier"] = TierSystem.roll(_local_player_luck())
 		stock.append(final_entry)
 	## Garantili kalkan hep 1. karta düşmesin diye kartların gösterim sırası
 	## da karıştırılıyor.

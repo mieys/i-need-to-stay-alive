@@ -37,10 +37,11 @@ const WEIGHTS := [60.0, 16.0, 5.0, 1.0]
 ## Şansa (Luck) bağlı olarak üst tierların GÖRECELİ ağırlığını büyütür - luck
 ## 0 iken WEIGHTS aynen kullanılır (tier1 hiç etkilenmez, sadece 2/3/4
 ## büyür). Kullanıcı isteği: "çıkma ihtimalleri şansa bağlı olarak artacak" -
-## bu istek özellikle level atlama kartlarıyla ilgiliydi, bu yüzden SADECE
-## level_up_screen.gd (_populate_cards) roll()'a gerçek luck değerini
-## geçiyor; sandık/seyyar satıcı çekilişleri (bkz. chest_menu.gd/
-## traveling_merchant.gd) varsayılan luck=0 ile eskisi gibi ETKİLENMİYOR.
+## bu istek önce SADECE level atlama kartlarıyla ilgiliydi. GÜNCELLEME
+## (kullanıcı isteği 2026-09-24: "şans iyi kartlar çıkarma oranını, sandık
+## düşme oranı iyi sandık çıkma oranını da arttırmalı") - artık sandık ödülü
+## (chest_menu.gd, açanın şansı) ve seyyar satıcı eşya kademeleri
+## (traveling_merchant.gd, yerel oyuncunun şansı) de gerçek luck geçiyor.
 const TIER_LUCK_WEIGHT_BONUS_PER_POINT := 0.015
 
 ## Kullanıcı isteği: "Can çalma statlarını düzenliyoruz, tier 1: %1, tier 2: %1.5,

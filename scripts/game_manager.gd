@@ -20,13 +20,13 @@ const BODY_BLOCK_SCALE := 0.48
 ## Kullanıcı isteği: "can çalma, alan hasarı veren eşyalarda %33 geçerli
 ## olsun" - GLOBAL kapsamda (eşyalar + karakter pasifleri/yetenekleri +
 ## silahlar, hepsi) uygulanıyor. player.gd VE weapon.gd'deki TÜM can
-## çalma/alan hasarı hesaplarının (on_damage_dealt, _apply_weapon_lifesteal,
-## weapon.gd melee AoE splash, _buyucu_on_kill)
+## çalma hesaplarının (on_damage_dealt, _apply_weapon_lifesteal, _buyucu_on_kill)
 ## çarptığı TEK ortak sabit - BODY_BLOCK_SCALE ile aynı sebepten burada:
 ## birden fazla dosyada aynı sayı elle kopyalanırsa biri güncellenirken
-## diğeri unutulabilir.
+## diğeri unutulabilir. SADECE can emmeyi etkiler, hasarı DEĞİL.
+## DÜZELTME (kullanıcı isteği 2026-09-24): eskiden yanında bir AOE_DAMAGE_EFFECTIVENESS (0.33) daha vardı ve
+## yakın dövüş sıçrama HASARINI da %33'e indiriyordu - istenmemişti, kaldırıldı (bkz. weapon.gd melee AoE).
 const LIFESTEAL_EFFECTIVENESS := 0.33
-const AOE_DAMAGE_EFFECTIVENESS := 0.33
 
 var game_time: float = 0.0
 var is_game_over: bool = false
@@ -674,7 +674,10 @@ const XP_INCREMENT_GROWTH := 5.0
 ## Seviye başına artışın asla aşamayacağı tavan - eğrinin "aşırı zor
 ## olmasın" kısmı. Bu tavana ulaşıldıktan sonra her seviye SABİT bu kadar
 ## XP daha ister (doğrusal büyüme), üstel/patlayan bir artış YOK.
-const MAX_XP_INCREMENT := 60.0
+## Kullanıcı isteği (2026-09-24 denge turu): 60 -> 110. Sadece rampadan SONRAKİ (seviye 12+) adımları etkiler -
+## rampa toplamı (MIN_XP_INCREMENT/XP_INCREMENT_GROWTH) bu sabite bağlı değil, seviye 1-11 eğrisi birebir aynı.
+## Kök neden: yaratık başına XP geç oyunda ~16 kat büyürken gereksinim sabit +60 artıyordu, seviye hızlanıyordu.
+const MAX_XP_INCREMENT := 110.0
 ## Artışın MIN_XP_INCREMENT'ten MAX_XP_INCREMENT'e ulaşması kaç seviye
 ## sürer (6, 8, 10, ..., 24 -> 10 adım). MAX_XP_INCREMENT/MIN_XP_INCREMENT/
 ## XP_INCREMENT_GROWTH değiştirilirse bu da elle güncellenmeli.

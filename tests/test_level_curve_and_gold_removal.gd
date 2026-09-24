@@ -47,12 +47,13 @@ func test_curve_is_easier_early_harder_late() -> void:
 	## ~L8-L9 civarında kesişiyor (yeni eğri hızlanarak zorlaşıyor, öncekiyse
 	## düzleşiyor) - o yüzden burada sadece gerçekten ERKEN seviyeler test
 	## ediliyor, karşılaştırma L9'dan sonra anlamını yitiriyor.
-	assert(_new_xp_needed(1) < _previous_wrong_xp_needed(1),
-		"L1 yeni %s, önceki %s - ilk seviyeler hâlâ zor" % [_new_xp_needed(1), _previous_wrong_xp_needed(1)])
-	assert(_new_xp_needed(3) < _previous_wrong_xp_needed(3),
-		"L3 önceki kadar zor kalmış: %s vs %s" % [_new_xp_needed(3), _previous_wrong_xp_needed(3)])
-	assert(_new_xp_needed(5) < _previous_wrong_xp_needed(5),
-		"L5 önceki kadar zor kalmış: %s vs %s" % [_new_xp_needed(5), _previous_wrong_xp_needed(5)])
+	## GÜNCELLEME (2026-09-24): eğri sonradan kullanıcı istekleriyle x5/3 ve x1.5 büyütüldü (BASE_XP_NEEDED 75) -
+	## L1 artık eski karekök eğrisinin (50) altında DEĞİL; bilinçli tasarım, bu yüzden L1 karşılaştırması kaldırıldı.
+	assert(_new_xp_needed(1) <= GameManager.BASE_XP_NEEDED + 0.5,
+		"L1 gereksinimi taban değer olmalı: %s" % _new_xp_needed(1))
+	## Aynı sebeple L3/L5'in eski eğriden kolay olma şartı da kaldırıldı; erken seviyelerin artışı hâlâ küçük olmalı.
+	assert(_new_xp_needed(5) - _new_xp_needed(1) < _new_xp_needed(25) - _new_xp_needed(21),
+		"Erken seviyeler geç seviyelerden daha yavaş zorlaşmalı")
 
 	## GEÇ seviyeler bir önceki eğriden belirgin şekilde ZOR (şikayet:
 	## "sonraki levellerde hafif zorlaşması lazımdı, aşırı kolay kalmış")
@@ -95,7 +96,8 @@ func test_curve_growth_increases_then_caps_and_never_explodes() -> void:
 	## 1267) gibi patlamamalı.
 	assert(_new_xp_needed(30) > 400.0,
 		"L30 gereksinimi hâlâ çok düşük (aşırı kolay): %s" % _new_xp_needed(30))
-	assert(_new_xp_needed(30) < 800.0,
+	## GÜNCELLEME (2026-09-24 denge turu): eğri x2.5 büyütüldü ve rampadan sonraki artış 60 -> 110 oldu (L30 = 2540).
+	assert(_new_xp_needed(30) < 3000.0,
 		"L30 gereksinimi çok yüksek (aşırı zor): %s" % _new_xp_needed(30))
 
 

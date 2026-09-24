@@ -6,6 +6,7 @@ görünsün" - eski tek harfli (G/H/İ/Y/K) kısaltmalar kaldırıldı, her efek
   invuln (Yenilmezlik)       -> ALTIN KALKAN (hasar almama)
   bat (Yarasa Formu)         -> YARASA KANADI (mor)
   shield_slow (Kalkan Yavaş) -> ÇATLAK KALKAN + aşağı ok (kırmızı, debuff)
+  burn (Yanma)               -> ALEV (İblis ateş topu, debuff)
 48x48 sanat ızgarası (bkz. hafıza "Pixel density 48x48"), gen_shield_icons.py'daki AYNI küçük
 yardımcı (Icon/poly/circle/rect/outline/dilate) deseni - o dosyaya bağımlı değil, kendi küçük kopyası.
 
@@ -168,6 +169,19 @@ def cracked_shield():
     return ic
 
 
+def flame():
+    """Yanma (debuff - Iblis ates topu, 2026-09-24): turuncu-sari alev, icte beyaz cekirdek."""
+    ic = Icon()
+    outer = poly([(24, 3), (31, 13), (36, 22), (37, 32), (33, 40), (24, 45), (15, 40), (11, 32), (12, 22), (17, 14), (20, 20)])
+    ic.outline(outer)
+    ic.fill_fn(outer, lambda x, y: hexc('#e04a12') if y > 38 or x < 15 or x > 34 else hexc('#ff7a1c'))
+    mid = poly([(24, 14), (30, 25), (31, 34), (24, 41), (17, 34), (18, 26)])
+    ic.fill(mid, hexc('#ffb83a'))
+    core = poly([(24, 24), (28, 32), (24, 38), (20, 32)])
+    ic.fill(core, hexc('#fff3c2'))
+    return ic
+
+
 def build():
     os.makedirs(OUTDIR, exist_ok=True)
     icons = {
@@ -176,6 +190,7 @@ def build():
         'invuln': gold_shield(),
         'bat': bat_wing(),
         'shield_slow': cracked_shield(),
+        'burn': flame(),
     }
     for k, ic in icons.items():
         ic.image().save(os.path.join(OUTDIR, '%s.png' % k))

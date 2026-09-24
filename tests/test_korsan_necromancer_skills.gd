@@ -27,9 +27,19 @@ func test_korsan_ulti_maps_to_bomb_detonate_not_heal() -> void:
 	var idx: int = content.find("match char_id:")
 	var match_block: String = content.substr(idx, 400)
 	assert("18: _skill_korsan_detonate_all()" in match_block, "Korsan ULTİ (id 18) artık _skill_korsan_detonate_all'a gitmeli")
-	var idx3: int = content.find("match skill3_id:")
-	var match_block3: String = content.substr(idx3, 700)
-	assert("20: _skill_necro_summon_golem()" in match_block3, "Necromancer ULTİ (id 20) artık R/skill3'teki _skill_necro_summon_golem'a gitmeli")
+
+
+## Güncel dizilim (2026-09-24): Golem Çağır (id 20) E/skill2'de, R/skill3 Lanetli Kafatası (id 44). Ayrı fonksiyon: yukarıdaki
+## Korsan kontrolü (önceden var olan başarısızlık) bu kontrolleri durdurmasın.
+func test_necro_golem_is_e_and_skull_is_r() -> void:
+	var content: String = FileAccess.get_file_as_string("res://scripts/player.gd")
+	var a2: int = content.find("func _activate_skill2()")
+	var skill2_body: String = content.substr(a2, content.find("func _end_skill2_effects()", a2) - a2)
+	assert("20: _skill_necro_summon_golem()" in skill2_body, "Necromancer E (id 20) _activate_skill2'deki match'ten _skill_necro_summon_golem'a gitmeli")
+	var a3: int = content.find("func _activate_skill3()")
+	var skill3_body: String = content.substr(a3, content.find("func _end_skill3_effects()", a3) - a3)
+	assert(not ("20: _skill_necro_summon_golem()" in skill3_body), "golem artık R'de olmamalı")
+	assert("44: _skill_necro_skull()" in skill3_body, "Necromancer R (id 44) kafatasına gitmeli")
 
 
 func test_korsan_and_necro_functions_exist() -> void:

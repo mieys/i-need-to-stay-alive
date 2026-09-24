@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_fear_status.gd" id="1_fear"]
+[ext_resource type="SpriteFrames" path="res://assets/fx/necro/fear_frames.tres" id="2_frames"]
+
+[node name="FxFearStatus" type="AnimatedSprite2D"]
+z_index = 56
+texture_filter = 1
+sprite_frames = ExtResource("2_frames")
+animation = &"loop"
+script = ExtResource("1_fear")

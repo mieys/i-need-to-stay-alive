@@ -1,43 +1,33 @@
 extends Node
 
-## Kullanıcı isteği doğrulaması:
-## 1) Şans statı sandık düşme ihtimalini de arttırmalı - her 1 şans %0.2
-##    (0.002) arttırmalı, %1 (genel altın/meyve oranı) DEĞİL.
+## Şans (2026-09-24 denge turu yeniden tasarımı, bkz. enemy.gd LUCK_DROP_MULT_PER_POINT üstündeki not):
+## yemek/mıknatıs/sandık ihtimali ÇARPIMSAL (taban x (1 + %5 x şans) -> 20 şans = 2 kat), altın x (1 + %1 x şans),
+## ve düşme kararında HOST'un değil öldüren oyuncunun şansı kullanılır (_killer_node / last_attacker_peer_id).
+## Eski düz toplama (%0.2/puan - 10 şans yemeği 40 kat arttırıyordu) ve LUCK_CHEST_BONUS_PER_POINT kaldırıldı.
 ## (Kurt Adam karakteri oyundan silindi - eskiden burada onun pasif can çalma oranı da doğrulanıyordu.)
-##
-## NOT: enemy.gd'nin _player_luck_chest_bonus()/_player_luck_drop_bonus()
-## fonksiyonları get_tree().get_first_node_in_group("player") kullanıyor -
-## bu test ortamında instantiate edilen node'lar canlı bir SceneTree'ye
-## girmediği için get_tree() null dönüyor (bkz. tests/test_hud_gold_shop_
-## toggle.gd'deki aynı kısıt notu). Bu yüzden çarpanın DOĞRU sabit
-## (LUCK_CHEST_BONUS_PER_POINT) üzerinden tanımlandığını ve genel bonusla
-## (%1/şans) KARIŞTIRILMADIĞINI doğruluyoruz - production'da get_tree()
-## gerçek oyunda her zaman geçerli olacağı için davranış birebir aynı olur.
 
 const EnemyScript = preload("res://scripts/enemy.gd")
 
 
-func test_chest_luck_bonus_constant_is_point_two_percent() -> void:
-	assert(is_equal_approx(EnemyScript.LUCK_CHEST_BONUS_PER_POINT, 0.002),
-		"Sandik icin sans-basi bonus 0.002 (%%0.2) olmali, bulunan: %s" % EnemyScript.LUCK_CHEST_BONUS_PER_POINT)
-	## Genel altın/meyve bonusu (%1/şans = 0.01) ile KARIŞTIRILMAMALI.
-	assert(not is_equal_approx(EnemyScript.LUCK_CHEST_BONUS_PER_POINT, 0.01),
-		"Sandik bonusu yanlislikla genel %%1'lik oranla ayni olmus")
+func test_luck_is_multiplicative_twenty_points_doubles_drops() -> void:
+	assert(is_equal_approx(EnemyScript.LUCK_DROP_MULT_PER_POINT, 0.05), "yemek/mıknatıs/sandık: şans başı %%5")
+	assert(is_equal_approx(1.0 + 20.0 * EnemyScript.LUCK_DROP_MULT_PER_POINT, 2.0), "20 şans = 2 kat")
+	assert(is_equal_approx(EnemyScript.LUCK_GOLD_MULT_PER_POINT, 0.01), "altın: şans başı %%1")
 
 
-func test_chest_drop_uses_luck_chest_bonus_not_general_bonus() -> void:
-	## _drop_chest() kaynağının artık _player_luck_chest_bonus() kullandığını,
-	## eski "_player_luck_drop_bonus() * 0.05" ifadesini KULLANMADIĞINI
-	## doğrular (regresyona karşı).
+func test_drop_functions_use_killer_luck_multiplier() -> void:
 	var source: String = FileAccess.get_file_as_string("res://scripts/enemy.gd")
-	if source.length() > 0: ## bazı test ortamlarında FileAccess kısıtlı olabiliyor
-		var chest_fn_start: int = source.find("func _drop_chest()")
-		if chest_fn_start != -1:
-			var section: String = source.substr(chest_fn_start, 400)
-			assert(section.find("_player_luck_chest_bonus()") != -1,
-				"_drop_chest artik _player_luck_chest_bonus kullanmiyor")
-			assert(section.find("_player_luck_drop_bonus() * 0.05") == -1,
-				"_drop_chest hala eski genel bonus formulunu kullaniyor")
+	if source.length() == 0: ## bazı test ortamlarında FileAccess kısıtlı olabiliyor
+		return
+	assert(source.find("func _player_luck_drop_bonus") == -1, "eski düz şans bonusu fonksiyonu kalmamalı")
+	for fn in ["func _drop_food()", "func _drop_magnet()", "func _drop_chest()"]:
+		var i: int = source.find(fn)
+		assert(i != -1, "%s bulunamadı" % fn)
+		assert(source.substr(i, 900).find("_luck_mult(LUCK_DROP_MULT_PER_POINT)") != -1, "%s çarpımsal şans kullanmalı" % fn)
+	var g: int = source.find("func _drop_gold()")
+	assert(source.substr(g, 400).find("_luck_mult(LUCK_GOLD_MULT_PER_POINT)") != -1, "_drop_gold çarpımsal şans kullanmalı")
+	var k: int = source.find("func _killer_node()")
+	assert(k != -1 and source.substr(k, 700).find("last_attacker_peer_id") != -1, "öldürenin şansı last_attacker_peer_id'den bulunmalı")
 
 
 func test_player_reads_lifesteal_directly_from_character_def() -> void:

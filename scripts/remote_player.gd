@@ -24,6 +24,7 @@ var health: float = 100.0
 var max_health: float = 100.0
 ## Sahibinin gerçek yürüme hızı (main.gd extra["move_speed"]); henüz paket gelmediyse 0 (bkz. get_effective_move_speed).
 var synced_move_speed: float = 0.0
+var synced_base_move_speed: float = 0.0 ## bkz. get_base_move_speed
 var item_shield_hp: float = 0.0
 var item_shield_max: float = 0.0
 var is_dead: bool = false
@@ -145,6 +146,11 @@ var _vampir_bat_form: bool = false
 var _elara_evasion: bool = false
 ## Ruhani Yetenek "Savaş Şevki" - bkz. main.gd extra dict/enemy.gd _attacker_has_savas_sevki üstündeki AYNI not.
 var has_savas_sevki: bool = false
+## Denge turu (2026-09-24): bu uzak oyuncunun şansı / Şanslı Zar ekstra altın şansı / Tecrübe Kazanımı - host'taki
+## düşme (enemy.gd _killer_node) ve XP toplama (xp_orb.gd, network_manager.gd) kararları için (bkz. main.gd extra dict).
+var luck: float = 0.0
+var item_extra_gold_chance: float = 0.0
+var exp_gain_percent: float = 0.0
 var _vampir_pull: float = 0.0
 var _vampir_rest_positions: Array = []
 var _vampir_swarm: Node2D = null
@@ -1063,6 +1069,13 @@ func is_ghost_now() -> bool:
 ## player.tscn tabanı) yedek olarak döner - eskiden kopya burada Characters.BASE_MOVE_SPEED (252) kullanıyordu, ama
 ## oyuncunun gerçek taban hızı player.tscn'de 91 x EntityScale.SPEED = ~82: host olmayan oyuncunun kopyası ondan ~2.5
 ## kat hızlıydı ("kopya sürekli karaktere ışınlanıyor ve bırakmıyor" bildiriminin kök nedeni).
+## Sahibinin KALICI hızı (yetenek buff'sız, main.gd extra["base_speed"]) - bkz. player.gd get_base_move_speed.
+func get_base_move_speed() -> float:
+	if synced_base_move_speed > 0.0:
+		return synced_base_move_speed
+	return Characters.BASE_MOVE_SPEED
+
+
 func get_effective_move_speed() -> float:
 	if synced_move_speed > 0.0:
 		return synced_move_speed
@@ -1075,6 +1088,7 @@ func get_effective_move_speed() -> float:
 func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary = {}) -> void:
 	update_weapon_visuals(weapon_keys, extra.get("weapon_tiers", {}))
 	synced_move_speed = float(extra.get("move_speed", synced_move_speed))
+	synced_base_move_speed = float(extra.get("base_speed", synced_base_move_speed))
 	health = hp
 	max_health = max_hp
 	item_shield_hp = s_hp
@@ -1108,6 +1122,9 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	## is_ghost_now()'da okunuyor ki enemy.gd bu oyuncuya sert yapışmasın.
 	_elara_evasion = extra.get("elara_evasion", false)
 	has_savas_sevki = extra.get("has_savas_sevki", false)
+	luck = float(extra.get("luck", 0.0))
+	item_extra_gold_chance = float(extra.get("extra_gold", 0.0))
+	exp_gain_percent = float(extra.get("exp_gain", 0.0))
 	match_damage_dealt = extra.get("dmg_dealt", 0.0)
 	if downed_timer_label:
 		downed_timer_label.set_remaining_seconds(extra.get("downed_remaining", 0.0) if is_downed else 0.0)
@@ -1903,7 +1920,7 @@ func _spawn_floating_text(text: String, color: Color, is_heal: bool = false) -> 
 ## Called by XP orbs when a remote player touches them on the host.
 func add_xp(amount: float) -> void:
 	if NetworkManager.is_host:
-		NetworkManager.host_collect_xp(amount)
+		NetworkManager.host_collect_xp(amount * (1.0 + maxf(0.0, exp_gain_percent)))
 
 
 ## Called by gold drops when a remote player touches them on the host.
@@ -1929,6 +1946,18 @@ func collect_gold(amount: int) -> void:
 ## o client'ın kendi yetkili Player node'unda, oradaki take_damage() içinde
 ## olur - can/kalkan durumu değiştiği için zaten normal _rpc_update_player_
 ## extra_state senkron döngüsüyle (bkz. main.gd) herkese geri yayılır.
+## Yaratık yeteneklerinin özel hasarı (bkz. enemy_abilities.gd / player.gd take_special_damage) - host'taki yetkili
+## lazer/diken/asit/ateş topu bu kuklaya değince hasar, türüyle birlikte gerçek oyuncunun makinesine iletilir (yanma,
+## kalkana x2 gibi kurallar orada uygulanır).
+func take_special_damage(amount: float, source: Node2D, kind: String) -> void:
+	if is_dead or peer_id <= 0:
+		return
+	var enemy_net_id: int = 0
+	if source and is_instance_valid(source):
+		enemy_net_id = int(source.get_meta("network_enemy_id", 0))
+	NetworkManager.forward_special_damage_to_peer.rpc_id(peer_id, amount, enemy_net_id, kind)
+
+
 func take_damage(amount: float, source: Node2D = null) -> void:
 	if is_dead or peer_id <= 0:
 		return

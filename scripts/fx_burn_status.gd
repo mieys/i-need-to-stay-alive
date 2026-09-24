@@ -22,8 +22,12 @@ extends Node2D
 ## z_index, opaklık) HİÇ dokunulmadı - istek zaten "aynı çalışacak" diyordu.
 ## Eski a/b/c/d dosyaları silinmedi (kullanılmıyor ama zararsız duruyorlar,
 ## proje genelinde silme konusunda temkinli davranılıyor).
+## GÜNCELLEME (kullanıcı isteği 2026-09-24: "yakma efektini daha minimal pixel tarzda 48x48 ve göz yormayacak şekilde
+## değiştir ancak dumana dokunma" + "spritesheete dönüştür") - ateş artık tools/gen_burn_fire_fx.py'nin pişirdiği 48x48
+## pixel-art alev (4 yumuşak ton, beyaz-sıcak parlama yok, kareler arası parlaklık sabit, 8 kare / 8 fps sakin döngü).
+## Eski fx_burn_fire_v2 (119x124 yumuşak/parlak) dosyaları kullanılmıyor. DUMAN (SMOKE_VARIANTS ve tüm ayarları) aynen.
 const FIRE_VARIANTS := [
-	preload("res://assets/generated/fx_burn_fire_v2_frames.tres"),
+	preload("res://assets/fx/burn/fire_min_frames.tres"),
 ]
 const SMOKE_VARIANTS := [
 	preload("res://assets/generated/fx_burn_smoke_a_frames.tres"),
@@ -60,7 +64,9 @@ const VERTICAL_OFFSET := -12.0
 ## sprite'ı için, kök Node2D'nin EFFECT_SCALE'i (duman DAHİL ikisini birlikte
 ## küçülten) yerine _fire'ın KENDİ yerel ölçeği - kullanıcı bu sefer SADECE
 ## "ateş"i belirtti, duman önceki isteklerde olduğu gibi ayrı tutuldu.
-const FIRE_ONLY_SCALE := 0.5
+## GÜNCELLEME (2026-09-24): yeni ateş 48x48 sanat pikseli - 1 sanat pikseli = TEXEL (1.212) ile karakterlerle aynı piksel
+## yoğunluğunda ve eski ateşle (119 px x 0.5) hemen hemen aynı ekran boyunda.
+const FIRE_ONLY_SCALE := 1.212
 ## DÜZELTME (kullanıcı isteği: "dumanı %10 küçült") - FIRE_ONLY_SCALE ile
 ## AYNI desen, SADECE duman için kendi yerel ölçeği.
 const SMOKE_ONLY_SCALE := 0.9

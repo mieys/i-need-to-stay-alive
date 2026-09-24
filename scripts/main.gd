@@ -50,7 +50,7 @@ const MISSION_DESCRIPTIONS := {
 	"collect": "Haritanın dört bir yanına saçılmış kristallerden yeterince topla (minimapte işaretli).",
 	"escort_van": "Konvoyun çevresindeki dairede kalarak onu hedefe kadar it. Uzaklaşırsan geri kayar.",
 	"defend_tree": "Ağacı yaratıklardan koru - büyümesini tamamlayana kadar yok olmasın.",
-	"kill_your_copy": "Haritada bir yerde beliren renkleri ters kopyanı bul ve öldür.",
+	"kill_your_copy": "Haritada bir yerde beliren mor tonlu kopyanı bul ve öldür.",
 }
 
 ## Kullanıcı isteği: LoL tarzı görüş alanı / savaş sisi - bkz. vision_fog.gd.
@@ -481,6 +481,12 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## (bkz. enemy.gd _attacker_has_savas_sevki, remote_player.gd has_savas_sevki). Seçim kendisi
 			## ("hangi ruhani yetenek") ağa hiç gitmiyor (bkz. lobby_menu.gd notu) - sadece bu TEK bayrak.
 			"has_savas_sevki": player.has_savas_sevki() if player.has_method("has_savas_sevki") else false,
+			## Denge turu (2026-09-24): düşme/XP kararları host'ta verildiği için öldüren/toplayan UZAK oyuncunun
+			## statları host'taki kuklasında olmalı - bkz. enemy.gd _killer_node (şans, Şanslı Zar altını) ve
+			## xp_orb.gd/network_manager.gd XP toplama (Tecrübe Kazanımı). Değerler nadiren değişir (değişince gider).
+			"luck": player.luck if "luck" in player else 0.0,
+			"extra_gold": player.item_extra_gold_chance if "item_extra_gold_chance" in player else 0.0,
+			"exp_gain": player.exp_gain_percent if "exp_gain_percent" in player else 0.0,
 			"elara_double": player.elara_double_fire_active if "elara_double_fire_active" in player else false,
 			"talon_giant": player._talon_ulti_active if "_talon_ulti_active" in player else false,
 			## Talon Ayna Formu (R) aktif mi - diger oyuncularda +%10 boyut ve alev aurasi icin (remote_player.gd _talon_form_active).
@@ -520,6 +526,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## Gerçek yürüme hızı (bkz. player.gd get_effective_move_speed) - host'taki "Kopyanı Öldür" kopyası bu
 			## oyuncuyu kopyalıyorsa hızını buradan alır (RemotePlayer'ın kendi hız bilgisi yok).
 			"move_speed": player.get_effective_move_speed() if player.has_method("get_effective_move_speed") else 0.0,
+			## Kalıcı hız (yetenek buff'sız) - host'taki "Kopyanı Öldür" kopyası bunu kopyalar (bkz. mission_player_copy.gd).
+			"base_speed": player.get_base_move_speed() if player.has_method("get_base_move_speed") else 0.0,
 			## DÜZELTME (kullanıcı bildirimi #41: "Diğer oyuncuların kalkan
 			## baloncukları sürekli görünür kalıyor"): remote_player.gd eskiden
 			## sadece "item_shield_hp > 0.0" bakıyordu - bu, kalkan dolu/sabit
@@ -2017,6 +2025,7 @@ func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radiu
 					get_tree().current_scene.add_child(copy)
 					copy.global_position = m.get("pos", Vector2.ZERO)
 					copy.setup(mission_id, i, int(m.get("char_id", 1)), 100.0, Characters.BASE_MOVE_SPEED, 0.0, false)
+					copy.set_weapon_keys(m.get("weapons", []))
 					copies.append(copy)
 				visuals["copies"] = copies
 	_world_event_visuals[mission_id] = visuals

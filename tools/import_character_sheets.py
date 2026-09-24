@@ -8,7 +8,7 @@ Kullanicinin verdigi her karakter klasoru (idle/walk/run/eat/hurt/read/shrug/dow
   1) Sayfalari (satirlar yukaridan asagiya: asagi, sol, sag, yukari; hucre = 48x48 piksel sanatinin K kat buyutulmusu - K sayfaya gore 6 ya da 5)
      48x48 hucrelere indirir -> assets/characters/<anahtar>/sheets/<ad>.png ("down" sayfasi "downed" adiyla yazilir)
   2) SpriteFrames (.tres) uretir: her sayfadan <ad>_<yon> klipleri (bkz. player.gd/char_anim.gd klip adi kurallari). Vampir icin ayrica
-     yarasa formu bat_<yon> klipleri eklenir (assets/characters/vampir/bat_*.png, tools/gen_vampir_assets.py uretir).
+     yarasa formu bat_<yon> klipleri eklenir (assets/characters/vampir/bat_sheet.png, tools/gen_vampir_bat_form.py uretir).
   3) Portre (idle, asagi bakan ilk kare, ust govde kirpimi) -> assets/characters/<eski portre adi>.png
   4) Ciktiya DEFS icin olculen govde/ayak bilgisini yazdirir.
 Hangi animasyon oyunda ne zaman oynar: kullanici talimatlari (Animasyon talimatlari.txt) ve player.gd/char_anim.gd.
@@ -130,9 +130,23 @@ def write_frames(key, frames_name, sheet_counts):
             refs = [f'SubResource("{add_atlas(ext_id, c, row)}")' for c in range(count)]
             add_anim(f"{sheet}_{d}", refs, loop, speed)
     if key == "vampir":
+        ## Yarasa formu (2026-09-24 yeniden tasarim): tools/gen_vampir_bat_form.py TEK bir sayfa uretir
+        ## (bat_sheet.png, 96x112 hucre, satirlar DIR_ROWS sirasinda) - eskiden 16 ayri bat_<yon>_<n>.png vardi.
         prefix, count, loop, speed = BAT_ANIM
-        for d, _row in DIR_ROWS:
-            refs = [f'ExtResource("{add_ext(f"{res_dir}/{prefix}_{d}_{i}.png")}")' for i in range(1, count + 1)]
+        bat_ext = add_ext(f"{res_dir}/bat_sheet.png")
+        for d, row in DIR_ROWS:
+            refs = []
+            for i in range(count):
+                idx = len(subs) + 1
+                subs.append(
+                    f'[sub_resource type="AtlasTexture" id="AtlasTexture_{idx}"]
+'
+                    f'atlas = ExtResource("{bat_ext}")
+'
+                    f"region = Rect2({i * 96}, {row * 112}, 96, 112)
+"
+                )
+                refs.append(f'SubResource("AtlasTexture_{idx}")')
             add_anim(f"{prefix}_{d}", refs, loop, speed)
     lines = [f'[gd_resource type="SpriteFrames" load_steps={len(ext) + len(subs) + 1} format=3]', ""]
     lines += ext + [""]

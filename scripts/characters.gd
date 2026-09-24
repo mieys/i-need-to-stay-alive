@@ -236,7 +236,7 @@ const DEFS := {
 		## player.gd _buyucu_try_activate_variation_r/BUYUCU_SET_R_VARIATIONS.
 		"skill3": 24,
 		"skill3_name": "Hortum (Set 1/2)",
-		"skill3_desc": "3. YETENEK (R, 2 setli - ULTİ ile değiştirilir):\n1) Hortum: 15sn boyunca dolaşan 3 hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %120'si kadar hasar verir. (45sn bekleme)\n2) Meteor Patlaması: 5sn hareketsiz odaklanıp etrafa saldırı gücünün %120'si kadar hasar veren meteorlar yağdırır. (120sn bekleme)",
+		"skill3_desc": "3. YETENEK (R, 2 setli - ULTİ ile değiştirilir):\n1) Hortum: 15sn boyunca dolaşan 3 hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %90'ı kadar hasar verir. (45sn bekleme)\n2) Meteor Patlaması: 5sn hareketsiz odaklanıp etrafa saldırı gücünün %120'si kadar hasar veren meteorlar yağdırır. (120sn bekleme)",
 		"skill3_variation_icons": [
 			"res://assets/skills/buyucu_skill_hortum_icon.png",
 			"res://assets/skills/buyucu_skill_meteor_icon.png",
@@ -294,7 +294,7 @@ const DEFS := {
 		## _skill_assasin_dash, skill id 16) - artık 3. yetenek/R'de.
 		"skill3": 16,
 		"skill3_name": "Gölge Hücumu",
-		"skill3_desc": "ULTİ: Yakındaki yaratıklara sırayla hızla çarpar (en fazla 25 yaratık), her çarpışta tüm silahlarının toplam hasarı kadar 1 kez hasar verir, bitince kullandığı konuma geri döner. (90sn bekleme)",
+		"skill3_desc": "ULTİ: 10 saniye boyunca yakındaki yaratıklara sırayla hızla çarpar; her çarpış saldırı gücünün %150'si kadar hasar verir ve saldırı hızının 3 katı hızda tekrarlanır. Vurulmamış yaratık kalmazsa (tek yaratık olsa bile) aynı yaratıklara tekrar saldırır. Bitince kullandığı konuma geri döner. (90sn bekleme)",
 		"passive": "Bıçak Uzmanlığı: yetenek kullanımından sonraki 3 saniye boyunca garantili kritik vurur.",
 		"passive_icon": "res://assets/skills/assasin_passive_icon.png",
 		"frames": "res://assets/characters/assasin_frames.tres",
@@ -375,7 +375,7 @@ const DEFS := {
 		"skill2_icon": "res://assets/skills/elara_gercek_hasar_icon.png",
 		"skill3": 31,
 		"skill3_name": "Çift Tetik",
-		"skill3_desc": "ULTİ: 25 saniye boyunca saldırılar 2 kez tetiklenir ama %60 hasar verir. (120sn bekleme)",
+		"skill3_desc": "ULTİ: 15 saniye boyunca saldırılar 2 kez tetiklenir ama %60 hasar verir. (120sn bekleme)",
 		"skill3_icon": "res://assets/skills/elara_cift_tetik_icon.png",
 		"passive": "Seviye başına %1 saldırı hızı kazanır. (En fazla %50)",
 		"passive_icon": "res://assets/skills/elara_passive_icon.png",
@@ -417,7 +417,7 @@ const DEFS := {
 		## tikler player.gd _process_korsan_bombardment'ta.
 		"skill3": 34,
 		"skill3_name": "Bombardıman",
-		"skill3_desc": "3. YETENEK: Etrafındaki büyük bir alanı 8 saniye boyunca bombardımana tutar, her saniye saldırı gücünün %150'si kadar hasar verir. (40sn bekleme)",
+		"skill3_desc": "3. YETENEK: Etrafındaki büyük bir alanı 8 saniye boyunca bombardımana tutar, her saniye saldırı gücünün %110'u kadar hasar verir. (40sn bekleme)",
 		## DÜZELTME (kullanıcı bildirimi 2026-09-22: "Korsanın ultisinin skill ikonu yok") - skill3_icon hiç
 		## eklenmemişti, HUD'da R slotu boş/placeholder kalıyordu (bkz. hud.gd "def.has(\"skill3_icon\")" kontrolü).
 		## Kullanıcı isteği (2026-09-24): Korsan'ın 4 ikonu (Q/E/R/pasif) 48x48 piksel sanat kare ikon olarak yeniden
@@ -550,21 +550,25 @@ const DEFS := {
 		## "golemi aşırı hızlı hareket ediyor... saldırı hızı azaltmasını %50
 		## den %20 ye düşür") - buradaki yüzde golem_pet.gd'deki GOLEM_ATTACK_
 		## SLOWDOWN_PERCENT ile AYNI kalmalı, %50 -> %20 olarak güncellendi.
+		## GÜNCEL DİZİLİM (2026-09-24): Q = İskelet Çağır (19), E = Golem Çağır (20), R = Lanetli Kafatası (44);
+		## Yarasa Sürüsü (35) ve necro_bat.gd/tscn tamamen silindi - yukarıdaki geçmiş notlar eski dizilimleri anlatır.
 		"skill": 19,
 		"skill_name": "İskelet Çağır",
-		"skill_desc": "YETENEK: 10 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (statlarının %30'u, canının %100'ü, kalkansız, 60sn yaşar). Toplamda (iskelet+golem) en fazla 10 yaratığa sahip olabilirsin. (1sn bekleme)",
+		"skill_desc": "YETENEK: 10 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (statlarının %30'u, canının %100'ü, kalkansız, 60sn yaşar). Toplamda (iskelet+golem) en fazla 20 yaratığa sahip olabilirsin. (1sn bekleme)",
 		"skill_icon": "res://assets/skills/necromancer_iskelet_cagir_icon.png",
-		"skill2": 35,
-		"skill2_name": "Yarasa Sürüsü",
-		"skill2_desc": "TEMEL (BASILIP KAPATILABİLİR): Açıkken her saniye %1 maksimum kalkan + 25 kalkan tüketerek etrafındaki yaratıklara yarasa gönderir. Yarasalar hedefe saldırı gücünün %80'i kadar hasar verip sana geri döner (hızları hareket hızınla eşittir). Kalkanın biterse kendiliğinden kapanır.",
-		"skill2_icon": "res://assets/skills/necromancer_yarasa_suru_icon.png",
-		## Kullanıcı isteği: Necromancer'ın ULTİ'si (Golem Çağır, skill3 id
-		## 20, R tuşu) - standart skill3_state makinesini kullanır (bkz.
-		## player.gd _skill_necro_summon_golem).
-		"skill3": 20,
-		"skill3_name": "Golem Çağır",
-		"skill3_desc": "ULTİ: 100 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %50 oranında), kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 6sn'de bir çevresindeki yaratıkları 1sn sersemletir, 120sn yaşar). (10sn bekleme)",
-		"skill3_icon": "res://assets/skills/necromancer_hortlak_cagir_icon.png",
+		## Kullanıcı isteği (2026-09-24): "iskelet Q golem E kafatası da R olmalı yarasayı ... yok et" - Golem Çağır
+		## (id 20) R'den E'ye taşındı (standart skill2 makinesi, E kalkan tarifesi), Yarasa Sürüsü (id 35) tamamen silindi.
+		"skill2": 20,
+		"skill2_name": "Golem Çağır",
+		"skill2_desc": "TEMEL: 100 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %50 oranında), kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 6sn'de bir çevresindeki yaratıkları 1sn sersemletir, 120sn yaşar). (10sn bekleme)",
+		"skill2_icon": "res://assets/skills/necromancer_hortlak_cagir_icon.png",
+		## Kullanıcı isteği (2026-09-24): Necromancer'ın ULTİ'si artık Lanetli Kafatası (skill3 id 44, R tuşu) - Golem Çağır'ın
+		## (id 20) yerine. Standart skill3_state makinesi (10sn aktif + 60sn bekleme, bkz. player.gd SKILL3_TIMING[44] /
+		## _skill_necro_skull, mantık scripts/necro_skull.gd). Ruh tüketmez (istekte ruh bedeli yok, bekleme süresi var).
+		"skill3": 44,
+		"skill3_name": "Lanetli Kafatası",
+		"skill3_desc": "ULTİ: Düşmanlara dev bir lanetli kafatası gönderir. Kafatası 10sn boyunca kalabalıklara ve bosslara öncelik vererek düşmanlara çarpar; her çarpmada isabet alanındaki düşmanlara saldırı gücünün %110'u kadar hasar verir ve onları 3sn korkutur (korkan düşmanlar rastgele yönlerde yürür ve hasar veremez, bosslar korkmaz). (60sn bekleme)",
+		"skill3_icon": "res://assets/skills/necromancer_lanetli_kafatasi_icon.png",
 		"passive": "Etrafta ölen her düşman 1 ruh biriktirir (bosslar 5 ruh). Biriken ruh sayısı pasif ikonunun üstünde görünür.",
 		"passive_icon": "res://assets/skills/necromancer_passive_icon.png",
 		"frames": "res://assets/characters/necromancer_frames.tres",
@@ -590,7 +594,7 @@ const DEFS := {
 		## versiyonu).
 		"skill": 26,
 		"skill_name": "Kalkan Totemi",
-		"skill_desc": "ULTİ (kalkan harcamaz): Bulunduğun konuma bir totem diker. Totem 30sn boyunca her saniye etrafındaki müttefiklere (ve sana) kendi kalkanının %0.5'i + saldırı gücünün %20'si kadar kalkan yeniler. (60sn bekleme)",
+		"skill_desc": "ULTİ (kalkan harcamaz): Bulunduğun konuma bir totem diker. Totem 30sn boyunca her saniye etrafındaki müttefiklere (ve sana) kendi kalkanının %0.5'i + saldırı gücünün %12'si kadar kalkan yeniler. (60sn bekleme)",
 		"skill_icon": "res://assets/skills/shaman_kalkan_totemi_icon.png",
 		"skill2": 27,
 		"skill2_name": "Saldırı Totemi",
@@ -621,7 +625,7 @@ const DEFS := {
 		## (Q ve E maksimum canın %4'ü, R aktifken her saniye maksimum canın %3'ü, bkz.
 		## player.gd VAMPIR_*). Skill id'leri: Q=40 (Kan Emme, SKILL_TIMING[40]), E=41 (Yarasa
 		## Formu, SKILL2_TIMING[41]), R=42 (Kan Yarasaları, SKILL3_TIMING[42], basılıp
-		## kapatılan toggle - Necromancer'ın Yarasa Sürüsü ile aynı desen).
+		## kapatılan toggle).
 		## Görsel: assets/characters/vampir/ (tools/gen_vampir_assets.py + gen_vampir_frames.py).
 		"skill": 40,
 		"skill_name": "Kan Emme",

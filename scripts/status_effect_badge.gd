@@ -38,6 +38,7 @@ const INFO := {
 	"invuln": ["Yenilmezlik", "Ruhani Yetenek \"Kalkan\" aktif - bu süre boyunca hiç hasar almazsın."],
 	"bat": ["Yarasa Formu", "Vampir Çocuk'un yarasa formu aktif: daha hızlısın ama sürekli can harcarsın."],
 	"shield_slow": ["Kalkan Yenilemesi Yavaş", "Bir yetenek kullandın - kalkan yenilenme hızın kısa süreliğine %50 düştü."],
+	"burn": ["Yanma", "Bir İblis'in ateş topu seni tutuşturdu - 3 saniye boyunca yanarak hasar alırsın."],
 	"savas_sevki": ["Savaş Şevki", "Öldürdükçe yığılan savaş şevki - 50'de kalıcı +1 saldırı gücüne dönüşür."],
 	"kalkan_bagi": ["Kalkan Bağı", "Arkadaşınla kalkanınız birbirine bağlı - hasar/bedel/artış %50-%50 paylaşılıyor, ikinizin de kalkanı daha hızlı yenileniyor."],
 }

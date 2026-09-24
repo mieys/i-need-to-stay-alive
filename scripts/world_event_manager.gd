@@ -702,6 +702,20 @@ func _escort_current_pos(slot: Dictionary) -> Vector2:
 ## Döner: {"nodes": Array[CharacterBody2D] (bu istemcinin GERÇEK, simüle edilen kopyaları),
 ## "meta": Array[Dictionary] ("char_id"/"pos", client'ların kendi kozmetik kopyalarını
 ## kurması için world_event_started.extra["copies"]'e konur - bkz. dosya başı not)}.
+## Kopyanın taşıyacağı silahlar (kullanıcı isteği 2026-09-24: "tıpkı benim gibi silahları olmalı"): yerel oyuncu için
+## kalıcı envanter (GameManager.owned_weapons - Talon Ayna Formu'nun geçici kopyaları dahil DEĞİL), uzak oyuncu için
+## kuklasının zaten senkron tuttuğu anahtar listesi (remote_player.gd _weapon_keys).
+func _copy_weapon_keys_of(p: Node) -> Array:
+	var keys: Array = []
+	if p.is_in_group("player"):
+		for entry in GameManager.owned_weapons:
+			keys.append(str(entry.get("key", "")))
+	elif "_weapon_keys" in p:
+		for k in p.get("_weapon_keys"):
+			keys.append(str(k))
+	return keys
+
+
 func _spawn_copies(mission_id: int) -> Dictionary:
 	var copies: Array = []
 	var meta: Array = []
@@ -716,7 +730,8 @@ func _spawn_copies(mission_id: int) -> Dictionary:
 			var char_id: int = int(p.get("char_id")) if "char_id" in p else int(GameManager.selected_char_id)
 			## Gerçek (bonuslu) yürüme hızı - bkz. player.gd/remote_player.gd get_effective_move_speed. Kopya ayrıca
 			## source_player üzerinden bunu her karede yeniden okur (hız buff'ları anında yansısın).
-			var spd: float = float(p.call("get_effective_move_speed")) if p.has_method("get_effective_move_speed") else Characters.BASE_MOVE_SPEED
+			## Kalıcı hız (yetenek buff'ları hariç - bkz. mission_player_copy.gd hız notu).
+			var spd: float = float(p.call("get_base_move_speed")) if p.has_method("get_base_move_speed") else Characters.BASE_MOVE_SPEED
 			var maxhp_v: Variant = p.get("max_health")
 			var maxhp: float = float(maxhp_v) if maxhp_v != null else 100.0
 			var copy: CharacterBody2D = CopyScript.new()
@@ -724,7 +739,9 @@ func _spawn_copies(mission_id: int) -> Dictionary:
 			copy.global_position = pos
 			copy.setup(mission_id, idx, char_id, maxhp, spd, COPY_BASE_CONTACT_DAMAGE, true)
 			copy.set("source_player", p)
+			var weapon_keys: Array = _copy_weapon_keys_of(p)
+			copy.set_weapon_keys(weapon_keys)
 			copies.append(copy)
-			meta.append({"char_id": char_id, "pos": pos})
+			meta.append({"char_id": char_id, "pos": pos, "weapons": weapon_keys})
 			idx += 1
 	return {"nodes": copies, "meta": meta}

@@ -20,6 +20,12 @@ class_name MatthewFoxShieldFx
 
 const LoopFrames := preload("res://assets/fx/matthew_fox_shield/loop_frames.tres")
 const PopFrames := preload("res://assets/fx/matthew_fox_shield/pop_frames.tres")
+## Kullanıcı isteği (2026-09-24): kalkan ve kırılması pixel-art olarak yeniden tasarlandı (tools/gen_matthew_shield_fx.py) -
+## 1 sanat pikseli = TEXEL yerel birim (oyuncu kökü 0.5 ölçekli -> karakterin kendi piksel boyu). Kubbenin merkezi
+## karelerde tam ortada değil (kulaklar için üstte pay var) - LOOP/POP_OFFSET merkezi düğümün orijinine getirir.
+const TEXEL := 1.212
+const LOOP_OFFSET := Vector2(0.0, -6.0) ## loop karesi 120x128, kubbe merkezi (60, 70)
+const POP_OFFSET := Vector2(0.0, -4.0) ## pop karesi 180x180, kubbe merkezi (90, 94)
 
 var _sprite: AnimatedSprite2D = null
 var popping: bool = false
@@ -31,6 +37,8 @@ func _ready() -> void:
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_sprite.sprite_frames = LoopFrames
 	_sprite.centered = true
+	_sprite.scale = Vector2.ONE * TEXEL
+	_sprite.offset = LOOP_OFFSET
 	add_child(_sprite)
 	_sprite.play("loop")
 	## Steady-state döngü rastgele bir başlangıç fazından başlasın (birden fazla oyuncu aynı anda
@@ -43,5 +51,6 @@ func pop() -> void:
 		return
 	popping = true
 	_sprite.sprite_frames = PopFrames
+	_sprite.offset = POP_OFFSET
 	_sprite.animation_finished.connect(queue_free)
 	_sprite.play("pop")

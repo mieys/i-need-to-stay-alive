@@ -2,7 +2,7 @@ extends Control
 
 ## Menülerde bir karakteri piksel-tam çizen kontrol (kart portresi + vitrin sahnesi). Karakterin oyundaki SpriteFrames'inden
 ## (Characters.DEFS[id]["frames"]) "idle_down" klibini kullanır: durağanken ilk kare (= portre PNG'siyle aynı kare),
-## playing=true iken klibi kendi hızında döngüde oynatır (kart üstüne gelince / seçiliyken, vitrinde hep).
+## playing=true iken klibi kendi hızında döngüde oynatır (sadece vitrinde - kartlar ve lobi oyuncu listesi hep durağan).
 ## Ölçek her zaman TAM SAYI (48x48 sprite'lar için pixel_scale; 64x64 çerçeveli eski Oakley kiti orana göre yuvarlanır) -
 ## böylece her sanat pikseli eşit sayıda ekran pikseli olur (bkz. 2026-09-24 "düşük kalitede görünüyor" düzeltmesi).
 ## Yerleşim: karakterin dolu piksellerinin ALT kenarı ground_y'ye (yerel px), yatay merkezi center_x'e oturur - her
@@ -27,7 +27,14 @@ var _content_cx: float = 24.0
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	set_process(false)
+
+
+## DÜZELTME (2026-09-24, "karakterler animasyonsuz görünsün" isteğinde bulundu): işleme eskiden sadece _init'te
+## set_process(false) ile kapatılıyordu - ama Godot 4, _process'i tanımlı düğümlerde işlemeyi _ready'den ÖNCE otomatik
+## AÇAR, _init'teki çağrı ezilir. Sonuç: playing=false olan TÜM kart portreleri de sürekli oynuyordu. Artık hem _ready'de
+## gerçek duruma çekiliyor hem de _process playing'i kendisi kontrol ediyor.
+func _ready() -> void:
+	set_process(playing)
 
 
 func setup(def: Dictionary, scale_px: int, ground: float) -> void:
@@ -88,7 +95,7 @@ func effective_scale() -> int:
 
 
 func _process(delta: float) -> void:
-	if frames == null or not frames.has_animation(_anim):
+	if not playing or frames == null or not frames.has_animation(_anim):
 		return
 	var n: int = frames.get_frame_count(_anim)
 	if n <= 1:

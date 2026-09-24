@@ -188,6 +188,9 @@ func _process(delta: float) -> void:
 					continue
 				if enemy.get("is_dead") == true:
 					continue
+				## Görünmez hayalet (yaratık yeteneği, bkz. enemy.gd set_ability_invisible) minimapte de ele verilmesin.
+				if enemy.get("is_ability_invisible") == true:
+					continue
 				if VisionFogScript.fog_visibility_of(enemy) < VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY:
 					continue
 				var is_boss: bool = false

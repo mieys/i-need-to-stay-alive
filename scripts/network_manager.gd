@@ -2013,6 +2013,11 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 		"fear":
 			if target_enemy.has_method("apply_fear"):
 				target_enemy.apply_fear(Vector2(param2, param3), param1)
+		## Necromancer ULTİ (Lanetli Kafatası) - rastgele yürüyen korku: param1=süre, param2>0.5 => bosslar da korkar
+		## (bkz. enemy.gd apply_fear_wander).
+		"fear_wander":
+			if target_enemy.has_method("apply_fear_wander"):
+				target_enemy.apply_fear_wander(param1, param2 > 0.5)
 		## Şovalye'nin E yeteneği (Kışkırtma, bkz. enemy.gd apply_taunt) -
 		## param1=süre, param2=kışkırtan oyuncunun peer id'si (host o peer'in
 		## oyuncu node'unu kendi tarafında bulup yaratığın hedefi yapar).
@@ -2039,6 +2044,10 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## seferlik durum olayları reliable olmalı - bkz. enemy_spawner.gd
 ## _sync_enemy_positions (o hâlâ doğru şekilde unreliable, çünkü kaybolsa
 ## bile 0.15sn sonraki paket zaten üzerine yazacak).
+## vfx_type listesi: poison_start/stop, freeze_start/stop, stun_start/stop, burn_start/stop, slow_start/stop, bleed,
+## rage_start, chill_tint, damage_number, attack_state, hit_flash, death_state + yaratık yetenekleri (2026-09-24):
+## ghost_vanish, ghost_reveal, vampire_blink (extra_data: from/to), fear_start (extra_data: duration)/fear_stop (korku
+## göstergesi - Melek korkusu + Necromancer Lanetli Kafatası) - yeni bir dal eklersen buraya da yaz.
 @rpc("any_peer", "call_remote", "reliable")
 func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictionary = {}) -> void:
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
@@ -2074,6 +2083,12 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		"stun_stop":
 			if target_enemy.has_method("_remove_stun_status_fx"):
 				target_enemy._remove_stun_status_fx()
+		"fear_start":
+			if target_enemy.has_method("_spawn_fear_status_fx"):
+				target_enemy._spawn_fear_status_fx(float(extra_data.get("duration", 3.0)))
+		"fear_stop":
+			if target_enemy.has_method("_remove_fear_status_fx"):
+				target_enemy._remove_fear_status_fx()
 		## Shaman pasifi (Totem Auraları) yakma göstergesi - bkz. enemy.gd
 		## apply_burn/_process_burn. Görsel, hasar mekaniğinden TAMAMEN ayrı;
 		## sadece hedefin üzerindeki alev sprite'ını kurar/kaldırır.
@@ -2099,6 +2114,12 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		"rage_start":
 			if target_enemy.has_method("_enter_rage_mode"):
 				target_enemy._enter_rage_mode()
+		## Yaratık yetenekleri (2026-09-24, bkz. enemy_abilities.gd / enemy.gd on_ability_vfx): hayaletin görünmez
+		## olması/görünür olması, vampirin ışınlanması (extra_data: from, to) - yaratığın KENDİ durumu değiştiği için
+		## burada (dünyada duran etkiler ayrı RPC'de: broadcast_enemy_ability_fx).
+		"ghost_vanish", "ghost_reveal", "vampire_blink":
+			if target_enemy.has_method("on_ability_vfx"):
+				target_enemy.on_ability_vfx(vfx_type, extra_data)
 		"chill_tint":
 			if target_enemy.has_method("_refresh_chill_tint"):
 				target_enemy._refresh_chill_tint()
@@ -2271,6 +2292,11 @@ func broadcast_oakley_vine_state(player_id: int, instance_id: String, pos: Vecto
 		rp._update_vine_visual_state(instance_id, pos, target_pos, has_target)
 
 
+## Necromancer ULTİ'sinin diğer oyunculardaki kozmetik kafatasları (oyuncu peer id -> NecroSkull), bkz. "necro_skull" dalı.
+const NecroSkullScript := preload("res://scripts/necro_skull.gd")
+var _necro_skull_visuals: Dictionary = {}
+
+
 @rpc("any_peer", "call_remote", "unreliable")
 func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_data: Dictionary) -> void:
 	var rp: RemotePlayer = _find_remote_player(player_id)
@@ -2405,6 +2431,29 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			get_tree().current_scene.add_child(chain_fx)
 			if chain_fx.has_method("setup_positions"):
 				chain_fx.setup_positions(Vector2(extra_data.get("from_pos", pos)), pos)
+		## Necromancer ULTİ (Lanetli Kafatası, bkz. necro_skull.gd dosya başı): extra_data.phase = "start" (pos = doğuş),
+		## "leg" (pos = hedef, from/dur), "end". Her oyuncu için tek kozmetik kafatası (_necro_skull_visuals) - hasar/korku
+		## YOK, sadece yetkili kafatasının bacaklarını aynı sürede uçar ve bacak sonunda aynı çarpma efektini oynatır.
+		"necro_skull":
+			var phase: String = str(extra_data.get("phase", ""))
+			var skull: Node = _necro_skull_visuals.get(player_id)
+			if skull != null and not is_instance_valid(skull):
+				skull = null
+			if phase == "end":
+				if skull and skull.has_method("network_end"):
+					skull.network_end()
+				_necro_skull_visuals.erase(player_id)
+				return
+			if skull == null or phase == "start":
+				if skull and skull.has_method("network_end"):
+					skull.network_end()
+				var start_pos: Vector2 = pos if phase == "start" else Vector2(extra_data.get("from", pos))
+				skull = NecroSkullScript.new()
+				skull.setup_network(start_pos)
+				get_tree().current_scene.add_child(skull)
+				_necro_skull_visuals[player_id] = skull
+			if phase == "leg" and skull.has_method("network_leg"):
+				skull.network_leg(Vector2(extra_data.get("from", pos)), pos, float(extra_data.get("dur", 0.5)))
 		"arcane_skull_bounce":
 			## Büyücü Kız'ın Arcane Lanet varyasyonu - "chain_lightning" ile
 			## BİREBİR AYNI gerekçe (bkz. yukarısı): uzak oyuncularda gerçek
@@ -2615,6 +2664,31 @@ func share_gold(amount: int) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func spend_gold(amount: int) -> void:
 	GameManager.gold = max(0, GameManager.gold - amount)
+
+
+## Yaratık yetenekleri (2026-09-24, bkz. enemy_abilities.gd): host'taki yetkili lazer/diken/asit/ateş topu bir
+## RemotePlayer kuklasına değince (remote_player.gd take_special_damage) hasar TÜRÜYLE birlikte gerçek oyuncuya
+## iletilir - forward_damage_to_peer ile aynı mimari, türe özel kurallar (yanma, kalkana x2) player.gd
+## take_special_damage'da o oyuncunun kendi makinesinde uygulanır.
+@rpc("any_peer", "call_remote", "reliable")
+func forward_special_damage_to_peer(amount: float, enemy_net_id: int, kind: String) -> void:
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if not local_player or not is_instance_valid(local_player):
+		return
+	var enemy_node: Node2D = find_enemy_by_net_id(enemy_net_id) as Node2D
+	if local_player.has_method("take_special_damage"):
+		local_player.take_special_damage(amount, enemy_node, kind)
+	elif local_player.has_method("take_damage"):
+		local_player.take_damage(amount, enemy_node)
+
+
+## Yaratık yeteneklerinin DÜNYADA duran etkileri (kind: "laser"/"thorns"/"acid"/"fireball", bkz. enemy_abilities.gd
+## spawn_world_fx) - host yetkili (hasar veren) örneği kendisi doğurur, istemciler burada SADECE görsel kopyayı doğurur
+## (authoritative=false: hasar vermez). Tek seferlik/seyrek olay olduğu için reliable (bkz. broadcast_enemy_vfx notu).
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_enemy_ability_fx(kind: String, pos: Vector2, data: Dictionary) -> void:
+	var abilities_script: GDScript = load("res://scripts/enemy_abilities.gd")
+	abilities_script.spawn_world_fx(get_tree(), kind, pos, data, false)
 
 
 ## Host bir yaratığın bir RemotePlayer kuklasına (=gerçek bir uzak client)
@@ -3380,7 +3454,11 @@ func request_drop_pickup(drop_network_id: int, drop_type: String) -> void:
 			"xp":
 				## Ortak EXP: Host doğrudan GameManager'ın ortak havuzuna ekler ve herkese yayınlar
 				if "xp_value" in real_drop:
-					host_collect_xp(real_drop.xp_value)
+					## Tecrübe Kazanımı: toplayan oyuncunun bonusu (bkz. xp_orb.gd xp_gain_mult_for).
+					var xp_local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+					var xp_collector: Node = get_tree().get_first_node_in_group("player") if (sender_id == xp_local_id or sender_id == 0) else _find_remote_player(sender_id)
+					var xp_mult: float = real_drop.xp_gain_mult_for(xp_collector) if real_drop.has_method("xp_gain_mult_for") else 1.0
+					host_collect_xp(real_drop.xp_value * xp_mult)
 				real_drop.queue_free()
 			_:
 				# Gold: host tarafında normal toplama işle

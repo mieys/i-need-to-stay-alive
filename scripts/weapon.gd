@@ -908,6 +908,8 @@ func _on_ranged_projectile_landed() -> void:
 ## bkz. _fire_at, player.gd _apply_boomerang_tier). Diğer tüm silahlerde 1.0
 ## (no-op, merminin kendi speed'i hiç değişmez).
 var projectile_speed_mult: float = 1.0
+## bkz. _fire_at'teki single_active_projectile dalı (2026-09-24 denge turu).
+const BOOMERANG_BASE_SPEED_MULT := 0.8
 
 
 ## Boomerang geri döndüğünde (bkz. boomerang_projectile.gd) çağrılır - bir
@@ -1281,6 +1283,12 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 	## çalışıyordu ve eskiden TÜM "enemies" grubunu tarıyordu; artık Enemy.
 	## get_enemies_near ile (bkz. enemy.gd) sadece kılıcın o anki yakınındaki
 	## yaratıklar geliyor.
+	## BUG DÜZELTMESİ (2026-09-24 denge turu): dönen kılıç Elara ULTİ'sinden (Çift Tetik) hiç etkilenmiyordu. Diğer
+	## silahlarla AYNI kural: ulti açıkken her isabet 2 kez, her biri %60 hasarla (x1.2).
+	var orbit_hits: int = 1
+	if _player_flag("elara_double_fire_active"):
+		orbit_hits = 2
+		final_damage *= ELARA_DOUBLE_FIRE_DAMAGE_MULT
 	if is_inside_tree():
 		## Şaman pasifi: bu vuruş penceresi (bir fizik karesi) kapsamında
 		## yakma EN FAZLA 1 düşmanda tetiklenebilir - bkz. enemy.gd
@@ -1291,7 +1299,9 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 			if not _hit_cooldowns.has(id):
 				_hit_cooldowns[id] = 1.0
 				if e.has_method("take_damage"):
-					e.take_damage(final_damage, is_crit, shield_pen, true) ## donen kilic: cevresindeki herkese = alan
+					for _h in range(orbit_hits):
+						if is_instance_valid(e) and e.get("is_dead") != true:
+							e.take_damage(final_damage, is_crit, shield_pen, true) ## donen kilic: cevresindeki herkese = alan
 					_spawn_orbit_hit_fx(e.global_position)
 					if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
 						_shaman_burn_applied = e.try_shaman_weapon_burn()
@@ -1947,6 +1957,11 @@ func _process_continuous_beam(delta: float) -> void:
 		_end_beam()
 		return
 	var rate_ratio: float = _effective_fire_wait() / _base_fire_rate if _base_fire_rate > 0.0 else 1.0
+	## BUG DÜZELTMESİ (2026-09-24 denge turu): Elara ULTİ'si (Çift Tetik) ışın silahında "2 kez tetiklenme"yi hiç
+	## uygulamıyordu (FireTimer yolu ışında erken dönüyor) ama _deal_beam_tick her tiki yine x0.6 ile çarpıyordu -
+	## ulti açıkken Yıldırım Asası %40 ZAYIFLIYORDU. Artık ışın 2 kat sık tikler (x0.6 ile birlikte diğer silahlar gibi x1.2).
+	if _player_flag("elara_double_fire_active"):
+		rate_ratio *= 0.5
 	var effective_tick_interval: float = max(0.05, beam_tick_interval * rate_ratio)
 	if target != _beam_target:
 		_end_beam()
@@ -2279,9 +2294,11 @@ func _fire_at(target: Node2D) -> void:
 			if e == target:
 				continue
 			if e.has_method("take_damage"):
-				## Kullanıcı isteği: alan hasarı global %33 etkinlik (bkz.
-				## GameManager.AOE_DAMAGE_EFFECTIVENESS).
-				e.take_damage(final_damage * melee_aoe_damage_percent * GameManager.AOE_DAMAGE_EFFECTIVENESS, false, shield_pen, true)
+				## DÜZELTME (kullanıcı isteği 2026-09-24: "alan hasarı veren silahların efektifliğinin %33 olmasını
+				## istemiyorum") - eskiden burada ayrıca ×0.33 (GameManager.AOE_DAMAGE_EFFECTIVENESS) vardı; asıl istek
+				## sadece alan hasarında CAN EMMENİN %33 olmasıydı (LIFESTEAL_EFFECTIVENESS, dokunulmadı). Sıçrama artık
+				## silahın kendi melee_aoe_damage_percent payını (varsayılan %50) aynen verir.
+				e.take_damage(final_damage * melee_aoe_damage_percent, false, shield_pen, true)
 				_apply_knockback(e)
 				_apply_item_slow_on_hit(e)
 				## Hançer: kullanıcı isteği - kanama sadece isabet ettiği İLK
@@ -2416,6 +2433,14 @@ func _fire_at(target: Node2D) -> void:
 	if projectile_speed_mult != 1.0 and "speed" in proj:
 		proj.speed *= projectile_speed_mult
 	if single_active_projectile:
+		## Kullanıcı isteği (2026-09-24 denge turu: "boomerangın hızını azaltıp saldırı hızına bağlı olarak hızlı
+		## gidip dönmesini sağla") - bumerang havada tek mermiyle sınırlı olduğu için saldırı hızı kartları ona HİÇ
+		## yaramıyordu (uçuş süresi ~1.4sn'ye kilitliydi). Artık taban hız x0.8, üstüne saldırı hızı oranı (taban atış
+		## aralığı / şu anki etkin aralık - kartlar, eşyalar, Elara Gerçek Hasar vb. dahil) kadar hızlanır. Uzak
+		## oyunculara giden hız aşağıdaki proj_speed okumasıyla bu son değerden alınır.
+		if "speed" in proj:
+			var attack_speed_ratio: float = _base_fire_rate / maxf(0.01, _effective_fire_wait()) if _base_fire_rate > 0.0 else 1.0
+			proj.speed *= BOOMERANG_BASE_SPEED_MULT * maxf(1.0, attack_speed_ratio)
 		_projectiles_in_flight += 1
 		if "return_callback_target" in proj:
 			proj.return_callback_target = self

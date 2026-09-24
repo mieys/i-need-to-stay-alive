@@ -35,7 +35,7 @@ func test_shield_logic_untouched() -> void:
 	assert(not src.is_empty(), "totem_shield.gd okunabilmeli")
 	# Kalkan hesabı AYNEN duruyor mu? (SELF_PERCENT %0.5 + ATTACK_POWER_RATIO %10)
 	assert(src.contains("const SELF_PERCENT := 0.005"), "SELF_PERCENT değişmemeli")
-	assert(src.contains("const ATTACK_POWER_RATIO := 0.10"), "ATTACK_POWER_RATIO değişmemeli")
+	assert(src.contains("const ATTACK_POWER_RATIO := 0.12"), "ATTACK_POWER_RATIO (2026-09-24 denge turu: %12) değişmemeli")
 	assert(src.contains("caster.heal_shield(self_amount)"), "kendi kalkanı heal_shield üzerinden verilmeli")
 	assert(src.contains("caster._apply_shield_heal_to_ally(ally, ally_amount)"), "ally kalkanı _apply_shield_heal_to_ally üzerinden verilmeli")
 	assert(src.contains("super(delta)"), "TotemBase._process'e super edilmeli (tick döngüsü korunmalı)")

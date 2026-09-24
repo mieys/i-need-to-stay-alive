@@ -13,7 +13,9 @@ class_name TotemShield
 ## DÜZELTME (kullanıcı isteği: "saldırı gücü oranını %10'dan %20'ye
 ## yükselt") - eskiden 0.10 idi.
 const SELF_PERCENT := 0.005
-const ATTACK_POWER_RATIO := 0.20
+## Kullanıcı isteği (2026-09-24 denge turu): "Shaman'ın kalkanı %12 AP olsun" - 0.20 -> 0.12 (30sn boyunca tüm takıma
+## saniyede AP'nin %20'si kalkan, AP ile sınırsız büyüyen en güçlü takım savunmalarından biriydi).
+const ATTACK_POWER_RATIO := 0.12
 
 ## Kullanıcı isteği: "totemden diğer oyunculara doğru ses ince sihirli bir
 ## ses dalgasına benzer bir efektle kalkan göndersin menzilin içindeyken.

@@ -223,7 +223,7 @@ func _on_body_entered(body: Node) -> void:
 		# gerçek bir uzak oyuncu kuklası dokunmuş olabilir - ikisi de
 		# ortak takım XP'sine eklenir, kimin dokunduğu önemli değildir).
 		if NetworkManager.is_host:
-			NetworkManager.host_collect_xp(xp_value)
+			NetworkManager.host_collect_xp(xp_value * xp_gain_mult_for(body))
 			var drop_id: int = int(get_meta("drop_network_id", 0))
 			if drop_id > 0:
 				NetworkManager.queue_remove_drop(drop_id)
@@ -231,5 +231,15 @@ func _on_body_entered(body: Node) -> void:
 			return
 	else:
 		# Tek oyunculu mod: doğrudan ortak takıma ekle
-		GameManager.add_team_xp(xp_value)
+		GameManager.add_team_xp(xp_value * xp_gain_mult_for(body))
 		queue_free()
+
+
+## Tecrübe Kazanımı (kart/Hasat Çantası) - BUG DÜZELTMESİ (2026-09-24 denge turu): exp_gain_percent eskiden SADECE
+## ekranda gösteriliyordu, XP'ye hiç uygulanmıyordu. Artık orb'u TOPLAYAN oyuncunun bonusu uygulanır: yerel Player
+## ya da host'taki RemotePlayer kuklası (değer durum kanalından gelir, bkz. main.gd extra dict "exp_gain").
+## network_manager.gd request_drop_pickup'un istemci toplama yolu da AYNI fonksiyonu kullanır.
+static func xp_gain_mult_for(collector: Node) -> float:
+	if collector == null or not is_instance_valid(collector) or not ("exp_gain_percent" in collector):
+		return 1.0
+	return 1.0 + maxf(0.0, float(collector.get("exp_gain_percent")))

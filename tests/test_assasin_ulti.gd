@@ -80,14 +80,21 @@ func test_pressing_r_attacks_nearby_enemies_and_cleans_up_the_right_slot() -> vo
 	p._activate_skill3()
 	assert(p.skill3_state == "active", "R basılınca skill3 aktif olmalı")
 
-	## Zincirin bitmesini bekle (3 hedef x ~0.3 sn + dönüş; en fazla 8 sn)
+	## 2026-09-24 denge turu: Gölge Hücumu artık 10sn'lik bir pencere (SKILL3_TIMING[16]) - herkes vurulunca tur baştan
+	## başlar, yani 10sn boyunca yakındaki yaratıklara TEKRAR TEKRAR vurulur (~3 vuruş/sn). En fazla 13 sn bekle.
 	var waited: float = 0.0
-	while p.skill3_state == "active" and waited < 8.0:
+	while p.skill3_state == "active" and waited < 13.0:
 		await get_tree().physics_frame
 		waited += get_physics_process_delta_time()
+	## 10sn dolunca durum önce "cooldown"a geçer, cast noktasına dönüş (kısa tween) hemen ardından gelir.
+	for _i in range(20):
+		await get_tree().physics_frame
 
-	assert(e1.hits == 1 and e2.hits == 1 and e3.hits == 1,
-		"Yakındaki her yaratığa TAM 1 kez vurulmalı: %d/%d/%d (karakter siyaha dönüp saldırmıyordu)" % [e1.hits, e2.hits, e3.hits])
+	assert(e1.hits >= 2 and e2.hits >= 2 and e3.hits >= 2,
+		"10sn boyunca yakındaki yaratıklara tekrar tekrar vurulmalı: %d/%d/%d" % [e1.hits, e2.hits, e3.hits])
+	assert(absi(e1.hits - e3.hits) <= 1, "Vurulmamış yaratık önceliği: vuruşlar yaratıklar arasında dengeli dağılmalı")
+	assert(e1.damage_taken / float(e1.hits) >= p.damage_bonus * p.ASSASIN_DASH_DAMAGE_RATIO - 0.001,
+		"Vuruş başı hasar en az saldırı gücünün %%150'si olmalı (kritikle fazlası)")
 	assert(far.hits == 0, "Yarıçap dışındaki yaratığa vurulmamalı")
 	assert(p.skill3_state == "cooldown", "Zincir bitince R bekleme süresine geçmeli, durum: %s" % p.skill3_state)
 	assert(p.skill3_timer > 1.0, "R bekleme sayacı kurulmalı")
@@ -126,10 +133,11 @@ func test_hidden_enemies_are_not_targeted_but_visible_ones_are() -> void:
 	var hidden_enemy := _enemy(origin + Vector2(-100.0, 0.0), 0.0)
 	p._activate_skill3()
 	var waited: float = 0.0
-	while p.skill3_state == "active" and waited < 6.0:
+	while p.skill3_state == "active" and waited < 13.0:
 		await get_tree().physics_frame
 		waited += get_physics_process_delta_time()
-	assert(visible_enemy.hits == 1, "Görünen yaratığa vurulmalı")
+	## 2026-09-24: tek görünen yaratık varsa ona birden fazla kez saldırılır (kullanıcı isteği).
+	assert(visible_enemy.hits >= 2, "Tek görünen yaratığa birden fazla kez vurulmalı: %d" % visible_enemy.hits)
 	assert(hidden_enemy.hits == 0, "Görünmeyen yaratığa vurulmamalı")
 	get_tree().current_scene = previous_scene
 	_cleanup()

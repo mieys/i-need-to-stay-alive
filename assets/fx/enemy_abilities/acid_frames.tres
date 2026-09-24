@@ -1,0 +1,178 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/fx/enemy_abilities/acid_sheet.png" id="1"]
+
+[sub_resource type="AtlasTexture" id="AT_0"]
+atlas = ExtResource("1")
+region = Rect2(0, 0, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_1"]
+atlas = ExtResource("1")
+region = Rect2(80, 0, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_2"]
+atlas = ExtResource("1")
+region = Rect2(160, 0, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_3"]
+atlas = ExtResource("1")
+region = Rect2(240, 0, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_4"]
+atlas = ExtResource("1")
+region = Rect2(320, 0, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_5"]
+atlas = ExtResource("1")
+region = Rect2(400, 0, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_6"]
+atlas = ExtResource("1")
+region = Rect2(0, 44, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_7"]
+atlas = ExtResource("1")
+region = Rect2(80, 44, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_8"]
+atlas = ExtResource("1")
+region = Rect2(160, 44, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_9"]
+atlas = ExtResource("1")
+region = Rect2(240, 44, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_10"]
+atlas = ExtResource("1")
+region = Rect2(320, 44, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_11"]
+atlas = ExtResource("1")
+region = Rect2(400, 44, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_12"]
+atlas = ExtResource("1")
+region = Rect2(480, 44, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_13"]
+atlas = ExtResource("1")
+region = Rect2(560, 44, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_14"]
+atlas = ExtResource("1")
+region = Rect2(0, 88, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_15"]
+atlas = ExtResource("1")
+region = Rect2(80, 88, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_16"]
+atlas = ExtResource("1")
+region = Rect2(160, 88, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_17"]
+atlas = ExtResource("1")
+region = Rect2(240, 88, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_18"]
+atlas = ExtResource("1")
+region = Rect2(320, 88, 80, 44)
+
+[sub_resource type="AtlasTexture" id="AT_19"]
+atlas = ExtResource("1")
+region = Rect2(400, 88, 80, 44)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_5")
+}],
+"loop": false,
+"name": &"intro",
+"speed": 20.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_13")
+}],
+"loop": true,
+"name": &"loop",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_14")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_15")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_16")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_17")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_18")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_19")
+}],
+"loop": false,
+"name": &"outro",
+"speed": 16.0
+}]

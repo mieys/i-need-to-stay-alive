@@ -201,7 +201,7 @@ func _setup_stat_tooltips() -> void:
 		"crit_chance": "Kritik Oran/Hasar: Kritik vuruş yapma şansını ve kritik hasar çarpanını arttırır.",
 		"shield_pen_percent": "Kalkan Delme: Düşmanların kalkan soğurmasını yüzde olarak yok sayar.",
 		"exp_gain": "Tecrübe Kazanımı: Kazanılan tecrübe puanını (XP) arttırır.",
-		"luck": "Şans (puan): Her 1 puan altın/yemek/mıknatıs düşme ihtimalini %0.2, sandık düşme ihtimalini %0.04, kartlarda üst kademe çıkma ağırlığını %1.5 arttırır.",
+		"luck": "Şans (puan): Her 1 puan öldürdüğün yaratıkların yemek/mıknatıs/sandık düşürme ihtimalini %5 (20 puan = 2 kat), altın düşürme ihtimalini %1 arttırır; seviye kartlarında, sandık ödüllerinde ve satıcı eşyalarında üst kademe çıkma ağırlığını %1.5 arttırır.",
 		"range": "Menzil: Silahların vuruş ve menzil uzaklığını arttırır.",
 		"dodge": "Sıvışma: Saldırılardan kaçınma şansı verir (Maks %60, fazlası boşa gider).",
 		"knockback": "Geri Tepme: Silahların düşmanları geri itme gücünü arttırır.",

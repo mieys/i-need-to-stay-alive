@@ -3,7 +3,9 @@ extends Control
 ## Karakter seçim kartı (tek oyunculu character_select.gd + çok oyunculu lobby_menu.gd ORTAK - bkz. menu_character_roster.gd).
 ## Tek parça sabit boyutlu piksel doku (tools/gen_menu_kit.py card(): ahşap çerçeve + portre penceresi + çimen tümseği +
 ## parşömen isim plakası), üç durum: normal / hover / selected (altın çerçeve + dış parıltı). Karakter, oyundaki
-## SpriteFrames'inden 3x çizilir (menu_character_preview.gd); üstüne gelince / seçiliyken idle animasyonu oynar.
+## SpriteFrames'inden 3x çizilir (menu_character_preview.gd) - HER ZAMAN durağan (idle'ın ilk karesi). Kullanıcı isteği
+## (2026-09-24): "karakter seçim ekranlarında karakterlerin animasyonsuz görünmesini istiyorum sadece tıkladığım kişinin
+## sağda karakter göstergesinden animasyonlu idle oynasın" - animasyon yalnızca vitrinde (menu_character_showcase.gd).
 ## Kartın HER yeri tıklanır (kullanıcı bildirimi 2026-09-24: "karakterin kendisine tıklamam gerekiyor karta tıklama
 ## seçmemi sağlamıyor"); klavye/gamepad ile odaklanıp ui_accept ile de seçilir.
 
@@ -60,8 +62,7 @@ func _set_hover(value: bool) -> void:
 
 
 func _refresh() -> void:
-	if _preview:
-		_preview.playing = selected or _hover
+	## Kart portresi hiç oynamaz (bkz. dosya başı) - hover/seçim sadece çerçeve dokusunu değiştirir.
 	queue_redraw()
 
 

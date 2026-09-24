@@ -197,7 +197,9 @@ func setup(player: Node, chest_tier: int) -> void:
 	## tier_system.gd) çekilip doğrudan gösteriliyor. "SAT" butonu (bkz.
 	## _build_card) hâlâ duruyor - istemiyorsa altına çevirebilir.
 	var item_key: String = Items.KEYS[randi() % Items.KEYS.size()]
-	_reward_tier = TierSystem.roll()
+	## Kullanıcı isteği (2026-09-24 denge turu: şans "iyi sandık çıkma oranını da arttırmalı") - ödülün kademesi
+	## artık sandığı açan oyuncunun şansıyla çekilir (seviye kartlarıyla AYNI TierSystem ağırlığı).
+	_reward_tier = TierSystem.roll(float(player.luck) if (player != null and "luck" in player) else 0.0)
 	var candidate: Dictionary = {"type": "item", "key": item_key}
 
 	# Connect UI sounds

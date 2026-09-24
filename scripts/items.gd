@@ -77,11 +77,11 @@ const DEFS := {
 	},
 	"hasat_cantasi": {
 		"name": "Hasat Çantası",
-		"desc": "+%10 toplama menzili, +%5 tecrübe kazanımı.\nPasif: Her tecrübe toplarken %2 ihtimalle 1 can yenilersin.",
+		"desc": "+%10 toplama menzili, +%2.5 tecrübe kazanımı.\nPasif: Her tecrübe toplarken %2 ihtimalle 1 can yenilersin.",
 		"cost_base": 50,
 		"stats": {
 			"item_pickup_range_percent": 0.10,
-			"exp_gain_percent": 0.05,
+			"exp_gain_percent": 0.025, ## 2026-09-24 denge turu: stat artık gerçekten uygulanıyor, 0.05 -> 0.025
 			"item_xp_heal_chance": 0.02,
 		},
 	},

@@ -74,19 +74,9 @@ def main():
         140, 140,
         [("loop", (0, 0), 36, True, 36.0 / (2.0 * 3.14159265 / 6.0))],
     )
-    # --- Matthew kalkani: 60 kareli SH2_LOOP_PERIOD (2pi/1.5) donen dongu + 20 kareli 0.4sn tek seferlik pop ---
-    write_sprite_frames(
-        os.path.join(ROOT, "assets", "fx", "matthew_fox_shield", "loop_frames.tres"),
-        "res://assets/fx/matthew_fox_shield/loop_sheet.png",
-        130, 130,
-        [("loop", (0, 0), 60, True, 60.0 / (2.0 * 3.14159265 / 1.5))],
-    )
-    write_sprite_frames(
-        os.path.join(ROOT, "assets", "fx", "matthew_fox_shield", "pop_frames.tres"),
-        "res://assets/fx/matthew_fox_shield/pop_sheet.png",
-        198, 198,
-        [("pop", (0, 0), 20, False, 20.0 / 0.4)],
-    )
+    # --- Matthew kalkani: 2026-09-24'ten beri tools/gen_matthew_shield_fx.py kendi .tres'lerini yaziyor (burada yazilirsa
+    #     yeni sayfa boyutlariyla uyusmayan eski bolgeler olusurdu).
+
 
 
 if __name__ == "__main__":

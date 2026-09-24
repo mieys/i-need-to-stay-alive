@@ -73,7 +73,7 @@ const UPGRADES = [
 	{"id": "crit_damage", "title": "Kritik Hasar", "desc": "+%16.5", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "pickup_range", "title": "Toplama Mesafesi", "desc": "+%30", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "shield_pen_percent", "title": "Kalkan Delme", "desc": "+%5", "cat": "Saldırı", "color": CAT_ATTACK},
-	{"id": "exp_gain", "title": "Tecrübe Kazanımı", "desc": "+%7.5", "cat": "Yardımcı", "color": CAT_UTILITY},
+	{"id": "exp_gain", "title": "Tecrübe Kazanımı", "desc": "+%5", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "luck", "title": "Şans", "desc": "+1", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "range", "title": "Menzil", "desc": "+%12", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "dodge", "title": "Sıvışma", "desc": "+%2.5", "cat": "Savunma", "color": CAT_DEFENSE},
@@ -513,7 +513,23 @@ func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
 ## hakla sınırlıydı. Artık SINIRSIZ ama her kullanımda altın harcıyor -
 ## her takım seviye atlayışında kazanılan +1 altınla (bkz. game_manager.gd
 ## LEVEL_UP_GOLD_REWARD) biriktirilip kullanılabiliyor.
-const LEVEL_UP_REROLL_COST := 5
+## DÜZELTME (kullanıcı isteği 2026-09-24 denge turu: "oyunun ekonomisine bağlı olarak karıştırma fiyatı düşük
+## pahalılıkta başlayıp rolladıkça fiyatı yükselsin") - eskiden sabit 5 altın/sınırsız: altını olan Efsanevi kart
+## bulana kadar çevirebiliyordu. Artık:
+##   taban = LEVEL_UP_REROLL_BASE_COST x satıcı fiyat ölçeği (seyyar satıcıyla AYNI Kademe/zaman eğrisi, bkz.
+##           merchant_shop_screen.gd MERCHANT_PRICE_* - Kademe 1'de 3, Kademe 5'te ~9, Kademe 15'te ~23 altın)
+##   fiyat = taban x (1 + bu ekranda yapılan reroll sayısı) -> 3, 6, 9, 12 ...
+## Her seviye atlayışında ekran yeniden oluşturulduğu için sayaç kendiliğinden sıfırlanır.
+const LEVEL_UP_REROLL_BASE_COST := 3.0
+const MerchantShopScript := preload("res://scripts/merchant_shop_screen.gd")
+var _rerolls_this_screen: int = 0
+
+
+func _reroll_cost() -> int:
+	var tier: int = clampi(1 + int(GameManager.game_time / MerchantShopScript.MERCHANT_PRICE_TIER_DURATION), 1, 15)
+	var price_scale: float = (MerchantShopScript.MERCHANT_PRICE_EARLY_SCALE + float(tier - 1) * MerchantShopScript.MERCHANT_PRICE_PER_TIER_GROWTH) / MerchantShopScript.MERCHANT_PRICE_EARLY_SCALE
+	var base: int = maxi(1, int(round(LEVEL_UP_REROLL_BASE_COST * price_scale)))
+	return base * (1 + _rerolls_this_screen)
 
 ## Kullanıcı isteği (2026-09-24): oyun içi TÜM arayüzler menülerle aynı bej/ahşap kite geçti - karıştır butonu da artık
 ## kitin ten (tan) butonu (eski assets/ui/reroll_button.png görseli yerine; eskiden %40 küçültülmüş 29 px'lik yüksekliği
@@ -582,14 +598,17 @@ func _apply_kit_style() -> void:
 
 
 func _refresh_reroll_button() -> void:
-	reroll_button.text = "Yeniden Karıştır (%d altın)" % LEVEL_UP_REROLL_COST
-	reroll_button.disabled = GameManager.gold < LEVEL_UP_REROLL_COST
+	var cost: int = _reroll_cost()
+	reroll_button.text = "Yeniden Karıştır (%d altın)" % cost
+	reroll_button.disabled = GameManager.gold < cost
 
 
 func _on_reroll_pressed() -> void:
-	if GameManager.gold < LEVEL_UP_REROLL_COST:
+	var cost: int = _reroll_cost()
+	if GameManager.gold < cost:
 		return
-	GameManager.gold -= LEVEL_UP_REROLL_COST
+	GameManager.gold -= cost
+	_rerolls_this_screen += 1
 	_populate_cards()
 	_refresh_reroll_button()
 	_animate_cards_in()

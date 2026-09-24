@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_enemy_burn_status.gd" id="1"]
+
+[node name="FxEnemyBurnStatus" type="Node2D"]
+script = ExtResource("1")

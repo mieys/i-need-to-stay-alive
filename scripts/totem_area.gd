@@ -21,55 +21,51 @@ const MAX_SLOW_PERCENT := 0.80
 const DAMAGE_ATTACK_POWER_RATIO := 0.20
 const SLOW_REFRESH_DURATION := 1.5 ## TICK_INTERVAL'den (1.0sn) biraz uzun - alanda duran düşmanda hiç boşluk kalmaz
 
-## Yeteneğe özgü efekt (KOZMETİK - yavaşlatma/hasar hesaplarıyla ilgisi yok):
-## alanın içinde dönen boşluk girdabı (_draw) + alandaki düşmanların her tik
-## hasarında üstlerine kısa birer boşluk perisi (_spawn_void_wisp).
-const WISP_PARTICLES := 5
+## Yeteneğe özgü efektler (KOZMETİK - yavaşlatma/hasar hesaplarıyla ilgisi yok). Kullanıcı isteği (2026-09-24): "Alan hasarı veren
+## mor totemin de daha minimalist bir alana sahip olmasını istiyorum ... pixel tarzda ... sprite'a dönüştür performans kaybı olmasın".
+## Eski: shaders/totem_void_aura.gdshader (her karede ~376x376 ekran karesi için dither girdap + 16 rün + çift halka), her tikte
+## prosedürel _draw nabız halkası (TotemShieldWave.spawn_pulse) ve düşmanlarda prosedürel PixelDraw "void" patlaması.
+## Yeni: üçü de tools/gen_shaman_area_fx.py'nin pişirdiği spritesheet'ler, her biri TEK AnimatedSprite2D (bkz. fx_enemy_ability.gd):
+##  - AURA: keskin 1 texel mor çember + çok soluk düz dolgu + çemberde sırayla parlayan 6 küçük ay rünü (döngü, 12 kare / 6 fps)
+##  - NABIZ: her tikte totem dibinden yayılan ince halka (tek seferlik)
+##  - RUH: alan hasarı yiyen düşmanın üstünde kıvrılarak yükselen küçük mor ruh (tek seferlik)
+## Hepsi hem gerçek totemde hem ağ görsel kopyasında kurulur (salt görsel) - diğer oyuncular da aynı alanı görür.
+const AURA_FRAMES := preload("res://assets/fx/shaman_area/aura_frames.tres")
+const PULSE_FRAMES := preload("res://assets/fx/shaman_area/pulse_frames.tres")
+const WISP_FRAMES := preload("res://assets/fx/shaman_area/wisp_frames.tres")
+const FxSprite := preload("res://scripts/fx_enemy_ability.gd")
+const WISP_OFFSET := Vector2(0, -10)
+var _aura: AnimatedSprite2D = null
 
 
 func _init() -> void:
 	totem_kind = "area"
 	totem_color = Color(0.65, 0.35, 0.85)
 	totem_radius = 180.0
-	## Yavaşlatma bölgesinin İÇİ hafif mor pixel "toz" noktalarıyla dolsun (TotemBase._draw - aura_fill_alpha > 0 ise).
 	aura_fill_alpha = 0.0
-	use_custom_aura = true ## menzil halkası/dolgu/spiral artık TotemBase'te değil, aşağıdaki shader aurada (bkz. _build_void_aura)
-
-
-## Kullanıcı isteği (2026-09-22): "mor totemin etrafında açtığı aura çok kötü, pixel tarzda yeniden tasarla" - eski aura seyrek noktalı soluk halka +
-## dağınık spiral noktalarıydı. Yeni: shaders/totem_void_aura.gdshader (texel ızgarasına oturan büyü çemberi + dönen rünler + dither boşluk
-## girdabı + yükselen kıvılcımlar). Gerçek totemde de, ağ kopyasında da AYNI kurulur (salt görsel).
-const AURA_SHADER := preload("res://shaders/totem_void_aura.gdshader")
-var _aura: ColorRect = null
+	use_custom_aura = true ## menzil halkası/dolgu artık TotemBase._draw'da değil, aşağıdaki sprite aurada (bkz. _build_area_aura)
 
 
 func _ready() -> void:
 	super()
-	_build_void_aura()
+	_build_area_aura()
 
 
-func _build_void_aura() -> void:
-	var size_px: float = totem_radius * 2.0 + 20.0
-	_aura = ColorRect.new()
-	_aura.name = "VoidAura"
-	_aura.color = Color(1, 1, 1, 1)
-	_aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_aura.size = Vector2(size_px, size_px)
-	_aura.position = -_aura.size * 0.5
-	var mat := ShaderMaterial.new()
-	mat.shader = AURA_SHADER
-	mat.set_shader_parameter("radius_px", totem_radius)
-	mat.set_shader_parameter("texel", PixelDraw.TEXEL)
-	mat.set_shader_parameter("quad_size", Vector2(size_px, size_px))
-	_aura.material = mat
+func _build_area_aura() -> void:
+	_aura = AnimatedSprite2D.new()
+	_aura.name = "AreaAura"
+	_aura.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_aura.sprite_frames = AURA_FRAMES
+	_aura.scale = Vector2.ONE * PixelDraw.TEXEL ## 148 sanat px yarıçap * 1.212 = ~180 birim (totem_radius)
 	add_child(_aura)
 	move_child(_aura, 0) ## totem gövdesinin (TotemSprite) ARKASINDA çizilsin
+	_aura.play(&"loop")
 	_aura.modulate.a = 0.0
 	create_tween().tween_property(_aura, "modulate:a", 1.0, 0.8)
 
 
-## Her tik'te (TICK_INTERVAL) girdap nabzı: totemin etrafında yayılan mor pixel halka + alçak "vızıltı". Gerçek totemde de, ağ
-## kopyasında da çalışır (salt görsel/ses - oyun durumu paylaşmaz), yani herkes alanın "çalıştığını" görür ve duyar.
+## Her tik'te (TICK_INTERVAL) totemin dibinden ince nabız halkası + alçak "vızıltı". Gerçek totemde de, ağ kopyasında da çalışır
+## (salt görsel/ses - oyun durumu paylaşmaz), yani herkes alanın "çalıştığını" görür ve duyar.
 var _pulse_timer: float = 0.0
 
 func _process(delta: float) -> void:
@@ -81,20 +77,24 @@ func _process(delta: float) -> void:
 	var scene: Node = get_tree().current_scene
 	if scene == null or not is_instance_valid(scene):
 		return
-	TotemShieldWave.spawn_pulse(scene, global_position, totem_color)
+	var pulse: Node2D = FxSprite.spawn(self, global_position, PULSE_FRAMES, &"play", 0)
+	if pulse:
+		move_child(pulse, 1) ## auranın üstünde, totem gövdesinin altında (zemindeki halka)
 	ShamanSfx.play_at(scene, ShamanSfx.AREA_PULSE, global_position, -18.0, 0.05)
+	## Ağ görsel kopyası hasar tikini çalıştırmaz (_tick sadece dikenin client'ında) - diğer oyuncular da "alan hasar veriyor"
+	## sinyalini görsün diye kopya, alandaki düşmanların üstünde AYNI ruh efektini kendi nabzında oynatır (salt görsel).
+	if _is_network_visual:
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if e is Node2D and is_instance_valid(e) and e.get("is_dead") != true 					and global_position.distance_to((e as Node2D).global_position) <= totem_radius:
+				_spawn_void_wisp((e as Node2D).global_position)
 
 
-const TotemShieldWave := preload("res://scripts/totem_shield_wave.gd")
-
-
-## Hasar tikinde düşmanın üstünde kısa süreli boşluk perisi - "bu düşman şu
-## an alan hasarı yiyor" sinyali. Salt kozmetik, hasar hesabı _tick'te bitti.
+## Hasar tikinde düşmanın üstünde kısa süreli mor ruh - "bu düşman şu an alan hasarı yiyor" sinyali. Salt kozmetik.
 func _spawn_void_wisp(enemy_pos: Vector2) -> void:
 	var scene: Node = get_tree().current_scene
 	if scene == null or not is_instance_valid(scene):
 		return
-	PixelDraw.spawn_burst(scene, enemy_pos + Vector2(0, -10), "void", WISP_PARTICLES + 3, 70.0, 0.45)
+	FxSprite.spawn(scene, enemy_pos + WISP_OFFSET, WISP_FRAMES, &"play", 2)
 
 
 func _tick() -> void:

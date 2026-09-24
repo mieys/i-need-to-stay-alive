@@ -2,14 +2,19 @@ extends CharacterBody2D
 class_name MissionPlayerCopy
 
 ## "Kopyanı Öldür" (Kill your copy) - kullanıcı isteği: aynı silah/statlar ama %90 daha az
-## hasar alır/verir, %20 daha yavaş, yetenek kullanamaz, "negatif zıt tonlar" (kullanıcı cevabı:
-## "renk tersine çevirme olsun" - basit bir RGB invert shader, aşağıdaki INVERT_SHADER_CODE).
+## hasar alır/verir, %20 daha yavaş, yetenek kullanamaz. Görünüm: GÜNCELLEME (kullanıcı isteği 2026-09-24:
+## "negatif yerine benden bir şekilde farklı görünmesini sağlayacak bir ton değişikliği yap üzerinde genel") - eski
+## RGB invert shader yerine COPY_TINT_SHADER_CODE: mor "gölge klonu" tonu (bkz. orada).
 ## 5 dakika sürer, öldürülmezse yok olur (ödülsüz).
 ##
 ## GERÇEK SİLAH ATEŞLEMEZ (bilinen basitleştirme, bkz. world_event_manager.gd dosya başı notu):
 ## weapon.gd tamamen Player'a bağlı (attack_power/skills/vs. okuyor), bir NPC'ye güvenle
 ## takmak ciddi bir ek risk/efor - onun yerine temas hasarı (basit kovalama + değme) kullanıldı.
-## "Aynı silaha sahip" sözü GÖRSEL olarak da karşılanmıyor (ikon eklenmedi) - zaman kısıtı.
+## GÜNCELLEME (kullanıcı bildirimi 2026-09-24: "kopyanın silahları görünmüyor ... tıpkı benim gibi silahları olmalı
+## fakat yetenek kullanamamalı"): kopya artık kaynak oyuncunun silahlarını (remote_player.gd'deki kozmetik ikonlarla
+## AYNI doku/ölçek/yerleşim kuralı) üstünde taşır, hedefe nişan alır; menzilli saldırıları sırayla bu silahların
+## namlusundan çıkar (geri tepmeyle), yakın dövüş silahları temasta savrulur. Hasar dengesi eskisiyle aynı (bkz.
+## _fire_next_weapon). Silah listesi world_event_manager.gd _spawn_copies'te kaynaktan okunur, istemcilere meta ile gider.
 ##
 ## HASAR ALMA UYUMLULUĞU: enemy.gd'deki GERÇEK yaratıklarla AYNI çağrı imzası
 ## (take_damage(amount, is_crit, shield_pen_percent, is_area)) - weapon.gd zaten TÜM hedeflerini
@@ -39,7 +44,27 @@ const RANGED_RANGE := 320.0
 const RANGED_INTERVAL := 1.4
 const ProjectileScene := preload("res://scenes/projectile.tscn")
 
-const INVERT_SHADER_CODE := "shader_type canvas_item;\nvoid fragment() {\n\tvec4 tex = texture(TEXTURE, UV);\n\tCOLOR = vec4(vec3(1.0) - tex.rgb, tex.a);\n}\n"
+## Mor gölge klonu tonu: rengin %72'si parlaklığa göre mor bir rampaya kayar (koyular derin mor, açıklar soluk
+## lavanta) - karakter ve silahları tanınır kalır ama oyuncudan net ayrışır (eskiden koyu karakterlerde sadece
+## "biraz daha koyu" görünüyordu).
+const COPY_TINT_SHADER_CODE := """shader_type canvas_item;
+void fragment() {
+	// Godot 4: COLOR burada ZATEN doku x modulate - dokuyu ikinci kez çarpmak rengi mora değil siyaha çekiyordu.
+	vec4 c = COLOR;
+	float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+	vec3 shadow_ramp = mix(vec3(0.30, 0.12, 0.52), vec3(0.92, 0.80, 1.0), lum);
+	COLOR = vec4(mix(c.rgb, shadow_ramp, 0.72), c.a);
+}
+"""
+## Oyuncu kökü 0.5 ölçekli (main.tscn) - kopyanın görseli (gövde + silahlar) aynı ölçekte bir düğümde, böylece
+## player.gd'nin karakter ölçeği/ofseti ve remote_player.gd'nin silah yuvası konumları birebir geçerli.
+const VISUAL_ROOT_SCALE := 0.5
+const RemotePlayerScript := preload("res://scripts/remote_player.gd")
+const WAND_SCALE_MULT := 0.3 ## remote_player.gd REMOTE_WAND_SCALE_MULT ile aynı
+const MELEE_KEYS := ["dagger", "pence", "topuz", "uzunkilic"]
+const AIM_EASE_RATE := 10.0
+const RECOIL_DISTANCE := 10.0
+const HOVER_BOB := 3.0
 
 var mission_id: int = 0
 var copy_index: int = 0
@@ -71,6 +96,13 @@ var anim: AnimatedSprite2D = null
 ## kalkan STAT'ı yok (health/max_health dışında hiç eklenmedi) - set_shield(0,0) ile çubuğun
 ## kalkan bölümü boş/gizli kalır, bu YENİ bir mekanik icat etmez, sadece can çubuğunu gösterir.
 var _overhead_bar: Node2D = null
+var _visual_root: Node2D = null
+var _tint_material: ShaderMaterial = null
+## Silah ikonları: her giriş {"icon": Node2D, "key": String, "melee": bool, "forward": float (rad), "mirror": bool,
+## "slot": Vector2, "recoil": float}
+var _weapons: Array = []
+var _next_weapon: int = 0
+var _hover_t: float = 0.0
 
 
 ## DÜZELTME: bu Node .tscn'siz, tamamen kod içinde kuruluyor (bkz. dosya başı not) - @onready
@@ -85,8 +117,16 @@ func _ready() -> void:
 	body_circle.radius = 16.0
 	body_shape.shape = body_circle
 	add_child(body_shape)
+	_visual_root = Node2D.new()
+	_visual_root.scale = Vector2.ONE * VISUAL_ROOT_SCALE
+	add_child(_visual_root)
+	_tint_material = ShaderMaterial.new()
+	var shader := Shader.new()
+	shader.code = COPY_TINT_SHADER_CODE
+	_tint_material.shader = shader
 	anim = AnimatedSprite2D.new()
-	add_child(anim)
+	anim.material = _tint_material
+	_visual_root.add_child(anim)
 	_overhead_bar = Node2D.new()
 	_overhead_bar.set_script(preload("res://scripts/overhead_bar.gd"))
 	add_child(_overhead_bar)
@@ -115,11 +155,113 @@ func setup(mid: int, idx: int, char_id: int, p_max_health: float, p_speed: float
 		anim.sprite_frames = load(path)
 		if anim.sprite_frames.has_animation("idle_down"):
 			anim.play("idle_down")
-	var shader := Shader.new()
-	shader.code = INVERT_SHADER_CODE
-	var mat := ShaderMaterial.new()
-	mat.shader = shader
-	anim.material = mat
+	## Oyuncuyla AYNI boy (bkz. player.gd _load_character_frames: DEFS "scale"/"offset" + EntityScale; varsayılanlar player.gd DEFAULT_ANIM_SCALE/OFFSET).
+	anim.scale = def.get("scale", Vector2(1.27575, 1.27575)) * EntityScale.SIZE
+	anim.offset = def.get("offset", Vector2(0, -5))
+	anim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
+
+## Kaynak oyuncunun silahları (shop anahtarları, ör. ["dagger", "yay"]) - host'ta world_event_manager.gd, istemcide
+## main.gd (meta "weapons") çağırır. Kozmetik ikon + atış çıkış noktası; weapon.gd'nin kendisi TAKILMAZ (Player'a bağlı).
+func set_weapon_keys(keys: Array) -> void:
+	for w in _weapons:
+		if is_instance_valid(w["icon"]):
+			w["icon"].queue_free()
+	_weapons.clear()
+	_next_weapon = 0
+	var slots: Array[Vector2] = RemotePlayerScript.WEAPON_ICON_SLOTS
+	for i in range(mini(keys.size(), slots.size())):
+		var key: String = str(keys[i])
+		var scene: PackedScene = RemotePlayerScript.WEAPON_SCENES.get(key)
+		if scene == null:
+			continue
+		## Sahne AĞACA EKLENMEDEN örneklenir (weapon.gd _ready/zamanlayıcıları hiç çalışmaz), sadece Icon alınır.
+		var root: Node = scene.instantiate()
+		var icon: Node2D = root.get_node_or_null("Icon") as Node2D
+		if icon == null:
+			root.free()
+			continue
+		root.remove_child(icon)
+		var forward: float = deg_to_rad(float(root.get("sprite_forward_angle_deg"))) if "sprite_forward_angle_deg" in root else 0.0
+		var mirror: bool = bool(root.get("mirror_icon_when_aiming_left")) if "mirror_icon_when_aiming_left" in root else false
+		root.free()
+		## remote_player.gd update_weapon_visuals ile AYNI doku/ölçek kuralı (asalar v3 ikon + x0.3, diğerleri x0.9).
+		var wand_tex: String = ""
+		if key.containsn("arcane"):
+			wand_tex = "res://assets/weapons/arcane/icon_v3.png"
+		elif key.containsn("fire"):
+			wand_tex = "res://assets/weapons/fire/firestaff_icon_v3.png"
+		elif key.containsn("lightning"):
+			wand_tex = "res://assets/weapons/lightning/icon_v3.png"
+		elif key.containsn("buz"):
+			wand_tex = "res://assets/weapons/buz_asasi/icon_v3.png"
+		if wand_tex != "":
+			if icon is Sprite2D:
+				(icon as Sprite2D).texture = load(wand_tex)
+			icon.scale = Vector2(0.99, 0.99) * WAND_SCALE_MULT
+		else:
+			icon.scale *= 0.9
+		icon.position = slots[i]
+		icon.material = _tint_material
+		_visual_root.add_child(icon)
+		_weapons.append({"icon": icon, "key": key, "melee": key in MELEE_KEYS, "forward": forward, "mirror": mirror,
+			"slot": slots[i], "recoil": 0.0})
+
+
+## Her karede (host ve istemci): silahlar hedefe nişan alır, hafifçe süzülür, geri tepme söner.
+func _update_weapon_icons(delta: float) -> void:
+	if _weapons.is_empty():
+		return
+	_hover_t += delta
+	var target: Node2D = _target if (_target and is_instance_valid(_target)) else _find_nearest_player()
+	for i in range(_weapons.size()):
+		var w: Dictionary = _weapons[i]
+		var icon: Node2D = w["icon"]
+		if not is_instance_valid(icon):
+			continue
+		w["recoil"] = move_toward(float(w["recoil"]), 0.0, delta * 60.0)
+		var dir: Vector2 = Vector2.DOWN
+		if target:
+			var to_t: Vector2 = target.global_position - (global_position + (w["slot"] as Vector2) * VISUAL_ROOT_SCALE)
+			if to_t.length() > 1.0:
+				dir = to_t.normalized()
+		var bob: float = sin(_hover_t * 2.4 + float(i) * 1.3) * HOVER_BOB
+		icon.position = (w["slot"] as Vector2) + Vector2(0.0, bob) - dir * float(w["recoil"])
+		if w["melee"]:
+			continue ## yakın dövüş silahı dinlenme açısında kalır, temasta savrulur (_swing_melee)
+		var flip: bool = bool(w["mirror"]) and dir.x < 0.0
+		var target_rot: float = (dir.angle() - PI + float(w["forward"])) if flip else (dir.angle() - float(w["forward"]))
+		if icon is Sprite2D:
+			(icon as Sprite2D).flip_h = flip
+		icon.rotation = lerp_angle(icon.rotation, target_rot, clampf(delta * AIM_EASE_RATE, 0.0, 1.0))
+
+
+## Menzilli saldırı: sıradaki MENZİLLİ silahın konumundan bolt (hasar/aralık eskisiyle aynı - toplam DPS değişmedi).
+## Silahı yoksa (ör. yaratıkla doğmuş eski kayıt) eskisi gibi gövdeden atar; sadece yakın dövüş silahı varsa atmaz.
+func _fire_next_weapon(target: Node2D) -> void:
+	var ranged: Array = _weapons.filter(func(w: Dictionary) -> bool: return not w["melee"] and is_instance_valid(w["icon"]))
+	if _weapons.is_empty():
+		_fire_at(target, global_position)
+		return
+	if ranged.is_empty():
+		return
+	var w: Dictionary = ranged[_next_weapon % ranged.size()]
+	_next_weapon += 1
+	w["recoil"] = RECOIL_DISTANCE
+	_fire_at(target, (w["icon"] as Node2D).global_position)
+
+
+## Temas vuruşunda yakın dövüş silahları hedefe doğru kısa bir savuruş yapar (kozmetik).
+func _swing_melee(target: Node2D) -> void:
+	for w in _weapons:
+		if not w["melee"] or not is_instance_valid(w["icon"]):
+			continue
+		var icon: Node2D = w["icon"]
+		var dir: Vector2 = (target.global_position - global_position).normalized() if target else Vector2.RIGHT
+		var tw := create_tween()
+		tw.tween_property(icon, "rotation", dir.angle() + 1.2, 0.08)
+		tw.tween_property(icon, "rotation", dir.angle() - 0.9, 0.1)
+		tw.tween_property(icon, "rotation", 0.0, 0.18)
 
 
 func _physics_process(delta: float) -> void:
@@ -131,6 +273,7 @@ func _physics_process(delta: float) -> void:
 			var before: Vector2 = global_position
 			global_position = global_position.lerp(_net_pos, 1.0 - exp(-NET_SMOOTHING * delta))
 			_update_move_anim((global_position - before) / maxf(delta, 0.0001))
+		_update_weapon_icons(delta)
 		return
 	_lifetime_left -= delta
 	if _lifetime_left <= 0.0:
@@ -142,8 +285,12 @@ func _physics_process(delta: float) -> void:
 		_target = _find_nearest_player()
 	## Kullanıcı isteği (2026-09-24): "hareket hızı kopyaladığı kişinin hızından %20 daha az olmalı" - setup'taki TEK
 	## seferlik değer yerine kopyalanan oyuncunun O ANKİ gerçek hızı (hız kartı/eşya/yetenek buff'ları dahil).
-	if source_player and is_instance_valid(source_player) and source_player.has_method("get_effective_move_speed"):
-		move_speed = float(source_player.call("get_effective_move_speed")) * SPEED_MULT
+	## DÜZELTME (kullanıcı bildirimi 2026-09-24: "ben yetenek kullanınca onda da aktif oluyor ... yetenek kullanamamalı"):
+	## eskiden get_effective_move_speed() okunuyordu - o, oyuncunun yetenek/ruhani/geçici hız buff'larını da içerdiği
+	## için (Elara Q, Matthew E, Taktiksel...) oyuncu yetenek kullanınca kopya da aynı anda hızlanıyordu. Artık SADECE
+	## kalıcı hız (taban + kart + eşya) kopyalanır (bkz. player.gd/remote_player.gd get_base_move_speed).
+	if source_player and is_instance_valid(source_player) and source_player.has_method("get_base_move_speed"):
+		move_speed = float(source_player.call("get_base_move_speed")) * SPEED_MULT
 	if _target:
 		var to_target: Vector2 = _target.global_position - global_position
 		var dist: float = to_target.length()
@@ -153,12 +300,14 @@ func _physics_process(delta: float) -> void:
 		if dist <= CONTACT_RANGE and _contact_timer <= 0.0 and _target.has_method("take_damage"):
 			_contact_timer = CONTACT_INTERVAL
 			_target.take_damage(contact_damage, self)
+			_swing_melee(_target)
 		elif dist <= RANGED_RANGE and _ranged_timer <= 0.0:
 			_ranged_timer = RANGED_INTERVAL
-			_fire_at(_target)
+			_fire_next_weapon(_target)
 	else:
 		velocity = Vector2.ZERO
 		_update_move_anim(Vector2.ZERO)
+	_update_weapon_icons(delta)
 	_sync_timer -= delta
 	if _sync_timer <= 0.0:
 		_sync_timer = SYNC_INTERVAL
@@ -185,12 +334,12 @@ func _update_move_anim(move: Vector2) -> void:
 		anim.play(clip)
 
 
-func _fire_at(target: Node2D) -> void:
-	spawn_bolt(global_position, target.global_position, contact_damage, self, false)
+func _fire_at(target: Node2D, from_pos: Vector2) -> void:
+	spawn_bolt(from_pos, target.global_position, contact_damage, self, false)
 	## Mermi SADECE host'ta gerçek (hasar veren) - diğer istemciler aynı atışın hasarsız
 	## kozmetik kopyasını görsün (bkz. CLAUDE.md "kaster görür, diğerleri görmez" sınıfı).
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_world_event_copy_bolt.rpc(global_position, target.global_position)
+		NetworkManager.broadcast_world_event_copy_bolt.rpc(from_pos, target.global_position)
 
 
 static func spawn_bolt(from_pos: Vector2, to_pos: Vector2, damage: float, source: Node2D, cosmetic: bool) -> void:

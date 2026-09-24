@@ -161,17 +161,10 @@ const SKILL2_TIMING := {
 	## SKILL_TIMING[26] üstündeki AYNI not (eksik kayıt + artık "duration"
 	## kullanılmıyor + 45sn bekleme).
 	27: {"duration": 0.0, "cooldown": 45.0},
-	## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü
-	## çağırma ile değiştir") - Yarasa Sürüsü (skill2 id 35): eskiden
-	## SKILL3_TIMING[35]'teydi (R iken), "basılıp kapatılabilir" bir TOGGLE,
-	## standart skill2_state makinesini KULLANMIYOR (bkz. player.gd
-	## _necro_toggle_bats/_process_necro_bats - girdi bloğunda id
-	## kontrolüyle bypass edilir, Korsan bombasıyla AYNI mimari desen).
-	## Burada SADECE _skill2_timing_for()'un varsayılana düşmemesi için var -
-	## gerçek "süre" yok (kalkan bitene ya da tekrar basılana kadar sürer),
-	## "cooldown" da 0 (bekleme süresi yok, sadece kalkan yeterliliği
-	## kısıtlar).
-	35: {"duration": 9999.0, "cooldown": 0.0},
+	## Necromancer E = Golem Çağır (id 20) - kullanıcı isteği (2026-09-24): "iskelet Q golem E kafatası da R olmalı
+	## yarasayı ... yok et". Eskiden SKILL3_TIMING[20]'deydi (R iken); Yarasa Sürüsü (id 35) tamamen silindi.
+	## 100 Ruh + 10sn bekleme, standart skill2_state makinesi (ön kontroller _activate_skill2 başında).
+	20: {"duration": 0.4, "cooldown": 10.0},
 	## Vampir Çocuk TEMEL (Yarasa Formu, skill2 id 41): 5sn dönüşüm, ardından 22sn bekleme -
 	## standart skill2_state makinesini kullanır (bkz. _skill_vampir_bat_form/_end_skill2_effects).
 	41: {"duration": 5.0, "cooldown": 22.0},
@@ -196,14 +189,17 @@ const SKILL3_TIMING := {
 	## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
 	## değiştir") - eskiden Kalkan Sıçraması buradaydı (bkz. SKILL_TIMING[12]
 	## şimdi orada), id 31 artık Çift Tetik'in (bkz. player.gd
-	## _skill_elara_double_fire) yeni evi - "duration" 25sn'lik gerçek buff
-	## süresiyle birebir eşleşiyor, 120sn bekleme.
-	31: {"duration": 25.0, "cooldown": 120.0},
+	## _skill_elara_double_fire) yeni evi - "duration" gerçek buff süresiyle
+	## birebir eşleşiyor, 120sn bekleme.
+	## Kullanıcı isteği (2026-09-24 denge turu): süre 25sn -> 15sn (hasar %60 aynı kaldı).
+	31: {"duration": 15.0, "cooldown": 120.0},
 	## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
 	## yerini değiştir") - eskiden Gölge Adımı (id 30) buradaydı (bkz.
 	## SKILL_TIMING[30] şimdi orada), id 16 artık Gölge Hücumu'nun
 	## (bkz. player.gd _skill_assasin_dash) yeni evi.
-	16: {"duration": 15.0, "cooldown": 90.0},
+	## Kullanıcı isteği (2026-09-24 denge turu): Gölge Hücumu artık 25 hedeflik bir zincir değil, 10sn süren bir
+	## saldırı penceresi (bkz. _skill_assasin_dash) - "duration" o pencerenin kendisi.
+	16: {"duration": 10.0, "cooldown": 90.0},
 	## Kullanıcı isteği: Melek'in yeni 3. yeteneği (Korku, id 32) - "duration"
 	## sadece büyü animasyonu penceresi, gerçek etki (4sn korku) enemy.gd'nin
 	## kendi _fear_timer'ında ayrıca tutulur.
@@ -226,27 +222,21 @@ const SKILL3_TIMING := {
 	## bir kanal) - "duration" gerçek 8sn'lik bombardıman süresiyle birebir
 	## eşleşiyor (bkz. KORSAN_BOMBARDMENT_DURATION, _skill_korsan_bombardment).
 	34: {"duration": 8.0, "cooldown": 40.0},
-	## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü
-	## çağırma ile değiştir") - Yarasa Sürüsü (id 35) artık E/skill2'de, bu
-	## kayıt SKILL2_TIMING[35]'e taşındı (bkz. yukarısı).
 	## Talon'un yeni 3. yeteneği (Ayna Formu, skill3 id 37) - kullanıcı isteği:
 	## "R ile Q'nun yerini değiştir" (eskiden Hamle Vuruşu buradaydı, bkz.
 	## SKILL_TIMING[38] şimdi orada). "15sn boyunca her silahının bir aynalı
 	## kopyası belirir" (bkz. _skill_talon_mirror_form), 120sn bekleme.
 	37: {"duration": 15.0, "cooldown": 120.0},
-	## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
-	## değiştir") - Golem Çağır (skill3 id 20): eskiden SKILL_TIMING[20]'deydi
-	## (Q iken), 100 Ruh karşılığında golem çağırır - ruh kontrolü
-	## _activate_skill3() başında yapılır, burada sadece bekleme süresi
-	## (10sn, bkz. _skill_necro_summon_golem).
-	20: {"duration": 0.4, "cooldown": 10.0},
+	## Necromancer YENİ ULTİ (Lanetli Kafatası, id 44, kullanıcı isteği 2026-09-24): kafatası 10sn çarpar, 60sn bekleme.
+	## Golem Çağır (id 20) R'den E'ye taşındı - bkz. SKILL2_TIMING[20].
+	44: {"duration": 10.0, "cooldown": 60.0}, ## süre = necro_skull.gd DURATION
 	## DÜZELTME (kullanıcı isteği 2026-09-22: "Matthew'in yeni skili... kalkan yeteneğini R'ye yerleştir") -
 	## Feda Kalkanı (id 9) artık R/skill3'te, bu kayıt SKILL_TIMING[9]'dan buraya taşındı (sayılar AYNI:
 	## en fazla 15sn'lik kalkan çemberi, 120sn bekleme).
 	9: {"duration": 15.0, "cooldown": 120.0},
 	## Vampir Çocuk ULTİ (Kan Yarasaları, skill3 id 42): basılıp kapatılan bir TOGGLE, bekleme süresi
-	## YOK (kısıt: açıkken saniyede maksimum canın %3'ü) - Necromancer'ın Yarasa Sürüsü (id 35) ile
-	## AYNI desen, standart skill3_state makinesini KULLANMAZ (bkz. _vampir_toggle_bats). Burada
+	## YOK (kısıt: açıkken saniyede maksimum canın %3'ü) - (silinen) Necromancer Yarasa Sürüsü'nün
+	## toggle deseni, standart skill3_state makinesini KULLANMAZ (bkz. _vampir_toggle_bats). Burada
 	## sadece _skill3_timing_for()'un varsayılana düşmemesi ve tooltip için var.
 	42: {"duration": 9999.0, "cooldown": 0.0},
 }
@@ -379,9 +369,9 @@ var weapon_range_bonus: float = 0.0 ## KESİR: her silahın attack_range'ine +%X
 ## Kart kaynaklı ham sıyrılma şansı en fazla %60 olabilir (bkz.
 ## DODGE_CHANCE_CAP) - bunu AŞAN kart puanları DÜZELTME (zırh kaldırıldı):
 ## eskiden zırha dönüşen taşma artık basitçe boşa gidiyor (bkz. apply_upgrade
-## "dodge" dalı). Kalkan Şimşek Hız modu bunun DIŞINDA, ayrı bir shield_mode_
-## dodge_bonus olarak toplam etkin sıyrılmaya (bkz. take_damage effective_
-## dodge) cap'in üstünde eklenmeye devam ediyor.
+## "dodge" dalı). DÜZELTME (2026-09-24): kalkan modu/Deri Çizme hareket bonusu
+## artık bu cap'in DIŞINDA değil - tüm stat kaynakları take_damage'da birlikte
+## kırpılır, sadece yetenekler (Elara Q) üstüne çıkabilir (bkz. effective_dodge).
 const DODGE_CHANCE_CAP := 0.6
 var dodge_chance: float = 0.0      ## 0-1 chance to fully evade incoming damage
 
@@ -600,7 +590,10 @@ const SHIELD_TYPES := {
 ## protection_bonus/thorny_intake_bonus) dahil edildiğinde toplam emilim
 ## %100'e kadar çıkabilir - SADECE kart/tür kaynaklı ham shield_protection
 ## %90'da sınırlı (bkz. SHIELD_PROTECTION_CAP).
-const SHIELD_MODE_PROTECTION_CAP := 1.0
+## DÜZELTME (kullanıcı isteği 2026-09-24 denge turu): Kalkan Bağı (+%10) / kalkan modları %92'nin üstüne çıkıp %100
+## soğurmaya (kalkan bitmedikçe cana HİÇ hasar geçmemesi) ulaşabiliyordu. Toplam tavan artık kart tavanıyla AYNI -
+## bonuslar sadece tavana ulaşmamış oyuncuyu tavana yaklaştırır, üstüne çıkaramaz.
+const SHIELD_MODE_PROTECTION_CAP := SHIELD_PROTECTION_CAP
 var shield_mode_max_mult: float = 1.0
 ## Meditasyon (resilience) modu: kalkan azaltma cezası yerine maksimum CANI
 ## %30 azaltır (bkz. _apply_shield_mode). Bir önceki uygulanan çarpanı
@@ -1619,12 +1612,18 @@ func _apply_tabanca_tier(w, level: int) -> void:
 ##   zehir ramp'i gibi - _refresh_hancer_bleed ile HER Hasar kartında da
 ##   tazelenir, sadece tier değişince değil).
 const HANCER_BLEED_ATTACK_POWER_RATIO := 0.05
+const HANCER_BLEED_EXTRA_MAX_STACKS := 2
 
 func _apply_hancer_tier(w, level: int) -> void:
 	## bleed_max_stacks eskiden doğrudan "tier" (=level, 1..10) idi - artık
 	## _tier_from_level10 ile 1..10 arasına yuvarlanarak dönüştürülüyor
 	## (level 1 -> 1, level 100 -> 10, arada ~10 basamaklı düzgün bir artış).
-	w.bleed_max_stacks = int(round(_tier_from_level10(level)))
+	## Kullanıcı isteği (2026-09-24 denge turu): kanama tavanı seviye 1'de 1 yükte kaldığı için pasif önemsizdi -
+	## tavan her seviyede +HANCER_BLEED_EXTRA_MAX_STACKS (seviye 1'de 3). Tik hasarının düz "tier" kısmı bu ekten
+	## ETKİLENMESİN diye tier ayrıca bleed_tier meta'sında saklanır (bkz. _refresh_hancer_bleed).
+	var bleed_tier: int = int(round(_tier_from_level10(level)))
+	w.set_meta("bleed_tier", bleed_tier)
+	w.bleed_max_stacks = bleed_tier + HANCER_BLEED_EXTRA_MAX_STACKS
 	if level >= 20:
 		w.bleed_stacks_per_hit = 5
 	elif level >= 14:
@@ -1644,7 +1643,7 @@ func _apply_hancer_tier(w, level: int) -> void:
 func _refresh_hancer_bleed(w) -> void:
 	if not is_instance_valid(w):
 		return
-	var tier: int = int(w.get("bleed_max_stacks") if "bleed_max_stacks" in w else 1)
+	var tier: int = int(w.get_meta("bleed_tier", w.get("bleed_max_stacks") if "bleed_max_stacks" in w else 1))
 	if "bleed_tick_damage_per_stack" in w:
 		w.bleed_tick_damage_per_stack = float(tier) + damage_bonus * HANCER_BLEED_ATTACK_POWER_RATIO
 
@@ -1757,6 +1756,8 @@ func _apply_fisek_tier(w, level: int) -> void:
 ##   hasar: tier başına +20, %100 saldırı gücü (oran tier'e göre değişmez -
 ##   weapon_pence.tscn'de card_damage_bonus_ratio = 1.0 sabit).
 ##   can emme (verilen hasarın %'si): taban %0.3, dönüm noktalarında (3/5/7/10) KÜMÜLATİF +%0.2.
+const PENCE_BASE_LIFESTEAL := 0.01
+
 func _apply_pence_tier(w, level: int) -> void:
 	var tier: float = _tier_from_level10(level)
 	var dmg_bonus: float = (tier - 1.0) * 20.0
@@ -1771,7 +1772,8 @@ func _apply_pence_tier(w, level: int) -> void:
 		milestone_lifesteal_bonus = 0.004
 	elif level >= 6:
 		milestone_lifesteal_bonus = 0.002
-	w.lifesteal_percent = 0.003 + milestone_lifesteal_bonus
+	## Kullanıcı isteği (2026-09-24 denge turu): taban can emme %0.3 -> %1 (AP 350'de vuruş başına ~1 candı, önemsizdi).
+	w.lifesteal_percent = PENCE_BASE_LIFESTEAL + milestone_lifesteal_bonus
 	if w.has_method("set_weapon_tier"):
 		w.set_weapon_tier(_visual_tier_from_level(level))
 
@@ -2312,6 +2314,7 @@ func _physics_process(delta: float) -> void:
 	_update_facing(effective_direction)
 	_update_animation(effective_direction.length() > 0.1 and not _paladin_movement_locked)
 	_process_regen(delta)
+	_process_enemy_burn(delta)
 	_process_skill(delta)
 	_process_skill2(delta)
 	_process_item_shield(delta)
@@ -2333,7 +2336,6 @@ func _physics_process(delta: float) -> void:
 	_process_talon_mirror_form(delta)
 	_process_assasin_dash2_charges(delta)
 	_process_necro_skeleton_cooldown(delta)
-	_process_necro_bats(delta)
 	_process_matthew_speed_lines(delta)
 	_process_buyucu(delta)
 	_process_skill3(delta)
@@ -2381,15 +2383,6 @@ func _physics_process(delta: float) -> void:
 		## fonksiyonun üstündeki yorum).
 		if skill2_id_pressed == 17:
 			_korsan_try_place_bomb()
-		## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü
-		## çağırma ile değiştir") - Yarasa Sürüsü (id 35) "basılıp
-		## kapatılabilir" bir TOGGLE - eskiden R/skill3'teydi (bkz. aşağıdaki
-		## skill3 dalındaki taşınma notu), standart skill2_state == "ready"
-		## bekleme makinesini BAŞTAN bypass ediyor, her basış açar/kapatır
-		## (bkz. _necro_toggle_bats - artık skill3_state yerine skill2_state
-		## kullanıyor).
-		elif skill2_id_pressed == 35:
-			_necro_toggle_bats()
 		## Assasin Çocuk TEMEL (id 5, yeni 8 yönlü hamle) - Korsan'ın bomba
 		## şarjıyla AYNI desen, standart bekleme makinesi yerine kendi
 		## yük sayacını kullanır (bkz. ASSASIN_DASH2_*/_try_assasin_dash2).
@@ -2421,17 +2414,10 @@ func _physics_process(delta: float) -> void:
 		if skill3_id_pressed in BUYUCU_VARIATION_SKILL2_IDS:
 			_buyucu_try_activate_variation_r()
 		## Vampir Çocuk'un R'si (Kan Yarasaları, id 42) "basılıp kapatılabilir" bir TOGGLE -
-		## Necromancer'ın Yarasa Sürüsü'yle AYNI desen: standart skill3_state == "ready"
-		## bekleme makinesini BAŞTAN bypass eder (bkz. _vampir_toggle_bats).
+		## standart skill3_state == "ready" bekleme makinesini BAŞTAN bypass eder (bkz. _vampir_toggle_bats).
 		elif skill3_id_pressed == 42:
 			_vampir_toggle_bats()
-		## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
-		## değiştir") - Yarasa Sürüsü (eskiden burada, id 35) artık E/skill2'de
-		## (bkz. yukarısı) - Golem Çağır (id 20) standart skill3_state
-		## bekleme makinesini KULLANIYOR (bkz. _activate_skill()'teki eski
-		## ön kontroller artık _activate_skill3()'te), bu yüzden burada özel
-		## bir bypass dalına ihtiyacı yok, aşağıdaki genel "ready" dalından
-		## geçiyor.
+		## Necromancer'ın R'si (Lanetli Kafatası, id 44) standart skill3_state makinesini kullanır - özel dal yok.
 		elif skill3_state == "ready" and skill3_id_pressed != 0:
 			_activate_skill3()
 	## Ruhani Yetenek (F) - karakterden bağımsız, kendi durum makinesi (bkz. dosya sonundaki "RUHANİ YETENEKLER" bloğu).
@@ -3287,6 +3273,8 @@ func get_status_effects() -> Array:
 		out.append({"id": "bat_form", "kind": "bat", "is_buff": true, "stacks": 0, "remaining": -1.0, "duration": -1.0})
 	## EVRENSEL debuff: herhangi bir TEMEL/ULTİ kullanımından sonra kalkan yenilenmesi kısa süreliğine %50
 	## yavaşlar (bkz. item_shield_ability_slow_timer/_process_item_shield) - hangi karakter olursa olsun aynı.
+	if _enemy_burn_timer > 0.0:
+		out.append({"id": "enemy_burn", "kind": "burn", "is_buff": false, "stacks": 0, "remaining": _enemy_burn_timer, "duration": ENEMY_BURN_DURATION})
 	if item_shield_ability_slow_timer > 0.0:
 		out.append({"id": "shield_slow", "kind": "shield_slow", "is_buff": false, "stacks": 0, "remaining": item_shield_ability_slow_timer, "duration": maxf(_shield_hit_regen_delay(), 0.01)})
 	## Ruhani Yetenek "Savaş Şevki" - biriken yığın (kullanıcı isteği: "Biriken saldırı güçleri skillbarın
@@ -3698,7 +3686,7 @@ func _skill_korsan_detonate_all() -> void:
 const KORSAN_BOMBARDMENT_RADIUS := KorsanFxMath.BOMBARDMENT_RADIUS ## fx_korsan_zone.gd de aynı sayıyı buradan okur
 const KORSAN_BOMBARDMENT_DURATION := KorsanFxMath.BOMBARDMENT_DURATION
 const KORSAN_BOMBARDMENT_TICK_INTERVAL := 1.0
-const KORSAN_BOMBARDMENT_DAMAGE_RATIO := 1.5 ## %150 saldırı gücü
+const KORSAN_BOMBARDMENT_DAMAGE_RATIO := 1.1 ## %110 saldırı gücü - 2026-09-24 denge turu: %150 -> %110 (characters.gd metniyle birlikte)
 
 var _korsan_bombardment_active: bool = false
 var _korsan_bombardment_channel_timer: float = 0.0
@@ -3829,7 +3817,7 @@ func _skill_necro_summon_skeleton() -> void:
 	## Kullanıcı isteği: "necromancerın yaratık spawnlama sınırını 10 ile
 	## sınırla".
 	if _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
-		_spawn_floating_text("YARATIK SINIRI (10)", Color(0.9, 0.6, 0.3))
+		_spawn_floating_text("YARATIK SINIRI (%d)" % NECRO_MAX_ACTIVE_PETS, Color(0.9, 0.6, 0.3))
 		return
 	necro_souls -= NECRO_SKELETON_SOUL_COST
 	_necro_skeleton_cooldown_timer = NECRO_SKELETON_COOLDOWN
@@ -3839,7 +3827,7 @@ func _skill_necro_summon_skeleton() -> void:
 	if pet.has_method("setup_from_player"):
 		pet.setup_from_player(self, NECRO_SKELETON_STAT_PERCENT, NECRO_SKELETON_HP_PERCENT, NECRO_SKELETON_LIFESPAN)
 	_register_necro_pet(pet)
-	_spawn_burst(Color(0.55, 0.95, 0.55))
+	_spawn_necro_summon_fx(pet.global_position)
 	_broadcast_necro_pet_spawn(pet, "res://scenes/skeleton_pet.tscn")
 
 
@@ -3850,9 +3838,39 @@ func _process_necro_skeleton_cooldown(delta: float) -> void:
 		_necro_skeleton_cooldown_timer = max(0.0, _necro_skeleton_cooldown_timer - delta)
 
 
-## Necromancer ULTİ (Golem Çağır, skill id 20, R tuşu) - _activate_skill()
-## match bloğundan çağrılır, standart skill_state/bekleme (10sn) makinesini
-## kullanır. Ruh yeterliliği _activate_skill() başında zaten kontrol edildi.
+## Kullanıcı isteği (2026-09-24): "necromancerın yetenekleri için (yaratık spawnlandığında) özel efektler hazırla pixel
+## tarzda" - eski jenerik CPUParticles2D patlaması (_spawn_burst) yerine önceden pişirilmiş çağırma efekti (yerde çizilen mor
+## rün çemberi, karanlık havuz, uzanan kemik eller, yükselen turkuaz ruh alevleri - tools/gen_necro_fx.py "summon"). Dünya
+## konumunda oynar, diğer oyunculara AYNI sahne yolu "hitscan_impact" ile gider (tek referans: sahnenin resource_path'i).
+const FxNecroSummonScene := preload("res://scenes/fx_necro_summon.tscn")
+const NECRO_SUMMON_FX_OFFSET := Vector2(0, 10) ## yaratığın ayak hizası (efektin yer noktası)
+
+
+func _spawn_necro_summon_fx(pet_pos: Vector2) -> void:
+	var pos: Vector2 = pet_pos + NECRO_SUMMON_FX_OFFSET
+	var fx: Node2D = FxNecroSummonScene.instantiate() as Node2D
+	get_tree().current_scene.add_child(fx)
+	fx.global_position = pos
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {
+			"scene_path": FxNecroSummonScene.resource_path,
+		})
+
+
+## Necromancer YENİ ULTİ - Lanetli Kafatası (skill3 id 44): kafatası 10sn boyunca kalabalığa/bosslara çarpar, her çarpmada
+## %110 AP alan hasarı + 3sn rastgele-yürüme korkusu. Tüm mantık/ağ yayını necro_skull.gd'de (bkz. dosya başı).
+const NecroSkullScript := preload("res://scripts/necro_skull.gd")
+
+
+func _skill_necro_skull() -> void:
+	var skull: Node2D = NecroSkullScript.new()
+	get_tree().current_scene.add_child(skull)
+	skull.setup(self)
+
+
+## Necromancer TEMEL (Golem Çağır, skill id 20, E tuşu - kullanıcı isteği 2026-09-24, eskiden R) - _activate_skill2()
+## match bloğundan çağrılır, standart skill2_state/bekleme (10sn) makinesini kullanır. Ruh/sınır kontrolü
+## _activate_skill2() başında (_necro_golem_can_summon) zaten yapıldı.
 ## DÜZELTME (kullanıcı isteği: "necromancerın ultisi hayalet yerine golem
 ## çağırsın") - eskiden WraithPetScene (Hortlak) çağırıyordu, artık
 ## GolemPetScene (%200 stat/can, kalkanlı, bkz. golem_pet.gd) çağırıyor.
@@ -3871,110 +3889,22 @@ func _skill_necro_summon_golem() -> void:
 		pet.died.connect(func() -> void:
 			_necro_active_golems.erase(pet)
 		, CONNECT_ONE_SHOT)
-	_spawn_burst(Color(0.75, 0.5, 1.0))
+	_spawn_necro_summon_fx(pet.global_position)
 	_broadcast_necro_pet_spawn(pet, "res://scenes/golem_pet.tscn")
 
 
-## Necromancer'ın TEMEL yeteneği (Yarasa Sürüsü, skill2 id 35, E tuşu) -
-## "Basılıp kapatılabilir. Basıldığında her saniye %1 maks kalkan + 25 kalkan
-## tüketerek etrafındaki yaratıklara yarasa gönderir, yarasalar yaratıklara
-## vurup Necromancer'a geri döner (yarasaların hızı Necromancer'la eşdeğerdir).
-## Yarasalar her yaratığa çarptığında %80 saldırı gücü kadar hasar verir."
-## TOGGLE olduğu için standart skill2_state makinesini KULLANMIYOR - Korsan'ın
-## bombasıyla AYNI mimari desen (bkz. _physics_process skill2_id_pressed == 35
-## dalı). skill2_state SADECE HUD ikonunun "aktif" parlamasını (bkz.
-## is_skill2_active) tetiklemek için ödünç kullanılıyor - skill2_timer'a HİÇ
-## dokunulmuyor (0'da kalıyor), yani _process_skill2() içindeki standart
-## süre/bekleme geçişleri bu karakter için asla çalışmıyor.
-## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü çağırma
-## ile değiştir") - eskiden R/skill3 id 35'ti (bkz. get_skill3_progress()
-## karşılığı artık get_skill2_progress()'teki char_id==11 özel dalı), aşağıda
-## skill3_state/skill3_timer kullanan tüm satırlar skill2_state/skill2_timer
-## olarak güncellendi.
-const NECRO_BATS_SHIELD_DRAIN_PERCENT_OF_MAX := 0.01 ## %1 maks kalkan/sn
-const NECRO_BATS_SHIELD_DRAIN_FLAT := 25.0 ## +25 kalkan/sn
-const NECRO_BATS_DAMAGE_RATIO := 0.8 ## %80 saldırı gücü/isabet
-const NECRO_BATS_RADIUS := 260.0 ## "etrafındaki" - yakındaki yaratıklar
-const NECRO_BATS_TICK_INTERVAL := 1.0
-## Aşırı kalabalık bir sürüde (max_concurrent_enemies=63) her tikte 63 yarasa
-## fırlatmasın diye - bir tikte en fazla bu kadar yaratık hedeflenir.
-const NECRO_BATS_MAX_TARGETS_PER_TICK := 6
-const NecroBatScene := preload("res://scenes/necro_bat.tscn")
-
-var _necro_bats_active: bool = false
-var _necro_bats_tick_timer: float = 0.0
-
-
-func _necro_toggle_bats() -> void:
-	if _necro_bats_active:
-		_necro_bats_active = false
-		skill2_state = "ready"
-		return
-	if item_shield_hp <= 0.0:
-		_spawn_floating_text("KALKAN YOK", Color(0.4, 0.7, 1.0))
-		return
-	_necro_bats_active = true
-	_necro_bats_tick_timer = 0.0 ## ilk tik hemen bu karede düşsün
-	skill2_state = "active" ## SADECE HUD ikonu için - bkz. yukarıdaki dosya başı notu
-	_spawn_ring_sized(NECRO_BATS_RADIUS, Color(0.55, 0.15, 0.65))
-
-
-## Her saniye: kalkanı tüket (biterse yetenek kendiliğinden kapanır),
-## menzildeki yaratıklara birer yarasa gönder. Oyuncu ölür/düşerse (bkz.
-## is_dead/is_downed) güvenlik amacıyla otomatik kapanır - aksi halde cansız
-## bir bedenden sonsuza kadar kalkan tüketmeye devam ederdi.
-func _process_necro_bats(delta: float) -> void:
-	if not _necro_bats_active:
-		return
-	if is_dead or is_downed:
-		_necro_bats_active = false
-		skill2_state = "ready"
-		return
-	_necro_bats_tick_timer -= delta
-	if _necro_bats_tick_timer > 0.0:
-		return
-	_necro_bats_tick_timer += NECRO_BATS_TICK_INTERVAL
-	var drain: float = item_shield_max * NECRO_BATS_SHIELD_DRAIN_PERCENT_OF_MAX + NECRO_BATS_SHIELD_DRAIN_FLAT
-	_spend_ability_shield_cost(drain)
-	if item_shield_hp <= 0.0:
-		_necro_bats_active = false
-		skill2_state = "ready"
-		_spawn_floating_text("KALKAN BİTTİ", Color(0.4, 0.7, 1.0))
-		return
-	_launch_necro_bats()
-
-
-## Menzildeki yaratıklardan en fazla NECRO_BATS_MAX_TARGETS_PER_TICK tanesine
-## (en yakınlardan başlayarak) birer yarasa gönderir - bkz. necro_bat.gd.
-## Yarasalar SADECE bu (döken) istemcide var olur ve hasar verir, Korsan'ın
-## bombalarıyla AYNI mimari (bkz. necro_bat.gd dosya başı notu).
-func _launch_necro_bats() -> void:
-	var candidates: Array = []
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
-		if not VisionFogScript.can_target(e):
-			continue
-		var d: float = global_position.distance_to(e.global_position)
-		if d <= NECRO_BATS_RADIUS:
-			candidates.append([d, e])
-	if candidates.is_empty():
-		return
-	candidates.sort_custom(func(a, b): return a[0] < b[0])
-	## Yarasaların hızı Necromancer'ın KENDİ o anki hareket hızıyla eşdeğer -
-	## bkz. _physics_process'teki AYNI formül (velocity = ... * speed * ...).
-	var bat_speed: float = get_effective_move_speed()
-	for i in range(min(candidates.size(), NECRO_BATS_MAX_TARGETS_PER_TICK)):
-		var target: Node2D = candidates[i][1]
-		var bat: Node2D = NecroBatScene.instantiate() as Node2D
-		get_tree().current_scene.add_child(bat)
-		bat.global_position = global_position
-		bat.target = target
-		bat.caster = self
-		bat.speed = max(bat_speed, 40.0) ## oyuncu tamamen durursa bile yarasalar hareketsiz kalmasın
-		var is_crit: bool = _roll_ability_crit()
-		bat.damage = _apply_ability_crit(damage_bonus * NECRO_BATS_DAMAGE_RATIO, is_crit)
-		bat.is_crit = is_crit
+## Golem Çağır ön kontrolleri (100 ruh, toplam yaratık sınırı, en fazla NECRO_MAX_GOLEMS golem) - yetersizse sebebi yazar.
+func _necro_golem_can_summon() -> bool:
+	if necro_souls < NECRO_GOLEM_SOUL_COST:
+		_spawn_floating_text("RUH YETERSİZ", Color(0.6, 0.9, 0.5))
+		return false
+	if _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
+		_spawn_floating_text("YARATIK SINIRI (%d)" % NECRO_MAX_ACTIVE_PETS, Color(0.9, 0.6, 0.3))
+		return false
+	if _necro_active_golem_count() >= NECRO_MAX_GOLEMS:
+		_spawn_floating_text("GOLEM SINIRI (%d)" % NECRO_MAX_GOLEMS, Color(0.75, 0.5, 1.0))
+		return false
+	return true
 
 
 ## Kullanıcı isteği: "necromancerın yaratık spawnlama sınırını 10 ile
@@ -4537,16 +4467,7 @@ func get_skill2_progress() -> float:
 		if cd <= 0.0:
 			return 1.0
 		return clamp(1.0 - (_buyucu_variation_cooldowns[buyucu_variation] / cd), 0.0, 1.0)
-	## DÜZELTME (kullanıcı isteği: "Necromancer in E sini yarasa sürüsü
-	## çağırma ile değiştir") - Necromancer'ın Yarasa Sürüsü (bkz.
-	## _necro_toggle_bats) bir TOGGLE - gerçek bekleme süresi yok (sadece
-	## kalkan yeterliliği kısıtlar), her zaman "hazır" sayılır. Bunun ÖZEL
-	## DALI olmasa skill2_total_elapsed (bkz. _process_skill2, skill2_state
-	## != "ready" iken sınırsız birikiyor) yüzünden yanıltıcı bir "dolan
-	## bekleme" göstergesi oluşurdu - eskiden bu dal get_skill3_progress()'te
-	## R/skill3 için vardı (Yarasa Sürüsü orada iken), artık burada.
-	if GameManager.selected_char_id == 11:
-		return 1.0
+	## (Necromancer'ın E'si artık Golem Çağır - standart bekleme; eski Yarasa Sürüsü toggle'ının "hep hazır" dalı silindi.)
 	if get_skill2_id() == 0:
 		return 1.0
 	if skill2_state == "ready":
@@ -4629,13 +4550,7 @@ func get_skill3_progress() -> float:
 	## içindeki Necromancer karşılığı: aksi halde skill3_total_elapsed'den yanıltıcı bir dolan bar çıkar).
 	if GameManager.selected_char_id == VampirMath.CHAR_ID:
 		return 1.0
-	## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
-	## değiştir") - eskiden burada Necromancer'ın Yarasa Sürüsü (bir TOGGLE,
-	## bkz. _necro_toggle_bats) için "her zaman hazır sayılır" özel bir dal
-	## vardı - Yarasa Sürüsü artık E/skill2'de (bkz. get_skill2_progress()'teki
-	## karşılığı), R'de artık standart skill3_state makinesini kullanan Golem
-	## Çağır var, bu yüzden özel dal kaldırıldı - normal ilerleme hesabı
-	## geçerli.
+	## (Necromancer R = Lanetli Kafatası: standart ilerleme hesabı - eski Yarasa Sürüsü toggle dalı silindi.)
 	if get_skill3_id() == 0:
 		return 1.0
 	if skill3_state == "ready":
@@ -4659,13 +4574,9 @@ func get_skill3_active_fraction() -> float:
 		if _buyucu_meteor_channel_active and BUYUCU_METEOR_CHANNEL_TIME > 0.0:
 			return clamp(_buyucu_meteor_channel_timer / BUYUCU_METEOR_CHANNEL_TIME, 0.0, 1.0)
 		return 0.0
-	## Necromancer'ın Yarasa Sürüsü - sabit bir süresi yok (kalkan bitene/
-	## tekrar basılana kadar sürer), o yüzden skill3_timer/_skill3_duration
-	## oranı (hiçbiri bu toggle tarafından hiç güncellenmiyor) anlamsız kalır.
-	## Aktifken tam dolu (1.0) göster - "toggle açık" en doğru okunuşu bu.
-	if GameManager.selected_char_id == 11:
-		return 1.0 if _necro_bats_active else 0.0
-	## Vampir Çocuk'un Kan Yarasaları (toggle) - aynı gerekçe: sabit süre yok, açıkken tam dolu.
+	## DÜZELTME (2026-09-24, Lanetli Kafatası): burada Necromancer için "Yarasa Sürüsü açıksa tam dolu" dalı vardı - R artık
+	## 10sn süreli kafatası (standart hesap), Yarasa Sürüsü de tamamen silindi.
+	## Vampir Çocuk'un Kan Yarasaları (toggle) - sabit süre yok, açıkken tam dolu.
 	if GameManager.selected_char_id == VampirMath.CHAR_ID:
 		return 1.0 if _vampir_bats_active else 0.0
 	if skill3_state != "active" or _skill3_duration <= 0.0:
@@ -5126,6 +5037,63 @@ var _last_damage_taken_at_msec: int = -999999
 const CONTACT_DAMAGE_IFRAME_MS := 150
 
 const FxBloodSplatterScene := preload("res://scenes/fx_blood_splatter.tscn")
+
+## ---------- Yaratık yeteneklerinin özel hasarı (kullanıcı isteği 2026-09-24, bkz. enemy_abilities.gd) ----------
+## Host'taki yetkili lazer/diken/asit/ateş topu isabeti buraya gelir (uzak oyuncuya remote_player.gd ->
+## NetworkManager.forward_special_damage_to_peer ile). Türe özel kurallar:
+##   "laser"    - Röntgen: "kalkanlara normal hasarlarının 2 katı kadar hasar verir" (_special_dmg_shield_mult = 2)
+##   "fireball" - İblis: normal hasar + isabet ettiyse (sıvışma/ev içi vb. değilse) 3 sn yanma (apply_enemy_burn)
+##   "burn"     - yanma tiki: 150ms dokunulmazlık kilidine ve sıvışmaya TABİ DEĞİL (sürekli hasar)
+##   "thorns"/"acid" - normal hasar kuralları.
+const ENEMY_LASER_SHIELD_MULT := 2.0
+const ENEMY_BURN_DURATION := 3.0
+const ENEMY_BURN_DPS_RATIO := 0.25 ## saniyede ateş topu isabet hasarının %25'i (3 sn = isabetin %75'i kadar ek hasar)
+const ENEMY_BURN_TICK := 0.5
+const FxEnemyBurnScene := preload("res://scenes/fx_enemy_burn_status.tscn")
+var _special_dmg_shield_mult: float = 1.0
+var _special_dmg_is_dot: bool = false
+var _enemy_burn_timer: float = 0.0
+var _enemy_burn_dps: float = 0.0
+var _enemy_burn_tick_timer: float = 0.0
+var _enemy_burn_fx: Node = null
+
+
+func take_special_damage(amount: float, source: Node2D, kind: String) -> void:
+	var before: float = health + item_shield_hp
+	_special_dmg_shield_mult = ENEMY_LASER_SHIELD_MULT if kind == "laser" else 1.0
+	_special_dmg_is_dot = kind == "burn"
+	take_damage(amount, source)
+	_special_dmg_shield_mult = 1.0
+	_special_dmg_is_dot = false
+	if kind == "fireball" and not is_dead and health + item_shield_hp < before:
+		apply_enemy_burn(amount * ENEMY_BURN_DPS_RATIO)
+
+
+func apply_enemy_burn(dps: float) -> void:
+	if dps <= 0.0 or is_dead:
+		return
+	_enemy_burn_dps = maxf(_enemy_burn_dps if _enemy_burn_timer > 0.0 else 0.0, dps)
+	_enemy_burn_timer = ENEMY_BURN_DURATION
+	if _enemy_burn_tick_timer <= 0.0:
+		_enemy_burn_tick_timer = ENEMY_BURN_TICK
+	if is_instance_valid(_enemy_burn_fx):
+		_enemy_burn_fx.call("refresh")
+	else:
+		_enemy_burn_fx = _play_and_broadcast_skill_fx(FxEnemyBurnScene)
+
+
+func _process_enemy_burn(delta: float) -> void:
+	if _enemy_burn_timer <= 0.0:
+		return
+	_enemy_burn_timer -= delta
+	_enemy_burn_tick_timer -= delta
+	if _enemy_burn_tick_timer <= 0.0:
+		_enemy_burn_tick_timer += ENEMY_BURN_TICK
+		if not is_dead:
+			take_special_damage(_enemy_burn_dps * ENEMY_BURN_TICK, null, "burn")
+	if _enemy_burn_timer <= 0.0:
+		_enemy_burn_dps = 0.0
+		_enemy_burn_tick_timer = 0.0
 const FxOakleyLeafBarrierScene := preload("res://scenes/fx_oakley_leaf_barrier.tscn")
 
 func take_damage(amount: float, source: Node2D = null) -> void:
@@ -5137,10 +5105,13 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## Ruhani Yetenek "Can": 3sn boyunca hasar görmez (bkz. apply_spirit_can_buff).
 	if _spirit_invuln_timer > 0.0:
 		return
-	var _now_damage_msec: int = Time.get_ticks_msec()
-	if _now_damage_msec - _last_damage_taken_at_msec < CONTACT_DAMAGE_IFRAME_MS:
-		return
-	_last_damage_taken_at_msec = _now_damage_msec
+	## Yaratık yeteneklerinin sürekli hasarı (yanma tikleri, bkz. take_special_damage) bu kilide TABİ DEĞİL ve kilidi
+	## de tazelemez - aksi halde her tik bir temas vuruşunu yutar ya da tersi olurdu.
+	if not _special_dmg_is_dot:
+		var _now_damage_msec: int = Time.get_ticks_msec()
+		if _now_damage_msec - _last_damage_taken_at_msec < CONTACT_DAMAGE_IFRAME_MS:
+			return
+		_last_damage_taken_at_msec = _now_damage_msec
 	## Ev içindeyken ek güvenlik: normalde yaratıklar zaten indoors oyuncuyu
 	## hiç hedeflemiyor (bkz. enemy.gd), ama başka bir hasar kaynağı
 	## (ör. çoktan atılmış bir mermi) yine de buraya ulaşırsa tamamen yok say.
@@ -5228,12 +5199,16 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 		return
 
 	## Deri Çizme pasifi: hareket halindeyken fazladan sıvışma (bkz.
-	## item_move_dodge_active, _process_item_passives). Elara'nın Q'su (bkz.
-	## _current_elara_evasion_dodge) da AYNI şekilde dodge_chance'in KENDİ
-	## sınırından (DODGE_CHANCE_CAP) SONRA eklenir - kullanıcı isteği: "sıvışma
-	## sınırını aşabilir".
-	var effective_dodge: float = clamp(dodge_chance + shield_mode_dodge_bonus + item_move_dodge_active + _current_elara_evasion_dodge(), 0.0, 0.95)
-	if effective_dodge > 0.0 and randf() < effective_dodge:
+	## item_move_dodge_active, _process_item_passives).
+	## DÜZELTME (kullanıcı isteği 2026-09-24 denge turu: "kart veya stat farketmeksizin maksimum %60 olabilsin. Elara'nın
+	## Q'su gibi yetenekler sınırı aşabilir istediği gibi ancak sınır aşma stat dönüştürmesine sahip olamaz") - eskiden
+	## Deri Çizme'nin hareket bonusu ve kalkan modunun sıvışması DODGE_CHANCE_CAP'in DIŞINDA kalıp toplamı %95'e kadar
+	## çıkarabiliyordu. Artık TÜM stat kaynakları (kart + eşya + hareket pasifi + kalkan modu) birlikte DODGE_CHANCE_CAP'te
+	## kırpılır (taşma boşa gider, hiçbir stata dönüşmez); SADECE yetenek kaynaklı sıvışma (Elara'nın Q'su,
+	## _current_elara_evasion_dodge) bu sınırın üstüne biner.
+	var stat_dodge: float = minf(DODGE_CHANCE_CAP, dodge_chance + shield_mode_dodge_bonus + item_move_dodge_active)
+	var effective_dodge: float = clamp(stat_dodge + _current_elara_evasion_dodge(), 0.0, 1.0)
+	if not _special_dmg_is_dot and effective_dodge > 0.0 and randf() < effective_dodge:
 		_spawn_floating_text("SIYRILDI", Color(0.7, 0.95, 1.0))
 		return
 
@@ -5262,16 +5237,18 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	if item_shield_hp > 0 and effective_protection > 0.0:
 		# Shield only ever eats its protection share of the hit - the rest
 		# always reaches health, even with a full shield.
-		var absorbed: float = min(item_shield_hp, amount * effective_protection)
+		## Röntgen lazeri (bkz. take_special_damage "laser"): kalkana normal hasarın _special_dmg_shield_mult katı -
+		## kalkan havuzundan absorbed x çarpan düşülür, koruduğu miktar (remaining'den düşülen) aynı kalır.
+		var absorbed: float = min(item_shield_hp / maxf(_special_dmg_shield_mult, 0.01), amount * effective_protection)
 		## Şovalye ultisi aktifken kalkan HAVUZU çok daha az yıpranır ama
 		## sağladığı koruma (remaining'den düşülen miktar) AYNI kalır - yani
 		## oyuncu normalde ne kadar hasardan korunuyorsa yine o kadar korunur,
 		## sadece kalkanın kendisi bunun için %95 daha az "harcanır" (bkz.
 		## PALADIN_ULTI_SHIELD_COST_MULT).
 		var shield_cost_mult: float = PALADIN_ULTI_SHIELD_COST_MULT if paladin_zone_active else 1.0
-		item_shield_hp -= absorbed * shield_cost_mult
+		item_shield_hp = maxf(0.0, item_shield_hp - absorbed * shield_cost_mult * _special_dmg_shield_mult)
 		## Kullanıcı isteği (Kalkan Bağı): "alınan hasarlar... kalkanlarına yansıtılır".
-		_kalkan_bagi_mirror(-(absorbed * shield_cost_mult))
+		_kalkan_bagi_mirror(-(absorbed * shield_cost_mult * _special_dmg_shield_mult))
 		remaining -= absorbed
 		shield_absorbed_hit = true ## bkz. yukarıdaki "kalkansız hasar" sesi notu
 		item_shield_regen_delay = _shield_hit_regen_delay()
@@ -5892,16 +5869,23 @@ func on_xp_collected() -> void:
 ## saldırı gücü idi (kullanıcının andığı 10/1 değerleri kodda hiç yoktu) - yani
 ## saldırı gücü zaten hedefteydi, sadece can 5 -> 20 oldu. İki değer de tek
 ## yerde, sabit olarak burada duruyor (başka kopyası yok).
+## Kullanıcı isteği (2026-09-24 denge turu): geç oyunda AP'nin yarısı bu bedava artıştan geliyordu - 10. seviyeden
+## SONRAKİ her seviye (11+) yarısını verir (LATE_*). Seviye 2-10 (Kademe 1-2 civarı) birebir aynı kaldı.
 const LEVEL_UP_HEALTH_GAIN := 20.0
 const LEVEL_UP_DAMAGE_GAIN := 2.0
+const LEVEL_UP_LATE_FROM_LEVEL := 11
+const LEVEL_UP_LATE_HEALTH_GAIN := 10.0
+const LEVEL_UP_LATE_DAMAGE_GAIN := 1.0
 
 func on_team_leveled_up(new_level: int) -> void:
 	level = new_level
 	max_item_slots = level
-	max_health += LEVEL_UP_HEALTH_GAIN
-	health += LEVEL_UP_HEALTH_GAIN
+	var late: bool = new_level >= LEVEL_UP_LATE_FROM_LEVEL
+	var health_gain: float = LEVEL_UP_LATE_HEALTH_GAIN if late else LEVEL_UP_HEALTH_GAIN
+	max_health += health_gain
+	health += health_gain
 	health_changed.emit(health, max_health)
-	damage_bonus += LEVEL_UP_DAMAGE_GAIN
+	damage_bonus += LEVEL_UP_LATE_DAMAGE_GAIN if late else LEVEL_UP_DAMAGE_GAIN
 	_apply_weapon_bonuses()
 
 
@@ -6126,7 +6110,9 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 			var shield_pen_gain: float = _nice_up(0.05 * 1.3, 0.005) * tier_mult ## eskiden 0.05 (ondan önce 0.1), +%30 -> 0.065
 			shield_pen_percent = min(1.0, shield_pen_percent + shield_pen_gain)
 		"exp_gain":
-			exp_gain_percent += _nice_up(0.075 * 1.3, 0.005) * tier_mult ## eskiden 0.075 (ondan önce 0.15), +%30 -> 0.10
+			## Kullanıcı isteği (2026-09-24 denge turu): stat artık GERÇEKTEN uygulanıyor (bkz. xp_orb.gd xp_gain_mult_for) -
+			## değeri yarıya indirildi: 0.10 -> 0.05 (kartta yazan "+%5" ile birebir; eskiden kart +%7.5 yazıp +%10 veriyordu).
+			exp_gain_percent += 0.05 * tier_mult
 		"luck":
 			## Her 1 şans puanı yaratıkların birşey düşürme ihtimalini +%1
 			## arttırır (bkz. enemy.gd _drop_gold/_drop_food, düz toplama).
@@ -6309,6 +6295,9 @@ func _activate_skill2() -> void:
 	var skill2_id: int = get_skill2_id()
 	if skill2_id == 0:
 		return
+	## Necromancer E (Golem Çağır, id 20): ruh / yaratık / golem sınırı yetmiyorsa kalkan ödemeden ve beklemeye girmeden çık.
+	if skill2_id == 20 and not _necro_golem_can_summon():
+		return
 	## Kalkanla İLGİLİ yetenekler bu maliyetten muaf - kullanıcı isteği:
 	## "kalkan yenileyen veya kalkanla ilgili yetenekler harcamasın." Kalkan
 	## Yenileme (id 10, Şovalye'nin TEMEL/E yeteneği) kalkanı zaten
@@ -6375,6 +6364,8 @@ func _activate_skill2() -> void:
 		27: _skill_shaman_attack_totem()
 		## Vampir Çocuk TEMEL (Yarasa Formu) - bkz. characters.gd DEFS[13].
 		41: _skill_vampir_bat_form()
+		## Necromancer TEMEL (Golem Çağır) - kullanıcı isteği 2026-09-24: "iskelet Q golem E kafatası da R".
+		20: _skill_necro_summon_golem()
 
 
 func _end_skill2_effects() -> void:
@@ -6442,15 +6433,7 @@ func _activate_skill3() -> void:
 	## değiştir") - Golem Çağır'ın (id 20) ön kontrolleri eskiden
 	## _activate_skill()'deydi (Q iken), buraya taşındı - bkz.
 	## _skill_necro_summon_golem.
-	if skill3_id == 20 and necro_souls < NECRO_GOLEM_SOUL_COST:
-		_spawn_floating_text("RUH YETERSİZ", Color(0.6, 0.9, 0.5))
-		return
-	if skill3_id == 20 and _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
-		_spawn_floating_text("YARATIK SINIRI (10)", Color(0.9, 0.6, 0.3))
-		return
-	if skill3_id == 20 and _necro_active_golem_count() >= NECRO_MAX_GOLEMS:
-		_spawn_floating_text("GOLEM SINIRI (2)", Color(0.75, 0.5, 1.0))
-		return
+	## (Golem Çağır'ın (id 20) ruh/yaratık sınırı ön kontrolleri E'ye taşındı - bkz. _activate_skill2 / _necro_golem_can_summon.)
 	## DÜZELTME (bkz. _activate_skill()'teki eşleşen not) - Talon'un Ayna
 	## Formu (R, id 37) burada ARTIK TEMEL tarifesini DEĞİL, genel ULTİ
 	## tarifesini (SKILL_SHIELD_COST_*) ödüyor: 120sn bekleme süreli,
@@ -6476,7 +6459,7 @@ func _activate_skill3() -> void:
 	## ULTİ hissi veriyor (60sn bekleme, güçlü koruma) - diğer karakterlerin
 	## R'deki gerçek ultileriyle (Ayna Formu/Çift Tetik/Gölge Hücumu/Golem
 	## Çağır) AYNI tarife.
-	var use_ulti_tier: bool = (skill3_id == 37 or skill3_id == 31 or skill3_id == 16 or skill3_id == 20 or skill3_id == 39)
+	var use_ulti_tier: bool = (skill3_id == 37 or skill3_id == 31 or skill3_id == 16 or skill3_id == 39 or skill3_id == 44)
 	var skill3_shield_cost: float = (item_shield_max * (SKILL_SHIELD_COST_PERCENT_OF_MAX if use_ulti_tier else SKILL2_SHIELD_COST_PERCENT_OF_MAX) + (SKILL_SHIELD_COST_FLAT if use_ulti_tier else SKILL2_SHIELD_COST_FLAT)) * (1.0 - item_skill_shield_cost_reduction)
 	## DÜZELTME (kullanıcı isteği 2026-09-22: "Matthew'in yeni skili... kalkan yeteneğini R'ye yerleştir") -
 	## Feda Kalkanı (id 9) Q'dan buraya taşındı, kalkan VEREN bir yetenek olduğu için (bkz. _activate_skill()
@@ -6518,9 +6501,8 @@ func _activate_skill3() -> void:
 		## Talon'un yeni 3. yeteneği (Ayna Formu, id 37) - kullanıcı isteği: "R
 		## ile Q'nun yerini değiştir" - eskiden R'de Hamle Vuruşu vardı.
 		37: _skill_talon_mirror_form()
-		## DÜZELTME (kullanıcı isteği: "Necromancer in R sini golem çıkarma ile
-		## değiştir") - Golem Çağır (id 20) artık burada, eskiden Q'da.
-		20: _skill_necro_summon_golem()
+		## Necromancer YENİ ULTİ - Lanetli Kafatası (id 44), Golem Çağır'ın yerine (kullanıcı isteği 2026-09-24).
+		44: _skill_necro_skull()
 		## DÜZELTME (kullanıcı isteği: "Matthew'in yeni skili... kalkan yeteneğini R'ye yerleştir") -
 		## Feda Kalkanı (id 9) artık burada, eskiden Q/skill'deydi (bkz. _activate_skill()'teki eşleşen
 		## düzeltme - Tilki Hücumu id 43 onun yerine Q'ya geldi).
@@ -7196,7 +7178,7 @@ const BUYUCU_NOVA_DAMAGE_RATIO := 1.0
 ## varlık olarak ayrı bir script dosyasında implemente edildi).
 const BUYUCU_TORNADO_COUNT := 3
 const BUYUCU_TORNADO_DURATION := 15.0
-const BUYUCU_TORNADO_HIT_RATIO := 1.20
+const BUYUCU_TORNADO_HIT_RATIO := 0.90 ## 2026-09-24 denge turu: %120 -> %90 (açıklama metni bu sabitten üretiliyor)
 const BUYUCU_TORNADO_HIT_INTERVAL := 1.0
 const BUYUCU_TORNADO_RADIUS := 380.0
 const BUYUCU_TORNADO_TOUCH_RADIUS := 46.0
@@ -8201,7 +8183,16 @@ func _end_assasin_invisibility_r() -> void:
 ## çevresindekilere vurmasını istiyorum").
 const ASSASIN_DASH_RADIUS := 600.0 ## SADECE cast konumunun bu yarıçapındaki yaratıklara sıçrar
 const ASSASIN_DASH_LUNGE_TIME := 0.09 ## anlık ışınlanma yerine kısa, görünür bir sıçrayış
-const ASSASIN_DASH_HIT_INTERVAL := 0.2 ## vuruşlar arası bekleme (eskiden 0.07 - göz seçemiyordu)
+const ASSASIN_DASH_HIT_INTERVAL := 0.2 ## (artık kullanılmıyor - bkz. ASSASIN_DASH_BASE_ATTACK_INTERVAL)
+## Kullanıcı isteği (2026-09-24 denge turu): "yetenek aktifken 10 saniye boyunca silahlarının hasarını değil her vuruşta
+## kendi saldırı gücünün %150'si kadar hasar versin ve bu vuruşların hızı saldırı hızının 3 katı hızda hesaplansın.
+## ayrıca ... tek bir yaratık varsa o yaratığa birden fazla saldırabilsin". Süre SKILL3_TIMING[16] (10sn).
+## Vuruş aralığı = TABAN_ARALIK x get_attack_interval_mult() / 3 (sıçrayış süresi dahil) - kartsız 1sn/3 = ~0.33sn
+## (eskiden 0.09 sıçrayış + 0.2 bekleme = 0.29sn, yani taban tempo neredeyse aynı), saldırı hızı kartlarıyla hızlanır.
+const ASSASIN_DASH_DAMAGE_RATIO := 1.5
+const ASSASIN_DASH_BASE_ATTACK_INTERVAL := 1.0
+const ASSASIN_DASH_ATTACK_SPEED_MULT := 3.0
+const ASSASIN_DASH_MIN_INTERVAL := 0.1 ## çok yüksek saldırı hızında bile sıçrayışlar okunabilir kalsın
 const ASSASIN_DASH_HIT_SOUNDS: Array[String] = [
 	"res://assets/audio/assasin_swing1.mp3",
 	"res://assets/audio/assasin_swing2.mp3",
@@ -8370,7 +8361,9 @@ func _spawn_assasin_dash_hit_fx(pos: Vector2, dir: Vector2) -> void:
 		if slash:
 			get_tree().current_scene.add_child(slash)
 			slash.global_position = pos
-			slash.rotation = facing_dir.angle() + PI / 4.0
+			## Yeni pixel-art sprite sheet efekti kendi içinde hamle yönüne (+x) bakıyor - diğer oyunculara giden
+			## "rotation" ile AYNI açı (eskiden burada +45° vardı, uzak kopyada yoktu; bkz. fx_assasin_shadow_hit.gd).
+			slash.rotation = facing_dir.angle()
 	if ResourceLoader.exists(sound_path):
 		var stream: AudioStream = load(sound_path) as AudioStream
 		if stream:
@@ -8441,10 +8434,11 @@ func _skill_assasin_dash() -> void:
 	## hedeflenir, karakter kendisi ışınlandıkça arama alanı KAYMAZ.
 	var origin_pos: Vector2 = global_position
 
-	# Run the sequence of dashes — hit each enemy at most once, up to 25 targets
-	var max_hits: int = 25
+	## 10sn'lik pencere (SKILL3_TIMING[16]) boyunca - eskiden en fazla 25 hedef/her hedefe bir kez idi. Vurulmamış
+	## yaratıklar önceliklidir; hepsi vurulduysa liste sıfırlanır ve aynı yaratıklara (tek yaratık olsa bile) tekrar
+	## saldırılır. Görüş alanında hiç yaratık yoksa zincir erken biter (eskisi gibi).
 	var hit_enemies: Array[Node] = []
-	while assasin_dash_hits < max_hits:
+	while true:
 		# Check if player is dead or game ended or skill is no longer active
 		## DÜZELTME (kullanıcı bildirimi: "assasin çocuğun ultisi yine çalışmıyor, R'ye basınca
 		## karakter siyaha dönüyor ama saldırmıyor"): Gölge Hücumu "Q ile R'nin yerini değiştir"
@@ -8457,13 +8451,9 @@ func _skill_assasin_dash() -> void:
 		if not is_inside_tree() or skill3_state != "active" or is_dead:
 			break
 
-		# Sum weapon damage once per dash tick
-		var total_damage: float = 0.0
-		for w: Node in owned_weapon_nodes:
-			if is_instance_valid(w) and "damage" in w:
-				total_damage += float(w.get("damage"))
-		if total_damage <= 0.0:
-			total_damage = 10.0
+		## Her vuruş: saldırı gücünün %150'si (eskiden tüm silahların toplam hasarı).
+		var total_damage: float = maxf(1.0, damage_bonus * ASSASIN_DASH_DAMAGE_RATIO)
+		var hit_interval: float = maxf(ASSASIN_DASH_MIN_INTERVAL, ASSASIN_DASH_BASE_ATTACK_INTERVAL * get_attack_interval_mult() / ASSASIN_DASH_ATTACK_SPEED_MULT)
 
 		# Find nearest un-hit, alive enemy within ASSASIN_DASH_RADIUS of origin_pos
 		## DÜZELTME (kullanıcı bildirimi: "assasin çocuk hala düzgün çalışmıyor
@@ -8475,23 +8465,11 @@ func _skill_assasin_dash() -> void:
 		## (sadece savuruş efekti/flaş görünüp tek bir düşmana bile
 		## çarpmıyordu) - kullanıcının "hala çalışmıyor" bildirdiği tam olarak
 		## buydu.
-		var enemies: Array = get_tree().get_nodes_in_group("enemies")
-		var target_enemy: Node2D = null
-		var min_dist: float = ASSASIN_DASH_RADIUS
-		for e: Node in enemies:
-			if not is_instance_valid(e):
-				continue
-			if e in hit_enemies:
-				continue
-			if e.get("is_dead") == true:
-				continue
-			if not VisionFogScript.can_target(e):
-				continue
-			if e is Node2D:
-				var dist: float = origin_pos.distance_to((e as Node2D).global_position)
-				if dist < min_dist:
-					min_dist = dist
-					target_enemy = e as Node2D
+		var target_enemy: Node2D = _assasin_dash_pick_target(origin_pos, hit_enemies)
+		if not target_enemy and not hit_enemies.is_empty():
+			## Herkes bu turda vuruldu - tur baştan, aynı yaratıklara tekrar saldırılabilir.
+			hit_enemies.clear()
+			target_enemy = _assasin_dash_pick_target(origin_pos, hit_enemies)
 
 		# No more reachable enemies — stop early
 		if not target_enemy:
@@ -8506,7 +8484,8 @@ func _skill_assasin_dash() -> void:
 		var dash_dir: Vector2 = target_pos - start_pos
 		var lunge_tween := create_tween()
 		lunge_tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
-		lunge_tween.tween_method(func(p: Vector2): global_position = p, start_pos, target_pos, ASSASIN_DASH_LUNGE_TIME)
+		var lunge_time: float = minf(ASSASIN_DASH_LUNGE_TIME, hit_interval * 0.5)
+		lunge_tween.tween_method(func(p: Vector2): global_position = p, start_pos, target_pos, lunge_time)
 		await lunge_tween.finished
 
 		# Hedef bu kısa sıçrayış sırasında öldüyse/geçersiz olduysa hasar verme
@@ -8542,8 +8521,8 @@ func _skill_assasin_dash() -> void:
 		## isabette çalınıyor, katılımcılara da broadcast ediliyor.
 		_spawn_assasin_dash_hit_fx(target_pos, dash_dir)
 
-		# Brief delay between dashes - eskiden 0.07 idi, göz seçemiyordu.
-		await get_tree().create_timer(ASSASIN_DASH_HIT_INTERVAL).timeout
+		# Vuruşlar arası bekleme: saldırı hızının 3 katı tempo (sıçrayış süresi düşülerek).
+		await get_tree().create_timer(maxf(0.01, hit_interval - lunge_time)).timeout
 
 	## DÜZELTME (kullanıcı bildirimi: "1 kere bi yaratığa doğru saldırdı sonra
 	## yerinde hareketsiz bir gölge şeklinde kaldı"): burada eskiden sadece
@@ -8577,6 +8556,27 @@ func _skill_assasin_dash() -> void:
 		death_camera.position_smoothing_enabled = _dash_cam_was_smoothing
 		death_camera.position_smoothing_speed = _dash_cam_prev_speed
 	_cancel_active_skill3_early()
+
+
+## Gölge Hücumu hedef seçimi: cast noktasının (origin_pos) ASSASIN_DASH_RADIUS'u içinde, görülebilen, canlı ve bu turda
+## henüz vurulmamış en yakın yaratık. ("enemies" ÇOĞUL grup - bkz. yukarıdaki eski grup adı düzeltmesi.)
+func _assasin_dash_pick_target(origin_pos: Vector2, hit_enemies: Array[Node]) -> Node2D:
+	var target_enemy: Node2D = null
+	var min_dist: float = ASSASIN_DASH_RADIUS
+	for e: Node in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node2D):
+			continue
+		if e in hit_enemies:
+			continue
+		if e.get("is_dead") == true:
+			continue
+		if not VisionFogScript.can_target(e):
+			continue
+		var dist: float = origin_pos.distance_to((e as Node2D).global_position)
+		if dist < min_dist:
+			min_dist = dist
+			target_enemy = e as Node2D
+	return target_enemy
 
 
 func _skill_haste() -> void:
@@ -10566,6 +10566,12 @@ func get_attack_interval_mult() -> float:
 ## Toplam saldırı hızı bonusu (%): 1/aralık_çarpanı - 1. Kart/eşya aldıkça yalnızca ARTAR (geçici "Adc" bitince düşer).
 func get_attack_speed_bonus_percent() -> float:
 	return (1.0 / maxf(0.01, get_attack_interval_mult()) - 1.0) * 100.0
+
+
+## Sadece KALICI hız (taban + hız kartları + eşyalar) - yetenek/ruhani/geçici buff'lar HARİÇ. "Kopyanı Öldür"
+## görevindeki kopya bunu kopyalar (bkz. mission_player_copy.gd - oyuncunun yetenekleri kopyaya geçmesin).
+func get_base_move_speed() -> float:
+	return speed * (1.0 + item_speed_percent + speed_card_percent)
 
 
 func get_effective_move_speed() -> float:
