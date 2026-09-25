@@ -35,9 +35,26 @@ func _ready() -> void:
 
 
 func _on_animation_finished() -> void:
+	_release_flash_glow()
 	var s: AudioStreamPlayer2D = get_node_or_null("Sound")
 	if s and is_instance_valid(s) and s.playing:
 		visible = false
 		await s.finished
 	if is_instance_valid(self):
 		queue_free()
+
+
+## Kullanıcı bildirimi (2026-09-25, ikinci kez): "ateş asasının patlama efekti ışık saçmıyor". Kök neden: gece ışığı
+## (night_glow.gd, atmosphere.gd bu efekte çocuk olarak takıyor) sahibi GİZLENİNCE sönüyor - ateş patlaması 0,5 sn'de
+## biter ve sesi beklemek için visible=false olur, yani ışık katalogdaki flaş süresinin ("d", 0,75 sn) ortasında,
+## henüz güçlüyken kesiliyordu (ölçüldü: 0,5 sn'de güç 0,33 -> 0). Flaş ışığı (decay > 0) artık aynı dünya noktasında
+## ebeveyne taşınır ve kendi süresi dolunca kendiliğinden söner (night_glow.gd _process -> queue_free). Sürekli ışıklar
+## (decay 0) taşınmaz - sahipsiz kalıp sonsuza dek yanarlardı.
+func _release_flash_glow() -> void:
+	var glow: Node2D = get_node_or_null("NightGlow") as Node2D
+	if glow == null or float(glow.get("decay")) <= 0.0:
+		return
+	var parent: Node = get_parent()
+	if parent == null:
+		return
+	glow.reparent(parent)

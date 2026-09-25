@@ -50,6 +50,8 @@ extends Node2D
 
 var damage: float = 10.0
 var is_crit: bool = false
+## Efsun (bkz. weapon.gd enchant_on_projectile_hit / enchant_on_explode).
+var source_weapon: Node = null
 var shield_pen_percent: float = 0.0
 ## weapon.gd _fire_at() bunu ateş yönüne göre dolduruyor - target_position
 ## henüz (0,0) ise (güvenlik durumu) ilk yörünge tahmininde kullanılır,
@@ -166,8 +168,12 @@ func _explode() -> void:
 			continue
 		if global_position.distance_to(e.global_position) <= splash_radius:
 			e.take_damage(damage, is_crit, shield_pen_percent, true) ## patlama alanı
+			if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_projectile_hit"):
+				source_weapon.enchant_on_projectile_hit(self, e, damage, true)
 			if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
 				_shaman_burn_applied = e.try_shaman_weapon_burn()
+	if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_explode"):
+		source_weapon.enchant_on_explode(self, global_position)
 	_spawn_impact()
 	_play_impact_sound()
 	if is_instance_valid(return_callback_target) and return_callback_target.has_method("_on_ranged_projectile_landed"):

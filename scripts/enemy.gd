@@ -32,7 +32,11 @@ const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 ## ×0.2 ölçeklendi (0.00255 -> 0.00051). _drop_food()'daki şans çarpanı
 ## (bkz. LUCK_DROP_MULT_PER_POINT - 2026-09-24'ten beri çarpımsal, 20 şans =
 ## 2 kat) HÂLÂ ve TEK artış yolu, burada dokunulmadı.
-@export var food_chance: float = 0.00051
+## DÜZELTME (kullanıcı bildirimi 2026-09-25: "şans kasmadığında ... yemek düşmüyor") - yukarıdaki iki %80 kesinti şans
+## TOPLANARAK eklenirken yapılmıştı (şans puanı başına +%0,2 mutlak - şanslı oyuncuda yemek yağıyordu); 2026-09-24'ten
+## beri şans ÇARPAN (puan başına x1,05) olunca şanssız oyuncuya ~25 dk'da 3-5 yemek kalmıştı. Son kesinti geri alındı
+## (0.00051 -> 0.0025, x~5): şans 0'da ilk 5 dk'da ~1-2, oyun boyunca ~15-20 yemek; 20 şans hâlâ 2 kat.
+@export var food_chance: float = 0.0025
 
 ## Chance (0-1) to drop a magnet pickup on death - bkz. yukarıdaki MagnetDrop
 ## sabiti üstündeki BUG DÜZELTMESİ notu. README'deki eski davranışla aynı
@@ -904,6 +908,12 @@ func apply_poison(dps_per_stack: float, max_stacks: float, duration: float) -> v
 		if net_id > 0:
 			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "poison", dps_per_stack, max_stacks, duration)
 		return
+	var had_elements: Dictionary = {} if _in_element_apply else _element_snapshot()
+	_apply_poison_stack(dps_per_stack, max_stacks, duration)
+	_legacy_element_touched("zehir", had_elements)
+
+
+func _apply_poison_stack(dps_per_stack: float, max_stacks: float, duration: float) -> void:
 	var stack_cap: int = maxi(1, int(round(max_stacks)))
 	if _poison_stack_time.size() >= stack_cap:
 		## Üst sınırda: en eski (en az ömrü kalan) yükü tazele.
@@ -1062,6 +1072,7 @@ func apply_burn(tick_damage: float, duration: float) -> void:
 		if net_id > 0:
 			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "burn", tick_damage, 0.0, duration)
 		return
+	var had_elements: Dictionary = {} if _in_element_apply else _element_snapshot()
 	## Yeni bir isabet süreyi YENİLER ama tik hasarı en güçlüsünde kalır -
 	## poison'un "üst üste binmez, yenilenir" davranışıyla tutarlı.
 	burn_tick_damage = max(burn_tick_damage, tick_damage)
@@ -1083,6 +1094,7 @@ func apply_burn(tick_damage: float, duration: float) -> void:
 			var net_id: int = int(get_meta("network_enemy_id", 0))
 			if net_id > 0:
 				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "burn_start")
+	_legacy_element_touched("yanma", had_elements)
 
 
 func _process_burn(delta: float) -> void:
@@ -1092,9 +1104,11 @@ func _process_burn(delta: float) -> void:
 	_burn_tick_timer -= delta
 	if _burn_tick_timer <= 0.0:
 		_burn_tick_timer += BURN_TICK_INTERVAL
-		_take_dot_damage(burn_tick_damage)
+		## Efsun yanma yığını (Alevli Ok V): 0/1 yük = eski tek tik.
+		_take_dot_damage(burn_tick_damage * float(maxi(1, _burn_stacks)))
 	if burn_time_left <= 0.0:
 		burn_tick_damage = 0.0
+		_burn_stacks = 0
 		## GÖRSEL: yakma bitti - alev sprite'ı kaldırılır (poison'ın
 		## _process_poison'daki AYNI temizlik deseni) ve ağa haber verilir.
 		if _burn_status_fx and is_instance_valid(_burn_status_fx):
@@ -1144,13 +1158,13 @@ func _process_poison(delta: float) -> void:
 		var whole_damage: float = floorf(_poison_damage_accum)
 		if whole_damage >= 1.0:
 			_poison_damage_accum -= whole_damage
-			_take_dot_damage(whole_damage)
+			_take_dot_damage(whole_damage, 1.0 if _poison_true else 0.0)
 	if all_expired:
 		## Son kesir (<1): en yakın tam sayıya yuvarlanıp uygulanır (0.5+ ise 1).
 		var rest_damage: float = roundf(_poison_damage_accum)
 		_poison_damage_accum = 0.0
 		if rest_damage >= 1.0:
-			_take_dot_damage(rest_damage)
+			_take_dot_damage(rest_damage, 1.0 if _poison_true else 0.0)
 		if _poison_status_fx and is_instance_valid(_poison_status_fx):
 			_poison_status_fx.queue_free()
 			_poison_status_fx = null
@@ -1195,6 +1209,688 @@ func _process_mark(delta: float) -> void:
 		mark_stacks = 0
 
 
+## ================================================================ EFSUN ELEMENT SİSTEMİ (2026-09-25)
+## Tasarım belgesi "Element sistemi" bölümü. Efsun davranışları (scripts/enchants/*.gd) düşmana TEK giriş noktasından
+## element uygular: apply_element(tür, parametreler). Çoklu oyuncuda istemci bunu host'a yönlendirir
+## (NetworkManager.request_enemy_element) - durumlar ve tepkimeler (element_reactions.gd) SADECE host'ta çözülür.
+## Mevcut (efsun dışı) kaynaklar da (Buz Asası donması, Şaman yakması, Oakley zehri...) apply_poison/apply_burn/
+## apply_bleed/_start_freeze'in host dalındaki kancayla (_legacy_element_touched) aynı tepkime kontrolüne girer.
+const ElementReactions := preload("res://scripts/element_reactions.gd")
+const EnchantFxScript := preload("res://scripts/enchant_fx.gd")
+const ShockStatusFxScript := preload("res://scripts/fx_shock_status.gd")
+const EnchantAreaScript := preload("res://scripts/enchant_area.gd")
+const SHOCK_JUMP_RANGE := 200.0
+const SHOCK_JUMP_MIN_INTERVAL_MSEC := 120
+const CRACK_DAMAGE_PER_STACK := 0.10
+
+var _reaction_cd: Dictionary = {} ## tepkime anahtarı -> tekrar tetiklenebileceği an (msec)
+var _reaction_ap: float = 0.0 ## son element uygulayanın SG'si (tepkime hasarı buradan)
+var _reaction_power: float = 0.0 ## son element uygulayanın Tepkime Gücü
+var _reaction_peer: int = 0 ## tepkime hasarının atfedileceği oyuncu
+var _in_element_apply: bool = false ## apply_element_host içinden çağrılan apply_* kancaları tepkimeyi ikinci kez çözmesin
+## Şok (yeni durum): şoklu düşmana gelen DOĞRUDAN isabetin bir kısmı en yakın düşman(lar)a sıçrar.
+var shock_time_left: float = 0.0
+var _shock_jump: float = 0.0
+var _shock_jumps: int = 1
+var _shock_spark: float = 0.0
+var _shock_spark_timer: float = 0.0
+var _shock_ap: float = 0.0
+var _shock_peer: int = 0
+var _shock_death_bolt: bool = false
+var _shock_fx: Node2D = null
+var _shock_last_jump_msec: int = 0
+## Uyku (Tüftüf Uyku Okları): sersemletme üstüne kurulu, hasar alınca bozulabilir.
+var _sleep_time: float = 0.0
+var _sleep_break: bool = true
+var _sleep_bonus: float = 0.0
+var _sleep_vuln: float = 0.0
+var _sleep_wake_slow: float = 0.0
+## Kafatası Kırıcı (Topuz Ağır Darbe finali): her çatlak alınan TÜM hasarı +%10 artırır.
+var crack_stacks: int = 0
+## Yanma yığını (Alevli Ok V): 0/1 = eski davranış, >1 tik hasarı katlanır.
+var _burn_stacks: int = 0
+## Tepkime bayrakları (bkz. element_reactions.gd).
+var _infected: bool = false
+var _conductive: bool = false
+var _blood_current: bool = false
+var _bleed_double_until_msec: int = 0
+## Salgın / Zehirli Ok ölüm yayılımları.
+var _plague: Dictionary = {}
+var _plague_cough_timer: float = 2.0
+var _death_poison_burst: Dictionary = {}
+## Efsunların düşmana bıraktığı "ölünce / sürerken" bayrakları (element parametrelerinden, host'ta). Her biri
+## {"peer": vuran, "ap": SG, ...} taşır - ölüm etkisi (_on_death_elements) hasarı ona atfeder.
+var _enchant_flags: Dictionary = {}
+var _bleed_interval: float = BLEED_TICK_INTERVAL ## Kanlı Hançer IV / Keskin Kenar V: 0.5
+var _poison_true: bool = false ## Engerek Dişi: zehir tikleri kalkanı deler
+var _mark_duration: float = MARK_DURATION
+var _mark_pct: float = MARK_PERCENT_PER_STACK
+var _boss_chill_required: int = BOSS_CHILL_HITS_REQUIRED
+var _vuln_pct: float = 0.0 ## Harpun / Sersemletici Bomba: süreli "tüm hasardan fazla alır"
+var _vuln_until_msec: int = 0
+var _contagious_timer: float = 0.0
+var _linger_slow: float = 0.0 ## Ebedi Kış: donma bitince yavaşlama
+
+
+func apply_element(kind: String, p: Dictionary) -> void:
+	if is_dead or is_ability_invisible:
+		return
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.request_enemy_element.rpc_id(NetworkManager._host_peer_id(), net_id, kind, p)
+		return
+	var peer: int = multiplayer.get_unique_id() if (NetworkManager.is_multiplayer_active and multiplayer.has_multiplayer_peer()) else 0
+	apply_element_host(kind, p, peer)
+
+
+## Host (ya da tek oyunculu). attacker_peer = elementi uygulayan oyuncu (tepkime/sıçrama hasarı ona atfedilir).
+func apply_element_host(kind: String, p: Dictionary, attacker_peer: int) -> void:
+	if is_dead:
+		return
+	if p.has("ap"):
+		_reaction_ap = float(p["ap"])
+		_reaction_power = float(p.get("rp", 0.0))
+		_reaction_peer = attacker_peer
+	var had: Dictionary = _element_snapshot()
+	var element: String = ""
+	_in_element_apply = true
+	match kind:
+		"poison":
+			if bool(p.get("kobra", false)):
+				_kobra_strike(attacker_peer)
+			var dps: float = float(p.get("dps", 1.0))
+			var cap: float = float(p.get("cap", 20.0))
+			var dur: float = float(p.get("dur", 10.0))
+			for i in range(clampi(int(p.get("stacks", 1)), 1, 50)):
+				apply_poison(dps, cap, dur)
+			if p.has("plague"):
+				_plague = (p["plague"] as Dictionary).duplicate()
+				_plague["peer"] = attacker_peer
+				_plague["dps"] = dps
+				_plague["cap"] = cap
+				_plague["dur"] = dur
+			if int(p.get("death_burst", 0)) > 0:
+				_death_poison_burst = {"stacks": int(p["death_burst"]), "dps": dps, "cap": cap, "dur": dur}
+			if bool(p.get("true_dmg", false)):
+				_poison_true = true
+			_store_flag(p, "death_cloud", attacker_peer, {"dps": dps})
+			element = "zehir"
+		"burn":
+			_apply_burn_stack(float(p.get("tick", 1.0)), float(p.get("dur", 3.0)), int(p.get("max_stacks", 1)))
+			_store_flag(p, "burn_spread", attacker_peer, {"tick": float(p.get("tick", 1.0)), "dur": float(p.get("dur", 3.0))})
+			_store_flag(p, "burn_death_blast", attacker_peer, {})
+			if p.has("steam"):
+				_enchant_flags["steam"] = (p["steam"] as Dictionary).duplicate()
+				_enchant_flags["steam"]["peer"] = attacker_peer
+			element = "yanma"
+		"bleed":
+			var before: int = bleed_stacks
+			apply_bleed(float(p.get("tick", 1.0)), int(p.get("stacks", 1)), int(p.get("cap", 10)))
+			if bool(p.get("fast", false)):
+				_bleed_interval = BLEED_TICK_INTERVAL * 0.5
+			_store_flag(p, "bleed_transfer", attacker_peer, {"tick": float(p.get("tick", 1.0)), "cap": int(p.get("cap", 10))})
+			_store_flag(p, "bleed_death_blast", attacker_peer, {})
+			_store_flag(p, "bleed_kill", attacker_peer, {})
+			if bool(p.get("burst", false)) and int(bleed_stacks / 10) > int(before / 10):
+				_bleed_burst(attacker_peer, float(p.get("ap", 10.0)) * float(p.get("burst_pct", 0.5)))
+			element = "kanama"
+		"shock":
+			_apply_shock_host(p, attacker_peer)
+			element = "sok"
+		"freeze":
+			if not is_boss:
+				apply_freeze_full(float(p.get("dur", 3.0)))
+			elif int(p.get("boss_hits", 0)) > 0:
+				_boss_chill_required = mini(_boss_chill_required, int(p["boss_hits"]))
+			if float(p.get("linger_slow", 0.0)) > 0.0:
+				_linger_slow = float(p["linger_slow"])
+			_store_flag(p, "contagious", attacker_peer, {})
+			_store_flag(p, "frozen_shards", attacker_peer, {"freeze": bool(p.get("shards_freeze", false))})
+			element = "donma"
+		"shatter":
+			_try_shatter(p, attacker_peer)
+		"mark":
+			_mark_duration = maxf(_mark_duration, float(p.get("dur", MARK_DURATION)))
+			_mark_pct = maxf(_mark_pct, float(p.get("pct", MARK_PERCENT_PER_STACK)))
+			var cap_m: int = int(p.get("cap", 20))
+			mark_stacks = mini(mark_stacks + int(p.get("stacks", 1)), cap_m)
+			_mark_timer = _mark_duration
+			_store_flag(p, "decree", attacker_peer, {})
+			_store_flag(p, "mark_transfer", attacker_peer, {"cap": cap_m})
+			_store_flag(p, "mark_soul", attacker_peer, {})
+			_store_flag(p, "mark_death_blast", attacker_peer, {})
+			_check_decree()
+		"vuln":
+			_vuln_pct = maxf(_vuln_pct if Time.get_ticks_msec() < _vuln_until_msec else 0.0, float(p.get("pct", 0.2)))
+			_vuln_until_msec = Time.get_ticks_msec() + int(float(p.get("dur", 2.0)) * 1000.0)
+		"chain_bomb":
+			_enchant_flags["chain_bomb"] = {"peer": attacker_peer, "ap": float(p.get("ap", 10.0)),
+				"until": Time.get_ticks_msec() + int(float(p.get("dur", 0.6)) * 1000.0), "gold": float(p.get("gold", 0.03))}
+		"fear":
+			apply_fear_wander(float(p.get("dur", 2.0)), false)
+		"root":
+			if is_boss:
+				apply_slow(0.9, float(p.get("dur", 2.0)) * 0.5, true)
+			else:
+				apply_root(float(p.get("dur", 2.0)))
+		"knock":
+			apply_knockback_distance(Vector2(p.get("dir", Vector2.RIGHT)), float(p.get("dist", 60.0)))
+		"sleep":
+			_apply_sleep_host(p)
+		"crack":
+			crack_stacks += maxi(1, int(p.get("stacks", 1)))
+		"stun":
+			apply_stun(float(p.get("dur", 0.5)))
+		"slow":
+			apply_slow(float(p.get("pct", 0.3)), float(p.get("dur", 2.0)), bool(p.get("boss", false)))
+	_in_element_apply = false
+	## "quiet": alan etkilerinin (zehir bulutu, lav...) tekrarlayan uygulaması yeni tepkime zinciri başlatmasın.
+	if element != "" and not bool(p.get("quiet", false)):
+		ElementReactions.resolve(self, element, had)
+
+
+## Parametrede bayrak true ise ölüm/süre etkisi için saklar (vuran + SG ile).
+func _store_flag(p: Dictionary, key: String, peer: int, extra: Dictionary) -> void:
+	if not bool(p.get(key, false)):
+		return
+	var d: Dictionary = extra.duplicate()
+	d["peer"] = peer
+	d["ap"] = float(p.get("ap", 10.0))
+	d["power"] = float(p.get("power", 1.0))
+	_enchant_flags[key] = d
+
+
+## Kan Şelalesi: her 10 kanama yükünde hedef patlar, patlama hasarının %5'i vurana can.
+func _bleed_burst(peer: int, dmg: float) -> void:
+	var tree: SceneTree = get_tree()
+	var pos: Vector2 = global_position
+	for v in Enemy.get_enemies_near(tree, pos, 60.0):
+		if is_instance_valid(v) and not v.is_dead:
+			if peer > 0:
+				v.last_attacker_peer_id = peer
+			v._take_dot_damage(dmg)
+	_notify_enchant_owner(peer, "heal", {"amount": dmg * 0.05})
+	EnchantFxScript.play(tree, "burst", pos, {"palette": "fire", "count": 14, "speed": 110.0, "life": 0.4})
+	EnchantFxScript.play(tree, "ring", pos, {"radius": 60.0, "color": Color(0.9, 0.2, 0.25)})
+
+
+## Ölüm Fermanı: 50+ işaretli düşman canı %15'in altına inince ölür (boss yerine bir kez büyük hasar).
+func _check_decree() -> void:
+	if not _enchant_flags.has("decree") or mark_stacks < 50 or is_dead or max_health <= 0.0:
+		return
+	if health / max_health >= 0.15:
+		return
+	var f: Dictionary = _enchant_flags["decree"]
+	if int(f["peer"]) > 0:
+		last_attacker_peer_id = int(f["peer"])
+	if is_boss:
+		if not bool(f.get("used", false)):
+			f["used"] = true
+			_take_dot_damage(float(f["ap"]) * 2.0 * float(f["power"]))
+		return
+	EnchantFxScript.play(get_tree(), "text", global_position, {"text": "İnfaz", "color": Color("#c98cff")})
+	_take_dot_damage(health + 1.0)
+
+
+## Donmuş Kalp: donmuş (sersem değil) düşmanın canı eşiğin altındaysa paramparça (boss hariç).
+func _try_shatter(p: Dictionary, peer: int) -> void:
+	if is_boss or is_dead or not (is_frozen and not is_stunned) or max_health <= 0.0:
+		return
+	if health / max_health > float(p.get("th", 0.15)):
+		return
+	var tree: SceneTree = get_tree()
+	var pos: Vector2 = global_position
+	var ap: float = float(p.get("ap", 10.0)) * float(p.get("power", 1.0))
+	if peer > 0:
+		last_attacker_peer_id = peer
+	EnchantFxScript.play(tree, "burst", pos, {"palette": "spark", "count": 26, "speed": 210.0, "life": 0.5})
+	EnchantFxScript.play(tree, "text", pos, {"text": "Paramparça", "color": Color("#bfe6ff")})
+	var shards: int = int(p.get("shards", 0))
+	var freeze_r: float = float(p.get("freeze_aoe", 0.0))
+	_take_dot_damage(health + 1.0)
+	for v in ElementReactions._nearest(tree, self, pos, 140.0, shards):
+		if peer > 0:
+			v.last_attacker_peer_id = peer
+		v._take_dot_damage(ap * 0.4)
+		EnchantFxScript.play(tree, "chain", pos, {"to": v.global_position, "color": Color(0.75, 0.9, 1.0)})
+	if freeze_r > 0.0:
+		for v in Enemy.get_enemies_near(tree, pos, freeze_r):
+			if is_instance_valid(v) and not v.is_dead and v != self:
+				v.apply_freeze_full(2.0)
+	if bool(p.get("throne", false)):
+		_notify_enchant_owner(peer, "shatter", {})
+
+
+## Uygulamadan ÖNCEKİ aktif element durumları (tepkime tespiti için).
+func _element_snapshot() -> Dictionary:
+	return {
+		"yanma": burn_time_left > 0.0,
+		"donma": is_frozen and not is_stunned,
+		"zehir": not _poison_stack_time.is_empty(),
+		"kanama": bleed_stacks > 0,
+		"sok": shock_time_left > 0.0,
+	}
+
+
+## Efsun dışı kaynakların tepkime kancası (apply_poison/apply_burn/apply_bleed/_start_freeze host dalı).
+func _legacy_element_touched(element: String, had: Dictionary) -> void:
+	if _in_element_apply or had.is_empty():
+		return
+	ElementReactions.resolve(self, element, had)
+
+
+func _reaction_attack_power() -> float:
+	if _reaction_ap > 0.0:
+		return _reaction_ap
+	var p: Node = get_tree().get_first_node_in_group("player")
+	return float(p.get("damage_bonus")) if p and "damage_bonus" in p else 10.0
+
+
+func _reaction_damage(amount: float) -> void:
+	if amount <= 0.0 or is_dead:
+		return
+	if _reaction_peer > 0:
+		last_attacker_peer_id = _reaction_peer
+	_take_dot_damage(amount)
+
+
+func _end_freeze_now() -> void:
+	if is_frozen and not is_stunned:
+		_freeze_timer = 0.0
+		_process_freeze(0.0)
+
+
+func _poison_dps_total() -> float:
+	var s: float = 0.0
+	for d in _poison_stack_dps:
+		s += d
+	return s
+
+
+func _poison_dps_average() -> float:
+	return _poison_dps_total() / float(_poison_stack_dps.size()) if _poison_stack_dps.size() > 0 else 0.0
+
+
+func _extend_poison(seconds: float) -> void:
+	if seconds <= 0.0:
+		return
+	for i in range(_poison_stack_time.size()):
+		_poison_stack_time[i] += seconds
+
+
+func _apply_burn_stack(tick: float, duration: float, max_stacks: int) -> void:
+	var was_burning: bool = burn_time_left > 0.0
+	apply_burn(tick, duration)
+	if max_stacks > 1:
+		_burn_stacks = mini(max_stacks, (_burn_stacks if was_burning else 0) + 1)
+	elif _burn_stacks < 1:
+		_burn_stacks = 1
+
+
+## İstemci kuklası da efekt varlığından bilir (burn_start/burn_stop yayınıyla kurulur) - silah tarafı bonusları için.
+func is_burning() -> bool:
+	return _burn_status_fx != null and is_instance_valid(_burn_status_fx)
+
+
+func is_shocked() -> bool:
+	return _shock_fx != null and is_instance_valid(_shock_fx)
+
+
+## Donmuş mu (buz, sersemletme değil) - istemci kuklasında freeze_start ile kurulan görselden.
+func is_frozen_now() -> bool:
+	return (_freeze_status_fx != null and is_instance_valid(_freeze_status_fx)) or (is_frozen and not is_stunned)
+
+
+func _apply_shock_host(p: Dictionary, peer: int) -> void:
+	shock_time_left = maxf(shock_time_left, float(p.get("dur", 4.0)))
+	_shock_jump = maxf(_shock_jump, float(p.get("jump", 0.25)))
+	_shock_jumps = maxi(_shock_jumps, int(p.get("jumps", 1)))
+	_shock_spark = maxf(_shock_spark, float(p.get("spark", 0.0)))
+	_shock_ap = maxf(_shock_ap, float(p.get("ap", 0.0)))
+	if bool(p.get("death_bolt", false)):
+		_shock_death_bolt = true
+	if peer > 0:
+		_shock_peer = peer
+	if not is_shocked():
+		_spawn_shock_status_fx()
+		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+			var net_id: int = int(get_meta("network_enemy_id", 0))
+			if net_id > 0:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "shock_start")
+
+
+## Aşırı Yük tepkimesinin şok yayılması - kaynağın şok parametreleri kopyalanır, yeni tepkime zinciri başlatmaz.
+func _apply_shock_from(src: Node) -> void:
+	if is_dead or not is_instance_valid(src):
+		return
+	_in_element_apply = true
+	_apply_shock_host({"dur": maxf(2.0, float(src.shock_time_left)), "jump": src._shock_jump, "jumps": src._shock_jumps,
+		"spark": src._shock_spark, "ap": src._shock_ap}, int(src._shock_peer))
+	_in_element_apply = false
+
+
+func _spawn_shock_status_fx() -> void:
+	if is_shocked():
+		return
+	_shock_fx = Node2D.new()
+	_shock_fx.set_script(ShockStatusFxScript)
+	_shock_fx.set("radius", _body_radius)
+	add_child(_shock_fx)
+
+
+func _remove_shock_status_fx() -> void:
+	if is_shocked():
+		_shock_fx.queue_free()
+	_shock_fx = null
+
+
+func _clear_shock() -> void:
+	shock_time_left = 0.0
+	_shock_jump = 0.0
+	_shock_jumps = 1
+	_shock_spark = 0.0
+	_shock_death_bolt = false
+	_conductive = false
+	_blood_current = false
+	if is_shocked():
+		_remove_shock_status_fx()
+		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+			var net_id: int = int(get_meta("network_enemy_id", 0))
+			if net_id > 0:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "shock_stop")
+
+
+## Şoklu düşmana DOĞRUDAN isabet (silah/yetenek; DOT ve sıçramanın kendisi değil) -> en yakın düşman(lar)a sıçrama.
+func _shock_on_direct_hit(amount: float) -> void:
+	if _shock_jump <= 0.0 or amount <= 0.0:
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - _shock_last_jump_msec < SHOCK_JUMP_MIN_INTERVAL_MSEC:
+		return
+	_shock_last_jump_msec = now
+	var tree: SceneTree = get_tree()
+	for t in ElementReactions._nearest(tree, self, global_position, SHOCK_JUMP_RANGE, _shock_jumps):
+		var dmg: float = amount * _shock_jump
+		if _blood_current and bleed_stacks > 0:
+			dmg *= 1.0 + 0.05 * float(bleed_stacks)
+			t.apply_bleed(bleed_tick_damage_per_stack, 1, maxi(t.bleed_stacks + 1, 5))
+		if _conductive and not _poison_stack_time.is_empty():
+			var avg: float = _poison_dps_average()
+			for i in range(mini(_poison_stack_time.size() / 2, 50)):
+				t.apply_poison(avg, 200.0, 10.0)
+		if last_attacker_peer_id > 0:
+			t.last_attacker_peer_id = last_attacker_peer_id
+		t._take_dot_damage(dmg)
+		EnchantFxScript.play(tree, "chain", global_position, {"to": t.global_position})
+
+
+func _apply_sleep_host(p: Dictionary) -> void:
+	if is_boss or is_dead:
+		return
+	var dur: float = float(p.get("dur", 1.5))
+	apply_stun(dur)
+	_sleep_time = maxf(_sleep_time, dur)
+	_sleep_break = bool(p.get("break", true))
+	_sleep_bonus = maxf(_sleep_bonus, float(p.get("bonus", 0.0)))
+	_sleep_vuln = maxf(_sleep_vuln, float(p.get("vuln", 0.0)))
+	_sleep_wake_slow = maxf(_sleep_wake_slow, float(p.get("wake_slow", 0.0)))
+
+
+func _wake_up() -> void:
+	if _sleep_time <= 0.0:
+		return
+	if is_frozen and is_stunned:
+		_freeze_timer = 0.0
+		_process_freeze(0.0)
+	_on_sleep_end()
+
+
+func _on_sleep_end() -> void:
+	_sleep_time = 0.0
+	if _sleep_wake_slow > 0.0 and not is_dead:
+		apply_slow(_sleep_wake_slow, 3.0)
+	_sleep_bonus = 0.0
+	_sleep_vuln = 0.0
+	_sleep_wake_slow = 0.0
+	_sleep_break = true
+
+
+## Çatlak + Derin Uyku: alınan TÜM hasarın çarpanı (bkz. _apply_damage).
+func _damage_taken_mult() -> float:
+	var m: float = 1.0
+	if crack_stacks > 0:
+		m += CRACK_DAMAGE_PER_STACK * float(crack_stacks)
+	if _sleep_time > 0.0 and _sleep_vuln > 0.0:
+		m += _sleep_vuln
+	if _vuln_pct > 0.0 and Time.get_ticks_msec() < _vuln_until_msec:
+		m += _vuln_pct
+	## Efsun İşaret'i (element "mark"): yük başına alınan tüm hasar +%1 (Avcı İşareti ile +%1,5).
+	if mark_stacks > 0 and _mark_pct > 0.0:
+		m += _mark_pct * float(mark_stacks)
+	return m
+
+
+## Doğrudan isabetin ÖNCESİ (host): uyuyan düşmana ilk vuruş bonusu.
+func _pre_direct_hit(amount: float) -> float:
+	if _sleep_time > 0.0 and _sleep_bonus > 0.0:
+		amount *= 1.0 + _sleep_bonus
+		_sleep_bonus = 0.0
+	return amount
+
+
+## Doğrudan isabetin SONRASI (host): uykudan uyandırma, şok sıçraması.
+func _post_direct_hit(amount: float) -> void:
+	if is_dead:
+		return
+	if _sleep_time > 0.0 and _sleep_break:
+		_wake_up()
+	if shock_time_left > 0.0:
+		_shock_on_direct_hit(amount)
+	if _enchant_flags.has("decree"):
+		_check_decree()
+
+
+## Host'ta her karede (sadece bir efsun durumu aktifken çağrılır - bkz. _physics_process).
+func _process_enchant_status(delta: float) -> void:
+	if shock_time_left > 0.0:
+		shock_time_left -= delta
+		if _shock_spark > 0.0:
+			_shock_spark_timer -= delta
+			if _shock_spark_timer <= 0.0:
+				_shock_spark_timer = 1.0
+				var near: Array = ElementReactions._nearest(get_tree(), self, global_position, 160.0, 1)
+				if not near.is_empty():
+					var t: Node = near[0]
+					if _shock_peer > 0:
+						t.last_attacker_peer_id = _shock_peer
+					t._take_dot_damage(_shock_ap * _shock_spark)
+					EnchantFxScript.play(get_tree(), "chain", global_position, {"to": t.global_position})
+		if shock_time_left <= 0.0:
+			_clear_shock()
+	if _sleep_time > 0.0:
+		_sleep_time -= delta
+		if _sleep_time <= 0.0:
+			_on_sleep_end()
+	## Ebedi Kış: donmuş düşmana değen (34 px) düşman da donar.
+	if _enchant_flags.has("contagious") and is_frozen and not is_stunned:
+		_contagious_timer -= delta
+		if _contagious_timer <= 0.0:
+			_contagious_timer = 0.5
+			for v in Enemy.get_enemies_near(get_tree(), global_position, 34.0 + _body_radius):
+				if is_instance_valid(v) and v != self and not v.is_dead and not v.is_frozen:
+					v.apply_freeze_full(2.0)
+					v._linger_slow = maxf(v._linger_slow, _linger_slow)
+	if not _plague.is_empty() and bool(_plague.get("cough", false)) and _poison_stack_time.size() >= 10:
+		_plague_cough_timer -= delta
+		if _plague_cough_timer <= 0.0:
+			_plague_cough_timer = 2.0
+			var near_c: Array = ElementReactions._nearest(get_tree(), self, global_position, float(_plague.get("radius", 80.0)), 1)
+			if not near_c.is_empty():
+				near_c[0]._receive_plague(1, float(_plague.get("dps", 1.0)), float(_plague.get("cap", 10.0)), float(_plague.get("dur", 10.0)), _plague)
+
+
+func _has_enchant_status() -> bool:
+	return shock_time_left > 0.0 or _sleep_time > 0.0 or (not _plague.is_empty() and bool(_plague.get("cough", false)))
+
+
+func _receive_plague(stacks: int, dps: float, cap: float, dur: float, plague: Dictionary) -> void:
+	if is_dead or stacks <= 0:
+		return
+	var had: Dictionary = _element_snapshot()
+	_in_element_apply = true
+	for i in range(mini(stacks, 50)):
+		apply_poison(dps, cap, dur)
+	_plague = plague.duplicate()
+	_in_element_apply = false
+	ElementReactions.resolve(self, "zehir", had)
+
+
+## Kobra Oku (Zehirli Ok finali): 20+ yüklü hedefe tüm yüklerin 3 sn'lik hasarı anında; hasarın %2'si vurana can.
+func _kobra_strike(peer: int) -> void:
+	if _poison_stack_time.size() < 20:
+		return
+	var dmg: float = _poison_dps_total() * 3.0
+	if dmg <= 0.0:
+		return
+	if peer > 0:
+		last_attacker_peer_id = peer
+	_take_dot_damage(dmg)
+	_notify_enchant_owner(peer, "heal", {"amount": dmg * 0.02})
+	EnchantFxScript.play(get_tree(), "text", global_position, {"text": "Kobra", "color": Color("#8fd65a")})
+
+
+## Host'ta olan ve bir oyuncuya ait efsun olayını o oyuncunun kendi istemcisine iletir (can, Veba sayacı...).
+func _notify_enchant_owner(peer: int, event: String, data: Dictionary) -> void:
+	var local_id: int = multiplayer.get_unique_id() if (NetworkManager.is_multiplayer_active and multiplayer.has_multiplayer_peer()) else 0
+	if not NetworkManager.is_multiplayer_active or peer <= 0 or peer == local_id:
+		var p: Node = get_tree().get_first_node_in_group("player")
+		if p and p.has_method("on_enchant_event"):
+			p.on_enchant_event(event, data)
+		return
+	NetworkManager.enchant_event.rpc_id(peer, event, data)
+
+
+## Efsun bayraklarının ölüm etkileri (bkz. _enchant_flags). Hasar veren olanlar ertelenir (ölüm -> patlama -> ölüm
+## zincirinde derin özyineleme olmasın) ve bayrağı bırakan oyuncuya atfedilir.
+func _on_death_enchant_flags(tree: SceneTree, pos: Vector2, poison_stacks: int) -> void:
+	if _enchant_flags.is_empty():
+		return
+	var f: Dictionary = _enchant_flags
+	var was_frozen: bool = is_frozen and not is_stunned
+	var deferred: Array = [] ## [yarıçap, hasar, peer, fx türü, renk]
+	if f.has("death_cloud") and poison_stacks > 0:
+		var dc: Dictionary = f["death_cloud"]
+		EnchantAreaScript.spawn(tree, "poison_cloud", pos, {"radius": 100.0, "duration": 3.0, "dps": float(dc.get("dps", 1.0)),
+			"peer": int(dc["peer"]), "ap": float(dc["ap"])}, true)
+	if f.has("burn_spread") and burn_time_left > 0.0:
+		var bs: Dictionary = f["burn_spread"]
+		for v in ElementReactions._nearest(tree, self, pos, 60.0, 6):
+			v.apply_element_host("burn", {"tick": float(bs["tick"]), "dur": float(bs["dur"]), "ap": float(bs["ap"]), "quiet": true}, int(bs["peer"]))
+	if f.has("burn_death_blast") and burn_time_left > 0.0:
+		var bb: Dictionary = f["burn_death_blast"]
+		deferred.append([80.0, float(bb["ap"]) * 0.6 * float(bb["power"]), int(bb["peer"]), "explosion", Color(1.0, 0.55, 0.2)])
+	if f.has("bleed_transfer") and bleed_stacks > 0:
+		var bt: Dictionary = f["bleed_transfer"]
+		for v in ElementReactions._nearest(tree, self, pos, 160.0, 1):
+			v.apply_bleed(bleed_tick_damage_per_stack, bleed_stacks, maxi(int(bt.get("cap", 10)), bleed_stacks))
+	if f.has("bleed_death_blast") and bleed_stacks > 0:
+		var bd: Dictionary = f["bleed_death_blast"]
+		deferred.append([60.0, float(bd["ap"]) * 0.4 * float(bd["power"]), int(bd["peer"]), "burst_blood", Color(0.9, 0.2, 0.25)])
+	if f.has("bleed_kill") and bleed_stacks > 0:
+		_notify_enchant_owner(int(f["bleed_kill"]["peer"]), "bleed_kill", {})
+	if f.has("frozen_shards") and was_frozen:
+		var fs: Dictionary = f["frozen_shards"]
+		var shard_peer: int = int(fs["peer"])
+		for v in ElementReactions._nearest(tree, self, pos, 140.0, 3):
+			if shard_peer > 0:
+				v.last_attacker_peer_id = shard_peer
+			v._take_dot_damage(float(fs["ap"]) * 0.4 * float(fs["power"]))
+			if bool(fs.get("freeze", false)):
+				v.apply_freeze_full(2.0)
+			EnchantFxScript.play(tree, "chain", pos, {"to": v.global_position, "color": Color(0.75, 0.9, 1.0)})
+	if f.has("mark_transfer") and mark_stacks > 1:
+		for v in ElementReactions._nearest(tree, self, pos, 160.0, 1):
+			v.apply_element_host("mark", {"stacks": mark_stacks / 2, "cap": int(f["mark_transfer"].get("cap", 20)),
+				"dur": _mark_duration, "pct": _mark_pct, "quiet": true}, int(f["mark_transfer"]["peer"]))
+	if f.has("mark_soul") and mark_stacks > 0:
+		_notify_enchant_owner(int(f["mark_soul"]["peer"]), "soul", {})
+	if f.has("mark_death_blast") and mark_stacks > 0:
+		var md: Dictionary = f["mark_death_blast"]
+		deferred.append([80.0, float(md["ap"]) * 0.6 * float(md["power"]), int(md["peer"]), "explosion", Color(0.75, 0.45, 1.0)])
+	if f.has("chain_bomb") and Time.get_ticks_msec() <= int(f["chain_bomb"]["until"]):
+		var cb: Dictionary = f["chain_bomb"]
+		deferred.append([60.0, float(cb["ap"]) * 0.6, int(cb["peer"]), "chain_bomb", Color(1.0, 0.7, 0.3)])
+		if randf() < float(cb.get("gold", 0.03)):
+			_notify_enchant_owner(int(cb["peer"]), "gold", {"amount": 1})
+	if deferred.is_empty():
+		return
+	tree.create_timer(0.06).timeout.connect(func() -> void:
+		for d in deferred:
+			var radius: float = float(d[0])
+			var dmg: float = float(d[1])
+			var peer: int = int(d[2])
+			var kind: String = str(d[3])
+			if kind == "burst_blood":
+				EnchantFxScript.play(tree, "burst", pos, {"palette": "fire", "count": 12, "speed": 100.0, "life": 0.4})
+			else:
+				EnchantFxScript.play(tree, "explosion", pos, {"radius": radius, "color": d[4]})
+			for v in Enemy.get_enemies_near(tree, pos, radius):
+				if not is_instance_valid(v) or v.is_dead:
+					continue
+				if kind == "chain_bomb":
+					v.apply_element_host("chain_bomb", {"ap": dmg / 0.6, "dur": 0.6, "gold": 0.03}, peer)
+				if peer > 0:
+					v.last_attacker_peer_id = peer
+				v._take_dot_damage(dmg))
+
+
+## die() içinden, SADECE host/tek oyunculuda: Salgın, Zehirli Ok yayılımı, Enfeksiyon, Şimşek Çekici yıldırımı.
+func _on_death_elements() -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	var pos: Vector2 = global_position
+	var stacks: int = _poison_stack_time.size()
+	if not _plague.is_empty() and stacks > 0:
+		var n: int = int(round(float(stacks) * float(_plague.get("ratio", 0.5))))
+		if n > 0:
+			var dur: float = float(_plague.get("dur", 10.0))
+			if not bool(_plague.get("refresh", false)) and stacks > 0:
+				var rem: float = 0.0
+				for t in _poison_stack_time:
+					rem += t
+				dur = maxf(1.0, rem / float(stacks))
+			for v in ElementReactions._nearest(tree, self, pos, float(_plague.get("radius", 80.0)), 6):
+				v._receive_plague(n, float(_plague.get("dps", 1.0)), float(_plague.get("cap", 10.0)), dur, _plague)
+			EnchantFxScript.play(tree, "ring", pos, {"radius": float(_plague.get("radius", 80.0)), "color": Color(0.55, 0.9, 0.35, 0.9)})
+		if bool(_plague.get("final", false)):
+			_notify_enchant_owner(int(_plague.get("peer", 0)), "plague_death", {})
+	if not _death_poison_burst.is_empty() and stacks > 0:
+		for v in ElementReactions._nearest(tree, self, pos, 100.0, 8):
+			v._receive_plague(int(_death_poison_burst["stacks"]), float(_death_poison_burst["dps"]), float(_death_poison_burst["cap"]), float(_death_poison_burst["dur"]), {})
+		EnchantFxScript.play(tree, "burst", pos, {"palette": "void", "count": 12, "speed": 110.0, "life": 0.4})
+	if _infected:
+		var avg: float = _poison_dps_average()
+		for v in ElementReactions._nearest(tree, self, pos, 150.0, 2):
+			if stacks > 1:
+				v._receive_plague(stacks / 2, avg, 200.0, 10.0, {})
+			if bleed_stacks > 1:
+				v.apply_bleed(bleed_tick_damage_per_stack, bleed_stacks / 2, maxi(v.bleed_stacks + bleed_stacks / 2, 5))
+	_on_death_enchant_flags(tree, pos, stacks)
+	if _shock_death_bolt and shock_time_left > 0.0:
+		var ap: float = _shock_ap
+		var peer: int = _shock_peer
+		## Ertelenir: ölüm zincirinde (yıldırım -> ölüm -> yıldırım) derin özyineleme olmasın.
+		tree.create_timer(0.05).timeout.connect(func() -> void:
+			EnchantFxScript.play(tree, "bolt", pos, {})
+			for v in Enemy.get_enemies_near(tree, pos, 60.0):
+				if is_instance_valid(v) and not v.is_dead:
+					if peer > 0:
+						v.last_attacker_peer_id = peer
+					v._take_dot_damage(ap * 0.5))
+
+
 ## Hançer'in mermisi (weapon.gd _fire_at) her isabette çağırır - yük ekler
 ## (max_stacks'e kadar) ve o anki saniye-başı-hasarı günceller (saldırı gücü
 ## büyüdükçe sonraki isabetlerde tik hasarı da büyür).
@@ -1206,8 +1902,10 @@ func apply_bleed(tick_damage_per_stack: float, stacks_to_add: int, max_stacks: i
 		if net_id > 0:
 			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "bleed", tick_damage_per_stack, float(stacks_to_add), float(max_stacks))
 		return
+	var had_elements: Dictionary = {} if _in_element_apply else _element_snapshot()
 	bleed_tick_damage_per_stack = tick_damage_per_stack
 	bleed_stacks = min(bleed_stacks + max(1, stacks_to_add), max_stacks)
+	_legacy_element_touched("kanama", had_elements)
 
 
 func _process_bleed(delta: float) -> void:
@@ -1215,8 +1913,10 @@ func _process_bleed(delta: float) -> void:
 		return
 	_bleed_tick_timer -= delta
 	if _bleed_tick_timer <= 0.0:
-		_bleed_tick_timer += BLEED_TICK_INTERVAL
-		_take_dot_damage(bleed_tick_damage_per_stack * bleed_stacks)
+		_bleed_tick_timer += _bleed_interval
+		## Kristal Kan tepkimesi: donmuş kalan süre boyunca kanama tikleri x2 (bkz. element_reactions.gd).
+		var bleed_mult: float = 2.0 if Time.get_ticks_msec() < _bleed_double_until_msec else 1.0
+		_take_dot_damage(bleed_tick_damage_per_stack * bleed_stacks * bleed_mult)
 		_spawn_bleed_fx()
 		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 			var net_id: int = int(get_meta("network_enemy_id", 0))
@@ -1258,7 +1958,7 @@ func apply_chill(_stacks_to_add: int) -> void:
 	if is_boss:
 		_boss_chill_stacks += 1
 		_boss_chill_timer = CHILL_DURATION
-		if _boss_chill_stacks >= BOSS_CHILL_HITS_REQUIRED:
+		if _boss_chill_stacks >= _boss_chill_required:
 			_boss_chill_stacks = 0
 			_start_freeze(BOSS_CHILL_FREEZE_DURATION)
 		return
@@ -1601,6 +2301,13 @@ func apply_freeze_full(duration: float) -> void:
 
 
 func _start_freeze(duration: float = FREEZE_DURATION) -> void:
+	## Efsun tepkimeleri (bkz. _legacy_element_touched): donma, uygulanmadan önceki yanma/zehir/kanama/şokla tepkimeye girer.
+	var had_elements: Dictionary = {} if (_in_element_apply or (is_frozen and not is_stunned)) else _element_snapshot()
+	_start_freeze_inner(duration)
+	_legacy_element_touched("donma", had_elements)
+
+
+func _start_freeze_inner(duration: float) -> void:
 	is_frozen = true
 	is_stunned = false
 	chill_stacks = 0
@@ -1666,7 +2373,16 @@ func _get_target_player() -> Node2D:
 	## edilmez.
 	_ensure_lod_classification(get_tree())
 	var target_interval: int = TARGET_UPDATE_INTERVAL_FRAMES * (ENEMY_LOD_FAR_SLOWDOWN if _is_lod_far(get_instance_id()) else 1)
-	var stale_dead: bool = _cached_target_player != null and (not is_instance_valid(_cached_target_player) or _cached_target_player.get("is_dead") == true)
+	## ÇÖKME DÜZELTMESİ (2026-09-25, "Invalid type in function '_apply_aggro_overrides'
+	## ... (previously freed)" ile oyun durdu): Godot 4'te SİLİNMİŞ bir nesne "== null"
+	## sorgusunda TRUE döner (4.7.2'de denendi), yani eski "_cached_target_player != null
+	## and not is_instance_valid(...)" koruması silinmiş hedefte HİÇ tetiklenmiyordu -
+	## hedef (ör. süresi biten Necromancer iskeleti) silinince önbellek yenileme karesine
+	## kadar ölü referansı tutuyor, typed Node2D parametreli _apply_aggro_overrides'a
+	## geçince betik hatası veriyordu. Silinmiş referans typeof OBJECT kalır, gerçek boş
+	## (null) hedef NIL'dir - böylece boş hedefte her karede tarama yapılmıyor (perf).
+	var cache_freed: bool = typeof(_cached_target_player) == TYPE_OBJECT and not is_instance_valid(_cached_target_player)
+	var stale_dead: bool = cache_freed or (_cached_target_player != null and _cached_target_player.get("is_dead") == true)
 	if stale_dead or Engine.get_physics_frames() % target_interval == get_instance_id() % target_interval:
 		_cached_target_player = _find_closest_target_player()
 	## "En yakın" seçimi (yukarıdaki önbellek) ucuzluk için 4 karede bir yenilenir,
@@ -1890,8 +2606,12 @@ func _process_freeze(delta: float) -> void:
 		return
 	_freeze_timer -= delta
 	if _freeze_timer <= 0.0:
+		var was_ice: bool = not is_stunned
 		is_frozen = false
 		is_stunned = false
+		## Ebedi Kış: donma bitince yavaşlık kalır.
+		if was_ice and _linger_slow > 0.0 and not is_dead:
+			apply_slow(_linger_slow, 3.0)
 		if _freeze_status_fx and is_instance_valid(_freeze_status_fx):
 			_freeze_status_fx.queue_free()
 		_freeze_status_fx = null
@@ -2801,6 +3521,10 @@ static func get_enemies_near(tree: SceneTree, pos: Vector2, radius: float) -> Ar
 			if not _separation_grid.has(cell):
 				continue
 			for e in (_separation_grid[cell] as Array):
+				## Izgara fizik karesi başına kurulur; fizik adımı olmayan bir çizim karesinde (yüksek FPS) o arada
+				## serbest kalmış bir yaratık hâlâ içinde olabilir (efsun duman testinde yakalandı) - atla.
+				if not is_instance_valid(e):
+					continue
 				if pos.distance_squared_to(e.global_position) <= radius_sq:
 					result.append(e)
 	return result
@@ -3387,6 +4111,8 @@ func _physics_process(delta: float) -> void:
 			_process_mark(delta)
 		if bleed_stacks > 0:
 			_process_bleed(delta)
+		if shock_time_left > 0.0 or _sleep_time > 0.0 or not _plague.is_empty() or not _enchant_flags.is_empty():
+			_process_enchant_status(delta) ## efsun: şok / uyku / Salgın öksürüğü / bulaşıcı donma
 		if chill_stacks > 0:
 			_process_chill(delta)
 		if _boss_chill_stacks > 0:
@@ -3970,7 +4696,10 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 	## kendi yerel vuruşu) güncelleniyor.
 	if NetworkManager.is_multiplayer_active:
 		last_attacker_peer_id = multiplayer.get_unique_id()
+	## Efsun durumları (bkz. "EFSUN ELEMENT SİSTEMİ"): uyku bonusu, uyandırma, şok sıçraması - doğrudan isabetlerde.
+	amount = _pre_direct_hit(amount)
 	_apply_damage(amount, is_crit, shield_pen_percent)
+	_post_direct_hit(amount)
 
 
 ## Called by NetworkManager.request_enemy_damage RPC on the host only.
@@ -3980,7 +4709,7 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 ## Tüftüf zehriyle ölen yaratıkta öldürme ödülü (şans, Korsan altını, Necromancer ruhu, Savaş Şevki) ve can emme host'a
 ## gidiyordu. Artık tik, son DOĞRUDAN vuranın kimliğini korur (etkiyi genelde o uygulamıştır); istatistik/can emme sadece
 ## o kişi bu makinenin oyuncusuysa (tek oyunculu ya da host'un kendi vuruşu) burada işlenir.
-func _take_dot_damage(amount: float) -> void:
+func _take_dot_damage(amount: float, shield_pen: float = 0.0) -> void:
 	if is_dead or is_ability_invisible or amount <= 0.0:
 		return
 	var local_owner: bool = not NetworkManager.is_multiplayer_active or last_attacker_peer_id <= 0 \
@@ -3991,7 +4720,7 @@ func _take_dot_damage(amount: float) -> void:
 			dealer.match_damage_dealt += amount
 		if dealer and dealer.has_method("on_dealer_hit"):
 			dealer.on_dealer_hit(amount, false)
-	_apply_damage(amount, false, 0.0)
+	_apply_damage(amount, false, shield_pen)
 
 
 func take_damage_host(amount: float, is_crit: bool, shield_pen_percent: float, attacker_id: int = 0) -> void:
@@ -3999,7 +4728,9 @@ func take_damage_host(amount: float, is_crit: bool, shield_pen_percent: float, a
 		return
 	if attacker_id > 0:
 		last_attacker_peer_id = attacker_id
+	amount = _pre_direct_hit(amount)
 	_apply_damage(amount, is_crit, shield_pen_percent)
+	_post_direct_hit(amount)
 
 
 ## DÜZELTME (kullanıcı isteği: "zırh statını ve zırhla ilgili herşeyi
@@ -4009,6 +4740,9 @@ func take_damage_host(amount: float, is_crit: bool, shield_pen_percent: float, a
 ## tamamen kaldırıldığı için o katman de gitti - kalkanı geçen hasar artık
 ## doğrudan (en az 1 hasar garantisiyle) cana işliyor.
 func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> void:
+	## Efsun: Kafatası Kırıcı çatlakları + Derin Uyku - alınan TÜM hasar (DOT dahil).
+	if crack_stacks > 0 or _sleep_vuln > 0.0 or _vuln_pct > 0.0 or mark_stacks > 0:
+		amount *= _damage_taken_mult()
 	var remaining: float = amount
 	var effective_protection: float = shield_protection * (1.0 - clamp(shield_pen_percent, 0.0, 1.0))
 	if item_shield_hp > 0.0 and effective_protection > 0.0:
@@ -4211,6 +4945,11 @@ func die() -> void:
 		var killer_player := get_tree().get_first_node_in_group("player")
 		if killer_player and killer_player.has_method("on_enemy_killed"):
 			killer_player.on_enemy_killed(self)
+
+	## Efsun ölüm yayılımları (Salgın, Enfeksiyon, Şimşek Çekici...) - durumlar host'ta tutulduğu için sadece host/tek oyunculu.
+	## (Boss ölümü artık doğrudan efsun hakkı vermez - garanti düşen ELİT sandık herkese efsun verir, bkz. _drop_chest.)
+	if not NetworkManager.is_multiplayer_active or NetworkManager.is_host:
+		_on_death_elements()
 
 	_drop_xp()
 	_drop_gold()
@@ -4607,9 +5346,23 @@ func _drop_magnet() -> void:
 ## sandık düşürmesi bilinçli olarak bu çarpandan MUAF kalmaya devam ediyor
 ## (yukarıdaki not), o yüzden bu değişiklik SADECE normal yaratıkları
 ## etkiliyor.
-const CHEST_DROP_RATE_MULT := 0.12
+## DÜZELTME (kullanıcı bildirimi 2026-09-25: "şans kasmadığında ... sandık düşmüyor") - 0.12 de yemekteki gibi toplamalı
+## şans döneminde verilmişti; şans 0'da ~25 dk'da ~5 sandık kalıyordu. 0.12 -> 0.25 (x~2): ilk 5 dk'da ~0,75, oyun boyunca
+## ~12-14 normal sandık (bosslar/elit sandıklar ayrı, bu çarpandan etkilenmez).
+const CHEST_DROP_RATE_MULT := 0.25
+## Elit sandık (kullanıcı isteği 2026-09-25: "elitler bosslardan ve güçlü yaratıklardan nadiren düşsün ... bossdan düşen
+## sandık garantidir", "güçlü yaratık kademesi yüksek yaratık demek"): boss her zaman 1 ELİT sandık düşürür (eskiden
+## normal sandık + herkese efsun hakkı); Kademe >= ELITE_CHEST_MIN_TIER olan sıradan yaratıklarda ayrı, nadir bir elit
+## zarı (şansla çarpılır). Normal sandık zarı eskisiyle aynı ("şanslar değişmeyecek").
+const ELITE_CHEST_MIN_TIER := 7
+const ELITE_CHEST_CHANCE := 0.0006
+
+
 func _drop_chest() -> void:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		return
+	if is_boss:
+		_spawn_chest_drop(true)
 		return
 	var base_chance: float = 0.005
 	if _current_tier <= 2:
@@ -4626,21 +5379,28 @@ func _drop_chest() -> void:
 		base_chance = 0.010
 
 	## Şans artık çarpımsal (bkz. LUCK_DROP_MULT_PER_POINT) - 20 şans = 2 kat sandık.
-	var chance: float = 1.0 if is_boss else base_chance * _luck_mult(LUCK_DROP_MULT_PER_POINT) * CHEST_DROP_RATE_MULT
-	if randf() <= chance:
-		var chest_tier: int = _get_chest_tier_from_enemy_tier()
-		var drop_pos: Vector2 = global_position + Vector2(randf_range(-12.0, 12.0), randf_range(-12.0, 12.0))
-		var scene_root: Node = get_tree().current_scene
-		_queue_drop_spawn(func() -> void:
-			var chest = ChestDropScene.instantiate()
-			chest.chest_tier = chest_tier
-			chest.global_position = drop_pos
-			if NetworkManager.is_multiplayer_active:
-				var drop_id: int = NetworkManager._gen_drop_id()
-				chest.set_meta("drop_network_id", drop_id)
-				NetworkManager.broadcast_drop.rpc("chest", chest.global_position, chest.chest_tier, drop_id)
-			scene_root.call_deferred("add_child", chest)
-		)
+	var luck: float = _luck_mult(LUCK_DROP_MULT_PER_POINT)
+	if randf() <= base_chance * luck * CHEST_DROP_RATE_MULT:
+		_spawn_chest_drop(false)
+	if _current_tier >= ELITE_CHEST_MIN_TIER and randf() <= ELITE_CHEST_CHANCE * luck:
+		_spawn_chest_drop(true)
+
+
+func _spawn_chest_drop(elite: bool) -> void:
+	var chest_tier: int = _get_chest_tier_from_enemy_tier()
+	var drop_pos: Vector2 = global_position + Vector2(randf_range(-12.0, 12.0), randf_range(-12.0, 12.0))
+	var scene_root: Node = get_tree().current_scene
+	_queue_drop_spawn(func() -> void:
+		var chest = ChestDropScene.instantiate()
+		chest.chest_tier = chest_tier
+		chest.is_elite = elite
+		chest.global_position = drop_pos
+		if NetworkManager.is_multiplayer_active:
+			var drop_id: int = NetworkManager._gen_drop_id()
+			chest.set_meta("drop_network_id", drop_id)
+			NetworkManager.broadcast_drop.rpc("elite_chest" if elite else "chest", chest.global_position, chest.chest_tier, drop_id)
+		scene_root.call_deferred("add_child", chest)
+	)
 
 
 func _get_chest_tier_from_enemy_tier() -> int:

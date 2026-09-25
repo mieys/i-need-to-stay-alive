@@ -152,7 +152,7 @@ func _ready() -> void:
 	## Fizik interpolasyonu (bkz. physics_interp.gd): _physics_process'te hareket ediyor.
 	PhysicsInterp.opt_in(self)
 	body_entered.connect(_on_body_entered)
-	get_tree().create_timer(2.0).timeout.connect(func(): if is_instance_valid(self): queue_free())
+	get_tree().create_timer(2.0).timeout.connect(_on_life_timeout)
 	if is_crit:
 		if color_rect:
 			color_rect.color = Color(1.0, 0.35, 0.15, 1.0)
@@ -167,6 +167,22 @@ func _ready() -> void:
 		anim.play("appear")
 	elif anim and anim.sprite_frames and anim.sprite_frames.has_animation("fly"):
 		anim.play("fly")
+
+
+## Efsun (Kartal Gözü): taban 2 sn ömrün üstüne eklenecek uçuş süresi - silah (weapon.gd) ya da uzak kopyada
+## EnchantFx.apply_projectile_look mermi ağaca girdikten SONRA yazar, bu yüzden ilk zamanlayıcı dolunca okunur.
+var _extra_life: float = 0.0
+
+
+func _on_life_timeout() -> void:
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
+	if _extra_life > 0.0:
+		var more: float = _extra_life
+		_extra_life = 0.0
+		get_tree().create_timer(more).timeout.connect(_on_life_timeout)
+		return
+	queue_free()
 
 
 ## "appear" bitince (ör. Arcane büyü parlaması) - mermi bu sırada hedefe
@@ -204,6 +220,14 @@ func _on_body_entered(body: Node) -> void:
 	if get_meta("network_spawned", false):
 		_spawn_impact()
 		_play_impact_sound()
+		## Efsunlu delici mermi (bkz. EnchantFx.apply_projectile_look "pierce"): uzak kopya da kasterdeki gibi o kadar
+		## düşmanın içinden geçer, ilk düşmanda yok olup "ok kayboldu" gibi görünmez.
+		var visual_pierce: int = int(get_meta("visual_pierce", 0))
+		if visual_pierce > 0 and is_instance_valid(body) and body.is_in_group("enemies"):
+			if not _hit_bodies.has(body):
+				_hit_bodies.append(body)
+			if _hit_bodies.size() <= visual_pierce:
+				return
 		_finish_or_play_impact()
 		return
 	if not is_instance_valid(body) or not (body.is_in_group("enemies") and body.has_method("take_damage")):
@@ -247,6 +271,10 @@ func _on_body_entered(body: Node) -> void:
 	_apply_knockback(body)
 	if splash_radius > 0.0:
 		_apply_splash_damage(body)
+	## Efsun: silahın efsun davranışı (scripts/enchants/*.gd) bu isabete element/etki ekler, merminin yönünü (sekme) ya da
+	## sonraki hasarını (delme rampası) değiştirebilir. Silah sahneden kalktıysa sessizce atlanır.
+	if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_projectile_hit"):
+		source_weapon.enchant_on_projectile_hit(self, body, hit_damage, is_primary_hit)
 	_spawn_impact()
 	_play_impact_sound()
 	## Hâlâ delme hakkı varsa (pierce_count kadar EK düşman) mermi hiç
@@ -288,6 +316,9 @@ func _apply_splash_damage(direct_hit: Node) -> void:
 			continue
 		if global_position.distance_to(e.global_position) <= splash_radius:
 			e.take_damage(damage, is_crit, shield_pen_percent, true) ## patlama alanı
+			## Efsun: patlamanın vurduğu her düşman da bir (ikincil) isabet (bkz. enchant_behavior.gd on_hit).
+			if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_projectile_hit"):
+				source_weapon.enchant_on_projectile_hit(self, e, damage, false)
 			## Ateş Asası pasifi: patlamanın değdiği HER düşman yanar.
 			if burn_on_hit_tick_damage > 0.0 and e.has_method("apply_burn"):
 				e.apply_burn(burn_on_hit_tick_damage, BURN_ON_HIT_DURATION)

@@ -170,7 +170,7 @@ const SKILL2_TIMING := {
 	27: {"duration": 0.0, "cooldown": 45.0},
 	## Necromancer E = Golem Çağır (id 20) - kullanıcı isteği (2026-09-24): "iskelet Q golem E kafatası da R olmalı
 	## yarasayı ... yok et". Eskiden SKILL3_TIMING[20]'deydi (R iken); Yarasa Sürüsü (id 35) tamamen silindi.
-	## 50 Ruh (NECRO_GOLEM_SOUL_COST) + 10sn bekleme, standart skill2_state makinesi (ön kontroller _activate_skill2 başında).
+	## 25 Ruh (NECRO_GOLEM_SOUL_COST) + 10sn bekleme, standart skill2_state makinesi (ön kontroller _activate_skill2 başında).
 	20: {"duration": 0.4, "cooldown": 10.0},
 	## Vampir Çocuk TEMEL (Yarasa Formu, skill2 id 41): 5sn dönüşüm, ardından 22sn bekleme -
 	## standart skill2_state makinesini kullanır (bkz. _skill_vampir_bat_form/_end_skill2_effects).
@@ -1205,6 +1205,8 @@ func buy_weapon_copy(key: String, level: int) -> bool:
 		w.fired.connect(_on_weapon_fired)
 	_apply_weapon_bonuses_to(w)
 	apply_owned_weapon_tier(w, key, level)
+	## Efsun: kayıtlı oyun geri yükleme / aynı sıradaki kaydın efsunu (yeni alınan silahta boş - no-op).
+	_apply_enchant_to_weapon(owned_weapon_nodes.size() - 1)
 	_reposition_weapon_icons()
 	## Kullanıcı bildirimi: "karakterin silahları içeride gözükmemeli" -
 	## oyun artık ev içindeyken başlayıp (bkz. house_interior.gd _ready())
@@ -1331,663 +1333,236 @@ func set_owned_weapon_level(index: int, level: int) -> void:
 	apply_owned_weapon_tier(w, key, level)
 
 
-## Tek bir silah instance'ına, tek bir seviyeye göre tier uygular - hem
-## dükkandan alınan bağımsız kopyalar (buy_weapon_copy/set_owned_weapon_level)
-## HEM Matthew'in ana Tüftüf'ü (_ready()'de doğrudan) bunu kullanır.
-## 100 seviyeye rebalance (kullanıcı isteği: "Tüm silah/kalkan
-## geliştirmelerini 100 levele yükseltip gelişim başına artan statları da
-## buna göre güncelle - 100 levele arttırmamız daha güçlü olacakları anlamına
-## gelmiyor sadece geliştirmelerin güçlendirmesi ufak ufak gelecek... kademe
-## 3-5-7-10'da verilen güçlendirmeler 100 levele göre sıralanmalı: kademe
-## 3=30 level, kademe 5=50 level, kademe 7=70 level, kademe 10=100 level.")
-##
-## Eskiden bu 13+1 silah (fire_staff hariç, o kademesizdi - bkz. aşağıda)
-## 10 (bazıları 30, bkz. shop_panel.gd MAX_LEVELS eski değerleri) seviyeye
-## kapalıydı ve "tier" (int, clamp(level,1,10)) DOĞRUDAN "level"e eşitti - bu
-## yüzden tek bir "tier" değişkeni HEM sürekli büyüyen statları (hasar/ateş
-## hızı/zırh delme gibi her seviyede küçük küçük artan şeyler) HEM de dönüm
-## noktası (3/5/7/10) bonuslarını AYNI ANDA temsil edebiliyordu. Artık 100
-## seviye olduğu için bu ikisi ayrıştı:
-##   _tier_from_level10(level): sürekli büyüyen statlar İÇİN - level 1'de
-##   eski tier 1, level 100'de eski tier 10 ile TAM AYNI değeri verecek
-##   şekilde DÜZGÜN (lineer) ara değer üretir. Aşağıdaki "(tier-1)*X"/
-##   "tier*X" formülleri HİÇ DEĞİŞMEDİ, sadece eski int tier'in yerine bu
-##   float geldi - uç noktalar (level 1 ve level 100) eski (level 1 ve level
-##   10) ile birebir eşit kalıyor, aradaki her seviye ESKİSİNDEN ÇOK daha
-##   ufak bir artış veriyor (istenen "ufak ufak güçlenme").
-##   Dönüm noktası bonusları (poison ramp çarpanı/pierce sayısı/crit hasarı
-##   gibi İKİNCİL, "aşağı yukarı sabit basamak" bonuslar) ise artık ham
-##   `level`e bakıp 30/50/70/100 eşiklerini kontrol ediyor (kullanıcının
-##   verdiği TAM eşleme) - bonus DEĞERLERİ hiç değişmedi, sadece eşik seviyesi.
-##   _visual_tier_from_level(level): weapon.gd'nin set_weapon_tier()/
-##   tier_icon_textures'ı SADECE eski 1/3/5/7/10 karşılığı kadar ikon
-##   içeriyor - ham level (1..100) verilirse ikon hep aynı (son) tier'de
-##   kilitli kalırdı, bu yüzden görsel güncelleme için bu ayrı staircase
-##   fonksiyonu kullanılıyor.
-## Kullanıcı isteği: "Oyundaki geliştirilebilen tüm itemlerin levele göre
-## gelişme hızını %100 arttır. Yani level başına verilecek statlar %100
-## artacak her levelde." - bu, çoğu silahın (bkz. yukarıdaki not - ~12
-## _apply_*_tier fonksiyonu bu TEK paylaşılan fonksiyonu kullanıyor) sürekli
-## per-level büyümesinin kaynağı. Level 1'deki taban (tier=1.0, "hiç
-## geliştirilmemiş" durumu) DEĞİŞMEDİ - sadece seviye başına artış (eski
-## 9.0/99.0) iki katına çıkarıldı (18.0/99.0), yani level 100'deki tavan da
-## eskisinin İKİ KATI kadar (tier 10 -> 19) bonus üretiyor - "(tier-1)*X"
-## formüllerinin hepsi bunu otomatik yansıtır.
-##
-## DÜZELTME (kullanıcı isteği: "Silah ve kalkan tierlarını 100 yapmanı
-## istemiştim onu 20'ye düşürerek geliştirme bedellerinin fiyatını ve
-## geliştirme başına artan gücünü buna göre eşitle. 100 leveldeki güç nasılsa
-## 20 leveldeki güç de öyle olacak şekilde güncelle.") - max seviye 100'den
-## 20'ye indi (bkz. shop_panel.gd MAX_LEVELS). UÇ NOKTALAR (level 1 -> tier
-## 1.0, level 20 -> tier 19.0) BİREBİR AYNI KALDI - sadece payda 99'dan 19'a
-## indi, yani artık 20 (eskiden 100) adımda AYNI 1.0->19.0 aralığı taranıyor.
-## Sonuç: eski level 100'ün ürettiği HER stat, yeni level 20'de DE aynen
-## üretiliyor - "100 leveldeki güç ne ise 20 leveldeki güç de o" isteği
-## otomatik sağlanıyor, "(tier-1)*X" formüllerinin hiçbirine dokunmaya gerek
-## kalmadı.
-static func _tier_from_level10(level: int) -> float:
-	var lvl: int = clampi(level, 1, 20)
-	return 1.0 + (float(lvl) - 1.0) * 18.0 / 19.0
+## Silahların SAF (oto-atak) hali - hem dükkandan/sandıktan alınan kopyalar (buy_weapon_copy/
+## set_owned_weapon_level) HEM Matthew'in başlangıç Tüftüf'ü bunu kullanır.
+## Kullanıcı isteği (2026-09-25, efsun sistemi öncesi temizlik): "silahların pasif özelliklerini silip saf
+## hallerine dönüştür, sadece oto ataklı formu kalsın (yayın 3 vuruşta bir 2 ok atması, buz asasının
+## dondurması gibi)". Kullanıcının seçimleri:
+##   1) Seviye silaha HİÇBİR şey vermez - eski _apply_*_tier fonksiyonlarının düz hasar/ateş hızı büyümesi ve
+##      30/50/70/100 dönüm noktaları (ekstra ok, delme, sıçrama, kritik, kalkan delme, yarıçap, hız, hasar
+##      çarpanı...) silindi. level parametresi sadece çağıran yerlerle imza uyumu için duruyor.
+##   2) "Daha da sade": sadece ATIŞ BİÇİMİ kalır - durum efektleri silahlardan kaldırıldı: Hançer kanaması,
+##      Tüftüf zehri + kalıcı gerçek hasarı + zehir-öncelikli hedeflemesi (weapon_tuftuf.tscn), Tabanca yükü,
+##      Ateş Asası yakması, Pençe can emmesi.
+## Kalan atış biçimleri: Yay her 3. atışta +1 ok, Buz Asası donma (+donmamışa öncelik, sahnede), Tüfek 1 ek
+## düşman delme (%30, sahnede), Yıldırım ışını + 1 sıçrama (weapon.gd varsayılanı), Bumerang gidip dönme,
+## Fişek/Ateş Asası alan patlaması, yakın dövüş silahlarının alan savuruşu (_configure_*_melee).
+## weapon.gd/projectile.gd/enemy.gd'deki kanama/zehir/yük/yakma/can emme/kalkan delme ALTYAPISI bilerek
+## duruyor (değer 0 = no-op) - efsun sistemi bu alanları doldurarak kullanabilir.
+const YAY_PURE_EXTRA_ARROWS := 1
+const BUZ_PURE_CHILL_STACKS := 1
+## Tüfek'in saldırı gücü oranı (kullanıcı istekleri: önce x1.3, sonra x1.5 -> 1.95) - pasif değil taban stat,
+## eskiden _apply_tufek_tier'de set ediliyordu; sahnedeki (0.9) değerin üstüne yazılır.
+const TUFEK_ATTACK_POWER_RATIO := 1.95
 
-
-static func _visual_tier_from_level(level: int) -> int:
-	if level >= 20:
-		return 10
-	elif level >= 14:
-		return 7
-	elif level >= 10:
-		return 5
-	elif level >= 6:
-		return 3
-	return 1
-
-
-func apply_owned_weapon_tier(w, key: String, level: int) -> void:
-	if key == "tuftuf":
-		_apply_tuftuf_tier(w, level)
-	elif key == "tufek":
-		_apply_tufek_tier(w, level)
-	elif key == "tabanca":
-		_apply_tabanca_tier(w, level)
-	elif key == "arcane":
-		_apply_arcane_tier(w, level)
-	elif key == "dagger":
-		_apply_hancer_tier(w, level)
-	elif key == "yay":
-		_apply_yay_tier(w, level)
-	elif key == "crossbow":
-		_apply_crossbow_tier(w, level)
-	elif key == "boomerang":
-		_apply_boomerang_tier(w, level)
-	elif key == "buz_asasi":
-		_apply_buz_asasi_tier(w, level)
-	elif key == "fisek":
-		_apply_fisek_tier(w, level)
-	elif key == "pence":
-		_apply_pence_tier(w, level)
-	elif key == "topuz":
-		_apply_topuz_tier(w, level)
-	elif key == "uzunkilic":
-		_apply_uzunkilic_tier(w, level)
-	elif key == "lightning_staff":
-		_apply_lightning_tier(w, level)
-	## DÜZELTME (100-level rebalance): fire_staff eskiden kademesizdi (bu
-	## generic "else" dalına düşüyordu, diğer 14 silahın hiçbirinde olmayan
-	## bir eksiklikti). Şimdi tutarlılık için diğerleriyle aynı 1/3/5/7/10
-	## dönüm noktası desenine kavuştu (bkz. _apply_fire_staff_tier) -
-	## kullanıcının literal isteğinin ötesinde bir ek, mevcut 14 silahla
-	## tutarlılık için eklendi.
-	elif key == "fire_staff":
-		_apply_fire_staff_tier(w, level)
-	else:
-		var dmg_bonus: float = (level - 1) * 3.0
-		var fr_mult: float = max(0.5, 1.0 - (level - 1) * 0.015)
-		if w.has_method("set_shop_damage_bonus"):
-			w.set_shop_damage_bonus(dmg_bonus)
-		if w.has_method("set_shop_fire_rate_mult"):
-			w.set_shop_fire_rate_mult(fr_mult)
-
-
-## Tüftüf: diğer dükkan silahları gibi 30 değil, 10 tier'e kapalı - bkz.
-## tüftüf özellikleri.txt (2026 güncellemesi).
-##   hasar: tier başına 5 hasar + saldırı gücünün (damage_bonus) %50'si
-##   (saldırı gücü oranı tier'e göre değişmez - bkz. weapon.gd
-##   card_damage_bonus_ratio, weapon_tuftuf.tscn'de 0.5 olarak ayarlı, bu
-##   yüzden burada SADECE tier'e bağlı düz kısım (tier1 taban HARİÇ, tier
-##   başına +5) set_shop_damage_bonus ile ekleniyor).
-##   ateş hızı: tier başına %8 daha hızlı (tier 10'da ~%72 daha hızlı,
-##   min. çarpan 0.3 ile sınırlı) - değişmedi.
-## ZEHİR (kullanıcı isteği: "Tüftüfün zehri 100 defaya kadar stacklenebilsin ve
-## zehir 20 saniye boyunca her saniye saldırı gücünün %5'i kadar hasar versin"):
-## eskiden tek bir zehir vardı (her isabet yeniliyor, tık hasarı tier + %1
-## saldırı gücü kadar her saniye artıyor, 3/5/7/10. tier'da x1.5..x3 çarpanı).
-## Artık her isabet bir YÜK ekler (en fazla TUFTUF_POISON_MAX_STACKS), her yük
-## TUFTUF_POISON_DURATION sn boyunca saniyede saldırı gücünün
-## TUFTUF_POISON_DPS_ATTACK_POWER_RATIO'su kadar hasar verir (bkz. enemy.gd
-## apply_poison). Zehir artık tier'e BAĞLI DEĞİL - kullanıcı sabit, tier'siz bir
-## formül verdi; tier sadece dart hasarını ve ateş hızını büyütmeye devam ediyor.
-const TUFTUF_POISON_DPS_ATTACK_POWER_RATIO := 0.05
-const TUFTUF_POISON_MAX_STACKS := 100
-const TUFTUF_POISON_DURATION := 20.0
-
-func _apply_tuftuf_tier(w, level: int) -> void:
-	## Matthew'in başlangıç Tüftüf'ü DAHİL, her Tüftüf kopyası aynı kuralı
-	## izler - taze, level 1'den başlar, hiçbir özel kaydırma/bonus yok
-	## (hiçbir karakterin ayrı bir "ana silahı" olmadığı için).
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 5.0
-	var fr_mult: float = max(0.3, 1.0 - (tier - 1.0) * 0.08)
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	if w.has_method("set_shop_fire_rate_mult"):
-		w.set_shop_fire_rate_mult(fr_mult)
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-	_refresh_tuftuf_poison(w)
-
-
-## Zehir yükünün saniyelik hasarı saldırı gücünden (damage_bonus) pay alıyor - bu
-## yüzden SADECE silah kurulurken (_apply_tuftuf_tier) değil, HER Hasar kartı
-## alındığında da (damage_bonus güncellendiğinde, bkz. _apply_weapon_bonuses_to)
-## yeniden hesaplanmalı, yoksa run ilerledikçe yeni yükler "eski" hasarla eklenir.
-func _refresh_tuftuf_poison(w) -> void:
+func apply_owned_weapon_tier(w, key: String, _level: int) -> void:
 	if not is_instance_valid(w):
 		return
-	if "poison_tick_damage" in w:
-		w.poison_tick_damage = damage_bonus * TUFTUF_POISON_DPS_ATTACK_POWER_RATIO
-	if "poison_max_stacks" in w:
-		w.poison_max_stacks = TUFTUF_POISON_MAX_STACKS
-	if "poison_duration" in w:
-		w.poison_duration = TUFTUF_POISON_DURATION
+	match key:
+		"yay":
+			if w.has_method("set_yay_multishot_bonus"):
+				w.set_yay_multishot_bonus(YAY_PURE_EXTRA_ARROWS)
+		"buz_asasi":
+			w.chill_stacks_per_hit = BUZ_PURE_CHILL_STACKS
+		"tufek":
+			w.card_damage_bonus_ratio = TUFEK_ATTACK_POWER_RATIO
+			## buy_weapon_copy _apply_weapon_bonuses_to'yu BUNDAN ÖNCE çağırıyor - oran değişince hasar yeniden
+			## hesaplanmazsa yeni tüfek bir sonraki Hasar kartına kadar sahnedeki 0.9 oranıyla vururdu.
+			if w.has_method("set_damage_bonus"):
+				w.set_damage_bonus(damage_bonus)
 
 
-## Arcane Asası: Tüftüf/Tüfek gibi 10 tier'e kapalı - bkz. Arcane asasının
-## özellikleri.txt.
-##   hasar: tier başına +16 (tier1 taban zaten weapon_arcane.tscn'de damage
-##   olarak ayarlı, burada SADECE tier'e bağlı düz kısım ekleniyor -
-##   card_damage_bonus_ratio hiç override edilmedi, yani Hasar kartlarının
-##   saldırı gücü diğer silahlardaki gibi %100 ağırlıkla ekleniyor)
-##   dönüm noktası bonusu: 3/5/7/10. seviyelerde KÜMÜLATİF +%8 (tier 3-4:
-##   x1.08, 5-6: x1.16, 7-9: x1.24, 10: x1.32) - weapon.gd'deki YENİ
-##   çarpımsal set_tier_damage_mult() katmanı ile uygulanıyor (düz tier
-##   bonusu dahil TÜM hasara çarpımsal olarak etki etsin diye).
-func _apply_arcane_tier(w, level: int) -> void:
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 16.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	var milestone_mult: float = 1.0
-	if level >= 20:
-		milestone_mult = 1.32
-	elif level >= 14:
-		milestone_mult = 1.24
-	elif level >= 10:
-		milestone_mult = 1.16
-	elif level >= 6:
-		milestone_mult = 1.08
-	if w.has_method("set_tier_damage_mult"):
-		w.set_tier_damage_mult(milestone_mult)
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
+## ================================================================ EFSUN SİSTEMİ (2026-09-25)
+## Tasarım belgesi: claude.ai/code/artifact/71096889-a741-4268-8db1-7a097bba9f2d. Bir silah kopyasının efsunu
+## GameManager.owned_weapons[i]["enchant"] = {"id", "steps": [kart gücü...], "askin": float} içinde tutulur (kopya
+## silinince/satılınca kaydıyla birlikte kayar - owned_weapon_nodes ile aynı sıra). Silah düğümü bunu set_enchant ile
+## kendi davranış scriptine çevirir (weapon.gd). Kart ekranı: enchant_screen.gd, havuz: enchant_pool.gd.
+const EnchantFxScript := preload("res://scripts/enchant_fx.gd")
 
 
-## Tüfek: Tüftüf gibi 10 tier'e kapalı - bkz. tüfeğin
-## özellikleri.txt. Reload/mermi sistemi tamamen kaldırıldı - artık diğer
-## reload'suz silahlar gibi sınırsız/anında ateş ediyor (bkz.
-## weapon_tufek.tscn - max_ammo hiç set edilmiyor, weapon.gd'de varsayılan
-## 0 kalıyor ki bu reload mantığını tamamen devre dışı bırakıyor).
-##   hasar: tier başına +20
-##   kalkan delme: tier başına +%3 (bu silahın kendi mermilerine özel, bkz.
-##   weapon.gd weapon_shield_pen_bonus - oyuncunun genel kalkan delme
-##   statından bağımsız, ona EK olarak uygulanır) - DÜZELTME (zırh kaldırıldı,
-##   yerini kalkan delme aldı): eskiden weapon_armor_pen_bonus idi.
-## Delme sayısı (pierce_count, birincil hedeften SONRA kaç ek düşmana daha
-## çarpacağı) ve delici hasar (pierce_damage_percent) taban 1 ek düşman/%30 -
-## dönüm noktalarında ikisi de birlikte sıçrar:
-##   tier 3: 2 ek düşman delinir, delici hasar %40
-##   tier 5: 3 ek düşman delinir, delici hasar %50
-##   tier 7: 4 ek düşman delinir, delici hasar %60
-##   tier 10: 5 ek düşman delinir, delici hasar %70
-
-func _apply_tufek_tier(w, level: int) -> void:
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 20.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	## Kullanıcı isteği (1. tur): "tüfeğin saldırı gücü oranını %30 arttır" -
-	## weapon.gd card_damage_bonus_ratio varsayılanı (1.0 = oyuncunun saldırı
-	## gücünün %100'ü) tüfek için hiç override edilmiyordu, %130'a çıkarıldı.
-	## DÜZELTME (2. tur, kullanıcı isteği #27: "tüfeğin saldırı gücü oranını
-	## %50 arttır") - mevcut 1.3 üstüne BİR KEZ DAHA %50: 1.3 * 1.5 = 1.95.
-	w.card_damage_bonus_ratio = 1.95
-	w.weapon_shield_pen_bonus = (tier - 1.0) * 0.03
-	## Silahın görseli de aynı dönüm noktalarında (3/5/7/10, artık 30/50/70/100
-	## level'de) yenilenir - bkz. weapon_tufek.tscn tier_icon_textures ve
-	## weapon.gd set_weapon_tier().
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-	var pierce_count: int = 1
-	var pierce_percent: float = 0.3
-	if level >= 20:
-		pierce_count = 5
-		pierce_percent = 0.7
-	elif level >= 14:
-		pierce_count = 4
-		pierce_percent = 0.6
-	elif level >= 10:
-		pierce_count = 3
-		pierce_percent = 0.5
-	elif level >= 6:
-		pierce_count = 2
-		pierce_percent = 0.4
-	w.pierce_count = pierce_count
-	w.pierce_damage_percent = pierce_percent
-
-
-## Tabanca: 2026 güncellemesi (bkz. Tabancanın özellikleri.txt) - eski mermi/
-## reload sistemi tamamen kaldırıldı (Tüfek gibi artık sınırsız/anında ateş
-## ediyor), yerine hedefte biriken "yük" (mark) mekaniği geldi. Taban hasar
-## (17 + %90 saldırı gücü) VE ateş hızı tier'e göre DÜZ ARTMAZ - metinde
-## "tier başına X" ifadesi hiç yok, sadece dönüm noktaları (3/5/7/10) ateş
-## hızını VE yük kapasitesini artırıyor:
-##   3/5/7 seviye: +%10 ateş hızı + %5 yük kapasitesi
-##   10. seviye: +%12 ateş hızı + %5 yük kapasitesi
-## Yük kapasitesi taban %70 (=70 yük, 1 yük=%1 hasar) - dönüm noktalarıyla
-## kümülatif %90'a kadar çıkar (70/75/80/85/90).
-func _apply_tabanca_tier(w, level: int) -> void:
-	var milestone_fr_bonus: float = 0.0
-	var milestone_mark_bonus: int = 0
-	if level >= 20:
-		milestone_fr_bonus = 0.10 + 0.10 + 0.10 + 0.12
-		milestone_mark_bonus = 20
-	elif level >= 14:
-		milestone_fr_bonus = 0.10 + 0.10 + 0.10
-		milestone_mark_bonus = 15
-	elif level >= 10:
-		milestone_fr_bonus = 0.10 + 0.10
-		milestone_mark_bonus = 10
-	elif level >= 6:
-		milestone_fr_bonus = 0.10
-		milestone_mark_bonus = 5
-	var fr_mult: float = max(0.15, 1.0 - milestone_fr_bonus)
-	if w.has_method("set_shop_fire_rate_mult"):
-		w.set_shop_fire_rate_mult(fr_mult)
-	w.mark_max_stacks = 70 + milestone_mark_bonus
-
-
-## Hançer (Dagger): bkz. Hançerin özellikleri.txt. Diğer bazı 2026 güncellemesi
-## silahler (Tabanca) gibi taban hasar/ateş hızı tier'e göre DÜZ ARTMAZ - tüm
-## güç artışı kanama mekaniğinden gelir:
-##   kapasite (bir hedefte AZAMİ birikebilecek yük sayısı): tier'e eşit (1..10)
-##   yük/isabet (bir vuruşta eklenen yük sayısı): taban 1, dönüm noktalarında
-##   (3/5/7/10) kümülatif +1 (tier 10'da isabet başına 5 yük)
-##   yük başına saniye hasarı: tier + saldırı gücünün %5'i (tıpkı Tüftüf'ün
-##   zehir ramp'i gibi - _refresh_hancer_bleed ile HER Hasar kartında da
-##   tazelenir, sadece tier değişince değil).
-const HANCER_BLEED_ATTACK_POWER_RATIO := 0.05
-const HANCER_BLEED_EXTRA_MAX_STACKS := 2
-
-func _apply_hancer_tier(w, level: int) -> void:
-	## bleed_max_stacks eskiden doğrudan "tier" (=level, 1..10) idi - artık
-	## _tier_from_level10 ile 1..10 arasına yuvarlanarak dönüştürülüyor
-	## (level 1 -> 1, level 100 -> 10, arada ~10 basamaklı düzgün bir artış).
-	## Kullanıcı isteği (2026-09-24 denge turu): kanama tavanı seviye 1'de 1 yükte kaldığı için pasif önemsizdi -
-	## tavan her seviyede +HANCER_BLEED_EXTRA_MAX_STACKS (seviye 1'de 3). Tik hasarının düz "tier" kısmı bu ekten
-	## ETKİLENMESİN diye tier ayrıca bleed_tier meta'sında saklanır (bkz. _refresh_hancer_bleed).
-	var bleed_tier: int = int(round(_tier_from_level10(level)))
-	w.set_meta("bleed_tier", bleed_tier)
-	w.bleed_max_stacks = bleed_tier + HANCER_BLEED_EXTRA_MAX_STACKS
-	if level >= 20:
-		w.bleed_stacks_per_hit = 5
-	elif level >= 14:
-		w.bleed_stacks_per_hit = 4
-	elif level >= 10:
-		w.bleed_stacks_per_hit = 3
-	elif level >= 6:
-		w.bleed_stacks_per_hit = 2
-	else:
-		w.bleed_stacks_per_hit = 1
-	_refresh_hancer_bleed(w)
-
-
-## Kanama tik hasarı saldırı gücünden (damage_bonus) pay aldığı için tier
-## değişmese bile HER Hasar kartı alındığında yeniden hesaplanmalı - tier,
-## silahın kendi tuttuğu bleed_max_stacks'ten (=tier) geri okunur.
-func _refresh_hancer_bleed(w) -> void:
-	if not is_instance_valid(w):
+func _apply_enchant_to_weapon(index: int) -> void:
+	if index < 0 or index >= owned_weapon_nodes.size() or index >= GameManager.owned_weapons.size():
 		return
-	var tier: int = int(w.get_meta("bleed_tier", w.get("bleed_max_stacks") if "bleed_max_stacks" in w else 1))
-	if "bleed_tick_damage_per_stack" in w:
-		w.bleed_tick_damage_per_stack = float(tier) + damage_bonus * HANCER_BLEED_ATTACK_POWER_RATIO
-
-
-## Crossbow: Yay ile aynı okları (arrow_projectile.tscn) kullanır ama tamamen
-## ayrı bir silah - bkz. Crossbow+ Tamam/crossbow özellikleri.txt.
-##   hasar: tier başına +16, %100 saldırı gücü (oran tier'e göre değişmez -
-##   weapon_crossbow.tscn'de card_damage_bonus_ratio = 1.0 sabit).
-##   Crossbow'a özgü ekstra kritik şansı/hasarı: her RAW tier +%4 kritik şansı
-##   (weapon_crit_chance_bonus), dönüm noktalarında (3/5/7/10) KÜMÜLATİF +%10
-##   ekstra kritik hasar (weapon_crit_damage_bonus) - ikisi de weapon.gd'nin
-##   set_crit_chance_bonus/set_crit_damage_bonus setter'larına eklenen genel
-##   "silaha özel ek bonus" katmanı. Bu iki alan sadece SAKLANMAKLA kalmaz,
-##   oyuncunun güncel kart bonuslarıyla (crit_chance_bonus/crit_damage_bonus)
-##   birlikte setter'lar TEKRAR çağrılarak hemen uygulanır - yoksa ilk satın
-##   almada (bkz. buy_weapon_copy: _apply_weapon_bonuses_to ÖNCE, tier apply
-##   SONRA çağrılıyor) crossbow'un tier bonusu bir sonraki kart alınana kadar
-##   yansımazdı.
-func _apply_crossbow_tier(w, level: int) -> void:
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 16.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	w.weapon_crit_chance_bonus = tier * 0.04
-	var milestone_crit_damage_bonus: float = 0.0
-	if level >= 20:
-		milestone_crit_damage_bonus = 0.40
-	elif level >= 14:
-		milestone_crit_damage_bonus = 0.30
-	elif level >= 10:
-		milestone_crit_damage_bonus = 0.20
-	elif level >= 6:
-		milestone_crit_damage_bonus = 0.10
-	w.weapon_crit_damage_bonus = milestone_crit_damage_bonus
-	if w.has_method("set_crit_chance_bonus"):
-		w.set_crit_chance_bonus(crit_chance_bonus)
-	if w.has_method("set_crit_damage_bonus"):
-		w.set_crit_damage_bonus(crit_damage_bonus)
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-
-
-## Boomerang: fırlatılınca throw_distance kadar gidip oyuncuya geri döner,
-## dönene kadar tekrar atılamaz (bkz. weapon.gd single_active_projectile,
-## boomerang_projectile.gd) - bkz. Boomerang+ tamam/boomerangın özellikleri.txt.
-##   hasar: tier başına +16, %90 saldırı gücü (oran tier'e göre değişmez -
-##   weapon_boomerang.tscn'de card_damage_bonus_ratio = 0.9 sabit).
-##   dönüm noktaları (3/5/7/10): KÜMÜLATİF +%10 "daha hızlı fırlatılır ve daha
-##   hızlı geri döner" - projectile_speed_mult üzerinden doğrudan merminin
-##   speed'ini çarpar (fire_rate'i etkilemez).
-func _apply_boomerang_tier(w, level: int) -> void:
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 16.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	var milestone_speed_bonus: float = 0.0
-	if level >= 20:
-		milestone_speed_bonus = 0.40
-	elif level >= 14:
-		milestone_speed_bonus = 0.30
-	elif level >= 10:
-		milestone_speed_bonus = 0.20
-	elif level >= 6:
-		milestone_speed_bonus = 0.10
-	w.projectile_speed_mult = 1.0 + milestone_speed_bonus
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-
-
-## Buz Asası: her isabette boss olmayan hedefi 3 saniyeliğine dondurur.
-## Hedefleme, donmamış düşmanları önceliklendirir; hepsi donmuşsa en yakın
-## hedefe dönerek saldırmayı sürdürür (bkz. weapon.gd).
-func _apply_buz_asasi_tier(w, level: int) -> void:
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 12.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	var fr_reduction: float = (tier - 1.0) * 0.06
-	var fr_mult: float = max(0.15, 1.0 - fr_reduction)
-	if w.has_method("set_shop_fire_rate_mult"):
-		w.set_shop_fire_rate_mult(fr_mult)
-	w.chill_stacks_per_hit = 1
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-
-
-## Fişek: hasarı FLAT (Tabanca/Hançer gibi "tier başına" hiç büyümüyor, bkz.
-## Fişek özellikleri.txt "saldırı gücü oranı tier başına artmaz" VE ayrıca
-## hiç "tier başına X hasar" cümlesi de yok) - tüm güç dönüm noktalarındaki
-## KÜMÜLATİF +%15 patlama genişliği bonusundan gelir (splash_radius_mult).
-func _apply_fisek_tier(w, level: int) -> void:
-	var milestone_bonus: float = 0.0
-	if level >= 20:
-		milestone_bonus = 0.60
-	elif level >= 14:
-		milestone_bonus = 0.45
-	elif level >= 10:
-		milestone_bonus = 0.30
-	elif level >= 6:
-		milestone_bonus = 0.15
-	w.splash_radius_mult = 1.0 + milestone_bonus
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-
-
-## Pençe: kısa menzilli, alan hasarsız (aslında hafif AOE var, bkz.
-## _configure_pence_melee) yakın dövüş - SADECE bu silahın kendi hasarından
-## "can emme" ile can yenilenir: verilen hasarın yüzdesi (bkz. weapon.gd
-## lifesteal_percent/_apply_weapon_lifesteal, Pençeler Özellikleri.txt).
-##   hasar: tier başına +20, %100 saldırı gücü (oran tier'e göre değişmez -
-##   weapon_pence.tscn'de card_damage_bonus_ratio = 1.0 sabit).
-##   can emme (verilen hasarın %'si): taban %0.3, dönüm noktalarında (3/5/7/10) KÜMÜLATİF +%0.2.
-const PENCE_BASE_LIFESTEAL := 0.01
-
-func _apply_pence_tier(w, level: int) -> void:
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 20.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	var milestone_lifesteal_bonus: float = 0.0
-	if level >= 20:
-		milestone_lifesteal_bonus = 0.008
-	elif level >= 14:
-		milestone_lifesteal_bonus = 0.006
-	elif level >= 10:
-		milestone_lifesteal_bonus = 0.004
-	elif level >= 6:
-		milestone_lifesteal_bonus = 0.002
-	## Kullanıcı isteği (2026-09-24 denge turu): taban can emme %0.3 -> %1 (AP 350'de vuruş başına ~1 candı, önemsizdi).
-	w.lifesteal_percent = PENCE_BASE_LIFESTEAL + milestone_lifesteal_bonus
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-
-
-## Topuz: kalkan delme YÜZDESİ (dönüm noktaları) kazanır - bkz. weapon.gd
-## weapon_shield_pen_bonus, topuzun özellikleri.txt.
-##   hasar: tier başına +20, %105 saldırı gücü (oran tier'e göre değişmez -
-##   weapon_topuz.tscn'de card_damage_bonus_ratio = 1.05 sabit).
-##   kalkan delme: dönüm noktalarında (3/5/7/10) KÜMÜLATİF +%10 yüzdesel.
-## DÜZELTME (kullanıcı isteği: "zırh kaldırıldı, yerini kalkan delme
-## alacak") - eskiden AYRICA tier başına (RAW) +2 DÜZ zırh delme de
-## kazanıyordu (weapon_armor_pen_flat_bonus); düz zırh azaltma kavramının
-## kalkan tarafında (yüzdesel emilim) doğrudan bir karşılığı olmadığı için
-## bu düz bonus kaldırıldı, sadece yüzdesel (aşağıdaki milestone_bonus)
-## kaldı - Topuz'un delme gücü artık SADECE dönüm noktalarında artıyor.
-func _apply_topuz_tier(w, level: int) -> void:
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 20.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	var milestone_bonus: float = 0.0
-	if level >= 20:
-		milestone_bonus = 0.40
-	elif level >= 14:
-		milestone_bonus = 0.30
-	elif level >= 10:
-		milestone_bonus = 0.20
-	elif level >= 6:
-		milestone_bonus = 0.10
-	w.weapon_shield_pen_bonus = milestone_bonus
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-
-
-## Uzunkılıç: hasarı FLAT (Hançer/Tabanca gibi "tier başına" hiç büyümüyor,
-## bkz. Kılıç özellikleri.txt "saldırı gücü oranı tiera göre artmaz" VE hiç
-## "tier başına X hasar" cümlesi de yok) - kalkan delme tier başına (RAW)
-## büyür (weapon_shield_pen_bonus), dönüm noktalarındaki (3/5/7/10) KÜMÜLATİF
-## +%10 "ekstra silah hasarı" ÇARPIMSAL bir katman (set_tier_damage_mult,
-## Arcane'in dönüm noktası hasar çarpanıyla birebir aynı mekanik).
-func _apply_uzunkilic_tier(w, level: int) -> void:
-	var tier: float = _tier_from_level10(level)
-	w.weapon_shield_pen_bonus = (tier - 1.0) * 0.05
-	var milestone_mult: float = 1.0
-	if level >= 20:
-		milestone_mult = 1.40
-	elif level >= 14:
-		milestone_mult = 1.30
-	elif level >= 10:
-		milestone_mult = 1.20
-	elif level >= 6:
-		milestone_mult = 1.10
-	if w.has_method("set_tier_damage_mult"):
-		w.set_tier_damage_mult(milestone_mult)
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-
-
-## Şimşek Asası (2026 güncellemesi): kesintisiz ışın - bkz. weapon.gd
-## continuous_beam/_process_continuous_beam, Şimşek asası özellikleri.txt.
-##   hasar: HER SANİYE tier başına +12, %140 saldırı gücü (oran tier'e göre
-##   değişmez - weapon_lightning.tscn'de card_damage_bonus_ratio = 1.4 sabit).
-##   Kullanıcı isteği: "Yıldırım asasının saldırı gücünü %140 seviyesine
-##   yükselt" - GERÇEKTE uygulanan oran (sahnedeki değer) öncesinde 1.2285
-##   idi (eski %65 x sonraki hasar artışları x %10 azaltma); metinlerdeki
-##   "%65" eskiydi. Artık sahne değeri ve metinler AYNI: %140 (1.4).
-##   Bu toplam saniyelik hasar artık TEK bir tik yerine saniyede 3 küçük tike
-##   bölünerek geliyor (her tik tam hasarın %33'ü, bkz. weapon.gd
-##   BEAM_TICK_DAMAGE_RATIO/beam_tick_interval) - toplamı DEĞİŞMEZ, sadece
-##   dağılımı daha sık/yumuşak.
-##   dönüm noktaları (3/5/7/10): KÜMÜLATİF fazladan +1 sıçrama - taban 1
-##   sıçrama ile birlikte tier 10'da toplam 5 sıçrama hedefine kadar çıkar.
-func _apply_lightning_tier(w, level: int) -> void:
-	## DÜZELTME (100-level rebalance sırasında bulunan eski bug): bu fonksiyon
-	## eskiden "tier = clamp(level, 1, 10)" kullanıyordu ama shop_panel.gd'deki
-	## eski cap 30'du - yani seviye 11-30 arası HİÇBİR ek güç vermiyordu
-	## (tier hep 10'da kilitli kalıyordu). Artık _tier_from_level10 eski
-	## "etkin" 1..10 aralığını (eski gerçek max güç = eski level 10) level
-	## 1..100'e düzgün yayıyor, bu eksik büyüme de kendiliğinden düzeliyor.
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 12.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	var milestone_bonus: int = 0
-	if level >= 20:
-		milestone_bonus = 4
-	elif level >= 14:
-		milestone_bonus = 3
-	elif level >= 10:
-		milestone_bonus = 2
-	elif level >= 6:
-		milestone_bonus = 1
-	w.chain_jump_count = 1 + milestone_bonus
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-
-
-## Yay (Bow): diğer 10 tier'lik ekstra silahlar gibi - bkz. Yayın özellikleri.txt.
-##   hasar: tier başına +10, %90 saldırı gücü (card_damage_bonus_ratio,
-##   weapon_yay.tscn'de 0.9 olarak sabit - "oranı tier başına artmaz" demek bu,
-##   burada SADECE tier'e bağlı düz kısım ekleniyor, tıpkı Arcane'in düz tier
-##   bonusu gibi).
-##   ateş hızı: tier başına %10 daha hızlı, AYRICA 3/5/7/10. seviyelerde
-##   KÜMÜLATİF +%15 ek (dönüm noktası) - Tabanca'daki "üst üste binen dönüm
-##   noktası" şablonuyla birebir aynı: taban + milestone tek bir fr_mult'ta
-##   toplanıp set_shop_fire_rate_mult'a verilir (ayrı bir weapon.gd alanına
-##   gerek yok, Arcane'in çarpımsal hasar katmanının aksine bu tamamen
-##   toplamsal bir azalma). 0.15 taban çarpanı altına inmez (aşırı hızlı ateş
-##   aralığını önler).
-func _apply_yay_tier(w, level: int) -> void:
-	var tier: float = _tier_from_level10(level)
-	var dmg_bonus: float = (tier - 1.0) * 10.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	# Level başına artan saldırı hızı oranı ve milestone bonusları %15 azaltıldı (0.85 ile çarpıldı)
-	var milestone_fr_bonus: float = 0.0
-	if level >= 20:
-		milestone_fr_bonus = 0.51
-	elif level >= 14:
-		milestone_fr_bonus = 0.3825
-	elif level >= 10:
-		milestone_fr_bonus = 0.255
-	elif level >= 6:
-		milestone_fr_bonus = 0.1275
-	var fr_reduction: float = (tier - 1.0) * 0.085 + milestone_fr_bonus
-	var fr_mult: float = max(0.15, 1.0 - fr_reduction)
-	if w.has_method("set_shop_fire_rate_mult"):
-		w.set_shop_fire_rate_mult(fr_mult)
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(level))
-	## Yay pasifi (kullanıcı isteği): her 3. saldırıdan sonra fazladan 1 ok
-	## atar - dönüm noktası (artık 30/50/70/100 level) başına bu fazladan ok
-	## sayısı +1 artar. tier1-2: +1, tier3-4: +2, tier5-6: +3, tier7-9: +4,
-	## tier10: +5.
-	var yay_multishot_bonus: int = 1
-	if level >= 20:
-		yay_multishot_bonus = 5
-	elif level >= 14:
-		yay_multishot_bonus = 4
-	elif level >= 10:
-		yay_multishot_bonus = 3
-	elif level >= 6:
-		yay_multishot_bonus = 2
-	if w.has_method("set_yay_multishot_bonus"):
-		w.set_yay_multishot_bonus(yay_multishot_bonus)
-
-
-## Ateş Asası (fire_staff): DÜZELTME (100-level rebalance sırasında bulunan
-## tutarsızlık) - eskiden bu silahın HİÇ kademe/dönüm noktası bonusu yoktu
-## (apply_owned_weapon_tier'ın generic "else" dalına düşüyordu, diğer 14
-## silahın hepsinde bir tane vardı). Diğerleriyle tutarlı olsun diye artık
-## Arcane/Uzunkılıç'ın kullandığı AYNI çarpımsal set_tier_damage_mult()
-## katmanıyla 30/50/70/100 dönüm noktalarında bir bonus alıyor (patlayıcı
-## mermisine "explosion_radius" gibi ayrı bir alan olmadığı için düz hasar
-## çarpanı seçildi - bu kullanıcının literal isteğinin ÖTESİNDE bir ek).
-## Eski cap 30 idi (10 değil) ve raw `level` (clamp yok) kullanıyordu - bu
-## yüzden temel büyüme _tier_from_level10 (eski 1..10 aralığı) DEĞİL, eski
-## 1..30 aralığını 1..100'e yayan kendi oranıyla (29/99) ölçekleniyor.
-## Ateş Asası pasifi (kullanıcı isteği: "ateş asasına yeni pasif ekliyoruz,
-## isabet ettiğinde düşmanları 3 saniye boyunca yakarak her saniye saldırı
-## gücünün %10'u kadar hasar versin") - Hançer'in bleed_tick_damage_per_
-## stack'i / Tüftüf'ün zehir ramp'iyle AYNI desen: saldırı gücünden
-## (damage_bonus) pay alan bir tik hasarı, tier değişince VE her Hasar
-## kartında (bkz. _apply_weapon_bonuses_to) yeniden hesaplanır. Süre sabit
-## 3sn (tier'e göre büyümez, bkz. weapon.gd/projectile.gd BURN_ON_HIT_
-## DURATION).
-const FIRE_STAFF_BURN_ATTACK_POWER_RATIO := 0.10
-
-func _refresh_fire_staff_burn(w) -> void:
-	if not is_instance_valid(w):
+	var w = owned_weapon_nodes[index]
+	if not is_instance_valid(w) or not w.has_method("set_enchant"):
 		return
-	if "burn_on_hit_tick_damage" in w:
-		w.burn_on_hit_tick_damage = damage_bonus * FIRE_STAFF_BURN_ATTACK_POWER_RATIO
+	var entry: Dictionary = GameManager.owned_weapons[index]
+	if str(entry.get("key", "")) != str(w.get_meta("shop_key", "")):
+		return
+	w.set_enchant(entry.get("enchant", {}))
 
 
-func _apply_fire_staff_tier(w, level: int) -> void:
-	## DÜZELTME (100->20 level rebalance): uç noktalar (level 1 ve level 20)
-	## AYNI kalsın diye clamp/payda 99'dan 19'a çekildi - bkz.
-	## _tier_from_level10 üstündeki AYNI düzeltme notu.
-	var lvl: int = clampi(level, 1, 20)
-	var dmg_bonus: float = (float(lvl) - 1.0) * 3.0 * 29.0 / 19.0
-	if w.has_method("set_shop_damage_bonus"):
-		w.set_shop_damage_bonus(dmg_bonus)
-	var fr_reduction: float = (float(lvl) - 1.0) * 0.015 * 29.0 / 19.0
-	var fr_mult: float = max(0.5, 1.0 - fr_reduction)
-	if w.has_method("set_shop_fire_rate_mult"):
-		w.set_shop_fire_rate_mult(fr_mult)
-	var milestone_mult: float = 1.0
-	if lvl >= 20:
-		milestone_mult = 1.32
-	elif lvl >= 14:
-		milestone_mult = 1.24
-	elif lvl >= 10:
-		milestone_mult = 1.16
-	elif lvl >= 6:
-		milestone_mult = 1.08
-	if w.has_method("set_tier_damage_mult"):
-		w.set_tier_damage_mult(milestone_mult)
-	if w.has_method("set_weapon_tier"):
-		w.set_weapon_tier(_visual_tier_from_level(lvl))
-	_refresh_fire_staff_burn(w)
+## Efsun ekranında seçilen kart (bkz. EnchantPool.build) uygulanır.
+func apply_enchant_choice(choice: Dictionary) -> void:
+	var kind: String = str(choice.get("type", ""))
+	var tier: int = int(choice.get("tier", 1))
+	var slot: int = int(choice.get("slot", -1))
+	var entry: Dictionary = GameManager.owned_weapons[slot] if slot >= 0 and slot < GameManager.owned_weapons.size() else {}
+	match kind:
+		"temel":
+			entry["enchant"] = {"id": str(choice["id"]), "steps": [EnchantDefs.card_power(tier)], "askin": 0.0}
+		"step":
+			(entry["enchant"]["steps"] as Array).append(EnchantDefs.card_power(tier))
+		"final":
+			(entry["enchant"]["steps"] as Array).append(0.0)
+		"askin":
+			entry["enchant"]["askin"] = float(entry["enchant"].get("askin", 0.0)) + EnchantDefs.askin_power(tier)
+		"general_rp":
+			GameManager.enchant_reaction_power += EnchantDefs.GENERAL_REACTION_POWER * float(EnchantDefs.TIER_POWER[clampi(tier, 1, 4) - 1])
+		"general_dmg":
+			GameManager.enchant_damage_percent += EnchantDefs.GENERAL_DAMAGE_PERCENT * float(EnchantDefs.TIER_POWER[clampi(tier, 1, 4) - 1])
+		"gold":
+			GameManager.gold += int(choice.get("gold", 10))
+	if slot >= 0 and kind in ["temel", "step", "final", "askin"]:
+		_apply_enchant_to_weapon(slot)
+		var def: Dictionary = EnchantDefs.get_def(str(choice.get("id", "")))
+		var col: Color = EnchantDefs.element_color(str(def.get("element", "fiziksel")))
+		EnchantFxScript.play(get_tree(), "ring", global_position, {"radius": 70.0, "color": col, "duration": 0.6})
+		EnchantFxScript.play(get_tree(), "burst", global_position, {"palette": "spark", "count": 16, "speed": 120.0, "life": 0.5})
+
+
+## Host'ta olan ve bu oyuncuya ait efsun olayı (bkz. enemy.gd _notify_enchant_owner, NetworkManager.enchant_event).
+func on_enchant_event(event: String, data: Dictionary) -> void:
+	match event:
+		"heal":
+			heal(float(data.get("amount", 0.0)))
+		"gold":
+			GameManager.gold += int(data.get("amount", 1))
+		_:
+			for w in owned_weapon_nodes:
+				if is_instance_valid(w) and w.has_method("on_enchant_event"):
+					w.on_enchant_event(event, data)
+
+
+## Yetenek kullanıldı (bkz. _play_cast_animation) - Fırtına Kovanı gibi "yetenek kullanınca" efsunları.
+func _notify_enchants_skill_used() -> void:
+	for w in owned_weapon_nodes:
+		if is_instance_valid(w) and w.has_method("on_enchant_skill_used"):
+			w.on_enchant_skill_used()
+
+
+func _notify_enchants_dodge() -> void:
+	for w in owned_weapon_nodes:
+		if is_instance_valid(w) and w.has_method("enchant_on_dodge"):
+			w.enchant_on_dodge()
+
+
+## Efsun engelleme şansı (en yüksek silah) + her silahın hasar tepkisi. 0 dönerse vuruş engellendi.
+const ENCHANT_BLOCK_CAP := 0.35
+
+func _enchant_owner_damaged(amount: float, source: Node) -> float:
+	var block: float = 0.0
+	for w in owned_weapon_nodes:
+		if is_instance_valid(w) and w.has_method("enchant_block_chance"):
+			block = maxf(block, float(w.enchant_block_chance()))
+	if block > 0.0 and randf() < minf(block, ENCHANT_BLOCK_CAP):
+		for w in owned_weapon_nodes:
+			if is_instance_valid(w) and w.has_method("enchant_on_blocked"):
+				w.enchant_on_blocked(amount, source)
+		_spawn_floating_text("ENGEL", Color(0.85, 0.9, 1.0))
+		return 0.0
+	var out: float = amount
+	for w in owned_weapon_nodes:
+		if is_instance_valid(w) and w.has_method("enchant_on_owner_damaged"):
+			out = float(w.enchant_on_owner_damaged(out, source))
+	return out
+
+
+## Ölümcül darbe: bir efsun ölümü atlatıyorsa (Küllerinden Doğuş) true.
+func _enchant_cheat_death() -> bool:
+	for w in owned_weapon_nodes:
+		if is_instance_valid(w) and w.has_method("enchant_cheat_death") and w.enchant_cheat_death():
+			return true
+	return false
+
+
+## Öldürme bildirimi (host'ta bizzat ya da RPC ile) - Anka Kuşu sayacı, Kelle Avcısı...
+func _notify_enchants_kill(is_boss_kill: bool, pos: Vector2) -> void:
+	for w in owned_weapon_nodes:
+		if is_instance_valid(w) and w.has_method("on_enchant_event"):
+			w.on_enchant_event("kill", {"boss": is_boss_kill, "pos": pos})
+
+
+## Oyuncu geneli efsun hızlanması (tüm silahlar) - Buz Tahtı, Napalm Fişeği V.
+var _enchant_haste: float = 0.0
+var _enchant_haste_until_msec: int = 0
+
+func enchant_haste(pct: float, dur: float) -> void:
+	var now: int = Time.get_ticks_msec()
+	_enchant_haste = maxf(_enchant_haste if now < _enchant_haste_until_msec else 0.0, pct)
+	_enchant_haste_until_msec = maxi(_enchant_haste_until_msec, now + int(dur * 1000.0))
+
+
+func enchant_haste_value() -> float:
+	return _enchant_haste if Time.get_ticks_msec() < _enchant_haste_until_msec else 0.0
+
+
+## Efsun kalıcı kazançları (Ruh Hasadı: saldırı gücü, Kan Lordu: maksimum can) - Savaş Şevki ile aynı yol.
+func enchant_add_attack_power(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	damage_bonus += amount
+	_apply_weapon_bonuses()
+	_spawn_floating_text("+%d saldırı gücü" % int(round(amount)), Color(0.8, 0.55, 1.0))
+
+
+func enchant_add_max_health(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	max_health += amount
+	health = minf(max_health, health + amount)
+	health_changed.emit(health, max_health)
+
+
+## Kısa efsun yenilmezliği (Hayvan Hücumu V: atılma sırasında hasar yok) - bkz. take_damage.
+var _enchant_invuln_until_msec: int = 0
+
+func enchant_invuln(dur: float) -> void:
+	_enchant_invuln_until_msec = maxi(_enchant_invuln_until_msec, Time.get_ticks_msec() + int(dur * 1000.0))
+
+
+## Efsun atılması (Pençe Hayvan Hücumu) - Talon Q'nun atılmasıyla aynı hareket kilidi/tween; yolundaki düşmanlara
+## vuruş çağıranın işi (hits_fn: yol oranı 0..1 ile çağrılır).
+func enchant_dash(target_pos: Vector2, duration: float, hits_fn: Callable = Callable()) -> void:
+	if _talon_dashing or is_dead or is_downed:
+		return
+	var start_pos: Vector2 = global_position
+	_talon_dashing = true
+	var tw := create_tween()
+	tw.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	tw.set_trans(Tween.TRANS_QUART)
+	tw.set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(t: float) -> void:
+		if not is_instance_valid(self):
+			return
+		global_position = start_pos.lerp(target_pos, t)
+		if hits_fn.is_valid():
+			hits_fn.call(t)
+	, 0.0, 1.0, duration)
+	await tw.finished
+	_talon_dashing = false
+
+
+## Efsunun kısa hız artışı - daha güçlü bir yetenek hızlanması sürüyorsa onu EZMEZ (apply_temp_speed_boost tek kanal).
+func enchant_speed_buff(percent: float, duration: float) -> void:
+	if _temp_speed_boost_timer > 0.0 and _temp_speed_boost_percent > percent:
+		return
+	apply_temp_speed_boost(percent, duration, false)
+
+
+var _enchant_dr: float = 0.0
+var _enchant_dr_until_msec: int = 0
+
+## Kısa süreli hasar azaltma (Topuz Ağır Darbe V) - bkz. take_damage.
+func enchant_damage_reduction(percent: float, duration: float) -> void:
+	_enchant_dr = clampf(percent, 0.0, 0.9)
+	_enchant_dr_until_msec = Time.get_ticks_msec() + int(duration * 1000.0)
+
+
+func enchant_damage_taken_mult() -> float:
+	if _enchant_dr > 0.0 and Time.get_ticks_msec() < _enchant_dr_until_msec:
+		return 1.0 - _enchant_dr
+	return 1.0
 
 
 ## All weapons currently equipped (başlangıç silahı DAHİL, hepsi
@@ -2061,16 +1636,6 @@ func _apply_weapon_bonuses_to(w) -> void:
 		w.set_crit_chance_bonus(crit_chance_bonus)
 	if w.has_method("set_crit_damage_bonus"):
 		w.set_crit_damage_bonus(crit_damage_bonus)
-	## Tüftüf'ün zehir ramp'i de saldırı gücünden (damage_bonus) pay alıyor -
-	## sadece tier değiştiğinde değil, HER kart alındığında (bu fonksiyon her
-	## silah için burada zaten çağrılıyor) da tazelenmeli (bkz.
-	## _refresh_tuftuf_poison).
-	if w.get_meta("shop_key", "") == "tuftuf":
-		_refresh_tuftuf_poison(w)
-	elif w.get_meta("shop_key", "") == "dagger":
-		_refresh_hancer_bleed(w)
-	elif w.get_meta("shop_key", "") == "fire_staff":
-		_refresh_fire_staff_burn(w)
 
 
 func _apply_weapon_bonuses() -> void:
@@ -2190,10 +1755,6 @@ func _configure_dagger_melee(w) -> void:
 		mw.get("attack_sound_volume_db", -12.0),
 		mw.get("slash_fx_fixed_rotation", false),
 		mw.get("slash_fx_mirror", false))
-	## Bıçak edinilir edinilmez tier 1 kanama mekanizmasını başlat.
-	## _apply_hancer_tier yalnızca tier yükseltildiğinde çağrıldığı için
-	## başlangıçta bleed_max_stacks = 0 kalıyor ve kanama hiç uygulanmıyordu.
-	_apply_hancer_tier(w, 1)
 
 
 ## Pençe: dagger'ın aksine karakter tanımına (Characters.MAIN_WEAPON) değil,
@@ -3404,9 +2965,11 @@ const NECRO_SOUL_PER_KILL := 1
 const NECRO_SOUL_PER_BOSS_KILL := 5
 ## Kullanıcı isteği: "necromancerın iskelet çağırma bedelini 10 yap" /
 ## "necromancerın goleminin ruh bedelini 100 yap" - eskiden 3/10'du.
-const NECRO_SKELETON_SOUL_COST := 10
-## Kullanıcı isteği (2026-09-24): "golemi spawnlamak için gereken ruh da 50 ye düşsün" (100 -> 50).
-const NECRO_GOLEM_SOUL_COST := 50
+## Kullanıcı isteği (2026-09-25): "necromancer kalkan ile yaratık doğuramasın ancak ruh bedellerini %50 azalt" -
+## İskelet 10 -> 5, Golem 50 -> 25; ruh yetmezse artık kalkandan ÖDENMEZ, çağırma hiç olmaz.
+const NECRO_SKELETON_SOUL_COST := 5
+## Kullanıcı isteği (2026-09-24): "golemi spawnlamak için gereken ruh da 50 ye düşsün" (100 -> 50), 2026-09-25: 50 -> 25.
+const NECRO_GOLEM_SOUL_COST := 25
 ## Kullanıcı isteği: "necromancerın iskelet çağırma skiline 1 saniye bekleme
 ## süresi ekle" - eskiden TEMEL'in (İskelet Çağır) hiç bekleme süresi yoktu,
 ## sadece ruh sayısı/yaratık sınırı kısıtlıyordu (bkz. yukarıdaki "Necromancer"
@@ -3516,6 +3079,7 @@ func _on_matthew_pet_died() -> void:
 ## "öldürme" olayı için). Pasifi olmayan karakterlerde no-op.
 func on_enemy_killed(enemy: Node) -> void:
 	var is_boss_kill: bool = is_instance_valid(enemy) and enemy.get("is_boss") == true
+	_notify_enchants_kill(is_boss_kill, enemy.global_position if is_instance_valid(enemy) else global_position)
 	_apply_kill_heal_item()
 	_savas_sevki_on_kill(is_boss_kill)
 	_distribute_arcane_stack(enemy.global_position if is_instance_valid(enemy) else global_position)
@@ -3547,6 +3111,7 @@ func on_enemy_killed(enemy: Node) -> void:
 ## duyduğu için (bkz. _buyucu_on_kill) bu RPC'ye ayrıca death_pos eklendi
 ## (bkz. network_manager.gd notify_kill_passive/enemy.gd die()).
 func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZERO) -> void:
+	_notify_enchants_kill(is_boss_kill, death_pos)
 	_apply_kill_heal_item()
 	_savas_sevki_on_kill(is_boss_kill)
 	_distribute_arcane_stack(death_pos)
@@ -3922,17 +3487,12 @@ func _skill_necro_summon_skeleton() -> void:
 	if _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
 		_spawn_floating_text("YARATIK SINIRI (%d)" % NECRO_MAX_ACTIVE_PETS, Color(0.9, 0.6, 0.3))
 		return
-	## Kullanıcı isteği (2026-09-24): "necromancerın ruhu yoksa yetenekleri kalkan ile kullanabilsin" - ruh yetmezse
-	## bedel TEMEL yetenek kadar kalkandan ödenir (bkz. _necro_shield_cost).
-	if necro_souls >= NECRO_SKELETON_SOUL_COST:
-		necro_souls -= NECRO_SKELETON_SOUL_COST
-	else:
-		var shield_cost: float = _necro_shield_cost(false)
-		if not _has_enough_ability_shield(shield_cost):
-			_spawn_floating_text("RUH / KALKAN YETERSİZ", Color(0.6, 0.9, 0.5))
-			return
-		_spend_ability_shield_cost(shield_cost)
-		item_shield_ability_slow_timer = _shield_hit_regen_delay()
+	## Kullanıcı isteği (2026-09-25): "necromancer kalkan ile yaratık doğuramasın" - 2026-09-24'teki "ruh yetmezse
+	## kalkandan öde" yolu kaldırıldı: ruh yetmezse iskelet çağrılmaz, 1sn bekleme de başlamaz.
+	if necro_souls < NECRO_SKELETON_SOUL_COST:
+		_spawn_floating_text("RUH YETERSİZ (%d)" % NECRO_SKELETON_SOUL_COST, Color(0.6, 0.9, 0.5))
+		return
+	necro_souls -= NECRO_SKELETON_SOUL_COST
 	_necro_skeleton_cooldown_timer = NECRO_SKELETON_COOLDOWN
 	var pet: Node2D = SkeletonPetScene.instantiate() as Node2D
 	get_tree().current_scene.add_child(pet)
@@ -3990,9 +3550,8 @@ func _skill_necro_skull() -> void:
 ## çağırsın") - eskiden WraithPetScene (Hortlak) çağırıyordu, artık
 ## GolemPetScene (%200 stat/can, kalkanlı, bkz. golem_pet.gd) çağırıyor.
 func _skill_necro_summon_golem() -> void:
-	## Ruh yetmiyorsa bedel _activate_skill2'de ULTİ kadar kalkandan ödendi (bkz. _necro_golem_pays_with_shield).
-	if necro_souls >= NECRO_GOLEM_SOUL_COST:
-		necro_souls -= NECRO_GOLEM_SOUL_COST
+	## Ruh yeterliliği _activate_skill2 başında (_necro_golem_can_summon) kontrol edildi - ruh yoksa buraya gelinmez.
+	necro_souls = maxi(0, necro_souls - NECRO_GOLEM_SOUL_COST)
 	var pet: Node2D = GolemPetScene.instantiate() as Node2D
 	get_tree().current_scene.add_child(pet)
 	pet.global_position = global_position
@@ -4011,10 +3570,14 @@ func _skill_necro_summon_golem() -> void:
 	_play_skill_sfx("necro_golem")
 
 
-## Golem Çağır ön kontrolleri (toplam yaratık sınırı, en fazla NECRO_MAX_GOLEMS golem) - yetersizse sebebi yazar.
-## Ruh yetmezse artık engel değil: kullanıcı isteği (2026-09-24) "ruhu yoksa yetenekleri kalkan ile kullanabilsin (E
-## yeteneği de ulti kadar kalkan harcar)" - bedel _activate_skill2'de ULTİ kademesi kalkandan ödenir.
+## Golem Çağır ön kontrolleri (ruh, toplam yaratık sınırı, en fazla NECRO_MAX_GOLEMS golem) - yetersizse sebebi yazar,
+## kalkan ödenmez ve bekleme başlamaz. Kullanıcı isteği (2026-09-25): "necromancer kalkan ile yaratık doğuramasın" -
+## 2026-09-24'teki "ruh yetmezse ulti kadar kalkan harca" yolu kaldırıldı. (E'nin herkeste olan TEMEL kalkan tarifesi
+## _activate_skill2'de aynen duruyor - o ruhun YERİNE değil, her E yeteneği gibi.)
 func _necro_golem_can_summon() -> bool:
+	if necro_souls < NECRO_GOLEM_SOUL_COST:
+		_spawn_floating_text("RUH YETERSİZ (%d)" % NECRO_GOLEM_SOUL_COST, Color(0.6, 0.9, 0.5))
+		return false
 	if _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
 		_spawn_floating_text("YARATIK SINIRI (%d)" % NECRO_MAX_ACTIVE_PETS, Color(0.9, 0.6, 0.3))
 		return false
@@ -4022,18 +3585,6 @@ func _necro_golem_can_summon() -> bool:
 		_spawn_floating_text("GOLEM SINIRI (%d)" % NECRO_MAX_GOLEMS, Color(0.75, 0.5, 1.0))
 		return false
 	return true
-
-
-func _necro_golem_pays_with_shield() -> bool:
-	return necro_souls < NECRO_GOLEM_SOUL_COST
-
-
-## Ruh yerine ödenen kalkan: ulti=false -> TEMEL (E) kademesi, true -> ULTİ kademesi (_activate_skill*'teki AYNI formül,
-## Yetenek Kitabı indirimi dahil).
-func _necro_shield_cost(ulti: bool) -> float:
-	var pct: float = SKILL_SHIELD_COST_PERCENT_OF_MAX if ulti else SKILL2_SHIELD_COST_PERCENT_OF_MAX
-	var flat: float = SKILL_SHIELD_COST_FLAT if ulti else SKILL2_SHIELD_COST_FLAT
-	return (item_shield_max * pct + flat) * (1.0 - item_skill_shield_cost_reduction)
 
 
 ## Kullanıcı isteği: "necromancerın yaratık spawnlama sınırını 10 ile
@@ -4383,9 +3934,8 @@ func refresh_mod_level(key: String) -> void:
 ## lightning/piercing/tank) TEK paylaşılan büyüme fonksiyonu bu olduğu için
 ## her birini ayrı ayrı değiştirmeye gerek yok.
 func _mod_lerp(level: int, at_level_1: float, at_level_10: float) -> float:
-	## DÜZELTME (100->20 level rebalance): bkz. _tier_from_level10 üstündeki
-	## AYNI düzeltme notu - uç noktalar (level 1/level 20) aynı kalsın diye
-	## payda 99'dan 19'a çekildi.
+	## DÜZELTME (100->20 level rebalance): uç noktalar (level 1/level 20) aynı
+	## kalsın diye payda 99'dan 19'a çekildi.
 	var t: float = clamp(level - 1, 0, 19) / 19.0
 	var doubled_at_level_10: float = at_level_1 + (at_level_10 - at_level_1) * 2.0
 	return lerp(at_level_1, doubled_at_level_10, t)
@@ -4945,6 +4495,7 @@ func _cast_anim_name() -> String:
 ## Yetenek kullanımında oynayan klip (yeni setlerde shrug_<yön>, eskilerde spellcast_<yön> - bkz. CharAnim.
 ## CAST_PREFIXES). Odaklanarak kanal yapan yeteneklerde çağıran taraf bitince yeniden çağırarak döngüde tutar.
 func _play_cast_animation() -> void:
+	_notify_enchants_skill_used() ## efsun: "yetenek kullanınca" tetikleri (bkz. EFSUN SİSTEMİ bölümü)
 	var clip: String = _cast_anim_name()
 	if clip != "":
 		_play_action_anim(clip)
@@ -5261,6 +4812,8 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## Ruhani Yetenek "Can": 3sn boyunca hasar görmez (bkz. apply_spirit_can_buff).
 	if _spirit_invuln_timer > 0.0:
 		return
+	if Time.get_ticks_msec() < _enchant_invuln_until_msec:
+		return
 	## Yaratık yeteneklerinin sürekli hasarı (yanma tikleri, bkz. take_special_damage) bu kilide TABİ DEĞİL ve kilidi
 	## de tazelemez - aksi halde her tik bir temas vuruşunu yutar ya da tersi olurdu.
 	if not _special_dmg_is_dot:
@@ -5315,6 +4868,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## katmanlarından ÖNCE, ham miktar üzerinden - Oakley'nin Koruyucu Büyü'sü ile aynı yer).
 	if _vampir_bat_form_active:
 		amount *= VAMPIR_BAT_DAMAGE_TAKEN_MULT
+	amount *= enchant_damage_taken_mult() ## efsun kısa hasar azaltma (Topuz Ağır Darbe V)
 	if oakley_bond_active:
 		## Kalkanı olan kişi her hasar aldığında üstünde yeşil parçalar çıkar (kullanıcı isteği, fx_oakley_leaf_barrier.gd).
 		if is_instance_valid(_oakley_leaf_fx) and _oakley_leaf_fx.has_method("hit"):
@@ -5366,7 +4920,14 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	var effective_dodge: float = clamp(stat_dodge + _current_elara_evasion_dodge(), 0.0, 1.0)
 	if not _special_dmg_is_dot and effective_dodge > 0.0 and randf() < effective_dodge:
 		_spawn_floating_text("SIYRILDI", Color(0.7, 0.95, 1.0))
+		_notify_enchants_dodge() ## efsun: Gölge Dansı / Kılıç Ustası sıyrılma tetikleri
 		return
+	## Efsun engellemesi (Uzunkılıç Karşı Saldırı) - sıvışmadan ayrı, kendi tavanıyla; engellenen vuruş da bir "hasar alma"
+	## anı sayılır (karşılık penceresi başlar). Diğer efsun tepkileri (yansıtma, karşılık) enchant_on_owner_damaged'de.
+	if not _special_dmg_is_dot:
+		amount = _enchant_owner_damaged(amount, source)
+		if amount <= 0.0:
+			return
 
 	## Ruhani Yetenek "Tank": alınan hasarın %60'ı hasarı verene yansır + eksik kalkanın %3'ü yenilenir.
 	_spirit_tank_on_hit(amount, source)
@@ -5505,6 +5066,9 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 
 func die() -> void:
 	if is_downed or is_dead:
+		return
+	## Efsun: Küllerinden Doğuş (Ateş Asası Anka Kuşu finali) ölümcül darbeyi bir kez atlatır.
+	if _enchant_cheat_death():
 		return
 	## Kullanıcı isteği: "multiplayerda dirilme olayı ölür ölmez olmamalı.
 	## öldükten sonra arkadaşının 3 saniye boyunca yakınında durması gereksin
@@ -6494,9 +6058,6 @@ func _activate_skill2() -> void:
 	## kontrol ediliyor.
 	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
 	var skill2_shield_cost: float = (item_shield_max * SKILL2_SHIELD_COST_PERCENT_OF_MAX + SKILL2_SHIELD_COST_FLAT) * (1.0 - item_skill_shield_cost_reduction)
-	## Necromancer Golem Çağır ruhsuz kullanılırsa ruh yerine ULTİ kadar kalkan (bkz. _necro_golem_can_summon).
-	if skill2_id == 20 and _necro_golem_pays_with_shield():
-		skill2_shield_cost = _necro_shield_cost(true)
 	var is_shield_related_skill2: bool = (skill2_id == 10 and GameManager.selected_char_id != 2)
 	## Vampir Çocuk TEMEL'i (Yarasa Formu, id 41) kalkan YERİNE maksimum canın %4'ünü harcar - can
 	## yetmiyorsa hiç tetiklenmez (bkz. _vampir_try_pay_health), kalkan bedeli ödenmez.

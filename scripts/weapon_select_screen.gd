@@ -71,29 +71,30 @@ const SHIELD_KEYS := ["shield_standart", "shield_enerji", "shield_kale", "shield
 ## ekle aşağı kaydırarak okuyabilelim" (bkz. _populate_cards - her kartın
 ## içinde daima açık, kaydırılabilir bir açıklama kutusu).
 ## Kullanıcı isteği (güncel): "kartlardaki yetenek açıklamalarını hasar +
-## saldırı gücü oranı ve kademe geliştirmeleri olarak ayrı ayrı basit bir
-## şekilde açıkla" - her kartta iki ayrı bölüm var: ilk satır HASAR + saldırı
-## gücü oranı (menzil/ateş hızı da kısaca), ikinci satır KADEME geliştirmeleri.
+## saldırı gücü oranı ... basit bir şekilde açıkla" - tek satır: HASAR + saldırı
+## gücü oranı (menzil/ateş hızı da kısaca) + silahın atış biçimi. KADEME satırı
+## 2026-09-25'te silindi: silahlar saf oto-atak formuna döndü, seviye artık
+## silaha bir şey vermiyor (bkz. player.gd apply_owned_weapon_tier).
 ## Değerler mevcut player.gd tier fonksiyonları + weapon_*.tscn dosyalarından
 ## alındı (eski metinlerdeki birçok sayı güncel koddan sapmıştı - örn. Ateş
 ## Asası hasarı 16 değil 13, Tüfek 35 değil 22, Yay saldırı gücü oranı %90
 ## değil %70).
 const WEAPON_DESCRIPTIONS := {
-	"dagger": "HASAR: 10 + %85 saldırı gücü · Yakın dövüş, hedefe kanama yükü bırakır\nKADEME (100): Kanama kapasitesi kademeyle artar (3→12). 30/50/70/100'da isabet başına +1 kanama yükü. Kanama: kademe + %5 saldırı gücü/sn.",
-	"fire_staff": "HASAR: 13 + %100 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Patlayıcı mermi\nKADEME (100): Her seviye ufak hasar ve hafif ateş hızı artışı. 30/50/70/100'de kümülatif +%8 hasar (100'de +%32).",
-	"lightning_staff": "HASAR: 12/sn + %140 saldırı gücü · Menzil 168 · Kesintisiz ışın\nKADEME (100): +12 saniyelik hasar/kademe. 30/50/70/100'da +1 zincir sıçrama (2→5 hedefe).",
-	"tabanca": "HASAR: 17 + %99 saldırı gücü · Ateş hızı 0.9sn · Menzil 210 · Aynı hedefe isabet başına +%2 yük biriktirir (tavan %70)\nKADEME (100): 30/50/70'de +%10 ateş hızı +%5 yük; 100'de +%12 ateş hızı +%5 yük (tavan %90'a çıkar).",
-	"tuftuf": "HASAR: 5 + %55 saldırı gücü · Ateş hızı 1.4sn · Menzil 238 · Hedefi zehirler: her isabet 1 yük ekler (en fazla 100 yük), her yük 20sn boyunca saniyede saldırı gücünün %5'i kadar hasar verir · Öncelik: canı yüksek > hiç zehirlenmemiş > tümü\nKADEME (100): +5 hasar ve +%8 ateş hızı/kademe (zehir kademeye bağlı değil).",
-	"tufek": "HASAR: 22 + %195 saldırı gücü · Ateş hızı 1.3sn · Menzil 336 · Delici mermi\nKADEME (100): +20 hasar ve +%3 kalkan delme/kademe. 30/50/70/100'da delme sayısı 2/3/4/5, delici hasar %40/50/60/70.",
-	"arcane": "HASAR: 16 + %110 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Kuyruklu yıldız mermisi\nKADEME (100): +16 hasar/kademe. 30/50/70/100'da kümülatif +%8 hasar (10'da +%32).",
-	"yay": "HASAR: 14 + %70 saldırı gücü · Ateş hızı 0.8sn · Menzil 266 · Ateşten önce ok çeker\nKADEME (100): +10 hasar/kademe, ateş hızı artar. Her 3. atışta ekstra ok; 30/50/70/100'da +1 ekstra ok (→+5).",
-	"crossbow": "HASAR: 16 + %110 saldırı gücü · Ateş hızı 0.7sn · Menzil 245\nKADEME (100): +16 hasar ve +%4 kritik şans/kademe. 30/50/70/100'da kümülatif +%10 kritik hasar (10'da +%40).",
-	"boomerang": "HASAR: 16 + %90 saldırı gücü · Ateş hızı 0.3sn · Menzil 167 · Gidip döner, 2 kez vurabilir; saldırı hızı arttıkça daha hızlı gidip döner\nKADEME (100): +16 hasar/kademe. 30/50/70/100'da kümülatif +%10 fırlatma/dönüş hızı (10'da +%40).",
-	"buz_asasi": "HASAR: 12 + %77 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Her isabette boss olmayan hedefi 3sn dondurur · Donmamış hedefleri önceliklendirir\nKADEME (100): +12 hasar ve +%6 ateş hızı/kademe. Donma süresi ve donmamış hedef önceliği değişmez.",
-	"fisek": "HASAR: 14 + %230 saldırı gücü (sadece alan hasarı) · Ateş hızı 3.7sn · Menzil 252\nKADEME (100): Hasar kademeyle büyümez. 30/50/70/100'da kümülatif +%15 patlama yarıçapı (10'da +%60).",
-	"pence": "HASAR: 20 + %100 saldırı gücü · Yakın dövüş (menzil 110) · Verdiği hasarın yüzdesi kadar can emer\nKADEME (100): +20 hasar/kademe. Can emme tabanı %1; 30/50/70/100'da +%0.2 (10'da %1.8).",
-	"topuz": "HASAR: 20 + %105 saldırı gücü · Yakın dövüş (menzil 120) · Geniş alan hasarı\nKADEME (100): +20 hasar/kademe. 30/50/70/100'da kümülatif +%10 kalkan delme (10'da +%40).",
-	"uzunkilic": "HASAR: 18 + %100 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş\nKADEME (100): Hasar kademeyle büyümez. +%5 kalkan delme/kademe. 30/50/70/100'da kümülatif +%10 ekstra silah hasarı (10'da +%40).",
+	"dagger": "HASAR: 10 + %85 saldırı gücü · Yakın dövüş, hedefin çevresine hafif alan hasarı",
+	"fire_staff": "HASAR: 13 + %100 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Patlayıcı mermi",
+	"lightning_staff": "HASAR: 12/sn + %140 saldırı gücü · Menzil 168 · Kesintisiz ışın, yakındaki 1 hedefe sıçrar (%50 hasar)",
+	"tabanca": "HASAR: 17 + %99 saldırı gücü · Ateş hızı 0.9sn · Menzil 210",
+	"tuftuf": "HASAR: 5 + %55 saldırı gücü · Ateş hızı 1.4sn · Menzil 238",
+	"tufek": "HASAR: 22 + %195 saldırı gücü · Ateş hızı 1.3sn · Menzil 336 · Delici mermi: 1 düşmanı daha deler (%30 hasar)",
+	"arcane": "HASAR: 16 + %110 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Kuyruklu yıldız mermisi",
+	"yay": "HASAR: 14 + %70 saldırı gücü · Ateş hızı 0.8sn · Menzil 266 · Ateşten önce ok çeker · Her 3. atışta +1 ok",
+	"crossbow": "HASAR: 16 + %110 saldırı gücü · Ateş hızı 0.7sn · Menzil 245",
+	"boomerang": "HASAR: 16 + %90 saldırı gücü · Ateş hızı 0.3sn · Menzil 167 · Gidip döner, 2 kez vurabilir; saldırı hızı arttıkça daha hızlı gidip döner",
+	"buz_asasi": "HASAR: 12 + %77 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Her isabette boss olmayan hedefi 3sn dondurur · Donmamış hedefleri önceliklendirir",
+	"fisek": "HASAR: 14 + %230 saldırı gücü (sadece alan hasarı) · Ateş hızı 3.7sn · Menzil 252",
+	"pence": "HASAR: 20 + %100 saldırı gücü · Yakın dövüş (menzil 110) · Çift pençe darbesi",
+	"topuz": "HASAR: 20 + %105 saldırı gücü · Yakın dövüş (menzil 120) · Geniş alan hasarı",
+	"uzunkilic": "HASAR: 18 + %100 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş",
 }
 const SHIELD_DESCRIPTIONS := {
 	"shield_standart": "Dengeli bir kalkan. 150 kalkan gücü, %65 hasar emilimi. Vurulduktan 8 saniye sonra yenilenmeye başlar (10/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar (+10 güç, +1 yenilenme, -0.1sn bekleme/eski-seviye). 100 seviyeye kadar geliştirilebilir.",

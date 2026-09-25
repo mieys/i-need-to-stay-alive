@@ -196,7 +196,35 @@ func pop_pending_chest() -> int:
 
 
 func has_pending_chests() -> bool:
-	return not pending_chest_tiers.is_empty()
+	return not pending_chest_tiers.is_empty() or pending_elite_chests > 0
+
+
+## Elit sandıklar (kullanıcı isteği 2026-09-25: "normal sandıklardan eşya elit sandıklardan efsun çıksın", "elit
+## sandıklar ise paylaşılır"): normal sandıklarla AYNI kuyruk akışında açılır (main.gd _try_open_next_pending_chest -
+## önce normaller, sonra elitler), açılınca efsun ekranı gelir. Yerel/kişisel sayaç: paylaşım, sandık toplanınca host'ta
+## yapılır (NetworkManager.host_award_elite_chest HERKESİN sayacına ekler).
+var pending_elite_chests: int = 0
+
+
+func add_pending_elite_chest() -> void:
+	pending_elite_chests += 1
+
+
+func pop_pending_elite_chest() -> bool:
+	if pending_elite_chests <= 0:
+		return false
+	pending_elite_chests -= 1
+	return true
+
+
+## ================================================================ EFSUN SİSTEMİ (2026-09-25)
+## Efsun ekranı artık SADECE elit sandıklardan gelir (bkz. yukarıdaki pending_elite_chests) - eski "her 5 levelde bir",
+## "boss ölünce herkese" ve "sandıkların %20'si" kuralları kaldırıldı (kullanıcı isteği 2026-09-25).
+## Bir silah kopyasının efsunu owned_weapons girdisinin "enchant" alanında: {"id", "steps": [kart gücü...], "askin"}.
+var enchant_banish_left: int = 3
+var enchant_banished: Array = [] ## "<slot>:<efsun id>" - o kopyanın havuzundan run boyunca çıkan Temel kartlar
+var enchant_reaction_power: float = 0.0 ## genel Aşkın kartı "Tepkime Gücü" (oyuncunun kendi tepkimelerine)
+var enchant_damage_percent: float = 0.0 ## genel Aşkın kartı "hasar"
 
 ## Shield modes bought from the shop's "Modlar" category: leveled items
 ## (0 = not owned), 10 levels, expensive to level up - higher levels make the
@@ -992,6 +1020,11 @@ func reset() -> void:
 	owned_weapons = []
 	owned_items = []
 	pending_chest_tiers = []
+	pending_elite_chests = 0
+	enchant_banish_left = 3
+	enchant_banished = []
+	enchant_reaction_power = 0.0
+	enchant_damage_percent = 0.0
 	shield_mod_resilience_level = 0
 	shield_mod_thorny_level = 0
 	shield_mod_turtle_level = 0

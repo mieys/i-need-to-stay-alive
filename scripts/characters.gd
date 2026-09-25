@@ -570,13 +570,13 @@ const DEFS := {
 		## Yarasa Sürüsü (35) ve necro_bat.gd/tscn tamamen silindi - yukarıdaki geçmiş notlar eski dizilimleri anlatır.
 		"skill": 19,
 		"skill_name": "İskelet Çağır",
-		"skill_desc": "YETENEK: 10 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (saldırı gücünün %50'si kadar vurur, saniyede ~1.3 kez saldırır, hareket hızının %90'ı, canının %100'ü, kalkansız, 60sn yaşar). Ruhun yetmezse bedel temel yetenek kadar kalkandan ödenir. Toplamda (iskelet+golem) en fazla 20 yaratığa sahip olabilirsin. (1sn bekleme)",
+		"skill_desc": "YETENEK: 5 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (saldırı gücünün %50'si kadar vurur, saniyede ~1.3 kez saldırır, hareket hızının %90'ı, canının %100'ü, kalkansız, 60sn yaşar). Ruh yetmezse çağrılamaz. Toplamda (iskelet+golem) en fazla 20 yaratığa sahip olabilirsin. (1sn bekleme)",
 		"skill_icon": "res://assets/skills/necromancer_iskelet_cagir_icon.png",
 		## Kullanıcı isteği (2026-09-24): "iskelet Q golem E kafatası da R olmalı yarasayı ... yok et" - Golem Çağır
 		## (id 20) R'den E'ye taşındı (standart skill2 makinesi, E kalkan tarifesi), Yarasa Sürüsü (id 35) tamamen silindi.
 		"skill2": 20,
 		"skill2_name": "Golem Çağır",
-		"skill2_desc": "TEMEL: 50 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %50 oranında), kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 6sn'de bir çevresindeki yaratıkları 1sn sersemletir, 120sn yaşar). Ruhun yetmezse ruh yerine ulti kadar kalkan harcar. (10sn bekleme)",
+		"skill2_desc": "TEMEL: 25 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %50 oranında), kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 6sn'de bir çevresindeki yaratıkları 1sn sersemletir, 120sn yaşar). Ruh yetmezse çağrılamaz. (10sn bekleme)",
 		"skill2_icon": "res://assets/skills/necromancer_hortlak_cagir_icon.png",
 		## Kullanıcı isteği (2026-09-24): Necromancer'ın ULTİ'si artık Lanetli Kafatası (skill3 id 44, R tuşu) - Golem Çağır'ın
 		## (id 20) yerine. Standart skill3_state makinesi (10sn aktif + 60sn bekleme, bkz. player.gd SKILL3_TIMING[44] /

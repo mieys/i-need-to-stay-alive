@@ -759,7 +759,7 @@ func _update_local_uzunkilic_orbit(delta: float) -> void:
 			icon.visible = true
 		## Yörünge izi - weapon.gd ile AYNI fonksiyon (bkz. WeaponOrbitMath.update_arc). İz ikonun çocuğu olarak tutulur,
 		## ikon silinince kendiliğinden gider.
-		var arc: AnimatedSprite2D = WeaponOrbitMath.update_arc(icon.get_meta("orbit_arc", null), icon, global_position, icon.global_position)
+		var arc: AnimatedSprite2D = WeaponOrbitMath.update_arc(icon.get_meta("orbit_arc") if icon.has_meta("orbit_arc") else null, icon, global_position, icon.global_position)
 		icon.set_meta("orbit_arc", arc)
 
 
@@ -1930,7 +1930,9 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		tw.tween_property(icon, "position", base_pos, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		## Ölçek: gerçek silahla (weapon.gd _do_recoil) AYNI ezilip esneyen "punch" - bkz. weapon_juice.gd.
 		## (Eskiden burada düz %15 büyüme vardı, yerel silahta hiç yoktu - iki taraf farklı görünüyordu.)
-		var old_punch: Variant = icon.get_meta("punch_tween", null)
+		## get_meta(ad, null): Godot varsayılan null'ı "varsayılan yok" sayıp HER atışta hata basıyordu (efsun çok
+		## oyunculu testinde host logunda yakalandı) - önce has_meta.
+		var old_punch: Variant = icon.get_meta("punch_tween") if icon.has_meta("punch_tween") else null
 		if old_punch is Tween and (old_punch as Tween).is_valid():
 			(old_punch as Tween).kill()
 		var punch: Tween = WeaponJuice.fire_punch(self, icon, base_scale)

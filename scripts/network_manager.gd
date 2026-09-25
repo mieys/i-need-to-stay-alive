@@ -3,6 +3,7 @@ extends Node
 ## Vampir Çocuk FX yardımcısı (broadcast_player_vfx "vampir_fx" dalı).
 const VampirMathScript := preload("res://scripts/vampir_math.gd")
 const PixelDrawScript := preload("res://scripts/pixel_draw.gd")
+const EnchantFxScript := preload("res://scripts/enchant_fx.gd")
 const SpiritualSkillsScript := preload("res://scripts/spiritual_skills.gd")
 
 ## NetworkManager: Godot'nun yerleşik ENet çoklu oyuncu altyapısı üzerinden DOĞRUDAN
@@ -1395,7 +1396,9 @@ func broadcast_weapon_attack(source_pos: Vector2, target_pos: Vector2, shop_key:
 ## Projectile broadcast: when a player fires a ranged weapon, other peers
 ## see the same projectile (visual-only, damage handled by host authority).
 @rpc("any_peer", "call_remote", "unreliable")
-func broadcast_projectile(scene_path: String, spawn_pos: Vector2, direction: Vector2, proj_speed: float, proj_scale: Vector2, target_pos: Vector2, player_id: int = 0) -> void:
+## look: efsunlu merminin görünümü (renk tonu, parçacık izi, ölçek - bkz. EnchantFx.apply_projectile_look). Kaster
+## tarafında AYNI fonksiyon uygulanır (weapon.gd _fire_at), uzak kopya birebir aynı görünür.
+func broadcast_projectile(scene_path: String, spawn_pos: Vector2, direction: Vector2, proj_speed: float, proj_scale: Vector2, target_pos: Vector2, player_id: int = 0, look: Dictionary = {}) -> void:
 	if not ResourceLoader.exists(scene_path):
 		return
 	var proj_scene: PackedScene = load(scene_path) as PackedScene
@@ -1416,6 +1419,8 @@ func broadcast_projectile(scene_path: String, spawn_pos: Vector2, direction: Vec
 		proj.rotation = direction.angle()
 	# Tag as network-spawned so it doesn't deal duplicate damage on remote peers.
 	proj.set_meta("network_spawned", true)
+	if not look.is_empty():
+		EnchantFxScript.apply_projectile_look(proj, look)
 	# For boomerang return: set player_node to the remote player so it returns properly
 	if player_id > 0 and "player_node" in proj:
 		var rp: RemotePlayer = _find_remote_player(player_id)
@@ -1455,7 +1460,7 @@ func broadcast_drop(drop_type: String, pos: Vector2, amount: int, network_id: in
 			drop_scene = load("res://scenes/gold_drop.tscn")
 		"food":
 			drop_scene = load("res://scenes/food_drop.tscn")
-		"chest":
+		"chest", "elite_chest":
 			drop_scene = load("res://scenes/chest_drop.tscn")
 		## DÜZELTME (görünmezlik): Korsan'ın bıraktığı bomba önceden
 		## _broadcast_skill_scene() ile gönderiliyordu - o yol kozmetik
@@ -1507,6 +1512,9 @@ func broadcast_drop(drop_type: String, pos: Vector2, amount: int, network_id: in
 	## ÖNCE bunu görmeli ki _ready()/_setup_visual() doğru ikonu göstersin.
 	if drop_type == "food" and "tier" in drop:
 		drop.tier = amount
+	## Elit sandık (2026-09-25): kopya da elit görünsün (mor sandık); toplanınca host'taki GERÇEK sandık kuralı uygular.
+	if drop_type == "elite_chest":
+		drop.set("is_elite", true)
 	get_tree().current_scene.add_child(drop)
 	drop.global_position = pos
 	# Multiplayer görsel kopya — client'lar body_entered ile toplayabilir
@@ -2008,6 +2016,36 @@ func notify_kill_passive(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZERO) 
 		local_player.on_enemy_killed_remote(is_boss_kill, death_pos)
 
 
+## ================================================================ EFSUN SİSTEMİ (2026-09-25)
+## İstemcinin efsun elementi (zehir/yanma/şok/uyku/çatlak...) -> host'taki gerçek yaratık (bkz. enemy.gd apply_element).
+## Tepkimeler host'ta çözülür ve hasarı bu isteği gönderen oyuncuya atfedilir.
+@rpc("any_peer", "call_remote", "reliable")
+func request_enemy_element(network_id: int, kind: String, params: Dictionary) -> void:
+	if not is_host or get_tree().paused:
+		return
+	var target_enemy: Node = find_enemy_by_net_id(network_id)
+	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("apply_element_host"):
+		target_enemy.apply_element_host(kind, params, multiplayer.get_remote_sender_id())
+
+
+## Host'ta gerçekleşen ve bir oyuncuya ait efsun olayı o oyuncunun kendi istemcisine (Kobra canı, Veba sayacı...) -
+## bkz. enemy.gd _notify_enchant_owner, player.gd on_enchant_event.
+@rpc("any_peer", "call_remote", "reliable")
+func enchant_event(event: String, data: Dictionary) -> void:
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if local_player and local_player.has_method("on_enchant_event"):
+		local_player.on_enchant_event(event, data)
+
+
+## Efsun görselleri (patlama, halka, zincir, yazı, alan...) - yerelde EnchantFx.play oynatır ve bunu çağırır; uzakta
+## AYNI EnchantFx.spawn çalışır (tek kaynak, bkz. CLAUDE.md "iki ayrı yer" hata sınıfı).
+@rpc("any_peer", "call_remote", "unreliable")
+func broadcast_enchant_fx(kind: String, pos: Vector2, data: Dictionary) -> void:
+	if get_tree().current_scene == null:
+		return
+	EnchantFxScript.spawn(get_tree(), kind, pos, data)
+
+
 ## Host-authoritative enemy status effect: non-host clients send poison/bleed/chill here.
 @rpc("any_peer", "call_remote", "reliable")
 func request_enemy_effect(network_id: int, effect_type: String, param1: float, param2: float, param3: float) -> void:
@@ -2095,13 +2133,20 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## ghost_vanish, ghost_reveal, vampire_blink (extra_data: from/to), fear_start (extra_data: duration)/fear_stop (korku
 ## göstergesi - Melek korkusu + Necromancer Lanetli Kafatası), taunt_start (extra_data: duration)/taunt_stop (Şovalye
 ## Kışkırtma'sının öfke damarı göstergesi), root_start (extra_data: duration)/root_stop (Oakley Sarmaşıklar'ın bacaklara
-## sarılan dikenleri, bkz. fx_oakley_entangle.gd) - yeni bir dal eklersen buraya da yaz.
+## sarılan dikenleri, bkz. fx_oakley_entangle.gd), shock_start/shock_stop (efsun Şok durumu, bkz. enemy.gd
+## _apply_shock_host/_clear_shock - istemcideki is_shocked() bu görselin varlığından okunur) - yeni bir dal eklersen buraya da yaz.
 @rpc("any_peer", "call_remote", "reliable")
 func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictionary = {}) -> void:
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if not target_enemy or not is_instance_valid(target_enemy):
 		return
 	match vfx_type:
+		"shock_start":
+			if target_enemy.has_method("_spawn_shock_status_fx"):
+				target_enemy._spawn_shock_status_fx()
+		"shock_stop":
+			if target_enemy.has_method("_remove_shock_status_fx"):
+				target_enemy._remove_shock_status_fx()
 		"poison_start":
 			if target_enemy.has_method("_spawn_poison_status_fx"):
 				target_enemy._spawn_poison_status_fx()
@@ -2819,6 +2864,48 @@ func host_award_chest(chest_tier: int, picker_peer_id: int = 0) -> int:
 		open_chest_for_peer.rpc_id(winner_id, chest_tier)
 	_rpc_announce_chest_winner.rpc(winner_id)
 	return winner_id
+
+
+## Elit sandık (kullanıcı isteği 2026-09-25: "normal sandıklar tek oyuncuya gider elit sandıklar ise paylaşılır"):
+## toplayan kim olursa olsun yaşayan HER katılımcıya birer elit sandık (açılınca efsun ekranı). Host kendi kuyruğuna
+## ekler, uzak oyunculara open_elite_chest_for_peer. Herkesin ekranında kendi oyuncusunun üstünde duyuru.
+## Döner: sandık verilen oyuncu sayısı (0 = kimse yok, çağıran kendi yerel yoluna düşer).
+func host_award_elite_chest(picker_peer_id: int = 0) -> int:
+	if not is_host:
+		return 0
+	var participants: Array = get_reward_participants()
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	for p: Dictionary in participants:
+		var pid: int = int(p["peer_id"])
+		if pid == local_id:
+			GameManager.add_pending_elite_chest()
+		else:
+			open_elite_chest_for_peer.rpc_id(pid)
+	if not participants.is_empty():
+		_rpc_announce_elite_chest.rpc(picker_peer_id)
+	return participants.size()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func open_elite_chest_for_peer() -> void:
+	GameManager.add_pending_elite_chest()
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_announce_elite_chest(picker_id: int) -> void:
+	var local_p: Node = get_tree().get_first_node_in_group("player")
+	if local_p == null or not (local_p is Node2D) or local_p.get("is_dead") == true:
+		return
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	var text: String = "+1 ELİT SANDIK" if picker_id == local_id or picker_id <= 0 else "+1 ELİT SANDIK (%s)" % get_player_names([picker_id])
+	var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
+	if ft_scene == null or get_tree().current_scene == null:
+		return
+	var ft: Node2D = ft_scene.instantiate() as Node2D
+	get_tree().current_scene.add_child(ft)
+	ft.global_position = (local_p as Node2D).global_position + Vector2(-20, -52)
+	if ft.has_method("setup"):
+		ft.call("setup", text, Color(0.85, 0.6, 1.0))
 
 
 ## Sandık kazananı: her katılımcının şansı EŞİT (1/N), ağırlık yok. Test edilebilsin diye ayrı saf fonksiyon.

@@ -370,7 +370,13 @@ func _give(key: String) -> void:
 	if not player:
 		return
 	if _item_mode == 0:
+		## Sahiplik kaydı (GameManager.owned_weapons) silah düğümüyle AYNI sırada tutulmalı (satıcı/sandık akışlarıyla
+		## aynı: önce deftere, sonra düğüm) - eskiden debug verilen silah deftere hiç girmiyordu, envanterde görünmüyor
+		## ve efsun havuzuna (bkz. enchant_pool.gd) hiç gelmiyordu.
+		GameManager.owned_weapons.append({"key": key, "level": 1, "spent": 0})
 		var ok: bool = player.call("buy_weapon_copy", key, 1)
+		if not ok:
+			GameManager.owned_weapons.pop_back()
 		_set_status(("'%s' verildi." % ChestMenuScript.WEAPON_NAMES.get(key, key)) if ok else "Silah envanteri dolu (en fazla 5).", ok)
 	else:
 		## player.buy_item() SADECE stat etkisini uygular - sahiplik kaydı (GameManager.owned_items) çağıran tarafça
@@ -395,7 +401,56 @@ func _build_player_page(page: VBoxContainer) -> void:
 		GameManager.debug_enemy_spawns_enabled = not GameManager.debug_enemy_spawns_enabled
 		_refresh_toggles())
 	page.add_child(_spawns_btn)
+	## Efsun prototipi testi (2026-09-25): 5 level beklemeden efsun ekranını açmak ve finallerin katalizörlerini almak için.
+	_header(page, "Sandık / Efsun (efsun prototipi: Tüftüf, Yay, Topuz)")
+	var ench_grid := _grid(page, 2)
+	var open_btn := _button("Efsun ekranı aç", "green", Vector2(420, 76))
+	open_btn.pressed.connect(func() -> void:
+		var main: Node = get_tree().current_scene
+		if main and main.has_method("debug_open_enchant_screen"):
+			close()
+			main.debug_open_enchant_screen())
+	ench_grid.add_child(open_btn)
+	var cat_btn := _button("Katalizörleri ver", "wood", Vector2(420, 76))
+	cat_btn.pressed.connect(_give_enchant_catalysts)
+	ench_grid.add_child(cat_btn)
+	## Sandık açılış animasyonunu level beklemeden görmek için (2026-09-25): normal = eşya kartı, elit = efsun ekranı.
+	for pair: Array in [["Sandık aç", false], ["Elit sandık aç", true]]:
+		var chest_btn := _button(str(pair[0]), "wood", Vector2(420, 76))
+		var elite: bool = bool(pair[1])
+		chest_btn.pressed.connect(func() -> void:
+			var m: Node = get_tree().current_scene
+			if m and m.has_method("debug_open_chest"):
+				close()
+				m.debug_open_chest(elite))
+		ench_grid.add_child(chest_btn)
+	UISound.connect_all_buttons(ench_grid)
 	_refresh_toggles()
+
+
+## Sahip olunan efsunların finalleri için gereken katalizör eşyaları (her birinden 1, zaten varsa verilmez).
+func _give_enchant_catalysts() -> void:
+	var player: Node2D = _local_player()
+	if not player:
+		return
+	var given: Array = []
+	for entry in GameManager.owned_weapons:
+		var ench: Dictionary = entry.get("enchant", {})
+		if ench.is_empty():
+			continue
+		var cat: String = str(EnchantDefs.get_def(str(ench.get("id", ""))).get("catalyst", ""))
+		if cat == "" or given.has(cat):
+			continue
+		var owned: bool = false
+		for it in GameManager.owned_items:
+			if str(it.get("key", "")) == cat:
+				owned = true
+		if owned:
+			continue
+		if player.call("buy_item", cat):
+			GameManager.owned_items.append({"key": cat, "spent": 0})
+			given.append(cat)
+	_set_status("Katalizör verildi: %s" % (", ".join(given) if not given.is_empty() else "yok (efsun yok ya da zaten var)"), not given.is_empty())
 
 
 func _refresh_toggles() -> void:

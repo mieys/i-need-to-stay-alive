@@ -19,6 +19,8 @@ extends RefCounted
 ## Profil anahtarları: c = renk, r = yarıçap (DÜNYA birimi; karakter ~30 birim boyunda), e = merkez gücü 0..1,
 ## f = titreme 0..1, d = flaş süresi (sn, >0 ise doğrusal söner), o = ofset (sahibin YEREL koordinatı),
 ## fog = sisin içindeyken hiç çizilmesin (düşman büyüleri - gizli yaratığın yerini ele vermesin),
+## cap = bu ışığa özel güç tavanı (atmosphere_overlay.gd GLOW_ENERGY_CAP yerine) - sadece kısa patlama flaşlarında, bkz.
+## fx_fire_impact notu; tavanı aşmak için "e" 1'in üstüne çıkabilir,
 ## cp = rengi sahibin bu alanından oku, rp = yarıçapı sahibin bu alanından oku (x rs çarpanı),
 ## pal = fx_pixel_burst palet adı -> renk (listede olmayan palet parlamaz),
 ## frames = fx_enemy_ability'nin SpriteFrames yolundaki parça -> profil (listede olmayan parlamaz).
@@ -69,7 +71,13 @@ const BY_SCENE := {
 	"res://scenes/fx_tufek_muzzle.tscn": {"c": Color(1.0, 0.78, 0.42), "r": 72.0, "e": 1.0, "d": 0.16},
 	## --- İsabet/patlama efektleri ---
 	## Kullanıcı bildirimi (2026-09-25): "ateş topunun patlama efekti parlamıyor" - flaş çok kısa/küçüktü (0.45 sn, r 62).
-	"res://scenes/fx_fire_impact.tscn": {"c": Color(1.0, 0.55, 0.2), "r": 84.0, "e": 1.0, "d": 0.75, "f": 0.2},
+	## İkinci bildirim (aynı gün): hâlâ parlamıyordu - (1) ışık patlama sprite'ı 0,5 sn'de gizlenince kesiliyordu (d hiç
+	## işlemiyordu, bkz. fx_animation.gd _release_flash_glow), (2) r 84 x GLOW_RADIUS_SCALE 0,65 = 55 birim, patlamanın
+	## kendi yarıçapı ~40 birim (50 px x 1,6) - ışık neredeyse tamamen sprite'ın altında kalıp zemine taşmıyordu.
+	## Artık diğer patlamalarla (fişek/korsan 110) aynı: r 110 -> ~72 birim. (3) Genel GLOW_ENERGY_CAP (0,4) patlamayı uçan
+	## ateş topunun ışığıyla (o da 0,4) AYNI parlaklığa eşitliyordu - gerçek render'da eski/yeni hale neredeyse aynıydı.
+	## 0,75 sn'lik flaş olduğu için bu ışığa özel tavan 0,65 ("cap") + e 1,2 (0,56 x 1,2 = 0,67 -> tepe 0,65).
+	"res://scenes/fx_fire_impact.tscn": {"c": Color(1.0, 0.55, 0.2), "r": 110.0, "e": 1.2, "d": 0.75, "f": 0.2, "cap": 0.65},
 	"res://scenes/fx_ice_impact.tscn": {"c": Color(0.55, 0.88, 1.0), "r": 54.0, "e": 0.85, "d": 0.4},
 	"res://scenes/fx_tabanca_impact.tscn": {"c": Color(1.0, 0.7, 0.35), "r": 30.0, "e": 0.8, "d": 0.18},
 	"res://scenes/fx_hit_tabanca_combo.tscn": {"c": Color(1.0, 0.72, 0.38), "r": 30.0, "e": 0.8, "d": 0.18},
@@ -166,6 +174,11 @@ const BY_SCENE := {
 ## Sahnesiz, kodla kurulan (set_script / X.new()) efektler ve objeler.
 const BY_SCRIPT := {
 	"res://scripts/fx_arcane_impact.gd": {"c": Color(0.7, 0.5, 1.0), "r": 50.0, "e": 0.85, "d": 0.4},
+	## Efsun sistemi (2026-09-25): tek seferlik pixel halka/dalga/ışık (renk efektin "color"ı), kalıcı alanlar (renk türe
+	## göre enchant_area.gd get_night_glow_color kancasından), yaratığın üstündeki Şok durumu.
+	"res://scripts/fx_enchant_pixel.gd": {"cp": "color", "c": Color(1.0, 0.9, 0.7), "r": 50.0, "e": 0.6, "d": 0.45},
+	"res://scripts/enchant_area.gd": {"c": Color(1.0, 0.6, 0.25), "r": 50.0, "e": 0.45},
+	"res://scripts/fx_shock_status.gd": {"c": Color(1.0, 0.9, 0.35), "r": 22.0, "e": 0.4},
 	"res://scripts/fx_kalkan_bagi_link.gd": {"c": Color(0.45, 0.8, 1.0), "r": 24.0, "e": 0.4},
 	"res://scripts/fx_matthew_dash_lines.gd": {"c": Color(1.0, 0.7, 0.4), "r": 30.0, "e": 0.4, "d": 0.3},
 	"res://scripts/fx_melek_ally_aura.gd": {"c": Color(1.0, 0.9, 0.55), "r": 50.0, "e": 0.45},
@@ -287,4 +300,5 @@ static func resolve(node: Node, raw: Dictionary) -> Dictionary:
 		"decay": float(p.get("d", 0.0)),
 		"offset": p.get("o", Vector2.ZERO),
 		"hide_in_fog": bool(p.get("fog", false)),
+		"energy_cap": float(p.get("cap", -1.0)),
 	}

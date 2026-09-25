@@ -1344,6 +1344,24 @@ def levelup_die():
     return a
 
 
+# "SEVİYE ATLADIN!" başlığı (kullanıcı seçimi 2026-09-25: prototip "Başlık 4 - Işıltılı Yazı"): krem yazının arkasında
+# içe doğru açılan 3 basamaklı altın ışık + 4 piksel kıvılcım. 224x32 sanat px (3x = 672x96); basamaklar 220x28 / 200x22 /
+# 180x16, ortalı; sağ kıvılcım dış basamağın kenarına taştığı için 2 sanat px pay. Yazı level_up_screen.gd'de (Label).
+def levelup_title_glow():
+    w, h = 224, 32
+    a = Art(w, h)
+    for (bw, bh, col) in ((220, 28, hexc('#4a3a1e')), (200, 22, hexc('#685024')), (180, 16, hexc('#8c6828'))):
+        x0, y0 = (w - bw) // 2, (h - bh) // 2
+        for y in range(y0, y0 + bh):
+            for x in range(x0, x0 + bw):
+                a.set(x, y, col)
+    for (cx, cy) in ((4, 5), (222, 7), (25, 27), (204, 26)):
+        for (dx, dy) in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            a.set(cx + dx, cy + dy, GOLD)
+        a.set(cx, cy, GOLD_L)
+    return a
+
+
 def tier_card_glow(w=100, h=160, pad=5, radius=5):
     """Seçim parıltısı: kart silüetinin dışına taşan beyaz hale (çalışma anında tier/altın renge boyanır, ADD karışım).
     Kartın her yanından `pad` sanat px taşar -> (w+2p)x(h+2p). Halka bantları tam texel (bulanık gradyan yok)."""
@@ -1455,6 +1473,7 @@ def build_game():
     for st in ('normal', 'hover', 'pressed', 'disabled'):
         save(levelup_reroll(st), 'levelup_reroll_%s.png' % st)
     save(levelup_die(), 'levelup_die.png')
+    save(levelup_title_glow(), 'levelup_title_glow.png')
     save(tall_card(), 'card_tall.png')     # kademesiz silah/kalkan seçim kartı (eski sade kart)
     save(slot_cell(), 'slot_cell.png')     # kademesiz envanter hücresi (eski sade slot)
     for st in ('normal', 'hover', 'selected'):

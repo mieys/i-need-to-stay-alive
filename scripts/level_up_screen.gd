@@ -479,7 +479,9 @@ func _apply_card_tier_frame(card: Button, tier: int) -> void:
 const ROW_SIZE := Vector2(804, 150)
 const ROW_ART_SIZE := Vector2(268, 50)
 const ROW_SEPARATION := 22
-const ROW_TOP := -270.0 ## ekran ortasına göre (başlık kurdelesinin altı, karıştır butonunun üstü)
+## Ekran ortasına göre (başlığın altı, karıştır butonunun üstü). 2026-09-25: yeni başlık/karıştır butonu seçilen
+## prototipteki yerleşimle geldi - satırlar y 216'dan başlıyor (eskiden 270), buton satırların 90 px altında (y 800).
+const ROW_TOP := -324.0
 const ROW_TEXTURES := [
 	preload("res://assets/ui/game/levelup_row_1.png"),
 	preload("res://assets/ui/game/levelup_row_2.png"),
@@ -741,16 +743,56 @@ var _rerolls_this_screen: int = 0
 func _reroll_cost() -> int:
 	return MerchantShopScript.reroll_cost(_rerolls_this_screen)
 
-## Kullanıcı isteği (2026-09-24): oyun içi TÜM arayüzler menülerle aynı bej/ahşap kite geçti - karıştır butonu da artık
-## kitin ten (tan) butonu (eski assets/ui/reroll_button.png görseli yerine; eskiden %40 küçültülmüş 29 px'lik yüksekliği
-## kit butonunun 9-slice payına (15+15) sığmıyordu, okunaklı 48 px'e büyütüldü - kartların altında, geri sayım panelinin
-## üstünde aynı boşlukta).
+## Kullanıcı seçimi (2026-09-25, prototip "Karıştır 2 - Altın Kenarlı + Zar"; eskiden kitin ahşap butonu): koyu gövde +
+## altın kenarlı 9-slice buton (tools/gen_menu_kit.py levelup_reroll: 10x10 sanat px, pay 3 sanat px = 9 px), solda piksel
+## zar (levelup_die, 33 px), krem yazı "Yeniden Karıştır (N altın)". Altın yetmezse gri kenarlı pasif doku + sönük yazı/zar.
+## Prototipteki yerinde: satırların altında y 800..860 (1080p); geri sayım paneli (çok oyunculu) onun altına kaydı.
+const REROLL_TEXTURES := {
+	"normal": preload("res://assets/ui/game/levelup_reroll_normal.png"),
+	"hover": preload("res://assets/ui/game/levelup_reroll_hover.png"),
+	"pressed": preload("res://assets/ui/game/levelup_reroll_pressed.png"),
+	"disabled": preload("res://assets/ui/game/levelup_reroll_disabled.png"),
+}
+const REROLL_DIE := preload("res://assets/ui/game/levelup_die.png")
+const REROLL_SIZE := Vector2(420, 60)
+const REROLL_TOP := 260.0 ## ekran ortasına göre
+
+
 func _apply_reroll_button_style() -> void:
-	UIKit.style_button(reroll_button, "wood", false, UIKit.FS_BODY)
-	reroll_button.offset_left = -198.0
-	reroll_button.offset_right = 198.0
-	reroll_button.offset_top = 258.0
-	reroll_button.offset_bottom = 306.0
+	for state: String in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
+		var sb := StyleBoxTexture.new()
+		sb.texture = REROLL_TEXTURES["pressed" if state == "hover_pressed" else state]
+		sb.set_texture_margin_all(9.0)
+		## Zar sol kenardan 26 px içeride (prototipte zarın merkezi x+42), yazı kalan alanda ortalı.
+		sb.content_margin_left = 26.0
+		sb.content_margin_right = 16.0
+		sb.content_margin_top = 0.0
+		sb.content_margin_bottom = 0.0
+		reroll_button.add_theme_stylebox_override(state, sb)
+	reroll_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	reroll_button.icon = REROLL_DIE
+	reroll_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	reroll_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reroll_button.expand_icon = false
+	reroll_button.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		reroll_button.add_theme_color_override(c, UIKit.C_CREAM)
+	reroll_button.add_theme_color_override("font_disabled_color", Color(UIKit.C_CREAM, 0.45))
+	reroll_button.add_theme_color_override("icon_disabled_color", Color(1, 1, 1, 0.45))
+	reroll_button.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+	reroll_button.add_theme_constant_override("outline_size", 4)
+	reroll_button.offset_left = -REROLL_SIZE.x * 0.5
+	reroll_button.offset_right = REROLL_SIZE.x * 0.5
+	reroll_button.offset_top = REROLL_TOP
+	reroll_button.offset_bottom = REROLL_TOP + REROLL_SIZE.y
+
+
+## "SEVİYE ATLADIN!" başlığı - kullanıcı seçimi (2026-09-25, prototip "Başlık 4 - Işıltılı Yazı"; eskiden kitin kurdelesi):
+## krem yazının arkasında 3 basamaklı altın ışık + 4 piksel kıvılcım (tools/gen_menu_kit.py levelup_title_glow, 224x32 sanat
+## px = 672x96, esnetilmez - Label tam doku boyunda). Yazı 64 px krem, koyu kontur (prototipteki 2 px piksel kontur).
+const TITLE_GLOW := preload("res://assets/ui/game/levelup_title_glow.png")
+const TITLE_SIZE := Vector2(672, 96)
+const TITLE_TOP := 22.0 ## ekranın üstünden (prototipte dış basamak y 28..112)
 
 
 ## Level atlama ekranı - oyun içi bej kit (bkz. UIKit): sıcak karartma, kurdele başlık, kartlarda koyu yazı (kart
@@ -765,16 +807,18 @@ func _apply_kit_style() -> void:
 	var title: Label = get_node_or_null("Title") as Label
 	if title:
 		title.theme = game_theme
-		title.add_theme_stylebox_override("normal", UIKit.panel_style("banner"))
-		UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_TEXT, 0)
+		var glow_sb := StyleBoxTexture.new()
+		glow_sb.texture = TITLE_GLOW
+		title.add_theme_stylebox_override("normal", glow_sb)
+		UIKit.style_label(title, UIKit.FS_BIG, UIKit.C_CREAM, 6)
 		title.remove_theme_color_override("font_shadow_color")
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		title.autowrap_mode = TextServer.AUTOWRAP_OFF
-		var w: float = MenuKit.font().get_string_size(title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIKit.FS_TITLE).x + 132.0
-		title.offset_left = -roundf(w * 0.5)
-		title.offset_right = roundf(w * 0.5)
-		title.offset_top = 24.0
-		title.offset_bottom = 96.0
+		title.offset_left = -TITLE_SIZE.x * 0.5
+		title.offset_right = TITLE_SIZE.x * 0.5
+		title.offset_top = TITLE_TOP
+		title.offset_bottom = TITLE_TOP + TITLE_SIZE.y
 	var container: Control = get_node_or_null("CardsContainer") as Control
 	if container:
 		container.theme = game_theme
@@ -799,8 +843,8 @@ func _apply_kit_style() -> void:
 	if countdown_panel:
 		countdown_panel.theme = game_theme
 		countdown_panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
-		countdown_panel.offset_top = 318.0
-		countdown_panel.offset_bottom = 392.0
+		countdown_panel.offset_top = REROLL_TOP + REROLL_SIZE.y + 12.0
+		countdown_panel.offset_bottom = REROLL_TOP + REROLL_SIZE.y + 86.0
 	if waiting_label:
 		waiting_label.add_theme_color_override("font_color", UIKit.C_TEXT)
 	if countdown_label:

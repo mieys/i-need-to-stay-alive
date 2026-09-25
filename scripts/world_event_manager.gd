@@ -75,11 +75,10 @@ const INITIAL_DELAY_MAX := 30.0
 const SECOND_CONCURRENT_MISSION_CHANCE := 0.2
 
 ## Kullanıcı isteği (2026-09-24): "Görev ödülleri olarak her oyuncuya 1 adet rasgele tierlı sandık verilmeli"
-## - başarılı her görevde (altın ödülüne EK olarak) hayattaki HER oyuncuya ayrı ayrı, MIN..MAX arası eşit
-## olasılıklı rastgele kademeli 1 sandık (bkz. _grant_chest_to_all_players). Sandıklar normal sandıklar gibi
-## kişisel bekleyen-sandık kuyruğuna girer (bir sonraki seviye atlamasında açılır).
-const MISSION_CHEST_TIER_MIN := 0
-const MISSION_CHEST_TIER_MAX := 5 ## enemy.gd _get_chest_tier_from_enemy_tier'in en yüksek değeri
+## - başarılı her görevde (altın ödülüne EK olarak) hayattaki HER oyuncuya ayrı ayrı 1 sandık (bkz.
+## _grant_chest_to_all_players). 2026-09-25: "efsunlar ... görev ödülleri ... sandık ödüllerinde çalışacak" + "elit
+## sandıklardan efsun çıksın" - görev sandığı artık ELİT sandık (açılınca efsun ekranı). Sandıklar kişisel
+## bekleyen-sandık kuyruğuna girer (bir sonraki seviye atlamasında açılır).
 
 ## Kullanıcı isteği (2026-09-24): "Görevler collision shape içeren şeylerin içinde spawnlanmamalı" - eskiden
 ## görev noktası SADECE tek bir merkez pikseli için kontrol ediliyordu; nesnenin gövdesi (ağaç tacı, konvoy,
@@ -560,15 +559,14 @@ func _grant_reward_to_zone_players(pos: Vector2, radius: float, gold: int) -> vo
 				NetworkManager.grant_personal_gold.rpc_id(peer_id, gold)
 
 
-## bkz. MISSION_CHEST_TIER_MIN/MAX üstündeki not. Her oyuncu KENDİ zarını atar (farklı kademeler gelebilir).
-## Host kendi kuyruğuna ekler, uzak oyunculara open_chest_for_peer (normal sandık kazanımıyla AYNI RPC).
+## bkz. yukarıdaki görev sandığı notu. Host kendi kuyruğuna ekler, uzak oyunculara open_elite_chest_for_peer (elit
+## sandık paylaşımıyla AYNI RPC, bkz. NetworkManager.host_award_elite_chest).
 func _grant_chest_to_all_players() -> void:
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
 	for p: Dictionary in NetworkManager.get_reward_participants():
-		var tier: int = _rng.randi_range(MISSION_CHEST_TIER_MIN, MISSION_CHEST_TIER_MAX)
 		var peer_id: int = int(p["peer_id"])
 		if not NetworkManager.is_multiplayer_active or peer_id == local_id:
-			GameManager.add_pending_chest(tier)
+			GameManager.add_pending_elite_chest()
 			var node: Node = p["node"]
 			var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
 			if ft_scene and is_instance_valid(node) and node is Node2D:
@@ -576,9 +574,9 @@ func _grant_chest_to_all_players() -> void:
 				get_tree().current_scene.add_child(ft)
 				ft.global_position = (node as Node2D).global_position + Vector2(-14, -52)
 				if ft.has_method("setup"):
-					ft.setup("+1 Sandık (görev)", Color(0.75, 0.9, 1.0))
+					ft.setup("+1 Elit Sandık (görev)", Color(0.85, 0.6, 1.0))
 		else:
-			NetworkManager.open_chest_for_peer.rpc_id(peer_id, tier)
+			NetworkManager.open_elite_chest_for_peer.rpc_id(peer_id)
 
 
 func _player_count() -> int:

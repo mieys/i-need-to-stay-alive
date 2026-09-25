@@ -65,6 +65,13 @@ extends Area2D
 
 var direction: Vector2 = Vector2.RIGHT
 var damage: float = 10.0
+## Efsun (bkz. weapon.gd enchant_on_*): isabet/uç nokta/yakalama bildirimleri. apex_pause > 0 = bumerang en uzak
+## noktada bu kadar sn dönerek durur (Kasırga Bumerang) - uzak kopyaya EnchantFx.apply_projectile_look ile gelir.
+var source_weapon: Node = null
+var apex_pause: float = 0.0
+var _pause_left: float = 0.0
+var _pause_clear: float = 0.0
+var _apex_done: bool = false
 var is_crit: bool = false
 var shield_pen_percent: float = 0.0
 
@@ -192,12 +199,28 @@ func _physics_process(delta: float) -> void:
 	for i in range(_trail_nodes.size()):
 		if _trail_nodes[i]:
 			(_trail_nodes[i] as AnimatedSprite2D).frame = (rot_frame - i - 1 + ROT_STEPS) % ROT_STEPS
+	if _pause_left > 0.0:
+		## Uç noktada duraklama: aynı düşmanları tekrar tekrar keser (1/3 sn'de bir).
+		_pause_left -= delta
+		_pause_clear -= delta
+		if _pause_clear <= 0.0:
+			_pause_clear = 0.33
+			_hit_this_leg.clear()
+		_update_trail(delta)
+		return
 	if not _returning:
 		position += direction * speed * delta
 		_traveled += speed * delta
 		if _traveled >= throw_distance:
 			_returning = true
 			_hit_this_leg.clear()
+			if not _apex_done:
+				_apex_done = true
+				if apex_pause > 0.0:
+					_pause_left = apex_pause
+					_pause_clear = 0.33
+				if not get_meta("network_spawned", false) and is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_boomerang_apex"):
+					source_weapon.enchant_on_boomerang_apex(self)
 		_update_trail(delta)
 		return
 	if not is_instance_valid(player_node):
@@ -243,6 +266,8 @@ func _finish() -> void:
 		# Network copies: skip callback, just clean up
 		queue_free()
 		return
+	if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_boomerang_caught"):
+		source_weapon.enchant_on_boomerang_caught(self)
 	if is_instance_valid(return_callback_target) and return_callback_target.has_method("_on_boomerang_returned"):
 		return_callback_target._on_boomerang_returned()
 	queue_free()
@@ -277,6 +302,8 @@ func _on_body_entered(body: Node) -> void:
 		return
 	_hit_this_leg.append(body)
 	body.take_damage(damage, is_crit, shield_pen_percent)
+	if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_projectile_hit"):
+		source_weapon.enchant_on_projectile_hit(self, body, damage, not _returning)
 	if not _shaman_burn_used and body.has_method("try_shaman_weapon_burn"):
 		_shaman_burn_used = body.try_shaman_weapon_burn()
 	_spawn_impact()

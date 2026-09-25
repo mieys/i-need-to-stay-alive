@@ -1,6 +1,7 @@
 extends Node2D
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const EnchantFx := preload("res://scripts/enchant_fx.gd")
 
 signal fired(direction: Vector2)
 
@@ -179,6 +180,12 @@ func _effective_fire_wait() -> float:
 	var wait: float = fire_rate * fire_rate_multiplier
 	if _elara_true_damage_active():
 		wait /= 1.0 + TRUE_DAMAGE_ATTACK_SPEED_BONUS ## saldırı hızı x1.3 = aralık /1.3
+	if is_instance_valid(enchant_behavior):
+		wait /= 1.0 + enchant_behavior.attack_speed_bonus() ## efsun saldırı hızı (ör. Çoklu Üfleme V)
+	## Oyuncu geneli efsun hızlanması (Buz Tahtı, Napalm Fişeği V...) - tüm silahlara.
+	var owner_p: Node = get_parent()
+	if owner_p and owner_p.has_method("enchant_haste_value"):
+		wait /= 1.0 + float(owner_p.enchant_haste_value())
 	return wait
 ## Elara ULTİ (R): 25sn boyunca her atış bu oranda hasar verir (%60) - "2 kez
 ## tetiklenir" kısmı _on_fire_timer_timeout/_process'teki draw-ready dalında
@@ -418,17 +425,154 @@ var melee_slash_fx_scale_mult: float = 1.0
 var _draw_ready: bool = false
 var _frame_changed_connected: bool = false
 
-## Yay pasifi (kullanıcı isteği): her 3. saldırıdan sonra fazladan 1 kez ok
-## atar - yayın dönüm noktası (3/5/7/10) her seviyeye ulaştıkça bu fazladan
-## ok sayısı +1 artar (bkz. player.gd _apply_yay_tier -> set_yay_multishot_
-## bonus). 0 = pasif kapalı (diğer tüm silahlerde no-op).
+## Yayın atış biçimi: her 3. saldırıdan sonra fazladan ok atar - saf formda
+## sabit +1 (bkz. player.gd apply_owned_weapon_tier; eski seviye/dönüm noktası
+## büyümesi 2026-09-25'te silindi). 0 = kapalı (diğer tüm silahlerde no-op).
 var yay_multishot_bonus: int = 0
 var _yay_attack_counter: int = 0
 const YAY_MULTISHOT_TRIGGER_EVERY := 3
 const YAY_MULTISHOT_VISUAL_DELAY := 0.09
+## Saf formun ek ok sayısı (player.gd apply_owned_weapon_tier) - bir efsun ek okları kendisi yönetiyorsa
+## (Ok Yağmuru, bkz. enchant_behavior.gd overrides_multishot) yay_multishot_bonus 0'a çekilir, efsun kalkınca geri gelir.
+var _pure_yay_multishot: int = 0
 
 func set_yay_multishot_bonus(bonus: int) -> void:
-	yay_multishot_bonus = max(0, bonus)
+	_pure_yay_multishot = max(0, bonus)
+	yay_multishot_bonus = 0 if (is_instance_valid(enchant_behavior) and enchant_behavior.overrides_multishot()) else _pure_yay_multishot
+
+
+## ================================================================ EFSUN (2026-09-25)
+## Bu silah kopyasının efsunu (bkz. EnchantDefs, player.gd _apply_enchant_to_weapon). Davranış bu silahın çocuğu olan
+## bir Node'dur (scripts/enchants/<id>.gd, temel: enchant_behavior.gd) - _fire_at/projectile.gd kancalarından çağrılır.
+var enchant_behavior: Node = null
+var enchant_stats: Dictionary = {}
+## Efsunun kendi ek atışları (yelpaze dart, ek ok, halka...) sırasında true - ek atış kendi ek atışını doğurmaz,
+## "her N. saldırı" sayaçlarına girmez, yayın çekiliş döngüsünü baştan başlatmaz.
+var _enchant_extra_shot: bool = false
+var _shot_damage_mult: float = 1.0
+var _shot_angle_offset: float = 0.0
+
+
+func set_enchant(ench: Dictionary) -> void:
+	if is_instance_valid(enchant_behavior):
+		remove_child(enchant_behavior)
+		enchant_behavior.queue_free()
+	enchant_behavior = null
+	enchant_stats = {}
+	## Önceki efsunun değiştirdiği silah özellikleri (yakın dövüş parça sayısı vb.) saf hâline döner.
+	for prop in _enchant_orig_props:
+		set(prop, _enchant_orig_props[prop])
+	_enchant_orig_props.clear()
+	if not ench.is_empty():
+		enchant_stats = EnchantDefs.resolve(ench)
+		## Efsuna özgü script yoksa (tamamen ortak mekaniklerle çalışan efsunlar: Kanlı Hançer, Sekme Mermisi...) temel sınıf.
+		var path: String = "res://scripts/enchants/%s.gd" % str(ench.get("id", ""))
+		if not ResourceLoader.exists(path):
+			path = "res://scripts/enchant_behavior.gd"
+		if not enchant_stats.is_empty():
+			var b := Node.new()
+			b.set_script(load(path))
+			b.name = "EnchantBehavior"
+			add_child(b)
+			b.setup(self, enchant_stats)
+			enchant_behavior = b
+	yay_multishot_bonus = 0 if (is_instance_valid(enchant_behavior) and enchant_behavior.overrides_multishot()) else _pure_yay_multishot
+	_recompute_attack_range()
+
+
+## Efsunun değiştirdiği silah özellikleri - efsun değişince/kalkınca geri yüklenir (bkz. set_enchant).
+var _enchant_orig_props: Dictionary = {}
+
+
+func set_enchant_prop(prop: String, value: Variant) -> void:
+	if not _enchant_orig_props.has(prop):
+		_enchant_orig_props[prop] = get(prop)
+	set(prop, value)
+
+
+## Efsun ek atışı: hedefe doğru (+ açı), hasar çarpanıyla, gecikmeli olabilir. Hedef bu arada ölürse no-op.
+func fire_enchant_shot(target: Node2D, delay: float, dmg_mult: float = 1.0, angle: float = 0.0) -> void:
+	if delay > 0.0:
+		await get_tree().create_timer(delay).timeout
+		if not is_instance_valid(self) or not is_inside_tree():
+			return
+	if not is_instance_valid(target) or target.get("is_dead") == true:
+		return
+	var prev_extra: bool = _enchant_extra_shot
+	_enchant_extra_shot = true
+	_shot_damage_mult = dmg_mult
+	_shot_angle_offset = angle
+	_fire_at(target)
+	_enchant_extra_shot = prev_extra
+	_shot_damage_mult = 1.0
+	_shot_angle_offset = 0.0
+
+
+## Efsunun bir noktadan doğurduğu mermi (Tam Çekiş'in bölünen okları) - mevcut mermi sahnesiyle, bu silahın isabet
+## kancalarıyla ve uzak oyunculara yayınla. exclude: doğduğu noktadaki düşman(lar)a tekrar çarpmasın.
+## Ertelenir: genelde bir merminin body_entered sinyali içinden çağrılıyor, fizik sorguları sırasında yeni Area2D
+## eklemek "Can't change this state while flushing queries" hatası verir (efsun duman testinde yakalandı).
+func spawn_enchant_projectile(from_pos: Vector2, dir: Vector2, dmg: float, exclude: Array = [], look: Dictionary = {}, metas: Dictionary = {}) -> void:
+	call_deferred("_spawn_enchant_projectile_now", from_pos, dir, dmg, exclude, look, metas)
+
+
+func _spawn_enchant_projectile_now(from_pos: Vector2, dir: Vector2, dmg: float, exclude: Array, look: Dictionary, metas: Dictionary) -> Node2D:
+	if not projectile_scene or not is_inside_tree() or get_tree().current_scene == null:
+		return null
+	var proj = projectile_scene.instantiate()
+	get_tree().current_scene.add_child(proj)
+	proj.global_position = from_pos
+	proj.direction = dir.normalized()
+	if "face_direction" in proj and proj.face_direction:
+		proj.rotation = dir.angle() + ranged_projectile_rotation_offset
+	var owner_char: Node = get_parent()
+	if owner_char is Node2D:
+		proj.scale *= (owner_char as Node2D).scale
+	proj.damage = dmg
+	proj.is_crit = false
+	if "source_weapon" in proj:
+		proj.source_weapon = self
+	if "_hit_bodies" in proj:
+		for e in exclude:
+			if is_instance_valid(e):
+				proj._hit_bodies.append(e)
+	for m in metas:
+		proj.set_meta(m, metas[m])
+	if not look.is_empty():
+		EnchantFx.apply_projectile_look(proj, look)
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.broadcast_projectile.rpc(projectile_scene.resource_path, from_pos, proj.direction,
+			float(proj.get("speed")) if "speed" in proj else 0.0, proj.scale, Vector2.ZERO, multiplayer.get_unique_id(), _net_look(look))
+	return proj
+
+
+## Uzak kopyaya giden görünüm: "scale" zaten proj_scale ile gidiyor (iki kez çarpılmasın).
+static func _net_look(look: Dictionary) -> Dictionary:
+	if not look.has("scale"):
+		return look
+	var d: Dictionary = look.duplicate()
+	d.erase("scale")
+	return d
+
+
+## projectile.gd isabetinden (bkz. orada) - efsun davranışına iletir.
+func enchant_on_projectile_hit(proj: Node2D, body: Node, dmg: float, is_primary: bool) -> void:
+	if is_instance_valid(enchant_behavior):
+		enchant_behavior.on_hit(body, dmg, is_primary, proj)
+
+
+func on_enchant_skill_used() -> void:
+	if is_instance_valid(enchant_behavior):
+		enchant_behavior.on_skill_used()
+
+
+func on_enchant_event(event: String, data: Dictionary) -> void:
+	if is_instance_valid(enchant_behavior):
+		enchant_behavior.on_event(event, data)
+
+
+func _enchant_aoe_mult() -> float:
+	return enchant_behavior.aoe_mult() if is_instance_valid(enchant_behavior) else 1.0
 
 
 ## Her gerçek ok atışından sonra çağrılır (hem draw_before_fire modundaki
@@ -441,8 +585,9 @@ func _process_yay_multishot_passive(target: Node2D) -> void:
 	if _yay_attack_counter < YAY_MULTISHOT_TRIGGER_EVERY:
 		return
 	_yay_attack_counter = 0
+	## Efsun ek atışı olarak (bkz. fire_enchant_shot): efsun sayaçlarına girmez, çekiliş döngüsünü baştan başlatmaz.
 	for i in range(yay_multishot_bonus):
-		_fire_at_delayed(target, YAY_MULTISHOT_VISUAL_DELAY * float(i + 1))
+		fire_enchant_shot(target, YAY_MULTISHOT_VISUAL_DELAY * float(i + 1))
 
 var rage_multiplier: float = 1.0
 var fire_rate_multiplier: float = 1.0
@@ -783,7 +928,8 @@ func _recompute_attack_range() -> void:
 	## Yakıncı silahlar menzil bonusundan kısılmış pay alır.
 	var effective_bonus: float = _last_range_bonus * (MELEE_RANGE_BONUS_FACTOR if melee else 1.0)
 	## weapon_range_bonus artık KESİR (0.12 = +%12, bkz. player.gd) - taban menzil üstüne çarpan olarak biner.
-	attack_range = _base_attack_range * (1.0 + effective_bonus) * _temp_range_mult
+	var enchant_range: float = enchant_behavior.range_mult() if is_instance_valid(enchant_behavior) else 1.0
+	attack_range = _base_attack_range * (1.0 + effective_bonus) * _temp_range_mult * enchant_range
 
 
 ## The following four are the same idea as set_range_bonus, but for the
@@ -911,6 +1057,45 @@ const BOOMERANG_BASE_SPEED_MULT := 0.8
 ## Boomerang geri döndüğünde (bkz. boomerang_projectile.gd) çağrılır - bir
 ## sonraki atışın önü açılır, kafanın üstünde süzülen ikon tekrar görünür olur
 ## (bkz. _fire_at - atış anında gizlenmişti, "iki bumerang" görünmesin diye).
+## Efsun: bumerang en uzak noktada / yakalandı (bkz. boomerang_projectile.gd), fişek patladı (firework_projectile.gd),
+## sahip hasar aldı / kaçındı / ölüyor (player.gd).
+func enchant_on_boomerang_apex(proj: Node2D) -> void:
+	if is_instance_valid(enchant_behavior):
+		enchant_behavior.on_boomerang_apex(proj)
+
+
+func enchant_on_boomerang_caught(proj: Node2D) -> void:
+	if is_instance_valid(enchant_behavior):
+		enchant_behavior.on_boomerang_caught(proj)
+
+
+func enchant_on_explode(proj: Node2D, pos: Vector2) -> void:
+	if is_instance_valid(enchant_behavior):
+		enchant_behavior.on_explode(proj, pos)
+
+
+func enchant_on_owner_damaged(amount: float, source: Node) -> float:
+	return enchant_behavior.on_owner_damaged(amount, source) if is_instance_valid(enchant_behavior) else amount
+
+
+func enchant_block_chance() -> float:
+	return enchant_behavior.block_chance() if is_instance_valid(enchant_behavior) else 0.0
+
+
+func enchant_on_blocked(amount: float, source: Node) -> void:
+	if is_instance_valid(enchant_behavior):
+		enchant_behavior.on_blocked(amount, source)
+
+
+func enchant_on_dodge() -> void:
+	if is_instance_valid(enchant_behavior):
+		enchant_behavior.on_dodge()
+
+
+func enchant_cheat_death() -> bool:
+	return is_instance_valid(enchant_behavior) and enchant_behavior.cheat_death()
+
+
 func _on_boomerang_returned() -> void:
 	## bkz. _projectiles_in_flight üstündeki yorum - eskiden burada bool
 	## direkt false'a çekiliyordu, çifte tetik ile havada 2 bumerang varken
@@ -1238,6 +1423,12 @@ func _physics_process(delta: float) -> void:
 
 
 var _orbit_arc: AnimatedSprite2D = null
+## Efsun "savuruş" birimi: kılıcın çeyrek turu. Tam tur temel hızda ~4 sn sürdüğü için (WeaponOrbitMath
+## ROTATION_SPEED_MULT) "her N turda" tetikleyiciler çok seyrekti; çeyrek tur temel hızda ~1 sn ve saldırı hızıyla kısalır
+## (kartlarda "her N sn" diye yazılır, bkz. EnchantDefs UZUNKILIÇ).
+const ENCHANT_SWING_ARC := PI * 0.5
+
+var _orbit_travel: float = 0.0
 
 func _process_uzunkilic_orbit(delta: float) -> void:
 	# Update cooldowns
@@ -1258,6 +1449,8 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 	## remote_player.gd _update_local_uzunkilic_orbit AYNI fonksiyonu
 	## çağırıyor, bkz. o dosyanın başındaki kök neden notu.
 	var orbit: Dictionary = WeaponOrbitMath.compute(delta, _orbit_angle, fire_rate, range_mult, parent_node.scale.x)
+	## Efsun: kılıç her çeyrek turda (ENCHANT_SWING_ARC) bir "savuruş" sayılır (bkz. enchant_behavior.gd on_revolution).
+	_orbit_travel += absf(angle_difference(_orbit_angle, float(orbit["angle"])))
 	_orbit_angle = orbit["angle"]
 	global_position = parent_node.global_position + orbit["offset"]
 	rotation = orbit["rotation"]
@@ -1273,7 +1466,12 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 
 	# Collision detection with enemies
 	var sword_pos: Vector2 = global_position
-	var collision_radius: float = 45.0 * range_mult * parent_node.scale.x
+	var collision_radius: float = 45.0 * range_mult * parent_node.scale.x * _enchant_aoe_mult()
+	var orb_ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
+	if _orbit_travel >= ENCHANT_SWING_ARC:
+		_orbit_travel -= ENCHANT_SWING_ARC
+		if orb_ench:
+			orb_ench.on_revolution(sword_pos)
 	
 	# Compute effective damage stats
 	var final_damage: float = damage * rage_multiplier
@@ -1306,11 +1504,18 @@ func _process_uzunkilic_orbit(delta: float) -> void:
 		for e in Enemy.get_enemies_near(get_tree(), sword_pos, collision_radius):
 			var id: int = e.get_instance_id()
 			if not _hit_cooldowns.has(id):
-				_hit_cooldowns[id] = 1.0
+				_hit_cooldowns[id] = 1.0 * (orb_ench.orbit_cd_mult() if orb_ench else 1.0)
 				if e.has_method("take_damage"):
+					var hit_dmg: float = final_damage
+					var hit_pen: float = shield_pen
+					if orb_ench:
+						hit_dmg = orb_ench.modify_damage(final_damage * (1.0 + GameManager.enchant_damage_percent), e)
+						hit_pen += orb_ench.extra_shield_pen()
 					for _h in range(orbit_hits):
 						if is_instance_valid(e) and e.get("is_dead") != true:
-							e.take_damage(final_damage, is_crit, shield_pen, true) ## donen kilic: cevresindeki herkese = alan
+							e.take_damage(hit_dmg, is_crit, hit_pen, true) ## donen kilic: cevresindeki herkese = alan
+					if orb_ench and is_instance_valid(e):
+						orb_ench.on_hit(e, hit_dmg, true, null)
 					_spawn_orbit_hit_fx(e.global_position)
 					if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
 						_shaman_burn_applied = e.try_shaman_weapon_burn()
@@ -1779,6 +1984,11 @@ func _make_facing_direction_target() -> Node2D:
 ## Hangi hedefleme moduna göre saldırılacağını seçer - Tüftüf hariç herkes
 ## en yakın düşmanı hedeflemeye devam eder (eski davranış).
 func _get_target_enemy() -> Node2D:
+	## Efsun hedef seçimi (Düello) - efsun null dönerse silahın normal seçimi.
+	if is_instance_valid(enchant_behavior):
+		var picked: Node2D = enchant_behavior.pick_target()
+		if is_instance_valid(picked):
+			return picked
 	## Menzilde boss / görev kopyası varsa silah DAİMA onlara odaklanır (kullanıcı isteği 2026-09-25) - kural TEK yerde:
 	## weapon_target_priority.gd (uzak kuklanın nişanı da aynısını çağırır).
 	var priority: Node2D = WeaponTargetPriorityScript.nearest_priority_target(get_tree(), _attack_origin(), attack_range,
@@ -2093,15 +2303,24 @@ func _deal_beam_tick(target: Node2D) -> void:
 	final_damage += _player_stat("item_flat_hit_damage")
 	final_damage *= 1.0 + _player_stat("item_damage_mult_bonus")
 	shield_pen += _player_stat("shield_pen_percent") + _player_stat("spirit_shield_pen") ## + Ruhani Yetenek "Adc" (%15)
+	## Efsun: ışın tiki de bir isabet - hasar değişikliği, kalkan delme, element (bkz. enchant_behavior.gd on_beam_tick).
+	var ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
+	if ench:
+		final_damage = ench.modify_damage(final_damage * (1.0 + GameManager.enchant_damage_percent), target)
+		shield_pen += ench.extra_shield_pen()
 	target.take_damage(final_damage, is_crit, shield_pen)
+	if ench and is_instance_valid(target):
+		ench.on_beam_tick(target, final_damage)
 	## Şaman pasifi: bu tik = 1 "saldırı" (bkz. enemy.gd try_shaman_weapon_burn
 	## üstündeki not) - yakma bu tikte EN FAZLA 1 düşmanda (birincil hedef ya
 	## da bir sekme hedefi) tetiklenebilir, aşağı _apply_chain_jumps'a taşınır.
 	var _shaman_burn_applied: bool = false
 	if target.has_method("try_shaman_weapon_burn"):
 		_shaman_burn_applied = target.try_shaman_weapon_burn()
-	if chain_jump_count > 0:
-		_apply_chain_jumps(target, final_damage * chain_damage_percent, is_crit, shield_pen, _shaman_burn_applied)
+	var jumps: int = chain_jump_count + (ench.chain_bonus() if ench else 0)
+	var chain_pct: float = ench.chain_pct(chain_damage_percent) if ench else chain_damage_percent
+	if jumps > 0 and is_instance_valid(target):
+		_apply_chain_jumps(target, final_damage * chain_pct, is_crit, shield_pen, _shaman_burn_applied, jumps)
 	fired.emit((target.global_position - global_position).normalized())
 	_apply_item_slow_on_hit(target)
 
@@ -2111,7 +2330,11 @@ func _deal_beam_tick(target: Node2D) -> void:
 ## bir önceki hedeften yeni hedefe görsel bir elektrik arkı (fx_lightning_
 ## chain) bırakır - önceden bu efekt hiç oluşturulmuyordu (bkz.
 ## FxLightningChainScene yorumu), sıçrama tamamen görünmezdi.
-func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shield_pen: float, shaman_burn_applied: bool = false) -> void:
+func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shield_pen: float, shaman_burn_applied: bool = false, jumps: int = -1) -> void:
+	if jumps < 0:
+		jumps = chain_jump_count
+	var ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
+	var jump_range: float = CHAIN_JUMP_RANGE * (ench.chain_range_mult() if ench else 1.0)
 	var candidates: Array = []
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e == primary or not is_instance_valid(e) or e.get("is_dead") == true:
@@ -2122,12 +2345,12 @@ func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shi
 			continue
 		## DÜZELTME: sekme artık sadece birincil hedefin CHAIN_JUMP_RANGE
 		## yarıçapı içindeki yaratıkları aday sayıyor (bkz. sabit üstündeki not).
-		if primary.global_position.distance_to(e.global_position) > CHAIN_JUMP_RANGE:
+		if primary.global_position.distance_to(e.global_position) > jump_range:
 			continue
 		candidates.append(e)
 	candidates.sort_custom(func(a, b):
 		return primary.global_position.distance_to(a.global_position) < primary.global_position.distance_to(b.global_position))
-	var n: int = min(chain_jump_count, candidates.size())
+	var n: int = min(jumps, candidates.size())
 	## Zincir görsel olarak sırayla sıçrasın diye (birincil -> 1. -> 2. -> ...)
 	## bir önceki hedefi takip ediyoruz - sadece hepsi birincilden ayrı ayrı
 	## sıçramış gibi değil, gerçek bir "zincir" hissi versin diye.
@@ -2138,7 +2361,11 @@ func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shi
 		if not shaman_burn_applied and chain_to.has_method("try_shaman_weapon_burn"):
 			shaman_burn_applied = chain_to.try_shaman_weapon_burn()
 		_spawn_chain_lightning_fx(chain_from, chain_to)
+		if ench:
+			ench.on_hit(chain_to, chain_damage, false, null)
 		chain_from = chain_to
+	if ench:
+		ench.on_chain(primary, candidates.slice(0, n), chain_damage)
 
 
 ## Bkz. _apply_chain_jumps üstündeki yorum - iki düşman arasında (veya
@@ -2206,18 +2433,28 @@ func _fire_at(target: Node2D) -> void:
 	if draw_before_fire and held_arrow:
 		held_arrow.visible = false
 
+	## Efsun: atış başı kancası (sayaçlar, "hazır" durumları) - hasar/kritik hesabından ÖNCE.
+	var ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
+	if ench:
+		ench.on_fire(target, _enchant_extra_shot)
 	var final_damage: float = damage * rage_multiplier
 	final_damage *= 1.0 + _player_stat("aggressive_damage_bonus") + _player_stat("talon_damage_bonus")
 	final_damage *= _player_stat_default("shield_mode_damage_mult", 1.0) ## Tank Modu: -25% while active
-	var is_crit: bool = randf() < crit_chance
+	var is_crit: bool = randf() < crit_chance + (ench.crit_bonus(target) if ench else 0.0)
 	if is_crit:
-		final_damage *= crit_damage
+		final_damage *= crit_damage + (ench.crit_damage_bonus(target) if ench else 0.0)
 	## Arcane Asası pasifi: canı %30'un altındaki düşmanlara %30 fazla hasar.
 	if _is_arcane and "health" in target and "max_health" in target:
 		var target_max_health: float = float(target.get("max_health"))
 		if target_max_health > 0.0 and float(target.get("health")) <= target_max_health * ARCANE_EXECUTE_HP_THRESHOLD:
 			final_damage *= ARCANE_EXECUTE_DAMAGE_MULT
+	## Efsun: ek atış hasar çarpanı (ör. Ok Yağmuru ek okları %80) + efsunun kendi hasar değişikliği (güç, koşullu bonuslar).
+	final_damage *= _shot_damage_mult * (1.0 + GameManager.enchant_damage_percent)
+	if ench:
+		final_damage = ench.modify_damage(final_damage, target)
 	var direction: Vector2 = (target.global_position - global_position).normalized()
+	if _shot_angle_offset != 0.0:
+		direction = direction.rotated(_shot_angle_offset)
 	var parent_node: Node = get_parent()
 	if parent_node and parent_node.has_method("get_skill_character_id") and parent_node.get_skill_character_id() == 5:
 		var line_scene: PackedScene = preload("res://scenes/fx_speed_line.tscn")
@@ -2299,6 +2536,8 @@ func _fire_at(target: Node2D) -> void:
 	final_damage += _player_stat("item_flat_hit_damage")
 	final_damage *= 1.0 + _player_stat("item_damage_mult_bonus")
 	shield_pen += _player_stat("shield_pen_percent") + _player_stat("spirit_shield_pen") ## + Ruhani Yetenek "Adc" (%15)
+	if ench:
+		shield_pen += ench.extra_shield_pen() ## ör. Topuz Ağır Darbe II
 
 	if melee:
 		if target.has_method("take_damage"):
@@ -2319,6 +2558,8 @@ func _fire_at(target: Node2D) -> void:
 				_apply_weapon_lifesteal(final_damage)
 			if target.has_method("try_shaman_weapon_burn"):
 				_shaman_burn_applied = target.try_shaman_weapon_burn()
+			if ench:
+				ench.on_hit(target, final_damage, true, null)
 		## Hafif alan hasarı: hedefin çevresindeki diğer düşmanlar da
 		## savuruştan pay alır (tam hasarın melee_aoe_damage_percent'i).
 		## DÜZELTME (kullanıcı bildirimi: "yaratıklara tam saldırırken anlık
@@ -2328,7 +2569,7 @@ func _fire_at(target: Node2D) -> void:
 		## amaçlı sürümü) SADECE gerçekten menzildeki yaratıklar geliyor.
 		## Hayalet hedefe (Talon Salvosu, ışında yaratık yok) savurulmuşsa gerçek bir vuruş yok: etrafına
 		## alan payı da dağıtılmaz (aksi halde boşa atan silah alan hasarı veriyordu).
-		var aoe_victims: Array = Enemy.get_enemies_near(get_tree(), target.global_position, melee_aoe_radius * aoe_radius_multiplier) if target.has_method("take_damage") else []
+		var aoe_victims: Array = Enemy.get_enemies_near(get_tree(), target.global_position, melee_aoe_radius * aoe_radius_multiplier * _enchant_aoe_mult()) if target.has_method("take_damage") else []
 		for e in aoe_victims:
 			if e == target:
 				continue
@@ -2351,10 +2592,14 @@ func _fire_at(target: Node2D) -> void:
 				## düşmanı yakabilir (bkz. _shaman_burn_applied üstündeki not).
 				if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
 					_shaman_burn_applied = e.try_shaman_weapon_burn()
+				if ench:
+					ench.on_hit(e, final_damage * melee_aoe_damage_percent, false, null)
 		## Efektler artık YUKARIDA (hasar/knockback'ten ÖNCE) spawn edildi -
 		## bkz. melee_effect_hold ve _do_melee_swing çağrısı.
 		fired.emit(direction)
 		_play_attack_sound()
+		if ench:
+			ench.after_fire(target, _enchant_extra_shot)
 		return
 
 	if hitscan:
@@ -2508,17 +2753,27 @@ func _fire_at(target: Node2D) -> void:
 			_broadcast_weapon_icon_visibility(false)
 		if "return_callback_target" in proj:
 			proj.return_callback_target = self
+	## Efsun: mermiye delme/hız/işaret yazılır; görünüm (renk/iz/ölçek) kasterde uygulanır VE aşağıda uzak kopyaya gider.
+	var look: Dictionary = {}
+	if ench:
+		ench.configure_projectile(proj, target, _enchant_extra_shot)
+		look = ench.projectile_look(proj)
+		if not look.is_empty():
+			EnchantFx.apply_projectile_look(proj, look)
 	## Multiplayer: broadcast projectile so other players see it.
 	if NetworkManager.is_multiplayer_active:
 		var scene_path: String = projectile_scene.resource_path
 		var proj_speed: float = proj.get("speed") if "speed" in proj else 0.0
 		var proj_scale: Vector2 = proj.scale
 		var target_pt: Vector2 = proj.get("target_position") if "target_position" in proj else Vector2.ZERO
-		NetworkManager.broadcast_projectile.rpc(scene_path, global_position, direction, proj_speed, proj_scale, target_pt, multiplayer.get_unique_id())
+		NetworkManager.broadcast_projectile.rpc(scene_path, global_position, direction, proj_speed, proj_scale, target_pt, multiplayer.get_unique_id(), _net_look(look))
 	fired.emit(direction)
 	_play_attack_sound()
-	if draw_before_fire:
+	## Efsun ek atışı yayın çekiliş döngüsünü baştan başlatmaz (asıl atışın döngüsü zaten başladı).
+	if draw_before_fire and not _enchant_extra_shot:
 		_start_draw_cycle()
+	if ench:
+		ench.after_fire(target, _enchant_extra_shot)
 
 
 ## Silahın bu karaktere özel savuruş efekti sahnesi ("" = prosedürel pençe).
@@ -2592,7 +2847,9 @@ func _deal_melee_damage(target: Node, total_damage: float, is_crit: bool, shield
 				_apply_delayed_segment.bind(target, per_hit, is_crit, shield_pen))
 
 
-func _apply_delayed_segment(target: Node, amount: float, is_crit: bool, shield_pen: float) -> void:
+## target tipsiz: parça zamanlayıcısı dolduğunda hedef serbest bırakılmış olabilir - tipli parametreye serbest nesne
+## gelince çağrı "Cannot convert argument" hatasıyla düşüyordu (efsunların darbe sayısını artırmasıyla daha sık).
+func _apply_delayed_segment(target, amount: float, is_crit: bool, shield_pen: float) -> void:
 	## DÜZELTME (kullanıcı bildirimi: "Fişek tüfek ve bıçak market alanın
 	## içinde saldırı yapmaya devam ediyor") - bu get_tree().create_timer()
 	## ile gecikmeli tetiklendiği için (bkz. _deal_melee_damage), silahın

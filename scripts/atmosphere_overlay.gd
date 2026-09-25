@@ -213,7 +213,8 @@ func _gather_lights(xf: Transform2D, map_size: Vector2) -> Array:
 		var glow := n as Node2D
 		if glow == null or glow.get_canvas_layer_node() != null:
 			continue ## arayüzdeki (CanvasLayer altındaki) önizlemeler dünyaya ışık saçmaz
-		var e: float = minf(float(glow.call("current_energy")) * GLOW_ENERGY_SCALE, GLOW_ENERGY_CAP)
+		var own_cap: float = float(glow.get("energy_cap"))
+		var e: float = minf(float(glow.call("current_energy")) * GLOW_ENERGY_SCALE, own_cap if own_cap > 0.0 else GLOW_ENERGY_CAP)
 		if e <= 0.01:
 			continue
 		if bool(glow.get("hide_in_fog")) and fog_active and not bool(fog.call("is_world_pos_visible", glow.global_position)):

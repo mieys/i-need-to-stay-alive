@@ -16,9 +16,13 @@ var _chest_tier: int = 0 ## "KADEME" - hangi dünya evresinden gelen sandık (bk
 ## Sıradan/Nadir/Epik/Efsanevi). setup() doldurur, _build_card()/
 ## _on_al_pressed bunu okur.
 var _reward_tier: int = 1
-## bkz. _play_chest_open_sequence - açılış animasyonu için kullanılan sandık
-## görseli (chest_drop.gd'deki DÜNYA sandığıyla AYNI doku/tier eşlemesi).
-var _chest_icon: TextureRect = null
+## bkz. _play_chest_open_sequence - açılış animasyonu (chest_open_anim.gd); ödül kartı bunun ağzından fırlar.
+var _chest_icon: Control = null
+## Sandık (kartın ARKASINDA, yerleşimden bağımsız), kartın arkasındaki ışık katmanı ve kıvılcım katmanı (en üstte).
+var _stage: Control = null
+var _rays_layer: Control = null
+var _fx_layer: Control = null
+var _rays: Node = null
 
 ## Kullanıcı isteği: "bir oyuncu sandık seçerken diğer oyuncularda ve sandık
 ## seçen kişide 25 saniyelik bekleme süresi olmuyor, onun da bekleme süresi
@@ -41,20 +45,11 @@ const CHEST_TITLES := {
 	5: "KADEME 11+ SANDIK"
 }
 
-## chest_drop.gd'deki DÜNYA sandığı dokularıyla BİREBİR aynı (bilinçli kopya -
-## o script bir class_name TANIMLAMIYOR, bkz. dosya başındaki WEAPON_* notu
-## ile AYNI gerekçe). Her doku 32x128px, dikey 4 kare (hframes=1, vframes=4) -
-## kare 0 kapalı sandık, kare 3 tam açık. Kullanıcı isteği: "sandıklar
-## açılırken öncesinde sandık ekrana gelecek... açma animasyonu görünecek" -
-## bkz. _play_chest_open_sequence.
-const CHEST_TEXTURES := {
-	0: "res://assets/sprites/chest_tier_1_2.png",
-	1: "res://assets/sprites/chest_tier_3_4.png",
-	2: "res://assets/sprites/chest_tier_5_6.png",
-	3: "res://assets/sprites/chest_tier_7_8.png",
-	4: "res://assets/sprites/chest_tier_9_10.png",
-	5: "res://assets/sprites/chest_tier_11_up.png",
-}
+## Kullanıcı isteği (2026-09-25): "sandık açarken daha iyi ve ödüllendirici heyecan uyandırıcı sandık açma animasyonu" -
+## eski 4 karelik kapak açılışı (chest_tier_*.png) yerine yeni piksel sayfa + ışık/ses/flaş (bkz. chest_open_anim.gd).
+const ChestOpenAnim := preload("res://scripts/chest_open_anim.gd")
+const RewardReveal := preload("res://scripts/reward_reveal.gd")
+const RewardRays := preload("res://scripts/reward_rays.gd")
 ## KULLANICI BİLDİRİMİ (2026-09-21): "Sandık açıldığında sandık özelliklerini gösteren kart ufakken yazılar kocaman kalıyor bu
 ## yüzden doğru düzgün görünmüyor yazıları." KÖK NEDEN: kart içeriği kenardan sadece 16 px içeride başlıyordu ama çerçeve dokusunun
 ## (TierSystem.FRAME_TEXTURES) süslü kenarları/mücevheri çok daha içeride - başlık çerçevenin üstüne biniyor, açıklama çerçeve
@@ -75,8 +70,6 @@ const CARD_DESC_MIN_FONT_SIZE := 13
 const CARD_ICON_SIZE := 96.0
 const CARD_BUTTON_HEIGHT := 44.0
 const CARD_BUTTON_FONT_SIZE := 24
-const CHEST_ICON_DISPLAY_SIZE := 176.0 ## kullanıcı isteği: "biraz görünür olmalı boyut olarak"
-const CHEST_OPEN_FRAME_DELAY := 0.15 ## dünya sandığındaki 0.08sn'den biraz daha yavaş - UI'da daha net okunsun diye
 
 ## DÜZELTME/YENİ ÖZELLİK (kullanıcı isteği: "bundan sonra yere düşen
 ## sandıklardan rasgele 3 silah düşecek 3 silahtan birini seçmemiz
@@ -211,112 +204,101 @@ func setup(player: Node, chest_tier: int) -> void:
 ## Kullanıcı isteği: "Sandıklar açılırken öncesinde sandık ekrana gelecek
 ## (biraz görünür olmalı boyut olarak) açma animasyonu görünecek ve içinden
 ## çıkan eşya kartı sandığın içinden animasyonlu olarak çıkarak oyuncuya
-## gösterilecek." - chest_drop.gd'deki DÜNYA sandığının AYNI 4 kareli açılış
-## animasyonunu (bkz. CHEST_TEXTURES notu) burada, ödül ekranında tekrar
-## oynatır; son karede ödül kartı sandığın konumundan/küçük boyuttan
-## büyüyerek/kayarak "çıkar" (bkz. _reveal_reward_card).
+## gösterilecek." - 2026-09-25'ten beri tam açılış animasyonu (chest_open_anim.gd: sallanma, ışık, patlama, altınlar).
+## İKİNCİ tur (aynı gün: "kart içinden fırlamış gibi görünmüyor"): sandık artık VBox'ta değil, kartın ARKASINDAKİ ayrı bir
+## katmanda (_stage) ekranın ortasında durur - eskiden kart eklenince VBox yeniden yerleşip sandığı kaydırıyordu ve kart
+## animasyonun tamamı + bekleme bittikten sonra sadece büyüyerek beliriyordu. Artık kapağın patladığı an (burst) kart
+## sandığın ağzından fırlar (reward_reveal.gd), indiğinde parlar ve arkasında tier'a göre ışık huzmeleri yanar.
 func _play_chest_open_sequence(candidate: Dictionary) -> void:
-	var vbox: VBoxContainer = get_node_or_null("CenterContainer/VBox")
-	if not vbox or not cards_container:
+	if not cards_container:
 		_reveal_reward_card(candidate) ## güvenlik ağı - sahne beklenmedik şekilde eksikse animasyonsuz devam et
 		return
+	var center_node: Node = get_node_or_null("CenterContainer")
+	_stage = _make_layer("ChestStage")
+	_rays_layer = _make_layer("RewardRays")
+	if center_node:
+		## Sıra: Dim, sandık, ışık, kart (CenterContainer) - kart her şeyin önünde.
+		move_child(_stage, center_node.get_index())
+		move_child(_rays_layer, center_node.get_index())
+	_fx_layer = _make_layer("RewardFx")
 
-	_chest_icon = TextureRect.new()
-	_chest_icon.custom_minimum_size = Vector2(CHEST_ICON_DISPLAY_SIZE, CHEST_ICON_DISPLAY_SIZE)
-	_chest_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_chest_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var tex_path: String = CHEST_TEXTURES.get(_chest_tier, CHEST_TEXTURES[0])
-	var full_tex: Texture2D = load(tex_path) as Texture2D
-	_chest_icon.texture = _chest_frame_texture(full_tex, 0)
-	vbox.add_child(_chest_icon)
-	vbox.move_child(_chest_icon, cards_container.get_index())
+	## Işığın rengi çıkacak eşyanın nadirliği (_reward_tier, setup'ta çekildi) - kart görünmeden önce ipucu.
+	var anim: Control = ChestOpenAnim.new()
+	anim.setup(false, _reward_tier)
+	_stage.add_child(anim)
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	anim.size = anim.custom_minimum_size
+	anim.position = (view - anim.size) * 0.5
+	_chest_icon = anim
 
-	_chest_icon.scale = Vector2(0.6, 0.6)
-	_chest_icon.pivot_offset = Vector2(CHEST_ICON_DISPLAY_SIZE, CHEST_ICON_DISPLAY_SIZE) * 0.5
-	_chest_icon.modulate.a = 0.0
+	anim.pivot_offset = anim.custom_minimum_size * 0.5
+	anim.scale = Vector2(0.6, 0.6)
+	anim.modulate.a = 0.0
 	var pop_in := create_tween()
 	pop_in.set_parallel(true)
 	pop_in.set_ease(Tween.EASE_OUT)
 	pop_in.set_trans(Tween.TRANS_BACK)
-	pop_in.tween_property(_chest_icon, "modulate:a", 1.0, 0.2)
-	pop_in.tween_property(_chest_icon, "scale", Vector2.ONE, 0.3)
-	await pop_in.finished
-	if not is_instance_valid(self):
-		return
-
-	## Kapalıdan (kare 0) tam açığa (kare 3) - dünya sandığındaki AYNI kare
-	## sırası, UI'da biraz daha yavaş (CHEST_OPEN_FRAME_DELAY).
-	for frame in range(1, 4):
-		if not is_instance_valid(self):
-			return
-		await get_tree().create_timer(CHEST_OPEN_FRAME_DELAY).timeout
-		if not is_instance_valid(_chest_icon) or not is_instance_valid(self):
-			return
-		_chest_icon.texture = _chest_frame_texture(full_tex, frame)
-		## Her karede küçük bir "sarsıntı" - açılışın hissedilir olması için.
-		var shake := create_tween()
-		shake.tween_property(_chest_icon, "rotation", deg_to_rad(6.0), 0.05)
-		shake.tween_property(_chest_icon, "rotation", deg_to_rad(-6.0), 0.08)
-		shake.tween_property(_chest_icon, "rotation", 0.0, 0.05)
-
-	await get_tree().create_timer(0.12).timeout
-	if not is_instance_valid(self):
-		return
-	_reveal_reward_card(candidate)
+	pop_in.tween_property(anim, "modulate:a", 1.0, 0.2)
+	pop_in.tween_property(anim, "scale", Vector2.ONE, 0.3)
+	anim.burst.connect(func() -> void:
+		if is_instance_valid(self):
+			_reveal_reward_card(candidate)
+	, CONNECT_ONE_SHOT)
 
 
-func _chest_frame_texture(full_tex: Texture2D, frame: int) -> Texture2D:
-	if not full_tex:
-		return null
-	var frame_h: float = full_tex.get_height() / 4.0
-	var atlas := AtlasTexture.new()
-	atlas.atlas = full_tex
-	atlas.region = Rect2(0.0, frame_h * float(frame), full_tex.get_width(), frame_h)
-	return atlas
+func _make_layer(layer_name: String) -> Control:
+	var c := Control.new()
+	c.name = layer_name
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(c)
+	return c
 
 
-## Açık sandığı soldurup ödül kartını onun konumundan küçük/saydam başlatıp
-## normal boyutuna/konumuna büyüterek "çıkarır" - _animate_cards_in'in eski
-## (3 kartlık) versiyonunun yerini alıyor, artık TEK kart için ve sandığın
-## konumundan başlıyor.
+## Kart sandığın ağzından fırlar (reward_reveal.gd fly_out), AL/SAT satırları kart indikten sonra belirir; inişte parıltı +
+## tier ışığı, tier 2+ kartta boşta parlama döngüsü. Sandık kart indikten sonra aşağı kayarak söner.
 func _reveal_reward_card(candidate: Dictionary) -> void:
 	if cards_container:
-		var card = _build_card(candidate)
+		var column = _build_card(candidate)
 		## Yazı boyutu yerleşim bittikten sonra ayarlanıyor (bkz. _fit_card_texts) - o bir kareye kadar ayarsız yazı görünmesin.
-		card.modulate.a = 0.0
-		cards_container.add_child(card)
+		column.modulate.a = 0.0
+		cards_container.add_child(column)
 		cards_container.visible = true
 		await get_tree().process_frame
 		if not is_instance_valid(self):
 			return
-		_fit_card_texts(card)
-		if card is Control:
-			card.pivot_offset = card.size * 0.5
-			var final_pos: Vector2 = card.position
-			var final_scale: Vector2 = card.scale
-			card.scale = final_scale * 0.35
-			card.modulate.a = 0.0
-			if is_instance_valid(_chest_icon):
-				## Sandığın global konumunu kartın yerel (container-içi)
-				## konum uzayına çevirip başlangıç noktası yapıyoruz - kart
-				## gerçekten sandığın olduğu yerden çıkıyormuş gibi görünür.
-				var chest_center: Vector2 = _chest_icon.get_global_rect().get_center()
-				var card_parent_pos: Vector2 = card.get_parent().get_global_transform().affine_inverse() * chest_center
-				card.position = card_parent_pos - card.size * 0.5
-			var out_tween := create_tween()
-			out_tween.set_parallel(true)
-			out_tween.set_ease(Tween.EASE_OUT)
-			out_tween.set_trans(Tween.TRANS_BACK)
-			out_tween.tween_property(card, "modulate:a", 1.0, 0.28)
-			out_tween.tween_property(card, "scale", final_scale, 0.32)
-			out_tween.tween_property(card, "position", final_pos, 0.32)
-	if is_instance_valid(_chest_icon):
-		var fade_out := create_tween()
-		fade_out.tween_property(_chest_icon, "modulate:a", 0.0, 0.25).set_delay(0.15)
-		fade_out.tween_callback(func():
-			if is_instance_valid(_chest_icon):
-				_chest_icon.queue_free()
-		)
+		_fit_card_texts(column)
+		var card_panel: Control = column.get_child(0) as Control
+		var buttons: Array = []
+		for i in range(1, column.get_child_count()):
+			var b: Control = column.get_child(i) as Control
+			if b:
+				b.modulate.a = 0.0
+				buttons.append(b)
+		column.modulate.a = 1.0
+		var tier: int = int(card_panel.get_meta("reward_tier", _reward_tier)) if card_panel else _reward_tier
+		if card_panel and is_instance_valid(_rays_layer):
+			_rays = RewardRays.new()
+			_rays_layer.add_child(_rays)
+			_rays.setup(card_panel, CARD_SIZE, 3.0, tier, false)
+		if card_panel:
+			## Sütunun tamamı uçar (kart + gizli butonlar); pivot kartın ortası.
+			var mouth: Vector2 = RewardReveal.chest_mouth(_chest_icon) if is_instance_valid(_chest_icon) else card_panel.get_global_rect().get_center()
+			RewardReveal.launch_sparks(_fx_layer, mouth, tier, false)
+			var tw: Tween = RewardReveal.fly_out(self, column, mouth, 0.0, 0.08, card_panel.position + card_panel.size * 0.5)
+			tw.tween_callback(func() -> void:
+				if not is_instance_valid(card_panel):
+					return
+				var frame: TextureRect = card_panel.get_node_or_null("Frame") as TextureRect
+				RewardReveal.land_fx(self, card_panel, frame, tier, false, _fx_layer, _rays)
+				TierCardFx.start_idle_shine(self, frame, tier, 1.2)
+				for b in buttons:
+					if is_instance_valid(b):
+						create_tween().tween_property(b, "modulate:a", 1.0, 0.2)
+				_hide_chest()
+			)
+	elif is_instance_valid(_chest_icon):
+		_hide_chest()
 
 	## bkz. dosya başındaki _has_chosen notu - geri sayım main.gd tarafından
 	## zaten başlatılmış durumda (bkz. _try_open_next_pending_chest
@@ -331,6 +313,20 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 			countdown_panel.visible = NetworkManager.chest_countdown_active
 			if countdown_panel.visible and countdown_label:
 				countdown_label.text = "%ds" % int(ceil(NetworkManager.chest_countdown))
+
+
+## Açık sandığı kart indikten sonra aşağı kaydırıp söndürür.
+func _hide_chest() -> void:
+	if not is_instance_valid(_chest_icon):
+		return
+	var chest: Control = _chest_icon
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(chest, "modulate:a", 0.0, 0.3).set_delay(0.1)
+	tw.tween_property(chest, "position:y", chest.position.y + 40.0, 0.4).set_delay(0.1).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(func() -> void:
+		if is_instance_valid(chest):
+			chest.queue_free()
+	)
 
 
 ## Kullanıcı isteği (2026-09-24): "sandık açma kartında 1 tuşu alma tuşunu 2 tuşu satma tuşunu tetikleyecek şekilde
@@ -460,6 +456,7 @@ func _build_card(candidate: Dictionary) -> Control:
 	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	frame.stretch_mode = TextureRect.STRETCH_SCALE
 	TierCardFx.apply_frame(frame, _reward_tier if not is_weapon else 1)
+	card.set_meta("reward_tier", _reward_tier if not is_weapon else 1)
 	card.add_child(frame)
 
 	## Bölgeler TierCardFx'teki dikdörtgenlere mutlak konumla yerleşiyor (PanelContainer çocuğu düz bir Control kartı kaplar).

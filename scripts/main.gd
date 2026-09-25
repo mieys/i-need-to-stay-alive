@@ -4,6 +4,7 @@ const LevelUpScreenScene = preload("res://scenes/level_up_screen.tscn")
 const PauseMenuScene = preload("res://scenes/pause_menu.tscn")
 const RemotePlayerScene = preload("res://scenes/remote_player.tscn")
 const ChestMenuScene = preload("res://scenes/chest_menu.tscn")
+const EnchantScreenScript = preload("res://scripts/enchant_screen.gd")
 ## Kullanıcı isteği: "kimsenin başlangıç silahı/kalkanı yok, oyuna başlayınca
 ## 3 silah kartından 1 seçilecek, sonra 2 kalkan kartından 1 seçilecek" - bkz.
 ## weapon_select_screen.gd (level_up_screen.gd'nin kart/animasyon/çok
@@ -1365,6 +1366,65 @@ func _advance_level_up_queue() -> void:
 		_finish_level_up_phase(_try_open_next_pending_chest)
 
 
+## ================================================================ EFSUN EKRANI (2026-09-25)
+## Sadece elit sandıklardan (bkz. _show_elite_chest) ve debug menüsünden açılır - sandık akışının kendi meşgul durumu/
+## geri sayımı zaten açık (enchant_screen.gd use_chest_timer). Seçim bitince on_done (kuyruğun sonraki adımı) çağrılır.
+var _active_enchant_screen: Node = null
+
+
+## intro_chest: ekran önce elit sandığın açılışını oynatır, kartlar sandıktan fırlar (enchant_screen.gd).
+func _show_enchant_screen(on_done: Callable, intro_chest: bool = false) -> void:
+	if is_instance_valid(player) and player.has_method("clear_input_state"):
+		player.call("clear_input_state")
+	get_tree().paused = true
+	_hide_level_up_wait_overlay()
+	var screen: CanvasLayer = EnchantScreenScript.new()
+	screen.name = "EnchantScreen"
+	screen.player_ref = player
+	screen.use_chest_timer = true
+	screen.intro_chest = intro_chest
+	add_child(screen)
+	_active_enchant_screen = screen
+	screen.enchant_chosen.connect(func(choice: Dictionary) -> void:
+		if str(choice.get("type", "")) != "skip" and is_instance_valid(player) and player.has_method("apply_enchant_choice"):
+			player.apply_enchant_choice(choice)
+		if is_instance_valid(screen):
+			screen.queue_free()
+		_active_enchant_screen = null
+		on_done.call())
+
+
+## Elit sandık (kullanıcı isteği 2026-09-25: "elit sandıklardan efsun çıksın"): efsun ekranı elit sandığın açılışını
+## kendisi oynatır ve kartlar sandığın içinden fırlar (eskiden ayrı bir sandık katmanı bitince efsun ekranı açılıyordu -
+## kullanıcı: "kart içinden fırlamış gibi görünmüyor").
+func _show_elite_chest(on_done: Callable) -> void:
+	_show_enchant_screen(on_done, true)
+
+
+## Debug menüsü (debug_menu.gd "Efsun ekranı aç"): level beklemeden efsun ekranı. Çok oyunculuda diğer oyuncuları
+## bekletmez (meşgul durumu yayınlanmaz), seçim bitince sadece bu oyuncunun oyunu devam eder.
+func debug_open_enchant_screen() -> void:
+	if _active_enchant_screen != null and is_instance_valid(_active_enchant_screen):
+		return
+	_show_enchant_screen(func() -> void: get_tree().paused = false)
+
+
+## Debug menüsü (debug_menu.gd "Sandık aç" / "Elit sandık aç"): sandık açılışını level beklemeden gösterir; bitince
+## sadece bu oyuncunun oyunu devam eder (sandık kuyruğuna/çok oyunculu meşgul durumuna dokunmaz).
+func debug_open_chest(elite: bool) -> void:
+	if not is_instance_valid(player) or _active_enchant_screen != null:
+		return
+	get_tree().paused = true
+	var resume := func() -> void: get_tree().paused = false
+	if elite:
+		_show_elite_chest(resume)
+		return
+	var menu: CanvasLayer = ChestMenuScene.instantiate() as CanvasLayer
+	add_child(menu)
+	menu.setup(player, 0)
+	menu.closed.connect(resume, CONNECT_ONE_SHOT)
+
+
 ## Bu oyuncunun kart/silah/kalkan seçim kuyruğu TAMAMEN bitti (bkz.
 ## _advance_level_up_queue/_finish_item_select_chain) - chest_busy_peers/
 ## _try_open_next_pending_chest'teki AYNI desen (bkz. network_manager.gd
@@ -1395,7 +1455,7 @@ func _on_level_up_busy_state_changed() -> void:
 		return
 	if NetworkManager.is_any_level_up_busy():
 		get_tree().paused = true
-		if _active_level_up_screen == null and _active_item_select_screen == null:
+		if _active_level_up_screen == null and _active_item_select_screen == null and _active_enchant_screen == null:
 			_show_level_up_wait_overlay()
 	else:
 		_hide_level_up_wait_overlay()
@@ -1547,6 +1607,12 @@ func _try_open_next_pending_chest() -> void:
 		## başlar (bkz. chest_menu.gd _on_countdown_tick).
 		NetworkManager.start_chest_countdown()
 	_hide_chest_wait_overlay()
+	## Önce normal sandıklar (eşya kartı), sonra elit sandıklar (açılış animasyonu + efsun ekranı) - kullanıcı isteği
+	## 2026-09-25: "normal sandıklardan eşya elit sandıklardan efsun çıksın".
+	if GameManager.pending_chest_tiers.is_empty():
+		GameManager.pop_pending_elite_chest()
+		_show_elite_chest(Callable(self, "_try_open_next_pending_chest"))
+		return
 	var tier: int = GameManager.pop_pending_chest()
 	var menu: CanvasLayer = ChestMenuScene.instantiate() as CanvasLayer
 	add_child(menu)

@@ -5,8 +5,6 @@ extends Node
 ## zehirlenmemiş yaratıklara öncelik versin, öncelik sırası: (canı yüksek > hiç zehirlenmemiş > tüm yaratıklar)"
 
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn")
-const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
-const PlayerScript: GDScript = preload("res://scripts/player.gd")
 const TuftufTargeting: GDScript = preload("res://scripts/tuftuf_targeting.gd")
 
 var _spawned: Array[Node] = []
@@ -57,7 +55,7 @@ func test_stacks_add_up_to_one_hundred_and_then_refresh_the_oldest() -> void:
 func test_one_stack_deals_five_percent_attack_power_per_second_for_twenty_seconds() -> void:
 	var e: Node2D = _make_enemy()
 	var attack_power: float = 40.0
-	var per_second: float = attack_power * PlayerScript.TUFTUF_POISON_DPS_ATTACK_POWER_RATIO ## %5 = 2.0
+	var per_second: float = attack_power * 0.05 ## %5 = 2.0 (eski Tüftüf oranı; zehir artık silahta değil, enemy.gd altyapısı test ediliyor)
 	assert(is_equal_approx(per_second, 2.0), "40 saldırı gücünün %%5'i 2 olmalı")
 	e.apply_poison(per_second, 100.0, 20.0)
 	var before: float = e.health
@@ -104,24 +102,6 @@ func test_each_stack_keeps_its_own_lifetime() -> void:
 	assert(e.is_poisoned(), "Kalan yük varken hâlâ zehirli olmalı")
 	_run_poison(e, 10.0)
 	assert(e.get_poison_stack_count() == 0 and not e.is_poisoned(), "İkinci yük de bitince zehir tamamen kalkmalı")
-	_cleanup()
-
-
-func test_tuftuf_poison_values_come_from_attack_power() -> void:
-	var player: Node = PlayerScene.instantiate()
-	add_child(player)
-	_spawned.append(player)
-	var weapon: Node = load("res://scenes/weapon_tuftuf.tscn").instantiate()
-	player.add_child(weapon)
-	player.damage_bonus = 60.0
-	player._refresh_tuftuf_poison(weapon)
-	assert(is_equal_approx(weapon.poison_tick_damage, 3.0), "Yük hasarı saldırı gücünün %%5'i (60 -> 3) olmalı, bulunan: %s" % weapon.poison_tick_damage)
-	assert(weapon.poison_max_stacks == 100, "Üst sınır 100 yük olmalı")
-	assert(is_equal_approx(weapon.poison_duration, 20.0), "Yük ömrü 20sn olmalı")
-	## Zehir tier'e bağlı değil: tier değişince aynı kalmalı.
-	weapon.set_weapon_tier(10)
-	player._refresh_tuftuf_poison(weapon)
-	assert(is_equal_approx(weapon.poison_tick_damage, 3.0), "Zehir hasarı tier'e göre değişmemeli")
 	_cleanup()
 
 

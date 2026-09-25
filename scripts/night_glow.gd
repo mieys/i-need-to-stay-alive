@@ -36,6 +36,8 @@ var decay: float = 0.0
 var hide_in_fog: bool = false
 ## Işık sahibinin modulate.a'sıyla (ve 3 kuşak atasınınkiyle) birlikte sönsün mü.
 var fade_with_owner: bool = true
+## > 0 ise atmosphere_overlay.gd'nin genel GLOW_ENERGY_CAP'i yerine bu tavan (kısa patlama flaşları - katalogda "cap").
+var energy_cap: float = -1.0
 
 var _age: float = 0.0
 var _seed: float = 0.0
@@ -69,6 +71,7 @@ static func attach(target: Node, profile: Dictionary) -> Node2D:
 	glow.set("decay", float(profile.get("decay", 0.0)))
 	glow.set("hide_in_fog", bool(profile.get("hide_in_fog", false)))
 	glow.set("fade_with_owner", bool(profile.get("fade_with_owner", true)))
+	glow.set("energy_cap", float(profile.get("energy_cap", -1.0)))
 	glow.position = Vector2(profile.get("offset", Vector2.ZERO))
 	target.add_child(glow)
 	return glow

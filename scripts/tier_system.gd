@@ -32,7 +32,11 @@ const COLORS := [
 ## oranda azalt - tier 2'yi biraz azalt, 3'ü biraz daha fazla, 4'ü daha da
 ## fazla azalt") - eskiden %60/%25/%12/%3'tü; üst tierlar KADEMELİ olarak
 ## (tier2 en az oranda, tier4 en çok oranda) düşürüldü.
-const WEIGHTS := [60.0, 16.0, 5.0, 1.0]
+## DÜZELTME (kullanıcı bildirimi 2026-09-25: "şans kasmadığında ... hep tier 1 kartlar çıkıyor") - 60/16/5/1'de kartların
+## %73'ü Sıradan'dı, level atlamaların %39'unda üç kart da Sıradan geliyordu. Orta nokta: %62/%27/%9/%2 (üçü birden Sıradan
+## %24) - Efsanevi hâlâ ilk %3'ün altında (yukarıdaki "4'ü daha da fazla azalt" isteği korunuyor). Level kartları, sandık
+## eşyası, efsun gücü ve seyyar satıcı aynı zarı kullanır.
+const WEIGHTS := [55.0, 24.0, 8.0, 2.0]
 
 ## Şansa (Luck) bağlı olarak üst tierların GÖRECELİ ağırlığını büyütür - luck
 ## 0 iken WEIGHTS aynen kullanılır (tier1 hiç etkilenmez, sadece 2/3/4

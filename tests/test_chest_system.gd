@@ -9,21 +9,36 @@ func test_items_defs_exist() -> void:
 		assert(def.has("desc"), "Item %s has no desc!" % key)
 		assert(def.has("cost_base"), "Item %s has no cost_base!" % key)
 
-func test_chest_drop_tier_sprite_frame() -> void:
-	var scene = load("res://scenes/chest_drop.tscn")
-	var drop = scene.instantiate()
+## 2026-09-25: sandıklar yeniden çizildi (tools/gen_chest_sprites.py, 20 kare x 48 px) - kademe artık görseli
+## değiştirmiyor, normal/elit ayrımı değiştiriyor.
+func test_chest_drop_uses_normal_or_elite_sheet() -> void:
+	var drop = (load("res://scenes/chest_drop.tscn") as PackedScene).instantiate()
 	add_child(drop)
-	drop._ready() # Force ready
-	
-	drop.chest_tier = 0
-	assert(drop.sprite.frame == 0, "Chest tier 0 should map to frame 0")
-	assert(drop.sprite.texture != null and "chest_tier_1_2.png" in str(drop.sprite.texture.get_meta("path", "")), "Expected chest_tier_1_2 texture")
-	
-	drop.chest_tier = 2
-	assert(drop.sprite.frame == 0, "Chest tier 2 should also start at frame 0")
-	assert(drop.sprite.texture != null and "chest_tier_5_6.png" in str(drop.sprite.texture.get_meta("path", "")), "Expected chest_tier_5_6 texture")
-	
+	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_normal_t1.png"), "normal sandık normal sayfayı kullanmalı")
+	assert(drop.sprite.hframes == 20 and drop.sprite.vframes == 1, "sayfa 20 yatay kare olmalı")
+	assert(drop.sprite.frame == 0, "kapalı sandık karesiyle başlamalı")
+	drop.chest_tier = 3
+	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_normal_t1.png"), "kademe görseli değiştirmemeli")
+	drop.is_elite = true
+	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_elite.png"), "elit sandık elit sayfayı kullanmalı")
 	drop.free()
+
+
+## Elit sandıklar ayrı sayaçta ama normal sandıklarla AYNI "bekleyen sandık var mı" kapısından geçer (main.gd sandık akışı).
+func test_elite_chest_queue_counts_as_pending() -> void:
+	var saved_tiers: Array = GameManager.pending_chest_tiers.duplicate()
+	var saved_elite: int = GameManager.pending_elite_chests
+	GameManager.pending_chest_tiers = []
+	GameManager.pending_elite_chests = 0
+	assert(not GameManager.has_pending_chests(), "boş kuyruk")
+	GameManager.add_pending_elite_chest()
+	assert(GameManager.has_pending_chests(), "tek elit sandık da bekleyen sandık sayılmalı")
+	assert(GameManager.pop_pending_elite_chest(), "elit sandık çekilebilmeli")
+	assert(not GameManager.pop_pending_elite_chest(), "boşken çekilememeli")
+	assert(not GameManager.has_pending_chests(), "çekildikten sonra kuyruk boş")
+	GameManager.pending_chest_tiers = saved_tiers
+	GameManager.pending_elite_chests = saved_elite
+
 
 func test_chest_menu_setup_populates_cards() -> void:
 	var menu_scene = load("res://scenes/chest_menu.tscn")
