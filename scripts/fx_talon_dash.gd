@@ -35,6 +35,7 @@ var _shader: Shader = null
 func _ready() -> void:
 	top_level = true
 	z_index = 0 ## efektif z = oyuncununki (1); negatif z harita altında kalır (bkz. weapon.gd gölge notu)
+	## (Gece ışığı: kök (0,0)'da - ışık get_glow_segment() ile Talon'un üstünde, bkz. night_glow.gd.)
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_host = get_parent() as Node2D
 	_shader = Shader.new()
@@ -46,6 +47,12 @@ func _ready() -> void:
 		## Fırlama anında geriye pixel toz/kıvılcım patlaması.
 		for i in range(10):
 			_embers.append([_host.global_position, Vector2(randf_range(-70.0, 70.0), randf_range(-70.0, 70.0)), 0.0, randi_range(1, 2)])
+
+
+func get_glow_segment() -> Array:
+	if _host == null or not is_instance_valid(_host):
+		return []
+	return [_host.global_position, _host.global_position]
 
 
 func _add_sample() -> void:

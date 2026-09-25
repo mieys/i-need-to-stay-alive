@@ -9,7 +9,7 @@ Kullanim (repo kokunden):
    assets/characters/vampir/sheets/<ad>.png olarak yazar (SpriteFrames bunlari AtlasTexture ile okur,
    bkz. tools/gen_vampir_frames.py). Kaynak sayfa tam 6x buyutme degilse durur.
 2) "Buyuk yarasa" formunu (E yetenegi) PIXEL-ART kareler olarak cizer: bat_<yon>_<1..4>.png.
-3) Yetenek/pasif ikonlarini (32x32 sanat -> 128x128 NEAREST) cizer.
+3) (ikonlar artik tools/gen_spirit_vampir_icons.py'de)
 4) Portreyi (Idle sayfasi, asagi bakan ilk kare) yazar.
 --src verilmezse sadece 2) ve 3) (ve mini yarasalar) uretilir.
 SpriteFrames (.tres) burada uretilmez, bkz. tools/gen_vampir_frames.py.
@@ -244,115 +244,9 @@ def make_bat_frames():
         _to_bat_canvas(side_l).save(os.path.join(OUT_DIR, f"bat_left_{phase + 1}.png"))
 
 
-# ---------------------------------------------------------------- ikonlar (32x32 sanat -> 128x128)
-def icon_base():
-    img = Image.new("RGBA", (32, 32), (0, 0, 0, 255))
-    d = ImageDraw.Draw(img)
-    for y in range(32):
-        for x in range(32):
-            r = ((x - 16) ** 2 + (y - 16) ** 2) ** 0.5
-            v = max(0.0, 1.0 - r / 22.0)
-            level = int(v * 4)
-            if level == 3 and (x + y) % 2 == 0:
-                level = 2
-            col = [(8, 2, 6), (36, 6, 16), (72, 10, 26), (110, 14, 34)][max(0, min(3, level))]
-            d.point((x, y), fill=col + (255,))
-    return img, d
-
-
-def finish_icon(img, name):
-    a = np.array(img)
-    a[0, :, :3] = 0
-    a[-1, :, :3] = 0
-    a[:, 0, :3] = 0
-    a[:, -1, :3] = 0
-    img = Image.fromarray(a).resize((128, 128), Image.NEAREST)
-    img.save(os.path.join(OUT_SKILL, name))
-
-
-def blood_drop(d, cx, cy, s=1):
-    pts = [(cx, cy - 6 * s), (cx + 4 * s, cy + 1 * s), (cx + 3 * s, cy + 5 * s), (cx, cy + 7 * s),
-           (cx - 3 * s, cy + 5 * s), (cx - 4 * s, cy + 1 * s)]
-    d.polygon(pts, fill=BLOOD)
-    d.polygon([(cx, cy - 3 * s), (cx + 2 * s, cy + 1 * s), (cx, cy + 5 * s), (cx - 2 * s, cy + 1 * s)], fill=BLOOD_L)
-    d.point([(cx - 1, cy + 1), (cx - 1, cy + 2)], fill=(255, 220, 220, 255))
-    d.line([(cx - 4 * s, cy + 1 * s), (cx - 3 * s, cy + 5 * s), (cx, cy + 7 * s)], fill=BLOOD_D, width=1)
-
-
-def icon_q():
-    img, d = icon_base()
-    for (sx, sy) in [(4, 5), (27, 5), (16, 27)]:
-        d.ellipse([sx - 2, sy - 2, sx + 2, sy + 2], fill=(30, 26, 34, 255))
-        d.point([(sx - 1, sy), (sx + 1, sy)], fill=EYE)
-        steps = 12
-        for i in range(steps):
-            t = i / steps
-            px = sx + (16 - sx) * t
-            py = sy + (16 - sy) * t
-            d.point([(int(px), int(py))], fill=BLOOD_L if i % 3 == 0 else BLOOD)
-    blood_drop(d, 16, 16, 1)
-    d.polygon([(13, 22), (15, 22), (14, 26)], fill=FANG)
-    d.polygon([(17, 22), (19, 22), (18, 26)], fill=FANG)
-    finish_icon(img, "vampir_kan_emme_icon.png")
-
-
-def mini_bat(d, cx, cy, wings_up, col=(20, 10, 16, 255), eye=True):
-    if wings_up:
-        pts_l = [(cx - 1, cy), (cx - 4, cy - 3), (cx - 7, cy - 3), (cx - 6, cy - 1), (cx - 4, cy)]
-        pts_r = [(cx + 1, cy), (cx + 4, cy - 3), (cx + 7, cy - 3), (cx + 6, cy - 1), (cx + 4, cy)]
-    else:
-        pts_l = [(cx - 1, cy), (cx - 4, cy + 1), (cx - 7, cy + 3), (cx - 5, cy + 1), (cx - 3, cy - 1)]
-        pts_r = [(cx + 1, cy), (cx + 4, cy + 1), (cx + 7, cy + 3), (cx + 5, cy + 1), (cx + 3, cy - 1)]
-    d.polygon(pts_l, fill=col)
-    d.polygon(pts_r, fill=col)
-    d.rectangle([cx - 1, cy - 1, cx + 1, cy + 2], fill=col)
-    d.point([(cx - 1, cy - 2), (cx + 1, cy - 2)], fill=col)
-    if eye:
-        d.point([(cx - 1, cy - 1), (cx + 1, cy - 1)], fill=EYE)
-
-
-def icon_e():
-    img, d = icon_base()
-    d.polygon([(16, 15), (9, 9), (2, 8), (3, 15), (6, 21), (8, 18), (11, 22), (13, 19), (16, 22)], fill=(24, 10, 20, 255))
-    d.polygon([(16, 15), (23, 9), (30, 8), (29, 15), (26, 21), (24, 18), (21, 22), (19, 19), (16, 22)], fill=(24, 10, 20, 255))
-    d.line([(16, 15), (9, 9), (3, 9)], fill=MEM_L, width=1)
-    d.line([(16, 15), (23, 9), (29, 9)], fill=MEM_L, width=1)
-    d.ellipse([12, 12, 20, 24], fill=(30, 12, 24, 255))
-    d.polygon([(12, 14), (12, 8), (15, 12)], fill=(30, 12, 24, 255))
-    d.polygon([(20, 14), (20, 8), (17, 12)], fill=(30, 12, 24, 255))
-    d.rectangle([13, 15, 14, 16], fill=EYE)
-    d.rectangle([18, 15, 19, 16], fill=EYE)
-    d.point([(13, 15), (19, 15)], fill=EYE_H)
-    d.polygon([(14, 19), (15, 19), (14, 22)], fill=FANG)
-    d.polygon([(17, 19), (18, 19), (18, 22)], fill=FANG)
-    for y in (26, 28):
-        d.line([(6, y), (12, y)], fill=BLOOD_D, width=1)
-        d.line([(20, y), (26, y)], fill=BLOOD_D, width=1)
-    finish_icon(img, "vampir_yarasa_formu_icon.png")
-
-
-def icon_r():
-    img, d = icon_base()
-    blood_drop(d, 16, 17, 1)
-    ring = [(16, 4), (26, 9), (27, 22), (16, 28), (5, 22), (6, 9)]
-    for i, (bx, by) in enumerate(ring):
-        mini_bat(d, bx, by, i % 2 == 0)
-    finish_icon(img, "vampir_kan_yarasalari_icon.png")
-
-
-def icon_passive():
-    img, d = icon_base()
-    d.polygon([(8, 5), (14, 5), (12, 20), (10, 24)], fill=FANG)
-    d.polygon([(18, 5), (24, 5), (23, 20), (21, 24)], fill=FANG)
-    d.polygon([(9, 6), (11, 6), (11, 18)], fill=(200, 196, 186, 255))
-    d.polygon([(19, 6), (21, 6), (22, 18)], fill=(200, 196, 186, 255))
-    d.line([(10, 24), (10, 27)], fill=BLOOD, width=1)
-    d.line([(21, 24), (21, 28)], fill=BLOOD, width=1)
-    d.point([(10, 28), (21, 29)], fill=BLOOD_L)
-    hx, hy = 16, 27
-    d.polygon([(hx - 3, hy - 2), (hx - 1, hy - 3), (hx, hy - 2), (hx + 1, hy - 3), (hx + 3, hy - 2), (hx + 3, hy),
-               (hx, hy + 3), (hx - 3, hy)], fill=BLOOD)
-    finish_icon(img, "vampir_passive_icon.png")
+# ---------------------------------------------------------------- ikonlar
+# 2026-09-25: Vampir ikonlari tools/gen_spirit_vampir_icons.py ile 48x48 olarak yeniden cizildi (eskiden 32x32 -> 128 px,
+# iri pikselliydi). Eski ikon kodu buradan SILINDI ki bu betik tekrar calistirilirsa yeni ikonlarin uzerine yazmasin.
 
 
 def mini_bat_frame(phase):
@@ -385,21 +279,12 @@ def make_mini_bats():
         mini_bat_frame(phase).save(os.path.join(OUT_DIR, f"mini_bat_{phase + 1}.png"))
 
 
-def make_icons():
-    os.makedirs(OUT_SKILL, exist_ok=True)
-    icon_q()
-    icon_e()
-    icon_r()
-    icon_passive()
-
-
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", help="animasyon sayfalarinin (Idle.png, Walk.png ...) oldugu klasor; verilmezse sadece yarasa+ikonlar uretilir")
+    ap.add_argument("--src", help="animasyon sayfalarinin (Idle.png, Walk.png ...) oldugu klasor; verilmezse sadece yarasa kareleri uretilir")
     args = ap.parse_args()
     if args.src:
         import_sheets(args.src)
     make_bat_frames()
     make_mini_bats()
-    make_icons()
     print("tamam")

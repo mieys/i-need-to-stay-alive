@@ -68,7 +68,15 @@ const SAVAS_SEVKI_EXECUTE_PERCENT_BOSS := 0.03 ## boss: daha düşük eşik
 ## (Paladin ultisi/Vampir R gibi "active": true ama güvenlik tavanı sonsuza yakın, bkz. player.gd KALKAN_BAGI_ACTIVE_CAP).
 const KALKAN_BAGI_RANGE := 400.0 ## bağ kurulabilecek/bağın kopmadan kalabileceği azami mesafe (Oakley Koruyucu Büyü/Paladin bariyeriyle AYNI mertebe)
 const KALKAN_BAGI_MIRROR_RATIO := 0.50 ## hasar/bedel/artış her türlü kalkan değişikliğinin yansıyan payı
-const KALKAN_BAGI_REGEN_PERCENT_PER_SEC := 0.01 ## aktifken ikisinin de saniyede yenilenen maksimum kalkan payı
+## Kullanıcı isteği (2026-09-25): "kalkanı az olan kişi kalkanı çok olan kişiden %30 daha fazla paylaşım alacak (%80)" -
+## partnerin kalkan ARTIŞLARINDAN, o an kalkanı daha AZ olan taraf %50 yerine %80 pay alır (Claude'un yorumu: "paylaşım
+## almak" = kazanç payı; hasar yansıması iki tarafta da %50 kalır ki zayıf taraf daha çok hasar yemesin).
+const KALKAN_BAGI_WEAKER_GAIN_RATIO := 0.80
+## Aynı istek: "kalkan bağı aktifken kalkanı olmayan kişi kalkanı olan kişinin kalkanını kullanabilir" - kalkanı biten
+## tarafın aldığı hasarın bu payı (kendi soğurması 0 ise) partnerin kalkanından düşer.
+const KALKAN_BAGI_BORROW_PROTECTION := 0.50
+## 2026-09-25: "kalkan yenilenmesini %1'den %0.5'e düşür".
+const KALKAN_BAGI_REGEN_PERCENT_PER_SEC := 0.005 ## aktifken ikisinin de saniyede yenilenen maksimum kalkan payı
 const KALKAN_BAGI_ABSORPTION_BONUS := 0.10 ## aktifken ikisinin de kazandığı ekstra kalkan hasar soğurması
 const KALKAN_BAGI_COOLDOWN := 60.0 ## bağ koparsa/kapatılırsa
 ## "active" fazının güvenlik tavanı - Paladin ultisi/Vampir R toggle'larıyla AYNI desen (bkz. o SKILL_TIMING
@@ -141,7 +149,7 @@ const DEFS := {
 		"cooldown": KALKAN_BAGI_COOLDOWN,
 		"icon": "res://assets/skills/spirit_kalkan_bagi_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_kalkan_bagi.wav",
-		"desc": "En yakın arkadaşınla kalkan bağı kurarsın: hasarlar, yetenek bedelinden giden kalkanlar ve kalkan artışları gibi her türlü kalkan değişikliği %50-%50 birbirinize yansır. Aktifken ikinizin de kalkanı saniyede %1 yenilenir ve %10 kalkan hasar soğurması kazanırsınız. Tekrar kullanana ya da uzaklaşıp bağ kopana kadar sürer. (60sn bekleme)",
+		"desc": "En yakın arkadaşınla kalkan bağı kurarsın: hasarlar, yetenek bedelinden giden kalkanlar ve kalkan artışları gibi her türlü kalkan değişikliği %50 birbirinize yansır; kalkanı daha az olan, arkadaşının kalkan artışlarından %80 pay alır. Kalkanı biten, arkadaşının kalkanını kullanır. Aktifken ikinizin de kalkanı saniyede %0.5 yenilenir ve %10 kalkan hasar soğurması kazanırsınız. Tekrar kullanana ya da uzaklaşıp bağ kopana kadar sürer. (60sn bekleme)",
 	},
 }
 

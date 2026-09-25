@@ -55,6 +55,7 @@ func _ready() -> void:
 	## fullscreen_check ile BİREBİR AYNI desen (UISound'daki show_fps'e bağlı).
 	fps_check.button_pressed = UISound.show_fps
 	fps_check.toggled.connect(_on_fps_toggled)
+	_build_ui_opacity_row()
 	settings_panel.visible = false
 	## DÜZELTME (kullanıcı isteği: "Multiplayerda host oyunu yeniden
 	## başlatabilsin eskiden yeniden başlatmayı seçerek fakat önce diğer
@@ -197,6 +198,60 @@ func _on_resolution_selected(index: int) -> void:
 
 func _on_fps_toggled(enabled: bool) -> void:
 	UISound.set_show_fps(enabled)
+
+
+## Kullanıcı isteği (2026-09-25): "arayüzler için ayarlara opaklık ayarı getir" (bkz. UISound.ui_opacity_percent).
+## Ayar paneli sahnede (pause_menu.tscn) mutlak konumlu - .tscn'e dokunmadan (editör açıkken ezilme riski, CLAUDE.md)
+## kodla ekleniyor: ses satırıyla AYNI düzen (etiket + % değeri, altında kaydırıcı), FPS satırının altına; Kapat butonu
+## ve panel bu iki satır kadar (100 px) aşağı uzatılıyor, panel ekranda ortalı kalsın diye üst kenar da 50 px yukarı.
+const UI_OPACITY_ROW_EXTRA := 100.0
+var _ui_opacity_value: Label = null
+
+
+func _build_ui_opacity_row() -> void:
+	var panel: Panel = settings_panel
+	panel.offset_top -= UI_OPACITY_ROW_EXTRA * 0.5
+	panel.offset_bottom += UI_OPACITY_ROW_EXTRA * 0.5
+	var close_btn: Control = $SettingsPanel/CloseButton
+	close_btn.offset_top += UI_OPACITY_ROW_EXTRA
+	close_btn.offset_bottom += UI_OPACITY_ROW_EXTRA
+	var ref_label: Label = $SettingsPanel/VolumeLabel
+	var label := Label.new()
+	label.name = "UiOpacityLabel"
+	label.text = "Arayüz Opaklığı"
+	label.position = Vector2(40.0, 395.0)
+	label.size = Vector2(280.0, 40.0)
+	label.vertical_alignment = ref_label.vertical_alignment
+	for override_name in ["font_size"]:
+		if ref_label.has_theme_font_size_override(override_name):
+			label.add_theme_font_size_override(override_name, ref_label.get_theme_font_size(override_name))
+	panel.add_child(label)
+	_ui_opacity_value = Label.new()
+	_ui_opacity_value.name = "UiOpacityValue"
+	_ui_opacity_value.position = Vector2(430.0, 395.0)
+	_ui_opacity_value.size = Vector2(90.0, 40.0)
+	_ui_opacity_value.horizontal_alignment = volume_value.horizontal_alignment
+	_ui_opacity_value.vertical_alignment = volume_value.vertical_alignment
+	if volume_value.has_theme_font_size_override("font_size"):
+		_ui_opacity_value.add_theme_font_size_override("font_size", volume_value.get_theme_font_size("font_size"))
+	panel.add_child(_ui_opacity_value)
+	var slider := HSlider.new()
+	slider.name = "UiOpacitySlider"
+	slider.min_value = UISound.UI_OPACITY_MIN_PERCENT
+	slider.max_value = 100.0
+	slider.step = 5.0
+	slider.position = Vector2(40.0, 440.0)
+	slider.size = Vector2(480.0, 40.0)
+	slider.value = UISound.ui_opacity_percent
+	slider.value_changed.connect(_on_ui_opacity_changed)
+	panel.add_child(slider)
+	_ui_opacity_value.text = "%d%%" % int(slider.value)
+
+
+func _on_ui_opacity_changed(value: float) -> void:
+	UISound.set_ui_opacity_percent(value)
+	if _ui_opacity_value:
+		_ui_opacity_value.text = "%d%%" % int(value)
 
 
 ## Kullanıcı isteği: "tuş ataması için ayarlarda bir menü hazırla, ayarlar

@@ -29,6 +29,11 @@ func _ready() -> void:
 	global_position = Vector2.ZERO
 
 
+## Gece ışığı (bkz. night_glow.gd): kök (0,0)'da - ışık ışınlanma izi boyunca.
+func get_glow_segment() -> Array:
+	return [from_pos, to_pos]
+
+
 func _process(delta: float) -> void:
 	_t += delta
 	if _t >= _life:

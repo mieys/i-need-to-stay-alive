@@ -15,7 +15,12 @@ const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.
 ## bu kadar büyük olmasın") ile 0.62'den 0.48'e düşürüldü - bkz. player.gd
 ## PLAYER_BODY_RADIUS (16->12) ile birlikte, ikisi toplamda kalabalık bir
 ## yaratık grubunda oyuncuyu daha az sıkıştırır.
-const BODY_BLOCK_SCALE := 0.48
+## DÖRDÜNCÜ tur (kullanıcı bildirimi 2026-09-25: "yaratıkların veya oyuncuların body blockları çok kalın, yaratıkların
+## aralarından geçmek zor oluyor") - 0.48 -> 0.36 (%25 ince). İki orta boy yaratık (yarıçap 20) arasındaki boşluk
+## (enemy.gd ENEMY_SEPARATION_SCALE ile ~32 birim) eskiden oyuncunun ihtiyacına (2 x 0.48 x 31.4 = ~30) neredeyse
+## eşitti - araya ancak kıl payı sığılıyordu; artık ~23 yetiyor. Oyuncu-oyuncu engeli de (player.gd
+## _block_movement_into_players) aynı sabiti kullanır. Ayrıca bkz. player.gd PLAYER_PUSH_ENEMY_RATIO.
+const BODY_BLOCK_SCALE := 0.36
 
 ## Kullanıcı isteği: "can çalma, alan hasarı veren eşyalarda %33 geçerli
 ## olsun" - GLOBAL kapsamda (eşyalar + karakter pasifleri/yetenekleri +

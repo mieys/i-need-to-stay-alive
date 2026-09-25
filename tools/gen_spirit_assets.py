@@ -4,7 +4,7 @@
 Kullanim (repo kokunden):
     python tools/gen_spirit_assets.py
 
-1) assets/skills/spirit_<id>_icon.png  - 48x48 pixel-art madalyon (oyunun piksel yogunlugu), 144x144'e NEAREST buyutulmus.
+1) (ikonlar artik tools/gen_spirit_vampir_icons.py'de)
 2) assets/audio/spiritual/*.wav        - kisa, prosedurel (numpy) ses efektleri. Uzun/loop ses YOK (bkz. hafiza:
    bow hum). Yeni PNG/WAV'lar icin Godot'ta bir kez `--headless --import` gerekir.
 """
@@ -12,262 +12,14 @@ import os
 import wave
 
 import numpy as np
-from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_SKILL = os.path.join(ROOT, "assets", "skills")
 OUT_AUDIO = os.path.join(ROOT, "assets", "audio", "spiritual")
 
 # ---------------------------------------------------------------- ikonlar
-# Kullanici geri bildirimi (2026-09-21): "oyunum 48x48 piksel oranlarina sahip, ikonlari/efektleri cok pixel yapiyorsun" ->
-# ikonlar 48x48 sanat izgarasinda cizilir (eskiden 32x32) ve 3x buyutulur (144x144, NEAREST): her sanat pikseli oyundaki
-# karakter pikseline yakin, ince detayli.
-S = 48
-K = 3
-
-
-def new_canvas():
-    return Image.new("RGBA", (S, S), (0, 0, 0, 0))
-
-
-def medallion(rim, rim_l, rim_d, bg, bg_l):
-    im = new_canvas()
-    d = ImageDraw.Draw(im)
-    d.ellipse((1, 1, 46, 46), fill=(20, 12, 10, 255))  # koyu dis kontur
-    d.ellipse((2, 2, 45, 45), fill=rim)
-    d.ellipse((4, 4, 43, 43), fill=rim_d)
-    d.ellipse((5, 5, 42, 42), fill=bg)
-    d.ellipse((9, 8, 38, 34), fill=bg_l)  # ust kisim hafif aydinlik
-    # rim uzerinde sol-ust parlama (yay boyunca 1px)
-    for deg in range(200, 262, 3):
-        a = np.deg2rad(deg)
-        x = int(round(23.5 + 20.5 * np.cos(a)))
-        y = int(round(23.5 + 20.5 * np.sin(a)))
-        im.putpixel((x, y), rim_l)
-    return im
-
-
-def outline(layer, col=(18, 10, 8, 255)):
-    """Emblemin etrafina 1px koyu kontur (yalnizca dis kenar)."""
-    w, h = layer.size
-    px = layer.load()
-    out = layer.copy()
-    op = out.load()
-    for y in range(h):
-        for x in range(w):
-            if px[x, y][3] > 0:
-                continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < w and 0 <= ny < h and px[nx, ny][3] > 0:
-                    op[x, y] = col
-                    break
-    return out
-
-
-def put(layer, pts, col):
-    for (x, y) in pts:
-        if 0 <= x < S and 0 <= y < S:
-            layer.putpixel((x, y), col)
-
-
-def sparkle(layer, cx, cy, core, arm, long_arm=2):
-    """Ince 4 kollu parilti (1px cekirdek + 1px kollar)."""
-    put(layer, [(cx, cy)], core)
-    for i in range(1, long_arm + 1):
-        put(layer, [(cx + i, cy), (cx - i, cy), (cx, cy + i), (cx, cy - i)], arm)
-
-
-def finish(base, emblem, name):
-    emblem = outline(emblem)
-    base.alpha_composite(emblem)
-    big = base.resize((S * K, S * K), Image.NEAREST)
-    big.save(os.path.join(OUT_SKILL, f"spirit_{name}_icon.png"))
-
-
-def icon_para():
-    base = medallion((214, 160, 40, 255), (255, 232, 140, 255), (120, 78, 16, 255), (44, 30, 14, 255), (70, 50, 22, 255))
-    e = new_canvas()
-    d = ImageDraw.Draw(e)
-    GOLD, GOLD_L, GOLD_D, GOLD_X = (255, 208, 60, 255), (255, 240, 150, 255), (206, 132, 22, 255), (140, 84, 12, 255)
-    # 4 madeni para yigini (alttan uste), her biri kenar + yuz + ic oyuk
-    for i, cy in enumerate((33, 28, 23, 18)):
-        d.ellipse((11, cy - 4, 35, cy + 4), fill=GOLD_X)  # kenar (koyu)
-        d.ellipse((11, cy - 6, 35, cy + 2), fill=GOLD)  # yuz
-        d.ellipse((13, cy - 5, 33, cy + 1), fill=GOLD_D)  # ic oyuk
-        d.ellipse((14, cy - 5, 32, cy), fill=GOLD_L if i == 3 else GOLD)
-        put(e, [(16, cy - 3), (17, cy - 4), (18, cy - 4)], (255, 250, 220, 255))
-    # ust madeni: ince dikey oyuk ("1" gibi)
-    d.rectangle((22, 14, 23, 20), fill=GOLD_D)
-    put(e, [(21, 15), (20, 16)], GOLD_D)
-    sparkle(e, 36, 11, (255, 255, 255, 255), (255, 240, 170, 255), 3)
-    sparkle(e, 10, 34, (255, 255, 255, 255), (255, 232, 140, 255), 1)
-    finish(base, e, "para")
-
-
-def icon_can():
-    base = medallion((60, 200, 110, 255), (170, 255, 190, 255), (20, 100, 56, 255), (10, 40, 30, 255), (18, 66, 44, 255))
-    e = new_canvas()
-    d = ImageDraw.Draw(e)
-    R, R_L, R_D, R_X = (236, 64, 96, 255), (255, 160, 180, 255), (170, 26, 66, 255), (110, 14, 44, 255)
-    d.ellipse((10, 11, 24, 25), fill=R)
-    d.ellipse((23, 11, 37, 25), fill=R)
-    d.polygon([(10, 21), (37, 21), (23.5, 38)], fill=R)
-    d.polygon([(14, 24), (35, 24), (23.5, 37)], fill=R_D)
-    d.ellipse((29, 14, 36, 22), fill=R_D)
-    d.polygon([(19, 26), (33, 26), (23.5, 36)], fill=R_X)
-    d.ellipse((13, 13, 19, 18), fill=R_L)
-    put(e, [(14, 12), (15, 12), (12, 15), (12, 16)], (255, 225, 232, 255))
-    d.rectangle((21, 17, 26, 30), fill=(255, 255, 255, 255))
-    d.rectangle((16, 21, 31, 26), fill=(255, 255, 255, 255))
-    d.rectangle((22, 18, 25, 29), fill=(255, 214, 224, 255))
-    d.rectangle((17, 22, 30, 25), fill=(255, 214, 224, 255))
-    sparkle(e, 8, 36, (220, 255, 225, 255), (120, 240, 150, 255), 2)
-    sparkle(e, 39, 12, (220, 255, 225, 255), (120, 240, 150, 255), 2)
-    finish(base, e, "can")
-
-
-def icon_adc():
-    base = medallion((230, 80, 40, 255), (255, 190, 120, 255), (120, 30, 16, 255), (40, 12, 10, 255), (66, 20, 14, 255))
-    e = new_canvas()
-    d = ImageDraw.Draw(e)
-    STEEL, STEEL_L, STEEL_D = (206, 214, 226, 255), (250, 252, 255, 255), (110, 120, 140, 255)
-    d.line((12, 36, 31, 17), fill=STEEL_D, width=4)
-    d.line((12, 35, 31, 16), fill=STEEL, width=3)
-    d.line((13, 34, 30, 17), fill=STEEL_L, width=1)
-    d.polygon([(28, 9), (39, 9), (39, 20)], fill=STEEL_D)
-    d.polygon([(29, 10), (38, 10), (38, 19)], fill=STEEL)
-    d.polygon([(31, 11), (37, 11), (37, 17)], fill=STEEL_L)
-    d.polygon([(8, 30), (15, 30), (13, 38), (6, 38)], fill=(255, 120, 60, 255))
-    d.polygon([(8, 31), (12, 31), (10, 36), (7, 37)], fill=(255, 176, 100, 255))
-    d.polygon([(9, 40), (15, 33), (19, 39), (13, 42)], fill=(230, 60, 40, 255))
-    put(e, [(4, 18), (5, 18), (6, 18), (7, 18), (8, 18)], (255, 200, 120, 255))
-    put(e, [(3, 24), (4, 24), (5, 24), (6, 24), (7, 24), (8, 24), (9, 24), (10, 24)], (255, 150, 80, 255))
-    put(e, [(15, 8), (16, 8), (17, 8), (18, 8), (19, 8), (20, 8)], (255, 200, 120, 255))
-    d.polygon([(36, 29), (33, 34), (39, 34)], fill=(230, 40, 60, 255))
-    d.ellipse((33, 32, 39, 38), fill=(230, 40, 60, 255))
-    put(e, [(35, 34), (35, 35)], (255, 170, 176, 255))
-    finish(base, e, "adc")
-
-
-def icon_tank():
-    base = medallion((90, 150, 230, 255), (190, 225, 255, 255), (36, 70, 130, 255), (14, 22, 44, 255), (24, 40, 76, 255))
-    e = new_canvas()
-    d = ImageDraw.Draw(e)
-    ST, ST_L, ST_D = (120, 140, 176, 255), (196, 214, 240, 255), (64, 80, 116, 255)
-    d.polygon([(24, 8), (37, 12), (37, 26), (24, 41), (11, 26), (11, 12)], fill=ST_D)
-    d.polygon([(24, 10), (35, 13), (35, 25), (24, 38), (13, 25), (13, 13)], fill=ST)
-    d.polygon([(24, 10), (24, 38), (13, 25), (13, 13)], fill=ST_L)
-    d.line((15, 14, 24, 11), fill=(240, 248, 255, 255), width=1)
-    d.polygon([(24, 15), (31, 17), (31, 24), (24, 32), (17, 24), (17, 17)], fill=(206, 140, 40, 255))
-    d.polygon([(24, 16), (30, 18), (30, 23), (24, 30), (18, 23), (18, 18)], fill=(240, 190, 70, 255))
-    d.polygon([(24, 16), (24, 30), (18, 23), (18, 18)], fill=(255, 226, 130, 255))
-    d.rectangle((23, 19, 24, 27), fill=(150, 90, 20, 255))
-    d.rectangle((20, 22, 27, 23), fill=(150, 90, 20, 255))
-    put(e, [(14, 14), (34, 14), (14, 25), (34, 25)], (230, 240, 255, 255))
-    sparkle(e, 41, 19, (230, 250, 255, 255), (150, 220, 255, 255), 2)
-    sparkle(e, 6, 19, (230, 250, 255, 255), (150, 220, 255, 255), 2)
-    finish(base, e, "tank")
-
-
-def icon_taktik():
-    base = medallion((60, 200, 220, 255), (190, 250, 255, 255), (16, 90, 110, 255), (8, 30, 40, 255), (14, 52, 66, 255))
-    e = new_canvas()
-    d = ImageDraw.Draw(e)
-    cols = [(52, 120, 150, 255), (100, 200, 228, 255), (232, 255, 255, 255)]
-    for i, c in enumerate(cols):
-        ox = 10 + i * 9
-        d.line((ox, 12, ox + 8, 23), fill=c, width=4)
-        d.line((ox + 8, 24, ox, 35), fill=c, width=4)
-        if i == 2:
-            d.line((ox + 1, 13, ox + 7, 23), fill=(190, 240, 255, 255), width=1)
-    put(e, [(4, 20), (5, 20), (6, 20), (7, 20)], (150, 230, 250, 255))
-    put(e, [(3, 28), (4, 28), (5, 28), (6, 28), (7, 28), (8, 28)], (100, 200, 228, 255))
-    sparkle(e, 38, 9, (255, 255, 255, 255), (190, 250, 255, 255), 3)
-    sparkle(e, 7, 39, (255, 255, 255, 255), (150, 235, 250, 255), 2)
-    finish(base, e, "taktik")
-
-
-def icon_dukkan():
-    base = medallion((160, 110, 230, 255), (225, 200, 255, 255), (70, 40, 130, 255), (24, 16, 44, 255), (40, 28, 72, 255))
-    e = new_canvas()
-    d = ImageDraw.Draw(e)
-    d.ellipse((8, 30, 39, 42), outline=(200, 150, 255, 255), width=2)
-    d.ellipse((12, 33, 35, 40), outline=(140, 90, 220, 255), width=1)
-    d.rectangle((13, 20, 34, 35), fill=(214, 168, 108, 255))
-    d.rectangle((13, 20, 18, 35), fill=(238, 200, 140, 255))
-    d.rectangle((30, 20, 34, 35), fill=(184, 138, 86, 255))
-    d.polygon([(10, 20), (37, 20), (31, 9), (16, 9)], fill=(200, 60, 56, 255))
-    d.polygon([(10, 20), (16, 20), (16, 9)], fill=(240, 110, 100, 255))
-    d.polygon([(31, 9), (37, 20), (32, 20)], fill=(160, 40, 40, 255))
-    for x in range(12, 36, 5):
-        d.rectangle((x, 17, x + 2, 20), fill=(255, 235, 200, 255))
-    d.rectangle((21, 26, 27, 35), fill=(90, 56, 36, 255))
-    d.rectangle((22, 27, 26, 35), fill=(60, 36, 24, 255))
-    put(e, [(25, 31), (26, 31)], (255, 224, 120, 255))
-    d.rectangle((15, 24, 18, 28), fill=(255, 226, 150, 255))
-    d.rectangle((29, 24, 32, 28), fill=(255, 226, 150, 255))
-    d.ellipse((22, 12, 27, 16), fill=(255, 210, 70, 255))
-    put(e, [(23, 13)], (255, 250, 210, 255))
-    sparkle(e, 40, 12, (255, 255, 255, 255), (230, 200, 255, 255), 3)
-    finish(base, e, "dukkan")
-
-
-def icon_savas_sevki():
-    # Kullanici istegi (2026-09-23): "Savas sevki" - olum vurusu/infaz + kalici guc kazanma teması, sicak
-    # kirmizi-turuncu (savas cosku) paleti - alevli, yukari dogru kalkan bir kilic.
-    base = medallion((210, 60, 30, 255), (255, 150, 90, 255), (110, 24, 10, 255), (34, 10, 8, 255), (60, 18, 12, 255))
-    e = new_canvas()
-    d = ImageDraw.Draw(e)
-    STEEL, STEEL_L, STEEL_D = (222, 228, 236, 255), (255, 255, 255, 255), (140, 148, 168, 255)
-    GOLD, GOLD_D = (255, 208, 90, 255), (170, 110, 30, 255)
-    d.polygon([(24, 5), (28, 12), (28, 30), (20, 30), (20, 12)], fill=STEEL)
-    d.polygon([(24, 5), (28, 12), (24, 12)], fill=STEEL_L)
-    d.line((23, 10, 23, 28), fill=STEEL_D, width=1)
-    d.rectangle((13, 30, 35, 33), fill=GOLD)
-    d.rectangle((13, 30, 35, 31), fill=(255, 232, 160, 255))
-    d.rectangle((21, 34, 27, 41), fill=(120, 70, 30, 255))
-    d.ellipse((19, 40, 29, 46), fill=GOLD_D)
-    d.ellipse((22, 42, 26, 45), fill=GOLD)
-    for (fx, fy) in [(13, 25), (35, 21), (10, 15), (38, 13), (16, 8), (32, 6), (24, 3)]:
-        put(e, [(fx, fy), (fx + 1, fy)], (255, 140, 40, 255))
-        put(e, [(fx, fy - 2)], (255, 210, 100, 255))
-    sparkle(e, 7, 34, (255, 220, 180, 255), (255, 140, 60, 255), 2)
-    sparkle(e, 41, 30, (255, 220, 180, 255), (255, 140, 60, 255), 2)
-    finish(base, e, "savas_sevki")
-
-
-def icon_kalkan_bagi():
-    # Kullanici istegi: "Kalkan bagi" - iki ayri kalkanin ortak bir zincirle/baglantiyla birlestigi görsel.
-    base = medallion((70, 130, 220, 255), (170, 210, 255, 255), (24, 60, 120, 255), (10, 22, 40, 255), (18, 40, 70, 255))
-    e = new_canvas()
-    d = ImageDraw.Draw(e)
-    BLU, BLU_L, BLU_D = (100, 160, 230, 255), (200, 230, 255, 255), (40, 80, 150, 255)
-    GOLD = (255, 214, 110, 255)
-    d.polygon([(7, 10), (19, 7), (19, 25), (13, 35), (7, 25)], fill=BLU_D)
-    d.polygon([(8, 11), (18, 9), (18, 24), (13, 33), (8, 24)], fill=BLU)
-    d.polygon([(8, 11), (13, 10), (13, 33), (8, 24)], fill=BLU_L)
-    d.polygon([(41, 10), (29, 7), (29, 25), (35, 35), (41, 25)], fill=BLU_D)
-    d.polygon([(40, 11), (30, 9), (30, 24), (35, 33), (40, 24)], fill=BLU)
-    d.polygon([(40, 11), (35, 10), (35, 33), (40, 24)], fill=(230, 245, 255, 255))
-    for (cx, cy) in [(20, 17), (24, 19), (28, 17), (20, 24), (24, 26), (28, 24)]:
-        d.ellipse((cx - 2, cy - 2, cx + 2, cy + 2), outline=GOLD, width=1)
-    put(e, [(24, 21), (24, 22)], (255, 245, 210, 255))
-    sparkle(e, 6, 38, (220, 240, 255, 255), (150, 210, 255, 255), 2)
-    sparkle(e, 41, 38, (220, 240, 255, 255), (150, 210, 255, 255), 2)
-    finish(base, e, "kalkan_bagi")
-
-
-def make_icons():
-    os.makedirs(OUT_SKILL, exist_ok=True)
-    icon_para()
-    icon_can()
-    icon_adc()
-    icon_tank()
-    icon_taktik()
-    icon_dukkan()
-    icon_savas_sevki()
-    icon_kalkan_bagi()
+# 2026-09-25: ruhani ikonlar tools/gen_spirit_vampir_icons.py ile yeniden cizildi (kullanici istegi: "tum ruhani buyulerin
+# ikonlarini ... yeniden pixel tarzda 48x48 tasarla"). Eski yuvarlak madalyon ciziminin kodu buradan SILINDI ki bu betik
+# tekrar calistirilirsa yeni ikonlarin uzerine yazmasin - bu dosya artik sadece sesleri uretir.
 
 
 # ------------------------------------------------------------------ sesler
@@ -473,6 +225,5 @@ def make_sounds():
 
 
 if __name__ == "__main__":
-    make_icons()
     make_sounds()
     print("ok")

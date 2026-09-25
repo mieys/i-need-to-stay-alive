@@ -36,8 +36,13 @@ def out(name):
     return os.path.join(OUTDIR, name)
 
 
+# Tier savaş kartları/slotları + seçim halesi kendi paletleriyle ayrı tasarlandı (kullanıcı: "şuan yaptığın kart ve tier
+# olaylarını ayrı tutarak") - arayüz koyulaştırma eğrisi (ui_kit_lib.deepen_rgb) bunlara UYGULANMAZ.
+DEEPEN_EXEMPT_PREFIXES = ('tier_card_', 'tier_slot_', 'stat_', 'levelup_')   # stat_: vitrin istatistik ikonları (ikon rengi korunur)
+
+
 def save(a, name):
-    a.save(out(name), scale=S3)
+    a.save(out(name), scale=S3, deepen=not name.startswith(DEEPEN_EXEMPT_PREFIXES))
 
 
 # ------------------------------------------------------------------ palet
@@ -916,10 +921,14 @@ def _gem(a, cx, cy, r, tp, t):
     a.set(cx - 2, cy, tp['hi'])
 
 
-def tier_card(t, w=100, h=160):
-    """Level atlama / sandık ödül kartı (300x480 px = 100x160 sanat px, bkz. level_up_screen.tscn Card*/Frame):
-    dış ahşap çerçeve + TİER renginde emaye bant + parşömen iç (üst başlık bölgesi tier rengiyle hafif boyalı),
-    üstte tier taşı, altta küçük taş, yanlarda çivi. Tier 3-4'te taşların yanında altın kıvrımlar. İç alan düz parşömen."""
+def tall_card(w=100, h=160):
+    """Kademesiz uzun kart (silah/kalkan seçim kartları, 300x480 px): ahşap çerçeve + ahşap renkli bant + düz parşömen iç.
+    Eski Sıradan tier kartının (2026-09-24) birebir aynısı - tier kartları savaş kartı tasarımına geçince (bkz. tier_card)
+    serbest yerleşimli silah seçim kartları bu sade zemini korusun diye ayrıldı."""
+    return _plain_tier_card(1, w, h)
+
+
+def _plain_tier_card(t, w=100, h=160):
     tp = _tier_pal(t)
     a = Art(w, h)
     d = depth_map(rr_mask(w, h, 6))
@@ -970,9 +979,13 @@ def tier_card(t, w=100, h=160):
     return a
 
 
-def tier_slot(t, w=32, h=32):
-    """Tier ikon slotu (satıcı mini kartı / envanter hücresi, genelde 96 px = 32x32 sanat px): tier renginde çerçeve +
-    çukur bej iç (ikon üstüne çizilir). Tier 2-4 köşelerde küçük taş, tier 4 altın."""
+def slot_cell(w=32, h=32):
+    """Kademesiz ikon hücresi (envanter yuvaları, 96 px): ahşap çerçeve + çukur bej iç. Eski Sıradan tier slotunun
+    (2026-09-24) birebir aynısı - tier slotları tamamen tier rengine geçince (bkz. tier_slot) envanter bu sade hücreyi korur."""
+    return _plain_tier_slot(1, w, h)
+
+
+def _plain_tier_slot(t, w=32, h=32):
     tp = _tier_pal(t)
     a = Art(w, h)
     d = depth_map(rr_mask(w, h, 4))
@@ -1002,6 +1015,414 @@ def tier_slot(t, w=32, h=32):
     return a
 
 
+# ------------------------------------------------------------------ SAVAŞ KARTLARI (level atlama / sandık ödülü / tier slotu)
+# Kullanıcı isteği (2026-09-25): "level atlama kartları ve tier bazlı mini kartlar oyunla uyumlu görünüyor ancak hiç heyecan
+# verici ve savaşla alakalı şeyler gibi görünmüyorlar. diğer arayüzlerle uyumlu olmasını ancak renklerinin sadece dış
+# çizgilerinin değil tamamen tier'a uygun hale olacak şekilde değiştirilmesini istiyorum."
+# -> Kart GÖVDESİ artık tamamen tier renginde: tier metali çerçeve + perçinler, arma arkasından yayılan ışık hüzmeleri, çapraz
+#    iki kılıç üstünde pirinç çerçeveli kalkan arması (stat/eşya ikonu onun parşömen yüzüne oturur), tier adını taşıyan
+#    kurdele (kitin başlık kurdelesiyle aynı biçim) ve açıklama için parşömen levha (kitin koyu "mürekkep" yazıları + stat
+#    renkleri bej zeminde okunmaya devam eder - bkz. UIKit.INK). Malzemeler kitle aynı: pirinç çivi, parşömen, koyu kontur.
+# Yerleşim bölgeleri (sanat px, 3 ekran px = 1 sanat px) level_up_screen.gd / chest_menu.gd'deki CARD_* sabitleriyle eşleşir:
+#   kategori/tier yazısı 7..18 | arma 21..66 (ikon merkezi y=42) | kurdele 67..79 | parşömen levha 83..151
+TIER_FIELD = {
+    1: dict(hi=hexc('#e0ad72'), lt=hexc('#b9824c'), md=hexc('#93613a'), dk=hexc('#704627'), dd=hexc('#52321b'), deep=hexc('#3a2212')),
+    2: dict(hi=hexc('#a6c6f4'), lt=hexc('#5f8fd8'), md=hexc('#3f69b6'), dk=hexc('#2b4b8c'), dd=hexc('#1c3262'), deep=hexc('#13234a')),
+    3: dict(hi=hexc('#d8aef4'), lt=hexc('#a970d8'), md=hexc('#854ab8'), dk=hexc('#613290'), dd=hexc('#43216a'), deep=hexc('#2e164c')),
+    4: dict(hi=hexc('#f8a890'), lt=hexc('#e2553e'), md=hexc('#bb352b'), dk=hexc('#88241d'), dd=hexc('#5e1712'), deep=hexc('#420f0c')),
+}
+STEEL_HI = hexc('#f2f5f7')
+STEEL = hexc('#c3ccd4')
+STEEL_DK = hexc('#8a96a2')
+GRIP = hexc('#6d4527')
+GRIP_L = hexc('#8f5f36')
+CARD_CREST_CX, CARD_CREST_CY = 50, 42   # arma (ve ikon) merkezi - ışık hüzmeleri buradan yayılır
+CARD_RIBBON_Y0, CARD_RIBBON_Y1 = 67, 79
+CARD_PLAQUE_Y0, CARD_PLAQUE_Y1 = 83, 151
+CARD_PLAQUE_X0, CARD_PLAQUE_X1 = 9, 90
+
+
+def _metal(t):
+    """Çerçeve metali: tier 4 altın, diğerleri tier renginin kendisi (hi/lt/md/dk)."""
+    if t == 4:
+        return dict(hi=GOLD_L, lt=GOLD, md=GOLD_D, dk=GOLD_DD)
+    f = TIER_FIELD[t]
+    return dict(hi=f['hi'], lt=f['lt'], md=f['md'], dk=f['dk'])
+
+
+def _field_color(fp, x, y, cx, cy, reach, rays=16, ray_len=0.0):
+    """Tier zemini: merkezde hafif aydınlık hale + kenarlara doğru koyulaşma, ray_len > 0 ise merkezden yayılan dönüşümlü
+    ışık hüzmeleri (uzaklaştıkça söner). Ton geçişlerinde tek satırlık dama (kitin portre penceresindeki bant geçişiyle aynı
+    teknik), başka dither yok."""
+    dx, dy = x + 0.5 - cx, (y + 0.5 - cy) * 0.92
+    r = math.hypot(dx, dy)
+    lvl = 2.75 - r / reach
+    if ray_len > 0.0 and r > 4:
+        ang = math.atan2(dy, dx) / (2 * math.pi) * rays + 0.25
+        if (ang - math.floor(ang)) < 0.42:
+            lvl = max(lvl, 0.0) + 1.15 * max(0.0, 1.0 - r / ray_len)
+    tones = [fp['deep'], fp['dd'], fp['dk'], fp['md']]
+    base = int(math.floor(lvl))
+    frac = lvl - base
+    if frac > 0.8 and ((x + y) & 1) == 0:
+        base += 1
+    return tones[max(0, min(len(tones) - 1, base))]
+
+
+def _sword(a, cx, cy, ux, uy, t_tip, t_guard, t_grip, t_pommel, covered):
+    """Çapraz kılıç (u = kabzaya doğru birim yön). Uç, kalkan armasının arkasından sol/sağ üstte, balçak + kabza altta çıkar.
+    covered(x, y) True olan pikseller (arma) çizilmez."""
+    vx, vy = -uy, ux
+    for y in range(a.h):
+        for x in range(a.w):
+            if covered(x, y):
+                continue
+            px, py = x + 0.5 - cx, y + 0.5 - cy
+            t = px * ux + py * uy
+            s = px * vx + py * vy
+            c = None
+            if t_tip <= t <= t_guard:
+                hw = 1.7 if t > t_tip + 5 else 1.7 * max(0.0, (t - t_tip)) / 5.0
+                if abs(s) <= hw:
+                    c = STEEL_HI if s < -0.55 else (STEEL_DK if s > 0.55 else STEEL)
+                elif abs(s) <= hw + 1.0 and t >= t_tip - 0.6:
+                    c = OUTL
+            elif t_guard < t <= t_guard + 2.4:
+                if abs(s) <= 6.5:
+                    c = GOLD_L if t < t_guard + 1.2 else GOLD_D
+                elif abs(s) <= 7.5:
+                    c = OUTL
+            elif t_guard + 2.4 < t <= t_grip:
+                if abs(s) <= 1.2:
+                    c = GRIP_L if int(t) % 3 else GRIP
+                elif abs(s) <= 2.2:
+                    c = OUTL
+            if c is None:
+                pd = math.hypot(t - t_pommel, s)
+                if pd <= 1.9:
+                    c = GOLD if (t < t_pommel and s < 0.5) else GOLD_D
+                elif pd <= 2.9:
+                    c = OUTL
+            if c is None and t_guard - 0.6 < t <= t_guard + 3.0 and abs(s) <= 7.5:
+                c = OUTL
+            if c is not None:
+                a.set(x, y, c)
+
+
+def _crest_mask(x, y, cx=CARD_CREST_CX, top=21, straight=47, point=66, half=19):
+    """Kalkan arması silueti: düz üst (köşeleri pahlı), düz yanlar, aşağıda sivri uca kıvrılan kenarlar."""
+    if y < top or y > point:
+        return False
+    if y <= straight:
+        hw = half - (1 if y == top else 0)
+    else:
+        k = (y - straight) / float(point - straight)
+        hw = half * (math.cos(k * math.pi / 2) ** 0.75)
+    return abs(x + 0.5 - cx) <= hw
+
+
+def _draw_crest(a, t):
+    cx = CARD_CREST_CX
+    m = [[_crest_mask(x, y) for x in range(a.w)] for y in range(a.h)]
+    d = depth_map(m)
+    rim = dict(hi=GOLD_L, lt=GOLD, md=GOLD_D, dk=GOLD_DD) if t > 1 else dict(hi=hexc('#f0c890'), lt=hexc('#d29a5c'), md=hexc('#a8733f'), dk=hexc('#7a4f28'))
+    for y in range(a.h):
+        for x in range(a.w):
+            dd = d[y][x]
+            if dd < 0:
+                continue
+            lt = x + 0.5 <= cx and y < 58 or (y < 30)
+            if dd == 0:
+                c = OUTL
+            elif dd == 1:
+                c = rim['hi'] if lt else rim['md']
+            elif dd == 2:
+                c = rim['lt'] if lt else rim['dk']
+            elif dd == 3:
+                c = LINE
+            elif dd == 4:
+                c = P_SH if lt else _paper(x, y)
+            else:
+                c = P_HI if (y < 26 and x + 0.5 < cx) else _paper(x, y)
+            a.set(x, y, c)
+    return m
+
+
+def _draw_ribbon(a, fp, y0=CARD_RIBBON_Y0, y1=CARD_RIBBON_Y1, x0=17):
+    """Tier adı kurdelesi: kitin başlık kurdelesiyle (banner) aynı yapı - ön şerit + arkadan çıkan V çentikli kuyruklar +
+    katlanma üçgeni - ama tier renginde."""
+    w = a.w
+    tt, tb = y0 + 3, y1 + 2          # kuyruk satırları
+    mid, half = (tt + tb) / 2.0, (tb - tt) / 2.0
+    for side in (0, 1):
+        def X(x):
+            return x if side == 0 else w - 1 - x
+        for y in range(tt, tb + 1):
+            n = x0 - 9 + int(round(3 * (1.0 - abs(y - mid) / half)))   # V çentik
+            for x in range(n, x0 + 4):
+                if y in (tt, tb) or x == n:
+                    c = OUTL
+                elif y == tt + 1:
+                    c = fp['lt']
+                elif y >= tb - 1:
+                    c = fp['dd']
+                else:
+                    c = fp['dk']
+                a.set(X(x), y, c)
+        for k in range(tb - y1):
+            y = y1 + 1 + k
+            for x in range(x0, x0 + 4):
+                if x - x0 <= k:
+                    a.set(X(x), y, OUTL if (x == x0 + 3 or y == tb) else fp['deep'])
+    for y in range(y0, y1 + 1):
+        for x in range(x0, w - x0):
+            if y in (y0, y1) or x in (x0, w - x0 - 1):
+                c = OUTL
+            elif y == y0 + 1:
+                c = fp['hi']
+            elif y == y0 + 2:
+                c = fp['lt']
+            elif y >= y1 - 2:
+                c = fp['dk'] if y == y1 - 1 else fp['md']
+            else:
+                c = fp['md']
+            a.set(x, y, c)
+
+
+def _draw_plaque(a, t, x0=CARD_PLAQUE_X0, y0=CARD_PLAQUE_Y0, x1=CARD_PLAQUE_X1, y1=CARD_PLAQUE_Y1):
+    """Açıklama levhası: tier metali kenarlı parşömen (koyu mürekkep yazılar burada okunur)."""
+    mt = _metal(t)
+    w, h = x1 - x0 + 1, y1 - y0 + 1
+    d = depth_map(rr_mask(w, h, 3))
+    for y in range(h):
+        for x in range(w):
+            dd = d[y][x]
+            if dd < 0:
+                continue
+            lt = light_side(x, y, w, h)
+            if dd == 0:
+                c = OUTL
+            elif dd == 1:
+                c = mt['hi'] if lt else mt['md']
+            elif dd == 2:
+                c = mt['lt'] if lt else mt['dk']
+            elif dd == 3:
+                c = LINE
+            elif dd == 4 and lt:
+                c = P_SH
+            else:
+                c = _paper(x0 + x, y0 + y)
+            a.set(x0 + x, y0 + y, c)
+
+
+def tier_card(t, w=100, h=160):
+    """Level atlama / sandık ödülü SAVAŞ kartı (300x480 px = 100x160 sanat px, bkz. yukarıdaki bölüm notu)."""
+    fp = TIER_FIELD[t]
+    mt = _metal(t)
+    a = Art(w, h)
+    d = depth_map(rr_mask(w, h, 5))
+    reach = 30.0
+    for y in range(h):
+        for x in range(w):
+            dd = d[y][x]
+            if dd < 0:
+                continue
+            lt = light_side(x, y, w, h)
+            if dd == 0:
+                c = OUTL
+            elif dd == 1:
+                c = mt['hi'] if lt else mt['md']
+            elif dd == 2:
+                c = mt['lt'] if lt else mt['dk']
+            elif dd == 3:
+                c = mt['md'] if lt else mt['dk']
+            elif dd == 4:
+                c = fp['deep']
+            else:
+                c = _field_color(fp, x, y, CARD_CREST_CX, CARD_CREST_CY, reach, 14, 78.0)
+                if dd == 5 and lt:
+                    c = fp['deep'] if c == fp['dd'] else fp['dd']   # çerçevenin iç gölgesi
+            a.set(x, y, c)
+    covered = lambda x, y: _crest_mask(x, y)  # noqa: E731
+    k = 0.7071
+    _sword(a, CARD_CREST_CX, CARD_CREST_CY, k, k, -40, 17, 25, 28, covered)
+    _sword(a, CARD_CREST_CX, CARD_CREST_CY, -k, k, -40, 17, 25, 28, covered)
+    _draw_crest(a, t)
+    _draw_ribbon(a, fp)
+    _draw_plaque(a, t)
+    # perçinler: çerçevenin yanlarında (orta + köşelere yakın) - kitin pencerelerindeki pirinç çivilerle aynı
+    for yy in (12, h // 2 - 1, h - 14):
+        nail(a, 1, yy)
+        nail(a, w - 3, yy)
+    cx = w // 2
+    if t >= 3:
+        for dx in range(5, 11):
+            yy = 2 if dx < 8 else 3
+            a.set(cx - dx, yy, GOLD if dx % 3 else GOLD_L)
+            a.set(cx + dx - 1, yy, GOLD if dx % 3 else GOLD_L)
+    _gem(a, cx, 3, 3, _tier_pal(t), t)
+    _gem(a, cx, h - 3, 2, _tier_pal(t), t)
+    return a
+
+
+# ------------------------------------------------------------------ LEVEL ATLAMA SATIRLARI (2026-09-25)
+# Kullanıcı isteği: savaş kartı yerine prototiplerden "A2 - Liste Satırları" (survivor-like yatay satır) seçildi; "soldaki
+# düz uzun çizgi olmasın, çerçeve sola simetrik hizalansın", "genişlikleri %20 azalt". Bej/ahşap YOK ("oyunun panellerine
+# benzetmene gerek yok"): koyu nötr gövde + tier renkli çerçeve; Tier 1 GRİ. 268x50 sanat px (3x = 804x150), ikon yuvası
+# her kenardan 6 sanat px (18 px) - sol boşluk = üst = alt. Yazılar level_up_screen.gd'de kodla (_layout_rows).
+LEVELUP_TIER = {
+    1: dict(hi=hexc('#cdd1d6'), lt=hexc('#9ea4ac'), md=hexc('#767d87'), dk=hexc('#565c65'), dd=hexc('#3d4249'), deep=hexc('#2a2e33')),
+}
+LEVELUP_ROW_W, LEVELUP_ROW_H = 268, 50
+LEVELUP_BODY = hexc('#2b2a30')
+
+
+def levelup_row(t, w=LEVELUP_ROW_W, h=LEVELUP_ROW_H):
+    f = LEVELUP_TIER.get(t, TIER_FIELD[t])
+    body = mix(LEVELUP_BODY, f['deep'], 0.35)
+    a = Art(w, h)
+    for y in range(h):
+        for x in range(w):
+            if x in (0, w - 1) or y in (0, h - 1):
+                c = OUTL
+            elif x in (1, w - 2) or y in (1, h - 2):
+                c = f['hi'] if y == 1 else f['dk'] if y == h - 2 else f['md']
+            elif x in (2, w - 3) or y in (2, h - 3):
+                c = f['deep']
+            else:
+                c = body
+            a.set(x, y, c)
+    # ikon yuvası: (6,6)..(43,43) = 38x38 (114 px): kontur + açık halka + koyu tier içi
+    for y in range(6, 44):
+        for x in range(6, 44):
+            d = min(x - 6, 43 - x, y - 6, 43 - y)
+            a.set(x, y, OUTL if d == 0 else f['lt'] if d == 1 else f['dd'])
+    return a
+
+
+# "Yeniden Karıştır" butonu (kullanıcı seçimi: "altın kenarlı + zar"): koyu gövde + altın kenar, 10x10 sanat px 9-slice
+# (payı 3 sanat px = 9 px; level_up_screen.gd _apply_reroll_button_style). Pasif (altın yetmiyor) = gri kenar.
+def levelup_reroll(state='normal', w=10, h=10):
+    if state == 'disabled':
+        rim = dict(hi=hexc('#9ea4ac'), md=hexc('#767d87'), dk=hexc('#565c65'))
+        body, deep = hexc('#26252a'), hexc('#1c1b20')
+    else:
+        rim = dict(hi=GOLD_L, md=GOLD, dk=GOLD_D)
+        body = {'normal': hexc('#2b2a30'), 'hover': hexc('#3a3842'), 'pressed': hexc('#222127')}[state]
+        deep = hexc('#281e12')
+    a = Art(w, h)
+    for y in range(h):
+        for x in range(w):
+            d = min(x, y, w - 1 - x, h - 1 - y)
+            if d == 0:
+                c = OUTL
+            elif d == 1:
+                top = rim['dk'] if state == 'pressed' else rim['hi']
+                c = top if y == 1 else rim['dk'] if y == h - 2 else rim['md']
+            elif d == 2:
+                c = deep
+            else:
+                c = body
+            a.set(x, y, c)
+    return a
+
+
+def levelup_die():
+    """Buton ikonu: 11x11 sanat px zar (33 px) - krem yüz, alt satır gölge, çapraz 3 kırmızı nokta."""
+    a = Art(11, 11)
+    for y in range(11):
+        for x in range(11):
+            if x in (0, 10) or y in (0, 10):
+                c = OUTL
+            elif y == 9:
+                c = hexc('#beb4a0')
+            else:
+                c = hexc('#ece6d8')
+            a.set(x, y, c)
+    for (x, y) in ((3, 3), (5, 5), (7, 7)):
+        a.set(x, y, hexc('#a02828'))
+    return a
+
+
+def tier_card_glow(w=100, h=160, pad=5, radius=5):
+    """Seçim parıltısı: kart silüetinin dışına taşan beyaz hale (çalışma anında tier/altın renge boyanır, ADD karışım).
+    Kartın her yanından `pad` sanat px taşar -> (w+2p)x(h+2p). Halka bantları tam texel (bulanık gradyan yok)."""
+    W, H = w + 2 * pad, h + 2 * pad
+    a = Art(W, H)
+    card = rr_mask(w, h, radius)
+    inside = [[False] * W for _ in range(H)]
+    for y in range(h):
+        for x in range(w):
+            inside[y + pad][x + pad] = card[y][x]
+    # 4-komşu BFS mesafesi (kart dışı)
+    dist = [[-1] * W for _ in range(H)]
+    cur = [(x, y) for y in range(H) for x in range(W) if inside[y][x]]
+    for (x, y) in cur:
+        dist[y][x] = 0
+    lvl = 0
+    while cur and lvl < pad:
+        nxt = []
+        for (x, y) in cur:
+            for ddx, ddy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + ddx, y + ddy
+                if 0 <= nx < W and 0 <= ny < H and dist[ny][nx] == -1:
+                    dist[ny][nx] = lvl + 1
+                    nxt.append((nx, ny))
+        cur = nxt
+        lvl += 1
+    alphas = {1: 255, 2: 190, 3: 120, 4: 64, 5: 28}
+    for y in range(H):
+        for x in range(W):
+            dd = dist[y][x]
+            if dd <= 0:
+                # kartın kendi kenarına da 1 texel ince iç parıltı (çerçevenin dış konturu parlasın)
+                if dd == 0 and not inside[y][x]:
+                    continue
+                if dd == 0:
+                    edge = any(not (0 <= x + ex < W and 0 <= y + ey < H) or not inside[y + ey][x + ex]
+                               for ex, ey in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+                    if edge:
+                        a.set(x, y, (255, 255, 255, 150))
+                continue
+            al = alphas.get(dd)
+            if al:
+                a.set(x, y, (255, 255, 255, al))
+    return a
+
+
+def tier_slot(t, w=32, h=32):
+    """Tier mini kartı / ikon slotu (satıcı kartı, satıcı ayrıntı paneli, satıcı envanter hücresi - 96..120 px = 32x32 sanat px):
+    TAMAMEN tier renginde - tier metali çerçeve + ortası aydınlık, kenarlara doğru koyulaşan tier zemini (ikon ışığın
+    üstüne oturur) + köşelerde perçin. Tier 4 çerçevesi altın."""
+    fp = TIER_FIELD[t]
+    mt = _metal(t)
+    a = Art(w, h)
+    d = depth_map(rr_mask(w, h, 4))
+    for y in range(h):
+        for x in range(w):
+            dd = d[y][x]
+            if dd < 0:
+                continue
+            lt = light_side(x, y, w, h)
+            if dd == 0:
+                c = OUTL
+            elif dd == 1:
+                c = mt['hi'] if lt else mt['dk']
+            elif dd == 2:
+                c = mt['lt'] if lt else mt['md']
+            elif dd == 3:
+                c = fp['deep']
+            else:
+                c = _field_color(fp, x, y, w / 2.0, h / 2.0, 6.5)
+                if dd == 4 and lt:
+                    c = fp['deep'] if c == fp['dd'] else fp['dd']
+            a.set(x, y, c)
+    rv = (GOLD_L, GOLD_D) if t > 1 else (hexc('#f0c890'), hexc('#a8733f'))
+    for (x, y, c) in ((2, 2, rv[0]), (3, 2, rv[0]), (2, 3, rv[0]), (3, 3, rv[1])):
+        paste_mirror4(a, x, y, c)
+    return a
+
+
 def build_menu():
     use_palette(MENU_PAL, os.path.join(os.path.dirname(__file__), '..', 'assets', 'ui', 'menu'))
     build()
@@ -1027,6 +1448,15 @@ def build_game():
     for t in (1, 2, 3, 4):
         save(tier_card(t), 'tier_card_%d.png' % t)
         save(tier_slot(t), 'tier_slot_%d.png' % t)
+    save(tier_card_glow(), 'tier_card_glow.png')
+    for t in range(1, 5):
+        save(levelup_row(t), 'levelup_row_%d.png' % t)
+    save(tier_card_glow(LEVELUP_ROW_W, LEVELUP_ROW_H, 5, 0), 'levelup_row_glow.png')
+    for st in ('normal', 'hover', 'pressed', 'disabled'):
+        save(levelup_reroll(st), 'levelup_reroll_%s.png' % st)
+    save(levelup_die(), 'levelup_die.png')
+    save(tall_card(), 'card_tall.png')     # kademesiz silah/kalkan seçim kartı (eski sade kart)
+    save(slot_cell(), 'slot_cell.png')     # kademesiz envanter hücresi (eski sade slot)
     for st in ('normal', 'hover', 'selected'):
         save(slot(st), 'slot_%s.png' % st)
     save(keycap(), 'keycap.png')

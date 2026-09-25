@@ -62,19 +62,17 @@ const CHEST_TEXTURES := {
 ## uzatıyordu. Artık içerik, çerçevenin İÇİNDEKİ alana oturuyor (level_up_screen.tscn Content kutusu 28/54/28/52'ydi ama yan çubuklara
 ## değiyordu - burada biraz daha dar); yazı boyutları o alana göre seçiliyor (_fit_card_texts: isim tek satıra, açıklama alana SIĞANA kadar küçülür).
 const CARD_SIZE := Vector2(300, 480)
-## 2026-09-24: kartlar oyun içi bej kitin tier kartları (tools/gen_menu_kit.py tier_card, 100x160 sanat px = 300x480) - çerçeve +
-## emaye bant tam 7 sanat px (21 px), üst taş kartın içine yalnız ~27 px sarkıyor; tier yazısı kartın tier renkli başlık bandına
-## (21..54 px) oturuyor. Eski süslü hazır çizim için gereken 46/64/52'lik geniş paylar artık gereksiz (iç alan daralıyordu).
-const CARD_PAD_LEFT := 27
-const CARD_PAD_RIGHT := 27
-const CARD_PAD_TOP := 24
-const CARD_PAD_BOTTOM := 27
-const CARD_TIER_FONT_SIZE := 24
-const CARD_NAME_FONT_SIZE := 34
+## 2026-09-25: kartlar savaş kartı dokusuna geçti (tools/gen_menu_kit.py tier_card) - içerik artık kenar paylarıyla değil,
+## dokunun sabit bölgelerine (TierCardFx.HEADER_RECT / CREST_CENTER / RIBBON_RECT / PLAQUE_INNER_RECT) yerleşiyor. Yazılar
+## m5x7'nin keskin durduğu 32 px'te (üst satır/kurdele), açıklama levhada 24 px'ten başlayıp sığana kadar küçülür.
+const TierCardFx := preload("res://scripts/tier_card_fx.gd")
+const CARD_TIER_FONT_SIZE := 32
+const CARD_POWER_FONT_SIZE := 24
+const CARD_NAME_FONT_SIZE := 32
 const CARD_NAME_MIN_FONT_SIZE := 20
 const CARD_DESC_FONT_SIZE := 24
 const CARD_DESC_MIN_FONT_SIZE := 13
-const CARD_ICON_SIZE := 64.0
+const CARD_ICON_SIZE := 96.0
 const CARD_BUTTON_HEIGHT := 44.0
 const CARD_BUTTON_FONT_SIZE := 24
 const CHEST_ICON_DISPLAY_SIZE := 176.0 ## kullanıcı isteği: "biraz görünür olmalı boyut olarak"
@@ -399,7 +397,7 @@ func _auto_pick_random_card() -> void:
 ## rengini VE yeni bir tier-adı etiketini (Sıradan/Nadir/Epik/Efsanevi,
 ## TierSystem ile level atlama kartlarıyla AYNI görsel dil) belirler. Gerçek
 ## güç çarpanı (bkz. Items.ITEM_TIER_POWER) _on_al_pressed'e kadar taşınır.
-func _build_card(candidate: Dictionary) -> PanelContainer:
+func _build_card(candidate: Dictionary) -> Control:
 	var card_type: String = candidate.get("type", "item")
 	var item_key: String = candidate.get("key", "")
 	var is_weapon: bool = card_type == "weapon"
@@ -410,8 +408,17 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	var cost_base: int = WEAPON_COST_BASE.get(item_key, 80) if is_weapon else int(item_def.get("cost_base", 50))
 	var power_mult: float = 1.0 if is_weapon else Items.ITEM_TIER_POWER[_reward_tier - 1]
 
+	## 2026-09-25 savaş kartı (bkz. scripts/tier_card_fx.gd): kart dokusu artık sabit bölgelere bölünmüş (üst satır / kalkan
+	## arması / tier kurdelesi / parşömen levha). Eşyaların açıklamaları uzun (250 karaktere kadar) - AL/SAT butonları levhaya
+	## sığmayıp açıklamayı okunmaz boyuta küçülteceği için kartın ALTINA taşındı: CardsContainer'a eklenen öğe artık kart +
+	## buton satırlarından oluşan bir sütun (name_label/desc_label/al_button/sat_button meta'ları sütunda - _unhandled_input,
+	## _auto_pick_random_card ve _fit_card_texts onları cards_container çocuklarından okur).
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
+
 	# 1. Main Card Container
 	var card := PanelContainer.new()
+	column.add_child(card)
 	## Kullanıcı isteği: "sandık ödülü seçim kartı level kartlarıyla aynı
 	## boyutlarda görünsün" - level_up_screen.tscn'deki Card1/2/3 ile birebir
 	## aynı boyut. DÜZELTME (kullanıcı isteği: "kartları büyütmekle ilgili
@@ -452,65 +459,68 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	## seyyar satıcı ekranında kullanıcı ekran görüntüsüyle yakalandı).
 	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	frame.stretch_mode = TextureRect.STRETCH_SCALE
-	frame.texture = TierSystem.FRAME_TEXTURES[(_reward_tier - 1) if not is_weapon else 0]
+	TierCardFx.apply_frame(frame, _reward_tier if not is_weapon else 1)
 	card.add_child(frame)
 
-	# 2. Margin Container
-	var margin := MarginContainer.new()
-	## Çerçeve dokusunun süslü kenarlarının İÇİ (bkz. CARD_PAD_* notu) - eskiden hepsi 16'ydı, içerik çerçevenin üstüne biniyordu.
-	margin.add_theme_constant_override("margin_left", CARD_PAD_LEFT)
-	margin.add_theme_constant_override("margin_right", CARD_PAD_RIGHT)
-	margin.add_theme_constant_override("margin_top", CARD_PAD_TOP)
-	margin.add_theme_constant_override("margin_bottom", CARD_PAD_BOTTOM)
-	card.add_child(margin)
-	
-	# 3. VBox
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	margin.add_child(vbox)
-	
-	# 4. Tier badge (SADECE eşyalar - bkz. _build_card üstündeki not)
-	if not is_weapon:
-		var tier_lbl := Label.new()
-		tier_lbl.text = "%s (%%%d güç)" % [TierSystem.NAMES[_reward_tier - 1], int(round(power_mult * 100.0))]
-		tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		tier_lbl.add_theme_font_size_override("font_size", CARD_TIER_FONT_SIZE)
-		tier_lbl.add_theme_color_override("font_color", TierSystem.COLORS[_reward_tier - 1])
-		vbox.add_child(tier_lbl)
+	## Bölgeler TierCardFx'teki dikdörtgenlere mutlak konumla yerleşiyor (PanelContainer çocuğu düz bir Control kartı kaplar).
+	var layout := Control.new()
+	layout.name = "Layout"
+	layout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(layout)
 
-	# 5. Item Title
+	# 2. Üst satır: eşya/silah adı (koyu tier zemini üstünde krem yazı). Uzunsa _fit_card_texts tek satıra sığana dek küçültür.
 	var name_lbl := Label.new()
 	name_lbl.text = display_name
+	name_lbl.position = TierCardFx.HEADER_RECT.position
+	name_lbl.size = TierCardFx.HEADER_RECT.size
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	## Kullanıcı isteği: font level atlama kartlarının Title'ıyla (40) aynı
-	## boyuta getirildi. autowrap eklendi - eskiden kapalıydı, uzun silah/eşya
-	## isimleri ("Yıldırım Asası" gibi) bu büyük fontta tek satıra sığmayıp
-	## kartın dışına taşabilirdi (kullanıcı isteği: "dışarı taşmasınlar
-	## sakın kelime uzunsa aşağıdan devam etsin").
-	## (2026-09-21) 46 -> 34: kart iç alanı 244 px genişliğinde (bkz. CARD_PAD_*); isim önce tek satıra sığacak şekilde küçültülür
-	## (_fit_card_texts), o da yetmeyen çok uzun isimler alt satıra kayar (autowrap).
-	name_lbl.add_theme_font_size_override("font_size", CARD_NAME_FONT_SIZE)
-	name_lbl.add_theme_color_override("font_color", UIKit.C_ACCENT)
+	UIKit.style_label(name_lbl, CARD_NAME_FONT_SIZE, UIKit.C_CREAM, 4)
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	name_lbl.clip_text = false
-	vbox.add_child(name_lbl)
-	card.set_meta("name_label", name_lbl)
+	layout.add_child(name_lbl)
+	## Ağaca girmeden önce Label en küçük boyutunu varsayılan temanın büyük yazısıyla ölçüp kutusunu büyütüyor (375x70) ve bir
+	## daha küçültmüyor - doğru boyut, kart ağaca eklendikten sonra (ertelenmiş) yeniden verilir.
+	name_lbl.set_deferred("size", TierCardFx.HEADER_RECT.size)
+	column.set_meta("name_label", name_lbl)
 
-	# 5. Icon
+	# 3. İkon: kalkan armasının parşömen yüzünde (eşya ikonları 32x32 -> 3x = kartın kendi 3 px piksel yoğunluğu).
 	var icon_rect := TextureRect.new()
-	## Kullanıcı isteği: level atlama kartlarının ikon boyutuyla (bkz.
-	## level_up_screen.tscn Icon custom_minimum_size) aynı - büyütme geri
-	## alınınca (kullanıcı isteği) bu da 84'e döndü.
-	icon_rect.custom_minimum_size = Vector2(CARD_ICON_SIZE, CARD_ICON_SIZE) # Proportional icon size
+	icon_rect.size = Vector2(CARD_ICON_SIZE, CARD_ICON_SIZE)
+	icon_rect.position = TierCardFx.CREST_CENTER - icon_rect.size * 0.5
 	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
 		icon_rect.texture = load(icon_path) as Texture2D
 	icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	vbox.add_child(icon_rect)
+	icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layout.add_child(icon_rect)
 
-	# 6. Description
+	# 4. Kurdele: tier adı (silahların tier'ı yok - "Silah").
+	var tier_lbl := Label.new()
+	tier_lbl.text = "Silah" if is_weapon else TierSystem.NAMES[_reward_tier - 1]
+	tier_lbl.position = TierCardFx.RIBBON_RECT.position
+	tier_lbl.size = TierCardFx.RIBBON_RECT.size
+	tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tier_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	UIKit.style_label(tier_lbl, CARD_TIER_FONT_SIZE, UIKit.C_CREAM, 4)
+	layout.add_child(tier_lbl)
+	tier_lbl.set_deferred("size", TierCardFx.RIBBON_RECT.size) ## bkz. name_lbl notu
+
+	# 5. Parşömen levha: güç yüzdesi (eşyalar) + açıklama.
+	var vbox := VBoxContainer.new()
+	vbox.position = TierCardFx.PLAQUE_INNER_RECT.position
+	vbox.size = TierCardFx.PLAQUE_INNER_RECT.size
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layout.add_child(vbox)
+	if not is_weapon:
+		var power_lbl := Label.new()
+		power_lbl.text = "%%%d güç" % int(round(power_mult * 100.0))
+		power_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		UIKit.style_label(power_lbl, CARD_POWER_FONT_SIZE, UIKit.C_GOLD, 0)
+		vbox.add_child(power_lbl)
+
 	## (2026-09-21) Label -> RichTextLabel (level atlama kartlarındaki Desc ile aynı tür): autowrap'lı bir Label metnin yüksekliğini
 	## kartın MİNİMUM boyutuna yansıtıp kartı uzatıyordu; fit_content'siz RichTextLabel ise kalan alana sabit sığar ve
 	## _fit_card_texts uzun açıklamayı o alana SIĞANA kadar küçültür.
@@ -525,7 +535,7 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	_set_desc_font_size(desc_lbl, CARD_DESC_FONT_SIZE)
 	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(desc_lbl)
-	card.set_meta("desc_label", desc_lbl)
+	column.set_meta("desc_label", desc_lbl)
 
 	# Check slots limit (SİLAH ve EŞYA için AYRI limitler - bkz. is_weapon)
 	var has_slots: bool = true
@@ -570,10 +580,10 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 		al_btn.text = "SLOTLAR DOLU"
 		al_btn.disabled = true
 	al_btn.pressed.connect(_on_al_pressed.bind(candidate, cost_base, power_mult))
-	vbox.add_child(al_btn)
+	column.add_child(al_btn)
 	## bkz. _auto_pick_random_card - süre dolduğunda hangi kartların hâlâ
 	## seçilebilir ("AL" tıklanabilir) olduğunu bulmak için doğrudan referans.
-	card.set_meta("al_button", al_btn)
+	column.set_meta("al_button", al_btn)
 
 	# 8. Sat Button
 	var refund_gold: int = int(round(cost_base * 0.7))
@@ -584,10 +594,10 @@ func _build_card(candidate: Dictionary) -> PanelContainer:
 	UIKit.style_button(sat_btn, "wood", false, CARD_BUTTON_FONT_SIZE)
 	sat_btn.text = "SAT (+%d Altın)" % refund_gold
 	sat_btn.pressed.connect(_on_sat_pressed.bind(item_key, refund_gold))
-	vbox.add_child(sat_btn)
-	card.set_meta("sat_button", sat_btn) ## bkz. _unhandled_input (2 kısayolu)
+	column.add_child(sat_btn)
+	column.set_meta("sat_button", sat_btn) ## bkz. _unhandled_input (2 kısayolu)
 	
-	return card
+	return column
 
 static func _set_desc_font_size(desc_lbl: RichTextLabel, font_size: int) -> void:
 	for key in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size", "mono_font_size"]:

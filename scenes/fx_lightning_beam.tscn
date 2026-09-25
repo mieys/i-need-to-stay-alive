@@ -1,26 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/fx_lightning_beam.gd" id="1"]
-[ext_resource type="Shader" path="res://shaders/lightning_yellow.gdshader" id="5"]
-[ext_resource type="SpriteFrames" path="res://assets/weapons/lightning/beam/beam_frames.tres" id="2"]
-[ext_resource type="SpriteFrames" path="res://assets/weapons/lightning/lightning_spark_frames.tres" id="3"]
 [ext_resource type="AudioStream" path="res://assets/audio/lightning/electric_loop.mp3" id="4"]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_lightning_yellow"]
-shader = ExtResource("5")
-
 [node name="FxLightningBeam" type="Node2D"]
+texture_filter = 1
 script = ExtResource("1")
-
-[node name="Bolt" type="AnimatedSprite2D" parent="."]
-material = SubResource("ShaderMaterial_lightning_yellow")
-scale = Vector2(0.3, 0.3375)
-sprite_frames = ExtResource("2")
-
-[node name="Spark" type="AnimatedSprite2D" parent="."]
-material = SubResource("ShaderMaterial_lightning_yellow")
-scale = Vector2(0.3375, 0.3375)
-sprite_frames = ExtResource("3")
 
 [node name="Sfx" type="AudioStreamPlayer2D" parent="."]
 stream = ExtResource("4")

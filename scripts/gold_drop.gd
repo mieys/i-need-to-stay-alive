@@ -34,6 +34,12 @@ func _ready() -> void:
 	add_to_group("gold_drops")
 	body_entered.connect(_on_body_entered)
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
+	_place_on_ground.call_deferred()
+
+
+## Zeminde, karakterlerin altında çizil (bkz. drop_attraction.gd place_on_ground).
+func _place_on_ground() -> void:
+	DropAttraction.place_on_ground(self)
 
 
 func _on_expire() -> void:

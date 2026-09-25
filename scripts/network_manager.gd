@@ -3,6 +3,7 @@ extends Node
 ## Vampir Çocuk FX yardımcısı (broadcast_player_vfx "vampir_fx" dalı).
 const VampirMathScript := preload("res://scripts/vampir_math.gd")
 const PixelDrawScript := preload("res://scripts/pixel_draw.gd")
+const SpiritualSkillsScript := preload("res://scripts/spiritual_skills.gd")
 
 ## NetworkManager: Godot'nun yerleşik ENet çoklu oyuncu altyapısı üzerinden DOĞRUDAN
 ## (host <-> client) bağlantı kurar. Kullanıcı isteği: "multiplayerdan ziva altyapısını
@@ -1671,6 +1672,28 @@ func broadcast_merchant_departed() -> void:
 	merchant_departed.emit()
 
 
+## GÜN-GECE + HAVA DURUMU (kullanıcı isteği 2026-09-25, bkz. scripts/atmosphere.gd): saat ve hava durumunu SADECE host
+## yürütür/seçer, bu RPC ile birkaç saniyede bir + her hava değişiminde herkese (sonradan katılana peer_needs_game_catchup
+## ile hedefli) gönderir. state: {"t" döngü saniyesi, "w" hava türü, "ri"/"wi" yağmur/rüzgar şiddeti, "wa" rüzgar açısı,
+## "wr" havanın kalan süresi (host devri olursa yeni host kaldığı yerden sürdürsün), "ts" debug saat hızı}.
+## call_remote: host kendi durumunu zaten biliyor.
+signal atmosphere_state_received(state: Dictionary)
+
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_atmosphere_state(state: Dictionary) -> void:
+	atmosphere_state_received.emit(state)
+
+
+## SAĞANAK YILDIRIMI (kullanıcı isteği 2026-09-25, bkz. scripts/weather_storm.gd): yıldırımın konumunu SADECE host seçer,
+## bu RPC herkese (call_local: host dahil) iletir; her istemci aynı noktada uyarı + yıldırımı yerel oynatır. Yaratık
+## hasarını host, oyuncu hasarını her istemci kendi oyuncusuna uygular. Ek veri yok (zamanlama sabit, WARN_TIME).
+signal lightning_strike_received(pos: Vector2)
+
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_lightning_strike(pos: Vector2) -> void:
+	lightning_strike_received.emit(pos)
+
+
 ## =====================================================================================
 ## Rastgele dünya görevleri (bkz. world_event_manager.gd) - kullanıcı isteği (2026-09-23):
 ## "Oyuna rasgele aralıklarla gerçekleşen bir görev sistemi ekliyoruz". Seyyar satıcı
@@ -1739,6 +1762,16 @@ func request_world_event_copy_damage(mission_id: int, copy_index: int, amount: f
 	if not is_host:
 		return
 	world_event_copy_damage_requested.emit(mission_id, copy_index, amount)
+
+## Kopyaya itme (bkz. mission_player_copy.gd apply_knockback_distance) - hasar isteğiyle AYNI yol: istemcinin vuruşu
+## host'taki GERÇEK kopyaya iletilir (yaratıklardaki request_enemy_knockback'in karşılığı).
+signal world_event_copy_knockback_requested(mission_id: int, copy_index: int, dir: Vector2, distance: float)
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_world_event_copy_knockback(mission_id: int, copy_index: int, dir: Vector2, distance: float) -> void:
+	if not is_host:
+		return
+	world_event_copy_knockback_requested.emit(mission_id, copy_index, dir, distance)
 
 ## Kopyanın yakın dövüş savuruşu (bkz. mission_player_copy.gd _process_attacks) - hasar host'ta verilir, bu yayın
 ## diğer istemcilerdeki kozmetik kopyanın silah ikonlarının da AYNI anda savrulmasını sağlar.
@@ -2060,7 +2093,8 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## vfx_type listesi: poison_start/stop, freeze_start/stop, stun_start/stop, burn_start/stop, slow_start/stop, bleed,
 ## rage_start, chill_tint, damage_number, attack_state, hit_flash, death_state + yaratık yetenekleri (2026-09-24):
 ## ghost_vanish, ghost_reveal, vampire_blink (extra_data: from/to), fear_start (extra_data: duration)/fear_stop (korku
-## göstergesi - Melek korkusu + Necromancer Lanetli Kafatası) - yeni bir dal eklersen buraya da yaz.
+## göstergesi - Melek korkusu + Necromancer Lanetli Kafatası), taunt_start (extra_data: duration)/taunt_stop (Şovalye
+## Kışkırtma'sının öfke damarı göstergesi) - yeni bir dal eklersen buraya da yaz.
 @rpc("any_peer", "call_remote", "reliable")
 func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictionary = {}) -> void:
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
@@ -2102,6 +2136,13 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		"fear_stop":
 			if target_enemy.has_method("_remove_fear_status_fx"):
 				target_enemy._remove_fear_status_fx()
+		## Şovalye Adam Q (Kışkırtma) - yaratığın başının üstündeki öfke damarı (bkz. enemy.gd _set_taunt_visual).
+		"taunt_start":
+			if target_enemy.has_method("_spawn_taunt_status_fx"):
+				target_enemy._spawn_taunt_status_fx(float(extra_data.get("duration", 5.0)))
+		"taunt_stop":
+			if target_enemy.has_method("_remove_taunt_status_fx"):
+				target_enemy._remove_taunt_status_fx()
 		## Shaman pasifi (Totem Auraları) yakma göstergesi - bkz. enemy.gd
 		## apply_burn/_process_burn. Görsel, hasar mekaniğinden TAMAMEN ayrı;
 		## sadece hedefin üzerindeki alev sprite'ını kurar/kaldırır.
@@ -2626,9 +2667,8 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				vampir_opts["points"] = extra_data.get("points", PackedVector2Array())
 				vampir_opts["sink"] = rp
 			VampirMathScript.spawn_fx(get_tree().current_scene, vampir_kind, pos, vampir_opts)
-			var vampir_text: String = str(extra_data.get("text", ""))
-			if not vampir_text.is_empty() and rp.has_method("_spawn_floating_text"):
-				rp._spawn_floating_text(vampir_text, Color(0.95, 0.25, 0.35), true)
+			## extra_data "text" (Q'nun "+1 Maks. Can" yazısı) artık uzak ekranlarda GÖSTERİLMİYOR - kullanıcı isteği
+			## (2026-09-25): başka oyuncuların can/hasar sayıları görünmemeli. Yazıyı sadece Vampir kendisi görür.
 
 
 ## DÜZELTME (kullanıcı bildirimi: "multiplayerda genel olarak bazı hosta
@@ -2828,10 +2868,20 @@ func _rpc_announce_chest_winner(winner_id: int) -> void:
 ## oyuncusuna %8 can + %15 kalkan + 3sn dokunulmazlık uygular (apply_spirit_can_buff) ve herkesin üzerinde şifa/bariyer efektini gösterir.
 ## "Mesafe fark etmeksizin": RPC herkese gittiği için menzil kontrolü yok. Ölmüş oyuncular etkilenmez (apply_spirit_can_buff kendi içinde eler).
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_spirit_team_buff(_caster_id: int) -> void:
+func _rpc_spirit_team_buff(caster_id: int) -> void:
 	var local_p: Node = get_tree().get_first_node_in_group("player")
 	if local_p and is_instance_valid(local_p) and local_p.has_method("apply_spirit_can_buff"):
 		local_p.apply_spirit_can_buff()
+	## Kaster BİZSEK arkadaşlara bastığımız can/kalkanı kuklalarının üstünde görelim (kullanıcı isteği 2026-09-25);
+	## her hedef kendi miktarını apply_spirit_can_buff ile kendi ekranında zaten görüyor, üçüncü kişiler görmez.
+	var is_caster: bool = multiplayer.has_multiplayer_peer() and caster_id == multiplayer.get_unique_id()
+	if is_caster:
+		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+			if not is_instance_valid(rp) or rp.get("is_dead") == true or rp.get("is_downed") == true \
+					or not rp.has_method("show_support_number"):
+				continue
+			rp.show_support_number(float(rp.get("max_health")) * SpiritualSkillsScript.CAN_HEAL_PERCENT, false)
+			rp.show_support_number(float(rp.get("item_shield_max")) * SpiritualSkillsScript.CAN_SHIELD_PERCENT, true)
 	## Efekt: yerelde apply_spirit_can_buff kendi oyuncumuza doğurdu; burada SADECE uzak kuklalara.
 	var scene: PackedScene = load("res://scenes/fx_spirit_can.tscn") as PackedScene
 	if scene == null:
@@ -2990,6 +3040,11 @@ func sync_ally_shield_heal(target_peer_id: int, amount: float) -> void:
 		return
 	var local_player: Node = get_tree().get_first_node_in_group("player")
 	if local_player and local_player.has_method("heal_shield"):
+		## Kullanıcı isteği (2026-09-25): arkadaşın bastığı kalkan hedefin KENDİ ekranında da üstünde yazsın
+		## (kaster kendi ekranında kuklanın üstünde görüyor - bkz. player.gd _apply_shield_heal_to_ally).
+		## heal_shield() genel yenilemede de (regen, toplama) çağrıldığı için sayı orada değil, burada.
+		if local_player.has_method("show_received_shield_number"):
+			local_player.show_received_shield_number(amount)
 		local_player.heal_shield(amount)
 
 

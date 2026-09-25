@@ -104,6 +104,22 @@ func _process(delta: float) -> void:
 		_check_hits()
 
 
+## Gece ışığı (bkz. night_glow.gd, düşman büyüleri - soru-cevap seçimi): ışın boyunca. Uyarı evresinde kısık kırmızı
+## (gece de "buradan ışın gelecek" okunsun), ateş evresinde parlak mor-beyaz, sönerken ışık da söner.
+func get_glow_segment() -> Array:
+	return [global_position, global_position + _dir * _length]
+
+
+func get_night_glow_color() -> Color:
+	return Color(0.95, 0.6, 1.0) if _fired else Color(1.0, 0.25, 0.2)
+
+
+func get_night_glow_energy() -> float:
+	if not _fired:
+		return 0.35 * clampf(_t / maxf(_warn, 0.01), 0.0, 1.0)
+	return clampf((_fire - (_t - _warn)) / (_fire * 0.4), 0.0, 1.0)
+
+
 func _check_hits() -> void:
 	var a: Vector2 = global_position
 	var b: Vector2 = global_position + _dir * _length

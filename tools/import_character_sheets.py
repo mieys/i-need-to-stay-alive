@@ -41,6 +41,9 @@ CHARS = {
     "assasin": ("assasin", "assasin_frames.tres", "assasin_portrait.png"),
     "matthew": ("matthew", "matthew_frames.tres", "matthew_portrait.png"),
     "shaman": ("shaman", "shaman_frames.tres", "shaman_portrait.png"),
+    # 2026-09-25 ucuncu parti: Oakley (eski LPC oyku_atlas.png'den bu kite). Dosya adlari
+    # (oyku_*) eski Oyku adindan kalma - characters.gd bunlari kullandigi icin korunuyor.
+    "oakley": ("oakley", "oyku_frames.tres", "oyku_portrait.png"),
 }
 
 # (oyundaki sayfa adi, kaynak dosya adi adaylari, dongu, hiz fps)
@@ -139,12 +142,9 @@ def write_frames(key, frames_name, sheet_counts):
             for i in range(count):
                 idx = len(subs) + 1
                 subs.append(
-                    f'[sub_resource type="AtlasTexture" id="AtlasTexture_{idx}"]
-'
-                    f'atlas = ExtResource("{bat_ext}")
-'
-                    f"region = Rect2({i * 96}, {row * 112}, 96, 112)
-"
+                    f'[sub_resource type="AtlasTexture" id="AtlasTexture_{idx}"]\n'
+                    f'atlas = ExtResource("{bat_ext}")\n'
+                    f"region = Rect2({i * 96}, {row * 112}, 96, 112)\n"
                 )
                 refs.append(f'SubResource("AtlasTexture_{idx}")')
             add_anim(f"{prefix}_{d}", refs, loop, speed)

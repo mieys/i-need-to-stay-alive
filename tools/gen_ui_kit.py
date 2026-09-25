@@ -638,19 +638,19 @@ def build():
     """Yalnız HUD parçaları. Oyun içi PANEL/BUTON dokuları artık tools/gen_menu_kit.py build_game -> assets/ui/game
     (kullanıcı isteği 2026-09-24: oyun içi arayüzler menülerle aynı bej/ahşap kite geçti); plank/window_panel/inset_panel/
     card_panel/plaque_panel fonksiyonları yalnız ability_bar/HUD çizimlerinin ortak yardımcıları olarak duruyor."""
-    ability_bar_panel().save(out('panel_ability_bar.png'))
-    status_badge_panel().save(out('panel_status_badge.png'))
-    bar_frame('hp').save(out('hud_bar_frame_hp.png'))
-    bar_frame('shield').save(out('hud_bar_frame_shield.png'))
-    bar_under().save(out('hud_bar_under.png'))
-    bar_fill().save(out('hud_bar_fill.png'))
-    avatar_frame().save(out('hud_avatar_frame.png'))
-    avatar_bg().save(out('hud_avatar_bg.png'))
-    level_badge().save(out('hud_level_badge.png'))
-    slot_frame(39, 5, PAL_SLOT_WOOD).save(out('hud_skill_frame.png'))
-    slot_frame(47, 6, PAL_SLOT_SPIRIT).save(out('hud_skill_frame_spirit.png'))
-    slot_frame(24, 3, PAL_SLOT_WOOD).save(out('hud_skill_frame_small.png'))
-    minimap_ring().save(out('hud_minimap_ring.png'))
+    ability_bar_panel().save(out('panel_ability_bar.png'), deepen=True)
+    status_badge_panel().save(out('panel_status_badge.png'), deepen=True)
+    bar_frame('hp').save(out('hud_bar_frame_hp.png'), deepen=True)
+    bar_frame('shield').save(out('hud_bar_frame_shield.png'), deepen=True)
+    bar_under().save(out('hud_bar_under.png'), deepen=True)
+    bar_fill().save(out('hud_bar_fill.png'))  # dolgu çalışma anında can/kalkan rengine boyanır - oyun bilgisi, koyulaştırılmaz
+    avatar_frame().save(out('hud_avatar_frame.png'), deepen=True)
+    avatar_bg().save(out('hud_avatar_bg.png'), deepen=True)
+    level_badge().save(out('hud_level_badge.png'), deepen=True)
+    slot_frame(39, 5, PAL_SLOT_WOOD).save(out('hud_skill_frame.png'), deepen=True)
+    slot_frame(47, 6, PAL_SLOT_SPIRIT).save(out('hud_skill_frame_spirit.png'), deepen=True)
+    slot_frame(24, 3, PAL_SLOT_WOOD).save(out('hud_skill_frame_small.png'), deepen=True)
+    minimap_ring().save(out('hud_minimap_ring.png'), deepen=True)
     print('HUD kit written to', os.path.abspath(OUTDIR))
 
 

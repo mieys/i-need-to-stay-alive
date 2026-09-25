@@ -2,6 +2,7 @@ extends CharacterBody2D
 class_name RemotePlayer
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const WeaponTargetPriorityScript := preload("res://scripts/weapon_target_priority.gd")
 const OakleyLeafBarrierScene: PackedScene = preload("res://scenes/fx_oakley_leaf_barrier.tscn")
 
 ## Remote player puppet for multiplayer.
@@ -335,6 +336,8 @@ func _ready() -> void:
 	_target_position = global_position
 
 	if overhead_bar:
+		## Şapkalar örtülmesin (kullanıcı bildirimi 2026-09-25) - player.gd ile AYNI sabit (overhead_bar.gd CHARACTER_Y_OFFSET).
+		overhead_bar.set_offset(overhead_bar.CHARACTER_Y_OFFSET)
 		overhead_bar.set_health(health, max_health)
 		overhead_bar.set_shield(item_shield_hp, item_shield_max)
 
@@ -568,6 +571,8 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 			icon.scale = Vector2(0.99, 0.99) * REMOTE_WAND_SCALE_MULT
 		else:
 			icon.scale *= 0.9
+		## Kullanıcı isteği (2026-09-25): tüm silahlar %15 küçük - yerel weapon.gd ile AYNI çarpan (bkz. WeaponOrbitMath).
+		icon.scale *= WeaponOrbitMath.ICON_SIZE_MULT
 
 		# Apply tier-based texture if available
 		var tier: int = int(weapon_tiers.get(key, 1))
@@ -875,6 +880,11 @@ func update_vampir_bats_from_net(positions: PackedVector2Array) -> void:
 ## bayraklarına göre belirlenir. `origin` çağıran ikonun KENDİ konumu.
 func _get_target_for_weapon(i: int, origin: Vector2) -> Node2D:
 	var max_range: float = _weapon_attack_range[i] if i < _weapon_attack_range.size() else 0.0
+	## weapon.gd _get_target_enemy ile AYNI öncelik (menzilde boss / görev kopyası varsa daima o) - bkz.
+	## weapon_target_priority.gd. Buradaki diğer seçiciler gibi sis süzgeci yok (kozmetik nişan).
+	var priority: Node2D = WeaponTargetPriorityScript.nearest_priority_target(get_tree(), origin, max_range)
+	if priority != null:
+		return priority
 	if i < _weapon_target_highest_health.size() and _weapon_target_highest_health[i]:
 		return _get_highest_health_enemy_from(origin, max_range)
 	if i < _weapon_target_prefer_unfrozen.size() and _weapon_target_prefer_unfrozen[i]:
@@ -1111,7 +1121,8 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	## (revive_from_permadeath, is_dead tekrar false olur) sonrasında ikisi
 	## de otomatik geri açılsın.
 	if overhead_bar:
-		overhead_bar.visible = not is_dead
+		## 2026-09-25: düşmüşken (downed) de gizli - "can ve kalkan barı ölünce gizlensin" (diriltme sayacı onun yerinde).
+		overhead_bar.visible = not is_dead and not bool(extra.get("is_downed", false))
 	var col: CollisionShape2D = get_node_or_null("CollisionShape2D")
 	if col:
 		col.set_deferred("disabled", is_dead)
@@ -1144,10 +1155,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	## eklendiği için - bkz. update_weapon_visuals) doğru şekilde yayılsın.
 	if extra.has("modulate"):
 		modulate = Color(extra["modulate"])
-	elif is_downed:
-		## Yerde yatan (downed) müttefik griye boyanır ki diğer oyuncular
-		## kimin canlandırılmayı beklediğini görsel olarak ayırt edebilsin.
-		modulate = Color(0.5, 0.5, 0.55, 1.0)
+	## (Yerde yatan müttefiğin griye boyanması 2026-09-25'te kaldırıldı - "ölünce koyu görünüyor" - ölüm klibi yeterli.)
 	elif extra.get("is_invisible", false):
 		modulate = Color(1.0, 1.0, 1.0, 0.35)
 	else:
@@ -1242,6 +1250,8 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	## dict/fx_paladin_barrier_link.gd. shield_bubble_visible ile AYNI
 	## desen, sadece basit bir spawn/despawn child (hazır sahne node'u yok).
 	_refresh_barrier_link_visual(extra.get("barrier_link_active", false))
+	## Şovalye Adam E (Koruma Bariyeri) - kasterin kendi üstündeki emilim efekti (player.gd ile AYNI sahne).
+	_refresh_paladin_guard_visual(bool(extra.get("paladin_guard", false)) and not is_dead)
 	## Ruhani Yetenek "Kalkan Bağı" - BUG DÜZELTMESİ (derin multiplayer denetimi): bağın FX'i eskiden SADECE
 	## bağın kendi iki tarafının player.gd'sinde (_ensure_kalkan_bagi_link_fx) kuruluyordu - bağa dahil
 	## OLMAYAN üçüncü bir oyuncunun ekranında iki tarafın kuklaları arasında HİÇBİR ŞEY görünmüyordu (tam
@@ -1274,7 +1284,9 @@ func _play_death_animation() -> void:
 	## player.gd ölüm klibiyle AYNI öncelik: death_<yön> (yeni setler; yön kuklanın son klibinden okunur),
 	## yönsüz "death" (eski atlas karakterler), o da yoksa "hurt" (eski LPC).
 	var anim_name: String = CharAnim.pick(anim.sprite_frames, ["death_" + CharAnim.dir_of(String(anim.animation)), "death", "hurt"])
-	if anim_name != "":
+	## Yere düşen oyuncu artık ölüm klibiyle yatıyor (player.gd _go_down) - kalıcı ölüme geçişte aynı klip zaten son
+	## karesinde donmuşsa baştan başlatma.
+	if anim_name != "" and anim.animation != StringName(anim_name):
 		anim.play(anim_name)
 
 
@@ -1334,6 +1346,19 @@ func _remove_barrier_visual() -> void:
 ## spawn/despawn child - _ensure_barrier_visual gibi hazır bir .tscn yok,
 ## script doğrudan bir Node2D'ye atanıyor.
 var _barrier_link_fx: Node2D = null
+const FxSovalyeGuardScene: PackedScene = preload("res://scenes/fx_sovalye_guard.tscn")
+var _paladin_guard_fx: Node = null
+
+
+## bkz. player.gd _refresh_paladin_guard_visual - AYNI sahne yolu (CLAUDE.md "kaster görür, diğerleri görmez" sınıfı).
+func _refresh_paladin_guard_visual(active: bool) -> void:
+	if active:
+		if _paladin_guard_fx == null or not is_instance_valid(_paladin_guard_fx):
+			_paladin_guard_fx = FxSovalyeGuardScene.instantiate()
+			add_child(_paladin_guard_fx)
+	elif _paladin_guard_fx != null and is_instance_valid(_paladin_guard_fx):
+		_paladin_guard_fx.queue_free()
+		_paladin_guard_fx = null
 
 func _refresh_barrier_link_visual(active: bool) -> void:
 	if active:
@@ -1672,6 +1697,7 @@ func _process_remote_weapon_fall(i: int, delta: float) -> void:
 	var xy_t: float = WeaponDeathDropMath.ease_out_cubic(_weapon_drop_elapsed[i] / WeaponDeathDropMath.XY_DURATION)
 	var xy_pos: Vector2 = _weapon_drop_start_pos[i].lerp(_weapon_drop_ground_pos[i], xy_t)
 	icon.position = xy_pos + Vector2(0.0, -_weapon_drop_height[i])
+	_set_remote_weapon_death_alpha(i, WeaponDeathDropMath.fall_alpha(_weapon_drop_elapsed[i]))
 	icon.rotation += _weapon_drop_spin_speed[i] * delta
 	if bounce["settled"] and xy_t >= 1.0:
 		_weapon_falling[i] = false
@@ -1683,7 +1709,9 @@ func _process_remote_weapon_fall(i: int, delta: float) -> void:
 func _process_remote_weapon_rise(i: int, delta: float) -> void:
 	var icon: Node2D = _weapon_icons[i]
 	_weapon_rise_elapsed[i] += delta
-	var t: float = WeaponDeathDropMath.ease_out_cubic(_weapon_rise_elapsed[i] / WeaponDeathDropMath.XY_DURATION)
+	## bkz. weapon.gd _process_weapon_rise_physics - AYNI ease-in-out eğrisi ve opaklık dönüşü.
+	var t: float = WeaponDeathDropMath.ease_in_out_cubic(_weapon_rise_elapsed[i] / WeaponDeathDropMath.RISE_DURATION)
+	_set_remote_weapon_death_alpha(i, lerpf(WeaponDeathDropMath.GROUND_ALPHA, 1.0, t))
 	var rest_pos: Vector2 = WEAPON_ICON_SLOTS[min(i, WEAPON_ICON_SLOTS.size() - 1)]
 	icon.position = _weapon_rise_start_pos[i].lerp(rest_pos, t)
 	## Rotasyon: menzilli silahlarda _update_local_weapon_aim (is_dead kalkınca
@@ -1696,6 +1724,15 @@ func _process_remote_weapon_rise(i: int, delta: float) -> void:
 	if t >= 1.0:
 		_weapon_rising[i] = false
 		_weapon_drop_height[i] = 0.0
+		_set_remote_weapon_death_alpha(i, 1.0)
+
+
+## bkz. weapon.gd _set_death_alpha - self_modulate (Vampir yarasa formunun modulate'ıyla çarpılarak birleşir).
+func _set_remote_weapon_death_alpha(i: int, a: float) -> void:
+	if is_instance_valid(_weapon_icons[i]):
+		_weapon_icons[i].self_modulate.a = a
+	if i < _weapon_shadows.size() and is_instance_valid(_weapon_shadows[i]):
+		_weapon_shadows[i].self_modulate.a = a
 
 
 ## bkz. weapon.gd _update_icon_shadow'daki AYNI kök neden notu - gölge
@@ -1902,17 +1939,16 @@ func _animate_weapon_fire(slot_index: int, fire_direction: Vector2, is_melee: bo
 	})
 
 
+## Kullanıcı isteği (2026-09-25): "başka oyuncuların hasar/iyileştirme sayısını görmemeliyiz" - kukla heal()/
+## heal_shield() artık SAYI GÖSTERMEZ (ör. host'ta bir arkadaşın yediği yemek). Sayı SADECE destek veren kişinin
+## ekranında, onun açıkça çağırdığı show_support_number() ile çıkar (bkz. player.gd _apply_heal_to_ally); hedef
+## kendi ekranında kendi Player'ında görür (network_manager.gd sync_ally_heal/sync_ally_shield_heal).
 func heal(amount: float) -> void:
 	if is_dead or amount <= 0.0:
 		return
 	health = min(max_health, health + amount)
 	if overhead_bar:
 		overhead_bar.set_health(health, max_health)
-	_heal_display_accum += amount
-	if _heal_display_accum >= 1.0:
-		var shown: int = int(_heal_display_accum)
-		_heal_display_accum -= shown
-		_spawn_floating_text("%d" % shown, Color(0.4, 0.9, 0.45), true)
 
 
 func heal_shield(amount: float) -> void:
@@ -1921,15 +1957,40 @@ func heal_shield(amount: float) -> void:
 	item_shield_hp = min(item_shield_max, item_shield_hp + amount)
 	if overhead_bar:
 		overhead_bar.set_shield(item_shield_hp, item_shield_max)
-	_spawn_floating_text("%d" % int(round(amount)), Color(0.4, 0.7, 1.0), true)
 
 
-func _spawn_floating_text(text: String, color: Color, is_heal: bool = false) -> void:
+## BU istemcinin oyuncusu bu arkadaşa can (yeşil) / kalkan (mavi) bastığında onun üstünde miktarı gösterir.
+## Canı/kalkanı zaten doluysa gösterilmez; 1'in altındaki tikler birikip tam sayıya ulaşınca yazılır.
+var _shield_display_accum: float = 0.0
+
+func show_support_number(amount: float, is_shield: bool) -> void:
+	if is_dead or amount <= 0.0:
+		return
+	if is_shield:
+		if item_shield_max <= 0.0 or item_shield_hp >= item_shield_max:
+			return
+		_shield_display_accum += amount
+		if _shield_display_accum >= 1.0:
+			var shown_shield: int = int(_shield_display_accum)
+			_shield_display_accum -= shown_shield
+			## Aynı anda basılan can sayısıyla üst üste binmesin diye biraz yukarıda.
+			_spawn_floating_text("%d" % shown_shield, Color(0.4, 0.7, 1.0), true, -61.0)
+		return
+	if health >= max_health:
+		return
+	_heal_display_accum += amount
+	if _heal_display_accum >= 1.0:
+		var shown: int = int(_heal_display_accum)
+		_heal_display_accum -= shown
+		_spawn_floating_text("%d" % shown, Color(0.4, 0.9, 0.45), true)
+
+
+func _spawn_floating_text(text: String, color: Color, is_heal: bool = false, y_offset: float = -45.0) -> void:
 	var scene: PackedScene = load("res://scenes/floating_text.tscn")
 	if scene:
 		var ft = scene.instantiate()
 		get_tree().current_scene.add_child(ft)
-		ft.global_position = global_position + Vector2(randf_range(-15, 15), -45)
+		ft.global_position = global_position + Vector2(randf_range(-15, 15), y_offset)
 		if ft.has_method("setup"):
 			ft.setup(text, color, is_heal)
 

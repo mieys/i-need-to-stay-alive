@@ -30,7 +30,8 @@ func test_stat_traits_and_rage() -> void:
 	assert(is_equal_approx(z["health"], 1.3) and not z.has("shield"), "zombide sadece can artar")
 	assert(is_equal_approx(EnemyScript.ORK_RAGE_HP_THRESHOLD, 0.5))
 	## normal öfke +%100 (x2), ork öfkesi bunun 1.5 katı artış: +%150 (x2.5)
-	assert(is_equal_approx(EnemyScript.ORK_RAGE_SPEED_MULT, 2.5), "ork öfke hızı: %s" % EnemyScript.ORK_RAGE_SPEED_MULT)
+	## 2026-09-25: öfke hızı kesintisi (x0.9/1.1) ork öfkesine de uygulanır.
+	assert(is_equal_approx(EnemyScript.ORK_RAGE_SPEED_MULT, 2.5 * 0.9 / 1.1), "ork öfke hızı: %s" % EnemyScript.ORK_RAGE_SPEED_MULT)
 
 
 func test_timings_match_request() -> void:

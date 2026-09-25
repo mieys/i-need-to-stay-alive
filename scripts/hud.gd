@@ -316,12 +316,28 @@ func _ready() -> void:
 		shield_mode_bar.visible = false
 
 	_create_chat_ui()
+	_register_ui_opacity()
 
 	## NOT: Eskiden dükkan açılınca DÜKKAN/ENVANTER butonları gizleniyordu -
 	## kullanıcı artık bunu istemiyor (bkz. kullanıcı bildirimi: "dükkana
 	## basınca dükkan/envanter butonu kapanmasın"), bu yüzden bu davranış
 	## kaldırıldı; butonlar panel açıkken de görünür kalır (bkz. aşağıdaki
 	## artık kullanılmayan _update_toggle_buttons_visibility notu).
+
+
+## Kullanıcı isteği (2026-09-25): "arayüzler için ayarlara opaklık ayarı getir" (bkz. UISound.ui_opacity_percent) - HUD'un
+## KALICI parçaları bu opaklıkla çizilir. Dükkan/envanter panelleri ve sohbet YAZMA kutusu bilerek hariç (açıkken okunmalı).
+const UI_OPACITY_NODES: Array[String] = ["BottomBar", "CharacterCluster", "SkillBar", "GoldIndicator", "MinimapControl",
+	"ReviveHearts", "XPBar", "ShopToggleButton", "EnvanterToggleButton", "FpsLabel", "PartyPanelLayer/PartyPanel"]
+
+
+func _register_ui_opacity() -> void:
+	for path: String in UI_OPACITY_NODES:
+		var n: Node = get_node_or_null(path)
+		if n:
+			UISound.register_ui_opacity(n)
+	if _chat_scroll:
+		UISound.register_ui_opacity(_chat_scroll)
 
 
 func _layout_shop_inventory_buttons() -> void:

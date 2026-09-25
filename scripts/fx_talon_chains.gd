@@ -102,6 +102,14 @@ func _life() -> float:
 	return TalonMath.SALVO_DURATION + RETRACT_TIME
 
 
+## Gece ışığı (bkz. night_glow.gd): kök (0,0)'da (top_level, dünya koordinatıyla çiziyor) - kızgın zincirlerin sıcak
+## ışığı Talon'un üstünde.
+func get_glow_segment() -> Array:
+	if _host == null or not is_instance_valid(_host):
+		return []
+	return [_host.global_position, _host.global_position]
+
+
 func _weapon_points() -> Array:
 	var pts: Array = []
 	if _host == null or not is_instance_valid(_host):

@@ -45,6 +45,7 @@ var chain_damage_percent: float = 0.5
 ## yarıçap içindeki düşmanlar aday sayılıyor.
 ## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
 const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
+const WeaponTargetPriorityScript := preload("res://scripts/weapon_target_priority.gd")
 const TuftufTargetingScript: GDScript = preload("res://scripts/tuftuf_targeting.gd")
 
 const CHAIN_JUMP_RANGE := 220.0
@@ -119,7 +120,7 @@ var burn_on_hit_tick_damage: float = 0.0
 
 ## Kullanıcı isteği: "Tüftüfün hasarını gerçek hasara çevir" - bu silahın
 ## hasarı artık kalkanı TAMAMEN yok sayar (bkz. _fire_at() içindeki
-## shield_pen = 1.0 ataması, Elara'nın _true_damage_charges'ıyla AYNI
+## shield_pen = 1.0 ataması, Elara'nın Gerçek Hasar'ıyla (elara_true_damage_active) AYNI
 ## mekanizma - sadece Elara'daki gibi geçici bir hak DEĞİL, Tüftüf'te
 ## KALICI/her zaman açık). Diğer tüm silahlerde false, davranış değişmez.
 @export var always_true_damage: bool = false
@@ -159,26 +160,25 @@ var _reload_timer: float = 0.0
 ## sadece yüzdesel (Uzunkılıç'ın zaten kullandığı) stat kaldı.
 var weapon_shield_pen_bonus: float = 0.0
 
-## Elara TEMEL (E): "sonraki 6 saldırı" hakkı - kullanıcı isteğiyle SİLAH
-## BAŞINA tutuluyor (toplamda değil), o yüzden sayaç oyuncuda değil BURADA,
-## her silahın kendisinde. player.gd _skill_elara_true_damage() aktivasyonda
-## sahip olunan her silaha add_true_damage_charges() ile 6 hak dağıtır; her
-## _fire_at() bir hakkı tüketir (varsa) ve o atışı %50 fazla hasarla,
-## kalkanı tamamen yok sayarak (gerçek hasar) işler. Diğer tüm karakterlerde
-## hep 0 - no-op.
-var _true_damage_charges: int = 0
-const TRUE_DAMAGE_BONUS_MULT := 1.5 ## +%50
-## Kullanıcı isteği (2026-09-24): "Elaranın E yeteneği aktifkenki yapacağı 6 saldırı buffu aynı zamanda %100 saldırı
-## hızı versin" - silahın hakları sürdüğü sürece atış aralığı bu çarpanla kısalır (0.5 = 2 kat hız = +%100).
+## Elara TEMEL (E) "Gerçek Hasar". Kullanıcı isteği (2026-09-25): "6 saldırı yerine 6 saniye sürsün", "bonus hasarını
+## kaldır, saldırı hızını %30 TOPLAM saldırı hızı olarak güncelle (mevcut saldırı hızını güncel haliyle %30 arttıracak),
+## bekleme süresi 25 sn". Eskiden silah başına 6 hak sayacı (+%50 hasar, x2 saldırı hızı) vardı - kaldırıldı. Artık
+## oyuncudaki elara_true_damage_active bayrağı (elara_double_fire_active ile AYNI desen, süreyi player.gd'nin skill2
+## makinesi yönetir): açıkken her atış kalkanı TAMAMEN yok sayar (gerçek hasar - kalan tek hasar etkisi) ve o anki
+## TOPLAM atış hızı (kartlar/eşyalar/pasif/diğer yetenekler dahil, _effective_fire_wait'in geri kalanı) %30 artar.
 ## fire_rate_multiplier'a YAZILMIYOR (o alanı Matthew/Talon yetenekleri de kullanıyor, bitişte 1.0'a sıfırlıyorlar).
-const TRUE_DAMAGE_FIRE_RATE_MULT := 0.5
+const TRUE_DAMAGE_ATTACK_SPEED_BONUS := 0.30
+
+
+func _elara_true_damage_active() -> bool:
+	return _player_flag("elara_true_damage_active")
 
 
 ## Tüm atış aralığı hesaplarının (FireTimer, yay çekilişi, şimşek ışını tiki) TEK kaynağı.
 func _effective_fire_wait() -> float:
 	var wait: float = fire_rate * fire_rate_multiplier
-	if _true_damage_charges > 0:
-		wait *= TRUE_DAMAGE_FIRE_RATE_MULT
+	if _elara_true_damage_active():
+		wait /= 1.0 + TRUE_DAMAGE_ATTACK_SPEED_BONUS ## saldırı hızı x1.3 = aralık /1.3
 	return wait
 ## Elara ULTİ (R): 25sn boyunca her atış bu oranda hasar verir (%60) - "2 kez
 ## tetiklenir" kısmı _on_fire_timer_timeout/_process'teki draw-ready dalında
@@ -213,18 +213,6 @@ func _fire_at_delayed(target: Node2D, delay: float) -> void:
 	if not is_instance_valid(target) or target.get("is_dead") == true:
 		return
 	_fire_at(target)
-
-
-func add_true_damage_charges(count: int) -> void:
-	_true_damage_charges = count
-
-
-func true_damage_charges_remaining() -> int:
-	return _true_damage_charges
-
-
-func clear_true_damage_charges() -> void:
-	_true_damage_charges = 0
 
 
 ## _player_stat()/_player_stat_default() sayısal (float) dönüyor - bool bir
@@ -697,7 +685,9 @@ func _ready() -> void:
 		else:
 			# Diğer silahların boyutunu %10 küçült (çarpımsal)
 			icon_sprite.scale *= 0.9
-			
+		## Kullanıcı isteği (2026-09-25): tüm silahlar %15 küçük - uzak kuklada AYNI çarpan (bkz. WeaponOrbitMath).
+		icon_sprite.scale *= WeaponOrbitMath.ICON_SIZE_MULT
+
 		top_level = true
 		_target_local_offset = hover_offset + _fan_offset()
 		var parent = get_parent()
@@ -1120,6 +1110,7 @@ func _process_weapon_fall_physics(delta: float) -> void:
 		ground_target = p2d.global_position + _drop_ground_local_offset * p2d.scale
 	var xy_pos: Vector2 = _drop_start_pos.lerp(ground_target, xy_t)
 	global_position = xy_pos + Vector2(0.0, -_drop_height) ## height yukarı = ekranda Y azalır
+	_set_death_alpha(WeaponDeathDropMath.fall_alpha(_drop_elapsed))
 	if icon_sprite:
 		icon_sprite.rotation += _drop_spin_speed * delta
 	if bounce["settled"] and xy_t >= 1.0:
@@ -1138,7 +1129,9 @@ func _process_weapon_fall_physics(delta: float) -> void:
 ## hissini yok ederdi - bu yüzden dönüş de kendi ayrı geçişiyle yapılıyor.
 func _process_weapon_rise_physics(delta: float) -> void:
 	_rise_elapsed += delta
-	var t: float = WeaponDeathDropMath.ease_out_cubic(_rise_elapsed / WeaponDeathDropMath.XY_DURATION)
+	## 2026-09-25: "dirilince ease ease halinde geri dönsün" - ease-in-out, biraz daha uzun (bkz. WeaponDeathDropMath).
+	var t: float = WeaponDeathDropMath.ease_in_out_cubic(_rise_elapsed / WeaponDeathDropMath.RISE_DURATION)
+	_set_death_alpha(lerpf(WeaponDeathDropMath.GROUND_ALPHA, 1.0, t))
 	var parent_node: Node = get_parent()
 	var target_global: Vector2 = _rise_start_pos
 	if parent_node is Node2D:
@@ -1158,6 +1151,16 @@ func _process_weapon_rise_physics(delta: float) -> void:
 		_rising = false
 		_floaty_global_pos = global_position
 		_drop_height = 0.0
+		_set_death_alpha(1.0)
+
+
+## Ölüm düşüşü opaklığı (bkz. WeaponDeathDropMath.GROUND_ALPHA) - ikon + gölge, self_modulate ile (başka sistemlerin
+## modulate'ına dokunmadan).
+func _set_death_alpha(a: float) -> void:
+	if icon_sprite:
+		icon_sprite.self_modulate.a = a
+	if shadow_sprite:
+		shadow_sprite.self_modulate.a = a
 
 func _update_hover_follow(delta: float) -> void:
 	if not icon_sprite:
@@ -1763,6 +1766,14 @@ func _make_facing_direction_target() -> Node2D:
 ## Hangi hedefleme moduna göre saldırılacağını seçer - Tüftüf hariç herkes
 ## en yakın düşmanı hedeflemeye devam eder (eski davranış).
 func _get_target_enemy() -> Node2D:
+	## Menzilde boss / görev kopyası varsa silah DAİMA onlara odaklanır (kullanıcı isteği 2026-09-25) - kural TEK yerde:
+	## weapon_target_priority.gd (uzak kuklanın nişanı da aynısını çağırır).
+	var priority: Node2D = WeaponTargetPriorityScript.nearest_priority_target(get_tree(), _attack_origin(), attack_range,
+			func(e: Node) -> bool: return VisionFogScript.can_target(e))
+	if priority != null:
+		if target_prefer_unfrozen:
+			_claimed_frost_target = priority
+		return priority
 	if target_highest_health:
 		return _get_highest_health_enemy()
 	if target_prefer_unfrozen:
@@ -2039,10 +2050,8 @@ func _deal_beam_tick(target: Node2D) -> void:
 	## Elara TEMEL/ULTİ - bkz. _fire_at()'teki birebir aynı blok. Sürekli ışın
 	## (Şimşek Asası) nadiren de olsa Elara'ya verilirse tikleri de aynı
 	## kurala uysun diye burada da tekrarlanıyor.
-	if _true_damage_charges > 0:
-		final_damage *= TRUE_DAMAGE_BONUS_MULT
+	if _elara_true_damage_active():
 		shield_pen = 1.0
-		_true_damage_charges -= 1
 	if _player_flag("elara_double_fire_active"):
 		final_damage *= ELARA_DOUBLE_FIRE_DAMAGE_MULT
 	## Eldiven/Sigara: item_flat_hit_damage (düz +hasar) ve
@@ -2240,17 +2249,13 @@ func _fire_at(target: Node2D) -> void:
 	if always_true_damage:
 		shield_pen = 1.0
 
-	## Elara TEMEL (E): bu silahta hak varsa bu atış %50 fazla hasar verir VE
-	## kalkanı tamamen yok sayar (gerçek hasar) - hak diğer tüm karakterlerde/
-	## silahlerde her zaman 0 (no-op). Elara ULTİ (R) aktifken (bkz. player.gd
-	## elara_double_fire_active) her atış sadece %60 hasar verir - "2 kez
-	## tetiklenir" kısmı bu fonksiyonun İKİ KEZ çağrılmasıyla dışarıda
-	## sağlanıyor (bkz. _on_fire_timer_timeout, _process draw-ready dalı),
+	## Elara TEMEL (E) açıkken bu atış kalkanı tamamen yok sayar (gerçek hasar; bonus hasar 2026-09-25'te kaldırıldı,
+	## bkz. TRUE_DAMAGE_ATTACK_SPEED_BONUS notu) - diğer tüm karakterlerde bayrak yok (no-op). Elara ULTİ (R) aktifken
+	## (bkz. player.gd elara_double_fire_active) her atış sadece %60 hasar verir - "2 kez tetiklenir" kısmı bu
+	## fonksiyonun İKİ KEZ çağrılmasıyla dışarıda sağlanıyor (bkz. _on_fire_timer_timeout, _process draw-ready dalı),
 	## burada sadece oran düşüyor.
-	if _true_damage_charges > 0:
-		final_damage *= TRUE_DAMAGE_BONUS_MULT
+	if _elara_true_damage_active():
 		shield_pen = 1.0
-		_true_damage_charges -= 1
 	if _player_flag("elara_double_fire_active"):
 		final_damage *= ELARA_DOUBLE_FIRE_DAMAGE_MULT
 

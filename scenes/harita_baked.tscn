@@ -24,8 +24,6 @@
 [ext_resource type="Shader" uid="uid://bhjq06gfk3kt6" path="res://scenes/mini çim renk.gdshader" id="22_2pe0c"]
 [ext_resource type="Shader" uid="uid://c7rr6a1q87484" path="res://scenes/su.gdshader" id="23_6ypx7"]
 [ext_resource type="Shader" uid="uid://clix6nhj12na3" path="res://scenes/sallantı.gdshader" id="24_fga8b"]
-[ext_resource type="Shader" uid="uid://c3psht2bsqkyn" path="res://scenes/rüzgar efekti.gdshader" id="25_0fkpn"]
-[ext_resource type="Script" uid="uid://8wi2gq3wklux" path="res://scenes/kamera takip.gd" id="26_05fja"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_o6xl0"]
 shader = ExtResource("1_05eux")
@@ -5365,19 +5363,6 @@ shader_parameter/shadow_opacity = 0.0800000038
 shader_parameter/shadow_rotation = 0.0
 shader_parameter/shadow_blur = 0.0
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_o6nt6"]
-shader = ExtResource("25_0fkpn")
-shader_parameter/camera_pos = Vector2(0, 0)
-shader_parameter/camera_scale = Vector2(1, 1)
-shader_parameter/wind_color = Color(1, 1, 1, 0.15)
-shader_parameter/pixel_size = 1.1950000092625
-shader_parameter/world_scale = 0.0310000014725
-shader_parameter/line_thickness = 0.5
-shader_parameter/wind_length = 2.3200000627
-shader_parameter/speed = 16.49300078015762
-shader_parameter/wind_angle = 6.868002463730001
-shader_parameter/density_threshold = 0.84900003706762
-
 [node name="Harita" type="Node2D" unique_id=222238299]
 
 [node name="Yer" type="Node2D" parent="." unique_id=709601894]
@@ -5520,15 +5505,3 @@ tile_set = SubResource("TileSet_xemjr")
 texture_filter = 1
 tile_map_data = PackedByteArray("AADeACAAEwARAAgAAADfACAAEwASAAgAAADgACAAEwATAAgAAADhACAAEwAUAAgAAADiACAAEwATAAgAAADjACAAEwAUAAgAAADkACAAEwAVAAgAAADlACAAEwATAAgAAADmACAAEwAUAAgAAADnACAAEwAVAAgAAADoACAAEwAWAAgAAADpACAAEwAWAAgAAADqACAAEwAXAAgAAADrACAAEwAYAAgAAAA=")
 tile_set = SubResource("TileSet_xemjr")
-
-[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1079156036]
-
-[node name="ColorRect" type="ColorRect" parent="CanvasLayer" unique_id=1671485687]
-material = SubResource("ShaderMaterial_o6nt6")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-script = ExtResource("26_05fja")

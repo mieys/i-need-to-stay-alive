@@ -638,7 +638,8 @@ func test_downed_pose_and_remote_death_direction() -> void:
 	_ready_player(player)
 	player.facing = "right"
 	player._go_down()
-	assert(str(player.anim.animation) == "downed_right", "yere düşünce downed_<yön>: %s" % str(player.anim.animation))
+	## 2026-09-25 kullanıcı isteği: "karakterler öldüğünde death animasyonunu kullansın downed yerine".
+	assert(str(player.anim.animation) == "death_right", "yere düşünce death_<yön>: %s" % str(player.anim.animation))
 	if get_tree().current_scene == null:
 		get_tree().current_scene = self
 	var rp: Node = RemotePlayerScene.instantiate()

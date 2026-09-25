@@ -43,6 +43,14 @@ var resolution_index: int = DEFAULT_RESOLUTION_INDEX
 ## kapatılabilsin" - is_fullscreen/resolution_index ile AYNI "display" bölümü/
 ## ConfigFile'ı paylaşıyor, ayrı bir dosya/autoload YOK.
 var show_fps: bool = false
+## Kullanıcı isteği (2026-09-25): "arayüzler için ayarlara opaklık ayarı getir". Oyun içi KALICI arayüz parçaları
+## (can/kalkan kümesi, yetenek çubuğu, XP çubuğu, minimap, altın, grup paneli, sohbet, görev penceresi...) bu opaklıkla
+## çizilir - kendilerini UI_OPACITY_GROUP'a register_ui_opacity() ile kaydederler (bkz. hud.gd, main.gd). Açılır/modal
+## pencereler (dükkan, envanter, level kartları, duraklatma) kaydedilmez: onlar her zaman tam opak (okunabilir) kalır.
+## show_fps ile AYNI "display" ConfigFile bölümü. %25'in altına inmez (arayüz tamamen kaybolmasın).
+const UI_OPACITY_GROUP := &"ui_opacity"
+const UI_OPACITY_MIN_PERCENT := 25.0
+var ui_opacity_percent: float = 100.0
 
 
 func _ready() -> void:
@@ -160,6 +168,32 @@ func set_show_fps(enabled: bool) -> void:
 	_save_display_settings()
 
 
+## bkz. ui_opacity_percent notu.
+func set_ui_opacity_percent(percent: float) -> void:
+	ui_opacity_percent = clampf(percent, UI_OPACITY_MIN_PERCENT, 100.0)
+	_save_display_settings()
+	if is_inside_tree():
+		for n: Node in get_tree().get_nodes_in_group(UI_OPACITY_GROUP):
+			_apply_ui_opacity(n)
+
+
+## Kalıcı bir arayüz parçasını opaklık ayarına bağlar (hemen uygular; ayar değişince de güncellenir).
+func register_ui_opacity(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	node.add_to_group(UI_OPACITY_GROUP)
+	_apply_ui_opacity(node)
+
+
+func _apply_ui_opacity(node: Node) -> void:
+	var ci := node as CanvasItem
+	if ci == null:
+		return
+	var c: Color = ci.modulate
+	c.a = ui_opacity_percent / 100.0
+	ci.modulate = c
+
+
 func get_resolution_labels() -> Array[String]:
 	var labels: Array[String] = []
 	for r in RESOLUTIONS:
@@ -179,6 +213,7 @@ func _save_display_settings() -> void:
 	config.set_value("display", "is_fullscreen", is_fullscreen)
 	config.set_value("display", "resolution_index", resolution_index)
 	config.set_value("display", "show_fps", show_fps)
+	config.set_value("display", "ui_opacity_percent", ui_opacity_percent)
 	config.save(DISPLAY_SETTINGS_PATH)
 
 
@@ -188,6 +223,7 @@ func _load_display_settings() -> void:
 		is_fullscreen = bool(config.get_value("display", "is_fullscreen", true))
 		resolution_index = clamp(int(config.get_value("display", "resolution_index", DEFAULT_RESOLUTION_INDEX)), 0, RESOLUTIONS.size() - 1)
 		show_fps = bool(config.get_value("display", "show_fps", false))
+		ui_opacity_percent = clampf(float(config.get_value("display", "ui_opacity_percent", 100.0)), UI_OPACITY_MIN_PERCENT, 100.0)
 	if is_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:

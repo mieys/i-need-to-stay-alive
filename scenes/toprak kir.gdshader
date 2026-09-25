@@ -1,238 +1,151 @@
 shader_type canvas_item;
 
 // ==================================================
-// MEVCUT AYARLAR
+// ZEMİN TOPRAK - cozy piksel toprak (Harita > Yer > "Zemin Toprak")
 // ==================================================
+// Kullanıcı isteği (2026-09-25): "zemin toprak tilelayerında shader var ancak toprak pek güzel durmuyor pixel tarzında daha
+// cozy ve göz yormayan bir toprak texture'ına sahip olacağı bir shadera ihtiyacı var" - prototiplerden "C - Canlı" seçildi
+// (sade lekeler + seyrek çakıllar + çok seyrek filiz/çöp).
+//
+// Eski shader'ın asıl sorunu: deseni ATLAS UV'sinden (UV / TEXTURE_PIXEL_SIZE) hesaplıyordu. Harita tek bir düz toprak
+// karosuyla (Ground_grass.png 1,4) döşeli olduğu için her 16x16 karo atlasın AYNI bölgesini örnekliyor -> aynı benek deseni
+// her 16 px'te birebir tekrar ediyor, karo sınırlarında kopuyordu (göz yoran ızgara hissi). Ayrıca hash'i (x*127.1) tam sayı
+// girdilerde 10'luk periyotla tekrar ediyordu.
+//
+// Yeni tasarım:
+//  - Desen DÜNYA koordinatından (1 dünya pikseli = 1 texel, karolar arası kesintisiz; kamera 2x'te her texel 2x2 ekran pikseli).
+//  - Birkaç tonlu sınırlı palet: yumuşak, düşük kontrastlı koyu/açık lekeler (domain-warp'lı gürültü), leke kenarlarında
+//    yalnız 2-4 px'lik ince 4x4 Bayer dither (piksel-sanat geçişi, bulanık gradyan yok).
+//  - Seyrek 3-4 px'lik minik topaklar + seyrek küçük çakıllar (1 px ışık sol-üst, 1 px gölge alt) + çok seyrek 3 px'lik
+//    yeşil filizler ve 4 px'lik dal/çöp parçaları.
+//  - Tonlar karonun kendi rengine GÖRE uygulanır (çarpan): düz karoda paletin aynısı, kenar karolarındaki ayrıntı korunur.
+// Yeni parametre adları eski shader'ınkilerle BİLEREK çakışmıyor: sahnede (harita_baked.tscn) eski adlarla kayıtlı değerler
+// (soil_opacity 0.606 vb.) yeni varsayılanları ezmesin. O eski kayıtlar artık kullanılmıyor, zararsız.
 
-uniform float detail_strength : hint_range(0.0, 1.0) = 0.16;
-uniform float speckle_amount : hint_range(0.0, 1.0) = 0.10;
-uniform float pixel_size : hint_range(1.0, 8.0) = 2.0;
+// ---------------- RENKLER (karonun kendi rengi = taban; diğerleri ona göre oran olarak uygulanır)
+uniform vec4 zemin_taban : source_color = vec4(0.588, 0.494, 0.365, 1.0);      // #967e5d - toprak karosunun rengi
+uniform vec4 zemin_koyu : source_color = vec4(0.549, 0.451, 0.333, 1.0);       // #8c7355 - nemli/koyu lekeler
+uniform vec4 zemin_daha_koyu : source_color = vec4(0.514, 0.412, 0.298, 1.0);  // #83694c - koyu lekelerin iç kısmı
+uniform vec4 zemin_acik : source_color = vec4(0.624, 0.525, 0.392, 1.0);       // #9f8664 - kuru/açık lekeler
 
-uniform float large_variation : hint_range(0.0, 1.0) = 0.18;
-uniform float patch_amount : hint_range(0.0, 1.0) = 0.20;
+// ---------------- LEKELER
+uniform float leke_olcegi : hint_range(0.003, 0.03) = 0.0095;      // küçük = daha büyük lekeler
+uniform float koyu_esik : hint_range(0.3, 0.9) = 0.58;             // büyük = daha az koyu leke
+uniform float daha_koyu_esik : hint_range(0.3, 0.95) = 0.68;
+uniform float acik_esik : hint_range(0.1, 0.7) = 0.40;             // küçük = daha az açık leke
+uniform float kenar_yumusakligi : hint_range(0.0, 0.08) = 0.012;   // leke kenarındaki dither bandı
+uniform float kivrim : hint_range(0.0, 80.0) = 36.0;               // lekelerin kıvrımlılığı (domain warp)
 
-// YENİ: Shader efektinin kendi opaklığı (Orijinal doku ile efekt arası geçiş)
-uniform float soil_opacity : hint_range(0.0, 1.0) = 1.0;
+// ---------------- MİNİK TOPAKLAR + ÇAKILLAR
+uniform float topak_miktari : hint_range(0.0, 1.0) = 1.0;
+uniform float cakil_yogunlugu : hint_range(0.0, 0.6) = 0.12;       // 11x11 px hücre başına çakıl olasılığı
+uniform vec4 cakil_rengi : source_color = vec4(0.663, 0.576, 0.478, 1.0);   // #a9937a
+uniform vec4 cakil_isik : source_color = vec4(0.733, 0.651, 0.549, 1.0);    // #bba68c
+uniform vec4 cakil_golge : source_color = vec4(0.463, 0.376, 0.290, 1.0);   // #76604a
 
-// ==================================================
-// KURU TOPRAK GENEL RASTGELELİĞİ
-// ==================================================
+// ---------------- FİLİZ + ÇÖP ("C - Canlı": toprak cansız durmasın diye çok seyrek)
+uniform float filiz_yogunlugu : hint_range(0.0, 0.6) = 0.18;       // 29x29 px hücre başına küçük yeşil filiz olasılığı
+uniform float cop_yogunlugu : hint_range(0.0, 0.6) = 0.10;         // 29x29 px hücre başına küçük dal/çöp parçası olasılığı
+uniform vec4 filiz_acik : source_color = vec4(0.612, 0.773, 0.416, 1.0);    // #9cc56a - filizin ucu
+uniform vec4 filiz_koyu : source_color = vec4(0.435, 0.604, 0.282, 1.0);    // #6f9a48
+uniform vec4 cop_rengi : source_color = vec4(0.416, 0.322, 0.220, 1.0);     // #6a5238
 
-uniform float dry_amount : hint_range(0.0, 1.0) = 0.28;
-uniform float dry_strength : hint_range(0.0, 1.0) = 0.28;
+// ---------------- GENEL
+uniform float efekt_gucu : hint_range(0.0, 1.0) = 1.0;             // 0 = karonun düz rengi, 1 = tam efekt
 
-// Lekenin genel büyüklüğü
-uniform float dry_scale : hint_range(0.01, 0.15) = 0.045;
+varying vec2 world_pos;
 
-// Ovalite
-uniform float dry_ovalness : hint_range(0.2, 2.0) = 1.15;
-
-// Kenarın yumuşaklığı (Aktif)
-uniform float dry_softness : hint_range(0.01, 0.5) = 0.12;
-
-// ==================================================
-// RENKLER
-// ==================================================
-
-uniform vec4 dark_soil : source_color = vec4(0.38, 0.31, 0.22, 1.0);
-uniform vec4 light_soil : source_color = vec4(0.55, 0.46, 0.34, 1.0);
-// Aktif
-uniform vec4 dry_soil : source_color = vec4(0.59, 0.49, 0.35, 1.0);
-
-// ==================================================
-// RANDOM
-// ==================================================
-
-float hash21(vec2 p)
-{
-	p = fract(p * vec2(127.1, 311.7));
-	p += dot(p, p + 74.7);
-	return fract(p.x * p.y);
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
 }
 
-// ==================================================
-// NOISE
-// ==================================================
+// Dave Hoskins hash12 - tam sayı girdilerde periyot/desen üretmez.
+float hash12(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
 
-float noise(vec2 p)
-{
+float vnoise(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
-
-	float a = hash21(i);
-	float b = hash21(i + vec2(1.0, 0.0));
-	float c = hash21(i + vec2(0.0, 1.0));
-	float d = hash21(i + vec2(1.0, 1.0));
-
+	float a = hash12(i);
+	float b = hash12(i + vec2(1.0, 0.0));
+	float c = hash12(i + vec2(0.0, 1.0));
+	float d = hash12(i + vec2(1.0, 1.0));
 	f = f * f * (3.0 - 2.0 * f);
-
-	return mix(
-		mix(a, b, f.x),
-		mix(c, d, f.x),
-		f.y
-	);
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// ==================================================
-// FBM
-// ==================================================
-
-float fbm(vec2 p)
-{
-	float value = 0.0;
-	value += noise(p) * 0.55;
-	value += noise(p * 2.0) * 0.30;
-	value += noise(p * 4.0) * 0.15;
-	return value;
+float fbm(vec2 p) {
+	return vnoise(p) * 0.55 + vnoise(p * 2.03) * 0.30 + vnoise(p * 4.01) * 0.15;
 }
 
-// ==================================================
-// GENEL ORGANİK KURU TOPRAK ALANI
-// ==================================================
-
-float dry_field(vec2 p)
-{
-	// Domain Warp
-	float warp_x = fbm(p * 0.018);
-	float warp_y = fbm(p * 0.018 + vec2(43.7, 17.2));
-
-	vec2 warped_p = p + vec2(warp_x - 0.5, warp_y - 0.5) * 24.0;
-
-	// ANA GENİŞ RASTGELE ALAN
-	float broad = fbm(warped_p * dry_scale);
-
-	// İKİNCİ, DAHA UZUN NOISE
-	vec2 stretched = warped_p;
-	stretched.x *= dry_ovalness;
-	stretched.y *= 0.72;
-
-	float elongated = fbm(stretched * dry_scale * 1.35);
-
-	// NOISE'LARI BİRLEŞTİR
-	float field = broad * 0.68 + elongated * 0.32;
-
-	// SADECE BAZI BÖLGELERİ SEÇ
-	float dry_mask = smoothstep(
-		1.0 - dry_amount - 0.12,
-		1.0 - dry_amount + 0.08,
-		field
-	);
-
-	// ORGANİK KENAR
-	float edge_noise = fbm(warped_p * 0.055);
-	dry_mask += (edge_noise - 0.5) * 0.18;
-
-	// SOFT EDGE (dry_softness kullanılıyor)
-	float soft_lower = clamp(0.5 - dry_softness, 0.0, 0.49);
-	float soft_upper = clamp(0.5 + dry_softness, 0.51, 1.0);
-	dry_mask = smoothstep(soft_lower, soft_upper, dry_mask);
-
-	return clamp(dry_mask, 0.0, 1.0);
+float bayer4(vec2 p) {
+	int x = int(mod(p.x, 4.0));
+	int y = int(mod(p.y, 4.0));
+	float m[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+	return m[y * 4 + x] / 16.0 + 1.0 / 32.0;
 }
 
-// ==================================================
-// FRAGMENT
-// ==================================================
+// v > esik ? 1 : 0 - eşiğin +-kenar_yumusakligi bandında Bayer dither.
+bool dith(float v, float esik, vec2 px) {
+	float t = clamp((v - esik) / max(2.0 * kenar_yumusakligi, 0.0001) + 0.5, 0.0, 1.0);
+	return t > bayer4(px);
+}
 
-void fragment()
-{
+void fragment() {
 	vec4 tex = texture(TEXTURE, UV);
-
-	// TOPRAK MASKESİ
+	// Sadece toprak renkli pikseller (karonun çimen/kontur pikselleri olduğu gibi kalır).
 	float soil_mask = smoothstep(0.18, 0.38, tex.r - tex.g * 0.55);
 
-	// PIXEL KOORDİNATLARI
-	vec2 pixel_uv = UV / TEXTURE_PIXEL_SIZE;
-	vec2 p = floor(pixel_uv / pixel_size);
+	vec2 px = floor(world_pos);   // dünya pikseli (texel) - bütün desen bu ızgarada sabit
 
-	// MEVCUT BÜYÜK VARYASYON
-	float large_noise = fbm(p * 0.018);
-	float large_change = (large_noise - 0.5) * large_variation;
+	// LEKELER: domain warp'lı gürültü, eşiklerle koyu / daha koyu / açık bölgeler.
+	vec2 warp = vec2(fbm(px * 0.012), fbm(px * 0.012 + vec2(31.7, 7.3))) - 0.5;
+	float z = fbm((px + warp * kivrim) * leke_olcegi);
+	vec3 target = zemin_taban.rgb;
+	if (dith(z, koyu_esik, px)) { target = zemin_koyu.rgb; }
+	if (dith(z, daha_koyu_esik, px)) { target = zemin_daha_koyu.rgb; }
+	if (!dith(z, acik_esik, px)) { target = zemin_acik.rgb; }
+	// Karonun kendi rengine oranla uygula (düz toprak karosunda paletin birebir aynısı).
+	vec3 c = tex.rgb * (target / max(zemin_taban.rgb, vec3(0.001)));
 
-	// MEVCUT ORTA LEKELER
-	float patch_noise = fbm(p * 0.055);
-	float patch_dark = smoothstep(0.68, 0.82, patch_noise);
-	float patch_light = smoothstep(0.20, 0.34, patch_noise);
+	// MİNİK TOPAKLAR: 3-4 px'lik seyrek koyu/açık kümeler (tek tek benek yerine).
+	float cl = vnoise(px * 0.45);
+	float h = hash12(px + vec2(11.0, 3.0));
+	if (cl > 0.80 && h > 0.35) { c = mix(c, c * vec3(0.94, 0.935, 0.93), topak_miktari); }
+	if (cl < 0.12 && h > 0.45) { c = mix(c, min(c * vec3(1.05, 1.05, 1.045), vec3(1.0)), topak_miktari); }
 
-	// MEVCUT KÜÇÜK DETAY
-	float small_noise = noise(p * 0.23);
-	float small_variation = (small_noise - 0.5) * detail_strength;
-
-	// ANA TOPRAK
-	vec3 soil_color = tex.rgb;
-
-	soil_color += large_change * vec3(0.10, 0.075, 0.045);
-
-	soil_color = mix(
-		soil_color,
-		soil_color * vec3(0.84, 0.82, 0.76),
-		patch_dark * patch_amount
-	);
-
-	soil_color = mix(
-		soil_color,
-		soil_color + vec3(0.055, 0.045, 0.030),
-		patch_light * patch_amount * 0.7
-	);
-
-	soil_color += small_variation * vec3(0.08, 0.06, 0.035);
-
-	// RASTGELE KURU TOPRAK ALANI (dry_soil bağlandı)
-	float dry = dry_field(p);
-
-	vec3 dry_color = dry_soil.rgb;
-
-	// İçerideki varyasyon
-	float dry_inside = fbm(p * 0.035);
-	dry_color += (dry_inside - 0.5) * vec3(0.035, 0.025, 0.015);
-
-	// Kuru bölgeleri mevcut shaderın üzerine ekle
-	soil_color = mix(
-		soil_color,
-		dry_color,
-		dry * dry_strength
-	);
-
-	// MEVCUT KÜÇÜK PIXEL DETAYLARI
-	float speckle = hash21(p * 1.91);
-	float local_density = noise(floor(p * 0.16) + 42.7);
-	float local_amount = speckle_amount * (0.35 + local_density * 1.35);
-
-	if (speckle > 1.0 - local_amount)
-	{
-		float type = hash21(p + 91.73);
-
-		if (type < 0.52)
-		{
-			soil_color = mix(soil_color, dark_soil.rgb, 0.22);
-		}
-		else
-		{
-			soil_color = mix(soil_color, light_soil.rgb, 0.14);
+	// ÇAKILLAR: 11x11 hücrede en fazla 1 taş (2x1 / 2x2 / 3x2, köşesi yuvarlak), sol-üst 1 px ışık, altında 1 px gölge.
+	const float CELL = 11.0;
+	vec2 ci = floor(px / CELL);
+	if (hash12(ci + vec2(5.3, 1.7)) < cakil_yogunlugu) {
+		vec2 o = floor(vec2(hash12(ci + vec2(2.1, 8.4)), hash12(ci + vec2(6.6, 3.2))) * (CELL - 4.0));
+		float kind = hash12(ci + vec2(9.9, 4.4));
+		vec2 l = px - ci * CELL - o;
+		float w = kind > 0.6 ? 3.0 : 2.0;
+		float hh = kind > 0.3 ? 2.0 : 1.0;
+		bool inside = l.x >= 0.0 && l.y >= 0.0 && l.x < w && l.y < hh && !(w == 3.0 && hh == 2.0 && l.x == 2.0 && l.y == 1.0);
+		if (inside) {
+			c = (l.x == 0.0 && l.y == 0.0) ? cakil_isik.rgb : cakil_rengi.rgb;
+		} else if (l.y == hh && l.x >= 0.0 && l.x < w) {
+			c = cakil_golge.rgb;
 		}
 	}
 
-	// SEYREK PIXEL KÜMELERİ
-	vec2 cluster_cell = floor(p * 0.35);
-	float cluster_random = hash21(cluster_cell + 17.31);
-
-	if (cluster_random > 0.90)
-	{
-		float cluster_pixel = hash21(p + cluster_cell * 7.13);
-
-		if (cluster_pixel > 0.58)
-		{
-			soil_color *= 0.90;
-		}
+	// FİLİZ / ÇÖP: 29x29 hücrede en fazla 1 tane - filiz = 3 px gövde + 2 yaprak (ucu açık yeşil), çöp = 4 px çapraz dal.
+	const float CELL2 = 29.0;
+	vec2 cj = floor(px / CELL2);
+	float k = hash12(cj + vec2(1.1, 9.1));
+	vec2 o2 = floor(vec2(hash12(cj + vec2(4.4, 2.2)), hash12(cj + vec2(7.7, 5.5))) * (CELL2 - 5.0));
+	vec2 m = px - cj * CELL2 - o2;
+	if (k < filiz_yogunlugu) {
+		bool sprout = (m.x == 1.0 && m.y >= 0.0 && m.y <= 2.0) || (m.x == 0.0 && m.y == 1.0) || (m.x == 2.0 && m.y == 0.0);
+		if (sprout) { c = m.y == 0.0 ? filiz_acik.rgb : filiz_koyu.rgb; }
+	} else if (k > 1.0 - cop_yogunlugu) {
+		if (m.x >= 0.0 && m.x < 4.0 && m.y == floor(m.x / 2.0)) { c = cop_rengi.rgb; }
 	}
 
-	// TOPRAK EFEKTİNİN OPAKLIĞI (soil_opacity burada maskeyi etkiliyor)
-	vec3 final_color = mix(
-		tex.rgb,
-		soil_color,
-		soil_mask * soil_opacity
-	);
-
-	// Orijinal doku alfa kanalı aynen korunuyor
-	COLOR = vec4(final_color, tex.a);
+	COLOR = vec4(mix(tex.rgb, c, soil_mask * efekt_gucu), tex.a);
 }

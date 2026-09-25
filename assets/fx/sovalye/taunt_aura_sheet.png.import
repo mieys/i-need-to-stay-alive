@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://mb271mrjbbge"
-path="res://.godot/imported/oyku_atlas.png-8eabea4870beb4cdafda7e81793f3f10.ctex"
+uid="uid://bxo5duy8pmnjn"
+path="res://.godot/imported/taunt_aura_sheet.png-d01e69082fa63102147eadd3fe8274fc.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/characters/oyku_atlas.png"
-dest_files=["res://.godot/imported/oyku_atlas.png-8eabea4870beb4cdafda7e81793f3f10.ctex"]
+source_file="res://assets/fx/sovalye/taunt_aura_sheet.png"
+dest_files=["res://.godot/imported/taunt_aura_sheet.png-d01e69082fa63102147eadd3fe8274fc.ctex"]
 
 [params]
 

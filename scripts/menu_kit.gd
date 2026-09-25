@@ -35,7 +35,9 @@ const C_BAD := Color("#a03d27")
 const C_GOLD := Color("#b07a22")
 const C_CREAM := Color("#fff3d8")
 const C_OUTLINE := Color("#4a2c1a")
-const C_WASH := Color(0.99, 0.90, 0.72, 0.16) ## arka plan manzarasının üstüne sıcak, hafif bej örtü
+## Arka plan manzarasının üstüne örtü. 2026-09-25: açık bej örtü (0.99, 0.90, 0.72, 0.16) -> sıcak koyu kahve örtü: koyulaşan
+## panellerin arasından görünen parlak manzara da aynı oranda sakinleşsin (resmin kendisi değişmedi).
+const C_WASH := Color(0.16, 0.09, 0.04, 0.24)
 
 ## Kart dokusu: 60x72 sanat px (gövde 58x70 + 1 px seçim parıltısı payı) - bkz. tools/gen_menu_kit.py card().
 const CARD_SIZE := Vector2(180, 216)
@@ -160,13 +162,16 @@ const BTN_TEXT := {
 }
 
 ## Paletler: aynı tema kurucusu (build_theme) iki kit için. Oyun paleti bir ton koyu parşömen -> yazılar da bir ton koyu.
+## 2026-09-25 (kullanıcı isteği: arayüz renkleri "çok açık ve göz yoruyor", görünüm aynı kalıp doğal şekilde koyulaşsın):
+## kit dokuları tools/ui_kit_lib.py deepen_rgb eğrisiyle koyulaştırıldı - dokuların yanında çizilen düz renkler (kaydırıcı
+## izi) aynı eğriden geçirilmiş karşılıklarıyla değiştirildi (eski: menü #d3b686/#9a7a50, oyun #b99a6b/#7f613b).
 const PAL_MENU := {
 	"dir": DIR, "text": C_TEXT, "dim": C_TEXT_DIM, "accent": C_ACCENT,
-	"track": Color("#d3b686"), "track_edge": Color("#9a7a50"), "disabled_text": Color(0.42, 0.36, 0.30, 0.8),
+	"track": Color("#ab9166"), "track_edge": Color("#866841"), "disabled_text": Color(0.42, 0.36, 0.30, 0.8),
 }
 const PAL_GAME := {
 	"dir": GAME_DIR, "text": Color("#3a2212"), "dim": Color("#5e3f24"), "accent": Color("#8a3f1e"),
-	"track": Color("#b99a6b"), "track_edge": Color("#7f613b"), "disabled_text": Color(0.36, 0.30, 0.24, 0.8),
+	"track": Color("#9b7f54"), "track_edge": Color("#725531"), "disabled_text": Color(0.36, 0.30, 0.24, 0.8),
 	## Oyun içi butonlar eski kitin sıkı içerik paylarını korur (34-40 px'lik butonlar büyüyüp yerleşimleri bozmasın).
 	"btn_margins": [8, 5, 8, 5], "btn_content": [18, 4, 18, 4], "btn_content_pressed": [18, 6, 18, 2],
 }

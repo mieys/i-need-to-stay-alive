@@ -10,7 +10,12 @@ class_name SkillBurstFx
 ## sonra add_child(null) ile host'un motorunu çöktürüyordu (kullanıcı
 ## bildirimi: "hostun oyunu kapanıyor bianda").
 
+## Gece ışığının rengi (bkz. night_glow_catalog.gd "cp": "glow_color") - parçacıklarla aynı.
+var glow_color: Color = Color(1.0, 0.9, 0.7)
+
+
 func setup(radius: float, color: Color) -> void:
+	glow_color = color
 	var p := CPUParticles2D.new()
 	add_child(p)
 	var scale_ratio: float = clamp(radius / 100.0, 0.3, 3.0)

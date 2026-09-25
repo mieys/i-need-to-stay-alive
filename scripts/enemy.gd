@@ -291,14 +291,20 @@ const RAGE_TINT_COLOR := Color(1.7, 0.3, 0.3, 1.0)
 ## aşırı hızlı koşuyor") - 2.4 sabit çarpan tüm Kademelerde AYNI kalıyordu,
 ## ilk Kademelerin (düşük taban hız) yanında bile "aşırı" hissettiriyordu.
 ## Biraz aşağı çekildi.
-const RAGE_SPEED_MULT := 2.0
+## Kullanıcı isteği (2026-09-25): "yaratıkların hareket hızını %10 arttırıp rage hızlarını %10 azalt" - taban hız
+## GLOBAL_SPEED_SCALE'de x1.1; öfke çarpanı x(0.9 / 1.1) ki öfkedeki SON hız (taban x çarpan) bugünkünün TAM %90'ı olsun
+## (sadece x0.9 yapılsaydı taban hızdaki +%10 onu geri alırdı, öfke hızı neredeyse hiç değişmezdi).
+const RAGE_SPEED_CUT_2026_09_25 := 0.9 / 1.1
+const RAGE_SPEED_MULT := 2.0 * RAGE_SPEED_CUT_2026_09_25
 ## Kullanıcı isteği (2026-09-24 yaratık yetenekleri): "Orkların ragesi %50 canın altında gerçekleşir, bu esnada hareket
-## hızları normal rageye göre 1.5 kat daha fazla artar" - normal öfke +%100 (x2.0) -> ork +%150 (x2.5).
+## hızları normal rageye göre 1.5 kat daha fazla artar" - normal öfke +%100 (x2.0) -> ork +%150 (x2.5); 2026-09-25 kesintisi
+## ork öfkesine de aynı oranda uygulanır.
 const ORK_RAGE_HP_THRESHOLD := 0.50
-const ORK_RAGE_SPEED_MULT := 1.0 + (RAGE_SPEED_MULT - 1.0) * 1.5
+const ORK_RAGE_SPEED_MULT := (1.0 + (2.0 - 1.0) * 1.5) * RAGE_SPEED_CUT_2026_09_25
 
 ## ---------- Yaratık yetenekleri (kullanıcı isteği 2026-09-24, bkz. enemy_abilities.gd) ----------
 const EnemyAbilitiesScript := preload("res://scripts/enemy_abilities.gd")
+const CreatureDeathSound := preload("res://scripts/creature_death_sound.gd")
 ## Görünmez hayaletin sprite opaklığı - kullanıcı tercihi (2026-09-24): "%25 soluk gölge" (hedef alınamaz ama nerede olduğu tahmin edilebilir).
 const GHOST_INVISIBLE_ALPHA := 0.25
 ## Hayalet görünmezken hedef alınamaz (bkz. vision_fog.gd can_target) - bu meta ile işaretlenir.
@@ -593,6 +599,10 @@ var _network_time_since_update: float = 0.0
 ## host'ta çalışır) - client'taki kuklalarda hiç ilerlemez.
 var _taunt_timer: float = 0.0
 var _taunt_target: Node2D = null
+## Kışkırtma göstergesi (başın üstünde öfke damarı, kullanıcı isteği 2026-09-25) - korku göstergesiyle AYNI yaşam döngüsü:
+## host/tek oyunculu karar verir, broadcast_enemy_vfx "taunt_start"/"taunt_stop" ile yayınlar (bkz. _set_taunt_visual).
+const TauntStatusFxScene := preload("res://scenes/fx_taunt_status.tscn")
+var _taunt_status_fx: Node2D = null
 
 
 ## Every enemy gets a LITTLE tougher the longer the run has been going, on
@@ -644,6 +654,40 @@ func apply_taunt(duration: float, taunter: Node2D = null) -> void:
 	_taunt_timer = max(_taunt_timer, duration)
 	if taunter != null and is_instance_valid(taunter):
 		_taunt_target = taunter
+	_set_taunt_visual(true, _taunt_timer)
+
+
+## Kışkırtma göstergesi: gösterge kendi süresiyle söner (fx_taunt_status.gd setup); kışkırtan ölür/hedef dışı kalırsa
+## (_apply_aggro_overrides) erken kaldırılır. Her kışkırtmada (Şovalye Q'su, 25sn'de bir) yayınlanır - yenilemede süre
+## uzadığı için uzak kopyaların da güncel süreyi alması gerekir, trafik önemsiz.
+func _set_taunt_visual(on: bool, duration: float = 0.0) -> void:
+	if on:
+		_spawn_taunt_status_fx(duration)
+	else:
+		_remove_taunt_status_fx()
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			if on:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "taunt_start", {"duration": duration})
+			else:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "taunt_stop")
+
+
+func _spawn_taunt_status_fx(duration: float) -> void:
+	if is_dead:
+		return
+	if not _taunt_status_fx or not is_instance_valid(_taunt_status_fx):
+		_taunt_status_fx = TauntStatusFxScene.instantiate()
+		add_child(_taunt_status_fx)
+	if _taunt_status_fx.has_method("setup"):
+		_taunt_status_fx.setup(duration)
+
+
+func _remove_taunt_status_fx() -> void:
+	if _taunt_status_fx and is_instance_valid(_taunt_status_fx):
+		_taunt_status_fx.queue_free()
+	_taunt_status_fx = null
 
 
 ## Kullanıcı isteği: yakın dövüşçülerin hasarı artık menzile girer girmez
@@ -1612,6 +1656,7 @@ func _apply_aggro_overrides(target: Node2D) -> Node2D:
 			target = _taunt_target
 		else:
 			_taunt_target = null
+			_set_taunt_visual(false)
 	var focus: Node2D = _paladin_zone_focus_target(target)
 	return focus if focus != null else target
 
@@ -1932,7 +1977,9 @@ func get_overhead_bar_offset() -> float:
 ## özel %25 daha indirildi (0.64 * 0.75 = 0.48, bkz. kullanıcı isteği).
 ## Düşman hızları sahne dosyalarında tek tek tanımlı olduğu için burada
 ## topluca çarpılıyor (30+ sahneyi elle değiştirmek yerine).
-const GLOBAL_SPEED_SCALE := 0.48
+## 2026-09-25: "yaratıkların hareket hızını %10 arttır" - 0.48 -> 0.528 (x1.1), öfke çarpanı ayrıca kısıldı (bkz.
+## RAGE_SPEED_CUT_2026_09_25).
+const GLOBAL_SPEED_SCALE := 0.528
 
 ## "Body block" sistemi: yaratıklar artık oyuncunun tam üstüne/içine kadar
 ## yürüyemiyor - hedefe olan mesafe, düşmanın kendi gövde çember yarıçapı +
@@ -2634,6 +2681,10 @@ static func _batch_compute_separation_if_needed(tree: SceneTree) -> void:
 	_separation_results.clear()
 	var count: int = _flat_nodes.size()
 	for i in range(count):
+		## Önbellek (ızgara) bu karede yenilenmediyse arada silinmiş (free) bir yaratık kalmış olabilir - tipli değişkene
+		## atamadan önce atla ("Trying to assign invalid previously freed instance").
+		if not is_instance_valid(_flat_nodes[i]):
+			continue
 		var e: Node = _flat_nodes[i]
 		var instance_id: int = e.get_instance_id()
 		var interval: int = SEPARATION_UPDATE_INTERVAL_FRAMES * (ENEMY_LOD_FAR_SLOWDOWN if _is_lod_far(instance_id) else 1)
@@ -3957,17 +4008,28 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 	## hasar üzerinden bildirim - pasifsiz karakterlerde no-op.
 	## Can emme artık VURAN istemcide (take_damage -> player.on_dealer_hit) hesaplanıyor: burası SADECE host'ta çalıştığı için
 	## istemci vuruşları host oyuncusuna yanlış atfediliyor ve alan hasarı ayırt edilemiyordu.
-	_spawn_floating_text(effective_amount, is_crit)
-	# Broadcast damage number to clients
-	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+	## Kullanıcı isteği (2026-09-25): "başka oyuncuların hasar sayısını görmemeliyiz" - sayı SADECE vuranın
+	## ekranında çıkar. Vuran = last_attacker_peer_id (take_damage/take_damage_host her isabette günceller, DOT tiki
+	## son doğrudan vuranınkini korur - bkz. _take_dot_damage). Bilinmiyorsa (0: tek oyunculu ya da oyuncu dışı
+	## bir kaynak) eskisi gibi herkese.
+	var dmg_owner: int = last_attacker_peer_id if NetworkManager.is_multiplayer_active else 0
+	var my_peer: int = multiplayer.get_unique_id() if (NetworkManager.is_multiplayer_active and multiplayer.has_multiplayer_peer()) else 0
+	if dmg_owner <= 0 or dmg_owner == my_peer:
+		_spawn_floating_text(effective_amount, is_crit)
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host and dmg_owner != my_peer:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		## Relay'in saniyelik mesaj/byte bütçesini aşıp bağlantıyı KAPATMASINI
 		## önlemek için sınırlanıyor (bkz. NetworkManager.should_throttle
 		## üzerindeki not) - çok hızlı vuran silahlar/DOT tikleri aynı
 		## yaratığa saniyede onlarca "damage_number" göndermeye çalışabilir,
 		## bu salt kozmetik olduğu için kayıp fark edilmez ama flood'u önler.
-		if net_id > 0 and not NetworkManager.should_throttle("dmgnum_%d" % net_id, 0.1):
-			NetworkManager.broadcast_enemy_vfx.rpc(net_id, "damage_number", {"amount": effective_amount, "is_crit": is_crit})
+		## Kısıtlama vuran başına: aynı yaratığa vuran iki oyuncu birbirinin sayısını yutmasın.
+		if net_id > 0 and not NetworkManager.should_throttle("dmgnum_%d_%d" % [net_id, dmg_owner], 0.1):
+			var dmg_payload: Dictionary = {"amount": effective_amount, "is_crit": is_crit}
+			if dmg_owner > 0:
+				NetworkManager.broadcast_enemy_vfx.rpc_id(dmg_owner, net_id, "damage_number", dmg_payload)
+			else:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "damage_number", dmg_payload)
 	## Ruhani Yetenek "Savaş Şevki": bu isabeti verenin seçtiği ruhani yetenek buysa, normal hasardan sonra
 	## hâlâ hayattaysa ama kalan can oranı eşiğin altındaysa anında öldürülür (bkz. _attacker_has_savas_sevki,
 	## spiritual_skills.gd SAVAS_SEVKI_EXECUTE_PERCENT*). die() zaten aşağıda "health <= 0" ile tetiklenir,
@@ -4042,6 +4104,9 @@ func die() -> void:
 	is_feared = false
 	_fear_wander = false
 	_remove_fear_status_fx()
+	## Aileye özgü kısık ölüm sesi (kullanıcı isteği 2026-09-25) - her istemcide yerel, bkz. creature_death_sound.gd.
+	if is_inside_tree():
+		CreatureDeathSound.play(get_tree(), creature_family(), global_position, is_boss)
 	if creature_family() == "zombie" and (not NetworkManager.is_multiplayer_active or NetworkManager.is_host) and is_inside_tree():
 		EnemyAbilitiesScript.spawn_zombie_acid(get_tree(), global_position, contact_damage, self)
 	## Görev sistemi (bkz. world_event_manager.gd "Alanı Güvenceye Al") - bkz. GameManager.

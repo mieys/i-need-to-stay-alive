@@ -196,6 +196,7 @@ const FINAL_CREATURES := [
 ## darboğaz büyük ölçüde ortadan kalktı. 80 -> 220, SONRA kullanıcı isteğiyle
 ## 220 -> 200 (test için yuvarlak sayı) - hâlâ SADECE bir test değeri,
 ## profiler'la ölçüp gerekirse yine kullanıcı tercihine göre ayarlanmalı.
+## 2026-09-25: bu artık 5 OYUNCULU oyunun tavanı - daha az oyuncuda düşer (bkz. player_enemy_cap).
 @export var max_concurrent_enemies: int = 200
 ## Multiplayer enemy scaling: solo keeps the original cap; each additional
 ## player adds room for more creatures and slightly increases spawn frequency.
@@ -206,7 +207,11 @@ const FINAL_CREATURES := [
 ## SONRAKİ TUR (perf çalışması sonrası, bkz. max_concurrent_enemies üstündeki
 ## not) - max_concurrent_enemies ile AYNI oranda (şimdi 200/80) yükseltildi,
 ## yine sadece başlangıç test değeri.
-const EXTRA_PLAYER_ENEMY_CAP := 98
+## KALDIRILDI (kullanıcı isteği 2026-09-25): eskiden tavan = 200 + (oyuncu - 1) x 98 idi (5 oyuncuda 592). Yeni kural:
+## "maksimum yaratık sayısı 5 oyuncu varken olsun; 4 oyuncuda 180, 3'te 160, 2'de 140, tek oyunculuda 120" -
+## max_concurrent_enemies (200) artık 5 oyuncunun tavanı, her eksik oyuncu için ENEMY_CAP_STEP_PER_MISSING_PLAYER düşer.
+const FULL_ENEMY_CAP_PLAYER_COUNT := 5
+const ENEMY_CAP_STEP_PER_MISSING_PLAYER := 20
 ## Kullanıcı isteği (2026-09-24 denge turu: "her kademe için oyuncu başına %30 spawn ve %50 can") - 0.25 -> 0.30.
 const EXTRA_PLAYER_SPAWN_RATE := 0.30
 @export var min_spawn_distance: float = 480.0
@@ -346,15 +351,31 @@ const GLOBAL_DEFENSE_BUFF := 1.2 ## eskiden 1.45 - can, kalkan için
 ## normal hem boss yaratıkları kapsıyor.
 ## Kullanıcı isteği: "Tüm yaratıkların canını ve kalkanını %10 azalt" - normal yaratıklar için 2.64 -> 2.376
 ## (×0.9). Bosslar için bkz. BOSS_HEALTH_SHIELD_MULT.
-const HEALTH_SHIELD_MULT := 2.376
+## Kullanıcı isteği (2026-09-25): "tüm yaratıkların canlarını ve kalkanlarını %15 azaltıp hasarlarını %20 arttır" -
+## 2.376 -> 2.0196 (×0.85). Bosslar DAHİL ("tüm"): BOSS_HEALTH_SHIELD_MULT da ×0.85, GLOBAL_DAMAGE_BUFF ×1.2 (o çarpan
+## bosslara da uygulanıyor). Bu çarpanlar TÜM spawn yollarının geçtiği tek yerde (_apply_global_buff) - kopya yok.
+const HEALTH_SHIELD_MULT := 2.0196
 ## Bosslara uygulanan can/kalkan çarpanı - normal yaratıkların ESKİ değeri (2.64), yani bosslar "tüm
 ## yaratıklar %10" azaltmasından muaf (bkz. BOSS_HEALTH_MULT üstündeki not: bosslar TAM %20 azalır).
-const BOSS_HEALTH_SHIELD_MULT := 2.64
+## 2026-09-25: 2.64 -> 2.244 (×0.85, bkz. HEALTH_SHIELD_MULT üstündeki not).
+const BOSS_HEALTH_SHIELD_MULT := 2.244
+## 2026-09-25 turunun can/kalkan kesintisi (×0.85). Boss altın/XP ödülü bossun NİHAİ canından hesaplanıyor (bkz.
+## _apply_global_buff) - kullanıcı ödül değişikliği istemedi, bu yüzden ödül bu kesintiden ÖNCEKİ can üzerinden
+## hesaplanır (ödüller aynen kalır).
+const DURABILITY_CUT_2026_09_25 := 0.85
+## Kullanıcı isteği (2026-09-25, ikinci tur): "tüm bossların canını ve kalkanını %15 azalt hasarını da %15 azalt" - SADECE
+## bosslar, _apply_global_buff'ta can, kalkan (item_shield_max - candan ayrı çarpıldığı için ikisi de TAM %15 iner, üst üste
+## binmez) ve temas/menzilli hasara x0.85. Yaratık yetenekleri (asit, lazer...) contact_damage'den türediği için onlar da
+## iner. Tüm boss doğuş yolları (normal, geç katılan istemci, debug) bu fonksiyondan geçiyor - kopya yok. Ödül (altın/XP)
+## DURABILITY_CUT ile AYNI gerekçeyle bu kesintiden önceki can üzerinden hesaplanır (kullanıcı ödül değişikliği istemedi).
+const BOSS_CUT_2026_09_25B := 0.85
 ## DÜZELTME (kullanıcı isteği: "yaratıkların hasarını %60 arttır") - 1.05 ->
 ## 1.68 (1.05 * 1.6).
 ## Kullanıcı isteği: "tüm yaratıkların hasarını %10 azalt" - 1.68 -> 1.512 (×0.9), bosslar DAHİL (bkz.
 ## BOSS_DAMAGE_MULT üstündeki not).
-const GLOBAL_DAMAGE_BUFF := 1.512 ## sadece hasar için (eskiden 1.68, ondan önce ortak 1.3)
+## Kullanıcı isteği (2026-09-25): "hasarlarını %20 arttır" - 1.512 -> 1.8144 (×1.2), bosslar DAHİL. Yaratık yetenekleri
+## (asit, ateş topu, lazer, dikenler) ve menzilli saldırılar da bu çarpanla büyüyen contact/ranged_damage'den türüyor.
+const GLOBAL_DAMAGE_BUFF := 1.8144 ## sadece hasar için (eskiden 1.512, ondan önce 1.68, ondan önce ortak 1.3)
 
 ## Kullanıcı isteği (#26): "yaratıklardan çok az altın düşüyor, altın düşme
 ## oranını arttır." Her yaratık sahnesinin (scenes/creatures/enemy_*.tscn)
@@ -700,8 +721,14 @@ func _scaled_enemy_cap() -> int:
 	## BİLEREK atlanıyor, kalıcı davranış DEĞİL.
 	if DEBUG_RAMP_TEST_ENABLED and _debug_ramp_elapsed < DEBUG_RAMP_TEST_SECONDS:
 		return DEBUG_RAMP_TEST_TARGET
-	var base_cap: int = max_concurrent_enemies + (_player_count() - 1) * EXTRA_PLAYER_ENEMY_CAP
-	return max(1, int(round(base_cap * _tier_crowding_scale())))
+	return max(1, int(round(player_enemy_cap(_player_count()) * _tier_crowding_scale())))
+
+
+## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->120, 2->140, 3->160, 4->180, 5+->200 (bkz.
+## FULL_ENEMY_CAP_PLAYER_COUNT notu). Erken kademelerde bu tavan _tier_crowding_scale ile ayrıca kısılır (değişmedi).
+func player_enemy_cap(players: int) -> int:
+	var missing: int = maxi(0, FULL_ENEMY_CAP_PLAYER_COUNT - maxi(1, players))
+	return maxi(1, max_concurrent_enemies - missing * ENEMY_CAP_STEP_PER_MISSING_PLAYER)
 
 
 func _current_interval() -> float:
@@ -1314,22 +1341,23 @@ func _apply_global_buff(enemy: Node) -> void:
 	## Kullanıcı isteği (2026-09-24 denge turu): ekstra oyuncu başına can/kalkan +%30 -> +%50 (her kademede).
 	var multiplayer_defense_mult: float = 1.0 + float(extra_players) * EXTRA_PLAYER_DEFENSE_MULT
 	var health_shield_mult: float = BOSS_HEALTH_SHIELD_MULT if enemy.is_boss else HEALTH_SHIELD_MULT
+	var boss_cut: float = BOSS_CUT_2026_09_25B if enemy.is_boss else 1.0
 	## Aile özellikleri (bkz. FAMILY_TRAITS) - kalkan çarpanı candan AYRI tutulur (zombide sadece can artar).
 	var fam_trait: Dictionary = FAMILY_TRAITS.get(Enemy.family_of_id(str(enemy.get_meta("creature_id", ""))), {})
 	var trait_health: float = float(fam_trait.get("health", 1.0))
 	var trait_shield: float = float(fam_trait.get("shield", 1.0))
 	enemy.speed *= float(fam_trait.get("speed", 1.0))
-	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_health
+	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_health * boss_cut
 	enemy.health = enemy.max_health
-	enemy.contact_damage *= GLOBAL_DAMAGE_BUFF
+	enemy.contact_damage *= GLOBAL_DAMAGE_BUFF * boss_cut
 	if enemy.ranged_damage > 0.0:
-		enemy.ranged_damage *= GLOBAL_DAMAGE_BUFF
+		enemy.ranged_damage *= GLOBAL_DAMAGE_BUFF * boss_cut
 	# Kalkan zaten max_health * shield_ratio ile hesaplandı; oranı bozmamak
 	# için item_shield_max ve item_shield_hp'yi de aynı (savunma) çarpanla
 	# büyütüyoruz.
 	if enemy.item_shield_max > 0.0:
 		## Kalkan zaten (trait'siz) candan türetilmişti: GLOBAL çarpanlar + ailenin KENDİ kalkan çarpanı.
-		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_shield
+		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_shield * boss_cut
 		enemy.item_shield_hp = enemy.item_shield_max
 		enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
 	enemy.health_changed.emit(enemy.health, enemy.max_health)
@@ -1357,7 +1385,9 @@ func _apply_global_buff(enemy: Node) -> void:
 	## uyardığı "aynı bilgiye iki ayrı yerden referans" hata sınıfı). Artık
 	## kopya YOK - enemy.gd'deki TEK kaynak sabitler doğrudan okunuyor.
 	if enemy.is_boss:
-		enemy.xp_value = round(enemy.max_health * Enemy.BOSS_XP_HEALTH_RATIO)
-		enemy.gold_min = max(1, int(enemy.max_health * Enemy.BOSS_GOLD_MIN_HEALTH_RATIO))
-		enemy.gold_max = max(enemy.gold_min + 1, int(enemy.max_health * Enemy.BOSS_GOLD_MAX_HEALTH_RATIO))
+		## bkz. DURABILITY_CUT_2026_09_25: ödül, 2026-09-25 can kesintisinden önceki can üzerinden (ödüller değişmesin).
+		var reward_health: float = enemy.max_health / DURABILITY_CUT_2026_09_25 / BOSS_CUT_2026_09_25B
+		enemy.xp_value = round(reward_health * Enemy.BOSS_XP_HEALTH_RATIO)
+		enemy.gold_min = max(1, int(reward_health * Enemy.BOSS_GOLD_MIN_HEALTH_RATIO))
+		enemy.gold_max = max(enemy.gold_min + 1, int(reward_health * Enemy.BOSS_GOLD_MAX_HEALTH_RATIO))
 		enemy.gold_chance = 1.0

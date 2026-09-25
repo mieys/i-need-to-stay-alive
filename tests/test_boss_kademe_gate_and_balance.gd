@@ -153,8 +153,11 @@ func test_boss_health_and_shield_targets() -> void:
 	var raw: float = (10.0 + 3.0 * 9.0) * float(mult["hp"])
 	var prev_health: float = raw * PREV_BOSS_HEALTH_MULT * SpawnerScript.GLOBAL_DEFENSE_BUFF * SpawnerScript.BOSS_HEALTH_SHIELD_MULT
 	var prev_shield: float = prev_health * PREV_BOSS_SHIELD_RATIO
-	assert(absf(float(boss.max_health) - prev_health * 0.85) < 0.01, "Boss canı öncekinin TAM %%85'i olmalı: %s (önceki %s)" % [boss.max_health, prev_health])
-	assert(absf(float(boss.item_shield_max) - prev_shield * 0.90) < 0.01, "Boss kalkanı öncekinin TAM %%90'ı olmalı: %s (önceki %s)" % [boss.item_shield_max, prev_shield])
+	## 2026-09-25 ikinci tur: tüm bosslar can/kalkan/hasar x BOSS_CUT_2026_09_25B (0.85).
+	var cut: float = SpawnerScript.BOSS_CUT_2026_09_25B
+	assert(is_equal_approx(cut, 0.85), "Boss kesintisi x0.85 olmalı")
+	assert(absf(float(boss.max_health) - prev_health * 0.85 * cut) < 0.01, "Boss canı öncekinin TAM %%85'i olmalı: %s (önceki %s)" % [boss.max_health, prev_health])
+	assert(absf(float(boss.item_shield_max) - prev_shield * 0.90 * cut) < 0.01, "Boss kalkanı öncekinin TAM %%90'ı olmalı: %s (önceki %s)" % [boss.item_shield_max, prev_shield])
 	_cleanup()
 
 
@@ -162,7 +165,8 @@ func test_boss_health_and_shield_targets() -> void:
 func test_boss_damage_up_ten_and_all_creature_damage_down_ten() -> void:
 	## 2026-09-24 denge turu: bu turun x1.1'inin üstüne tüm bosslara +%60 (x1.6).
 	assert(is_equal_approx(SpawnerScript.BOSS_DAMAGE_MULT, PREV_BOSS_DAMAGE_MULT * 1.1 * 1.6), "Boss hasar çarpanı x1.1 x1.6: %s" % SpawnerScript.BOSS_DAMAGE_MULT)
-	assert(is_equal_approx(SpawnerScript.GLOBAL_DAMAGE_BUFF, PREV_GLOBAL_DAMAGE_BUFF * 0.9), "Global hasar çarpanı x0.9: %s" % SpawnerScript.GLOBAL_DAMAGE_BUFF)
+	## 2026-09-25: tüm yaratıkların hasarı +%20 (x1.2), bosslar dahil.
+	assert(is_equal_approx(SpawnerScript.GLOBAL_DAMAGE_BUFF, PREV_GLOBAL_DAMAGE_BUFF * 0.9 * 1.2), "Global hasar çarpanı x0.9 x1.2: %s" % SpawnerScript.GLOBAL_DAMAGE_BUFF)
 
 	var sp: Node = _spawner()
 	var bosses: Array = _boss_of_tier(sp, 3)
@@ -172,7 +176,7 @@ func test_boss_damage_up_ten_and_all_creature_damage_down_ten() -> void:
 	var raw_damage: float = (3.0 + 3.0 * 2.2) * float(mult["dmg"])
 	var prev_boss_damage: float = raw_damage * PREV_BOSS_DAMAGE_MULT * PREV_GLOBAL_DAMAGE_BUFF
 	## Net: x1.1 (boss) x0.9 (tüm yaratıklar) = x0.99, üstüne 2026-09-24 denge turunun x1.6'sı.
-	assert(absf(float(boss.contact_damage) - prev_boss_damage * 1.1 * 0.9 * 1.6) < 0.001,
+	assert(absf(float(boss.contact_damage) - prev_boss_damage * 1.1 * 0.9 * 1.6 * 1.2 * SpawnerScript.BOSS_CUT_2026_09_25B) < 0.001,
 		"Boss hasarı öncekinin x1.1 x0.9'u olmalı: %s (önceki %s)" % [boss.contact_damage, prev_boss_damage])
 
 	var rat: Node = RatScene.instantiate()
@@ -181,5 +185,5 @@ func test_boss_damage_up_ten_and_all_creature_damage_down_ten() -> void:
 	rat.contact_damage = 10.0
 	sp._apply_global_buff(rat)
 	assert(absf(float(rat.contact_damage) - 10.0 * SpawnerScript.GLOBAL_DAMAGE_BUFF) < 0.001, "Normal yaratık hasarı x GLOBAL_DAMAGE_BUFF olmalı")
-	assert(absf(float(rat.contact_damage) - 10.0 * PREV_GLOBAL_DAMAGE_BUFF * 0.9) < 0.001, "Normal yaratık hasarı öncekinin TAM %%90'ı olmalı: %s" % rat.contact_damage)
+	assert(absf(float(rat.contact_damage) - 10.0 * PREV_GLOBAL_DAMAGE_BUFF * 0.9 * 1.2) < 0.001, "Normal yaratık hasarı öncekinin %%90'ı x1.2 olmalı: %s" % rat.contact_damage)
 	_cleanup()

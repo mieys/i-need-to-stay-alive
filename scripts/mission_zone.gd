@@ -65,6 +65,12 @@ func _ready() -> void:
 	z_index = 0 ## negatif z harita katmanlarının altında kalır (bkz. fx_korsan_zone.gd notu)
 
 
+## Gece ışığı rengi (bkz. night_glow_catalog.gd): halkanın rengiyle aynı - bayrak mavi, "alanı güvenceye al" kızıl.
+func get_night_glow_color() -> Color:
+	var c: Color = RING_CAPTURE if kind == "capture_point" else RING_SECURE
+	return Color(c.r, c.g, c.b, 1.0)
+
+
 func set_progress(value: float, target: float) -> void:
 	_progress = clampf(value / maxf(target, 0.001), 0.0, 1.0)
 	_update_flag()

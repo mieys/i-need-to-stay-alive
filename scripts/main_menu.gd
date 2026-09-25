@@ -188,6 +188,31 @@ func _build_settings() -> void:
 	fps_check.size_flags_horizontal = Control.SIZE_SHRINK_END
 	grid.add_child(fps_check)
 
+	## Kullanıcı isteği (2026-09-25): "arayüzler için ayarlara opaklık ayarı getir" - ses satırıyla aynı düzen (bkz.
+	## UISound.ui_opacity_percent; pause_menu.gd'de AYNI satır).
+	grid.add_child(_row_label("Arayüz Opaklığı"))
+	var op_row := HBoxContainer.new()
+	op_row.add_theme_constant_override("separation", 12)
+	op_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var op_slider := HSlider.new()
+	op_slider.min_value = UISound.UI_OPACITY_MIN_PERCENT
+	op_slider.max_value = 100
+	op_slider.step = 5
+	op_slider.custom_minimum_size = Vector2(300, 42)
+	op_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	op_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	op_row.add_child(op_slider)
+	var op_value: Label = MenuKit.make_label("100%", MenuKit.FS_BODY, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
+	op_value.custom_minimum_size = Vector2(84, 0)
+	op_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	op_row.add_child(op_value)
+	grid.add_child(op_row)
+	op_slider.value = UISound.ui_opacity_percent
+	op_value.text = "%d%%" % int(op_slider.value)
+	op_slider.value_changed.connect(func(value: float) -> void:
+		UISound.set_ui_opacity_percent(value)
+		op_value.text = "%d%%" % int(value))
+
 	keybind_button = MenuKit.make_button("Tuş Atamaları", "tan", MenuKit.FS_BODY, 52)
 	v.add_child(keybind_button)
 	var close_btn := MenuKit.make_button("KAPAT", "sage", MenuKit.FS_BODY, 52)

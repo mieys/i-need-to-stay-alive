@@ -23,7 +23,10 @@ class_name MissionPlayerCopy
 ## deseni. Diğer istemcilerde bu Node salt kozmetik, konumunu/canlılığını/can-kalkan oranını
 ## NetworkManager.world_event_copy_state'ten alır (bkz. network_manager.gd notu).
 
-const DAMAGE_TAKEN_MULT := 0.10
+## Kullanıcı isteği (2026-09-25): "kopyaların aldığı hasar azaltmasını kaldır, onun yerine canlarını ve kalkanlarını
+## oyuncunun canının ve kalkanının 10 katı olarak güncelle" - DAMAGE_TAKEN_MULT 0.10 -> 1.0 (tam hasar alır),
+## HEALTH_MULT/SHIELD_MULT 3 -> 10 (aşağıda). Net dayanıklılık eskiden 3/0.1 = 30 kat idi, şimdi 10 kat.
+const DAMAGE_TAKEN_MULT := 1.0
 const DAMAGE_DEALT_MULT := 0.10
 const SPEED_MULT := 0.80
 const LIFETIME := 300.0
@@ -32,8 +35,8 @@ const SYNC_INTERVAL := 0.15
 ## Kalkan = kaynak oyuncunun kalkan maksimumu (item_shield_max) x3; oyuncunun kalkanı yoksa (henüz kalkan eşyası
 ## seçilmemiş) canının SHIELD_FALLBACK_OF_HP oranı taban alınır ki kopya yine kalkansız doğmasın. Hasar önce kalkandan
 ## düşer (mission_tree.gd ile aynı), SHIELD_REGEN_DELAY sn hasar almayınca saniyede max'ın SHIELD_REGEN_PER_SEC'i dolar.
-const HEALTH_MULT := 3.0
-const SHIELD_MULT := 3.0
+const HEALTH_MULT := 10.0 ## 2026-09-25: 3 -> 10 (bkz. DAMAGE_TAKEN_MULT notu)
+const SHIELD_MULT := 10.0
 const SHIELD_FALLBACK_OF_HP := 0.3
 const SHIELD_REGEN_DELAY := 7.0
 const SHIELD_REGEN_PER_SEC := 0.05
@@ -157,6 +160,8 @@ var _hover_t: float = 0.0
 ## setup() bu yüzden add_child'dan SONRA çağrılmalı (bkz. world_event_manager.gd çağrı sırası).
 func _ready() -> void:
 	add_to_group("enemies")
+	## Silahlar kopya varken daima ona odaklanır (kullanıcı isteği 2026-09-25, bkz. weapon_target_priority.gd).
+	add_to_group("mission_copies")
 	collision_layer = 4
 	collision_mask = 0
 	var body_shape := CollisionShape2D.new()
@@ -184,6 +189,7 @@ func _ready() -> void:
 	set_physics_process(true)
 	NetworkManager.world_event_copy_state.connect(_on_net_state)
 	NetworkManager.world_event_copy_damage_requested.connect(_on_remote_damage)
+	NetworkManager.world_event_copy_knockback_requested.connect(_on_remote_knockback)
 	NetworkManager.world_event_copy_swing.connect(_on_net_swing)
 
 
@@ -270,6 +276,7 @@ func set_weapon_keys(keys: Array) -> void:
 			icon.scale = Vector2(0.99, 0.99) * WAND_SCALE_MULT
 		else:
 			icon.scale *= 0.9
+		icon.scale *= WeaponOrbitMath.ICON_SIZE_MULT ## 2026-09-25: silahlar %15 küçük (oyuncu/kukla ile aynı)
 		icon.position = slots[i]
 		icon.material = _tint_material
 		_visual_root.add_child(icon)
@@ -410,8 +417,13 @@ func _physics_process(delta: float) -> void:
 		desired = _desired_direction(delta)
 		_process_attacks(delta, _target, global_position.distance_to(_target.global_position))
 	velocity = velocity.move_toward(desired * move_speed, ACCEL * delta)
+	## İtiş hızı yürüme hızına eklenir, bu karede kullanılıp yaratıklarla AYNI oranda söner (bkz. apply_knockback_distance).
+	var walk_velocity: Vector2 = velocity
+	velocity += _knockback_velocity
 	_block_walls()
 	move_and_slide()
+	velocity = walk_velocity
+	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, Enemy.KNOCKBACK_DECAY * delta)
 	_clamp_to_map()
 	var look: Vector2 = Vector2.ZERO
 	if _target:
@@ -651,6 +663,47 @@ func _on_net_swing(mid: int, idx: int, dir: Vector2) -> void:
 	for w in _weapons:
 		if w["melee"] and is_instance_valid(w["icon"]):
 			_swing_melee_icon(w, dir)
+
+
+## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-25: "İtme gücü kopyalara daha etkili çalışıyor bunu düzelt") - kök neden:
+## kopyada apply_knockback_* YOKTU; weapon.gd/projectile.gd bu durumda son çare olarak hedefi itiş MESAFESİNİN TAMAMI
+## kadar (400 px'e kadar) anında ışınlıyordu. Yaratıklarda ise aynı değer %20'ye ölçeklenip (KNOCKBACK_DISTANCE_MULT),
+## 60 px tavanla, art arda vuruşlarda küçülerek (REPEAT) yumuşak, sönümlenen bir hıza çevriliyor. Artık kopya birebir aynı
+## formülü ve sabitleri kullanıyor (TEK kaynak: enemy.gd). İstemcinin vuruşu host'taki gerçek kopyaya iletilir.
+var _knockback_velocity: Vector2 = Vector2.ZERO
+var _last_knockback_msec: int = -100000
+
+func apply_knockback_distance(dir: Vector2, distance: float) -> void:
+	if distance <= 0.0 or is_dead:
+		return
+	if not _is_host_simulated:
+		if NetworkManager.is_multiplayer_active:
+			NetworkManager.request_world_event_copy_knockback.rpc_id(NetworkManager._host_peer_id(), mission_id, copy_index, dir, distance)
+		return
+	var d: Vector2 = dir.normalized() if dir.length() > 0.001 else Vector2.RIGHT
+	var now_msec: int = Time.get_ticks_msec()
+	var repeat_mult: float = Enemy.KNOCKBACK_REPEAT_MULT if (now_msec - _last_knockback_msec) < int(Enemy.KNOCKBACK_REPEAT_WINDOW * 1000.0) else 1.0
+	_last_knockback_msec = now_msec
+	var v0: float = sqrt(2.0 * Enemy.KNOCKBACK_DECAY * minf(distance * Enemy.KNOCKBACK_DISTANCE_MULT * repeat_mult, Enemy.KNOCKBACK_DISTANCE_MAX))
+	var along: float = _knockback_velocity.dot(d)
+	if along < v0:
+		_knockback_velocity += d * (v0 - maxf(along, 0.0))
+
+
+## Hız cinsinden itiş (gövde itmesi vb.) - yaratıklardaki apply_knockback_force ile aynı tavan.
+func apply_knockback_force(dir: Vector2, force: float) -> void:
+	if force <= 0.0 or is_dead or not _is_host_simulated:
+		return
+	var d: Vector2 = dir.normalized() if dir.length() > 0.001 else Vector2.RIGHT
+	_knockback_velocity += d * force
+	if _knockback_velocity.length() > Enemy.KNOCKBACK_MAX_SPEED:
+		_knockback_velocity = _knockback_velocity.normalized() * Enemy.KNOCKBACK_MAX_SPEED
+
+
+func _on_remote_knockback(mid: int, idx: int, dir: Vector2, distance: float) -> void:
+	if not _is_host_simulated or mid != mission_id or idx != copy_index:
+		return
+	apply_knockback_distance(dir, distance)
 
 
 ## Host'ta: bir istemcinin kozmetik kopyaya verdiği hasar (bkz. take_damage) gerçek kopyaya uygulanır.

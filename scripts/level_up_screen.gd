@@ -38,9 +38,16 @@ const CAT_UTILITY := UIKit.C_CAT_UTILITY
 ## DÜZELTME (kullanıcı isteği: "kartları büyütmekle ilgili değişikliği geri
 ## al") - kart kutusu (level_up_screen.tscn) ve buradaki font/ikon boyutları
 ## eski (büyütme öncesi) değerlerine döndürüldü.
+## 2026-09-25 (savaş kartı yeniden tasarımı, bkz. scripts/tier_card_fx.gd): açıklama artık kartın alt yarısını kaplayan
+## parşömen levhada - m5x7'nin keskin durduğu 32 px'e (UIKit.FS_BODY) büyütüldü; çok uzun bir metin levhaya sığmazsa
+## _fit_plaque_desc 24'e kadar küçültür.
 const CARD_CATEGORY_FONT_SIZE := 32
-const CARD_DESCRIPTION_FONT_SIZE := 24
+const CARD_DESCRIPTION_FONT_SIZE := 32
+const CARD_DESCRIPTION_MIN_FONT_SIZE := 24
 const CARD_COUNT_FONT_SIZE := 16
+const CARD_TIER_FONT_SIZE := 32
+const CARD_VALUE_FONT_SIZE := 64
+const TierCardFx := preload("res://scripts/tier_card_fx.gd")
 
 ## Her tier'ın kendi çizilmiş kart çerçevesi (kullanıcının yüklediği 4 ayrı
 ## dosya - 499x665, hepsi aynı oranlı/hizalı). Kartın KENDİ StyleBoxFlat
@@ -56,7 +63,7 @@ const CARD_COUNT_FONT_SIZE := 16
 ## yarıya düşürüldü, buradaki metinler de ona göre güncellendi.
 const UPGRADES = [
 	{"id": "speed", "title": "Hız", "desc": "+%4", "cat": "Yardımcı", "color": CAT_UTILITY},
-	{"id": "max_health", "title": "Can", "desc": "+10", "cat": "Savunma", "color": CAT_DEFENSE},
+	{"id": "max_health", "title": "Can", "desc": "+15", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "damage", "title": "Saldırı Gücü", "desc": "+6", "cat": "Saldırı", "color": CAT_ATTACK},
 	## "Ateş Hızı" -> "Saldırı Hızı" (2026-09-24): eşyalar/stat ekranı aynı stat için "saldırı hızı" diyordu, iki ayrı stat
 	## sanılıyordu (bkz. player.gd get_attack_interval_mult).
@@ -70,7 +77,8 @@ const UPGRADES = [
 	## yüzdesel kartlarla (crit_chance, armor_pen_percent, exp_gain vb.)
 	## AYNI "+%X miktar" formatında ve player.gd'deki gerçek uygulanan
 	## değerle (_nice_up(0.125*1.3,0.005)=0.165 -> %16.5) birebir eşleşiyor.
-	{"id": "crit_damage", "title": "Kritik Hasar", "desc": "+%16.5", "cat": "Saldırı", "color": CAT_ATTACK},
+	## 2026-09-25: %16.5 -> %6 (bkz. player.gd CRIT_DAMAGE_CARD_BASE - ikisi aynı sayıyı göstermeli).
+	{"id": "crit_damage", "title": "Kritik Hasar", "desc": "+%6", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "pickup_range", "title": "Toplama Mesafesi", "desc": "+%30", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "shield_pen_percent", "title": "Kalkan Delme", "desc": "+%5", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "exp_gain", "title": "Tecrübe Kazanımı", "desc": "+%5", "cat": "Yardımcı", "color": CAT_UTILITY},
@@ -135,6 +143,12 @@ var _card_tweens: Array = [null, null, null]
 ## durumundaki) tekrar seçim yapılmaz.
 var _has_chosen: bool = false
 
+## Her kartın o anki tier'ı (hover halesi rengi + seçim kutlaması için) ve boşta parlama tween'leri (reroll'da öldürülür).
+var _card_tiers: Array = [1, 1, 1]
+var _shine_tweens: Array = [null, null, null]
+## Seçim kıvılcımlarının çizildiği, tüm ekranı kaplayan en üst katman (bkz. _ensure_fx_layer).
+var _fx_layer: Control = null
+
 
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
 ## Kart seçim ekranı açıkken karakter okuma (read) pozuna geçer - bkz. ReadingUiWatcher.
@@ -147,6 +161,7 @@ func _ready() -> void:
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir (kart butonları "icon slot" gibi dikey orantılı oldukları için bu zaten atlıyor, bkz. o dosyadaki _looks_like_icon_slot)
 	_apply_reroll_button_style()
 	_apply_kit_style()
+	_layout_rows()
 	_populate_cards()
 	_wire_card_hover_feedback()
 	reroll_button.pressed.connect(_on_reroll_pressed)
@@ -218,15 +233,33 @@ func _unhandled_input(event: InputEvent) -> void:
 		card.pressed.emit()
 
 
+## Kullanıcı isteği (2026-09-25): "level seçim kartlarının karıştırması space tuşu ile yeniden rerollanabilsin" -
+## Karıştır butonuna basmakla BİREBİR aynı (altın bedeli/yetersiz altında kapalı buton kuralları aynen). GUI'den ÖNCE
+## (_input) yakalanır: Space varsayılan "ui_accept" olduğu için yoksa klavye odağındaki KART seçilirdi.
+func _input(event: InputEvent) -> void:
+	if _has_chosen or not (event is InputEventKey) or not event.pressed or event.echo or event.keycode != KEY_SPACE:
+		return
+	var player := get_tree().get_first_node_in_group("player")
+	if player and bool(player.get("is_chat_typing")):
+		return
+	get_viewport().set_input_as_handled()
+	if is_instance_valid(reroll_button) and reroll_button.visible and not reroll_button.disabled:
+		reroll_button.pressed.emit()
+
+
 func _on_card_hover(card: Button, entered: bool) -> void:
-	if card.disabled:
-		return ## bekleme durumunda karartılmış kartın üstü hover'la aydınlanmasın
+	if card.disabled or _has_chosen:
+		return ## bekleme/kutlama sırasında kartların üstü hover'la aydınlanmasın
 	var frame: TextureRect = card.get_node_or_null("Frame")
 	if frame:
 		frame.modulate = Color(1.12, 1.12, 1.12, 1.0) if entered else Color(1, 1, 1, 1)
+	var idx: int = cards.find(card)
+	TierCardFx.set_hover_glow(card, int(_card_tiers[idx]) if idx >= 0 else 1, entered)
 
 
 func _on_card_press(card: Button, is_down: bool) -> void:
+	if _has_chosen:
+		return ## seçim kutlaması kartın ölçeğini kendisi canlandırıyor
 	card.pivot_offset = card.size * 0.5
 	card.scale = Vector2(0.97, 0.97) if is_down else Vector2.ONE
 
@@ -382,34 +415,36 @@ func _populate_cards() -> void:
 		## Böylece Category/Icon/Title/Desc/CountLabel TEK bir dikey yığın
 		## olarak otomatik diziliyor, yeni (daha dar) iç alana elle piksel
 		## hesabı yapmadan sığıyor.
+		## 2026-09-25 savaş kartı: kategori artık koyu tier zemininin üstünde (kartın üst satırı) - krem yazı + koyu kontur
+		## (kategori renkleri parşömen için seçilmiş koyu tonlardı, tier renginin üstünde okunmuyordu).
 		var category_label: Label = content.get_node("Category")
 		category_label.text = upgrade["cat"]
 		category_label.modulate = Color(1, 1, 1, 1)
-		category_label.add_theme_color_override("font_color", upgrade["color"])
-		category_label.add_theme_font_size_override("font_size", CARD_CATEGORY_FONT_SIZE)
+		UIKit.style_label(category_label, CARD_CATEGORY_FONT_SIZE, UIKit.C_CREAM, 4)
 
 		content.get_node("Icon").setup(upgrade["id"], upgrade["color"])
 
-		## Title etiketi eskiden hiç kullanılmıyordu (bkz. eski "Hide the
-		## title" yorumu) - artık tier adını (Sıradan/Nadir/Epik/Efsanevi)
-		## tier rengiyle göstermek için kullanılıyor.
+		## Title etiketi = tier adı (Sıradan/Nadir/Epik/Efsanevi) - artık kartın tier renkli kurdelesinin üstünde, krem yazı.
 		var title_label: Label = content.get_node("Title") as Label
 		title_label.visible = true
 		title_label.text = TierSystem.NAMES[tier - 1]
-		title_label.add_theme_color_override("font_color", TierSystem.COLORS[tier - 1])
+		UIKit.style_label(title_label, CARD_TIER_FONT_SIZE, UIKit.C_CREAM, 4)
 
+		_card_tiers[i] = tier
 		_apply_card_tier_frame(card, tier)
+		if _shine_tweens[i] and _shine_tweens[i].is_valid():
+			_shine_tweens[i].kill()
+		_shine_tweens[i] = TierCardFx.start_idle_shine(self, card.get_node_or_null("Frame") as TextureRect, tier, 0.5 + 0.35 * i)
 
-		var desc_label: RichTextLabel = content.get_node("Desc") as RichTextLabel
+		var desc_label: RichTextLabel = _card_desc(card)
 		desc_label.text = _get_friendly_desc(upgrade, tier)
-		desc_label.add_theme_font_size_override("normal_font_size", CARD_DESCRIPTION_FONT_SIZE)
-		desc_label.add_theme_font_size_override("bold_font_size", CARD_DESCRIPTION_FONT_SIZE)
-		desc_label.add_theme_font_size_override("italics_font_size", CARD_DESCRIPTION_FONT_SIZE)
-		desc_label.add_theme_font_size_override("bold_italics_font_size", CARD_DESCRIPTION_FONT_SIZE)
+		_set_desc_font_size(desc_label, CARD_DESCRIPTION_FONT_SIZE)
 
-		var count_label: Label = content.get_node("CountLabel") as Label
+		var count_label: Label = _card_count(card)
 		count_label.add_theme_font_size_override("font_size", CARD_COUNT_FONT_SIZE)
 		count_label.text = ("%dx alındı" % count) if count > 0 else ""
+		_fill_row(card, upgrade, tier, count)
+	_fit_plaque_desc.call_deferred()
 
 
 ## Görünür çerçeve artık bir StyleBoxFlat rengi DEĞİL, tier'a özel çizilmiş
@@ -419,12 +454,188 @@ func _populate_cards() -> void:
 func _apply_card_tier_frame(card: Button, tier: int) -> void:
 	var frame: TextureRect = card.get_node_or_null("Frame")
 	if frame:
-		frame.texture = TierSystem.FRAME_TEXTURES[tier - 1]
+		TierCardFx.apply_frame(frame, tier)
+		## Satır dokusu (savaş kartı yerine) + ışıltı shader'ının sanat pikseli ızgarası satırın boyuna göre.
+		frame.texture = ROW_TEXTURES[clampi(tier, 1, 4) - 1]
+		(frame.material as ShaderMaterial).set_shader_parameter("art_size", ROW_ART_SIZE)
 		frame.modulate = Color(1, 1, 1, 1)
 	var glow: Control = card.get_node_or_null("SelectGlow")
 	if glow:
 		glow.visible = false
+	TierCardFx.set_hover_glow(card, tier, false)
 	card.modulate = Color(1, 1, 1, 1)
+
+
+## ---------------------------------------------------------------- level atlama SATIRLARI (2026-09-25)
+## Kullanıcı isteği: savaş kartı (ve denenen başka kart tasarımları) yerine prototiplerden "A2 - Liste Satırları" seçildi
+## (survivor-like: 3 yatay satır; solda ikon yuvası, ortada ad + "Tier · Kategori · Nx alındı", sağda değer). "soldaki düz
+## uzun çizgi olmasın, çerçeve sola simetrik hizalansın" (ikon yuvası her kenardan 18 px), "genişlikleri %20 azalt" (804 px),
+## "oyunun panellerine benzetmene gerek yok" (koyu gövde + tier renkli çerçeve, bej yok), Tier 1 GRİ. Doku:
+## tools/gen_menu_kit.py levelup_row (yuva dokunun içinde). .tscn'ye DOKUNULMADI (açık editör eski hâli üstüne yazabilir):
+## kartlar çalışma anında yeni bir dikey "Rows" kutusuna taşınır, satır yazıları burada kurulur; eski Content'in yalnız
+## Icon'u kalır (yuvanın içinde), diğer etiketleri gizlenir (yine doldurulurlar, zararsız). Hover halesi / seçim kutlaması
+## TierCardFx'in aynı kodu - satır boyutu ve dokusu kart meta'larıyla verilir (bkz. TierCardFx.ensure_glow). Sandık ödül
+## kartları (chest_menu.gd) savaş kartında kalır.
+const ROW_SIZE := Vector2(804, 150)
+const ROW_ART_SIZE := Vector2(268, 50)
+const ROW_SEPARATION := 22
+const ROW_TOP := -270.0 ## ekran ortasına göre (başlık kurdelesinin altı, karıştır butonunun üstü)
+const ROW_TEXTURES := [
+	preload("res://assets/ui/game/levelup_row_1.png"),
+	preload("res://assets/ui/game/levelup_row_2.png"),
+	preload("res://assets/ui/game/levelup_row_3.png"),
+	preload("res://assets/ui/game/levelup_row_4.png"),
+]
+const ROW_GLOW := preload("res://assets/ui/game/levelup_row_glow.png")
+## Tier yazı rengi (alt satır) = dokudaki tier "hi" tonu; Tier 1 gri. Işıltı renkleri de Tier 1'de gümüş.
+const ROW_TIER_TEXT := [Color("#cdd1d6"), Color("#a6c6f4"), Color("#d8aef4"), Color("#f8a890")]
+const ROW_GLOW_COLORS := [Color("#dfe4ea"), Color("#9cc4ff"), Color("#dcb0ff"), Color("#ffc65a")]
+const ROW_VALUE_COLOR := Color("#ffd66e")
+const ROW_DIM_COLOR := Color("#e6d2b0")
+## Satır içi yerleşim (px): ikon yuvasının içi (dokuda 18..132, kenar halkası düşülmüş); yazılar yuvanın sağından, değer sağa yaslı.
+const ROW_ICON_RECT := Rect2(24, 24, 102, 102)
+const ROW_TEXT_X := 156.0
+const ROW_RIGHT_PAD := 36.0
+
+
+func _layout_rows() -> void:
+	var old: Control = get_node_or_null("CardsContainer") as Control
+	var rows := VBoxContainer.new()
+	rows.name = "Rows"
+	rows.theme = UIKit.theme()
+	rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rows.add_theme_constant_override("separation", ROW_SEPARATION)
+	rows.set_anchors_preset(Control.PRESET_CENTER)
+	rows.offset_left = -ROW_SIZE.x * 0.5
+	rows.offset_right = ROW_SIZE.x * 0.5
+	rows.offset_top = ROW_TOP
+	rows.offset_bottom = ROW_TOP + ROW_SIZE.y * cards.size() + ROW_SEPARATION * (cards.size() - 1)
+	add_child(rows)
+	if old:
+		move_child(rows, old.get_index())
+		old.visible = false
+	for card: Button in cards:
+		if not is_instance_valid(card):
+			continue
+		card.reparent(rows, false)
+		card.custom_minimum_size = ROW_SIZE
+		card.clip_contents = false ## seçim halesi satırın dışına taşar (bkz. TierCardFx.ensure_glow)
+		card.set_meta("glow_texture", ROW_GLOW)
+		card.set_meta("glow_card_size", ROW_SIZE)
+		card.set_meta("glow_colors", ROW_GLOW_COLORS)
+		var frame: TextureRect = card.get_node_or_null("Frame") as TextureRect
+		if frame:
+			frame.offset_right = ROW_SIZE.x
+			frame.offset_bottom = ROW_SIZE.y
+		var content: VBoxContainer = card.get_node("Content") as VBoxContainer
+		content.clip_contents = false
+		content.alignment = BoxContainer.ALIGNMENT_CENTER
+		content.offset_left = ROW_ICON_RECT.position.x
+		content.offset_top = ROW_ICON_RECT.position.y
+		content.offset_right = ROW_ICON_RECT.end.x
+		content.offset_bottom = ROW_ICON_RECT.end.y
+		for n in ["Category", "Title", "Desc", "CountLabel"]:
+			var node: CanvasItem = content.get_node_or_null(n) as CanvasItem
+			if node:
+				node.visible = false
+		(content.get_node("Icon") as Control).custom_minimum_size = Vector2(90, 90)
+		var sel: Control = card.get_node_or_null("SelectGlow") as Control
+		if sel:
+			sel.visible = false
+		var right_x: float = ROW_SIZE.x - ROW_RIGHT_PAD - 300.0
+		_row_label(card, "RowName", Rect2(ROW_TEXT_X, 30, 430, 44), 32, UIKit.C_CREAM, HORIZONTAL_ALIGNMENT_LEFT)
+		_row_label(card, "RowValue", Rect2(right_x, 18, 300, 80), 64, ROW_VALUE_COLOR, HORIZONTAL_ALIGNMENT_RIGHT)
+		_row_label(card, "RowVerb", Rect2(right_x, 84, 300, 40), 32, ROW_DIM_COLOR, HORIZONTAL_ALIGNMENT_RIGHT)
+		var sub := RichTextLabel.new()
+		sub.name = "RowSub"
+		sub.bbcode_enabled = true
+		sub.fit_content = false
+		sub.scroll_active = false
+		sub.autowrap_mode = TextServer.AUTOWRAP_OFF
+		sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_set_desc_font_size(sub, 32)
+		card.add_child(sub)
+		sub.position = Vector2(ROW_TEXT_X, 82)
+		sub.size = Vector2(ROW_SIZE.x - ROW_TEXT_X - ROW_RIGHT_PAD, 44)
+
+
+func _row_label(card: Control, lbl_name: String, rect: Rect2, font_size: int, color: Color, align: HorizontalAlignment) -> void:
+	var lbl := Label.new()
+	lbl.name = lbl_name
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.horizontal_alignment = align
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	UIKit.style_label(lbl, font_size, color, 0)
+	card.add_child(lbl)
+	lbl.position = rect.position
+	## Label ağaca girmeden/ilk karede varsayılan temayla en küçük boyutunu büyük ölçebiliyor - boyut ertelenerek de verilir.
+	lbl.size = rect.size
+	lbl.set_deferred("size", rect.size)
+
+
+## Satırın yazıları: ad, "Tier · Kategori · Nx alındı" (tier kısmı tier renginde), sağda değer + fiil.
+func _fill_row(card: Button, upgrade: Dictionary, tier: int, count: int) -> void:
+	var name_lbl: Label = card.get_node_or_null("RowName") as Label
+	if name_lbl == null:
+		return
+	## _populate_cards eski kart yerleşimi için tier adı etiketini (Content/Title) her çekilişte görünür yapıyor - satırda
+	## tier adı alt satırda, bu yüzden burada gizlenir.
+	var old_title: CanvasItem = card.get_node_or_null("Content/Title") as CanvasItem
+	if old_title:
+		old_title.visible = false
+	name_lbl.text = upgrade["title"]
+	var sub_text: String = "[color=#%s]%s  ·  %s[/color]" % [ROW_TIER_TEXT[clampi(tier, 1, 4) - 1].to_html(false),
+		TierSystem.NAMES[tier - 1], upgrade["cat"]]
+	if count > 0:
+		sub_text += "[color=#%s]  ·  %dx alındı[/color]" % [ROW_DIM_COLOR.to_html(false), count]
+	(card.get_node("RowSub") as RichTextLabel).text = sub_text
+	var is_cdr: bool = upgrade["id"] == "cooldown_reduction"
+	var clean_val: String = _scaled_desc_value(upgrade["desc"] as String, tier, str(upgrade["id"])).replace("+", "").replace("-", "")
+	(card.get_node("RowValue") as Label).text = ("-" if is_cdr else "+") + clean_val
+	(card.get_node("RowVerb") as Label).text = "azalır" if is_cdr else "artar"
+
+
+func _card_desc(card: Node) -> RichTextLabel:
+	var d: Node = card.get_node_or_null("Plaque/Desc")
+	return (d if d else card.get_node("Content/Desc")) as RichTextLabel
+
+
+func _card_count(card: Node) -> Label:
+	var c: Node = card.get_node_or_null("Plaque/CountLabel")
+	return (c if c else card.get_node("Content/CountLabel")) as Label
+
+
+static func _set_desc_font_size(desc: RichTextLabel, font_size: int) -> void:
+	for key in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size"]:
+		desc.add_theme_font_size_override(key, font_size)
+
+
+## Levhaya sığmayan (çok satıra kırılan) açıklamayı CARD_DESCRIPTION_MIN_FONT_SIZE'a kadar küçültür (yerleşimden sonra çağrılır).
+func _fit_plaque_desc() -> void:
+	if not is_inside_tree():
+		return
+	for card: Button in cards:
+		if not is_instance_valid(card):
+			continue
+		var desc: RichTextLabel = _card_desc(card)
+		var room: float = TierCardFx.PLAQUE_INNER_RECT.size.y - 30.0
+		var fs: int = CARD_DESCRIPTION_FONT_SIZE
+		_set_desc_font_size(desc, fs)
+		while fs > CARD_DESCRIPTION_MIN_FONT_SIZE and float(desc.get_content_height()) > room:
+			fs -= 8
+			_set_desc_font_size(desc, fs)
+
+
+func _ensure_fx_layer() -> Control:
+	if is_instance_valid(_fx_layer):
+		return _fx_layer
+	_fx_layer = Control.new()
+	_fx_layer.name = "PickFx"
+	_fx_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fx_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_fx_layer)
+	return _fx_layer
 
 
 ## Yetenek hover ipucundaki (bkz. skill_icon.gd _format_lol_style) İLE AYNI
@@ -485,6 +696,8 @@ func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 	var scaled: float
 	if id == "lifesteal":
 		scaled = TierSystem.lifesteal_percent_for_tier(tier) * 100.0
+	elif id == "max_health":
+		scaled = TierSystem.health_card_for_tier(tier) ## 15/24/30/38 - bkz. TierSystem (player.gd ile tek kaynak)
 	else:
 		scaled = rest.to_float() * (1.0 + float(tier - 1) * 0.3)
 	var formatted: String
@@ -501,11 +714,13 @@ func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
 	var title_name: String = upgrade["title"] as String
 	var title_color: String = STAT_TITLE_COLORS.get(upgrade["id"], UIKit.INK["text"])
 	var colored_title: String = "[color=%s][b]%s[/b][/color]" % [title_color, title_name]
-	var colored_val: String = "[color=%s]%s[/color]" % [UIKit.INK["value"], clean_val]
-	if upgrade["id"] == "cooldown_reduction":
-		return "%s %s azalır" % [colored_title, colored_val]
-	else:
-		return "%s %s artar" % [colored_title, colored_val]
+	## 2026-09-25 savaş kartı: kazanılan değer levhanın en büyük yazısı (m5x7'nin keskin durduğu 64 px) - kart bir bakışta
+	## "ne kadar güçlendim" desin; stat adı üstünde kendi renginde, fiil (artar/azalır) değerin altında küçük.
+	var colored_val: String = "[font_size=%d][color=%s]%s%s[/color][/font_size]" % [CARD_VALUE_FONT_SIZE, UIKit.INK["value"],
+		"-" if upgrade["id"] == "cooldown_reduction" else "+", clean_val]
+	var verb: String = "azalır" if upgrade["id"] == "cooldown_reduction" else "artar"
+	return "%s\n%s\n[font_size=%d][color=%s]%s[/color][/font_size]" % [colored_title, colored_val, CARD_COUNT_FONT_SIZE * 2,
+		UIKit.C_TEXT_DIM.to_html(false), verb]
 
 
 ## #48 DÜZELTME (kullanıcı isteği: "Level kartı reroll'u altınla olsun,
@@ -574,10 +789,10 @@ func _apply_kit_style() -> void:
 			gs.shadow_color = Color(0.92, 0.72, 0.28, 0.5)
 			gs.shadow_size = 10
 			glow.add_theme_stylebox_override("panel", gs)
-		var count_label: Label = card.get_node_or_null("Content/CountLabel") as Label
+		var count_label: Label = _card_count(card)
 		if count_label:
 			count_label.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
-		var desc: RichTextLabel = card.get_node_or_null("Content/Desc") as RichTextLabel
+		var desc: RichTextLabel = _card_desc(card)
 		if desc:
 			desc.add_theme_color_override("default_color", UIKit.C_TEXT)
 	reroll_button.theme = game_theme
@@ -619,10 +834,49 @@ func _on_reroll_pressed() -> void:
 ## _on_upgrade_chosen) - kuyruk bitmediyse bir sonraki kart hemen açılır,
 ## kuyruk BİTTİYSE main.gd ayrı bir "diğer oyuncular bekleniyor" ekranı
 ## gösterir (bkz. main.gd _show_level_up_wait_overlay).
-func _on_card_pressed(id: String, tier: int, _card: Button) -> void:
+##
+## Kullanıcı isteği (2026-09-25): "bir kartı seçince parıltı ve ödüllendirici bir ses efekti çıksın ve 1 saniye boyunca kart
+## parıldasın sonrasında level kart seçim ekranı kapansın böyle çok ruhsuz." - seçim artık önce TierCardFx.celebrate'i
+## (ses + parlama + hale + kıvılcım, TierCardFx.PICK_DURATION = 1 sn) oynatıyor, upgrade_chosen ancak o bitince yayılıyor
+## (main.gd ekranı onu alınca kapatır). Bu sürede ağaç zaten duraklatılmış (main.gd _show_level_up_screen) - oyun
+## akmıyor; _has_chosen HEMEN true olduğundan ikinci bir tık/1-2-3 tuşu/süre dolumu otomatik seçimi yeniden tetiklemez,
+## karıştır butonu da kapanır. Tween bu ekrana bağlı: ekran başka bir sebeple (oyun sıfırlama vb.) serbest kalırsa
+## sinyal hiç yayılmaz, eski/yarım bir seçim uygulanmaz.
+func _on_card_pressed(id: String, tier: int, card: Button) -> void:
+	if _has_chosen:
+		return
 	_has_chosen = true
-	## Ekranın kendisini serbest bırakmak main.gd'nin _on_upgrade_chosen'ına
-	## bırakılıyor (o zaten _active_level_up_screen'i - yani bu sahneyi -
-	## queue_free() ediyor) - burada AYRICA çağırmak zararsız ama gereksiz
-	## tekrar olurdu.
+	if is_instance_valid(reroll_button):
+		reroll_button.disabled = true
+	for i in range(cards.size()):
+		if _shine_tweens[i] and _shine_tweens[i].is_valid():
+			_shine_tweens[i].kill()
+		if _card_tweens[i] and _card_tweens[i].is_valid():
+			_card_tweens[i].kill()
+		var other: Button = cards[i]
+		if not is_instance_valid(other):
+			continue
+		other.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if other == card:
+			continue
+		## Seçilmeyen kartlar sönüp hafifçe geri çekilir - göz seçilen karta gitsin.
+		other.pivot_offset = other.size * 0.5
+		TierCardFx.set_hover_glow(other, int(_card_tiers[i]), false)
+		var fade := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		fade.tween_property(other, "modulate", Color(0.55, 0.52, 0.5, 0.35), 0.3)
+		fade.tween_property(other, "scale", Vector2(0.94, 0.94), 0.3)
+	## Açılış animasyonu yarıda kesildiyse (ekran açılır açılmaz 1/2/3'e basıldı) kart tam görünür olsun ve HBox onu asıl
+	## yerine geri koysun.
+	card.modulate = Color(1, 1, 1, 1)
+	var container: Container = card.get_parent() as Container
+	if container:
+		container.queue_sort()
+	var frame: TextureRect = card.get_node_or_null("Frame") as TextureRect
+	var tw: Tween = TierCardFx.celebrate(self, card, frame, tier, _ensure_fx_layer())
+	tw.chain().tween_callback(_finish_pick.bind(id, tier))
+
+
+## Ekranın kendisini serbest bırakmak main.gd'nin _on_upgrade_chosen'ına bırakılıyor (o zaten _active_level_up_screen'i -
+## yani bu sahneyi - queue_free() ediyor).
+func _finish_pick(id: String, tier: int) -> void:
 	upgrade_chosen.emit(id, tier)

@@ -50,6 +50,15 @@ const TYPE_FRAMES := {
 	"shield_savas": preload("res://assets/fx/shield_bubble_savas/bubble_frames.tres"),
 }
 
+## Gece ışığının rengi (bkz. night_glow_catalog.gd BY_SCRIPT, night_glow.gd kancası) - her türün baloncuk sanatının
+## ortalama tonundan (standart mavi, enerji yeşil, kale turkuaz, savaş kırmızı).
+const TYPE_GLOW_COLORS := {
+	"shield_enerji": Color(0.66, 0.96, 0.3),
+	"shield_kale": Color(0.26, 0.86, 0.66),
+	"shield_savas": Color(0.95, 0.3, 0.3),
+}
+const DEFAULT_GLOW_COLOR := Color(0.3, 0.72, 1.0)
+
 ## Sahnede BubbleSprite'a zaten atanmış olan Standart Kalkan sprite_frames'i -
 ## _ready()'de bir kere okunup saklanıyor ki shield_standart'a (ya da hiçbir
 ## tür sahip değilken) dönüldüğünde bubble_frames.tres'e elle dokunmadan
@@ -70,6 +79,10 @@ func _ready() -> void:
 	if bubble:
 		bubble.animation_finished.connect(_on_bubble_animation_finished)
 		_default_frames = bubble.sprite_frames
+
+
+func get_night_glow_color() -> Color:
+	return TYPE_GLOW_COLORS.get(_current_shield_type, DEFAULT_GLOW_COLOR)
 
 
 ## Aktif kalkan TÜRÜNE göre baloncuk görselini değiştirir (bkz. TYPE_FRAMES).

@@ -29,6 +29,15 @@ func _ready() -> void:
 	z_index = 6
 
 
+## Gece ışığı (bkz. night_glow.gd): bağ çizgisi boyunca, çizgiyle birlikte söner.
+func get_glow_segment() -> Array:
+	return [start_pos, end_pos]
+
+
+func get_night_glow_energy() -> float:
+	return 1.0 - clampf(_elapsed / LIFETIME, 0.0, 1.0)
+
+
 func _process(delta: float) -> void:
 	_elapsed += delta
 	queue_redraw()

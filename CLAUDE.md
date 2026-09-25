@@ -99,6 +99,20 @@ diğer oyuncularda eski/hiç görsel kalır.
    `scripts/reading_ui_watcher.gd`) — `get_tree().paused` yapan ekranlarda
    bile çalışır, ekran kapanınca kendiliğinden biter.
 
+7. **Gece ışığı (gün-gece sistemi, 2026-09-25).** Gece yetenek/mermi/namlu
+   efektleri karanlığı azaltan ışık saçar. Hangi efektin hangi renk/boyda
+   parladığı TEK listede: `scripts/night_glow_catalog.gd` (sahne yolu ya da
+   script yolu -> profil). `atmosphere.gd` sahneye eklenen her düğüme bakıp
+   ışığı OTOMATİK takar - yerel ve uzak kopyalar aynı yoldan üretildiği için
+   ikisinde de çıkar, `remote_player.gd`'ye ayrıca bir şey yazma. Yeni bir
+   `scenes/fx_*.tscn` listede yoksa hafif varsayılan bir parıltı alır; doğru
+   renk için `BY_SCENE`'e ekle, parlamaması gerekiyorsa (kan/toz/duman/
+   gizlilik) `NO_GLOW_SCENES`'e ekle. Kodla kurulan (sahnesiz) efekt SADECE
+   `BY_SCRIPT`'teyse parlar. Efekt `top_level` olup kökü (0,0)'da duruyor ve
+   dünya koordinatıyla çiziyorsa ışık yanlış yerde çıkar: efekte
+   `get_glow_segment() -> [başlangıç, bitiş]` kancası ekle (bkz.
+   `night_glow.gd` dosya başı, örnek `fx_lightning_beam.gd`).
+
 ## Test/doğrulama
 
 Yeni bir yetenek/efekt eklediğinde, TEK bilgisayarda iki pencere açıp

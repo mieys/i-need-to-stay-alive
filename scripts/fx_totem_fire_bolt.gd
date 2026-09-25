@@ -81,6 +81,13 @@ func _draw() -> void:
 		_draw_impact()
 
 
+## Gece ışığı (bkz. night_glow.gd): kök (0,0)'da duruyor (top_level, dünya koordinatıyla çiziyor) - ışık uçan ateş
+## topunun başında, isabetten sonra çarpma noktasında.
+func get_glow_segment() -> Array:
+	var p: Vector2 = _path(_elapsed / travel_time) if _elapsed <= travel_time else end_pos
+	return [p, p]
+
+
 ## Yol üzerindeki konum: u = 0..1 (yumuşak başlangıç/bitiş). Kuyruk, geçmiş u değerleri analitik okunarak çizilir.
 func _path(u: float) -> Vector2:
 	var c: float = clampf(u, 0.0, 1.0)

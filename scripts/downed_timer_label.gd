@@ -14,17 +14,25 @@ extends Label
 ## aynı formül/konum TEKRARLANMASIN diye (bkz. proje CLAUDE.md üstündeki
 ## tekrar eden hata sınıfı notu).
 ##
-## overhead_bar.gd'nin can çubuğuyla (y_offset=-62.0, WIDTH=44.0) AYNI
+## overhead_bar.gd'nin karakter can çubuğuyla (CHARACTER_Y_OFFSET, WIDTH=44.0) AYNI
 ## yükseklikte ama karakterin SOLUNDA duruyor (remote_player_name.gd'nin
-## isim etiketi gibi sabit bir offset, bkz. orada).
+## isim etiketi gibi sabit bir offset, bkz. orada). 2026-09-25: çubuk -62 -> -76
+## yükseldi (şapkalar örtülmesin), bu etiket de 14 px yukarı (-76 -> -90).
+
+## Kullanıcı isteği (2026-09-25): "diriltme zaman sayacı karakterin içinde değil can ve kalkan barının olduğu yerde
+## çıksın ve can ve kalkan barı ölünce gizlensin" - artık karakterin solunda değil, gizlenen can çubuğunun TAM yerinde
+## (overhead_bar.gd CHARACTER_Y_OFFSET, çubuğun ortası) ortalanmış duruyor.
+const OverheadBarScript := preload("res://scripts/overhead_bar.gd")
+const LABEL_SIZE := Vector2(120.0, 34.0)
+
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	position = Vector2(-152.0, -76.0)
-	size = Vector2(92.0, 30.0)
-	horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	size = LABEL_SIZE
+	position = Vector2(-LABEL_SIZE.x * 0.5, OverheadBarScript.CHARACTER_Y_OFFSET + OverheadBarScript.HEIGHT * 0.5 - LABEL_SIZE.y * 0.5)
+	horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	add_theme_font_size_override("font_size", 22)
+	add_theme_font_size_override("font_size", 28)
 	add_theme_color_override("font_color", Color(1.0, 0.35, 0.3, 1.0))
 	add_theme_constant_override("outline_size", 4)
 	add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))

@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_taunt_status.gd" id="1_taunt"]
+[ext_resource type="SpriteFrames" path="res://assets/fx/sovalye/taunt_status_frames.tres" id="2_frames"]
+
+[node name="FxTauntStatus" type="AnimatedSprite2D"]
+z_index = 56
+texture_filter = 1
+sprite_frames = ExtResource("2_frames")
+animation = &"loop"
+script = ExtResource("1_taunt")

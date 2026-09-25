@@ -26,24 +26,21 @@ extends Control
 ## yuvarlak köşeli yumuşak (StyleBoxFlat) 9/6 px çubuklar ve 28 px altın butonuydu. Yeni düzen HUD'un ana can/kalkan
 ## çubuklarıyla AYNI piksel dokuları (hud_bar_under/hud_bar_fill + renk tonu), 24 px (m5x7 3x) yazı, çerçeveli 48 px
 ## portre (1:1 piksel), çubuğun içinde "can/maks" yazısı ve 40 px altın butonu kullanır; başlıkta "GRUP" + İstatistik.
-const PANEL_WIDTH := 340.0
+## YENİDEN TASARIM (kullanıcı bildirimi 2026-09-25, ekran görüntüsüyle: "grup paneli çok büyük görünüyor, can ve kalkan
+## barları çok kalın ve çok yer kaplıyor, yeniden tasarlanması gerekiyor"). Eskiden her müttefik satırı ana HUD'un 44 px'lik
+## ikonlu parşömen levhalarından İKİ tane (can + kalkan) + 60 px portre + 40 px altın butonu taşıyordu (satır ~120 px,
+## panel 340 px genişlik - 3 müttefikte ekranın sol yarısını kaplıyordu). Artık MMO "party frame" sadeliği: 48 px 1:1 portre,
+## isim satırı, altında İNCE can (14 px) ve kalkan (12 px) çubukları, değer yazısı çubuğun içinde küçük (16 px = m5x7 2x,
+## keskin). Çubuklar yine ana HUD'la AYNI piksel dokuları (hud_bar_under/hud_bar_fill), AYNI renk dili (can yeşil->kırmızı,
+## kalkan mavi) ve %10 çentikler - sadece çerçevesiz ve ince. Satır ~60 px, panel 280 px.
+const PANEL_WIDTH := 280.0
 const AVATAR_SIZE := 48.0 ## portre PNG'leri 48x48 - 1:1 çizilir (bulanık/yamuk ölçek yok)
-const AVATAR_BOX := 60.0
-const GOLD_BTN_SIZE := 40.0
-## GÜNCELLEME (kullanıcı bildirimi 2026-09-24, aynı gün: "gruptaki can kalkan barları ... oyunla uygun görünmüyor") -
-## ekran görüntüsünde çubuklar çerçevesiz, çentiksiz, düz (ve can %60'ta haki) duruyordu; sol üstteki ana can/kalkan
-## levhalarıyla aynı aileden görünmüyordu. Artık ana HUD'un BİREBİR aynı yapısı (bkz. hud.gd _layout_bar_kit): ikonlu
-## parşömen levha (hud_bar_frame_hp / _shield, 9-patch, 1:1 piksel), levhanın yuvasında dolgu + %10 çentikler, ortada
-## konturlu değer yazısı. Ölçüler hud.gd sabitleriyle aynı (levha 44 px, yuva 20 px, sol pay 40 / sağ pay 12).
-const BAR_FRAME_HP := preload("res://assets/ui/kit/hud_bar_frame_hp.png")
-const BAR_FRAME_SHIELD := preload("res://assets/ui/kit/hud_bar_frame_shield.png")
-const BAR_FRAME_HEIGHT := 44.0
-const BAR_FRAME_PATCH_LEFT := 40
-const BAR_FRAME_PATCH_RIGHT := 12
-const BAR_SLOT_TOP := 12.0
-const BAR_SLOT_HEIGHT := 20.0
+const AVATAR_BOX := 52.0
+const GOLD_BTN_SIZE := 32.0
+const HP_BAR_HEIGHT := 14.0
+const SHIELD_BAR_HEIGHT := 12.0
 const BAR_TICK_COUNT := 10
-const BAR_VALUE_FONT_SIZE := 24
+const BAR_VALUE_FONT_SIZE := 16
 const FS_ROW := 24
 const GOLD_ICON_PATH := "res://assets/ui/newui/icon_ingot.png"
 const BAR_UNDER := preload("res://assets/ui/kit/hud_bar_under.png")
@@ -148,7 +145,7 @@ func _build_static_ui() -> void:
 	## başka çocuklara dokunmaz), bu yüzden buton en üste onun içine ekleniyor.
 	_stats_button = Button.new()
 	_stats_button.text = "İstatistik"
-	_stats_button.custom_minimum_size = Vector2(0, 36)
+	_stats_button.custom_minimum_size = Vector2(0, 30) ## 2026-09-25 sadeleştirme: 36 -> 30
 	## DÜZELTME (kullanıcı bildirimi: "grup paneli çok genişledi... istatistikler
 	## butonu eklediğin için yanlışlıkla genişletmişsin") - bu butonun font_size
 	## override'ı hiç yoktu, yani proje varsayılan temasının (theme.tres)
@@ -344,8 +341,8 @@ func _create_row(peer_id: int) -> PartyRow:
 	avatar_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	avatar_bg.stretch_mode = TextureRect.STRETCH_SCALE
 	avatar_bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	avatar_bg.position = Vector2(4, 4)
-	avatar_bg.size = Vector2(AVATAR_BOX - 8.0, AVATAR_BOX - 8.0)
+	avatar_bg.position = Vector2(2, 2)
+	avatar_bg.size = Vector2(AVATAR_BOX - 4.0, AVATAR_BOX - 4.0)
 	avatar_box.add_child(avatar_bg)
 	var avatar := TextureRect.new()
 	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -369,7 +366,7 @@ func _create_row(peer_id: int) -> PartyRow:
 	var info_vbox := VBoxContainer.new()
 	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	info_vbox.add_theme_constant_override("separation", 0)
+	info_vbox.add_theme_constant_override("separation", 3)
 	hbox.add_child(info_vbox)
 
 	## 1. satır: isim (taşarsa ...) + durum etiketi (YERDE / ÖLÜ)
@@ -390,12 +387,12 @@ func _create_row(peer_id: int) -> PartyRow:
 	name_row.add_child(downed_label)
 	row.downed_label = downed_label
 
-	## 2-3. satır: ana HUD'la aynı ikonlu levhalı can ve kalkan çubukları (bkz. BAR_FRAME_* notu), içinde "değer/maks".
-	var hp_parts: Array = _make_framed_bar(BAR_FRAME_HP)
+	## 2-3. satır: ince can ve kalkan çubukları (bkz. PANEL_WIDTH üstündeki yeniden tasarım notu), içinde "değer/maks".
+	var hp_parts: Array = _make_slim_bar(HP_BAR_HEIGHT)
 	info_vbox.add_child(hp_parts[0])
 	row.health_bar = hp_parts[1]
 	row.health_label = hp_parts[2]
-	var sh_parts: Array = _make_framed_bar(BAR_FRAME_SHIELD)
+	var sh_parts: Array = _make_slim_bar(SHIELD_BAR_HEIGHT)
 	info_vbox.add_child(sh_parts[0])
 	row.shield_root = sh_parts[0]
 	row.shield_bar = sh_parts[1]
@@ -451,19 +448,15 @@ func _create_row(peer_id: int) -> PartyRow:
 	return row
 
 
-## Ana HUD levhası (bkz. hud.gd _layout_bar_kit): [kök Control, TextureProgressBar, değer Label]. Çizim sırası: dolgu ->
-## çentikler (dolgunun çocuğu) -> levha çerçevesi -> yazı.
-func _make_framed_bar(frame_tex: Texture2D) -> Array:
+## İnce çubuk: [kök Control, TextureProgressBar, değer Label]. Ana HUD'la aynı dolgu dokuları + %10 çentikler, çerçevesiz
+## (bkz. PANEL_WIDTH üstündeki yeniden tasarım notu). Yazı çubuğun ortasında, koyu konturla her renkte okunur.
+func _make_slim_bar(height: float) -> Array:
 	var root := Control.new()
-	root.custom_minimum_size = Vector2(0.0, BAR_FRAME_HEIGHT)
+	root.custom_minimum_size = Vector2(0.0, height)
 	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bar: TextureProgressBar = _make_bar(BAR_SLOT_HEIGHT)
-	bar.anchor_right = 1.0
-	bar.offset_left = float(BAR_FRAME_PATCH_LEFT)
-	bar.offset_right = -float(BAR_FRAME_PATCH_RIGHT)
-	bar.offset_top = BAR_SLOT_TOP
-	bar.offset_bottom = BAR_SLOT_TOP + BAR_SLOT_HEIGHT
+	var bar: TextureProgressBar = _make_bar(height)
+	bar.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(bar)
 	var ticks := Control.new()
 	ticks.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -472,28 +465,18 @@ func _make_framed_bar(frame_tex: Texture2D) -> Array:
 	ticks.draw.connect(func() -> void:
 		for t in range(1, BAR_TICK_COUNT):
 			var x: float = round(ticks.size.x * float(t) / float(BAR_TICK_COUNT) * 0.5) * 2.0
-			ticks.draw_rect(Rect2(x - 2.0, 0.0, 2.0, ticks.size.y), Color(0.12, 0.06, 0.02, 0.3)))
+			ticks.draw_rect(Rect2(x - 1.0, 2.0, 2.0, maxf(ticks.size.y - 4.0, 1.0)), Color(0.12, 0.06, 0.02, 0.3)))
 	ticks.resized.connect(ticks.queue_redraw)
-	var frame := NinePatchRect.new()
-	frame.texture = frame_tex
-	frame.patch_margin_left = BAR_FRAME_PATCH_LEFT
-	frame.patch_margin_right = BAR_FRAME_PATCH_RIGHT
-	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.add_child(frame)
 	var lbl := Label.new()
-	lbl.anchor_right = 1.0
-	lbl.offset_left = float(BAR_FRAME_PATCH_LEFT)
-	lbl.offset_right = -float(BAR_FRAME_PATCH_RIGHT)
-	lbl.offset_top = BAR_SLOT_TOP - 4.0
-	lbl.offset_bottom = BAR_SLOT_TOP + BAR_SLOT_HEIGHT + 4.0
+	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lbl.offset_top = -3.0
+	lbl.offset_bottom = 3.0
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", BAR_VALUE_FONT_SIZE)
 	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 	lbl.add_theme_color_override("font_outline_color", Color(0.1, 0.05, 0.03))
-	lbl.add_theme_constant_override("outline_size", 6)
+	lbl.add_theme_constant_override("outline_size", 4)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(lbl)
 	return [root, bar, lbl]

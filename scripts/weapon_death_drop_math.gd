@@ -36,6 +36,23 @@ const SCATTER_RADIUS_MAX := 50.0
 ## üstüne çıkmaz - ilk fırlamanın tepe noktası (v^2/2g) bu sınırın altında
 ## kalacak şekilde INITIAL_UP_SPEED ile uyumlu seçildi.
 const MAX_SHADOW_GAP := 70.0
+## Kullanıcı isteği (2026-09-25): "ölünce silahlar etrafa saçılıp hafifçe opaklaşsın dirilince ease ease halinde geri
+## dönsün karaktere" - yerdeyken silah (ikon + gölge) bu opaklığa iner (düşerken kademeli), dirilince geri dönüş
+## RISE_DURATION sürer ve ease-in-out'tur (yavaş kalkar, hızlanır, yavaşça yerine oturur); opaklık da aynı eğriyle 1'e çıkar.
+## weapon.gd ve remote_player.gd ikisi de buradan okur (self_modulate - Vampir yarasa formunun modulate'ıyla çakışmaz).
+const GROUND_ALPHA := 0.55
+const RISE_DURATION := 0.75
+
+
+## Düşerken opaklık: 1 -> GROUND_ALPHA (yatay kaymayla aynı eğri).
+static func fall_alpha(elapsed: float) -> float:
+	return lerpf(1.0, GROUND_ALPHA, ease_out_cubic(elapsed / XY_DURATION))
+
+
+## Dönüşün konum/opaklık eğrisi (0..1 zaman -> 0..1 ilerleme).
+static func ease_in_out_cubic(t: float) -> float:
+	t = clampf(t, 0.0, 1.0)
+	return 4.0 * t * t * t if t < 0.5 else 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0
 
 
 ## Bir fizik karesi kadar dikey "sekme" simülasyonu ilerletir - height (>=0,

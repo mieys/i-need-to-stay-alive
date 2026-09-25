@@ -108,7 +108,7 @@ const DEFS := {
 		## DEĞİŞMEDİ (bkz. eski skill3 alanları, artık burada).
 		"skill": 33,
 		"skill_name": "Arı Sürüsü",
-		"skill_desc": "Bulunduğu konuma 10sn süren bir arı sürüsü salar. İçindeki yaratıklar saniyede 1 zehir yükü biriktirir (en fazla 10), her yük 4sn boyunca toplam saldırı gücünün %20'si kadar hasar verir. (20sn bekleme)",
+		"skill_desc": "YETENEK: Bulunduğu konuma 10sn süren bir arı sürüsü salar. İçindeki yaratıklar saniyede 1 zehir yükü biriktirir (en fazla 10), her yük 4sn boyunca toplam saldırı gücünün %20'si kadar hasar verir. (20sn bekleme)",
 		"skill_icon": "res://assets/skills/oakley_ari_suru_icon.png",
 		"skill2": 10,
 		"skill2_name": "Sarmaşıklar",
@@ -141,6 +141,15 @@ const DEFS := {
 		"passive_icon": "res://assets/skills/oakley_cicek_icon.png",
 		"frames": "res://assets/characters/oyku_frames.tres",
 		"portrait": "res://assets/characters/oyku_portrait.png",
+		## Kullanıcı isteği (2026-09-25, new characters.zip #3): eski LPC atlası (oyku_atlas.png, silindi) yerine yeni 48x48 sayfalar
+		## (tools/import_character_sheets.py, anahtar "oakley" -> assets/characters/oakley/sheets; dosya adları oyku_*
+		## korundu). Aynı üretici kanvası (OLCU: gövde 14x37, ayak satırı 40) - Talon/Elara'yla AYNI ölçek/offset/gölge
+		## yüksekliği; gölge genişliği aynı gövde genişliğindeki (14) Matthew'in küçültme öncesi değeri.
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(15.25, 6.25),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
 	},
 	3: {
 		"name": "Matthew",
@@ -151,9 +160,9 @@ const DEFS := {
 		"skill": 43,
 		"skill_name": "Tilki Hücumu",
 		"skill_desc": "YETENEK: Tilkisini anında yanına ışınlayıp görüş alanındaki en fazla 6 düşmana dash saldırısı attırır, saldırı gücünün %110'u kadar hasar verir ve onları kendinden uzağa iter. (8sn bekleme)",
-		## İkon dosyası HENÜZ YOK (Talon'un yeni kitindeki AYNI durum, bkz. DEFS[1] üstündeki not) - gerçek
-		## sanat gelene kadar geçici olarak Feda Kalkanı'nın ikonu paylaşılıyor.
-		"skill_icon": "res://assets/skills/matthew_feda_kalkani_icon.png",
+		## Kullanıcı isteği (2026-09-25): Matthew'in 4 ikonu 48x48 piksel olarak sıfırdan çizildi (tools/gen_matthew_icons.py) -
+		## Q artık Feda Kalkanı'nın ikonunu paylaşmıyor, kendi ikonu var.
+		"skill_icon": "res://assets/skills/matthew_tilki_hucumu_icon.png",
 		"skill2": 21,
 		"skill2_name": "Vahşi Hız",
 		"skill2_desc": "TEMEL: Kendine ve tilkisine 10 saniye boyunca %40 saldırı hızı ve %15 hareket hızı kazandırır. (35sn bekleme)",
@@ -201,7 +210,7 @@ const DEFS := {
 		"skill_name": "Büyü Değişimi",
 		## Kullanıcı isteği (2026-09-24): Büyücü Kız'ın E'si de 1. seviyede açık (diğerlerinde 5) - bkz. skill_unlock_level.
 		"skill2_unlock_level": 1,
-		"skill_desc": "ULTİ: TEMEL (E) ve 3. yeteneğin (R) setini birlikte değiştirir (Set 1: Arcane Lanet + Hortum <-> Set 2: Don Nova + Meteor Patlaması). (1sn bekleme)",
+		"skill_desc": "YETENEK: TEMEL (E) ve ULTİ (R) setini birlikte değiştirir (Set 1: Arcane Lanet + Hortum <-> Set 2: Don Nova + Meteor Patlaması). (1sn bekleme)",
 		## DÜZELTME (kullanıcı bildirimi: "büyücü kızın skill ikonları
 		## görünmüyor"): eskiden hem ULTİ hem pasif ikonu, ULTİ tamamen
 		## kaldırılmış ESKİ "Hızlı Ateş" yeteneğinin ikonuna
@@ -223,7 +232,7 @@ const DEFS := {
 		## düşüş (fallback) değeri.
 		"skill2": 22,
 		"skill2_name": "Arcane Lanet (Set 1/2)",
-		"skill2_desc": "TEMEL (E, 2 setli - ULTİ ile değiştirilir):\n1) Arcane Lanet: yaratıklar arasında 4 kez sekip her sekişte saldırı gücünün %80'i kadar hasar verir. (4sn bekleme)\n2) Don Nova: etraftaki tüm yaratıkları 6sn dondurur (donan yaratık hiçbir şey yapamaz) ve saldırı gücünün %100'ü kadar hasar verir. (30sn bekleme)",
+		"skill2_desc": "TEMEL (2 setli - Q ile değiştirilir):\n1) Arcane Lanet: yaratıklar arasında 4 kez sekip her sekişte saldırı gücünün %80'i kadar hasar verir. (4sn bekleme)\n2) Don Nova: etraftaki tüm yaratıkları 6sn dondurur (donan yaratık hiçbir şey yapamaz) ve saldırı gücünün %100'ü kadar hasar verir. (30sn bekleme)",
 		## bkz. hud.gd _process (GameManager.selected_char_id == 4 dalı) -
 		## HER karede o anki set'e göre skill2_icon.custom_texture'ı burdan
 		## (buyucu_variation_set index'iyle, 0 veya 1) seçiyor. Sıra: 0=Arcane
@@ -238,7 +247,7 @@ const DEFS := {
 		## player.gd _buyucu_try_activate_variation_r/BUYUCU_SET_R_VARIATIONS.
 		"skill3": 24,
 		"skill3_name": "Hortum (Set 1/2)",
-		"skill3_desc": "3. YETENEK (R, 2 setli - ULTİ ile değiştirilir):\n1) Hortum: 15sn boyunca dolaşan 3 hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %90'ı kadar hasar verir. (45sn bekleme)\n2) Meteor Patlaması: 5sn hareketsiz odaklanıp etrafa saldırı gücünün %120'si kadar hasar veren meteorlar yağdırır. (120sn bekleme)",
+		"skill3_desc": "ULTİ (2 setli - Q ile değiştirilir):\n1) Hortum: 15sn boyunca dolaşan 3 hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %90'ı kadar hasar verir. (45sn bekleme)\n2) Meteor Patlaması: 5sn hareketsiz odaklanıp etrafa saldırı gücünün %120'si kadar hasar veren meteorlar yağdırır. (120sn bekleme)",
 		"skill3_variation_icons": [
 			"res://assets/skills/buyucu_skill_hortum_icon.png",
 			"res://assets/skills/buyucu_skill_meteor_icon.png",
@@ -311,32 +320,34 @@ const DEFS := {
 	},
 	7: {
 		"name": "Şovalye Adam",
-		"skill": 11,
-		"skill_name": "Koruma Baloncuğu",
-		"skill_desc": "ULTİ: Kalkanı bitene kadar içine düşman/mermi girmeyen koruma alanı açar (%30 menzil, kalkan hasarı %95 azalır). Hareket edemez. (120sn bekleme)",
-		"skill_icon": "res://assets/skills/sovalye_ulti_koruma_baloncugu_icon.png",
-		"skill2": 10,
-		"skill2_name": "Kalkan Yenileme",
-		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede EKSİK kalkanının %5'ini yeniler ve çevrendeki yaratıkların dikkatini 5 saniye boyunca üzerine çeker. (25sn bekleme)",
-		"skill2_icon": "res://assets/skills/sovalye_kiskirtma_icon.png",
+		## Kullanıcı isteği (2026-09-25): "şovalye adamın Q su R olacak. E si yeni Q olacak R si de E olacak" - Matthew'in
+		## Q/R değişimiyle AYNI desen: id'ler yuvalar arasında taşındı (player.gd _activate_skill/_activate_skill2/
+		## _activate_skill3 + SKILL*_TIMING eşleşen "2026-09-25 slot değişimi" notları). Eski E (Kalkan Yenileme, skill2
+		## id 10 - Melek/Oakley ile paylaşılan id) Q'ya Şovalye'ye özel yeni id 45 ile geldi; Koruma Bariyeri (29) E'ye,
+		## Koruma Baloncuğu (11) R'ye geçti. Açılış seviyeleri yuvaya bağlı (Q 1, E 5, R 10).
+		"skill": 45,
+		"skill_name": "Kışkırtma",
+		"skill_desc": "YETENEK: 6 saniye boyunca her saniye EKSİK kalkanının %5'i + MAKSİMUM kalkanının %5'i kadar kalkan yeniler ve çevrendeki yaratıkların dikkatini 5 saniye boyunca üzerine çeker. (25sn bekleme)",
+		"skill_icon": "res://assets/skills/sovalye_kiskirtma_icon.png",
+		"skill2": 29,
+		"skill2_name": "Koruma Bariyeri",
+		"skill2_desc": "TEMEL: Yakındaki dostların etrafında 15sn boyunca dönen bir bariyer oluşturur, aldıkları hasarın %30'unu kendine yansıtır (kendi kalkanından geçer). Dost çok uzaklaşırsa bariyeri kaybolur. (60sn bekleme)",
+		## Kullanıcı isteği (2026-09-25): ikonu yoktu - tools/gen_sovalye_icons.py.
+		"skill2_icon": "res://assets/skills/sovalye_koruma_bariyeri_icon.png",
 		## Kullanıcı bildirimi: "bazı karakterlerin pasifi oyun içindeyken
 		## görünmüyor" - kök neden Şovalye Adam'ın hiç pasifi olmamasıydı
 		## (tek istisna, diğer 10 karakterin hepsinde var). Kullanıcı isteğiyle
 		## eklendi: aldığı hasarın bir kısmını saldırgana geri yansıtır (bkz.
-		## player.gd thorns_reflect_percent/take_damage). Henüz gerçek sanat
-		## eseri ikonu yok, bu yüzden "passive_vector_id" ile skill_icon.gd
-		## _icon_thorns'a düşüyor (bkz. Talon Devleşme'nin gerçek ikonu
-		## gelene kadar aynı şekilde vektörle gösterilmesiyle AYNI desen).
+		## player.gd thorns_reflect_percent/take_damage). "passive_vector_id" (skill_icon.gd _icon_thorns) artık
+		## sadece yedek - 2026-09-25'ten beri gerçek piksel ikonu var (tools/gen_sovalye_icons.py).
 		"passive": "Dikenli Zırh: Aldığı hasarın %10'unu saldırgana geri yansıtır.",
+		"passive_icon": "res://assets/skills/sovalye_passive_icon.png",
 		"passive_vector_id": 16,
 		"thorns_reflect_percent": 0.10,
-		## Kullanıcı isteği: Şovalye Adam'ın yeni 3. yeteneği (skill3, R
-		## tuşu) - yakındaki dostların etrafında 15sn boyunca dönen bir
-		## bariyer oluşturup aldıkları hasarın %30'unu kendine yansıtır
-		## (bkz. player.gd _skill_paladin_barrier, skill id 29).
-		"skill3": 29,
-		"skill3_name": "Koruma Bariyeri",
-		"skill3_desc": "3. YETENEK: Yakındaki dostların etrafında 15sn boyunca dönen bir bariyer oluşturur, aldıkları hasarın %30'unu kendine yansıtır (kendi kalkanından geçer). Dost çok uzaklaşırsa bariyeri kaybolur. (60sn bekleme)",
+		"skill3": 11,
+		"skill3_name": "Koruma Baloncuğu",
+		"skill3_desc": "ULTİ: Kalkanı bitene kadar içine düşman/mermi girmeyen koruma alanı açar (%30 menzil, kalkan hasarı %95 azalır). Hareket edemez. (120sn bekleme)",
+		"skill3_icon": "res://assets/skills/sovalye_ulti_koruma_baloncugu_icon.png",
 		"frames": "res://assets/characters/sovalye_frames.tres",
 		"portrait": "res://assets/characters/sovalye_portrait.png",
 		## Kullanıcı isteği (2026-09-23, new characters.zip #2) - bkz. Matthew DEFS'indeki
@@ -366,14 +377,16 @@ const DEFS := {
 		## kaldırıldı, id 12 AYNI kaldı (bkz. player.gd _skill_elara_evasion).
 		"skill": 12,
 		"skill_name": "Sıvışma",
-		"skill_desc": "YETENEK: 3 saniye boyunca (azalarak kaybolacak şekilde) %100 hareket hızı, %50 sıvışma kazandırır ve yaratıkların içinden geçebilmeni sağlar (sıvışma sınırını aşabilir). Kalkan harcamaz. (10sn bekleme)",
+		## 2026-09-25: hız %100 (azalan) -> %50 SABİT; sıvışma hâlâ azalarak (bkz. player.gd ELARA_EVASION_SPEED_PERCENT).
+		"skill_desc": "YETENEK: 3 saniye boyunca %50 hareket hızı ve azalarak kaybolan %50 sıvışma kazandırır, yaratıkların içinden geçebilmeni sağlar (sıvışma sınırını aşabilir). Kalkan harcamaz. (10sn bekleme)",
 		## Kullanıcı isteği (2026-09-24): Elara + Korsan'ın TÜM yetenek ikonları 48x48 piksel sanat olarak yeniden
 		## çizildi (tools/gen_elara_korsan_icons.py) - Q'nun (Sıvışma) daha önce hiç ikonu yoktu (vektör yedeğine
 		## düşüyordu), artık kanatlı çizme ikonu var.
 		"skill_icon": "res://assets/skills/elara_sivisma_icon.png",
 		"skill2": 11,
 		"skill2_name": "Gerçek Hasar",
-		"skill2_desc": "TEMEL: Sonraki 6 saldırı %50 fazla hasar vurur, kalkanı yok sayar ve %100 saldırı hızıyla yapılır. (35sn bekleme)",
+		## 2026-09-25: 6 saldırı -> 6 saniye, +%50 hasar kaldırıldı, saldırı hızı TOPLAMIN %30'u, bekleme 35 -> 25 sn.
+		"skill2_desc": "TEMEL: 6 saniye boyunca saldırıların kalkanı yok sayar ve toplam saldırı hızın %30 artar. (25sn bekleme)",
 		"skill2_icon": "res://assets/skills/elara_gercek_hasar_icon.png",
 		"skill3": 31,
 		"skill3_name": "Çift Tetik",
@@ -406,7 +419,7 @@ const DEFS := {
 		## Kullanıcı isteği (2026-09-22): "Korsanın Q'sunun bekleme süresini kaldır ve mana bedelini de
 		## kaldır" - bkz. player.gd SKILL_TIMING[18] (cooldown 0.0) ve _activate_skill()'teki kalkan
 		## bedeli muafiyet listesi (char_id != 18 eklendi).
-		"skill_desc": "ULTİ: Bırakılmış tüm saatli bombaları patlatır. (Bekleme yok, kalkan harcamaz)",
+		"skill_desc": "YETENEK: Bırakılmış tüm saatli bombaları patlatır. (Bekleme yok, kalkan harcamaz)",
 		"skill_icon": "res://assets/skills/korsan_patlat_icon.png",
 		"skill2": 17,
 		"skill2_name": "Saatli Bomba",
@@ -419,7 +432,7 @@ const DEFS := {
 		## tikler player.gd _process_korsan_bombardment'ta.
 		"skill3": 34,
 		"skill3_name": "Bombardıman",
-		"skill3_desc": "3. YETENEK: Etrafındaki büyük bir alanı 8 saniye boyunca bombardımana tutar, her saniye saldırı gücünün %110'u kadar hasar verir. (40sn bekleme)",
+		"skill3_desc": "ULTİ: Etrafındaki büyük bir alanı 8 saniye boyunca bombardımana tutar, her saniye saldırı gücünün %110'u kadar hasar verir. (40sn bekleme)",
 		## DÜZELTME (kullanıcı bildirimi 2026-09-22: "Korsanın ultisinin skill ikonu yok") - skill3_icon hiç
 		## eklenmemişti, HUD'da R slotu boş/placeholder kalıyordu (bkz. hud.gd "def.has(\"skill3_icon\")" kontrolü).
 		## Kullanıcı isteği (2026-09-24): Korsan'ın 4 ikonu (Q/E/R/pasif) 48x48 piksel sanat kare ikon olarak yeniden
@@ -470,7 +483,7 @@ const DEFS := {
 		## DÜZELTME (kullanıcı isteği: "Melek'in can verme yeteneğinin (Q)
 		## saldırı gücü oranını %30'a düşür") - bkz. player.gd
 		## MELEK_Q_TICK_ATTACK_RATIO (Oakley'nin kendi %60'ı DEĞİŞMEDİ).
-		"skill_desc": "ULTİ: Anında %15 can yeniler, sonraki 6sn boyunca saniyede %1 can + saldırı gücünün %30'u kadar can yeniler (kendine+müttefiğe). (20sn bekleme)",
+		"skill_desc": "YETENEK: Anında %15 can yeniler, sonraki 6sn boyunca saniyede %1 can + saldırı gücünün %30'u kadar can yeniler (kendine+müttefiğe). (20sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## Oakley ile AYNI geçici "oyku_ulti_can_basma_icon.png" dosyasını
 		## paylaşıyordu, artık kendi özel ikonu var.
@@ -491,7 +504,7 @@ const DEFS := {
 		## (bkz. player.gd _skill_melek_fear, skill id 32).
 		"skill3": 32,
 		"skill3_name": "Kutsal Korku",
-		"skill3_desc": "3. YETENEK: Kendi etrafındaki (ve bağ kurduğu dostun etrafındaki) tüm yaratıkları 4 saniye boyunca korkutup kaçırır. (45sn bekleme)",
+		"skill3_desc": "ULTİ: Kendi etrafındaki (ve bağ kurduğu dostun etrafındaki) tüm yaratıkları 4 saniye boyunca korkutup kaçırır. (45sn bekleme)",
 		"skill3_icon": "res://assets/skills/melek_kutsal_korku_icon.png",
 		## DÜZELTME (kullanıcı isteği: "Melek'in pasifi %0.5 can yerine saldırı
 		## gücünün %5'si olarak güncelle. Yani 100 saldırı gücü varsa 5 can
@@ -596,7 +609,7 @@ const DEFS := {
 		## versiyonu).
 		"skill": 26,
 		"skill_name": "Kalkan Totemi",
-		"skill_desc": "ULTİ (kalkan harcamaz): Bulunduğun konuma bir totem diker. Totem 30sn boyunca her saniye etrafındaki müttefiklere (ve sana) kendi kalkanının %0.5'i + saldırı gücünün %12'si kadar kalkan yeniler. (60sn bekleme)",
+		"skill_desc": "YETENEK (kalkan harcamaz): Bulunduğun konuma bir totem diker. Totem 30sn boyunca her saniye etrafındaki müttefiklere (ve sana) kendi kalkanının %0.5'i + saldırı gücünün %12'si kadar kalkan yeniler. (60sn bekleme)",
 		"skill_icon": "res://assets/skills/shaman_kalkan_totemi_icon.png",
 		"skill2": 27,
 		"skill2_name": "Saldırı Totemi",
@@ -604,7 +617,7 @@ const DEFS := {
 		"skill2_icon": "res://assets/skills/shaman_saldiri_totemi_icon.png",
 		"skill3": 28,
 		"skill3_name": "Alan Saldırı Totemi",
-		"skill3_desc": "R: Bulunduğun konuma bir totem diker. Totem 30sn boyunca etrafına bir alan açar - alana giren düşmanlar %20 + saldırı gücünün %20'si kadar (en fazla %80) yavaşlar, alanda duran düşmanlar her saniye saldırı gücünün %20'si kadar hasar alır. (60sn bekleme)",
+		"skill3_desc": "ULTİ: Bulunduğun konuma bir totem diker. Totem 30sn boyunca etrafına bir alan açar - alana giren düşmanlar %20 + saldırı gücünün %20'si kadar (en fazla %80) yavaşlar, alanda duran düşmanlar her saniye saldırı gücünün %20'si kadar hasar alır. (60sn bekleme)",
 		"skill3_icon": "res://assets/skills/shaman_alan_totemi_icon.png",
 		"passive": "Totem Auraları: totemlerine yakın müttefiklerin düşmanlara verdiği hasar, düşmana 3sn boyunca her saniye o müttefiğin saldırı gücünün %10'u kadar yakma hasarı bırakır.",
 		"passive_icon": "res://assets/skills/shaman_passive_icon.png",

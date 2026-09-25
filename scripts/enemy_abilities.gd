@@ -359,10 +359,17 @@ static func damageable_players(tree: SceneTree) -> Array:
 	return out
 
 
-static func deal_special_damage(target: Node, amount: float, source: Node2D, kind: String) -> void:
+## ÇÖKME DÜZELTMESİ (kullanıcı bildirimi 2026-09-25, ekran görüntüsü: "oyundan attı birden" - enemy_acid_pool.gd
+## _process: "Invalid type in function 'deal_special_damage' ... argument 3 (previously freed)"). Kök neden: asit gölü/
+## lazer/ateş topu/dikenler, kendilerini doğuran yaratığı (source) saklar; yaratık ölüp SİLİNDİKTEN sonra da hasar vermeye
+## devam ederler (asit gölü tam olarak ölümde doğar). Silinmiş bir nesneyi TİPLİ (Node2D) bir parametreye geçirmek
+## GDScript'te çağrı anında çalışma hatası - fonksiyonun içindeki is_instance_valid kontrolüne hiç sıra gelmiyordu. Asit
+## artık 0.5 sn'de bir vurduğu için ölümden sonraki ilk tikte patlıyordu. Parametre bilerek TİPSİZ: geçerlilik burada
+## kontrol edilir, silinmişse kaynak null olarak iletilir (hasar yine uygulanır).
+static func deal_special_damage(target: Node, amount: float, source, kind: String) -> void:
 	if target == null or not is_instance_valid(target) or amount <= 0.0:
 		return
-	var src: Node2D = source if (source != null and is_instance_valid(source)) else null
+	var src: Node2D = (source as Node2D) if is_instance_valid(source) else null
 	if target.has_method("take_special_damage"):
 		target.call("take_special_damage", amount, src, kind)
 	elif target.has_method("take_damage"):

@@ -35,6 +35,19 @@ const DEFAULT_PICKUP_RANGE := 60.0
 const WAKE_MARGIN := 64.0
 const WAKE_CHECK_SPREAD := 3
 
+## Kullanıcı bildirimi (2026-09-25): "oyunda yere düşen şeyler herkesin üstünde görünüyor, altta zeminde görünmeleri
+## lazım (sandık hariç)". Kök neden: sahnede y-sort yok, aynı z'deki kardeşler AĞAÇ SIRASIYLA çizilir; düşmeler
+## current_scene'in SONUNA eklendiği için o ana kadar doğmuş her yaratığın (ve ağaç sırası daha önce olan her şeyin)
+## üstünde kalıyordu. Zombi asit gölüyle AYNI çözüm (bkz. enemy_abilities.gd place_on_ground): düşme, haritanın hemen
+## arkasına taşınır - zeminin üstünde, tüm karakter/yaratıkların altında. XP/altın/yemek/mıknatıs kendi _ready'sinden
+## çağırır (host'un gerçek düşmesi VE istemcilerin görsel kopyası aynı script - ikisinde de geçerli); sandık BİLEREK
+## çağırmaz (kullanıcı: "sandık hariç").
+static func place_on_ground(drop: Node) -> void:
+	if drop == null or not is_instance_valid(drop) or not drop.is_inside_tree():
+		return
+	preload("res://scripts/enemy_abilities.gd").place_on_ground(drop.get_tree(), drop)
+
+
 static var _sleeping: Array = [] ## tipsiz: silinmiş düşme okunurken tipli değişken ataması hata verirdi
 static var _wake_cursor: int = 0
 static var _ticker: Node = null

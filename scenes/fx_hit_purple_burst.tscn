@@ -5,7 +5,7 @@
 
 [node name="FxHitPurpleBurst" type="AnimatedSprite2D"]
 texture_filter = 1
-scale = Vector2(1.4, 1.4)
+scale = Vector2(0.84, 0.84)
 z_index = 150
 sprite_frames = ExtResource("2")
 script = ExtResource("1")

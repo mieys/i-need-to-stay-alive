@@ -160,7 +160,9 @@ func _on_body_hit(body: Node) -> bool:
 	## ("player_allies" - ÇOĞUL) hasar alabilir ve mermileri engelleyebilir.
 	var is_target: bool = body.is_in_group("player") or body.is_in_group("player_allies") or body.is_in_group("remote_players")
 	if is_target and body.has_method("take_damage"):
-		body.take_damage(damage, source)
+		## Mermiyi atan yaratık mermi uçarken ölüp silinmiş olabilir - silinmiş nesneyi take_damage'in TİPLİ (Node2D)
+		## source parametresine geçirmek oyunu çökertiyordu (bkz. enemy_abilities.gd deal_special_damage ÇÖKME notu).
+		body.take_damage(damage, source if is_instance_valid(source) else null)
 		_spawn_impact()
 		queue_free()
 		return true

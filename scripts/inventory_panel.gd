@@ -84,7 +84,8 @@ func _decorate_slot(btn: Button) -> void:
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	frame.stretch_mode = TextureRect.STRETCH_SCALE
-	frame.texture = TierSystem.MINI_FRAME_TEXTURES[0]
+	## 2026-09-25: tier mini kartları tamamen tier rengine geçti; envanter yuvası kademesiz olduğu için eski sade hücreyi kullanır.
+	frame.texture = UIKit.game_tex("slot_cell.png")
 	btn.add_child(frame)
 	btn.mouse_entered.connect(func() -> void:
 		if is_instance_valid(frame):

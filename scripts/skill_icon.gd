@@ -33,6 +33,9 @@ var name_override: String = ""
 var desc_override: String = ""
 
 var tooltip_panel: PanelContainer = null
+## Shift'e basılı tutulunca ayrıntılar (bkz. skill_details.gd) - ipucu açıkken Shift durumu değişirse yeniden kurulur.
+const SkillDetails := preload("res://scripts/skill_details.gd")
+var _tooltip_shift: bool = false
 
 func _ready() -> void:
 	mouse_entered.connect(_on_mouse_entered)
@@ -42,6 +45,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if tooltip_panel and is_instance_valid(tooltip_panel) and tooltip_panel.visible:
+		if Input.is_key_pressed(KEY_SHIFT) != _tooltip_shift:
+			_on_mouse_entered()
+			return
 		_update_tooltip_position()
 	if is_active:
 		_pulse_time += delta
@@ -69,6 +75,9 @@ func _on_mouse_entered() -> void:
 	var desc: String = ""
 	var cd_text: String = ""
 	var keybind_text: String = ""
+	## Ayrıntılar için yeteneğin etkin süresi (sn) - bilinmiyorsa 0.
+	var detail_duration: float = 0.0
+	_tooltip_shift = Input.is_key_pressed(KEY_SHIFT)
 	
 	if name == "PassiveIcon":
 		var passive_name_str: String = "Pasif Yetenek"
@@ -91,6 +100,7 @@ func _on_mouse_entered() -> void:
 			var timing: Dictionary = player.SKILL_TIMING.get(skill_id_val, {"cooldown": 20.0}) as Dictionary
 			base_cd = timing["cooldown"] as float
 			current_cd = player._skill_cooldown as float
+			detail_duration = float(timing.get("duration", 0.0))
 		else:
 			base_cd = 20.0
 			current_cd = base_cd
@@ -113,6 +123,7 @@ func _on_mouse_entered() -> void:
 		title = "Ruhani Yetenek - %s" % str(spirit_def.get("name", ""))
 		desc = str(spirit_def.get("desc", ""))
 		var spirit_cd: float = float(spirit_def.get("cooldown", 0.0))
+		detail_duration = float(spirit_def.get("duration", 0.0))
 		if bool(spirit_def.get("active", false)):
 			keybind_text = GameManager.get_action_key_label("skill4")
 			cd_text = "Bekleme Süresi: %.0fs (bekleme süresi azaltmadan etkilenmez)" % spirit_cd
@@ -145,6 +156,7 @@ func _on_mouse_entered() -> void:
 			## BUYUCU_VARIATION_SKILL2_IDS) - orada da aranır.
 			var timing3: Dictionary = player.SKILL3_TIMING.get(skill3_id_val, player.SKILL2_TIMING.get(skill3_id_val, {"cooldown": 15.0})) as Dictionary
 			base_cd3 = timing3["cooldown"] as float
+			detail_duration = float(timing3.get("duration", 0.0))
 			var cdr3: float = float(player.cooldown_reduction_percent) if "cooldown_reduction_percent" in player else 0.0
 			current_cd3 = base_cd3 * (1.0 - cdr3)
 		else:
@@ -186,6 +198,7 @@ func _on_mouse_entered() -> void:
 		if player and is_instance_valid(player) and "SKILL2_TIMING" in player:
 			var timing: Dictionary = player.SKILL2_TIMING.get(skill2_id_val, {"cooldown": 15.0}) as Dictionary
 			base_cd = timing["cooldown"] as float
+			detail_duration = float(timing.get("duration", 0.0))
 			## DÜZELTME: player._skill2_cooldown Büyücü Kız için hiç
 			## güncellenmiyor (standart skill2_state makinesini kullanmıyor,
 			## bkz. player.gd _buyucu_try_activate_variation) - bekleme
@@ -314,6 +327,25 @@ func _on_mouse_entered() -> void:
 	lbl_desc.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
 	lbl_desc.add_theme_constant_override("outline_size", 0)
 	vbox.add_child(lbl_desc)
+
+	## Shift: ayrıntılar (hasar/kalkan/iyileştirme sayıları, oyuncunun anlık statlarıyla - bkz. skill_details.gd).
+	var detail_text: String = ""
+	if _tooltip_shift:
+		var details: String = SkillDetails.build(desc, player, detail_duration, UIKit.INK)
+		detail_text = "[color=#%s][b]AYRINTILAR[/b][/color]\n%s" % [UIKit.C_ACCENT.to_html(false), details]
+	else:
+		detail_text = "[color=#%s][Shift] basılı tut: ayrıntılar[/color]" % UIKit.C_TEXT_DIM.to_html(false)
+	var lbl_detail: RichTextLabel = RichTextLabel.new()
+	lbl_detail.bbcode_enabled = true
+	lbl_detail.text = detail_text
+	lbl_detail.fit_content = true
+	lbl_detail.autowrap_mode = TextServer.AUTOWRAP_WORD
+	var detail_fs: int = TOOLTIP_BODY_FONT_SIZE if _tooltip_shift else 24
+	for key in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size", "mono_font_size"]:
+		lbl_detail.add_theme_font_size_override(key, detail_fs)
+	lbl_detail.add_theme_color_override("default_color", UIKit.C_TEXT)
+	lbl_detail.add_theme_constant_override("outline_size", 0)
+	vbox.add_child(lbl_detail)
 
 	hud_layer.add_child(tooltip_panel)
 	tooltip_panel.reset_size()

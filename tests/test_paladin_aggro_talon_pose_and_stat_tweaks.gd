@@ -170,8 +170,9 @@ func test_paladin_bubble_reduction_is_ninety_five_percent() -> void:
 	assert(is_equal_approx(PlayerScript.PALADIN_ULTI_SHIELD_COST_MULT, 0.05),
 		"Baloncuğun hasar azaltımı %%95 (çarpan 0.05) olmalı, bulunan: %s" % PlayerScript.PALADIN_ULTI_SHIELD_COST_MULT)
 	var def: Dictionary = Characters.get_def(7)
-	assert(str(def.get("skill_desc", "")).find("%95") != -1, "Ulti açıklaması %%95 yazmalı: %s" % def.get("skill_desc"))
-	assert(str(def.get("skill2_desc", "")).find("5 saniye") != -1, "E açıklaması kışkırtmayı anlatmalı: %s" % def.get("skill2_desc"))
+	## 2026-09-25 slot değişimi: baloncuk (ulti) artık R/skill3, kışkırtma Q/skill.
+	assert(str(def.get("skill3_desc", "")).find("%95") != -1, "Ulti açıklaması %%95 yazmalı: %s" % def.get("skill3_desc"))
+	assert(str(def.get("skill_desc", "")).find("5 saniye") != -1, "Q açıklaması kışkırtmayı anlatmalı: %s" % def.get("skill_desc"))
 
 
 func test_shield_absorption_bases_are_up_five_points() -> void:

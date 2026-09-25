@@ -1,95 +1,145 @@
 extends Control
 class_name DebugMenu
 
-## Debug modu (kullanıcı isteği, 2026-09-24): chate "baykusseverim" yazılınca (bkz. hud.gd
-## _on_chat_input_submitted) ya da ana menüden "Debug Modu" ile başlayınca (bkz. main_menu.gd,
-## GameManager.debug_mode_unlocked) HUD'da küçük bir "DEBUG" butonu belirir (bkz. hud.gd
-## _create_debug_button) - bu Node o butona basılınca açılan asıl menü. TAMAMEN kod içinde
-## kurulu (bu oturumdaki world_event_banner.gd gibi diğer script-yapımı panellerle AYNI
-## yaklaşım), yeni bir .tscn YOK.
+## Debug modu (kullanıcı isteği, 2026-09-24): chate "baykusseverim" yazılınca (bkz. hud.gd _on_chat_input_submitted) ya da
+## ana menüden "Debug Modu" ile başlayınca (bkz. main_menu.gd, GameManager.debug_mode_unlocked) HUD'da "DEBUG" butonu
+## belirir (bkz. hud.gd _setup_debug_mode) - bu Node o butona basılınca açılan asıl menü. TAMAMEN kod içinde kurulu.
 ##
-## KAPSAM (kullanıcı isteği): (1) istediğimiz yaratığı istediğimiz kadar spawnlama, (2) istediğimiz
-## itemi (silah/pasif eşya) alma, (3) ölümsüzlük, (4) istediğimiz görevi başlatma, (5) yaratık
-## spawnlarını aç/kapa. Kalkan verme BİLEREK yok (seviye/mod sistemi bu debug aracına göre
-## orantısız karmaşık - istenirse ayrı bir görev olarak eklenir).
+## YENİDEN TASARIM (kullanıcı bildirimi 2026-09-25: "debugmode çok karmaşık tasarıma sahip ve yazılar ufak kullanımı çok
+## zor herşeyin yeniden elden geçirilmesi gerekiyor"). Eskiden tek, uzun bir kaydırmalı sütunda 16-22 px yazılı açılır
+## listeler + küçük sayı kutuları vardı. Artık:
+##  - Solda büyük SEKME butonları (Yaratık / Eşya / Oyuncu / Görev / Hava) - aynı anda tek sayfa görünür.
+##  - Açılır liste YOK: her şey tıklanabilir büyük buton ızgarası. Eşya/görev tek tıkla verilir/başlar; yaratıkta tür +
+##    kademe (-/+) + hızlı adet butonları, sonra büyük "SPAWNLA".
+##  - Yazılar 22-34 px, altta büyük bir durum satırı (ne olduğu/neden olmadığı).
+## KAPSAM aynı: yaratık spawnlama, silah/pasif eşya verme, ölümsüzlük, spawn aç/kapa, görev başlatma, saat/hava/yıldırım.
 ##
-## ÇOK OYUNCULU: yaratık spawnlama/görev başlatma host-authoritative (bkz. enemy_spawner.gd
-## debug_spawn_creature/world_event_manager.gd debug_force_start_mission notları - host
-## DEĞİLSEN bu ikisi sessizce hiçbir şey yapmaz). Ölümsüzlük/item verme SADECE bu istemcinin
-## KENDİ oyuncusunu etkiler - bu bilerek böyle, "hile" başka oyunculara sızmıyor.
+## ÇOK OYUNCULU: yaratık spawnlama/görev başlatma/atmosfer host-authoritative (host DEĞİLSEN hiçbir şey yapmaz, durum
+## satırı söyler). Ölümsüzlük/eşya verme SADECE bu istemcinin kendi oyuncusunu etkiler.
 
-const PANEL_W := 520.0
-## DÜZELTME: proje genelindeki varsayılan tema fontu UIKit.FS_BODY=32 - bu menüdeki
-## HER kontrol (Label/Button/OptionButton/CheckBox) bunu override ETMEDEN kullanınca
-## her satır ~90-140px'e çıkıp panel 1300px+ yükseklikte bile taşıyordu (bkz.
-## debug_menu.png - "Item / Silah Ver" panelin dışına taşmıştı). keybind_menu.gd'nin
-## AYNI (satır etiketi 20/buton 18) deseniyle kompakt tut.
-const FONT_ROW := 20
-const FONT_CTRL := 18
-const FONT_HEADER := 22
+## Oyunun piksel fontu (m5x7) 16'nın katlarında net ve okunur (bkz. ui_kit.gd FS_BODY=32) - ilk yeni sürümün 22-34 px'i
+## gerçek ekranda hâlâ küçük kalıyordu (ekran görüntüsüyle kontrol edildi).
+const FS_TITLE := 64
+const FS_TAB := 48
+const FS_LABEL := 32
+const FS_BTN := 48
+const FS_STATUS := 32
+const TAB_W := 260.0
+const MAX_PANEL := Vector2(1780.0, 1000.0)
+const TABS := ["Yaratık", "Eşya", "Oyuncu", "Görev", "Hava"]
+const COUNT_PRESETS := [1, 5, 10, 25, 50]
+const ATMO_TIME_PRESETS := [["Sabah", 20.0], ["Öğle", 150.0], ["İkindi", 290.0], ["Gün batımı", 350.0], ["Gece", 450.0], ["Gün doğumu", 560.0]]
+const ATMO_WEATHERS := ["Açık", "Rüzgarlı", "Yağmurlu", "Sağanak"]
+const ATMO_FAST_TIME_SCALE := 20.0
+const ChestMenuScript := preload("res://scripts/chest_menu.gd")
+
+var _dim: ColorRect = null
+var _panel: PanelContainer = null
+var _pages: Array[Control] = []
+var _tab_buttons: Array[Button] = []
+var _status_label: Label = null
+
+var _creature_buttons: Dictionary = {} ## id -> Button
+var _selected_creature: String = ""
+var _tier: int = 1
+var _tier_label: Label = null
+var _count: int = 1
+var _count_buttons: Array[Button] = []
+var _item_mode: int = 0 ## 0 silah, 1 pasif eşya
+var _item_mode_buttons: Array[Button] = []
+var _item_grid: GridContainer = null
+var _immortal_btn: Button = null
+var _spawns_btn: Button = null
+var _atmosphere_label: Label = null
+var _fast_time_btn: Button = null
 
 
 func _ready() -> void:
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	## bkz. world_event_banner.gd dosya başı notu - main.gd'de kurulan bir CanvasLayer'ın
-	## çocuğu olacağı için anchor/preset'e güvenmiyoruz, kendi rect'imizi elle kuruyoruz.
+	## bkz. world_event_banner.gd dosya başı notu - CanvasLayer çocuğu; rect elle kurulur.
 	top_level = true
 
-	var dim := ColorRect.new()
-	dim.color = Color(0.12, 0.07, 0.03, 0.55)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(dim)
-	_dim = dim
+	_dim = ColorRect.new()
+	_dim.color = Color(0.1, 0.06, 0.03, 0.6)
+	_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_dim)
 
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
-	## 2026-09-24: oyun içi bej kit teması (koyu yazı, kit butonları/giriş kutuları/açılır liste).
-	panel.theme = UIKit.theme()
-	add_child(panel)
-	_panel = panel
+	_panel = PanelContainer.new()
+	_panel.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
+	_panel.theme = UIKit.theme()
+	add_child(_panel)
 
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 22)
-	panel.add_child(margin)
+		margin.add_theme_constant_override("margin_%s" % side, 24)
+	_panel.add_child(margin)
 
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(PANEL_W, 460.0)
-	scroll.clip_contents = true ## içerik bu yüksekliği aşarsa GÖRÜNMEZ TAŞMAK yerine kaydırılsın
-	margin.add_child(scroll)
-	_scroll = scroll
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 16)
+	margin.add_child(root)
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 14)
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(vbox)
-
+	## Başlık + kapat
+	var head := HBoxContainer.new()
+	root.add_child(head)
 	var title := Label.new()
 	title.text = "DEBUG MENÜSÜ"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", UIKit.C_TEXT)
-	vbox.add_child(title)
-
-	_build_spawn_section(vbox)
-	vbox.add_child(HSeparator.new())
-	_build_item_section(vbox)
-	vbox.add_child(HSeparator.new())
-	_build_toggle_section(vbox)
-	vbox.add_child(HSeparator.new())
-	_build_mission_section(vbox)
-
-	var close_btn := Button.new()
-	close_btn.text = "Kapat"
-	close_btn.custom_minimum_size = Vector2(0, 44)
-	close_btn.add_theme_font_size_override("font_size", FONT_HEADER)
+	UIKit.style_label(title, FS_TITLE, UIKit.C_ACCENT)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close_btn := _button("Kapat  X", "red", Vector2(240, 76), FS_TAB)
 	close_btn.pressed.connect(close)
-	vbox.add_child(close_btn)
+	head.add_child(close_btn)
+
+	## Gövde: solda sekmeler, sağda sayfa
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 18)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(body)
+	var tabs := VBoxContainer.new()
+	tabs.custom_minimum_size = Vector2(TAB_W, 0)
+	tabs.add_theme_constant_override("separation", 10)
+	body.add_child(tabs)
+	var page_holder := PanelContainer.new()
+	page_holder.add_theme_stylebox_override("panel", UIKit.panel_style("inset"))
+	page_holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	page_holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(page_holder)
+
+	for i in range(TABS.size()):
+		var tb := _button(TABS[i], "wood", Vector2(TAB_W, 84), FS_TAB)
+		var idx: int = i
+		tb.pressed.connect(func() -> void: _show_page(idx))
+		tabs.add_child(tb)
+		_tab_buttons.append(tb)
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		page_holder.add_child(scroll)
+		var page := VBoxContainer.new()
+		page.add_theme_constant_override("separation", 16)
+		page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(page)
+		_pages.append(scroll)
+		match i:
+			0: _build_creature_page(page)
+			1: _build_item_page(page)
+			2: _build_player_page(page)
+			3: _build_mission_page(page)
+			4: _build_atmosphere_page(page)
+
+	## Durum satırı
+	_status_label = Label.new()
+	UIKit.style_label(_status_label, FS_STATUS, UIKit.C_TEXT_DIM)
+	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_status_label.custom_minimum_size = Vector2(0, 34)
+	_status_label.text = "Bir sekme seç."
+	root.add_child(_status_label)
 
 	UISound.connect_all_buttons(self)
-	UISound.apply_wood_buttons(self)
+	_show_page(0)
 
 
 func _process(_delta: float) -> void:
@@ -97,36 +147,21 @@ func _process(_delta: float) -> void:
 		return
 	var vp: Vector2 = get_viewport_rect().size
 	_dim.size = vp
-	## DÜZELTME: sabit 460px yükseklik 2560x1440'ta bile içeriğin (spawn + item + toggle +
-	## görev bölümleri) tamamını sığdırmıyordu, "İtem / Silah Ver" başlığı panelin ALT
-	## kenarının DIŞINA taşıp harita zemininin üstüne çiziliyordu (bkz. debug_menu.png).
-	## Ekran boyu ne olursa olsun MÜMKÜN OLDUĞUNCA kaydırma GEREKMESİN diye scroll alanını
-	## viewport'a göre dinamik büyüt; küçük ekranlarda güvenlik ağı olarak yine de kayar.
-	if _scroll:
-		_scroll.custom_minimum_size.y = max(vp.y - 200.0, 300.0)
-	_panel.position = (vp - _panel.size) * 0.5
-
-
-var _dim: ColorRect = null
-var _panel: PanelContainer = null
-var _scroll: ScrollContainer = null
-var _creature_option: OptionButton = null
-var _tier_spin: SpinBox = null
-var _count_spin: SpinBox = null
-var _give_type_option: OptionButton = null
-var _give_key_option: OptionButton = null
-var _immortal_check: CheckBox = null
-var _spawns_check: CheckBox = null
-var _mission_option: OptionButton = null
-var _status_label: Label = null
+	var want := Vector2(minf(MAX_PANEL.x, vp.x - 60.0), minf(MAX_PANEL.y, vp.y - 60.0))
+	_panel.custom_minimum_size = want
+	_panel.size = want
+	_panel.position = ((vp - want) * 0.5).floor()
+	if Engine.get_process_frames() % 15 == 0:
+		_refresh_atmosphere_label()
 
 
 func open() -> void:
 	visible = true
-	if _spawns_check:
-		_spawns_check.button_pressed = GameManager.debug_enemy_spawns_enabled
-	if _immortal_check:
-		_immortal_check.button_pressed = GameManager.debug_immortal
+	## HUD'daki DEBUG butonu (kardeş düğüm, sonra eklendiği için) menünün üstüne çiziliyordu - açılınca en öne geç.
+	if get_parent():
+		get_parent().move_child(self, -1)
+	_refresh_toggles()
+	_refresh_atmosphere_label()
 
 
 func close() -> void:
@@ -140,87 +175,130 @@ func toggle() -> void:
 		open()
 
 
-## DÜZELTME (kullanıcı bildirimi, gerçek ekran görüntüsü: "açılan seçenekler de çok
-## kötü kocamanlar") - OptionButton'ın kendi metnine font_size override etmek sadece
-## KAPALI haldeki görünümünü küçültüyor, tıklayınca açılan PopupMenu AYRI bir kontrol
-## ve varsayılan (32px) tema fontunu kullanmaya devam ediyordu. Her OptionButton için
-## popup'ı da ayrıca küçült.
-func _style_dropdown(ob: OptionButton) -> void:
-	ob.clip_text = true ## uzun metin (görev adı/silah anahtarı) satırı/butonu dışarı İTMESİN, "…" ile kessin
-	ob.get_popup().add_theme_font_size_override("font_size", FONT_CTRL)
+## ------------------------------------------------------------------ ortak yardımcılar
+func _button(text: String, variant: String, min_size: Vector2, font_size: int = FS_BTN) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = min_size
+	b.clip_text = true
+	UIKit.style_button(b, variant, false, font_size)
+	return b
 
 
-func _row(parent: VBoxContainer, label_text: String) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	parent.add_child(row)
-	var lbl := Label.new()
-	lbl.text = label_text
-	lbl.custom_minimum_size = Vector2(120, 0)
-	lbl.add_theme_color_override("font_color", UIKit.C_TEXT)
-	lbl.add_theme_font_size_override("font_size", FONT_ROW)
-	row.add_child(lbl)
-	return row
+func _header(parent: Control, text: String) -> void:
+	var l := Label.new()
+	l.text = text
+	UIKit.style_label(l, FS_LABEL, UIKit.C_ACCENT)
+	parent.add_child(l)
 
 
-func _set_status(text: String) -> void:
+func _grid(parent: Control, columns: int) -> GridContainer:
+	var g := GridContainer.new()
+	g.columns = columns
+	g.add_theme_constant_override("h_separation", 10)
+	g.add_theme_constant_override("v_separation", 10)
+	g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(g)
+	return g
+
+
+func _set_status(text: String, good: bool = true) -> void:
 	if _status_label:
 		_status_label.text = text
+		_status_label.add_theme_color_override("font_color", UIKit.C_GOOD if good else UIKit.C_BAD)
 
 
-## ------------------------------------------------------------------ Yaratık spawnlama
-func _build_spawn_section(vbox: VBoxContainer) -> void:
-	var header := Label.new()
-	header.text = "Yaratık Spawnla"
-	header.add_theme_color_override("font_color", UIKit.C_ACCENT)
-	header.add_theme_font_size_override("font_size", FONT_HEADER)
-	vbox.add_child(header)
+func _is_client() -> bool:
+	return NetworkManager.is_multiplayer_active and not NetworkManager.is_host
 
-	var row := _row(vbox, "Tür")
-	_creature_option = OptionButton.new()
-	_creature_option.custom_minimum_size = Vector2(200, 40)
-	_creature_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_creature_option.add_theme_font_size_override("font_size", FONT_CTRL)
+
+func _show_page(idx: int) -> void:
+	for i in range(_pages.size()):
+		_pages[i].visible = i == idx
+		UIKit.style_button(_tab_buttons[i], "green" if i == idx else "wood", false, FS_TAB)
+
+
+static func _pretty(key: String) -> String:
+	return key.replace("_", " ").capitalize()
+
+
+## ------------------------------------------------------------------ Yaratık
+func _build_creature_page(page: VBoxContainer) -> void:
+	## Üstte ayarlar + büyük SPAWNLA (kaydırmadan hep görünür), altta yaratık ızgarası.
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 22)
+	page.add_child(top)
+	var tier_box := VBoxContainer.new()
+	top.add_child(tier_box)
+	_header(tier_box, "Kademe")
+	var tier_row := HBoxContainer.new()
+	tier_row.add_theme_constant_override("separation", 10)
+	tier_box.add_child(tier_row)
+	var minus := _button("-", "dark", Vector2(72, 72), FS_TAB)
+	minus.pressed.connect(func() -> void: _set_tier(_tier - 1))
+	tier_row.add_child(minus)
+	_tier_label = Label.new()
+	_tier_label.custom_minimum_size = Vector2(80, 0)
+	_tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tier_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	UIKit.style_label(_tier_label, FS_TITLE, UIKit.C_TEXT)
+	tier_row.add_child(_tier_label)
+	var plus := _button("+", "dark", Vector2(72, 72), FS_TAB)
+	plus.pressed.connect(func() -> void: _set_tier(_tier + 1))
+	tier_row.add_child(plus)
+	_set_tier(1)
+
+	var count_box := VBoxContainer.new()
+	top.add_child(count_box)
+	_header(count_box, "Adet")
+	var count_row := HBoxContainer.new()
+	count_row.add_theme_constant_override("separation", 8)
+	count_box.add_child(count_row)
+	for c in COUNT_PRESETS:
+		var cb := _button(str(c), "wood", Vector2(84, 72), FS_TAB)
+		var n: int = c
+		cb.pressed.connect(func() -> void: _set_count(n))
+		count_row.add_child(cb)
+		_count_buttons.append(cb)
+	_set_count(1)
+
+	var spawn := _button("SPAWNLA", "green", Vector2(260, 110), FS_TAB)
+	spawn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spawn.size_flags_vertical = Control.SIZE_SHRINK_END
+	spawn.pressed.connect(_on_spawn_pressed)
+	top.add_child(spawn)
+
+	_header(page, "Yaratık seç (seçili = yeşil)")
+	var grid := _grid(page, 5)
 	var spawner: Node = _find_enemy_spawner()
 	var ids: Array = spawner.call("get_debug_creature_ids") if spawner else []
 	ids.sort()
 	for id in ids:
-		_creature_option.add_item(String(id))
-	_style_dropdown(_creature_option)
-	row.add_child(_creature_option)
+		var b2 := _button(_pretty(String(id)), "wood", Vector2(255, 76))
+		var sid: String = String(id)
+		b2.pressed.connect(func() -> void: _select_creature(sid))
+		grid.add_child(b2)
+		_creature_buttons[sid] = b2
+	if not ids.is_empty():
+		_select_creature(String(ids[0]))
 
-	## DÜZELTME (kullanıcı bildirimi): "Kademe / Adet" TEK satırda İKİ etiketsiz
-	## SpinBox olunca hangisinin hangisi olduğu ANLAŞILMIYORDU - artık her biri kendi
-	## etiketli satırında (bkz. dosya başındaki _row() deseni, menüdeki HER ALAN AYNI kural).
-	var row_tier := _row(vbox, "Kademe")
-	_tier_spin = SpinBox.new()
-	_tier_spin.min_value = 1
-	_tier_spin.max_value = 15
-	_tier_spin.value = 1
-	_tier_spin.custom_minimum_size = Vector2(90, 40)
-	_tier_spin.get_line_edit().add_theme_font_size_override("font_size", FONT_CTRL)
-	row_tier.add_child(_tier_spin)
 
-	var row_count := _row(vbox, "Adet")
-	_count_spin = SpinBox.new()
-	_count_spin.min_value = 1
-	_count_spin.max_value = 100
-	_count_spin.value = 1
-	_count_spin.custom_minimum_size = Vector2(90, 40)
-	_count_spin.get_line_edit().add_theme_font_size_override("font_size", FONT_CTRL)
-	row_count.add_child(_count_spin)
-	var spawn_btn := Button.new()
-	spawn_btn.text = "Spawnla"
-	spawn_btn.custom_minimum_size = Vector2(120, 40)
-	spawn_btn.add_theme_font_size_override("font_size", FONT_CTRL)
-	spawn_btn.pressed.connect(_on_spawn_pressed)
-	row_count.add_child(spawn_btn)
+func _select_creature(id: String) -> void:
+	_selected_creature = id
+	for k in _creature_buttons:
+		UIKit.style_button(_creature_buttons[k], "green" if k == id else "wood", false, FS_BTN)
 
-	_status_label = Label.new()
-	_status_label.add_theme_color_override("font_color", Color(UIKit.INK["shield"]))
-	_status_label.add_theme_font_size_override("font_size", 16)
-	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	vbox.add_child(_status_label)
+
+func _set_tier(v: int) -> void:
+	_tier = clampi(v, 1, 15)
+	if _tier_label:
+		_tier_label.text = str(_tier)
+
+
+func _set_count(v: int) -> void:
+	_count = v
+	for i in range(_count_buttons.size()):
+		UIKit.style_button(_count_buttons[i], "green" if COUNT_PRESETS[i] == v else "wood", false, FS_TAB)
 
 
 func _find_enemy_spawner() -> Node:
@@ -240,153 +318,180 @@ func _local_player() -> Node2D:
 func _on_spawn_pressed() -> void:
 	var spawner: Node = _find_enemy_spawner()
 	var player: Node2D = _local_player()
-	if not spawner or not player or _creature_option.item_count == 0:
+	if not spawner or not player or _selected_creature.is_empty():
 		return
-	var id: String = _creature_option.get_item_text(_creature_option.selected)
-	var tier: int = int(_tier_spin.value)
-	var count: int = int(_count_spin.value)
-	var spawned: int = spawner.call("debug_spawn_creature", id, tier, count, player.global_position)
-	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
-		_set_status("Sadece host yaratık spawnlayabilir.")
-	else:
-		_set_status("%d/%d %s spawnlandı (Kademe %d)." % [spawned, count, id, tier])
-
-
-## ------------------------------------------------------------------ Item/silah verme
-func _build_item_section(vbox: VBoxContainer) -> void:
-	var header := Label.new()
-	header.text = "Item / Silah Ver"
-	header.add_theme_color_override("font_color", UIKit.C_ACCENT)
-	header.add_theme_font_size_override("font_size", FONT_HEADER)
-	vbox.add_child(header)
-
-	var row := _row(vbox, "Tür")
-	_give_type_option = OptionButton.new()
-	_give_type_option.custom_minimum_size = Vector2(0, 40)
-	_give_type_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_give_type_option.add_theme_font_size_override("font_size", FONT_CTRL)
-	_give_type_option.add_item("Silah")
-	_give_type_option.add_item("Pasif Eşya")
-	_give_type_option.item_selected.connect(_on_give_type_selected)
-	_style_dropdown(_give_type_option)
-	row.add_child(_give_type_option)
-
-	## DÜZELTME (kullanıcı bildirimi: "silah alma butonu da yok sadece seçilebiliyor") -
-	## bazı silah anahtarları ("lightning_staff" gibi) OptionButton'ın doğal genişliğini
-	## satırın TAMAMINI kaplayacak kadar büyütüp "Ver" butonunu panel dışına/kırpılan
-	## alana itiyordu. size_flags_horizontal=EXPAND_FILL + clip_text (bkz. _style_dropdown)
-	## OptionButton'ın metni "…" ile KISALTMASINI sağlıyor, butona her zaman sabit yer kalıyor.
-	var row2 := _row(vbox, "Anahtar")
-	_give_key_option = OptionButton.new()
-	_give_key_option.custom_minimum_size = Vector2(180, 40)
-	_give_key_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_give_key_option.add_theme_font_size_override("font_size", FONT_CTRL)
-	_style_dropdown(_give_key_option)
-	row2.add_child(_give_key_option)
-	var give_btn := Button.new()
-	give_btn.text = "Ver"
-	give_btn.custom_minimum_size = Vector2(90, 40)
-	give_btn.add_theme_font_size_override("font_size", FONT_CTRL)
-	give_btn.pressed.connect(_on_give_pressed)
-	row2.add_child(give_btn)
-
-	_populate_give_keys(0)
-
-
-func _on_give_type_selected(index: int) -> void:
-	_populate_give_keys(index)
-
-
-func _populate_give_keys(type_index: int) -> void:
-	_give_key_option.clear()
-	var player: Node2D = _local_player()
-	if type_index == 0:
-		var keys: Array = player.WEAPON_SCENES_BY_KEY.keys() if player else []
-		keys.sort()
-		for k in keys:
-			_give_key_option.add_item(String(k))
-	else:
-		var keys: Array = Items.DEFS.keys()
-		keys.sort()
-		for k in keys:
-			_give_key_option.add_item(String(k))
-
-
-func _on_give_pressed() -> void:
-	var player: Node2D = _local_player()
-	if not player or _give_key_option.item_count == 0:
+	if _is_client():
+		_set_status("Sadece host yaratık spawnlayabilir.", false)
 		return
-	var key: String = _give_key_option.get_item_text(_give_key_option.selected)
-	if _give_type_option.selected == 0:
+	var spawned: int = spawner.call("debug_spawn_creature", _selected_creature, _tier, _count, player.global_position)
+	_set_status("%d/%d %s spawnlandı (Kademe %d)." % [spawned, _count, _pretty(_selected_creature), _tier], spawned > 0)
+
+
+## ------------------------------------------------------------------ Eşya / silah
+func _build_item_page(page: VBoxContainer) -> void:
+	var mode_row := HBoxContainer.new()
+	mode_row.add_theme_constant_override("separation", 12)
+	page.add_child(mode_row)
+	for i in range(2):
+		var mb := _button(["Silahlar", "Pasif Eşyalar"][i], "wood", Vector2(340, 76), FS_TAB)
+		var m: int = i
+		mb.pressed.connect(func() -> void: _set_item_mode(m))
+		mode_row.add_child(mb)
+		_item_mode_buttons.append(mb)
+	_header(page, "Tıkla = anında al")
+	_item_grid = _grid(page, 3)
+	_set_item_mode(0)
+
+
+func _set_item_mode(m: int) -> void:
+	_item_mode = m
+	for i in range(_item_mode_buttons.size()):
+		UIKit.style_button(_item_mode_buttons[i], "green" if i == m else "wood", false, FS_TAB)
+	for c in _item_grid.get_children():
+		c.queue_free()
+	var player: Node2D = _local_player()
+	var keys: Array = []
+	if m == 0:
+		keys = player.WEAPON_SCENES_BY_KEY.keys() if player else []
+	else:
+		keys = Items.DEFS.keys()
+	keys.sort()
+	for k in keys:
+		var key: String = String(k)
+		var label: String = ChestMenuScript.WEAPON_NAMES.get(key, _pretty(key)) if m == 0 else String(Items.DEFS[key].get("name", _pretty(key)))
+		var b := _button(label, "wood", Vector2(420, 76))
+		b.pressed.connect(func() -> void: _give(key))
+		_item_grid.add_child(b)
+	UISound.connect_all_buttons(_item_grid)
+
+
+func _give(key: String) -> void:
+	var player: Node2D = _local_player()
+	if not player:
+		return
+	if _item_mode == 0:
 		var ok: bool = player.call("buy_weapon_copy", key, 1)
-		_set_status(("'%s' silahı verildi." % key) if ok else "Silah envanteri dolu (en fazla 5).")
+		_set_status(("'%s' verildi." % ChestMenuScript.WEAPON_NAMES.get(key, key)) if ok else "Silah envanteri dolu (en fazla 5).", ok)
 	else:
-		## DÜZELTME: player.buy_item() SADECE stat etkisini uygular - "sahiplik" kaydı
-		## (GameManager.owned_items) shop_panel.gd::_on_buy_item'da AYRICA, çağıran tarafından
-		## eklenir (bkz. o dosyadaki BİREBİR AYNI sıra). Bunu atlarsam eşya GERÇEKTEN
-		## uygulanır ama envanterde hiç görünmez/sonradan satılamaz - headless testte
-		## "items after=0" olarak yakalandı.
+		## player.buy_item() SADECE stat etkisini uygular - sahiplik kaydı (GameManager.owned_items) çağıran tarafça
+		## eklenir (shop_panel.gd::_on_buy_item ile aynı sıra); atlanırsa eşya envanterde görünmez/satılamaz.
 		var ok2: bool = player.call("buy_item", key)
 		if ok2:
 			GameManager.owned_items.append({"key": key, "spent": 0})
-		_set_status(("'%s' eşyası verildi." % key) if ok2 else "Eşya slotu dolu.")
+		_set_status(("'%s' verildi." % String(Items.DEFS[key].get("name", key))) if ok2 else "Eşya slotu dolu.", ok2)
 
 
-## ------------------------------------------------------------------ Ölümsüzlük / spawn aç-kapa
-func _build_toggle_section(vbox: VBoxContainer) -> void:
-	_immortal_check = CheckBox.new()
-	_immortal_check.text = "Ölümsüzlük (sadece bu oyuncu)"
-	_immortal_check.add_theme_color_override("font_color", UIKit.C_TEXT)
-	_immortal_check.add_theme_font_size_override("font_size", FONT_CTRL)
-	_immortal_check.toggled.connect(func(v: bool) -> void: GameManager.debug_immortal = v)
-	vbox.add_child(_immortal_check)
+## ------------------------------------------------------------------ Oyuncu
+func _build_player_page(page: VBoxContainer) -> void:
+	_header(page, "Sadece bu oyuncu")
+	_immortal_btn = _button("", "wood", Vector2(0, 96), FS_TAB)
+	_immortal_btn.pressed.connect(func() -> void:
+		GameManager.debug_immortal = not GameManager.debug_immortal
+		_refresh_toggles())
+	page.add_child(_immortal_btn)
+	_header(page, "Dünya")
+	_spawns_btn = _button("", "wood", Vector2(0, 96), FS_TAB)
+	_spawns_btn.pressed.connect(func() -> void:
+		GameManager.debug_enemy_spawns_enabled = not GameManager.debug_enemy_spawns_enabled
+		_refresh_toggles())
+	page.add_child(_spawns_btn)
+	_refresh_toggles()
 
-	_spawns_check = CheckBox.new()
-	_spawns_check.text = "Yaratık spawnları açık"
-	_spawns_check.add_theme_color_override("font_color", UIKit.C_TEXT)
-	_spawns_check.add_theme_font_size_override("font_size", FONT_CTRL)
-	_spawns_check.toggled.connect(func(v: bool) -> void: GameManager.debug_enemy_spawns_enabled = v)
-	vbox.add_child(_spawns_check)
+
+func _refresh_toggles() -> void:
+	if _immortal_btn:
+		var on: bool = GameManager.debug_immortal
+		_immortal_btn.text = "Ölümsüzlük: %s" % ("AÇIK" if on else "KAPALI")
+		UIKit.style_button(_immortal_btn, "green" if on else "wood", false, FS_TAB)
+	if _spawns_btn:
+		var on2: bool = GameManager.debug_enemy_spawns_enabled
+		_spawns_btn.text = "Yaratık spawnları: %s" % ("AÇIK" if on2 else "KAPALI")
+		UIKit.style_button(_spawns_btn, "green" if on2 else "red", false, FS_TAB)
 
 
-## ------------------------------------------------------------------ Görev başlatma
-func _build_mission_section(vbox: VBoxContainer) -> void:
-	var header := Label.new()
-	header.text = "Görev Başlat"
-	header.add_theme_color_override("font_color", UIKit.C_ACCENT)
-	header.add_theme_font_size_override("font_size", FONT_HEADER)
-	vbox.add_child(header)
-
-	var row := _row(vbox, "Görev")
-	_mission_option = OptionButton.new()
-	_mission_option.custom_minimum_size = Vector2(150, 40)
-	_mission_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_mission_option.add_theme_font_size_override("font_size", FONT_CTRL)
+## ------------------------------------------------------------------ Görev
+func _build_mission_page(page: VBoxContainer) -> void:
+	_header(page, "Tıkla = görevi hemen başlat (yanında)")
+	var grid := _grid(page, 2)
 	var wem: Node = _find_world_event_manager()
-	if wem:
-		var labels: Dictionary = wem.get("MISSION_LABELS")
-		var names: Dictionary = wem.get("MISSION_KIND_NAMES")
-		for kind in names.keys():
-			_mission_option.add_item(String(labels.get(kind, names[kind])))
-			_mission_option.set_item_metadata(_mission_option.item_count - 1, names[kind])
-	_style_dropdown(_mission_option)
-	row.add_child(_mission_option)
-	var start_btn := Button.new()
-	start_btn.text = "Başlat"
-	start_btn.custom_minimum_size = Vector2(110, 40)
-	start_btn.add_theme_font_size_override("font_size", FONT_CTRL)
-	start_btn.pressed.connect(_on_start_mission_pressed)
-	row.add_child(start_btn)
+	if wem == null:
+		return
+	var labels: Dictionary = wem.get("MISSION_LABELS")
+	var names: Dictionary = wem.get("MISSION_KIND_NAMES")
+	for kind in names.keys():
+		var kind_name: String = String(names[kind])
+		var b := _button(String(labels.get(kind, kind_name)), "wood", Vector2(560, 80), FS_LABEL)
+		b.pressed.connect(func() -> void: _start_mission(kind_name))
+		grid.add_child(b)
 
 
-func _on_start_mission_pressed() -> void:
+func _start_mission(kind_name: String) -> void:
 	var wem: Node = _find_world_event_manager()
 	var player: Node2D = _local_player()
-	if not wem or not player or _mission_option.item_count == 0:
+	if not wem or not player:
 		return
-	var kind_name: String = String(_mission_option.get_item_metadata(_mission_option.selected))
+	if _is_client():
+		_set_status("Sadece host görev başlatabilir.", false)
+		return
 	var ok: bool = wem.call("debug_force_start_mission", kind_name, player.global_position)
-	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
-		_set_status("Sadece host görev başlatabilir.")
+	_set_status(("Görev başlatıldı: %s" % kind_name) if ok else "Görev başlatılamadı (harita hazır değil?).", ok)
+
+
+## ------------------------------------------------------------------ Hava (gün-gece + hava durumu, bkz. atmosphere.gd)
+func _find_atmosphere() -> Node:
+	return get_tree().get_first_node_in_group("atmosphere")
+
+
+func _build_atmosphere_page(page: VBoxContainer) -> void:
+	_atmosphere_label = Label.new()
+	UIKit.style_label(_atmosphere_label, FS_LABEL, UIKit.C_TEXT)
+	page.add_child(_atmosphere_label)
+
+	_header(page, "Saat")
+	var tg := _grid(page, 3)
+	for preset in ATMO_TIME_PRESETS:
+		var b := _button(String(preset[0]), "wood", Vector2(300, 70), FS_LABEL)
+		var t: float = float(preset[1])
+		b.pressed.connect(func() -> void: _atmosphere_call("debug_set_time", t))
+		tg.add_child(b)
+
+	_header(page, "Hava")
+	var wg := _grid(page, 3)
+	for i in range(ATMO_WEATHERS.size()):
+		var wb := _button(ATMO_WEATHERS[i], "wood", Vector2(300, 70), FS_LABEL)
+		var kind: int = i
+		wb.pressed.connect(func() -> void: _atmosphere_call("debug_set_weather", kind))
+		wg.add_child(wb)
+	var sb := _button("Yıldırım düşür", "red", Vector2(300, 70), FS_LABEL)
+	sb.pressed.connect(func() -> void: _atmosphere_call("debug_force_strike", null))
+	wg.add_child(sb)
+
+	_fast_time_btn = _button("", "wood", Vector2(0, 76), FS_LABEL)
+	_fast_time_btn.pressed.connect(func() -> void:
+		var atmo: Node = _find_atmosphere()
+		var fast: bool = atmo != null and float(atmo.get("debug_time_scale")) > 1.0
+		_atmosphere_call("debug_set_time_scale", 1.0 if fast else ATMO_FAST_TIME_SCALE))
+	page.add_child(_fast_time_btn)
+
+
+func _atmosphere_call(method: String, arg: Variant) -> void:
+	var atmo: Node = _find_atmosphere()
+	if atmo == null:
+		_set_status("Atmosfer yok (ana menü / ev içi?).", false)
+		return
+	var ok: bool = bool(atmo.call(method, arg))
+	if not ok:
+		_set_status("Sadece host saati/havayı değiştirebilir.", false)
 	else:
-		_set_status(("Görev başlatıldı: %s" % kind_name) if ok else "Görev başlatılamadı (harita hazır değil?).")
+		_set_status("Tamam.")
+	_refresh_atmosphere_label()
+
+
+func _refresh_atmosphere_label() -> void:
+	var atmo: Node = _find_atmosphere()
+	if _atmosphere_label:
+		_atmosphere_label.text = ("Şu an: " + String(atmo.call("debug_describe"))) if atmo else "Atmosfer yok (ana menü/ev içi test?)"
+	if _fast_time_btn:
+		var fast: bool = atmo != null and float(atmo.get("debug_time_scale")) > 1.0
+		_fast_time_btn.text = "Gün döngüsü x%d hızlı: %s" % [int(ATMO_FAST_TIME_SCALE), "AÇIK" if fast else "KAPALI"]
+		UIKit.style_button(_fast_time_btn, "green" if fast else "wood", false, FS_LABEL)

@@ -62,12 +62,62 @@ class Art:
                     px[x, y] = c
         return im
 
-    def save(self, path, scale=S):
+    def save(self, path, scale=S, deepen=False):
+        """deepen: arayüz kiti dokularına ortak koyulaştırma eğrisi (bkz. deepen_rgb) - gen_menu_kit.py / gen_ui_kit.py açar;
+        ikon üreticileri (kalkan ikonları vb.) ve kendi paleti ayrı tutulan tier kartları/slotları kapalı bırakır."""
         os.makedirs(os.path.dirname(path), exist_ok=True)
         im = self.image()
+        if deepen:
+            im = deepen_image(im)
         if scale != 1:
             im = im.resize((self.w * scale, self.h * scale), Image.NEAREST)
         im.save(path)
+
+
+# ------------------------------------------------------------------ doğal koyulaştırma (2026-09-25)
+# Kullanıcı isteği: "oyundaki BÜTÜN arayüzleri çok beğendim ancak renkleri çok açık ve göz yoruyor. görünüşlerini
+# değiştirmeden renklerini doğal bir şekilde koyulaştırmak mümkünse koyulaştırır mısın?"
+# -> Kit dokuları (menü + oyun içi + HUD) kaydedilirken HER piksele aynı eğri uygulanır: HSV parlaklığı açık tonlarda daha
+#    çok, koyu tonlarda çok az düşer (V' = V * (1 - A * V^P)) - bej parşömen ~%18 koyulaşır, koyu kontur/yazı neredeyse aynı
+#    kalır (okunurluk korunur); doygunluk açık tonlarda hafifçe artar ki bej grileşmeden sıcak taba dönsün. Ton (hue) ve
+#    saydamlık değişmez, piksel yapısı aynı kalır -> tasarım aynı, sadece koyu. Oranı değiştirmek için A/P/SB yeterli.
+DEEPEN_A = 0.24
+DEEPEN_P = 1.2
+DEEPEN_SB = 0.12
+
+
+def deepen_rgb(c):
+    """Tek renk (r, g, b[, a]) için aynı eğri (çalışma anı renklerini dokularla eşlemek için)."""
+    r, g, b = (v / 255.0 for v in c[:3])
+    mx, mn = max(r, g, b), min(r, g, b)
+    v = mx
+    s = (mx - mn) / mx if mx > 1e-9 else 0.0
+    v2 = v * (1.0 - DEEPEN_A * v ** DEEPEN_P)
+    s2 = min(1.0, s * (1.0 + DEEPEN_SB * v))
+    out = []
+    for ch in (r, g, b):
+        t = (mx - ch) / (mx - mn) if mx - mn > 1e-9 else 0.0
+        out.append(int(round(max(0.0, min(1.0, v2 - v2 * s2 * t)) * 255)))
+    return tuple(out) + tuple(c[3:])
+
+
+def deepen_image(im):
+    """PIL RGBA görüntünün her pikseline deepen_rgb (piksel başına önbellekli - kit dokuları az renklidir)."""
+    im = im.convert('RGBA')
+    px = im.load()
+    cache = {}
+    for y in range(im.height):
+        for x in range(im.width):
+            c = px[x, y]
+            if c[3] == 0:
+                continue
+            key = c[:3]
+            d = cache.get(key)
+            if d is None:
+                d = deepen_rgb(key)
+                cache[key] = d
+            px[x, y] = d + (c[3],)
+    return im
 
 
 def rr_mask(w, h, r):

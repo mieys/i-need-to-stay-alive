@@ -433,6 +433,10 @@ func _create_protection_bubble() -> Node2D:
 	## temalı bir renk - görsel TEKNİK (dome shader, parıltı, nabız) birebir
 	## aynı, sadece renk farklı.
 	bubble.color = Color(1.0, 0.82, 0.25, 0.9)
+	## 2026-09-25: kubbe artık sprite (tools/gen_paladin_dome_fx.py) - renk sayfanın kendisinde: altın varyant. Şovalye
+	## baloncuğuna eklenen "dışarıdaki sesler boğuk" etkisi satıcı bölgesinde istenmedi.
+	bubble.variant = "gold"
+	bubble.muffle_outside_sound = false
 	bubble.active = true
 	return bubble
 

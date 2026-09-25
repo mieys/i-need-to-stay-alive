@@ -70,6 +70,15 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
+## Gece ışığı (bkz. night_glow.gd): kasterden hedefe dalga boyunca; iyileştirme yeşil, kalkan mavi.
+func get_glow_segment() -> Array:
+	return [start_pos, target_pos]
+
+
+func get_night_glow_color() -> Color:
+	return Color(0.5, 1.0, 0.6) if fx_type == "heal" else Color(0.45, 0.7, 1.0)
+
+
 ## Dalganın yol boyunca (0..1) yanal sapması - pixel dalga. heal: yumuşak sinüs, shield: açısal (üçgen) dalga.
 func _wave_offset(t: float) -> float:
 	var env: float = sin(t * PI)
@@ -98,21 +107,24 @@ func _draw() -> void:
 	mid.a = fade
 	light.a = fade
 
-	## --- Dalga yolu: 3 katman (koyu kalın -> orta -> parlak ince), parlak katman yol boyunca AKAR ---
-	var step: float = PixelDraw.TEXEL * 1.6
+	## --- Dalga yolu: 3 katman (koyu kenar -> orta -> parlak çekirdek), parlak katman yol boyunca AKAR ---
+	## İNCELTME (kullanıcı isteği 2026-09-25: "melek'in can ve kalkan basarken kurduğu bağın biraz incelmesi gerekiyor, çok
+	## kalın görünüyor"): katman kalınlıkları 5/3/2 -> 3/2/1 sanat pikseli (ekranda ~12 px -> ~7 px), adım da sıklaştı ki
+	## ince yol kopuk kopuk görünmesin. Renk dili ve akış aynı.
+	var step: float = PixelDraw.TEXEL * 1.0
 	var n: int = maxi(8, int(length / step))
 	var pts: PackedVector2Array = PackedVector2Array()
 	for i in range(n + 1):
 		var t: float = float(i) / float(n)
 		pts.append(start_pos.lerp(target_pos, t) + normal * _wave_offset(t))
 	for p in pts:
-		PixelDraw.px(self, p, 5, deep)
+		PixelDraw.px(self, p, 3, deep)
 	for p in pts:
-		PixelDraw.px(self, p, 3, mid)
+		PixelDraw.px(self, p, 2, mid)
 	for i in range(pts.size()):
 		var t2: float = float(i) / float(n)
 		if sin(t2 * 22.0 - elapsed * 34.0) > 0.25:
-			PixelDraw.px(self, pts[i], 2, light)
+			PixelDraw.px(self, pts[i], 1, light)
 
 	## --- Akan rozetler: caster'dan hedefe kayan kalpler (can) / kalkanlar (kalkan) ---
 	var art: Array = HEART_ART if is_heal else SHIELD_ART

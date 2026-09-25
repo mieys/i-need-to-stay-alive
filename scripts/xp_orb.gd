@@ -22,6 +22,20 @@ var magnet_target_peer_id: int = -1
 const ATTRACT_ACCEL := 720.0 ## genel hız ayarı: %20 düşürüldü
 const MAX_ATTRACT_SPEED := 496.0
 
+## Kullanıcı isteği (2026-09-25): "exp orbları direk karaktere doğru gelmek yerine önce geri gidip sonra geri gelsin
+## smooth bir şekilde". Çekim başladığında orb önce RECOIL_TIME boyunca oyuncunun TERSİNE geri teper (hız
+## RECOIL_SPEED'den 0'a karesel azalır = ease-out, toplam ~RECOIL_SPEED*RECOIL_TIME/3 px), sonra hız 0'dan
+## ATTRACT_ACCEL ile yeniden artarak oyuncuya gelir - dönüş noktasında hız iki tarafta da 0, kopukluk yok.
+## Geri tepme orb'u toplama menzilinin dışına itebildiği için çekim başlayınca hedef oyuncu _chase_target'ta
+## tutulur ve menzil dışına çıksa da takip sürer (yoksa menzil kenarındaki orb geri gidip orada kalırdı).
+## Host'un gerçek orb'u ve istemcilerin görsel kopyası aynı script - her ekranda aynı hareket.
+const RECOIL_TIME := 0.24
+const RECOIL_SPEED := 230.0
+
+var _recoil_t: float = -1.0 ## -1 = çekim henüz başlamadı; 0..RECOIL_TIME geri tepme; üstü = oyuncuya geliş
+var _recoil_dir: Vector2 = Vector2.ZERO
+var _chase_target: Node2D = null
+
 ## Kullanıcı isteği: "5 adet orb bulunuyor her orbun kendi tierı var ... yüksek
 ## tierler diğerlerinden azıcık büyük olacak" - eskiden TEK bir jenerik
 ## (small/medium/large) sprite sheet vardı, tier'a göre sadece self_modulate
@@ -34,12 +48,22 @@ const MAX_ATTRACT_SPEED := 496.0
 ## yani %60 küçültülmüş) - xp_value'nun eskiden "%40 küçült" istendiğinde
 ## AYNI oranda (scale VE collision_radius birlikte) küçültüldüğü desenle
 ## tutarlı (bkz. Git geçmişi).
+## YENİDEN TASARIM (kullanıcı isteği 2026-09-25: "exp orblarını pixel tarzda yeniden tasarla ... opaklık ayarını da
+## kaldır") - tools/gen_xp_orb_sprites.py: 16x16 x 8 karelik piksel orblar (koyu dış hat + 4 ton gövde + parlama + hale,
+## tier 3+ yıldız pırıltısı, tier 4-5 dönen zerreler), renk sırası aynı. Eskiden her tier FARKLI, tam sayı olmayan bir
+## ölçekle (0.22-0.30) küçültülen 64x64 yumuşak çizimler vardı (her tier farklı piksel yoğunluğu). Artık HEPSİ aynı
+## ORB_TEXEL ölçeğinde (1080p'de tam 1 ekran pikseli = 1 sanat pikseli, kamera zoom 2), büyüklük farkı sanatın kendisinde
+## (çap 9/9/11/11/13 piksel). Saydamlık (sahnedeki %70 modulate) kaldırıldı - bkz. _setup_visual.
+## Kullanıcı isteği (2026-09-25, sonraki tur): "tüm exp orbları %25 büyütmeni istiyorum" - ORB_TEXEL'i 1.25'le çarpmak
+## pikselleri eşitsizleştirirdi; bunun yerine sanatın kendisi %25 büyütüldü (çap 11/11/14/14/16, 20x20 kare - bkz.
+## tools/gen_xp_orb_sprites.py) ve çarpışma yarıçapları aynı oranda x1.25.
+const ORB_TEXEL := 0.5
 const TIERS := {
-	1: {"anim": "green", "scale": 0.22, "collision_radius": 1.8},
-	2: {"anim": "blue", "scale": 0.24, "collision_radius": 2.0},
-	3: {"anim": "purple", "scale": 0.26, "collision_radius": 2.2},
-	4: {"anim": "yellow", "scale": 0.28, "collision_radius": 2.4},
-	5: {"anim": "red", "scale": 0.30, "collision_radius": 2.6},
+	1: {"anim": "green", "scale": ORB_TEXEL, "collision_radius": 2.25},
+	2: {"anim": "blue", "scale": ORB_TEXEL, "collision_radius": 2.5},
+	3: {"anim": "purple", "scale": ORB_TEXEL, "collision_radius": 2.75},
+	4: {"anim": "yellow", "scale": ORB_TEXEL, "collision_radius": 3.0},
+	5: {"anim": "red", "scale": ORB_TEXEL, "collision_radius": 3.25},
 }
 
 ## Kullanıcı isteği: "azıcık smooth büyüyüp küçülme animasyonu ekle" - sprite
@@ -80,6 +104,12 @@ func _ready() -> void:
 	_pulse_time = randf() * TAU
 	_setup_visual()
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
+	_place_on_ground.call_deferred()
+
+
+## Zeminde, karakterlerin altında çizil (bkz. drop_attraction.gd place_on_ground).
+func _place_on_ground() -> void:
+	DropAttraction.place_on_ground(self)
 
 
 ## bkz. sınıf üstü BUG DÜZELTMESİ notu. "network_spawned" kozmetik kopyalarda
@@ -106,7 +136,11 @@ func _process(delta: float) -> void:
 func _setup_visual() -> void:
 	var tier: Dictionary = TIERS.get(xp_tier, TIERS[1])
 
+	## Tamamen opak (kullanıcı isteği 2026-09-25) - sahnede kalmış eski %70 saydamlık ne olursa olsun ezilir.
+	sprite.modulate = Color.WHITE
+	## Hepsi aynı fazda parıldamasın.
 	sprite.play(tier["anim"])
+	sprite.frame = randi() % maxi(1, sprite.sprite_frames.get_frame_count(tier["anim"]))
 	_base_scale = tier["scale"]
 	sprite.scale = Vector2(_base_scale, _base_scale)
 
@@ -129,12 +163,30 @@ func attract_to_player(target_peer_id: int = -1) -> void:
 func _physics_process(delta: float) -> void:
 	## Hedef seçimi + menzil kontrolü ortak/önbellekli yardımcıda (bkz. drop_attraction.gd PERF notu).
 	var player: Node2D = DropAttraction.attraction_target(self, is_magnetized, magnet_target_peer_id)
+	if player == null and _recoil_t >= 0.0 and _chase_valid():
+		player = _chase_target ## çekim başladıysa geri tepme menzil dışına itse de takip sürer (bkz. RECOIL notu)
 	if player == null:
+		_chase_target = null
 		if DropAttraction.last_query_far:
 			DropAttraction.put_to_sleep(self) ## uyku/uyandırma: bkz. drop_attraction.gd
 		return
+	_chase_target = player
+	if _recoil_t < 0.0:
+		_recoil_t = 0.0
+		_recoil_dir = player.global_position.direction_to(global_position)
+		if _recoil_dir == Vector2.ZERO:
+			_recoil_dir = Vector2.UP
+	if _recoil_t < RECOIL_TIME:
+		var k: float = 1.0 - _recoil_t / RECOIL_TIME
+		global_position += _recoil_dir * RECOIL_SPEED * k * k * delta
+		_recoil_t += delta
+		return
 	attract_speed = min(attract_speed + ATTRACT_ACCEL * delta, MAX_ATTRACT_SPEED)
 	global_position = global_position.move_toward(player.global_position, attract_speed * delta)
+
+
+func _chase_valid() -> bool:
+	return _chase_target != null and is_instance_valid(_chase_target) and _chase_target.is_inside_tree() 		and _chase_target.get("is_dead") != true
 
 
 ## bkz. gold_drop.gd::_resolve_attraction_target aynı yorumu - XP takım

@@ -203,8 +203,9 @@ func test_boss_health_and_shield_are_exactly_twenty_percent_lower() -> void:
 		"BOSS_HEALTH_MULT eskisinin %%80'inin %%85'i olmalı: %s" % SpawnerScript.BOSS_HEALTH_MULT)
 	assert(is_equal_approx(SpawnerScript.BOSS_SHIELD_RATIO, 1.3 * 0.9 / 0.85),
 		"BOSS_SHIELD_RATIO can %%15, kalkan %%10 düşecek şekilde 1.3 x 0.9 / 0.85 olmalı: %s" % SpawnerScript.BOSS_SHIELD_RATIO)
-	assert(is_equal_approx(SpawnerScript.BOSS_HEALTH_SHIELD_MULT, OLD_HEALTH_SHIELD_MULT),
-		"Bosslar 'tüm yaratıklar %%10' azaltmasına dahil olmamalı (bosslar tam %%20 iner)")
+	## 2026-09-25: "tüm yaratıklar can/kalkan -%15" bosslara da uygulandı (x0.85).
+	assert(is_equal_approx(SpawnerScript.BOSS_HEALTH_SHIELD_MULT, OLD_HEALTH_SHIELD_MULT * 0.85),
+		"Bosslar 'tüm yaratıklar %%10' azaltmasına dahil olmamalı (bosslar tam %%20 iner), 2026-09-25 x0.85'e dahil")
 
 	var sp: Node = _spawner()
 	_player(Vector2(500.0, 500.0))
@@ -217,17 +218,17 @@ func test_boss_health_and_shield_are_exactly_twenty_percent_lower() -> void:
 	var mult: Dictionary = SpawnerScript.FAMILY_MULT.get(family, {"hp": 1.0, "dmg": 1.0})
 	var raw: float = (10.0 + 3.0 * 9.0) * float(mult["hp"])
 	var expected_old_health: float = raw * OLD_BOSS_HEALTH_MULT * SpawnerScript.GLOBAL_DEFENSE_BUFF * OLD_HEALTH_SHIELD_MULT
-	assert(absf(float(boss.max_health) - expected_old_health * 0.8 * 0.85) < 0.01,
-		"Boss canı eski değerin x0.8 x0.85'i olmalı: %s (eski %s)" % [boss.max_health, expected_old_health])
-	assert(absf(float(boss.item_shield_max) - expected_old_health * 1.3 * 0.8 * 0.9) < 0.01,
+	assert(absf(float(boss.max_health) - expected_old_health * 0.8 * 0.85 * 0.85 * SpawnerScript.BOSS_CUT_2026_09_25B) < 0.01,
+		"Boss canı eski değerin x0.8 x0.85 (x0.85 2026-09-25)'i olmalı: %s (eski %s)" % [boss.max_health, expected_old_health])
+	assert(absf(float(boss.item_shield_max) - expected_old_health * 1.3 * 0.8 * 0.9 * 0.85 * SpawnerScript.BOSS_CUT_2026_09_25B) < 0.01,
 		"Boss kalkanı eski (x0.8'lik) kalkanın TAM %%90'ı olmalı: %s" % boss.item_shield_max)
 	assert(absf(float(boss.item_shield_max) / float(boss.max_health) - 1.3 * 0.9 / 0.85) < 0.001, "Boss kalkan/can oranı 1.3x0.9/0.85 olmalı")
 	_cleanup()
 
 
 func test_regular_creature_health_and_shield_are_ten_percent_lower() -> void:
-	assert(is_equal_approx(SpawnerScript.HEALTH_SHIELD_MULT, OLD_HEALTH_SHIELD_MULT * 0.9),
-		"Normal yaratık çarpanı eskisinin %%90'ı olmalı: %s" % SpawnerScript.HEALTH_SHIELD_MULT)
+	assert(is_equal_approx(SpawnerScript.HEALTH_SHIELD_MULT, OLD_HEALTH_SHIELD_MULT * 0.9 * 0.85),
+		"Normal yaratık çarpanı eskisinin %%90'ı (x0.85 2026-09-25) olmalı: %s" % SpawnerScript.HEALTH_SHIELD_MULT)
 	var sp: Node = _spawner()
 	var enemy: Node = RatScene.instantiate()
 	add_child(enemy)
@@ -237,8 +238,8 @@ func test_regular_creature_health_and_shield_are_ten_percent_lower() -> void:
 	enemy.item_shield_hp = 100.0
 	sp._apply_global_buff(enemy)
 	var old_health: float = 100.0 * SpawnerScript.GLOBAL_DEFENSE_BUFF * OLD_HEALTH_SHIELD_MULT
-	assert(absf(float(enemy.max_health) - old_health * 0.9) < 0.01, "Normal yaratığın canı eskisinin %%90'ı olmalı: %s (eski %s)" % [enemy.max_health, old_health])
-	assert(absf(float(enemy.item_shield_max) - old_health * 0.9) < 0.01, "Normal yaratığın kalkanı eskisinin %%90'ı olmalı: %s" % enemy.item_shield_max)
+	assert(absf(float(enemy.max_health) - old_health * 0.9 * 0.85) < 0.01, "Normal yaratığın canı eskisinin %%90'ı (x0.85) olmalı: %s (eski %s)" % [enemy.max_health, old_health])
+	assert(absf(float(enemy.item_shield_max) - old_health * 0.9 * 0.85) < 0.01, "Normal yaratığın kalkanı eskisinin %%90'ı (x0.85) olmalı: %s" % enemy.item_shield_max)
 	_cleanup()
 
 

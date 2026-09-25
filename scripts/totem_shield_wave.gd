@@ -97,6 +97,11 @@ func _ready() -> void:
 	z_index = 60
 
 
+## Gece ışığı (bkz. night_glow.gd): kök (0,0)'da - ışık totemden müttefike dalga boyunca.
+func get_glow_segment() -> Array:
+	return [start_pos, end_pos]
+
+
 func _process(delta: float) -> void:
 	_elapsed += delta
 	if is_instance_valid(ally_ref):

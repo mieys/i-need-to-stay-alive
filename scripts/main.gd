@@ -56,6 +56,8 @@ const MISSION_DESCRIPTIONS := {
 ## açık tutarken dışarıdan yapılan .tscn düzenlemeleri editörün "Kaydet"i ile
 ## sessizce ezilebiliyor (bkz. CLAUDE.md).
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
+## Gün-gece döngüsü + hava durumu (kullanıcı isteği 2026-09-25) - sis gibi kodla kuruluyor (aynı gerekçe).
+const AtmosphereScript := preload("res://scripts/atmosphere.gd")
 
 ## Haritaya "gökyüzündeki bulutlar yer yer gölge düşürmüş" görünümü veren
 ## materyal. TEK bir paylaşılan kaynak (.tres) olarak tutuluyor - böylece
@@ -185,6 +187,10 @@ func _ready() -> void:
 	world_event_banner_layer.layer = 40
 	add_child(world_event_banner_layer)
 	world_event_banner_layer.add_child(_world_event_banner)
+	## Arayüz opaklığı ayarı (kullanıcı isteği 2026-09-25, bkz. UISound.ui_opacity_percent) - görev penceresi ve satıcı
+	## oku da kalıcı arayüz parçası.
+	UISound.register_ui_opacity(_world_event_banner)
+	UISound.register_ui_opacity(_merchant_arrow)
 	## Görev göstergeleri HUD'un sağ sütunundaki butonların altında dursun (bkz. world_event_banner.gd).
 	_world_event_banner.set("hud_anchor_controls", [hud.get("envanter_toggle_button"), hud.get("gold_indicator"), hud.get("_debug_button")])
 	## #58 DÜZELTME (kullanıcı bildirimi: "sandık açılımı esnasında oyun diğer
@@ -241,6 +247,16 @@ func _ready() -> void:
 	vision_fog.name = "VisionFog"
 	add_child(vision_fog)
 	move_child(vision_fog, hud.get_index())
+
+	## Gün-gece + hava durumu (bkz. atmosphere.gd). Ekran renk geçişi katmanı sisin HEMEN ÖNCESİNE (aynı layer=1, ağaç
+	## sırası): dünya -> gün/gece renkleri + gece ışıkları -> sis -> HUD. Sis de karartılmış sahneyi okur (bkz.
+	## vision_fog.gd BackBufferCopy notu); HUD hiç etkilenmez.
+	var atmosphere := AtmosphereScript.new()
+	atmosphere.name = "Atmosphere"
+	add_child(atmosphere)
+	var atmosphere_layer: CanvasLayer = atmosphere.create_overlay_layer()
+	add_child(atmosphere_layer)
+	move_child(atmosphere_layer, vision_fog.get_index())
 
 	# Add loopable breezy cozy forest ambient sound
 	var ambient: Node = preload("res://scripts/wind_breeze_ambient.gd").new()
@@ -543,6 +559,9 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## ile AYNI desen, sadece görsel bir bayrak, gerçek mekanik
 			## (hasar yansıtma) zaten player.gd take_damage()'ında.
 			"barrier_link_active": player.has_active_damage_redirect_barrier() if player.has_method("has_active_damage_redirect_barrier") else false,
+			## Şovalye Adam E (Koruma Bariyeri) açık mı - Şovalye'nin KENDİ üstündeki "hasarı üstüne çekme" efekti diğer
+			## oyuncularda da görünsün (bkz. player.gd paladin_guard_active / remote_player.gd _refresh_paladin_guard_visual).
+			"paladin_guard": player.paladin_guard_active if "paladin_guard_active" in player else false,
 			## Ruhani Yetenek "Kalkan Bağı" - BUG DÜZELTMESİ (bkz. remote_player.gd _refresh_kalkan_bagi_link_
 			## visual üstündeki not): barrier_link_active ile AYNI desen, ama bir bool yerine partnerin
 			## peer_id'sini taşıyor çünkü fx_kalkan_bagi_link.gd karşı ucun KONUMUNU bulmak için buna ihtiyaç

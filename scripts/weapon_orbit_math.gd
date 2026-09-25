@@ -16,6 +16,11 @@
 class_name WeaponOrbitMath
 extends RefCounted
 
+## Kullanıcı isteği (2026-09-25): "silahların boyutunu %15 küçült". Silah ikonunun ölçeği hem yerel silahta (weapon.gd
+## _ready) hem uzak oyuncu kuklasında (remote_player.gd update_weapon_visuals) AYRI ayrı kuruluyor - ikisi de bu TEK
+## çarpanı kullanır ki diğer oyunculara silahlar farklı boyda görünmesin (CLAUDE.md "iki yer" hata sınıfı).
+const ICON_SIZE_MULT: float = 0.85
+
 const BASE_ORBIT_RADIUS: float = 130.0
 const ROTATION_SPEED_MULT: float = 0.28
 const TRAIL_INTERVAL: float = 0.045

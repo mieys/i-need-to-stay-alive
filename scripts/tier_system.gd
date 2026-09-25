@@ -55,6 +55,14 @@ const TIER_LUCK_WEIGHT_BONUS_PER_POINT := 0.015
 static func lifesteal_percent_for_tier(tier: int) -> float:
 	return 0.01 + 0.005 * float(clampi(tier, 1, NAMES.size()) - 1)
 
+## Kullanıcı isteği (2026-09-25): "tier 1: 15, tier 2: 24, tier 3: 30, tier 4: 38" - level atlama kartındaki "Can"
+## (max_health) paylaşılan x1.3 tier eğrisinden çıkarıldı, elle verilen merdiven. player.gd apply_upgrade "max_health"
+## dalı VE level_up_screen.gd _scaled_desc_value (kartta gösterilen sayı) İÇİN TEK kaynak - lifesteal ile aynı desen.
+const HEALTH_CARD_BY_TIER := [15.0, 24.0, 30.0, 38.0]
+
+static func health_card_for_tier(tier: int) -> float:
+	return HEALTH_CARD_BY_TIER[clampi(tier, 1, HEALTH_CARD_BY_TIER.size()) - 1]
+
 ## Kart arkaplanı: level atlama kartlarının çizilmiş 4 tier çerçevesi
 ## (eskiden SADECE level_up_screen.gd'nin kendi TIER_FRAME_TEXTURES'ıydı).
 ## Kullanıcı isteği: "seyyar satıcı eşyalarının / sandık ödülü kartının
@@ -65,6 +73,9 @@ static func lifesteal_percent_for_tier(tier: int) -> float:
 ## Kullanıcı isteği (2026-09-24): kartlar oyun içi bej kitle AYNI dilde yeniden çizildi (tools/gen_menu_kit.py tier_card):
 ## 300x480 px = 100x160 sanat px (level_up_screen.tscn Card*/Frame boyutu, 3 px texel) - ahşap dış çerçeve + tier renginde
 ## emaye bant + parşömen iç + tier taşı. Eski 483x643 hazır çizimler (assets/sprites/level_card_tier_*.png) kaldırıldı.
+## 2026-09-25 (kullanıcı isteği: "renklerinin sadece dış çizgilerinin değil tamamen tier'a uygun hale" + "savaşla alakalı"):
+## kart gövdesi tamamen tier renginde SAVAŞ kartı - tier metali çerçeve, ışık hüzmeleri, çapraz kılıçlı kalkan arması, tier
+## kurdelesi, parşömen açıklama levhası. Sabit bölgeleri scripts/tier_card_fx.gd'de (level atlama + sandık aynı yerleşimi okur).
 const FRAME_TEXTURES := [
 	preload("res://assets/ui/game/tier_card_1.png"),
 	preload("res://assets/ui/game/tier_card_2.png"),
@@ -77,7 +88,8 @@ const FRAME_TEXTURES := [
 ## tüm kartı değil, sadece ikonun oturduğu kare alanı kaplar. Tier'ı olmayan
 ## girişler (silah/kalkan) varsayılan olarak MINI_FRAME_TEXTURES[0] (tier 1)
 ## kullanır.
-## 96x96 px = 32x32 sanat px (tools/gen_menu_kit.py tier_slot): tier renginde çerçeve + çukur bej iç.
+## 96x96 px = 32x32 sanat px (tools/gen_menu_kit.py tier_slot). 2026-09-25: TAMAMEN tier renginde (tier metali çerçeve + ortası
+## aydınlık tier zemini + köşe perçinleri); kademesiz envanter yuvası eski sade hücreyi (assets/ui/game/slot_cell.png) kullanır.
 const MINI_FRAME_TEXTURES := [
 	preload("res://assets/ui/game/tier_slot_1.png"),
 	preload("res://assets/ui/game/tier_slot_2.png"),

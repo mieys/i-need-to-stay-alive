@@ -82,6 +82,14 @@ var _needs_reset: bool = true
 var _prev_origin: Vector2 = Vector2.ZERO
 var _prev_zoom: Vector2 = Vector2.ONE
 
+## Kullanıcı isteği (2026-09-25): "gece olunca görüş açısı %25 azalacak (hava kararmaya doğru kademeli şekilde yavaş
+## yavaş ... daha dar görüş açısı)". Elips artık sabit VISION_RADIUS değil, bu değer: VISION_RADIUS x atmosferin görüş
+## çarpanı (atmosphere.gd -> atmosphere_math.gd vision_multiplier: gündüz 1.0, gece 0.75, arası kademeli). Saat host'tan
+## senkron geldiği için her istemcide aynı. Atmosfer yoksa (ana menü, testler) VISION_RADIUS'ta kalır.
+var _vision_radius: float = VISION_RADIUS
+var _atmosphere: Node = null
+var _screen_copy: BackBufferCopy = null
+
 
 func _ready() -> void:
 	add_to_group(FOG_GROUP)
@@ -125,6 +133,16 @@ func _ready() -> void:
 	_material.set_shader_parameter("fog_tint", FOG_TINT)
 	_material.set_shader_parameter("fog_darkness", FOG_DARKNESS)
 	_material.set_shader_parameter("fog_desaturation", FOG_DESATURATION)
+
+	## Gün-gece renk geçişi (atmosphere_overlay.gd) de ekranı okuyup sisten hemen ÖNCE çiziliyor. Godot 2B'de ekran
+	## kopyasını art arda okuyan iki geçişten ikincisi ilkinin sonucunu göremeyebilir (kopya bir kez alınır) - sis tam
+	## ekranı opak yazdığı için bu durumda gece renkleri tamamen silinirdi. Bu kopya sisin, önündeki her şey (dünya +
+	## gece renkleri) çizildikten SONRAKİ ekranı okumasını garanti eder. Sis kapalıyken bu da kapalı.
+	_screen_copy = BackBufferCopy.new()
+	_screen_copy.name = "ScreenCopy"
+	_screen_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	_screen_copy.visible = false
+	add_child(_screen_copy)
 
 	_rect = ColorRect.new()
 	_rect.name = "Fog"
@@ -207,6 +225,7 @@ func update_fog(delta: float = -1.0) -> void:
 
 	var world_sources: PackedVector2Array = _collect_source_positions()
 	_active = not world_sources.is_empty() and not _local_player_indoors()
+	_vision_radius = VISION_RADIUS * _atmosphere_vision_multiplier()
 	if _active:
 		_world_sources = world_sources
 		_source_count = world_sources.size()
@@ -221,7 +240,25 @@ func update_fog(delta: float = -1.0) -> void:
 		_needs_reset = true
 		_mask_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_rect.visible = _active
+	_screen_copy.visible = _active
 	_apply_enemy_visibility(_active, delta)
+
+
+func _atmosphere_vision_multiplier() -> float:
+	if _atmosphere == null or not is_instance_valid(_atmosphere):
+		_atmosphere = get_tree().get_first_node_in_group("atmosphere")
+		if _atmosphere == null:
+			return 1.0
+	return float(_atmosphere.call("get_vision_multiplier"))
+
+
+## O anki (gece daralmış) görüş yarıçapı - sisin DIŞINDAN elipsi kendi hesaplayan yerler için (bkz. player.gd Matthew
+## Tilki Hücumu). Sis yoksa VISION_RADIUS.
+static func current_radius(tree: SceneTree) -> float:
+	var fog: Node = tree.get_first_node_in_group(FOG_GROUP) if tree else null
+	if fog == null:
+		return VISION_RADIUS
+	return float(fog.get("_vision_radius"))
 
 
 func _push_mask_uniforms(delta: float) -> void:
@@ -348,8 +385,8 @@ func _update_half_extent() -> void:
 	if size.x <= 0.0 or size.y <= 0.0:
 		return
 	var zoom: Vector2 = viewport.get_canvas_transform().get_scale()
-	var half_width_world: float = VISION_RADIUS * maxf(VISION_WIDTH_SCALE, 0.05)
-	_half_extent = Vector2(half_width_world * absf(zoom.x) / size.x, VISION_RADIUS * absf(zoom.y) / size.y)
+	var half_width_world: float = _vision_radius * maxf(VISION_WIDTH_SCALE, 0.05)
+	_half_extent = Vector2(half_width_world * absf(zoom.x) / size.x, _vision_radius * absf(zoom.y) / size.y)
 
 
 func _world_to_uv(world_pos: Vector2) -> Vector2:
@@ -368,7 +405,7 @@ func _target_visibility(world_pos: Vector2) -> float:
 	var best: float = 0.0
 	for source: Vector2 in _world_sources:
 		var vis: float = visibility_from_distance(
-				normalized_distance(world_pos - source, VISION_RADIUS, VISION_WIDTH_SCALE), EDGE_SOFTNESS)
+				normalized_distance(world_pos - source, _vision_radius, VISION_WIDTH_SCALE), EDGE_SOFTNESS)
 		if vis <= best:
 			continue
 		if _occluders != null and _occluders.is_ray_blocked(source, world_pos):

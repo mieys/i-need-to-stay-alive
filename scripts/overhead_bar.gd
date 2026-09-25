@@ -35,6 +35,16 @@ const MAX_SEGMENT_LINES := 20
 ## their head instead - see enemy_spawner.gd's _attach_boss_bar.
 var y_offset: float = -62.0
 
+## OYNANABİLİR KARAKTERLERİN barı (kullanıcı bildirimi 2026-09-25: "karakterin üstündeki can ve kalkan barını biraz yukarı
+## yükselt, bazı karakterlerin şapkasının görünmemesine neden oluyor"). Ölçüm (tüm karakterlerin idle/walk karelerindeki en
+## üst opak piksel, characters.gd ölçek/ofset x EntityScale 0.95, karakter kökünün yerel biriminde): en uzunlar Büyücü
+## (şapka) ve Melek -52.7, Assasin -50.6, Shaman -48.4. Eski -62'de can+kalkan çubuğu (7 + 2 + 5 px + çerçeve) -48'e kadar
+## iniyor, şapkaların ucunu örtüyordu. -76'da çubukların altı ~-60 - en uzun şapkanın 7 px üstü. İsim etiketinin alt kenarı
+## (remote_player_name.gd, -92) ile arasında hâlâ boşluk var. player.gd, remote_player.gd ve mission_player_copy.gd
+## (oyuncunun kopyası) bunu set_offset ile uygular; varsayılan (-62) yaratık dışı diğer kullanıcılar (ağaç görevi) için
+## değişmedi. downed_timer_label.gd de bu yüksekliğe hizalı.
+const CHARACTER_Y_OFFSET := -76.0
+
 var health_current: float = 1.0
 var health_max: float = 1.0
 var health_ratio: float = 1.0

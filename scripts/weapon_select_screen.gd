@@ -301,10 +301,12 @@ func _refresh_reroll_button() -> void:
 	_reroll_button.disabled = _reroll_left <= 0 or _has_chosen
 
 
-## Kart zemini: Sıradan tier'in ahşap kartı (bkz. CARD_SIZE notu) - hover biraz aydınlık, basılı biraz koyu.
+## Kart zemini: kitin sade uzun kartı (ahşap çerçeve + parşömen iç; 2026-09-25'e kadar Sıradan tier kartıydı - tier kartları
+## sabit bölgeli savaş kartına geçince bu serbest yerleşimli kart eski sade zemini card_tall.png olarak korudu) - hover biraz
+## aydınlık, basılı biraz koyu.
 static func _build_card_style(tint: Color) -> StyleBoxTexture:
 	var style := StyleBoxTexture.new()
-	style.texture = UIKit.game_tex("tier_card_1.png")
+	style.texture = UIKit.game_tex("card_tall.png")
 	style.modulate_color = tint
 	return style
 
@@ -500,6 +502,45 @@ func _populate_cards() -> void:
 		_cards_container.add_child(card)
 		_cards.append(card)
 		_card_tweens.append(null)
+
+
+## Kullanıcı isteği (2026-09-25): "oyun başlangıcındaki silah ve kalkan seçimleri de 1-2-3 tuşları ile seçilebilsin",
+## "başlangıç itemi seçme kartlarının karıştırması space tuşu ile yeniden rerollanabilsin" - level_up_screen.gd'nin
+## AYNI kısayolları (bkz. oradaki _unhandled_input/_input). Chat yazarken tetiklenmez.
+func _chat_typing() -> bool:
+	var p: Node = player_ref if is_instance_valid(player_ref) else get_tree().get_first_node_in_group("player")
+	return p != null and bool(p.get("is_chat_typing"))
+
+
+## Space: GUI'den ÖNCE (_input) yakalanır - aksi halde Space varsayılan "ui_accept" olduğu için klavye odağındaki KART
+## seçilirdi (karıştırmak isterken silah seçilmiş olurdu).
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventKey) or not event.pressed or event.echo or event.keycode != KEY_SPACE:
+		return
+	if _has_chosen or _chat_typing():
+		return
+	get_viewport().set_input_as_handled()
+	if _reroll_button and not _reroll_button.disabled:
+		_reroll_button.pressed.emit()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _has_chosen or not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	var idx: int = -1
+	match event.keycode:
+		KEY_1, KEY_KP_1:
+			idx = 0
+		KEY_2, KEY_KP_2:
+			idx = 1
+		KEY_3, KEY_KP_3:
+			idx = 2
+	if idx < 0 or idx >= _cards.size() or _chat_typing():
+		return
+	var card: Button = _cards[idx]
+	if is_instance_valid(card) and not card.disabled:
+		get_viewport().set_input_as_handled()
+		card.pressed.emit()
 
 
 func _on_reroll_pressed() -> void:

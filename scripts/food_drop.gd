@@ -1,6 +1,7 @@
 extends Area2D
 
 const FloatingText := preload("res://scenes/floating_text.tscn")
+const DropAttractionScript := preload("res://scripts/drop_attraction.gd")
 
 ## 5 yemek tier'i (bkz. enemy.gd FOOD_TIER_COUNT/_roll_food_tier - orada
 ## ağırlıklı rastgele 1-5 arası seçiliyor, üst tier'ler daha nadir). Her
@@ -65,6 +66,12 @@ func _ready() -> void:
 		sprite = get_node_or_null("Sprite2D")
 	_update_visual()
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
+	_place_on_ground.call_deferred()
+
+
+## Zeminde, karakterlerin altında çizil (bkz. drop_attraction.gd place_on_ground).
+func _place_on_ground() -> void:
+	DropAttractionScript.place_on_ground(self)
 
 
 func _on_expire() -> void:

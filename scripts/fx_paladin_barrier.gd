@@ -1,149 +1,132 @@
 extends Node2D
 
-## Şovalye (Paladin) ultisi ("Koruma Baloncuğu") aktifken oyuncuya eklenen
-## kalıcı, BÜYÜK koruma alanı baloncuğu - bkz. player.gd _skill_paladin_ulti/
-## _end_paladin_ulti.
+## Şovalye (Paladin) R'si ("Koruma Baloncuğu") aktifken oyuncuya eklenen kalıcı, BÜYÜK koruma alanı baloncuğu - bkz.
+## player.gd _skill_paladin_ulti/_end_paladin_ulti. Diğer oyuncularda remote_player.gd _ensure_barrier_visual AYNI
+## script'i kurar (tek görsel yolu).
 ##
-## z_index MUTLAKA absolute olmalı (z_as_relative = false) - Player'ın kendi
-## z_index'i main.tscn'de 1 olarak ayarlı, göreceli negatif bir değer
-## (ör. -5) zemin TileMapLayer'larının (z_index=0, absolute) ARKASINDA
-## kalıp baloncuğu tamamen görünmez yapıyordu.
+## z_index MUTLAKA absolute olmalı (z_as_relative = false) - Player'ın kendi z_index'i main.tscn'de 1 olarak ayarlı,
+## göreceli negatif bir değer (ör. -5) zemin TileMapLayer'larının (z_index=0, absolute) ARKASINDA kalıp baloncuğu
+## tamamen görünmez yapıyordu.
 ##
-## Görünüm modern piksel sanatı (high-res pixel art) standartlarına uygun olarak
-## yüksek çözünürlüklü bir piksellenme ile güncellendi.
-## Kalkan hasar aldığında, darbenin geldiği yönde sihirli dairesel cam çatlakları
-## (örümcek ağı şeklinde kırıklar) ve yerçekimiyle aşağı dökülen pikselli cam
-## parçaları (shards) oluşur.
+## YENİDEN TASARIM (kullanıcı isteği 2026-09-25: "şovalye adamın kalkan baloncuğunun efektini de pixel tarzda yeniden
+## tasarlamanı istiyorum yine önceki hali gibi hasar alınca özel efektler ve bariyer hasar alıyormuş gibi hafif
+## parıldamalı görünmeli ... spritesheete dönüştür ki performans kaybı yaşanmasın"): eskiden kubbe her karede bir
+## shader'la (shaders/shield_dome.gdshader, ColorRect) + ayrı bir çizim overlay'iyle (fx_paladin_overlay.gd) çiziliyordu.
+## Artık tools/gen_paladin_dome_fx.py sayfaları:
+##  - loop: altıgen örgülü mavi enerji kubbesi, üzerinden çapraz akan parıltı bandı (16 kare döngü).
+##  - flash: her isabette kubbenin kenar bandı ve örgüsü hafifçe parlayıp söner (loop'un ÜSTÜNDE ayrı sprite).
+## İsabet noktasındaki yönlü piksel çatlak (fx_shield_hit.gd, zaten sprite) önceki gibi kalır.
+##
+## BOĞUK SES (aynı istek: "içinde bulunan oyuncular dışardaki sesleri boğuk duymalı sanki bir bariyerin içindeymiş gibi"):
+## yerel oyuncu bu baloncuğun içindeyken baloncuğun DIŞINI kaplayan halka biçimli bir Area2D kurulur; audio_bus_override
+## ile o halkanın içinde (yani baloncuğun dışında) çalan her AudioStreamPlayer2D, alçak geçiren filtreli MUFFLE_BUS'a
+## yönlenir (Godot: 2D ses çalar, bulunduğu noktadaki bus-override'lı alanın bus'ını kullanır). Baloncuğun içindeki
+## sesler (Şovalye'nin/dostların kendi silahları vb.) normal kalır. Alan, hiçbir Area2D sinyali/sorgusu olmayan oyunda
+## çarpışma katmanı 1'de (AudioStreamPlayer2D.area_mask varsayılanı) ama monitorable/monitoring KAPALI durur - başka
+## alanlarla çift oluşturmaz, fiziğe etkisi yoktur. UI sesleri (AudioStreamPlayer) etkilenmez.
 
 var radius: float = 126.0 ## player.gd _skill_paladin_ulti() PALADIN_ULTI_ZONE_RADIUS ile üzerine yazar - bu sadece varsayılan
-var color: Color = Color(0.35, 0.78, 1.0, 0.95)
+var color: Color = Color(0.35, 0.78, 1.0, 0.95) ## gece ışığı rengi (bkz. night_glow_catalog.gd "cp": "color")
 var active: bool = true
+## Seyyar satıcının güvenli bölgesi de bu script'i kullanır (traveling_merchant.gd) - add_child'dan ÖNCE atanır:
+## "gold" = altın ticaret kubbesi (tools/gen_paladin_dome_fx.py *_gold sayfaları), boğuk ses KAPALI.
+var variant: String = ""
+var muffle_outside_sound: bool = true
 
-var _pulse_t: float = 0.0
-var _flash_t: float = 0.0
-const FLASH_DURATION := 0.22
+const LoopFrames := preload("res://assets/fx/paladin_dome/loop_frames.tres")
+const FlashFrames := preload("res://assets/fx/paladin_dome/flash_frames.tres")
+const LoopFramesGold := preload("res://assets/fx/paladin_dome/loop_gold_frames.tres")
+const FlashFramesGold := preload("res://assets/fx/paladin_dome/flash_gold_frames.tres")
+## Sayfalardaki kubbe yarıçapı (sanat pikseli = dünya birimi) - radius farklıysa sprite orantılı ölçeklenir.
+const ART_RADIUS := 126.0
+const APPEAR_TIME := 0.25
 
-## Kullanıcı bildirimi (2026-09-23): "şovalye adamın kalkan baloncuğunu açtığımda fps 10'a
-## düşüyor çünkü çok sayıda kalkan hasar alma efekti oluyor" - baloncuğu saran her yaratık
-## KENDİ contact_interval'ıyla ayrı ayrı saldırıyor (bkz. enemy.gd take_paladin_barrier_damage
-## çağrısı), yani kalabalık bir sürüde saniyede onlarca hasar isabeti oluşabiliyor. Her isabet
-## eskiden TAM DETAYLI bir fx_shield_hit.gd (dither dolgu + tam çember halkalar + yüzey dalgası,
-## ~1200 draw_rect/kare) doğuruyordu - aynı anda çok sayısı üst üste binince FPS çöküyordu.
-## DÜZELTME (aynı gün, devamı): fx_shield_hit.gd artık PROSEDÜREL değil, PNG'ye pişirilmiş
-## (bkz. tools/gen_perf_sprite_fx.py) TEK bir AnimatedSprite2D çizimi - maliyet detaydan
-## bağımsız (~1 çizim/örnek) hale geldi, "light mod" ayrımı gereksizleşti. Yine de aşırı uç
-## bir durumda (yüzlerce yaratık) bile makul kalsın diye burada hâlâ aynı anda kaç tane çatlak
-## fx'i canlı olabileceği VE ne sıklıkla yeni bir tane doğabileceği sınırlı tutuluyor -
-## baloncuğun kendi flaş/nabız parıltısı (shader tabanlı, ayrıca ucuz) hâlâ HER isabette
-## tetiklenir, sadece fx örneği sınırlanır.
+## Kullanıcı bildirimi (2026-09-23): "şovalye adamın kalkan baloncuğunu açtığımda fps 10'a düşüyor çünkü çok sayıda
+## kalkan hasar alma efekti oluyor" - kalabalık bir sürüde saniyede onlarca isabet olabiliyor. Yönlü çatlak fx'i
+## (fx_shield_hit.gd) sprite olsa da aynı anda kaç tane canlı olabileceği ve doğma sıklığı sınırlı; kubbenin kendi
+## flaşı (tek sprite, yeniden başlatılır) her isabette tetiklenir.
 const MAX_CONCURRENT_HIT_FX := 4
 const HIT_FX_MIN_INTERVAL := 0.05
-var _hit_fx_count: int = 0
-var _hit_fx_cooldown: float = 0.0
-
-var rect: ColorRect
-var mat: ShaderMaterial
-var overlay: Node2D
-
-# Çatlama ve parça dökülme verileri
-var cracks: Array[Dictionary] = []
 ## Bariyer isabet efektinin (çatlak) sabit ölçeği - 1.0 = oyuncunun kendi kalkan baloncuğundaki çatlakla aynı boy.
 const PALADIN_CRACK_SCALE := 1.0
-var shards: Array[Dictionary] = []
+
+const AudioBuses := preload("res://scripts/audio_buses.gd")
+## Halkanın dış yarıçapı (dünya birimi) - ekranın çok dışı; daha uzaktaki sesler zaten duyulmuyor (max_distance).
+const MUFFLE_OUTER_RADIUS := 4000.0
+const MUFFLE_SEGMENTS := 24
+
+var _hit_fx_count: int = 0
+var _hit_fx_cooldown: float = 0.0
+var _loop: AnimatedSprite2D = null
+var _flash: AnimatedSprite2D = null
+var _t: float = 0.0
+var _muffle_area: Area2D = null
+
 
 func _ready() -> void:
 	z_as_relative = false
 	z_index = 20 ## zeminin (0) kesinlikle üstünde, kalıcı/güvenilir görünürlük
-
-	# Karakterin kendi ölçeğinden bağımsız global boyutu korurken,
-	# kalkanın dikeyde basık olmaması (tam yuvarlak olması) sağlanır.
-	var parent_scale: Vector2 = Vector2.ONE
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	## Karakterin kendi ölçeğinden bağımsız global boyut: 1 yerel birim = 1 dünya birimi = 1 sanat pikseli.
 	var p := get_parent()
 	if p is Node2D:
-		parent_scale = p.scale
-	if parent_scale.x != 0.0 and parent_scale.y != 0.0:
-		scale = Vector2(1.0 / parent_scale.x, 1.0 / parent_scale.y)
-
-	# Shader'ı çalıştıracak ColorRect çocuğunu oluşturuyoruz.
-	rect = ColorRect.new()
-	rect.size = Vector2(radius * 2.0, radius * 2.0)
-	rect.position = Vector2(-radius, -radius)
-	add_child(rect)
-
-	# Shader material yükleme ve atama
-	var shader := load("res://shaders/shield_dome.gdshader") as Shader
-	mat = ShaderMaterial.new()
-	mat.shader = shader
-	rect.material = mat
-
-	# Başlangıç parametrelerini veriyoruz (Modern piksel art için 200.0 yapıldı)
-	mat.set_shader_parameter("shield_color", color)
-	mat.set_shader_parameter("pixel_size", 200.0) 
-	mat.set_shader_parameter("time_speed", 2.0)
-
-	# Üst katman çizim overlay'i (çatlakları ve dökülen parçaları kalkanın üstüne çizmek için)
-	overlay = Node2D.new()
-	overlay.set_script(load("res://scripts/fx_paladin_overlay.gd"))
-	add_child(overlay)
+		var ps: Vector2 = (p as Node2D).scale
+		if ps.x != 0.0 and ps.y != 0.0:
+			scale = Vector2(1.0 / ps.x, 1.0 / ps.y)
+	var art_scale: float = radius / ART_RADIUS
+	var gold: bool = variant == "gold"
+	_loop = _make_sprite(LoopFramesGold if gold else LoopFrames, art_scale)
+	_loop.play("loop")
+	_loop.frame = randi() % LoopFrames.get_frame_count("loop")
+	_flash = _make_sprite(FlashFramesGold if gold else FlashFrames, art_scale)
+	_flash.visible = false
+	_flash.animation_finished.connect(func() -> void: _flash.visible = false)
+	## Açılış: küçükten büyüyerek belirir.
+	modulate.a = 0.0
+	_loop.scale = Vector2.ONE * art_scale * 0.7
 
 
-## Kullanıcı bildirimi: "Şovalye adamın kalkan baloncuğuna vurulduğu andaki
-## çatlama ve kalkanın hasar alma efekti şovalye adam haricinde kimseye
-## görünmüyor... diğer oyuncuların host/katılımcı farketmeksizin aynı
-## efektleri görmesi gerekiyor." Kök neden: flash() sadece kalkan sahibinin
-## KENDİ client'ında (player.gd flash_paladin_barrier() üzerinden) çağrılıyordu,
-## uzak client'lardaki RemotePlayer kuklasının kendi _barrier_visual kopyasında
-## (bkz. remote_player.gd _ensure_barrier_visual) hiçbir zaman tetiklenmiyordu.
-## Artık network_manager.gd broadcast_player_vfx() "paladin_barrier_flash"
-## RPC'siyle bu fonksiyon uzak kopyalarda da çağrılıyor - saldıranın gerçek
-## Node2D referansı uzak client'ta anlamlı olmadığı için (farklı network id'ler)
-## sadece hazır hesaplanmış açı gönderiliyor.
+func _make_sprite(frames: SpriteFrames, art_scale: float) -> AnimatedSprite2D:
+	var s := AnimatedSprite2D.new()
+	s.sprite_frames = frames
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.centered = true
+	s.scale = Vector2.ONE * art_scale
+	add_child(s)
+	return s
+
+
+func _exit_tree() -> void:
+	_remove_muffle_area()
+
+
+## Kullanıcı bildirimi: "Şovalye adamın kalkan baloncuğuna vurulduğu andaki çatlama ve kalkanın hasar alma efekti
+## şovalye adam haricinde kimseye görünmüyor" - network_manager.gd broadcast_player_vfx() "paladin_barrier_flash"
+## RPC'siyle bu fonksiyon uzak kopyalarda da çağrılıyor (saldıranın Node2D'si uzakta anlamsız, sadece açı gider).
 func flash_from_angle(angle: float) -> void:
-	_flash_t = FLASH_DURATION
-	_spawn_crack(angle)
-	_spawn_shards_at(angle)
+	_play_flash()
+	_spawn_pixel_hit(angle)
 
 
 func flash(attacker: Node2D = null) -> void:
-	_flash_t = FLASH_DURATION
-	
-	# Eğer saldıran düşman belirtildiyse direkt onun açısını kullan
-	if attacker and is_instance_valid(attacker):
-		var parent = get_parent()
-		if parent:
-			var dir = (attacker.global_position - parent.global_position).normalized()
-			_spawn_crack(dir.angle())
-			_spawn_shards_at(dir.angle())
-	else:
-		# Belirtilmediyse en yakın düşmanı tara (fallback)
-		var parent = get_parent()
-		if parent:
-			var closest_enemy: Node2D = null
-			var min_dist := 99999.0
-			for e in get_tree().get_nodes_in_group("enemies"):
-				if is_instance_valid(e) and e.get("is_dead") != true:
-					var d = parent.global_position.distance_to(e.global_position)
-					if d < min_dist:
-						min_dist = d
-						closest_enemy = e
-			
-			if closest_enemy:
-				var dir = (closest_enemy.global_position - parent.global_position).normalized()
-				_spawn_crack(dir.angle())
-				_spawn_shards_at(dir.angle())
-			else:
-				# Kimse yoksa rastgele bir açıda çatlak ve parça oluştur
-				var rand_angle = randf_range(0.0, TAU)
-				_spawn_crack(rand_angle)
-				_spawn_shards_at(rand_angle)
+	var parent := get_parent() as Node2D
+	var angle: float = randf_range(0.0, TAU)
+	if attacker and is_instance_valid(attacker) and parent:
+		angle = (attacker.global_position - parent.global_position).angle()
+	flash_from_angle(angle)
 
 
-## Kullanıcı isteği (2026-09-21): "kalkanların hasar alma efektleri pixel tarzı, mavi ve yarı saydam bir bariyer hasarı efekti
-## olsun" - eskiden burada düzgün çizgili çatlak + cam kırığı çiziliyordu; artık oyuncu kalkanıyla AYNI pixel efekt
-## (fx_shield_hit.gd, bu bariyerin kendi yarıçapıyla) doğuyor. Eski çatlak/kırık kodu aşağıda kullanılmıyor (erken dönüş).
+func _play_flash() -> void:
+	if _flash == null:
+		return
+	_flash.visible = true
+	_flash.frame = 0
+	_flash.play("flash")
+
+
+## Kullanıcı isteği (2026-09-21): "kalkanların hasar alma efektleri pixel tarzı, mavi ve yarı saydam bir bariyer hasarı
+## efekti olsun" - oyuncu kalkanıyla AYNI pixel efekt (fx_shield_hit.gd, bu bariyerin kendi yarıçapıyla) doğar.
 func _spawn_pixel_hit(angle: float) -> void:
-	## bkz. sınıf üstü MAX_CONCURRENT_HIT_FX/HIT_FX_MIN_INTERVAL notu - baloncuğun kendisi
-	## (_flash_t üstünden) yine de HER isabette parlar, sadece bu pahalı fx sınırlanıyor.
 	if _hit_fx_cooldown > 0.0 or _hit_fx_count >= MAX_CONCURRENT_HIT_FX:
 		return
 	_hit_fx_cooldown = HIT_FX_MIN_INTERVAL
@@ -152,187 +135,75 @@ func _spawn_pixel_hit(angle: float) -> void:
 	fx.set_script(load("res://scripts/fx_shield_hit.gd"))
 	add_child(fx)
 	fx.tree_exited.connect(func() -> void: _hit_fx_count -= 1)
-	## Kullanıcı bildirimi (2026-09-24): çatlaklar çok büyüktü (bariyer yarıçapıyla ölçekleniyordu, ~x3.2) - artık
-	## sabit PALADIN_CRACK_SCALE boyutunda, bariyerin kenarında (bkz. fx_shield_hit.gd setup crack_scale).
+	## Kullanıcı bildirimi (2026-09-24): çatlaklar çok büyüktü - sabit PALADIN_CRACK_SCALE boyutunda, bariyerin kenarında.
 	fx.call("setup", angle, radius, false, PALADIN_CRACK_SCALE)
-
-
-func _spawn_crack(angle: float) -> void:
-	_spawn_pixel_hit(angle)
-	return
-	var dir := Vector2(cos(angle), sin(angle))
-	
-	# Darbenin merkez vuruş noktası (çeperin üzerinde)
-	var c_pt := dir * radius
-	
-	var lines: Array[PackedVector2Array] = []
-	
-	# 1. Tamamen Randomize Edilmiş Radyal Çatlak Çizgileri
-	var num_radials := randi_range(2, 4)
-	for i in range(num_radials):
-		# Her kırık çizgisi için farklı yön sapması
-		var a_dev := randf_range(-0.45, 0.45)
-		var r_dir := dir.rotated(a_dev)
-		var r_perp := Vector2(-r_dir.y, r_dir.x)
-		
-		# Zikzaklı kırık segmentleri
-		var p1 := c_pt - r_dir * randf_range(12.0, 22.0) + r_perp * randf_range(-6.0, 6.0)
-		var p2 := p1 - r_dir * randf_range(10.0, 18.0) + r_perp * randf_range(-4.0, 4.0)
-		
-		lines.append(PackedVector2Array([c_pt, p1, p2]))
-		
-		# Rastgele yan dal uzantısı
-		if randf() < 0.5:
-			var branch_dir := r_dir.rotated(randf_range(-0.6, 0.6))
-			var p3 := p1 - branch_dir * randf_range(8.0, 14.0)
-			lines.append(PackedVector2Array([p1, p3]))
-			
-	# 2. Tamamen Randomize Edilmiş Konsantrik Cam Kırık Yayları (Örümcek Ağı Hissiyatı)
-	var num_arcs := randi_range(1, 3)
-	for i in range(num_arcs):
-		var dist_mult := randf_range(6.0, 10.0) if i == 0 else randf_range(14.0, 24.0)
-		var arc_pts := PackedVector2Array()
-		var steps := randi_range(4, 7)
-		var spread := randf_range(0.5, 0.9)
-		
-		for j in range(steps + 1):
-			var f := (j / float(steps)) - 0.5
-			var a = angle + f * spread
-			var pt_dir := Vector2(cos(a), sin(a))
-			var pt := c_pt - pt_dir * dist_mult + pt_dir.rotated(PI/2.0) * randf_range(-2.0, 2.0)
-			arc_pts.append(pt)
-			
-		lines.append(arc_pts)
-		
-	cracks.append({
-		"lines": lines,
-		"life": 0.0,
-		"max_life": 0.42
-	})
-
-
-func _spawn_shards_at(_angle: float) -> void:
-	return
-	var angle: float = _angle
-	# Darbenin merkez vuruş noktası
-	var start_pos := Vector2(cos(angle), sin(angle)) * radius
-	
-	# 5-9 adet kırık cam parçası spawn et
-	var count := randi_range(5, 9)
-	for i in range(count):
-		# Kuşbakışı oyun için yerçekimsiz patlama: Dışarı doğru dairesel saçılma
-		var spread_angle = angle + randf_range(-0.7, 0.7)
-		var speed = randf_range(60.0, 140.0)
-		var vel = Vector2(cos(spread_angle), sin(spread_angle)) * speed
-		
-		# Keskin cam parçası özellikleri
-		var shard_size = randf_range(1.8, 3.8)
-		var rot = randf_range(0.0, TAU)
-		var rot_speed = randf_range(-8.0, 8.0)
-		
-		shards.append({
-			"pos": start_pos,
-			"vel": vel,
-			"size": shard_size,
-			"rot": rot,
-			"rot_speed": rot_speed,
-			"life": 0.0,
-			"max_life": randf_range(0.35, 0.65),
-			"color": Color(0.65, 0.88, 1.0) if randf() < 0.75 else Color.WHITE
-		})
 
 
 func _process(delta: float) -> void:
 	if not active:
 		queue_free()
 		return
-	_pulse_t += delta
-	if _flash_t > 0.0:
-		_flash_t = max(0.0, _flash_t - delta)
+	if _t < APPEAR_TIME:
+		_t += delta
+		var k: float = clampf(_t / APPEAR_TIME, 0.0, 1.0)
+		modulate.a = k
+		_loop.scale = Vector2.ONE * (radius / ART_RADIUS) * lerpf(0.7, 1.0, 1.0 - (1.0 - k) * (1.0 - k))
 	if _hit_fx_cooldown > 0.0:
 		_hit_fx_cooldown = max(0.0, _hit_fx_cooldown - delta)
-
-	# Çatlak sürelerini güncelle
-	var active_cracks: Array[Dictionary] = []
-	for c in cracks:
-		c.life += delta
-		if c.life < c.max_life:
-			active_cracks.append(c)
-	cracks = active_cracks
-
-	# Yerçekimsiz sürtünmeli dökülme/savrulma (Top-down drift & friction)
-	var active_shards: Array[Dictionary] = []
-	for s in shards:
-		s.life += delta
-		if s.life < s.max_life:
-			s.pos += s.vel * delta
-			s.vel *= 0.91 # Sürtünme (yavaşlayıp durma hissi)
-			s.rot += s.rot_speed * delta
-			active_shards.append(s)
-	shards = active_shards
-
-	# Shader parametrelerini güncelliyoruz
-	if mat:
-		var pulse: float = sin(_pulse_t * 2.2)
-		var flash_amount: float = _flash_t / FLASH_DURATION if _flash_t > 0.0 else 0.0
-		mat.set_shader_parameter("pulse", pulse)
-		mat.set_shader_parameter("flash_amount", flash_amount)
-
-	if overlay and is_instance_valid(overlay):
-		overlay.queue_redraw()
-
-	queue_redraw()
+	_update_muffle()
 
 
-# Pikselli sert görünüm için koordinatları 2.0 piksel ızgaraya oturtan yardımcı fonksiyonlar
-func _snap_vec(v: Vector2) -> Vector2:
-	return Vector2(round(v.x / 2.0) * 2.0, round(v.y / 2.0) * 2.0)
+## ---------------------------------------------------------------- boğuk ses (bkz. dosya başı notu)
+func _update_muffle() -> void:
+	if not muffle_outside_sound:
+		return
+	var local_player := get_tree().get_first_node_in_group("player") as Node2D
+	var inside: bool = local_player != null and is_instance_valid(local_player) and local_player.get("is_dead") != true \
+		and local_player.global_position.distance_to(global_position) <= radius
+	if inside and _muffle_area == null:
+		_create_muffle_area()
+	elif not inside and _muffle_area != null:
+		_remove_muffle_area()
+	if _muffle_area != null:
+		_muffle_area.global_position = global_position
 
-func _snap_polyline(points: PackedVector2Array) -> PackedVector2Array:
-	var snapped := PackedVector2Array()
-	for pt in points:
-		snapped.append(_snap_vec(pt))
-	return snapped
+
+## Yerel oyuncunun şu an içinde olduğu kubbeler - biri bile varsa konumsuz ortam sesleri (yağmur/rüzgar/fırtına/orman)
+## de boğulur (bkz. audio_buses.gd AMBIENT - 2026-09-25 "kalkanın içindeyken sesler boğuklaşmıyor" düzeltmesi).
+static var _domes_with_player_inside: Dictionary = {}
 
 
-# Overlay tarafından kalkan üstü çizimlerin yapılması
-func _draw_overlay(overlay_node: Node2D) -> void:
-	# 1. Pikselli Cam Çatlakları Çizimi
-	for c in cracks:
-		var progress: float = c.life / c.max_life
-		var alpha: float = 1.0 - progress
-		
-		# Dış parlayan mavi kontur (Kalın, sert pikselli hat)
-		var glow_color := Color(0.2, 0.75, 1.0, alpha * 0.55)
-		for line in c.lines:
-			var snapped_line = _snap_polyline(line)
-			# antialiased = false verilerek kenarların yumuşaması engellenir, sert piksel kalır
-			overlay_node.draw_polyline(snapped_line, glow_color, 3.0, false)
-			
-		# Net sert pikselli beyaz çekirdek kırığı
-		var core_color := Color(1.0, 1.0, 1.0, alpha * 0.95)
-		for line in c.lines:
-			var snapped_line = _snap_polyline(line)
-			overlay_node.draw_polyline(snapped_line, core_color, 1.0, false)
-			
-	# 2. Savrulan Cam Parçacıkları Çizimi (Top-down fragments)
-	for s in shards:
-		var progress: float = s.life / s.max_life
-		var alpha: float = 1.0 - progress
-		var s_color = s.color
-		s_color.a = alpha * 0.95
-		
-		# Üçgen pikselli sert cam parçası çizimi
-		var rot = s.rot
-		var sz = s.size
-		var p0 = _snap_vec(s.pos + Vector2(0.0, -sz).rotated(rot))
-		var p1 = _snap_vec(s.pos + Vector2(sz * 0.6, sz * 0.5).rotated(rot))
-		var p2 = _snap_vec(s.pos + Vector2(-sz * 0.6, sz * 0.5).rotated(rot))
-		
-		var pts := PackedVector2Array([p0, p1, p2])
-		overlay_node.draw_colored_polygon(pts, s_color)
-		
-		# Sert beyaz parıltı çizgisi
-		var glow = Color.WHITE
-		glow.a = alpha * 0.6
-		overlay_node.draw_polyline(PackedVector2Array([p0, p1]), glow, 1.0, false)
+func _create_muffle_area() -> void:
+	_domes_with_player_inside[get_instance_id()] = true
+	AudioBuses.set_ambient_muffled(true)
+	var area := Area2D.new()
+	area.name = "BarrierMuffleArea"
+	area.top_level = true
+	area.monitoring = false
+	area.monitorable = false
+	area.collision_layer = 1 ## AudioStreamPlayer2D.area_mask varsayılanı
+	area.collision_mask = 0
+	area.audio_bus_override = true
+	area.audio_bus_name = AudioBuses.muffle_bus()
+	## Halka: baloncuk yarıçapından dışarı, MUFFLE_SEGMENTS dışbükey dörtgen (CollisionPolygon2D delikli şekil almaz).
+	var inner: float = radius
+	for i in range(MUFFLE_SEGMENTS):
+		var a0: float = TAU * float(i) / MUFFLE_SEGMENTS
+		var a1: float = TAU * float(i + 1) / MUFFLE_SEGMENTS
+		var poly := CollisionPolygon2D.new()
+		poly.polygon = PackedVector2Array([
+			Vector2.from_angle(a0) * inner, Vector2.from_angle(a0) * MUFFLE_OUTER_RADIUS,
+			Vector2.from_angle(a1) * MUFFLE_OUTER_RADIUS, Vector2.from_angle(a1) * inner,
+		])
+		area.add_child(poly)
+	add_child(area)
+	area.global_position = global_position
+	_muffle_area = area
+
+
+func _remove_muffle_area() -> void:
+	if _muffle_area != null and is_instance_valid(_muffle_area):
+		_muffle_area.queue_free()
+	_muffle_area = null
+	if _domes_with_player_inside.erase(get_instance_id()) and _domes_with_player_inside.is_empty():
+		AudioBuses.set_ambient_muffled(false)

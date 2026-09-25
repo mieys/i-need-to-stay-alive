@@ -32,6 +32,11 @@ const HOVER_MODULATE := Color(0.88, 0.87, 0.85)
 var _hover_id: String = ""
 var _name_label: Label = null
 var _desc_label: Label = null
+var _desc_scroll: ScrollContainer = null
+## Açıklama kutusunun yazı boyutu: sığmayan metin 32'den (FS_BODY) 24'e (FS_SMALL) iner, o da sığmazsa kutu kayar.
+const DESC_MIN_FONT_SIZE := 24
+const DESC_MIN_HEIGHT := 72.0
+var _fit_queued: bool = false
 var _columns: int = 3
 
 
@@ -86,16 +91,27 @@ func _build() -> void:
 	_name_label = MenuKit.make_label("", MenuKit.FS_BODY, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
 	vbox.add_child(_name_label)
 
+	## KULLANICI BİLDİRİMİ (2026-09-25): "çok oyuncuda ruhani yeteneklerin arayüzü ekranın aşağısına taşmış". KÖK NEDEN: açıklama
+	## Label'ı kutunun doğrudan çocuğuydu - autowrap'lı Label tüm metnin yüksekliğini EN KÜÇÜK boyut olarak ister; lobide sağ
+	## sütunu karakter vitriniyle paylaşan seçicide uzun açıklamalar ("Can", "Kalkan Bağı") sütunu ekranın altına itiyordu
+	## (tek oyunculu ekranda seçici tüm sol sütunu kapladığı için görünmüyordu). Artık açıklama bir ScrollContainer içinde:
+	## kutu sadece KALAN alanı kaplar; metin sığmazsa önce yazı DESC_MIN_FONT_SIZE'a kadar küçülür (_fit_desc), yine
+	## sığmazsa kutu kaydırılabilir olur - seçici hiçbir durumda ekrandan taşmaz.
 	var desc_box := MenuKit.make_panel("inset")
 	desc_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(desc_box)
+	_desc_scroll = ScrollContainer.new()
+	_desc_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_desc_scroll.custom_minimum_size = Vector2(0, DESC_MIN_HEIGHT)
+	desc_box.add_child(_desc_scroll)
 	_desc_label = MenuKit.make_label("", MenuKit.FS_BODY, MenuKit.C_TEXT_DIM)
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	## Label'ın Godot 4 varsayılanı SHRINK_CENTER - açıklama kutunun ortasında yüzmesin, üstten başlasın.
 	_desc_label.size_flags_vertical = Control.SIZE_FILL
 	_desc_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	desc_box.add_child(_desc_label)
+	_desc_scroll.add_child(_desc_label)
+	_desc_scroll.resized.connect(_queue_fit_desc)
 
 
 func _on_icon_pressed(id: String) -> void:
@@ -156,3 +172,35 @@ func select(id: String) -> void:
 		_name_label.text = "%s%s" % [str(def.get("name", "")), "" if bool(def.get("active", false)) else " (Pasif)"]
 	if _desc_label:
 		_desc_label.text = str(def.get("desc", ""))
+		if _desc_scroll:
+			_desc_scroll.scroll_vertical = 0
+		_queue_fit_desc()
+
+
+func _queue_fit_desc() -> void:
+	if _fit_queued:
+		return
+	_fit_queued = true
+	_fit_desc.call_deferred()
+
+
+## Metin kutuya 32 px'te sığıyorsa 32 kalır, sığmıyorsa 24 px'e iner (m5x7 iki boyutta da kitin başka yerlerinde kullanılıyor).
+## Yükseklik, Label'ın o anki genişliğinde satır sayısından hesaplanır - bu yüzden yerleşim bittikten sonra (ertelenmiş) çalışır.
+func _fit_desc() -> void:
+	_fit_queued = false
+	if not is_instance_valid(_desc_label) or not is_instance_valid(_desc_scroll) or _desc_scroll.size.y <= 0.0:
+		return
+	var room: float = _desc_scroll.size.y
+	for fs: int in [MenuKit.FS_BODY, DESC_MIN_FONT_SIZE]:
+		_desc_label.add_theme_font_size_override("font_size", fs)
+		if _desc_text_height() <= room:
+			return
+
+
+func _desc_text_height() -> float:
+	var font: Font = _desc_label.get_theme_font("font")
+	var fs: int = _desc_label.get_theme_font_size("font_size")
+	var width: float = maxf(_desc_scroll.size.x - 4.0, 1.0)
+	var h: float = font.get_multiline_string_size(_desc_label.text, HORIZONTAL_ALIGNMENT_LEFT, width, fs,
+		-1, TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE).y
+	return h + float(_desc_label.get_theme_constant("line_spacing")) * 2.0

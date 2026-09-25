@@ -7,4 +7,6 @@ func _ready() -> void:
 		stream_res.loop = true
 		stream = stream_res
 	volume_db = -12.0
+	## Ortam sesi yolu: Şovalye kubbesinin içindeyken boğulur (bkz. audio_buses.gd).
+	bus = preload("res://scripts/audio_buses.gd").ambient_bus()
 	play()
