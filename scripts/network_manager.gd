@@ -2094,7 +2094,8 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## rage_start, chill_tint, damage_number, attack_state, hit_flash, death_state + yaratık yetenekleri (2026-09-24):
 ## ghost_vanish, ghost_reveal, vampire_blink (extra_data: from/to), fear_start (extra_data: duration)/fear_stop (korku
 ## göstergesi - Melek korkusu + Necromancer Lanetli Kafatası), taunt_start (extra_data: duration)/taunt_stop (Şovalye
-## Kışkırtma'sının öfke damarı göstergesi) - yeni bir dal eklersen buraya da yaz.
+## Kışkırtma'sının öfke damarı göstergesi), root_start (extra_data: duration)/root_stop (Oakley Sarmaşıklar'ın bacaklara
+## sarılan dikenleri, bkz. fx_oakley_entangle.gd) - yeni bir dal eklersen buraya da yaz.
 @rpc("any_peer", "call_remote", "reliable")
 func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictionary = {}) -> void:
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
@@ -2143,6 +2144,13 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		"taunt_stop":
 			if target_enemy.has_method("_remove_taunt_status_fx"):
 				target_enemy._remove_taunt_status_fx()
+		## Oakley Sarmaşıklar - kök salan yaratığın bacaklarına sarılan dikenler (bkz. enemy.gd _set_root_visual).
+		"root_start":
+			if target_enemy.has_method("_spawn_entangle_fx"):
+				target_enemy._spawn_entangle_fx(float(extra_data.get("duration", 4.0)))
+		"root_stop":
+			if target_enemy.has_method("_remove_entangle_fx"):
+				target_enemy._remove_entangle_fx()
 		## Shaman pasifi (Totem Auraları) yakma göstergesi - bkz. enemy.gd
 		## apply_burn/_process_burn. Görsel, hasar mekaniğinden TAMAMEN ayrı;
 		## sadece hedefin üzerindeki alev sprite'ını kurar/kaldırır.
@@ -2207,7 +2215,7 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 ## Generic player VFX broadcast: muzzle flash, skill burst/ring, hit impacts, etc.
 ## vfx_type: "muzzle_flash", "skill_burst", "skill_ring", "hitscan_impact", "melee_hit",
 ## "skill_scene", "beam_start", "beam_stop", "beam_update", "paladin_barrier_flash",
-## "shield_hit_flash"
+## "shield_hit_flash", "oakley_bee_sting" (pos = sokulan yaratığın konumu, bkz. fx_oakley_bee_guard.gd)
 ## extra_data: {"scene_path": "...", "direction": Vector2, "color": Color, "scale": float, ...}
 ## Pet spawn/despawn - broadcast_player_vfx'ten (yukarısı) BİLEREK AYRI ve
 ## "reliable": o fonksiyon "unreliable" - kozmetik/yüksek frekanslı VFX'ler
@@ -2427,23 +2435,14 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 					impact_fx.call("setup", pos)
 				elif extra_data.has("radius"):
 					impact_fx.call("setup", float(extra_data.get("radius", 80.0)), Color(extra_data.get("color", Color.WHITE)))
-		## Oakley'in Arı Sürüsü yeteneği - bkz. oakley_bee_swarm.gd/player.gd
-		## _skill_oakley_bee_swarm() dosya başı DÜZELTME notu. SADECE görsel
-		## halkayı (oakley_bee_swarm_ring.gd) oluşturur - gerçek yük/hasar
-		## VERMEZ, o SADECE döken oyuncunun kendi istemcisindeki oakley_bee_
-		## swarm.gd'de gerçekleşir (enemy.gd host-yetkili olduğu için burada
-		## da apply_bee_poison çağrılırsa hasar/yük KATLANIRDI).
-		"oakley_bee_swarm_spawn":
-			var ring := Node2D.new()
-			ring.set_script(preload("res://scripts/oakley_bee_swarm_ring.gd"))
-			get_tree().current_scene.add_child(ring)
-			ring.global_position = pos
-			if ring.has_method("setup"):
-				ring.call("setup", OakleyBeeSwarm.RADIUS)
-			get_tree().create_timer(OakleyBeeSwarm.DURATION).timeout.connect(func() -> void:
-				if is_instance_valid(ring):
-					ring.queue_free()
-			)
+		## Oakley Arı Sürüsü (ikinci tasarım, fx_oakley_bee_guard.gd): kasterin arısı bu noktadaki yaratığa daldı -
+		## kuklanın üstündeki kozmetik sürüden bir arı aynı noktaya dalıp sokma efektini oynatır (hasar VERMEZ - zehir/itme sadece
+		## kasterin kopyasında; burada da uygulansa host-yetkili enemy.gd'de yük katlanırdı).
+		"oakley_bee_sting":
+			for child in rp.get_children():
+				if child is OakleyBeeGuard and not child.is_queued_for_deletion():
+					child.remote_sting(pos)
+					break
 		## Oakley'in Çiçek yeteneği - bkz. player.gd _try_oakley_flower/
 		## scripts/oakley_flower.gd. chain_lightning/arcane_skull_bounce ile
 		## AYNI desen: uzak istemcide gerçek Oakley referansı olmadığı için

@@ -83,9 +83,8 @@ func test_flower_passive_is_automatic_timer() -> void:
 	player.queue_free()
 
 
-## Arı Sürüsü Q'ya taşındı ama KENDİ mekaniği (yarıçap/hasar/süre) hiç
-## değişmedi - bkz. oakley_bee_swarm.gd, sadece hangi tuştan tetiklendiği
-## değişti.
+## Arı Sürüsü Q'da; 2026-09-25'te sabit alandan takip eden koruyucu sürüye dönüştü (fx_oakley_bee_guard.gd) - süre/bekleme
+## ve zehir yükü kuralı (yük başına saldırı gücünün %20'si, 4 sn) aynı kaldı.
 func test_bee_swarm_function_unchanged_on_q() -> void:
 	var player: Node = _make_oakley_player()
 	assert(player.has_method("_skill_oakley_bee_swarm"), "_skill_oakley_bee_swarm hâlâ olmalı (artık Q)")
@@ -93,6 +92,8 @@ func test_bee_swarm_function_unchanged_on_q() -> void:
 		"Arı Sürüsü'nün 20sn bekleme süresi Q'ya taşınırken değişmemeli")
 	assert(is_equal_approx(player.SKILL_TIMING[33]["duration"], 10.0),
 		"Arı Sürüsü'nün 10sn süresi Q'ya taşınırken değişmemeli")
+	assert(is_equal_approx(OakleyBeeGuard.DURATION, player.SKILL_TIMING[33]["duration"]), "sürünün süresi yeteneğin süresiyle aynı")
+	assert(is_equal_approx(OakleyBeeGuard.DAMAGE_RATIO_PER_STACK, 0.20), "zehir yükü kuralı değişmedi")
 	player.queue_free()
 
 

@@ -173,10 +173,55 @@ static func panel_style(kind: String = "window") -> StyleBox:
 			a.content_margin_top = 6.0
 			a.content_margin_bottom = 6.0
 			sb = a
+		"hud_flat":
+			## Sade HUD kutusu (kullanıcı isteği 2026-09-25: grup paneli / hasar tablosu "daha basit, gereksiz çerçeve
+			## ayrıntısı olmasın") - yarı saydam koyu ceviz zemin + 2 px ahşap kenar, piksel köşe (kenar yumuşatma yok).
+			sb = _flat(HUD_FLAT_BG, HUD_FLAT_BORDER, 8.0, 6.0)
+		"hud_flat_btn":
+			sb = _flat(Color(0.26, 0.17, 0.1, 0.92), HUD_FLAT_BORDER, 8.0, 2.0)
+		"hud_flat_btn_hover":
+			sb = _flat(Color(0.36, 0.24, 0.14, 0.95), Color(0.66, 0.48, 0.28), 8.0, 2.0)
+		"hud_flat_btn_pressed":
+			sb = _flat(Color(0.18, 0.11, 0.06, 0.95), HUD_FLAT_BORDER, 8.0, 2.0)
 		_:
 			sb = StyleBoxEmpty.new()
 	_style_cache[key] = sb
 	return sb
+
+
+const HUD_FLAT_BG := Color(0.11, 0.075, 0.05, 0.8)
+const HUD_FLAT_BORDER := Color(0.47, 0.33, 0.19, 1.0)
+## Koyu sade kutuların üstündeki açık yazı renkleri.
+const HUD_TEXT_LIGHT := Color(0.95, 0.9, 0.8)
+const HUD_TEXT_DIM := Color(0.72, 0.64, 0.52)
+const HUD_TEXT_ACCENT := Color(1.0, 0.8, 0.42)
+
+
+static func _flat(bg: Color, border: Color, pad_x: float, pad_y: float) -> StyleBoxFlat:
+	var f := StyleBoxFlat.new()
+	f.bg_color = bg
+	f.border_color = border
+	f.set_border_width_all(2)
+	f.set_corner_radius_all(3)
+	f.anti_aliasing = false
+	f.content_margin_left = pad_x
+	f.content_margin_right = pad_x
+	f.content_margin_top = pad_y
+	f.content_margin_bottom = pad_y
+	return f
+
+
+## Sade (hud_flat) küçük buton: düz koyu zemin, ahşap kenar, açık yazı.
+static func style_flat_button(btn: Button, font_size: int = 16) -> void:
+	btn.add_theme_stylebox_override("normal", panel_style("hud_flat_btn"))
+	btn.add_theme_stylebox_override("hover", panel_style("hud_flat_btn_hover"))
+	btn.add_theme_stylebox_override("pressed", panel_style("hud_flat_btn_pressed"))
+	btn.add_theme_stylebox_override("disabled", panel_style("hud_flat_btn_pressed"))
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_font_size_override("font_size", font_size)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		btn.add_theme_color_override(c, HUD_TEXT_LIGHT)
+	btn.add_theme_color_override("font_disabled_color", HUD_TEXT_DIM)
 
 
 static func _margins(sb: StyleBoxTexture, tex_margin: float, content: float) -> void:

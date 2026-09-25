@@ -501,6 +501,8 @@ var _tier_damage_mult: float = 1.0
 ## hariç, o zaten tier_icon_textures boşken hiç çağrılmıyor) ikisinde de ortak.
 @onready var icon_sprite = get_node_or_null("Icon")
 var shadow_sprite: Sprite2D
+var _icon_base_scale: Vector2 = Vector2.ONE
+var _punch_tween: Tween = null
 ## Ikonun dokudan okunan GERÇEK (width, height) piksel boyutu - gölgenin
 ## silahın GERÇEK ŞEKLİNE göre (ince silah -> ince gölge, yuvarlak/kalın
 ## silah -> daha yuvarlak gölge) uzayıp genişlemesi için ikisi de saklanıyor,
@@ -687,6 +689,7 @@ func _ready() -> void:
 			icon_sprite.scale *= 0.9
 		## Kullanıcı isteği (2026-09-25): tüm silahlar %15 küçük - uzak kuklada AYNI çarpan (bkz. WeaponOrbitMath).
 		icon_sprite.scale *= WeaponOrbitMath.ICON_SIZE_MULT
+		_icon_base_scale = icon_sprite.scale ## ateş "punch"ının döndüğü SABİT taban (bkz. WeaponJuice)
 
 		top_level = true
 		_target_local_offset = hover_offset + _fan_offset()
@@ -710,7 +713,12 @@ func _ready() -> void:
 		## yüzdeye eşitlemek) TERSİ etkiyi vermişti ("çok opak olmuş").
 		const SHADOW_TRANSPARENCY := 0.6
 		shadow_sprite.modulate = Color(1, 1, 1, 1.0 - SHADOW_TRANSPARENCY)
-		add_child(shadow_sprite)
+		## 2026-09-25: gölge KARAKTERİN ALTINDA çizilir (ayak gölgesiyle aynı katman, sahibin "Shadow" düğümünün hemen
+		## arkası) - yukarıdaki slotların gölgesi artık karakterin arkasındaki zemine iniyor (bkz. WeaponOrbitMath.
+		## hover_shadow_gap), silahın çocuğu kalsaydı karakterin bacaklarının ÜSTÜNE çizilirdi. top_level olduğu için
+		## konumu yine bu script belirler; silah silinince _exit_tree gölgeyi de siler.
+		## (Ertelenir: sahip o an çocuk kuruyor olabilir - "Parent node is busy".)
+		_attach_shadow_under_owner.call_deferred()
 		## KRİTİK: negatif z_index KULLANMA - top_level=true node'lar bile
 		## z_index'i EBEVEYNDEN (Player, main.tscn'de z_index=1) miras alır,
 		## yani z_index=-1 => efektif z = 1-1 = 0 = HARİTANIN/zeminin efektif
@@ -721,9 +729,7 @@ func _ready() -> void:
 		## Doğru çözüm: z_index'e hiç dokunma (aynı efektif seviyede kal,
 		## Player/İkon ile birlikte zeminin ÜSTÜNDE kalır), sadece kardeş
 		## node sıralamasında İkon'dan ÖNCE (index 0) konumlandır - böylece
-		## aynı z katmanında ama İkonun ARKASINDA çizilir.
-		move_child(shadow_sprite, 0)
-		shadow_sprite.queue_redraw()
+		## aynı z katmanında ama İkonun ARKASINDA çizilir. (Yukarıda: artık sahibin ayak gölgesinin yanına taşınıyor.)
 		## Ikonun gercek piksel genisligi (dokudan okunur) - sadece icon.scale'e
 		## bakmak yetmez, cunku her silahin kaynak dokusu farkli boyutta.
 		## Bu, golgenin ikona gore orantili olmasini sagliyor.
@@ -1353,7 +1359,7 @@ func _update_icon_shadow() -> void:
 	if not shadow_sprite.visible:
 		return
 
-	const HOVER_SHADOW_GAP := 62.0 ## px, ikonun DİBİYLE gölge arasındaki mesafe - kullanıcı isteğiyle biraz aşağı alındı
+	## (Eski sabit HOVER_SHADOW_GAP 62 artık WeaponOrbitMath.HOVER_SHADOW_BASE_GAP - en alttaki slotun boşluğu.)
 	## Kullanıcı bildirimi: "çok abartılı olmuş uçma animasyonları, aşırı
 	## yukarı aşağı gidip geliyorlar" - eskiden gölge bob'a göre ±10px
 	## kayıp ±%15 küçülüp büyüyordu, bu da (silahın kendi ~3.5px'lik ufak
@@ -1375,7 +1381,10 @@ func _update_icon_shadow() -> void:
 		bob_factor = 1.0
 	else:
 		var bob_norm: float = _last_bob / max(0.001, HOVER_BOB_AMPLITUDE) ## -1..1
-		gap = (HOVER_SHADOW_GAP + bob_norm * 3.0) * scale.y
+		## Yer noktası slot yüksekliğine göre (bkz. WeaponOrbitMath.hover_shadow_gap) ve KARAKTERİN ölçeğiyle - eskiden
+		## silahın KENDİ ölçeğiyle (asalar 0.3) çarpılıyordu, asaların gölgesi ikonun hemen dibinde kalıyordu.
+		var owner_scale: float = (get_parent() as Node2D).scale.y if get_parent() is Node2D else 1.0
+		gap = (WeaponOrbitMath.hover_shadow_gap(_target_local_offset.y) + bob_norm * 3.0) * owner_scale
 		bob_factor = 1.0 - bob_norm * 0.05
 
 	## Kullanıcı isteği: "gölgelerin silahın boyutlarına göre genişleyip
@@ -1674,7 +1683,11 @@ func get_nearest_enemy() -> Node2D:
 ## kendi konumuna yakın yaratığa saldırması gerekirken karaktere en yakın
 ## yaratığa saldırıyorlar").
 func _attack_origin() -> Vector2:
-	return global_position
+	## Menzil merkezi: dikeyde karakterin ortası, yatayda ikonun x'i (bkz. WeaponTargetPriority.range_center).
+	var owner_node := get_parent() as Node2D
+	if owner_node == null or _falling or _weapon_grounded or _rising:
+		return global_position
+	return WeaponTargetPriorityScript.range_center(owner_node.global_position, global_position)
 
 
 func _get_nearest_enemy() -> Node2D:
@@ -2015,11 +2028,32 @@ func _end_beam() -> void:
 		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "beam_stop", Vector2.ZERO, {})
 
 
+func _attach_shadow_under_owner() -> void:
+	if not (shadow_sprite and is_instance_valid(shadow_sprite)) or shadow_sprite.get_parent() != null:
+		return
+	var shadow_host: Node = get_parent()
+	var foot_shadow: Node = shadow_host.get_node_or_null("Shadow") if shadow_host != null else null
+	if foot_shadow != null:
+		shadow_host.add_child(shadow_sprite)
+		shadow_host.move_child(shadow_sprite, foot_shadow.get_index() + 1)
+		shadow_sprite.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
+	else:
+		add_child(shadow_sprite)
+		move_child(shadow_sprite, 0)
+	shadow_sprite.queue_redraw()
+
+
 ## Silah satılır/yok edilirse (bkz. player.gd remove_owned_weapon) açık kalmış
 ## bir ışın varsa (Şimşek Asası) sahipsiz kalmasın diye o da serbest bırakılır.
 func _exit_tree() -> void:
 	if continuous_beam:
 		_end_beam()
+	## Gölge artık sahibin çocuğu (bkz. shadow_sprite kurulumu) - silahla birlikte gitsin.
+	if shadow_sprite and is_instance_valid(shadow_sprite) and shadow_sprite.get_parent() != self:
+		if shadow_sprite.get_parent() == null:
+			shadow_sprite.free() ## henüz ağaca girmemiş (ertelenmiş ekleme) - sızıntı olmasın
+		else:
+			shadow_sprite.queue_free()
 
 
 ## Şimşek Asası artık saniyede 3 kez tik atıyor (beam_tick_interval taban
@@ -2907,6 +2941,10 @@ func _do_recoil(direction: Vector2) -> void:
 	var tw := create_tween()
 	tw.tween_property(icon_sprite, "position", kick, 0.04)
 	tw.tween_property(icon_sprite, "position", Vector2.ZERO, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	## Ezilip esneyen "punch" (bkz. weapon_juice.gd - uzak kopya remote_player.gd de aynısını oynatır).
+	if _punch_tween and _punch_tween.is_valid():
+		_punch_tween.kill()
+	_punch_tween = WeaponJuice.fire_punch(self, icon_sprite, _icon_base_scale)
 	# Broadcast weapon recoil to remote players
 	if NetworkManager.is_multiplayer_active:
 		# Determine slot index from parent's weapon list

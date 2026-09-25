@@ -596,9 +596,12 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 		var half_w: float = max(3.5, icon_px_size.x * icon.scale.x * 0.30 * 0.8)
 		var half_h: float = max(2.5, icon_px_size.y * icon.scale.y * 0.30 * 0.55 * 0.8)
 		shadow.scale = Vector2(half_w, half_h)
-		const REMOTE_SHADOW_GAP := 62.0
-		shadow.position = icon.position + Vector2(0, REMOTE_SHADOW_GAP)
+		shadow.position = icon.position + Vector2(0, WeaponOrbitMath.hover_shadow_gap(icon.position.y))
 		add_child(shadow)
+		## Karakterin ALTINDA (ayak gölgesiyle aynı katman): "Shadow" düğümünün hemen arkasına, sprite'tan önce.
+		var foot_shadow: Node = get_node_or_null("Shadow")
+		if foot_shadow != null:
+			move_child(shadow, foot_shadow.get_index() + 1)
 		_weapon_shadows.append(shadow)
 
 		add_child(icon)
@@ -689,12 +692,11 @@ func _update_local_weapon_aim(delta: float) -> void:
 		var icon: Node2D = _weapon_icons[i]
 		if not is_instance_valid(icon):
 			continue
-		## Her silah KENDİ konumundan hedef arar (bkz. weapon.gd _attack_origin
-		## yorumu) - karakterin merkezinden değil, aksi halde birden fazla
-		## silah hep aynı tek düşmana kilitlenir.
+		## Her silah KENDİ yatay konumundan, karakterin ORTASI hizasından hedef arar (bkz. weapon.gd _attack_origin /
+		## WeaponTargetPriority.range_center) - gerçek silahla aynı merkez, kozmetik nişan kasterinkiyle aynı yöne döner.
 		var target: Node2D
 		if should_retarget:
-			target = _get_target_for_weapon(i, icon.global_position)
+			target = _get_target_for_weapon(i, WeaponTargetPriorityScript.range_center(global_position, icon.global_position))
 			_cached_aim_targets[i] = target
 		else:
 			## Önbellekteki hedef iki yeniden-hedefleme arasında (AIM_RETARGET_INTERVAL)
@@ -1591,10 +1593,11 @@ func _spawn_vine_visual(instance_id: String) -> void:
 	## bkz. _spawn_pet_visual'daki AYNI DÜZELTME notu - RemotePlayer'ın kendi
 	## (kuklayı küçültmek için) gizli scale'ini miras almasın diye sahnenin
 	## KÖKÜNE, GERÇEK sarmaşıkla (player.gd _skill_oakley_vines) aynı şekilde ekleniyor.
-	get_tree().current_scene.add_child(vine)
-	vine.global_position = global_position
+	## Konum ve kozmetik bayrağı add_child'dan ÖNCE (bkz. player.gd _skill_oakley_vines DÜZELTME notu - _ready konumu kullanır).
+	vine.position = global_position + preload("res://scripts/oakley_vine.gd").CASTER_FEET_OFFSET
 	if vine.has_method("mark_as_network_visual"):
 		vine.mark_as_network_visual()
+	get_tree().current_scene.add_child(vine)
 	_vine_visuals[instance_id] = vine
 	vine.tree_exiting.connect(func() -> void:
 		if _vine_visuals.get(instance_id) == vine:
@@ -1607,7 +1610,11 @@ func _despawn_vine_visual(instance_id: String) -> void:
 		return
 	var v = _vine_visuals[instance_id]
 	if is_instance_valid(v):
-		v.queue_free()
+		## Gerçek sarmaşıkla aynı gömülme efekti (bkz. oakley_vine.gd despawn).
+		if v.has_method("despawn"):
+			v.despawn()
+		else:
+			v.queue_free()
 	_vine_visuals.erase(instance_id)
 
 
@@ -1742,8 +1749,7 @@ func _set_remote_weapon_death_alpha(i: int, a: float) -> void:
 func _refresh_remote_weapon_shadow(i: int) -> void:
 	if i >= _weapon_shadows.size() or not is_instance_valid(_weapon_shadows[i]):
 		return
-	const REMOTE_SHADOW_GAP := 62.0
-	var gap: float = REMOTE_SHADOW_GAP
+	var gap: float = WeaponOrbitMath.hover_shadow_gap(_weapon_icons[i].position.y)
 	if _weapon_falling[i] or _weapon_grounded[i] or _weapon_rising[i]:
 		gap = _weapon_drop_height[i]
 	_weapon_shadows[i].position = _weapon_icons[i].position + Vector2(0, gap)
@@ -1920,12 +1926,15 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		var tw := create_tween()
 		if slot_index < _weapon_fire_tweens.size():
 			_weapon_fire_tweens[slot_index] = tw
-		tw.set_parallel(true)
 		tw.tween_property(icon, "position", base_pos + kick, 0.04)
-		tw.tween_property(icon, "scale", base_scale * 1.15, 0.04).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.chain().set_parallel(true)
 		tw.tween_property(icon, "position", base_pos, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tw.tween_property(icon, "scale", base_scale, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		## Ölçek: gerçek silahla (weapon.gd _do_recoil) AYNI ezilip esneyen "punch" - bkz. weapon_juice.gd.
+		## (Eskiden burada düz %15 büyüme vardı, yerel silahta hiç yoktu - iki taraf farklı görünüyordu.)
+		var old_punch: Variant = icon.get_meta("punch_tween", null)
+		if old_punch is Tween and (old_punch as Tween).is_valid():
+			(old_punch as Tween).kill()
+		var punch: Tween = WeaponJuice.fire_punch(self, icon, base_scale)
+		icon.set_meta("punch_tween", punch)
 
 
 ## Eski format için geri uyumluluk.

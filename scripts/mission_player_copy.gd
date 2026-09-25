@@ -35,8 +35,13 @@ const SYNC_INTERVAL := 0.15
 ## Kalkan = kaynak oyuncunun kalkan maksimumu (item_shield_max) x3; oyuncunun kalkanı yoksa (henüz kalkan eşyası
 ## seçilmemiş) canının SHIELD_FALLBACK_OF_HP oranı taban alınır ki kopya yine kalkansız doğmasın. Hasar önce kalkandan
 ## düşer (mission_tree.gd ile aynı), SHIELD_REGEN_DELAY sn hasar almayınca saniyede max'ın SHIELD_REGEN_PER_SEC'i dolar.
-const HEALTH_MULT := 10.0 ## 2026-09-25: 3 -> 10 (bkz. DAMAGE_TAKEN_MULT notu)
-const SHIELD_MULT := 10.0
+## Kullanıcı isteği (2026-09-25, ikinci tur): "kopyanın kalkan soğurmasını %20 azalt ve can ve kalkan artışını da normal
+## karakterin can ve kalkanının %200'ü kadar yap" - 10 -> 2 (kopya, kaynak oyuncunun canının/kalkanının 2 katı).
+const HEALTH_MULT := 2.0
+const SHIELD_MULT := 2.0
+## Kalkanın bir isabetten emdiği pay (oyuncu kalkanındaki "koruma payı" gibi): eskiden hasarın TAMAMI önce kalkandan
+## düşüyordu; artık %80'i kalkana, %20'si kalkan dolu olsa bile doğrudan cana gider (aynı istek: "soğurmayı %20 azalt").
+const SHIELD_ABSORB_RATIO := 0.8
 const SHIELD_FALLBACK_OF_HP := 0.3
 const SHIELD_REGEN_DELAY := 7.0
 const SHIELD_REGEN_PER_SEC := 0.05
@@ -193,7 +198,7 @@ func _ready() -> void:
 	NetworkManager.world_event_copy_swing.connect(_on_net_swing)
 
 
-## p_max_health / p_max_shield: KAYNAK oyuncunun değerleri (x3 burada uygulanır). İstemcideki kozmetik kopyada can/kalkan
+## p_max_health / p_max_shield: KAYNAK oyuncunun değerleri (HEALTH_MULT/SHIELD_MULT burada uygulanır). İstemcideki kozmetik kopyada can/kalkan
 ## ORANLARI ağdan geldiği için bu değerler sadece çubuğun kalkan bölümünün görünmesi için önemli.
 func setup(mid: int, idx: int, char_id: int, p_max_health: float, p_max_shield: float, p_speed: float,
 		p_damage_bonus: float, simulated: bool) -> void:
@@ -627,7 +632,7 @@ func take_damage(amount: float, _is_crit: bool = false, _shield_pen_percent: flo
 	var dmg: float = amount * DAMAGE_TAKEN_MULT
 	_no_damage_timer = 0.0
 	if shield > 0.0:
-		var absorbed: float = minf(shield, dmg)
+		var absorbed: float = minf(shield, dmg * SHIELD_ABSORB_RATIO)
 		shield -= absorbed
 		dmg -= absorbed
 	health = max(0.0, health - dmg)

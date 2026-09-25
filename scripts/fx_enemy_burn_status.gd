@@ -8,9 +8,10 @@ extends Node2D
 const TEXEL := 1.212 ## oyuncu kökü 0.5 ölçekli: 1.212 yerel birim = karakterin kendi sanat pikseli
 const BURN_FRAMES := preload("res://assets/fx/enemy_abilities/burn_frames.tres")
 const DURATION := 3.0
+const SIZE_MULT := 0.9
 const FADE_TIME := 0.3
 ## burn_sheet karesi 34x42, alevlerin tabanı y=36 - taban karakterin bel/ayak arasına (yerel y ~ +22) gelsin.
-const LOCAL_OFFSET := Vector2(0.0, 22.0 - (36.0 - 21.0) * TEXEL)
+const LOCAL_OFFSET := Vector2(0.0, 22.0 - (36.0 - 21.0) * TEXEL * SIZE_MULT) ## küçülünce taban aynı yerde kalsın
 
 var _anim: AnimatedSprite2D = null
 var _t: float = 0.0
@@ -21,7 +22,9 @@ func _ready() -> void:
 	position = LOCAL_OFFSET
 	_anim = AnimatedSprite2D.new()
 	_anim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_anim.scale = Vector2.ONE * TEXEL
+	## 2026-09-25: "yanma efektinin boyutunu %10 küçültüp biraz daha parlamasını sağla".
+	_anim.scale = Vector2.ONE * TEXEL * SIZE_MULT
+	_anim.modulate = Color(1.2, 1.2, 1.1, 1.0)
 	_anim.sprite_frames = BURN_FRAMES
 	add_child(_anim)
 	_anim.play(&"loop")

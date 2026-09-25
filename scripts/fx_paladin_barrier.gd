@@ -50,17 +50,14 @@ const HIT_FX_MIN_INTERVAL := 0.05
 ## Bariyer isabet efektinin (çatlak) sabit ölçeği - 1.0 = oyuncunun kendi kalkan baloncuğundaki çatlakla aynı boy.
 const PALADIN_CRACK_SCALE := 1.0
 
-const AudioBuses := preload("res://scripts/audio_buses.gd")
-## Halkanın dış yarıçapı (dünya birimi) - ekranın çok dışı; daha uzaktaki sesler zaten duyulmuyor (max_distance).
-const MUFFLE_OUTER_RADIUS := 4000.0
-const MUFFLE_SEGMENTS := 24
+## Boğuk ses artık ortak bileşende (dome_sound_muffle.gd - satıcı baloncuğu da kullanır).
+const DomeSoundMuffleScript := preload("res://scripts/dome_sound_muffle.gd")
 
 var _hit_fx_count: int = 0
 var _hit_fx_cooldown: float = 0.0
 var _loop: AnimatedSprite2D = null
 var _flash: AnimatedSprite2D = null
 var _t: float = 0.0
-var _muffle_area: Area2D = null
 
 
 func _ready() -> void:
@@ -81,6 +78,11 @@ func _ready() -> void:
 	_flash = _make_sprite(FlashFramesGold if gold else FlashFrames, art_scale)
 	_flash.visible = false
 	_flash.animation_finished.connect(func() -> void: _flash.visible = false)
+	if muffle_outside_sound:
+		var muffle := Node2D.new()
+		muffle.set_script(DomeSoundMuffleScript)
+		muffle.set("radius", radius)
+		add_child(muffle)
 	## Açılış: küçükten büyüyerek belirir.
 	modulate.a = 0.0
 	_loop.scale = Vector2.ONE * art_scale * 0.7
@@ -94,10 +96,6 @@ func _make_sprite(frames: SpriteFrames, art_scale: float) -> AnimatedSprite2D:
 	s.scale = Vector2.ONE * art_scale
 	add_child(s)
 	return s
-
-
-func _exit_tree() -> void:
-	_remove_muffle_area()
 
 
 ## Kullanıcı bildirimi: "Şovalye adamın kalkan baloncuğuna vurulduğu andaki çatlama ve kalkanın hasar alma efekti
@@ -150,60 +148,3 @@ func _process(delta: float) -> void:
 		_loop.scale = Vector2.ONE * (radius / ART_RADIUS) * lerpf(0.7, 1.0, 1.0 - (1.0 - k) * (1.0 - k))
 	if _hit_fx_cooldown > 0.0:
 		_hit_fx_cooldown = max(0.0, _hit_fx_cooldown - delta)
-	_update_muffle()
-
-
-## ---------------------------------------------------------------- boğuk ses (bkz. dosya başı notu)
-func _update_muffle() -> void:
-	if not muffle_outside_sound:
-		return
-	var local_player := get_tree().get_first_node_in_group("player") as Node2D
-	var inside: bool = local_player != null and is_instance_valid(local_player) and local_player.get("is_dead") != true \
-		and local_player.global_position.distance_to(global_position) <= radius
-	if inside and _muffle_area == null:
-		_create_muffle_area()
-	elif not inside and _muffle_area != null:
-		_remove_muffle_area()
-	if _muffle_area != null:
-		_muffle_area.global_position = global_position
-
-
-## Yerel oyuncunun şu an içinde olduğu kubbeler - biri bile varsa konumsuz ortam sesleri (yağmur/rüzgar/fırtına/orman)
-## de boğulur (bkz. audio_buses.gd AMBIENT - 2026-09-25 "kalkanın içindeyken sesler boğuklaşmıyor" düzeltmesi).
-static var _domes_with_player_inside: Dictionary = {}
-
-
-func _create_muffle_area() -> void:
-	_domes_with_player_inside[get_instance_id()] = true
-	AudioBuses.set_ambient_muffled(true)
-	var area := Area2D.new()
-	area.name = "BarrierMuffleArea"
-	area.top_level = true
-	area.monitoring = false
-	area.monitorable = false
-	area.collision_layer = 1 ## AudioStreamPlayer2D.area_mask varsayılanı
-	area.collision_mask = 0
-	area.audio_bus_override = true
-	area.audio_bus_name = AudioBuses.muffle_bus()
-	## Halka: baloncuk yarıçapından dışarı, MUFFLE_SEGMENTS dışbükey dörtgen (CollisionPolygon2D delikli şekil almaz).
-	var inner: float = radius
-	for i in range(MUFFLE_SEGMENTS):
-		var a0: float = TAU * float(i) / MUFFLE_SEGMENTS
-		var a1: float = TAU * float(i + 1) / MUFFLE_SEGMENTS
-		var poly := CollisionPolygon2D.new()
-		poly.polygon = PackedVector2Array([
-			Vector2.from_angle(a0) * inner, Vector2.from_angle(a0) * MUFFLE_OUTER_RADIUS,
-			Vector2.from_angle(a1) * MUFFLE_OUTER_RADIUS, Vector2.from_angle(a1) * inner,
-		])
-		area.add_child(poly)
-	add_child(area)
-	area.global_position = global_position
-	_muffle_area = area
-
-
-func _remove_muffle_area() -> void:
-	if _muffle_area != null and is_instance_valid(_muffle_area):
-		_muffle_area.queue_free()
-	_muffle_area = null
-	if _domes_with_player_inside.erase(get_instance_id()) and _domes_with_player_inside.is_empty():
-		AudioBuses.set_ambient_muffled(false)

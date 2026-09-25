@@ -1,0 +1,106 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/fx/oakley/ward_cast_sheet.png" id="1"]
+
+[sub_resource type="AtlasTexture" id="AT_0"]
+atlas = ExtResource("1")
+region = Rect2(0, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_1"]
+atlas = ExtResource("1")
+region = Rect2(72, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_2"]
+atlas = ExtResource("1")
+region = Rect2(144, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_3"]
+atlas = ExtResource("1")
+region = Rect2(216, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_4"]
+atlas = ExtResource("1")
+region = Rect2(288, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_5"]
+atlas = ExtResource("1")
+region = Rect2(360, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_6"]
+atlas = ExtResource("1")
+region = Rect2(432, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_7"]
+atlas = ExtResource("1")
+region = Rect2(504, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_8"]
+atlas = ExtResource("1")
+region = Rect2(576, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_9"]
+atlas = ExtResource("1")
+region = Rect2(648, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_10"]
+atlas = ExtResource("1")
+region = Rect2(720, 0, 72, 96)
+
+[sub_resource type="AtlasTexture" id="AT_11"]
+atlas = ExtResource("1")
+region = Rect2(792, 0, 72, 96)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_11")
+}],
+"loop": false,
+"name": &"cast",
+"speed": 18
+}]

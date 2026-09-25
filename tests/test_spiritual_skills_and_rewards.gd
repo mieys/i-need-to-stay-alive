@@ -417,12 +417,16 @@ func test_oakley_r_leaf_barrier_follows_bond_flag_and_bursts_on_hit() -> void:
 	assert(fx.get_parent() == player, "bariyer büyüyü alan oyuncunun çocuğu olmalı")
 	player._last_damage_taken_at_msec = -999999
 	player.take_damage(10.0)
-	assert(not fx._pieces.is_empty(), "her hasarda yeşil parçalar çıkmalı")
-	## Bayrak kapanınca bariyer kendini kaldırır.
+	## 2026-09-25 yeniden tasarım (sprite sayfaları, tools/gen_oakley_fx.py): hasar = "ward_hit" parlaması.
+	assert(fx._hit.visible and fx._hit.animation == &"hit", "her hasarda yaprak kalkanı parlaması/kırıkları çıkmalı")
+	## Bayrak kapanınca bariyer "close" oynatır, bitince kendini kaldırır.
 	fx._process(0.05) ## bayrak açıkken bir kare (oyunda hep böyle)
 	player.oakley_bond_active = false
-	for i in range(60):
+	for i in range(20):
 		fx._process(0.05)
+	assert(fx._closing and fx._back.animation == &"close", "büyü bitince kapanış animasyonu oynamalı")
+	## AnimatedSprite2D manuel _process() ile ilerlemiyor - bitiş sinyalini doğrudan tetikle.
+	fx._back.animation_finished.emit()
 	assert(not is_instance_valid(fx) or fx.is_queued_for_deletion(), "büyü bitince bariyer kalkmalı")
 	_cleanup()
 
@@ -464,16 +468,27 @@ func test_oakley_vine_uses_pixel_visual_and_bee_ring_spawns_bees() -> void:
 	vine.mark_as_network_visual()
 	add_child(vine)
 	_spawned.append(vine)
-	assert(vine._visual != null and vine._visual.has_method("_draw_strand"), "Line2D değil pixel sarmaşık görseli")
+	## 2026-09-25 yeniden tasarım: yerde sürünen sarmaşık - 16 yön için ayrı çizilmiş baş/gövde sayfaları (Line2D yok).
+	assert(vine._visual != null and vine._visual._head is AnimatedSprite2D, "sprite sayfalı pixel sarmaşık başı")
 	vine.update_network_vine_state(vine.global_position, vine.global_position + Vector2(90, 0), true)
 	vine._process(0.1)
 	assert(vine._visual.points.size() == 2, "hedef verilince uzantı noktaları set edilmeli")
-	var ring: Node2D = Node2D.new()
-	ring.set_script(load("res://scripts/oakley_bee_swarm_ring.gd"))
-	add_child(ring)
-	_spawned.append(ring)
-	ring.setup(130.0)
-	assert(ring._bees.size() >= 12, "alanın içinde minik arılar uçuşmalı")
+	## Arı Sürüsü 2026-09-25 ikinci tasarım: Oakley'nin çocuğu olan koruyucu sürü (fx_oakley_bee_guard.gd) - kuklada da
+	## (yerel oyuncu olmayan ebeveyn) aynı sahne kurulur ama hedef/hasar mantığı çalışmaz.
+	var host := Node2D.new()
+	add_child(host)
+	_spawned.append(host)
+	var guard: Node = (load("res://scenes/fx_oakley_bee_guard.tscn") as PackedScene).instantiate()
+	host.add_child(guard)
+	assert(guard._bees.size() == OakleyBeeGuard.BEE_COUNT, "Oakley'nin etrafında minik arılar dönmeli")
+	assert(not guard._authority, "kukla kopyası hasar/hedef mantığı çalıştırmaz")
+	## Arılar yaratığa dalmaz (kullanıcı isteği) - uzak kopya sadece etki noktasında sokma efektini oynatır.
+	var before: int = get_tree().current_scene.get_child_count() if get_tree().current_scene else 0
+	guard.remote_sting(host.global_position + Vector2(60, 0))
+	if get_tree().current_scene:
+		assert(get_tree().current_scene.get_child_count() == before + 1, "uzak etki sokma efektini oynatmalı")
+	for b in guard._bees:
+		assert(not b.has("state"), "arılar dalış durumu taşımamalı - sadece halkada dönerler")
 	assert(ResourceLoader.exists("res://assets/audio/oakley/oakley_bees.wav"), "arı vızıltı sesi")
 
 

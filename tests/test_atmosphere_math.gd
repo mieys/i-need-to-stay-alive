@@ -73,7 +73,7 @@ func test_night_is_dark_blue_but_not_pitch_black() -> void:
 	var g: Dictionary = AtmosphereMath.grade(465.0, 0.0, 0.0)
 	var a: Color = g["ambient"]
 	assert(AtmosphereMath.luminance(a) > 0.35)
-	assert(AtmosphereMath.luminance(a) < 0.55)
+	assert(AtmosphereMath.luminance(a) < 0.65) ## 2026-09-25: gece biraz daha aydınlık (DARKNESS_SCALE 0.68)
 	assert(a.b > a.g and a.g > a.r)
 	assert(float(g["light_gain"]) > 0.7)
 	assert(float(g["glow_gain"]) > 0.2)
@@ -84,8 +84,9 @@ func test_night_is_dark_blue_but_not_pitch_black() -> void:
 func test_night_darkness_and_glow_are_twenty_percent_lower() -> void:
 	var raw: Color = AtmosphereMath.raw_time_grade(465.0)[0]
 	var scaled: Color = AtmosphereMath.time_grade(465.0)[0]
-	assert(is_equal_approx(1.0 - scaled.r, (1.0 - raw.r) * 0.8))
-	assert(is_equal_approx(1.0 - scaled.b, (1.0 - raw.b) * 0.8))
+	assert(is_equal_approx(1.0 - scaled.r, (1.0 - raw.r) * AtmosphereMath.DARKNESS_SCALE))
+	assert(is_equal_approx(1.0 - scaled.b, (1.0 - raw.b) * AtmosphereMath.DARKNESS_SCALE))
+	assert(AtmosphereMath.DARKNESS_SCALE < 0.8, "gece ilk turdan (x0.8) daha aydınlık olmalı")
 	var g: Dictionary = AtmosphereMath.grade(465.0, 0.0, 0.0)
 	var raw_gain: float = clampf((1.0 - AtmosphereMath.luminance(raw)) * AtmosphereMath.LIGHT_GAIN_SCALE, 0.0, 1.0)
 	assert(is_equal_approx(float(g["light_gain"]), raw_gain * 0.8))

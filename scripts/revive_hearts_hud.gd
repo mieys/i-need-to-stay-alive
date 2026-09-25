@@ -19,7 +19,7 @@ func _ready() -> void:
 	_regen_label = Label.new()
 	_regen_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UIKit.style_label(_regen_label, 24, Color(1.0, 0.72, 0.76), 3)
-	_regen_label.position = Vector2(0.0, 24.0)
+	_regen_label.position = Vector2(0.0, 28.0)
 	_regen_label.visible = false
 	add_child(_regen_label)
 	queue_redraw()
@@ -46,53 +46,77 @@ func set_revives(count: int) -> void:
 	revives_remaining = clamp(count, 0, MAX_REVIVES)
 	queue_redraw()
 
+## YENİDEN TASARIM (kullanıcı isteği 2026-09-25: "kalan dirilme haklarımızın göründüğü kalpleri yeniden daha iyi bir şekilde
+## pixel tarzda tasarla"): eski 7x6 düz dolgulu, kesirli ölçekli (x2.6 - pikseller eşit değildi) kalp yerine 11x10 sanat
+## pikselli, TAM SAYI ölçekli (x2, keskin) kalp: koyu kontur, üç tonlu gölgeleme (sol üst açık, sağ alt koyu), iki pikselli
+## parlama ve sert gölge. Boş kalp aynı biçimde koyu/cam gibi; yenilenen kalp alttan yukarı soluk kırmızıyla dolar.
+const HEART_ROWS: Array[String] = [
+	"..XXX.XXX..",
+	".XXXXXXXXX.",
+	"XXXXXXXXXXX",
+	"XXXXXXXXXXX",
+	"XXXXXXXXXXX",
+	".XXXXXXXXX.",
+	"..XXXXXXX..",
+	"...XXXXX...",
+	"....XXX....",
+	".....X.....",
+]
+const PX := 2.0 ## sanat pikseli -> ekran pikseli (tam sayı: keskin)
+const HEART_SPACING := 26.0
+const C_OUTLINE := Color(0.16, 0.04, 0.07, 1.0)
+const C_BASE := Color(0.9, 0.2, 0.28, 1.0)
+const C_LIGHT := Color(1.0, 0.46, 0.5, 1.0)
+const C_SHADE := Color(0.62, 0.09, 0.19, 1.0)
+const C_SHINE := Color(1.0, 0.92, 0.9, 1.0)
+const C_EMPTY := Color(0.2, 0.18, 0.22, 0.85)
+const C_EMPTY_LIGHT := Color(0.34, 0.31, 0.36, 0.85)
+const C_REGEN := Color(0.78, 0.34, 0.42, 1.0)
+
+
+static func _in_heart(x: int, y: int) -> bool:
+	return y >= 0 and y < HEART_ROWS.size() and x >= 0 and x < HEART_ROWS[y].length() and HEART_ROWS[y][x] == "X"
+
+
 func _draw() -> void:
-	var start_x: float = 4.0
-	var spacing: float = 26.0
-	var heart_size: float = 20.0
-	
 	for i in range(MAX_REVIVES):
 		var active: bool = i < revives_remaining
-		var pos := Vector2(start_x + i * spacing, 6.0)
+		var pos := Vector2(4.0 + float(i) * HEART_SPACING, 4.0)
 		## Yenilenen kalp (ilk boş kalp = 0. kalp): sayacın ilerlemesi kadarı aşağıdan yukarı soluk kırmızı dolar.
 		var fill: float = 0.0
 		if i == 0 and not active and _regen_left >= 0.0:
 			fill = clampf(1.0 - _regen_left / GameManager.REVIVE_REGEN_INTERVAL, 0.0, 1.0)
 		_draw_pixel_heart(pos, active, fill)
 
+
 func _draw_pixel_heart(pos: Vector2, active: bool, regen_fill: float = 0.0) -> void:
-	# 7x7 pixel grid scaled by 2.6
-	var scale_factor: float = 2.6
-	var rows: Array[String] = [
-		".XX.XX.",
-		"XXXXXXX",
-		"XXXXXXX",
-		".XXXXX.",
-		"..XXX..",
-		"...X..."
-	]
-	
-	var fill_color: Color = Color(0.95, 0.22, 0.28, 1.0) if active else Color(0.28, 0.28, 0.32, 0.7)
-	var shine_color: Color = Color(1.0, 0.75, 0.8, 1.0) if active else Color(0.45, 0.45, 0.5, 0.8)
-	var border_color: Color = Color(0.08, 0.04, 0.05, 0.95)
-	
-	# Draw drop shadow
-	for y in range(rows.size()):
-		var line: String = rows[y]
-		for x in range(line.length()):
-			if line[x] == 'X':
-				draw_rect(Rect2(pos.x + x * scale_factor + 1.5, pos.y + y * scale_factor + 1.5, scale_factor, scale_factor), Color(0, 0, 0, 0.4))
-				
-	# Draw border / fill
-	var regen_color := Color(0.72, 0.3, 0.36, 0.9)
-	for y in range(rows.size()):
-		var line: String = rows[y]
-		## Satır, alttan (rows.size() - y) sırada; dolum oranı o kadar satırı kapsıyorsa soluk kırmızı çizilir.
-		var row_filled: bool = regen_fill > 0.0 and float(rows.size() - y) <= regen_fill * float(rows.size()) + 0.001
-		for x in range(line.length()):
-			if line[x] == 'X':
-				var c := regen_color if row_filled else fill_color
-				# Highlight dot on top left
-				if (x == 1 or x == 2) and y == 1:
-					c = shine_color
-				draw_rect(Rect2(pos.x + x * scale_factor, pos.y + y * scale_factor, scale_factor, scale_factor), c)
+	var h: int = HEART_ROWS.size()
+	## Sert gölge (1 sanat pikseli sağ-aşağı)
+	for y in range(h):
+		for x in range(HEART_ROWS[y].length()):
+			if _in_heart(x, y):
+				draw_rect(Rect2(pos + Vector2(x + 1, y + 1) * PX, Vector2(PX, PX)), Color(0, 0, 0, 0.35))
+	for y in range(h):
+		var row_filled: bool = regen_fill > 0.0 and float(h - y) <= regen_fill * float(h) + 0.001
+		for x in range(HEART_ROWS[y].length()):
+			if not _in_heart(x, y):
+				continue
+			var edge: bool = not (_in_heart(x - 1, y) and _in_heart(x + 1, y) and _in_heart(x, y - 1) and _in_heart(x, y + 1))
+			var c: Color
+			if edge:
+				c = C_OUTLINE
+			elif active:
+				## Sağ-alt kontura komşu iç pikseller koyu, sol üst bölge açık, kalan taban.
+				if not _in_heart(x + 2, y) or not _in_heart(x, y + 2) or not _in_heart(x + 1, y + 1):
+					c = C_SHADE
+				elif x + y <= 5:
+					c = C_LIGHT
+				else:
+					c = C_BASE
+				if (x == 2 and y == 2) or (x == 3 and y == 2) or (x == 2 and y == 3):
+					c = C_SHINE
+			elif row_filled:
+				c = C_REGEN
+			else:
+				c = C_EMPTY_LIGHT if (x + y <= 5) else C_EMPTY
+			draw_rect(Rect2(pos + Vector2(x, y) * PX, Vector2(PX, PX)), c)

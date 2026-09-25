@@ -191,8 +191,15 @@ func _ready() -> void:
 	## oku da kalıcı arayüz parçası.
 	UISound.register_ui_opacity(_world_event_banner)
 	UISound.register_ui_opacity(_merchant_arrow)
-	## Görev göstergeleri HUD'un sağ sütunundaki butonların altında dursun (bkz. world_event_banner.gd).
-	_world_event_banner.set("hud_anchor_controls", [hud.get("envanter_toggle_button"), hud.get("gold_indicator"), hud.get("_debug_button")])
+	## Görev göstergeleri HUD'un SAĞ sütununun altında dursun (bkz. world_event_banner.gd): minimap + (varsa) grup paneli.
+	## DÜZELTME (kullanıcı bildirimi 2026-09-25: "görev başlayınca sağda gözükmüyor") - eskiden ENVANTER/altın butonlarına
+	## hizalanıyordu; onlar aynı gün SOLA taşınınca band ekranın sol dışına itiliyordu (sağ kenarı = envanterin sağ kenarı).
+	var banner_anchors: Array = []
+	for path: String in ["MinimapControl", "PartyPanelLayer/PartyPanel/Background"]:
+		var anchor_node: Node = hud.get_node_or_null(path)
+		if anchor_node != null:
+			banner_anchors.append(anchor_node)
+	_world_event_banner.set("hud_anchor_controls", banner_anchors)
 	## #58 DÜZELTME (kullanıcı bildirimi: "sandık açılımı esnasında oyun diğer
 	## oyuncularda devam ediyor gibi görünüyor, kart bekleme ekranının aktif
 	## kalması gerekiyor o esnada") - bkz. _on_chest_busy_state_changed().

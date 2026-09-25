@@ -16,6 +16,16 @@ const BOSS_GROUP := &"boss"
 const COPY_GROUP := &"mission_copies" ## bkz. mission_player_copy.gd _ready
 
 
+## Silahın hedef arama MERKEZİ (kullanıcı isteği 2026-09-25: "silahlar üstümüzde göründüğü için altımızdaki yaratıklara
+## karşı daha az menzile sahip oluyoruz ... menzil merkezinin ortalardan hesaplanmasını istiyorum ancak konumlarına göre
+## sağa ve sola doğru değişsin, aksi taktirde tüm silahlar aynı düşmana ateş etmeye çalışıyor"): DİKEYDE karakterin
+## gövde ortası (kökü), YATAYDA silah ikonunun kendi x'i - üstteki silahın menzili aşağıya da eşit uzanır, sağdaki/soldaki
+## silahlar yine farklı yaratıklara yönelir. Mermi hâlâ ikondan çıkar; sadece "kim menzilde / en yakın kim" buradan ölçülür.
+## weapon.gd _attack_origin (gerçek) ve remote_player.gd (kozmetik nişan) ikisi de bunu çağırır.
+static func range_center(owner_pos: Vector2, icon_pos: Vector2) -> Vector2:
+	return Vector2(icon_pos.x, owner_pos.y)
+
+
 ## can_target: hedeflenebilirlik süzgeci (Callable(Node) -> bool); geçersiz Callable = süzgeç yok.
 static func nearest_priority_target(tree: SceneTree, origin: Vector2, max_range: float, can_target: Callable = Callable()) -> Node2D:
 	if tree == null:

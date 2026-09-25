@@ -46,6 +46,7 @@ const SMOKE_VARIANTS := [
 ## opaklaştırmak sayısal olarak mümkün değil, bu yüzden buraya dokunulmadı
 ## (bkz. sohbet - kullanıcıya bu sınır ayrıca açıklandı).
 const FIRE_OPACITY := 1.0
+const FIRE_BRIGHTNESS := 1.2
 ## DÜZELTME (kullanıcı isteği: "dumanı ... %10 daha opaklaştır") - 0.3 * 1.1.
 const SMOKE_OPACITY := 0.33
 
@@ -55,7 +56,8 @@ const SMOKE_OPACITY := 0.33
 ## hizalaması _ready() sonunda doku piksel boyutlarından hesaplandığı için
 ## bu ölçeklemeden etkilenmiyor, orantı korunuyor). İki ardışık %10 küçültme
 ## kümülatif: 0.9 * 0.9 = 0.81.
-const EFFECT_SCALE := 0.81
+## 2026-09-25: "yanma efektinin boyutunu %10 küçült" - 0.81 -> 0.729.
+const EFFECT_SCALE := 0.729
 
 ## DÜZELTME (kullanıcı isteği: "yangın ve dumanı biraz yukarı taşı") - kök
 ## Node2D'nin Y konumu (enemy.gd tarafında hep Vector2.ZERO'ya sabitlenen
@@ -85,7 +87,9 @@ func _ready() -> void:
 	_smoke.modulate.a = SMOKE_OPACITY
 	_smoke.play("burn")
 	_fire.sprite_frames = FIRE_VARIANTS[randi() % FIRE_VARIANTS.size()]
-	_fire.modulate.a = FIRE_OPACITY
+	## "biraz daha parlasın" (2026-09-25): alevler 1'in üstünde modulate ile hafifçe parlatılır (gece ışığı da güçlendi,
+	## bkz. night_glow_catalog.gd).
+	_fire.modulate = Color(FIRE_BRIGHTNESS, FIRE_BRIGHTNESS, FIRE_BRIGHTNESS * 0.92, FIRE_OPACITY)
 	_fire.play("burn")
 	_fire.scale = Vector2(FIRE_ONLY_SCALE, FIRE_ONLY_SCALE)
 	_smoke.scale = Vector2(SMOKE_ONLY_SCALE, SMOKE_ONLY_SCALE)

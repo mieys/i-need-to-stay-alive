@@ -108,7 +108,8 @@ const DEFS := {
 		## DEĞİŞMEDİ (bkz. eski skill3 alanları, artık burada).
 		"skill": 33,
 		"skill_name": "Arı Sürüsü",
-		"skill_desc": "YETENEK: Bulunduğu konuma 10sn süren bir arı sürüsü salar. İçindeki yaratıklar saniyede 1 zehir yükü biriktirir (en fazla 10), her yük 4sn boyunca toplam saldırı gücünün %20'si kadar hasar verir. (20sn bekleme)",
+		## 2026-09-25 ikinci tasarım (sabit alan yerine takip eden koruyucu sürü) - bkz. fx_oakley_bee_guard.gd sabitleri.
+		"skill_desc": "YETENEK: 10sn boyunca etrafını geniş bir halka halinde saran minik arılar çağırır. Halkaya giren yaratıklar geri itilir ve zehirlenir: her etki 1 zehir yükü ekler (en fazla 10), her yük 4sn boyunca toplam saldırı gücünün %20'si kadar hasar verir. Aynı yaratık saniyede en fazla bir kez etkilenir. (20sn bekleme)",
 		"skill_icon": "res://assets/skills/oakley_ari_suru_icon.png",
 		"skill2": 10,
 		"skill2_name": "Sarmaşıklar",

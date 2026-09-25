@@ -2286,6 +2286,9 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	## Dükkan/kart ekranı açıkken ve kapandıktan sonraki okuma pozu süresince (READ_AFTER_CLOSE_MSEC) yürünmez.
+	if _reading_ui_active:
+		input_direction = Vector2.ZERO
 	## Şovalye'nin Koruma Baloncuğu ultisi aktifken tamamen hareketsiz kalır
 	## (bkz. _skill_paladin_ulti) - input okunmaya devam eder ki animasyon/
 	## yön sistemi bozulmasın, sadece gerçek hareket engellenir.
@@ -4985,6 +4988,11 @@ func _play_reading_anim() -> bool:
 
 ## Kullanıcı talimatı (2026-09-22): "read" en az 1 SANİYE görünmeli (ekran hemen kapansa bile pozun görülebilmesi için).
 const READ_MIN_MSEC := 1000
+## Kullanıcı isteği (2026-09-25): "kart seçim ekranı bittiğinde (animasyonlar vb dahil komple bittiğinde) karakter read
+## animasyonunda 0.5 kalıp sonrasında normale dönerek hareket edebilsin" - ekran(lar) tamamen kapandıktan SONRA okuma pozu
+## en az bu kadar daha sürer ve bu sürede karakter yürümez (bkz. _physics_process input_direction). READ_MIN_MSEC (kısa
+## açılan dükkanlarda pozun görülebilmesi) hâlâ geçerli - ikisinden uzun olanı beklenir.
+const READ_AFTER_CLOSE_MSEC := 500
 var _reading_started_msec: int = 0
 var _reading_release_token: int = 0
 
@@ -5008,7 +5016,7 @@ func set_reading_ui_active(active: bool) -> void:
 		return
 	if not _reading_ui_active:
 		return
-	var remaining_msec: int = READ_MIN_MSEC - (Time.get_ticks_msec() - _reading_started_msec)
+	var remaining_msec: int = maxi(READ_AFTER_CLOSE_MSEC, READ_MIN_MSEC - (Time.get_ticks_msec() - _reading_started_msec))
 	if remaining_msec > 0 and is_inside_tree():
 		_reading_release_token += 1
 		var token: int = _reading_release_token
@@ -5242,6 +5250,7 @@ func _process_enemy_burn(delta: float) -> void:
 		_enemy_burn_dps = 0.0
 		_enemy_burn_tick_timer = 0.0
 const FxOakleyLeafBarrierScene := preload("res://scenes/fx_oakley_leaf_barrier.tscn")
+const FxOakleyWardCastScene := preload("res://scenes/fx_oakley_ward_cast.tscn")
 
 func take_damage(amount: float, source: Node2D = null) -> void:
 	if is_dead:
@@ -8904,9 +8913,13 @@ func _skill_oakley_vines() -> void:
 	for i in range(OAKLEY_VINES_COUNT):
 		var vine := Node2D.new()
 		vine.set_script(preload("res://scripts/oakley_vine.gd"))
-		get_tree().current_scene.add_child(vine)
 		## Üç sarmaşık farklı noktalardan (120 derece arayla) çıkar - aynı noktada üst üste görünmesinler (bkz. oakley_vine.gd _pick_new_target).
-		vine.global_position = global_position + Vector2.RIGHT.rotated(float(i) * TAU / float(OAKLEY_VINES_COUNT) + 0.5) * 16.0
+		## DÜZELTME (2026-09-25, test_oakley_three_vines_pick_three_different_targets ile bulundu): konum add_child'dan
+		## ÖNCE atanır - sarmaşığın _ready'si ilk hedefini seçiyor; eskiden o an konum henüz (0,0) = DÜNYA MERKEZİ idi,
+		## harita merkezine yakın bir yaratık varsa sarmaşık Oakley'nin yanındakine değil ona kilitleniyordu.
+		## (current_scene kökü dönüşümsüz: ağaca girmeden verilen konum = dünya konumu.)
+		vine.position = global_position + preload("res://scripts/oakley_vine.gd").CASTER_FEET_OFFSET 				+ Vector2.RIGHT.rotated(float(i) * TAU / float(OAKLEY_VINES_COUNT) + 0.5) * 16.0
+		get_tree().current_scene.add_child(vine)
 		vine.call("setup", damage_bonus)
 		if NetworkManager.is_multiplayer_active:
 			_oakley_vine_id_counter += 1
@@ -8917,24 +8930,22 @@ func _skill_oakley_vines() -> void:
 				if NetworkManager.is_multiplayer_active:
 					NetworkManager.broadcast_oakley_vine_despawn.rpc(multiplayer.get_unique_id(), vine_id)
 			)
-	_spawn_burst(Color(0.35, 0.75, 0.3))
+	## Genel yeşil CPUParticles patlaması (_spawn_burst) kaldırıldı: üç sarmaşığın ayak dibinden fışkırması (vine_emerge,
+	## oakley_vine.gd) zaten kullanım anını gösteriyor ve pixel dilinde (kullanıcı isteği 2026-09-25).
 	_play_skill_sfx("oakley_vines")
 
 
-## Oakley: Arı Sürüsü yeteneği (3. Yetenek/R, skill3 id 33 - bkz.
-## _activate_skill3()'teki match dalı). DÜZELTME (kullanıcı isteği:
-## "senkronize et, diğer oyuncular da öyle görmeli") - bkz. oakley_bee_
-## swarm.gd dosya başı notu: sabit konumda durduğu için TEK SEFERLİK bir
-## "skill_ring"/"hitscan_impact" tarzı broadcast yeterli, sürekli senkron
-## gerekmiyor (oakley_vine.gd'nin aksine).
+## Oakley: Arı Sürüsü (Q, skill id 33). İKİNCİ TASARIM (kullanıcı isteği 2026-09-25): sabit alan yerine Oakley'yi takip eden
+## minik arılar yaklaşan yaratıkları sokup zehirler ve geri iter - bütün mantık/görsel fx_oakley_bee_guard.gd'de. Sahne
+## _play_and_broadcast_skill_fx ile hem burada hem diğer oyunculardaki kuklada kurulur; hedef/hasar sadece bu (kaster)
+## kopyada, sokmalar "oakley_bee_sting" yayınıyla uzak kopyalara da görünür.
+const FxOakleyBeeGuardScene := preload("res://scenes/fx_oakley_bee_guard.tscn")
+
 func _skill_oakley_bee_swarm() -> void:
-	var swarm := Node2D.new()
-	swarm.set_script(preload("res://scripts/oakley_bee_swarm.gd"))
-	get_tree().current_scene.add_child(swarm)
-	swarm.global_position = global_position
-	swarm.call("setup", damage_bonus)
-	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "oakley_bee_swarm_spawn", global_position, {})
+	for c in get_children():
+		if c is OakleyBeeGuard and not c.is_queued_for_deletion():
+			c.queue_free() ## (bekleme süresi 20 > süre 10 - normalde olmaz, yine de iki sürü üst üste binmesin)
+	_play_and_broadcast_skill_fx(FxOakleyBeeGuardScene)
 
 
 ## ---------- Oakley YENİ R: Koruyucu Büyü (skill3 id 39) ----------
@@ -8997,8 +9008,10 @@ func _skill_oakley_bond() -> void:
 	var heal_per_hit: float = damage_bonus * OAKLEY_BOND_HEAL_RATIO
 	var shield_per_hit: float = damage_bonus * OAKLEY_BOND_SHIELD_RATIO
 	_apply_oakley_bond_to_target(target, heal_per_hit, shield_per_hit, OAKLEY_BOND_DAMAGE_REDUCTION, OAKLEY_BOND_DURATION)
-	_spawn_wave_beam_to_ally(target, "shield")
-	_spawn_burst(Color(0.4, 1.0, 0.55))
+	## Kullanım anı: Oakley'nin ayak altında altın mühür + yükselen yaprak girdabı (kullanıcı isteği 2026-09-25, pixel
+	## yeniden tasarım). Eskiden Melek'le paylaşılan dalga ışını + genel yeşil parçacık patlaması vardı; büyünün KİME
+	## gittiği hedefin üstünde açılan yaprak mührüyle (fx_oakley_leaf_barrier.gd "open") zaten görünüyor.
+	_play_and_broadcast_skill_fx(FxOakleyWardCastScene)
 	_play_skill_sfx("oakley_bond")
 
 

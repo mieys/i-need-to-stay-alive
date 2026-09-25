@@ -31,16 +31,18 @@ const NIGHT_VISION_MULT := 0.75
 ## NOT (kullanıcı geri bildirimi, bkz. vision_fog.gd): görünmeyen yer asla zifiri olmamalı - gece yarısı ortamı ham
 ## anahtarda ~%41, DARKNESS_SCALE (x0.8 karartma) sonrası ~%54 parlaklıkta; üstüne sisin kendi koyulaşması biniyor.
 const TIME_KEYS: Array = [
-	[0.0, Color(0.95, 0.92, 0.96), 0.96, Color(0.02, 0.012, 0.03)], ## sabah serinliği (gün doğumunun son pembe izi)
+	## 2026-09-25: "gün batımı/doğumunda renk ayarı aşırı kızıllaşıyor, göz yoruyor" - sabah/ikindi/gün batımı/gün doğumu
+	## anahtarlarının kırmızı-turuncu kayması ve kızıl kaldırma (lift) yaklaşık yarıya indirildi (ton aynı, daha hafif).
+	[0.0, Color(0.97, 0.955, 0.975), 0.98, Color(0.012, 0.008, 0.018)], ## sabah serinliği (gün doğumunun son pembe izi)
 	[70.0, Color(1.0, 1.0, 1.0), 1.0, Color(0.0, 0.0, 0.0)], ## tam gündüz
 	[280.0, Color(1.0, 1.0, 1.0), 1.0, Color(0.0, 0.0, 0.0)],
-	[330.0, Color(1.0, 0.9, 0.77), 1.06, Color(0.03, 0.012, 0.0)], ## altın saat (ikindi)
-	[360.0, Color(0.96, 0.67, 0.55), 0.95, Color(0.05, 0.012, 0.03)], ## gün batımı: turuncu-pembe
+	[330.0, Color(1.0, 0.94, 0.86), 1.03, Color(0.015, 0.006, 0.0)], ## altın saat (ikindi)
+	[360.0, Color(0.95, 0.8, 0.72), 0.95, Color(0.028, 0.01, 0.022)], ## gün batımı: turuncu-pembe
 	[390.0, Color(0.45, 0.45, 0.67), 0.72, Color(0.012, 0.01, 0.04)], ## alacakaranlık -> gece mavisi
 	[465.0, Color(0.37, 0.41, 0.63), 0.64, Color(0.0, 0.012, 0.042)], ## gece yarısı
 	[540.0, Color(0.41, 0.43, 0.65), 0.68, Color(0.01, 0.01, 0.045)], ## şafak öncesi
-	[570.0, Color(0.9, 0.71, 0.74), 0.9, Color(0.05, 0.015, 0.035)], ## gün doğumu: pembe-şeftali
-	[600.0, Color(0.95, 0.92, 0.96), 0.96, Color(0.02, 0.012, 0.03)], ## = ilk anahtar (döngü kapanır)
+	[570.0, Color(0.9, 0.8, 0.82), 0.92, Color(0.028, 0.012, 0.026)], ## gün doğumu: pembe-şeftali
+	[600.0, Color(0.97, 0.955, 0.975), 0.98, Color(0.012, 0.008, 0.018)], ## = ilk anahtar (döngü kapanır)
 ]
 
 ## Hava durumu. Kullanıcı seçimi (2026-09-25): "Dengeli" - %50 açık, %25 rüzgarlı, %25 yağmurlu; her hava 1.5-3 dk
@@ -84,7 +86,8 @@ static func weather_targets(w: int) -> Vector3:
 ## karanlığını %20 azaltıp parıltıları da %20 azalt"): zaman anahtarlarının KARARTMASI (1 - ortam, kanal kanal) ve
 ## renksizleştirmesi (1 - doygunluk) bu oranla ölçeklenir - renk tonu (gece mavisi, gün batımı turuncusu) korunur, sadece
 ## daha az karanlık. Işık/parıltı gücü (LIGHT_GAIN_SCALE, GLOW_GAIN_MAX) aynı turda x0.8.
-const DARKNESS_SCALE := 0.8
+## 2026-09-25 ikinci tur: "gecenin karanlığını biraz azalt, azcık daha aydınlık olsun" - 0.8 -> 0.68 (karartma ~%15 daha az).
+const DARKNESS_SCALE := 0.68
 ## Işıkların (karakter etrafı, yetenek/silah parıltıları) karanlığı ne kadar kaldırdığı: HAM (DARKNESS_SCALE öncesi)
 ## ortam parlaklığı düştükçe artar - gündüz 0 (ışıklar görünmez), yağmurlu gündüz hafif, gece ~1. Ham değerden
 ## hesaplanıyor ki gece aydınlanınca ışıklar KENDİLİĞİNDEN de sönükleşmesin - "%20 azalt" tam olarak LIGHT_STRENGTH.

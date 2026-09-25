@@ -23,6 +23,15 @@ const CrystalFrames := preload("res://assets/fx/mission_collect/crystal_frames.t
 const PickupFrames := preload("res://assets/fx/mission_collect/pickup_frames.tres")
 const TEXEL := 1.212 ## PixelDraw.TEXEL
 var _sprite: AnimatedSprite2D = null
+## GÜNDÜZ PARILTISI (kullanıcı isteği 2026-09-25: "eşyalar gündüzleri de gece olduğu gibi parıldasın"): gece ışığı
+## (night_glow_catalog.gd, atmosphere_overlay.gd ışık haritası) tasarım gereği gündüz 0 kazançla çalışır. Gündüz aynı
+## renkte (katalogdaki c) yumuşak, toplamalı (ADD) bir hale çizilir; hava karardıkça söner ve yerini gece ışığı alır
+## (ikisi üst üste binip aşırı parlamasın). Hafifçe nabız atar.
+const DAY_GLOW_COLOR := Color(0.45, 1.0, 0.9)
+const DAY_GLOW_RADIUS := 38.0 ## dünya birimi - gece ışığının yarıçapıyla aynı (katalog "r")
+const DAY_GLOW_ALPHA := 0.55
+var _day_glow: Sprite2D = null
+var _atmosphere: Node = null
 
 var mission_id: int = 0
 var item_index: int = 0
@@ -48,6 +57,9 @@ func _ready() -> void:
 	add_child(_sprite)
 	_sprite.play("idle")
 	_sprite.frame = randi() % 6 ## hepsi aynı anda parlamasın
+	_day_glow = _make_day_glow()
+	add_child(_day_glow)
+	move_child(_day_glow, 0) ## kristalin arkasında
 	_base_y = position.y
 	set_process(true)
 
@@ -58,6 +70,12 @@ func _process(delta: float) -> void:
 	_bob_time += delta
 	if _sprite:
 		_sprite.position.y = round(sin(_bob_time * 2.2) * 2.0) * TEXEL ## tam texel adımlarıyla (pixel kalsın)
+	if _day_glow:
+		if _atmosphere == null or not is_instance_valid(_atmosphere):
+			_atmosphere = get_tree().get_first_node_in_group("atmosphere")
+		var dark: float = float(_atmosphere.call("get_darkness")) if _atmosphere != null and _atmosphere.has_method("get_darkness") else 0.0
+		var pulse: float = 0.85 + 0.15 * sin(_bob_time * 2.2)
+		_day_glow.modulate.a = DAY_GLOW_ALPHA * pulse * clampf(1.0 - dark * 1.6, 0.0, 1.0)
 	## DÜZELTME (kullanıcı bildirimi 2026-09-24: "görevlerden çoğu çalışmıyor") - toplama SADECE
 	## body_entered (fizik, collision_mask=2) ile algılanıyordu ama Player'ın collision_layer'ı 0 (bkz.
 	## player.tscn), yani objeler HİÇ toplanamıyordu. Bayrak/Konvoy ile AYNI mesafe kontrolü; her istemci
@@ -67,6 +85,28 @@ func _process(delta: float) -> void:
 			if is_instance_valid(p) and p.get("is_dead") != true and (p as Node2D).global_position.distance_to(global_position) <= PICKUP_RADIUS:
 				_on_body_entered(p)
 				break
+
+
+func _make_day_glow() -> Sprite2D:
+	var grad := Gradient.new()
+	grad.set_color(0, Color(DAY_GLOW_COLOR, 1.0))
+	grad.set_color(1, Color(DAY_GLOW_COLOR, 0.0))
+	grad.add_point(0.35, Color(DAY_GLOW_COLOR, 0.45))
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 64
+	tex.height = 64
+	var sp := Sprite2D.new()
+	sp.texture = tex
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	sp.material = mat
+	sp.scale = Vector2.ONE * (DAY_GLOW_RADIUS * 2.0 / 64.0)
+	sp.position = Vector2(0.0, -10.0) ## gece ışığının ofsetiyle aynı (katalog "o")
+	return sp
 
 
 func _on_body_entered(body: Node) -> void:
@@ -99,6 +139,8 @@ func _fade_out() -> void:
 	set_process(false)
 	if _sprite:
 		_sprite.visible = false
+	if _day_glow:
+		_day_glow.visible = false
 	var burst := AnimatedSprite2D.new()
 	burst.sprite_frames = PickupFrames
 	burst.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

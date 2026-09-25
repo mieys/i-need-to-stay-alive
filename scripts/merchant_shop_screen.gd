@@ -185,6 +185,16 @@ func _process(delta: float) -> void:
 ## sağında kendine özgü stat penceresi olacak şekilde yeniden tasarla, ayrıca dükkanda olduğumuz eşyaları gösterebilecek bir buton ve
 ## buna özgü pencere ekle" - tüm arayüz UIKit (assets/ui/kit) ile yeniden kuruldu: 2x piksel ölçeği, m5x7 için 32/48/64 yazı boyutları
 ## (eskiden 14-18 = okunaksız/uneven), büyük kartlar (icon 96 px), sağda stat penceresi, üstte ENVANTER butonu (bkz. _open_inventory).
+## Kullanıcı isteği (2026-09-25): "seyyar satıcı arayüzünü %25 küçültmeni istiyorum herşey kocaman ve tüm ekranı kaplıyor
+## nerdeyse" - pencerenin tamamı (yazılar, kartlar, butonlar birlikte) merkezinden x0.75 ölçeklenir; CenterContainer onu
+## ölçeksiz boyutuna göre ortaladığı için pivot pencerenin ortasında tutulur. Fare/tıklama dönüşümü Godot'ta ölçekle doğru çalışır.
+const WINDOW_SCALE := 0.75
+
+func _apply_window_scale(window: Control) -> void:
+	window.scale = Vector2.ONE * WINDOW_SCALE
+	window.resized.connect(func() -> void: window.pivot_offset = window.size * 0.5)
+
+
 func _build_ui() -> void:
 	var dim := ColorRect.new()
 	dim.color = Color(0.12, 0.07, 0.03, 0.62)
@@ -202,6 +212,7 @@ func _build_ui() -> void:
 	var window := PanelContainer.new()
 	window.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
 	center.add_child(window)
+	_apply_window_scale(window)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
@@ -703,6 +714,7 @@ func _open_inventory() -> void:
 	var window := PanelContainer.new()
 	window.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
 	center.add_child(window)
+	_apply_window_scale(window)
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
 	window.add_child(vbox)

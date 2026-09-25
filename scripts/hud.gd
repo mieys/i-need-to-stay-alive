@@ -356,13 +356,18 @@ func _layout_shop_inventory_buttons() -> void:
 	## açıktı, taşan kısmı kırpar).
 	var btn_w: float = ORIGINAL_BTN_W * SHRINK_RATIO
 	var btn_h: float = ORIGINAL_BTN_H * SHRINK_RATIO
-	var right_edge: float = minimap.offset_right
-	var top_y: float = minimap.offset_bottom + GAP
+	## Kullanıcı isteği (2026-09-25): "bundan sonra envanter ve altın göstergesi solda olsun grup paneli de sağda olsun" -
+	## ENVANTER + altın artık SOL üstte, karakter kümesinin ve dirilme kalplerinin (ReviveHearts) altında; grup paneli sağda
+	## minimapın altına geçti (bkz. party_panel.gd RIGHT_MARGIN/TOP_Y).
+	var cluster: Control = get_node_or_null("CharacterCluster")
+	var hearts: Control = get_node_or_null("ReviveHearts")
+	var left_edge: float = cluster.offset_left if cluster else 20.0
+	var top_y: float = (hearts.offset_bottom if hearts else 196.0) + GAP
 
-	# Envanter butonu en üstte (bkz. kullanıcı isteği - eskisi gibi).
-	envanter_toggle_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	envanter_toggle_button.offset_right = right_edge
-	envanter_toggle_button.offset_left = right_edge - btn_w
+	# Envanter butonu üstte, altın göstergesi altında.
+	envanter_toggle_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	envanter_toggle_button.offset_left = left_edge
+	envanter_toggle_button.offset_right = left_edge + btn_w
 	envanter_toggle_button.add_theme_font_size_override("font_size", 32)
 	envanter_toggle_button.clip_text = true
 	envanter_toggle_button.offset_top = top_y
@@ -378,9 +383,9 @@ func _layout_shop_inventory_buttons() -> void:
 	shop_toggle_button.visible = false
 
 	# Altın göstergesi artık SADECE bir gösterge - envanter butonunun hemen altında.
-	gold_indicator.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	gold_indicator.offset_right = right_edge
-	gold_indicator.offset_left = right_edge - btn_w
+	gold_indicator.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	gold_indicator.offset_left = left_edge
+	gold_indicator.offset_right = left_edge + btn_w
 	gold_indicator.offset_top = envanter_toggle_button.offset_bottom + GAP
 	gold_indicator.offset_bottom = gold_indicator.offset_top + btn_h
 	gold_indicator.visible = true
@@ -435,7 +440,10 @@ func _style_envanter_and_gold_buttons() -> void:
 	## göstergeye çevir") - tıklanabilirlik/hover davranışı kaldırıldı, kendi
 	## sabit rengi (PAL_WINDOW_BG, bkz. hud.tscn) korunuyor.
 	## Kullanıcı isteği (2026-09-21): tüm arayüz UIKit kitiyle uyumlu - altın göstergesi başlık tahtası (plaque) stilinde.
-	_gold_indicator_normal_style = UIKit.panel_style("plaque")
+	## 2026-09-25 sadeleştirme: plaque.png'nin altın perçinsiz kopyası (tools/simplify_hud_frames.py) - aynı paylar.
+	var plaque_clean := MenuKit._tex_style("plaque.png", [6, 5, 6, 5], [22, 6, 22, 6], false, MenuKit.GAME_DIR)
+	plaque_clean.texture = load("res://assets/ui/game/hud_plaque_clean.png")
+	_gold_indicator_normal_style = plaque_clean
 	gold_indicator.add_theme_stylebox_override("panel", _gold_indicator_normal_style)
 	## 2026-09-24: levha artık bej parşömen (oyun içi kit) - sahnedeki açık sarı yazı okunmuyordu, koyu altın.
 	if gold_indicator_label:
@@ -872,7 +880,12 @@ const BAR_SLOT_TOP := 12.0 ## levha üstünden çubuk yuvasına (sanat satırı 
 const BAR_SLOT_HEIGHT := 20.0
 const BAR_FRAME_TOPS := [4.0, 52.0]
 const BAR_VALUE_FONT_SIZE := 24
-const BAR_TICK_COUNT := 10 ## %10'da bir çentik - miktar bir bakışta okunur
+## Kullanıcı isteği (2026-09-25): "sol üstteki can kalkan barının dolma barlarının oval ve içlerinin çizgisiz olmasını
+## istiyorum" - %10 çentikleri (_add_bar_ticks) kaldırıldı; dolgu uçları tam yuvarlak yeni doku (tools/simplify_hud_frames.py
+## hud_bar_fill_round 32x20, esneme payı 10 px - değer azaldıkça sağ uç yuvarlak kalır). Zemin de aynı paya uygun geniş kopya.
+const BAR_FILL_ROUND := preload("res://assets/ui/kit/hud_bar_fill_round.png")
+const BAR_UNDER_WIDE := preload("res://assets/ui/kit/hud_bar_under_wide.png")
+const BAR_ROUND_MARGIN := 10
 
 
 func _layout_bar_kit() -> void:
@@ -898,7 +911,31 @@ func _layout_bar_kit() -> void:
 		bar.offset_right = frame.offset_right - BAR_FRAME_PATCH_RIGHT
 		bar.offset_top = top + BAR_SLOT_TOP
 		bar.offset_bottom = bar.offset_top + BAR_SLOT_HEIGHT
-		_add_bar_ticks(bar)
+		var tpb := bar as TextureProgressBar
+		if tpb != null:
+			## Dolgu TextureProgressBar'ın kendi "progress" dokusuyla ÇİZİLMEZ: gerçek oyun görüntüsünde ölçüldü (2026-09-25),
+			## 9 parçalı esnetmede kısmi dolum dokuyu KIRPIYOR - sağ uç kare kalıyordu. Artık zemin (under) bar'ın kendisinde,
+			## dolgu ise genişliği değere göre ayarlanan bir NinePatchRect (iki ucu HER ZAMAN yuvarlak) - bkz. _refresh_round_fill.
+			tpb.texture_progress = null
+			tpb.texture_under = BAR_UNDER_WIDE
+			tpb.nine_patch_stretch = true
+			tpb.stretch_margin_left = 2
+			tpb.stretch_margin_right = 2
+			tpb.stretch_margin_top = 0
+			tpb.stretch_margin_bottom = 0
+			tpb.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			if not tpb.has_node("RoundFill"):
+				var fill := NinePatchRect.new()
+				fill.name = "RoundFill"
+				fill.texture = BAR_FILL_ROUND
+				fill.patch_margin_left = BAR_ROUND_MARGIN
+				fill.patch_margin_right = BAR_ROUND_MARGIN
+				fill.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+				fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				tpb.add_child(fill)
+				tpb.value_changed.connect(func(_v: float) -> void: _refresh_round_fill(tpb))
+				tpb.resized.connect(func() -> void: _refresh_round_fill(tpb))
+			_refresh_round_fill(tpb)
 		if lbl:
 			lbl.offset_left = bar.offset_left
 			lbl.offset_right = bar.offset_right
@@ -908,20 +945,6 @@ func _layout_bar_kit() -> void:
 			lbl.add_theme_constant_override("outline_size", 6)
 
 
-## Çubuğun ÇOCUĞU olarak çizilir: dolgunun üstünde, levhanın (sonraki kardeş) altında. 2 px'lik koyu şerit, 2 px ızgarada.
-func _add_bar_ticks(bar: Control) -> void:
-	if bar.has_node("Ticks"):
-		return
-	var ticks := Control.new()
-	ticks.name = "Ticks"
-	ticks.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ticks.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bar.add_child(ticks)
-	ticks.draw.connect(func() -> void:
-		for t in range(1, BAR_TICK_COUNT):
-			var x: float = round(ticks.size.x * float(t) / float(BAR_TICK_COUNT) * 0.5) * 2.0
-			ticks.draw_rect(Rect2(x - 2.0, 0.0, 2.0, ticks.size.y), Color(0.12, 0.06, 0.02, 0.3)))
-	ticks.resized.connect(ticks.queue_redraw)
 
 
 func _setup_portrait() -> void:
@@ -1125,6 +1148,27 @@ func _on_envanter_closed() -> void:
 	stats_panel_instance.visible = false
 
 
+## Oval dolgu: bar'ın oranı kadar genişlikte, iki ucu yuvarlak NinePatchRect; rengi bar'ın tint_progress'i (bkz. _layout_bar_kit).
+func _refresh_round_fill(bar: TextureProgressBar) -> void:
+	if bar == null or not is_instance_valid(bar):
+		return
+	var fill: NinePatchRect = bar.get_node_or_null("RoundFill") as NinePatchRect
+	if fill == null:
+		return
+	var span: float = bar.max_value - bar.min_value
+	var ratio: float = clampf((bar.value - bar.min_value) / span, 0.0, 1.0) if span > 0.0 else 0.0
+	var w: float = roundf(bar.size.x * ratio / 2.0) * 2.0 ## 2 px ızgara (sanat pikseli x2)
+	fill.visible = w >= 2.0
+	fill.position = Vector2.ZERO
+	## Çok kısa dolumda iki yuvarlak uç birbirine girmesin: en az iki uç payı kadar genişlikte çizilir, dikeyde küçülür.
+	var min_w: float = float(BAR_ROUND_MARGIN * 2)
+	fill.size = Vector2(maxf(w, min_w), bar.size.y)
+	fill.scale = Vector2(w / min_w, w / min_w) if w < min_w else Vector2.ONE
+	if w < min_w:
+		fill.position = Vector2(0.0, bar.size.y * (1.0 - fill.scale.y) * 0.5)
+	fill.modulate = bar.tint_progress
+
+
 func update_health(current: float, max_value: float) -> void:
 	health_bar.max_value = max(max_value, 0.001)
 	health_bar.value = current
@@ -1135,6 +1179,7 @@ func update_health(current: float, max_value: float) -> void:
 	## 2026-09-24 bar yeniden tasarımı: parşömen levhada daha canlı piksel yeşili -> kırmızı (dolgu dokusu düz beyaz, ton burada).
 	var health_color: Color = Color(0.84, 0.22, 0.22).lerp(Color(0.36, 0.78, 0.29), pct)
 	health_bar.tint_progress = health_color
+	_refresh_round_fill(health_bar)
 
 
 ## main.gd hâlâ bu sinyale bağlanıyor (player.xp_changed) - HUD'da artık
@@ -1171,6 +1216,7 @@ func _on_item_shield_changed(current: float, max_value: float) -> void:
 	item_shield_bar.max_value = max(max_value, 0.001)
 	item_shield_bar.value = current
 	item_shield_bar.tint_progress = Color(0.24, 0.59, 0.91)
+	_refresh_round_fill(item_shield_bar)
 	if max_value > 0:
 		shield_value_label.text = "%d/%d" % [int(round(max(current, 0.0))), int(round(max_value))]
 
@@ -1360,14 +1406,13 @@ func _setup_debug_mode() -> void:
 func _position_debug_button() -> void:
 	if not _debug_button:
 		return
-	## DÜZELTME: hud.gd'nin kökü bir CanvasLayer (Control DEĞİL) - get_viewport_rect() burada
-	## yok, get_viewport().get_visible_rect() HER Node'da çalışır (bkz. bu hatanın headless
-	## testte "Parse Error: Function get_viewport_rect() not found" olarak yakalanması).
-	var vp: Vector2 = get_viewport().get_visible_rect().size
-	## DÜZELTME: custom_minimum_size (90) SADECE minimumdu - ortam temasının büyük
-	## font boyutu yüzünden buton GERÇEKTE daha geniş çiziliyordu (bkz. debug_menu.png'de
-	## "DEBUG" yerine sağdan kırpılmış "DEB" görünmesi). Gerçek genişlik için size.x kullan.
-	_debug_button.position = Vector2(vp.x - _debug_button.size.x - 20.0, 330.0)
+	## 2026-09-25: sağ sütun artık minimap + grup paneli - DEBUG butonu SOL sütunda, altın göstergesinin altında
+	## (sol kenara hizalı - eski sağ kenar hizası için gereken gerçek genişlik/viewport hesabı artık yok).
+	var below_y: float = 330.0
+	if gold_indicator and gold_indicator.visible:
+		below_y = gold_indicator.get_global_rect().end.y + 10.0
+	var left_x: float = gold_indicator.get_global_rect().position.x if gold_indicator else 20.0
+	_debug_button.position = Vector2(left_x, below_y)
 
 
 func _unlock_debug_mode() -> void:

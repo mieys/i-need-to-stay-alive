@@ -90,6 +90,12 @@ func set_shield(current: float, max_value: float) -> void:
 const CORNER_RATIO := 0.28
 
 func _draw_pixel_bar(rect: Rect2, ratio: float, fill_color: Color, bg_color: Color) -> void:
+	draw_pixel_bar(self, rect, ratio, fill_color, bg_color)
+
+
+## Çizimin kendisi STATIC: grup panelindeki müttefik çubukları da (ui_mini_bar.gd, kullanıcı isteği 2026-09-25: "can kalkan
+## barları tıpkı karakterin üstündeki can kalkan barına benzer olmalı") AYNI fonksiyonu çağırır - iki görünüm ayrışmasın.
+static func draw_pixel_bar(ci: CanvasItem, rect: Rect2, ratio: float, fill_color: Color, bg_color: Color) -> void:
 	var r := Rect2(rect.position.round(), rect.size.round())
 	var corner: float = r.size.y * CORNER_RATIO
 
@@ -97,18 +103,18 @@ func _draw_pixel_bar(rect: Rect2, ratio: float, fill_color: Color, bg_color: Col
 	var shadow_style := StyleBoxFlat.new()
 	shadow_style.bg_color = Color(0, 0, 0, 0.5)
 	shadow_style.set_corner_radius_all(int(corner))
-	draw_style_box(shadow_style, shadow_rect)
+	ci.draw_style_box(shadow_style, shadow_rect)
 
 	var outer := r.grow(OUTLINE)
 	var outline_style := StyleBoxFlat.new()
 	outline_style.bg_color = Color(0, 0, 0, 1.0)
 	outline_style.set_corner_radius_all(int(corner + OUTLINE))
-	draw_style_box(outline_style, outer)
+	ci.draw_style_box(outline_style, outer)
 
 	var bg_style := StyleBoxFlat.new()
 	bg_style.bg_color = bg_color
 	bg_style.set_corner_radius_all(int(corner))
-	draw_style_box(bg_style, r)
+	ci.draw_style_box(bg_style, r)
 
 	if ratio > 0.0:
 		var fill_w: float = round(r.size.x * ratio)
@@ -117,13 +123,13 @@ func _draw_pixel_bar(rect: Rect2, ratio: float, fill_color: Color, bg_color: Col
 			var fill_style := StyleBoxFlat.new()
 			fill_style.bg_color = fill_color
 			fill_style.set_corner_radius_all(int(corner))
-			draw_style_box(fill_style, fill_rect)
+			ci.draw_style_box(fill_style, fill_rect)
 			var glow_rect := Rect2(r.position, Vector2(fill_w, max(1.0, r.size.y * 0.3)))
 			var glow_style := StyleBoxFlat.new()
 			glow_style.bg_color = fill_color.lightened(0.4)
 			glow_style.corner_radius_top_left = int(corner)
 			glow_style.corner_radius_top_right = int(corner)
-			draw_style_box(glow_style, glow_rect)
+			ci.draw_style_box(glow_style, glow_rect)
 
 
 ## LoL tarzı bölme çizgileri: can havuzu büyüdükçe çubuk daha çok dilime bölünür (yaklaşık her SEGMENT_HP canda bir çizgi,

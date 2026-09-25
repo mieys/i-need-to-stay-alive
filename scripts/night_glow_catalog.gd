@@ -47,6 +47,8 @@ const NO_GLOW_SCENES := [
 	"res://scenes/fx_crossbow_muzzle.tscn",
 	"res://scenes/fx_speed_line.tscn",
 	"res://scenes/fx_mage_swap.tscn",
+	## Oakley Sarmaşıklar'ın yaratığa sarılan dikenleri - bitki, büyü değil.
+	"res://scenes/fx_oakley_entangle.tscn",
 ]
 
 const BY_SCENE := {
@@ -66,7 +68,8 @@ const BY_SCENE := {
 	"res://scenes/fx_revolver_muzzle.tscn": {"c": Color(1.0, 0.8, 0.45), "r": 60.0, "e": 1.0, "d": 0.14},
 	"res://scenes/fx_tufek_muzzle.tscn": {"c": Color(1.0, 0.78, 0.42), "r": 72.0, "e": 1.0, "d": 0.16},
 	## --- İsabet/patlama efektleri ---
-	"res://scenes/fx_fire_impact.tscn": {"c": Color(1.0, 0.55, 0.2), "r": 62.0, "e": 0.95, "d": 0.45, "f": 0.2},
+	## Kullanıcı bildirimi (2026-09-25): "ateş topunun patlama efekti parlamıyor" - flaş çok kısa/küçüktü (0.45 sn, r 62).
+	"res://scenes/fx_fire_impact.tscn": {"c": Color(1.0, 0.55, 0.2), "r": 84.0, "e": 1.0, "d": 0.75, "f": 0.2},
 	"res://scenes/fx_ice_impact.tscn": {"c": Color(0.55, 0.88, 1.0), "r": 54.0, "e": 0.85, "d": 0.4},
 	"res://scenes/fx_tabanca_impact.tscn": {"c": Color(1.0, 0.7, 0.35), "r": 30.0, "e": 0.8, "d": 0.18},
 	"res://scenes/fx_hit_tabanca_combo.tscn": {"c": Color(1.0, 0.72, 0.38), "r": 30.0, "e": 0.8, "d": 0.18},
@@ -117,6 +120,10 @@ const BY_SCENE := {
 	"res://scenes/fx_revive_rewind.tscn": {"c": Color(0.85, 0.95, 0.5), "r": 60.0, "e": 0.65},
 	"res://scenes/fx_necro_summon.tscn": {"c": Color(0.45, 0.85, 0.75), "r": 60.0, "e": 0.7, "d": 0.8},
 	"res://scenes/fx_oakley_leaf_barrier.tscn": {"c": Color(0.55, 0.95, 0.4), "r": 44.0, "e": 0.35},
+	## Oakley Q Arı Sürüsü (2026-09-25 ikinci tasarım: Oakley'yi takip eden minik arılar) - gövde çevresinde hafif bal ışığı.
+	"res://scenes/fx_oakley_bee_guard.tscn": {"c": Color(1.0, 0.86, 0.4), "r": 40.0, "e": 0.3, "o": Vector2(0.0, -8.0)},
+	## Oakley R kullanım anı (altın mühür + yaprak girdabı) - kısa, sıcak-yeşil parlama.
+	"res://scenes/fx_oakley_ward_cast.tscn": {"c": Color(0.85, 1.0, 0.55), "r": 50.0, "e": 0.5, "d": 0.7},
 	"res://scenes/fx_shaman_cast_area.tscn": {"c": Color(0.7, 0.5, 1.0), "r": 50.0, "e": 0.6, "d": 0.6},
 	"res://scenes/fx_shaman_cast_attack.tscn": {"c": Color(1.0, 0.6, 0.25), "r": 50.0, "e": 0.6, "d": 0.6},
 	"res://scenes/fx_shaman_cast_shield.tscn": {"c": Color(0.45, 0.72, 1.0), "r": 50.0, "e": 0.6, "d": 0.6},
@@ -140,8 +147,9 @@ const BY_SCENE := {
 	"res://scenes/fx_skill_burst.tscn": {"cp": "glow_color", "c": Color(1.0, 0.9, 0.7), "r": 60.0, "e": 0.75, "d": 0.8},
 	"res://scenes/fx_skill_ring.tscn": {"cp": "_color", "rp": "_radius", "rs": 0.7, "c": Color(1.0, 0.9, 0.7), "r": 60.0, "e": 0.6, "d": 0.6},
 	## --- Durum efektleri (yanma/donma/zehir... - yaratığın/oyuncunun üstünde) ---
-	"res://scenes/fx_burn_status.tscn": {"c": Color(1.0, 0.5, 0.15), "r": 32.0, "e": 0.6, "f": 0.5},
-	"res://scenes/fx_enemy_burn_status.tscn": {"c": Color(1.0, 0.5, 0.15), "r": 32.0, "e": 0.6, "f": 0.5},
+	## Yanma (2026-09-25: "boyutunu %10 küçültüp biraz daha parlamasını sağla") - güç 0.6 -> 0.85.
+	"res://scenes/fx_burn_status.tscn": {"c": Color(1.0, 0.5, 0.15), "r": 34.0, "e": 0.85, "f": 0.45},
+	"res://scenes/fx_enemy_burn_status.tscn": {"c": Color(1.0, 0.5, 0.15), "r": 34.0, "e": 0.85, "f": 0.45},
 	"res://scenes/fx_ice_freeze_status.tscn": {"c": Color(0.5, 0.82, 1.0), "r": 30.0, "e": 0.45},
 	"res://scenes/fx_poison_status.tscn": {"c": Color(0.55, 0.95, 0.35), "r": 24.0, "e": 0.35},
 	"res://scenes/fx_poison_hit.tscn": {"c": Color(0.55, 0.95, 0.35), "r": 26.0, "e": 0.45, "d": 0.3},
@@ -163,6 +171,8 @@ const BY_SCRIPT := {
 	"res://scripts/fx_melek_ally_aura.gd": {"c": Color(1.0, 0.9, 0.55), "r": 50.0, "e": 0.45},
 	"res://scripts/fx_oakley_flower_bond.gd": {"c": Color(0.6, 1.0, 0.5), "r": 22.0, "e": 0.45},
 	"res://scripts/fx_paladin_barrier.gd": {"cp": "color", "c": Color(0.35, 0.78, 1.0), "r": 50.0, "e": 0.45},
+	## Seyyar satıcı baloncuğu (2026-09-25: eski Şovalye baloncuğunun satıcıya ayrılmış kopyası) - aynı ışık.
+	"res://scripts/fx_merchant_bubble.gd": {"cp": "color", "c": Color(0.35, 0.78, 1.0), "r": 50.0, "e": 0.45},
 	## Koruma Bariyeri (E) baloncuğu 2026-09-25'te mor-mavi sprite'a geçti - ışık da o renkte.
 	"res://scripts/fx_paladin_barrier_link.gd": {"c": Color(0.55, 0.52, 1.0), "r": 40.0, "e": 0.4},
 	"res://scripts/fx_paladin_overlay.gd": {"c": Color(1.0, 0.88, 0.45), "r": 40.0, "e": 0.4},
@@ -182,7 +192,6 @@ const BY_SCRIPT := {
 	"res://scripts/totem_shield_wave.gd": {"c": Color(0.45, 0.75, 1.0), "r": 60.0, "e": 0.5, "d": 0.6},
 	## (Vampir'in yarasa sürüsü ve kan efektleri (vampir_bat_swarm.gd / vampir_fx.gd) BİLEREK yok: kan/yarasa ışık
 	## saçmaz - kan sıçramalarıyla aynı kural, bkz. NO_GLOW_SCENES.)
-	"res://scripts/oakley_bee_swarm_ring.gd": {"c": Color(1.0, 0.9, 0.4), "r": 60.0, "e": 0.3},
 	"res://scripts/oakley_flower.gd": {"c": Color(1.0, 0.7, 0.85), "r": 30.0, "e": 0.35},
 	"res://scripts/wraith_pet.gd": {"c": Color(0.6, 0.9, 1.0), "r": 36.0, "e": 0.35},
 	## --- Görev objeleri (soru-cevap seçimi) ---
@@ -199,7 +208,8 @@ const BY_SCRIPT := {
 	## Yaratık yeteneklerinin ortak sprite oynatıcısı - neyin oynadığına göre (hayalet/vampir sisi parlamaz).
 	"res://scripts/fx_enemy_ability.gd": {"frames": {
 		"laser_flash": {"c": Color(0.95, 0.6, 1.0), "r": 35.2, "e": 0.5, "d": 0.3, "fog": true},
-		"fire_impact": {"c": Color(1.0, 0.5, 0.2), "r": 44.0, "e": 0.5, "d": 0.45, "fog": true},
+		## İblis ateş topu patlaması - "patlama efekti parlamıyor" (2026-09-25): 0.5 güç / 0.45 sn neredeyse görünmüyordu.
+		"fire_impact": {"c": Color(1.0, 0.5, 0.2), "r": 70.0, "e": 1.0, "d": 0.7, "f": 0.2, "fog": true},
 		"necro/impact": {"c": Color(0.45, 0.85, 0.75), "r": 50.0, "e": 0.8, "d": 0.4},
 		"shaman_area/pulse": {"c": Color(0.7, 0.5, 1.0), "r": 50.0, "e": 0.5, "d": 0.5},
 		"shaman_area/wisp": {"c": Color(0.75, 0.6, 1.0), "r": 22.0, "e": 0.45},

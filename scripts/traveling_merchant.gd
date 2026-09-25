@@ -137,7 +137,8 @@ const MerchantShopScreenScript := preload("res://scripts/merchant_shop_screen.gd
 ## Baloncuğu" ultisiyle BİREBİR AYNI görsel (bkz. player.gd _skill_paladin_
 ## ulti, fx_paladin_barrier.gd, shaders/shield_dome.gdshader) yeniden
 ## kullanılıyor - sadece radius/color farklı, teknik/görsel dil AYNI.
-const ProtectionBubbleScript := preload("res://scripts/fx_paladin_barrier.gd")
+## 2026-09-25: Şovalye'nin ESKİ (shader) baloncuğu, satıcıya ayrılmış kopya + boğuk ses (bkz. fx_merchant_bubble.gd).
+const ProtectionBubbleScript := preload("res://scripts/fx_merchant_bubble.gd")
 
 
 func _ready() -> void:
@@ -429,14 +430,8 @@ func _create_protection_bubble() -> Node2D:
 	bubble.name = "ProtectionBubble"
 	bubble.set_script(ProtectionBubbleScript)
 	bubble.radius = GameManager.MERCHANT_ZONE_RADIUS
-	## Şovalye'nin savaş kalkanıyla (mavi) karışmasın diye altın/ticaret
-	## temalı bir renk - görsel TEKNİK (dome shader, parıltı, nabız) birebir
-	## aynı, sadece renk farklı.
-	bubble.color = Color(1.0, 0.82, 0.25, 0.9)
-	## 2026-09-25: kubbe artık sprite (tools/gen_paladin_dome_fx.py) - renk sayfanın kendisinde: altın varyant. Şovalye
-	## baloncuğuna eklenen "dışarıdaki sesler boğuk" etkisi satıcı bölgesinde istenmedi.
-	bubble.variant = "gold"
-	bubble.muffle_outside_sound = false
+	## Kullanıcı isteği (2026-09-25): "şovalye adamın eski koruma baloncuğu olsun" - eski Şovalye baloncuğunun kendi
+	## rengi (fx_merchant_bubble.gd varsayılanı, mavi). İçerideyken dış sesler boğuk (dome_sound_muffle.gd).
 	bubble.active = true
 	return bubble
 

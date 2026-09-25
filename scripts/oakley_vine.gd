@@ -34,7 +34,14 @@ extends Node2D
 ## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
 const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
 
-const PixelDrawScript: GDScript = preload("res://scripts/pixel_draw.gd")
+## Çıkış / gömülme tek seferlik sayfaları (tools/gen_oakley_fx.py - bkz. oakley_vine_visual.gd dosya başı notu).
+const EMERGE_FRAMES := preload("res://assets/fx/oakley/vine_emerge_frames.tres")
+const FX_TEXEL := 1.212
+## Kare 44x40, zemin y=31 (merkez 20).
+const EMERGE_OFFSET := Vector2(0.0, -11.0 * FX_TEXEL)
+## Sarmaşık yerin altında ilerlediği için kasterin GÖVDE merkezinden değil AYAK hizasından doğar (oyuncu kökü ~gövde
+## ortası, ayaklar ~+30). Gerçek (player.gd) ve kozmetik (remote_player.gd) kopya aynı sabiti kullanır.
+const CASTER_FEET_OFFSET := Vector2(0.0, 30.0)
 const NETWORK_STATE_THROTTLE := 0.2 ## saniyede ~5 kez - skeleton_pet.gd _broadcast_network_state ile AYNI aralık
 
 ## player.gd _skill_oakley_vines() tarafından atanır - broadcast_oakley_vine_
@@ -81,16 +88,40 @@ func setup(caster_damage_bonus: float) -> void:
 
 
 func _ready() -> void:
-	z_index = 4
+	z_index = 0 ## toprağın altında ilerler: zeminde, karakterlerin altında (negatif z harita altında kalır)
 	## Kardeş sarmaşıklar birbirinin hedefini görebilsin (bkz. _pick_new_target - aynı yaratığa üşüşmesinler).
 	if not _is_network_visual:
 		add_to_group("oakley_vines")
 	_visual = Node2D.new()
 	_visual.set_script(preload("res://scripts/oakley_vine_visual.gd"))
 	add_child(_visual)
-	## Toprağın içinden çıkış: küçük toprak patlaması (gerçek + kozmetik kopyada aynı).
-	PixelDrawScript.spawn_burst(get_tree().current_scene, global_position, "dust", 8, 70.0, 0.4)
+	## Toprağın içinden çıkış: toprak çatlar, dikenli filiz fışkırıp geri çekilir (gerçek + kozmetik kopyada aynı).
+	## Çağıranlar (player.gd/remote_player.gd) konumu artık add_child'dan ÖNCE atıyor (eskiden sonra: toz patlaması dünya
+	## merkezinde çıkıyor, ilk hedef (0,0)'a göre seçiliyordu). Ertelemek yine de zararsız ve eski çağıranlara karşı güvenli.
+	_spawn_ground_fx.call_deferred(EMERGE_FRAMES, &"burst", EMERGE_OFFSET)
 	_pick_new_target()
+
+
+## Süre dolunca (gerçek) ya da despawn yayını gelince (kozmetik kopya, bkz. remote_player.gd _despawn_vine_visual) düğüm
+## silinir; arkada bıraktığı gövde parçaları kendi tween'leriyle söner (oakley_vine_visual.gd). İki taraf AYNI fonksiyonu çağırır.
+func despawn() -> void:
+	if is_queued_for_deletion():
+		return
+	queue_free()
+
+
+func _spawn_ground_fx(frames: SpriteFrames, anim: StringName, offset: Vector2) -> void:
+	if not is_inside_tree() or get_tree().current_scene == null:
+		return
+	var fx := AnimatedSprite2D.new()
+	fx.sprite_frames = frames
+	fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fx.scale = Vector2.ONE * FX_TEXEL
+	fx.z_index = 0
+	get_tree().current_scene.add_child(fx)
+	fx.global_position = global_position + offset
+	fx.animation_finished.connect(fx.queue_free)
+	fx.play(anim)
 
 
 ## bkz. dosya başı DÜZELTME notu - kozmetik kopyalar (_is_network_visual)
@@ -116,7 +147,7 @@ func _process(delta: float) -> void:
 
 	_lifetime_remaining -= delta
 	if _lifetime_remaining <= 0.0:
-		queue_free()
+		despawn()
 		return
 
 	for id in _recent_hits.keys():

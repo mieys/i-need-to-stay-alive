@@ -612,10 +612,13 @@ func test_read_pose_while_a_shop_or_card_screen_is_open_and_ends_when_it_closes(
 	assert(str(player.anim.animation) == "walk_down")
 	player._update_animation(false)
 	assert(str(player.anim.animation) == "read_down", "durunca tekrar okuma")
-	## Ekran kapanınca (görünmez YA DA silinmiş) biter.
+	## Ekran kapanınca (görünmez YA DA silinmiş) okuma pozu READ_AFTER_CLOSE_MSEC (0.5 sn, 2026-09-25) daha sürer -
+	## bu sürede karakter yürümez - sonra biter. Zamanlayıcıyı beklemek yerine bitişi doğrudan tetikliyoruz.
 	screen.visible = false
 	watcher._process(0.016)
-	assert(not player._reading_ui_active, "ekran kapanınca okuma biter")
+	assert(player._reading_ui_active, "ekran kapandıktan sonra okuma pozu kısa bir süre daha sürer")
+	player._finish_reading()
+	assert(not player._reading_ui_active, "süre dolunca okuma biter")
 	assert(player.anim.process_mode == Node.PROCESS_MODE_INHERIT, "sprite duraklama muafiyeti kalkar")
 	assert(str(player.anim.animation) == "idle_down", "okuma klibi ekranda takılı kalmamalı: %s" % str(player.anim.animation))
 	screen.visible = true
@@ -623,6 +626,7 @@ func test_read_pose_while_a_shop_or_card_screen_is_open_and_ends_when_it_closes(
 	assert(player._reading_ui_active)
 	screen.queue_free() ## is_queued_for_deletion(): silinmeyi beklerken de "açık" sayılmaz
 	watcher._process(0.016)
+	player._finish_reading()
 	assert(not player._reading_ui_active, "silinen ekran okumayı bitirir")
 	_cleanup()
 

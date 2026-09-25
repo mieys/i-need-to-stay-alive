@@ -91,26 +91,20 @@ func test_party_panel_gift_buttons_and_dynamic_gold_button() -> void:
 	pp.set_script(script)
 	add_child(pp)
 	pp._ready()
-	## Statik hediye popup butonlari (Iptal / miktar butonlari) genis oldugu
-	## icin ANA Button.png stilini almali.
+	## 2026-09-25 sadeleştirme ("grup paneli daha basit görünmeli ... gereksiz çerçeve ayrıntısı olmasın"): grup paneli ve
+	## açılır pencereleri artık ahşap doku DEĞİL, sade UIKit "hud_flat" butonları kullanır - genel ahşap taramasının
+	## (UISound.apply_wood_buttons) bunları ezmemesi gerekir.
 	var cancel_btn: Button = null
 	var gift_popup: Control = pp.get_node("GiftPopup")
 	for vbox in gift_popup.get_children():
 		for child in vbox.get_children():
 			if child is Button and child.text == "İptal":
 				cancel_btn = child
-			if child is HBoxContainer:
-				for sub in child.get_children():
-					pass
 	assert(cancel_btn != null, "Iptal butonu bulunamadi")
-	assert(_style_texture_path(cancel_btn, "normal") == ButtonPngPath,
-		"Iptal butonu yeni dokuyu almiyor: %s" % _style_texture_path(cancel_btn, "normal"))
+	assert(cancel_btn.get_theme_stylebox("normal") is StyleBoxFlat, "Iptal butonu sade (flat) stilde olmali")
 
-	## Dinamik olarak _create_row() ile yaratilan gold_button KARE oldugu icin
-	## MINI dokuyu almali (elle uygulanan _apply_mini_wood_button_style).
 	var row: RefCounted = pp.call("_create_row", 12345)
 	var gold_btn: Button = row.gold_button
 	assert(gold_btn != null, "gold_button olusmamis")
-	assert(_style_texture_path(gold_btn, "normal") == MiniButtonPngPath,
-		"gold_button mini dokuyu almiyor: %s" % _style_texture_path(gold_btn, "normal"))
+	assert(gold_btn.get_theme_stylebox("normal") is StyleBoxFlat, "gold_button sade (flat) stilde olmali")
 	pp.queue_free()

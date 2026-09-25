@@ -1369,6 +1369,7 @@ func apply_root(duration: float) -> void:
 		return
 	is_rooted = true
 	_root_timer = max(_root_timer, duration)
+	_set_root_visual(true, _root_timer)
 
 
 func _process_root(delta: float) -> void:
@@ -1378,6 +1379,44 @@ func _process_root(delta: float) -> void:
 	if _root_timer <= 0.0:
 		_root_timer = 0.0
 		is_rooted = false
+		_set_root_visual(false)
+
+
+## Kök salma görseli (Oakley Sarmaşıklar - bacaklara sarılan dikenli sarmaşık, bkz. fx_oakley_entangle.gd; kullanıcı isteği
+## 2026-09-25). Korku/kışkırtma göstergeleriyle AYNI yaşam döngüsü: host/tek oyunculu karar verir, broadcast_enemy_vfx
+## "root_start"/"root_stop" ile yayınlar (bkz. _set_taunt_visual).
+const EntangleFxScene := preload("res://scenes/fx_oakley_entangle.tscn")
+var _entangle_fx: Node2D = null
+
+func _set_root_visual(on: bool, duration: float = 0.0) -> void:
+	if on:
+		_spawn_entangle_fx(duration)
+	else:
+		_remove_entangle_fx()
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			if on:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "root_start", {"duration": duration})
+			else:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "root_stop")
+
+
+func _spawn_entangle_fx(duration: float) -> void:
+	if is_dead:
+		return
+	if _entangle_fx and is_instance_valid(_entangle_fx) and not _entangle_fx.is_queued_for_deletion():
+		_entangle_fx.refresh(duration)
+		return
+	_entangle_fx = EntangleFxScene.instantiate()
+	add_child(_entangle_fx)
+	_entangle_fx.setup(duration, _body_radius)
+
+
+func _remove_entangle_fx() -> void:
+	if _entangle_fx and is_instance_valid(_entangle_fx):
+		_entangle_fx.release()
+	_entangle_fx = null
 
 
 ## Oakley'in Arı Sürüsü yeteneği (R, bkz. oakley_bee_swarm.gd) - her
@@ -4104,6 +4143,7 @@ func die() -> void:
 	is_feared = false
 	_fear_wander = false
 	_remove_fear_status_fx()
+	_remove_entangle_fx()
 	## Aileye özgü kısık ölüm sesi (kullanıcı isteği 2026-09-25) - her istemcide yerel, bkz. creature_death_sound.gd.
 	if is_inside_tree():
 		CreatureDeathSound.play(get_tree(), creature_family(), global_position, is_boss)
