@@ -9,7 +9,10 @@ extends PanelContainer
 
 const SkillIconScript: GDScript = preload("res://scripts/skill_icon.gd")
 ## 96 = 48x48 piksel ikonların TAM 2x katı (72 = 1.5x idi, pikseller eşit çizilmiyordu - bkz. tools/gen_elara_korsan_icons.py).
-const ICON_SIZE := 96
+## Kullanıcı isteği (2026-09-25, 13. karakter Suriyeli Hadime ile kart ızgarası 3. satıra çıktı): "alttaki yetenek
+## açıklamalarındaki çoğu şey gereksiz büyük, okunurluğunu kolay bırakarak boyunu kısalt" - ikon 1x (48 = sanatın kendisi,
+## yine tam sayı kat), tüm yazılar FS_SMALL, boşluklar ve panel payı sıkı. Panel ~280 px'e indi; uzun açıklamalar kayar.
+const ICON_SIZE := 48
 
 var _name_label: Label
 var _rows_box: VBoxContainer
@@ -17,27 +20,27 @@ var _scroll: ScrollContainer
 
 
 func _init() -> void:
-	add_theme_stylebox_override("panel", MenuKit.style("panel"))
+	add_theme_stylebox_override("panel", MenuKit.style("panel_tight"))
 	clip_contents = true
 
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", 5)
 	add_child(v)
 
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 24)
 	v.add_child(head)
-	_name_label = MenuKit.make_label("", MenuKit.FS_TITLE, MenuKit.C_TEXT)
+	_name_label = MenuKit.make_label("", MenuKit.FS_BODY, MenuKit.C_TEXT)
 	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(_name_label)
-	var caption := MenuKit.make_label("Yetenekler", MenuKit.FS_BODY, MenuKit.C_ACCENT, HORIZONTAL_ALIGNMENT_RIGHT)
+	var caption := MenuKit.make_label("Yetenekler", MenuKit.FS_SMALL, MenuKit.C_ACCENT, HORIZONTAL_ALIGNMENT_RIGHT)
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	head.add_child(caption)
 
 	var rule := ColorRect.new()
 	rule.color = MenuKit.C_LINE
-	rule.custom_minimum_size = Vector2(0, 3)
+	rule.custom_minimum_size = Vector2(0, 2)
 	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(rule)
 
@@ -47,7 +50,7 @@ func _init() -> void:
 	v.add_child(_scroll)
 	_rows_box = VBoxContainer.new()
 	_rows_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_rows_box.add_theme_constant_override("separation", 12)
+	_rows_box.add_theme_constant_override("separation", 8)
 	_scroll.add_child(_rows_box)
 
 
@@ -93,7 +96,7 @@ static func _split_kind(desc: String) -> Array:
 
 func _add_skill_row(skill_id: int, icon_path: String, action: String, skill_name: String, desc: String) -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
+	row.add_theme_constant_override("separation", 10)
 	_rows_box.add_child(row)
 
 	var slot := MenuKit.make_panel("slot_normal")
@@ -111,20 +114,20 @@ func _add_skill_row(skill_id: int, icon_path: String, action: String, skill_name
 
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation", 4)
+	col.add_theme_constant_override("separation", 1)
 	row.add_child(col)
 
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 12)
+	head.add_theme_constant_override("separation", 8)
 	col.add_child(head)
 	if action != "":
 		var key := MenuKit.make_panel("keycap")
 		key.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		key.add_child(MenuKit.make_label(GameManager.get_action_key_label(action), MenuKit.FS_BODY, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+		key.add_child(MenuKit.make_label(GameManager.get_action_key_label(action), MenuKit.FS_SMALL, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
 		head.add_child(key)
 	## Pasif satırında başlık yok - yalnızca PASİF etiketi (başlık + etiket aynı kelimeyi tekrar ediyordu).
 	if skill_name != "":
-		var title := MenuKit.make_label(skill_name, MenuKit.FS_BODY, MenuKit.C_TEXT)
+		var title := MenuKit.make_label(skill_name, MenuKit.FS_SMALL, MenuKit.C_TEXT)
 		title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		head.add_child(title)
 
@@ -134,7 +137,7 @@ func _add_skill_row(skill_id: int, icon_path: String, action: String, skill_name
 		var tag_style: String = "tag_ulti" if kind.begins_with("ULT") else ("tag_pasif" if kind.begins_with("PAS") else "tag_temel")
 		var tag := MenuKit.make_panel(tag_style)
 		tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		tag.add_child(MenuKit.make_label(kind, MenuKit.FS_BODY, MenuKit.C_CREAM, HORIZONTAL_ALIGNMENT_CENTER))
+		tag.add_child(MenuKit.make_label(kind, MenuKit.FS_SMALL, MenuKit.C_CREAM, HORIZONTAL_ALIGNMENT_CENTER))
 		head.add_child(tag)
 	var note: String = parts[1]
 	if note != "":
@@ -142,7 +145,7 @@ func _add_skill_row(skill_id: int, icon_path: String, action: String, skill_name
 		note_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		head.add_child(note_lbl)
 
-	var body := MenuKit.make_label(parts[2], MenuKit.FS_BODY, MenuKit.C_TEXT_DIM)
+	var body := MenuKit.make_label(parts[2], MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_child(body)

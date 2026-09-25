@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_oneshot_sprite.gd" id="1_oneshot"]
+[ext_resource type="SpriteFrames" path="res://assets/fx/hadime/curse_launch_frames.tres" id="2_frames"]
+
+[node name="FxHadimeCurseLaunch" type="AnimatedSprite2D"]
+z_index = 2
+texture_filter = 1
+scale = Vector2(1.212, 1.212)
+offset = Vector2(0, -1)
+sprite_frames = ExtResource("2_frames")
+animation = &"burst"
+script = ExtResource("1_oneshot")

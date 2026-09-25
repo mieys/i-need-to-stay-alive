@@ -306,7 +306,7 @@ const DEFS := {
 		## _skill_assasin_dash, skill id 16) - artık 3. yetenek/R'de.
 		"skill3": 16,
 		"skill3_name": "Gölge Hücumu",
-		"skill3_desc": "ULTİ: 10 saniye boyunca yakındaki yaratıklara sırayla hızla çarpar; her çarpış saldırı gücünün %150'si kadar hasar verir ve saldırı hızının 3 katı hızda tekrarlanır. Vurulmamış yaratık kalmazsa (tek yaratık olsa bile) aynı yaratıklara tekrar saldırır. Bitince kullandığı konuma geri döner. (90sn bekleme)",
+		"skill3_desc": "ULTİ: 10 saniye boyunca yakındaki yaratıklara sırayla hızla çarpar; her çarpış saldırı gücünün %150'si kadar hasar verir ve saldırı hızının 4,5 katı hızda tekrarlanır. Vurulmamış yaratık kalmazsa (tek yaratık olsa bile) aynı yaratıklara tekrar saldırır. Bitince kullandığı konuma geri döner. (90sn bekleme)",
 		"passive": "Bıçak Uzmanlığı: yetenek kullanımından sonraki 3 saniye boyunca garantili kritik vurur.",
 		"passive_icon": "res://assets/skills/assasin_passive_icon.png",
 		"frames": "res://assets/characters/assasin_frames.tres",
@@ -681,6 +681,41 @@ const DEFS := {
 		"ground_shadow_y": 33.4,
 		## Kullanıcı isteği (animasyon talimatı): "run animasyonları hareket hızı bonusu %20'yi geçince
 		## oynatılmalı (skiller, statlar vb.)" - genel eşik (player.gd RUN_ANIM_SPEED_RATIO) 1.25, bu karakter için 1.2.
+		"run_speed_ratio": 1.15,
+	},
+	## Kullanıcı isteği (2026-09-25): yeni karakter "Suriyeli Hadime" (hadime.zip - 48x48 sayfalar + ayrı gelen read.png).
+	## Yetenek id'leri: Q=46 (Lanet Kitabı, aç/kapa kanal - standart skill_state makinesini bypass eder, bkz. player.gd
+	## _process_hadime_q), E=47 (Kara Delik, standart skill2), R=48 (Karabasan, standart skill3). Sabitler/formüller TEK yerde:
+	## scripts/hadime_math.gd (uzak kopyalar da oradan okur). Pasif (hayalet formu) player.gd _hadime_rise_ghost/_process_downed.
+	## Adlar kullanıcı vermediği için seçildi (Lanet Kitabı / Karabasan / Ruh Göçü; E'yi kullanıcı "Kara Delik" olarak
+	## değiştirdi) - değiştirmek sadece metin.
+	14: {
+		"name": "Suriyeli Hadime",
+		"skill": 46,
+		"skill_name": "Lanet Kitabı",
+		"skill_desc": "YETENEK (AÇ/KAPA): Kitabını okuyarak odaklanır; hafifçe havaya süzülür, birimlerin içinden geçebilir ve %30 yavaş hareket eder. Saniyede bir kitaptan yukarı fırlayan bir lanet etraftaki yaratıklara sırayla düşer ve saldırı gücünün %110'u kadar hasar verir. Açık kaldığı sürece her saniye temel yetenek kalkan bedelinin yarısı kadar kalkan harcar. Tekrar basınca (ya da kalkan yetmeyince) kapanır ve 8sn bekleme süresine girer.",
+		"skill_icon": "res://assets/skills/hadime_lanet_kitabi_icon.png",
+		"skill2": 47,
+		## Kullanıcı isteği (2026-09-25, ikinci tur): "hadimenin E sini kara delik yeteneğiyle değiştiriyoruz" - eski Kara Büyü
+		## tamamen kaldırıldı, id 47 aynı kaldı (bkz. player.gd _skill_hadime_black_hole, scripts/hadime_black_hole.gd).
+		"skill2_name": "Kara Delik",
+		"skill2_desc": "TEMEL: Bulunduğu konuma 5 saniye süren bir kara delik bırakır. Kara delik yakınındaki yaratıkları hafifçe içine doğru çeker, her saniye saldırı gücünün %80'i kadar hasar verir ve verdiği hasarın %20'si kadar kalkanlarını emerek Hadime'nin kalkanını yeniler (bosslar çekilmez). Lanet Kitabı basılıyken de kullanılabilir. (18sn bekleme)",
+		"skill2_icon": "res://assets/skills/hadime_kara_delik_icon.png",
+		"skill3": 48,
+		"skill3_name": "Karabasan",
+		"skill3_desc": "ULTİ: 15 saniye boyunca korkutucu karanlık Karabasan formuna bürünür. Yakınına yaklaşan tüm yaratıklar 1 saniyeliğine korkar, yakınındaki yaratıklar her saniye saldırı gücünün %80'i kadar hasar alır (bosslar korkmaz). (100sn bekleme)",
+		"skill3_icon": "res://assets/skills/hadime_karabasan_icon.png",
+		"passive": "Ruh Göçü: Yere düştüğünde 2 saniye sonra ruhu bedeninden ayrılır ve yarı saydam bir hayalet olarak ayağa kalkar; bedeni yerde kalır. Hayaletken yaratıklar onu görmezden gelir, sadece yetenekleriyle %80 daha az hasar vererek savaşabilir; hiçbir şey toplayamaz, kimseyi diriltemez, silah kullanamaz, dükkan ve görevlerle etkileşemez. Arkadaşları bedenini diriltince hayalet bedenine döner (tek oyunculuda 20 saniye sonra kendiliğinden).",
+		"passive_icon": "res://assets/skills/hadime_passive_icon.png",
+		"frames": "res://assets/characters/hadime_frames.tres",
+		"portrait": "res://assets/characters/hadime_portrait.png",
+		## tools/import_character_sheets.py (anahtar "hadime") - aynı üretici kanvası (OLCU: gövde 16x33, ayak satırı 40),
+		## Şovalye Adam'la birebir aynı gövde ölçüsü: aynı ölçek/offset/gölge. SpriteFrames'te ayrıca ölümün tersi
+		## "ghostrise_<yön>" klibi var (hayalet kalkışı - bkz. importer REVERSED_CLIPS).
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(17.5, 6.25),
+		"ground_shadow_y": 32.5,
 		"run_speed_ratio": 1.15,
 	},
 }

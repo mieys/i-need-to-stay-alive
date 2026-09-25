@@ -534,16 +534,22 @@ func _players_in_radius(pos: Vector2, radius: float) -> int:
 	var n := 0
 	for group_name in ["player", "remote_players"]:
 		for p: Node in get_tree().get_nodes_in_group(group_name):
-			if is_instance_valid(p) and p.get("is_dead") != true and (p as Node2D).global_position.distance_to(pos) <= radius:
+			if is_instance_valid(p) and p.get("is_dead") != true and not _is_hadime_ghost(p) 					and (p as Node2D).global_position.distance_to(pos) <= radius:
 				n += 1
 	return n
+
+
+## Suriyeli Hadime'nin hayaleti "görevlerle etkileşime giremez" (kullanıcı isteği) - bölge sayımına, ödüle ve
+## "Kopyanı Öldür" kopyalarına dahil edilmez. (Uzak kopya yere düşmüşken is_dead=false gelir, bu yüzden ayrı sorulur.)
+func _is_hadime_ghost(p: Node) -> bool:
+	return p.has_method("is_hadime_ghost") and bool(p.call("is_hadime_ghost"))
 
 
 func _grant_reward_to_zone_players(pos: Vector2, radius: float, gold: int) -> void:
 	var any_player: Node = get_tree().get_first_node_in_group("player")
 	for group_name in ["player", "remote_players"]:
 		for p: Node in get_tree().get_nodes_in_group(group_name):
-			if not is_instance_valid(p) or (p as Node2D).global_position.distance_to(pos) > radius:
+			if not is_instance_valid(p) or (p as Node2D).global_position.distance_to(pos) > radius or _is_hadime_ghost(p):
 				continue
 			var peer_id: int = int(p.get("peer_id")) if "peer_id" in p else 0
 			if p == any_player or peer_id == 0 or peer_id == multiplayer.get_unique_id():
@@ -785,7 +791,7 @@ func _spawn_copies(mission_id: int) -> Dictionary:
 	var idx := 0
 	for group_name in ["player", "remote_players"]:
 		for p: Node in get_tree().get_nodes_in_group(group_name):
-			if not is_instance_valid(p) or p.get("is_dead") == true:
+			if not is_instance_valid(p) or p.get("is_dead") == true or _is_hadime_ghost(p):
 				continue
 			var pos: Vector2 = _random_map_position(float(SPAWN_CLEARANCE[MissionKind.KILL_YOUR_COPY]))
 			if pos == Vector2.ZERO:

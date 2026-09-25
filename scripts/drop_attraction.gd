@@ -28,6 +28,7 @@ static var _positions: PackedVector2Array = PackedVector2Array()
 static var _ranges: PackedFloat32Array = PackedFloat32Array()
 static var _peer_ids: PackedInt32Array = PackedInt32Array()
 static var _alive: Array[bool] = []
+static var _ghost: Array[bool] = [] ## Suriyeli Hadime hayaleti (toplayamaz) - bkz. _push
 static var _local_index: int = -1
 static var _local_peer_id: int = 0
 
@@ -65,6 +66,7 @@ static func _refresh(tree: SceneTree) -> void:
 	_ranges.clear()
 	_peer_ids.clear()
 	_alive.clear()
+	_ghost.clear()
 	_local_index = -1
 	var local_player: Node2D = tree.get_first_node_in_group("player") as Node2D
 	var mp: bool = NetworkManager.is_multiplayer_active
@@ -86,6 +88,8 @@ static func _push(n: Node2D, peer_id: int) -> void:
 	_ranges.append(float(n.call("get_pickup_range")) if n.has_method("get_pickup_range") else DEFAULT_PICKUP_RANGE)
 	_peer_ids.append(peer_id)
 	_alive.append(n.get("is_dead") != true)
+	## Suriyeli Hadime'nin hayaleti "yerden hiçbir şey toplayamaz" - düşmeler ona doğru uçup etrafında asılı kalmasın.
+	_ghost.append(n.has_method("is_hadime_ghost") and bool(n.call("is_hadime_ghost")))
 
 
 ## Bu fizik adımında düşmenin çekileceği hedef oyuncunun _nodes indeksi; hedef yoksa -1. Kurallar eski
@@ -93,22 +97,23 @@ static func _push(n: Node2D, peer_id: int) -> void:
 ## mıknatıs sahibi (canlıysa), yoksa en yakın oyuncu (yerel oyuncu ölü olsa bile başlangıç adayı - eski
 ## davranış; RemotePlayer'lar ölüyse atlanır).
 static func _target_index(pos: Vector2, is_magnetized: bool, magnet_target_peer_id: int) -> int:
+	var local_ok: bool = _local_index >= 0 and not _ghost[_local_index]
 	if not NetworkManager.is_multiplayer_active:
-		return _local_index
+		return _local_index if local_ok else -1
 	if is_magnetized and magnet_target_peer_id >= 0:
 		if magnet_target_peer_id == _local_peer_id:
-			if _local_index >= 0 and _alive[_local_index]:
+			if local_ok and _alive[_local_index]:
 				return _local_index
 		else:
 			for i in range(_nodes.size()):
-				if i != _local_index and _alive[i] and _peer_ids[i] == magnet_target_peer_id:
+				if i != _local_index and _alive[i] and not _ghost[i] and _peer_ids[i] == magnet_target_peer_id:
 					return i
-	var best: int = _local_index
+	var best: int = _local_index if local_ok else -1
 	var best_d: float = INF
-	if _local_index >= 0:
+	if local_ok:
 		best_d = pos.distance_squared_to(_positions[_local_index])
 	for i in range(_nodes.size()):
-		if i == _local_index or not _alive[i]:
+		if i == _local_index or not _alive[i] or _ghost[i]:
 			continue
 		var d: float = pos.distance_squared_to(_positions[i])
 		if d < best_d:
@@ -144,6 +149,8 @@ static func attraction_target(drop: Node2D, is_magnetized: bool, magnet_target_p
 ## WAKE_MARGIN içinde mi. En yakın hedef kuralından bağımsız, kasıtlı olarak geniş: uyumak için HERKESTEN uzak olmalı.
 static func _near_any_player(pos: Vector2) -> bool:
 	for i in range(_nodes.size()):
+		if _ghost[i]:
+			continue ## hayalet toplayamaz: yanında uyuyan düşmeyi uyandırmasın (uyan-uyu döngüsü olmasın)
 		var r: float = _ranges[i] + WAKE_MARGIN
 		if pos.distance_squared_to(_positions[i]) <= r * r:
 			return true

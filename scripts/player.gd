@@ -11,6 +11,8 @@ const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
 ## Vampir Çocuk: silah çekilme/yarasa yörüngesi formülleri remote_player.gd ile PAYLAŞILIR.
 const VampirMath := preload("res://scripts/vampir_math.gd")
 const VampirBatSwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.gd")
+## Suriyeli Hadime: sabitler/lanet eğrisi/form görünümü/ceset remote_player.gd ve network_manager.gd ile PAYLAŞILIR.
+const HadimeMath := preload("res://scripts/hadime_math.gd")
 ## Klip adı kuralları (remote_player.gd ile ortak) ve dükkan/kart ekranı izleyicisi - bkz. o dosyaların üst notları.
 const CharAnim := preload("res://scripts/char_anim.gd")
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
@@ -111,6 +113,10 @@ const SKILL_TIMING := {
 	## görsel pencere, gerçek kısıt 6sn bekleme (bkz. _skill_vampir_blood_drain).
 	## Kullanıcı isteği (2026-09-21): "Vampir çocuk'un Q sunun bekleme süresini 6 saniyeye düşür" (eskiden 8sn).
 	40: {"duration": 0.4, "cooldown": 6.0},
+	## Suriyeli Hadime Q'su (Lanet Kitabı, id 46): AÇ/KAPA kanal - süresi yok (tekrar basılınca / kalkan yetmeyince
+	## biter, bkz. _process_hadime_q). "duration" sadece HUD'un "aktif" çerçevesi dolu görünsün diye büyük bir tavan;
+	## bekleme süresi kanal bitince başlar. Standart _activate_skill() HİÇ çağrılmaz (Necro iskeletiyle aynı bypass).
+	46: {"duration": 9999.0, "cooldown": HadimeMath.Q_COOLDOWN},
 }
 var _skill_duration: float = DEFAULT_SKILL_DURATION
 var _skill_cooldown: float = DEFAULT_SKILL_COOLDOWN
@@ -175,6 +181,9 @@ const SKILL2_TIMING := {
 	## Vampir Çocuk TEMEL (Yarasa Formu, skill2 id 41): 5sn dönüşüm, ardından 22sn bekleme -
 	## standart skill2_state makinesini kullanır (bkz. _skill_vampir_bat_form/_end_skill2_effects).
 	41: {"duration": 5.0, "cooldown": 22.0},
+	## Suriyeli Hadime TEMEL (Kara Delik, id 47 - 2026-09-25 ikinci istekle "Kara Büyü"nün yerine): 5 sn duran kara delik,
+	## 18 sn bekleme (proje kuralı: bekleme aktif süre bitince başlar) - standart skill2 makinesi.
+	47: {"duration": HadimeMath.HOLE_DURATION, "cooldown": HadimeMath.HOLE_COOLDOWN},
 }
 var _skill2_duration: float = DEFAULT_SKILL2_DURATION
 var _skill2_cooldown: float = DEFAULT_SKILL2_COOLDOWN
@@ -246,6 +255,9 @@ const SKILL3_TIMING := {
 	## toggle deseni, standart skill3_state makinesini KULLANMAZ (bkz. _vampir_toggle_bats). Burada
 	## sadece _skill3_timing_for()'un varsayılana düşmemesi ve tooltip için var.
 	42: {"duration": 9999.0, "cooldown": 0.0},
+	## Suriyeli Hadime ULTİ (Karabasan, id 48): 15 sn form, 100 sn bekleme - standart skill3 makinesi (bitiş
+	## _end_skill3_effects -> _end_hadime_nightmare).
+	48: {"duration": HadimeMath.R_DURATION, "cooldown": HadimeMath.R_COOLDOWN},
 }
 var _skill3_duration: float = DEFAULT_SKILL2_DURATION
 var _skill3_cooldown: float = DEFAULT_SKILL2_COOLDOWN
@@ -1691,6 +1703,7 @@ func _load_character_frames() -> void:
 		char_base_anim_scale = def.get("scale", DEFAULT_ANIM_SCALE) * EntityScale.SIZE
 		anim.scale = char_base_anim_scale
 		anim.offset = def.get("offset", DEFAULT_ANIM_OFFSET)
+		_hadime_base_offset = anim.offset ## Hadime Q'daki havaya süzülme bu tabana eklenir
 	else:
 		base_modulate = Color(1, 1, 1, 1)
 		char_base_anim_scale = DEFAULT_ANIM_SCALE * EntityScale.SIZE
@@ -1831,6 +1844,8 @@ func _physics_process(delta: float) -> void:
 	## silah çekilme animasyonunu ilerletir. Aşağıdaki is_downed/is_dead erken dönüşlerinden ÖNCE
 	## olmalı - yoksa ölen bir oyuncunun silahları hiç geri gelmezdi.
 	_process_vampir(delta)
+	## Suriyeli Hadime: süzülme/Karabasan/hayalet görünümü + ceset - ölü/düşmüşken de (hayalet tam o sırada) çalışmalı.
+	_process_hadime_visuals(delta)
 	## Ruhani Yetenek (F, bkz. dosya sonundaki blok): Para pasifi, dokunulmazlık/aktif/bekleme süreleri, Dükkan odaklanması.
 	_process_spirit(delta)
 	## Adım sesleri burada da güncelleniyor: aşağıdaki erken dönüşler
@@ -1841,6 +1856,10 @@ func _physics_process(delta: float) -> void:
 	if is_downed:
 		_update_walk_sound(false, delta)
 		_process_downed(delta)
+		## Suriyeli Hadime pasifi (Ruh Göçü): yerde yatmak yerine hayalet olarak dolaşıp SADECE yeteneklerini kullanır
+		## (bkz. _process_hadime_ghost). _process_downed bu karede diriltip/kalıcı öldürmüş olabilir - tekrar bakılır.
+		if is_downed and _hadime_ghost_active:
+			_process_hadime_ghost(delta)
 		return
 	if is_dead:
 		_update_walk_sound(false, delta)
@@ -1916,6 +1935,7 @@ func _physics_process(delta: float) -> void:
 	_process_necro_skeleton_cooldown(delta)
 	_process_matthew_speed_lines(delta)
 	_process_buyucu(delta)
+	_process_hadime(delta)
 	_process_skill3(delta)
 	_process_oakley_bond(delta)
 	_process_damage_redirect_range_check(delta)
@@ -1944,6 +1964,10 @@ func _physics_process(delta: float) -> void:
 		## ediyor.
 		if get_skill_character_id() == 19:
 			_skill_necro_summon_skeleton()
+		## Suriyeli Hadime Q (Lanet Kitabı, id 46): AÇ/KAPA kanal (kullanıcı isteği 2026-09-25: "basınca açılıp tekrar
+		## basınca kapansın, basılı tutmak zor oluyor") - standart _activate_skill() makinesi bypass edilir.
+		elif get_skill_character_id() == HadimeMath.Q_SKILL_ID:
+			_hadime_toggle_q()
 		elif skill_state == "ready":
 			_activate_skill()
 		## DÜZELTME (kullanıcı isteği #42: "şovalyenin kendini hareketsiz
@@ -1974,7 +1998,8 @@ func _physics_process(delta: float) -> void:
 		## Kullanıcı isteği (2026-09-21): "Vampir çocuk E sine tekrar basarak normal formuna dönebilsin" -
 		## form açıkken E, dönüşümü erken bitirir (silahlar geri çıkar, bekleme süresi başlar).
 		elif skill2_id_pressed == 41 and _vampir_bat_form_active:
-			_vampir_cancel_bat_form()
+			if _toggle_close_allowed("skill2"): ## spam koruması - bkz. TOGGLE_CLOSE_GUARD_MSEC
+				_vampir_cancel_bat_form()
 		elif skill2_state == "ready" and skill2_id_pressed != 0:
 			_activate_skill2()
 	## Üçüncü aktif yetenek (R) - bkz. dosya başındaki SKILL3_TIMING notu.
@@ -2000,7 +2025,8 @@ func _physics_process(delta: float) -> void:
 		## Şovalye'nin Koruma Baloncuğu (id 11, tam hareketsiz kalır) tuşa tekrar basılarak erken iptal edilebilir
 		## (kullanıcı isteği #42) - 2026-09-25 slot değişimiyle Q'dan buraya.
 		elif skill3_state == "active" and skill3_id_pressed == 11:
-			_cancel_paladin_ulti_early()
+			if _toggle_close_allowed("skill3"): ## spam koruması - bkz. TOGGLE_CLOSE_GUARD_MSEC
+				_cancel_paladin_ulti_early()
 	## Ruhani Yetenek (F) - karakterden bağımsız, kendi durum makinesi (bkz. dosya sonundaki "RUHANİ YETENEKLER" bloğu).
 	if Input.is_action_just_pressed("skill4") and not is_chat_typing and not is_in_merchant_zone:
 		_try_spirit_skill()
@@ -2019,6 +2045,26 @@ func is_skill_slot_unlocked(slot: String) -> bool:
 
 ## Kilitliyse tuşa basınca kısa bir uyarı (üst üste basınca yazı yığılmasın diye en fazla saniyede bir).
 var _skill_lock_warn_until: float = 0.0
+
+## ---------- Aç/kapa yeteneklerde spam koruması ----------
+## Kullanıcı isteği (2026-09-25): "bütün basınca açılıp basınca kapatılan yeteneklerin spamlama korumasına sahip olması
+## lazım, yani basıp açınca 1 saniye içinde tekrar basmak yeteneği kapatmamalı" (ör. Kalkan Bağı, Şovalye'nin ultisi).
+## Kapsam: Hadime Q (Lanet Kitabı), Vampir E (Yarasa Formu erken dönüş) ve R (Kan Yarasaları), Şovalye R (Koruma
+## Baloncuğu erken iptal), Ruhani Kalkan Bağı ve Ruhani Dükkan odaklanması (F ile iptal). Açıldığı an yuvaya göre
+## ("skill"/"skill2"/"skill3"/"spirit") kaydedilir; bu süre içindeki "kapat" basışı sessizce yok sayılır. SADECE oyuncunun
+## tuşla kapatmasını etkiler - süre dolması, kalkan/can bitmesi, ölüm gibi otomatik kapanışlar aynen çalışır.
+## YENİ bir aç/kapa yetenek eklerken: açılışta _toggle_mark_opened(yuva), tuşla kapatmadan önce _toggle_close_allowed(yuva).
+const TOGGLE_CLOSE_GUARD_MSEC := 1000
+var _toggle_opened_msec: Dictionary = {}
+
+
+func _toggle_mark_opened(slot: String) -> void:
+	_toggle_opened_msec[slot] = Time.get_ticks_msec()
+
+
+func _toggle_close_allowed(slot: String) -> bool:
+	return Time.get_ticks_msec() - int(_toggle_opened_msec.get(slot, -1000000)) >= TOGGLE_CLOSE_GUARD_MSEC
+
 
 func _skill_slot_unlocked_or_warn(slot: String) -> bool:
 	if is_skill_slot_unlocked(slot):
@@ -2122,6 +2168,10 @@ func _block_movement_into_enemies() -> void:
 	## Gölge Adımı/Vampir'in Yarasa Formu ile AYNI sebepten burada da atlanması gerekiyor.
 	if _elara_evasion_timer > 0.0:
 		return
+	## Suriyeli Hadime Q (Lanet Kitabı): havaya süzülürken birimlerin içinden geçer (kullanıcı isteği 2026-09-25) -
+	## yaratık tarafındaki karşılığı enemy.gd'nin sert yapıştırma bloğu (is_ghost_now).
+	if _hadime_q_active:
+		return
 	if velocity.length() < 0.1:
 		return
 	var still_overlapping: Array = []
@@ -2159,6 +2209,9 @@ func _block_movement_into_enemies() -> void:
 ## giremiyor gibi hissettiriyor, ekstra senkronizasyon gerekmiyor.
 func _block_movement_into_players() -> void:
 	if not NetworkManager.is_multiplayer_active or velocity.length() < 0.1:
+		return
+	## Suriyeli Hadime Q: havaya süzülürken arkadaşlarının da içinden geçer ("birimlerin içinden geçebilme").
+	if _hadime_q_active:
 		return
 	var required_sep: float = (PLAYER_BODY_RADIUS * 2.0) * GameManager.BODY_BLOCK_SCALE
 	for rp in get_tree().get_nodes_in_group("remote_players"):
@@ -4435,6 +4488,11 @@ func _update_animation(is_moving: bool) -> void:
 		## özelliği, sadece walk_ klibine özel değil).
 		anim.speed_scale = 1.0
 		return
+	## Suriyeli Hadime Q kanalı (Lanet Kitabı): kitabı okuyarak süzülür - yürürken de read_<yön> klibi kalır (yürüme adımı
+	## yok). Klip adı ağdan gittiği için diğer oyuncular da aynısını görür; E'nin shrug klibi (yukarıdaki aksiyon
+	## kontrolü) bitene kadar önce o oynar.
+	if _hadime_q_active and _play_hadime_read_anim():
+		return
 	## Dükkan / kart seçim ekranı açıkken (bkz. ReadingUiWatcher) durup okuma pozunda kal; hareket edilirse
 	## normal yürüme/koşma klibi oynar (dükkan oyunu duraklatmaz, oyuncu yürüyebilir).
 	if _reading_ui_active and not is_moving and _play_reading_anim():
@@ -5168,7 +5226,8 @@ func _nearest_living_ally_for_revive(max_range: float) -> Node2D:
 			continue
 		if rp.get("is_dead") == true or rp.get("is_downed") == true:
 			continue
-		var d: float = global_position.distance_to((rp as Node2D).global_position)
+		## Hadime hayaletken ruhu dolaşır - diriltmek için arkadaşın CESEDİN yanında durması gerekir.
+		var d: float = _revive_anchor_position().distance_to((rp as Node2D).global_position)
 		if d <= nearest_dist:
 			nearest_dist = d
 			nearest = rp as Node2D
@@ -5206,7 +5265,7 @@ func _update_death_status_fx() -> void:
 	if is_dead:
 		if not _death_status_fx or not is_instance_valid(_death_status_fx):
 			_death_status_fx = FxDeathScene.instantiate()
-			add_child(_death_status_fx)
+			_death_fx_parent().add_child(_death_status_fx) ## Hadime hayaletken: cesedin üstü
 	elif _death_status_fx and is_instance_valid(_death_status_fx):
 		_death_status_fx.queue_free()
 		_death_status_fx = null
@@ -5223,7 +5282,7 @@ func _update_revive_rewind_fx() -> void:
 	if is_downed and ratio > 0.0:
 		if not _revive_rewind_fx or not is_instance_valid(_revive_rewind_fx):
 			_revive_rewind_fx = FxReviveRewindScene.instantiate()
-			add_child(_revive_rewind_fx)
+			_death_fx_parent().add_child(_revive_rewind_fx) ## Hadime hayaletken: cesedin üstü
 		if _revive_rewind_fx.has_method("set_progress"):
 			_revive_rewind_fx.set_progress(ratio)
 	elif _revive_rewind_fx and is_instance_valid(_revive_rewind_fx):
@@ -5242,6 +5301,8 @@ func _update_revive_rewind_fx() -> void:
 
 
 func _go_down() -> void:
+	## Suriyeli Hadime: Q kanalı / Karabasan formu kapanır (bkz. _hadime_on_go_down) - diğer karakterlerde no-op.
+	_hadime_on_go_down()
 	is_downed = true
 	is_dead = true
 	health = 0
@@ -5278,6 +5339,9 @@ func _go_down() -> void:
 ## kimse kalmadıysa DOWNED_NO_RESCUER_GRACE sonunda kalıcı ölüme düşer.
 func _process_downed(delta: float) -> void:
 	_downed_time += delta
+	## Suriyeli Hadime pasifi (Ruh Göçü): düştükten 2 sn sonra ruhu hayalet olarak kalkar, beden yerde kalır.
+	if not _hadime_ghost_active and _is_hadime() and _downed_time >= HadimeMath.GHOST_RISE_DELAY:
+		_hadime_rise_ghost()
 	if NetworkManager.is_multiplayer_active:
 		if _has_living_rescuer():
 			_no_rescuer_time = 0.0
@@ -5293,7 +5357,9 @@ func _process_downed(delta: float) -> void:
 	## TIME (3sn) sonunda _complete_revive() tetiklenir. Multiplayer'daki
 	## "gerçek bir müttefik yakında durmalı" davranışı AYNEN korunuyor.
 	var rescuer: Node2D = _nearest_living_ally_for_revive(REVIVE_RANGE) if NetworkManager.is_multiplayer_active else null
-	if rescuer or not NetworkManager.is_multiplayer_active:
+	## Tek oyunculuda Hadime'nin hayaleti önce GHOST_SP_TIME sn savaşır, kanal ancak son 3 sn'de dolar (bkz.
+	## _hadime_sp_revive_allowed) - diğer karakterlerde her zaman true.
+	if rescuer or (not NetworkManager.is_multiplayer_active and _hadime_sp_revive_allowed()):
 		_revive_progress = min(REVIVE_CHANNEL_TIME, _revive_progress + delta)
 	else:
 		## Müttefik menzilden ayrılırsa kanal anlık sıfırlanmaz, iki katı
@@ -5342,6 +5408,8 @@ func _complete_revive() -> void:
 	## çünkü hak henüz rezerve edilmemişti) kanal dolmuş/başarılı görünen bu
 	## oyuncu aslında _finalize_death() ile SİLİNİYORDU ("diriltildi ama yok
 	## oldu" şikayeti). Artık kanalı dolduran biri KESİN dirilir.
+	## Suriyeli Hadime: arkadaşları cesedi diriltti -> ruh bedenine döner (karakter cesedin yerine ışınlanır).
+	_hadime_end_ghost(false)
 	if overhead_bar:
 		overhead_bar.visible = true ## bkz. _go_down - ölüyken gizlenmişti
 	is_downed = false
@@ -5400,6 +5468,8 @@ func grant_revive_invulnerability(duration: float = REVIVE_INVULNERABILITY_TIME)
 ## Kalıcı ölüm - eskiden die()'ın alt kısmıydı (revive hakkı yoksa ya da
 ## downed kanalı/bleedout süresi başarısız olursa buraya düşülür).
 func _finalize_death() -> void:
+	## Suriyeli Hadime: hayaletken kalıcı ölüm (diriltecek kimse kalmadı) -> ruh bedenine döner, ceset olarak kalır.
+	_hadime_end_ghost(true)
 	is_downed = false
 	is_dead = true
 	health = 0
@@ -6025,18 +6095,27 @@ const SKILL_SHIELD_COST_FLAT := 40.0
 ## başladığı için (bkz. game_manager.gd shield_standart_level) bu maliyet
 ## GERÇEK bir kısıt haline getirildi - bkz. _has_enough_ability_shield,
 ## çağıran yerlerdeki (skill/skill2/büyücü varyasyonu) ön kontrol.
+## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-25: "kalkan bağında en son kalkanı biten kişi kalkanı olan bağ kurduğu
+## kişinin kalkanıyla skill kullanamıyordu"): hasar emiliminde partnerin kalkanı zaten ödünç alınıyordu (bkz.
+## _kalkan_bagi_borrow_absorb) ama yetenek bedeli kontrolü SADECE kendi kalkanına bakıyordu. Artık Kalkan Bağı açıkken
+## kendi kalkanı yetmeyen oyuncu eksik kısmı partnerinin kalkanından karşılar (bkz. _kalkan_bagi_borrow_cost). Bütün
+## yetenek bedelleri (Q/E/R, Büyücü varyasyonları, Hadime Q'nun saniyelik bedeli) bu iki fonksiyondan geçer - tek yer.
 func _has_enough_ability_shield(cost: float) -> bool:
-	return cost <= 0.0 or item_shield_hp >= cost
+	return cost <= 0.0 or item_shield_hp + _kalkan_bagi_borrowable_shield() >= cost
 
 
 func _spend_ability_shield_cost(amount: float) -> void:
-	if amount <= 0.0 or item_shield_hp <= 0.0:
+	if amount <= 0.0:
 		return
-	var before: float = item_shield_hp
-	item_shield_hp = max(0.0, item_shield_hp - amount)
-	item_shield_changed.emit(item_shield_hp, item_shield_max)
-	## Kullanıcı isteği (Kalkan Bağı): "yetenek bedellerinden giden kalkanlar... yansıtılır".
-	_kalkan_bagi_mirror(item_shield_hp - before)
+	var from_own: float = minf(item_shield_hp, amount)
+	if from_own > 0.0:
+		var before: float = item_shield_hp
+		item_shield_hp = max(0.0, item_shield_hp - from_own)
+		item_shield_changed.emit(item_shield_hp, item_shield_max)
+		## Kullanıcı isteği (Kalkan Bağı): "yetenek bedellerinden giden kalkanlar... yansıtılır".
+		_kalkan_bagi_mirror(item_shield_hp - before)
+	if amount - from_own > 0.0:
+		_kalkan_bagi_borrow_cost(amount - from_own)
 
 
 func _activate_skill2() -> void:
@@ -6116,6 +6195,8 @@ func _activate_skill2() -> void:
 		41: _skill_vampir_bat_form()
 		## Necromancer TEMEL (Golem Çağır) - kullanıcı isteği 2026-09-24: "iskelet Q golem E kafatası da R".
 		20: _skill_necro_summon_golem()
+		## Suriyeli Hadime TEMEL (Kara Delik) - bkz. characters.gd DEFS[14], dosya sonundaki Hadime bloğu.
+		47: _skill_hadime_black_hole()
 
 
 func _end_skill2_effects() -> void:
@@ -6266,6 +6347,8 @@ func _activate_skill3() -> void:
 		37: _skill_talon_mirror_form()
 		## Necromancer YENİ ULTİ - Lanetli Kafatası (id 44), Golem Çağır'ın yerine (kullanıcı isteği 2026-09-24).
 		44: _skill_necro_skull()
+		## Suriyeli Hadime ULTİ - Karabasan (id 48), bkz. dosya sonundaki Hadime bloğu.
+		48: _skill_hadime_nightmare()
 		## DÜZELTME (kullanıcı isteği: "Matthew'in yeni skili... kalkan yeteneğini R'ye yerleştir") -
 		## Feda Kalkanı (id 9) artık burada, eskiden Q/skill'deydi (bkz. _activate_skill()'teki eşleşen
 		## düzeltme - Tilki Hücumu id 43 onun yerine Q'ya geldi).
@@ -6289,8 +6372,7 @@ func _end_skill3_effects() -> void:
 		16:
 			is_assasin_dashing = false
 			if _assasin_dash_fx and is_instance_valid(_assasin_dash_fx):
-				if _assasin_dash_fx.has_method("stop"):
-					_assasin_dash_fx.stop()
+				_stop_and_broadcast_skill_fx(_assasin_dash_fx)
 				_assasin_dash_fx = null
 			## bkz. _end_skill_effects()'teki AYNI çapraz-slot koruması - Q'nun
 			## Gölge Adımı'sı (id 30) HÂLÂ aktifken (kendi modulate.a=0.35
@@ -6324,6 +6406,10 @@ func _end_skill3_effects() -> void:
 		9:
 			if matthew_dome_active:
 				_pop_matthew_dome(false)
+		## Suriyeli Hadime Karabasan (id 48) 15 sn dolunca / erken iptalde normal forma döner.
+		48:
+			if _hadime_nightmare_active:
+				_end_hadime_nightmare()
 
 
 func _activate_skill() -> void:
@@ -6563,8 +6649,7 @@ func _end_skill_effects() -> void:
 		is_invisible = false
 	is_assasin_dashing = false
 	if _assasin_dash_fx and is_instance_valid(_assasin_dash_fx):
-		if _assasin_dash_fx.has_method("stop"):
-			_assasin_dash_fx.stop()
+		_stop_and_broadcast_skill_fx(_assasin_dash_fx)
 		_assasin_dash_fx = null
 	skill_speed_multiplier = 1.0
 	heal_regen_bonus = 0.0
@@ -7312,6 +7397,8 @@ const SKILL_SFX := {
 	"melek_fear": -1.0,
 	"necro_skeleton": -2.0, "necro_golem": -5.0, "necro_skull": -3.5,
 	"vampir_drain": -4.0, "vampir_bat_form": -3.0, "vampir_bats": -1.0,
+	## Suriyeli Hadime (2026-09-25, tools/gen_skill_sounds.py --only hadime): lanet düşüşü saniyede 1 kez çaldığı için kısık.
+	"hadime_q": -4.0, "hadime_curse": -9.0, "hadime_blackhole": -3.0, "hadime_nightmare": -4.5, "hadime_ghost": -3.0,
 }
 
 
@@ -7571,6 +7658,7 @@ func _skill_shield() -> void:
 var _paladin_shield_broke: bool = false
 
 func _skill_paladin_ulti() -> void:
+	_toggle_mark_opened("skill3") ## R'ye tekrar basınca erken iptal - spam koruması (bkz. TOGGLE_CLOSE_GUARD_MSEC)
 	_paladin_shield_broke = false
 	paladin_zone_active = true
 	paladin_zone_radius = PALADIN_ULTI_ZONE_RADIUS
@@ -8015,11 +8103,13 @@ const ASSASIN_DASH_HIT_INTERVAL := 0.2 ## (artık kullanılmıyor - bkz. ASSASIN
 ## Kullanıcı isteği (2026-09-24 denge turu): "yetenek aktifken 10 saniye boyunca silahlarının hasarını değil her vuruşta
 ## kendi saldırı gücünün %150'si kadar hasar versin ve bu vuruşların hızı saldırı hızının 3 katı hızda hesaplansın.
 ## ayrıca ... tek bir yaratık varsa o yaratığa birden fazla saldırabilsin". Süre SKILL3_TIMING[16] (10sn).
-## Vuruş aralığı = TABAN_ARALIK x get_attack_interval_mult() / 3 (sıçrayış süresi dahil) - kartsız 1sn/3 = ~0.33sn
+## Vuruş aralığı = TABAN_ARALIK x get_attack_interval_mult() / ASSASIN_DASH_ATTACK_SPEED_MULT (sıçrayış süresi dahil; ilk hali 3) - kartsız 1sn/3 = ~0.33sn
 ## (eskiden 0.09 sıçrayış + 0.2 bekleme = 0.29sn, yani taban tempo neredeyse aynı), saldırı hızı kartlarıyla hızlanır.
 const ASSASIN_DASH_DAMAGE_RATIO := 1.5
 const ASSASIN_DASH_BASE_ATTACK_INTERVAL := 1.0
-const ASSASIN_DASH_ATTACK_SPEED_MULT := 3.0
+## Kullanıcı isteği (2026-09-25): "assasin çocuğun R sinin saldırı hızına bağlı olarak hızlanmasının şuanki oranını %50
+## arttır" - 3.0 -> 4.5 (kartsız ~0.33 sn -> ~0.22 sn'de bir çarpış; ASSASIN_DASH_MIN_INTERVAL 0.1 tabanı aynı).
+const ASSASIN_DASH_ATTACK_SPEED_MULT := 4.5
 const ASSASIN_DASH_MIN_INTERVAL := 0.1 ## çok yüksek saldırı hızında bile sıçrayışlar okunabilir kalsın
 const ASSASIN_DASH_HIT_SOUNDS: Array[String] = [
 	"res://assets/audio/assasin_swing1.mp3",
@@ -8149,7 +8239,7 @@ func _assasin_dash2_execute() -> void:
 	## ediyordu. Artık yeni bir dash başlarken, hâlâ durdurulmamış eski bir
 	## fx varsa ÖNCE o durduruluyor.
 	if _assasin_dash2_fx and is_instance_valid(_assasin_dash2_fx) and _assasin_dash2_fx.has_method("stop"):
-		_assasin_dash2_fx.stop()
+		_stop_and_broadcast_skill_fx(_assasin_dash2_fx)
 	_assasin_dash2_fx = _play_and_broadcast_skill_fx(preload("res://scenes/fx_assasin_dash.tscn"))
 
 	var dash_tween := create_tween()
@@ -8158,7 +8248,7 @@ func _assasin_dash2_execute() -> void:
 	await dash_tween.finished
 
 	if _assasin_dash2_fx and is_instance_valid(_assasin_dash2_fx) and _assasin_dash2_fx.has_method("stop"):
-		_assasin_dash2_fx.stop()
+		_stop_and_broadcast_skill_fx(_assasin_dash2_fx)
 	_assasin_dash2_fx = null
 
 	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir" - her
@@ -9596,6 +9686,20 @@ func _play_and_broadcast_skill_fx(scene: PackedScene) -> Node:
 	return fx
 
 
+## _play_and_broadcast_skill_fx'in KAPANIŞ karşılığı: kendi süresi olmayan, stop() ile biten karaktere bağlı bir FX'i
+## (ör. Assasin hamle izi, fx_assasin_dash.gd) hem burada hem diğer oyuncularda durdurur.
+## BUG DÜZELTMESİ (çok oyunculu senkron denetimi 2026-09-25): açılış "skill_scene" ile gidiyordu ama kapanış HİÇ
+## gitmiyordu - uzak kopya sadece kendi güvenlik tavanında (SAFETY_DURATION) bitiyordu: E hamlesinden (~0.2 sn) sonra
+## diğer oyuncular Assasin'in arkasında 6 sn gölge izi görüyor, 10 sn'lik R'nin izi ise onlarda 6. sn'de kesiliyordu.
+func _stop_and_broadcast_skill_fx(fx: Node) -> void:
+	if fx == null or not is_instance_valid(fx):
+		return
+	if fx.has_method("stop"):
+		fx.call("stop")
+	if NetworkManager.is_multiplayer_active and not fx.scene_file_path.is_empty():
+		NetworkManager.broadcast_player_fx_stop.rpc(multiplayer.get_unique_id(), fx.scene_file_path)
+
+
 func _spawn_burst(color: Color) -> void:
 	var p := CPUParticles2D.new()
 	get_tree().current_scene.add_child(p)
@@ -9713,7 +9817,7 @@ func _is_vampir() -> bool:
 ## enemy.gd (host'un yaratık simülasyonu) bu oyuncunun/kuklasının "içinden geçilebilir" olup olmadığını buradan öğrenir
 ## (remote_player.gd is_ghost_now'ın karşılığı) - aksi halde yaratık, üstüne binen yarasayı sert yapıştırmayla dışarı iterdi.
 func is_ghost_now() -> bool:
-	return _vampir_bat_form_active or _elara_evasion_timer > 0.0
+	return _vampir_bat_form_active or _elara_evasion_timer > 0.0 or _hadime_q_active
 
 
 func vampir_can_target(e: Node) -> bool:
@@ -9852,6 +9956,7 @@ func _skill_vampir_blood_drain() -> void:
 ## ---------- E: Yarasa Formu ----------
 func _skill_vampir_bat_form() -> void:
 	_vampir_bat_form_active = true
+	_toggle_mark_opened("skill2")
 	skill2_speed_multiplier = VAMPIR_BAT_SPEED_MULT
 	_vampir_contact_cooldowns.clear()
 	_vampir_capture_weapon_offsets()
@@ -10007,12 +10112,14 @@ func _process_vampir_weapon_pull(delta: float) -> void:
 ## ---------- R: Kan Yarasaları ----------
 func _vampir_toggle_bats() -> void:
 	if _vampir_bats_active:
-		_vampir_stop_bats()
+		if _toggle_close_allowed("skill3"): ## spam koruması - bkz. TOGGLE_CLOSE_GUARD_MSEC
+			_vampir_stop_bats()
 		return
 	## İlk saniyenin bedeli aktivasyonda ödenir, sonraki her saniye _vampir_process_bats'te.
 	if not _vampir_try_pay_health(_vampir_skill_health_cost(VAMPIR_ULTI_COST_PERCENT_PER_SEC), false):
 		return
 	_vampir_bats_active = true
+	_toggle_mark_opened("skill3")
 	_vampir_r_tick_timer = 1.0
 	_play_skill_sfx("vampir_bats")
 	## R standart _activate_skill3 makinesini bypass ettiği için yetenek animasyonu (shrug) burada elle oynatılır
@@ -10226,12 +10333,14 @@ func _try_spirit_skill() -> void:
 		return
 	## Dükkan odaklanması sürerken F'ye tekrar basmak iptal eder.
 	if id == SpiritualSkillsScript.DUKKAN and _spirit_channeling:
-		_spirit_cancel_channel("İPTAL")
+		if _toggle_close_allowed("spirit"): ## spam koruması - bkz. TOGGLE_CLOSE_GUARD_MSEC
+			_spirit_cancel_channel("İPTAL")
 		return
 	## Kalkan Bağı bir TOGGLE (bkz. sınıf üstü not) - aktifken tekrar F'ye basmak KAPATIR, DUKKAN'ın odaklanma
 	## iptaliyle AYNI "spirit_state != ready kontrolünden ÖNCE" deseni.
 	if id == SpiritualSkillsScript.KALKAN_BAGI and spirit_state == "active":
-		_end_kalkan_bagi("KAPATILDI")
+		if _toggle_close_allowed("spirit"): ## spam koruması - bkz. TOGGLE_CLOSE_GUARD_MSEC
+			_end_kalkan_bagi("KAPATILDI")
 		return
 	if spirit_state != "ready":
 		return
@@ -10251,6 +10360,7 @@ func _try_spirit_skill() -> void:
 
 
 func _spirit_begin_active(active_time: float, cooldown: float) -> void:
+	_toggle_mark_opened("spirit") ## Kalkan Bağı / Dükkan F ile kapatılır - spam koruması (bkz. TOGGLE_CLOSE_GUARD_MSEC)
 	spirit_state = "active"
 	spirit_timer = active_time
 	_spirit_active_total = active_time
@@ -10444,7 +10554,7 @@ func get_base_move_speed() -> float:
 
 
 func get_effective_move_speed() -> float:
-	return speed * skill_speed_multiplier * skill2_speed_multiplier * shield_mode_speed_mult * (1.0 + item_speed_percent + speed_card_percent + _current_temp_speed_boost())
+	return speed * skill_speed_multiplier * skill2_speed_multiplier * shield_mode_speed_mult * _hadime_move_mult() 		* (1.0 + item_speed_percent + speed_card_percent + _current_temp_speed_boost())
 
 
 ## Kullanıcı isteği (2026-09-25): "hava durumlarında rüzgarların esme yönüne göre karakter hızlanmalı veya yavaşlamalı".
@@ -10758,6 +10868,31 @@ func _kalkan_bagi_borrow_absorb(amount: float, protection: float) -> float:
 	return absorbed
 
 
+## Yetenek bedeli için ödünç alınabilecek kalkan: bağ açıkken partnerin (kuklasındaki) kalkanı, değilse 0.
+func _kalkan_bagi_borrowable_shield() -> float:
+	if not _kalkan_bagi_active or not NetworkManager.is_multiplayer_active:
+		return 0.0
+	var partner: Node2D = _kalkan_bagi_partner()
+	if partner == null:
+		return 0.0
+	return maxf(0.0, float(partner.get("item_shield_hp")))
+
+
+## Kendi kalkanının karşılamadığı yetenek bedelini partnerin kalkanından düşer - _kalkan_bagi_borrow_absorb ile AYNI
+## desen: doğrudan (yansıma oranı yok, gerçekten o kalkan harcanıyor), kukladaki değer de hemen düşülür ki aynı karede
+## gelen ikinci bir bedel onu tekrar saymasın (sonraki durum senkronu düzeltir).
+func _kalkan_bagi_borrow_cost(amount: float) -> void:
+	var partner: Node2D = _kalkan_bagi_partner()
+	if amount <= 0.0 or partner == null or not _kalkan_bagi_active:
+		return
+	var partner_shield: float = float(partner.get("item_shield_hp"))
+	var taken: float = minf(partner_shield, amount)
+	if taken <= 0.0:
+		return
+	partner.set("item_shield_hp", partner_shield - taken)
+	NetworkManager.sync_kalkan_bagi_shield_delta.rpc(_kalkan_bagi_partner_peer_id, -taken)
+
+
 ## Partnerden gelen yansımış kalkan değişikliğini uygular (bkz. network_manager.gd sync_kalkan_bagi_shield_
 ## delta) - mirror=false ile heal_shield çağrılır (aksi halde bu ZATEN yansımış değer bir kez daha yansırdı,
 ## sonsuz "sen bana ben sana" döngüsü olurdu).
@@ -10789,3 +10924,487 @@ func _remove_kalkan_bagi_link_fx() -> void:
 	if is_instance_valid(_kalkan_bagi_link_fx):
 		_kalkan_bagi_link_fx.queue_free()
 	_kalkan_bagi_link_fx = null
+
+
+## ================= Suriyeli Hadime (karakter 14) =================
+## Kullanıcı isteği (2026-09-25, hadime.zip "hadime yetenekleri.txt" + soru-cevap). Sabitler, lanet uçuş eğrisi, form
+## görünümü ve ceset scripts/hadime_math.gd'de - remote_player.gd ve network_manager.gd ("hadime_fx" dalı) AYNI yerden
+## okur (CLAUDE.md madde 3). Diğer oyunculara giden durum: main.gd extra["hadime"] (get_hadime_net_state).
+##  Q (46) AÇ/KAPA kanal (2026-09-25: basılı tutmaktan aç/kapa'ya geçti): standart skill_state makinesi bypass (bkz.
+##         _physics_process Q dalı, _hadime_toggle_q, _process_hadime_q).
+##  E (47, Kara Delik) / R (48): standart skill2/skill3 makineleri (_activate_skill2/_activate_skill3 match dalları).
+##  Pasif: _process_downed -> _hadime_rise_ghost; hayaletken _physics_process _process_hadime_ghost'a düşer.
+const FxHadimeNightmareBurstScene := preload("res://scenes/fx_hadime_nightmare_burst.tscn")
+
+var _hadime_q_active: bool = false
+var _hadime_q_time: float = 0.0 ## kanal başından beri (süzülme salınımı)
+var _hadime_q_cost_timer: float = 0.0
+var _hadime_q_curse_timer: float = 0.0
+## Yaratık instance_id -> son lanetlendiği an (ms): lanetler "tek tek" en uzun süredir lanetlenmemiş yaratığa düşer.
+var _hadime_curse_last: Dictionary = {}
+var _hadime_nightmare_active: bool = false
+var _hadime_r_tick_timer: float = 0.0
+var _hadime_r_fear_timer: float = 0.0
+var _hadime_r_feared: Dictionary = {} ## instance_id -> son korkutma anı (ms)
+var _hadime_nightmare_orig_scale: Vector2 = Vector2.ZERO
+var _hadime_aura_on: bool = false
+var _hadime_levitate_on: bool = false
+var _hadime_ghost_active: bool = false
+var _hadime_ghost_time: float = 0.0
+var _hadime_corpse_pos: Vector2 = Vector2.ZERO
+var _hadime_corpse_clip: String = ""
+var _hadime_saved_collision_layer: int = -1
+var _hadime_base_offset: Vector2 = Vector2(0, -1.8)
+
+
+func _is_hadime() -> bool:
+	return GameManager.selected_char_id == HadimeMath.CHAR_ID
+
+
+## Dışarıdan (drop_attraction.gd, world_event_manager.gd) sorulur - remote_player.gd'de aynı adlı karşılığı var.
+func is_hadime_ghost() -> bool:
+	return _hadime_ghost_active
+
+
+## Pasif: hayaletken verdiği hasar %80 az - Hadime'nin TÜM yetenek hasarları bu çarpandan geçer.
+func _hadime_damage_mult() -> float:
+	return HadimeMath.GHOST_DAMAGE_MULT if _hadime_ghost_active else 1.0
+
+
+## Q kanalı sürerken %30 yavaş (bkz. get_effective_move_speed).
+func _hadime_move_mult() -> float:
+	return HadimeMath.Q_MOVE_MULT if _hadime_q_active else 1.0
+
+
+func _process_hadime(delta: float) -> void:
+	if not _is_hadime():
+		return
+	_process_hadime_q(delta)
+	_process_hadime_nightmare(delta)
+
+
+## ---------- Q: Lanet Kitabı ----------
+## Kullanıcı düzeltmesi (2026-09-25): "Q su temel skillerin kalkan bedelinin yarısı kadar harcasın" - saniyelik bedel
+## (ilk saniyeninki kanal başında). Yetenek Kitabı (item_skill_shield_cost_reduction) indirimi burada da geçerli.
+func _hadime_q_cost() -> float:
+	return (item_shield_max * SKILL2_SHIELD_COST_PERCENT_OF_MAX + SKILL2_SHIELD_COST_FLAT) * HadimeMath.Q_COST_RATIO \
+		* (1.0 - item_skill_shield_cost_reduction)
+
+
+## Q tuşu: kapalıysa (ve hazırsa) açar, açıksa kapatır - açıldıktan sonraki 1 sn'de gelen basış yok sayılır (spam
+## koruması, bkz. TOGGLE_CLOSE_GUARD_MSEC). Bekleme süresindeyken basmak hiçbir şey yapmaz (diğer yeteneklerle aynı).
+func _hadime_toggle_q() -> void:
+	if _hadime_q_active:
+		if _toggle_close_allowed("skill"):
+			_hadime_end_q()
+	elif skill_state == "ready":
+		_hadime_try_start_q()
+
+
+func _hadime_try_start_q() -> void:
+	if _hadime_q_active or skill_state != "ready":
+		return
+	var cost: float = _hadime_q_cost()
+	if not _has_enough_ability_shield(cost):
+		_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
+		return
+	_spend_ability_shield_cost(cost)
+	item_shield_ability_slow_timer = _shield_hit_regen_delay()
+	var timing: Dictionary = _skill_timing_for(HadimeMath.Q_SKILL_ID)
+	_skill_duration = timing["duration"]
+	_skill_cooldown = timing["cooldown"] * (1.0 - cooldown_reduction_percent)
+	skill_state = "active"
+	skill_timer = _skill_duration
+	skill_total_elapsed = 0.0
+	_hadime_q_active = true
+	_toggle_mark_opened("skill")
+	_hadime_q_time = 0.0
+	_hadime_q_cost_timer = 1.0
+	_hadime_q_curse_timer = HadimeMath.Q_FIRST_CURSE_DELAY
+	## Q cast klibi (shrug) yerine read oynadığı için efsun "yetenek kullanınca" tetiği burada elle.
+	_notify_enchants_skill_used()
+	_play_hadime_read_anim()
+	_play_skill_sfx("hadime_q")
+
+
+## Q'ya tekrar basılınca (_hadime_toggle_q), satıcı bölgesine/eve girilince (orada yetenek kullanılamaz) ya da bir
+## sonraki saniyenin kalkan bedeli yetmeyince biter.
+func _process_hadime_q(delta: float) -> void:
+	if not _hadime_q_active:
+		return
+	if is_in_merchant_zone or is_indoors:
+		_hadime_end_q()
+		return
+	_hadime_q_time += delta
+	_hadime_q_cost_timer -= delta
+	if _hadime_q_cost_timer <= 0.0:
+		_hadime_q_cost_timer += 1.0
+		var cost: float = _hadime_q_cost()
+		if not _has_enough_ability_shield(cost):
+			_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
+			_hadime_end_q()
+			return
+		_spend_ability_shield_cost(cost)
+		item_shield_ability_slow_timer = _shield_hit_regen_delay()
+	_hadime_q_curse_timer -= delta
+	if _hadime_q_curse_timer <= 0.0:
+		if _hadime_launch_curse():
+			_hadime_q_curse_timer = maxf(0.0, _hadime_q_curse_timer + HadimeMath.Q_CURSE_INTERVAL)
+		else:
+			## Menzilde hedef yok: kısa aralıkla tekrar bak (yaratık gelince lanet beklemeden düşsün).
+			_hadime_q_curse_timer = 0.2
+
+
+## Kanal biter -> 8 sn bekleme (HUD halkası 0'dan dolar: _skill_duration 0 + _skill_cooldown).
+func _hadime_end_q() -> void:
+	if not _hadime_q_active:
+		return
+	_hadime_q_active = false
+	skill_state = "cooldown"
+	_skill_duration = 0.0
+	_skill_cooldown = float(_skill_timing_for(HadimeMath.Q_SKILL_ID)["cooldown"]) * (1.0 - cooldown_reduction_percent)
+	skill_timer = _skill_cooldown
+	skill_total_elapsed = 0.0
+
+
+func _play_hadime_read_anim() -> bool:
+	if not is_instance_valid(anim) or anim.sprite_frames == null:
+		return false
+	var read_name: String = "read_" + facing
+	if not anim.sprite_frames.has_animation(read_name):
+		return false
+	if anim.animation != read_name or not anim.is_playing():
+		anim.play(read_name)
+	anim.speed_scale = 1.0
+	return true
+
+
+## Menzildeki (görülebilen) yaratıklar arasından EN UZUN süredir lanetlenmemiş olan (hiç lanetlenmemişler önce),
+## eşitlikte en yakını - "etrafındaki yaratıklara tek tek".
+func _hadime_pick_curse_target() -> Node2D:
+	if _hadime_curse_last.size() > 256:
+		_hadime_curse_last.clear()
+	var best: Node2D = null
+	var best_last: int = 0
+	var best_d: float = INF
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
+			continue
+		var d: float = global_position.distance_to((e as Node2D).global_position)
+		if d > HadimeMath.Q_TARGET_RADIUS or not VisionFogScript.can_target(e):
+			continue
+		var last: int = int(_hadime_curse_last.get(e.get_instance_id(), -1000000000))
+		if best == null or last < best_last or (last == best_last and d < best_d):
+			best = e as Node2D
+			best_last = last
+			best_d = d
+	return best
+
+
+func _hadime_launch_curse() -> bool:
+	var target: Node2D = _hadime_pick_curse_target()
+	if target == null:
+		return false
+	_hadime_curse_last[target.get_instance_id()] = Time.get_ticks_msec()
+	## Kitap ofseti karakterin YEREL biriminde - kök 0.5 ölçekli olduğu için dünyaya to_global ile çevrilir.
+	var from: Vector2 = to_global(HadimeMath.book_offset(facing, HadimeMath.channel_lift(_hadime_q_time)))
+	var to: Vector2 = HadimeMath.enemy_hit_point(target)
+	HadimeMath.spawn_fx(get_tree().current_scene, "curse", {"from": from, "to": to, "target": target, "on_land": _on_hadime_curse_land})
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hadime_fx", from, {
+			"kind": "curse",
+			"to": to,
+			"net_id": int(target.get_meta("network_enemy_id", 0)),
+		})
+	return true
+
+
+## Lanet yere indiği AN hasar (uçuş ~0.7 sn - hedef bu arada ölmüşse boşa düşer). target tipsiz: silinmiş olabilir.
+func _on_hadime_curse_land(target, _pos: Vector2) -> void:
+	if target == null or not is_instance_valid(target) or target.get("is_dead") == true:
+		return
+	var is_crit: bool = _roll_ability_crit()
+	var dmg: float = _apply_ability_crit(damage_bonus * HadimeMath.Q_DAMAGE_RATIO * _hadime_damage_mult(), is_crit)
+	if target.has_method("take_damage"):
+		target.take_damage(dmg, is_crit, 0.0, false)
+	_play_skill_sfx("hadime_curse", randf_range(0.92, 1.08))
+
+
+## ---------- E: Kara Delik ----------
+## Ayak altına 5 sn duran kara delik bırakır (HadimeMath.spawn_black_hole / hadime_black_hole.gd). Hasar + kalkan bu
+## oyuncunun kopyasında (_on_hadime_hole_tick), yaratık çekimi host'taki kopyada - kaster host değilse diğer oyunculara
+## (host dahil) broadcast_hadime_black_hole (reliable) ile gider.
+func _skill_hadime_black_hole() -> void:
+	var pos: Vector2 = to_global(HadimeMath.HOLE_FEET_LOCAL)
+	var pull_here: bool = not NetworkManager.is_multiplayer_active or NetworkManager.is_host
+	HadimeMath.spawn_black_hole(get_tree().current_scene, pos, true, pull_here, _on_hadime_hole_tick)
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.broadcast_hadime_black_hole.rpc(multiplayer.get_unique_id(), pos)
+	_play_skill_sfx("hadime_blackhole")
+
+
+## Her saniye (5 tik): yarıçaptaki yaratıklara %80 saldırı gücü (tik başına tek kritik zarı - Korsan bombardımanıyla aynı),
+## verilen toplam hasarın %20'si kadar Hadime'nin kalkanı yenilenir ("kalkanlarını emerek"). Hayaletken hasar %80 az.
+## Delik yerinde kaldığı için Hadime uzaklaşsa da çalışır.
+func _on_hadime_hole_tick(center: Vector2) -> void:
+	var is_crit: bool = _roll_ability_crit()
+	var dmg: float = _apply_ability_crit(damage_bonus * HadimeMath.HOLE_DAMAGE_RATIO * _hadime_damage_mult(), is_crit)
+	var dealt: float = 0.0
+	var r2: float = HadimeMath.HOLE_RADIUS * HadimeMath.HOLE_RADIUS
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
+			continue
+		if center.distance_squared_to((e as Node2D).global_position) > r2:
+			continue
+		if e.has_method("take_damage"):
+			e.take_damage(dmg, is_crit, 0.0, true)
+			dealt += dmg
+	_hadime_gain_shield(dealt * HadimeMath.HOLE_SHIELD_RATIO)
+
+
+## heal_shield ölüyken çalışmaz - hayalet de (is_dead) Kara Delik ile kalkan yenileyebilmeli.
+func _hadime_gain_shield(amount: float) -> void:
+	if amount <= 0.0 or item_shield_max <= 0.0:
+		return
+	var before: float = item_shield_hp
+	item_shield_hp = minf(item_shield_max, item_shield_hp + amount)
+	var gained: float = item_shield_hp - before
+	if gained <= 0.0:
+		return
+	item_shield_changed.emit(item_shield_hp, item_shield_max)
+	_kalkan_bagi_mirror(gained)
+	_spawn_floating_text("+%d" % int(round(gained)), Color(0.4, 0.7, 1.0), true, -46.0)
+
+
+## ---------- R: Karabasan ----------
+func _skill_hadime_nightmare() -> void:
+	_hadime_nightmare_active = true
+	_hadime_r_tick_timer = 0.5
+	_hadime_r_fear_timer = 0.0
+	_hadime_r_feared.clear()
+	## Talon Ayna Formu'yla aynı desen: TABAN ölçek büyür (ateş sarsıntısı/diğer sıfırlamalar formu bozmasın).
+	if _hadime_nightmare_orig_scale == Vector2.ZERO:
+		_hadime_nightmare_orig_scale = char_base_anim_scale
+	char_base_anim_scale = _hadime_nightmare_orig_scale * HadimeMath.R_SCALE_MULT
+	if is_instance_valid(anim):
+		anim.scale = char_base_anim_scale
+	_play_and_broadcast_skill_fx(FxHadimeNightmareBurstScene)
+	_play_skill_sfx("hadime_nightmare")
+
+
+func _end_hadime_nightmare() -> void:
+	_hadime_nightmare_active = false
+	_hadime_r_feared.clear()
+	if _hadime_nightmare_orig_scale != Vector2.ZERO:
+		char_base_anim_scale = _hadime_nightmare_orig_scale
+		_hadime_nightmare_orig_scale = Vector2.ZERO
+		if is_instance_valid(anim):
+			anim.scale = char_base_anim_scale
+
+
+## Yaklaşan her yaratık 1 sn korkar (aynı yaratık en erken korkusu bitince yeniden - istemcide her apply_fear host'a
+## bir RPC olduğu için sürekli değil). Yakındakiler saniyede %80 saldırı gücü hasar alır. Bosslar korkmaz (enemy.gd).
+func _process_hadime_nightmare(delta: float) -> void:
+	if not _hadime_nightmare_active:
+		return
+	_hadime_r_fear_timer -= delta
+	if _hadime_r_fear_timer <= 0.0:
+		_hadime_r_fear_timer = HadimeMath.R_FEAR_SCAN
+		var now: int = Time.get_ticks_msec()
+		var fear_ms: int = int(HadimeMath.R_FEAR_TIME * 1000.0)
+		if _hadime_r_feared.size() > 256:
+			_hadime_r_feared.clear()
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true or e.get("is_boss") == true:
+				continue
+			if global_position.distance_to((e as Node2D).global_position) > HadimeMath.R_RADIUS:
+				continue
+			var id: int = e.get_instance_id()
+			if now - int(_hadime_r_feared.get(id, -1000000)) < fear_ms:
+				continue
+			_hadime_r_feared[id] = now
+			if e.has_method("apply_fear"):
+				e.apply_fear(global_position, HadimeMath.R_FEAR_TIME)
+	_hadime_r_tick_timer -= delta
+	if _hadime_r_tick_timer <= 0.0:
+		_hadime_r_tick_timer += HadimeMath.R_TICK
+		var is_crit: bool = _roll_ability_crit()
+		var dmg: float = _apply_ability_crit(damage_bonus * HadimeMath.R_DAMAGE_RATIO * _hadime_damage_mult(), is_crit)
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
+				continue
+			if global_position.distance_to((e as Node2D).global_position) > HadimeMath.R_RADIUS:
+				continue
+			if e.has_method("take_damage"):
+				e.take_damage(dmg, is_crit, 0.0, true)
+
+
+## ---------- Pasif: Ruh Göçü (hayalet) ----------
+## Yere düşerken (_go_down): kanal/form kapanır (ceset normal boyda, düz yatsın).
+func _hadime_on_go_down() -> void:
+	if not _is_hadime():
+		return
+	_hadime_end_q()
+	if _hadime_nightmare_active:
+		if skill3_state == "active":
+			_cancel_active_skill3_early()
+		else:
+			_end_hadime_nightmare()
+	_hadime_ghost_active = false
+
+
+## Düştükten GHOST_RISE_DELAY sn sonra (_process_downed): beden (ölüm klibinin son karesi) yerde kalır, ruh ölüm klibinin
+## TERSİYLE (ghostrise_<yön>, SpriteFrames'te ayrı klip - uzak istemciler de sadece klip adını görür) yarı saydam kalkar.
+func _hadime_rise_ghost() -> void:
+	_hadime_ghost_active = true
+	_hadime_ghost_time = 0.0
+	## Kullanıcı isteği (2026-09-25): "hayalet formu olarak kalktığında kalkanı dolu olarak hayalet formuna geçsin yoksa
+	## yetenek kullanamıyor" - düşerken kalkan genelde sıfırdır (hasar önce kalkandan düşer). Doğrudan doldurulur:
+	## heal_shield ölüyken çalışmaz ve Kalkan Bağı'na YANSITILMAZ (bu bir pasif sıfırlama, partnere bedava kalkan olmasın).
+	if item_shield_max > 0.0:
+		item_shield_hp = item_shield_max
+		_shield_regen_tick_pending = 0.0
+		item_shield_changed.emit(item_shield_hp, item_shield_max)
+	_hadime_corpse_pos = global_position
+	var clip: String = String(anim.animation) if is_instance_valid(anim) else ""
+	if not clip.begins_with("death") and is_instance_valid(anim):
+		clip = CharAnim.pick(anim.sprite_frames, ["death_" + facing, "death"])
+	_hadime_corpse_clip = clip
+	var corpse: Node2D = HadimeMath.spawn_corpse(self, anim, clip, _hadime_corpse_pos)
+	## Ölüm ve diriltme (geri sarma) efektleri bedenin üstünde kalsın - arkadaşlar CESEDİ diriltir (bkz. _death_fx_parent).
+	for fx in [_death_status_fx, _revive_rewind_fx]:
+		if fx != null and is_instance_valid(fx):
+			fx.reparent(corpse, false)
+	## Hiçbir Area2D (altın/yemek/sandık/satıcı/ev kapısı) hayaleti görmesin: hiçbir şey toplayamaz, etkileşemez.
+	_hadime_saved_collision_layer = collision_layer
+	collision_layer = 0
+	_hadime_set_weapons_visible(false)
+	facing = CharAnim.dir_of(clip)
+	var rise: String = CharAnim.pick(anim.sprite_frames, [HadimeMath.GHOST_RISE_PREFIX + facing])
+	if rise != "":
+		_play_action_anim(rise)
+	_play_skill_sfx("hadime_ghost")
+	_spawn_floating_text("RUH GÖÇÜ", Color(0.8, 1.0, 0.9))
+
+
+## Hayalet: SADECE yürür ve Q/E/R kullanır. Silahlar (weapon.gd is_dead/is_downed), toplama (collision_layer 0),
+## diriltme (uzak kopyada is_downed), yaratık hedeflemesi (enemy.gd downed kontrolü) mevcut "yerde" kurallarıyla kapalı.
+## Kalkan yenilenmeye devam eder (yetenek bedelleri için).
+func _process_hadime_ghost(delta: float) -> void:
+	_hadime_ghost_time += delta
+	var input_direction := Vector2.ZERO
+	var rising: bool = _hadime_ghost_time < HadimeMath.GHOST_RISE_LOCK
+	if not rising and not _reading_ui_active and not _menu_input_locked and not is_chat_typing:
+		input_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	velocity = input_direction * get_effective_move_speed()
+	_block_movement_into_terrain()
+	move_and_slide()
+	_clamp_to_map_bounds()
+	_update_facing(input_direction)
+	_update_animation(input_direction.length() > 0.1)
+	_process_skill(delta)
+	_process_skill2(delta)
+	_process_skill3(delta)
+	_process_item_shield(delta)
+	_process_shield_regen_tick(delta)
+	_process_hadime(delta)
+	if rising or is_chat_typing or is_in_merchant_zone:
+		return
+	if Input.is_action_just_pressed("skill") and _skill_slot_unlocked_or_warn("skill"):
+		_hadime_toggle_q()
+	if Input.is_action_just_pressed("skill2") and skill2_state == "ready" and _skill_slot_unlocked_or_warn("skill2"):
+		_activate_skill2()
+	if Input.is_action_just_pressed("skill3") and skill3_state == "ready" and _skill_slot_unlocked_or_warn("skill3"):
+		_activate_skill3()
+
+
+## Diriltme (arkadaş cesedi diriltti / tek oyunculuda süre doldu) ya da kalıcı ölüm: ruh bedenine döner.
+## final_death: kalıcı ölümde beden yeniden "ölmesin" diye ölüm klibinin son karesinde bırakılır (_detach_death_camera
+## aynı klibi görünce baştan oynatmaz).
+func _hadime_end_ghost(final_death: bool) -> void:
+	if not _hadime_ghost_active:
+		return
+	_hadime_ghost_active = false
+	_hadime_end_q()
+	if _hadime_nightmare_active:
+		if skill3_state == "active":
+			_cancel_active_skill3_early()
+		else:
+			_end_hadime_nightmare()
+	global_position = _hadime_corpse_pos
+	velocity = Vector2.ZERO
+	reset_physics_interpolation()
+	HadimeMath.remove_corpse(self)
+	if _hadime_saved_collision_layer >= 0:
+		collision_layer = _hadime_saved_collision_layer
+		_hadime_saved_collision_layer = -1
+	_hadime_set_weapons_visible(true)
+	facing = CharAnim.dir_of(_hadime_corpse_clip)
+	if final_death and is_instance_valid(anim) and anim.sprite_frames and anim.sprite_frames.has_animation(_hadime_corpse_clip):
+		anim.play(_hadime_corpse_clip)
+		anim.frame = anim.sprite_frames.get_frame_count(_hadime_corpse_clip) - 1
+		anim.pause()
+
+
+## Hayalet silah kullanamaz (weapon.gd zaten ateş etmez). Yere saçılan silahlar karakterin ANLIK konumuna göre
+## yerleştiği için hayaletle birlikte sürüklenirdi - hayalet süresince gizlenir (remote_player.gd'de aynı karar).
+## Gölge sprite'ı silahın değil karakterin çocuğu (weapon.gd _attach_shadow_under_owner) - ayrıca gizlenir.
+func _hadime_set_weapons_visible(v: bool) -> void:
+	for w in owned_weapon_nodes:
+		if not is_instance_valid(w):
+			continue
+		w.visible = v
+		var sh: Variant = w.get("shadow_sprite")
+		if sh != null and is_instance_valid(sh):
+			(sh as CanvasItem).visible = v
+
+
+## Diriltme kanalının ölçüldüğü nokta: hayaletken CESET (arkadaşlar bedenin yanında durur), değilse karakterin kendisi.
+func _revive_anchor_position() -> Vector2:
+	return _hadime_corpse_pos if _hadime_ghost_active else global_position
+
+
+## Ölüm (fx_death) / diriltme (fx_revive_rewind) efektlerinin ebeveyni: hayaletken ceset.
+func _death_fx_parent() -> Node:
+	if _hadime_ghost_active:
+		var corpse: Node2D = HadimeMath.get_corpse(self)
+		if corpse != null:
+			return corpse
+	return self
+
+
+## Tek oyunculuda diriltecek arkadaş yok: Hadime'nin hayaleti GHOST_SP_TIME sn savaşır, SON 3 sn'de (REVIVE_CHANNEL_TIME)
+## normal diriltme kanalı dolar ve bedenine döner (kullanıcı seçimi: "Hayalet 20sn, sonra dirilir").
+func _hadime_sp_revive_allowed() -> bool:
+	if not _is_hadime():
+		return true
+	return _downed_time >= HadimeMath.GHOST_RISE_DELAY + HadimeMath.GHOST_SP_TIME - REVIVE_CHANNEL_TIME
+
+
+## Her kare (ölü/düşmüşken de): Q'da havaya süzülme, Karabasan (koyu siluet + aura) / hayalet (yarı saydam) görünümü.
+func _process_hadime_visuals(_delta: float) -> void:
+	if not _is_hadime() or not is_instance_valid(anim):
+		return
+	var lift: float = HadimeMath.channel_lift(_hadime_q_time) if _hadime_q_active else 0.0
+	anim.offset = _hadime_base_offset + Vector2(0, -lift)
+	HadimeMath.apply_form(anim, _hadime_nightmare_active, _hadime_ghost_active)
+	if _hadime_aura_on != _hadime_nightmare_active:
+		_hadime_aura_on = _hadime_nightmare_active
+		HadimeMath.set_nightmare_aura(self, _hadime_aura_on)
+	## Q'da havaya süzülürken ayak altında karanlık uçma parçacıkları (sprite sayfası, bkz. fx_hadime_ground_loop.gd).
+	if _hadime_levitate_on != _hadime_q_active:
+		_hadime_levitate_on = _hadime_q_active
+		HadimeMath.set_levitate_fx(self, _hadime_levitate_on)
+	if shadow:
+		shadow.modulate.a = HadimeMath.GHOST_ALPHA if _hadime_ghost_active else 1.0
+
+
+## main.gd extra["hadime"] - diğer oyunculardaki kukla (remote_player.gd _apply_hadime_net_state) bundan kurulur.
+func get_hadime_net_state() -> Dictionary:
+	if not _is_hadime():
+		return {}
+	var st: Dictionary = {"q": _hadime_q_active, "nm": _hadime_nightmare_active, "gh": _hadime_ghost_active}
+	if _hadime_ghost_active:
+		st["cp"] = _hadime_corpse_pos
+		st["cc"] = _hadime_corpse_clip
+	return st

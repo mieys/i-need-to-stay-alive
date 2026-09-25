@@ -599,6 +599,12 @@ func _process_multiplayer_sync(delta: float) -> void:
 		## renk) gönderiyoruz.
 		if player.anim and is_instance_valid(player.anim):
 			extra["modulate"] = player.modulate * player.anim.modulate
+		## Suriyeli Hadime: Q'da havaya süzülme, Karabasan formu, hayalet + cesedin yeri/klibi (bkz. player.gd
+		## get_hadime_net_state / remote_player.gd _apply_hadime_net_state). Diğer karakterlerde anahtar hiç eklenmez.
+		if player.has_method("get_hadime_net_state"):
+			var hadime_state: Dictionary = player.get_hadime_net_state()
+			if not hadime_state.is_empty():
+				extra["hadime"] = hadime_state
 
 		## Klasik canlanma sistemi (bkz. player.gd is_downed/_go_down/
 		## _process_downed): downed iken hp/max_hp alanları GERÇEK canı

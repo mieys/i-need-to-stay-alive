@@ -2890,10 +2890,36 @@ var _route_active: bool = false
 ## weapon.gd/projectile.gd tarafından çağrılır - dir yönünde force kadar bir
 ## itiş hızı ekler (üst üste birikebilir, ama toplam KNOCKBACK_MAX_SPEED'i
 ## aşamaz).
+## BUG DÜZELTMESİ (çok oyunculu senkron denetimi 2026-09-25): bu fonksiyon apply_knockback_distance'ın aksine istemciden
+## host'a HİÇ iletilmiyordu - istemcideki yaratık sadece host'un konum yayınını izleyen bir kukla olduğu için host olmayan
+## oyuncunun itişleri tamamen kayboluyordu: sprey eşyası (_do_repel), Şovalye baloncuğunun kırılma itişi, Matthew kalkan
+## patlamasının itişi ve oyuncunun gövdesiyle yaratık itmesi / sıkışınca kurtulma itişi (player.gd _block_movement_into_
+## enemies - istemci kalabalığın ortasında kalınca hiçbir yöne gidemiyordu). Artık istemcide birikip host'a gider.
+## Gövde itişi HER KAREDE geldiği için yaratık başına en fazla KNOCKBACK_FORCE_RPC_INTERVAL_MSEC'te bir, o ana kadar
+## biriken toplam itiş olarak gönderilir.
+const KNOCKBACK_FORCE_RPC_INTERVAL_MSEC := 100
+var _pending_net_force: Vector2 = Vector2.ZERO
+var _last_net_force_msec: int = -100000
+
 func apply_knockback_force(dir: Vector2, force: float) -> void:
 	if force <= 0.0:
 		return
 	var d: Vector2 = dir.normalized() if dir.length() > 0.001 else Vector2.RIGHT
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id <= 0:
+			return
+		var now_msec: int = Time.get_ticks_msec()
+		if now_msec - _last_net_force_msec > KNOCKBACK_FORCE_RPC_INTERVAL_MSEC * 3:
+			_pending_net_force = Vector2.ZERO ## eski, gönderilmemiş kırıntı birikmesin
+		_pending_net_force += d * force
+		if now_msec - _last_net_force_msec >= KNOCKBACK_FORCE_RPC_INTERVAL_MSEC:
+			_last_net_force_msec = now_msec
+			var total: Vector2 = _pending_net_force
+			_pending_net_force = Vector2.ZERO
+			if total.length() > 0.001:
+				NetworkManager.request_enemy_knockback_force.rpc_id(NetworkManager._host_peer_id(), net_id, total.normalized(), total.length())
+		return
 	_knockback_velocity += d * force
 	if _knockback_velocity.length() > KNOCKBACK_MAX_SPEED:
 		_knockback_velocity = _knockback_velocity.normalized() * KNOCKBACK_MAX_SPEED

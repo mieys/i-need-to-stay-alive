@@ -15,6 +15,7 @@ Calma seviyesi player.gd SKILL_SFX tablosunda (_play_networked_sound -> diger oy
 Calistir:  python tools/gen_skill_sounds.py      (sonra Godot: --headless --import ya da editoru ac)
 """
 import os
+import sys
 import wave
 
 import numpy as np
@@ -316,6 +317,71 @@ SOUNDS = [
 ]
 
 
+# ------------------------------------------------------------------ Suriyeli Hadime (2026-09-25)
+## Yeni karakter: kara buyucu (lanet kitabi, kara buyu, karabasan formu, hayalet). Uzun kayitlarin (Scrapemare 25 sn,
+## Ghost Cantata 7 sn) en dolu bolumu enerjiye gore secilir (loud) - elle saniye aramak gerekmesin. Kendi RNG'si var:
+## sadece bu sesler yeniden uretilince (--only hadime) diger seslerin rastgele katmanlari degismez.
+H_RNG = np.random.default_rng(20260926)
+
+
+def loud(rel, dur):
+    """Kaydin EN YUKSEK enerjili dur saniyelik penceresi (0.05 sn adimlarla aranir)."""
+    x = load(rel)
+    n = int(dur * SR)
+    if len(x) <= n:
+        return x
+    step = int(0.05 * SR)
+    best, best_e = 0, -1.0
+    for a in range(0, len(x) - n, step):
+        e = float(np.mean(x[a:a + n] ** 2))
+        if e > best_e:
+            best, best_e = a, e
+    return x[best:best + n].copy()
+
+
+def hadime_q():
+    """Hadime Q - Lanet Kitabi (kanal basi): kitap acilir - alcak buyu muhru ugultusu + boguk hayalet korosu."""
+    ms = pitch(lowpass(load("Magic/Magic Seal.wav", 0.0, 1.3), 1800.0), 0.85)
+    gc = lowpass(loud("Horror/Ghost Cantata.wav", 1.0), 1400.0)
+    return fade(mix(1.05, [(fade(ms, 0.02, 0.4), 0.0, 0.0), (fade(gc, 0.15, 0.4), 0.05, -9.0)]), fout=0.3)
+
+
+def hadime_curse():
+    """Hadime Q - her lanet dususu (saniyede 1): kisa karanlik vurus + tok alt ton (kuyrugu kisa, sik calar)."""
+    na = pitch(load("Magic/Necromantic Attack.wav", 0.0, 0.55), 1.15)
+    return fade(mix(0.5, [(fade(na, fout=0.2), 0.0, 0.0), (thump(70.0, 0.3, 0.07), 0.0, -6.0)]), fout=0.18)
+
+
+def hadime_blackhole():
+    """Hadime E - Kara Delik: yerde acilan kara delik - ters (ice cekilen) karanlik yarik 'vuuump' + derin alt ugultu +
+    kisa kapanis gumlemesi. 5 sn boyunca DONGU/uzun ses YOK (hafiza: takili ugultu), sadece acilis."""
+    rr = lowpass(load("Horror/Reality Rift.wav", 0.0, 0.8), 2400.0)[::-1].copy()
+    hum = lowpass(sine_sweep(95.0, 42.0, 1.1, 0.7), 400.0) * env_exp(int(1.1 * SR), 0.05, 0.5)
+    return fade(mix(1.3, [(fade(rr, 0.05, 0.05), 0.0, -2.0), (hum, 0.25, -5.0), (thump(44.0, 0.5, 0.14), 0.78, -4.0)]),
+                fout=0.35)
+
+
+def hadime_nightmare():
+    """Hadime R - Karabasan: korkutucu karanlik forma burunme - tirmalayan kabus ugultusu + alcak kahkaha + gumleme."""
+    sc = lowpass(loud("Horror/Scrapemare.wav", 1.3), 2600.0)
+    la = pitch(lowpass(load("Horror/It Laughs At You.wav", 0.0, 1.3), 1800.0), 0.8)
+    return fade(mix(1.4, [(fade(sc, 0.05, 0.5), 0.0, 0.0), (fade(la, 0.05, 0.5), 0.1, -6.0),
+                          (thump(46.0, 0.6, 0.2), 0.0, -3.0)]), fin=0.01, fout=0.35)
+
+
+def hadime_ghost():
+    """Hadime pasif - ruh bedenden ayrilip hayalet olarak kalkar: soluk hayalet korosu + ters dirilis parlamasi."""
+    gc = loud("Horror/Ghost Cantata.wav", 1.4)
+    rs = lowpass(load("Magic/Resurrection.wav", 0.0, 0.9), 3500.0)[::-1].copy()
+    return fade(mix(1.45, [(fade(gc, 0.2, 0.5), 0.0, -2.0), (fade(rs, 0.3, 0.1), 0.45, -9.0)]), fout=0.4)
+
+
+HADIME_SOUNDS = [
+    ("hadime_q", hadime_q), ("hadime_curse", hadime_curse), ("hadime_blackhole", hadime_blackhole),
+    ("hadime_nightmare", hadime_nightmare), ("hadime_ghost", hadime_ghost),
+]
+
+
 def save(name, x, peak_db=-1.0):
     ## DC kaymasi yuksek geciren filtreyle alinir (ortalamayi CIKARMAK fade'lenmis uclara sabit bir kayma ekleyip tik
     ## yapiyordu), sonra uclar yeniden kisa fade'le sifira indirilir.
@@ -334,5 +400,9 @@ def save(name, x, peak_db=-1.0):
 
 
 if __name__ == "__main__":
-    for nm, fn in SOUNDS:
+    ## --only <onek>: sadece adi bu onekle baslayan sesleri uret (ornek: --only hadime) - digerlerinin wav'larina dokunmaz.
+    only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else ""
+    for nm, fn in SOUNDS + HADIME_SOUNDS:
+        if only and not nm.startswith(only):
+            continue
         save(nm, fn())

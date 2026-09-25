@@ -2,6 +2,8 @@ extends Node
 
 ## Vampir Çocuk FX yardımcısı (broadcast_player_vfx "vampir_fx" dalı).
 const VampirMathScript := preload("res://scripts/vampir_math.gd")
+## Suriyeli Hadime "hadime_fx" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
+const HadimeMathScript := preload("res://scripts/hadime_math.gd")
 const PixelDrawScript := preload("res://scripts/pixel_draw.gd")
 const EnchantFxScript := preload("res://scripts/enchant_fx.gd")
 const SpiritualSkillsScript := preload("res://scripts/spiritual_skills.gd")
@@ -1999,6 +2001,17 @@ func request_enemy_knockback(network_id: int, dir: Vector2, distance: float) -> 
 		target_enemy.apply_knockback_distance(dir, distance)
 
 
+## İstemcinin hız-tabanlı itişi (gövde itişi, alan itmeleri) -> host'taki gerçek yaratık (bkz. enemy.gd apply_knockback_force
+## üstündeki BUG DÜZELTMESİ). request_enemy_knockback ile aynı desen.
+@rpc("any_peer", "call_remote", "unreliable")
+func request_enemy_knockback_force(network_id: int, dir: Vector2, force: float) -> void:
+	if not is_host or get_tree().paused:
+		return
+	var target_enemy: Node = find_enemy_by_net_id(network_id)
+	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("apply_knockback_force"):
+		target_enemy.apply_knockback_force(dir, force)
+
+
 ## DÜZELTME (KRİTİK - multiplayer öldürme-bazlı pasifler): host, enemy.gd
 ## die() içinde gerçek öldürenin kendisi olmadığını (last_attacker_peer_id)
 ## tespit ettiğinde bunu doğrudan o istemciye bildirir - Korsan'ın "öldürme
@@ -2260,7 +2273,9 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 ## Generic player VFX broadcast: muzzle flash, skill burst/ring, hit impacts, etc.
 ## vfx_type: "muzzle_flash", "skill_burst", "skill_ring", "hitscan_impact", "melee_hit",
 ## "skill_scene", "beam_start", "beam_stop", "beam_update", "paladin_barrier_flash",
-## "shield_hit_flash", "oakley_bee_sting" (pos = sokulan yaratığın konumu, bkz. fx_oakley_bee_guard.gd)
+## "shield_hit_flash", "oakley_bee_sting" (pos = sokulan yaratığın konumu, bkz. fx_oakley_bee_guard.gd),
+## "hadime_fx" (Suriyeli Hadime Q laneti: kind "curse" pos = kitap, to/net_id = hedef - bkz. hadime_math.gd spawn_fx;
+## E Kara Delik oyun etkisi taşıdığı için AYRI ve reliable: broadcast_hadime_black_hole)
 ## extra_data: {"scene_path": "...", "direction": Vector2, "color": Color, "scale": float, ...}
 ## Pet spawn/despawn - broadcast_player_vfx'ten (yukarısı) BİLEREK AYRI ve
 ## "reliable": o fonksiyon "unreliable" - kozmetik/yüksek frekanslı VFX'ler
@@ -2475,6 +2490,9 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			## kaybediyordu - fx_meteor_strike (0,0)'a düşüyor, fx_skill_ring
 			## sabit 80px/beyaz kalıyordu. extra_data'daki alanlara göre doğru
 			## setup() imzasını çağırıyoruz.
+			## İsteğe bağlı renk tonu (Necromancer pet'lerinin mor/yeşil kıvılcımları - yerelde modulate ile boyanıyor).
+			if extra_data.has("modulate"):
+				impact_fx.modulate = Color(extra_data["modulate"])
 			if impact_fx.has_method("setup"):
 				if bool(extra_data.get("setup_pos", false)):
 					impact_fx.call("setup", pos)
@@ -2711,6 +2729,16 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				vampir_opts["points"] = extra_data.get("points", PackedVector2Array())
 				vampir_opts["sink"] = rp
 			VampirMathScript.spawn_fx(get_tree().current_scene, vampir_kind, pos, vampir_opts)
+		## Suriyeli Hadime (bkz. hadime_math.gd spawn_fx - yerel oyuncu AYNI fonksiyonu çağırır, iki taraf sapamaz).
+		## Kozmetik: hasar/kalkan emme sadece kasterin kendi kopyasında (on_land burada yok).
+		"hadime_fx":
+			var hadime_kind: String = str(extra_data.get("kind", ""))
+			if hadime_kind == "curse":
+				HadimeMathScript.spawn_fx(get_tree().current_scene, "curse", {
+					"from": pos,
+					"to": Vector2(extra_data.get("to", pos)),
+					"target": find_enemy_by_net_id(int(extra_data.get("net_id", 0))),
+				})
 			## extra_data "text" (Q'nun "+1 Maks. Can" yazısı) artık uzak ekranlarda GÖSTERİLMİYOR - kullanıcı isteği
 			## (2026-09-25): başka oyuncuların can/hasar sayıları görünmemeli. Yazıyı sadece Vampir kendisi görür.
 
@@ -2747,6 +2775,28 @@ func _find_remote_player(player_id: int) -> RemotePlayer:
 		if child is RemotePlayer and child.peer_id == player_id:
 			return child
 	return null
+
+
+## Suriyeli Hadime E (Kara Delik, bkz. hadime_black_hole.gd): kasterin bıraktığı deliğin diğer oyunculardaki kopyası.
+## broadcast_player_vfx'ten (unreliable) BİLEREK AYRI ve "reliable": host'taki kopya yaratıkları ÇEKEN kopya (yaratıklar
+## host'ta simüle edilir) - paket kaybolursa o kullanımda çekim hiç olmazdı. Hasar/kalkan kasterin kendi kopyasında
+## (burada on_tick yok), diğer istemcilerde sadece görsel.
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_hadime_black_hole(_player_id: int, pos: Vector2) -> void:
+	HadimeMathScript.spawn_black_hole(get_tree().current_scene, pos, false, is_host, Callable())
+
+
+## player.gd _stop_and_broadcast_skill_fx: "skill_scene" ile açılmış, kendi süresi olmayan (stop() ile biten) bir FX'in
+## bu oyuncunun kuklası üstündeki TÜM kopyalarını durdurur. "reliable": kaybolursa uzak kopya güvenlik süresine kadar
+## sürerdi (Assasin hamle izi: E'den sonra 6 sn gölge).
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_player_fx_stop(player_id: int, scene_path: String) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if not rp:
+		return
+	for child in rp.get_children():
+		if child.scene_file_path == scene_path and child.has_method("stop"):
+			child.call("stop")
 
 
 ## Gold sharing: when any player picks up gold, all players receive the same amount.

@@ -49,6 +49,8 @@ const TuftufTargetingScript: GDScript = preload("res://scripts/tuftuf_targeting.
 ## Vampir Çocuk: silah çekilme formülü player.gd ile PAYLAŞILAN (bkz. vampir_math.gd üstündeki not).
 const VampirMath := preload("res://scripts/vampir_math.gd")
 const VampirBatSwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.gd")
+## Suriyeli Hadime: süzülme/form görünümü/ceset/aura player.gd ile PAYLAŞILAN yardımcılardan (bkz. hadime_math.gd).
+const HadimeMath := preload("res://scripts/hadime_math.gd")
 ## Klip adı kuralları (player.gd ile ortak) - bkz. char_anim.gd.
 const CharAnim := preload("res://scripts/char_anim.gd")
 ## Son yarasa konum paketinden bu kadar süre (sn) geçtiyse (kapanış paketi kaybolduysa) kozmetik sürü silinir.
@@ -157,6 +159,18 @@ var item_extra_gold_chance: float = 0.0
 var exp_gain_percent: float = 0.0
 var _vampir_pull: float = 0.0
 var _vampir_rest_positions: Array = []
+## Suriyeli Hadime (bkz. _apply_hadime_net_state / main.gd extra["hadime"]). hadime_ghost_active herkese açık:
+## world_event_manager.gd hayaleti görev bölgesinde saymasın diye okur.
+var hadime_ghost_active: bool = false
+var _hadime_q: bool = false
+var _hadime_q_time: float = 0.0
+var _hadime_nm: bool = false
+var _hadime_aura_on: bool = false
+var _hadime_levitate_on: bool = false
+var _hadime_corpse_pos: Vector2 = Vector2.ZERO
+var _hadime_corpse_clip: String = ""
+var _hadime_base_offset: Vector2 = Vector2.ZERO
+var _base_collision_layer: int = 2
 var _vampir_swarm: Node2D = null
 var _vampir_bats_last_msec: int = 0
 
@@ -323,6 +337,7 @@ func _ready() -> void:
 	## player_ally + (aşağıda) remote_players'ta.
 	add_to_group("player_ally")
 	add_to_group("remote_players")
+	_base_collision_layer = collision_layer
 	
 	_load_character_frames()
 	## Kullanıcı isteği (bkz. EntityScale): yerel oyuncuyla AYNI boyut küçültme.
@@ -375,6 +390,7 @@ func _load_character_frames() -> void:
 	anim.scale = def.get("scale", Vector2(1.27575, 1.27575)) * EntityScale.SIZE
 	_base_anim_scale = anim.scale
 	anim.offset = def.get("offset", Vector2(0, -5))
+	_hadime_base_offset = anim.offset
 	## Ayak gölgesi (Vampir): yerel oyuncuyla AYNI yardımcı/DEFS değerleri (bkz. ground_shadow.gd) - uzak ekranda da görünsün.
 	GroundShadow.apply_to(get_node_or_null("Shadow") as Node2D, def)
 	var frames_path: String = def.get("frames", "")
@@ -402,6 +418,9 @@ func _physics_process(delta: float) -> void:
 	## erken dönüşünden ÖNCE yapılıyor, yoksa hiç çalışmazdı.
 	_process_weapon_drop_physics_all(delta)
 	_process_vampir_remote(delta)
+	_process_hadime_remote(delta)
+	if _beam_fx and is_instance_valid(_beam_fx) and (is_dead or Time.get_ticks_msec() - _beam_last_net_msec > BEAM_NET_TIMEOUT_MSEC):
+		_stop_beam_vfx() ## bkz. BEAM_NET_TIMEOUT_MSEC
 	if is_dead:
 		return
 	# Smoothly interpolate position towards target
@@ -1017,7 +1036,7 @@ func _update_death_status_fx() -> void:
 	if is_dead:
 		if not _death_status_fx or not is_instance_valid(_death_status_fx):
 			_death_status_fx = FxDeathScene.instantiate()
-			add_child(_death_status_fx)
+			_death_fx_parent().add_child(_death_status_fx)
 	elif _death_status_fx and is_instance_valid(_death_status_fx):
 		_death_status_fx.queue_free()
 		_death_status_fx = null
@@ -1030,7 +1049,7 @@ func _update_revive_rewind_fx() -> void:
 	if is_downed and ratio > 0.0:
 		if not _revive_rewind_fx or not is_instance_valid(_revive_rewind_fx):
 			_revive_rewind_fx = FxReviveRewindScene.instantiate()
-			add_child(_revive_rewind_fx)
+			_death_fx_parent().add_child(_revive_rewind_fx) ## Hadime hayaletken: cesedin üstü (arkadaşlar cesedi diriltir)
 		if _revive_rewind_fx.has_method("set_progress"):
 			_revive_rewind_fx.set_progress(ratio)
 	elif _revive_rewind_fx and is_instance_valid(_revive_rewind_fx):
@@ -1077,7 +1096,8 @@ func _apply_vampir_bat_scale() -> void:
 ## Vampir Çocuk yarasa formundayken (anim adı bat_*) yaratıklar bu kuklanın içinden geçilebilir sayar - player.gd is_ghost_now ile aynı
 ## sözleşme (enemy.gd host'ta çalışır, uzak Vampir'i bu kukla temsil eder).
 func is_ghost_now() -> bool:
-	return _vampir_bat_form or _elara_evasion
+	## Suriyeli Hadime Q'da havaya süzülürken de (main.gd extra["hadime"].q) - host'taki yaratıklar onu dışarı itmesin.
+	return _vampir_bat_form or _elara_evasion or _hadime_q
 
 
 ## player.gd get_effective_move_speed ile AYNI sözleşme. Durum paketi henüz gelmediyse yerel oyuncunun hızı (aynı
@@ -1129,6 +1149,8 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	if col:
 		col.set_deferred("disabled", is_dead)
 	is_downed = extra.get("is_downed", false)
+	## Suriyeli Hadime: hayalet/ceset/form durumu - ölüm/diriltme efektlerinden ÖNCE (hayaletken onlar cesedin üstüne).
+	_apply_hadime_net_state(extra.get("hadime", {}))
 	_update_death_status_fx()
 	_update_revive_rewind_fx()
 	_process_weapon_death_drop_transition()
@@ -1407,6 +1429,11 @@ func _spawn_ring_vfx(radius: float, col: Color) -> void:
 
 ## Lightning beam VFX — managed on remote player by broadcast_player_vfx.
 var _beam_fx: Node2D = null
+## BUG DÜZELTMESİ (çok oyunculu senkron denetimi 2026-09-25): "beam_stop" unreliable kanaldan geliyor - kaybolursa ışın
+## (ve sesi) bir sonraki "beam_start"a kadar bu kuklada asılı kalıyordu (hafızada da not vardı). Işın açıkken sahibi
+## 0.05 sn'de bir "beam_update" yollar (weapon.gd); BEAM_NET_TIMEOUT_MSEC boyunca hiç güncelleme gelmezse kendiliğinden kapanır.
+const BEAM_NET_TIMEOUT_MSEC := 500
+var _beam_last_net_msec: int = 0
 
 func _start_beam_vfx(_beam_type: String, target_pos: Vector2, extra_data: Dictionary) -> void:
 	if _beam_fx and is_instance_valid(_beam_fx):
@@ -1416,6 +1443,7 @@ func _start_beam_vfx(_beam_type: String, target_pos: Vector2, extra_data: Dictio
 	if beam_scene:
 		_beam_fx = beam_scene.instantiate() as Node2D
 		add_child(_beam_fx)
+		_beam_last_net_msec = Time.get_ticks_msec()
 		if _beam_fx.has_method("setup_network"):
 			_beam_fx.setup_network(target_pos, extra_data)
 
@@ -1425,6 +1453,7 @@ func _stop_beam_vfx() -> void:
 		_beam_fx = null
 
 func _update_beam_vfx(target_pos: Vector2, origin_pos: Vector2 = Vector2.ZERO) -> void:
+	_beam_last_net_msec = Time.get_ticks_msec()
 	if _beam_fx and is_instance_valid(_beam_fx) and _beam_fx.has_method("update_target"):
 		_beam_fx.update_target(target_pos, origin_pos)
 
@@ -2067,3 +2096,93 @@ func take_paladin_barrier_damage(amount: float, attacker: Node2D = null) -> void
 	if attacker and is_instance_valid(attacker):
 		enemy_net_id = int(attacker.get_meta("network_enemy_id", 0))
 	NetworkManager.forward_damage_to_peer.rpc_id(peer_id, amount, enemy_net_id, true)
+
+
+## ================= Suriyeli Hadime (kozmetik kopya) =================
+## player.gd get_hadime_net_state -> main.gd extra["hadime"] -> burası. Görünüm formülleri/ceset/aura player.gd ile
+## AYNI yardımcılardan (hadime_math.gd) - CLAUDE.md madde 3. Lanet/kara büyü efektleri ayrıca "hadime_fx" (network_manager).
+func _apply_hadime_net_state(st: Dictionary) -> void:
+	if not HadimeMath.is_hadime(char_id):
+		return
+	var was_ghost: bool = hadime_ghost_active
+	var was_q: bool = _hadime_q
+	_hadime_q = bool(st.get("q", false))
+	_hadime_nm = bool(st.get("nm", false))
+	hadime_ghost_active = bool(st.get("gh", false))
+	if _hadime_q and not was_q:
+		_hadime_q_time = 0.0
+	if hadime_ghost_active and not was_ghost:
+		## Ruh bedeninden ayrıldı: beden (ölüm klibinin son karesi) cesedin yerinde kalır, kukla hayalet olarak dolaşır.
+		_hadime_corpse_pos = Vector2(st.get("cp", global_position))
+		_hadime_corpse_clip = str(st.get("cc", ""))
+		## Aynı pakette Karabasan/Q kapanışı da gelmiş olabilir (görünüm _process_hadime_remote'ta bir sonraki karede
+		## sıfırlanır) - ceset formun büyüklüğünü/süzülmesini kopyalamasın diye taban ölçek/ofset önce geri alınır.
+		if anim and is_instance_valid(anim):
+			anim.scale = _base_anim_scale
+			anim.offset = _hadime_base_offset
+		var corpse: Node2D = HadimeMath.spawn_corpse(self, anim, _hadime_corpse_clip, _hadime_corpse_pos)
+		for fx in [_death_status_fx, _revive_rewind_fx]:
+			if fx != null and is_instance_valid(fx):
+				fx.reparent(corpse, false)
+		## Host'taki GERÇEK altın/yemek/sandık Area2D'leri bu kuklayı görmesin (hayalet hiçbir şey toplayamaz).
+		collision_layer = 0
+		_hadime_set_weapons_visible(false)
+	elif was_ghost and not hadime_ghost_active:
+		## Ruh bedenine döndü (diriltildi ya da kalıcı öldü): kukla cesedin yerine - player.gd _hadime_end_ghost ile aynı.
+		global_position = _hadime_corpse_pos
+		_target_position = _hadime_corpse_pos
+		_network_velocity = Vector2.ZERO
+		reset_physics_interpolation()
+		HadimeMath.remove_corpse(self)
+		collision_layer = _base_collision_layer
+		_hadime_set_weapons_visible(true)
+		## Kalıcı ölümde (bu pakette "dead" de geldi, bkz. update_extra_state_from_net başı) beden yeniden "ölmesin".
+		if is_dead and anim and anim.sprite_frames and anim.sprite_frames.has_animation(_hadime_corpse_clip):
+			anim.play(_hadime_corpse_clip)
+			anim.frame = anim.sprite_frames.get_frame_count(_hadime_corpse_clip) - 1
+			anim.pause()
+
+
+## Her kare (ölüyken de - görünüm geri dönsün): Q süzülmesi, Karabasan (koyu siluet + %15 büyük + aura), hayalet (yarı saydam).
+func _process_hadime_remote(delta: float) -> void:
+	if not HadimeMath.is_hadime(char_id) or not (anim and is_instance_valid(anim)):
+		return
+	if _hadime_q:
+		_hadime_q_time += delta
+	var lift: float = HadimeMath.channel_lift(_hadime_q_time) if _hadime_q else 0.0
+	anim.offset = _hadime_base_offset + Vector2(0, -lift)
+	anim.scale = _base_anim_scale * (HadimeMath.R_SCALE_MULT if _hadime_nm else 1.0)
+	HadimeMath.apply_form(anim, _hadime_nm, hadime_ghost_active)
+	if _hadime_aura_on != _hadime_nm:
+		_hadime_aura_on = _hadime_nm
+		HadimeMath.set_nightmare_aura(self, _hadime_aura_on)
+	if _hadime_levitate_on != _hadime_q:
+		_hadime_levitate_on = _hadime_q
+		HadimeMath.set_levitate_fx(self, _hadime_levitate_on)
+	var sh: Node2D = get_node_or_null("Shadow") as Node2D
+	if sh:
+		sh.modulate.a = HadimeMath.GHOST_ALPHA if hadime_ghost_active else 1.0
+
+
+## Hayalet silah kullanamaz: yere saçılan ikonlar kuklanın YEREL çocukları olduğu için hayaletle birlikte sürüklenirdi -
+## hayalet süresince gizlenir (player.gd'deki gerçek silahlarla aynı karar).
+func _hadime_set_weapons_visible(v: bool) -> void:
+	for icon in _weapon_icons:
+		if is_instance_valid(icon):
+			icon.visible = v
+	for sh in _weapon_shadows:
+		if is_instance_valid(sh):
+			sh.visible = v
+
+
+## player.gd is_hadime_ghost ile aynı sözleşme (drop_attraction.gd / world_event_manager.gd sorar).
+func is_hadime_ghost() -> bool:
+	return hadime_ghost_active
+
+
+func _death_fx_parent() -> Node:
+	if hadime_ghost_active:
+		var corpse: Node2D = HadimeMath.get_corpse(self)
+		if corpse != null:
+			return corpse
+	return self

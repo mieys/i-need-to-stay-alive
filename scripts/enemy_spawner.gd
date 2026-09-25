@@ -773,7 +773,10 @@ func _any_living_player_outdoors() -> bool:
 			return true
 	if NetworkManager.is_multiplayer_active:
 		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
-			if not is_instance_valid(rp) or rp.get("is_dead") == true:
+			## Yerde yatan uzak oyuncu (kuklada is_dead=false gelir, bkz. main.gd state_snapshot) yerel oyuncuyla AYNI
+			## kuralla sayılmaz - host kendi yerdeki oyuncusunu is_dead ile zaten dışlıyordu (çok oyunculu senkron
+			## denetimi 2026-09-25; Suriyeli Hadime'nin gezen hayaleti de böylece spawn çapası olmaz).
+			if not is_instance_valid(rp) or rp.get("is_dead") == true or rp.get("is_downed") == true:
 				continue
 			var rp_indoors: bool = rp.get("is_indoors") if "is_indoors" in rp else false
 			var rp_in_merchant_zone: bool = rp.get("is_in_merchant_zone") if "is_in_merchant_zone" in rp else false
@@ -813,7 +816,10 @@ func _find_any_living_player_anchor() -> Node:
 	var fallback: Node = null
 	if NetworkManager.is_multiplayer_active:
 		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
-			if not is_instance_valid(rp) or rp.get("is_dead") == true:
+			## Yerde yatan uzak oyuncu (kuklada is_dead=false gelir, bkz. main.gd state_snapshot) yerel oyuncuyla AYNI
+			## kuralla sayılmaz - host kendi yerdeki oyuncusunu is_dead ile zaten dışlıyordu (çok oyunculu senkron
+			## denetimi 2026-09-25; Suriyeli Hadime'nin gezen hayaleti de böylece spawn çapası olmaz).
+			if not is_instance_valid(rp) or rp.get("is_dead") == true or rp.get("is_downed") == true:
 				continue
 			var rp_indoors: bool = rp.get("is_indoors") if "is_indoors" in rp else false
 			var rp_in_merchant_zone: bool = rp.get("is_in_merchant_zone") if "is_in_merchant_zone" in rp else false
@@ -962,7 +968,10 @@ func _outdoor_living_players() -> Array[Node]:
 			out.append(local_p)
 	if NetworkManager.is_multiplayer_active:
 		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
-			if not is_instance_valid(rp) or rp.get("is_dead") == true:
+			## Yerde yatan uzak oyuncu (kuklada is_dead=false gelir, bkz. main.gd state_snapshot) yerel oyuncuyla AYNI
+			## kuralla sayılmaz - host kendi yerdeki oyuncusunu is_dead ile zaten dışlıyordu (çok oyunculu senkron
+			## denetimi 2026-09-25; Suriyeli Hadime'nin gezen hayaleti de böylece spawn çapası olmaz).
+			if not is_instance_valid(rp) or rp.get("is_dead") == true or rp.get("is_downed") == true:
 				continue
 			var rp_indoors: bool = rp.get("is_indoors") if "is_indoors" in rp else false
 			var rp_zone: bool = rp.get("is_in_merchant_zone") if "is_in_merchant_zone" in rp else false

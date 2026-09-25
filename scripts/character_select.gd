@@ -4,7 +4,8 @@ extends Control
 ## kitle (MenuKit) SIFIRDAN yeniden tasarlandı; ekran tamamen KODLA kurulur (.tscn sadece kök).
 ## Yerleşim (1920x1080, simetrik üç sütun - çok oyunculu lobi ile AYNI ızgara):
 ##   sol  : Ruhani Yetenek seçici (spiritual_picker.gd)
-##   orta : kurdele başlık + 6x2 karakter kartı (menu_character_roster.gd) + yetenek bilgi paneli (menu_character_details.gd)
+##   orta : kurdele başlık + 6 sütunlu karakter kartları (menu_character_roster.gd; 13 karakterle 3 satır) + yetenek bilgi
+##          paneli (menu_character_details.gd)
 ##   sağ  : seçili karakterin animasyonlu vitrini (menu_character_showcase.gd) + BAŞLA
 ## Kartlar/bilgi paneli/vitrin lobby_menu.gd ile ORTAK bileşenler - eskiden iki ekranda "birebir aynı" tutulan kopyalar vardı.
 

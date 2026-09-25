@@ -624,6 +624,7 @@ func _process_attack(delta: float) -> void:
 			get_tree().current_scene.add_child(spark)
 			spark.global_position = e.global_position
 			spark.modulate = Color(0.75, 0.5, 1.0) # Mor kıvılcım
+			_broadcast_impact_fx(spark_scene.resource_path, e.global_position, spark.modulate)
 
 
 ## Kullanıcı isteği: "golem 6 saniyede bir yere vurarak çevresindeki
@@ -666,6 +667,20 @@ func _process_golem_slam(delta: float) -> void:
 		get_tree().current_scene.add_child(burst)
 		burst.global_position = global_position
 		burst.modulate = Color(0.8, 0.55, 1.05) # Mor patlama
+		_broadcast_impact_fx(burst_scene.resource_path, global_position, burst.modulate)
+
+
+## BUG DÜZELTMESİ (çok oyunculu senkron denetimi 2026-09-25): Golem'in saldırı kıvılcımları ve 6 sn'lik yer vuruşu
+## patlaması SADECE Necromancer'ın kendi ekranında çıkıyordu (kozmetik kopya yalnızca saldırı animasyonunu oynatıyordu).
+## Artık dünya konumlu "hitscan_impact" olarak (renk tonuyla) diğer oyunculara da gider. Sadece GERÇEK golem çağırır
+## (kozmetik kopya _physics_process'te _process_network_visual'a döner, bu fonksiyonlara hiç girmez).
+func _broadcast_impact_fx(scene_path: String, pos: Vector2, tint: Color) -> void:
+	if not NetworkManager.is_multiplayer_active or network_instance_id.is_empty():
+		return
+	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {
+		"scene_path": scene_path,
+		"modulate": tint,
+	})
 
 
 ## enemy.gd sadece "player" grubunu hedef aldığı için (bkz. skeleton_pet.gd

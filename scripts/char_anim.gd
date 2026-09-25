@@ -12,7 +12,9 @@ extends RefCounted
 
 ## Bitene kadar yürüme/bekleme animasyonunun ÜSTÜNE yazamadığı "aksiyon" klipleri (bkz. player.gd
 ## _update_animation): saldırı, yetenek (cast), hasar (hurt), yemek (eat). Hepsi tek seferlik (loop=false).
-const ACTION_PREFIXES: Array[String] = ["attack", "spellcast", "shrug_", "hurt_", "eat_"]
+## "ghostrise_": Suriyeli Hadime'nin hayalet kalkışı (ölüm klibinin tersi, bkz. hadime_math.gd) - bitmeden bekleme/yürüme
+## klibine geçerse kalkış yarıda kesilirdi.
+const ACTION_PREFIXES: Array[String] = ["attack", "spellcast", "shrug_", "hurt_", "eat_", "ghostrise_"]
 
 ## Yetenek kullanım klibi: yeni sprite setlerinde "shrug_<yön>", eski (LPC) setlerde "spellcast_<yön>".
 ## Öncelik sırası bu; karakterde hangisi varsa o oynar. Odaklanarak kanal yapan yeteneklerde (Büyücü meteor,

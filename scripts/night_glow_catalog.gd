@@ -51,6 +51,12 @@ const NO_GLOW_SCENES := [
 	"res://scenes/fx_mage_swap.tscn",
 	## Oakley Sarmaşıklar'ın yaratığa sarılan dikenleri - bitki, büyü değil.
 	"res://scenes/fx_oakley_entangle.tscn",
+	## Suriyeli Hadime: lanet kıvılcım izi (saniyede ~20 minik düğüm - her birine ışık takılmasın, lanetin kendisi parlar),
+	## Q'daki karanlık uçma parçacıkları ve Karabasan'ın karanlık aurası/patlaması (karanlık - ışık saçmaz).
+	"res://scenes/fx_hadime_curse_mote.tscn",
+	"res://scenes/fx_hadime_levitate.tscn",
+	"res://scenes/fx_hadime_nightmare.tscn",
+	"res://scenes/fx_hadime_nightmare_burst.tscn",
 ]
 
 const BY_SCENE := {
@@ -117,6 +123,12 @@ const BY_SCENE := {
 	## Şovalye Q (Kışkırtma, açık kırmızı) ve E açıkken Şovalye'nin emilim efekti (mor-mavi) - 2026-09-25.
 	"res://scenes/fx_sovalye_taunt.tscn": {"c": Color(1.0, 0.42, 0.42), "r": 60.0, "e": 0.55, "o": Vector2(0.0, 30.0)},
 	"res://scenes/fx_sovalye_guard.tscn": {"c": Color(0.55, 0.52, 1.0), "r": 44.0, "e": 0.45},
+	## Suriyeli Hadime (2026-09-25): Q laneti (uçan küre + kitaptan çıkış + düşüş) hastalıklı yeşil, E kara deliğin
+	## birikim diski mor (5 sn). Karabasan (R) bilerek parlamaz (bkz. NO_GLOW_SCENES).
+	"res://scenes/fx_hadime_curse.tscn": {"c": Color(0.5, 1.0, 0.35), "r": 30.0, "e": 0.6},
+	"res://scenes/fx_hadime_curse_launch.tscn": {"c": Color(0.55, 1.0, 0.4), "r": 34.0, "e": 0.55, "d": 0.3},
+	"res://scenes/fx_hadime_curse_impact.tscn": {"c": Color(0.5, 1.0, 0.35), "r": 60.0, "e": 0.8, "d": 0.5},
+	"res://scenes/fx_hadime_black_hole.tscn": {"c": Color(0.78, 0.45, 1.0), "r": 56.0, "e": 0.55, "f": 0.15},
 	"res://scenes/fx_melek_holy.tscn": {"c": Color(1.0, 0.88, 0.4), "r": 80.0, "e": 0.85},
 	"res://scenes/fx_melek_heal_aura.tscn": {"c": Color(0.55, 1.0, 0.5), "r": 55.0, "e": 0.5},
 	"res://scenes/fx_melek_shield_aura.tscn": {"c": Color(0.4, 0.6, 1.0), "r": 55.0, "e": 0.5},

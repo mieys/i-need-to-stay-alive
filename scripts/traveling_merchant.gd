@@ -607,6 +607,11 @@ func _process_interaction() -> void:
 	if not is_instance_valid(player):
 		_hide_prompt()
 		return
+	## Ölü/yerde yatan (Suriyeli Hadime'nin hayaleti dahil - "dükkanla etkileşime giremez") oyuncu dükkan açamaz. Etkileşim
+	## alanı hayaleti zaten görmez (collision_layer 0) ama satıcının yanında düşerse _player_near true kalıyordu.
+	if player.get("is_dead") == true:
+		_hide_prompt()
+		return
 	## Dükkan zaten açıkken (ör. çift F basımı) tekrar açmayı/ipucunu önle.
 	if _shop_screen and is_instance_valid(_shop_screen):
 		_hide_prompt()

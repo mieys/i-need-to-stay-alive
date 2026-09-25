@@ -552,7 +552,8 @@ func _process(_delta: float) -> void:
 	## yanlışlıkla eve girip çıkmayı tetiklemesin.
 	var f_just_pressed: bool = Input.is_action_just_pressed("interact") and not bool(_player.get("is_chat_typing"))
 
-	if not indoors and _near_entrance:
+	## Ölü/yerde yatan (Suriyeli Hadime'nin hayaleti dahil) oyuncu kapının yanında düştüyse eve giremesin.
+	if not indoors and _near_entrance and _player.get("is_dead") != true:
 		_prompt_label.text = "Eve girmek için %s tuşuna bas" % GameManager.get_action_key_label("interact")
 		_prompt_label.visible = true
 		if f_just_pressed:

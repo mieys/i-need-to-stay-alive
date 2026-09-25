@@ -44,6 +44,16 @@ CHARS = {
     # 2026-09-25 ucuncu parti: Oakley (eski LPC oyku_atlas.png'den bu kite). Dosya adlari
     # (oyku_*) eski Oyku adindan kalma - characters.gd bunlari kullandigi icin korunuyor.
     "oakley": ("oakley", "oyku_frames.tres", "oyku_portrait.png"),
+    # 2026-09-25: yeni karakter Suriyeli Hadime (hadime.zip; read.png ayri geldi, ayni klasore konur).
+    "hadime": ("hadime", "hadime_frames.tres", "hadime_portrait.png"),
+}
+
+# Karaktere ozel TERS klipler: (yeni klip adi, kaynak sayfa, fps) - kaynak sayfanin kareleri SONDAN BASA dizilir.
+# Hadime pasifi (hayalet formu): olumden 2 sn sonra "olum animasyonunun tersi" ile ayaga kalkar (player.gd
+# _hadime_rise_ghost). Klip SpriteFrames'te AYRI bir ad olarak durur ki uzak istemciler de sadece klip ADINI (ag senkronu)
+# gorup ayni kalkisi oynatsin - ayri bir "tersten oynat" RPC'si gerekmesin (bkz. CLAUDE.md madde 4).
+REVERSED_CLIPS = {
+    "hadime": [("ghostrise", "death", 5.0)],
 }
 
 # (oyundaki sayfa adi, kaynak dosya adi adaylari, dongu, hiz fps)
@@ -126,12 +136,19 @@ def write_frames(key, frames_name, sheet_counts):
         frames = ", ".join('{"duration": 1.0,"texture": %s}' % r for r in refs)
         anims.append('{"frames": [%s],"loop": %s,"name": &"%s","speed": %s}' % (frames, "true" if loop else "false", name, speed))
 
+    sheet_ext = {}
     for sheet, _names, loop, speed in SHEETS:
         count = sheet_counts[sheet]
         ext_id = add_ext(f"{res_dir}/sheets/{sheet}.png")
+        sheet_ext[sheet] = ext_id
         for d, row in DIR_ROWS:
             refs = [f'SubResource("{add_atlas(ext_id, c, row)}")' for c in range(count)]
             add_anim(f"{sheet}_{d}", refs, loop, speed)
+    for clip, src_sheet, speed in REVERSED_CLIPS.get(key, []):
+        count = sheet_counts[src_sheet]
+        for d, row in DIR_ROWS:
+            refs = [f'SubResource("{add_atlas(sheet_ext[src_sheet], c, row)}")' for c in reversed(range(count))]
+            add_anim(f"{clip}_{d}", refs, False, speed)
     if key == "vampir":
         ## Yarasa formu (2026-09-24 yeniden tasarim): tools/gen_vampir_bat_form.py TEK bir sayfa uretir
         ## (bat_sheet.png, 96x112 hucre, satirlar DIR_ROWS sirasinda) - eskiden 16 ayri bat_<yon>_<n>.png vardi.

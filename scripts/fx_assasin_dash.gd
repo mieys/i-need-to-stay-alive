@@ -17,7 +17,9 @@ var color_main: Color = Color(0.55, 0.15, 0.85) # koyu mor
 var color_bright: Color = Color(0.85, 0.65, 1.0) # parlak leylak
 const PIXEL_GRID := 4.0
 const SPAWN_INTERVAL := 0.012
-const SAFETY_DURATION := 6.0 ## player.gd stop() çağırmazsa (ör. uzak client kopyası) diye güvenlik tavanı
+## player.gd stop() çağırmazsa diye güvenlik tavanı. Uzak kopyalar artık kapanışı network_manager.gd broadcast_player_fx_stop
+## ile alıyor (2026-09-25); tavan 10 sn'lik Gölge Hücumu'nu (R) kesmesin diye 6 -> 12 sn.
+const SAFETY_DURATION := 12.0
 
 var elapsed: float = 0.0
 var _stopping: bool = false

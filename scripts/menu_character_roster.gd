@@ -2,7 +2,8 @@ extends GridContainer
 
 ## Karakter kartı ızgarası - tek oyunculu (character_select.gd) ve çok oyunculu (lobby_menu.gd) ekranların ORTAK bileşeni.
 ## Eskiden iki ekranda "birebir aynı" tutulan iki ayrı kopya vardı (kart stili, isim sığdırma, seçim çerçevesi) ve her
-## düzeltme iki yere ayrı ayrı yapılmak zorundaydı; artık tek yer. 6 sütun x 2 satır (12 karakter) - bkz. MenuKit.CARD_SIZE.
+## düzeltme iki yere ayrı ayrı yapılmak zorundaydı; artık tek yer. 6 sütun, satır sayısı karakter sayısından (grid_size) -
+## 2026-09-25'ten beri 13 karakter = 3 satır (altındaki yetenek paneli buna göre sıkılaştırıldı, bkz. menu_character_details.gd).
 
 signal character_picked(char_id: int)
 
@@ -30,7 +31,8 @@ func build() -> void:
 		cards[char_id] = card
 
 
-## Izgaranın toplam boyutu (yerleşim hesapları için): 6 x 180 + 5 x 4 = 1100 px genişlik, 2 x 216 + 6 = 438 px yükseklik.
+## Izgaranın toplam boyutu (yerleşim hesapları için): 6 x 180 + 5 x 4 = 1100 px genişlik, satır x 216 + (satır-1) x 6 yükseklik
+## (3 satır = 660 px).
 static func grid_size(count: int) -> Vector2:
 	var rows: int = int(ceil(float(count) / COLUMNS))
 	return Vector2(COLUMNS * MenuKit.CARD_SIZE.x + (COLUMNS - 1) * H_SEP, rows * MenuKit.CARD_SIZE.y + (rows - 1) * V_SEP)

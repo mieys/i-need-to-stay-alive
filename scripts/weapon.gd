@@ -1531,7 +1531,18 @@ func _spawn_orbit_hit_fx(pos: Vector2) -> void:
 		get_parent().add_child(fx)
 	fx.global_position = pos + Vector2(randf_range(-4.0, 4.0), randf_range(-4.0, 4.0))
 	fx.rotation = randf_range(0.0, TAU)
+	var scene_scale: float = maxf(fx.scale.x, 0.001)
 	fx.scale = Vector2(0.5, 0.5)
+	## BUG DÜZELTMESİ (çok oyunculu senkron denetimi 2026-09-25): dönen kılıcın vuruş efekti diğer oyunculara HİÇ
+	## gitmiyordu (diğer yakın dövüş vuruşları "melee_hit" ile gidiyor, bkz. _spawn_melee_hit_fx) - uzak kopyada kılıç
+	## dönüyor ama yaratıklara değince hiçbir şey görünmüyordu. Dönen kılıç saniyede çok sayıda yaratığa değebildiği
+	## için yayın silah başına 0.08 sn'de bire sınırlı (sadece görsel).
+	if NetworkManager.is_multiplayer_active and not NetworkManager.should_throttle("orbit_hit_%d" % get_instance_id(), 0.08):
+		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "melee_hit", fx.global_position, {
+			"scene_path": HitClawFxScene.resource_path,
+			"rotation": fx.rotation,
+			"scale_mult": 0.5 / scene_scale, ## uzak dal sahnenin kendi ölçeğiyle ÇARPAR - yereldeki mutlak 0.5 ile aynı boy
+		})
 
 
 ## Silahın kafanın üstünde süzülen ikonu için, İKONA BAĞLI (karakterin
