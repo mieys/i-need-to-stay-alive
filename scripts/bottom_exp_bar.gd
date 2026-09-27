@@ -9,8 +9,15 @@ extends Control
 
 ## Kullanıcı isteği (güncelleme): "exp barı çok kalın olmuş birazcık incelt" -
 ## eski 20px'ten 10px'e indirildi.
-const BAR_HEIGHT := 12.0
+## Kullanıcı isteği (2026-09-27): "exp barını %20 inceltip rengini mor exp tonlarında yap" - 12 -> 10 px (tam %20 = 9.6,
+## piksel ızgarasında kalsın diye 10), altın/turuncu yerine mor tonlar. hud.gd DOCK_BOTTOM_MARGIN bu yüksekliğe göre boşluk bırakır.
+const BAR_HEIGHT := 10.0
 const OUTLINE := 1.0
+const C_BG := Color(0.11, 0.07, 0.15, 1.0)
+const C_OUTLINE := Color(0.52, 0.34, 0.74, 1.0)
+const C_FILL := Color(0.6, 0.33, 0.93, 1.0)
+const C_SHINE := Color(0.82, 0.66, 1.0, 0.9)
+const C_FLASH := Color(0.95, 0.86, 1.0, 1.0)
 
 ## Görünen dolum oranı - gerçek orana (target_ratio) doğru tween ile
 ## yumuşakça ilerler, ani bir sıçrama yerine "akan" bir dolum animasyonu
@@ -67,21 +74,20 @@ func _draw() -> void:
 	var w: float = size.x
 	var h: float = BAR_HEIGHT
 
-	## Arka plan (boş kısım) - koyu kahverengi/toprak tonu, oyunun genel
-	## sıcak pikselsi paletiyle uyumlu.
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(0.18, 0.14, 0.12, 1.0))
+	## Arka plan (boş kısım) - koyu mor.
+	draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), C_BG)
 
-	## Üst kalın piksel çerçevesi (parlak bronz/altın rengi) - siyah zeminler ve
+	## Üst piksel çerçevesi (açık mor) - siyah zeminler ve
 	## ekran kenarlıkları üzerinde belirgin bir sınır çizgisi oluşturur.
-	draw_rect(Rect2(Vector2(0, 0), Vector2(w, OUTLINE)), Color(0.70, 0.52, 0.20, 1.0))
+	draw_rect(Rect2(Vector2(0, 0), Vector2(w, OUTLINE)), C_OUTLINE)
 
 	if _display_ratio > 0.0:
 		var fill_w: float = round(w * _display_ratio)
 		var fill_rect := Rect2(Vector2(0, OUTLINE), Vector2(fill_w, h - OUTLINE))
-		## Ana dolum rengi - altın/turuncu sıcak bir EXP tonu.
-		draw_rect(fill_rect, Color(0.95, 0.75, 0.15, 1.0))
+		## Ana dolum rengi - mor EXP tonu.
+		draw_rect(fill_rect, C_FILL)
 		## Üstte ince, daha açık bir "parlama" şeridi (klasik piksel bar derinliği).
-		draw_rect(Rect2(Vector2(0, OUTLINE), Vector2(fill_w, max(1.0, h * 0.25))), Color(1.0, 0.92, 0.55, 0.9))
+		draw_rect(Rect2(Vector2(0, OUTLINE), Vector2(fill_w, max(1.0, h * 0.25))), C_SHINE)
 		## Piksel-sanatı bölme çizgileri - her %10'da ince bir çizgi.
 		for i in range(1, 10):
 			var seg_x: float = round(w * (i / 10.0))
@@ -92,4 +98,4 @@ func _draw() -> void:
 	## çubuğun üstünde beyazımsı bir parlama söner (kullanıcı isteği:
 	## "exp dolunca orda gözükmeli artış animasyonuna sahip olmalı").
 	if _flash_alpha > 0.0:
-		draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(1.0, 1.0, 0.85, 0.35 * _flash_alpha))
+		draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(C_FLASH.r, C_FLASH.g, C_FLASH.b, 0.35 * _flash_alpha))

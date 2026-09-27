@@ -13,7 +13,7 @@ doğru görür, ama **diğer oyuncularda eski efekt kalır ya da hiçbir şey
 görünmez.** `scripts/player.gd` içindeki geçmiş yorumlarda bunun tam olarak
 aynı kök nedenle defalarca yaşandığı görülüyor (ör. `_spawn_buyucu_meteor_
 strike`'ın üstündeki "ziva agent" notu, `remote_player.gd`'deki "Meteor
-kanalı uzak ekranlarda donuyor" notu, `_weapon_is_orbit_sword` notu).
+kanalı uzak ekranlarda donuyor" notu, eski dönen kılıcın uzak kopya notu).
 
 **Kök neden:** Bu proje mimarisinde her oyuncunun görsel efektleri/
 animasyonları KENDİ istemcisinde üretilir, sonra `NetworkManager.
@@ -54,9 +54,9 @@ diğer oyuncularda eski/hiç görsel kalır.
 3. **Sürekli/karede-karede simüle edilen bir görsel mi?** (ör. dönen
    silah, orbit eden bir mermi) → Bunlar performans için AĞDAN POZİSYON
    ALMAZ, her istemci KENDİ kopyasını AYNI formülle hesaplar (bkz.
-   `scripts/weapon_orbit_math.gd`). Bu tür bir şey eklersen, formülü
+   `scripts/talon_formation_math.gd`, `scripts/sword_swing_math.gd`). Bu tür bir şey eklersen, formülü
    `weapon.gd` (yetkili/gerçek) VE `remote_player.gd` (kozmetik kopya)
-   içine AYRI AYRI YAZMA — `weapon_orbit_math.gd` gibi paylaşılan bir
+   içine AYRI AYRI YAZMA — `sword_swing_math.gd` gibi paylaşılan bir
    `static func` çıkar, iki taraf da onu çağırsın. Böylece formülü
    değiştirdiğinde tek yeri değiştirmen yeterli olur.
 

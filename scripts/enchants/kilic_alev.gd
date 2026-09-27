@@ -1,16 +1,19 @@
 extends "res://scripts/enchant_behavior.gd"
 
-## Alevli Kılıç (EnchantDefs "kilic_alev"): yakma / yanana bonus / yanma yığını temel sınıfta. Her N savuruşta (on_revolution - çeyrek tur, ~1 sn)
-## sahibinin çevresinde, kılıcın dönüş yarıçapında süreli alev halkası (enchant_area.gd "field" ring, sahibini izler).
+## Alevli Kılıç (EnchantDefs "kilic_alev"): yakma / yanana bonus / yanma yığını temel sınıfta. Her N savuruşta (on_revolution -
+## weapon.gd _sword_contact) sahibinin çevresinde, kılıcın erişim mesafesinde süreli alev halkası (enchant_area.gd "field" ring,
+## sahibini izler).
 ## Final (Sigara) Ateş Kılıcı: vuruş alanı x2 (aoe_mult, temel sınıf) + her turda çevreye alev dalgası.
 
 const FIRE := Color(1.0, 0.55, 0.2)
 const RING_WIDTH := 26.0
 
 
+## 2026-09-26: kılıç artık etrafta dönmüyor (eskiden oyuncu-kılıç mesafesi = yörünge yarıçapı) - halka kılıcın erişim
+## mesafesinin (attack_range) ~%70'inde, savuruşların düştüğü bantta.
 func _orbit_radius() -> float:
-	var p: Node2D = owner_player() as Node2D
-	return maxf(50.0, p.global_position.distance_to(weapon.global_position)) if p else 80.0
+	var reach: float = float(weapon.get("attack_range")) if is_instance_valid(weapon) else 115.0
+	return clampf(reach * 0.7, 60.0, 180.0)
 
 
 func revolution_extra(_pos: Vector2) -> void:

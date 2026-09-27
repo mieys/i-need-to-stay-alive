@@ -1,6 +1,6 @@
 extends Control
 
-## (2026-09-25: artık SAĞ üstte, minimapın altında - bkz. RIGHT_MARGIN.) Klasik MMORPG "party frame" tarzı küçük bir
+## (2026-09-25: artık SAĞ üstte, minimapın altında - bkz. RIGHT_MARGIN; görünüm 2026-09-27: bkz. İKİNCİ TASARIM.) Klasik MMORPG "party frame" tarzı küçük bir
 ## müttefik paneli (kullanıcı isteği: "sağ taraf altın üretim butonlarına -
 ## maden/altın toplayıcı - ayrıldığı için mutlaka SOL tarafta olmalı"). Her
 ## satırda o müttefikin avatarı+ismi, can/kalkan barı VE tıklanınca miktar
@@ -21,33 +21,35 @@ extends Control
 ## kalır, ekstra bir kontrol gerekmez.
 
 
-## YENİDEN TASARIM (kullanıcı isteği 2026-09-25): "grup paneli daha basit görünmeli aynı şekilde orda da kenarlıkların daha
-## iyi olması gerekiyor can kalkan barları tıpkı karakterin üstündeki can kalkan barına benzer olmalı gereksiz yer
-## kaplamaması gereksiz ayrıntılı olmaması için (genişliği buna uygun olmalı)" + "grup panelindeki hasar tablosunun da daha
-## minimalist ve diğer panellerle uyumlu tasarlanması gerekiyor" + "grup paneli de sağda olsun" (minimapın altında).
-## Eskiden: ahşap pencere + her satırda çukur parşömen kutu + ahşap çerçeveli portre + %10 çentikli parşömen çubuklar +
-## çubuk içinde "can/maks" yazısı + ahşap butonlar (panel 280 px). Artık: tek sade koyu kutu (UIKit "hud_flat"), satırlar
-## çerçevesiz; 48 px 1:1 portre (ince kenar), isim, altında karakter ÜSTÜNDEKİ çubuğun birebir aynısı (ui_mini_bar.gd ->
-## overhead_bar.gd draw_pixel_bar) can + kalkan, küçük sade altın butonu. Panel ~254 px. Açılır pencereler panel sağda
-## olduğu için artık SOLA açılır.
-const PANEL_WIDTH := 238.0
+## YENİDEN TASARIM (kullanıcı isteği 2026-09-25): "grup paneli daha basit görünmeli ..." - ahşap pencere + parşömen
+## kutular kaldırılıp tek sade koyu kutuya (UIKit "hud_flat") geçilmişti.
+## İKİNCİ TASARIM (kullanıcı isteği 2026-09-27: "grup arayüzü diğer panellerle yakışmıyor diğer panellere benzemeli yapısı
+## ve minimalist olmalı"): koyu kutu HUD'un geri kalanından (bej levhalı görev satırları, altın göstergesi, ENVANTER, can/
+## kalkan levhaları) kopuk duruyordu. Artık her müttefik, hemen altındaki görev satırlarıyla (world_event_banner.gd) AYNI
+## yapıda kendi levhası: perçinsiz bej levha (hud_plaque_clean.png, altın göstergesiyle aynı), solda görev okunun kutusuyla
+## aynı koyu kutuda 1:1 portre, isim + durum, altında görev ilerleme çubuğuyla aynı gömme (inset_tight) çukurda HUD çubuk
+## dokusu - can (kalın) ve kalkan (ince) TEK çukurda üst üste. "GRUP" başlığı kaldırıldı; altın butonu satırın sağında
+## küçük ahşap buton, "Hasar" levhaların altında küçük ahşap buton. Açılır pencereler de aynı levha + ahşap butonlar.
+const ROW_WIDTH := 270.0 ## world_event_banner.gd ROW_WIDTH ile aynı - sağ sütun tek hizada
 const AVATAR_SIZE := 48.0 ## portre PNG'leri 48x48 - 1:1 çizilir (bulanık/yamuk ölçek yok)
-const AVATAR_BOX := 52.0
-const GOLD_BTN_SIZE := 26.0
-## Karakter üstü çubuğun oranları (overhead_bar.gd HEIGHT 7 / kalkan x0.72) ekran ölçeğinde (1 dünya birimi = 2 px).
-const HP_BAR_HEIGHT := 18.0
-const SHIELD_BAR_HEIGHT := 14.0
-const FS_ROW := 16 ## m5x7 2x - keskin
+const AVATAR_BORDER := 2.0
+const GOLD_BTN_SIZE := 32.0
+const HP_BAR_HEIGHT := 10.0
+const SHIELD_BAR_HEIGHT := 6.0
+const FS_ROW := 24 ## m5x7 3x - görev satırlarıyla aynı (16 1080p'de okunmuyor)
 ## Sağ üstteki minimap'in (hud.tscn MinimapControl: sağdan 36, alt kenar 186) hemen altı.
 const RIGHT_MARGIN := 36.0
 const TOP_Y := 198.0
 const GOLD_ICON_PATH := "res://assets/ui/newui/icon_ingot.png"
 const AVATAR_BG := preload("res://assets/ui/kit/hud_avatar_bg.png")
-const MiniBarScript := preload("res://scripts/ui_mini_bar.gd")
+const PLAQUE_CLEAN := preload("res://assets/ui/game/hud_plaque_clean.png")
+const BarUnder := preload("res://assets/ui/kit/hud_bar_under.png")
+const BarFill := preload("res://assets/ui/kit/hud_bar_fill.png")
+## Görev okunun kutusuyla aynı koyu çerçeve (world_event_banner.gd ArrowBox).
+const BOX_OUTLINE := Color("#3a2212")
+const BOX_FILL := Color("#5a361d")
 const SHIELD_COLOR := Color(0.35, 0.72, 1.0, 1.0) ## overhead_bar.gd kalkan rengi ile AYNI
-const HP_BG := Color(0.12, 0.04, 0.04, 1.0)
-const SHIELD_BG := Color(0.04, 0.08, 0.14, 1.0)
-const DAMAGE_BAR_COLOR := Color(1.0, 0.6, 0.28, 1.0)
+const DAMAGE_BAR_COLOR := Color("#e0aa3e") ## görev çubuğunun altın tonu
 
 ## Kim ne zaman katıldı/ayrıldı diye satırların Node'larını her karede değil,
 ## bu aralıkta bir kontrol ediyoruz (satır içeriği - can/kalkan/isim/durum -
@@ -59,8 +61,8 @@ class PartyRow:
 	var container: Control
 	var avatar: TextureRect
 	var name_label: Label
-	var health_bar: Control ## ui_mini_bar.gd
-	var shield_bar: Control ## ui_mini_bar.gd
+	var health_bar: TextureProgressBar
+	var shield_bar: TextureProgressBar
 	var gold_button: Button
 	var downed_label: Label
 	var peer_id: int = 0
@@ -96,39 +98,50 @@ func _ready() -> void:
 	UISound.connect_all_buttons(self)
 
 
+## Perçinsiz bej levha (altın göstergesiyle aynı: plaque.png payları + hud_plaque_clean.png dokusu).
+static func _plaque_style(pad_x: float, pad_y: float) -> StyleBoxTexture:
+	var sb := MenuKit._tex_style("plaque.png", [6, 5, 6, 5], [pad_x, pad_y, pad_x, pad_y], false, MenuKit.GAME_DIR)
+	sb.texture = PLAQUE_CLEAN
+	return sb
+
+
+static func _wood_button(text: String, min_size: Vector2) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.custom_minimum_size = min_size
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	UIKit.style_button(btn, "wood", true, FS_ROW)
+	return btn
+
+
 func _build_static_ui() -> void:
 	theme = UIKit.theme()
-	var bg := PanelContainer.new()
+	## "Background": levhaların + Hasar butonunun toplam alanı (main.gd görev satırlarını bunun ALTINA hizalar, açılır
+	## pencereler bunun SOLUNA açılır). Kendisi çizim yapmaz.
+	var bg := VBoxContainer.new()
 	bg.name = "Background"
-	bg.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
-	bg.add_theme_stylebox_override("panel", UIKit.panel_style("hud_flat"))
+	bg.custom_minimum_size = Vector2(ROW_WIDTH, 0)
+	bg.add_theme_constant_override("separation", 6)
 	bg.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	bg.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
 	_list = VBoxContainer.new()
 	_list.name = "List"
 	_list.add_theme_constant_override("separation", 6)
+	_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bg.add_child(_list)
-	## Başlık satırı: "GRUP" + sağda sade "Hasar" butonu (hasar sıralaması).
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 8)
-	_list.add_child(header)
-	var title := Label.new()
-	title.text = "GRUP"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	UIKit.style_label(title, FS_ROW, UIKit.HUD_TEXT_ACCENT, 0)
-	header.add_child(title)
 
-	_stats_button = Button.new()
-	_stats_button.text = "Hasar"
-	_stats_button.custom_minimum_size = Vector2(0, 24)
+	## Levhaların altında, sağa yaslı küçük ahşap "Hasar" butonu (hasar sıralaması).
+	var footer := HBoxContainer.new()
+	footer.alignment = BoxContainer.ALIGNMENT_END
+	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.add_child(footer)
+	_stats_button = _wood_button("Hasar", Vector2(0, 32))
 	_stats_button.tooltip_text = "Kimin ne kadar hasar verdiğini göster"
-	_stats_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_stats_button.pressed.connect(_on_stats_button_pressed)
-	UIKit.style_flat_button(_stats_button, FS_ROW)
-	header.add_child(_stats_button)
+	footer.add_child(_stats_button)
 
 	_build_gift_popup()
 	_build_stats_popup()
@@ -139,14 +152,14 @@ func _build_gift_popup() -> void:
 	_gift_popup.name = "GiftPopup"
 	_gift_popup.visible = false
 	_gift_popup.z_index = 100
-	_gift_popup.add_theme_stylebox_override("panel", UIKit.panel_style("hud_flat"))
+	_gift_popup.add_theme_stylebox_override("panel", _plaque_style(14.0, 10.0))
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
 	_gift_popup.add_child(vbox)
 
 	_gift_amount_label = Label.new()
-	UIKit.style_label(_gift_amount_label, FS_ROW, UIKit.HUD_TEXT_ACCENT, 0)
+	UIKit.style_label(_gift_amount_label, FS_ROW, UIKit.C_TEXT, 0)
 	_gift_amount_label.text = "Altın gönder"
 	vbox.add_child(_gift_amount_label)
 
@@ -154,23 +167,14 @@ func _build_gift_popup() -> void:
 	presets_box.add_theme_constant_override("separation", 4)
 	vbox.add_child(presets_box)
 	for amount in [10, 50, 100]:
-		var btn := Button.new()
-		btn.text = str(amount)
-		btn.custom_minimum_size = Vector2(44, 26)
-		UIKit.style_flat_button(btn, FS_ROW)
+		var btn := _wood_button(str(amount), Vector2(52, 32))
 		btn.pressed.connect(_on_gift_amount_pressed.bind(amount))
 		presets_box.add_child(btn)
-	var all_btn := Button.new()
-	all_btn.text = "Hepsi"
-	all_btn.custom_minimum_size = Vector2(52, 26)
-	UIKit.style_flat_button(all_btn, FS_ROW)
+	var all_btn := _wood_button("Hepsi", Vector2(64, 32))
 	all_btn.pressed.connect(_on_gift_amount_pressed.bind(-1))
 	presets_box.add_child(all_btn)
 
-	var cancel_btn := Button.new()
-	cancel_btn.text = "İptal"
-	cancel_btn.custom_minimum_size = Vector2(0, 26)
-	UIKit.style_flat_button(cancel_btn, FS_ROW)
+	var cancel_btn := _wood_button("İptal", Vector2(0, 32))
 	cancel_btn.pressed.connect(_hide_gift_popup)
 	vbox.add_child(cancel_btn)
 
@@ -179,15 +183,14 @@ func _build_gift_popup() -> void:
 	add_child(_gift_popup)
 
 
-## Hasar sıralaması (kullanıcı isteği 2026-09-25: "daha minimalist ve diğer panellerle uyumlu, gereksiz çerçeve ayrıntısı
-## olmasın") - grup paneliyle AYNI sade kutu; başlık + köşede küçük "x", satırlarda sıra/isim/hasar ve altında en çok
-## vurana göre oranlı ince çubuk (karakter üstü çubuk diliyle).
+## Hasar sıralaması - grup satırlarıyla AYNI levha; başlık + köşede küçük "x", satırlarda sıra/isim/hasar ve altında en çok
+## vurana göre oranlı ince çubuk (görev çubuğuyla aynı gömme çukur + doku).
 func _build_stats_popup() -> void:
 	_stats_popup = PanelContainer.new()
 	_stats_popup.name = "StatsPopup"
 	_stats_popup.visible = false
 	_stats_popup.z_index = 100
-	_stats_popup.add_theme_stylebox_override("panel", UIKit.panel_style("hud_flat"))
+	_stats_popup.add_theme_stylebox_override("panel", _plaque_style(14.0, 10.0))
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
@@ -199,20 +202,18 @@ func _build_stats_popup() -> void:
 	var title := Label.new()
 	title.text = "Hasar Sıralaması"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UIKit.style_label(title, FS_ROW, UIKit.HUD_TEXT_ACCENT, 0)
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	UIKit.style_label(title, FS_ROW, UIKit.C_ACCENT, 0)
 	header.add_child(title)
 	## Kullanıcı bildirimi (eski): sadece kendi kapat butonuyla kapanmalı (dışına tıklayınca değil).
-	var close_btn := Button.new()
-	close_btn.text = "x"
-	close_btn.custom_minimum_size = Vector2(24, 24)
+	var close_btn := _wood_button("x", Vector2(32, 32))
 	close_btn.tooltip_text = "Kapat"
-	UIKit.style_flat_button(close_btn, FS_ROW)
 	close_btn.pressed.connect(_hide_stats_popup)
 	header.add_child(close_btn)
 
 	_stats_list = VBoxContainer.new()
 	_stats_list.add_theme_constant_override("separation", 6)
-	_stats_list.custom_minimum_size = Vector2(230, 0)
+	_stats_list.custom_minimum_size = Vector2(250, 0)
 	vbox.add_child(_stats_list)
 
 	# _gift_popup ile AYNI sebep: liste akışının DIŞINDA, kök seviyesinde.
@@ -288,20 +289,28 @@ func _create_row(peer_id: int) -> PartyRow:
 	var row := PartyRow.new()
 	row.peer_id = peer_id
 
+	var plaque := PanelContainer.new()
+	plaque.custom_minimum_size = Vector2(ROW_WIDTH, 0.0)
+	plaque.add_theme_stylebox_override("panel", _plaque_style(14.0, 8.0))
+	plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_list.add_child(plaque)
+	row.container = plaque
+
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
-	_list.add_child(hbox)
-	row.container = hbox
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plaque.add_child(hbox)
 
-	## Portre: HUD avatar zemini + 1:1 portre + ince koyu kenar (ahşap çerçeve yok).
+	## Portre: görev okunun kutusuyla aynı koyu çerçeve, içinde HUD avatarının bej zemini + 1:1 portre.
+	var box_size: float = AVATAR_SIZE + AVATAR_BORDER * 2.0
 	var avatar_box := Panel.new()
-	avatar_box.custom_minimum_size = Vector2(AVATAR_BOX, AVATAR_BOX)
+	avatar_box.custom_minimum_size = Vector2(box_size, box_size)
 	avatar_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	avatar_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var avatar_border := StyleBoxFlat.new()
-	avatar_border.bg_color = Color(0, 0, 0, 0)
-	avatar_border.border_color = UIKit.HUD_FLAT_BORDER
-	avatar_border.set_border_width_all(2)
+	avatar_border.bg_color = BOX_FILL
+	avatar_border.border_color = BOX_OUTLINE
+	avatar_border.set_border_width_all(int(AVATAR_BORDER))
 	avatar_border.anti_aliasing = false
 	avatar_box.add_theme_stylebox_override("panel", avatar_border)
 	hbox.add_child(avatar_box)
@@ -311,16 +320,16 @@ func _create_row(peer_id: int) -> PartyRow:
 	avatar_bg.stretch_mode = TextureRect.STRETCH_SCALE
 	avatar_bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	avatar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	avatar_bg.position = Vector2(2, 2)
-	avatar_bg.size = Vector2(AVATAR_BOX - 4.0, AVATAR_BOX - 4.0)
+	avatar_bg.position = Vector2(AVATAR_BORDER, AVATAR_BORDER)
+	avatar_bg.size = Vector2(AVATAR_SIZE, AVATAR_SIZE)
 	avatar_box.add_child(avatar_bg)
-	avatar_box.move_child(avatar_bg, 0)
 	var avatar := TextureRect.new()
 	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	avatar.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 	avatar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	avatar.position = Vector2((AVATAR_BOX - AVATAR_SIZE) * 0.5, (AVATAR_BOX - AVATAR_SIZE) * 0.5)
+	avatar.clip_contents = true
+	avatar.position = Vector2(AVATAR_BORDER, AVATAR_BORDER)
 	avatar.size = Vector2(AVATAR_SIZE, AVATAR_SIZE)
 	avatar_box.add_child(avatar)
 	row.avatar = avatar
@@ -328,15 +337,17 @@ func _create_row(peer_id: int) -> PartyRow:
 	var info_vbox := VBoxContainer.new()
 	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	info_vbox.add_theme_constant_override("separation", 4)
+	info_vbox.add_theme_constant_override("separation", 2)
+	info_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(info_vbox)
 
-	## 1. satır: isim (taşarsa ...) + durum etiketi (YERDE / ÖLÜ) + küçük altın butonu
+	## 1. satır: isim (taşarsa ...) + durum etiketi (YERDE / ÖLÜ)
 	var name_row := HBoxContainer.new()
 	name_row.add_theme_constant_override("separation", 6)
+	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info_vbox.add_child(name_row)
 	var name_label := Label.new()
-	UIKit.style_label(name_label, FS_ROW, UIKit.HUD_TEXT_LIGHT, 0)
+	UIKit.style_label(name_label, FS_ROW, UIKit.C_TEXT, 0)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -344,17 +355,31 @@ func _create_row(peer_id: int) -> PartyRow:
 	row.name_label = name_label
 	var downed_label := Label.new()
 	downed_label.text = "YERDE"
-	UIKit.style_label(downed_label, FS_ROW, Color(1.0, 0.45, 0.4), 0)
+	UIKit.style_label(downed_label, FS_ROW, UIKit.C_BAD, 0)
 	downed_label.visible = false
 	name_row.add_child(downed_label)
 	row.downed_label = downed_label
 
-	var gold_button := Button.new()
-	gold_button.custom_minimum_size = Vector2(GOLD_BTN_SIZE, GOLD_BTN_SIZE)
+	## 2. satır: görev çubuğuyla aynı gömme çukur; içinde can (kalın) + kalkan (ince) üst üste.
+	var well := PanelContainer.new()
+	well.add_theme_stylebox_override("panel", UIKit.panel_style("inset_tight"))
+	well.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	well.mouse_filter = Control.MOUSE_FILTER_PASS ## can değeri ipucu (tooltip) için
+	info_vbox.add_child(well)
+	var bars := VBoxContainer.new()
+	bars.add_theme_constant_override("separation", 2)
+	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	well.add_child(bars)
+	row.health_bar = _make_bar(HP_BAR_HEIGHT)
+	bars.add_child(row.health_bar)
+	row.shield_bar = _make_bar(SHIELD_BAR_HEIGHT)
+	row.shield_bar.tint_progress = SHIELD_COLOR
+	bars.add_child(row.shield_bar)
+
+	## Sağda küçük ahşap altın butonu (tıklanınca miktar seçip hediye).
+	var gold_button := _wood_button("", Vector2(GOLD_BTN_SIZE, GOLD_BTN_SIZE))
+	gold_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	gold_button.tooltip_text = "Altın gönder"
-	gold_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	gold_button.text = ""
-	UIKit.style_flat_button(gold_button, FS_ROW)
 	## İkon, boyutu garanti edilen ayrı bir TextureRect olarak butonun ÜSTÜNE (Button.icon tema/sürüme göre çok küçük kalıyordu).
 	var gold_icon_applied: bool = false
 	if ResourceLoader.exists(GOLD_ICON_PATH):
@@ -367,10 +392,10 @@ func _create_row(peer_id: int) -> PartyRow:
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			icon_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-			icon_rect.offset_left = 3.0
-			icon_rect.offset_top = 3.0
-			icon_rect.offset_right = -3.0
-			icon_rect.offset_bottom = -3.0
+			icon_rect.offset_left = 6.0
+			icon_rect.offset_top = 6.0
+			icon_rect.offset_right = -6.0
+			icon_rect.offset_bottom = -6.0
 			gold_button.add_child(icon_rect)
 			gold_icon_applied = true
 	if not gold_icon_applied:
@@ -379,23 +404,27 @@ func _create_row(peer_id: int) -> PartyRow:
 	## Bu buton _ready()'deki tek seferlik UISound taramasından SONRA yaratıldığı için tık sesi burada elle bağlanır.
 	if not gold_button.pressed.is_connected(UISound.play_click):
 		gold_button.pressed.connect(UISound.play_click)
-	name_row.add_child(gold_button)
+	hbox.add_child(gold_button)
 	row.gold_button = gold_button
-
-	## 2-3. satır: karakterin üstündeki çubuğun aynısı - can (yeşil->kırmızı) ve kalkan (mavi).
-	row.health_bar = _make_mini_bar(HP_BAR_HEIGHT, HP_BG)
-	info_vbox.add_child(row.health_bar)
-	row.shield_bar = _make_mini_bar(SHIELD_BAR_HEIGHT, SHIELD_BG)
-	info_vbox.add_child(row.shield_bar)
 	return row
 
 
-func _make_mini_bar(height: float, bg: Color) -> Control:
-	var bar := Control.new()
-	bar.set_script(MiniBarScript)
+## Görev ilerleme çubuğuyla (world_event_banner.gd) aynı HUD çubuk dokusu - 9 parçalı, piksel.
+func _make_bar(height: float) -> TextureProgressBar:
+	var bar := TextureProgressBar.new()
+	bar.texture_under = BarUnder
+	bar.texture_progress = BarFill
+	bar.nine_patch_stretch = true
+	for m in ["stretch_margin_left", "stretch_margin_right", "stretch_margin_top", "stretch_margin_bottom"]:
+		bar.set(m, 2)
+	bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	bar.custom_minimum_size = Vector2(0.0, height)
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.set("bg_color", bg)
+	bar.min_value = 0.0
+	bar.max_value = 1.0
+	bar.step = 0.0
+	bar.value = 1.0
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return bar
 
 
@@ -434,14 +463,17 @@ func _update_row(row: PartyRow, ally: Node) -> void:
 	var max_health: float = max(float(ally.get("max_health")), 0.001)
 	var pct: float = clampf(health / max_health, 0.0, 1.0)
 	## Karakter üstü çubukla aynı yeşil; azaldıkça kırmızıya kayar (hud.gd update_health ile aynı geçiş).
-	row.health_bar.call("set_values", pct, Color(0.84, 0.22, 0.22).lerp(Color(0.30, 0.82, 0.24), pct))
-	row.health_bar.tooltip_text = "%d/%d" % [int(round(maxf(health, 0.0))), int(round(max_health))]
+	_set_bar(row.health_bar, pct, Color(0.84, 0.22, 0.22).lerp(Color(0.30, 0.82, 0.24), pct))
+	var tip: String = "%d/%d" % [int(round(maxf(health, 0.0))), int(round(max_health))]
+	var well: Control = row.health_bar.get_parent().get_parent() as Control
+	if well != null and well.tooltip_text != tip:
+		well.tooltip_text = tip
 
 	## Kalkan çubuğu hep görünür (kalkansızken boş) - satır yüksekliği kalkan alınca zıplamasın.
 	var shield_max: float = float(ally.get("item_shield_max"))
 	var shield_hp: float = float(ally.get("item_shield_hp"))
 	var sh_pct: float = clampf(shield_hp / max(shield_max, 0.001), 0.0, 1.0) if shield_max > 0.0 else 0.0
-	row.shield_bar.call("set_values", sh_pct, SHIELD_COLOR)
+	_set_bar(row.shield_bar, sh_pct, SHIELD_COLOR)
 
 	## Ölü/yerde yatan (downed) müttefik: portre griye boyanır ve durum yazısı çıkar (remote_player.gd ile aynı görsel dil).
 	var is_dead: bool = bool(ally.get("is_dead"))
@@ -453,6 +485,13 @@ func _update_row(row: PartyRow, ally: Node) -> void:
 		row.avatar.modulate = Color(0.5, 0.5, 0.55, 1.0)
 	else:
 		row.avatar.modulate = Color(1, 1, 1, 1)
+
+
+func _set_bar(bar: TextureProgressBar, ratio: float, tint: Color) -> void:
+	if not is_equal_approx(bar.value, ratio):
+		bar.value = ratio
+	if not bar.tint_progress.is_equal_approx(tint):
+		bar.tint_progress = tint
 
 
 ## Panel ekranın SAĞINDA - açılır pencereler panelin (arka plan kutusunun) SOLUNA, tetikleyen butonun hizasında açılır:
@@ -549,7 +588,7 @@ func _refresh_stats_popup() -> void:
 	if entries.is_empty():
 		var empty_lbl := Label.new()
 		empty_lbl.text = "Veri yok"
-		UIKit.style_label(empty_lbl, FS_ROW, UIKit.HUD_TEXT_DIM, 0)
+		UIKit.style_label(empty_lbl, FS_ROW, UIKit.C_TEXT_DIM, 0)
 		_stats_list.add_child(empty_lbl)
 		return
 	var top: float = maxf(float(entries[0].get("dealt", 0.0)), 1.0)
@@ -564,8 +603,8 @@ func _refresh_stats_popup() -> void:
 
 		var rank_lbl := Label.new()
 		rank_lbl.text = "%d." % (i + 1)
-		rank_lbl.custom_minimum_size = Vector2(22, 0)
-		UIKit.style_label(rank_lbl, FS_ROW, UIKit.HUD_TEXT_ACCENT if i == 0 else UIKit.HUD_TEXT_DIM, 0)
+		rank_lbl.custom_minimum_size = Vector2(30, 0)
+		UIKit.style_label(rank_lbl, FS_ROW, UIKit.C_ACCENT if i == 0 else UIKit.C_TEXT_DIM, 0)
 		row.add_child(rank_lbl)
 
 		var name_lbl := Label.new()
@@ -574,17 +613,21 @@ func _refresh_stats_popup() -> void:
 		name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_lbl.custom_minimum_size = Vector2(110, 0)
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UIKit.style_label(name_lbl, FS_ROW, UIKit.HUD_TEXT_LIGHT, 0)
+		UIKit.style_label(name_lbl, FS_ROW, UIKit.C_TEXT, 0)
 		row.add_child(name_lbl)
 
 		var dealt: float = float(entry.get("dealt", 0.0))
 		var dmg_lbl := Label.new()
 		dmg_lbl.text = "%d" % int(round(dealt))
 		dmg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		dmg_lbl.custom_minimum_size = Vector2(56, 0)
-		UIKit.style_label(dmg_lbl, FS_ROW, DAMAGE_BAR_COLOR, 0)
+		dmg_lbl.custom_minimum_size = Vector2(64, 0)
+		UIKit.style_label(dmg_lbl, FS_ROW, UIKit.C_GOLD, 0)
 		row.add_child(dmg_lbl)
 
-		var bar: Control = _make_mini_bar(10.0, HP_BG)
-		bar.call("set_values", clampf(dealt / top, 0.0, 1.0), DAMAGE_BAR_COLOR)
-		block.add_child(bar)
+		var well := PanelContainer.new()
+		well.add_theme_stylebox_override("panel", UIKit.panel_style("inset_tight"))
+		well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		block.add_child(well)
+		var bar: TextureProgressBar = _make_bar(8.0)
+		_set_bar(bar, clampf(dealt / top, 0.0, 1.0), DAMAGE_BAR_COLOR)
+		well.add_child(bar)

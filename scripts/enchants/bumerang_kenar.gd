@@ -1,15 +1,16 @@
 extends "res://scripts/enchant_behavior.gd"
 
-## Keskin Kenar (EnchantDefs "bumerang_kenar"): kanama / kanayana bonus / boyut / hızlı kanama temel sınıfta. II: dönüşte
-## (boomerang_projectile.gd: is_primary = gidiş) daha çok kanama; final (Vampir Dişi) Kan Çarkı - yakalayınca 3 sn
-## etrafında dönen, can çeken bir çark (enchant_area.gd "orbit_blade").
+## Keskin Kenar (EnchantDefs "bumerang_kenar"): kanama / kanayana bonus / boyut / hızlı kanama temel sınıfta. II: çarpışta
+## daha çok kanama (eskiden "dönüşte" - 2026-09-26'dan beri bumerang dönüşte vurmuyor, çarptığı düşmandan dönüyor;
+## is_primary = gidişteki çarpma); final (Vampir Dişi) Kan Çarkı - yakalayınca 3 sn etrafında dönen, can çeken bir çark
+## (enchant_area.gd "orbit_blade").
 
 const BLOOD := Color(0.9, 0.2, 0.25)
 
 
 func hit_extra(t: Node, _dmg: float, is_primary: bool, _proj: Node2D) -> void:
 	var extra: int = n("return_bleed") - n("bleed_stacks", 1)
-	if not is_primary and extra > 0 and is_enemy(t):
+	if is_primary and extra > 0 and is_enemy(t):
 		apply_bleed_to(t, extra)
 
 

@@ -22,5 +22,5 @@ autostart = true
 
 [node name="Icon" type="Sprite2D" parent="."]
 texture_filter = 1
-scale = Vector2(0.4125, 0.4125)
+scale = Vector2(0.33, 0.33)
 texture = ExtResource("3")

@@ -101,7 +101,9 @@ const COLLECT_ITEM_CLEARANCE := 16.0
 const CAPTURE_RADIUS := 240.0
 const CAPTURE_FILL_TIME_SOLO := 45.0
 const CAPTURE_FILL_TIME_MIN := 12.0
-const CAPTURE_TIMEOUT := 150.0
+## Kullanıcı isteği (2026-09-26): "bazı görevlerin süresi yapma süresine göre gereksiz uzun, kısalt" - tek başına 45 sn'de
+## dolan bayrağa 150 sn veriliyordu (3.3 kat). 150 -> 90 (tek kişilik dolum süresinin 2 katı).
+const CAPTURE_TIMEOUT := 90.0
 const CAPTURE_REWARD_GOLD := 120
 
 ## Secure the Area (kullanıcı isteği: "~300 düşman, 3 dakika içinde").
@@ -148,7 +150,9 @@ const ESCORT_MAX_DISTANCE := 2600.0
 ## Bulunan yol düz çizgiden en fazla bu kadar uzun olabilir (çok dolambaçlı, geri dönen rotalar elensin).
 const ESCORT_MAX_DETOUR := 1.6
 const EnemyPathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
-const ESCORT_TIMEOUT_BUFFER := 2.6 ## süre = mesafe/hız * bu çarpan (geri kaymalara pay)
+## süre = mesafe/hız * bu çarpan (geri kaymalara pay). 2026-09-26 (bkz. CAPTURE_TIMEOUT notu): 2.6 -> 1.5 - kesintisiz itme
+## süresinin 2.6 katı (en uzun rotada ~14 dk) gereksiz uzundu; %50 pay geri kaymalara/savaşa yeter.
+const ESCORT_TIMEOUT_BUFFER := 1.5
 const ESCORT_REWARD_GOLD := 180
 const VanScript := preload("res://scripts/mission_van.gd")
 
@@ -161,10 +165,11 @@ const TreeScript := preload("res://scripts/mission_tree.gd")
 
 ## Kill Your Copy (kullanıcı isteği: %90 az hasar alır/verir, %20 yavaş, yetenek yok, renk
 ## tersine çevrilmiş, 5 dakika, öldürülmezse yok olur).
-const COPY_LIFETIME := 300.0
 const COPY_BASE_DAMAGE := 10.0 ## kaynağın damage_bonus'u okunamazsa: BASE_STATS "Hasar:10" ile aynı taban (bkz. lobby_menu.gd)
 const COPY_REWARD_GOLD := 250
 const CopyScript := preload("res://scripts/mission_player_copy.gd")
+## Tek kaynak: kopyanın kendi ömrü (mission_player_copy.gd LIFETIME) - görev süresi ile kopyanın kaybolma anı ayrışmasın.
+const COPY_LIFETIME: float = CopyScript.LIFETIME
 
 var _next_mission_id: int = 1
 ## Her biri null ya da bir Dictionary.
@@ -598,6 +603,9 @@ func _random_map_position(clearance: float = 48.0) -> Vector2:
 		var pos := Vector2(
 			_rng.randf_range(rect.position.x + margin, rect.position.x + rect.size.x - margin),
 			_rng.randf_range(rect.position.y + margin, rect.position.y + rect.size.y - margin))
+		## İlk 10 dakika haritanın köşelerinden uzak (bkz. GameManager.is_spawn_blocked_by_early_corner).
+		if GameManager.is_spawn_blocked_by_early_corner(pos):
+			continue
 		if not _is_area_clear(pos, clearance):
 			continue
 		return pos

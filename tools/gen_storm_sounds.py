@@ -5,7 +5,7 @@ ses efektlerini buna gore tasarlamayi unutma". Yagmur/ruzgar dongusu zaten var (
 saganakta ikisi birlikte calar. Bu script yildirim ailesini uretir:
 
   charge.wav            (1.3 sn) dusecegi yerde elektriklenme: yukselen alcak vizilti + sikligi artan citirtilar (kisik).
-  thunder_strike_1/2    (3.4 sn) yakina dusen yildirim: sert beyaz "CRACK" + hemen ardindan yuvarlanan alcak gurultu.
+  (ESKI, artik yazilmaz - bkz. tools/gen_thunder_sounds.py) thunder_strike_1/2    (3.4 sn) yakina dusen yildirim: sert beyaz "CRACK" + hemen ardindan yuvarlanan alcak gurultu.
   thunder_distant_1/2   (4.0 sn) uzaktan gok gurultusu (yildirimsiz sema parlamalarinda): yumusak, dalgali gurultu.
 
 Calistir: python tools/gen_storm_sounds.py
@@ -115,7 +115,5 @@ def thunder_distant(rng):
 if __name__ == "__main__":
     rng = np.random.default_rng(2026)
     save("charge.wav", charge(rng), 0.7)
-    save("thunder_strike_1.wav", thunder_strike(np.random.default_rng(11)))
-    save("thunder_strike_2.wav", thunder_strike(np.random.default_rng(12)))
-    save("thunder_distant_1.wav", thunder_distant(np.random.default_rng(21)), 0.8)
-    save("thunder_distant_2.wav", thunder_distant(np.random.default_rng(22)), 0.8)
+    ## 2026-09-26: gok gurultusu dosyalari artik tools/gen_thunder_sounds.py'den (gercek kayit tabanli) - buradaki eski
+    ## sentez surumleri ("hic gok gurultusu gibi degil") onlarin uzerine YAZILMAZ.

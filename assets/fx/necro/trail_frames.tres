@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://dbctrrj0u5v8w"]
 
-[ext_resource type="Texture2D" path="res://assets/fx/necro/trail_sheet.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://cr03v1q2nkhiu" path="res://assets/fx/necro/trail_sheet.png" id="1"]
 
 [sub_resource type="AtlasTexture" id="AT_0"]
 atlas = ExtResource("1")
@@ -27,24 +27,20 @@ animations = [{
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AT_0")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_1")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_2")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_3")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_4")
 }],
-"loop": false,
+"loop": 0,
 "name": &"play",
 "speed": 16.0
 }]

@@ -35,9 +35,6 @@ const C_BAD := Color("#a03d27")
 const C_GOLD := Color("#b07a22")
 const C_CREAM := Color("#fff3d8")
 const C_OUTLINE := Color("#4a2c1a")
-## Arka plan manzarasının üstüne örtü. 2026-09-25: açık bej örtü (0.99, 0.90, 0.72, 0.16) -> sıcak koyu kahve örtü: koyulaşan
-## panellerin arasından görünen parlak manzara da aynı oranda sakinleşsin (resmin kendisi değişmedi).
-const C_WASH := Color(0.16, 0.09, 0.04, 0.24)
 
 ## Kart dokusu: 60x72 sanat px (gövde 58x70 + 1 px seçim parıltısı payı) - bkz. tools/gen_menu_kit.py card().
 const CARD_SIZE := Vector2(180, 216)
@@ -394,22 +391,19 @@ static func build_theme(pal: Dictionary) -> Theme:
 	return th
 
 
-## Arka plan: mevcut piksel manzara (assets/ui/lobby_bg.png) + üstüne sıcak bej örtü (eski koyu gri örtü yerine).
+## Arka plan (2026-09-26, kullanıcı: "daha sade bir arkaplan ... ai gibi olmasın"): eski kalabalık manzara (lobby_bg.png) +
+## kahve örtü yerine, oyunun kendi harita tileset'lerinden kurulan sade orman açıklığı - tools/gen_menu_bg.py üretir
+## (1920x1080, 3x piksel, ton resmin içinde pişmiş; üstüne örtü YOK).
 static func add_background(root: Control) -> void:
 	var bg := TextureRect.new()
 	bg.name = "BackgroundImage"
-	bg.texture = load("res://assets/ui/lobby_bg.png")
+	bg.texture = load("res://assets/ui/menu_bg.png")
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(bg)
-	var wash := ColorRect.new()
-	wash.name = "Wash"
-	wash.color = C_WASH
-	wash.set_anchors_preset(Control.PRESET_FULL_RECT)
-	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(wash)
 
 
 ## Bir karakterin temel istatistikleri - ikon + değer (bkz. tools/gen_menu_kit.py STAT_ICONS). Tüm karakterler aynı

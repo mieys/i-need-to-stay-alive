@@ -11,8 +11,13 @@ extends RefCounted
 
 const AMBIENT_BUS := &"Ambient"
 const MUFFLE_BUS := &"BarrierMuffle"
-const MUFFLE_CUTOFF_HZ := 500.0
-const MUFFLE_VOLUME_DB := -6.0
+## Kullanıcı bildirimi (2026-09-26): "kalkanın içindeyken dışardan içeri hiç ses çıkmıyor, yağmur boğuk gelmiyor" - eski
+## 500 Hz + -6 dB, kulağın en duyarlı olduğu 2-5 kHz'i silip sesi neredeyse YOK ediyordu. Ölçüm (ses dosyalarının kendisi,
+## Godot'nun biquad alçak geçireni rezonans 0.5, A-ağırlıklı = algılanan): yağmur -19.6 dB, fırtına rüzgarı -16.2, rüzgar
+## -12.6. Şimdi 1200 Hz (tek aşama = varsayılan) + -1 dB: tizler hâlâ sert kesilir (4 kHz'de ~-22 dB, boğuk "duvarın
+## arkasından" tını) ama sesin gövdesi kalır - yağmur -8.0, fırtına rüzgarı -5.4, rüzgar -3.3 dB.
+const MUFFLE_CUTOFF_HZ := 1200.0
+const MUFFLE_VOLUME_DB := -1.0
 
 
 static func _ensure(bus_name: StringName) -> int:

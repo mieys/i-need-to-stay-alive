@@ -468,7 +468,14 @@ func _clear_peer_state() -> void:
 	if _peer:
 		_peer.close()
 		_peer = null
-	multiplayer.multiplayer_peer = null
+	## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-26: "görevler hala görünmüyor singleplayerda ... sağda görünmüyor
+	## panelleri"): burada eskiden `multiplayer_peer = null` vardı. Godot oyunu varsayılan bir OfflineMultiplayerPeer ile
+	## başlatır ve call_local RPC'ler (ör. broadcast_world_event_announced) tek oyunculuda onun sayesinde YEREL çalışır;
+	## null'a çekilince "Trying to call an RPC while no multiplayer peer is active" hatasıyla HİÇ çalışmıyordu. Ana menüdeki
+	## TEK OYUNCULU butonu her seferinde disconnect_from_room() çağırdığı için gerçek tek oyunculu oyunda görev duyuruları
+	## (ve .rpc() ile giden diğer tüm yerel olaylar) sessizce kayboluyordu - sahneyi doğrudan açan testlerde ise peer hâlâ
+	## varsayılan Offline olduğundan görünmüyordu. Oyun açılışındaki durumla BİREBİR aynı: çevrimdışı peer.
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	is_multiplayer_active = false
 	is_host = false
 	_host_peer = 0
@@ -2012,6 +2019,16 @@ func request_enemy_knockback_force(network_id: int, dir: Vector2, force: float) 
 		target_enemy.apply_knockback_force(dir, force)
 
 
+## İstemcinin yetenek itmesi (mesafe cinsinden, bkz. enemy.gd apply_skill_push) -> host'taki gerçek yaratık.
+@rpc("any_peer", "call_remote", "reliable")
+func request_enemy_skill_push(network_id: int, dir: Vector2, distance: float) -> void:
+	if not is_host or get_tree().paused:
+		return
+	var target_enemy: Node = find_enemy_by_net_id(network_id)
+	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("apply_skill_push"):
+		target_enemy.apply_skill_push(dir, clampf(distance, 0.0, 400.0))
+
+
 ## DÜZELTME (KRİTİK - multiplayer öldürme-bazlı pasifler): host, enemy.gd
 ## die() içinde gerçek öldürenin kendisi olmadığını (last_attacker_peer_id)
 ## tespit ettiğinde bunu doğrudan o istemciye bildirir - Korsan'ın "öldürme
@@ -3078,6 +3095,57 @@ func _rpc_gold_share_fx(from_pos: Vector2, shares: Dictionary) -> void:
 		root.add_child(fx)
 		fx.call("setup", from_pos, target, index, int(pid) == local_id)
 		index += 1
+
+
+## ---------------------------------------------------------------- Korsan pasifi: Papağan (2026-09-26)
+## Papağan altını ALDIĞI an host'ta sahiplenilir (iki kişi/papağan aynı altını alamaz - request_drop_pickup ile aynı
+## "claimed" işareti), altın ise papağan omza konunca hesaba eklenir (bkz. scripts/korsan_parrot.gd).
+
+## Host: gerçek altını papağan için alır. -1 = başkası çoktan aldı. Boss altını her zamanki gibi tüm katılımcılara
+## paylaştırılır (host_share_boss_gold) - o durumda 0 döner, papağan sadece bonusunu getirir.
+func host_take_gold_for_parrot(real_drop: Node, picker: Node) -> int:
+	if not is_instance_valid(real_drop) or real_drop.get_meta("claimed", false) or real_drop.is_queued_for_deletion():
+		return -1
+	real_drop.set_meta("claimed", true)
+	var amount: int = int(real_drop.get("amount"))
+	if bool(real_drop.get("is_boss_gold")) and host_share_boss_gold(amount, (real_drop as Node2D).global_position, picker):
+		amount = 0
+	var drop_id: int = int(real_drop.get_meta("drop_network_id", 0))
+	if drop_id > 0:
+		queue_remove_drop(drop_id)
+	real_drop.queue_free()
+	return amount
+
+
+## İstemcideki Korsan'ın papağanı görsel kopyayı aldı -> host gerçek altını sahiplenir ve miktarı geri bildirir.
+@rpc("any_peer", "call_remote", "reliable")
+func request_parrot_gold(drop_network_id: int) -> void:
+	if not is_host:
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	var amount: int = -1
+	for g: Node in get_tree().get_nodes_in_group("gold_drops"):
+		if is_instance_valid(g) and not g.get_meta("network_spawned", false) and int(g.get_meta("drop_network_id", -1)) == drop_network_id:
+			amount = host_take_gold_for_parrot(g, _find_player_by_peer_id(sender_id))
+			break
+	parrot_gold_result.rpc_id(sender_id, drop_network_id, amount)
+
+
+## Host -> papağanın sahibi: istenen altının miktarı (-1 = başkası aldı).
+@rpc("any_peer", "call_remote", "reliable")
+func parrot_gold_result(drop_network_id: int, amount: int) -> void:
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if local_player and local_player.has_method("korsan_parrot_gold_result"):
+		local_player.korsan_parrot_gold_result(drop_network_id, amount)
+
+
+## Papağanın durum değişikliği (uç / dön / kon + ayağındaki altın sayısı + hız) -> diğer oyuncuların ekranındaki kukla
+## papağan aynı hareketi korsan_parrot.gd'nin AYNI koduyla oynatır. Seyrek (saniyede birkaç) olduğu için güvenilir kanal.
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_korsan_parrot(player_id: int, state: int, target: Vector2, carry: int, speed: float) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if rp and rp.has_method("korsan_parrot_event"):
+		rp.korsan_parrot_event(state, target, carry, speed)
 
 
 ## Şans faktörüyle her oyuncunun kişisel altınına doğrudan ekleme yapar -

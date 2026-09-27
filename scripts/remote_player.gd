@@ -2,6 +2,8 @@ extends CharacterBody2D
 class_name RemotePlayer
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
+const KORSAN_CHAR_ID := 9 ## Characters.DEFS roster id'si (player.gd ile aynı)
 const WeaponTargetPriorityScript := preload("res://scripts/weapon_target_priority.gd")
 const OakleyLeafBarrierScene: PackedScene = preload("res://scenes/fx_oakley_leaf_barrier.tscn")
 
@@ -227,22 +229,12 @@ var _weapon_target_highest_health: Array = []
 var _weapon_target_prefer_unfrozen: Array = []
 const AIM_EASE_RATE := 12.0
 
-## BUG DÜZELTMESİ (derin multiplayer denetimi bulgusu: "kılıcın animasyonu
-## multiplayerda diğer oyunculara doğru gösterilmiyor") - kök neden: kılıç
-## (Uzunkılıç) hiç _fire_at()/broadcast_weapon_attack çağırmıyor, sürekli
-## kendi etrafında dönen bir yörünge (bkz. weapon.gd _process_uzunkilic_
-## orbit) - hiçbir şey yayınlanmadığı için uzak kopya onu normal menzilli
-## bir silah sanıp en yakın düşmana "nişan alma" rotasyonu uyguluyordu (bkz.
-## _update_local_weapon_aim). Menzilli nişan hesabı gibi bu da TAMAMEN
-## YEREL hesaplanabilir - yörünge tamamen deterministik (sadece fire_rate'e
-## bağlı sabit açısal hız), ağdan hiçbir veriye ihtiyaç yok. Faz (başlangıç
-## açısı) gerçek silahla birebir eşleşmez ama bu sürekli/dekoratif bir
-## dönüş olduğu için (ayrı, hedefe kilitli bir vuruş animasyonu değil) fark
-## edilmez.
-var _weapon_is_orbit_sword: Array = []
-var _weapon_fire_rate: Array = []
-var _weapon_orbit_angle: Array = []
-var _weapon_base_attack_range: Array = []
+## Uzunkılıç slotları (_weapon_icons ile aynı index). 2026-09-26'dan beri kılıç etrafta DÖNMEZ, hedefe savrulur: kaster
+## (weapon.gd _start_sword_swing) "weapon_fire" yayınına sword_side/sword_size/sword_speed ekler, bu kukla AYNI planı
+## scripts/sword_swing_math.gd ile kendi ölçeğinde kurup aynı savuruşu + hilali oynatır (bkz. _animate_weapon_fire_full).
+## (Eski yerel yörünge simülasyonu - _update_local_uzunkilic_orbit - kaldırıldı.)
+var _weapon_is_sword: Array = []
+const SwordSwingMath := preload("res://scripts/sword_swing_math.gd")
 
 ## DÜZELTME (mimari sadeleştirme - kullanıcı isteği: "singleplayerda zaten
 ## kayıtlı animasyon/efekt bilgilerinin multiplayerdan gereksiz yere
@@ -399,6 +391,19 @@ func _load_character_frames() -> void:
 		if res is SpriteFrames:
 			anim.sprite_frames = res
 	anim.play("idle_down")
+	## Korsan pasifi papağanı - KUKLA modunda: kararları sahibinin ekranı verir, buraya olay olarak gelir (bkz.
+	## korsan_parrot.gd, NetworkManager.broadcast_korsan_parrot -> korsan_parrot_event).
+	if char_id == KORSAN_CHAR_ID and not has_node("KorsanParrot"):
+		var parrot: Node2D = KorsanParrotScript.new()
+		add_child(parrot)
+		parrot.setup(self, anim, true)
+
+
+## bkz. _load_character_frames papağan notu.
+func korsan_parrot_event(state: int, target: Vector2, carry: int, speed: float) -> void:
+	var parrot: Node = get_node_or_null("KorsanParrot")
+	if parrot and parrot.has_method("apply_event"):
+		parrot.apply_event(state, target, carry, speed)
 
 
 
@@ -450,7 +455,6 @@ func _physics_process(delta: float) -> void:
 		_update_talon_formation(delta)
 	else:
 		_update_local_weapon_aim(delta)
-		_update_local_uzunkilic_orbit(delta)
 
 
 var _weapon_tiers: Dictionary = {}
@@ -539,10 +543,7 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 	_weapon_rise_start_pos.clear()
 	_weapon_rise_elapsed.clear()
 	_was_incapacitated_for_weapons = false
-	_weapon_is_orbit_sword.clear()
-	_weapon_fire_rate.clear()
-	_weapon_orbit_angle.clear()
-	_weapon_base_attack_range.clear()
+	_weapon_is_sword.clear()
 	for i in range(min(_weapon_keys.size(), MAX_WEAPON_ICONS)):
 		var key: String = str(_weapon_keys[i])
 		var weapon_scene: PackedScene = WEAPON_SCENES.get(key)
@@ -660,13 +661,8 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 		_weapon_slash_fx_above_offset.append(float(weapon_root.get("melee_slash_fx_above_offset")) if "melee_slash_fx_above_offset" in weapon_root else 0.0)
 		_weapon_recoil_distance.append(float(weapon_root.get("recoil_distance")) if "recoil_distance" in weapon_root else 10.0)
 		_weapon_hit_segments.append(int(weapon_root.get("melee_hit_segments")) if "melee_hit_segments" in weapon_root else 1)
-		## bkz. _weapon_is_orbit_sword üstündeki BUG DÜZELTMESİ notu - weapon_
-		## root zaten add_child() ile _ready()'sini çalıştırdığı için
-		## _is_uzunkilic/fire_rate GERÇEK, hesaplanmış değerleriyle okunabilir.
-		_weapon_is_orbit_sword.append(bool(weapon_root.get("_is_uzunkilic")) if "_is_uzunkilic" in weapon_root else false)
-		_weapon_fire_rate.append(float(weapon_root.get("fire_rate")) if "fire_rate" in weapon_root else 1.0)
-		_weapon_orbit_angle.append(0.0)
-		_weapon_base_attack_range.append(float(weapon_root.get("_base_attack_range")) if "_base_attack_range" in weapon_root else 0.0)
+		## weapon_root add_child() ile _ready()'sini çalıştırdığı için _is_uzunkilic gerçek değeriyle okunur.
+		_weapon_is_sword.append(bool(weapon_root.get("_is_uzunkilic")) if "_is_uzunkilic" in weapon_root else false)
 		weapon_root.queue_free()
 
 
@@ -705,8 +701,6 @@ func _update_local_weapon_aim(delta: float) -> void:
 		_cached_aim_targets.resize(_weapon_icons.size())
 	for i in range(_weapon_icons.size()):
 		if i < _weapon_melee.size() and _weapon_melee[i]:
-			continue
-		if i < _weapon_is_orbit_sword.size() and _weapon_is_orbit_sword[i]:
 			continue
 		var icon: Node2D = _weapon_icons[i]
 		if not is_instance_valid(icon):
@@ -748,38 +742,6 @@ func _update_local_weapon_aim(delta: float) -> void:
 				_weapon_icon_flipped[i] = flip
 		else:
 			icon.rotation = lerp_angle(icon.rotation, target_rotation, t)
-
-
-## bkz. _weapon_is_orbit_sword üstündeki BUG DÜZELTMESİ notu - weapon.gd
-## _process_uzunkilic_orbit() ile AYNI konum/rotasyon matematiği (artık
-## weapon_orbit_math.gd'den TEK kaynaktan çağrılıyor, bkz. o dosyanın başı),
-## sadece hasar/çarpışma kısmı YOK (uzak kopya asla gerçek hasar vermez,
-## diğer kozmetik kopyalarla AYNI kural).
-var _orbit_trail_timer: float = 0.0
-
-func _update_local_uzunkilic_orbit(delta: float) -> void:
-	for i in range(_weapon_icons.size()):
-		if i >= _weapon_is_orbit_sword.size() or not _weapon_is_orbit_sword[i]:
-			continue
-		var icon: Node2D = _weapon_icons[i]
-		if not is_instance_valid(icon):
-			continue
-		var base_range: float = _weapon_base_attack_range[i] if i < _weapon_base_attack_range.size() else 0.0
-		var cur_range: float = _weapon_attack_range[i] if i < _weapon_attack_range.size() else 0.0
-		var range_mult: float = (cur_range / base_range) if base_range > 0.001 else 1.0
-		var fr: float = _weapon_fire_rate[i] if i < _weapon_fire_rate.size() else 1.0
-		var angle_in: float = _weapon_orbit_angle[i] if i < _weapon_orbit_angle.size() else 0.0
-		var orbit: Dictionary = WeaponOrbitMath.compute(delta, angle_in, fr, range_mult, scale.x)
-		if i < _weapon_orbit_angle.size():
-			_weapon_orbit_angle[i] = orbit["angle"]
-		icon.position = orbit["offset"]
-		icon.rotation = orbit["rotation"]
-		if not icon.visible:
-			icon.visible = true
-		## Yörünge izi - weapon.gd ile AYNI fonksiyon (bkz. WeaponOrbitMath.update_arc). İz ikonun çocuğu olarak tutulur,
-		## ikon silinince kendiliğinden gider.
-		var arc: AnimatedSprite2D = WeaponOrbitMath.update_arc(icon.get_meta("orbit_arc") if icon.has_meta("orbit_arc") else null, icon, global_position, icon.global_position)
-		icon.set_meta("orbit_arc", arc)
 
 
 ## Talon'un Silah Salvosu (E)/Ayna Formu (R) yeteneklerindeki dairesel silah
@@ -1884,6 +1846,19 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 
 	if is_melee and formation_owns_position:
 		_kick_formation_icon(slot_index, dir, float(_weapon_recoil_distance[slot_index]) if slot_index < _weapon_recoil_distance.size() else 8.0)
+	elif is_melee and slot_index < _weapon_is_sword.size() and _weapon_is_sword[slot_index] and data.has("sword_side"):
+		## Uzunkılıç: kasterle AYNI savuruş (bkz. weapon.gd _start_sword_swing) - plan kuklanın kendi kök ölçeğiyle kurulur.
+		var s_target := Vector2(float(data.get("target_pos_x", 0.0)), float(data.get("target_pos_y", 0.0)))
+		var s_plan: Dictionary = SwordSwingMath.make_plan(dir, s_target, float(data.get("sword_side", 1.0)),
+			float(data.get("sword_size", 1.0)), scale.x)
+		var s_forward: float = deg_to_rad(_weapon_forward_angle_deg[slot_index] if slot_index < _weapon_forward_angle_deg.size() else 0.0)
+		var s_rest_rot: float = deg_to_rad(_weapon_rest_rotation_deg[slot_index] if slot_index < _weapon_rest_rotation_deg.size() else 0.0)
+		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
+			(_weapon_fire_tweens[slot_index] as Tween).kill()
+		var s_tw: Tween = SwordSwingMath.play(self, icon, s_plan, s_forward, base_pos, s_rest_rot,
+			float(data.get("sword_speed", 1.0)), get_tree().current_scene)
+		if slot_index < _weapon_fire_tweens.size():
+			_weapon_fire_tweens[slot_index] = s_tw
 	elif is_melee:
 		var target_pos := Vector2(float(data.get("target_pos_x", 0.0)), float(data.get("target_pos_y", 0.0)))
 		var reps: int = _weapon_hit_segments[slot_index] if slot_index < _weapon_hit_segments.size() else 3

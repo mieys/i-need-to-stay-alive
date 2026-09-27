@@ -504,8 +504,9 @@ func _create_prompt_ui() -> void:
 	_prompt_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_prompt_label.offset_left = -180.0
 	_prompt_label.offset_right = 180.0
-	_prompt_label.offset_top = -170.0
-	_prompt_label.offset_bottom = -130.0
+	## 2026-09-27: alttaki oyuncu paneli (hud.gd dock + üstündeki buff satırı) ~-211'e kadar çıkıyor - ipucu onun üstünde.
+	_prompt_label.offset_top = -262.0
+	_prompt_label.offset_bottom = -222.0
 	_prompt_label.visible = false
 	layer.add_child(_prompt_label)
 

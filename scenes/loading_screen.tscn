@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cxabw3i3tlyqy"]
 
 [ext_resource type="Script" uid="uid://c1op7g5ux3u1l" path="res://scripts/loading_screen.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://bwv7jqy3ikjya" path="res://assets/ui/loading_bg.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu_bg.png" id="2"]
 [ext_resource type="Theme" uid="uid://ceslvnp1x5pxb" path="res://assets/fonts/theme_original.tres" id="3_theme"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bg"]

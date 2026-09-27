@@ -542,8 +542,10 @@ var merchant_zone_pos: Vector2 = Vector2.ZERO
 ## _create_protection_bubble, bubble.radius = MERCHANT_ZONE_RADIUS) bu
 ## değere DOĞRUDAN bağlı, o yüzden gerçek güvenli bölge de birlikte
 ## küçültüldü - aksi halde görünen bariyer ile gerçekte güvenli olan alan
-## birbirini tutmazdı. 378.0 * 0.7 = 264.6.
-const MERCHANT_ZONE_RADIUS := 264.6
+## birbirini tutmazdı. 378.0 * 0.7 = 264.6. İkinci tur (kullanıcı isteği 2026-09-26: "seyyar satıcının koruma kalkanının
+## boyutunu %30 küçült"): 264.6 * 0.7 = 185.22 - görsel kubbe, güvenli bölge, düşman itme sınırı ve ses boğma halkası
+## hepsi bu tek sabitten okuyor.
+const MERCHANT_ZONE_RADIUS := 185.22
 
 func is_position_in_merchant_zone(pos: Vector2) -> bool:
 	return merchant_zone_active and merchant_zone_pos.distance_to(pos) <= MERCHANT_ZONE_RADIUS
@@ -908,6 +910,26 @@ func get_map_world_rect() -> Rect2:
 	_map_world_rect = total
 	_map_world_rect_searched = true
 	return _map_world_rect
+
+
+## Kullanıcı isteği (2026-09-26): "oyunun ilk 10 dakikasında görevler ve seyyar satıcı haritanın köşelerine yakın
+## yerlerde spawnlanmamalı". Tek kaynak - hem world_event_manager.gd (_random_map_position: görev noktası, konvoy
+## varışı, toplama objeleri) hem traveling_merchant.gd (_pick_spawn_position) bunu sorar.
+## "Köşeye yakın" = haritanın dört köşesinden birine, haritanın KISA kenarının CORNER_AVOID_FRACTION'ı kadar yakın.
+const CORNER_AVOID_DURATION := 600.0
+const CORNER_AVOID_FRACTION := 0.3
+
+func is_spawn_blocked_by_early_corner(pos: Vector2) -> bool:
+	if game_time >= CORNER_AVOID_DURATION:
+		return false
+	var rect: Rect2 = get_map_world_rect()
+	if rect.size == Vector2.ZERO:
+		return false
+	var limit: float = minf(rect.size.x, rect.size.y) * CORNER_AVOID_FRACTION
+	for corner: Vector2 in [rect.position, Vector2(rect.end.x, rect.position.y), Vector2(rect.position.x, rect.end.y), rect.end]:
+		if pos.distance_to(corner) < limit:
+			return true
+	return false
 
 
 ## Kullanıcı isteği: "Orman parçaları Node2D'nin içindeki 'Orman parçaları'

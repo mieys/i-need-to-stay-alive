@@ -16,6 +16,10 @@ func fire_start(_target: Node2D, is_extra: bool) -> void:
 
 ## Yelpazedeki tüm mızraklar (ana + 4 ek, ek atışlar fire_extra içinde eşzamanlı) geri iter.
 func projectile_extra(proj: Node2D, _target: Node2D, _is_extra: bool) -> void:
+	## "Deldikleri de donar": saf Buz Asası artık soğutmuyor (2026-09-26, sadece statlar), mızrağın her isabetteki
+	## soğuma yükü buradan gelir (projectile.gd chill_stacks -> enemy.gd apply_chill).
+	if "chill_stacks" in proj:
+		proj.set("chill_stacks", maxi(1, int(proj.get("chill_stacks"))))
 	if _spear_volley and "knockback_force" in proj:
 		proj.set("knockback_force", float(proj.get("knockback_force")) + 60.0)
 

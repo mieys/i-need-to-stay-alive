@@ -10,10 +10,15 @@ const KeybindMenuScript := preload("res://scripts/keybind_menu.gd")
 
 const TITLE := "I NEED TO STAY ALIVE"
 const SCREEN := Vector2(1920, 1080)
-const SIGN_TOP := 96.0
-const SIGN_H := 186.0 ## tabela dokusunun kendi boyu (62 sanat px x 3) - bkz. tools/gen_menu_kit.py sign()
-const MENU_W := 540.0
-const MENU_FONT := 64 ## ana menü butonları: m5x7 4x (eskisi gibi büyük, uzaktan okunur)
+## Kullanıcı isteği (2026-09-26): "başlangıç menüsündeki başlığı ve arayüzü biraz küçült" - başlık 96 -> 72, tabela 186 -> 150,
+## butonlar 64/84 -> 48/66, panel 540 -> 408 (hepsi ~%75; boyutlar 3'ün katı, yazı 8'in katı: pikseller keskin kalır).
+const SIGN_TOP := 120.0
+const SIGN_H := 150.0 ## tabela dokusunun kendi boyu (50 sanat px x 3) - bkz. tools/gen_menu_kit.py sign()
+const MENU_W := 408.0
+const MENU_Y := 336.0
+const MENU_FONT := 48
+const MENU_BTN_H := 66.0
+const TITLE_FONT := 72
 
 var settings_panel: Control
 var volume_slider: HSlider
@@ -44,8 +49,8 @@ func _ready() -> void:
 ## Başlık: iki örgü iple yukarıdan asılı, 3 tahtalı ahşap tabela; yazı krem, koyu kahve konturlu (tabela boyası).
 func _build_title_sign() -> void:
 	var f: Font = MenuKit.font()
-	var text_w: float = f.get_string_size(TITLE, HORIZONTAL_ALIGNMENT_LEFT, -1, MenuKit.FS_HUGE).x
-	var sign_w: float = ceilf((text_w + 2.0 * 96.0) / 6.0) * 6.0
+	var text_w: float = f.get_string_size(TITLE, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_FONT).x
+	var sign_w: float = ceilf((text_w + 2.0 * 72.0) / 6.0) * 6.0
 	var x: float = roundf((SCREEN.x - sign_w) / 6.0) * 3.0
 
 	for rx: float in [x + sign_w * 0.2, x + sign_w * 0.8]:
@@ -61,12 +66,12 @@ func _build_title_sign() -> void:
 	sb.texture = MenuKit.tex("sign.png")
 	sb.texture_margin_left = 42
 	sb.texture_margin_right = 42
-	sb.texture_margin_top = 93
-	sb.texture_margin_bottom = 93
+	sb.texture_margin_top = SIGN_H / 2.0
+	sb.texture_margin_bottom = SIGN_H / 2.0
 	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
-	## İçerik payları açıkça verilmezse StyleBoxTexture doku paylarını (93+93) minimum boy sayar ve tabela büyürdü.
-	sb.content_margin_left = 90
-	sb.content_margin_right = 90
+	## İçerik payları açıkça verilmezse StyleBoxTexture doku paylarını (75+75) minimum boy sayar ve tabela büyürdü.
+	sb.content_margin_left = 72
+	sb.content_margin_right = 72
 	sb.content_margin_top = 0
 	sb.content_margin_bottom = 6
 	var sign_panel := PanelContainer.new()
@@ -75,15 +80,15 @@ func _build_title_sign() -> void:
 	sign_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(sign_panel)
 
-	var title := MenuKit.make_label(TITLE, MenuKit.FS_HUGE, MenuKit.C_CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	var title := MenuKit.make_label(TITLE, TITLE_FONT, MenuKit.C_CREAM, HORIZONTAL_ALIGNMENT_CENTER)
 	title.name = "Title"
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_outline_color", MenuKit.C_OUTLINE)
-	title.add_theme_constant_override("outline_size", 18)
+	title.add_theme_constant_override("outline_size", 14)
 	title.add_theme_color_override("font_shadow_color", Color(0.29, 0.17, 0.10, 0.9))
 	title.add_theme_constant_override("shadow_offset_x", 0)
 	title.add_theme_constant_override("shadow_offset_y", 6)
-	title.add_theme_constant_override("shadow_outline_size", 18)
+	title.add_theme_constant_override("shadow_outline_size", 14)
 	sign_panel.add_child(title)
 	## Ağaca eklendikten SONRA (menü teması geçerliyken) konum/boyut - bkz. character_select.gd _place notu.
 	MenuKit.place(sign_panel, Vector2(x, SIGN_TOP), Vector2(sign_w, SIGN_H))
@@ -94,15 +99,15 @@ func _build_menu() -> void:
 	panel.name = "MenuPanel"
 	panel.custom_minimum_size = Vector2(MENU_W, 0)
 	add_child(panel)
-	MenuKit.place(panel, Vector2(roundf((SCREEN.x - MENU_W) / 6.0) * 3.0, 348.0), Vector2(MENU_W, 0))
+	MenuKit.place(panel, Vector2(roundf((SCREEN.x - MENU_W) / 6.0) * 3.0, MENU_Y), Vector2(MENU_W, 0))
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
+	v.add_theme_constant_override("separation", 9)
 	panel.add_child(v)
 
-	_start_btn = MenuKit.make_button("TEK OYUNCULU", "sage", MENU_FONT, 84)
-	_multiplayer_btn = MenuKit.make_button("ÇOK OYUNCULU", "tan", MENU_FONT, 84)
-	_settings_btn = MenuKit.make_button("AYARLAR", "tan", MENU_FONT, 84)
-	_exit_btn = MenuKit.make_button("ÇIKIŞ", "rose", MENU_FONT, 84)
+	_start_btn = MenuKit.make_button("TEK OYUNCULU", "sage", MENU_FONT, MENU_BTN_H)
+	_multiplayer_btn = MenuKit.make_button("ÇOK OYUNCULU", "tan", MENU_FONT, MENU_BTN_H)
+	_settings_btn = MenuKit.make_button("AYARLAR", "tan", MENU_FONT, MENU_BTN_H)
+	_exit_btn = MenuKit.make_button("ÇIKIŞ", "rose", MENU_FONT, MENU_BTN_H)
 	for b: Button in [_start_btn, _multiplayer_btn, _settings_btn, _exit_btn]:
 		v.add_child(b)
 	_start_btn.pressed.connect(_on_start_pressed)

@@ -435,13 +435,19 @@ func _find_map_refs() -> void:
 		_vignette_base = float(_vignette_material.get_shader_parameter("intensity"))
 
 
+## Bitki sallanma çarpanı (1 = sakin hava). TEK kaynak: sallantı.gdshader materyalleri (aşağıda) VE sway_plants.gd'nin
+## sallanan otları bunu okur.
+func get_sway_multiplier() -> float:
+	return lerpf(1.0, SWAY_WINDY_MULT, wind_intensity) * lerpf(1.0, SWAY_STORM_MULT / SWAY_WINDY_MULT, storm_intensity)
+
+
 func _update_map_atmosphere() -> void:
 	if not _map_refs_searched:
 		_find_map_refs()
 	var darkness: float = AtmosphereMath.darkness(cycle_time)
 	## PERF (kullanıcı bildirimi 2026-09-25 "hava durumları fpsi düşürüyor"): shader parametreleri eskiden HER karede
 	## (değişmese bile) yazılıyordu - artık sadece değer gerçekten değişince.
-	var sway_k: float = lerpf(1.0, SWAY_WINDY_MULT, wind_intensity) * lerpf(1.0, SWAY_STORM_MULT / SWAY_WINDY_MULT, storm_intensity)
+	var sway_k: float = get_sway_multiplier()
 	if absf(sway_k - _last_sway_k) > 0.005:
 		_last_sway_k = sway_k
 		for entry: Array in _sway_materials:

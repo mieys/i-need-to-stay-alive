@@ -594,15 +594,18 @@ def rope(w=4, h=6):
     return a
 
 
-def sign(w=52, h=62):
+def sign(w=52, h=50):
     """Ana menü başlık tabelası: 3 yatay tahta, damar çizgileri (12 px periyot), uçlarda pirinç çiviler, köşelerde
     yaprak sarmaşığı. Dokunun 2 px şeffaf payı yaprakların dışa taşabilmesi için. 9-slice: yatay pay 14 -> orta karo 24
-    sütun = damar periyodunun (12) tam 2 katı, dikişsiz; dikeyde tabela hep dokunun kendi boyunda (62) çizilir."""
+    sütun = damar periyodunun (12) tam 2 katı, dikişsiz; dikeyde tabela hep dokunun kendi boyunda çizilir.
+    2026-09-26 (kullanıcı: "başlangıç menüsündeki başlığı ve arayüzü biraz küçült"): yükseklik 62 -> 50 (tahta 19 -> 15 satır);
+    main_menu.gd SIGN_H = h x 3 ile eşleşmeli."""
     a = Art(w, h)
     m0 = 2
     bw, bh = w - 2 * m0, h - 2 * m0
     d = depth_map(rr_mask(bw, bh, 3))
-    planks = [(1, 19), (20, 38), (39, bh - 2)]
+    ph_ = (bh - 1) // 3
+    planks = [(1, ph_), (ph_ + 1, 2 * ph_), (2 * ph_ + 1, bh - 2)]
     plank_tone = [(W_HI, W_LT, W_MD), (lighten(W_HI, 0.04), lighten(W_LT, 0.05), W_MD), (W_HI, W_LT, W_MD)]
     for y in range(bh):
         for x in range(bw):

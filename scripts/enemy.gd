@@ -2925,6 +2925,29 @@ func apply_knockback_force(dir: Vector2, force: float) -> void:
 		_knockback_velocity = _knockback_velocity.normalized() * KNOCKBACK_MAX_SPEED
 
 
+## YETENEK İTMESİ (kullanıcı bildirimi 2026-09-27: "matthewin Q yeteneği yaratıkları matthewdan uzağa itmiyor iyi oranda
+## uzağa itmesi gerekiyordu"): apply_knockback_force HIZ alır ve KNOCKBACK_MAX_SPEED (400) ile kırpılır - sönümle (1400
+## px/sn²) Q'nun 260'lık itişi ~24 px, tavanda bile en fazla ~57 px kaydırıyordu. Bu fonksiyon MESAFE alır: tam o mesafeyi
+## kat edecek başlangıç hızı hesaplanır, tek bir güçlü yetenek itişi tavanı aşabilir (silah/gövde itmeleri değişmedi).
+## Bosslar SKILL_PUSH_BOSS_MULT kadar. Çok oyunculuda istemci -> host'taki gerçek yaratık (NetworkManager.request_enemy_skill_push).
+const SKILL_PUSH_BOSS_MULT := 0.4
+
+func apply_skill_push(dir: Vector2, distance: float) -> void:
+	if distance <= 0.0 or is_dead:
+		return
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.request_enemy_skill_push.rpc_id(NetworkManager._host_peer_id(), net_id, dir, distance)
+		return
+	var d: Vector2 = dir.normalized() if dir.length() > 0.001 else Vector2.RIGHT
+	var dist: float = distance * (SKILL_PUSH_BOSS_MULT if is_boss else 1.0)
+	var v0: float = sqrt(2.0 * KNOCKBACK_DECAY * dist)
+	## Mevcut itişin bu yöndeki bileşeni sayılır (üst üste binince katlanmasın), dik bileşen korunur.
+	var along: float = _knockback_velocity.dot(d)
+	_knockback_velocity += d * maxf(v0 - maxf(along, 0.0), 0.0)
+
+
 ## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-24: "normal yaratıklarda geri tepme çalışmıyor sadece bosslarda ve
 ## kopyalarda çalışıyor"): silah/mermi itişi (Kitelama Seti knockback_stat = 40, öfke/kart bonusları) eskiden "bu kadar
 ## piksel ışınla" demekti; yumuşak itişe geçilirken AYNI sayı apply_knockback_force'a HIZ (px/sn) olarak verilmeye
@@ -5376,6 +5399,20 @@ func _drop_magnet() -> void:
 ## şans döneminde verilmişti; şans 0'da ~25 dk'da ~5 sandık kalıyordu. 0.12 -> 0.25 (x~2): ilk 5 dk'da ~0,75, oyun boyunca
 ## ~12-14 normal sandık (bosslar/elit sandıklar ayrı, bu çarpandan etkilenmez).
 const CHEST_DROP_RATE_MULT := 0.25
+## Kullanıcı bildirimi (2026-09-26): "erken oyunda yaratıklardan nerdeyse hiç sandık çıkmıyor" - kök neden: Kademe 1-2 zarı
+## 0.005 x 0.25 = öldürme başına %0.125; erken oyunda doğuş aralığı ~0.6 sn (dakikada <=100 öldürme), yani ilk 10 dk'da
+## ortalama ~1 sandık. Sadece ERKEN oyuna çarpan: ilk EARLY_CHEST_BOOST_UNTIL sn x EARLY_CHEST_BOOST (~3-4 sandık/10 dk),
+## sonra EARLY_CHEST_BOOST_FADE sn içinde doğrusal olarak x1'e iner (geç oyun sandık sayısı değişmez).
+const EARLY_CHEST_BOOST := 3.0
+const EARLY_CHEST_BOOST_UNTIL := 600.0
+const EARLY_CHEST_BOOST_FADE := 300.0
+
+
+static func early_chest_boost(game_time: float) -> float:
+	if game_time <= EARLY_CHEST_BOOST_UNTIL:
+		return EARLY_CHEST_BOOST
+	var t: float = clampf((game_time - EARLY_CHEST_BOOST_UNTIL) / EARLY_CHEST_BOOST_FADE, 0.0, 1.0)
+	return lerpf(EARLY_CHEST_BOOST, 1.0, t)
 ## Elit sandık (kullanıcı isteği 2026-09-25: "elitler bosslardan ve güçlü yaratıklardan nadiren düşsün ... bossdan düşen
 ## sandık garantidir", "güçlü yaratık kademesi yüksek yaratık demek"): boss her zaman 1 ELİT sandık düşürür (eskiden
 ## normal sandık + herkese efsun hakkı); Kademe >= ELITE_CHEST_MIN_TIER olan sıradan yaratıklarda ayrı, nadir bir elit
@@ -5406,7 +5443,7 @@ func _drop_chest() -> void:
 
 	## Şans artık çarpımsal (bkz. LUCK_DROP_MULT_PER_POINT) - 20 şans = 2 kat sandık.
 	var luck: float = _luck_mult(LUCK_DROP_MULT_PER_POINT)
-	if randf() <= base_chance * luck * CHEST_DROP_RATE_MULT:
+	if randf() <= base_chance * luck * CHEST_DROP_RATE_MULT * early_chest_boost(GameManager.game_time):
 		_spawn_chest_drop(false)
 	if _current_tier >= ELITE_CHEST_MIN_TIER and randf() <= ELITE_CHEST_CHANCE * luck:
 		_spawn_chest_drop(true)

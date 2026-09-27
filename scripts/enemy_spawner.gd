@@ -115,6 +115,19 @@ const TIER_ROSTER := {
 	15: ["demon2", "hayalet3", "slime7", "vampire3", "iblis3"],
 }
 
+## Kullanıcı isteği (2026-09-27): "oyun başlangıcındaki kademe 1 slimelar 90 saniye sonra doğmaya başlasın" - oyunun ilk
+## SLIME_START_DELAY saniyesinde (game_time) rosterdeki slime'lar çıkarılır (Kademe 1'de sadece fareler doğar). Normal
+## doğma ve görev dalgası aynı yardımcıyı (_spawnable_roster) kullanır.
+const SLIME_START_DELAY := 90.0
+
+
+func _spawnable_roster(tier: int) -> Array:
+	var roster: Array = TIER_ROSTER.get(tier, TIER_ROSTER.get(1, []))
+	if GameManager.game_time >= SLIME_START_DELAY:
+		return roster
+	return roster.filter(func(id: String) -> bool: return not id.begins_with("slime"))
+
+
 ## Boss Kademe: one guaranteed tough spawn near the end of that tier's time
 ## window (see boss_trigger_fraction). Stats are computed from the tier
 ## number itself (e.g. İskelet 3's tier-3 boss uses tier=3, not its later
@@ -369,6 +382,16 @@ const DURABILITY_CUT_2026_09_25 := 0.85
 ## iner. Tüm boss doğuş yolları (normal, geç katılan istemci, debug) bu fonksiyondan geçiyor - kopya yok. Ödül (altın/XP)
 ## DURABILITY_CUT ile AYNI gerekçeyle bu kesintiden önceki can üzerinden hesaplanır (kullanıcı ödül değişikliği istemedi).
 const BOSS_CUT_2026_09_25B := 0.85
+## Kullanıcı isteği (2026-09-26): "Tüm yaratıkların canını ve kalkanını %10 azalt" - normal + boss, can ve kalkana
+## x0.9 (_apply_global_buff; tüm doğuş yolları oradan geçer). Boss ödülü önceki kesintilerle aynı gerekçeyle bu
+## kesintiden ÖNCEKİ can üzerinden hesaplanır (ödüller değişmez).
+const DURABILITY_CUT_2026_09_26 := 0.9
+## Kullanıcı isteği (2026-09-26, ikinci): "ilk 2 kademedeki yaratıkların canlarını ve kalkanlarını %20 azalt" - Kademe 1-2'de
+## doğan (boss olmayan; bu kademelerde boss yok) yaratıklara ek x0.8, can ve kalkana. Kademe 1-2 yaratıklarının şu an kalkanı
+## yok (REGULAR_SHIELD_MIN_TIER = 3) ama çarpan kalkana da uygulanır. Kademe apply_tier_scaling ile _apply_global_buff'tan
+## ÖNCE atanıyor (tüm doğuş yolları: normal, görev dalgası, pusu, debug).
+const EARLY_TIER_DURABILITY_CUT := 0.8
+const EARLY_TIER_MAX := 2
 ## DÜZELTME (kullanıcı isteği: "yaratıkların hasarını %60 arttır") - 1.05 ->
 ## 1.68 (1.05 * 1.6).
 ## Kullanıcı isteği: "tüm yaratıkların hasarını %10 azalt" - 1.68 -> 1.512 (×0.9), bosslar DAHİL (bkz.
@@ -1027,7 +1050,7 @@ func _spawn_regular_enemy() -> void:
 	var tier: int = _resolve_spawn_tier()
 	if tier <= 0:
 		return
-	var roster: Array = TIER_ROSTER.get(tier, [])
+	var roster: Array = _spawnable_roster(tier)
 	if roster.is_empty():
 		return
 	## kullanıcı isteği: "karakter çok güçlüyse normalden daha fazla
@@ -1234,7 +1257,7 @@ func spawn_mission_wave(center: Vector2, ring_radius: float, count: int) -> int:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		return 0
 	var tier: int = max(1, _current_tier())
-	var roster: Array = TIER_ROSTER.get(tier, TIER_ROSTER.get(1, []))
+	var roster: Array = _spawnable_roster(tier)
 	if roster.is_empty():
 		return 0
 	var spawned := 0
@@ -1340,9 +1363,12 @@ const EXTRA_PLAYER_DEFENSE_MULT := 0.50
 ## yolları _apply_global_buff'tan geçer):
 ##  - golem: "çok dayanıklıdır fakat biraz yavaştır (kalkan ve can oranları %30 arttır, hızlarını %20 azalt)"
 ##  - zombie: "zombilerin canı %30 daha fazla olsun" (sadece can; ölüm asidi enemy.gd die()'da)
+##  - rat (2026-09-26): "oyundaki farelerin canını ve kalkanını %30 azalt" -> aynı gün "%30 azaltmayı %50 yapalım" (x0.5;
+##    rat1/2/3, normal + boss, host + client)
 const FAMILY_TRAITS := {
 	"golem": {"health": 1.3, "shield": 1.3, "speed": 0.8},
 	"zombie": {"health": 1.3},
+	"rat": {"health": 0.5, "shield": 0.5},
 }
 
 func _apply_global_buff(enemy: Node) -> void:
@@ -1351,12 +1377,14 @@ func _apply_global_buff(enemy: Node) -> void:
 	var multiplayer_defense_mult: float = 1.0 + float(extra_players) * EXTRA_PLAYER_DEFENSE_MULT
 	var health_shield_mult: float = BOSS_HEALTH_SHIELD_MULT if enemy.is_boss else HEALTH_SHIELD_MULT
 	var boss_cut: float = BOSS_CUT_2026_09_25B if enemy.is_boss else 1.0
+	var enemy_tier: int = int(enemy.get("_current_tier")) if "_current_tier" in enemy else 0
+	var early_cut: float = EARLY_TIER_DURABILITY_CUT if (not enemy.is_boss and enemy_tier >= 1 and enemy_tier <= EARLY_TIER_MAX) else 1.0
 	## Aile özellikleri (bkz. FAMILY_TRAITS) - kalkan çarpanı candan AYRI tutulur (zombide sadece can artar).
 	var fam_trait: Dictionary = FAMILY_TRAITS.get(Enemy.family_of_id(str(enemy.get_meta("creature_id", ""))), {})
 	var trait_health: float = float(fam_trait.get("health", 1.0))
 	var trait_shield: float = float(fam_trait.get("shield", 1.0))
 	enemy.speed *= float(fam_trait.get("speed", 1.0))
-	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_health * boss_cut
+	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_health * boss_cut * DURABILITY_CUT_2026_09_26 * early_cut
 	enemy.health = enemy.max_health
 	enemy.contact_damage *= GLOBAL_DAMAGE_BUFF * boss_cut
 	if enemy.ranged_damage > 0.0:
@@ -1366,7 +1394,7 @@ func _apply_global_buff(enemy: Node) -> void:
 	# büyütüyoruz.
 	if enemy.item_shield_max > 0.0:
 		## Kalkan zaten (trait'siz) candan türetilmişti: GLOBAL çarpanlar + ailenin KENDİ kalkan çarpanı.
-		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_shield * boss_cut
+		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_shield * boss_cut * DURABILITY_CUT_2026_09_26 * early_cut
 		enemy.item_shield_hp = enemy.item_shield_max
 		enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
 	enemy.health_changed.emit(enemy.health, enemy.max_health)
@@ -1395,7 +1423,7 @@ func _apply_global_buff(enemy: Node) -> void:
 	## kopya YOK - enemy.gd'deki TEK kaynak sabitler doğrudan okunuyor.
 	if enemy.is_boss:
 		## bkz. DURABILITY_CUT_2026_09_25: ödül, 2026-09-25 can kesintisinden önceki can üzerinden (ödüller değişmesin).
-		var reward_health: float = enemy.max_health / DURABILITY_CUT_2026_09_25 / BOSS_CUT_2026_09_25B
+		var reward_health: float = enemy.max_health / DURABILITY_CUT_2026_09_25 / BOSS_CUT_2026_09_25B / DURABILITY_CUT_2026_09_26
 		enemy.xp_value = round(reward_health * Enemy.BOSS_XP_HEALTH_RATIO)
 		enemy.gold_min = max(1, int(reward_health * Enemy.BOSS_GOLD_MIN_HEALTH_RATIO))
 		enemy.gold_max = max(enemy.gold_min + 1, int(reward_health * Enemy.BOSS_GOLD_MAX_HEALTH_RATIO))

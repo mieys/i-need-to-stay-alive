@@ -52,15 +52,19 @@ var flash: float = 0.0
 var _strike_timer: float = 4.0
 var _distant_timer: float = 5.0
 var _flash_queue: Array = [] ## [gecikme, güç] - yıldırımın ikinci titremesi
-var _distant_player: AudioStreamPlayer = null
+## 2 çalar: yeni uzak gürültü kaydı 8-10 sn, aralık 6-14 sn - tek çalarda önceki bitmeden gelen parlama SESSİZ kalıyordu.
+## Gerçek fırtınada da gürültüler üst üste biner.
+var _distant_players: Array[AudioStreamPlayer] = []
 
 
 func _ready() -> void:
 	NetworkManager.lightning_strike_received.connect(_on_strike_received)
-	_distant_player = AudioStreamPlayer.new()
-	_distant_player.process_mode = Node.PROCESS_MODE_ALWAYS
-	_distant_player.bus = preload("res://scripts/audio_buses.gd").ambient_bus() ## kubbe içinde boğulur
-	add_child(_distant_player)
+	for i in 2:
+		var dp := AudioStreamPlayer.new()
+		dp.process_mode = Node.PROCESS_MODE_ALWAYS
+		dp.bus = preload("res://scripts/audio_buses.gd").ambient_bus() ## kubbe içinde boğulur
+		add_child(dp)
+		_distant_players.append(dp)
 
 
 func set_storm(value: float, p_indoors: bool) -> void:
@@ -187,11 +191,19 @@ func _distant_thunder() -> void:
 	## Yıldırımsız uzak gürültü + hafif gökyüzü parlaması (flaş gürültüden biraz önce - ışık sesten hızlı).
 	flash = maxf(flash, randf_range(0.2, 0.35))
 	var path: String = DISTANT_SOUNDS[randi() % DISTANT_SOUNDS.size()]
-	if not ResourceLoader.exists(path) or _distant_player.playing:
+	var player: AudioStreamPlayer = null
+	for dp in _distant_players:
+		if not dp.playing and not dp.has_meta(&"reserved"): ## reserved: gecikmeli play() bekliyor
+			player = dp
+			break
+	if not ResourceLoader.exists(path) or player == null:
 		return
-	_distant_player.stream = load(path)
-	_distant_player.volume_db = -16.0 + 4.0 * (storm - 1.0) ## 2026-09-25: -5 dB ("hava sesleri biraz fazla")
-	_distant_player.pitch_scale = randf_range(0.85, 1.05)
+	player.set_meta(&"reserved", true)
+	player.stream = load(path)
+	player.volume_db = -16.0 + 4.0 * (storm - 1.0) ## 2026-09-25: -5 dB ("hava sesleri biraz fazla")
+	player.pitch_scale = randf_range(0.85, 1.05)
 	get_tree().create_timer(randf_range(0.3, 0.9), false).timeout.connect(func() -> void:
-		if is_instance_valid(_distant_player) and not indoors:
-			_distant_player.play())
+		if is_instance_valid(player):
+			player.remove_meta(&"reserved")
+			if not indoors:
+				player.play())

@@ -87,20 +87,10 @@ const UPGRADES = [
 	{"id": "dodge", "title": "Sıvışma", "desc": "+%2.5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "shield_amount", "title": "Kalkan Miktarı", "desc": "+%5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "cooldown_reduction", "title": "Bekleme Süresi Azaltma", "desc": "-%4", "cat": "Yardımcı", "color": CAT_UTILITY},
-	## Kullanıcı isteği: "kalkan emilimi statının adını kalkan soğurma olarak
-	## değiştir ve level atlama kartlarına kalkan soğurma statlarını ekle.
-	## (level başına %4) Kalkan soğurma en fazla %92 olsun" - eskiden
-	## "shield_protection" (o zamanki adıyla "Kalkan Koruması") bu havuzdan
-	## çıkarılmıştı (bkz. aşağıdaki eski yorum), şimdi YENİ isim ve YENİ
-	## sabit (+%4, cooldown_reduction ile AYNI desen - kart-güçlendirme
-	## çarpanına tabi değil) ile geri eklendi (bkz. player.gd apply_upgrade
-	## "shield_protection" dalı, SHIELD_PROTECTION_CAP=0.92).
-	{"id": "shield_protection", "title": "Kalkan Soğurma", "desc": "+%4", "cat": "Savunma", "color": CAT_DEFENSE},
-	## Kullanıcı isteği (3. tur): "kart seçimlerine itme ve can çalma statını
-	## ekle" - "knockback" (Geri Tepme) 1. turda çıkarılmıştı, şimdi geri
-	## eklendi; "lifesteal" (Can Çalma) ilk kez ekleniyor (bkz. player.gd
-	## apply_upgrade "lifesteal" dalı - mekanizma zaten vardı, kart yoktu).
-	{"id": "knockback", "title": "Geri Tepme", "desc": "+19.5", "cat": "Saldırı", "color": CAT_ATTACK},
+	## Kullanıcı isteği (2026-09-26): "geri tepmeyi level atlama kartlarından kaldırıyoruz ... kalkan soğurmayı da level
+	## atlama kartlarından kaldırıyoruz" - "knockback" (Geri Tepme) ve "shield_protection" (Kalkan Soğurma) kartları
+	## havuzdan çıkarıldı. Geri tepme artık bir stat değil, ileride efsun özelliği olacak. player.gd apply_upgrade'deki
+	## dallar duruyor (bu havuzdan artık hiç seçilmiyor).
 	## Kullanıcı isteği: "Can çalma veren tüm statları %70 azalt" - +%1 -> +%0.3.
 	{"id": "lifesteal", "title": "Can Çalma", "desc": "+%1", "cat": "Saldırı", "color": CAT_ATTACK},
 ]
@@ -110,6 +100,7 @@ const UPGRADES = [
 ## yerine "health_regen" eklenmişti. "shield_protection" artık "Kalkan
 ## Soğurma" adıyla yeniden eklendi (2. tur kullanıcı isteği), "knockback" da
 ## şimdi (3. tur) "lifesteal" ile birlikte YUKARIDA geri/yeni eklendi.
+## 2026-09-26: ikisi de TEKRAR çıkarıldı (bkz. yukarıdaki "lifesteal" satırının üstündeki not).
 
 @onready var cards: Array = [$CardsContainer/Card1, $CardsContainer/Card2, $CardsContainer/Card3]
 @onready var reroll_button: Button = $RerollButton

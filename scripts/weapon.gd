@@ -35,8 +35,9 @@ signal fired(direction: Vector2)
 @export var beam_tick_interval: float = 0.3333333
 ## Işığın birincil hedeften sıçradığı EK düşman sayısı (0 = hiç sıçramaz) ve
 ## her sıçramanın verdiği hasar oranı (birincil hedefin o tikteki hasarına
-## göre). player.gd _apply_lightning_tier() tier'e göre günceller.
-var chain_jump_count: int = 1
+## göre). Kullanıcı isteği (2026-09-26, "silahlarda sadece statlar kalsın"): saf silah SIÇRAMAZ (0) - sıçrama artık
+## sadece efsundan gelir (Zincir Yıldırım, enchant_behavior.gd chain_bonus).
+var chain_jump_count: int = 0
 var chain_damage_percent: float = 0.5
 ## Kullanıcı isteği: "yıldırım asasının sekmesi sadece hedefin yakınındaki
 ## yaratıklara olmalı, çok uzaktaki yaratıklara bile sekiyor" - eskiden
@@ -182,6 +183,10 @@ func _effective_fire_wait() -> float:
 		wait /= 1.0 + TRUE_DAMAGE_ATTACK_SPEED_BONUS ## saldırı hızı x1.3 = aralık /1.3
 	if is_instance_valid(enchant_behavior):
 		wait /= 1.0 + enchant_behavior.attack_speed_bonus() ## efsun saldırı hızı (ör. Çoklu Üfleme V)
+		## Uzunkılıç "daha sık savrulur" efsun adımları (EnchantDefs "orbit_cd_mult" - eski dönen kılıçta aynı düşmana
+		## tekrar vurma bekleme çarpanıydı): savrulan kılıçta doğrudan savuruş aralığı.
+		if _is_uzunkilic:
+			wait *= enchant_behavior.orbit_cd_mult()
 	## Oyuncu geneli efsun hızlanması (Buz Tahtı, Napalm Fişeği V...) - tüm silahlara.
 	var owner_p: Node = get_parent()
 	if owner_p and owner_p.has_method("enchant_haste_value"):
@@ -687,98 +692,15 @@ func _measure_icon_pixel_size() -> Vector2:
 @onready var muzzle: Node2D = get_node_or_null("Icon/Muzzle")
 
 
-## Arcane Asası pasifleri (bkz. kullanıcı isteği):
-## 1) "Canı %30'un altındaki düşmanlara %30 daha fazla hasar" - _fire_at()
-##    içinde final_damage'a uygulanıyor.
-## 2) menzil içindeki rastgele düşmanlara aniden 10 kere saldırır - bkz.
-##    add_arcane_stack/_process_arcane_burst_cooldown üstündeki DÜZELTME
-##    notu (kullanıcı isteği: "kendi öldürdüğü değil etrafta ölen
-##    düşmanlara göre stacklensin, 6sn bekleme süresi olsun").
-const ARCANE_EXECUTE_HP_THRESHOLD := 0.30
-const ARCANE_EXECUTE_DAMAGE_MULT := 1.3
-const ARCANE_BURST_ATTACK_COUNT := 10
-## DÜZELTME (kullanıcı bildirimi: "Arcane asası kendi öldürdüğü değil
-## etrafta ölen düşmanlara göre stacklensin (belli bi stackten sonra
-## ateşleme yapıyordu çünkü) ve bunun bekleme süresi 6 saniye olsun ve bu
-## bekleme süresi bekleme süresinde azalmaya göre azalabilsin. Her arcane
-## asasının kendi bekleme süresi ve kendi etrafta yaratık ölünce stack
-## birikmesi olsun") - eski sistem SADECE bu silahın KENDİ mermisiyle
-## öldürdüğü düşmanları sayıyordu (bkz. eski notify_kill), bu yüzden nadir/
-## tahmin edilemezdi. Artık player.gd _distribute_arcane_stack() (bkz. o
-## dosyadaki on_enemy_killed/_remote çağrıları) menzil (attack_range)
-## içindeki SAHİP OLUNAN Arcane kopyalarından rastgele BİRİNE (kim
-## öldürürse öldürsün, "1 ölüm 5 asaya da stack vermemeli") add_arcane_
-## stack() ile 1 stack ekliyor; her kopya KENDİ stack sayacını ve KENDİ
-## 6sn'lik (cooldown_reduction_percent'e tabi) bekleme süresini bağımsız
-## işletip hazır olduğunda birikmiş TÜM stack'i tek seferde patlatıyor.
-const ARCANE_BURST_COOLDOWN := 8.0
+## Arcane Asası: sadece asa ölçeği/ikonu için tür bayrağı. Eski pasifler (canı %30 altına %30 infaz, etrafta ölen
+## düşmanlarla stacklenen 10'lu patlama) 2026-09-26'da silindi - kullanıcı isteği: "silahlarda sadece statlar kalsın".
 var _is_arcane: bool = false
-var _arcane_stacks: int = 0
-var _arcane_burst_cooldown_timer: float = 0.0
+## Uzunkılıç: 2026-09-26'dan beri etrafta DÖNMEZ, hedefe savrulan bir yakın dövüş silahı (kullanıcı isteği: "artık
+## etrafımızda dönmesi yerine hedeflediği düşmana doğru savurulsun") - savuruşun konum/zaman matematiği ve hilal efekti
+## scripts/sword_swing_math.gd'de TEK yerde (remote_player.gd aynı dosyayı çağırır).
 var _is_uzunkilic: bool = false
-var _orbit_angle: float = 0.0
-var _hit_cooldowns: Dictionary = {}
-var _trail_timer: float = 0.0
-const HitClawFxScene := preload("res://scenes/fx_pence_slash.tscn")
-## Trail sahne yolu artık weapon_orbit_math.gd'de TEK yerde (TRAIL_SCENE_PATH)
-## - burada elle ikinci bir referans tutulmuyor (bkz. o dosyanın başındaki
-## kök neden notu).
-
-
-## player.gd _distribute_arcane_stack() çağırır (bkz. dosya başındaki
-## ARCANE_BURST_COOLDOWN üstündeki DÜZELTME notu) - SADECE Arcane Asası bu
-## metodu anlamlı kullanır, diğer tüm silahlerde no-op (has_method
-## kontrolüyle her silahta çağrılabilir olsa da _is_arcane false olduğu
-## için hiçbir şey yapmaz).
-func add_arcane_stack() -> void:
-	if not _is_arcane:
-		return
-	_arcane_stacks += 1
-
-
-## _process()'ten her karede çağrılır - bkz. ARCANE_BURST_COOLDOWN üstündeki
-## DÜZELTME notu. Bekleme süresi dolduğunda VE en az 1 stack birikmişse
-## patlamayı tetikleyip stack'i sıfırlıyor, sonra bekleme süresini (oyuncunun
-## cooldown_reduction_percent'iyle ölçeklenmiş) yeniden başlatıyor - stack
-## yoksa bekleme süresi dolsa bile hiçbir şey olmaz (yakınında kimse
-## ölmediyse "boşa" ateş etmez).
-func _process_arcane_burst_cooldown(delta: float) -> void:
-	if not _is_arcane:
-		return
-	if _arcane_burst_cooldown_timer > 0.0:
-		_arcane_burst_cooldown_timer -= delta
-		return
-	if _arcane_stacks <= 0:
-		return
-	_arcane_stacks = 0
-	var reduction: float = 0.0
-	var owner_char: Node = get_parent()
-	if owner_char and "cooldown_reduction_percent" in owner_char:
-		reduction = owner_char.cooldown_reduction_percent
-	_arcane_burst_cooldown_timer = ARCANE_BURST_COOLDOWN * (1.0 - reduction)
-	_trigger_arcane_burst()
-
-
-## Menzil içindeki düşmanlardan rastgele ARCANE_BURST_ATTACK_COUNT tanesine
-## (yeterince yoksa hepsine) art arda normal bir atış gönderir - _fire_at()
-## zaten dışarıdan (bkz. _fire_at_delayed) tekrar tekrar çağrılabilecek
-## şekilde tasarlı, burada da aynı şekilde kullanılıyor.
-func _trigger_arcane_burst() -> void:
-	var origin: Vector2 = _attack_origin()
-	var in_range: Array = []
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
-		if not VisionFogScript.can_target(e):
-			continue
-		if attack_range <= 0.0 or origin.distance_to(e.global_position) <= attack_range:
-			in_range.append(e)
-	if in_range.is_empty():
-		return
-	in_range.shuffle()
-	var count: int = min(ARCANE_BURST_ATTACK_COUNT, in_range.size())
-	for i in range(count):
-		_fire_at(in_range[i])
+const SwordSwingMath := preload("res://scripts/sword_swing_math.gd")
+const SwordHitFxScene := preload("res://scenes/fx_sword_hit.tscn")
 
 
 ## Silah TÜRÜ tespiti için kaynak metin. BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-24: "saldırı hızı yükseltmeme rağmen
@@ -796,8 +718,17 @@ func _ready() -> void:
 		## Kullanıcı isteği: "her silahın saldırı gücü oranını %10 azalt" -
 		## eskiden 1.8, %10 azaltılmış hali 1.62.
 		card_damage_bonus_ratio = 1.62
-		melee = false
+		## Yakın dövüş bayrağı SAHNEDEN değil burada: player.gd _configure_uzunkilic_melee'den ÖNCE ve uzak kuklanın
+		## (remote_player.gd update_weapon_visuals) okuduğu geçici kopyada da doğru olsun - yoksa kukla kılıcı menzilli
+		## sanıp hedefe nişan döndürürdü.
+		melee = true
 		attack_range = 115.0
+		## İsabet: eski kırmızı "İsabet 2" çizgileri (sahnedeki fx_hit_slash_streak, x1.2, açı düzeltmeli) yeni çelik mavisi
+		## hilalle çakışıyordu - kılıca özel küçük kesik parlaması (tools/gen_weapon_fx_sprites.py gen_sword_hit). Kesik
+		## çizgisi saldırı yönüne dik çizildiği için açı düzeltmesi yok. Uzak kopya "melee_hit" ile aynı sahneyi alır.
+		hit_impact_scene = SwordHitFxScene
+		hit_impact_scale_mult = 1.0
+		hit_impact_rotation_offset = 0.0
 	_is_arcane = _type_src.containsn("arcane")
 	if _type_src.containsn("yay") or _type_src.containsn("bow"):
 		# Firing rate (saldırı hızı) %15 azaltılıyor (yani atış aralığı saniyesi %15 artıyor)
@@ -1050,8 +981,10 @@ func _on_ranged_projectile_landed() -> void:
 ## bkz. _fire_at, player.gd _apply_boomerang_tier). Diğer tüm silahlerde 1.0
 ## (no-op, merminin kendi speed'i hiç değişmez).
 var projectile_speed_mult: float = 1.0
-## bkz. _fire_at'teki single_active_projectile dalı (2026-09-24 denge turu).
-const BOOMERANG_BASE_SPEED_MULT := 0.8
+## bkz. _fire_at'teki single_active_projectile dalı (2026-09-24 denge turu). 2026-09-26 (kullanıcı: "gidiş dönüş hızını
+## düşür bu zaten saldırı hızına göre artıyordu"): 0.8 -> 0.65; üstüne boomerang_projectile.gd uca yaklaşırken yavaşlayıp
+## dönüşte hızlanıyor (ortalama ~%80) - tam menzilli bir atış eskisinden ~%35 yavaş. Saldırı hızı oranıyla artmaya devam eder.
+const BOOMERANG_BASE_SPEED_MULT := 0.65
 
 
 ## Boomerang geri döndüğünde (bkz. boomerang_projectile.gd) çağrılır - bir
@@ -1406,143 +1339,17 @@ func _update_hover_follow(delta: float) -> void:
 const AIM_EASE_RATE := 12.0
 
 func _physics_process(delta: float) -> void:
-	if _is_uzunkilic:
-		_process_uzunkilic_orbit(delta)
-	else:
-		_process_death_drop()
-		## Düşerken/yerdeyken/dönerken hover takibi TAMAMEN durur (bkz.
-		## _process_death_drop üstündeki kök neden notu) - kendi fizik/geçiş
-		## simülasyonları global_position'ı zaten dolduruyor.
-		if _falling:
-			_process_weapon_fall_physics(delta)
-		elif _rising:
-			_process_weapon_rise_physics(delta)
-		elif not _weapon_grounded:
-			_update_hover_follow(delta)
-		_update_icon_shadow()
-
-
-var _orbit_arc: AnimatedSprite2D = null
-## Efsun "savuruş" birimi: kılıcın çeyrek turu. Tam tur temel hızda ~4 sn sürdüğü için (WeaponOrbitMath
-## ROTATION_SPEED_MULT) "her N turda" tetikleyiciler çok seyrekti; çeyrek tur temel hızda ~1 sn ve saldırı hızıyla kısalır
-## (kartlarda "her N sn" diye yazılır, bkz. EnchantDefs UZUNKILIÇ).
-const ENCHANT_SWING_ARC := PI * 0.5
-
-var _orbit_travel: float = 0.0
-
-func _process_uzunkilic_orbit(delta: float) -> void:
-	# Update cooldowns
-	for id in _hit_cooldowns.keys():
-		_hit_cooldowns[id] -= delta
-		if _hit_cooldowns[id] <= 0.0:
-			_hit_cooldowns.erase(id)
-
-	var parent_node: Node = get_parent()
-	if not parent_node or not parent_node is Node2D:
-		return
-
-	# Compute range multiplier based on attack range
-	var range_mult: float = attack_range / max(0.001, _base_attack_range)
-	scale = parent_node.scale * range_mult * form_scale_mult
-
-	## Dönüş/pozisyon formülü artık weapon_orbit_math.gd'de TEK yerde -
-	## remote_player.gd _update_local_uzunkilic_orbit AYNI fonksiyonu
-	## çağırıyor, bkz. o dosyanın başındaki kök neden notu.
-	var orbit: Dictionary = WeaponOrbitMath.compute(delta, _orbit_angle, fire_rate, range_mult, parent_node.scale.x)
-	## Efsun: kılıç her çeyrek turda (ENCHANT_SWING_ARC) bir "savuruş" sayılır (bkz. enchant_behavior.gd on_revolution).
-	_orbit_travel += absf(angle_difference(_orbit_angle, float(orbit["angle"])))
-	_orbit_angle = orbit["angle"]
-	global_position = parent_node.global_position + orbit["offset"]
-	rotation = orbit["rotation"]
-
-	# Ensure the icon is visible
-	if icon_sprite:
-		icon_sprite.visible = true
-
-	## Yörünge izi: kılıcın arkasında TEK bir pişirilmiş hilal (bkz. WeaponOrbitMath.update_arc) - eskiden saniyede ~22
-	## ayrı iz sahnesi doğuyordu.
-	if is_inside_tree():
-		_orbit_arc = WeaponOrbitMath.update_arc(_orbit_arc, self, (parent_node as Node2D).global_position, global_position)
-
-	# Collision detection with enemies
-	var sword_pos: Vector2 = global_position
-	var collision_radius: float = 45.0 * range_mult * parent_node.scale.x * _enchant_aoe_mult()
-	var orb_ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
-	if _orbit_travel >= ENCHANT_SWING_ARC:
-		_orbit_travel -= ENCHANT_SWING_ARC
-		if orb_ench:
-			orb_ench.on_revolution(sword_pos)
-	
-	# Compute effective damage stats
-	var final_damage: float = damage * rage_multiplier
-	final_damage *= 1.0 + _player_stat("aggressive_damage_bonus") + _player_stat("talon_damage_bonus")
-	final_damage *= _player_stat_default("shield_mode_damage_mult", 1.0)
-	var is_crit: bool = randf() < crit_chance
-	if is_crit:
-		final_damage *= crit_damage
-	final_damage += _player_stat("item_flat_hit_damage")
-	final_damage *= 1.0 + _player_stat("item_damage_mult_bonus")
-	
-	var shield_pen: float = _player_stat("shield_mode_shield_pen_bonus") + weapon_shield_pen_bonus
-
-	## DÜZELTME (kullanıcı bildirimi: "yaratıklara tam saldırırken anlık fps
-	## düşürüyor") - bu HER FİZİK KARESİNDE (uzunkılıç dönerken sürekli)
-	## çalışıyordu ve eskiden TÜM "enemies" grubunu tarıyordu; artık Enemy.
-	## get_enemies_near ile (bkz. enemy.gd) sadece kılıcın o anki yakınındaki
-	## yaratıklar geliyor.
-	## BUG DÜZELTMESİ (2026-09-24 denge turu): dönen kılıç Elara ULTİ'sinden (Çift Tetik) hiç etkilenmiyordu. Diğer
-	## silahlarla AYNI kural: ulti açıkken her isabet 2 kez, her biri %60 hasarla (x1.2).
-	var orbit_hits: int = 1
-	if _player_flag("elara_double_fire_active"):
-		orbit_hits = 2
-		final_damage *= ELARA_DOUBLE_FIRE_DAMAGE_MULT
-	if is_inside_tree():
-		## Şaman pasifi: bu vuruş penceresi (bir fizik karesi) kapsamında
-		## yakma EN FAZLA 1 düşmanda tetiklenebilir - bkz. enemy.gd
-		## try_shaman_weapon_burn() üstündeki kök neden notu.
-		var _shaman_burn_applied: bool = false
-		for e in Enemy.get_enemies_near(get_tree(), sword_pos, collision_radius):
-			var id: int = e.get_instance_id()
-			if not _hit_cooldowns.has(id):
-				_hit_cooldowns[id] = 1.0 * (orb_ench.orbit_cd_mult() if orb_ench else 1.0)
-				if e.has_method("take_damage"):
-					var hit_dmg: float = final_damage
-					var hit_pen: float = shield_pen
-					if orb_ench:
-						hit_dmg = orb_ench.modify_damage(final_damage * (1.0 + GameManager.enchant_damage_percent), e)
-						hit_pen += orb_ench.extra_shield_pen()
-					for _h in range(orbit_hits):
-						if is_instance_valid(e) and e.get("is_dead") != true:
-							e.take_damage(hit_dmg, is_crit, hit_pen, true) ## donen kilic: cevresindeki herkese = alan
-					if orb_ench and is_instance_valid(e):
-						orb_ench.on_hit(e, hit_dmg, true, null)
-					_spawn_orbit_hit_fx(e.global_position)
-					if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
-						_shaman_burn_applied = e.try_shaman_weapon_burn()
-
-
-func _spawn_orbit_hit_fx(pos: Vector2) -> void:
-	if not HitClawFxScene:
-		return
-	var fx: Node2D = HitClawFxScene.instantiate() as Node2D
-	if is_inside_tree() and get_tree().current_scene:
-		get_tree().current_scene.add_child(fx)
-	else:
-		get_parent().add_child(fx)
-	fx.global_position = pos + Vector2(randf_range(-4.0, 4.0), randf_range(-4.0, 4.0))
-	fx.rotation = randf_range(0.0, TAU)
-	var scene_scale: float = maxf(fx.scale.x, 0.001)
-	fx.scale = Vector2(0.5, 0.5)
-	## BUG DÜZELTMESİ (çok oyunculu senkron denetimi 2026-09-25): dönen kılıcın vuruş efekti diğer oyunculara HİÇ
-	## gitmiyordu (diğer yakın dövüş vuruşları "melee_hit" ile gidiyor, bkz. _spawn_melee_hit_fx) - uzak kopyada kılıç
-	## dönüyor ama yaratıklara değince hiçbir şey görünmüyordu. Dönen kılıç saniyede çok sayıda yaratığa değebildiği
-	## için yayın silah başına 0.08 sn'de bire sınırlı (sadece görsel).
-	if NetworkManager.is_multiplayer_active and not NetworkManager.should_throttle("orbit_hit_%d" % get_instance_id(), 0.08):
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "melee_hit", fx.global_position, {
-			"scene_path": HitClawFxScene.resource_path,
-			"rotation": fx.rotation,
-			"scale_mult": 0.5 / scene_scale, ## uzak dal sahnenin kendi ölçeğiyle ÇARPAR - yereldeki mutlak 0.5 ile aynı boy
-		})
+	_process_death_drop()
+	## Düşerken/yerdeyken/dönerken hover takibi TAMAMEN durur (bkz.
+	## _process_death_drop üstündeki kök neden notu) - kendi fizik/geçiş
+	## simülasyonları global_position'ı zaten dolduruyor.
+	if _falling:
+		_process_weapon_fall_physics(delta)
+	elif _rising:
+		_process_weapon_rise_physics(delta)
+	elif not _weapon_grounded:
+		_update_hover_follow(delta)
+	_update_icon_shadow()
 
 
 ## Silahın kafanın üstünde süzülen ikonu için, İKONA BAĞLI (karakterin
@@ -1620,8 +1427,6 @@ func _update_icon_shadow() -> void:
 	shadow_sprite.global_position = icon_sprite.global_position + Vector2(0, gap)
 
 func _process(delta: float) -> void:
-	if _is_uzunkilic:
-		return
 	## Oyuncu öldüğünde/yere düştüğünde silah node'u (kendi Timer/_process
 	## döngüsüyle Player'dan bağımsız çalışıyor) ateş etmeyi durdurmalı -
 	## Player._physics_process'teki "if is_dead: return" koruması BU node'u
@@ -1655,7 +1460,6 @@ func _process(delta: float) -> void:
 			## olabilecek durumlar için burada da aynı temizliği yapıyoruz.
 			_end_beam()
 		return
-	_process_arcane_burst_cooldown(delta)
 	## Şimşek Asası: FireTimer/fire_rate'i tamamen görmezden gelir, kendi
 	## sürekli ışın döngüsünü işler (bkz. _process_continuous_beam).
 	if continuous_beam:
@@ -1808,8 +1612,6 @@ func _on_draw_frame_changed() -> void:
 
 
 func _on_fire_timer_timeout() -> void:
-	if _is_uzunkilic:
-		return
 	## bkz. _process() en başındaki aynı ölüm/yere düşme koruması - FireTimer
 	## bu node'a ait ve Player öldükten sonra da tetiklenmeye devam edebiliyordu.
 	var owner_node := get_parent()
@@ -2454,11 +2256,6 @@ func _fire_at(target: Node2D) -> void:
 	var is_crit: bool = randf() < crit_chance + (ench.crit_bonus(target) if ench else 0.0)
 	if is_crit:
 		final_damage *= crit_damage + (ench.crit_damage_bonus(target) if ench else 0.0)
-	## Arcane Asası pasifi: canı %30'un altındaki düşmanlara %30 fazla hasar.
-	if _is_arcane and "health" in target and "max_health" in target:
-		var target_max_health: float = float(target.get("max_health"))
-		if target_max_health > 0.0 and float(target.get("health")) <= target_max_health * ARCANE_EXECUTE_HP_THRESHOLD:
-			final_damage *= ARCANE_EXECUTE_DAMAGE_MULT
 	## Efsun: ek atış hasar çarpanı (ör. Ok Yağmuru ek okları %80) + efsunun kendi hasar değişikliği (güç, koşullu bonuslar).
 	final_damage *= _shot_damage_mult * (1.0 + GameManager.enchant_damage_percent)
 	if ench:
@@ -2498,7 +2295,11 @@ func _fire_at(target: Node2D) -> void:
 	## önceden söyleyebilmemizi sağlar - bkz. kullanıcı bildirimi: "kesme
 	## efekti bitmeden kılıcın geri dönmesi [sorunu]".
 	var melee_effect_hold: float = 0.0
-	if melee:
+	if melee and _is_uzunkilic:
+		## Uzunkılıç: hedefe atılıp üstünden yay çizen kendi savuruşu (bkz. _start_sword_swing) - diğer yakın dövüş
+		## silahlarının hedef üstündeki "Z" zikzağı ve eski kırmızı hilal (fx_uzunkilic_slash) kılıçta kullanılmıyor.
+		_start_sword_swing(direction, target_pos_at_attack)
+	elif melee:
 		var fx_speed: float = _melee_effect_speed_scale()
 		var slash_fx_node: Node2D = _spawn_slash_fx(direction, melee_at_position, fx_speed)
 		var hit_fx_node: Node2D = _spawn_melee_hit_fx(direction, target_pos_at_attack, fx_speed)
@@ -2551,60 +2352,14 @@ func _fire_at(target: Node2D) -> void:
 		shield_pen += ench.extra_shield_pen() ## ör. Topuz Ağır Darbe II
 
 	if melee:
-		if target.has_method("take_damage"):
-			## Bölünmüş vuruş (Assasin Çocuk): tek seferde tam hasar yerine,
-			## eşit parçalara bölünüp art arda uygulanır - "-30" yerine
-			## sırayla "-10","-10","-10" gibi. Geri tepme tek seferde,
-			## saldırının başında uygulanır (vuruş anındaki fiziksel itiş).
-			_apply_knockback(target)
-			_deal_melee_damage(target, final_damage, is_crit, shield_pen)
-			_apply_item_slow_on_hit(target)
-			## Hançer: birincil hedefte kanama yükü bırakır (bkz. enemy.gd
-			## apply_bleed) - diğer tüm silahlerde bleed_max_stacks=0, no-op.
-			if bleed_max_stacks > 0 and target.has_method("apply_bleed"):
-				target.apply_bleed(bleed_tick_damage_per_stack, bleed_stacks_per_hit, bleed_max_stacks)
-			## Pençe: SADECE bu silahın kendi vuruşundan can çalar - diğer tüm
-			## silahlerde lifesteal_percent=0, no-op (bkz. _apply_weapon_lifesteal).
-			if lifesteal_percent > 0.0:
-				_apply_weapon_lifesteal(final_damage)
-			if target.has_method("try_shaman_weapon_burn"):
-				_shaman_burn_applied = target.try_shaman_weapon_burn()
-			if ench:
-				ench.on_hit(target, final_damage, true, null)
-		## Hafif alan hasarı: hedefin çevresindeki diğer düşmanlar da
-		## savuruştan pay alır (tam hasarın melee_aoe_damage_percent'i).
-		## DÜZELTME (kullanıcı bildirimi: "yaratıklara tam saldırırken anlık
-		## fps düşürüyor") - HER yakın dövüş vuruşunda TÜM "enemies" grubunu
-		## (158'e kadar) tarayıp mesafe hesaplıyordu; artık Enemy.
-		## get_enemies_near ile (bkz. enemy.gd - ayrışma ızgarasının genel
-		## amaçlı sürümü) SADECE gerçekten menzildeki yaratıklar geliyor.
-		## Hayalet hedefe (Talon Salvosu, ışında yaratık yok) savurulmuşsa gerçek bir vuruş yok: etrafına
-		## alan payı da dağıtılmaz (aksi halde boşa atan silah alan hasarı veriyordu).
-		var aoe_victims: Array = Enemy.get_enemies_near(get_tree(), target.global_position, melee_aoe_radius * aoe_radius_multiplier * _enchant_aoe_mult()) if target.has_method("take_damage") else []
-		for e in aoe_victims:
-			if e == target:
-				continue
-			if e.has_method("take_damage"):
-				## DÜZELTME (kullanıcı isteği 2026-09-24: "alan hasarı veren silahların efektifliğinin %33 olmasını
-				## istemiyorum") - eskiden burada ayrıca ×0.33 (GameManager.AOE_DAMAGE_EFFECTIVENESS) vardı; asıl istek
-				## sadece alan hasarında CAN EMMENİN %33 olmasıydı (LIFESTEAL_EFFECTIVENESS, dokunulmadı). Sıçrama artık
-				## silahın kendi melee_aoe_damage_percent payını (varsayılan %50) aynen verir.
-				e.take_damage(final_damage * melee_aoe_damage_percent, false, shield_pen, true)
-				_apply_knockback(e)
-				_apply_item_slow_on_hit(e)
-				## Hançer: kullanıcı isteği - kanama sadece isabet ettiği İLK
-				## yaratığa değil, savuruşun değdiği TÜM yaratıklara
-				## uygulanmalı (bkz. yukarıdaki birincil hedef bleed'i, diğer
-				## tüm silahlerde bleed_max_stacks=0, no-op).
-				if bleed_max_stacks > 0 and e.has_method("apply_bleed"):
-					e.apply_bleed(bleed_tick_damage_per_stack, bleed_stacks_per_hit, bleed_max_stacks)
-				## Şaman pasifi: kullanıcı isteği - alan hasarlı bir savuruş
-				## değdiği TÜM düşmanları değil, bu saldırı başına SADECE 1
-				## düşmanı yakabilir (bkz. _shaman_burn_applied üstündeki not).
-				if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
-					_shaman_burn_applied = e.try_shaman_weapon_burn()
-				if ench:
-					ench.on_hit(e, final_damage * melee_aoe_damage_percent, false, null)
+		if _is_uzunkilic:
+			## Hasar bıçak hedefin üstünden geçtiği AN (bkz. SwordSwingMath.contact_delay) - hedef o arada ölürse/kaybolursa
+			## savuruş yine son bilinen noktada alanına vurur (bkz. _sword_contact). Hayalet hedefte (Talon salvosu, ışında
+			## yaratık yok) gerçek vuruş yok: alan payı da dağıtılmaz.
+			get_tree().create_timer(SwordSwingMath.contact_delay(_melee_effect_speed_scale()), false).timeout.connect(
+				_sword_contact.bind(target, target_pos_at_attack, target.has_method("take_damage"), final_damage, is_crit, shield_pen, direction))
+		else:
+			_melee_strike(target, target.global_position, target.has_method("take_damage"), final_damage, is_crit, shield_pen)
 		## Efektler artık YUKARIDA (hasar/knockback'ten ÖNCE) spawn edildi -
 		## bkz. melee_effect_hold ve _do_melee_swing çağrısı.
 		fired.emit(direction)
@@ -2672,10 +2427,8 @@ func _fire_at(target: Node2D) -> void:
 	proj.shield_pen_percent = shield_pen
 	if "knockback_force" in proj:
 		proj.knockback_force = _player_stat("knockback_force")
-	## Arcane Asası pasifi: mermi, öldürdüğü hedefi bu silaha bildirsin diye
-	## kendisini kaydediyor (bkz. notify_kill/_trigger_arcane_burst, ve
-	## projectile.gd _on_body_entered'ın sonundaki kill bildirimi). Diğer
-	## silahlerde source_weapon hiç okunmadığı için no-op.
+	## Mermi kendisini fırlatan silahı taşır (projectile.gd _on_body_entered sonundaki kill bildirimi, silahta
+	## notify_kill yoksa no-op).
 	if "source_weapon" in proj:
 		proj.source_weapon = self
 	## Kitelama Seti (bkz. items.gd/enemy.gd apply_slow): eskiden sadece
@@ -2840,6 +2593,122 @@ var melee_slash_fx_mirror: bool = false
 var melee_lunge_range_ratio: float = 0.0
 
 
+## Yakın dövüş vuruşunun hasar kısmı (ana hedef + çevresine alan payı). Eskiden _fire_at'in içindeydi; Uzunkılıç hasarı
+## savuruşun temas anında (gecikmeli) verdiği için ayrıldı - diğer yakın dövüş silahları hâlâ _fire_at'ten ANINDA çağırır.
+## target null olabilir (kılıç savrulurken hedef öldü): o zaman sadece center çevresine alan payı. real_hit false = hayalet
+## hedef, alan payı yok.
+func _melee_strike(target: Node2D, center: Vector2, real_hit: bool, final_damage: float, is_crit: bool, shield_pen: float) -> void:
+	if not is_inside_tree():
+		return
+	var ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
+	var _shaman_burn_applied: bool = false
+	if target != null and target.has_method("take_damage"):
+		## Bölünmüş vuruş (Assasin Çocuk): tek seferde tam hasar yerine,
+		## eşit parçalara bölünüp art arda uygulanır - "-30" yerine
+		## sırayla "-10","-10","-10" gibi. Geri tepme tek seferde,
+		## saldırının başında uygulanır (vuruş anındaki fiziksel itiş).
+		_apply_knockback(target)
+		_deal_melee_damage(target, final_damage, is_crit, shield_pen)
+		_apply_item_slow_on_hit(target)
+		## Hançer: birincil hedefte kanama yükü bırakır (bkz. enemy.gd
+		## apply_bleed) - diğer tüm silahlerde bleed_max_stacks=0, no-op.
+		if bleed_max_stacks > 0 and target.has_method("apply_bleed"):
+			target.apply_bleed(bleed_tick_damage_per_stack, bleed_stacks_per_hit, bleed_max_stacks)
+		## Pençe: SADECE bu silahın kendi vuruşundan can çalar - diğer tüm
+		## silahlerde lifesteal_percent=0, no-op (bkz. _apply_weapon_lifesteal).
+		if lifesteal_percent > 0.0:
+			_apply_weapon_lifesteal(final_damage)
+		if target.has_method("try_shaman_weapon_burn"):
+			_shaman_burn_applied = target.try_shaman_weapon_burn()
+		if ench:
+			ench.on_hit(target, final_damage, true, null)
+	## Hafif alan hasarı: hedefin çevresindeki diğer düşmanlar da
+	## savuruştan pay alır (tam hasarın melee_aoe_damage_percent'i).
+	## DÜZELTME (kullanıcı bildirimi: "yaratıklara tam saldırırken anlık
+	## fps düşürüyor") - HER yakın dövüş vuruşunda TÜM "enemies" grubunu
+	## (158'e kadar) tarayıp mesafe hesaplıyordu; artık Enemy.
+	## get_enemies_near ile (bkz. enemy.gd - ayrışma ızgarasının genel
+	## amaçlı sürümü) SADECE gerçekten menzildeki yaratıklar geliyor.
+	## Hayalet hedefe (Talon Salvosu, ışında yaratık yok) savurulmuşsa gerçek bir vuruş yok: etrafına
+	## alan payı da dağıtılmaz (aksi halde boşa atan silah alan hasarı veriyordu).
+	var aoe_victims: Array = Enemy.get_enemies_near(get_tree(), center, melee_aoe_radius * aoe_radius_multiplier * _enchant_aoe_mult()) if real_hit else []
+	for e in aoe_victims:
+		if e == target:
+			continue
+		if e.has_method("take_damage"):
+			## DÜZELTME (kullanıcı isteği 2026-09-24: "alan hasarı veren silahların efektifliğinin %33 olmasını
+			## istemiyorum") - eskiden burada ayrıca ×0.33 (GameManager.AOE_DAMAGE_EFFECTIVENESS) vardı; asıl istek
+			## sadece alan hasarında CAN EMMENİN %33 olmasıydı (LIFESTEAL_EFFECTIVENESS, dokunulmadı). Sıçrama artık
+			## silahın kendi melee_aoe_damage_percent payını (varsayılan %50) aynen verir.
+			e.take_damage(final_damage * melee_aoe_damage_percent, false, shield_pen, true)
+			_apply_knockback(e)
+			_apply_item_slow_on_hit(e)
+			## Hançer: kullanıcı isteği - kanama sadece isabet ettiği İLK
+			## yaratığa değil, savuruşun değdiği TÜM yaratıklara
+			## uygulanmalı (bkz. yukarıdaki birincil hedef bleed'i, diğer
+			## tüm silahlerde bleed_max_stacks=0, no-op).
+			if bleed_max_stacks > 0 and e.has_method("apply_bleed"):
+				e.apply_bleed(bleed_tick_damage_per_stack, bleed_stacks_per_hit, bleed_max_stacks)
+			## Şaman pasifi: kullanıcı isteği - alan hasarlı bir savuruş
+			## değdiği TÜM düşmanları değil, bu saldırı başına SADECE 1
+			## düşmanı yakabilir (bkz. _shaman_burn_applied üstündeki not).
+			if not _shaman_burn_applied and e.has_method("try_shaman_weapon_burn"):
+				_shaman_burn_applied = e.try_shaman_weapon_burn()
+			if ench:
+				ench.on_hit(e, final_damage * melee_aoe_damage_percent, false, null)
+
+
+## ---------------------------------------------------------------- Uzunkılıç savuruşu (2026-09-26)
+## Her savuruşta yay yönü değişir (sağdan sola / soldan sağa) - art arda vuruşlar tekdüze durmasın.
+var _sword_side: float = 1.0
+
+
+## Görsel boyut çarpanı: savuruş efektiyle (_spawn_slash_fx) aynı kurallar - menzil kartlarıyla büyür, Talon Devleşme
+## (aoe_radius_multiplier) ve efsun alan çarpanıyla (ör. Ateş Kılıcı x2) gerçek vuruş alanıyla birlikte büyür.
+func _sword_size_mult() -> float:
+	var grow_ratio: float = attack_range / _base_attack_range if _base_attack_range > 0.0 else 1.0
+	return grow_ratio * aoe_radius_multiplier * _enchant_aoe_mult()
+
+
+func _start_sword_swing(direction: Vector2, target_pos: Vector2) -> void:
+	if not icon_sprite or not is_inside_tree():
+		return
+	_sword_side = -_sword_side
+	var size: float = _sword_size_mult()
+	var owner_node: Node = get_parent()
+	var owner_scale: float = (owner_node as Node2D).scale.x if owner_node is Node2D else 1.0
+	var plan: Dictionary = SwordSwingMath.make_plan(direction, target_pos, _sword_side, size, owner_scale)
+	var speed: float = _melee_effect_speed_scale()
+	if _melee_swing_tween and _melee_swing_tween.is_valid():
+		_melee_swing_tween.kill()
+	_melee_swing_tween = SwordSwingMath.play(self, icon_sprite, plan, deg_to_rad(sprite_forward_angle_deg), Vector2.ZERO,
+		deg_to_rad(melee_icon_rest_rotation_deg), speed, get_tree().current_scene)
+	if NetworkManager.is_multiplayer_active:
+		## Uzak kukla aynı planı KENDİ ölçeğiyle kurar (bkz. remote_player.gd _animate_weapon_fire_full) - yay yönü, boyut
+		## ve hız bu savuruşa özel olduğu için gönderilir.
+		_broadcast_weapon_fire_anim(direction, target_pos, 0.0, {"sword_side": _sword_side, "sword_size": size, "sword_speed": speed})
+
+
+## Bıçak hedefin üstünden geçtiği an (bkz. _fire_at'teki zamanlayıcı). target_v tipsiz: zamanlayıcı beklerken hedef
+## serbest bırakılmış olabilir (serbest bir referans tipli parametreye gelirse hata verir).
+func _sword_contact(target_v: Variant, center: Vector2, real_hit: bool, final_damage: float, is_crit: bool, shield_pen: float, direction: Vector2) -> void:
+	if not is_inside_tree():
+		return
+	var owner_node: Node = get_parent()
+	if owner_node and (owner_node.get("is_dead") == true or owner_node.get("is_downed") == true or owner_node.get("is_in_merchant_zone") == true):
+		return
+	var target: Node2D = null
+	if is_instance_valid(target_v) and target_v is Node2D and (target_v as Node2D).get("is_dead") != true:
+		target = target_v as Node2D
+		center = target.global_position
+	if real_hit:
+		_spawn_melee_hit_fx(direction, center, _melee_effect_speed_scale())
+	var ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
+	if ench:
+		ench.on_revolution(center) ## efsunların "her N savuruşta" sayacı (eski dönen kılıçta çeyrek tur)
+	_melee_strike(target, center, real_hit, final_damage, is_crit, shield_pen)
+
+
 ## Ana hedefe hasarı melee_hit_segments'e göre böler: 1 ise eskisi gibi tek
 ## seferde, >1 ise eşit parçalara bölüp melee_hit_segment_delay arayla art
 ## arda uygular (her parça enemy.take_damage'ı ayrı çağırdığı için ekranda
@@ -2912,8 +2781,6 @@ func configure_melee(range_px: float, aoe_radius: float, aoe_percent: float,
 		slash_fx_scale_mult: float = 1.0, sound_volume_db: float = -12.0,
 		slash_fx_fixed_rotation: bool = false, slash_fx_mirror: bool = false,
 		lunge_range_ratio: float = 0.0) -> void:
-	if _is_uzunkilic:
-		return
 	melee = true
 	attack_range = range_px
 	_base_attack_range = range_px
@@ -3238,7 +3105,7 @@ func _do_recoil(direction: Vector2) -> void:
 ## Multiplayer: uzak oyuncunun silah ikonuna ateş animasyonu oynatması için
 ## broadcast. slot_index + fire_direction + tam melee/menzilli parametrelerini
 ## gönderir, remote_player.gd'de _animate_weapon_fire karşılar.
-func _broadcast_weapon_fire_anim(fire_direction: Vector2, melee_target_pos: Vector2 = Vector2.ZERO, hold_dur: float = 0.0) -> void:
+func _broadcast_weapon_fire_anim(fire_direction: Vector2, melee_target_pos: Vector2 = Vector2.ZERO, hold_dur: float = 0.0, extra: Dictionary = {}) -> void:
 	var owner_player: Node = get_parent()
 	if not owner_player or not owner_player.has_method("_get_weapon_index"):
 		return
@@ -3263,14 +3130,16 @@ func _broadcast_weapon_fire_anim(fire_direction: Vector2, melee_target_pos: Vect
 	## bkz. _update_local_weapon_aim notu). Burada SADECE gerçekten o ana
 	## özel olan gerçek olaylar kalıyor: hangi slot ateş etti, hangi yöne,
 	## (yakın dövüşse) nereye vurdu, ne kadar tuttu.
-	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "weapon_fire", global_position, {
+	var payload: Dictionary = {
 		"slot_index": slot_idx,
 		"direction_x": fire_direction.x,
 		"direction_y": fire_direction.y,
 		"target_pos_x": melee_target_pos.x,
 		"target_pos_y": melee_target_pos.y,
 		"hold_duration": hold_dur,
-	})
+	}
+	payload.merge(extra) ## ör. Uzunkılıç: sword_side/sword_size/sword_speed (bkz. _start_sword_swing)
+	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "weapon_fire", global_position, payload)
 
 
 ## Aynı anda tek bir savuruş animasyonu koşmalı - hızlı ateş hızında yeni bir

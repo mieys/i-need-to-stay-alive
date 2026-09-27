@@ -1,55 +1,16 @@
-[gd_resource type="Theme" load_steps=22 format=3 uid="uid://b8xlgwwr8283u"]
+[gd_resource type="Theme" format=3 uid="uid://b8xlgwwr8283u"]
 
-[ext_resource type="Texture2D" path="res://assets/ui/game/btn_tan_normal.png" id="b_normal"]
-[ext_resource type="Texture2D" path="res://assets/ui/game/btn_tan_hover.png" id="b_hover"]
-[ext_resource type="Texture2D" path="res://assets/ui/game/btn_tan_pressed.png" id="b_pressed"]
-[ext_resource type="Texture2D" path="res://assets/ui/game/btn_tan_disabled.png" id="b_disabled"]
-[ext_resource type="Texture2D" path="res://assets/ui/game/btn_focus.png" id="b_focus"]
-[ext_resource type="Texture2D" path="res://assets/ui/game/inset.png" id="p_inset"]
-[ext_resource type="Texture2D" path="res://assets/ui/game/inset_focus.png" id="p_inset_focus"]
-[ext_resource type="Texture2D" path="res://assets/ui/game/panel.png" id="p_panel"]
-[ext_resource type="Texture2D" path="res://assets/ui/game/scroll_grab.png" id="s_grab"]
-[ext_resource type="Texture2D" path="res://assets/ui/game/scroll_grab_hover.png" id="s_grab_hl"]
+[ext_resource type="Texture2D" uid="uid://blx466m3o5yvi" path="res://assets/ui/game/btn_tan_disabled.png" id="b_disabled"]
+[ext_resource type="Texture2D" uid="uid://bfnng68vfcuek" path="res://assets/ui/game/btn_focus.png" id="b_focus"]
+[ext_resource type="Texture2D" uid="uid://jssthl813b21" path="res://assets/ui/game/btn_tan_hover.png" id="b_hover"]
+[ext_resource type="Texture2D" uid="uid://bn8dtowllcv47" path="res://assets/ui/game/btn_tan_normal.png" id="b_normal"]
+[ext_resource type="Texture2D" uid="uid://cxx5pkq73axog" path="res://assets/ui/game/btn_tan_pressed.png" id="b_pressed"]
 [ext_resource type="FontFile" uid="uid://buuvwvb3ccc16" path="res://assets/fonts/m5x7.ttf" id="font"]
-
-[sub_resource type="StyleBoxTexture" id="SB_normal"]
-content_margin_left = 18.0
-content_margin_top = 4.0
-content_margin_right = 18.0
-content_margin_bottom = 4.0
-texture = ExtResource("b_normal")
-texture_margin_left = 24.0
-texture_margin_top = 15.0
-texture_margin_right = 24.0
-texture_margin_bottom = 15.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
-
-[sub_resource type="StyleBoxTexture" id="SB_hover"]
-content_margin_left = 18.0
-content_margin_top = 4.0
-content_margin_right = 18.0
-content_margin_bottom = 4.0
-texture = ExtResource("b_hover")
-texture_margin_left = 24.0
-texture_margin_top = 15.0
-texture_margin_right = 24.0
-texture_margin_bottom = 15.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
-
-[sub_resource type="StyleBoxTexture" id="SB_pressed"]
-content_margin_left = 18.0
-content_margin_top = 6.0
-content_margin_right = 18.0
-content_margin_bottom = 2.0
-texture = ExtResource("b_pressed")
-texture_margin_left = 24.0
-texture_margin_top = 15.0
-texture_margin_right = 24.0
-texture_margin_bottom = 15.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
+[ext_resource type="Texture2D" uid="uid://bw4jpfjm2y3cg" path="res://assets/ui/game/inset.png" id="p_inset"]
+[ext_resource type="Texture2D" uid="uid://b88fhelim8g4e" path="res://assets/ui/game/inset_focus.png" id="p_inset_focus"]
+[ext_resource type="Texture2D" uid="uid://c1wxysxmiiaom" path="res://assets/ui/game/panel.png" id="p_panel"]
+[ext_resource type="Texture2D" uid="uid://cf2wt0447ffu6" path="res://assets/ui/game/scroll_grab.png" id="s_grab"]
+[ext_resource type="Texture2D" uid="uid://c46e71qc2nryl" path="res://assets/ui/game/scroll_grab_hover.png" id="s_grab_hl"]
 
 [sub_resource type="StyleBoxTexture" id="SB_disabled"]
 content_margin_left = 18.0
@@ -77,55 +38,42 @@ texture_margin_bottom = 15.0
 axis_stretch_horizontal = 1
 axis_stretch_vertical = 1
 
-[sub_resource type="StyleBoxTexture" id="SB_input"]
-content_margin_left = 12.0
+[sub_resource type="StyleBoxTexture" id="SB_hover"]
+content_margin_left = 18.0
+content_margin_top = 4.0
+content_margin_right = 18.0
+content_margin_bottom = 4.0
+texture = ExtResource("b_hover")
+texture_margin_left = 24.0
+texture_margin_top = 15.0
+texture_margin_right = 24.0
+texture_margin_bottom = 15.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[sub_resource type="StyleBoxTexture" id="SB_normal"]
+content_margin_left = 18.0
+content_margin_top = 4.0
+content_margin_right = 18.0
+content_margin_bottom = 4.0
+texture = ExtResource("b_normal")
+texture_margin_left = 24.0
+texture_margin_top = 15.0
+texture_margin_right = 24.0
+texture_margin_bottom = 15.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[sub_resource type="StyleBoxTexture" id="SB_pressed"]
+content_margin_left = 18.0
 content_margin_top = 6.0
-content_margin_right = 12.0
-content_margin_bottom = 6.0
-texture = ExtResource("p_inset")
-texture_margin_left = 12.0
-texture_margin_top = 12.0
-texture_margin_right = 12.0
-texture_margin_bottom = 12.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
-
-[sub_resource type="StyleBoxTexture" id="SB_input_focus"]
-content_margin_left = 12.0
-content_margin_top = 6.0
-content_margin_right = 12.0
-content_margin_bottom = 6.0
-texture = ExtResource("p_inset_focus")
-texture_margin_left = 12.0
-texture_margin_top = 12.0
-texture_margin_right = 12.0
-texture_margin_bottom = 12.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
-
-[sub_resource type="StyleBoxTexture" id="SB_panel"]
-content_margin_left = 8.0
-content_margin_top = 8.0
-content_margin_right = 8.0
-content_margin_bottom = 8.0
-texture = ExtResource("p_inset")
-texture_margin_left = 12.0
-texture_margin_top = 12.0
-texture_margin_right = 12.0
-texture_margin_bottom = 12.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
-
-[sub_resource type="StyleBoxTexture" id="SB_tooltip"]
-content_margin_left = 21.0
-content_margin_top = 15.0
-content_margin_right = 21.0
-content_margin_bottom = 18.0
-texture = ExtResource("p_panel")
-texture_margin_left = 30.0
-texture_margin_top = 30.0
-texture_margin_right = 30.0
-texture_margin_bottom = 30.0
+content_margin_right = 18.0
+content_margin_bottom = 2.0
+texture = ExtResource("b_pressed")
+texture_margin_left = 24.0
+texture_margin_top = 15.0
+texture_margin_right = 24.0
+texture_margin_bottom = 15.0
 axis_stretch_horizontal = 1
 axis_stretch_vertical = 1
 
@@ -169,6 +117,58 @@ corner_radius_bottom_left = 3
 color = Color(0.592, 0.4, 0.224, 1)
 thickness = 3
 
+[sub_resource type="StyleBoxTexture" id="SB_input_focus"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+texture = ExtResource("p_inset_focus")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 12.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[sub_resource type="StyleBoxTexture" id="SB_input"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+texture = ExtResource("p_inset")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 12.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[sub_resource type="StyleBoxTexture" id="SB_panel"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+texture = ExtResource("p_inset")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 12.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[sub_resource type="StyleBoxTexture" id="SB_tooltip"]
+content_margin_left = 21.0
+content_margin_top = 15.0
+content_margin_right = 21.0
+content_margin_bottom = 18.0
+texture = ExtResource("p_panel")
+texture_margin_left = 30.0
+texture_margin_top = 30.0
+texture_margin_right = 30.0
+texture_margin_bottom = 30.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
 [resource]
 default_font = ExtResource("font")
 default_font_size = 88
@@ -203,9 +203,9 @@ LineEdit/styles/focus = SubResource("SB_input_focus")
 LineEdit/styles/normal = SubResource("SB_input")
 LineEdit/styles/read_only = SubResource("SB_input")
 OptionButton/colors/font_color = Color(0.227, 0.133, 0.071, 1)
+OptionButton/colors/font_focus_color = Color(0.227, 0.133, 0.071, 1)
 OptionButton/colors/font_hover_color = Color(0.227, 0.133, 0.071, 1)
 OptionButton/colors/font_pressed_color = Color(0.227, 0.133, 0.071, 1)
-OptionButton/colors/font_focus_color = Color(0.227, 0.133, 0.071, 1)
 OptionButton/styles/disabled = SubResource("SB_disabled")
 OptionButton/styles/focus = SubResource("SB_focus")
 OptionButton/styles/hover = SubResource("SB_hover")
@@ -215,8 +215,8 @@ Panel/styles/panel = SubResource("SB_panel")
 PanelContainer/styles/panel = SubResource("SB_panel")
 PopupMenu/colors/font_color = Color(0.227, 0.133, 0.071, 1)
 PopupMenu/colors/font_hover_color = Color(0.227, 0.133, 0.071, 1)
-PopupMenu/styles/panel = SubResource("SB_tooltip")
 PopupMenu/styles/hover = SubResource("SB_input")
+PopupMenu/styles/panel = SubResource("SB_tooltip")
 PopupPanel/styles/panel = SubResource("SB_tooltip")
 ProgressBar/fonts/font = ExtResource("font")
 TooltipLabel/colors/font_color = Color(0.227, 0.133, 0.071, 1)

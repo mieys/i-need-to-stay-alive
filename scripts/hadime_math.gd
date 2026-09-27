@@ -15,10 +15,10 @@ extends RefCounted
 ##                           kitaptan yukarı fırlayıp etraftaki yaratıklara (sırayla, en uzun süredir lanetlenmemişe) düşer,
 ##                           %110 saldırı gücü. Her saniye temel yetenek kalkan bedelinin YARISI (kullanıcı düzeltmesi).
 ##                           Tekrar basınca (açıldıktan 1 sn sonra - spam koruması) / kalkan yetmeyince 8 sn bekleme.
-##  E Kara Delik (id 47)   : (2026-09-25 ikinci istek - ilk tasarım "Kara Büyü" tamamen kaldırıldı) bulunduğu yere 5 sn süren
+##  E Kara Delik (id 47)   : (2026-09-25 ikinci istek - ilk tasarım "Kara Büyü" tamamen kaldırıldı) bulunduğu yere 6 sn süren
 ##                           bir kara delik bırakır: yakındaki yaratıkları hafifçe içine çeker, her saniye %80 saldırı gücü
 ##                           hasar verir, verdiği hasarın %20'si kadar Hadime'nin kalkanını yeniler (kalkan çekme efekti YOK -
-##                           kullanıcı). 18 sn bekleme (5 sn aktif süreden sonra başlar). Q basılıyken de kullanılabilir.
+##                           kullanıcı). 18 sn bekleme (6 sn aktif süreden sonra başlar). Q basılıyken de kullanılabilir.
 ##  R Karabasan (id 48)    : 15 sn karanlık form - yakına gelen her yaratık 1 sn korkar, yakındakiler saniyede %80 saldırı
 ##                           gücü hasar alır. 100 sn bekleme.
 ##  Pasif Ruh Göçü         : yere düşünce (downed) 2 sn sonra ölüm klibinin TERSİYLE yarı saydam hayalet olarak kalkar,
@@ -64,14 +64,15 @@ const BOOK_OFFSETS := {
 }
 
 ## ---------- E: Kara Delik (dünya birimleri) ----------
-const HOLE_DURATION := 5.0
+## Kullanıcı isteği (2026-09-26): "kara delik 5 saniye yerine 6 saniye boyunca yerde kalsın" - 5 -> 6.
+const HOLE_DURATION := 6.0
 const HOLE_COOLDOWN := 18.0
 ## Çekim/hasar yarıçapı - sayfadaki içe akan zerrelerin başladığı halkayla aynı büyüklük (gen_hadime_fx.py black_hole).
 const HOLE_RADIUS := 110.0
 const HOLE_DAMAGE_RATIO := 0.8
 const HOLE_SHIELD_RATIO := 0.2
 const HOLE_TICK := 1.0
-## İlk hasar tiki (sonra her HOLE_TICK sn) - 5 sn içinde 5 tik: 0.5, 1.5, 2.5, 3.5, 4.5.
+## İlk hasar tiki (sonra her HOLE_TICK sn) - 6 sn içinde 6 tik: 0.5, 1.5, 2.5, 3.5, 4.5, 5.5.
 const HOLE_FIRST_TICK := 0.5
 ## "Hafifçe içine doğru çeker": sabit, yavaş kayma (dünya birimi/sn) - yürüyen yaratık uzaklaşabilir ama zorlanır.
 ## Merkeze bu kadar yaklaşan yaratık artık çekilmez (üst üste yığılıp titremesin). Bosslar çekilmez (diğer kontrol
@@ -300,7 +301,7 @@ static func spawn_fx(root: Node, kind: String, opts: Dictionary) -> void:
 					opts.get("target", null), opts.get("on_land", Callable()))
 
 
-## E Kara Delik: dünya konumunda (ayak altı) 5 sn duran kara delik (fx_hadime_black_hole.tscn, hadime_black_hole.gd).
+## E Kara Delik: dünya konumunda (ayak altı) HOLE_DURATION (6) sn duran kara delik (fx_hadime_black_hole.tscn, hadime_black_hole.gd).
 ##  authoritative: kasterin kendi kopyası - her HOLE_TICK'te on_tick(merkez) çağırır (hasar + kalkan player.gd'de).
 ##  pull_authority: yaratıkları çeken kopya - yaratıklar HOST'ta simüle edildiği için sadece host'taki kopya (kaster host
 ##                  ise kendi kopyası, değilse network_manager.gd broadcast_hadime_black_hole'un host'ta açtığı kopya).

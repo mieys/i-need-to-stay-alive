@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://wbuuj0ws3s75"]
 
-[ext_resource type="Texture2D" path="res://assets/fx/oakley/ward_hit_sheet.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://cgowiup82omaf" path="res://assets/fx/oakley/ward_hit_sheet.png" id="1"]
 
 [sub_resource type="AtlasTexture" id="AT_0"]
 atlas = ExtResource("1")
@@ -35,32 +35,26 @@ animations = [{
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AT_0")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_1")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_2")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_3")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_4")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_5")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_6")
 }],
-"loop": false,
+"loop": 0,
 "name": &"hit",
-"speed": 20
+"speed": 20.0
 }]

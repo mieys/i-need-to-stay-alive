@@ -155,9 +155,10 @@ func test_boss_health_and_shield_targets() -> void:
 	var prev_shield: float = prev_health * PREV_BOSS_SHIELD_RATIO
 	## 2026-09-25 ikinci tur: tüm bosslar can/kalkan/hasar x BOSS_CUT_2026_09_25B (0.85).
 	var cut: float = SpawnerScript.BOSS_CUT_2026_09_25B
+	var cut_0926: float = SpawnerScript.DURABILITY_CUT_2026_09_26 ## 2026-09-26: tüm yaratıklar can/kalkan x0.9
 	assert(is_equal_approx(cut, 0.85), "Boss kesintisi x0.85 olmalı")
-	assert(absf(float(boss.max_health) - prev_health * 0.85 * cut) < 0.01, "Boss canı öncekinin TAM %%85'i olmalı: %s (önceki %s)" % [boss.max_health, prev_health])
-	assert(absf(float(boss.item_shield_max) - prev_shield * 0.90 * cut) < 0.01, "Boss kalkanı öncekinin TAM %%90'ı olmalı: %s (önceki %s)" % [boss.item_shield_max, prev_shield])
+	assert(absf(float(boss.max_health) - prev_health * 0.85 * cut * cut_0926) < 0.01, "Boss canı öncekinin TAM %%85'i olmalı: %s (önceki %s)" % [boss.max_health, prev_health])
+	assert(absf(float(boss.item_shield_max) - prev_shield * 0.90 * cut * cut_0926) < 0.01, "Boss kalkanı öncekinin TAM %%90'ı olmalı: %s (önceki %s)" % [boss.item_shield_max, prev_shield])
 	_cleanup()
 
 

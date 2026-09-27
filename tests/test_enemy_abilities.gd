@@ -28,6 +28,9 @@ func test_stat_traits_and_rage() -> void:
 	assert(is_equal_approx(g["health"], 1.3) and is_equal_approx(g["shield"], 1.3) and is_equal_approx(g["speed"], 0.8))
 	var z: Dictionary = SpawnerScript.FAMILY_TRAITS["zombie"]
 	assert(is_equal_approx(z["health"], 1.3) and not z.has("shield"), "zombide sadece can artar")
+	## 2026-09-26: "oyundaki farelerin canını ve kalkanını %30 azalt" -> "%50 yapalım"
+	var r: Dictionary = SpawnerScript.FAMILY_TRAITS["rat"]
+	assert(is_equal_approx(r["health"], 0.5) and is_equal_approx(r["shield"], 0.5) and not r.has("speed"), "fare can/kalkan x0.5")
 	assert(is_equal_approx(EnemyScript.ORK_RAGE_HP_THRESHOLD, 0.5))
 	## normal öfke +%100 (x2), ork öfkesi bunun 1.5 katı artış: +%150 (x2.5)
 	## 2026-09-25: öfke hızı kesintisi (x0.9/1.1) ork öfkesine de uygulanır.

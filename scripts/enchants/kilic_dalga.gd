@@ -1,7 +1,7 @@
 extends "res://scripts/enchant_behavior.gd"
 
-## Kılıç Dalgası (EnchantDefs "kilic_dalga"): Uzunkılıç sahibinin etrafında DÖNEN bir kılıç - "savuruş" = çeyrek tur, temel
-## hızda ~1 sn (weapon.gd _process_uzunkilic_orbit -> on_revolution; kartta "her N sn"). Her N savuruşta en yakın düşmana doğru ilerleyen enerji dalgası
+## Kılıç Dalgası (EnchantDefs "kilic_dalga"): Uzunkılıç hedefe SAVRULAN bir kılıç - "savuruş" = bir saldırı (weapon.gd
+## _sword_contact -> on_revolution; kartta "her N savuruşta"). Her N savuruşta en yakın düşmana doğru ilerleyen enerji dalgası
 ## (enchant_area.gd "blade"); IV: ters yöne de. Final (Keskin Uçlar) Göğü Yaran: dalga ekranı geçer ve geçtiği yerde 1 sn
 ## sonra ikinci kez vuran bir kesik kalır (enchant_area.gd "line" second_cut).
 

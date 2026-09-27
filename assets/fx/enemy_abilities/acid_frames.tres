@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://c6t5v2131d64n"]
 
-[ext_resource type="Texture2D" path="res://assets/fx/enemy_abilities/acid_sheet.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://cn4e7c6rkraew" path="res://assets/fx/enemy_abilities/acid_sheet.png" id="1"]
 
 [sub_resource type="AtlasTexture" id="AT_0"]
 atlas = ExtResource("1")
@@ -87,92 +87,75 @@ animations = [{
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AT_0")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_1")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_2")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_3")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_4")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_5")
 }],
-"loop": false,
+"loop": 0,
 "name": &"intro",
 "speed": 20.0
 }, {
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AT_6")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_7")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_8")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_9")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_10")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_11")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_12")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_13")
 }],
-"loop": true,
+"loop": 1,
 "name": &"loop",
 "speed": 8.0
 }, {
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AT_14")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_15")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_16")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_17")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_18")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_19")
 }],
-"loop": false,
+"loop": 0,
 "name": &"outro",
 "speed": 16.0
 }]

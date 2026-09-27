@@ -15,6 +15,8 @@ const VampirBatSwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.g
 const HadimeMath := preload("res://scripts/hadime_math.gd")
 ## Klip adı kuralları (remote_player.gd ile ortak) ve dükkan/kart ekranı izleyicisi - bkz. o dosyaların üst notları.
 const CharAnim := preload("res://scripts/char_anim.gd")
+const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
+const KORSAN_CHAR_ID := 9 ## Characters.DEFS roster id'si
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
 
 const DEFAULT_SKILL_DURATION := 10.0
@@ -181,7 +183,7 @@ const SKILL2_TIMING := {
 	## Vampir Çocuk TEMEL (Yarasa Formu, skill2 id 41): 5sn dönüşüm, ardından 22sn bekleme -
 	## standart skill2_state makinesini kullanır (bkz. _skill_vampir_bat_form/_end_skill2_effects).
 	41: {"duration": 5.0, "cooldown": 22.0},
-	## Suriyeli Hadime TEMEL (Kara Delik, id 47 - 2026-09-25 ikinci istekle "Kara Büyü"nün yerine): 5 sn duran kara delik,
+	## Suriyeli Hadime TEMEL (Kara Delik, id 47 - 2026-09-25 ikinci istekle "Kara Büyü"nün yerine): 6 sn duran kara delik,
 	## 18 sn bekleme (proje kuralı: bekleme aktif süre bitince başlar) - standart skill2 makinesi.
 	47: {"duration": HadimeMath.HOLE_DURATION, "cooldown": HadimeMath.HOLE_COOLDOWN},
 }
@@ -237,7 +239,8 @@ const SKILL3_TIMING := {
 	## makinesi KULLANILIYOR (Büyücü/Necromancer'ın aksine basit, sabit süreli
 	## bir kanal) - "duration" gerçek 8sn'lik bombardıman süresiyle birebir
 	## eşleşiyor (bkz. KORSAN_BOMBARDMENT_DURATION, _skill_korsan_bombardment).
-	34: {"duration": 8.0, "cooldown": 40.0},
+	## Kullanıcı isteği (2026-09-27): "korsanın ultisinin bekleme süresini 90 saniye yap" (eskiden 40).
+	34: {"duration": 8.0, "cooldown": 90.0},
 	## Talon'un yeni 3. yeteneği (Ayna Formu, skill3 id 37) - kullanıcı isteği:
 	## "R ile Q'nun yerini değiştir" (eskiden Hamle Vuruşu buradaydı, bkz.
 	## SKILL_TIMING[38] şimdi orada). "15sn boyunca her silahının bir aynalı
@@ -1356,13 +1359,14 @@ func set_owned_weapon_level(index: int, level: int) -> void:
 ##   2) "Daha da sade": sadece ATIŞ BİÇİMİ kalır - durum efektleri silahlardan kaldırıldı: Hançer kanaması,
 ##      Tüftüf zehri + kalıcı gerçek hasarı + zehir-öncelikli hedeflemesi (weapon_tuftuf.tscn), Tabanca yükü,
 ##      Ateş Asası yakması, Pençe can emmesi.
-## Kalan atış biçimleri: Yay her 3. atışta +1 ok, Buz Asası donma (+donmamışa öncelik, sahnede), Tüfek 1 ek
-## düşman delme (%30, sahnede), Yıldırım ışını + 1 sıçrama (weapon.gd varsayılanı), Bumerang gidip dönme,
-## Fişek/Ateş Asası alan patlaması, yakın dövüş silahlarının alan savuruşu (_configure_*_melee).
-## weapon.gd/projectile.gd/enemy.gd'deki kanama/zehir/yük/yakma/can emme/kalkan delme ALTYAPISI bilerek
-## duruyor (değer 0 = no-op) - efsun sistemi bu alanları doldurarak kullanabilir.
-const YAY_PURE_EXTRA_ARROWS := 1
-const BUZ_PURE_CHILL_STACKS := 1
+## DÜZELTME (kullanıcı bildirimi 2026-09-26: "sadece statlar kalacaktı, bazılarını unutmuşsun - Arcane asası ve
+## yay"): parantezdeki örnekler SİLİNECEK pasiflerdi, ilk turda yanlışlıkla korunmuştu. Artık da silindi: Yay'ın her
+## 3. atışta +1 oku, Buz Asası donması + donmamışa öncelik (sahne), Tüfek'in 1 ek delmesi (sahne), Yıldırım'ın 1
+## sıçraması (weapon.gd chain_jump_count 0), Arcane Asası infaz + stack patlaması. Bunların hepsi efsunlarda var
+## (Ok Yağmuru, Buzul Asa/Buz Mızrağı, Delici Mermi, Zincir Yıldırım). Kalan tek şey silahın temel ATIŞ ŞEKLİ:
+## mermi/ışın/bumerang gidip dönme/Fişek-Ateş Asası patlayan mermisi/yakın dövüş savuruşu + statlar.
+## weapon.gd/projectile.gd/enemy.gd'deki kanama/zehir/yük/yakma/can emme/kalkan delme/çoklu ok/donma ALTYAPISI
+## bilerek duruyor (değer 0 = no-op) - efsun sistemi bu alanları doldurarak kullanır.
 ## Tüfek'in saldırı gücü oranı (kullanıcı istekleri: önce x1.3, sonra x1.5 -> 1.95) - pasif değil taban stat,
 ## eskiden _apply_tufek_tier'de set ediliyordu; sahnedeki (0.9) değerin üstüne yazılır.
 const TUFEK_ATTACK_POWER_RATIO := 1.95
@@ -1371,11 +1375,6 @@ func apply_owned_weapon_tier(w, key: String, _level: int) -> void:
 	if not is_instance_valid(w):
 		return
 	match key:
-		"yay":
-			if w.has_method("set_yay_multishot_bonus"):
-				w.set_yay_multishot_bonus(YAY_PURE_EXTRA_ARROWS)
-		"buz_asasi":
-			w.chill_stacks_per_hit = BUZ_PURE_CHILL_STACKS
 		"tufek":
 			w.card_damage_bonus_ratio = TUFEK_ATTACK_POWER_RATIO
 			## buy_weapon_copy _apply_weapon_bonuses_to'yu BUNDAN ÖNCE çağırıyor - oran değişince hasar yeniden
@@ -1715,6 +1714,12 @@ func _load_character_frames() -> void:
 		var reading_watcher := ReadingUiWatcher.new()
 		reading_watcher.name = "ReadingUiWatcher"
 		add_child(reading_watcher)
+	## Korsan pasifi: omuzdaki papağan (roster id'sine göre - yetenek id'leri tuşlar arasında taşınabiliyor, bkz. Necro
+	## notu). Diğer oyuncuların ekranındaki kopyası remote_player.gd _load_character_frames'te kurulur.
+	if GameManager.selected_char_id == KORSAN_CHAR_ID and anim and not has_node("KorsanParrot"):
+		var parrot: Node2D = KorsanParrotScript.new()
+		add_child(parrot)
+		parrot.setup(self, anim, false)
 	## Silah kurulumu artık burada YOK - hiçbir karakterin ayrı bir "ana
 	## silahı" olmadığı için herkesin başlangıç silahı (bkz.
 	## STARTING_WEAPON_BY_CHAR) tamamen standart yoldan, _ready()'deki
@@ -1812,18 +1817,16 @@ func _configure_topuz_melee(w) -> void:
 	w.configure_melee(120.0, 95.0, 0.5, [], "res://scenes/fx_topuz_slash.tscn", 8.0, 0.0, 1, 1.0, -12.0, true, true)
 
 
-## Uzunkılıç: normal yönlü bir savuruş hilali (Topuz'un aksine sabit rotasyon
-## DEĞİL - saldırı yönüne göre döner, dagger/pence ile aynı mod). Ses
-## efektleri configure_melee'ye verilmiyor (sound_paths=[]) çünkü
-## weapon_uzunkilic.tscn zaten kendi random_sfx_player.gd tabanlı AttackSound'unu
-## taşıyor (3 farklı kılıç sesi arasından rastgele).
-## slash_fx_offset = 18.0 (Dagger/MAIN_WEAPON ile aynı, bkz. _configure_pence_melee
-## yorumu). lunge_range_ratio ARTIK VERİLMİYOR + hit_segments = 2 (aynı
-## yorumdaki gerekçe - Pençe ile birebir aynı, tek fark savuruş efekti/sesleri).
+## Uzunkılıç (2026-09-26, "artık etrafımızda dönmesi yerine hedeflediği düşmana doğru savurulsun"): hedefe atılıp
+## üstünden geniş bir yay çizen savuruş - görseli ve temas zamanı weapon.gd _start_sword_swing / scripts/
+## sword_swing_math.gd'de (savuruş efekti sahnesi burada verilmiyor, kılıç kendi hilalini çizer). Tek, bölünmemiş vuruş
+## (hit_segments 1); süpürülen alan (55 px) içindeki herkes TAM hasar alır (aoe_percent 1.0) - eski dönen kılıç da
+## değdiği herkese tam hasar veriyordu, kılıcın "kalabalığa karşı" kimliği korunuyor. Ses: weapon_uzunkilic.tscn'nin
+## kendi AttackSound'u (3 kılıç sesi).
 func _configure_uzunkilic_melee(w) -> void:
 	if not w.has_method("configure_melee"):
 		return
-	w.configure_melee(115.0, 60.0, 0.5, [], "res://scenes/fx_uzunkilic_slash.tscn", 8.0, 0.0, 2, 1.0, -12.0, false, false)
+	w.configure_melee(115.0, 55.0, 1.0, [], "", 8.0, 0.0, 1, 1.0, -12.0, false, false)
 
 
 ## Fizik interpolasyonu: bu adımdan ÖNCEKİ konum - _process'te buna yapışan görseller
@@ -1866,9 +1869,10 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	## Dükkan/kart ekranı açıkken ve kapandıktan sonraki okuma pozu süresince (READ_AFTER_CLOSE_MSEC) yürünmez.
-	if _reading_ui_active:
-		input_direction = Vector2.ZERO
+	## Dükkan/kart ekranı AÇIKKEN yürünmez. Kullanıcı isteği (2026-09-26): "level atlama ekranından sonra karakter kitap
+	## okuma animasyonundayken hareket etmeye devam edebilsin yerde sabit kalmasın" - ekran kapandıktan sonraki okuma
+	## pozu (READ_AFTER_CLOSE_MSEC / READ_MIN_MSEC) artık yürümeyi KİLİTLEMEZ: hareket girdisi gelirse poz beklemeden biter.
+	input_direction = _reading_filter_input(input_direction)
 	## Şovalye'nin Koruma Baloncuğu ultisi aktifken tamamen hareketsiz kalır
 	## (bkz. _skill_paladin_ulti) - input okunmaya devam eder ki animasyon/
 	## yön sistemi bozulmasın, sadece gerçek hareket engellenir.
@@ -2989,8 +2993,7 @@ const KORSAN_BOMB_DAMAGE_FLAT := 32.0
 ## gücünün TAM %100'ü (damage_bonus ile birebir aynı miktar) bombanın
 ## hasarına ekleniyor.
 const KORSAN_BOMB_DAMAGE_POWER_RATIO := 1.0
-const KORSAN_PASSIVE_BASE_CHANCE := 0.10
-const KORSAN_PASSIVE_CHANCE_PER_LEVEL := 0.01
+## (Eski pasif "öldürmede %10+ şansla 1 altın" 2026-09-26'da Papağan'a dönüştü - bkz. scripts/korsan_parrot.gd.)
 var korsan_bomb_charges: int = KORSAN_MAX_BOMB_CHARGES
 var _korsan_bomb_recharge_timer: float = 0.0
 ## Bırakılmış, henüz patlatılmamış GERÇEK bomba referansları (bkz.
@@ -3135,7 +3138,6 @@ func on_enemy_killed(enemy: Node) -> void:
 	_notify_enchants_kill(is_boss_kill, enemy.global_position if is_instance_valid(enemy) else global_position)
 	_apply_kill_heal_item()
 	_savas_sevki_on_kill(is_boss_kill)
-	_distribute_arcane_stack(enemy.global_position if is_instance_valid(enemy) else global_position)
 	## DÜZELTME (kullanıcı bildirimi: "Necromancer ölen düşmanlardan ruh
 	## toplayamıyor") - kök neden: burada Necromancer id 20'ye (Golem Çağır'ın
 	## SKILL id'si) göre dallanıyordu - bu SADECE Golem Q/skill slotundayken
@@ -3149,8 +3151,6 @@ func on_enemy_killed(enemy: Node) -> void:
 	## hata sınıfı).
 	if GameManager.selected_char_id == 11:
 		_necro_on_kill(is_boss_kill)
-	match get_skill_character_id():
-		18: _korsan_on_kill()
 
 
 ## DÜZELTME (KRİTİK - multiplayer öldürme pasifleri): enemy.gd die() SADECE
@@ -3167,13 +3167,10 @@ func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZER
 	_notify_enchants_kill(is_boss_kill, death_pos)
 	_apply_kill_heal_item()
 	_savas_sevki_on_kill(is_boss_kill)
-	_distribute_arcane_stack(death_pos)
 	## bkz. on_enemy_killed() üstündeki AYNI düzeltme notu - roster id'sine
 	## göre, artık hangi yetenek Q/E/R'de olursa olsun doğru çalışır.
 	if GameManager.selected_char_id == 11:
 		_necro_on_kill(is_boss_kill)
-	match get_skill_character_id():
-		18: _korsan_on_kill()
 
 
 ## Vampir Dişi pasifi: karakterden bağımsız, item_kill_heal_amount > 0 ise
@@ -3210,36 +3207,13 @@ func has_savas_sevki() -> bool:
 	return get_spirit_id() == SpiritualSkillsScript.SAVAS_SEVKI
 
 
-## Arcane Asası pasifi (bkz. weapon.gd add_arcane_stack üstündeki DÜZELTME
-## notu, kullanıcı isteği: "kendi öldürdüğü değil etrafta ölen düşmanlara
-## göre stacklensin... 1 ölüm 5 asaya da stack vermemeli yani sadece
-## rasgele 1 arcane asasına 1 stack olacak") - _apply_kill_heal_item() ile
-## AYNI desen: on_enemy_killed/_remote'un HER İKİ yolundan da çağrılır ki
-## host olmayan bir oyuncu da KENDİ silahları üzerinden pasifini alsın.
-## Menzili (attack_range) ölüm konumunu kapsayan SAHİP OLUNAN Arcane
-## kopyalarından SADECE rastgele BİRİNE 1 stack eklenir.
-func _distribute_arcane_stack(death_pos: Vector2) -> void:
-	var candidates: Array = []
-	for w in owned_weapon_nodes:
-		if not is_instance_valid(w) or not ("_is_arcane" in w) or not w._is_arcane:
-			continue
-		var w_range: float = float(w.attack_range) if "attack_range" in w else 0.0
-		if w_range <= 0.0 or w.global_position.distance_to(death_pos) <= w_range:
-			candidates.append(w)
-	if candidates.is_empty():
-		return
-	var chosen: Node = candidates[randi() % candidates.size()]
-	if chosen.has_method("add_arcane_stack"):
-		chosen.add_arcane_stack()
-
-
-## Korsan pasifi: "Her öldürmede %10 ihtimalle 1 altın kazanırsın. Bu şans
-## her level için +%1 artar (en fazla %100)." (bkz. characters.gd DEFS[9]).
-func _korsan_on_kill() -> void:
-	var chance: float = clamp(KORSAN_PASSIVE_BASE_CHANCE + KORSAN_PASSIVE_CHANCE_PER_LEVEL * float(level - 1), 0.0, 1.0)
-	if randf() < chance:
-		GameManager.gold += 1
-		_spawn_floating_text("+1 Altın", Color(1.0, 0.85, 0.2))
+## Korsan pasifi "Papağan" (2026-09-26): omzundaki papağan yakındaki altınları toplayıp getirir - mantık/görsel
+## scripts/korsan_parrot.gd'de. İstemcide host'un "papağan şu altını aldı" cevabı buraya gelir (NetworkManager.
+## parrot_gold_result) ve papağana iletilir.
+func korsan_parrot_gold_result(drop_id: int, amount: int) -> void:
+	var parrot: Node = get_node_or_null("KorsanParrot")
+	if parrot and parrot.has_method("on_gold_result"):
+		parrot.on_gold_result(drop_id, amount)
 
 
 ## Korsan'ın bomba şarjlarının zamanla yenilenmesi - _physics_process'ten
@@ -4599,16 +4573,34 @@ func _play_reading_anim() -> bool:
 const READ_MIN_MSEC := 1000
 ## Kullanıcı isteği (2026-09-25): "kart seçim ekranı bittiğinde (animasyonlar vb dahil komple bittiğinde) karakter read
 ## animasyonunda 0.5 kalıp sonrasında normale dönerek hareket edebilsin" - ekran(lar) tamamen kapandıktan SONRA okuma pozu
-## en az bu kadar daha sürer ve bu sürede karakter yürümez (bkz. _physics_process input_direction). READ_MIN_MSEC (kısa
-## açılan dükkanlarda pozun görülebilmesi) hâlâ geçerli - ikisinden uzun olanı beklenir.
+## en az bu kadar daha sürer. READ_MIN_MSEC (kısa açılan dükkanlarda pozun görülebilmesi) hâlâ geçerli - ikisinden uzun
+## olanı beklenir. 2026-09-26: bu kapanış sonrası süre yürümeyi artık ENGELLEMEZ (bkz. _reading_filter_input) - oyuncu
+## dururken poz görünür, yürümeye başlarsa hemen biter.
 const READ_AFTER_CLOSE_MSEC := 500
 var _reading_started_msec: int = 0
 var _reading_release_token: int = 0
+## Okuma pozunu başlatan ekran(lar)dan en az biri hâlâ AÇIK mı. _reading_ui_active kapanış sonrası poz süresince de true
+## kalır; yürüme kilidi yalnızca bu bayrağa bakar.
+var _reading_screen_open: bool = false
+
+
+## Hareket girdisini okuma pozuna göre süzer: ekran açıkken sıfır; ekran kapanmış ama poz sürüyorsa girdi olduğu gibi
+## geçer ve yürüme başladığı an poz biter (yürüme/koşma klibi araya okuma klibi girmeden oynar).
+func _reading_filter_input(input_direction: Vector2) -> Vector2:
+	if not _reading_ui_active:
+		return input_direction
+	if _reading_screen_open:
+		return Vector2.ZERO
+	if input_direction.length() > 0.1:
+		_reading_release_token += 1 ## bekleyen "bırak" zamanlayıcısı artık gereksiz
+		_finish_reading()
+	return input_direction
 
 
 ## ReadingUiWatcher'ın çağırdığı giriş: açık bir dükkan/kart seçim ekranı var (true) / hepsi kapandı (false).
 ## Kapanış istenince okuma pozu en az READ_MIN_MSEC boyunca sürer (duraklamada da çalışan bir zamanlayıcı bitirir).
 func set_reading_ui_active(active: bool) -> void:
+	_reading_screen_open = active
 	if active:
 		_reading_release_token += 1 ## bekleyen bir "bırak" varsa iptal (ekran art arda yeniden açıldı)
 		if _reading_ui_active:
@@ -8859,7 +8851,9 @@ func _skill_matthew_haste() -> void:
 const MATTHEW_FOX_STRIKE_DAMAGE_RATIO := 1.10 ## %110 saldırı gücü
 const MATTHEW_FOX_STRIKE_RADIUS := 150.0 ## "yakınındaki" - Melek'in Kutsal Korku'suyla (fear) aynı büyüklük mertebesi
 const MATTHEW_FOX_STRIKE_MAX_TARGETS := 6
-const MATTHEW_FOX_STRIKE_KNOCKBACK := 260.0
+## Kullanıcı bildirimi (2026-09-27): "yaratıkları matthewdan uzağa itmiyor iyi oranda uzağa itmesi gerekiyordu" - eskiden
+## 260 HIZ (apply_knockback_force, sönümle ~24 px). Artık MESAFE (px, enemy.gd apply_skill_push): Matthew'dan dışa doğru.
+const MATTHEW_FOX_STRIKE_PUSH_DISTANCE := 120.0
 ## Dash'in kendisi (hareket süresi) player_pet.gd DASH_HOP_TIME'da - hem gerçek tilki hem kozmetik kopya
 ## AYNI değeri kullansın diye TEK yerde. Bu, her isabetten sonra tilkinin hedefin dibinde kısacık durduğu an:
 ## vuruşun "oturması" için (hepsi art arda akıp gitseydi isabetler hissedilmiyordu). 6 hedef * (0.09 + 0.07)
@@ -8907,12 +8901,14 @@ func _matthew_fox_target_ok(e: Node) -> bool:
 	return is_instance_valid(_matthew_pet) and _matthew_pet.global_position.distance_to(ep) <= MATTHEW_FOX_STRIKE_RADIUS
 
 
-## Sıradaki hedef: henüz vurulmamış uygun düşmanlardan tilkinin O ANKİ konumuna en yakını. BUG DÜZELTMESİ
+## Sıradaki hedef: henüz vurulmamış uygun düşmanlardan MATTHEW'E o an en yakını (kullanıcı isteği 2026-09-27: "matthewa
+## güncel olarak en yakın yaratıklarda odaklanması gerekiyor bu vuruşların" - eskiden tilkinin o anki konumuna en yakını
+## seçiliyordu, tilki itilen yaratığın peşinden uzaklaşıp Matthew'i saran yaratıkları atlıyordu). BUG DÜZELTMESİ
 ## ("6 kişiye kadar vurmalı ama vurmuyor bazen"): eskiden 6 hedef en başta bir kez seçiliyordu - biri dash
 ## sırasında ölürse (başka oyuncu/silah öldürdü) ya da önceki vuruşun itmesiyle uzaklaşırsa o vuruş hakkı
 ## sessizce boşa gidiyordu. Artık her adımda yeniden seçiliyor, ölen hedefin yerine bir sonraki geçiyor.
 func _matthew_fox_next_target(already_hit: Dictionary) -> Node2D:
-	var from: Vector2 = _matthew_pet.global_position if is_instance_valid(_matthew_pet) else global_position
+	var from: Vector2 = global_position
 	var best: Node2D = null
 	var best_d: float = INF
 	for e: Node in get_tree().get_nodes_in_group("enemies"):
@@ -8969,11 +8965,11 @@ func _matthew_fox_dash_sequence() -> void:
 		var is_crit: bool = _roll_ability_crit()
 		e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
 		hits += 1
-		if e.has_method("apply_knockback_force"):
+		if e.has_method("apply_skill_push"):
 			var away_dir: Vector2 = e.global_position - global_position
 			if away_dir.length() < 1.0:
-				away_dir = _facing_to_vector(facing)
-			e.call("apply_knockback_force", away_dir.normalized(), MATTHEW_FOX_STRIKE_KNOCKBACK)
+				away_dir = -approach_dir if approach_dir != Vector2.ZERO else _facing_to_vector(facing)
+			e.call("apply_skill_push", away_dir.normalized(), MATTHEW_FOX_STRIKE_PUSH_DISTANCE)
 		_spawn_matthew_claw_hit_fx(e.global_position, -approach_dir)
 		## Her isabetin kendi kısa/darbeli sesi (bkz. tools/gen_matthew_sounds.py snd_matthew_fox_impact).
 		_play_networked_sound("res://assets/audio/matthew_fox_impact.wav", randf_range(0.92, 1.12), -3.0)
@@ -9249,7 +9245,7 @@ func _talon_restore_weapon_aim() -> void:
 ## kendi gerçek atışları verir.
 const TALON_SALVO_DURATION := TalonFormationMath.SALVO_DURATION
 const TALON_SALVO_ROTATIONS := TalonFormationMath.SALVO_ROTATIONS
-const TALON_SALVO_RADIUS := TalonFormationMath.SALVO_RADIUS ## WeaponOrbitMath.BASE_ORBIT_RADIUS ile AYNI görsel dil (bkz. weapon_orbit_math.gd)
+const TALON_SALVO_RADIUS := TalonFormationMath.SALVO_RADIUS ## (eski dönen kılıçla aynı yarıçaptı - o 2026-09-26da savrulan kılıca dönüştü; bkz. weapon_orbit_math.gd)
 const TALON_SALVO_FIRE_RATE_MULT := 1.0 / 3.0 ## +%200 saldırı hızı = 3 kat hızlı = 1/3 bekleme
 ## DÜZELTME (kullanıcı bildirimi: "Talonun E si açıkken tüm silahlar alan hasarı veriyor, skillin tek yaptığı
 ## silahı karakterin etrafında düz bir şekilde hızlıca ateş ettirmek ve isabet ettiği yaratığa normal vuruşu
@@ -10070,10 +10066,8 @@ func _vampir_capture_weapon_offsets() -> void:
 		_vampir_weapon_rest_offsets[w.get_instance_id()] = (w.global_position - global_position) * inv_scale
 
 
-func _vampir_slot_for(w: Node, index: int) -> Vector2:
-	## Dönen kılıç (orbit) sabit bir slotta durmaz - çekilmeden önceki gerçek konumundan çekilip aynı yere çıkar.
-	if w.get("_is_uzunkilic") == true and _vampir_weapon_rest_offsets.has(w.get_instance_id()):
-		return _vampir_weapon_rest_offsets[w.get_instance_id()]
+func _vampir_slot_for(_w: Node, index: int) -> Vector2:
+	## (Eskiden dönen kılıç için istisna vardı - 2026-09-26'dan beri kılıç da normal slotunda duruyor.)
 	return WEAPON_ICON_SLOTS[mini(index, WEAPON_ICON_SLOTS.size() - 1)]
 
 
@@ -11131,7 +11125,7 @@ func _on_hadime_curse_land(target, _pos: Vector2) -> void:
 
 
 ## ---------- E: Kara Delik ----------
-## Ayak altına 5 sn duran kara delik bırakır (HadimeMath.spawn_black_hole / hadime_black_hole.gd). Hasar + kalkan bu
+## Ayak altına 6 sn duran kara delik bırakır (HadimeMath.spawn_black_hole / hadime_black_hole.gd). Hasar + kalkan bu
 ## oyuncunun kopyasında (_on_hadime_hole_tick), yaratık çekimi host'taki kopyada - kaster host değilse diğer oyunculara
 ## (host dahil) broadcast_hadime_black_hole (reliable) ile gider.
 func _skill_hadime_black_hole() -> void:
@@ -11294,8 +11288,8 @@ func _process_hadime_ghost(delta: float) -> void:
 	_hadime_ghost_time += delta
 	var input_direction := Vector2.ZERO
 	var rising: bool = _hadime_ghost_time < HadimeMath.GHOST_RISE_LOCK
-	if not rising and not _reading_ui_active and not _menu_input_locked and not is_chat_typing:
-		input_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if not rising and not _menu_input_locked and not is_chat_typing:
+		input_direction = _reading_filter_input(Input.get_vector("move_left", "move_right", "move_up", "move_down"))
 	velocity = input_direction * get_effective_move_speed()
 	_block_movement_into_terrain()
 	move_and_slide()

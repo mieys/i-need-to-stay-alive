@@ -48,8 +48,10 @@ const VISIT_DURATION := 180.0
 ## (kullanıcı ilk turda süreyi belirtmemişti); artık MIN=MAX=120.0 olduğu
 ## için randf_range(COOLDOWN_MIN, COOLDOWN_MAX) her zaman tam 2 dakika
 ## döndürüyor - sabit bir döngü.
-const COOLDOWN_MIN := 120.0
-const COOLDOWN_MAX := 120.0
+## Kullanıcı isteği (2026-09-26): "seyyar satıcı daha sık çıksın" - ziyaretler arası 120 -> 60 sn (ziyaret 180 sn
+## kaldığı için döngü 5 dk -> 4 dk; satıcı zamanın %75'inde haritada).
+const COOLDOWN_MIN := 60.0
+const COOLDOWN_MAX := 60.0
 ## İlk ziyaret oyunun tam başında değil, biraz oynadıktan sonra gelsin diye.
 ## GEÇİCİ TEST DEĞERİ (kullanıcı isteği: "deneme açısından oyun ilk
 ## başladığında ... seyyar satıcı spawnlansın") - bildirim/ok/görsel
@@ -57,8 +59,9 @@ const COOLDOWN_MAX := 120.0
 ## çekildi. Test bitince eski değerlere (60.0 / 150.0) döndürülmeli.
 ## DÜZELTME (kullanıcı bildirimi 2026-09-24: "seyyar satıcı oyun başlar başlamaz geliyor") - yukarıdaki geçici test
 ## değerleri (3-5sn) hiç geri alınmamıştı; nottaki eski değerlere döndürüldü.
-const INITIAL_DELAY_MIN := 60.0
-const INITIAL_DELAY_MAX := 150.0
+## 2026-09-26 ("daha sık çıksın"): ilk ziyaret 60-150 -> 30-90 sn.
+const INITIAL_DELAY_MIN := 30.0
+const INITIAL_DELAY_MAX := 90.0
 ## Aynı bildirim: "başlangıca çok uzak noktalarda doğuyor". Sonraki ziyaretler de (ilk ziyaret zaten en yakın
 ## adaydan başlar) önce herhangi bir canlı oyuncuya bu mesafeden yakın çalı noktalarından seçilir; yoksa tüm harita.
 const VISIT_MAX_DISTANCE_FROM_PLAYERS := 1600.0
@@ -348,6 +351,11 @@ func _pick_spawn_position() -> Vector2:
 			candidates.append(layer.to_global(layer.map_to_local(cell)))
 	if candidates.is_empty():
 		return Vector2.ZERO
+	## İlk 10 dakika haritanın köşelerine yakın çalılar elenir (bkz. GameManager.is_spawn_blocked_by_early_corner).
+	## Hepsi köşedeyse (olmamalı) filtre uygulanmaz - satıcı hiç gelmemekten iyidir.
+	var off_corner: Array = candidates.filter(func(c: Vector2) -> bool: return not GameManager.is_spawn_blocked_by_early_corner(c))
+	if not off_corner.is_empty():
+		candidates = off_corner
 	## bkz. dosya başı "_is_first_visit" notu - ilk ziyarette rastgele karıştırmak
 	## yerine eve en yakın adaylardan başlanır, sonraki tüm ziyaretler eskisi
 	## gibi tam rastgele.
@@ -567,8 +575,9 @@ func _create_interaction(pos: Vector2) -> void:
 	_prompt_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_prompt_label.offset_left = -220.0
 	_prompt_label.offset_right = 220.0
-	_prompt_label.offset_top = -170.0
-	_prompt_label.offset_bottom = -130.0
+	## 2026-09-27: alttaki oyuncu paneli (hud.gd dock + üstündeki buff satırı) ~-211'e kadar çıkıyor - ipucu onun üstünde.
+	_prompt_label.offset_top = -262.0
+	_prompt_label.offset_bottom = -222.0
 	_prompt_label.visible = false
 	_prompt_layer.add_child(_prompt_label)
 	add_child(_prompt_layer)

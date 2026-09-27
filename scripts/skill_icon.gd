@@ -563,20 +563,30 @@ func _layout_stack_badge() -> void:
 		badge_size = stack_badge.get_combined_minimum_size()
 	stack_badge.size = badge_size
 	stack_badge.position = Vector2(size.x - margin - badge_size.x, margin)
+	## 2026-09-26: kilit etiketiyle aynı krem yazı + koyu kontur (eskiden camgöbeği, ikon renklerine karışıyordu);
+	## arkasındaki plaka _draw_badge_plate'te.
+	stack_badge.add_theme_color_override("font_color", Color(1.0, 0.86, 0.55))
+	stack_badge.add_theme_color_override("font_outline_color", PIP_OUTLINE)
+	stack_badge.add_theme_constant_override("outline_size", 4)
 	queue_redraw()
 
 
-## Kullanıcı isteği: "yük biriken yeteneği olan karakterlerde (assasin,
-## korsan) yetenek birikirken kaç yük olduğunun yanında bir çember/sayaç
-## olsun - ◔ bekleme sürüyor, ◑ yarısı doldu, ◕ bitmek üzere, ● hazır".
-## Unicode karakter KULLANILMIYOR - StackBadge rozetinin (bkz. yukarısı)
-## etrafına doğrudan draw_arc ile AYNI fikri (kısmi/tam daire) çizen bir
-## gösterge - bkz. _draw_charge_ring. fraction < 0 göstergeyi tamamen
-## gizler (stack sayacı kullanmayan TÜM diğer karakterlerde varsayılan bu).
-var _charge_fraction: float = -1.0
+## Yük (şarj) göstergesi - Korsan Saatli Bomba, Assasin Şahin Hamlesi (hud.gd). Kullanıcı bildirimi (2026-09-26): "yük olan
+## karakterlerin stack göstergesi doğru gösterilmiyor ve ikonlarla hiç uyumlu değil" - eski tasarım sağ-üstte (Label'ın
+## font yüksekliği kadar) uzun bir kutu + etrafında saat yönünde dolan yeşil/camgöbeği çerçeveydi; sayı bomba ikonunun
+## camgöbeği çizgileriyle aynı renkte okunmuyor, kutu ikonun yarısını kaplıyordu. Artık sol-üst köşede koyu ahşap bir
+## plakanın üstünde maksimum yük kadar küçük PİKSEL boncuk (kilit simgesiyle aynı piksel birimi ve altın paleti): dolu =
+## altın, boş = koyu, dolmakta olan = aşağıdan yukarı dolan soluk altın. count < 0 ya da max_count <= 0 = gizli.
+var _charge_count: int = -1
+var _charge_max: int = 0
+var _charge_fraction: float = 0.0
 
-func set_charge_progress(fraction: float) -> void:
-	_charge_fraction = fraction
+func set_charges(count: int, max_count: int, fraction: float) -> void:
+	if count == _charge_count and max_count == _charge_max and is_equal_approx(fraction, _charge_fraction):
+		return
+	_charge_count = count
+	_charge_max = max_count
+	_charge_fraction = clampf(fraction, 0.0, 1.0)
 	queue_redraw()
 
 
@@ -659,7 +669,8 @@ func _draw() -> void:
 		## üst-sol köşeden saat yönünde daralan bir çerçeve çiziliyor.
 		_draw_rect_perimeter_partial(outer, active_fraction, Color(1.0, 0.9, 0.4, 0.95), 3.0)
 
-	_draw_charge_ring()
+	_draw_charge_pips(inner)
+	_draw_badge_plate()
 
 
 ## Kilitli yuva: koyu örtü + üst yarıda piksel asma kilit (gövde + halka, 1 px koyu kontur). Seviye numarası _lock_label.
@@ -683,31 +694,41 @@ func _draw_lock(inner: Rect2) -> void:
 	draw_rect(Rect2(c + Vector2(-0.5, 1.0) * px, Vector2(1.0, 2.0) * px), outline, true) ## anahtar deliği
 
 
-## bkz. set_charge_progress üstündeki kullanıcı isteği notu - StackBadge'in
-## (sol-üst köşe, İKONUN İÇİNDE - bkz. hud.tscn/hud.gd StackBadge offset
-## düzeltmesi) etrafına saat 12 hizasından
-## başlayıp saat yönünde dolan bir yay çizer: fraction=0 -> tamamen boş
-## halka (◔'dan da az), 0.5 -> yarım (◑), 1.0 -> tam daire (●).
-## DÜZELTME (kullanıcı bildirimi: "stack hakkına sahip skill butonları için
-## tasarladığın dolma barı iğrenç olmuş uyumsuz görünüyor butonlarla") - eski
-## tasarım StackBadge'in (kare rozet) etrafına ayrık, kayan bir DAİRE
-## çiziyordu; kare rozetle çakışan farklı bir şekil dilinde durduğu için
-## uyumsuz görünüyordu. Artık aynı köşeli, "saat yönünde dolan çerçeve"
-## dilini (bkz. _draw_rect_perimeter_partial - ikonun kendi aktiflik
-## çerçevesinde ZATEN kullanılan teknik) rozetin KENDİ dikdörtgen sınırına
-## uyguluyor - rozetle aynı şekil, rozetin kendi rengiyle (StackBadge
-## font_color) uyumlu.
-func _draw_charge_ring() -> void:
-	if stack_badge == null or not stack_badge.visible or _charge_fraction < 0.0:
+const PIP_OUTLINE := Color(0.08, 0.05, 0.03, 1.0)
+const PIP_EMPTY := Color(0.24, 0.17, 0.11, 1.0)
+const PIP_GOLD := Color(0.93, 0.74, 0.3, 1.0)
+const PIP_GOLD_HI := Color(1.0, 0.93, 0.62, 1.0)
+const PIP_FILLING := Color(0.72, 0.55, 0.24, 1.0)
+
+## bkz. set_charges. Birim = kilit simgesiyle aynı piksel birimi (iç alan / 22). Her boncuk 2x2 birim, aralarında ve
+## çevresinde 1 birim koyu kontur (ortak kenarlar paylaşılır) -> 3 yükte 10x4 birimlik plaka.
+func _draw_charge_pips(inner: Rect2) -> void:
+	if _charge_count < 0 or _charge_max <= 0:
 		return
-	var rect: Rect2 = Rect2(stack_badge.position, stack_badge.size).grow(3.0)
-	const BADGE_COLOR := Color(0.6, 0.95, 1.0, 1.0)
-	_draw_rect_perimeter_partial(rect, 1.0, Color(BADGE_COLOR.r, BADGE_COLOR.g, BADGE_COLOR.b, 0.22), 2.0)
-	var f: float = clamp(_charge_fraction, 0.0, 1.0)
-	if f <= 0.0:
+	var u: float = maxf(1.0, round(inner.size.x / 22.0))
+	var origin: Vector2 = inner.position + Vector2(u, u)
+	var plate := Rect2(origin, Vector2(1.0 + 3.0 * _charge_max, 4.0) * u)
+	draw_rect(plate, PIP_OUTLINE, true)
+	for i in range(_charge_max):
+		var pip := Rect2(origin + Vector2(1.0 + 3.0 * i, 1.0) * u, Vector2(2.0, 2.0) * u)
+		if i < _charge_count:
+			draw_rect(pip, PIP_GOLD, true)
+			draw_rect(Rect2(pip.position, Vector2(u, u)), PIP_GOLD_HI, true)
+		else:
+			draw_rect(pip, PIP_EMPTY, true)
+			if i == _charge_count and _charge_fraction > 0.0:
+				var h: float = round(pip.size.y * _charge_fraction)
+				if h > 0.0:
+					draw_rect(Rect2(pip.position + Vector2(0.0, pip.size.y - h), Vector2(pip.size.x, h)), PIP_FILLING, true)
+
+
+## Sayısal rozetin (Necromancer ruh sayısı) arkasına koyu ahşap plaka - yazı kilit etiketiyle aynı krem renkte
+## (bkz. _layout_stack_badge). Eski halinde plaka yoktu, camgöbeği yazı ikonun rengine karışıyordu.
+func _draw_badge_plate() -> void:
+	if stack_badge == null or not stack_badge.visible:
 		return
-	var ring_color: Color = Color(0.45, 1.0, 0.55, 1.0) if f >= 1.0 else BADGE_COLOR
-	_draw_rect_perimeter_partial(rect, f, ring_color, 2.0)
+	var r: Rect2 = Rect2(stack_badge.position, stack_badge.size).grow_individual(3.0, 0.0, 3.0, 0.0)
+	draw_rect(r, Color(PIP_OUTLINE.r, PIP_OUTLINE.g, PIP_OUTLINE.b, 0.82), true)
 
 
 ## Bir dikdörtgenin çevresini (perimeter) BAŞLANGIÇ noktasından (üst-sol,

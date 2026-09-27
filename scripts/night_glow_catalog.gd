@@ -46,6 +46,8 @@ const NO_GLOW_SCENES := [
 	"res://scenes/fx_sovalye_slash.tscn",
 	"res://scenes/fx_topuz_slash.tscn",
 	"res://scenes/fx_uzunkilic_slash.tscn",
+	## Uzunkılıç (2026-09-26 savrulan kılıç) isabeti - çelik kesik parlaması. Savuruş hilali sahnesiz (sword_swing_math.gd), zaten parlamaz.
+	"res://scenes/fx_sword_hit.tscn",
 	"res://scenes/fx_crossbow_muzzle.tscn",
 	"res://scenes/fx_speed_line.tscn",
 	"res://scenes/fx_mage_swap.tscn",

@@ -233,6 +233,7 @@ func _ready() -> void:
 	_create_spirit_icon()
 	_create_ability_bar_frame()
 	_create_status_bar()
+	_create_player_dock()
 	_setup_ability_icons()
 	_setup_portrait()
 	_layout_bar_kit()
@@ -328,7 +329,8 @@ func _ready() -> void:
 ## Kullanıcı isteği (2026-09-25): "arayüzler için ayarlara opaklık ayarı getir" (bkz. UISound.ui_opacity_percent) - HUD'un
 ## KALICI parçaları bu opaklıkla çizilir. Dükkan/envanter panelleri ve sohbet YAZMA kutusu bilerek hariç (açıkken okunmalı).
 const UI_OPACITY_NODES: Array[String] = ["BottomBar", "CharacterCluster", "SkillBar", "GoldIndicator", "MinimapControl",
-	"ReviveHearts", "XPBar", "ShopToggleButton", "EnvanterToggleButton", "FpsLabel", "PartyPanelLayer/PartyPanel"]
+	"ReviveHearts", "XPBar", "ShopToggleButton", "EnvanterToggleButton", "FpsLabel", "PartyPanelLayer/PartyPanel",
+	"DockFrame", "HeartsTab"]
 
 
 func _register_ui_opacity() -> void:
@@ -359,10 +361,10 @@ func _layout_shop_inventory_buttons() -> void:
 	## Kullanıcı isteği (2026-09-25): "bundan sonra envanter ve altın göstergesi solda olsun grup paneli de sağda olsun" -
 	## ENVANTER + altın artık SOL üstte, karakter kümesinin ve dirilme kalplerinin (ReviveHearts) altında; grup paneli sağda
 	## minimapın altına geçti (bkz. party_panel.gd RIGHT_MARGIN/TOP_Y).
-	var cluster: Control = get_node_or_null("CharacterCluster")
-	var hearts: Control = get_node_or_null("ReviveHearts")
-	var left_edge: float = cluster.offset_left if cluster else 20.0
-	var top_y: float = (hearts.offset_bottom if hearts else 196.0) + GAP
+	## 2026-09-27: karakter kümesi (avatar/can/kalkan/seviye) ve kalpler alttaki oyuncu paneline taşındı (bkz.
+	## _layout_player_dock) - sol üstte sadece ENVANTER + altın kaldı, en üste çıktılar.
+	var left_edge: float = 20.0
+	var top_y: float = 20.0
 
 	# Envanter butonu üstte, altın göstergesi altında.
 	envanter_toggle_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -629,12 +631,9 @@ func _layout_ability_icons() -> bool:
 		slots.append([group[i], gap])
 	if spirit_icon and spirit_icon.visible:
 		slots.append([spirit_icon, ABILITY_GROUP_GAP])
-	var total: float = 0.0
-	for sl in slots:
-		total += float(sl[1]) + sz
-	var sx: float = maxf(absf(bar.scale.x), 0.01)
-	var local_center: float = (bar.get_viewport_rect().size.x * 0.5 - bar.global_position.x) / sx
-	var x: float = roundf(local_center - total * 0.5)
+	## 2026-09-27: dizi artık ekran ortasına değil yerel 0'dan başlar - SkillBar'ı oyuncu paneli (dock) yetenek bölümüne
+	## oturtur (bkz. _layout_player_dock).
+	var x: float = 0.0
 	var sig: String = str(x) + "|" + str(slots.size())
 	for sl in slots:
 		var c: Control = sl[0]
@@ -737,16 +736,13 @@ func _create_ability_bar_frame() -> void:
 ## birleşimini alıp çerçeveyi ona (+pay) oturtur - _setup_ability_icons() görünürlükleri/_place_spirit_icon()
 ## konumu belirledikten SONRA (o fonksiyonun sonunda) çağrılır, karakter değişmediği sürece bir daha gerekmez.
 func _update_ability_bar_frame() -> void:
-	if not is_instance_valid(ability_bar_frame):
-		return
-	var bar: Control = ability_bar_frame.get_parent()
+	var bar: Control = get_node_or_null("SkillBar")
 	if not bar:
 		return
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
 	for child in bar.get_children():
-		## Durum satırı (StatusBar) çerçevenin ÜSTÜNE, çerçeveye göre yerleşir - birleşime katılırsa çerçeve her
-		## güncellemede kendini yukarı doğru büyütüyordu.
+		## Durum satırı ve eski çerçeve birleşime katılmaz (yalnız yetenek yuvaları).
 		if child == ability_bar_frame or child == status_bar or not (child is Control):
 			continue
 		var c: Control = child
@@ -756,15 +752,194 @@ func _update_ability_bar_frame() -> void:
 		lo.y = minf(lo.y, c.offset_top)
 		hi.x = maxf(hi.x, c.offset_right)
 		hi.y = maxf(hi.y, c.offset_bottom)
-	if lo.x == INF:
+	## 2026-09-27: yetenek yuvalarının eski oval çerçevesi yerine tüm oyuncu paneli tek çerçeve (DockFrame).
+	if is_instance_valid(ability_bar_frame):
 		ability_bar_frame.visible = false
-		return
-	ability_bar_frame.visible = true
-	ability_bar_frame.offset_left = lo.x - ABILITY_BAR_FRAME_PAD
-	ability_bar_frame.offset_top = lo.y - ABILITY_BAR_FRAME_PAD
-	ability_bar_frame.offset_right = hi.x + ABILITY_BAR_FRAME_PAD
-	ability_bar_frame.offset_bottom = hi.y + ABILITY_BAR_FRAME_PAD
+	if lo.x == INF:
+		lo = Vector2.ZERO
+		hi = Vector2.ZERO
+	_icons_lo = lo
+	_icons_hi = hi
+	_layout_player_dock()
 	_update_status_bar_layout()
+
+
+## ---------------------------------------------------------------- OYUNCU PANELİ (dock)
+## Kullanıcı isteği (2026-09-27): "alttaki yetenek panelini değiştiriyoruz, yetenek paneli artık sol üstteki can ve kalkan
+## barını avatar barını level ve kalan canların oranını da içerecek şekilde sığdırılmalı yeniden konumlandırılmalı ve
+## yeniden tasarlanmalı" - 4 prototipten "B" seçildi: tek ahşap panel (ability_bar dokusu), solda portre + altında seviye
+## rozeti, sağ üstte yetenek yuvaları, altlarında yetenek dizisi genişliğinde can (kalın) ve kalkan (ince) piksel çubukları,
+## kalpler portrenin üstünde küçük bir sekmede. Sol üstteki eski küme kaldırıldı - AYNI düğümler (CharacterCluster,
+## SkillBar, ReviveHearts) buraya taşındı (@onready referansları/testler geçerli). Eski levha çubukları (HealthBar/
+## ShieldBar + çerçeve + yazı) gizli ama güncellenmeye devam eder; görünen çubuklar hud_pixel_bar.gd.
+## Ölçüler 1920x1080 taban, ekranın alt-ortasına göre.
+const DOCK_PAD_X := 16.0
+const DOCK_PAD_TOP := 12.0
+const DOCK_PAD_BOTTOM := 12.0
+## Kullanıcı isteği (2026-09-27, ikinci tur): "alttaki karakter skilleri panelini biraz küçült üp exp barıyla arasında azıcık
+## boşluk olmasını sağla" - panel bütünüyle DOCK_SCALE ile küçülür (portre/rozet/çubuklar CharacterCluster.scale ile, yetenek
+## yuvaları SkillBar.scale ile - yerel yerleşim aynı kalır), XP şeridinin (bottom_exp_bar.gd BAR_HEIGHT 10) üstünde ~10 px boşluk.
+const DOCK_SCALE := 0.85
+const SKILLBAR_BASE_SCALE := 1.275 ## hud.tscn SkillBar ölçeği (panel küçültmesinden önce)
+const DOCK_BOTTOM_MARGIN := 30.0 ## kullanıcı: "bi 10px daha yukarı" (20 -> 30)
+const DOCK_PORTRAIT := 96.0 ## hud_avatar_frame.png doğal boyu
+const DOCK_PORTRAIT_GAP := 14.0
+const DOCK_ROW_GAP := 6.0
+const DOCK_HP_H := 22.0
+const DOCK_SHIELD_H := 16.0
+const DOCK_BAR_GAP := 2.0
+const DOCK_BADGE_OVERHANG := 26.0 ## seviye rozeti portre çerçevesinin altından bu kadar taşar (hud.tscn LevelBadge 70..122)
+const HEARTS_TAB_W := 100.0
+const HEARTS_TAB_H := 36.0
+const HEARTS_TAB_TIMER_W := 64.0 ## kalp yenilenme sayacı (m:ss) görünürken sekme bu kadar genişler
+const HEARTS_TAB_OVERLAP := 6.0
+const PixelBarScript: GDScript = preload("res://scripts/hud_pixel_bar.gd")
+const SHIELD_BAR_COLOR := Color(0.24, 0.59, 0.91)
+
+var dock_frame: Panel = null
+var hearts_tab: Panel = null
+var dock_hp_bar: Control = null
+var dock_shield_bar: Control = null
+var _icons_lo := Vector2.ZERO
+var _icons_hi := Vector2.ZERO
+var _hearts_tab_wide: bool = false
+
+
+func _create_player_dock() -> void:
+	if not is_inside_tree() or has_node("DockFrame"):
+		return
+	var cluster: Control = get_node_or_null("CharacterCluster")
+	dock_frame = Panel.new()
+	dock_frame.name = "DockFrame"
+	dock_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dock_frame.add_theme_stylebox_override("panel", UIKit.panel_style("ability_bar"))
+	add_child(dock_frame)
+	if cluster:
+		move_child(dock_frame, cluster.get_index())
+	hearts_tab = Panel.new()
+	hearts_tab.name = "HeartsTab"
+	hearts_tab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hearts_tab.add_theme_stylebox_override("panel", UIKit.panel_style("status_badge"))
+	add_child(hearts_tab)
+	if revive_hearts:
+		move_child(hearts_tab, revive_hearts.get_index())
+		if revive_hearts.has_method("set_regen_label_position"):
+			revive_hearts.set_regen_label_position(Vector2(84.0, -3.0))
+	if cluster:
+		for n: String in ["HealthBar", "HealthBarFrame", "HealthValueLabel", "ShieldBar", "ShieldBarFrame", "ShieldValueLabel"]:
+			var old: CanvasItem = cluster.get_node_or_null(n) as CanvasItem
+			if old:
+				old.visible = false
+		dock_hp_bar = Control.new()
+		dock_hp_bar.name = "DockHpBar"
+		dock_hp_bar.set_script(PixelBarScript)
+		cluster.add_child(dock_hp_bar)
+		dock_shield_bar = Control.new()
+		dock_shield_bar.name = "DockShieldBar"
+		dock_shield_bar.set_script(PixelBarScript)
+		dock_shield_bar.set("font_size", 16)
+		dock_shield_bar.set("fill", SHIELD_BAR_COLOR)
+		dock_shield_bar.set("ratio", 0.0)
+		dock_shield_bar.set("text", "0/0")
+		cluster.add_child(dock_shield_bar)
+		## _ready ilk can/kalkan değerini dock kurulmadan ÖNCE yazıyor - gizli eski çubuklardan kopyala.
+		var hp_span: float = maxf(float(health_bar.max_value), 0.001)
+		dock_hp_bar.call("set_values", clampf(float(health_bar.value) / hp_span, 0.0, 1.0), health_bar.tint_progress, health_value_label.text)
+		var sh_span: float = float(item_shield_bar.max_value)
+		dock_shield_bar.call("set_values", clampf(float(item_shield_bar.value) / sh_span, 0.0, 1.0) if sh_span > 0.001 else 0.0,
+			SHIELD_BAR_COLOR, shield_value_label.text)
+	var bar: Control = get_node_or_null("SkillBar")
+	if bar:
+		bar.pivot_offset = Vector2.ZERO ## dock konumu SkillBar'ın sol üst köşesinden hesaplanır
+
+
+func _dock_place(c: Control, r: Rect2) -> void:
+	c.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	c.offset_left = r.position.x
+	c.offset_top = r.position.y
+	c.offset_right = r.end.x
+	c.offset_bottom = r.end.y
+
+
+func _layout_player_dock() -> void:
+	var bar: Control = get_node_or_null("SkillBar")
+	var cluster: Control = get_node_or_null("CharacterCluster")
+	if bar == null or cluster == null or not is_instance_valid(dock_frame):
+		return
+	var sc: float = DOCK_SCALE
+	bar.scale = Vector2.ONE * SKILLBAR_BASE_SCALE * sc
+	var k: float = bar.scale.x
+	## Yerel (küçültmesiz) ölçüler - eski yerleşimin aynısı; ekrandaki boyut = yerel x sc.
+	var row_w: float = maxf((_icons_hi.x - _icons_lo.x) * SKILLBAR_BASE_SCALE, 200.0)
+	var row_h: float = maxf((_icons_hi.y - _icons_lo.y) * SKILLBAR_BASE_SCALE, 40.0)
+	var content_h: float = row_h + DOCK_ROW_GAP + DOCK_HP_H + DOCK_BAR_GAP + DOCK_SHIELD_H
+	var dock_h: float = DOCK_PAD_TOP + content_h + DOCK_PAD_BOTTOM
+	var dock_w: float = DOCK_PAD_X + DOCK_PORTRAIT + DOCK_PORTRAIT_GAP + row_w + DOCK_PAD_X
+	var x0: float = roundf(-dock_w * sc * 0.5)
+	var y1: float = -DOCK_BOTTOM_MARGIN
+	var y0: float = roundf(y1 - dock_h * sc)
+	_dock_place(dock_frame, Rect2(x0, y0, dock_w * sc, y1 - y0))
+	_dock_place(cluster, Rect2(x0, y0, dock_w, dock_h))
+	cluster.pivot_offset = Vector2.ZERO
+	cluster.scale = Vector2.ONE * sc
+
+	## Yetenek yuvaları: dock'un sağ üst bölümü (SkillBar ölçekli; yerel ikon dizisi _icons_lo'dan başlar).
+	var sx: float = x0 + (DOCK_PAD_X + DOCK_PORTRAIT + DOCK_PORTRAIT_GAP) * sc
+	var sy: float = y0 + DOCK_PAD_TOP * sc
+	bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	bar.offset_left = sx - _icons_lo.x * k
+	bar.offset_top = sy - _icons_lo.y * k
+	bar.offset_right = bar.offset_left + maxf(_icons_hi.x, 1.0)
+	bar.offset_bottom = bar.offset_top + maxf(_icons_hi.y, 1.0)
+
+	## Portre + seviye rozeti (küme yerel koordinatı = dock sol üstü). Rozet dock'un içinde kalsın.
+	var py: float = maxf(4.0, dock_h - 4.0 - DOCK_PORTRAIT - DOCK_BADGE_OVERHANG)
+	py = minf(py, DOCK_PAD_TOP - 4.0)
+	var fo := Vector2(DOCK_PAD_X, py)
+	_cluster_rect(cluster, "PortraitFrame", Rect2(fo, Vector2(DOCK_PORTRAIT, DOCK_PORTRAIT)))
+	_cluster_rect(cluster, "PortraitClip", Rect2(fo + Vector2(12, 12), Vector2(72, 72)))
+	_cluster_rect(cluster, "LevelBadge", Rect2(fo + Vector2(22, 70), Vector2(52, 52)))
+	_cluster_rect(cluster, "LevelLabel", Rect2(fo + Vector2(22, 70), Vector2(52, 52)))
+
+	## Can + kalkan: yetenek dizisinin altında, onunla aynı genişlikte.
+	var bx: float = DOCK_PAD_X + DOCK_PORTRAIT + DOCK_PORTRAIT_GAP
+	var by: float = DOCK_PAD_TOP + row_h + DOCK_ROW_GAP
+	if dock_hp_bar:
+		dock_hp_bar.position = Vector2(bx, by)
+		dock_hp_bar.size = Vector2(row_w, DOCK_HP_H)
+	if dock_shield_bar:
+		dock_shield_bar.position = Vector2(bx, by + DOCK_HP_H + DOCK_BAR_GAP)
+		dock_shield_bar.size = Vector2(row_w, DOCK_SHIELD_H)
+
+	_layout_hearts_tab(x0, y0)
+
+
+func _cluster_rect(cluster: Control, n: String, r: Rect2) -> void:
+	var c: Control = cluster.get_node_or_null(n) as Control
+	if c == null:
+		return
+	c.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	c.offset_left = r.position.x
+	c.offset_top = r.position.y
+	c.offset_right = r.end.x
+	c.offset_bottom = r.end.y
+
+
+## Kalpler portrenin üstünde küçük sekmede; yenilenme sayacı görünürken sekme sağa genişler (sayaç kalplerin yanında).
+func _layout_hearts_tab(x0: float, y0: float) -> void:
+	if not is_instance_valid(hearts_tab) or revive_hearts == null:
+		return
+	_hearts_tab_wide = revive_hearts.has_method("is_regen_visible") and bool(revive_hearts.is_regen_visible())
+	## Panelle aynı oranda küçülür (DOCK_SCALE).
+	var sc: float = DOCK_SCALE
+	var w: float = roundf((HEARTS_TAB_W + (HEARTS_TAB_TIMER_W if _hearts_tab_wide else 0.0)) * sc)
+	var h: float = roundf(HEARTS_TAB_H * sc)
+	var tx: float = x0 + roundf(10.0 * sc)
+	var tb: float = y0 + roundf(HEARTS_TAB_OVERLAP * sc)
+	_dock_place(hearts_tab, Rect2(tx, tb - h, w, h))
+	_dock_place(revive_hearts, Rect2(tx + roundf(8.0 * sc), tb - h + roundf(5.0 * sc), 90.0, 32.0))
+	revive_hearts.pivot_offset = Vector2.ZERO
+	revive_hearts.scale = Vector2.ONE * sc
 
 
 ## Kullanıcı isteği (2026-09-22): "bufflar solda debufflar sağda görünmeli" - iki HBoxContainer, biri sola
@@ -807,12 +982,15 @@ const STATUS_CENTER_GAP := 4.0 ## buff ve debuff sıraları çubuğun ortasında
 
 
 func _update_status_bar_layout() -> void:
-	if not is_instance_valid(status_bar) or not is_instance_valid(ability_bar_frame):
+	if not is_instance_valid(status_bar):
 		return
-	var w: float = ability_bar_frame.offset_right - ability_bar_frame.offset_left
-	status_bar.offset_left = ability_bar_frame.offset_left
-	status_bar.offset_right = ability_bar_frame.offset_right
-	status_bar.offset_bottom = ability_bar_frame.offset_top - 6.0
+	## 2026-09-27: dock'un yetenek bölümünün TAM ÜSTÜNE, yetenek dizisiyle aynı genişlikte (SkillBar yerel koordinatı).
+	var bar: Control = status_bar.get_parent() as Control
+	var k: float = maxf(absf(bar.scale.x), 0.01) if bar else 1.0
+	var w: float = _icons_hi.x - _icons_lo.x
+	status_bar.offset_left = _icons_lo.x
+	status_bar.offset_right = _icons_hi.x
+	status_bar.offset_bottom = _icons_lo.y - (DOCK_PAD_TOP * DOCK_SCALE + 6.0) / k
 	status_bar.offset_top = status_bar.offset_bottom - STATUS_ROW_HEIGHT
 	if status_buff_row:
 		status_buff_row.offset_left = 0.0
@@ -1180,6 +1358,8 @@ func update_health(current: float, max_value: float) -> void:
 	var health_color: Color = Color(0.84, 0.22, 0.22).lerp(Color(0.36, 0.78, 0.29), pct)
 	health_bar.tint_progress = health_color
 	_refresh_round_fill(health_bar)
+	if dock_hp_bar:
+		dock_hp_bar.call("set_values", pct, health_color, health_value_label.text)
 
 
 ## main.gd hâlâ bu sinyale bağlanıyor (player.xp_changed) - HUD'da artık
@@ -1210,15 +1390,16 @@ func update_stats(_speed: float, _damage: float, _fire_rate: float, _crit_chance
 
 
 func _on_item_shield_changed(current: float, max_value: float) -> void:
-	## Kalkan barı artık her zaman görünür (eski davranış: sadece max_value>0 ise görünürdü)
-	item_shield_bar.visible = true
-	shield_value_label.visible = true
+	## (2026-09-27: görünen kalkan çubuğu artık oyuncu panelindeki dock_shield_bar - eski levha gizli ama güncel tutulur.)
 	item_shield_bar.max_value = max(max_value, 0.001)
 	item_shield_bar.value = current
 	item_shield_bar.tint_progress = Color(0.24, 0.59, 0.91)
 	_refresh_round_fill(item_shield_bar)
 	if max_value > 0:
 		shield_value_label.text = "%d/%d" % [int(round(max(current, 0.0))), int(round(max_value))]
+	if dock_shield_bar:
+		var sh_ratio: float = clampf(current / max_value, 0.0, 1.0) if max_value > 0.0 else 0.0
+		dock_shield_bar.call("set_values", sh_ratio, SHIELD_BAR_COLOR, shield_value_label.text)
 
 
 ## O an SAHİP OLUNAN (seviyesi >0) modların listesini MODE_KEYS sırasıyla
@@ -1464,6 +1645,9 @@ func _process(delta: float) -> void:
 			_fps_update_timer = 0.0
 			fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
 	_update_status_bar()
+	if is_instance_valid(hearts_tab) and revive_hearts and revive_hearts.has_method("is_regen_visible") \
+			and bool(revive_hearts.is_regen_visible()) != _hearts_tab_wide:
+		_layout_player_dock()
 	if _mode_switch_cooldown_remaining > 0.0:
 		_mode_switch_cooldown_remaining = max(0.0, _mode_switch_cooldown_remaining - delta)
 		_refresh_shield_mode_slots()
@@ -1510,22 +1694,18 @@ func _process(delta: float) -> void:
 		## Necromancer'ın biriken ruh sayısı (pasif ikonunun üstünde) -
 		## standart bekleme-süresi modeline uymayan yetenekler için özel bir
 		## sayısal rozet (bkz. skill_icon.gd set_stack_count).
-		if skill2_icon.has_method("set_stack_count"):
+		## 2026-09-26: yük göstergesi artık sayı rozeti değil, maksimum yük kadar piksel boncuk (skill_icon.gd set_charges).
+		if skill2_icon.has_method("set_charges"):
+			skill2_icon.set_stack_count(-1) ## eski sayı rozeti bu yuvada artık kullanılmıyor
 			if "korsan_bomb_charges" in player and player.get_skill2_id() == 17:
-				skill2_icon.set_stack_count(player.korsan_bomb_charges)
-				if skill2_icon.has_method("set_charge_progress"):
-					skill2_icon.set_charge_progress(player.get_korsan_bomb_charge_fraction())
+				skill2_icon.set_charges(player.korsan_bomb_charges, player.KORSAN_MAX_BOMB_CHARGES, player.get_korsan_bomb_charge_fraction())
 			## Assasin Çocuk'un yeni TEMEL'i (Şahin Hamlesi, id 5) de Korsan'ın
 			## bombasıyla AYNI şarj deseninde - bkz. player.gd
 			## assasin_dash2_charges/ASSASIN_DASH2_MAX_CHARGES.
 			elif "assasin_dash2_charges" in player and player.get_skill2_id() == 5:
-				skill2_icon.set_stack_count(player.assasin_dash2_charges)
-				if skill2_icon.has_method("set_charge_progress"):
-					skill2_icon.set_charge_progress(player.get_assasin_dash2_charge_fraction())
+				skill2_icon.set_charges(player.assasin_dash2_charges, player.ASSASIN_DASH2_MAX_CHARGES, player.get_assasin_dash2_charge_fraction())
 			else:
-				skill2_icon.set_stack_count(-1)
-				if skill2_icon.has_method("set_charge_progress"):
-					skill2_icon.set_charge_progress(-1.0)
+				skill2_icon.set_charges(-1, 0, 0.0)
 		if passive_icon.has_method("set_stack_count"):
 			## DÜZELTME (kullanıcı bildirimi: "Necromancer ölen düşmanlardan
 			## ruh toplayamıyor" araştırması sırasında bulunan İKİNCİ bir

@@ -42,6 +42,19 @@ extends Area2D
 ## (throw_distance sonunda geri dönerken) belirgin şekilde "kuyruk" çizen
 ## bir iz oluşturuyor.
 
+## 2026-09-26 (kullanıcı: "boomerangın gidip gelme animasyonu çok göz yoruyor ve güzel görünmüyor ayrıca boyutu çok büyüyor
+## fırlatınca, bu arada boomerang artık birimlerin içinden geçememeli çarpıp geri dönmeli ve hızlı dönerse tekrar
+## fırlatılabilmeli. gidiş dönüş hızını düşür"):
+##  - ÇARPIP DÖNER: gidişte İLK düşmana vurunca hemen geri döner (_begin_return - "uç nokta" kancaları da orada tetiklenir,
+##    Kasırga'nın durması çarptığı yerde olur). Dönüşte HİÇ vurmaz (soru-cevapta seçildi) - sadece uç noktada durma
+##    (apex_pause) sırasında vurur. Yakın düşmana çarpınca çabuk döner ve weapon.gd bir sonraki FireTimer tikinde yeniden
+##    fırlatır. Diğer istemcilerdeki kozmetik kopya da düşmana değince aynı şekilde döner.
+##  - SAKİN GÖRÜNÜM: 24 karelik (15 derece) dönüş sayfası (eskisi 12 kare/30 derece, hızlı dönüşte titriyordu), dönüş hızı
+##    sahnede 900 -> 480 derece/sn, etrafındaki hava çizgileri (SpinFx) ve 3 hayaletten ikisi kaldırıldı (tek soluk
+##    hayalet kalır), uca yaklaşırken yavaşlayıp dönüşte yeniden hızlanır (ani ters dönüş yok).
+##  - BOYUT: gövde artık kafadaki ikonla BİREBİR aynı boyda (BODY_SCALE, eskiden ~%20 büyüktü) ve fırlatma anındaki 1.35x
+##    "punch" büyümesi kaldırıldı.
+
 @export var speed: float = 460.0
 @export var throw_distance: float = 360.0
 @export var spin_speed_deg: float = 900.0
@@ -58,10 +71,12 @@ extends Area2D
 ## Dönüş bacağında oyuncuya bu kadar yakınlaşınca "geri döndü" sayılır ve
 ## kendini serbest bırakır.
 @export var return_arrival_distance: float = 24.0
-## Fırlatma anındaki "punch" büyümesinin çarpanı ve süresi - sadece Bullet'in
-## KENDİ ölçeğini oynatır, ayrı bir sprite/asset gerektirmez.
-@export var launch_punch_scale_mult: float = 1.35
-@export var launch_punch_duration: float = 0.14
+
+## Hız eğrisi (bkz. dosya başı 2026-09-26 notu): gidişte uca yaklaştıkça hız APEX_SPEED_MIN'e iner (t^2 - başta tam hız),
+## dönüşte RETURN_RAMP_TIME içinde tekrar tam hıza çıkar.
+const APEX_SPEED_MIN := 0.35
+const RETURN_RAMP_TIME := 0.3
+var _return_ramp: float = 1.0
 
 var direction: Vector2 = Vector2.RIGHT
 var damage: float = 10.0
@@ -114,13 +129,18 @@ const TRAIL_FOLLOW_SPEEDS := [22.0, 14.0, 9.0] ## büyük = az gecikme (ön), k�
 ## kendisi döndürülmez (piksel ızgarası bozulmasın). SpinFx artık bumerangın etrafında dönen hava çizgileri; Trail1/2/3
 ## (kuyruklu yıldız) artık beyaz girdap değil, AYNI bumerangın küçülerek solan "hayalet" kopyaları. Geri yakalanınca
 ## kısa bir parıltı. Eski Bullet (icon.png'nin kendisi, düz döndürülen) gizlenir.
-const RotFrames := preload("res://assets/weapons/boomerang/rot_frames.tres")
-const WhooshFrames := preload("res://assets/fx/boomerang/whoosh_frames.tres")
+const RotFrames := preload("res://assets/weapons/boomerang/rot24_frames.tres")
 const CatchFrames := preload("res://assets/fx/boomerang/catch_frames.tres")
-const ROT_STEPS := 12
-const BODY_SCALE := 1.5 ## dünya birimi / sanat pikseli (eski bumerangla ~aynı ekran boyu)
-const WHOOSH_SCALE := 1.45
-const GHOST_SCALES := [0.8, 0.62, 0.45] ## Trail1/2/3 - gövdeye göre
+const ROT_STEPS := 24
+## Sanat pikseli başına ölçek - kafadaki ikonla AYNI: icon.png = art48 x4, weapon_boomerang.tscn Icon ölçeği (ICON_SCALE) x 0.9
+## (weapon.gd menzilli-olmayan silah küçültmesi) x ICON_SIZE_MULT; ikisi de karakterin kök ölçeğiyle çarpılır (weapon.gd
+## _fire_at proj.scale). 2026-09-26 (kullanıcı: "boyutunu da %20 küçült çok büyük görünüyor karakterin üstündeyken bile"):
+## ikon 0.4125 -> 0.33 - ICON_SCALE sahnedeki değerle AYNI kalmalı (test_boomerang_bounce.gd kontrol eder).
+const ICON_SCALE := 0.33
+const BODY_SCALE := ICON_SCALE * 0.9 * WeaponOrbitMath.ICON_SIZE_MULT * 4.0
+## Tek soluk hayalet (Trail1) - Trail2/3 gizli.
+const GHOST_SCALE := 0.85
+const GHOST_ALPHA := 0.28
 const GHOST_TINT := Color(1.0, 0.9, 0.75)
 var _body: AnimatedSprite2D = null
 
@@ -139,19 +159,16 @@ func _ready() -> void:
 	_body.scale = Vector2.ONE * BODY_SCALE
 	add_child(_body)
 	_base_bullet_scale = _body.scale
-	_play_launch_punch()
 	if spin_fx:
-		spin_fx.sprite_frames = WhooshFrames
-		spin_fx.scale = Vector2.ONE * WHOOSH_SCALE
-		spin_fx.play("loop")
+		spin_fx.visible = false ## hava çizgileri kaldırıldı (göz yoruyordu)
 	for i in range(_trail_nodes.size()):
 		var tn: AnimatedSprite2D = _trail_nodes[i]
 		if tn:
 			tn.sprite_frames = RotFrames
 			tn.animation = &"spin"
 			tn.stop()
-			tn.scale = Vector2.ONE * BODY_SCALE * float(GHOST_SCALES[mini(i, GHOST_SCALES.size() - 1)])
-			tn.modulate = Color(GHOST_TINT.r, GHOST_TINT.g, GHOST_TINT.b, tn.modulate.a)
+			tn.visible = false ## Trail1 ilk _update_trail'de (ölçeği doğru kurulunca) görünür olur; Trail2/3 hep gizli
+			tn.modulate = Color(GHOST_TINT.r, GHOST_TINT.g, GHOST_TINT.b, GHOST_ALPHA)
 	## SpinFx artık DÖNGÜLÜ (bkz. spin_frames.tres "trail" loop=true) - mermi
 	## havada olduğu sürece sürekli oynar, _finish()'te projeyle birlikte
 	## queue_free() olur. "Bir kez oynayıp donma" hatası artık mümkün değil.
@@ -163,19 +180,6 @@ func _ready() -> void:
 	for t in _trail_nodes:
 		if t:
 			t.global_position = global_position
-
-
-## Fırlatma anında kısacık bir büyü-küçül "punch" - Bullet'in KENDİ
-## ölçeğini Tween'ler, ayrı bir sprite/asset oluşturmaz. Tween otomatik
-## temizlendiği için SpinFx'teki gibi "donup ekranda kocaman kalma" hatasına
-## yapısal olarak kapalıdır.
-func _play_launch_punch() -> void:
-	if _body == null:
-		return
-	_body.scale = _base_bullet_scale * launch_punch_scale_mult
-	var tw := create_tween()
-	tw.tween_property(_body, "scale", _base_bullet_scale, launch_punch_duration) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 func _physics_process(delta: float) -> void:
@@ -209,18 +213,12 @@ func _physics_process(delta: float) -> void:
 		_update_trail(delta)
 		return
 	if not _returning:
-		position += direction * speed * delta
-		_traveled += speed * delta
+		var t: float = clampf(_traveled / maxf(1.0, throw_distance), 0.0, 1.0)
+		var step: float = speed * lerpf(1.0, APEX_SPEED_MIN, t * t) * delta
+		position += direction * step
+		_traveled += step
 		if _traveled >= throw_distance:
-			_returning = true
-			_hit_this_leg.clear()
-			if not _apex_done:
-				_apex_done = true
-				if apex_pause > 0.0:
-					_pause_left = apex_pause
-					_pause_clear = 0.33
-				if not get_meta("network_spawned", false) and is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_boomerang_apex"):
-					source_weapon.enchant_on_boomerang_apex(self)
+			_begin_return()
 		_update_trail(delta)
 		return
 	if not is_instance_valid(player_node):
@@ -231,8 +229,29 @@ func _physics_process(delta: float) -> void:
 		_finish()
 		return
 	direction = to_player.normalized()
-	position += direction * speed * delta
+	_return_ramp = minf(1.0, _return_ramp + delta / RETURN_RAMP_TIME)
+	var ease_out: float = 1.0 - (1.0 - _return_ramp) * (1.0 - _return_ramp)
+	position += direction * speed * lerpf(APEX_SPEED_MIN, 1.0, ease_out) * delta
 	_update_trail(delta)
+
+
+## Gidiş bitti: en uzak noktaya varıldı YA DA bir düşmana çarpıldı. "Uç nokta" efsun kancaları (Kasırga durması, Çift
+## Bumerang bölünmesi, Yıldırım/Alev hattının ucu) burada. Çarpma anı fizik sinyalinin içinde olduğu için yeni mermi
+## doğuran kanca ertelenir (sinyal sırasında Area2D eklemek engellenir).
+func _begin_return() -> void:
+	if _returning:
+		return
+	_returning = true
+	_return_ramp = 0.0
+	_hit_this_leg.clear()
+	if _apex_done:
+		return
+	_apex_done = true
+	if apex_pause > 0.0:
+		_pause_left = apex_pause
+		_pause_clear = 0.33
+	if not get_meta("network_spawned", false) and is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_boomerang_apex"):
+		Callable(source_weapon, "enchant_on_boomerang_apex").call_deferred(self)
 
 
 ## Her kuyruk halkasını, ana gövdenin GÜNCEL konumuna doğru kendi hızında
@@ -247,6 +266,11 @@ func _update_trail(delta: float) -> void:
 			continue
 		var speed_factor: float = TRAIL_FOLLOW_SPEEDS[i] if i < TRAIL_FOLLOW_SPEEDS.size() else 10.0
 		t.global_position = t.global_position.lerp(global_position, clamp(speed_factor * delta, 0.0, 1.0))
+		## top_level olduğu için kökün ölçeğini (weapon.gd _fire_at: karakterin 0.5 kök ölçeği x efsun boyutu) MİRAS
+		## ALMAZ - eskiden hayaletler gövdenin ~2 katı büyük çiziliyordu (2026-09-26 "fırlatınca boyutu çok büyüyor"un bir
+		## parçası). Ölçek _ready'de değil burada: weapon.gd kökün ölçeğini add_child'dan SONRA ayarlıyor.
+		t.global_scale = Vector2.ONE * BODY_SCALE * GHOST_SCALE * absf(global_scale.x)
+		t.visible = i == 0
 		## Kuyruk halkaları da (SpinFx gibi) dönüşü KENDİ animasyon
 		## karelerinden alıyor - buraya ayrıca ana gövdenin rotation'ını
 		## yazmak aynı "çift dönüş" glitch'ine yol açıyordu, bu yüzden
@@ -290,13 +314,21 @@ func _spawn_catch_sparkle() -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	## Ağ üzerinden spawnlanan görsel kopyalar hasar vermez —
-	## sadece darbe efektini ve sesini oynatır.
+	if not is_instance_valid(body) or not body.is_in_group("enemies"):
+		return
+	## Dönüşte vurmaz (bkz. dosya başı 2026-09-26 notu) - sadece uç noktada dururken (Kasırga) keser.
+	var pausing: bool = _pause_left > 0.0
+	if _returning and not pausing:
+		return
+	## Ağ üzerinden spawnlanan görsel kopyalar hasar vermez — sadece darbe efektini/sesini oynatır ve gerçek bumerang gibi
+	## çarptığı yerden döner.
 	if get_meta("network_spawned", false):
 		_spawn_impact()
 		_play_impact_sound()
+		if not _returning:
+			_begin_return()
 		return
-	if not is_instance_valid(body) or not (body.is_in_group("enemies") and body.has_method("take_damage")):
+	if not body.has_method("take_damage"):
 		return
 	if _hit_this_leg.has(body):
 		return
@@ -308,6 +340,9 @@ func _on_body_entered(body: Node) -> void:
 		_shaman_burn_used = body.try_shaman_weapon_burn()
 	_spawn_impact()
 	_play_impact_sound()
+	## Birimlerin içinden geçmez: gidişte çarptığı ilk düşmandan geri döner.
+	if not _returning:
+		_begin_return()
 
 
 func _spawn_impact() -> void:

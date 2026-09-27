@@ -91,9 +91,8 @@ func test_party_panel_gift_buttons_and_dynamic_gold_button() -> void:
 	pp.set_script(script)
 	add_child(pp)
 	pp._ready()
-	## 2026-09-25 sadeleştirme ("grup paneli daha basit görünmeli ... gereksiz çerçeve ayrıntısı olmasın"): grup paneli ve
-	## açılır pencereleri artık ahşap doku DEĞİL, sade UIKit "hud_flat" butonları kullanır - genel ahşap taramasının
-	## (UISound.apply_wood_buttons) bunları ezmemesi gerekir.
+	## 2026-09-27 ("grup arayüzü diğer panellere benzemeli"): grup paneli ve açılır pencereleri HUD'un geri kalanı gibi
+	## küçük ahşap (kit dokulu) butonlar kullanır - eski sade "hud_flat" (StyleBoxFlat) butonlara geri dönülmemeli.
 	var cancel_btn: Button = null
 	var gift_popup: Control = pp.get_node("GiftPopup")
 	for vbox in gift_popup.get_children():
@@ -101,10 +100,10 @@ func test_party_panel_gift_buttons_and_dynamic_gold_button() -> void:
 			if child is Button and child.text == "İptal":
 				cancel_btn = child
 	assert(cancel_btn != null, "Iptal butonu bulunamadi")
-	assert(cancel_btn.get_theme_stylebox("normal") is StyleBoxFlat, "Iptal butonu sade (flat) stilde olmali")
+	assert(cancel_btn.get_theme_stylebox("normal") is StyleBoxTexture, "Iptal butonu ahsap (kit dokulu) stilde olmali")
 
 	var row: RefCounted = pp.call("_create_row", 12345)
 	var gold_btn: Button = row.gold_button
 	assert(gold_btn != null, "gold_button olusmamis")
-	assert(gold_btn.get_theme_stylebox("normal") is StyleBoxFlat, "gold_button sade (flat) stilde olmali")
+	assert(gold_btn.get_theme_stylebox("normal") is StyleBoxTexture, "gold_button ahsap (kit dokulu) stilde olmali")
 	pp.queue_free()

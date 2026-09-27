@@ -59,6 +59,10 @@ const MISSION_DESCRIPTIONS := {
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
 ## Gün-gece döngüsü + hava durumu (kullanıcı isteği 2026-09-25) - sis gibi kodla kuruluyor (aynı gerekçe).
 const AtmosphereScript := preload("res://scripts/atmosphere.gd")
+const GrassSwayScript := preload("res://scripts/grass_sway.gd")
+const TreeSwayScript := preload("res://scripts/tree_sway.gd")
+const SunCloudsScript := preload("res://scripts/sun_clouds.gd")
+const RiverAmbienceScript := preload("res://scripts/river_ambience.gd")
 
 ## Haritaya "gökyüzündeki bulutlar yer yer gölge düşürmüş" görünümü veren
 ## materyal. TEK bir paylaşılan kaynak (.tres) olarak tutuluyor - böylece
@@ -265,6 +269,27 @@ func _ready() -> void:
 	var atmosphere_layer: CanvasLayer = atmosphere.create_overlay_layer()
 	add_child(atmosphere_layer)
 	move_child(atmosphere_layer, vision_fog.get_index())
+	## Güneş ışığı + bulut gölgeleri (bkz. sun_clouds.gd): renk geçişinin HEMEN önüne (gece/yağmur rengi bulutlara da uygulansın).
+	var sun_clouds: CanvasLayer = SunCloudsScript.new()
+	sun_clouds.name = "SunClouds"
+	add_child(sun_clouds)
+	move_child(sun_clouds, atmosphere_layer.get_index())
+	## Güneş huzmesi: sisin HEMEN arkasına (HUD'dan önce) - gökyüzünden gelen ışık, sis onu karartmasın.
+	add_child(sun_clouds.light_layer)
+	move_child(sun_clouds.light_layer, vision_fog.get_index() + 1)
+
+	## Sallanan otlar (bkz. grass_sway.gd / scenes/sallanan ot.gdshader): karo kök tablosu, havaya göre salınım ve yukarı/aşağı
+	## önceliği (önünde kalan otlar oyuncunun üstüne çizilir).
+	var harita_node: Node = get_node_or_null("Harita")
+	if harita_node:
+		## Nehir akıntısı sesi (bkz. river_ambience.gd) - yerel oyuncuya en yakın su noktasında.
+		var river := RiverAmbienceScript.new()
+		river.name = "RiverAmbience"
+		river.setup(harita_node)
+		add_child(river)
+		GrassSwayScript.new().setup(harita_node)
+		## Sallanan ağaçlar ("Ağaç 0/1/2", bkz. tree_sway.gd / scenes/sallanan ağaç.gdshader).
+		TreeSwayScript.new().setup(harita_node)
 
 	# Add loopable breezy cozy forest ambient sound
 	var ambient: Node = preload("res://scripts/wind_breeze_ambient.gd").new()
@@ -362,6 +387,7 @@ func _process(delta: float) -> void:
 		_process_multiplayer_sync(delta)
 	if not _remote_players.is_empty():
 		_update_character_draw_order()
+	_update_creature_draw_order()
 	## #54: izleyici kamerasının seçili müttefiği takip etmesi - player node'u
 	## bu noktada zaten queue_free() edilmiş/geçersiz olabilir (bkz. player.gd
 	## die()), bu yüzden yukarıdaki "is_instance_valid(player)" şartından
@@ -429,6 +455,118 @@ func _update_character_draw_order() -> void:
 		var prev_idx: int = chars[i - 1].get_index()
 		if chars[i].get_index() < prev_idx:
 			move_child(chars[i], prev_idx)
+
+
+## DÜZELTME (kullanıcı bildirimi 2026-09-26: "bütün yaratıkların y ekseni bozuk alttakilere üsttekilerin ayakları üstte
+## görünüyor"): yaratıklar (enemy_spawner.gd _spawn_creature -> Main'e add_child), evcil hayvanlar ve görev kopyaları
+## Main'in doğrudan çocukları ve aynı z katmanında (0); aralarındaki çizim sırası sadece SAHNEYE EKLENME sırasıydı - sonradan
+## doğan, daha yukarıdaki yaratık aşağıdakinin üstüne çiziliyordu. Oyuncularla (_update_character_draw_order) aynı yöntem:
+## Main'e y_sort vermeden sadece bu düğümler kendi aralarında yeniden diziliyor, move_child yalnız sıra bozuksa.
+## Anahtar düğümün kök noktası DEĞİL AYAK hizası: kök gövde ortasında ve yaratık boyları çok farklı (boss, sıçan, golem) -
+## merkeze göre sıralanınca büyük bir yaratığın ayağının hemen üstündeki küçük yaratık yine onun üstüne çiziliyordu.
+## Ayak = sprite karesindeki en alt dolu piksel satırı (gölgeli sayfalarda gölgenin altı), doku başına bir kez ölçülür.
+const CREATURE_SORT_GROUPS: Array[String] = ["enemies", "player_ally", "player_allies"]
+static var _foot_row_cache: Dictionary = {} ## "doku yolu|hframes|vframes" -> kare üstünden ayak satırına px (kare boyu ile)
+
+
+func _update_creature_draw_order() -> void:
+	## İki karede bir yeter (yan yana yürüyen yaratıklar bir karede sıra değiştirmez); ~200 yaratıkta maliyeti yarıya indirir.
+	if Engine.get_process_frames() % 2 != 0:
+		return
+	var nodes: Array[Node2D] = []
+	var keys: Array = [] ## Vector2(ayak_y, nodes indeksi) - Array.sort() yerleşik karşılaştırmayla (lambda yok) sıralar
+	var seen: Dictionary = {} ## iki gruptaki bir düğüm iki kez sayılmasın
+	for group_name in CREATURE_SORT_GROUPS:
+		for n in get_tree().get_nodes_in_group(group_name):
+			var n2 := n as Node2D
+			if n2 == null or n2.get_parent() != self or seen.has(n2):
+				continue
+			seen[n2] = true
+			keys.append(Vector2(_creature_foot_y(n2), nodes.size()))
+			nodes.append(n2)
+	if nodes.size() < 2:
+		return
+	keys.sort()
+	## _update_character_draw_order ile aynı: her düğüm, kendinden bir önceki (daha yukarıdaki) düğümün ağaçta ARKASINDA
+	## olmalı; öndeyse hemen arkasına taşınır, önceki çiftlerin göreli sırası bozulmaz.
+	var prev: Node2D = nodes[int(keys[0].y)]
+	for i in range(1, keys.size()):
+		var cur: Node2D = nodes[int(keys[i].y)]
+		var prev_idx: int = prev.get_index()
+		if cur.get_index() < prev_idx:
+			move_child(cur, prev_idx)
+		prev = cur
+
+
+## Yaratığın ayaklarının dünya y'si. Görsel (Sprite2D / AnimatedSprite2D) bulunamazsa kök noktası.
+func _creature_foot_y(n: Node2D) -> float:
+	## Serbest bırakılmış bir referans tipli değişkene atanırsa hata verir (bkz. GDScript freed == null notu) - önce kontrol.
+	## get_meta(ad, null) varsayılanı "yok" sayılıp hata basıyor - has_meta ile.
+	var vis_v: Variant = n.get_meta("_foot_visual") if n.has_meta("_foot_visual") else null
+	var vis: Node2D = vis_v if is_instance_valid(vis_v) else null
+	if vis == null:
+		vis = _find_creature_visual(n)
+		if vis == null:
+			return n.global_position.y
+		n.set_meta("_foot_visual", vis)
+		n.set_meta("_foot_local", _visual_foot_local(vis))
+	var local: float = n.get_meta("_foot_local")
+	return vis.global_position.y + local * absf(vis.global_scale.y)
+
+
+func _find_creature_visual(n: Node) -> Node2D:
+	for child_name in ["Sprite2D", "AnimatedSprite2D"]:
+		var c: Node = n.get_node_or_null(child_name)
+		if c is Sprite2D or c is AnimatedSprite2D:
+			return c as Node2D
+	for c in n.get_children():
+		if c is Sprite2D or c is AnimatedSprite2D:
+			return c as Node2D
+	return null
+
+
+## Görselin kendi yerel koordinatında ayak satırının y'si (ölçekten önce). Ölçülemezse karenin alt kenarı.
+func _visual_foot_local(vis: Node2D) -> float:
+	var tex: Texture2D = null
+	var frame_size := Vector2.ZERO
+	var key := ""
+	var centered := true
+	var offset := Vector2.ZERO
+	if vis is Sprite2D:
+		var s := vis as Sprite2D
+		tex = s.texture
+		centered = s.centered
+		offset = s.offset
+		if tex:
+			frame_size = tex.get_size() / Vector2(maxi(s.hframes, 1), maxi(s.vframes, 1))
+			key = "%s|%d|%d" % [tex.resource_path, s.hframes, s.vframes]
+	elif vis is AnimatedSprite2D:
+		var a := vis as AnimatedSprite2D
+		centered = a.centered
+		offset = a.offset
+		if a.sprite_frames and a.sprite_frames.has_animation(a.animation) and a.sprite_frames.get_frame_count(a.animation) > 0:
+			tex = a.sprite_frames.get_frame_texture(a.animation, 0)
+			if tex:
+				frame_size = tex.get_size()
+				var atlas_region: Rect2 = (tex as AtlasTexture).region if tex is AtlasTexture else Rect2()
+				key = "%s|%s" % [tex.resource_path if tex.resource_path != "" else str(tex.get_rid()), atlas_region]
+	if tex == null or frame_size.y <= 0.0:
+		return offset.y
+	var foot_row: float = frame_size.y
+	if key != "" and _foot_row_cache.has(key):
+		foot_row = _foot_row_cache[key]
+	else:
+		var img: Image = tex.get_image()
+		if img:
+			if img.is_compressed():
+				img.decompress()
+			var fr := Rect2i(Vector2i.ZERO, Vector2i(frame_size)).intersection(Rect2i(Vector2i.ZERO, img.get_size()))
+			var used: Rect2i = img.get_region(fr).get_used_rect()
+			if used.size.y > 0:
+				foot_row = float(used.end.y)
+		if key != "":
+			_foot_row_cache[key] = foot_row
+	return offset.y + foot_row - (frame_size.y * 0.5 if centered else 0.0)
 
 
 func _process_multiplayer_sync(delta: float) -> void:
@@ -1125,8 +1263,9 @@ func _refresh_mini_shop_revive_prompt() -> void:
 	_mini_shop_revive_prompt.layer = 93 ## dükkanın (HUD katmanı) üstünde.
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	panel.offset_top = -140.0
-	panel.offset_bottom = -70.0
+	## 2026-09-27: alttaki oyuncu panelinin (hud.gd dock) üstünde.
+	panel.offset_top = -300.0
+	panel.offset_bottom = -230.0
 	panel.offset_left = -220.0
 	panel.offset_right = 220.0
 	## 2026-09-24: oyun içi bej kit penceresi (menülerle aynı dil).

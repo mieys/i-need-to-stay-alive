@@ -73,6 +73,12 @@ func _ready() -> void:
 	_apply_kit_style()
 	_apply_text_colors()
 	_setup_stat_tooltips()
+	## Kullanıcı isteği (2026-09-26): geri tepme artık bir stat değil (kartlardan/eşyalardan kaldırıldı, ileride efsun
+	## özelliği olacak) - istatistik ızgarasındaki satırı gizlenir (düğümler sahnede duruyor).
+	for n in ["KnockbackIcon", "KnockbackLabel", "KnockbackValue"]:
+		var row_node: Control = get_node_or_null("Frame/Margin/VBox/GridScroll/Grid/" + n) as Control
+		if row_node:
+			row_node.visible = false
 	pivot_offset = size * 0.5
 	_refresh()
 

@@ -426,6 +426,9 @@ const DEFS := {
 		"skill2_name": "Saatli Bomba",
 		"skill2_desc": "TEMEL: Bulunduğu konuma saatli bomba bırakır (3 yük, yük başına 14sn yenilenir). Patladığında 32 + saldırı gücünün %220'si kadar hasar verir.",
 		"skill2_icon": "res://assets/skills/korsan_saatli_bomba_icon.png",
+		## Kullanıcı isteği (2026-09-26): "korsanın e yeteneği de 1 levelde açık olsun 5 level yerine" - Büyücü Kız'daki
+		## AYNI istisna (bkz. skill_unlock_level). Q (Patlat) bombasız işe yaramadığı için E baştan açık.
+		"skill2_unlock_level": 1,
 		## Kullanıcı isteği: Korsan'ın yeni 3. yeteneği (Bombardıman, skill3 id
 		## 34, R tuşu) - "etrafındaki büyük bir alana 8 saniye boyunca
 		## bombardımana alır, her saniye %150 saldırı gücü kadar hasar verir."
@@ -433,14 +436,16 @@ const DEFS := {
 		## tikler player.gd _process_korsan_bombardment'ta.
 		"skill3": 34,
 		"skill3_name": "Bombardıman",
-		"skill3_desc": "ULTİ: Etrafındaki büyük bir alanı 8 saniye boyunca bombardımana tutar, her saniye saldırı gücünün %110'u kadar hasar verir. (40sn bekleme)",
+		"skill3_desc": "ULTİ: Etrafındaki büyük bir alanı 8 saniye boyunca bombardımana tutar, her saniye saldırı gücünün %110'u kadar hasar verir. (90sn bekleme)",
 		## DÜZELTME (kullanıcı bildirimi 2026-09-22: "Korsanın ultisinin skill ikonu yok") - skill3_icon hiç
 		## eklenmemişti, HUD'da R slotu boş/placeholder kalıyordu (bkz. hud.gd "def.has(\"skill3_icon\")" kontrolü).
 		## Kullanıcı isteği (2026-09-24): Korsan'ın 4 ikonu (Q/E/R/pasif) 48x48 piksel sanat kare ikon olarak yeniden
 		## çizildi - bkz. tools/gen_elara_korsan_icons.py (eski halka-rozet üreticisi gen_korsan_bombardment_icon.py silindi).
 		"skill3_icon": "res://assets/skills/korsan_bombardiman_icon.png",
-		"passive": "Her öldürmede %10 ihtimalle 1 altın kazanırsın. Bu şans her level için +%1 artar (en fazla %100).",
-		"passive_icon": "res://assets/skills/korsan_passive_icon.png",
+		## Kullanıcı isteği (2026-09-26): eski pasif (öldürmede %10+ şansla 1 altın) -> Papağan (bkz. scripts/korsan_parrot.gd,
+		## ikon/sprite tools/gen_korsan_parrot.py).
+		"passive": "Papağan: Omzundaki papağan yakındaki altınları uçarak toplayıp sana getirir (aynı anda en fazla 3 altın, ayağının altında taşır). Her getirişte +1 bonus altın kazanırsın. Papağan senin hareket hızının 1,2 katı hızla uçar.",
+		"passive_icon": "res://assets/skills/korsan_papagan_icon.png",
 		"frames": "res://assets/characters/korsan_frames.tres",
 		"portrait": "res://assets/characters/korsan_portrait.png",
 		## Kullanıcı isteği (2026-09-22, new characters.zip): yeni 48x48 sprite sayfaları (idle/walk/run/eat/hurt/read/shrug/downed/death + kullanılmayan
@@ -699,7 +704,7 @@ const DEFS := {
 		## Kullanıcı isteği (2026-09-25, ikinci tur): "hadimenin E sini kara delik yeteneğiyle değiştiriyoruz" - eski Kara Büyü
 		## tamamen kaldırıldı, id 47 aynı kaldı (bkz. player.gd _skill_hadime_black_hole, scripts/hadime_black_hole.gd).
 		"skill2_name": "Kara Delik",
-		"skill2_desc": "TEMEL: Bulunduğu konuma 5 saniye süren bir kara delik bırakır. Kara delik yakınındaki yaratıkları hafifçe içine doğru çeker, her saniye saldırı gücünün %80'i kadar hasar verir ve verdiği hasarın %20'si kadar kalkanlarını emerek Hadime'nin kalkanını yeniler (bosslar çekilmez). Lanet Kitabı basılıyken de kullanılabilir. (18sn bekleme)",
+		"skill2_desc": "TEMEL: Bulunduğu konuma 6 saniye süren bir kara delik bırakır. Kara delik yakınındaki yaratıkları hafifçe içine doğru çeker, her saniye saldırı gücünün %80'i kadar hasar verir ve verdiği hasarın %20'si kadar kalkanlarını emerek Hadime'nin kalkanını yeniler (bosslar çekilmez). Lanet Kitabı basılıyken de kullanılabilir. (18sn bekleme)",
 		"skill2_icon": "res://assets/skills/hadime_kara_delik_icon.png",
 		"skill3": 48,
 		"skill3_name": "Karabasan",

@@ -872,6 +872,10 @@ func _on_tab_selected(category: String) -> void:
 
 
 func _process(_delta: float) -> void:
+	## PERF (2026-09-27 FPS analizi): fiyat etiketleri dükkan KAPALIYKEN de her karede yeniden hesaplanıyordu (~0.3 ms/kare,
+	## ölçüldü) - görünmüyorken hiçbir şey yapma; açılınca ilk karede güncellenir.
+	if not is_visible_in_tree():
+		return
 	## NOT: Eskiden burada maden/altın toplayıcının dolum barları
 	## (mine_fill_bar/gold_collector_fill_bar) güncelleniyordu - ikisi de
 	## kullanıcı isteğiyle kaldırıldı (bkz. yukarıdaki aynı not).

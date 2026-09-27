@@ -653,7 +653,7 @@ func on_beam_tick(target: Node, dmg: float) -> void:
 	on_hit(target, dmg, true, null)
 
 
-## Uzunkılıç: kılıç her çeyrek turda (~1 sn, weapon.gd ENCHANT_SWING_ARC) (weapon.gd _process_uzunkilic_orbit) - "savuruş" sayacı.
+## Uzunkılıç: her savuruşun temas anında (weapon.gd _sword_contact) - "her N savuruşta" sayacı. (Ad eski dönen kılıçtan kaldı.)
 func on_revolution(pos: Vector2) -> void:
 	attacks += 1
 	revolution_extra(pos)

@@ -1,7 +1,7 @@
 extends Node2D
 
 ## Suriyeli Hadime E - Kara Delik (kullanıcı isteği 2026-09-25: "bulunduğu konuma kara delik bırakıp yaratıkları hafifçe
-## içine doğru çekip kalkanlarını emerek verdiği hasarın %20'si kadar Hadime'ye kalkan yenilesin, 5 saniye sürecek, her
+## içine doğru çekip kalkanlarını emerek verdiği hasarın %20'si kadar Hadime'ye kalkan yenilesin, 5 saniye sürecek (2026-09-26: 6 sn, bkz. HadimeMath.HOLE_DURATION), her
 ## saniye %80 saldırı gücü hasar, 18 sn bekleme, kalkan çekme efektine gerek yok").
 ##
 ## Dünya konumunda sabit (HadimeMath.spawn_black_hole). Görsel tamamen sprite sayfası (tools/gen_hadime_fx.py black_hole:

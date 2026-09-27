@@ -87,24 +87,43 @@ func _process(delta: float) -> void:
 				break
 
 
+## PİKSEL HALE (kullanıcı bildirimi 2026-09-27: "parıltıların pixel parıltı olması gerekiyor"): eskiden yumuşak bir
+## GradientTexture2D idi. Artık 1 doku pikseli = 1 sanat pikseli (TEXEL), güç DAY_GLOW_STEP'lik düz bantlara bölünür,
+## bant sınırları 4x4 Bayer dither'lı - gece ışığıyla aynı dil (atmosphere_grade.gdshader pixel_light).
+const DAY_GLOW_STEP := 0.2
+const DAY_GLOW_DITHER := 0.4
+const BAYER4: Array[int] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
+static var _day_glow_tex: ImageTexture = null
+
+
+static func _make_day_glow_texture() -> ImageTexture:
+	if _day_glow_tex != null:
+		return _day_glow_tex
+	var r_tex: int = int(round(DAY_GLOW_RADIUS / TEXEL))
+	var size: int = r_tex * 2
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	for y in range(size):
+		for x in range(size):
+			var d: float = Vector2(float(x) + 0.5 - r_tex, float(y) + 0.5 - r_tex).length() / float(r_tex)
+			## Eski gradyanla aynı profil: merkez 1, d=0.35'te 0.45, kenarda 0.
+			var a: float = lerpf(1.0, 0.45, d / 0.35) if d < 0.35 else lerpf(0.45, 0.0, clampf((d - 0.35) / 0.65, 0.0, 1.0))
+			var v: float = a / DAY_GLOW_STEP
+			var t: float = clampf((fposmod(v, 1.0) - 0.5) / DAY_GLOW_DITHER + 0.5, 0.0, 1.0)
+			var threshold: float = (float(BAYER4[(y % 4) * 4 + (x % 4)]) + 0.5) / 16.0
+			var q: float = (floorf(v) + (1.0 if t > threshold else 0.0)) * DAY_GLOW_STEP
+			img.set_pixel(x, y, Color(DAY_GLOW_COLOR, clampf(q, 0.0, 1.0)))
+	_day_glow_tex = ImageTexture.create_from_image(img)
+	return _day_glow_tex
+
+
 func _make_day_glow() -> Sprite2D:
-	var grad := Gradient.new()
-	grad.set_color(0, Color(DAY_GLOW_COLOR, 1.0))
-	grad.set_color(1, Color(DAY_GLOW_COLOR, 0.0))
-	grad.add_point(0.35, Color(DAY_GLOW_COLOR, 0.45))
-	var tex := GradientTexture2D.new()
-	tex.gradient = grad
-	tex.fill = GradientTexture2D.FILL_RADIAL
-	tex.fill_from = Vector2(0.5, 0.5)
-	tex.fill_to = Vector2(1.0, 0.5)
-	tex.width = 64
-	tex.height = 64
 	var sp := Sprite2D.new()
-	sp.texture = tex
+	sp.texture = _make_day_glow_texture()
+	sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	sp.material = mat
-	sp.scale = Vector2.ONE * (DAY_GLOW_RADIUS * 2.0 / 64.0)
+	sp.scale = Vector2.ONE * TEXEL
 	sp.position = Vector2(0.0, -10.0) ## gece ışığının ofsetiyle aynı (katalog "o")
 	return sp
 

@@ -42,6 +42,16 @@ func _process(_delta: float) -> void:
 		_regen_left = left
 		queue_redraw()
 
+## Oyuncu paneli (hud.gd dock) kalpleri küçük bir sekmeye koyar - yenilenme sayacı kalplerin ALTINA değil yanına gelsin.
+func set_regen_label_position(p: Vector2) -> void:
+	if _regen_label:
+		_regen_label.position = p
+
+
+func is_regen_visible() -> bool:
+	return _regen_label != null and _regen_label.visible
+
+
 func set_revives(count: int) -> void:
 	revives_remaining = clamp(count, 0, MAX_REVIVES)
 	queue_redraw()

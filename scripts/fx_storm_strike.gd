@@ -41,6 +41,8 @@ var _bolt: AnimatedSprite2D = null
 var _impact: AnimatedSprite2D = null
 var _scorch: Sprite2D = null
 var _charge_player: AudioStreamPlayer2D = null
+## Gök gürültüsü (2026-09-26 yeni ses ~6 sn) - düğüm, ses bitmeden silinip kuyruğu kesmesin diye tutulur.
+var _strike_player: AudioStreamPlayer2D = null
 
 
 func _ready() -> void:
@@ -92,7 +94,7 @@ func _process(delta: float) -> void:
 	var since: float = _t - warn_time
 	if _scorch != null:
 		_scorch.modulate.a = clampf(1.0 - (since - 0.4) / SCORCH_TIME, 0.0, 1.0)
-	if since >= SCORCH_TIME + 0.5:
+	if since >= SCORCH_TIME + 0.5 and not (is_instance_valid(_strike_player) and _strike_player.playing):
 		queue_free()
 
 
@@ -113,7 +115,7 @@ func _strike() -> void:
 	_impact.play("burst")
 	_impact.animation_finished.connect(_impact.queue_free)
 	if play_sounds:
-		_sound(STRIKE_SOUNDS[randi() % STRIKE_SOUNDS.size()], -3.0, 3000.0, 0.7) ## 2026-09-25: -5 dB
+		_strike_player = _sound(STRIKE_SOUNDS[randi() % STRIKE_SOUNDS.size()], -3.0, 3000.0, 0.7) ## 2026-09-25: -5 dB
 	if on_strike.is_valid():
 		on_strike.call(global_position)
 

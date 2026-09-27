@@ -11,6 +11,11 @@ HICBIR SEKILDE dokunulmadi - bu script SADECE $XPPickupSound'un ham stream'ini d
 pitch_scale zaten Godot tarafinda calisma anda uygulaniyor. Taban perde (880 Hz), 1.5x
 streak tavaninda bile (1320 Hz) tiz/rahatsiz edici olmayacak sekilde secildi.
 
+GERI ALINDI (kullanici istegi 2026-09-26: "orblarin sesini ... eski haline cevirir misin yeni sese alisamadik"):
+scenes/player.tscn $XPPickupSound tekrar eski assets/audio/xp_pickup.mp3'u kullaniyor (git 80f2b92'den geri
+getirildi). Bu script ve urettigi xp_pickup.wav sadece istenirse geri donmek icin duruyor - hicbir yerden
+referans verilmiyor.
+
 Calistir: python tools/gen_xp_pickup_sound.py
 Sonra Godot'u --headless --import ile calistirip .wav.import dosyasini olustur.
 """

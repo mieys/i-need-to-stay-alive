@@ -15,10 +15,15 @@ Kullanici istegi (2026-09-24):
 
 Cikti:
   assets/fx/trails/trail_sheet.png + trail_frames.tres            ("launch" tek sefer, "fly" dongu)
-  assets/fx/sword_arc/arc_sheet.png + arc_frames.tres             ("loop" dongu)
+  assets/fx/sword_arc/arc_sheet.png + arc_frames.tres             ("loop" dongu - eski donen kilic; artik kullanilmiyor)
+  assets/fx/sword_sweep/sweep_sheet.png + sweep_frames.tres       ("play" tek sefer - bkz. gen_sword_sweep)
+  assets/fx/sword_hit/hit_sheet.png + hit_frames.tres             ("play" tek sefer - Uzunkilic isabeti, gen_sword_hit)
+
+Sadece kilic savurusu + isabeti: python tools/gen_weapon_fx_sprites.py sweep
   assets/weapons/boomerang/art48.png                              (48x48 kaynak cizim)
   assets/weapons/boomerang/icon.png                               (200x200 - art48 x4, ortali)
-  assets/weapons/boomerang/rot_sheet.png                          (12 x 48x48 onceden dondurulmus)
+  assets/weapons/boomerang/rot_sheet.png                          (12 x 48x48 onceden dondurulmus - artik kullanilmiyor)
+  assets/weapons/boomerang/rot24_sheet.png + rot24_frames.tres    (24 x 48x48, 15 derece - gen_boomerang_rot24)
   assets/fx/boomerang/whoosh_sheet.png + whoosh_frames.tres       ("loop")
   assets/fx/boomerang/catch_sheet.png + catch_frames.tres         ("play" tek sefer)
 """
@@ -142,6 +147,117 @@ def gen_sword_arc():
     cell = save_sheet(frames, os.path.join(out, "arc_sheet.png"))
     write_sprite_frames(os.path.join(out, "arc_frames.tres"), res(os.path.join(out, "arc_sheet.png")), cell[0], cell[1],
                         [("loop", (0, 0), 4, True, 16.0)])
+
+
+def gen_sword_sweep():
+    """Kullanici istegi (2026-09-26): "kilicin calisma bicimini degistiriyoruz artik etrafimizda donmesi yerine
+    hedefledigi dusmana dogru savurulsun ... savurusunu daha guzel yap". Uzunkilic artik hedefe atilip onun uzerinden
+    genis bir yay cizerek suprur (bkz. scripts/sword_swing_math.gd). Bu, bicagin UCUNUN izledigi yay boyunca kalan hilal:
+    merkez (el/pivot) karenin ortasinda, yay -75..+75 derece (+x = hedef yonu, y asagi = saat yonu). Ilk 4 kare bicakla
+    birlikte buyur (bas parlak ve kalin, kuyruk ince ve dither'li saydam), son 4 karede kuyruktan basa dogru erir.
+    Palet eski donen kilic iziyle (gen_sword_arc) ayni celik beyaz-mavi. Ters yone savurusta sprite dikeyde aynalanir."""
+    out = os.path.join(ROOT, "assets", "fx", "sword_sweep")
+    R = 32
+    S = R * 2 + 8
+    c = S / 2.0
+    a_s, a_e = math.radians(-75), math.radians(75)
+    T_MAX = 7.0
+    grow = [(0.0, 0.30), (0.0, 0.58), (0.06, 0.82), (0.18, 1.0)]
+    fade = [(0.36, 1.0, 0.9), (0.58, 1.0, 0.7), (0.76, 1.0, 0.45), (0.9, 1.0, 0.25)]
+    plan = [(t, h, 1.0) for t, h in grow] + fade
+    frames = []
+    for fi, (tail, head, fa) in enumerate(plan):
+        im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+        for y in range(S):
+            for x in range(S):
+                dx, dy = x + 0.5 - c, y + 0.5 - c
+                r = math.hypot(dx, dy)
+                if r > R + 0.5 or r < R - T_MAX - 1:
+                    continue
+                u = (math.atan2(dy, dx) - a_s) / (a_e - a_s)
+                if u < tail or u > head or head - tail < 1e-3:
+                    continue
+                v = (u - tail) / (head - tail)  # 0 kuyruk .. 1 bas
+                thick = T_MAX * (v ** 0.9)
+                if v > 0.86:
+                    thick *= 1.0 - (v - 0.86) / 0.14 * 0.55  # bas ucu sivrilir
+                if fi >= 4:
+                    thick *= 0.55 + 0.45 * fa  # erirken incelir
+                d = R - r  # 0 = dis kenar
+                if d < -0.5 or d > thick:
+                    continue
+                if v < 0.22:
+                    if (x + y) % 2:
+                        continue
+                    al = 0.35
+                elif v < 0.5:
+                    al = 0.62
+                else:
+                    al = 0.95
+                if d < 1.0:
+                    col = (1.0, 1.0, 1.0)
+                elif d < thick * 0.6:
+                    col = (0.82, 0.92, 1.0)
+                else:
+                    col = (0.56, 0.74, 1.0)
+                    al *= 0.85
+                put(im, x, y, rgba(*col, al * fa))
+        # kivilcimlar: bicak basinin hemen disinda, karelere gore kayan 2-3 piksel
+        if 1 <= fi <= 5:
+            for k in range(3):
+                uu = min(head, 1.0) - 0.05 - k * 0.11 - (fi % 2) * 0.03
+                if uu < tail:
+                    continue
+                a = a_s + (a_e - a_s) * uu
+                rr = R + 2 + (k % 2) * 2
+                put(im, c - 0.5 + math.cos(a) * rr, c - 0.5 + math.sin(a) * rr, rgba(1, 1, 1, (0.9 - k * 0.25) * fa))
+        frames.append(im)
+    cell = save_sheet(frames, os.path.join(out, "sweep_sheet.png"))
+    write_sprite_frames(os.path.join(out, "sweep_frames.tres"), res(os.path.join(out, "sweep_sheet.png")), cell[0], cell[1],
+                        [("play", (0, 0), 8, False, 26.0)])
+
+
+def gen_sword_hit():
+    """Uzunkilic isabet efekti (2026-09-26): savrulan kilicin celik mavisi hilaliyle uyumlu kucuk bir "kesik" parlamasi.
+    Eski kirmizi "Isabet 2" cizgileri (fx_hit_slash_streak) yeni hilalle catisiyordu. +x = saldiri yonu (weapon.gd
+    _spawn_melee_hit_fx rotation = direction.angle()); kesik cizgisi buna DIK (dikey), yani bicagin supurme yonunde.
+    Kivilcimlar ileriye (hedefin arkasina) ve biraz geriye sacilir; 6 kare, tek sefer."""
+    out = os.path.join(ROOT, "assets", "fx", "sword_hit")
+    S = 30
+    c = S // 2
+    WHITE = (1.0, 1.0, 1.0)
+    PALE = (0.82, 0.92, 1.0)
+    BLUE = (0.56, 0.74, 1.0)
+    # (cizgi yari boyu, kalinlik, alfa, bosluklu mu), kivilcim mesafesi, kivilcim alfasi
+    plan = [(5, 1, 1.0, False, 0, 0.0), (10, 2, 1.0, False, 3, 1.0), (12, 2, 0.9, False, 6, 0.95),
+            (12, 1, 0.65, True, 9, 0.75), (9, 1, 0.38, True, 11, 0.45), (5, 1, 0.18, True, 12, 0.2)]
+    shards = [math.radians(a) for a in (18, -24, 52, -58, 165, 195)]
+    frames = []
+    for half, thick, al, gappy, sd, sal in plan:
+        im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+        for dy in range(-half, half + 1):
+            if gappy and dy % 3 == 1:
+                continue
+            taper = 1.0 - abs(dy) / (half + 1.0)
+            y = c + dy
+            put(im, c, y, rgba(*WHITE, al * (0.55 + 0.45 * taper)))
+            if thick >= 2 and abs(dy) < half - 1:
+                put(im, c + 1, y, rgba(*PALE, al * 0.9))
+                put(im, c - 1, y, rgba(*BLUE, al * 0.6))
+        if half >= 10 and not gappy:
+            for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+                put(im, c + dx, c + dy, rgba(*WHITE, al))
+        if sd > 0:
+            for k, a in enumerate(shards):
+                d = sd * (0.75 if k >= 4 else 1.0)
+                x, y = c + math.cos(a) * d, c + math.sin(a) * d
+                put(im, x, y, rgba(*(WHITE if k % 2 == 0 else PALE), sal))
+                if sd <= 6:
+                    put(im, x - math.cos(a), y - math.sin(a), rgba(*BLUE, sal * 0.6))
+        frames.append(im)
+    cell = save_sheet(frames, os.path.join(out, "hit_sheet.png"))
+    write_sprite_frames(os.path.join(out, "hit_frames.tres"), res(os.path.join(out, "hit_sheet.png")), cell[0], cell[1],
+                        [("play", (0, 0), 6, False, 24.0)])
 
 
 # ------------------------------------------------------------------------------------------------ bumerang
@@ -306,7 +422,28 @@ def gen_boomerang():
                         [("play", (0, 0), 6, False, 24.0)])
 
 
+def gen_boomerang_rot24():
+    """Kullanici bildirimi (2026-09-26): "boomerangin gidip gelme animasyonu cok goz yoruyor". 12 karelik (30 derece)
+    donus sayfasi hizli donuste titriyordu - AYNI 48x48 cizimin 24 karelik (15 derece) RotSprite sayfasi. Mevcut
+    rot_sheet.png/rot_frames.tres'e dokunmaz (ayri dosya); boomerang_projectile.gd bunu kullanir."""
+    wdir = os.path.join(ROOT, "assets", "weapons", "boomerang")
+    art = boomerang_art()
+    rots = [rotsprite(art, k * 15) for k in range(24)]
+    cell = save_sheet(rots, os.path.join(wdir, "rot24_sheet.png"))
+    write_sprite_frames(os.path.join(wdir, "rot24_frames.tres"), res(os.path.join(wdir, "rot24_sheet.png")), cell[0], cell[1],
+                        [("spin", (0, 0), 24, True, 0.0)])
+
+
 if __name__ == "__main__":
-    gen_trails()
-    gen_sword_arc()
-    gen_boomerang()
+    if len(sys.argv) > 1 and sys.argv[1] == "sweep":
+        gen_sword_sweep()
+        gen_sword_hit()
+    elif len(sys.argv) > 1 and sys.argv[1] == "rot24":
+        gen_boomerang_rot24()
+    else:
+        gen_trails()
+        gen_sword_arc()
+        gen_sword_sweep()
+        gen_sword_hit()
+        gen_boomerang()
+        gen_boomerang_rot24()

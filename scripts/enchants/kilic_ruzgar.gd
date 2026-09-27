@@ -1,7 +1,7 @@
 extends "res://scripts/enchant_behavior.gd"
 
 ## Rüzgâr Kılıcı (EnchantDefs "kilic_ruzgar"): vuruş sıklığı (orbit_cd_mult) / alan temel sınıfta. Her N savuruşta
-## (on_revolution - çeyrek tur, ~1 sn) sahibinin çevresinde kasırga savuruşu (V: içeri çeker). Final (Deri Çizme) Kılıç Ustası: hareket
+## (on_revolution - weapon.gd _sword_contact) sahibinin çevresinde kasırga savuruşu (V: içeri çeker). Final (Deri Çizme) Kılıç Ustası: hareket
 ## halindeyken kılıç iki kat vurur; sıyrılınca (player.gd -> on_dodge) 3 sn boyunca yarım saniyede bir kasırga.
 
 const WHIRL_RADIUS := 120.0

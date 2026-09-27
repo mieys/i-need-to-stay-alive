@@ -110,11 +110,12 @@ const DEFS := {
 	},
 	"kitelama_seti": {
 		"name": "Kitelama Seti",
-		"desc": "%1 hareket hızı, +40 itme gücü.\nPasif: Bir rakibe hasar vermek onun hareket hızını 5 saniyeliğine %10 azaltır (hasar vermek bu etkiyi baştan başlatır). Her ek Kitelama Seti kopyası hem itme gücünü hem de yavaşlatma oranını artırır.",
+		## Kullanıcı isteği (2026-09-26): "geri tepmeyle ilgili ekstraların geri tepmesini de kaldırıyoruz" - +40 itme gücü
+		## (knockback_stat) silindi; geri tepme artık stat değil, ileride efsun özelliği olacak.
+		"desc": "%1 hareket hızı.\nPasif: Bir rakibe hasar vermek onun hareket hızını 5 saniyeliğine %10 azaltır (hasar vermek bu etkiyi baştan başlatır). Her ek Kitelama Seti kopyası yavaşlatma oranını artırır.",
 		"cost_base": 55,
 		"stats": {
 			"item_speed_percent": 0.01,
-			"knockback_stat": 40.0,
 			"item_enemy_slow_percent": 0.10,
 		},
 	},

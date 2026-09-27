@@ -5,6 +5,7 @@ extends CanvasLayer
 ##  1) ışık kaynaklarını (her oyuncunun etrafı + "night_glow" grubundaki yetenek/mermi/namlu/görev ışıkları, bkz.
 ##     night_glow.gd) ekranın 1/4 çözünürlüğündeki bir SubViewport'a yumuşak, renkleri toplanan lekeler olarak çizer
 ##     (vision_fog.gd'nin maske SubViewport'uyla AYNI dünya->ekran dönüşümü),
+##     (ekran geçişi bu yumuşak haritayı dünya piksel ızgarasına oturtup basamaklı + dither'lı piksel ışığa çevirir),
 ##  2) tüm ekranı kaplayan ColorRect ile sahneye renk ayarı + ışıkları uygular.
 ## main.gd bu katmanı VisionFog'un hemen ÖNCESİNE taşır (aynı layer=1'deki CanvasLayer'ların çizim sırasını ağaç
 ## sırası belirliyor, bkz. main.gd'deki sis notu): dünya -> BU geçiş -> sis -> HUD. HUD etkilenmez.
@@ -180,13 +181,22 @@ func _process(_delta: float) -> void:
 	var size: Vector2 = vp.get_visible_rect().size
 	if size.x <= 0.0 or size.y <= 0.0:
 		return
+	## Piksel ışık (atmosphere_grade.gdshader pixel_light): ızgara dünyaya yapışık kalsın diye şu anki kamera HER karede.
+	var xf: Transform2D = vp.get_canvas_transform()
+	_material.set_shader_parameter("view_origin", xf.origin)
+	_material.set_shader_parameter("view_zoom", absf(xf.get_scale().x))
+	_material.set_shader_parameter("view_size", size)
 	if Engine.get_process_frames() % LIGHT_MAP_EVERY != 0:
 		_light_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		return
 	_fit_light_map(size)
 	_light_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-	_drawer.lights = _gather_lights(vp.get_canvas_transform(), Vector2(_light_viewport.size))
+	_drawer.lights = _gather_lights(xf, Vector2(_light_viewport.size))
 	_drawer.queue_redraw()
+	## Haritanın hangi kamerayla çizildiği: arada (güncellenmeyen) karede shader dünya noktasını haritada doğru yerden okur.
+	_material.set_shader_parameter("map_origin", xf.origin)
+	_material.set_shader_parameter("map_zoom", absf(xf.get_scale().x))
+	_material.set_shader_parameter("map_uv_scale", Vector2.ONE / (Vector2(_light_viewport.size) * float(LIGHT_DOWNSCALE)))
 
 
 func _gather_lights(xf: Transform2D, map_size: Vector2) -> Array:

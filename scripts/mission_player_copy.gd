@@ -29,7 +29,8 @@ class_name MissionPlayerCopy
 const DAMAGE_TAKEN_MULT := 1.0
 const DAMAGE_DEALT_MULT := 0.10
 const SPEED_MULT := 0.80
-const LIFETIME := 300.0
+## 2026-09-26 ("görev süreleri gereksiz uzun"): 300 -> 150 sn. world_event_manager.gd COPY_LIFETIME bunu okur (tek kaynak).
+const LIFETIME := 150.0
 const SYNC_INTERVAL := 0.15
 ## Kullanıcı isteği (2026-09-24): "Kopyanın canı ve kalkanı normal oyuncunun 3 katı olmalı" + "kopyanın kalkanı yok".
 ## Kalkan = kaynak oyuncunun kalkan maksimumu (item_shield_max) x3; oyuncunun kalkanı yoksa (henüz kalkan eşyası

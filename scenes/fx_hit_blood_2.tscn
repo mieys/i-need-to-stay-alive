@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/fx_animation.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/fx_hit_blood.gd" id="1"]
 [ext_resource type="SpriteFrames" path="res://assets/fx/hit_effects/blood_2/blood_2_frames.tres" id="2"]
 
 [node name="FxHitBlood2" type="AnimatedSprite2D"]
