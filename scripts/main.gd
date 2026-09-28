@@ -1,6 +1,9 @@
 extends Node2D
 
 const LevelUpScreenScene = preload("res://scenes/level_up_screen.tscn")
+## Yetenek evrimleri (2026-09-28): evrim kartı seçimi "evo:<id>" olarak gelir (bkz. _on_upgrade_chosen).
+const SkillEvolutionsScript := preload("res://scripts/skill_evolutions.gd")
+const EVO_CHOICE_PREFIX := SkillEvolutionsScript.CHOICE_PREFIX
 const PauseMenuScene = preload("res://scenes/pause_menu.tscn")
 const RemotePlayerScene = preload("res://scenes/remote_player.tscn")
 const ChestMenuScene = preload("res://scenes/chest_menu.tscn")
@@ -282,11 +285,14 @@ func _ready() -> void:
 	## önceliği (önünde kalan otlar oyuncunun üstüne çizilir).
 	var harita_node: Node = get_node_or_null("Harita")
 	if harita_node:
-		## Nehir akıntısı sesi (bkz. river_ambience.gd) - yerel oyuncuya en yakın su noktasında.
-		var river := RiverAmbienceScript.new()
-		river.name = "RiverAmbience"
-		river.setup(harita_node)
-		add_child(river)
+		## Nehir akıntısı sesi (bkz. river_ambience.gd) - yerel oyuncuya en yakın su noktasında. Kullanıcı isteği
+		## (2026-09-27): üretilen ses iptal edildi, kullanıcı kendi sesini yükleyecek - ses dosyası (RiverAmbience SOUND_PATH)
+		## yoksa bileşen hiç kurulmaz.
+		if ResourceLoader.exists(RiverAmbienceScript.SOUND_PATH):
+			var river := RiverAmbienceScript.new()
+			river.name = "RiverAmbience"
+			river.setup(harita_node)
+			add_child(river)
 		GrassSwayScript.new().setup(harita_node)
 		## Sallanan ağaçlar ("Ağaç 0/1/2", bkz. tree_sway.gd / scenes/sallanan ağaç.gdshader).
 		TreeSwayScript.new().setup(harita_node)
@@ -724,6 +730,10 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## match_damage_dealt zaten hasar verildikçe canlı biriken bir
 			## sayaç (bkz. player.gd on_damage_dealt/match_damage_dealt notu).
 			"dmg_dealt": player.match_damage_dealt,
+			## Yetenek evrimleri (2026-09-28, player.gd skill_evolutions) - diğer oyuncularda kuklanın görsel kararları ve
+			## host'taki simülasyon (Talon mermi kalkanı) bu listeden okur (remote_player.gd has_evo). Sıralı dizi: değişmedikçe
+			## aynı kalır, durum kanalını boşuna tetiklemez.
+			"evo": player.get_skill_evolution_ids() if player.has_method("get_skill_evolution_ids") else [],
 		}
 		# Character modulate color for status effects
 		## DÜZELTME (derin multiplayer görsel denetimi): bazı yetenekler
@@ -1025,6 +1035,8 @@ func _grant_selected_item(mode: String, key: String) -> void:
 ## ==============================================================================
 var _pending_level_ups: int = 0
 var _active_level_up_screen: Node = null
+## Açılacak level-up ekranlarının seviyeleri (FIFO, bkz. _on_team_leveled_up / _show_level_up_screen).
+var _level_up_screen_levels: Array[int] = []
 ## Bu oyuncunun kart/silah/kalkan seçim kuyruğu (bkz. _finish_level_up_phase)
 ## TAMAMEN bitti ama diğer oyuncu(lar) hâlâ meşgulken - "artık kimse meşgul
 ## değil" anını yakalayınca (bkz. _on_level_up_busy_state_changed) bir kez
@@ -1116,6 +1128,10 @@ func _on_team_leveled_up(new_level: int) -> void:
 	hud.update_level(new_level)
 	if is_instance_valid(player) and player.has_method("on_team_leveled_up"):
 		player.on_team_leveled_up(new_level)
+	## Her level-up ekranının HANGİ seviyeye ait olduğu (yetenek evrimleri 5/10/15... seviyelerde kart yerine gelir) - ekranlar
+	## sırayla açıldığı için FIFO. Eskiden ekran açılırken sadece GÜNCEL takım seviyesi biliniyordu: 4'ten 6'ya hızlı
+	## atlanınca iki ekran da "6" sayılır, 5. seviyenin evrimi kaybolurdu.
+	_level_up_screen_levels.append(new_level)
 	if _active_level_up_screen != null and is_instance_valid(_active_level_up_screen):
 		_pending_level_ups += 1
 		return
@@ -1461,6 +1477,9 @@ func _show_level_up_screen(new_level: int) -> void:
 	_mini_shop_pending_after_level_up = GameManager.is_mini_shop_cooldown_ready()
 	var screen = LevelUpScreenScene.instantiate()
 	screen.name = "LevelUpScreen"
+	## Bu ekranın seviyesi (yetenek evrimi seviyesiyse level_up_screen.gd evrim kartlarını gösterir).
+	var screen_level: int = _level_up_screen_levels.pop_front() if not _level_up_screen_levels.is_empty() else new_level
+	screen.set("screen_level", screen_level)
 	add_child(screen)
 	screen.upgrade_chosen.connect(_on_upgrade_chosen)
 	_active_level_up_screen = screen
@@ -1482,7 +1501,12 @@ func _show_level_up_screen(new_level: int) -> void:
 ## diye bildirir.
 func _on_upgrade_chosen(id: String, tier: int) -> void:
 	if is_instance_valid(player):
-		player.apply_upgrade(id, tier)
+		## Yetenek evrimi kartı (level_up_screen.gd evrim modu, "evo:<id>") - stat kartı değil.
+		if id.begins_with(EVO_CHOICE_PREFIX):
+			if player.has_method("apply_skill_evolution"):
+				player.apply_skill_evolution(id.substr(EVO_CHOICE_PREFIX.length()))
+		else:
+			player.apply_upgrade(id, tier)
 	if _active_level_up_screen != null and is_instance_valid(_active_level_up_screen):
 		_active_level_up_screen.queue_free()
 	_active_level_up_screen = null
@@ -1544,6 +1568,44 @@ func _show_enchant_screen(on_done: Callable, intro_chest: bool = false) -> void:
 ## kullanıcı: "kart içinden fırlamış gibi görünmüyor").
 func _show_elite_chest(on_done: Callable) -> void:
 	_show_enchant_screen(on_done, true)
+
+
+## Debug menüsü (debug_menu.gd "Evrim ekranı aç", 2026-09-28): seviye beklemeden evrim kartları - tüm yuvalar açıkmış gibi
+## (R dahil). Sadece bu oyuncunun oyunu durur, seçince devam eder (level-up kuyruğuna/çok oyunculu meşgul durumuna dokunmaz).
+func debug_open_evolution_screen() -> bool:
+	if _active_level_up_screen != null and is_instance_valid(_active_level_up_screen):
+		return false
+	if not is_instance_valid(player) or not SkillEvolutionsScript.has_evolutions(GameManager.selected_char_id):
+		return false
+	get_tree().paused = true
+	var screen = LevelUpScreenScene.instantiate()
+	screen.name = "LevelUpScreen"
+	screen.set("screen_level", 99)
+	screen.set("force_evolution", true)
+	add_child(screen)
+	_active_level_up_screen = screen
+	screen.upgrade_chosen.connect(func(id: String, _tier: int) -> void:
+		if id.begins_with(EVO_CHOICE_PREFIX) and is_instance_valid(player):
+			player.apply_skill_evolution(id.substr(EVO_CHOICE_PREFIX.length()))
+		if is_instance_valid(screen):
+			screen.queue_free()
+		_active_level_up_screen = null
+		get_tree().paused = false)
+	return true
+
+
+## Debug menüsü "Tüm evrimleri ver": karakterin bütün evrimleri (finaller en sonda).
+func debug_grant_all_evolutions() -> int:
+	if not is_instance_valid(player) or not player.has_method("apply_skill_evolution"):
+		return 0
+	var n: int = 0
+	for final_pass in [false, true]:
+		for slot in SkillEvolutionsScript.SLOTS:
+			for e in SkillEvolutionsScript.slot_list(GameManager.selected_char_id, slot):
+				if bool(e.get("final", false)) == final_pass and not player.has_evo(str(e["id"])):
+					player.apply_skill_evolution(str(e["id"]), true)
+					n += 1
+	return n
 
 
 ## Debug menüsü (debug_menu.gd "Efsun ekranı aç"): level beklemeden efsun ekranı. Çok oyunculuda diğer oyuncuları

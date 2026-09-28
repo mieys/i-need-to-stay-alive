@@ -51,11 +51,12 @@ const DEFS := {
 		## edildi.
 		"skill": 38,
 		"skill_name": "Hamle Vuruşu",
-		"skill_desc": "YETENEK: İleri kısa bir hamle yapar, isabet ettiği düşmanlara saldırı gücünün %60'ı kadar hasar verir ve isabet başına eksik kalkanının %4'ünü yeniler. (4sn bekleme)",
+		## 2026-09-28 yetenek evrimleri: kalkan yenileme "Kalkan Hamlesi" evrimine geçti, bekleme 4 -> 10 sn.
+		"skill_desc": "YETENEK: İleri kısa bir hamle yapar, isabet ettiği düşmanlara saldırı gücünün %60'ı kadar hasar verir. (10sn bekleme)",
 		"skill_icon": "res://assets/skills/talon_devlesme_icon.png",
 		"skill2": 36,
 		"skill2_name": "Silah Salvosu",
-		"skill2_desc": "TEMEL: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %200 saldırı hızı kazanırlar. (15sn bekleme)",
+		"skill2_desc": "TEMEL: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %150 saldırı hızı kazanırlar. (15sn bekleme)",
 		"skill2_icon": "res://assets/skills/talon_yer_sarsintisi_icon.png",
 		"skill3": 37,
 		"skill3_name": "Ayna Formu",
@@ -160,19 +161,20 @@ const DEFS := {
 		## (bkz. player.gd _activate_skill/_activate_skill3 - eşleşen "Matthew Q/R yer değişimi" notları).
 		"skill": 43,
 		"skill_name": "Tilki Hücumu",
-		"skill_desc": "YETENEK: Tilkisini anında yanına ışınlayıp görüş alanındaki en fazla 6 düşmana dash saldırısı attırır, saldırı gücünün %110'u kadar hasar verir ve onları kendinden uzağa iter. (8sn bekleme)",
+		## 2026-09-28 yetenek evrimleri: itme "Savuran Pençe" evrimine geçti, bekleme 8 -> 10 sn.
+		"skill_desc": "YETENEK: Tilkisini anında yanına ışınlayıp görüş alanındaki en fazla 6 düşmana dash saldırısı attırır, saldırı gücünün %110'u kadar hasar verir. (10sn bekleme)",
 		## Kullanıcı isteği (2026-09-25): Matthew'in 4 ikonu 48x48 piksel olarak sıfırdan çizildi (tools/gen_matthew_icons.py) -
 		## Q artık Feda Kalkanı'nın ikonunu paylaşmıyor, kendi ikonu var.
 		"skill_icon": "res://assets/skills/matthew_tilki_hucumu_icon.png",
 		"skill2": 21,
 		"skill2_name": "Vahşi Hız",
-		"skill2_desc": "TEMEL: Kendine ve tilkisine 10 saniye boyunca %40 saldırı hızı ve %15 hareket hızı kazandırır. (35sn bekleme)",
+		"skill2_desc": "TEMEL: Kendine ve tilkisine 6 saniye boyunca %40 saldırı hızı ve %15 hareket hızı kazandırır. (35sn bekleme)",
 		"skill2_icon": "res://assets/skills/matthew_vahsi_hiz_icon.png",
 		"skill3": 9,
 		"skill3_name": "Feda Kalkanı",
-		"skill3_desc": "ULTİ: Yaratığı feda edip 15sn süren koruyucu bir kalkan çemberi kurar. (120sn bekleme)",
+		"skill3_desc": "ULTİ: Yaratığı feda edip 15sn süren koruyucu bir kalkan çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer. (120sn bekleme)",
 		"skill3_icon": "res://assets/skills/matthew_feda_kalkani_icon.png",
-		"passive": "Statlarının %50'siyle saldıran bir yaratığa sahipsin. Ölürse 30sn sonra yeniden doğar.",
+		"passive": "Hedef alınamayan bir tilkin var: saldırı gücünün, saldırı hızının ve kritik şansı/hasarının %200'üyle saldırır. Ölürse 30sn sonra yeniden doğar.",
 		"passive_icon": "res://assets/skills/matthew_passive_icon.png",
 		"frames": "res://assets/characters/matthew_frames.tres",
 		"portrait": "res://assets/characters/matthew_portrait.png",
@@ -328,7 +330,8 @@ const DEFS := {
 		## Koruma Baloncuğu (11) R'ye geçti. Açılış seviyeleri yuvaya bağlı (Q 1, E 5, R 10).
 		"skill": 45,
 		"skill_name": "Kışkırtma",
-		"skill_desc": "YETENEK: 6 saniye boyunca her saniye EKSİK kalkanının %5'i + MAKSİMUM kalkanının %5'i kadar kalkan yeniler ve çevrendeki yaratıkların dikkatini 5 saniye boyunca üzerine çeker. (25sn bekleme)",
+		## 2026-09-28 yetenek evrimleri: kışkırtma temel yetenekten çıktı ("Meydan Okuma" evrimi).
+		"skill_desc": "YETENEK: 6 saniye boyunca her saniye EKSİK kalkanının %5'i + MAKSİMUM kalkanının %5'i kadar kalkan yeniler. (25sn bekleme)",
 		"skill_icon": "res://assets/skills/sovalye_kiskirtma_icon.png",
 		"skill2": 29,
 		"skill2_name": "Koruma Bariyeri",
@@ -379,7 +382,8 @@ const DEFS := {
 		"skill": 12,
 		"skill_name": "Sıvışma",
 		## 2026-09-25: hız %100 (azalan) -> %50 SABİT; sıvışma hâlâ azalarak (bkz. player.gd ELARA_EVASION_SPEED_PERCENT).
-		"skill_desc": "YETENEK: 3 saniye boyunca %50 hareket hızı ve azalarak kaybolan %50 sıvışma kazandırır, yaratıkların içinden geçebilmeni sağlar (sıvışma sınırını aşabilir). Kalkan harcamaz. (10sn bekleme)",
+		## 2026-09-28 yetenek evrimleri: sıvışma "Rüzgar Adımı" evrimine geçti, hız %50 -> %30.
+		"skill_desc": "YETENEK: 3 saniye boyunca %30 hareket hızı kazandırır ve yaratıkların içinden geçebilmeni sağlar. Kalkan harcamaz. (10sn bekleme)",
 		## Kullanıcı isteği (2026-09-24): Elara + Korsan'ın TÜM yetenek ikonları 48x48 piksel sanat olarak yeniden
 		## çizildi (tools/gen_elara_korsan_icons.py) - Q'nun (Sıvışma) daha önce hiç ikonu yoktu (vektör yedeğine
 		## düşüyordu), artık kanatlı çizme ikonu var.
@@ -387,7 +391,9 @@ const DEFS := {
 		"skill2": 11,
 		"skill2_name": "Gerçek Hasar",
 		## 2026-09-25: 6 saldırı -> 6 saniye, +%50 hasar kaldırıldı, saldırı hızı TOPLAMIN %30'u, bekleme 35 -> 25 sn.
-		"skill2_desc": "TEMEL: 6 saniye boyunca saldırıların kalkanı yok sayar ve toplam saldırı hızın %30 artar. (25sn bekleme)",
+		## 2026-09-28 yetenek evrimleri: gerçek hasar kaldırıldı ("Delici Oklar" evrimi ek %15 gerçek hasar), saldırı hızı artık
+		## TOPLAM değil normal (taban) saldırı hızının %30'u ("Tam Odak" evrimi toplama çevirir) - bkz. weapon.gd _effective_fire_wait.
+		"skill2_desc": "TEMEL: 6 saniye boyunca saldırı hızın, normal saldırı hızının %30'u kadar artar. (25sn bekleme)",
 		"skill2_icon": "res://assets/skills/elara_gercek_hasar_icon.png",
 		"skill3": 31,
 		"skill3_name": "Çift Tetik",
@@ -424,7 +430,9 @@ const DEFS := {
 		"skill_icon": "res://assets/skills/korsan_patlat_icon.png",
 		"skill2": 17,
 		"skill2_name": "Saatli Bomba",
-		"skill2_desc": "TEMEL: Bulunduğu konuma saatli bomba bırakır (3 yük, yük başına 14sn yenilenir). Patladığında 32 + saldırı gücünün %220'si kadar hasar verir.",
+		## 2026-09-28: metin koddaki güncel değerlere (10 sn yenilenme, %100 - bkz. player.gd KORSAN_*) çekildi + yeni kural "yerde en
+		## fazla 6 bomba" (kullanıcı; "Barut Deposu" evrimi kaldırır).
+		"skill2_desc": "TEMEL: Bulunduğu konuma saatli bomba bırakır (3 yük, yük başına 10sn yenilenir, yerde aynı anda en fazla 6 bomba olabilir). Patladığında 32 + saldırı gücünün %100'ü kadar hasar verir.",
 		"skill2_icon": "res://assets/skills/korsan_saatli_bomba_icon.png",
 		## Kullanıcı isteği (2026-09-26): "korsanın e yeteneği de 1 levelde açık olsun 5 level yerine" - Büyücü Kız'daki
 		## AYNI istisna (bkz. skill_unlock_level). Q (Patlat) bombasız işe yaramadığı için E baştan açık.
@@ -436,7 +444,8 @@ const DEFS := {
 		## tikler player.gd _process_korsan_bombardment'ta.
 		"skill3": 34,
 		"skill3_name": "Bombardıman",
-		"skill3_desc": "ULTİ: Etrafındaki büyük bir alanı 8 saniye boyunca bombardımana tutar, her saniye saldırı gücünün %110'u kadar hasar verir. (90sn bekleme)",
+		## 2026-09-28 yetenek evrimleri: alan artık kullanıldığı yerde SABİT ve %30 küçük ("Seyyar Bombardıman" finali tekrar takip ettirir).
+		"skill3_desc": "ULTİ: Bulunduğu noktadaki geniş bir alanı 8 saniye boyunca bombardımana tutar (alan yerinde kalır), her saniye saldırı gücünün %110'u kadar hasar verir. (90sn bekleme)",
 		## DÜZELTME (kullanıcı bildirimi 2026-09-22: "Korsanın ultisinin skill ikonu yok") - skill3_icon hiç
 		## eklenmemişti, HUD'da R slotu boş/placeholder kalıyordu (bkz. hud.gd "def.has(\"skill3_icon\")" kontrolü).
 		## Kullanıcı isteği (2026-09-24): Korsan'ın 4 ikonu (Q/E/R/pasif) 48x48 piksel sanat kare ikon olarak yeniden
@@ -575,7 +584,7 @@ const DEFS := {
 		## Yarasa Sürüsü (35) ve necro_bat.gd/tscn tamamen silindi - yukarıdaki geçmiş notlar eski dizilimleri anlatır.
 		"skill": 19,
 		"skill_name": "İskelet Çağır",
-		"skill_desc": "YETENEK: 5 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (saldırı gücünün %50'si kadar vurur, saniyede ~1.3 kez saldırır, hareket hızının %90'ı, canının %100'ü, kalkansız, 60sn yaşar). Ruh yetmezse çağrılamaz. Toplamda (iskelet+golem) en fazla 20 yaratığa sahip olabilirsin. (1sn bekleme)",
+		"skill_desc": "YETENEK: 5 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (saldırı gücünün %50'si kadar vurur, saniyede ~1.3 kez saldırır, hareket hızının %90'ı, canının %100'ü, kalkansız, 60sn yaşar). Ruh yetmezse çağrılamaz. Toplamda (iskelet+golem) en fazla 20 yaratığa sahip olabilirsin. (0.2sn bekleme)",
 		"skill_icon": "res://assets/skills/necromancer_iskelet_cagir_icon.png",
 		## Kullanıcı isteği (2026-09-24): "iskelet Q golem E kafatası da R olmalı yarasayı ... yok et" - Golem Çağır
 		## (id 20) R'den E'ye taşındı (standart skill2 makinesi, E kalkan tarifesi), Yarasa Sürüsü (id 35) tamamen silindi.
@@ -650,15 +659,15 @@ const DEFS := {
 		## Görsel: assets/characters/vampir/ (tools/gen_vampir_assets.py + gen_vampir_frames.py).
 		"skill": 40,
 		"skill_name": "Kan Emme",
-		"skill_desc": "YETENEK (maksimum canının %4'ünü harcar): Yakınındaki en yakın 3 düşmanın kanını emip kendine çeker, her birine saldırı gücünün %130'u kadar hasar verir ve maksimum canını oyun boyunca kalıcı olarak 1 arttırır (karakterin üstünde +1 Maks. Can yazar). (6sn bekleme)",
+		"skill_desc": "YETENEK (maksimum canının %4'ünü harcar): Yakınındaki en yakın 3 düşmanın kanını emip kendine çeker, her birine saldırı gücünün %130'u kadar hasar verir. (6sn bekleme)",
 		"skill_icon": "res://assets/skills/vampir_kan_emme_icon.png",
 		"skill2": 41,
 		"skill2_name": "Yarasa Formu",
-		"skill2_desc": "TEMEL (maksimum canının %4'ünü harcar): 5sn boyunca büyük bir yarasaya dönüşür - %60 hareket hızı kazanır, aldığı hasar %80 azalır, yaratıkların ve duvarların içinden geçebilir ve temas ettiği her yaratığa saldırı gücünün %80'i kadar hasar verir. Bu esnada silahlarını kullanamaz: silahlar karakterin içine çekilip kaybolur, form bitince geri çıkar. E'ye tekrar basarak süre dolmadan normal forma dönebilirsin (bekleme o an başlar). (22sn bekleme)",
+		"skill2_desc": "TEMEL (maksimum canının %4'ünü harcar): 5sn boyunca büyük bir yarasaya dönüşür - %30 hareket hızı kazanır, yaratıkların içinden geçebilir ve temas ettiği her yaratığa saldırı gücünün %80'i kadar hasar verir. Bu esnada silahlarını kullanamaz: silahlar karakterin içine çekilip kaybolur, form bitince geri çıkar. E'ye tekrar basarak süre dolmadan normal forma dönebilirsin (bekleme o an başlar). (22sn bekleme)",
 		"skill2_icon": "res://assets/skills/vampir_yarasa_formu_icon.png",
 		"skill3": 42,
 		"skill3_name": "Kan Yarasaları",
-		"skill3_desc": "ULTİ (BASILIP KAPATILABİLİR): Açıkken her saniye maksimum canının %5'ini harcar. Yakınındaki yaratıklara 6 küçük yarasa gönderir; yarasalar vurup saldırı gücünün %60'ı kadar hasar verir ve sana geri döner (hızları saldırı hızınla artar). Yarasalar her döndüğünde saldırı gücünün %5'i kadar can yenilenir.",
+		"skill3_desc": "ULTİ (BASILIP KAPATILABİLİR): Açıkken her saniye maksimum canının %5'ini harcar. Yakınındaki yaratıklara 3 küçük yarasa gönderir; yarasalar vurup saldırı gücünün %60'ı kadar hasar verir ve sana geri döner (hızları saldırı hızınla artar). Yarasalar her döndüğünde saldırı gücünün %5'i kadar can yenilenir.",
 		"skill3_icon": "res://assets/skills/vampir_kan_yarasalari_icon.png",
 		"passive": "Kan Emme: %1 can emme kazanır (verdiği hasarın %1'i kadar can yenilenir) ve her 1 saldırı gücü için 1 maksimum can kazanır.",
 		"passive_icon": "res://assets/skills/vampir_passive_icon.png",
@@ -704,11 +713,11 @@ const DEFS := {
 		## Kullanıcı isteği (2026-09-25, ikinci tur): "hadimenin E sini kara delik yeteneğiyle değiştiriyoruz" - eski Kara Büyü
 		## tamamen kaldırıldı, id 47 aynı kaldı (bkz. player.gd _skill_hadime_black_hole, scripts/hadime_black_hole.gd).
 		"skill2_name": "Kara Delik",
-		"skill2_desc": "TEMEL: Bulunduğu konuma 6 saniye süren bir kara delik bırakır. Kara delik yakınındaki yaratıkları hafifçe içine doğru çeker, her saniye saldırı gücünün %80'i kadar hasar verir ve verdiği hasarın %20'si kadar kalkanlarını emerek Hadime'nin kalkanını yeniler (bosslar çekilmez). Lanet Kitabı basılıyken de kullanılabilir. (18sn bekleme)",
+		"skill2_desc": "TEMEL: Bulunduğu konuma 6 saniye süren bir kara delik bırakır. Kara delik yakınındaki yaratıkları hafifçe içine doğru çeker ve her saniye saldırı gücünün %80'i kadar hasar verir (bosslar çekilmez). Lanet Kitabı basılıyken de kullanılabilir. (18sn bekleme)",
 		"skill2_icon": "res://assets/skills/hadime_kara_delik_icon.png",
 		"skill3": 48,
 		"skill3_name": "Karabasan",
-		"skill3_desc": "ULTİ: 15 saniye boyunca korkutucu karanlık Karabasan formuna bürünür. Yakınına yaklaşan tüm yaratıklar 1 saniyeliğine korkar, yakınındaki yaratıklar her saniye saldırı gücünün %80'i kadar hasar alır (bosslar korkmaz). (100sn bekleme)",
+		"skill3_desc": "ULTİ: 12 saniye boyunca korkutucu karanlık Karabasan formuna bürünür. Yakınına yaklaşan tüm yaratıklar 1 saniyeliğine korkar, yakınındaki yaratıklar her saniye saldırı gücünün %80'i kadar hasar alır (bosslar korkmaz). (100sn bekleme)",
 		"skill3_icon": "res://assets/skills/hadime_karabasan_icon.png",
 		"passive": "Ruh Göçü: Yere düştüğünde 2 saniye sonra ruhu bedeninden ayrılır ve yarı saydam bir hayalet olarak ayağa kalkar; bedeni yerde kalır. Hayaletken yaratıklar onu görmezden gelir, sadece yetenekleriyle %80 daha az hasar vererek savaşabilir; hiçbir şey toplayamaz, kimseyi diriltemez, silah kullanamaz, dükkan ve görevlerle etkileşemez. Arkadaşları bedenini diriltince hayalet bedenine döner (tek oyunculuda 20 saniye sonra kendiliğinden).",
 		"passive_icon": "res://assets/skills/hadime_passive_icon.png",

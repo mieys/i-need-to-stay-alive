@@ -1,0 +1,74 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/fx/evolution/talon_ward_sheet.png" id="1"]
+
+[sub_resource type="AtlasTexture" id="AT_0"]
+atlas = ExtResource("1")
+region = Rect2(0, 0, 232, 232)
+
+[sub_resource type="AtlasTexture" id="AT_1"]
+atlas = ExtResource("1")
+region = Rect2(232, 0, 232, 232)
+
+[sub_resource type="AtlasTexture" id="AT_2"]
+atlas = ExtResource("1")
+region = Rect2(464, 0, 232, 232)
+
+[sub_resource type="AtlasTexture" id="AT_3"]
+atlas = ExtResource("1")
+region = Rect2(696, 0, 232, 232)
+
+[sub_resource type="AtlasTexture" id="AT_4"]
+atlas = ExtResource("1")
+region = Rect2(928, 0, 232, 232)
+
+[sub_resource type="AtlasTexture" id="AT_5"]
+atlas = ExtResource("1")
+region = Rect2(1160, 0, 232, 232)
+
+[sub_resource type="AtlasTexture" id="AT_6"]
+atlas = ExtResource("1")
+region = Rect2(1392, 0, 232, 232)
+
+[sub_resource type="AtlasTexture" id="AT_7"]
+atlas = ExtResource("1")
+region = Rect2(1624, 0, 232, 232)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_7")
+}],
+"loop": true,
+"name": &"loop",
+"speed": 10.0
+}]

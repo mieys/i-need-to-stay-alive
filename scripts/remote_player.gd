@@ -756,13 +756,20 @@ func _update_talon_formation(delta: float) -> void:
 	var radius: float
 	if _talon_formation == "salvo":
 		radius = TalonFormationMath.SALVO_RADIUS
-		_talon_salvo_angle = TalonFormationMath.advance_salvo_angle(_talon_salvo_angle, delta)
+		## Yetenek evrimi "Uzun Girdap": kasterle AYNI dönüş çarpanı (player.gd _talon_salvo_spin_mult).
+		var spin_mult: float = TalonFormationMath.EVO_SALVO_SPIN_MULT if has_evo("talon_e2") else 1.0
+		_talon_salvo_angle = TalonFormationMath.advance_salvo_angle(_talon_salvo_angle, delta, spin_mult)
 	else: ## "mirror" - sabit dizilim, dönmez
 		radius = TalonFormationMath.MIRROR_RADIUS
+	## Yetenek evrimi "Kan Aynası" (Talon R finali): Ayna Formu'nun kopyaları (listenin ikinci yarısı - player.gd kopyaları
+	## sona ekler) kasterdeki gibi kan kırmızısı.
+	var tint_copies: bool = has_evo("talon_rf")
 	for i in range(count):
 		var icon: Node2D = _weapon_icons[i]
 		if not is_instance_valid(icon):
 			continue
+		if tint_copies:
+			icon.modulate = TALON_BLOOD_COPY_TINT if (_talon_form_active and i >= count / 2) else Color.WHITE
 		var slot: Dictionary = TalonFormationMath.compute_slot(i, count, radius, _talon_salvo_angle)
 		icon.position = slot["offset"] + _formation_kick_offset(i)
 		## Ayna Formu (R) TEK BAŞINA: sadece konum çember, namlular normal nişanla en yakın yaratığa döner
@@ -803,7 +810,8 @@ func _update_talon_formation(delta: float) -> void:
 ## olmayan silahlar da doğru yere döner).
 func _process_vampir_remote(delta: float) -> void:
 	var prev: float = _vampir_pull
-	_vampir_pull = VampirMath.step_pull(_vampir_pull, _vampir_bat_form and not is_dead, delta)
+	## Yetenek evrimi "Silahlı Yarasa" (Vampir E finali): silahlar formda çekilmez - player.gd _vampir_weapons_absorbed ile aynı karar.
+	_vampir_pull = VampirMath.step_pull(_vampir_pull, _vampir_bat_form and not is_dead and not has_evo("vampir_ef"), delta)
 	if _vampir_pull > 0.0:
 		if prev <= 0.0:
 			_vampir_rest_positions.clear()
@@ -1055,6 +1063,25 @@ func _apply_vampir_bat_scale() -> void:
 	anim.scale = _base_anim_scale * (VampirMath.BAT_FORM_SCALE_MULT if _vampir_bat_form else 1.0)
 
 
+## ---------- Yetenek evrimleri (2026-09-28) ----------
+## Bu oyuncunun aldığı evrimler (main.gd extra["evo"]) - player.gd has_evo ile AYNI sözleşme; uzak kuklanın görsel kararları
+## ve host'taki simülasyonun sorduğu şeyler (get_talon_ward_radius) bundan okunur.
+var _evolutions: Dictionary = {}
+const TALON_BLOOD_COPY_TINT := Color(1.0, 0.55, 0.55, 1.0) ## player.gd EVO_TALON_BLOOD_COPY_TINT ile aynı
+
+
+func has_evo(evo_id: String) -> bool:
+	return _evolutions.has(evo_id)
+
+
+## Talon "Kalkan Çemberi" (E finali): salvo sürerken silah çemberine giren yaratık atışları söner - player.gd
+## get_talon_ward_radius ile AYNI formül (host'ta uzak Talon'un çemberi mermileri bu kuklaya göre söndürür).
+func get_talon_ward_radius() -> float:
+	if _talon_formation == "salvo" and has_evo("talon_ef") and not is_dead:
+		return TalonFormationMath.SALVO_RADIUS * absf(global_scale.x)
+	return 0.0
+
+
 ## Vampir Çocuk yarasa formundayken (anim adı bat_*) yaratıklar bu kuklanın içinden geçilebilir sayar - player.gd is_ghost_now ile aynı
 ## sözleşme (enemy.gd host'ta çalışır, uzak Vampir'i bu kukla temsil eder).
 func is_ghost_now() -> bool:
@@ -1083,6 +1110,11 @@ func get_effective_move_speed() -> float:
 
 
 func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary = {}) -> void:
+	## Yetenek evrimleri (2026-09-28, main.gd extra["evo"]) - görsel kararlardan ÖNCE (bkz. has_evo).
+	if extra.has("evo"):
+		_evolutions.clear()
+		for evo_id in extra["evo"]:
+			_evolutions[str(evo_id)] = true
 	update_weapon_visuals(weapon_keys, extra.get("weapon_tiers", {}))
 	synced_move_speed = float(extra.get("move_speed", synced_move_speed))
 	synced_base_move_speed = float(extra.get("base_speed", synced_base_move_speed))
@@ -1205,6 +1237,11 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	var new_talon_formation: String = extra.get("talon_formation", "")
 	if new_talon_formation != "" and _talon_formation != new_talon_formation:
 		_talon_salvo_angle = 0.0
+	## "Kan Aynası" tonu formasyon bitince (Ayna Formu kapanınca) sıfırlanır - _update_talon_formation artık çalışmaz.
+	if new_talon_formation == "" and _talon_formation != "" and has_evo("talon_rf"):
+		for icon in _weapon_icons:
+			if is_instance_valid(icon):
+				icon.modulate = Color.WHITE
 	_talon_formation = new_talon_formation
 	_talon_form_active = bool(extra.get("talon_form", false))
 	_apply_talon_form_scale()

@@ -82,8 +82,29 @@ const HOLE_PULL_DEADZONE := 10.0
 ## Karakter kökünden (yerel) ayak altı - kara delik buraya bırakılır.
 const HOLE_FEET_LOCAL := Vector2(0, 30)
 
+## ---------- Yetenek evrimleri (2026-09-28, kart metinleri scripts/skill_evolutions.gd) ----------
+## Q Patlayan Lanet: lanet düştüğü yaratığın çevresine (dünya birimi) verdiği hasarın bu oranında patlar.
+const EVO_CURSE_BURST_RATIO := 0.7
+const EVO_CURSE_BURST_RADIUS := 70.0
+## Q Hafif Süzülüş: kanal yavaşlatmasının YERİNE bu hız çarpanı (%10 hızlı).
+const EVO_Q_FAST_MOVE_MULT := 1.1
+## Q Tutumlu Okuma: saniyelik kalkan bedeli çarpanı.
+const EVO_Q_COST_MULT := 0.5
+## Q Hızlı Okuma: lanet aralığı saldırı hızıyla kısalır ama bu kadardan kısa olmaz (sn).
+const EVO_CURSE_MIN_INTERVAL := 0.25
+## E Genişleyen Boşluk: yarıçap/görsel çarpanı.
+const EVO_HOLE_SIZE_MULT := 1.5
+## E Gezgin Delik: kalabalığa ilerleme hızı = çekim hızı (kullanıcı: "içine çekme hızıyla eşit olmalıdır"). Kalabalık bu
+## yarıçapta aranır, hedef bu aralıkla yenilenir.
+const EVO_HOLE_MOVE_SEARCH := 320.0
+const EVO_HOLE_RETARGET := 0.5
+## E Süpernova: ömrün sonunda içindekilere saldırı gücünün %150'si.
+const EVO_HOLE_BURST_RATIO := 1.5
+
 ## ---------- R: Karabasan ----------
-const R_DURATION := 15.0
+## Kullanıcı isteği (2026-09-28, yetenek evrimleri): "Karabasanın etkinlik süresini 12 saniyeye düşürüyoruz çünkü geliştirmeye
+## eklenecek" - 15 -> 12 (Uzun Kabus evrimi +5 sn, bkz. player.gd _evo_timing).
+const R_DURATION := 12.0
 const R_COOLDOWN := 100.0
 const R_RADIUS := 130.0
 const R_FEAR_TIME := 1.0
@@ -305,13 +326,21 @@ static func spawn_fx(root: Node, kind: String, opts: Dictionary) -> void:
 ##  authoritative: kasterin kendi kopyası - her HOLE_TICK'te on_tick(merkez) çağırır (hasar + kalkan player.gd'de).
 ##  pull_authority: yaratıkları çeken kopya - yaratıklar HOST'ta simüle edildiği için sadece host'taki kopya (kaster host
 ##                  ise kendi kopyası, değilse network_manager.gd broadcast_hadime_black_hole'un host'ta açtığı kopya).
-static func spawn_black_hole(root: Node, world_pos: Vector2, authoritative: bool, pull_authority: bool, on_tick: Callable) -> Node2D:
+## Evrimler (2026-09-28) opts ile gelir - kasterin kopyası ve network_manager.gd broadcast_hadime_black_hole AYNI anahtarlarla
+## kurar: "radius_mult" (Genişleyen Boşluk), "moving" (Gezgin Delik), "owner_peer" (hareketli deliğin ağ konumu için),
+## "on_end" (Süpernova - SADECE yetkili kopyada, ömrün sonunda merkez + yarıçapla çağrılır).
+static func spawn_black_hole(root: Node, world_pos: Vector2, authoritative: bool, pull_authority: bool, on_tick: Callable,
+		opts: Dictionary = {}) -> Node2D:
 	if root == null or not is_instance_valid(root):
 		return null
 	var hole: Node2D = scene(FX_BLACK_HOLE).instantiate() as Node2D
 	hole.set("authoritative", authoritative)
 	hole.set("pull_authority", pull_authority)
 	hole.set("on_tick", on_tick)
+	hole.set("radius_mult", float(opts.get("radius_mult", 1.0)))
+	hole.set("moving", bool(opts.get("moving", false)))
+	hole.set("owner_peer", int(opts.get("owner_peer", 0)))
+	hole.set("on_end", opts.get("on_end", Callable()))
 	root.add_child(hole)
 	hole.global_position = world_pos
 	return hole

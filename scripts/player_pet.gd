@@ -19,10 +19,8 @@ extends CharacterBody2D
 ## - eskiden uzaktan (projectile ile) saldırıyordu, artık yakın dövüşçü:
 ##   Matthew'a FOCUS_RADIUS içine giren en yakın yaratığa koşup MELEE_RANGE'e
 ##   girince doğrudan hasar veriyor.
-## - health/max_health SADECE Matthew'in "Feda Kalkanı" ultisinin kalkan
-##   boyutunu belirlemek için bir stat olarak kalıyor (bkz. player.gd'nin
-##   _skill_shield_dome'u - _matthew_pet.health okuyor). Pet asla hasar
-##   almadığı için health hep max_health'e eşit kalır.
+## - health/max_health artık hiçbir şeyi belirlemiyor (2026-09-28: Feda Kalkanı saldırı gücünden, tilki hedef alınamaz,
+##   bkz. FOX_STAT_RATIO). Pet asla hasar almaz.
 
 signal died
 
@@ -30,7 +28,16 @@ var max_health: float = 50.0
 var health: float = 50.0
 var speed: float = 150.0 ## flavor stat only - see _process_movement, which never lets it fall behind
 
-const BASE_DAMAGE := 12.0
+const BASE_DAMAGE := 12.0 ## sadece sahip yoksa (yedek)
+## Kullanıcı isteği (2026-09-28): "tilkinin statları da düzenlensin artık hedef alınamaz bir varlık olduğu için sadece
+## matthewin saldırı gücü saldırı hızı kritik v.b gibi saldırı odaklı güçlerinin %200'üne sahip olmasını istiyorum" -
+## tilkinin savunma statı yok (hedef alınamaz; Feda Kalkanı da artık saldırı gücünden hesaplanıyor), saldırısı her
+## vuruşta Matthew'in O ANKİ statlarından okunur (kart/eşya aldıkça tilki de güçlenir):
+##   hasar        = Matthew saldırı gücü (damage_bonus) x FOX_STAT_RATIO
+##   saldırı hızı = Matthew'in saldırı hızı BONUSU x FOX_STAT_RATIO (ör. Matthew +%20 -> tilki +%40); Vahşi Hız (E) ayrıca
+##   kritik şansı = Matthew'in yetenek kritik şansı (taban %5 + kart) x FOX_STAT_RATIO (en fazla %100)
+##   kritik hasar = Matthew'in kritik hasar çarpanı (taban 1.5 + kart) x FOX_STAT_RATIO
+const FOX_STAT_RATIO := 2.0
 ## Matthew'a (sahibine) bu mesafe içine giren yaratıklara focus atar - "ona
 ## yakın olan ve ona saldırmak üzere olan yaratıklara focus atmalı" (kullanıcı
 ## isteği). Kendi konumuna göre değil, SAHİBİNİN konumuna göre ölçülüyor.
@@ -136,8 +143,7 @@ func _ready() -> void:
 ## Called once right after spawning (see player.gd's _spawn_matthew_pet).
 func setup_from_player(player: Node) -> void:
 	owner_player = player
-	if "max_health" in player:
-		max_health = player.max_health * 0.5
+	## (2026-09-28: can artık Matthew'den türemiyor - tilki hedef alınamaz, bkz. FOX_STAT_RATIO notu.)
 	health = max_health
 	if "speed" in player:
 		## Eskiden 0.5 (yarım hız) idi, sonra 0.75 - kullanıcı bildirimleri
@@ -516,7 +522,7 @@ func _update_animation() -> void:
 
 
 func _process_attack(delta: float) -> void:
-	_attack_timer -= delta * _get_attack_speed_mult()
+	_attack_timer -= delta * _get_attack_speed_mult() * _owner_attack_speed_mult()
 	if _attack_timer > 0.0:
 		return
 	## DÜZELTME (kullanıcı bildirimi: "Shopta kalkan baloncuğunun içinde
@@ -548,6 +554,7 @@ func _process_attack(delta: float) -> void:
 ## attack()'ın çağırdığı _spawn_slash_fx() (fx_matthew_pet_slash.tscn,
 ## tilkiye özel) ile üst üste biniyordu. Artık SADECE hasar veriliyor.
 func _do_cone_attack(attack_dir: Vector2) -> void:
+	var base_dmg: float = _owner_attack_power() * FOX_STAT_RATIO
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
@@ -560,7 +567,14 @@ func _do_cone_attack(attack_dir: Vector2) -> void:
 			if angle > deg_to_rad(ATTACK_ARC_DEG * 0.5):
 				continue
 		if e.has_method("take_damage"):
-			e.take_damage(BASE_DAMAGE)
+			var is_crit: bool = randf() < _crit_chance()
+			e.take_damage(base_dmg * (_crit_damage_mult() if is_crit else 1.0), is_crit)
+			## Yetenek evrimi "Sersemleten Isırık" (2026-09-28): Vahşi Hız aktifken tilkinin saldırıları sersemletir - süre
+			## sahibinden (player.gd matthew_fox_stun_time, 0 = yok).
+			if _owner_ok() and owner_player.has_method("matthew_fox_stun_time"):
+				var stun_t: float = float(owner_player.call("matthew_fox_stun_time"))
+				if stun_t > 0.0 and e.has_method("apply_stun"):
+					e.apply_stun(stun_t)
 
 
 ## BUG DÜZELTMESİ (derin multiplayer denetimi bulgusu, CLAUDE.md'nin "kaster görür diğeri görmez" hata
@@ -635,16 +649,60 @@ func die() -> void:
 		queue_free()
 
 
+## Vahşi Hız (Matthew E) açıkken tilkinin payı - sayılar sahibinden (player.gd matthew_haste_bonus: "Vahşi Koşu" %30/%50,
+## "Tilki Ruhu" tilkiye 2 katı). Eskiden burada sabit 1.15/1.40 yazıyordu (Matthew'deki sabitlerin ikinci kopyası).
 func _get_speed_mult() -> float:
 	if owner_player and is_instance_valid(owner_player) and owner_player.has_method("is_skill2_active") and owner_player.has_method("get_skill2_id"):
 		if owner_player.is_skill2_active() and owner_player.get_skill2_id() == 21:
+			if owner_player.has_method("matthew_haste_bonus"):
+				return 1.0 + float(owner_player.call("matthew_haste_bonus", "move", true))
 			return 1.15
 	return 1.0
+
+
+## ---- Matthew'den okunan saldırı statları (bkz. FOX_STAT_RATIO notu). Sahip yoksa tilki eski yedek değerleri kullanır.
+func _owner_ok() -> bool:
+	return owner_player != null and is_instance_valid(owner_player)
+
+
+func _owner_attack_power() -> float:
+	if _owner_ok() and "damage_bonus" in owner_player:
+		return maxf(1.0, float(owner_player.get("damage_bonus")))
+	return BASE_DAMAGE / FOX_STAT_RATIO
+
+
+## Sayaç hız çarpanı: 1 + (Matthew'in saldırı hızı bonusu x 2).
+func _owner_attack_speed_mult() -> float:
+	if _owner_ok() and owner_player.has_method("get_attack_speed_bonus_percent"):
+		return maxf(0.1, 1.0 + float(owner_player.call("get_attack_speed_bonus_percent")) / 100.0 * FOX_STAT_RATIO)
+	return 1.0
+
+
+## Matthew'in yetenek kritik tabanları (player.gd ABILITY_BASE_CRIT_*) - betiğin sabit tablosundan (tek kaynak).
+func _owner_const(n: String, fallback: float) -> float:
+	var sc: Script = owner_player.get_script() if _owner_ok() else null
+	if sc == null:
+		return fallback
+	return float(sc.get_script_constant_map().get(n, fallback))
+
+
+func _crit_chance() -> float:
+	if _owner_ok() and "crit_chance_bonus" in owner_player:
+		return clampf((_owner_const("ABILITY_BASE_CRIT_CHANCE", 0.05) + float(owner_player.get("crit_chance_bonus"))) * FOX_STAT_RATIO, 0.0, 1.0)
+	return 0.0
+
+
+func _crit_damage_mult() -> float:
+	if _owner_ok() and "crit_damage_bonus" in owner_player:
+		return (_owner_const("ABILITY_BASE_CRIT_DAMAGE", 1.5) + float(owner_player.get("crit_damage_bonus"))) * FOX_STAT_RATIO
+	return 1.5
 
 
 func _get_attack_speed_mult() -> float:
 	if owner_player and is_instance_valid(owner_player) and owner_player.has_method("is_skill2_active") and owner_player.has_method("get_skill2_id"):
 		if owner_player.is_skill2_active() and owner_player.get_skill2_id() == 21:
+			if owner_player.has_method("matthew_haste_bonus"):
+				return 1.0 + float(owner_player.call("matthew_haste_bonus", "attack", true))
 			return 1.40
 	return 1.0
 

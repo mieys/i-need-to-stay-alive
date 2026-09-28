@@ -278,6 +278,8 @@ func test_korsan_strike_falls_then_explodes_and_frees() -> void:
 func test_korsan_bombardment_damage_lands_when_the_shells_do() -> void:
 	var player: Node = _make_player(9, 18)
 	var enemy: FakeEnemy = _make_enemy(player.global_position + Vector2(120, 0))
+	## 2026-09-28: alan kullanıldığı noktada sabit (_skill_korsan_bombardment merkezi kaydeder) - tik doğrudan çağrıldığı için elle.
+	player._korsan_bombardment_center = player.global_position
 	player._apply_korsan_bombardment_tick()
 	assert(enemy.hits.is_empty(), "mermiler düşerken hasar henüz gelmez")
 	assert(get_tree().current_scene.get_child_count() > 0)

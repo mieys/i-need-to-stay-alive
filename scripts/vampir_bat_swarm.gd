@@ -30,7 +30,10 @@ const FRAME_SEQUENCE := [0, 1, 2, 1]
 var authoritative: bool = false
 var caster: Node2D = null
 var launch_radius: float = 260.0
-var bat_speed: float = 190.0 ## caster her karede saldırı hızına göre günceller (player.gd VAMPIR_R_BASE_BAT_SPEED)
+var bat_speed: float = 152.0 ## caster her karede saldırı hızına göre günceller (player.gd VAMPIR_R_BASE_BAT_SPEED)
+## Yarasa sayısı (2026-09-28: taban 3, "Büyüyen Sürü" evrimiyle 5) - yetkili kopyada caster eklemeden ÖNCE verir (bkz. player.gd
+## _vampir_bat_count); kozmetik kopya sayıyı ağdan gelen konum dizisinin uzunluğundan alır (apply_net_positions).
+var bat_count: int = VampirMath.BAT_COUNT
 var retiring: bool = false
 
 var _pos: PackedVector2Array = PackedVector2Array()
@@ -50,8 +53,15 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	for i in range(3):
 		_textures.append(load("res://assets/characters/vampir/mini_bat_%d.png" % (i + 1)))
+	set_bat_count(bat_count)
+
+
+## Yarasa sayısını ayarlar (sürü açıkken evrim alınırsa yeni yarasalar karakterin yanından katılır; azalma olmaz).
+func set_bat_count(n: int) -> void:
+	bat_count = maxi(n, _pos.size())
 	var start: Vector2 = caster.global_position if is_instance_valid(caster) else Vector2.ZERO
-	for i in range(VampirMath.BAT_COUNT):
+	while _pos.size() < bat_count:
+		var i: int = _pos.size()
 		_pos.append(start)
 		_state.append(BatState.HOME)
 		_delay.append(0.15 + 0.12 * float(i)) ## sırayla fırlasınlar
@@ -93,6 +103,20 @@ func get_net_positions() -> PackedVector2Array:
 
 
 func apply_net_positions(arr: PackedVector2Array) -> void:
+	## Kasterin yarasa sayısı (evrimle 3 -> 5) dizinin uzunluğundan - eksik yuvalar ilk konumlarıyla eklenir.
+	if arr.size() > _pos.size():
+		var first: Vector2 = arr[0] if arr.size() > 0 else Vector2.ZERO
+		while _pos.size() < arr.size():
+			var p: Vector2 = arr[_pos.size()]
+			if p.x < -90000.0:
+				p = first
+			_pos.append(p)
+			_state.append(BatState.HOME)
+			_delay.append(0.0)
+			_active.append(false)
+			_targets.append(null)
+			_net_pos.append(p)
+		bat_count = _pos.size()
 	for i in range(mini(arr.size(), _net_pos.size())):
 		_net_pos[i] = arr[i]
 

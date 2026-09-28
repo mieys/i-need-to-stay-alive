@@ -33,6 +33,11 @@ var _is_detonated: bool = false
 
 ## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir" - bombayı bırakan oyuncuya referans.
 var owner_player: Node2D = null
+## Yetenek evrimleri (2026-09-28) - player.gd _skill_korsan_detonate_all patlatmadan hemen önce yazar:
+## "Sersemleten Patlama" (stun_time > 0: vurulan yaratıklar sersemler) ve "Ganimet" (gold_on_kill: bu patlamada ölen her
+## yaratık bırakana 1 altın - enemy.gd "evo_gold" bayrağı, hasardan ÖNCE host'a gider ki ölüm anında okunabilsin).
+var stun_time: float = 0.0
+var gold_on_kill: bool = false
 
 @onready var sprite: Sprite2D = $Sprite2D
 var _anim: AnimatedSprite2D = null
@@ -69,7 +74,11 @@ func detonate() -> void:
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if global_position.distance_to(e.global_position) <= radius and e.has_method("take_damage"):
+			if gold_on_kill and e.has_method("apply_element"):
+				e.apply_element("evo_gold", {"dur": 0.6})
 			e.take_damage(dmg, is_crit, 0.0, true)
+			if stun_time > 0.0 and e.has_method("apply_stun"):
+				e.apply_stun(stun_time)
 	_spawn_explosion_fx()
 	queue_free()
 

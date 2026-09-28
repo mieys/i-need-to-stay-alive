@@ -11,6 +11,11 @@ extends RefCounted
 
 ## Kullanıcı seçimi (2026-09-25 soru-cevap): 10 dakikalık tam gün (~25-30 dk'lık bir koşuda 2-3 gece).
 const CYCLE_LENGTH := 600.0
+## Kullanıcı isteği (2026-09-27): "gün 24 saati hızını biraz azaltalım çok hızlı sabah akşam oluyor" - döngü birimleri
+## (CYCLE_LENGTH, evre sınırları, renk anahtarları, debug saat ayarları) AYNI kaldı; saat artık gerçek zamanın bu oranında
+## ilerler (atmosphere.gd _process). 600 birim / 900 gerçek sn = tam gün 15 dk (gündüz ~8.3, gün batımı 1.5, gece ~3.8,
+## gün doğumu 1.5 dk). Host ve istemciler aynı sabitle ilerler.
+const CLOCK_SPEED := 600.0 / 900.0
 ## Evre sınırları (döngü saniyesi): gündüz 0-330 (5.5 dk), gün batımı 330-390 (1 dk), gece 390-540 (2.5 dk),
 ## gün doğumu 540-600 (1 dk). 600 = 0 (döngü kapanır).
 const DAY_END := 330.0

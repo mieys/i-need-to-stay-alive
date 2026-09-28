@@ -210,7 +210,9 @@ const FINAL_CREATURES := [
 ## 220 -> 200 (test için yuvarlak sayı) - hâlâ SADECE bir test değeri,
 ## profiler'la ölçüp gerekirse yine kullanıcı tercihine göre ayarlanmalı.
 ## 2026-09-25: bu artık 5 OYUNCULU oyunun tavanı - daha az oyuncuda düşer (bkz. player_enemy_cap).
-@export var max_concurrent_enemies: int = 200
+## Kullanıcı isteği (2026-09-27): "yaratık sayısı singleplayerda 100 sonrasında her oyuncu için +20 olsun (can kalkan
+## oranlarına dokunma)" - artık bu TEK OYUNCULU tavan; her ek oyuncu ENEMY_CAP_PER_EXTRA_PLAYER ekler (bkz. player_enemy_cap).
+@export var max_concurrent_enemies: int = 100
 ## Multiplayer enemy scaling: solo keeps the original cap; each additional
 ## player adds room for more creatures and slightly increases spawn frequency.
 ## Kullanıcı isteği: "oyuncu başına yaratık sayısı %50 [artsın]" - eskiden 18, ×1.5 (27).
@@ -223,8 +225,8 @@ const FINAL_CREATURES := [
 ## KALDIRILDI (kullanıcı isteği 2026-09-25): eskiden tavan = 200 + (oyuncu - 1) x 98 idi (5 oyuncuda 592). Yeni kural:
 ## "maksimum yaratık sayısı 5 oyuncu varken olsun; 4 oyuncuda 180, 3'te 160, 2'de 140, tek oyunculuda 120" -
 ## max_concurrent_enemies (200) artık 5 oyuncunun tavanı, her eksik oyuncu için ENEMY_CAP_STEP_PER_MISSING_PLAYER düşer.
-const FULL_ENEMY_CAP_PLAYER_COUNT := 5
-const ENEMY_CAP_STEP_PER_MISSING_PLAYER := 20
+## 2026-09-27: yeni kural - tek oyuncu max_concurrent_enemies (100), her ek oyuncu +20 (2 -> 120, 3 -> 140, 4 -> 160...).
+const ENEMY_CAP_PER_EXTRA_PLAYER := 20
 ## Kullanıcı isteği (2026-09-24 denge turu: "her kademe için oyuncu başına %30 spawn ve %50 can") - 0.25 -> 0.30.
 const EXTRA_PLAYER_SPAWN_RATE := 0.30
 @export var min_spawn_distance: float = 480.0
@@ -747,11 +749,11 @@ func _scaled_enemy_cap() -> int:
 	return max(1, int(round(player_enemy_cap(_player_count()) * _tier_crowding_scale())))
 
 
-## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->120, 2->140, 3->160, 4->180, 5+->200 (bkz.
-## FULL_ENEMY_CAP_PLAYER_COUNT notu). Erken kademelerde bu tavan _tier_crowding_scale ile ayrıca kısılır (değişmedi).
+## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->100, 2->120, 3->140, 4->160, 5->180 (2026-09-27, bkz.
+## max_concurrent_enemies notu). Erken kademelerde bu tavan _tier_crowding_scale ile ayrıca kısılır (değişmedi).
+## Yaratık canı/kalkanı oyuncu sayısından BAĞIMSIZ olarak ayrı ölçeklenir - burası sadece sayı.
 func player_enemy_cap(players: int) -> int:
-	var missing: int = maxi(0, FULL_ENEMY_CAP_PLAYER_COUNT - maxi(1, players))
-	return maxi(1, max_concurrent_enemies - missing * ENEMY_CAP_STEP_PER_MISSING_PLAYER)
+	return maxi(1, max_concurrent_enemies + (maxi(1, players) - 1) * ENEMY_CAP_PER_EXTRA_PLAYER)
 
 
 func _current_interval() -> float:

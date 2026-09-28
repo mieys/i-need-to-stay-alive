@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_evo_burst.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/fx/evolution/curse_burst_frames.tres" id="2"]
+
+[node name="FxEvoCurseBurst" type="AnimatedSprite2D"]
+z_index = 5
+texture_filter = 1
+position = Vector2(0, 0)
+scale = Vector2(1.212, 1.212)
+offset = Vector2(0, -2)
+sprite_frames = ExtResource("2")
+animation = &"play"
+script = ExtResource("1")
+base_radius = 70.0

@@ -269,6 +269,9 @@ func _on_body_entered(body: Node) -> void:
 	if not _shaman_burn_used and body.has_method("try_shaman_weapon_burn"):
 		_shaman_burn_used = body.try_shaman_weapon_burn()
 	_apply_knockback(body)
+	## Yetenek evrimleri (2026-09-28): "saldırıların geri iter/yavaşlatır..." - silahın ortak isabet kancası (weapon.gd).
+	if is_instance_valid(source_weapon) and source_weapon.has_method("evo_on_projectile_hit"):
+		source_weapon.evo_on_projectile_hit(body, hit_damage, direction)
 	if splash_radius > 0.0:
 		_apply_splash_damage(body)
 	## Efsun: silahın efsun davranışı (scripts/enchants/*.gd) bu isabete element/etki ekler, merminin yönünü (sekme) ya da

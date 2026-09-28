@@ -68,6 +68,12 @@ static func compute_icon_pose(angle: float, forward_rad: float, mirror_when_left
 ## KENDİ yerel sayacıyla integre eder - weapon_orbit_math.gd'deki uzunkılıç
 ## dönüşüyle AYNI mantık: faz caster ile birebir eşleşmeyebilir ama sürekli/
 ## dekoratif bir dönüş olduğu için fark edilmez.
-static func advance_salvo_angle(angle_in: float, delta: float) -> float:
-	var rotation_speed: float = (TAU * SALVO_ROTATIONS) / SALVO_DURATION
+## 2026-09-28: yetkili kopya (player.gd _process_talon_weapon_salvo) da artık BU fonksiyonu kullanıyor - eskiden kendi
+## "ilerleme x tur" hesabı 3 sn'de kırpılıyordu (salvo evrimle uzayınca silahlar donardı). spin_mult: "Uzun Girdap" evrimi
+## (EVO_SALVO_SPIN_MULT) - uzak kopya kasterin evrim listesinden (remote_player.gd has_evo) aynı çarpanı verir.
+const EVO_SALVO_SPIN_MULT: float = 1.2
+
+
+static func advance_salvo_angle(angle_in: float, delta: float, spin_mult: float = 1.0) -> float:
+	var rotation_speed: float = (TAU * SALVO_ROTATIONS) / SALVO_DURATION * spin_mult
 	return angle_in + delta * rotation_speed

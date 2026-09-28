@@ -15,8 +15,9 @@ const CHAR_ID := 13
 const PULL_TIME := 0.35
 ## Silahların "çekildiği" nokta - karakter düğümünün yerel uzayında (gövdenin ortası).
 const BODY_CENTER := Vector2(0, -6)
-## R yeteneği: aynı anda dolaşan küçük yarasa sayısı.
-const BAT_COUNT := 6
+## R yeteneği: aynı anda dolaşan küçük yarasa sayısı. Kullanıcı isteği (2026-09-28, yetenek evrimleri): "yarasa sayısını 3'e
+## düşürüyoruz" - 6 -> 3 ("Büyüyen Sürü" evrimi +2, bkz. player.gd _vampir_bat_count).
+const BAT_COUNT := 3
 const BAT_HOME_RADIUS := 30.0
 ## Karakter dokusunun 1 sanat pikselinin dünyadaki boyutu (DEFAULT_ANIM_SCALE 1.27575 x EntityScale.SIZE 0.95).
 ## Tüm Vampir FX'leri bu ızgaraya oturtulur - bkz. feedback "pixel-style FX".

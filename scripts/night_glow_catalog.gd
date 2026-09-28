@@ -59,6 +59,12 @@ const NO_GLOW_SCENES := [
 	"res://scenes/fx_hadime_levitate.tscn",
 	"res://scenes/fx_hadime_nightmare.tscn",
 	"res://scenes/fx_hadime_nightmare_burst.tscn",
+	## Yetenek evrimleri (2026-09-28): kan (Vampir Kan Patlaması / Kan Kalkanı), yarasa kanadı savurması ve Elara'nın
+	## "Kaybolan Gölge" dumanı (gizlilik) parlamaz.
+	"res://scenes/fx_evo_blood_burst.tscn",
+	"res://scenes/fx_evo_blood_shield.tscn",
+	"res://scenes/fx_evo_bat_swoop.tscn",
+	"res://scenes/fx_evo_vanish.tscn",
 ]
 
 const BY_SCENE := {
@@ -168,6 +174,21 @@ const BY_SCENE := {
 	"res://scenes/fx_wave_beam.tscn": {"c": Color(0.5, 1.0, 0.6), "r": 30.0, "e": 0.7},
 	"res://scenes/fx_skill_burst.tscn": {"cp": "glow_color", "c": Color(1.0, 0.9, 0.7), "r": 60.0, "e": 0.75, "d": 0.8},
 	"res://scenes/fx_skill_ring.tscn": {"cp": "_color", "rp": "_radius", "rs": 0.7, "c": Color(1.0, 0.9, 0.7), "r": 60.0, "e": 0.6, "d": 0.6},
+	## --- Yetenek evrimleri (2026-09-28, tools/gen_evolution_fx.py) ---
+	"res://scenes/fx_evo_gain.tscn": {"c": Color(0.8, 0.6, 1.0), "r": 50.0, "e": 0.55, "d": 0.8},
+	"res://scenes/fx_evo_curse_burst.tscn": {"c": Color(0.5, 1.0, 0.35), "r": 70.0, "e": 0.8, "d": 0.5},
+	"res://scenes/fx_evo_hole_burst.tscn": {"c": Color(0.78, 0.45, 1.0), "r": 110.0, "e": 1.0, "d": 0.7},
+	"res://scenes/fx_evo_heal_pulse.tscn": {"c": Color(0.85, 1.0, 0.55), "r": 50.0, "e": 0.6, "d": 0.6},
+	"res://scenes/fx_evo_cooldown_reset.tscn": {"c": Color(1.0, 0.85, 0.4), "r": 26.0, "e": 0.5, "d": 0.6},
+	## Talon "Kalkan Çemberi": salvo boyunca sürekli, çember (dünya ~65 birim) kadar geniş hafif turuncu ışık.
+	"res://scenes/fx_evo_talon_ward.tscn": {"c": Color(1.0, 0.55, 0.2), "r": 70.0, "e": 0.35},
+	"res://scenes/fx_evo_talon_block.tscn": {"c": Color(1.0, 0.7, 0.3), "r": 20.0, "e": 0.6, "d": 0.25},
+	"res://scenes/fx_evo_spin_spark.tscn": {"c": Color(1.0, 0.7, 0.3), "r": 18.0, "e": 0.55, "d": 0.2},
+	"res://scenes/fx_evo_shield_refill.tscn": {"c": Color(0.45, 0.75, 1.0), "r": 50.0, "e": 0.6, "d": 0.6},
+	"res://scenes/fx_evo_reflect_spark.tscn": {"c": Color(1.0, 0.85, 0.4), "r": 20.0, "e": 0.55, "d": 0.2},
+	"res://scenes/fx_evo_shockwave.tscn": {"c": Color(0.75, 0.85, 1.0), "r": 120.0, "e": 0.6, "d": 0.5},
+	"res://scenes/fx_evo_retribution.tscn": {"c": Color(1.0, 0.85, 0.4), "r": 150.0, "e": 1.1, "d": 0.8, "cap": 0.65},
+	"res://scenes/fx_evo_mine_pop.tscn": {"c": Color(1.0, 0.55, 0.2), "r": 50.0, "e": 0.9, "d": 0.4},
 	## --- Durum efektleri (yanma/donma/zehir... - yaratığın/oyuncunun üstünde) ---
 	## Yanma (2026-09-25: "boyutunu %10 küçültüp biraz daha parlamasını sağla") - güç 0.6 -> 0.85.
 	"res://scenes/fx_burn_status.tscn": {"c": Color(1.0, 0.5, 0.15), "r": 34.0, "e": 0.85, "f": 0.45},
@@ -192,6 +213,9 @@ const BY_SCRIPT := {
 	## göre enchant_area.gd get_night_glow_color kancasından), yaratığın üstündeki Şok durumu.
 	"res://scripts/fx_enchant_pixel.gd": {"cp": "color", "c": Color(1.0, 0.9, 0.7), "r": 50.0, "e": 0.6, "d": 0.45},
 	"res://scripts/enchant_area.gd": {"c": Color(1.0, 0.6, 0.25), "r": 50.0, "e": 0.45},
+	## Yetenek evrimi dünya alanları (2026-09-28): Korsan ateş alanı (turuncu, alan kadar) / mayın (küçük kırmızı) - renk ve
+	## yarıçap evo_area.gd glow_color / glow_radius alanlarından.
+	"res://scripts/evo_area.gd": {"cp": "glow_color", "rp": "glow_radius", "rs": 1.0, "c": Color(1.0, 0.5, 0.18), "r": 60.0, "e": 0.5, "f": 0.3},
 	"res://scripts/fx_shock_status.gd": {"c": Color(1.0, 0.9, 0.35), "r": 22.0, "e": 0.4},
 	"res://scripts/fx_kalkan_bagi_link.gd": {"c": Color(0.45, 0.8, 1.0), "r": 24.0, "e": 0.4},
 	"res://scripts/fx_matthew_dash_lines.gd": {"c": Color(1.0, 0.7, 0.4), "r": 30.0, "e": 0.4, "d": 0.3},

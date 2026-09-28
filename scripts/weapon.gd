@@ -179,8 +179,14 @@ func _elara_true_damage_active() -> bool:
 ## Tüm atış aralığı hesaplarının (FireTimer, yay çekilişi, şimşek ışını tiki) TEK kaynağı.
 func _effective_fire_wait() -> float:
 	var wait: float = fire_rate * fire_rate_multiplier
+	## Kullanıcı isteği (2026-09-28, yetenek evrimleri): "saldırı hızını toplam saldırı hızı yerine normal saldırı hızı olarak
+	## değiştiriyoruz" - taban: silahın TABAN atış hızının %30'u kadar EKLENİR (kartlar/eşyalarla çarpılmaz); "Tam Odak"
+	## evrimi (E finali, player.gd elara_focus_total) eski davranışı verir: o anki TOPLAM hız x1.3.
 	if _elara_true_damage_active():
-		wait /= 1.0 + TRUE_DAMAGE_ATTACK_SPEED_BONUS ## saldırı hızı x1.3 = aralık /1.3
+		if _player_flag("elara_focus_total") or _base_fire_rate <= 0.0:
+			wait /= 1.0 + TRUE_DAMAGE_ATTACK_SPEED_BONUS ## saldırı hızı x1.3 = aralık /1.3
+		else:
+			wait = 1.0 / (1.0 / maxf(0.01, wait) + TRUE_DAMAGE_ATTACK_SPEED_BONUS / _base_fire_rate)
 	if is_instance_valid(enchant_behavior):
 		wait /= 1.0 + enchant_behavior.attack_speed_bonus() ## efsun saldırı hızı (ör. Çoklu Üfleme V)
 		## Uzunkılıç "daha sık savrulur" efsun adımları (EnchantDefs "orbit_cd_mult" - eski dönen kılıçta aynı düşmana
@@ -2107,8 +2113,8 @@ func _deal_beam_tick(target: Node2D) -> void:
 	## Elara TEMEL/ULTİ - bkz. _fire_at()'teki birebir aynı blok. Sürekli ışın
 	## (Şimşek Asası) nadiren de olsa Elara'ya verilirse tikleri de aynı
 	## kurala uysun diye burada da tekrarlanıyor.
-	if _elara_true_damage_active():
-		shield_pen = 1.0
+	## (2026-09-28: Elara E artık kalkanı TAMAMEN yok saymıyor - kullanıcı: "Gerçek hasar bonusunu kaldırıyoruz". Evrimi "Delici
+	## Oklar" isabet başına ek %15 gerçek hasar ekler - bkz. player.gd evo_weapon_hit.)
 	if _player_flag("elara_double_fire_active"):
 		final_damage *= ELARA_DOUBLE_FIRE_DAMAGE_MULT
 	## Eldiven/Sigara: item_flat_hit_damage (düz +hasar) ve
@@ -2136,6 +2142,7 @@ func _deal_beam_tick(target: Node2D) -> void:
 		_apply_chain_jumps(target, final_damage * chain_pct, is_crit, shield_pen, _shaman_burn_applied, jumps)
 	fired.emit((target.global_position - global_position).normalized())
 	_apply_item_slow_on_hit(target)
+	_evo_on_hit(target, final_damage, (target.global_position - global_position).normalized())
 
 
 ## Birincil hedefe EN YAKIN chain_jump_count kadar farklı düşmana (birincil
@@ -2217,6 +2224,20 @@ func _apply_item_slow_on_hit(target: Node2D) -> void:
 	var slow_percent: float = _player_stat("item_enemy_slow_percent")
 	if slow_percent > 0.0 and is_instance_valid(target) and target.has_method("apply_slow"):
 		target.apply_slow(slow_percent, 5.0)
+
+
+## Yetenek evrimlerinin "saldırıların ..." etkileri (geri itme, yavaşlatma, ek gerçek hasar, kopya silah can çalması) - TEK
+## kanca: isabet kararı burada, etkinin kendisi sahibin player.gd evo_weapon_hit'inde (evrim/buff durumunu o bilir).
+## Mermiler projectile.gd'den evo_on_projectile_hit ile aynı yere gelir. Sahip bir oyuncu değilse (kopya/önizleme) no-op.
+func _evo_on_hit(target: Node2D, dmg: float, dir: Vector2) -> void:
+	var owner_p: Node = get_parent()
+	if owner_p and owner_p.has_method("evo_weapon_hit") and is_instance_valid(target):
+		owner_p.evo_weapon_hit(self, target, dmg, dir)
+
+
+func evo_on_projectile_hit(body: Node, dmg: float, dir: Vector2) -> void:
+	if body is Node2D:
+		_evo_on_hit(body as Node2D, dmg, dir)
 
 
 func _fire_at(target: Node2D) -> void:
@@ -2337,8 +2358,8 @@ func _fire_at(target: Node2D) -> void:
 	## (bkz. player.gd elara_double_fire_active) her atış sadece %60 hasar verir - "2 kez tetiklenir" kısmı bu
 	## fonksiyonun İKİ KEZ çağrılmasıyla dışarıda sağlanıyor (bkz. _on_fire_timer_timeout, _process draw-ready dalı),
 	## burada sadece oran düşüyor.
-	if _elara_true_damage_active():
-		shield_pen = 1.0
+	## (2026-09-28: Elara E artık kalkanı TAMAMEN yok saymıyor - kullanıcı: "Gerçek hasar bonusunu kaldırıyoruz". Evrimi "Delici
+	## Oklar" isabet başına ek %15 gerçek hasar ekler - bkz. player.gd evo_weapon_hit.)
 	if _player_flag("elara_double_fire_active"):
 		final_damage *= ELARA_DOUBLE_FIRE_DAMAGE_MULT
 
@@ -2373,6 +2394,7 @@ func _fire_at(target: Node2D) -> void:
 			target.take_damage(final_damage, is_crit, shield_pen)
 			_apply_knockback(target)
 			_apply_item_slow_on_hit(target)
+			_evo_on_hit(target, final_damage, direction)
 			if target.has_method("try_shaman_weapon_burn"):
 				_shaman_burn_applied = target.try_shaman_weapon_burn()
 		if impact_scene:
@@ -2610,6 +2632,7 @@ func _melee_strike(target: Node2D, center: Vector2, real_hit: bool, final_damage
 		_apply_knockback(target)
 		_deal_melee_damage(target, final_damage, is_crit, shield_pen)
 		_apply_item_slow_on_hit(target)
+		_evo_on_hit(target, final_damage, (target.global_position - global_position).normalized())
 		## Hançer: birincil hedefte kanama yükü bırakır (bkz. enemy.gd
 		## apply_bleed) - diğer tüm silahlerde bleed_max_stacks=0, no-op.
 		if bleed_max_stacks > 0 and target.has_method("apply_bleed"):

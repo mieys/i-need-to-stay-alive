@@ -4,6 +4,8 @@ extends Node
 const VampirMathScript := preload("res://scripts/vampir_math.gd")
 ## Suriyeli Hadime "hadime_fx" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
 const HadimeMathScript := preload("res://scripts/hadime_math.gd")
+## Yetenek evrimi dünya alanları (Korsan ateş/mayın) - broadcast_evo_area.
+const EvoAreaScript := preload("res://scripts/evo_area.gd")
 const PixelDrawScript := preload("res://scripts/pixel_draw.gd")
 const EnchantFxScript := preload("res://scripts/enchant_fx.gd")
 const SpiritualSkillsScript := preload("res://scripts/spiritual_skills.gd")
@@ -2489,6 +2491,11 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			if not skill_scene:
 				return
 			var skill_fx: Node = skill_scene.instantiate()
+			## Yetenek evrimleri (2026-09-28): kasterin player.gd _play_and_broadcast_skill_fx(scene, props) ile AYNI props -
+			## add_child'dan ÖNCE (sahnenin _ready'si evrim bilgisini görsün).
+			var skill_props: Dictionary = extra_data.get("props", {})
+			for prop_key in skill_props:
+				skill_fx.set(prop_key, skill_props[prop_key])
 			rp.add_child(skill_fx)
 			if "position" in extra_data:
 				skill_fx.set("position", Vector2(extra_data["position"]))
@@ -2500,6 +2507,9 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			if not impact_scene:
 				return
 			var impact_fx: Node2D = impact_scene.instantiate() as Node2D
+			## Yetenek evrimi efektleri (player.gd _evo_world_fx): yön (rotation) - yarıçap setup(radius, color) ile aşağıda.
+			if extra_data.has("rotation"):
+				impact_fx.rotation = float(extra_data["rotation"])
 			get_tree().current_scene.add_child(impact_fx)
 			impact_fx.global_position = pos
 			## DÜZELTME: bazı hitscan_impact fx'leri (örn. fx_meteor_strike,
@@ -2798,9 +2808,34 @@ func _find_remote_player(player_id: int) -> RemotePlayer:
 ## broadcast_player_vfx'ten (unreliable) BİLEREK AYRI ve "reliable": host'taki kopya yaratıkları ÇEKEN kopya (yaratıklar
 ## host'ta simüle edilir) - paket kaybolursa o kullanımda çekim hiç olmazdı. Hasar/kalkan kasterin kendi kopyasında
 ## (burada on_tick yok), diğer istemcilerde sadece görsel.
+## Yetenek evrimleri (2026-09-28): opts {"r": yarıçap çarpanı (Genişleyen Boşluk), "mv": hareketli mi (Gezgin Delik)} -
+## kasterin kendi kopyasıyla AYNI HadimeMath.spawn_black_hole seçenekleri. Hareketli delikte kaster konumu
+## broadcast_hadime_hole_pos ile yayınlar; kopya oyuncu kimliğiyle _hadime_holes'ta tutulur (aynı anda oyuncu başına tek
+## delik: bekleme süresi ömründen uzun).
+var _hadime_holes: Dictionary = {}
+
+
 @rpc("any_peer", "call_remote", "reliable")
-func broadcast_hadime_black_hole(_player_id: int, pos: Vector2) -> void:
-	HadimeMathScript.spawn_black_hole(get_tree().current_scene, pos, false, is_host, Callable())
+func broadcast_hadime_black_hole(player_id: int, pos: Vector2, opts: Dictionary = {}) -> void:
+	var hole: Node2D = HadimeMathScript.spawn_black_hole(get_tree().current_scene, pos, false, is_host, Callable(), {
+		"radius_mult": float(opts.get("r", 1.0)),
+		"moving": bool(opts.get("mv", false)),
+		"owner_peer": player_id,
+	})
+	if hole != null:
+		_hadime_holes[player_id] = hole
+
+
+## Gezgin Delik: kasterin yetkili deliğinin konumu (~10 Hz, kozmetik + host'taki çekim kopyasının yeri). Kaybolan paket
+## sorun değil - bir sonraki konum gelir.
+@rpc("any_peer", "call_remote", "unreliable")
+func broadcast_hadime_hole_pos(player_id: int, pos: Vector2) -> void:
+	var hole: Variant = _hadime_holes.get(player_id)
+	if hole == null or not is_instance_valid(hole):
+		_hadime_holes.erase(player_id)
+		return
+	if (hole as Node).has_method("set_net_target"):
+		(hole as Node).call("set_net_target", pos)
 
 
 ## player.gd _stop_and_broadcast_skill_fx: "skill_scene" ile açılmış, kendi süresi olmayan (stop() ile biten) bir FX'in
@@ -3281,6 +3316,33 @@ func sync_damage_redirect_buff(target_peer_id: int, source_peer_id: int, percent
 ## Oakley'nin saldırı gücünden sabitlenmiş halde geliyor - hedef bundan sonra
 ## tamamen yerel çalışır, Oakley'nin GÜNCEL statlarına bir daha erişmeye
 ## gerek yok.
+## Yetenek evrimleri (2026-09-28): Melek'in bağlı dosta verdiği süreli etkiler ("knock" saldırılar geri iter, "absorb" kalkan
+## soğurma, "dmg_red" hasar azaltma, "speed" hareket hızı) - hedefin KENDİ istemcisinde uygulanır (player.gd apply_evo_buff;
+## hasar/hız/silah vuruşları orada hesaplanır). Melek her saniye tazeler, bu yüzden kaybolan paket kısa bir boşluktur.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_evo_buff(target_peer_id: int, key: String, value: float, duration: float) -> void:
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	if local_id != target_peer_id:
+		return
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if local_player and local_player.has_method("apply_evo_buff"):
+		local_player.apply_evo_buff(key, value, duration)
+
+
+## Yetenek evrimi alanları (evo_area.gd: Korsan ateş alanı / mayın): yetkili kopya kasterde, diğer oyuncularda AYNI
+## spawn() görsel kopya kurar. Mayın patlayınca yetkili kopya broadcast_evo_area_end ile kopyaları da patlatır.
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_evo_area(kind: String, pos: Vector2, params: Dictionary) -> void:
+	if get_tree().current_scene == null:
+		return
+	EvoAreaScript.spawn(get_tree(), kind, pos, params, false)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_evo_area_end(area_id: int, pos: Vector2) -> void:
+	EvoAreaScript.end_remote(area_id, pos)
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func sync_oakley_bond_buff(target_peer_id: int, heal_per_hit: float, shield_per_hit: float, reduction: float, duration: float) -> void:
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0

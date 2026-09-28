@@ -14,14 +14,21 @@ extends Node2D
 ## hareketini etkilemeyecek şekilde, pasif bir esinti gibi (fırtına rüzgarları değişmeyecek)"). Eski ekran kaplaması
 ## (harita_baked.tscn "CanvasLayer/ColorRect", rüzgar efekti.gdshader) haritadan kaldırıldı; yerine burada, dışarıdayken
 ## HER havada birkaç tane (BREEZE_GUSTS) daha şeffaf, daha yavaş, daha kısa ve daha az kıvrılan akıntı + ara sıra tek
-## bir yaprak. Rüzgarlı havanın kendi akıntıları (MAX_GUSTS) aynen ayrıca gelir. Esinti hızı ETKİLEMEZ (hız etkisi
-## player.gd _wind_move_mult - sadece atmosphere.gd wind_intensity'ye bakar).
+## bir yaprak. Rüzgarlı havanın kendi akıntıları (MAX_GUSTS) aynen ayrıca gelir. Rüzgar oyuncu hızını ETKİLEMEZ
+## (2026-09-27'de kaldırıldı, bkz. player.gd).
 ##
 ## PERF: parçacık başına Node YOK, tek _draw (weather_rain.gd ile aynı desen). PERF DÜZELTMESİ (kullanıcı bildirimi
 ## 2026-09-25: "oyundaki hava durumları fpsi düşürüyor gibi görünüyor"): akıntı pikselleri ve yapraklar eskiden TEK TEK
 ## draw_rect ile çiziliyordu (akıntı başına ~50-70, rüzgarlı/sağanakta ekranda ~20-40 akıntı -> karede 1000-2500 çizim
 ## komutu). Artık bütün pikseller 1 birimlik yatay çizgi parçaları olarak TEK draw_multiline_colors çağrısında - görünüm
 ## birebir aynı (1x1 dünya birimi hücre), komut sayısı 1.
+##
+## PERF DÜZELTMESİ 2 (kullanıcı bildirimi 2026-09-27: "ilerleyen kademelerde hala çok fps sorunu var"): gece-fırtına
+## profilinde bu düğüm tek başına ~6.7 ms/kare yiyordu (kapatınca 21.5 -> 14.8 ms, 46 -> 68 FPS). Kök neden _draw: her karede
+## her akıntı (fırtınada ~33) kuyruktan başa 0.8 birim adımla ~125 kez _gust_point (sözlük okumaları + sin/cos) ile YENİDEN
+## hesaplanıyordu (~4000 adım/kare). Akıntının şekli doğduğu an belli ve değişmiyor (sadece "baş" ilerliyor) - artık
+## pikselleri (hücre + ilk göründüğü yol mesafesi) _spawn_gust'ta BİR KEZ hesaplanıp saklanır; _draw sadece [kuyruk, baş]
+## aralığındaki hazır hücreleri gezip opaklığı uygular. Görünüm aynı (aynı örnekleme, aynı ardışık-tekrar ayıklaması).
 ##
 ## SAĞANAK (kullanıcı bildirimi 2026-09-25: "hava durumunda fırtına hiç belli olmuyor rüzgarlar yapraklar vb yeterince
 ## belirgin ve hızlı değil"): set_wind'in storm (0..1) parametresi akıntıları daha çok/hızlı/uzun/parlak ve daha az
@@ -168,6 +175,27 @@ func _spawn_gust(lite: bool) -> void:
 		"alpha": randf_range(0.6, 1.0) * (BREEZE_ALPHA_MULT if lite else 1.0),
 		"base_a": GUST_COLOR.a if lite else lerpf(GUST_COLOR.a, STORM_ALPHA, st),
 	})
+	_bake_gust_cells(_gusts[_gusts.size() - 1])
+
+
+## Akıntının tüm yolu boyunca (0 .. total + trail) hücreleri ve her hücrenin İLK göründüğü yol mesafesi - _draw'ın eski
+## örneklemesiyle birebir (0.8 adım, ardışık aynı hücre atlanır).
+func _bake_gust_cells(g: Dictionary) -> void:
+	var cells := PackedVector2Array()
+	var cs := PackedFloat32Array()
+	var s_max: float = float(g["total"]) + float(g["trail"])
+	var last := Vector2i(-999999, -999999)
+	var s: float = 0.0
+	while s <= s_max:
+		var p: Vector2 = _gust_point(g, s)
+		var cell := Vector2i(int(floor(p.x)), int(floor(p.y)))
+		if cell != last:
+			last = cell
+			cells.append(Vector2(cell))
+			cs.append(s)
+		s += 0.8
+	g["cells"] = cells
+	g["cs"] = cs
 
 
 ## Rüzgarlı havada yaprak hızlı savrulur; sadece esinti varken (lite) yavaş, hafifçe aşağı süzülerek "düşer" ve
@@ -226,19 +254,27 @@ func _draw() -> void:
 		var base: Color = GUST_COLOR
 		base.a = float(g.get("base_a", GUST_COLOR.a))
 		var tail: float = maxf(0.0, head - trail)
-		var last := Vector2i(-999999, -999999)
-		var s: float = tail
-		while s <= head:
-			var p: Vector2 = _gust_point(g, s)
-			var cell := Vector2i(int(floor(p.x)), int(floor(p.y)))
-			if cell != last:
-				last = cell
-				var u: float = (s - tail) / maxf(trail, 1.0) ## 0 kuyruk -> 1 baş
-				var c: Color = base
-				c.a *= env * float(g["alpha"]) * u * u * (3.0 - 2.0 * u)
-				if c.a > 0.03:
-					_cell(Vector2(cell), c)
-			s += 0.8
+		var cells: PackedVector2Array = g["cells"]
+		var cs: PackedFloat32Array = g["cs"]
+		var n: int = cs.size()
+		## Kuyruğun düştüğü hücre: ilk göründüğü mesafe <= tail olan son hücre.
+		var i: int = maxi(cs.bsearch(tail, true) - 1, 0)
+		if i < n and cs[i] < tail and i + 1 < n and cs[i + 1] <= tail:
+			i += 1
+		var a_k: float = env * float(g["alpha"]) * base.a
+		var inv_trail: float = 1.0 / maxf(trail, 1.0)
+		while i < n:
+			var s: float = maxf(cs[i], tail)
+			if s > head:
+				break
+			var u: float = (s - tail) * inv_trail ## 0 kuyruk -> 1 baş
+			var a: float = a_k * u * u * (3.0 - 2.0 * u)
+			if a > 0.03:
+				var p: Vector2 = cells[i]
+				_pts.append(Vector2(p.x, p.y + 0.5))
+				_pts.append(Vector2(p.x + 1.0, p.y + 0.5))
+				_cols.append(Color(base.r, base.g, base.b, a))
+			i += 1
 	for leaf: Dictionary in _leaves:
 		var p2: Vector2 = (leaf["pos"] as Vector2).floor()
 		var col: Color = leaf["color"]

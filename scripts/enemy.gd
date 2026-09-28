@@ -1364,6 +1364,10 @@ func apply_element_host(kind: String, p: Dictionary, attacker_peer: int) -> void
 		"vuln":
 			_vuln_pct = maxf(_vuln_pct if Time.get_ticks_msec() < _vuln_until_msec else 0.0, float(p.get("pct", 0.2)))
 			_vuln_until_msec = Time.get_ticks_msec() + int(float(p.get("dur", 2.0)) * 1000.0)
+		## Yetenek evrimi (2026-09-28) Korsan "Ganimet": bu kısa süre içinde ölürse bayrağı bırakan oyuncuya 1 altın (bkz.
+		## _on_death_enchant_flags, korsan_bomb.gd - istemcide bayrak hasar RPC'sinden ÖNCE aynı güvenilir kanaldan gelir).
+		"evo_gold":
+			_enchant_flags["evo_gold"] = {"peer": attacker_peer, "until": Time.get_ticks_msec() + int(float(p.get("dur", 0.6)) * 1000.0)}
 		"chain_bomb":
 			_enchant_flags["chain_bomb"] = {"peer": attacker_peer, "ap": float(p.get("ap", 10.0)),
 				"until": Time.get_ticks_msec() + int(float(p.get("dur", 0.6)) * 1000.0), "gold": float(p.get("gold", 0.03))}
@@ -1818,6 +1822,9 @@ func _on_death_enchant_flags(tree: SceneTree, pos: Vector2, poison_stacks: int) 
 	if f.has("mark_death_blast") and mark_stacks > 0:
 		var md: Dictionary = f["mark_death_blast"]
 		deferred.append([80.0, float(md["ap"]) * 0.6 * float(md["power"]), int(md["peer"]), "explosion", Color(0.75, 0.45, 1.0)])
+	if f.has("evo_gold") and Time.get_ticks_msec() <= int(f["evo_gold"]["until"]):
+		_notify_enchant_owner(int(f["evo_gold"]["peer"]), "gold", {"amount": 1})
+		EnchantFxScript.play(tree, "text", pos, {"text": "+1", "color": Color("#ffd24a")})
 	if f.has("chain_bomb") and Time.get_ticks_msec() <= int(f["chain_bomb"]["until"]):
 		var cb: Dictionary = f["chain_bomb"]
 		deferred.append([60.0, float(cb["ap"]) * 0.6, int(cb["peer"]), "chain_bomb", Color(1.0, 0.7, 0.3)])

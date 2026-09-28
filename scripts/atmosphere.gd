@@ -162,7 +162,7 @@ func is_authority() -> bool:
 
 
 func _process(delta: float) -> void:
-	cycle_time = AtmosphereMath.wrap_time(cycle_time + delta * debug_time_scale)
+	cycle_time = AtmosphereMath.wrap_time(cycle_time + delta * AtmosphereMath.CLOCK_SPEED * debug_time_scale)
 	if is_authority():
 		_process_weather_authority(delta)
 	elif _time_fix != 0.0:

@@ -1666,6 +1666,11 @@ func _process(delta: float) -> void:
 				var ic: Node = pair[1]
 				if ic and is_instance_valid(ic) and ic.has_method("set_locked_level"):
 					ic.set_locked_level(0 if player.is_skill_slot_unlocked(pair[0]) else player.get_skill_slot_unlock_level(pair[0]))
+				## Yetenek evrimi boncukları (2026-09-28, skill_icon.gd set_evolution_progress) - final ancak diğerlerinden
+				## sonra alınabildiği için "hepsi alındı" = final de alındı.
+				if ic and is_instance_valid(ic) and ic.has_method("set_evolution_progress") and player.has_method("get_evolution_progress"):
+					var evo_prog: Vector2i = player.get_evolution_progress(pair[0])
+					ic.set_evolution_progress(evo_prog.x, evo_prog.y, evo_prog.y > 0 and evo_prog.x >= evo_prog.y)
 		skill_icon.update_state(player.get_skill_progress(), player.is_skill_active(), player.skill_timer, player.get_skill_active_fraction())
 		if skill2_icon.visible and player.has_method("get_skill2_progress"):
 			## Büyücü Kız'ın TEMEL yeteneği artık 4 varyasyonlu ve standart
@@ -1698,7 +1703,7 @@ func _process(delta: float) -> void:
 		if skill2_icon.has_method("set_charges"):
 			skill2_icon.set_stack_count(-1) ## eski sayı rozeti bu yuvada artık kullanılmıyor
 			if "korsan_bomb_charges" in player and player.get_skill2_id() == 17:
-				skill2_icon.set_charges(player.korsan_bomb_charges, player.KORSAN_MAX_BOMB_CHARGES, player.get_korsan_bomb_charge_fraction())
+				skill2_icon.set_charges(player.korsan_bomb_charges, player.get_korsan_max_bomb_charges(), player.get_korsan_bomb_charge_fraction()) ## evrimle 3 -> 5
 			## Assasin Çocuk'un yeni TEMEL'i (Şahin Hamlesi, id 5) de Korsan'ın
 			## bombasıyla AYNI şarj deseninde - bkz. player.gd
 			## assasin_dash2_charges/ASSASIN_DASH2_MAX_CHARGES.

@@ -1,7 +1,8 @@
 extends Node2D
 
 ## Nehir akıntısı sesi (kullanıcı isteği 2026-09-27: "oyunda nehire yaklaşınca nehir su akıntısı sesi eklemeni istiyorum").
-## Ses: assets/audio/river_flow_loop.wav (tools/gen_river_sound.py, dikişsiz döngü).
+## Ses: SOUND_PATH. 2026-09-27: üretilen ses kullanıcı isteğiyle iptal edildi ("nehir sesini iptal et ben sonra yüklerim") -
+## dosya bu yola konana kadar main.gd bu bileşeni hiç kurmaz. Döngü açık olmalı (WAV ise çalışma anında açılır).
 ##
 ## Haritanın "Su" katmanlarındaki (harita_baked.tscn: Su/Su, Su/Su altı) dolu hücrelerden kaba bir ızgara (GRID_CELL dünya
 ## birimi) kurulur; her UPDATE_INTERVAL'da YEREL oyuncuya en yakın su noktası bulunur ve tek bir AudioStreamPlayer2D oraya

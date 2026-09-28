@@ -63,6 +63,12 @@ func _physics_process(delta: float) -> void:
 				and global_position.distance_to(pn.global_position) <= float(pn.get("paladin_zone_radius")):
 			_explode()
 			return
+		## Talon "Kalkan Çemberi" evrimi (2026-09-28): salvo çemberine değen ateş topu söner.
+		if pn.has_method("get_talon_ward_radius"):
+			var ward_r: float = float(pn.call("get_talon_ward_radius"))
+			if ward_r > 0.0 and global_position.distance_to(pn.global_position) <= ward_r:
+				_explode()
+				return
 		if global_position.distance_to(pn.global_position) <= HIT_RADIUS + AbilitiesScript.TARGET_BODY_RADIUS:
 			if authoritative:
 				AbilitiesScript.deal_special_damage(p, damage, source, "fireball")

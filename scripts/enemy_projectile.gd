@@ -52,6 +52,11 @@ var _life: float = 0.0
 static var _cache_frame: int = -1
 static var _targets: Array = [] ## [Node2D gövde, Vector2 şekil merkezi, float yarıçap]
 static var _dome_owners: Array = [] ## aktif Şovalye kalkanı olan oyuncular (genelde boş)
+## Talon "Kalkan Çemberi" evrimi (2026-09-28): salvo sürerken mermileri silah çemberinde söndüren oyuncular [gövde, yarıçap].
+static var _ward_owners: Array = []
+## İlk kullanımda yüklenir (preload DEĞİL: yeni sayfa henüz içe aktarılmadıysa bu script derlenmeye devam etsin).
+const WARD_BLOCK_SCENE_PATH := "res://scenes/fx_evo_talon_block.tscn"
+static var _ward_block_scene: PackedScene = null
 
 
 func _ready() -> void:
@@ -77,6 +82,7 @@ static func _refresh_cache(tree: SceneTree) -> void:
 		_forest_inv = _forest_layer.global_transform.affine_inverse()
 	_targets.clear()
 	_dome_owners.clear()
+	_ward_owners.clear()
 	var bodies: Array = []
 	var local_p: Node = tree.get_first_node_in_group("player")
 	if local_p:
@@ -89,6 +95,11 @@ static func _refresh_cache(tree: SceneTree) -> void:
 		## Şovalye (Paladin) ultisi: hangi oyuncuya hedeflenmiş olursa olsun HER aktif kalkan kontrol edilir.
 		if "paladin_zone_active" in b and b.get("paladin_zone_active") == true:
 			_dome_owners.append(b)
+		## Talon "Kalkan Çemberi" (yerel oyuncu + uzak kukla aynı adlı fonksiyonu verir - host'ta uzak Talon'un çemberi de sayılır).
+		if b.has_method("get_talon_ward_radius"):
+			var ward_r: float = float(b.call("get_talon_ward_radius"))
+			if ward_r > 0.0:
+				_ward_owners.append([b, ward_r])
 		if not (b is CollisionObject2D) or ((b as CollisionObject2D).collision_layer & TARGET_LAYER_MASK) == 0:
 			continue
 		for c in (b as Node).get_children():
@@ -129,6 +140,11 @@ func _physics_process(delta: float) -> void:
 	## mermi kime hedeflenmiş olursa olsun.
 	for p in _dome_owners:
 		if is_instance_valid(p) and global_position.distance_to(p.global_position) <= float(p.get("paladin_zone_radius")):
+			queue_free()
+			return
+	for w in _ward_owners:
+		if is_instance_valid(w[0]) and global_position.distance_to((w[0] as Node2D).global_position) <= float(w[1]):
+			_spawn_ward_block()
 			queue_free()
 			return
 
@@ -175,5 +191,17 @@ func _spawn_impact() -> void:
 	var fx := Node2D.new()
 	fx.set_script(ImpactScript)
 	fx.set("color", tint)
+	get_tree().current_scene.add_child(fx)
+	fx.global_position = global_position
+
+
+## Talon "Kalkan Çemberi"nde sönen merminin küçük kıvılcımı - her makine kendi kopyası sönerken kendisi oynatır (yayın yok:
+## mermi her makinede aynı kurala göre söner).
+func _spawn_ward_block() -> void:
+	if _ward_block_scene == null and ResourceLoader.exists(WARD_BLOCK_SCENE_PATH):
+		_ward_block_scene = load(WARD_BLOCK_SCENE_PATH) as PackedScene
+	if _ward_block_scene == null or get_tree().current_scene == null:
+		return
+	var fx: Node2D = _ward_block_scene.instantiate() as Node2D
 	get_tree().current_scene.add_child(fx)
 	fx.global_position = global_position

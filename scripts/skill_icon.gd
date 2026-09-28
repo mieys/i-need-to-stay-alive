@@ -97,7 +97,9 @@ func _on_mouse_entered() -> void:
 		var skill_id_val: int = def.get("skill", 1) as int
 		
 		if player and is_instance_valid(player) and "SKILL_TIMING" in player:
-			var timing: Dictionary = player.SKILL_TIMING.get(skill_id_val, {"cooldown": 20.0}) as Dictionary
+			## Yetenek evrimlerinin bekleme/süre değişiklikleri dahil (player.gd _skill_timing_for -> _evo_timing).
+			var timing: Dictionary = (player.call("_skill_timing_for", skill_id_val) if player.has_method("_skill_timing_for") \
+				else player.SKILL_TIMING.get(skill_id_val, {"cooldown": 20.0})) as Dictionary
 			base_cd = timing["cooldown"] as float
 			current_cd = player._skill_cooldown as float
 			detail_duration = float(timing.get("duration", 0.0))
@@ -155,6 +157,9 @@ func _on_mouse_entered() -> void:
 			## E ile paylaşılan SKILL2_TIMING kimlik uzayında (bkz. player.gd
 			## BUYUCU_VARIATION_SKILL2_IDS) - orada da aranır.
 			var timing3: Dictionary = player.SKILL3_TIMING.get(skill3_id_val, player.SKILL2_TIMING.get(skill3_id_val, {"cooldown": 15.0})) as Dictionary
+			## Yetenek evrimlerinin bekleme/süre değişiklikleri dahil (player.gd _skill3_timing_for -> _evo_timing).
+			if player.SKILL3_TIMING.has(skill3_id_val) and player.has_method("_skill3_timing_for"):
+				timing3 = player.call("_skill3_timing_for", skill3_id_val) as Dictionary
 			base_cd3 = timing3["cooldown"] as float
 			detail_duration = float(timing3.get("duration", 0.0))
 			var cdr3: float = float(player.cooldown_reduction_percent) if "cooldown_reduction_percent" in player else 0.0
@@ -196,7 +201,9 @@ func _on_mouse_entered() -> void:
 			skill2_id_val = player.get_skill2_id()
 
 		if player and is_instance_valid(player) and "SKILL2_TIMING" in player:
-			var timing: Dictionary = player.SKILL2_TIMING.get(skill2_id_val, {"cooldown": 15.0}) as Dictionary
+			## Yetenek evrimlerinin bekleme/süre değişiklikleri dahil (player.gd _skill2_timing_for -> _evo_timing).
+			var timing: Dictionary = (player.call("_skill2_timing_for", skill2_id_val) if player.has_method("_skill2_timing_for") \
+				else player.SKILL2_TIMING.get(skill2_id_val, {"cooldown": 15.0})) as Dictionary
 			base_cd = timing["cooldown"] as float
 			detail_duration = float(timing.get("duration", 0.0))
 			## DÜZELTME: player._skill2_cooldown Büyücü Kız için hiç
@@ -327,6 +334,20 @@ func _on_mouse_entered() -> void:
 	lbl_desc.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
 	lbl_desc.add_theme_constant_override("outline_size", 0)
 	vbox.add_child(lbl_desc)
+
+	## Yetenek evrimleri (2026-09-28): bu yuvada alınmış evrimler, açıklamanın hemen altında (ad + ne yaptığı).
+	var evo_text: String = _evolution_tooltip_text(player)
+	if evo_text != "":
+		var lbl_evo: RichTextLabel = RichTextLabel.new()
+		lbl_evo.bbcode_enabled = true
+		lbl_evo.text = evo_text
+		lbl_evo.fit_content = true
+		lbl_evo.autowrap_mode = TextServer.AUTOWRAP_WORD
+		for key in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size", "mono_font_size"]:
+			lbl_evo.add_theme_font_size_override(key, 24)
+		lbl_evo.add_theme_color_override("default_color", UIKit.C_TEXT)
+		lbl_evo.add_theme_constant_override("outline_size", 0)
+		vbox.add_child(lbl_evo)
 
 	## Shift: ayrıntılar (hasar/kalkan/iyileştirme sayıları, oyuncunun anlık statlarıyla - bkz. skill_details.gd).
 	var detail_text: String = ""
@@ -670,6 +691,7 @@ func _draw() -> void:
 		_draw_rect_perimeter_partial(outer, active_fraction, Color(1.0, 0.9, 0.4, 0.95), 3.0)
 
 	_draw_charge_pips(inner)
+	_draw_evolution_pips(inner)
 	_draw_badge_plate()
 
 
@@ -923,3 +945,70 @@ func _icon_thorns(c: Vector2, s: float) -> void:
 		var tip: Vector2 = c + dir * s * 1.05
 		var side: Vector2 = Vector2(-dir.y, dir.x) * s * 0.14
 		draw_colored_polygon(PackedVector2Array([base - side, base + side, tip]), spike_col)
+
+
+## ---------------------------------------------------------------- Yetenek evrimleri (2026-09-28)
+## Bu ikonun yuvası ("skill"/"skill2"/"skill3" - pasif/ruhani ikonlarda "").
+func _evolution_slot() -> String:
+	match String(name):
+		"SkillIcon":
+			return "skill"
+		"Skill2Icon":
+			return "skill2"
+		"Skill3Icon":
+			return "skill3"
+	return ""
+
+
+## İpucunun "EVRİMLER (2/5)" bölümü: bu yuvada alınmış her evrimin adı + ne yaptığı (skill_evolutions.gd metni). Yoksa "".
+func _evolution_tooltip_text(player: Node) -> String:
+	var slot: String = _evolution_slot()
+	if slot == "" or player == null or not is_instance_valid(player) or not ("skill_evolutions" in player):
+		return ""
+	var char_id: int = GameManager.selected_char_id
+	var owned_list: Array = SkillEvolutionsScript.owned_in_slot(char_id, slot, player.skill_evolutions)
+	if owned_list.is_empty():
+		return ""
+	var total: int = SkillEvolutionsScript.slot_list(char_id, slot).size()
+	var out: String = "[color=#%s][b]EVRİMLER (%d/%d)[/b][/color]" % [EVO_PIP_COLOR.to_html(false), owned_list.size(), total]
+	for e in owned_list:
+		var col: Color = EVO_PIP_FINAL if bool(e.get("final", false)) else EVO_PIP_COLOR
+		out += "\n[color=#%s]%s:[/color] %s" % [col.to_html(false), str(e.get("name", "")), str(e.get("desc", ""))]
+	return out
+
+
+const SkillEvolutionsScript := preload("res://scripts/skill_evolutions.gd")
+## Evrim boncukları: ikonun ALT kenarında, sağa yaslı - alınan evrim sayısı kadar mor (final altın) boncuk + kalanlar koyu.
+## Hiç evrim yoksa çizilmez (erken oyunda ikonlar sade kalsın). hud.gd her karede player.get_evolution_progress ile ayarlar.
+const EVO_PIP_COLOR := Color(0.78, 0.55, 1.0, 1.0)
+const EVO_PIP_HI := Color(0.93, 0.82, 1.0, 1.0)
+const EVO_PIP_FINAL := Color(1.0, 0.78, 0.35, 1.0)
+var _evo_owned: int = 0
+var _evo_total: int = 0
+var _evo_final_owned: bool = false
+
+
+func set_evolution_progress(owned: int, total: int, final_owned: bool = false) -> void:
+	if owned == _evo_owned and total == _evo_total and final_owned == _evo_final_owned:
+		return
+	_evo_owned = owned
+	_evo_total = total
+	_evo_final_owned = final_owned
+	queue_redraw()
+
+
+func _draw_evolution_pips(inner: Rect2) -> void:
+	if _evo_owned <= 0 or _evo_total <= 0:
+		return
+	var u: float = maxf(1.0, round(inner.size.x / 22.0))
+	var w: float = (1.0 + 3.0 * _evo_total) * u
+	var origin := Vector2(inner.end.x - w - u, inner.end.y - 5.0 * u)
+	draw_rect(Rect2(origin, Vector2(w, 4.0 * u)), PIP_OUTLINE, true)
+	for i in range(_evo_total):
+		var pip := Rect2(origin + Vector2(1.0 + 3.0 * i, 1.0) * u, Vector2(2.0, 2.0) * u)
+		if i < _evo_owned:
+			var is_final_pip: bool = _evo_final_owned and i == _evo_total - 1
+			draw_rect(pip, EVO_PIP_FINAL if is_final_pip else EVO_PIP_COLOR, true)
+			draw_rect(Rect2(pip.position, Vector2(u, u)), EVO_PIP_HI, true)
+		else:
+			draw_rect(pip, PIP_EMPTY, true)

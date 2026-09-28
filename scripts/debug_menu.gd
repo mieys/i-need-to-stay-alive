@@ -425,6 +425,25 @@ func _build_player_page(page: VBoxContainer) -> void:
 				m.debug_open_chest(elite))
 		ench_grid.add_child(chest_btn)
 	UISound.connect_all_buttons(ench_grid)
+	## Yetenek evrimleri (2026-09-28): 5 level beklemeden evrim kartları / bütün evrimler (henüz 8 karakterde var).
+	_header(page, "Yetenek evrimleri (Hadime, Vampir, Melek, Talon, Elara, Korsan, Şovalye, Matthew)")
+	var evo_grid := _grid(page, 2)
+	var evo_open_btn := _button("Evrim ekranı aç", "green", Vector2(420, 76))
+	evo_open_btn.pressed.connect(func() -> void:
+		var m: Node = get_tree().current_scene
+		if m and m.has_method("debug_open_evolution_screen"):
+			close()
+			if not bool(m.debug_open_evolution_screen()):
+				_set_status("Bu karakterin evrimi yok ya da ekran zaten açık", false))
+	evo_grid.add_child(evo_open_btn)
+	var evo_all_btn := _button("Tüm evrimleri ver", "wood", Vector2(420, 76))
+	evo_all_btn.pressed.connect(func() -> void:
+		var m: Node = get_tree().current_scene
+		if m and m.has_method("debug_grant_all_evolutions"):
+			var n: int = int(m.debug_grant_all_evolutions())
+			_set_status("%d evrim verildi" % n, n > 0))
+	evo_grid.add_child(evo_all_btn)
+	UISound.connect_all_buttons(evo_grid)
 	_refresh_toggles()
 
 

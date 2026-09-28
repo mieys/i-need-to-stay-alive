@@ -143,7 +143,9 @@ func test_timing_tables() -> void:
 	assert(P.VAMPIR_SKILL_COST_PERCENT == 0.04 and P.VAMPIR_ULTI_COST_PERCENT_PER_SEC == 0.05)
 	assert(P.VAMPIR_Q_DAMAGE_RATIO == 1.3 and P.VAMPIR_BAT_CONTACT_DAMAGE_RATIO == 0.8)
 	assert(P.VAMPIR_R_DAMAGE_RATIO == 0.6 and P.VAMPIR_R_HEAL_RATIO == 0.05)
-	assert(P.VAMPIR_BAT_SPEED_MULT == 1.6 and P.VAMPIR_BAT_DAMAGE_TAKEN_MULT == 0.2)
+	## 2026-09-28 yetenek evrimleri: taban yarasa formu %30 hız / hasar azaltma yok; "Gece Uçuşu" %60, "Gölge Kanatlar" %70 azaltma.
+	assert(P.VAMPIR_BAT_SPEED_MULT == 1.3 and P.EVO_VAMPIR_BAT_FAST_SPEED_MULT == 1.6 and P.EVO_VAMPIR_BAT_DAMAGE_TAKEN_MULT == 0.3)
+	assert(VampirMath.BAT_COUNT == 3 and P.EVO_VAMPIR_R_EXTRA_BATS == 2, "R: 3 yarasa (+2 evrimle)")
 
 
 func test_shared_pull_math() -> void:
@@ -196,7 +198,7 @@ func test_passive_does_nothing_for_other_characters() -> void:
 
 # ------------------------------------------------------------------ Q
 
-func test_q_hits_nearest_three_pays_health_and_grants_permanent_max_health() -> void:
+func test_q_hits_nearest_three_and_pays_health() -> void:
 	var player: Node = _make_player()
 	_ready_player(player)
 	var e1: FakeEnemy = _make_enemy(Vector2(1050, 1000))
@@ -213,9 +215,30 @@ func test_q_hits_nearest_three_pays_health_and_grants_permanent_max_health() -> 
 	for e in [e1, e2, e3]:
 		assert(e.hits.size() == 1 and is_equal_approx(e.hits[0], expected), "en yakın 3 düşman %%130 alır: %s" % str(e.hits))
 	assert(e4.hits.is_empty() and far.hits.is_empty(), "4. yakın ve uzak düşman vurulmamalı")
-	assert(is_equal_approx(player.max_health, max0 + 1.0), "kalıcı +1 maks. can (cast başına)")
-	assert(is_equal_approx(player.health, max0 - cost + 1.0), "bedel: maks. canın %%4'ü, +1 yeni can: %s" % str(player.health))
+	## 2026-09-28: kalıcı +1 maks. can artık temel yetenekte değil ("Kan Bağı" evrimi - aşağıdaki test).
+	assert(is_equal_approx(player.max_health, max0), "evrimsiz Q maks. canı değiştirmez")
+	assert(is_equal_approx(player.health, max0 - cost), "bedel: maks. canın %%4'ü: %s" % str(player.health))
 	assert(is_equal_approx(player.item_shield_hp, 0.0), "kalkan harcanmaz")
+	_cleanup()
+
+
+func test_q_evolutions_blood_bond_feast_and_cooldown() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	for id in ["vampir_q1", "vampir_q2", "vampir_qf"]:
+		player.apply_skill_evolution(id, true)
+	var enemies: Array = []
+	for i in range(6):
+		enemies.append(_make_enemy(Vector2(1040 + i * 30, 1000)))
+	var max0: float = player.max_health
+	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE
+	player._activate_skill()
+	var hit_count: int = 0
+	for e in enemies:
+		hit_count += (e as FakeEnemy).hits.size()
+	assert(hit_count == 5, "Kan Ziyafeti: 5 yaratık: %d" % hit_count)
+	assert(is_equal_approx(player.max_health, max0 + 1.0), "Kan Bağı: kalıcı +1 maks. can")
+	assert(is_equal_approx(player._skill_cooldown, 6.0 * 0.5 * (1.0 - player.cooldown_reduction_percent)), "Açlık: bekleme %%50")
 	_cleanup()
 
 
@@ -247,12 +270,19 @@ func test_e_bat_form_speed_damage_reduction_and_contact_damage() -> void:
 	var cost: float = player.max_health * 0.04
 	player._activate_skill2()
 	assert(player._vampir_bat_form_active and player.skill2_state == "active", "form aktif")
-	assert(is_equal_approx(player.skill2_speed_multiplier, 1.6), "%%60 hareket hızı")
+	assert(is_equal_approx(player.skill2_speed_multiplier, 1.3), "%%30 hareket hızı (2026-09-28 taban)")
 	assert(is_equal_approx(player.health, player.max_health - cost), "E de maks. canın %%4'ünü harcar")
 	var h1: float = player.health
+	player._last_damage_taken_at_msec = -999999
 	player.take_damage(50.0)
 	var form_loss: float = h1 - player.health
-	assert(is_equal_approx(form_loss, normal_loss * 0.2), "form aktifken hasar %%80 azalır: normal %s, formda %s" % [normal_loss, form_loss])
+	assert(is_equal_approx(form_loss, normal_loss), "evrimsiz form hasarı azaltmaz: normal %s, formda %s" % [normal_loss, form_loss])
+	## "Gölge Kanatlar" evrimi: form aktifken %70 azalma.
+	player.apply_skill_evolution("vampir_e1", true)
+	var h2: float = player.health
+	player._last_damage_taken_at_msec = -999999
+	player.take_damage(50.0)
+	assert(is_equal_approx(h2 - player.health, normal_loss * 0.3), "Gölge Kanatlar: %%70 azalma: %s" % str(h2 - player.health))
 	## Temas hasarı: değdiği yaratığa %80, aynı yaratığa aralıklı.
 	var touching: FakeEnemy = _make_enemy(player.global_position + Vector2(20, 0))
 	var away: FakeEnemy = _make_enemy(player.global_position + Vector2(400, 0))
