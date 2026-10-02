@@ -8,6 +8,7 @@ extends Area2D
 
 const FloatingText := preload("res://scenes/floating_text.tscn")
 const DropAttractionScript := preload("res://scripts/drop_attraction.gd")
+const DropShadowScript := preload("res://scripts/drop_shadow.gd")
 
 var bob_time: float = 0.0
 var _last_bob_offset: float = 0.0
@@ -22,6 +23,8 @@ func _ready() -> void:
 	add_to_group("magnet_drops")
 	body_entered.connect(_on_body_entered)
 	queue_redraw()
+	## Gölge (2026-10-02, bkz. drop_shadow.gd): mıknatıs _draw ile çiziliyor (sprite yok) - görünen alan elle (yay r=7 + kalınlık).
+	DropShadowScript.attach(self, null, true, 2, Rect2(-9.5, -9.5, 19.0, 19.0))
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
 	_place_on_ground.call_deferred()
 

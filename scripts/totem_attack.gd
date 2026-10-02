@@ -1,10 +1,15 @@
 extends TotemBase
 class_name TotemAttack
 
-## Saldırı Totemi (Shaman TEMEL/E, skill2 id 27): "Etrafındaki yaratıklara
+## Saldırı Totemi (Shaman Q, skill id 27): "Etrafındaki yaratıklara
 ## düzenli olarak ateş eder. Her saldırı shaman'ın saldırı gücünün %150'si
 ## kadar hasar verir, saldırı hızı da shaman'ın kendi saldırı hızının %150'si
 ## kadardır."
+## Kullanıcı isteği (2026-09-29): "E ve R'nin etkileri artık birleştiriliyor ve tek yetenek haline geliyor fakat yavaşlatma
+## etkisi kaldırılıyor. E ve R artık yeni Q yeteneği oluyor" - eski Alan Saldırı Totemi'nin (R, id 28, totem_area.gd -
+## SİLİNDİ) alan hasarı + mor alan görselleri bu totemin içine taşındı; yavaşlatma YOK. 2026-09-30: alan hasarı Kalkan
+## Totemi'ne de eklendi (kullanıcı isteği) - kod artık totem_base.gd "ALAN HASARI" bloğunda (area_damage_enabled, iki totem
+## aynı kodu kullanır). Ateş menzili (totem_radius 260) ile alan yarıçapı (AREA_RADIUS 180) ayrı.
 ##
 ## Hasar doğrudan enemy.take_damage() üzerinden - bu fonksiyon zaten host/
 ## client farkını kendi içinde çözüyor (bkz. enemy.gd take_damage), çağıran
@@ -38,6 +43,7 @@ func _init() -> void:
 	totem_kind = "attack"
 	totem_color = Color(1.0, 0.55, 0.25)
 	totem_radius = 260.0
+	area_damage_enabled = true ## bkz. totem_base.gd "ALAN HASARI" bloğu
 
 
 func _process(delta: float) -> void:

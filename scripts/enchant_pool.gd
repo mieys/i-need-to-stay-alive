@@ -1,11 +1,15 @@
 extends RefCounted
 
-## EFSUN KART HAVUZU (tasarım belgesi "Kart havuzu kuralları"). Yerel oyuncunun sahip olduğu silah kopyalarından 3 kart:
-##   - efsunsuz kopya -> o silahın 5 efsununun Temel kartları (yasaklananlar hariç)
-##   - yolu süren kopya -> sıradaki geliştirme (I-V); V bitti + katalizör eşya envanterde -> Final
-##   - tamamlanmış kopya -> Aşkın kartı (sınırsız)
-## Yolu süren bir kopya varsa kartlardan en az biri onun sıradaki adımıdır. Havuz 3'ten küçükse genel Aşkın kartları,
-## o da yetmezse altın kesesi doldurur. Kart = {"type", "slot", "id", "step", "tier"} (+ "gold").
+## EFSUN KART HAVUZU. Yerel oyuncunun sahip olduğu silah kopyalarından 3 kart (2026-09-30 yeni efsun seti kuralları -
+## bkz. enchant_defs.gd dosya başı):
+##   - efsunsuz kopya -> o silaha uyan efsunların Temel kartları (yasaklananlar hariç)
+##   - yolu süren kopya -> alınmamış geliştirmelerinden RASTGELE biri (sıra yok); hepsi alındı + katalizör eşya envanterde
+##     -> Final. Tamamlanmış kopya için kart YOK (Aşkın kaldırıldı).
+## Yolu süren bir kopya varsa kartlardan en az biri onun kartıdır. Havuz 3'ten küçükse genel kartlar (Tepkime Gücü /
+## Keskinlik), o da yetmezse altın kesesi doldurur. Kart = {"type", "slot", "id", "up", "tier"} (+ "gold").
+## Nadirlik YOK: efsun kartları hep mor (EnchantDefs.CARD_TIER), Final kırmızı (FINAL_CARD_TIER).
+## Kalkan efsunları (2026-09-29, bkz. shield_enchant_defs.gd): "shield_pick" / "shield_up" kartları Temel kartlarla AYNI
+## torbaya girer. Değerleri sabittir, hep Epik (mor) görünür.
 
 ## chest_menu.gd WEAPON_ICON_TEXTURES ile aynı yollar.
 const WEAPON_ICONS := {
@@ -32,19 +36,10 @@ static func card_key(c: Dictionary) -> String:
 	return "%s:%d:%s" % [str(c.get("type", "")), int(c.get("slot", -1)), str(c.get("id", ""))]
 
 
-static func has_catalyst(item_key: String) -> bool:
-	for entry in GameManager.owned_items:
-		if str(entry.get("key", "")) == item_key:
-			return true
-	return false
-
-
 ## exclude: bu ekranda daha önce gösterilmiş kart anahtarları (karıştırınca aynı kart tekrar gelmesin; havuz yetmezse yok sayılır).
-static func build(player: Node, exclude: Array = []) -> Array:
-	var luck: float = float(player.get("luck")) if player and "luck" in player else 0.0
+static func build(_player: Node, exclude: Array = []) -> Array:
 	var progress: Array = []
 	var temel: Array = []
-	var askin: Array = []
 	for i in range(GameManager.owned_weapons.size()):
 		var entry: Dictionary = GameManager.owned_weapons[i]
 		var key: String = str(entry.get("key", ""))
@@ -52,24 +47,32 @@ static func build(player: Node, exclude: Array = []) -> Array:
 			continue
 		var ench: Dictionary = entry.get("enchant", {})
 		if ench.is_empty():
-			for id in EnchantDefs.BY_WEAPON[key]:
+			for id in EnchantDefs.enchants_for(key):
 				if GameManager.enchant_banished.has("%d:%s" % [i, id]):
 					continue
-				temel.append({"type": "temel", "slot": i, "id": id, "step": 0})
+				temel.append({"type": "temel", "slot": i, "id": id})
 			continue
 		var id2: String = str(ench.get("id", ""))
-		var taken: int = (ench.get("steps", []) as Array).size()
-		if taken < EnchantDefs.FINAL_STEP:
-			progress.append({"type": "step", "slot": i, "id": id2, "step": taken})
-		elif taken == EnchantDefs.FINAL_STEP:
-			if has_catalyst(str(EnchantDefs.get_def(id2).get("catalyst", ""))):
-				progress.append({"type": "final", "slot": i, "id": id2, "step": taken})
+		if EnchantDefs.is_complete(ench):
+			continue
+		var def: Dictionary = EnchantDefs.get_def(id2)
+		if def.is_empty():
+			continue
+		var taken: Array = EnchantDefs.upgrades_taken(ench)
+		var left: Array = []
+		for u in range((def["upgrades"] as Array).size()):
+			if not taken.has(u):
+				left.append(u)
+		if not left.is_empty():
+			progress.append({"type": "step", "slot": i, "id": id2, "up": left[randi() % left.size()]})
 		else:
-			askin.append({"type": "askin", "slot": i, "id": id2, "step": taken})
-	var picks: Array = _pick(progress, temel, askin, exclude)
+			## Tüm geliştirmeler alındı -> Final (2026-10-02: katalizör eşya şartı ekstralarla birlikte kaldırıldı).
+			progress.append({"type": "final", "slot": i, "id": id2})
+	temel.append_array(ShieldEnchantDefs.pool_cards())
+	var picks: Array = _pick(progress, temel, exclude)
 	if picks.size() < 3 and not exclude.is_empty():
 		## Karıştırmada havuz tükendiyse (az silah) tekrar kartlara izin ver.
-		picks = _pick(progress, temel, askin, [])
+		picks = _pick(progress, temel, [])
 	var general: Array = [{"type": "general_rp"}, {"type": "general_dmg"}]
 	general.shuffle()
 	while picks.size() < 3 and not general.is_empty():
@@ -78,20 +81,22 @@ static func build(player: Node, exclude: Array = []) -> Array:
 		picks.append({"type": "gold", "gold": GOLD_CARD_AMOUNT})
 	for c in picks:
 		match str(c["type"]):
-			"final", "gold":
+			"final":
+				c["tier"] = EnchantDefs.FINAL_CARD_TIER
+			"gold":
 				c["tier"] = 1
+			"shield_pick", "shield_up":
+				c["tier"] = ShieldEnchantDefs.CARD_TIER
 			_:
-				c["tier"] = TierSystem.roll(luck)
+				c["tier"] = EnchantDefs.CARD_TIER
 	return picks
 
 
-static func _pick(progress: Array, temel: Array, askin: Array, exclude: Array) -> Array:
+static func _pick(progress: Array, temel: Array, exclude: Array) -> Array:
 	var p: Array = progress.filter(func(c): return not exclude.has(card_key(c)))
 	var t: Array = temel.filter(func(c): return not exclude.has(card_key(c)))
-	var a: Array = askin.filter(func(c): return not exclude.has(card_key(c)))
 	p.shuffle()
 	t.shuffle()
-	a.shuffle()
 	var picks: Array = []
 	if not p.is_empty():
 		picks.append(p.pop_front())
@@ -99,75 +104,68 @@ static func _pick(progress: Array, temel: Array, askin: Array, exclude: Array) -
 	rest.shuffle()
 	while picks.size() < 3 and not rest.is_empty():
 		picks.append(rest.pop_front())
-	while picks.size() < 3 and not a.is_empty():
-		picks.append(a.pop_front())
 	return picks
 
 
-## Kartın ekrandaki metinleri (kullanıcı geri bildirimi 2026-09-25: "efsun açıklamaları çok belirsiz"). Alanlar:
-##   title      - efsun adı                      tier_line - "Nadir · II / V" (nadirlik + aşama)
+## Kartın ekrandaki metinleri. Alanlar:
+##   title      - efsun adı                      tier_line - "Temel" / "Geliştirme 2 / 4" / "Final"
 ##   category   - silah adı (aynı silahtan iki kopya varsa numarası)
 ##   lead       - efsunun ne yaptığı (tek cümle, element adıyla)
-##   head/body  - "BU KART" + bu kartın verdiği şey
-##   power      - efsun gücü önce -> sonra ve neyi çarptığı (Temel/I-V/Aşkın)
-##   note       - Final için gereken eşya (V ve Final kartında; sende var mı)
+##   head/body  - kartın başlığı (geliştirmenin adı) + bu kartın verdiği şey
+##   note       - Final için gereken eşya (son geliştirmede ve Final kartında; sende var mı)
 static func describe(c: Dictionary) -> Dictionary:
 	var kind: String = str(c.get("type", ""))
-	var tier: int = int(c.get("tier", 1))
-	var tier_pow: float = float(EnchantDefs.TIER_POWER[clampi(tier, 1, 4) - 1])
-	var tier_name: String = str(TierSystem.NAMES[clampi(tier, 1, 4) - 1])
-	var out: Dictionary = {"title": "", "tier_line": tier_name, "category": "", "lead": "", "head": "BU KART", "body": "",
+	var out: Dictionary = {"title": "", "tier_line": "", "category": "", "lead": "", "head": "BU KART", "body": "",
 		"power": "", "note": "", "icon": "", "color": Color("#d9d2c4"), "final": kind == "final", "banishable": kind == "temel"}
 	match kind:
-		"temel", "step", "final", "askin":
-			var def: Dictionary = EnchantDefs.get_def(str(c.get("id", "")))
+		"temel", "step", "final":
+			var id: String = str(c.get("id", ""))
+			var def: Dictionary = EnchantDefs.get_def(id)
 			var slot: int = int(c.get("slot", -1))
-			var wkey: String = str(def.get("weapon", ""))
+			var wkey: String = _slot_weapon(slot)
 			var wname: String = str(EnchantDefs.WEAPON_NAMES.get(wkey, wkey))
 			if _count_copies(wkey) > 1:
 				wname += " (%d. kopya)" % (slot + 1)
-			var element: String = str(def.get("element", "fiziksel"))
+			var element: String = EnchantDefs.element_of(id, wkey)
 			out["icon"] = str(WEAPON_ICONS.get(wkey, ""))
 			out["color"] = EnchantDefs.element_color(element)
 			out["title"] = str(def.get("name", ""))
 			out["category"] = wname
 			out["lead"] = "%s efsunu. %s" % [EnchantDefs.element_name(element), str(def.get("desc", ""))]
-			var step: int = int(c.get("step", 0))
-			var steps: Array = def.get("steps", [])
-			var label: String = str(def.get("power_label", "efsun etkisi"))
-			var now_power: float = _current_power(slot)
-			if kind == "askin":
-				out["tier_line"] = "%s · Aşkın" % tier_name
-				out["head"] = "AŞKIN (efsun tamamlandı)"
-				out["body"] = "Bu efsunu daha da güçlendirir. Sınırsız kez alınabilir."
-				out["power"] = _power_line(now_power, now_power + EnchantDefs.askin_power(tier), label)
-			else:
-				out["tier_line"] = "Final" if kind == "final" else "%s · %s" % [tier_name, EnchantDefs.STEP_LABELS[clampi(step, 0, 6)]]
-				out["head"] = "FİNAL KARTI" if kind == "final" else ("BU KART (efsunu başlatır)" if kind == "temel" else "BU KART")
-				out["body"] = str(steps[step].get("text", "")) if step < steps.size() else ""
-				if kind != "final":
-					out["power"] = _power_line(now_power, now_power + EnchantDefs.card_power(tier), label)
-				if step >= EnchantDefs.FINAL_STEP - 1:
-					var cat: String = str(def.get("catalyst", ""))
-					var cat_name: String = str(Items.get_def(cat).get("name", cat))
-					if kind == "final":
-						out["note"] = "Gereken eşya: %s (sende var)" % cat_name
-					else:
-						out["note"] = "Sıradaki kart FİNAL: %s eşyası gerekir (%s)" % [cat_name, "sende var" if has_catalyst(cat) else "sende yok"]
+			var ups: Array = def.get("upgrades", [])
+			var taken: int = _taken_count(slot)
+			match kind:
+				"temel":
+					out["tier_line"] = "Temel"
+					out["head"] = "BU KART (efsunu başlatır)"
+					out["body"] = str((def.get("base", {}) as Dictionary).get("text", ""))
+				"step":
+					var u: int = int(c.get("up", 0))
+					var up: Dictionary = ups[u] if u >= 0 and u < ups.size() else {}
+					out["tier_line"] = "Geliştirme %d / %d" % [taken + 1, ups.size()]
+					out["head"] = str(up.get("name", "GELİŞTİRME")).to_upper()
+					out["body"] = str(up.get("text", ""))
+				"final":
+					var fin: Dictionary = def.get("final", {})
+					out["tier_line"] = "Final"
+					out["head"] = "FİNAL: %s" % str(fin.get("name", "")).to_upper()
+					out["body"] = str(fin.get("text", ""))
 		"general_rp":
 			out["title"] = "Tepkime Gücü"
 			out["category"] = "Tüm silahlar"
-			out["tier_line"] = "%s · Genel Aşkın" % tier_name
+			out["tier_line"] = "Genel"
 			out["lead"] = "İki farklı element aynı düşmanda buluşunca tepkime olur (ör. donma + yanma = Buhar Patlaması)."
-			out["body"] = "Tetiklediğin tüm tepkimelerin hasarı %%%d artar." % int(round(EnchantDefs.GENERAL_REACTION_POWER * tier_pow * 100.0))
+			out["body"] = "Tetiklediğin tüm tepkimelerin hasarı %%%d artar." % int(round(EnchantDefs.GENERAL_REACTION_POWER * 100.0))
 			out["color"] = Color("#c98cff")
 		"general_dmg":
 			out["title"] = "Keskinlik"
 			out["category"] = "Tüm silahlar"
-			out["tier_line"] = "%s · Genel Aşkın" % tier_name
+			out["tier_line"] = "Genel"
 			out["lead"] = "Efsunu olsun olmasın bütün silahlarını etkiler."
-			out["body"] = "Tüm silahlarının hasarı %%%d artar." % int(round(EnchantDefs.GENERAL_DAMAGE_PERCENT * tier_pow * 100.0))
+			out["body"] = "Tüm silahlarının hasarı %%%d artar." % int(round(EnchantDefs.GENERAL_DAMAGE_PERCENT * 100.0))
 			out["color"] = Color("#ff8a5a")
+		"shield_pick", "shield_up":
+			ShieldEnchantDefs.describe(c, out)
 		"gold":
 			out["title"] = "Altın Kesesi"
 			out["category"] = "Efsun kalmadı"
@@ -178,18 +176,16 @@ static func describe(c: Dictionary) -> Dictionary:
 	return out
 
 
-## "Efsun gücü %100 -> %110" + neyi çarptığı. Güç = 1 + alınan kartların gücü + Aşkın (EnchantDefs.resolve).
-static func _power_line(before: float, after: float, label: String) -> String:
-	return "Efsun gücü: %%%d → %%%d\n(%s bu oranla çarpılır)" % [int(round(before * 100.0)), int(round(after * 100.0)), label]
-
-
-static func _current_power(slot: int) -> float:
+static func _slot_weapon(slot: int) -> String:
 	if slot < 0 or slot >= GameManager.owned_weapons.size():
-		return 1.0
-	var ench: Dictionary = GameManager.owned_weapons[slot].get("enchant", {})
-	if ench.is_empty():
-		return 1.0
-	return float(EnchantDefs.resolve(ench).get("power_mult", 1.0))
+		return ""
+	return str(GameManager.owned_weapons[slot].get("key", ""))
+
+
+static func _taken_count(slot: int) -> int:
+	if slot < 0 or slot >= GameManager.owned_weapons.size():
+		return 0
+	return (EnchantDefs.upgrades_taken(GameManager.owned_weapons[slot].get("enchant", {})) as Array).size()
 
 
 ## Ekranın üstündeki "sahip olduğun efsunlar" satırı: her silah kopyası için efsun adı + aşama ya da "efsunsuz".
@@ -206,9 +202,12 @@ static func owned_summary() -> String:
 			parts.append("%s: efsunsuz" % wname)
 			continue
 		var def: Dictionary = EnchantDefs.get_def(str(ench.get("id", "")))
-		var taken: int = (ench.get("steps", []) as Array).size()
-		var stage: String = "Aşkın" if taken >= EnchantDefs.STEP_COUNT else EnchantDefs.STEP_LABELS[clampi(taken - 1, 0, 6)]
+		var stage: String = "Final" if EnchantDefs.is_complete(ench) else "%d / %d" % [
+			(EnchantDefs.upgrades_taken(ench) as Array).size(), (def.get("upgrades", []) as Array).size()]
 		parts.append("%s: %s (%s)" % [wname, str(def.get("name", "")), stage])
+	var shield_line: String = ShieldEnchantDefs.summary()
+	if shield_line != "":
+		parts.append(shield_line)
 	return "   ·   ".join(parts)
 
 

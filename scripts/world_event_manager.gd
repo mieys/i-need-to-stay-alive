@@ -108,7 +108,8 @@ const CAPTURE_REWARD_GOLD := 120
 
 ## Secure the Area (kullanıcı isteği: "~300 düşman, 3 dakika içinde").
 const SECURE_RADIUS := 300.0
-const SECURE_KILL_TARGET := 300
+## 2026-10-02 (kullanıcı: "hedef düşman öldürmesini %30 düşür"): 300 -> 210.
+const SECURE_KILL_TARGET := 210
 const SECURE_DURATION := 180.0
 const SECURE_REWARD_GOLD := 200
 ## DÜZELTME (kullanıcı bildirimi 2026-09-24: "görevlerden çoğu çalışmıyor") - normal yaratık akışı 3
@@ -131,14 +132,18 @@ const COLLECT_DURATION := 150.0
 ## tamamına rastgele (engelsiz) dağılır; hedefin bu katı kadar obje üretilir (hedefe ulaşınca görev biter, artanlar
 ## main.gd _on_world_event_completed'da silinir - başarı da başarısızlık da aynı yol). Konumlar minimapte noktalar
 ## olarak gösterilir (bkz. minimap.gd set_collect_dots), tek bir "görev merkezi" işareti yok (HIDDEN_LOCATION_KINDS).
-const COLLECT_ITEM_RATIO := 1.5
+## Kullanıcı isteği (2026-10-01): 1.5 -> 2.0 ("25 tane toplamamız gerekiyorsa 50 tane çıksın").
+const COLLECT_ITEM_RATIO := 2.0
 const COLLECT_REWARD_GOLD := 150
 const CollectItemScript := preload("res://scripts/mission_collect_item.gd")
+const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 
 ## Escort the Van (kullanıcı isteği: küçük daire, yakın durunca ittir, uzaklaşınca %20 hızla
 ## geri kayar, gidiş hızı da çok hızlı olmasın, oyuncu sayısıyla biraz artabilir).
 const ESCORT_PUSH_RADIUS := 130.0
-const ESCORT_BASE_SPEED := 8.0 ## dünya birimi/sn - "çok hızlı olmasın"
+## dünya birimi/sn - "çok hızlı olmasın"; 2026-10-02 (kullanıcı: "araba çok yavaş, %20 daha hızlı"): 8.0 -> 9.6. Süre sınırı
+## rota/hız ile hesaplandığı için (ESCORT_TIMEOUT_BUFFER) o da orantılı kısalır.
+const ESCORT_BASE_SPEED := 9.6
 const ESCORT_RETREAT_RATIO := 0.2 ## "%20si kadar"
 const ESCORT_SPEED_PER_EXTRA_PLAYER := 0.15 ## "biraz hızı artabilir"
 const ESCORT_MAX_SPEED_MULT := 1.6
@@ -558,16 +563,11 @@ func _grant_reward_to_zone_players(pos: Vector2, radius: float, gold: int) -> vo
 				continue
 			var peer_id: int = int(p.get("peer_id")) if "peer_id" in p else 0
 			if p == any_player or peer_id == 0 or peer_id == multiplayer.get_unique_id():
-				GameManager.gold += gold
-				var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
-				if ft_scene and is_instance_valid(any_player):
-					var ft: Node = ft_scene.instantiate()
-					get_tree().current_scene.add_child(ft)
-					ft.global_position = any_player.global_position + Vector2(14, -34)
-					if ft.has_method("setup"):
-						ft.setup("+%d altın (görev)" % gold, Color(1.0, 0.85, 0.25))
+				## Altın hemen eklenir, paralar "Görev Tamamlandı" penceresinden sol üstteki altın paneline uçar
+				## (GoldRewardFx.hold -> mission_complete_window.gd; pencereyi _end_mission'ın completed yayını açar).
+				GoldRewardFx.hold(get_tree(), gold, &"mission", pos)
 			else:
-				NetworkManager.grant_personal_gold.rpc_id(peer_id, gold)
+				NetworkManager.grant_reward_gold.rpc_id(peer_id, gold, pos, "mission")
 
 
 ## bkz. yukarıdaki görev sandığı notu. Host kendi kuyruğuna ekler, uzak oyunculara open_elite_chest_for_peer (elit

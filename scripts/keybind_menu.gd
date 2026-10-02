@@ -24,12 +24,6 @@ var _listening_kind: int = ListenKind.NONE
 var _row_buttons: Dictionary = {} ## action_name -> Button (tuş adını gösteren buton)
 var _row_joy_buttons: Dictionary = {} ## action_name -> Button (gamepad adını gösteren buton)
 
-## Ölü action'lar (bkz. hud.gd shield_mode_slots notu - kalkan modu barı
-## kalıcı gizli) - bunlara gamepad sütunu eklemenin anlamı yok, tek bir
-## yüz/tampon tuşunu boşa harcamamak için atlanıyor.
-const _NO_JOYPAD_ACTIONS := ["shield_mode_slot_1", "shield_mode_slot_2", "shield_mode_slot_3", "shield_mode_slot_4", "shield_mode_slot_5"]
-
-
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 95
@@ -131,15 +125,13 @@ func _build_row(action_name: String, label_text: String) -> PanelContainer:
 
 	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - ikinci sütun,
 	## AYNI satırda gamepad atamasını gösterip yeniden atamayı sağlıyor.
-	## Ölü kalkan-modu action'larına (bkz. _NO_JOYPAD_ACTIONS) eklenmiyor.
-	if not _NO_JOYPAD_ACTIONS.has(action_name):
-		var joy_btn := Button.new()
-		joy_btn.custom_minimum_size = Vector2(190, 44)
-		joy_btn.add_theme_font_size_override("font_size", 24)
-		joy_btn.text = _joypad_label(GameManager.get_keybind_joypad_descriptor(action_name))
-		joy_btn.pressed.connect(_on_joy_button_pressed.bind(action_name, joy_btn))
-		hbox.add_child(joy_btn)
-		_row_joy_buttons[action_name] = joy_btn
+	var joy_btn := Button.new()
+	joy_btn.custom_minimum_size = Vector2(190, 44)
+	joy_btn.add_theme_font_size_override("font_size", 24)
+	joy_btn.text = _joypad_label(GameManager.get_keybind_joypad_descriptor(action_name))
+	joy_btn.pressed.connect(_on_joy_button_pressed.bind(action_name, joy_btn))
+	hbox.add_child(joy_btn)
+	_row_joy_buttons[action_name] = joy_btn
 
 	return row
 

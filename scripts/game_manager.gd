@@ -1,6 +1,7 @@
 extends Node
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const MobileUI := preload("res://scripts/mobile_ui.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 
 ## "Body block" sınırının (bkz. enemy.gd PLAYER_BODY_RADIUS/_body_radius ve
@@ -91,25 +92,12 @@ var gold: int = 0
 ## Altın artık SADECE düşman düşürmesiyle (bkz. gold_drop.gd) ve seviye atlama
 ## ödülüyle (bkz. LEVEL_UP_GOLD_REWARD) kazanılıyor; pasif gelir YOK.
 var spray_level: int = 0
-## Eski tek "Sihirli Kalkan" (shield_level) kaldırıldı - artık 4 bağımsız
-## kalkan TÜRÜ var (bkz. player.gd SHIELD_TYPES). Kullanıcı isteğiyle
-## ("sadece 1 kalkan alınabilmeli") aynı anda EN FAZLA BİRİNİN seviyesi
-## sıfırdan büyük olabilir - shop_panel.gd bunu satın alma sırasında
-## zorluyor (bkz. _on_buy_upgrade, önce mevcut türü satmadan başkası
-## alınamaz). "Aktif" tür artık ayrı bir seçim değil, otomatik olarak
-## seviyesi >0 olan tür (bkz. player.gd _owned_shield_type_key) - bu
-## yüzden eskiden burada olan "active_shield_type" seçici değişkeni
-## tamamen kaldırıldı, gereksizdi.
-## DÜZELTME (kullanıcı isteği: "bundan sonra kimsenin başlangıç kalkanı
-## yok") - bir önceki "herkes Standart Kalkan'la başlasın" kararı geri
-## alındı. Artık HİÇBİR kalkan türü sahiplenilmemiş (0) başlıyor, oyuncu
-## main.gd'nin gösterdiği kalkan seçim ekranından (bkz.
-## weapon_select_screen.gd) seçtiği türle 1. seviyeye ulaşıyor (bkz.
-## reset()'teki AYNI değişiklik).
+## Kalkan (2026-09-29): herkes Standart Kalkanla başlar (main.gd _grant_starting_shield -> shield_standart_level = 1).
+## Efsun ekranından bir kalkan efsunu seçilirse shield_enchant onun anahtarı olur ve Standart'ın yerine geçer;
+## shield_enchant_ups o efsunun her geliştirmesinden kaç tane alındığı. Veri/kurallar: shield_enchant_defs.gd.
 var shield_standart_level: int = 0
-var shield_enerji_level: int = 0
-var shield_kale_level: int = 0
-var shield_savas_level: int = 0
+var shield_enchant: String = ""
+var shield_enchant_ups: Array = []
 ## Kullanıcı isteği: "Dükkan her level atladığında açılıyor sadece 5 dakika
 ## bekleme süresi dolunca level atladıktan sonra çıkmalı. Her seferinde 5
 ## dakika bekleme süresine girmeli." - periyodik dükkan artık HER level
@@ -217,6 +205,22 @@ func pop_pending_elite_chest() -> bool:
 	return true
 
 
+## Kullanıcı isteği (2026-10-02): "sandık açılırken kart çıkar çıkmaz ordan gitmesini istiyorum altın barına" - yer
+## sandığının altın payı sandık toplanınca EKLENMEZ, sandıkla birlikte burada bekler; sandık/efsun ekranında kart inince
+## kartın yerinden altın paneline uçarak eklenir (chest_menu.gd / enchant_screen.gd _release_chest_gold). Kişisel/yerel.
+var pending_chest_gold: Dictionary = {"normal": [], "elite": []}
+
+
+func add_pending_chest_gold(elite: bool, amount: int) -> void:
+	if amount > 0:
+		(pending_chest_gold["elite" if elite else "normal"] as Array).append(amount)
+
+
+func pop_pending_chest_gold(elite: bool) -> int:
+	var q: Array = pending_chest_gold["elite" if elite else "normal"]
+	return int(q.pop_front()) if not q.is_empty() else 0
+
+
 ## ================================================================ EFSUN SİSTEMİ (2026-09-25)
 ## Efsun ekranı artık SADECE elit sandıklardan gelir (bkz. yukarıdaki pending_elite_chests) - eski "her 5 levelde bir",
 ## "boss ölünce herkese" ve "sandıkların %20'si" kuralları kaldırıldı (kullanıcı isteği 2026-09-25).
@@ -226,18 +230,6 @@ var enchant_banished: Array = [] ## "<slot>:<efsun id>" - o kopyanın havuzundan
 var enchant_reaction_power: float = 0.0 ## genel Aşkın kartı "Tepkime Gücü" (oyuncunun kendi tepkimelerine)
 var enchant_damage_percent: float = 0.0 ## genel Aşkın kartı "hasar"
 
-## Shield modes bought from the shop's "Modlar" category: leveled items
-## (0 = not owned), 10 levels, expensive to level up - higher levels make the
-## mod's own bonus/penalty stronger (see Player._apply_shield_mode). Only one
-## can be the *active* mode at a time - "" means none.
-var shield_mod_resilience_level: int = 0
-var shield_mod_thorny_level: int = 0
-var shield_mod_turtle_level: int = 0
-var shield_mod_aggressive_level: int = 0
-var shield_mod_lightning_level: int = 0 ## Şimşek Hız Modu
-var shield_mod_piercing_level: int = 0 ## Delicilik Modu
-var shield_mod_tank_level: int = 0 ## Tank Modu
-var active_shield_mode: String = ""
 
 
 ## Kullanıcı isteği: "ayarlara tuş ataması özelliği ekle, isteyen istediği
@@ -260,11 +252,6 @@ const REBINDABLE_ACTIONS := [
 	{"action": "skill3", "label": "3. Yetenek"},
 	{"action": "skill4", "label": "Ruhani Yetenek"},
 	{"action": "interact", "label": "Etkileşim / Eve Gir"},
-	{"action": "shield_mode_slot_1", "label": "Kalkan Modu 1"},
-	{"action": "shield_mode_slot_2", "label": "Kalkan Modu 2"},
-	{"action": "shield_mode_slot_3", "label": "Kalkan Modu 3"},
-	{"action": "shield_mode_slot_4", "label": "Kalkan Modu 4"},
-	{"action": "shield_mode_slot_5", "label": "Kalkan Modu 5"},
 ]
 
 ## action_name -> Key (int) - diskten okunan yerel tuş override'ları,
@@ -286,6 +273,8 @@ enum JoypadKind { BUTTON, AXIS }
 func _ready() -> void:
 	## Fizik interpolasyonu: kökte KAPALI, sadece opt_in'li varlıklar açık (bkz. physics_interp.gd).
 	PhysicsInterp.setup_root(get_tree())
+	## Telefon: arayüz ölçeği + en-boy (bkz. mobile_ui.gd). Masaüstünde no-op.
+	MobileUI.apply(get_tree())
 	_load_keybind_overrides()
 	_setup_input_actions()
 
@@ -446,16 +435,6 @@ func _setup_input_actions() -> void:
 	## içinden ayarlamak için (bkz. debug_tuning_panel.gd). Dev-only - gamepad
 	## varsayılanı bilerek yok.
 	_bind("debug_tuning", KEY_F9)
-	## Alt bardaki kalkan modu seçici kısayolları (bkz. hud.gd
-	## _refresh_shield_mode_slots/_unhandled_input) - kullanıcı isteğiyle
-	## 1-2-3-4-5 tuşlarıyla o an görünen kalkan modu slotu seçilebiliyor.
-	## Bu özellik artık KULLANILMIYOR (bkz. hud.gd shield_mode_slots notu -
-	## bar kalıcı gizli) - gamepad varsayılanı bilerek eklenmedi.
-	_bind("shield_mode_slot_1", KEY_1)
-	_bind("shield_mode_slot_2", KEY_2)
-	_bind("shield_mode_slot_3", KEY_3)
-	_bind("shield_mode_slot_4", KEY_4)
-	_bind("shield_mode_slot_5", KEY_5)
 	## Chat (kullanıcı isteği: "enter tuşuna basarak mesaj yazabiliriz") -
 	## bkz. hud.gd _unhandled_input - kutu kapalıyken Enter'a basınca açılır,
 	## açıkken (LineEdit odaktayken) Enter'a basmak LineEdit'in KENDİ
@@ -511,6 +490,9 @@ func _bind_joypad(action_name: String, defaults: Array) -> void:
 
 ## Bir action'ın ekranda gösterilecek tuş adı (ipucu yazıları için: "Eve girmek için BOŞLUK tuşuna bas").
 func get_action_key_label(action_name: String) -> String:
+	## Telefonda klavye yok: uyarılar ekrandaki düğmenin adını söyler (bkz. hud.gd _setup_mobile_hud).
+	if MobileUI.enabled and action_name == "interact":
+		return "ETKİLEŞİM"
 	var code: int = get_keybind_keycode(action_name)
 	if code == KEY_NONE:
 		return "?"
@@ -761,7 +743,10 @@ const MAX_XP_INCREMENT := 110.0
 ## sürer (6, 8, 10, ..., 24 -> 10 adım). MAX_XP_INCREMENT/MIN_XP_INCREMENT/
 ## XP_INCREMENT_GROWTH değiştirilirse bu da elle güncellenmeli.
 const RAMP_STEPS := 10
-var team_xp_needed: float = BASE_XP_NEEDED
+## Kullanıcı isteği (2026-09-30): "level atlamayı %10 kolaylaştırır mısın genel olarak" - her seviyenin gereksinimi x0.9.
+## Eğrinin 4 sabitine dokunmadan tek çarpan: şekil (rampa, tavan) aynen kalır, her seviye %10 daha az XP ister.
+const XP_NEEDED_MULT := 0.9
+var team_xp_needed: float = round(BASE_XP_NEEDED * XP_NEEDED_MULT)
 
 ## Bir SONRAKİ seviye için gereken XP (bkz. yukarıdaki eğri notu). Her
 ## seviye atlayışı bir "adım" sayılır (1'den level-1'e kadar); ilk
@@ -775,7 +760,7 @@ func _xp_needed_for_level(level: int) -> float:
 			+ XP_INCREMENT_GROWTH * (ramp_steps_done * (ramp_steps_done - 1) / 2.0)
 	var capped_steps: int = maxi(steps - RAMP_STEPS, 0)
 	var capped_sum: float = capped_steps * MAX_XP_INCREMENT
-	return round(BASE_XP_NEEDED + ramp_sum + capped_sum)
+	return round((BASE_XP_NEEDED + ramp_sum + capped_sum) * XP_NEEDED_MULT)
 
 ## #48 DÜZELTME (kullanıcı isteği: "Level kartı reroll'u altınla olsun,
 ## level başına +1 altın"): her takım seviye atlayışında oyuncuya kişisel
@@ -1024,7 +1009,7 @@ func reset() -> void:
 	_mini_shop_cooldown_remaining = 0.0
 	team_level = 1
 	team_xp = 0.0
-	team_xp_needed = BASE_XP_NEEDED
+	team_xp_needed = _xp_needed_for_level(1)
 	team_xp_changed.emit(team_xp, team_xp_needed)
 	revives_remaining = max_revives
 	peer_revives.clear()
@@ -1036,22 +1021,14 @@ func reset() -> void:
 	## Kullanıcı isteği: "kimsenin başlangıç kalkanı yok" - bkz. yukarıdaki
 	## var bildirimi üzerindeki AYNI yorum.
 	shield_standart_level = 0
-	shield_enerji_level = 0
-	shield_kale_level = 0
-	shield_savas_level = 0
+	shield_enchant = ""
+	shield_enchant_ups = []
 	owned_weapons = []
 	owned_items = []
 	pending_chest_tiers = []
 	pending_elite_chests = 0
+	pending_chest_gold = {"normal": [], "elite": []}
 	enchant_banish_left = 3
 	enchant_banished = []
 	enchant_reaction_power = 0.0
 	enchant_damage_percent = 0.0
-	shield_mod_resilience_level = 0
-	shield_mod_thorny_level = 0
-	shield_mod_turtle_level = 0
-	shield_mod_aggressive_level = 0
-	shield_mod_lightning_level = 0
-	shield_mod_piercing_level = 0
-	shield_mod_tank_level = 0
-	active_shield_mode = ""

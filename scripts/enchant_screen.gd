@@ -18,7 +18,12 @@ const EnchantPool := preload("res://scripts/enchant_pool.gd")
 const ChestOpenAnim := preload("res://scripts/chest_open_anim.gd")
 const RewardReveal := preload("res://scripts/reward_reveal.gd")
 const RewardRays := preload("res://scripts/reward_rays.gd")
-const CARD_TEXEL := 4.0 ## kart 4x ölçekte (120x180 sanat px)
+## Kullanıcı isteği (2026-10-02): "yetenek evrimlerindeki kart panelinin ve efsun panelinin kartların vb biraz küçülmesini
+## istiyorum nerdeyse tüm ekranı kaplıyorlar %20 küçülsünler" - kart 4x -> 3x (480x720 -> 360x540, %25). %20 = 3.2x olurdu ve
+## piksel sanatını/yazıyı düzensizleştirirdi (seyyar satıcı 0.75 ölçeğinde yaşandı); 3x tam sayı ve kart dokusunun
+## (levelup_enchant_card_*.png 360x540, hale 390x570) KENDİ boyutu - artık esnetilmeden birebir çiziliyor. Evrim kartları
+## (level_up_screen.gd) bu sabitleri okur, ikisi birlikte küçüldü.
+const CARD_TEXEL := 3.0 ## kart 3x ölçekte (120x180 sanat px)
 const FAN_SPIN := [-0.12, 0.0, 0.12]
 const FAN_DELAY := 0.1
 const RAYS_REACH_SCALE := 0.75 ## üç büyük kart yan yana - ışık ekranın tepesine/dibine taşmasın
@@ -27,9 +32,9 @@ const MerchantShopScript := preload("res://scripts/merchant_shop_screen.gd")
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
 const SHINE_SHADER := preload("res://shaders/tier_card_shine.gdshader")
 
-const CARD_SIZE := Vector2(480, 720)
+const CARD_SIZE := Vector2(360, 540)
 const CARD_ART_SIZE := Vector2(120, 180)
-const CARD_GAP := 40
+const CARD_GAP := 30
 const CARD_TEXTURES := [
 	preload("res://assets/ui/game/levelup_enchant_card_1.png"),
 	preload("res://assets/ui/game/levelup_enchant_card_2.png"),
@@ -46,13 +51,13 @@ const LEAD_COLOR := Color("#b9a78c")
 const HEAD_COLOR := Color("#ffd66e")
 const POWER_COLOR := Color("#9cc4ff")
 const NOTE_COLOR := Color("#ffb070")
-## Kart içi yerleşim (ekran px, 4x): ikon yuvası (36,36) 104x104, sağında nadirlik·aşama / silah; gömük metin alanı
-## (40..440, 164..680).
-const ICON_RECT := Rect2(44, 44, 88, 88)
-const BADGE_RECT := Rect2(112, 112, 24, 24)
-const TIER_RECT := Rect2(160, 40, 300, 50)
-const CATEGORY_RECT := Rect2(160, 88, 300, 50)
-const TEXT_RECT := Rect2(56, 176, 368, 488)
+## Kart içi yerleşim (ekran px, 3x - eski 4x değerlerin 3/4'ü): ikon yuvası, sağında nadirlik·aşama / silah; gömük metin
+## alanı. İkon 64 px = 32 px ikonların tam 2 katı (yuvanın ortasında).
+const ICON_RECT := Rect2(34, 34, 64, 64)
+const BADGE_RECT := Rect2(84, 84, 18, 18)
+const TIER_RECT := Rect2(120, 30, 225, 38)
+const CATEGORY_RECT := Rect2(120, 66, 225, 38)
+const TEXT_RECT := Rect2(42, 132, 276, 366)
 const BODY_FONT := 32
 const BODY_MIN_FONT := 24
 const HEADER_FONTS := [32, 24]
@@ -81,6 +86,7 @@ var _countdown_label: Label = null
 var _owned_label: Label = null
 var _fx_layer: Control = null
 var _shine_tweens: Array = [null, null, null]
+var _chest_center: Vector2 = Vector2(960.0, 540.0)
 
 
 func _enter_tree() -> void:
@@ -256,6 +262,7 @@ func _start_chest_intro() -> void:
 	var view: Vector2 = get_viewport().get_visible_rect().size
 	anim.size = anim.custom_minimum_size
 	anim.position = Vector2((view.x - anim.size.x) * 0.5, view.y * 0.5 - 20.0 - anim.size.y * 0.55)
+	_chest_center = anim.position + anim.size * Vector2(0.5, 0.52) ## altın kesesi buradan fışkırır (bkz. _on_card_pressed)
 	anim.pivot_offset = anim.size * 0.5
 	anim.scale = Vector2(0.6, 0.6)
 	anim.modulate.a = 0.0
@@ -426,7 +433,8 @@ func _fill_card(i: int) -> void:
 	var card: Button = _cards[i]
 	var c: Dictionary = _choices[i] if i < _choices.size() else {}
 	var d: Dictionary = EnchantPool.describe(c)
-	var tier: int = 5 if bool(d["final"]) else clampi(int(c.get("tier", 1)), 1, 4)
+	## 2026-09-30: nadirlik yok - efsun kartları mor (Tier 3), Final kırmızı (Tier 4); havuz kartın "tier"ini zaten böyle yazar.
+	var tier: int = clampi(int(c.get("tier", 1)), 1, 4)
 	var frame: TextureRect = card.get_node("Frame")
 	frame.texture = CARD_TEXTURES[tier - 1]
 	frame.modulate = Color.WHITE
@@ -601,7 +609,15 @@ func _on_card_pressed(i: int) -> void:
 	var card: Button = _cards[i]
 	card.modulate = Color.WHITE
 	var tw: Tween = TierCardFx.celebrate(self, card, card.get_node("Frame") as TextureRect, int(card.get_meta("tier", 1)), _fx_layer)
-	tw.chain().tween_callback(func() -> void: enchant_chosen.emit(_choices[i]))
+	tw.chain().tween_callback(func() -> void:
+		var choice: Dictionary = _choices[i]
+		## Altın kesesi kartı: ekran kapanınca elit sandık yerinde yeniden belirir, altın ağzından sol üstteki altın paneline
+		## fışkırır (player.apply_enchant_choice -> gold_reward_fx.gd). Sandıksız açılışta (debug) kartın yerinden.
+		if str(choice.get("type", "")) == "gold" and is_instance_valid(card):
+			choice = choice.duplicate()
+			choice["fx_from"] = _chest_center if intro_chest else card.get_global_transform_with_canvas() * (card.size * 0.5)
+			choice["fx_source"] = "elite_chest" if intro_chest else ""
+		enchant_chosen.emit(choice))
 
 
 func _unhandled_input(event: InputEvent) -> void:

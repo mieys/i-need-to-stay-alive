@@ -55,6 +55,7 @@ func _build_title_sign() -> void:
 
 	for rx: float in [x + sign_w * 0.2, x + sign_w * 0.8]:
 		var rope := TextureRect.new()
+		rope.name = "Rope" ## telefonda tabelayla birlikte büyür (bkz. mobile_menu_fit.gd RootFitter)
 		rope.texture = MenuKit.tex("rope.png")
 		rope.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		rope.stretch_mode = TextureRect.STRETCH_TILE

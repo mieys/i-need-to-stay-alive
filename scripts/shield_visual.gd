@@ -41,7 +41,7 @@ const POP_DURATION := 9.0 / 12.0
 ## sahnede zaten atanmış olan varsayılan bubble_frames.tres'ine HİÇ
 ## dokunulmuyor (bkz. player.tscn BubbleSprite.sprite_frames); diğer 3 tür
 ## (Enerji/Kale/Savaş) kendi bubble_frames.tres'lerini kullanır. Anahtarlar
-## player.gd SHIELD_TYPES ile birebir aynı ("shield_enerji"/"shield_kale"/
+## shield_enchant_defs.gd TYPES ile birebir aynı ("shield_enerji"/"shield_kale"/
 ## "shield_savas") - set_shield_type() player.gd _owned_shield_type_key()'in
 ## döndürdüğü anahtarla çağrılır ve bunlar arasında geçiş yapar.
 const TYPE_FRAMES := {

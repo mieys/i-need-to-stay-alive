@@ -20,7 +20,6 @@ const RUNE_SCENE := "res://scenes/fx_totem_rune_flash.tscn"
 const CAST_SCENES := {
 	"res://scenes/fx_shaman_cast_shield.tscn": "shield",
 	"res://scenes/fx_shaman_cast_attack.tscn": "attack",
-	"res://scenes/fx_shaman_cast_area.tscn": "area",
 }
 const PUFF_SCENES := {
 	"res://scenes/fx_totem_plant_dust.tscn": "plant",
@@ -30,17 +29,15 @@ const PUFF_SCENES := {
 const TOTEM_SCENES := [
 	"res://scenes/totem_shield.tscn",
 	"res://scenes/totem_attack.tscn",
-	"res://scenes/totem_area.tscn",
 ]
 const SKILL_ICONS := [
 	"res://assets/skills/shaman_kalkan_totemi_icon.png",
 	"res://assets/skills/shaman_saldiri_totemi_icon.png",
-	"res://assets/skills/shaman_alan_totemi_icon.png",
 ]
 const SFX_PATH := "res://scripts/shaman_sfx.gd"
 const SMOOTH_DRAW_SCRIPTS := [
 	"res://scripts/fx_shaman_cast.gd", "res://scripts/fx_totem_puff.gd", "res://scripts/fx_totem_fire_bolt.gd",
-	"res://scripts/totem_shield_wave.gd", "res://scripts/totem_base.gd", "res://scripts/totem_area.gd",
+	"res://scripts/totem_shield_wave.gd", "res://scripts/totem_base.gd", "res://scripts/totem_attack.gd",
 ]
 const TOTEM_BASE_PATH := "res://scripts/totem_base.gd"
 const PLAYER_PATH := "res://scripts/player.gd"
@@ -174,11 +171,39 @@ func test_player_uses_broadcast_helper_for_shaman_cast() -> void:
 	var src: String = _read(PLAYER_PATH)
 	assert(src.contains("ShamanCastShieldScene := preload(\"res://scenes/fx_shaman_cast_shield.tscn\")"), "kalkan cast sahnesi bağlı olmalı")
 	assert(src.contains("ShamanCastAttackScene := preload(\"res://scenes/fx_shaman_cast_attack.tscn\")"), "saldırı cast sahnesi bağlı olmalı")
-	assert(src.contains("ShamanCastAreaScene := preload(\"res://scenes/fx_shaman_cast_area.tscn\")"), "alan cast sahnesi bağlı olmalı")
 	assert(src.contains("_play_and_broadcast_skill_fx(ShamanCastShieldScene)"), "kalkan cast ağ-yardımcısıyla oynatılmalı")
 	assert(src.contains("_play_and_broadcast_skill_fx(ShamanCastAttackScene)"), "saldırı cast ağ-yardımcısıyla oynatılmalı")
-	assert(src.contains("_play_and_broadcast_skill_fx(ShamanCastAreaScene)"), "alan cast ağ-yardımcısıyla oynatılmalı")
 	## Eski jenerik patlama artık Shaman yeteneklerinde KULLANILMAMALI.
 	assert(not src.contains("_spawn_burst(Color(0.35, 0.65, 1.0))"), "eski jenerik kalkan patlaması kaldırılmalı")
 	assert(not src.contains("_spawn_burst(Color(1.0, 0.55, 0.25))"), "eski jenerik saldırı patlaması kaldırılmalı")
 	assert(not src.contains("_spawn_burst(Color(0.65, 0.35, 0.85))"), "eski jenerik alan patlaması kaldırılmalı")
+
+
+## Kullanıcı isteği (2026-09-29): "E ve R nin etkileri artık birleştiriliyor ... yavaşlatma etkisi kaldırılıyor. E ve R artık
+## yeni Q yeteneği oluyor. Q yeteneği artık E yeteneği olacak. R yeteneğini sonra yazacağım."
+func test_shaman_kit_after_merge() -> void:
+	var def: Dictionary = Characters.DEFS[12]
+	assert(int(def.get("skill", 0)) == 27, "Shaman Q = Saldırı Totemi (27) olmalı")
+	assert(int(def.get("skill2", 0)) == 26, "Shaman E = Kalkan Totemi (26) olmalı")
+	assert(int(def.get("skill3", 0)) == 49, "Shaman R = Elemental Golem (49) - 2026-09-30, bkz. test_shaman_golem.gd")
+	var src: String = _strip_comments(_read(PLAYER_PATH))
+	assert(src.contains("27: _skill_shaman_attack_totem()"), "Q match bloğunda Saldırı Totemi olmalı")
+	assert(src.contains("26: _skill_shaman_shield_totem()"), "E match bloğunda Kalkan Totemi olmalı")
+	assert(not src.contains("_skill_shaman_area_totem"), "eski Alan Totemi dispatch'i kalmamalı")
+	assert(src.contains("skill2_id == 26 or"), "Kalkan Totemi E'de de kalkan harcamamalı")
+	assert(not ResourceLoader.exists("res://scenes/totem_area.tscn"), "eski Alan Totemi sahnesi silinmiş olmalı")
+
+
+## 2026-09-30: alan hasarı Kalkan Totemi'ne de eklendi - kod tek yerde (totem_base.gd "ALAN HASARI"), iki totem açar.
+func test_attack_totem_has_area_damage_without_slow() -> void:
+	var base_src: String = _strip_comments(_read(TOTEM_BASE_PATH))
+	assert(base_src.contains("AREA_DAMAGE_ATTACK_POWER_RATIO := 0.20"), "alan hasarı (saldırı gücünün %20'si/sn) totem tabanında olmalı")
+	assert(base_src.contains("func _process_area_damage("), "alan hasar tiki olmalı")
+	for path in ["res://scripts/totem_attack.gd", "res://scripts/totem_shield.gd"]:
+		var src: String = _strip_comments(_read(path))
+		assert(src.contains("area_damage_enabled = true"), "%s alan hasarını açmalı" % path)
+		assert(not src.contains("apply_slow") and not src.contains("func _process_area_damage("), "%s: yavaşlatma yok, kopya kod yok" % path)
+	assert(not base_src.contains("apply_slow"), "alan YAVAŞLATMAMALI")
+	var inst: Node = (load("res://scenes/totem_attack.tscn") as PackedScene).instantiate()
+	assert(float(inst.get("totem_radius")) == 260.0, "ateş menzili 260 kalmalı")
+	inst.free()

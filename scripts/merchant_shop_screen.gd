@@ -41,6 +41,7 @@ signal closed
 ## _apply_mini_wood_button_style/MAX_LEVELS/_upgrade_cost) script referansı
 ## üzerinden erişiliyor, instance gerekmiyor.
 const ShopScript := preload("res://scripts/shop_panel.gd")
+const EventSfx := preload("res://scripts/event_sfx.gd")
 
 ## "Deliberate copy" - shop_panel.gd/chest_menu.gd/weapon_select_screen.gd
 ## ile AYNI desen (bu dosyalar hiçbiri class_name üzerinden bu tabloları
@@ -68,11 +69,6 @@ const WEAPON_ICON_TEXTURES := {
 	"topuz": "res://assets/weapons/topuz/icon.png",
 	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
 }
-const SHIELD_NAMES := {
-	"shield_standart": "Standart Kalkan", "shield_enerji": "Enerji Kalkanı",
-	"shield_kale": "Kale Kalkanı", "shield_savas": "Savaş Kalkanı",
-}
-const SHIELD_TYPE_KEYS := ["shield_standart", "shield_enerji", "shield_kale", "shield_savas"]
 const MAX_OWNED_WEAPONS := 5
 
 var _player: Node = null
@@ -85,7 +81,8 @@ var _price_labels: Array = []
 ## hakkın harcanması ORADA (ziyaretler arası kalıcı, kişisel) tutuluyor, bu
 ## ekran sadece butonu gösterip çağırıyor.
 var _merchant: Node = null
-var _grid: GridContainer = null
+var _grid: GridContainer = null ## eşya kartları (4 sütun) - 2026-10-02: silahlar ayrı _weapon_grid'de
+var _weapon_grid: GridContainer = null
 var _reroll_btn: Button = null
 
 ## "Satıldı" kaydı KARTIN KENDİSİNDE tutulur (entry["sold"], bkz. _entry_sold):
@@ -111,6 +108,11 @@ var _details_icon_frame: TextureRect
 var _details_icon_inset: Control
 var _details_desc: Label
 var _details_price: Label
+## Tarif satırı (eşya önizlemesi): bileşen ikonları - sahip olunanlar parlak, olmayanlar soluk (bkz. _refresh_recipe).
+var _details_recipe_box: VBoxContainer
+var _details_recipe_row: HFlowContainer
+var _details_recipe_note: Label
+var _details_block: Label
 ## Sağdaki stat penceresi / altın göstergesi / envanter penceresi (bkz. _build_stats_panel, _open_inventory).
 var _gold_label: Label = null
 var _stat_value_labels: Dictionary = {}
@@ -140,6 +142,7 @@ func setup(player: Node, stock: Array, merchant: Node = null) -> void:
 	## _entry_cost.
 	_sort_stock_by_cost()
 	_merchant = merchant
+	EventSfx.play(get_tree(), &"shop_open")
 	## Pencere büyüdüğü için HUD'un üstündeki geçici yazıların (satıcı sayacı, "eve gir" ipucu, bildirimler) üstüne binmesini önle.
 	layer = 80
 	_build_ui()
@@ -188,11 +191,41 @@ func _process(delta: float) -> void:
 ## Kullanıcı isteği (2026-09-25): "seyyar satıcı arayüzünü %25 küçültmeni istiyorum herşey kocaman ve tüm ekranı kaplıyor
 ## nerdeyse" - pencerenin tamamı (yazılar, kartlar, butonlar birlikte) merkezinden x0.75 ölçeklenir; CenterContainer onu
 ## ölçeksiz boyutuna göre ortaladığı için pivot pencerenin ortasında tutulur. Fare/tıklama dönüşümü Godot'ta ölçekle doğru çalışır.
-const WINDOW_SCALE := 0.75
+## Kullanıcı bildirimi (2026-10-02): "seyyar satıcıdaki yazılar zor okunuyor, çözünürlüklerinde gariplik var" - m5x7 piksel
+## fontu yalnızca 16'nın katı boyutlarda (16/32/48) net; x0.75 ölçek 32'lik yazıyı 24'e (1.5 px/font pikseli) çekip
+## düzensiz kalınlıklar yapıyordu (ikonlar da 2.75x oluyordu). Ölçek 1.0'a döndü; pencere kart düzeni sıkılaştırılarak
+## ekrana sığdırıldı (kademe etiketi yerine çerçeve rengi, ikonlar tam sayı katı). Aşağıdaki sığdırma artık sadece
+## yedek (1080'den küçük bir görüntü alanı olursa).
+const WINDOW_SCALE := 1.0
 
+## DÜZELTME (2026-10-02): Godot'ta Container.fit_child_in_rect çocuğun ölçeğini HER yerleşimde 1'e sıfırlar - pencere
+## CenterContainer'ın çocuğu olduğu için 2026-09-25'teki x0.75 hiç uygulanmıyordu (ölçüm: scale (1, 1)). Ölçek artık
+## yerleşim BİTTİKTEN sonra (sort_children sinyali) verilir; yeni eşya bölümüyle uzayan pencere ekrana sığmıyorsa ayrıca
+## küçülür (en fazla WINDOW_SCALE).
+## Kullanıcı bildirimi (2026-10-02): "seyyar satıcı paneli ekranın ortasında durmuyor" - ölçeksiz pencere (1214 px) ekrandan
+## (1080) uzun olunca CenterContainer kendini aşağı doğru büyütüp pencereyi y=0'a koyuyordu; ölçeklenmiş pencerenin merkezi
+## ekran merkezinin ~67 px altına düşüyordu. Pivot merkezde olduğu için görünen merkez = position + size/2 -> ekran merkezine
+## sabitlenir.
 func _apply_window_scale(window: Control) -> void:
-	window.scale = Vector2.ONE * WINDOW_SCALE
-	window.resized.connect(func() -> void: window.pivot_offset = window.size * 0.5)
+	var fit_scale := func() -> void:
+		if not is_instance_valid(window):
+			return
+		window.pivot_offset = window.size * 0.5
+		var view: Vector2 = window.get_viewport_rect().size
+		var fit: float = minf(view.x * 0.97 / maxf(1.0, window.size.x), view.y * 0.97 / maxf(1.0, window.size.y))
+		window.scale = Vector2.ONE * minf(WINDOW_SCALE, fit)
+		## position (ham, ölçeksiz) kullanılır - 4.7'de global_position pivot/ölçek kaymasını içeriyor (ölçülerek görüldü).
+		var parent_ci := window.get_parent() as CanvasItem
+		var center_local: Vector2 = view * 0.5
+		if parent_ci:
+			center_local = parent_ci.get_global_transform().affine_inverse() * center_local
+		window.position = (center_local - window.size * 0.5).round()
+	var parent: Node = window.get_parent()
+	if parent is Container:
+		(parent as Container).sort_children.connect(fit_scale)
+	else:
+		window.resized.connect(fit_scale)
+	fit_scale.call()
 
 
 func _build_ui() -> void:
@@ -305,7 +338,7 @@ func _build_details_panel() -> Control:
 	_details_icon_holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	## bkz. _build_card ile AYNI kare ikon-slotu deseni (_build_icon_slot) - çerçeve tier'a göre _refresh_details()'te güncellenir.
 	## İkon alanı 144 px = 3x (32 px eşya) / 3x (48 px kalkan) => piksel-net.
-	_details_icon_inset = _build_icon_slot(_details_icon_holder, 1, 24.0)
+	_details_icon_inset = _build_icon_slot(_details_icon_holder, 1, 32.0) ## 128 px = 4x (32 px eşya ikonu) -> piksel-net
 	_details_icon_frame = _details_icon_holder.get_node("SlotFrame") as TextureRect
 	vbox.add_child(_details_icon_holder)
 
@@ -332,42 +365,86 @@ func _build_details_panel() -> Control:
 	_details_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desc_scroll.add_child(_details_desc)
 
+	## Tarif (2026-10-02): bileşenler + sahip olunan parçaların fiyattan düşülmesi (bkz. Items.plan_purchase).
+	_details_recipe_box = VBoxContainer.new()
+	_details_recipe_box.add_theme_constant_override("separation", 6)
+	var rt := Label.new()
+	rt.text = "TARİF"
+	UIKit.style_label(rt, UIKit.FS_BODY, UIKit.C_ACCENT, 2)
+	_details_recipe_box.add_child(rt)
+	_details_recipe_row = HFlowContainer.new()
+	_details_recipe_row.add_theme_constant_override("h_separation", 6)
+	_details_recipe_row.add_theme_constant_override("v_separation", 6)
+	_details_recipe_box.add_child(_details_recipe_row)
+	_details_recipe_note = Label.new()
+	_details_recipe_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_details_recipe_note.custom_minimum_size = Vector2(320, 0)
+	UIKit.style_label(_details_recipe_note, UIKit.FS_BODY, UIKit.C_TEXT_DIM, 0)
+	_details_recipe_box.add_child(_details_recipe_note)
+	vbox.add_child(_details_recipe_box)
+
 	_details_price = Label.new()
 	_details_price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UIKit.style_label(_details_price, UIKit.FS_TITLE, UIKit.C_GOLD, 3)
 	vbox.add_child(_details_price)
 
+	_details_block = Label.new()
+	_details_block.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_details_block.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UIKit.style_label(_details_block, UIKit.FS_BODY, UIKit.C_BAD, 0)
+	vbox.add_child(_details_block)
+
 	return panel
 
 
 func _build_grid() -> Control:
+	## 2026-10-02 (kullanıcı seçimi "Eşyalar ayrı bölüm"): üstte SİLAHLAR (4 kart, tek sıra), altında EŞYALAR (4x2).
+	## (Yan yana dizilince pencere ekrandan taşıyordu - sağdaki stat paneli ve başlık düğmeleri görünmüyordu.)
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var wbox := VBoxContainer.new()
+	wbox.add_theme_constant_override("separation", 8)
+	wbox.add_child(_section_title("SİLAHLAR"))
+	_weapon_grid = GridContainer.new()
+	_weapon_grid.columns = 4
+	_weapon_grid.add_theme_constant_override("h_separation", 14)
+	_weapon_grid.add_theme_constant_override("v_separation", 14)
+	wbox.add_child(_weapon_grid)
+	row.add_child(wbox)
+	var ibox := VBoxContainer.new()
+	ibox.add_theme_constant_override("separation", 8)
+	ibox.add_child(_section_title("EŞYALAR"))
 	_grid = GridContainer.new()
-	## 8 kart (bkz. TravelingMerchant.STOCK_SIZE) 4 sütun x 2 satır.
 	_grid.columns = 4
 	_grid.add_theme_constant_override("h_separation", 14)
 	_grid.add_theme_constant_override("v_separation", 14)
+	ibox.add_child(_grid)
+	row.add_child(ibox)
 	_populate_grid()
-	return _grid
-
+	return row
 
 func _populate_grid() -> void:
 	_card_panels.clear()
 	_buy_buttons.clear()
 	_price_labels.clear()
 	for i in range(_stock.size()):
-		_grid.add_child(_build_card(i))
-
+		var card: Control = _build_card(i)
+		if str(_stock[i].get("type", "")) == "weapon" and _weapon_grid:
+			_weapon_grid.add_child(card)
+		else:
+			_grid.add_child(card)
 
 ## _on_reroll_pressed tarafından çağrılır - TAMAMEN yeni bir stokla kartları
 ## sıfırdan kurar (bkz. _build_ui()'nin ilk kuruluşuyla AYNI _populate_grid).
 func _rebuild_grid() -> void:
-	for c in _grid.get_children():
-		c.queue_free()
+	for g in [_grid, _weapon_grid]:
+		if g:
+			for c in g.get_children():
+				c.queue_free()
 	_populate_grid()
 	## Yeni oluşan butonlara da tık sesi bağlanmalı - connect_all_buttons zaten
 	## bağlı olanları atlıyor (bkz. ui_sound.gd), tekrar çağırmak zararsız.
 	UISound.connect_all_buttons(self)
-
 
 ## Kart: kademe etiketi, ikon (tier çerçeveli kare slot), ad, fiyat, AL butonu. Kullanıcı isteği (SONRADAN VAZGEÇİLDİ - "uzun kartları
 ## buna eklemeyelim, sadece ikonları saran 1/1 kart kalsın"): level-kartı tarzı büyük dikey Frame BURADA kullanılmaz, sadece ikon slotu
@@ -375,7 +452,8 @@ func _rebuild_grid() -> void:
 func _build_card(index: int) -> PanelContainer:
 	var entry: Dictionary = _stock[index]
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(228, 350)
+	## 2026-10-02: 3 sıra kart (1 silah + 2 eşya) x1.0 ölçekte ekrana sığsın diye yükseklik içeriğe göre (eskiden 336).
+	card.custom_minimum_size = Vector2(228, 0)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	card.add_theme_stylebox_override("panel", UIKit.panel_style("card"))
@@ -390,24 +468,13 @@ func _build_card(index: int) -> PanelContainer:
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(vbox)
 
-	var tier_label := Label.new()
-	tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	UIKit.style_label(tier_label, UIKit.FS_BODY, UIKit.C_TEXT, 3)
-	if entry.get("type") == "item":
-		var tier: int = int(entry.get("tier", 1))
-		tier_label.text = TierSystem.NAMES[tier - 1]
-		tier_label.add_theme_color_override("font_color", TierSystem.COLORS[tier - 1])
-	else:
-		tier_label.text = _entry_kind_text(entry)
-		tier_label.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
-	tier_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(tier_label)
-
+	## 2026-10-02: kartın üstündeki kademe yazısı (Parça/Epik/Efsanevi, Silah) kaldırıldı - kademe ikon çerçevesinin renginden
+	## (kahve/mavi/mor) okunuyor, adı soldaki ayrıntı panelinde; pencere x1.0'da ekrana sığsın diye.
 	var icon_holder := Control.new()
-	icon_holder.custom_minimum_size = Vector2(120, 120)
+	icon_holder.custom_minimum_size = Vector2(112, 112)
 	icon_holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var icon_inset: Control = _build_icon_slot(icon_holder, _entry_slot_tier(entry), 12.0)
+	var icon_inset: Control = _build_icon_slot(icon_holder, _entry_slot_tier(entry), 8.0) ## 96 px = 3x (32 px ikon)
 	_add_icon(icon_inset, entry)
 	vbox.add_child(icon_holder)
 
@@ -416,27 +483,32 @@ func _build_card(index: int) -> PanelContainer:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	name_label.custom_minimum_size = Vector2(0, 70)
+	name_label.custom_minimum_size = Vector2(0, 52)
 	name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	UIKit.style_label(name_label, UIKit.FS_BODY, UIKit.C_TEXT, 3)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(name_label)
 
+	## 2026-10-02: fiyat + AL aynı satırda (pencere x1.0'da ekrana sığsın diye bir satır kazanıldı).
+	var buy_row := HBoxContainer.new()
+	buy_row.add_theme_constant_override("separation", 6)
+	buy_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(buy_row)
 	var price_label := Label.new()
 	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	price_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UIKit.style_label(price_label, UIKit.FS_BODY, UIKit.C_GOLD, 3)
 	price_label.text = "%d Altın" % _entry_cost(entry)
 	price_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(price_label)
+	buy_row.add_child(price_label)
 
 	## Kullanıcı isteği: "eşyaların altında minik satın al butonları olsun" - artık okunaklı boyutta (yeşil onay plakası).
 	var buy_btn := Button.new()
 	buy_btn.text = "AL"
-	buy_btn.custom_minimum_size = Vector2(150, 56)
-	buy_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	buy_btn.custom_minimum_size = Vector2(72, 50)
 	UIKit.style_button(buy_btn, "green", false, UIKit.FS_BODY)
 	buy_btn.pressed.connect(_on_buy_pressed.bind(index))
-	vbox.add_child(buy_btn)
+	buy_row.add_child(buy_btn)
 
 	_card_panels.append(card)
 	_buy_buttons.append(buy_btn)
@@ -449,8 +521,6 @@ func _entry_kind_text(entry: Dictionary) -> String:
 	match entry.get("type"):
 		"weapon":
 			return "Silah"
-		"shield":
-			return "Kalkan"
 	return " "
 
 
@@ -482,18 +552,16 @@ func _build_icon_slot(holder: Control, tier: int, inset: float) -> Control:
 
 
 func _entry_slot_tier(entry: Dictionary) -> int:
-	return int(entry.get("tier", 1)) if entry.get("type") == "item" else 1
-
+	## Eşya kademesi = çerçeve rengi (1 kahve, 2 mavi parıltılı, 3 mor parıltılı - kullanıcı: "oyunda hali hazırda mevcut").
+	return Items.kademe(str(entry.get("key", ""))) if entry.get("type") == "item" else 1
 
 func _entry_name(entry: Dictionary) -> String:
 	var key: String = entry.get("key", "")
 	match entry.get("type"):
 		"item":
-			return Items.get_def(key).get("name", key.capitalize())
+			return Items.item_name(key)
 		"weapon":
 			return WEAPON_NAMES.get(key, key.capitalize())
-		"shield":
-			return SHIELD_NAMES.get(key, key.capitalize())
 	return key.capitalize()
 
 
@@ -511,18 +579,9 @@ func _add_icon_by(holder: Control, type: String, key: String) -> void:
 	tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	match type:
 		"item":
-			var icon_path: String = "res://assets/generated/item_" + key + "_frame_0.png"
-			if ResourceLoader.exists(icon_path):
-				tex_rect.texture = load(icon_path) as Texture2D
-			else:
-				## Bazı eşyaların hazır PNG'si yok (bkz. shop_item_icon.gd) - prosedürel çizime düş.
-				var proc := Control.new()
-				proc.set_script(load("res://scripts/shop_item_icon.gd"))
-				proc.set_anchors_preset(Control.PRESET_FULL_RECT)
-				proc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				proc.set("item_type", "trinket")
-				holder.add_child(proc)
-				return
+			## 2026-10-02: kullanıcının 32x32 eşya ikonları (assets/items/<anahtar>.png, bkz. items.gd).
+			tex_rect.texture = Items.icon(key)
+			tex_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		"weapon":
 			var wpath: String = WEAPON_ICON_TEXTURES.get(key, "")
 			if not wpath.is_empty() and ResourceLoader.exists(wpath):
@@ -564,42 +623,73 @@ func _refresh_card_styles() -> void:
 		panel.add_theme_stylebox_override("panel", UIKit.panel_style(kind))
 
 
-## Kalkan türünün çalışma biçimi (player.gd SHIELD_TYPES ile uyumlu) - açıklama metni.
-const SHIELD_DESC := {
-	"shield_standart": "Dengeli kalkan.\nHasarın %65'ini emer.\nHasar aldıktan 8 sn sonra yenilenmeye başlar.",
-	"shield_enerji": "Düşük kapasite ama çok hızlı yenilenir.\nHasarın %55'ini emer.\nHasar aldıktan 4.5 sn sonra yenilenmeye başlar.",
-	"shield_kale": "En yüksek kapasite ve emilim.\nHasarın %75'ini emer.\nYenilenmesi yavaştır (9 sn bekleme).",
-	"shield_savas": "Savaş sırasında da durmadan yenilenir.\nHasarın %60'ını emer.\nBekleme süresi yoktur.",
-}
-
-
 func _refresh_details() -> void:
 	if _selected_index < 0 or _selected_index >= _stock.size():
 		return
 	var entry: Dictionary = _stock[_selected_index]
+	var key: String = str(entry.get("key", ""))
 	_details_name.text = _entry_name(entry)
+	_details_recipe_box.visible = false
+	_details_block.text = ""
 	if entry.get("type") == "item":
-		var tier: int = int(entry.get("tier", 1))
-		_details_tier.text = TierSystem.NAMES[tier - 1]
-		_details_tier.add_theme_color_override("font_color", TierSystem.COLORS[tier - 1])
-		_details_desc.text = Items.get_def(entry.get("key", "")).get("desc", "")
+		var kd: int = Items.kademe(key)
+		_details_tier.text = Items.KADEME_NAMES[kd - 1]
+		_details_tier.add_theme_color_override("font_color", TierSystem.COLORS[kd - 1])
+		var desc: String = Items.describe(key)
+		var ups: Array = Items.builds_into(key)
+		if not ups.is_empty():
+			var names: Array = []
+			for u in ups:
+				names.append(Items.item_name(u))
+			desc += "\n\nYükseltmeleri: " + ", ".join(names)
+		_details_desc.text = desc
+		_refresh_recipe(key)
+		if not _entry_sold(entry):
+			var reason: String = Items.purchase_block_reason(key, GameManager.owned_items, _part_slots())
+			_details_block.text = reason
 	elif entry.get("type") == "weapon":
 		_details_tier.text = "Silah"
 		_details_tier.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
 		_details_desc.text = "Yeni bir silah - kalıcı olarak edinilir."
-	else:
-		var key: String = entry.get("key", "")
-		_details_tier.text = "Kalkan"
-		_details_tier.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
-		var lvl: int = int(GameManager.get(key + "_level"))
-		var max_lvl: int = int(ShopScript.MAX_LEVELS.get(key, 20))
-		_details_desc.text = "%s\n\nKalkan seviyesi: %d/%d\nSatın alınca bir seviye yükselir." % [SHIELD_DESC.get(key, ""), lvl, max_lvl]
 	_details_icon_frame.texture = TierSystem.MINI_FRAME_TEXTURES[_entry_slot_tier(entry) - 1]
 	for c in _details_icon_inset.get_children():
 		c.queue_free()
 	_add_icon(_details_icon_inset, entry)
 	_details_price.text = "%d Altın" % _entry_cost(entry)
 
+
+## Tarif satırı: her bileşen küçük kademe çerçeveli ikon; sahip olunan (bu satın almada tüketilecek) bileşenler parlak.
+## Alt satırda tam fiyat ve indirim dökümü.
+func _refresh_recipe(key: String) -> void:
+	for c in _details_recipe_row.get_children():
+		c.queue_free()
+	var rec: Array = Items.recipe(key)
+	if rec.is_empty():
+		return
+	_details_recipe_box.visible = true
+	var plan: Dictionary = Items.plan_purchase(key, GameManager.owned_items)
+	var owned_keys: Array = []
+	for idx in plan.get("consume", []):
+		owned_keys.append(str((GameManager.owned_items[int(idx)] as Dictionary).get("key", "")))
+	var pool: Array = owned_keys.duplicate()
+	for comp in rec:
+		var have: bool = pool.has(str(comp))
+		if have:
+			pool.erase(str(comp))
+		var holder := Control.new()
+		holder.custom_minimum_size = Vector2(80, 80)
+		holder.mouse_filter = Control.MOUSE_FILTER_PASS
+		holder.tooltip_text = "%s (%d altın)%s" % [Items.item_name(str(comp)), Items.cost(str(comp)), "  - sende var" if have else ""]
+		var inset: Control = _build_icon_slot(holder, Items.kademe(str(comp)), 8.0) ## 64 px = 2x ikon
+		_add_icon_by(inset, "item", str(comp))
+		holder.modulate = Color(1, 1, 1, 1) if have else Color(1, 1, 1, 0.38)
+		_details_recipe_row.add_child(holder)
+	var full: int = int(plan.get("full", Items.cost(key)))
+	var pay: int = int(plan.get("cost", full))
+	if pay < full:
+		_details_recipe_note.text = "Sendeki parçalar: -%d" % (full - pay)
+	else:
+		_details_recipe_note.text = "Parça sendeyse fiyattan düşer"
 
 ## ---------------------------------------------------------------- sağ: kendine özgü stat penceresi
 func _build_stats_panel() -> Control:
@@ -653,6 +743,7 @@ const STAT_ROWS := [
 	{"id": "absorb", "label": "Soğurma", "color": UIKit.C_TEXT},
 	{"id": "dodge", "label": "Sıvışma", "color": UIKit.C_TEXT},
 	{"id": "luck", "label": "Şans", "color": UIKit.C_GOOD},
+	{"id": "heal_power", "label": "İyileştirme", "color": Color(UIKit.INK["health"])},
 	{"id": "xp", "label": "Tecrübe", "color": Color(UIKit.INK["exp"])},
 ]
 
@@ -683,6 +774,7 @@ func _refresh_stats() -> void:
 	t["dodge"] = "%%%d" % int(round(p.dodge_chance * 100.0))
 	t["luck"] = ("%d" % int(round(p.luck))) if is_equal_approx(p.luck, round(p.luck)) else ("%.1f" % p.luck)
 	t["xp"] = "+%%%d" % int(round(p.exp_gain_percent * 100.0))
+	t["heal_power"] = ("+%%%d" % int(round(float(p.heal_shield_power) * 100.0))) if "heal_shield_power" in p else "-"
 	for id in _stat_value_labels:
 		(_stat_value_labels[id] as Label).text = str(t.get(id, "-"))
 
@@ -826,31 +918,38 @@ func _refresh_inventory() -> void:
 	shield_box.add_theme_constant_override("separation", 6)
 	shield_box.add_child(_section_title("KALKAN"))
 	if owned_shield != "":
-		var lvl: int = int(GameManager.get(owned_shield + "_level"))
-		var mx: int = int(ShopScript.MAX_LEVELS.get(owned_shield, 20))
-		shield_box.add_child(_inventory_cell("shield", owned_shield, 1, SHIELD_NAMES.get(owned_shield, ""), "Sv. %d/%d" % [lvl, mx]))
+		shield_box.add_child(_inventory_cell("shield", owned_shield, 1, ShieldEnchantDefs.type_name(owned_shield), " "))
 	else:
 		shield_box.add_child(_inventory_cell("", "", 1, "Yok", " "))
 	srow.add_child(shield_box)
 	_inventory_body.add_child(srow)
 
-	## Eşyalar
-	var max_i: int = 1
-	if _player and _player.has_method("get_max_item_slots"):
-		max_i = _player.get_max_item_slots()
+	## Eşyalar (2026-10-02): kademe başına ayrı bölüm ve slot sınırı - parça seviye başına 1, epik 10, efsanevi 5.
 	var owned_i: Array = GameManager.owned_items
-	_inventory_body.add_child(_section_title("EŞYALAR  %d/%d" % [owned_i.size(), max_i]))
-	var irow := HFlowContainer.new()
-	irow.add_theme_constant_override("h_separation", 12)
-	irow.add_theme_constant_override("v_separation", 12)
-	for i in range(maxi(max_i, owned_i.size())):
-		if i < owned_i.size():
-			var ik: String = str(owned_i[i].get("key", ""))
-			var tier: int = int(owned_i[i].get("tier", 1))
-			irow.add_child(_inventory_cell("item", ik, tier, Items.get_def(ik).get("name", ik.capitalize()), TierSystem.NAMES[tier - 1], TierSystem.COLORS[tier - 1]))
-		else:
-			irow.add_child(_inventory_cell("", "", 1, "Boş", " "))
-	_inventory_body.add_child(irow)
+	for kd in [Items.KADEME_EFSANEVI, Items.KADEME_EPIK, Items.KADEME_PARCA]:
+		var limit: int = Items.slot_limit(kd, _part_slots())
+		var keys: Array = []
+		for e in owned_i:
+			var ik: String = str((e as Dictionary).get("key", ""))
+			if Items.kademe(ik) == kd:
+				keys.append(ik)
+		var title: Label = _section_title("%s EŞYALAR  %d/%d" % [Items.KADEME_NAMES[kd - 1].to_upper(), keys.size(), limit])
+		title.add_theme_color_override("font_color", TierSystem.COLORS[kd - 1])
+		_inventory_body.add_child(title)
+		var irow := HFlowContainer.new()
+		irow.add_theme_constant_override("h_separation", 12)
+		irow.add_theme_constant_override("v_separation", 12)
+		## Boş yuvalar en fazla bir sıra (parça slotu seviyeyle büyür; uzun boş liste göstermeye gerek yok).
+		var shown: int = mini(limit, maxi(keys.size(), int(ceil(float(maxi(keys.size(), 1)) / 5.0)) * 5))
+		shown = maxi(shown, keys.size())
+		for i in range(shown):
+			if i < keys.size():
+				var cell: Control = _inventory_cell("item", keys[i], kd, Items.item_name(keys[i]), Items.KADEME_NAMES[kd - 1], TierSystem.COLORS[kd - 1])
+				cell.tooltip_text = "%s\n%s" % [Items.item_name(keys[i]), Items.describe(keys[i])]
+				irow.add_child(cell)
+			else:
+				irow.add_child(_inventory_cell("", "", kd, "Boş", " "))
+		_inventory_body.add_child(irow)
 	_fit_inventory_scroll()
 
 
@@ -921,27 +1020,15 @@ func _entry_cost(entry: Dictionary) -> int:
 
 func _entry_cost_raw(entry: Dictionary) -> int:
 	var key: String = entry.get("key", "")
+	## Kullanıcı isteği (2026-10-02): "zaman ölçeklenmesini kaldır" - fiyatlar sabit (eşya: belgedeki fiyat, sahip olunan
+	## parçalar düşülür; silah: shop_panel'in kademeli taban fiyatı).
 	match entry.get("type"):
 		"item":
-			var base_cost: int = int(Items.get_def(key).get("cost_base", 50))
-			var power_mult: float = Items.ITEM_TIER_POWER[int(entry.get("tier", 1)) - 1]
-			return _scale_merchant_price(base_cost * power_mult)
+			return int(Items.plan_purchase(key, GameManager.owned_items).get("cost", Items.cost(key)))
 		"weapon":
-			## DÜZELTME (kullanıcı isteği: "Multiplayerda ilk seçtiğimiz
-			## silahtan sonra alacağımız 2. silah ucuz olacak 3. 4 .5 silahı
-			## 80 gold civarında başlat") - artık silah TÜRÜNDEN değil
-			## (WEAPON_COST_BASE artık kullanılmıyor), shop_panel.gd'deki
-			## AYNI kademeli taban fiyatı (bkz. ShopScript._copy_cost) sahip
-			## olunan TOPLAM silah sayısına göre kullanıyor - üstüne bu
-			## dükkana özgü Kademe/zaman ölçeklemesi (_scale_merchant_price)
-			## hâlâ AYNI şekilde uygulanıyor.
 			var next_total: int = GameManager.owned_weapons.size() + 1
-			return _scale_merchant_price(float(ShopScript._copy_cost_raw(key, next_total)))
-		"shield":
-			var next_level: int = int(GameManager.get(key + "_level")) + 1
-			return _scale_merchant_price(float(ShopScript._upgrade_cost_raw(key, next_level)))
+			return ShopScript._copy_cost_raw(key, next_total)
 	return 0
-
 
 ## bkz. _entry_cost üstündeki DÜZELTME notu - kullanıcı isteği: "fiyatı
 ## ucuzdan pahalıya göre sıralanmalı".
@@ -950,10 +1037,7 @@ func _sort_stock_by_cost() -> void:
 
 
 func _owned_shield_type() -> String:
-	for key in SHIELD_TYPE_KEYS:
-		if int(GameManager.get(key + "_level")) > 0:
-			return key
-	return ""
+	return ShieldEnchantDefs.owned_type()
 
 
 ## bkz. yukarıdaki "Satıldı kaydı" notu.
@@ -970,10 +1054,7 @@ func _entry_can_buy(entry: Dictionary, _index: int) -> bool:
 		return false
 	match entry.get("type"):
 		"item":
-			var max_slots: int = 1
-			if _player and _player.has_method("get_max_item_slots"):
-				max_slots = _player.get_max_item_slots()
-			return GameManager.owned_items.size() < max_slots
+			return Items.purchase_block_reason(key, GameManager.owned_items, _part_slots()) == ""
 		"weapon":
 			## Sahip olunan bir silah türü de alınabilir ("ateş asam var, boş slotum var
 			## ama dükkandaki ateş asasını alamıyorum" bildirimi) - kural "kart başına
@@ -982,14 +1063,14 @@ func _entry_can_buy(entry: Dictionary, _index: int) -> bool:
 			if _player and _player.has_method("get_max_owned_weapons"):
 				max_w = _player.get_max_owned_weapons()
 			return GameManager.owned_weapons.size() < max_w
-		"shield":
-			var cur_level: int = int(GameManager.get(key + "_level"))
-			if cur_level >= int(ShopScript.MAX_LEVELS.get(key, 20)):
-				return false
-			var owned: String = _owned_shield_type()
-			return owned == "" or owned == key
 	return false
 
+
+## Parça slotu sayısı (seviye başına 1) - oyuncu yoksa (test) 1.
+func _part_slots() -> int:
+	if _player and _player.has_method("get_max_item_slots"):
+		return int(_player.get_max_item_slots())
+	return 1
 
 func _on_buy_pressed(index: int) -> void:
 	if index < 0 or index >= _stock.size():
@@ -1001,10 +1082,10 @@ func _on_buy_pressed(index: int) -> void:
 	var cost: int = _entry_cost(entry)
 	match entry.get("type"):
 		"item":
-			var power_mult: float = Items.ITEM_TIER_POWER[int(entry.get("tier", 1)) - 1]
-			if _player and _player.has_method("buy_item") and _player.buy_item(key, power_mult):
+			## Tarifli satın alma: sahip olunan bileşenler tüketilir (player.acquire_item kaydı da yazar).
+			var plan: Dictionary = Items.plan_purchase(key, GameManager.owned_items)
+			if _player and _player.has_method("acquire_item") and _player.acquire_item(key, plan, cost):
 				GameManager.gold -= cost
-				GameManager.owned_items.append({"key": key, "spent": cost, "power": power_mult, "tier": int(entry.get("tier", 1))})
 				entry["sold"] = true
 		"weapon":
 			## bkz. shop_panel.gd _on_buy_copy / chest_menu.gd _on_al_pressed
@@ -1013,13 +1094,6 @@ func _on_buy_pressed(index: int) -> void:
 			GameManager.owned_weapons.append({"key": key, "level": 1, "spent": cost})
 			if _player and _player.has_method("buy_weapon_copy"):
 				_player.buy_weapon_copy(key, 1)
-			entry["sold"] = true
-		"shield":
-			var next_level: int = int(GameManager.get(key + "_level")) + 1
-			GameManager.gold -= cost
-			GameManager.set(key + "_level", next_level)
-			if _player and _player.has_method("refresh_shield_stats"):
-				_player.refresh_shield_stats()
 			entry["sold"] = true
 	_refresh_all_buy_states()
 	_refresh_reroll_button()
@@ -1032,8 +1106,8 @@ func _refresh_all_buy_states() -> void:
 		var entry: Dictionary = _stock[i]
 		var sold: bool = _entry_sold(entry)
 		_buy_buttons[i].disabled = not _entry_can_buy(entry, i)
-		_buy_buttons[i].text = "SATILDI" if sold else "AL"
-		_price_labels[i].text = "%d Altın" % _entry_cost(entry)
+		_buy_buttons[i].text = "AL"
+		_price_labels[i].text = "SATILDI" if sold else "%d Altın" % _entry_cost(entry)
 	_refresh_card_styles()
 	_refresh_stats()
 	_refresh_inventory()

@@ -13,15 +13,13 @@ extends CanvasLayer
 ## countdown mekanizması - bkz. network_manager.gd "KART/SİLAH/KALKAN SEÇİM
 ## KUYRUĞU SENKRONİZASYONU" notu - o RPC katmanı seçimin NE olduğunu hiç
 ## bilmiyor, sadece "bu eş hâlâ meşgul mü" takip ediyor).
-## İki modu var: "weapon" (3 kart, WEAPON_KEYS havuzundan) ve "shield"
-## (2 kart, SHIELD_KEYS havuzundan) - level_up_screen'in aksine reroll ALTIN
+## 3 kart, WEAPON_KEYS havuzundan (kalkan modu 2026-09-29'da kaldırıldı - herkes Standart Kalkanla
+## başlıyor, bkz. main.gd _grant_starting_shield) - level_up_screen'in aksine reroll ALTIN
 ## MALİYETLİ DEĞİL, sabit REROLL_MAX hakkı var, ekran her açıldığında
 ## sıfırdan başlar ("aynı karıştırma hakları kullanılacak" - kullanıcı isteği).
 
 signal item_chosen(key: String)
 
-## main.gd, add_child()'dan ÖNCE ayarlamalı.
-var mode: String = "weapon"
 ## CountLabel'da "zaten sahip olunan kopya" bilgisi için (bkz. _populate_cards).
 var player_ref: Node = null
 
@@ -30,7 +28,6 @@ const REROLL_MAX := 2
 ## 2026-09-24: kartlar bej parşömen - kategori renkleri koyu tonlar (TEK kaynak UIKit, level kartlarıyla aynı).
 const CAT_MELEE_COLOR := UIKit.C_CAT_ATTACK
 const CAT_RANGED_COLOR := UIKit.C_CAT_UTILITY
-const CAT_SHIELD_COLOR := UIKit.C_CAT_DEFENSE
 
 ## bkz. chest_menu.gd üstündeki aynı not - shop_panel.gd bir class_name
 ## tanımlamadığı için oradaki const'lara erişmenin en basit/açık yolu bu
@@ -63,10 +60,6 @@ const WEAPON_ICON_TEXTURES := {
 ## için çağrılıyor, geri kalan tüm silahler menzilli/projectile.
 const MELEE_WEAPON_KEYS := ["dagger", "pence", "topuz", "uzunkilic"]
 
-## bkz. player.gd SHIELD_TYPES - isimler oradan (player_ref üzerinden)
-## okunuyor, burada sadece anahtar sırası tutuluyor.
-const SHIELD_KEYS := ["shield_standart", "shield_enerji", "shield_kale", "shield_savas"]
-
 ## Kullanıcı isteği: "ayrıntılarını direk kartın içine mini bir panel olarak
 ## ekle aşağı kaydırarak okuyabilelim" (bkz. _populate_cards - her kartın
 ## içinde daima açık, kaydırılabilir bir açıklama kutusu).
@@ -84,8 +77,8 @@ const WEAPON_DESCRIPTIONS := {
 	"fire_staff": "HASAR: 13 + %100 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Patlayıcı mermi",
 	"lightning_staff": "HASAR: 12/sn + %140 saldırı gücü · Menzil 168 · Kesintisiz ışın",
 	"tabanca": "HASAR: 17 + %99 saldırı gücü · Ateş hızı 0.9sn · Menzil 210",
-	"tuftuf": "HASAR: 5 + %55 saldırı gücü · Ateş hızı 1.4sn · Menzil 238",
-	"tufek": "HASAR: 22 + %195 saldırı gücü · Ateş hızı 1.3sn · Menzil 336",
+	"tuftuf": "HASAR: %100 saldırı gücü · Ateş hızı 1.4sn · Menzil 128",
+	"tufek": "HASAR: %160 saldırı gücü · Ateş hızı 1.3sn · Menzil 302",
 	"arcane": "HASAR: 16 + %110 saldırı gücü · Ateş hızı 1.4sn · Menzil 168",
 	"yay": "HASAR: 14 + %70 saldırı gücü · Ateş hızı 0.8sn · Menzil 266 · Ateşten önce ok çeker",
 	"crossbow": "HASAR: 16 + %110 saldırı gücü · Ateş hızı 0.7sn · Menzil 245",
@@ -95,12 +88,6 @@ const WEAPON_DESCRIPTIONS := {
 	"pence": "HASAR: 20 + %100 saldırı gücü · Yakın dövüş (menzil 110) · Çift pençe darbesi",
 	"topuz": "HASAR: 20 + %105 saldırı gücü · Yakın dövüş (menzil 120) · Geniş alan hasarı",
 	"uzunkilic": "HASAR: 18 + %100 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş",
-}
-const SHIELD_DESCRIPTIONS := {
-	"shield_standart": "Dengeli bir kalkan. 150 kalkan gücü, %65 hasar emilimi. Vurulduktan 8 saniye sonra yenilenmeye başlar (10/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar (+10 güç, +1 yenilenme, -0.1sn bekleme/eski-seviye). 100 seviyeye kadar geliştirilebilir.",
-	"shield_enerji": "Hızlı yenilenen ama zayıf bir kalkan. 90 kalkan gücü, %55 hasar emilimi. Vurulduktan 4.5 saniye sonra yenilenmeye başlar (12/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar. 100 seviyeye kadar geliştirilebilir.",
-	"shield_kale": "Çok güçlü ama yavaş yenilenen bir kalkan. 180 kalkan gücü, %75 hasar emilimi. Vurulduktan 9 saniye sonra yenilenmeye başlar (8/sn). Her seviye ufak ufak +güç/+yenilenme, bekleme azalır (en az 1.5sn) - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar. 100 seviyeye kadar geliştirilebilir.",
-	"shield_savas": "Savaş sırasında da yenilenir, hiç bekleme süresi yok. 100 kalkan gücü, %60 hasar emilimi, sürekli 3.6/sn yenilenir. Her seviye ufak ufak +güç/+yenilenme - seviye 100'de toplamda eskiden 30 seviyede olduğu kadar. 100 seviyeye kadar geliştirilebilir.",
 }
 
 var _cards: Array = []
@@ -131,7 +118,7 @@ const CARD_ANIM_START_SCALE := 0.92
 
 
 func _card_count() -> int:
-	return 3 if mode == "weapon" else 2
+	return 3
 
 
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
@@ -206,7 +193,7 @@ func _build_ui() -> void:
 
 	var title := Label.new()
 	title.name = "Title"
-	title.text = "SİLAHINI SEÇ" if mode == "weapon" else "KALKANINI SEÇ"
+	title.text = "SİLAHINI SEÇ"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.theme = theme_res
@@ -331,28 +318,20 @@ func _owned_weapon_copy_count(key: String) -> int:
 	return count
 
 
-func _owned_shield_level(key: String) -> int:
-	if not is_instance_valid(player_ref):
-		return 0
-	return int(GameManager.get(key + "_level"))
-
-
 ## Kullanıcı isteği: "rerollanan şeyler rerollandığında asla önceki
 ## seçeneklerden birini içermemeli" - bu ekranda GÖSTERİLMİŞ (ilk açılış +
-## tüm reroll'lar) tüm anahtarları tutar. Kalkan modunda sadece 4 tür
-## olduğundan (2'şer gösteriliyor) havuz 1 reroll sonra tükenebilir - bu
-## durumda son çare olarak sıfırlanır.
+## tüm reroll'lar) tüm anahtarları tutar. Havuz tükenirse son çare olarak
+## sıfırlanır.
 var _shown_keys: Array = []
 
 func _draw_pool(count: int) -> Array:
-	var full_pool: Array = WEAPON_KEYS if mode == "weapon" else SHIELD_KEYS
+	var full_pool: Array = WEAPON_KEYS
 	var available: Array = full_pool.filter(func(k): return not _shown_keys.has(k))
 	if available.size() < count:
 		_shown_keys.clear()
 		available = full_pool.duplicate()
 	available.shuffle()
-	## Havuz istenen sayıdan azsa (kalkan modunda 4 tür var, 2 isteniyor -
-	## sorun yok, ama ileride azalırsa) tekrar kullanılabilir.
+	## Havuz istenen sayıdan azsa tekrar kullanılabilir.
 	while available.size() < count:
 		available.append_array(full_pool)
 	var result: Array = available.slice(0, count)
@@ -464,39 +443,22 @@ func _populate_cards() -> void:
 		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		desc_scroll.add_child(desc_label)
 
-		if mode == "weapon":
-			var cat_info: Dictionary = _weapon_category(key)
-			category.text = cat_info["label"]
-			category.add_theme_color_override("font_color", cat_info["color"])
-			name_label.text = WEAPON_NAMES.get(key, key.capitalize())
-			var icon_path: String = WEAPON_ICON_TEXTURES.get(key, "")
-			if icon_path != "" and ResourceLoader.exists(icon_path):
-				var tex_rect := TextureRect.new()
-				tex_rect.texture = load(icon_path)
-				tex_rect.custom_minimum_size = Vector2(96, 96)
-				tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-				tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-				tex_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-				icon_holder.add_child(tex_rect)
-			var owned: int = _owned_weapon_copy_count(key)
-			count_label.text = ("%dx sahipsin" % owned) if owned > 0 else ""
-			desc_label.text = WEAPON_DESCRIPTIONS.get(key, "")
-		else:
-			category.text = "Kalkan"
-			category.add_theme_color_override("font_color", CAT_SHIELD_COLOR)
-			var shield_def: Dictionary = {}
-			if is_instance_valid(player_ref):
-				shield_def = player_ref.SHIELD_TYPES.get(key, {})
-			name_label.text = str(shield_def.get("name", key.capitalize()))
-			var shield_icon_script: GDScript = load("res://scripts/shop_item_icon.gd")
-			var icon_ctrl: Control = Control.new()
-			icon_ctrl.set_script(shield_icon_script)
-			icon_ctrl.custom_minimum_size = Vector2(96, 96)
-			icon_ctrl.set("item_type", "shield")
-			icon_holder.add_child(icon_ctrl)
-			var owned_lvl: int = _owned_shield_level(key)
-			count_label.text = ("Zaten seviye %d" % owned_lvl) if owned_lvl > 0 else ""
-			desc_label.text = SHIELD_DESCRIPTIONS.get(key, "")
+		var cat_info: Dictionary = _weapon_category(key)
+		category.text = cat_info["label"]
+		category.add_theme_color_override("font_color", cat_info["color"])
+		name_label.text = WEAPON_NAMES.get(key, key.capitalize())
+		var icon_path: String = WEAPON_ICON_TEXTURES.get(key, "")
+		if icon_path != "" and ResourceLoader.exists(icon_path):
+			var tex_rect := TextureRect.new()
+			tex_rect.texture = load(icon_path)
+			tex_rect.custom_minimum_size = Vector2(96, 96)
+			tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			tex_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			icon_holder.add_child(tex_rect)
+		var owned: int = _owned_weapon_copy_count(key)
+		count_label.text = ("%dx sahipsin" % owned) if owned > 0 else ""
+		desc_label.text = WEAPON_DESCRIPTIONS.get(key, "")
 
 		card.add_child(category)
 		card.add_child(content)

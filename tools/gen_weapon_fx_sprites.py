@@ -19,7 +19,10 @@ Cikti:
   assets/fx/sword_sweep/sweep_sheet.png + sweep_frames.tres       ("play" tek sefer - bkz. gen_sword_sweep)
   assets/fx/sword_hit/hit_sheet.png + hit_frames.tres             ("play" tek sefer - Uzunkilic isabeti, gen_sword_hit)
 
+  assets/fx/tufek_hit/hit_sheet.png + hit_frames.tres             ("play" tek sefer - Tufek mermi isabeti, gen_tufek_hit)
+
 Sadece kilic savurusu + isabeti: python tools/gen_weapon_fx_sprites.py sweep
+Sadece tufek isabeti: python tools/gen_weapon_fx_sprites.py tufek
   assets/weapons/boomerang/art48.png                              (48x48 kaynak cizim)
   assets/weapons/boomerang/icon.png                               (200x200 - art48 x4, ortali)
   assets/weapons/boomerang/rot_sheet.png                          (12 x 48x48 onceden dondurulmus - artik kullanilmiyor)
@@ -260,8 +263,117 @@ def gen_sword_hit():
                         [("play", (0, 0), 6, False, 24.0)])
 
 
+def gen_tufek_hit():
+    """Tufek mermi isabeti (kullanici istegi 2026-09-28: "tufek ates ettiginde dusmanda cikan mermi isabet efektini
+    yeniden tasarla, pixel tarzda spritesheet olsun"). Eskiden kilicla paylasilan kirmizi "Isabet 2" cizgileri
+    (fx_hit_slash_streak) kullaniliyordu. Merminin altin izine (projectile.gd TRAIL_TINTS "tufek_projectile") uyan
+    beyaz-altin-kehribar palet: once sert bir namlu-disi flas (ileri kolu uzun 4 kollu yildiz), sonra kirik bir darbe
+    halkasi genisler, kivilcimlar ileri (mermi yonune, +x) bir koni halinde ve ikisi geri seker, sonunda kucuk dithered
+    bir duman/toz kalir. +x = ucus yonu (projectile.gd impact_face_direction ile doner). 8 kare, tek sefer."""
+    out = os.path.join(ROOT, "assets", "fx", "tufek_hit")
+    S = 44
+    c = S // 2
+    WHITE = (1.0, 1.0, 0.95)
+    GOLD = (1.0, 0.93, 0.6)
+    AMBER = (1.0, 0.72, 0.3)
+    EMBER = (0.85, 0.4, 0.15)
+    SMOKE = (0.62, 0.57, 0.52)
+
+    def star(im, fwd, back, side, al, core):
+        """Merkezde 4 kollu flas: +x kolu fwd, -x kolu back, dikey kollar side piksel. Kol ucu altina, kok beyaza doner."""
+        for dx, dy, ln in ((1, 0, fwd), (-1, 0, back), (0, 1, side), (0, -1, side)):
+            for i in range(1, ln + 1):
+                f = i / (ln + 1)
+                col = WHITE if f < 0.35 else (GOLD if f < 0.7 else AMBER)
+                put(im, c + dx * i, c + dy * i, rgba(*col, al * (1.0 - 0.45 * f)))
+        for dx in range(-core, core + 1):
+            for dy in range(-core, core + 1):
+                if abs(dx) + abs(dy) <= core:
+                    put(im, c + dx, c + dy, rgba(*(WHITE if abs(dx) + abs(dy) < core else GOLD), al))
+
+    def ring(im, r, col, al, gap):
+        """1 px kirik halka; gap > 0 ise her gap'inci piksel bos (dagilma hissi)."""
+        n = max(8, int(math.tau * r * 1.5))
+        seen = set()
+        for i in range(n):
+            a = i / n * math.tau
+            p = (int(round(c + math.cos(a) * r)), int(round(c + math.sin(a) * r)))
+            if p in seen:
+                continue
+            seen.add(p)
+            if gap and len(seen) % gap == 0:
+                continue
+            put(im, p[0], p[1], rgba(*col, al))
+
+    # kivilcim yonleri: ileri koni + iki geri sekme (kisa)
+    sparks = [(math.radians(a), k) for a, k in ((-38, 1.0), (-14, 1.15), (9, 1.05), (33, 0.95), (162, 0.55), (203, 0.6))]
+
+    def spark_pass(im, d, streak, head_col, tail_col, al):
+        for a, k in sparks:
+            dd = d * k
+            x, y = c + math.cos(a) * dd, c + math.sin(a) * dd
+            put(im, x, y, rgba(*head_col, al))
+            for s in range(1, streak + 1):
+                put(im, x - math.cos(a) * s, y - math.sin(a) * s, rgba(*tail_col, al * (0.7 - 0.2 * s)))
+
+    def smoke(im, r, al, phase):
+        for y in range(-r, r + 1):
+            for x in range(-r, r + 1):
+                if x * x + y * y > r * r or (x + y + phase) % 2:
+                    continue
+                put(im, c - 1 + x, c + y, rgba(*SMOKE, al))
+
+    frames = []
+    # 0: ilk temas - kucuk beyaz cekirdek
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    star(im, 3, 2, 2, 1.0, 1)
+    frames.append(im)
+    # 1: tam flas - ileri kolu uzun yildiz
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    star(im, 9, 4, 5, 1.0, 2)
+    frames.append(im)
+    # 2: flas kisalir, kucuk darbe halkasi, kivilcimlar halkanin DISINA firlar
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    ring(im, 3, GOLD, 0.7, 0)
+    star(im, 6, 3, 3, 0.85, 1)
+    spark_pass(im, 7, 2, WHITE, GOLD, 1.0)
+    frames.append(im)
+    # 3
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    ring(im, 5, AMBER, 0.4, 3)
+    star(im, 2, 1, 1, 0.6, 1)
+    spark_pass(im, 11, 2, GOLD, AMBER, 0.95)
+    frames.append(im)
+    # 4: halka biter, duman baslar
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    smoke(im, 2, 0.3, 0)
+    put(im, c, c, rgba(*AMBER, 0.5))
+    spark_pass(im, 14, 2, AMBER, EMBER, 0.8)
+    frames.append(im)
+    # 5
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    smoke(im, 3, 0.24, 1)
+    spark_pass(im, 16, 1, AMBER, EMBER, 0.55)
+    frames.append(im)
+    # 6
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    smoke(im, 3, 0.16, 0)
+    spark_pass(im, 17, 0, EMBER, EMBER, 0.35)
+    frames.append(im)
+    # 7: son kor pikseller
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    smoke(im, 3, 0.08, 1)
+    for a, k in sparks[1:3]:
+        put(im, c + math.cos(a) * 18 * k, c + math.sin(a) * 18 * k, rgba(*EMBER, 0.2))
+    frames.append(im)
+
+    cell = save_sheet(frames, os.path.join(out, "hit_sheet.png"))
+    write_sprite_frames(os.path.join(out, "hit_frames.tres"), res(os.path.join(out, "hit_sheet.png")), cell[0], cell[1],
+                        [("play", (0, 0), 8, False, 30.0)])
+
+
 # ------------------------------------------------------------------------------------------------ bumerang
-WOOD = [rgba(0.86, 0.62, 0.36), rgba(0.66, 0.42, 0.22), rgba(0.45, 0.27, 0.13)]  # acik, orta, koyu
+WOOD =[rgba(0.86, 0.62, 0.36), rgba(0.66, 0.42, 0.22), rgba(0.45, 0.27, 0.13)]  # acik, orta, koyu
 OUTLINE = rgba(0.16, 0.08, 0.05)
 PAINT_A = rgba(0.95, 0.9, 0.76)  # krem serit
 PAINT_B = rgba(0.78, 0.2, 0.14)  # kirmizi serit
@@ -440,6 +552,8 @@ if __name__ == "__main__":
         gen_sword_hit()
     elif len(sys.argv) > 1 and sys.argv[1] == "rot24":
         gen_boomerang_rot24()
+    elif len(sys.argv) > 1 and sys.argv[1] == "tufek":
+        gen_tufek_hit()
     else:
         gen_trails()
         gen_sword_arc()

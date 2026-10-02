@@ -1,6 +1,7 @@
 extends Area2D
 
 const DropAttraction := preload("res://scripts/drop_attraction.gd")
+const DropShadowScript := preload("res://scripts/drop_shadow.gd")
 
 const FloatingText := preload("res://scenes/floating_text.tscn")
 
@@ -33,6 +34,8 @@ const EXPIRE_SECONDS := 300.0
 func _ready() -> void:
 	add_to_group("gold_drops")
 	body_entered.connect(_on_body_entered)
+	## Gölge (2026-10-02, bkz. drop_shadow.gd): kök zıplıyor (position.y += bob) - gölge yerde kalır.
+	DropShadowScript.attach(self, get_node_or_null("AnimatedSprite2D") as Node2D, true)
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
 	_place_on_ground.call_deferred()
 

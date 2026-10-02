@@ -14,21 +14,14 @@ class_name ShopPanel
 ## sinyal yoktu (inventory_panel.gd'deki "closed" ile AYNI desen).
 signal closed
 
-## Every purchasable item in the shop is a "leveled" item now: mine/spray/
-## shield always worked this way, and the 4 shield mods used to be one-time
-## bool purchases but were converted to leveled items too (10 levels) so
-## buying them again keeps making them stronger instead of just unlocking
-## them once.
+## Every purchasable upgrade in the shop is a "leveled" item (spray).
 ## Silah yükseltmeleri (dagger/fire_staff/lightning_staff/tabanca/tuftuf/
 ## tufek) - hiçbiri "ana silah" değil, hepsi birebir aynı muamele gören,
 ## satılabilir/yükseltilebilir normal owned_weapons kopyaları (bkz.
 ## player.gd STARTING_WEAPON_BY_CHAR - hiçbir karakterin ayrı, ücretsiz bir
 ## ana silahı yok).
-## Eski tek "Sihirli Kalkan" (100 seviye) kaldırıldı - artık 4 bağımsız
-## kalkan TÜRÜ var (bkz. player.gd SHIELD_TYPES), her biri en fazla 30
-## seviyeye kadar geliştirilebilir (bkz. kullanıcı isteği). Kalkan MODLARI
-## (shield_mod_*) bundan tamamen bağımsız, değişmedi.
-const SHIELD_TYPE_KEYS := ["shield_standart", "shield_enerji", "shield_kale", "shield_savas"]
+## Kalkan dükkandan satılmıyor (2026-09-29: herkes Standart Kalkanla başlıyor, bkz. main.gd
+## _grant_starting_shield); kalkan modları tamamen kaldırıldı.
 ## DÜZELTME (kullanıcı isteği: "Tüm silah/kalkan geliştirmelerini 100 levele
 ## yükseltip gelişim başına artan statları da buna göre güncelle... geliştirme
 ## bedellerini buna göre büyük miktarda ucuzlatıp dengele") - eskiden silahlar
@@ -49,29 +42,15 @@ const SHIELD_TYPE_KEYS := ["shield_standart", "shield_enerji", "shield_kale", "s
 ## noktalar aynı) ve aşağıdaki LEVEL_SCALE_TO_OLD_100/_upgrade_cost notu.
 const MAX_LEVELS := {
 	"spray": 10,
-	"shield_standart": 20, "shield_enerji": 20, "shield_kale": 20, "shield_savas": 20,
 	"dagger": 20, "fire_staff": 20, "lightning_staff": 20, "tabanca": 20, "tuftuf": 20, "tufek": 20, "arcane": 20, "yay": 20,
 	"crossbow": 20, "boomerang": 20, "buz_asasi": 20, "fisek": 20, "pence": 20, "topuz": 20, "uzunkilic": 20,
-	"shield_mod_resilience": 20, "shield_mod_thorny": 20,
-	"shield_mod_turtle": 20, "shield_mod_aggressive": 20,
-	"shield_mod_lightning": 20, "shield_mod_piercing": 20, "shield_mod_tank": 20,
 }
 const UPGRADE_NAMES := {
 	"spray": "İtici Sprey",
-	"shield_standart": "Standart Kalkan", "shield_enerji": "Enerji Kalkanı",
-	"shield_kale": "Kale Kalkanı", "shield_savas": "Savaş Kalkanı",
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Tüftüf", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
 	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç",
-	## Kullanıcı isteği: "kalkan modlarının adı artık savaş modları" - eski
-	## mod isimleri (Metanet/Dikenli Kalkan/Kaplumbağa/Agresif/Şimşek Hız/
-	## Delicilik/Tank) yerine yeni görsel setiyle gelen isimler kullanılıyor.
-	## Anahtarlar (shield_mod_*) DEĞİŞMEDİ - sadece görüntülenen isim.
-	"shield_mod_resilience": "Meditasyon", "shield_mod_thorny": "Yansıtma",
-	"shield_mod_turtle": "Kırılmaz İrade", "shield_mod_aggressive": "Cinnet",
-	"shield_mod_lightning": "Çeviklik", "shield_mod_piercing": "Teknik Savaş",
-	"shield_mod_tank": "Savunma",
 }
 
 ## Biriktirilebilir silahların ikonları - Geliştirmeler sekmesindeki her slot
@@ -151,14 +130,6 @@ const PRICE_LABEL_EXTRA_HEIGHT := 36.0
 ## burada da hiçbir referans kalmadı.
 @onready var selectable_rows := {
 	"spray": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherPage/SprayRow, "kind": "upgrade"},
-	## Kullanıcı isteği: "Savunma sekmesi silinip İşlevsellik'e taşınsın" -
-	## kalkan türleri artık OtherPage'in (İşlevsellik) içinde (bkz. shop_
-	## panel.tscn'de move_node ile taşınmaları + DefenseTab/DefensePage'in
-	## tamamen kaldırılması).
-	"shield_standart": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherPage/StandartShieldRow, "kind": "upgrade"},
-	"shield_enerji": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherPage/EnerjiShieldRow, "kind": "upgrade"},
-	"shield_kale": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherPage/KaleShieldRow, "kind": "upgrade"},
-	"shield_savas": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherPage/SavasShieldRow, "kind": "upgrade"},
 	"dagger": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/WeaponsPage/DaggerRow, "kind": "copy"},
 	"fire_staff": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/WeaponsPage/FireRow, "kind": "copy"},
 	"lightning_staff": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/WeaponsPage/LightningRow, "kind": "copy"},
@@ -174,36 +145,8 @@ const PRICE_LABEL_EXTRA_HEIGHT := 36.0
 	"pence": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/WeaponsPage/PenceRow, "kind": "copy"},
 	"topuz": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/WeaponsPage/TopuzRow, "kind": "copy"},
 	"uzunkilic": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/WeaponsPage/UzunkilicRow, "kind": "copy"},
-	"shield_mod_resilience": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsPage/ResilienceRow, "kind": "upgrade"},
-	"shield_mod_thorny": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsPage/ThornyRow, "kind": "upgrade"},
-	"shield_mod_turtle": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsPage/TurtleRow, "kind": "upgrade"},
-	"shield_mod_aggressive": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsPage/AggressiveRow, "kind": "upgrade"},
-	"shield_mod_lightning": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsPage/LightningSpeedRow, "kind": "upgrade"},
-	"shield_mod_piercing": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsPage/PiercingRow, "kind": "upgrade"},
-	"shield_mod_tank": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsPage/TankRow, "kind": "upgrade"},
-	## Eşyalar (bkz. scripts/items.gd) - "copy"a benzer ama kendi "item" türü:
-	## seviyelenmezler, aynı eşyadan fazladan kopya alınabilir, hepsi TEK bir
-	## slot havuzunu (player.gd get_max_item_slots) paylaşır (owned_weapons'un
-	## kendi havuzundan bağımsız - bkz. _on_buy_item/_max_item_slots).
-	"vitamin": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/VitaminRow, "kind": "item"},
-	"eldiven": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/EldivenRow, "kind": "item"},
-	"deri_cizme": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/DeriCizmeRow, "kind": "item"},
-	"sigara": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/SigaraRow, "kind": "item"},
-	"steroid": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/SteroidRow, "kind": "item"},
-	"sansli_zar": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/SansliZarRow, "kind": "item"},
-	"hasat_cantasi": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/HasatCantasiRow, "kind": "item"},
-	"kalkan_yuzugu": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/KalkanYuzuguRow, "kind": "item"},
-	"keskin_uclar": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/KeskinUclarRow, "kind": "item"},
-	"kitelama_seti": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/KitelamaSetiRow, "kind": "item"},
-	"kaos_kitabi": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/KaosKitabiRow, "kind": "item"},
-	## DÜZELTME (kullanıcı bildirimi: "dükkanda bazı ekstralar görünmüyor. can
-	## çalma ve bekleme süresinde azalma ekstrası görünmüyor.") - kök neden:
-	## bu iki eşya items.gd'nin DEFS/KEYS listesinde zaten TANIMLIYDI ama
-	## shop_panel.tscn'de karşılık gelen satır node'ları hiç oluşturulmamıştı
-	## ve burada hiç eşlenmemişlerdi - dükkan HİÇBİR ZAMAN bu ikisini
-	## çizmiyordu. Satırlar KaosKitabiRow ile BİREBİR aynı şablonla eklendi.
-	"vampir_disi": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/VampirDisiRow, "kind": "item"},
-	"yetenek_kitabi": {"panel": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage/YetenekKitabiRow, "kind": "item"},
+	## 2026-10-02: eski ekstralar silindi (bkz. items.gd) - ItemsPage satırları ve "Ekstralar" sekmesi _ready()'de gizlenir.
+	## Yeni bir ekstra dükkanda satılacaksa buraya {"panel": <satır>, "kind": "item"} kaydı eklenir.
 }
 
 ## Şu an seçili (son tıklanan) ürünün anahtarı - boşsa hiçbir şey seçili
@@ -224,7 +167,6 @@ var selected_key: String = ""
 ## Sadece seçili ürün sahip olunan kalkan türüyse görünür (bkz. _refresh_
 ## preview) - "sadece 1 kalkan alınabilmeli" kısıtlaması yüzünden, başka bir
 ## türe geçmeden önce bununla mevcut tür satılmalı.
-@onready var preview_sell_button: Button = $PreviewPanel/PreviewMargin/PreviewVBox/PreviewSellButton
 
 ## 7 sekme tek satıra sığmayıp sağdan taşdığı için (bkz. kullanıcı bildirimi)
 ## TabBar artık HBoxContainer değil, 4 sütunlu bir GridContainer (2 satır:
@@ -253,15 +195,9 @@ var selected_key: String = ""
 ## kaldırıldığı için artık MAX_LEVELS/_upgrade_cost/_on_buy_upgrade (ve
 ## GameManager'daki maden/toplayıcı durumu) bu iki anahtarı HİÇ bilmiyor;
 ## burada sadece boş sekmenin gizlenmesi kaldı.
-## DÜZELTME (kullanıcı isteği: "Savaş modlarını ... oyundan kaldır. Bunları
-## kimse sevmedi.") - "mods" burada bilerek YOK, tıpkı "production" gibi
-## (bkz. hemen üstteki not) - bu sayede "Hepsi" sekmesi (_on_tab_selected)
-## onu bir daha göstermez. ModsTab/ModsPage/ModsHeader/ModsDivider _ready()'de
-## kalıcı olarak gizleniyor (bkz. aşağıdaki "ProductionTab" ile AYNI blok).
 @onready var pages := {
 	"weapons": $Frame/Margin/VBox/Body/Scroll/PagesVBox/WeaponsPage,
 	"other": $Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherPage,
-	"items": $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage,
 }
 ## Her kategori sayfasının üstündeki başlık etiketi + ayırıcı çizgi (bkz.
 ## kullanıcı bildirimi: "kategoriler kafa karıştırıcı, ürün dizilimlerinde
@@ -273,7 +209,6 @@ var selected_key: String = ""
 	"weapons": [$Frame/Margin/VBox/Body/Scroll/PagesVBox/WeaponsHeader, $Frame/Margin/VBox/Body/Scroll/PagesVBox/WeaponsDivider],
 	## "production" burada da bilerek YOK - bkz. "pages" sözlüğü üstündeki yorum.
 	"other": [$Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherHeader, $Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherDivider],
-	"items": [$Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsHeader, $Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsDivider],
 }
 @onready var upgrades_page: GridContainer = $Frame/Margin/VBox/Body/Scroll/PagesVBox/UpgradesPage
 @onready var upgrade_header_nodes: Array[Control] = [
@@ -649,6 +584,15 @@ func _ready() -> void:
 	## (bkz. yukarıdaki "satırlar KALDIRILDI" notu) - sahnedeki ProductionPage/
 	## MineRow/GoldCollectorRow düğümleri artık hiçbir koddan referans almıyor,
 	## bu blok yalnızca boş sekmenin görünmemesini garanti ediyor.
+	## Ekstralar sekmesi de (2026-10-02, ekstralar silindi - bkz. items.gd) aynı şekilde gizli: eski satırlar artık hiçbir
+	## kayda bağlı değil, sekme/sayfa/başlık "Hepsi" görünümünde de çıkmasın.
+	for items_path in ["Frame/Margin/VBox/Body/TabBar/ItemsTab", "Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsPage",
+			"Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsHeader", "Frame/Margin/VBox/Body/Scroll/PagesVBox/ItemsDivider"]:
+		var items_node: Control = get_node_or_null(items_path) as Control
+		if items_node:
+			items_node.visible = false
+			if items_node is Button:
+				(items_node as Button).disabled = true
 	var production_tab: Button = get_node_or_null("Frame/Margin/VBox/Body/TabBar/ProductionTab") as Button
 	if production_tab:
 		production_tab.visible = false
@@ -662,30 +606,6 @@ func _ready() -> void:
 	var production_divider: Control = get_node_or_null("Frame/Margin/VBox/Body/Scroll/PagesVBox/ProductionDivider") as Control
 	if production_divider:
 		production_divider.visible = false
-
-	## DÜZELTME (kullanıcı isteği: "Savaş modlarını ve savaş modları için
-	## skill panelinin aşağısına eklenen slotları oyundan kaldır. Bunları
-	## kimse sevmedi.") - "Modlar" sekmesi (buton + sayfa + başlık + ayırıcı
-	## çizgi) ProductionTab ile BİREBİR AYNI desenle kalıcı olarak gizlendi
-	## (bkz. yukarıdaki "pages"/"page_headers" sözlüklerinden "mods"
-	## çıkarılması - bu sayede _on_tab_selected("all") onu bir daha görünür
-	## yapmaz). shield_mod_* satırları/COST sabitleri BİLEREK dokunulmadı -
-	## MAX_LEVELS/_upgrade_cost/_refresh_price_labels gibi paylaşılan
-	## fonksiyonlar hâlâ bunlara bakıyor, sadece artık hiçbir yerden
-	## satın alınamıyorlar (sayfa erişilemez).
-	var mods_tab: Button = get_node_or_null("Frame/Margin/VBox/Body/TabBar/ModsTab") as Button
-	if mods_tab:
-		mods_tab.visible = false
-		mods_tab.disabled = true
-	var mods_page: Control = get_node_or_null("Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsPage") as Control
-	if mods_page:
-		mods_page.visible = false
-	var mods_header: Control = get_node_or_null("Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsHeader") as Control
-	if mods_header:
-		mods_header.visible = false
-	var mods_divider: Control = get_node_or_null("Frame/Margin/VBox/Body/Scroll/PagesVBox/ModsDivider") as Control
-	if mods_divider:
-		mods_divider.visible = false
 
 	## Kategori başlıkları koyu yeşil yerine kartlardaki metinle aynı
 	## açık krem tonda; seçili sekme dışındaki başlıklar zaten gizlenir.
@@ -778,7 +698,6 @@ func _ready() -> void:
 		entry["price_label"] = price_label
 		panel.custom_minimum_size.y += PRICE_LABEL_EXTRA_HEIGHT
 	preview_buy_button.pressed.connect(_on_buy_bar_pressed)
-	preview_sell_button.pressed.connect(_on_sell_shield)
 
 	## Her slot butonunun bağlandığı SIRA sabit (0..4), hangi silahı temsil
 	## ettiği (owned_weapons[i]) her _refresh()'te değişebilir - bkz.
@@ -798,7 +717,6 @@ func _ready() -> void:
 	## kasıtlı olarak silinmedi.
 	$Frame/Margin/VBox/Body/TabBar/ProductionTab.pressed.connect(_on_tab_selected.bind("production"))
 	$Frame/Margin/VBox/Body/TabBar/OtherTab.pressed.connect(_on_tab_selected.bind("other"))
-	$Frame/Margin/VBox/Body/TabBar/ModsTab.pressed.connect(_on_tab_selected.bind("mods"))
 	$Frame/Margin/VBox/Body/TabBar/UpgradesTab.pressed.connect(_on_tab_selected.bind("upgrades"))
 	$Frame/Margin/VBox/Body/TabBar/ItemsTab.pressed.connect(_on_tab_selected.bind("items"))
 
@@ -822,18 +740,6 @@ func _on_row_gui_input(event: InputEvent, key: String) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		selected_key = key
 		_refresh()
-
-
-## Şu an seviyesi >0 olan (yani "sahip olunan") tek kalkan türünün
-## anahtarını döner - kullanıcı isteğiyle ("sadece 1 kalkan alınabilmeli")
-## aynı anda en fazla biri olabilir, hiçbiri yoksa "" döner. player.gd'deki
-## _owned_shield_type_key ile BİREBİR aynı mantık, dükkan burada GameManager'a
-## doğrudan bakıyor (player her zaman sahnede olmayabilir - ör. ana menüde).
-func _owned_shield_type() -> String:
-	for key in SHIELD_TYPE_KEYS:
-		if int(GameManager.get(key + "_level")) > 0:
-			return key
-	return ""
 
 
 ## BuyBar'daki paylaşılan butona basılınca, o an seçili ürünün TÜRÜNE göre
@@ -933,9 +839,7 @@ func _display_cost_text(key: String) -> String:
 ## just with a base tuned to that item's level cap/power so maxing anything
 ## out is a comparably big late-run investment:
 ##   mine (100 lvl, passive income engine): 4   -> 40 000 gold at lvl 100
-##   shield (100 lvl, core defense):        3   -> 30 000 gold at lvl 100
 ##   spray (10 lvl, utility knockback):     15  ->  1 500 gold at lvl 10
-##   shield mods (10 lvl each):             50  ->  5 000 gold at lvl 10
 ##   dagger/fire_staff/lightning_staff/tabanca/tuftuf/tufek (10-30 lvl, "Geliştirmeler"
 ##   sekmesinde TÜM kopyalara birden uygulanan seviye): bkz. WEAPON_KEYS +
 ##   ilgili sabitler - fiyat tabanları aynı kaldı, sadece artık "silahı satın
@@ -959,11 +863,6 @@ const DEBUG_ALL_COSTS_ONE := false
 ## base için) - hem "ucuzlat" hem "ufak ufak" isteğini birlikte karşılıyor.
 const WEAPON_UPGRADE_COST_EXPONENT := 0.5
 const WEAPON_UPGRADE_COST_MULT := 0.167
-## Kalkan/kalkan modu için AYNI karekök eğrisi, kendi eski taban çarpanlarına
-## (3 / 50) göre ayrıca kalibre edilmiş sabitler - ikisi de eski 2-30/2-10
-## toplam maliyetin kabaca %65'ine denk gelecek şekilde seçildi.
-const SHIELD_UPGRADE_COST_MULT := 9.166
-const MOD_UPGRADE_COST_MULT := 0.372
 
 ## DÜZELTME (100->20 level rebalance): silah/kalkan/mod/mine/gold_collector
 ## artık 100 yerine 20 seviyeye kapalı (bkz. MAX_LEVELS üstündeki not) ama
@@ -1002,12 +901,6 @@ static func _upgrade_cost_raw(item: String, next_level: int) -> int:
 	match item:
 		## NOT: "mine"/"gold_collector" maliyet dalları kullanıcı isteğiyle
 		## kaldırıldı (bkz. yukarıdaki "satırlar KALDIRILDI" notu).
-		## DÜZELTME (100-level rebalance): kalkanlar eskiden 30 seviyeye kapalı
-		## saf karesel (3*level^2) büyüyordu - artık silahlarla AYNI karekök
-		## eğrisine (bkz. WEAPON_UPGRADE_COST_EXPONENT/_MULT üstündeki not)
-		## geçti, sadece kendi taban çarpanıyla (SHIELD_UPGRADE_COST_MULT).
-		"shield_standart", "shield_enerji", "shield_kale", "shield_savas":
-			return int(round(3 * pow(float(next_level) * LEVEL_SCALE_TO_OLD_100, WEAPON_UPGRADE_COST_EXPONENT) * SHIELD_UPGRADE_COST_MULT))
 		"spray":
 			return 15 * next_level * next_level
 		"dagger":
@@ -1040,11 +933,6 @@ static func _upgrade_cost_raw(item: String, next_level: int) -> int:
 			return _weapon_upgrade_cost(105, next_level)
 		"uzunkilic":
 			return _weapon_upgrade_cost(100, next_level)
-		## DÜZELTME (100-level rebalance): kalkan modları eskiden 10 seviyeye
-		## kapalı saf karesel (50*level^2) büyüyordu - AYNI karekök eğrisine
-		## (kendi taban çarpanıyla) geçti.
-		"shield_mod_resilience", "shield_mod_thorny", "shield_mod_turtle", "shield_mod_aggressive", "shield_mod_lightning", "shield_mod_piercing", "shield_mod_tank":
-			return int(round(50 * pow(float(next_level) * LEVEL_SCALE_TO_OLD_100, WEAPON_UPGRADE_COST_EXPONENT) * MOD_UPGRADE_COST_MULT))
 	return next_level
 
 
@@ -1134,21 +1022,12 @@ func _on_buy_item(item: String) -> void:
 	## olmalı" - harcama artık başka hiçbir peer'e senkron edilmiyor (bkz.
 	## spend_gold.rpc kaldırıldı), her oyuncunun altını kendi GameManager
 	## kopyasında tamamen bağımsız yönetiliyor.
-	GameManager.gold -= cost
-	GameManager.owned_items.append({"key": item, "spent": cost})
+	GameManager.gold -= cost ## kayıt player.buy_item -> acquire_item içinde yazıldı (2026-10-02)
 
 	_refresh()
 
 
 func _on_buy_upgrade(item: String) -> void:
-	## Kullanıcı isteği: "sadece 1 kalkan alınabilmeli, birini alınca mevcut
-	## kalkanı satmadan başka bir tane alınamamalı." Şu an BAŞKA bir tür
-	## sahipse (seviyesi >0) ve tıklanan bu türden değilse, satın alma tamamen
-	## reddedilir - önce _on_sell_shield() ile mevcut tür satılmalı.
-	if item in SHIELD_TYPE_KEYS:
-		var owned: String = _owned_shield_type()
-		if owned != "" and owned != item:
-			return
 	## Savunma: MAX_LEVELS'ta bulunmayan bir anahtar gelirse (ör. kaldırılan
 	## "mine"/"gold_collector") sessizce çık - yoksa aşağıdaki MAX_LEVELS[item]
 	## erişimi çöker.
@@ -1165,15 +1044,6 @@ func _on_buy_upgrade(item: String) -> void:
 		return
 	GameManager.gold -= cost
 	GameManager.set(level_prop, next_level)
-
-	var player = get_tree().get_first_node_in_group("player")
-	match item:
-		"shield_standart", "shield_enerji", "shield_kale", "shield_savas":
-			if player and player.has_method("refresh_shield_stats"):
-				player.refresh_shield_stats()
-		"shield_mod_resilience", "shield_mod_thorny", "shield_mod_turtle", "shield_mod_aggressive", "shield_mod_lightning", "shield_mod_piercing", "shield_mod_tank":
-			if player and player.has_method("refresh_mod_level"):
-				player.refresh_mod_level(item)
 
 	_refresh()
 
@@ -1267,33 +1137,6 @@ func _on_sell_weapon(index: int) -> void:
 	_refresh()
 
 
-## Sahip olunan TEK kalkan türünü tamamen satar (seviyeyi 0'a döndürür) -
-## kullanıcı isteğiyle eklendi, başka bir türü satın alabilmek için önce bu
-## çağrılmalı (bkz. _on_buy_upgrade'in başındaki engel). İade, o türe o ana
-## kadar harcanan TOPLAM altının %70'i - silah satışıyla aynı oran, ama
-## silahların aksine kalkan türleri "spent" değerini ayrıca saklamıyor, o
-## yüzden 1'den mevcut seviyeye kadar _upgrade_cost() tekrar toplanarak
-## hesaplanıyor.
-func _on_sell_shield() -> void:
-	var owned: String = _owned_shield_type()
-	if owned == "":
-		return
-	var level: int = int(GameManager.get(owned + "_level"))
-	var total_spent: int = 0
-	for l in range(1, level + 1):
-		total_spent += _upgrade_cost(owned, l)
-	var refund: int = int(round(total_spent * 0.7))
-
-	GameManager.set(owned + "_level", 0)
-	GameManager.gold += refund
-
-	var player = get_tree().get_first_node_in_group("player")
-	if player and player.has_method("refresh_shield_stats"):
-		player.refresh_shield_stats()
-
-	_refresh()
-
-
 func _refresh() -> void:
 	_refresh_selection_highlight()
 	_refresh_preview()
@@ -1335,7 +1178,6 @@ func _refresh_selection_highlight() -> void:
 func _refresh_preview() -> void:
 	if selected_key == "" or not selectable_rows.has(selected_key):
 		preview_panel.visible = false
-		preview_sell_button.visible = false
 		return
 
 	preview_panel.visible = true
@@ -1381,24 +1223,7 @@ func _refresh_preview() -> void:
 		var max_level: int = MAX_LEVELS[selected_key]
 		preview_status_label.text = "Seviye: %d/%d" % [level, max_level]
 
-		var is_shield_type: bool = selected_key in SHIELD_TYPE_KEYS
-		var owned_shield: String = _owned_shield_type() if is_shield_type else ""
-		## "Sat" butonu SADECE şu an sahip olunan kalkan türü seçiliyken
-		## görünür - başka bir kalkan türüne geçmeden önce bununla mevcut
-		## tür satılmalı (bkz. _on_buy_upgrade'in başındaki engel).
-		preview_sell_button.visible = is_shield_type and owned_shield == selected_key and level > 0
-		if preview_sell_button.visible:
-			var total_spent: int = 0
-			for l in range(1, level + 1):
-				total_spent += _upgrade_cost(selected_key, l)
-			preview_sell_button.text = "Kalkanı Sat (+%d)" % int(round(total_spent * 0.7))
-
-		if is_shield_type and owned_shield != "" and owned_shield != selected_key:
-			## Başka bir tür zaten sahip - bu satın alınamaz, önce diğeri
-			## satılmalı (bkz. kullanıcı isteği "sadece 1 kalkan alınabilir").
-			preview_buy_button.text = "Önce %s Sat" % UPGRADE_NAMES.get(owned_shield, owned_shield)
-			preview_buy_button.disabled = true
-		elif level >= max_level:
+		if level >= max_level:
 			preview_buy_button.text = "MAX"
 			preview_buy_button.disabled = true
 		else:
@@ -1406,7 +1231,6 @@ func _refresh_preview() -> void:
 			preview_buy_button.text = "Satın Al (%d)" % cost
 			preview_buy_button.disabled = GameManager.gold < cost
 	elif kind == "item":
-		preview_sell_button.visible = false
 		var owned_count: int = _item_count_owned(selected_key)
 		var slot_max: int = _max_item_slots()
 		## Kısa ve tek satır tutuluyor - StatusLabel'in dar (PreviewPanel ~300px)
@@ -1422,7 +1246,6 @@ func _refresh_preview() -> void:
 			preview_buy_button.text = "Satın Al (%d)" % cost
 			preview_buy_button.disabled = GameManager.gold < cost
 	else:
-		preview_sell_button.visible = false
 		var count: int = _count_owned(selected_key)
 		preview_status_label.text = "Sahip olunan: %d" % count
 		## Sahip olunan silah da tekrar alınabilir (bkz. _display_cost_text notu) - sadece slot sınırı.

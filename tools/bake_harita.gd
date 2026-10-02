@@ -121,6 +121,8 @@ func _init() -> void:
 	print("Harita bake tamamlandı: %s (korunan materyal: %d, korunan ekstra node: %d, korunan görünüm özelliği: %d, sıkıştırılan gömülü texture: %d)" % [NEW_BAKED_PATH, _carried_material_count, _carried_node_count, _carried_property_count, _compacted_texture_count])
 	if not _dropped_tiled_paths.is_empty():
 		print("Tiled'dan silindiği için TAŞINMAYAN eski katman/gruplar (%d): %s" % [_dropped_tiled_paths.size(), ", ".join(_dropped_tiled_paths)])
+	## 2026-10-02: harita gölgeleri haritadan PİŞİRİLİYOR (assets/map/harita_golgeleri.png) - objeler değiştiyse yeniden pişir.
+	print("HATIRLATMA: obje (ağaç/çalı/ev/kaya...) değiştiyse gölgeleri yeniden pişir: tools/bake_map_shadows.gd (--windowed) + tools/bake_map_shadows.py")
 	quit(0)
 
 

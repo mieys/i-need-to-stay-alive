@@ -556,6 +556,7 @@ func _process(_delta: float) -> void:
 	## Ölü/yerde yatan (Suriyeli Hadime'nin hayaleti dahil) oyuncu kapının yanında düştüyse eve giremesin.
 	if not indoors and _near_entrance and _player.get("is_dead") != true:
 		_prompt_label.text = "Eve girmek için %s tuşuna bas" % GameManager.get_action_key_label("interact")
+		_prompt_label.add_to_group(&"interact_prompt") ## telefonda ETKİLEŞİM düğmesi bu uyarı görünürken çıkar (touch_controls.gd)
 		_prompt_label.visible = true
 		if f_just_pressed:
 			_enter_house()

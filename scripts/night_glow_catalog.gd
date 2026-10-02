@@ -32,6 +32,7 @@ const DEFAULT_FX_SCENE := {"c": Color(1.0, 0.92, 0.75), "r": 34.0, "e": 0.45}
 ## gizlilik (Assasin'in gizlenmesi parlarsa gizlilik anlamsızlaşır), hız çizgisi, arbalet (ateşli/büyülü değil).
 const NO_GLOW_SCENES := [
 	"res://scenes/fx_blood_splatter.tscn",
+	"res://scenes/fx_item_crimson_harvest.tscn", ## eşya pasifi: kan damlaları (2026-10-02)
 	"res://scenes/fx_hit_blood_1.tscn",
 	"res://scenes/fx_hit_blood_2.tscn",
 	"res://scenes/fx_hit_blood_3.tscn",
@@ -59,15 +60,33 @@ const NO_GLOW_SCENES := [
 	"res://scenes/fx_hadime_levitate.tscn",
 	"res://scenes/fx_hadime_nightmare.tscn",
 	"res://scenes/fx_hadime_nightmare_burst.tscn",
+	## Shaman golem formu (2026-09-30): otomatik darbenin toz halkası (saniyede ~1 kez - her birine ışık takılmasın).
+	"res://scenes/fx_shaman_golem_slam.tscn",
 	## Yetenek evrimleri (2026-09-28): kan (Vampir Kan Patlaması / Kan Kalkanı), yarasa kanadı savurması ve Elara'nın
 	## "Kaybolan Gölge" dumanı (gizlilik) parlamaz.
 	"res://scenes/fx_evo_blood_burst.tscn",
 	"res://scenes/fx_evo_blood_shield.tscn",
 	"res://scenes/fx_evo_bat_swoop.tscn",
 	"res://scenes/fx_evo_vanish.tscn",
+	## Assasin evrimleri (2026-09-30): gölge dumanı (kopya / ışınlanma), "Rüzgar Gibi" gölge kıvrımları ve "Pusu" gölge
+	## kıvılcımları - gizlilik yetenekleri parlarsa gizlilik anlamsızlaşır (fx_assasin_stealth ile aynı kural). Gölge kopyası ve
+	## gölge izi evo_area.gd'de (night_glow_off bayrağı - resolve).
+	"res://scenes/fx_evo_shadow_puff.tscn",
+	"res://scenes/fx_evo_assasin_evade.tscn",
+	"res://scenes/fx_evo_assasin_empower.tscn",
 ]
 
 const BY_SCENE := {
+	## --- Eşya pasifleri (2026-10-02, tools/gen_item_fx.py) ---
+	"res://scenes/fx_item_time_freeze.tscn": {"c": Color(0.55, 0.85, 1.0), "r": 70.0, "e": 0.9},
+	"res://scenes/fx_item_sun_will.tscn": {"c": Color(1.0, 0.78, 0.35), "r": 80.0, "e": 1.0},
+	"res://scenes/fx_item_death_threshold.tscn": {"c": Color(0.45, 0.7, 1.0), "r": 56.0, "e": 0.85},
+	"res://scenes/fx_item_aegis.tscn": {"c": Color(0.5, 0.75, 1.0), "r": 30.0, "e": 0.6},
+	"res://scenes/fx_item_phoenix.tscn": {"c": Color(1.0, 0.55, 0.2), "r": 34.0, "e": 0.7, "f": 0.3},
+	"res://scenes/fx_item_kings_chalice.tscn": {"c": Color(1.0, 0.85, 0.4), "r": 26.0, "e": 0.6},
+	"res://scenes/fx_item_blood_shield.tscn": {"c": Color(0.5, 0.75, 1.0), "r": 26.0, "e": 0.6},
+	"res://scenes/fx_item_light_guard.tscn": {"c": Color(1.0, 0.9, 0.55), "r": 50.0, "e": 0.8},
+	"res://scenes/fx_item_azrail_mark.tscn": {"c": Color(0.85, 0.25, 0.35), "r": 26.0, "e": 0.7},
 	## --- Silah mermileri (kullanıcı: "mermilerinde parıltı") ---
 	"res://scenes/fire_projectile.tscn": {"c": Color(1.0, 0.56, 0.2), "r": 44.0, "e": 0.9, "f": 0.25},
 	"res://scenes/ice_bolt_projectile.tscn": {"c": Color(0.5, 0.85, 1.0), "r": 40.0, "e": 0.85},
@@ -98,6 +117,7 @@ const BY_SCENE := {
 	"res://scenes/fx_hit_bullet_burst.tscn": {"c": Color(1.0, 0.72, 0.38), "r": 30.0, "e": 0.8, "d": 0.18},
 	"res://scenes/fx_hit_mini_spark.tscn": {"c": Color(1.0, 0.82, 0.45), "r": 22.0, "e": 0.7, "d": 0.15},
 	"res://scenes/fx_hit_slash_streak.tscn": {"c": Color(1.0, 0.6, 0.35), "r": 26.0, "e": 0.6, "d": 0.15},
+	"res://scenes/fx_tufek_hit.tscn": {"c": Color(1.0, 0.85, 0.5), "r": 26.0, "e": 0.75, "d": 0.18},
 	## Arcane asasının isabet patlaması - 2026-09-25'te efekt %40 küçültüldü (fx_hit_purple_burst.tscn scale 1.4 -> 0.84),
 	## ışık yarıçapı da orantılı 50 -> 30.
 	"res://scenes/fx_hit_purple_burst.tscn": {"c": Color(0.85, 0.6, 1.0), "r": 30.0, "e": 0.9, "d": 0.35},
@@ -152,8 +172,11 @@ const BY_SCENE := {
 	"res://scenes/fx_oakley_bee_guard.tscn": {"c": Color(1.0, 0.86, 0.4), "r": 40.0, "e": 0.3, "o": Vector2(0.0, -8.0)},
 	## Oakley R kullanım anı (altın mühür + yaprak girdabı) - kısa, sıcak-yeşil parlama.
 	"res://scenes/fx_oakley_ward_cast.tscn": {"c": Color(0.85, 1.0, 0.55), "r": 50.0, "e": 0.5, "d": 0.7},
-	"res://scenes/fx_shaman_cast_area.tscn": {"c": Color(0.7, 0.5, 1.0), "r": 50.0, "e": 0.6, "d": 0.6},
 	"res://scenes/fx_shaman_cast_attack.tscn": {"c": Color(1.0, 0.6, 0.25), "r": 50.0, "e": 0.6, "d": 0.6},
+	## Shaman R - Elemental Golem (2026-09-30): dönüşümün amber ruh ateşi, Q yarıklarının ateşi, E inişinin kısa flaşı.
+	"res://scenes/fx_shaman_golem_transform.tscn": {"c": Color(1.0, 0.66, 0.3), "r": 64.0, "e": 0.7, "d": 0.6},
+	"res://scenes/fx_shaman_golem_quake.tscn": {"c": Color(1.0, 0.58, 0.24), "r": 80.0, "e": 0.55, "d": 0.62},
+	"res://scenes/fx_shaman_golem_land.tscn": {"c": Color(1.0, 0.7, 0.35), "r": 46.0, "e": 0.5, "d": 0.3},
 	"res://scenes/fx_shaman_cast_shield.tscn": {"c": Color(0.45, 0.72, 1.0), "r": 50.0, "e": 0.6, "d": 0.6},
 	"res://scenes/fx_totem_rune_flash.tscn": {"c": Color(0.6, 0.85, 1.0), "r": 40.0, "e": 0.6, "d": 0.4},
 	"res://scenes/fx_spirit_adc.tscn": {"c": Color(1.0, 0.5, 0.15), "r": 60.0, "e": 0.7},
@@ -189,6 +212,8 @@ const BY_SCENE := {
 	"res://scenes/fx_evo_shockwave.tscn": {"c": Color(0.75, 0.85, 1.0), "r": 120.0, "e": 0.6, "d": 0.5},
 	"res://scenes/fx_evo_retribution.tscn": {"c": Color(1.0, 0.85, 0.4), "r": 150.0, "e": 1.1, "d": 0.8, "cap": 0.65},
 	"res://scenes/fx_evo_mine_pop.tscn": {"c": Color(1.0, 0.55, 0.2), "r": 50.0, "e": 0.9, "d": 0.4},
+	## Assasin "Kunai Yağmuru" / "Gölge İzi" isabeti - küçük, kısa mor-beyaz çelik kıvılcımı.
+	"res://scenes/fx_evo_kunai_hit.tscn": {"c": Color(0.78, 0.62, 1.0), "r": 16.0, "e": 0.4, "d": 0.18},
 	## --- Durum efektleri (yanma/donma/zehir... - yaratığın/oyuncunun üstünde) ---
 	## Yanma (2026-09-25: "boyutunu %10 küçültüp biraz daha parlamasını sağla") - güç 0.6 -> 0.85.
 	"res://scenes/fx_burn_status.tscn": {"c": Color(1.0, 0.5, 0.15), "r": 34.0, "e": 0.85, "f": 0.45},
@@ -208,15 +233,27 @@ const BY_SCENE := {
 
 ## Sahnesiz, kodla kurulan (set_script / X.new()) efektler ve objeler.
 const BY_SCRIPT := {
+	## Elit yaratık aurası (2026-10-02, "B - Yükselen Kıvılcımlar"): ayak noktasında mor, yarıçap auranın boyundan
+	## (elite_aura.gd glow_radius), hafif titrek; sisteyken çizilmez (gizli elitin yerini ele vermesin).
+	"res://scripts/elite_aura.gd": {"rp": "glow_radius", "rs": 1.0, "c": Color(0.62, 0.3, 0.95), "r": 40.0, "e": 0.55, "f": 0.2, "fog": true},
 	"res://scripts/fx_arcane_impact.gd": {"c": Color(0.7, 0.5, 1.0), "r": 50.0, "e": 0.85, "d": 0.4},
 	## Efsun sistemi (2026-09-25): tek seferlik pixel halka/dalga/ışık (renk efektin "color"ı), kalıcı alanlar (renk türe
 	## göre enchant_area.gd get_night_glow_color kancasından), yaratığın üstündeki Şok durumu.
 	"res://scripts/fx_enchant_pixel.gd": {"cp": "color", "c": Color(1.0, 0.9, 0.7), "r": 50.0, "e": 0.6, "d": 0.45},
-	"res://scripts/enchant_area.gd": {"c": Color(1.0, 0.6, 0.25), "r": 50.0, "e": 0.45},
+	## 2026-10-01 (kullanıcı: "efsunların parıltıları yok, karanlıkta parlamıyorlar"): yarıçap artık alanın kendisinden
+	## (enchant_area.gd glow_radius - alan yarıçapı / hat kalınlığı), hat alanları (Zeus ışını, iz, yarık) hat boyunca
+	## (get_glow_segment), renk sayfaya göre, ışıksız türler (ok yağmuru, rüzgar dalgası, görünmez hasar) night_glow_off.
+	"res://scripts/enchant_area.gd": {"rp": "glow_radius", "rs": 1.0, "c": Color(1.0, 0.6, 0.25), "r": 50.0, "e": 0.75},
 	## Yetenek evrimi dünya alanları (2026-09-28): Korsan ateş alanı (turuncu, alan kadar) / mayın (küçük kırmızı) - renk ve
-	## yarıçap evo_area.gd glow_color / glow_radius alanlarından.
+	## yarıçap evo_area.gd glow_color / glow_radius alanlarından. Assasin kunaileri küçük mor; gölge kopyası / gölge izi
+	## parlamaz (night_glow_off = true -> resolve boş döner).
 	"res://scripts/evo_area.gd": {"cp": "glow_color", "rp": "glow_radius", "rs": 1.0, "c": Color(1.0, 0.5, 0.18), "r": 60.0, "e": 0.5, "f": 0.3},
 	"res://scripts/fx_shock_status.gd": {"c": Color(1.0, 0.9, 0.35), "r": 22.0, "e": 0.4},
+	## Yeni efsun seti sprite sayfaları (2026-09-30, fx_enchant_sprite.gd GLOW listesi - listede olmayan sayfa parlamaz).
+	## 2026-10-01: yarıçap sayfanın görsel boyutundan, güç sayfaya göre (get_night_glow_energy çarpanı, taban 1,0 - parlak
+	## efsunlar diğer yetenek ışıkları gibi atmosphere_overlay'in 0,4 tavanına ulaşır), ışık
+	## görselin merkezinde / koni boyunca (get_glow_segment) - bkz. fx_enchant_sprite.gd GLOW notu.
+	"res://scripts/fx_enchant_sprite.gd": {"cp": "glow_color", "rp": "glow_radius", "rs": 1.0, "c": Color(1.0, 0.8, 0.5), "r": 30.0, "e": 1.0, "f": 0.12},
 	"res://scripts/fx_kalkan_bagi_link.gd": {"c": Color(0.45, 0.8, 1.0), "r": 24.0, "e": 0.4},
 	"res://scripts/fx_matthew_dash_lines.gd": {"c": Color(1.0, 0.7, 0.4), "r": 30.0, "e": 0.4, "d": 0.3},
 	"res://scripts/fx_melek_ally_aura.gd": {"c": Color(1.0, 0.9, 0.55), "r": 50.0, "e": 0.45},
@@ -237,7 +274,6 @@ const BY_SCRIPT := {
 	"res://scripts/fx_spirit_blink.gd": {"c": Color(0.75, 0.55, 1.0), "r": 40.0, "e": 0.7, "d": 0.45},
 	"res://scripts/fx_totem_fire_bolt.gd": {"cp": "bolt_color", "c": Color(1.0, 0.55, 0.25), "r": 34.0, "e": 0.85},
 	"res://scripts/necro_skull.gd": {"c": Color(0.45, 0.9, 0.75), "r": 50.0, "e": 0.8},
-	"res://scripts/totem_area.gd": {"c": Color(0.7, 0.5, 1.0), "r": 60.0, "e": 0.35},
 	"res://scripts/totem_attack.gd": {"c": Color(1.0, 0.6, 0.3), "r": 34.0, "e": 0.45},
 	"res://scripts/totem_shield.gd": {"c": Color(0.45, 0.75, 1.0), "r": 40.0, "e": 0.45},
 	"res://scripts/totem_shield_wave.gd": {"c": Color(0.45, 0.75, 1.0), "r": 60.0, "e": 0.5, "d": 0.6},
@@ -302,6 +338,9 @@ static func profile_for(node: Node) -> Dictionary:
 ## attach() biçimine çevirir. Boş sözlük = bu örnek parlamayacak.
 static func resolve(node: Node, raw: Dictionary) -> Dictionary:
 	if raw.is_empty():
+		return {}
+	## Aynı script'ten üretilen bazı örnekler parlamamalı (evo_area.gd gölge türleri) - sahibin "night_glow_off" bayrağı.
+	if node.get("night_glow_off") == true:
 		return {}
 	var p: Dictionary = raw
 	if raw.has("frames"):

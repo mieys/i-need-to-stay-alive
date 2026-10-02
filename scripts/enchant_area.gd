@@ -8,6 +8,13 @@ extends Node2D
 ## "follow": true olan alanlar sahibini izler (yetkili kopyada yerel oyuncu, uzak kopyada p["peer"]'in kuklası).
 ## Türler: poison_cloud, steam_fog, lava, hive, arrow_rain, volcano, tornado, hammer, meteor, flame_cone, line, blade,
 ## sticky_bomb, turret, bird, orbit_blade, blizzard, black_hole, wolf, electric_cloud, field (daire: tik hasarı + element).
+## 2026-09-30 yeni efsun seti: rain (Arrow Rain alanı + balista), zeus (Beam of Zeus ışını, sahibini izler), shuriken (Blade
+## of Valerius: uçar-saplanır-döner), mini_fw (Matryoshka küçük fişeği), heal_orb (Hunter's Eye can küresi), cosmic (Astral
+## Yörünge kozmik diski), dot (görünmez süreli hasar listesi - yalnız kasterde). Mevcut türlere eklenenler: line -> slow /
+## vuln / kapanış ("close", "fault") / bitiş patlaması ("blast"); field -> slow / vuln / stun / freeze; blade -> push /
+## slow / wall_slam; orbit_blade -> knock; black_hole -> "blast" varsa patlar. "sheet" parametresi olan alan kendi
+## sprite sayfasıyla görünür (tools/gen_enchant_fx.py) ve prosedürel çizimi atlar; "to"/"tile_len" varsa sayfa hat boyunca
+## karolanır. "no_net": true -> yayınlanmaz (kasterin iç işi).
 
 const PixelDraw := preload("res://scripts/pixel_draw.gd")
 const TornadoFrames := preload("res://assets/fx/buyucu_tornado/loop_frames.tres")
@@ -17,6 +24,9 @@ const SELF_PATH := "res://scripts/enchant_area.gd"
 const HIVE_GROUP := "enchant_hives_local"
 const TURRET_GROUP := "enchant_turrets_local"
 const PULL_INTERVAL := 0.2 ## kasırga/kara delik çekme aralığı (bkz. _process_tornado)
+const SpriteFx := preload("res://scripts/fx_enchant_sprite.gd")
+const EnchantLayer := preload("res://scripts/enchant_layer.gd")
+const TEXEL := 1.212
 
 var kind: String = ""
 var p: Dictionary = {}
@@ -38,6 +48,17 @@ var _icon: Sprite2D = null
 var _angle: float = 0.0
 var _struck: bool = false
 var _wolf_target: Node2D = null
+## 2026-09-30 yeni türler
+var _sheet_nodes: Array = []
+var _victims: Dictionary = {} ## zeus aşırı yükü: düşman id -> düğüm (yalnız yetkili kopya)
+var _phase: String = ""
+var _dealt: float = 0.0
+var _kills: int = 0
+var target_node: Node2D = null ## shuriken hedefi (yetkili kopyada doğrudan, uzakta ağ kimliğinden)
+var targets: Array = [] ## dot: hasar alacak düğümler (yalnız yetkili kopya)
+var _from: Vector2 = Vector2.ZERO
+## "id" parametreli alanlar erken bitirilebilir (enchant_fx.gd "area_end" - Astral Yörünge nesneleri diske birleşince).
+static var _by_id: Dictionary = {}
 
 
 static func spawn(tree: SceneTree, area_kind: String, pos: Vector2, params: Dictionary, is_authoritative: bool) -> Node2D:
@@ -52,10 +73,12 @@ static func spawn(tree: SceneTree, area_kind: String, pos: Vector2, params: Dict
 	a.position = pos
 	tree.current_scene.add_child(a)
 	a.global_position = pos
-	if is_authoritative and NetworkManager.is_multiplayer_active:
+	if params.has("id"):
+		_by_id[str(params["id"])] = a
+	if is_authoritative and NetworkManager.is_multiplayer_active and not bool(params.get("no_net", false)):
 		var net: Dictionary = params.duplicate()
 		net["area"] = area_kind
-		NetworkManager.broadcast_enchant_fx.rpc("area", pos, net)
+		NetworkManager.broadcast_enchant_area.rpc("area", pos, net) ## güvenilir: tek seferlik, kaybı alanı hiç göstermez
 	return a
 
 
@@ -63,10 +86,65 @@ func _fx() -> GDScript:
 	return load(ENCHANT_FX_PATH) as GDScript
 
 
+## Kimlikli alanı bitiş etkisi OLMADAN kaldırır (yerel; ağ için enchant_fx.gd "area_end").
+static func end_by_id(id: String) -> void:
+	var a: Variant = _by_id.get(id)
+	_by_id.erase(id)
+	if a != null and is_instance_valid(a):
+		(a as Node).set("_done", true)
+		(a as Node).queue_free()
+
+
+func _exit_tree() -> void:
+	if p.has("id") and _by_id.get(str(p["id"])) == self:
+		_by_id.erase(str(p["id"]))
+
+
+## ------------------------------------------------------------------ gece ışığı
+## Kullanıcı bildirimi (2026-10-01): "efsunların parıltıları yok, karanlıkta parlamıyorlar" - alanlar eskiden türünden
+## bağımsız 50 birimlik zayıf bir nokta ışık alıyordu (x0,65 sonrası kara delik / kozmik disk / lav gibi büyük alanların
+## çok altında; Zeus ışını, iz ve yarık hatları sadece başlangıç noktasında hafif parlıyordu). Artık: yarıçap alanın
+## kendisinden (glow_radius, katalog "rp"), hatlar hat boyunca (get_glow_segment), renk sayfaya göre; ışık saçmaması
+## gereken türler/sayfalar (ok yağmuru, rüzgar dalgası, görünmez hasar listesi, çelik shuriken) night_glow_off.
+const SHEET_GLOW_COLORS := {
+	"magma_tile": Color(1.0, 0.5, 0.18), "rift_tile": Color(1.0, 0.5, 0.18), "rift_tile_wide": Color(1.0, 0.5, 0.18),
+	"lava_pool": Color(1.0, 0.5, 0.18), "volt_tile": Color(1.0, 0.92, 0.45), "zeus_tile": Color(1.0, 0.92, 0.45),
+	"frost_ground": Color(0.55, 0.85, 1.0), "radiation": Color(0.7, 1.0, 0.35), "void_hole": Color(0.7, 0.45, 1.0),
+	"cosmic_disk": Color(0.7, 0.45, 1.0), "astral_orb": Color(0.8, 0.55, 1.0), "heal_orb": Color(0.55, 1.0, 0.5),
+	"crystal_ice_shard": Color(0.55, 0.85, 1.0), "crystal_arcane_shard": Color(0.8, 0.55, 1.0), "mini_fw": Color(1.0, 0.6, 0.25),
+}
+const NO_GLOW_KINDS := ["rain", "dot", "shuriken"]
+var glow_radius: float = 50.0
+var night_glow_off: bool = false
+
+
+func _setup_glow() -> void:
+	var sh: String = str(p.get("sheet", ""))
+	night_glow_off = kind in NO_GLOW_KINDS or (sh != "" and not SHEET_GLOW_COLORS.has(sh))
+	if kind in ["line", "zeus"]:
+		glow_radius = maxf(28.0, float(p.get("width", 18.0)) * 2.0)
+	elif float(p.get("radius", 0.0)) > 0.0:
+		glow_radius = float(p["radius"]) * 1.5
+	elif kind in ["orbit_blade", "heal_orb", "mini_fw", "blade"]:
+		glow_radius = 34.0
+
+
+## Hat türleri (sabit "to" hattı ya da sahibini izleyen "tile_len" ışını) hat boyunca parlar; diğerleri nokta (boyu sıfır).
+func get_glow_segment() -> Array:
+	if kind in ["line", "zeus"]:
+		if p.has("to"):
+			return [global_position, Vector2(p["to"])]
+		if p.has("tile_len"):
+			return [global_position, global_position + Vector2(p.get("dir", Vector2.RIGHT)).normalized() * float(p["tile_len"])]
+	return [global_position, global_position]
+
+
 ## Gece ışığının rengi (bkz. night_glow.gd, night_glow_catalog.gd BY_SCRIPT) - alan türüne göre.
 func get_night_glow_color() -> Color:
 	if p.has("color"):
 		return Color(p["color"])
+	if SHEET_GLOW_COLORS.has(str(p.get("sheet", ""))):
+		return SHEET_GLOW_COLORS[str(p["sheet"])]
 	match kind:
 		"poison_cloud":
 			return Color(0.55, 0.95, 0.35)
@@ -80,7 +158,8 @@ func get_night_glow_color() -> Color:
 
 
 func _ready() -> void:
-	z_index = 3 if kind in ["poison_cloud", "lava", "steam_fog", "line", "blizzard", "field"] else 9
+	_setup_glow()
+	z_index = EnchantLayer.Z ## karakterlerin altında (bkz. enchant_layer.gd; eskiden 3/9 = karakterin üstü)
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_seed = randi()
 	_origin = global_position
@@ -118,6 +197,10 @@ func _ready() -> void:
 				add_child(_icon)
 	if kind == "line" and float(p.get("instant", 0.0)) > 0.0 and authoritative:
 		_line_damage_all(float(p["instant"]))
+	_from = global_position
+	if kind == "shuriken" and target_node == null:
+		target_node = NetworkManager.find_enemy_by_net_id(int(p.get("target_id", 0))) as Node2D
+	_setup_sheet()
 
 
 func _process(delta: float) -> void:
@@ -180,6 +263,29 @@ func _process(delta: float) -> void:
 			_tick_every(delta, 0.33, _electric_cloud_tick)
 		"field":
 			_tick_every(delta, float(p.get("tick", 0.5)), _field_tick)
+		"rain":
+			_tick_every(delta, float(p.get("tick", 0.5)), _rain_tick)
+		"zeus":
+			_tick_every(delta, float(p.get("tick", 0.25)), _zeus_tick)
+		"shuriken":
+			if _process_shuriken(delta):
+				return
+		"mini_fw":
+			if _process_mini_fw():
+				return
+		"heal_orb":
+			if _process_heal_orb(delta):
+				return
+		"cosmic":
+			_process_cosmic(delta)
+		"dot":
+			_tick_every(delta, 1.0, _dot_tick)
+	if not _sheet_nodes.is_empty():
+		var sd: float = _duration()
+		var sf: float = clampf(minf(_t / 0.15, (sd - _t) / 0.3), 0.0, 1.0)
+		for sn in _sheet_nodes:
+			if is_instance_valid(sn):
+				(sn as CanvasItem).modulate.a = sf
 	if _t >= _duration() and not _done:
 		_done = true
 		_on_expire()
@@ -202,6 +308,10 @@ func _duration() -> float:
 			return float(p.get("delay", 1.0)) + 0.1
 		"blade":
 			return float(p.get("range", 220.0)) / maxf(1.0, float(p.get("speed", 900.0))) + 0.15
+		"shuriken", "heal_orb":
+			return float(p.get("safety", 12.0))
+		"mini_fw":
+			return float(p.get("flight", 0.35)) + 0.2
 	return float(p.get("duration", 3.0))
 
 
@@ -260,10 +370,33 @@ func _on_expire() -> void:
 					for e in _enemies_in(100.0):
 						_elem(e, "freeze", {"dur": 2.0})
 		"black_hole":
-			_fx().spawn(get_tree(), "explosion", global_position, {"radius": 160.0, "color": Color(0.7, 0.45, 1.0)})
+			## 2026-09-30: patlama artık isteğe bağlı ("blast" varsa - Endless Void Finali "Tekillik Çöküşü").
+			if p.has("blast"):
+				var br: float = float(p.get("radius", 200.0))
+				if p.has("blast_sheet"):
+					SpriteFx.spawn(get_tree(), global_position, {"sheet": str(p["blast_sheet"]), "scale": br / (66.0 * TEXEL), "z": 9})
+				else:
+					_fx().spawn(get_tree(), "explosion", global_position, {"radius": 160.0, "color": Color(0.7, 0.45, 1.0)})
+				if authoritative:
+					for e in _enemies_in(br):
+						_hit(e, float(p.get("blast", 10.0)))
+		"rain":
+			if float(p.get("ballista", 0.0)) > 0.0:
+				SpriteFx.spawn(get_tree(), global_position, {"sheet": "ballista", "offset": Vector2(0.0, -40.0), "z": 9})
+				if authoritative:
+					for e in _enemies_in(90.0):
+						_hit(e, float(p["ballista"]))
+		"line":
+			_line_expire()
+		"zeus":
+			_zeus_expire()
+		"cosmic":
+			SpriteFx.spawn(get_tree(), global_position, {"sheet": "cosmic_blast", "scale": float(p.get("radius", 90.0)) / (74.0 * TEXEL), "z": 9})
 			if authoritative:
-				for e in _enemies_in(200.0):
-					_hit(e, float(p.get("blast", 10.0)))
+				for e in _enemies_in(float(p.get("radius", 90.0)) * 1.3):
+					var away: Vector2 = e.global_position - global_position
+					_elem(e, "knock", {"dir": away.normalized() if away.length() > 1.0 else Vector2.RIGHT, "dist": 110.0, "quiet": true})
+					_hit(e, float(p.get("damage", 10.0)))
 
 
 ## ------------------------------------------------------------------ davranışlar (yalnız yetkili kopya)
@@ -463,6 +596,7 @@ func _line_tick() -> void:
 	for e in _enemies_on_line(float(p.get("width", 22.0))):
 		_hit(e, float(p.get("damage", 0.0)))
 		_line_effect(e)
+		_status_effects(e, float(p.get("tick", 0.5)))
 	## Enerji Kırbacı: ağın değdiği tecrübe küreleri sahibine çekilir.
 	if bool(p.get("collect_xp", false)):
 		var my_id: int = multiplayer.get_unique_id() if NetworkManager.is_multiplayer_active and multiplayer.has_multiplayer_peer() else -1
@@ -505,6 +639,15 @@ func _process_blade(delta: float) -> void:
 		_hit(e, float(p.get("damage", 10.0)))
 		if int(p.get("mark", 0)) > 0:
 			_elem(e, "mark", {"stacks": int(p["mark"]), "cap": 20})
+		## Wind Sword: savurma, yavaşlatma, duvara çarptırma (itme yönünde orman duvarı varsa ek hasar + sersemletme).
+		var push: float = float(p.get("push", 0.0))
+		if push > 0.0 and not e.is_boss:
+			_elem(e, "knock", {"dir": dir, "dist": push, "quiet": true})
+			if bool(p.get("wall_slam", false)) and GameManager.is_position_blocked_by_forest(e.global_position + dir * push):
+				_hit(e, float(p.get("damage", 10.0)) * float(p.get("slam_mult", 1.0)))
+				_elem(e, "stun", {"dur": float(p.get("slam_stun", 1.0))})
+		if float(p.get("slow", 0.0)) > 0.0:
+			_elem(e, "slow", {"pct": float(p["slow"]), "dur": float(p.get("slow_dur", 1.5))})
 
 
 func _explode_sticky() -> void:
@@ -558,6 +701,9 @@ func _process_orbit_thing(delta: float) -> void:
 		var dmg: float = float(p.get("damage", 0.0))
 		if dmg > 0.0:
 			_hit(e, dmg)
+		if float(p.get("knock", 0.0)) > 0.0 and not e.is_boss:
+			var aw: Vector2 = e.global_position - _origin
+			_elem(e, "knock", {"dir": aw.normalized() if aw.length() > 1.0 else Vector2.RIGHT, "dist": float(p["knock"]), "quiet": true})
 		if float(p.get("burn_tick", 0.0)) > 0.0:
 			_elem(e, "burn", {"tick": float(p["burn_tick"]), "dur": 3.0, "ap": float(p.get("ap", 0.0))})
 		## Kan Çarkı: kanayan düşmandan can çeker.
@@ -605,7 +751,7 @@ func _process_black_hole(delta: float) -> void:
 	for e in _enemies_in(r):
 		var to_c: Vector2 = global_position - e.global_position
 		if pull_now and to_c.length() > 10.0 and not e.is_boss:
-			_elem(e, "knock", {"dir": to_c.normalized(), "dist": minf(50.0, to_c.length()), "quiet": true})
+			_elem(e, "knock", {"dir": to_c.normalized(), "dist": minf(50.0 * float(p.get("pull", 1.0)), to_c.length()), "quiet": true})
 		if dmg_now:
 			_hit(e, float(p.get("dps", 5.0)) * 0.5)
 	if bool(p.get("pull_xp", false)) and dmg_now:
@@ -645,6 +791,7 @@ func _field_tick() -> void:
 			continue
 		_hit(e, float(p.get("damage", 0.0)))
 		_line_effect(e)
+		_status_effects(e, float(p.get("tick", 0.5)))
 
 
 func _electric_cloud_tick() -> void:
@@ -660,6 +807,8 @@ func _electric_cloud_tick() -> void:
 
 ## ------------------------------------------------------------------ çizim (her iki kopya)
 func _draw() -> void:
+	if p.has("sheet") or kind in ["rain", "zeus", "shuriken", "mini_fw", "heal_orb", "cosmic", "dot"]:
+		return
 	var dur: float = _duration()
 	var fade: float = clampf(minf(_t / 0.25, (dur - _t) / 0.4), 0.0, 1.0)
 	var col: Color = Color(p.get("color", get_night_glow_color()))
@@ -808,3 +957,323 @@ func _draw() -> void:
 				var ang7: float = TAU * PixelDraw.hash01(_seed + i) + _t * 0.5
 				PixelDraw.disc(self, Vector2(cos(ang7), sin(ang7) * 0.5) * re * 0.4 - Vector2(0.0, 40.0), 14.0, Color(0.3, 0.3, 0.38, 0.55 * fade))
 			PixelDraw.ring(self, Vector2.ZERO, re, Color(1.0, 0.95, 0.5, 0.3 * fade), 1, 2, 4, _t * 16.0)
+
+
+## ================================================================== 2026-09-30 yeni efsun seti
+## Sprite sayfası görünümü (her iki kopya). Hat türlerinde (line / zeus) sayfa karolanır: "to" (sabit hat) ya da "dir" +
+## "tile_len" (sahibini izleyen ışın). "sheet_scale" float ya da Vector2 (x hat boyunca, y kalınlık).
+func _setup_sheet() -> void:
+	if not p.has("sheet"):
+		return
+	var fr: SpriteFrames = SpriteFx.frames(str(p["sheet"]))
+	if fr == null:
+		return
+	var sc_v: Variant = p.get("sheet_scale", 1.0)
+	var sc: Vector2 = sc_v if sc_v is Vector2 else Vector2.ONE * float(sc_v)
+	var anim: StringName = &"loop" if fr.has_animation(&"loop") else &"play"
+	var tile_vec: Vector2 = Vector2.ZERO
+	if p.has("to"):
+		tile_vec = Vector2(p["to"]) - global_position
+	elif p.has("tile_len"):
+		tile_vec = Vector2(p.get("dir", Vector2.RIGHT)).normalized() * float(p["tile_len"])
+	if tile_vec.length() > 1.0:
+		## Kullanıcı (2026-09-30): "başlangıçları/bitişleri keskin, hiç doğal durmuyor". Karolar artık TAM karo genişliği
+		## aralıkla, aynı karede ve çevrilmeden dizilir (sayfalar x'te 16 px periyodik -> desen dikişsiz akar; eskiden 16
+		## birim adımla 19 birimlik karolar üst üste biniyor, her biri farklı karede/ters oynuyordu). İlk karo
+		## "<sayfa>_cap" (uca doğru sivrilir), son karo onun yatay aynası - hat kare kesik başlayıp bitmez.
+		var tex: Texture2D = fr.get_frame_texture(anim, 0)
+		var tile_w: float = maxf(4.0, float(tex.get_width()) * sc.x * TEXEL)
+		var seg: float = tile_vec.length()
+		var n: int = maxi(1, int(round(seg / tile_w)))
+		var along: Vector2 = tile_vec / seg
+		var cap_fr: SpriteFrames = SpriteFx.frames(str(p["sheet"]) + "_cap")
+		for i in range(n):
+			var is_cap: bool = cap_fr != null and (i == 0 or i == n - 1)
+			var spr := _sheet_sprite(cap_fr if is_cap else fr, anim, sc)
+			spr.position = along * (tile_w * (float(i) + 0.5)) + Vector2(p.get("sheet_pos", Vector2.ZERO))
+			spr.rotation = tile_vec.angle()
+			spr.flip_h = is_cap and i == n - 1 and n > 1
+	else:
+		var one := _sheet_sprite(fr, anim, sc)
+		one.position = Vector2(p.get("sheet_pos", Vector2.ZERO))
+		one.rotation = float(p.get("sheet_rot", 0.0))
+		one.offset = Vector2(p.get("sheet_offset", Vector2.ZERO))
+
+
+func _sheet_sprite(fr: SpriteFrames, anim: StringName, sc: Vector2) -> AnimatedSprite2D:
+	var spr := AnimatedSprite2D.new()
+	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	spr.sprite_frames = fr
+	spr.scale = sc * TEXEL
+	add_child(spr)
+	spr.play(anim)
+	_sheet_nodes.append(spr)
+	return spr
+
+
+## Hat / daire alanlarının ortak durum etkileri (tik başına): yavaşlatma, "tüm hasardan fazla al", sersemletme, dondurma.
+func _status_effects(e: Node, tick: float) -> void:
+	if float(p.get("slow", 0.0)) > 0.0:
+		_elem(e, "slow", {"pct": float(p["slow"]), "dur": tick + 0.4})
+	if float(p.get("vuln", 0.0)) > 0.0:
+		_elem(e, "vuln", {"pct": float(p["vuln"]), "dur": tick + 0.4})
+	if float(p.get("stun", 0.0)) > 0.0:
+		_elem(e, "stun", {"dur": float(p["stun"])})
+	if float(p.get("freeze", 0.0)) > 0.0:
+		if e.get("is_boss") == true:
+			_elem(e, "slow", {"pct": 0.5, "dur": tick + 0.4, "boss": true})
+		else:
+			_elem(e, "freeze", {"dur": float(p["freeze"]), "quiet": true})
+
+
+## Hat bitişi: "close" (Tektonik Seviye 4 kapanışı), "fault" (Final: merkeze çekip ezen dev patlama), "blast" (Magma /
+## Lightning Trail Finali: patlama + süreli yanma/çarpılma). Hasar içerideki düşman başına %15 artar (close / fault).
+func _line_expire() -> void:
+	var a: Vector2 = _origin
+	var b: Vector2 = _origin + _line_to()
+	var mid: Vector2 = (a + b) * 0.5
+	var fault: float = float(p.get("fault", 0.0))
+	var close: float = float(p.get("close", 0.0))
+	var blast: float = float(p.get("blast", 0.0))
+	if fault > 0.0:
+		SpriteFx.spawn(get_tree(), mid, {"sheet": "fault_blast", "offset": Vector2(0.0, -22.0), "z": 9})
+	elif close > 0.0:
+		_fx().spawn(get_tree(), "tiles", a, {"sheet": "quake_tile", "to": b, "step": 20.0, "rot": 0.0})
+	if blast > 0.0:
+		_fx().spawn(get_tree(), "tiles", a, {"sheet": str(p.get("blast_sheet", "trail_pop_fire")), "to": b, "step": 24.0})
+	if not authoritative:
+		return
+	var victims: Array = _enemies_on_line(float(p.get("width", 22.0)))
+	var crowd: float = 1.0 + float(p.get("crowd_bonus", 0.15)) * float(victims.size())
+	for e in victims:
+		if fault > 0.0:
+			var to_mid: Vector2 = mid - e.global_position
+			if to_mid.length() > 8.0 and not e.is_boss:
+				_elem(e, "knock", {"dir": to_mid.normalized(), "dist": to_mid.length(), "quiet": true})
+			_hit(e, fault * crowd)
+		elif close > 0.0:
+			_hit(e, close * crowd)
+		if blast > 0.0:
+			_hit(e, blast)
+	if blast > 0.0 and float(p.get("blast_dot", 0.0)) > 0.0 and not victims.is_empty():
+		if str(p.get("blast_mode", "")) == "fire":
+			for e in victims:
+				_elem(e, "burn", {"tick": float(p["blast_dot"]), "dur": 3.0, "ap": float(p.get("ap", 0.0)), "quiet": true})
+		else:
+			var d := spawn(get_tree(), "dot", global_position, {"duration": 3.05, "damage": float(p["blast_dot"]),
+				"fx_sheet": "bounce_spark", "no_net": true, "peer": int(p.get("peer", 0))}, true)
+			if d:
+				d.set("targets", victims)
+
+
+## Arrow Rain: alandakilere tik hasarı (+ Finalde kalkan kırma). Görsel sayfa döngüsü (arrow_rain).
+func _rain_tick() -> void:
+	for e in _enemies_in(float(p.get("radius", 70.0))):
+		if float(p.get("shield_break", 0.0)) > 0.0:
+			_elem(e, "shield_break", {"pct": float(p["shield_break"]), "dur": float(p.get("tick", 0.5)) + 0.4})
+		_hit(e, float(p.get("damage", 5.0)))
+
+
+## Beam of Zeus: sahibinden "dir" yönünde tile_len boyunca, "width" kalınlığında. Değenleri Final için kaydeder.
+func _zeus_seg() -> Array:
+	var a: Vector2 = global_position
+	return [a, a + Vector2(p.get("dir", Vector2.RIGHT)).normalized() * float(p.get("tile_len", 300.0))]
+
+
+func _zeus_tick() -> void:
+	var seg: Array = _zeus_seg()
+	var a: Vector2 = seg[0]
+	var b: Vector2 = seg[1]
+	var w: float = float(p.get("width", 18.0))
+	var dir: Vector2 = (b - a).normalized()
+	for e in _enemies_in(a.distance_to(b) * 0.5 + w, (a + b) * 0.5):
+		if e.global_position.distance_to(Geometry2D.get_closest_point_to_segment(e.global_position, a, b)) > w:
+			continue
+		_hit(e, float(p.get("damage", 5.0)))
+		if float(p.get("push", 0.0)) > 0.0 and not e.is_boss:
+			_elem(e, "knock", {"dir": dir.orthogonal() * signf(dir.orthogonal().dot(e.global_position - a)) if absf(dir.orthogonal().dot(e.global_position - a)) > 1.0 else dir, "dist": float(p["push"]) * 0.5, "quiet": true})
+		if bool(p.get("overcharge", false)):
+			_victims[e.get_instance_id()] = e
+
+
+func _zeus_expire() -> void:
+	if not authoritative or _victims.is_empty():
+		return
+	var n: int = 0
+	for id in _victims:
+		var e = _victims[id]
+		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		n += 1
+		if n > 14:
+			break
+		var at: Vector2 = (e as Node2D).global_position
+		_fx().play(get_tree(), "sprite", at, {"sheet": "zeus_burst", "z": 9})
+		for v in _enemies_in(40.0, at):
+			_hit(v, float(p.get("oc_dmg", 10.0)))
+		var near: Array = _enemies_in(220.0, at)
+		near.sort_custom(func(x, y): return x.global_position.distance_squared_to(at) < y.global_position.distance_squared_to(at))
+		var jumped: int = 0
+		for v in near:
+			if v == e or jumped >= 3:
+				continue
+			jumped += 1
+			_fx().play(get_tree(), "chain", at, {"to": v.global_position, "color": Color(1.0, 0.95, 0.5)})
+			_hit(v, float(p.get("chain_dmg", 5.0)))
+
+
+## Blade of Valerius shurikeni: "fly" (hedefe uçar) -> "stick" (hedefe saplı, saniyede hasar) -> "return" (sahibine döner;
+## Finalde yolundakileri deler) -> sahibine varınca verdiği hasarın "leech" oranı kadar can (yalnız yetkili kopya). Uzak kopya
+## aynı hedefi ağ kimliğinden bulur, aynı yolu çizer, hasar/can YOK. true = düğüm silindi.
+func _process_shuriken(delta: float) -> bool:
+	if _phase == "":
+		_phase = "fly"
+	match _phase:
+		"fly":
+			var tgt: Vector2 = target_node.global_position if is_instance_valid(target_node) else Vector2(p.get("tpos", global_position))
+			var k: float = clampf(_t / 0.2, 0.0, 1.0)
+			global_position = _from.lerp(tgt, k)
+			if k >= 1.0:
+				_phase = "stick"
+				_tick = 1.0
+				_t = 0.0
+				if authoritative and is_instance_valid(target_node):
+					_deal_tracked(target_node, float(p.get("hit", 5.0)))
+					_fx().play(get_tree(), "sprite", global_position, {"sheet": "shuriken_hit", "z": 9})
+		"stick":
+			var alive: bool = is_instance_valid(target_node) and target_node.get("is_dead") != true
+			if alive:
+				global_position = target_node.global_position + Vector2(0.0, -6.0)
+			if authoritative and alive:
+				_tick -= delta
+				if _tick <= 0.0:
+					_tick += 1.0
+					_deal_tracked(target_node, float(p.get("dot", 1.0)))
+			if _t >= float(p.get("stick", 5.0)) or not alive:
+				_phase = "return"
+				_hit_once.clear()
+		"return":
+			var owner_node: Node2D = _follow_target()
+			if owner_node == null:
+				queue_free()
+				return true
+			var to_o: Vector2 = owner_node.global_position - global_position
+			var stepd: float = 520.0 * delta
+			if authoritative and bool(p.get("return_pierce", false)):
+				for e in _enemies_in(16.0):
+					var id: int = e.get_instance_id()
+					if _hit_once.has(id):
+						continue
+					_hit_once[id] = true
+					var dmg: float = float(p.get("return_hit", 5.0))
+					if float(e.get("health")) <= dmg:
+						_kills += 1
+					_deal_tracked(e, dmg)
+			if to_o.length() <= stepd + 6.0:
+				if authoritative and owner_node.has_method("heal"):
+					var leech: float = float(p.get("kill_leech", 0.0)) if _kills > 0 and float(p.get("kill_leech", 0.0)) > 0.0 else float(p.get("leech", 0.01))
+					var amount: float = _dealt * leech
+					if amount > 0.0:
+						owner_node.heal(amount)
+				queue_free()
+				return true
+			global_position += to_o.normalized() * stepd
+	for sn in _sheet_nodes:
+		if is_instance_valid(sn):
+			(sn as Node2D).rotation += delta * 18.0
+	if _t > 30.0:
+		queue_free()
+		return true
+	return false
+
+
+func _deal_tracked(e: Node, amount: float) -> void:
+	if amount > 0.0 and is_instance_valid(e) and e.get("is_dead") != true:
+		_dealt += amount
+		_hit(e, amount)
+
+
+## Matryoshka küçük fişeği: "to" noktasına yay çizerek uçar, patlar (hasar + isteğe bağlı sersemletme); "micro" > 0 ise
+## yetkili kopya 2 mikro fişek doğurur (onlar da kendilerini yayınlar). true = düğüm silindi.
+func _process_mini_fw() -> bool:
+	var fl: float = float(p.get("flight", 0.35))
+	var k: float = clampf(_t / fl, 0.0, 1.0)
+	var to: Vector2 = Vector2(p.get("to", _from))
+	global_position = _from.lerp(to, k) - Vector2(0.0, sin(k * PI) * 22.0)
+	if k < 1.0:
+		return false
+	var r: float = float(p.get("radius", 35.0))
+	SpriteFx.spawn(get_tree(), to, {"sheet": "mini_pop", "scale": r / (29.0 * TEXEL), "z": 9})
+	if authoritative:
+		for e in _enemies_in(r, to):
+			_hit(e, float(p.get("damage", 5.0)))
+			if float(p.get("stun", 0.0)) > 0.0:
+				_elem(e, "stun", {"dur": float(p["stun"])})
+		if float(p.get("micro", 0.0)) > 0.0:
+			var base_ang: float = randf() * TAU
+			for i in range(2):
+				var ang: float = base_ang + PI * float(i)
+				var d: Dictionary = p.duplicate()
+				d.erase("id")
+				d["micro"] = 0.0
+				d["damage"] = float(p["micro"])
+				d["radius"] = r * 0.7
+				d["to"] = to + Vector2(cos(ang), sin(ang)) * float(p.get("range", 60.0)) * 0.6
+				d["sheet_scale"] = 0.7
+				spawn(get_tree(), "mini_fw", to, d, true)
+	queue_free()
+	return true
+
+
+## Hunter's Eye can küresi: kısa bekleyip sahibine uçar; varınca (yetkili kopyada) "heal" kadar can. true = silindi.
+func _process_heal_orb(delta: float) -> bool:
+	if _t < 0.35:
+		global_position.y -= 20.0 * delta
+		return false
+	var owner_node: Node2D = _follow_target()
+	if owner_node == null:
+		queue_free()
+		return true
+	var to_o: Vector2 = owner_node.global_position - global_position
+	var stepd: float = (260.0 + _t * 200.0) * delta
+	if to_o.length() <= stepd + 6.0:
+		if authoritative and owner_node.has_method("heal"):
+			owner_node.heal(float(p.get("heal", 5.0)))
+		queue_free()
+		return true
+	global_position += to_o.normalized() * stepd
+	return false
+
+
+## Astral Yörünge kozmik diski: sahibini izler, bosslar dışındakileri içine çeker, 0,3 sn'de bir hasar; bitince dışa patlar.
+func _process_cosmic(delta: float) -> void:
+	if not authoritative:
+		return
+	var r: float = float(p.get("radius", 90.0))
+	_tick2 -= delta
+	var pull_now: bool = _tick2 <= 0.0
+	if pull_now:
+		_tick2 = PULL_INTERVAL
+	_tick -= delta
+	var dmg_now: bool = _tick <= 0.0
+	if dmg_now:
+		_tick = float(p.get("tick", 0.3))
+	for e in _enemies_in(r * 1.6):
+		var to_c: Vector2 = global_position - e.global_position
+		if pull_now and to_c.length() > 18.0 and not e.is_boss:
+			_elem(e, "knock", {"dir": to_c.normalized(), "dist": minf(45.0, to_c.length() - 14.0), "quiet": true})
+		if dmg_now and to_c.length() <= r:
+			_hit(e, float(p.get("damage", 5.0)))
+
+
+## Görünmez süreli hasar (Lightning Trail Finali "çarpılmaya devam eder"): saniyede bir listedekilere hasar + küçük kıvılcım.
+func _dot_tick() -> void:
+	var alive: Array = []
+	for e in targets:
+		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		alive.append(e)
+		_hit(e, float(p.get("damage", 1.0)))
+		if p.has("fx_sheet"):
+			_fx().play(get_tree(), "sprite", (e as Node2D).global_position, {"sheet": str(p["fx_sheet"]), "z": 9})
+	targets = alive

@@ -379,12 +379,9 @@ func _give(key: String) -> void:
 			GameManager.owned_weapons.pop_back()
 		_set_status(("'%s' verildi." % ChestMenuScript.WEAPON_NAMES.get(key, key)) if ok else "Silah envanteri dolu (en fazla 5).", ok)
 	else:
-		## player.buy_item() SADECE stat etkisini uygular - sahiplik kaydı (GameManager.owned_items) çağıran tarafça
-		## eklenir (shop_panel.gd::_on_buy_item ile aynı sıra); atlanırsa eşya envanterde görünmez/satılamaz.
-		var ok2: bool = player.call("buy_item", key)
-		if ok2:
-			GameManager.owned_items.append({"key": key, "spent": 0})
-		_set_status(("'%s' verildi." % String(Items.DEFS[key].get("name", key))) if ok2 else "Eşya slotu dolu.", ok2)
+		## 2026-10-02: player.acquire_item() kaydı da yazar (tüketimsiz, bedava; kademe slot kuralları geçerli).
+		var ok2: bool = player.call("acquire_item", key, {}, 0)
+		_set_status(("'%s' verildi." % Items.item_name(key)) if ok2 else Items.purchase_block_reason(key, GameManager.owned_items, int(player.call("get_max_item_slots"))), ok2)
 
 
 ## ------------------------------------------------------------------ Oyuncu
@@ -402,7 +399,7 @@ func _build_player_page(page: VBoxContainer) -> void:
 		_refresh_toggles())
 	page.add_child(_spawns_btn)
 	## Efsun prototipi testi (2026-09-25): 5 level beklemeden efsun ekranını açmak ve finallerin katalizörlerini almak için.
-	_header(page, "Sandık / Efsun (efsun prototipi: Tüftüf, Yay, Topuz)")
+	_header(page, "Sandık / Efsun")
 	var ench_grid := _grid(page, 2)
 	var open_btn := _button("Efsun ekranı aç", "green", Vector2(420, 76))
 	open_btn.pressed.connect(func() -> void:
@@ -411,9 +408,6 @@ func _build_player_page(page: VBoxContainer) -> void:
 			close()
 			main.debug_open_enchant_screen())
 	ench_grid.add_child(open_btn)
-	var cat_btn := _button("Katalizörleri ver", "wood", Vector2(420, 76))
-	cat_btn.pressed.connect(_give_enchant_catalysts)
-	ench_grid.add_child(cat_btn)
 	## Sandık açılış animasyonunu level beklemeden görmek için (2026-09-25): normal = eşya kartı, elit = efsun ekranı.
 	for pair: Array in [["Sandık aç", false], ["Elit sandık aç", true]]:
 		var chest_btn := _button(str(pair[0]), "wood", Vector2(420, 76))
@@ -445,31 +439,6 @@ func _build_player_page(page: VBoxContainer) -> void:
 	evo_grid.add_child(evo_all_btn)
 	UISound.connect_all_buttons(evo_grid)
 	_refresh_toggles()
-
-
-## Sahip olunan efsunların finalleri için gereken katalizör eşyaları (her birinden 1, zaten varsa verilmez).
-func _give_enchant_catalysts() -> void:
-	var player: Node2D = _local_player()
-	if not player:
-		return
-	var given: Array = []
-	for entry in GameManager.owned_weapons:
-		var ench: Dictionary = entry.get("enchant", {})
-		if ench.is_empty():
-			continue
-		var cat: String = str(EnchantDefs.get_def(str(ench.get("id", ""))).get("catalyst", ""))
-		if cat == "" or given.has(cat):
-			continue
-		var owned: bool = false
-		for it in GameManager.owned_items:
-			if str(it.get("key", "")) == cat:
-				owned = true
-		if owned:
-			continue
-		if player.call("buy_item", cat):
-			GameManager.owned_items.append({"key": cat, "spent": 0})
-			given.append(cat)
-	_set_status("Katalizör verildi: %s" % (", ".join(given) if not given.is_empty() else "yok (efsun yok ya da zaten var)"), not given.is_empty())
 
 
 func _refresh_toggles() -> void:

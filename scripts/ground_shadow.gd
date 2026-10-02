@@ -11,6 +11,11 @@ class_name GroundShadow
 ## Düğüm karakterin AnimatedSprite2D'sinden ÖNCE çizilir (Shadow düğümü sahnede sprite'ın üstünde durur), yani sprite'ın altında kalır.
 
 const PixelDraw := preload("res://scripts/pixel_draw.gd")
+## Shaman golem formu (2026-09-30): sprite "golem_*" klibindeyken gölge büyür, sıçrayışta havadayken küçülür - kural
+## shaman_golem_math.gd'de; yerel oyuncu ve uzak kukla aynı sprite klibini oynattığı için ikisinde de aynı çıkar.
+const ShamanGolemMath := preload("res://scripts/shaman_golem_math.gd")
+## Güneş kayması (sola) - tek kaynak map_shadows.gd SUN_SHIFT_X; çizimde piksel ızgarasına (TEXEL) yuvarlanır.
+const MapShadows := preload("res://scripts/map_shadows.gd")
 
 @export var radius: Vector2 = Vector2(19.0, 7.0)
 @export var edge_color: Color = Color(0.0, 0.0, 0.0, 0.28)
@@ -31,6 +36,7 @@ const LYING_DROP_ART := 1.0
 const LYING_RY_MULT := 1.35
 var _lying: float = 0.0
 var _lie_dx: float = 0.0
+var _form_scale: Vector2 = Vector2.ONE
 
 
 ## `node` sahnedeki mevcut "Shadow" düğümü (player.tscn / remote_player.tscn - eski blob gölgesi). DEFS'te "ground_shadow" yoksa
@@ -58,6 +64,12 @@ func _process(delta: float) -> void:
 			var anim_name: String = String(spr.animation)
 			var dir: String = anim_name.get_slice("_", anim_name.get_slice_count("_") - 1)
 			_lie_dx = float(LYING_SHIFT_ART.get(dir, 0.0))
+	var form_spr: AnimatedSprite2D = host.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D if host != null else null
+	if form_spr != null:
+		var fs: Vector2 = ShamanGolemMath.shadow_scale_for(String(form_spr.animation), form_spr.frame)
+		if fs != _form_scale:
+			_form_scale = fs
+			queue_redraw()
 	var target: float = 1.0 if lying else 0.0
 	if _lying != target:
 		_lying = move_toward(_lying, target, delta / LYING_TIME)
@@ -72,12 +84,12 @@ func _art_px() -> float:
 
 
 func _draw() -> void:
-	var r: Vector2 = radius
-	var center := Vector2.ZERO
+	var r: Vector2 = radius * _form_scale
+	var center := Vector2(roundf(MapShadows.SUN_SHIFT_X / PixelDraw.TEXEL) * PixelDraw.TEXEL, 0.0)
 	if _lying > 0.0:
 		var e: float = _lying * _lying * (3.0 - 2.0 * _lying)
 		var s: float = _art_px()
 		var lying_r := Vector2(maxf(radius.x, LYING_HALF_ART * s * 0.95), radius.y * LYING_RY_MULT)
 		r = radius.lerp(lying_r, e)
-		center = Vector2(_lie_dx * s, LYING_DROP_ART * s) * e
+		center += Vector2(_lie_dx * s, LYING_DROP_ART * s) * e
 	PixelDraw.ground_shadow(self, center, r, edge_color, core_color)

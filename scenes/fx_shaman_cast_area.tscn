@@ -1,7 +1,0 @@
-[gd_scene format=3 uid="uid://b78q2h18wd8i2"]
-
-[ext_resource type="Script" uid="uid://wkr5pu7p20wt" path="res://scripts/fx_shaman_cast.gd" id="1"]
-
-[node name="FxShamanCastArea" type="Node2D" unique_id=1976457962]
-script = ExtResource("1")
-kind = "area"

@@ -17,9 +17,17 @@ extends AnimatedSprite2D
 ## "geri sar" durumuna gerek yok.
 
 const FRAME_COUNT := 29
+const OverheadBarScript := preload("res://scripts/overhead_bar.gd")
+## Kullanıcı isteği (2026-10-02): "diriltilirkenki saat efektinin de karakterin can ve kalkan barının üst kısımlarında
+## olmasını istiyorum durum etkisi gibi görünmesi için" - gövdenin ortası yerine can/kalkan barının (yerdeyken gizli) hemen
+## üstünde küçük bir durum simgesi. Ebeveyn: Player/RemotePlayer kökü ya da Hadime cesedi (ikisi de aynı yerel ölçekte).
+const STATUS_SCALE := 0.5
+const STATUS_GAP := 2.0
+const FRAME_PX := 64.0
 
 func _ready() -> void:
-	position = Vector2.ZERO
+	scale = Vector2.ONE * STATUS_SCALE
+	position = Vector2(0.0, OverheadBarScript.CHARACTER_Y_OFFSET - STATUS_GAP - FRAME_PX * STATUS_SCALE * 0.5)
 	animation = "all"
 	frame = FRAME_COUNT - 1
 

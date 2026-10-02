@@ -551,20 +551,17 @@ const ChestDropScene := preload("res://scenes/chest_drop.tscn")
 ## yeniden eklendi.
 const MagnetDrop := preload("res://scenes/magnet_drop.tscn")
 
-## Çok hızlı ateş eden silahlerle (yüksek ateş hızı) art arda gelen vuruşlar
-## ayrı ayrı hasar kutucukları olarak üst üste yığılıp "hasar sayıları hızlı
-## hızlı yukarı/aşağı gidiyor ve hiç görünmüyor" görüntüsü vermesin diye
-## (bkz. kullanıcı bildirimi) - önceki kutucuk hâlâ ekranda (henüz solup
-## yok olmadıysa) YENİ bir vuruş asla yeni bir kutucuk açmaz, hep AYNI
-## kutucuğun üzerine toplanır - bu yüzden aynı anda en fazla TEK bir hasar
-## kutucuğu var olabilir (iki ayrı kutucuğun farklı yükseklikte görünüp
-## "biri yukarı biri aşağı" hissi vermesi mümkün değil). O kutucuğun kendi
-## yükselişi (RISE) da sadece İLK vuruşta bir kez oynar, sonraki
-## toplamalarda tekrar tetiklenmez - bkz. _spawn_floating_text.
-## Kutucuk artık ayrı bir sahne değil, DamageNumbers'taki bir kayıt (bkz.
-## scripts/damage_numbers.gd) - burada sadece o kaydın kimliği tutuluyor.
-var _floating_text_id: int = 0
-var _floating_text_total: int = 0
+## Her vuruş KENDİ hasar sayısını açar (kullanıcı bildirimi 2026-10-01: "hasar
+## birikerek değil tek tek görünsün"). Kullanıcı isteği (aynı gün, son hal): "tek bi
+## doğrultuda... tamamen rastgele konumlarda çıksın" - her sayı yaratığın üstünde
+## DMG_SPAWN_OFFSET çevresinde DMG_SCATTER kutusu içinde RASTGELE bir noktada pop'la
+## doğar ve oradan süzülerek yükselir (bkz. damage_numbers.gd RISE notu). Sayılar
+## yaratığı takip etmez (itilip sallanan yaratıkla sallanmasın). Aynı anda en fazla
+## DMG_MAX_LIVE sayı; dolunca EN ESKİSİ silinir (alan hasarında kayıt sayısı sınırlı).
+const DMG_SPAWN_OFFSET := Vector2(0, -32)
+const DMG_SCATTER := Vector2(22, 14) ## yarı genişlik / yarı yükseklik (px)
+const DMG_MAX_LIVE := 5
+var _dmg_ids: Array[int] = [] ## eskiden yeniye
 
 @onready var anim_sprite: AnimatedSprite2D = get_node_or_null("AnimatedSprite2D")
 @onready var frame_sprite: Sprite2D = get_node_or_null("Sprite2D")
@@ -821,7 +818,11 @@ func apply_boss_stats(new_max_health: float, new_damage: float, scale_mult: floa
 	gold_max = max(gold_min + 1, int(new_max_health * BOSS_GOLD_MAX_HEALTH_RATIO))
 	gold_chance = 1.0
 	health_changed.emit(health, max_health)
+	_scale_body(scale_mult)
 
+
+## Görseli ve çarpışmayı birlikte büyütür (boss ve elit yaratık - bkz. apply_boss_stats / make_elite).
+func _scale_body(scale_mult: float) -> void:
 	if frame_sprite:
 		frame_sprite.scale *= scale_mult
 	if anim_sprite:
@@ -830,13 +831,107 @@ func apply_boss_stats(new_max_health: float, new_damage: float, scale_mult: floa
 		var shape = body_collision.shape.duplicate()
 		shape.radius *= scale_mult
 		body_collision.shape = shape
-		_body_radius = shape.radius ## body block mesafesi boss boyutuyla senkron kalsın
+		_body_radius = shape.radius ## body block mesafesi boyutla senkron kalsın
 	if hit_area:
 		var hit_collision: CollisionShape2D = hit_area.get_node_or_null("HitCollision")
 		if hit_collision and hit_collision.shape:
 			var hshape = hit_collision.shape.duplicate()
 			hshape.radius *= scale_mult
 			hit_collision.shape = hshape
+
+
+## ELİT YARATIK (kullanıcı isteği 2026-10-02: "oyunda elit sandık düşürecek elit düşmanlar ekleyeceğiz"). Kurallar:
+## görünüm AYNI kalır, sadece başının üstünde mor piksel yıldız (elite_star.gd) + ayaklarında aura (elite_aura.gd, kullanıcı
+## seçimi "B - Yükselen Kıvılcımlar"); can ve kalkan "%300 daha fazla" (x4);
+## hasar +%50 (yetenekler dahil - yaratık yetenekleri hasarını contact_damage/ranged_damage'den türetiyor, bkz.
+## enemy_abilities.gd, enemy_*.gd mermi/alanlar); boyut +%50; yürüme %15 yavaş + yürüme animasyonu biraz yavaş ("büyük
+## olduğu hissedilsin"); sersemletme/yavaşlatma/sabitlemeye BAĞIŞIK DEĞİL (is_boss'a bakan hiçbir korumaya girmez);
+## ölünce garanti elit sandık (_drop_chest). Hangi yaratığın, ne zaman elit olacağını host seçer (enemy_spawner.gd
+## ELİT YARATIK bloğu, kademe başına 1) ve istemcilere _rpc_client_spawn_creature'ın is_elite bayrağıyla bildirir - host
+## ve istemci AYNI make_elite()'i çağırır (iki yerde ayrı formül yok, bkz. CLAUDE.md).
+const ELITE_DEFENSE_MULT := 4.0
+const ELITE_DAMAGE_MULT := 1.5
+const ELITE_SCALE_MULT := 1.5
+const ELITE_SPEED_MULT := 0.85
+const ELITE_WALK_ANIM_MULT := 0.8
+const EliteStarScript := preload("res://scripts/elite_star.gd")
+## Aura "B - Yükselen Kıvılcımlar" (kullanıcı seçimi 2026-10-02) - bkz. elite_aura.gd.
+const EliteAuraScript := preload("res://scripts/elite_aura.gd")
+## Yıldızın başın görünen üst kenarından yukarı mesafesi (dünya birimi).
+const ELITE_STAR_GAP := 10.0
+
+var is_elite: bool = false
+## Yürüme animasyonu kare hızı çarpanı (elitlerde < 1, bkz. _advance_frame_sprite).
+var _walk_anim_mult: float = 1.0
+
+
+## Kademe ölçeklemesi + global güçlendirmeden SONRA çağrılır (enemy_spawner.gd _apply_elite) - çarpanlar nihai değerlere biner.
+func make_elite() -> void:
+	if is_elite or is_boss:
+		return
+	is_elite = true
+	add_to_group("elite_enemies")
+	max_health *= ELITE_DEFENSE_MULT
+	health = max_health
+	if item_shield_max > 0.0:
+		item_shield_max *= ELITE_DEFENSE_MULT
+		item_shield_hp = item_shield_max
+		item_shield_changed.emit(item_shield_hp, item_shield_max)
+	contact_damage *= ELITE_DAMAGE_MULT
+	if ranged_damage > 0.0:
+		ranged_damage *= ELITE_DAMAGE_MULT
+	speed *= ELITE_SPEED_MULT
+	_walk_anim_mult = ELITE_WALK_ANIM_MULT
+	_scale_body(ELITE_SCALE_MULT)
+	health_changed.emit(health, max_health)
+	var vis: Rect2 = _visual_bounds()
+	var aura: Node2D = EliteAuraScript.new()
+	aura.name = "EliteAura"
+	add_child(aura)
+	## Ayak (gölge) merkezi: görselin alt kenarından ~3 yaratık texel'i yukarı (sayfalarda gömülü gölgenin ortası).
+	var texel: float = absf(frame_sprite.scale.y) if frame_sprite else 1.0
+	aura.setup(self, Vector2(vis.get_center().x, vis.end.y - 3.0 * texel), vis.size.x)
+	var star: Node2D = EliteStarScript.new()
+	star.name = "EliteStar"
+	star.set("base_y", vis.position.y - ELITE_STAR_GAP)
+	add_child(star)
+
+
+static var _visual_bounds_cache: Dictionary = {} ## doku yolu|hücre -> hücre içindeki dolu dikdörtgen (px, tüm kareler)
+
+
+## Yaratık görselinin (yürüme sayfası, tüm kareler/yönler) dolu piksellerini saran dikdörtgen, kök koordinatında - yıldız
+## kafanın hemen üstüne, aura ayağa otursun (sayfa hücreleri yaratıktan çok büyük olabiliyor, hücre kenarı kullanılamaz).
+func _visual_bounds() -> Rect2:
+	var fallback := Rect2(-20.0, get_overhead_bar_offset(), 40.0, -get_overhead_bar_offset())
+	if frame_sprite == null:
+		return fallback
+	var tex: Texture2D = walk_texture if walk_texture else frame_sprite.texture
+	if tex == null:
+		return fallback
+	var key: String = "%s|%d" % [tex.resource_path if tex.resource_path != "" else str(tex.get_rid()), cell_size]
+	var used_px: Rect2i
+	if _visual_bounds_cache.has(key):
+		used_px = _visual_bounds_cache[key]
+	else:
+		var img: Image = tex.get_image()
+		if img:
+			if img.is_compressed():
+				img.decompress()
+			var size_i: Vector2i = img.get_size()
+			for r in range(maxi(1, size_i.y / cell_size)):
+				for c in range(maxi(1, size_i.x / cell_size)):
+					var cell := Rect2i(c * cell_size, r * cell_size, cell_size, cell_size).intersection(Rect2i(Vector2i.ZERO, size_i))
+					var used: Rect2i = img.get_region(cell).get_used_rect()
+					if used.size.x > 0:
+						used_px = used if used_px.size.x == 0 else used_px.merge(used)
+		_visual_bounds_cache[key] = used_px
+	if used_px.size.x == 0:
+		return fallback
+	var half: Vector2 = Vector2(cell_size, cell_size) * 0.5 if frame_sprite.centered else Vector2.ZERO
+	var local := Rect2(frame_sprite.offset + Vector2(used_px.position) - half, Vector2(used_px.size))
+	var sc: Vector2 = frame_sprite.scale
+	return Rect2(frame_sprite.position + local.position * sc, local.size * sc)
 
 
 ## Called by enemy_spawner.gd right after a regular (non-boss) spawn, with
@@ -1267,6 +1362,8 @@ var _mark_duration: float = MARK_DURATION
 var _mark_pct: float = MARK_PERCENT_PER_STACK
 var _boss_chill_required: int = BOSS_CHILL_HITS_REQUIRED
 var _vuln_pct: float = 0.0 ## Harpun / Sersemletici Bomba: süreli "tüm hasardan fazla alır"
+var _shield_break_pct: float = 0.0 ## Arrow Rain Finali: süreli kalkan koruması düşüşü (bkz. "shield_break")
+var _shield_break_until_msec: int = 0
 var _vuln_until_msec: int = 0
 var _contagious_timer: float = 0.0
 var _linger_slow: float = 0.0 ## Ebedi Kış: donma bitince yavaşlama
@@ -1364,10 +1461,20 @@ func apply_element_host(kind: String, p: Dictionary, attacker_peer: int) -> void
 		"vuln":
 			_vuln_pct = maxf(_vuln_pct if Time.get_ticks_msec() < _vuln_until_msec else 0.0, float(p.get("pct", 0.2)))
 			_vuln_until_msec = Time.get_ticks_msec() + int(float(p.get("dur", 2.0)) * 1000.0)
+		## Efsun Arrow Rain Finali (2026-09-30, "zırhı %30 kırılır" = kalkan): süreli olarak TÜM kaynaklardan gelen isabetlerde
+		## kalkan koruması bu oran kadar düşer (bkz. _apply_damage effective_protection).
+		"shield_break":
+			_shield_break_pct = maxf(_shield_break_pct if Time.get_ticks_msec() < _shield_break_until_msec else 0.0, float(p.get("pct", 0.3)))
+			_shield_break_until_msec = Time.get_ticks_msec() + int(float(p.get("dur", 1.0)) * 1000.0)
 		## Yetenek evrimi (2026-09-28) Korsan "Ganimet": bu kısa süre içinde ölürse bayrağı bırakan oyuncuya 1 altın (bkz.
 		## _on_death_enchant_flags, korsan_bomb.gd - istemcide bayrak hasar RPC'sinden ÖNCE aynı güvenilir kanaldan gelir).
 		"evo_gold":
 			_enchant_flags["evo_gold"] = {"peer": attacker_peer, "until": Time.get_ticks_msec() + int(float(p.get("dur", 0.6)) * 1000.0)}
+		## Yetenek evrimi (2026-09-30) Assasin "Av Zinciri": bu kısa süre içinde ölürse bayrağı bırakan oyuncuya p.event olayı
+		## (player.gd on_enchant_event "assasin_dash_kill" - Şahin Hamlesi yükünün bekleme süresi kısalır). evo_gold ile aynı yol.
+		"evo_kill":
+			_enchant_flags["evo_kill"] = {"peer": attacker_peer, "event": str(p.get("event", "")),
+				"until": Time.get_ticks_msec() + int(float(p.get("dur", 0.6)) * 1000.0)}
 		"chain_bomb":
 			_enchant_flags["chain_bomb"] = {"peer": attacker_peer, "ap": float(p.get("ap", 10.0)),
 				"until": Time.get_ticks_msec() + int(float(p.get("dur", 0.6)) * 1000.0), "gold": float(p.get("gold", 0.03))}
@@ -1825,6 +1932,8 @@ func _on_death_enchant_flags(tree: SceneTree, pos: Vector2, poison_stacks: int) 
 	if f.has("evo_gold") and Time.get_ticks_msec() <= int(f["evo_gold"]["until"]):
 		_notify_enchant_owner(int(f["evo_gold"]["peer"]), "gold", {"amount": 1})
 		EnchantFxScript.play(tree, "text", pos, {"text": "+1", "color": Color("#ffd24a")})
+	if f.has("evo_kill") and Time.get_ticks_msec() <= int(f["evo_kill"]["until"]) and str(f["evo_kill"]["event"]) != "":
+		_notify_enchant_owner(int(f["evo_kill"]["peer"]), str(f["evo_kill"]["event"]), {})
 	if f.has("chain_bomb") and Time.get_ticks_msec() <= int(f["chain_bomb"]["until"]):
 		var cb: Dictionary = f["chain_bomb"]
 		deferred.append([60.0, float(cb["ap"]) * 0.6, int(cb["peer"]), "chain_bomb", Color(1.0, 0.7, 0.3)])
@@ -2296,13 +2405,14 @@ func apply_stun(duration: float) -> void:
 ## kullanması - "donan yaratıklar hiçbir şey yapamaz" isteğiyle zaten
 ## eşleşen mekanizma budur, sadece süresi yük birikimine değil doğrudan
 ## dışarıdan verilen bir değere bağlı.
-func apply_freeze_full(duration: float) -> void:
-	if is_dead or is_boss:
+## allow_boss: Zaman Kıran (eşya) bossları da dondurur - diğer donduranlar bossa işlemez.
+func apply_freeze_full(duration: float, allow_boss: bool = false) -> void:
+	if is_dead or (is_boss and not allow_boss):
 		return
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		if net_id > 0:
-			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "freeze", duration, 0.0, 0.0)
+			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "freeze", duration, 1.0 if allow_boss else 0.0, 0.0)
 		return
 	_start_freeze(max(duration, _freeze_timer if is_frozen else 0.0))
 
@@ -3436,7 +3546,8 @@ static func _rebuild_separation_grid_if_needed(tree: SceneTree) -> void:
 ## bir perf sınıflandırması - hedef seçimindeki asıl "kim görünmez/ev içi"
 ## kurallarına (bkz. _find_closest_target_player) dokunmuyor, sadece NE SIKLIKLA
 ## yeniden hesaplanacaklarını etkiliyor.
-const ENEMY_LOD_NEAR_RADIUS_SQ: float = 1600.0 * 1600.0
+const ENEMY_LOD_NEAR_RADIUS_SQ: float = 1600.0 * 1600.0 ## masaüstü; telefonda dar kamera -> MobileUI.MOBILE_LOD_RADIUS
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const ENEMY_LOD_FAR_SLOWDOWN: int = 8 ## uzaktaki yaratıklarda hedef/yol kontrol aralığı kaç kat seyrekleşsin
 static var _lod_far_ids: Dictionary = {}
 static var _lod_frame: int = -1
@@ -3464,11 +3575,12 @@ static func _ensure_lod_classification(tree: SceneTree) -> void:
 	## PERF: ayrışma ızgarasının bu kare ZATEN topladığı canlı yaratık konumları
 	## kullanılıyor (ikinci bir grup taraması + her yaratıkta get("is_dead") yok).
 	_rebuild_separation_grid_if_needed(tree)
+	var near_sq: float = MobileUIScript.lod_near_radius_sq(ENEMY_LOD_NEAR_RADIUS_SQ)
 	for i in range(_flat_positions.size()):
 		var pos: Vector2 = _flat_positions[i]
 		var is_near: bool = false
 		for p in player_positions:
-			if pos.distance_squared_to(p) <= ENEMY_LOD_NEAR_RADIUS_SQ:
+			if pos.distance_squared_to(p) <= near_sq:
 				is_near = true
 				break
 		if not is_near:
@@ -4630,7 +4742,7 @@ func _anim_length_for(state: int) -> float:
 
 func _advance_frame_sprite(delta: float) -> void:
 	var cols: int = max(frame_sprite.hframes, 1)
-	_frame_time += delta * sprite_fps
+	_frame_time += delta * sprite_fps * (_walk_anim_mult if _state == State.WALK else 1.0)
 	var col: int
 	if _state == State.WALK:
 		col = int(_frame_time) % cols
@@ -4789,6 +4901,32 @@ func take_damage_host(amount: float, is_crit: bool, shield_pen_percent: float, a
 	_post_direct_hit(amount)
 
 
+## Hasar sayısı: kalkanın emdiği kısım DAHİL tam vuruş (bkz. _apply_damage). Sadece sayıyı gösterir/yayınlar.
+func _show_hit_number(shown_amount: float, is_crit: bool) -> void:
+	## Kullanıcı isteği (2026-09-25): "başka oyuncuların hasar sayısını görmemeliyiz" - sayı SADECE vuranın
+	## ekranında çıkar. Vuran = last_attacker_peer_id (take_damage/take_damage_host her isabette günceller, DOT tiki
+	## son doğrudan vuranınkini korur - bkz. _take_dot_damage). Bilinmiyorsa (0: tek oyunculu ya da oyuncu dışı
+	## bir kaynak) eskisi gibi herkese.
+	var dmg_owner: int = last_attacker_peer_id if NetworkManager.is_multiplayer_active else 0
+	var my_peer: int = multiplayer.get_unique_id() if (NetworkManager.is_multiplayer_active and multiplayer.has_multiplayer_peer()) else 0
+	if dmg_owner <= 0 or dmg_owner == my_peer:
+		_spawn_floating_text(shown_amount, is_crit)
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host and dmg_owner != my_peer:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		## Relay'in saniyelik mesaj/byte bütçesini aşıp bağlantıyı KAPATMASINI
+		## önlemek için sınırlanıyor (bkz. NetworkManager.should_throttle
+		## üzerindeki not) - çok hızlı vuran silahlar/DOT tikleri aynı
+		## yaratığa saniyede onlarca "damage_number" göndermeye çalışabilir,
+		## bu salt kozmetik olduğu için kayıp fark edilmez ama flood'u önler.
+		## Kısıtlama vuran başına: aynı yaratığa vuran iki oyuncu birbirinin sayısını yutmasın.
+		if net_id > 0 and not NetworkManager.should_throttle("dmgnum_%d_%d" % [net_id, dmg_owner], 0.1):
+			var dmg_payload: Dictionary = {"amount": shown_amount, "is_crit": is_crit}
+			if dmg_owner > 0:
+				NetworkManager.broadcast_enemy_vfx.rpc_id(dmg_owner, net_id, "damage_number", dmg_payload)
+			else:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "damage_number", dmg_payload)
+
+
 ## DÜZELTME (kullanıcı isteği: "zırh statını ve zırhla ilgili herşeyi
 ## oyundan kaldır. gerçek hasar artık kalkanı görmezden gelerek vuruyor
 ## eskisi gibi") - eskiden kalkan emiliminden SONRA bir de "effective_armor"
@@ -4800,6 +4938,8 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 	if crack_stacks > 0 or _sleep_vuln > 0.0 or _vuln_pct > 0.0 or mark_stacks > 0:
 		amount *= _damage_taken_mult()
 	var remaining: float = amount
+	if _shield_break_pct > 0.0 and Time.get_ticks_msec() < _shield_break_until_msec:
+		shield_pen_percent = 1.0 - (1.0 - clamp(shield_pen_percent, 0.0, 1.0)) * (1.0 - _shield_break_pct)
 	var effective_protection: float = shield_protection * (1.0 - clamp(shield_pen_percent, 0.0, 1.0))
 	if item_shield_hp > 0.0 and effective_protection > 0.0:
 		# Shield only ever eats its protection share of the hit - the rest
@@ -4813,6 +4953,11 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 
 	_flash()
 	_show_overhead_bar()
+	## Kullanıcı isteği (2026-09-28): "hasar sayıları kalkanın hasar azaltmasından hesaplanmasın direk kaç vurduğumuz
+	## yazsın" - eskiden sayı sadece cana ulaşan kısmı (remaining) gösteriyordu; %90 soğuran boss kalkanında 100'lük
+	## vuruş "10" yazıyor, boss zırhlıymış gibi görünüyordu. Artık kalkandan ÖNCEKİ tam vuruş (hasar alma çarpanları
+	## dahil) yazılır; can/kalkan hesabı değişmedi.
+	_show_hit_number(max(amount, 1.0), is_crit)
 
 	if remaining <= 0.0:
 		return
@@ -4837,28 +4982,6 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 	## hasar üzerinden bildirim - pasifsiz karakterlerde no-op.
 	## Can emme artık VURAN istemcide (take_damage -> player.on_dealer_hit) hesaplanıyor: burası SADECE host'ta çalıştığı için
 	## istemci vuruşları host oyuncusuna yanlış atfediliyor ve alan hasarı ayırt edilemiyordu.
-	## Kullanıcı isteği (2026-09-25): "başka oyuncuların hasar sayısını görmemeliyiz" - sayı SADECE vuranın
-	## ekranında çıkar. Vuran = last_attacker_peer_id (take_damage/take_damage_host her isabette günceller, DOT tiki
-	## son doğrudan vuranınkini korur - bkz. _take_dot_damage). Bilinmiyorsa (0: tek oyunculu ya da oyuncu dışı
-	## bir kaynak) eskisi gibi herkese.
-	var dmg_owner: int = last_attacker_peer_id if NetworkManager.is_multiplayer_active else 0
-	var my_peer: int = multiplayer.get_unique_id() if (NetworkManager.is_multiplayer_active and multiplayer.has_multiplayer_peer()) else 0
-	if dmg_owner <= 0 or dmg_owner == my_peer:
-		_spawn_floating_text(effective_amount, is_crit)
-	if NetworkManager.is_multiplayer_active and NetworkManager.is_host and dmg_owner != my_peer:
-		var net_id: int = int(get_meta("network_enemy_id", 0))
-		## Relay'in saniyelik mesaj/byte bütçesini aşıp bağlantıyı KAPATMASINI
-		## önlemek için sınırlanıyor (bkz. NetworkManager.should_throttle
-		## üzerindeki not) - çok hızlı vuran silahlar/DOT tikleri aynı
-		## yaratığa saniyede onlarca "damage_number" göndermeye çalışabilir,
-		## bu salt kozmetik olduğu için kayıp fark edilmez ama flood'u önler.
-		## Kısıtlama vuran başına: aynı yaratığa vuran iki oyuncu birbirinin sayısını yutmasın.
-		if net_id > 0 and not NetworkManager.should_throttle("dmgnum_%d_%d" % [net_id, dmg_owner], 0.1):
-			var dmg_payload: Dictionary = {"amount": effective_amount, "is_crit": is_crit}
-			if dmg_owner > 0:
-				NetworkManager.broadcast_enemy_vfx.rpc_id(dmg_owner, net_id, "damage_number", dmg_payload)
-			else:
-				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "damage_number", dmg_payload)
 	## Ruhani Yetenek "Savaş Şevki": bu isabeti verenin seçtiği ruhani yetenek buysa, normal hasardan sonra
 	## hâlâ hayattaysa ama kalan can oranı eşiğin altındaysa anında öldürülür (bkz. _attacker_has_savas_sevki,
 	## spiritual_skills.gd SAVAS_SEVKI_EXECUTE_PERCENT*). die() zaten aşağıda "health <= 0" ile tetiklenir,
@@ -5434,6 +5557,9 @@ func _drop_chest() -> void:
 	if is_boss:
 		_spawn_chest_drop(true)
 		return
+	## Elit yaratık (bkz. make_elite): garanti elit sandık; normal sandık zarı da aşağıda her yaratıktaki gibi atılır.
+	if is_elite:
+		_spawn_chest_drop(true)
 	var base_chance: float = 0.005
 	if _current_tier <= 2:
 		base_chance = 0.005
@@ -5499,10 +5625,6 @@ func _spawn_floating_text(amount: float, is_crit: bool) -> void:
 	var dn = DamageNumbersScript.get_instance(get_tree())
 	if dn == null:
 		return
-	if _floating_text_id != 0 and dn.is_alive(_floating_text_id):
-		_floating_text_total += amt
-		dn.update_text(_floating_text_id, "%d" % _floating_text_total, color)
-		return
 	## DÜZELTME (kullanıcı bildirimi: "alan hasarı alınca FPS 60'tan 40'a düşüyor" -
 	## gerçek oyunda 200 yaratıkla ölçüldü): her sayı eskiden ayrı bir floating_text
 	## sahnesiydi (6 node + 2 Tween); 200 yaratığa vuran bir alan hasarından sonra
@@ -5511,5 +5633,12 @@ func _spawn_floating_text(amount: float, is_crit: bool) -> void:
 	## Artık tüm yaratık hasar sayıları TEK bir DamageNumbers düğümünde kayıt olarak
 	## tutulup tek _draw'da çiziliyor (görünüm floating_text ile aynı). Node
 	## oluşturmadığı için fizik sorgu taşması sırasında da güvenle çağrılabilir.
-	_floating_text_total = amt
-	_floating_text_id = dn.spawn(self, Vector2(0, -30), "%d" % amt, color)
+	var alive: Array[int] = []
+	for id in _dmg_ids:
+		if dn.is_alive(id):
+			alive.append(id)
+	while alive.size() >= DMG_MAX_LIVE:
+		dn.remove(alive.pop_front())
+	var jitter := Vector2(randf_range(-DMG_SCATTER.x, DMG_SCATTER.x), randf_range(-DMG_SCATTER.y, DMG_SCATTER.y))
+	alive.append(dn.spawn_fixed(self, PhysicsInterp.visual_position(self) + DMG_SPAWN_OFFSET + jitter, "%d" % amt, color))
+	_dmg_ids = alive

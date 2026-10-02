@@ -34,6 +34,8 @@ func _init() -> void:
 	totem_kind = "shield"
 	totem_color = Color(0.35, 0.65, 1.0)
 	totem_radius = 220.0
+	## Kullanıcı isteği (2026-09-30): Saldırı Totemi'nin alan hasarı bu totemde de (bkz. totem_base.gd "ALAN HASARI").
+	area_damage_enabled = true
 
 
 func _process(delta: float) -> void:

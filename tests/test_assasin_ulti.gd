@@ -94,7 +94,7 @@ func test_pressing_r_attacks_nearby_enemies_and_cleans_up_the_right_slot() -> vo
 		"10sn boyunca yakındaki yaratıklara tekrar tekrar vurulmalı: %d/%d/%d" % [e1.hits, e2.hits, e3.hits])
 	assert(absi(e1.hits - e3.hits) <= 1, "Vurulmamış yaratık önceliği: vuruşlar yaratıklar arasında dengeli dağılmalı")
 	assert(e1.damage_taken / float(e1.hits) >= p.damage_bonus * p.ASSASIN_DASH_DAMAGE_RATIO - 0.001,
-		"Vuruş başı hasar en az saldırı gücünün %%150'si olmalı (kritikle fazlası)")
+		"Vuruş başı hasar en az saldırı gücü x ASSASIN_DASH_DAMAGE_RATIO (%300) olmalı (kritikle fazlası)")
 	assert(far.hits == 0, "Yarıçap dışındaki yaratığa vurulmamalı")
 	assert(p.skill3_state == "cooldown", "Zincir bitince R bekleme süresine geçmeli, durum: %s" % p.skill3_state)
 	assert(p.skill3_timer > 1.0, "R bekleme sayacı kurulmalı")

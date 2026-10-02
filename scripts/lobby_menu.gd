@@ -47,6 +47,15 @@ var _lan_ip_input: LineEdit = null
 ## ağdan bulunan host'ları gösterir, tıklanınca IP alanı otomatik doldurulup katılır.
 var _lan_found_vbox: VBoxContainer = null
 var _lan_found_header: Label = null
+## İnternet odaları (kullanıcı isteği 2026-10-02: "hem androidden hem pcden crossplay sağlanması radmin olmadan") -
+## Epic Online Services; bkz. scripts/net/eos_online.gd + network_manager.gd host_online/join_online.
+const ONLINE_REFRESH_SEC := 8.0
+var _online_host_btn: Button = null
+var _online_refresh_btn: Button = null
+var _online_vbox: VBoxContainer = null
+var _online_section: Array[Control] = []
+var _online_refresh_timer: Timer = null
+var _online_searched_once: bool = false
 
 
 func _ready() -> void:
@@ -121,7 +130,11 @@ func _build_lobby_panel() -> void:
 	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status_box.add_child(status_label)
 
-	## Kullanıcı isteği: "multiplayerdan ziva altyapısını kaldır" - tek bağlantı yolu LAN/IP.
+	_build_online_section(v)
+
+	## Kullanıcı isteği: "multiplayerdan ziva altyapısını kaldır" - LAN/IP (internet odası yukarıda, Epic).
+	var lan_header := MenuKit.make_label("Aynı Ağ (LAN)", MenuKit.FS_BODY, MenuKit.C_ACCENT)
+	v.add_child(lan_header)
 	_lan_ip_input = LineEdit.new()
 	_lan_ip_input.placeholder_text = "IP:Port (örn. 192.168.1.50:7777)"
 	_lan_ip_input.text = "127.0.0.1:7777"
@@ -143,12 +156,12 @@ func _build_lobby_panel() -> void:
 	## DÜZELTME (kullanıcı isteği: "ip adresimi otomatik olarak lan'da görünsün") - host olunca IP otomatik algılanıp
 	## oda bilgisinde gösteriliyor VE aynı ağdaki host'lar aşağıdaki listede kendiliğinden beliriyor - manuel IP sadece
 	## keşif işe yaramazsa (güvenlik duvarı vb.) yedek.
-	var lan_info := MenuKit.make_label("Aynı ağdaki oyunlar aşağıda kendiliğinden belirir, tıklayıp katılabilirsin. Görünmezse (güvenlik duvarı vb.) host'un IP:Port'unu yukarıya yaz.", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
+	var lan_info := MenuKit.make_label("Aynı ağdaki oyunlar aşağıda belirir. Görünmezse host'un IP:Port'unu yaz.", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
 	lan_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lan_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_child(lan_info)
 
-	_lan_found_header = MenuKit.make_label("Bulunan Oyunlar", MenuKit.FS_BODY, MenuKit.C_ACCENT)
+	_lan_found_header = MenuKit.make_label("Bulunan LAN Oyunları", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
 	v.add_child(_lan_found_header)
 	_lan_found_vbox = VBoxContainer.new()
 	_lan_found_vbox.add_theme_constant_override("separation", 4)
@@ -190,6 +203,90 @@ func _build_lobby_panel() -> void:
 	close_room_btn.pressed.connect(_on_close_room_pressed)
 
 	_place(panel, Vector2(EDGE, TOP), Vector2(SIDE, SCREEN.y - TOP - BOTTOM))
+
+
+## İnternet (Epic) bölümü: [İnternetten Kur] [Yenile] + bulunan odalar. Kimlik dosyası yoksa düğmeler kapalı, LAN etkilenmez.
+func _build_online_section(v: VBoxContainer) -> void:
+	var header := MenuKit.make_label("İnternet (PC + Android)", MenuKit.FS_BODY, MenuKit.C_ACCENT)
+	v.add_child(header)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	v.add_child(row)
+	_online_host_btn = MenuKit.make_button("İnternetten Kur", "sage", MenuKit.FS_BODY, 48)
+	_online_host_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_online_host_btn)
+	_online_refresh_btn = MenuKit.make_button("Yenile", "tan", MenuKit.FS_BODY, 48)
+	row.add_child(_online_refresh_btn)
+	_online_host_btn.pressed.connect(_on_online_host_pressed)
+	_online_refresh_btn.pressed.connect(_refresh_online_list)
+	_online_vbox = VBoxContainer.new()
+	_online_vbox.add_theme_constant_override("separation", 4)
+	v.add_child(_online_vbox)
+	_online_section = [header, row, _online_vbox]
+	if not NetworkManager.is_online_available():
+		_online_host_btn.disabled = true
+		_online_refresh_btn.disabled = true
+		_set_online_message("Epic ayarları eksik (eos_credentials.cfg) - şimdilik sadece LAN.")
+		return
+	_set_online_message("Odalar aranıyor...")
+	_online_refresh_timer = Timer.new()
+	_online_refresh_timer.wait_time = ONLINE_REFRESH_SEC
+	_online_refresh_timer.timeout.connect(_refresh_online_list)
+	add_child(_online_refresh_timer)
+	_online_refresh_timer.start()
+	_refresh_online_list.call_deferred()
+
+
+func _set_online_message(text: String) -> void:
+	for c in _online_vbox.get_children():
+		c.queue_free()
+	var lbl := MenuKit.make_label(text, MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_online_vbox.add_child(lbl)
+
+
+func _player_name_or(fallback: String) -> String:
+	var pname: String = player_name_input.text.strip_edges()
+	return fallback if pname.is_empty() else pname
+
+
+func _on_online_host_pressed() -> void:
+	NetworkManager.host_online(_player_name_or("Kurucu"), selected_char_id)
+
+
+## Epic'te bu oyunun açık odalarını arar (bağlı değilken ONLINE_REFRESH_SEC'te bir kendiliğinden, ya da "Yenile").
+func _refresh_online_list() -> void:
+	if NetworkManager.is_multiplayer_active or not NetworkManager.is_online_available():
+		return
+	if not _online_searched_once:
+		_set_online_message("Odalar aranıyor...")
+	var rooms: Array = await EosOnline.search_lobbies_async(_player_name_or("Oyuncu"))
+	if not is_inside_tree() or NetworkManager.is_multiplayer_active:
+		return
+	_online_searched_once = true
+	if rooms.is_empty():
+		_set_online_message("(açık internet odası yok - sen kurabilirsin)")
+		return
+	for c in _online_vbox.get_children():
+		c.queue_free()
+	for r in rooms:
+		var label: String = "%s   %d/%d" % [r["host_name"], int(r["players"]), int(r["max_players"])]
+		if r["in_game"]:
+			label += "  (oyunda)"
+		var btn := MenuKit.make_button(label, "tan", MenuKit.FS_SMALL, 40)
+		btn.clip_text = true
+		btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.tooltip_text = label
+		btn.disabled = int(r["players"]) >= int(r["max_players"])
+		btn.pressed.connect(_on_online_room_pressed.bind(String(r["host_id"]), String(r["host_name"])))
+		_online_vbox.add_child(btn)
+	UISound.connect_all_buttons(_online_vbox)
+
+
+func _on_online_room_pressed(host_id: String, host_name: String) -> void:
+	NetworkManager.join_online(host_id, host_name, _player_name_or("Katılımcı"), selected_char_id)
 
 
 ## ------------------------------------------------------------------ orta: kartlar + yetenek paneli
@@ -367,6 +464,11 @@ func _update_lobby_ui() -> void:
 		if _lan_found_header: _lan_found_header.visible = true
 		if _lan_found_vbox: _lan_found_vbox.visible = true
 		_refresh_lan_found_list()
+		for c in _online_section:
+			c.visible = true
+		var online_ok: bool = NetworkManager.is_online_available()
+		if _online_host_btn: _online_host_btn.disabled = not online_ok
+		if _online_refresh_btn: _online_refresh_btn.disabled = not online_ok
 	else:
 		room_info_label.text = "Bağlantı: %s (%s)" % [NetworkManager.room_code, "Host" if NetworkManager.is_host else "Katılımcı"]
 		start_game_btn.visible = NetworkManager.is_host
@@ -383,6 +485,9 @@ func _update_lobby_ui() -> void:
 		## (dinleme de NetworkManager.host_lan/join_lan içinde zaten durduruldu).
 		if _lan_found_header: _lan_found_header.visible = false
 		if _lan_found_vbox: _lan_found_vbox.visible = false
+		## Odadayken internet bölümü de gizli (oda bilgisi aşağıdaki "Oda" bölümünde).
+		for c in _online_section:
+			c.visible = false
 		_refresh_public_ip_label()
 
 	for child in player_list_container.get_children():

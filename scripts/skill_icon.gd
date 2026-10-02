@@ -31,6 +31,9 @@ var _pulse_time: float = 0.0
 ## okuma) hiç değişmez.
 var name_override: String = ""
 var desc_override: String = ""
+## >= 0 ise ipucundaki bekleme süresi (taban, sn) bu - yeteneğin kendi zamanlama tablosu yerine (Shaman golem formunda Q/E'nin
+## form hâlleri kendi sayaçlarıyla çalışır, bkz. player.gd get_hud_skill_override / hud.gd _apply_hud_skill_override).
+var cooldown_override: float = -1.0
 
 var tooltip_panel: PanelContainer = null
 ## Shift'e basılı tutulunca ayrıntılar (bkz. skill_details.gd) - ipucu açıkken Shift durumu değişirse yeniden kurulur.
@@ -89,7 +92,11 @@ func _on_mouse_entered() -> void:
 		keybind_text = "PASİF"
 	elif name == "SkillIcon":
 		title = def.get("skill_name", "Aktif Yetenek") as String
+		if not name_override.is_empty():
+			title = name_override
 		desc = def.get("skill_desc", "Aktif yetenek açıklaması bulunmuyor.") as String
+		if not desc_override.is_empty():
+			desc = desc_override
 		keybind_text = "Q"
 		
 		var base_cd: float = 20.0
@@ -106,6 +113,11 @@ func _on_mouse_entered() -> void:
 		else:
 			base_cd = 20.0
 			current_cd = base_cd
+		if cooldown_override >= 0.0:
+			base_cd = cooldown_override
+			var cdr_q: float = float(player.cooldown_reduction_percent) if player and is_instance_valid(player) and "cooldown_reduction_percent" in player else 0.0
+			current_cd = base_cd * (1.0 - cdr_q)
+			detail_duration = 0.0
 			
 		if current_cd != base_cd:
 			cd_text = "Bekleme Süresi: %.1fs [color=#88ff88](Base: %.1fs)[/color]" % [current_cd, base_cd]
@@ -217,6 +229,11 @@ func _on_mouse_entered() -> void:
 		else:
 			base_cd = 15.0
 			current_cd = base_cd
+		if cooldown_override >= 0.0:
+			base_cd = cooldown_override
+			var cdr_e: float = float(player.cooldown_reduction_percent) if player and is_instance_valid(player) and "cooldown_reduction_percent" in player else 0.0
+			current_cd = base_cd * (1.0 - cdr_e)
+			detail_duration = 0.0
 			
 		if current_cd != base_cd:
 			cd_text = "Bekleme Süresi: %.1fs [color=#88ff88](Base: %.1fs)[/color]" % [current_cd, base_cd]

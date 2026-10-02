@@ -11,8 +11,11 @@ extends Node
 ## boyut/hız, yelpaze ve seri ek atışlar, saldırı hızı/menzil/alan, yakın dövüş parça sayısı, ışın zinciri. Efsun
 ## scriptleri sadece kendine özgü kısmı *_extra kancalarıyla ekler.
 ##
-## power = efsun gücü (1 + kart/Aşkın gücü); stats["power_on"] neyi çarptığını söyler: "hit" (silah vuruşu), "poison",
-## "burn", "bleed", "shock", "area" (efsunun alan/ek hasarları), "heal", "shield".
+## power: 2026-09-30 yeni efsun setinde nadirlik/Aşkın kalktı -> her zaman 1.0 (pw() etkisiz; eski kancalar için duruyor).
+## Yeni set (scripts/enchants/<id>.gd, 21 efsun) buradaki YARDIMCILARI kullanır: wdmg() (silah hasarı), sprite() (efsun
+## sprite sayfası - fx_enchant_sprite.gd, diğer oyunculara da gider), mark_kill() (öldürme olayı - enemy.gd "evo_kill"),
+## set_ward() (düşman mermisi yok eden çember - player.gd get_talon_ward_radius üzerinden, ağa extra["ench_ward"]).
+## replaces_shot(): true dönen efsun (Destiny of Ice and Fire püskürtmesi) silahın normal atışını tamamen kapatır.
 
 const EnchantFx := preload("res://scripts/enchant_fx.gd")
 const EnchantArea := preload("res://scripts/enchant_area.gd")
@@ -58,6 +61,57 @@ func _on_setup() -> void:
 
 
 ## ------------------------------------------------------------------ yardımcılar
+## Bu kopyanın silah anahtarı (Ateş/Buz Asası gibi çift silahlı efsunlar davranışı buna göre seçer).
+func weapon_key() -> String:
+	return str(stats.get("weapon", ""))
+
+
+## "Silah hasarı" (kartlarda "silah hasarının %X'i") = silahın o anki vuruş hasarı.
+func wdmg() -> float:
+	return float(weapon.get("damage")) if is_instance_valid(weapon) and "damage" in weapon else ap()
+
+
+## Efsun sprite sayfası (tools/gen_enchant_fx.py): yerelde + diğer oyunculara aynı efekt.
+func sprite(sheet_name: String, pos: Vector2, data: Dictionary = {}) -> void:
+	var d: Dictionary = data.duplicate()
+	d["sheet"] = sheet_name
+	fx("sprite", pos, d)
+
+
+## Bu düşman kısa süre içinde ölürse host bu oyuncuya "event" olayını yollar (enemy.gd "evo_kill" -> player.on_enchant_event
+## -> silahlar -> on_event). Hasardan ÖNCE çağrılmalı (bayrak isteği hasar isteğinden önce aynı güvenilir kanaldan gider).
+func mark_kill(t: Node, event: String, dur: float = 0.6) -> void:
+	if is_enemy(t):
+		t.apply_element("evo_kill", {"dur": dur, "event": event})
+
+
+## Sahibin çevresinde düşman mermilerini yok eden çember (yarıçap, süre) - bkz. player.gd enchant_ward.
+func set_ward(radius: float, dur: float) -> void:
+	var pl: Node = owner_player()
+	if pl and pl.has_method("set_enchant_ward"):
+		pl.set_enchant_ward(radius, dur)
+
+
+func replaces_shot() -> bool:
+	return false
+
+
+## Silah ikonunun nişan alacağı hedef (weapon.gd _update_aim) - null = silahın kendi hedef seçimi.
+func aim_target() -> Node2D:
+	return null
+
+
+## Süreli hasar (kanama elementi yaratık ölene kadar sürer - "4 sn kanama" gibi süreli etkiler için): saniyede "dps",
+## "dur" sn, her tikte hedefte küçük sayfa efekti. enchant_area "dot" (yalnız bu makinede, hedef listesiyle).
+func timed_dot(victims: Array, dps: float, dur: float, fx_sheet: String = "shuriken_hit") -> void:
+	if victims.is_empty() or dps <= 0.0 or dur <= 0.0:
+		return
+	var d: Node2D = area("dot", (victims[0] as Node2D).global_position, {"duration": dur + 0.05, "damage": dps,
+		"fx_sheet": fx_sheet, "no_net": true})
+	if d:
+		d.set("targets", victims.duplicate())
+
+
 func f(key: String, d: float = 0.0) -> float:
 	return float(stats.get(key, d))
 
@@ -453,6 +507,7 @@ func configure_projectile(proj: Node2D, target: Node2D, is_extra: bool) -> void:
 		proj.set_meta("enchant_bounce", n("bounce"))
 	if flag("homing") and is_instance_valid(target):
 		_homing.append([proj, target])
+		proj.set_meta("home_net_id", int(target.get_meta("network_enemy_id", 0)))
 	projectile_extra(proj, target, is_extra)
 
 
@@ -466,11 +521,15 @@ func projectile_look(proj: Node2D) -> Dictionary:
 	var el: String = str(stats.get("element", "fiziksel"))
 	if el != "fiziksel":
 		d["tint"] = EnchantDefs.element_color(el).lerp(Color.WHITE, 0.55)
-	var pierce_total: int = n("pierce") + n("bounce")
-	if pierce_total > 0:
-		d["pierce"] = pierce_total
+	## Sekme (bounce) uzak kopyanın delme sayısına EKLENMEZ: kopya ilk düşmanda biter, her sekişte kaster sekme noktasından
+	## yeni görsel kopya yayınlar (weapon.broadcast_projectile_redirect) - eskiden kopya sekmeden düz uçuyordu.
+	if n("pierce") > 0:
+		d["pierce"] = n("pierce")
 	if f("apex_pause") > 0.0:
 		d["apex_pause"] = f("apex_pause")
+	## Güdümlü mermi: uzak kopya aynı hedefe aynı dönüş hızıyla yönelir (projectile.gd "home_id") - eskiden düz uçuyordu.
+	if proj != null and int(proj.get_meta("home_net_id", 0)) > 0:
+		d["home_id"] = int(proj.get_meta("home_net_id"))
 	return look_extra(proj, d)
 
 
@@ -571,9 +630,15 @@ func _projectile_follow_up(t: Node, proj: Node2D) -> void:
 	proj.set("direction", dir)
 	if bool(proj.get("face_direction")):
 		proj.rotation = dir.angle() + float(weapon.get("ranged_projectile_rotation_offset"))
+	## Uzak ekranlar sekmeyi görsün: sekme noktasından yeni yöne görsel kopya (uzaktaki eski kopya bu düşmanda bitti).
+	if weapon.has_method("broadcast_projectile_redirect"):
+		weapon.broadcast_projectile_redirect(proj, dir, projectile_look(proj))
 	if f("bounce_split") > 0.0 and randf() < f("bounce_split") * (1.0 + 0.05 * float((owner_player().get("luck") if owner_player() else 0.0))):
+		## Bölünen kopya da sekme noktasında (düşmanın içinde) doğar: uzak kopyası o düşmanı delip geçsin (pierce +1).
+		var split_look: Dictionary = projectile_look(proj)
+		split_look["pierce"] = int(split_look.get("pierce", 0)) + 1
 		weapon.spawn_enchant_projectile(proj.global_position, dir.rotated(0.5), float(proj.get("damage")), hit_list.duplicate(),
-			projectile_look(proj), {"enchant_bounce": left - 1})
+			split_look, {"enchant_bounce": left - 1})
 
 
 func hit_extra(_t: Node, _dmg: float, _is_primary: bool, _proj: Node2D) -> void:

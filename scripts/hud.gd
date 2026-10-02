@@ -1,32 +1,5 @@
 extends CanvasLayer
 
-## Alt orta bar eskiden sahip olunan silahların ikonlarını gösteriyordu -
-## kullanıcı isteğiyle artık SAVAŞ MODLARI (Meditasyon/Yansıtma/Kırılmaz
-## İrade/Cinnet/Çeviklik/Teknik Savaş/Savunma - eski adlarıyla Metanet/
-## Dikenli/Kaplumbağa/Agresif/Şimşek Hız/Delicilik/Tank, bkz. MODE_KEYS'in
-## anahtar sırası) için kullanılıyor: tıklanarak ya da 1-2-3-4-5
-## kısayollarıyla aktif mod seçilebiliyor (bkz. _refresh_shield_
-## mode_slots/_unhandled_input). Silah ikonları hâlâ Envanter panelinde
-## (inventory_panel.gd) görülebiliyor, sadece bu bardan kaldırıldı.
-## Sabit sıra - en fazla 5 slot olduğu için 7 moddan SAHİP OLUNAN ilk 5'i
-## (bu sırayla) gösterilir.
-const MODE_KEYS := ["resilience", "thorny", "turtle", "aggressive", "lightning", "piercing", "tank"]
-## Kullanıcı isteği: "kalkan modlarının adı artık savaş modları ve
-## görselleri bunlarla değiştirilecek" - eskiden burada tek bir vektörel
-## kalkan ikonu MODE_TINTS ile mod başına renklendiriliyordu (bkz. eski
-## shop_item_icon.gd "shield" çizimi), şimdi shop_panel.tscn'deki
-## ModsPage satırlarıyla BİREBİR aynı gerçek görsel setinden gelen kendi
-## texture'ı var, tint YOK (bkz. _refresh_shield_mode_slots).
-const MODE_TEXTURES := {
-	"resilience": preload("res://assets/ui/battle_modes/resilience.png"),
-	"thorny": preload("res://assets/ui/battle_modes/thorny.png"),
-	"turtle": preload("res://assets/ui/battle_modes/turtle.png"),
-	"aggressive": preload("res://assets/ui/battle_modes/aggressive.png"),
-	"lightning": preload("res://assets/ui/battle_modes/lightning.png"),
-	"piercing": preload("res://assets/ui/battle_modes/piercing.png"),
-	"tank": preload("res://assets/ui/battle_modes/tank.png"),
-}
-
 ## Karakter panosu ve silah yuvası barı "BottomBar" sarmalayıcısının altında,
 ## yetenek ikonları ise AYRI bir "SkillBar" sarmalayıcısının altında (bkz.
 ## hud.tscn) - kullanıcı ana barı küçültüp yetenek ikonlarını büyütmek
@@ -143,37 +116,6 @@ var _fps_update_timer: float = 0.0
 @onready var envanter_toggle_button: Button = $EnvanterToggleButton
 @onready var stats_panel_instance = $StatsPanelInstance
 @onready var inventory_panel_instance = $InventoryPanelInstance
-## Kalkan modu slotları (bkz. yukarıdaki MODE_KEYS) - sırayla i. slot, o an
-## sahip olunan modların (shield_mod_*_level > 0) i'incisini gösterir.
-## DÜZELTME: "Savaş modları" barı (ShieldModeBarBG) sahneden tamamen
-## silinmiş (BottomBar artık boş) ama bu dizi hâlâ sabit "$Path" ile onlara
-## erişmeye çalışıyordu - node yoksa bu sabit erişim _ready()'yi FATAL
-## şekilde patlatır (bkz. test hataları: "Node not found:
-## BottomBar/ShieldModeBarBG/ShieldModeSlot1" sonrası HUD'un geri kalan
-## @onready'leri de bozuluyordu). get_node_or_null'a çevrildi - node'lar
-## dönerse (ileride bar geri eklenirse) davranış AYNI, yoksa dizi güvenle
-## null içerir (aşağıdaki tüm kullanımlar zaten is_instance_valid kontrollü).
-@onready var shield_mode_slots: Array = [
-	get_node_or_null("BottomBar/ShieldModeBarBG/ShieldModeSlot1"),
-	get_node_or_null("BottomBar/ShieldModeBarBG/ShieldModeSlot2"),
-	get_node_or_null("BottomBar/ShieldModeBarBG/ShieldModeSlot3"),
-	get_node_or_null("BottomBar/ShieldModeBarBG/ShieldModeSlot4"),
-]
-## 1-2-3-4-5 kısayolları (bkz. game_manager.gd _setup_input_actions) -
-## sırayla shield_mode_slots'un aynı index'iyle eşleşir.
-const SLOT_SHORTCUT_ACTIONS := [
-	"shield_mode_slot_1", "shield_mode_slot_2", "shield_mode_slot_3",
-	"shield_mode_slot_4",
-]
-
-## Savaş modları aniden art arda değiştirilemesin diye - kullanıcı isteği:
-## "2sn bekleme süresi ekle değiştirmek için aniden değiştirilmesin". Bu süre
-## boyunca hem tıklama hem 1-5 kısayolları görmezden gelinir (bkz.
-## _on_shield_mode_slot_pressed) ve slotlar hafifçe solgunlaşıp devre dışı
-## kalarak (bkz. _refresh_shield_mode_slots) bekleme durumunu belli eder.
-const MODE_SWITCH_COOLDOWN := 2.0
-var _mode_switch_cooldown_remaining: float = 0.0
-
 var player: Node = null
 
 ## NOT: Eskiden burada ekranın SAĞINDA, minimapın altında dinamik olarak
@@ -199,15 +141,6 @@ func _ready() -> void:
 	_setup_debug_mode()
 	if passive_icon:
 		passive_icon.frame_border = 4.0 ## küçük pasif çerçeve: 3 sanat pikseli kenar (bkz. skill_icon.gd frame_border)
-	## DÜZELTME (kullanıcı isteği: "kategori butonları veya aşırı dar olan
-	## butonlar için mini button dosyasını kullan") - kalkan modu slotları
-	## (52x52, kare ikon butonları) custom_minimum_size YERİNE offset ile
-	## boyutlandırıldığı için ui_sound.gd'nin _looks_like_icon_slot kontrolünü
-	## atlayıp yukarıdaki genel taramadan GENİŞ (Button.png) stille çıkıyordu -
-	## kare oldukları için burada KARE mini button.png stiliyle EZİLİYOR.
-	for slot: Button in shield_mode_slots:
-		if is_instance_valid(slot):
-			ShopPanel._apply_mini_wood_button_style(slot)
 	## is_inside_tree() koruması: test ortamında bu HUD sahnesi canlı bir
 	## SceneTree'ye girmeden instantiate edilip test edilebiliyor
 	## (bkz. tests/test_hud_gold_shop_toggle.gd) - get_tree() orada null
@@ -304,20 +237,9 @@ func _ready() -> void:
 	## için (aynı desen: inventory_panel_instance.closed -> _on_envanter_closed).
 	_connect_once(shop_panel.closed, _on_shop_closed)
 	_connect_once(inventory_panel_instance.closed, _on_envanter_closed)
-	## DÜZELTME (kullanıcı isteği: "Savaş modlarını ve savaş modları için
-	## skill panelinin aşağısına eklenen slotları oyundan kaldır. Bunları
-	## kimse sevmedi.") - slot butonları artık kurulmuyor/bağlanmıyor, üstlerini
-	## saran bar (ShieldModeBarBG - skill panelinin altındaki o 4 slotluk şerit)
-	## kalıcı olarak gizleniyor (bkz. shop_panel.gd'deki "ProductionTab" ile
-	## AYNI desen - dükkandaki "Modlar" sekmesi de aynı şekilde kalıcı olarak
-	## gizlendi, bkz. o dosyadaki not). Node'lar sahneden SİLİNMEDİ, sadece
-	## erişilemez/görünmez halde kalıyorlar.
-	var shield_mode_bar: Control = get_node_or_null("BottomBar/ShieldModeBarBG") as Control
-	if shield_mode_bar:
-		shield_mode_bar.visible = false
-
 	_create_chat_ui()
 	_register_ui_opacity()
+	_setup_mobile_hud()
 
 	## NOT: Eskiden dükkan açılınca DÜKKAN/ENVANTER butonları gizleniyordu -
 	## kullanıcı artık bunu istemiyor (bkz. kullanıcı bildirimi: "dükkana
@@ -365,6 +287,13 @@ func _layout_shop_inventory_buttons() -> void:
 	## _layout_player_dock) - sol üstte sadece ENVANTER + altın kaldı, en üste çıktılar.
 	var left_edge: float = 20.0
 	var top_y: float = 20.0
+	var mobile_u: float = 1.0
+	if MobileUIScript.enabled:
+		## Telefon: can kümesinin altında, x HUD_SCALE (bkz. _layout_mobile_hud).
+		mobile_u = MobileUIScript.HUD_SCALE
+		var e: Rect2 = _mobile_edges()
+		left_edge = e.position.x
+		top_y = e.position.y + (MOBILE_CLUSTER_H + 6.0) * mobile_u
 
 	# Envanter butonu üstte, altın göstergesi altında.
 	envanter_toggle_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -388,9 +317,12 @@ func _layout_shop_inventory_buttons() -> void:
 	gold_indicator.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	gold_indicator.offset_left = left_edge
 	gold_indicator.offset_right = left_edge + btn_w
-	gold_indicator.offset_top = envanter_toggle_button.offset_bottom + GAP
+	gold_indicator.offset_top = top_y + (btn_h + GAP) * mobile_u
 	gold_indicator.offset_bottom = gold_indicator.offset_top + btn_h
 	gold_indicator.visible = true
+	for c: Control in [envanter_toggle_button, gold_indicator]:
+		c.pivot_offset = Vector2.ZERO
+		c.scale = Vector2.ONE * mobile_u
 
 	## DÜZELTME (kullanıcı isteği: "dükkan paneli ekranın ortasında açılsın
 	## sağ altta değil") - burada eskiden dükkan penceresini minimapın
@@ -615,6 +547,8 @@ func _layout_ability_icons() -> bool:
 	var bar: Control = get_node_or_null("SkillBar")
 	if bar == null or skill_icon == null:
 		return false
+	if MobileUIScript.enabled and touch_controls != null:
+		return _layout_mobile_ability_icons()
 	var slots: Array = [] ## [Control, gap_before]
 	var sz: float = SPIRIT_ICON_BASE_SIZE
 	var group: Array = [skill_icon]
@@ -648,6 +582,31 @@ func _layout_ability_icons() -> bool:
 		return false
 	_ability_layout_sig = sig
 	return true
+
+
+## Form hâli (player.gd get_hud_skill_override - bugün Shaman'ın Elemental Golem formundaki Q/E'si): doluysa ikonun adı/
+## açıklaması/bekleme süresi/görseli form hâlininki; boşa dönünce (form bitti) karakterin normal ikonu geri yüklenir.
+func _apply_hud_skill_override(icon, ov: Dictionary, slot: String) -> void:
+	if icon == null or not is_instance_valid(icon):
+		return
+	if not ov.is_empty():
+		icon.name_override = str(ov.get("name", ""))
+		icon.desc_override = str(ov.get("desc", ""))
+		icon.cooldown_override = float(ov.get("cooldown", -1.0))
+		var tex: Texture2D = _cached_texture(str(ov.get("icon", ""))) if str(ov.get("icon", "")) != "" else null
+		if tex and icon.custom_texture != tex:
+			icon.custom_texture = tex
+		icon.set_meta("hud_override", true)
+	elif icon.has_meta("hud_override"):
+		icon.remove_meta("hud_override")
+		icon.name_override = ""
+		icon.desc_override = ""
+		icon.cooldown_override = -1.0
+		var def: Dictionary = Characters.get_def(GameManager.selected_char_id)
+		if def.has(slot + "_icon"):
+			var base_tex: Texture2D = _cached_texture(str(def[slot + "_icon"]))
+			if base_tex:
+				icon.custom_texture = base_tex
 
 
 ## characters.gd "skill2" alanı olan karakterlerde (ör. Oakley) ikinci bir
@@ -862,6 +821,9 @@ func _dock_place(c: Control, r: Rect2) -> void:
 
 
 func _layout_player_dock() -> void:
+	if MobileUIScript.enabled:
+		_layout_mobile_hud()
+		return
 	var bar: Control = get_node_or_null("SkillBar")
 	var cluster: Control = get_node_or_null("CharacterCluster")
 	if bar == null or cluster == null or not is_instance_valid(dock_frame):
@@ -912,6 +874,335 @@ func _layout_player_dock() -> void:
 		dock_shield_bar.size = Vector2(row_w, DOCK_SHIELD_H)
 
 	_layout_hearts_tab(x0, y0)
+
+
+## ---------------------------------------------------------------- TELEFON HUD'u (bkz. mobile_ui.gd)
+## Kullanıcı isteği (2026-10-01): "skill barı, can kalkan barı androide uyumlu olarak yeniden tasarlanmalı" - masaüstü
+## dock'u (portre + ahşap panel + yuvalar + çubuklar) telefonda dağılır, AYNI düğümler kullanılır:
+##  - sol üst: seviye rozeti + oyunun kendi piksel can/kalkan çubukları (hud_pixel_bar.gd) + kalpler; portre/panel gizli,
+##  - sağ alt: yetenek ikonları dikey sütun (alttan: Q, E, R, F, en üstte pasif), onaylanan ince yuvarlak ahşap çerçeve
+##    (assets/ui/kit/hud_skill_frame_round.png, tools/gen_round_skill_frame.py) + ikon dairesel maskeli
+##    (shaders/round_mask.gdshader); dokununca touch_controls.gd mevcut eylemlere basar,
+##  - sol alt joystick, sağ üstte duraklat, etkileşim düğmesi sadece ev/satıcı uyarısı görünürken.
+## Masaüstünde bu blok hiç çalışmaz.
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
+const TouchControlsScript := preload("res://scripts/touch_controls.gd")
+const ROUND_FRAME: Texture2D = preload("res://assets/ui/kit/hud_skill_frame_round.png")
+const ROUND_FRAME_SPIRIT: Texture2D = preload("res://assets/ui/kit/hud_skill_frame_spirit_round.png")
+const ROUND_MASK_SHADER: Shader = preload("res://shaders/round_mask.gdshader")
+## Aşağıdaki ölçüler "HUD birimi": ekrana MobileUI.HUD_SCALE (1.5) ile çarpılarak çıkar (genel arayüz ölçeği 1.0 - bkz.
+## mobile_ui.gd: tüm ekranlar masaüstü tasarımıyla sığsın diye sadece bu öğeler büyür). Kenar payları çentik payını da içerir.
+const MOBILE_MARGIN := 12.0
+const MOBILE_BOTTOM_MARGIN := 18.0 ## alttaki XP şeridinin üstünde
+const MOBILE_SKILL_PX := 88.0 ## yetenek düğmesi çapı (x1.5 -> 132 px, ~13 mm)
+const MOBILE_SKILL_GAP := 12.0
+const MOBILE_BAR_W := 250.0
+const MOBILE_CLUSTER_H := 84.0 ## sol üst can kümesinin yüksekliği (envanter düğmesi altına gelir)
+const MOBILE_RING_PX := 4.0 ## çerçeve halkası (dış hat + ahşap + iç hat) 54 px dokuda
+const MOBILE_PASSIVE_K := 0.62 ## pasif ikon basılmaz - sütunun tepesinde küçük durur (sütun minimap'e uzanmasın)
+const MOBILE_MINIMAP_K := 0.8 ## minimap x HUD_SCALE (164 -> ~223 px)
+var touch_controls: Control = null
+var mobile_pause_button: Button = null
+var mobile_interact_button: Button = null
+
+
+## Ekran kenarından içeri pay (tuval px): position = (sol, üst), size = (sağ, alt). Çentik/kamera deliği payı + HUD payı.
+func _mobile_edges() -> Rect2:
+	var u: float = MobileUIScript.HUD_SCALE
+	var safe: Rect2 = MobileUIScript.safe_margins(get_viewport())
+	return Rect2(safe.position.x + MOBILE_MARGIN * u, safe.position.y + MOBILE_MARGIN * u,
+			safe.size.x + MOBILE_MARGIN * u, safe.size.y + MOBILE_BOTTOM_MARGIN * u)
+
+
+func _setup_mobile_hud() -> void:
+	if not MobileUIScript.enabled or not is_inside_tree() or touch_controls != null:
+		return
+	if is_instance_valid(dock_frame):
+		dock_frame.visible = false
+	if is_instance_valid(hearts_tab):
+		hearts_tab.visible = false
+	var cluster: Control = get_node_or_null("CharacterCluster")
+	if cluster:
+		for n: String in ["PortraitFrame", "PortraitClip"]:
+			var c: CanvasItem = cluster.get_node_or_null(n) as CanvasItem
+			if c:
+				c.visible = false
+	for icon in [skill_icon, skill2_icon, skill3_icon, spirit_icon, passive_icon]:
+		if icon:
+			_apply_mobile_skill_look(icon, icon == spirit_icon)
+	touch_controls = TouchControlsScript.new()
+	touch_controls.name = "TouchControls"
+	touch_controls.extra_block = _mobile_hud_panel_open
+	add_child(touch_controls)
+	for pair in [[skill_icon, &"skill"], [skill2_icon, &"skill2"], [skill3_icon, &"skill3"], [spirit_icon, &"skill4"]]:
+		if pair[0]:
+			touch_controls.register_button(pair[0], pair[1])
+	mobile_pause_button = _make_mobile_button("MobilePause", "II")
+	touch_controls.register_button(mobile_pause_button, &"ui_cancel", false)
+	touch_controls.pause_button = mobile_pause_button
+	mobile_interact_button = _make_mobile_button("MobileInteract", "ETKİLEŞİM")
+	mobile_interact_button.visible = false
+	touch_controls.register_button(mobile_interact_button, &"interact", false)
+	touch_controls.interact_button = mobile_interact_button
+	_ability_layout_sig = ""
+	_layout_ability_icons()
+	_update_ability_bar_frame()
+	_layout_shop_inventory_buttons()
+	_fit_mobile_inventory_panels.call_deferred()
+
+
+## Envanter + özellikler panelleri (sahnede sabit konumlu, yan yana) birlikte ekrana sığacak kadar büyütülüp ortalanır -
+## açılır ekranlarla aynı kural (bkz. mobile_ui.gd MenuFitter); paneller kendini yeniden konumlamadığı için bir kez yeter.
+func _fit_mobile_inventory_panels() -> void:
+	var panels: Array[Control] = []
+	for c in [stats_panel_instance, inventory_panel_instance]:
+		if c is Control and is_instance_valid(c):
+			panels.append(c)
+	if panels.is_empty():
+		return
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var r: Rect2 = panels[0].get_global_rect()
+	for c in panels:
+		r = r.merge(c.get_global_rect())
+	## Soldaki ENVANTER/altın sütununa ve sağdaki yetenek sütununa binmesin: her iki yandan sütun genişliği kadar dar
+	## bir alana sığdırılır (simetrik), sonra ekranda ortalanır.
+	var side: float = _mobile_edges().position.x + 168.0 * MobileUIScript.HUD_SCALE
+	var avail := Vector2(vp.x - 2.0 * side, vp.y)
+	var s: float = MobileUIScript.fit_scale(r.size, avail)
+	var xf: Transform2D = MobileUIScript.fit_transform(r, s, vp)
+	for c in panels:
+		c.pivot_offset = Vector2.ZERO
+		c.scale = c.scale * s
+		c.global_position = xf * c.global_position
+
+
+## Envanter/özellikler paneli oyunu duraklatmaz - açıkken joystick başlamasın ve çizilmesin (panelin üstüne binmesin).
+func _mobile_hud_panel_open() -> bool:
+	return (stats_panel_instance != null and stats_panel_instance.visible) \
+			or (inventory_panel_instance != null and inventory_panel_instance.visible)
+
+
+## Düğme görseli (ahşap stil); basma işini touch_controls yapar - fare olaylarını yutmasın (ikinci parmak da çalışsın).
+func _make_mobile_button(n: String, text: String) -> Button:
+	var b := Button.new()
+	b.name = n
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_theme_font_size_override("font_size", 26)
+	ShopPanel._apply_wood_button_style(b)
+	add_child(b)
+	return b
+
+
+func _apply_mobile_skill_look(icon: Control, spirit: bool) -> void:
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE ## dokunuşta takılı kalan ipucu penceresi açılmasın
+	var bg: TextureRect = icon.get_node_or_null("BG") as TextureRect
+	if bg:
+		bg.texture = ROUND_FRAME_SPIRIT if spirit else ROUND_FRAME
+		bg.modulate = Color.WHITE
+	var key: CanvasItem = icon.get_node_or_null("KeyLabel") as CanvasItem
+	if key:
+		key.visible = false
+	var sz: float = SPIRIT_ICON_BASE_SIZE
+	icon.set("frame_border", sz * MOBILE_RING_PX / 54.0)
+	var mat := ShaderMaterial.new()
+	mat.shader = ROUND_MASK_SHADER
+	mat.set_shader_parameter("merkez", Vector2(sz, sz) * 0.5)
+	mat.set_shader_parameter("yaricap", sz * 0.5 - sz * MOBILE_RING_PX / 54.0 + 0.6)
+	icon.material = mat
+
+
+func _mobile_column() -> Array:
+	var col: Array = []
+	for icon in [skill_icon, skill2_icon, skill3_icon, spirit_icon, passive_icon]:
+		if icon and icon.visible:
+			col.append(icon)
+	return col
+
+
+## SkillBar'ın ölçeği: ikon (52 birim) ekranda MOBILE_SKILL_PX * HUD_SCALE px olur.
+func _mobile_skill_k() -> float:
+	return MOBILE_SKILL_PX * MobileUIScript.HUD_SCALE / SPIRIT_ICON_BASE_SIZE
+
+
+## Sütun yüksekliği (SkillBar yerel birimi): Q/E/R/F tam boy, pasif MOBILE_PASSIVE_K boy.
+func _mobile_column_height(col: Array) -> float:
+	var sz: float = SPIRIT_ICON_BASE_SIZE
+	var gap: float = MOBILE_SKILL_GAP * MobileUIScript.HUD_SCALE / _mobile_skill_k()
+	var h: float = 0.0
+	for i in col.size():
+		h += sz * (MOBILE_PASSIVE_K if col[i] == passive_icon else 1.0)
+		if i > 0:
+			h += gap
+	return h
+
+
+## Sütun: SkillBar yerelinde x=0, alttan yukarı. SkillBar sağ-alta yaslı (bkz. _layout_mobile_hud).
+func _layout_mobile_ability_icons() -> bool:
+	var col: Array = _mobile_column()
+	var sz: float = SPIRIT_ICON_BASE_SIZE
+	var gap: float = MOBILE_SKILL_GAP * MobileUIScript.HUD_SCALE / _mobile_skill_k()
+	var n: int = col.size()
+	var sig: String = "m|" + str(n)
+	var bottom: float = _mobile_column_height(col)
+	for i in n:
+		var c: Control = col[i]
+		var k: float = MOBILE_PASSIVE_K if c == passive_icon else 1.0
+		var h: float = sz * k
+		## Pasif küçük: ölçek düğümün kendisinde (maskeli çizim aynı kalsın), sütunun ortasına hizalı.
+		c.pivot_offset = Vector2.ZERO
+		c.scale = Vector2.ONE * k
+		c.offset_left = (sz - h) * 0.5
+		c.offset_right = c.offset_left + sz
+		c.offset_top = bottom - h
+		c.offset_bottom = c.offset_top + sz
+		bottom -= h + gap
+		sig += "," + c.name
+	if sig == _ability_layout_sig:
+		return false
+	_ability_layout_sig = sig
+	return true
+
+
+func _layout_mobile_hud() -> void:
+	var bar: Control = get_node_or_null("SkillBar")
+	var cluster: Control = get_node_or_null("CharacterCluster")
+	if bar == null or cluster == null:
+		return
+	var u: float = MobileUIScript.HUD_SCALE
+	var e: Rect2 = _mobile_edges() ## sol, üst, sağ, alt
+	## Yetenek sütunu: sağ alt.
+	var sz: float = SPIRIT_ICON_BASE_SIZE
+	var k: float = _mobile_skill_k()
+	var col_h: float = maxf(_mobile_column_height(_mobile_column()), sz)
+	bar.pivot_offset = Vector2.ZERO
+	bar.scale = Vector2.ONE * k
+	bar.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	bar.offset_left = -e.size.x - sz * k
+	bar.offset_top = -e.size.y - col_h * k
+	bar.offset_right = bar.offset_left + sz
+	bar.offset_bottom = bar.offset_top + col_h
+	## Can kümesi: sol üst - seviye rozeti + iki piksel çubuk (yerel ölçüler HUD birimi, küme x HUD_SCALE).
+	cluster.pivot_offset = Vector2.ZERO
+	cluster.scale = Vector2.ONE * u
+	cluster.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	cluster.offset_left = e.position.x
+	cluster.offset_top = e.position.y
+	cluster.offset_right = e.position.x + 60.0 + MOBILE_BAR_W
+	cluster.offset_bottom = e.position.y + MOBILE_CLUSTER_H
+	_cluster_rect(cluster, "LevelBadge", Rect2(0, 0, 52, 52))
+	_cluster_rect(cluster, "LevelLabel", Rect2(0, 0, 52, 52))
+	if dock_hp_bar:
+		dock_hp_bar.position = Vector2(60.0, 4.0)
+		dock_hp_bar.size = Vector2(MOBILE_BAR_W, DOCK_HP_H)
+	if dock_shield_bar:
+		dock_shield_bar.position = Vector2(60.0, 4.0 + DOCK_HP_H + DOCK_BAR_GAP)
+		dock_shield_bar.size = Vector2(MOBILE_BAR_W, DOCK_SHIELD_H)
+	if revive_hearts:
+		revive_hearts.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		revive_hearts.pivot_offset = Vector2.ZERO
+		revive_hearts.scale = Vector2.ONE * 0.8 * u
+		revive_hearts.offset_left = e.position.x + 60.0 * u
+		revive_hearts.offset_top = e.position.y + (4.0 + DOCK_HP_H + DOCK_BAR_GAP + DOCK_SHIELD_H + 6.0) * u
+		revive_hearts.offset_right = revive_hearts.offset_left + 90.0
+		revive_hearts.offset_bottom = revive_hearts.offset_top + 32.0
+	## Minimap: sağ üst, can kümesiyle AYNI kenar payında (simetrik) ve x HUD_SCALE.
+	var minimap: Control = get_node_or_null("MinimapControl")
+	var mm_left: float = -e.size.x
+	var mm_bottom: float = e.position.y
+	if minimap:
+		var mk: float = MOBILE_MINIMAP_K * u
+		var mm: float = minimap.custom_minimum_size.x
+		minimap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		minimap.pivot_offset = Vector2.ZERO
+		minimap.scale = Vector2.ONE * mk
+		minimap.offset_left = -e.size.x - mm * mk
+		minimap.offset_right = minimap.offset_left + mm
+		minimap.offset_top = e.position.y
+		minimap.offset_bottom = e.position.y + mm
+		mm_left = minimap.offset_left
+		mm_bottom = e.position.y + mm * mk
+	## Grup paneli (çok oyunculu): minimapın altı, sağ kenar payında.
+	var party: Control = get_node_or_null("PartyPanelLayer/PartyPanel") as Control
+	if party:
+		party.pivot_offset = Vector2.ZERO
+		party.scale = Vector2.ONE * u * 0.8
+		party.offset_left = -e.size.x
+		party.offset_right = -e.size.x
+		party.offset_top = mm_bottom + 10.0 * u
+		party.offset_bottom = party.offset_top
+	## Duraklat: minimapın solunda, üst hizada; etkileşim: yetenek sütununun solunda, alt hizada.
+	if is_instance_valid(mobile_pause_button):
+		_place_mobile_button(mobile_pause_button, Control.PRESET_TOP_RIGHT, Vector2(mm_left - 10.0 * u, e.position.y),
+				Vector2(56.0, 56.0))
+	if is_instance_valid(mobile_interact_button):
+		_place_mobile_button(mobile_interact_button, Control.PRESET_BOTTOM_RIGHT,
+				Vector2(-e.size.x - sz * k - 18.0 * u, -e.size.y - 10.0 * u), Vector2(190.0, 64.0))
+	## Joystick'in boştaki yeri: Q düğmesiyle ayna simetrisi (aynı kenar payı, aynı alt hiza).
+	if touch_controls:
+		var vp: Vector2 = get_viewport().get_visible_rect().size
+		var q_r: float = sz * k * 0.5
+		touch_controls.rest_center = Vector2(e.position.x + q_r + 40.0 * u, vp.y - e.size.y - q_r - 22.0 * u)
+
+
+## Sağa yaslı telefon düğmesi: `corner` = düğmenin sağ-üst (TOP_RIGHT) ya da sağ-alt (BOTTOM_RIGHT) köşesi, ekranın o
+## köşesine göre; `base` boyut HUD birimi (ölçek düğmenin kendisinde - metin de büyür).
+func _place_mobile_button(b: Button, preset: int, corner: Vector2, base: Vector2) -> void:
+	var u: float = MobileUIScript.HUD_SCALE
+	b.set_anchors_preset(preset)
+	b.pivot_offset = Vector2.ZERO
+	b.scale = Vector2.ONE * u
+	b.offset_left = corner.x - base.x * u
+	b.offset_right = b.offset_left + base.x
+	b.offset_top = corner.y - base.y * u if preset == Control.PRESET_BOTTOM_RIGHT else corner.y
+	b.offset_bottom = b.offset_top + base.y
+
+
+## Telefonda kasmanın CPU mu (oyun mantığı) GPU mu (çizim) olduğunu ayırt etmek için FPS etiketinin uzun hali
+## (Ayarlar > FPS göstergesi açıkken): kare süresi, GPU çizim süresi, çizim komutu ve yaratık sayısı. GPU süresi kare
+## süresine yakınsa darboğaz çizim, çok altındaysa oyun mantığı.
+var _perf_measure_on: bool = false
+func _mobile_perf_text() -> String:
+	var vp_rid: RID = get_viewport().get_viewport_rid()
+	if not _perf_measure_on:
+		RenderingServer.viewport_set_measure_render_time(vp_rid, true)
+		_perf_measure_on = true
+	var fps: float = Engine.get_frames_per_second()
+	var frame_ms: float = 1000.0 / maxf(fps, 1.0)
+	var gpu_ms: float = RenderingServer.viewport_get_measured_render_time_gpu(vp_rid)
+	var draws: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	var enemies: int = get_tree().get_nodes_in_group("enemies").size()
+	return "FPS %d | kare %.1f ms | GPU %.1f ms | çizim %d | yaratık %d" % [int(fps), frame_ms, gpu_ms, draws, enemies]
+
+
+## Durum (buff/debuff) satırı telefonda can kümesinin sağına, üst kenara taşınır (yetenek sütununun içinde yer yok).
+func _layout_mobile_status_bar() -> void:
+	if not is_instance_valid(status_bar):
+		return
+	if status_bar.get_parent() != self:
+		status_bar.reparent(self, false)
+	var u: float = MobileUIScript.HUD_SCALE
+	var e: Rect2 = _mobile_edges()
+	status_bar.pivot_offset = Vector2.ZERO
+	status_bar.scale = Vector2.ONE * u
+	status_bar.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	var w: float = 360.0
+	status_bar.offset_left = e.position.x + (60.0 + MOBILE_BAR_W + 16.0) * u
+	status_bar.offset_right = status_bar.offset_left + w
+	status_bar.offset_top = e.position.y
+	status_bar.offset_bottom = e.position.y + STATUS_ROW_HEIGHT
+	if status_buff_row:
+		status_buff_row.offset_left = 0.0
+		status_buff_row.offset_right = w * 0.5 - STATUS_CENTER_GAP
+		status_buff_row.offset_top = 0.0
+		status_buff_row.offset_bottom = STATUS_ROW_HEIGHT
+	if status_debuff_row:
+		status_debuff_row.offset_left = w * 0.5 + STATUS_CENTER_GAP
+		status_debuff_row.offset_right = w
+		status_debuff_row.offset_top = 0.0
+		status_debuff_row.offset_bottom = STATUS_ROW_HEIGHT
 
 
 func _cluster_rect(cluster: Control, n: String, r: Rect2) -> void:
@@ -983,6 +1274,9 @@ const STATUS_CENTER_GAP := 4.0 ## buff ve debuff sıraları çubuğun ortasında
 
 func _update_status_bar_layout() -> void:
 	if not is_instance_valid(status_bar):
+		return
+	if MobileUIScript.enabled and touch_controls != null:
+		_layout_mobile_status_bar()
 		return
 	## 2026-09-27: dock'un yetenek bölümünün TAM ÜSTÜNE, yetenek dizisiyle aynı genişlikte (SkillBar yerel koordinatı).
 	var bar: Control = status_bar.get_parent() as Control
@@ -1402,35 +1696,6 @@ func _on_item_shield_changed(current: float, max_value: float) -> void:
 		dock_shield_bar.call("set_values", sh_ratio, SHIELD_BAR_COLOR, shield_value_label.text)
 
 
-## O an SAHİP OLUNAN (seviyesi >0) modların listesini MODE_KEYS sırasıyla
-## döner - en fazla 5 slot olduğu için fazlası (7. moda kadar) görünmez.
-func _owned_shield_modes() -> Array:
-	var owned: Array = []
-	for mode in MODE_KEYS:
-		if int(GameManager.get("shield_mod_" + mode + "_level")) > 0:
-			owned.append(mode)
-	return owned
-
-
-## Savaş modları/slotları oyundan kaldırıldı (kullanıcı isteği: "Savaş
-## modlarını ve savaş modları için skill panelinin aşağısına eklenen
-## slotları oyundan kaldır. Bunları kimse sevmedi.") - bar zaten _ready()'de
-## kalıcı gizlendi (ShieldModeBarBG.visible = false), bu fonksiyon artık
-## no-op.
-func _refresh_shield_mode_slots() -> void:
-	return
-
-
-## Bir slota tıklanınca YA DA aynı index'in kısayol tuşuna basılınca çağrılır
-## - zaten aktif olan moda tekrar basmak onu kapatır (bkz. player.gd
-## set_active_shield_mode, shield_mode_selector.gd'deki eski davranışla aynı).
-## Savaş modları oyundan kaldırıldı (bkz. _refresh_shield_mode_slots
-## üstündeki not) - slot butonları artık hiçbir sinyale bağlanmıyor
-## (_ready()) ve 1-4 kısayolları da artık hiçbir şey yapmıyor, no-op.
-func _on_shield_mode_slot_pressed(_index: int) -> void:
-	return
-
-
 ## Kullanıcı isteği: "oyuna chat ekle, enter tuşuna basarak mesaj
 ## yazabiliriz" - kutu KAPALIYKEN Enter'a basmak burayı tetikleyip kutuyu
 ## açar. Kutu zaten AÇIKKEN (odaktayken) Enter'a basmak bu fonksiyona hiç
@@ -1636,27 +1901,25 @@ func _process(delta: float) -> void:
 	## Altın göstergesi artık HER ZAMAN görünür (bkz. kullanıcı isteği: sağ
 	## üstteki DÜKKAN/ENVANTER buton yığınının hemen altında, dükkan
 	## açık/kapalı farketmeksizin) - sadece metni her karede güncelleniyor.
-	gold_indicator_label.text = str(GameManager.gold)
+	## Ödül altınları (sandık/görev/boss payı) panele uçarken sayaç yoldakileri saymaz, paralar vardıkça tıkır tıkır
+	## yükselir (bkz. gold_reward_fx.gd).
+	gold_indicator_label.text = str(GoldRewardFx.display_gold())
 	_position_debug_button()
 	fps_label.visible = UISound.show_fps
 	if UISound.show_fps:
 		_fps_update_timer += delta
 		if _fps_update_timer >= 0.2:
 			_fps_update_timer = 0.0
-			fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
+			fps_label.text = _mobile_perf_text() if MobileUIScript.enabled else "FPS: %d" % Engine.get_frames_per_second()
 	_update_status_bar()
 	if is_instance_valid(hearts_tab) and revive_hearts and revive_hearts.has_method("is_regen_visible") \
 			and bool(revive_hearts.is_regen_visible()) != _hearts_tab_wide:
 		_layout_player_dock()
-	if _mode_switch_cooldown_remaining > 0.0:
-		_mode_switch_cooldown_remaining = max(0.0, _mode_switch_cooldown_remaining - delta)
-		_refresh_shield_mode_slots()
 	_shop_refresh_timer += delta
 	if _shop_refresh_timer > 0.4:
 		_shop_refresh_timer = 0.0
 		if shop_panel.has_method("_refresh"):
 			shop_panel._refresh()
-		_refresh_shield_mode_slots()
 
 	if player and is_instance_valid(player) and player.has_method("get_skill_progress"):
 		## Yetenek yuvası kilidi (bkz. player.gd is_skill_slot_unlocked / skill_icon.gd set_locked_level).
@@ -1671,7 +1934,27 @@ func _process(delta: float) -> void:
 				if ic and is_instance_valid(ic) and ic.has_method("set_evolution_progress") and player.has_method("get_evolution_progress"):
 					var evo_prog: Vector2i = player.get_evolution_progress(pair[0])
 					ic.set_evolution_progress(evo_prog.x, evo_prog.y, evo_prog.y > 0 and evo_prog.x >= evo_prog.y)
-		skill_icon.update_state(player.get_skill_progress(), player.is_skill_active(), player.skill_timer, player.get_skill_active_fraction())
+		## Form hâli (Shaman Elemental Golem: Q = Sarsıcı Darbe) - ikon/ad/açıklama/bekleme karakterin kendi sayacından.
+		var q_override: Dictionary = player.get_hud_skill_override("skill") if player.has_method("get_hud_skill_override") else {}
+		_apply_hud_skill_override(skill_icon, q_override, "skill")
+		## Shaman Q (Saldırı Totemi) yük sistemi (2026-09-30): yük varken hazır, yoksa sıradaki yükün dolumu + boncuklar
+		## (Korsan/Assasin E'siyle aynı set_charges görünümü). Golem formunda (q_override) boncuklar gizli.
+		var q_charges: Dictionary = player.get_shaman_q_charge_state() if q_override.is_empty() and player.has_method("get_shaman_q_charge_state") else {}
+		## Assasin Çocuk Q = Şahin Hamlesi (2026-09-30 Q/E değişimiyle E ikonundan buraya) - aynı yük sözlüğü.
+		if q_charges.is_empty() and q_override.is_empty() and player.has_method("get_assasin_dash_charge_state"):
+			q_charges = player.get_assasin_dash_charge_state()
+		if not q_override.is_empty():
+			skill_icon.update_state(float(q_override["progress"]), false, float(q_override["remaining"]), 0.0)
+		elif not q_charges.is_empty():
+			var has_charge: bool = int(q_charges["charges"]) > 0
+			skill_icon.update_state(1.0 if has_charge else float(q_charges["fraction"]), false, 0.0 if has_charge else float(q_charges["remaining"]), 0.0)
+		else:
+			skill_icon.update_state(player.get_skill_progress(), player.is_skill_active(), player.skill_timer, player.get_skill_active_fraction())
+		if skill_icon.has_method("set_charges"):
+			if q_charges.is_empty():
+				skill_icon.set_charges(-1, 0, 0.0)
+			else:
+				skill_icon.set_charges(int(q_charges["charges"]), int(q_charges["max"]), float(q_charges["fraction"]))
 		if skill2_icon.visible and player.has_method("get_skill2_progress"):
 			## Büyücü Kız'ın TEMEL yeteneği artık 4 varyasyonlu ve standart
 			## skill2_state/skill2_timer makinesini KULLANMIYOR (bkz. player.gd
@@ -1680,7 +1963,11 @@ func _process(delta: float) -> void:
 			## simge kimliğini, adını ve açıklamasını göstersin diye ayrı bir
 			## dalda güncelleniyor. Diğer tüm karakterlerde override'lar
 			## boşaltılıp eski davranış aynen kullanılıyor.
-			if GameManager.selected_char_id == 4 and player.has_method("get_buyucu_variation_cooldown_remaining"):
+			var e_override: Dictionary = player.get_hud_skill_override("skill2") if player.has_method("get_hud_skill_override") else {}
+			_apply_hud_skill_override(skill2_icon, e_override, "skill2")
+			if not e_override.is_empty():
+				skill2_icon.update_state(float(e_override["progress"]), false, float(e_override["remaining"]), 0.0)
+			elif GameManager.selected_char_id == 4 and player.has_method("get_buyucu_variation_cooldown_remaining"):
 				skill2_icon.skill_id = player.get_skill2_id()
 				skill2_icon.name_override = player.get_buyucu_variation_name()
 				skill2_icon.desc_override = player.get_buyucu_variation_desc()
@@ -1704,11 +1991,7 @@ func _process(delta: float) -> void:
 			skill2_icon.set_stack_count(-1) ## eski sayı rozeti bu yuvada artık kullanılmıyor
 			if "korsan_bomb_charges" in player and player.get_skill2_id() == 17:
 				skill2_icon.set_charges(player.korsan_bomb_charges, player.get_korsan_max_bomb_charges(), player.get_korsan_bomb_charge_fraction()) ## evrimle 3 -> 5
-			## Assasin Çocuk'un yeni TEMEL'i (Şahin Hamlesi, id 5) de Korsan'ın
-			## bombasıyla AYNI şarj deseninde - bkz. player.gd
-			## assasin_dash2_charges/ASSASIN_DASH2_MAX_CHARGES.
-			elif "assasin_dash2_charges" in player and player.get_skill2_id() == 5:
-				skill2_icon.set_charges(player.assasin_dash2_charges, player.ASSASIN_DASH2_MAX_CHARGES, player.get_assasin_dash2_charge_fraction())
+			## (Assasin Çocuk'un Şahin Hamlesi yük boncukları 2026-09-30'dan beri Q ikonunda - bkz. yukarıdaki q_charges.)
 			else:
 				skill2_icon.set_charges(-1, 0, 0.0)
 		if passive_icon.has_method("set_stack_count"):

@@ -15,6 +15,7 @@ extends Area2D
 
 const RADIUS := 14.0
 const PICKUP_RADIUS := 30.0
+const EventSfx := preload("res://scripts/event_sfx.gd")
 ## Kullanıcı bildirimi (2026-09-24): obje görünmüyordu / pixel art + spritesheet olmalı - eskiden her karede
 ## draw_colored_polygon ile yumuşak kenarlı bir elmas çiziliyordu. Artık tools/gen_collect_item_sprite.py'nin pişirdiği
 ## 6 karelik kristal döngüsü (1 sanat pikseli = PixelDraw.TEXEL, karakterlerle aynı yoğunluk).
@@ -132,6 +133,8 @@ func _on_body_entered(body: Node) -> void:
 	if _collected or not body.is_in_group("player"):
 		return
 	_collected = true
+	## Sadece toplayan oyuncunun ekranında (bu fonksiyon yalnız yerel oyuncu için çağrılır; diğerleri mark_collected alır).
+	EventSfx.play(get_tree(), &"crystal_collect")
 	NetworkManager.broadcast_world_event_item_collected.rpc(mission_id, item_index)
 	_fade_out()
 

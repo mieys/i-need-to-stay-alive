@@ -27,6 +27,17 @@ GameManager="*res://scripts/game_manager.gd"
 CombatTuning="*res://scripts/combat_tuning.gd"
 UISound="*res://scripts/ui_sound.gd"
 NetworkManager="*res://scripts/network_manager.gd"
+EOSGRuntime="*res://addons/epic-online-services-godot/runtime.gd"
+HPlatform="*res://addons/epic-online-services-godot/heos/hplatform.gd"
+HAuth="*res://addons/epic-online-services-godot/heos/hauth.gd"
+HAchievements="*res://addons/epic-online-services-godot/heos/hachievements.gd"
+HFriends="*res://addons/epic-online-services-godot/heos/hfriends.gd"
+HStats="*res://addons/epic-online-services-godot/heos/hstats.gd"
+HLeaderboards="*res://addons/epic-online-services-godot/heos/hleaderboards.gd"
+HLobbies="*res://addons/epic-online-services-godot/heos/hlobbies.gd"
+HP2P="*res://addons/epic-online-services-godot/heos/hp2p.gd"
+HSessions="*res://addons/epic-online-services-godot/heos/hsessions.gd"
+EosOnline="*res://scripts/net/eos_online.gd"
 
 [debug]
 
@@ -43,7 +54,7 @@ window/vsync/vsync_mode=0
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/YATI/plugin.cfg")
+enabled=PackedStringArray("res://addons/YATI/plugin.cfg", "res://addons/epic-online-services-godot/plugin.cfg")
 
 [gui]
 
@@ -59,3 +70,4 @@ common/physics_interpolation=true
 
 rendering_device/pipeline_cache/save_chunk_size_mb=5.078001
 textures/canvas_textures/default_texture_filter=0
+textures/vram_compression/import_etc2_astc=true

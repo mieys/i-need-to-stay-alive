@@ -14,7 +14,9 @@ extends RefCounted
 ## _update_animation): saldırı, yetenek (cast), hasar (hurt), yemek (eat). Hepsi tek seferlik (loop=false).
 ## "ghostrise_": Suriyeli Hadime'nin hayalet kalkışı (ölüm klibinin tersi, bkz. hadime_math.gd) - bitmeden bekleme/yürüme
 ## klibine geçerse kalkış yarıda kesilirdi.
-const ACTION_PREFIXES: Array[String] = ["attack", "spellcast", "shrug_", "hurt_", "eat_", "ghostrise_"]
+## "golem_slam"/"golem_jump_": Shaman'ın Elemental Golem formundaki darbe (slam + slam2 aynı kareler) ve sıçrayış klipleri
+## (bkz. shaman_golem_math.gd - player.gd'nin golem dalı bunları zaten korur, liste kural gereği tek yerde dursun diye).
+const ACTION_PREFIXES: Array[String] = ["attack", "spellcast", "shrug_", "hurt_", "eat_", "ghostrise_", "golem_slam", "golem_jump_"]
 
 ## Yetenek kullanım klibi: yeni sprite setlerinde "shrug_<yön>", eski (LPC) setlerde "spellcast_<yön>".
 ## Öncelik sırası bu; karakterde hangisi varsa o oynar. Odaklanarak kanal yapan yeteneklerde (Büyücü meteor,

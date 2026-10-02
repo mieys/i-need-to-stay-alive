@@ -19,6 +19,10 @@ extends Control
 @onready var dodge_value: Label = $Frame/Margin/VBox/GridScroll/Grid/DodgeValue
 @onready var knockback_value: Label = $Frame/Margin/VBox/GridScroll/Grid/KnockbackValue
 @onready var shield_amount_value: Label = $Frame/Margin/VBox/GridScroll/Grid/ShieldAmountValue
+## 2026-10-02: sahnede olmayan iki satır kodla eklenir (bkz. _add_runtime_rows) - yeni eşya sistemi statı "İyileştirme ve
+## Kalkan Gücü" ve 5 saniyede bir işleyen Can Yenilenmesi.
+var heal_power_value: Label = null
+var regen_value: Label = null
 
 ## Her satırın başındaki küçük ikon (bkz. stat_icon.gd - level atlama
 ## kartlarıyla AYNI script/AYNI PNG'ler, res://assets/ui/level_up_icons/,
@@ -68,6 +72,7 @@ func _ready() -> void:
 	player = get_tree().get_first_node_in_group("player")
 	if player and player.has_signal("stats_changed"):
 		player.stats_changed.connect(_refresh)
+	_add_runtime_rows()
 	for stat_id in _icon_nodes:
 		_icon_nodes[stat_id].setup(stat_id, ICON_ROW_COLOR)
 	_apply_kit_style()
@@ -104,7 +109,7 @@ func _apply_kit_style() -> void:
 	var grid: GridContainer = $Frame/Margin/VBox/GridScroll/Grid as GridContainer
 	grid.offset_transform_enabled = false
 	grid.add_theme_constant_override("h_separation", 14)
-	grid.add_theme_constant_override("v_separation", 12)
+	grid.add_theme_constant_override("v_separation", 5) ## 2026-10-02: 12 -> 5, iki yeni satır kaydırmasız sığsın
 	var kids: Array[Node] = grid.get_children()
 	for i in range(0, kids.size(), 3):
 		if i + 2 >= kids.size():
@@ -142,8 +147,36 @@ func _apply_text_colors() -> void:
 			val_lbl.add_theme_stylebox_override("normal", sb)
 
 
+## [ikon, ad, değer] üçlüsü - sahnedeki satırlarla aynı düzen; stil/renk _apply_kit_style ve _apply_text_colors'tan gelir.
+func _add_runtime_rows() -> void:
+	var grid: GridContainer = $Frame/Margin/VBox/GridScroll/Grid as GridContainer
+	for row in [["health_regen", "Can Yenilenmesi"], ["heal_power", "İyileştirme Gücü"]]:
+		var icon_node := Control.new()
+		icon_node.set_script(preload("res://scripts/stat_icon.gd"))
+		icon_node.name = "Runtime_%s_Icon" % row[0]
+		icon_node.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var name_lbl := Label.new()
+		name_lbl.text = row[1]
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.clip_text = true
+		var val_lbl := Label.new()
+		val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		val_lbl.clip_text = true
+		for n in [icon_node, name_lbl, val_lbl]:
+			grid.add_child(n)
+		_icon_nodes[row[0]] = icon_node
+		if row[0] == "health_regen":
+			regen_value = val_lbl
+			name_lbl.tooltip_text = "Can Yenilenmesi: 5 saniyede bir yenilenen can (kartlar ve eşyalardan; İyileştirme Gücü ile büyür)."
+		else:
+			heal_power_value = val_lbl
+			name_lbl.tooltip_text = "İyileştirme ve Kalkan Gücü: yaptığın bütün iyileştirmeleri, can yenilenmesini, can çalmayı ve kalkan doldurmayı yüzde olarak arttırır."
+		name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED and visible:
+		_refresh()
 		_play_open_animation()
 
 
@@ -186,6 +219,11 @@ func _refresh() -> void:
 	dodge_value.text = "%%%d" % int(round(player.dodge_chance * 100))
 	knockback_value.text = str(int(player.knockback_stat))
 	shield_amount_value.text = "+%%%d" % int(round(player.shield_max_percent * 100))
+	if regen_value and "heal_regen_card_bonus" in player:
+		var regen: float = float(player.heal_regen_card_bonus) + float(player.get("item_health_regen") if "item_health_regen" in player else 0.0)
+		regen_value.text = "%s/5sn" % format_luck(snappedf(regen, 0.1))
+	if heal_power_value and "heal_shield_power" in player:
+		heal_power_value.text = "+%%%d" % int(round(float(player.heal_shield_power) * 100.0))
 
 
 ## KULLANICI BİLDİRİMİ (2026-09-21): "şans buga girmiş veya çok bozuk %1500lere kadar ulaşılabiliyor, çok şans alınmamasına

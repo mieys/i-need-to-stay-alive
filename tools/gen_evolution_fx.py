@@ -29,8 +29,16 @@ oyunda degisen efektler sahnesindeki "base_radius" (fx_evo_burst.gd setup) ile o
   Korsan  QF    korsan_fire      (160x96, 8 kare dongu) "Cehennem Atesi": zeminde yanan ates alani (evo_area.gd)
           EF    korsan_mine      (16x16,  4 kare dongu) "Mayin Sacan": yanip sonen mayin
                 mine_pop         (40x40,  7 kare)  mayin patlamasi
+  Assasin E2    assasin_empower  (48x84,  8 kare dongu) "Pusu": ayak alti kizil-mor kesik halka + yukselen pusu zerreleri
+          EF    shadow_puff      (40x40,  9 kare)  "Golge Kopyasi": isinlanma / kopya sonmesi - koyu mor duman
+                assasin_clone_base (32x16, 6 kare dongu) kopyanin ayagindaki golge girdabi (evo_area.gd)
+          Q4    assasin_evade    (48x84, 12 kare)  "Ruzgar Gibi": govdeyi saran golge seritleri (0,75 sn)
+          QF    kunai            (16x7,   2 kare dongu) "Kunai Yagmuru": ucan kunai (evo_area.gd)
+                kunai_hit        (16x12,  5 kare)  kunai / golge izi isabet kivilcimi
+          RF    shadow_trail     (16x10,  8 kare)  "Golge Izi": 1 sn'de asinan zemin karosu (evo_area.gd seridi)
 
 Calistir: python tools/gen_evolution_fx.py   (sonra Godot --headless --import; yepyeni sayfalar icin 2 import gerekebilir)
+          python tools/gen_evolution_fx.py --only assasin   (sadece Assasin sayfalari)
 """
 
 import math
@@ -699,8 +707,210 @@ def mine_pop():
     save("mine_pop", frames, "play", False, 22.0)
 
 
+# ====================================================================== Assasin (2026-09-30)
+# Karaktere bagli olanlar (assasin_empower / assasin_evade): 48x84 tuval, sahnede position (0, -10) -> tuval merkezi (24, 42)
+# karakterin yerel (0, -10) noktasi; ayak (yerel y +30) tuvalde y = 42 + 40 / 1.212 = ~75.
+A_OUT = (16, 6, 26)
+A_DEEP = (44, 16, 72)
+A_MID = (98, 42, 156)
+A_LIGHT = (164, 110, 232)
+A_HI = (226, 204, 255)
+A_RED = (170, 34, 84)
+A_RED_L = (250, 112, 150)
+STEEL_D = (52, 54, 70)
+STEEL = (148, 154, 176)
+STEEL_L = (224, 230, 242)
+CHAR_CX, CHAR_FEET = 24, 75
+
+
+def assasin_empower():
+    """"Pusu" (E2): Golge Adimi boyunca kizil-mor pusu kivilcimlari - ayak alti kesik halka + govde kenarindan yukselen
+    zerreler. Dongu (fx_evo_loop.gd, gorunmezlik bitince soner). Oyuncu saydam oldugu icin (0.35) seyrek ama parlak."""
+    frames = []
+    n = 8
+    rnd = random.Random(51)
+    motes = [(rnd.choice((-1, 1)) * rnd.uniform(9, 15), rnd.uniform(0, 1), rnd.uniform(0.7, 1.0)) for _ in range(7)]
+    for i in range(n):
+        t = i / n
+        im = new(48, 84)
+        # ayak alti: 3 parcali kesik halka, doner
+        for k in range(3):
+            a0 = TAU * (k / 3 + t / 3)
+            for s in range(9):
+                a = a0 + s * 0.13
+                plot(im, CHAR_CX + math.cos(a) * 14, CHAR_FEET + math.sin(a) * 4, A_RED if s < 6 else A_DEEP, 0.8)
+        # yukselen zerreler (1 px + 1 px kuyruk)
+        for (dx, ph, sp) in motes:
+            u = (t * sp + ph) % 1.0
+            y = CHAR_FEET - 4 - u * 62
+            x = CHAR_CX + dx * (1.0 - 0.35 * u)
+            fade = 1.0 if u < 0.7 else max(0.0, 1.0 - (u - 0.7) / 0.3)
+            plot(im, x, y, A_RED_L if u < 0.5 else A_LIGHT, fade)
+            plot(im, x, y + 1, A_RED, fade * 0.55)
+        # bel hizasinda iki kucuk hancer parilti noktasi (sirayla yanar)
+        for k, side in enumerate((-1, 1)):
+            if (i + k * 4) % 8 < 2:
+                spark(im, CHAR_CX + side * 12, CHAR_FEET - 30, 2, A_HI, A_RED_L, 1.0)
+        frames.append(im)
+    save("assasin_empower", frames, "loop", True, 10.0)
+
+
+def assasin_evade():
+    """"Ruzgar Gibi" (Q4): hamleden sonra 0,75 sn - govdenin cevresinde yukari kivrilan 3 golge seridi, sonra dagilir."""
+    frames = []
+    n = 12
+    for i in range(n):
+        t = i / (n - 1)
+        im = new(48, 84)
+        fade = 1.0 if t < 0.6 else max(0.0, 1.0 - (t - 0.6) / 0.4)
+        for r in range(3):
+            base = TAU * r / 3 + t * 7.0
+            for s in range(14):  # serit: bastan kuyruga 14 nokta
+                u = s / 13.0
+                a = base - u * 2.2
+                h = 6 + (t * 40 + r * 12 + u * 16) % 58
+                rx = 13 + 3 * math.sin(u * 3 + r)
+                x = CHAR_CX + math.cos(a) * rx
+                y = CHAR_FEET - h + math.sin(a) * 3
+                front = math.sin(a) > 0
+                col = A_LIGHT if s < 3 else (A_MID if s < 9 else A_DEEP)
+                plot(im, x, y, col, fade * (1.0 - 0.6 * u) * (1.0 if front else 0.55))
+        frames.append(im)
+    save("assasin_evade", frames, "play", False, 16.0)
+
+
+def shadow_puff():
+    """Golge Kopyasi: isinlanma / kopya sonmesi - koyu mor duman pufu + ilk karede parlama. 40x40, merkez (20, 22)."""
+    frames = []
+    n = 9
+    cx, cy = 20, 22
+    rnd = random.Random(52)
+    puffs = [(rnd.uniform(0, TAU), rnd.uniform(0.45, 1.0)) for _ in range(8)]
+    for i in range(n):
+        t = i / (n - 1)
+        im = new(40, 40)
+        fade = 1.0 if t < 0.35 else max(0.0, 1.0 - (t - 0.35) / 0.65)
+        for (a, f) in puffs:
+            d = 3 + 11 * f * ease_out(t)
+            x = cx + math.cos(a) * d
+            y = cy + math.sin(a) * d * 0.75 - 5 * t
+            r = 2 + 3.5 * f * (1 - t * 0.55)
+            disc(im, x, y, r, A_OUT, fade * 0.8, over=False)
+            disc(im, x - 0.5, y - 0.5, r * 0.6, A_DEEP, fade * 0.8, over=False)
+            plot(im, x - r * 0.4, y - r * 0.5, A_MID, fade)
+        for k in range(4):  # yukselen kivilcimlar
+            h = 4 + t * 20 + k * 3
+            plot(im, cx + (k - 1.5) * 5, cy - h, A_LIGHT, fade)
+        if i <= 1:
+            spark(im, cx, cy - 2, 4 - i, A_HI, A_LIGHT)
+        frames.append(im)
+    save("shadow_puff", frames, "play", False, 18.0)
+
+
+def assasin_clone_base():
+    """Golge Kopyasi'nin ayagindaki golge girdabi (dongu). 32x16, zemin merkezi = tuval merkezi (16, 8) - evo_area.gd "ground"."""
+    frames = []
+    n = 6
+    gx, gy = 16, 8
+    for i in range(n):
+        t = i / n
+        im = new(32, 16)
+        fill_ellipse(im, gx, gy, 11, 3.5, A_OUT, 0.55)
+        fill_ellipse(im, gx, gy, 7, 2.2, A_DEEP, 0.55)
+        ring(im, gx, gy, 12, 4, A_MID, 0.55, gap=(TAU * t, TAU * t + 1.4))
+        for k in range(5):  # kenardan yukselen ince gölge teli
+            a = TAU * k / 5 + t * 2.0
+            u = (t + k * 0.23) % 1.0
+            x = gx + math.cos(a) * 10
+            y = gy + math.sin(a) * 3 - u * 6
+            plot(im, x, y, A_LIGHT if u < 0.3 else A_MID, 1.0 - u)
+        frames.append(im)
+    save("assasin_clone_base", frames, "loop", True, 8.0)
+
+
+def kunai():
+    """Kunai Yagmuru: 16x7, uc +x'e bakar (evo_area.gd rotation = ucus yonu). 2 kare: bicaktaki parilti kayar."""
+    frames = []
+    for i in range(2):
+        im = new(16, 7)
+        cy = 3
+        # bicak (baklava): uc x=15, en genis x=11
+        for x in range(10, 16):
+            half = 1 if 10 <= x <= 12 else 0
+            for dy in range(-half, half + 1):
+                plot(im, x, cy + dy, STEEL_L if dy == 0 else STEEL, 1.0)
+        plot(im, 15, cy, STEEL_L, 1.0)
+        # sap (sarili bez) + halka
+        for x in range(5, 10):
+            plot(im, x, cy, A_DEEP if x % 2 else A_MID, 1.0)
+        plot(im, 9, cy - 1, STEEL_D, 1.0)
+        plot(im, 9, cy + 1, STEEL_D, 1.0)
+        ring(im, 3, cy, 1.5, 1.5, STEEL_D, 1.0)
+        # hareket izi
+        plot(im, 1, cy, A_MID, 0.55)
+        plot(im, 0, cy, A_DEEP, 0.3)
+        # parilti
+        plot(im, 12 if i == 0 else 14, cy - 1 if i == 0 else cy, (255, 255, 255), 1.0)
+        frames.append(im)
+    save("kunai", frames, "loop", True, 12.0)
+
+
+def kunai_hit():
+    """Kunai / golge izi isabeti: 16x12, merkez (6, 6), +x yonune savrulan celik-mor kivilcim."""
+    frames = []
+    n = 5
+    for i in range(n):
+        t = i / (n - 1)
+        im = new(16, 12)
+        fade = 1.0 if t < 0.3 else max(0.0, 1.0 - (t - 0.3) / 0.7)
+        if i <= 1:
+            spark(im, 6, 6, 3 - i, (255, 255, 255), A_LIGHT)
+        for k, (ang, sp) in enumerate(((-0.5, 1.0), (0.0, 1.3), (0.55, 0.9))):
+            d = 2 + 8 * sp * ease_out(t)
+            x = 6 + math.cos(ang) * d
+            y = 6 + math.sin(ang) * d
+            plot(im, x, y, STEEL_L if k == 1 else A_LIGHT, fade)
+            plot(im, x - math.cos(ang), y - math.sin(ang), A_MID, fade * 0.55)
+        frames.append(im)
+    save("kunai_hit", frames, "play", False, 24.0)
+
+
+def shadow_trail():
+    """Golge Izi karosu (tek seferlik 1 sn): 16x10, zemin merkezi (8, 5). evo_area.gd seridi bu karolari ~13 birimde bir dizer;
+    koyu leke kenarlardan asinip incelir, uc ince golge teli yukselir, sonda tamamen kaybolur."""
+    frames = []
+    n = 8
+    gx, gy = 8, 5
+    rnd = random.Random(53)
+    speck = [(rnd.uniform(-7, 7), rnd.uniform(-2.2, 2.2), rnd.uniform(0, 1)) for _ in range(14)]
+    for i in range(n):
+        t = i / (n - 1)
+        im = new(16, 10)
+        shrink = 1.0 - 0.55 * t
+        fill_ellipse(im, gx, gy, 8 * shrink, 2.6 * shrink, A_OUT, 0.8 * (1 - t))
+        fill_ellipse(im, gx, gy, 5 * shrink, 1.5 * shrink, A_DEEP, 0.8 * (1 - t))
+        for (dx, dy, th) in speck:  # asinma: her nokta kendi esiginde soner
+            if th > t:
+                plot(im, gx + dx, gy + dy, A_MID if th > t + 0.3 else A_DEEP, 0.55)
+        for k in range(3):  # yukselen teller
+            u = min(1.0, t * 1.4 + k * 0.12)
+            x = gx - 4 + k * 4 + math.sin(t * 5 + k) * 0.8
+            y = gy - 1 - u * 5
+            plot(im, x, y, A_LIGHT if u < 0.4 else A_MID, max(0.0, 1.0 - u))
+        frames.append(im)
+    save("shadow_trail", frames, "play", False, 8.0)
+
+
+ASSASIN = [assasin_empower, assasin_evade, shadow_puff, assasin_clone_base, kunai, kunai_hit, shadow_trail]
+
+
 if __name__ == "__main__":
     print("Evrim FX ->", os.path.relpath(OUT, ROOT))
+    # --only assasin: sadece 2026-09-30 Assasin sayfalari (digerlerini yeniden yazmaz).
+    if "--only" in sys.argv and sys.argv[sys.argv.index("--only") + 1:][:1] == ["assasin"]:
+        for fn in ASSASIN:
+            fn()
+        sys.exit(0)
     evo_gain()
     curse_burst()
     hole_burst()
@@ -720,3 +930,5 @@ if __name__ == "__main__":
     korsan_fire()
     korsan_mine()
     mine_pop()
+    for fn in ASSASIN:
+        fn()

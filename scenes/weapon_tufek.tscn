@@ -20,7 +20,7 @@ attack_range = 336.0
 sprite_forward_angle_deg = -5.739859031870196
 ranged_projectile_rotation_offset = -0.005471964169398338
 mirror_icon_when_aiming_left = true
-card_damage_bonus_ratio = 0.9
+card_damage_bonus_ratio = 1.6
 
 [node name="FireTimer" type="Timer" parent="."]
 autostart = true

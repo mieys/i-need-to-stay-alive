@@ -289,26 +289,37 @@ const DEFS := {
 		## bir ULTİ (Gölge Hücumu, id 16) onun yerini almıştı (bkz. player.gd
 		## _skill_assasin_dash/SKILL_TIMING[16]) - o değişiklik E'yi
 		## ETKİLEMEDİ, hâlâ geçerli.
-		"skill": 30,
-		"skill_name": "Gölge Adımı",
-		"skill_desc": "YETENEK: 6 saniye boyunca görünmez olur ve yaratıkların içinden geçebilir. Görünmezken saldırı gücü %30 artar. (60sn bekleme)",
+		## Kullanıcı isteği (2026-09-30): "assasin çocuğun E yeteneği artık Q, Q yeteneği de artık E olsun" - Şovalye/Shaman
+		## değişimleriyle AYNI desen: id'ler yuvalar arasında taşındı (5 = Şahin Hamlesi artık Q, 30 = Gölge Adımı artık E).
+		## player.gd: hamle Q tuşunda yük dalıyla (_physics_process "skill" dalı, _try_assasin_dash2), Gölge Adımı standart
+		## skill2 makinesinde (SKILL2_TIMING[30], _activate_skill2 / _end_skill2_effects); evrim listeleri de yuvalarıyla
+		## birlikte taşındı (skill_evolutions.gd DEFS[5]).
+		## DÜZELTME (kullanıcı isteği: yeni temel yetenek) - Görünmezlik'in
+		## yerine 8 yönlü, 3 yüklü bir hamle geldi (bkz. player.gd
+		## ASSASIN_DASH2_*/_try_assasin_dash2 üstündeki not).
+		"skill": 5,
+		"skill_name": "Şahin Hamlesi",
+		## 2026-09-30 (yetenek evrimleri): "artık 3 yük yerine 2 yüke sahip çünkü geliştirmelere eklenecek" (evrim "Üçüncü Hamle").
+		## Aynı gün: "dash yeteneğinin bekleme süresini de 10 saniyeye düşür" - yük başına 12 -> 10 sn (ASSASIN_DASH2_RECHARGE_TIME).
+		"skill_desc": "YETENEK: Yürüdüğü yöne (8 yön) hızla hamle yapıp içinden geçtiği düşmanlara saldırı gücünün %150'si kadar hasar verir. 2 yükü vardır, her yük ayrı ayrı 10sn'de yenilenir.",
+		"skill_icon": "res://assets/skills/assasin_sahin_hamlesi_icon.png",
+		"skill2": 30,
+		"skill2_name": "Gölge Adımı",
+		## Kullanıcı isteği (2026-09-30, yetenek evrimleri): "görünmezlik artık saldırı gücünü arttırmıyor çünkü geliştirmelere
+		## eklenecek" - eski "+%30 saldırı gücü" temelden çıktı (evrim "Pusu": +%25, bkz. skill_evolutions.gd DEFS[5]).
+		"skill2_desc": "TEMEL: 6 saniye boyunca görünmez olur ve yaratıkların içinden geçebilir. (60sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## E ile AYNI geçici "assasin_gorunmezlik_icon.png" dosyasını
 		## paylaşıyordu, artık kendi özel ikonu var.
-		"skill_icon": "res://assets/skills/assasin_golge_adimi_icon.png",
-		## DÜZELTME (kullanıcı isteği: yeni temel yetenek) - Görünmezlik'in
-		## yerine 8 yönlü, 3 yüklü bir hamle geldi (bkz. player.gd
-		## ASSASIN_DASH2_*/_try_assasin_dash2/SKILL2_TIMING[5] üstündeki not).
-		"skill2": 5,
-		"skill2_name": "Şahin Hamlesi",
-		"skill2_desc": "TEMEL: Yürüdüğü yöne (8 yön) hızla hamle yapıp içinden geçtiği düşmanlara saldırı gücünün %150'si kadar hasar verir. 3 yükü vardır, her yük ayrı ayrı 12sn'de yenilenir.",
-		"skill2_icon": "res://assets/skills/assasin_sahin_hamlesi_icon.png",
+		"skill2_icon": "res://assets/skills/assasin_golge_adimi_icon.png",
 		## Kullanıcı isteği: Assasin Çocuk'un eski ULTİ'si (Gölge Hücumu) -
 		## yakındaki yaratıklara sırayla hızla çarpar (bkz. player.gd
 		## _skill_assasin_dash, skill id 16) - artık 3. yetenek/R'de.
 		"skill3": 16,
 		"skill3_name": "Gölge Hücumu",
-		"skill3_desc": "ULTİ: 10 saniye boyunca yakındaki yaratıklara sırayla hızla çarpar; her çarpış saldırı gücünün %150'si kadar hasar verir ve saldırı hızının 4,5 katı hızda tekrarlanır. Vurulmamış yaratık kalmazsa (tek yaratık olsa bile) aynı yaratıklara tekrar saldırır. Bitince kullandığı konuma geri döner. (90sn bekleme)",
+		## 2026-09-30 (yetenek evrimleri): "R artık saldırı hızına göre artmıyor çünkü geliştirmelere eklenecek" - tempo sabit
+		## (saniyede ~4,5 çarpış, eski kartsız tempoyla aynı); saldırı hızına bağlanması evrim "Hızlanan Hücum".
+		"skill3_desc": "ULTİ: 10 saniye boyunca yakındaki yaratıklara sırayla hızla çarpar; her çarpış saldırı gücünün %300'ü kadar hasar verir (saniyede yaklaşık 4,5 çarpış). Vurulmamış yaratık kalmazsa (tek yaratık olsa bile) aynı yaratıklara tekrar saldırır. Bitince kullandığı konuma geri döner. (90sn bekleme)",
 		"passive": "Bıçak Uzmanlığı: yetenek kullanımından sonraki 3 saniye boyunca garantili kritik vurur.",
 		"passive_icon": "res://assets/skills/assasin_passive_icon.png",
 		"frames": "res://assets/characters/assasin_frames.tres",
@@ -622,18 +633,37 @@ const DEFS := {
 		## edildiği DÜNYA konumunda sabit kalan, ağ üzerinden senkronize
 		## objeler (bkz. scripts/totem_base.gd - golem_pet.gd'nin "sabit"
 		## versiyonu).
-		"skill": 26,
-		"skill_name": "Kalkan Totemi",
-		"skill_desc": "YETENEK (kalkan harcamaz): Bulunduğun konuma bir totem diker. Totem 30sn boyunca her saniye etrafındaki müttefiklere (ve sana) kendi kalkanının %0.5'i + saldırı gücünün %12'si kadar kalkan yeniler. (60sn bekleme)",
-		"skill_icon": "res://assets/skills/shaman_kalkan_totemi_icon.png",
-		"skill2": 27,
-		"skill2_name": "Saldırı Totemi",
-		"skill2_desc": "TEMEL: Bulunduğun konuma bir totem diker. Totem 30sn boyunca düzenli olarak en yakın düşmana ateş eder, saldırı gücü ve saldırı hızı senin statlarının %150'si kadardır. (60sn bekleme)",
-		"skill2_icon": "res://assets/skills/shaman_saldiri_totemi_icon.png",
-		"skill3": 28,
-		"skill3_name": "Alan Saldırı Totemi",
-		"skill3_desc": "ULTİ: Bulunduğun konuma bir totem diker. Totem 30sn boyunca etrafına bir alan açar - alana giren düşmanlar %20 + saldırı gücünün %20'si kadar (en fazla %80) yavaşlar, alanda duran düşmanlar her saniye saldırı gücünün %20'si kadar hasar alır. (60sn bekleme)",
-		"skill3_icon": "res://assets/skills/shaman_alan_totemi_icon.png",
+		## Kullanıcı isteği (2026-09-29): "E ve R nin etkileri artık birleştiriliyor ve tek yetenek haline geliyor fakat
+		## yavaşlatma etkisi kaldırılıyor. E ve R artık yeni Q yeteneği oluyor. Q yeteneği artık E yeteneği olacak. R
+		## yeteneğini sonra yazacağım" - Q = Saldırı Totemi (27, eski E'nin ateşi + eski R'nin alan hasarı, yavaşlatma YOK,
+		## bkz. totem_attack.gd), E = Kalkan Totemi (26, eski Q, sayılar aynı), R = 2026-09-30'dan beri Elemental Golem (49,
+		## aşağıda). Eski Alan Saldırı Totemi (28) ve totem_area.gd/tscn silindi.
+		## Bekleme süreleri player.gd SKILL_TIMING[27]/SKILL2_TIMING[26]: 45sn (açıklamalardaki eski "60sn" metni 45'e düzeltildi).
+		## Kullanıcı isteği (2026-09-30): "Q yeteneğinin alan hasarı özelliğini E yeteneğine eklemeni istiyorum ve Q yeteneği artık
+		## 2 stack birikebilsin" - Kalkan Totemi'nde de alan hasarı (kod totem_base.gd "ALAN HASARI", Q'da da duruyor), Q 2 yüklü
+		## (player.gd SHAMAN_ATTACK_TOTEM_MAX_CHARGES, _skill_shaman_attack_totem).
+		"skill": 27,
+		"skill_name": "Saldırı Totemi",
+		"skill_desc": "YETENEK: Bulunduğun konuma bir totem diker. Totem 30sn boyunca düzenli olarak en yakın düşmana ateş eder (saldırı gücü ve saldırı hızı senin statlarının %150'si kadardır) ve etrafına bir alan açar - alanda duran düşmanlar her saniye saldırı gücünün %20'si kadar hasar alır. 2 yük birikebilir, her yük ayrı ayrı yenilenir. (yük başına 45sn bekleme)",
+		"skill_icon": "res://assets/skills/shaman_saldiri_totemi_icon.png",
+		"skill2": 26,
+		"skill2_name": "Kalkan Totemi",
+		"skill2_desc": "TEMEL (kalkan harcamaz): Bulunduğun konuma bir totem diker. Totem 30sn boyunca her saniye etrafındaki müttefiklere (ve sana) kendi kalkanının %0.5'i + saldırı gücünün %12'si kadar kalkan yeniler ve etrafına bir alan açar - alanda duran düşmanlar her saniye saldırı gücünün %20'si kadar hasar alır. (45sn bekleme)",
+		"skill2_icon": "res://assets/skills/shaman_kalkan_totemi_icon.png",
+		## Kullanıcı isteği (2026-09-30): yeni R - Elemental Golem (id 49). Sayılar/klip adları scripts/shaman_golem_math.gd'de
+		## (tek kaynak), mantık player.gd dosya sonundaki "SHAMAN: ELEMENTAL GOLEM" bloğunda. Form boyunca Q ve E aşağıdaki
+		## "golem_skill*" hâllerine dönüşür (HUD ikonu/adı/açıklaması/bekleme süresi değişir - bkz. player.gd
+		## get_hud_skill_override); form bitince totemler geri gelir. Bekleme süresi (90 sn) kullanıcı vermediği için seçildi.
+		"skill3": 49,
+		"skill3_name": "Elemental Golem",
+		"skill3_desc": "ULTİ: 20sn boyunca dev bir elemental goleme dönüşür. Yakınında yaratık varsa saldırı hızına bağlı olarak düzenli aralıklarla yere alan hasarı veren darbeler indirir (yakın mesafe, her darbe saldırı gücünün %120'si kadar hasar verir, kritik vurabilir). Form boyunca aldığın hasar %40 azalır, yeteneklerin kalkan harcamaz, silahlar gövdeye çekilir ve Q ile E değişir: Q - Sarsıcı Darbe, E - Golem Sıçrayışı. (90sn bekleme)",
+		"skill3_icon": "res://assets/skills/shaman_elemental_golem_icon.png",
+		"golem_skill_name": "Sarsıcı Darbe",
+		"golem_skill_desc": "GOLEM FORMU (kalkan harcamaz): Yere sert bir darbe indirerek etraftaki yaratıkları 1 saniye sersemletir ve saldırı gücünün %250'si kadar hasar verir (bosslar sersemlemez). (3sn bekleme)",
+		"golem_skill_icon": "res://assets/skills/shaman_sarsici_darbe_icon.png",
+		"golem_skill2_name": "Golem Sıçrayışı",
+		"golem_skill2_desc": "GOLEM FORMU (kalkan harcamaz): Zıplayıp ileri doğru atlar; düştüğü yerdeki yaratıkları birbirine çeker ve saldırı gücünün %150'si kadar hasar verir. (8sn bekleme)",
+		"golem_skill2_icon": "res://assets/skills/shaman_golem_sicrayisi_icon.png",
 		"passive": "Totem Auraları: totemlerine yakın müttefiklerin düşmanlara verdiği hasar, düşmana 3sn boyunca her saniye o müttefiğin saldırı gücünün %10'u kadar yakma hasarı bırakır.",
 		"passive_icon": "res://assets/skills/shaman_passive_icon.png",
 		"frames": "res://assets/characters/shaman_frames.tres",
@@ -652,14 +682,14 @@ const DEFS := {
 	13: {
 		"name": "Vampir Çocuk",
 		## Kullanıcı isteği: yeni karakter Vampir Çocuk - yetenekleri kalkan YERİNE CAN harcar
-		## (Q ve E maksimum canın %4'ü, R aktifken her saniye maksimum canın %3'ü, bkz.
+		## (2026-10-01: Q artık diğer karakterler gibi KALKAN harcar; E maksimum canın %4'ü, R aktifken her saniye %5'i, bkz.
 		## player.gd VAMPIR_*). Skill id'leri: Q=40 (Kan Emme, SKILL_TIMING[40]), E=41 (Yarasa
 		## Formu, SKILL2_TIMING[41]), R=42 (Kan Yarasaları, SKILL3_TIMING[42], basılıp
 		## kapatılan toggle).
 		## Görsel: assets/characters/vampir/ (tools/gen_vampir_assets.py + gen_vampir_frames.py).
 		"skill": 40,
 		"skill_name": "Kan Emme",
-		"skill_desc": "YETENEK (maksimum canının %4'ünü harcar): Yakınındaki en yakın 3 düşmanın kanını emip kendine çeker, her birine saldırı gücünün %130'u kadar hasar verir. (6sn bekleme)",
+		"skill_desc": "YETENEK: Yakınındaki en yakın 3 düşmanın kanını emip kendine çeker, her birine saldırı gücünün %130'u kadar hasar verir. (6sn bekleme)",
 		"skill_icon": "res://assets/skills/vampir_kan_emme_icon.png",
 		"skill2": 41,
 		"skill2_name": "Yarasa Formu",
@@ -707,7 +737,7 @@ const DEFS := {
 		"name": "Suriyeli Hadime",
 		"skill": 46,
 		"skill_name": "Lanet Kitabı",
-		"skill_desc": "YETENEK (AÇ/KAPA): Kitabını okuyarak odaklanır; hafifçe havaya süzülür, birimlerin içinden geçebilir ve %30 yavaş hareket eder. Saniyede bir kitaptan yukarı fırlayan bir lanet etraftaki yaratıklara sırayla düşer ve saldırı gücünün %110'u kadar hasar verir. Açık kaldığı sürece her saniye temel yetenek kalkan bedelinin yarısı kadar kalkan harcar. Tekrar basınca (ya da kalkan yetmeyince) kapanır ve 8sn bekleme süresine girer.",
+		"skill_desc": "YETENEK (AÇ/KAPA): Kitabını okuyarak odaklanır; hafifçe havaya süzülür, birimlerin içinden geçebilir ve %30 yavaş hareket eder. Saniyede bir kitaptan yukarı 3 lanet birden fırlar, etraftaki farklı yaratıklara düşer ve her biri saldırı gücünün %110'u kadar hasar verir. Açık kaldığı sürece her saniye temel yetenek kalkan bedelinin yarısı kadar kalkan harcar. Tekrar basınca (ya da kalkan yetmeyince) kapanır ve 8sn bekleme süresine girer.",
 		"skill_icon": "res://assets/skills/hadime_lanet_kitabi_icon.png",
 		"skill2": 47,
 		## Kullanıcı isteği (2026-09-25, ikinci tur): "hadimenin E sini kara delik yeteneğiyle değiştiriyoruz" - eski Kara Büyü

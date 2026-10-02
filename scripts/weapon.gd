@@ -233,7 +233,7 @@ func _fire_at_delayed(target: Node2D, delay: float) -> void:
 	_fire_at(target)
 
 
-## _player_stat()/_player_stat_default() sayısal (float) dönüyor - bool bir
+## _player_stat() sayısal (float) dönüyor - bool bir
 ## bayrağı (ör. elara_double_fire_active) okumak için ayrı, tip-güvenli bir
 ## yardımcı.
 func _player_flag(stat_name: String) -> bool:
@@ -475,8 +475,8 @@ func set_enchant(ench: Dictionary) -> void:
 		set(prop, _enchant_orig_props[prop])
 	_enchant_orig_props.clear()
 	if not ench.is_empty():
-		enchant_stats = EnchantDefs.resolve(ench)
-		## Efsuna özgü script yoksa (tamamen ortak mekaniklerle çalışan efsunlar: Kanlı Hançer, Sekme Mermisi...) temel sınıf.
+		enchant_stats = EnchantDefs.resolve(ench, str(get_meta("shop_key", "")))
+		## Efsuna özgü script yoksa (tamamen ortak mekaniklerle çalışan efsunlar) temel sınıf.
 		var path: String = "res://scripts/enchants/%s.gd" % str(ench.get("id", ""))
 		if not ResourceLoader.exists(path):
 			path = "res://scripts/enchant_behavior.gd"
@@ -555,6 +555,19 @@ func _spawn_enchant_projectile_now(from_pos: Vector2, dir: Vector2, dmg: float, 
 		NetworkManager.broadcast_projectile.rpc(projectile_scene.resource_path, from_pos, proj.direction,
 			float(proj.get("speed")) if "speed" in proj else 0.0, proj.scale, Vector2.ZERO, multiplayer.get_unique_id(), _net_look(look))
 	return proj
+
+
+## Kasterde YÖNÜ DEĞİŞEN mermi (efsun sekmesi - enchant_behavior._projectile_follow_up): uzak kopya ilk düşmanda biter,
+## sekme noktasından yeni yöne yeni bir GÖRSEL kopya çıkar. Kopya içinde doğduğu düşmanı delip geçsin diye look "pierce"
+## +1 (projectile.gd visual_pierce). 2026-09-30 çok oyunculu silah senkron analizi: eskiden uzak kopya sekmeyi hiç
+## görmeden düz uçup düşmanların içinden geçiyordu (Seken Mermiler).
+func broadcast_projectile_redirect(proj: Node2D, dir: Vector2, look: Dictionary) -> void:
+	if not NetworkManager.is_multiplayer_active or projectile_scene == null or not is_instance_valid(proj):
+		return
+	var lk: Dictionary = look.duplicate()
+	lk["pierce"] = int(lk.get("pierce", 0)) + 1
+	NetworkManager.broadcast_projectile.rpc(projectile_scene.resource_path, proj.global_position, dir.normalized(),
+		float(proj.get("speed")) if "speed" in proj else 0.0, proj.scale, Vector2.ZERO, multiplayer.get_unique_id(), _net_look(lk))
 
 
 ## Uzak kopyaya giden görünüm: "scale" zaten proj_scale ile gidiyor (iki kez çarpılmasın).
@@ -1075,16 +1088,6 @@ func _player_stat(stat_name: String) -> float:
 	return 0.0
 
 
-## Same as _player_stat, but for multiplier-style stats (e.g.
-## shield_mode_damage_mult) where "missing" should mean "no change" (1.0),
-## not "zero out everything" (0.0).
-func _player_stat_default(stat_name: String, default_value: float) -> float:
-	var parent := get_parent()
-	if parent and stat_name in parent:
-		return parent.get(stat_name)
-	return default_value
-
-
 ## Called by Player._reposition_weapon_icons() every time the set of owned
 ## weapons changes, so the whole fan re-centers itself: 1 weapon sits dead
 ## center (angle 0), 2+ spread out evenly and symmetrically around it.
@@ -1502,6 +1505,7 @@ func _process(delta: float) -> void:
 			## Kaos Kitabı: bkz. _on_fire_timer_timeout'taki birebir aynı mantık.
 			if randf() < _player_stat("item_double_fire_chance"):
 				_fire_at_delayed(draw_target, ITEM_DOUBLE_FIRE_VISUAL_DELAY)
+			_item_on_attack(draw_target)
 			## Yay pasifi: her 3. saldırıda dönüm noktasına göre fazladan ok/oklar.
 			_process_yay_multishot_passive(draw_target)
 
@@ -1525,7 +1529,13 @@ func _process(delta: float) -> void:
 ## while the fire timer is still on cooldown - eased so it swings smoothly
 ## into place instead of snapping instantly to the new angle.
 func _update_aim(delta: float) -> void:
-	var target := _get_target_enemy()
+	## Efsun kendi hedefini seçiyorsa (Destiny püskürtmesi normal atışın yerine geçer, koni en yakın düşmana) ikon ona döner -
+	## silaha bağlı efekt (fx_enchant_sprite silah takibi) asanın baktığı yönden çıktığı için ikisi aynı yöne bakmalı.
+	var target: Node2D = null
+	if is_instance_valid(enchant_behavior):
+		target = enchant_behavior.aim_target()
+	if target == null:
+		target = _get_target_enemy()
 	if not target:
 		return
 	var dir: Vector2 = (target.global_position - global_position).normalized()
@@ -1658,6 +1668,62 @@ func _on_fire_timer_timeout() -> void:
 		## (kullanıcı isteği: "her silahın olasılığı birbirinden bağımsız").
 		if randf() < _player_stat("item_double_fire_chance"):
 			_fire_at_delayed(target, ITEM_DOUBLE_FIRE_VISUAL_DELAY)
+		_item_on_attack(target)
+
+
+## ---------------------------------------------------------------- Eşya pasifleri (2026-10-02, bkz. items.gd)
+## Ilıdaric'in Kılıcı: her silahın kendi saldırı sayacı - her 8. saldırı ikinci kez tetiklenir (Kaos Kitabı'nın kısa
+## gecikmeli çift atışıyla aynı yol). Zamanbükenin Eldiveni: her saldırı Q/E'nin kalan bekleme süresini %3 azaltır.
+const ITEM_ILIDARIC_EVERY := 8
+var _item_attack_count: int = 0
+
+
+func _item_on_attack(target: Node2D) -> void:
+	var p: Node = get_parent()
+	if p == null or not p.has_method("has_item"):
+		return
+	_item_attack_count += 1
+	if p.has_item("ilidaricin_kilici") and _item_attack_count % ITEM_ILIDARIC_EVERY == 0 and is_instance_valid(target):
+		_fire_at_delayed(target, ITEM_DOUBLE_FIRE_VISUAL_DELAY)
+	p.item_on_weapon_attack()
+
+
+## Azrail'in Gözü: oyuncunun bu yaratığa ilk vuruşu mu (player.gd item_first_hit işaretler) - işaret efekti burada.
+func _item_first_hit(target: Node) -> bool:
+	var p: Node = get_parent()
+	if p == null or not p.has_method("item_first_hit") or not p.item_first_hit(target):
+		return false
+	var scene: PackedScene = load("res://scenes/fx_item_azrail_mark.tscn") as PackedScene if ResourceLoader.exists("res://scenes/fx_item_azrail_mark.tscn") else null
+	if scene and is_instance_valid(target) and get_tree().current_scene:
+		var fx: Node2D = scene.instantiate() as Node2D
+		get_tree().current_scene.add_child(fx)
+		fx.global_position = (target as Node2D).global_position
+		if NetworkManager.is_multiplayer_active:
+			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "muzzle_flash", fx.global_position,
+				{"scene_path": "res://scenes/fx_item_azrail_mark.tscn"})
+	return true
+
+
+## Vuruş başına eşya ek hasarı: Canavarlaştırma Özütü (hedefin mevcut canının %2'si, bosslara en fazla 40) + Azrail'in
+## Gözü (ilk vuruşta saldırı gücünün %20'si).
+const ITEM_CANAVAR_PERCENT := 0.02
+const ITEM_CANAVAR_BOSS_CAP := 40.0
+const ITEM_AZRAIL_AP_RATIO := 0.2
+
+
+func _item_hit_bonus(target: Node, first_hit: bool) -> float:
+	var p: Node = get_parent()
+	if p == null or not p.has_method("has_item"):
+		return 0.0
+	var bonus: float = 0.0
+	if p.has_item("canavarlastirma_ozutu") and is_instance_valid(target) and "health" in target:
+		var extra: float = maxf(0.0, float(target.get("health"))) * ITEM_CANAVAR_PERCENT
+		if target.get("is_boss") == true:
+			extra = minf(extra, ITEM_CANAVAR_BOSS_CAP)
+		bonus += extra
+	if first_hit:
+		bonus += maxf(0.0, _player_stat("damage_bonus")) * ITEM_AZRAIL_AP_RATIO
+	return bonus
 
 
 ## Tabanca (Revolver): mermi biterse çağrılır - ikonu gizleyip yerine
@@ -2096,7 +2162,7 @@ func _exit_tree() -> void:
 const BEAM_TICK_DAMAGE_RATIO := 0.33
 
 ## Şimşek Asası'nın tik hasarı: normal _fire_at()'teki hasar hesaplama
-## zinciriyle AYNI (rage/aggressive/shield modu/kritik), sadece FireTimer
+## zinciriyle AYNI (rage/Talon/kritik), sadece FireTimer
 ## yerine beam_tick_interval'a bağlı. Birincil hedefe BEAM_TICK_DAMAGE_RATIO
 ## kadarı, chain_jump_count kadar EK (en yakın farklı) düşmana bunun da
 ## chain_damage_percent'i kadarı uygulanır (bkz. _apply_chain_jumps).
@@ -2104,12 +2170,18 @@ func _deal_beam_tick(target: Node2D) -> void:
 	if not target.has_method("take_damage"):
 		return
 	var final_damage: float = damage * BEAM_TICK_DAMAGE_RATIO * rage_multiplier
-	final_damage *= 1.0 + _player_stat("aggressive_damage_bonus") + _player_stat("talon_damage_bonus")
-	final_damage *= _player_stat_default("shield_mode_damage_mult", 1.0)
-	var is_crit: bool = randf() < crit_chance
+	final_damage *= 1.0 + _player_stat("talon_damage_bonus")
+	var first_hit: bool = _item_first_hit(target)
+	var is_crit: bool = first_hit or randf() < crit_chance
 	if is_crit:
-		final_damage *= crit_damage
-	var shield_pen: float = _player_stat("shield_mode_shield_pen_bonus") + weapon_shield_pen_bonus
+		final_damage *= crit_damage + _player_stat("item_crit_damage_bonus")
+		## Kritik tik: asa hafifçe titrer (bkz. WeaponCritAnim "jitter") - uzak kopyaya da gider.
+		if icon_sprite:
+			WeaponCritAnim.play_ranged(self, icon_sprite, _crit_key(), (target.global_position - global_position), Vector2.ZERO,
+				_icon_base_scale, recoil_distance)
+			if NetworkManager.is_multiplayer_active:
+				_broadcast_weapon_fire_anim(target.global_position - global_position, Vector2.ZERO, 0.0, {"crit": true})
+	var shield_pen: float = weapon_shield_pen_bonus
 	## Elara TEMEL/ULTİ - bkz. _fire_at()'teki birebir aynı blok. Sürekli ışın
 	## (Şimşek Asası) nadiren de olsa Elara'ya verilirse tikleri de aynı
 	## kurala uysun diye burada da tekrarlanıyor.
@@ -2119,7 +2191,7 @@ func _deal_beam_tick(target: Node2D) -> void:
 		final_damage *= ELARA_DOUBLE_FIRE_DAMAGE_MULT
 	## Eldiven/Sigara: item_flat_hit_damage (düz +hasar) ve
 	## item_damage_mult_bonus (%hasar artışı) - bkz. items.gd.
-	final_damage += _player_stat("item_flat_hit_damage")
+	final_damage += _player_stat("item_flat_hit_damage") + _item_hit_bonus(target, first_hit)
 	final_damage *= 1.0 + _player_stat("item_damage_mult_bonus")
 	shield_pen += _player_stat("shield_pen_percent") + _player_stat("spirit_shield_pen") ## + Ruhani Yetenek "Adc" (%15)
 	## Efsun: ışın tiki de bir isabet - hasar değişikliği, kalkan delme, element (bkz. enchant_behavior.gd on_beam_tick).
@@ -2271,12 +2343,18 @@ func _fire_at(target: Node2D) -> void:
 	var ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
 	if ench:
 		ench.on_fire(target, _enchant_extra_shot)
+		## Efsun normal atışın YERİNE geçiyorsa (Destiny of Ice and Fire püskürtmesi - koni efsunun kendi zamanlayıcısıyla
+		## işler) mermi/isabet hiç üretilmez; sadece atış sesi/ikon tepkisi kalır.
+		if ench.replaces_shot():
+			return
 	var final_damage: float = damage * rage_multiplier
-	final_damage *= 1.0 + _player_stat("aggressive_damage_bonus") + _player_stat("talon_damage_bonus")
-	final_damage *= _player_stat_default("shield_mode_damage_mult", 1.0) ## Tank Modu: -25% while active
-	var is_crit: bool = randf() < crit_chance + (ench.crit_bonus(target) if ench else 0.0)
+	final_damage *= 1.0 + _player_stat("talon_damage_bonus")
+	## Azrail'in Gözü (eşya): bu yaratığa ilk vuruş garanti kritik (+ aşağıda ek hasar).
+	var first_hit: bool = _item_first_hit(target)
+	var is_crit: bool = first_hit or randf() < crit_chance + (ench.crit_bonus(target) if ench else 0.0)
 	if is_crit:
-		final_damage *= crit_damage + (ench.crit_damage_bonus(target) if ench else 0.0)
+		## Son Felaket Pençesi: kritik çarpanına +0.5 (sınırı aşabilir).
+		final_damage *= crit_damage + (ench.crit_damage_bonus(target) if ench else 0.0) + _player_stat("item_crit_damage_bonus")
 	## Efsun: ek atış hasar çarpanı (ör. Ok Yağmuru ek okları %80) + efsunun kendi hasar değişikliği (güç, koşullu bonuslar).
 	final_damage *= _shot_damage_mult * (1.0 + GameManager.enchant_damage_percent)
 	if ench:
@@ -2284,14 +2362,9 @@ func _fire_at(target: Node2D) -> void:
 	var direction: Vector2 = (target.global_position - global_position).normalized()
 	if _shot_angle_offset != 0.0:
 		direction = direction.rotated(_shot_angle_offset)
-	var parent_node: Node = get_parent()
-	if parent_node and parent_node.has_method("get_skill_character_id") and parent_node.get_skill_character_id() == 5:
-		var line_scene: PackedScene = preload("res://scenes/fx_speed_line.tscn")
-		if line_scene:
-			var line: Node2D = line_scene.instantiate() as Node2D
-			get_tree().current_scene.add_child(line)
-			line.global_position = global_position
-			line.setup(direction, Color(0.3, 0.05, 0.5, 0.95))
+	## (2026-09-30: burada ilk sürümden kalma "get_skill_character_id() == 5 ise her atışta mor hız çizgisi" bloğu vardı. Q
+	## yetenek id'si 5 olan karakter uzun zamandır yoktu - blok hiç çalışmıyordu; Assasin'in Q/E değişimiyle Q id'si 5
+	## olunca aniden (ve sadece kasterin ekranında, yayınsız) her atışta çizgi çıkaracaktı. Bugünkü davranışı korumak için silindi.)
 	## Hedefin konumu BİR KEZ burada yakalanır - aşağıda _apply_knockback
 	## hedefi itip global_position'ını değiştirebiliyor, eğer ikon (yukarıda)
 	## ve efekt (aşağıda) konumu iki farklı zamanda okusaydı ikisi birbirinden
@@ -2319,7 +2392,7 @@ func _fire_at(target: Node2D) -> void:
 	if melee and _is_uzunkilic:
 		## Uzunkılıç: hedefe atılıp üstünden yay çizen kendi savuruşu (bkz. _start_sword_swing) - diğer yakın dövüş
 		## silahlarının hedef üstündeki "Z" zikzağı ve eski kırmızı hilal (fx_uzunkilic_slash) kılıçta kullanılmıyor.
-		_start_sword_swing(direction, target_pos_at_attack)
+		_start_sword_swing(direction, target_pos_at_attack, is_crit)
 	elif melee:
 		var fx_speed: float = _melee_effect_speed_scale()
 		var slash_fx_node: Node2D = _spawn_slash_fx(direction, melee_at_position, fx_speed)
@@ -2334,18 +2407,18 @@ func _fire_at(target: Node2D) -> void:
 		## yerine, yakın dövüşte ikon hedefe doğru hızlı ileri-geri
 		## (kesiyormuş gibi) hareket eder - bkz. _do_melee_swing(). Artık
 		## efekt(ler) tamamen bitmeden dönmeye başlamıyor (melee_effect_hold).
-		_do_melee_swing(direction, melee_at_position, melee_effect_hold)
+		_do_melee_swing(direction, melee_at_position, melee_effect_hold, is_crit)
 		if NetworkManager.is_multiplayer_active:
-			_broadcast_weapon_fire_anim(direction, melee_at_position, melee_effect_hold)
+			_broadcast_weapon_fire_anim(direction, melee_at_position, melee_effect_hold, {"crit": true} if is_crit else {})
 	else:
-		_do_recoil(direction)
+		_do_recoil(direction, is_crit)
 		_spawn_muzzle_flash(direction)
 		if NetworkManager.is_multiplayer_active:
-			_broadcast_weapon_fire_anim(direction)
+			_broadcast_weapon_fire_anim(direction, Vector2.ZERO, 0.0, {"crit": true} if is_crit else {})
 
-	## Delicilik Modu (oyuncu geneli) + Uzunkılıç/Tüfek/Topuz gibi silaha özel
-	## kalkan delme (weapon_shield_pen_bonus, diğer tüm silahlerde 0 - no-op).
-	var shield_pen: float = _player_stat("shield_mode_shield_pen_bonus") + weapon_shield_pen_bonus
+	## Uzunkılıç/Tüfek/Topuz gibi silaha özel kalkan delme (weapon_shield_pen_bonus,
+	## diğer tüm silahlerde 0 - no-op).
+	var shield_pen: float = weapon_shield_pen_bonus
 
 	## Tüftüf: her zaman gerçek hasar (bkz. always_true_damage üstündeki
 	## yorum) - Elara'nın geçici hakkının aksine bonus çarpan YOK, sadece
@@ -2366,7 +2439,7 @@ func _fire_at(target: Node2D) -> void:
 	## Eldiven/Sigara: item_flat_hit_damage (düz +hasar) ve
 	## item_damage_mult_bonus (%hasar artışı) - bkz. items.gd. Keskin Uçlar:
 	## shield_pen_percent genel kalkan delme.
-	final_damage += _player_stat("item_flat_hit_damage")
+	final_damage += _player_stat("item_flat_hit_damage") + _item_hit_bonus(target, first_hit)
 	final_damage *= 1.0 + _player_stat("item_damage_mult_bonus")
 	shield_pen += _player_stat("shield_pen_percent") + _player_stat("spirit_shield_pen") ## + Ruhani Yetenek "Adc" (%15)
 	if ench:
@@ -2523,8 +2596,12 @@ func _fire_at(target: Node2D) -> void:
 		## ayrı bir projectile değil"). Yay'ın held_arrow'u gizleme deseniyle
 		## birebir aynı mantık.
 		if icon_sprite:
-			icon_sprite.visible = false
-			_broadcast_weapon_icon_visibility(false)
+			## Kritik fırlatmada ikon önce savrulur (bkz. WeaponCritAnim "throw"), SONRA gizlenir.
+			if is_crit and WeaponCritAnim.kind_of(_crit_key()) == "throw":
+				get_tree().create_timer(WeaponCritAnim.THROW_DURATION, false).timeout.connect(_hide_icon_if_still_flying)
+			else:
+				icon_sprite.visible = false
+				_broadcast_weapon_icon_visibility(false)
 	## Fişek: kafanın üstündeki ikon, ateşlenen fişek(ler) havadayken (henüz
 	## inip patlamadan) gizlenir - kullanıcı isteği: "fırlatıldığı esnada
 	## karakterin üstünden de yok olmalı tekrar spawnlanana kadar". Fişek
@@ -2535,8 +2612,12 @@ func _fire_at(target: Node2D) -> void:
 	if hide_icon_while_projectile_flying:
 		_flying_projectile_count += 1
 		if icon_sprite:
-			icon_sprite.visible = false
-			_broadcast_weapon_icon_visibility(false)
+			## Kritik fırlatmada ikon önce savrulur (bkz. WeaponCritAnim "throw"), SONRA gizlenir.
+			if is_crit and WeaponCritAnim.kind_of(_crit_key()) == "throw":
+				get_tree().create_timer(WeaponCritAnim.THROW_DURATION, false).timeout.connect(_hide_icon_if_still_flying)
+			else:
+				icon_sprite.visible = false
+				_broadcast_weapon_icon_visibility(false)
 		if "return_callback_target" in proj:
 			proj.return_callback_target = self
 	## Efsun: mermiye delme/hız/işaret yazılır; görünüm (renk/iz/ölçek) kasterde uygulanır VE aşağıda uzak kopyaya gider.
@@ -2546,6 +2627,10 @@ func _fire_at(target: Node2D) -> void:
 		look = ench.projectile_look(proj)
 		if not look.is_empty():
 			EnchantFx.apply_projectile_look(proj, look)
+	## Kritik bumerang havada daha hızlı döner (kullanıcı seçimi 2026-09-29) - kasterde burada, uzak kopyada "look" ile.
+	if is_crit and "spin_speed_deg" in proj:
+		proj.spin_speed_deg *= CRIT_SPIN_MULT
+		look["spin_mult"] = CRIT_SPIN_MULT
 	## Multiplayer: broadcast projectile so other players see it.
 	if NetworkManager.is_multiplayer_active:
 		var scene_path: String = projectile_scene.resource_path
@@ -2693,23 +2778,32 @@ func _sword_size_mult() -> float:
 	return grow_ratio * aoe_radius_multiplier * _enchant_aoe_mult()
 
 
-func _start_sword_swing(direction: Vector2, target_pos: Vector2) -> void:
+func _start_sword_swing(direction: Vector2, target_pos: Vector2, is_crit: bool = false) -> void:
 	if not icon_sprite or not is_inside_tree():
 		return
-	_sword_side = -_sword_side
 	var size: float = _sword_size_mult()
 	var owner_node: Node = get_parent()
 	var owner_scale: float = (owner_node as Node2D).scale.x if owner_node is Node2D else 1.0
-	var plan: Dictionary = SwordSwingMath.make_plan(direction, target_pos, _sword_side, size, owner_scale)
 	var speed: float = _melee_effect_speed_scale()
 	if _melee_swing_tween and _melee_swing_tween.is_valid():
 		_melee_swing_tween.kill()
-	_melee_swing_tween = SwordSwingMath.play(self, icon_sprite, plan, deg_to_rad(sprite_forward_angle_deg), Vector2.ZERO,
-		deg_to_rad(melee_icon_rest_rotation_deg), speed, get_tree().current_scene)
+	if is_crit:
+		## Kritik: yay yerine düz saplama - uç aynı contact_delay anında hedefe girer (hasar zamanlaması değişmez).
+		var stab: Dictionary = SwordSwingMath.make_stab_plan(direction, target_pos, size, owner_scale)
+		_melee_swing_tween = SwordSwingMath.play_stab(self, icon_sprite, stab, deg_to_rad(sprite_forward_angle_deg), Vector2.ZERO,
+			deg_to_rad(melee_icon_rest_rotation_deg), speed)
+	else:
+		_sword_side = -_sword_side
+		var plan: Dictionary = SwordSwingMath.make_plan(direction, target_pos, _sword_side, size, owner_scale)
+		_melee_swing_tween = SwordSwingMath.play(self, icon_sprite, plan, deg_to_rad(sprite_forward_angle_deg), Vector2.ZERO,
+			deg_to_rad(melee_icon_rest_rotation_deg), speed, get_tree().current_scene)
 	if NetworkManager.is_multiplayer_active:
 		## Uzak kukla aynı planı KENDİ ölçeğiyle kurar (bkz. remote_player.gd _animate_weapon_fire_full) - yay yönü, boyut
 		## ve hız bu savuruşa özel olduğu için gönderilir.
-		_broadcast_weapon_fire_anim(direction, target_pos, 0.0, {"sword_side": _sword_side, "sword_size": size, "sword_speed": speed})
+		var sword_extra: Dictionary = {"sword_side": _sword_side, "sword_size": size, "sword_speed": speed}
+		if is_crit:
+			sword_extra["crit"] = true
+		_broadcast_weapon_fire_anim(direction, target_pos, 0.0, sword_extra)
 
 
 ## Bıçak hedefin üstünden geçtiği an (bkz. _fire_at'teki zamanlayıcı). target_v tipsiz: zamanlayıcı beklerken hedef
@@ -3090,10 +3184,33 @@ func _broadcast_weapon_icon_visibility(is_visible: bool) -> void:
 	})
 
 
+## Kritik bumerangın havadaki dönüş hızı çarpanı (bkz. _fire_at, boomerang_projectile.gd spin_speed_deg).
+const CRIT_SPIN_MULT := 1.6
+
+
+## Bu silahın kritik animasyon anahtarı (dükkan anahtarı - bkz. weapon_crit_anim.gd STYLES).
+func _crit_key() -> String:
+	return String(get_meta("shop_key", ""))
+
+
+## Kritik fırlatma savurması bitince (bkz. _fire_at) - mermi o arada döndüyse/patladıysa ikon zaten görünür kalmalı.
+func _hide_icon_if_still_flying() -> void:
+	if icon_sprite and (_flying_projectile_count > 0 or _projectiles_in_flight > 0):
+		icon_sprite.visible = false
+		_broadcast_weapon_icon_visibility(false)
+
+
 ## Small kick opposite the fire direction, purely cosmetic on the icon
 ## sprite (doesn't affect hover_offset / firing origin).
-func _do_recoil(direction: Vector2) -> void:
+func _do_recoil(direction: Vector2, is_crit: bool = false) -> void:
 	if not icon_sprite:
+		return
+	## Kritik: silaha özel sert animasyon (bkz. weapon_crit_anim.gd) - uzak kopya "weapon_fire" yayınındaki "crit" ile aynısını
+	## oynatır, bu yüzden ayrı "weapon_recoil" yayını gönderilmez (iki tween aynı ikonda çekişirdi).
+	if is_crit and WeaponCritAnim.kind_of(_crit_key()) != "":
+		if _punch_tween and _punch_tween.is_valid():
+			_punch_tween.kill()
+		_punch_tween = WeaponCritAnim.play_ranged(self, icon_sprite, _crit_key(), direction, Vector2.ZERO, _icon_base_scale, recoil_distance)
 		return
 	var kick: Vector2 = -direction * recoil_distance
 	var tw := create_tween()
@@ -3138,7 +3255,8 @@ func _broadcast_weapon_fire_anim(fire_direction: Vector2, melee_target_pos: Vect
 	## Relay flood korumasına takılmamak için sınırlanıyor (bkz.
 	## NetworkManager.should_throttle) - yüksek ateş hızlı silahlarda animasyon
 	## zaten görsel olarak ~20/sn üzerinde fark edilmiyor.
-	if NetworkManager.should_throttle("wfire_%d_%d" % [multiplayer.get_unique_id(), slot_idx], 0.05):
+	## Kritikler sınırlamaya takılmaz (seyrek ve görsel olarak önemli - kaçarsa uzakta normal atış görünürdü).
+	if not extra.get("crit", false) and NetworkManager.should_throttle("wfire_%d_%d" % [multiplayer.get_unique_id(), slot_idx], 0.05):
 		return
 	## DÜZELTME (mimari sadeleştirme - kullanıcı isteği: "singleplayerda zaten
 	## kayıtlı animasyon/efekt bilgilerinin multiplayerdan gereksiz yere
@@ -3183,7 +3301,7 @@ var _melee_swing_tween: Tween = null
 ## dönüş tween'ine başlamadan ÖNCE bu kadar (isabet/savuruş efektinin gerçek
 ## oynama süresi, bkz. _fx_playback_duration) BEKLİYOR. 0.0 (efekt yoksa/
 ## efekt AnimatedSprite2D değilse) = eski davranış, hiç bekleme yok.
-func _do_melee_swing(direction: Vector2, at_position: Vector2, hold_duration: float = 0.0) -> void:
+func _do_melee_swing(direction: Vector2, at_position: Vector2, hold_duration: float = 0.0, is_crit: bool = false) -> void:
 	if not icon_sprite:
 		return
 	var reps: int = max(1, melee_hit_segments)
@@ -3199,6 +3317,14 @@ func _do_melee_swing(direction: Vector2, at_position: Vector2, hold_duration: fl
 	var distance_to_target: float = global_position.distance_to(at_position)
 	var strike_center: Vector2 = direction * max(0.0, distance_to_target - melee_slash_fx_offset) + Vector2(0, -melee_slash_fx_above_offset)
 	var forward: float = deg_to_rad(sprite_forward_angle_deg)
+
+	## Kritik: bıçak saplar / pençe çapraz yırtar / topuz tepeden iner (bkz. weapon_crit_anim.gd) - zikzak yerine.
+	if is_crit and WeaponCritAnim.is_melee_kind(_crit_key()):
+		if _melee_swing_tween and _melee_swing_tween.is_valid():
+			_melee_swing_tween.kill()
+		_melee_swing_tween = WeaponCritAnim.play_melee(self, icon_sprite, _crit_key(), direction, Vector2.ZERO, strike_center,
+			forward, deg_to_rad(melee_icon_rest_rotation_deg), _icon_base_scale, hold_duration)
+		return
 
 	## Zigzag noktaları: saldırı yönüne dik eksende (perp) sırayla sağa/sola
 	## kayan noktalar - yaratığın üzerinde bir "Z" çizerek kesiyormuş hissi

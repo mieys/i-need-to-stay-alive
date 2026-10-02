@@ -14,3 +14,11 @@
 ~*.TMP
 ~*.tmp
 ~*
+
+# Epic Online Services kimlik bilgileri (2026-10-02) - repo herkese açık, client_secret buraya GİRMEMELİ.
+# Şablon: eos_credentials.example.cfg. Export'a include_filter ile girer (export_presets.cfg).
+eos_credentials.cfg
+
+# Claude Code yerel dosyaları (proje skill/komutları .claude/skills altında commit edilir)
+.claude/*.lock
+.claude/settings.local.json

@@ -75,14 +75,18 @@ const SPAWN_CLEARANCE_RADIUS := 90.0
 const SPAWN_CANDIDATE_ATTEMPTS := 30
 
 ## Kullanıcı isteği (İKİNCİ tur): "Seyyar satıcı dükkandan rasgele 8 item
-## gösterecek. Ekstralar, silahlar, kalkanlar dahil." - satıcı BELİRİRKEN
+## gösterecek. Ekstralar, silahlar, kalkanlar dahil." (kalkanlar 2026-09-29'da çıkarıldı - kalkan artık satılmıyor,
+## herkes Standart Kalkanla başlıyor) - satıcı BELİRİRKEN
 ## (bkz. _generate_stock) bu üç havuzdan (bkz. items.gd Items.KEYS + bu iki
 ## "deliberate copy" liste - shop_panel.gd/chest_menu.gd/merchant_shop_
 ## screen.gd ile AYNI desen) 8 benzersiz giriş rastgele seçilir.
 ## Kullanıcı isteği (2026-09-21): "Seyyar satıcıda sadece 6 item sunuluyor bunu 8'e çıkarmanı istiyorum".
-const STOCK_SIZE := 8
+const STOCK_SIZE := 12 ## WEAPON_STOCK + ITEM_STOCK
+const WEAPON_STOCK := 4
+const ITEM_STOCK := 8
+## Eşya kartlarının kademe ağırlıkları (parça, epik, efsanevi) - kademe içinde eşit.
+const ITEM_TIER_WEIGHTS := [0.5, 0.35, 0.15]
 const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic"]
-const SHIELD_TYPE_KEYS := ["shield_standart", "shield_enerji", "shield_kale", "shield_savas"]
 ## Kullanıcı isteği: "seyyar satıcı herkese aynı eşyayı satıyor, herkese
 ## farklı şeyler çıkmalıydı" - _generate_stock() artık HOST'ta bir kere
 ## üretilip ağdan dağıtılmıyor, HER istemci kendi stokunu KENDİ yerel
@@ -266,74 +270,49 @@ func try_reroll_stock() -> Variant:
 	return _current_stock
 
 
-## Oyuncunun şu an sahip olduğu (= oyun başında seçtiği, bkz. main.gd
-## _grant_selected_item) kalkan türü - kalkan türleri BİRBİRİNİ DIŞLAR
-## (bkz. merchant_shop_screen.gd _entry_can_buy "shield" dalı: "owned == ''
-## or owned == key"), yani bir tür seçildikten sonra DİĞER türler o oyun
-## boyunca hiç satın alınamaz hale gelir - merchant_shop_screen.gd'deki
-## AYNI mantığın (deliberate copy) burada da bir kopyası.
-func _owned_shield_type() -> String:
-	for key in SHIELD_TYPE_KEYS:
-		if int(GameManager.get(key + "_level")) > 0:
-			return key
-	return ""
-
-
 ## bkz. dosya başı "STOCK_SIZE" notu.
-## DÜZELTME (kullanıcı bildirimi: "Seyyar satıcıda kalkan da çıkmalı") -
-## kalkanlar havuzda sadece 4/32 giriş olduğu için saf rastgele seçimde
-## ziyaretlerin ~%42'sinde HİÇ çıkmıyorlardı - artık slotlardan 1 tanesi HER
-## ZAMAN bir kalkan. DÜZELTME (kullanıcı bildirimi: "oyun başında
-## seçtiğimiz ... kalkanının çıkma olasılığı daha fazla olmalı") - bu
-## garantili slot oyuncunun ZATEN SAHİP OLDUĞU türü kullanır (henüz hiç
-## kalkanı yoksa rastgele bir türle başlar) - FARKLI bir tür göstermek
-## zaten anlamsız olurdu (yukarıdaki _owned_shield_type() notuna bkz.,
-## satın alınamaz).
-## Kalan slotlar Items.KEYS + WEAPON_KEYS + (kalan) SHIELD_TYPE_KEYS'ten
-## EŞİT olasılıkla çekilir. Kullanıcı isteği (2026-09-21): eskiden oyuncunun
-## başlangıç silahı burada 4 kat daha sık çıkıyordu ("daha önce aldığın itemlerin
-## çıkma olasılığı yükseltilsin"), kullanıcı bunu KALKAN DIŞINDAKİ eşyalar için
-## geri aldırdı: "her item aynı olasılıkla çıkacak". Kalkan garantisi aynen duruyor.
+## Slotlar Items.KEYS + WEAPON_KEYS'ten EŞİT olasılıkla çekilir (kullanıcı isteği 2026-09-21: "her item aynı olasılıkla
+## çıkacak"). Eskiden 1 slot her zaman oyuncunun kalkan türüydü - kalkan satışı 2026-09-29'da kaldırıldı.
 func _local_player_luck() -> float:
 	var p: Node = get_tree().get_first_node_in_group("player")
 	return float(p.luck) if (p != null and "luck" in p) else 0.0
 
 
 func _generate_stock() -> Array:
+	## 2026-10-02 yeni eşya sistemi (kullanıcı seçimi "Eşyalar ayrı bölüm"): WEAPON_STOCK silah + ITEM_STOCK eşya, ayrı
+	## havuzlardan. Eşyalar kademeye göre ağırlıklı (parça sık, epik orta, efsanevi nadir); sahip olunan efsanevi (tekil)
+	## ve arkadaşına can/kalkan veremeyen karakterlere Işığın Muhafızı Parşomeni gelmez.
 	var stock: Array = []
-	var owned_shield: String = _owned_shield_type()
-	var guaranteed_shield_key: String = owned_shield if owned_shield != "" else SHIELD_TYPE_KEYS[randi() % SHIELD_TYPE_KEYS.size()]
-	stock.append({"type": "shield", "key": guaranteed_shield_key})
-
-	var pool: Array = []
+	var weapons: Array = WEAPON_KEYS.duplicate()
+	weapons.shuffle()
+	for k in weapons.slice(0, WEAPON_STOCK):
+		stock.append({"type": "weapon", "key": k})
+	var candidates: Array = []
 	for k in Items.KEYS:
-		pool.append({"type": "item", "key": k})
-	for k in WEAPON_KEYS:
-		pool.append({"type": "weapon", "key": k})
-	for k in SHIELD_TYPE_KEYS:
-		if k != guaranteed_shield_key:
-			pool.append({"type": "shield", "key": k})
-	pool.shuffle()
-
-	## Aynı eşyayı stokta İKİ KEZ göstermemek için (type, key) bazında tekilleştir.
-	var used: Dictionary = {"shield:" + guaranteed_shield_key: true}
-	for raw_entry in pool:
-		if stock.size() >= STOCK_SIZE:
-			break
-		var entry: Dictionary = raw_entry as Dictionary
-		var dedup_key: String = str(entry["type"]) + ":" + str(entry["key"])
-		if used.has(dedup_key):
+		if Items.kademe(k) == Items.KADEME_EFSANEVI and Items.owns(GameManager.owned_items, k):
 			continue
-		used[dedup_key] = true
-		var final_entry: Dictionary = entry.duplicate()
-		if final_entry["type"] == "item":
-			## Kullanıcı isteği (2026-09-24 denge turu: "şans iyi kartlar çıkarma oranını arttırmalı") - stok her
-			## oyuncunun KENDİ makinesinde üretiliyor (bkz. _on_merchant_spawned), yani yerel oyuncunun şansı doğru kişi.
-			final_entry["tier"] = TierSystem.roll(_local_player_luck())
-		stock.append(final_entry)
-	## Garantili kalkan hep 1. karta düşmesin diye kartların gösterim sırası
-	## da karıştırılıyor.
-	stock.shuffle()
+		if Items.is_support_only(k) and not Items.is_ally_support_char(GameManager.selected_char_id):
+			continue
+		candidates.append(k)
+	var per_tier: Dictionary = {}
+	for k in candidates:
+		per_tier[Items.kademe(k)] = int(per_tier.get(Items.kademe(k), 0)) + 1
+	var picked: Array = []
+	while picked.size() < ITEM_STOCK and not candidates.is_empty():
+		var total: float = 0.0
+		for k in candidates:
+			total += float(ITEM_TIER_WEIGHTS[Items.kademe(k) - 1]) / float(per_tier[Items.kademe(k)])
+		var r: float = randf() * total
+		var chosen: String = str(candidates[-1])
+		for k in candidates:
+			r -= float(ITEM_TIER_WEIGHTS[Items.kademe(k) - 1]) / float(per_tier[Items.kademe(k)])
+			if r <= 0.0:
+				chosen = str(k)
+				break
+		candidates.erase(chosen)
+		picked.append(chosen)
+	for k in picked:
+		stock.append({"type": "item", "key": k})
 	return stock
 
 
@@ -568,6 +547,7 @@ func _create_interaction(pos: Vector2) -> void:
 	_prompt_layer.layer = 50
 	_prompt_label = Label.new()
 	_prompt_label.text = "Seyyar Satıcı ile konuşmak için %s tuşuna bas" % GameManager.get_action_key_label("interact")
+	_prompt_label.add_to_group(&"interact_prompt") ## telefonda ETKİLEŞİM düğmesi bu uyarı görünürken çıkar (touch_controls.gd)
 	_prompt_label.add_theme_font_size_override("font_size", 24)
 	_prompt_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

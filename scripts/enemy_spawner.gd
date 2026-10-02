@@ -2,6 +2,7 @@ extends Node2D
 
 ## Yaratıkların duvar dolanma yol ızgarası (bkz. _ready / enemy_pathing.gd).
 const EnemyPathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
+const EventSfx := preload("res://scripts/event_sfx.gd")
 
 ## Full 15-Kademe (+ Final Kademe) creature roster, built from
 ## visuals/yaratıklar/. Every id here matches scenes/creatures/enemy_<id>.tscn.
@@ -432,6 +433,18 @@ var _next_network_enemy_id: int = 1
 var _boss_tiers_spawned: Dictionary = {}
 var _final_spawned: bool = false
 
+## ELİT YARATIK (kullanıcı isteği 2026-10-02 - kurallar enemy.gd make_elite üstünde): her Kademe'de TAM 1 elit. Kademe'nin
+## ilk sıradan doğumunda o Kademe için Kademe saatinde (_tier_time) rastgele bir "vade" seçilir - ilk doğumdan
+## ELITE_WINDOW_MIN..MAX x tier_duration sonra, ama Kademe bitmeden ELITE_END_MARGIN sn önceyi geçmeyecek şekilde (vade
+## Kademe'nin dışına düşüp o Kademe'nin eliti hiç doğmamasın). Vadeden sonraki ilk sıradan doğum (rastgele seçilmiş
+## roster yaratığı) elite dönüşür. Bosslar/görev dalgaları/debug doğumları elit olmaz. Sadece host karar verir; istemciler
+## _rpc_client_spawn_creature'ın is_elite bayrağıyla öğrenir.
+const ELITE_WINDOW_MIN := 0.1
+const ELITE_WINDOW_MAX := 0.7
+const ELITE_END_MARGIN := 10.0
+var _elite_due_time: Dictionary = {} ## kademe -> elitin doğabileceği en erken Kademe saati (_tier_time)
+var _elite_spawned_tiers: Dictionary = {} ## kademe -> true
+
 ## Kullanıcı isteği: "en yaygın/en sağlıklı ne ise onu yap" - gerçek zamanlı
 ## çok oyunculu oyunların standart tekniği "ilgi alanı" (area of interest):
 ## bir oyuncuya sadece YAKININDAKİ varlıkların tam durumu gönderilir, haritanın
@@ -449,6 +462,9 @@ var _final_spawned: bool = false
 const ENEMY_SYNC_NEAR_RADIUS := 1600.0
 const ENEMY_SYNC_NEAR_RADIUS_SQ := ENEMY_SYNC_NEAR_RADIUS * ENEMY_SYNC_NEAR_RADIUS
 const ENEMY_SYNC_FAR_TIER_SKIP := 4 ## uzak yaratıklar ~4 tikte bir (≈0.6sn)
+## Tek _sync_enemy_positions paketindeki en fazla yaratık (~85 bayt/yaratık -> ~850 bayt: Epic P2P paket sınırına (bkz.
+## scripts/net/fragment_peer.gd) bölünmeden sığar).
+const ENEMY_SYNC_BATCH := 10
 var _far_tier_tick: int = 0
 var _last_dead_sent: Dictionary = {} ## network_enemy_id -> bool
 
@@ -490,7 +506,8 @@ func _on_peer_needs_game_catchup(peer_id: int) -> void:
 			continue
 		var is_boss_enemy: bool = enemy.is_in_group("boss")
 		var enemy_tier: int = int(enemy.get("_current_tier")) if "_current_tier" in enemy else 1
-		_rpc_client_spawn_creature.rpc_id(peer_id, creature_id, enemy.global_position, enemy_tier, is_boss_enemy, net_id)
+		_rpc_client_spawn_creature.rpc_id(peer_id, creature_id, enemy.global_position, enemy_tier, is_boss_enemy, net_id, false,
+				enemy.get("is_elite") == true)
 		## ÇOK OYUNCULU DÜZELTME (2026-09-24 senkron analizi): istemci maks can/kalkanı kendisi hesaplıyor, ama sonradan
 		## katılan oyuncu için bu hesap ŞİMDİKİ oyun saati (Kademe 3+ zamanla artan can) ve ŞİMDİKİ oyuncu sayısıyla
 		## yapılıyor - eski yaratıkların barı dolu can'da bile boş görünüyordu. Host'un gerçek değerleri + görünmez hayalet
@@ -529,6 +546,10 @@ func _on_became_host() -> void:
 	var final_trigger_time: float = (FINAL_TIER - 1) * tier_duration
 	if t >= final_trigger_time:
 		_final_spawned = true
+	## Elit: hâlâ yaşayan elitlerin kademeleri "doğdu" sayılır (yeni host aynı kademede ikinci bir elit doğurmasın).
+	for enemy: Node in get_tree().get_nodes_in_group("elite_enemies"):
+		if is_instance_valid(enemy):
+			_elite_spawned_tiers[int(enemy.get_meta("spawn_tier", enemy.get("_current_tier")))] = true
 
 
 func _process(delta: float) -> void:
@@ -640,8 +661,11 @@ func _broadcast_enemy_states_with_interest_management() -> void:
 				## last_attacker_peer_id) host olmayan istemcilere de ulaşsın diye.
 				int(enemy.get("last_attacker_peer_id") if "last_attacker_peer_id" in enemy else 0)
 			])
-		if not states.is_empty():
-			_sync_enemy_positions.rpc_id(peer_id, states)
+		## Küçük paketler halinde gönder (2026-10-02, Epic internet odası): 100+ yaratık tek pakette ~10 KB ediyordu; Epic
+		## P2P bunu ~10 parçaya bölmek zorunda ve "güvenilmez" pakette TEK parça kaybı tüm turu düşürüyordu. Her paket kendi
+		## başına işlenir (kayıp sadece o grubu etkiler); LAN'da da aynı şekilde daha dayanıklı.
+		for i in range(0, states.size(), ENEMY_SYNC_BATCH):
+			_sync_enemy_positions.rpc_id(peer_id, states.slice(i, i + ENEMY_SYNC_BATCH))
 
 	## BAKIM (kullanıcı bildirimi: "oyun ~4-5 dakikada bir donuyor" araştırması
 	## sırasında fark edildi - kesin donma nedeni DEĞİL, ama bir sızıntıydı):
@@ -1087,9 +1111,12 @@ func _spawn_regular_enemy() -> void:
 		# Global güçlendirme - tier scaling SONRASI uygulanır (zaten ölçeklenmiş
 		# değerlerin üstüne eklenir, katlanarak büyümez)
 		_apply_global_buff(enemy)
+		var elite: bool = _roll_elite(tier)
+		if elite:
+			_apply_elite(enemy)
 
 		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
-			_rpc_client_spawn_creature.rpc(id, spawn_pos, tier, false, network_id)
+			_rpc_client_spawn_creature.rpc(id, spawn_pos, tier, false, network_id, false, elite)
 
 
 
@@ -1138,11 +1165,13 @@ func _spawn_boss_group(ids: Array, tier: int) -> void:
 		_apply_global_buff(enemy)
 		_attach_boss_bar(enemy)
 		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
-			_rpc_client_spawn_creature.rpc(id, enemy.global_position, tier, true, network_id)
+			_rpc_client_spawn_creature.rpc(id, enemy.global_position, tier, true, network_id, true)
 	## Kademe boss kapısı (bkz. _tier_time): bu kademenin bossları ölene kadar Kademe saati o kademenin
 	## sonunda bekler. (Final Kademe'nin bossları kapıdan sonra gelir, tutulacak bir sonraki kademe yok.)
 	if BOSS_TIERS.has(tier) and not spawned_bosses.is_empty():
 		_tier_bosses[tier] = spawned_bosses
+	if not spawned_bosses.is_empty():
+		EventSfx.play(get_tree(), &"boss")
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -1161,10 +1190,14 @@ func _rpc_client_catchup_enemy_state(network_id: int, max_hp: float, shield_max:
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_client_spawn_creature(id: String, pos: Vector2, tier: int, is_boss: bool, network_id: int) -> void:
+## announce: boss sesi çalsın mı - sonradan katılan oyuncuya hâlâ yaşayan bossları gönderen yakalama (catch-up) false geçer.
+## is_elite: host bu yaratığı elit seçti (bkz. ELİT YARATIK bloğu) - istemci de AYNI _apply_elite'i çağırır.
+func _rpc_client_spawn_creature(id: String, pos: Vector2, tier: int, is_boss: bool, network_id: int, announce: bool = false, is_elite: bool = false) -> void:
 	var enemy = _spawn_creature(id, pos, network_id)
 	if not enemy:
 		return
+	if is_boss and announce:
+		EventSfx.play(get_tree(), &"boss")
 	if is_boss:
 		enemy.add_to_group("boss")
 		var family: String = ID_FAMILY.get(id, "")
@@ -1183,6 +1216,30 @@ func _rpc_client_spawn_creature(id: String, pos: Vector2, tier: int, is_boss: bo
 		if tier >= REGULAR_SHIELD_MIN_TIER and enemy.has_method("enable_item_shield"):
 			enemy.enable_item_shield(SHIELD_PROTECTION, REGULAR_SHIELD_RATIO)
 		_apply_global_buff(enemy)
+		if is_elite:
+			_apply_elite(enemy)
+
+
+## Host'ta (doğumda) ve istemcide (RPC) AYNI kurulum - bkz. enemy.gd make_elite.
+func _apply_elite(enemy: Node) -> void:
+	if enemy.has_method("make_elite"):
+		enemy.make_elite()
+
+
+## Bu sıradan doğum, kademesinin elit yaratığı mı? (host, _spawn_regular_enemy). Kademe başına en fazla 1 kez true.
+func _roll_elite(tier: int) -> bool:
+	if _elite_spawned_tiers.has(tier):
+		return false
+	var now: float = _tier_time()
+	if not _elite_due_time.has(tier):
+		var latest: float = float(tier) * tier_duration - ELITE_END_MARGIN
+		_elite_due_time[tier] = minf(now + randf_range(ELITE_WINDOW_MIN, ELITE_WINDOW_MAX) * tier_duration, latest)
+		if now < float(_elite_due_time[tier]):
+			return false
+	if now < float(_elite_due_time[tier]):
+		return false
+	_elite_spawned_tiers[tier] = true
+	return true
 
 
 
@@ -1245,7 +1302,7 @@ func debug_spawn_creature(id: String, tier: int, count: int, around_pos: Vector2
 			enemy.enable_item_shield(SHIELD_PROTECTION, REGULAR_SHIELD_RATIO)
 		_apply_global_buff(enemy)
 		if NetworkManager.is_multiplayer_active:
-			_rpc_client_spawn_creature.rpc(id, spawn_pos, tier, false, network_id)
+			_rpc_client_spawn_creature.rpc(id, spawn_pos, tier, false, network_id, false)
 		spawned += 1
 	return spawned
 
@@ -1283,7 +1340,7 @@ func spawn_mission_wave(center: Vector2, ring_radius: float, count: int) -> int:
 			enemy.enable_item_shield(SHIELD_PROTECTION, REGULAR_SHIELD_RATIO)
 		_apply_global_buff(enemy)
 		if NetworkManager.is_multiplayer_active:
-			_rpc_client_spawn_creature.rpc(id, spawn_pos, tier, false, network_id)
+			_rpc_client_spawn_creature.rpc(id, spawn_pos, tier, false, network_id, false)
 		spawned += 1
 	return spawned
 
@@ -1292,6 +1349,10 @@ func spawn_mission_wave(center: Vector2, ring_radius: float, count: int) -> int:
 ## dışarıdan doğrudan da okunabilir ama isimlendirilmiş bir erişim daha temiz.
 func get_debug_creature_ids() -> Array:
 	return SCENES.keys()
+
+
+var _sync_enemy_map: Dictionary = {}
+var _sync_enemy_map_frame: int = -1
 
 
 @rpc("any_peer", "call_remote", "unreliable")
@@ -1303,13 +1364,18 @@ func _sync_enemy_positions(enemy_states: Array) -> void:
 	if sender_id != 0 and sender_id != NetworkManager._host_peer_id():
 		return
 	
-	# Hızlı erişim için mevcut düşmanları bir dictionary'ye indeksle
-	var enemy_map: Dictionary = {}
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
-		if is_instance_valid(enemy):
-			var nid: int = int(enemy.get_meta("network_enemy_id", 0))
-			if nid > 0:
-				enemy_map[nid] = enemy
+	# Hızlı erişim için mevcut düşmanları bir dictionary'ye indeksle - durum artık küçük paketler halinde geldiği için
+	# (bkz. ENEMY_SYNC_BATCH) aynı karede gelen paketler bu indeksi paylaşır.
+	var frame: int = Engine.get_process_frames()
+	if frame != _sync_enemy_map_frame:
+		_sync_enemy_map_frame = frame
+		_sync_enemy_map.clear()
+		for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+			if is_instance_valid(enemy):
+				var nid: int = int(enemy.get_meta("network_enemy_id", 0))
+				if nid > 0:
+					_sync_enemy_map[nid] = enemy
+	var enemy_map: Dictionary = _sync_enemy_map
 
 	for state: Array in enemy_states:
 		if state.size() < 2:

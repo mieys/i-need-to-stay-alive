@@ -27,6 +27,7 @@ const ICON_PATHS := {
 	"damage": "stat_damage.png",
 	"fire_rate": "stat_fire_rate.png",
 	"health_regen": "stat_max_health.png",
+	"heal_power": "stat_max_health.png", ## 2026-10-02 İyileştirme ve Kalkan Gücü (eşya statı) - ayrı ikon yok, kalp
 	"shield_protection": "stat_shield.png",
 	"crit_chance": "stat_crit_chance.png",
 	"crit_damage": "stat_crit_damage.png",

@@ -35,8 +35,10 @@ class FakePlayer extends Node:
 	func get_max_owned_weapons() -> int:
 		return 5
 
-	func buy_item(key: String, _power: float = 1.0) -> bool:
+	## 2026-10-02: satıcı artık tarifli acquire_item çağırır (kaydı oyuncu yazar).
+	func acquire_item(key: String, _plan: Dictionary = {}, paid: int = 0) -> bool:
 		bought_items.append(key)
+		GameManager.owned_items.append({"key": key, "spent": paid})
 		return true
 
 	func buy_weapon_copy(key: String, _level: int) -> bool:
@@ -97,6 +99,10 @@ func test_owned_weapon_card_can_still_be_bought() -> void:
 
 
 ## Aynı kart ziyaret başına 1 kez: ikinci basış hiçbir şey yapmamalı, buton "SATILDI".
+## Eşya kartı akışı gerçek bir parça kartıyla sınanır.
+const TEST_ITEM_KEY := "kutsal_tilsim" ## 2026-10-02: gerçek bir parça (bilinmeyen anahtar satın alınamaz)
+
+
 func test_each_card_type_is_sold_once_per_visit() -> void:
 	_reset_state()
 	var merchant := FakeMerchant.new()
@@ -105,27 +111,24 @@ func test_each_card_type_is_sold_once_per_visit() -> void:
 	add_child(player)
 	var stock: Array = [
 		_weapon_card("fire_staff"),
-		{"type": "item", "key": Items.KEYS[0], "tier": 1},
-		{"type": "shield", "key": "shield_standart"},
+		{"type": "item", "key": TEST_ITEM_KEY, "tier": 1},
 	]
 	var screen: CanvasLayer = _make_screen(stock, merchant, player)
 	for i in range(stock.size()):
 		assert(screen._entry_can_buy(stock[i], i), "Kart %d ilk seferde alınabilmeli (%s)" % [i, str(stock[i])])
 
 	## Her kartı iki kez almayı dene (kartların sırası maliyete göre yeniden dizilmiş olabilir).
-	var shield_level_before: int = int(GameManager.get("shield_standart_level"))
 	for _round in range(2):
 		for i in range(screen._stock.size()):
 			screen._on_buy_pressed(i)
 
 	assert(player.bought_weapons.size() == 1, "Silah kartı sadece 1 kez alınmalı, bulunan: %d" % player.bought_weapons.size())
 	assert(player.bought_items.size() == 1, "Eşya kartı sadece 1 kez alınmalı, bulunan: %d" % player.bought_items.size())
-	assert(int(GameManager.get("shield_standart_level")) == shield_level_before + 1,
-		"Kalkan kartı sadece 1 seviye vermeli, önce %d sonra %s" % [shield_level_before, str(GameManager.get("shield_standart_level"))])
 	for i in range(screen._stock.size()):
 		assert(not screen._entry_can_buy(screen._stock[i], i), "Satılan kart tekrar alınamamalı: %s" % str(screen._stock[i]))
-		assert(screen._buy_buttons[i].text == "SATILDI", "Satılan kartın butonu 'SATILDI' olmalı, bulunan: %s" % screen._buy_buttons[i].text)
-	GameManager.set("shield_standart_level", shield_level_before)
+		## 2026-10-02: "SATILDI" artık fiyatın yerinde (fiyat + AL aynı satırda), buton pasif.
+		assert(screen._price_labels[i].text == "SATILDI", "Satılan kartın fiyat yazısı 'SATILDI' olmalı, bulunan: %s" % screen._price_labels[i].text)
+		assert(screen._buy_buttons[i].disabled, "Satılan kartın AL butonu pasif olmalı")
 	_cleanup([merchant, player])
 
 
@@ -138,7 +141,7 @@ func test_sold_state_survives_reopening_and_resorting() -> void:
 	var player := FakePlayer.new()
 	add_child(merchant)
 	add_child(player)
-	var cheap_item: Dictionary = {"type": "item", "key": Items.KEYS[0], "tier": 1}
+	var cheap_item: Dictionary = {"type": "item", "key": TEST_ITEM_KEY, "tier": 1}
 	var weapon: Dictionary = _weapon_card("fire_staff")
 	var stock: Array = [cheap_item, weapon]
 	var screen: CanvasLayer = _make_screen(stock, merchant, player)
@@ -155,8 +158,8 @@ func test_sold_state_survives_reopening_and_resorting() -> void:
 	for i in range(reopened._stock.size()):
 		var entry: Dictionary = reopened._stock[i]
 		var should_be_sold: bool = entry == weapon
-		assert(reopened._buy_buttons[i].text == ("SATILDI" if should_be_sold else "AL"),
-			"Yeniden açılışta %s kartının etiketi yanlış: %s" % [str(entry), reopened._buy_buttons[i].text])
+		assert((reopened._price_labels[i].text == "SATILDI") == should_be_sold,
+			"Yeniden açılışta %s kartının etiketi yanlış: %s" % [str(entry), reopened._price_labels[i].text])
 		assert(reopened._entry_can_buy(entry, i) != should_be_sold, "Yeniden açılışta satılan kart alınamamalı, diğeri alınabilmeli")
 	_cleanup([merchant, player])
 

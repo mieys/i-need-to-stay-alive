@@ -173,6 +173,11 @@ def write_frames(key, frames_name, sheet_counts):
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines))
     print(f"    yazildi: {frames_name} ({len(ext)} doku, {len(subs)} atlas karesi, {len(anims)} klip)")
+    if key == "shaman":
+        ## Shaman R (Elemental Golem, 2026-09-30): golem_* klipleri tools/gen_shaman_golem.py'nin sayfasindan - yeniden
+        ## ice alma onlari silmesin (klip adlari ag uzerinden gider, bkz. scripts/shaman_golem_math.gd).
+        import gen_shaman_golem
+        gen_shaman_golem.add_golem_clips(out)
 
 
 def bbox(frame):

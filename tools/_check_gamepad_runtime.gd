@@ -55,8 +55,8 @@ func _init():
 		else:
 			print("OK: ", action, " has expected axis+dpad")
 
-	# 2) chat/debug_tuning/shield_mode_slot_* should have NO joypad event.
-	for action in ["chat", "debug_tuning", "shield_mode_slot_1"]:
+	# 2) chat/debug_tuning should have NO joypad event.
+	for action in ["chat", "debug_tuning"]:
 		var has_joy := false
 		for ev in InputMap.action_get_events(action):
 			if ev is InputEventJoypadButton or ev is InputEventJoypadMotion:

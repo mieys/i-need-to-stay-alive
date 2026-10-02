@@ -87,23 +87,3 @@ func test_envanter_button_matches_gold_indicator_palette() -> void:
 	assert(gold_style.texture.resource_path.begins_with("res://assets/ui/game/"),
 		"Altin gostergesi kit dokusunu kullanmiyor: %s" % gold_style.texture.resource_path)
 	hud.queue_free()
-
-
-func test_battle_mode_slots_always_visible_and_fully_opaque() -> void:
-	var hud: Node = _make_hud()
-	
-	# Verify slots list
-	assert(hud.shield_mode_slots != null, "shield_mode_slots array must exist")
-	assert(hud.shield_mode_slots.size() == 4, "Should have 4 slots")
-	
-	for i in range(hud.shield_mode_slots.size()):
-		var slot: Button = hud.shield_mode_slots[i] as Button
-		assert(slot.visible == true, "Slot %d must be visible even if not owned" % i)
-		assert(is_equal_approx(slot.modulate.a, 1.0), "Slot %d must be fully opaque" % i)
-		
-		var bg_node: TextureRect = slot.get_node_or_null("BG") as TextureRect
-		if bg_node:
-			assert(bg_node.visible == true, "BG of slot %d must be visible" % i)
-			assert(is_equal_approx(bg_node.modulate.a, 1.0), "BG of slot %d must be fully opaque" % i)
-			
-	hud.queue_free()

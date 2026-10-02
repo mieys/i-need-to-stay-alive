@@ -68,7 +68,7 @@ const UPGRADES = [
 	## "Ateş Hızı" -> "Saldırı Hızı" (2026-09-24): eşyalar/stat ekranı aynı stat için "saldırı hızı" diyordu, iki ayrı stat
 	## sanılıyordu (bkz. player.gd get_attack_interval_mult).
 	{"id": "fire_rate", "title": "Saldırı Hızı", "desc": "+%6", "cat": "Saldırı", "color": CAT_ATTACK},
-	{"id": "health_regen", "title": "Can Yenilenmesi", "desc": "+0.5", "cat": "Savunma", "color": CAT_DEFENSE},
+	{"id": "health_regen", "title": "Can Yenilenmesi", "desc": "+2", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "crit_chance", "title": "Kritik Oran", "desc": "+%2.5", "cat": "Saldırı", "color": CAT_ATTACK},
 	## Kullanıcı isteği: "kritik hasar oranını arttıran kartta kritik hasar
 	## çarpanı yerine kritik hasar miktarı yazsın" - eskiden "+0.125x kritik
@@ -166,6 +166,9 @@ func _ready() -> void:
 	## Kullanıcı isteği (2026-09-28): "pardon reroll olmasın" - evrim kartlarında karıştırma yok.
 	if _evo_mode:
 		reroll_button.visible = false
+		## Üç geniş kart ekranın sağına kadar uzanır - sağ sütundaki görev satırları (katman 40) üçüncü kartın üstüne
+		## binmesin diye ekran onların üstüne alınır (ipucu/geri sayım katmanları 50/90+ yine üstte).
+		layer = EVO_LAYER
 		var title_lbl: Label = get_node_or_null("Title") as Label
 		if title_lbl:
 			title_lbl.text = EVO_TITLE
@@ -462,11 +465,10 @@ func _apply_card_tier_frame(card: Button, tier: int) -> void:
 	if frame:
 		TierCardFx.apply_frame(frame, tier)
 		## Satır dokusu (savaş kartı yerine) + ışıltı shader'ının sanat pikseli ızgarası satırın boyuna göre.
-		## Evrim modunda daha uzun satır (açıklama sığsın) - doku yoksa (henüz içe aktarılmadı) normal satıra düşer.
-		var evo_tex: Texture2D = _evo_row_texture(tier) if _evo_mode else null
-		if evo_tex:
-			frame.texture = evo_tex
-			(frame.material as ShaderMaterial).set_shader_parameter("art_size", EVO_ROW_ART_SIZE)
+		## Evrim modunda efsun ekranının dikey kartı (mor / FİNAL kırmızı - bkz. "YETENEK EVRİMİ" bloğu).
+		if _evo_mode:
+			frame.texture = EnchantScreenScript.CARD_TEXTURES[clampi(tier, 1, 4) - 1]
+			(frame.material as ShaderMaterial).set_shader_parameter("art_size", EnchantScreenScript.CARD_ART_SIZE)
 		else:
 			frame.texture = ROW_TEXTURES[clampi(tier, 1, 4) - 1]
 			(frame.material as ShaderMaterial).set_shader_parameter("art_size", ROW_ART_SIZE)
@@ -513,10 +515,11 @@ const ROW_RIGHT_PAD := 36.0
 
 
 func _layout_rows() -> void:
+	if _evo_mode:
+		_layout_evolution_cards()
+		return
 	var old: Control = get_node_or_null("CardsContainer") as Control
-	## Evrim modunda satırlar daha uzun (açıklama metni sığsın) - doku bulunamazsa normal satır boyu.
-	var evo_rows: bool = _evo_mode and _evo_row_texture(3) != null
-	var row_size: Vector2 = EVO_ROW_SIZE if evo_rows else ROW_SIZE
+	var row_size: Vector2 = ROW_SIZE
 	var rows := VBoxContainer.new()
 	rows.name = "Rows"
 	rows.theme = UIKit.theme()
@@ -537,16 +540,13 @@ func _layout_rows() -> void:
 		card.reparent(rows, false)
 		card.custom_minimum_size = row_size
 		card.clip_contents = false ## seçim halesi satırın dışına taşar (bkz. TierCardFx.ensure_glow)
-		card.set_meta("glow_texture", _evo_row_glow() if evo_rows else ROW_GLOW)
+		card.set_meta("glow_texture", ROW_GLOW)
 		card.set_meta("glow_card_size", row_size)
 		card.set_meta("glow_colors", ROW_GLOW_COLORS)
 		var frame: TextureRect = card.get_node_or_null("Frame") as TextureRect
 		if frame:
 			frame.offset_right = row_size.x
 			frame.offset_bottom = row_size.y
-		if _evo_mode:
-			_layout_evolution_row(card, row_size)
-			continue
 		var content: VBoxContainer = card.get_node("Content") as VBoxContainer
 		content.clip_contents = false
 		content.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -949,30 +949,31 @@ func _finish_pick(id: String, tier: int) -> void:
 ## ekran normal stat kartları YERİNE karakterin Q/E/R evrimlerinden rastgele 3'ünü gösterir (havuz kuralları ve metinler
 ## scripts/skill_evolutions.gd'de - TEK kaynak). Seçim upgrade_chosen("evo:<id>") ile gider (main.gd _on_upgrade_chosen ->
 ## player.apply_skill_evolution). Karıştırma YOK (kullanıcı: "pardon reroll olmasın"). Havuzda 3'ten az evrim kaldıysa boş
-## satırlar gizlenir; hiç kalmadıysa (ya da karakterin evrimleri henüz yazılmadıysa) normal kartlar çıkar.
-## Görünüm: aynı koyu satır dili, ama daha uzun satır (açıklama sığsın - tools/gen_evolution_ui.py levelup_evo_row_*),
-## solda yeteneğin kendi ikonu + tuşu, normal evrim Epik (mor) çerçeve, FİNAL Efsanevi (altın-kırmızı) çerçeve.
+## kartlar gizlenir; hiç kalmadıysa (ya da karakterin evrimleri henüz yazılmadıysa) normal kartlar çıkar.
+## Görünüm (kullanıcı isteği 2026-10-02: "skill evrimlerinin dikey mor kartlardan olmasını istiyorum final versiyonu da
+## kırmızı dikey kartlardan olsun (oyunun içindeki efsun kartlarında bulunuyor bu kartlar)"): yatay satırlar yerine efsun
+## ekranının dikey kartı (480x720, 4x sanat pikseli) - normal evrim mor (Tier 3), FİNAL kırmızı (Tier 4). Doku, hale ve
+## kart içi yerleşim enchant_screen.gd'den okunur (tek kaynak): sol üstte yeteneğin ikonu + tuşu, sağında "EVRİM n/N" /
+## "FİNAL EVRİM" ve "Q · Yetenek adı", altta evrim adı + açıklama (sayılar altın).
 const SkillEvolutions := preload("res://scripts/skill_evolutions.gd")
+const EnchantScreenScript := preload("res://scripts/enchant_screen.gd")
 const EVO_TITLE := "YETENEK EVRİMİ!"
-const EVO_ROW_SIZE := Vector2(804, 198)
-const EVO_ROW_ART_SIZE := Vector2(268, 66)
-const EVO_ROW_TEXTURE_PATHS := {
-	3: "res://assets/ui/game/levelup_evo_row_3.png",
-	4: "res://assets/ui/game/levelup_evo_row_4.png",
-}
-const EVO_ROW_GLOW_PATH := "res://assets/ui/game/levelup_evo_row_glow.png"
-const EVO_DESC_FONT_SIZE := 24
-const EVO_DESC_MIN_FONT_SIZE := 16
+const EVO_CARD_GAP := 30
+## 2026-10-02: kartlar 480x720 -> 360x540 (bkz. enchant_screen.gd CARD_TEXEL notu) - başlığın altında, geri sayım hemen altlarında.
+const EVO_CARD_TOP := -340.0 ## ekran ortasına göre (başlığın altı) - 540 px kart y 200..740
+const EVO_COUNTDOWN_TOP := 216.0 ## karıştır butonu evrimde gizli; geri sayım kartların altına iner
+const EVO_TEXT_FONT_SIZE := 32
+const EVO_TEXT_MIN_FONT_SIZE := 16
 const EVO_TIER_REGULAR := 3
 const EVO_TIER_FINAL := 4
-const EVO_FINAL_COLOR := Color("#ffc65a")
+const EVO_TITLE_COLOR := Color("#fff0d6")
+const EVO_LAYER := 42
 
 ## main.gd verir (add_child'dan ÖNCE): bu ekranın ait olduğu takım seviyesi; debug menüsü evrim ekranını seviyeden bağımsız açar.
 var screen_level: int = 0
 var force_evolution: bool = false
 var _evo_mode: bool = false
 var _evo_offers: Array = []
-var _evo_tex_cache: Dictionary = {}
 
 
 func _roll_evolution_offers() -> Array:
@@ -987,70 +988,80 @@ func _roll_evolution_offers() -> Array:
 	return SkillEvolutions.roll_offer(char_id, player.skill_evolutions, screen_level)
 
 
-## Evrim satırı dokusu (ilk kullanımda - içe aktarılmamışsa null, satır normal dokuya düşer).
-func _evo_row_texture(tier: int) -> Texture2D:
-	var path: String = str(EVO_ROW_TEXTURE_PATHS.get(tier, EVO_ROW_TEXTURE_PATHS[EVO_TIER_REGULAR]))
-	if not _evo_tex_cache.has(path):
-		_evo_tex_cache[path] = load(path) if ResourceLoader.exists(path) else null
-	return _evo_tex_cache[path]
-
-
-func _evo_row_glow() -> Texture2D:
-	if not _evo_tex_cache.has(EVO_ROW_GLOW_PATH):
-		_evo_tex_cache[EVO_ROW_GLOW_PATH] = load(EVO_ROW_GLOW_PATH) if ResourceLoader.exists(EVO_ROW_GLOW_PATH) else ROW_GLOW
-	return _evo_tex_cache[EVO_ROW_GLOW_PATH]
-
-
-## Evrim satırının yazı/ikon düğümleri (stat ikonu ve eski kart yazıları gizlenir). İkon yuvası dokuda dikeyde ortalı.
-func _layout_evolution_row(card: Button, row_size: Vector2) -> void:
-	var content: Control = card.get_node_or_null("Content") as Control
-	if content:
-		content.visible = false
-	var sel: Control = card.get_node_or_null("SelectGlow") as Control
-	if sel:
-		sel.visible = false
-	var slot_y: float = (row_size.y - 114.0) * 0.5 + 6.0 ## iç alan (yuva konturu hariç), üstten
-	var icon := TextureRect.new()
-	icon.name = "EvoIcon"
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	card.add_child(icon)
-	icon.position = Vector2(27.0, slot_y + 3.0)
-	icon.size = Vector2(96.0, 96.0)
-	_row_label(card, "EvoKey", Rect2(24.0 + 102.0 - 36.0, slot_y + 102.0 - 36.0, 32.0, 32.0), 24, UIKit.C_CREAM, HORIZONTAL_ALIGNMENT_RIGHT)
-	var key_lbl: Label = card.get_node("EvoKey") as Label
-	key_lbl.add_theme_constant_override("outline_size", 6)
-	key_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-	var tall: bool = row_size.y >= EVO_ROW_SIZE.y
-	var name_y: float = 14.0 if tall else 8.0
-	_row_label(card, "RowName", Rect2(ROW_TEXT_X, name_y, 470.0, 42.0), 32, UIKit.C_CREAM, HORIZONTAL_ALIGNMENT_LEFT)
-	_row_label(card, "EvoTag", Rect2(row_size.x - ROW_RIGHT_PAD - 180.0, name_y, 180.0, 42.0), 24, EVO_FINAL_COLOR, HORIZONTAL_ALIGNMENT_RIGHT)
-	var sub := RichTextLabel.new()
-	sub.name = "RowSub"
-	sub.bbcode_enabled = true
-	sub.fit_content = false
-	sub.scroll_active = false
-	sub.autowrap_mode = TextServer.AUTOWRAP_OFF
-	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_set_desc_font_size(sub, 24)
-	card.add_child(sub)
-	sub.position = Vector2(ROW_TEXT_X, name_y + 44.0)
-	sub.size = Vector2(row_size.x - ROW_TEXT_X - ROW_RIGHT_PAD, 30.0)
-	var desc := RichTextLabel.new()
-	desc.name = "EvoDesc"
-	desc.bbcode_enabled = true
-	desc.fit_content = false
-	desc.scroll_active = false
-	desc.clip_contents = true
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	desc.add_theme_color_override("default_color", UIKit.C_CREAM)
-	_set_desc_font_size(desc, EVO_DESC_FONT_SIZE)
-	card.add_child(desc)
-	desc.position = Vector2(ROW_TEXT_X, name_y + 78.0)
-	desc.size = Vector2(row_size.x - ROW_TEXT_X - ROW_RIGHT_PAD, row_size.y - (name_y + 78.0) - 12.0)
+## Kartlar çalışma anında yatay bir kutuya taşınır (.tscn'ye dokunulmaz - açık editör eski hâli üstüne yazabilir); eski
+## Content/SelectGlow gizlenir, efsun kartının yazı düğümleri burada kurulur.
+func _layout_evolution_cards() -> void:
+	var old: Control = get_node_or_null("CardsContainer") as Control
+	var card_size: Vector2 = EnchantScreenScript.CARD_SIZE
+	var n: int = clampi(_evo_offers.size(), 1, cards.size())
+	var total_w: float = card_size.x * n + EVO_CARD_GAP * (n - 1)
+	var row := HBoxContainer.new()
+	row.name = "EvoCards"
+	row.theme = UIKit.theme()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", EVO_CARD_GAP)
+	row.set_anchors_preset(Control.PRESET_CENTER)
+	row.offset_left = -total_w * 0.5
+	row.offset_right = total_w * 0.5
+	row.offset_top = EVO_CARD_TOP
+	row.offset_bottom = EVO_CARD_TOP + card_size.y
+	add_child(row)
+	if old:
+		move_child(row, old.get_index())
+		old.visible = false
+	if countdown_panel:
+		countdown_panel.offset_top = EVO_COUNTDOWN_TOP
+		countdown_panel.offset_bottom = EVO_COUNTDOWN_TOP + 74.0
+	for card: Button in cards:
+		if not is_instance_valid(card):
+			continue
+		card.reparent(row, false)
+		card.custom_minimum_size = card_size
+		card.clip_contents = false ## seçim halesi kartın dışına taşar (bkz. TierCardFx.ensure_glow)
+		card.set_meta("glow_texture", EnchantScreenScript.GLOW_TEXTURE)
+		card.set_meta("glow_card_size", card_size)
+		card.set_meta("glow_colors", EnchantScreenScript.GLOW_COLORS)
+		var frame: TextureRect = card.get_node_or_null("Frame") as TextureRect
+		if frame:
+			frame.offset_right = card_size.x
+			frame.offset_bottom = card_size.y
+		for n_name in ["Content", "SelectGlow"]:
+			var node: CanvasItem = card.get_node_or_null(n_name) as CanvasItem
+			if node:
+				node.visible = false
+		var icon_rect: Rect2 = EnchantScreenScript.ICON_RECT
+		var icon := TextureRect.new()
+		icon.name = "EvoIcon"
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		card.add_child(icon)
+		icon.position = icon_rect.position
+		icon.size = icon_rect.size
+		_row_label(card, "EvoKey", Rect2(icon_rect.end - Vector2(32.0, 32.0), Vector2(32.0, 32.0)), 24, UIKit.C_CREAM, HORIZONTAL_ALIGNMENT_RIGHT)
+		var key_lbl: Label = card.get_node("EvoKey") as Label
+		key_lbl.add_theme_constant_override("outline_size", 6)
+		key_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
+		_row_label(card, "EvoTier", EnchantScreenScript.TIER_RECT, EnchantScreenScript.HEADER_FONTS[0], UIKit.C_CREAM, HORIZONTAL_ALIGNMENT_LEFT)
+		_row_label(card, "EvoSkill", EnchantScreenScript.CATEGORY_RECT, EnchantScreenScript.HEADER_FONTS[0], EnchantScreenScript.DIM_COLOR, HORIZONTAL_ALIGNMENT_LEFT)
+		for lbl_name in ["EvoTier", "EvoSkill"]:
+			(card.get_node(lbl_name) as Label).clip_text = true
+		var text := RichTextLabel.new()
+		text.name = "EvoDesc"
+		text.bbcode_enabled = true
+		text.fit_content = false
+		text.scroll_active = false
+		text.clip_contents = true
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		text.add_theme_color_override("default_color", EnchantScreenScript.DIM_COLOR)
+		text.add_theme_constant_override("line_separation", 2)
+		_set_desc_font_size(text, EVO_TEXT_FONT_SIZE)
+		card.add_child(text)
+		text.position = EnchantScreenScript.TEXT_RECT.position
+		text.size = EnchantScreenScript.TEXT_RECT.size
 
 
 func _populate_evolution_rows() -> void:
@@ -1074,26 +1085,29 @@ func _populate_evolution_rows() -> void:
 		if _shine_tweens[i] and _shine_tweens[i].is_valid():
 			_shine_tweens[i].kill()
 		_shine_tweens[i] = TierCardFx.start_idle_shine(self, card.get_node_or_null("Frame") as TextureRect, tier, 0.5 + 0.35 * i)
-		_fill_evolution_row(card, evo, tier, player)
+		_fill_evolution_card(card, evo, tier, player)
 	_fit_evolution_desc.call_deferred()
 
 
-## Satır yazıları: evrim adı (+ FİNAL etiketi), "Q · Yetenek adı · Evrim 2/5" (tier renginde), açıklama (sayılar altın).
-func _fill_evolution_row(card: Button, evo: Dictionary, tier: int, player: Node) -> void:
+## Kart yazıları: "EVRİM n/N" ya da "FİNAL EVRİM" (tier renginde), "Q · Yetenek adı", evrim adı + açıklama (sayılar altın).
+func _fill_evolution_card(card: Button, evo: Dictionary, tier: int, player: Node) -> void:
 	var char_id: int = GameManager.selected_char_id
 	var slot: String = str(evo.get("slot", "skill"))
 	var def: Dictionary = Characters.get_def(char_id)
 	var key: String = str(SkillEvolutions.SLOT_KEYS.get(slot, "Q"))
-	(card.get_node("RowName") as Label).text = str(evo.get("name", ""))
-	(card.get_node("EvoTag") as Label).text = "FİNAL" if tier == EVO_TIER_FINAL else ""
-	(card.get_node("EvoKey") as Label).text = key
 	var owned: Dictionary = player.skill_evolutions if player != null and "skill_evolutions" in player else {}
 	var total: int = SkillEvolutions.slot_list(char_id, slot).size()
 	var next_n: int = SkillEvolutions.owned_count(char_id, slot, owned) + 1
-	(card.get_node("RowSub") as RichTextLabel).text = "[color=#%s]%s  ·  %s[/color][color=#%s]  ·  Evrim %d/%d[/color]" % [
-		ROW_TIER_TEXT[clampi(tier, 1, 4) - 1].to_html(false), key, str(def.get(slot + "_name", "")),
-		ROW_DIM_COLOR.to_html(false), next_n, total]
-	(card.get_node("EvoDesc") as RichTextLabel).text = _evo_desc_bbcode(str(evo.get("desc", "")))
+	var tier_lbl: Label = card.get_node("EvoTier") as Label
+	tier_lbl.text = "FİNAL EVRİM" if tier == EVO_TIER_FINAL else "EVRİM %d/%d" % [next_n, total]
+	tier_lbl.add_theme_color_override("font_color", EnchantScreenScript.TIER_TEXT[clampi(tier, 1, 4) - 1])
+	EnchantScreenScript._fit_header(tier_lbl, EnchantScreenScript.TIER_RECT.size.x)
+	var skill_lbl: Label = card.get_node("EvoSkill") as Label
+	skill_lbl.text = "%s  ·  %s" % [key, str(def.get(slot + "_name", ""))]
+	EnchantScreenScript._fit_header(skill_lbl, EnchantScreenScript.CATEGORY_RECT.size.x)
+	(card.get_node("EvoKey") as Label).text = key
+	(card.get_node("EvoDesc") as RichTextLabel).text = "[color=#%s]%s[/color]\n\n%s" % [
+		EVO_TITLE_COLOR.to_html(false), str(evo.get("name", "")), _evo_desc_bbcode(str(evo.get("desc", "")))]
 	var icon_path: String = str(def.get(slot + "_icon", ""))
 	var icon: TextureRect = card.get_node("EvoIcon") as TextureRect
 	icon.texture = (load(icon_path) as Texture2D) if (icon_path != "" and ResourceLoader.exists(icon_path)) else null
@@ -1113,7 +1127,7 @@ func _evo_desc_bbcode(text: String) -> String:
 	return out + text.substr(last)
 
 
-## Satıra sığmayan açıklama EVO_DESC_MIN_FONT_SIZE'a kadar küçülür (yerleşimden sonra).
+## Karta sığmayan metin EVO_TEXT_MIN_FONT_SIZE'a kadar 8'er px küçülür (m5x7 8'in katlarında net; yerleşimden sonra).
 func _fit_evolution_desc() -> void:
 	if not is_inside_tree():
 		return
@@ -1123,8 +1137,16 @@ func _fit_evolution_desc() -> void:
 		var desc: RichTextLabel = card.get_node_or_null("EvoDesc") as RichTextLabel
 		if desc == null:
 			continue
-		var fs: int = EVO_DESC_FONT_SIZE
+		var fs: int = EVO_TEXT_FONT_SIZE
 		_set_desc_font_size(desc, fs)
-		while fs > EVO_DESC_MIN_FONT_SIZE and float(desc.get_content_height()) > desc.size.y:
+		## İlk ölçüm de bir kare sonra - yerleşim bitmeden okunan yükseklik eski/şişkin çıkıp yazıyı boşuna küçültüyordu.
+		await get_tree().process_frame
+		if not is_instance_valid(desc):
+			return
+		while fs > EVO_TEXT_MIN_FONT_SIZE and float(desc.get_content_height()) > desc.size.y:
 			fs -= 8
 			_set_desc_font_size(desc, fs)
+			## İçerik yüksekliği bir sonraki karede güncellenir - hemen tekrar ölçmek eski değeri okur.
+			await get_tree().process_frame
+			if not is_instance_valid(desc):
+				return

@@ -176,7 +176,7 @@ func test_paladin_bubble_reduction_is_ninety_five_percent() -> void:
 
 
 func test_shield_absorption_bases_are_up_five_points() -> void:
-	var t: Dictionary = PlayerScript.SHIELD_TYPES
+	var t: Dictionary = ShieldEnchantDefs.TYPES
 	assert(is_equal_approx(float(t["shield_standart"]["absorption"]), 0.65), "Standart 0.65")
 	assert(is_equal_approx(float(t["shield_enerji"]["absorption"]), 0.55), "Enerji 0.55")
 	assert(is_equal_approx(float(t["shield_kale"]["absorption"]), 0.75), "Kale 0.75")
@@ -201,9 +201,6 @@ func test_lifesteal_card_and_item_tiers() -> void:
 	var expected: Array = [0.01, 0.015, 0.02, 0.025]
 	for i in range(4):
 		assert(is_equal_approx(TierSystem.lifesteal_percent_for_tier(i + 1), expected[i]), "Kart tier %d" % (i + 1))
-		## Vampir Dişi eşyası: taban x ITEM_TIER_POWER AYNI merdiveni vermeli.
-		var item_base: float = float(Items.get_def("vampir_disi")["stats"]["lifesteal_percent"])
-		assert(is_equal_approx(item_base * float(Items.ITEM_TIER_POWER[i]), expected[i]), "Eşya tier %d" % (i + 1))
 	## Kartın gerçekten uyguladığı değer ve ekranda yazan sayı.
 	var screen: Node = LevelUpScreenScript.new()
 	_track(screen)

@@ -41,6 +41,10 @@ const CHAR_TEXEL := 2.125
 ## ---------- Q: Lanet Kitabı ----------
 const Q_TARGET_RADIUS := 320.0
 const Q_CURSE_INTERVAL := 1.0
+## Kullanıcı isteği (2026-10-01): "tek tek değil 3'er 3'er top göndersin" - her atışta bu kadar lanet (her biri sıradaki
+## en uzun süredir lanetlenmemiş yaratığa). Evrim "Çifte Lanet" (Q finali) bunu EVO_CURSE_VOLLEY_MULT ile katlar.
+const Q_CURSES_PER_VOLLEY := 3
+const EVO_CURSE_VOLLEY_MULT := 2
 ## Kanal başladıktan sonra ilk lanet bu kadar sonra (kitap açılır açılmaz bir lanet görünsün).
 const Q_FIRST_CURSE_DELAY := 0.3
 const Q_DAMAGE_RATIO := 1.1
@@ -215,10 +219,11 @@ static func apply_form(anim: CanvasItem, nightmare: bool, ghost: bool) -> void:
 	if anim == null or not is_instance_valid(anim):
 		return
 	if not nightmare and not ghost:
-		if anim.material != null and anim.has_meta("hadime_form_mat"):
+		## Sadece KENDİ materyalini kaldırır - yere düşünce bedene konan hırpalanma shader'ını (death_blood.gd) silmesin.
+		if anim.material != null and anim.has_meta("hadime_form_mat") and anim.material == anim.get_meta("hadime_form_mat"):
 			anim.material = null
 		return
-	var mat: ShaderMaterial = anim.get_meta("hadime_form_mat", null)
+	var mat: ShaderMaterial = anim.get_meta("hadime_form_mat") if anim.has_meta("hadime_form_mat") else null ## varsayılan null hata loglardı
 	if mat == null:
 		mat = ShaderMaterial.new()
 		mat.shader = _shader()

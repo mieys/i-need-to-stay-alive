@@ -8,6 +8,7 @@ extends Node2D
 ##   spark_ring - sarı kıvılcımlı kesik halka (şok patlaması, kovan)
 
 const PixelDraw := preload("res://scripts/pixel_draw.gd")
+const EnchantLayer := preload("res://scripts/enchant_layer.gd")
 
 var kind: String = "ring"
 var radius: float = 80.0
@@ -18,7 +19,7 @@ var _seed: int = 0
 
 
 func _ready() -> void:
-	z_index = 8
+	z_index = EnchantLayer.Z ## karakterlerin altında (bkz. enchant_layer.gd)
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_seed = randi()
 	if kind == "slam":

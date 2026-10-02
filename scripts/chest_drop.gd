@@ -11,6 +11,7 @@ extends Area2D
 ## toplanınca 4-12 (sallanma + kapak patlaması). Sandık sprite'ı hafifçe sallanır, gölgesi yerde sabit kalır.
 
 const NORMAL_SHEET := preload("res://assets/sprites/chests/chest_normal_t1.png")
+const DropShadowScript := preload("res://scripts/drop_shadow.gd")
 const ELITE_SHEET := preload("res://assets/sprites/chests/chest_elite.png")
 const SHADOW_TEX := preload("res://assets/sprites/chests/chest_shadow.png")
 const FRAME_COUNT := 20
@@ -45,6 +46,9 @@ func _ready() -> void:
 	bob_time = randf() * TAU
 	_idle_t = randf() * NORMAL_GLINT_EVERY
 	_update_visual()
+	## Gölge (2026-10-02, harita gölgeleriyle aynı "B" dili - bkz. drop_shadow.gd): sprite dinlenme konumundayken ölçülür,
+	## sonra sadece sprite zıpladığı için gölge yerde kalır.
+	DropShadowScript.attach(self, sprite, false, 3, Rect2(), true)
 
 
 func _update_visual() -> void:
@@ -121,6 +125,7 @@ func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("remote_players") or NetworkManager.is_multiplayer_active:
 		_open_for_player(body)
 	else:
+		_award_chest_gold([])
 		_open_chest_for(body)
 
 
@@ -170,6 +175,56 @@ func _open_chest_for(_body: Node, award_to_local: bool = true) -> void:
 ## Multiplayer: host tarafında, sandığı GERÇEKTEN toplayan oyuncu için açar. Normal sandık TOPLAYANA gider (kullanıcı
 ## isteği 2026-09-24, NetworkManager.host_award_chest); elit sandık yaşayan HER oyuncuya birer tane (2026-09-25,
 ## NetworkManager.host_award_elite_chest). Tek oyunculu (multiplayer kapalı) akışta toplayan alır.
+## Kullanıcı isteği (2026-10-02, yeni eşya sistemiyle birlikte): "oyunda yere düşen sandıklardan 90-150 civarı altın
+## çıkmasını ve bu altınların oyuncularla paylaşılmasını istiyorum (herkese aynı miktar gönderilir oyuncu başına bu miktar
+## %10 azalır)". Yetkili taraf (host / tek oyunculu) bir kez çeker; her katılımcı AYNI payı alır: miktar x (1 - %10 x
+## (oyuncu sayısı - 1)). Sadece NORMAL yer sandıkları verir (elit sandık vermez - kullanıcı isteği, aynı gün).
+## Aynı gün düzeltme ("sandık açılırken kart çıkar çıkmaz ordan gitmesini istiyorum altın barına"): bu yerden SANDIK alan
+## oyuncunun payı sandıkla birlikte bekler (GameManager.add_pending_chest_gold), sandık ekranında kart inince karttan
+## panele uçar. Sandık almayan takım arkadaşlarının payı (normal sandık tek kişiye gider) boss altını gibi sandığın
+## yerinden dünyada KENDİ karakterlerine uçar ve doğrudan eklenir (grant_personal_gold + _rpc_gold_share_fx).
+const CHEST_GOLD_MIN := 90
+const CHEST_GOLD_MAX := 150
+const CHEST_GOLD_CUT_PER_PLAYER := 0.10
+
+
+static func chest_gold_share(amount: int, players: int) -> int:
+	return maxi(1, int(round(float(amount) * maxf(0.1, 1.0 - CHEST_GOLD_CUT_PER_PLAYER * float(maxi(1, players) - 1)))))
+
+
+## chest_receivers: bu yerden sandık alan peer id'leri (normal: toplayan/kazanan, elit: herkes). Tek oyunculuda yok sayılır.
+func _award_chest_gold(chest_receivers: Array) -> void:
+	## Kullanıcı isteği (2026-10-02): "elit sandıklardan altın çıkmasını istemiyorum" - sadece normal yer sandıkları.
+	if is_elite or get_meta("gold_awarded", false):
+		return
+	set_meta("gold_awarded", true)
+	var amount: int = randi_range(CHEST_GOLD_MIN, CHEST_GOLD_MAX)
+	if not NetworkManager.is_multiplayer_active:
+		GameManager.add_pending_chest_gold(is_elite, chest_gold_share(amount, 1))
+		return
+	var participants: Array = NetworkManager.get_reward_participants()
+	if participants.is_empty():
+		return
+	var share: int = chest_gold_share(amount, participants.size())
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	var fx_shares: Dictionary = {}
+	for p: Dictionary in participants:
+		var pid: int = int(p["peer_id"])
+		if chest_receivers.has(pid):
+			if pid == local_id:
+				GameManager.add_pending_chest_gold(is_elite, share)
+			else:
+				NetworkManager.queue_chest_gold.rpc_id(pid, is_elite, share)
+			continue
+		if pid == local_id:
+			NetworkManager.grant_personal_gold(share)
+		else:
+			NetworkManager.grant_personal_gold.rpc_id(pid, share)
+		fx_shares[pid] = share
+	if not fx_shares.is_empty():
+		NetworkManager._rpc_gold_share_fx.rpc(global_position, fx_shares)
+
+
 func _open_for_player(player_node: Node) -> void:
 	if not NetworkManager.is_multiplayer_active:
 		if player_node and is_instance_valid(player_node) and player_node.is_in_group("player"):
@@ -193,6 +248,7 @@ func _open_for_player(player_node: Node) -> void:
 		if winner_id == 0 and picker_is_local:
 			## Katılımcı listesi boş (ör. herkes ölü): yine de host'un yerel oyuncusuna ver, sandık boşa gitmesin.
 			GameManager.add_pending_chest(chest_tier)
+		_award_chest_gold([winner_id])
 	if picker_is_local:
 		## Toplayan host'un kendisiyse açılış animasyonu/sesi oynasın (ödül yukarıda dağıtıldı).
 		_open_chest_for(player_node, false)

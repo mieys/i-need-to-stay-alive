@@ -87,6 +87,22 @@ var apex_pause: float = 0.0
 var _pause_left: float = 0.0
 var _pause_clear: float = 0.0
 var _apex_done: bool = false
+## Efsun anahtarları (2026-09-30 yeni set - enchant_fx.gd apply_projectile_look "props" ile HEM kasterde HEM uzak kopyada):
+##  enchant_pierce_all - gidişte düşmanlardan dönmez, içlerinden geçer (BIGerang)
+##  enchant_grow / enchant_grow_max - delinen düşman başına büyüme oranı ve tavanı; enchant_titan - uç noktada küçülmez
+##  hit_on_return / return_crit - dönüşte de (düşman başına bir kez) vurur, kesin kritik (Bumerang Testeresi Finali)
+##  pause_hits - uç nokta duraklamasında bumerangın kendi vuruşları (false: testere hasarını efsun veriyor, çift sayılmasın)
+var enchant_pierce_all: bool = false
+var enchant_grow: float = 0.0
+var enchant_grow_max: float = 1.0
+var enchant_titan: bool = false
+var hit_on_return: bool = false
+## Dönüş bacağının hız çarpanı (BIGerang: 1.4 - kullanıcı isteği 2026-10-01 "dönüş hızı %40 daha hızlı").
+var enchant_return_speed_mult: float = 1.0
+var return_crit: bool = false
+var pause_hits: bool = true
+var _grow_factor: float = 1.0
+var _grow_base_scale: Vector2 = Vector2.ZERO
 var is_crit: bool = false
 var shield_pen_percent: float = 0.0
 
@@ -231,7 +247,7 @@ func _physics_process(delta: float) -> void:
 	direction = to_player.normalized()
 	_return_ramp = minf(1.0, _return_ramp + delta / RETURN_RAMP_TIME)
 	var ease_out: float = 1.0 - (1.0 - _return_ramp) * (1.0 - _return_ramp)
-	position += direction * speed * lerpf(APEX_SPEED_MIN, 1.0, ease_out) * delta
+	position += direction * speed * enchant_return_speed_mult * lerpf(APEX_SPEED_MIN, 1.0, ease_out) * delta
 	_update_trail(delta)
 
 
@@ -247,6 +263,9 @@ func _begin_return() -> void:
 	if _apex_done:
 		return
 	_apex_done = true
+	## BIGerang: uç noktadan dönerken normal boyutuna iner (Titanyum Girdabı finalinde inmez).
+	if enchant_grow > 0.0 and not enchant_titan and _grow_factor > 1.0:
+		_set_grow(1.0)
 	if apex_pause > 0.0:
 		_pause_left = apex_pause
 		_pause_clear = 0.33
@@ -318,14 +337,20 @@ func _on_body_entered(body: Node) -> void:
 		return
 	## Dönüşte vurmaz (bkz. dosya başı 2026-09-26 notu) - sadece uç noktada dururken (Kasırga) keser.
 	var pausing: bool = _pause_left > 0.0
-	if _returning and not pausing:
+	if pausing and not pause_hits:
+		return
+	if _returning and not pausing and not hit_on_return:
 		return
 	## Ağ üzerinden spawnlanan görsel kopyalar hasar vermez — sadece darbe efektini/sesini oynatır ve gerçek bumerang gibi
-	## çarptığı yerden döner.
+	## çarptığı yerden döner (efsunla delip geçiyorsa geçer, büyüyorsa aynı oranla büyür).
 	if get_meta("network_spawned", false):
+		if _hit_this_leg.has(body):
+			return
+		_hit_this_leg.append(body)
 		_spawn_impact()
 		_play_impact_sound()
-		if not _returning:
+		_grow_on_hit()
+		if not _returning and not enchant_pierce_all:
 			_begin_return()
 		return
 	if not body.has_method("take_damage"):
@@ -333,16 +358,41 @@ func _on_body_entered(body: Node) -> void:
 	if _hit_this_leg.has(body):
 		return
 	_hit_this_leg.append(body)
-	body.take_damage(damage, is_crit, shield_pen_percent)
+	var hit_crit: bool = is_crit
+	var hit_dmg: float = damage
+	if _returning and not pausing and return_crit and not is_crit:
+		hit_crit = true
+		hit_dmg *= float(source_weapon.get("crit_damage")) if is_instance_valid(source_weapon) and "crit_damage" in source_weapon else 2.0
+	body.take_damage(hit_dmg, hit_crit, shield_pen_percent)
+	_grow_on_hit()
 	if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_projectile_hit"):
 		source_weapon.enchant_on_projectile_hit(self, body, damage, not _returning)
 	if not _shaman_burn_used and body.has_method("try_shaman_weapon_burn"):
 		_shaman_burn_used = body.try_shaman_weapon_burn()
 	_spawn_impact()
 	_play_impact_sound()
-	## Birimlerin içinden geçmez: gidişte çarptığı ilk düşmandan geri döner.
-	if not _returning:
+	## Birimlerin içinden geçmez: gidişte çarptığı ilk düşmandan geri döner (BIGerang efsunu hariç - delip geçer).
+	if not _returning and not enchant_pierce_all:
 		_begin_return()
+
+
+## BIGerang: delinen düşman başına büyür (tavana kadar). Kök düğüm ölçeklenir - çarpışma alanı da büyür.
+func _grow_on_hit() -> void:
+	## Dönüş vuruşları büyütmez (efsun tanımı: "dönerken normal boyutuna iner").
+	if enchant_grow <= 0.0 or _returning:
+		return
+	_set_grow(minf(enchant_grow_max, _grow_factor * (1.0 + enchant_grow)))
+
+
+func _set_grow(factor: float) -> void:
+	if _grow_base_scale == Vector2.ZERO:
+		_grow_base_scale = scale
+	_grow_factor = factor
+	scale = _grow_base_scale * factor
+
+
+func is_grown_max() -> bool:
+	return enchant_grow > 0.0 and _grow_factor >= enchant_grow_max - 0.001
 
 
 func _spawn_impact() -> void:

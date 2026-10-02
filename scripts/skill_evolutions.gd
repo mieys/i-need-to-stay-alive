@@ -3,6 +3,7 @@ extends RefCounted
 ## ==============================================================================
 ## YETENEK EVRİMLERİ (kullanıcı isteği 2026-09-28)
 ## ==============================================================================
+## (2026-09-30: Assasin Çocuk da eklendi - 9 karakter.)
 ## "her 5 levelde bir her karaktere oynadığı karaktere göre 3 kart sunulacak ... kartlar rasgele olacak ... Bir skillin 4
 ## geliştirmesini de aldığında final geliştirme kartların arasına karışıp şans eseri denk gelebilecek. Temel skillerin 5
 ## ultinin 3 geliştirmesi bulunur". Soru-cevapla netleşenler:
@@ -35,7 +36,7 @@ const DEFS := {
 			{"id": "hadime_q2", "name": "Hafif Süzülüş", "desc": "Lanet Kitabı artık seni yavaşlatmaz; açıkken %10 hareket hızı kazanırsın."},
 			{"id": "hadime_q3", "name": "Tutumlu Okuma", "desc": "Lanet Kitabı saniyede %50 daha az kalkan harcar."},
 			{"id": "hadime_q4", "name": "Hızlı Okuma", "desc": "Saldırı hızına bağlı olarak lanetleri daha hızlı yaratıp gönderirsin."},
-			{"id": "hadime_qf", "name": "Çifte Lanet", "desc": "Aynı anda 2 lanet gönderirsin.", "final": true},
+			{"id": "hadime_qf", "name": "Çifte Lanet", "desc": "Her seferinde gönderdiğin lanet sayısı 2 katına çıkar (3 yerine 6).", "final": true},
 		],
 		"skill2": [
 			{"id": "hadime_e1", "name": "Genişleyen Boşluk", "desc": "Kara deliğin boyutu %50 artar."},
@@ -202,6 +203,33 @@ const DEFS := {
 			{"id": "matthew_r1", "name": "Kalın Kürk", "desc": "Feda Kalkanı'nın koruma kapasitesi %50 artar."},
 			{"id": "matthew_r2", "name": "Çabuk Fedakarlık", "desc": "Feda Kalkanı'nın bekleme süresi %25 azalır."},
 			{"id": "matthew_rf", "name": "Ağır Pençeler", "desc": "Feda Kalkanı aktifken saldırıların yaratıkları %30 yavaşlatır.", "final": true},
+		],
+	},
+	## ---------------------------------------------------------------- Assasin Çocuk (kullanıcı isteği 2026-09-30)
+	## Temel kesintiler "çünkü geliştirmelere eklenecek": Gölge Adımı artık saldırı gücü vermez (E2'de), Şahin Hamlesi 3 yerine
+	## 2 yük (Q1'de), Gölge Hücumu'nun tempusu saldırı hızıyla artmaz (R1'de). Aynı gün Q ile E yer değiştirdi (kullanıcı: "E
+	## yeteneği artık Q, Q yeteneği de artık E olsun") - evrimler yetenekleriyle birlikte taşındı, id'ler yeni yuvaya göre
+	## (assasin_q* = Şahin Hamlesi, assasin_e* = Gölge Adımı). Kullanıcının ilk metnindeki "Q yeteneğin fazladan 1 yüke sahip
+	## olur" (hamle listesindeydi) bu değişimle birebir doğru hale geldi.
+	5: {
+		"skill": [
+			{"id": "assasin_q1", "name": "Üçüncü Hamle", "desc": "Şahin Hamlesi fazladan 1 yüke sahip olur (2 yerine 3 yük)."},
+			{"id": "assasin_q2", "name": "Av Zinciri", "desc": "Bu yetenekle öldürdüğün her yaratık, dolmakta olan yükün bekleme süresini 0,2 saniye azaltır."},
+			{"id": "assasin_q3", "name": "Keskin Pençe", "desc": "Şahin Hamlesi'nin hasar oranı %30 artar."},
+			{"id": "assasin_q4", "name": "Rüzgar Gibi", "desc": "Hamle attığında 0,75 saniye boyunca %100 sıvışma kazanırsın (sıvışma sınırını aşar)."},
+			{"id": "assasin_qf", "name": "Kunai Yağmuru", "desc": "Hamle attığında çevrene 6 kunai fırlatırsın; her kunai isabet ettiği yaratıkları delip geçerek saldırı gücünün %50'si kadar hasar verir.", "final": true},
+		],
+		"skill2": [
+			{"id": "assasin_e1", "name": "Uzun Gölge", "desc": "Görünmezliğin süresi 2 saniye uzar."},
+			{"id": "assasin_e2", "name": "Pusu", "desc": "Gölge Adımı aktifken %25 saldırı gücü kazanırsın."},
+			{"id": "assasin_e3", "name": "Gölge Nefesi", "desc": "Görünmezlik aktifleştiğinde kalkan yenilenmesinin bekleme süresi sıfırlanır; kalkanın hemen dolmaya başlar."},
+			{"id": "assasin_e4", "name": "Sessiz Adımlar", "desc": "Görünmezken %20 hareket hızı kazanırsın."},
+			{"id": "assasin_ef", "name": "Gölge Kopyası", "desc": "Görünmezliği aktifleştirdiğinde bulunduğun yere bir gölge kopyanı bırakırsın; görünmezlik sürerken E'ye tekrar basmak seni kopyana geri ışınlar.", "final": true},
+		],
+		"skill3": [
+			{"id": "assasin_r1", "name": "Hızlanan Hücum", "desc": "Gölge Hücumu'nun saldırı sıklığı saldırı hızına bağlı olarak artar."},
+			{"id": "assasin_r2", "name": "Çabuk Gölge", "desc": "Gölge Hücumu'nun bekleme süresi %25 azalır."},
+			{"id": "assasin_rf", "name": "Gölge İzi", "desc": "Gölge Hücumu sırasında arkanda 1 saniye süren bir gölge izi bırakırsın; ize temas eden yaratıklar saldırı gücünün %80'i kadar hasar alır.", "final": true},
 		],
 	},
 }

@@ -2,6 +2,8 @@ extends CharacterBody2D
 class_name RemotePlayer
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const DeathBlood := preload("res://scripts/death_blood.gd")
+const EventSfx := preload("res://scripts/event_sfx.gd")
 const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
 const KORSAN_CHAR_ID := 9 ## Characters.DEFS roster id'si (player.gd ile aynı)
 const WeaponTargetPriorityScript := preload("res://scripts/weapon_target_priority.gd")
@@ -53,6 +55,8 @@ const VampirMath := preload("res://scripts/vampir_math.gd")
 const VampirBatSwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.gd")
 ## Suriyeli Hadime: süzülme/form görünümü/ceset/aura player.gd ile PAYLAŞILAN yardımcılardan (bkz. hadime_math.gd).
 const HadimeMath := preload("res://scripts/hadime_math.gd")
+## Shaman R - Elemental Golem: form kuralları player.gd ile PAYLAŞILIR (bkz. shaman_golem_math.gd).
+const ShamanGolemMath := preload("res://scripts/shaman_golem_math.gd")
 ## Klip adı kuralları (player.gd ile ortak) - bkz. char_anim.gd.
 const CharAnim := preload("res://scripts/char_anim.gd")
 ## Son yarasa konum paketinden bu kadar süre (sn) geçtiyse (kapanış paketi kaybolduysa) kozmetik sürü silinir.
@@ -62,6 +66,8 @@ const FxReviveHeartScene := preload("res://scenes/fx_revive_heart.tscn")
 var _death_status_fx: Node = null
 var _revive_rewind_fx: Node = null
 var _was_downed_for_heart_fx: bool = false
+## update_extra_state_from_net en az bir kez geldi mi (bkz. ally_down sesi).
+var _net_state_seen: bool = false
 
 ## "efekt sistemi" (iyileşme.png/kalkan.png) - bkz. player.gd _set_ally_aura/
 ## network_manager.gd broadcast_ally_aura_start/stop. Bu kukla, başka bir
@@ -149,9 +155,15 @@ var _oakley_bond_fx: Node = null
 ## silahlar gövdeye çekilir (0 = normal yerinde, 1 = tamamen içeride) - anim ADI zaten transform
 ## kanalından geliyor, ek ağ alanı yok.
 var _vampir_bat_form: bool = false
+## Shaman Elemental Golem (bkz. player.gd "SHAMAN: ELEMENTAL GOLEM"): "golem_*" klip adı geldiği sürece form açık - silahlar
+## Vampir'in yarasa formundaki gibi gövdeye çekilir, can çubuğu/isim golemin üstüne çıkar; "golem_jump_*" sürerken (havada)
+## host'taki yaratıklar kuklanın içinden geçer. Ek ağ alanı yok (klip adı transform kanalından geliyor).
+var _shaman_golem_form: bool = false
+var _shaman_golem_jumping: bool = false
 ## Elara'nın Sıvışma'sı (bkz. main.gd extra dict, update_extra_state_from_net) - Vampir'in Yarasa Formu'nun
 ## AKSİNE özel bir animasyonu olmadığı için animasyon adından ÇIKARILAMIYOR, AYRI bir ağ bayrağı gerekiyor.
 var _elara_evasion: bool = false
+var _item_ninja: bool = false ## Ninja'nın El Kitabı - main.gd extra["ninja"]
 ## Ruhani Yetenek "Savaş Şevki" - bkz. main.gd extra dict/enemy.gd _attacker_has_savas_sevki üstündeki AYNI not.
 var has_savas_sevki: bool = false
 ## Denge turu (2026-09-24): bu uzak oyuncunun şansı / Şanslı Zar ekstra altın şansı / Tecrübe Kazanımı - host'taki
@@ -666,6 +678,24 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 		weapon_root.queue_free()
 
 
+## [ikon Sprite2D, sprite_forward_angle_deg] - player.gd get_weapon_icon_info ile AYNI imza. slot = sahibin ağ silah slotu
+## (main.gd "weapon_keys" sırası). update_weapon_visuals sahnesi olmayan anahtarı atladığı için ikon index'i slotla ancak
+## atlanan yoksa aynıdır - burada aynı atlama kuralıyla eşlenir.
+func get_weapon_icon_info(slot: int) -> Array:
+	if slot < 0 or slot >= _weapon_keys.size() or slot >= MAX_WEAPON_ICONS:
+		return []
+	var idx: int = 0
+	for i in range(slot):
+		if WEAPON_SCENES.get(str(_weapon_keys[i])) != null:
+			idx += 1
+	if WEAPON_SCENES.get(str(_weapon_keys[slot])) == null or idx >= _weapon_icons.size():
+		return []
+	var icon: Sprite2D = _weapon_icons[idx] as Sprite2D
+	if not is_instance_valid(icon):
+		return []
+	return [icon, float(_weapon_forward_angle_deg[idx]) if idx < _weapon_forward_angle_deg.size() else 0.0]
+
+
 ## Menzilli silahların (asa/tabanca/yay vb.) sürekli en yakın düşmana dönen
 ## nişan rotasyonunu uzaktaki oyuncu kuklasında YEREL olarak hesaplar - bkz.
 ## weapon.gd _update_aim/_get_nearest_enemy (BİREBİR aynı mantık, aynalama
@@ -811,7 +841,9 @@ func _update_talon_formation(delta: float) -> void:
 func _process_vampir_remote(delta: float) -> void:
 	var prev: float = _vampir_pull
 	## Yetenek evrimi "Silahlı Yarasa" (Vampir E finali): silahlar formda çekilmez - player.gd _vampir_weapons_absorbed ile aynı karar.
-	_vampir_pull = VampirMath.step_pull(_vampir_pull, _vampir_bat_form and not is_dead and not has_evo("vampir_ef"), delta)
+	## Shaman golem formu da aynı çekilmeyi kullanır (player.gd _vampir_weapons_absorbed ile aynı karar).
+	var absorbed: bool = (_vampir_bat_form and not has_evo("vampir_ef")) or _shaman_golem_form
+	_vampir_pull = VampirMath.step_pull(_vampir_pull, absorbed and not is_dead, delta)
 	if _vampir_pull > 0.0:
 		if prev <= 0.0:
 			_vampir_rest_positions.clear()
@@ -947,6 +979,17 @@ func _get_highest_health_enemy_from(origin: Vector2, max_range: float) -> Node2D
 ## İÇİNDE, aynı sıklıkta gönderiliyordu (bkz. update_extra_state_from_net,
 ## sadece değiştiğinde çalışır), silah nişan dönüşü de artık hiç ağdan
 ## gelmiyor (bkz. _update_local_weapon_aim - tamamen yerel hesaplanıyor).
+## Işınlanma (network_manager.gd "teleport_snap" - Assasin "Gölge Kopyası"): yumuşatma/hız tahmini olmadan anında sıçrar.
+## Hız tahmini sıfırlanmazsa bir sonraki pakette (eski hedef -> yeni konum) dev bir hız türetilip kukla ileri fırlardı.
+func snap_to_network_position(pos: Vector2) -> void:
+	global_position = pos
+	_target_position = pos
+	_network_velocity = Vector2.ZERO
+	_network_time_since_update = 0.0
+	_interp_prev_pos = pos
+	reset_physics_interpolation()
+
+
 func update_position_and_anim_from_net(pos: Vector2, cur_anim: String) -> void:
 	## bkz. yukarıdaki _network_velocity sınıf üstü notu - enemy.gd
 	## update_network_state() ile BİREBİR aynı türetme.
@@ -962,6 +1005,9 @@ func update_position_and_anim_from_net(pos: Vector2, cur_anim: String) -> void:
 	_target_position = pos
 	_vampir_bat_form = VampirMath.is_bat_anim(cur_anim)
 	_apply_vampir_bat_scale()
+	_shaman_golem_form = ShamanGolemMath.is_golem_anim(cur_anim)
+	_shaman_golem_jumping = ShamanGolemMath.is_jump_anim(cur_anim)
+	ShamanGolemMath.apply_overhead_lift(self, _shaman_golem_form and not is_dead)
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(cur_anim):
 		if anim.animation != cur_anim:
 			anim.play(cur_anim)
@@ -1003,6 +1049,9 @@ func update_position_and_anim_from_net(pos: Vector2, cur_anim: String) -> void:
 ## çağrılıyor (bkz. update_extra_state_from_net içindeki çağrı yeri - alanlar
 ## atandıktan HEMEN SONRA çağrılıyor).
 func _update_death_status_fx() -> void:
+	## Kan + hırpalanma (bkz. death_blood.gd, player.gd aynı çağrı). Kukla yere düşmüşken is_dead false gelir (main.gd
+	## send_dead) - bu yüzden is_downed da sayılır.
+	DeathBlood.sync(self, is_dead or is_downed)
 	if is_dead:
 		if not _death_status_fx or not is_instance_valid(_death_status_fx):
 			_death_status_fx = FxDeathScene.instantiate()
@@ -1078,15 +1127,19 @@ func has_evo(evo_id: String) -> bool:
 ## get_talon_ward_radius ile AYNI formül (host'ta uzak Talon'un çemberi mermileri bu kuklaya göre söndürür).
 func get_talon_ward_radius() -> float:
 	if _talon_formation == "salvo" and has_evo("talon_ef") and not is_dead:
-		return TalonFormationMath.SALVO_RADIUS * absf(global_scale.x)
-	return 0.0
+		return maxf(TalonFormationMath.SALVO_RADIUS * absf(global_scale.x), _enchant_ward)
+	return 0.0 if is_dead else _enchant_ward
+
+
+## Sahibinin efsun mermi kalkanı (main.gd extra["ench_ward"], player.gd get_enchant_ward_radius ile aynı değer).
+var _enchant_ward: float = 0.0
 
 
 ## Vampir Çocuk yarasa formundayken (anim adı bat_*) yaratıklar bu kuklanın içinden geçilebilir sayar - player.gd is_ghost_now ile aynı
 ## sözleşme (enemy.gd host'ta çalışır, uzak Vampir'i bu kukla temsil eder).
 func is_ghost_now() -> bool:
 	## Suriyeli Hadime Q'da havaya süzülürken de (main.gd extra["hadime"].q) - host'taki yaratıklar onu dışarı itmesin.
-	return _vampir_bat_form or _elara_evasion or _hadime_q
+	return _vampir_bat_form or _elara_evasion or _hadime_q or _shaman_golem_jumping or _item_ninja
 
 
 ## player.gd get_effective_move_speed ile AYNI sözleşme. Durum paketi henüz gelmediyse yerel oyuncunun hızı (aynı
@@ -1111,6 +1164,7 @@ func get_effective_move_speed() -> float:
 
 func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary = {}) -> void:
 	## Yetenek evrimleri (2026-09-28, main.gd extra["evo"]) - görsel kararlardan ÖNCE (bkz. has_evo).
+	_enchant_ward = float(extra.get("ench_ward", 0.0))
 	if extra.has("evo"):
 		_evolutions.clear()
 		for evo_id in extra["evo"]:
@@ -1128,7 +1182,11 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	# Handle death state change
 	if dead and not is_dead:
 		_play_death_animation()
+		## Takım arkadaşı düştü/öldü sesi - ilk durum paketinde değil (sonradan katılınca zaten ölü olan arkadaş için çalmasın).
+		if _net_state_seen:
+			EventSfx.play(get_tree(), &"ally_down")
 	is_dead = dead
+	_net_state_seen = true
 	## Kullanıcı isteği: "öldüğü konum ve body si yerinde durmalı" - ceset
 	## artık kalıcı olarak sahnede kaldığı için (bkz. yukarıdaki _play_death_
 	## animation notu) can/kalkan çubuğu artık anlamsız (hep 0) hale geliyor,
@@ -1154,6 +1212,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	## Elara'nın Sıvışma'sı (bkz. main.gd extra dict/player.gd _elara_evasion_timer üstündeki AYNI not) -
 	## is_ghost_now()'da okunuyor ki enemy.gd bu oyuncuya sert yapışmasın.
 	_elara_evasion = extra.get("elara_evasion", false)
+	_item_ninja = extra.get("ninja", false)
 	has_savas_sevki = extra.get("has_savas_sevki", false)
 	luck = float(extra.get("luck", 0.0))
 	item_extra_gold_chance = float(extra.get("extra_gold", 0.0))
@@ -1256,7 +1315,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 
 	if shield_visual:
 		## DÜZELTME (derin multiplayer görsel denetimi): kalkanın GÖRSEL türü
-		## (standart/enerji/kale/savaş - bkz. player.gd SHIELD_TYPES /
+		## (standart/enerji/kale/savaş - bkz. shield_enchant_defs.gd /
 		## _owned_shield_type_key) hiç senkronize edilmiyordu, uzak oyuncular
 		## her zaman varsayılan (standart) baloncuk görselini görüyordu.
 		shield_visual.set_shield_type(extra.get("shield_type", ""))
@@ -1880,20 +1939,29 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 	## Talon formasyonu (Salvo/Ayna Formu) ya da Vampir'in silah çekilmesi sürerken ikon konumu başka bir sistemin (formül) elinde:
 	## slot tabanlı savurma/geri tepme tween'i onunla çekişip silahı fırlatıyordu - sadece küçük ofset uygula (bkz. _formation_kick).
 	var formation_owns_position: bool = _talon_formation != "" or _vampir_pull > 0.0
+	## Kritik atış (bkz. weapon_crit_anim.gd) - kaster weapon.gd'de aynı fonksiyonları oynatır.
+	var is_crit: bool = bool(data.get("crit", false))
+	var wkey: String = str(_weapon_keys[slot_index]) if slot_index < _weapon_keys.size() else ""
+	var base_scale_all: Vector2 = _weapon_base_scales[slot_index] if slot_index < _weapon_base_scales.size() else icon.scale
 
 	if is_melee and formation_owns_position:
 		_kick_formation_icon(slot_index, dir, float(_weapon_recoil_distance[slot_index]) if slot_index < _weapon_recoil_distance.size() else 8.0)
 	elif is_melee and slot_index < _weapon_is_sword.size() and _weapon_is_sword[slot_index] and data.has("sword_side"):
 		## Uzunkılıç: kasterle AYNI savuruş (bkz. weapon.gd _start_sword_swing) - plan kuklanın kendi kök ölçeğiyle kurulur.
 		var s_target := Vector2(float(data.get("target_pos_x", 0.0)), float(data.get("target_pos_y", 0.0)))
-		var s_plan: Dictionary = SwordSwingMath.make_plan(dir, s_target, float(data.get("sword_side", 1.0)),
-			float(data.get("sword_size", 1.0)), scale.x)
 		var s_forward: float = deg_to_rad(_weapon_forward_angle_deg[slot_index] if slot_index < _weapon_forward_angle_deg.size() else 0.0)
 		var s_rest_rot: float = deg_to_rad(_weapon_rest_rotation_deg[slot_index] if slot_index < _weapon_rest_rotation_deg.size() else 0.0)
 		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
 			(_weapon_fire_tweens[slot_index] as Tween).kill()
-		var s_tw: Tween = SwordSwingMath.play(self, icon, s_plan, s_forward, base_pos, s_rest_rot,
-			float(data.get("sword_speed", 1.0)), get_tree().current_scene)
+		var s_tw: Tween
+		if is_crit:
+			var stab: Dictionary = SwordSwingMath.make_stab_plan(dir, s_target, float(data.get("sword_size", 1.0)), scale.x)
+			s_tw = SwordSwingMath.play_stab(self, icon, stab, s_forward, base_pos, s_rest_rot, float(data.get("sword_speed", 1.0)))
+		else:
+			var s_plan: Dictionary = SwordSwingMath.make_plan(dir, s_target, float(data.get("sword_side", 1.0)),
+				float(data.get("sword_size", 1.0)), scale.x)
+			s_tw = SwordSwingMath.play(self, icon, s_plan, s_forward, base_pos, s_rest_rot,
+				float(data.get("sword_speed", 1.0)), get_tree().current_scene)
 		if slot_index < _weapon_fire_tweens.size():
 			_weapon_fire_tweens[slot_index] = s_tw
 	elif is_melee:
@@ -1907,6 +1975,14 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		
 		var dist: float = global_position.distance_to(target_pos)
 		var strike_center: Vector2 = base_pos + dir * max(0.0, dist - slash_offset) + Vector2(0.0, -slash_above)
+		if is_crit and WeaponCritAnim.is_melee_kind(wkey):
+			if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
+				(_weapon_fire_tweens[slot_index] as Tween).kill()
+			var c_tw: Tween = WeaponCritAnim.play_melee(self, icon, wkey, dir, base_pos, strike_center, forward, rest_rot,
+				base_scale_all, hold_duration)
+			if slot_index < _weapon_fire_tweens.size():
+				_weapon_fire_tweens[slot_index] = c_tw
+			return
 		var perp := Vector2(-dir.y, dir.x)
 		var points: Array[Vector2] = []
 		for i in range(reps):
@@ -1964,6 +2040,15 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
 			(_weapon_fire_tweens[slot_index] as Tween).kill()
 		
+		if is_crit and WeaponCritAnim.kind_of(wkey) != "":
+			var old_crit_punch: Variant = icon.get_meta("punch_tween") if icon.has_meta("punch_tween") else null
+			if old_crit_punch is Tween and (old_crit_punch as Tween).is_valid():
+				(old_crit_punch as Tween).kill()
+			var r_tw: Tween = WeaponCritAnim.play_ranged(self, icon, wkey, dir, base_pos, base_scale, recoil_dist)
+			if slot_index < _weapon_fire_tweens.size():
+				_weapon_fire_tweens[slot_index] = r_tw
+			return
+
 		var tw := create_tween()
 		if slot_index < _weapon_fire_tweens.size():
 			_weapon_fire_tweens[slot_index] = tw

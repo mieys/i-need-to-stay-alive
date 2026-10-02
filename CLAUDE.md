@@ -113,6 +113,27 @@ diğer oyuncularda eski/hiç görsel kalır.
    `get_glow_segment() -> [başlangıç, bitiş]` kancası ekle (bkz.
    `night_glow.gd` dosya başı, örnek `fx_lightning_beam.gd`).
 
+8. **İnternet odası (Epic Online Services, 2026-10-02).** LAN'a ek olarak
+   PC + Android crossplay: `scripts/net/eos_online.gd` (EosOnline autoload:
+   anonim giriş, oda ilanı) + `network_manager.gd` `host_online`/`join_online`.
+   Epic P2P tek paketi ~1170 baytla sınırlar; `scripts/net/fragment_peer.gd`
+   büyük RPC'leri otomatik böler, yani RPC kodu değişmez - ama YÜKSEK
+   FREKANSLI ve büyük bir senkron eklersen `enemy_spawner.gd`
+   `ENEMY_SYNC_BATCH` gibi küçük gruplara böl (güvenilmez pakette tek parça
+   kaybı tüm mesajı düşürür). Kimlikler `eos_credentials.cfg` (git'e GİRMEZ,
+   repo herkese açık; şablon `eos_credentials.example.cfg`). Android gradle
+   şablonu (`android/`, git'te yok) kurulunca `python tools/setup_android_eos.py`
+   çalıştır.
+
+9. **DEVAM EDEN BÜYÜK İŞ: yaratık sistemi yeniden yazımı (2026-10-03'ten beri).**
+   Yaratıklar (enemy.gd ve ona bağlı her şey) aşamalı olarak veri odaklı bir mimariye (`EnemyWorld`) taşınıyor. İş
+   birden çok oturuma VE birden çok Claude hesabına yayılıyor; önceki oturumun yaptıklarını hafızadan değil depodan
+   öğrenirsin: **`docs/yaratik_yeniden_yazim/PLAN.md`** (plan, mimari, kararlar, tuzaklar) ve
+   **`docs/yaratik_yeniden_yazim/ILERLEME.md`** (şu an hangi aşama, sıradaki adım, ölçümler, oturum kayıtları).
+   `enemy*.gd`, `weapon.gd`, efsunlar, yaratık sahneleri veya isabet/hasar koduna dokunan HER görevden önce bu ikisini
+   oku - başka bir iş yapıyor olsan bile yeniden yazımla çakışmasın. Bu işe devam ederken
+   `.claude/skills/yaratik-yeniden-yazim/SKILL.md` adımlarını izle; oturum biterken ILERLEME.md'yi güncellemeyi ATLAMA.
+
 ## Test/doğrulama
 
 Yeni bir yetenek/efekt eklediğinde, TEK bilgisayarda iki pencere açıp

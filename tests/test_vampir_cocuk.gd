@@ -198,16 +198,29 @@ func test_passive_does_nothing_for_other_characters() -> void:
 
 # ------------------------------------------------------------------ Q
 
-func test_q_hits_nearest_three_and_pays_health() -> void:
+## Kullanıcı isteği (2026-10-01): Q artık candan değil, diğer karakterlerin Q'su gibi standart temel kalkan tarifesinden harcar.
+func _give_shield(player: Node, amount: float) -> void:
+	player.item_shield_max = amount
+	player.item_shield_hp = amount
+
+
+func _q_shield_cost(player: Node) -> float:
+	return (player.item_shield_max * player.SKILL2_SHIELD_COST_PERCENT_OF_MAX + player.SKILL2_SHIELD_COST_FLAT) \
+		* (1.0 - player.item_skill_shield_cost_reduction)
+
+
+func test_q_hits_nearest_three_and_pays_shield() -> void:
 	var player: Node = _make_player()
 	_ready_player(player)
+	_give_shield(player, 200.0)
 	var e1: FakeEnemy = _make_enemy(Vector2(1050, 1000))
 	var e2: FakeEnemy = _make_enemy(Vector2(1000, 1100))
 	var e3: FakeEnemy = _make_enemy(Vector2(1200, 1000))
 	var e4: FakeEnemy = _make_enemy(Vector2(1000, 1300)) ## menzil içinde ama 4. yakın
 	var far: FakeEnemy = _make_enemy(Vector2(3000, 3000))
 	var max0: float = player.max_health
-	var cost: float = max0 * 0.04
+	var h0: float = player.health
+	var cost: float = _q_shield_cost(player)
 	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE ## kritik yok (taban %5 de sıfırlanır)
 	player._activate_skill()
 	assert(player.skill_state == "active", "Q tetiklenmeli")
@@ -217,8 +230,9 @@ func test_q_hits_nearest_three_and_pays_health() -> void:
 	assert(e4.hits.is_empty() and far.hits.is_empty(), "4. yakın ve uzak düşman vurulmamalı")
 	## 2026-09-28: kalıcı +1 maks. can artık temel yetenekte değil ("Kan Bağı" evrimi - aşağıdaki test).
 	assert(is_equal_approx(player.max_health, max0), "evrimsiz Q maks. canı değiştirmez")
-	assert(is_equal_approx(player.health, max0 - cost), "bedel: maks. canın %%4'ü: %s" % str(player.health))
-	assert(is_equal_approx(player.item_shield_hp, 0.0), "kalkan harcanmaz")
+	assert(is_equal_approx(player.health, h0), "Q artık can harcamaz: %s / %s" % [player.health, h0])
+	assert(cost > 0.0 and absf(player.item_shield_hp - (200.0 - cost)) < 0.01,
+		"bedel standart Q kalkan tarifesi (%s) olmalı, kalan kalkan: %s" % [cost, player.item_shield_hp])
 	_cleanup()
 
 
@@ -227,6 +241,7 @@ func test_q_evolutions_blood_bond_feast_and_cooldown() -> void:
 	_ready_player(player)
 	for id in ["vampir_q1", "vampir_q2", "vampir_qf"]:
 		player.apply_skill_evolution(id, true)
+	_give_shield(player, 200.0)
 	var enemies: Array = []
 	for i in range(6):
 		enemies.append(_make_enemy(Vector2(1040 + i * 30, 1000)))
@@ -242,16 +257,18 @@ func test_q_evolutions_blood_bond_feast_and_cooldown() -> void:
 	_cleanup()
 
 
-func test_q_without_target_or_with_too_little_health_does_not_fire() -> void:
+func test_q_without_target_or_with_too_little_shield_does_not_fire() -> void:
 	var player: Node = _make_player()
 	_ready_player(player)
+	_give_shield(player, 200.0)
 	var h0: float = player.health
 	player._activate_skill()
-	assert(player.skill_state == "ready" and is_equal_approx(player.health, h0), "hedef yokken can harcanmaz/bekleme başlamaz: state=%s hp=%s h0=%s enemies=%d" % [player.skill_state, player.health, h0, get_tree().get_nodes_in_group("enemies").size()])
+	assert(player.skill_state == "ready" and is_equal_approx(player.health, h0) and is_equal_approx(player.item_shield_hp, 200.0),
+		"hedef yokken bedel ödenmez/bekleme başlamaz: state=%s hp=%s kalkan=%s" % [player.skill_state, player.health, player.item_shield_hp])
 	var e: FakeEnemy = _make_enemy(Vector2(1050, 1000))
-	player.health = 3.0 ## bedel (~%4 max) üstünde: kendini ÖLDÜRMEMELİ
+	player.item_shield_hp = 0.0 ## kalkan bedeli karşılanamıyor - diğer karakterlerin Q'su gibi "KALKAN YETERSİZ"
 	player._activate_skill()
-	assert(player.skill_state == "ready" and is_equal_approx(player.health, 3.0) and e.hits.is_empty(), "can yetersizse tetiklenmez")
+	assert(player.skill_state == "ready" and is_equal_approx(player.health, h0) and e.hits.is_empty(), "kalkan yetersizse tetiklenmez, can da harcanmaz")
 	_cleanup()
 
 
@@ -604,6 +621,7 @@ func test_shrug_plays_on_q_and_r_but_not_on_e() -> void:
 	_ready_player(player)
 	var target: FakeEnemy = _make_enemy(Vector2(1050, 1000))
 	assert(target != null)
+	_give_shield(player, 200.0) ## Q artık kalkan bedeli öder (2026-10-01)
 	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE
 	player._activate_skill()
 	assert(player.skill_state == "active", "Q tetiklenmeli")

@@ -22,6 +22,10 @@ const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 ## true ise "impact" animasyonu, uçuş rotasyonunun tam 180° tersinde çizilir
 ## - mermi çarpıp geri patlamış gibi görünür (ör. Büyücü Kız'ın patlaması).
 @export var impact_rotation_flip: bool = false
+## true ise impact_scene, merminin uçuş yönüne (direction) döndürülür - efekt sprite'ı +x = uçuş yönü çizilmişse
+## (ör. Tüfek isabeti: kıvılcımlar mermi yönünde saçılır, bkz. tools/gen_weapon_fx_sprites.py gen_tufek_hit). Uzak
+## kopyalar da aynı direction'ı aldığı için (NetworkManager.broadcast_projectile) iki tarafta aynı döner.
+@export var impact_face_direction: bool = false
 
 ## Çarpma anında bu listeden RASTGELE biri çalınır (ör. Tabanca'nın 7 farklı
 ## "et'e mermi isabeti" sesi) - boşsa hiçbir şey çalmaz. Ses, mermi çarpma
@@ -209,7 +213,32 @@ func _physics_process(delta: float) -> void:
 		_trail.global_rotation = direction.angle()
 		_trail.global_scale = Vector2.ONE * TRAIL_SCALE
 		_trail.visible = true
+	_net_homing(delta)
 	position += direction * speed * delta
+
+
+## Uzak (görsel) kopyanın güdümü: look "home_id" (bkz. EnchantFx.apply_projectile_look) -> aynı hedefe kasterdeki
+## enchant_behavior güdümüyle AYNI dönüş hızıyla yönelir. Kasterde bu meta hiç okunmaz (güdüm orada behavior'da).
+## 2026-09-30 çok oyunculu silah senkron analizi: eskiden uzak ekranlarda güdümlü mermiler (Prizm kopyaları) düz uçuyordu.
+const NET_HOMING_TURN := 9.0 ## = enchant_behavior.gd HOMING_TURN
+var _home_target: Node2D = null
+var _home_checked: bool = false
+
+
+func _net_homing(delta: float) -> void:
+	if not _home_checked:
+		_home_checked = true
+		if get_meta("network_spawned", false) and int(get_meta("home_id", 0)) > 0:
+			_home_target = NetworkManager.find_enemy_by_net_id(int(get_meta("home_id"))) as Node2D
+	if _home_target == null:
+		return
+	if not is_instance_valid(_home_target) or _home_target.get("is_dead") == true:
+		_home_target = null
+		return
+	var want: Vector2 = (_home_target.global_position - global_position).normalized()
+	direction = direction.slerp(want, clampf(NET_HOMING_TURN * delta, 0.0, 1.0)).normalized()
+	if face_direction:
+		rotation = direction.angle()
 
 
 func _on_body_entered(body: Node) -> void:
@@ -336,6 +365,8 @@ func _spawn_impact() -> void:
 	var fx = impact_scene.instantiate()
 	get_tree().current_scene.add_child(fx)
 	fx.global_position = global_position + impact_offset
+	if impact_face_direction and fx is Node2D and direction.length() > 0.001:
+		fx.rotation = direction.angle()
 
 
 ## impact_sounds doluysa aralarından rastgele birini seçip çalar - mermi

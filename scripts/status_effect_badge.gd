@@ -40,6 +40,7 @@ const INFO := {
 	"shield_slow": ["Kalkan Yenilemesi Yavaş", "Bir yetenek kullandın - kalkan yenilenme hızın kısa süreliğine %50 düştü."],
 	"burn": ["Yanma", "Bir İblis'in ateş topu seni tutuşturdu - 3 saniye boyunca yanarak hasar alırsın."],
 	"savas_sevki": ["Savaş Şevki", "Öldürdükçe yığılan savaş şevki - 50'de kalıcı +1 saldırı gücüne dönüşür."],
+	"golem": ["Elemental Golem", "Golem formundasın: aldığın hasar %40 azalır ve yeteneklerin kalkan harcamaz."],
 	"kalkan_bagi": ["Kalkan Bağı", "Arkadaşınla kalkanınız birbirine bağlı - hasar/bedel/artış %50-%50 paylaşılıyor, ikinizin de kalkanı daha hızlı yenileniyor."],
 }
 

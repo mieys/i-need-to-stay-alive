@@ -1,13 +1,16 @@
 extends Node
 
+## 2026-10-02: eski ekstralar silindi, liste boş olabilir (kullanıcı yenilerini tasarlıyor) - tanımlı olanlar eksiksiz olmalı.
 func test_items_defs_exist() -> void:
-	assert(Items.KEYS.size() > 0, "Items keys are empty!")
+	assert(Items.KEYS.size() == Items.DEFS.size(), "KEYS ile DEFS aynı eşyaları listelemeli")
 	for key in Items.KEYS:
 		var def = Items.get_def(key)
 		assert(def.size() > 0, "Item definition for %s is empty!" % key)
 		assert(def.has("name"), "Item %s has no name!" % key)
-		assert(def.has("desc"), "Item %s has no desc!" % key)
-		assert(def.has("cost_base"), "Item %s has no cost_base!" % key)
+		## 2026-10-02 yeni eşya sistemi: açıklama statlardan üretilir (Items.describe), fiyat "cost", kademe 1-3.
+		assert(Items.describe(key) != "", "Item %s has no description!" % key)
+		assert(def.has("cost") and int(def["cost"]) > 0, "Item %s has no cost!" % key)
+		assert(int(def.get("kademe", 0)) in [1, 2, 3], "Item %s has no kademe!" % key)
 
 ## 2026-09-25: sandıklar yeniden çizildi (tools/gen_chest_sprites.py, 20 kare x 48 px) - kademe artık görseli
 ## değiştirmiyor, normal/elit ayrımı değiştiriyor.

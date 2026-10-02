@@ -2,6 +2,8 @@ extends Node
 
 ## Vampir Çocuk FX yardımcısı (broadcast_player_vfx "vampir_fx" dalı).
 const VampirMathScript := preload("res://scripts/vampir_math.gd")
+const EventSfx := preload("res://scripts/event_sfx.gd")
+const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 ## Suriyeli Hadime "hadime_fx" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
 const HadimeMathScript := preload("res://scripts/hadime_math.gd")
 ## Yetenek evrimi dünya alanları (Korsan ateş/mayın) - broadcast_evo_area.
@@ -18,8 +20,8 @@ const SpiritualSkillsScript := preload("res://scripts/spiritual_skills.gd")
 ##
 ## Host = ENet sunucusu = HER ZAMAN peer id 1 (bkz. _refresh_host). Host oyundan ayrılırsa
 ## oyun biter (host devri yok): katılımcılar server_disconnected/host_left_game sinyaliyle
-## ana menüye döner. İnternet üzerinden oynamak için host'un portu (varsayılan 7777, UDP)
-## yönlendirmesi ya da bir sanal ağ aracı (Radmin/Hamachi/ZeroTier vb.) gerekir.
+## ana menüye döner. İnternet üzerinden oynamak için (2026-10-02'den beri) Epic Online Services odası var: port açma /
+## Radmin gerekmez, PC ve Android birlikte oynar - bkz. host_online/join_online ("İNTERNET ODASI" bloğu).
 ##
 ## "Oda kodu" (room_code) artık sadece bağlantı bilgisi metnidir: host'ta "LAN:<port>",
 ## katılımcıda "<ip>:<port>" - lobide gösterilir.
@@ -190,6 +192,7 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	lobby_updated.connect(_sync_online_lobby_state)
 	## Level atlama geri sayımı (bkz. update_level_up_timer) TAM OLARAK
 	## oyun duraklatılmışken (get_tree().paused = true, level atlama
 	## ekranı açıkken) işlemesi gerekiyor - varsayılan process_mode
@@ -224,6 +227,7 @@ func _process(delta: float) -> void:
 
 	if is_multiplayer_active and is_host:
 		_process_batched_syncs(delta)
+	_process_online_session()
 
 	## LAN OTOMATİK KEŞİF: host'ken periyodik "buradayım" yayını, herkeste (bağlı
 	## olsun olmasın, fonksiyonların kendisi no-op guard'lı) gelen paketleri dinleme.
@@ -238,11 +242,7 @@ func _process(delta: float) -> void:
 func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1) -> bool:
 	disconnect_from_room(false)
 	is_multiplayer_active = true
-	local_player_name = player_name.strip_edges()
-	if local_player_name.is_empty():
-		local_player_name = "Oyuncu"
-	_save_local_player_name()
-	local_char_id = char_id
+	_set_local_identity(player_name, char_id)
 	is_host = true
 	_host_peer = 1
 	## DÜZELTME (kullanıcı isteği: "ip adresimi otomatik olarak lan'da görünsün ipmi
@@ -284,11 +284,7 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 func join_lan(ip: String = "127.0.0.1", port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1) -> bool:
 	disconnect_from_room(false)
 	is_multiplayer_active = true
-	local_player_name = player_name.strip_edges()
-	if local_player_name.is_empty():
-		local_player_name = "Oyuncu"
-	_save_local_player_name()
-	local_char_id = char_id
+	_set_local_identity(player_name, char_id)
 	is_host = false
 	_host_peer = 1
 	room_code = "%s:%d" % [ip, port]
@@ -305,6 +301,132 @@ func join_lan(ip: String = "127.0.0.1", port: int = 7777, player_name: String = 
 	connection_status_changed.emit("LAN Sunucuya bağlanılıyor (%s:%d)..." % [ip, port])
 	stop_lan_discovery_listen()
 	return true
+
+
+## ============================================================================
+## İNTERNET ODASI - Epic Online Services (kullanıcı isteği 2026-10-02: "hem androidden hem pcden crossplay sağlanması
+## radmin olmadan")
+## ============================================================================
+## LAN ile AYNI oyun kodu: tek fark bağlantı katmanı. ENet yerine Epic P2P (EOSGMultiplayerPeer; NAT delme + gerekirse
+## Epic relay, port açmaya gerek yok), FragmentPeer ile sarılı (Epic'in ~1170 baytlık paket sınırı - bkz. fragment_peer.gd).
+## Host yine peer id 1. Epic girişi/oda ilanı scripts/net/eos_online.gd (EosOnline autoload).
+const FragmentPeerScript := preload("res://scripts/net/fragment_peer.gd")
+## Epic'te host'a ulaşılamazsa bağlantı "bağlanıyor"da asılı kalabiliyor - bu süre sonunda başarısız sayılır.
+const ONLINE_CONNECT_TIMEOUT_MS := 20000
+
+## true: şu anki oda Epic üzerinden (host ya da katılımcı).
+var is_online_session: bool = false
+## Her host_online/join_online/bağlantı kesme çağrısında artar; uzun süren Epic adımları (await) bittiğinde oyuncu bu
+## arada vazgeçtiyse (geri/başka oda) eski deneme sessizce iptal olur.
+var _online_attempt: int = 0
+var _online_connect_deadline_msec: int = 0
+
+
+## Oyuncuya internet seçeneğini göstermeli mi? (eos_credentials.cfg dolu mu)
+func is_online_available() -> bool:
+	return EosOnline.is_configured()
+
+
+func host_online(player_name: String = "Oyuncu", char_id: int = 1) -> void:
+	disconnect_from_room(false)
+	_online_attempt += 1
+	var attempt: int = _online_attempt
+	_set_local_identity(player_name, char_id)
+	connection_status_changed.emit("Epic'e bağlanılıyor...")
+	var err: String = await EosOnline.ensure_ready_async(local_player_name)
+	if attempt != _online_attempt:
+		return
+	if not err.is_empty():
+		connection_status_changed.emit(err)
+		return
+	var eos_peer := EOSGMultiplayerPeer.new()
+	if eos_peer.create_server(EosOnline.SOCKET_ID) != OK:
+		connection_status_changed.emit("İnternet odası kurulamadı (Epic P2P).")
+		return
+	connection_status_changed.emit("İnternet odası ilan ediliyor...")
+	var listed: bool = await EosOnline.host_lobby_async(local_player_name, MAX_PLAYERS)
+	if attempt != _online_attempt:
+		eos_peer.close()
+		EosOnline.close_lobby_async()
+		return
+	if not listed:
+		eos_peer.close()
+		connection_status_changed.emit("Epic oda ilanı oluşturulamadı.")
+		return
+
+	is_multiplayer_active = true
+	is_online_session = true
+	is_host = true
+	_host_peer = 1
+	room_code = "İnternet (Epic) - %s" % local_player_name
+	_peer = FragmentPeerScript.new(eos_peer)
+	multiplayer.multiplayer_peer = _peer
+	lobby_players[1] = {
+		"name": local_player_name,
+		"char_id": local_char_id,
+		"is_ready": true,
+		"is_host": true
+	}
+	stop_lan_discovery_listen()
+	connection_status_changed.emit("İnternet odası kuruldu! Arkadaşların listede görüp katılabilir.")
+	lobby_updated.emit()
+
+
+## host_id: odayı kuranın Epic kullanıcı kimliği (EosOnline.search_lobbies_async sonucundaki "host_id").
+func join_online(host_id: String, host_name: String, player_name: String = "Oyuncu", char_id: int = 1) -> void:
+	disconnect_from_room(false)
+	_online_attempt += 1
+	var attempt: int = _online_attempt
+	_set_local_identity(player_name, char_id)
+	connection_status_changed.emit("Epic'e bağlanılıyor...")
+	var err: String = await EosOnline.ensure_ready_async(local_player_name)
+	if attempt != _online_attempt:
+		return
+	if not err.is_empty():
+		connection_status_changed.emit(err)
+		return
+	var eos_peer := EOSGMultiplayerPeer.new()
+	if eos_peer.create_client(EosOnline.SOCKET_ID, host_id) != OK:
+		connection_status_changed.emit("Odaya bağlanılamadı (Epic P2P).")
+		return
+	is_multiplayer_active = true
+	is_online_session = true
+	is_host = false
+	_host_peer = 1
+	room_code = "İnternet (Epic) - %s" % host_name
+	_peer = FragmentPeerScript.new(eos_peer)
+	multiplayer.multiplayer_peer = _peer
+	_online_connect_deadline_msec = Time.get_ticks_msec() + ONLINE_CONNECT_TIMEOUT_MS
+	stop_lan_discovery_listen()
+	connection_status_changed.emit("%s odasına bağlanılıyor..." % host_name)
+
+
+## host_lan/join_lan/host_online/join_online'ın ortak başlangıcı: oyuncu adı (kaydedilir) + karakter.
+func _set_local_identity(player_name: String, char_id: int) -> void:
+	local_player_name = player_name.strip_edges()
+	if local_player_name.is_empty():
+		local_player_name = "Oyuncu"
+	_save_local_player_name()
+	local_char_id = char_id
+
+
+## Her karede (_process): katılımcıda bağlantı zaman aşımı, host'ta oda ilanındaki oyuncu sayısı.
+func _process_online_session() -> void:
+	if not is_online_session or _peer == null:
+		return
+	if not is_host and _online_connect_deadline_msec > 0:
+		if _peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+			_online_connect_deadline_msec = 0
+		elif Time.get_ticks_msec() > _online_connect_deadline_msec:
+			_online_connect_deadline_msec = 0
+			_clear_peer_state()
+			connection_status_changed.emit("Odaya bağlanılamadı (zaman aşımı). Oda kapanmış olabilir, listeyi yenile.")
+
+
+## Host'ta: oda ilanındaki oyuncu sayısı / oyunda mı bilgisi (lobby_updated ve oyun başlangıcında).
+func _sync_online_lobby_state() -> void:
+	if is_online_session and is_host:
+		EosOnline.set_lobby_state(lobby_players.size(), _is_game_in_progress)
 
 
 ## ============================================================================
@@ -479,6 +601,12 @@ func _clear_peer_state() -> void:
 	## varsayılan Offline olduğundan görünmüyordu. Oyun açılışındaki durumla BİREBİR aynı: çevrimdışı peer.
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	is_multiplayer_active = false
+	## İnternet odası (bkz. host_online): süren Epic denemesini iptal et, host'sak oda ilanını kaldır.
+	_online_attempt += 1
+	_online_connect_deadline_msec = 0
+	if is_online_session:
+		EosOnline.close_lobby_async()
+	is_online_session = false
 	is_host = false
 	_host_peer = 0
 	room_code = ""
@@ -871,6 +999,10 @@ func _on_server_disconnected() -> void:
 
 
 func _on_peer_connected(peer_id: int) -> void:
+	## İnternet odası (bkz. host_online): ENet'teki gibi bir bağlantı sınırı yok - oda doluysa yeni geleni geri çevir.
+	if is_online_session and is_host and _real_peers().size() > MAX_PLAYERS - 1:
+		_peer.disconnect_peer(peer_id)
+		return
 	# Send our info to the newly joined peer
 	var my_info: Dictionary = lobby_players.get(multiplayer.get_unique_id(), {
 		"name": local_player_name,
@@ -1370,7 +1502,11 @@ func update_chest_countdown(delta: float) -> void:
 	chest_countdown_tick.emit(chest_countdown)
 
 
-@rpc("any_peer", "call_remote", "reliable")
+## Kozmetik yakın dövüş savuruşu - her vuruşta gelir: diğer silah görselleri (weapon_fire/recoil/melee_hit) gibi
+## unreliable. 2026-09-30 çok oyunculu silah senkron analizi: eskiden reliable + sınırsızdı; paket kaybında güvenilir
+## kanalın sıralı teslimi aynı kanaldaki hasar/element isteklerini (request_enemy_damage...) bu görsellerin arkasında
+## bekletiyordu. Tek bir kayıp savuruş görseli fark edilmez.
+@rpc("any_peer", "call_remote", "unreliable")
 func broadcast_weapon_attack(source_pos: Vector2, target_pos: Vector2, shop_key: String, _weapon_type: String) -> void:
 	var local_player: Node = get_tree().get_first_node_in_group("player")
 	if not local_player:
@@ -2078,6 +2214,18 @@ func broadcast_enchant_fx(kind: String, pos: Vector2, data: Dictionary) -> void:
 	EnchantFxScript.spawn(get_tree(), kind, pos, data)
 
 
+## Kalıcı efsun ALANLARI ("area": kara delik, ok yağmuru, Zeus ışını, yarık/iz hatları, lav/buz zemini, kozmik disk,
+## Astral küreleri, shuriken...) ve erken bitişleri ("area_end") - TEK SEFERLİK olaylar, tekrar gönderilmez. Eskiden
+## yukarıdaki unreliable kanaldan gidiyordu: tek kayıp paket o alanı diğer oyuncuda TÜM süresi boyunca hiç göstermiyor,
+## kayıp "area_end" ise uzak kopyayı asılı bırakıyordu (2026-09-30 çok oyunculu silah senkron analizi). Kısa ömürlü tek
+## seferlik görseller (patlama, kıvılcım, sprite) unreliable kalır - kaybolmaları fark edilmez.
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_enchant_area(kind: String, pos: Vector2, data: Dictionary) -> void:
+	if get_tree().current_scene == null:
+		return
+	EnchantFxScript.spawn(get_tree(), kind, pos, data)
+
+
 ## Host-authoritative enemy status effect: non-host clients send poison/bleed/chill here.
 @rpc("any_peer", "call_remote", "reliable")
 func request_enemy_effect(network_id: int, effect_type: String, param1: float, param2: float, param3: float) -> void:
@@ -2123,7 +2271,7 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 		## apply_freeze_full) - "stun" ile AYNI host-yönlendirme deseni.
 		"freeze":
 			if target_enemy.has_method("apply_freeze_full"):
-				target_enemy.apply_freeze_full(param1)
+				target_enemy.apply_freeze_full(param1, param2 > 0.5) ## param2: bosslar da donar (Zaman Kıran)
 		## Melek'in yeni 3. yeteneği (Kutsal Korku) - param1=süre,
 		## param2/param3=kaçış merkezinin x/y'si (bkz. enemy.gd apply_fear).
 		"fear":
@@ -2294,7 +2442,8 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 ## "skill_scene", "beam_start", "beam_stop", "beam_update", "paladin_barrier_flash",
 ## "shield_hit_flash", "oakley_bee_sting" (pos = sokulan yaratığın konumu, bkz. fx_oakley_bee_guard.gd),
 ## "hadime_fx" (Suriyeli Hadime Q laneti: kind "curse" pos = kitap, to/net_id = hedef - bkz. hadime_math.gd spawn_fx;
-## E Kara Delik oyun etkisi taşıdığı için AYRI ve reliable: broadcast_hadime_black_hole)
+## E Kara Delik oyun etkisi taşıdığı için AYRI ve reliable: broadcast_hadime_black_hole),
+## "teleport_snap" (pos = kaster kuklasının anında sıçrayacağı nokta - Assasin "Gölge Kopyası" ışınlanması)
 ## extra_data: {"scene_path": "...", "direction": Vector2, "color": Color, "scale": float, ...}
 ## Pet spawn/despawn - broadcast_player_vfx'ten (yukarısı) BİLEREK AYRI ve
 ## "reliable": o fonksiyon "unreliable" - kozmetik/yüksek frekanslı VFX'ler
@@ -2743,6 +2892,11 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			blink.set_script(load("res://scripts/fx_spirit_blink.gd"))
 			get_tree().current_scene.add_child(blink)
 			blink.call("setup", str(extra_data.get("kind", "streak")), pos, Vector2(extra_data.get("to", pos)))
+		## Yetenek evrimi Assasin "Gölge Kopyası" (2026-09-30): kaster kopyasına ışınlandı - kukla normal konum yumuşatmasıyla
+		## (lerp + hız tahmini) oraya KAYMASIN, kasterin ekranındaki gibi anında sıçrasın (bkz. remote_player.gd snap_to_network_position).
+		"teleport_snap":
+			if rp.has_method("snap_to_network_position"):
+				rp.snap_to_network_position(pos)
 		"spirit_cancel":
 			var cancel_target: Node = rp.get_node_or_null(str(extra_data.get("node", "FxSpiritDukkan")))
 			if cancel_target != null and cancel_target.has_method("cancel"):
@@ -2993,6 +3147,13 @@ func open_elite_chest_for_peer() -> void:
 	GameManager.add_pending_elite_chest()
 
 
+## Yer sandığının bu oyuncuya düşen altın payı sandıkla birlikte bekler, sandık ekranında karttan uçar (bkz. chest_drop.gd
+## _award_chest_gold, GameManager.add_pending_chest_gold).
+@rpc("any_peer", "call_remote", "reliable")
+func queue_chest_gold(elite: bool, amount: int) -> void:
+	GameManager.add_pending_chest_gold(elite, amount)
+
+
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_announce_elite_chest(picker_id: int) -> void:
 	var local_p: Node = get_tree().get_first_node_in_group("player")
@@ -3101,6 +3262,8 @@ func host_share_boss_gold(amount: int, from_pos: Vector2, picker: Node) -> bool:
 		var share: int = int(shares[pid])
 		if share <= 0:
 			continue
+		## 2026-10-02 (kullanıcı: "altınlar yerden alınıp karaktere gidince sonrasında altın barına gidiyor böyle olmasını
+		## istemiyorum"): yerden toplanan boss altını panele ikinci kez uçmaz - pay dünyada sahibine uçar, doğrudan eklenir.
 		if int(pid) == local_id:
 			grant_personal_gold(share)
 		else:
@@ -3122,6 +3285,7 @@ func _rpc_gold_share_fx(from_pos: Vector2, shares: Dictionary) -> void:
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	var index: int = 0
 	for pid in shares.keys():
+		## 2026-10-02: kendi payımız da dünyada bedenimize uçar (panele ikinci uçuş yok, bkz. host_share_boss_gold).
 		var target: Node = _find_player_by_peer_id(int(pid))
 		if target == null or not is_instance_valid(target) or not (target is Node2D):
 			continue
@@ -3204,6 +3368,40 @@ func grant_personal_gold(amount: int) -> void:
 				ft.setup("+%d altın" % amount, Color(1.0, 0.85, 0.25))
 
 
+## Işığın Muhafızı Parşomeni (eşya, 2026-10-02): can/kalkan veren oyuncu bu RPC'yi SADECE hedefin peer'ine yollar
+## (player.gd _item_light_guard_on_support); hedef kendi oyuncusunda 6 sn %15 saldırı hızı + 5 saldırı gücü alır, buff
+## efekti oradan herkese yayınlanır (player.gd apply_light_guard_buff -> _item_fx).
+@rpc("any_peer", "call_remote", "reliable")
+func grant_light_guard_buff(duration: float) -> void:
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if local_player and local_player.has_method("apply_light_guard_buff"):
+		local_player.apply_light_guard_buff(duration)
+
+
+## Ödül altını (görev, boss payı): grant_personal_gold gibi SADECE hedef client'ın kişisel altınına eklenir, ama altın
+## sol üstteki altın paneline slot makinesi gibi uçar (bkz. gold_reward_fx.gd). kind "mission": paralar "Görev
+## Tamamlandı" penceresinden fırlar (GoldRewardFx.hold - pencereyi bu RPC'den hemen sonra gelen
+## broadcast_world_event_completed açar, mission_complete_window.gd); diğerleri from_pos'tan uçar + "+X altın" yazısı.
+## Düşman altınları grant_personal_gold'da kalır (onlar zaten dünyada oyuncuya uçuyor).
+@rpc("any_peer", "call_remote", "reliable")
+func grant_reward_gold(amount: int, from_pos: Vector2, kind: String) -> void:
+	if amount <= 0:
+		return
+	if kind == "mission":
+		GoldRewardFx.hold(get_tree(), amount, &"mission", from_pos)
+		return
+	GoldRewardFx.give(get_tree(), amount, from_pos)
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if local_player and is_instance_valid(local_player) and get_tree().current_scene:
+		var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
+		if ft_scene:
+			var ft = ft_scene.instantiate()
+			get_tree().current_scene.add_child(ft)
+			ft.global_position = local_player.global_position + Vector2(14, -34)
+			if ft.has_method("setup"):
+				ft.setup("+%d altın" % amount, Color(1.0, 0.85, 0.25))
+
+
 ## Parti panelindeki altın ikonu (bkz. party_panel.gd _on_gift_amount_pressed)
 ## bir müttefike altın göndermek için bunu ÇAĞIRIR (bu bir RPC DEĞİL, sadece
 ## GÖNDEREN tarafta yerel bir doğrulama+düşme fonksiyonu) - altın kişisel
@@ -3235,8 +3433,18 @@ func request_give_gold(to_player_id: int, amount: int) -> bool:
 func receive_gold_gift(from_name: String, amount: int) -> void:
 	if amount <= 0:
 		return
-	GameManager.gold += amount
+	EventSfx.play(get_tree(), &"gold_gift")
 	var local_player: Node = get_tree().get_first_node_in_group("player")
+	## Kullanıcı isteği (2026-10-02): "takım arkadaşı altın verince ondan bana doğru altınlar gelsin" - paralar GÖNDERENİN
+	## karakterinden (ekran dışındaysa ekranın o yöndeki kenarından) altın paneline uçar.
+	var sender: Node = _find_player_by_peer_id(multiplayer.get_remote_sender_id())
+	if sender is Node2D and sender != local_player:
+		var view: Rect2 = get_viewport().get_visible_rect()
+		var sp: Vector2 = get_viewport().get_canvas_transform() * ((sender as Node2D).global_position + Vector2(0.0, -14.0))
+		sp = sp.clamp(view.position + Vector2(48.0, 48.0), view.end - Vector2(48.0, 48.0))
+		GoldRewardFx.give_from_screen(get_tree(), amount, sp)
+	else:
+		GoldRewardFx.give(get_tree(), amount, (local_player as Node2D).global_position if local_player is Node2D else Vector2.ZERO)
 	if local_player and is_instance_valid(local_player):
 		var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
 		if ft_scene:
@@ -3258,7 +3466,7 @@ func sync_ally_heal(target_peer_id: int, amount: float) -> void:
 		return
 	var local_player: Node = get_tree().get_first_node_in_group("player")
 	if local_player and local_player.has_method("heal"):
-		local_player.heal(amount)
+		local_player.heal(amount, false) ## veren zaten kendi İyileştirme Gücüyle büyüttü
 
 
 ## BUG DÜZELTMESİ (kullanıcı bildirimi: "oakley ve meleğin kalkan yenileme
@@ -3284,7 +3492,7 @@ func sync_ally_shield_heal(target_peer_id: int, amount: float) -> void:
 		## heal_shield() genel yenilemede de (regen, toplama) çağrıldığı için sayı orada değil, burada.
 		if local_player.has_method("show_received_shield_number"):
 			local_player.show_received_shield_number(amount)
-		local_player.heal_shield(amount)
+		local_player.heal_shield(amount, true, false) ## veren zaten kendi İyileştirme ve Kalkan Gücüyle büyüttü
 
 
 ## Şovalye Adam'ın Koruma Bariyeri (skill3, id 29) - sync_ally_heal ile AYNI
@@ -3612,6 +3820,7 @@ func _rpc_start_game() -> void:
 	_loading_done.clear()
 
 	_is_game_in_progress = true
+	_sync_online_lobby_state()
 	game_started.emit()
 	get_tree().change_scene_to_file("res://scenes/loading_screen.tscn")
 

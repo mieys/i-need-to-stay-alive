@@ -15,12 +15,19 @@ const PixelDraw := preload("res://scripts/pixel_draw.gd")
 const PixelFxScript := preload("res://scripts/fx_enchant_pixel.gd")
 const ParticleTrail := preload("res://scripts/fx_particle_trail.gd")
 const ENCHANT_AREA_PATH := "res://scripts/enchant_area.gd"
+const SpriteFxScript := preload("res://scripts/fx_enchant_sprite.gd")
+## Efsun efektleri karakterlerin ALTINDA (bkz. enchant_layer.gd).
+const EnchantLayer := preload("res://scripts/enchant_layer.gd")
 
 
 static func play(tree: SceneTree, kind: String, pos: Vector2, data: Dictionary = {}) -> void:
 	spawn(tree, kind, pos, data)
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_enchant_fx.rpc(kind, pos, data)
+		## Kalıcı alan / alan bitişi tek seferlik ve kaybı görünür -> güvenilir kanal (bkz. broadcast_enchant_area).
+		if kind == "area" or kind == "area_end":
+			NetworkManager.broadcast_enchant_area.rpc(kind, pos, data)
+		else:
+			NetworkManager.broadcast_enchant_fx.rpc(kind, pos, data)
 
 
 static func spawn(tree: SceneTree, kind: String, pos: Vector2, data: Dictionary = {}) -> void:
@@ -31,12 +38,14 @@ static func spawn(tree: SceneTree, kind: String, pos: Vector2, data: Dictionary 
 		"explosion":
 			var ex: Node2D = ExplosionScene.instantiate() as Node2D
 			root.add_child(ex)
+			EnchantLayer.apply(ex)
 			ex.global_position = pos
 			if ex.has_method("setup"):
 				ex.setup(float(data.get("radius", 80.0)), Color(data.get("color", Color(1.0, 0.6, 0.2))))
 		"chain":
 			var ch: Node2D = ChainScene.instantiate() as Node2D
 			root.add_child(ch)
+			EnchantLayer.apply(ch)
 			if ch.has_method("setup_positions"):
 				ch.setup_positions(pos, Vector2(data.get("to", pos)))
 			if data.has("color"):
@@ -46,15 +55,17 @@ static func spawn(tree: SceneTree, kind: String, pos: Vector2, data: Dictionary 
 			bolt.set("warn_time", float(data.get("warn", 0.05)))
 			bolt.set("play_sounds", bool(data.get("sound", false)))
 			root.add_child(bolt)
+			## Kök (uyarı halkası, yanık izi) karakterlerin altında; gökten inen ışın kendi z'siyle (fx_storm_strike) üstte.
+			EnchantLayer.apply(bolt)
 			bolt.global_position = pos
 		"burst":
-			PixelDraw.spawn_burst(root, pos, str(data.get("palette", "spark")), int(data.get("count", 14)),
-				float(data.get("speed", 140.0)), float(data.get("life", 0.5)))
+			EnchantLayer.apply(PixelDraw.spawn_burst(root, pos, str(data.get("palette", "spark")), int(data.get("count", 14)),
+				float(data.get("speed", 140.0)), float(data.get("life", 0.5))))
 		"bursts":
 			## Tek RPC'de birden çok küçük patlama (Havai Fişek Gösterisi parçacıkları, buz kıymıkları).
 			for pt in data.get("points", []):
-				PixelDraw.spawn_burst(root, Vector2(pt), str(data.get("palette", "spark")), int(data.get("count", 8)),
-					float(data.get("speed", 90.0)), float(data.get("life", 0.35)))
+				EnchantLayer.apply(PixelDraw.spawn_burst(root, Vector2(pt), str(data.get("palette", "spark")), int(data.get("count", 8)),
+					float(data.get("speed", 90.0)), float(data.get("life", 0.35))))
 			if float(data.get("radius", 0.0)) > 0.0:
 				for pt in data.get("points", []):
 					spawn(tree, "ring", Vector2(pt), {"radius": float(data["radius"]), "color": Color(data.get("color", Color.WHITE)), "duration": 0.3})
@@ -76,6 +87,23 @@ static func spawn(tree: SceneTree, kind: String, pos: Vector2, data: Dictionary 
 		"area":
 			var area_script: GDScript = load(ENCHANT_AREA_PATH) as GDScript
 			area_script.spawn(tree, str(data.get("area", "")), pos, data, false)
+		"area_end":
+			var area_script2: GDScript = load(ENCHANT_AREA_PATH) as GDScript
+			area_script2.end_by_id(str(data.get("id", "")))
+		## 2026-09-30 yeni efsun seti: sprite sayfası (tools/gen_enchant_fx.py) - tek seferlik ya da süreli döngü.
+		"sprite":
+			SpriteFxScript.spawn(tree, pos, data)
+		## Bir hat boyunca aynı sayfadan karolar (sarsıntı hattı, patlayan iz): pos -> data.to, data.step aralıkla.
+		"tiles":
+			var to: Vector2 = Vector2(data.get("to", pos))
+			var step: float = maxf(4.0, float(data.get("step", 18.0)))
+			var n: int = maxi(1, int(ceil(pos.distance_to(to) / step)))
+			var d2: Dictionary = data.duplicate()
+			for i in range(n + 1):
+				var q: Vector2 = pos.lerp(to, float(i) / float(n))
+				if bool(data.get("jitter", false)):
+					d2["rot"] = float(data.get("rot", 0.0)) + (float(i % 3) - 1.0) * 0.2
+				SpriteFxScript.spawn(tree, q, d2)
 
 
 ## Efsunlu mermi görünümü: tint (Color), trail ("fire"/"ice"/"missile"), scale (çarpan), pierce (uzak kopya kaç düşmanın
@@ -91,7 +119,19 @@ static func apply_projectile_look(proj: Node2D, look: Dictionary) -> void:
 		ParticleTrail.attach(proj, str(look["trail"]))
 	if look.has("pierce"):
 		proj.set_meta("visual_pierce", int(look["pierce"]))
+	## Güdüm hedefinin ağ kimliği - yalnız uzak (network_spawned) kopya kullanır (projectile.gd _net_homing); kasterde
+	## güdüm enchant_behavior'da.
+	if look.has("home_id"):
+		proj.set_meta("home_id", int(look["home_id"]))
 	if look.has("life") and "_extra_life" in proj:
 		proj.set("_extra_life", float(look["life"]))
 	if look.has("apex_pause") and "apex_pause" in proj:
 		proj.set("apex_pause", float(look["apex_pause"]))
+	## 2026-09-30 yeni efsun seti: mermi özellikleri (bumerang delip geçme / büyüme / dönüş vuruşu...) - kaster ve uzak kopya aynı.
+	for k in (look.get("props", {}) as Dictionary):
+		if k in proj:
+			proj.set(k, look["props"][k])
+	## Kritik bumerang (efsun değil, bkz. weapon.gd _fire_at CRIT_SPIN_MULT): uzak kopya da hızlı döner. Kasterde ayrıca
+	## çarpıldığı için bu anahtar yalnızca ağdan gelen kopyada uygulanır.
+	if look.has("spin_mult") and "spin_speed_deg" in proj:
+		proj.set("spin_speed_deg", float(proj.get("spin_speed_deg")) * float(look["spin_mult"]))

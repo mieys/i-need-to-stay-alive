@@ -98,6 +98,8 @@ func _ready() -> void:
 	## totem de artık AYNI şekilde varsayılanda, diğer oyuncu/yaratıklarla
 	## aynı katmanda Y konumuna göre doğal olarak sıralanıyor.
 	_play_plant_animation()
+	if area_damage_enabled:
+		_build_area_aura()
 
 
 ## ---------- Pixel-art efektler (kullanıcı isteği: "efektleri pixel-art yap") ----
@@ -202,6 +204,10 @@ func _process(delta: float) -> void:
 	if _redraw_acc >= REDRAW_INTERVAL:
 		_redraw_acc = 0.0
 		queue_redraw()
+	## Alan hasarı (bkz. dosya sonundaki "ALAN HASARI" bloğu): görseller her kopyada, hasar sadece dikenin client'ında.
+	if area_damage_enabled:
+		_process_area_visuals(delta)
+		_process_area_damage(delta)
 	if _is_network_visual:
 		return
 	if not is_instance_valid(caster):
@@ -308,3 +314,102 @@ func _draw_rune(pos: Vector2, ang: float, col: Color) -> void:
 			PixelDraw.px(self, pos - Vector2(t, 0), 1, col)
 			PixelDraw.px(self, pos + Vector2(0, t), 1, col)
 			PixelDraw.px(self, pos - Vector2(0, t), 1, col)
+
+
+## ---------- ALAN HASARI (opsiyonel; Saldırı Totemi + Kalkan Totemi) ----------
+## Kullanıcı istekleri: 2026-09-29 eski Alan Saldırı Totemi'nin (R) alan hasarı yavaşlatmasız Saldırı Totemi'ne (Q) birleşti;
+## 2026-09-30 "Q yeteneğinin alan hasarı özelliğini E yeteneğine eklemeni istiyorum" - Kalkan Totemi'ne (E) de. Tek kod burada:
+## alt sınıf _init'te area_damage_enabled = true yapar. Alanda duran düşmanlar her saniye shaman'ın saldırı gücünün %20'si kadar
+## hasar alır (kendi sabit 1 sn'lik saatinde - totemin kendi _tick ritminden bağımsız, ilk hasar dikildiği anda).
+## Görseller (KOZMETİK) tools/gen_shaman_area_fx.py'nin sheet'leri (bkz. fx_enemy_ability.gd FxSprite): mor AURA çemberi
+## (148 sanat px * TEXEL = ~180 birim = AREA_RADIUS), her tikte NABIZ halkası, hasar yiyen düşmanın üstünde RUH. Hepsi hem gerçek
+## totemde hem ağ görsel kopyasında kurulur (aynı sahne) - diğer oyuncular da aynı alanı görür.
+var area_damage_enabled: bool = false
+const AREA_RADIUS := 180.0
+const AREA_DAMAGE_ATTACK_POWER_RATIO := 0.20
+const AREA_TICK_INTERVAL := 1.0
+const AURA_FRAMES := preload("res://assets/fx/shaman_area/aura_frames.tres")
+const PULSE_FRAMES := preload("res://assets/fx/shaman_area/pulse_frames.tres")
+const WISP_FRAMES := preload("res://assets/fx/shaman_area/wisp_frames.tres")
+const FxSprite := preload("res://scripts/fx_enemy_ability.gd")
+const WISP_OFFSET := Vector2(0, -10)
+var _aura: AnimatedSprite2D = null
+var _area_pulse_timer: float = 0.0
+var _area_damage_timer: float = 0.0
+
+
+func _build_area_aura() -> void:
+	_aura = AnimatedSprite2D.new()
+	_aura.name = "AreaAura"
+	_aura.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_aura.sprite_frames = AURA_FRAMES
+	_aura.scale = Vector2.ONE * PixelDraw.TEXEL
+	add_child(_aura)
+	move_child(_aura, 0) ## totem gövdesinin (TotemSprite) ARKASINDA çizilsin
+	_aura.play(&"loop")
+	_aura.modulate.a = 0.0
+	create_tween().tween_property(_aura, "modulate:a", 1.0, 0.8)
+
+
+## Her alan tikinde nabız halkası + alçak "vızıltı" - gerçek totemde de ağ kopyasında da (salt görsel/ses). Ağ kopyası hasar
+## tikini çalıştırmadığı için alandaki düşmanlarda AYNI ruh efektini kendi nabzında oynatır (diğer oyuncular da "alan hasar
+## veriyor" sinyalini görsün).
+func _process_area_visuals(delta: float) -> void:
+	_area_pulse_timer -= delta
+	if _area_pulse_timer > 0.0:
+		return
+	_area_pulse_timer += AREA_TICK_INTERVAL
+	var scene: Node = get_tree().current_scene
+	if scene == null or not is_instance_valid(scene):
+		return
+	var pulse: Node2D = FxSprite.spawn(self, global_position, PULSE_FRAMES, &"play", 0)
+	if pulse:
+		move_child(pulse, 1) ## auranın üstünde, totem gövdesinin altında (zemindeki halka)
+	ShamanSfx.play_at(scene, ShamanSfx.AREA_PULSE, global_position, -18.0, 0.05)
+	if _is_network_visual:
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if e is Node2D and is_instance_valid(e) and e.get("is_dead") != true and global_position.distance_to((e as Node2D).global_position) <= AREA_RADIUS:
+				_spawn_void_wisp((e as Node2D).global_position)
+
+
+## Alan hasarı - SADECE dikenin client'ında (ateş _tick'iyle aynı korumalar: ağ kopyası değil, caster geçerli, satıcı bölgesinde
+## değil - bkz. TotemBase._process). Alan hasarı hedef SEÇMEDİĞİ için görünürlük (can_target) şartı yok (bkz. vision_fog.gd).
+func _process_area_damage(delta: float) -> void:
+	if _is_network_visual or not is_instance_valid(caster):
+		return
+	if caster.get("is_in_merchant_zone") == true:
+		return
+	_area_damage_timer -= delta
+	if _area_damage_timer > 0.0:
+		return
+	_area_damage_timer += AREA_TICK_INTERVAL
+	if not ("damage_bonus" in caster):
+		return
+	var dmg: float = float(caster.damage_bonus) * AREA_DAMAGE_ATTACK_POWER_RATIO
+	if dmg <= 0.0:
+		return
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		if not (e is Node2D):
+			continue
+		if global_position.distance_to((e as Node2D).global_position) > AREA_RADIUS:
+			continue
+		if not e.has_method("take_damage"):
+			continue
+		var is_crit: bool = false
+		if caster.has_method("_roll_ability_crit"):
+			is_crit = caster._roll_ability_crit()
+		var hit_dmg: float = dmg
+		if caster.has_method("_apply_ability_crit"):
+			hit_dmg = caster._apply_ability_crit(dmg, is_crit)
+		e.call("take_damage", hit_dmg, is_crit)
+		_spawn_void_wisp((e as Node2D).global_position)
+
+
+## Hasar tikinde düşmanın üstünde kısa süreli mor ruh - "bu düşman şu an alan hasarı yiyor" sinyali. Salt kozmetik.
+func _spawn_void_wisp(enemy_pos: Vector2) -> void:
+	var scene: Node = get_tree().current_scene
+	if scene == null or not is_instance_valid(scene):
+		return
+	FxSprite.spawn(scene, enemy_pos + WISP_OFFSET, WISP_FRAMES, &"play", 2)

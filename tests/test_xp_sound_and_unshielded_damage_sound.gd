@@ -34,8 +34,9 @@ func test_xp_pickup_sound_is_back_to_normal() -> void:
 	var player: Node = _make_player()
 	var sound: AudioStreamPlayer2D = player.get_node_or_null("XPPickupSound")
 	assert(sound != null, "XPPickupSound düğümü bulunamadı")
-	assert(is_equal_approx(sound.volume_db, -16.0),
-		"XP orb sesi normal seviyeye dönmemiş (arttırmalar kaldırılmamış): %s dB (beklenen -16.0)" % sound.volume_db)
+	## Kullanıcı isteği (2026-10-02): "exp orb toplama sesini -8 desibel seviyesiyle değiştir".
+	assert(is_equal_approx(sound.volume_db, -8.0),
+		"XP orb sesi -8 dB değil: %s dB" % sound.volume_db)
 	player.queue_free()
 
 

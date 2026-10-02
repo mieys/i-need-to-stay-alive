@@ -3,6 +3,7 @@ extends Node2D
 const LevelUpScreenScene = preload("res://scenes/level_up_screen.tscn")
 ## Yetenek evrimleri (2026-09-28): evrim kartı seçimi "evo:<id>" olarak gelir (bkz. _on_upgrade_chosen).
 const SkillEvolutionsScript := preload("res://scripts/skill_evolutions.gd")
+const MissionCompleteWindowScript := preload("res://scripts/mission_complete_window.gd")
 const EVO_CHOICE_PREFIX := SkillEvolutionsScript.CHOICE_PREFIX
 const PauseMenuScene = preload("res://scenes/pause_menu.tscn")
 const RemotePlayerScene = preload("res://scenes/remote_player.tscn")
@@ -19,6 +20,7 @@ const EnchantScreenScript = preload("res://scripts/enchant_screen.gd")
 ## artık SADECE _start_initial_loadout_selection()'dan (oyunun en başında)
 ## çağrılıyor.
 const WeaponSelectScreenScript = preload("res://scripts/weapon_select_screen.gd")
+const EventSfx := preload("res://scripts/event_sfx.gd")
 
 ## bkz. _on_merchant_spawned/_on_merchant_departed - minimap'teki küçük "$"
 ## noktası (bkz. minimap.gd set_merchant_marker) yeterince fark edilmiyordu,
@@ -64,6 +66,7 @@ const VisionFogScript := preload("res://scripts/vision_fog.gd")
 const AtmosphereScript := preload("res://scripts/atmosphere.gd")
 const GrassSwayScript := preload("res://scripts/grass_sway.gd")
 const TreeSwayScript := preload("res://scripts/tree_sway.gd")
+const MapShadowsScript := preload("res://scripts/map_shadows.gd")
 const SunCloudsScript := preload("res://scripts/sun_clouds.gd")
 const RiverAmbienceScript := preload("res://scripts/river_ambience.gd")
 
@@ -115,6 +118,8 @@ var _remote_players: Dictionary = {}
 ## DÜZELTME (kullanıcı bildirimi: "ölüm ekranı yok ölünce hiçbir gösterge
 ## v.s yok"): bkz. _show_death_overlay/_on_player_died üstündeki notlar.
 var _death_overlay_layer: CanvasLayer = null
+## Oyun bitti sesi bir kez (_show_death_overlay(true) hem son ölende hem game_over_synced'te çağrılabilir).
+var _game_over_sfx_played: bool = false
 var _death_overlay_label: Label = null
 ## Oyun sonu istatistik ekranı: peer_id (int) -> {"name": String, "dealt":
 ## float, "taken": float} - bkz. NetworkManager.match_stats_received/
@@ -296,6 +301,8 @@ func _ready() -> void:
 		GrassSwayScript.new().setup(harita_node)
 		## Sallanan ağaçlar ("Ağaç 0/1/2", bkz. tree_sway.gd / scenes/sallanan ağaç.gdshader).
 		TreeSwayScript.new().setup(harita_node)
+		## Harita gölgeleri (2026-10-02, "B - Tepe gölgesi"): pişmiş doku zeminin üstüne, objelerin altına (bkz. map_shadows.gd).
+		MapShadowsScript.attach(harita_node)
 
 	# Add loopable breezy cozy forest ambient sound
 	var ambient: Node = preload("res://scripts/wind_breeze_ambient.gd").new()
@@ -330,8 +337,9 @@ func _ready() -> void:
 	## Kullanıcı isteği: kimsenin artık başlangıç silahı/kalkanı yok (bkz.
 	## player.gd - _grant_starting_weapon() çağrısı kaldırıldı, game_manager.gd
 	## - shield_standart_level artık 0'dan başlıyor). GameManager.owned_weapons
-	## boşsa bu YENİ bir koşu demektir - oyuncuyu ilk silah/kalkan seçim
-	## ekranlarından geçirip öyle başlatıyoruz.
+	## boşsa bu YENİ bir koşu demektir - oyuncuyu ilk silah seçim ekranından
+	## geçirip öyle başlatıyoruz (kalkan 2026-09-29'dan beri seçilmiyor, herkes
+	## Standart Kalkanla başlıyor - bkz. _grant_starting_shield).
 	## Kullanıcı isteği: "silah seçme kartının oyun başladıktan 2 saniye
 	## sonra gelmesini istiyorum" - oyuncu ilk 2 saniye haritayı/karakterini
 	## görsün diye ekran hemen değil, kısa bir gecikmeyle açılıyor (oyun bu
@@ -637,6 +645,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## Vampir'in Yarasa Formu'ndaki AYNI ihtiyaç animasyon adından çıkarılabiliyordu (bkz. remote_
 			## player.gd _vampir_bat_form), Elara'nın özel bir animasyonu olmadığı için AYRI bir bayrak gerekiyor.
 			"elara_evasion": player._elara_evasion_timer > 0.0 if "_elara_evasion_timer" in player else false,
+			## Ninja'nın El Kitabı (eşya): host'taki yaratıklar bu oyuncunun kuklasını itmesin (remote_player is_ghost_now).
+			"ninja": player.has_item("ninjanin_el_kitabi") if player.has_method("has_item") else false,
 			## Ruhani Yetenek "Savaş Şevki" - infaz kontrolünün diğer istemcilerde de doğru çalışması için
 			## (bkz. enemy.gd _attacker_has_savas_sevki, remote_player.gd has_savas_sevki). Seçim kendisi
 			## ("hangi ruhani yetenek") ağa hiç gitmiyor (bkz. lobby_menu.gd notu) - sadece bu TEK bayrak.
@@ -701,7 +711,7 @@ func _process_multiplayer_sync(delta: float) -> void:
 			"shield_bubble_visible": player._bubble_active if "_bubble_active" in player else false,
 			## DÜZELTME (derin multiplayer görsel denetimi): kalkan baloncuğunun
 			## GÖRSEL türü (standart/enerji/kale/savaş - bkz. player.gd
-			## SHIELD_TYPES/_owned_shield_type_key/shield_visual.set_shield_type)
+			## shield_enchant_defs.gd/_owned_shield_type_key/shield_visual.set_shield_type)
 			## hiç senkronize edilmiyordu; uzak oyuncular her zaman varsayılan
 			## (standart) baloncuk görselini görüyordu.
 			"shield_type": player._owned_shield_type_key() if player.has_method("_owned_shield_type_key") else "",
@@ -734,6 +744,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## host'taki simülasyon (Talon mermi kalkanı) bu listeden okur (remote_player.gd has_evo). Sıralı dizi: değişmedikçe
 			## aynı kalır, durum kanalını boşuna tetiklemez.
 			"evo": player.get_skill_evolution_ids() if player.has_method("get_skill_evolution_ids") else [],
+			## Efsun mermi kalkanı (2026-09-30, player.gd get_enchant_ward_radius) - host'ta düşman mermileri kuklaya sorar.
+			"ench_ward": player.get_enchant_ward_radius() if player.has_method("get_enchant_ward_radius") else 0.0,
 		}
 		# Character modulate color for status effects
 		## DÜZELTME (derin multiplayer görsel denetimi): bazı yetenekler
@@ -975,20 +987,24 @@ func _start_initial_loadout_selection() -> void:
 	if is_instance_valid(player) and player.has_method("clear_input_state"):
 		player.call("clear_input_state")
 	get_tree().paused = true
-	_show_item_select_screen("weapon", func(): _show_item_select_screen("shield", _finish_item_select_chain))
+	## Kullanıcı isteği (2026-09-29): "oyun başlangıcında kalkan seçimini kaldırıyoruz artık herkes standart kalkanla
+	## başlıyor" - silah seçilince kalkan ekranı açılmıyor, Standart Kalkan doğrudan veriliyor (bkz. _grant_starting_shield).
+	_show_item_select_screen(func():
+		_grant_starting_shield()
+		_finish_item_select_chain()
+	)
 
 
 ## `on_done`, bu ekran seçilir seçilmez (ağ beklemesi OLMADAN, bkz. aşağıdaki
 ## kök neden notu) hemen çağrılır - başlangıç akışında bir sonraki ekrana
 ## zincirlemek için kullanılıyor.
-func _show_item_select_screen(mode: String, on_done: Callable) -> void:
+func _show_item_select_screen(on_done: Callable) -> void:
 	get_tree().paused = true
 	## bkz. _show_level_up_screen'deki AYNI koruma notu.
 	_hide_level_up_wait_overlay()
 	var screen: CanvasLayer = WeaponSelectScreenScript.new()
-	screen.mode = mode
 	screen.player_ref = player
-	screen.name = "WeaponSelectScreen" if mode == "weapon" else "ShieldSelectScreen"
+	screen.name = "WeaponSelectScreen"
 	add_child(screen)
 	_active_item_select_screen = screen
 	## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini
@@ -1001,7 +1017,7 @@ func _show_item_select_screen(mode: String, on_done: Callable) -> void:
 	## açılır) - ağ senkronu SADECE zincirin gerçekten bittiği noktada
 	## (bkz. _finish_item_select_chain) devreye giriyor.
 	screen.item_chosen.connect(func(key: String):
-		_grant_selected_item(mode, key)
+		_grant_selected_item(key)
 		if _active_item_select_screen != null and is_instance_valid(_active_item_select_screen):
 			_active_item_select_screen.queue_free()
 		_active_item_select_screen = null
@@ -1012,22 +1028,28 @@ func _show_item_select_screen(mode: String, on_done: Callable) -> void:
 		NetworkManager.start_level_up_countdown()
 
 
-## Silah + kalkan seçim zincirinin GERÇEK sonu (bkz. _show_item_select_screen
+## Başlangıç silah seçimi zincirinin GERÇEK sonu (bkz. _show_item_select_screen
 ## çağrı zinciri) - bkz. _finish_level_up_phase.
 func _finish_item_select_chain() -> void:
 	_finish_level_up_phase(_show_mini_shop_screen)
 
 
-func _grant_selected_item(mode: String, key: String) -> void:
+func _grant_selected_item(key: String) -> void:
 	if not is_instance_valid(player):
 		return
-	if mode == "weapon":
-		GameManager.owned_weapons.append({"key": key, "level": 1, "spent": 0})
-		player.buy_weapon_copy(key, 1) ## bkz. player.gd - kendi içinde _reposition_weapon_icons() zaten çağırıyor
-	else:
-		GameManager.set(key + "_level", 1)
-		if player.has_method("refresh_shield_stats"):
-			player.refresh_shield_stats()
+	GameManager.owned_weapons.append({"key": key, "level": 1, "spent": 0})
+	player.buy_weapon_copy(key, 1) ## bkz. player.gd - kendi içinde _reposition_weapon_icons() zaten çağırıyor
+
+
+## Herkesin başlangıç kalkanı: Standart Kalkan, seviye 1. Kalkan artık ne başlangıçta seçiliyor ne de dükkandan/seyyar
+## satıcıdan alınıyor. Eskiden başlangıçta seçilen kalkan gibi boş başlar ve kendi kendine dolar (bkz. player.gd
+## refresh_shield_stats).
+func _grant_starting_shield() -> void:
+	if not is_instance_valid(player):
+		return
+	GameManager.shield_standart_level = 1
+	if player.has_method("refresh_shield_stats"):
+		player.refresh_shield_stats()
 
 
 ## ==============================================================================
@@ -2208,6 +2230,7 @@ func _show_network_toast(text: String, hold_seconds: float = 2.4) -> void:
 ## bildiriliyor ama gelince bildirilmiyor" şikayeti tam olarak buydu.
 func _on_merchant_spawned(pos: Vector2, _stock: Array) -> void:
 	_show_network_toast("Bir seyyar satıcı haritada belirdi! Konumu haritada işaretlendi.")
+	EventSfx.play(get_tree(), &"merchant_arrive")
 	var minimap: Node = hud.get_node_or_null("MinimapControl")
 	if minimap and minimap.has_method("set_merchant_marker"):
 		minimap.set_merchant_marker(pos, true)
@@ -2217,6 +2240,7 @@ func _on_merchant_spawned(pos: Vector2, _stock: Array) -> void:
 
 func _on_merchant_departed() -> void:
 	_show_network_toast("Seyyar satıcı haritadan ayrıldı.")
+	EventSfx.play(get_tree(), &"merchant_leave")
 	var minimap: Node = hud.get_node_or_null("MinimapControl")
 	if minimap and minimap.has_method("set_merchant_marker"):
 		minimap.set_merchant_marker(Vector2.ZERO, false)
@@ -2235,6 +2259,8 @@ func _on_merchant_departed() -> void:
 func _on_world_event_announced(mission_id: int, kind: String, pos: Vector2, _radius: float, warn_seconds: float, label: String) -> void:
 	_world_event_kind_by_id[mission_id] = kind
 	_world_event_label_by_id[mission_id] = label
+	if warn_seconds > 0.0: ## debug zorla-başlat uyarısız gelir (hemen _started)
+		EventSfx.play(get_tree(), &"mission_warn")
 	var loc_note: String = " Konumu haritada işaretlendi."
 	if kind == "kill_your_copy":
 		loc_note = ""
@@ -2254,6 +2280,7 @@ func _on_world_event_announced(mission_id: int, kind: String, pos: Vector2, _rad
 
 func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radius: float, duration: float, extra: Dictionary) -> void:
 	var label: String = String(_world_event_label_by_id.get(mission_id, kind))
+	EventSfx.play(get_tree(), &"mission_start")
 	_show_network_toast("%s görevi BAŞLADI!\n%s" % [label, String(MISSION_DESCRIPTIONS.get(kind, ""))], MISSION_TOAST_SECONDS)
 	if not NO_SINGLE_LOCATION_KINDS.has(kind):
 		var minimap: Node = hud.get_node_or_null("MinimapControl")
@@ -2386,7 +2413,13 @@ func _on_world_event_completed(mission_id: int, kind: String, success: bool) -> 
 	var fail_text: String = "%s görevi süresi doldu, iptal edildi." % label
 	if kind == "defend_tree" and not success:
 		fail_text = "%s görevi BAŞARISIZ! Ağaç yok edildi." % label
-	_show_network_toast(("%s görevi TAMAMLANDI! Ödül: altın + her oyuncuya 1 sandık." % label) if success else fail_text, MISSION_TOAST_SECONDS)
+	## Başarı: "Görev Tamamlandı" penceresi (kullanıcı isteği 2026-10-02) - görev altını onun içinden altın paneline uçar
+	## (bkz. mission_complete_window.gd). Başarısızlık eskisi gibi sağ üstte bildirim.
+	if success:
+		MissionCompleteWindowScript.open(self, label)
+	else:
+		_show_network_toast(fail_text, MISSION_TOAST_SECONDS)
+	EventSfx.play(get_tree(), &"mission_success" if success else &"mission_fail")
 	_world_event_kind_by_id.erase(mission_id)
 	_world_event_label_by_id.erase(mission_id)
 	var minimap: Node = hud.get_node_or_null("MinimapControl")
@@ -2503,6 +2536,7 @@ func _on_chat_message_received(peer_id: int, player_name: String, text: String) 
 		if is_instance_valid(player) and player.has_method("show_chat_bubble"):
 			player.show_chat_bubble(text)
 	else:
+		EventSfx.play(get_tree(), &"chat") ## sadece başkasının mesajında (kendi yazdığında çalmaz)
 		var rp: RemotePlayer = _get_remote_player(peer_id)
 		if rp and is_instance_valid(rp) and rp.has_method("show_chat_bubble"):
 			rp.show_chat_bubble(text)
@@ -2601,6 +2635,9 @@ func _on_game_over_synced() -> void:
 ## is_final=true: oyun gerçekten bitti (tek oyunculu HER ZAMAN, çok
 ## oyunculuda herkes öldüğünde).
 func _show_death_overlay(is_final: bool) -> void:
+	if is_final and not _game_over_sfx_played:
+		_game_over_sfx_played = true
+		EventSfx.play(get_tree(), &"game_over")
 	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
 		_death_overlay_layer = CanvasLayer.new()
 		_death_overlay_layer.layer = 95

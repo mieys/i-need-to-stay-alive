@@ -382,6 +382,63 @@ HADIME_SOUNDS = [
 ]
 
 
+# ------------------------------------------------------------------ Shaman R - Elemental Golem (2026-09-30)
+## Tas golem: yer alti gumburtusu, agir tas darbeleri, kaya catirtisi. Kendi RNG'si (--only shaman digerlerini degistirmez).
+S_RNG = np.random.default_rng(20260930)
+
+
+def rock_crunch(sec=0.35):
+    """Kaya catirtisi: kisa, sik tas tikirtilari (bant gecirenli gurultu darbeleri)."""
+    out = np.zeros(int(sec * SR))
+    for _ in range(14):
+        a = int(S_RNG.uniform(0, sec * 0.8) * SR)
+        n = int(S_RNG.uniform(0.008, 0.03) * SR)
+        g = band(S_RNG.uniform(-1, 1, n), 700, 4200) * env_exp(n, 0.0005, n / SR * 0.35) * S_RNG.uniform(0.3, 1.0)
+        out[a:a + n] += g[:len(out) - a]
+    return out
+
+
+def shaman_golem_form():
+    """R - donusum: yer sarsilir, taslar toplanip dogrulur - gumburtu + agir darbe + kaya catirtisi + sicak ruh atesi puf."""
+    rumble = lowpass(load("Hollywood/Earthquake Loop.wav", 1.0, 1.1), 380.0)
+    hit = pitch(load("Community Requests/Hammer Fall.wav", 0.0, 0.6), 0.55)
+    fire = lowpass(load("Community Requests/Stoke Coal Oven.wav", 0.0, 0.7), 2600.0)
+    return fade(mix(1.25, [(fade(rumble, 0.1, 0.35), 0.0, 0.0), (rock_crunch(0.5), 0.12, -6.0),
+                           (fade(hit, fout=0.25), 0.3, -1.5), (thump(44.0, 0.6, 0.2), 0.3, -3.0),
+                           (fade(fire, 0.05, 0.3), 0.35, -11.0)]), fin=0.02, fout=0.3)
+
+
+def shaman_golem_slam():
+    """Otomatik darbe (saniyede ~1): kisa, tok tas yumruk - alt ton + kisa catirti (kuyruk kisa, sik calar)."""
+    ax = pitch(lowpass(load("Motions and Impacts/Impact Axe Fall.wav", 0.0, 0.45), 1800.0), 0.6)
+    return fade(mix(0.5, [(thump(56.0, 0.4, 0.1), 0.0, 0.0), (fade(ax, fout=0.15), 0.0, -4.0),
+                          (rock_crunch(0.25), 0.01, -9.0)]), fout=0.15)
+
+
+def shaman_golem_quake():
+    """Q - Sarsici Darbe: iki yumruk yere - derin bum + yarilan zemin (catirti) + kisa gumburtu kuyrugu."""
+    mb = lowpass(load("Hollywood/Mega Bomb.wav", 0.0, 1.0), 900.0)
+    rumble = lowpass(load("Hollywood/Earthquake Loop.wav", 2.2, 0.9), 320.0)
+    hit = pitch(load("Community Requests/Hammer Fall.wav", 0.0, 0.6), 0.5)
+    return fade(mix(1.1, [(fade(mb, fout=0.5), 0.0, -2.0), (fade(hit, fout=0.25), 0.0, -2.0),
+                          (thump(40.0, 0.7, 0.22), 0.0, 0.0), (rock_crunch(0.6), 0.03, -5.0),
+                          (fade(rumble, 0.05, 0.4), 0.15, -6.0)]), fin=0.003, fout=0.35)
+
+
+def shaman_golem_leap():
+    """E - Golem Sicrayisi: havalanma savrulmasi + ~0.41 sn'de (inis ani, shaman_golem_math.gd JUMP_LAND_FRAME) agir inis."""
+    wh = pitch(lowpass(load("Medieval/Weapon Whoosh.wav", 0.0, 0.5), 2200.0), 0.6)
+    land = pitch(load("Community Requests/Hammer Fall.wav", 0.0, 0.6), 0.5)
+    return fade(mix(1.1, [(fade(wh, 0.01, 0.2), 0.0, -3.0), (thump(46.0, 0.6, 0.18), 0.41, 0.0),
+                          (fade(land, fout=0.25), 0.41, -2.0), (rock_crunch(0.45), 0.42, -6.0)]), fin=0.005, fout=0.3)
+
+
+SHAMAN_SOUNDS = [
+    ("shaman_golem_form", shaman_golem_form), ("shaman_golem_slam", shaman_golem_slam),
+    ("shaman_golem_quake", shaman_golem_quake), ("shaman_golem_leap", shaman_golem_leap),
+]
+
+
 def save(name, x, peak_db=-1.0):
     ## DC kaymasi yuksek geciren filtreyle alinir (ortalamayi CIKARMAK fade'lenmis uclara sabit bir kayma ekleyip tik
     ## yapiyordu), sonra uclar yeniden kisa fade'le sifira indirilir.
@@ -402,7 +459,7 @@ def save(name, x, peak_db=-1.0):
 if __name__ == "__main__":
     ## --only <onek>: sadece adi bu onekle baslayan sesleri uret (ornek: --only hadime) - digerlerinin wav'larina dokunmaz.
     only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else ""
-    for nm, fn in SOUNDS + HADIME_SOUNDS:
+    for nm, fn in SOUNDS + HADIME_SOUNDS + SHAMAN_SOUNDS:
         if only and not nm.startswith(only):
             continue
         save(nm, fn())

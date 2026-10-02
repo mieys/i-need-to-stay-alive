@@ -99,6 +99,68 @@ static func play(host: Node, icon: Node2D, plan: Dictionary, forward: float, res
 	return tw
 
 
+## KRİTİK SAPLAMA (kullanıcı isteği 2026-09-29: "kılıç vuruşu kritik olacağı zaman saplar gibi bir animasyonu olmalı",
+## bkz. weapon_crit_anim.gd). Yay çizmek yerine: kılıç hedefin gerisinde geri çekilir (APPROACH), ucu hedefi delecek
+## şekilde düz bir hamleyle saplanır ve uç TAM contact_delay anında hedefe varır - hasar zamanlaması savuruşla aynı
+## kalır. Saplı kalıp hafifçe titrer, sonra çekilip dinlenme yerine döner. Hilal efekti yok (düz saplama).
+const STAB_BACK := 26.0 ## geri çekilme mesafesi (plan ölçeği k ile büyür)
+const STAB_OVER := 8.0 ## ucun hedefi geçtiği mesafe
+
+
+static func make_stab_plan(dir: Vector2, target: Vector2, size: float, owner_scale: float) -> Dictionary:
+	if dir.is_zero_approx():
+		dir = Vector2.RIGHT
+	dir = dir.normalized()
+	var k: float = maxf(0.05, size) * owner_scale / REF_OWNER_SCALE
+	## İkon merkezi, ucun TIP_RADIUS-ICON_RADIUS gerisinde (bıçak yönü = dir).
+	var hilt_back: float = (TIP_RADIUS - ICON_RADIUS) * k
+	return {
+		"dir": dir,
+		"k": k,
+		"wind": target - dir * (hilt_back + STAB_BACK * k),
+		"hit": target - dir * (hilt_back - STAB_OVER * k),
+		"out": target - dir * (hilt_back + STAB_BACK * 0.5 * k),
+	}
+
+
+static func play_stab(host: Node, icon: Node2D, plan: Dictionary, forward: float, rest_pos: Vector2, rest_rot: float,
+		speed: float) -> Tween:
+	var sp: float = maxf(0.01, speed)
+	var start_pos: Vector2 = icon.global_position
+	var start_rot: float = icon.global_rotation
+	var dir: Vector2 = plan["dir"]
+	var aim: float = dir.angle() - forward
+	var wind: Vector2 = plan["wind"]
+	var hit: Vector2 = plan["hit"]
+	var out: Vector2 = plan["out"]
+	var perp := Vector2(-dir.y, dir.x)
+	var wind_step := func(t: float) -> void:
+		if is_instance_valid(icon):
+			icon.global_position = start_pos.lerp(wind, t)
+			icon.global_rotation = lerp_angle(start_rot, aim, t)
+	var lunge_step := func(t: float) -> void:
+		if is_instance_valid(icon):
+			icon.global_position = wind.lerp(hit, t)
+			icon.global_rotation = aim
+	var stuck_step := func(t: float) -> void:
+		if is_instance_valid(icon):
+			icon.global_position = hit + perp * sin(t * TAU * 3.0) * 1.6 * (1.0 - t) * float(plan["k"])
+			icon.global_rotation = aim
+	var pull_step := func(t: float) -> void:
+		if is_instance_valid(icon):
+			icon.global_position = hit.lerp(out, t)
+			icon.global_rotation = aim
+	var tw: Tween = host.create_tween()
+	tw.tween_method(wind_step, 0.0, 1.0, APPROACH / sp).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	## Saplama contact_delay'de (APPROACH + SWEEP/2) biter - hasar tam uç hedefe girdiği anda.
+	tw.tween_method(lunge_step, 0.0, 1.0, SWEEP * 0.5 / sp).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	tw.tween_method(stuck_step, 0.0, 1.0, (SWEEP * 0.5 + FOLLOW) / sp)
+	tw.tween_method(pull_step, 0.0, 1.0, 0.07 / sp).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(icon, "position", rest_pos, RETURN).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.parallel().tween_property(icon, "rotation", rest_rot, RETURN).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	return tw
+
+
 ## Bıçak ucunun yayındaki hilal (tek seferlik, bitince silinir). Pişirilmiş hilal -75..+75 derece saat yönünde; ters
 ## yönlü savuruşta dikeyde aynalanır.
 static func spawn_sweep_fx(parent: Node, plan: Dictionary, speed: float) -> AnimatedSprite2D:

@@ -34,18 +34,8 @@ const WEAPON_NAMES := {
 ## Eşyalar (bkz. scripts/items.gd) - dükkandaki ItemsPage satırlarıyla BİREBİR
 ## AYNI tonlar (bkz. shop_panel.tscn) kullanıcı iki yerde de aynı eşyayı hemen
 ## tanısın diye.
+## 2026-10-02: eski ekstralar silindi (bkz. items.gd) - yeni ekstraların tonları buraya (anahtar -> Color).
 const ITEM_TINTS := {
-	"vitamin": Color(1.0, 0.55, 0.6, 1),
-	"eldiven": Color(0.75, 0.75, 0.8, 1),
-	"deri_cizme": Color(0.65, 0.45, 0.3, 1),
-	"sigara": Color(0.55, 0.5, 0.45, 1),
-	"steroid": Color(1.2, 0.5, 0.45, 1),
-	"sansli_zar": Color(0.55, 1.2, 0.6, 1),
-	"hasat_cantasi": Color(0.85, 0.7, 0.35, 1),
-	"kalkan_yuzugu": Color(0.5, 0.75, 1.3, 1),
-	"keskin_uclar": Color(0.8, 0.8, 0.85, 1),
-	"kitelama_seti": Color(0.6, 0.9, 0.75, 1),
-	"kaos_kitabi": Color(0.85, 0.55, 1.2, 1),
 }
 
 ## HUD, bu paneli istatistik paneliyle EŞLEŞTİRİP birlikte açıp kapatıyor
@@ -143,12 +133,10 @@ func _play_open_animation() -> void:
 var main_layout: VBoxContainer = null
 var weapons_grid: HBoxContainer = null
 var equip_grid: HBoxContainer = null
-var mods_grid: GridContainer = null
-var items_grid_box: GridContainer = null
+var items_grid_box: VBoxContainer = null ## 2026-10-02: kademe bölümleri (bkz. _refresh_items_grid)
 
 var _last_weapons_signature: String = ""
 var _last_equip_signature: String = ""
-var _last_mods_signature: String = ""
 
 ## #37 DÜZELTME (kullanıcı bildirimi: "Envanterden bir şey satınca parasını
 ## vermiyor, ayrıca tıklayınca direkt satılmamalı - dükkandan zaten
@@ -187,43 +175,20 @@ func _on_sell_confirmed() -> void:
 		_pending_sell_action.call()
 	_pending_sell_action = Callable()
 
+## Kalkan adları shield_enchant_defs.gd'den (ShieldEnchantDefs.type_name) gelir.
 const EQUIP_NAMES: Dictionary = {
-	"shield_standart": "Standart Kalkan",
-	"shield_enerji": "Enerji Kalkanı",
-	"shield_kale": "Kale Kalkanı",
-	"shield_savas": "Savaş Kalkanı",
 	"spray": "İtici Sprey"
 }
 
 ## Kullanıcı isteği: "karakterin sadece 1 kalkan yuvası + 2 işlevsellik
-## yuvası olmalı" - kalkan zaten SHIELD_TYPE_KEYS ile (dükkanda ve burada
-## _owned_shield_type()) tek yuvaya sınırlı. İşlevsellik (dükkandaki eski
+## yuvası olmalı" - kalkan tek yuva (herkesin Standart Kalkanı, bkz.
+## _owned_shield_type()). İşlevsellik (dükkandaki eski
 ## "Diğer", artık "İşlevsellik" sekmesi - bkz. shop_panel.gd) tarafında şu an
 ## SADECE "İtici Sprey" var ama yuva sayısı ileride eklenecek başka
 ## işlevsellik eşyalarına yer açacak şekilde 2'ye çıkarıldı (bkz.
 ## MAX_UTILITY_SLOTS/_refresh_equipments).
 const UTILITY_KEYS: Array = ["spray"]
 const MAX_UTILITY_SLOTS: int = 2
-
-const MOD_NAMES: Dictionary = {
-	"resilience": "Meditasyon",
-	"thorny": "Yansıtma",
-	"turtle": "Kırılmaz İrade",
-	"aggressive": "Cinnet",
-	"lightning": "Çeviklik",
-	"piercing": "Teknik Savaş",
-	"tank": "Savunma"
-}
-const MODE_KEYS: Array = ["resilience", "thorny", "turtle", "aggressive", "lightning", "piercing", "tank"]
-const MOD_ICON_TEXTURES: Dictionary = {
-	"resilience": preload("res://assets/ui/battle_modes/resilience.png"),
-	"thorny": preload("res://assets/ui/battle_modes/thorny.png"),
-	"turtle": preload("res://assets/ui/battle_modes/turtle.png"),
-	"aggressive": preload("res://assets/ui/battle_modes/aggressive.png"),
-	"lightning": preload("res://assets/ui/battle_modes/lightning.png"),
-	"piercing": preload("res://assets/ui/battle_modes/piercing.png"),
-	"tank": preload("res://assets/ui/battle_modes/tank.png"),
-}
 
 var _ready_done := false
 
@@ -294,19 +259,14 @@ func _ready() -> void:
 	equip_grid.add_theme_constant_override("separation", 10)
 	main_layout.add_child(equip_grid)
 
-	# 3. Savaş Modları - kullanıcı isteği (2026-09-22): "Envanterde savaş modları gözüküyor onları kaldır" - bölüm artık kurulmuyor
-	# (mods_grid null kalır, bkz. _refresh_mods'taki koruma). Modların kendisi (dükkan satın alımı/aktif mod) etkilenmez.
-
-	# 4. Pasif Eşyalar
+	# 4. Eşyalar (2026-10-02 yeni eşya sistemi): Efsanevi / Epik / Parça bölümleri, kendi slot sınırlarıyla.
 	var title_items: Label = Label.new()
-	title_items.text = "PASİF EŞYALAR (Satmak için tıklayın)"
+	title_items.text = "EŞYALAR (Satmak için tıklayın)"
 	UIKit.style_label(title_items, UIKit.FS_BODY, UIKit.C_ACCENT, 3)
 	main_layout.add_child(title_items)
-	
-	items_grid_box = GridContainer.new()
-	items_grid_box.columns = 6
-	items_grid_box.add_theme_constant_override("h_separation", 8)
-	items_grid_box.add_theme_constant_override("v_separation", 8)
+
+	items_grid_box = VBoxContainer.new()
+	items_grid_box.add_theme_constant_override("separation", 6)
 	main_layout.add_child(items_grid_box)
 
 	_refresh()
@@ -393,7 +353,6 @@ func _refresh() -> void:
 		xp_label.text = "0"
 	_refresh_weapons()
 	_refresh_equipments()
-	_refresh_mods()
 	_refresh_items_grid()
 
 
@@ -506,27 +465,14 @@ func _do_sell_weapon_equip(index: int) -> void:
 
 
 func _owned_shield_type() -> String:
-	for key: String in ["shield_standart", "shield_enerji", "shield_kale", "shield_savas"]:
-		if int(GameManager.get(key + "_level")) > 0:
-			return key
-	return ""
+	return ShieldEnchantDefs.owned_type()
 
 
 func _get_upgrade_cost(item: String, next_level: int) -> int:
 	match item:
-		"shield_standart", "shield_enerji", "shield_kale", "shield_savas":
-			return 3 * next_level * next_level
 		"spray":
 			return 15 * next_level * next_level
 	return next_level
-
-
-func _get_shield_modulate(key: String) -> Color:
-	match key:
-		"shield_enerji": return Color(0.6, 0.95, 1.4, 1)
-		"shield_kale": return Color(1.3, 0.6, 0.7, 1)
-		"shield_savas": return Color(1.2, 0.9, 0.4, 1)
-		_: return Color(1, 1, 1, 1)
 
 
 func _refresh_equipments() -> void:
@@ -534,8 +480,7 @@ func _refresh_equipments() -> void:
 		return
 		
 	var shield_key: String = _owned_shield_type()
-	var shield_lvl: int = int(GameManager.get(shield_key + "_level")) if shield_key != "" else 0
-	var sig: String = shield_key + ":" + str(shield_lvl)
+	var sig: String = shield_key + ":" + str(GameManager.shield_enchant_ups)
 	for utility_key: String in UTILITY_KEYS:
 		sig += "," + utility_key + ":" + str(int(GameManager.get(utility_key + "_level")))
 	if sig == _last_equip_signature:
@@ -558,17 +503,12 @@ func _refresh_equipments() -> void:
 	shield_btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 	_decorate_slot(shield_btn)
 	
+	## 2026-09-29: kalkan satılamaz (herkes Standart Kalkanla başlıyor, dükkanda kalkan yok; tür/geliştirme sadece kalkan
+	## efsunlarıyla - bkz. shield_enchant_defs.gd) - yuva sadece
+	## sahip olunan kalkanı gösterir, tıklanınca satış YOK (yoksa oyuncu o oyun boyunca kalkansız kalırdı).
 	if shield_key != "":
-		var level: int = int(GameManager.get(shield_key + "_level"))
-		var total_spent: int = 0
-		for l: int in range(1, level + 1):
-			total_spent += _get_upgrade_cost(shield_key, l)
-		var refund: int = int(round(total_spent * 0.7))
-		
-		shield_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		shield_btn.tooltip_text = "%s Lv%d\n\nSatmak için tıklayın (+%d Altın)" % [EQUIP_NAMES.get(shield_key, shield_key), level, refund]
-		shield_btn.pressed.connect(_on_sell_shield_equip)
-		
+		var shield_sum: String = ShieldEnchantDefs.summary()
+		shield_btn.tooltip_text = shield_sum if shield_sum != "" else ShieldEnchantDefs.type_name(shield_key)
 		var icon: Control = Control.new()
 		icon.set_script(load("res://scripts/shop_item_icon.gd"))
 		icon.item_type = "shield"
@@ -584,23 +524,6 @@ func _refresh_equipments() -> void:
 		icon.offset_top = -32
 		icon.offset_bottom = 32
 		shield_btn.add_child(icon)
-		
-		var lvl_lbl: Label = Label.new()
-		lvl_lbl.text = "Sv%d" % level
-		lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-		lvl_lbl.add_theme_color_override("font_color", UIKit.C_CREAM)
-		lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-		lvl_lbl.add_theme_constant_override("outline_size", 4)
-		lvl_lbl.anchor_left = 1.0
-		lvl_lbl.anchor_top = 1.0
-		lvl_lbl.anchor_right = 1.0
-		lvl_lbl.anchor_bottom = 1.0
-		lvl_lbl.offset_left = -70
-		lvl_lbl.offset_top = -38
-		lvl_lbl.offset_right = -10
-		lvl_lbl.offset_bottom = -8
-		lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		shield_btn.add_child(lvl_lbl)
 	else:
 		shield_btn.tooltip_text = "Kalkan Yuvası (Boş)"
 		_dim_slot(shield_btn)
@@ -670,38 +593,6 @@ func _refresh_equipments() -> void:
 		equip_grid.add_child(util_btn)
 
 
-func _on_sell_shield_equip() -> void:
-	var owned: String = _owned_shield_type()
-	if owned == "":
-		return
-	var level: int = int(GameManager.get(owned + "_level"))
-	var total_spent: int = 0
-	for l: int in range(1, level + 1):
-		total_spent += _get_upgrade_cost(owned, l)
-	var refund: int = int(round(total_spent * 0.7))
-	_request_sell_confirmation(EQUIP_NAMES.get(owned, owned), refund, _do_sell_shield_equip)
-
-
-func _do_sell_shield_equip() -> void:
-	var owned: String = _owned_shield_type()
-	if owned == "":
-		return
-	var level: int = int(GameManager.get(owned + "_level"))
-	var total_spent: int = 0
-	for l: int in range(1, level + 1):
-		total_spent += _get_upgrade_cost(owned, l)
-	var refund: int = int(round(total_spent * 0.7))
-
-	GameManager.set(owned + "_level", 0)
-	GameManager.gold += refund
-
-	if player and is_instance_valid(player) and player.has_method("refresh_shield_stats"):
-		player.refresh_shield_stats()
-
-	_last_equip_signature = ""
-	_refresh()
-
-
 ## "key" hangi İşlevsellik yuvasına basıldığını belirtir (bkz.
 ## UTILITY_KEYS/MAX_UTILITY_SLOTS) - artık tek bir sabit "spray" değil,
 ## genel bir anahtar parametresi (ileride eklenecek başka işlevsellik
@@ -733,97 +624,8 @@ func _do_sell_utility_equip(key: String) -> void:
 	_refresh()
 
 
-func _refresh_mods() -> void:
-	if not main_layout or not is_instance_valid(main_layout) or mods_grid == null:
-		return
-		
-	var sig: String = ""
-	for mode: String in MODE_KEYS:
-		sig += mode + ":" + str(int(GameManager.get("shield_mod_" + mode + "_level"))) + ","
-	if sig == _last_mods_signature:
-		return
-	_last_mods_signature = sig
-		
-	for child: Node in mods_grid.get_children():
-		child.queue_free()
-		
-	var slot_tex: Texture2D = load("res://assets/ui/shop_redesign/item_slot.png") as Texture2D
-	var style_box: StyleBoxTexture = StyleBoxTexture.new()
-	style_box.texture = slot_tex
-	style_box.texture_margin_left = 5.0
-	style_box.texture_margin_top = 5.0
-	style_box.texture_margin_right = 5.0
-	style_box.texture_margin_bottom = 5.0
-	
-	for mode: String in MODE_KEYS:
-		var btn: Button = Button.new()
-		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
-		_decorate_slot(btn)
-		
-		btn.set_script(preload("res://scripts/inventory_mod_drag_source.gd"))
-		btn.setup(mode, MOD_ICON_TEXTURES[mode] as Texture2D)
-		
-		var level: int = int(GameManager.get("shield_mod_" + mode + "_level"))
-		if level > 0:
-			btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			btn.tooltip_text = "%s Lv%d\n\nSürükleyip alttaki kısayol slotlarına (1-4) yerleştirin." % [MOD_NAMES.get(mode, mode), level]
-			
-			var icon_tr: TextureRect = TextureRect.new()
-			icon_tr.texture = MOD_ICON_TEXTURES[mode] as Texture2D
-			icon_tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			icon_tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon_tr.custom_minimum_size = Vector2(64, 64)
-			icon_tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			icon_tr.anchor_left = 0.5
-			icon_tr.anchor_right = 0.5
-			icon_tr.anchor_top = 0.5
-			icon_tr.anchor_bottom = 0.5
-			icon_tr.offset_left = -32
-			icon_tr.offset_right = 32
-			icon_tr.offset_top = -32
-			icon_tr.offset_bottom = 32
-			btn.add_child(icon_tr)
-			
-			var lvl_lbl: Label = Label.new()
-			lvl_lbl.text = "Sv%d" % level
-			lvl_lbl.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-			lvl_lbl.add_theme_color_override("font_color", UIKit.C_CREAM)
-			lvl_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-			lvl_lbl.add_theme_constant_override("outline_size", 4)
-			lvl_lbl.anchor_left = 1.0
-			lvl_lbl.anchor_top = 1.0
-			lvl_lbl.anchor_right = 1.0
-			lvl_lbl.anchor_bottom = 1.0
-			lvl_lbl.offset_left = -70
-			lvl_lbl.offset_top = -38
-			lvl_lbl.offset_right = -10
-			lvl_lbl.offset_bottom = -8
-			lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			btn.add_child(lvl_lbl)
-		else:
-			btn.tooltip_text = "%s (Kilitli - Dükkandan satın alın)" % MOD_NAMES.get(mode, mode)
-			var icon_tr: TextureRect = TextureRect.new()
-			icon_tr.texture = MOD_ICON_TEXTURES[mode] as Texture2D
-			icon_tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			icon_tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon_tr.custom_minimum_size = Vector2(64, 64)
-			icon_tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			icon_tr.modulate = Color(1.0, 1.0, 1.0, 0.25)
-			icon_tr.anchor_left = 0.5
-			icon_tr.anchor_right = 0.5
-			icon_tr.anchor_top = 0.5
-			icon_tr.anchor_bottom = 0.5
-			icon_tr.offset_left = -32
-			icon_tr.offset_right = 32
-			icon_tr.offset_top = -32
-			icon_tr.offset_bottom = 32
-			btn.add_child(icon_tr)
-			
-		mods_grid.add_child(btn)
-
-
 func _refresh_items_grid() -> void:
-	var sig: String = ""
+	var sig: String = str(player.get_max_item_slots() if player and is_instance_valid(player) and player.has_method("get_max_item_slots") else 1) + "|"
 	for entry: Dictionary in GameManager.owned_items:
 		sig += str(entry.get("key", "")) + ","
 	if sig == _last_items_signature:
@@ -833,85 +635,76 @@ func _refresh_items_grid() -> void:
 	for child: Node in items_grid_box.get_children():
 		child.queue_free()
 
-	var slot_tex: Texture2D = load("res://assets/ui/shop_redesign/item_slot.png") as Texture2D
-	var style_box: StyleBoxTexture = StyleBoxTexture.new()
-	style_box.texture = slot_tex
-	style_box.texture_margin_left = 5.0
-	style_box.texture_margin_top = 5.0
-	style_box.texture_margin_right = 5.0
-	style_box.texture_margin_bottom = 5.0
+	var part_slots: int = 1
+	if player and is_instance_valid(player) and player.has_method("get_max_item_slots"):
+		part_slots = player.get_max_item_slots()
+	for kd in [Items.KADEME_EFSANEVI, Items.KADEME_EPIK, Items.KADEME_PARCA]:
+		var limit: int = Items.slot_limit(kd, part_slots)
+		var indices: Array = []
+		for i: int in range(GameManager.owned_items.size()):
+			if Items.kademe(str((GameManager.owned_items[i] as Dictionary).get("key", ""))) == kd:
+				indices.append(i)
+		var head := Label.new()
+		head.text = "%s  %d/%d" % [Items.KADEME_NAMES[kd - 1].to_upper(), indices.size(), limit]
+		UIKit.style_label(head, 24, TierSystem.COLORS[kd - 1], 0)
+		items_grid_box.add_child(head)
+		var grid := GridContainer.new()
+		grid.columns = 6
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		items_grid_box.add_child(grid)
+		## Boş yuvalar: sınır küçükse (efsanevi 5) hepsi, büyükse bir sıra.
+		var shown: int = mini(limit, maxi(indices.size(), 6 * int(ceil(float(maxi(indices.size(), 1)) / 6.0))))
+		for n in range(maxi(shown, indices.size())):
+			var btn: Button = Button.new()
+			btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+			_decorate_slot(btn)
+			var frame: TextureRect = btn.get_node("SlotFrame") as TextureRect
+			if n >= indices.size():
+				btn.disabled = true
+				_dim_slot(btn)
+				grid.add_child(btn)
+				continue
+			var i: int = indices[n]
+			var key: String = str((GameManager.owned_items[i] as Dictionary).get("key", ""))
+			frame.texture = TierSystem.MINI_FRAME_TEXTURES[kd - 1]
+			btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			btn.tooltip_text = "%s
+%s
 
-	var style_hover: StyleBoxTexture = StyleBoxTexture.new()
-	style_hover.texture = slot_tex
-	style_hover.texture_margin_left = 5.0
-	style_hover.texture_margin_top = 5.0
-	style_hover.texture_margin_right = 5.0
-	style_hover.texture_margin_bottom = 5.0
-	style_hover.modulate_color = Color(1.22, 1.22, 1.22, 1)
-
-	var style_pressed: StyleBoxTexture = StyleBoxTexture.new()
-	style_pressed.texture = slot_tex
-	style_pressed.texture_margin_left = 5.0
-	style_pressed.texture_margin_top = 5.0
-	style_pressed.texture_margin_right = 5.0
-	style_pressed.texture_margin_bottom = 5.0
-	style_pressed.modulate_color = Color(0.8, 0.8, 0.8, 1)
-
-	for i: int in range(GameManager.owned_items.size()):
-		var entry: Dictionary = GameManager.owned_items[i]
-		var key: String = entry.get("key", "")
-		var def: Dictionary = Items.get_def(key)
-		var refund: int = int(round(int(entry.get("spent", 0)) * 0.7))
-
-		var btn: Button = Button.new()
-		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
-		_decorate_slot(btn)
-		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		btn.tooltip_text = "%s\n%s\n\nSatmak için tıkla (+%d altın)" % [def.get("name", key), def.get("desc", ""), refund]
-		btn.pressed.connect(_on_sell_item.bind(i))
-
-		var icon: Control = Control.new()
-		icon.set_script(load("res://scripts/shop_item_icon.gd"))
-		icon.item_type = "trinket"
-		if "item_key" in icon:
-			icon.item_key = key
-		icon.modulate = Color(1, 1, 1, 1)
-		icon.custom_minimum_size = Vector2(64, 64)
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		icon.anchor_left = 0.5
-		icon.anchor_right = 0.5
-		icon.anchor_top = 0.5
-		icon.anchor_bottom = 0.5
-		icon.offset_left = -32
-		icon.offset_right = 32
-		icon.offset_top = -32
-		icon.offset_bottom = 32
-		btn.add_child(icon)
-
-		items_grid_box.add_child(btn)
+Satmak için tıkla (+%d altın)" % [Items.item_name(key), Items.describe(key), Items.sell_refund(key)]
+			btn.pressed.connect(_on_sell_item.bind(i))
+			var icon := TextureRect.new()
+			icon.texture = Items.icon(key)
+			icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+			icon.offset_left = SLOT_INSET
+			icon.offset_top = SLOT_INSET
+			icon.offset_right = -SLOT_INSET
+			icon.offset_bottom = -SLOT_INSET
+			btn.add_child(icon)
+			grid.add_child(btn)
 
 
 func _on_sell_item(index: int) -> void:
 	if index < 0 or index >= GameManager.owned_items.size():
 		return
-	var entry: Dictionary = GameManager.owned_items[index]
-	var key: String = entry.get("key", "")
-	var def: Dictionary = Items.get_def(key)
-	var refund: int = int(round(int(entry.get("spent", 0)) * 0.7))
-	_request_sell_confirmation(def.get("name", key), refund, _do_sell_item.bind(index))
+	var key: String = str((GameManager.owned_items[index] as Dictionary).get("key", ""))
+	_request_sell_confirmation(Items.item_name(key), Items.sell_refund(key), _do_sell_item.bind(index))
 
 
+## Satış iadesi eşyanın TAM fiyatının %70'i (tarifle ucuza alınmış olsa da - parçaları tek tek satmakla aynı değer).
 func _do_sell_item(index: int) -> void:
 	if index < 0 or index >= GameManager.owned_items.size():
 		return
-	var entry: Dictionary = GameManager.owned_items[index]
-	var refund: int = int(round(int(entry.get("spent", 0)) * 0.7))
-
-	if player and is_instance_valid(player) and player.has_method("remove_owned_item"):
-		player.remove_owned_item(index)
-
-	GameManager.owned_items.remove_at(index)
-	GameManager.gold += refund
-
+	if player and is_instance_valid(player) and player.has_method("sell_owned_item"):
+		player.sell_owned_item(index)
+	else:
+		var key: String = str((GameManager.owned_items[index] as Dictionary).get("key", ""))
+		GameManager.owned_items.remove_at(index)
+		GameManager.gold += Items.sell_refund(key)
 	_last_items_signature = ""
 	_refresh()

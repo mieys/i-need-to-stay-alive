@@ -14,15 +14,22 @@ extends Node2D
 ## hafif çağrı). İlk sürüm her karede hepsini yeniden çiziyordu - 200 sayıda kare
 ## başına ~1.5ms ölçüldü, bu yüzden bu yapıya geçildi.
 ##
-## Görünüm floating_text.gd ile BİREBİR aynı olacak şekilde yazıldı (font, boyut,
-## 4 yönlü piksel kontür, yükselme/belirme/sönme zamanlaması, saydamlığın metin+
-## kontüre birlikte uygulanması, sis görünürlüğü, hedefi takip, hedef yok olunca
-## son konumda kalma) - oradaki bir sabiti değiştirirsen buradakini de değiştir.
+## Yazı floating_text.gd ile aynı (font, boyut, 4 yönlü piksel kontür, belirme/sönme zamanlaması, sis görünürlüğü).
+## 2026-10-01'den beri hareket farklı ve sadece burada: pop + uzun süzülme + push_up yığılması, yaratıklar
+## spawn_fixed kullanır (takip yok) - bkz. RISE üstündeki not.
 
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 
-const RISE := 6.0
+## Kullanıcı isteği (2026-10-01): "yukarı çıkmadan direk spawn oluyor... daha güzel bir yukarı çıkış animasyonu" - eski
+## 6 px yükselme görünmüyordu. Artık: küçük bir pop (POP_SCALE'den 1'e, POP_TIME'da) + ömür boyunca RISE kadar
+## yumuşak süzülme. Yaratıklar sayıyı çevresinde rastgele bir noktada doğurur (enemy.gd DMG_SCATTER); push_up() (eskileri
+## yumuşakça yukarı kaydırma) şu an kullanılmıyor, sütun dizilimi istenirse hazır. Maliyet aynı: sayı başına karede yine
+## 1 transform (+ değişirse 1 modulate) çağrısı.
+const RISE := 22.0
+const POP_SCALE := 1.45
+const POP_TIME := 0.14
+const LIFT_SMOOTH := 16.0
 const LIFETIME := 0.9
 const FADE_IN_DURATION := 0.08
 const HOLD := LIFETIME * 0.4
@@ -54,8 +61,13 @@ class Entry:
 	var target = null
 	var offset: Vector2
 	var origin: Vector2
+	## false: doğduğu dünya noktasında sabit kalır, dümdüz yukarı çıkar (target sadece sis görünürlüğü için tutulur).
+	var follow: bool = true
 	var rise_t: float = 0.0
 	var fade_t: float = 0.0
+	## push_up birikimi (hedef) ve şu anki yumuşatılmış değeri.
+	var lift: float = 0.0
+	var lift_target: float = 0.0
 	var fade_from: float = 0.0
 	## Son uygulanan değerler - değişmeyen RenderingServer çağrıları atlanır.
 	var shown: bool = true
@@ -98,12 +110,24 @@ func _notification(what: int) -> void:
 
 
 func spawn(target: Node2D, offset: Vector2, text: String, color: Color) -> int:
+	return _spawn_entry(target, offset, target.global_position + offset if is_instance_valid(target) else Vector2.ZERO, true, text, color)
+
+
+## Hedefi TAKİP ETMEYEN sayı: world_pos'ta doğar, oradan dümdüz yukarı çıkar. Kullanıcı bildirimi (2026-10-01): takip
+## eden sayılar her vuruşta geri itilip ilerleyen yaratıkla birlikte sağa sola sallanıyordu ("sağ sol sağ sol").
+## target yalnızca sis görünürlüğü için.
+func spawn_fixed(target: Node2D, world_pos: Vector2, text: String, color: Color) -> int:
+	return _spawn_entry(target, Vector2.ZERO, world_pos, false, text, color)
+
+
+func _spawn_entry(target: Node2D, offset: Vector2, origin: Vector2, follow: bool, text: String, color: Color) -> int:
 	var id: int = _next_id
 	_next_id += 1
 	var e := Entry.new()
 	e.target = target
 	e.offset = offset
-	e.origin = target.global_position + offset if is_instance_valid(target) else Vector2.ZERO
+	e.origin = origin
+	e.follow = follow
 	e.ci = RenderingServer.canvas_item_create()
 	RenderingServer.canvas_item_set_parent(e.ci, get_canvas_item())
 	_paint(e.ci, text, color)
@@ -114,6 +138,22 @@ func spawn(target: Node2D, offset: Vector2, text: String, color: Color) -> int:
 
 func is_alive(id: int) -> bool:
 	return _entries.has(id)
+
+
+## Sayıyı yumuşakça amount kadar daha yukarı kaydırır (aynı yaratığa yeni sayı geldiğinde ona yer açmak için).
+func push_up(id: int, amount: float) -> void:
+	var e: Entry = _entries.get(id)
+	if e != null:
+		e.lift_target += amount
+
+
+## Kaydı süresi dolmadan siler (yaratık başı sayı sınırı dolunca en eskisi gider).
+func remove(id: int) -> void:
+	var e: Entry = _entries.get(id)
+	if e == null:
+		return
+	RenderingServer.free_rid(e.ci)
+	_entries.erase(id)
 
 
 ## floating_text.gd update_text ile aynı: metin/renk güncellenir, sönme zamanlayıcısı
@@ -164,9 +204,13 @@ func _apply(e: Entry) -> void:
 		RenderingServer.canvas_item_set_visible(e.ci, visible_now)
 	if not visible_now:
 		return
-	## Tween TRANS_SINE + EASE_OUT, 0 -> RISE.
+	## Yükselme: sinüs ease-out, 0 -> RISE. Pop: ilk POP_TIME'da POP_SCALE -> 1 (karesel ease-out).
 	var rise: float = RISE * sin((e.rise_t / LIFETIME) * PI * 0.5)
-	RenderingServer.canvas_item_set_transform(e.ci, Transform2D(0.0, e.origin - Vector2(0.0, rise)))
+	var sc: float = 1.0
+	if e.rise_t < POP_TIME:
+		var k: float = 1.0 - e.rise_t / POP_TIME
+		sc = 1.0 + (POP_SCALE - 1.0) * k * k
+	RenderingServer.canvas_item_set_transform(e.ci, Transform2D(0.0, Vector2(sc, sc), 0.0, e.origin - Vector2(0.0, rise + e.lift)))
 	var a: float = _alpha_of(e.fade_t, e.fade_from)
 	if a != e.alpha:
 		e.alpha = a
@@ -184,12 +228,14 @@ func _process(delta: float) -> void:
 			dead.append(id)
 			continue
 		e.rise_t = minf(e.rise_t + delta, LIFETIME)
+		if e.lift != e.lift_target:
+			e.lift = move_toward(e.lift, e.lift_target, maxf(0.5, absf(e.lift_target - e.lift) * LIFT_SMOOTH * delta))
 		if e.target != null:
-			if is_instance_valid(e.target):
+			if not is_instance_valid(e.target):
+				e.target = null
+			elif e.follow:
 				## Çizilen (interpolasyonlu) konuma yapış, ham fizik konumuna değil - bkz. PhysicsInterp.visual_position.
 				e.origin = PhysicsInterp.visual_position(e.target) + e.offset
-			else:
-				e.target = null
 		_apply(e)
 	for id in dead:
 		RenderingServer.free_rid((_entries[id] as Entry).ci)

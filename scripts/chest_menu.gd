@@ -48,6 +48,7 @@ const CHEST_TITLES := {
 ## Kullanıcı isteği (2026-09-25): "sandık açarken daha iyi ve ödüllendirici heyecan uyandırıcı sandık açma animasyonu" -
 ## eski 4 karelik kapak açılışı (chest_tier_*.png) yerine yeni piksel sayfa + ışık/ses/flaş (bkz. chest_open_anim.gd).
 const ChestOpenAnim := preload("res://scripts/chest_open_anim.gd")
+const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const RewardReveal := preload("res://scripts/reward_reveal.gd")
 const RewardRays := preload("res://scripts/reward_rays.gd")
 ## KULLANICI BİLDİRİMİ (2026-09-21): "Sandık açıldığında sandık özelliklerini gösteren kart ufakken yazılar kocaman kalıyor bu
@@ -133,6 +134,8 @@ func _enter_tree() -> void:
 func setup(player: Node, chest_tier: int) -> void:
 	_player = player
 	_chest_tier = chest_tier
+	## Bu sandığın yerden gelen altını (varsa) şimdi alınır: kartın üstünde yazar, kart inince oradan uçar.
+	_chest_gold = GameManager.pop_pending_chest_gold(false)
 
 	if not title_label:
 		title_label = get_node_or_null("CenterContainer/VBox/Title")
@@ -187,11 +190,14 @@ func setup(player: Node, chest_tier: int) -> void:
 	## level_up_screen.gd'deki kartlarla AYNI nadir dağılımı, bkz.
 	## tier_system.gd) çekilip doğrudan gösteriliyor. "SAT" butonu (bkz.
 	## _build_card) hâlâ duruyor - istemiyorsa altına çevirebilir.
-	var item_key: String = Items.KEYS[randi() % Items.KEYS.size()]
-	## Kullanıcı isteği (2026-09-24 denge turu: şans "iyi sandık çıkma oranını da arttırmalı") - ödülün kademesi
-	## artık sandığı açan oyuncunun şansıyla çekilir (seviye kartlarıyla AYNI TierSystem ağırlığı).
-	_reward_tier = TierSystem.roll(float(player.luck) if (player != null and "luck" in player) else 0.0)
-	var candidate: Dictionary = {"type": "item", "key": item_key}
+	## 2026-10-02: ekstralar silindi (bkz. items.gd) - liste boşken sandık açılış animasyonunu oynatıp BOŞ çıkar
+	## (kullanıcı seçimi: "Boş açılsın"), bkz. _reveal_reward_card "empty" dalı.
+	## 2026-10-02 yeni eşya sistemi: sandıktan SADECE parça (1. kademe) çıkar, eski Tier1-4 güç çarpanı yok (kullanıcı
+	## seçimi) - kart çerçevesi parçanın kademesi (Tier 1 rengi).
+	var parts: Array = Items.KEYS.filter(func(k): return Items.kademe(str(k)) == Items.KADEME_PARCA)
+	var item_key: String = str(parts[randi() % parts.size()]) if not parts.is_empty() else ""
+	_reward_tier = 1
+	var candidate: Dictionary = {"type": "item", "key": item_key} if item_key != "" else {"type": "empty"}
 
 	# Connect UI sounds
 	var ui_sound = _get_ui_sound()
@@ -230,6 +236,7 @@ func _play_chest_open_sequence(candidate: Dictionary) -> void:
 	anim.size = anim.custom_minimum_size
 	anim.position = (view - anim.size) * 0.5
 	_chest_icon = anim
+	_chest_center = anim.position + anim.size * Vector2(0.5, 0.52) ## RewardReveal.chest_mouth ile aynı nokta (ölçek animasyonundan bağımsız)
 
 	anim.pivot_offset = anim.custom_minimum_size * 0.5
 	anim.scale = Vector2(0.6, 0.6)
@@ -246,6 +253,10 @@ func _play_chest_open_sequence(candidate: Dictionary) -> void:
 	, CONNECT_ONE_SHOT)
 
 
+## Sandığın ekrandaki ağzı - SAT altını buradan fışkırır (bkz. _on_sat_pressed). Animasyonsuz yolda ekranın ortası.
+var _chest_center: Vector2 = Vector2(960.0, 560.0)
+
+
 func _make_layer(layer_name: String) -> Control:
 	var c := Control.new()
 	c.name = layer_name
@@ -258,6 +269,9 @@ func _make_layer(layer_name: String) -> Control:
 ## Kart sandığın ağzından fırlar (reward_reveal.gd fly_out), AL/SAT satırları kart indikten sonra belirir; inişte parıltı +
 ## tier ışığı, tier 2+ kartta boşta parlama döngüsü. Sandık kart indikten sonra aşağı kayarak söner.
 func _reveal_reward_card(candidate: Dictionary) -> void:
+	if str(candidate.get("type", "")) == "empty":
+		_reveal_empty_chest()
+		return
 	if cards_container:
 		var column = _build_card(candidate)
 		## Yazı boyutu yerleşim bittikten sonra ayarlanıyor (bkz. _fit_card_texts) - o bir kareye kadar ayarsız yazı görünmesin.
@@ -296,9 +310,14 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 					if is_instance_valid(b):
 						create_tween().tween_property(b, "modulate:a", 1.0, 0.2)
 				_hide_chest()
+				_release_chest_gold(card_panel.get_global_transform_with_canvas() * (card_panel.size * 0.5))
 			)
-	elif is_instance_valid(_chest_icon):
-		_hide_chest()
+		else:
+			_release_chest_gold(_chest_center)
+	else:
+		if is_instance_valid(_chest_icon):
+			_hide_chest()
+		_release_chest_gold(_chest_center)
 
 	## bkz. dosya başındaki _has_chosen notu - geri sayım main.gd tarafından
 	## zaten başlatılmış durumda (bkz. _try_open_next_pending_chest
@@ -313,6 +332,95 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 			countdown_panel.visible = NetworkManager.chest_countdown_active
 			if countdown_panel.visible and countdown_label:
 				countdown_label.text = "%ds" % int(ceil(NetworkManager.chest_countdown))
+
+
+## Ekstra listesi boş (bkz. items.gd): kapak açılınca kart yerine "Sandık boş" yazısı belirir, sandık söner, menü
+## kendiliğinden kapanır.
+const EMPTY_CHEST_HOLD := 1.6
+
+
+## Kullanıcı isteği (2026-10-02): "sandık açılırken kart çıkar çıkmaz ordan gitmesini istiyorum altın barına" - bu
+## sandığın yerden gelen altın payı (GameManager.pending_chest_gold, bkz. chest_drop.gd _award_chest_gold) setup'ta alınır.
+## Aynı gün: "sandık kartlarında vereceği altın da yazsın kartın üstünde ve gelecek altınlar o altın göstergesinden gitsin
+## altın sayısı paneline" - kartın üst kenarında altın rozeti (_build_gold_badge), kart inince paralar rozetten uçar.
+## Görev/debug sandığının bekleyen altını yoksa rozet de yok. Ekran paralar fırlamadan kapanırsa altın yine verilir.
+var _chest_gold: int = 0
+var _chest_gold_released: bool = false
+var _gold_badge: Control = null
+const GoldCoinFrames := preload("res://assets/pickups/gold/gold_coin_frames.tres")
+
+
+func _release_chest_gold(from_screen: Vector2) -> void:
+	if _chest_gold_released:
+		return
+	_chest_gold_released = true
+	if _chest_gold > 0:
+		if is_instance_valid(_gold_badge) and _gold_badge.is_inside_tree():
+			from_screen = _gold_badge.get_global_transform_with_canvas() * (_gold_badge.size * 0.5)
+		GoldRewardFx.give_now_from_screen(get_tree(), _chest_gold, from_screen)
+
+
+func _exit_tree() -> void:
+	## Güvenlik ağı: kart inmeden ekran kapandıysa (ör. oyun bitti) sandığın altını kaybolmasın.
+	if not _chest_gold_released and _chest_gold > 0 and is_inside_tree():
+		_release_chest_gold(_chest_center)
+
+
+## Parşömen levhanın altında (açıklamanın altındaki boş alanda) altın satırı: altın ikonu + "+120 Altın". Kart sütunuyla
+## birlikte sandıktan fırlar; kart inince paralar bu satırdan altın paneline uçar. (İlk deneme kartın üst kenarındaki koyu
+## rozetti - eşyanın adını örtüyordu.)
+func _build_gold_badge(parent: Control) -> Control:
+	var row := HBoxContainer.new()
+	row.name = "GoldRow"
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var coin := TextureRect.new()
+	coin.texture = GoldCoinFrames.get_frame_texture(&"spin", 0)
+	coin.custom_minimum_size = Vector2(32.0, 32.0)
+	coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	coin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(coin)
+	var lbl := Label.new()
+	lbl.text = "+%d Altın" % _chest_gold
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	UIKit.style_label(lbl, CARD_DESC_FONT_SIZE, UIKit.C_GOLD, 0)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(lbl)
+	parent.add_child(row)
+	return row
+
+
+func _reveal_empty_chest() -> void:
+	_release_chest_gold(_chest_center)
+	_has_chosen = true
+	var lbl := Label.new()
+	lbl.text = "Sandık boş"
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UIKit.style_label(lbl, UIKit.FS_TITLE, UIKit.C_CREAM, 6)
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	var parent: Control = _fx_layer if is_instance_valid(_fx_layer) else null
+	if parent:
+		parent.add_child(lbl)
+	else:
+		add_child(lbl)
+	lbl.position = Vector2(0.0, _chest_center.y - 150.0)
+	lbl.size = Vector2(view.x, 64.0)
+	lbl.modulate.a = 0.0
+	create_tween().tween_property(lbl, "modulate:a", 1.0, 0.2)
+	_hide_chest()
+	## Metoda bağlı (lambda değil): menü bu arada başka yoldan kapanıp silinirse bağlantı kendiliğinden düşer.
+	get_tree().create_timer(EMPTY_CHEST_HOLD, true).timeout.connect(_on_empty_chest_done)
+
+
+func _on_empty_chest_done() -> void:
+	if is_inside_tree() and not is_queued_for_deletion():
+		_close()
 
 
 ## Açık sandığı kart indikten sonra aşağı kaydırıp söndürür.
@@ -399,10 +507,10 @@ func _build_card(candidate: Dictionary) -> Control:
 	var is_weapon: bool = card_type == "weapon"
 	var item_def: Dictionary = {} if is_weapon else Items.get_def(item_key)
 	var display_name: String = WEAPON_NAMES.get(item_key, item_key.capitalize()) if is_weapon else item_def.get("name", item_key.capitalize())
-	var desc_text: String = "Yeni bir silah - kalıcı olarak edinilir." if is_weapon else item_def.get("desc", "")
-	var icon_path: String = WEAPON_ICON_TEXTURES.get(item_key, "") if is_weapon else ("res://assets/generated/item_" + item_key + "_frame_0.png")
-	var cost_base: int = WEAPON_COST_BASE.get(item_key, 80) if is_weapon else int(item_def.get("cost_base", 50))
-	var power_mult: float = 1.0 if is_weapon else Items.ITEM_TIER_POWER[_reward_tier - 1]
+	var desc_text: String = "Yeni bir silah - kalıcı olarak edinilir." if is_weapon else Items.describe(item_key)
+	var icon_path: String = WEAPON_ICON_TEXTURES.get(item_key, "") if is_weapon else Items.icon_path(item_key)
+	var cost_base: int = WEAPON_COST_BASE.get(item_key, 80) if is_weapon else Items.cost(item_key)
+	var power_mult: float = 1.0
 
 	## 2026-09-25 savaş kartı (bkz. scripts/tier_card_fx.gd): kart dokusu artık sabit bölgelere bölünmüş (üst satır / kalkan
 	## arması / tier kurdelesi / parşömen levha). Eşyaların açıklamaları uzun (250 karaktere kadar) - AL/SAT butonları levhaya
@@ -495,7 +603,7 @@ func _build_card(candidate: Dictionary) -> Control:
 
 	# 4. Kurdele: tier adı (silahların tier'ı yok - "Silah").
 	var tier_lbl := Label.new()
-	tier_lbl.text = "Silah" if is_weapon else TierSystem.NAMES[_reward_tier - 1]
+	tier_lbl.text = "Silah" if is_weapon else Items.KADEME_NAMES[Items.kademe(item_key) - 1]
 	tier_lbl.position = TierCardFx.RIBBON_RECT.position
 	tier_lbl.size = TierCardFx.RIBBON_RECT.size
 	tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -511,12 +619,6 @@ func _build_card(candidate: Dictionary) -> Control:
 	vbox.add_theme_constant_override("separation", 4)
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layout.add_child(vbox)
-	if not is_weapon:
-		var power_lbl := Label.new()
-		power_lbl.text = "%%%d güç" % int(round(power_mult * 100.0))
-		power_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		UIKit.style_label(power_lbl, CARD_POWER_FONT_SIZE, UIKit.C_GOLD, 0)
-		vbox.add_child(power_lbl)
 
 	## (2026-09-21) Label -> RichTextLabel (level atlama kartlarındaki Desc ile aynı tür): autowrap'lı bir Label metnin yüksekliğini
 	## kartın MİNİMUM boyutuna yansıtıp kartı uzatıyordu; fit_content'siz RichTextLabel ise kalan alana sabit sığar ve
@@ -534,6 +636,10 @@ func _build_card(candidate: Dictionary) -> Control:
 	vbox.add_child(desc_lbl)
 	column.set_meta("desc_label", desc_lbl)
 
+	## Sandığın vereceği altın: parşömenin altında satır (bkz. _build_gold_badge).
+	if _chest_gold > 0:
+		_gold_badge = _build_gold_badge(vbox)
+
 	# Check slots limit (SİLAH ve EŞYA için AYRI limitler - bkz. is_weapon)
 	var has_slots: bool = true
 	var gm = _get_game_manager()
@@ -544,11 +650,10 @@ func _build_card(candidate: Dictionary) -> Control:
 				max_w = _player.get_max_owned_weapons()
 			has_slots = gm.owned_weapons.size() < max_w
 	elif _player and gm and "owned_items" in gm:
-		var current_items: int = gm.owned_items.size()
-		var max_slots: int = 1
+		var part_slots: int = 1
 		if _player.has_method("get_max_item_slots"):
-			max_slots = _player.get_max_item_slots()
-		has_slots = current_items < max_slots
+			part_slots = _player.get_max_item_slots()
+		has_slots = Items.purchase_block_reason(item_key, gm.owned_items, part_slots, {"consume": []}) == ""
 
 	## Kullanıcı isteği: "oyundaki bütün butonları bununla değiştirmeni
 	## istiyorum" - eski yeşil (Al)/kırmızı (Sat) renk ayrımı kaldırıldı,
@@ -660,24 +765,18 @@ func _on_al_pressed(candidate: Dictionary, item_cost: int, power_mult: float = 1
 		_close()
 		return
 
-	# Double check slots just in case
-	var max_slots: int = 1
-	if _player.has_method("get_max_item_slots"):
-		max_slots = _player.get_max_item_slots()
-
-	if gm.owned_items.size() >= max_slots:
+	## Parça slotu kontrolü + kayıt player.acquire_item'da (tüketimsiz - sandık parçası bedava).
+	if _player.has_method("acquire_item") and not _player.acquire_item(item_key, {"cost": 0, "consume": [], "full": item_cost}, 0):
 		return
-
-	if _player.has_method("buy_item") and _player.buy_item(item_key, power_mult):
-		gm.owned_items.append({"key": item_key, "spent": item_cost, "power": power_mult, "tier": _reward_tier})
 
 	_close()
 
 func _on_sat_pressed(_item_key: String, refund_amount: int) -> void:
 	_has_chosen = true
-	var gm = _get_game_manager()
-	if gm:
-		gm.gold += refund_amount
+	## Kullanıcı isteği (2026-10-02: "sandıktan paranın sandıktan para paneline doğru gitmesini istiyorum"): menü kapanınca
+	## sandığın durduğu yerde (ekranın ortası, bkz. _play_chest_open_sequence) açık sandık yeniden belirir, altınlar
+	## ağzından fışkırıp sol üstteki altın paneline uçar, sayaç yavaşça dolar (gold_reward_fx.gd - altını da o ekler).
+	GoldRewardFx.give_from_screen(get_tree(), refund_amount, _chest_center, &"chest")
 	_spawn_gold_floating_text(refund_amount)
 	_close()
 

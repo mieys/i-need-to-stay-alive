@@ -97,11 +97,11 @@ func test_para_discount_applies_to_shop_prices_only_for_para() -> void:
 	GameManager.selected_spiritual = S.CAN
 	var full_upgrade: int = ShopPanel._upgrade_cost("dagger", 5)
 	var full_copy: int = ShopPanel._copy_cost("dagger", 3)
-	var full_item: int = ShopPanel._item_cost(Items.KEYS[0], 2)
+	var full_item: int = ShopPanel._item_cost("test_item", 2)
 	GameManager.selected_spiritual = S.PARA
 	assert(ShopPanel._upgrade_cost("dagger", 5) == int(round(float(full_upgrade) * 0.9)), "yükseltme fiyatı %10 düşmeli")
 	assert(ShopPanel._copy_cost("dagger", 3) == int(round(float(full_copy) * 0.9)), "silah fiyatı %10 düşmeli")
-	assert(ShopPanel._item_cost(Items.KEYS[0], 2) == int(round(float(full_item) * 0.9)), "eşya fiyatı %10 düşmeli")
+	assert(ShopPanel._item_cost("test_item", 2) == int(round(float(full_item) * 0.9)), "eşya fiyatı %10 düşmeli")
 	assert(GameManager.apply_shop_discount(1) == 1, "1 altın 0'a düşmemeli")
 	GameManager.selected_spiritual = prev
 
@@ -250,25 +250,28 @@ func test_dukkan_needs_merchant_channels_three_seconds_and_cancels_on_move_or_da
 	_cleanup()
 
 
-# ------------------------------------------------------------------ Satıcı: 8 eşya, eşit olasılık
+# ------------------------------------------------------------------ Satıcı: 4 silah + 8 eşya (2026-10-02 eşya sistemi)
 
-func test_merchant_stock_is_eight_unique_entries_with_one_owned_shield() -> void:
-	assert(MerchantScript.STOCK_SIZE == 8, "stok 8 olmalı")
+func test_merchant_stock_is_twelve_unique_entries_four_weapons_eight_items() -> void:
+	assert(MerchantScript.STOCK_SIZE == 12, "stok 12 olmalı (4 silah + 8 eşya)")
 	var m: Node = MerchantScript.new()
 	add_child(m)
 	_spawned.append(m)
 	for i in range(30):
 		var stock: Array = m._generate_stock()
-		assert(stock.size() == 8, "8 kart: %d" % stock.size())
 		var seen: Dictionary = {}
-		var shields: int = 0
+		var weapons: int = 0
+		var items: int = 0
 		for e in stock:
 			var k: String = "%s:%s" % [e["type"], e["key"]]
-			assert(not seen.has(k), "tekrarlı kart: %s" % k)
+			if e["type"] == "weapon":
+				assert(not seen.has(k), "tekrarlı silah kartı: %s" % k)
+				weapons += 1
+			elif e["type"] == "item":
+				items += 1
 			seen[k] = true
-			if e["type"] == "shield":
-				shields += 1
-		assert(shields >= 1, "en az bir kalkan garanti")
+		assert(weapons == MerchantScript.WEAPON_STOCK, "4 silah: %d" % weapons)
+		assert(items == MerchantScript.ITEM_STOCK, "8 eşya: %d" % items)
 
 
 func test_merchant_no_longer_favours_the_starting_weapon() -> void:

@@ -57,13 +57,19 @@ var _chase_target: Node2D = null
 ## Kullanıcı isteği (2026-09-25, sonraki tur): "tüm exp orbları %25 büyütmeni istiyorum" - ORB_TEXEL'i 1.25'le çarpmak
 ## pikselleri eşitsizleştirirdi; bunun yerine sanatın kendisi %25 büyütüldü (çap 11/11/14/14/16, 20x20 kare - bkz.
 ## tools/gen_xp_orb_sprites.py) ve çarpışma yarıçapları aynı oranda x1.25.
+## 2026-10-01: "küresi küçülsün, parıltısı büyüsün" - küre çapı 9/9/12/12/14, hale 3 piksel, yıldız kolları uzadı (sadece
+## sanat; çarpışma yarıçapları ve toplama mesafesi aynı).
+## 2026-10-02: şekil ELMAS KRİSTAL (kullanıcı deniyor) - tools/gen_xp_orb_sprites.py SHAPE; 28x28 x 12 kare @10 fps,
+## renkler aynı. Yuvarlağa dönmek için SHAPE = "round" ile yeniden üret.
+## 2026-10-02 "hepsini %15 büyüt": sanat boyu 10/10/14/14/16 (kare 32), çarpışma yarıçapları x1.15 (eski 2.25..3.25 ile
+## aynı oran - 2026-09-25 %25 büyütmedeki desen).
 const ORB_TEXEL := 0.5
 const TIERS := {
-	1: {"anim": "green", "scale": ORB_TEXEL, "collision_radius": 2.25},
-	2: {"anim": "blue", "scale": ORB_TEXEL, "collision_radius": 2.5},
-	3: {"anim": "purple", "scale": ORB_TEXEL, "collision_radius": 2.75},
-	4: {"anim": "yellow", "scale": ORB_TEXEL, "collision_radius": 3.0},
-	5: {"anim": "red", "scale": ORB_TEXEL, "collision_radius": 3.25},
+	1: {"anim": "green", "scale": ORB_TEXEL, "collision_radius": 2.59}, ## 2026-10-02: zümrüt/nane yeşili (çimenden ayrışır; beyaz denemesi geri alındı)
+	2: {"anim": "blue", "scale": ORB_TEXEL, "collision_radius": 2.88},
+	3: {"anim": "purple", "scale": ORB_TEXEL, "collision_radius": 3.16},
+	4: {"anim": "yellow", "scale": ORB_TEXEL, "collision_radius": 3.45},
+	5: {"anim": "red", "scale": ORB_TEXEL, "collision_radius": 3.74},
 }
 
 ## Kullanıcı isteği: "azıcık smooth büyüyüp küçülme animasyonu ekle" - sprite
@@ -129,7 +135,9 @@ func _on_expire() -> void:
 
 func _process(delta: float) -> void:
 	_pulse_time += delta
-	var pulse: float = 1.0 + sin(_pulse_time * PULSE_SPEED) * PULSE_AMPLITUDE
+	## Sadece BÜYÜR (1.0 .. 1.0 + 2*genlik): orb 1 ekran pikseli = 1 sanat pikseli ölçeğinde; 1'in altına inince tek
+	## piksellik parıltı/yıldız ekrandan düşüyordu (kullanıcı 2026-10-01: "oyunda hiç parıltılı görünmüyor").
+	var pulse: float = 1.0 + (sin(_pulse_time * PULSE_SPEED) * 0.5 + 0.5) * 2.0 * PULSE_AMPLITUDE
 	sprite.scale = Vector2(_base_scale, _base_scale) * pulse
 
 
