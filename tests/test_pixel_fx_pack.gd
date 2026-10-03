@@ -148,15 +148,17 @@ func test_matthew_fox_shield_pops_and_frees() -> void:
 	_spawned.append(host)
 	var shield: Node2D = (load("res://scenes/fx_matthew_fox_shield.tscn") as PackedScene).instantiate()
 	host.add_child(shield)
-	for i in range(20):
-		shield._process(0.016)
+	## 2026-09-24 sprite sayfası tasarımı: kalkan kendi _process'i olmadan AnimatedSprite2D döngüsü oynatır; pop() sonrası
+	## "pop" animasyonu bitince (animation_finished) kendini siler - gerçek kareler beklenir (2026-10-03 test güncellemesi).
+	await get_tree().process_frame
 	assert(is_instance_valid(shield) and not shield.popping)
 	shield.pop()
-	for i in range(40):
-		shield._process(0.016)
-		if shield.is_queued_for_deletion():
-			break
-	assert(shield.is_queued_for_deletion(), "pop animasyonu bitince silinir")
+	assert(shield.popping, "pop() patlamaya geçmeli")
+	var waited: float = 0.0
+	while is_instance_valid(shield) and not shield.is_queued_for_deletion() and waited < 3.0:
+		await get_tree().process_frame
+		waited += get_process_delta_time()
+	assert(not is_instance_valid(shield) or shield.is_queued_for_deletion(), "pop animasyonu bitince silinir")
 	_cleanup()
 
 
@@ -269,9 +271,13 @@ func test_korsan_strike_falls_then_explodes_and_frees() -> void:
 	while t < KorsanMath.STRIKE_FALL_TIME - 0.05:
 		strike._process(0.016)
 		t += 0.016
-	assert(strike.get_child_count() == 0, "mermi düşerken patlama yok")
+	## 2026-09-24 sprite sayfası tasarımı: düşen mermi kendi animasyon çocuğunu (AnimatedSprite2D) taşır - iddia "düşerken
+	## PATLAMA yok" (blast_radius taşıyan çocuk yok), yere inince patlama çocuğu eklenir (2026-10-03 test güncellemesi).
+	var blasts := func() -> Array: return strike.get_children().filter(func(c: Node) -> bool: return "blast_radius" in c)
+	assert(blasts.call().is_empty(), "mermi düşerken patlama yok")
 	strike._process(0.1)
-	assert(strike.get_child_count() == 1 and is_equal_approx(strike.get_child(0).blast_radius, 70.0), "yere inince patlar")
+	var b: Array = blasts.call()
+	assert(b.size() == 1 and is_equal_approx(b[0].blast_radius, 70.0), "yere inince patlar")
 	_cleanup()
 
 

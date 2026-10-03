@@ -98,16 +98,13 @@ func test_growth_did_not_push_the_character_downwards() -> void:
 
 
 func test_other_characters_are_untouched() -> void:
-	## DÜZELTME (stale test - HEAD'de de zaten başarısızdı, bu oturumun konusu değil): id 3/5/7/11/12
-	## (Matthew/Assasin Çocuk/Şovalye Adam/Necromancer/Shaman) bu testin yazıldığı %25 büyütme isteğinde
-	## yoktu, ama SONRAKİ, ayrı oturumlarda (48x48 "ikinci parti" karakter içe aktarımı + Matthew'in kendi
-	## %20 küçültme/%10 büyütme istekleri, bkz. characters.gd'deki ilgili notlar ve
-	## test_matthew_growth_kept_feet_on_ground_and_scaled_shadow) KENDİ scale/ground_shadow değerlerini
-	## aldı - "yoktu" varsayımı artık geçersiz. Sadece id 2 (Oakley) hâlâ bu 48x48 ölçek sistemine hiç girmedi.
-	for id in [2]:
-		var def: Dictionary = Characters.get_def(int(id))
-		assert(not def.has("scale"),
-			"%s bu istekte yoktu, ölçek eklenmemeli" % str(def["name"]))
+	## DÜZELTME (stale test): id 3/5/7/11/12 sonraki oturumlarda kendi scale/ground_shadow değerlerini aldı; SON istisna
+	## Oakley (id 2) de 2026-09-25'te yeni 48x48 sayfalara geçti (characters.gd: "Talon/Elara'yla AYNI ölçek/offset/gölge").
+	## Artık "ölçeksiz" karakter kalmadı - Oakley'nin Talon/Elara ile aynı ölçekte olduğu doğrulanır (2026-10-03).
+	var oakley: Dictionary = Characters.get_def(2)
+	assert(oakley.has("scale") and oakley.has("ground_shadow"), "Oakley 48x48 sistemine geçti: scale + ground_shadow olmalı")
+	assert((oakley["scale"] as Vector2).is_equal_approx(Vector2(2.2368375, 2.2368375)),
+		"Oakley ölçeği Talon/Elara ile aynı olmalı (2.2368375), bulunan: %s" % oakley["scale"])
 
 
 ## Kullanıcı isteği (2026-09-23): "matthewi %10 büyüt" - eski taban 1.78947 (Matthew'in kendi önceki %20

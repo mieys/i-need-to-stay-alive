@@ -77,7 +77,10 @@ func test_interact_is_space_and_skill4_is_f() -> void:
 
 
 func test_spiritual_definitions_match_the_spec() -> void:
-	assert(S.ORDER.size() == 6, "6 ruhani yetenek")
+	## İlk 6 + 2026-09-23'te eklenen Savaş Şevki ve Kalkan Bağı = 8 (2026-10-03 test güncellemesi).
+	assert(S.ORDER.size() == 8, "8 ruhani yetenek, bulunan: %d" % S.ORDER.size())
+	for id in [S.PARA, S.CAN, S.ADC, S.TANK, S.TAKTIK, S.DUKKAN, S.SAVAS_SEVKI, S.KALKAN_BAGI]:
+		assert(S.ORDER.has(id), "ruhani yetenek eksik: %s" % id)
 	assert(S.PARA_INTERVAL == 10.0 and S.PARA_GOLD == 5 and is_equal_approx(S.PARA_SHOP_DISCOUNT, 0.10), "Para: 10sn / 5 altın / %10")
 	assert(is_equal_approx(S.CAN_HEAL_PERCENT, 0.08) and is_equal_approx(S.CAN_SHIELD_PERCENT, 0.15) and S.CAN_INVULN_TIME == 3.0 and S.CAN_COOLDOWN == 90.0, "Can")
 	assert(S.ADC_DURATION == 10.0 and is_equal_approx(S.ADC_ATTACK_SPEED, 0.30) and is_equal_approx(S.ADC_SHIELD_PEN, 0.15) and is_equal_approx(S.ADC_LIFESTEAL, 0.01) and S.ADC_COOLDOWN == 120.0, "Adc")

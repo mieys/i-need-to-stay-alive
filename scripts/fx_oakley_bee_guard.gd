@@ -1,6 +1,9 @@
 extends Node2D
 class_name OakleyBeeGuard
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 ## Oakley Q - Arı Sürüsü (skill id 33).
 ##
 ## Kullanıcı istekleri (2026-09-25): "oakleyin arı yeteneğini siliyoruz artık oakley arı yeteneğini açtığında kendisini
@@ -146,7 +149,7 @@ func _authority_area(delta: float) -> void:
 		if float(_recent[id]) <= 0.0:
 			_recent.erase(id)
 	var feet: Vector2 = global_position + FEET
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), feet, GUARD_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
 			continue
 		var id: int = e.get_instance_id()

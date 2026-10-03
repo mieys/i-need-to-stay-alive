@@ -9,12 +9,20 @@ func _make_hud() -> Node:
 	var scene: PackedScene = load("res://scenes/hud.tscn")
 	var hud: Node = scene.instantiate()
 	add_child(hud)
-	hud._ready()
+	## (2026-10-03) add_child zaten _ready'yi çalıştırıyor; Godot 4.7'de elle _ready() @onready'leri yeniden çözüyor ve
+	## _ready'de başka katmana taşınan InventoryPanelInstance'ı null yapıyordu - ikinci çağrı kaldırıldı.
 	return hud
 
 
 func test_open_shop_panel_shows_stats_panel_to_its_right() -> void:
 	var hud: Node = _make_hud()
+	## Kullanıcı kararı: dükkan şimdilik TAMAMEN kapalı (GameManager.SHOP_ENABLED = false, "dükkan asla açılmayacak sonraki bir
+	## değişikliğe kadar") - kapalıyken hiçbir yoldan açılmamalı; açılırsa aşağıdaki kural sınanır (2026-10-03 test güncellemesi).
+	if not GameManager.SHOP_ENABLED:
+		hud._on_shop_toggle()
+		assert(not hud.shop_panel.visible, "Dükkan kapalıyken açıldı")
+		hud.queue_free()
+		return
 	assert(not hud.shop_panel.visible, "Dükkan başta kapalı olmalı")
 	assert(not hud.stats_panel_instance.visible, "İstatistik paneli başta kapalı olmalı")
 	var stats_default_x: float = hud.stats_panel_instance.global_position.x
@@ -37,6 +45,13 @@ func test_open_shop_panel_shows_stats_panel_to_its_right() -> void:
 
 func test_close_shop_panel_hides_stats_panel_too() -> void:
 	var hud: Node = _make_hud()
+	## Kullanıcı kararı: dükkan şimdilik TAMAMEN kapalı (GameManager.SHOP_ENABLED = false, "dükkan asla açılmayacak sonraki bir
+	## değişikliğe kadar") - kapalıyken hiçbir yoldan açılmamalı; açılırsa aşağıdaki kural sınanır (2026-10-03 test güncellemesi).
+	if not GameManager.SHOP_ENABLED:
+		hud._on_shop_toggle()
+		assert(not hud.shop_panel.visible, "Dükkan kapalıyken açıldı")
+		hud.queue_free()
+		return
 	hud.open_shop_panel()
 	assert(hud.shop_panel.visible and hud.stats_panel_instance.visible)
 	hud.close_shop_panel()
@@ -47,6 +62,13 @@ func test_close_shop_panel_hides_stats_panel_too() -> void:
 
 func test_shop_toggle_pairs_stats_panel() -> void:
 	var hud: Node = _make_hud()
+	## Kullanıcı kararı: dükkan şimdilik TAMAMEN kapalı (GameManager.SHOP_ENABLED = false, "dükkan asla açılmayacak sonraki bir
+	## değişikliğe kadar") - kapalıyken hiçbir yoldan açılmamalı; açılırsa aşağıdaki kural sınanır (2026-10-03 test güncellemesi).
+	if not GameManager.SHOP_ENABLED:
+		hud._on_shop_toggle()
+		assert(not hud.shop_panel.visible, "Dükkan kapalıyken açıldı")
+		hud.queue_free()
+		return
 	hud._on_shop_toggle()
 	assert(hud.shop_panel.visible and hud.stats_panel_instance.visible,
 		"_on_shop_toggle() ilk tıklamada ikisini de açmalı")
@@ -58,6 +80,13 @@ func test_shop_toggle_pairs_stats_panel() -> void:
 
 func test_shop_panel_has_closed_signal_that_hud_reacts_to() -> void:
 	var hud: Node = _make_hud()
+	## Kullanıcı kararı: dükkan şimdilik TAMAMEN kapalı (GameManager.SHOP_ENABLED = false, "dükkan asla açılmayacak sonraki bir
+	## değişikliğe kadar") - kapalıyken hiçbir yoldan açılmamalı; açılırsa aşağıdaki kural sınanır (2026-10-03 test güncellemesi).
+	if not GameManager.SHOP_ENABLED:
+		hud._on_shop_toggle()
+		assert(not hud.shop_panel.visible, "Dükkan kapalıyken açıldı")
+		hud.queue_free()
+		return
 	hud.open_shop_panel()
 	assert(hud.shop_panel.has_signal("closed"), "shop_panel.gd 'closed' sinyali tanımlamalı")
 	hud.shop_panel.closed.emit()

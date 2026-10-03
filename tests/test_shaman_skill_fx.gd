@@ -101,11 +101,13 @@ func test_totem_scenes_use_48px_pixel_sprites() -> void:
 		inst.free()
 
 
+## İkonlar 48x48 sanat pikseli ızgarasında çizilip x3 (144x144) dosyaya yazılıyor - projedeki tüm yetenek ikonlarının standardı
+## (assets/skills altında 38 ikon 144x144; 2026-10-03 test güncellemesi, eskiden dosya da 48x48'di).
 func test_skill_icons_are_48px() -> void:
 	for path: String in SKILL_ICONS:
 		var tex: Texture2D = load(path)
 		assert(tex != null, "%s yüklenebilmeli" % path)
-		assert(tex.get_width() == 48 and tex.get_height() == 48, "%s 48x48 olmalı (bulunan %s)" % [path, tex.get_size()])
+		assert(tex.get_width() == 144 and tex.get_height() == 144, "%s 144x144 (48 sanat pikseli x3) olmalı (bulunan %s)" % [path, tex.get_size()])
 
 
 func test_shaman_sounds_exist() -> void:

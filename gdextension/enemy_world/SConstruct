@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+# EnemyWorld GDExtension derlemesi (yaratık yeniden yazımı, docs/yaratik_yeniden_yazim/PLAN.md §6.1).
+# SCons'u `python` takma adıyla DEĞİL doğrudan %LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe ile çalıştır.
+#   Windows: ... -m SCons platform=windows use_mingw=yes use_llvm=yes target=template_debug   (ve template_release)
+#   Android: ... -m SCons platform=android arch=arm64 target=template_debug                   (ve template_release)
+import os
+
+godot_cpp = os.environ.get("GODOT_CPP", os.path.join(os.environ.get("LOCALAPPDATA", ""), "Toolchains", "godot-cpp"))
+env = SConscript(os.path.join(godot_cpp, "SConstruct"))
+
+env.Append(CPPPATH=["src/"])
+lib = env.SharedLibrary(
+    "bin/libenemyworld{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+    source=Glob("src/*.cpp"),
+)
+Default(lib)

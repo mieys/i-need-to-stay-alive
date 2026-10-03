@@ -14,6 +14,7 @@ const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const PlayerScript: GDScript = preload("res://scripts/player.gd")
 const LevelUpScreenScript: GDScript = preload("res://scripts/level_up_screen.gd")
 const EnemyScript: GDScript = preload("res://scripts/enemy.gd")
+const EnemyWorldBridgeScript: GDScript = preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 
 const DT := 1.0 / 30.0
 
@@ -73,8 +74,32 @@ func _make_enemy(pos: Vector2) -> Node2D:
 	return enemy
 
 
-## Baloncuk sahibi (grup "player") + baloncuğun İÇİNDE duran dost (grup "player_allies", enemy.gd
-## bunu da aday sayıyor) ile yaratığın davranışını adım adım ölçer.
+## Yaratık yeniden yazımı (2026-10-03): hedef seçimi / kışkırtma / baloncuk odağı C++ EnemyWorld'de (enemy.gd'deki eski
+## _get_target_player dalı silindi). Test düğümü current_scene olduğu için yaratık kaydolur; köprüyü ELLE adımlayıp
+## hedefi C++'ın bu karedeki kararından okuruz (iddialar eskisiyle aynı).
+func _bridge() -> Node:
+	return EnemyWorldBridgeScript._instance
+
+
+func _step(sec: float, per_frame: Callable = Callable()) -> void:
+	var b: Node = _bridge()
+	b.set_physics_process(false)
+	var t: float = 0.0
+	while t < sec:
+		if per_frame.is_valid():
+			per_frame.call()
+		b._physics_process(DT)
+		t += DT
+	b.set_physics_process(true)
+
+
+func _target_of(enemy: Node2D) -> Node2D:
+	var ti: int = int(enemy._ew_world.get_target(enemy._ew_slot))
+	return _bridge().target_node(ti)
+
+
+## Baloncuk sahibi (grup "player") + baloncuğun İÇİNDE duran dost (grup "player_allies", aday sayılıyor) ile yaratığın
+## davranışını adım adım ölçer.
 func test_creature_targets_bubble_owner_when_ally_is_inside() -> void:
 	var paladin := _make_player(Vector2.ZERO)
 	paladin.paladin_zone_active = true
@@ -82,17 +107,11 @@ func test_creature_targets_bubble_owner_when_ally_is_inside() -> void:
 	## Dost baloncuğun içinde ve yaratığa Şovalye'den DAHA YAKIN.
 	var ally := _make_player(Vector2(80.0, 0.0), "player_allies")
 	var enemy: Node2D = _make_enemy(Vector2(400.0, 0.0))
-	enemy._cached_target_player = ally ## "en yakın hedef" = dost (bug'ın kaynağı)
-
-	var target: Node2D = enemy._get_target_player()
-	assert(target == paladin, "Baloncuktaki dost yerine baloncuğun sahibi hedef olmalı, bulunan: %s" % target)
-
+	await get_tree().process_frame ## köprü ertelenerek eklenir
+	_step(DT * 2.0)
+	assert(_target_of(enemy) == paladin, "Baloncuktaki dost yerine baloncuğun sahibi hedef olmalı, bulunan: %s" % _target_of(enemy))
 	## Sonuç: yaratık sınıra yürüyüp KALKANA saldırmalı, dosta değil.
-	var t: float = 0.0
-	while t < 12.0:
-		enemy._cached_target_player = ally
-		enemy._physics_process(DT)
-		t += DT
+	_step(12.0)
 	assert(paladin.barrier_damage_taken > 0.0,
 		"Yaratık baloncuğa (kalkana) saldırmalıydı, kalkan hasarı: %s" % paladin.barrier_damage_taken)
 	assert(ally.get("normal_damage_taken") == 0.0 and paladin.normal_damage_taken == 0.0,
@@ -108,17 +127,15 @@ func test_creature_far_from_bubble_keeps_normal_target() -> void:
 	## Baloncuğun DIŞINDAKİ dost: kural devreye girmemeli.
 	var ally := _make_player(Vector2(600.0, 0.0), "player_allies")
 	var enemy: Node2D = _make_enemy(Vector2(800.0, 0.0))
-	enemy._cached_target_player = ally
-	assert(enemy._get_target_player() == ally, "Baloncuk dışındaki dost normal hedef kalmalı")
-	## Baloncuk kapalıyken hiçbir şey değişmemeli.
+	await get_tree().process_frame
+	_step(DT * 5.0)
+	assert(_target_of(enemy) == ally, "Baloncuk dışındaki dost normal hedef kalmalı")
+	## Baloncuk kapalıyken hiçbir şey değişmemeli: en yakın (dost) hedef.
 	paladin.paladin_zone_active = false
-	_reset_zone_cache()
-	## Öndeki (600px) dostu kaldır: yaratığın "en yakın hedef" yenilemesi (4 karede bir, instance id'ye bağlı) rastgele
-	## bir karede tetiklenirse en yakın olan seçilir - testin kendi kurulumundaki bu belirsizliği ortadan kaldırıyor.
 	ally.free()
 	var inside_ally := _make_player(Vector2(60.0, 0.0), "player_allies")
-	enemy._cached_target_player = inside_ally
-	assert(enemy._get_target_player() == inside_ally, "Baloncuk kapalıyken hedef değişmemeli")
+	_step(DT * 5.0)
+	assert(_target_of(enemy) == inside_ally, "Baloncuk kapalıyken hedef değişmemeli (en yakın dost)")
 	_cleanup()
 
 
@@ -126,32 +143,21 @@ func test_taunt_locks_target_for_five_seconds_even_if_ally_is_closer() -> void:
 	var paladin := _make_player(Vector2.ZERO)
 	var ally := _make_player(Vector2(300.0, 0.0), "player_allies")
 	var enemy: Node2D = _make_enemy(Vector2(340.0, 0.0)) ## dosta çok yakın, Şovalye'ye uzak
-	enemy._cached_target_player = ally
-	assert(enemy._get_target_player() == ally, "Kışkırtma öncesi en yakın hedef dost")
+	await get_tree().process_frame
+	_step(DT * 5.0)
+	assert(_target_of(enemy) == ally, "Kışkırtma öncesi en yakın hedef dost")
 
 	assert(is_equal_approx(PlayerScript.PALADIN_TAUNT_DURATION, 5.0), "Kışkırtma süresi 5sn olmalı")
 	enemy.apply_taunt(PlayerScript.PALADIN_TAUNT_DURATION, paladin)
-	enemy._cached_target_player = ally
-	assert(enemy._get_target_player() == paladin, "Kışkırtılan yaratık Şovalye'yi hedeflemeli")
-
+	## dost hep en yakın aday kalsın (0.5px: yaratık Şovalye'ye yapışınca mesafe eşitliği hedefi kaydırmasın)
+	var keep_ally_closest := func() -> void: ally.global_position = enemy.global_position + Vector2(0.5, 0.0)
+	_step(DT * 2.0, keep_ally_closest)
+	assert(_target_of(enemy) == paladin, "Kışkırtılan yaratık Şovalye'yi hedeflemeli")
 	## 4.5sn sonra hâlâ kilitli, 5sn'yi geçince serbest.
-	var t: float = 0.0
-	while t < 4.5:
-		ally.global_position = enemy.global_position + Vector2(0.5, 0.0) ## dost hep en yakın aday kalsın (0.5px: yaratık Şovalye'ye yapışınca 10px'lik mesafe eşitliği hedefi Şovalye'ye kaydırıp testi dalgalandırıyordu)
-		enemy._cached_target_player = ally
-		enemy._physics_process(DT)
-		t += DT
-	ally.global_position = enemy.global_position + Vector2(0.5, 0.0)
-	enemy._cached_target_player = ally
-	assert(enemy._get_target_player() == paladin, "4.5sn sonra kışkırtma sürmeli")
-	while t < 5.4:
-		ally.global_position = enemy.global_position + Vector2(0.5, 0.0)
-		enemy._cached_target_player = ally
-		enemy._physics_process(DT)
-		t += DT
-	ally.global_position = enemy.global_position + Vector2(0.5, 0.0)
-	enemy._cached_target_player = ally
-	assert(enemy._get_target_player() == ally, "5sn sonra yaratık normal hedefine dönmeli")
+	_step(4.5 - DT * 2.0, keep_ally_closest)
+	assert(_target_of(enemy) == paladin, "4.5sn sonra kışkırtma sürmeli")
+	_step(0.9, keep_ally_closest)
+	assert(_target_of(enemy) == ally, "5sn sonra yaratık normal hedefine dönmeli")
 	_cleanup()
 
 
@@ -159,12 +165,13 @@ func test_taunt_is_dropped_when_taunter_dies() -> void:
 	var paladin := _make_player(Vector2.ZERO)
 	var ally := _make_player(Vector2(300.0, 0.0), "player_allies")
 	var enemy: Node2D = _make_enemy(Vector2(340.0, 0.0))
+	await get_tree().process_frame
 	enemy.apply_taunt(5.0, paladin)
+	_step(DT * 2.0)
 	paladin.is_dead = true
-	enemy._cached_target_player = ally
-	assert(enemy._get_target_player() == ally, "Kışkırtan ölünce yaratık boşa kilitli kalmamalı")
+	_step(DT * 5.0)
+	assert(_target_of(enemy) == ally, "Kışkırtan ölünce yaratık boşa kilitli kalmamalı")
 	_cleanup()
-
 
 func test_paladin_bubble_reduction_is_ninety_five_percent() -> void:
 	assert(is_equal_approx(PlayerScript.PALADIN_ULTI_SHIELD_COST_MULT, 0.05),
@@ -172,7 +179,9 @@ func test_paladin_bubble_reduction_is_ninety_five_percent() -> void:
 	var def: Dictionary = Characters.get_def(7)
 	## 2026-09-25 slot değişimi: baloncuk (ulti) artık R/skill3, kışkırtma Q/skill.
 	assert(str(def.get("skill3_desc", "")).find("%95") != -1, "Ulti açıklaması %%95 yazmalı: %s" % def.get("skill3_desc"))
-	assert(str(def.get("skill_desc", "")).find("5 saniye") != -1, "Q açıklaması kışkırtmayı anlatmalı: %s" % def.get("skill_desc"))
+	## 2026-09-28 (yetenek evrimleri): temel Q artık SADECE kalkan yeniler; kışkırtma "Meydan Okuma" evrimine taşındı
+	## (player.gd _skill_sovalye_taunt) - açıklama kalkan yenilemeyi anlatmalı (2026-10-03 test güncellemesi).
+	assert(str(def.get("skill_desc", "")).find("kalkan yeniler") != -1, "Q açıklaması kalkan yenilemeyi anlatmalı: %s" % def.get("skill_desc"))
 
 
 func test_shield_absorption_bases_are_up_five_points() -> void:

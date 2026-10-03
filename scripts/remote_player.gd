@@ -7,6 +7,8 @@ const EventSfx := preload("res://scripts/event_sfx.gd")
 const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
 const KORSAN_CHAR_ID := 9 ## Characters.DEFS roster id'si (player.gd ile aynı)
 const WeaponTargetPriorityScript := preload("res://scripts/weapon_target_priority.gd")
+## Aday sorgusu (host'ta yeni yolda C++ ızgarası, aksi halde tüm grup) - nişan seçicilerinin süzgeçleri aynen kalır.
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const OakleyLeafBarrierScene: PackedScene = preload("res://scenes/fx_oakley_leaf_barrier.tscn")
 
 ## Remote player puppet for multiplayer.
@@ -916,7 +918,7 @@ func _get_target_for_weapon(i: int, origin: Vector2) -> Node2D:
 
 
 func _get_nearest_enemy_from(origin: Vector2, max_range: float) -> Node2D:
-	var enemies := get_tree().get_nodes_in_group("enemies")
+	var enemies: Array = EnemyQueryScript.candidates(get_tree(), origin, max_range + 1.0 if max_range > 0.0 else INF)
 	if enemies.is_empty():
 		return null
 	var nearest: Node2D = null
@@ -939,7 +941,7 @@ func _get_nearest_enemy_from(origin: Vector2, max_range: float) -> Node2D:
 ## için: hiç donmamış düşman yoksa (veya menzil dışındaysa) normal en yakın
 ## düşmana düşer, asa "hedefsiz" kalmasın diye.
 func _get_nearest_unfrozen_enemy_from(origin: Vector2, max_range: float) -> Node2D:
-	var enemies := get_tree().get_nodes_in_group("enemies")
+	var enemies: Array = EnemyQueryScript.candidates(get_tree(), origin, max_range + 1.0 if max_range > 0.0 else INF)
 	if enemies.is_empty():
 		return null
 	var nearest: Node2D = null
@@ -964,7 +966,7 @@ func _get_nearest_unfrozen_enemy_from(origin: Vector2, max_range: float) -> Node
 ## yüksek > hiç zehirlenmemiş > tüm yaratıklar" kuralı TEK yerde (bkz.
 ## tuftuf_targeting.gd), iki taraf da onu çağırır.
 func _get_highest_health_enemy_from(origin: Vector2, max_range: float) -> Node2D:
-	var enemies := get_tree().get_nodes_in_group("enemies")
+	var enemies: Array = EnemyQueryScript.candidates(get_tree(), origin, max_range + 1.0 if max_range > 0.0 else INF)
 	if enemies.is_empty():
 		return null
 	return TuftufTargetingScript.pick(enemies, origin, max_range)

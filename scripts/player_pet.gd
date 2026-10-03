@@ -1,5 +1,8 @@
 extends CharacterBody2D
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 ## Matthew's companion creature (see player.gd's _passive_matthew /
 ## _spawn_matthew_pet). Follows the player, and melees whatever enemy strays
 ## closest to MATTHEW (not to itself) - see _pick_focus_target(). Reports its
@@ -406,7 +409,7 @@ func _pick_focus_target() -> Node2D:
 		return null
 	var nearest: Node2D = null
 	var nearest_dist: float = FOCUS_RADIUS
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), owner_player.global_position, FOCUS_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		var d: float = owner_player.global_position.distance_to(e.global_position)
@@ -555,7 +558,7 @@ func _process_attack(delta: float) -> void:
 ## tilkiye özel) ile üst üste biniyordu. Artık SADECE hasar veriliyor.
 func _do_cone_attack(attack_dir: Vector2) -> void:
 	var base_dmg: float = _owner_attack_power() * FOX_STAT_RATIO
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, ATTACK_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		var to_enemy: Vector2 = e.global_position - global_position

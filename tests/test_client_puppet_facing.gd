@@ -4,7 +4,7 @@ extends Node
 ## falan bakıp saldırı hareketi yapıyor". Kök neden host tarafında (_physics_process "not think" dalı) VE
 ## istemci tarafında (aşağıdaki dead-reckoning yön türetme) AYRI AYRI mekanizmalardı - biri düzeltilip diğeri
 ## unutulursa CLAUDE.md'nin uyardığı "kaster/host görür, diğerleri görmez" hata sınıfına tam uyardı, bu yüzden
-## istemci (katılımcı) tarafı BURADA ayrı test ediliyor.
+## istemci (katılımcı) tarafı BURADA ayrı test ediliyor. (2026-10-03'ten beri istemci kuklası C++'ta: EnemyWorld step_puppet - aynı kural.)
 ##
 ## Senaryo: istemci puppet'ı (NetworkManager.is_host = false), host bir yaratığın DURUP saldırıya geçtiğini
 ## bildiriyor (aynı konum arka arkaya 2 paket - _network_velocity küçük kalır, 15.0 eşiğinin altında) ama
@@ -50,6 +50,9 @@ func test_stopped_puppet_eventually_faces_the_real_nearby_player_not_stale_movem
 
 	## Host, yaratığın DURDUĞUNU bildiriyor: iki paket AYNI konumda (velocity ~ 0) - ama yaratık şu an
 	## _sprite_row = ROW_UP (yukarı bakıyor, yani oyuncudan UZAĞA) gibi eski/yanlış bir yönde donmuş olsun.
+	## 2026-10-03: istemci kuklası C++ EnemyWorld'e (F_PUPPET) kayıtlıysa yönü C++ tutar (step_puppet) - yanlış yön oraya yazılır.
+	if int(enemy.get("_ew_slot")) >= 0:
+		enemy._ew_world.set_face(enemy._ew_slot, Vector2.UP)
 	enemy._sprite_row = 1 ## ROW_UP - kasıtlı olarak YANLIŞ (oyuncu aşağıda, doğrusu ROW_DOWN=0 olmalı)
 	enemy.update_network_state(enemy.global_position, false, -1.0, -1.0, false, -1, 0)
 	await _physics_frames(1)
@@ -58,7 +61,8 @@ func test_stopped_puppet_eventually_faces_the_real_nearby_player_not_stale_movem
 	var turned: bool = false
 	for i in range(enemy.AI_THINK_INTERVAL_FRAMES + 2):
 		await get_tree().physics_frame
-		if int(enemy._sprite_row) == 0: ## ROW_DOWN = oyuncuya (aşağıya) bakıyor
+		var row: int = int(enemy._ew_world.get_facing_row(enemy._ew_slot)) if int(enemy.get("_ew_slot")) >= 0 else int(enemy._sprite_row)
+		if row == 0: ## ROW_DOWN = oyuncuya (aşağıya) bakıyor
 			turned = true
 			break
 	assert(turned, "Duran istemci puppet'ı birkaç kare içinde GERÇEK hedefe (oyuncuya) dönmeli, eski hareket yönünde donmamalı")

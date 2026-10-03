@@ -487,6 +487,12 @@ func _update_creature_draw_order() -> void:
 	## İki karede bir yeter (yan yana yürüyen yaratıklar bir karede sıra değiştirmez); ~200 yaratıkta maliyeti yarıya indirir.
 	if Engine.get_process_frames() % 2 != 0:
 		return
+	## Yaratık yeniden yazımı (Aşama 3): yeni yolda sıralama C++'ta ve düğümler TAŞINMAZ (draw index) - 2000 yaratıkta bu
+	## fonksiyon GDScript'te ~10 ms/çağrıydı. Eski yol aşağıda aynen.
+	var ew: Object = EnemyWorldBridgeScript.fog_world(get_tree())
+	if ew != null:
+		_update_creature_draw_order_ew(ew)
+		return
 	var nodes: Array[Node2D] = []
 	var keys: Array = [] ## Vector2(ayak_y, nodes indeksi) - Array.sort() yerleşik karşılaştırmayla (lambda yok) sıralar
 	var seen: Dictionary = {} ## iki gruptaki bir düğüm iki kez sayılmasın
@@ -494,6 +500,11 @@ func _update_creature_draw_order() -> void:
 		for n in get_tree().get_nodes_in_group(group_name):
 			var n2 := n as Node2D
 			if n2 == null or n2.get_parent() != self or seen.has(n2):
+				continue
+			## PERF (yaratık yeniden yazımı Aşama 3, 1000 yaratıkta bu fonksiyon ~3,4 ms): görünmeyen (görüş sisinin gizlediği)
+			## yaratık çizilmez, sırası önemsiz - sisin dışına çıktığı karede zaten bir sonraki geçişte (<= 2 kare) sıralanır.
+			## Sis kapalıyken (ev içi / sis yok) herkes görünür, davranış eskisiyle aynı.
+			if not n2.visible:
 				continue
 			seen[n2] = true
 			keys.append(Vector2(_creature_foot_y(n2), nodes.size()))
@@ -510,6 +521,36 @@ func _update_creature_draw_order() -> void:
 		if cur.get_index() < prev_idx:
 			move_child(cur, prev_idx)
 		prev = cur
+
+
+const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
+
+## Yeni yol: C++'a kayıtlı yaratıkların ayak y'sini C++ hesaplar (görsel + yerel ayak satırı bir kez set_foot ile verilir);
+## kayıtsız olanlar (ölüm animasyonundaki yaratıklar, görev kopyaları, müttefikler) burada hesaplanıp ekstra olarak verilir.
+## Kural _update_creature_draw_order ile aynı (Main'in doğrudan çocuğu, görünür, ayak y'sine göre); fark: ağaçtaki sıra
+## değişmez, görünür düğümlerin işgal ettiği indeksler ayak sırasıyla canvas draw index olarak dağıtılır.
+func _update_creature_draw_order_ew(ew: Object) -> void:
+	for n in ew.call("foot_missing"):
+		var n2 := n as Node2D
+		if n2 == null:
+			continue
+		var vis: Node2D = _find_creature_visual(n2)
+		ew.call("set_foot", int(n2.get("_ew_slot")), vis, _visual_foot_local(vis) if vis != null else 0.0)
+	var extras: Array = []
+	var foot := PackedFloat32Array()
+	var seen: Dictionary = {}
+	var cand: Array = EnemyWorldBridgeScript.fog_extra_enemies(get_tree())
+	for group_name in CREATURE_SORT_GROUPS:
+		if group_name != "enemies":
+			cand.append_array(get_tree().get_nodes_in_group(group_name))
+	for n in cand:
+		var n2 := n as Node2D
+		if n2 == null or not is_instance_valid(n2) or n2.get_parent() != self or seen.has(n2) or not n2.visible:
+			continue
+		seen[n2] = true
+		extras.append(n2)
+		foot.append(_creature_foot_y(n2))
+	ew.call("draw_order", self, extras, foot)
 
 
 ## Yaratığın ayaklarının dünya y'si. Görsel (Sprite2D / AnimatedSprite2D) bulunamazsa kök noktası.

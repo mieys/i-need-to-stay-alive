@@ -68,9 +68,8 @@ func test_keybind_menu_buttons_get_wood_style() -> void:
 func test_weapon_select_screen_reroll_uses_wide_texture_and_cards_are_untouched() -> void:
 	var script: GDScript = load("res://scripts/weapon_select_screen.gd")
 	var wss: CanvasLayer = script.new()
-	wss.mode = "weapon"
+	## (2026-10-03) ekranın "mode" alanı kalktı (artık yalnızca silah seçimi); add_child _ready'yi zaten çalıştırır.
 	add_child(wss)
-	wss._ready()
 	var reroll: Button = wss.get_node("RerollButton")
 	assert(_style_texture_path(reroll, "normal") == ButtonPngPath,
 		"RerollButton yeni dokuyu almiyor: %s" % _style_texture_path(reroll, "normal"))

@@ -199,6 +199,32 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_move_physics(delta)
+	_ew_poll_hits()
+
+
+## Yaratık yeniden yazımı (PLAN §4.3): EnemyWorld açıkken kayıtlı yaratıkların fizik gövdesi kapalı - onları
+## body_entered yerine bu sorgu bulur ve AYNI _on_body_entered'a verir (giriş/çıkış anlamı aynı: uç noktada bekleyen
+## Kasırga içeride duranı değil, çıkıp yeniden gireni tekrar keser - eski Area2D davranışı).
+const EnemyWorldHits := preload("res://scripts/enemy_world/enemy_world_hits.gd")
+var _ew_hits: RefCounted = null
+
+
+func _ew_poll_hits() -> void:
+	if not is_inside_tree() or is_queued_for_deletion():
+		return
+	var w: Object = EnemyWorldHits.world(get_tree())
+	if w == null:
+		return
+	if _ew_hits == null:
+		_ew_hits = EnemyWorldHits.new()
+	for e in _ew_hits.poll(w, global_position, EnemyWorldHits.shape_radius(self)):
+		if is_instance_valid(e):
+			_on_body_entered(e)
+	_ew_hits.mark(global_position)
+
+
+func _move_physics(delta: float) -> void:
 	rotation += deg_to_rad(spin_speed_deg) * delta
 	## SpinFx zaten KENDİ animasyon karelerinde (spin_frames.tres "trail",
 	## 6 kareli döngüsel bir dönüş bulanıklığı) dönüşü gösteriyor - normal

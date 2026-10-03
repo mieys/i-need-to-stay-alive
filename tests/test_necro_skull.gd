@@ -4,6 +4,7 @@ extends Node
 ## (Ağ tarafı - kozmetik kafatasının bacakları, korku göstergesinin diğer istemcide görünmesi - gerçek 2 pencereli testle
 ## doğrulanmalı; burası kurallar ve tek istemcili davranış.)
 
+const EnemyWorldBridgeScript: GDScript = preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 const PlayerScript = preload("res://scripts/player.gd")
 const SkullScript = preload("res://scripts/necro_skull.gd")
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_rat1.tscn")
@@ -90,12 +91,19 @@ func test_wander_fear_blocks_damage_and_expires() -> void:
 	tgt.global_position = e.global_position
 	await e._schedule_melee_hit(0.0, tgt)
 	assert(tgt.hits == 0, "korkmuş yaratık hasar verememeli")
-	## rastgele yön: birkaç yeniden seçimde en az iki farklı yön
+	## rastgele yön (yaratık yeniden yazımı: korku-dolaşma hareketi C++ EnemyWorld'de, 0,45-1 sn'de bir yeni yön): köprüyü
+	## elle adımlayıp 0,5 sn'lik hareket yönlerini örnekle - en az iki farklı yön.
+	await get_tree().process_frame ## köprü ertelenerek eklenir
+	var bridge: Node = EnemyWorldBridgeScript._instance
+	assert(bridge != null and int(e.get("_ew_slot")) >= 0, "yaratık C++'a kaydolmalı")
+	bridge.set_physics_process(false)
 	var dirs: Array = []
-	for i in 6:
-		e._fear_wander_retarget = 0.0
-		e._fear_wander_velocity(0.016)
-		dirs.append(e._fear_wander_dir)
+	for i in 4:
+		var p0: Vector2 = e.global_position
+		for k in 30:
+			bridge._physics_process(1.0 / 60.0)
+		dirs.append((e.global_position - p0).normalized())
+	bridge.set_physics_process(true)
 	var distinct := false
 	for d in dirs:
 		if d.distance_to(dirs[0]) > 0.1:

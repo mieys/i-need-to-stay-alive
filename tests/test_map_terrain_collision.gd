@@ -9,14 +9,15 @@ extends Node
 ## paylaşılıyor ve YATI her bake'te sıfırdan üretiyor) - bunun yerine
 ## harita_baked.tscn'deki "Su/Su" ve "ev/Ev" katmanlarına doğrudan karo
 ## sorgusu yapılıyor. Bu testler: (1) çekirdek sorgu fonksiyonunun bilinen
-## su/ev/temiz hücrelerde doğru sonuç verdiğini, (2) player.gd/enemy.gd'nin
-## hareket engelleme fonksiyonlarının gerçekten hızı iptal ettiğini,
+## su/ev/temiz hücrelerde doğru sonuç verdiğini, (2) player.gd'nin hareket engellemesinin hızı iptal ettiğini ve
+## C++ EnemyWorld'deki yaratığın orman duvarına girmediğini,
 ## (3) enemy_spawner.gd'nin su/ev üstüne spawn ETMEDİĞİNİ doğruluyor.
 
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn")
 const HaritaScene: PackedScene = preload("res://scenes/harita_baked.tscn")
 const EnemySpawnerScript = preload("res://scripts/enemy_spawner.gd")
+const EnemyWorldBridgeScript: GDScript = preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 
 ## Bilinen hücreler (bkz. get_tilemap_layout ile doğrulanmış):
 ## - (8,8) piksel -> tile (0,0): Su/Su katmanında dolu (su).
@@ -140,28 +141,52 @@ func test_player_already_inside_forest_can_walk_out() -> void:
 	_clear_game_manager_map()
 
 
+## Yaratık yeniden yazımı (2026-10-03): yaratık hareketi + orman duvarı probu C++ EnemyWorld'de (enemy.gd'deki eski
+## _block_movement_into_terrain silindi). Test düğümü current_scene olduğu için yaratık kaydolur; köprüyü elle adımlarız.
+func _step_bridge(frames: int, each: Callable = Callable()) -> void:
+	var b: Node = EnemyWorldBridgeScript._instance
+	b.set_physics_process(false)
+	for i in frames:
+		b._physics_process(1.0 / 60.0)
+		if each.is_valid():
+			each.call()
+	b.set_physics_process(true)
+
+
 func test_enemy_blocked_by_forest_and_free_when_inside() -> void:
 	var harita: Node = _inject_map_into_game_manager()
 	var forest: TileMapLayer = GameManager.get_forest_layer()
 	var found: Dictionary = _find_forest_wall_from_above(forest)
 	assert(not found.is_empty(), "Test için üstü boş bir orman duvarı hücresi bulunamadı")
 
+	## Duvarın hemen altına (ardına) bir hedef: yaratık düz aşağı yürümek ister, duvara GİRMEMELİ.
+	var target := Node2D.new()
+	target.add_to_group("player")
+	add_child(target)
+	target.global_position = found["wall"] + Vector2(0.0, 160.0)
 	var enemy = EnemyScene.instantiate()
 	add_child(enemy)
-	enemy.global_position = found["above"]
-	enemy.velocity = Vector2(0.0, 50.0)
-	enemy._block_movement_into_terrain()
-	assert(enemy.velocity.y == 0.0, "Yaratık orman duvarına doğru hareket ederken engellenmedi")
+	enemy.global_position = found["above"] + Vector2(0.0, -12.0)
+	await get_tree().process_frame ## köprü ertelenerek eklenir
+	var world: Object = enemy._ew_world
+	assert(world != null, "Yaratık C++'a kaydolmalı")
+	var entered: Array = [0]
+	_step_bridge(120, func() -> void:
+		if world.call("is_solid_at", enemy.global_position):
+			entered[0] += 1)
+	assert(entered[0] == 0, "Yaratık orman duvarına girdi (%d kare)" % entered[0])
 
+	## Zaten duvarın içindeki yaratık hapsolmamalı (prob içerideyken atlanır, kendi çıkar).
 	enemy.global_position = found["wall"]
-	enemy.velocity = Vector2(0.0, 50.0)
-	enemy._block_movement_into_terrain()
-	assert(enemy.velocity.y == 50.0, "Zaten duvarın içindeki yaratık kısıtlanmamalı (yoksa sonsuza dek hapsolur)")
+	_step_bridge(2)
+	var p0: Vector2 = enemy.global_position
+	_step_bridge(60)
+	assert(enemy.global_position.distance_to(p0) > 4.0, "Duvarın içindeki yaratık sonsuza dek hapsolmamalı")
 
+	target.queue_free()
 	enemy.queue_free()
 	harita.queue_free()
 	_clear_game_manager_map()
-
 
 func test_spawner_never_picks_forest_position() -> void:
 	var harita: Node = _inject_map_into_game_manager()
@@ -255,20 +280,16 @@ func test_player_is_free_to_walk_into_house_while_house_collision_is_off() -> vo
 
 func test_enemy_is_free_to_walk_into_water_while_water_collision_is_off() -> void:
 	var harita: Node = _inject_map_into_game_manager()
-
 	var enemy = EnemyScene.instantiate()
 	add_child(enemy)
-	## Su noktasının hemen güneyinde (y ekseninde suya doğru hareket).
-	enemy.global_position = Vector2(8.0, 8.0 + enemy._body_radius + 8.0)
-	enemy.velocity = Vector2(0.0, -50.0) ## suya doğru (-y)
-	enemy._block_movement_into_terrain()
-	assert(enemy.velocity.y == -50.0,
-		"Su engeli kapalıyken yaratık suya doğru engellendi (kullanıcı su/ev collision'ını bilerek kapattı)")
-
+	await get_tree().process_frame
+	_step_bridge(1) ## ızgara köprüye yüklensin
+	## C++ engel ızgarası SADECE orman katmanı (su/ev bilerek kapalı): su noktası geçilebilir olmalı.
+	assert(not bool(enemy._ew_world.call("is_solid_at", WATER_POINT)) or GameManager.is_position_blocked_by_forest(WATER_POINT),
+		"Su engeli kapalıyken yaratık için su engel sayıldı (kullanıcı su/ev collision'ını bilerek kapattı)")
 	enemy.queue_free()
 	harita.queue_free()
 	_clear_game_manager_map()
-
 
 func test_spawner_never_picks_water_or_house_position() -> void:
 	var harita: Node = _inject_map_into_game_manager()

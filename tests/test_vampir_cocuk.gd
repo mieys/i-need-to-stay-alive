@@ -420,6 +420,9 @@ func test_r_swarm_retires_and_frees_itself_after_toggle_off() -> void:
 	_ready_player(player)
 	player._vampir_toggle_bats()
 	var swarm: Node2D = player._vampir_swarm
+	## Açılıştan sonraki 1 sn içindeki kapatma bilerek yok sayılır (toggle spam koruması, player.gd TOGGLE_CLOSE_GUARD_MSEC);
+	## testte 1 sn geçmiş gibi koruma kaydını temizle.
+	player._toggle_opened_msec.clear()
 	player._vampir_toggle_bats()
 	assert(not player._vampir_bats_active, "kapandı")
 	for i in range(30):
@@ -590,18 +593,20 @@ func test_eat_plays_when_food_is_picked_up_and_lasts_half_a_second() -> void:
 	_cleanup()
 
 
-func test_walk_at_normal_speed_and_run_when_speed_bonus_exceeds_twenty_percent() -> void:
+func test_walk_at_normal_speed_and_run_when_speed_bonus_exceeds_fifteen_percent() -> void:
 	var player: Node = _make_player()
 	_ready_player(player)
 	player.facing = "down"
 	player._update_animation(true)
 	assert(str(player.anim.animation) == "walk_down", "standart hızda walk: %s" % str(player.anim.animation))
-	player.item_speed_percent = 0.19
+	## Koşma eşiği tüm yeni karakterlerde %15 (characters.gd run_speed_ratio 1.15 - eski %20 isteği sonradan değişti;
+	## 2026-10-03 test güncellemesi).
+	player.item_speed_percent = 0.14
 	player._update_animation(true)
-	assert(str(player.anim.animation) == "walk_down", "%%19 bonus hâlâ walk")
-	player.item_speed_percent = 0.21
+	assert(str(player.anim.animation) == "walk_down", "%%14 bonus hâlâ walk")
+	player.item_speed_percent = 0.16
 	player._update_animation(true)
-	assert(str(player.anim.animation) == "run_down", "%%21 bonus (stat) run: %s" % str(player.anim.animation))
+	assert(str(player.anim.animation) == "run_down", "%%16 bonus (stat) run: %s" % str(player.anim.animation))
 	player.item_speed_percent = 0.0
 	player.skill_speed_multiplier = 1.3 ## yetenek kaynaklı bonus
 	player._update_animation(true)

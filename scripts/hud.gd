@@ -1911,6 +1911,9 @@ func _process(delta: float) -> void:
 		if _fps_update_timer >= 0.2:
 			_fps_update_timer = 0.0
 			fps_label.text = _mobile_perf_text() if MobileUIScript.enabled else "FPS: %d" % Engine.get_frames_per_second()
+			## Yaratık yeniden yazımı: yeni yol (C++ EnemyWorld) GERÇEKTEN çalışıyorsa belli olsun (anahtar kapalıyken metin aynı)
+			if get_tree().current_scene and get_tree().current_scene.get_node_or_null("EnemyWorldBridge") != null:
+				fps_label.text += " | C++ yaratık"
 	_update_status_bar()
 	if is_instance_valid(hearts_tab) and revive_hearts and revive_hearts.has_method("is_regen_visible") \
 			and bool(revive_hearts.is_regen_visible()) != _hearts_tab_wide:

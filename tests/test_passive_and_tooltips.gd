@@ -4,7 +4,8 @@ func _make_hud() -> Node:
 	var scene: PackedScene = load("res://scenes/hud.tscn")
 	var hud: Node = scene.instantiate()
 	add_child(hud)
-	hud._ready()
+	## (2026-10-03) add_child zaten _ready'yi çalıştırıyor; Godot 4.7'de elle _ready() @onready'leri yeniden çözüyor ve
+	## _ready'de başka katmana taşınan InventoryPanelInstance'ı null yapıyordu - ikinci çağrı kaldırıldı.
 	return hud
 
 func test_passive_icon_node_exists() -> void:
@@ -21,9 +22,9 @@ func test_passive_icon_node_exists() -> void:
 	# Position verification: PassiveIcon must be to the left of Q's SkillIcon
 	assert(passive_icon.offset_left < skill_icon.offset_left, "PassiveIcon must be positioned to the left of Q skill icon")
 	
-	# Size verification: PassiveIcon scaled 40% smaller (e.g. size around 32x32 vs 52x52)
-	assert(passive_icon.size.x < skill_icon.size.x, "PassiveIcon must be smaller than Q skill icon")
-	assert(is_equal_approx(passive_icon.size.x / skill_icon.size.x, 32.0 / 52.0), "PassiveIcon should be ~40% smaller (approx 60% of Q size)")
+	# 2026-09-27 oyuncu paneli (dock): yetenek dizisindeki her slot AYNI boyutta (hud.gd _layout_ability_icons - eski "%40 küçük
+	# pasif" kuralı dock tasarımıyla kalktı; 2026-10-03 test güncellemesi). Pasif yine Q'nun solunda (yukarıda).
+	assert(is_equal_approx(passive_icon.size.x, skill_icon.size.x), "Dock'ta pasif ikon Q ile aynı boyutta olmalı")
 	
 	hud.queue_free()
 
@@ -58,11 +59,13 @@ func test_lol_style_bbcode_formatting() -> void:
 	var raw_text: String = "Etrafındaki yaratıkları keser, %120 hasar verir. Bekleme süresi 15 saniye."
 	var formatted: String = skill_icon._format_lol_style(raw_text)
 	
-	assert("[color=#ff5555]hasar[/color]" in formatted, "Should colorize 'hasar'")
-	assert("[color=#ffaa00]%120[/color]" in formatted, "Should colorize '%120'")
-	assert("[color=#ffaa00]15 saniye[/color]" in formatted, "Should colorize '15 saniye'")
+	## 2026-09-24: ipucu parşömen kit - renkler TEK kaynak UIKit.INK mürekkep tonları (eski neon #ff5555/#ffaa00 değil).
+	var ink: Dictionary = UIKit.INK
+	assert(("[color=%s]hasar[/color]" % ink["damage"]) in formatted, "Should colorize 'hasar'")
+	assert(("[color=%s]%%120[/color]" % ink["value"]) in formatted, "Should colorize '%120'")
+	assert(("[color=%s]15 saniye[/color]" % ink["value"]) in formatted, "Should colorize '15 saniye'")
 	
-	# Make sure it doesn't break color hex numbers like #ff5555
-	assert("[color=#ffaa00]#ff5555[/color]" not in formatted, "Should not colorize digits inside color tags")
+	# Make sure it doesn't break color hex numbers inside the tags
+	assert(not ("[color=%s]%s[/color]" % [ink["value"], ink["damage"]]) in formatted, "Should not colorize digits inside color tags")
 	
 	hud.queue_free()

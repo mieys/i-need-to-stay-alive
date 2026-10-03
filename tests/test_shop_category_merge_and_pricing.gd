@@ -4,7 +4,7 @@ extends Node
 ## 9)  "Eşyalar" -> "Ekstralar"
 ## 10) "Diğer" -> "İşlevsellik"; Savunma (kalkan) sekmesi tamamen silinip
 ##     İşlevsellik'e taşındı.
-## 11) Karakterin en fazla 1 kalkan yuvası + 2 işlevsellik yuvası olmalı.
+## 11) Karakterin en fazla 1 kalkan yuvası + 2 işlevsellik yuvası olmalı. (2026-09-29'dan beri kalkan dükkanda satılmıyor.)
 ## 12) DÜZELTME (SONRAKİ kullanıcı isteği: "Multiplayerda ilk seçtiğimiz
 ##     silahtan sonra alacağımız 2. silah ucuz olacak 3. 4 .5 silahı 80 gold
 ##     civarında başlat") - eski #12 ("fazladan kopya fiyatı artırmamalı")
@@ -29,14 +29,12 @@ func test_shop_panel_instantiates_without_defense_tab() -> void:
 		"DefenseTab hala sahnede - silinmemiş")
 	assert(panel.get_node_or_null("Frame/Margin/VBox/Body/Scroll/PagesVBox/DefensePage") == null,
 		"DefensePage hala sahnede - silinmemiş")
-	## Kalkan satırları artık OtherPage (İşlevsellik) altında olmalı.
-	assert(panel.get_node_or_null("Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherPage/StandartShieldRow") != null,
-		"StandartShieldRow OtherPage altına taşınmamış")
-	assert(panel.get_node_or_null("Frame/Margin/VBox/Body/Scroll/PagesVBox/OtherPage/SavasShieldRow") != null,
-		"SavasShieldRow OtherPage altına taşınmamış")
+	## 2026-09-29 kalkan sadeleştirmesi (kullanıcı kararı): kalkan seçme/alma/satma YOK - herkes Standart Lv1 kalkanla başlar,
+	## dükkandaki kalkan satırları tamamen silindi (eskiden OtherPage'e taşınmışlardı; 2026-10-03 test güncellemesi).
+	assert(panel.find_children("*ShieldRow", "", true, false).is_empty(), "Dükkanda kalkan satırı kalmamalı")
 	assert(not ("defense" in panel.pages), "'defense' anahtarı hala pages sözlüğünde")
 	assert(not ("defense" in panel.page_headers), "'defense' anahtarı hala page_headers sözlüğünde")
-	assert("shield_standart" in panel.selectable_rows, "shield_standart artık selectable_rows'ta olmalı")
+	assert(not ("shield_standart" in panel.selectable_rows), "Kalkan artık dükkanda satılmamalı (selectable_rows)")
 	panel.queue_free()
 
 

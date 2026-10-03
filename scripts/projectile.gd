@@ -215,6 +215,27 @@ func _physics_process(delta: float) -> void:
 		_trail.visible = true
 	_net_homing(delta)
 	position += direction * speed * delta
+	_ew_poll_hits()
+
+
+## Yaratık yeniden yazımı (PLAN §4.3): EnemyWorld açıkken kayıtlı yaratıkların fizik gövdesi kapalı - onları
+## body_entered yerine bu sorgu bulur ve AYNI _on_body_entered'a verir (anlam aynı: içeri girdiği kare bir kez).
+const EnemyWorldHits := preload("res://scripts/enemy_world/enemy_world_hits.gd")
+var _ew_hits: RefCounted = null
+
+
+func _ew_poll_hits() -> void:
+	var w: Object = EnemyWorldHits.world(get_tree())
+	if w == null:
+		return
+	if _ew_hits == null:
+		_ew_hits = EnemyWorldHits.new()
+	for e in _ew_hits.poll(w, global_position, EnemyWorldHits.shape_radius(self)):
+		if _impacted:
+			break
+		if is_instance_valid(e):
+			_on_body_entered(e)
+	_ew_hits.mark(global_position)
 
 
 ## Uzak (görsel) kopyanın güdümü: look "home_id" (bkz. EnchantFx.apply_projectile_look) -> aynı hedefe kasterdeki

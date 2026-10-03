@@ -21,6 +21,7 @@ const ShamanGolemMath := preload("res://scripts/shaman_golem_math.gd")
 const CharAnim := preload("res://scripts/char_anim.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const KORSAN_CHAR_ID := 9 ## Characters.DEFS roster id'si
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
@@ -2124,7 +2125,9 @@ func _block_movement_into_enemies() -> void:
 	if velocity.length() < 0.1:
 		return
 	var still_overlapping: Array = []
-	for e in get_tree().get_nodes_in_group("enemies"):
+	## Aday sorgusu: yeni yolda sadece yakındakiler (C++ ızgarası), eski yolda tüm grup - süzgeç aynen aşağıda.
+	var block_reach: float = (EnemyQueryScript.BODY_PAD + PLAYER_BODY_RADIUS) * GameManager.BODY_BLOCK_SCALE + 1.0
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, block_reach):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		var enemy_radius: float = e._body_radius if "_body_radius" in e else 20.0

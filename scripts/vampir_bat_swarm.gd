@@ -1,5 +1,8 @@
 extends Node2D
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 ## Vampir Çocuk'un R yeteneği (Kan Yarasaları): karakterin çevresinde dolaşan 6 küçük yarasa. Açıkken
 ## menzildeki yaratıklara tek tek fırlayıp vurur (saldırı gücünün %60'ı), sonra karaktere geri döner
 ## (her dönüşte saldırı gücünün %5'i kadar can yeniler). Hız saldırı hızına göre artar.
@@ -202,7 +205,7 @@ func _pick_target(caster_pos: Vector2, self_index: int) -> Node2D:
 	var best_free_d: float = INF
 	var best_any: Node2D = null
 	var best_any_d: float = INF
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), caster_pos, launch_radius + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if caster.has_method("vampir_can_target") and not caster.vampir_can_target(e):

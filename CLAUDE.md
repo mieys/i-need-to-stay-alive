@@ -133,6 +133,19 @@ diğer oyuncularda eski/hiç görsel kalır.
    `enemy*.gd`, `weapon.gd`, efsunlar, yaratık sahneleri veya isabet/hasar koduna dokunan HER görevden önce bu ikisini
    oku - başka bir iş yapıyor olsan bile yeniden yazımla çakışmasın. Bu işe devam ederken
    `.claude/skills/yaratik-yeniden-yazim/SKILL.md` adımlarını izle; oturum biterken ILERLEME.md'yi güncellemeyi ATLAMA.
+   **2026-10-03'ten beri VARSAYILAN yeni yol** (`scripts/enemy_world/enemy_world_config.gd` `USE_ENEMY_WORLD = true`):
+   host / tek oyunculuda yaratık hareketi, hedef seçimi, itilme, isabet sorguları, sis görünürlüğü, y-sıralaması C++'ta
+   (`gdextension/enemy_world/`, derlenmiş .dll/.so depoda - C++'a dokunmayan derleyici kurmaz). Yeni kod yazarken:
+   (a) yaratık HAREKET/AI kuralı değiştireceksen enemy.gd'deki eski dal yeni yolda ÇALIŞMAZ - `enemy_world.cpp`'yi değiştirip
+   4 kütüphaneyi derle (PLAN §6.1); (b) her karede `"enemies"` grubunu tarayan yeni kod yazma - `EnemyQuery.candidates(
+   tree, merkez, yarıçap)` (scripts/enemy_world/enemy_query.gd) kullan, süzgeçlerini aynen uygula; (c) yaratığın konumunu
+   dışarıdan değiştirmek serbest (C++ benimser), ama fizik gövdesi/HitArea kayıtlıyken KAPALI - mermi isabeti
+   `enemy_world_hits.gd` sorgusuyla. Eski GDScript host simülasyonu SİLİNDİ (kullanıcı onayı, 2026-10-03) - geçiş anahtarı
+   yok, eklenti derlenmemiş bir platformda (Web, Android armv7) yaratıklar hareket etmez. İstemci (host olmayan) kuklaları da
+   C++'ta (F_PUPPET: AI yok, ağ konumunu ölü hesaplamayla izler); `ENEMY_WORLD_PUPPET=0` istemciyi eski GDScript kukla dalına
+   döndürür (A/B ve yedek). (d) Birim testleri `tools/enemy_rewrite/run_tests.ps1` ile: test düğümü current_scene olur, yaratıklar
+   C++'a kaydolur; yaratık hareketi sınayan test köprüyü elle adımlar (`EnemyWorldBridgeScript._instance._physics_process(DT)`,
+   örnek tests/test_enemy_pathing.gd).
 
 ## Test/doğrulama
 

@@ -1,5 +1,8 @@
 extends Node2D
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 ## Suriyeli Hadime E - Kara Delik (kullanıcı isteği 2026-09-25: "bulunduğu konuma kara delik bırakıp yaratıkları hafifçe
 ## içine doğru çekip kalkanlarını emerek verdiği hasarın %20'si kadar Hadime'ye kalkan yenilesin, 5 saniye sürecek (2026-09-26: 6 sn, bkz. HadimeMath.HOLE_DURATION), her
 ## saniye %80 saldırı gücü hasar, 18 sn bekleme, kalkan çekme efektine gerek yok").
@@ -142,7 +145,7 @@ func _pick_crowd_goal() -> Vector2:
 	var r2: float = r * r
 	var search2: float = HadimeMath.EVO_HOLE_MOVE_SEARCH * HadimeMath.EVO_HOLE_MOVE_SEARCH
 	var cands: Array = []
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, HadimeMath.EVO_HOLE_MOVE_SEARCH + 1.0):
 		if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
 			continue
 		if global_position.distance_squared_to((e as Node2D).global_position) <= search2:
@@ -167,7 +170,7 @@ func _pull(delta: float, drag: Vector2) -> void:
 	var c: Vector2 = global_position
 	var r: float = radius()
 	var r2: float = r * r
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), c - drag, r + 1.0):
 		if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true or e.get("is_boss") == true:
 			continue
 		var ep: Vector2 = (e as Node2D).global_position + drag

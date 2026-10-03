@@ -75,8 +75,11 @@ func test_burn_status_fx_is_pixel_art_loop() -> void:
 			"%s pixel-art olmalı (texture_filter NEAREST), bulunan: %s" % [spr.name, spr.texture_filter])
 		assert(spr.sprite_frames != null, "%s SpriteFrames taşımalı" % spr.name)
 		assert(spr.sprite_frames.has_animation("burn"), "%s 'burn' animasyonunu taşımalı" % spr.name)
-		assert(spr.sprite_frames.get_frame_count("burn") == 14,
-			"%s 14 kare olmalı, bulunan: %s" % [spr.name, spr.sprite_frames.get_frame_count("burn")])
+		## Ateş: TEK 9 karelik fx_burn_fire_v2 sayfası (kullanıcı isteğiyle eski 14'er karelik 4 varyantın yerine, bkz.
+		## fx_burn_status.gd başı); duman varyantları hâlâ 14 kare. (2026-10-03 test güncellemesi)
+		var want: int = 9 if spr == fire else 14
+		assert(spr.sprite_frames.get_frame_count("burn") == want,
+			"%s %d kare olmalı, bulunan: %s" % [spr.name, want, spr.sprite_frames.get_frame_count("burn")])
 		assert(spr.sprite_frames.get_animation_loop("burn"), "%s DÖNGÜLÜ olmalı" % spr.name)
 	## Kullanıcı isteği: "layer sıralamaları düşman bedeni-duman-ateş olacak" -
 	## duman arkada, ateş önde.

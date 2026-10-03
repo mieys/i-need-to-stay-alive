@@ -6,11 +6,9 @@ extends Node
 ##  2) "Level atladıktan sonra dükkan açılıyor ama ... bazen hostta açılıp
 ##     diğer oyunlarda açılmıyor." (karar artık host otoritesinde)
 ##
-## Doğrulananlar:
-##  - can çarpanı tam 2 katı, kalkanın MUTLAK miktarı tam 3 katı (can da ikiye
-##    katlandığı için oran 1.5 katı),
-##  - soğurma oranı 0.85 ve buna göre bir vuruşun %85'i kalkandan, %15'i candan
-##    gidiyor (canlı davranış testi),
+## Doğrulananlar (boss değerleri sonraki denge turlarıyla güncellendi, bkz. aşağıdaki CURRENT_* notu):
+##  - can çarpanı / kalkan oranı güncel karara eşit,
+##  - soğurma oranı 0.90 ve buna göre bir vuruşun %90'ı kalkandan, %10'u candan gidiyor (canlı davranış testi),
 ##  - dükkan kararı host otoritesinde: client kendi başına karar vermiyor,
 ##    host kararı yayınlıyor, RPC yalnızca host'u kabul ediyor ve client'ta
 ##    güvenlik zaman aşımı var,
@@ -19,76 +17,51 @@ extends Node
 const SpawnerScript: GDScript = preload("res://scripts/enemy_spawner.gd")
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_rat1.tscn")
 
-## Bu değişiklikten ÖNCEKİ boss değerleri (artış yüzdelerini ölçmenin tabanı).
-const OLD_BOSS_HEALTH_MULT := 44.0
-const OLD_BOSS_SHIELD_RATIO := 5.2
+## Güncel boss kararları (enemy_spawner.gd'deki notlar): canı ve kalkanı sonraki denge turlarında değişti - ilk istekteki
+## "can x2 / kalkan x3 / soğurma %85" yerine (2026-10-03 test güncellemesi, yaratık yeniden yazımı oturumu):
+##  - BEŞİNCİ tur: can x0,85 (126.72 -> 107.712), kalkan x0,9 -> oran 1.3 x 0.9 / 0.85,
+##  - "bossların kalkanlarını canlarından %30 daha fazla olacak şekilde dengele" (oran tabanı 1.3),
+##  - boss kalkanı vuruşun %90'ını emer (BOSS_SHIELD_PROTECTION 0.90; normal yaratıklar SHIELD_PROTECTION).
+## Eski "kalkan havuzu boss ölmeden tükenmesin (oran >= p/(1-p))" testi, kullanıcının "kalkan = can x 1,3" kararıyla
+## çeliştiği için kaldırıldı.
+const CURRENT_BOSS_HEALTH_MULT := 107.712
+const CURRENT_BOSS_SHIELD_RATIO := 1.3 * 0.9 / 0.85
+const CURRENT_BOSS_SHIELD_PROTECTION := 0.90
 
 
 func _boss_constants() -> Dictionary:
 	return SpawnerScript.get_script_constant_map()
 
 
-func test_boss_health_doubled() -> void:
-	var new_health_mult: float = float(_boss_constants()["BOSS_HEALTH_MULT"])
-	assert(is_equal_approx(new_health_mult, OLD_BOSS_HEALTH_MULT * 2.0),
-		"Boss canı %%100 artmamış: %s (eskiden %s)" % [new_health_mult, OLD_BOSS_HEALTH_MULT])
+func test_boss_health_mult_matches_fifth_balance_round() -> void:
+	var m: float = float(_boss_constants()["BOSS_HEALTH_MULT"])
+	assert(is_equal_approx(m, CURRENT_BOSS_HEALTH_MULT), "Boss can çarpanı beşinci tur kararından farklı: %s" % m)
 
 
-func test_boss_shield_amount_tripled() -> void:
-	var constants: Dictionary = _boss_constants()
-	var new_health_mult: float = float(constants["BOSS_HEALTH_MULT"])
-	var new_shield_ratio: float = float(constants["BOSS_SHIELD_RATIO"])
-	## Kalkan havuzu = max_health x oran (bkz. enemy.gd enable_item_shield).
-	## Can da ikiye katlandığı için MUTLAK kalkan miktarının tam 3 katı
-	## (+%200) olması için oran x1.5 olmalı.
-	var old_absolute: float = OLD_BOSS_HEALTH_MULT * OLD_BOSS_SHIELD_RATIO
-	var new_absolute: float = new_health_mult * new_shield_ratio
-	assert(absf(new_absolute / old_absolute - 3.0) < 0.001,
-		"Boss kalkan miktarı %%200 artmamış: %s katı (eskiden mutlak %s, şimdi %s)" % [new_absolute / old_absolute, old_absolute, new_absolute])
-	assert(absf(new_shield_ratio - OLD_BOSS_SHIELD_RATIO * 1.5) < 0.001,
-		"Kalkan oranı can artışı hesaba katılmadan değiştirilmiş: %s" % new_shield_ratio)
+func test_boss_shield_ratio_matches_fifth_balance_round() -> void:
+	var r: float = float(_boss_constants()["BOSS_SHIELD_RATIO"])
+	assert(absf(r - CURRENT_BOSS_SHIELD_RATIO) < 0.0001, "Boss kalkan oranı 1.3 x 0.9 / 0.85 değil: %s" % r)
 
 
-func test_boss_shield_absorption_is_85_percent() -> void:
-	assert(is_equal_approx(float(_boss_constants()["BOSS_SHIELD_PROTECTION"]), 0.85),
-		"Boss kalkan soğurması %%85'e sabitlenmemiş: %s" % _boss_constants()["BOSS_SHIELD_PROTECTION"])
+func test_boss_shield_absorption_is_90_percent() -> void:
+	assert(is_equal_approx(float(_boss_constants()["BOSS_SHIELD_PROTECTION"]), CURRENT_BOSS_SHIELD_PROTECTION),
+		"Boss kalkan soğurması %%90 değil: %s" % _boss_constants()["BOSS_SHIELD_PROTECTION"])
 
-	## Canlı davranış: 100 hasar vuran bir vuruşta kalkan 85, can 15 kaybetmeli.
-	## NOT: _apply_damage hasar yazısını get_tree().current_scene'e ekliyor -
-	## test ortamında current_scene boş olabildiği için geçici olarak bu test
-	## düğümünü gösteriyoruz (bkz. test_boomerang_impact_sound.gd'deki AYNI desen).
-	var previous_scene: Node = get_tree().current_scene
-	get_tree().current_scene = self
+	## Canlı davranış: 100 hasar vuran bir vuruşta kalkan 90, can 10 kaybetmeli.
 	var enemy: Node = EnemyScene.instantiate()
 	add_child(enemy)
 	enemy.apply_boss_stats(1000.0, 10.0, 1.7, 5)
-	enemy.enable_item_shield(0.85, 7.8)
+	enemy.enable_item_shield(CURRENT_BOSS_SHIELD_PROTECTION, 7.8)
 	assert(absf(enemy.item_shield_max - 1000.0 * 7.8) < 0.01,
 		"Kalkan havuzu can x oran değil: %s" % enemy.item_shield_max)
-
 	var shield_before: float = enemy.item_shield_hp
 	var health_before: float = enemy.health
 	enemy._apply_damage(100.0, false, 0.0)
-	assert(absf((shield_before - enemy.item_shield_hp) - 85.0) < 0.01,
-		"Kalkan vuruşun %%85'ini emmiyor: %s" % (shield_before - enemy.item_shield_hp))
-	assert(absf((health_before - enemy.health) - 15.0) < 0.01,
-		"Cana kalan hasar %%15 değil: %s" % (health_before - enemy.health))
+	assert(absf((shield_before - enemy.item_shield_hp) - 90.0) < 0.01,
+		"Kalkan vuruşun %%90'ını emmiyor: %s" % (shield_before - enemy.item_shield_hp))
+	assert(absf((health_before - enemy.health) - 10.0) < 0.01,
+		"Cana kalan hasar %%10 değil: %s" % (health_before - enemy.health))
 	enemy.queue_free()
-	get_tree().current_scene = previous_scene
-
-
-## Boss bilinçli olarak kalkanı BİTMEDEN ölmemeli, yoksa kalkan boşa gider:
-## kalkan havuzu (oran x can) en az "can / (1 - soğurma) x soğurma" kadar olmalı.
-func test_boss_shield_pool_is_large_enough_to_matter() -> void:
-	var constants: Dictionary = _boss_constants()
-	var protection: float = float(constants["BOSS_SHIELD_PROTECTION"])
-	var ratio: float = float(constants["BOSS_SHIELD_RATIO"])
-	## Kann kaybedeceği toplam hasar (sadece can) = health / (1 - protection);
-	## bu süre boyunca kalkanın emmesi gereken miktar = o hasar x protection.
-	var needed_pool_ratio: float = (1.0 / (1.0 - protection)) * protection
-	assert(ratio >= needed_pool_ratio - 0.001,
-		"Kalkan havuzu (oran %s) boss ölmeden tükenir - gereken en az %s" % [ratio, needed_pool_ratio])
-
 
 func test_mini_shop_decision_is_host_authoritative() -> void:
 	assert(NetworkManager.has_signal("mini_shop_decision_received"),
@@ -121,6 +94,14 @@ func test_mini_shop_decision_is_host_authoritative() -> void:
 ## sıfırdan başlar.
 func test_mini_shop_cooldown_rule_unchanged() -> void:
 	GameManager.reset()
+	## Kullanıcı kararı: dükkan şimdilik TAMAMEN kapalı (GameManager.SHOP_ENABLED = false, "dükkan asla açılmayacak
+	## sonraki bir değişikliğe kadar") - kapalıyken hiçbir zaman "hazır" olmamalı; açılırsa aşağıdaki kural geçerli.
+	if not GameManager.SHOP_ENABLED:
+		assert(not GameManager.is_mini_shop_cooldown_ready(), "Dükkan kapalıyken bekleme süresi 'hazır' sayıldı")
+		GameManager._process(GameManager.MINI_SHOP_COOLDOWN * 2.0)
+		assert(not GameManager.is_mini_shop_cooldown_ready(), "Dükkan kapalıyken süre dolunca 'hazır' sayıldı")
+		GameManager.reset()
+		return
 	assert(GameManager.is_mini_shop_cooldown_ready(),
 		"Oyun başında bekleme süresi 'hazır' olmalı (ilk dükkan açılabilsin)")
 	GameManager.start_mini_shop_cooldown()

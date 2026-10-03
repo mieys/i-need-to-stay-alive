@@ -5,6 +5,7 @@ class_name Minimap
 ## sınırlarını gösterir.
 
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
+const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 
 const RADIUS: float = 80.0
 ## Kullanıcı isteği (2026-09-21): minimap çerçevesi yeniden tasarlandı - 92 sanat pikseli (184 px) ahşap halka + altın perçinler
@@ -89,6 +90,7 @@ const ENEMY_REFRESH_INTERVAL: float = 0.2
 var _alpha: float = 1.0
 
 var _enemy_dots: Array = [] ## {"node": Node2D, "is_boss": bool} - konum çizimde canlı okunur
+var _ew_dots_world: Object = null ## yeni yolda C++ EnemyWorld (kayıtlı yaratık noktaları _draw'da ondan), yoksa / ev içinde null
 var _map_texture: Texture2D = null
 var _map_origin: Vector2 = Vector2.ZERO ## dokunun sol-üst köşesinin dünya konumu
 var _map_world_size: Vector2 = Vector2.ZERO
@@ -176,6 +178,7 @@ func _process(delta: float) -> void:
 		var player_indoors: bool = _player != null and is_instance_valid(_player) and _player.has_method("is_indoors_now") and _player.is_indoors_now()
 		if player_indoors:
 			_enemy_dots = []
+			_ew_dots_world = null
 		else:
 			## Kullanıcı isteği (LoL tarzı görüş alanı): sisin içindeki düşman
 			## ekranda gizleniyorsa/soluyorsa minimap'te de nokta olarak
@@ -183,7 +186,16 @@ func _process(delta: float) -> void:
 			## düşmanı yönetmiyorsa (katman yok / ev içi) fog_visibility_of 1
 			## döner - o durumlarda davranış eskisi gibi.
 			var dots: Array = []
-			for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+			## Aday sorgusu (yaratık yeniden yazımı): yeni yolda görünen dairenin (+0,2 sn'lik yürüme payı) içindekiler C++
+			## ızgarasından + bosslar (kenarda yön göstergesi olarak her uzaklıkta çizilir); eski yolda tüm grup. Süzgeç aynen aşağıda.
+			var scan: Array = get_tree().get_nodes_in_group("enemies")
+			_ew_dots_world = EnemyWorldBridgeScript.fog_world(get_tree())
+			if _ew_dots_world != null:
+				## Yaratık yeniden yazımı (Aşama 3): C++'a kayıtlı sıradan yaratıkların noktaları HER KAREDE C++'tan gelir
+				## (_draw, minimap_points - aynı süzgeç, aynı pikseldekiler tekilleştirilmiş); burada sadece bosslar (kenarda
+				## yön göstergesi) ve C++'ta olmayan görev kopyaları kalır. 2000 yaratıkta eski tarama ~8 ms/yenileme idi.
+				scan = get_tree().get_nodes_in_group("boss") + get_tree().get_nodes_in_group("mission_copies")
+			for enemy: Node in scan:
 				if not is_instance_valid(enemy) or not ("global_position" in enemy):
 					continue
 				if enemy.get("is_dead") == true:
@@ -228,6 +240,14 @@ func _draw() -> void:
 		draw_polygon(pts, PackedColorArray([Color.WHITE]), uvs, _map_texture)
 
 	# --- Düşman noktaları ---
+	## Yeni yol: kayıtlı sıradan yaratıklar (aşağıdaki döngüyle aynı çizim; ofset C++'ta yuvarlanmış harita pikseli)
+	if _ew_dots_world != null and is_instance_valid(_ew_dots_world):
+		var pts: PackedVector2Array = _ew_dots_world.call("minimap_points", _view_center, VIEW_WORLD_PER_PX, RADIUS - 4.0,
+				VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY)
+		for off: Vector2 in pts:
+			var epos2: Vector2 = center + off
+			draw_rect(Rect2(epos2 - Vector2(3.0, 3.0), Vector2(6.0, 6.0)), Color("#3a2213"))
+			draw_rect(Rect2(epos2 - Vector2(2.0, 2.0), Vector2(4.0, 4.0)), COLOR_ENEMY)
 	for dot: Dictionary in _enemy_dots:
 		var enode_ref: Variant = dot["node"]
 		if not is_instance_valid(enode_ref):

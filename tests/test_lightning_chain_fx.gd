@@ -29,8 +29,14 @@ func test_chain_fx_setup_positions_builds_zigzag_path() -> void:
 	add_child(fx)
 	fx.setup_positions(Vector2(0, 0), Vector2(100, 0))
 	assert(fx.global_position == Vector2(100, 0), "FX, hedef (to) pozisyonunda durmalı")
-	assert(fx._zigzag_points.size() >= 2, "Zikzak elektrik hattı oluşturulmalı")
-	assert(fx._particles.size() > 0, "İsabet kıvılcımları oluşturulmalı")
+	## 2026-09-25 yeniden tasarım: ark piksel şimşek karolarıyla (lightning_strip.gd) çizilir, isabette "chain_hit" sprite'ı
+	## oynar (eski _zigzag_points/_particles yok - 2026-10-03 test güncellemesi).
+	assert(fx._tiles.size() >= 1, "Şimşek karo hattı oluşturulmalı")
+	var hit: AnimatedSprite2D = null
+	for c in fx.get_children():
+		if c is AnimatedSprite2D:
+			hit = c
+	assert(hit != null and hit.is_playing() and hit.animation == &"burst", "İsabet patlaması (burst) oynamalı")
 
 
 func test_chain_fx_setup_with_nodes_tracks_them() -> void:
@@ -45,4 +51,8 @@ func test_chain_fx_setup_with_nodes_tracks_them() -> void:
 	add_child(fx)
 	fx.setup(from_node, to_node)
 	assert(fx.global_position == Vector2(200, 10), "FX, to_node'un konumunda durmalı")
-	assert(fx._zigzag_points.size() >= 2, "Zikzak elektrik hattı oluşturulmalı")
+	assert(fx._tiles.size() >= 1, "Şimşek karo hattı oluşturulmalı")
+	## takip: hedef kayınca ark da kaymalı
+	to_node.global_position = Vector2(260, 40)
+	fx._process(0.01)
+	assert(fx.global_position == Vector2(260, 40), "FX hareket eden hedefi takip etmeli")

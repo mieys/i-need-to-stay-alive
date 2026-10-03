@@ -8,6 +8,7 @@ extends Node
 ## düşmesiydi. Bu testler artık her ikisinin de KENDİ, doğru fonksiyonlarına
 ## yönlendiğini doğruluyor.
 
+const PlayerSceneForNecro: PackedScene = preload("res://scenes/player.tscn")
 const PlayerScript = preload("res://scripts/player.gd")
 
 
@@ -24,9 +25,14 @@ func test_korsan_ulti_maps_to_bomb_detonate_not_heal() -> void:
 	var f := FileAccess.open("res://scripts/player.gd", FileAccess.READ)
 	var content: String = f.get_as_text()
 	f.close()
+	## Q/skill dispatch'i (_activate_skill içindeki ilk "match char_id:") büyüdükçe 18 satırı ilk 400 karakterin dışına düştü -
+	## blok, bir sonraki fonksiyon tanımına kadar aranır (2026-10-03 test güncellemesi).
 	var idx: int = content.find("match char_id:")
-	var match_block: String = content.substr(idx, 400)
+	var end: int = content.find("
+func ", idx)
+	var match_block: String = content.substr(idx, end - idx)
 	assert("18: _skill_korsan_detonate_all()" in match_block, "Korsan ULTİ (id 18) artık _skill_korsan_detonate_all'a gitmeli")
+	assert(not ("18: _skill_heal()" in match_block), "Korsan ULTİ (id 18) iyileştirmeye gitmemeli")
 
 
 ## Güncel dizilim (2026-09-24): Golem Çağır (id 20) E/skill2'de, R/skill3 Lanetli Kafatası (id 44). Ayrı fonksiyon: yukarıdaki
@@ -53,9 +59,10 @@ func test_korsan_and_necro_functions_exist() -> void:
 	p.free()
 
 
-func test_korsan_bomb_charges_default_to_two() -> void:
+## #39 (kullanıcı: "Korsan bomba/ulti düzenlemeleri"): şarj 2 -> 3 (player.gd KORSAN_MAX_BOMB_CHARGES). Oyun tam şarjla başlar.
+func test_korsan_bomb_charges_default_to_max() -> void:
 	var p := PlayerScript.new()
-	assert(p.korsan_bomb_charges == 2, "Korsan 2 bomba şarjıyla başlamalı")
+	assert(p.korsan_bomb_charges == p.KORSAN_MAX_BOMB_CHARGES and p.KORSAN_MAX_BOMB_CHARGES == 3, "Korsan 3 bomba şarjıyla (tam) başlamalı")
 	p.free()
 
 
@@ -63,7 +70,8 @@ const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_rat1.tscn"
 
 
 func test_necro_souls_start_at_zero_and_accumulate_on_kill() -> void:
-	var p := PlayerScript.new()
+	## Oyuncu sahneden (OverheadBar vb. çocuklarıyla) kurulur - player.gd _ready onlara bağlanıyor (2026-10-03 test düzeltmesi).
+	var p: Node = PlayerSceneForNecro.instantiate()
 	add_child(p)
 	p.necro_souls = 0
 	# Necromancer'ın skill id'si 20 olmalı ki on_enemy_killed doğru dallansın.
@@ -90,7 +98,8 @@ func test_necro_souls_start_at_zero_and_accumulate_on_kill() -> void:
 ## sınıyordu - artık sabitin kendisinden okunuyor ki ileride tekrar
 ## dengelenirse test kendiliğinden güncel kalsın.
 func test_necro_skeleton_summon_requires_correct_souls() -> void:
-	var p := PlayerScript.new()
+	## Oyuncu sahneden (OverheadBar vb. çocuklarıyla) kurulur - player.gd _ready onlara bağlanıyor (2026-10-03 test düzeltmesi).
+	var p: Node = PlayerSceneForNecro.instantiate()
 	add_child(p)
 	var cost: int = PlayerScript.NECRO_SKELETON_SOUL_COST
 	p.necro_souls = cost - 1

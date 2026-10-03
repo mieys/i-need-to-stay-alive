@@ -59,6 +59,7 @@ const VIS_META := &"vision_fog_vis"
 const FogShader: Shader = preload("res://shaders/vision_fog.gdshader")
 const MaskShader: Shader = preload("res://shaders/vision_fog_mask.gdshader")
 const VisionOccludersScript: GDScript = preload("res://scripts/vision_occluders.gd")
+const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 
 ## Görüşü kesen karoların ızgarası (bkz. vision_occluders.gd). Harita sahnede yoksa
 ## (ana menü, testler, ev içi) null kalır ve sis eskisi gibi sadece elipse bakar.
@@ -430,8 +431,22 @@ func _apply_enemy_visibility(enable: bool, delta: float) -> void:
 		return
 	var any_managed: bool = false
 	var frame: int = Engine.get_process_frames()
+	## Yaratık yeniden yazımı (PLAN Aşama 3): yeni yolda C++'a kayıtlı yaratıkların görünürlüğü C++'ta AYNI kuralla
+	## hesaplanıp yazılır (her karede 1000 yaratıkta GDScript ışın taraması ~8 ms yiyordu); burada sadece kayıtsız
+	## "enemies" üyeleri (ölüm animasyonu, görev kopyası) kalır. Köprü yoksa eskisi gibi tüm grup.
+	var ew: Object = EnemyWorldBridgeScript.fog_world(get_tree())
+	if ew != null:
+		if enable:
+			ew.call("fog_update", _world_sources, _vision_radius, VISION_WIDTH_SCALE, EDGE_SOFTNESS, HIDE_BELOW,
+					MANAGE_INTERVAL_FRAMES, frame)
+			any_managed = true
+		else:
+			ew.call("fog_reset")
 	for group_name: String in HIDEABLE_GROUPS:
-		for node: Node in get_tree().get_nodes_in_group(group_name):
+		var members: Array = get_tree().get_nodes_in_group(group_name)
+		if ew != null and enable and group_name == "enemies":
+			members = EnemyWorldBridgeScript.fog_extra_enemies(get_tree())
+		for node: Node in members:
 			var item: Node2D = node as Node2D
 			if item == null:
 				continue

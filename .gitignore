@@ -22,3 +22,9 @@ eos_credentials.cfg
 # Claude Code yerel dosyaları (proje skill/komutları .claude/skills altında commit edilir)
 .claude/*.lock
 .claude/settings.local.json
+
+# C++ GDExtension derleme ara dosyaları (yaratık yeniden yazımı, bkz. docs/yaratik_yeniden_yazim/PLAN.md §6)
+*.o
+*.os
+.sconsign*.dblite
+**/bin/liblib*.a

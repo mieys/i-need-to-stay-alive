@@ -8,6 +8,7 @@ extends Node
 
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn")
 const State := preload("res://scripts/enemy.gd").State
+const EnemyWorldBridgeScript: GDScript = preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 
 const DT := 1.0 / 30.0
 
@@ -142,13 +143,27 @@ func test_without_an_idle_sheet_the_walk_frames_are_not_cycled() -> void:
 	_cleanup()
 
 
+## Yaratık yeniden yazımı (2026-10-03): host'ta "gerçek fizik döngüsü" = C++ EnemyWorld adımı (yürüme/bekleme tespiti
+## step_loco_anim -> E_LOCO olayı -> enemy.gd _ew_on_loco). Test düğümü current_scene olduğu için yaratık kaydolur; köprüyü
+## ELLE adımlarız (eski enemy._physics_process(DT) döngüsünün karşılığı).
+func _step(frames: int, per_frame: Callable = Callable()) -> void:
+	var b: Node = EnemyWorldBridgeScript._instance
+	b.set_physics_process(false)
+	for i: int in range(frames):
+		b._physics_process(DT)
+		if per_frame.is_valid() and per_frame.call(i):
+			break
+	b.set_physics_process(true)
+
+
 ## Gerçek fizik döngüsü: donmuş (sabitlenmiş) yaratık idle pozuna geçmeli.
 func test_frozen_enemy_goes_idle_in_the_real_physics_loop() -> void:
 	var e := _make_enemy()
+	await get_tree().process_frame ## köprü ertelenerek eklenir
 	e.is_frozen = true
 	e._freeze_timer = 30.0
-	for i: int in range(20):
-		e._physics_process(DT)
+	e._ew_wake()
+	_step(20)
 	assert(e._state == State.IDLE, "Donmuş/sabitlenmiş yaratık IDLE'a geçmeli, durum: %s" % e._state)
 	_cleanup()
 
@@ -162,47 +177,43 @@ func test_chasing_enemy_walks_then_never_walks_in_place_at_the_target() -> void:
 	_spawned.append(target)
 	target.global_position = Vector2(400.0, 0.0)
 	var e := _make_enemy(Vector2.ZERO)
-	e.set("_cached_target_player", target) ## testte fizik kare sayacı ilerlemediği için hedefi doğrudan ver
-	var saw_walk: bool = false
-	for i: int in range(60): ## 2 sn: hâlâ yolda
-		e._physics_process(DT)
+	await get_tree().process_frame
+	var saw_walk: Array = [false]
+	_step(60, func(_i: int) -> bool: ## 2 sn: hâlâ yolda
 		if e._state == State.WALK:
-			saw_walk = true
-	assert(saw_walk and e._state == State.WALK, "Hedefe yürürken WALK olmalı, durum: %s" % e._state)
-	for i: int in range(240): ## hedefe varana kadar
-		e._physics_process(DT)
-		if e.global_position.distance_to(target.global_position) < 60.0:
-			break
+			saw_walk[0] = true
+		return false)
+	assert(saw_walk[0] and e._state == State.WALK, "Hedefe yürürken WALK olmalı, durum: %s" % e._state)
+	_step(240, func(_i: int) -> bool: return e.global_position.distance_to(target.global_position) < 60.0) ## hedefe varana kadar
 	assert(e.global_position.distance_to(target.global_position) < 80.0, "Yaratık hedefe ulaşmalıydı: %s" % str(e.global_position))
-	var walked_in_place: int = 0
-	for i: int in range(150): ## 5 sn hedefin dibinde
-		e._physics_process(DT)
+	var walked_in_place: Array = [0]
+	_step(150, func(i: int) -> bool: ## 5 sn hedefin dibinde
 		if e._state == State.WALK and i > 6:
-			walked_in_place += 1
-	assert(walked_in_place == 0, "Hedefin dibinde duran yaratık yürüme pozunda takılı kalmamalı (%d kare)" % walked_in_place)
+			walked_in_place[0] += 1
+		return false)
+	assert(walked_in_place[0] == 0, "Hedefin dibinde duran yaratık yürüme pozunda takılı kalmamalı (%d kare)" % walked_in_place[0])
 	_cleanup()
 
 
 ## AGROSUZ dolaşma: hem yürüme hem duraklama görülmeli (duraklamada IDLE).
 func test_wandering_enemy_without_a_target_idles_during_pauses() -> void:
 	var e := _make_enemy(Vector2(1000.0, 1000.0)) ## "player" grubunda kimse yok -> hedefsiz dolaşma
-	var saw_idle: bool = false
-	var saw_walk: bool = false
-	for i: int in range(3000): ## 100 sn
-		e._physics_process(DT)
-		if e._state == State.IDLE:
-			saw_idle = true
-		elif e._state == State.WALK:
-			saw_walk = true
-		if saw_idle and saw_walk:
-			break
-	assert(saw_walk, "Hedefsiz dolaşırken yürüme görülmeli")
-	assert(saw_idle, "Hedefsiz dolaşırken duraklamalarda IDLE görülmeli (yürüme pozunda takılmamalı)")
+	await get_tree().process_frame
+	var seen: Dictionary = {}
+	_step(3000, func(_i: int) -> bool: ## 100 sn
+		if e._state == State.IDLE or e._state == State.WALK:
+			seen[e._state] = true
+		return seen.size() == 2)
+	assert(seen.has(State.WALK), "Hedefsiz dolaşırken yürüme görülmeli")
+	assert(seen.has(State.IDLE), "Hedefsiz dolaşırken duraklamalarda IDLE görülmeli (yürüme pozunda takılmamalı)")
 	_cleanup()
 
 
-## İstemci (puppet) dalı da AYNI fonksiyonu çağırmalı - yoksa katılımcılarda sorun sürer.
+## Host yaratığı ve istemci kuklası AYNI yürüme/bekleme kuralını kullanmalı - yoksa katılımcılarda sorun sürer. Yeni
+## yolda ikisi de C++ step_loco_anim (host dalı + F_PUPPET dalı); C++'a kaydı olmayan istemci kuklası / ölüm dalı
+## enemy.gd _update_locomotion_state.
 func test_host_and_client_branches_both_update_locomotion() -> void:
+	var cpp: String = FileAccess.get_file_as_string("res://gdextension/enemy_world/src/enemy_world.cpp")
+	assert(cpp.count("step_loco_anim(i, delta);") >= 2, "C++'ta hem host hem kukla dalı step_loco_anim'i çağırmalı")
 	var src: String = FileAccess.get_file_as_string("res://scripts/enemy.gd")
-	assert(src.count("_update_locomotion_state(delta)") >= 2,
-		"Hem host hem istemci (puppet) dalı _update_locomotion_state'i çağırmalı")
+	assert(src.count("_update_locomotion_state(delta)") >= 1, "Kayıtsız istemci / ölüm dalı _update_locomotion_state'i çağırmalı")

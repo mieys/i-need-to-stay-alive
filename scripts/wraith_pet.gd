@@ -1,5 +1,8 @@
 extends CharacterBody2D
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 ## Necromancer'ın ULTİ'si (Hortlak Çağır, skill id 20, bkz. player.gd
 ## _skill_necro_summon_wraith/characters.gd DEFS[11]) ile çağrılan hortlak.
 ## skeleton_pet.gd ile aynı temel desende (gerçek can, kendi hasar/tarama
@@ -175,7 +178,7 @@ func _update_focus_target() -> void:
 	_focus_target = null
 	var nearest: Node2D = null
 	var nearest_dist: float = SEEK_RADIUS
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, SEEK_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		var d: float = global_position.distance_to(e.global_position)
@@ -353,7 +356,7 @@ func _process_incoming_damage(delta: float) -> void:
 	if _incoming_dmg_timer > 0.0:
 		return
 	var total: float = 0.0
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, INCOMING_CONTACT_RANGE + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if global_position.distance_to(e.global_position) <= INCOMING_CONTACT_RANGE:

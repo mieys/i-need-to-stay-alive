@@ -103,7 +103,7 @@ func _current_tick_interval() -> float:
 func _find_nearest_enemy() -> Node2D:
 	var nearest: Node2D = null
 	var nearest_dist: float = totem_radius
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, totem_radius + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if not (e is Node2D):

@@ -21,7 +21,8 @@ func _make_hud() -> Node:
 	var scene: PackedScene = load("res://scenes/hud.tscn")
 	var hud: Node = scene.instantiate()
 	add_child(hud)
-	hud._ready()
+	## (2026-10-03) add_child zaten _ready'yi çalıştırıyor; Godot 4.7'de elle _ready() @onready'leri yeniden çözüyor ve
+	## _ready'de başka katmana taşınan InventoryPanelInstance'ı null yapıyordu - ikinci çağrı kaldırıldı.
 	return hud
 
 
@@ -50,6 +51,13 @@ func test_shop_toggle_button_is_hidden() -> void:
 
 func test_gold_indicator_click_opens_shop() -> void:
 	var hud: Node = _make_hud()
+	## Kullanıcı kararı: dükkan şimdilik TAMAMEN kapalı (GameManager.SHOP_ENABLED = false, "dükkan asla açılmayacak sonraki bir
+	## değişikliğe kadar") - kapalıyken hiçbir yoldan açılmamalı; açılırsa aşağıdaki kural sınanır (2026-10-03 test güncellemesi).
+	if not GameManager.SHOP_ENABLED:
+		hud._on_shop_toggle()
+		assert(not hud.shop_panel.visible, "Dükkan kapalıyken açıldı")
+		hud.queue_free()
+		return
 	var shop_panel: Control = hud.get_node("ShopPanel")
 	assert(shop_panel.visible == false, "Dükkan başta kapalı olmalı")
 	hud._on_gold_indicator_gui_input(

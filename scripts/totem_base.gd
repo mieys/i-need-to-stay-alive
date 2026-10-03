@@ -1,6 +1,9 @@
 extends Node2D
 class_name TotemBase
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 ## Shaman'ın 3 totem yeteneğinin paylaşılan temeli - CLAUDE.md'nin anlattığı
 ## hata sınıfının (kastın kendi ekranında doğru görünen ama diğer
 ## oyunculara hiç/eski görünen efektler) tam tersini hedefler: totemler
@@ -388,7 +391,7 @@ func _process_area_damage(delta: float) -> void:
 	var dmg: float = float(caster.damage_bonus) * AREA_DAMAGE_ATTACK_POWER_RATIO
 	if dmg <= 0.0:
 		return
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, AREA_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if not (e is Node2D):

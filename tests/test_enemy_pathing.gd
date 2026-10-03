@@ -2,14 +2,14 @@ extends Node
 
 ## Kullanıcı bildirimi: "yaratıklar collision shapelerin etrafından dolanıp beni
 ## bulmayı akıl edemiyor" - bkz. scripts/enemy_pathing.gd (yerel AStarGrid2D) ve
-## enemy.gd _route_direction. Testler GERÇEK yaratığın _physics_process'ini adım adım
-## çalıştırıp (sahte bir "player" hedefiyle) davranışı ölçer; yol bulma KAPALIYKEN
-## aynı senaryoda yaratığın takıldığı da doğrulanır (test anlamlı olsun diye).
+## (2026-10-03'ten beri) C++ EnemyWorld akış alanı. Yaratık testleri köprüyü adım adım çalıştırıp (sahte bir "player"
+## hedefiyle) davranışı ölçer; enemy_pathing.gd'nin A* fonksiyonları (evcil hayvan/görev kopyası/görevler kullanıyor) ayrıca sınanır.
 
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn")
 const HaritaScene: PackedScene = preload("res://scenes/harita_baked.tscn")
 const PathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
 const WallLayerFactory: GDScript = preload("res://tests/wall_layer_factory.gd")
+const EnemyWorldBridgeScript: GDScript = preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 
 const DT := 1.0 / 30.0
 const CELL := 16.0
@@ -68,35 +68,31 @@ func _make_enemy(pos: Vector2) -> Node2D:
 	return enemy
 
 
-## İki faz arasında yaratığın yol/sıkışma durumunu sıfırlar.
-func _reset_enemy(enemy: Node2D, pos: Vector2, target: Node2D) -> void:
-	enemy.global_position = pos
-	enemy._route = PackedVector2Array()
-	enemy._route_index = 0
-	enemy._route_line_blocked = false
-	enemy._route_line_timer = 0.0
-	enemy._route_replan_timer = 0.0
-	enemy._route_active = false
-	enemy._is_stuck = false
-	enemy._stuck_check_pos = pos
-	enemy._stuck_check_timer = 0.0
-	## Testte fizik kare sayacı ilerlemediği için enemy.gd'nin 4 karede bir hedef yenilemesi
-	## tetiklenmez (oyunda ilerler) - hedefi doğrudan veriyoruz.
-	enemy.set("_cached_target_player", target)
+## Yaratık yeniden yazımı (2026-10-03): yaratık hareketi C++ EnemyWorld'de (eski enemy.gd A* rota izleme dalı silindi).
+## Test düğümü current_scene olduğu için yaratık kaydolur; köprüyü (EnemyWorldBridge) ELLE adımlarız - oyundaki yolun
+## aynısı, ama eski testteki gibi hızlı ve deterministik.
+func _bridge() -> Node:
+	return EnemyWorldBridgeScript._instance
 
 
-## Yaratığı hedefe doğru sürer; hedefin `reach` yakınına gelirse kaç saniyede geldiğini,
-## gelmezse -1 döner.
+func _reset_enemy(enemy: Node2D, pos: Vector2, _target: Node2D) -> void:
+	enemy.global_position = pos ## C++ dışarıdan taşımayı bir sonraki adımda benimser
+
+
+## Yaratığı hedefe doğru sürer; hedefin `reach` yakınına gelirse kaç saniyede geldiğini, gelmezse -1 döner.
 func _simulate(enemy: Node2D, target: Node2D, max_seconds: float, reach: float) -> float:
+	var b: Node = _bridge()
+	assert(b != null and int(enemy.get("_ew_slot")) >= 0, "Yaratık C++ EnemyWorld'e kaydolmalı")
+	b.set_physics_process(false) ## sadece elle adım
 	var t: float = 0.0
 	while t < max_seconds:
-		PathingScript.reset_budget()
-		enemy._physics_process(DT)
+		b._physics_process(DT)
 		t += DT
 		if enemy.global_position.distance_to(target.global_position) <= reach:
+			b.set_physics_process(true)
 			return t
+	b.set_physics_process(true)
 	return -1.0
-
 
 ## U şeklinde bir cep: açıklık YUKARI bakıyor, hedef cebin ALTINDA -> düz çizgi alt
 ## duvara çarpar, yaratık önce yukarı çıkıp yandan dolanmalı.
@@ -150,41 +146,31 @@ func test_find_path_goes_around_the_wall_and_never_enters_it() -> void:
 	_cleanup()
 
 
-func test_enemy_stuck_without_pathing_reaches_target_with_pathing() -> void:
+func test_enemy_routes_out_of_u_pocket_to_target() -> void:
 	var layer: TileMapLayer = WallLayerFactory.make_layer(self, _u_pocket_cells())
 	_track(layer)
 	_inject_layer(layer)
 	var target: Node2D = _make_target(_cell_center(Vector2i(15, 30)))
 	var enemy: Node2D = _make_enemy(_cell_center(Vector2i(15, 15)))
-	_reset_enemy(enemy, _cell_center(Vector2i(15, 15)), target)
-
-	## 1) Yol bulma KAPALI: eski davranış - alt duvara yaslanıp takılır.
-	PathingScript.set_enabled(false)
-	var t_off: float = _simulate(enemy, target, 25.0, REACH)
-	assert(t_off < 0.0, "Yol bulma kapalıyken yaratık hedefe ulaşmamalıydı (test anlamsız olur), süre: %s" % t_off)
-
-	## 2) Yol bulma AÇIK: aynı senaryoda hedefe ulaşmalı.
-	PathingScript.set_enabled(true)
-	PathingScript.reset()
-	_reset_enemy(enemy, _cell_center(Vector2i(15, 15)), target)
+	await get_tree().process_frame ## köprü ertelenerek eklenir
+	## Düz çizgi alt duvara çarpıyor (aşağıdaki test_line_blocked...); C++ akış alanı cebin açıklığından dolanmalı.
 	var t_on: float = _simulate(enemy, target, 25.0, REACH)
-	assert(t_on > 0.0, "Yol bulma açıkken yaratık cepten çıkıp hedefe ulaşmalı (25 sn içinde), konum: %s" % str(enemy.global_position))
+	assert(t_on > 0.0, "Yaratık cepten çıkıp hedefe ulaşmalı (25 sn içinde), konum: %s" % str(enemy.global_position))
 	_cleanup()
 
-
 func test_open_field_behaviour_is_unchanged() -> void:
-	## Aradaki duvar YOKSA yol bulma devreye girmemeli: yaratık düz çizgide yürür.
+	## Aradaki duvar YOKSA yaratık düz çizgide yürür (zikzak/sapma yok).
 	var layer: TileMapLayer = WallLayerFactory.make_layer(self, WallLayerFactory.rect_cells(60, 60, 70, 60))
 	_track(layer)
 	_inject_layer(layer)
-	var target: Node2D = _make_target(_cell_center(Vector2i(20, 5)))
+	var target: Node2D = _make_target(_cell_center(Vector2i(30, 5)))
 	var enemy: Node2D = _make_enemy(_cell_center(Vector2i(5, 5)))
-	var dir_direct: Vector2 = (target.global_position - enemy.global_position).normalized()
-	var dir: Vector2 = enemy._route_direction(dir_direct, target.global_position, 0.3)
-	assert(dir == dir_direct, "Duvar yokken yön doğrudan hedefe olmalı: %s" % str(dir))
-	assert(not enemy._route_active, "Duvar yokken rota izleme aktif olmamalı")
+	await get_tree().process_frame
+	var start: Vector2 = enemy.global_position
+	_simulate(enemy, target, 1.0, 1.0)
+	assert(enemy.global_position.x - start.x > 50.0, "Yaratık hedefe doğru ilerlemeli: %s" % str(enemy.global_position))
+	assert(absf(enemy.global_position.y - start.y) < 2.0, "Duvar yokken düz çizgiden sapmamalı: %s" % str(enemy.global_position))
 	_cleanup()
-
 
 func test_path_budget_and_unreachable_targets_are_bounded() -> void:
 	## Kapalı cep: hedef tamamen duvarla çevrili -> yol boş, bütçe kare başına sınırlı.
@@ -264,22 +250,15 @@ func test_real_map_enemies_reach_targets_behind_cliffs() -> void:
 
 	var target: Node2D = _make_target(Vector2.ZERO)
 	var enemy: Node2D = _make_enemy(Vector2.ZERO)
+	await get_tree().process_frame
 	var arrived_on: int = 0
-	var arrived_off: int = 0
 	for pair: Array in pairs:
 		target.global_position = pair[1]
-		for mode: int in [0, 1]:
-			PathingScript.set_enabled(mode == 1)
-			PathingScript.reset()
-			_reset_enemy(enemy, pair[0], target)
-			var t: float = _simulate(enemy, target, 45.0, REACH)
-			if t >= 0.0:
-				if mode == 1:
-					arrived_on += 1
-				else:
-					arrived_off += 1
-	print("[gerçek harita] duvarın ardındaki %d çift: yol bulma KAPALI ulaşan=%d, AÇIK ulaşan=%d" % [pairs.size(), arrived_off, arrived_on])
+		_reset_enemy(enemy, pair[0], target)
+		var t: float = _simulate(enemy, target, 45.0, REACH)
+		if t >= 0.0:
+			arrived_on += 1
+	print("[gerçek harita] duvarın ardındaki %d çift: C++ akış alanıyla ulaşan=%d" % [pairs.size(), arrived_on])
 	assert(arrived_on >= int(ceil(pairs.size() * 0.9)),
-		"Yol bulma açıkken çiftlerin en az %%90'ı ulaşmalı: %d/%d" % [arrived_on, pairs.size()])
-	assert(arrived_on > arrived_off, "Yol bulma ulaşma oranını artırmalı: açık=%d kapalı=%d" % [arrived_on, arrived_off])
+		"Çiftlerin en az %%90'ı ulaşmalı: %d/%d" % [arrived_on, pairs.size()])
 	_cleanup()

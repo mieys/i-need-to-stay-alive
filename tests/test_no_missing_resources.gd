@@ -17,7 +17,9 @@ extends Node
 ## çalışma zamanında/koşullu olarak yapılır (ör. shop_item_icon.gd'de olmayan
 ## ikon dosyası) ve eksikliği derlemeyi kırmaz.
 
-const SKIP_DIRS := [".godot", "addons", "tools"]
+## android: Gradle derleme şablonu (git'te yok, Godot'un kendi örnek dosyaları - android/build/.gdignore ile oyun kaynağı
+## sayılmaz); içindeki şablon main.tscn'in eksik main.gd referansı oyunun değil (2026-10-03).
+const SKIP_DIRS := [".godot", "addons", "tools", "android"]
 
 
 func _collect_files(dir_path: String, extension: String, out: Array[String]) -> void:

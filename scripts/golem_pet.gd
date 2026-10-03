@@ -1,5 +1,8 @@
 extends CharacterBody2D
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 ## Necromancer'ın ULTİ'si (skill id 20, R tuşu, bkz. player.gd
 ## _skill_necro_summon_golem/characters.gd DEFS[11]) ile çağrılan Golem.
 ## Kullanıcı isteği: "necromancerın ultisi hayalet yerine golem çağırsın
@@ -352,7 +355,7 @@ func _broadcast_network_state() -> void:
 func _update_focus_target() -> void:
 	var nearest: Node2D = null
 	var nearest_dist: float = SEEK_RADIUS
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, SEEK_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		var d: float = global_position.distance_to(e.global_position)
@@ -611,7 +614,7 @@ func _process_attack(delta: float) -> void:
 		is_crit = owner_player._roll_ability_crit()
 		dmg = owner_player._apply_ability_crit(dmg, is_crit)
 	var spark_scene: PackedScene = load("res://scenes/fx_hit_mini_spark.tscn")
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, GOLEM_ATTACK_AOE_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if global_position.distance_to(e.global_position) > GOLEM_ATTACK_AOE_RADIUS:
@@ -645,7 +648,7 @@ func _process_golem_slam(delta: float) -> void:
 	## tetiklenmiyor - golem sadece gerçekten vuracağı bir şey varken "saldırı"
 	## gösteriyor.
 	var any_target_in_range: bool = false
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, GOLEM_SLAM_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if global_position.distance_to(e.global_position) <= GOLEM_SLAM_RADIUS:
@@ -695,7 +698,7 @@ func _process_incoming_damage(delta: float) -> void:
 	if _incoming_dmg_timer > 0.0:
 		return
 	var total: float = 0.0
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, INCOMING_CONTACT_RANGE + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if global_position.distance_to(e.global_position) <= INCOMING_CONTACT_RANGE:

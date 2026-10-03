@@ -1,5 +1,8 @@
 extends Node2D
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 
 ## Papağan'ın ULTİ'si (Tüy Fırtınası, skill 22) için oyuncunun etrafında
@@ -55,7 +58,7 @@ func _process(delta: float) -> void:
 	for key in _hit_timers.keys():
 		_hit_timers[key] = max(0.0, (_hit_timers[key] as float) - delta)
 
-	for e: Node in get_tree().get_nodes_in_group("enemies"):
+	for e: Node in EnemyQueryScript.candidates(get_tree(), global_position, touch_radius + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if global_position.distance_to(e.global_position) > touch_radius:

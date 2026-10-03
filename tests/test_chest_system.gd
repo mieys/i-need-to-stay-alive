@@ -70,12 +70,21 @@ func buy_item(key: String) -> bool:
 	# Check title
 	assert(menu.title_label.text == "KADEME 3-4 SANDIK", "Expected KADEME 3-4 SANDIK for tier 1")
 	
-	# Check cards count
+	## Kullanıcı kararları: sandıktan 3 aday yerine TEK kart çıkar ve açılış animasyonu bitince (kapak patlayınca) sandığın içinden
+	## fırlar - setup sonrası kart alanı GİZLİ ve boş; kart _reveal_reward_card ile gelir. 2026-10-02'den beri sadece parça
+	## (1. kademe) eşyalar çıkar. _build_card kart + altındaki AL/SAT satırlarından oluşan bir sütun döndürür (2026-10-03 test güncellemesi).
+	assert(not menu.cards_container.visible, "Açılış animasyonu sürerken kart alanı gizli olmalı")
+	var parts: Array = Items.KEYS.filter(func(k): return Items.kademe(str(k)) == Items.KADEME_PARCA)
+	assert(not parts.is_empty(), "Sandık havuzunda parça eşya olmalı")
+	for c in menu.cards_container.get_children():
+		menu.cards_container.remove_child(c)
+		c.queue_free()
+	await menu._reveal_reward_card({"type": "item", "key": str(parts[0])})
 	var cards = menu.cards_container.get_children()
-	assert(cards.size() == 3, "Expected exactly 3 cards")
+	assert(cards.size() == 1, "Sandıktan tek kart çıkmalı, bulunan: %d" % cards.size())
 	
 	# Check card structure
-	var first_card = cards[0]
+	var first_card = cards[0].get_child(0)
 	assert(first_card is PanelContainer, "Card should be PanelContainer")
 	
 	menu.free()

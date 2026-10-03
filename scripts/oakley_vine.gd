@@ -1,5 +1,8 @@
 extends Node2D
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 ## Oakley'in Sarmaşıklar yeteneği (E, kullanıcı isteği: "Oakley yeni
 ## yetenekleri" 2. Yetenek - SADECE Oakley, Melek'e dokunulmadı) - yaratıklar
 ## arasında yavaşça dolaşan, isabet ettiği yaratığı sabitleyen bir sarmaşık.
@@ -214,7 +217,7 @@ func _pick_new_target() -> void:
 	var best_dist: float = INF
 	var best_any: Node2D = null
 	var best_any_dist: float = INF
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, RETARGET_SEARCH_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if _recent_hits.has(e.get_instance_id()):

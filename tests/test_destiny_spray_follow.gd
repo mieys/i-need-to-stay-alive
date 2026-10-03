@@ -90,12 +90,14 @@ func test_local_spray_follows_staff_tip() -> void:
 			e.health = 60000.0
 			_sprays.clear()
 			get_tree().node_added.connect(_on_node_added)
-			var prefix: String = "spray_ice" if key == "buz_asasi" else "spray_fire"
+			## 2026-10-03 alev sanatı: TEK sürekli döngülü alev flame_fire / flame_ice (eski 6 karelik spray_*[_big] sayfaları kalktı;
+			## final "_big" sayfa yerine menzil x2 + yan yana alt alevler) - 2026-10-03 test güncellemesi.
+			var prefix: String = "flame_ice" if key == "buz_asasi" else "flame_fire"
 			## Asa nişanına yerleşsin (yumuşak dönüş), sonra taze bir tikin sprite'ını incele.
 			await _wait(0.6)
 			var s: Node2D = _latest_spray(prefix)
 			assert(s != null, "%s: süren püskürtme yok" % key)
-			assert(str(s.get("sheet")).ends_with("_big") == final, "%s final=%s: sayfa %s" % [key, final, s.get("sheet")])
+			assert(str(s.get("sheet")) == prefix, "%s final=%s: sayfa %s" % [key, final, s.get("sheet")])
 			assert(s.get_parent() == w, "%s: sprite asanın köküne bağlı olmalı, ebeveyn: %s" % [key, s.get_parent()])
 			var tip: Vector2 = WeaponTip.tip_global(icon, fwd)
 			assert(s.global_position.distance_to(tip) < 1.0, "%s: sprite asanın ucunda olmalı (%s / uç %s)" % [key, s.global_position, tip])

@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+# Aşama 0 C++ prototipi derlemesi (docs/yaratik_yeniden_yazim/PLAN.md §6 "C++ araç zinciri").
+#   Windows: python -m SCons platform=windows use_mingw=yes use_llvm=yes target=template_debug
+#   Android: python -m SCons platform=android arch=arm64 target=template_debug
+# godot-cpp yolu: GODOT_CPP ortam değişkeni ya da %LOCALAPPDATA%/Toolchains/godot-cpp.
+import os
+
+godot_cpp = os.environ.get("GODOT_CPP", os.path.join(os.environ.get("LOCALAPPDATA", ""), "Toolchains", "godot-cpp"))
+# DİKKAT: SCons'u `python` takma adıyla (WindowsApps) DEĞİL doğrudan
+# %LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe ile çalıştır - takma ad paketli uygulama olarak AppData'yı
+# sanallaştırıyor, godot-cpp ve Android NDK'yı göremiyor ("missing SConscript file"). Bkz. PLAN §6.
+env = SConscript(os.path.join(godot_cpp, "SConstruct"))
+
+env.Append(CPPPATH=["src/"])
+sources = Glob("src/*.cpp")
+
+lib = env.SharedLibrary(
+    "bin/libenemysimbench{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+    source=sources,
+)
+Default(lib)

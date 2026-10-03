@@ -1780,7 +1780,31 @@ func _attack_origin() -> Vector2:
 	return WeaponTargetPriorityScript.range_center(owner_node.global_position, global_position)
 
 
+const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
+## Aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm grup) - aşağıdaki seçicilerin süzgeçleri aynen kalır.
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 func _get_nearest_enemy() -> Node2D:
+	## Yaratık yeniden yazımı (PLAN Aşama 2/3): bu fonksiyon _update_aim üzerinden HER SİLAHTA HER KAREDE çağrılıyor - 1000
+	## yaratıkta tüm grubu GDScript'te taramak silah başına ~1-2 ms. Yeni yolda kayıtlı yaratıklar C++'ta AYNI süzgeçle
+	## (ölü değil, untargetable değil, VisionFog.can_target) aranır; C++'ta olmayan tek canlı "enemies" üyesi görev kopyaları.
+	var ew: Object = EnemyWorldBridgeScript.fog_world(get_tree())
+	if ew != null:
+		var o: Vector2 = _attack_origin()
+		var best: Node2D = ew.call("query_nearest", o, VisionFogScript.TARGETABLE_MIN_VISIBILITY) as Node2D
+		var best_d: float = o.distance_to(best.global_position) if best != null else INF
+		for c in get_tree().get_nodes_in_group("mission_copies"):
+			if not is_instance_valid(c) or not c.is_in_group("enemies") or c.get("is_dead") == true:
+				continue
+			if not VisionFogScript.can_target(c):
+				continue
+			var dc: float = o.distance_to((c as Node2D).global_position)
+			if dc < best_d:
+				best_d = dc
+				best = c
+		if best == null or (attack_range > 0.0 and best_d > attack_range):
+			return null
+		return best
 	var enemies := get_tree().get_nodes_in_group("enemies")
 	if enemies.is_empty():
 		return null
@@ -1830,7 +1854,7 @@ func _find_enemy_on_facing_ray(origin: Vector2, dir: Vector2, reach: float) -> N
 	var ray_end: Vector2 = origin + dir * reach
 	var best: Node2D = null
 	var best_along: float = INF
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), origin, reach + EnemyQueryScript.BODY_PAD + FACING_MELEE_RAY_MARGIN):
 		if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
 			continue
 		if not VisionFogScript.can_target(e):
@@ -1934,7 +1958,7 @@ func get_claimed_frost_target() -> Node2D:
 
 
 func _get_nearest_unfrozen_enemy() -> Node2D:
-	var enemies := get_tree().get_nodes_in_group("enemies")
+	var enemies: Array = EnemyQueryScript.candidates(get_tree(), _attack_origin(), attack_range + 1.0 if attack_range > 0.0 else INF)
 	if enemies.is_empty():
 		_claimed_frost_target = null
 		return null
@@ -2020,7 +2044,7 @@ func _pick_random_nearby_unfrozen(preferred: Node2D, claimed_by_siblings: Array)
 	if not is_instance_valid(preferred) or preferred.get("is_frozen") == true:
 		return preferred
 	var pool: Array = [preferred]
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), preferred.global_position, PREFER_UNFROZEN_MAX_EXTRA_DIST + 1.0):
 		if e == preferred or not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if not VisionFogScript.can_target(e):
@@ -2041,7 +2065,7 @@ func _pick_random_nearby_unfrozen(preferred: Node2D, claimed_by_siblings: Array)
 ## belirdikçe hedef kendiliğinden değişir, ayrı bir takip mantığı gerekmez. Fonksiyon
 ## adı eski "en yüksek can" isteğinden kaldı (test_vision_targeting.gd kullanıyor).
 func _get_highest_health_enemy() -> Node2D:
-	var enemies := get_tree().get_nodes_in_group("enemies")
+	var enemies: Array = EnemyQueryScript.candidates(get_tree(), _attack_origin(), attack_range + 1.0 if attack_range > 0.0 else INF)
 	if enemies.is_empty():
 		return null
 	return TuftufTargetingScript.pick(enemies, _attack_origin(), attack_range, func(e: Node) -> bool: return VisionFogScript.can_target(e))
@@ -2228,7 +2252,7 @@ func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shi
 	var ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
 	var jump_range: float = CHAIN_JUMP_RANGE * (ench.chain_range_mult() if ench else 1.0)
 	var candidates: Array = []
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in EnemyQueryScript.candidates(get_tree(), primary.global_position, jump_range + 1.0):
 		if e == primary or not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if not e.has_method("take_damage"):

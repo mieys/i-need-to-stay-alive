@@ -1,6 +1,9 @@
 extends Node2D
 class_name MissionTree
 
+## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+
 ## "Ağacı Koru" görevi (bkz. world_event_manager.gd) - kullanıcı isteği: "ağaç için temsili
 ## birşey hazırla" (gerçek büyüme-fazlı sprite paketi hâlâ yok, zip konumu bulunamadı - bkz.
 ## world_event_manager.gd dosya başı notu). tools/gen_tree_assets.py ile ÜRETİLMİŞ 5 fazlı
@@ -134,7 +137,7 @@ func _physics_process(delta: float) -> void:
 func _try_fire_at_nearest_enemy() -> void:
 	var best: Node2D = null
 	var best_d: float = ATTACK_RANGE
-	for e: Node in get_tree().get_nodes_in_group("enemies"):
+	for e: Node in EnemyQueryScript.candidates(get_tree(), global_position, ATTACK_RANGE + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		var d: float = global_position.distance_to((e as Node2D).global_position)
