@@ -11,8 +11,8 @@
   maddesindeki "SIRADAKİ (2) eski yolu silmek" ARTIK YAPILDI - o madde tarihçedir. Son durum:
   tam paket 523 testten 522'si geçiyor + kalan tek hata (gerçek harita yol bulma) düzeltildi (köprü damgası, aşağıda);
   köprüyü elle adımlayan testler 49/49, compile 307/307, LAN MP + **Epic MP** geçti.
-  **SIRADAKİ (kullanıcı kararı/izni):** (1) commit + push (hiçbiri yapılmadı; değişiklikler diskte, `git stash list`'teki
-  "eski host yolu silinmeden ONCE" yedeği commit sonrası silinebilir). (2) Telefonda FPS (kullanıcı release APK alır).
+  **SIRADAKİ (kullanıcı kararı/izni):** (1) ~~commit + push~~ YAPILDI: `cf6c560` master'a push edildi (2026-10-03).
+  `git stash list`'teki "eski host yolu silinmeden ONCE" yedeği artık gereksiz (kullanıcı isterse silinir). (2) Telefonda FPS (kullanıcı release APK alır).
   (3) Şovalye Q adı ("Kışkırtma" ama artık sadece kalkan yeniliyor) - kullanıcıya soruldu, cevap bekleniyor.
 - **7. bölüm sonu (2026-10-03 sabah) - YENİDEN YAZIM FİİLEN TAMAM, YENİ YOL VARSAYILAN:**
   - `USE_ENEMY_WORLD = true` (kullanıcı oynadı: "FPS mükemmeldi"). Aşama 0-4 + Aşama 5'in MP ve test maddeleri TAMAM.
