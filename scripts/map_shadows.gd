@@ -18,7 +18,10 @@ const TINT := Color(0.28, 0.36, 0.42)
 ## Güneş kayması (kullanıcı isteği 2026-10-02: "gölgeler güneş açısıyla uyuşmuyor, biraz sola kaymaları gerekiyor"): güneş
 ## ışınları sağ üstten geliyor (sun_clouds.gd), gölgeler tam altta kalınca uyumsuz duruyordu. TÜM gölgeler (harita dokusu,
 ## karakter ayak gölgesi ground_shadow.gd, yerdeki obje gölgesi drop_shadow.gd) bu kadar dünya pikseli SOLA kayar - tek
-## sabit, üçü birlikte değişir. Sadece sabit öteleme: eğme/uzatma/saate göre dönme YOK (1 Ekim'de "3D gibi" bulunup geri alındı).
+## sabit, üçü birlikte değişir. Eğme/saate göre dönme YOK (1 Ekim'de "3D gibi" bulunup geri alındı).
+## DÜZELTME (kullanıcı bildirimi 2026-10-03: "gölgeleri sola aldırmıştım o zamandan beri gölgeler ayrı duruyor bağlı olmaları
+## gereken şeylerden"): gölge artık TAŞINMIYOR, sola UZATILIYOR - asıl yerindeki gölge ile SUN_SHIFT_X kadar sola kaymış
+## halinin BİRLEŞİMİ çizilir. Sağ kenar nesnenin dibinde kalır (arada çim açılmaz), sol kenar 3 px uzar (güneş yönü aynı).
 const SUN_SHIFT_X := -3.0
 const NODE_NAME := "Gölgeler"
 ## Bu katmanlardan SONRA (üstte) çizilir - zemin ve su; geri kalan her şey (orman parçaları, ev, tarla, ağaçlar...) üstte.
@@ -33,14 +36,16 @@ static func shadow_material() -> ShaderMaterial:
 		sh.code = """shader_type canvas_item;
 render_mode blend_mul;
 uniform vec3 tint = vec3(0.28, 0.36, 0.42);
+uniform float shift_texels = 3.0; // sola uzatma (bkz. SUN_SHIFT_X): asıl gölge + sağdaki texel'in gölgesi
 void fragment() {
-	float a = texture(TEXTURE, UV).r;
+	float a = max(texture(TEXTURE, UV).r, texture(TEXTURE, UV + vec2(shift_texels * TEXTURE_PIXEL_SIZE.x, 0.0)).r);
 	COLOR = vec4(mix(vec3(1.0), tint, a), 1.0);
 }
 """
 		_material = ShaderMaterial.new()
 		_material.shader = sh
 		_material.set_shader_parameter("tint", Vector3(TINT.r, TINT.g, TINT.b))
+		_material.set_shader_parameter("shift_texels", -SUN_SHIFT_X)
 	return _material
 
 
@@ -52,7 +57,7 @@ static func attach(harita: Node) -> Sprite2D:
 	spr.name = NODE_NAME
 	spr.texture = load(TEXTURE_PATH) as Texture2D
 	spr.centered = false
-	spr.position = Vector2(SUN_SHIFT_X, 0.0)
+	spr.position = Vector2.ZERO ## kayma shader'da (sola uzatma, bkz. SUN_SHIFT_X)
 	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	spr.material = shadow_material()
 	harita.add_child(spr)

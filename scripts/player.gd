@@ -182,8 +182,8 @@ const SKILL2_TIMING := {
 	## dinamik döndüğü id'ye göre BURADAN okuyor), Korsan/Necromancer'ın
 	## şarj-tabanlı TEMEL'leriyle AYNI mimari desen.
 	22: {"duration": 0.35, "cooldown": 4.0}, ## Varyasyon 1: Arcane Lanet
-	23: {"duration": 0.5, "cooldown": 30.0}, ## Varyasyon 2: Don Nova
-	24: {"duration": 15.0, "cooldown": 45.0}, ## Varyasyon 3: Hortum
+	23: {"duration": 0.5, "cooldown": 45.0}, ## Varyasyon 2: Don Nova (2026-10-04: 30 -> 45)
+	24: {"duration": 15.0, "cooldown": 30.0}, ## Varyasyon 3: Hortum (2026-10-04: 45 -> 30)
 	25: {"duration": 5.0, "cooldown": 120.0}, ## Varyasyon 4: Meteor Patlaması
 	## Shaman E = Kalkan Totemi (id 26) - 2026-09-29 slot değişimiyle SKILL_TIMING'den buraya (sayılar AYNI, bkz. SKILL_TIMING[27]
 	## üstündeki notlar: "duration" kullanılmıyor, 45sn bekleme). Saldırı Totemi (27) artık Q'da.
@@ -1425,7 +1425,8 @@ func enchant_haste(pct: float, dur: float) -> void:
 
 
 func enchant_haste_value() -> float:
-	return _enchant_haste if Time.get_ticks_msec() < _enchant_haste_until_msec else 0.0
+	## + Shaman "Savaş Ritmi" (shaman_e2) buff'ı: totem alanındaki oyuncular +%15 saldırı hızı (weapon.gd _effective_fire_wait okur).
+	return (_enchant_haste if Time.get_ticks_msec() < _enchant_haste_until_msec else 0.0) + _evo_buff("atk_speed")
 
 
 ## Efsun kalıcı kazançları (Ruh Hasadı: saldırı gücü, Kan Lordu: maksimum can) - Savaş Şevki ile aynı yol.
@@ -2784,11 +2785,11 @@ func _spawn_oakley_flower_auto() -> void:
 	## taşınıyor. "oakley_flower_spawn" işleneni değişmedi (remote_player.gd),
 	## sadece konum artık drop_pos (global_position değil).
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "oakley_flower_spawn", drop_pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "oakley_flower_spawn", drop_pos, {
 			"caster_damage_bonus": damage_bonus,
 			"flower_id": flower_id
 		})
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "oakley_flower_bond", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "oakley_flower_bond", global_position, {
 			"end_pos": drop_pos
 		})
 	_spawn_burst(Color(1.0, 0.7, 0.85))
@@ -3076,6 +3077,7 @@ func on_enemy_killed(enemy: Node) -> void:
 	## hata sınıfı).
 	if GameManager.selected_char_id == 11:
 		_necro_on_kill(is_boss_kill)
+	_shaman_golem_on_kill()
 
 
 ## DÜZELTME (KRİTİK - multiplayer öldürme pasifleri): enemy.gd die() SADECE
@@ -3097,6 +3099,7 @@ func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZER
 	## göre, artık hangi yetenek Q/E/R'de olursa olsun doğru çalışır.
 	if GameManager.selected_char_id == 11:
 		_necro_on_kill(is_boss_kill)
+	_shaman_golem_on_kill()
 
 
 ## Vampir Dişi pasifi: karakterden bağımsız, item_kill_heal_amount > 0 ise
@@ -3291,7 +3294,7 @@ func _skill_korsan_detonate_all() -> void:
 		any_detonated = true
 		_korsan_on_bomb_exploded(bomb_pos, bomb_radius)
 		if NetworkManager.is_multiplayer_active:
-			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", bomb_pos, {
+			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", bomb_pos, {
 				"scene_path": "res://scenes/fx_korsan_explosion.tscn",
 				"radius": bomb_radius,
 				"color": Color(1.0, 0.6, 0.2),
@@ -3443,7 +3446,7 @@ func _spawn_korsan_bombardment_strike_fx(pos: Vector2) -> void:
 		if fx.has_method("setup"):
 			fx.setup(KorsanFxMath.STRIKE_RADIUS, Color(1.0, 0.6, 0.2))
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", pos, {
 			"scene_path": "res://scenes/fx_korsan_strike.tscn",
 			"radius": KorsanFxMath.STRIKE_RADIUS,
 			"color": Color(1.0, 0.6, 0.2),
@@ -3470,7 +3473,7 @@ func _korsan_pixel_burst(pos: Vector2, palette: String, _count: int, _speed: flo
 		get_tree().current_scene.add_child(fx)
 		fx.global_position = pos
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {"scene_path": path})
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", pos, {"scene_path": path})
 
 
 ## Necromancer pasifi: "Etrafta ölen her düşman 1 ruh biriktirir (bosslar 5
@@ -3535,7 +3538,7 @@ func _spawn_necro_summon_fx(pet_pos: Vector2) -> void:
 	get_tree().current_scene.add_child(fx)
 	fx.global_position = pos
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", pos, {
 			"scene_path": FxNecroSummonScene.resource_path,
 		})
 
@@ -3777,14 +3780,22 @@ func _shaman_start_q_recharge() -> void:
 	_shaman_q_recharge_timer = _shaman_q_recharge_total
 
 
+## Evrim "Üçüncü Totem" (shaman_q1): yük tavanı 2 -> 3 (kart metni skill_evolutions.gd DEFS[12]).
+const EVO_SHAMAN_Q_MAX_CHARGES := 3
+
+
+func get_shaman_q_max_charges() -> int:
+	return EVO_SHAMAN_Q_MAX_CHARGES if has_evo("shaman_q1") else SHAMAN_ATTACK_TOTEM_MAX_CHARGES
+
+
 func _process_shaman_q_charges(delta: float) -> void:
-	if get_skill_character_id() != SHAMAN_ATTACK_TOTEM_ID or shaman_q_charges >= SHAMAN_ATTACK_TOTEM_MAX_CHARGES:
+	if get_skill_character_id() != SHAMAN_ATTACK_TOTEM_ID or shaman_q_charges >= get_shaman_q_max_charges():
 		return
 	_shaman_q_recharge_timer -= delta
 	if _shaman_q_recharge_timer <= 0.0:
 		shaman_q_charges += 1
 		_shaman_q_recharge_timer = 0.0
-		if shaman_q_charges < SHAMAN_ATTACK_TOTEM_MAX_CHARGES:
+		if shaman_q_charges < get_shaman_q_max_charges():
 			_shaman_start_q_recharge()
 
 
@@ -3792,12 +3803,12 @@ func _process_shaman_q_charges(delta: float) -> void:
 func get_shaman_q_charge_state() -> Dictionary:
 	if get_skill_character_id() != SHAMAN_ATTACK_TOTEM_ID:
 		return {}
-	var full: bool = shaman_q_charges >= SHAMAN_ATTACK_TOTEM_MAX_CHARGES
+	var full: bool = shaman_q_charges >= get_shaman_q_max_charges()
 	var fraction: float = 1.0 if full or _shaman_q_recharge_total <= 0.0 \
 		else clampf(1.0 - _shaman_q_recharge_timer / _shaman_q_recharge_total, 0.0, 1.0)
 	return {
 		"charges": shaman_q_charges,
-		"max": SHAMAN_ATTACK_TOTEM_MAX_CHARGES,
+		"max": get_shaman_q_max_charges(),
 		"fraction": fraction,
 		"remaining": 0.0 if full else _shaman_q_recharge_timer,
 	}
@@ -4085,12 +4096,8 @@ func get_skill2_progress() -> float:
 
 func is_skill2_active() -> bool:
 	if GameManager.selected_char_id == 4:
-		## DÜZELTME (Büyücü Kız rework): Hortum/Meteor artık E'nin DEĞİL, R'nin
-		## (skill3) varyasyonları - "aktif/kanal" görseli artık is_skill3_
-		## active()'e taşındı (bkz. aşağısı), E'nin elindeki Arcane Lanet/Don
-		## Nova ikisi de neredeyse anlık olduğu için E hiçbir zaman "aktif"
-		## görünmez.
-		return false
+		## 2026-10-04: Hortum E'ye döndü - E'nin "aktif" görseli hortumlar dolaşırken (15 sn); Arcane Lanet neredeyse anlık, hiç aktif görünmez.
+		return not _buyucu_active_tornadoes.is_empty()
 	return skill2_state == "active"
 
 
@@ -4171,7 +4178,7 @@ func is_skill3_active() -> bool:
 		## Hortum'un 15sn'lik dolaşma penceresi/Meteor'un 5sn'lik odaklanma
 		## kanalı artık R'nin (skill3) sorumluluğunda - bkz. is_skill2_active()
 		## üstündeki taşıma notu.
-		return _buyucu_meteor_channel_active or not _buyucu_active_tornadoes.is_empty()
+		return _buyucu_meteor_channel_active ## (Hortum 2026-10-04'ten beri E'de: is_skill2_active; Don Nova anlık)
 	if GameManager.selected_char_id == VampirMath.CHAR_ID:
 		return _vampir_bats_active
 	return skill3_state == "active"
@@ -4573,7 +4580,7 @@ func _on_weapon_fired(_direction: Vector2) -> void:
 	
 	# Broadcast fire sound to remote players
 	if NetworkManager.is_multiplayer_active and fire_sound and fire_sound.stream and fire_sound.stream.resource_path != "":
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "weapon_sound", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "weapon_sound", global_position, {
 			"sound_path": fire_sound.stream.resource_path,
 			"pitch": fire_sound.pitch_scale,
 			## DÜZELTME: gerçek volume_db taşınmıyordu, katılımcılar bu silah
@@ -4583,8 +4590,9 @@ func _on_weapon_fired(_direction: Vector2) -> void:
 		})
 
 
+## Büyücü "Yükseliş" (R1) havadayken de hedef alınamaz (yaratık hedeflemesi + C++ köprüsü bunu okur; uzak kukla extra["byc_fly"]).
 func is_invisible_now() -> bool:
-	return is_invisible
+	return is_invisible or is_buyucu_airborne()
 
 
 ## bkz. is_indoors üstündeki yorum - enemy.gd bunu is_invisible_now() ile AYNI
@@ -4817,6 +4825,9 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## etmeksizin) görünmezken hiçbir hasar işlenmemeli.
 	if is_invisible:
 		return
+	## Büyücü "Yükseliş" (R1): Meteor kanalı boyunca havada - zaten atılmış mermi/alan hasarı da işlenmez.
+	if is_buyucu_airborne():
+		return
 	if is_assasin_dashing:
 		return
 	if is_revive_invulnerable:
@@ -4853,7 +4864,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	amount *= _evo_damage_taken_mult()
 	## Shaman Elemental Golem formu (R): %40 hasar azaltma (bkz. shaman_golem_math.gd DAMAGE_TAKEN_MULT).
 	if _shaman_golem_active:
-		amount *= ShamanGolemMath.DAMAGE_TAKEN_MULT
+		amount *= ShamanGolemMath.damage_taken_mult(has_evo("shaman_r1"))
 	if oakley_bond_active:
 		## Kalkanı olan kişi her hasar aldığında üstünde yeşil parçalar çıkar (kullanıcı isteği, fx_oakley_leaf_barrier.gd).
 		if is_instance_valid(_oakley_leaf_fx) and _oakley_leaf_fx.has_method("hit"):
@@ -4878,7 +4889,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 			## baloncuğu gibi) sadece kalkan sahibinin kendi ekranında
 			## görünüyordu.
 			if NetworkManager.is_multiplayer_active:
-				NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "shield_hit_flash", global_position, {
+				NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "shield_hit_flash", global_position, {
 					"angle": impact_angle
 				})
 		return
@@ -4988,7 +4999,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 		## bu parıltı + halka efekti de artık uzak oyunculara broadcast
 		## ediliyor (network_manager.gd "shield_hit_flash" dalı zaten hazırdı).
 		if NetworkManager.is_multiplayer_active:
-			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "shield_hit_flash", global_position, {
+			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "shield_hit_flash", global_position, {
 				"angle": impact_angle,
 				"with_ring": true
 			})
@@ -5259,7 +5270,7 @@ func _go_down() -> void:
 		## durumu zaten anlatıyor; karakter kendi renginde kalır.
 		anim.modulate = Color.WHITE
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_ring", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_ring", global_position, {
 			"radius": 70.0,
 			"color": Color(0.6, 0.15, 0.15)
 		})
@@ -5365,7 +5376,7 @@ func _complete_revive() -> void:
 	tw_rev.tween_property(anim, "modulate:a", 1.0, 0.8)
 
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_burst", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_burst", global_position, {
 			"radius": 100.0,
 			"color": Color(0.2, 1.0, 0.4)
 		})
@@ -5551,7 +5562,7 @@ func revive_from_permadeath() -> void:
 	grant_revive_invulnerability()
 
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_burst", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_burst", global_position, {
 			"radius": 100.0,
 			"color": Color(0.2, 1.0, 0.4)
 		})
@@ -5571,7 +5582,7 @@ func revive_from_permadeath() -> void:
 func on_damage_dealt(amount: float, is_area: bool = false) -> void:
 	## Ruhani Yetenek "Adc": aktifken +%1 can emme eklenir (bkz. spirit_lifesteal). Yetenek evrimi Elara "Kan Oku": Gerçek
 	## Hasar (E) aktifken +%10 can çalma (oyunun can çalma kuralıyla: isabet başına o ihtimalle +1 can).
-	var total_lifesteal: float = lifesteal_percent + spirit_lifesteal + _evo_lifesteal_bonus()
+	var total_lifesteal: float = lifesteal_percent + spirit_lifesteal + _evo_lifesteal_bonus() + evo_hit_lifesteal
 	if is_dead or total_lifesteal <= 0.0 or amount <= 0.0:
 		return
 	## Kan Ağlayan: can doluyken can çalma kalkana yazılır (aynı şans kuralı).
@@ -7007,8 +7018,9 @@ func _process_healer_heal_tick(delta: float) -> void:
 
 ## ---------- Büyücü Kız (roster 4, "skill": 3, TEMEL: 4 varyasyon) ----------
 ## Kullanıcı isteği ile eklenen yeni kit:
-##   Pasif: YOK - eski "Kadim Patlama" (öldürülen yaratık patlayıp çevresine alan hasarı verirdi) kullanıcı
-##     isteğiyle (2026-09-23: "büyücü kızın pasifini sil direk onu sonra değiştiricem") tamamen silindi.
+##   Pasif: "Büyü Dalgası" (2026-10-04) - her yetenekte silahlar ileri fırlayıp hemen +%30 ateş eder (BUYUCU_PASSIVE_SHOT_MULT,
+##     _buyucu_on_skill_used). Eski "Kadim Patlama" (öldürülen yaratık patlayıp çevresine alan hasarı verirdi) 2026-09-23'te
+##     silinmişti; mühür patlaması görseli artık "Arcane Patlama" evriminde (_buyucu_arcane_explode).
 ##   TEMEL (E): 4 farklı varyasyon, her birinin KENDİ bekleme süresi ayrı ayrı
 ##     işler (bkz. _buyucu_variation_cooldowns, _buyucu_try_activate_variation) -
 ##     standart skill2_state makinesini KULLANMAZ, Korsan/Necromancer'ın
@@ -7040,12 +7052,20 @@ const BUYUCU_ARCANE_BOUNCE_RATIO := 0.80
 const BUYUCU_ARCANE_BOUNCE_RANGE := 280.0
 const BUYUCU_ARCANE_BOUNCE_DELAY := 0.14
 
-## Varyasyon 2: Don Nova - etraftaki TÜM yaratıkları dondurur + anlık hasar.
-## enemy.gd apply_freeze_full()'ın tam donma sistemini kullanır (bkz. o
-## fonksiyonun üstündeki yorum) - "donan yaratıklar hiçbir şey yapamaz".
+## Varyasyon 2: Don Nova - etraftaki TÜM yaratıkları yavaşlatır + anlık hasar.
+## Kullanıcı isteği (2026-10-04): "büyücü kızın don novası artık düşmanları dondurmak yerine 6 saniyeliğine %80 yavaşlatıyor çünkü
+## donma olayı geliştirmelere eklenecek" - eskiden enemy.gd apply_freeze_full ile 6 sn tam donma. Artık enemy.gd apply_frost_slow
+## (mavimsi ton + buz kristalleri); donma R finali "Ateş ve Buz"da (EVO_BUYUCU_NOVA_FREEZE_TIME).
 const BUYUCU_NOVA_RADIUS := 320.0
-const BUYUCU_NOVA_FREEZE_DURATION := 6.0
+const BUYUCU_NOVA_SLOW_PERCENT := 0.8
+const BUYUCU_NOVA_SLOW_DURATION := 6.0
 const BUYUCU_NOVA_DAMAGE_RATIO := 1.0
+
+## PASİF "Büyü Dalgası" (kullanıcı isteği 2026-10-04): "Büyücü kız her yetenek kullandığında silahları aniden sertçe ileri itilip
+## aynı anda atış yaparak verdikleri sonraki atışın hasarını %30 arttırır. (saldırı hızı bekleme süresi sıfırlanır ve aniden ateş
+## ederler)". Q (set değişimi) de bir yetenek kullanımı sayılır (kullanıcı finalde açıkça "Q hariç" yazdı, pasifte yazmadı). Silah
+## tarafı weapon.gd arcane_surge (bekleme sıfırlama + %30'luk atış + itilme animasyonu WeaponJuice.arcane_surge - uzak kopya aynı).
+const BUYUCU_PASSIVE_SHOT_MULT := 1.3
 
 ## Varyasyon 3: Hortum - bkz. fx_buyucu_tornado.gd (bağımsız, dolaşan bir
 ## varlık olarak ayrı bir script dosyasında implemente edildi).
@@ -7098,15 +7118,22 @@ const FxBuyucuTornadoScript := preload("res://scripts/fx_buyucu_tornado.gd")
 ## bkz. get_skill2_id/get_skill3_id/_skill_buyucu_switch_variation.
 var buyucu_variation: int = 0
 var buyucu_variation_set: int = 0 ## 0 veya 1 - ULTİ (Q) ile değişir
-const BUYUCU_SET_E_VARIATIONS: Array[int] = [0, 1] ## E: Arcane Lanet, Don Nova
-const BUYUCU_SET_R_VARIATIONS: Array[int] = [2, 3] ## R: Hortum, Meteor Patlaması
+## Kullanıcı isteği (2026-10-04): "hortum yeteneğini Q2'ye (E) taşıyıp Q2'deki don nova'yı da boş kalan R kısmına taşı" - Hortum ile
+## Don Nova yer değiştirdi: Set 1 = {E: Arcane Lanet, R: Don Nova}, Set 2 = {E: Hortum, R: Meteor Patlaması}. Değerler VARYASYON id'leri
+## (0 Arcane, 1 Don Nova, 2 Hortum, 3 Meteor); karakter ikonları characters.gd skill2/skill3_variation_icons SET sırasındadır.
+## Slot değişince bedel/açılış seviyesi de slotu izler: Hortum artık TEMEL bedelini öder ve 1. seviyede açık, Don Nova ULTİ bedelini öder ve 10. seviyede açılır.
+const BUYUCU_SET_E_VARIATIONS: Array[int] = [0, 2] ## E: Arcane Lanet, Hortum
+const BUYUCU_SET_R_VARIATIONS: Array[int] = [1, 3] ## R: Don Nova, Meteor Patlaması
 var _buyucu_variation_cooldowns: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var is_buyucu_channeling: bool = false ## Meteor odaklanma kanalı - hareket kilidi
 var _buyucu_meteor_channel_active: bool = false
 var _buyucu_meteor_channel_timer: float = 0.0
 var _buyucu_meteor_origin: Vector2 = Vector2.ZERO
 var _buyucu_meteor_spawn_timer: float = 0.0
+var _buyucu_meteor_power: float = 1.0 ## bu kanalın meteorlarının boyut/hasar çarpanı (Efsunlu Büyü)
 var _buyucu_active_tornadoes: Array = []
+## Evrim "Yükseliş" (R1) görseli - yerel oyuncu ve uzak kukla aynı script (bkz. is_buyucu_airborne).
+const BuyucuLevitateScript := preload("res://scripts/buyucu_levitate.gd")
 
 
 ## Ana _physics_process döngüsünden her karede çağrılır (bkz. o fonksiyondaki
@@ -7140,17 +7167,26 @@ func get_buyucu_variation_name_r() -> String:
 ## get_buyucu_variation_desc() (E slotu, eski davranış AYNEN) ve
 ## get_buyucu_variation_desc_r() (R slotu) İKİSİ DE bu tek fonksiyonu
 ## çağırıyor, metin/oran/bekleme süresi formülleri TEK YERDE kalıyor.
-func _buyucu_variation_desc_for(variation: int) -> String:
+func _buyucu_variation_desc_for(variation: int, kind: String) -> String:
+	## kind: yuvanın türü ("TEMEL" = E, "ULTİ" = R) - varyasyon yuva değiştirebildiği için (2026-10-04 Hortum<->Don Nova) önek
+	## varyasyonun değil o anki YUVANIN türünü göstermeli; aşağıdaki metinlerin ön eki bununla değiştirilir.
+	var text: String = _buyucu_variation_text(variation)
+	var paren: int = text.find(" (")
+	return kind + text.substr(paren) if paren > 0 else text
+
+
+func _buyucu_variation_text(variation: int) -> String:
+	## Sayı/oranlar evrimlerle güncel (Büyü Fırtınası 7 sekme / 5 hortum, Güçlü Büyü x1,3) - ipucu gerçekte olanı söylesin.
 	match variation:
 		0:
 			return "TEMEL (Arcane Lanet): yaratıklar arasında %d kez sekip her sekişte saldırı gücünün %%%d'ü kadar hasar verir. (%.0fsn bekleme)" % [
-				BUYUCU_ARCANE_BOUNCE_COUNT, int(BUYUCU_ARCANE_BOUNCE_RATIO * 100.0), float(SKILL2_TIMING[22]["cooldown"])]
+				_buyucu_arcane_bounce_count(), int(round(_buyucu_arcane_ratio() * 100.0)), float(SKILL2_TIMING[22]["cooldown"])]
 		1:
-			return "TEMEL (Don Nova): etraftaki tüm yaratıkları %.0fsn dondurur (hiçbir şey yapamazlar) ve saldırı gücünün %%%d'ü kadar hasar verir. (%.0fsn bekleme)" % [
-				BUYUCU_NOVA_FREEZE_DURATION, int(BUYUCU_NOVA_DAMAGE_RATIO * 100.0), float(SKILL2_TIMING[23]["cooldown"])]
+			return "TEMEL (Don Nova): etraftaki tüm yaratıkları %.0fsn boyunca %%%d yavaşlatır ve saldırı gücünün %%%d'ü kadar hasar verir. (%.0fsn bekleme)" % [
+				BUYUCU_NOVA_SLOW_DURATION, int(BUYUCU_NOVA_SLOW_PERCENT * 100.0), int(BUYUCU_NOVA_DAMAGE_RATIO * 100.0), float(SKILL2_TIMING[23]["cooldown"])]
 		2:
 			return "ULTİ (Hortum): %.0fsn boyunca dolaşan %d hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %%%d'ü kadar hasar verir. (%.0fsn bekleme)" % [
-				BUYUCU_TORNADO_DURATION, BUYUCU_TORNADO_COUNT, int(BUYUCU_TORNADO_HIT_RATIO * 100.0), float(SKILL2_TIMING[24]["cooldown"])]
+				BUYUCU_TORNADO_DURATION, _buyucu_tornado_count(), int(round(_buyucu_tornado_ratio() * 100.0)), float(SKILL2_TIMING[24]["cooldown"])]
 		3:
 			return "ULTİ (Meteor Patlaması): %.0fsn hareketsiz odaklanıp etrafa saldırı gücünün %%%d'ü kadar hasar veren meteorlar yağdırır. (%.0fsn bekleme)" % [
 				BUYUCU_METEOR_CHANNEL_TIME, int(BUYUCU_METEOR_HIT_RATIO * 100.0), float(SKILL2_TIMING[25]["cooldown"])]
@@ -7159,11 +7195,11 @@ func _buyucu_variation_desc_for(variation: int) -> String:
 
 
 func get_buyucu_variation_desc() -> String:
-	return _buyucu_variation_desc_for(buyucu_variation)
+	return _buyucu_variation_desc_for(BUYUCU_SET_E_VARIATIONS[buyucu_variation_set], "TEMEL")
 
 
 func get_buyucu_variation_desc_r() -> String:
-	return _buyucu_variation_desc_for(BUYUCU_SET_R_VARIATIONS[buyucu_variation_set])
+	return _buyucu_variation_desc_for(BUYUCU_SET_R_VARIATIONS[buyucu_variation_set], "ULTİ")
 
 
 func get_buyucu_variation_cooldown_remaining() -> float:
@@ -7203,6 +7239,12 @@ func _skill_buyucu_switch_variation() -> void:
 	## sesi sadece yerelde çalıyordu, uzak oyuncular büyü değişimini hiç
 	## duymuyordu.
 	_play_networked_sound("res://assets/audio/arcane_attack.mp3", randf_range(1.35, 1.55), -4.0)
+	## Evrim "Kalkan Akışı" (Q1): set değişiminde maks. kalkanın %10'u - 10 sn'de en fazla bir kez.
+	if has_evo("buyucu_q1") and item_shield_max > 0.0 and Time.get_ticks_msec() >= _evo_buyucu_q1_ready_msec:
+		_evo_buyucu_q1_ready_msec = Time.get_ticks_msec() + int(EVO_BUYUCU_Q1_COOLDOWN * 1000.0)
+		heal_shield(item_shield_max * EVO_BUYUCU_Q1_SHIELD_RATIO)
+		_play_and_broadcast_skill_fx(FxEvoShieldRefillScene)
+	_buyucu_on_skill_used("skill", -1)
 
 
 ## TEMEL (E) - Korsan'ın Saatli Bomba'sı/Necromancer'ın İskelet Çağır'ıyla
@@ -7227,8 +7269,9 @@ func _buyucu_try_activate_variation() -> void:
 	## TERSİYDİ. Artık diğer karakterlerin TEMEL'leriyle (_activate_skill2())
 	## AYNI standart kalkan bedeli burada uygulanıyor; Q ise _activate_skill()
 	## içindeki ayrı muafiyetle (char_id != 3) bedelsiz kalıyor.
-	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
-	var skill2_shield_cost: float = (item_shield_max * SKILL2_SHIELD_COST_PERCENT_OF_MAX + SKILL2_SHIELD_COST_FLAT) * (1.0 - item_skill_shield_cost_reduction)
+	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum. Evrim "Tutumlu Büyü": x0,75 (_buyucu_shield_cost_mult).
+	var skill2_shield_cost: float = (item_shield_max * SKILL2_SHIELD_COST_PERCENT_OF_MAX + SKILL2_SHIELD_COST_FLAT) * (1.0 - item_skill_shield_cost_reduction) \
+			* _buyucu_shield_cost_mult(buyucu_variation)
 	if not _has_enough_ability_shield(skill2_shield_cost):
 		_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
 		return
@@ -7237,11 +7280,7 @@ func _buyucu_try_activate_variation() -> void:
 	var timing: Dictionary = _skill2_timing_for(BUYUCU_VARIATION_SKILL2_IDS[buyucu_variation])
 	_buyucu_variation_cooldowns[buyucu_variation] = float(timing["cooldown"]) * (1.0 - cooldown_reduction_percent)
 	_play_cast_animation()
-	match buyucu_variation:
-		0: _skill_buyucu_arcane_curse()
-		1: _skill_buyucu_frost_nova()
-		2: _skill_buyucu_tornado()
-		3: _skill_buyucu_meteor()
+	_buyucu_cast_variation(buyucu_variation, "skill2")
 
 
 ## R YETENEĞİ (skill3) - _buyucu_try_activate_variation()'ın (E/TEMEL)
@@ -7259,18 +7298,19 @@ func _buyucu_try_activate_variation_r() -> void:
 		return
 	## bkz. _buyucu_try_activate_variation() üstündeki AYNI kalkan bedeli notu. 2026-09-25: "TÜM R LER ulti olmalı" - R
 	## varyasyonları (Hortum/Meteor) artık diğer karakterlerin R'leri gibi ULTİ tarifesini öder (eskiden temel).
-	var skill3_shield_cost: float = (item_shield_max * SKILL_SHIELD_COST_PERCENT_OF_MAX + SKILL_SHIELD_COST_FLAT) * (1.0 - item_skill_shield_cost_reduction)
-	if not _has_enough_ability_shield(skill3_shield_cost):
-		_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
-		return
-	_spend_ability_shield_cost(skill3_shield_cost)
-	item_shield_ability_slow_timer = _shield_hit_regen_delay()
+	## Evrimler: "Tutumlu Büyü" x0,75, "Meteor Sağanağı" Don Nova'yı bedelsiz yapar (_buyucu_shield_cost_mult -> 0).
+	var skill3_shield_cost: float = (item_shield_max * SKILL_SHIELD_COST_PERCENT_OF_MAX + SKILL_SHIELD_COST_FLAT) * (1.0 - item_skill_shield_cost_reduction) \
+			* _buyucu_shield_cost_mult(variation)
+	if skill3_shield_cost > 0.0:
+		if not _has_enough_ability_shield(skill3_shield_cost):
+			_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
+			return
+		_spend_ability_shield_cost(skill3_shield_cost)
+	item_shield_ability_slow_timer = _shield_hit_regen_delay() ## bedelsiz yeteneklerde de (Q'nun _activate_skill'deki notu)
 	var timing: Dictionary = _skill2_timing_for(BUYUCU_VARIATION_SKILL2_IDS[variation])
 	_buyucu_variation_cooldowns[variation] = float(timing["cooldown"]) * (1.0 - cooldown_reduction_percent)
 	_play_cast_animation()
-	match variation:
-		2: _skill_buyucu_tornado()
-		3: _skill_buyucu_meteor()
+	_buyucu_cast_variation(variation, "skill3")
 
 
 ## Sabit bir DÜNYA konumunda (oyuncunun güncel konumu değil - öldürülen
@@ -7281,15 +7321,18 @@ func _buyucu_try_activate_variation_r() -> void:
 ## hit_fx ile AYNI desen. fx_korsan_explosion.tscn kendi patlama sesini
 ## zaten içeriyor, ayrıca sound_path taşımaya gerek yok.
 
-func _spawn_world_explosion_fx(pos: Vector2) -> void:
+## fx_scale (2026-10-04, Büyücü "Arcane Patlama" evrimi - mühür patlama alanı kadar): uzak kopyaya "hitscan_impact" fx_scale ile.
+func _spawn_world_explosion_fx(pos: Vector2, fx_scale: float = 1.0) -> void:
 	if not FxMagePassiveBurstScene:
 		return
 	var fx: Node2D = FxMagePassiveBurstScene.instantiate() as Node2D
+	fx.scale = Vector2.ONE * fx_scale
 	get_tree().current_scene.add_child(fx)
 	fx.global_position = pos
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "melee_hit", pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", pos, {
 			"scene_path": "res://scenes/fx_mage_passive_burst.tscn",
+			"fx_scale": fx_scale,
 		})
 
 
@@ -7328,7 +7371,7 @@ func _spawn_ring_sized(radius: float, color: Color) -> void:
 	if ring.has_method("setup"):
 		ring.setup(radius, color)
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_ring", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_ring", global_position, {
 			"radius": radius,
 			"color": color,
 		})
@@ -7356,7 +7399,7 @@ func _spawn_local_telegraph_ring(pos: Vector2, radius: float, color: Color) -> v
 	if ring.has_method("setup"):
 		ring.setup(radius, color)
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", pos, {
 			"scene_path": "res://scenes/fx_skill_ring.tscn",
 			"radius": radius,
 			"color": color,
@@ -7380,7 +7423,7 @@ func _play_networked_sound(path: String, pitch: float, volume_db: float = 0.0) -
 	asp.finished.connect(asp.queue_free)
 	asp.play()
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "weapon_sound", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "weapon_sound", global_position, {
 			"sound_path": path,
 			"pitch": pitch,
 			"volume_db": volume_db,
@@ -7418,13 +7461,15 @@ func _play_skill_sfx(key: String, pitch: float = 1.0) -> void:
 ## Varyasyon 1: Arcane Lanet - en yakın yaratıktan başlayıp sırayla en fazla
 ## BUYUCU_ARCANE_BOUNCE_COUNT farklı yaratığa sekip her sekişte saldırı
 ## gücünün %30'u kadar hasar verir.
-func _skill_buyucu_arcane_curse() -> void:
+## Dönüş: lanet bir hedefe çıktı mı (hedefsizse Efsunlu Büyü harcanmaz - bkz. _buyucu_cast_variation).
+func _skill_buyucu_arcane_curse() -> bool:
 	var start: Node2D = _find_closest_enemy_in_range(global_position, BUYUCU_ARCANE_BOUNCE_RANGE)
 	if not start:
 		_spawn_floating_text("HEDEF YOK", Color(0.7, 0.5, 1.0))
-		return
+		return false
 	_spawn_burst(Color(0.55, 0.25, 0.95))
-	_run_buyucu_arcane_bounce(start)
+	_run_buyucu_arcane_bounce(start, _buyucu_cast_power)
+	return true
 
 
 ## await ile SIRAYLA sekiyor (aynı anda değil) - kullanıcının Assasin
@@ -7432,26 +7477,41 @@ func _skill_buyucu_arcane_curse() -> void:
 ## geri bildiriminden ders: her sekme net görülebilsin diye aralarında kısa
 ## bir gecikme var (bkz. BUYUCU_ARCANE_BOUNCE_DELAY). _skill_assasin_dash()
 ## ile AYNI "fire and forget" await deseni - çağıran taraf beklemiyor.
-func _run_buyucu_arcane_bounce(first_target: Node2D) -> void:
-	var dmg: float = damage_bonus * BUYUCU_ARCANE_BOUNCE_RATIO
+## power: Efsunlu Büyü (Q finali) boyut/hasar çarpanı - kafatası ve patlama büyür, hasar artar (efsunsuz 1.0).
+func _run_buyucu_arcane_bounce(first_target: Node2D, power: float = 1.0) -> void:
+	var dmg: float = damage_bonus * _buyucu_arcane_ratio() * power
+	var bounce_count: int = _buyucu_arcane_bounce_count()
 	var visited: Array = []
 	var current_from: Node2D = self
 	var current_target: Node2D = first_target
-	for i in range(BUYUCU_ARCANE_BOUNCE_COUNT):
+	for i in range(bounce_count):
 		if not is_instance_valid(current_target) or current_target.get("is_dead") == true:
 			break
 		visited.append(current_target)
+		var from_pos: Vector2 = current_from.global_position if is_instance_valid(current_from) else global_position
+		var hit_pos: Vector2 = current_target.global_position
 		if current_target.has_method("take_damage"):
 			## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir" -
 			## her sekiş kendi başına ayrı bir kritik zarı atıyor.
 			var is_crit: bool = _roll_ability_crit()
-			current_target.take_damage(_apply_ability_crit(dmg, is_crit), is_crit)
-		_spawn_arcane_bounce_fx(current_from, current_target)
+			var hit_dmg: float = _apply_ability_crit(dmg, is_crit)
+			current_target.take_damage(hit_dmg, is_crit)
+			## Evrim "Arcane Patlama" (E1): isabet noktasında patlar, çevredekilere bu isabetin %75'i (hedefin kendisi hariç).
+			if has_evo("buyucu_e1"):
+				_buyucu_arcane_explode(hit_pos, hit_dmg * EVO_BUYUCU_ARCANE_BLAST_RATIO, is_crit, current_target, power)
+		## Evrim "Savuran Büyü" (E4): kafatasının geldiği yönde geri itilir.
+		if has_evo("buyucu_e4") and is_instance_valid(current_target) and current_target.has_method("apply_skill_push"):
+			current_target.apply_skill_push(hit_pos - from_pos, EVO_BUYUCU_ARCANE_PUSH)
+		_spawn_arcane_bounce_fx(current_from, current_target, power)
 		current_from = current_target
-		_play_skill_sfx("buyucu_arcane_bounce", 1.0 + 0.08 * float(i)) ## her sekme bir öncekinden biraz tiz
-		if i < BUYUCU_ARCANE_BOUNCE_COUNT - 1:
+		_play_skill_sfx("buyucu_arcane_bounce", 1.0 + 0.08 * float(mini(i, 4))) ## her sekme bir öncekinden biraz tiz
+		if i < bounce_count - 1:
 			await get_tree().create_timer(BUYUCU_ARCANE_BOUNCE_DELAY).timeout
-			var next_target: Node2D = _find_closest_enemy_in_range(current_target.global_position, BUYUCU_ARCANE_BOUNCE_RANGE, visited)
+			if not is_instance_valid(self) or not is_inside_tree():
+				return
+			## Bekleme sırasında hedef serbest kalmış olabilir (patlama/sekme öldürdü) - son bilinen noktadan aranır.
+			var search_from: Vector2 = current_target.global_position if is_instance_valid(current_target) else hit_pos
+			var next_target: Node2D = _find_closest_enemy_in_range(search_from, BUYUCU_ARCANE_BOUNCE_RANGE, visited)
 			if not next_target:
 				break
 			current_target = next_target
@@ -7466,39 +7526,64 @@ func _run_buyucu_arcane_bounce(first_target: Node2D) -> void:
 ## kullanılmıyordu. Artık o kullanılıyor - "chain_lightning" broadcast'iyle
 ## AYNI iskelet üzerinden kendi vfx_type'ı ("arcane_skull_bounce", bkz.
 ## network_manager.gd) ile yayınlanıyor.
-func _spawn_arcane_bounce_fx(from_node: Node2D, to_node: Node2D) -> void:
+## fx_scale: Efsunlu Büyü (Q finali) kafatası %25 büyük - uzak kopya aynı ölçeği "fx_scale" ile alır.
+func _spawn_arcane_bounce_fx(from_node: Node2D, to_node: Node2D, fx_scale: float = 1.0) -> void:
 	if not is_instance_valid(to_node):
 		return
 	if FxArcaneSkullBounceScene:
 		var fx: Node2D = FxArcaneSkullBounceScene.instantiate() as Node2D
+		fx.scale = Vector2.ONE * fx_scale
 		get_tree().current_scene.add_child(fx)
 		if fx.has_method("setup"):
 			fx.setup(from_node.global_position if is_instance_valid(from_node) else global_position, to_node)
 	if NetworkManager.is_multiplayer_active and not NetworkManager.should_throttle("buyucu_chain_%d" % multiplayer.get_unique_id(), 0.05):
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "arcane_skull_bounce", to_node.global_position, {
-			"from_pos": from_node.global_position if is_instance_valid(from_node) else global_position,
-		})
+		var data: Dictionary = {"from_pos": from_node.global_position if is_instance_valid(from_node) else global_position}
+		if fx_scale != 1.0:
+			data["fx_scale"] = fx_scale
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "arcane_skull_bounce", to_node.global_position, data)
 
 
-## Varyasyon 2: Don Nova - "etrafındaki tüm yaratıkları 6 saniye boyunca
-## dondurur ve saldırı gücünün %100'ü kadar hasar verir."
+## Varyasyon 2: Don Nova - etraftaki tüm yaratıklara saldırı gücünün %100'ü + 6 sn %80 yavaşlatma (2026-10-04'e kadar 6 sn
+## donmaydı - bkz. BUYUCU_NOVA_SLOW_* üstündeki not). Evrimler: "Yükseliş" (R1) yaratıkları alanın dışına iter, "Ateş ve Buz" (RF)
+## ilk 3 sn dondurur. İkisi birlikteyken donma itme bitince başlar (C++ dünyası donuk yaratığa itiş uygulamaz - enemy_world.cpp
+## "donukken uygulanmaz"), bitişi yine etkinin 3. saniyesi.
 func _skill_buyucu_frost_nova() -> void:
-	var dmg: float = damage_bonus * BUYUCU_NOVA_DAMAGE_RATIO
+	var power: float = _buyucu_cast_power
+	var radius: float = BUYUCU_NOVA_RADIUS * power
+	var dmg: float = damage_bonus * BUYUCU_NOVA_DAMAGE_RATIO * power
 	var hit_any: bool = false
+	var push: bool = has_evo("buyucu_r1")
+	var freeze_targets: Array = []
+	var push_time: float = 0.0
 	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir" - Don
 	## Nova'nın tüm alan hasarı TEK bir kritik zarına bağlı (aynı anda vurduğu
 	## herkese aynı sonuç uygulanır, Meteor'un tek patlamasıyla AYNI mantık).
 	var is_crit: bool = _roll_ability_crit()
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in Enemy.get_enemies_near(get_tree(), global_position, radius):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
-		if global_position.distance_to(e.global_position) > BUYUCU_NOVA_RADIUS:
+		var d: float = global_position.distance_to(e.global_position)
+		if d > radius:
 			continue
 		hit_any = true
 		if e.has_method("take_damage"):
 			e.take_damage(_apply_ability_crit(dmg, is_crit), is_crit, 0.0, true)
-		if e.has_method("apply_freeze_full"):
-			e.apply_freeze_full(BUYUCU_NOVA_FREEZE_DURATION)
+		if e.has_method("apply_frost_slow"):
+			e.apply_frost_slow(BUYUCU_NOVA_SLOW_PERCENT, BUYUCU_NOVA_SLOW_DURATION)
+		if push and e.has_method("apply_skill_push"):
+			## Alanın kenarının biraz dışına: merkezdeki en uzağa, kenardaki az (en az EVO_BUYUCU_NOVA_PUSH_MIN).
+			var dist: float = maxf(EVO_BUYUCU_NOVA_PUSH_MIN, radius + EVO_BUYUCU_NOVA_PUSH_MARGIN - d)
+			var dir: Vector2 = e.global_position - global_position
+			if dir.length() < 1.0:
+				dir = Vector2.from_angle(randf() * TAU)
+			e.apply_skill_push(dir, dist)
+			## enemy.gd/C++ apply_skill_push: v0 = sqrt(2 x sönüm x mesafe) -> durma süresi v0 / sönüm.
+			push_time = maxf(push_time, sqrt(2.0 * dist / Enemy.KNOCKBACK_DECAY))
+		if has_evo("buyucu_rf"):
+			freeze_targets.append(e)
+	if not freeze_targets.is_empty():
+		var delay: float = minf(push_time, EVO_BUYUCU_NOVA_FREEZE_MAX_DELAY)
+		_buyucu_nova_freeze(freeze_targets, delay, EVO_BUYUCU_NOVA_FREEZE_TIME - delay)
 	## DÜZELTME (kullanıcı bildirimi: "büyücü kızın don nova yeteneği sanırım
 	## görünmüyor" + sonraki tur "yeni efektler yaptırılmıştı ziva agent
 	## tarafından ama görünmüyor/eskisi görünüyor"): fx_frost_nova_burst.gd
@@ -7515,15 +7600,32 @@ func _skill_buyucu_frost_nova() -> void:
 	)
 	if FxFrostNovaBurstScene:
 		var nova_fx: Node2D = FxFrostNovaBurstScene.instantiate() as Node2D
+		nova_fx.scale = Vector2.ONE * power ## Efsunlu Büyü: halka gerçek alanla birlikte büyür (max_radius 320 x ölçek)
 		get_tree().current_scene.add_child(nova_fx)
 		nova_fx.global_position = global_position
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", global_position, {
-			"scene_path": "res://scenes/fx_frost_nova_burst.tscn",
-		})
+		var nova_data: Dictionary = {"scene_path": "res://scenes/fx_frost_nova_burst.tscn"}
+		if power != 1.0:
+			nova_data["fx_scale"] = power
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", global_position, nova_data)
+	## İtici Don Nova: alanın kenarına kadar genişleyen şok dalgası (Şovalye "Sarsıcı Patlama" sayfası - zaten buz mavisi/beyaz).
+	if push:
+		_evo_world_fx(FxEvoShockwaveScene, global_position, radius)
 	_play_networked_sound("res://assets/audio/buz_asasi_freeze.mp3", 1.0, -3.0)
 	if not hit_any:
 		_spawn_floating_text("HEDEF YOK", Color(0.6, 0.85, 1.0))
+
+
+## "Ateş ve Buz" (R finali): Don Nova'nın vurduğu yaratıklar delay sn sonra (itilme bittiğinde) duration sn tam donar (bosslar
+## bağışık - enemy.gd apply_freeze_full). Oyun duraklarsa (kart ekranı) zamanlayıcı da durur.
+func _buyucu_nova_freeze(targets: Array, delay: float, duration: float) -> void:
+	if delay > 0.0:
+		await get_tree().create_timer(delay, false).timeout
+		if not is_instance_valid(self) or not is_inside_tree():
+			return
+	for e in targets:
+		if is_instance_valid(e) and e.get("is_dead") != true and e.has_method("apply_freeze_full"):
+			e.apply_freeze_full(maxf(0.1, duration))
 
 
 ## Varyasyon 3: Hortum - "etrafına 3 adet hortum gönderir, 15 saniye
@@ -7539,13 +7641,17 @@ func _skill_buyucu_frost_nova() -> void:
 ## fx_buyucu_tornado.gd'deki AYNI düzeltme notu).
 
 func _skill_buyucu_tornado() -> void:
-	var dmg: float = damage_bonus * BUYUCU_TORNADO_HIT_RATIO
-	for i in range(BUYUCU_TORNADO_COUNT):
+	## Evrimler: "Güçlü Büyü" oran x1,3, "Büyü Fırtınası" 5 hortum, Efsunlu Büyü boyut/hasar x1,25 (temas yarıçapı da büyür).
+	## Temas anı etkileri (Arcane Patlama hasar artışı, Savuran Büyü sersemletmesi): buyucu_tornado_touch.
+	var power: float = _buyucu_cast_power
+	var dmg: float = damage_bonus * _buyucu_tornado_ratio() * power
+	for i in range(_buyucu_tornado_count()):
 		if not FxBuyucuTornadoScene:
 			continue
 		var t := FxBuyucuTornadoScene.instantiate() as Node2D
 		get_tree().current_scene.add_child(t)
-		t.setup(self, global_position, BUYUCU_TORNADO_RADIUS, dmg, BUYUCU_TORNADO_HIT_INTERVAL, BUYUCU_TORNADO_DURATION, BUYUCU_TORNADO_TOUCH_RADIUS)
+		t.setup(self, global_position, BUYUCU_TORNADO_RADIUS, dmg, BUYUCU_TORNADO_HIT_INTERVAL, BUYUCU_TORNADO_DURATION, BUYUCU_TORNADO_TOUCH_RADIUS * power)
+		t.set_size_mult(power)
 		_buyucu_active_tornadoes.append(t)
 		if NetworkManager.is_multiplayer_active:
 			var instance_id: String = str(t.get_instance_id())
@@ -7577,9 +7683,14 @@ func _skill_buyucu_meteor() -> void:
 	_buyucu_meteor_channel_timer = BUYUCU_METEOR_CHANNEL_TIME
 	_buyucu_meteor_origin = global_position
 	_buyucu_meteor_spawn_timer = 0.0
+	## Efsunlu Büyü (Q finali) bu kanalın TÜM meteorlarını büyütür (patlama alanı, görsel, hasar, krater).
+	_buyucu_meteor_power = _buyucu_cast_power
 	modulate = Color(1.0, 0.55, 0.3, 1.0)
 	_spawn_ring_sized(BUYUCU_METEOR_RADIUS, Color(1.0, 0.5, 0.2))
 	_play_networked_sound("res://assets/audio/buyucu_ulti.wav", 1.0, -4.0)
+	## Evrim "Yükseliş" (R1): kanal boyunca havada (is_buyucu_airborne) - yükselme görseli buyucu_levitate.gd.
+	if has_evo("buyucu_r1"):
+		BuyucuLevitateScript.ensure(self, anim, shadow)
 
 
 func _process_buyucu_meteor(delta: float) -> void:
@@ -7595,7 +7706,8 @@ func _process_buyucu_meteor(delta: float) -> void:
 	_buyucu_meteor_channel_timer -= delta
 	_buyucu_meteor_spawn_timer -= delta
 	if _buyucu_meteor_spawn_timer <= 0.0:
-		_buyucu_meteor_spawn_timer = BUYUCU_METEOR_INTERVAL
+		## Evrim "Meteor Sağanağı" (R2): sıklık %30 artar = aralık / 1,3.
+		_buyucu_meteor_spawn_timer = BUYUCU_METEOR_INTERVAL / (EVO_BUYUCU_METEOR_RATE_MULT if has_evo("buyucu_r2") else 1.0)
 		_spawn_buyucu_meteor_strike()
 	if _buyucu_meteor_channel_timer <= 0.0:
 		_buyucu_meteor_channel_active = false
@@ -7608,10 +7720,12 @@ func _process_buyucu_meteor(delta: float) -> void:
 ## "gökten meteor düşme" hissi için okunabilir bir gecikme (Assasin Çocuk'un
 ## Gölge Hücumu düzeltmelerinden aynı ders: ani/anlaşılmaz yerine telegraph'lı).
 func _spawn_buyucu_meteor_strike() -> void:
+	var power: float = _buyucu_meteor_power
+	var impact_radius: float = BUYUCU_METEOR_IMPACT_RADIUS * power
 	var angle: float = randf() * TAU
 	var dist: float = randf_range(0.0, BUYUCU_METEOR_RADIUS)
 	var strike_pos: Vector2 = _buyucu_meteor_origin + Vector2(cos(angle), sin(angle)) * dist
-	_spawn_local_telegraph_ring(strike_pos, BUYUCU_METEOR_IMPACT_RADIUS, Color(1.0, 0.35, 0.1))
+	_spawn_local_telegraph_ring(strike_pos, impact_radius, Color(1.0, 0.35, 0.1))
 	## DÜZELTME (kullanıcı bildirimi: "yeni efektler yaptırılmıştı ziva agent
 	## tarafından" ama görünmüyorlardı): gökten düşen taş + toz izi + patlama
 	## (fx_meteor_strike.gd) BUYUCU_METEOR_TELEGRAPH_TIME'a çok yakın (0.45sn)
@@ -7622,25 +7736,38 @@ func _spawn_buyucu_meteor_strike() -> void:
 	## kullanılıyordu - tamamen alakasız bir efekt "eski efekt" olarak kalmıştı.
 	if FxMeteorStrikeScene:
 		var meteor_fx: Node2D = FxMeteorStrikeScene.instantiate() as Node2D
+		meteor_fx.scale = Vector2.ONE * power
 		get_tree().current_scene.add_child(meteor_fx)
 		if meteor_fx.has_method("setup"):
 			meteor_fx.setup(strike_pos)
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", strike_pos, {
-			"scene_path": "res://scenes/fx_meteor_strike.tscn",
-			"setup_pos": true,
-		})
+		var strike_data: Dictionary = {"scene_path": "res://scenes/fx_meteor_strike.tscn", "setup_pos": true}
+		if power != 1.0:
+			strike_data["fx_scale"] = power
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", strike_pos, strike_data)
 	await get_tree().create_timer(BUYUCU_METEOR_TELEGRAPH_TIME).timeout
-	var dmg: float = damage_bonus * BUYUCU_METEOR_HIT_RATIO
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
+	var dmg: float = damage_bonus * BUYUCU_METEOR_HIT_RATIO * power
 	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir".
 	var is_crit: bool = _roll_ability_crit()
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in Enemy.get_enemies_near(get_tree(), strike_pos, impact_radius):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
-		if strike_pos.distance_to(e.global_position) > BUYUCU_METEOR_IMPACT_RADIUS:
+		if strike_pos.distance_to(e.global_position) > impact_radius:
 			continue
 		if e.has_method("take_damage"):
 			e.take_damage(_apply_ability_crit(dmg, is_crit), is_crit, 0.0, true)
+	## Evrim "Ateş ve Buz" (R finali): düştüğü yerde yanan krater (evo_area.gd "buyucu_crater" - üstüne basan yaratık 3 sn,
+	## saniyede saldırı gücünün %30'u yanar; diğer oyuncular aynı krateri görür).
+	if has_evo("buyucu_rf"):
+		EvoAreaScript.spawn(get_tree(), "buyucu_crater", strike_pos, {
+			"radius": impact_radius * EVO_BUYUCU_CRATER_RADIUS_RATIO,
+			"duration": EVO_BUYUCU_CRATER_TIME,
+			"dps": damage_bonus * EVO_BUYUCU_CRATER_DPS_RATIO,
+			"burn_time": EVO_BUYUCU_CRATER_BURN_TIME,
+			"peer": multiplayer.get_unique_id() if NetworkManager.is_multiplayer_active else 0,
+		}, true)
 
 
 func _skill_shield() -> void:
@@ -7829,7 +7956,7 @@ func flash_paladin_barrier(attacker: Node2D = null) -> void:
 	if _paladin_barrier_instance.has_method("flash_from_angle"):
 		_paladin_barrier_instance.flash_from_angle(angle)
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "paladin_barrier_flash", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "paladin_barrier_flash", global_position, {
 			"angle": angle
 		})
 
@@ -7904,7 +8031,7 @@ func _paladin_barrier_break() -> void:
 		fx.global_position = global_position
 		get_tree().current_scene.add_child(fx)
 		if NetworkManager.is_multiplayer_active:
-			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", global_position, {
+			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", global_position, {
 				"scene_path": "res://scenes/fx_paladin_shatter.tscn"
 			})
 		
@@ -8138,7 +8265,7 @@ func _skill_invisibility() -> void:
 		add_child(fx)
 		# Broadcast stealth scene to remote players
 		if NetworkManager.is_multiplayer_active:
-			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_scene", global_position, {
+			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_scene", global_position, {
 				"scene_path": "res://scenes/fx_assasin_stealth.tscn",
 				"position": Vector2.ZERO
 			})
@@ -8432,7 +8559,7 @@ func _spawn_assasin_dash_hit_fx(pos: Vector2, dir: Vector2) -> void:
 			asp.finished.connect(asp.queue_free)
 			asp.play()
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "melee_hit", pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "melee_hit", pos, {
 			"scene_path": "res://scenes/fx_assasin_shadow_hit.tscn",
 			"rotation": facing_dir.angle(),
 			"sound_path": sound_path,
@@ -8475,7 +8602,7 @@ func _skill_assasin_dash() -> void:
 		_assasin_dash_fx = fx_scene.instantiate() as Node2D
 		add_child(_assasin_dash_fx)
 		if NetworkManager.is_multiplayer_active:
-			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_scene", global_position, {
+			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_scene", global_position, {
 				"scene_path": "res://scenes/fx_assasin_dash.tscn",
 				"position": Vector2.ZERO
 			})
@@ -9183,7 +9310,7 @@ func _spawn_matthew_claw_hit_fx(pos: Vector2, dir: Vector2) -> void:
 	fx.global_position = pos
 	fx.rotation = dir.angle()
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "muzzle_flash", pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "muzzle_flash", pos, {
 			"scene_path": FxMatthewClawSlashScene.resource_path,
 			"rotation": fx.rotation,
 		})
@@ -9227,7 +9354,7 @@ func _spawn_speed_line(dir: Vector2, color: Color) -> void:
 	fx.global_position = spawn_pos
 	fx.setup(dir, color)
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "speed_line", spawn_pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "speed_line", spawn_pos, {
 			"scene_path": "res://scenes/fx_speed_line.tscn",
 			"direction": dir,
 			"color": color,
@@ -9425,8 +9552,12 @@ const TALON_SALVO_ROTATIONS := TalonFormationMath.SALVO_ROTATIONS
 const TALON_SALVO_RADIUS := TalonFormationMath.SALVO_RADIUS ## (eski dönen kılıçla aynı yarıçaptı - o 2026-09-26da savrulan kılıca dönüştü; bkz. weapon_orbit_math.gd)
 ## Kullanıcı isteği (2026-09-28, yetenek evrimleri): "Bu yetenek aktifkenki %200 saldırı bonusunu %150ye düşürüyoruz çünkü
 ## geliştirmeye eklenecek" - taban +%150 (2.5 kat = 1/2.5 bekleme); "Ateş Seli" evrimi eski +%200'ü (1/3) geri verir.
-const TALON_SALVO_FIRE_RATE_MULT := 1.0 / 2.5 ## +%150 saldırı hızı = 2.5 kat hızlı
-const EVO_TALON_SALVO_FIRE_RATE_MULT := 1.0 / 3.0 ## +%200
+## Kullanıcı isteği (2026-10-04): "E aktifkenki saldırı hızı bonusunu %400 seviyesine yükseltip bu esnada verdiği hasar %40 azalsın.
+## Geliştirmelerden gelen saldırı hızı bonusu da ekstra %100 olsun" - taban +%400 (5 kat), "Ateş Seli" +%100 daha (+%500 = 6 kat);
+## salvo boyunca silahların hasarı %40 düşük (bkz. talon_salvo_damage_penalty, weapon.gd _fire_at/_deal_beam_tick).
+const TALON_SALVO_FIRE_RATE_MULT := 1.0 / 5.0 ## +%400 saldırı hızı = 5 kat hızlı
+const EVO_TALON_SALVO_FIRE_RATE_MULT := 1.0 / 6.0 ## +%500
+const TALON_SALVO_DAMAGE_PENALTY := 0.4 ## salvo sürerken silah hasarı -%40
 ## DÜZELTME (kullanıcı bildirimi: "Talonun E si açıkken tüm silahlar alan hasarı veriyor, skillin tek yaptığı
 ## silahı karakterin etrafında düz bir şekilde hızlıca ateş ettirmek ve isabet ettiği yaratığa normal vuruşu
 ## kadar vurdurmak, ama tabanca bile ateş asası gibi alan hasarı veriyor") - eskiden BURADA silahların gerçek
@@ -9436,12 +9567,16 @@ const EVO_TALON_SALVO_FIRE_RATE_MULT := 1.0 / 3.0 ## +%200
 ## (weapon.gd fire_in_facing_direction - mermi kendi çarpışmasıyla, yakın dövüş ışın üstündeki gerçek hedefle,
 ## bkz. weapon.gd _make_facing_direction_target) - yani bir silah ne kadar vuruyorsa o kadar.
 var _talon_weapon_salvo_active: bool = false
+## Salvo sürerken TALON_SALVO_DAMAGE_PENALTY, değilken 0 - weapon.gd `_player_stat("talon_salvo_damage_penalty")` ile okuyup
+## final_damage'i (1 - ceza) ile çarpar. Çarpımsal (talon_damage_bonus'un toplamsal yığınlarından bağımsız).
+var talon_salvo_damage_penalty: float = 0.0
 var _talon_salvo_elapsed: float = 0.0
 var _talon_salvo_angle_offset: float = 0.0
 
 
 func _skill_talon_weapon_salvo() -> void:
 	_talon_weapon_salvo_active = true
+	talon_salvo_damage_penalty = TALON_SALVO_DAMAGE_PENALTY
 	_talon_salvo_elapsed = 0.0
 	_talon_salvo_angle_offset = 0.0
 	_evo_talon_spin_hit_cd.clear()
@@ -9507,6 +9642,7 @@ func _talon_salvo_spin_mult() -> float:
 ## ikonlarını normal (WEAPON_ICON_SLOTS tabanlı) konumuna döndürür.
 func _end_talon_weapon_salvo() -> void:
 	_talon_weapon_salvo_active = false
+	talon_salvo_damage_penalty = 0.0
 	if has_evo("talon_e4"):
 		skill2_speed_multiplier = 1.0
 	if _evo_talon_ward_fx != null and is_instance_valid(_evo_talon_ward_fx):
@@ -9869,7 +10005,7 @@ func _matthew_dome_explosion() -> void:
 		fx.global_position = global_position
 		get_tree().current_scene.add_child(fx)
 		if NetworkManager.is_multiplayer_active:
-			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", global_position, {
+			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", global_position, {
 				"scene_path": "res://scenes/fx_matthew_explosion.tscn"
 			})
 
@@ -9878,7 +10014,7 @@ func _matthew_dome_explosion() -> void:
 func _broadcast_skill_scene(scene_path: String) -> void:
 	if not NetworkManager.is_multiplayer_active:
 		return
-	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_scene", global_position, {
+	NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_scene", global_position, {
 		"scene_path": scene_path,
 		"position": Vector2.ZERO
 	})
@@ -9935,7 +10071,7 @@ func _play_and_broadcast_skill_fx(scene: PackedScene, props: Dictionary = {}) ->
 		}
 		if not props.is_empty():
 			data["props"] = props
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_scene", global_position, data)
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_scene", global_position, data)
 	return fx
 
 
@@ -9973,7 +10109,7 @@ func _spawn_burst(color: Color) -> void:
 	get_tree().create_timer(1.2).timeout.connect(p.queue_free)
 	# Broadcast to remote players
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_burst", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_burst", global_position, {
 			"radius": 100.0,
 			"color": color
 		})
@@ -10000,7 +10136,7 @@ func _spawn_ring(color: Color) -> void:
 	ring.color = color
 	# Broadcast to remote players
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "skill_ring", global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_ring", global_position, {
 			"radius": 120.0,
 			"color": color
 		})
@@ -10304,7 +10440,7 @@ func _vampir_hit_fx(pos: Vector2) -> void:
 func _vampir_broadcast_fx(kind: String, pos: Vector2, points: PackedVector2Array = PackedVector2Array(), text: String = "") -> void:
 	if not NetworkManager.is_multiplayer_active:
 		return
-	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "vampir_fx", pos, {
+	NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "vampir_fx", pos, {
 		"kind": kind,
 		"points": points,
 		"text": text,
@@ -10913,7 +11049,7 @@ func _spirit_blink_fx(kind: String, from: Vector2, to: Vector2) -> void:
 	get_tree().current_scene.add_child(fx)
 	fx.call("setup", kind, from, to)
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "spirit_blink", from, {"kind": kind, "to": to})
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "spirit_blink", from, {"kind": kind, "to": to})
 
 
 ## ---------- Dükkan ----------
@@ -10957,7 +11093,7 @@ func _spirit_cancel_channel(text: String) -> void:
 		_spirit_channel_sound.queue_free()
 	_spirit_channel_sound = null
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "spirit_cancel", global_position, {"node": "FxSpiritDukkan"})
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "spirit_cancel", global_position, {"node": "FxSpiritDukkan"})
 	if not text.is_empty():
 		_spawn_floating_text(text, Color(1.0, 0.7, 0.3))
 	## Işınlanma tamamlanmadığı için tam bekleme YOK - sadece spam'i önleyen kısa kilit.
@@ -11444,7 +11580,7 @@ func _hadime_launch_curse() -> bool:
 	var to: Vector2 = HadimeMath.enemy_hit_point(target)
 	HadimeMath.spawn_fx(get_tree().current_scene, "curse", {"from": from, "to": to, "target": target, "on_land": _on_hadime_curse_land})
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hadime_fx", from, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hadime_fx", from, {
 			"kind": "curse",
 			"to": to,
 			"net_id": int(target.get_meta("network_enemy_id", 0)),
@@ -11892,6 +12028,9 @@ const EVO_MATTHEW_R_CD_MULT := 0.75 ## Çabuk Fedakarlık
 const EVO_MATTHEW_R_SLOW := 0.3 ## Ağır Pençeler
 const EVO_MATTHEW_R_SLOW_TIME := 1.5
 const EVO_MATTHEW_SPEED_LINE_COLOR := Color(1.0, 0.82, 0.4, 0.55)
+## Shaman (2026-10-04) - kart metinleri skill_evolutions.gd DEFS[12]; golem sayıları shaman_golem_math.gd EVO_*, totem sayıları totem_*.gd
+const EVO_SHAMAN_Q_CD_MULT := 0.8 ## Çabuk Totem: bekleme -%20
+const EVO_SHAMAN_Q_LIFESTEAL := 0.05 ## Ruh Emici: totem isabetlerinde +%5 can çalma (oyunun can çalma kuralı: isabet başına o ihtimalle +1 can)
 ## Assasin Çocuk (2026-09-30)
 const EVO_ASSASIN_E_EXTRA_DURATION := 2.0 ## Uzun Gölge
 const EVO_ASSASIN_E_AP_BONUS := 0.25 ## Pusu: +%25 saldırı gücü (Gölge Adımı aktifken)
@@ -11915,6 +12054,36 @@ const EVO_ASSASIN_TRAIL_DAMAGE_RATIO := 0.8
 const EVO_ASSASIN_TRAIL_WIDTH := 18.0 ## şerit çizgisine bu mesafedeki yaratıklar "temas" eder (dünya birimi)
 const EVO_ASSASIN_TRAIL_HIT_INTERVAL := 0.5 ## aynı yaratık üst üste binen şeritlerden en sık bu aralıkla hasar alır
 const EVO_ASSASIN_R_CD_MULT := 0.75 ## Çabuk Gölge
+## Büyücü Kız (2026-10-04) - kart metinleri skill_evolutions.gd DEFS[4]. E/R evrimleri yuvadaki İKİ varyasyona birden uygulanır.
+const EVO_BUYUCU_Q1_SHIELD_RATIO := 0.10 ## Kalkan Akışı: set değişiminde maks. kalkanın %10'u
+const EVO_BUYUCU_Q1_COOLDOWN := 10.0
+const EVO_BUYUCU_Q2_SPEED := 0.20 ## Büyü Rüzgarı: her yetenekte 2 sn +%20 hareket hızı
+const EVO_BUYUCU_Q2_TIME := 2.0
+const EVO_BUYUCU_SPEED_LINE_COLOR := Color(0.72, 0.45, 1.0, 0.6)
+const EVO_BUYUCU_ALL_CD_MULT := 0.85 ## Akıcı Büyü: Q dahil tüm yetenekler -%15
+const EVO_BUYUCU_COST_MULT := 0.75 ## Tutumlu Büyü: kalkan bedeli -%25
+const EVO_BUYUCU_ENCHANT_EVERY := 5 ## Efsunlu Büyü: Q hariç her 5 kullanımda bir varyasyon efsunlanır
+const EVO_BUYUCU_ENCHANT_POWER := 1.25 ## efsunlu dökümde boyut ve hasar
+const EVO_BUYUCU_ARCANE_BLAST_RATIO := 0.75 ## Arcane Patlama: isabetin %75'i çevreye
+const EVO_BUYUCU_ARCANE_BLAST_RADIUS := 75.0 ## dünya birimi (kullanıcı vermedi)
+const EVO_BUYUCU_ARCANE_BLAST_FX_BASE := 96.0 ## fx_mage_passive_burst.gd MAX_R - efekt bu yarıçapa ölçeklenir
+const EVO_BUYUCU_TORNADO_VULN := 0.20 ## Arcane Patlama: hortuma yakalanan +%20 hasar alır (enemy.gd "vuln")
+const EVO_BUYUCU_TORNADO_VULN_TIME := 2.0 ## her temasta tazelenir (hortum aynı yaratığa saniyede bir değer)
+const EVO_BUYUCU_E_CD_MULT := 0.8 ## Çabuk Büyü: Arcane Lanet + Hortum -%20
+const EVO_BUYUCU_E_RATIO_MULT := 1.3 ## Güçlü Büyü: oranlar x1,3 (%80 -> %104, %90 -> %117)
+const EVO_BUYUCU_ARCANE_PUSH := 45.0 ## Savuran Büyü: "bir miktar" (px, enemy.gd apply_skill_push)
+const EVO_BUYUCU_TORNADO_STUN := 1.0
+const EVO_BUYUCU_ARCANE_BOUNCES := 7 ## Büyü Fırtınası
+const EVO_BUYUCU_TORNADO_COUNT := 5
+const EVO_BUYUCU_NOVA_PUSH_MARGIN := 24.0 ## Yükseliş: Don Nova alanın kenarının bu kadar dışına iter
+const EVO_BUYUCU_NOVA_PUSH_MIN := 50.0
+const EVO_BUYUCU_METEOR_RATE_MULT := 1.3 ## Meteor Sağanağı: sıklık +%30
+const EVO_BUYUCU_CRATER_TIME := 5.0 ## Ateş ve Buz: krater ömrü (kullanıcı vermedi - kanal kadar)
+const EVO_BUYUCU_CRATER_DPS_RATIO := 0.30 ## yanma: saniyede saldırı gücünün %30'u
+const EVO_BUYUCU_CRATER_BURN_TIME := 3.0
+const EVO_BUYUCU_CRATER_RADIUS_RATIO := 0.8 ## krater = meteor patlama alanının bu oranı
+const EVO_BUYUCU_NOVA_FREEZE_TIME := 3.0 ## Ateş ve Buz: Don Nova'nın ilk 3 sn'si donma
+const EVO_BUYUCU_NOVA_FREEZE_MAX_DELAY := 0.75 ## itmeyle birlikteyken donma itme bitince başlar (en geç)
 
 ## ---- Evrim efektleri (tools/gen_evolution_fx.py -> assets/fx/evolution). Sahneler ilk kullanımda yüklenir (preload DEĞİL):
 ## yeni sayfalar editörde henüz içe aktarılmamışsa player.gd'nin derlenmesini bozmasın, sadece efekt çıkmasın. Dünya konumlu
@@ -11984,6 +12153,10 @@ var FxEvoAssasinEvadeScene: PackedScene:
 var FxEvoKunaiHitScene: PackedScene:
 	get:
 		return _evo_scene("res://scenes/fx_evo_kunai_hit.tscn")
+## Büyücü Kız "Efsunlu Büyü": efsunlu varyasyon dökülünce ayak altında altın-mor rün parlaması + yükselen kıvılcımlar.
+var FxEvoBuyucuEnchantScene: PackedScene:
+	get:
+		return _evo_scene("res://scenes/fx_evo_buyucu_enchant.tscn")
 
 ## Sahip olunan evrimler (id -> true).
 var skill_evolutions: Dictionary = {}
@@ -12023,6 +12196,12 @@ var _matthew_patience_was_active: bool = false
 var _assasin_empower_fx: Node = null
 var _assasin_clone: Variant = null ## evo_area.gd "assasin_clone" (tipsiz: güvenlik süresinde kendi kendine silinebilir)
 var _evo_assasin_evade_until_msec: int = 0
+## Büyücü Kız
+var _evo_buyucu_q1_ready_msec: int = 0
+var _evo_buyucu_speed_until_msec: int = 0
+var _buyucu_enchant_counter: int = 0
+var _buyucu_enchanted: Dictionary = {} ## Efsunlu Büyü: varyasyon (0-3) -> true, bir sonraki dökümünde tüketilir
+var _buyucu_cast_power: float = 1.0 ## o anki dökümün boyut/hasar çarpanı (efsunluysa EVO_BUYUCU_ENCHANT_POWER)
 
 
 func has_evo(evo_id: String) -> bool:
@@ -12058,6 +12237,10 @@ func apply_skill_evolution(evo_id: String, quiet: bool = false) -> void:
 		"vampir_r1":
 			if is_instance_valid(_vampir_swarm) and _vampir_swarm.has_method("set_bat_count"):
 				_vampir_swarm.set_bat_count(_vampir_bat_count())
+		"shaman_q1":
+			## Yeni 3. yük hemen dolmaya başlasın (Assasin "Üçüncü Hamle" ile aynı).
+			if shaman_q_charges < get_shaman_q_max_charges() and _shaman_q_recharge_timer <= 0.0:
+				_shaman_start_q_recharge()
 		"assasin_q1":
 			## Yeni 3. yük hemen dolmaya başlasın (Korsan "Dolu Cephanelik" ile aynı).
 			if assasin_dash2_charges < get_assasin_dash2_max_charges() and _assasin_dash2_recharge_timer <= 0.0:
@@ -12120,11 +12303,19 @@ func _evo_timing(skill_id: int, base: Dictionary) -> Dictionary:
 				dur_add += EVO_MATTHEW_E_EXTRA_DURATION
 			elif skill_id == 9 and has_evo("matthew_r2"):
 				cd_mult *= EVO_MATTHEW_R_CD_MULT
+		12: ## Shaman: Q 27 (Saldırı Totemi - yük başına bekleme, bkz. _shaman_q_recharge_time)
+			if skill_id == 27 and has_evo("shaman_q3"):
+				cd_mult *= EVO_SHAMAN_Q_CD_MULT
 		5: ## Assasin Çocuk: E 30 (Gölge Adımı), R 16 (Gölge Hücumu) - Q (5) yük tabanlı, bkz. get_assasin_dash2_max_charges
 			if skill_id == 30 and has_evo("assasin_e1"):
 				dur_add += EVO_ASSASIN_E_EXTRA_DURATION
 			elif skill_id == 16 and has_evo("assasin_r2"):
 				cd_mult *= EVO_ASSASIN_R_CD_MULT
+		4: ## Büyücü Kız: Q 3 (Büyü Değişimi), varyasyonlar 22 Arcane / 23 Don Nova / 24 Hortum / 25 Meteor (_skill2_timing_for)
+			if (skill_id == 3 or (skill_id >= 22 and skill_id <= 25)) and has_evo("buyucu_q3"):
+				cd_mult *= EVO_BUYUCU_ALL_CD_MULT
+			if (skill_id == 22 or skill_id == 24) and has_evo("buyucu_e2"):
+				cd_mult *= EVO_BUYUCU_E_CD_MULT
 	if cd_mult == 1.0 and dur_add == 0.0:
 		return base
 	var t: Dictionary = base.duplicate()
@@ -12190,7 +12381,19 @@ func _evo_move_bonus() -> float:
 		b += EVO_MATTHEW_PATIENCE_SPEED
 	if _assasin_invis_active() and has_evo("assasin_e4"):
 		b += EVO_ASSASIN_E_SPEED
+	if Time.get_ticks_msec() < _evo_buyucu_speed_until_msec:
+		b += EVO_BUYUCU_Q2_SPEED ## Büyücü "Büyü Rüzgarı": her yetenekten sonra 2 sn
 	return b
+
+
+## Shaman "Ruh Emici" (shaman_q4): Saldırı Totemi'nin ATEŞ isabetlerinde (totem_attack.gd _tick) +%5 can çalma. Totem take_damage'ı
+## çağırmadan hemen önce set eder, hemen sonra sıfırlar - enemy.take_damage -> on_dealer_hit -> on_damage_dealt eşzamanlı olduğu
+## için bonus yalnızca o isabete uygulanır (silah isabetleri etkilenmez). Çalınan can doğrudan bu oyuncuya (kaster) yenilenir.
+var evo_hit_lifesteal: float = 0.0
+
+
+func get_shaman_totem_lifesteal() -> float:
+	return EVO_SHAMAN_Q_LIFESTEAL if has_evo("shaman_q4") else 0.0
 
 
 func _evo_lifesteal_bonus() -> float:
@@ -12361,7 +12564,7 @@ func _evo_world_fx(scene: PackedScene, pos: Vector2, radius: float = 0.0, rot: f
 	var data: Dictionary = {"scene_path": scene.resource_path, "rotation": rot}
 	if radius > 0.0:
 		data["radius"] = radius
-	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, data)
+	NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", pos, data)
 
 
 ## ---------- Talon ----------
@@ -12604,7 +12807,7 @@ func _assasin_teleport_to_clone() -> void:
 	_knockback_velocity = Vector2.ZERO
 	_play_networked_sound(EVO_ASSASIN_TELEPORT_SOUND, 1.35, -6.0)
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "teleport_snap", to, {})
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "teleport_snap", to, {})
 
 
 ## "Rüzgar Gibi": hamleden sonraki pencerede yetenek kaynaklı %100 sıvışma (take_damage effective_dodge'a eklenir).
@@ -12673,6 +12876,136 @@ func evo_area_hit(e: Node, dmg: float, kind: String, dir: Vector2) -> void:
 		_evo_world_fx(FxEvoKunaiHitScene, (e as Node2D).global_position, 0.0, rot, "assasin_evo_hit", 0.06)
 
 
+## ---------- Büyücü Kız (2026-10-04) ----------
+## Q = Büyü Değişimi (_skill_buyucu_switch_variation), E/R = varyasyonlar (_buyucu_try_activate_variation[_r] ->
+## _buyucu_cast_variation). Süre/bekleme evrimleri _evo_timing'de, hız _evo_move_bonus'ta, hava (Yükseliş) take_damage +
+## is_invisible_now'da. Dünyada duran krater evo_area.gd "buyucu_crater"; buton parıltısı hud.gd -> skill_icon.gd set_enchant_glow.
+
+func _buyucu_arcane_bounce_count() -> int:
+	return EVO_BUYUCU_ARCANE_BOUNCES if has_evo("buyucu_ef") else BUYUCU_ARCANE_BOUNCE_COUNT
+
+
+func _buyucu_tornado_count() -> int:
+	return EVO_BUYUCU_TORNADO_COUNT if has_evo("buyucu_ef") else BUYUCU_TORNADO_COUNT
+
+
+func _buyucu_arcane_ratio() -> float:
+	return BUYUCU_ARCANE_BOUNCE_RATIO * (EVO_BUYUCU_E_RATIO_MULT if has_evo("buyucu_e3") else 1.0)
+
+
+func _buyucu_tornado_ratio() -> float:
+	return BUYUCU_TORNADO_HIT_RATIO * (EVO_BUYUCU_E_RATIO_MULT if has_evo("buyucu_e3") else 1.0)
+
+
+## Varyasyonun kalkan bedeli çarpanı: "Meteor Sağanağı" Don Nova'yı bedelsiz yapar, "Tutumlu Büyü" x0,75.
+func _buyucu_shield_cost_mult(variation: int) -> float:
+	if variation == 1 and has_evo("buyucu_r2"):
+		return 0.0
+	return EVO_BUYUCU_COST_MULT if has_evo("buyucu_q4") else 1.0
+
+
+## E ve R'nin ortak dökümü (bedel/bekleme çağıranda ödendi): Efsunlu Büyü'yü tüketir (bu dökümün _buyucu_cast_power'ı), yeteneği
+## çalıştırır, sonra pasifi ve sayaçları işletir. Hedefsiz Arcane Lanet efsunu harcamaz (geri verilir).
+func _buyucu_cast_variation(variation: int, slot: String) -> void:
+	var enchanted: bool = _buyucu_enchanted.has(variation)
+	_buyucu_cast_power = EVO_BUYUCU_ENCHANT_POWER if enchanted else 1.0
+	var cast_ok: bool = true
+	match variation:
+		0: cast_ok = _skill_buyucu_arcane_curse()
+		1: _skill_buyucu_frost_nova()
+		2: _skill_buyucu_tornado()
+		3: _skill_buyucu_meteor()
+	_buyucu_cast_power = 1.0
+	if enchanted and cast_ok:
+		_buyucu_enchanted.erase(variation)
+		_spawn_floating_text("EFSUNLU!", Color(1.0, 0.82, 0.45), false, -58.0)
+		_play_and_broadcast_skill_fx(FxEvoBuyucuEnchantScene)
+	_buyucu_on_skill_used(slot, variation)
+
+
+## PASİF "Büyü Dalgası" + Q evrimleri - her yetenek kullanımında (Q set değişimi dahil; slot "skill"/"skill2"/"skill3").
+func _buyucu_on_skill_used(slot: String, _variation: int) -> void:
+	for w in owned_weapon_nodes:
+		if is_instance_valid(w) and w.has_method("arcane_surge"):
+			w.arcane_surge(BUYUCU_PASSIVE_SHOT_MULT)
+	if has_evo("buyucu_q2"):
+		_evo_buyucu_speed_until_msec = Time.get_ticks_msec() + int(EVO_BUYUCU_Q2_TIME * 1000.0)
+	if slot != "skill" and has_evo("buyucu_qf"):
+		_buyucu_enchant_counter += 1
+		if _buyucu_enchant_counter >= EVO_BUYUCU_ENCHANT_EVERY:
+			_buyucu_enchant_counter = 0
+			_buyucu_grant_enchant()
+
+
+## "Efsunlu Büyü" (Q finali): henüz efsunlu olmayan, yuvası açık varyasyonlardan rastgele biri efsunlanır - o varyasyonu taşıyan
+## buton parıldar (hud.gd is_buyucu_slot_enchanted); diğer settedeyse Q butonu sönük parıldar (set değiştir ipucu).
+func _buyucu_grant_enchant() -> void:
+	var pool: Array = []
+	for v in range(BUYUCU_VARIATION_COUNT):
+		if _buyucu_enchanted.has(v):
+			continue
+		if not is_skill_slot_unlocked("skill2" if BUYUCU_SET_E_VARIATIONS.has(v) else "skill3"):
+			continue
+		pool.append(v)
+	if pool.is_empty():
+		return
+	var pick: int = pool[randi() % pool.size()]
+	_buyucu_enchanted[pick] = true
+	_spawn_floating_text("EFSUN: %s" % BUYUCU_VARIATION_NAMES[pick], Color(1.0, 0.82, 0.45), false, -58.0)
+
+
+func is_buyucu_variation_enchanted(variation: int) -> bool:
+	return _buyucu_enchanted.has(variation)
+
+
+## HUD: o anki setin E ("skill2") / R ("skill3") butonu efsunlu mu; "skill" = efsunlu bir varyasyon DİĞER sette (Q ipucu).
+func is_buyucu_slot_enchanted(slot: String) -> bool:
+	if GameManager.selected_char_id != 4 or _buyucu_enchanted.is_empty():
+		return false
+	var e_now: int = BUYUCU_SET_E_VARIATIONS[buyucu_variation_set]
+	var r_now: int = BUYUCU_SET_R_VARIATIONS[buyucu_variation_set]
+	match slot:
+		"skill2":
+			return _buyucu_enchanted.has(e_now)
+		"skill3":
+			return _buyucu_enchanted.has(r_now)
+		"skill":
+			for v in _buyucu_enchanted:
+				if int(v) != e_now and int(v) != r_now:
+					return true
+	return false
+
+
+## "Arcane Patlama" (E1): Arcane Lanet'in isabet noktasında mühür patlaması - çevredeki yaratıklara (vurulan hariç) dmg, alan
+## hasarı (can çalma alan oranıyla). Görsel: eski "Kadim Patlama" pasifinin mor mühür patlaması (fx_mage_passive_burst).
+func _buyucu_arcane_explode(pos: Vector2, dmg: float, is_crit: bool, exclude: Node, power: float = 1.0) -> void:
+	var r: float = EVO_BUYUCU_ARCANE_BLAST_RADIUS * power
+	for e in Enemy.get_enemies_near(get_tree(), pos, r):
+		if e == exclude or not is_instance_valid(e) or e.get("is_dead") == true or not e.has_method("take_damage"):
+			continue
+		if pos.distance_to((e as Node2D).global_position) > r:
+			continue
+		e.take_damage(dmg, is_crit, 0.0, true)
+	_spawn_world_explosion_fx(pos, r / EVO_BUYUCU_ARCANE_BLAST_FX_BASE)
+
+
+## fx_buyucu_tornado.gd temas anı (hasardan ÖNCE - bu temas da artıştan yararlansın): "Arcane Patlama" +%20 alınan hasar
+## (enemy.gd "vuln", çok oyunculuda host'a gider), "Savuran Büyü" 1 sn sersemletme (bosslar bağışık).
+func buyucu_tornado_touch(e: Node) -> void:
+	if not is_instance_valid(e):
+		return
+	if has_evo("buyucu_e1") and e.has_method("apply_element"):
+		e.apply_element("vuln", {"pct": EVO_BUYUCU_TORNADO_VULN, "dur": EVO_BUYUCU_TORNADO_VULN_TIME})
+	if has_evo("buyucu_e4") and e.has_method("apply_stun"):
+		e.apply_stun(EVO_BUYUCU_TORNADO_STUN)
+
+
+## "Yükseliş" (R1): Meteor kanalı boyunca havada - yaratıklar hedef almaz (is_invisible_now: GDScript hedeflemesi + C++ köprüsü)
+## ve hiçbir hasar işlemez (take_damage). Uzak kukla main.gd extra["byc_fly"] ile aynı görünümü kurar, host'ta da hedef dışı.
+func is_buyucu_airborne() -> bool:
+	return _buyucu_meteor_channel_active and has_evo("buyucu_r1") and not is_dead and not is_downed
+
+
 ## ---------- Her kare ----------
 func _process_evo(delta: float) -> void:
 	## Elara "Kaybolan Gölge" görünmezliğinin sonu.
@@ -12705,6 +13038,8 @@ func _process_evo(delta: float) -> void:
 		line_color = Color(1.0, 0.6, 0.25, 0.7)
 	elif _assasin_invis_active() and has_evo("assasin_e4"):
 		line_color = EVO_ASSASIN_SPEED_LINE_COLOR ## Sessiz Adımlar: koyu mor
+	elif Time.get_ticks_msec() < _evo_buyucu_speed_until_msec:
+		line_color = EVO_BUYUCU_SPEED_LINE_COLOR ## Büyücü "Büyü Rüzgarı": arcane moru
 	if line_color.a > 0.0 and velocity.length() > 20.0:
 		_evo_speed_line_timer -= delta
 		if _evo_speed_line_timer <= 0.0:
@@ -12746,6 +13081,7 @@ func _is_shaman() -> bool:
 
 func _skill_shaman_golem() -> void:
 	_shaman_golem_active = true
+	_golem_evo_apply(true)
 	_golem_pending_kind = ""
 	_golem_auto_timer = 0.35 ## dönüşüm parlaması bitmeden ilk darbe inmesin
 	_vampir_capture_weapon_offsets()
@@ -12761,6 +13097,7 @@ func _end_shaman_golem() -> void:
 	if not _shaman_golem_active:
 		return
 	_shaman_golem_active = false
+	_golem_evo_apply(false)
 	_golem_pending_kind = ""
 	_shaman_golem_stop_jump()
 	ShamanGolemMath.apply_overhead_lift(self, false)
@@ -12790,7 +13127,7 @@ func _process_shaman_golem(delta: float) -> void:
 	if _shaman_golem_active and (is_dead or is_downed):
 		_shaman_golem_on_go_down()
 	_process_vampir_weapon_pull(delta)
-	ShamanGolemMath.apply_overhead_lift(self, _shaman_golem_active)
+	ShamanGolemMath.apply_overhead_lift(self, _shaman_golem_active, ShamanGolemMath.EVO_BIG_SCALE_MULT if has_evo("shaman_rf") else 1.0)
 	_golem_q_cd = maxf(0.0, _golem_q_cd - delta)
 	_golem_e_cd = maxf(0.0, _golem_e_cd - delta)
 	if not _shaman_golem_active or is_dead or is_downed:
@@ -12808,7 +13145,7 @@ func _process_shaman_golem(delta: float) -> void:
 	if _golem_auto_timer > 0.0 or _golem_pending_kind != "" or _shaman_golem_jumping or is_in_merchant_zone:
 		return
 	## Yakında yaratık yoksa sayaç 0'da bekler - yaklaşan ilk yaratığa hemen iner.
-	if not _golem_enemy_near(ShamanGolemMath.AUTO_RADIUS):
+	if not _golem_enemy_near(ShamanGolemMath.AUTO_RADIUS * _golem_area_mult()):
 		return
 	var interval: float = _golem_auto_interval()
 	_golem_auto_timer = interval
@@ -12819,6 +13156,52 @@ func _process_shaman_golem(delta: float) -> void:
 ## Aralık = taban x oyuncunun saldırı aralığı çarpanı (kart/eşya/ruhani saldırı hızı, Elara pasifi - silahlarla aynı kaynak).
 func _golem_auto_interval() -> float:
 	return maxf(ShamanGolemMath.AUTO_MIN_INTERVAL, ShamanGolemMath.AUTO_BASE_INTERVAL * get_attack_interval_mult())
+
+
+## ---- Shaman R evrimleri (kart metinleri skill_evolutions.gd DEFS[12]; sayılar shaman_golem_math.gd EVO_*) ----
+var _golem_big_orig_scale: Vector2 = Vector2.ZERO
+var _golem_big_ap_added: float = 0.0
+
+
+## "Dev Golem" (shaman_rf): form boyunca darbe/sarsıntı/iniş alanları +%30.
+func _golem_area_mult() -> float:
+	return ShamanGolemMath.EVO_BIG_AREA_MULT if _shaman_golem_active and has_evo("shaman_rf") else 1.0
+
+
+## "Dev Golem": form boyunca boyut +%30 (char_base_anim_scale TABAN olduğundan ateş sarsıntısı vb. sonrası da korunur) ve +%15 saldırı
+## gücü (eklenen miktar tutulur, bitişte aynısı geri alınır - arada level atlanırsa kazanılan güç kaybolmasın; Elara "Güçlü Tetik" deseni).
+## Uzak kukla boyutu remote_player.gd _apply_shaman_golem_scale ile aynı çarpanı klip adından + has_evo'dan türetir.
+func _golem_evo_apply(on: bool) -> void:
+	if on:
+		if not has_evo("shaman_rf"):
+			return
+		if _golem_big_orig_scale == Vector2.ZERO:
+			_golem_big_orig_scale = char_base_anim_scale
+		char_base_anim_scale = _golem_big_orig_scale * ShamanGolemMath.EVO_BIG_SCALE_MULT
+		if is_instance_valid(anim):
+			anim.scale = char_base_anim_scale
+		_golem_big_ap_added = damage_bonus * ShamanGolemMath.EVO_BIG_AP_BONUS
+		damage_bonus += _golem_big_ap_added
+		_apply_weapon_bonuses()
+	else:
+		if _golem_big_orig_scale != Vector2.ZERO:
+			char_base_anim_scale = _golem_big_orig_scale
+			_golem_big_orig_scale = Vector2.ZERO
+			if is_instance_valid(anim):
+				anim.scale = char_base_anim_scale
+		if _golem_big_ap_added != 0.0:
+			damage_bonus -= _golem_big_ap_added
+			_golem_big_ap_added = 0.0
+			_apply_weapon_bonuses()
+
+
+## "Taşın Dirilişi" (shaman_r2): formdayken biten her öldürme başına eksik canın %1'i yenilenir (öldürme bildirimi on_enemy_killed/_remote).
+func _shaman_golem_on_kill() -> void:
+	if not _shaman_golem_active or is_dead or is_downed or not has_evo("shaman_r2"):
+		return
+	var missing: float = max_health - health
+	if missing > 0.0:
+		heal(missing * ShamanGolemMath.EVO_HEAL_MISSING_PER_KILL)
 
 
 func _golem_cd(base: float) -> float:
@@ -12849,13 +13232,13 @@ func _shaman_golem_start_slam(kind: String, speed: float) -> void:
 
 
 func _shaman_golem_auto_hit() -> void:
-	_golem_area_damage(global_position, ShamanGolemMath.AUTO_RADIUS, ShamanGolemMath.AUTO_DAMAGE_RATIO, 0.0)
+	_golem_area_damage(global_position, ShamanGolemMath.AUTO_RADIUS * _golem_area_mult(), ShamanGolemMath.AUTO_DAMAGE_RATIO, 0.0)
 	_shaman_golem_world_fx("slam", _golem_ground_pos())
 	_play_skill_sfx("shaman_golem_slam")
 
 
 func _shaman_golem_quake_hit() -> void:
-	_golem_area_damage(global_position, ShamanGolemMath.Q_RADIUS, ShamanGolemMath.Q_DAMAGE_RATIO, ShamanGolemMath.Q_STUN_TIME)
+	_golem_area_damage(global_position, ShamanGolemMath.Q_RADIUS * _golem_area_mult(), ShamanGolemMath.Q_DAMAGE_RATIO, ShamanGolemMath.Q_STUN_TIME)
 	_shaman_golem_world_fx("quake", _golem_ground_pos())
 	_play_skill_sfx("shaman_golem_quake")
 
@@ -12947,7 +13330,7 @@ func _golem_safe_jump_end(start: Vector2, dir: Vector2) -> Vector2:
 func _shaman_golem_land() -> void:
 	if not _shaman_golem_active or is_dead:
 		return
-	_golem_area_damage(global_position, ShamanGolemMath.E_RADIUS, ShamanGolemMath.E_DAMAGE_RATIO, 0.0, ShamanGolemMath.E_PULL_KEEP)
+	_golem_area_damage(global_position, ShamanGolemMath.E_RADIUS * _golem_area_mult(), ShamanGolemMath.E_DAMAGE_RATIO, 0.0, ShamanGolemMath.E_PULL_KEEP)
 	_shaman_golem_world_fx("land", _golem_ground_pos())
 
 
@@ -12996,10 +13379,17 @@ func _shaman_golem_world_fx(kind: String, pos: Vector2) -> void:
 	var fx: Node2D = scene.instantiate() as Node2D
 	if fx == null:
 		return
+	## "Dev Golem" (shaman_rf): efektler de alan kadar büyür; diğer oyunculara "fx_scale" ile aynı ölçek gider (network_manager hitscan_impact).
+	var fx_scale: float = _golem_area_mult()
+	if not is_equal_approx(fx_scale, 1.0):
+		fx.scale = Vector2.ONE * fx_scale
 	get_tree().current_scene.add_child(fx)
 	fx.global_position = pos
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {"scene_path": path})
+		var payload: Dictionary = {"scene_path": path}
+		if not is_equal_approx(fx_scale, 1.0):
+			payload["fx_scale"] = fx_scale
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", pos, payload)
 
 
 ## HUD (hud.gd): golem formunda Q/E ikonları form hâllerini gösterir - ad/açıklama/ikon characters.gd DEFS[12]

@@ -24,6 +24,10 @@ extends Node2D
 ##                  şeridi; çizgiye p.width'ten yakın yaratık saldırı gücünün %80'i hasar alır - aynı yaratık tüm şeritlerden en
 ##                  sık p.hit_interval'de bir (üst üste binen şeritler katlanmasın). p: to, ground, duration, dmg, width,
 ##                  hit_interval, peer.
+## Büyücü Kız (2026-10-04):
+##  "buyucu_crater" - "Ateş ve Buz" (R finali): her meteorun düştüğü yerde kalan, içi kor çatlaklı yanan krater. Üstüne basan
+##                  yaratık yanar: 3 sn boyunca saniyede saldırı gücünün %30'u (enemy.gd apply_burn - yenilenir, katlanmaz). Korsan
+##                  ateşiyle aynı açılış/kapanış solması. p: radius, duration, dps, burn_time, peer.
 
 const SELF_PATH := "res://scripts/evo_area.gd"
 const EnemyAbilities := preload("res://scripts/enemy_abilities.gd")
@@ -54,6 +58,12 @@ const KUNAI_FADE := 0.08 ## menzil sonunda / duvarda sönme
 const TRAIL_CHECK_INTERVAL := 0.1
 ## Gölge şeridi karoları arası (dünya birimi) - karo sayfası 16 sanat px (~19 birim) genişliğinde, hafif üst üste biner.
 const TRAIL_TILE_STEP := 13.0
+## Büyücü krateri: sayfa (buyucu_crater - tools/gen_buyucu_evo_fx.py) kül halesinin yatay yarıçapı (sanat px) ve zemin merkezinin
+## karenin ortasına göre yeri (sayfa merkezi = zemin merkezi) - görsel radius'a korsan ateşi gibi ölçeklenir. Basma kontrolü 2/sn.
+const CRATER_FRAMES_PATH := "res://assets/fx/evolution/buyucu_crater_frames.tres"
+const CRATER_ART_RADIUS := 44.0
+const CRATER_GROUND_ART := Vector2.ZERO
+const CRATER_TICK := 0.5
 
 static var _by_id: Dictionary = {}
 static var _next_local_id: int = 1
@@ -150,6 +160,15 @@ func _ready() -> void:
 			_setup_kunai()
 		"assasin_trail":
 			_setup_trail()
+		"buyucu_crater":
+			var cr: float = float(p.get("radius", 56.0))
+			_sprite.sprite_frames = _frames(CRATER_FRAMES_PATH)
+			_sprite.scale = Vector2.ONE * TEXEL * (cr / (CRATER_ART_RADIUS * TEXEL))
+			_sprite.offset = -CRATER_GROUND_ART
+			glow_color = Color(1.0, 0.45, 0.15)
+			glow_radius = cr * 1.05
+			modulate.a = 0.0
+			_tick = 0.0 ## düştüğü an içindekiler de yanar
 	if _sprite.sprite_frames != null and _sprite.sprite_frames.has_animation(&"loop"):
 		_sprite.play(&"loop")
 	## Zemin efekti: yaratık/karakterlerin ALTINDA (kara delik / asit gölüyle aynı çözüm) - ekleme bitince. Ayakta duran
@@ -275,6 +294,13 @@ func _process(delta: float) -> void:
 				if _tick <= 0.0:
 					_tick += TRAIL_CHECK_INTERVAL
 					_trail_check()
+		"buyucu_crater":
+			modulate.a = clampf(minf(_t / FIRE_FADE, (duration - _t) / FIRE_FADE), 0.0, 1.0)
+			if authoritative:
+				_tick -= delta
+				if _tick <= 0.0:
+					_tick += CRATER_TICK
+					_crater_tick()
 	if _t >= duration:
 		_done = true
 		queue_free()
@@ -363,6 +389,19 @@ func _fire_tick() -> void:
 	for e in Enemy.get_enemies_near(get_tree(), global_position, r):
 		if is_instance_valid(e) and e.get("is_dead") != true and e.has_method("apply_burn"):
 			e.apply_burn(dps, FIRE_BURN_TIME)
+
+
+## Büyücü krateri: içindeki her yaratık yanar (süre yenilenir; enemy.gd apply_burn tik hasarı en güçlüsünde kalır, katlanmaz).
+func _crater_tick() -> void:
+	var r: float = float(p.get("radius", 56.0))
+	var dps: float = float(p.get("dps", 5.0))
+	var burn_time: float = float(p.get("burn_time", 3.0))
+	for e in Enemy.get_enemies_near(get_tree(), global_position, r):
+		if not is_instance_valid(e) or e.get("is_dead") == true or not e.has_method("apply_burn"):
+			continue
+		if global_position.distance_to((e as Node2D).global_position) > r:
+			continue
+		e.apply_burn(dps, burn_time)
 
 
 func _mine_check() -> void:

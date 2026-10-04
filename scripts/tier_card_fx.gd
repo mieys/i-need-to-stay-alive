@@ -89,8 +89,10 @@ static func ensure_glow(card: Control) -> TextureRect:
 	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	glow.stretch_mode = TextureRect.STRETCH_SCALE
 	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	glow.position = Vector2(-GLOW_PAD, -GLOW_PAD)
-	glow.size = (card.get_meta("glow_card_size", CARD_SIZE) as Vector2) + Vector2(GLOW_PAD, GLOW_PAD) * 2.0
+	## "glow_pad": kart 3x'ten büyük çizildiyse (telefonda efsun kartı 5x) hale payı da aynı oranda (bkz. mobile_ui.gd CHOICE_*).
+	var pad: float = float(card.get_meta("glow_pad", GLOW_PAD))
+	glow.position = Vector2(-pad, -pad)
+	glow.size = (card.get_meta("glow_card_size", CARD_SIZE) as Vector2) + Vector2(pad, pad) * 2.0
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	glow.material = add

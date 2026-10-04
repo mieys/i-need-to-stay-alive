@@ -204,7 +204,9 @@ func test_attack_totem_has_area_damage_without_slow() -> void:
 	for path in ["res://scripts/totem_attack.gd", "res://scripts/totem_shield.gd"]:
 		var src: String = _strip_comments(_read(path))
 		assert(src.contains("area_damage_enabled = true"), "%s alan hasarını açmalı" % path)
-		assert(not src.contains("apply_slow") and not src.contains("func _process_area_damage("), "%s: yavaşlatma yok, kopya kod yok" % path)
+		assert(not src.contains("func _process_area_damage("), "%s: kopya kod yok" % path)
+		## Temel yavaşlatma yok; yalnızca Kalkan Totemi'nin "Yapışkan Zemin" evrimi (shaman_e3, 2026-10-04) yavaşlatabilir.
+		assert(not src.contains("apply_slow") or (path.ends_with("totem_shield.gd") and src.contains('"shaman_e3"')), "%s: yavaşlatma yok (evrim hariç)" % path)
 	assert(not base_src.contains("apply_slow"), "alan YAVAŞLATMAMALI")
 	var inst: Node = (load("res://scenes/totem_attack.tscn") as PackedScene).instantiate()
 	assert(float(inst.get("totem_radius")) == 260.0, "ateş menzili 260 kalmalı")

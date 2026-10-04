@@ -1,7 +1,7 @@
 extends "res://scripts/enchant_behavior.gd"
 
 ## Endless Void (Arcane Asası) - bkz. EnchantDefs "endless_void". Her isabet 1 boşluk yükü; eşikte son vurulan düşmanın
-## yerinde karadelik (enchant_area "black_hole" + void_hole sayfası): çeker, saniyede hasar; Final'de bitişte %250 patlama
+## yerinde karadelik (enchant_area "black_hole" + void_hole sayfası): çeker, saniyede hasar; Final'de bitişte %150 patlama (2026-10-04 denge turu: eşik 20 -> 8 yük)
 ## (void_collapse sayfası). Yük sayacı silah meta'sında (keep_*) - kart alınıp davranış yeniden kurulunca sıfırlanmasın.
 
 
@@ -9,7 +9,7 @@ func hit_extra(t: Node, _dmg: float, is_primary: bool, _proj: Node2D) -> void:
 	if not is_primary or not is_enemy(t):
 		return
 	var stacks: int = int(keep_get("void_stacks", 0)) + 1
-	if stacks < maxi(1, n("void_stacks", 20)):
+	if stacks < maxi(1, n("void_stacks", 8)):
 		keep_set("void_stacks", stacks)
 		return
 	keep_set("void_stacks", 0)

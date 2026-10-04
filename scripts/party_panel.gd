@@ -40,7 +40,7 @@ const FS_ROW := 24 ## m5x7 3x - görev satırlarıyla aynı (16 1080p'de okunmuy
 ## Sağ üstteki minimap'in (hud.tscn MinimapControl: sağdan 36, alt kenar 186) hemen altı.
 const RIGHT_MARGIN := 36.0
 const TOP_Y := 198.0
-const GOLD_ICON_PATH := "res://assets/ui/newui/icon_ingot.png"
+const GOLD_ICON_PATH := "res://assets/ui/newui/icon_gold_coin.png" ## oyun içi altın parayla aynı (animasyonsuz ilk kare)
 const AVATAR_BG := preload("res://assets/ui/kit/hud_avatar_bg.png")
 const PLAQUE_CLEAN := preload("res://assets/ui/game/hud_plaque_clean.png")
 const BarUnder := preload("res://assets/ui/kit/hud_bar_under.png")
@@ -69,6 +69,9 @@ class PartyRow:
 
 var _rows: Dictionary = {} ## peer_id(int) -> PartyRow
 var _list: VBoxContainer = null
+## Satırlar bir kaydırma kutusunda: telefonda kalabalık grup KÜÇÜLMEZ, kaydırılır (bkz. set_max_list_height).
+var _list_scroll: ScrollContainer = null
+var _max_list_h: float = 0.0
 var _gift_popup: PanelContainer = null
 var _gift_amount_label: Label = null
 var _gift_target_peer: int = 0
@@ -131,7 +134,13 @@ func _build_static_ui() -> void:
 	_list.name = "List"
 	_list.add_theme_constant_override("separation", 6)
 	_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bg.add_child(_list)
+	_list_scroll = ScrollContainer.new()
+	_list_scroll.name = "ListScroll"
+	_list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_list_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_list_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
+	bg.add_child(_list_scroll)
+	_list_scroll.add_child(_list)
 
 	## Levhaların altında, sağa yaslı küçük ahşap "Hasar" butonu (hasar sıralaması).
 	var footer := HBoxContainer.new()
@@ -280,9 +289,64 @@ func _rebuild_rows() -> void:
 				_hide_gift_popup()
 			_rows.erase(pid)
 
-	visible = not _rows.is_empty()
+	visible = not _rows.is_empty() and not collapsed
+	_apply_list_height()
 	if not visible:
 		_hide_stats_popup()
+		_hide_gift_popup()
+
+
+## Telefonda grup paneli aç/kapa (kullanıcı isteği 2026-10-04, düğme chat'in altında - bkz. hud.gd _fit_mobile_party).
+var collapsed: bool = false
+
+
+func set_collapsed(v: bool) -> void:
+	collapsed = v
+	_rebuild_rows()
+
+
+func has_allies() -> bool:
+	return not _rows.is_empty()
+
+
+## Telefon (kullanıcı isteği 2026-10-04: "oyuncu sayısı çok fazla olunca grup paneli küçülmek yerine kaydırılsın"):
+## satır listesi en fazla `h` (panel birimi) uzar, fazlası parmakla kaydırılır (touch_scroll.gd). h <= 0: sınırsız (masaüstü).
+func set_max_list_height(h: float) -> void:
+	_max_list_h = h
+	_apply_list_height()
+
+
+func _apply_list_height() -> void:
+	if _list_scroll == null:
+		return
+	if _max_list_h <= 0.0:
+		_list_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_list_scroll.custom_minimum_size.y = 0.0
+		return
+	_list_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_list_scroll.custom_minimum_size.y = minf(_max_list_h, _list.get_combined_minimum_size().y)
+
+
+## Telefonda "Hasar" düğmesi panelin altında değil, HUD'un üst düğme sırasında (kullanıcı isteği 2026-10-04: "hasar butonu da
+## üstte olmalı") - paneldeki kendi düğmesi gizlenir, sıralama penceresi o düğmenin hizasında açılır.
+func set_footer_visible(v: bool) -> void:
+	if _stats_button and _stats_button.get_parent() is Control:
+		(_stats_button.get_parent() as Control).visible = v
+
+
+func toggle_stats_popup(anchor: Control) -> void:
+	if _stats_popup.visible:
+		_hide_stats_popup()
+		return
+	_hide_gift_popup()
+	_refresh_stats_popup()
+	_stats_popup.visible = true
+	_place_popup_left_of(_stats_popup, anchor)
+
+
+## Telefon: panelin ve açık pencerelerinin dokunuşu joystick başlatmasın (bkz. touch_controls.gd joy_exclude).
+func touch_blocking_controls() -> Array:
+	return [get_node_or_null("Background"), _gift_popup, _stats_popup]
 
 
 func _create_row(peer_id: int) -> PartyRow:
@@ -502,7 +566,11 @@ func _place_popup_left_of(popup: Control, anchor_btn: Control) -> void:
 	var w: float = popup.get_combined_minimum_size().x
 	var bg: Control = get_node_or_null("Background") as Control
 	var left_x: float = bg.global_position.x if bg != null else anchor_btn.global_position.x
-	popup.global_position = Vector2(left_x - w - 8.0, anchor_btn.global_position.y - 6.0)
+	var x: float = left_x - w - 8.0
+	## Telefonda panel SOL kenarda (bkz. hud.gd _fit_mobile_party) - solda yer yoksa panelin SAĞINA aç.
+	if x < 8.0 and bg != null:
+		x = bg.get_global_rect().end.x + 8.0
+	popup.global_position = Vector2(x, anchor_btn.global_position.y - 6.0)
 
 
 func _on_gold_button_pressed(peer_id: int) -> void:

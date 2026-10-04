@@ -8,7 +8,7 @@ extends CanvasLayer
 ## bölgesinde değildiyse altın satırı çıkmaz. Oyunu durdurmaz, tıklamaları yutmaz, kendi kendine kapanır.
 
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
-const INGOT_ICON := preload("res://assets/ui/newui/icon_ingot.png")
+const INGOT_ICON := preload("res://assets/ui/newui/icon_gold_coin.png") ## altın simgesi = oyun içi madeni paranın animasyonsuz ilk karesi (2026-10-04)
 const ELITE_CHEST_SHEET := preload("res://assets/sprites/chests/chest_elite.png")
 
 const LAYER := 40 ## altın uçuş katmanının (41) hemen altı - paralar pencerenin üstünden çıkar

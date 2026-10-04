@@ -68,6 +68,24 @@ var visual_time: float = 0.0
 func setup_from_player(p_caster: Node) -> void:
 	caster = p_caster
 	global_position = p_caster.global_position
+	_apply_evolutions()
+
+
+## Sahibin yetenek evrimi (skill_evolutions.gd DEFS[12]) - gerçek totemde caster = Player, ağ kopyasında caster = o oyuncunun
+## RemotePlayer kuklası; ikisinde de has_evo var (kuklada main.gd extra["evo"] listesinden). Evrim yoksa/caster yoksa false.
+func _caster_has_evo(evo_id: String) -> bool:
+	return is_instance_valid(caster) and caster.has_method("has_evo") and bool(caster.call("has_evo", evo_id))
+
+
+## setup_from_player'dan (add_child'dan SONRA) çağrılır - yani _ready'de kurulan aura bile burada yeniden ölçeklenebilir.
+## Hem gerçek totemde hem ağ kopyasında çalışır, böylece diğer oyuncular da büyütülmüş alanı görür.
+## "Geniş Alan" (shaman_e1, Kalkan Totemi): hem müttefik/menzil alanı (totem_radius) hem hasar alanı (area_radius) +%30.
+func _apply_evolutions() -> void:
+	if totem_kind == "shield" and _caster_has_evo("shaman_e1"):
+		totem_radius *= EVO_AREA_MULT
+		area_radius *= EVO_AREA_MULT
+		if is_instance_valid(_aura):
+			_aura.scale *= EVO_AREA_MULT
 
 
 func mark_as_network_visual() -> void:
@@ -101,7 +119,7 @@ func _ready() -> void:
 	## totem de artık AYNI şekilde varsayılanda, diğer oyuncu/yaratıklarla
 	## aynı katmanda Y konumuna göre doğal olarak sıralanıyor.
 	_play_plant_animation()
-	if area_damage_enabled:
+	if area_damage_enabled and show_area_aura:
 		_build_area_aura()
 
 
@@ -328,6 +346,14 @@ func _draw_rune(pos: Vector2, ang: float, col: Color) -> void:
 ## (148 sanat px * TEXEL = ~180 birim = AREA_RADIUS), her tikte NABIZ halkası, hasar yiyen düşmanın üstünde RUH. Hepsi hem gerçek
 ## totemde hem ağ görsel kopyasında kurulur (aynı sahne) - diğer oyuncular da aynı alanı görür.
 var area_damage_enabled: bool = false
+## Alan hasarı yarıçapı (AREA_RADIUS taban; "Geniş Alan" evrimi büyütür - bkz. _apply_evolutions).
+var area_radius: float = AREA_RADIUS
+## Yetenek evrimi sayıları (kart metinleriyle birebir - skill_evolutions.gd DEFS[12]).
+const EVO_AREA_MULT := 1.3 ## Geniş Alan (shaman_e1)
+## false => alan hasarı aynen çalışır ama sabit mor çember (AreaAura) çizilmez. Saldırı Totemi (Q) kapatır (kullanıcı isteği 2026-10-04:
+## "Q'nun etrafındaki gereksiz mor sınır"); Kalkan Totemi (E) çemberi korur. Görsel her kopyada aynı _ready yolundan kurulduğu için
+## ağ kopyaları da otomatik aynı kararı verir.
+var show_area_aura: bool = true
 const AREA_RADIUS := 180.0
 const AREA_DAMAGE_ATTACK_POWER_RATIO := 0.20
 const AREA_TICK_INTERVAL := 1.0
@@ -371,7 +397,7 @@ func _process_area_visuals(delta: float) -> void:
 	ShamanSfx.play_at(scene, ShamanSfx.AREA_PULSE, global_position, -18.0, 0.05)
 	if _is_network_visual:
 		for e in get_tree().get_nodes_in_group("enemies"):
-			if e is Node2D and is_instance_valid(e) and e.get("is_dead") != true and global_position.distance_to((e as Node2D).global_position) <= AREA_RADIUS:
+			if e is Node2D and is_instance_valid(e) and e.get("is_dead") != true and global_position.distance_to((e as Node2D).global_position) <= area_radius:
 				_spawn_void_wisp((e as Node2D).global_position)
 
 
@@ -391,15 +417,16 @@ func _process_area_damage(delta: float) -> void:
 	var dmg: float = float(caster.damage_bonus) * AREA_DAMAGE_ATTACK_POWER_RATIO
 	if dmg <= 0.0:
 		return
-	for e in EnemyQueryScript.candidates(get_tree(), global_position, AREA_RADIUS + 1.0):
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, area_radius + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if not (e is Node2D):
 			continue
-		if global_position.distance_to((e as Node2D).global_position) > AREA_RADIUS:
+		if global_position.distance_to((e as Node2D).global_position) > area_radius:
 			continue
 		if not e.has_method("take_damage"):
 			continue
+		_on_area_enemy_tick(e as Node2D) ## alt sınıf kancası (Kalkan Totemi evrimleri - totem_shield.gd)
 		var is_crit: bool = false
 		if caster.has_method("_roll_ability_crit"):
 			is_crit = caster._roll_ability_crit()
@@ -408,6 +435,12 @@ func _process_area_damage(delta: float) -> void:
 			hit_dmg = caster._apply_ability_crit(dmg, is_crit)
 		e.call("take_damage", hit_dmg, is_crit)
 		_spawn_void_wisp((e as Node2D).global_position)
+
+
+## Alan hasar tikinde alandaki HER yaratık için bir kez çağrılır (hasardan önce) - SADECE dikenin client'ında. Varsayılan: hiçbir şey
+## (alan YAVAŞLATMAZ - kullanıcı 2026-09-29); Kalkan Totemi evrimleri bunu override eder.
+func _on_area_enemy_tick(_enemy: Node2D) -> void:
+	pass
 
 
 ## Hasar tikinde düşmanın üstünde kısa süreli mor ruh - "bu düşman şu an alan hasarı yiyor" sinyali. Salt kozmetik.

@@ -54,12 +54,12 @@ func test_upgrade_order_does_not_matter() -> void:
 		var a: Dictionary = EnchantDefs.resolve({"id": id, "ups": fwd, "final": false})
 		var b: Dictionary = EnchantDefs.resolve({"id": id, "ups": rev, "final": false})
 		assert(a == b, "%s: geliştirme sırası sonucu değiştirdi" % id)
-	## Kullanıcının yazdığı zincirler: iki bekleme kartı 60 -> 30, Final 20; sekme 4 -> 7; güçlü mermi her 5. atış.
-	assert(is_equal_approx(float(EnchantDefs.resolve({"id": "beam_of_zeus", "ups": [3, 0]})["zeus_cd"]), 30.0), "Zeus 60 -> 30")
+	## Zincirler (2026-10-04 denge turu sayıları): iki bekleme kartı 15 -> 9, Final 7; sekme 4 -> 7; güçlü mermi her 3. atış.
+	assert(is_equal_approx(float(EnchantDefs.resolve({"id": "beam_of_zeus", "ups": [3, 0]})["zeus_cd"]), 9.0), "Zeus 15 -> 9")
 	assert(int(EnchantDefs.resolve({"id": "seken_mermiler", "ups": [3, 0]})["bounce"]) == 7, "sekme 4 -> 7")
-	assert(int(EnchantDefs.resolve({"id": "loaded_chamber", "ups": [3, 1]})["charged_every"]) == 5, "her 5. atış")
-	assert(int(EnchantDefs.resolve({"id": "hunters_eye", "ups": [3, 1]})["marks_per_ap"]) == 50, "50 işaret")
-	assert(int(EnchantDefs.resolve({"id": "endless_void", "ups": [0]})["void_stacks"]) == 15, "karadelik 20 -> 15")
+	assert(int(EnchantDefs.resolve({"id": "loaded_chamber", "ups": [3, 1]})["charged_every"]) == 3, "her 3. atış")
+	assert(int(EnchantDefs.resolve({"id": "hunters_eye", "ups": [3, 1]})["marks_per_ap"]) == 30, "30 işaret")
+	assert(int(EnchantDefs.resolve({"id": "endless_void", "ups": [0]})["void_stacks"]) == 6, "karadelik 8 -> 6")
 
 
 func test_pool_random_upgrades_final_and_no_askin() -> void:
@@ -173,8 +173,8 @@ func _run_one(id: String, key: String) -> Array:
 		e.global_position = p.global_position + Vector2(cos(ang), sin(ang)) * (55.0 + 20.0 * float(i % 3))
 		e.set("speed", 0.0)
 		e.max_health = ENEMY_HP
-		## Hunter's Eye infazı için hepsi %30 canın altında.
-		e.health = ENEMY_HP * (0.2 if id == "hunters_eye" else 1.0)
+		## Hunter's Eye infazı için hepsi %20 canın altında.
+		e.health = ENEMY_HP * (0.15 if id == "hunters_eye" else 1.0)
 		enemies.append(e)
 	var hp0: float = 0.0
 	for e in enemies:

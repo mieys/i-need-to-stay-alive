@@ -56,7 +56,7 @@ func setup(key: String) -> void:
 	vbox.add_child(title_hbox)
 
 	var icon_rect: TextureRect = TextureRect.new()
-	var icon_path: String = "res://assets/ui/newui/icon_gem_big.png" if key == "mine" else "res://assets/ui/newui/icon_ingot.png"
+	var icon_path: String = "res://assets/ui/newui/icon_gem_big.png" if key == "mine" else "res://assets/ui/newui/icon_gold_coin.png"
 	icon_rect.texture = load(icon_path) as Texture2D
 	icon_rect.custom_minimum_size = Vector2(16, 16)
 	icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

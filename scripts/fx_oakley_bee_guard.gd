@@ -168,7 +168,7 @@ func _authority_area(delta: float) -> void:
 			e.call("apply_knockback_distance", away if away.length() > 0.01 else Vector2.RIGHT, KNOCKBACK_DISTANCE)
 		_spawn_sting_fx(epos)
 		if NetworkManager.is_multiplayer_active:
-			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "oakley_bee_sting", epos, {})
+			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "oakley_bee_sting", epos, {})
 
 
 ## Uzak kopya: kasterin sürüsü bu noktadaki yaratığı etkiledi - aynı noktada sokma efekti (sadece görsel).

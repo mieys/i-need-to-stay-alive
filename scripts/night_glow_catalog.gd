@@ -74,6 +74,9 @@ const NO_GLOW_SCENES := [
 	"res://scenes/fx_evo_shadow_puff.tscn",
 	"res://scenes/fx_evo_assasin_evade.tscn",
 	"res://scenes/fx_evo_assasin_empower.tscn",
+	## Büyücü Kız Don Nova buz yavaşlatması (2026-10-04): kırağı/buz kristalleri ışık saçmaz - bir dökümde onlarca yaratığa
+	## birden takılır (ışık kalabalığı olmasın); donmuş halin buz kütlesi (fx_ice_freeze_status) parlamaya devam eder.
+	"res://scenes/fx_frost_chill_status.tscn",
 ]
 
 const BY_SCENE := {
@@ -214,6 +217,8 @@ const BY_SCENE := {
 	"res://scenes/fx_evo_mine_pop.tscn": {"c": Color(1.0, 0.55, 0.2), "r": 50.0, "e": 0.9, "d": 0.4},
 	## Assasin "Kunai Yağmuru" / "Gölge İzi" isabeti - küçük, kısa mor-beyaz çelik kıvılcımı.
 	"res://scenes/fx_evo_kunai_hit.tscn": {"c": Color(0.78, 0.62, 1.0), "r": 16.0, "e": 0.4, "d": 0.18},
+	## Büyücü Kız "Efsunlu Büyü" (2026-10-04): efsunlu döküm anında ayak altında altın rün çemberi.
+	"res://scenes/fx_evo_buyucu_enchant.tscn": {"c": Color(1.0, 0.82, 0.45), "r": 50.0, "e": 0.6, "d": 0.7},
 	## --- Durum efektleri (yanma/donma/zehir... - yaratığın/oyuncunun üstünde) ---
 	## Yanma (2026-09-25: "boyutunu %10 küçültüp biraz daha parlamasını sağla") - güç 0.6 -> 0.85.
 	"res://scenes/fx_burn_status.tscn": {"c": Color(1.0, 0.5, 0.15), "r": 34.0, "e": 0.85, "f": 0.45},
@@ -249,6 +254,8 @@ const BY_SCRIPT := {
 	## parlamaz (night_glow_off = true -> resolve boş döner).
 	"res://scripts/evo_area.gd": {"cp": "glow_color", "rp": "glow_radius", "rs": 1.0, "c": Color(1.0, 0.5, 0.18), "r": 60.0, "e": 0.5, "f": 0.3},
 	"res://scripts/fx_shock_status.gd": {"c": Color(1.0, 0.9, 0.35), "r": 22.0, "e": 0.4},
+	## Büyücü Kız "Yükseliş" (2026-10-04): Meteor kanalında havada parıldayan karakter - sıcak altın, hafif titrek.
+	"res://scripts/buyucu_levitate.gd": {"c": Color(1.0, 0.75, 0.4), "r": 46.0, "e": 0.55, "f": 0.15},
 	## Yeni efsun seti sprite sayfaları (2026-09-30, fx_enchant_sprite.gd GLOW listesi - listede olmayan sayfa parlamaz).
 	## 2026-10-01: yarıçap sayfanın görsel boyutundan, güç sayfaya göre (get_night_glow_energy çarpanı, taban 1,0 - parlak
 	## efsunlar diğer yetenek ışıkları gibi atmosphere_overlay'in 0,4 tavanına ulaşır), ışık

@@ -26,12 +26,13 @@ const FS_BTN := 48
 const FS_STATUS := 32
 const TAB_W := 260.0
 const MAX_PANEL := Vector2(1780.0, 1000.0)
-const TABS := ["Yaratık", "Eşya", "Oyuncu", "Görev", "Hava"]
+const TABS := ["Yaratık", "Eşya", "Oyuncu", "Görev", "Hava", "Perf"]
 const COUNT_PRESETS := [1, 5, 10, 25, 50]
 const ATMO_TIME_PRESETS := [["Sabah", 20.0], ["Öğle", 150.0], ["İkindi", 290.0], ["Gün batımı", 350.0], ["Gece", 450.0], ["Gün doğumu", 560.0]]
 const ATMO_WEATHERS := ["Açık", "Rüzgarlı", "Yağmurlu", "Sağanak"]
 const ATMO_FAST_TIME_SCALE := 20.0
 const ChestMenuScript := preload("res://scripts/chest_menu.gd")
+const PerfProbeScript := preload("res://scripts/perf_probe.gd")
 
 var _dim: ColorRect = null
 var _panel: PanelContainer = null
@@ -55,6 +56,7 @@ var _fast_time_btn: Button = null
 
 
 func _ready() -> void:
+	add_to_group(&"gamepad_modal") ## kumandayla menü gezinmesi: açılınca ilk düğmeye odak (bkz. gamepad_ui.gd)
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -129,6 +131,7 @@ func _ready() -> void:
 			2: _build_player_page(page)
 			3: _build_mission_page(page)
 			4: _build_atmosphere_page(page)
+			5: _build_perf_page(page)
 
 	## Durum satırı
 	_status_label = Label.new()
@@ -538,3 +541,17 @@ func _refresh_atmosphere_label() -> void:
 		var fast: bool = atmo != null and float(atmo.get("debug_time_scale")) > 1.0
 		_fast_time_btn.text = "Gün döngüsü x%d hızlı: %s" % [int(ATMO_FAST_TIME_SCALE), "AÇIK" if fast else "KAPALI"]
 		UIKit.style_button(_fast_time_btn, "green" if fast else "wood", false, FS_LABEL)
+
+
+## Cihaz üstü performans testi (bkz. scripts/perf_probe.gd) - telefonda darboğazı ölçmek için (2026-10-03).
+func _build_perf_page(page: VBoxContainer) -> void:
+	var info := Label.new()
+	UIKit.style_label(info, FS_LABEL, UIKit.C_TEXT)
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD
+	info.text = "Dışarıda, kasmanın olduğu yerde dur (Oyuncu sekmesinden ölümsüzlüğü açman iyi olur). Test ~50 sn sürer: " 			+ "sis, gece rengi, güneş/bulut, hava, zemin, harita, yaratıklar ve arayüz sırayla kapatılıp ölçülür. Bitince " 			+ "çıkan tablonun ekran görüntüsünü gönder."
+	page.add_child(info)
+	var b := _button("Performans testini başlat", "green", Vector2(0, 90), FS_BTN)
+	b.pressed.connect(func() -> void:
+		close()
+		PerfProbeScript.start(get_tree()))
+	page.add_child(b)

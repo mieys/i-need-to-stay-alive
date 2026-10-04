@@ -150,31 +150,21 @@ static func describe(card: Dictionary, out: Dictionary) -> void:
 		out["icon"] = str(ICONS.get(key, ""))
 		out["color"] = def.get("color", Color.WHITE)
 		out["tier_line"] = "%s · Kalkan" % tier_name
-		out["lead"] = "%s Şu anki kalkanının yerine geçer; sadece 1 kalkan efsunu seçilebilir." % str(def.get("desc", ""))
-		out["head"] = "BU KART (kalkanını değiştirir)"
-		var after: Dictionary = {"power": float(def["power"]), "absorption": float(def["absorption"]),
-			"regen": float(def["regen"]), "delay": float(def["delay"]), "always_regen": bool(def["always_regen"])}
-		out["body"] = _compare_lines(now, after, true)
-		out["note"] = "Seçince diğer kalkan efsunları bir daha çıkmaz, bu kalkanın geliştirmeleri gelir."
+		## Sade kart (2026-10-03, bkz. enchant_pool.gd describe notu): başlangıç kartı sadece kalkanın nasıl çalıştığını anlatır.
+		out["body"] = str(def.get("desc", ""))
 		return
 	var i: int = int(card.get("index", 0))
 	var def2: Dictionary = TYPES.get(GameManager.shield_enchant, {})
 	var up: Dictionary = (def2.get("upgrades", []) as Array)[i]
-	var limit: int = int(up.get("limit", 0))
 	out["title"] = "%s · Geliştirme %d" % [str(def2.get("name", "")), i + 1]
 	out["icon"] = str(ICONS.get(GameManager.shield_enchant, ""))
 	out["color"] = def2.get("color", Color.WHITE)
 	out["tier_line"] = "%s · Kalkan geliştirmesi" % tier_name
-	out["lead"] = str(def2.get("desc", ""))
 	var after2: Dictionary = now.duplicate()
 	for stat in ["power", "absorption", "regen", "delay"]:
 		after2[stat] = float(now.get(stat, 0.0)) + float(up.get(stat, 0.0))
+	## Geliştirme kartı sadece değişen statları yazar (bkz. enchant_pool.gd describe notu).
 	out["body"] = _compare_lines(now, after2, false)
-	if limit > 0:
-		var left: int = limit - upgrade_count(i)
-		out["note"] = "En fazla %d kez alınabilir (%d hak kaldı)." % [limit, left]
-	else:
-		out["note"] = "Sınırsız kez alınabilir."
 
 
 ## "Kalkan: 150 → 210" satırları. all_lines: kalkan değişiminde her satır, geliştirmede sadece değişenler.

@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://ms2gt1r0klqd" path="res://assets/ui/shop_redesign/item_slot.png" id="4"]
 [ext_resource type="Texture2D" uid="uid://dnkpme0o6rsek" path="res://assets/ui/shop_redesign/close_button.png" id="5"]
 [ext_resource type="Texture2D" uid="uid://depuvtgmv2srg" path="res://assets/generated/shop_close_x_cute_v2_frame_0.png" id="6"]
-[ext_resource type="Texture2D" uid="uid://br5vtbmsq6tyy" path="res://assets/ui/newui/icon_ingot.png" id="7"]
+[ext_resource type="Texture2D" path="res://assets/ui/newui/icon_gold_coin.png" id="7"]
 [ext_resource type="Texture2D" uid="uid://c31ny7kdpqr17" path="res://assets/ui/newui/icon_xp_gem.png" id="8"]
 
 [sub_resource type="StyleBoxFlat" id="SBF_window"]

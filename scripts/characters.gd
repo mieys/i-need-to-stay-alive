@@ -56,7 +56,7 @@ const DEFS := {
 		"skill_icon": "res://assets/skills/talon_devlesme_icon.png",
 		"skill2": 36,
 		"skill2_name": "Silah Salvosu",
-		"skill2_desc": "TEMEL: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %150 saldırı hızı kazanırlar. (15sn bekleme)",
+		"skill2_desc": "TEMEL: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %400 saldırı hızı kazanırlar ama %40 daha az hasar verirler. (15sn bekleme)",
 		"skill2_icon": "res://assets/skills/talon_yer_sarsintisi_icon.png",
 		"skill3": 37,
 		"skill3_name": "Ayna Formu",
@@ -213,7 +213,7 @@ const DEFS := {
 		"skill_name": "Büyü Değişimi",
 		## Kullanıcı isteği (2026-09-24): Büyücü Kız'ın E'si de 1. seviyede açık (diğerlerinde 5) - bkz. skill_unlock_level.
 		"skill2_unlock_level": 1,
-		"skill_desc": "YETENEK: TEMEL (E) ve ULTİ (R) setini birlikte değiştirir (Set 1: Arcane Lanet + Hortum <-> Set 2: Don Nova + Meteor Patlaması). (1sn bekleme)",
+		"skill_desc": "YETENEK: TEMEL (E) ve ULTİ (R) setini birlikte değiştirir (Set 1: Arcane Lanet + Don Nova <-> Set 2: Hortum + Meteor Patlaması). (1sn bekleme)",
 		## DÜZELTME (kullanıcı bildirimi: "büyücü kızın skill ikonları
 		## görünmüyor"): eskiden hem ULTİ hem pasif ikonu, ULTİ tamamen
 		## kaldırılmış ESKİ "Hızlı Ateş" yeteneğinin ikonuna
@@ -235,7 +235,7 @@ const DEFS := {
 		## düşüş (fallback) değeri.
 		"skill2": 22,
 		"skill2_name": "Arcane Lanet (Set 1/2)",
-		"skill2_desc": "TEMEL (2 setli - Q ile değiştirilir):\n1) Arcane Lanet: yaratıklar arasında 4 kez sekip her sekişte saldırı gücünün %80'i kadar hasar verir. (4sn bekleme)\n2) Don Nova: etraftaki tüm yaratıkları 6sn dondurur (donan yaratık hiçbir şey yapamaz) ve saldırı gücünün %100'ü kadar hasar verir. (30sn bekleme)",
+		"skill2_desc": "TEMEL (2 setli - Q ile değiştirilir):\n1) Arcane Lanet: yaratıklar arasında 4 kez sekip her sekişte saldırı gücünün %80'i kadar hasar verir. (4sn bekleme)\n2) Hortum: 15sn boyunca dolaşan 3 hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %90'ı kadar hasar verir. (30sn bekleme)",
 		## bkz. hud.gd _process (GameManager.selected_char_id == 4 dalı) -
 		## HER karede o anki set'e göre skill2_icon.custom_texture'ı burdan
 		## (buyucu_variation_set index'iyle, 0 veya 1) seçiyor. Sıra: 0=Arcane
@@ -243,20 +243,32 @@ const DEFS := {
 		"skill2_icon": "res://assets/skills/buyucu_skill_arcane_lanet_icon.png",
 		"skill2_variation_icons": [
 			"res://assets/skills/buyucu_skill_arcane_lanet_icon.png",
-			"res://assets/skills/buyucu_skill_don_nova_icon.png",
+			"res://assets/skills/buyucu_skill_hortum_icon.png",
 		],
 		## Kullanıcı isteği (rework #2 devamı): eski Hortum/Meteor Patlaması
 		## varyasyonları artık YENİ 3. yetenek (R) slotuna taşındı - bkz.
 		## player.gd _buyucu_try_activate_variation_r/BUYUCU_SET_R_VARIATIONS.
 		"skill3": 24,
-		"skill3_name": "Hortum (Set 1/2)",
-		"skill3_desc": "ULTİ (2 setli - Q ile değiştirilir):\n1) Hortum: 15sn boyunca dolaşan 3 hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %90'ı kadar hasar verir. (45sn bekleme)\n2) Meteor Patlaması: 5sn hareketsiz odaklanıp etrafa saldırı gücünün %120'si kadar hasar veren meteorlar yağdırır. (120sn bekleme)",
+		"skill3_name": "Don Nova (Set 1/2)",
+		## 2026-10-04: Don Nova artık dondurmuyor, 6 sn %80 yavaşlatıyor ("donma olayı geliştirmelere eklenecek" - R finali).
+		"skill3_desc": "ULTİ (2 setli - Q ile değiştirilir):\n1) Don Nova: etraftaki tüm yaratıkları 6sn boyunca %80 yavaşlatır ve saldırı gücünün %100'ü kadar hasar verir. (45sn bekleme)\n2) Meteor Patlaması: 5sn hareketsiz odaklanıp etrafa saldırı gücünün %120'si kadar hasar veren meteorlar yağdırır. (120sn bekleme)",
 		"skill3_variation_icons": [
-			"res://assets/skills/buyucu_skill_hortum_icon.png",
+			"res://assets/skills/buyucu_skill_don_nova_icon.png",
 			"res://assets/skills/buyucu_skill_meteor_icon.png",
 		],
-		## Pasif YOK: eski "Kadim Patlama" kullanıcı isteğiyle silindi (2026-09-23) - "passive" alanı olmadığı için
-		## HUD/karakter seçimi/lobi pasif ikonunu ve açıklamasını otomatik gizler (bkz. hud.gd has_passive).
+		## Statik R ikonu (skill2_icon gibi ilk kare/geri düşüş): evrim kartı (level_up_screen.gd) ve karakter seçimi okur - eskiden
+		## yoktu, R satırı ikonsuz kalıyordu. HUD her karede o anki setin ikonunu yazar (hud.gd).
+		"skill3_icon": "res://assets/skills/buyucu_skill_don_nova_icon.png",
+		## Yetenek evrimleri (2026-10-04) yuvadaki İKİ varyasyonu birden güçlendirir - evrim kartında yuvanın adı ikisini birden
+		## söylesin (level_up_screen.gd "<yuva>_evo_name", yoksa "<yuva>_name").
+		"skill_evo_name": "Büyü Değişimi",
+		"skill2_evo_name": "Arcane Lanet / Hortum",
+		"skill3_evo_name": "Don Nova / Meteor Patlaması",
+		## (Eski "Kadim Patlama" pasifi 2026-09-23'te silinmişti.) Kullanıcı isteği (2026-10-04): yeni pasif "Büyü Dalgası" - mekanik
+		## player.gd _buyucu_on_skill_used + weapon.gd arcane_surge (BUYUCU_PASSIVE_SHOT_MULT). Q (set değişimi) de yetenek sayılır.
+		## İkon tools/gen_buyucu_passive_icon.py (48x48 kare ikon - Elara/Korsan pasifleriyle aynı dil).
+		"passive": "Büyü Dalgası: her yetenek kullandığında silahların aniden ileri fırlar - saldırı bekleme süreleri sıfırlanır, hemen ateş ederler ve bu atış %30 daha fazla hasar verir.",
+		"passive_icon": "res://assets/skills/buyucu_passive_icon.png",
 		"frames": "res://assets/characters/buyucu_frames.tres",
 		"portrait": "res://assets/characters/buyucu_portrait.png",
 		## Kullanıcı isteği (2026-09-22, new characters.zip): yeni 48x48 sprite sayfaları (idle/walk/run/eat/hurt/read/shrug/downed/death + kullanılmayan

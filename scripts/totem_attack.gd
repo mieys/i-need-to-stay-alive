@@ -38,12 +38,25 @@ const BOLT_ORIGIN_OFFSET := Vector2(0, -56) ## totem (48x64 kare): koç kafatas�
 const TotemFireBolt := preload("res://scripts/fx_totem_fire_bolt.gd")
 var _visual_shot_timer: float = 0.0
 
+## Yetenek evrimleri (kart metinleri skill_evolutions.gd DEFS[12]):
+##  - "Alev Dokunuşu" (shaman_q2): her totem atışı hedefi, Shaman pasifinin yakmasıyla (enemy.gd try_shaman_weapon_burn ile AYNI
+##    sayılar: saniyede saldırı gücünün %10'u, 3 sn) yakar. Pasifin "totem yakınında olma" şartı aranmaz (kullanıcı: totemin
+##    saldırıları pasiften yararlanır); silah saldırıları için pasif aynen eskisi gibi.
+##  - "Ruh Emici" (shaman_q4): atış isabetinde +%5 can çalma (player.gd evo_hit_lifesteal; can çalma statları zaten aynı isabette
+##    on_dealer_hit -> on_damage_dealt ile işler). Çalınan can kasterin kendisine yenilenir (totem hasarı kasterin client'ında).
+##  - "Patlayan Alev" (shaman_qf, final): isabet ettiği hedefin etrafındaki yaratıklara atış hasarının %50'si (alan hasarı).
+const EVO_BURN_RATIO := 0.10
+const EVO_BURN_TIME := 3.0
+const EVO_BLAST_RADIUS := 90.0
+const EVO_BLAST_RATIO := 0.5
+
 
 func _init() -> void:
 	totem_kind = "attack"
 	totem_color = Color(1.0, 0.55, 0.25)
 	totem_radius = 260.0
 	area_damage_enabled = true ## bkz. totem_base.gd "ALAN HASARI" bloğu
+	show_area_aura = false ## mor sınır çemberi kaldırıldı (kullanıcı isteği 2026-10-04); alan hasarı değişmedi
 
 
 func _process(delta: float) -> void:
@@ -60,7 +73,12 @@ func _process(delta: float) -> void:
 	_visual_shot_timer += _current_tick_interval()
 	var vis_target: Node2D = _find_nearest_enemy()
 	if vis_target:
-		TotemFireBolt.spawn(get_tree().current_scene, global_position + BOLT_ORIGIN_OFFSET, vis_target, totem_color)
+		TotemFireBolt.spawn(get_tree().current_scene, global_position + BOLT_ORIGIN_OFFSET, vis_target, totem_color, _blast_radius())
+
+
+## Patlama yarıçapı (evrim yoksa 0). Ağ görsel kopyasında da çağrılır: patlama halkası her oyuncuda aynı çıksın.
+func _blast_radius() -> float:
+	return EVO_BLAST_RADIUS if _caster_has_evo("shaman_qf") else 0.0
 
 
 func _tick() -> void:
@@ -76,11 +94,39 @@ func _tick() -> void:
 	if caster.has_method("_apply_ability_crit"):
 		dmg = caster._apply_ability_crit(dmg, is_crit)
 	if target.has_method("take_damage"):
+		var hit_pos: Vector2 = target.global_position
+		## Ruh Emici: +%5 can çalma SADECE bu isabete (take_damage -> on_dealer_hit eşzamanlı çalışır).
+		var evo_ls: float = float(caster.call("get_shaman_totem_lifesteal")) if caster.has_method("get_shaman_totem_lifesteal") else 0.0
+		if evo_ls > 0.0 and "evo_hit_lifesteal" in caster:
+			caster.set("evo_hit_lifesteal", evo_ls)
 		target.call("take_damage", dmg, is_crit)
+		if evo_ls > 0.0 and "evo_hit_lifesteal" in caster:
+			caster.set("evo_hit_lifesteal", 0.0)
+		## Alev Dokunuşu: hedef hâlâ hayattaysa yak (yaratığın üstündeki yanma host-yetkili; apply_burn istemciyi host'a yönlendirir).
+		if _caster_has_evo("shaman_q2") and is_instance_valid(target) and target.get("is_dead") != true and target.has_method("apply_burn"):
+			target.call("apply_burn", float(caster.damage_bonus) * EVO_BURN_RATIO, EVO_BURN_TIME)
+		## Patlayan Alev: isabet noktasının etrafındaki diğer yaratıklara hasarın %50'si.
+		var blast: float = _blast_radius()
+		if blast > 0.0:
+			_explode(target, hit_pos, dmg * EVO_BLAST_RATIO, blast)
 		## Yetenek efekti: atış anında totemden hedefe alev oku uçar. Salt
 		## kozmetik - hasar hesabı yukarıda bitti, bu satır silinse bile
 		## skilin davranışı değişmez.
-		TotemFireBolt.spawn(get_tree().current_scene, global_position + BOLT_ORIGIN_OFFSET, target, totem_color)
+		TotemFireBolt.spawn(get_tree().current_scene, global_position + BOLT_ORIGIN_OFFSET, target, totem_color, blast)
+
+
+## Patlayan Alev hasarı: vurulan hedef HARİÇ yarıçaptaki yaratıklara sabit hasar (kritik zarı yok - atışın kendi hasarı zaten kritik
+## çarpanını içerir; alan hasarı sayılır, bu yüzden can çalma %33 etkili). Görünürlük (can_target) şartı yok - alan hasarı kuralı.
+func _explode(hit_target: Node2D, center: Vector2, blast_dmg: float, radius: float) -> void:
+	if blast_dmg <= 0.0:
+		return
+	for e in EnemyQueryScript.candidates(get_tree(), center, radius + 1.0):
+		if e == hit_target or not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
+			continue
+		if center.distance_to((e as Node2D).global_position) > radius:
+			continue
+		if e.has_method("take_damage"):
+			e.call("take_damage", blast_dmg, false, 0.0, true)
 
 
 ## DÜZELTME (kullanıcı isteği: "shamanın tek hedefli saldırı yeteneğinin

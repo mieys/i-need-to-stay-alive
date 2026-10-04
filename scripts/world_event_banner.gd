@@ -17,6 +17,7 @@ const BAR_TINT := Color("#e0aa3e")
 const BAR_TICK_COUNT := 10
 const BarUnder := preload("res://assets/ui/kit/hud_bar_under.png")
 const BarFill := preload("res://assets/ui/kit/hud_bar_fill.png")
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const ARROW_BOX := 40.0
 const FS_ROW := 24 ## m5x7 3x (keskin; 16 1080p'de okunmuyor)
 ## Mesafe gösterimi: 10 dünya birimi = 1 m (oyuncu ~8 m/sn koşar).
@@ -114,6 +115,11 @@ func _process(_delta: float) -> void:
 	if found:
 		top_y += BELOW_BUTTONS_GAP
 	_vbox.position = Vector2(right_edge - _vbox.size.x, top_y)
+	## Telefon (kullanıcı bildirimi 2026-10-03: paneller üst üste - görev penceresi sağdaki yetenek düğmelerini örtüyordu):
+	## üst ortada, ekranın üst kenarına yakın (orası telefonda boş; yetenekler sağ altta, grup paneli solda).
+	if MobileUIScript.enabled:
+		var safe: Rect2 = MobileUIScript.safe_margins(get_viewport())
+		_vbox.position = Vector2(roundf((vp.x - _vbox.size.x) * 0.5), safe.position.y + 56.0)
 	_tick_countdowns(_delta)
 	_update_arrows()
 	for id in _rows.keys():

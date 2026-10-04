@@ -14,7 +14,7 @@ func fire_start(_target: Node2D, is_extra: bool) -> void:
 	if is_extra or not can_act():
 		return
 	_count += 1
-	if _count % maxi(1, n("shuriken_every", 4)) != 0:
+	if _count % maxi(1, n("shuriken_every", 3)) != 0:
 		return
 	var pl: Node2D = owner_player() as Node2D
 	if pl == null:

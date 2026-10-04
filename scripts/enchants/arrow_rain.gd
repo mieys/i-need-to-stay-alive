@@ -2,7 +2,8 @@ extends "res://scripts/enchant_behavior.gd"
 
 ## Arrow Rain (Arbalet / Yay) - bkz. EnchantDefs "arrow_rain". Her isabet şansa bağlı olarak hedefin üstüne ok yağmuru
 ## (enchant_area "rain" + arrow_rain sayfası): alandakilere tik hasarı; Final'de şans %35, alandakilerin kalkan koruması
-## -%30 (enemy.gd "shield_break") ve yağmur bitince balista oku (ballista sayfası, %300).
+## -%30 (enemy.gd "shield_break") ve yağmur bitince balista oku (ballista sayfası). rain_pity isabet üst üste tutmazsa
+## sonraki kesin (roll_pity).
 
 const MIN_GAP := 0.4 ## aynı anda üst üste yağmur yığılmasın (çoklu ok isabetleri)
 const SHEET_RX := 58.0 ## sayfadaki zemin halkasının yarıçapı (sanat px) - 70 birimde ölçek ~1 (oklar texel yoğunluğunda)
@@ -17,7 +18,7 @@ func hit_extra(t: Node, _dmg: float, is_primary: bool, _proj: Node2D) -> void:
 	var now: int = Time.get_ticks_msec()
 	if now - _last_msec < int(MIN_GAP * 1000.0):
 		return
-	if randf() >= maxf(f("rain_chance"), f("rain_chance_final")):
+	if not roll_pity("rain", maxf(f("rain_chance"), f("rain_chance_final")), n("rain_pity")):
 		return
 	_last_msec = now
 	var r: float = f("rain_radius", 70.0)

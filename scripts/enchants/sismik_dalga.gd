@@ -1,7 +1,8 @@
 extends "res://scripts/enchant_behavior.gd"
 
 ## Sismik Dalga (Topuz) - bkz. EnchantDefs "sismik_dalga". Her ana hedef isabeti şansa bağlı olarak sahibin çevresine yayılan
-## bir dalga (seismic_ring sayfası): hasar + itme; Çift Nabız ile 0,25 sn arayla 2 dalga. Final: şans %50, dalga düşmanları
+## bir dalga (seismic_ring sayfası): hasar + hafif itme (2026-10-04: 60 -> 20 birim - eski itme düşmanları topuzun 120'lik
+## menzilinden atıp silahın kendi hasarını düşürüyordu); seis_pity vuruş üst üste tutmazsa sonraki kesin; Çift Nabız ile 0,25 sn arayla 2 dalga. Final: şans %50, dalga düşmanları
 ## 1,5 sn yere serer (sersemletme); savrulan düşmanın düşeceği yerde başka bir düşman varsa ikisi de çarpışma hasarı alır.
 
 const PULSE_GAP := 0.25
@@ -11,7 +12,7 @@ const COLLIDE_DIST := 26.0
 func hit_extra(t: Node, _dmg: float, is_primary: bool, proj: Node2D) -> void:
 	if not is_primary or proj != null or not is_enemy(t) or not can_act():
 		return
-	if randf() >= maxf(f("seis_chance"), f("seis_chance_final")):
+	if not roll_pity("seis", maxf(f("seis_chance"), f("seis_chance_final")), n("seis_pity")):
 		return
 	var pulses: int = maxi(1, n("seis_pulses", 1))
 	for i in range(pulses):
@@ -27,7 +28,7 @@ func _pulse() -> void:
 		return
 	var at: Vector2 = pl.global_position
 	var r: float = f("seis_radius", 110.0)
-	var push: float = f("seis_push", 60.0)
+	var push: float = f("seis_push", 20.0)
 	sprite("seismic_ring", at, {"scale": r / (91.0 * 1.212), "z": 3})
 	var victims: Array = enemies_near(at, r)
 	var landing: Dictionary = {}

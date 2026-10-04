@@ -89,13 +89,19 @@ var _pause_clear: float = 0.0
 var _apex_done: bool = false
 ## Efsun anahtarları (2026-09-30 yeni set - enchant_fx.gd apply_projectile_look "props" ile HEM kasterde HEM uzak kopyada):
 ##  enchant_pierce_all - gidişte düşmanlardan dönmez, içlerinden geçer (BIGerang)
-##  enchant_grow / enchant_grow_max - delinen düşman başına büyüme oranı ve tavanı; enchant_titan - uç noktada küçülmez
+##  enchant_grow / enchant_grow_max - isabet başına TOPLAMALI büyüme ve tavanı (gidiş + dönüş); enchant_grow_start - atışın
+##    başlangıç boyutu (BIGerang büyüklüğü atıştan atışa taşır); enchant_size_dmg - hasar x (1 + (boyut-1) x bu);
+##    enchant_out_speed_mult - gidiş hız çarpanı; enchant_titan - Final (girdap bu bayrağa + is_grown_max'a bakar)
 ##  hit_on_return / return_crit - dönüşte de (düşman başına bir kez) vurur, kesin kritik (Bumerang Testeresi Finali)
 ##  pause_hits - uç nokta duraklamasında bumerangın kendi vuruşları (false: testere hasarını efsun veriyor, çift sayılmasın)
 var enchant_pierce_all: bool = false
 var enchant_grow: float = 0.0
 var enchant_grow_max: float = 1.0
 var enchant_titan: bool = false
+var enchant_grow_start: float = 1.0
+var enchant_size_dmg: float = 0.0
+var enchant_out_speed_mult: float = 1.0
+var _grow_init: bool = false
 var hit_on_return: bool = false
 ## Dönüş bacağının hız çarpanı (BIGerang: 1.4 - kullanıcı isteği 2026-10-01 "dönüş hızı %40 daha hızlı").
 var enchant_return_speed_mult: float = 1.0
@@ -199,6 +205,12 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	## BIGerang: önceki atışlardan taşınan boyutla başla (props apply_projectile_look ile doğumdan sonra gelir - burada uygulanır,
+	## uzak kopyada da aynı props ile aynı boyut).
+	if not _grow_init:
+		_grow_init = true
+		if enchant_grow > 0.0 and enchant_grow_start > 1.0:
+			_set_grow(minf(enchant_grow_max, enchant_grow_start))
 	_move_physics(delta)
 	_ew_poll_hits()
 
@@ -256,7 +268,7 @@ func _move_physics(delta: float) -> void:
 		return
 	if not _returning:
 		var t: float = clampf(_traveled / maxf(1.0, throw_distance), 0.0, 1.0)
-		var step: float = speed * lerpf(1.0, APEX_SPEED_MIN, t * t) * delta
+		var step: float = speed * enchant_out_speed_mult * lerpf(1.0, APEX_SPEED_MIN, t * t) * delta
 		position += direction * step
 		_traveled += step
 		if _traveled >= throw_distance:
@@ -289,9 +301,7 @@ func _begin_return() -> void:
 	if _apex_done:
 		return
 	_apex_done = true
-	## BIGerang: uç noktadan dönerken normal boyutuna iner (Titanyum Girdabı finalinde inmez).
-	if enchant_grow > 0.0 and not enchant_titan and _grow_factor > 1.0:
-		_set_grow(1.0)
+	## BIGerang 2026-10-04: uç noktada artık küçülmez (büyüklük atıştan atışa taşınır - bkz. enchants/bigerang.gd).
 	if apex_pause > 0.0:
 		_pause_left = apex_pause
 		_pause_clear = 0.33
@@ -386,6 +396,8 @@ func _on_body_entered(body: Node) -> void:
 	_hit_this_leg.append(body)
 	var hit_crit: bool = is_crit
 	var hit_dmg: float = damage
+	if enchant_size_dmg > 0.0 and _grow_factor > 1.0:
+		hit_dmg *= 1.0 + (_grow_factor - 1.0) * enchant_size_dmg
 	if _returning and not pausing and return_crit and not is_crit:
 		hit_crit = true
 		hit_dmg *= float(source_weapon.get("crit_damage")) if is_instance_valid(source_weapon) and "crit_damage" in source_weapon else 2.0
@@ -402,12 +414,11 @@ func _on_body_entered(body: Node) -> void:
 		_begin_return()
 
 
-## BIGerang: delinen düşman başına büyür (tavana kadar). Kök düğüm ölçeklenir - çarpışma alanı da büyür.
+## BIGerang: her isabette (gidiş ve dönüş) toplamalı büyür, tavana kadar. Kök düğüm ölçeklenir - çarpışma alanı da büyür.
 func _grow_on_hit() -> void:
-	## Dönüş vuruşları büyütmez (efsun tanımı: "dönerken normal boyutuna iner").
-	if enchant_grow <= 0.0 or _returning:
+	if enchant_grow <= 0.0:
 		return
-	_set_grow(minf(enchant_grow_max, _grow_factor * (1.0 + enchant_grow)))
+	_set_grow(minf(enchant_grow_max, _grow_factor + enchant_grow))
 
 
 func _set_grow(factor: float) -> void:

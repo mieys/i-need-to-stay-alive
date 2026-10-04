@@ -61,6 +61,18 @@ signal closed
 ## alanı UIKit (assets/ui/kit) ile. Satış/sürükleme mantığı DEĞİŞMEDİ.
 const SLOT_SIZE := 80.0
 const SLOT_INSET := 8.0
+## Telefon (kullanıcı bildirimi 2026-10-03: "envanter paneli çok kötü mobile uyumlu değil"): hud.gd paneli küçültüp
+## sığdırmak yerine apply_mobile_layout'u çağırır - pencere ekranın yarısından büyük, yuvalar 136 px (eşya ikonu 32 px'in
+## 3 katı), yazılar 40/48. Telefonda ipucu (tooltip) görünmediği için yuvaya dokunmak satış onayı açmaz: alttaki bilgi
+## şeridinde ad + açıklama + büyük SAT düğmesi belirir (iki adım = yanlışlıkla satış yok). Masaüstünde hiçbir şey değişmez.
+var _mobile: bool = false
+var _slot: float = SLOT_SIZE
+var _icon_px: float = 64.0
+var _inset_px: float = SLOT_INSET
+var _detail_name: Label = null
+var _detail_desc: Label = null
+var _detail_sell: Button = null
+var _detail_action: Callable = Callable()
 
 
 ## Yuva düğmesi: kendi stili boş (çerçeveyi biz çiziyoruz), çerçeve dokusu çocuk TextureRect; fare üstüne gelince çerçeve parlar.
@@ -113,6 +125,7 @@ var _open_tween: Tween = null
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED and visible:
 		_play_open_animation()
+		_clear_detail()
 
 
 ## Kısa, tek seferlik bir ease-out büyüme+belirme - zıplama/elastik yok,
@@ -163,7 +176,11 @@ func _ensure_sell_confirm_dialog() -> ConfirmationDialog:
 	return _sell_confirm_dialog
 
 
-func _request_sell_confirmation(item_label: String, refund: int, action: Callable) -> void:
+func _request_sell_confirmation(item_label: String, refund: int, action: Callable, desc: String = "") -> void:
+	if _mobile:
+		## Telefon: onay penceresi yerine alttaki bilgi şeridi (ad + açıklama + büyük SAT) - dokunmak önce bilgiyi gösterir.
+		_show_detail(item_label, desc, refund, action)
+		return
 	var dialog: ConfirmationDialog = _ensure_sell_confirm_dialog()
 	dialog.dialog_text = "%s eşyasını satmak istediğine emin misin?\n\n+%d Altın kazanacaksın." % [item_label, refund]
 	_pending_sell_action = action
@@ -193,6 +210,7 @@ const MAX_UTILITY_SLOTS: int = 2
 var _ready_done := false
 
 func _ready() -> void:
+	add_to_group(&"gamepad_modal") ## kumandayla menü gezinmesi: açılınca ilk düğmeye odak (bkz. gamepad_ui.gd)
 	if _ready_done:
 		return
 	_ready_done = true
@@ -380,7 +398,7 @@ func _refresh_weapons() -> void:
 	
 	for i: int in range(5):
 		var btn: Button = Button.new()
-		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+		btn.custom_minimum_size = Vector2(_slot, _slot)
 		_decorate_slot(btn)
 		
 		if i < GameManager.owned_weapons.size():
@@ -400,16 +418,16 @@ func _refresh_weapons() -> void:
 				icon_tr.texture = icon_tex
 				icon_tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				icon_tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-				icon_tr.custom_minimum_size = Vector2(64, 64)
+				icon_tr.custom_minimum_size = Vector2(_icon_px, _icon_px)
 				icon_tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				icon_tr.anchor_left = 0.5
 				icon_tr.anchor_right = 0.5
 				icon_tr.anchor_top = 0.5
 				icon_tr.anchor_bottom = 0.5
-				icon_tr.offset_left = -32
-				icon_tr.offset_right = 32
-				icon_tr.offset_top = -32
-				icon_tr.offset_bottom = 32
+				icon_tr.offset_left = -_icon_px * 0.5
+				icon_tr.offset_right = _icon_px * 0.5
+				icon_tr.offset_top = -_icon_px * 0.5
+				icon_tr.offset_bottom = _icon_px * 0.5
 				btn.add_child(icon_tr)
 				
 				var lvl_lbl: Label = Label.new()
@@ -439,11 +457,15 @@ func _on_sell_weapon_equip(index: int) -> void:
 	if index < 0 or index >= GameManager.owned_weapons.size():
 		return
 	if GameManager.owned_weapons.size() <= 1:
+		if _mobile: ## telefonda bilgi yine görünür, son silah satılamaz (SAT yok)
+			var only: Dictionary = GameManager.owned_weapons[index]
+			_show_detail(WEAPON_NAMES.get(str(only.get("key", "")), "Silah"), "Silah  ·  Seviye %d\nSon silah satılamaz." % int(only.get("level", 1)), 0, Callable())
 		return
 	var entry: Dictionary = GameManager.owned_weapons[index]
 	var key: String = entry.get("key", "")
 	var refund: int = int(round(int(entry.get("spent", 0)) * 0.7))
-	_request_sell_confirmation(WEAPON_NAMES.get(key, key), refund, _do_sell_weapon_equip.bind(index))
+	_request_sell_confirmation(WEAPON_NAMES.get(key, key), refund, _do_sell_weapon_equip.bind(index),
+			"Silah  ·  Seviye %d" % int(entry.get("level", 1)) + ("\nSon silah satılamaz." if GameManager.owned_weapons.size() <= 1 else ""))
 
 
 func _do_sell_weapon_equip(index: int) -> void:
@@ -500,7 +522,7 @@ func _refresh_equipments() -> void:
 	
 	# 1. Shield slot
 	var shield_btn: Button = Button.new()
-	shield_btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+	shield_btn.custom_minimum_size = Vector2(_slot, _slot)
 	_decorate_slot(shield_btn)
 	
 	## 2026-09-29: kalkan satılamaz (herkes Standart Kalkanla başlıyor, dükkanda kalkan yok; tür/geliştirme sadece kalkan
@@ -509,20 +531,22 @@ func _refresh_equipments() -> void:
 	if shield_key != "":
 		var shield_sum: String = ShieldEnchantDefs.summary()
 		shield_btn.tooltip_text = shield_sum if shield_sum != "" else ShieldEnchantDefs.type_name(shield_key)
+		if _mobile: ## telefonda ipucu yok - dokununca bilgi şeridinde (satılamaz, SAT yok)
+			shield_btn.pressed.connect(_show_detail.bind(ShieldEnchantDefs.type_name(shield_key), shield_sum, 0, Callable()))
 		var icon: Control = Control.new()
 		icon.set_script(load("res://scripts/shop_item_icon.gd"))
 		icon.item_type = "shield"
 		icon.shield_type = shield_key ## yeni tür ikonları (assets/ui/shields) kendi renginde - eski tint modülasyonu kaldırıldı
-		icon.custom_minimum_size = Vector2(64, 64)
+		icon.custom_minimum_size = Vector2(_icon_px, _icon_px)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon.anchor_left = 0.5
 		icon.anchor_right = 0.5
 		icon.anchor_top = 0.5
 		icon.anchor_bottom = 0.5
-		icon.offset_left = -32
-		icon.offset_right = 32
-		icon.offset_top = -32
-		icon.offset_bottom = 32
+		icon.offset_left = -_icon_px * 0.5
+		icon.offset_right = _icon_px * 0.5
+		icon.offset_top = -_icon_px * 0.5
+		icon.offset_bottom = _icon_px * 0.5
 		shield_btn.add_child(icon)
 	else:
 		shield_btn.tooltip_text = "Kalkan Yuvası (Boş)"
@@ -540,7 +564,7 @@ func _refresh_equipments() -> void:
 
 	for slot_index: int in range(MAX_UTILITY_SLOTS):
 		var util_btn: Button = Button.new()
-		util_btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+		util_btn.custom_minimum_size = Vector2(_slot, _slot)
 		_decorate_slot(util_btn)
 
 		if slot_index < owned_utility_keys.size():
@@ -558,16 +582,16 @@ func _refresh_equipments() -> void:
 			var icon: Control = Control.new()
 			icon.set_script(load("res://scripts/shop_item_icon.gd"))
 			icon.item_type = utility_key
-			icon.custom_minimum_size = Vector2(64, 64)
+			icon.custom_minimum_size = Vector2(_icon_px, _icon_px)
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			icon.anchor_left = 0.5
 			icon.anchor_right = 0.5
 			icon.anchor_top = 0.5
 			icon.anchor_bottom = 0.5
-			icon.offset_left = -32
-			icon.offset_right = 32
-			icon.offset_top = -32
-			icon.offset_bottom = 32
+			icon.offset_left = -_icon_px * 0.5
+			icon.offset_right = _icon_px * 0.5
+			icon.offset_top = -_icon_px * 0.5
+			icon.offset_bottom = _icon_px * 0.5
 			util_btn.add_child(icon)
 
 			var lvl_lbl: Label = Label.new()
@@ -605,7 +629,7 @@ func _on_sell_utility_equip(key: String) -> void:
 	for l: int in range(1, level + 1):
 		total_spent += _get_upgrade_cost(key, l)
 	var refund: int = int(round(total_spent * 0.7))
-	_request_sell_confirmation(EQUIP_NAMES.get(key, key), refund, _do_sell_utility_equip.bind(key))
+	_request_sell_confirmation(EQUIP_NAMES.get(key, key), refund, _do_sell_utility_equip.bind(key), "İşlevsellik  ·  Seviye %d" % level)
 
 
 func _do_sell_utility_equip(key: String) -> void:
@@ -646,18 +670,19 @@ func _refresh_items_grid() -> void:
 				indices.append(i)
 		var head := Label.new()
 		head.text = "%s  %d/%d" % [Items.KADEME_NAMES[kd - 1].to_upper(), indices.size(), limit]
-		UIKit.style_label(head, 24, TierSystem.COLORS[kd - 1], 0)
+		UIKit.style_label(head, 40 if _mobile else 24, TierSystem.COLORS[kd - 1], 0)
 		items_grid_box.add_child(head)
 		var grid := GridContainer.new()
-		grid.columns = 6
+		grid.columns = 7 if _mobile else 6
 		grid.add_theme_constant_override("h_separation", 8)
 		grid.add_theme_constant_override("v_separation", 8)
 		items_grid_box.add_child(grid)
 		## Boş yuvalar: sınır küçükse (efsanevi 5) hepsi, büyükse bir sıra.
-		var shown: int = mini(limit, maxi(indices.size(), 6 * int(ceil(float(maxi(indices.size(), 1)) / 6.0))))
+		var cols: int = grid.columns
+		var shown: int = mini(limit, maxi(indices.size(), cols * int(ceil(float(maxi(indices.size(), 1)) / float(cols)))))
 		for n in range(maxi(shown, indices.size())):
 			var btn: Button = Button.new()
-			btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+			btn.custom_minimum_size = Vector2(_slot, _slot)
 			_decorate_slot(btn)
 			var frame: TextureRect = btn.get_node("SlotFrame") as TextureRect
 			if n >= indices.size():
@@ -681,10 +706,10 @@ Satmak için tıkla (+%d altın)" % [Items.item_name(key), Items.describe(key), 
 			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-			icon.offset_left = SLOT_INSET
-			icon.offset_top = SLOT_INSET
-			icon.offset_right = -SLOT_INSET
-			icon.offset_bottom = -SLOT_INSET
+			icon.offset_left = _inset_px
+			icon.offset_top = _inset_px
+			icon.offset_right = -_inset_px
+			icon.offset_bottom = -_inset_px
 			btn.add_child(icon)
 			grid.add_child(btn)
 
@@ -693,7 +718,8 @@ func _on_sell_item(index: int) -> void:
 	if index < 0 or index >= GameManager.owned_items.size():
 		return
 	var key: String = str((GameManager.owned_items[index] as Dictionary).get("key", ""))
-	_request_sell_confirmation(Items.item_name(key), Items.sell_refund(key), _do_sell_item.bind(index))
+	_request_sell_confirmation(Items.item_name(key), Items.sell_refund(key), _do_sell_item.bind(index),
+			Items.KADEME_NAMES[Items.kademe(key) - 1] + "  ·  " + Items.describe(key))
 
 
 ## Satış iadesi eşyanın TAM fiyatının %70'i (tarifle ucuza alınmış olsa da - parçaları tek tek satmakla aynı değer).
@@ -708,3 +734,119 @@ func _do_sell_item(index: int) -> void:
 		GameManager.gold += Items.sell_refund(key)
 	_last_items_signature = ""
 	_refresh()
+
+
+## ---------------------------------------------------------------- TELEFON YERLEŞİMİ (bkz. dosya başındaki _mobile notu)
+## rect: tuval px (hud.gd verir). Başlık levhası + altın/tecrübe üstte, X sağ üstte, yuvalar kaydırmalı alanda, altta bilgi şeridi.
+func apply_mobile_layout(rect: Rect2) -> void:
+	_mobile = true
+	_slot = 136.0
+	_icon_px = 96.0
+	_inset_px = 20.0
+	set_anchors_preset(Control.PRESET_TOP_LEFT)
+	position = rect.position
+	size = rect.size
+	pivot_offset = size * 0.5
+	var frame: Control = $Frame as Control
+	var header: Panel = frame.get_node_or_null("HeaderBar") as Panel
+	if header:
+		header.offset_top = 22.0
+		header.offset_bottom = 118.0
+		header.offset_right = -152.0
+		var title: Label = header.get_node_or_null("Title") as Label
+		if title:
+			title.add_theme_font_size_override("font_size", 48)
+	close_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	close_button.offset_left = -136.0
+	close_button.offset_right = -28.0
+	close_button.offset_top = 22.0
+	close_button.offset_bottom = 118.0
+	close_button.add_theme_font_size_override("font_size", 48)
+	## Altın / tecrübe: alt bilgi yerine başlık levhasının sağ yarısında.
+	var footer: Control = frame.get_node_or_null("FooterBG") as Control
+	if footer:
+		footer.visible = false
+	var row: Array = [[frame.get_node("GoldIcon"), 0.0], [gold_label, 52.0], [frame.get_node("XPIcon"), 240.0], [xp_label, 292.0]]
+	for r in row:
+		var c: Control = r[0] as Control
+		var is_icon: bool = not (c is Label)
+		c.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		c.offset_left = -600.0 + float(r[1])
+		c.offset_right = c.offset_left + (44.0 if is_icon else 180.0)
+		c.offset_top = 48.0 if is_icon else 34.0
+		c.offset_bottom = 92.0 if is_icon else 106.0
+	## Yuva alanı.
+	var scroll: ScrollContainer = main_layout.get_parent() as ScrollContainer
+	if scroll:
+		scroll.offset_top = 136.0
+		scroll.offset_bottom = -292.0
+	for c in main_layout.get_children():
+		if c is Label:
+			var l := c as Label
+			l.text = l.text.replace("(Satmak için tıklayın)", "").strip_edges()
+			l.add_theme_font_size_override("font_size", 40)
+	weapons_grid.add_theme_constant_override("separation", 12)
+	equip_grid.add_theme_constant_override("separation", 12)
+	## Bilgi şeridi.
+	var strip := Panel.new()
+	strip.name = "MobileDetail"
+	strip.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	strip.offset_left = 28.0
+	strip.offset_right = -28.0
+	strip.offset_top = -276.0
+	strip.offset_bottom = -28.0
+	strip.add_theme_stylebox_override("panel", UIKit.panel_style("inset"))
+	frame.add_child(strip)
+	_detail_name = Label.new()
+	UIKit.style_label(_detail_name, 48, UIKit.C_TEXT, 0)
+	_detail_name.position = Vector2(28.0, 16.0)
+	_detail_name.size = Vector2(rect.size.x - 460.0, 60.0)
+	_detail_name.clip_text = true
+	strip.add_child(_detail_name)
+	_detail_desc = Label.new()
+	UIKit.style_label(_detail_desc, 40, UIKit.C_TEXT_DIM, 0)
+	_detail_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail_desc.position = Vector2(28.0, 84.0)
+	_detail_desc.size = Vector2(rect.size.x - 460.0, 140.0)
+	_detail_desc.clip_text = true
+	strip.add_child(_detail_desc)
+	_detail_sell = Button.new()
+	UIKit.style_button(_detail_sell, "red", false, 40)
+	_detail_sell.position = Vector2(rect.size.x - 56.0 - 360.0, 56.0)
+	_detail_sell.size = Vector2(340.0, 136.0)
+	_detail_sell.pressed.connect(_on_detail_sell)
+	strip.add_child(_detail_sell)
+	UISound.connect_all_buttons(strip)
+	_clear_detail()
+	## Yuvalar yeni boyutla yeniden kurulsun.
+	_last_weapons_signature = "-"
+	_last_equip_signature = "-"
+	_last_items_signature = "-"
+	_refresh()
+
+
+func _show_detail(item_label: String, desc: String, refund: int, action: Callable) -> void:
+	if _detail_name == null:
+		return
+	_detail_name.text = item_label
+	_detail_name.add_theme_color_override("font_color", UIKit.C_TEXT)
+	_detail_desc.text = desc
+	_detail_action = action
+	_detail_sell.visible = action.is_valid()
+	_detail_sell.text = "SAT  +%d" % refund
+
+
+func _clear_detail() -> void:
+	if _detail_name == null:
+		return
+	_detail_name.text = "Bir eşyaya dokun"
+	_detail_name.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
+	_detail_desc.text = "Ne işe yaradığı ve satış fiyatı burada görünür."
+	_detail_action = Callable()
+	_detail_sell.visible = false
+
+
+func _on_detail_sell() -> void:
+	if _detail_action.is_valid():
+		_detail_action.call()
+	_clear_detail()

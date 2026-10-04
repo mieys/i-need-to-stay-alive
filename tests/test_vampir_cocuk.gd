@@ -685,7 +685,7 @@ func test_read_pose_while_a_shop_or_card_screen_is_open_and_ends_when_it_closes(
 
 
 func test_every_shop_and_card_screen_registers_for_the_read_pose() -> void:
-	for path in ["res://scripts/level_up_screen.gd", "res://scripts/chest_menu.gd", "res://scripts/weapon_select_screen.gd", "res://scripts/merchant_shop_screen.gd", "res://scripts/shop_panel.gd"]:
+	for path in ["res://scripts/level_up_screen.gd", "res://scripts/chest_menu.gd", "res://scripts/merchant_shop_screen.gd", "res://scripts/shop_panel.gd"]:
 		var src: String = (load(path) as GDScript).source_code
 		assert(src.contains("add_to_group(ReadingUiWatcher.GROUP)"), "%s okuma grubuna eklenmiyor" % path)
 

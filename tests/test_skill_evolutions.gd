@@ -11,7 +11,7 @@ const HadimeMath: GDScript = preload("res://scripts/hadime_math.gd")
 const VampirMath: GDScript = preload("res://scripts/vampir_math.gd")
 
 ## Kullanıcının evrimlerini yazdığı karakterler (roster id) - 2026-09-30: Assasin Çocuk (5) eklendi.
-const EVO_CHARS := [14, 13, 10, 1, 8, 9, 7, 3, 5]
+const EVO_CHARS := [14, 13, 10, 1, 8, 9, 7, 3, 5, 12, 4] ## 12 = Shaman, 4 = Büyücü Kız (2026-10-04)
 
 var _spawned: Array[Node] = []
 var _prev_char_id: int = 1

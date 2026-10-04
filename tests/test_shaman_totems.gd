@@ -79,7 +79,8 @@ func test_shield_totem_now_deals_area_damage_like_attack_totem() -> void:
 		_spawned.append(totem)
 		totem.setup_from_player(p)
 		assert(bool(totem.get("area_damage_enabled")), "%s alan hasarı açık" % totem.name)
-		assert(totem.get_node_or_null("AreaAura") != null, "%s mor alan aurası kuruldu" % totem.name)
+		## 2026-10-04: Saldırı Totemi'nin mor sınır çemberi kaldırıldı (kullanıcı isteği) - Kalkan Totemi'nde duruyor.
+		assert((totem.get_node_or_null("AreaAura") != null) == (str(totem.get("totem_kind")) == "shield"), "%s mor alan aurası sadece Kalkan Totemi'nde" % totem.name)
 		inside.hits.clear()
 		totem._process_area_damage(0.02) ## ilk hasar dikildiği anda
 		assert(inside.hits.size() == 1 and is_equal_approx(float(inside.hits[0]), 20.0), "%s alanda saniyede %%20 AP: %s" % [totem.name, str(inside.hits)])

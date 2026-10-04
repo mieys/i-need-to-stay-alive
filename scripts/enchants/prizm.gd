@@ -5,6 +5,9 @@ extends "res://scripts/enchant_behavior.gd"
 ## mermisi (kopyalar hariç) crystal_split kopyaya bölünüp yelpaze gibi saçılır (weapon.gd _spawn_enchant_projectile_now -
 ## uzak kopyalar broadcast_projectile ile). Final: kopyalar en yakın düşmana güdümlenir (ortak _homing), kristal bitince
 ## 6 delici şarapnel (enchant_area "blade") saçar. Kristaller sadece bu makinede sayılır (bölünme kasterin mermisinde olur).
+## 2026-10-04 denge turu: kristal çıkınca onu yaratan mermi HEMEN bölünür (eskiden sonraki merminin kristalden geçmesi
+## gerekiyordu - hedef ölünce/kayınca hiç olmuyordu), crystal_pity isabet üst üste tutmazsa sonraki kesin, aynı anda en
+## fazla crystal_max kristal (fazlasında en eskisi erken söner).
 
 const SPREAD := 0.5 ## kopyaların toplam yelpaze açısı (radyan)
 const SHRAPNEL_RANGE := 180.0
@@ -25,14 +28,21 @@ func projectile_extra(proj: Node2D, _target: Node2D, _is_extra: bool) -> void:
 func hit_extra(t: Node, _dmg: float, _is_primary: bool, proj: Node2D) -> void:
 	if proj == null or not is_instance_valid(proj) or proj.has_meta("prizm_copy") or not is_enemy(t) or not can_act():
 		return
-	if randf() >= f("crystal_chance"):
+	if not roll_pity("crystal", f("crystal_chance"), n("crystal_pity")):
 		return
 	var at: Vector2 = (t as Node2D).global_position + Vector2(0.0, -6.0)
 	var dur: float = f("crystal_dur", 4.0)
 	var size_k: float = f("crystal_size", 24.0) / 24.0
+	var cap: int = n("crystal_max", 4)
+	while cap > 0 and _crystals.size() >= cap:
+		_crystal_expire(_crystals.pop_front())
 	sprite(_sheet(), at, {"loop_time": dur, "scale": size_k, "z": 8})
-	_crystals.append({"pos": at, "until": Time.get_ticks_msec() + int(dur * 1000.0), "id": _next_id})
+	var c: Dictionary = {"pos": at, "until": Time.get_ticks_msec() + int(dur * 1000.0), "id": _next_id}
+	_crystals.append(c)
 	_next_id += 1
+	## Anında karşılık: kristali yaratan mermi burada bölünür (kopyalar vurulan düşmanı atlar).
+	proj.set_meta("prizm_%d" % int(c["id"]), true)
+	_split(proj, at, [t])
 
 
 func process_extra(_delta: float) -> void:
@@ -62,21 +72,21 @@ func process_extra(_delta: float) -> void:
 	_projs = alive
 
 
-func _split(pr: Node2D, at: Vector2) -> void:
+func _split(pr: Node2D, at: Vector2, skip: Array = []) -> void:
 	var dir: Vector2 = Vector2(pr.get("direction")) if "direction" in pr else Vector2.RIGHT
 	var cnt: int = maxi(1, n("crystal_split", 2))
-	var dmg: float = float(pr.get("damage")) * f("split_ratio", 0.5) if "damage" in pr else ap() * 0.5
+	var dmg: float = float(pr.get("damage")) * f("split_ratio", 0.6) if "damage" in pr else ap() * 0.6
 	sprite("crystal_burst", at, {"scale": 0.6, "z": 9})
 	for k in range(cnt):
 		var off: float = 0.0 if cnt == 1 else lerpf(-SPREAD, SPREAD, float(k) / float(cnt - 1))
 		var d: Vector2 = dir.rotated(off)
 		## Güdüm hedefi kopya doğmadan seçilir: kimliği görünüm verisiyle gider, uzak kopya da aynı hedefe yönelir
 		## (projectile.gd "home_id") - eskiden uzak ekranlarda kopyalar düz uçuyordu.
-		var tgt: Node = nearest_enemy(at + d * 60.0, 260.0) if flag("split_homing") else null
+		var tgt: Node = nearest_enemy(at + d * 60.0, 260.0, skip) if flag("split_homing") else null
 		var look: Dictionary = projectile_look(pr)
 		if tgt:
 			look["home_id"] = int(tgt.get_meta("network_enemy_id", 0))
-		var copy: Node2D = weapon.call("_spawn_enchant_projectile_now", at, d, dmg, [], look, {"prizm_copy": true})
+		var copy: Node2D = weapon.call("_spawn_enchant_projectile_now", at, d, dmg, skip, look, {"prizm_copy": true})
 		if copy and tgt:
 			_homing.append([copy, tgt])
 

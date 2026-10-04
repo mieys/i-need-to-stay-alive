@@ -61,6 +61,25 @@ const TEXT_RECT := Rect2(42, 132, 276, 366)
 const BODY_FONT := 32
 const BODY_MIN_FONT := 24
 const HEADER_FONTS := [32, 24]
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+## Telefon (kullanıcı seçimi 2026-10-03, prototip "A - ekranı dolduran kartlar"): kart 3x yerine k katı (k = 5/3 -> 600x900,
+## sığmazsa 4/3) - doku tam sayı sanat pikseli katında, iç dikdörtgenler k ile ölçeklenir, yazılar telefon boylarında
+## (mobile_ui.gd CHOICE_*). Karıştır solda, Geç + geri sayım sağda dikey büyük düğmeler; Yasakla kartın alt kenarında.
+## Masaüstünde k = 1, her şey eskisi gibi. Evrim kartları (level_up_screen.gd) aynı yardımcıları kullanır.
+const MOBILE_CARD_GAP := 48.0
+
+
+## Kartın k katı dikdörtgeni (k = 1 masaüstü 3x).
+static func card_rect(r: Rect2, k: float) -> Rect2:
+	return Rect2((r.position * k).round(), (r.size * k).round())
+
+
+static func header_fonts(k: float) -> Array:
+	return HEADER_FONTS if k <= 1.0 else MobileUIScript.CHOICE_HEADER_FONTS
+
+
+static func body_fonts(k: float) -> Array:
+	return [BODY_FONT, BODY_MIN_FONT] if k <= 1.0 else MobileUIScript.CHOICE_BODY_FONTS
 
 var player_ref: Node = null
 var use_chest_timer: bool = false
@@ -87,6 +106,8 @@ var _owned_label: Label = null
 var _fx_layer: Control = null
 var _shine_tweens: Array = [null, null, null]
 var _chest_center: Vector2 = Vector2(960.0, 540.0)
+var _k: float = 1.0
+var _card_size: Vector2 = CARD_SIZE
 
 
 func _enter_tree() -> void:
@@ -120,6 +141,10 @@ func _ready() -> void:
 
 func _build() -> void:
 	var game_theme: Theme = UIKit.theme()
+	_k = MobileUIScript.choice_card_scale(get_viewport(), CARD_SIZE, 3, MOBILE_CARD_GAP)
+	_card_size = (CARD_SIZE * _k).round()
+	var mobile: bool = _k > 1.0
+	var view: Vector2 = get_viewport().get_visible_rect().size
 	var dim := ColorRect.new()
 	dim.color = Color(0.06, 0.04, 0.08, 0.72)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -140,8 +165,8 @@ func _build() -> void:
 	var tw: float = MenuKit.font().get_string_size(title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIKit.FS_TITLE).x + 132.0
 	title.offset_left = -roundf(tw * 0.5)
 	title.offset_right = roundf(tw * 0.5)
-	title.offset_top = 16.0
-	title.offset_bottom = 88.0
+	title.offset_top = 8.0 if mobile else 16.0
+	title.offset_bottom = title.offset_top + 72.0
 	add_child(title)
 	_title = title
 
@@ -150,8 +175,8 @@ func _build() -> void:
 	_owned_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_owned_label.offset_left = -900.0
 	_owned_label.offset_right = 900.0
-	_owned_label.offset_top = 94.0
-	_owned_label.offset_bottom = 136.0
+	_owned_label.offset_top = 82.0 if mobile else 94.0
+	_owned_label.offset_bottom = _owned_label.offset_top + 40.0
 	_owned_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_owned_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_owned_label.clip_text = true
@@ -163,18 +188,24 @@ func _build() -> void:
 	var row := HBoxContainer.new()
 	row.name = "Cards"
 	row.theme = game_theme
-	row.add_theme_constant_override("separation", CARD_GAP)
+	var gap: float = MOBILE_CARD_GAP if mobile else float(CARD_GAP)
+	row.add_theme_constant_override("separation", int(gap))
 	row.set_anchors_preset(Control.PRESET_CENTER)
-	var total_w: float = CARD_SIZE.x * 3.0 + CARD_GAP * 2.0
+	var total_w: float = _card_size.x * 3.0 + gap * 2.0
 	row.offset_left = -total_w * 0.5
 	row.offset_right = total_w * 0.5
-	row.offset_top = -CARD_SIZE.y * 0.5 - 20.0
-	row.offset_bottom = CARD_SIZE.y * 0.5 - 20.0
+	row.offset_top = -_card_size.y * 0.5 - 20.0
+	row.offset_bottom = _card_size.y * 0.5 - 20.0
+	if mobile:
+		## Telefonda kartlar başlığın altından ekranın dibine kadar (bkz. mobile_ui.gd CHOICE_TOP).
+		row.offset_top = MobileUIScript.CHOICE_TOP - view.y * 0.5
+		row.offset_bottom = row.offset_top + _card_size.y
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(row)
 	for i in range(3):
 		var col := VBoxContainer.new()
-		col.add_theme_constant_override("separation", 10)
+		## Telefonda Yasakla kartın alt kenarının üstüne biner (kart ekranın boyu kadar - altında yer yok).
+		col.add_theme_constant_override("separation", -40 if mobile else 10)
 		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(col)
 		var card := _make_card()
@@ -182,15 +213,19 @@ func _build() -> void:
 		card.pressed.connect(_on_card_pressed.bind(i))
 		card.mouse_entered.connect(_on_card_hover.bind(i, true))
 		card.mouse_exited.connect(_on_card_hover.bind(i, false))
+		card.focus_entered.connect(_on_card_hover.bind(i, true))
+		card.focus_exited.connect(_on_card_hover.bind(i, false))
 		_cards.append(card)
 		var rays: Control = RewardRays.new()
 		_rays_layer.add_child(rays)
-		rays.setup(card, CARD_SIZE, CARD_TEXEL, 1, intro_chest, RAYS_REACH_SCALE)
+		rays.setup(card, _card_size, CARD_TEXEL * _k, 1, intro_chest, RAYS_REACH_SCALE)
 		_rays.append(rays)
 		var ban := Button.new()
 		ban.text = "Yasakla"
-		ban.custom_minimum_size = Vector2(CARD_SIZE.x, 44)
-		UIKit.style_button(ban, "dark", true, 24)
+		ban.custom_minimum_size = Vector2(_card_size.x * 0.6, 72) if mobile else Vector2(CARD_SIZE.x, 44)
+		if mobile:
+			ban.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		UIKit.style_button(ban, "dark", true, 32 if mobile else 24)
 		ban.pressed.connect(_on_banish_pressed.bind(i))
 		col.add_child(ban)
 		_banish_buttons.append(ban)
@@ -221,11 +256,45 @@ func _build() -> void:
 	UIKit.style_label(_countdown_label, UIKit.FS_BODY, UIKit.C_CREAM, 4)
 	_countdown_label.visible = false
 	bar.add_child(_countdown_label)
+	if mobile:
+		_layout_mobile_bar(bar)
 
 	_fx_layer = Control.new()
 	_fx_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_fx_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_fx_layer)
+
+
+## Telefon: alt çubuk yerine ekranın iki yanında dikey büyük düğmeler (karıştır solda, geç + geri sayım sağda). _bar tüm
+## ekranı kaplayan saydam bir kap olur (giriş animasyonundaki görünürlük geçişi aynen çalışsın).
+func _layout_mobile_bar(bar: HBoxContainer) -> void:
+	var holder := Control.new()
+	holder.name = "SideButtons"
+	holder.theme = bar.theme
+	holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(holder)
+	move_child(holder, bar.get_index())
+	var vp: Viewport = get_viewport()
+	var slots: Array = [[_reroll_button, MobileUIScript.choice_side_rect(vp, true, 0, 1, 300.0)],
+		[_skip_button, MobileUIScript.choice_side_rect(vp, false, 0, 1, 300.0)]]
+	for s in slots:
+		var b: Button = s[0]
+		var r: Rect2 = s[1]
+		b.reparent(holder, false)
+		b.custom_minimum_size = Vector2.ZERO
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.add_theme_font_size_override("font_size", 40)
+		b.position = r.position
+		b.size = r.size
+	_skip_button.text = "Geç\n+%d altın" % GameManager.LEVEL_UP_GOLD_REWARD
+	_countdown_label.reparent(holder, false)
+	_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var skip_r: Rect2 = slots[1][1]
+	_countdown_label.position = Vector2(skip_r.position.x, skip_r.end.y + 16.0)
+	_countdown_label.size = Vector2(skip_r.size.x, 48.0)
+	bar.queue_free()
+	_bar = holder
 
 
 func _make_layer(layer_name: String) -> Control:
@@ -339,21 +408,24 @@ func _finish_reveal() -> void:
 
 func _make_card() -> Button:
 	var card := Button.new()
-	card.custom_minimum_size = CARD_SIZE
+	card.custom_minimum_size = _card_size
 	card.flat = true
-	card.focus_mode = Control.FOCUS_NONE
+	## Kumandayla seçilebilsin (bkz. gamepad_ui.gd - odak sadece kumanda kullanılırken verilir, Space/fare akışı aynı).
+	card.focus_mode = Control.FOCUS_ALL
+	card.add_to_group(&"gamepad_first_focus")
 	for st in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
 		card.add_theme_stylebox_override(st, StyleBoxEmpty.new())
 	card.clip_contents = false
 	card.set_meta("glow_texture", GLOW_TEXTURE)
-	card.set_meta("glow_card_size", CARD_SIZE)
+	card.set_meta("glow_card_size", _card_size)
+	card.set_meta("glow_pad", TierCardFx.GLOW_PAD * _k)
 	card.set_meta("glow_colors", GLOW_COLORS)
 	var frame := TextureRect.new()
 	frame.name = "Frame"
 	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	frame.stretch_mode = TextureRect.STRETCH_SCALE
-	frame.size = CARD_SIZE
+	frame.size = _card_size
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mat := ShaderMaterial.new()
 	mat.shader = SHINE_SHADER
@@ -368,18 +440,18 @@ func _make_card() -> Button:
 	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.position = ICON_RECT.position
-	icon.size = ICON_RECT.size
+	icon.position = card_rect(ICON_RECT, _k).position
+	icon.size = card_rect(ICON_RECT, _k).size
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(icon)
 	var badge := ColorRect.new()
 	badge.name = "Badge"
-	badge.position = BADGE_RECT.position
-	badge.size = BADGE_RECT.size
+	badge.position = card_rect(BADGE_RECT, _k).position
+	badge.size = card_rect(BADGE_RECT, _k).size
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(badge)
-	_label(card, "TierLabel", TIER_RECT, HEADER_FONTS[0])
-	_label(card, "Category", CATEGORY_RECT, HEADER_FONTS[0])
+	_label(card, "TierLabel", card_rect(TIER_RECT, _k), header_fonts(_k)[0])
+	_label(card, "Category", card_rect(CATEGORY_RECT, _k), header_fonts(_k)[0])
 	var text := RichTextLabel.new()
 	text.name = "Text"
 	text.bbcode_enabled = true
@@ -387,8 +459,8 @@ func _make_card() -> Button:
 	text.scroll_active = false
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	text.position = TEXT_RECT.position
-	text.size = TEXT_RECT.size
+	text.position = card_rect(TEXT_RECT, _k).position
+	text.size = card_rect(TEXT_RECT, _k).size
 	text.add_theme_color_override("default_color", DIM_COLOR)
 	text.add_theme_constant_override("line_separation", 2)
 	card.add_child(text)
@@ -448,14 +520,14 @@ func _fill_card(i: int) -> void:
 	var tier_lbl: Label = card.get_node("TierLabel")
 	tier_lbl.text = str(d["tier_line"])
 	tier_lbl.add_theme_color_override("font_color", TIER_TEXT[tier - 1])
-	_fit_header(tier_lbl, TIER_RECT.size.x)
+	_fit_header(tier_lbl, card_rect(TIER_RECT, _k).size.x, header_fonts(_k))
 	var cat: Label = card.get_node("Category")
 	cat.text = str(d["category"])
 	cat.add_theme_color_override("font_color", DIM_COLOR)
-	_fit_header(cat, CATEGORY_RECT.size.x)
+	_fit_header(cat, card_rect(CATEGORY_RECT, _k).size.x, header_fonts(_k))
 	var text: RichTextLabel = card.get_node("Text")
 	text.text = _card_bbcode(d)
-	_set_text_size(text, BODY_FONT)
+	_set_text_size(text, body_fonts(_k)[0])
 	_fit_text.call_deferred(text)
 	card.set_meta("tier", mini(tier, 4))
 	card.set_meta("ray_tier", tier)
@@ -471,12 +543,16 @@ func _fill_card(i: int) -> void:
 	ban.text = "Yasakla (%d)" % GameManager.enchant_banish_left
 
 
-## Kart metni: ad, efsunun ne yaptığı (soluk), "BU KART" + verdiği şey, efsun gücü önce -> sonra, Final eşyası notu.
+## Kart metni: ad + tek metin (başlangıçta nasıl çalıştığı, geliştirmede ne değiştiği - bkz. EnchantPool.describe sade kart
+## notu). lead/head/power/note boşsa çizilmez (altın kartı lead kullanır).
 static func _card_bbcode(d: Dictionary) -> String:
 	var parts: Array = ["[color=#fff0d6]%s[/color]" % str(d["title"])]
 	if str(d["lead"]) != "":
 		parts.append("[color=#%s]%s[/color]" % [LEAD_COLOR.to_html(false), str(d["lead"])])
-	parts.append("[color=#%s]%s[/color]\n%s" % [HEAD_COLOR.to_html(false), str(d["head"]), str(d["body"])])
+	if str(d["head"]) != "":
+		parts.append("[color=#%s]%s[/color]\n%s" % [HEAD_COLOR.to_html(false), str(d["head"]), str(d["body"])])
+	elif str(d["body"]) != "":
+		parts.append(str(d["body"]))
 	if str(d["power"]) != "":
 		parts.append("[color=#%s]%s[/color]" % [POWER_COLOR.to_html(false), str(d["power"])])
 	if str(d["note"]) != "":
@@ -485,8 +561,8 @@ static func _card_bbcode(d: Dictionary) -> String:
 
 
 ## Tek satırlık başlık etiketi sığmıyorsa 32 -> 24 px (piksel yazı tipi 8'in katlarında net kalır).
-static func _fit_header(lbl: Label, width: float) -> void:
-	for fs in HEADER_FONTS:
+static func _fit_header(lbl: Label, width: float, fonts: Array = HEADER_FONTS) -> void:
+	for fs in fonts:
 		lbl.add_theme_font_size_override("font_size", fs)
 		if MenuKit.font().get_string_size(lbl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= width:
 			return
@@ -500,8 +576,9 @@ static func _set_text_size(text: RichTextLabel, fs: int) -> void:
 func _fit_text(text: RichTextLabel) -> void:
 	if not is_instance_valid(text) or not text.is_inside_tree():
 		return
-	var fs: int = BODY_FONT
-	while fs > BODY_MIN_FONT and float(text.get_content_height()) > TEXT_RECT.size.y:
+	var sizes: Array = body_fonts(_k)
+	var fs: int = int(sizes[0])
+	while fs > int(sizes[-1]) and float(text.get_content_height()) > card_rect(TEXT_RECT, _k).size.y:
 		fs -= 8
 		_set_text_size(text, fs)
 		## İçerik yüksekliği bir sonraki karede güncellenir - hemen tekrar ölçmek eski değeri okur.
@@ -531,7 +608,7 @@ func _reroll_cost() -> int:
 
 func _refresh_buttons() -> void:
 	var cost: int = _reroll_cost()
-	_reroll_button.text = "Yeniden Karıştır (%d altın)" % cost
+	_reroll_button.text = ("Karıştır\n%d altın" if _k > 1.0 else "Yeniden Karıştır (%d altın)") % cost
 	_reroll_button.disabled = _has_chosen or not _revealed or GameManager.gold < cost
 	_skip_button.disabled = _has_chosen or not _revealed
 

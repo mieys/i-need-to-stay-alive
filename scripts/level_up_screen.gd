@@ -79,11 +79,12 @@ const UPGRADES = [
 	## değerle (_nice_up(0.125*1.3,0.005)=0.165 -> %16.5) birebir eşleşiyor.
 	## 2026-09-25: %16.5 -> %6 (bkz. player.gd CRIT_DAMAGE_CARD_BASE - ikisi aynı sayıyı göstermeli).
 	{"id": "crit_damage", "title": "Kritik Hasar", "desc": "+%6", "cat": "Saldırı", "color": CAT_ATTACK},
-	{"id": "pickup_range", "title": "Toplama Mesafesi", "desc": "+%30", "cat": "Yardımcı", "color": CAT_UTILITY},
+	## Kullanıcı isteği (2026-10-04): "toplama mesafesi ve menzili level atlama kartlarından kaldırıyoruz ancak bu statlar
+	## oyundan silinmesin ilerde eşyalara vb ekleyeceğim" - "pickup_range" ve "range" kartları havuzdan çıktı; statlar,
+	## player.gd apply_upgrade dalları, stat ikonları ve DURUMUN satırları duruyor.
 	{"id": "shield_pen_percent", "title": "Kalkan Delme", "desc": "+%5", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "exp_gain", "title": "Tecrübe Kazanımı", "desc": "+%5", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "luck", "title": "Şans", "desc": "+1", "cat": "Yardımcı", "color": CAT_UTILITY},
-	{"id": "range", "title": "Menzil", "desc": "+%12", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "dodge", "title": "Sıvışma", "desc": "+%2.5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "shield_amount", "title": "Kalkan Miktarı", "desc": "+%5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "cooldown_reduction", "title": "Bekleme Süresi Azaltma", "desc": "-%4", "cat": "Yardımcı", "color": CAT_UTILITY},
@@ -156,6 +157,7 @@ func _ready() -> void:
 	_apply_reroll_button_style()
 	_apply_kit_style()
 	_layout_rows()
+	_apply_mobile_layout()
 	if _evo_mode:
 		_populate_evolution_rows()
 	else:
@@ -208,6 +210,10 @@ func _wire_card_hover_feedback() -> void:
 			continue
 		card.mouse_entered.connect(_on_card_hover.bind(card, true))
 		card.mouse_exited.connect(_on_card_hover.bind(card, false))
+		## Kumanda (bkz. gamepad_ui.gd): odaklanan kart fareyle üstüne gelinmiş gibi parlar; açılışta ilk odak kartlarda.
+		card.focus_entered.connect(_on_card_hover.bind(card, true))
+		card.focus_exited.connect(_on_card_hover.bind(card, false))
+		card.add_to_group(&"gamepad_first_focus")
 		card.button_down.connect(_on_card_press.bind(card, true))
 		card.button_up.connect(_on_card_press.bind(card, false))
 
@@ -530,6 +536,7 @@ func _layout_rows() -> void:
 	rows.offset_right = row_size.x * 0.5
 	rows.offset_top = ROW_TOP
 	rows.offset_bottom = ROW_TOP + row_size.y * cards.size() + ROW_SEPARATION * (cards.size() - 1)
+	_apply_desktop_scale(rows)
 	add_child(rows)
 	if old:
 		move_child(rows, old.get_index())
@@ -577,6 +584,85 @@ func _layout_rows() -> void:
 		card.add_child(sub)
 		sub.position = Vector2(ROW_TEXT_X, 82)
 		sub.size = Vector2(ROW_SIZE.x - ROW_TEXT_X - ROW_RIGHT_PAD, 44)
+
+
+## ---------------------------------------------------------------- TELEFON (kullanıcı seçimi 2026-10-03, prototip "A")
+## Masaüstündeki satırlar aynen, satır kutusu TAM 2 kat (804x150 -> 1608x300 = 6x sanat px; yazılar 32 -> 64, keskin) ve
+## ekranın boyu kadar; ekran o kadar geniş değilse 1,5 kat. Karıştır sol kenarda, geri sayım sağ kenarda dikey büyük kutular
+## (başparmak bölgesi). Evrim kartları kendi ölçeğini _layout_evolution_cards'ta kurar. Masaüstünde hiçbir şey değişmez.
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const MOBILE_ROW_SEPARATION := 8
+
+
+func _apply_mobile_layout() -> void:
+	if not MobileUIScript.enabled:
+		return
+	var vp: Viewport = get_viewport()
+	var view: Vector2 = vp.get_visible_rect().size
+	var title: Label = get_node_or_null("Title") as Label
+	if title:
+		title.offset_top = 8.0
+		title.offset_bottom = 8.0 + TITLE_SIZE.y
+	var rows: Control = get_node_or_null("Rows") as Control
+	if rows and not _evo_mode:
+		var safe: Rect2 = MobileUIScript.safe_margins(vp)
+		var room_w: float = view.x - safe.position.x - safe.size.x \
+				- 2.0 * (MobileUIScript.CHOICE_SIDE_W + 2.0 * MobileUIScript.CHOICE_SIDE_PAD)
+		var s: float = 2.0 if ROW_SIZE.x * 2.0 <= room_w else 1.5
+		(rows as VBoxContainer).add_theme_constant_override("separation", MOBILE_ROW_SEPARATION)
+		var h: float = ROW_SIZE.y * cards.size() + MOBILE_ROW_SEPARATION * (cards.size() - 1)
+		var top: float = MobileUIScript.CHOICE_TOP + maxf(0.0, (MobileUIScript.CHOICE_BOTTOM - MobileUIScript.CHOICE_TOP - h * s) * 0.5)
+		rows.offset_left = -roundf(ROW_SIZE.x * s * 0.5)
+		rows.offset_right = rows.offset_left + ROW_SIZE.x
+		rows.offset_top = top - view.y * 0.5
+		rows.offset_bottom = rows.offset_top + h
+		rows.scale = Vector2(s, s)
+	## Karıştır: sol kenar, zar yazının üstünde.
+	var rr: Rect2 = MobileUIScript.choice_side_rect(vp, true, 0, 1, 300.0)
+	reroll_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	reroll_button.position = rr.position
+	reroll_button.size = rr.size
+	reroll_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reroll_button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+	reroll_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	reroll_button.add_theme_font_size_override("font_size", 40)
+	for state: String in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
+		var sb := reroll_button.get_theme_stylebox(state) as StyleBoxTexture
+		if sb:
+			sb.content_margin_left = 12.0
+			sb.content_margin_right = 12.0
+			sb.content_margin_top = 40.0
+			sb.content_margin_bottom = 24.0
+	## Geri sayım: sağ kenar.
+	if countdown_panel:
+		var cr: Rect2 = MobileUIScript.choice_side_rect(vp, false, 0, 1, 260.0)
+		countdown_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		countdown_panel.position = cr.position
+		countdown_panel.size = cr.size
+		if waiting_label:
+			waiting_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			waiting_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if countdown_label:
+			countdown_label.add_theme_font_size_override("font_size", UIKit.FS_TITLE)
+			countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+## PC'de level atlama satırları ve evrim kartları %15 küçük - kullanıcı isteği (2026-10-03): "pcde level atlama kartlarını
+## %15 küçültmeni istiyorum". Telefonla AYNI yöntem (kutu ölçeği, bkz. _apply_mobile_layout 2x/1.5x); telefon kendi ölçeğini
+## kurduğu için orada uygulanmaz. Kutu yatayda ortalı ve dikey merkezi yerinde kalır (karıştır düğmesi oynamaz).
+const DESKTOP_CARD_SCALE := 0.85
+
+
+func _apply_desktop_scale(box: Control) -> void:
+	if MobileUIScript.enabled or box == null:
+		return
+	var w: float = box.offset_right - box.offset_left
+	var h: float = box.offset_bottom - box.offset_top
+	box.offset_left = -roundf(w * DESKTOP_CARD_SCALE * 0.5)
+	box.offset_right = box.offset_left + w
+	box.offset_top = roundf(box.offset_top + h * (1.0 - DESKTOP_CARD_SCALE) * 0.5)
+	box.offset_bottom = box.offset_top + h
+	box.scale = Vector2.ONE * DESKTOP_CARD_SCALE
 
 
 func _row_label(card: Control, lbl_name: String, rect: Rect2, font_size: int, color: Color, align: HorizontalAlignment) -> void:
@@ -871,7 +957,7 @@ func _apply_kit_style() -> void:
 
 func _refresh_reroll_button() -> void:
 	var cost: int = _reroll_cost()
-	reroll_button.text = "Yeniden Karıştır (%d altın)" % cost
+	reroll_button.text = ("Karıştır\n%d altın" if MobileUIScript.enabled else "Yeniden Karıştır (%d altın)") % cost
 	reroll_button.disabled = GameManager.gold < cost
 
 
@@ -974,6 +1060,8 @@ var screen_level: int = 0
 var force_evolution: bool = false
 var _evo_mode: bool = false
 var _evo_offers: Array = []
+## Telefonda evrim kartının 3x'e göre ölçeği (bkz. _layout_evolution_cards); masaüstünde 1.
+var _k: float = 1.0
 
 
 func _roll_evolution_offers() -> Array:
@@ -992,20 +1080,26 @@ func _roll_evolution_offers() -> Array:
 ## Content/SelectGlow gizlenir, efsun kartının yazı düğümleri burada kurulur.
 func _layout_evolution_cards() -> void:
 	var old: Control = get_node_or_null("CardsContainer") as Control
-	var card_size: Vector2 = EnchantScreenScript.CARD_SIZE
 	var n: int = clampi(_evo_offers.size(), 1, cards.size())
-	var total_w: float = card_size.x * n + EVO_CARD_GAP * (n - 1)
+	## Telefon: efsun ekranıyla aynı - kart k katı (5/3 -> 600x900), ekranın boyu kadar (bkz. enchant_screen.gd card_rect).
+	var gap: float = EnchantScreenScript.MOBILE_CARD_GAP if MobileUIScript.enabled else float(EVO_CARD_GAP)
+	_k = MobileUIScript.choice_card_scale(get_viewport(), EnchantScreenScript.CARD_SIZE, 3, gap)
+	var card_size: Vector2 = (EnchantScreenScript.CARD_SIZE * _k).round()
+	var total_w: float = card_size.x * n + gap * (n - 1)
 	var row := HBoxContainer.new()
 	row.name = "EvoCards"
 	row.theme = UIKit.theme()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", EVO_CARD_GAP)
+	row.add_theme_constant_override("separation", int(gap))
 	row.set_anchors_preset(Control.PRESET_CENTER)
 	row.offset_left = -total_w * 0.5
 	row.offset_right = total_w * 0.5
 	row.offset_top = EVO_CARD_TOP
-	row.offset_bottom = EVO_CARD_TOP + card_size.y
+	if _k > 1.0:
+		row.offset_top = MobileUIScript.CHOICE_TOP - get_viewport().get_visible_rect().size.y * 0.5
+	row.offset_bottom = row.offset_top + card_size.y
+	_apply_desktop_scale(row)
 	add_child(row)
 	if old:
 		move_child(row, old.get_index())
@@ -1021,6 +1115,7 @@ func _layout_evolution_cards() -> void:
 		card.clip_contents = false ## seçim halesi kartın dışına taşar (bkz. TierCardFx.ensure_glow)
 		card.set_meta("glow_texture", EnchantScreenScript.GLOW_TEXTURE)
 		card.set_meta("glow_card_size", card_size)
+		card.set_meta("glow_pad", TierCardFx.GLOW_PAD * _k)
 		card.set_meta("glow_colors", EnchantScreenScript.GLOW_COLORS)
 		var frame: TextureRect = card.get_node_or_null("Frame") as TextureRect
 		if frame:
@@ -1030,7 +1125,7 @@ func _layout_evolution_cards() -> void:
 			var node: CanvasItem = card.get_node_or_null(n_name) as CanvasItem
 			if node:
 				node.visible = false
-		var icon_rect: Rect2 = EnchantScreenScript.ICON_RECT
+		var icon_rect: Rect2 = EnchantScreenScript.card_rect(EnchantScreenScript.ICON_RECT, _k)
 		var icon := TextureRect.new()
 		icon.name = "EvoIcon"
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1040,12 +1135,14 @@ func _layout_evolution_cards() -> void:
 		card.add_child(icon)
 		icon.position = icon_rect.position
 		icon.size = icon_rect.size
-		_row_label(card, "EvoKey", Rect2(icon_rect.end - Vector2(32.0, 32.0), Vector2(32.0, 32.0)), 24, UIKit.C_CREAM, HORIZONTAL_ALIGNMENT_RIGHT)
+		var key_box: float = 32.0 * _k
+		_row_label(card, "EvoKey", Rect2(icon_rect.end - Vector2(key_box, key_box), Vector2(key_box, key_box)), 40 if _k > 1.0 else 24, UIKit.C_CREAM, HORIZONTAL_ALIGNMENT_RIGHT)
 		var key_lbl: Label = card.get_node("EvoKey") as Label
 		key_lbl.add_theme_constant_override("outline_size", 6)
 		key_lbl.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-		_row_label(card, "EvoTier", EnchantScreenScript.TIER_RECT, EnchantScreenScript.HEADER_FONTS[0], UIKit.C_CREAM, HORIZONTAL_ALIGNMENT_LEFT)
-		_row_label(card, "EvoSkill", EnchantScreenScript.CATEGORY_RECT, EnchantScreenScript.HEADER_FONTS[0], EnchantScreenScript.DIM_COLOR, HORIZONTAL_ALIGNMENT_LEFT)
+		var head_fs: int = EnchantScreenScript.header_fonts(_k)[0]
+		_row_label(card, "EvoTier", EnchantScreenScript.card_rect(EnchantScreenScript.TIER_RECT, _k), head_fs, UIKit.C_CREAM, HORIZONTAL_ALIGNMENT_LEFT)
+		_row_label(card, "EvoSkill", EnchantScreenScript.card_rect(EnchantScreenScript.CATEGORY_RECT, _k), head_fs, EnchantScreenScript.DIM_COLOR, HORIZONTAL_ALIGNMENT_LEFT)
 		for lbl_name in ["EvoTier", "EvoSkill"]:
 			(card.get_node(lbl_name) as Label).clip_text = true
 		var text := RichTextLabel.new()
@@ -1060,8 +1157,8 @@ func _layout_evolution_cards() -> void:
 		text.add_theme_constant_override("line_separation", 2)
 		_set_desc_font_size(text, EVO_TEXT_FONT_SIZE)
 		card.add_child(text)
-		text.position = EnchantScreenScript.TEXT_RECT.position
-		text.size = EnchantScreenScript.TEXT_RECT.size
+		text.position = EnchantScreenScript.card_rect(EnchantScreenScript.TEXT_RECT, _k).position
+		text.size = EnchantScreenScript.card_rect(EnchantScreenScript.TEXT_RECT, _k).size
 
 
 func _populate_evolution_rows() -> void:
@@ -1101,10 +1198,11 @@ func _fill_evolution_card(card: Button, evo: Dictionary, tier: int, player: Node
 	var tier_lbl: Label = card.get_node("EvoTier") as Label
 	tier_lbl.text = "FİNAL EVRİM" if tier == EVO_TIER_FINAL else "EVRİM %d/%d" % [next_n, total]
 	tier_lbl.add_theme_color_override("font_color", EnchantScreenScript.TIER_TEXT[clampi(tier, 1, 4) - 1])
-	EnchantScreenScript._fit_header(tier_lbl, EnchantScreenScript.TIER_RECT.size.x)
+	EnchantScreenScript._fit_header(tier_lbl, EnchantScreenScript.card_rect(EnchantScreenScript.TIER_RECT, _k).size.x, EnchantScreenScript.header_fonts(_k))
 	var skill_lbl: Label = card.get_node("EvoSkill") as Label
-	skill_lbl.text = "%s  ·  %s" % [key, str(def.get(slot + "_name", ""))]
-	EnchantScreenScript._fit_header(skill_lbl, EnchantScreenScript.CATEGORY_RECT.size.x)
+	## "<yuva>_evo_name": iki varyasyonlu yuvalar (Büyücü Kız) evrim kartında ikisinin adını birden gösterir.
+	skill_lbl.text = "%s  ·  %s" % [key, str(def.get(slot + "_evo_name", def.get(slot + "_name", "")))]
+	EnchantScreenScript._fit_header(skill_lbl, EnchantScreenScript.card_rect(EnchantScreenScript.CATEGORY_RECT, _k).size.x, EnchantScreenScript.header_fonts(_k))
 	(card.get_node("EvoKey") as Label).text = key
 	(card.get_node("EvoDesc") as RichTextLabel).text = "[color=#%s]%s[/color]\n\n%s" % [
 		EVO_TITLE_COLOR.to_html(false), str(evo.get("name", "")), _evo_desc_bbcode(str(evo.get("desc", "")))]
@@ -1137,7 +1235,7 @@ func _fit_evolution_desc() -> void:
 		var desc: RichTextLabel = card.get_node_or_null("EvoDesc") as RichTextLabel
 		if desc == null:
 			continue
-		var fs: int = EVO_TEXT_FONT_SIZE
+		var fs: int = EVO_TEXT_FONT_SIZE if _k <= 1.0 else int(EnchantScreenScript.body_fonts(_k)[0])
 		_set_desc_font_size(desc, fs)
 		## İlk ölçüm de bir kare sonra - yerleşim bitmeden okunan yükseklik eski/şişkin çıkıp yazıyı boşuna küçültüyordu.
 		await get_tree().process_frame

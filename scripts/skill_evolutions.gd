@@ -3,7 +3,7 @@ extends RefCounted
 ## ==============================================================================
 ## YETENEK EVRİMLERİ (kullanıcı isteği 2026-09-28)
 ## ==============================================================================
-## (2026-09-30: Assasin Çocuk da eklendi - 9 karakter.)
+## (2026-09-30: Assasin Çocuk da eklendi - 9 karakter. 2026-10-04: Shaman da - 10 karakter; aynı gün Büyücü Kız - 11 karakter.)
 ## "her 5 levelde bir her karaktere oynadığı karaktere göre 3 kart sunulacak ... kartlar rasgele olacak ... Bir skillin 4
 ## geliştirmesini de aldığında final geliştirme kartların arasına karışıp şans eseri denk gelebilecek. Temel skillerin 5
 ## ultinin 3 geliştirmesi bulunur". Soru-cevapla netleşenler:
@@ -105,7 +105,7 @@ const DEFS := {
 			{"id": "talon_qf", "name": "Hayalet Hamle", "desc": "Hamle sırasında %100 sıvışma kazanırsın (sıvışma sınırını aşar).", "final": true},
 		],
 		"skill2": [
-			{"id": "talon_e1", "name": "Ateş Seli", "desc": "Silah Salvosu'nun saldırı hızı bonusu %150'den %200'e çıkar."},
+			{"id": "talon_e1", "name": "Ateş Seli", "desc": "Silah Salvosu'nun saldırı hızı bonusu %400'den %500'e çıkar."},
 			{"id": "talon_e2", "name": "Uzun Girdap", "desc": "Silahların dönüş hızı %20 artar ve salvo 2 saniye daha uzun sürer."},
 			{"id": "talon_e3", "name": "Keskin Çember", "desc": "Dönen silahlar çarptıkları yaratıklara isabet başına saldırı gücünün %50'si kadar hasar verir."},
 			{"id": "talon_e4", "name": "Koşan Salvo", "desc": "Salvo sürerken hareket hızın %20 artar."},
@@ -230,6 +230,56 @@ const DEFS := {
 			{"id": "assasin_r1", "name": "Hızlanan Hücum", "desc": "Gölge Hücumu'nun saldırı sıklığı saldırı hızına bağlı olarak artar."},
 			{"id": "assasin_r2", "name": "Çabuk Gölge", "desc": "Gölge Hücumu'nun bekleme süresi %25 azalır."},
 			{"id": "assasin_rf", "name": "Gölge İzi", "desc": "Gölge Hücumu sırasında arkanda 1 saniye süren bir gölge izi bırakırsın; ize temas eden yaratıklar saldırı gücünün %80'i kadar hasar alır.", "final": true},
+		],
+	},
+	## ---------------------------------------------------------------- Shaman (kullanıcı isteği 2026-10-04)
+	## Q = Saldırı Totemi (27), E = Kalkan Totemi (26), R = Elemental Golem (49). Kullanıcının metninde E3 "Yavaşlatma oranı %70
+	## seviyesine yükselir" yazıyordu ama Kalkan Totemi'nin yavaşlatması yok (2026-09-29'da tüm totemlerden kaldırıldı) - bu
+	## yüzden E3 alandaki yaratıklara %70 yavaşlatmayı İLK KEZ getirir (temel yavaşlatma yok).
+	12: {
+		"skill": [
+			{"id": "shaman_q1", "name": "Üçüncü Totem", "desc": "Saldırı Totemi'nin yük sayısı 3'e çıkar."},
+			{"id": "shaman_q2", "name": "Alev Dokunuşu", "desc": "Totemin saldırıları senin pasifinden yararlanır: her saldırı hedefi yakar (3 saniye boyunca saniyede saldırı gücünün %10'u)."},
+			{"id": "shaman_q3", "name": "Çabuk Totem", "desc": "Saldırı Totemi'nin bekleme süresi %20 azalır."},
+			{"id": "shaman_q4", "name": "Ruh Emici", "desc": "Totemin saldırıları %5 can çalma kazanır ve can çalma statlarından da faydalanır; çalınan can sana yenilenir."},
+			{"id": "shaman_qf", "name": "Patlayan Alev", "desc": "Totemin saldırıları isabet ettiği hedefte patlar ve etrafındaki yaratıklara hasarın %50'si kadar hasar verir.", "final": true},
+		],
+		"skill2": [
+			{"id": "shaman_e1", "name": "Geniş Alan", "desc": "Kalkan Totemi'nin alanı %30 büyür."},
+			{"id": "shaman_e2", "name": "Savaş Ritmi", "desc": "Alanın içindeki oyuncular %15 saldırı hızı kazanır."},
+			{"id": "shaman_e3", "name": "Yapışkan Zemin", "desc": "Alandaki yaratıklar %70 yavaşlar."},
+			{"id": "shaman_e4", "name": "Güçlü Kalkan", "desc": "Totemin verdiği kalkan %50 artar."},
+			{"id": "shaman_ef", "name": "İtici Dalga", "desc": "Alan her hasar verdiğinde yaratıkları totemin merkezinden bir miktar dışarı iter.", "final": true},
+		],
+		"skill3": [
+			{"id": "shaman_r1", "name": "Taş Deri", "desc": "Golem formundayken hasar azaltma %60 seviyesine yükselir."},
+			{"id": "shaman_r2", "name": "Taşın Dirilişi", "desc": "Golem formundayken öldürdüğün her yaratık başına eksik canının %1'i kadar can yenilersin."},
+			{"id": "shaman_rf", "name": "Dev Golem", "desc": "Golem formundayken boyutun %30 büyür, %15 saldırı gücü kazanırsın ve golem yeteneklerinin alanı %30 artar.", "final": true},
+		],
+	},
+	## ---------------------------------------------------------------- Büyücü Kız (kullanıcı isteği 2026-10-04)
+	## Q = Büyü Değişimi (set değiştirir), E = Arcane Lanet / Hortum (set 1 / set 2), R = Don Nova / Meteor Patlaması. E ve R
+	## evrimleri yuvadaki İKİ varyasyonu birden güçlendirir. Temel değişiklik "çünkü donma olayı geliştirmelere eklenecek": Don
+	## Nova artık dondurmaz, 6 sn %80 yavaşlatır (R finali ilk 3 sn dondurur). Sayılar player.gd EVO_BUYUCU_* sabitlerinde.
+	4: {
+		"skill": [
+			{"id": "buyucu_q1", "name": "Kalkan Akışı", "desc": "Her set değiştirdiğinde maksimum kalkanının %10'u yenilenir (bu etkinin 10 saniye bekleme süresi vardır)."},
+			{"id": "buyucu_q2", "name": "Büyü Rüzgarı", "desc": "Her yetenek kullandığında 2 saniye boyunca %20 hareket hızı kazanırsın."},
+			{"id": "buyucu_q3", "name": "Akıcı Büyü", "desc": "Tüm yeteneklerinin bekleme süresi %15 azalır."},
+			{"id": "buyucu_q4", "name": "Tutumlu Büyü", "desc": "Yeteneklerinin kalkan bedeli %25 azalır."},
+			{"id": "buyucu_qf", "name": "Efsunlu Büyü", "desc": "Her 5 yetenek kullanımında (Q hariç) yeteneklerinden biri efsunlanır ve butonu parıldar: bir sonraki kullanımında boyutu ve hasarı %25 artar.", "final": true},
+		],
+		"skill2": [
+			{"id": "buyucu_e1", "name": "Arcane Patlama", "desc": "Arcane Lanet her isabette patlar ve çevresindeki yaratıklara verdiği hasarın %75'i kadar hasar verir. Hortuma yakalanan yaratıklar %20 daha fazla hasar alır."},
+			{"id": "buyucu_e2", "name": "Çabuk Büyü", "desc": "Arcane Lanet'in ve Hortum'un bekleme süresi %20 azalır."},
+			{"id": "buyucu_e3", "name": "Güçlü Büyü", "desc": "Arcane Lanet'in ve Hortum'un saldırı gücü oranları %30 artar."},
+			{"id": "buyucu_e4", "name": "Savuran Büyü", "desc": "Arcane Lanet'in çarptığı yaratıklar geriye itilir; hortuma yakalanan yaratıklar 1 saniye sersemler."},
+			{"id": "buyucu_ef", "name": "Büyü Fırtınası", "desc": "Arcane Lanet 4 yerine 7 yaratığa seker. Hortum sayısı 5'e çıkar.", "final": true},
+		],
+		"skill3": [
+			{"id": "buyucu_r1", "name": "Yükseliş", "desc": "Meteor Patlaması süresince havaya yükselir ve hedef alınamaz olursun. Don Nova yaratıkları etki alanının dışına iter."},
+			{"id": "buyucu_r2", "name": "Meteor Sağanağı", "desc": "Meteorlar %30 daha sık düşer. Don Nova kalkan harcamaz."},
+			{"id": "buyucu_rf", "name": "Ateş ve Buz", "desc": "Meteorlar yere krater bırakır; üstüne basan yaratıklar yanarak 3 saniye boyunca saniyede saldırı gücünün %30'u kadar hasar alır. Don Nova yaratıkları ilk 3 saniye dondurur.", "final": true},
 		],
 	},
 }

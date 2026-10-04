@@ -113,9 +113,14 @@ static func _pick(progress: Array, temel: Array, exclude: Array) -> Array:
 ##   lead       - efsunun ne yaptığı (tek cümle, element adıyla)
 ##   head/body  - kartın başlığı (geliştirmenin adı) + bu kartın verdiği şey
 ##   note       - Final için gereken eşya (son geliştirmede ve Final kartında; sende var mı)
+## SADE KART METNİ (kullanıcı isteği 2026-10-03: "efsun kartlarının açıklamasının daha basit olmasını istiyorum geliştirmelerde
+## sadece stat artışları yazsın varsa ek özellikler yazsın efsun başlangıçlarında da çalışma biçimini anlatsın yeter"):
+## kartta artık sadece ad + TEK bir metin var - başlangıç (Temel / kalkan seçimi): nasıl çalıştığı; geliştirme / Final / genel:
+## sadece ne değiştiği. Eski "<element> efsunu. <özet>" girişi, "BU KART (...)" başlığı ve alt notlar kaldırıldı (element adı
+## üst satırda: "Temel · Kanama"). lead/head/note alanları duruyor (altın kartı lead kullanır), boşsa ekran çizmez.
 static func describe(c: Dictionary) -> Dictionary:
 	var kind: String = str(c.get("type", ""))
-	var out: Dictionary = {"title": "", "tier_line": "", "category": "", "lead": "", "head": "BU KART", "body": "",
+	var out: Dictionary = {"title": "", "tier_line": "", "category": "", "lead": "", "head": "", "body": "",
 		"power": "", "note": "", "icon": "", "color": Color("#d9d2c4"), "final": kind == "final", "banishable": kind == "temel"}
 	match kind:
 		"temel", "step", "final":
@@ -131,37 +136,31 @@ static func describe(c: Dictionary) -> Dictionary:
 			out["color"] = EnchantDefs.element_color(element)
 			out["title"] = str(def.get("name", ""))
 			out["category"] = wname
-			out["lead"] = "%s efsunu. %s" % [EnchantDefs.element_name(element), str(def.get("desc", ""))]
 			var ups: Array = def.get("upgrades", [])
 			var taken: int = _taken_count(slot)
 			match kind:
 				"temel":
-					out["tier_line"] = "Temel"
-					out["head"] = "BU KART (efsunu başlatır)"
+					out["tier_line"] = "Temel · %s" % EnchantDefs.element_name(element)
 					out["body"] = str((def.get("base", {}) as Dictionary).get("text", ""))
 				"step":
 					var u: int = int(c.get("up", 0))
 					var up: Dictionary = ups[u] if u >= 0 and u < ups.size() else {}
 					out["tier_line"] = "Geliştirme %d / %d" % [taken + 1, ups.size()]
-					out["head"] = str(up.get("name", "GELİŞTİRME")).to_upper()
 					out["body"] = str(up.get("text", ""))
 				"final":
 					var fin: Dictionary = def.get("final", {})
 					out["tier_line"] = "Final"
-					out["head"] = "FİNAL: %s" % str(fin.get("name", "")).to_upper()
 					out["body"] = str(fin.get("text", ""))
 		"general_rp":
 			out["title"] = "Tepkime Gücü"
 			out["category"] = "Tüm silahlar"
 			out["tier_line"] = "Genel"
-			out["lead"] = "İki farklı element aynı düşmanda buluşunca tepkime olur (ör. donma + yanma = Buhar Patlaması)."
 			out["body"] = "Tetiklediğin tüm tepkimelerin hasarı %%%d artar." % int(round(EnchantDefs.GENERAL_REACTION_POWER * 100.0))
 			out["color"] = Color("#c98cff")
 		"general_dmg":
 			out["title"] = "Keskinlik"
 			out["category"] = "Tüm silahlar"
 			out["tier_line"] = "Genel"
-			out["lead"] = "Efsunu olsun olmasın bütün silahlarını etkiler."
 			out["body"] = "Tüm silahlarının hasarı %%%d artar." % int(round(EnchantDefs.GENERAL_DAMAGE_PERCENT * 100.0))
 			out["color"] = Color("#ff8a5a")
 		"shield_pick", "shield_up":

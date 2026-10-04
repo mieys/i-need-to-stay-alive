@@ -29,15 +29,51 @@ const MENU_MAX_SCALE := 1.6
 const MENU_MIN_SCALE := 0.6
 const MENU_MARGIN := 20.0
 ## İçerikleri ekrana sığacak kadar büyütülen ekranlar (kökü CanvasLayer). Yeni bir modal ekran eklenirse buraya yaz.
+## level_up_screen.gd / enchant_screen.gd / chest_menu.gd 2026-10-03'ten beri telefonda kendi yerleşimini kurar (bkz. CHOICE_*
+## aşağıda) - listede YOK.
 const FIT_LAYER_SCRIPTS: Array[String] = [
 	"res://scripts/pause_menu.gd",
-	"res://scripts/level_up_screen.gd",
-	"res://scripts/chest_menu.gd",
-	"res://scripts/merchant_shop_screen.gd",
-	"res://scripts/enchant_screen.gd",
-	"res://scripts/weapon_select_screen.gd",
 	"res://scripts/keybind_menu.gd",
+	"res://scripts/graphics_settings_menu.gd",
 ]
+## SEÇİM EKRANLARI (kullanıcı seçimi 2026-10-03, prototip "A - ekranı dolduran kartlar", tools/mobile_ui/proto_choice.gd):
+## level atlama / yetenek evrimi / efsun kartları telefonda MenuFitter ile sığdırılmaz, kendi büyük yerleşimini kurar:
+## aynı kart dokuları TAM sayı sanat pikseli katında (efsun kartı 3x -> 5x = 600x900; sığmazsa 4x), ekranın boyu kadar;
+## karıştır / geç / geri sayım ekranın iki yanında dikey büyük düğmeler (başparmak bölgesi).
+const CHOICE_SIDE_W := 220.0
+const CHOICE_SIDE_PAD := 16.0
+const CHOICE_TOP := 124.0 ## başlık (+ efsun özeti) altı
+const CHOICE_BOTTOM := 1050.0
+## Telefonda kart yazı boyları (m5x7 8'in katlarında keskin): başlık satırları ve gövde, büyükten küçüğe denenir.
+const CHOICE_HEADER_FONTS := [48, 40, 32]
+const CHOICE_BODY_FONTS := [48, 40, 32, 24]
+
+
+## 3x kart boyutunun telefonda kaç katı çizileceği: 5/3 (5x sanat px) sığarsa o, yoksa 4/3, yoksa 1 (masaüstüyle aynı).
+static func choice_card_scale(vp: Viewport, card3x: Vector2, count: int, gap: float) -> float:
+	if not enabled or vp == null:
+		return 1.0
+	var view: Vector2 = vp.get_visible_rect().size
+	var safe: Rect2 = safe_margins(vp)
+	var room_w: float = view.x - safe.position.x - safe.size.x - 2.0 * (CHOICE_SIDE_W + 2.0 * CHOICE_SIDE_PAD)
+	var room_h: float = view.y - CHOICE_TOP - (view.y - CHOICE_BOTTOM) - safe.position.y - safe.size.y
+	for k: float in [5.0 / 3.0, 4.0 / 3.0]:
+		if card3x.x * k * count + gap * (count - 1) <= room_w and card3x.y * k <= room_h:
+			return k
+	return 1.0
+
+
+## Ekran kenarındaki dikey düğme yuvası (left: sol kenar). index/count: aynı kenarda alt alta kaçıncı / kaç tane.
+static func choice_side_rect(vp: Viewport, left: bool, index: int, count: int, h: float) -> Rect2:
+	var view: Vector2 = vp.get_visible_rect().size
+	var safe: Rect2 = safe_margins(vp)
+	var gap: float = 24.0
+	var total: float = h * count + gap * (count - 1)
+	var y: float = roundf((view.y - total) * 0.5) + index * (h + gap)
+	var x: float = safe.position.x + CHOICE_SIDE_PAD if left else view.x - safe.size.x - CHOICE_SIDE_PAD - CHOICE_SIDE_W
+	return Rect2(x, y, CHOICE_SIDE_W, h)
+
+
 ## Telefonda uzak-yaratık LOD yarıçapı (dünya px; masaüstü 1600). Kamera 3.25x yakın - görünen alanın yarısı ~370x170 px;
 ## 900, çok oyunculuda masaüstü oyuncunun görüş alanını (yarısı ~480x270) da rahat kapsar.
 const MOBILE_LOD_RADIUS := 900.0
@@ -64,8 +100,11 @@ static func apply(tree: SceneTree) -> void:
 	if is_real_phone():
 		## Proje vsync KAPALI (masaüstü tercihi); telefonda sınırsız kare çizmek pili ısıtıp işlemciyi yavaşlatıyor ->
 		## dalgalı kasma. 60'a sabit, vsync açık.
+		## project.godot display/window/frame_pacing/android/swappy_mode=0 (pipeline_forced_on) bu 60'a UYAR. Godot varsayılanı
+		## 2 (auto_fps_auto_pipeline) FPS'i kendisi seçip ara sıra kaçan karelerde oyunu kalıcı 30'a indiriyordu (2026-10-03,
+		## Galaxy S22: perf testinde kare ortalaması 11.8 ms = 85 FPS iken oyunda sabit 30 - bkz. perf_probe.gd).
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
-		Engine.max_fps = 60
+		## Kare sınırı (telefonda varsayılan 60) artık Grafik ayarlarında: UISound.fps_limit (bu autoload'dan SONRA yüklenir).
 	## Ekran sığdırıcı ayrı dosyada (iç sınıflar bu dosyanın statik fonksiyonlarını göremiyor); load: döngüsel preload olmasın.
 	var w: Node = load("res://scripts/mobile_menu_fit.gd").new()
 	w.name = "MobileUIWatcher"

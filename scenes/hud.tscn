@@ -14,7 +14,7 @@
 [ext_resource type="Script" uid="uid://keugaujfmu0h" path="res://scripts/minimap.gd" id="minimap_script"]
 [ext_resource type="Script" uid="uid://btlr6id8elxjb" path="res://scripts/revive_hearts_hud.gd" id="revive_hearts_script"]
 [ext_resource type="Texture2D" path="res://assets/ui/kit/hud_bar_frame_hp.png" id="tex_can_new"]
-[ext_resource type="Texture2D" uid="uid://br5vtbmsq6tyy" path="res://assets/ui/newui/icon_ingot.png" id="tex_gold_ingot"]
+[ext_resource type="Texture2D" path="res://assets/ui/newui/icon_gold_coin.png" id="tex_gold_ingot"]
 [ext_resource type="Texture2D" path="res://assets/ui/kit/hud_bar_frame_shield.png" id="tex_kalkan_new"]
 [ext_resource type="Texture2D" path="res://assets/ui/kit/hud_bar_fill.png" id="tex_mp"]
 [ext_resource type="Texture2D" path="res://assets/ui/kit/hud_avatar_frame.png" id="tex_port"]

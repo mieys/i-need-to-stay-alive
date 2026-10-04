@@ -37,6 +37,10 @@ const DRIFT_BASE := 5.0
 const DRIFT_WIND := 22.0
 ## Güç değişimleri yumuşak (hava/gün geçişlerinde ani sıçrama olmasın).
 const FADE_RATE := 0.5
+## PİŞİRME (2026-10-03, telefon FPS - bkz. shader "gecis 2"): bulut + güneş bir kez, 1 piksel = 1 dünya texel'i çözünürlükte
+## küçük bir SubViewport'ta hesaplanır; iki ekran geçişi sadece o texel'i okur (görüntü aynı, telefonda ~10 kat az iş).
+## Dünya görünümü ekranın bu oranından büyükse (kamera çok uzak) pişirme kapanır, geçişler eskisi gibi doğrudan hesaplar.
+const BAKE_MAX_PIXEL_RATIO := 0.6
 
 var _rect: ColorRect = null
 var _mat: ShaderMaterial = null
@@ -45,6 +49,11 @@ var _mat: ShaderMaterial = null
 var light_layer: CanvasLayer = null
 var _light_rect: ColorRect = null
 var _light_mat: ShaderMaterial = null
+## false = pişirme kapalı, eski doğrudan hesaplama (A/B karşılaştırma).
+var bake_enabled: bool = true
+var _bake: SubViewport = null
+var _bake_rect: ColorRect = null
+var _bake_mat: ShaderMaterial = null
 var _atmosphere: Node = null
 var _drift: Vector2 = Vector2.ZERO
 var _time: float = 0.0
@@ -77,6 +86,19 @@ func _ready() -> void:
 	_light_rect.material = _light_mat
 	light_layer.add_child(_light_rect)
 	_light_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_bake_mat = ShaderMaterial.new()
+	_bake_mat.shader = ShaderRes
+	_bake_mat.set_shader_parameter("gecis", 2)
+	_bake = SubViewport.new()
+	_bake.name = "GunesBulutPisirme"
+	_bake.disable_3d = true
+	_bake.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_bake_rect = ColorRect.new()
+	_bake_rect.material = _bake_mat
+	_bake.add_child(_bake_rect)
+	add_child(_bake)
+	for m: ShaderMaterial in [_mat, _light_mat]:
+		m.set_shader_parameter("pisik", _bake.get_texture())
 	## Rastgele başlangıç: her oyunda bulutlar farklı yerde.
 	_drift = Vector2(randf_range(-5000.0, 5000.0), randf_range(-5000.0, 5000.0))
 
@@ -104,10 +126,15 @@ func _process(delta: float) -> void:
 	var step: float = FADE_RATE * delta
 	_sun_k = move_toward(_sun_k, sun_target, step)
 	_cloud_k = move_toward(_cloud_k, cloud_target, step)
+	## Grafik ayarı (UISound.gfx_sun_clouds, Düşük/Orta'da kapalı): ANINDA kapanır - iki tam ekran geçiş + pişirme hiç çizilmez.
+	if not UISound.gfx_sun_clouds:
+		_sun_k = 0.0
+		_cloud_k = 0.0
 	_cover = move_toward(_cover, cover_target, step * 0.2)
 	_rect.visible = _cloud_k > 0.002
 	_light_rect.visible = _sun_k > 0.002
 	if not _rect.visible and not _light_rect.visible:
+		_bake.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		return
 	_time += delta
 	_drift -= Vector2.from_angle(wind_angle) * (DRIFT_BASE + DRIFT_WIND * wind) * delta
@@ -117,7 +144,22 @@ func _process(delta: float) -> void:
 	var size: Vector2 = vp.get_visible_rect().size
 	var tl: Vector2 = inv * Vector2.ZERO
 	var br: Vector2 = inv * size
+	## Pişirme dokusu: görünen dünya texel'leri + 1 texel pay (tam sayı köşe).
+	var koken: Vector2 = tl.floor() - Vector2.ONE
+	var bake_size := Vector2i(ceili(br.x - koken.x) + 2, ceili(br.y - koken.y) + 2)
+	var baked: bool = bake_enabled and float(bake_size.x * bake_size.y) <= size.x * size.y * BAKE_MAX_PIXEL_RATIO
+	_bake.render_target_update_mode = SubViewport.UPDATE_ALWAYS if baked else SubViewport.UPDATE_DISABLED
+	if baked:
+		if _bake.size != bake_size:
+			_bake.size = bake_size
+			_bake_rect.size = Vector2(bake_size)
+		_bake_mat.set_shader_parameter("pisik_koken", koken)
+		_bake_mat.set_shader_parameter("pisik_boyut", Vector2(bake_size))
+		_bake_mat.set_shader_parameter("gunes_hesapla", _light_rect.visible)
 	for m: ShaderMaterial in [_mat, _light_mat]:
+		m.set_shader_parameter("pisik_kullan", baked)
+		m.set_shader_parameter("pisik_koken", koken)
+	for m: ShaderMaterial in [_mat, _light_mat, _bake_mat]:
 		m.set_shader_parameter("dunya_sol_ust", tl)
 		m.set_shader_parameter("dunya_boyut", br - tl)
 		m.set_shader_parameter("kamera", (tl + br) * 0.5)

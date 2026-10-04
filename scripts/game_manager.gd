@@ -80,6 +80,10 @@ var selected_character: int = 38
 ## açılınca varsayılan (Para) otomatik seçili gelir, yani normal akışta kimse ruhani yeteneksiz başlamaz; boş "" değer
 ## seçim ekranından hiç geçilmediği (ör. editörden doğrudan main.tscn, testler) anlamına gelir -> ruhani yetenek yok.
 var selected_spiritual: String = ""
+## Başlangıç silahı (kullanıcı isteği 2026-10-03): karakter seçim ekranında / lobide seçilir (menu_weapon_picker.gd), oyun
+## başlayınca main.gd _start_initial_loadout_selection verir. Boş/geçersizse WeaponCatalog.DEFAULT_KEY (bkz. weapon_catalog.gd).
+## Ruhani yetenek gibi yerel tercih - ağdan gitmez (her oyuncu kendi silahını kendi istemcisinde alır).
+var selected_start_weapon: String = ""
 
 var gold: int = 0
 ## Kullanıcı isteği: "altın toplayıcı ve madeni oyundan tamamen kaldır ve
@@ -242,16 +246,18 @@ const KEYBIND_SETTINGS_PATH := "user://keybind_settings.cfg"
 ## Tuş atama menüsünde gösterilecek, rebind edilebilir action listesi -
 ## _setup_input_actions()'daki _bind() çağrılarıyla eşleşir (F9 debug paneli
 ## gibi oyuncuya yönelik olmayanlar bilerek dışarıda bırakıldı).
+## Etiketler oyundaki yuva adlarıyla (kullanıcı isteği 2026-10-04): skill = Q yeteneği, skill2 = E yeteneği, skill3 = R = Ulti.
 const REBINDABLE_ACTIONS := [
 	{"action": "move_up", "label": "Yukarı Hareket"},
 	{"action": "move_down", "label": "Aşağı Hareket"},
 	{"action": "move_left", "label": "Sola Hareket"},
 	{"action": "move_right", "label": "Sağa Hareket"},
-	{"action": "skill", "label": "Ulti (Ana Yetenek)"},
-	{"action": "skill2", "label": "Temel Yetenek"},
-	{"action": "skill3", "label": "3. Yetenek"},
+	{"action": "skill", "label": "Q Yeteneği"},
+	{"action": "skill2", "label": "E Yeteneği"},
+	{"action": "skill3", "label": "Ulti"},
 	{"action": "skill4", "label": "Ruhani Yetenek"},
 	{"action": "interact", "label": "Etkileşim / Eve Gir"},
+	{"action": "inventory", "label": "Envanter"},
 ]
 
 ## action_name -> Key (int) - diskten okunan yerel tuş override'ları,
@@ -277,6 +283,14 @@ func _ready() -> void:
 	MobileUI.apply(get_tree())
 	_load_keybind_overrides()
 	_setup_input_actions()
+	## Kumandayla menü/kart gezinmesi (ilk odak, odak çerçevesi) - bkz. gamepad_ui.gd.
+	var gamepad_ui: Node = load("res://scripts/gamepad_ui.gd").new()
+	gamepad_ui.name = "GamepadUi"
+	add_child(gamepad_ui)
+	## Dokunmatik kaydırma: kartların/düğmelerin üstünden de sürükleyerek kaydırma (bkz. touch_scroll.gd).
+	var touch_scroll: Node = load("res://scripts/touch_scroll.gd").new()
+	touch_scroll.name = "TouchScroll"
+	add_child(touch_scroll)
 
 
 func _load_keybind_overrides() -> void:
@@ -411,9 +425,8 @@ func _setup_input_actions() -> void:
 	## yok (bkz. player.gd get_skill2_id()/_activate_skill2()).
 	_bind("skill", KEY_Q)
 	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle... yetenek
-	## tuşlarını da buna göre ayarla") - A/B zaten motorun ui_accept/
-	## ui_cancel varsayılanı (dokunulmuyor), bu yüzden 3 yetenek X/Y/RB'ye,
-	## interact LB'ye dağıtıldı - hepsi kolayca yeniden atanabilir.
+	## tuşlarını da buna göre ayarla") - A/B menü onay/geri için ayrıldı (aşağıda ui_accept/ui_cancel), bu yüzden
+	## 3 yetenek X/Y/RB'ye, interact LB'ye dağıtıldı - hepsi kolayca yeniden atanabilir.
 	_bind_joypad("skill", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_Y}])
 	_bind("skill2", KEY_E)
 	_bind_joypad("skill2", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_X}])
@@ -443,6 +456,29 @@ func _setup_input_actions() -> void:
 	## Serbest metin yazımı gamepad'de karşılığı olmadığı için (kullanıcı
 	## kararı: sanal klavye YOK) gamepad varsayılanı bilerek eklenmedi.
 	_bind("chat", KEY_ENTER)
+	## Envanter (kullanıcı bildirimi 2026-10-03: kumandayla "bazı eksiklikler var") - eskiden SADECE ekrandaki ENVANTER
+	## düğmesiyle açılıyordu; kumandada karşılığı yoktu. Klavye I, kumanda Select/Back (bkz. hud.gd _unhandled_input).
+	_bind("inventory", KEY_I)
+	_bind_joypad("inventory", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_BACK}])
+	## MENÜ ONAY / GERİ / DURAKLAT (aynı bildirim: "butonları onaylayamıyorum ayarları açamıyorum"): Godot 4.7'nin
+	## varsayılan ui_accept / ui_cancel eylemlerinde HİÇ kumanda düğmesi YOK (sadece Enter/Space/Escape - ölçüldü; eski
+	## "A/B zaten motorun varsayılanı" notu yanlıştı). A = onay, B = geri, Start = duraklatma menüsü (main.gd pause_game ile
+	## açar/kapatır). Yeniden atanamaz (motor eylemleri); kart/düğme odağı için bkz. gamepad_ui.gd.
+	_bind_joypad("ui_accept", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_A}])
+	_bind_joypad("ui_cancel", [
+		{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_B},
+		{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_START},
+	])
+	## Kullanıcı isteği (2026-10-04): "joystickteki oyun durdurma tuşunun sadece start tuşu olmasını istiyorum başka bi tuş daha
+	## oyunu durduruyor" - main.gd duraklatmayı eskiden ui_cancel'dan açıyordu, B de ui_cancel olduğu için B oyunu duraklatıyordu.
+	## Artık oyun içi duraklatma AYRI bir eylem: Esc + Start. B sadece menülerde "geri" (ui_cancel). Esc ve Start ayrıca
+	## ui_cancel'da kaldığı için "panel kendi geri basışını tüketti" mantığı (mark_ui_cancel_consumed) aynen çalışır.
+	if not InputMap.has_action("pause_game"):
+		InputMap.add_action("pause_game")
+	var pause_key := InputEventKey.new()
+	pause_key.physical_keycode = KEY_ESCAPE
+	InputMap.action_add_event("pause_game", pause_key)
+	_bind_joypad("pause_game", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_START}])
 
 
 func _bind(action_name: String, keycode: Key) -> void:
@@ -981,6 +1017,21 @@ func register_blocking_panel(panel: Node) -> void:
 
 func unregister_blocking_panel(panel: Node) -> void:
 	_blocking_panels.erase(panel)
+
+
+## Bir panel "geri" basışını (ui_cancel) kendisi kullandıysa işaretler: main.gd duraklatma menüsünü _process'te
+## Input.is_action_just_pressed ile açtığı için set_input_as_handled onu durdurmaz; panel o basışla kapanınca "engelleyici
+## panel yok" görüp AYNI basışla menüyü açıyordu (kumanda B ile envanter kapatma, 2026-10-03). Girdi karesi ile _process
+## karesi arasında sayaç bir artabildiği için 1 kare tolerans.
+var _ui_cancel_consumed_frame: int = -100
+
+
+func mark_ui_cancel_consumed() -> void:
+	_ui_cancel_consumed_frame = Engine.get_process_frames()
+
+
+func was_ui_cancel_consumed() -> bool:
+	return Engine.get_process_frames() - _ui_cancel_consumed_frame <= 1
 
 
 func is_any_blocking_panel_open() -> bool:

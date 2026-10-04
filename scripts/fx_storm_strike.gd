@@ -19,7 +19,14 @@ const ImpactFrames := preload("res://assets/fx/storm/impact_frames.tres")
 const ScorchTexture := preload("res://assets/fx/storm/scorch.png")
 
 const CHARGE_SOUND := "res://assets/audio/storm/charge.wav"
-const STRIKE_SOUNDS := ["res://assets/audio/storm/thunder_strike_1.wav", "res://assets/audio/storm/thunder_strike_2.wav"]
+## Kullanıcı isteği (2026-10-03, "yeni yıldırım sesleri.zip"): 3 yeni ses, her düşüşte rastgele biri. Kaynak mp3'ler mono wav'a
+## çevrildi, eski seslerle aynı seviyeye getirildi ve PATLAMANIN BAŞLANGICI her dosyada 0.10 sn'ye denk gelecek şekilde
+## kırpıldı (orijinallerde 0.09 / 0.38 / 1.80 sn'deydi - doğrudan konsaydı ilkinde gök 1.8 sn geç patlardı).
+const STRIKE_SOUNDS := ["res://assets/audio/storm/thunder_strike_1.wav", "res://assets/audio/storm/thunder_strike_2.wav",
+		"res://assets/audio/storm/thunder_strike_3.wav"]
+## Ses SENKRONU: dosyalardaki patlama 0.10 sn'de, yıldırım zemine bolt_frames'in 2. karesinde (1/24 sn = 0.04 sn) değiyor
+## -> ses düşüşten bu kadar ÖNCE başlatılır, patlama tam yıldırımın yere çarptığı kareye oturur.
+const STRIKE_SOUND_LEAD := 0.10 - 1.0 / 24.0
 
 ## Sayfalardaki çapa noktaları (sanat pikseli = dünya birimi, bkz. tools/gen_storm_fx.py): karenin ortasına göre zemin.
 const WARNING_CENTER := Vector2.ZERO ## 128x80, zemin (64,40) = kare ortası
@@ -81,6 +88,8 @@ func _sound(path: String, volume_db: float, max_distance: float, attenuation: fl
 func _process(delta: float) -> void:
 	_t += delta
 	if not _struck:
+		if play_sounds and _strike_player == null and _t >= warn_time - STRIKE_SOUND_LEAD:
+			_strike_player = _sound(STRIKE_SOUNDS[randi() % STRIKE_SOUNDS.size()], -3.0, 3000.0, 0.7) ## 2026-09-25: -5 dB
 		var k: float = clampf(_t / warn_time, 0.0, 1.0)
 		## Belirir, güçlenir; son %30'da hızlanan titreme (dikkat!).
 		var flicker: float = 1.0
@@ -114,8 +123,8 @@ func _strike() -> void:
 	_impact = _sprite(ImpactFrames, IMPACT_OFFSET, ABOVE_Z)
 	_impact.play("burst")
 	_impact.animation_finished.connect(_impact.queue_free)
-	if play_sounds:
-		_strike_player = _sound(STRIKE_SOUNDS[randi() % STRIKE_SOUNDS.size()], -3.0, 3000.0, 0.7) ## 2026-09-25: -5 dB
+	if play_sounds and _strike_player == null: ## normalde STRIKE_SOUND_LEAD kadar önce başladı (bkz. _process)
+		_strike_player = _sound(STRIKE_SOUNDS[randi() % STRIKE_SOUNDS.size()], -3.0, 3000.0, 0.7)
 	if on_strike.is_valid():
 		on_strike.call(global_position)
 

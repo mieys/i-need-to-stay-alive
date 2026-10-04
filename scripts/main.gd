@@ -9,17 +9,10 @@ const PauseMenuScene = preload("res://scenes/pause_menu.tscn")
 const RemotePlayerScene = preload("res://scenes/remote_player.tscn")
 const ChestMenuScene = preload("res://scenes/chest_menu.tscn")
 const EnchantScreenScript = preload("res://scripts/enchant_screen.gd")
-## Kullanıcı isteği: "kimsenin başlangıç silahı/kalkanı yok, oyuna başlayınca
-## 3 silah kartından 1 seçilecek, sonra 2 kalkan kartından 1 seçilecek" - bkz.
-## weapon_select_screen.gd (level_up_screen.gd'nin kart/animasyon/çok
-## oyunculu bekleme desenini yeniden kullanan yeni, ayrı bir ekran).
-## DÜZELTME (kullanıcı isteği: "level aralarında gelen silah seçimlerini
-## kaldır, sadece ilk levelde silah ve kalkan seçim ekranı olacak") - eskiden
-## bu ekran 5/10/15/20. levellerde (bkz. kaldırılan WEAPON_MILESTONE_LEVELS/
-## _advance_level_up_queue'daki kilometre taşı bloğu) de tekrar açılıyordu;
-## artık SADECE _start_initial_loadout_selection()'dan (oyunun en başında)
-## çağrılıyor.
-const WeaponSelectScreenScript = preload("res://scripts/weapon_select_screen.gd")
+## Başlangıç silahı (kullanıcı isteği 2026-10-03): oyun başındaki 3 rastgele silah kartı ekranı (weapon_select_screen.gd)
+## SİLİNDİ - silah karakter seçim ekranında / lobide seçiliyor (menu_weapon_picker.gd -> GameManager.selected_start_weapon),
+## oyun başlayınca _start_initial_loadout_selection doğrudan verir.
+const WeaponCatalog := preload("res://scripts/weapon_catalog.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
 
 ## bkz. _on_merchant_spawned/_on_merchant_departed - minimap'teki küçük "$"
@@ -67,6 +60,9 @@ const AtmosphereScript := preload("res://scripts/atmosphere.gd")
 const GrassSwayScript := preload("res://scripts/grass_sway.gd")
 const TreeSwayScript := preload("res://scripts/tree_sway.gd")
 const MapShadowsScript := preload("res://scripts/map_shadows.gd")
+const GroundTexelPassScript := preload("res://scripts/ground_texel_pass.gd")
+const WorldRenderScaleScript := preload("res://scripts/world_render_scale.gd")
+const MobileUI := preload("res://scripts/mobile_ui.gd")
 const SunCloudsScript := preload("res://scripts/sun_clouds.gd")
 const RiverAmbienceScript := preload("res://scripts/river_ambience.gd")
 
@@ -303,6 +299,11 @@ func _ready() -> void:
 		TreeSwayScript.new().setup(harita_node)
 		## Harita gölgeleri (2026-10-02, "B - Tepe gölgesi"): pişmiş doku zeminin üstüne, objelerin altına (bkz. map_shadows.gd).
 		MapShadowsScript.attach(harita_node)
+		## Zemin shader'ları (çimen/toprak) dünya pikseli çözünürlüğünde çizilip büyütülür - telefonda GPU'nun en büyük yükü
+		## (bkz. ground_texel_pass.gd, görüntü birebir aynı).
+		GroundTexelPassScript.attach(harita_node)
+	## Grafik ayarı "Çözünürlük ölçeği" (bkz. world_render_scale.gd; %100'de hiçbir şey kurmaz).
+	WorldRenderScaleScript.attach(self)
 
 	# Add loopable breezy cozy forest ambient sound
 	var ambient: Node = preload("res://scripts/wind_breeze_ambient.gd").new()
@@ -345,7 +346,7 @@ func _ready() -> void:
 	## görsün diye ekran hemen değil, kısa bir gecikmeyle açılıyor (oyun bu
 	## sırada duraklamıyor, bkz. _start_initial_loadout_selection).
 	if GameManager.owned_weapons.is_empty():
-		get_tree().create_timer(2.0).timeout.connect(_start_initial_loadout_selection)
+		_start_initial_loadout_selection.call_deferred()
 
 
 ## Bulut gölgesini haritanın TÜM tile katmanlarına uygular.
@@ -393,8 +394,9 @@ func _process(delta: float) -> void:
 	## ekranlar açıkken bu genel ui_cancel kontrolü hâlâ çalışıp pause
 	## menüsünü ÜSTLERİNE açardı (o ekranlar artık kendi ui_cancel'larını
 	## kendileri işliyor, bkz. GameManager "ENGELLEYİCİ PANEL KAYDI" notu).
-	if Input.is_action_just_pressed("ui_cancel") and not GameManager.is_game_over \
-			and not GameManager.is_any_blocking_panel_open():
+	## 2026-10-04: duraklatma "pause_game" (Esc + kumanda Start) - eskiden ui_cancel'dı, kumanda B'si de oyunu duraklatıyordu.
+	if Input.is_action_just_pressed("pause_game") and not GameManager.is_game_over \
+			and not GameManager.is_any_blocking_panel_open() and not GameManager.was_ui_cancel_consumed():
 		_toggle_pause()
 	
 	if NetworkManager.is_multiplayer_active and is_instance_valid(player):
@@ -633,11 +635,16 @@ func _process_multiplayer_sync(delta: float) -> void:
 			cur_anim = player.anim.animation
 		var weapon_keys: Array = []
 		var weapon_tiers: Dictionary = {}
+		var ench_tiers: Array = []
+		var any_ench: bool = false
 		for weapon: Node in player.owned_weapon_nodes:
 			var weapon_key: String = str(weapon.get_meta("shop_key", ""))
 			if not weapon_key.is_empty():
 				weapon_keys.append(weapon_key)
 				weapon_tiers[weapon_key] = int(weapon.get("tier") if "tier" in weapon else 1)
+				var et: int = int(weapon.get("enchant_glow_tier")) if "enchant_glow_tier" in weapon else 0
+				ench_tiers.append(et)
+				any_ench = any_ench or et > 0
 		## NOT: "owned_items" alanı BİLEREK kaldırıldı - remote_player.gd
 		## bu alanı hiç okumuyordu (tamamen ölü veri), ama
 		## GameManager.owned_items.duplicate() her karede (saniyede 20 kez)
@@ -680,6 +687,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 		# _last_sent_extra_state yorumu.
 		var extra: Dictionary = {
 			"is_invisible": player.is_invisible if "is_invisible" in player else false,
+			## Büyücü Kız "Yükseliş" (R1 evrimi): Meteor kanalında havada - kukla yükselir, host'ta hedef alınamaz (remote_player.gd).
+			"byc_fly": player.is_buyucu_airborne() if player.has_method("is_buyucu_airborne") else false,
 			"is_shielded": player.is_shielded if "is_shielded" in player else false,
 			## Elara'nın Sıvışma'sı (Q, id 12) - "yaratıkların içinden geçebilme" isteği diğer istemcilerde
 			## de doğru çalışsın diye (bkz. remote_player.gd is_ghost_now/enemy.gd sert yapıştırma kontrolü).
@@ -788,6 +797,9 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## Efsun mermi kalkanı (2026-09-30, player.gd get_enchant_ward_radius) - host'ta düşman mermileri kuklaya sorar.
 			"ench_ward": player.get_enchant_ward_radius() if player.has_method("get_enchant_ward_radius") else 0.0,
 		}
+		## Efsun kademesi parıltısı (2026-10-04, enchant_weapon_glow.gd) - weapon_keys ile aynı sıra; efsunsuzken hiç eklenmez.
+		if any_ench:
+			extra["ench_tiers"] = ench_tiers
 		# Character modulate color for status effects
 		## DÜZELTME (derin multiplayer görsel denetimi): bazı yetenekler
 		## (ör. Büyücü Kız Don Nova/Meteor, Assasin Görünmezlik/Gölge Hücumu)
@@ -997,9 +1009,8 @@ func _update_stats_display() -> void:
 
 
 ## ==============================================================================
-## SİLAH / KALKAN SEÇİM AKIŞI (bkz. weapon_select_screen.gd üstündeki not)
+## BAŞLANGIÇ SİLAHI / KALKANI (bkz. weapon_catalog.gd)
 ## ==============================================================================
-var _active_item_select_screen: Node = null
 
 ## BUG DÜZELTMESİ (derin multiplayer denetimi bulgusu: "multiplayerda bazen
 ## yaratıklar 5-10 dakika ara verip sonradan spawn olmaya başlıyorlar") - kök
@@ -1017,62 +1028,20 @@ var _chest_queue_batch_start_msec: int = -1
 const CHEST_QUEUE_TOTAL_TIMEOUT_MSEC := 90000 ## 90 saniye
 
 
-## DÜZELTME (kullanıcı isteği: "3 dakikada bir açılan dükkan ... oyun daha
-## başlamadan öyle açılmalı") - ilk silah+kalkan seçimi bitince artık oyun
-## direkt açılmıyor, ilk periyodik dükkan (bkz. _show_mini_shop_screen)
-## araya giriyor - dükkan KAPANINCA (bkz. _on_mini_shop_screen_closed ->
-## _finish_mini_shop_close) oyun zaten kendi başına açılıyor.
+## Kullanıcı isteği (2026-10-03): "bundan sonra başlangıç silahı karakter seçim ekranından seçilsin ... başlangıçtaki silah
+## seçme kartını kaldırıyoruz" - eskiden oyun başladıktan 2 sn sonra 3 rastgele silah kartı açılıp oyunu duraklatıyor,
+## çok oyunculuda herkesin seçmesi bekleniyordu. Artık silah menüde seçildiği için (GameManager.selected_start_weapon)
+## oyun duraklamadan, kimseyi beklemeden başlar: seçilen silah + herkesin Standart Kalkanı hemen verilir. Dükkan açıksa
+## (GameManager.SHOP_ENABLED) ilk periyodik dükkan eskisi gibi oyun başında araya girer.
 func _start_initial_loadout_selection() -> void:
 	if not GameManager.owned_weapons.is_empty():
 		return ## başka bir yol zaten doldurmuş (güvenlik payı)
-	if is_instance_valid(player) and player.has_method("clear_input_state"):
-		player.call("clear_input_state")
-	get_tree().paused = true
-	## Kullanıcı isteği (2026-09-29): "oyun başlangıcında kalkan seçimini kaldırıyoruz artık herkes standart kalkanla
-	## başlıyor" - silah seçilince kalkan ekranı açılmıyor, Standart Kalkan doğrudan veriliyor (bkz. _grant_starting_shield).
-	_show_item_select_screen(func():
-		_grant_starting_shield()
-		_finish_item_select_chain()
-	)
-
-
-## `on_done`, bu ekran seçilir seçilmez (ağ beklemesi OLMADAN, bkz. aşağıdaki
-## kök neden notu) hemen çağrılır - başlangıç akışında bir sonraki ekrana
-## zincirlemek için kullanılıyor.
-func _show_item_select_screen(on_done: Callable) -> void:
-	get_tree().paused = true
-	## bkz. _show_level_up_screen'deki AYNI koruma notu.
-	_hide_level_up_wait_overlay()
-	var screen: CanvasLayer = WeaponSelectScreenScript.new()
-	screen.player_ref = player
-	screen.name = "WeaponSelectScreen"
-	add_child(screen)
-	_active_item_select_screen = screen
-	## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini
-	## beklemeden tüm kartlarını seçebilsin") - eskiden burada (multiplayer
-	## dalında) on_done HİÇ çağrılmıyordu, NetworkManager.multiplayer_level_up_
-	## all_chosen (TÜM oyuncular seçene kadar) beklenip main.gd _on_multiplayer_
-	## level_up_all_chosen'da tetikleniyordu - yani silah seçilse bile kalkan
-	## ekranı diğer oyuncu(lar) silahını seçmeden AÇILMIYORDU. Artık on_done
-	## HER ZAMAN hemen çağrılıyor (silah seçilir seçilmez kalkan ekranı
-	## açılır) - ağ senkronu SADECE zincirin gerçekten bittiği noktada
-	## (bkz. _finish_item_select_chain) devreye giriyor.
-	screen.item_chosen.connect(func(key: String):
-		_grant_selected_item(key)
-		if _active_item_select_screen != null and is_instance_valid(_active_item_select_screen):
-			_active_item_select_screen.queue_free()
-		_active_item_select_screen = null
-		on_done.call()
-	)
-	if NetworkManager.is_multiplayer_active:
-		NetworkManager.set_level_up_busy(true)
-		NetworkManager.start_level_up_countdown()
-
-
-## Başlangıç silah seçimi zincirinin GERÇEK sonu (bkz. _show_item_select_screen
-## çağrı zinciri) - bkz. _finish_level_up_phase.
-func _finish_item_select_chain() -> void:
-	_finish_level_up_phase(_show_mini_shop_screen)
+	if not is_instance_valid(player):
+		return
+	_grant_selected_item(WeaponCatalog.selected())
+	_grant_starting_shield()
+	if GameManager.SHOP_ENABLED:
+		_show_mini_shop_screen()
 
 
 func _grant_selected_item(key: String) -> void:
@@ -1080,7 +1049,6 @@ func _grant_selected_item(key: String) -> void:
 		return
 	GameManager.owned_weapons.append({"key": key, "level": 1, "spent": 0})
 	player.buy_weapon_copy(key, 1) ## bkz. player.gd - kendi içinde _reposition_weapon_icons() zaten çağırıyor
-
 
 ## Herkesin başlangıç kalkanı: Standart Kalkan, seviye 1. Kalkan artık ne başlangıçta seçiliyor ne de dükkandan/seyyar
 ## satıcıdan alınıyor. Eskiden başlangıçta seçilen kalkan gibi boş başlar ve kendi kendine dolar (bkz. player.gd
@@ -1725,7 +1693,7 @@ func _on_level_up_busy_state_changed() -> void:
 		return
 	if NetworkManager.is_any_level_up_busy():
 		get_tree().paused = true
-		if _active_level_up_screen == null and _active_item_select_screen == null and _active_enchant_screen == null:
+		if _active_level_up_screen == null and _active_enchant_screen == null:
 			_show_level_up_wait_overlay()
 	else:
 		_hide_level_up_wait_overlay()
@@ -2219,12 +2187,19 @@ func _show_network_toast(text: String, hold_seconds: float = 2.4) -> void:
 	panel.offset_top = 292
 	panel.offset_left = -270
 	panel.offset_right = -10
+	## Telefon (kullanıcı bildirimi 2026-10-03: paneller üst üste): sağ sütun yetenek düğmeleriyle dolu - bildirimler görev
+	## penceresiyle birlikte ÜST ORTADA (bkz. world_event_banner.gd telefon dalı), telefonda okunur yazı.
+	var phone: bool = MobileUI.enabled
+	if phone:
+		panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		panel.offset_left = -330
+		panel.offset_right = 330
 	layer.add_child(panel)
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	UIKit.style_label(lbl, 24, UIKit.C_TEXT, 0)
+	UIKit.style_label(lbl, 32 if phone else 24, UIKit.C_TEXT, 0)
 	panel.add_child(lbl)
 	## Sağ sütundaki görev satırlarının (bkz. world_event_banner.gd) üstüne binmesin - onların altına yerleşir;
 	## aynı anda birden fazla bildirim varsa (ör. iki görev aynı anda) üst üste binmek yerine ALT ALTA dizilir.
@@ -2233,7 +2208,7 @@ func _show_network_toast(text: String, hold_seconds: float = 2.4) -> void:
 	var follow := func() -> void:
 		if not is_instance_valid(panel):
 			return
-		var y: float = 292.0
+		var y: float = 120.0 if phone else 292.0
 		if _world_event_banner and is_instance_valid(_world_event_banner):
 			y = maxf(y, float(_world_event_banner.call("get_rows_bottom_y")) + 8.0)
 		for other in _active_toast_panels:
@@ -2682,6 +2657,7 @@ func _show_death_overlay(is_final: bool) -> void:
 	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
 		_death_overlay_layer = CanvasLayer.new()
 		_death_overlay_layer.layer = 95
+		_death_overlay_layer.add_to_group(&"gamepad_modal") ## kumandayla düğmelere basılabilsin (bkz. gamepad_ui.gd)
 		add_child(_death_overlay_layer)
 
 		var dim := ColorRect.new()

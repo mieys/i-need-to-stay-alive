@@ -146,7 +146,7 @@ func _swap() -> void:
 	pl.global_position = target_pos
 	pl.reset_physics_interpolation()
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "teleport_snap", target_pos, {})
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "teleport_snap", target_pos, {})
 	_invuln_until_msec = Time.get_ticks_msec() + int(SWAP_INVULN * 1000.0)
 
 

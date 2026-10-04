@@ -1,6 +1,7 @@
 extends CanvasLayer
 
 const KeybindMenuScript := preload("res://scripts/keybind_menu.gd")
+const GraphicsSettingsMenuScript := preload("res://scripts/graphics_settings_menu.gd")
 
 @onready var settings_panel: Panel = $SettingsPanel
 @onready var volume_slider: HSlider = $SettingsPanel/VolumeSlider
@@ -12,6 +13,7 @@ const KeybindMenuScript := preload("res://scripts/keybind_menu.gd")
 
 
 func _ready() -> void:
+	add_to_group(&"gamepad_modal") ## kumandayla menü gezinmesi: açılınca ilk düğmeye odak (bkz. gamepad_ui.gd)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
@@ -38,6 +40,7 @@ func _ready() -> void:
 	$Panel/VBox/SettingsButton.pressed.connect(_on_settings_pressed)
 	$SettingsPanel/CloseButton.pressed.connect(_on_settings_closed)
 	keybind_button.pressed.connect(_on_keybind_pressed)
+	_build_graphics_button()
 	volume_slider.value = UISound.master_volume_percent
 	volume_slider.value_changed.connect(_on_volume_changed)
 	_update_volume_label(volume_slider.value)
@@ -252,6 +255,33 @@ func _on_ui_opacity_changed(value: float) -> void:
 	UISound.set_ui_opacity_percent(value)
 	if _ui_opacity_value:
 		_ui_opacity_value.text = "%d%%" % int(value)
+
+
+## Grafik ayarları (2026-10-03, bkz. graphics_settings_menu.gd): ayar paneli sahnede mutlak konumlu - .tscn'e dokunmadan
+## (editör açıkken ezilme riski, CLAUDE.md) "Tuş Atamaları" butonu satırın sol yarısına daraltılıp sağ yarıya AYNI
+## görünümde bir "Grafik" butonu kodla ekleniyor (panel yüksekliği değişmez).
+func _build_graphics_button() -> void:
+	var gfx := keybind_button.duplicate(0) as Button
+	gfx.name = "GraphicsButton"
+	gfx.text = "Grafik"
+	keybind_button.offset_left = 40.0
+	keybind_button.offset_right = 275.0
+	gfx.offset_left = 285.0
+	gfx.offset_right = 520.0
+	gfx.offset_top = keybind_button.offset_top
+	gfx.offset_bottom = keybind_button.offset_bottom
+	settings_panel.add_child(gfx)
+	gfx.pressed.connect(_on_graphics_pressed)
+
+
+func _on_graphics_pressed() -> void:
+	settings_panel.visible = false
+	var menu := GraphicsSettingsMenuScript.new()
+	add_child(menu)
+	menu.closed.connect(func() -> void:
+		if is_instance_valid(settings_panel):
+			settings_panel.visible = true
+	)
 
 
 ## Kullanıcı isteği: "tuş ataması için ayarlarda bir menü hazırla, ayarlar

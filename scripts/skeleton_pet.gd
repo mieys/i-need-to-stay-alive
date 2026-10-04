@@ -526,7 +526,7 @@ func _process_attack(delta: float) -> void:
 		## golem_pet.gd _broadcast_impact_fx ile aynı "hitscan_impact" yayını (iskelet sayısı çok olabildiği için
 		## iskelet başına 0.25 sn'de bire sınırlı).
 		if NetworkManager.is_multiplayer_active and not network_instance_id.is_empty() 				and not NetworkManager.should_throttle("skel_spark_%s" % network_instance_id, 0.25):
-			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", spark.global_position, {
+			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", spark.global_position, {
 				"scene_path": spark_scene.resource_path,
 				"modulate": spark.modulate,
 			})

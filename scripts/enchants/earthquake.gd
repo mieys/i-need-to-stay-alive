@@ -13,7 +13,7 @@ func hit_extra(t: Node, _dmg: float, is_primary: bool, proj: Node2D) -> void:
 	if not is_primary or proj != null or not is_enemy(t) or not can_act():
 		return
 	_hits += 1
-	if _hits % maxi(1, n("quake_every", 4)) != 0:
+	if _hits % maxi(1, n("quake_every", 3)) != 0:
 		return
 	var pl: Node2D = owner_player() as Node2D
 	if pl == null:

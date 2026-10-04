@@ -21,6 +21,12 @@ nabiz gibi, dis halka dama dither) -> her zeminde isik gibi okunur; yildiz HER k
 kademe 5'te karsi kosede ikinci yildiz); kayan parilti 2 px. Nefes olcegi artik sadece buyur (bkz. xp_orb.gd PULSE_*).
 Kare 20 -> 24 (dis halka kenara degmesin); govde/renk/caplar ayni.
 
+NOKTALI HALE DUZELTMESI (kullanici 2026-10-03: "exp orblarinin dis parlitisinda tuhaf tuhaf nokta nokta pixeller var oyunda
+kotu duruyor"): orta halka dama (her 2 pikselde 1), dis halka seyrek (her 4 pikselde 1) dither ile ciziliyordu - oyunda
+buyutulunce cimenin ustunde daginik piksel kirintisi gibi gorunuyordu (ayni ders: cimen/toprak shader'indaki Bayer dither).
+Artik halkalar DOLU ve disa dogru daha saydam (ic ~1.0 -> orta ~0.35 -> dis ~0.15 opaklik, nabizla) - yumusak sonen isik,
+nokta yok. Renkler/boylar/animasyon ayni.
+
 Cikti: assets/pickups/xp_orb/xp_orb_<renk>.png (8 kare x 24x24) + xp_orb_frames.tres (ayni uid'lerle yeniden yazilir).
 Calistir: python tools/gen_xp_orb_sprites.py   (sonra Godot editoru PNG'leri yeniden import eder)
 """
@@ -46,6 +52,11 @@ if SHAPE == "diamond":
     CELL = 32  # suzulme + 3 halkali hale + yildiz sigsin, kenara degmesin (2026-10-02 %15 buyutme: 28 -> 32)
     FRAMES = 12
     FPS = 10.0
+
+
+# Hale orta/dis halka opakligi (0..255): taban + nabiz payi (bkz. NOKTALI HALE DUZELTMESI).
+HALO2_ALPHA, HALO2_PULSE = 60, 60
+HALO3_ALPHA, HALO3_PULSE = 22, 30
 
 
 def hexc(h, a=255):
@@ -103,10 +114,10 @@ def draw_orb(tier_index, diameter, pal, frame):
             h1, h2, h3 = halo_colors(mid, light, hi)
             if r - 0.05 <= d < r + 0.95:
                 put(img, x, y, (h1[0], h1[1], h1[2], int(170 + 85 * pulse)))
-            elif r + 0.95 <= d < r + 1.95 and (x + y) % 2 == 0:
-                put(img, x, y, (h2[0], h2[1], h2[2], int(110 + 90 * pulse)))
-            elif r + 1.95 <= d < r + 2.95 and x % 2 == 0 and y % 2 == 0:
-                put(img, x, y, (h3[0], h3[1], h3[2], int(50 + 90 * pulse)))
+            elif r + 0.95 <= d < r + 1.95:  # dolu, saydam (dither YOK - bkz. dosya basi)
+                put(img, x, y, (h2[0], h2[1], h2[2], int(HALO2_ALPHA + HALO2_PULSE * pulse)))
+            elif r + 1.95 <= d < r + 2.95:
+                put(img, x, y, (h3[0], h3[1], h3[2], int(HALO3_ALPHA + HALO3_PULSE * pulse)))
 
     # Govde: dis hat + sol-ustten isik alan tonlar.
     lx, ly = -0.45, -0.55  # isik yonu (sol-ust)
@@ -243,10 +254,10 @@ def draw_diamond(tier_index, size, pal, frame):
             h1, h2, h3 = halo_colors(mid, light, hi)
             if m1[y][x]:
                 _blend(img, x, y, (h1[0], h1[1], h1[2], int(170 + 85 * pulse)))
-            elif m2[y][x] and (x + y) % 2 == 0:
-                _blend(img, x, y, (h2[0], h2[1], h2[2], int(110 + 90 * pulse)))
-            elif m3[y][x] and x % 2 == 0 and y % 2 == 0:
-                _blend(img, x, y, (h3[0], h3[1], h3[2], int(50 + 90 * pulse)))
+            elif m2[y][x]:  # dolu, saydam (dither YOK - bkz. dosya basi)
+                _blend(img, x, y, (h2[0], h2[1], h2[2], int(HALO2_ALPHA + HALO2_PULSE * pulse)))
+            elif m3[y][x]:
+                _blend(img, x, y, (h3[0], h3[1], h3[2], int(HALO3_ALPHA + HALO3_PULSE * pulse)))
     for y in range(CELL):
         for x in range(CELL):
             if not mask[y][x]:

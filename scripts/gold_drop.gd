@@ -22,6 +22,12 @@ var attract_speed: float = 0.0
 ## peer id'si. -1 = spesifik hedef yok (eski/normal "en yakın oyuncu"
 ## davranışı).
 var magnet_target_peer_id: int = -1
+## ÇÖKME DÜZELTMESİ (2026-10-04, kullanıcı: "6-7. dakikada kendiliğinden kapandı"): aynı altın aynı fizik adımında İKİ kez
+## toplanabiliyordu (iki gövde aynı karede girince - queue_free kare sonuna kadar düğümü silmez). İkinci toplama
+## $PickupSound'u bulamıyordu (ilki onu sahneye taşımıştı); RELEASE export'ta tipli null değişken üzerinden metod çağrısı
+## kontrol edilmeden motora gidiyor -> 0xc0000005 erişim ihlali, oyun uyarısız kapanıyor (editörde sadece script hatası
+## olur, bu yüzden testte görünmüyordu). Log'daki iz: 'Node not found: "PickupSound"' + iki 'rp_child is null'.
+var _collected: bool = false
 
 
 ## bkz. xp_orb.gd üstündeki AYNI BUG DÜZELTMESİ notu (kullanıcı bildirimi:
@@ -121,6 +127,9 @@ func _on_body_entered(body: Node) -> void:
 	## KENDİ ekranındaki/hesabındaki altına eklenir (bkz. aşağı).
 	if not (body.is_in_group("player") or body.is_in_group("remote_players")):
 		return
+	if _collected or is_queued_for_deletion():
+		return
+	_collected = true
 	
 	## Multiplayer: client tarafındaki görsel kopya → host'a toplama isteği gönder
 	if NetworkManager.is_multiplayer_active and get_meta("network_spawned", false):
@@ -168,7 +177,9 @@ func _on_body_entered(body: Node) -> void:
 ## the player from this node first so it isn't silenced mid-clip, and let it
 ## clean itself up once done (same trick used for the lightning strike fx).
 func _play_pickup_sound() -> void:
-	var sfx: AudioStreamPlayer2D = $PickupSound
+	var sfx: AudioStreamPlayer2D = get_node_or_null("PickupSound")
+	if sfx == null or get_tree().current_scene == null:
+		return
 	var world_pos: Vector2 = sfx.global_position
 	remove_child(sfx)
 	get_tree().current_scene.add_child(sfx)

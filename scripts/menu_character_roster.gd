@@ -15,8 +15,9 @@ const V_SEP := 6
 var cards: Dictionary = {}
 
 
-func build() -> void:
-	columns = COLUMNS
+## cols / k: telefon karakter seçimi (character_select.gd _build_mobile) daha az sütun ve 4/3 büyük kart ister.
+func build(cols: int = COLUMNS, k: float = 1.0) -> void:
+	columns = cols
 	add_theme_constant_override("h_separation", H_SEP)
 	add_theme_constant_override("v_separation", V_SEP)
 	for child in get_children():
@@ -26,7 +27,7 @@ func build() -> void:
 		var card: Control = CardScript.new()
 		card.name = "Card%d" % char_id
 		add_child(card)
-		card.setup(char_id, Characters.DEFS[char_id])
+		card.setup(char_id, Characters.DEFS[char_id], k)
 		card.pressed.connect(_on_card_pressed)
 		cards[char_id] = card
 

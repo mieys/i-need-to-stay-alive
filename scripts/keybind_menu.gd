@@ -25,6 +25,7 @@ var _row_buttons: Dictionary = {} ## action_name -> Button (tuş adını göster
 var _row_joy_buttons: Dictionary = {} ## action_name -> Button (gamepad adını gösteren buton)
 
 func _ready() -> void:
+	add_to_group(&"gamepad_modal") ## kumandayla menü gezinmesi: açılınca ilk düğmeye odak (bkz. gamepad_ui.gd)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 95
 	_build_ui()

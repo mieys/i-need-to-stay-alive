@@ -281,4 +281,4 @@ func _broadcast(phase: String, pos: Vector2, extra: Dictionary = {}) -> void:
 		return
 	var data: Dictionary = extra.duplicate()
 	data["phase"] = phase
-	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "necro_skull", pos, data)
+	NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "necro_skull", pos, data)

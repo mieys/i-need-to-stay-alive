@@ -237,6 +237,9 @@ func _ready() -> void:
 	## için (aynı desen: inventory_panel_instance.closed -> _on_envanter_closed).
 	_connect_once(shop_panel.closed, _on_shop_closed)
 	_connect_once(inventory_panel_instance.closed, _on_envanter_closed)
+	## Envanter açıkken geri (Escape / kumanda B-Start) duraklatma menüsünü AÇMASIN, envanteri kapatsın (bkz.
+	## _unhandled_input; main.gd ui_cancel'ı engelleyici panel açıkken yok sayar).
+	GameManager.register_blocking_panel(inventory_panel_instance)
 	_create_chat_ui()
 	_register_ui_opacity()
 	_setup_mobile_hud()
@@ -294,12 +297,15 @@ func _layout_shop_inventory_buttons() -> void:
 		var e: Rect2 = _mobile_edges()
 		left_edge = e.position.x
 		top_y = e.position.y + (MOBILE_CLUSTER_H + 6.0) * mobile_u
+		## Kullanıcı isteği (2026-10-04): ENVANTER + altın, altlarındaki grup + sohbet düğmeleriyle AYNI genişlikte (üst üste
+		## simetrik dursunlar) - iki kare düğme + aralık (bkz. _fit_mobile_party üst sıra).
+		btn_w = MOBILE_TOGGLE_SIZE.x * 2.0 + 10.0
 
 	# Envanter butonu üstte, altın göstergesi altında.
 	envanter_toggle_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	envanter_toggle_button.offset_left = left_edge
 	envanter_toggle_button.offset_right = left_edge + btn_w
-	envanter_toggle_button.add_theme_font_size_override("font_size", 32)
+	envanter_toggle_button.add_theme_font_size_override("font_size", 26 if MobileUIScript.enabled else 32)
 	envanter_toggle_button.clip_text = true
 	envanter_toggle_button.offset_top = top_y
 	envanter_toggle_button.offset_bottom = top_y + btn_h
@@ -886,6 +892,8 @@ func _layout_player_dock() -> void:
 ##  - sol alt joystick, sağ üstte duraklat, etkileşim düğmesi sadece ev/satıcı uyarısı görünürken.
 ## Masaüstünde bu blok hiç çalışmaz.
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+## Telefon: envanter/özellikler açıkken arkadaki karartma (bkz. _fit_mobile_inventory_panels).
+var _mobile_inv_dim: ColorRect = null
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const TouchControlsScript := preload("res://scripts/touch_controls.gd")
 const ROUND_FRAME: Texture2D = preload("res://assets/ui/kit/hud_skill_frame_round.png")
@@ -905,6 +913,11 @@ const MOBILE_MINIMAP_K := 0.8 ## minimap x HUD_SCALE (164 -> ~223 px)
 var touch_controls: Control = null
 var mobile_pause_button: Button = null
 var mobile_interact_button: Button = null
+## Telefon üst düğme sırası (altın göstergesinin altında, kullanıcı isteği 2026-10-04): grup aç/kapa, sohbet yaz, hasar
+## sıralaması - bkz. _fit_mobile_party.
+var mobile_party_toggle: Button = null
+var mobile_chat_button: Button = null
+var mobile_stats_button: Button = null
 
 
 ## Ekran kenarından içeri pay (tuval px): position = (sol, üst), size = (sağ, alt). Çentik/kamera deliği payı + HUD payı.
@@ -945,6 +958,20 @@ func _setup_mobile_hud() -> void:
 	mobile_interact_button.visible = false
 	touch_controls.register_button(mobile_interact_button, &"interact", false)
 	touch_controls.interact_button = mobile_interact_button
+	## Dokunuşu touch_controls bir eylem olarak basar (düğmeler joystick bölgesinde - fare olayı olsa joystick de başlardı).
+	for act: StringName in [&"mobile_party_toggle", &"mobile_chat_open", &"mobile_party_stats"]:
+		if not InputMap.has_action(act):
+			InputMap.add_action(act)
+	mobile_party_toggle = _make_mobile_icon_button("MobilePartyToggle", PARTY_ICON_MAP)
+	touch_controls.register_button(mobile_party_toggle, &"mobile_party_toggle", false)
+	mobile_chat_button = _make_mobile_icon_button("MobileChat", CHAT_ICON_MAP)
+	touch_controls.register_button(mobile_chat_button, &"mobile_chat_open", false)
+	mobile_stats_button = _make_mobile_button("MobileStats", "Hasar")
+	mobile_stats_button.add_theme_font_size_override("font_size", 22) ## dar düğmede (panel genişliği kadar) yazı sığsın
+	mobile_stats_button.clip_text = true
+	mobile_stats_button.visible = false
+	touch_controls.register_button(mobile_stats_button, &"mobile_party_stats", false)
+	touch_controls.joy_exclude = _mobile_joy_exclude
 	_ability_layout_sig = ""
 	_layout_ability_icons()
 	_update_ability_bar_frame()
@@ -962,19 +989,41 @@ func _fit_mobile_inventory_panels() -> void:
 	if panels.is_empty():
 		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var r: Rect2 = panels[0].get_global_rect()
-	for c in panels:
-		r = r.merge(c.get_global_rect())
-	## Soldaki ENVANTER/altın sütununa ve sağdaki yetenek sütununa binmesin: her iki yandan sütun genişliği kadar dar
-	## bir alana sığdırılır (simetrik), sonra ekranda ortalanır.
-	var side: float = _mobile_edges().position.x + 168.0 * MobileUIScript.HUD_SCALE
-	var avail := Vector2(vp.x - 2.0 * side, vp.y)
-	var s: float = MobileUIScript.fit_scale(r.size, avail)
-	var xf: Transform2D = MobileUIScript.fit_transform(r, s, vp)
-	for c in panels:
-		c.pivot_offset = Vector2.ZERO
-		c.scale = c.scale * s
-		c.global_position = xf * c.global_position
+	## Kullanıcı bildirimi (2026-10-03): "envanter paneli çok kötü mobile uyumlu değil" - masaüstü panelleri küçültüp
+	## sığdırmak yerine (eski yol) paneller telefon boyunda kendi yerleşimini kurar (prototip P1 "Büyütülmüş Klasik"):
+	## özellikler solda, envanter sağda, ikisi ekranın neredeyse tamamı; arkada karartma (dokununca kapanır), paneller
+	## HUD düğmelerinin üstünde (touch_controls panel açıkken yetenek düğmelerini de yok sayar).
+	var safe: Rect2 = MobileUIScript.safe_margins(get_viewport())
+	var room: float = vp.x - safe.position.x - safe.size.x - 48.0
+	var gap: float = 24.0
+	var stats_w: float = clampf(roundf(room * 0.42), 760.0, 900.0)
+	var inv_w: float = minf(1240.0, room - stats_w - gap)
+	var x0: float = safe.position.x + roundf((vp.x - safe.position.x - safe.size.x - (stats_w + gap + inv_w)) * 0.5)
+	var h: float = minf(1000.0, vp.y - 80.0)
+	var y0: float = roundf((vp.y - h) * 0.5)
+	if _mobile_inv_dim == null:
+		_mobile_inv_dim = ColorRect.new()
+		_mobile_inv_dim.name = "MobileInventoryDim"
+		_mobile_inv_dim.color = Color(0.06, 0.04, 0.02, 0.6)
+		_mobile_inv_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_mobile_inv_dim.visible = false
+		_mobile_inv_dim.gui_input.connect(func(e: InputEvent) -> void:
+			if (e is InputEventMouseButton and (e as InputEventMouseButton).pressed) or (e is InputEventScreenTouch and (e as InputEventScreenTouch).pressed):
+				if inventory_panel_instance.visible:
+					_on_envanter_toggle())
+		add_child(_mobile_inv_dim)
+	## Envanter paneli PartyPanelLayer'da (katman 96, bkz. _ready) - karartma ve özellikler paneli de oraya, sırayla
+	## karartma -> özellikler -> envanter (hepsi HUD düğmelerinin üstünde).
+	var top_layer: Node = inventory_panel_instance.get_parent()
+	for c in [_mobile_inv_dim, stats_panel_instance, inventory_panel_instance]:
+		if c is Node and is_instance_valid(c) and top_layer != null:
+			if c.get_parent() != top_layer:
+				(c as Node).reparent(top_layer, false)
+			top_layer.move_child(c, top_layer.get_child_count() - 1)
+	if stats_panel_instance.has_method("apply_mobile_layout"):
+		stats_panel_instance.call("apply_mobile_layout", Rect2(x0, y0, stats_w, h))
+	if inventory_panel_instance.has_method("apply_mobile_layout"):
+		inventory_panel_instance.call("apply_mobile_layout", Rect2(x0 + stats_w + gap, y0, inv_w, h))
 
 
 ## Envanter/özellikler paneli oyunu duraklatmaz - açıkken joystick başlamasın ve çizilmesin (panelin üstüne binmesin).
@@ -1124,15 +1173,6 @@ func _layout_mobile_hud() -> void:
 		minimap.offset_bottom = e.position.y + mm
 		mm_left = minimap.offset_left
 		mm_bottom = e.position.y + mm * mk
-	## Grup paneli (çok oyunculu): minimapın altı, sağ kenar payında.
-	var party: Control = get_node_or_null("PartyPanelLayer/PartyPanel") as Control
-	if party:
-		party.pivot_offset = Vector2.ZERO
-		party.scale = Vector2.ONE * u * 0.8
-		party.offset_left = -e.size.x
-		party.offset_right = -e.size.x
-		party.offset_top = mm_bottom + 10.0 * u
-		party.offset_bottom = party.offset_top
 	## Duraklat: minimapın solunda, üst hizada; etkileşim: yetenek sütununun solunda, alt hizada.
 	if is_instance_valid(mobile_pause_button):
 		_place_mobile_button(mobile_pause_button, Control.PRESET_TOP_RIGHT, Vector2(mm_left - 10.0 * u, e.position.y),
@@ -1145,6 +1185,214 @@ func _layout_mobile_hud() -> void:
 		var vp: Vector2 = get_viewport().get_visible_rect().size
 		var q_r: float = sz * k * 0.5
 		touch_controls.rest_center = Vector2(e.position.x + q_r + 40.0 * u, vp.y - e.size.y - q_r - 22.0 * u)
+	## Grup paneli (çok oyunculu): telefonda SOL sütunda - joystick yeri belli olduktan SONRA (ona göre küçülür).
+	_fit_mobile_party()
+
+
+## Telefonda grup paneli - kullanıcı bildirimi (2026-10-03): "bazı paneller bazı panellerin üstünde çıkıyor grup penceresi
+## mesela". Eskiden minimapın altında SAĞ kenardaydı; sağ kenarı minimap + yetenek sütunu + görev penceresi de paylaştığı için
+## 2-3 müttefikle Q/E/F düğmelerinin üstüne biniyordu. Artık SOL sütunda, altın göstergesinin altında (orası joysticke kadar
+## boş). Kök sıfır genişlikte ve sağa yaslı (arka plan sola büyür, bkz. party_panel.gd) -> kök x = sol kenar + genişlik x ölçek.
+## Satır sayısı arttıkça joystick alanına taşmasın diye küçülür (müttefik gelip gittikçe _process'ten yeniden çağrılır).
+## 2026-10-04: grup paneli gizlenebilir - mobil oyunlardaki gibi grup SİMGELİ kare düğme, panelin ÜSTÜNDE (kullanıcı:
+## "grup simgeli bi buton olacak oradan açılıp kapatılacak ... buton üstte olmalı"; yazılı "Grubu Gizle" reddedildi).
+## Sohbet eskiden masaüstü yerinde, sol altta ufacık kalıp joystickin üstüne biniyordu; artık grup panelinin SAĞINDA (alt
+## alta sığınca grup paneli çok küçülüyordu), m5x7 16 px x2 = 32 px keskin yazı. Grup kapalıyken sohbet sol kenara kayar.
+const MOBILE_PARTY_SCALE := 0.8 ## x HUD_SCALE
+const MOBILE_CHAT_K := 2.0 ## sohbet ölçeği (yazı 16 px -> 32 px, tam kat = keskin)
+const MOBILE_CHAT_FONT := 16
+const MOBILE_CHAT_W := 300.0 ## sohbet genişliği (ölçeksiz birim)
+const MOBILE_CHAT_H := 138.0 ## ~3 satır + yazarken altta giriş kutusu (38)
+const MOBILE_TOGGLE_SIZE := Vector2(56.0, 56.0) ## kare simge düğmesi (duraklat düğmesiyle aynı), ölçek HUD_SCALE
+const MOBILE_STATS_MIN_W := 76.0 ## "Hasar" düğmesinin en dar hâli (yazı sığsın); genişliği panelin sağ kenarına kadar
+## 16x16 düğme simgeleri - koddan üretilir, ayrı doku/import yok. Grup: önde bir, arkada iki kişi; sohbet: konuşma balonu.
+const PARTY_ICON_MAP: Array[String] = [
+	"................",
+	"......####......",
+	".....######.....",
+	".##..######..##.",
+	"####.######.####",
+	"####.######.####",
+	".##...####...##.",
+	"................",
+	".##...####...##.",
+	"####.######.####",
+	"####.######.####",
+	"####.######.####",
+	"####.######.####",
+	".....######.....",
+	".....######.....",
+	"................",
+]
+const CHAT_ICON_MAP: Array[String] = [
+	"................",
+	"................",
+	"..############..",
+	".##############.",
+	".##############.",
+	".##############.",
+	".###..#..#..###.",
+	".###..#..#..###.",
+	".##############.",
+	".##############.",
+	"..############..",
+	"....###.........",
+	"....##..........",
+	"....#...........",
+	"................",
+	"................",
+]
+var _mobile_party_h: float = -1.0
+var _mobile_party_open: bool = true
+
+
+func _toggle_mobile_party() -> void:
+	_mobile_party_open = not _mobile_party_open
+	var party: Node = get_node_or_null("PartyPanelLayer/PartyPanel")
+	if party and party.has_method("set_collapsed"):
+		party.call("set_collapsed", not _mobile_party_open)
+	if is_instance_valid(mobile_party_toggle):
+		var ic: CanvasItem = mobile_party_toggle.get_node_or_null("Icon") as CanvasItem
+		if ic:
+			ic.modulate.a = 1.0 if _mobile_party_open else 0.55 ## kapalıyken soluk: panel gizli
+	UISound.play_click()
+	_fit_mobile_party()
+
+
+func _pixel_icon_texture(map: Array[String]) -> Texture2D:
+	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	var ink := Color8(74, 46, 26)
+	for y in map.size():
+		for x in map[y].length():
+			if map[y][x] == "#":
+				img.set_pixel(x, y, ink)
+	return ImageTexture.create_from_image(img)
+
+
+## Kare ahşap düğme + ortasında 16x16 piksel simge (duraklat düğmesiyle aynı 56 birim).
+func _make_mobile_icon_button(n: String, map: Array[String]) -> Button:
+	var b: Button = _make_mobile_button(n, "")
+	b.visible = false
+	var icon := TextureRect.new()
+	icon.name = "Icon"
+	icon.texture = _pixel_icon_texture(map)
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = 10.0
+	icon.offset_top = 9.0
+	icon.offset_right = -10.0
+	icon.offset_bottom = -11.0
+	b.add_child(icon)
+	return b
+
+
+## Joystick bölgesinde kalan dokunulabilir HUD: grup satırları (altın gönder) + açılır pencereleri, açıkken sohbet kutusu.
+func _mobile_joy_exclude() -> Array:
+	var out: Array = []
+	var party: Node = get_node_or_null("PartyPanelLayer/PartyPanel")
+	if party and party.has_method("touch_blocking_controls"):
+		out.append_array(party.call("touch_blocking_controls"))
+	if _chat_input and _chat_input.visible:
+		out.append(_chat_input)
+	return out
+
+
+func _open_mobile_stats() -> void:
+	var party: Node = get_node_or_null("PartyPanelLayer/PartyPanel")
+	if party == null or not party.has_method("toggle_stats_popup"):
+		return
+	## Grup kapalıyken sıralama penceresi (panelin çocuğu) görünmez - önce grubu aç.
+	if not _mobile_party_open:
+		_toggle_mobile_party()
+	party.call("toggle_stats_popup", mobile_stats_button)
+
+
+func _fit_mobile_party() -> void:
+	var party: Control = get_node_or_null("PartyPanelLayer/PartyPanel") as Control
+	if party == null or not is_instance_valid(gold_indicator):
+		return
+	var bg: Control = party.get_node_or_null("Background") as Control
+	var u: float = MobileUIScript.HUD_SCALE
+	var e: Rect2 = _mobile_edges()
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var top: float = gold_indicator.get_global_rect().end.y + 12.0 * u
+	## DEBUG düğmesi (debug modunda) de altın göstergesinin altına yerleşir (bkz. _position_debug_button) - panel onun altına.
+	if is_instance_valid(_debug_button) and _debug_button.visible:
+		top = maxf(top, _debug_button.get_global_rect().end.y + 12.0 * u)
+	var joy_top: float = vp.y * 0.6
+	if touch_controls and touch_controls.rest_center != Vector2.ZERO:
+		## Grup paneli joystick halkasına yaklaşmasın (kullanıcı: "kontrol kısmını aşmamalı") - halkanın üstünde pay.
+		joy_top = touch_controls.rest_center.y - TouchControlsScript.JOY_RADIUS * u - 28.0 * u
+	var w: float = bg.size.x if bg else 270.0
+	var h: float = bg.size.y if bg else 0.0
+	_mobile_party_h = h
+	var has_allies: bool = party.has_method("has_allies") and bool(party.call("has_allies"))
+	var gap: float = 10.0 * u
+	var bk: float = u
+	if party.has_method("set_footer_visible"):
+		party.call("set_footer_visible", false)
+	## Üst düğme sırası (grup / sohbet / hasar) panelin ÜSTÜNDE: panel sıranın altından başlar. Sıra panelin genişliğini
+	## AŞMAZ (kullanıcı: "HASAR butonunun genişliği grup penceresinin genişliğini aşmasın") - Hasar panelin sağ kenarına
+	## kadar uzanır; panel çok dar kalırsa (çok müttefik) sıra bütünüyle küçülür.
+	var show_chat: bool = has_allies or NetworkManager.is_multiplayer_active
+	var row_h: float = MOBILE_TOGGLE_SIZE.y * bk + gap if (show_chat or has_allies) else 0.0
+	var chat_k: float = MOBILE_CHAT_K
+	var room: float = joy_top - top - row_h
+	## Grup paneli küçülmez; joystick payına sığmayan satırlar kaydırılır (bkz. party_panel.gd set_max_list_height).
+	var s: float = u * MOBILE_PARTY_SCALE
+	if party.has_method("set_max_list_height"):
+		party.call("set_max_list_height", maxf(60.0, room / s))
+	var rk: float = bk
+	if has_allies:
+		var need: float = (MOBILE_TOGGLE_SIZE.x * 2.0 + MOBILE_STATS_MIN_W) * bk + gap * 2.0
+		rk = bk * clampf(w * s / need, 0.45, 1.0)
+	var rgap: float = gap * rk / bk
+	var bx: float = e.position.x
+	var row_buttons: Array = [[mobile_party_toggle, has_allies], [mobile_chat_button, show_chat], [mobile_stats_button, has_allies and _mobile_party_open]]
+	for rb in row_buttons:
+		var b: Button = rb[0]
+		if not is_instance_valid(b):
+			continue
+		b.visible = rb[1]
+		if not b.visible:
+			continue
+		var bw: float = MOBILE_TOGGLE_SIZE.x
+		if b == mobile_stats_button:
+			bw = maxf(MOBILE_STATS_MIN_W, (e.position.x + w * s - bx) / rk)
+		b.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		b.pivot_offset = Vector2.ZERO
+		b.scale = Vector2.ONE * rk
+		b.offset_left = bx
+		b.offset_top = top
+		b.offset_right = bx + bw
+		b.offset_bottom = top + MOBILE_TOGGLE_SIZE.y
+		bx += bw * rk + rgap
+	if row_h > 0.0:
+		top += MOBILE_TOGGLE_SIZE.y * rk + rgap
+	party.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	party.pivot_offset = Vector2.ZERO
+	party.scale = Vector2.ONE * s
+	party.offset_left = e.position.x + w * s
+	party.offset_right = party.offset_left
+	party.offset_top = top
+	party.offset_bottom = top
+	var y: float = top
+	var x: float = e.position.x
+	if has_allies and _mobile_party_open and h > 0.0:
+		x = e.position.x + w * s + gap * 2.0
+	var chat_panel: Control = _chat_layer.get_node_or_null("ChatPanel") as Control if _chat_layer else null
+	if chat_panel:
+		chat_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		chat_panel.grow_vertical = Control.GROW_DIRECTION_END
+		chat_panel.pivot_offset = Vector2.ZERO
+		chat_panel.scale = Vector2.ONE * chat_k
+		chat_panel.offset_left = x
+		chat_panel.offset_top = y
+		chat_panel.offset_right = x + MOBILE_CHAT_W
+		chat_panel.offset_bottom = y + MOBILE_CHAT_H
 
 
 ## Sağa yaslı telefon düğmesi: `corner` = düğmenin sağ-üst (TOP_RIGHT) ya da sağ-alt (BOTTOM_RIGHT) köşesi, ekranın o
@@ -1612,12 +1860,16 @@ func _on_envanter_toggle() -> void:
 	var now_visible: bool = not inventory_panel_instance.visible
 	inventory_panel_instance.visible = now_visible
 	stats_panel_instance.visible = now_visible
+	if _mobile_inv_dim:
+		_mobile_inv_dim.visible = now_visible
 
 
 ## Envanter panelindeki X'e basılınca (inventory_panel.gd "closed" sinyali)
 ## eşleştiği istatistik panelini de birlikte kapatır.
 func _on_envanter_closed() -> void:
 	stats_panel_instance.visible = false
+	if _mobile_inv_dim:
+		_mobile_inv_dim.visible = false
 
 
 ## Oval dolgu: bar'ın oranı kadar genişlikte, iki ucu yuvarlak NinePatchRect; rengi bar'ın tint_progress'i (bkz. _layout_bar_kit).
@@ -1706,6 +1958,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("chat") and _chat_input and not _chat_input.visible:
 		_open_chat_input()
 		get_viewport().set_input_as_handled()
+		return
+	## Envanter kısayolu (klavye I / kumanda Select - bkz. GameManager "inventory") ve açıkken geri ile kapatma.
+	## Geri ile kapatınca basış "kullanıldı" işaretlenir: main.gd duraklatma menüsünü aynı basışla açmasın (bkz.
+	## GameManager.mark_ui_cancel_consumed).
+	if inventory_panel_instance == null or (_chat_input and _chat_input.visible):
+		return
+	var inv_open: bool = inventory_panel_instance.visible
+	if event.is_action_pressed("inventory") and (inv_open or not (get_tree().paused or GameManager.is_any_blocking_panel_open())):
+		_on_envanter_toggle()
+		get_viewport().set_input_as_handled()
+	elif inv_open and event.is_action_pressed("ui_cancel"):
+		GameManager.mark_ui_cancel_consumed()
+		_on_envanter_toggle()
+		get_viewport().set_input_as_handled()
 
 
 ## ==============================================================================
@@ -1762,6 +2028,8 @@ func _create_chat_ui() -> void:
 	_chat_input.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	_chat_input.offset_top = -34.0
 	_chat_input.placeholder_text = "Mesaj yazmak için Enter'a bas..."
+	if MobileUIScript.enabled:
+		_chat_input.placeholder_text = "Mesajını yaz..."
 	_chat_input.max_length = 200
 	_chat_input.visible = false
 	## 2026-09-24: oyun içi bej kit (menülerle aynı dil) - bej çukur giriş kutusu + koyu yazı. (Eski koyu yarı saydam kutu,
@@ -1772,6 +2040,8 @@ func _create_chat_ui() -> void:
 	_chat_input.text_submitted.connect(_on_chat_input_submitted)
 	_chat_input.focus_exited.connect(_close_chat_input)
 	panel.add_child(_chat_input)
+	if MobileUIScript.enabled:
+		_fit_mobile_party.call_deferred() ## telefonda sohbet sol sütunda (bkz. _fit_mobile_party)
 
 
 func _open_chat_input() -> void:
@@ -1875,7 +2145,7 @@ func append_chat_message(sender_name: String, text: String) -> void:
 	var line := Label.new()
 	line.text = "%s: %s" % [sender_name, text]
 	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	line.add_theme_font_size_override("font_size", 18)
+	line.add_theme_font_size_override("font_size", MOBILE_CHAT_FONT if MobileUIScript.enabled else 18)
 	line.add_theme_color_override("font_color", Color(0.93, 0.9, 0.85, 1.0))
 	line.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	line.add_theme_constant_override("shadow_offset_x", 1)
@@ -1904,6 +2174,20 @@ func _process(delta: float) -> void:
 	## Ödül altınları (sandık/görev/boss payı) panele uçarken sayaç yoldakileri saymaz, paralar vardıkça tıkır tıkır
 	## yükselir (bkz. gold_reward_fx.gd).
 	gold_indicator_label.text = str(GoldRewardFx.display_gold())
+	## Telefon: grup panelinin boyu müttefik gelip gittikçe değişir - yeniden sığdır (bkz. _fit_mobile_party).
+	if MobileUIScript.enabled and Engine.get_process_frames() % 20 == 0:
+		var bg: Control = get_node_or_null("PartyPanelLayer/PartyPanel/Background") as Control
+		var pp: Node = get_node_or_null("PartyPanelLayer/PartyPanel")
+		var allies_now: bool = pp != null and pp.has_method("has_allies") and bool(pp.call("has_allies"))
+		if (bg and not is_equal_approx(bg.size.y, _mobile_party_h)) or (is_instance_valid(mobile_party_toggle) 				and mobile_party_toggle.visible != allies_now):
+			_fit_mobile_party()
+	if MobileUIScript.enabled and touch_controls != null:
+		if Input.is_action_just_pressed(&"mobile_party_toggle"):
+			_toggle_mobile_party()
+		if Input.is_action_just_pressed(&"mobile_chat_open") and _chat_input and not _chat_input.visible:
+			_open_chat_input()
+		if Input.is_action_just_pressed(&"mobile_party_stats"):
+			_open_mobile_stats()
 	_position_debug_button()
 	fps_label.visible = UISound.show_fps
 	if UISound.show_fps:
@@ -1937,6 +2221,11 @@ func _process(delta: float) -> void:
 				if ic and is_instance_valid(ic) and ic.has_method("set_evolution_progress") and player.has_method("get_evolution_progress"):
 					var evo_prog: Vector2i = player.get_evolution_progress(pair[0])
 					ic.set_evolution_progress(evo_prog.x, evo_prog.y, evo_prog.y > 0 and evo_prog.x >= evo_prog.y)
+				## Büyücü Kız "Efsunlu Büyü" (Q finali, 2026-10-04): efsunlu varyasyonu taşıyan E/R butonu parıldar; efsunlu yetenek
+				## diğer setteyse Q butonu sönük parıldar (set değiştir ipucu) - skill_icon.gd set_enchant_glow. Diğer karakterlerde 0.
+				if ic and is_instance_valid(ic) and ic.has_method("set_enchant_glow") and player.has_method("is_buyucu_slot_enchanted"):
+					var glow_on: bool = player.is_buyucu_slot_enchanted(pair[0])
+					ic.set_enchant_glow((0.5 if pair[0] == "skill" else 1.0) if glow_on else 0.0)
 		## Form hâli (Shaman Elemental Golem: Q = Sarsıcı Darbe) - ikon/ad/açıklama/bekleme karakterin kendi sayacından.
 		var q_override: Dictionary = player.get_hud_skill_override("skill") if player.has_method("get_hud_skill_override") else {}
 		_apply_hud_skill_override(skill_icon, q_override, "skill")
@@ -1974,7 +2263,8 @@ func _process(delta: float) -> void:
 				skill2_icon.skill_id = player.get_skill2_id()
 				skill2_icon.name_override = player.get_buyucu_variation_name()
 				skill2_icon.desc_override = player.get_buyucu_variation_desc()
-				var v_idx: int = player.buyucu_variation if "buyucu_variation" in player else 0
+				## İkon dizisi SET sırasındadır (characters.gd skill2_variation_icons: [Arcane Lanet, Hortum]) - varyasyon id'si değil set.
+				var v_idx: int = player.buyucu_variation_set if "buyucu_variation_set" in player else 0
 				var v_icons: Array = Characters.get_def(4).get("skill2_variation_icons", [])
 				if v_idx >= 0 and v_idx < v_icons.size():
 					var v_tex: Texture2D = _cached_texture(v_icons[v_idx])
@@ -2019,12 +2309,9 @@ func _process(delta: float) -> void:
 				skill3_icon.skill_id = player.get_skill3_id()
 				skill3_icon.name_override = player.get_buyucu_variation_name_r()
 				skill3_icon.desc_override = player.get_buyucu_variation_desc_r()
-				var v_idx_r: int = player.BUYUCU_SET_R_VARIATIONS[player.buyucu_variation_set] if "buyucu_variation_set" in player else 2
-				## Şu an sadece "Hortum, Meteor Patlaması" için 2 ikon var (bkz.
-				## characters.gd "skill3_variation_icons"), index'i bu diziye
-				## eşlemek için R'nin varyasyon index'ini (2/3) 0/1'e kaydır.
+				## characters.gd "skill3_variation_icons" SET sırasındadır: [Don Nova, Meteor Patlaması] (2026-10-04'ten beri).
 				var v_icons_r: Array = Characters.get_def(4).get("skill3_variation_icons", [])
-				var v_local_idx_r: int = v_idx_r - 2
+				var v_local_idx_r: int = player.buyucu_variation_set if "buyucu_variation_set" in player else 0
 				if v_local_idx_r >= 0 and v_local_idx_r < v_icons_r.size():
 					var v_tex_r: Texture2D = _cached_texture(v_icons_r[v_local_idx_r])
 					if v_tex_r:

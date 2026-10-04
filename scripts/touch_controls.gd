@@ -33,6 +33,8 @@ var interact_button: Control = null
 var pause_button: Control = null
 ## HUD'un duraklatmayan panelleri (envanter/özellikler) açıkken true döner - joystick başlamaz/çizilmez.
 var extra_block: Callable = Callable()
+## -> Array[Control]: üstüne dokunulunca joystick BAŞLAMAYAN alanlar (bkz. hud.gd _mobile_joy_exclude).
+var joy_exclude: Callable = Callable()
 var _u: float = MobileUIScript.HUD_SCALE
 ## Boştaki hayalet joystick merkezi (tuval px) - hud.gd Q düğmesine simetrik verir; sıfırsa REST_POS.
 var rest_center: Vector2 = Vector2.ZERO
@@ -101,7 +103,9 @@ func _input(event: InputEvent) -> void:
 
 
 func _on_down(index: int, pos: Vector2) -> void:
-	if _blocked():
+	## Envanter/özellikler gibi HUD paneli açıkken (extra_block) yetenek düğmeleri de basılmaz - panel ekranı kaplıyor,
+	## altında kalan bir yetenek düğmesinin yerine dokunmak yanlışlıkla yetenek kullandırmasın.
+	if _blocked() or (extra_block.is_valid() and bool(extra_block.call())):
 		return
 	for b in _buttons:
 		var node: Control = b["node"]
@@ -112,6 +116,11 @@ func _on_down(index: int, pos: Vector2) -> void:
 			Input.action_press(action)
 			_held[index] = action
 			return
+	## Joystick bölgesindeki dokunulabilir HUD parçaları (grup paneli satırları/pencereleri, sohbet kutusu) joystick başlatmaz.
+	if joy_exclude.is_valid():
+		for c in joy_exclude.call():
+			if c is Control and is_instance_valid(c) and (c as Control).is_visible_in_tree() 					and (c as Control).get_global_rect().has_point(pos):
+				return
 	if _joy_id == -1 and not _joy_blocked() and pos.x < size.x * JOY_ZONE_W and pos.y > size.y * JOY_ZONE_TOP:
 		_joy_id = index
 		_joy_center = pos

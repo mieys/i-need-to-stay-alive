@@ -50,6 +50,10 @@ var _target_pos: Vector2 = Vector2.ZERO
 ## 170.0'ın %60'ı (170 * 0.6 = 102).
 var _speed: float = 102.0
 var _hit_timers: Dictionary = {} ## enemy instance_id -> kalan bekleme (sn)
+## Büyücü "Efsunlu Büyü" (Q finali, 2026-10-04): efsunlu dökümde hortum %25 büyük (görsel; temas yarıçapını player.gd zaten
+## büyütüp setup'a verir). Kozmetik kopyaya pet durum yayınının sprite_row alanında x100 gider (hortumun sprite satırı yok).
+var size_mult: float = 1.0
+const BASE_VISUAL_SCALE := 1.05
 
 ## bkz. skeleton_pet.gd dosya başındaki "kozmetik kopya" notu - AYNI desen.
 var network_instance_id: String = ""
@@ -71,7 +75,7 @@ func mark_as_network_visual() -> void:
 ## kopyada hiç setup() çağrılmıyor (bkz. skeleton_pet.gd'deki AYNI desen),
 ## ama görsel ölçeği yine de doğru olmalı.
 func _ready() -> void:
-	scale = Vector2(1.05, 1.05)
+	scale = Vector2.ONE * BASE_VISUAL_SCALE * size_mult
 	var sprite := AnimatedSprite2D.new()
 	sprite.sprite_frames = LoopFrames
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -98,6 +102,11 @@ func setup(p_owner: Node2D, p_origin: Vector2, p_radius: float, p_damage: float,
 	global_position = origin + Vector2(randf_range(-60.0, 60.0), randf_range(-60.0, 60.0))
 	_pick_new_target()
 	set_process(true)
+
+
+func set_size_mult(mult: float) -> void:
+	size_mult = maxf(0.1, mult)
+	scale = Vector2.ONE * BASE_VISUAL_SCALE * size_mult
 
 
 ## Yakında bir yaratık varsa ona doğru yönel ("rasgele konumlarda ...
@@ -151,6 +160,10 @@ func _process(delta: float) -> void:
 		if _hit_timers.get(id, 0.0) > 0.0:
 			continue
 		_hit_timers[id] = hit_interval
+		## Büyücü evrimleri (2026-10-04): temas etkileri (alınan hasar artışı, sersemletme) - hasardan ÖNCE (bkz. player.gd
+		## buyucu_tornado_touch).
+		if owner_player and is_instance_valid(owner_player) and owner_player.has_method("buyucu_tornado_touch"):
+			owner_player.buyucu_tornado_touch(e)
 		if e.has_method("take_damage"):
 			## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir" -
 			## her ayrı temas kendi kritik zarını atıyor (player.gd'deki
@@ -175,7 +188,8 @@ func _broadcast_network_state() -> void:
 		return
 	if NetworkManager.should_throttle("petpos_%s" % network_instance_id, 0.2):
 		return
-	NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, global_position, false)
+	NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, global_position, false,
+		-1.0, -1.0, int(round(size_mult * 100.0)))
 
 
 ## broadcast_pet_state RPC'sinin çağırdığı istemci tarafı karşılığı - "is_
@@ -184,9 +198,12 @@ func _broadcast_network_state() -> void:
 ## sprite_row dahil 3 argümanla çağırıyor (bkz. skeleton_pet.gd/player_pet.gd
 ## AYNI düzeltme) - eski 2 parametreli imza "too many arguments" hatasıyla
 ## sessizce başarısız olup tornadoyu diğer oyunculara hareketsiz gösteriyordu.
-func update_network_pet_state(pos: Vector2, _is_attacking: bool, _sprite_row: int = -1) -> void:
+## sprite_row: boyut çarpanı x100 (Efsunlu Büyü - bkz. size_mult); -1/0 = eski gönderen, ölçek değişmez.
+func update_network_pet_state(pos: Vector2, _is_attacking: bool, sprite_row: int = -1) -> void:
 	_network_target_position = pos
 	_network_state_received = true
+	if sprite_row > 0 and absf(float(sprite_row) / 100.0 - size_mult) > 0.001:
+		set_size_mult(float(sprite_row) / 100.0)
 
 
 func _process_network_visual(delta: float) -> void:

@@ -489,6 +489,14 @@ func set_enchant(ench: Dictionary) -> void:
 			enchant_behavior = b
 	yay_multishot_bonus = 0 if (is_instance_valid(enchant_behavior) and enchant_behavior.overrides_multishot()) else _pure_yay_multishot
 	_recompute_attack_range()
+	## Efsun kademesi parıltısı (bkz. enchant_weapon_glow.gd) - uzak kopyalara main.gd extra["ench_tiers"] ile gider.
+	enchant_glow_tier = EnchantGlowScript.tier_for(ench)
+	if icon_sprite:
+		EnchantGlowScript.attach(icon_sprite, enchant_glow_tier)
+
+
+const EnchantGlowScript := preload("res://scripts/enchant_weapon_glow.gd")
+var enchant_glow_tier: int = 0
 
 
 ## Efsunun değiştirdiği silah özellikleri - efsun değişince/kalkınca geri yüklenir (bkz. set_enchant).
@@ -588,6 +596,49 @@ func enchant_on_projectile_hit(proj: Node2D, body: Node, dmg: float, is_primary:
 func on_enchant_skill_used() -> void:
 	if is_instance_valid(enchant_behavior):
 		enchant_behavior.on_skill_used()
+
+
+## ================================================================ BÜYÜCÜ KIZ PASİFİ "Büyü Dalgası" (2026-10-04)
+## Kullanıcı isteği: "her yetenek kullandığında silahları aniden sertçe ileri itilip aynı anda atış yaparak verdikleri sonraki
+## atışın hasarını %30 arttırır. (saldırı hızı bekleme süresi sıfırlanır ve aniden ateş ederler)". player.gd _buyucu_on_skill_used
+## her silahta arcane_surge çağırır: güçlendirme BEKLEYEN bir çarpan olarak durur ve bir sonraki ASIL atışta (efsun ek atışları
+## hariç) tüketilir (_take_surge_mult) - hemen ateş edilebiliyorsa (hedef var, şarjör/bumerang/ölü/satıcı engeli yok) FireTimer
+## baştan kurulup o an ateşlenir; edilemiyorsa güçlendirme ilk fırsattaki atışa kalır. Işın silahında bir sonraki tik hemen
+## atılır. Görsel: güçlendirilmiş atışta ikon hedefe doğru sertçe ileri fırlar (WeaponJuice.arcane_surge - uzak kopya "weapon_fire"
+## yayınındaki "surge" ile AYNI fonksiyonu oynatır), yakın dövüşte savuruş zaten ileri atılış - sadece mor parlama.
+var _surge_pending_mult: float = 1.0
+## O an işlenen atış güçlendirilmiş mi (geri tepme/savuruş görseli + yayın bayrağı için - _fire_at içinde kurulur).
+var _surge_shot: bool = false
+
+
+func arcane_surge(dmg_mult: float) -> void:
+	_surge_pending_mult = maxf(_surge_pending_mult, dmg_mult)
+	var owner_node: Node = get_parent()
+	if owner_node == null or owner_node.get("is_dead") == true or owner_node.get("is_downed") == true \
+			or owner_node.get("is_in_merchant_zone") == true or not can_process():
+		return
+	if continuous_beam:
+		## Kilitli bir hedef varsa bir sonraki karede tik atılır (_process_continuous_beam; kilit yoksa kilitlenince hemen).
+		_beam_tick_timer = 0.0
+		return
+	if is_reloading or (single_active_projectile and _projectiles_in_flight > 0):
+		return
+	var target: Node2D = _make_facing_direction_target() if (fire_in_facing_direction and icon_sprite) else _get_target_enemy()
+	if target == null:
+		return
+	if fire_timer and not draw_before_fire:
+		fire_timer.start() ## saldırı bekleme süresi sıfırlanır - bir sonraki normal atış tam aralık sonra
+	_fire_at(target)
+	_item_on_attack(target)
+
+
+## Bekleyen güçlendirmeyi tüketir (asıl atışlarda - efsun ek atışları çarpanı paylaşmaz).
+func _take_surge_mult() -> float:
+	if _surge_pending_mult <= 1.0 or _enchant_extra_shot:
+		return 1.0
+	var m: float = _surge_pending_mult
+	_surge_pending_mult = 1.0
+	return m
 
 
 func on_enchant_event(event: String, data: Dictionary) -> void:
@@ -1699,7 +1750,7 @@ func _item_first_hit(target: Node) -> bool:
 		get_tree().current_scene.add_child(fx)
 		fx.global_position = (target as Node2D).global_position
 		if NetworkManager.is_multiplayer_active:
-			NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "muzzle_flash", fx.global_position,
+			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "muzzle_flash", fx.global_position,
 				{"scene_path": "res://scenes/fx_item_azrail_mark.tscn"})
 	return true
 
@@ -2121,14 +2172,14 @@ func _process_continuous_beam(delta: float) -> void:
 				_beam_fx.setup(origin_node, target)
 			# Broadcast the exact muzzle position so remote beams start at the same point.
 			if NetworkManager.is_multiplayer_active:
-				NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "beam_start", target.global_position, {
+				NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "beam_start", target.global_position, {
 					"beam_type": "lightning",
 					"from_pos": origin_node.global_position
 				})
 	# Keep both endpoints synchronized while the player or target moves.
 	if NetworkManager.is_multiplayer_active and not NetworkManager.should_throttle("lightning_beam_%d" % multiplayer.get_unique_id(), 0.05):
 		var origin_node_update: Node2D = muzzle if muzzle else (icon_sprite if icon_sprite else self)
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "beam_update", target.global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "beam_update", target.global_position, {
 			"from_pos": origin_node_update.global_position
 		})
 	_beam_tick_timer -= delta
@@ -2144,7 +2195,7 @@ func _end_beam() -> void:
 	_beam_fx = null
 	_beam_target = null
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "beam_stop", Vector2.ZERO, {})
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "beam_stop", Vector2.ZERO, {})
 
 
 func _attach_shadow_under_owner() -> void:
@@ -2194,13 +2245,25 @@ func _deal_beam_tick(target: Node2D) -> void:
 	if not target.has_method("take_damage"):
 		return
 	var final_damage: float = damage * BEAM_TICK_DAMAGE_RATIO * rage_multiplier
+	## Büyücü Kız pasifi: güçlendirme ışın silahında bir sonraki tike (+%30) - asa da sertçe ileri fırlar.
+	var surge_mult: float = _take_surge_mult()
+	final_damage *= surge_mult
+	if surge_mult > 1.0 and icon_sprite:
+		var surge_dir: Vector2 = target.global_position - global_position
+		if _punch_tween and _punch_tween.is_valid():
+			_punch_tween.kill()
+		_punch_tween = WeaponJuice.arcane_surge(self, icon_sprite, surge_dir, Vector2.ZERO, _icon_base_scale, recoil_distance)
+		if NetworkManager.is_multiplayer_active:
+			_broadcast_weapon_fire_anim(surge_dir, Vector2.ZERO, 0.0, {"surge": true})
 	final_damage *= 1.0 + _player_stat("talon_damage_bonus")
+	final_damage *= 1.0 - _player_stat("talon_salvo_damage_penalty") ## Talon E aktifken -%40 (bkz. player.gd)
 	var first_hit: bool = _item_first_hit(target)
 	var is_crit: bool = first_hit or randf() < crit_chance
 	if is_crit:
 		final_damage *= crit_damage + _player_stat("item_crit_damage_bonus")
-		## Kritik tik: asa hafifçe titrer (bkz. WeaponCritAnim "jitter") - uzak kopyaya da gider.
-		if icon_sprite:
+		## Kritik tik: asa hafifçe titrer (bkz. WeaponCritAnim "jitter") - uzak kopyaya da gider. (Büyücü pasifinin
+		## güçlendirilmiş tikinde ileri fırlayış öncelikli - iki tween aynı ikonda çekişmesin.)
+		if icon_sprite and surge_mult <= 1.0:
 			WeaponCritAnim.play_ranged(self, icon_sprite, _crit_key(), (target.global_position - global_position), Vector2.ZERO,
 				_icon_base_scale, recoil_distance)
 			if NetworkManager.is_multiplayer_active:
@@ -2307,7 +2370,7 @@ func _spawn_chain_lightning_fx(from_node: Node2D, to_node: Node2D) -> void:
 	## asıl nedeni muhtemelen buydu. Diğerleriyle aynı desene uyup burada da
 	## throttle uyguluyoruz.
 	if NetworkManager.is_multiplayer_active and not NetworkManager.should_throttle("chain_%d" % multiplayer.get_unique_id(), 0.05):
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "chain_lightning", to_node.global_position, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "chain_lightning", to_node.global_position, {
 			"from_pos": from_node.global_position,
 		})
 
@@ -2373,6 +2436,7 @@ func _fire_at(target: Node2D) -> void:
 			return
 	var final_damage: float = damage * rage_multiplier
 	final_damage *= 1.0 + _player_stat("talon_damage_bonus")
+	final_damage *= 1.0 - _player_stat("talon_salvo_damage_penalty") ## Talon E aktifken -%40 (bkz. player.gd)
 	## Azrail'in Gözü (eşya): bu yaratığa ilk vuruş garanti kritik (+ aşağıda ek hasar).
 	var first_hit: bool = _item_first_hit(target)
 	var is_crit: bool = first_hit or randf() < crit_chance + (ench.crit_bonus(target) if ench else 0.0)
@@ -2381,6 +2445,10 @@ func _fire_at(target: Node2D) -> void:
 		final_damage *= crit_damage + (ench.crit_damage_bonus(target) if ench else 0.0) + _player_stat("item_crit_damage_bonus")
 	## Efsun: ek atış hasar çarpanı (ör. Ok Yağmuru ek okları %80) + efsunun kendi hasar değişikliği (güç, koşullu bonuslar).
 	final_damage *= _shot_damage_mult * (1.0 + GameManager.enchant_damage_percent)
+	## Büyücü Kız pasifi (bkz. arcane_surge): bekleyen güçlendirme bu asıl atışta tüketilir (+%30) - görsel de sertleşir.
+	var surge_mult: float = _take_surge_mult()
+	_surge_shot = surge_mult > 1.0
+	final_damage *= surge_mult
 	if ench:
 		final_damage = ench.modify_damage(final_damage, target)
 	var direction: Vector2 = (target.global_position - global_position).normalized()
@@ -2413,6 +2481,12 @@ func _fire_at(target: Node2D) -> void:
 	## önceden söyleyebilmemizi sağlar - bkz. kullanıcı bildirimi: "kesme
 	## efekti bitmeden kılıcın geri dönmesi [sorunu]".
 	var melee_effect_hold: float = 0.0
+	## Büyücü pasifi: yakın dövüşte savuruş zaten hedefe atılış - güçlendirilmiş vuruşta ikon mor parlar (uzak kopya "surge" ile).
+	var surge_extra: Dictionary = {"surge": true} if _surge_shot else {}
+	if is_crit:
+		surge_extra["crit"] = true
+	if _surge_shot and icon_sprite:
+		WeaponJuice.surge_flash(self, icon_sprite)
 	if melee and _is_uzunkilic:
 		## Uzunkılıç: hedefe atılıp üstünden yay çizen kendi savuruşu (bkz. _start_sword_swing) - diğer yakın dövüş
 		## silahlarının hedef üstündeki "Z" zikzağı ve eski kırmızı hilal (fx_uzunkilic_slash) kılıçta kullanılmıyor.
@@ -2433,12 +2507,12 @@ func _fire_at(target: Node2D) -> void:
 		## efekt(ler) tamamen bitmeden dönmeye başlamıyor (melee_effect_hold).
 		_do_melee_swing(direction, melee_at_position, melee_effect_hold, is_crit)
 		if NetworkManager.is_multiplayer_active:
-			_broadcast_weapon_fire_anim(direction, melee_at_position, melee_effect_hold, {"crit": true} if is_crit else {})
+			_broadcast_weapon_fire_anim(direction, melee_at_position, melee_effect_hold, surge_extra)
 	else:
 		_do_recoil(direction, is_crit)
 		_spawn_muzzle_flash(direction)
 		if NetworkManager.is_multiplayer_active:
-			_broadcast_weapon_fire_anim(direction, Vector2.ZERO, 0.0, {"crit": true} if is_crit else {})
+			_broadcast_weapon_fire_anim(direction, Vector2.ZERO, 0.0, surge_extra)
 
 	## Uzunkılıç/Tüfek/Topuz gibi silaha özel kalkan delme (weapon_shield_pen_bonus,
 	## diğer tüm silahlerde 0 - no-op).
@@ -2507,7 +2581,7 @@ func _fire_at(target: Node2D) -> void:
 			## NetworkManager.should_throttle) - çok hızlı ateş eden silahlar
 			## saniyede onlarca isabet efekti göndermeye çalışabilir.
 			if NetworkManager.is_multiplayer_active and not NetworkManager.should_throttle("hitscan_%d" % multiplayer.get_unique_id(), 0.08):
-				NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", target.global_position, {
+				NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", target.global_position, {
 					"scene_path": impact_scene.resource_path
 				})
 		fired.emit(direction)
@@ -2827,6 +2901,8 @@ func _start_sword_swing(direction: Vector2, target_pos: Vector2, is_crit: bool =
 		var sword_extra: Dictionary = {"sword_side": _sword_side, "sword_size": size, "sword_speed": speed}
 		if is_crit:
 			sword_extra["crit"] = true
+		if _surge_shot:
+			sword_extra["surge"] = true ## Büyücü pasifi: uzak kopyada da mor parlama
 		_broadcast_weapon_fire_anim(direction, target_pos, 0.0, sword_extra)
 
 
@@ -3063,7 +3139,7 @@ func _spawn_melee_hit_fx(direction: Vector2, target_pos: Vector2, speed_scale: f
 		fx.speed_scale = speed_scale
 	# Broadcast melee hit impact to remote players
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "melee_hit", target_pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "melee_hit", target_pos, {
 			"scene_path": hit_impact_scene.resource_path,
 			"rotation": fx.rotation,
 			"scale_mult": aoe_radius_multiplier
@@ -3131,7 +3207,7 @@ func _play_attack_sound() -> void:
 		# Broadcast weapon fire sound to remote players
 		if NetworkManager.is_multiplayer_active and s.stream and s.stream.resource_path != "":
 			var player_id: int = multiplayer.get_unique_id()
-			NetworkManager.broadcast_player_vfx.rpc(player_id, "weapon_sound", global_position, {
+			NetworkManager.send_player_vfx(player_id, "weapon_sound", global_position, {
 				"sound_path": s.stream.resource_path,
 				"pitch": s.pitch_scale,
 				## DÜZELTME: gerçek volume_db taşınmıyordu, katılımcılar bu
@@ -3176,7 +3252,7 @@ func _spawn_muzzle_flash(direction: Vector2) -> void:
 	if NetworkManager.is_multiplayer_active:
 		var player_id: int = multiplayer.get_unique_id()
 		if not NetworkManager.should_throttle("muzzle_%d" % player_id, 0.05):
-			NetworkManager.broadcast_player_vfx.rpc(player_id, "muzzle_flash", fx.global_position, {
+			NetworkManager.send_player_vfx(player_id, "muzzle_flash", fx.global_position, {
 				"scene_path": muzzle_flash_scene.resource_path,
 				"rotation": fx.rotation
 			})
@@ -3202,7 +3278,7 @@ func _broadcast_weapon_icon_visibility(is_visible: bool) -> void:
 	var slot_idx: int = owner_player._get_weapon_index(self)
 	if slot_idx < 0:
 		return
-	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "weapon_icon_visibility", global_position, {
+	NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "weapon_icon_visibility", global_position, {
 		"slot_index": slot_idx,
 		"visible": is_visible,
 	})
@@ -3228,6 +3304,13 @@ func _hide_icon_if_still_flying() -> void:
 ## sprite (doesn't affect hover_offset / firing origin).
 func _do_recoil(direction: Vector2, is_crit: bool = false) -> void:
 	if not icon_sprite:
+		return
+	## Büyücü Kız pasifi: güçlendirilmiş atışta geri tepme yerine sert ileri fırlayış (kritik animasyonunun da önünde). Uzak kopya
+	## "weapon_fire" yayınındaki "surge" ile aynısını oynatır - ayrı "weapon_recoil" yayını gönderilmez (iki tween çekişirdi).
+	if _surge_shot:
+		if _punch_tween and _punch_tween.is_valid():
+			_punch_tween.kill()
+		_punch_tween = WeaponJuice.arcane_surge(self, icon_sprite, direction, Vector2.ZERO, _icon_base_scale, recoil_distance)
 		return
 	## Kritik: silaha özel sert animasyon (bkz. weapon_crit_anim.gd) - uzak kopya "weapon_fire" yayınındaki "crit" ile aynısını
 	## oynatır, bu yüzden ayrı "weapon_recoil" yayını gönderilmez (iki tween aynı ikonda çekişirdi).
@@ -3261,7 +3344,7 @@ func _do_recoil(direction: Vector2, is_crit: bool = false) -> void:
 				## _weapon_recoil_distance). Görsel/sabit bir değeri ayrıca
 				## ağdan göndermek hem gereksiz trafik hem de iki tarafın
 				## sayısı bir gün birbirinden sapabilir diye gereksiz risk.
-				NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "weapon_recoil", global_position, {
+				NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "weapon_recoil", global_position, {
 					"slot_index": slot_idx,
 				})
 
@@ -3279,8 +3362,9 @@ func _broadcast_weapon_fire_anim(fire_direction: Vector2, melee_target_pos: Vect
 	## Relay flood korumasına takılmamak için sınırlanıyor (bkz.
 	## NetworkManager.should_throttle) - yüksek ateş hızlı silahlarda animasyon
 	## zaten görsel olarak ~20/sn üzerinde fark edilmiyor.
-	## Kritikler sınırlamaya takılmaz (seyrek ve görsel olarak önemli - kaçarsa uzakta normal atış görünürdü).
-	if not extra.get("crit", false) and NetworkManager.should_throttle("wfire_%d_%d" % [multiplayer.get_unique_id(), slot_idx], 0.05):
+	## Kritikler ve Büyücü pasifinin güçlendirilmiş atışı sınırlamaya takılmaz (seyrek ve görsel olarak önemli).
+	if not extra.get("crit", false) and not extra.get("surge", false) \
+			and NetworkManager.should_throttle("wfire_%d_%d" % [multiplayer.get_unique_id(), slot_idx], 0.05):
 		return
 	## DÜZELTME (mimari sadeleştirme - kullanıcı isteği: "singleplayerda zaten
 	## kayıtlı animasyon/efekt bilgilerinin multiplayerdan gereksiz yere
@@ -3304,7 +3388,7 @@ func _broadcast_weapon_fire_anim(fire_direction: Vector2, melee_target_pos: Vect
 		"hold_duration": hold_dur,
 	}
 	payload.merge(extra) ## ör. Uzunkılıç: sword_side/sword_size/sword_speed (bkz. _start_sword_swing)
-	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "weapon_fire", global_position, payload)
+	NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "weapon_fire", global_position, payload)
 
 
 ## Aynı anda tek bir savuruş animasyonu koşmalı - hızlı ateş hızında yeni bir

@@ -81,9 +81,10 @@ func _try_measure() -> void:
 	if r.size == Vector2.ZERO:
 		return
 	_measured = true
-	_width = maxi(3, int(round(r.size.x * 0.9)))
+	## Güneş: gölge sola UZAR (taşınmaz, bkz. map_shadows.gd SUN_SHIFT_X) - sağ kenar objenin dibinde kalır.
+	_width = maxi(3, int(round(r.size.x * 0.9))) + int(absf(MapShadows.SUN_SHIFT_X))
 	_base_y = r.end.y
-	position = Vector2(round(r.get_center().x + MapShadows.SUN_SHIFT_X), _base_y) ## güneş kayması: sola (map_shadows.gd)
+	position = Vector2(round(r.get_center().x + MapShadows.SUN_SHIFT_X * 0.5), _base_y)
 	queue_redraw()
 
 

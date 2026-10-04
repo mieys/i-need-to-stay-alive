@@ -41,6 +41,17 @@ const JUMP_LAND_FRAME := 6 ## yere iniş (çekme + hasar)
 ## kalkan tüketmesin") ----------
 ## Gelen her hasar (kalkan/sıvışma katmanlarından ÖNCE, ham miktar - player.gd take_damage) bu çarpanla azalır.
 const DAMAGE_TAKEN_MULT := 0.6
+## Yetenek evrimleri (kullanıcı isteği 2026-10-04, bkz. skill_evolutions.gd DEFS[12]; kart metniyle birebir):
+const EVO_DAMAGE_TAKEN_MULT := 0.4 ## Taş Deri (shaman_r1): hasar azaltma %40 -> %60
+const EVO_HEAL_MISSING_PER_KILL := 0.01 ## Taşın Dirilişi (shaman_r2): formda öldürülen her yaratık başına eksik canın %1'i
+const EVO_BIG_SCALE_MULT := 1.3 ## Dev Golem (shaman_rf): boyut +%30
+const EVO_BIG_AP_BONUS := 0.15 ## Dev Golem: +%15 saldırı gücü (form boyunca)
+const EVO_BIG_AREA_MULT := 1.3 ## Dev Golem: darbe/sarsıntı/iniş alanları +%30
+
+
+## Formdayken gelen hasar çarpanı (r1 = "Taş Deri" evrimi alındı mı).
+static func damage_taken_mult(r1: bool) -> float:
+	return EVO_DAMAGE_TAKEN_MULT if r1 else DAMAGE_TAKEN_MULT
 ## Formdaki Q/E (Sarsıcı Darbe / Golem Sıçrayışı) standart yetenek makinelerini bypass eder ve kalkan bedeli ÖDEMEZ
 ## (player.gd _shaman_golem_try_q/_shaman_golem_try_e - bilerek _activate_skill*'a hiç gitmezler).
 
@@ -128,11 +139,12 @@ static func shadow_scale_for(anim_name: String, frame: int) -> Vector2:
 const OverheadBarScript := preload("res://scripts/overhead_bar.gd")
 
 
-static func apply_overhead_lift(host: Node, golem: bool) -> void:
-	if host == null or bool(host.get_meta("golem_overhead_lifted", false)) == golem:
+static func apply_overhead_lift(host: Node, golem: bool, size_mult: float = 1.0) -> void:
+	## size_mult: "Dev Golem" evrimi (EVO_BIG_SCALE_MULT) formu büyütür - çubuk/isim de orantılı yukarı çıkar.
+	var lift: float = OVERHEAD_LIFT * size_mult if golem else 0.0
+	if host == null or is_equal_approx(float(host.get_meta("golem_overhead_lift", 0.0)), lift):
 		return
-	host.set_meta("golem_overhead_lifted", golem)
-	var lift: float = OVERHEAD_LIFT if golem else 0.0
+	host.set_meta("golem_overhead_lift", lift)
 	var bar: Node = host.get_node_or_null("OverheadBar")
 	if bar != null and bar.has_method("set_offset"):
 		bar.set_offset(OverheadBarScript.CHARACTER_Y_OFFSET + lift)

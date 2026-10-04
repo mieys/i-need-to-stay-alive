@@ -157,6 +157,8 @@ func setup(player: Node, stock: Array, merchant: Node = null) -> void:
 
 
 func _process(delta: float) -> void:
+	if _phone:
+		_fit_phone_columns() ## kaydırma kutusu son genişliğine yerleşimden sonra gelir - ucuz, her kare
 	## BUG DÜZELTMESİ (kullanıcı bildirimi 2026-09-24: "seyyar satıcı arayüzü açıkken level atladığımızda yetenek ve
 	## sandık seçilmiyor ve hiçbir butona basamadan takılı kalıyoruz") - bu ekran 80. CanvasLayer'da ve tam ekran
 	## karartması (dim, MOUSE_FILTER_STOP) TÜM tıklamaları yutuyor; seviye atlama (level_up_screen.tscn layer 1),
@@ -198,6 +200,38 @@ func _process(delta: float) -> void:
 ## yedek (1080'den küçük bir görüntü alanı olursa).
 const WINDOW_SCALE := 1.0
 
+## TELEFON: TAM EKRAN (kullanıcı isteği 2026-10-04: "dükkan ekranı v.b bir pencere değil direk ekranı komple kaplayan bir
+## arayüz olsun ... her alanın değerlendirilmesini istiyorum" + "tüm telefonlarla uyumlu"). Eskiden pencere MenuFitter ile
+## ekrana sığdırılıyordu (içerik 1080'den uzun -> KÜÇÜLÜYORDU, yazılar ufacıktı). Artık katman PHONE_K kat büyütülür (piksel
+## yazı 32 -> 48, keskin), pencere güvenli alanın TAMAMINI kaplar (CenterContainer yok), kart ızgarası kaydırılır ve sütun
+## sayısı kalan genişlikten hesaplanır (16:9'dan 21:9'a). Masaüstü değişmedi.
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const PHONE_K := 1.5
+var _phone: bool = false
+var _phone_scroll: ScrollContainer = null
+
+
+## Telefonda pencerenin kaplayacağı alan (katman koordinatı = ekran / PHONE_K).
+func _phone_rect() -> Rect2:
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	var safe: Rect2 = MobileUIScript.safe_margins(get_viewport())
+	return Rect2(safe.position / PHONE_K, (view - safe.position - safe.size) / PHONE_K)
+
+
+## Kart sütunları kaydırma kutusunun genişliğine göre (kart 228 + aralık 14).
+func _fit_phone_columns() -> void:
+	if not is_instance_valid(_phone_scroll):
+		return
+	var avail: float = _phone_scroll.size.x - 20.0
+	var cols: int = maxi(1, int(floor((avail + 14.0) / (228.0 + 14.0))))
+	for g in [_grid, _weapon_grid]:
+		if g and g.columns != cols:
+			g.columns = cols
+		## Kartlar sütunu doldursun (sütun sayısına bölünemeyen genişlik kartlara dağılır, sağda boşluk kalmaz).
+		if g:
+			for c in g.get_children():
+				(c as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
 ## DÜZELTME (2026-10-02): Godot'ta Container.fit_child_in_rect çocuğun ölçeğini HER yerleşimde 1'e sıfırlar - pencere
 ## CenterContainer'ın çocuğu olduğu için 2026-09-25'teki x0.75 hiç uygulanmıyordu (ölçüm: scale (1, 1)). Ölçek artık
 ## yerleşim BİTTİKTEN sonra (sort_children sinyali) verilir; yeni eşya bölümüyle uzayan pencere ekrana sığmıyorsa ayrıca
@@ -235,17 +269,26 @@ func _build_ui() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
 
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	## 2026-09-24: oyun içi bej kit teması (koyu yazı, ten butonlar) - CanvasLayer temayı aktarmadığı için buradan.
-	center.theme = UIKit.theme()
-	add_child(center)
-
+	_phone = MobileUIScript.enabled
 	var window := PanelContainer.new()
 	window.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
-	center.add_child(window)
-	_apply_window_scale(window)
+	if _phone:
+		scale = Vector2.ONE * PHONE_K
+		window.theme = UIKit.theme()
+		add_child(window)
+		var r: Rect2 = _phone_rect()
+		window.position = r.position
+		window.size = r.size
+		window.custom_minimum_size = r.size
+	else:
+		var center := CenterContainer.new()
+		center.set_anchors_preset(Control.PRESET_FULL_RECT)
+		center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		## 2026-09-24: oyun içi bej kit teması (koyu yazı, ten butonlar) - CanvasLayer temayı aktarmadığı için buradan.
+		center.theme = UIKit.theme()
+		add_child(center)
+		center.add_child(window)
+		_apply_window_scale(window)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
@@ -295,6 +338,11 @@ func _build_ui() -> void:
 	UIKit.style_button(close_btn, "red", true, UIKit.FS_BODY)
 	close_btn.pressed.connect(_on_close_pressed)
 	title_bar.add_child(close_btn)
+	if _phone:
+		## 16:9 telefonda (1280 birim) masaüstü başlık genişlikleri pencereyi sağdan taşırıyordu.
+		_gold_label.custom_minimum_size.x = 150.0
+		inv_btn.custom_minimum_size.x = 190.0
+		_reroll_btn.custom_minimum_size.x = 0.0
 	vbox.add_child(title_bar)
 
 	var sep := HSeparator.new()
@@ -304,9 +352,32 @@ func _build_ui() -> void:
 	body.add_theme_constant_override("separation", 18)
 	vbox.add_child(body)
 
-	body.add_child(_build_details_panel())
-	body.add_child(_build_grid())
-	body.add_child(_build_stats_panel())
+	var details_panel: Control = _build_details_panel()
+	body.add_child(details_panel)
+	var grid_node: Control = _build_grid()
+	if _phone:
+		## Telefon: ızgara kalan genişliği ve yüksekliği doldurur, sığmayan kartlar parmakla kaydırılır.
+		body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_phone_scroll = ScrollContainer.new()
+		_phone_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_phone_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_phone_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_phone_scroll.follow_focus = true
+		grid_node.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_phone_scroll.add_child(grid_node)
+		body.add_child(_phone_scroll)
+		_phone_scroll.resized.connect(_fit_phone_columns)
+	else:
+		body.add_child(grid_node)
+	var stats_panel: Control = _build_stats_panel()
+	body.add_child(stats_panel)
+	if _phone:
+		## 16:9 telefonda (1920 / PHONE_K = 1280 birim) masaüstü genişlikleri (360 + 2 kart + 380) sığmıyordu.
+		details_panel.custom_minimum_size.x = 260.0
+		stats_panel.custom_minimum_size.x = 290.0
+		## Açıklama yazıları 320 en az genişlikle detay panelini genişletiyordu (ızgara 16:9'da tek sütuna düşüyordu).
+		_details_desc.custom_minimum_size.x = 0.0
+		_details_recipe_note.custom_minimum_size.x = 0.0
 
 	## bkz. chest_menu.gd'nin AYNI notu - sadece tık sesi, görsel stil zaten yukarıda UIKit ile elle uygulandı.
 	UISound.connect_all_buttons(self)
@@ -424,6 +495,9 @@ func _build_grid() -> Control:
 	return row
 
 func _populate_grid() -> void:
+	for old_card in _card_panels:
+		if is_instance_valid(old_card):
+			old_card.remove_from_group(&"gamepad_first_focus") ## karıştırmada silinen kart ilk odak adayı kalmasın
 	_card_panels.clear()
 	_buy_buttons.clear()
 	_price_labels.clear()
@@ -433,6 +507,9 @@ func _populate_grid() -> void:
 			_weapon_grid.add_child(card)
 		else:
 			_grid.add_child(card)
+	## Kumanda: dükkan açılınca ilk odak üstteki bir düğme değil ilk kart olsun (gamepad_ui.gd FIRST_FOCUS_GROUP).
+	if not _card_panels.is_empty():
+		(_card_panels[0] as Node).add_to_group(&"gamepad_first_focus")
 
 ## _on_reroll_pressed tarafından çağrılır - TAMAMEN yeni bir stokla kartları
 ## sıfırdan kurar (bkz. _build_ui()'nin ilk kuruluşuyla AYNI _populate_grid).
@@ -462,6 +539,12 @@ func _build_card(index: int) -> PanelContainer:
 	## kendiliğinden çizmiyor, GamepadFocusHelper kendi kenarlığını ekliyor (bkz. o dosyadaki not).
 	card.focus_mode = Control.FOCUS_ALL
 	GamepadFocusHelper.add_focus_ring(card)
+	## KUMANDA SATIN ALMA DÜZELTMESİ (kullanıcı bildirimi 2026-10-04: "joystick kullanırken seyyar satıcıdan satın alma
+	## butonlarına basamıyorum"): kart odaklanabilir olduğu için içindeki AL butonu D-pad'in odak aramasına HİÇ girmiyordu
+	## (ölçüldü: 4 kartın 4 AL butonu da ulaşılamaz) ve karta A basmak sadece "seç" yapıyordu - kumandayla satın almanın yolu
+	## yoktu. Artık D-pad bir karta gelince o kart seçilir (ayrıntılar solda görünür), A (ui_accept) odaktaki kartı SATIN ALIR
+	## (bkz. _on_card_gui_input). Fare akışı aynen: tık seçer, AL satın alır.
+	card.focus_entered.connect(_select_index.bind(index))
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
@@ -508,6 +591,7 @@ func _build_card(index: int) -> PanelContainer:
 	buy_btn.custom_minimum_size = Vector2(72, 50)
 	UIKit.style_button(buy_btn, "green", false, UIKit.FS_BODY)
 	buy_btn.pressed.connect(_on_buy_pressed.bind(index))
+	buy_btn.focus_mode = Control.FOCUS_NONE ## kumanda/klavye odağı kartta (A = satın al); fare tıklaması etkilenmez
 	buy_row.add_child(buy_btn)
 
 	_card_panels.append(card)
@@ -603,9 +687,12 @@ static func _shield_icon_texture(key: String) -> Texture2D:
 func _on_card_gui_input(event: InputEvent, index: int) -> void:
 	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - ui_accept (A/Enter/Boşluk) artık kart odaktayken sol tık ile AYNI
 	## seçim eylemini tetikliyor.
-	if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
-			or event.is_action_pressed("ui_accept"):
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_select_index(index)
+	elif event.is_action_pressed("ui_accept") and not event.is_echo():
+		## Kumanda/klavye: odaktaki kartı satın al (satılmış/yetersiz altınlı kartta _on_buy_pressed sessizce çıkar).
+		_select_index(index)
+		_on_buy_pressed(index)
 
 
 func _select_index(index: int) -> void:
@@ -791,6 +878,14 @@ func _open_inventory() -> void:
 	_inventory_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_inventory_overlay.theme = UIKit.theme()
 	add_child(_inventory_overlay)
+	if _phone:
+		## Katman PHONE_K büyütülmüş - tam ekran çapası ekranın PHONE_K katına taşardı; alanı elle ver.
+		var pr: Rect2 = _phone_rect()
+		_inventory_overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		_inventory_overlay.offset_left = pr.position.x
+		_inventory_overlay.offset_top = pr.position.y
+		_inventory_overlay.offset_right = pr.end.x
+		_inventory_overlay.offset_bottom = pr.end.y
 
 	var dim := ColorRect.new()
 	dim.color = Color(0.12, 0.07, 0.03, 0.5)
@@ -798,15 +893,19 @@ func _open_inventory() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_inventory_overlay.add_child(dim)
 
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_inventory_overlay.add_child(center)
-
 	var window := PanelContainer.new()
 	window.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
-	center.add_child(window)
-	_apply_window_scale(window)
+	if _phone:
+		## Telefon: envanter de tam alanı kaplar (ortalanmış/ölçeklenmiş pencere değil - bkz. PHONE_K notu).
+		_inventory_overlay.add_child(window)
+		window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	else:
+		var center := CenterContainer.new()
+		center.set_anchors_preset(Control.PRESET_FULL_RECT)
+		center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_inventory_overlay.add_child(center)
+		center.add_child(window)
+		_apply_window_scale(window)
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
 	window.add_child(vbox)
@@ -835,6 +934,8 @@ func _open_inventory() -> void:
 	_inventory_scroll = ScrollContainer.new()
 	_inventory_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_inventory_scroll.follow_focus = true ## gamepad ile odak aşağı inince kaydırsın
+	if _phone:
+		_inventory_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_inventory_scroll)
 	_inventory_body = VBoxContainer.new()
 	_inventory_body.add_theme_constant_override("separation", 12)
@@ -956,10 +1057,12 @@ func _refresh_inventory() -> void:
 ## bkz. _inventory_scroll üstündeki not. İçeriğin gerçek (minimum) boyutu hesaplanıp kaydırma alanı ona göre
 ## boyutlandırılır: genişlik = içerik (+ dikey kaydırma çubuğu payı), yükseklik = min(içerik, ekrana sığan).
 func _fit_inventory_scroll() -> void:
+	if _phone:
+		return ## telefonda kaydırma kutusu pencerenin kalanını doldurur (SIZE_EXPAND_FILL)
 	if not (_inventory_scroll and is_instance_valid(_inventory_scroll) and _inventory_body and is_instance_valid(_inventory_body)):
 		return
 	var content: Vector2 = _inventory_body.get_combined_minimum_size()
-	var vp_h: float = get_viewport().get_visible_rect().size.y
+	var vp_h: float = get_viewport().get_visible_rect().size.y / (PHONE_K if _phone else 1.0)
 	var max_h: float = maxf(200.0, vp_h - INVENTORY_SCREEN_MARGIN - INVENTORY_HEADER_ALLOWANCE)
 	var needs_scroll: bool = content.y > max_h
 	var bar_w: float = _inventory_scroll.get_v_scroll_bar().get_combined_minimum_size().x + 8.0 if needs_scroll else 0.0

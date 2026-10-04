@@ -268,7 +268,9 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 		"name": local_player_name,
 		"char_id": local_char_id,
 		"is_ready": true,
-		"is_host": true
+		"is_host": true,
+		"weapon": GameManager.selected_start_weapon,
+		"spirit": GameManager.selected_spiritual,
 	}
 
 	connection_status_changed.emit("LAN Sunucu Kuruldu! Port: %d" % port)
@@ -365,7 +367,9 @@ func host_online(player_name: String = "Oyuncu", char_id: int = 1) -> void:
 		"name": local_player_name,
 		"char_id": local_char_id,
 		"is_ready": true,
-		"is_host": true
+		"is_host": true,
+		"weapon": GameManager.selected_start_weapon,
+		"spirit": GameManager.selected_spiritual,
 	}
 	stop_lan_discovery_listen()
 	connection_status_changed.emit("İnternet odası kuruldu! Arkadaşların listede görüp katılabilir.")
@@ -641,7 +645,9 @@ func _on_connected_to_server() -> void:
 		"name": local_player_name,
 		"char_id": local_char_id,
 		"is_ready": is_host,
-		"is_host": is_host
+		"is_host": is_host,
+		"weapon": GameManager.selected_start_weapon,
+		"spirit": GameManager.selected_spiritual,
 	}
 
 	connection_status_changed.emit("Sunucuya bağlanıldı! Adres: " + room_code)
@@ -649,6 +655,7 @@ func _on_connected_to_server() -> void:
 
 	# Broadcast our info to everyone in the room
 	_rpc_sync_player_info.rpc(local_player_name, local_char_id, is_host)
+	_rpc_sync_player_loadout.rpc(GameManager.selected_start_weapon, GameManager.selected_spiritual)
 
 
 ## Bağlı diğer peer'ler (Godot'nun multiplayer.get_peers() davranışı gereği KENDİMİZ hariç).
@@ -1011,6 +1018,7 @@ func _on_peer_connected(peer_id: int) -> void:
 		"is_host": is_host
 	})
 	_rpc_sync_player_info.rpc_id(peer_id, my_info["name"], my_info["char_id"], my_info.get("is_host", false))
+	_rpc_sync_player_loadout.rpc_id(peer_id, GameManager.selected_start_weapon, GameManager.selected_spiritual)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -1076,12 +1084,13 @@ func _rpc_sync_player_info(p_name: String, p_char_id: int, p_is_host: bool) -> v
 		prev_ready = lobby_players[sender_id].get("is_ready", false)
 	else:
 		prev_ready = (sender_id == _host_peer)
-	lobby_players[sender_id] = {
-		"name": p_name,
-		"char_id": p_char_id,
-		"is_ready": prev_ready,
-		"is_host": (sender_id == _host_peer)
-	}
+	## Var olan kaydı GÜNCELLE (yeniden yazma): silah/ruhani yetenek (_rpc_sync_player_loadout) ayrı geliyor, silinmesin.
+	var info: Dictionary = lobby_players.get(sender_id, {})
+	info["name"] = p_name
+	info["char_id"] = p_char_id
+	info["is_ready"] = prev_ready
+	info["is_host"] = (sender_id == _host_peer)
+	lobby_players[sender_id] = info
 	lobby_updated.emit()
 
 
@@ -2314,7 +2323,9 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## göstergesi - Melek korkusu + Necromancer Lanetli Kafatası), taunt_start (extra_data: duration)/taunt_stop (Şovalye
 ## Kışkırtma'sının öfke damarı göstergesi), root_start (extra_data: duration)/root_stop (Oakley Sarmaşıklar'ın bacaklara
 ## sarılan dikenleri, bkz. fx_oakley_entangle.gd), shock_start/shock_stop (efsun Şok durumu, bkz. enemy.gd
-## _apply_shock_host/_clear_shock - istemcideki is_shocked() bu görselin varlığından okunur) - yeni bir dal eklersen buraya da yaz.
+## _apply_shock_host/_clear_shock - istemcideki is_shocked() bu görselin varlığından okunur), frost_slow_start (extra_data:
+## duration - Büyücü Kız Don Nova'nın buz yavaşlatması: mavimsi ton + buz kristalleri, bkz. enemy.gd _spawn_frost_chill_fx) - yeni
+## bir dal eklersen buraya da yaz.
 @rpc("any_peer", "call_remote", "reliable")
 func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictionary = {}) -> void:
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
@@ -2395,6 +2406,11 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		"slow_stop":
 			if target_enemy.has_method("_remove_slow_status_fx"):
 				target_enemy._remove_slow_status_fx()
+		## Büyücü Kız Don Nova (2026-10-04): buz yavaşlatmasının mavimsi tonu + buz kristalleri (bkz. enemy.gd
+		## _apply_frost_slow_host). Yavaşlatma simülasyonu host'ta; burada sadece görsel (ömrünü efekt kendisi sayar).
+		"frost_slow_start":
+			if target_enemy.has_method("_spawn_frost_chill_fx"):
+				target_enemy._spawn_frost_chill_fx(float(extra_data.get("duration", 6.0)))
 		"bleed":
 			if target_enemy.has_method("_spawn_bleed_fx"):
 				target_enemy._spawn_bleed_fx()
@@ -2587,6 +2603,32 @@ const NecroSkullScript := preload("res://scripts/necro_skull.gd")
 var _necro_skull_visuals: Dictionary = {}
 
 
+## OYUNCU GÖRSELLERİNİ GÖNDERMENİN TEK YOLU: send_player_vfx (broadcast_player_vfx.rpc'yi doğrudan çağırma).
+## Senkron analizi (2026-10-04, kullanıcı: "bazı şeyler senkron değil gibi geliyor"): bütün oyuncu görselleri tek bir
+## GÜVENİLMEZ RPC'den gidiyordu - kaybolan TEK paket = o yeteneğin efekti diğer oyuncuda HİÇ çıkmaz (ya da ışın / gizli
+## silah ikonu takılı kalır). Epic internet odasında büyük paketler parçalandığı için (fragment_peer.gd) kayıp daha olası.
+## Artık seyrek + kaybı görünür türler (yetenek sahnesi/halka/patlama, ışınlanma, ışın başı/sonu, ikon görünürlüğü...)
+## güvenilir kopyadan gider; sık tekrarlanan isabet/namlu/ses/ışın güncellemesi güvenilmez kalır (kaybı fark edilmez,
+## güvenilir kanalı tıkamasın - bkz. 2026-09-30 broadcast_weapon_attack notu). Yeni bir tür eklerken bu listeye bak.
+const RELIABLE_PLAYER_VFX := {
+	"skill_scene": true, "skill_ring": true, "skill_burst": true, "teleport_snap": true, "speed_line": true,
+	"beam_start": true, "beam_stop": true, "weapon_icon_visibility": true, "necro_skull": true,
+	"oakley_flower_spawn": true, "oakley_flower_bond": true, "spirit_blink": true, "spirit_cancel": true,
+}
+
+
+func send_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_data: Dictionary) -> void:
+	if RELIABLE_PLAYER_VFX.has(vfx_type):
+		broadcast_player_vfx_reliable.rpc(player_id, vfx_type, pos, extra_data)
+	else:
+		broadcast_player_vfx.rpc(player_id, vfx_type, pos, extra_data)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_player_vfx_reliable(player_id: int, vfx_type: String, pos: Vector2, extra_data: Dictionary) -> void:
+	broadcast_player_vfx(player_id, vfx_type, pos, extra_data)
+
+
 @rpc("any_peer", "call_remote", "unreliable")
 func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_data: Dictionary) -> void:
 	var rp: RemotePlayer = _find_remote_player(player_id)
@@ -2659,6 +2701,9 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			## Yetenek evrimi efektleri (player.gd _evo_world_fx): yön (rotation) - yarıçap setup(radius, color) ile aşağıda.
 			if extra_data.has("rotation"):
 				impact_fx.rotation = float(extra_data["rotation"])
+			## İsteğe bağlı ölçek (Shaman "Dev Golem" evrimi: golem darbe/sarsıntı/iniş efektleri alanla birlikte büyür).
+			if extra_data.has("fx_scale"):
+				impact_fx.scale = Vector2.ONE * float(extra_data["fx_scale"])
 			get_tree().current_scene.add_child(impact_fx)
 			impact_fx.global_position = pos
 			## DÜZELTME: bazı hitscan_impact fx'leri (örn. fx_meteor_strike,
@@ -2755,6 +2800,8 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			if not skull_scene:
 				return
 			var skull_fx: Node2D = skull_scene.instantiate() as Node2D
+			## Büyücü "Efsunlu Büyü" (Q finali): efsunlu Arcane Lanet'in kafatası %25 büyük (kasterle aynı ölçek).
+			skull_fx.scale = Vector2.ONE * float(extra_data.get("fx_scale", 1.0))
 			get_tree().current_scene.add_child(skull_fx)
 			if skull_fx.has_method("setup_positions"):
 				skull_fx.setup_positions(Vector2(extra_data.get("from_pos", pos)), pos)
@@ -3780,6 +3827,30 @@ func _rpc_update_character(char_id: int) -> void:
 	if lobby_players.has(sender_id):
 		lobby_players[sender_id]["char_id"] = char_id
 		lobby_updated.emit()
+
+
+## LOBİDE SEÇİMLER (kullanıcı isteği 2026-10-03: "lobide karakter portrelerinde ... silah seçimleri falan da görünsün"):
+## başlangıç silahı + ruhani yetenek eskiden sadece yereldi (oyunda herkes kendi seçimini kendisi uygular - bu değişmedi);
+## artık lobideki diğer oyuncular da GÖRSÜN diye lobby_players[peer]["weapon"/"spirit"]'e yazılıp yayınlanır. Sadece
+## gösterim: oyun mantığı bu alanları okumaz. Odaya girerken/yeni gelen birine ve lobi seçicileri değişince gönderilir.
+func update_local_loadout() -> void:
+	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	if not lobby_players.has(my_id):
+		return
+	lobby_players[my_id]["weapon"] = GameManager.selected_start_weapon
+	lobby_players[my_id]["spirit"] = GameManager.selected_spiritual
+	lobby_updated.emit()
+	_rpc_sync_player_loadout.rpc(GameManager.selected_start_weapon, GameManager.selected_spiritual)
+
+
+@rpc("any_peer", "reliable")
+func _rpc_sync_player_loadout(weapon: String, spirit: String) -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	var info: Dictionary = lobby_players.get(sender_id, {})
+	info["weapon"] = weapon
+	info["spirit"] = spirit
+	lobby_players[sender_id] = info
+	lobby_updated.emit()
 
 
 func start_multiplayer_game() -> void:

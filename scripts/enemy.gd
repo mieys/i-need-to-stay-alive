@@ -1523,6 +1523,9 @@ func apply_element_host(kind: String, p: Dictionary, attacker_peer: int) -> void
 			apply_stun(float(p.get("dur", 0.5)))
 		"slow":
 			apply_slow(float(p.get("pct", 0.3)), float(p.get("dur", 2.0)), bool(p.get("boss", false)))
+		## Büyücü Kız Don Nova (2026-10-04): %80'e kadar yavaşlatma + buz görünümü (bkz. _apply_frost_slow_host).
+		"frost_slow":
+			_apply_frost_slow_host(float(p.get("pct", FROST_SLOW_MAX)), float(p.get("dur", 6.0)))
 	_in_element_apply = false
 	## "quiet": alan etkilerinin (zehir bulutu, lav...) tekrarlayan uygulaması yeni tepkime zinciri başlatmasın.
 	if element != "" and not bool(p.get("quiet", false)):
@@ -2316,7 +2319,75 @@ const CHILL_TINT_COLOR := Color(0.62, 0.8, 1.05, 1.0)
 func _status_tint_color() -> Color:
 	if is_raging:
 		return RAGE_TINT_COLOR
-	return CHILL_TINT_COLOR if chill_stacks > 0 else Color(1.0, 1.0, 1.0, 1.0)
+	if chill_stacks > 0:
+		return CHILL_TINT_COLOR
+	return FROST_SLOW_TINT_COLOR if _frost_chill_active() else Color(1.0, 1.0, 1.0, 1.0)
+
+
+## ---------- Büyücü Kız "Don Nova" buz yavaşlatması (kullanıcı isteği 2026-10-04) ----------
+## "büyücü kızın don novası artık düşmanları dondurmak yerine 6 saniyeliğine %80 yavaşlatıyor çünkü donma olayı geliştirmelere
+## eklenecek" (R finali "Ateş ve Buz" ilk 3 sn dondurur - player.gd). apply_slow'un %75 tavanı eşya yığılması (Kitelama Seti) için;
+## bu yetenek kendi oranını taşır (FROST_SLOW_MAX). Bosslar diğer yavaşlatmalardaki gibi bağışık (eski donma da işlemiyordu).
+## Görsel (kullanıcı: "yavaşlatma için yaratıkların hafif mavimsi ve donuyormuş gibi görünmesi"): gövde buz mavisi ton
+## (_status_tint_color) + gövdede buz kristalleri / ayakta kırağı (fx_frost_chill_status.gd, sayfa tools/gen_evolution_fx.py
+## frost_chill). Host karar verir, istemcilere broadcast_enemy_vfx "frost_slow_start" (duration) - görselin ömrünü efekt kendisi
+## sayar (istemci kuklası GDScript tikinde durum sayacı işlemez), bitince _on_frost_chill_fx_finished tonu geri alır.
+const FROST_SLOW_MAX := 0.8
+const FROST_SLOW_TINT_COLOR := Color(0.74, 0.88, 1.08, 1.0)
+const FROST_CHILL_FX_PATH := "res://scenes/fx_frost_chill_status.tscn"
+static var _frost_chill_scene: PackedScene = null
+var _frost_chill_fx: Node2D = null
+
+
+func apply_frost_slow(percent: float, duration: float) -> void:
+	apply_element("frost_slow", {"pct": percent, "dur": duration})
+
+
+func _apply_frost_slow_host(percent: float, duration: float) -> void:
+	if is_dead or is_boss or percent <= 0.0 or duration <= 0.0:
+		return
+	_slow_percent = maxf(_slow_percent, minf(percent, FROST_SLOW_MAX))
+	_slow_timer = maxf(_slow_timer, duration)
+	_spawn_frost_chill_fx(duration)
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.broadcast_enemy_vfx.rpc(net_id, "frost_slow_start", {"duration": duration})
+
+
+func _frost_chill_active() -> bool:
+	return _frost_chill_fx != null and is_instance_valid(_frost_chill_fx) and not _frost_chill_fx.is_queued_for_deletion()
+
+
+## Yerel (host) ve ağdan gelen ("frost_slow_start") ortak giriş - zaten varsa süresi tazelenir.
+func _spawn_frost_chill_fx(duration: float) -> void:
+	if is_dead:
+		return
+	if _frost_chill_active():
+		_frost_chill_fx.call("refresh", duration)
+	else:
+		if _frost_chill_scene == null and ResourceLoader.exists(FROST_CHILL_FX_PATH):
+			_frost_chill_scene = load(FROST_CHILL_FX_PATH) as PackedScene
+		if _frost_chill_scene == null:
+			_frost_chill_fx = null
+		else:
+			_frost_chill_fx = _frost_chill_scene.instantiate() as Node2D
+			add_child(_frost_chill_fx)
+			_frost_chill_fx.call("setup", duration, _body_radius)
+	_refresh_chill_tint()
+
+
+## fx_frost_chill_status.gd kendi süresi bitince çağırır.
+func _on_frost_chill_fx_finished() -> void:
+	_frost_chill_fx = null
+	_refresh_chill_tint()
+
+
+func _remove_frost_chill_fx() -> void:
+	if _frost_chill_active():
+		_frost_chill_fx.queue_free()
+	_frost_chill_fx = null
+	_refresh_chill_tint()
 
 
 ## Rage modu tek seferlik bir anahtar - geri kapanmaz (ölene kadar sürer).
@@ -4415,6 +4486,7 @@ func die() -> void:
 	_fear_wander = false
 	_remove_fear_status_fx()
 	_remove_entangle_fx()
+	_remove_frost_chill_fx() ## Don Nova buz kristalleri ölüm animasyonunda kalmasın
 	## Aileye özgü kısık ölüm sesi (kullanıcı isteği 2026-09-25) - her istemcide yerel, bkz. creature_death_sound.gd.
 	if is_inside_tree():
 		CreatureDeathSound.play(get_tree(), creature_family(), global_position, is_boss)

@@ -2,7 +2,7 @@ extends "res://scripts/enchant_behavior.gd"
 
 ## Beam of Zeus (Yıldırım Asası) - bkz. EnchantDefs "beam_of_zeus". Bekleme süresi dolunca (kullanıcı: kendiliğinden) en
 ## kalabalık yöne sahibini izleyen kalın, delip geçen bir ışın (enchant_area "zeus" + zeus_tile karoları). Asanın normal ince
-## ışını aynen devam eder. Final: bekleme 20 sn, ışının değdikleri bitişte patlayıp zincirleme şimşek (zeus_burst).
+## ışını aynen devam eder. Final: bekleme 7 sn (2026-10-04 denge turu: taban 60 -> 15 sn), ışının değdikleri bitişte patlayıp zincirleme şimşek (zeus_burst).
 ## Bekleme sayacı silah meta'sında (kart alınınca sıfırlanmasın).
 
 const DIR_SAMPLES := 16
@@ -19,7 +19,7 @@ func _on_setup() -> void:
 func _cooldown() -> float:
 	if f("zeus_cd_final") > 0.0:
 		return f("zeus_cd_final")
-	return maxf(5.0, f("zeus_cd", 60.0))
+	return maxf(5.0, f("zeus_cd", 15.0))
 
 
 func process_extra(delta: float) -> void:
@@ -40,7 +40,7 @@ func process_extra(delta: float) -> void:
 	keep_set("zeus_cd_left", _cooldown())
 	area("zeus", pl.global_position, {"follow": true, "dir": dir, "tile_len": beam_len, "width": width, "tick": f("zeus_tick", 0.25),
 		"damage": ap() * f("zeus_ap"), "push": f("zeus_push"), "overcharge": flag("overcharge"), "oc_dmg": ap() * 0.8,
-		"chain_dmg": ap() * 0.5, "duration": f("zeus_dur", 2.0), "sheet": "zeus_tile",
+		"chain_dmg": ap() * 0.5, "duration": f("zeus_dur", 2.5), "sheet": "zeus_tile",
 		"sheet_scale": Vector2(1.0, width / SHEET_WIDTH)})
 
 

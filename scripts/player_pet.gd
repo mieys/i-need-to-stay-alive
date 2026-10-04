@@ -592,7 +592,7 @@ func _spawn_slash_fx(attack_dir: Vector2) -> void:
 	var rot: float = attack_dir.angle()
 	_spawn_claw_slash_at(pos, rot)
 	if NetworkManager.is_multiplayer_active and not network_instance_id.is_empty():
-		NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "muzzle_flash", pos, {
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "muzzle_flash", pos, {
 			"scene_path": SlashFxScene.resource_path,
 			"rotation": rot,
 		})

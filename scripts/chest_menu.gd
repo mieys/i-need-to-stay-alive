@@ -71,6 +71,22 @@ const CARD_DESC_MIN_FONT_SIZE := 13
 const CARD_ICON_SIZE := 96.0
 const CARD_BUTTON_HEIGHT := 44.0
 const CARD_BUTTON_FONT_SIZE := 24
+## Telefon (kullanıcı isteği 2026-10-03: "sandık açma ekranını da mobille uyumlu hale getir"): level/efsun ekranlarıyla aynı
+## kural (mobile_ui.gd CHOICE_*) - kart 3x yerine k katı (5/3 -> 500x800, doku tam 5x sanat px), kart içi bölgeler k ile
+## ölçeklenir, yazılar telefon boylarında; AL sağ kenarda, SAT sol kenarda dikey büyük düğmeler; sandık animasyonu da k kat.
+## Masaüstünde k = 1, her şey eskisi gibi.
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+var _k: float = 1.0
+var _side_holder: Control = null
+var _side_buttons: Array = []
+
+
+func _kr(r: Rect2) -> Rect2:
+	return Rect2((r.position * _k).round(), (r.size * _k).round())
+
+
+func _mobile() -> bool:
+	return _k > 1.0
 
 ## DÜZELTME/YENİ ÖZELLİK (kullanıcı isteği: "bundan sonra yere düşen
 ## sandıklardan rasgele 3 silah düşecek 3 silahtan birini seçmemiz
@@ -134,6 +150,7 @@ func _enter_tree() -> void:
 func setup(player: Node, chest_tier: int) -> void:
 	_player = player
 	_chest_tier = chest_tier
+	_k = MobileUIScript.choice_card_scale(get_viewport(), CARD_SIZE, 1, 0.0)
 	## Bu sandığın yerden gelen altını (varsa) şimdi alınır: kartın üstünde yazar, kart inince oradan uçar.
 	_chest_gold = GameManager.pop_pending_chest_gold(false)
 
@@ -239,14 +256,14 @@ func _play_chest_open_sequence(candidate: Dictionary) -> void:
 	_chest_center = anim.position + anim.size * Vector2(0.5, 0.52) ## RewardReveal.chest_mouth ile aynı nokta (ölçek animasyonundan bağımsız)
 
 	anim.pivot_offset = anim.custom_minimum_size * 0.5
-	anim.scale = Vector2(0.6, 0.6)
+	anim.scale = Vector2(0.6, 0.6) * _k
 	anim.modulate.a = 0.0
 	var pop_in := create_tween()
 	pop_in.set_parallel(true)
 	pop_in.set_ease(Tween.EASE_OUT)
 	pop_in.set_trans(Tween.TRANS_BACK)
 	pop_in.tween_property(anim, "modulate:a", 1.0, 0.2)
-	pop_in.tween_property(anim, "scale", Vector2.ONE, 0.3)
+	pop_in.tween_property(anim, "scale", Vector2.ONE * _k, 0.3)
 	anim.burst.connect(func() -> void:
 		if is_instance_valid(self):
 			_reveal_reward_card(candidate)
@@ -284,6 +301,10 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 		_fit_card_texts(column)
 		var card_panel: Control = column.get_child(0) as Control
 		var buttons: Array = []
+		for b in _side_buttons:
+			if is_instance_valid(b):
+				(b as Control).modulate.a = 0.0
+				buttons.append(b)
 		for i in range(1, column.get_child_count()):
 			var b: Control = column.get_child(i) as Control
 			if b:
@@ -294,7 +315,7 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 		if card_panel and is_instance_valid(_rays_layer):
 			_rays = RewardRays.new()
 			_rays_layer.add_child(_rays)
-			_rays.setup(card_panel, CARD_SIZE, 3.0, tier, false)
+			_rays.setup(card_panel, CARD_SIZE * _k, 3.0 * _k, tier, false)
 		if card_panel:
 			## Sütunun tamamı uçar (kart + gizli butonlar); pivot kartın ortası.
 			var mouth: Vector2 = RewardReveal.chest_mouth(_chest_icon) if is_instance_valid(_chest_icon) else card_panel.get_global_rect().get_center()
@@ -377,7 +398,7 @@ func _build_gold_badge(parent: Control) -> Control:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var coin := TextureRect.new()
 	coin.texture = GoldCoinFrames.get_frame_texture(&"spin", 0)
-	coin.custom_minimum_size = Vector2(32.0, 32.0)
+	coin.custom_minimum_size = Vector2(48.0, 48.0) if _mobile() else Vector2(32.0, 32.0)
 	coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -387,7 +408,7 @@ func _build_gold_badge(parent: Control) -> Control:
 	var lbl := Label.new()
 	lbl.text = "+%d Altın" % _chest_gold
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	UIKit.style_label(lbl, CARD_DESC_FONT_SIZE, UIKit.C_GOLD, 0)
+	UIKit.style_label(lbl, 40 if _mobile() else CARD_DESC_FONT_SIZE, UIKit.C_GOLD, 0)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(lbl)
 	parent.add_child(row)
@@ -530,7 +551,9 @@ func _build_card(candidate: Dictionary) -> Control:
 	## eşleşmeye devam etsin diye AYNI şekilde 300x480'e döndürüldü (eski
 	## 238x406'ya DEĞİL - o değer zaten level kartlarıyla eşleşmiyordu, bu
 	## yüzden ilk etapta düzeltilmişti).
-	card.custom_minimum_size = CARD_SIZE # Match level up card dimensions
+	card.custom_minimum_size = CARD_SIZE * _k # Match level up card dimensions
+	card.set_meta("glow_card_size", CARD_SIZE * _k)
+	card.set_meta("glow_pad", TierCardFx.GLOW_PAD * _k)
 
 	var sb := StyleBoxFlat.new()
 	## Kullanıcı isteği: "sandık ödülü seçme kartı da tiera bağlı olarak level
@@ -576,23 +599,23 @@ func _build_card(candidate: Dictionary) -> Control:
 	# 2. Üst satır: eşya/silah adı (koyu tier zemini üstünde krem yazı). Uzunsa _fit_card_texts tek satıra sığana dek küçültür.
 	var name_lbl := Label.new()
 	name_lbl.text = display_name
-	name_lbl.position = TierCardFx.HEADER_RECT.position
-	name_lbl.size = TierCardFx.HEADER_RECT.size
+	name_lbl.position = _kr(TierCardFx.HEADER_RECT).position
+	name_lbl.size = _kr(TierCardFx.HEADER_RECT).size
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	UIKit.style_label(name_lbl, CARD_NAME_FONT_SIZE, UIKit.C_CREAM, 4)
+	UIKit.style_label(name_lbl, _name_fs(), UIKit.C_CREAM, 4)
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	name_lbl.clip_text = false
 	layout.add_child(name_lbl)
 	## Ağaca girmeden önce Label en küçük boyutunu varsayılan temanın büyük yazısıyla ölçüp kutusunu büyütüyor (375x70) ve bir
 	## daha küçültmüyor - doğru boyut, kart ağaca eklendikten sonra (ertelenmiş) yeniden verilir.
-	name_lbl.set_deferred("size", TierCardFx.HEADER_RECT.size)
+	name_lbl.set_deferred("size", _kr(TierCardFx.HEADER_RECT).size)
 	column.set_meta("name_label", name_lbl)
 
 	# 3. İkon: kalkan armasının parşömen yüzünde (eşya ikonları 32x32 -> 3x = kartın kendi 3 px piksel yoğunluğu).
 	var icon_rect := TextureRect.new()
-	icon_rect.size = Vector2(CARD_ICON_SIZE, CARD_ICON_SIZE)
-	icon_rect.position = TierCardFx.CREST_CENTER - icon_rect.size * 0.5
+	icon_rect.size = Vector2(CARD_ICON_SIZE, CARD_ICON_SIZE) * _k
+	icon_rect.position = (TierCardFx.CREST_CENTER * _k - icon_rect.size * 0.5).round()
 	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
 		icon_rect.texture = load(icon_path) as Texture2D
 	icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -604,18 +627,18 @@ func _build_card(candidate: Dictionary) -> Control:
 	# 4. Kurdele: tier adı (silahların tier'ı yok - "Silah").
 	var tier_lbl := Label.new()
 	tier_lbl.text = "Silah" if is_weapon else Items.KADEME_NAMES[Items.kademe(item_key) - 1]
-	tier_lbl.position = TierCardFx.RIBBON_RECT.position
-	tier_lbl.size = TierCardFx.RIBBON_RECT.size
+	tier_lbl.position = _kr(TierCardFx.RIBBON_RECT).position
+	tier_lbl.size = _kr(TierCardFx.RIBBON_RECT).size
 	tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tier_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	UIKit.style_label(tier_lbl, CARD_TIER_FONT_SIZE, UIKit.C_CREAM, 4)
+	UIKit.style_label(tier_lbl, 48 if _mobile() else CARD_TIER_FONT_SIZE, UIKit.C_CREAM, 4)
 	layout.add_child(tier_lbl)
-	tier_lbl.set_deferred("size", TierCardFx.RIBBON_RECT.size) ## bkz. name_lbl notu
+	tier_lbl.set_deferred("size", _kr(TierCardFx.RIBBON_RECT).size) ## bkz. name_lbl notu
 
 	# 5. Parşömen levha: güç yüzdesi (eşyalar) + açıklama.
 	var vbox := VBoxContainer.new()
-	vbox.position = TierCardFx.PLAQUE_INNER_RECT.position
-	vbox.size = TierCardFx.PLAQUE_INNER_RECT.size
+	vbox.position = _kr(TierCardFx.PLAQUE_INNER_RECT).position
+	vbox.size = _kr(TierCardFx.PLAQUE_INNER_RECT).size
 	vbox.add_theme_constant_override("separation", 4)
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layout.add_child(vbox)
@@ -631,7 +654,7 @@ func _build_card(candidate: Dictionary) -> Control:
 	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	desc_lbl.text = "[center]%s[/center]" % desc_text.replace("[", "[lb]")
 	desc_lbl.add_theme_color_override("default_color", UIKit.C_TEXT)
-	_set_desc_font_size(desc_lbl, CARD_DESC_FONT_SIZE)
+	_set_desc_font_size(desc_lbl, _desc_fs())
 	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(desc_lbl)
 	column.set_meta("desc_label", desc_lbl)
@@ -682,7 +705,11 @@ func _build_card(candidate: Dictionary) -> Control:
 		al_btn.text = "SLOTLAR DOLU"
 		al_btn.disabled = true
 	al_btn.pressed.connect(_on_al_pressed.bind(candidate, cost_base, power_mult))
-	column.add_child(al_btn)
+	if _mobile():
+		al_btn.text = "AL" if has_slots else "SLOTLAR\nDOLU"
+		_add_side_button(al_btn, false, 64)
+	else:
+		column.add_child(al_btn)
 	## bkz. _auto_pick_random_card - süre dolduğunda hangi kartların hâlâ
 	## seçilebilir ("AL" tıklanabilir) olduğunu bulmak için doğrudan referans.
 	column.set_meta("al_button", al_btn)
@@ -696,10 +723,48 @@ func _build_card(candidate: Dictionary) -> Control:
 	UIKit.style_button(sat_btn, "wood", false, CARD_BUTTON_FONT_SIZE)
 	sat_btn.text = "SAT (+%d Altın)" % refund_gold
 	sat_btn.pressed.connect(_on_sat_pressed.bind(item_key, refund_gold))
-	column.add_child(sat_btn)
+	if _mobile():
+		sat_btn.text = "SAT\n+%d Altın" % refund_gold
+		_add_side_button(sat_btn, true, 40)
+	else:
+		column.add_child(sat_btn)
 	column.set_meta("sat_button", sat_btn) ## bkz. _unhandled_input (2 kısayolu)
 	
 	return column
+
+## Telefon: AL / SAT ekranın kenarında (karta değil ekrana bağlı - kart sandıktan uçarken düğmeler yerinde bekler).
+func _add_side_button(btn: Button, left: bool, fs: int) -> void:
+	if _side_holder == null:
+		_side_holder = Control.new()
+		_side_holder.name = "SideButtons"
+		_side_holder.theme = UIKit.theme()
+		_side_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_side_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_side_holder)
+	## Kullanıcı bildirimi (2026-10-03): "butonları çok kenarda" - tek kartlı ekranda düğmeler ekran kenarında değil, kartın
+	## hemen iki yanında (kart ekranın ortasında, 500 px; düğmeler kartın 48 px dışında).
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	var bw: float = 280.0
+	var bh: float = 300.0
+	var half: float = CARD_SIZE.x * _k * 0.5 + 48.0
+	var x: float = view.x * 0.5 - half - bw if left else view.x * 0.5 + half
+	var r := Rect2(roundf(x), roundf(view.y * 0.5 + 36.0 - bh * 0.5), bw, bh)
+	_side_holder.add_child(btn)
+	btn.custom_minimum_size = Vector2.ZERO
+	btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	btn.add_theme_font_size_override("font_size", fs)
+	btn.position = r.position
+	btn.size = r.size
+	_side_buttons.append(btn)
+
+
+func _name_fs() -> int:
+	return 48 if _mobile() else CARD_NAME_FONT_SIZE
+
+
+func _desc_fs() -> int:
+	return 40 if _mobile() else CARD_DESC_FONT_SIZE
+
 
 static func _set_desc_font_size(desc_lbl: RichTextLabel, font_size: int) -> void:
 	for key in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size", "mono_font_size"]:
@@ -713,7 +778,7 @@ func _fit_card_texts(card: Control) -> void:
 	var name_lbl: Label = card.get_meta("name_label", null) as Label
 	if name_lbl and is_instance_valid(name_lbl) and name_lbl.size.x > 0.0:
 		var font: Font = name_lbl.get_theme_font("font")
-		var fs: int = CARD_NAME_FONT_SIZE
+		var fs: int = _name_fs()
 		while fs > CARD_NAME_MIN_FONT_SIZE and font.get_string_size(name_lbl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > name_lbl.size.x:
 			fs -= 1
 		name_lbl.add_theme_font_size_override("font_size", fs)
@@ -721,7 +786,7 @@ func _fit_card_texts(card: Control) -> void:
 			name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var desc_lbl: RichTextLabel = card.get_meta("desc_label", null) as RichTextLabel
 	if desc_lbl and is_instance_valid(desc_lbl) and desc_lbl.size.y > 0.0:
-		var dfs: int = CARD_DESC_FONT_SIZE
+		var dfs: int = _desc_fs()
 		_set_desc_font_size(desc_lbl, dfs)
 		while dfs > CARD_DESC_MIN_FONT_SIZE and float(desc_lbl.get_content_height()) > desc_lbl.size.y:
 			dfs -= 1

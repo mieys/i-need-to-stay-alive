@@ -121,6 +121,13 @@ var is_in_merchant_zone: bool = false
 ## sadece hasar (player.gd take_damage(), HER ZAMAN kendi istemcisinde
 ## çalışır) doğru şekilde engelleniyordu.
 var is_invisible: bool = false
+## Büyücü Kız "Yükseliş" evrimi (main.gd extra["byc_fly"]) - bkz. update_extra_state_from_net.
+var buyucu_airborne: bool = false
+const BuyucuLevitateScript := preload("res://scripts/buyucu_levitate.gd")
+
+
+func is_buyucu_airborne() -> bool:
+	return buyucu_airborne and not is_dead
 ## bkz. main.gd state_snapshot "dmg_dealt" (kullanıcı isteği: "grup
 ## penceresinde canlı hasar istatistik paneli") - party_panel.gd
 ## _build_stats_popup bu müttefiğin canlı toplam verdiği hasarını buradan
@@ -1009,7 +1016,8 @@ func update_position_and_anim_from_net(pos: Vector2, cur_anim: String) -> void:
 	_apply_vampir_bat_scale()
 	_shaman_golem_form = ShamanGolemMath.is_golem_anim(cur_anim)
 	_shaman_golem_jumping = ShamanGolemMath.is_jump_anim(cur_anim)
-	ShamanGolemMath.apply_overhead_lift(self, _shaman_golem_form and not is_dead)
+	_apply_shaman_golem_scale()
+	ShamanGolemMath.apply_overhead_lift(self, _shaman_golem_form and not is_dead, ShamanGolemMath.EVO_BIG_SCALE_MULT if has_evo("shaman_rf") else 1.0)
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(cur_anim):
 		if anim.animation != cur_anim:
 			anim.play(cur_anim)
@@ -1101,6 +1109,14 @@ func _apply_talon_form_scale() -> void:
 			_weapon_base_scales[i] = _weapon_base_scales[i] * ratio
 
 
+## Shaman "Dev Golem" (shaman_rf) boyutu: golem formundayken sprite +%30 - player.gd _golem_evo_apply ile AYNI çarpan (form klip
+## adından, evrim extra["evo"] listesinden türetilir; yeni ağ alanı yok). SADECE Shaman'a dokunur (Vampir/Talon ölçeklemesini ezmesin).
+func _apply_shaman_golem_scale() -> void:
+	if char_id != ShamanGolemMath.CHAR_ID or not (anim and is_instance_valid(anim)):
+		return
+	anim.scale = _base_anim_scale * (ShamanGolemMath.EVO_BIG_SCALE_MULT if (_shaman_golem_form and has_evo("shaman_rf")) else 1.0)
+
+
 ## Vampir Çocuk Yarasa Formu (E) boyutu: yarasa kareleri (96x112) insan karelerinden büyük olduğu
 ## için form boyunca sprite %30 küçülür - yerel oyuncuyla AYNI çarpan (bkz. vampir_math.gd
 ## BAT_FORM_SCALE_MULT ve player.gd _update_animation'ın yarasa dalı) yoksa uzak ekranda devasa
@@ -1164,6 +1180,25 @@ func get_effective_move_speed() -> float:
 	return Characters.BASE_MOVE_SPEED
 
 
+## Efsun kademesi parıltısı (kaster: weapon.gd set_enchant; bkz. enchant_weapon_glow.gd). tiers[i] = weapon_keys[i]'in
+## kademesi; ikon adı "RemoteWeaponIcon_<i>" anahtar sırasını taşır (sahnesi/ikonu olmayan anahtar atlanınca kaymasın).
+const EnchantGlowScript := preload("res://scripts/enchant_weapon_glow.gd")
+
+
+func _apply_enchant_glows(tiers: Array) -> void:
+	for icon: Node2D in _weapon_icons:
+		if not is_instance_valid(icon):
+			continue
+		var idx: int = int(str(icon.name).get_slice("_", 1))
+		var t: int = int(tiers[idx]) if idx >= 0 and idx < tiers.size() else 0
+		var cur: Node = icon.get_node_or_null("EnchantGlow")
+		if t <= 0 and cur == null:
+			continue
+		if cur != null and int(cur.get("tier")) == t:
+			continue
+		EnchantGlowScript.attach(icon, t)
+
+
 func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary = {}) -> void:
 	## Yetenek evrimleri (2026-09-28, main.gd extra["evo"]) - görsel kararlardan ÖNCE (bkz. has_evo).
 	_enchant_ward = float(extra.get("ench_ward", 0.0))
@@ -1172,6 +1207,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 		for evo_id in extra["evo"]:
 			_evolutions[str(evo_id)] = true
 	update_weapon_visuals(weapon_keys, extra.get("weapon_tiers", {}))
+	_apply_enchant_glows(extra.get("ench_tiers", []))
 	synced_move_speed = float(extra.get("move_speed", synced_move_speed))
 	synced_base_move_speed = float(extra.get("base_speed", synced_base_move_speed))
 	damage_bonus = float(extra.get("dmg", damage_bonus))
@@ -1210,7 +1246,12 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	_process_weapon_death_drop_transition()
 	is_indoors = extra.get("is_indoors", false)
 	is_in_merchant_zone = extra.get("is_in_merchant_zone", false)
-	is_invisible = extra.get("is_invisible", false)
+	## Büyücü "Yükseliş" (R1): Meteor kanalında havada - host'un yaratıkları hedef almasın (köprü/enemy.gd is_invisible okur) ve
+	## kukla kasterle aynı şekilde yükselsin (buyucu_levitate.gd is_buyucu_airborne'u her karede sorar, inince kendini siler).
+	buyucu_airborne = bool(extra.get("byc_fly", false))
+	is_invisible = bool(extra.get("is_invisible", false)) or buyucu_airborne
+	if buyucu_airborne and anim and is_instance_valid(anim):
+		BuyucuLevitateScript.ensure(self, anim, get_node_or_null("Shadow") as Node2D)
 	## Elara'nın Sıvışma'sı (bkz. main.gd extra dict/player.gd _elara_evasion_timer üstündeki AYNI not) -
 	## is_ghost_now()'da okunuyor ki enemy.gd bu oyuncuya sert yapışmasın.
 	_elara_evasion = extra.get("elara_evasion", false)
@@ -1945,6 +1986,11 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 	var is_crit: bool = bool(data.get("crit", false))
 	var wkey: String = str(_weapon_keys[slot_index]) if slot_index < _weapon_keys.size() else ""
 	var base_scale_all: Vector2 = _weapon_base_scales[slot_index] if slot_index < _weapon_base_scales.size() else icon.scale
+	## Büyücü Kız pasifi (weapon.gd arcane_surge): güçlendirilmiş atış - mor parlama her silahta, menzilli ikon ayrıca ileri fırlar
+	## (aşağıda, kasterle aynı WeaponJuice.arcane_surge).
+	var is_surge: bool = bool(data.get("surge", false))
+	if is_surge:
+		WeaponJuice.surge_flash(self, icon)
 
 	if is_melee and formation_owns_position:
 		_kick_formation_icon(slot_index, dir, float(_weapon_recoil_distance[slot_index]) if slot_index < _weapon_recoil_distance.size() else 8.0)
@@ -2041,7 +2087,15 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		## büyümeye katkı yapamaz, ama yine de titremeyi önlemek için kesilir.
 		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
 			(_weapon_fire_tweens[slot_index] as Tween).kill()
-		
+
+		if is_surge:
+			var old_surge_punch: Variant = icon.get_meta("punch_tween") if icon.has_meta("punch_tween") else null
+			if old_surge_punch is Tween and (old_surge_punch as Tween).is_valid():
+				(old_surge_punch as Tween).kill()
+			var s_tw2: Tween = WeaponJuice.arcane_surge(self, icon, dir, base_pos, base_scale, recoil_dist)
+			if slot_index < _weapon_fire_tweens.size():
+				_weapon_fire_tweens[slot_index] = s_tw2
+			return
 		if is_crit and WeaponCritAnim.kind_of(wkey) != "":
 			var old_crit_punch: Variant = icon.get_meta("punch_tween") if icon.has_meta("punch_tween") else null
 			if old_crit_punch is Tween and (old_crit_punch as Tween).is_valid():

@@ -52,6 +52,31 @@ const UI_OPACITY_GROUP := &"ui_opacity"
 const UI_OPACITY_MIN_PERCENT := 25.0
 var ui_opacity_percent: float = 100.0
 
+## GRAFİK AYARLARI - kullanıcı isteği (2026-10-03): "bunu mobil için optimize etmenin en iyi yolu oyuna grafik ayarı
+## eklemek" -> "Düşük / Orta / Yüksek" hazır seviye + altında tek tek seçenekler (biri elle değişince seviye "Özel" olur);
+## "bu ayar pc sürümünde de olsun". Varsayılan her yerde Yüksek (kullanıcı seçimi). Kazançlar Galaxy S22'de ölçüldü (bkz.
+## perf_probe.gd): güneş/bulut kare -1.8 ms, zemin ayrıntısı GPU -0.9 ms. Sis seçenek DEĞİL (oyun mekaniği, düşman gizler).
+## Uygulayanlar graphics_changed sinyalini dinler / değeri her kare okur: sun_clouds.gd (güneş/bulut), ground_texel_pass.gd
+## (zemin ayrıntısı), world_render_scale.gd (çözünürlük ölçeği). FPS sınırı seviyelere DAHİL DEĞİL (ayrı ayar): PC'de
+## varsayılan sınırsız (eskisi gibi), telefonda 60 (mobile_ui.gd'nin eski sabiti). Ekran: graphics_settings_menu.gd.
+## Aynı "display" ConfigFile bölümü.
+signal graphics_changed
+enum GfxPreset { LOW, MEDIUM, HIGH, CUSTOM }
+const GFX_PRESET_NAMES: Array[String] = ["Düşük", "Orta", "Yüksek", "Özel"]
+## Seviye -> [güneş/bulut, zemin ayrıntısı, çözünürlük ölçeği]
+const GFX_PRESET_VALUES := {
+	GfxPreset.LOW: [false, false, 0.75],
+	GfxPreset.MEDIUM: [false, true, 1.0],
+	GfxPreset.HIGH: [true, true, 1.0],
+}
+const RENDER_SCALES: Array[float] = [1.0, 0.75, 0.5]
+const FPS_LIMITS: Array[int] = [30, 60, 120, 0] ## 0 = sınırsız
+var gfx_preset: int = GfxPreset.HIGH
+var gfx_sun_clouds: bool = true
+var gfx_ground_detail: bool = true
+var gfx_render_scale: float = 1.0
+var fps_limit: int = 0
+
 
 func _ready() -> void:
 	_load_audio_settings()
@@ -194,6 +219,62 @@ func _apply_ui_opacity(node: Node) -> void:
 	ci.modulate = c
 
 
+## bkz. GRAFİK AYARLARI notu.
+func set_gfx_preset(preset: int) -> void:
+	if not GFX_PRESET_VALUES.has(preset):
+		return
+	var v: Array = GFX_PRESET_VALUES[preset]
+	gfx_sun_clouds = bool(v[0])
+	gfx_ground_detail = bool(v[1])
+	gfx_render_scale = float(v[2])
+	gfx_preset = preset
+	_save_display_settings()
+	graphics_changed.emit()
+
+
+## Tek bir seçenek elle değişti -> değerler bir hazır seviyeyle birebir eşleşiyorsa o seviye, yoksa "Özel".
+func set_gfx_option(key: String, value: Variant) -> void:
+	match key:
+		"sun_clouds": gfx_sun_clouds = bool(value)
+		"ground_detail": gfx_ground_detail = bool(value)
+		"render_scale": gfx_render_scale = _nearest_render_scale(float(value))
+		_: return
+	gfx_preset = _matching_preset()
+	_save_display_settings()
+	graphics_changed.emit()
+
+
+func set_fps_limit(limit: int) -> void:
+	fps_limit = limit if FPS_LIMITS.has(limit) else _default_fps_limit()
+	_apply_fps_limit()
+	_save_display_settings()
+
+
+func _matching_preset() -> int:
+	for p: int in GFX_PRESET_VALUES:
+		var v: Array = GFX_PRESET_VALUES[p]
+		if bool(v[0]) == gfx_sun_clouds and bool(v[1]) == gfx_ground_detail and is_equal_approx(float(v[2]), gfx_render_scale):
+			return p
+	return GfxPreset.CUSTOM
+
+
+func _nearest_render_scale(v: float) -> float:
+	var best: float = RENDER_SCALES[0]
+	for r: float in RENDER_SCALES:
+		if absf(r - v) < absf(best - v):
+			best = r
+	return best
+
+
+## Telefonda 60 (sınırsız çizim ısınıp yavaşlatıyor - bkz. mobile_ui.gd), PC'de sınırsız (eskisi gibi).
+func _default_fps_limit() -> int:
+	return 60 if (OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")) else 0
+
+
+func _apply_fps_limit() -> void:
+	Engine.max_fps = fps_limit
+
+
 func get_resolution_labels() -> Array[String]:
 	var labels: Array[String] = []
 	for r in RESOLUTIONS:
@@ -214,6 +295,10 @@ func _save_display_settings() -> void:
 	config.set_value("display", "resolution_index", resolution_index)
 	config.set_value("display", "show_fps", show_fps)
 	config.set_value("display", "ui_opacity_percent", ui_opacity_percent)
+	config.set_value("display", "gfx_sun_clouds", gfx_sun_clouds)
+	config.set_value("display", "gfx_ground_detail", gfx_ground_detail)
+	config.set_value("display", "gfx_render_scale", gfx_render_scale)
+	config.set_value("display", "fps_limit", fps_limit)
 	config.save(DISPLAY_SETTINGS_PATH)
 
 
@@ -224,6 +309,16 @@ func _load_display_settings() -> void:
 		resolution_index = clamp(int(config.get_value("display", "resolution_index", DEFAULT_RESOLUTION_INDEX)), 0, RESOLUTIONS.size() - 1)
 		show_fps = bool(config.get_value("display", "show_fps", false))
 		ui_opacity_percent = clampf(float(config.get_value("display", "ui_opacity_percent", 100.0)), UI_OPACITY_MIN_PERCENT, 100.0)
+		gfx_sun_clouds = bool(config.get_value("display", "gfx_sun_clouds", true))
+		gfx_ground_detail = bool(config.get_value("display", "gfx_ground_detail", true))
+		gfx_render_scale = _nearest_render_scale(float(config.get_value("display", "gfx_render_scale", 1.0)))
+		fps_limit = int(config.get_value("display", "fps_limit", _default_fps_limit()))
+	else:
+		fps_limit = _default_fps_limit()
+	if not FPS_LIMITS.has(fps_limit):
+		fps_limit = _default_fps_limit()
+	gfx_preset = _matching_preset()
+	_apply_fps_limit()
 	if is_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:

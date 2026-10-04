@@ -2,7 +2,8 @@ extends "res://scripts/enchant_behavior.gd"
 
 ## Loaded Chamber (Arbalet / Tüfek) - bkz. EnchantDefs "loaded_chamber". Her N. gerçek atış güçlendirilmiş mermi: hasar
 ## charged_mult x (1 + charged_bonus), boyut charged_scale (mermi görünümü "scale" - kasterde ve uzak kopyada aynı), Kinetik
-## Boyut ile ilk düşmanı deler. Final: çarptığı an şok dalgası (charged_shock sayfası) - ilk hedef 1 sn sersem, 100 birim %200.
+## Boyut ile ilk düşmanı deler, Sarsıcı Darbe (charged_stun) ilk hedefi sersemletir. Final: çarptığı an şok dalgası
+## (charged_shock sayfası) - ilk hedef 1 sn sersem, 100 birim içine charged_shock x saldırı gücü.
 
 const SHOCK_RADIUS := 100.0
 const SHEET_RX := 82.0
@@ -16,12 +17,12 @@ func fire_start(_target: Node2D, is_extra: bool) -> void:
 		_charged = false
 		return
 	_shots += 1
-	_charged = _shots % maxi(1, n("charged_every", 7)) == 0
+	_charged = _shots % maxi(1, n("charged_every", 4)) == 0
 
 
 func damage_extra(dmg: float, _t: Node2D) -> float:
 	if _charged:
-		return dmg * f("charged_mult", 2.5) * (1.0 + f("charged_bonus"))
+		return dmg * f("charged_mult", 2.2) * (1.0 + f("charged_bonus"))
 	return dmg
 
 
@@ -46,12 +47,15 @@ func fire_extra(_target: Node2D, _is_extra: bool) -> void:
 
 
 func hit_extra(t: Node, _dmg: float, _is_primary: bool, proj: Node2D) -> void:
-	if f("charged_shock") <= 0.0 or proj == null or not is_instance_valid(proj) or not proj.has_meta("charged_shot"):
+	if proj == null or not is_instance_valid(proj) or not proj.has_meta("charged_shot"):
 		return
-	proj.remove_meta("charged_shot") ## dalga mermi başına bir kez (delip geçse bile)
+	proj.remove_meta("charged_shot") ## sersemletme/dalga mermi başına bir kez (delip geçse bile)
+	var stun: float = maxf(f("charged_stun"), 1.0 if f("charged_shock") > 0.0 else 0.0)
+	if stun > 0.0 and is_enemy(t):
+		t.apply_element("stun", {"dur": stun})
+	if f("charged_shock") <= 0.0:
+		return
 	var at: Vector2 = (t as Node2D).global_position
 	sprite("charged_shock", at, {"scale": SHOCK_RADIUS / (SHEET_RX * 1.212), "z": 9})
-	if is_enemy(t):
-		t.apply_element("stun", {"dur": 1.0})
 	for e in enemies_near(at, SHOCK_RADIUS):
 		hit(e, ap() * f("charged_shock"))

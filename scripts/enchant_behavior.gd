@@ -263,6 +263,19 @@ func every(count: int) -> bool:
 	return count > 0 and attacks > 0 and attacks % count == 0
 
 
+## Şans + kötü şans koruması (2026-10-04 efsun denge turu: şansa bağlı efsunlar art arda tutmayınca "hiç çalışmıyor" gibi
+## hissettiriyordu). `pity` deneme üst üste tutmazsa sonraki deneme kesin tutar. Sayaç anahtar başına.
+var _pity_miss: Dictionary = {}
+
+func roll_pity(key: String, chance: float, pity: int) -> bool:
+	var miss: int = int(_pity_miss.get(key, 0))
+	if randf() < chance or (pity > 0 and miss >= pity):
+		_pity_miss[key] = 0
+		return true
+	_pity_miss[key] = miss + 1
+	return false
+
+
 func is_enemy(t: Node) -> bool:
 	return is_instance_valid(t) and t.has_method("apply_element") and t.get("is_dead") != true
 

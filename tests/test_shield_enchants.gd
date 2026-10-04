@@ -71,7 +71,14 @@ func test_cards_are_epic_and_described() -> void:
 	var out: Dictionary = {}
 	ShieldEnchantDefs.describe({"type": "shield_pick", "id": "shield_savas"}, out)
 	assert(str(out.get("title", "")) == "Savaş Kalkanı", "Kart başlığı: %s" % str(out.get("title")))
-	assert(str(out.get("body", "")).find("150 → 160") != -1, "Kart Standart'tan Savaş'a kalkan değişimini göstermeli: %s" % str(out.get("body")))
+	## 2026-10-03 sade kart: başlangıç kartı sadece kalkanın nasıl çalıştığını yazar (stat karşılaştırması geliştirme kartında).
+	assert(str(out.get("body", "")) == str(ShieldEnchantDefs.TYPES["shield_savas"]["desc"]), "Kalkan seçme kartı çalışma biçimini göstermeli: %s" % str(out.get("body")))
+	var up_out: Dictionary = {}
+	GameManager.shield_enchant = "shield_savas"
+	ShieldEnchantDefs.describe({"type": "shield_up", "index": 0}, up_out)
+	assert(str(up_out.get("body", "")).find("→") != -1, "Kalkan geliştirme kartı stat değişimini göstermeli: %s" % str(up_out.get("body")))
+	assert(str(up_out.get("lead", "")) == "" and str(up_out.get("note", "")) == "", "Geliştirme kartında açıklama/not olmamalı")
+	GameManager.shield_enchant = ""
 	assert(ShieldEnchantDefs.CARD_TIER == 3, "Kalkan kartları Epik (mor) görünmeli")
 	for key in ShieldEnchantDefs.TYPES:
 		assert(float(ShieldEnchantDefs.TYPES[key]["absorption"]) <= 0.92, "%s taban soğurması oyuncu tavanını aşmamalı" % key)

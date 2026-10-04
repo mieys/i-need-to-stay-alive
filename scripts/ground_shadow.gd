@@ -67,6 +67,9 @@ func _process(delta: float) -> void:
 	var form_spr: AnimatedSprite2D = host.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D if host != null else null
 	if form_spr != null:
 		var fs: Vector2 = ShamanGolemMath.shadow_scale_for(String(form_spr.animation), form_spr.frame)
+		## "Dev Golem" (shaman_rf) evrimi: gövde +%30 büyür, gölge de (player.gd ve remote_player.gd has_evo ikisinde de var).
+		if fs != Vector2.ONE and host.has_method("has_evo") and host.call("has_evo", "shaman_rf"):
+			fs *= ShamanGolemMath.EVO_BIG_SCALE_MULT
 		if fs != _form_scale:
 			_form_scale = fs
 			queue_redraw()
@@ -85,7 +88,9 @@ func _art_px() -> float:
 
 func _draw() -> void:
 	var r: Vector2 = radius * _form_scale
-	var center := Vector2(roundf(MapShadows.SUN_SHIFT_X / PixelDraw.TEXEL) * PixelDraw.TEXEL, 0.0)
+	## Güneş: gölge sola UZAR (taşınmaz, bkz. map_shadows.gd SUN_SHIFT_X) - merkez yarım kayma sola, yarıçap yarım kayma büyük.
+	var center := Vector2(roundf(MapShadows.SUN_SHIFT_X * 0.5 / PixelDraw.TEXEL) * PixelDraw.TEXEL, 0.0)
+	r.x += absf(MapShadows.SUN_SHIFT_X) * 0.5
 	if _lying > 0.0:
 		var e: float = _lying * _lying * (3.0 - 2.0 * _lying)
 		var s: float = _art_px()

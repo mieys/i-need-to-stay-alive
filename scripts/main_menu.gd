@@ -7,6 +7,7 @@ extends Control
 ## Davranış (sahne geçişleri, ses/tam ekran/çözünürlük/FPS ayarları, tuş atamaları, debug modu) eskisiyle AYNI.
 
 const KeybindMenuScript := preload("res://scripts/keybind_menu.gd")
+const GraphicsSettingsMenuScript := preload("res://scripts/graphics_settings_menu.gd")
 
 const TITLE := "I NEED TO STAY ALIVE"
 const SCREEN := Vector2(1920, 1080)
@@ -219,8 +220,17 @@ func _build_settings() -> void:
 		UISound.set_ui_opacity_percent(value)
 		op_value.text = "%d%%" % int(value))
 
+	## Tuş atamaları + Grafik (2026-10-03, bkz. graphics_settings_menu.gd) yan yana - ikisi de kendi penceresini açar.
+	var sub_row := HBoxContainer.new()
+	sub_row.add_theme_constant_override("separation", 12)
+	v.add_child(sub_row)
 	keybind_button = MenuKit.make_button("Tuş Atamaları", "tan", MenuKit.FS_BODY, 52)
-	v.add_child(keybind_button)
+	keybind_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sub_row.add_child(keybind_button)
+	var gfx_button: Button = MenuKit.make_button("Grafik", "tan", MenuKit.FS_BODY, 52)
+	gfx_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gfx_button.pressed.connect(_on_graphics_pressed)
+	sub_row.add_child(gfx_button)
 	var close_btn := MenuKit.make_button("KAPAT", "sage", MenuKit.FS_BODY, 52)
 	v.add_child(close_btn)
 
@@ -311,6 +321,17 @@ func _on_resolution_selected(index: int) -> void:
 
 func _on_fps_toggled(enabled: bool) -> void:
 	UISound.set_show_fps(enabled)
+
+
+## Grafik ayarları penceresi (bkz. graphics_settings_menu.gd) - tuş atamalarıyla AYNI desen.
+func _on_graphics_pressed() -> void:
+	settings_panel.visible = false
+	var menu := GraphicsSettingsMenuScript.new()
+	add_child(menu)
+	menu.closed.connect(func() -> void:
+		if is_instance_valid(settings_panel):
+			settings_panel.visible = true
+	)
 
 
 ## bkz. pause_menu.gd _on_keybind_pressed - AYNI desen (tek kaynak

@@ -226,6 +226,39 @@ func _refresh() -> void:
 		heal_power_value.text = "+%%%d" % int(round(float(player.heal_shield_power) * 100.0))
 
 
+## Telefon (kullanıcı bildirimi 2026-10-03: "envanter paneli çok kötü mobile uyumlu değil"): hud.gd bu paneli küçültüp
+## sığdırmak yerine bunu çağırır - pencere ekranın sol yarısında, satırlar 40 px yazı + 48 px ikon (masaüstü 32/40).
+func apply_mobile_layout(rect: Rect2) -> void:
+	set_anchors_preset(Control.PRESET_TOP_LEFT)
+	scale = Vector2.ONE
+	position = rect.position
+	size = rect.size
+	pivot_offset = size * 0.5
+	var margin: MarginContainer = $Frame/Margin as MarginContainer
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 14)
+	($Frame/Margin/VBox/Title as Label).add_theme_font_size_override("font_size", 48)
+	var hint: Control = get_node_or_null("Frame/Margin/VBox/CloseHint") as Control
+	if hint:
+		hint.visible = false ## "ENVANTER'e tekrar bas" - telefonda kapatma envanterin X'i / boşluğa dokunma
+	var grid: GridContainer = $Frame/Margin/VBox/GridScroll/Grid as GridContainer
+	grid.add_theme_constant_override("h_separation", 20)
+	grid.add_theme_constant_override("v_separation", 10)
+	var kids: Array[Node] = grid.get_children()
+	for i in range(0, kids.size(), 3):
+		if i + 2 >= kids.size():
+			break
+		var icon_node: Control = kids[i] as Control
+		if icon_node:
+			icon_node.custom_minimum_size = Vector2(48, 48)
+		for j in [1, 2]:
+			var lbl: Label = kids[i + j] as Label
+			if lbl:
+				lbl.add_theme_font_size_override("font_size", 40)
+				if j == 2:
+					lbl.custom_minimum_size = Vector2(220, 0)
+
+
 ## KULLANICI BİLDİRİMİ (2026-09-21): "şans buga girmiş veya çok bozuk %1500lere kadar ulaşılabiliyor, çok şans alınmamasına
 ## rağmen". KÖK NEDEN: Şans bir PUAN sayacı (kart +1.5 puan, Şanslı Zar +2 puan; oyuncu.luck = toplam puan) ama panel onu yüzdeymiş
 ## gibi x100 yazıyordu - 15 puan "%1500" görünüyordu, oysa gerçek etkisi puan başına %0.2 düşme şansı (bkz. enemy.gd

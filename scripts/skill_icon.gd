@@ -54,6 +54,9 @@ func _process(delta: float) -> void:
 		_update_tooltip_position()
 	if is_active:
 		_pulse_time += delta
+	if _enchant_glow > 0.0:
+		_enchant_glow_t += delta
+		queue_redraw()
 
 func _exit_tree() -> void:
 	if tooltip_panel and is_instance_valid(tooltip_panel):
@@ -707,6 +710,7 @@ func _draw() -> void:
 		## üst-sol köşeden saat yönünde daralan bir çerçeve çiziliyor.
 		_draw_rect_perimeter_partial(outer, active_fraction, Color(1.0, 0.9, 0.4, 0.95), 3.0)
 
+	_draw_enchant_glow(inner)
 	_draw_charge_pips(inner)
 	_draw_evolution_pips(inner)
 	_draw_badge_plate()
@@ -1029,3 +1033,77 @@ func _draw_evolution_pips(inner: Rect2) -> void:
 			draw_rect(Rect2(pip.position, Vector2(u, u)), EVO_PIP_HI, true)
 		else:
 			draw_rect(pip, PIP_EMPTY, true)
+
+
+## ---------- Büyücü Kız "Efsunlu Büyü" (Q finali, kullanıcı isteği 2026-10-04) ----------
+## "nasıl efsunlandığını yetenek butonunun parıldamasından anlayacağız" - efsunlu varyasyonu taşıyan buton altın-mor parıldar:
+## nabız gibi yanan iki katlı çerçeve (dışta altın, içte mor), çerçeve boyunca dönen iki kıvılcım ve hafif iç ışık. Piksel birimi
+## evrim boncuklarıyla aynı (ikonun 1/22'si - HUD'un 48x48 piksel dili). level: 0 = kapalı, 1 = tam (bu buton efsunlu), 0,5 =
+## sönük (Q butonu: efsunlu yetenek DİĞER sette - set değiştir ipucu). hud.gd her karede player.is_buyucu_slot_enchanted'tan yazar.
+const ENCHANT_GLOW_GOLD := Color(1.0, 0.84, 0.42, 1.0)
+const ENCHANT_GLOW_VIOLET := Color(0.78, 0.5, 1.0, 1.0)
+const ENCHANT_GLOW_SPARK := Color(1.0, 0.97, 0.82, 1.0)
+const ENCHANT_GLOW_PULSE_SPEED := 5.0
+const ENCHANT_GLOW_SPARK_SPEED := 0.45 ## çevre turu / sn
+var _enchant_glow: float = 0.0
+var _enchant_glow_t: float = 0.0
+
+
+func set_enchant_glow(level: float) -> void:
+	if is_equal_approx(level, _enchant_glow):
+		return
+	_enchant_glow = level
+	queue_redraw()
+
+
+func _draw_enchant_glow(inner: Rect2) -> void:
+	if _enchant_glow <= 0.0:
+		return
+	var u: float = maxf(1.0, round(inner.size.x / 22.0))
+	var pulse: float = 0.55 + 0.45 * sin(_enchant_glow_t * ENCHANT_GLOW_PULSE_SPEED)
+	var a: float = _enchant_glow
+	draw_rect(inner, Color(1.0, 0.86, 0.5, 0.12 * pulse * a), true)
+	var gold: Color = ENCHANT_GLOW_GOLD
+	gold.a = (0.55 + 0.45 * pulse) * a
+	_draw_pixel_border(inner, u, gold)
+	var violet: Color = ENCHANT_GLOW_VIOLET
+	violet.a = 0.6 * pulse * a
+	_draw_pixel_border(inner.grow(-u), u, violet)
+	## İki kıvılcım çerçeve boyunca karşılıklı döner (artı şeklinde: 2x2 çekirdek + 1 birimlik kollar).
+	var spark: Color = ENCHANT_GLOW_SPARK
+	spark.a = a
+	var arm: Color = gold
+	arm.a = 0.8 * a
+	for k in range(2):
+		var f: float = fmod(_enchant_glow_t * ENCHANT_GLOW_SPARK_SPEED + 0.5 * float(k), 1.0)
+		var p: Vector2 = _perimeter_point(inner.grow(-u * 0.5), f)
+		p = inner.position + ((p - inner.position) / u).floor() * u
+		draw_rect(Rect2(p - Vector2(u, u), Vector2(2.0 * u, 2.0 * u)), spark, true)
+		draw_rect(Rect2(p + Vector2(-2.0 * u, -0.5 * u), Vector2(u, u)), arm, true)
+		draw_rect(Rect2(p + Vector2(u, -0.5 * u), Vector2(u, u)), arm, true)
+		draw_rect(Rect2(p + Vector2(-0.5 * u, -2.0 * u), Vector2(u, u)), arm, true)
+		draw_rect(Rect2(p + Vector2(-0.5 * u, u), Vector2(u, u)), arm, true)
+
+
+## Dolu dikdörtgenlerle w kalınlığında çerçeve (draw_rect'in çizgi kalınlığı köşelerde yumuşar - piksel keskin kalsın).
+func _draw_pixel_border(r: Rect2, w: float, col: Color) -> void:
+	draw_rect(Rect2(r.position, Vector2(r.size.x, w)), col, true)
+	draw_rect(Rect2(Vector2(r.position.x, r.end.y - w), Vector2(r.size.x, w)), col, true)
+	draw_rect(Rect2(Vector2(r.position.x, r.position.y + w), Vector2(w, r.size.y - 2.0 * w)), col, true)
+	draw_rect(Rect2(Vector2(r.end.x - w, r.position.y + w), Vector2(w, r.size.y - 2.0 * w)), col, true)
+
+
+## Dikdörtgen çevresinde f (0..1) oranındaki nokta - sol üstten saat yönünde.
+func _perimeter_point(r: Rect2, f: float) -> Vector2:
+	var per: float = 2.0 * (r.size.x + r.size.y)
+	var d: float = fposmod(f, 1.0) * per
+	if d < r.size.x:
+		return r.position + Vector2(d, 0.0)
+	d -= r.size.x
+	if d < r.size.y:
+		return Vector2(r.end.x, r.position.y + d)
+	d -= r.size.y
+	if d < r.size.x:
+		return Vector2(r.end.x - d, r.end.y)
+	d -= r.size.x
+	return Vector2(r.position.x, r.end.y - d)

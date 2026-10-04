@@ -19,7 +19,16 @@ render_mode unshaded, blend_premul_alpha;
 // ---------------- GEÇİŞ: 0 = bulut gölgesi (dünyadan sonra, renk geçişi + sisten ÖNCE - zemine düşen gölge);
 // 1 = güneş huzmesi + parıltı (sisin ÜSTÜNDE, HUD'un altında - gökyüzünden gelen ışık; sis köşeleri
 // koyulaştırdığı için sisten önce çizilen huzmeler görünmüyordu). İkisi aynı değerleri alır (sun_clouds.gd).
+// 2 = PİŞİRME (2026-10-03, telefon FPS): her şey dünya texel ızgarasına oturduğu için bir dünya texel'inin tüm ekran
+// pikselleri AYNI sonucu verir - telefonda kamera 3.25x yakın, aynı fbm ~10 kez hesaplanıyordu (ölçüm: bu iki geçiş GPU'nun
+// ~%27'si). Pişirme geçişi sun_clouds.gd'nin küçük SubViewport'unda 1 piksel = 1 dünya texel'i çizer: R = güneş ışığı
+// (gunes_guc'tan önce), G = bulut gölgesi (bulut_k). Ekran geçişleri (0/1) pisik_kullan açıkken sadece o texel'i okur.
 uniform int gecis = 0;
+uniform sampler2D pisik : filter_nearest, repeat_disable;
+uniform bool pisik_kullan = false;
+uniform vec2 pisik_koken = vec2(0.0);    // pişirme dokusunun sol üst köşesi (tam sayı dünya px)
+uniform vec2 pisik_boyut = vec2(1.0);    // pişirme dokusu boyutu (px) - sadece gecis 2
+uniform bool gunes_hesapla = true;       // gecis 2: güneş sönükken huzmeleri hesaplama
 
 // ---------------- DÜNYA <-> EKRAN (sun_clouds.gd her karede)
 uniform vec2 dunya_sol_ust = vec2(0.0);
@@ -97,44 +106,71 @@ float fbm(vec2 p) {
 	return vnoise(p) * 0.55 + vnoise(p * 2.03 + 17.1) * 0.30 + vnoise(p * 4.01 + 5.3) * 0.15;
 }
 
-void fragment() {
-	vec2 world = dunya_sol_ust + SCREEN_UV * dunya_boyut;
-	vec2 px = floor(world) + 0.5;                              // dünya texel ızgarası
-	// Ekran konumu da texel ızgarasından (huzme kenarları piksel piksel).
-	vec2 uv = (px - dunya_sol_ust) / dunya_boyut;
-
-	// ---------- BULUT GÖLGESİ (zemine bağlı)
+// ---------- BULUT GÖLGESİ (zemine bağlı) - px: dünya texel merkezi.
+float bulut(vec2 px) {
 	vec2 cp = (px + bulut_ofset) * bulut_olcegi;
 	vec2 warp = vec2(fbm(cp * 0.7 + zaman * 0.004), fbm(cp * 0.7 + vec2(9.2, 3.7) - zaman * 0.003)) - 0.5;
 	float c = fbm(cp + warp * 0.9);
 	float esik = 1.0 - bulut_kaplama;
-	float bulut_k = smoothstep(esik - bulut_yumusaklik * 0.5, esik + bulut_yumusaklik, c);
+	return smoothstep(esik - bulut_yumusaklik * 0.5, esik + bulut_yumusaklik, c);
+}
 
-	// ---------- BİRLEŞTİR (her geçiş sadece kendi işini hesaplar)
-	if (gecis == 0) {
-		COLOR = vec4(0.0, 0.0, 0.0, bulut_k * bulut_guc);
+// ---------- GÜNEŞ HUZMELERİ (gunes_guc ve renk hariç ışık miktarı) - uv: texel'in ekran konumu (0..1).
+float gunes_isigi(vec2 px, vec2 uv, float bulut_k) {
+	// Paralaks uzayında (zeminden yavaş kayar) paralel demetler.
+	vec2 sp = px - (px - kamera) * paralaks;
+	vec2 dir = normalize(isik_yonu);
+	vec2 perp = vec2(-dir.y, dir.x);
+	float u = dot(sp, perp) / huzme_genisligi;                    // demetlere dik (demetleri ayırır)
+	float v = dot(sp, dir) / huzme_boyu;                          // demet boyunca
+	// Demetler: dik eksende iki ölçekli gürültü (geniş demetler + ince yarıklar), çok yavaş kıpırdar.
+	float n = vnoise(vec2(u, v * 0.35 + zaman * 0.05)) * 0.75 + vnoise(vec2(u * 2.6 + 11.0, v * 0.5 - zaman * 0.07)) * 0.25;
+	float huzme = smoothstep(0.46, 0.8, n);
+	// Demetlerin boyu: demet boyunca ara ara kesilir (sonsuz düz çizgi olmasın).
+	huzme *= smoothstep(0.3, 0.6, vnoise(vec2(u * 0.5 + 5.0, v * 2.0)));
+	// Bölgesel yoğunluk: bazı yerlerde (ağaç tacı aralığı) demetler yoğun, bazılarında yok - yürüdükçe değişir.
+	huzme *= 0.25 + 0.75 * smoothstep(0.3, 0.58, fbm(sp * 0.0022 + vec2(3.0, 7.0)));
+	// Güneş sağ üstte: o yöne doğru biraz daha güçlü (spot değil, ekran boyunca yumuşak eğim).
+	float egim = mix(1.0 - yon_egimi, 1.0, clamp(uv.x * 0.7 + (1.0 - uv.y) * 0.5, 0.0, 1.0));
+	float golge = 1.0 - bulut_k * 0.75;
+	float gunes = piksel_basamak(huzme * egim * golge, floor(px)) + sicaklik * golge;
+	if (gunes > parlaklik_esigi) {
+		float fazla = gunes - parlaklik_esigi;
+		gunes = parlaklik_esigi + fazla / (1.0 + fazla / max(parlaklik_tavani - parlaklik_esigi, 0.001));
+	}
+	return gunes;
+}
+
+void fragment() {
+	if (gecis == 2) {
+		// PİŞİRME: bu piksel = bir dünya texel'i (bkz. uniform notu). Ekran geçişleriyle AYNI px/uv hesaplanır.
+		vec2 px = pisik_koken + floor(UV * pisik_boyut) + 0.5;
+		vec2 uv = (px - dunya_sol_ust) / dunya_boyut;
+		float bk = bulut(px);
+		float g = gunes_hesapla ? gunes_isigi(px, uv, bk) : 0.0;
+		COLOR = vec4(clamp(g, 0.0, 1.0), bk, 0.0, 1.0);
 	} else {
-		// ---------- GÜNEŞ HUZMELERİ: paralaks uzayında (zeminden yavaş kayar) paralel demetler.
-		vec2 sp = px - (px - kamera) * paralaks;
-		vec2 dir = normalize(isik_yonu);
-		vec2 perp = vec2(-dir.y, dir.x);
-		float u = dot(sp, perp) / huzme_genisligi;                    // demetlere dik (demetleri ayırır)
-		float v = dot(sp, dir) / huzme_boyu;                          // demet boyunca
-		// Demetler: dik eksende iki ölçekli gürültü (geniş demetler + ince yarıklar), çok yavaş kıpırdar.
-		float n = vnoise(vec2(u, v * 0.35 + zaman * 0.05)) * 0.75 + vnoise(vec2(u * 2.6 + 11.0, v * 0.5 - zaman * 0.07)) * 0.25;
-		float huzme = smoothstep(0.46, 0.8, n);
-		// Demetlerin boyu: demet boyunca ara ara kesilir (sonsuz düz çizgi olmasın).
-		huzme *= smoothstep(0.3, 0.6, vnoise(vec2(u * 0.5 + 5.0, v * 2.0)));
-		// Bölgesel yoğunluk: bazı yerlerde (ağaç tacı aralığı) demetler yoğun, bazılarında yok - yürüdükçe değişir.
-		huzme *= 0.25 + 0.75 * smoothstep(0.3, 0.58, fbm(sp * 0.0022 + vec2(3.0, 7.0)));
-		// Güneş sağ üstte: o yöne doğru biraz daha güçlü (spot değil, ekran boyunca yumuşak eğim).
-		float egim = mix(1.0 - yon_egimi, 1.0, clamp(uv.x * 0.7 + (1.0 - uv.y) * 0.5, 0.0, 1.0));
-		float golge = 1.0 - bulut_k * 0.75;
-		float gunes = piksel_basamak(huzme * egim * golge, floor(px)) + sicaklik * golge;
-		if (gunes > parlaklik_esigi) {
-			float fazla = gunes - parlaklik_esigi;
-			gunes = parlaklik_esigi + fazla / (1.0 + fazla / max(parlaklik_tavani - parlaklik_esigi, 0.001));
+		vec2 world = dunya_sol_ust + SCREEN_UV * dunya_boyut;
+		vec2 px = floor(world) + 0.5;                              // dünya texel ızgarası
+		float bk;
+		float g = 0.0;
+		if (pisik_kullan) {
+			vec4 t = texelFetch(pisik, ivec2(px - pisik_koken), 0);
+			bk = t.g;
+			g = t.r;
+		} else {
+			// Ekran konumu da texel ızgarasından (huzme kenarları piksel piksel).
+			vec2 uv = (px - dunya_sol_ust) / dunya_boyut;
+			bk = bulut(px);
+			if (gecis == 1) {
+				g = gunes_isigi(px, uv, bk);
+			}
 		}
-		COLOR = vec4(gunes_renk * gunes * gunes_guc, 0.0);
+		// BİRLEŞTİR (her geçiş sadece kendi işini çizer)
+		if (gecis == 0) {
+			COLOR = vec4(0.0, 0.0, 0.0, bk * bulut_guc);
+		} else {
+			COLOR = vec4(gunes_renk * g * gunes_guc, 0.0);
+		}
 	}
 }

@@ -23,6 +23,8 @@ var _hit_sound_played: bool = false
 var target_ref: Node2D = null
 var end_pos: Vector2 = Vector2.ZERO
 var bolt_color: Color = Color(1.0, 0.55, 0.25)
+## > 0 => isabette bu yarıçaplı patlama halkası da çizilir ("Patlayan Alev" evrimi, totem_attack.gd _explode). Salt görsel.
+var blast_radius: float = 0.0
 
 var travel_time: float = 0.26
 var impact_time: float = 0.42
@@ -33,7 +35,7 @@ var _sparks: Array[Dictionary] = []
 var _seed: int = 0
 
 
-static func spawn(parent: Node, p_start: Vector2, p_target: Node2D, p_color: Color) -> void:
+static func spawn(parent: Node, p_start: Vector2, p_target: Node2D, p_color: Color, p_blast_radius: float = 0.0) -> void:
 	if parent == null or not is_instance_valid(parent):
 		return
 	var bolt: TotemFireBolt = TotemFireBolt.new()
@@ -41,6 +43,7 @@ static func spawn(parent: Node, p_start: Vector2, p_target: Node2D, p_color: Col
 	bolt.end_pos = p_target.global_position if (p_target != null and is_instance_valid(p_target)) else p_start
 	bolt.target_ref = p_target
 	bolt.bolt_color = p_color
+	bolt.blast_radius = p_blast_radius
 	bolt._seed = randi()
 	parent.add_child(bolt)
 
@@ -176,6 +179,12 @@ func _draw_impact() -> void:
 	## Genişleyen çift ateş halkası
 	PixelDraw.ring(self, end_pos, 4.0 * t + 22.0 * t * k, Color(PixelDraw.fire_color(0.12 + 0.6 * k), alpha * 0.95), 1)
 	PixelDraw.ring(self, end_pos, 2.0 * t + 14.0 * t * k, Color(1.0, 0.88, 0.5, alpha * 0.7), 1, 3, 2, _elapsed * 30.0)
+	## Patlayan Alev evrimi: hasar yarıçapına kadar genişleyen kor halkası + sönen sıcak zemin (hasarın gerçek alanını gösterir).
+	if blast_radius > 0.0:
+		var bk: float = minf(1.0, k * 2.2)
+		PixelDraw.disc_dither(self, end_pos, blast_radius * bk, Color(1.0, 0.45, 0.12, 0.28 * alpha), 1, 1)
+		PixelDraw.ring(self, end_pos, blast_radius * bk, Color(PixelDraw.fire_color(0.1 + 0.5 * bk), alpha * 0.9), 1)
+		PixelDraw.ring(self, end_pos, blast_radius * bk * 0.7, Color(1.0, 0.85, 0.45, alpha * 0.6), 1, 3, 2, _elapsed * 20.0)
 	## Savrulan kor
 	for sp in _sparks:
 		var life: float = float(sp["life"])

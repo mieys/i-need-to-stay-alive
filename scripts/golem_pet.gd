@@ -680,7 +680,7 @@ func _process_golem_slam(delta: float) -> void:
 func _broadcast_impact_fx(scene_path: String, pos: Vector2, tint: Color) -> void:
 	if not NetworkManager.is_multiplayer_active or network_instance_id.is_empty():
 		return
-	NetworkManager.broadcast_player_vfx.rpc(multiplayer.get_unique_id(), "hitscan_impact", pos, {
+	NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", pos, {
 		"scene_path": scene_path,
 		"modulate": tint,
 	})
