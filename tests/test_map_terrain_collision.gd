@@ -18,6 +18,7 @@ const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn
 const HaritaScene: PackedScene = preload("res://scenes/harita_baked.tscn")
 const EnemySpawnerScript = preload("res://scripts/enemy_spawner.gd")
 const EnemyWorldBridgeScript: GDScript = preload("res://scripts/enemy_world/enemy_world_bridge.gd")
+const TerrainCollisionScript: GDScript = preload("res://scripts/terrain_collision.gd")
 
 ## Bilinen hücreler (bkz. get_tilemap_layout ile doğrulanmış):
 ## - (8,8) piksel -> tile (0,0): Su/Su katmanında dolu (su).
@@ -256,40 +257,51 @@ func test_is_position_blocked_by_terrain_core_lookup() -> void:
 const HOUSE_ADJACENT_POINT := Vector2(3016.0, 1921.0)
 
 
-## SU/EV ENGELİ OYUNCU VE YARATIKLAR İÇİN BİLEREK KAPALI (kullanıcı isteği:
-## "oyundaki collision shapeleri kaldır haritada istediğimiz yere hareket
-## edebilelim sonra sıfırdan collision shape dizicem çünkü" - bkz. player.gd/
-## enemy.gd _block_movement_into_terrain). Bu iki test bu durumu BELGELER: eve/suya
-## doğru hareket kısıtlanmıyor. Su/ev yeniden açılırsa bunlar ters çevrilmeli.
-func test_player_is_free_to_walk_into_house_while_house_collision_is_off() -> void:
+## SU/BİNA/AĞAÇ/MADEN ENGELİ AÇIK (kullanıcı isteği 2026-10-08: "collision shapeleri herşey için yeniden hesapla"; 2026-10-03'ten beri bilerek kapalıydı) -
+## ayrıntılı yürüme/yaratık/sis testleri tests/test_terrain_collision_objects.gd'de; burada eski iki testin yeni kuralı: bina tabanı hücresine doğru yürüyen
+## oyuncunun hızı iptal edilir, sudaki hücre C++ yaratık ızgarasında engeldir.
+func test_player_is_blocked_by_a_house_base_cell_now_that_house_collision_is_on() -> void:
 	var harita: Node = _inject_map_into_game_manager()
-
+	var forest: TileMapLayer = GameManager.get_forest_layer()
+	TerrainCollisionScript.reset()
+	TerrainCollisionScript.ensure(forest)
+	var houses: Array = TerrainCollisionScript.by_category.get("houses", [])
+	assert(not houses.is_empty(), "bina tabanı hücresi bulunamadı")
 	var player = PlayerScene.instantiate()
 	add_child(player)
-	player.global_position = HOUSE_ADJACENT_POINT
-	## Eve doğru (kuzey/yukarı, -y) hareket - su/ev kapalı, hız iptal EDİLMEMELİ.
-	player.velocity = Vector2(0.0, -50.0)
-	player._block_movement_into_terrain()
-	assert(player.velocity.y == -50.0,
-		"Ev engeli kapalıyken oyuncu eve doğru engellendi (kullanıcı su/ev collision'ını bilerek kapattı)")
-
+	var done: bool = false
+	for c: Vector2i in houses:
+		## Hücrenin HEMEN altında (hücre dışında) dur; 10 px'lik yoklama hücrenin içine düşer.
+		var start: Vector2 = forest.to_global(forest.map_to_local(c)) + Vector2(0.0, 10.0)
+		if GameManager.is_position_blocked_by_walls(start) or not GameManager.is_position_blocked_by_walls(start + Vector2(0.0, -10.0)):
+			continue
+		player.global_position = start
+		player.velocity = Vector2(0.0, -50.0)
+		player._block_movement_into_terrain()
+		assert(player.velocity.y == 0.0, "Ev tabanına doğru yürüyen oyuncunun hızı iptal edilmeli")
+		done = true
+		break
+	assert(done, "denenecek bir ev tabanı hücresi bulunamadı")
 	player.queue_free()
 	harita.queue_free()
 	_clear_game_manager_map()
 
 
-func test_enemy_is_free_to_walk_into_water_while_water_collision_is_off() -> void:
+func test_enemy_is_blocked_by_water_now_that_water_collision_is_on() -> void:
 	var harita: Node = _inject_map_into_game_manager()
 	var enemy = EnemyScene.instantiate()
 	add_child(enemy)
 	await get_tree().process_frame
 	_step_bridge(1) ## ızgara köprüye yüklensin
-	## C++ engel ızgarası SADECE orman katmanı (su/ev bilerek kapalı): su noktası geçilebilir olmalı.
-	assert(not bool(enemy._ew_world.call("is_solid_at", WATER_POINT)) or GameManager.is_position_blocked_by_forest(WATER_POINT),
-		"Su engeli kapalıyken yaratık için su engel sayıldı (kullanıcı su/ev collision'ını bilerek kapattı)")
+	## C++ engel ızgarası orman + su/bina/ağaç/maden: su noktası (8,8) hücresi hareket için engel olmalı (görüşü kesmez, bkz. test_terrain_collision_objects).
+	var forest: TileMapLayer = GameManager.get_forest_layer()
+	var water_root_cell: Vector2i = TerrainCollisionScript.by_category.get("water", [Vector2i.ZERO])[0]
+	assert(bool(enemy._ew_world.call("is_solid_at", forest.to_global(forest.map_to_local(water_root_cell)))),
+		"Su engeli açıkken yaratık için su hücresi engel sayılmalı")
 	enemy.queue_free()
 	harita.queue_free()
 	_clear_game_manager_map()
+
 
 func test_spawner_never_picks_water_or_house_position() -> void:
 	var harita: Node = _inject_map_into_game_manager()

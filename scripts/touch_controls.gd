@@ -13,6 +13,7 @@ extends Control
 ## Görseller fare olaylarını yutmaz (mouse_filter IGNORE).
 
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const GROUP := &"touch_controls"
 const JOY_ZONE_W := 0.45 ## ekranın sol bu kadarı joystick bölgesi
 const JOY_ZONE_TOP := 0.30 ## üstteki can/envanter düğmeleri joystick başlatmasın
 const JOY_RADIUS := 62.0 ## HUD birimi (x MobileUI.HUD_SCALE)
@@ -51,6 +52,14 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	## Duraklayınca basılı eylemleri bırakabilmek için.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_to_group(GROUP)
+
+
+## Bu parmak şu an joystick'i ya da bir yetenek/düğme eylemini tutuyor mu? touch_scroll.gd (liste/sohbet kaydırma) bunu
+## sorar: oyun girdisi kullanan parmak aynı anda bir listeyi de kaydırmasın (kullanıcı bildirimi 2026-10-05: "chat ve grup
+## penceresini kaydırırken karakter yürüyor / oyun bozuluyor").
+func owns_touch(index: int) -> bool:
+	return index == _joy_id or _held.has(index)
 
 
 func register_button(node: Control, action: StringName, round_shape: bool = true) -> void:

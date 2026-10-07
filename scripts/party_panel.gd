@@ -309,6 +309,15 @@ func has_allies() -> bool:
 	return not _rows.is_empty()
 
 
+## Sandık sırası efekti (bkz. chest_pass_fx.gd): bu müttefikin satırının ekrandaki (canvas) ortası; satır yoksa ya da panel
+## gizliyse (telefonda kapalı) Vector2.INF.
+func get_row_center(peer_id: int) -> Vector2:
+	var row: PartyRow = _rows.get(peer_id) as PartyRow
+	if row == null or not is_instance_valid(row.container) or not row.container.is_visible_in_tree():
+		return Vector2.INF
+	return row.container.get_global_transform_with_canvas() * (row.container.size * 0.5)
+
+
 ## Telefon (kullanıcı isteği 2026-10-04: "oyuncu sayısı çok fazla olunca grup paneli küçülmek yerine kaydırılsın"):
 ## satır listesi en fazla `h` (panel birimi) uzar, fazlası parmakla kaydırılır (touch_scroll.gd). h <= 0: sınırsız (masaüstü).
 func set_max_list_height(h: float) -> void:

@@ -267,7 +267,7 @@ const DEFS := {
 		## (Eski "Kadim Patlama" pasifi 2026-09-23'te silinmişti.) Kullanıcı isteği (2026-10-04): yeni pasif "Büyü Dalgası" - mekanik
 		## player.gd _buyucu_on_skill_used + weapon.gd arcane_surge (BUYUCU_PASSIVE_SHOT_MULT). Q (set değişimi) de yetenek sayılır.
 		## İkon tools/gen_buyucu_passive_icon.py (48x48 kare ikon - Elara/Korsan pasifleriyle aynı dil).
-		"passive": "Büyü Dalgası: her yetenek kullandığında silahların aniden ileri fırlar - saldırı bekleme süreleri sıfırlanır, hemen ateş ederler ve bu atış %30 daha fazla hasar verir.",
+		"passive": "Büyü Dalgası: E veya ulti yeteneğini kullandığında silahların hedefin tersine sertçe geri tepip aynı anda ateş eder - saldırı bekleme süreleri sıfırlanır ve bu atış %30 daha fazla hasar verir.",
 		"passive_icon": "res://assets/skills/buyucu_passive_icon.png",
 		"frames": "res://assets/characters/buyucu_frames.tres",
 		"portrait": "res://assets/characters/buyucu_portrait.png",
@@ -312,8 +312,8 @@ const DEFS := {
 		"skill": 5,
 		"skill_name": "Şahin Hamlesi",
 		## 2026-09-30 (yetenek evrimleri): "artık 3 yük yerine 2 yüke sahip çünkü geliştirmelere eklenecek" (evrim "Üçüncü Hamle").
-		## Aynı gün: "dash yeteneğinin bekleme süresini de 10 saniyeye düşür" - yük başına 12 -> 10 sn (ASSASIN_DASH2_RECHARGE_TIME).
-		"skill_desc": "YETENEK: Yürüdüğü yöne (8 yön) hızla hamle yapıp içinden geçtiği düşmanlara saldırı gücünün %150'si kadar hasar verir. 2 yükü vardır, her yük ayrı ayrı 10sn'de yenilenir.",
+		## Aynı gün: "dash yeteneğinin bekleme süresini de 10 saniyeye düşür" - yük başına 12 -> 10 sn; 2026-10-08: 10 -> 8 sn (ASSASIN_DASH2_RECHARGE_TIME).
+		"skill_desc": "YETENEK: Yürüdüğü yöne (8 yön) hızla hamle yapıp içinden geçtiği düşmanlara saldırı gücünün %150'si kadar hasar verir. 2 yükü vardır, her yük ayrı ayrı 8sn'de yenilenir.",
 		"skill_icon": "res://assets/skills/assasin_sahin_hamlesi_icon.png",
 		"skill2": 30,
 		"skill2_name": "Gölge Adımı",
@@ -694,14 +694,14 @@ const DEFS := {
 	13: {
 		"name": "Vampir Çocuk",
 		## Kullanıcı isteği: yeni karakter Vampir Çocuk - yetenekleri kalkan YERİNE CAN harcar
-		## (2026-10-01: Q artık diğer karakterler gibi KALKAN harcar; E maksimum canın %4'ü, R aktifken her saniye %5'i, bkz.
-		## player.gd VAMPIR_*). Skill id'leri: Q=40 (Kan Emme, SKILL_TIMING[40]), E=41 (Yarasa
+		## (2026-10-01: Q diğer karakterler gibi KALKAN harcıyordu, 2026-10-06'dan beri Q hiçbir bedel ödemez; E maksimum canın %4'ü,
+		## R aktifken her saniye %2,5'i, bkz. player.gd VAMPIR_*). Skill id'leri: Q=40 (Kan Emme, SKILL_TIMING[40]), E=41 (Yarasa
 		## Formu, SKILL2_TIMING[41]), R=42 (Kan Yarasaları, SKILL3_TIMING[42], basılıp
 		## kapatılan toggle).
 		## Görsel: assets/characters/vampir/ (tools/gen_vampir_assets.py + gen_vampir_frames.py).
 		"skill": 40,
 		"skill_name": "Kan Emme",
-		"skill_desc": "YETENEK: Yakınındaki en yakın 3 düşmanın kanını emip kendine çeker, her birine saldırı gücünün %130'u kadar hasar verir. (6sn bekleme)",
+		"skill_desc": "YETENEK: Yakınındaki en yakın 4 düşmanın kanını emip kendine çeker, her birine saldırı gücünün %130'u kadar hasar verir. (6sn bekleme)",
 		"skill_icon": "res://assets/skills/vampir_kan_emme_icon.png",
 		"skill2": 41,
 		"skill2_name": "Yarasa Formu",
@@ -709,7 +709,7 @@ const DEFS := {
 		"skill2_icon": "res://assets/skills/vampir_yarasa_formu_icon.png",
 		"skill3": 42,
 		"skill3_name": "Kan Yarasaları",
-		"skill3_desc": "ULTİ (BASILIP KAPATILABİLİR): Açıkken her saniye maksimum canının %5'ini harcar. Yakınındaki yaratıklara 3 küçük yarasa gönderir; yarasalar vurup saldırı gücünün %60'ı kadar hasar verir ve sana geri döner (hızları saldırı hızınla artar). Yarasalar her döndüğünde saldırı gücünün %5'i kadar can yenilenir.",
+		"skill3_desc": "ULTİ (BASILIP KAPATILABİLİR): Açıkken her saniye maksimum canının %2,5'ini harcar. Yakınındaki yaratıklara 3 küçük yarasa gönderir; yarasalar vurup saldırı gücünün %60'ı kadar hasar verir ve sana geri döner (hızları saldırı hızınla artar). Yarasalar her döndüğünde saldırı gücünün %5'i kadar can yenilenir.",
 		"skill3_icon": "res://assets/skills/vampir_kan_yarasalari_icon.png",
 		"passive": "Kan Emme: %1 can emme kazanır (verdiği hasarın %1'i kadar can yenilenir) ve her 1 saldırı gücü için 1 maksimum can kazanır.",
 		"passive_icon": "res://assets/skills/vampir_passive_icon.png",

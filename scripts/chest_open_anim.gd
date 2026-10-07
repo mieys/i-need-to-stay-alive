@@ -1,6 +1,6 @@
 extends Control
 
-## Sandık açılış animasyonu - ödül ekranında (normal: chest_menu.gd, elit: enchant_screen.gd intro_chest). Kartlar burst
+## Sandık açılış animasyonu - ödül ekranında (normal + elit: chest_menu.gd; efsun elit sandığı: enchant_screen.gd intro_chest). Kartlar burst
 ## anında sandığın ağzından fırlar (reward_reveal.gd). Kullanıcı isteği
 ## (2026-09-25): "sandık açarken daha iyi ve ödüllendirici heyecan uyandırıcı sandık açma animasyonu ... pixel tarzda
 ## sprite sheet olarak". Sayfa: tools/gen_chest_sprites.py (20 kare x 48x48, kare düzeni o dosyanın başında). Sırası:
@@ -53,6 +53,11 @@ var _loop_t: float = 0.0
 var _hold_left: float = -1.0
 var _burst_sent: bool = false
 var _done: bool = false
+## Oyuncu animasyonu atladı (tıklama/tuş): sahibi (chest_menu.gd) altın patlamasını bekletmeden kartı hemen gösterir.
+var skipped: bool = false
+## Ödül çınlaması (Reward.wav / elitte Magic Seal) kapak patlayınca çalar. Kartı sonradan çıkaran sahip (chest_menu.gd: altın önce, eşya
+## sonra) bunu false yapar ve çınlamayı kart ekrana inip oturunca kendisi çalar (play_reward_chime) - ses karta denk gelsin.
+var chime_on_burst: bool = true
 
 
 ## elite=false: reward_tier (1-4) ışığın rengini seçer.
@@ -128,6 +133,7 @@ func _process(_delta: float) -> void:
 func skip() -> void:
 	if _done or _hold_left >= 0.0:
 		return
+	skipped = true
 	if not _burst_sent:
 		_on_burst()
 	_advance(TIMELINE.size())
@@ -148,11 +154,8 @@ func _on_burst() -> void:
 		return
 	_burst_sent = true
 	_play(SFX_COINS, -2.0, 1.0)
-	if _elite:
-		_play(SFX_ELITE, -7.0, 1.0)
-	else:
-		## Nadirlik arttıkça ödül sesi biraz daha tiz ve güçlü.
-		_play(SFX_REWARD, -8.0 + float(_tier), 0.94 + 0.04 * float(_tier))
+	if chime_on_burst:
+		play_reward_chime(get_tree(), _tier, _elite)
 	_flash_screen()
 	## Sarsıntı: 3 kısa itme (sprite, kutunun kendisi değil - yerleşim bozulmasın).
 	var tw := create_tween()
@@ -181,14 +184,29 @@ func _flash_screen() -> void:
 	tw.tween_callback(flash.queue_free)
 
 
-## Ses kökte çalar: sandık görseli kart çıkınca silinir, 2 sn'lik ödül sesi yarıda kesilmesin. Oyun duraklatılmışken de çalsın.
+## Ödül çınlaması: elitte mühür sesi, aksi halde nadirlik arttıkça biraz daha tiz ve güçlü. Kart çıkış anında (chest_menu.gd) da bu çağrılır.
+static func play_reward_chime(tree: SceneTree, reward_tier: int, elite: bool) -> void:
+	if elite:
+		_play_on_root(tree, SFX_ELITE, -7.0, 1.0)
+	else:
+		var t: int = clampi(reward_tier, 1, 4)
+		_play_on_root(tree, SFX_REWARD, -8.0 + float(t), 0.94 + 0.04 * float(t))
+
+
 func _play(stream: AudioStream, volume_db: float, pitch: float) -> void:
+	_play_on_root(get_tree(), stream, volume_db, pitch)
+
+
+## Ses kökte çalar: sandık görseli kart çıkınca silinir, 2 sn'lik ödül sesi yarıda kesilmesin. Oyun duraklatılmışken de çalsın.
+static func _play_on_root(tree: SceneTree, stream: AudioStream, volume_db: float, pitch: float) -> void:
+	if tree == null:
+		return
 	var p := AudioStreamPlayer.new()
 	p.stream = stream
 	p.volume_db = volume_db
 	p.pitch_scale = pitch
 	p.process_mode = Node.PROCESS_MODE_ALWAYS
-	get_tree().root.add_child(p)
+	tree.root.add_child(p)
 	p.play()
 	p.finished.connect(p.queue_free)
 

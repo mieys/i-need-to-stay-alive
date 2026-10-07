@@ -1,5 +1,9 @@
 extends CanvasLayer
 
+## 2026-10-07: silahlar (ve kalkanlar) artık BURADA satılmıyor - demirci dükkanına taşındı (scripts/weapon_shop.gd +
+## weapon_shop_screen.gd; kullanıcı: "seyyar satıcıda silah satılmayacak bundan böyle"). Aşağıdaki eski notlardaki silah/kalkan
+## kartı anlatımları tarihsel; satıcı yalnızca 8 eşya gösterir. ENVANTER penceresi sahip olunan silahları göstermeye devam eder.
+##
 ## Kullanıcı isteği: "Seyyar satıcı dükkandan rasgele 8 item gösterecek.
 ## Ekstralar, silahlar, kalkanlar dahil. Tier sistemi olanlar rasgele
 ## tierlarda dükkanda çıkabilir. Oyuncular istediği eşyayı seçip alabilir.
@@ -81,8 +85,7 @@ var _price_labels: Array = []
 ## hakkın harcanması ORADA (ziyaretler arası kalıcı, kişisel) tutuluyor, bu
 ## ekran sadece butonu gösterip çağırıyor.
 var _merchant: Node = null
-var _grid: GridContainer = null ## eşya kartları (4 sütun) - 2026-10-02: silahlar ayrı _weapon_grid'de
-var _weapon_grid: GridContainer = null
+var _grid: GridContainer = null ## eşya kartları (4 sütun) - 2026-10-07: silahlar artık burada satılmıyor (demirci dükkanı, weapon_shop.gd)
 var _reroll_btn: Button = null
 
 ## "Satıldı" kaydı KARTIN KENDİSİNDE tutulur (entry["sold"], bkz. _entry_sold):
@@ -224,13 +227,12 @@ func _fit_phone_columns() -> void:
 		return
 	var avail: float = _phone_scroll.size.x - 20.0
 	var cols: int = maxi(1, int(floor((avail + 14.0) / (228.0 + 14.0))))
-	for g in [_grid, _weapon_grid]:
-		if g and g.columns != cols:
-			g.columns = cols
+	if _grid:
+		if _grid.columns != cols:
+			_grid.columns = cols
 		## Kartlar sütunu doldursun (sütun sayısına bölünemeyen genişlik kartlara dağılır, sağda boşluk kalmaz).
-		if g:
-			for c in g.get_children():
-				(c as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for c in _grid.get_children():
+			(c as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 ## DÜZELTME (2026-10-02): Godot'ta Container.fit_child_in_rect çocuğun ölçeğini HER yerleşimde 1'e sıfırlar - pencere
 ## CenterContainer'ın çocuğu olduğu için 2026-09-25'teki x0.75 hiç uygulanmıyordu (ölçüm: scale (1, 1)). Ölçek artık
@@ -389,6 +391,30 @@ func _build_ui() -> void:
 		_select_index(0)
 
 
+## Detay açıklama kutusunun dikey çubuk için ayrılan payı (px) - ölçüm: Godot kit teması çubuğu 18 px; pay çubuktan büyük olmalı (bkz. _build_details_panel).
+const DESC_SCROLLBAR_RESERVE := 28.0
+
+
+## Yan panellerin (detay / stat) içeriğini panele ekler. TELEFON (2026-10-06, kullanıcı bildirimi "marketteki kaydırma sorunu hâlâ
+## düzelmemiş"): panel içeriği kendi kaydırma kutusuna konur. Eskiden içerik doğrudan PanelContainer'daydı ve en az yüksekliği (uzun adlı /
+## tarifli eşyada detay paneli 868 birim, mevcut alan 564) pencereyi EKRANDAN UZUN yapıyordu: ortadaki kart ızgarasının kaydırma kutusu
+## aniden uzayıp kaydırma sınırı (826 -> 522) düşüyor, liste sıçrıyor, pencerenin altı (AL düğmeleri) ekran dışında kalıyordu; kart seçilince
+## (kaydırmaya başlarken parmak karta basar) pencere boyu eşyaya göre sürekli değişiyordu. Kaydırma kutusunun en az yüksekliği 0 olduğundan
+## pencere artık HER ZAMAN `_phone_rect()` boyunda kalır, uzun içerik panelin içinde kayar.
+func _attach_side_panel_content(panel: PanelContainer, margin: MarginContainer) -> void:
+	if not _phone:
+		panel.add_child(margin)
+		return
+	var sc := ScrollContainer.new()
+	sc.name = "SidePanelScroll"
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(sc)
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(margin)
+
+
 ## Sol: seçili eşyanın büyük ikonu, adı, kademesi, açıklaması ve fiyatı.
 func _build_details_panel() -> Control:
 	var panel := PanelContainer.new()
@@ -398,7 +424,7 @@ func _build_details_panel() -> Control:
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 10)
-	panel.add_child(margin)
+	_attach_side_panel_content(panel, margin)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 10)
@@ -426,8 +452,19 @@ func _build_details_panel() -> Control:
 
 	var desc_scroll := ScrollContainer.new()
 	desc_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	desc_scroll.custom_minimum_size = Vector2(0, 150)
+	## DONMA + ÇÖKME DÜZELTMESİ (kullanıcı bildirimi 2026-10-06: "markette donma devam ediyor ve bu sefer donduktan sonra kapandı"): dikey çubuk
+	## yalnızca gerekince göründüğü için bu kutunun EN AZ GENİŞLİĞİ çubuk görününce 320 -> 338'e (içerik + çubuk) sıçrıyordu; detay paneli o genişliğe
+	## göre ölçüldüğü için panel genişliği, dolayısıyla eşya adının (ör. "Savaşçının Kılıcı") satır sayısı 1 <-> 2 oluyor, bu detay sütununun
+	## en az yüksekliğini 26 px oynatıp açıklamaya kalan yüksekliği (260 <-> 286) ve çubuğun gerekip gerekmediğini yeniden değiştiriyordu: metin
+	## tam sınırdaysa DÖNGÜ HİÇ DURMUYORDU. Godot yerleşim güncellemelerini ertelenmiş çağrı kuyruğuyla işlediği için kuyruk bir karede dolana kadar
+	## (32 MB, ölçüm: ~1,4 milyon çağrı) oyun donuyor, sonra çöküyordu ("bazen": yalnızca bazı eşya adı/açıklaması uzunluklarında, ölçüm: 10 denemenin 3'ü).
+	## Çubuk payı baştan ayrılır: en az genişlik çubuk görünsün ya da görünmesin AYNI kalır.
+	desc_scroll.custom_minimum_size = Vector2(320.0 + DESC_SCROLLBAR_RESERVE, 150)
 	desc_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	if _phone:
+		## Telefonda tüm panel zaten kayıyor (bkz. _attach_side_panel_content): iç içe iki kaydırma kutusu parmağı şaşırtır.
+		desc_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		desc_scroll.custom_minimum_size = Vector2.ZERO
 	vbox.add_child(desc_scroll)
 	_details_desc = Label.new()
 	_details_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -469,19 +506,10 @@ func _build_details_panel() -> Control:
 
 
 func _build_grid() -> Control:
-	## 2026-10-02 (kullanıcı seçimi "Eşyalar ayrı bölüm"): üstte SİLAHLAR (4 kart, tek sıra), altında EŞYALAR (4x2).
-	## (Yan yana dizilince pencere ekrandan taşıyordu - sağdaki stat paneli ve başlık düğmeleri görünmüyordu.)
+	## 2026-10-02: silah ve eşya ayrı bölümlerdi; 2026-10-07: silahlar demirci dükkanına taşındı (weapon_shop.gd), burada sadece
+	## EŞYALAR (4x2) kaldı.
 	var row := VBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
-	var wbox := VBoxContainer.new()
-	wbox.add_theme_constant_override("separation", 8)
-	wbox.add_child(_section_title("SİLAHLAR"))
-	_weapon_grid = GridContainer.new()
-	_weapon_grid.columns = 4
-	_weapon_grid.add_theme_constant_override("h_separation", 14)
-	_weapon_grid.add_theme_constant_override("v_separation", 14)
-	wbox.add_child(_weapon_grid)
-	row.add_child(wbox)
 	var ibox := VBoxContainer.new()
 	ibox.add_theme_constant_override("separation", 8)
 	ibox.add_child(_section_title("EŞYALAR"))
@@ -502,11 +530,7 @@ func _populate_grid() -> void:
 	_buy_buttons.clear()
 	_price_labels.clear()
 	for i in range(_stock.size()):
-		var card: Control = _build_card(i)
-		if str(_stock[i].get("type", "")) == "weapon" and _weapon_grid:
-			_weapon_grid.add_child(card)
-		else:
-			_grid.add_child(card)
+		_grid.add_child(_build_card(i))
 	## Kumanda: dükkan açılınca ilk odak üstteki bir düğme değil ilk kart olsun (gamepad_ui.gd FIRST_FOCUS_GROUP).
 	if not _card_panels.is_empty():
 		(_card_panels[0] as Node).add_to_group(&"gamepad_first_focus")
@@ -514,10 +538,9 @@ func _populate_grid() -> void:
 ## _on_reroll_pressed tarafından çağrılır - TAMAMEN yeni bir stokla kartları
 ## sıfırdan kurar (bkz. _build_ui()'nin ilk kuruluşuyla AYNI _populate_grid).
 func _rebuild_grid() -> void:
-	for g in [_grid, _weapon_grid]:
-		if g:
-			for c in g.get_children():
-				c.queue_free()
+	if _grid:
+		for c in _grid.get_children():
+			c.queue_free()
 	_populate_grid()
 	## Yeni oluşan butonlara da tık sesi bağlanmalı - connect_all_buttons zaten
 	## bağlı olanları atlıyor (bkz. ui_sound.gd), tekrar çağırmak zararsız.
@@ -600,11 +623,8 @@ func _build_card(index: int) -> PanelContainer:
 	return card
 
 
-## Kartın küçük "tür" etiketi (kademesi olmayan silah/kalkan kartları için).
-func _entry_kind_text(entry: Dictionary) -> String:
-	match entry.get("type"):
-		"weapon":
-			return "Silah"
+## Kartın küçük "tür" etiketi (kademesi olmayan kartlar için; 2026-10-07'den beri satıcıda sadece eşya var).
+func _entry_kind_text(_entry: Dictionary) -> String:
 	return " "
 
 
@@ -644,8 +664,6 @@ func _entry_name(entry: Dictionary) -> String:
 	match entry.get("type"):
 		"item":
 			return Items.item_name(key)
-		"weapon":
-			return WEAPON_NAMES.get(key, key.capitalize())
 	return key.capitalize()
 
 
@@ -734,10 +752,6 @@ func _refresh_details() -> void:
 		if not _entry_sold(entry):
 			var reason: String = Items.purchase_block_reason(key, GameManager.owned_items, _part_slots())
 			_details_block.text = reason
-	elif entry.get("type") == "weapon":
-		_details_tier.text = "Silah"
-		_details_tier.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
-		_details_desc.text = "Yeni bir silah - kalıcı olarak edinilir."
 	_details_icon_frame.texture = TierSystem.MINI_FRAME_TEXTURES[_entry_slot_tier(entry) - 1]
 	for c in _details_icon_inset.get_children():
 		c.queue_free()
@@ -786,7 +800,7 @@ func _build_stats_panel() -> Control:
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 10)
-	panel.add_child(margin)
+	_attach_side_panel_content(panel, margin)
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
 	margin.add_child(vbox)
@@ -1128,9 +1142,6 @@ func _entry_cost_raw(entry: Dictionary) -> int:
 	match entry.get("type"):
 		"item":
 			return int(Items.plan_purchase(key, GameManager.owned_items).get("cost", Items.cost(key)))
-		"weapon":
-			var next_total: int = GameManager.owned_weapons.size() + 1
-			return ShopScript._copy_cost_raw(key, next_total)
 	return 0
 
 ## bkz. _entry_cost üstündeki DÜZELTME notu - kullanıcı isteği: "fiyatı
@@ -1158,14 +1169,6 @@ func _entry_can_buy(entry: Dictionary, _index: int) -> bool:
 	match entry.get("type"):
 		"item":
 			return Items.purchase_block_reason(key, GameManager.owned_items, _part_slots()) == ""
-		"weapon":
-			## Sahip olunan bir silah türü de alınabilir ("ateş asam var, boş slotum var
-			## ama dükkandaki ateş asasını alamıyorum" bildirimi) - kural "kart başına
-			## ziyaret başına 1 kez" (bkz. _entry_sold), sahiplik engeli DEĞİL.
-			var max_w: int = MAX_OWNED_WEAPONS
-			if _player and _player.has_method("get_max_owned_weapons"):
-				max_w = _player.get_max_owned_weapons()
-			return GameManager.owned_weapons.size() < max_w
 	return false
 
 
@@ -1190,14 +1193,6 @@ func _on_buy_pressed(index: int) -> void:
 			if _player and _player.has_method("acquire_item") and _player.acquire_item(key, plan, cost):
 				GameManager.gold -= cost
 				entry["sold"] = true
-		"weapon":
-			## bkz. shop_panel.gd _on_buy_copy / chest_menu.gd _on_al_pressed
-			## AYNI sıra: önce deftere ekle, sonra gerçek silah node'unu spawn et.
-			GameManager.gold -= cost
-			GameManager.owned_weapons.append({"key": key, "level": 1, "spent": cost})
-			if _player and _player.has_method("buy_weapon_copy"):
-				_player.buy_weapon_copy(key, 1)
-			entry["sold"] = true
 	_refresh_all_buy_states()
 	_refresh_reroll_button()
 	if _selected_index == index:

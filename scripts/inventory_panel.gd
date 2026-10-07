@@ -59,6 +59,7 @@ signal closed
 ## Kullanıcı isteği (2026-09-22): "Envanter arayüzünü seyyar satıcı gibi pixel tarzda, diğer arayüzlerle uyumlu yap" - yuvalar artık
 ## seyyar satıcıdaki gibi TierSystem.MINI_FRAME_TEXTURES çerçeveli 96 px kareler (ikon alanı 64 px = eşya ikonları 2x), pencere/başlık/altın
 ## alanı UIKit (assets/ui/kit) ile. Satış/sürükleme mantığı DEĞİŞMEDİ.
+const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const SLOT_SIZE := 80.0
 const SLOT_INSET := 8.0
 ## Telefon (kullanıcı bildirimi 2026-10-03: "envanter paneli çok kötü mobile uyumlu değil"): hud.gd paneli küçültüp
@@ -111,6 +112,8 @@ var player: Node = null
 ## (satın alma/satış) yeniden kuruluyor (bkz. _refresh_items_grid) - her
 ## karede N tane Button/Icon node'unu baştan yaratmak gereksiz maliyet olurdu.
 var _last_items_signature: String = ""
+## Eşya yuvalarının ikonları (eşya dizini -> TextureRect): satışta ikon parçalanıp altına döner (bkz. _do_sell_item).
+var _item_slot_icons: Dictionary = {}
 
 ## Açılış animasyonu (bkz. _play_open_animation) - kullanıcı isteği:
 ## "envanter penceresi de animasyonla açılsın, ease ease olmalı ve yorucu
@@ -409,7 +412,14 @@ func _refresh_weapons() -> void:
 			var refund: int = int(round(spent * 0.7))
 			
 			btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			btn.tooltip_text = "%s Lv%d\n\nSatmak için tıklayın (+%d Altın)" % [WEAPON_NAMES.get(key, key), level, refund]
+			## Kalıcı silah özelliği (EnchantDefs.TRAITS): adı + alınan geliştirme sayısı (geliştirmeler demirci dükkanında).
+			var trait_line: String = ""
+			var trait_rec: Dictionary = entry.get("enchant", {})
+			var trait_def: Dictionary = EnchantDefs.get_def(str(trait_rec.get("id", "")))
+			if not trait_def.is_empty():
+				var done: int = (EnchantDefs.upgrades_taken(trait_rec) as Array).size() + (1 if EnchantDefs.is_complete(trait_rec) else 0)
+				trait_line = "\nEfsun: %s (%d/%d)" % [str(trait_def["name"]), done, (trait_def["upgrades"] as Array).size() + 1]
+			btn.tooltip_text = "%s Lv%d%s\n\nSatmak için tıklayın (+%d Altın)" % [WEAPON_NAMES.get(key, key), level, trait_line, refund]
 			btn.pressed.connect(_on_sell_weapon_equip.bind(i))
 			
 			var icon_tex: Texture2D = WEAPON_ICON_TEXTURES.get(key)
@@ -655,6 +665,7 @@ func _refresh_items_grid() -> void:
 	if sig == _last_items_signature:
 		return
 	_last_items_signature = sig
+	_item_slot_icons.clear()
 
 	for child: Node in items_grid_box.get_children():
 		child.queue_free()
@@ -711,6 +722,7 @@ Satmak için tıkla (+%d altın)" % [Items.item_name(key), Items.describe(key), 
 			icon.offset_right = -_inset_px
 			icon.offset_bottom = -_inset_px
 			btn.add_child(icon)
+			_item_slot_icons[i] = icon
 			grid.add_child(btn)
 
 
@@ -723,15 +735,30 @@ func _on_sell_item(index: int) -> void:
 
 
 ## Satış iadesi eşyanın TAM fiyatının %70'i (tarifle ucuza alınmış olsa da - parçaları tek tek satmakla aynı değer).
+## Kullanıcı isteği (2026-10-08): "item satınca itemin parçalanıp altına dönüşme animasyonu" - yuvanın ikonu parçalanır, parçalar altın
+## paraya dönüp altın paneline uçar (gold_reward_fx.gd show_shatter; altın burada/oyuncuda eklenir, animasyon çift eklemez).
 func _do_sell_item(index: int) -> void:
 	if index < 0 or index >= GameManager.owned_items.size():
 		return
+	var key: String = str((GameManager.owned_items[index] as Dictionary).get("key", ""))
+	var shatter_tex: Texture2D = Items.icon(key)
+	var shatter_from: Vector2 = Vector2.ZERO
+	var shatter_size: Vector2 = Vector2.ZERO
+	var slot_icon: TextureRect = _item_slot_icons.get(index) as TextureRect
+	if shatter_tex != null and is_instance_valid(slot_icon) and slot_icon.is_inside_tree():
+		var xf: Transform2D = slot_icon.get_global_transform_with_canvas()
+		var top_left: Vector2 = xf * Vector2.ZERO
+		var bottom_right: Vector2 = xf * slot_icon.size
+		shatter_from = (top_left + bottom_right) * 0.5
+		shatter_size = (bottom_right - top_left).abs()
+	var refund: int = Items.sell_refund(key)
 	if player and is_instance_valid(player) and player.has_method("sell_owned_item"):
-		player.sell_owned_item(index)
+		refund = player.sell_owned_item(index)
 	else:
-		var key: String = str((GameManager.owned_items[index] as Dictionary).get("key", ""))
 		GameManager.owned_items.remove_at(index)
-		GameManager.gold += Items.sell_refund(key)
+		GameManager.gold += refund
+	if shatter_size != Vector2.ZERO and refund > 0:
+		GoldRewardFx.show_shatter(get_tree(), refund, shatter_from, shatter_tex, shatter_size)
 	_last_items_signature = ""
 	_refresh()
 

@@ -7,7 +7,9 @@ extends CanvasLayer
 ## Tamamen kodla kurulur (sahne dosyası yok - açık editör .tscn'yi eski hâliyle ezemesin). main.gd açar; seçim
 ## enchant_chosen ile döner ({"type": "skip"} = geç). Oyun zaten duraklatılmış (process_mode ALWAYS).
 ## Kısayollar level ekranıyla aynı: 1/2/3 kart, Space karıştır. Çok oyunculuda level ekranının 25 sn geri sayımı kullanılır.
-## Elit sandıktan açılınca (intro_chest, main.gd _show_elite_chest) ekran önce elit sandığın açılış animasyonunu kendisi
+## (2026-10-07: elit sandık artık epik eşya veriyor ve chest_menu.gd'yi açıyor; bu ekran efsunlar kapalıyken sadece debug menüsünden
+## gelir. Aşağıdaki intro_chest akışı, efsun elit sandığı geri getirilirse diye duruyor.)
+## Elit sandıktan açılınca (intro_chest) ekran önce elit sandığın açılış animasyonunu kendisi
 ## oynatır; kapak patlayınca üç kart sandığın ağzından yelpaze gibi fırlayıp yerlerine iner (reward_reveal.gd), arkalarında
 ## tier'a göre ışık huzmeleri yanar (reward_rays.gd - elitte daha parlak + mor hale). Kullanıcı isteği 2026-09-25: "kart
 ## içinden fırlamış gibi görünmüyor ... elitte daha da ödüllendirici gözükmesi gerekiyor".

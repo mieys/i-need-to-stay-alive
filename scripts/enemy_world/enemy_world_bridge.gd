@@ -228,7 +228,8 @@ func _refresh_grid() -> void:
 		world.call("set_grid", PackedByteArray(), Vector2i.ZERO, Vector2i.ZERO, 16.0, Vector2.ZERO)
 		return
 	var cw: float = float(layer.tile_set.tile_size.x) * layer.global_scale.x
-	world.call("set_grid", blocked, EnemyPathingScript._origin, size, cw, layer.global_position)
+	## Görüş (sis) ızgarası SADECE orman duvarı: su/bina/ağaç/maden hareketi engeller ama görüşü kesmez (bkz. terrain_collision.gd).
+	world.call("set_grid", blocked, EnemyPathingScript._origin, size, cw, layer.global_position, EnemyPathingScript._fog_blocked)
 
 
 func _build_targets() -> void:

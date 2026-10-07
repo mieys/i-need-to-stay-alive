@@ -77,7 +77,7 @@ const SECOND_CONCURRENT_MISSION_CHANCE := 0.2
 ## Kullanıcı isteği (2026-09-24): "Görev ödülleri olarak her oyuncuya 1 adet rasgele tierlı sandık verilmeli"
 ## - başarılı her görevde (altın ödülüne EK olarak) hayattaki HER oyuncuya ayrı ayrı 1 sandık (bkz.
 ## _grant_chest_to_all_players). 2026-09-25: "efsunlar ... görev ödülleri ... sandık ödüllerinde çalışacak" + "elit
-## sandıklardan efsun çıksın" - görev sandığı artık ELİT sandık (açılınca efsun ekranı). Sandıklar kişisel
+## sandıklardan efsun çıksın" - görev sandığı artık ELİT sandık (2026-10-07'den beri açılınca epik eşya kartı). Sandıklar kişisel
 ## bekleyen-sandık kuyruğuna girer (bir sonraki seviye atlamasında açılır).
 
 ## Kullanıcı isteği (2026-09-24): "Görevler collision shape içeren şeylerin içinde spawnlanmamalı" - eskiden
@@ -191,6 +191,31 @@ func _ready() -> void:
 		_slots[i] = {"state": "cooldown", "timer": first}
 	GameManager.enemy_died.connect(_on_enemy_died)
 	NetworkManager.world_event_item_collected.connect(_on_item_collected)
+	NetworkManager.peer_needs_game_catchup.connect(_on_peer_needs_game_catchup)
+
+
+## Geri katılan / geç yüklenen peer'e süren görevleri anlatır (host). Uyarı aşamasındaki: normal "X saniye sonra başlayacak" bildirimi
+## (kalan süreyle); aktif: tek yakalama RPC'si (bkz. NetworkManager.broadcast_world_event_catchup).
+func _on_peer_needs_game_catchup(peer_id: int) -> void:
+	if not NetworkManager.is_multiplayer_active or not NetworkManager.is_host:
+		return
+	for i in range(SLOT_COUNT):
+		var slot: Dictionary = _slots[i]
+		var state: String = str(slot.get("state", ""))
+		if state != "warning" and state != "active":
+			continue
+		var kind: int = int(slot["kind"])
+		var hidden: bool = HIDDEN_LOCATION_KINDS.has(kind)
+		var pos: Vector2 = Vector2.ZERO if hidden else (slot.get("pos", Vector2.ZERO) as Vector2)
+		var radius: float = 0.0 if hidden else float(slot.get("radius", 0.0))
+		if state == "warning":
+			NetworkManager.broadcast_world_event_announced.rpc_id(peer_id, int(slot["id"]), MISSION_KIND_NAMES[kind], pos, radius,
+					maxf(1.0, float(slot.get("timer", 1.0))), MISSION_LABELS[kind])
+		else:
+			var collected: Array = (slot.get("collected_set", {}) as Dictionary).keys()
+			NetworkManager.broadcast_world_event_catchup.rpc_id(peer_id, int(slot["id"]), MISSION_KIND_NAMES[kind], MISSION_LABELS[kind],
+					(slot.get("pos", Vector2.ZERO) as Vector2), float(slot.get("radius", 0.0)), maxf(0.0, float(slot.get("timer", 0.0))),
+					(slot.get("extra", {}) as Dictionary), float(slot.get("progress", 0.0)), float(slot.get("target", 1.0)), collected)
 
 
 func _process(delta: float) -> void:
@@ -375,6 +400,7 @@ func _activate_mission(slot_i: int) -> void:
 			## kozmetik kopyalarını kurabilmesi için world_event_started ile (bkz. main.gd)
 			## AYNI yayına biniyor - "gösterilmeme" sadece UI/harita işareti anlamına geliyor.
 			extra["copies"] = spawned["meta"]
+	slot["extra"] = extra ## geri katılana yakalama için (bkz. _on_peer_needs_game_catchup)
 	_slots[slot_i] = slot
 	NetworkManager.broadcast_world_event_started.rpc(slot["id"], MISSION_KIND_NAMES[slot["kind"]], slot.get("pos", Vector2.ZERO), slot["radius"], slot["timer"], extra)
 	NetworkManager.broadcast_world_event_progress.rpc(slot["id"], slot["progress"], slot["target"])

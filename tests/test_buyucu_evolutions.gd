@@ -132,8 +132,8 @@ func test_every_skill_use_surges_weapons() -> void:
 	add_child(spy)
 	_spawned.append(spy)
 	p.owned_weapon_nodes.append(spy)
-	p._skill_buyucu_switch_variation() ## Q da yetenek sayılır
-	assert(spy.calls == [p.BUYUCU_PASSIVE_SHOT_MULT], "Q (set değişimi) silahları ateşler: %s" % str(spy.calls))
+	p._skill_buyucu_switch_variation() ## Q pasifi TETİKLEMEZ (2026-10-04)
+	assert(spy.calls.is_empty(), "Q (set değişimi) silahları ateşlemez: %s" % str(spy.calls))
 	_make_enemy(Vector2(1100.0, 1000.0))
 	await get_tree().physics_frame
 	p._skill_buyucu_switch_variation() ## Set 1 (Arcane Lanet)
@@ -198,7 +198,9 @@ func test_q2_speed_q3_cooldowns_q4_cost() -> void:
 	var base_speed: float = p._evo_move_bonus()
 	_evo(p, ["buyucu_q2", "buyucu_q3"])
 	p._skill_buyucu_switch_variation()
-	assert(is_equal_approx(p._evo_move_bonus(), base_speed + 0.2), "her yetenekte +%20 hız")
+	assert(is_equal_approx(p._evo_move_bonus(), base_speed), "Q (set değişimi) hız bonusunu tetiklemez")
+	p._buyucu_on_skill_used("skill2", 0)
+	assert(is_equal_approx(p._evo_move_bonus(), base_speed + 0.2), "E/R kullanımında +%20 hız")
 	assert(is_equal_approx(float(p._skill_timing_for(3)["cooldown"]), 0.85), "Q bekleme -%15")
 	assert(is_equal_approx(float(p._skill2_timing_for(25)["cooldown"]), 120.0 * 0.85), "Meteor bekleme -%15")
 	## Tutumlu Büyü: E bedeli x0,75 (Hortum - hedef gerektirmez).
@@ -415,4 +417,36 @@ func test_skill_icon_enchant_glow_draws() -> void:
 	await get_tree().process_frame
 	assert(ic._enchant_glow == 1.0 and ic._enchant_glow_t > 0.0, "parıltı açık ve canlanıyor")
 	ic.set_enchant_glow(0.0)
+	_cleanup()
+
+
+# ------------------------------------------------------------------ pasif hissedilsin (2026-10-04)
+## "pasifin aktifleştiği hiç hissedilmiyor": mesafe silahın yerel biriminde verildiği için asalarda ekranda ~2 px kalıyordu, hedef
+## yokken de hiçbir görsel yoktu. Artık dünya biriminde ve hedefsiz de oynar.
+func test_passive_is_visible_even_without_target() -> void:
+	if get_tree().current_scene == null:
+		get_tree().current_scene = self
+	var p: Node = _make_player()
+	var w: Node2D = WeaponScene.instantiate()
+	p.add_child(w)
+	_spawned.append(w)
+	p.owned_weapon_nodes.append(w)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert(w.icon_sprite != null, "silahın ikonu var")
+	var start: Vector2 = w.icon_sprite.global_position
+	var max_move: float = 0.0
+	var wave_seen: bool = false
+	p._buyucu_on_skill_used("skill2", 0) ## hedef yok
+	for i in 12:
+		await get_tree().process_frame
+		max_move = maxf(max_move, w.icon_sprite.global_position.distance_to(start))
+		for c in p.get_children():
+			if str(c.name).contains("FxBuyucuSurgeWave") or c.get_script() != null and str(c.scene_file_path).contains("surge_wave"):
+				wave_seen = true
+	assert(max_move >= 15.0, "ikon dünya biriminde belirgin fırlar (>= 15 px), ölçülen: %.1f" % max_move)
+	assert(wave_seen, "karakterin ayağında mor dalga efekti çıkar")
+	assert(w._surge_pending_mult == 1.3, "güçlendirme bekler")
+	p.owned_weapon_nodes.erase(w)
+	await get_tree().create_timer(0.8).timeout
 	_cleanup()

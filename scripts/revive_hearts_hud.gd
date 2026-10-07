@@ -35,6 +35,10 @@ func _process(_delta: float) -> void:
 	if shown:
 		var secs: int = int(ceil(left))
 		var text: String = "%d:%02d" % [secs / 60, secs % 60]
+		## Yanında bekleyen arkadaşlar sayacı hızlandırıyor (bkz. GameManager.REVIVE_REGEN_ASSIST_BONUS): "x2.6" gibi.
+		var rate: float = GameManager.get_local_revive_regen_rate()
+		if rate > 1.01:
+			text += " x%.1f" % rate
 		if _regen_label.text != text:
 			_regen_label.text = text
 	## Dolum çizimi saniyede birkaç kez yenilensin yeter (her kare queue_redraw gereksiz).

@@ -68,7 +68,7 @@ func buy_item(key: String) -> bool:
 	menu.setup(dummy_player, 1)
 	
 	# Check title
-	assert(menu.title_label.text == "KADEME 3-4 SANDIK", "Expected KADEME 3-4 SANDIK for tier 1")
+	assert(menu.title_label.text == "KADEME III-IV SANDIK", "Expected KADEME III-IV SANDIK for tier 1")
 	
 	## Kullanıcı kararları: sandıktan 3 aday yerine TEK kart çıkar ve açılış animasyonu bitince (kapak patlayınca) sandığın içinden
 	## fırlar - setup sonrası kart alanı GİZLİ ve boş; kart _reveal_reward_card ile gelir. 2026-10-02'den beri sadece parça

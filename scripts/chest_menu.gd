@@ -10,6 +10,9 @@ var title_label: Label = null
 
 var _player: Node = null
 var _chest_tier: int = 0 ## "KADEME" - hangi dünya evresinden gelen sandık (bkz. CHEST_TITLES), eşya güç tier'ından AYRI bir kavram
+## Elit sandık (kullanıcı isteği 2026-10-07: "elit sandıklardan sadece epik item çıkacak çünkü efsunları kaldırmıştık"): havuz
+## sadece EPİK eşyalar (bkz. item_pool), kart epik çerçeveli, sandık/ışık elit görünümlü. Normal sandık: sadece parça.
+var _is_elite: bool = false
 ## Kullanıcı isteği: "4 lü tier sistemi bundan sonra sandıklara da geliyor,
 ## sandık gelince üç tane gelmek yerine 1 tane gelecek ve çıkan eşyanın
 ## tier'ı olacak" - bu, çekilen TEK eşyanın TierSystem tier'ı (1-4,
@@ -37,12 +40,12 @@ var _has_chosen: bool = false
 
 # Chest tier titles and borders
 const CHEST_TITLES := {
-	0: "KADEME 1-2 SANDIK",
-	1: "KADEME 3-4 SANDIK",
-	2: "KADEME 5-6 SANDIK",
-	3: "KADEME 7-8 SANDIK",
-	4: "KADEME 9-10 SANDIK",
-	5: "KADEME 11+ SANDIK"
+	0: "KADEME I-II SANDIK",
+	1: "KADEME III-IV SANDIK",
+	2: "KADEME V-VI SANDIK",
+	3: "KADEME VII-VIII SANDIK",
+	4: "KADEME IX-X SANDIK",
+	5: "KADEME XI+ SANDIK"
 }
 
 ## Kullanıcı isteği (2026-09-25): "sandık açarken daha iyi ve ödüllendirici heyecan uyandırıcı sandık açma animasyonu" -
@@ -147,12 +150,25 @@ func _enter_tree() -> void:
 	add_to_group(ReadingUiWatcher.GROUP)
 
 
-func setup(player: Node, chest_tier: int) -> void:
+## Elit sandığın kart çerçevesi: TierSystem 3 = "Epik" (Items.KADEME_EPIK ile aynı ad/renk).
+const ELITE_CARD_TIER := 3
+
+
+## Sandıktan çıkabilecek eşyalar: normal sandık = parçalar (1. kademe), elit sandık = epikler (2. kademe). Efsanevi hiçbir
+## sandıktan çıkmaz. Sadece destekçilere çıkan eşyalar (Items.is_support_only) char_id destekçi karakter değilse elenir.
+static func item_pool(elite: bool, char_id: int = -1) -> Array:
+	var kademe: int = Items.KADEME_EPIK if elite else Items.KADEME_PARCA
+	return Items.KEYS.filter(func(k) -> bool:
+		return Items.kademe(str(k)) == kademe and (not Items.is_support_only(str(k)) or Items.is_ally_support_char(char_id)))
+
+
+func setup(player: Node, chest_tier: int, elite: bool = false) -> void:
 	_player = player
 	_chest_tier = chest_tier
+	_is_elite = elite
 	_k = MobileUIScript.choice_card_scale(get_viewport(), CARD_SIZE, 1, 0.0)
 	## Bu sandığın yerden gelen altını (varsa) şimdi alınır: kartın üstünde yazar, kart inince oradan uçar.
-	_chest_gold = GameManager.pop_pending_chest_gold(false)
+	_chest_gold = GameManager.pop_pending_chest_gold(elite)
 
 	if not title_label:
 		title_label = get_node_or_null("CenterContainer/VBox/Title")
@@ -186,7 +202,7 @@ func setup(player: Node, chest_tier: int) -> void:
 
 	# Update Title
 	if title_label:
-		title_label.text = CHEST_TITLES.get(_chest_tier, "EŞYA SANDIĞI")
+		title_label.text = "ELİT SANDIK" if _is_elite else CHEST_TITLES.get(_chest_tier, "EŞYA SANDIĞI")
 
 	# Clear existing children just in case
 	if cards_container:
@@ -210,10 +226,10 @@ func setup(player: Node, chest_tier: int) -> void:
 	## 2026-10-02: ekstralar silindi (bkz. items.gd) - liste boşken sandık açılış animasyonunu oynatıp BOŞ çıkar
 	## (kullanıcı seçimi: "Boş açılsın"), bkz. _reveal_reward_card "empty" dalı.
 	## 2026-10-02 yeni eşya sistemi: sandıktan SADECE parça (1. kademe) çıkar, eski Tier1-4 güç çarpanı yok (kullanıcı
-	## seçimi) - kart çerçevesi parçanın kademesi (Tier 1 rengi).
-	var parts: Array = Items.KEYS.filter(func(k): return Items.kademe(str(k)) == Items.KADEME_PARCA)
+	## seçimi) - kart çerçevesi parçanın kademesi (Tier 1 rengi). 2026-10-07: ELİT sandıktan sadece EPİK çıkar (item_pool).
+	var parts: Array = item_pool(_is_elite, GameManager.selected_char_id)
 	var item_key: String = str(parts[randi() % parts.size()]) if not parts.is_empty() else ""
-	_reward_tier = 1
+	_reward_tier = ELITE_CARD_TIER if _is_elite else 1
 	var candidate: Dictionary = {"type": "item", "key": item_key} if item_key != "" else {"type": "empty"}
 
 	# Connect UI sounds
@@ -247,7 +263,9 @@ func _play_chest_open_sequence(candidate: Dictionary) -> void:
 
 	## Işığın rengi çıkacak eşyanın nadirliği (_reward_tier, setup'ta çekildi) - kart görünmeden önce ipucu.
 	var anim: Control = ChestOpenAnim.new()
-	anim.setup(false, _reward_tier)
+	anim.setup(_is_elite, _reward_tier)
+	## Kart paralardan SONRA çıkıyor: ödül çınlaması kapak patlayınca değil kart ekrana inip oturunca çalar (kullanıcı isteği 2026-10-08).
+	anim.chime_on_burst = false
 	_stage.add_child(anim)
 	var view: Vector2 = get_viewport().get_visible_rect().size
 	anim.size = anim.custom_minimum_size
@@ -266,12 +284,41 @@ func _play_chest_open_sequence(candidate: Dictionary) -> void:
 	pop_in.tween_property(anim, "scale", Vector2.ONE * _k, 0.3)
 	anim.burst.connect(func() -> void:
 		if is_instance_valid(self):
-			_reveal_reward_card(candidate)
+			_on_chest_burst(candidate, anim)
 	, CONNECT_ONE_SHOT)
+
+
+## Kapak patladığı an (kullanıcı isteği 2026-10-08: "sandık açma animasyonunda önce para animasyonu görünsün sonra item çıksın, tıpkı
+## item satarkenki sandıktan altın çıkma animasyonu gibi"): sandığın vereceği altın ÖNCE ağzından fışkırıp panele uçar, eşya kartı paraların
+## fırlaması bitince çıkar (uçuştaki son paralar kart çıkarken sürer). Altın yoksa (görev/debug sandığı) kart hemen çıkar; oyuncu animasyonu
+## atladıysa (tıklama/tuş) kısa bir an sonra.
+const CHEST_GOLD_CARD_DELAY := 0.2 ## son para fırladıktan sonra kartın çıkmasına kalan ek süre
+const CHEST_GOLD_CARD_DELAY_MAX := 1.0 ## büyük altında bile eşya en geç bu kadar sonra çıkar
+const CHEST_GOLD_SKIPPED_DELAY := 0.15
+
+
+static func chest_card_delay(gold: int, skipped: bool) -> float:
+	if gold <= 0:
+		return 0.0
+	if skipped:
+		return CHEST_GOLD_SKIPPED_DELAY
+	return minf(GoldRewardFx.burst_duration(gold) + CHEST_GOLD_CARD_DELAY, CHEST_GOLD_CARD_DELAY_MAX)
+
+
+func _on_chest_burst(candidate: Dictionary, anim: Control) -> void:
+	var delay: float = chest_card_delay(_chest_gold, bool(anim.get("skipped")))
+	if _chest_gold > 0:
+		_release_chest_gold(_chest_center, true)
+	if delay > 0.0:
+		await get_tree().create_timer(delay, true).timeout
+		if not is_instance_valid(self) or is_queued_for_deletion():
+			return
+	_reveal_reward_card(candidate)
 
 
 ## Sandığın ekrandaki ağzı - SAT altını buradan fışkırır (bkz. _on_sat_pressed). Animasyonsuz yolda ekranın ortası.
 var _chest_center: Vector2 = Vector2(960.0, 560.0)
+var _card_icon: TextureRect = null ## kartın eşya ikonu (SAT'ta parçalanır)
 
 
 func _make_layer(layer_name: String) -> Control:
@@ -315,17 +362,18 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 		if card_panel and is_instance_valid(_rays_layer):
 			_rays = RewardRays.new()
 			_rays_layer.add_child(_rays)
-			_rays.setup(card_panel, CARD_SIZE * _k, 3.0 * _k, tier, false)
+			_rays.setup(card_panel, CARD_SIZE * _k, 3.0 * _k, tier, _is_elite)
 		if card_panel:
 			## Sütunun tamamı uçar (kart + gizli butonlar); pivot kartın ortası.
 			var mouth: Vector2 = RewardReveal.chest_mouth(_chest_icon) if is_instance_valid(_chest_icon) else card_panel.get_global_rect().get_center()
-			RewardReveal.launch_sparks(_fx_layer, mouth, tier, false)
+			RewardReveal.launch_sparks(_fx_layer, mouth, tier, _is_elite)
 			var tw: Tween = RewardReveal.fly_out(self, column, mouth, 0.0, 0.08, card_panel.position + card_panel.size * 0.5)
 			tw.tween_callback(func() -> void:
 				if not is_instance_valid(card_panel):
 					return
 				var frame: TextureRect = card_panel.get_node_or_null("Frame") as TextureRect
-				RewardReveal.land_fx(self, card_panel, frame, tier, false, _fx_layer, _rays)
+				RewardReveal.land_fx(self, card_panel, frame, tier, _is_elite, _fx_layer, _rays)
+				ChestOpenAnim.play_reward_chime(get_tree(), tier, _is_elite)
 				TierCardFx.start_idle_shine(self, frame, tier, 1.2)
 				for b in buttons:
 					if is_instance_valid(b):
@@ -371,12 +419,13 @@ var _gold_badge: Control = null
 const GoldCoinFrames := preload("res://assets/pickups/gold/gold_coin_frames.tres")
 
 
-func _release_chest_gold(from_screen: Vector2) -> void:
+## from_chest: paralar sandığın ağzından (kapak patlayınca, bkz. _on_chest_burst); değilse (güvenlik ağları) kartın altın satırından.
+func _release_chest_gold(from_screen: Vector2, from_chest: bool = false) -> void:
 	if _chest_gold_released:
 		return
 	_chest_gold_released = true
 	if _chest_gold > 0:
-		if is_instance_valid(_gold_badge) and _gold_badge.is_inside_tree():
+		if not from_chest and is_instance_valid(_gold_badge) and _gold_badge.is_inside_tree():
 			from_screen = _gold_badge.get_global_transform_with_canvas() * (_gold_badge.size * 0.5)
 		GoldRewardFx.give_now_from_screen(get_tree(), _chest_gold, from_screen)
 
@@ -623,6 +672,7 @@ func _build_card(candidate: Dictionary) -> Control:
 	icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layout.add_child(icon_rect)
+	_card_icon = icon_rect ## SAT'ta bu ikon parçalanır (bkz. _on_sat_pressed)
 
 	# 4. Kurdele: tier adı (silahların tier'ı yok - "Silah").
 	var tier_lbl := Label.new()
@@ -824,7 +874,7 @@ func _on_al_pressed(candidate: Dictionary, item_cost: int, power_mult: float = 1
 		## shop_panel.gd _on_buy_copy ile AYNI sıra: önce deftere (owned_weapons)
 		## ekle, sonra gerçek silah node'unu spawn et - tek fark burada gold
 		## hiç harcanmıyor (sandık ödülü).
-		gm.owned_weapons.append({"key": item_key, "level": 1, "spent": 0})
+		gm.owned_weapons.append(EnchantDefs.new_weapon_entry(item_key, 1, 0))
 		if _player.has_method("buy_weapon_copy"):
 			_player.buy_weapon_copy(item_key, 1)
 		_close()
@@ -838,10 +888,17 @@ func _on_al_pressed(candidate: Dictionary, item_cost: int, power_mult: float = 1
 
 func _on_sat_pressed(_item_key: String, refund_amount: int) -> void:
 	_has_chosen = true
-	## Kullanıcı isteği (2026-10-02: "sandıktan paranın sandıktan para paneline doğru gitmesini istiyorum"): menü kapanınca
-	## sandığın durduğu yerde (ekranın ortası, bkz. _play_chest_open_sequence) açık sandık yeniden belirir, altınlar
-	## ağzından fışkırıp sol üstteki altın paneline uçar, sayaç yavaşça dolar (gold_reward_fx.gd - altını da o ekler).
-	GoldRewardFx.give_from_screen(get_tree(), refund_amount, _chest_center, &"chest")
+	## Kullanıcı isteği (2026-10-08): "item satınca itemin parçalanıp altına dönüşme animasyonu olsun, sandıktan altın çıkma yerine" -
+	## kartın üstündeki eşya ikonu parçalanır, parçalar altın paraya dönüp sol üstteki altın paneline uçar (gold_reward_fx.gd
+	## give_shattered - altını da o ekler; menü hemen kapanır, animasyon sahnede sürer). Ikon bulunamazsa (beklenmedik) eski sandık altını.
+	var icon: TextureRect = _card_icon if is_instance_valid(_card_icon) and _card_icon.texture != null and _card_icon.is_inside_tree() else null
+	if icon != null:
+		var xf: Transform2D = icon.get_global_transform_with_canvas()
+		var top_left: Vector2 = xf * Vector2.ZERO
+		var bottom_right: Vector2 = xf * icon.size
+		GoldRewardFx.give_shattered(get_tree(), refund_amount, (top_left + bottom_right) * 0.5, icon.texture, (bottom_right - top_left).abs())
+	else:
+		GoldRewardFx.give_from_screen(get_tree(), refund_amount, _chest_center, &"chest")
 	_spawn_gold_floating_text(refund_amount)
 	_close()
 

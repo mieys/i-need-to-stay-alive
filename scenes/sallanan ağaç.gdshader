@@ -11,6 +11,11 @@ shader_type canvas_item;
 //
 // Ağaç kimliği/kök/boy HÜCRE başına bir veri dokusundan okunur - scripts/tree_sway.gd oyun başında haritadaki gerçek
 // yerleşimden (atlasta komşu karo = aynı ağaç) hesaplar. Veri yoksa (editör önizlemesi) ağaç durur.
+//
+// ÖN KATMAN (on_katman = true, 2026-10-08): scripts/depth_occluders.gd bu katmanların bir kopyasını oyuncuların ÜSTÜNDE (z_index 2) çizer;
+// kopya SADECE kökü bir karakterin ayağından aşağıda (yani karakterin önünde) olan ağaç piksellerini ve sadece o karakterin gövde
+// dikdörtgeninin içinde bırakır - karakter ağacın arkasındayken ağaç onu örter (bkz. derinlik_on_katman.gdshader). Kopya AYNI köşe
+// kaydırmasını (sallanma) uyguladığı için asıl ağaçla birebir örtüşür.
 
 // ---------------- SALINIM
 uniform float strength : hint_range(0.0, 6.0) = 1.4;       // ağacın tepesinin en fazla kayması (texel) - rüzgarda tree_sway.gd büyütür
@@ -32,6 +37,13 @@ uniform vec2 veri_baslangic = vec2(0.0);
 uniform vec2 veri_boyut = vec2(1.0);
 uniform vec2 hucre_ofset = vec2(0.0);                       // hücre (0,0)'ın dünyadaki sol-üstü
 
+// ---------------- ÖN KATMAN (depth_occluders.gd yazar): karakterler[i] = (ayak x, ayak y, yarım genişlik, boy) - dünya px
+uniform bool on_katman = false;
+uniform int karakter_sayisi = 0;
+uniform vec4 karakterler[8];
+
+varying vec2 world_orijin; // köşenin sallanmadan ÖNCEki dünya konumu (ön katmanda hücreyi bulmak için)
+
 vec4 hucre_verisi(vec2 hucre) {
 	vec2 p = hucre - veri_baslangic;
 	if (p.x < 0.0 || p.y < 0.0 || p.x >= veri_boyut.x || p.y >= veri_boyut.y) {
@@ -41,6 +53,7 @@ vec4 hucre_verisi(vec2 hucre) {
 }
 
 void vertex() {
+	world_orijin = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
 	if (veri_var) {
 		vec2 dunya = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
 		// Bu köşe karonun hangi köşesi: dokudaki karo içi konum 0 (sol/üst) ya da 16 (sağ/alt).
@@ -73,5 +86,25 @@ void vertex() {
 			float sway = strength * genlik * (sin(t) * 0.7 + sin(t * 0.53 + faz * 5.0) * 0.3 + esinti);
 			VERTEX.x += sway * k;
 		}
+	}
+}
+
+void fragment() {
+	if (on_katman) {
+		vec2 hucre = floor((world_orijin - hucre_ofset) / 16.0);
+		vec4 v = hucre_verisi(hucre);
+		bool onde = false;
+		if (v.r > 0.5) {
+			float kok_y = hucre_ofset.y + hucre.y * 16.0 + v.r;
+			for (int i = 0; i < 8; i++) {
+				if (i >= karakter_sayisi) { break; }
+				vec4 c = karakterler[i];
+				if (kok_y > c.y && abs(world_orijin.x - c.x) <= c.z && world_orijin.y >= c.y - c.w && world_orijin.y <= c.y + 1.0) {
+					onde = true;
+					break;
+				}
+			}
+		}
+		if (!onde) { discard; }
 	}
 }

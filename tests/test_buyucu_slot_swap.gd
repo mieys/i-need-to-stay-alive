@@ -112,3 +112,27 @@ func test_hortum_casts_from_e_and_marks_e_active() -> void:
 		if is_instance_valid(t):
 			t.free()
 	_cleanup()
+
+
+## 2026-10-04 bildirimi: "2. fazdaki bir yetenek aktifken faz değiştirince 1. fazdakiler çalışmıyor" - gerçek tuş basışlarıyla
+## yetenekler çalışıyordu, ama hortum/meteor yaşarken faz değişince E/R butonu diğer varyasyonun "aktif" görselini taşıyordu.
+func test_active_look_follows_the_variation_in_the_slot() -> void:
+	var p: Node = _make_player()
+	p._skill_buyucu_switch_variation() ## Set 2: E = Hortum, R = Meteor
+	p._buyucu_try_activate_variation()
+	assert(p.is_skill2_active(), "Set 2: hortum varken E aktif görünür")
+	p._skill_buyucu_switch_variation() ## Set 1: E = Arcane Lanet
+	assert(not p.is_skill2_active(), "Set 1'e geçince E butonu (Arcane) hortumun aktif görselini taşımaz")
+	p._skill_buyucu_switch_variation()
+	assert(p.is_skill2_active(), "Set 2'ye dönünce hortum hâlâ yaşıyorsa E tekrar aktif görünür")
+	for t in p._buyucu_active_tornadoes:
+		if is_instance_valid(t):
+			t.free()
+	p._buyucu_active_tornadoes.clear()
+	p._skill_buyucu_meteor()
+	assert(p.is_skill3_active() and p.get_skill3_active_fraction() > 0.9, "Set 2: meteor kanalında R aktif")
+	p._skill_buyucu_switch_variation() ## Set 1: R = Don Nova
+	assert(not p.is_skill3_active() and p.get_skill3_active_fraction() == 0.0, "Set 1'de R (Don Nova) meteor kanalının aktif görselini taşımaz")
+	p._buyucu_meteor_channel_active = false
+	p.is_buyucu_channeling = false
+	_cleanup()

@@ -279,10 +279,70 @@ def frost_chill(key):
     save("frost_chill_%s_front" % key, front_frames, "loop", True, 8.0)
 
 
+# ====================================================================== pasif "Buyu Dalgasi" (her yetenekte)
+def surge_wave():
+    """Karakterin ayagindan disari yayilan mor buyu dalgasi (yassi elips, 8 kare): krem parlama -> kalin mor halka (dis kenar parlak,
+    sonda hilale asinip parcalanir) + halkadan firlayan kivilcimlar. Merkez = ayak noktasi; R_max 78 sanat px (~95 dunya birimi)."""
+    n = 8
+    W, H = 200, 110
+    cx, cy = W / 2, H / 2
+    sq = 0.42
+    frames = []
+    for i in range(n):
+        t = i / (n - 1)
+        cv = P.Canvas(W, H)
+        R = 10 + 68 * P.ease_out(min(1.0, t * 1.25))
+        if t < 0.2:
+            P.disc_flash(cv, cx, cy, 6 + 22 * t, core=P.CREAM, rim=ARC[4], squash=sq)
+        mult = None
+        if t > 0.5:
+            mult = P.break_mult(cv, cx, cy, sq, (t - 0.5) / 0.5, 11)
+        P.ring_band(cv, cx, cy, R, 9 - 4 * t, ARC, squash=sq, mult=mult)
+        P.ring_band(cv, cx, cy, R * 0.7, 5 - 2 * t, ARC, squash=sq, mult=mult, outline=False)
+        for q in range(10):
+            a = TAU * q / 10 + 0.3 + t * 1.4
+            d = R + 3 + 8 * t * (1 + (q % 3) * 0.3)
+            if t < 0.9:
+                P.star(cv, cx + math.cos(a) * d, cy + math.sin(a) * d * sq - 6 * t, 1 if q % 3 else 2,
+                       core=P.WHITE, arm=ARC[4] if q % 2 else ARC[3])
+        frames.append(cv)
+    save("buyucu_surge_wave", frames, "play", False, 18.0)
+
+
+def surge_spark():
+    """Silah ucunda guclenmis atis patlamasi (6 kare, 56x56): krem parlama diski + capraz isinlar + genisleyen halka + kivilcimlar."""
+    n = 6
+    W = H = 56
+    c = W / 2
+    frames = []
+    for i in range(n):
+        t = i / (n - 1)
+        cv = P.Canvas(W, H)
+        r = 4 + 14 * P.ease_out(t)
+        if t < 0.5:
+            P.disc_flash(cv, c, c, 7 - 9 * t, core=P.CREAM, rim=ARC[4])
+            L = int(10 * (1 - t))
+            for k in range(4):
+                a = k * math.pi / 2 + math.pi / 4
+                for d in range(3, 3 + L):
+                    cv.px(c + math.cos(a) * d, c + math.sin(a) * d, P.WHITE if d < 6 else ARC[4])
+        mult = None if t < 0.55 else P.break_mult(cv, c, c, 1.0, (t - 0.55) / 0.45, 5)
+        P.ring_band(cv, c, c, r, 5 - 3 * t, ARC, mult=mult)
+        for k in range(8):
+            a = TAU * k / 8 + 0.4
+            d = r + 2 + 6 * t
+            if t < 0.85:
+                cv.px(c + math.cos(a) * d, c + math.sin(a) * d, ARC[4] if k % 2 else P.WHITE)
+        frames.append(cv)
+    save("buyucu_surge_spark", frames, "play", False, 20.0)
+
+
 ALL = {
     "buyucu_crater": crater,
     "buyucu_levitate": levitate,
     "buyucu_enchant": enchant,
+    "buyucu_surge_wave": surge_wave,
+    "buyucu_surge_spark": surge_spark,
     "frost_chill_s": lambda: frost_chill("s"),
     "frost_chill_m": lambda: frost_chill("m"),
     "frost_chill_l": lambda: frost_chill("l"),

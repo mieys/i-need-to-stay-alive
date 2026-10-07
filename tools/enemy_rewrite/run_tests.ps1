@@ -19,7 +19,10 @@ $ran = 0; $failed = @(); $crashed = @()
 foreach ($f in $files) {
 	$env:TEST_FILE = "res://tests/$($f.Name)"
 	$o = Join-Path $tmp "out.txt"; $e = Join-Path $tmp "err.txt"
-	$p = Start-Process -FilePath $godot -ArgumentList @("--headless", "--path", "`"$proj`"", "-s", "res://tools/enemy_rewrite/run_tests.gd") -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+	## --log-file: testler kullanıcının oyun günlüklerini (%APPDATA%\Godot\app_userdata\<proje>\logs, son 10 dosya) döndürüp ezmesin
+	## (2026-10-06: ekransız test koşuları kullanıcının gerçek oyun günlüklerini silmişti).
+	$tlog = Join-Path $tmp "godot_test_run.log"
+	$p = Start-Process -FilePath $godot -ArgumentList @("--headless", "--path", "`"$proj`"", "--log-file", "`"$tlog`"", "-s", "res://tools/enemy_rewrite/run_tests.gd") -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
 	if (-not $p.WaitForExit($TimeoutSec * 1000)) { $p.Kill(); $crashed += "$($f.Name) (zaman aşımı)"; continue }
 	$lines = Get-Content $e -Encoding UTF8
 	$cur = ""; $done = $false; $bad = @{}

@@ -1,6 +1,8 @@
 extends Node2D
 class_name PaladinShatterFx
 
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
+
 var color_glass: Color = Color(0.35, 0.78, 1.0) # Radiant shield blue
 var color_accent: Color = Color(0.85, 0.96, 1.0) # Glowing white-blue
 var duration: float = 1.6
@@ -9,7 +11,12 @@ var elapsed: float = 0.0
 var shards: Array[Dictionary] = []
 var shockwaves: Array[Dictionary] = []
 
+func _shake() -> void:
+	CameraShakeScript.add_at(global_position, 0.5, 1100.0)
+
+
 func _ready() -> void:
+	call_deferred("_shake") ## kamera sarsıntısı (bkz. camera_shake.gd)
 	# Generate 45 glass shards flying out in a circular pattern (top-down view)
 	var count := 45
 	var radius_start := 126.0

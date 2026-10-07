@@ -37,6 +37,28 @@ const LIFESTEAL_EFFECTIVENESS := 0.33
 var game_time: float = 0.0
 var is_game_over: bool = false
 
+## KOŞU DURUMU (kullanıcı isteği 2026-10-05: zafer + sonsuz mod + koşu sonu istatistik/rekor). Hepsi koşu başında reset()'te sıfırlanır.
+## victory_reached / endless_*: NetworkManager.broadcast_victory / broadcast_endless_* RPC'leri HER peer'de set eder (karar host'ta,
+## bkz. enemy_spawner.gd). run_max_tier / run_kills: bu makinenin gördüğü en yüksek yaratık Kademesi (kademe bildirimi, bkz.
+## main.gd _on_creature_tier_reached) ve KENDİ öldürmeleri (player.gd on_enemy_killed*). run_clock_origin: tek oyunculuda Main
+## açıldığındaki game_time (karakter seçimi sırasında da aktığı için "Süre" oradan başlamasın; çok oyunculuda game_time zaten
+## _rpc_start_game'de sıfırlanıyor, origin 0 kalır).
+var victory_reached: bool = false
+var endless_active: bool = false
+var endless_layer: int = 0 ## 0 = sonsuz mod değil; 1.. = şu anki kat
+var run_max_tier: int = 1
+var run_kills: int = 0
+var run_clock_origin: float = 0.0
+## HOST DEVRİ (bkz. NetworkManager "HOST DEVRİ" bloğu): koşu SÜRÜYOR ama sahne yeniden kuruluyor - eski Main bu koşuyu "bitti" diye
+## kayda yazmasın (rekor/başarım çift sayılmasın). Yeni Main açılışında false'a döner (main.gd _ready).
+var run_record_suppressed: bool = false
+
+
+## Koşunun oyun saati (saniye): seyyar satıcı bölgesindeyken akmayan game_time'a göre.
+func run_elapsed() -> float:
+	return maxf(0.0, game_time - run_clock_origin)
+
+
 ## Debug modu (kullanıcı isteği, 2026-09-24): chate "baykusseverim" yazılınca (bkz. hud.gd
 ## _on_chat_input_submitted) YA DA ana menüden "Debug Modu" ile başlayınca (bkz. main_menu.gd)
 ## açılıyor - bkz. scripts/debug_menu.gd. Diğer sistemler (player.gd take_damage, enemy_spawner.gd
@@ -86,6 +108,20 @@ var selected_spiritual: String = ""
 var selected_start_weapon: String = ""
 
 var gold: int = 0
+
+## SİLAH PARÇACIĞI (kullanıcı isteği 2026-10-08): demirci dükkanında silah almak için gereken nadir kaynak (bkz. weapon_shop_logic.gd
+## SHARD_COST_*). Yaratıklardan %0.5, elitlerden 1, bosslardan 5 düşer ve biri aldığında HERKESE aynı miktar gider (bölünmez, bkz.
+## NetworkManager.host_award_weapon_shards / weapon_shard_drop.gd). Altın gibi KİŞİSEL: her oyuncunun kendi sayacı, sadece yerel
+## GameManager'da (dükkan harcaması ağa gitmez). Değişiklik sinyali HUD sayacını (bkz. hud.gd) ve dükkan ekranını günceller.
+signal weapon_shards_changed(total: int)
+var weapon_shards: int = 0
+
+
+func add_weapon_shards(amount: int) -> void:
+	if amount == 0:
+		return
+	weapon_shards = maxi(0, weapon_shards + amount)
+	weapon_shards_changed.emit(weapon_shards)
 ## Kullanıcı isteği: "altın toplayıcı ve madeni oyundan tamamen kaldır ve
 ## ekranın sağındaki arayüzlerini de sil" - eskiden burada mine_level/
 ## gold_collector_level ve ikisinin pasif altın üretimi duruyordu
@@ -193,7 +229,7 @@ func has_pending_chests() -> bool:
 
 ## Elit sandıklar (kullanıcı isteği 2026-09-25: "normal sandıklardan eşya elit sandıklardan efsun çıksın", "elit
 ## sandıklar ise paylaşılır"): normal sandıklarla AYNI kuyruk akışında açılır (main.gd _try_open_next_pending_chest -
-## önce normaller, sonra elitler), açılınca efsun ekranı gelir. Yerel/kişisel sayaç: paylaşım, sandık toplanınca host'ta
+## önce normaller, sonra elitler), açılınca epik eşya kartı gelir (2026-10-07; efsunlar kapalı). Yerel/kişisel sayaç: paylaşım, sandık toplanınca host'ta
 ## yapılır (NetworkManager.host_award_elite_chest HERKESİN sayacına ekler).
 var pending_elite_chests: int = 0
 
@@ -226,8 +262,9 @@ func pop_pending_chest_gold(elite: bool) -> int:
 
 
 ## ================================================================ EFSUN SİSTEMİ (2026-09-25)
-## Efsun ekranı artık SADECE elit sandıklardan gelir (bkz. yukarıdaki pending_elite_chests) - eski "her 5 levelde bir",
-## "boss ölünce herkese" ve "sandıkların %20'si" kuralları kaldırıldı (kullanıcı isteği 2026-09-25).
+## Efsun ekranı artık SADECE elit sandıklardan gelirdi (bkz. yukarıdaki pending_elite_chests) - eski "her 5 levelde bir",
+## "boss ölünce herkese" ve "sandıkların %20'si" kuralları kaldırıldı (kullanıcı isteği 2026-09-25). 2026-10-07: efsunlar
+## kapalı (EnchantDefs.enabled), elit sandık epik eşya veriyor - efsun ekranı yalnız debug menüsünden açılır.
 ## Bir silah kopyasının efsunu owned_weapons girdisinin "enchant" alanında: {"id", "steps": [kart gücü...], "askin"}.
 var enchant_banish_left: int = 3
 var enchant_banished: Array = [] ## "<slot>:<efsun id>" - o kopyanın havuzundan run boyunca çıkan Temel kartlar
@@ -291,6 +328,10 @@ func _ready() -> void:
 	var touch_scroll: Node = load("res://scripts/touch_scroll.gd").new()
 	touch_scroll.name = "TouchScroll"
 	add_child(touch_scroll)
+	## Takılma kaydedici: uzun kareleri user://hitch_log.txt'ye bağlamıyla yazar (bkz. hitch_log.gd). Başsız çalışmada kendini kapatır.
+	var hitch_log: Node = load("res://scripts/hitch_log.gd").new()
+	hitch_log.name = "HitchLog"
+	add_child(hitch_log)
 
 
 func _load_keybind_overrides() -> void:
@@ -658,6 +699,62 @@ const REVIVE_REGEN_SYNC_INTERVAL := 5.0 ## host, istemci aynasını bu aralıkla
 ## Anahtar -> kalan saniye (tek oyunculu: 0, çok oyunculu: peer_id). Host/tek oyunculuda gerçek sayaç, istemcide ayna.
 var _revive_regen_left: Dictionary = {}
 var _revive_regen_sync_timer: float = 0.0
+## YANINDA BEKLEYEN ARKADAŞ HIZLANDIRMASI (kullanıcı isteği 2026-10-08: "bir arkadaş öldüğünde ve hiç canı kalmadığında canının 5 dakikalık
+## bekleme süresi, yanında bulunan ve onu diriltmek için yanında bekleyen her arkadaş başına %80 hızlansın"): hakkı 0 olan oyuncu ölü/yerde
+## yatan durumdaysa ve cesedinin ETRAFINDA (diriltme kanalının menzilinde) hayatta, yerde yatmayan arkadaşlar varsa sayaç her arkadaş için
+## +%80 hızlı akar: hız = 1 + 0.8 x arkadaş sayısı (TOPLAMSAL: 1 arkadaş 1,8x, 2 arkadaş 2,6x, 3 arkadaş 3,4x). Hakkı olan ya da hâlâ
+## yaşayan oyuncuda etkisiz (sayaç zaten sadece hak 0'ken işler). Menzil player.gd REVIVE_RANGE ile AYNI (testle eşitliği doğrulanır).
+const REVIVE_REGEN_ASSIST_BONUS := 0.8
+const REVIVE_REGEN_ASSIST_RANGE := 90.0
+const REVIVE_REGEN_ASSIST_CHECK_INTERVAL := 0.25 ## host: yakındaki arkadaş sayısı bu aralıkla yeniden sayılır
+var _revive_regen_assist: Dictionary = {} ## host: peer_id -> yanında bekleyen arkadaş sayısı
+var _revive_regen_rate: Dictionary = {} ## peer_id -> sayaç hızı (host: hesaplanan, istemci: host'tan gelen ayna)
+var _revive_regen_rate_sent: Dictionary = {} ## host: istemcilere son bildirilen hız
+var _revive_assist_timer: float = 0.0
+
+
+static func revive_regen_rate(assist_count: int) -> float:
+	return 1.0 + REVIVE_REGEN_ASSIST_BONUS * float(maxi(0, assist_count))
+
+
+## peer_id'nin oyuncu düğümü: yerel Player ya da peer_id'li RemotePlayer (ceset sahnede KALIR, bkz. remote_player.gd _play_death_animation).
+func _player_node_for_peer(peer_id: int) -> Node2D:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	if peer_id == my_id:
+		return tree.get_first_node_in_group("player") as Node2D
+	for rp: Node in tree.get_nodes_in_group("remote_players"):
+		if is_instance_valid(rp) and int(rp.get("peer_id")) == peer_id:
+			return rp as Node2D
+	return null
+
+
+## Host: peer_id ölü/yerde yatıyorsa cesedinin menzilindeki hayatta (ölü ve yerde yatan DEĞİL) arkadaş sayısı; yaşıyorsa 0.
+func revive_assist_count(peer_id: int) -> int:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	var corpse: Node2D = _player_node_for_peer(peer_id)
+	if tree == null or corpse == null or not is_instance_valid(corpse):
+		return 0
+	if corpse.get("is_dead") != true and corpse.get("is_downed") != true:
+		return 0
+	var anchor: Vector2 = corpse.global_position
+	if corpse.has_method("_revive_anchor_position"):
+		anchor = corpse.call("_revive_anchor_position") ## Hadime hayaleti: ceset
+	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	var count: int = 0
+	var candidates: Array = tree.get_nodes_in_group("remote_players").duplicate()
+	if peer_id != my_id:
+		candidates.append(tree.get_first_node_in_group("player"))
+	for n in candidates:
+		if n == null or not is_instance_valid(n) or n == corpse or not (n is Node2D):
+			continue
+		if n.get("is_dead") == true or n.get("is_downed") == true:
+			continue
+		if (n as Node2D).global_position.distance_to(anchor) <= REVIVE_REGEN_ASSIST_RANGE:
+			count += 1
+	return count
 
 
 func _process_revive_regen(delta: float) -> void:
@@ -674,39 +771,58 @@ func _process_revive_regen(delta: float) -> void:
 			_revive_regen_left[0] = left
 		return
 	if not NetworkManager.is_host:
-		## İstemci aynası: sadece HUD göstergesi için geri sayar; hakkı host verir (sync_revive_consumed).
+		## İstemci aynası: sadece HUD göstergesi için geri sayar (host'un bildirdiği hızla); hakkı host verir (sync_revive_consumed).
 		for key in _revive_regen_left.keys():
-			_revive_regen_left[key] = maxf(0.0, float(_revive_regen_left[key]) - delta)
+			_revive_regen_left[key] = maxf(0.0, float(_revive_regen_left[key]) - delta * float(_revive_regen_rate.get(key, 1.0)))
 		return
 	_revive_regen_sync_timer -= delta
 	var periodic_sync: bool = _revive_regen_sync_timer <= 0.0
 	if periodic_sync:
 		_revive_regen_sync_timer = REVIVE_REGEN_SYNC_INTERVAL
+	_revive_assist_timer -= delta
+	var recount_assist: bool = _revive_assist_timer <= 0.0
+	if recount_assist:
+		_revive_assist_timer = REVIVE_REGEN_ASSIST_CHECK_INTERVAL
 	for peer_id in NetworkManager.lobby_players.keys():
 		if get_peer_revives(peer_id) > 0:
 			if _revive_regen_left.has(peer_id):
 				_revive_regen_left.erase(peer_id)
+				_revive_regen_assist.erase(peer_id)
+				_revive_regen_rate.erase(peer_id)
+				_revive_regen_rate_sent.erase(peer_id)
 				NetworkManager.sync_revive_regen.rpc(peer_id, -1.0)
 			continue
 		var started: bool = not _revive_regen_left.has(peer_id)
-		var left: float = float(_revive_regen_left.get(peer_id, REVIVE_REGEN_INTERVAL)) - delta
+		if recount_assist or started:
+			_revive_regen_assist[peer_id] = revive_assist_count(int(peer_id))
+		var rate: float = revive_regen_rate(int(_revive_regen_assist.get(peer_id, 0)))
+		_revive_regen_rate[peer_id] = rate
+		var left: float = float(_revive_regen_left.get(peer_id, REVIVE_REGEN_INTERVAL)) - delta * rate
 		if left <= 0.0:
 			_revive_regen_left.erase(peer_id)
+			_revive_regen_assist.erase(peer_id)
+			_revive_regen_rate.erase(peer_id)
+			_revive_regen_rate_sent.erase(peer_id)
 			peer_revives[peer_id] = 1
 			NetworkManager.sync_revive_consumed.rpc(peer_id, 1)
 			NetworkManager.sync_revive_regen.rpc(peer_id, -1.0)
 			continue
 		_revive_regen_left[peer_id] = left
-		if started or periodic_sync:
-			NetworkManager.sync_revive_regen.rpc(peer_id, left)
+		## Hız değişince (arkadaş geldi/gitti) hemen bildir ki istemcideki geri sayım doğru hızda aksın.
+		var rate_changed: bool = absf(float(_revive_regen_rate_sent.get(peer_id, 1.0)) - rate) > 0.001
+		if started or periodic_sync or rate_changed:
+			_revive_regen_rate_sent[peer_id] = rate
+			NetworkManager.sync_revive_regen.rpc(peer_id, left, rate)
 
 
-## İstemcide host'tan gelen kalan süre (bkz. NetworkManager.sync_revive_regen); seconds_left < 0 = sayaç yok.
-func apply_revive_regen_sync(peer_id: int, seconds_left: float) -> void:
+## İstemcide host'tan gelen kalan süre (bkz. NetworkManager.sync_revive_regen); seconds_left < 0 = sayaç yok. rate: sayaç hızı (1 = normal).
+func apply_revive_regen_sync(peer_id: int, seconds_left: float, rate: float = 1.0) -> void:
 	if seconds_left < 0.0:
 		_revive_regen_left.erase(peer_id)
+		_revive_regen_rate.erase(peer_id)
 	else:
 		_revive_regen_left[peer_id] = seconds_left
+		_revive_regen_rate[peer_id] = maxf(rate, 0.0)
 
 
 ## Bu istemcinin KENDİ kalbinin yenilenmesine kalan saniye; sayaç yoksa -1 (HUD, revive_hearts_hud.gd okur).
@@ -715,6 +831,14 @@ func get_local_revive_regen_left() -> float:
 	if NetworkManager.is_multiplayer_active:
 		key = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	return float(_revive_regen_left.get(key, -1.0))
+
+
+## Bu istemcinin kalbinin sayacı şu an kaç kat hızlı akıyor (yanında bekleyen arkadaşlar; 1 = normal). HUD "x2.6" yazar.
+func get_local_revive_regen_rate() -> float:
+	var key: int = 0
+	if NetworkManager.is_multiplayer_active:
+		key = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	return float(_revive_regen_rate.get(key, 1.0))
 
 
 ## Ortak Takım Seviyesi ve EXP Havuzu (Multiplayer & Tek Oyunculu)
@@ -870,6 +994,7 @@ func set_team_xp_state(new_xp: float, new_needed: float, new_level: int) -> void
 ## karolarına karşı. Bu yöntem TileSet'e hiç dokunmadığı için harita Tiled'da
 ## yeniden düzenlenip bake edildiğinde OTOMATİK olarak güncel kalır (ekstra
 ## bir post-bake düzeltmesi gerekmez, animation_columns/ekstra 2 gibi).
+const TerrainCollisionScript := preload("res://scripts/terrain_collision.gd")
 var _terrain_su_layer: TileMapLayer = null
 var _terrain_ev_layer: TileMapLayer = null
 var _terrain_forest_layer: TileMapLayer = null
@@ -977,12 +1102,26 @@ func is_position_blocked_by_forest(world_pos: Vector2) -> bool:
 	return forest.get_cell_source_id(cell) != -1
 
 
+## HAREKET engeli (kullanıcı isteği 2026-10-08, "collision herşey için"): orman duvarı VEYA terrain_collision.gd'nin hesapladığı su / bina tabanı / ağaç
+## gövdesi / maden / düşman üssü ayak izi. Oyuncu, evcil hayvanlar/çağrılanlar, görev kopyaları, ışınlanma/atılış noktaları bunu kullanır (yaratıklar C++
+## EnemyWorld'de aynı hücre kümesiyle). Mermi, görüş, duvara çarptırma ve yetenek menzili BİLEREK SADECE orman duvarı (is_position_blocked_by_forest):
+## ağaç/ev/su ateşi ve görüşü kesmez.
+func is_position_blocked_by_walls(world_pos: Vector2) -> bool:
+	if is_position_blocked_by_forest(world_pos):
+		return true
+	var forest: TileMapLayer = get_forest_layer()
+	return forest != null and TerrainCollisionScript.is_blocked(forest, world_pos)
+
+
 ## world_pos'ta (Harita/Su/Su, Harita/ev/Ev ya da orman katmanında) bir karo
 ## varsa true döner - "su", "ev" (dış bina) ya da orman duvarı alanına
 ## giriliyor demektir. Ana harita sahnede yoksa (ör. ana menü, ev içi ayrı
 ## bir bake) her zaman false. Spawner/satıcı yerleşimi/pet'ler bunu kullanır.
 func is_position_blocked_by_terrain(world_pos: Vector2) -> bool:
 	_find_terrain_layers()
+	## 2026-10-08: su / bina tabanı / ağaç gövdesi / maden ayak izleri de engel (bkz. terrain_collision.gd).
+	if is_instance_valid(_terrain_forest_layer) and TerrainCollisionScript.is_blocked(_terrain_forest_layer, world_pos):
+		return true
 	if is_instance_valid(_terrain_su_layer):
 		var cell: Vector2i = _terrain_su_layer.local_to_map(_terrain_su_layer.to_local(world_pos))
 		if _terrain_su_layer.get_cell_source_id(cell) != -1:
@@ -1044,16 +1183,61 @@ func is_any_blocking_panel_open() -> bool:
 	return false
 
 
+## Geri katılım (2026-10-04): bu oyuncunun KOŞU durumunun (reset()'in sıfırladığı kişisel kısım) kopyası / geri yüklenmesi.
+## Takım seviyesi/XP buraya dahil DEĞİL (takım ortak, host'tan gelir - bkz. NetworkManager._apply_rejoin_game_state).
+func capture_run_state() -> Dictionary:
+	return {
+		"gold": gold, "weapon_shards": weapon_shards, "spray_level": spray_level, "shield_standart_level": shield_standart_level,
+		"shield_enchant": shield_enchant, "shield_enchant_ups": shield_enchant_ups.duplicate(true),
+		"owned_weapons": owned_weapons.duplicate(true), "owned_items": owned_items.duplicate(true),
+		"enchant_banish_left": enchant_banish_left, "enchant_banished": enchant_banished.duplicate(true),
+		"enchant_reaction_power": enchant_reaction_power, "enchant_damage_percent": enchant_damage_percent,
+		"run_kills": run_kills, ## geri katılan "Öldürme" sütununda sıfırdan başlamasın (bkz. NetworkManager.rejoin_snapshot_signature: imzaya girmez)
+	}
+
+
+func restore_run_state(state: Dictionary) -> void:
+	if state.is_empty():
+		return
+	gold = int(state.get("gold", gold))
+	weapon_shards = int(state.get("weapon_shards", weapon_shards))
+	spray_level = int(state.get("spray_level", spray_level))
+	shield_standart_level = int(state.get("shield_standart_level", shield_standart_level))
+	shield_enchant = str(state.get("shield_enchant", shield_enchant))
+	shield_enchant_ups = (state.get("shield_enchant_ups", []) as Array).duplicate(true)
+	owned_weapons = (state.get("owned_weapons", []) as Array).duplicate(true)
+	owned_items = (state.get("owned_items", []) as Array).duplicate(true)
+	enchant_banish_left = int(state.get("enchant_banish_left", enchant_banish_left))
+	enchant_banished = (state.get("enchant_banished", []) as Array).duplicate(true)
+	enchant_reaction_power = float(state.get("enchant_reaction_power", enchant_reaction_power))
+	enchant_damage_percent = float(state.get("enchant_damage_percent", enchant_damage_percent))
+	run_kills = int(state.get("run_kills", run_kills))
+
+
+## reset() koşunun durumunu silmeden HEMEN önce yayınlanır: açık Main koşu sonu toplamlarını (süre/öldürme/koşu sayısı) yazabilsin.
+## Yeniden başlatma yolları (pause_menu _on_restart, çok oyunculu _rpc_start_game) reset()'i sahne değişmeden ÖNCE çağırıyor; Main'in
+## _exit_tree'si çalıştığında süre/öldürme zaten sıfırdı ve o koşu kayda geçmiyordu (2026-10-05).
+signal run_about_to_reset
+
+
 func reset() -> void:
+	run_about_to_reset.emit()
 	_blocking_panels.clear()
 	_terrain_su_layer = null
 	_terrain_ev_layer = null
 	_terrain_forest_layer = null
 	_terrain_layers_searched = false
+	TerrainCollisionScript.reset()
 	_map_world_rect = Rect2()
 	_map_world_rect_searched = false
 	game_time = 0.0
 	is_game_over = false
+	victory_reached = false
+	endless_active = false
+	endless_layer = 0
+	run_max_tier = 1
+	run_kills = 0
+	run_clock_origin = 0.0
 	## Önceki oyundan kalma bir seyyar satıcı bölgesi yeni oyuna sızmasın.
 	merchant_zone_active = false
 	merchant_zone_pos = Vector2.ZERO
@@ -1065,9 +1249,14 @@ func reset() -> void:
 	revives_remaining = max_revives
 	peer_revives.clear()
 	_revive_regen_left.clear()
+	_revive_regen_assist.clear()
+	_revive_regen_rate.clear()
+	_revive_regen_rate_sent.clear()
+	_revive_assist_timer = 0.0
 	_revive_regen_sync_timer = 0.0
 	revives_updated.emit(revives_remaining)
 	gold = 0
+	weapon_shards = 0
 	spray_level = 0
 	## Kullanıcı isteği: "kimsenin başlangıç kalkanı yok" - bkz. yukarıdaki
 	## var bildirimi üzerindeki AYNI yorum.

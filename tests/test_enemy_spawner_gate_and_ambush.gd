@@ -29,6 +29,13 @@ class FakeEnemy extends Node2D:
 	var is_dead: bool = false
 
 
+## Kapı hızlandırmasını (enemy.gd set_gate_rush) taklit eden sağ kalan yaratık.
+class FakeRusher extends FakeEnemy:
+	var gate_rush_mult: float = 1.0
+	func set_gate_rush(mult: float) -> void:
+		gate_rush_mult = mult
+
+
 var _made: Array[Node] = []
 
 
@@ -195,6 +202,66 @@ func test_gate_opens_after_the_wait_limit_even_if_a_survivor_never_dies() -> voi
 	_cleanup()
 
 
+## 2026-10-06 KULLANICI BİLDİRİMİ: "kademe aralarında yaratıklar bi anda gelmemeye başlıyor" - kapıyı tutanlar görüş dışında yavaş yürüyen
+## eski yaratıklardı. Kapı kısa bir süre bekledikten sonra SADECE görüş elipsi dışındaki kapı tutucular hızlanır.
+func _rusher(spawn_tier: int, pos: Vector2) -> FakeRusher:
+	var e := FakeRusher.new()
+	e.add_to_group("enemies")
+	e.set_meta("spawn_tier", spawn_tier)
+	add_child(e)
+	e.global_position = pos
+	return _track(e) as FakeRusher
+
+
+func test_gate_rush_speeds_up_only_out_of_sight_gate_holders_after_a_short_wait() -> void:
+	var sp: Node = _spawner()
+	var p: Vector2 = Vector2(500.0, 500.0)
+	_player(p)
+	GameManager.game_time = TIER_SECONDS * 2.0 + 5.0 ## zaman kademesi 3
+	sp._spawn_tier = 1
+	var unseen: FakeRusher = _rusher(1, p + Vector2(600.0, 0.0)) ## görüş (250x350) dışında, kapıyı tutar
+	var seen: FakeRusher = _rusher(2, p + Vector2(100.0, 0.0)) ## görüş içinde
+	var far: FakeRusher = _rusher(1, p + Vector2(sp.GATE_SURVIVOR_RADIUS + 400.0, 0.0)) ## kapıyı tutmaz
+	var boss: FakeRusher = _rusher(1, p + Vector2(700.0, 0.0))
+	boss.add_to_group("boss")
+	sp._spawn_regular_enemy() ## kapı beklemeye başlar
+	assert(sp._gate_wait_started_msec > 0 and sp._spawn_tier == 1, "kapı bekliyor olmalı")
+	sp._gate_rush_tick()
+	assert(is_equal_approx(unseen.gate_rush_mult, 1.0), "bekleme GATE_RUSH_DELAY_MSEC'ten kısaysa hızlanma yok")
+	sp._gate_wait_started_msec = Time.get_ticks_msec() - sp.GATE_RUSH_DELAY_MSEC - 10
+	sp._gate_rush_tick()
+	assert(is_equal_approx(unseen.gate_rush_mult, sp.GATE_RUSH_SPEED_MULT), "görüş dışındaki kapı tutucu hızlanmalı: %s" % unseen.gate_rush_mult)
+	assert(is_equal_approx(seen.gate_rush_mult, 1.0), "görüşteki yaratık normal hızda kalmalı")
+	assert(is_equal_approx(far.gate_rush_mult, 1.0), "kapıyı tutmayan uzaktaki yaratık hızlanmamalı")
+	assert(is_equal_approx(boss.gate_rush_mult, 1.0), "boss hızlanmamalı")
+	## Görüşe girince normal hıza döner (oyuncu hızlanmış yaratık görmez).
+	unseen.global_position = p + Vector2(120.0, 0.0)
+	sp._gate_rush_tick()
+	assert(is_equal_approx(unseen.gate_rush_mult, 1.0), "görüşe giren yaratık normal hıza dönmeli")
+	## Kapı açılınca (ya da zaman aşımında) hızlanan herkes sıfırlanır.
+	unseen.global_position = p + Vector2(600.0, 0.0)
+	sp._gate_rush_tick()
+	assert(is_equal_approx(unseen.gate_rush_mult, sp.GATE_RUSH_SPEED_MULT) and sp._gate_rush_active, "tekrar görüş dışında -> yine hızlanır")
+	sp._gate_wait_started_msec = 0
+	sp._gate_rush_tick()
+	assert(is_equal_approx(unseen.gate_rush_mult, 1.0) and not sp._gate_rush_active, "bekleme bitince hız sıfırlanmalı")
+	_cleanup()
+
+
+## enemy.gd: çarpan saklanır, aynı değer tekrar verilince bir şey yapmaz, kayıtsız (EnemyWorld'e bağlı olmayan) yaratıkta hata vermez.
+func test_enemy_gate_rush_multiplier_is_stored_and_idempotent() -> void:
+	var rat: Node = RatScene.instantiate()
+	add_child(rat)
+	_track(rat)
+	assert(is_equal_approx(float(rat.get("gate_rush_mult")), 1.0), "varsayılan çarpan 1")
+	rat.set_gate_rush(3.0)
+	assert(is_equal_approx(float(rat.get("gate_rush_mult")), 3.0))
+	rat.set_gate_rush(3.0)
+	rat.set_gate_rush(1.0)
+	assert(is_equal_approx(float(rat.get("gate_rush_mult")), 1.0), "sıfırlanabilmeli")
+	_cleanup()
+
+
 ## ---------------------------------------------------------------- 2) boss -%20, normal -%10
 ## Sonraki tur (kullanıcı isteği: "Bossların canını %15 kalkanını %10 azalt") bu testteki hedefleri güncelledi:
 ## OLD_* = %20 turundan ÖNCEKİ değerler; şimdiki = OLD x 0.8 (dördüncü tur) x 0.85 can, kalkan x 0.8 x 0.9.
@@ -218,9 +285,11 @@ func test_boss_health_and_shield_are_exactly_twenty_percent_lower() -> void:
 	var mult: Dictionary = SpawnerScript.FAMILY_MULT.get(family, {"hp": 1.0, "dmg": 1.0})
 	var raw: float = (10.0 + 3.0 * 9.0) * float(mult["hp"])
 	var expected_old_health: float = raw * OLD_BOSS_HEALTH_MULT * SpawnerScript.GLOBAL_DEFENSE_BUFF * OLD_HEALTH_SHIELD_MULT
-	assert(absf(float(boss.max_health) - expected_old_health * 0.8 * 0.85 * 0.85 * SpawnerScript.BOSS_CUT_2026_09_25B * SpawnerScript.DURABILITY_CUT_2026_09_26) < 0.01,
-		"Boss canı eski değerin x0.8 x0.85 (x0.85 2026-09-25)'i olmalı: %s (eski %s)" % [boss.max_health, expected_old_health])
-	assert(absf(float(boss.item_shield_max) - expected_old_health * 1.3 * 0.8 * 0.9 * 0.85 * SpawnerScript.BOSS_CUT_2026_09_25B * SpawnerScript.DURABILITY_CUT_2026_09_26) < 0.01,
+	## 2026-10-06 (Kademe 3 denge turu): Kademe 3 bossu ayrıca BOSS_PACING can çarpanıyla (x0.6) ölçeklenir.
+	var pace: float = SpawnerScript.boss_health_pacing(3) * SpawnerScript.late_durability_mult(3) ## 2026-10-06: BOSS_PACING + Kademe 3+ x0.9
+	assert(absf(float(boss.max_health) - expected_old_health * 0.8 * 0.85 * 0.85 * SpawnerScript.BOSS_CUT_2026_09_25B * SpawnerScript.DURABILITY_CUT_2026_09_26 * pace) < 0.01,
+		"Boss canı eski değerin x0.8 x0.85 (x0.85 2026-09-25) x pacing'i olmalı: %s (eski %s)" % [boss.max_health, expected_old_health])
+	assert(absf(float(boss.item_shield_max) - expected_old_health * 1.3 * 0.8 * 0.9 * 0.85 * SpawnerScript.BOSS_CUT_2026_09_25B * SpawnerScript.DURABILITY_CUT_2026_09_26 * pace) < 0.01,
 		"Boss kalkanı eski (x0.8'lik) kalkanın TAM %%90'ı olmalı: %s" % boss.item_shield_max)
 	assert(absf(float(boss.item_shield_max) / float(boss.max_health) - 1.3 * 0.9 / 0.85) < 0.001, "Boss kalkan/can oranı 1.3x0.9/0.85 olmalı")
 	_cleanup()
@@ -236,20 +305,23 @@ func test_regular_creature_health_and_shield_are_ten_percent_lower() -> void:
 	enemy.max_health = 100.0
 	enemy.item_shield_max = 100.0
 	enemy.item_shield_hp = 100.0
-	enemy.set("_current_tier", 5) ## Kademe 1-2 ek kesintisi (EARLY_TIER_DURABILITY_CUT) bu testin konusu değil
+	enemy.set("_current_tier", 6) ## Kademe 1-5 ek kesintisi (EARLY_TIER_DURABILITY_CUT + 3-5 yumuşatması) bu testin konusu değil
 	sp._apply_global_buff(enemy)
 	var old_health: float = 100.0 * SpawnerScript.GLOBAL_DEFENSE_BUFF * OLD_HEALTH_SHIELD_MULT
-	assert(absf(float(enemy.max_health) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26) < 0.01, "Normal yaratığın canı eskisinin %%90'ı (x0.85) olmalı: %s (eski %s)" % [enemy.max_health, old_health])
-	assert(absf(float(enemy.item_shield_max) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26) < 0.01, "Normal yaratığın kalkanı eskisinin %%90'ı (x0.85) olmalı: %s" % enemy.item_shield_max)
+	## 2026-10-06: Kademe 3+ ayrıca can/kalkan x0.9 (late_durability_mult).
+	var late: float = SpawnerScript.late_durability_mult(6)
+	assert(absf(float(enemy.max_health) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26 * late) < 0.01, "Normal yaratığın canı eskisinin %%90'ı (x0.85) olmalı: %s (eski %s)" % [enemy.max_health, old_health])
+	assert(absf(float(enemy.item_shield_max) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26 * late) < 0.01, "Normal yaratığın kalkanı eskisinin %%90'ı (x0.85) olmalı: %s" % enemy.item_shield_max)
 	_cleanup()
 
 
-## 2026-09-26: "ilk 2 kademedeki yaratıkların canlarını ve kalkanlarını %20 azalt" - Kademe 1-2 ek x0.8, Kademe 3+ etkilenmez.
+## 2026-09-26: "ilk 2 kademedeki yaratıkların canlarını ve kalkanlarını %20 azalt" - Kademe 1-2 ek x0.8, Kademe 6+ etkilenmez.
+## (2026-10-06: Kademe 3-5'te kesinti artık kademeli kalkıyor - EARLY_CUT_TAPER, bkz. test_tier_pacing; bu yüzden karşılaştırma Kademe 6'ya.)
 func test_first_two_tiers_are_twenty_percent_weaker() -> void:
 	assert(is_equal_approx(SpawnerScript.EARLY_TIER_DURABILITY_CUT, 0.8) and SpawnerScript.EARLY_TIER_MAX == 2)
 	var sp: Node = _spawner()
 	var results: Dictionary = {}
-	for tier in [1, 2, 3]:
+	for tier in [1, 2, 6]:
 		var enemy: Node = RatScene.instantiate()
 		add_child(enemy)
 		_track(enemy)
@@ -259,9 +331,11 @@ func test_first_two_tiers_are_twenty_percent_weaker() -> void:
 		enemy.set("_current_tier", tier)
 		sp._apply_global_buff(enemy)
 		results[tier] = [float(enemy.max_health), float(enemy.item_shield_max)]
+	## Kademe 6 değeri Kademe 3+ x0.9'u (late_durability_mult) içerir; 1-2'nin x0.8'i o çarpan HARİÇ Kademe 6'ya göre.
+	var late6: float = SpawnerScript.late_durability_mult(6)
 	for tier in [1, 2]:
-		assert(absf(results[tier][0] - results[3][0] * 0.8) < 0.01, "Kademe %d canı Kademe 3'ün %%80'i olmalı: %s" % [tier, results[tier]])
-		assert(absf(results[tier][1] - results[3][1] * 0.8) < 0.01, "Kademe %d kalkanı Kademe 3'ün %%80'i olmalı: %s" % [tier, results[tier]])
+		assert(absf(results[tier][0] - results[6][0] / late6 * 0.8) < 0.01, "Kademe %d canı Kademe 6'nın %%80'i olmalı: %s" % [tier, results[tier]])
+		assert(absf(results[tier][1] - results[6][1] / late6 * 0.8) < 0.01, "Kademe %d kalkanı Kademe 6'nın %%80'i olmalı: %s" % [tier, results[tier]])
 	_cleanup()
 
 
@@ -271,7 +345,7 @@ func test_spawn_interval_is_one_and_a_half_times_faster() -> void:
 	GameManager.game_time = 0.0
 	assert(absf(sp._current_interval() - (sp.base_interval / 1.5)) < 0.0001,
 		"Başta aralık eskisinin 1/1.5'i olmalı: %s" % sp._current_interval())
-	GameManager.game_time = 1000.0 ## tavan (min_interval) bölgesi
+	GameManager.game_time = 2000.0 ## tavan (min_interval) bölgesi (2026-10-06: doğuş artışı yavaşladı - difficulty_ramp 0.0006, tavana ~1230 sn'de varılır)
 	assert(absf(sp._current_interval() - (sp.min_interval / 1.5)) < 0.0001,
 		"Geç oyunda aralık min_interval/1.5 olmalı: %s" % sp._current_interval())
 	_cleanup()

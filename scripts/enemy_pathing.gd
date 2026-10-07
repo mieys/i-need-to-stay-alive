@@ -28,9 +28,9 @@ extends RefCounted
 ##  - Yaratık zaten duvar hücresinin İÇİNDEYSE yol aranmaz (enemy.gd/player.gd'deki
 ##    "içerideyse engelleme atlanır" güvenlik ağıyla tutarlı).
 ##
-## Su/ev bilerek DAHİL DEĞİL: onlar şu an yaratıklar için geçilebilir (bkz.
-## enemy.gd _block_movement_into_terrain). Onlar yeniden kapatılırsa _build içindeki
-## engel kümesine eklenmesi yeterli.
+## Engel kümesi (2026-10-08, kullanıcı: "collision shapeleri herşey için yeniden hesapla"): orman duvarı + terrain_collision.gd'nin hesapladığı su / bina
+## tabanı / ağaç gövdesi / maden / düşman üssü hücreleri (_blocked: hareket + yol bulma). SADECE orman ayrıca `_fog_blocked`'ta tutulur: görüş (sis) bu
+## nesnelerle KESİLMESİN diye C++ fog ışını onu kullanır (bkz. enemy_world_bridge.gd _refresh_grid, EnemyWorld.set_grid fog_blocked).
 
 ## Aramaya izin verilen en uzak yaratık-hedef mesafesi (dünya birimi). Doğuş halkası
 ## 480-640 (bkz. enemy_spawner.gd); çok uzaktaki yaratıklar zaten ekran dışı.
@@ -54,6 +54,8 @@ const GRID_MARGIN := 24
 ## ile preload edilmiş script'e doğrudan atama yapılamadığı için set_enabled kullanılır.
 static var enabled: bool = true
 
+const TerrainCollisionScript := preload("res://scripts/terrain_collision.gd")
+
 
 static func set_enabled(value: bool) -> void:
 	enabled = value
@@ -61,6 +63,7 @@ static func set_enabled(value: bool) -> void:
 static var _astar: AStarGrid2D = null
 static var _layer: TileMapLayer = null
 static var _blocked: PackedByteArray = PackedByteArray()
+static var _fog_blocked: PackedByteArray = PackedByteArray() ## sadece orman duvarı (görüş/sis) - _blocked ile aynı boyut/köken
 static var _origin: Vector2i = Vector2i.ZERO
 static var _size: Vector2i = Vector2i.ZERO
 static var _frame: int = -1
@@ -78,6 +81,8 @@ static func reset() -> void:
 	_astar = null
 	_layer = null
 	_blocked = PackedByteArray()
+	_fog_blocked = PackedByteArray()
+	TerrainCollisionScript.reset()
 	_frame = -1
 	_paths_this_frame = 0
 
@@ -172,10 +177,14 @@ static func _build(layer: TileMapLayer) -> void:
 	_layer = layer
 	_astar = null
 	_blocked = PackedByteArray()
-	var used: Array[Vector2i] = layer.get_used_cells()
-	if used.is_empty():
+	_fog_blocked = PackedByteArray()
+	var forest_cells: Array[Vector2i] = layer.get_used_cells()
+	if forest_cells.is_empty():
 		_size = Vector2i.ONE ## "boş katman" işareti (bkz. _ensure_grid)
 		return
+	## Orman duvarı + haritadaki nesnelerin engel hücreleri (su, bina tabanı, ağaç gövdesi, maden...) - bkz. terrain_collision.gd.
+	var used: Array[Vector2i] = forest_cells.duplicate()
+	used.append_array(TerrainCollisionScript.ensure(layer).keys())
 	var mn: Vector2i = used[0]
 	var mx: Vector2i = used[0]
 	for cell: Vector2i in used:
@@ -185,6 +194,7 @@ static func _build(layer: TileMapLayer) -> void:
 	_origin = mn - margin
 	_size = (mx - mn) + Vector2i.ONE + margin * 2
 	_blocked.resize(_size.x * _size.y)
+	_fog_blocked.resize(_size.x * _size.y)
 	var astar := AStarGrid2D.new()
 	astar.region = Rect2i(_origin, _size)
 	astar.cell_size = Vector2.ONE
@@ -194,6 +204,8 @@ static func _build(layer: TileMapLayer) -> void:
 	astar.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
 	astar.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
 	astar.update()
+	for cell: Vector2i in forest_cells:
+		_fog_blocked[(cell.y - _origin.y) * _size.x + (cell.x - _origin.x)] = 1
 	for cell: Vector2i in used:
 		astar.set_point_solid(cell, true)
 		_blocked[(cell.y - _origin.y) * _size.x + (cell.x - _origin.x)] = 1

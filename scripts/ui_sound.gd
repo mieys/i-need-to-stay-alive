@@ -51,6 +51,9 @@ var show_fps: bool = false
 const UI_OPACITY_GROUP := &"ui_opacity"
 const UI_OPACITY_MIN_PERCENT := 25.0
 var ui_opacity_percent: float = 100.0
+## EKRAN SARSINTISI (kullanıcı isteği 2026-10-05: "ayarlara kapatma özelliği de ekle"): 0 = kapalı, 100 = tam güç. Hareket hassasiyeti
+## olanlar için erişilebilirlik ayarı. camera_shake.gd her olayda ve her karede okur. Aynı "display" ConfigFile bölümü.
+var camera_shake_percent: float = 100.0
 
 ## GRAFİK AYARLARI - kullanıcı isteği (2026-10-03): "bunu mobil için optimize etmenin en iyi yolu oyuna grafik ayarı
 ## eklemek" -> "Düşük / Orta / Yüksek" hazır seviye + altında tek tek seçenekler (biri elle değişince seviye "Özel" olur);
@@ -193,6 +196,12 @@ func set_show_fps(enabled: bool) -> void:
 	_save_display_settings()
 
 
+## bkz. camera_shake_percent notu. 0 = kapalı.
+func set_camera_shake_percent(percent: float) -> void:
+	camera_shake_percent = clampf(percent, 0.0, 100.0)
+	_save_display_settings()
+
+
 ## bkz. ui_opacity_percent notu.
 func set_ui_opacity_percent(percent: float) -> void:
 	ui_opacity_percent = clampf(percent, UI_OPACITY_MIN_PERCENT, 100.0)
@@ -295,6 +304,7 @@ func _save_display_settings() -> void:
 	config.set_value("display", "resolution_index", resolution_index)
 	config.set_value("display", "show_fps", show_fps)
 	config.set_value("display", "ui_opacity_percent", ui_opacity_percent)
+	config.set_value("display", "camera_shake_percent", camera_shake_percent)
 	config.set_value("display", "gfx_sun_clouds", gfx_sun_clouds)
 	config.set_value("display", "gfx_ground_detail", gfx_ground_detail)
 	config.set_value("display", "gfx_render_scale", gfx_render_scale)
@@ -309,6 +319,7 @@ func _load_display_settings() -> void:
 		resolution_index = clamp(int(config.get_value("display", "resolution_index", DEFAULT_RESOLUTION_INDEX)), 0, RESOLUTIONS.size() - 1)
 		show_fps = bool(config.get_value("display", "show_fps", false))
 		ui_opacity_percent = clampf(float(config.get_value("display", "ui_opacity_percent", 100.0)), UI_OPACITY_MIN_PERCENT, 100.0)
+		camera_shake_percent = clampf(float(config.get_value("display", "camera_shake_percent", 100.0)), 0.0, 100.0)
 		gfx_sun_clouds = bool(config.get_value("display", "gfx_sun_clouds", true))
 		gfx_ground_detail = bool(config.get_value("display", "gfx_ground_detail", true))
 		gfx_render_scale = _nearest_render_scale(float(config.get_value("display", "gfx_render_scale", 1.0)))

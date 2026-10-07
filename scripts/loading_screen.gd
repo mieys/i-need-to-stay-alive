@@ -21,8 +21,12 @@ extends Control
 ## yani dolu barda donup bekliyordu. İkinci tur (kullanıcı: "bu sefer de donarak doluyor"): bağımlılıklar ana iş
 ## parçacığında yüklenince büyük betiklerin derlemesi ekranı donduruyordu (main.gd 2.2 sn, player.gd 1.6 sn). Yukarıdaki
 ## "iş parçacığında Parse Error" sorunu 2026-09-27'de tekrar ölçüldü ve ARTIK OLUŞMUYOR (main.tscn iş parçacığında temiz
-## yüklendi, en uzun kare 20 ms). Şimdi: main.tscn'in bağımlılık ağacı taranır, her bağımlılık SIRAYLA tek bir arka plan
-## iş parçacığında (load_threaded_request) yüklenir - ekran hiç donmaz, bar gerçek (türe göre ağırlıklı) ilerlemeyi gösterir
+## yüklendi, en uzun kare 20 ms). 2026-10-05: AMA ARALIKLI OLUŞUYOR (headless 10 denemenin 2-3'ü): player.gd/main.gd arka planda
+## derlenirken içlerindeki preload("...tscn") çağrıları "Could not preload resource file" ile başarısız oluyor ve iş parçacığı görevi
+## sonsuza dek "devam ediyor" kalıyor (bar %20-30'da sonsuz takılma; kullanıcı host'ta yaşadı, istemciler 30 sn sonra host'suz
+## başladı). Bu yüzden: GDScript'ler ANA iş parçacığında yüklenir (bir betik bütçeyi aşınca kare çizilir, derleme sırasında kısa
+## donmalar olur - kabul edildi), doku/ses/sahne arka planda kalır ve REQ_STALL_MSEC bekçisi vardır. Şimdi: main.tscn'in bağımlılık
+## ağacı taranır, her bağımlılık SIRAYLA yüklenir - bar gerçek (türe göre ağırlıklı) ilerlemeyi gösterir
 ## (%95'e kadar); iş parçacığında yüklenemeyen olursa ana iş parçacığında yeniden denenir. Sonra görsel en üst katmanıyla
 ## (loading_overlay.gd) köke taşınır, sahne değişir; yeni sahnenin kurulumu + ilk karesi (zorunlu ana iş parçacığı, ~1 sn)
 ## sırasında kahraman patikanın sonunda durur, ilk kare hazır olunca bar %100 olur ve bir kare sonra oyun görünür.
@@ -50,6 +54,7 @@ const LOAD_WEIGHT_PER_KB := {"gd": 1.0, "tscn": 0.25, "scn": 0.25, "tres": 0.02,
 const LOAD_WEIGHT_FALLBACK := {"gd": 20.0, "tscn": 10.0, "scn": 10.0}
 const LOAD_WEIGHT_DEFAULT := 0.05
 const WAIT_FOR_OTHERS_TIMEOUT := 30.0
+const WAIT_FOR_HOST_TIMEOUT := 120.0 ## host yüklemesini bitirmediyse istemci bu kadar bekler (bkz. NetworkManager.is_host_loading_done)
 
 @onready var progress_bar: ProgressBar = $ProgressBar
 @onready var status_label: Label = $StatusLabel
@@ -88,7 +93,8 @@ const TIPS: Array[String] = [
 	"F tuşu ruhani yeteneğini kullanır.",
 	"Bir kademenin boss'u yaşadıkça yeni kademe başlamaz.",
 	"Evin içindeyken yaratıklar sana saldıramaz.",
-	"Seçkin sandıklar silahlarına efsun kazandırır.",
+	"Elit sandıklar herkese birer epik eşya verir.",
+	"Normal sandıklar oyunculara sırayla verilir.",
 	"Hiç can hakkın kalmazsa 5 dakikada bir kalp yenilenir.",
 	"Space tuşu ile etkileşime girersin.",
 	"Q, E ve R yeteneklerin seviye atladıkça açılır.",
@@ -111,6 +117,8 @@ var _root_scripts: Array = []
 var _weights: Dictionary = {}
 var _req_weight: float = 0.0
 var _req_creep: float = 0.0
+const REQ_STALL_MSEC := 12000 ## arka plan isteği (doku/ses/sahne) bundan uzun sürerse atlanır (bkz. _step_loading bekçisi)
+var _req_started_msec: int = 0
 const STEP_CREEP_MAX := 0.85 ## uzun bir adım (büyük betik) sürerken bar o adımın payının en fazla bu kadarına süzülür
 const STEP_CREEP_RATE := 0.5 ## /sn
 var _hero: AnimatedSprite2D = null
@@ -320,14 +328,17 @@ func _process(delta: float) -> void:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.all_players_loading_done():
 		_wait_elapsed += delta
 		
+		## Host henüz yüklemesini bitirmediyse onsuz başlanmaz (uzun zaman aşımı): host'suz giren istemci oyunu bozuk görürdü.
+		var host_ready: bool = NetworkManager.is_host_loading_done()
+		var wait_limit: float = WAIT_FOR_OTHERS_TIMEOUT if host_ready else WAIT_FOR_HOST_TIMEOUT
 		_dots_timer += delta
 		if _dots_timer >= 0.4:
 			_dots_timer = 0.0
 			_dots_count = (_dots_count + 1) % 4
-			status_label.text = "DİĞER OYUNCULAR BEKLENİYOR" + ".".repeat(_dots_count)
-			
-		if _wait_elapsed >= WAIT_FOR_OTHERS_TIMEOUT:
-			push_warning("[LoadingScreen] Diğer oyuncular %.0f sn içinde hazır olmadı, yine de devam ediliyor." % WAIT_FOR_OTHERS_TIMEOUT)
+			status_label.text = ("DİĞER OYUNCULAR BEKLENİYOR" if host_ready else "HOST BEKLENİYOR") + ".".repeat(_dots_count)
+
+		if _wait_elapsed >= wait_limit:
+			push_warning("[LoadingScreen] Diğer oyuncular %.0f sn içinde hazır olmadı, yine de devam ediliyor." % wait_limit)
 			_proceed()
 		return
 
@@ -370,6 +381,13 @@ func _step_loading(delta: float) -> void:
 			var prog: Array = []
 			var st: int = ResourceLoader.load_threaded_get_status(_req_path, prog)
 			if st == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				## Bekçi: bir istek REQ_STALL_MSEC'ten uzun sürüyorsa atlanır - yükleme ekranı tek bir isteğe sonsuza dek bağlı
+				## kalmasın. Atlanan kaynak sahne kurulurken (_proceed) zaten ana iş parçacığında yüklenir.
+				if Time.get_ticks_msec() - _req_started_msec > REQ_STALL_MSEC:
+					push_warning("[LoadingScreen] iş parçacığı isteği %d sn'den uzun sürdü, atlanıyor: %s" % [int(REQ_STALL_MSEC / 1000.0), _req_path])
+					_weight_done += _req_weight
+					_req_path = ""
+					continue
 				_req_creep = minf(STEP_CREEP_MAX, _req_creep + STEP_CREEP_RATE * delta)
 				return ## bu kare iş parçacığını bekle - ekran akmaya devam eder
 			var r: Resource = null
@@ -389,6 +407,16 @@ func _step_loading(delta: float) -> void:
 			if ResourceLoader.has_cached(p) or not ResourceLoader.exists(p):
 				_weight_done += w
 				continue
+			if p.get_extension().to_lower() == "gd":
+				## GDScript ASLA iş parçacığında derlenmez (2026-10-05): betikteki preload("...tscn") çağrıları arka planda rastgele
+				## "Could not preload resource file" ile başarısız oluyor ve görev sonsuza dek "devam ediyor" kalıyordu (yükleme ekranı
+				## %20-30'da sonsuza dek takılıyor, çok oyunculuda host dahil; headless ölçüm: 10 denemenin 2'si). Ana iş parçacığında
+				## derleme (editördeki gibi) güvenli; kare başına bütçe aşılınca döngü biter, kare çizilir.
+				var rs: Resource = load(p)
+				if rs:
+					_loaded_refs.append(rs)
+				_weight_done += w
+				continue
 			if ResourceLoader.load_threaded_request(p, "", false) != OK:
 				var r2: Resource = load(p)
 				if r2:
@@ -398,6 +426,7 @@ func _step_loading(delta: float) -> void:
 			_req_path = p
 			_req_weight = w
 			_req_creep = 0.0
+			_req_started_msec = Time.get_ticks_msec()
 		else:
 			return
 

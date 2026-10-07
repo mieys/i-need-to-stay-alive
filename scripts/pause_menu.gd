@@ -59,6 +59,7 @@ func _ready() -> void:
 	fps_check.button_pressed = UISound.show_fps
 	fps_check.toggled.connect(_on_fps_toggled)
 	_build_ui_opacity_row()
+	_build_camera_shake_row()
 	settings_panel.visible = false
 	## DÜZELTME (kullanıcı isteği: "Multiplayerda host oyunu yeniden
 	## başlatabilsin eskiden yeniden başlatmayı seçerek fakat önce diğer
@@ -255,6 +256,61 @@ func _on_ui_opacity_changed(value: float) -> void:
 	UISound.set_ui_opacity_percent(value)
 	if _ui_opacity_value:
 		_ui_opacity_value.text = "%d%%" % int(value)
+
+
+## Ekran sarsıntısı (kullanıcı isteği 2026-10-05, bkz. camera_shake.gd): "Arayüz Opaklığı" satırıyla AYNI düzen, onun altında; 0 = kapalı.
+## Panel yine 100 px uzuyor (üst kenar 50 yukarı, alt kenar 50 aşağı), Kapat butonu 100 px iniyor.
+const SHAKE_ROW_EXTRA := 100.0
+var _shake_value: Label = null
+
+
+func _build_camera_shake_row() -> void:
+	var panel: Panel = settings_panel
+	panel.offset_top -= SHAKE_ROW_EXTRA * 0.5
+	panel.offset_bottom += SHAKE_ROW_EXTRA * 0.5
+	var close_btn: Control = $SettingsPanel/CloseButton
+	close_btn.offset_top += SHAKE_ROW_EXTRA
+	close_btn.offset_bottom += SHAKE_ROW_EXTRA
+	var ref_label: Label = $SettingsPanel/VolumeLabel
+	var label := Label.new()
+	label.name = "ShakeLabel"
+	label.text = "Ekran Sarsıntısı"
+	label.position = Vector2(40.0, 495.0)
+	label.size = Vector2(280.0, 40.0)
+	label.vertical_alignment = ref_label.vertical_alignment
+	if ref_label.has_theme_font_size_override("font_size"):
+		label.add_theme_font_size_override("font_size", ref_label.get_theme_font_size("font_size"))
+	panel.add_child(label)
+	_shake_value = Label.new()
+	_shake_value.name = "ShakeValue"
+	_shake_value.position = Vector2(400.0, 495.0)
+	_shake_value.size = Vector2(120.0, 40.0)
+	_shake_value.horizontal_alignment = volume_value.horizontal_alignment
+	_shake_value.vertical_alignment = volume_value.vertical_alignment
+	if volume_value.has_theme_font_size_override("font_size"):
+		_shake_value.add_theme_font_size_override("font_size", volume_value.get_theme_font_size("font_size"))
+	panel.add_child(_shake_value)
+	var slider := HSlider.new()
+	slider.name = "ShakeSlider"
+	slider.min_value = 0.0
+	slider.max_value = 100.0
+	slider.step = 10.0
+	slider.position = Vector2(40.0, 540.0)
+	slider.size = Vector2(480.0, 40.0)
+	slider.value = UISound.camera_shake_percent
+	slider.value_changed.connect(_on_camera_shake_changed)
+	panel.add_child(slider)
+	_shake_value.text = _shake_text(slider.value)
+
+
+func _shake_text(value: float) -> String:
+	return "Kapalı" if int(value) == 0 else "%d%%" % int(value)
+
+
+func _on_camera_shake_changed(value: float) -> void:
+	UISound.set_camera_shake_percent(value)
+	if _shake_value:
+		_shake_value.text = _shake_text(value)
 
 
 ## Grafik ayarları (2026-10-03, bkz. graphics_settings_menu.gd): ayar paneli sahnede mutlak konumlu - .tscn'e dokunmadan

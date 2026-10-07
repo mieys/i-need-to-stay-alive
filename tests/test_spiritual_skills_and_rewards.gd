@@ -253,65 +253,57 @@ func test_dukkan_needs_merchant_channels_three_seconds_and_cancels_on_move_or_da
 	_cleanup()
 
 
-# ------------------------------------------------------------------ Satıcı: 4 silah + 8 eşya (2026-10-02 eşya sistemi)
+# ------------------------------------------------------------------ Satıcı: 8 eşya (2026-10-07: silahlar demirci dükkanına taşındı)
 
-func test_merchant_stock_is_twelve_unique_entries_four_weapons_eight_items() -> void:
-	assert(MerchantScript.STOCK_SIZE == 12, "stok 12 olmalı (4 silah + 8 eşya)")
+## Eskiden 4 silah + 8 eşya = 12 kartlı stoktu (2026-10-02 eşya sistemi); 2026-10-07'de silahlar ve kalkanlar demirci dükkanına
+## (weapon_shop.gd) taşındı - satıcıda yalnızca 8 BENZERSİZ eşya kalır.
+func test_merchant_stock_is_eight_unique_items_and_no_weapons() -> void:
+	assert(MerchantScript.STOCK_SIZE == 8, "stok 8 olmalı (sadece eşya)")
 	var m: Node = MerchantScript.new()
 	add_child(m)
 	_spawned.append(m)
 	for i in range(30):
 		var stock: Array = m._generate_stock()
 		var seen: Dictionary = {}
-		var weapons: int = 0
 		var items: int = 0
 		for e in stock:
 			var k: String = "%s:%s" % [e["type"], e["key"]]
-			if e["type"] == "weapon":
-				assert(not seen.has(k), "tekrarlı silah kartı: %s" % k)
-				weapons += 1
-			elif e["type"] == "item":
-				items += 1
+			assert(e["type"] == "item", "satıcıda silah/kalkan kartı olmamalı: %s" % k)
+			assert(not seen.has(k), "tekrarlı eşya kartı: %s" % k)
 			seen[k] = true
-		assert(weapons == MerchantScript.WEAPON_STOCK, "4 silah: %d" % weapons)
+			items += 1
 		assert(items == MerchantScript.ITEM_STOCK, "8 eşya: %d" % items)
 
 
-func test_merchant_no_longer_favours_the_starting_weapon() -> void:
+## Eskiden "başlangıç silahı satıcıda ağırlıklı çıkmasın" testiydi; silah satışı kalktığı için karşılığı: sahip olunan silahlar
+## stoğu etkilemez, hiçbir turda silah kartı çıkmaz.
+func test_merchant_never_offers_weapons_whatever_the_player_owns() -> void:
 	GameManager.owned_weapons = [{"key": "dagger", "level": 1, "spent": 0}]
 	var m: Node = MerchantScript.new()
 	add_child(m)
 	_spawned.append(m)
-	var counts: Dictionary = {}
-	var rounds: int = 1500
-	for i in range(rounds):
+	for i in range(300):
 		for e in m._generate_stock():
-			if e["type"] == "weapon":
-				counts[e["key"]] = int(counts.get(e["key"], 0)) + 1
-	var dagger: int = int(counts.get("dagger", 0))
-	var others_total: int = 0
-	var others_n: int = 0
-	for k in counts.keys():
-		if k != "dagger":
-			others_total += int(counts[k])
-			others_n += 1
-	var others_avg: float = float(others_total) / float(maxi(others_n, 1))
-	assert(float(dagger) < others_avg * 1.35, "başlangıç silahı artık ağırlıklı çıkmamalı: dagger=%d diğer ort=%.1f" % [dagger, others_avg])
+			assert(e["type"] != "weapon", "satıcıda silah kartı çıktı: %s" % str(e))
 	GameManager.owned_weapons = []
 
 
 # ------------------------------------------------------------------ Sandık / boss altını
 
-func test_chest_winner_is_uniform_and_single() -> void:
+## 2026-10-07: normal sandık artık rastgele değil SIRAYLA (NetworkManager.next_chest_turn); ayrıntılı sıra testleri
+## test_chest_turn_rotation.gd'de - burada sadece "tek kazanan, herkese eşit pay" özeti.
+func test_chest_winner_is_single_and_shared_equally_in_turn() -> void:
 	var counts: Dictionary = {1: 0, 2: 0, 3: 0}
+	var last: int = 0
 	for i in range(3000):
-		var w: int = NetworkManager.pick_chest_winner([1, 2, 3])
+		var w: int = NetworkManager.next_chest_turn([1, 2, 3], last)
 		assert(counts.has(w), "geçersiz kazanan")
 		counts[w] += 1
+		last = w
 	for id in counts.keys():
-		assert(counts[id] > 800 and counts[id] < 1200, "her oyuncunun şansı ~%%33 olmalı: %s" % str(counts))
-	assert(NetworkManager.pick_chest_winner([]) == 0, "boş listede kazanan yok")
-	assert(NetworkManager.pick_chest_winner([7]) == 7, "tek oyuncu her zaman kazanır")
+		assert(counts[id] == 1000, "sırayla her oyuncuya tam eşit sandık düşmeli: %s" % str(counts))
+	assert(NetworkManager.next_chest_turn([], 0) == 0, "boş listede kazanan yok")
+	assert(NetworkManager.next_chest_turn([7], 7) == 7, "tek oyuncu her zaman kazanır")
 
 
 func test_boss_gold_is_split_equally_and_conserved() -> void:

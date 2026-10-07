@@ -19,6 +19,7 @@ class_name DebugMenu
 
 ## Oyunun piksel fontu (m5x7) 16'nın katlarında net ve okunur (bkz. ui_kit.gd FS_BODY=32) - ilk yeni sürümün 22-34 px'i
 ## gerçek ekranda hâlâ küçük kalıyordu (ekran görüntüsüyle kontrol edildi).
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 const FS_TITLE := 64
 const FS_TAB := 48
 const FS_LABEL := 32
@@ -376,7 +377,7 @@ func _give(key: String) -> void:
 		## Sahiplik kaydı (GameManager.owned_weapons) silah düğümüyle AYNI sırada tutulmalı (satıcı/sandık akışlarıyla
 		## aynı: önce deftere, sonra düğüm) - eskiden debug verilen silah deftere hiç girmiyordu, envanterde görünmüyor
 		## ve efsun havuzuna (bkz. enchant_pool.gd) hiç gelmiyordu.
-		GameManager.owned_weapons.append({"key": key, "level": 1, "spent": 0})
+		GameManager.owned_weapons.append(EnchantDefs.new_weapon_entry(key, 1, 0))
 		var ok: bool = player.call("buy_weapon_copy", key, 1)
 		if not ok:
 			GameManager.owned_weapons.pop_back()
@@ -411,7 +412,7 @@ func _build_player_page(page: VBoxContainer) -> void:
 			close()
 			main.debug_open_enchant_screen())
 	ench_grid.add_child(open_btn)
-	## Sandık açılış animasyonunu level beklemeden görmek için (2026-09-25): normal = eşya kartı, elit = efsun ekranı.
+	## Sandık açılış animasyonunu level beklemeden görmek için (2026-09-25): normal = parça kartı, elit = epik eşya kartı.
 	for pair: Array in [["Sandık aç", false], ["Elit sandık aç", true]]:
 		var chest_btn := _button(str(pair[0]), "wood", Vector2(420, 76))
 		var elite: bool = bool(pair[1])
@@ -441,6 +442,27 @@ func _build_player_page(page: VBoxContainer) -> void:
 			_set_status("%d evrim verildi" % n, n > 0))
 	evo_grid.add_child(evo_all_btn)
 	UISound.connect_all_buttons(evo_grid)
+	## Silah parçacığı (2026-10-08): demirci dükkanında silah almak 10 parçacık ister - yaratık düşürmesini beklemeden denemek için.
+	_header(page, "Silah parçacığı (demirci)")
+	var shard_grid := _grid(page, 2)
+	for shard_amount: int in [10, 50]:
+		var shard_btn := _button("+%d parçacık (bana)" % shard_amount, "wood", Vector2(420, 76))
+		shard_btn.pressed.connect(func() -> void:
+			GameManager.add_weapon_shards(shard_amount)
+			NetworkManager.show_weapon_shard_text(shard_amount)
+			_set_status("Parçacık: %d" % GameManager.weapon_shards, true))
+		shard_grid.add_child(shard_btn)
+	var shard_drop_btn := _button("Parçacık düşür (yanıma)", "green", Vector2(420, 76))
+	shard_drop_btn.pressed.connect(func() -> void:
+		var pl: Node2D = get_tree().get_first_node_in_group("player") as Node2D
+		if pl == null or (NetworkManager.is_multiplayer_active and not NetworkManager.is_host):
+			_set_status("Sadece host / tek oyunculu", false)
+			return
+		const WeaponShardDropScript := preload("res://scripts/weapon_shard_drop.gd")
+		WeaponShardDropScript.spawn(get_tree(), pl.global_position + Vector2(70, 0), 1)
+		_set_status("Parçacık düştü", true))
+	shard_grid.add_child(shard_drop_btn)
+	UISound.connect_all_buttons(shard_grid)
 	_refresh_toggles()
 
 
@@ -518,6 +540,16 @@ func _build_atmosphere_page(page: VBoxContainer) -> void:
 		var fast: bool = atmo != null and float(atmo.get("debug_time_scale")) > 1.0
 		_atmosphere_call("debug_set_time_scale", 1.0 if fast else ATMO_FAST_TIME_SCALE))
 	page.add_child(_fast_time_btn)
+
+	## Kamera sarsıntısı testi (2026-10-05, bkz. camera_shake.gd): gücü oynayarak ayarlamak için. Ayar kapalıysa (0) hiçbir şey olmaz.
+	var shake_grid := _grid(page, 3)
+	for entry: Array in [["Sarsıntı: hafif", 0.3], ["Sarsıntı: orta", 0.6], ["Sarsıntı: güçlü", 1.0]]:
+		var amount: float = float(entry[1])
+		var shake_btn := _button(str(entry[0]), "wood", Vector2(300, 70), FS_LABEL)
+		shake_btn.pressed.connect(func() -> void:
+			CameraShakeScript.add(amount)
+			_set_status("Sarsıntı %.1f (ayar: %s)." % [amount, "kapalı" if UISound.camera_shake_percent <= 0.0 else "%d%%" % int(UISound.camera_shake_percent)]))
+		shake_grid.add_child(shake_btn)
 
 
 func _atmosphere_call(method: String, arg: Variant) -> void:

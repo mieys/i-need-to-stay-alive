@@ -81,12 +81,12 @@ const SPAWN_CANDIDATE_ATTEMPTS := 30
 ## "deliberate copy" liste - shop_panel.gd/chest_menu.gd/merchant_shop_
 ## screen.gd ile AYNI desen) 8 benzersiz giriş rastgele seçilir.
 ## Kullanıcı isteği (2026-09-21): "Seyyar satıcıda sadece 6 item sunuluyor bunu 8'e çıkarmanı istiyorum".
-const STOCK_SIZE := 12 ## WEAPON_STOCK + ITEM_STOCK
-const WEAPON_STOCK := 4
+## 2026-10-07 (kullanıcı isteği: "seyyar satıcıda silah satılmayacak bundan böyle"): silahlar ve kalkanlar artık SADECE demirci
+## dükkanında (scripts/weapon_shop.gd, weapon_shop_screen.gd); seyyar satıcıda yalnızca eşya kaldı (4 silah kartı çıkarıldı).
+const STOCK_SIZE := 8 ## = ITEM_STOCK
 const ITEM_STOCK := 8
 ## Eşya kartlarının kademe ağırlıkları (parça, epik, efsanevi) - kademe içinde eşit.
 const ITEM_TIER_WEIGHTS := [0.5, 0.35, 0.15]
-const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic"]
 ## Kullanıcı isteği: "seyyar satıcı herkese aynı eşyayı satıyor, herkese
 ## farklı şeyler çıkmalıydı" - _generate_stock() artık HOST'ta bir kere
 ## üretilip ağdan dağıtılmıyor, HER istemci kendi stokunu KENDİ yerel
@@ -139,6 +139,7 @@ var _player_near: bool = false
 var _shop_screen: CanvasLayer = null
 
 const MerchantShopScreenScript := preload("res://scripts/merchant_shop_screen.gd")
+const HitchLogScript := preload("res://scripts/hitch_log.gd") ## takılma kaydına olay işareti (bkz. hitch_log.gd)
 ## Kullanıcı isteği: "dıştaki kalkan efekti şovalye adamın kalkan baloncuğu
 ## gibi görünmüyor" - kendi basit çizimimiz yerine ŞOVALYE'NİN "Koruma
 ## Baloncuğu" ultisiyle BİREBİR AYNI görsel (bkz. player.gd _skill_paladin_
@@ -227,6 +228,7 @@ func _broadcast_departed() -> void:
 ## üretir, böylece host dahil her oyuncu birbirinden bağımsız/farklı 8 eşya
 ## görür.
 func _on_merchant_spawned(_pos: Vector2, _stock: Array) -> void:
+	HitchLogScript.mark("merchant_spawned")
 	_active = true
 	_visit_timer = VISIT_DURATION
 	_current_stock = _generate_stock()
@@ -271,7 +273,7 @@ func try_reroll_stock() -> Variant:
 
 
 ## bkz. dosya başı "STOCK_SIZE" notu.
-## Slotlar Items.KEYS + WEAPON_KEYS'ten EŞİT olasılıkla çekilir (kullanıcı isteği 2026-09-21: "her item aynı olasılıkla
+## Slotlar Items.KEYS'ten çekilir (kullanıcı isteği 2026-09-21: "her item aynı olasılıkla
 ## çıkacak"). Eskiden 1 slot her zaman oyuncunun kalkan türüydü - kalkan satışı 2026-09-29'da kaldırıldı.
 func _local_player_luck() -> float:
 	var p: Node = get_tree().get_first_node_in_group("player")
@@ -279,14 +281,10 @@ func _local_player_luck() -> float:
 
 
 func _generate_stock() -> Array:
-	## 2026-10-02 yeni eşya sistemi (kullanıcı seçimi "Eşyalar ayrı bölüm"): WEAPON_STOCK silah + ITEM_STOCK eşya, ayrı
-	## havuzlardan. Eşyalar kademeye göre ağırlıklı (parça sık, epik orta, efsanevi nadir); sahip olunan efsanevi (tekil)
-	## ve arkadaşına can/kalkan veremeyen karakterlere Işığın Muhafızı Parşomeni gelmez.
+	## 2026-10-02 yeni eşya sistemi: ITEM_STOCK eşya. Eşyalar kademeye göre ağırlıklı (parça sık, epik orta, efsanevi nadir);
+	## sahip olunan efsanevi (tekil) ve arkadaşına can/kalkan veremeyen karakterlere Işığın Muhafızı Parşomeni gelmez.
+	## 2026-10-07: silahlar artık burada satılmıyor (bkz. STOCK_SIZE notu).
 	var stock: Array = []
-	var weapons: Array = WEAPON_KEYS.duplicate()
-	weapons.shuffle()
-	for k in weapons.slice(0, WEAPON_STOCK):
-		stock.append({"type": "weapon", "key": k})
 	var candidates: Array = []
 	for k in Items.KEYS:
 		if Items.kademe(k) == Items.KADEME_EFSANEVI and Items.owns(GameManager.owned_items, k):
@@ -376,12 +374,16 @@ func _pick_spawn_position() -> Vector2:
 func _players_anchor_positions() -> Array[Vector2]:
 	var out: Array[Vector2] = []
 	var house: Node = get_tree().current_scene.get_node_or_null("HouseInterior")
+	var smithy: Node = get_tree().current_scene.get_node_or_null("WeaponShop")
 	for group_name in ["player", "remote_players"]:
 		for p in get_tree().get_nodes_in_group(group_name):
 			if not is_instance_valid(p) or p.get("is_dead") == true:
 				continue
 			if p.get("is_indoors") == true:
-				if house and house.get("_exterior_return_pos") is Vector2 and house.get("_exterior_return_pos") != Vector2.ZERO:
+				## Demirci dükkanındaki oyuncunun haritadaki karşılığı dükkanın kapısı (bkz. weapon_shop.gd), evdekininki evin kapısı.
+				if smithy and smithy.has_method("is_interior_position") and smithy.call("is_interior_position", (p as Node2D).global_position):
+					out.append(smithy.call("get_exterior_anchor_pos"))
+				elif house and house.get("_exterior_return_pos") is Vector2 and house.get("_exterior_return_pos") != Vector2.ZERO:
 					out.append(house.get("_exterior_return_pos"))
 				continue
 			var rect: Rect2 = GameManager.get_map_world_rect()
@@ -619,9 +621,13 @@ func _hide_prompt() -> void:
 func _open_shop_screen(player: Node) -> void:
 	if _shop_screen and is_instance_valid(_shop_screen):
 		return
+	HitchLogScript.mark("shop_open")
+	var t0: int = Time.get_ticks_usec()
 	_shop_screen = MerchantShopScreenScript.new()
 	get_tree().current_scene.add_child(_shop_screen)
 	_shop_screen.setup(player, _current_stock, self)
+	HitchLogScript.mark("shop_setup %.0f ms" % (float(Time.get_ticks_usec() - t0) / 1000.0))
 	_shop_screen.closed.connect(func():
+		HitchLogScript.mark("shop_close")
 		_shop_screen = null
 	)

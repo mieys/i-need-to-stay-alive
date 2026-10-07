@@ -356,6 +356,37 @@ Aşama 5: [x] multiplayer (iki süreç LAN, yeni varsayılan)  [x] testler (tam 
 
 ## Oturum kayıtları (en yeni üstte)
 
+### 2026-10-08 (2) (yeniden yazım DIŞI iş - çok oyunculu sağlamlaştırma + host devri; spawner/enemy.gd'ye dokundu)
+- `enemy_spawner.gd`: yaratık durum paketi artık ikili (`scripts/enemy_sync_codec.gd`: 22 bayt/yaratık, tur numarası, paket başına 40; RPC `_sync_enemy_positions(tick, data)`),
+  yalnızca Main'i hazır istemcilere (`NetworkManager.game_ready_peers()`); doğuş RPC'si `_rpc_client_spawn_creature` yeni son parametre `player_count` (host'un sayısı) ve
+  `_announce_spawn` ile hazır peer'lere; `_player_count()` = `NetworkManager.game_player_count()` (hayalet lobi oyuncusu sayılmaz); `export_handover/import_handover`
+  (host devri: hangi boss/elit doğdu, Final, sonsuz mod, tutulan süre; ~2 sn'de bir `publish_host_handover`).
+- `enemy.gd`: XP bölüşümü `game_player_count()`. C++ DEĞİŞMEDİ. Ayrıntı CLAUDE.md madde 29-30.
+- `test_paladin_aggro_talon_pose_and_stat_tweaks`: kışkırtma testi 2 kare yerine 3 kare bekler (C++ yapay zekâ 3 karede bir düşünür; faz kayınca 2 kare yetmiyordu).
+
+### 2026-10-08 (yeniden yazım DIŞI iş ama C++ + enemy_pathing değişti - collision herşey için)
+- Kullanıcı: "collision shapeleri herşey için yeniden hesapla" (oyuncu + yaratıklar; su, bina tabanı, ağaç gövdesi, maden, düşman üssü). `scripts/terrain_collision.gd` nesne ayak izlerini
+  karolardan hesaplar; `enemy_pathing.gd _build` orman ∪ nesneleri `_blocked`'a (C++ hareket + akış alanı + A*) yazar, SADECE ormanı yeni `_fog_blocked`'a.
+- C++: `EnemyWorld.set_grid(..., fog_blocked = boş)` + `fog_solid_cell` (sadece `fog_ray_blocked` kullanır) - su/ağaç/bina görüşü KESMEZ. 4 kütüphane derlendi (Windows debug/release,
+  Android arm64 debug/release). Köprü `_refresh_grid` fog ızgarasını geçirir. Ayrıntı CLAUDE.md madde 27.
+- Testler: `test_terrain_collision_objects` (8), `test_map_terrain_collision` (10); gerçek pencerede tuş basışıyla doğrulandı.
+
+### 2026-10-06 (yeniden yazım DIŞI iş - kademe kapısı hızlandırması + ork öfkesi, bilgi için)
+- C++'a / hareket kurallarına dokunulmadı. `enemy.gd`: `gate_rush_mult` + `set_gate_rush()`; `_ew_push_state` içinde C++ "rage" çarpanı
+  `(öfke çarpanı) x gate_rush_mult` oldu (C++ bunu sadece kovalama hızına uyguluyor, enemy_world.cpp 1587/1692/1785). `enemy_spawner.gd`:
+  `_gate_rush_tick()` (`_check_tier_announcement` çağırır, kapı beklemiyorsa hemen çıkar): kapı >1 sn beklediyse kapıyı tutan, hiçbir
+  oyuncunun görüş elipsinde olmayan eski yaratıklar 3x hızlanır, görüşe girince/kapı açılınca 1x. Neden: kapı kapalıyken hiç doğuş yok ve
+  tutanlar hep görüş dışında ~40 px/sn yürüyen yaratıklar (ölçüm: kusursuz öldürücüyle bile ~8 sn boş, hızlanmayla ~2-3 sn).
+  Ayrıca `enemy.gd ORK_RAGE_NERF_2026_10_06 = 0.85` (ork öfkesinin hız ARTIŞI x0.85). Testler: test_enemy_spawner_gate_and_ambush (16,
+  mutasyonla doğrulandı), test_enemy_abilities (5). Gerçek oyunda elle denenmedi; 2 süreçli LAN koşusu yapılmadı (hız host'ta, istemci
+  kuklası konumu ağdan alıyor).
+
+### 2026-10-05 (yeniden yazım DIŞI iş, spawner'a ek - bilgi için)
+- Yaratık hareketi/AI'sına/C++'a dokunulmadı. `enemy_spawner.gd`'ye host tarafı "ZAFER + SONSUZ MOD" bloğu eklendi (Final bossları
+  `_final_bosses`'ta tutulur, hepsi ölünce zafer; sonra sonsuz katlar: yeni doğanın istatistik kademesi 15 + kat, roster 15'te
+  kalır) ve `enemy.gd`'ye `dismiss_without_reward()` (die()'ın görsel/kayıt kısmı, ödül/öldürme yok) eklendi. `_spawn_boss_group` artık
+  doğan listeyi döndürür; `_check_final_tier` hiç boss doğmadıysa `_final_spawned`'ı geri alıp yeniden dener. Ayrıntı: CLAUDE.md madde 10.
+
 ### 2026-10-03 (sonraki oturum, kısa kontrol)
 - Kod değişikliği yok. Diskteki durum yeniden doğrulandı: compile_check 307/307, köprüyü elle adımlayan testler + test_enemy_world
   + test_client_puppet_facing 49/49. Sıradaki hâlâ "Şu an"daki kullanıcı kararları (commit/push, telefonda FPS, Şovalye Q adı).

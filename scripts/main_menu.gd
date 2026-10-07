@@ -8,8 +8,10 @@ extends Control
 
 const KeybindMenuScript := preload("res://scripts/keybind_menu.gd")
 const GraphicsSettingsMenuScript := preload("res://scripts/graphics_settings_menu.gd")
+const RecordsScreenScript := preload("res://scripts/records_screen.gd")
 
-const TITLE := "I NEED TO STAY ALIVE"
+## Oyun adı (2026-10-04): "Lil'Slayers" (birleşik). Eski ad: "I NEED TO STAY ALIVE" (72 punto).
+const TITLE := "LIL'SLAYERS"
 const SCREEN := Vector2(1920, 1080)
 ## Kullanıcı isteği (2026-09-26): "başlangıç menüsündeki başlığı ve arayüzü biraz küçült" - başlık 96 -> 72, tabela 186 -> 150,
 ## butonlar 64/84 -> 48/66, panel 540 -> 408 (hepsi ~%75; boyutlar 3'ün katı, yazı 8'in katı: pikseller keskin kalır).
@@ -19,7 +21,7 @@ const MENU_W := 408.0
 const MENU_Y := 336.0
 const MENU_FONT := 48
 const MENU_BTN_H := 66.0
-const TITLE_FONT := 72
+const TITLE_FONT := 96 ## kısa ad için büyütüldü (uzun adla 72 idi; tabela genişliği yazıya göre hesaplanır)
 
 var settings_panel: Control
 var volume_slider: HSlider
@@ -31,12 +33,13 @@ var keybind_button: Button
 
 var _start_btn: Button
 var _multiplayer_btn: Button
+var _records_btn: Button
 var _settings_btn: Button
 var _exit_btn: Button
 
 
 func _ready() -> void:
-	DisplayServer.window_set_title("I Need to Stay Alive")
+	DisplayServer.window_set_title("Lil'Slayers")
 	theme = MenuKit.theme()
 	MenuKit.add_background(self)
 	_build_title_sign()
@@ -109,11 +112,13 @@ func _build_menu() -> void:
 	_start_btn = MenuKit.make_button("TEK OYUNCULU", "sage", MENU_FONT, MENU_BTN_H)
 	_multiplayer_btn = MenuKit.make_button("ÇOK OYUNCULU", "tan", MENU_FONT, MENU_BTN_H)
 	_settings_btn = MenuKit.make_button("AYARLAR", "tan", MENU_FONT, MENU_BTN_H)
+	_records_btn = MenuKit.make_button("REKORLAR", "tan", MENU_FONT, MENU_BTN_H)
 	_exit_btn = MenuKit.make_button("ÇIKIŞ", "rose", MENU_FONT, MENU_BTN_H)
-	for b: Button in [_start_btn, _multiplayer_btn, _settings_btn, _exit_btn]:
+	for b: Button in [_start_btn, _multiplayer_btn, _records_btn, _settings_btn, _exit_btn]:
 		v.add_child(b)
 	_start_btn.pressed.connect(_on_start_pressed)
 	_multiplayer_btn.pressed.connect(_on_multiplayer_pressed)
+	_records_btn.pressed.connect(_on_records_pressed)
 	_settings_btn.pressed.connect(_on_settings_pressed)
 	_exit_btn.pressed.connect(_on_exit_pressed)
 
@@ -220,6 +225,31 @@ func _build_settings() -> void:
 		UISound.set_ui_opacity_percent(value)
 		op_value.text = "%d%%" % int(value))
 
+	## Ekran sarsıntısı (kullanıcı isteği 2026-10-05, bkz. camera_shake.gd): 0 = kapalı (hareket hassasiyeti için).
+	grid.add_child(_row_label("Ekran Sarsıntısı"))
+	var sh_row := HBoxContainer.new()
+	sh_row.add_theme_constant_override("separation", 12)
+	sh_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sh_slider := HSlider.new()
+	sh_slider.name = "ShakeSlider"
+	sh_slider.min_value = 0
+	sh_slider.max_value = 100
+	sh_slider.step = 10
+	sh_slider.custom_minimum_size = Vector2(300, 42)
+	sh_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sh_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sh_row.add_child(sh_slider)
+	var sh_value: Label = MenuKit.make_label("100%", MenuKit.FS_BODY, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
+	sh_value.custom_minimum_size = Vector2(120, 0)
+	sh_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	sh_row.add_child(sh_value)
+	grid.add_child(sh_row)
+	sh_slider.value = UISound.camera_shake_percent
+	sh_value.text = "Kapalı" if int(sh_slider.value) == 0 else "%d%%" % int(sh_slider.value)
+	sh_slider.value_changed.connect(func(value: float) -> void:
+		UISound.set_camera_shake_percent(value)
+		sh_value.text = "Kapalı" if int(value) == 0 else "%d%%" % int(value))
+
 	## Tuş atamaları + Grafik (2026-10-03, bkz. graphics_settings_menu.gd) yan yana - ikisi de kendi penceresini açar.
 	var sub_row := HBoxContainer.new()
 	sub_row.add_theme_constant_override("separation", 12)
@@ -289,6 +319,16 @@ func _on_multiplayer_pressed() -> void:
 ## Kullanıcı isteği: "oyunun başlangıç ekranına çıkış düğmesi ekle".
 func _on_exit_pressed() -> void:
 	get_tree().quit()
+
+
+## Rekorlar + başarımlar penceresi (2026-10-05, bkz. records_screen.gd) - grafik/tuş ayarlarıyla AYNI "kendi penceresi" deseni.
+func _on_records_pressed() -> void:
+	var screen: CanvasLayer = RecordsScreenScript.new()
+	add_child(screen)
+	screen.closed.connect(func() -> void:
+		if is_instance_valid(_records_btn):
+			_records_btn.grab_focus()
+	)
 
 
 func _on_settings_pressed() -> void:

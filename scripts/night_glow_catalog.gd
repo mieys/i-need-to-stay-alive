@@ -219,6 +219,9 @@ const BY_SCENE := {
 	"res://scenes/fx_evo_kunai_hit.tscn": {"c": Color(0.78, 0.62, 1.0), "r": 16.0, "e": 0.4, "d": 0.18},
 	## Büyücü Kız "Efsunlu Büyü" (2026-10-04): efsunlu döküm anında ayak altında altın rün çemberi.
 	"res://scenes/fx_evo_buyucu_enchant.tscn": {"c": Color(1.0, 0.82, 0.45), "r": 50.0, "e": 0.6, "d": 0.7},
+	## Büyücü pasifi "Büyü Dalgası" (2026-10-04): her yetenekte ayaktan yayılan mor dalga + silah ucunda kıvılcım patlaması.
+	"res://scenes/fx_buyucu_surge_wave.tscn": {"c": Color(0.7, 0.45, 1.0), "r": 95.0, "e": 0.5, "d": 0.45},
+	"res://scenes/fx_buyucu_surge_spark.tscn": {"c": Color(0.8, 0.6, 1.0), "r": 30.0, "e": 0.55, "d": 0.25},
 	## --- Durum efektleri (yanma/donma/zehir... - yaratığın/oyuncunun üstünde) ---
 	## Yanma (2026-09-25: "boyutunu %10 küçültüp biraz daha parlamasını sağla") - güç 0.6 -> 0.85.
 	"res://scenes/fx_burn_status.tscn": {"c": Color(1.0, 0.5, 0.15), "r": 34.0, "e": 0.85, "f": 0.45},

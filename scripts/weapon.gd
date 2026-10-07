@@ -604,7 +604,7 @@ func on_enchant_skill_used() -> void:
 ## her silahta arcane_surge çağırır: güçlendirme BEKLEYEN bir çarpan olarak durur ve bir sonraki ASIL atışta (efsun ek atışları
 ## hariç) tüketilir (_take_surge_mult) - hemen ateş edilebiliyorsa (hedef var, şarjör/bumerang/ölü/satıcı engeli yok) FireTimer
 ## baştan kurulup o an ateşlenir; edilemiyorsa güçlendirme ilk fırsattaki atışa kalır. Işın silahında bir sonraki tik hemen
-## atılır. Görsel: güçlendirilmiş atışta ikon hedefe doğru sertçe ileri fırlar (WeaponJuice.arcane_surge - uzak kopya "weapon_fire"
+## atılır. Görsel: güçlendirilmiş atışta ikon hedefin TERSİNE sertçe geri teper (WeaponJuice.arcane_surge - uzak kopya "weapon_fire"
 ## yayınındaki "surge" ile AYNI fonksiyonu oynatır), yakın dövüşte savuruş zaten ileri atılış - sadece mor parlama.
 var _surge_pending_mult: float = 1.0
 ## O an işlenen atış güçlendirilmiş mi (geri tepme/savuruş görseli + yayın bayrağı için - _fire_at içinde kurulur).
@@ -614,22 +614,50 @@ var _surge_shot: bool = false
 func arcane_surge(dmg_mult: float) -> void:
 	_surge_pending_mult = maxf(_surge_pending_mult, dmg_mult)
 	var owner_node: Node = get_parent()
-	if owner_node == null or owner_node.get("is_dead") == true or owner_node.get("is_downed") == true \
-			or owner_node.get("is_in_merchant_zone") == true or not can_process():
+	if owner_node == null or owner_node.get("is_dead") == true or owner_node.get("is_downed") == true 			or owner_node.get("is_in_merchant_zone") == true or not can_process():
 		return
+	var target: Node2D = _get_target_enemy() if continuous_beam else 			(_make_facing_direction_target() if (fire_in_facing_direction and icon_sprite) else _get_target_enemy())
 	if continuous_beam:
 		## Kilitli bir hedef varsa bir sonraki karede tik atılır (_process_continuous_beam; kilit yoksa kilitlenince hemen).
 		_beam_tick_timer = 0.0
+		if target == null:
+			_surge_visual(_surge_fallback_dir())
 		return
-	if is_reloading or (single_active_projectile and _projectiles_in_flight > 0):
-		return
-	var target: Node2D = _make_facing_direction_target() if (fire_in_facing_direction and icon_sprite) else _get_target_enemy()
-	if target == null:
+	if is_reloading or (single_active_projectile and _projectiles_in_flight > 0) or target == null:
+		## Ateş edilemiyor (şarjör doluyor / bumerang havada / hedef yok): güçlendirme bekler ama yetenek kullanıldığı HİSSEDİLSİN -
+		## ikon yine de geri teper (2026-10-04 "pasifin aktifleştiği hiç hissedilmiyor").
+		_surge_visual((target.global_position - global_position) if target != null else _surge_fallback_dir())
 		return
 	if fire_timer and not draw_before_fire:
 		fire_timer.start() ## saldırı bekleme süresi sıfırlanır - bir sonraki normal atış tam aralık sonra
 	_fire_at(target)
 	_item_on_attack(target)
+
+
+## Hedef yokken geri tepme yönünün referansı: karakterin baktığı yön (tepme bunun tersine).
+func _surge_fallback_dir() -> Vector2:
+	var o: Node = get_parent()
+	if o != null and o.has_method("_facing_to_vector") and "facing" in o:
+		return o.call("_facing_to_vector", o.get("facing"))
+	return Vector2.RIGHT
+
+
+## Atışsız görsel: ikon hedefin tersine sertçe geri teper + kıvılcım + parlama; uzak kopyaya "weapon_surge" ile aynısı gider (atışlı yolda
+## görsel _do_recoil / _fire_at'teki "surge" bayrağıyla gider - iki kez oynamaz).
+func _surge_visual(direction: Vector2) -> void:
+	if icon_sprite == null or not icon_sprite.visible:
+		return
+	if _punch_tween and _punch_tween.is_valid():
+		_punch_tween.kill()
+	_punch_tween = WeaponJuice.arcane_surge(self, icon_sprite, direction, Vector2.ZERO, _icon_base_scale)
+	if NetworkManager.is_multiplayer_active:
+		var owner_player: Node = get_parent()
+		if owner_player and owner_player.has_method("_get_weapon_index"):
+			var slot_idx: int = owner_player._get_weapon_index(self)
+			if slot_idx >= 0:
+				NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "weapon_surge", global_position, {
+					"slot_index": slot_idx, "direction_x": direction.x, "direction_y": direction.y,
+				})
 
 
 ## Bekleyen güçlendirmeyi tüketir (asıl atışlarda - efsun ek atışları çarpanı paylaşmaz).
@@ -1526,6 +1554,7 @@ func _process(delta: float) -> void:
 		_process_continuous_beam(delta)
 		if icon_sprite:
 			_update_aim(delta)
+		_apply_beam_tremor()
 		return
 
 	var target_wait: float = max(0.05, _effective_fire_wait())
@@ -1737,6 +1766,12 @@ func _item_on_attack(target: Node2D) -> void:
 	if p.has_item("ilidaricin_kilici") and _item_attack_count % ITEM_ILIDARIC_EVERY == 0 and is_instance_valid(target):
 		_fire_at_delayed(target, ITEM_DOUBLE_FIRE_VISUAL_DELAY)
 	p.item_on_weapon_attack()
+
+
+## Assasin pasifi "Bıçak Uzmanlığı" (player.gd _assasin_passive_on_skill_used): yetenek kullanımından sonraki 3 sn boyunca silah vuruşları kesin kritik.
+func _passive_guaranteed_crit() -> bool:
+	var p := get_parent()
+	return p != null and p.has_method("assasin_guaranteed_crit_active") and bool(p.assasin_guaranteed_crit_active())
 
 
 ## Azrail'in Gözü: oyuncunun bu yaratığa ilk vuruşu mu (player.gd item_first_hit işaretler) - işaret efekti burada.
@@ -2194,8 +2229,30 @@ func _end_beam() -> void:
 		_beam_fx.queue_free()
 	_beam_fx = null
 	_beam_target = null
+	_stop_beam_tremor()
 	if NetworkManager.is_multiplayer_active:
 		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "beam_stop", Vector2.ZERO, {})
+
+
+## Yıldırım asası aktifken (ışın hedefe kilitli) ikon hafifçe titrer (kullanıcı isteği 2026-10-04). Uzak kopya: remote_player.gd
+## _update_beam_tremor (AYNI WeaponJuice.tremor_offset). Konum yerelde Vector2.ZERO taban; kritik tikinin "jitter" tween'i
+## (_punch_tween) sürerken ona karışılmaz.
+var _beam_tremor_on: bool = false
+
+
+func _apply_beam_tremor() -> void:
+	if not icon_sprite or not _beam_fx or not is_instance_valid(_beam_fx):
+		return
+	if _punch_tween and _punch_tween.is_valid():
+		return
+	icon_sprite.position = WeaponJuice.tremor_offset(Time.get_ticks_msec() / 1000.0)
+	_beam_tremor_on = true
+
+
+func _stop_beam_tremor() -> void:
+	if _beam_tremor_on and icon_sprite:
+		icon_sprite.position = Vector2.ZERO
+	_beam_tremor_on = false
 
 
 func _attach_shadow_under_owner() -> void:
@@ -2245,7 +2302,7 @@ func _deal_beam_tick(target: Node2D) -> void:
 	if not target.has_method("take_damage"):
 		return
 	var final_damage: float = damage * BEAM_TICK_DAMAGE_RATIO * rage_multiplier
-	## Büyücü Kız pasifi: güçlendirme ışın silahında bir sonraki tike (+%30) - asa da sertçe ileri fırlar.
+	## Büyücü Kız pasifi: güçlendirme ışın silahında bir sonraki tike (+%30) - asa da hedefin tersine sertçe geri tepe.
 	var surge_mult: float = _take_surge_mult()
 	final_damage *= surge_mult
 	if surge_mult > 1.0 and icon_sprite:
@@ -2258,11 +2315,11 @@ func _deal_beam_tick(target: Node2D) -> void:
 	final_damage *= 1.0 + _player_stat("talon_damage_bonus")
 	final_damage *= 1.0 - _player_stat("talon_salvo_damage_penalty") ## Talon E aktifken -%40 (bkz. player.gd)
 	var first_hit: bool = _item_first_hit(target)
-	var is_crit: bool = first_hit or randf() < crit_chance
+	var is_crit: bool = first_hit or _passive_guaranteed_crit() or randf() < crit_chance
 	if is_crit:
 		final_damage *= crit_damage + _player_stat("item_crit_damage_bonus")
 		## Kritik tik: asa hafifçe titrer (bkz. WeaponCritAnim "jitter") - uzak kopyaya da gider. (Büyücü pasifinin
-		## güçlendirilmiş tikinde ileri fırlayış öncelikli - iki tween aynı ikonda çekişmesin.)
+		## güçlendirilmiş tikinde geri tepme öncelikli - iki tween aynı ikonda çekişmesin.)
 		if icon_sprite and surge_mult <= 1.0:
 			WeaponCritAnim.play_ranged(self, icon_sprite, _crit_key(), (target.global_position - global_position), Vector2.ZERO,
 				_icon_base_scale, recoil_distance)
@@ -2439,7 +2496,7 @@ func _fire_at(target: Node2D) -> void:
 	final_damage *= 1.0 - _player_stat("talon_salvo_damage_penalty") ## Talon E aktifken -%40 (bkz. player.gd)
 	## Azrail'in Gözü (eşya): bu yaratığa ilk vuruş garanti kritik (+ aşağıda ek hasar).
 	var first_hit: bool = _item_first_hit(target)
-	var is_crit: bool = first_hit or randf() < crit_chance + (ench.crit_bonus(target) if ench else 0.0)
+	var is_crit: bool = first_hit or _passive_guaranteed_crit() or randf() < crit_chance + (ench.crit_bonus(target) if ench else 0.0)
 	if is_crit:
 		## Son Felaket Pençesi: kritik çarpanına +0.5 (sınırı aşabilir).
 		final_damage *= crit_damage + (ench.crit_damage_bonus(target) if ench else 0.0) + _player_stat("item_crit_damage_bonus")
@@ -2487,6 +2544,8 @@ func _fire_at(target: Node2D) -> void:
 		surge_extra["crit"] = true
 	if _surge_shot and icon_sprite:
 		WeaponJuice.surge_flash(self, icon_sprite)
+		if melee:
+			WeaponJuice.spawn_surge_spark(self, icon_sprite) ## menzilli silahta kıvılcım arcane_surge içinde
 	if melee and _is_uzunkilic:
 		## Uzunkılıç: hedefe atılıp üstünden yay çizen kendi savuruşu (bkz. _start_sword_swing) - diğer yakın dövüş
 		## silahlarının hedef üstündeki "Z" zikzağı ve eski kırmızı hilal (fx_uzunkilic_slash) kılıçta kullanılmıyor.
@@ -3305,7 +3364,7 @@ func _hide_icon_if_still_flying() -> void:
 func _do_recoil(direction: Vector2, is_crit: bool = false) -> void:
 	if not icon_sprite:
 		return
-	## Büyücü Kız pasifi: güçlendirilmiş atışta geri tepme yerine sert ileri fırlayış (kritik animasyonunun da önünde). Uzak kopya
+	## Büyücü Kız pasifi: güçlendirilmiş atışta normal geri tepme yerine pasifin sert geri tepmesi (kritik animasyonunun da önünde). Uzak kopya
 	## "weapon_fire" yayınındaki "surge" ile aynısını oynatır - ayrı "weapon_recoil" yayını gönderilmez (iki tween çekişirdi).
 	if _surge_shot:
 		if _punch_tween and _punch_tween.is_valid():
@@ -3319,14 +3378,19 @@ func _do_recoil(direction: Vector2, is_crit: bool = false) -> void:
 			_punch_tween.kill()
 		_punch_tween = WeaponCritAnim.play_ranged(self, icon_sprite, _crit_key(), direction, Vector2.ZERO, _icon_base_scale, recoil_distance)
 		return
-	var kick: Vector2 = -direction * recoil_distance
-	var tw := create_tween()
-	tw.tween_property(icon_sprite, "position", kick, 0.04)
-	tw.tween_property(icon_sprite, "position", Vector2.ZERO, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	## Ezilip esneyen "punch" (bkz. weapon_juice.gd - uzak kopya remote_player.gd de aynısını oynatır).
 	if _punch_tween and _punch_tween.is_valid():
 		_punch_tween.kill()
-	_punch_tween = WeaponJuice.fire_punch(self, icon_sprite, _icon_base_scale)
+	if WeaponJuice.has_ranged_recoil(_crit_key()):
+		## Yay/crossbow/tabanca/ateş-buz asası/tüfek/tüftüf (kullanıcı isteği 2026-10-04): daha okunur geri tepme + namlu kalkması
+		## (bkz. WeaponJuice.RANGED_RECOIL - uzak kopya remote_player.gd _animate_weapon_fire_full aynısını oynatır).
+		_punch_tween = WeaponJuice.ranged_recoil(self, icon_sprite, _crit_key(), direction, Vector2.ZERO, _icon_base_scale, recoil_distance)
+	else:
+		var kick: Vector2 = -direction * recoil_distance
+		var tw := create_tween()
+		tw.tween_property(icon_sprite, "position", kick, 0.04)
+		tw.tween_property(icon_sprite, "position", Vector2.ZERO, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		## Ezilip esneyen "punch" (bkz. weapon_juice.gd - uzak kopya remote_player.gd de aynısını oynatır).
+		_punch_tween = WeaponJuice.fire_punch(self, icon_sprite, _icon_base_scale)
 	# Broadcast weapon recoil to remote players
 	if NetworkManager.is_multiplayer_active:
 		# Determine slot index from parent's weapon list

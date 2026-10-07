@@ -59,6 +59,8 @@ const VisionFogScript := preload("res://scripts/vision_fog.gd")
 const AtmosphereScript := preload("res://scripts/atmosphere.gd")
 const GrassSwayScript := preload("res://scripts/grass_sway.gd")
 const TreeSwayScript := preload("res://scripts/tree_sway.gd")
+const DepthOccludersScript := preload("res://scripts/depth_occluders.gd")
+const CreatureDepthScript := preload("res://scripts/creature_depth.gd")
 const MapShadowsScript := preload("res://scripts/map_shadows.gd")
 const GroundTexelPassScript := preload("res://scripts/ground_texel_pass.gd")
 const WorldRenderScaleScript := preload("res://scripts/world_render_scale.gd")
@@ -122,6 +124,22 @@ var _death_overlay_label: Label = null
 ## _on_match_stats_received, _show_death_overlay.
 var _match_stats_by_peer: Dictionary = {}
 
+## ZAFER + SONSUZ MOD + koşu sonu rekor/başarım (kullanıcı isteği 2026-10-05) - bkz. _on_victory_reached, _run_summary, _record_run.
+const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
+const RunSummaryUIScript: GDScript = preload("res://scripts/run_summary_ui.gd")
+const VictoryOverlayScript: GDScript = preload("res://scripts/victory_overlay.gd")
+const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
+const EndlessMathScript: GDScript = preload("res://scripts/endless_math.gd")
+const BossBarTopScript: GDScript = preload("res://scripts/boss_bar_top.gd")
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
+const TierDisplayScript: GDScript = preload("res://scripts/tier_display.gd")
+var _boss_bar_top: Control = null ## üst ortadaki boss barı (boss_bar_top.gd)
+var _victory_overlay: CanvasLayer = null
+var _endless_label: Label = null
+## Bu koşuda kırılan rekorlar / açılan başarımlar ({"records": [...], "achievements": [...]}) - ölüm ve zafer ekranında listelenir.
+var _run_results: Dictionary = {"records": [], "achievements": []}
+var _run_end_recorded: bool = false ## koşu sonu (toplamlar) bir kez işlensin: ölüm ekranı YA DA menüye çıkış (_exit_tree)
+
 ## #54 (kullanıcı isteği: "Ölüm ekranında seçilebilir müttefik takip
 ## kamerası") - takım hâlâ hayattayken ("İzleyicisin" durumu) ölen oyuncu
 ## artık ok tuşlarıyla (bkz. _show_death_overlay'deki "SpectateRow") hayatta
@@ -160,6 +178,8 @@ func _ready() -> void:
 	GameManager.team_leveled_up.connect(_on_team_leveled_up)
 	player.stats_changed.connect(_update_stats_display)
 	player.died.connect(_on_player_died)
+	if player.has_signal("rose_from_permadeath"):
+		player.rose_from_permadeath.connect(_on_player_rose_from_permadeath)
 	NetworkManager.server_disconnected.connect(_on_multiplayer_server_disconnected)
 	## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini
 	## beklemeden tüm kartlarını seçebilsin... hepsi ortak bir bekleme
@@ -181,11 +201,22 @@ func _ready() -> void:
 	merchant_arrow_layer.add_child(_merchant_arrow)
 	## Görev sistemi (bkz. world_event_manager.gd) - satıcı okuyla AYNI CanvasLayer deseni,
 	## ayrı bir layer'da (aynı katmanda olsalar da iki script birbirinden habersiz, karışmasın).
+	NetworkManager.creature_tier_reached.connect(_on_creature_tier_reached)
+	NetworkManager.victory_reached.connect(_on_victory_reached)
+	GameManager.run_about_to_reset.connect(_record_run_end_once)
+	GameManager.run_record_suppressed = false ## yeni Main: devirden gelen bastırma bitti
+	NetworkManager.endless_started.connect(_on_endless_started)
+	NetworkManager.endless_layer_reached.connect(_on_endless_layer_reached)
+	## Tek oyunculuda game_time karakter seçimi sırasında da akıyor - koşu süresi Main açıldığı andan sayılsın (bkz. GameManager.run_clock_origin).
+	if not NetworkManager.is_multiplayer_active:
+		GameManager.run_clock_origin = GameManager.game_time
 	NetworkManager.world_event_announced.connect(_on_world_event_announced)
 	NetworkManager.world_event_started.connect(_on_world_event_started)
 	NetworkManager.world_event_progress.connect(_on_world_event_progress)
 	NetworkManager.world_event_completed.connect(_on_world_event_completed)
 	NetworkManager.world_event_item_collected.connect(_on_world_event_item_collected)
+	NetworkManager.world_event_catchup.connect(_on_world_event_catchup)
+	NetworkManager.host_migration_state.connect(_on_host_migration_state)
 	## (Ekranın üst-ortasındaki ayrı görev pusulası - world_event_marker.gd - kaldırıldı: kullanıcı isteğiyle (2026-09-24)
 	## görev konumu artık görev penceresinin İÇİNDE, her satırın yön oku + mesafesiyle - bkz. world_event_banner.gd.)
 	_world_event_banner = Control.new()
@@ -200,6 +231,32 @@ func _ready() -> void:
 	## oku da kalıcı arayüz parçası.
 	UISound.register_ui_opacity(_world_event_banner)
 	UISound.register_ui_opacity(_merchant_arrow)
+	## KAMERA SARSINTISI sürücüsü (kullanıcı isteği 2026-10-05, bkz. camera_shake.gd): olaylar static API'yi çağırır, bu düğüm her kare
+	## kamera ofsetine uygular. Önceki oyundan kalan travma temizlenir.
+	CameraShakeScript.reset()
+	var shake_driver := Node.new()
+	shake_driver.name = "CameraShakeDriver"
+	shake_driver.set_script(CameraShakeScript)
+	add_child(shake_driver)
+	## Üst ortadaki BOSS BARI (kullanıcı isteği 2026-10-05, prototip T1): canlı boss varken boss'un adı + kalkan + can; çoklu bossta
+	## altta küçük plaketler. Boss'un üstünde artık sadece kafatası işareti var (bkz. enemy.gd _create_overhead_bar).
+	var boss_bar_layer := CanvasLayer.new()
+	boss_bar_layer.name = "BossBarLayer"
+	boss_bar_layer.layer = 38
+	add_child(boss_bar_layer)
+	_boss_bar_top = Control.new()
+	_boss_bar_top.name = "BossBarTop"
+	_boss_bar_top.set_script(BossBarTopScript)
+	## Telefonda üst orta görev satırlarıyla paylaşılıyor: bar onların altından başlar (PC'de sabit y=50, görevler sağ sütunda).
+	_boss_bar_top.set("top_y_getter", func() -> float:
+		if not MobileUI.enabled:
+			return float(BossBarTopScript.TOP_Y)
+		var y: float = float(BossBarTopScript.PHONE_TOP_Y)
+		if _world_event_banner and is_instance_valid(_world_event_banner):
+			y = maxf(y, float(_world_event_banner.call("get_rows_bottom_y")) + 8.0)
+		return y)
+	boss_bar_layer.add_child(_boss_bar_top)
+	UISound.register_ui_opacity(_boss_bar_top)
 	## Görev göstergeleri HUD'un SAĞ sütununun altında dursun (bkz. world_event_banner.gd): minimap + (varsa) grup paneli.
 	## DÜZELTME (kullanıcı bildirimi 2026-09-25: "görev başlayınca sağda gözükmüyor") - eskiden ENVANTER/altın butonlarına
 	## hizalanıyordu; onlar aynı gün SOLA taşınınca band ekranın sol dışına itiliyordu (sağ kenarı = envanterin sağ kenarı).
@@ -297,11 +354,17 @@ func _ready() -> void:
 		GrassSwayScript.new().setup(harita_node)
 		## Sallanan ağaçlar ("Ağaç 0/1/2", bkz. tree_sway.gd / scenes/sallanan ağaç.gdshader).
 		TreeSwayScript.new().setup(harita_node)
+		## Derinlik (y-sıralama): ağaç/bina/maden önde kalınca oyuncunun üstüne çizilir (bkz. depth_occluders.gd; TreeSway'DEN SONRA kurulmalı).
+		DepthOccludersScript.new().setup(harita_node)
 		## Harita gölgeleri (2026-10-02, "B - Tepe gölgesi"): pişmiş doku zeminin üstüne, objelerin altına (bkz. map_shadows.gd).
 		MapShadowsScript.attach(harita_node)
 		## Zemin shader'ları (çimen/toprak) dünya pikseli çözünürlüğünde çizilip büyütülür - telefonda GPU'nun en büyük yükü
 		## (bkz. ground_texel_pass.gd, görüntü birebir aynı).
 		GroundTexelPassScript.attach(harita_node)
+	## Yaratık-oyuncu derinliği: oyuncunun önünde duran yaratık oyuncunun üstüne çizilir (bkz. creature_depth.gd).
+	var creature_depth: Node = CreatureDepthScript.new()
+	creature_depth.name = "CreatureDepth"
+	add_child(creature_depth)
 	## Grafik ayarı "Çözünürlük ölçeği" (bkz. world_render_scale.gd; %100'de hiçbir şey kurmaz).
 	WorldRenderScaleScript.attach(self)
 
@@ -347,6 +410,42 @@ func _ready() -> void:
 	## sırada duraklamıyor, bkz. _start_initial_loadout_selection).
 	if GameManager.owned_weapons.is_empty():
 		_start_initial_loadout_selection.call_deferred()
+	## Geç katılım (2026-10-04): Main artık ağaçta - host'tan yaratıkların/atmosferin/satıcının "yakalama" gönderimini iste
+	## (eskiden host bunu istek gelir gelmez, istemci henüz yükleme ekranındayken gönderiyordu: paketler boşa gidiyordu).
+	if NetworkManager.has_pending_rejoin():
+		_restore_rejoined_player.call_deferred()
+	NetworkManager.notify_main_ready_for_catchup.call_deferred()
+
+
+## Geri katılım (2026-10-04): oyundan düşen oyuncu geri girdiğinde kaydedilmiş durumu uygular ve takım seviyesine eşitler (kaçırılan
+## seviyelerin kartları rastgele - player.gd restore_from_rejoin_snapshot), evden çıkarıp son bilinen konuma koyar.
+func _restore_rejoined_player() -> void:
+	var pending: Dictionary = NetworkManager.take_pending_rejoin()
+	if pending.is_empty() or not is_instance_valid(player):
+		return
+	var snap: Dictionary = pending.get("snap", {})
+	var missed: int = player.restore_from_rejoin_snapshot(snap, GameManager.team_level)
+	var house: Node = get_node_or_null("HouseInterior")
+	if house != null and house.has_method("_do_exit_house"):
+		house.call("_do_exit_house") ## oyun evde başlar - süren bir oyuna girenin dışarıda olması gerekir
+	if snap.has("pos") and not bool(snap.get("indoors", false)):
+		player.global_position = Vector2(snap["pos"])
+		player.reset_physics_interpolation()
+	if missed > 0:
+		player._spawn_floating_text("%d SEVİYE KAÇIRDIN - RASTGELE KARTLAR VERİLDİ" % missed, Color(1.0, 0.85, 0.4), true, -58.0)
+
+
+## Geri katılım için kendi durumumu host'a periyodik bildirir (main _process).
+var _rejoin_report_timer: float = 4.0
+
+
+func _process_rejoin_report(delta: float) -> void:
+	if not NetworkManager.is_multiplayer_active or NetworkManager.is_host or not is_instance_valid(player):
+		return
+	_rejoin_report_timer -= delta
+	if _rejoin_report_timer <= 0.0:
+		_rejoin_report_timer = 6.0
+		NetworkManager.report_rejoin_snapshot(player.get_rejoin_snapshot())
 
 
 ## Bulut gölgesini haritanın TÜM tile katmanlarına uygular.
@@ -399,6 +498,7 @@ func _process(delta: float) -> void:
 			and not GameManager.is_any_blocking_panel_open() and not GameManager.was_ui_cancel_consumed():
 		_toggle_pause()
 	
+	_process_rejoin_report(delta)
 	if NetworkManager.is_multiplayer_active and is_instance_valid(player):
 		_process_multiplayer_sync(delta)
 	if not _remote_players.is_empty():
@@ -665,10 +765,10 @@ func _process_multiplayer_sync(delta: float) -> void:
 		# konumunu biliyor (enemy sync), "en yakın düşmana dön" kararını
 		# remote_player.gd kendi tarafında YEREL olarak hesaplıyor (bkz.
 		# _update_local_weapon_aim) - tıpkı tek oyunculudaki gibi.
-		_rpc_update_player_transform.rpc(
-			player.global_position,
-			cur_anim,
-		)
+		_transform_seq = (_transform_seq + 1) & 0xFFFF
+		## Sadece Main'i hazır peer'lere (bkz. NetworkManager.main_rpc_targets): yükleme ekranındaki geri katılana / lobideki yabancıya gitmez.
+		for target_peer: int in NetworkManager.main_rpc_targets():
+			_rpc_update_player_transform.rpc_id(target_peer, player.global_position, cur_anim, _transform_seq)
 
 		## Vampir Çocuk'un R yarasaları (bkz. vampir_bat_swarm.gd): 6 yarasanın dünya konumu bu SÜREKLİ
 		## (unreliable, ~20Hz) kanaldan gider - hedef seçimi/hasar SADECE bu istemcide olduğu için diğer
@@ -678,7 +778,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 		if player.has_method("get_vampir_swarm_net_positions"):
 			var bat_positions: PackedVector2Array = player.get_vampir_swarm_net_positions()
 			if not bat_positions.is_empty() or _vampir_bats_last_sent_nonempty:
-				_rpc_update_vampir_bats.rpc(bat_positions)
+				for target_peer: int in NetworkManager.main_rpc_targets():
+					_rpc_update_vampir_bats.rpc_id(target_peer, bat_positions)
 			_vampir_bats_last_sent_nonempty = not bat_positions.is_empty()
 
 		# 2) DURUM kanalı: can, kalkan, silah envanteri, durum efektleri gibi
@@ -869,16 +970,18 @@ func _process_multiplayer_sync(delta: float) -> void:
 		## değişen alanlar için ise 20Hz'den 5Hz'e (4 kat) düşüyor.
 		if (is_heartbeat or state_snapshot != _last_sent_extra_state) and not NetworkManager.should_throttle("extra_state", 0.2):
 			_last_sent_extra_state = state_snapshot.duplicate(true)
-			_rpc_update_player_extra_state.rpc(
-				send_hp,
-				send_max_hp,
-				player.item_shield_hp,
-				player.item_shield_max,
-				player.paladin_zone_active,
-				send_dead,
-				weapon_keys,
-				extra
-			)
+			for target_peer: int in NetworkManager.main_rpc_targets():
+				_rpc_update_player_extra_state.rpc_id(
+					target_peer,
+					send_hp,
+					send_max_hp,
+					player.item_shield_hp,
+					player.item_shield_max,
+					player.paladin_zone_active,
+					send_dead,
+					weapon_keys,
+					extra
+				)
 
 
 ## BUG DÜZELTMESİ (kullanıcı isteği: "dükkandan diriltme satın alınabilmeli")
@@ -920,10 +1023,33 @@ func _get_or_spawn_remote_player(sender_id: int, allow_spawn: bool = true) -> Re
 	return _remote_players.get(sender_id, null)
 
 
+## Konum paketlerinin sıra numarası (2026-10-08 MP denetimi bulgusu 4): kanal güvenilmez + sırasız, internette (Epic) ya da paket kaybı
+## sonrası eski bir paket yenisinin ARDINDAN gelip kuklayı geri sıçratabiliyordu. uint16 sarar; alıcı eski/aynı numarayı atar.
+## Kanal tipi (unreliable_ordered / aktarım kanalı) Epic'te garanti değil - bu yüzden sıra uygulama düzeyinde.
+const EnemySyncCodecScript := preload("res://scripts/enemy_sync_codec.gd") ## seq_newer: konum paketi sıra kuralı
+var _transform_seq: int = 0
+var _remote_transform_last: Dictionary = {} ## gönderen peer -> [son seq, son kabul ms]
+const TRANSFORM_RESYNC_MSEC := 1500 ## bu süredir yeni paket gelmediyse gelen numara (sayaç sıfırlanmış olabilir) kabul edilir
+
+
+func _is_stale_transform(sender_id: int, seq: int) -> bool:
+	var now: int = Time.get_ticks_msec()
+	var rec: Array = _remote_transform_last.get(sender_id, [])
+	if rec.is_empty():
+		_remote_transform_last[sender_id] = [seq, now]
+		return false
+	if EnemySyncCodecScript.seq_newer(seq, int(rec[0])) or now - int(rec[1]) > TRANSFORM_RESYNC_MSEC:
+		_remote_transform_last[sender_id] = [seq, now]
+		return false
+	return true
+
+
 @rpc("any_peer", "unreliable")
-func _rpc_update_player_transform(pos: Vector2, cur_anim: String) -> void:
+func _rpc_update_player_transform(pos: Vector2, cur_anim: String, seq: int = 0) -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id == 0:
+		return
+	if _is_stale_transform(sender_id, seq):
 		return
 	## bkz. _get_or_spawn_remote_player üstündeki DÜZELTME notu - saf konum
 	## paketi TEK BAŞINA asla yeni bir kukla oluşturamaz.
@@ -1047,7 +1173,7 @@ func _start_initial_loadout_selection() -> void:
 func _grant_selected_item(key: String) -> void:
 	if not is_instance_valid(player):
 		return
-	GameManager.owned_weapons.append({"key": key, "level": 1, "spent": 0})
+	GameManager.owned_weapons.append(EnchantDefs.new_weapon_entry(key, 1, 0))
 	player.buy_weapon_copy(key, 1) ## bkz. player.gd - kendi içinde _reposition_weapon_icons() zaten çağırıyor
 
 ## Herkesin başlangıç kalkanı: Standart Kalkan, seviye 1. Kalkan artık ne başlangıçta seçiliyor ne de dükkandan/seyyar
@@ -1288,6 +1414,19 @@ func _revive_local_player() -> void:
 		_death_overlay_layer.queue_free()
 	_death_overlay_layer = null
 	_death_overlay_label = null
+	## Host'un "kalıcı öldü" kaydı da silinir (2026-10-07): eskiden kalıyordu, diğerleri ölünce canlı oyuncu ölü sayılıp oyun erken bitiyordu.
+	NetworkManager.report_self_alive_again()
+
+
+## Kalıcı ölü oyuncunun diriltme hakkı yenilenince/varken yakında bir kurtarıcı olduğunda "yerde yatan" (kurtarılabilir) duruma
+## dönmesi (bkz. player.gd _rise_from_permadeath_to_downed): izleyici modu ve ölüm ekranı kalkar, host kalıcı ölü kaydını siler.
+func _on_player_rose_from_permadeath() -> void:
+	_end_spectate_mode()
+	if _death_overlay_layer and is_instance_valid(_death_overlay_layer):
+		_death_overlay_layer.queue_free()
+	_death_overlay_layer = null
+	_death_overlay_label = null
+	NetworkManager.report_self_alive_again()
 
 
 ## Periyodik dükkan molası sırasında kalıcı ölü oyuncuya (is_downed/kurtarma
@@ -1567,12 +1706,13 @@ func _advance_level_up_queue() -> void:
 
 
 ## ================================================================ EFSUN EKRANI (2026-09-25)
-## Sadece elit sandıklardan (bkz. _show_elite_chest) ve debug menüsünden açılır - sandık akışının kendi meşgul durumu/
-## geri sayımı zaten açık (enchant_screen.gd use_chest_timer). Seçim bitince on_done (kuyruğun sonraki adımı) çağrılır.
+## 2026-10-07'den beri sadece debug menüsünden ("Efsun ekranı aç") açılır: elit sandık artık epik eşya veriyor (bkz.
+## _show_elite_chest), efsunlar oyundan çıkarıldı (EnchantDefs.enabled). Seçim bitince on_done çağrılır.
 var _active_enchant_screen: Node = null
 
 
-## intro_chest: ekran önce elit sandığın açılışını oynatır, kartlar sandıktan fırlar (enchant_screen.gd).
+## intro_chest: ekran önce elit sandığın açılışını oynatır, kartlar sandıktan fırlar (enchant_screen.gd; efsun elit sandığı geri
+## getirilirse kullanılır).
 func _show_enchant_screen(on_done: Callable, intro_chest: bool = false) -> void:
 	if is_instance_valid(player) and player.has_method("clear_input_state"):
 		player.call("clear_input_state")
@@ -1594,11 +1734,19 @@ func _show_enchant_screen(on_done: Callable, intro_chest: bool = false) -> void:
 		on_done.call())
 
 
-## Elit sandık (kullanıcı isteği 2026-09-25: "elit sandıklardan efsun çıksın"): efsun ekranı elit sandığın açılışını
-## kendisi oynatır ve kartlar sandığın içinden fırlar (eskiden ayrı bir sandık katmanı bitince efsun ekranı açılıyordu -
-## kullanıcı: "kart içinden fırlamış gibi görünmüyor").
+## Elit sandık (kullanıcı isteği 2026-10-07: "bundan sonra elit sandıklardan sadece epik item çıkacak çünkü efsunları
+## kaldırmıştık"): normal sandıkla AYNI menü (chest_menu.gd), elit modda - elit sandık animasyonu, epik eşya kartı, AL/SAT.
+## (2026-09-25'te elit sandık efsun ekranı açıyordu; o ekran sadece debug menüsünden / EnchantDefs.enabled ile açılır.)
+## Menü kapanınca on_done (kuyruğun sonraki adımı) çağrılır.
 func _show_elite_chest(on_done: Callable) -> void:
-	_show_enchant_screen(on_done, true)
+	if is_instance_valid(player) and player.has_method("clear_input_state"):
+		player.call("clear_input_state")
+	get_tree().paused = true
+	_hide_level_up_wait_overlay()
+	var menu: CanvasLayer = ChestMenuScene.instantiate() as CanvasLayer
+	add_child(menu)
+	menu.setup(player, 0, true)
+	menu.closed.connect(on_done, CONNECT_ONE_SHOT)
 
 
 ## Debug menüsü (debug_menu.gd "Evrim ekranı aç", 2026-09-28): seviye beklemeden evrim kartları - tüm yuvalar açıkmış gibi
@@ -1845,8 +1993,8 @@ func _try_open_next_pending_chest() -> void:
 		## başlar (bkz. chest_menu.gd _on_countdown_tick).
 		NetworkManager.start_chest_countdown()
 	_hide_chest_wait_overlay()
-	## Önce normal sandıklar (eşya kartı), sonra elit sandıklar (açılış animasyonu + efsun ekranı) - kullanıcı isteği
-	## 2026-09-25: "normal sandıklardan eşya elit sandıklardan efsun çıksın".
+	## Önce normal sandıklar (parça kartı), sonra elit sandıklar (elit açılış animasyonu + epik eşya kartı, bkz.
+	## _show_elite_chest) - 2026-10-07: elit sandıktan efsun değil epik eşya çıkar.
 	if GameManager.pending_chest_tiers.is_empty():
 		GameManager.pop_pending_elite_chest()
 		_show_elite_chest(Callable(self, "_try_open_next_pending_chest"))
@@ -2120,6 +2268,12 @@ func _on_revive_invulnerability_granted(duration: float) -> void:
 		player.grant_revive_invulnerability(duration)
 
 
+## Host devri sürerken kısa bilgi (bkz. NetworkManager "HOST DEVRİ" bloğu). Metin boşsa (bitti/vazgeçildi) bir şey gösterilmez.
+func _on_host_migration_state(text: String, done: bool) -> void:
+	if text != "" and is_inside_tree():
+		_show_network_toast(text, 14.0 if not done else 2.4) ## devir sürerken dünya donuk: bildirim bağlanma bitene kadar kalsın
+
+
 func _on_host_left_game() -> void:
 	if not is_inside_tree():
 		return
@@ -2170,7 +2324,11 @@ func _return_to_menu_after_disconnect() -> void:
 ## Herhangi bir sahneye/panele bağımlı değil - doğrudan Main'e eklenir.
 var _active_toast_panels: Array = [] ## ekrandaki bildirimler, eskiden yeniye - alt alta dizilirler
 
-func _show_network_toast(text: String, hold_seconds: float = 2.4) -> void:
+## top_center (kullanıcı isteği 2026-10-05: "kademe atlamalarındaki bildirim ekranın üst ortasında çıksın"): PC'de bildirim sağ
+## sütun yerine ÜST ORTADA, FPS etiketi (y 8-44) ve sonsuz mod yazısının altında (y=56) çıkar, büyük yazıyla. Kendi yığını vardır:
+## sağ sütundaki bildirimlerle birbirlerinin yerini bozmazlar. Telefonda bildirimler zaten üst ortada - orada fark yok.
+## content: verilirse yazı etiketi yerine bu Control gösterilir (kademe bildirimi: başlık + kuru kafa satırı, bkz. _tier_banner).
+func _show_network_toast(text: String, hold_seconds: float = 2.4, top_center: bool = false, content: Control = null) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 100
 	add_child(layer)
@@ -2194,13 +2352,22 @@ func _show_network_toast(text: String, hold_seconds: float = 2.4) -> void:
 		panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
 		panel.offset_left = -330
 		panel.offset_right = 330
+	elif top_center:
+		panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		panel.offset_left = -380
+		panel.offset_right = 380
+	panel.set_meta("top_center", top_center and not phone)
 	layer.add_child(panel)
-	var lbl := Label.new()
-	lbl.text = text
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	UIKit.style_label(lbl, 32 if phone else 24, UIKit.C_TEXT, 0)
-	panel.add_child(lbl)
+	if content != null:
+		panel.add_child(content)
+	else:
+		var lbl := Label.new()
+		lbl.text = text
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+		UIKit.style_label(lbl, 32 if (phone or top_center) else 24, UIKit.C_TEXT, 0)
+		panel.add_child(lbl)
 	## Sağ sütundaki görev satırlarının (bkz. world_event_banner.gd) üstüne binmesin - onların altına yerleşir;
 	## aynı anda birden fazla bildirim varsa (ör. iki görev aynı anda) üst üste binmek yerine ALT ALTA dizilir.
 	## Satırlar/bildirimler eklenip kalktıkça her karede konum güncellenir.
@@ -2208,13 +2375,20 @@ func _show_network_toast(text: String, hold_seconds: float = 2.4) -> void:
 	var follow := func() -> void:
 		if not is_instance_valid(panel):
 			return
-		var y: float = 120.0 if phone else 292.0
-		if _world_event_banner and is_instance_valid(_world_event_banner):
+		var centered: bool = bool(panel.get_meta("top_center", false))
+		var y: float = 120.0 if phone else (56.0 if centered else 292.0)
+		## Üst-orta bildirimler görev satırlarıyla (sağ sütun) çakışmaz: o kontrol sadece sağ sütun içindir.
+		if not centered and _world_event_banner and is_instance_valid(_world_event_banner):
 			y = maxf(y, float(_world_event_banner.call("get_rows_bottom_y")) + 8.0)
+		## Üst ortadaki boss barı görünürken üst-orta bildirimler (telefonda tüm bildirimler) onun ALTINA yerleşir.
+		if (centered or phone) and _boss_bar_top and is_instance_valid(_boss_bar_top):
+			var bar_bottom: float = float(_boss_bar_top.call("get_bottom_y"))
+			if bar_bottom > 0.0:
+				y = maxf(y, bar_bottom + 8.0)
 		for other in _active_toast_panels:
 			if other == panel:
 				break
-			if is_instance_valid(other):
+			if is_instance_valid(other) and bool((other as Control).get_meta("top_center", false)) == centered:
 				y += (other as Control).size.y + 6.0
 		panel.offset_top = y
 	follow.call()
@@ -2252,6 +2426,174 @@ func _on_merchant_spawned(pos: Vector2, _stock: Array) -> void:
 		minimap.set_merchant_marker(pos, true)
 	if _merchant_arrow and is_instance_valid(_merchant_arrow):
 		_merchant_arrow.set_target_active(pos, true)
+
+
+## Yaratık Kademesi arttı (kullanıcı isteği 2026-10-04) - HER peer'de çalışır (bkz. NetworkManager.broadcast_creature_tier_reached).
+## tier == 16 = Final Kademe (enemy_spawner.gd FINAL_TIER).
+func _on_creature_tier_reached(tier: int) -> void:
+	if tier >= 16:
+		CameraShakeScript.add(0.5) ## Final: tüm bosslar geliyor
+	## 2026-10-05: sadece "KADEME <ROMEN>" + altında zorluğu gösteren 6 kuru kafa (bkz. tier_display.gd); eski "BAŞLADI - güçlendi" yazısı yok.
+	var title: String = TierDisplayScript.title(tier)
+	_show_network_toast(title, 4.0, true, _tier_banner(title, tier))
+	GameManager.run_max_tier = maxi(GameManager.run_max_tier, tier)
+	_note_run_progress()
+
+
+## Kademe bildirimi içeriği: ortalanmış başlık + altında kuru kafa satırı (tier_display.gd set_tier). Telefonda aynı boyut (okunur).
+func _tier_banner(title: String, tier: int) -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var lbl := Label.new()
+	lbl.text = title
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UIKit.style_label(lbl, 36, UIKit.C_TEXT, 0)
+	box.add_child(lbl)
+	var row: Control = Control.new()
+	row.set_script(TierDisplayScript)
+	row.call("set_tier", tier, 3)
+	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(row)
+	return box
+
+
+## ==============================================================================
+## ZAFER + SONSUZ MOD + KOŞU SONU REKOR/BAŞARIM (kullanıcı isteği 2026-10-05). Karar host'ta (enemy_spawner.gd "ZAFER + SONSUZ
+## MOD" bloğu), buradaki her şey HER peer'de yerel çalışır; rekorlar/başarımlar herkesin KENDİ makinesinde (run_records.gd).
+## ==============================================================================
+
+## Koşunun anlık özeti - ölüm/zafer ekranı ve rekor kaydı AYNI sözlüğü kullanır (bkz. run_records.gd başı).
+func _run_summary(victory: bool) -> Dictionary:
+	return {
+		"time": GameManager.run_elapsed(),
+		"tier": GameManager.run_max_tier,
+		"kills": GameManager.run_kills,
+		"layer": GameManager.endless_layer if GameManager.endless_active else 0,
+		"victory": victory or GameManager.victory_reached,
+		"solo": not NetworkManager.is_multiplayer_active,
+		"char_id": GameManager.selected_char_id,
+		"level": GameManager.team_level,
+	}
+
+
+## kind: "progress" (kademe/kat ilerledi) | "victory" | "end" (koşu bitti). Sonuçları _run_results'a biriktirir.
+## Debug modu (istediğin yaratığı doğurma) ve headless koşular (testler gerçek rekorları kirletmesin) HİÇ kayıt yazmaz.
+func _record_run(kind: String) -> Dictionary:
+	if GameManager.debug_mode_unlocked or DisplayServer.get_name() == "headless":
+		return {}
+	var s: Dictionary = _run_summary(kind == "victory")
+	var result: Dictionary
+	match kind:
+		"victory":
+			result = RunRecordsScript.record_victory(s)
+		"end":
+			result = RunRecordsScript.record_run_end(s)
+		_:
+			result = RunRecordsScript.note_progress(s)
+	RunRecordsScript.merge_results(_run_results, result)
+	return result
+
+
+## Koşu ilerlerken (yeni kademe / sonsuz kat): en iyi değerler anında kaydedilir, yeni açılan başarım toast ile bildirilir.
+func _note_run_progress() -> void:
+	_announce_achievements(_record_run("progress"))
+
+
+func _announce_achievements(result: Dictionary) -> void:
+	for id in result.get("achievements", []):
+		_show_network_toast("BAŞARIM: %s" % AchievementsScript.name_of(str(id)), 4.0)
+		EventSfx.play(get_tree(), &"mission_success")
+
+
+## Koşu ölüm ekranından geçmeden de bitebilir (menüye çıkış, yeniden başlatma) - toplamlar yine işlensin. 30 sn'den kısa koşu sayılmaz.
+func _exit_tree() -> void:
+	_record_run_end_once()
+
+
+## Koşu sonu toplamları bir kez yazılır. İki tetik: Main kalkarken (_exit_tree: menüye çıkış) ve GameManager.reset() öncesi
+## (yeniden başlatma: reset, Main kalkmadan ÖNCE süreyi/öldürmeyi sıfırlıyordu - bkz. GameManager.run_about_to_reset).
+func _record_run_end_once() -> void:
+	if GameManager.run_record_suppressed:
+		return ## host devri: koşu sürüyor, bu Main sadece yeniden kuruluyor
+	if not _run_end_recorded and GameManager.run_elapsed() >= 30.0:
+		_run_end_recorded = true
+		_record_run("end")
+
+
+## Final bosslarının hepsi öldü (HER peer'de, bkz. NetworkManager.victory_reached): zafer penceresi + zafer kaydı.
+func _on_victory_reached(_elapsed: float) -> void:
+	if _victory_overlay and is_instance_valid(_victory_overlay):
+		return
+	EventSfx.play(get_tree(), &"mission_success")
+	CameraShakeScript.add(0.9) ## zafer anı: Final'in son bossu yıkıldı
+	_record_run("victory") ## sonuçlar _run_results'ta birikir, pencerede gösterilir
+	var is_host_or_solo: bool = not NetworkManager.is_multiplayer_active or NetworkManager.is_host
+	_victory_overlay = CanvasLayer.new()
+	_victory_overlay.set_script(VictoryOverlayScript)
+	_victory_overlay.call("setup", _run_summary(true), is_host_or_solo, not NetworkManager.is_multiplayer_active)
+	_victory_overlay.connect("continue_pressed", _on_victory_continue_pressed)
+	_victory_overlay.connect("menu_pressed", _on_death_overlay_menu_pressed)
+	add_child(_victory_overlay)
+	_victory_overlay.call("set_results", _run_results)
+	## Takım tablosu: herkes KENDİ toplamlarını yayınlar (tek oyunculuda yerel yazılır) - ölüm ekranıyla aynı akış.
+	if NetworkManager.is_multiplayer_active:
+		_broadcast_local_match_stats()
+	else:
+		_record_local_match_stats()
+	_refresh_match_stats_ui()
+
+
+## Host/tek oyunculu "Sonsuza Devam Et"e bastı: spawner sonsuz modu başlatır, herkese endless_started gider.
+func _on_victory_continue_pressed() -> void:
+	var spawner: Node = get_node_or_null("EnemySpawner")
+	if spawner == null or not spawner.has_method("begin_endless") or not spawner.begin_endless():
+		if _victory_overlay and is_instance_valid(_victory_overlay) and _victory_overlay.has_method("unlock_continue"):
+			_victory_overlay.call("unlock_continue")
+
+
+func _on_endless_started() -> void:
+	if _victory_overlay and is_instance_valid(_victory_overlay):
+		_victory_overlay.queue_free()
+		_victory_overlay = null
+	_show_network_toast("SONSUZ MOD BAŞLADI! Her kat yaratıklar güçlenir, 3 katta bir boss dalgası gelir.", 5.0, true)
+	_update_endless_label()
+
+
+func _on_endless_layer_reached(layer: int) -> void:
+	var text: String = "SONSUZ KAT %d - yaratıklar güçlendi." % layer
+	if EndlessMathScript.is_boss_wave_layer(layer):
+		text += " Bu katta BOSS DALGASI var!"
+	_show_network_toast(text, 4.0, true)
+	_update_endless_label()
+	_note_run_progress()
+
+
+## Sonsuz moddayken üst-ortada küçük "SONSUZ MOD - KAT N" göstergesi (boss katında "BOSS DALGASI" eklenir).
+func _update_endless_label() -> void:
+	if not GameManager.endless_active:
+		if _endless_label and is_instance_valid(_endless_label):
+			_endless_label.visible = false
+		return
+	if _endless_label == null or not is_instance_valid(_endless_label):
+		var layer := CanvasLayer.new()
+		layer.name = "EndlessLabelLayer"
+		layer.layer = 41
+		add_child(layer)
+		_endless_label = Label.new()
+		_endless_label.name = "EndlessLabel"
+		_endless_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		_endless_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_endless_label.offset_top = 6
+		_endless_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_endless_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		UIKit.style_label(_endless_label, 32 if MobileUI.enabled else 28, UIKit.C_CREAM, 6)
+		layer.add_child(_endless_label)
+	var text: String = "SONSUZ MOD - KAT %d" % GameManager.endless_layer
+	if EndlessMathScript.is_boss_wave_layer(GameManager.endless_layer):
+		text += " - BOSS DALGASI"
+	_endless_label.text = text
+	_endless_label.visible = true
 
 
 func _on_merchant_departed() -> void:
@@ -2294,10 +2636,25 @@ func _on_world_event_announced(mission_id: int, kind: String, pos: Vector2, _rad
 			_world_event_banner.set_target(mission_id, pos, _radius)
 
 
-func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radius: float, duration: float, extra: Dictionary) -> void:
+## Süren görevin geç katılana yakalaması (bkz. NetworkManager.broadcast_world_event_catchup): etiket/tür kaydı + bildirimsiz aynı kurulum +
+## ilerleme + zaten toplanmış kristallerin gizlenmesi.
+func _on_world_event_catchup(mission_id: int, kind: String, label: String, pos: Vector2, radius: float, remaining: float, extra: Dictionary,
+		progress: float, target: float, collected: Array) -> void:
+	if _world_event_visuals.has(mission_id):
+		return ## bu görevi zaten biliyoruz (çift yakalama)
+	_world_event_kind_by_id[mission_id] = kind
+	_world_event_label_by_id[mission_id] = label
+	_on_world_event_started(mission_id, kind, pos, radius, remaining, extra, true)
+	_on_world_event_progress(mission_id, progress, target)
+	for idx in collected:
+		_on_world_event_item_collected(mission_id, int(idx))
+
+
+func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radius: float, duration: float, extra: Dictionary, quiet: bool = false) -> void:
 	var label: String = String(_world_event_label_by_id.get(mission_id, kind))
-	EventSfx.play(get_tree(), &"mission_start")
-	_show_network_toast("%s görevi BAŞLADI!\n%s" % [label, String(MISSION_DESCRIPTIONS.get(kind, ""))], MISSION_TOAST_SECONDS)
+	if not quiet:
+		EventSfx.play(get_tree(), &"mission_start")
+		_show_network_toast("%s görevi BAŞLADI!\n%s" % [label, String(MISSION_DESCRIPTIONS.get(kind, ""))], MISSION_TOAST_SECONDS)
 	if not NO_SINGLE_LOCATION_KINDS.has(kind):
 		var minimap: Node = hud.get_node_or_null("MinimapControl")
 		if minimap and minimap.has_method("set_mission_marker"):
@@ -2524,18 +2881,18 @@ func _record_local_match_stats() -> void:
 		return
 	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	var my_name: String = NetworkManager.local_player_name if NetworkManager.is_multiplayer_active else "Sen"
-	_match_stats_by_peer[my_id] = {"name": my_name, "dealt": player.match_damage_dealt, "taken": player.match_damage_taken}
+	_match_stats_by_peer[my_id] = {"name": my_name, "dealt": player.match_damage_dealt, "taken": player.match_damage_taken, "kills": GameManager.run_kills}
 	_refresh_match_stats_ui()
 
 
 func _broadcast_local_match_stats() -> void:
 	if not is_instance_valid(player):
 		return
-	NetworkManager.sync_match_stats.rpc(multiplayer.get_unique_id(), NetworkManager.local_player_name, player.match_damage_dealt, player.match_damage_taken)
+	NetworkManager.sync_match_stats.rpc(multiplayer.get_unique_id(), NetworkManager.local_player_name, player.match_damage_dealt, player.match_damage_taken, GameManager.run_kills)
 
 
-func _on_match_stats_received(peer_id: int, player_name: String, damage_dealt: float, damage_taken: float) -> void:
-	_match_stats_by_peer[peer_id] = {"name": player_name, "dealt": damage_dealt, "taken": damage_taken}
+func _on_match_stats_received(peer_id: int, player_name: String, damage_dealt: float, damage_taken: float, kills: int) -> void:
+	_match_stats_by_peer[peer_id] = {"name": player_name, "dealt": damage_dealt, "taken": damage_taken, "kills": kills}
 	_refresh_match_stats_ui()
 
 
@@ -2564,37 +2921,37 @@ func _on_chat_message_received(peer_id: int, player_name: String, text: String) 
 ## geldikçe her seferinde çağrılır, overlay henüz kurulmadıysa (is_final
 ## olmadan önce) sessizce no-op.
 func _refresh_match_stats_ui() -> void:
+	## 2026-10-05: tablo çizimi run_summary_ui.gd'ye taşındı (zafer penceresiyle ORTAK) + "Öldürme" sütunu.
+	if _victory_overlay and is_instance_valid(_victory_overlay):
+		_victory_overlay.call("refresh_stats", _match_stats_by_peer)
 	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
 		return
 	var grid: GridContainer = _death_overlay_layer.get_node_or_null("Window/VBox/StatsBox/StatsGrid")
 	if not grid:
 		return
-	for child in grid.get_children():
-		child.queue_free()
-	## 2026-09-24: kit penceresinde (bej) koyu mürekkep tonları, 24 px (m5x7 3x) - eskiden 15-16 px açık renkler.
-	for header_text in ["Oyuncu", "Verdiği Hasar", "Tankladığı Hasar"]:
-		var h := Label.new()
-		h.text = header_text
-		UIKit.style_label(h, 24, UIKit.C_TEXT_DIM, 0)
-		grid.add_child(h)
-	var peer_ids: Array = _match_stats_by_peer.keys()
-	peer_ids.sort_custom(func(a, b): return float(_match_stats_by_peer[a]["dealt"]) > float(_match_stats_by_peer[b]["dealt"]))
-	for peer_id in peer_ids:
-		var entry: Dictionary = _match_stats_by_peer[peer_id]
-		var name_lbl := Label.new()
-		name_lbl.text = str(entry.get("name", "?"))
-		UIKit.style_label(name_lbl, 24, UIKit.C_TEXT, 0)
-		grid.add_child(name_lbl)
-		var dealt_lbl := Label.new()
-		dealt_lbl.text = "%d" % int(round(float(entry.get("dealt", 0.0))))
-		dealt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		UIKit.style_label(dealt_lbl, 24, Color(UIKit.INK["damage"]), 0)
-		grid.add_child(dealt_lbl)
-		var taken_lbl := Label.new()
-		taken_lbl.text = "%d" % int(round(float(entry.get("taken", 0.0))))
-		taken_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		UIKit.style_label(taken_lbl, 24, Color(UIKit.INK["shield"]), 0)
-		grid.add_child(taken_lbl)
+	RunSummaryUIScript.fill_stats_grid(grid, _match_stats_by_peer)
+
+
+## Ölüm ekranı (is_final) koşu özeti: üstte SÜRE/KADEME/(KAT)/ÖLDÜRME satırı, altta bu koşuda kırılan rekor + açılan başarımlar.
+## Birden fazla kez çağrılabilir (hem son ölende hem game_over_synced'te) - eski satırlar silinip yeniden kurulur.
+func _refresh_death_summary() -> void:
+	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
+		return
+	var stats_box: VBoxContainer = _death_overlay_layer.get_node_or_null("Window/VBox/StatsBox")
+	if not stats_box:
+		return
+	for old_name in ["SummaryRow", "ExtrasBox"]:
+		var old: Node = stats_box.get_node_or_null(old_name)
+		if old:
+			stats_box.remove_child(old)
+			old.queue_free()
+	var summary: Dictionary = _run_summary(false)
+	var row: Control = RunSummaryUIScript.summary_row(summary)
+	stats_box.add_child(row)
+	stats_box.move_child(row, 0)
+	var extras: Control = RunSummaryUIScript.extras_box(_run_results, summary)
+	if extras:
+		stats_box.add_child(extras)
 
 
 ## bkz. pause_menu.gd::_on_menu() - ölüm overlay'indeki "Ana Menüye Dön"
@@ -2674,8 +3031,8 @@ func _show_death_overlay(is_final: bool) -> void:
 		window.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 		window.set_anchors_preset(Control.PRESET_CENTER_TOP)
 		window.offset_top = 80
-		window.offset_left = -330
-		window.offset_right = 330
+		window.offset_left = -380 ## 2026-10-05: tabloya "Öldürme" sütunu geldi (4 sütun) - 660 -> 760 genişlik
+		window.offset_right = 380
 		window.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		_death_overlay_layer.add_child(window)
 
@@ -2809,11 +3166,19 @@ func _show_death_overlay(is_final: bool) -> void:
 	if stats_box_node:
 		stats_box_node.visible = is_final
 	if is_final:
+		## Koşu sonu: toplamlar + rekorlar + başarımlar bir kez işlenir (bkz. _record_run), özet satırı ekrana kurulur.
+		if not _run_end_recorded:
+			_run_end_recorded = true
+			_record_run("end")
+		_refresh_death_summary()
 		_refresh_match_stats_ui()
 		if title_lbl:
 			title_lbl.text = "OYUN BİTTİ"
 		if sub_lbl:
 			sub_lbl.text = "Tüm takım elendi." if NetworkManager.is_multiplayer_active else "Öldün."
+			if GameManager.endless_active:
+				sub_lbl.text += " Sonsuz Kat %d'e kadar dayandınız." % GameManager.endless_layer if NetworkManager.is_multiplayer_active \
+						else " Sonsuz Kat %d'e kadar dayandın." % GameManager.endless_layer
 		if spectate_row_node:
 			spectate_row_node.visible = false
 		_end_spectate_mode()

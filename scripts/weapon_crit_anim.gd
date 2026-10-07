@@ -181,6 +181,11 @@ static func play_melee(host: Node, icon: Node2D, weapon_key: String, dir: Vector
 	return tw
 
 
+## Dışarıdan (WeaponJuice.ranged_recoil) kullanılan genel ad - bkz. aşağıdaki _add_rotation_kick.
+static func rotation_kick(host: Node, icon: Node2D, amount: float, dur: float, decay: bool) -> void:
+	_add_rotation_kick(host, icon, amount, dur, decay)
+
+
 ## Rotasyona toplam `amount` radyanlık ofseti `dur` içinde ARTIMLI ekler. decay=true: hemen eklenip sönen "tepme"
 ## (sonunda net 0), false: yumuşak ekleme (tam tur gibi - TAU sonunda aynı açı).
 static func _add_rotation_kick(host: Node, icon: Node2D, amount: float, dur: float, decay: bool) -> void:

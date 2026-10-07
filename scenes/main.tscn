@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://bne58yj7o5p68" path="res://scripts/house_interior.gd" id="13_houseinterior"]
 [ext_resource type="Script" uid="uid://dqodewtm2in70" path="res://scripts/traveling_merchant.gd" id="14_merchant"]
 [ext_resource type="Script" path="res://scripts/world_event_manager.gd" id="15_worldevents"]
+[ext_resource type="Script" path="res://scripts/weapon_shop.gd" id="16_weaponshop"]
 
 [sub_resource type="Shader" id="Shader_o6xl0"]
 code = "shader_type canvas_item;
@@ -98,6 +99,9 @@ script = ExtResource("6_spawner")
 
 [node name="HouseInterior" type="Node2D" parent="." unique_id=1858161347]
 script = ExtResource("13_houseinterior")
+
+[node name="WeaponShop" type="Node2D" parent="." unique_id=1962447305]
+script = ExtResource("16_weaponshop")
 
 [node name="TravelingMerchant" type="Node2D" parent="." unique_id=282758878]
 script = ExtResource("14_merchant")

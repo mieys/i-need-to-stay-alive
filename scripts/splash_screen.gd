@@ -1,13 +1,11 @@
 extends Control
 
-## Açılış logosu: oyun başladığında saydamdan görünür hale gelip (fade in),
-## 3 saniye tam görünür kalıp, sonra tekrar saydamlaşarak (fade out) ana
-## menüye geçer. Kullanıcı isteği - bkz. assets/ui/studio_logo.png.
+## Açılış sahnesi: eskiden stüdyo logosunu gösterip (fade in/out, ~4.8 sn + açılış sesi) ana menüye geçiyordu. Kullanıcı isteği
+## (2026-10-04): "oyun başlangıcındaki logo göstergesini kaldır" - logo ve sesi çıkarıldı (assets/ui/studio_logo.png dosyada
+## duruyor, geri istenirse sahneye eklenir). Sahne KALDI çünkü eksik .dll uyarısını (aşağıda) burası yapıyor: eksik dosya yoksa
+## doğrudan ana menüye geçer.
 
 const NEXT_SCENE := "res://scenes/main_menu.tscn"
-const FADE_IN_TIME := 0.8
-const HOLD_TIME := 2.5
-const FADE_OUT_TIME := 1.5
 ## EKSİK DOSYA UYARISI (kullanıcı bildirimi 2026-10-03: "insanlar oyunumu alıp açınca çok oyunculuya bastıklarında oyundan
 ## atıyor"): Windows'ta oyun = .exe + yanındaki .dll'ler (Epic Online Services + C++ yaratık sistemi; .exe'ye gömülemiyor).
 ## Sadece .exe gönderilince bu eklentiler yüklenmiyor - yaratıklar hareket etmiyor, çok oyunculu çöküyordu. Artık açılışta
@@ -18,25 +16,13 @@ const REQUIRED_NATIVE := {
 	&"EOSGMultiplayerPeer": "libeosg.windows.template_release.x86_64.dll, EOSSDK-Win64-Shipping.dll, xaudio2_9redist.dll",
 }
 
-@onready var logo: TextureRect = $CenterContainer/Logo
-@onready var audio: AudioStreamPlayer = $AudioStreamPlayer
 @onready var background: ColorRect = $Background
 
 
 func _ready() -> void:
 	if _show_missing_files_if_any():
 		return
-	# Arkaplan rengini logonun merkezine yakın bir arka plan rengiyle aynı yapıyoruz
-	background.color = Color(0.0, 0.0, 0.0, 1.0)
-	
-	logo.modulate.a = 0.0
-	audio.play() # Logo belirmeye başladığı anda ses çalsın
-	
-	var tween: Tween = create_tween()
-	tween.tween_property(logo, "modulate:a", 1.0, FADE_IN_TIME)
-	tween.tween_interval(HOLD_TIME)
-	tween.tween_property(logo, "modulate:a", 0.0, FADE_OUT_TIME)
-	tween.tween_callback(_go_to_main_menu)
+	_go_to_main_menu.call_deferred() ## _ready içinde sahne değiştirmek güvenli değil
 
 
 func _show_missing_files_if_any() -> bool:
@@ -51,7 +37,6 @@ func _show_missing_files_if_any() -> bool:
 	if missing.is_empty():
 		return false
 	background.color = Color(0.08, 0.05, 0.03, 1.0)
-	logo.visible = false
 	var label := Label.new()
 	if android:
 		label.text = "Oyunun bazı parçaları bu telefonda yüklenemedi!\n\nOyunu güncel APK ile kaldırıp yeniden yüklemeyi dene;\n" \

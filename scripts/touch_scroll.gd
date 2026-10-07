@@ -12,17 +12,25 @@ extends Node
 ##    tetiklenmez) ve sürükleme olayları GUI'ye gitmez (ScrollContainer'ın kendi sürüklemesiyle çift kaymasın).
 ##  - Parmak kalkınca son hızla bir süre savrulmaya devam eder (FLING_DECAY).
 ## Sadece dokunmatik olaylarda çalışır - fare/klavye/kumanda hiç etkilenmez. Kısa dokunuş (sürüklemesiz) eskisi gibi tıklar.
+## Telefon HUD'unda joystick'i ya da bir yetenek düğmesini tutan parmak liste KAYDIRMAZ (touch_controls.gd owns_touch):
+## sohbet/grup listesi joystick bölgesinde durduğu için, eskiden onları kaydırırken karakter de yürüyordu (2026-10-05).
 
 const DEADZONE := 18.0 ## px (ekran) - bundan kısa hareket dokunuş sayılır
 const FLING_DECAY := 6.0 ## 1/sn - büyük = savrulma çabuk durur
 const FLING_MIN := 30.0 ## px/sn - altında savrulma yok
+## Bırakma hızı = SON VEL_WINDOW_USEC içindeki toplam yer değiştirme / geçen süre (2026-10-05). Eskiden her sürükleme olayında
+## "olay arası duvar saati" ile anlık hız hesaplanıp 0.5 ile süzülüyordu: aynı karede gelen olaylarda (dt ~ 0) hız onlarca kat şişiyor,
+## parmak kalkarkenki küçük TERS titreme savrulmayı ters çevirip listeyi BAŞA fırlatıyordu ("aşağı kaydırınca başa dönüyor").
+const VEL_WINDOW_USEC := 120000 ## bırakma hızı için bakılan pencere
+const VEL_MIN_SPAN_USEC := 24000 ## pencerede bundan kısa süre varsa güvenilir hız yok -> savrulma yok
+const VEL_MAX := 6000.0 ## px/sn (ScrollContainer birimi) - üst sınır
+const FLING_STALE_USEC := 100000 ## son sürüklemeden bu kadar sonra bırakıldıysa (parmak durdu) savrulma yok
 
 var _sc: ScrollContainer = null
 var _start_pos: Vector2 = Vector2.ZERO
 var _start_scroll: Vector2 = Vector2.ZERO
 var _dragging: bool = false
-var _last_pos: Vector2 = Vector2.ZERO
-var _last_t: int = 0
+var _samples: Array = [] ## [zaman (usec), ekran konumu] - son sürükleme örnekleri (bırakma hızı için)
 var _vel: Vector2 = Vector2.ZERO ## px/sn, ScrollContainer yerel birimi
 var _fling: ScrollContainer = null
 
@@ -40,15 +48,17 @@ func _input(event: InputEvent) -> void:
 			_fling = null
 			_sc = _scroll_at(t.position)
 			_dragging = false
+			if _sc and _controls_own(t.index):
+				_sc = null
 			if _sc:
 				_start_pos = t.position
-				_last_pos = t.position
-				_last_t = Time.get_ticks_usec()
+				_samples = [[Time.get_ticks_usec(), t.position]]
 				_start_scroll = Vector2(_sc.scroll_horizontal, _sc.scroll_vertical)
 				_vel = Vector2.ZERO
 		else:
 			if _dragging:
 				get_viewport().set_input_as_handled()
+				_vel = _release_velocity()
 				if is_instance_valid(_sc) and _vel.length() > FLING_MIN:
 					_fling = _sc
 			_sc = null
@@ -57,6 +67,12 @@ func _input(event: InputEvent) -> void:
 		var d := event as InputEventScreenDrag
 		if d.index != 0 or _sc == null or not is_instance_valid(_sc):
 			return
+		## Parmak joystick'i/yetenek düğmesini tutuyorsa (touch_controls.gd ağaçta bizden ÖNCE işler ama sıraya
+		## güvenmeyelim) liste kaymaz: oyun girdisi önceliklidir.
+		if not _dragging and _controls_own(d.index):
+			_sc = null
+			return
+		_add_sample(d.position)
 		if not _dragging and d.position.distance_to(_start_pos) > DEADZONE:
 			_dragging = true
 			_cancel_press()
@@ -64,11 +80,6 @@ func _input(event: InputEvent) -> void:
 			var k: float = _local_scale(_sc)
 			var delta: Vector2 = (d.position - _start_pos) / k
 			_apply(_sc, _start_scroll - delta)
-			var now: int = Time.get_ticks_usec()
-			var dt: float = maxf(0.001, float(now - _last_t) / 1e6)
-			_vel = _vel.lerp(-(d.position - _last_pos) / k / dt, 0.5)
-			_last_pos = d.position
-			_last_t = now
 			get_viewport().set_input_as_handled()
 	elif _dragging and event is InputEventMouseMotion:
 		## Dokunuştan türetilen fare hareketi - GUI'ye gitmesin (ScrollContainer'ın kendi sürüklemesiyle çift kayardı).
@@ -86,6 +97,39 @@ func _process(delta: float) -> void:
 		_fling = null
 		return
 	_apply(_fling, Vector2(_fling.scroll_horizontal, _fling.scroll_vertical) + _vel * delta)
+
+
+func _add_sample(pos: Vector2) -> void:
+	var now: int = Time.get_ticks_usec()
+	_samples.append([now, pos])
+	while _samples.size() > 2 and now - int(_samples[0][0]) > VEL_WINDOW_USEC * 2:
+		_samples.pop_front()
+
+
+## Parmak kalkarken savrulma hızı (ScrollContainer yerel birimi, px/sn): son VEL_WINDOW_USEC'teki net yer değiştirme / süre.
+## Küçük bir kalkış titremesi pencerenin toplamında kaybolur; parmak durup bırakıldıysa ya da pencere çok kısaysa savrulma yok.
+func _release_velocity() -> Vector2:
+	if _samples.size() < 2 or not is_instance_valid(_sc):
+		return Vector2.ZERO
+	var last: Array = _samples.back()
+	if Time.get_ticks_usec() - int(last[0]) > FLING_STALE_USEC:
+		return Vector2.ZERO
+	var first: Array = last
+	for i in range(_samples.size() - 1, -1, -1):
+		if int(last[0]) - int(_samples[i][0]) > VEL_WINDOW_USEC:
+			break
+		first = _samples[i]
+	var span: int = int(last[0]) - int(first[0])
+	if span < VEL_MIN_SPAN_USEC:
+		return Vector2.ZERO
+	var v: Vector2 = -((last[1] as Vector2) - (first[1] as Vector2)) / _local_scale(_sc) / (float(span) / 1e6)
+	return v.limit_length(VEL_MAX)
+
+
+## Bu parmağı telefon HUD'unun joystick'i / düğmesi tutuyor mu (bkz. touch_controls.gd owns_touch)?
+func _controls_own(index: int) -> bool:
+	var tc: Node = get_tree().get_first_node_in_group(&"touch_controls")
+	return tc != null and tc.has_method(&"owns_touch") and bool(tc.call(&"owns_touch", index))
 
 
 func _apply(sc: ScrollContainer, target: Vector2) -> void:

@@ -3,6 +3,7 @@ extends CharacterBody2D
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const DeathBlood := preload("res://scripts/death_blood.gd")
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 
 ## Characters 1-6's active skill always lasted 10s with a 20s total cooldown.
 ## Öykü/Talha/Matthew (7-9) each need their own numbers instead, so the fixed
@@ -303,6 +304,28 @@ var _menu_input_locked: bool = false
 ## tuşlarını (Q/E/R) birlikte kilitler - yoksa mesaj içindeki harfler (ör.
 ## "q", "e", "r") yanlışlıkla yetenek tetikleyebilirdi.
 var is_chat_typing: bool = false
+
+## ---------- Dükkan / envanter açıkken yetenek tuşları ----------
+## Kullanıcı bildirimi (2026-10-08): "dükkan açıkken joystick kullanan insanlar hala yetenek kullanabiliyor... bir tuş hem seçme tuşu
+## hem skill tuşu olduğu için market açıkken o tuşa basmak o skili de tetikler". Kök neden: yetenekler `Input.is_action_just_pressed`
+## okur (global bayrak - bir ekranın set_input_as_handled'ı onu durdurmaz) ve dükkanlar oyunu DURAKLATMADIĞI için (hareket zaten
+## `_reading_filter_input` ile kilitli) yetenek girişi hiç süzülmüyordu; seyyar satıcıda `is_in_merchant_zone` kilidi tesadüfen koruyordu,
+## demirci/envanter/mini dükkanda koruma YOKTU. Artık kayıtlı engelleyici panel (GameManager.register_blocking_panel: seyyar satıcı,
+## demirci, mini dükkan, envanter) ya da açık okuma ekranı varken yetenek tuşları oyuna gitmez. KUYRUK: ekran kapanırken basılan tuş
+## (örn. kapat düğmesi aynı zamanda yetenek tuşuysa) aynı karede yeteneği tetiklemesin diye kapanıştan sonra kısa süre daha kilitli kalır.
+## Her fizik karesinde `_refresh_ui_skill_block` ile yenilenir (tuşa basılmasa da), kontrol `_skill_keys_blocked`.
+const UI_SKILL_BLOCK_TAIL_MSEC := 150
+var _ui_skill_block_until_msec: int = 0
+
+
+func _refresh_ui_skill_block() -> void:
+	if _reading_screen_open or GameManager.is_any_blocking_panel_open():
+		_ui_skill_block_until_msec = Time.get_ticks_msec() + UI_SKILL_BLOCK_TAIL_MSEC
+
+
+## Yetenek tuşları (Q/E/R/F ve kumanda karşılıkları) şu an oyuna iletilmemeli mi? (sohbet yazımı ya da açık dükkan/envanter)
+func _skill_keys_blocked() -> bool:
+	return is_chat_typing or Time.get_ticks_msec() < _ui_skill_block_until_msec
 var _chat_bubble: Node2D = null
 
 ## hud.gd (yerel mesaj gönderildiğinde) VE network_manager.gd
@@ -559,6 +582,8 @@ const ABILITY_BASE_CRIT_CHANCE := 0.05
 const ABILITY_BASE_CRIT_DAMAGE := 1.5
 
 func _roll_ability_crit() -> bool:
+	if assasin_guaranteed_crit_active():
+		return true ## Assasin pasifi "Bıçak Uzmanlığı" (bkz. _assasin_passive_on_skill_used)
 	return randf() < clamp(ABILITY_BASE_CRIT_CHANCE + crit_chance_bonus, 0.0, 1.0)
 
 
@@ -957,6 +982,8 @@ var _walk_step_timer: float = 0.0
 ## How many times each level-up card id has been picked this run, so the
 ## level-up screen can show "daha önce N kez alındı".
 var upgrade_counts: Dictionary = {}
+## Seçilen seviye kartları (id, tier) sırayla - geri katılımda AYNI yoldan (apply_upgrade) tekrar uygulanır (2026-10-04).
+var upgrade_log: Array = []
 
 
 func get_upgrade_count(id: String) -> int:
@@ -1304,6 +1331,7 @@ func _apply_enchant_to_weapon(index: int) -> void:
 	var entry: Dictionary = GameManager.owned_weapons[index]
 	if str(entry.get("key", "")) != str(w.get_meta("shop_key", "")):
 		return
+	EnchantDefs.ensure_trait(entry) ## kalıcı özellik: silahı alan herkes doğuştan efsunla başlar (bkz. EnchantDefs.TRAITS)
 	w.set_enchant(entry.get("enchant", {}))
 
 
@@ -1759,6 +1787,7 @@ var _interp_prev_frame: int = -1
 func _physics_process(delta: float) -> void:
 	_interp_prev_pos = global_position ## bkz. PhysicsInterp.visual_position
 	_interp_prev_frame = Engine.get_physics_frames()
+	_refresh_ui_skill_block() ## dükkan/envanter açıkken yetenek tuşları kilitli (bkz. _skill_keys_blocked); erken dönüşlerden ÖNCE
 	## "efekt sistemi" (ölüm.png/diriltme.png/kalp.png): durum ne olursa
 	## olsun HER karede reaktif olarak güncelleniyor - bkz. fonksiyonların
 	## kendi üstündeki DÜZELTME notları.
@@ -1790,6 +1819,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if is_dead:
 		_update_walk_sound(false, delta)
+		_process_permadeath_rise(delta) ## kalıcı ölü + yenilenen/kalan diriltme hakkı -> kurtarılabilir hale gel (aşağıda)
 		return
 
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -1880,7 +1910,7 @@ func _physics_process(delta: float) -> void:
 	## bir ateşkes bölgesi olmalı - üç yetenek girişi de (ve aşağıdaki tüm
 	## bypass dalları: Oakley Çiçek, Korsan bomba, Assasin hamle, Büyücü
 	## varyasyonları, Necro yarasa sürüsü DAHİL) bölgedeyken tamamen engellenir.
-	if Input.is_action_just_pressed("skill") and not is_chat_typing and not is_in_merchant_zone and _skill_slot_unlocked_or_warn("skill"):
+	if Input.is_action_just_pressed("skill") and not _skill_keys_blocked() and not is_in_merchant_zone and _skill_slot_unlocked_or_warn("skill"):
 		## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su
 		## bundan sonra pasifi olacak") - Çiçek artık burada DEĞİL, tamamen
 		## otomatik bir pasif (bkz. _process_oakley_passive). Oakley'nin Q'su
@@ -1919,7 +1949,7 @@ func _physics_process(delta: float) -> void:
 		## dolmadan erken iptal edilebilir; diğer karakterlerin yeteneklerine
 		## dokunulmuyor.
 		## (Koruma Baloncuğu'nun erken iptali 2026-09-25'ten beri R tuşunda - bkz. skill3 dalı.)
-	if Input.is_action_just_pressed("skill2") and not is_chat_typing and not is_in_merchant_zone and _skill_slot_unlocked_or_warn("skill2"):
+	if Input.is_action_just_pressed("skill2") and not _skill_keys_blocked() and not is_in_merchant_zone and _skill_slot_unlocked_or_warn("skill2"):
 		var skill2_id_pressed: int = get_skill2_id()
 		## Korsan (Saatli Bomba, id 17) bekleme süresi YERİNE şarj ile çalışır -
 		## standart skill2_state == "ready" makinesini BAŞTAN devre dışı
@@ -1953,7 +1983,7 @@ func _physics_process(delta: float) -> void:
 	## skill3 alanı olmayan karakterlerde get_skill3_id() 0 döner, tuş
 	## hiçbir şey yapmaz.
 	## get_skill3_id() != 0 kilit uyarısından ÖNCE: R'si olmayan karakterde (Shaman, 2026-09-29) "SEVİYE 10'DA AÇILIR" yazmasın.
-	if Input.is_action_just_pressed("skill3") and not is_chat_typing and not is_in_merchant_zone and get_skill3_id() != 0 and _skill_slot_unlocked_or_warn("skill3"):
+	if Input.is_action_just_pressed("skill3") and not _skill_keys_blocked() and not is_in_merchant_zone and get_skill3_id() != 0 and _skill_slot_unlocked_or_warn("skill3"):
 		var skill3_id_pressed: int = get_skill3_id()
 		## Büyücü Kız'ın R'si (bkz. BUYUCU_SET_R_VARIATIONS) - E'nin skill2
 		## dalıyla (yukarıda, "elif skill2_id_pressed in BUYUCU_VARIATION_
@@ -1976,7 +2006,7 @@ func _physics_process(delta: float) -> void:
 			if _toggle_close_allowed("skill3"): ## spam koruması - bkz. TOGGLE_CLOSE_GUARD_MSEC
 				_cancel_paladin_ulti_early()
 	## Ruhani Yetenek (F) - karakterden bağımsız, kendi durum makinesi (bkz. dosya sonundaki "RUHANİ YETENEKLER" bloğu).
-	if Input.is_action_just_pressed("skill4") and not is_chat_typing and not is_in_merchant_zone:
+	if Input.is_action_just_pressed("skill4") and not _skill_keys_blocked() and not is_in_merchant_zone:
 		_try_spirit_skill()
 
 
@@ -2226,16 +2256,16 @@ func _block_movement_into_terrain() -> void:
 	## bakıyor, zaten içerideyken bu her yönde yine karonun içine denk
 	## gelebiliyor). Zaten içerideyse blok mantığı TAMAMEN atlanır, oyuncu
 	## kısıtlanmadan hareket edip dışarı çıkabilir.
-	if GameManager.is_position_blocked_by_forest(global_position):
+	if GameManager.is_position_blocked_by_walls(global_position):
 		return
 	var probe_dist: float = 10.0
 	if velocity.x != 0.0:
 		var probe_x: Vector2 = global_position + Vector2(sign(velocity.x) * probe_dist, 0.0)
-		if GameManager.is_position_blocked_by_forest(probe_x):
+		if GameManager.is_position_blocked_by_walls(probe_x):
 			velocity.x = 0.0
 	if velocity.y != 0.0:
 		var probe_y: Vector2 = global_position + Vector2(0.0, sign(velocity.y) * probe_dist)
-		if GameManager.is_position_blocked_by_forest(probe_y):
+		if GameManager.is_position_blocked_by_walls(probe_y):
 			velocity.y = 0.0
 
 
@@ -3059,6 +3089,7 @@ func _on_matthew_pet_died() -> void:
 ## bildirim (bkz. on_damage_dealt ile AYNI desen, sadece "hasar" yerine
 ## "öldürme" olayı için). Pasifi olmayan karakterlerde no-op.
 func on_enemy_killed(enemy: Node) -> void:
+	GameManager.run_kills += 1 ## koşu sonu "Öldürme" istatistiği + rekor/başarım (bkz. GameManager.run_kills)
 	var is_boss_kill: bool = is_instance_valid(enemy) and enemy.get("is_boss") == true
 	_notify_enchants_kill(is_boss_kill, enemy.global_position if is_instance_valid(enemy) else global_position)
 	_apply_kill_heal_item()
@@ -3091,6 +3122,7 @@ func on_enemy_killed(enemy: Node) -> void:
 ## duyduğu için (bkz. _buyucu_on_kill) bu RPC'ye ayrıca death_pos eklendi
 ## (bkz. network_manager.gd notify_kill_passive/enemy.gd die()).
 func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZERO) -> void:
+	GameManager.run_kills += 1 ## bkz. on_enemy_killed - host'un öldürdüğü ama bu oyuncuya atfedilen öldürmeler
 	_notify_enchants_kill(is_boss_kill, death_pos)
 	_apply_kill_heal_item()
 	_item_on_kill()
@@ -4097,7 +4129,9 @@ func get_skill2_progress() -> float:
 func is_skill2_active() -> bool:
 	if GameManager.selected_char_id == 4:
 		## 2026-10-04: Hortum E'ye döndü - E'nin "aktif" görseli hortumlar dolaşırken (15 sn); Arcane Lanet neredeyse anlık, hiç aktif görünmez.
-		return not _buyucu_active_tornadoes.is_empty()
+		## Yalnız E'deki varyasyon HORTUM ise (Set 2): faz değiştirince E butonu Arcane Lanet'i gösterirken hortumun "aktif" görseli
+		## (beyaz nabız, bekleme örtüsü yok) butonda kalıp yeteneğin kullanılamıyormuş gibi görünmesini önler (2026-10-04 bildirimi).
+		return BUYUCU_SET_E_VARIATIONS[buyucu_variation_set] == 2 and not _buyucu_active_tornadoes.is_empty()
 	return skill2_state == "active"
 
 
@@ -4178,7 +4212,8 @@ func is_skill3_active() -> bool:
 		## Hortum'un 15sn'lik dolaşma penceresi/Meteor'un 5sn'lik odaklanma
 		## kanalı artık R'nin (skill3) sorumluluğunda - bkz. is_skill2_active()
 		## üstündeki taşıma notu.
-		return _buyucu_meteor_channel_active ## (Hortum 2026-10-04'ten beri E'de: is_skill2_active; Don Nova anlık)
+		## Yalnız R'deki varyasyon METEOR ise (Set 2) - faz değişince R butonu Don Nova'yı gösterirken kanalın aktif görseli kalmasın.
+		return BUYUCU_SET_R_VARIATIONS[buyucu_variation_set] == 3 and _buyucu_meteor_channel_active ## (Hortum 2026-10-04'ten beri E'de: is_skill2_active; Don Nova anlık)
 	if GameManager.selected_char_id == VampirMath.CHAR_ID:
 		return _vampir_bats_active
 	return skill3_state == "active"
@@ -4186,7 +4221,7 @@ func is_skill3_active() -> bool:
 
 func get_skill3_active_fraction() -> float:
 	if GameManager.selected_char_id == 4:
-		if _buyucu_meteor_channel_active and BUYUCU_METEOR_CHANNEL_TIME > 0.0:
+		if is_skill3_active() and BUYUCU_METEOR_CHANNEL_TIME > 0.0:
 			return clamp(_buyucu_meteor_channel_timer / BUYUCU_METEOR_CHANNEL_TIME, 0.0, 1.0)
 		return 0.0
 	## DÜZELTME (2026-09-24, Lanetli Kafatası): burada Necromancer için "Yarasa Sürüsü açıksa tam dolu" dalı vardı - R artık
@@ -4843,6 +4878,9 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## dalı) bu bir gelen hasarı savuşturmaktır, takım adına "tanklamak"
 	## sayılır.
 	match_damage_taken += amount
+	## Kamera sarsıntısı (kullanıcı isteği 2026-10-05): maks canın %12'sini aşan ağır tek vuruş; sürekli hasar (yanma/asit) hariç.
+	if not _special_dmg_is_dot and max_health > 0.0 and amount / max_health >= 0.12:
+		CameraShakeScript.add_limited("hit_heavy", clampf(0.2 + amount / max_health * 0.8, 0.25, 0.55), 0.25)
 	## Oakley'nin Koruyucu Büyü'sü (skill3 id 39, bkz. _skill_oakley_bond/
 	## _apply_oakley_bond_to_target) - kullanıcı isteği: "kişi her hasar
 	## aldığında oakley'in saldırı gücünün %10'u kadar can yeniler ve aynı
@@ -5066,6 +5104,7 @@ func die() -> void:
 	## Efsun: Küllerinden Doğuş (Ateş Asası Anka Kuşu finali) ölümcül darbeyi bir kez atlatır.
 	if _enchant_cheat_death():
 		return
+	CameraShakeScript.add(0.7) ## kamera sarsıntısı: kendi ölümün (bkz. camera_shake.gd)
 	## Kullanıcı isteği: "multiplayerda dirilme olayı ölür ölmez olmamalı.
 	## öldükten sonra arkadaşının 3 saniye boyunca yakınında durması gereksin
 	## seni diriltebilmek için" - eskiden GameManager.revives_remaining > 0
@@ -5344,6 +5383,7 @@ func get_downed_remaining_seconds() -> float:
 
 
 func _complete_revive() -> void:
+	CameraShakeScript.add(0.25) ## dirilme anı hafif titreme (bkz. camera_shake.gd)
 	## DÜZELTME (bkz. die() üstündeki DÜZELTME notu): revive hakkı artık
 	## downed'a girerken ZATEN rezerve edildi - burada TEKRAR host'a
 	## sorulmuyor. Eskiden burada ikinci bir try_use_revive() çağrısı vardı;
@@ -5545,14 +5585,7 @@ func revive_from_permadeath() -> void:
 	_spawn_floating_text("CANLANDIN!", Color(1.0, 0.8, 0.2))
 	_spawn_burst(Color(0.2, 1.0, 0.4))
 
-	if death_camera and is_instance_valid(death_camera):
-		if death_camera.get_parent() != self:
-			var old_parent: Node = death_camera.get_parent()
-			if old_parent:
-				old_parent.remove_child(death_camera)
-			add_child(death_camera)
-			death_camera.position = Vector2.ZERO
-		death_camera.make_current()
+	_reattach_death_camera()
 
 	if anim:
 		anim.modulate = Color(1.0, 1.0, 1.0, 0.4)
@@ -5566,6 +5599,65 @@ func revive_from_permadeath() -> void:
 			"radius": 100.0,
 			"color": Color(0.2, 1.0, 0.4)
 		})
+
+
+## Kalıcı ölümde sahne köküne taşınan (bkz. _detach_death_camera) kamerayı oyuncuya geri takar - dükkandan diriltme ve
+## yerde yatan duruma dönüş (_rise_from_permadeath_to_downed) ortak kullanır.
+func _reattach_death_camera() -> void:
+	if death_camera and is_instance_valid(death_camera):
+		if death_camera.get_parent() != self:
+			var old_parent: Node = death_camera.get_parent()
+			if old_parent:
+				old_parent.remove_child(death_camera)
+			add_child(death_camera)
+			death_camera.position = Vector2.ZERO
+		death_camera.make_current()
+
+
+## 2026-10-07 KULLANICI BİLDİRİMİ: "Revive hakkı biten oyuncunun revive hakkı yenileniyor fakat yenilendikten sonra ölen oyuncuyu
+## kaldıramıyoruz". Kök neden: kalıcı ölü oyuncu (is_dead, is_downed DEĞİL) hiçbir müttefikin kurtarma kanalına girmiyor - kanal
+## SADECE yerde yatan (is_downed) oyuncuda işler (bkz. _process_downed). Hak yenilenmesi (GameManager._process_revive_regen)
+## sadece sayıyı 1 yapıyordu ("sonraki ölüm için hazır bekler", dükkandan diriltme dışında kullanılamıyordu), yani hakkı geri
+## gelmiş cesedin başında beklemek hiçbir şey yapmıyordu. Artık kalıcı ölü oyuncunun diriltme hakkı varsa (yenilendi ya da
+## yerde yatarken kalıcı ölüme düşmüştü ve hâlâ hakkı var) VE yakında hayatta bir müttefik (kurtarıcı) varsa o hak harcanıp oyuncu
+## yeniden "yerde yatan" (kurtarılabilir) duruma geçer: izleyici modu/ölüm ekranı kalkar, kamera geri takılır, host "kalıcı ölü"
+## kaydını siler (main.gd _on_player_rose_from_permadeath). Kurtarma kanalı normal yerde yatma ile birebir aynı (3 sn, 90 px).
+signal rose_from_permadeath
+const PERMADEATH_RISE_CHECK_INTERVAL := 0.5
+var _permadeath_rise_timer: float = 0.0
+var _permadeath_rise_pending: bool = false
+
+
+## Kalıcı ölü oyuncu için _physics_process'in is_dead dalından çağrılır (yerde yatan değil - o _process_downed'da).
+func _process_permadeath_rise(delta: float) -> void:
+	if _permadeath_rise_pending or is_downed or not NetworkManager.is_multiplayer_active or GameManager.is_game_over:
+		return
+	_permadeath_rise_timer -= delta
+	if _permadeath_rise_timer > 0.0:
+		return
+	_permadeath_rise_timer = PERMADEATH_RISE_CHECK_INTERVAL
+	if not multiplayer.has_multiplayer_peer() or GameManager.get_peer_revives(multiplayer.get_unique_id()) <= 0:
+		return
+	if not _has_living_rescuer():
+		return ## kurtaracak kimse yok: hak boşa harcanıp 10 sn sonra yine kalıcı ölüme düşülmesin
+	_rise_from_permadeath_to_downed()
+
+
+func _rise_from_permadeath_to_downed() -> void:
+	_permadeath_rise_pending = true
+	## Hak host'ta yetkili harcanır (die() ile aynı yol); yanıt gelene kadar beklenir.
+	var granted: bool = await NetworkManager.try_use_revive()
+	_permadeath_rise_pending = false
+	if not granted or not is_inside_tree():
+		return
+	if not is_dead or is_downed or GameManager.is_game_over:
+		return ## bu arada başka bir yoldan diriltildi / oyun bitti
+	var col: CollisionShape2D = get_node_or_null("CollisionShape2D")
+	if col:
+		col.set_deferred("disabled", false) ## _finalize_death ceset çarpışmasını kapatmıştı
+	_reattach_death_camera()
+	_go_down()
+	rose_from_permadeath.emit()
 
 
 
@@ -5800,6 +5892,7 @@ func _nice_up(value: float, step: float = 0.5) -> float:
 ## davranış - varsayılan parametre de bu yüzden 1).
 func apply_upgrade(id: String, tier: int = 1) -> void:
 	upgrade_counts[id] = upgrade_counts.get(id, 0) + 1
+	upgrade_log.append([id, tier]) ## geri katılım için kart günlüğü (bkz. get_rejoin_snapshot)
 	## DÜZELTME (kullanıcı isteği: "level atlama kartlarının her tier başına
 	## artışını %30 yapalım") - bkz. level_up_screen.gd _scaled_desc_value()
 	## içindeki BİREBİR AYNI formül - ikisi de tier1=×1.0, tier2=×1.3,
@@ -6127,6 +6220,7 @@ func _activate_skill2() -> void:
 	skill2_timer = _skill2_duration
 	skill2_total_elapsed = 0.0
 	_talon_add_passive_stack()
+	_assasin_passive_on_skill_used()
 	## DÜZELTME (kullanıcı bildirimi: "neredeyse hiçbir karakter yetenek
 	## kullanımında spellcast animasyonunu kullanmıyor kullanması gerekiyor")
 	## - _activate_skill() (ULTİ) bunu zaten yapıyordu, TEMEL (E) için AYNI
@@ -6283,6 +6377,7 @@ func _activate_skill3() -> void:
 	skill3_timer = _skill3_duration
 	skill3_total_elapsed = 0.0
 	_talon_add_passive_stack()
+	_assasin_passive_on_skill_used()
 	## bkz. _activate_skill2() üstündeki AYNI düzeltme notu.
 	_play_cast_animation()
 	match skill3_id:
@@ -6403,10 +6498,10 @@ func _activate_skill() -> void:
 	if char_id == 18 and _korsan_bombs.is_empty():
 		_spawn_floating_text("BOMBA YOK", Color(1.0, 0.4, 0.4))
 		return
-	## Vampir Çocuk Q'su (Kan Emme, id 40): hedef yoksa hiç tetiklenmez, bekleme süresine girmez, bedel ödenmez (Korsan'ın
-	## "BOMBA YOK" deseni). Kullanıcı isteği (2026-10-01): "vampir çocuğun Q su candan değil diğer karakterlerdeki gibi
-	## kalkandan harcasın" - eskiden maksimum canın %4'ünü harcıyordu, artık aşağıdaki standart Q (temel) kalkan tarifesini
-	## öder. E (Yarasa Formu) ve R (Kan Yarasaları) can harcamaya devam eder.
+	## Vampir Çocuk Q'su (Kan Emme, id 40): hedef yoksa hiç tetiklenmez, bekleme süresine girmez (Korsan'ın "BOMBA YOK" deseni).
+	## Kullanıcı isteği (2026-10-01): "vampir çocuğun Q su candan değil diğer karakterlerdeki gibi kalkandan harcasın" - o tarihte
+	## maksimum canın %4'ü yerine standart Q (temel) kalkan tarifesine geçti; 2026-10-06: "Q sunun kalkan bedelini kaldır" - artık
+	## hiçbir bedel yok (aşağıdaki kalkan bedeli bloğunda id 40 muaf). E (Yarasa Formu) ve R (Kan Yarasaları) can harcamaya devam eder.
 	if char_id == 40 and _vampir_q_targets().is_empty():
 		_spawn_floating_text("HEDEF YOK", Color(1.0, 0.4, 0.4))
 		return
@@ -6483,7 +6578,9 @@ func _activate_skill() -> void:
 	## değiştir") - Kalkan Sıçraması (id 12) "Kalkan harcamaz" - eskiden R/
 	## skill3'teyken _activate_skill3()'ün "skill3_id != 31" muafiyetiyle
 	## bedelsizdi, şimdi Q'ya taşındığı için AYNI muafiyet burada.
-	## (Vampir Çocuk Q'su id 40 eskiden burada muaftı - bedelini can olarak ödüyordu; 2026-10-01'den beri kalkanla öder.)
+	## (Vampir Çocuk Q'su id 40: 2026-10-01'den beri standart kalkan tarifesini öder; 2026-10-06'da "kalkan bedelini kaldır" ile muaf
+	## yapılmıştı; kullanıcı isteği 2026-10-08: "Q su kalkan harcasın" - bedel GERİ GELDİ, karşılığında Kan Kalkanı evrimi 2x güçlendi ve
+	## Q 3 yerine 4 yaratığın kanını emiyor. Muaf listesinde id 40 YOK; yetersiz kalkanda "KALKAN YETERSİZ" ile hiç tetiklenmez.)
 	## DÜZELTME (kullanıcı isteği 2026-09-22: "Korsanın Q'sunun... mana bedelini de kaldır") - Patlat (id 18)
 	## artık hiç kalkan harcamıyor (bekleme süresi de kaldırıldı, bkz. SKILL_TIMING[18]).
 	## Şovalye'nin yeni Q'su (Kalkan Yenileme + Kışkırtma, id 45) eski E'deki muafiyetini korur: kalkan YENİLEYEN bir
@@ -7063,8 +7160,8 @@ const BUYUCU_NOVA_DAMAGE_RATIO := 1.0
 
 ## PASİF "Büyü Dalgası" (kullanıcı isteği 2026-10-04): "Büyücü kız her yetenek kullandığında silahları aniden sertçe ileri itilip
 ## aynı anda atış yaparak verdikleri sonraki atışın hasarını %30 arttırır. (saldırı hızı bekleme süresi sıfırlanır ve aniden ateş
-## ederler)". Q (set değişimi) de bir yetenek kullanımı sayılır (kullanıcı finalde açıkça "Q hariç" yazdı, pasifte yazmadı). Silah
-## tarafı weapon.gd arcane_surge (bekleme sıfırlama + %30'luk atış + itilme animasyonu WeaponJuice.arcane_surge - uzak kopya aynı).
+## ederler)". Q (set değişimi) pasifi TETİKLEMEZ (kullanıcı isteği 2026-10-04: "Q yeteneğiyle etkinleşmesini istemiyorum"). Silah
+## tarafı weapon.gd arcane_surge (bekleme sıfırlama + %30'luk atış + hedefin tersine geri tepme WeaponJuice.arcane_surge - uzak kopya aynı).
 const BUYUCU_PASSIVE_SHOT_MULT := 1.3
 
 ## Varyasyon 3: Hortum - bkz. fx_buyucu_tornado.gd (bağımsız, dolaşan bir
@@ -7244,7 +7341,7 @@ func _skill_buyucu_switch_variation() -> void:
 		_evo_buyucu_q1_ready_msec = Time.get_ticks_msec() + int(EVO_BUYUCU_Q1_COOLDOWN * 1000.0)
 		heal_shield(item_shield_max * EVO_BUYUCU_Q1_SHIELD_RATIO)
 		_play_and_broadcast_skill_fx(FxEvoShieldRefillScene)
-	_buyucu_on_skill_used("skill", -1)
+	## Q (set değişimi) pasifi TETİKLEMEZ (kullanıcı isteği 2026-10-04) - sadece E ve R (_buyucu_cast_variation).
 
 
 ## TEMEL (E) - Korsan'ın Saatli Bomba'sı/Necromancer'ın İskelet Çağır'ıyla
@@ -8359,7 +8456,7 @@ const ASSASIN_DASH_HIT_SOUNDS: Array[String] = [
 ## get_assasin_dash2_max_charges()'ı kullanmalı, bu sabiti değil.
 const ASSASIN_DASH2_MAX_CHARGES := 2
 ## Kullanıcı isteği (2026-09-30): "dash yeteneğinin bekleme süresini de 10 saniyeye düşür" - yük başına 12 -> 10 sn.
-const ASSASIN_DASH2_RECHARGE_TIME := 10.0
+const ASSASIN_DASH2_RECHARGE_TIME := 8.0 ## kullanıcı isteği 2026-10-08: "Q sunun bekleme süresini (yük başına) 8 saniyeye düşür" (12 -> 10 -> 8)
 ## DÜZELTME (kullanıcı isteği: "Assasin çocuğun dash skilini %40 kısalt ve
 ## %50 yavaşlat") - mesafe 260 -> 156 (-%40), süre 0.12 -> 0.24 (iki katı =
 ## %50 yavaş).
@@ -8381,7 +8478,27 @@ func get_assasin_dash2_max_charges() -> int:
 	return EVO_ASSASIN_Q_MAX_CHARGES if has_evo("assasin_q1") else ASSASIN_DASH2_MAX_CHARGES
 
 
+## ASSASIN PASİFİ "Bıçak Uzmanlığı" (kullanıcı bildirimi 2026-10-08: "assasin çocuğun pasifi çalışmıyor"): "yetenek kullanımından sonraki 3 saniye
+## boyunca garantili kritik vurur". KÖK NEDEN: pasif sadece characters.gd'de açıklama metniydi, hiçbir yerde uygulanmamıştı (garantili kritik yoktu).
+## Q (Şahin Hamlesi, _try_assasin_dash2), E (Gölge Adımı, _activate_skill2) ve R (Gölge Hücumu, _activate_skill3) kullanılınca sayaç 3 sn'ye kurulur
+## (her kullanım yeniler); sayaç oyun süresiyle (delta) azalır, duraklatmada akmaz. Süre boyunca silah vuruşları (weapon.gd _passive_guaranteed_crit)
+## ve yetenek vuruşları (_roll_ability_crit) kesin kritik olur. Tamamen yerel: vuruşu atan taraf kritiği kendi hesaplıyor (silah/yetenek sahibi).
+const ASSASIN_PASSIVE_CRIT_DURATION := 3.0
+var _assasin_crit_timer: float = 0.0
+
+
+func _assasin_passive_on_skill_used() -> void:
+	if get_skill_character_id() == 5:
+		_assasin_crit_timer = ASSASIN_PASSIVE_CRIT_DURATION
+
+
+func assasin_guaranteed_crit_active() -> bool:
+	return _assasin_crit_timer > 0.0 and get_skill_character_id() == 5
+
+
 func _process_assasin_dash2_charges(delta: float) -> void:
+	if _assasin_crit_timer > 0.0:
+		_assasin_crit_timer = maxf(0.0, _assasin_crit_timer - delta)
 	## 2026-09-30: Şahin Hamlesi (id 5) E'den Q'ya taşındı ("dash2" adları eski E yuvasından kalma).
 	if get_skill_character_id() != 5:
 		return
@@ -8424,6 +8541,7 @@ func _try_assasin_dash2() -> void:
 		_spawn_floating_text("HAMLE YOK", Color(1.0, 0.4, 0.4))
 		return
 	assasin_dash2_charges -= 1
+	_assasin_passive_on_skill_used()
 	## bkz. dosya başı yorumu - bir yük ZATEN yenilenmekteyken bu ikinci
 	## kullanım o sayaçı SIFIRLAMAZ, sadece henüz başlamamışsa başlatır.
 	if _assasin_dash2_recharge_timer <= 0.0:
@@ -10157,7 +10275,7 @@ func _spawn_floating_text(text: String, color: Color, big: bool = false, y_offse
 ## =====================================================================================
 ## Kullanıcı isteği (2026-09-21): yetenekleri kalkan YERİNE CAN harcar - Q ve E maksimum canın %4'ü,
 ## R (ulti) açıkken her saniye maksimum canın %5'i. Pasif: %1 can emme + her 1 saldırı gücü için 1 can.
-## Q: yakındaki 3 düşmanın kanını emer (%130 saldırı gücü), kalıcı +1 maksimum can (6sn).
+## Q: yakındaki 4 düşmanın kanını emer (%130 saldırı gücü), kalıcı +1 maksimum can (6sn).
 ## E: 5sn büyük yarasa formu (%60 hız, %80 hasar azaltma, temas hasarı %80, silahlar gövdeye çekilir) (22sn).
 ## R: 6 küçük yarasa (%60 hasar, dönünce %5 saldırı gücü kadar can, hızları saldırı hızıyla artar).
 ##
@@ -10167,10 +10285,10 @@ func _spawn_floating_text(text: String, color: Color, big: bool = false, y_offse
 ##  - Q/temas/geçiş efektleri: broadcast_player_vfx "vampir_fx" (network_manager.gd)
 ##  - R yarasaları: main.gd ~20Hz konum paketi (vampir_bat_swarm.gd kozmetik mod)
 const VAMPIR_SKILL_COST_PERCENT := 0.04 ## E: maksimum canın %4'ü (Q 2026-10-01'den beri standart kalkan tarifesini öder)
-const VAMPIR_ULTI_COST_PERCENT_PER_SEC := 0.05 ## R açıkken saniyede maksimum canın %5'i (kullanıcı isteği: %3'ten %5'e)
+const VAMPIR_ULTI_COST_PERCENT_PER_SEC := 0.025 ## R açıkken saniyede maksimum canın %2,5'i (%3 -> %5 -> kullanıcı isteği 2026-10-06: yarıya, %2,5)
 const VAMPIR_LIFESTEAL_RATIO := 0.01 ## pasif: verdiği hasarın %1i kadar can emme (kullanıcı isteği: %4 -> %2 -> 2026-09-24 %1)
 const VAMPIR_HEALTH_PER_ATTACK_POWER := 1.0 ## pasif: her 1 saldırı gücü = 1 maksimum can
-const VAMPIR_Q_TARGET_COUNT := 3
+const VAMPIR_Q_TARGET_COUNT := 4 ## kullanıcı isteği 2026-10-08: 3 -> 4 (Kan Ziyafeti evrimi 5)
 const VAMPIR_Q_RADIUS := 320.0
 const VAMPIR_Q_DAMAGE_RATIO := 1.3
 const VAMPIR_Q_MAX_HEALTH_GAIN := 1.0
@@ -10183,7 +10301,7 @@ const VAMPIR_BAT_SPEED_MULT := 1.3 ## Yarasa Formu: %30 hareket hızı
 const EVO_VAMPIR_BAT_FAST_SPEED_MULT := 1.6 ## Gece Uçuşu: %60
 const EVO_VAMPIR_BAT_DAMAGE_TAKEN_MULT := 0.3 ## Gölge Kanatlar: aldığı hasar %70 azalır
 const EVO_VAMPIR_Q_HEAL_RATIO := 0.03 ## Kanla Beslenme: Q hasarının %3'ü can
-const EVO_VAMPIR_Q_SHIELD_RATIO := 0.03 ## Kan Kalkanı: Q hasarının %3'ü kalkan
+const EVO_VAMPIR_Q_SHIELD_RATIO := 0.06 ## Kan Kalkanı: Q hasarının %6'sı kalkan (kullanıcı isteği 2026-10-08: %3 -> %6, Q kalkan bedeli geri geldiği için)
 const EVO_VAMPIR_Q_TARGETS := 5 ## Kan Ziyafeti
 const EVO_VAMPIR_BAT_KNOCK_DISTANCE := 95.0 ## Kanat Darbesi: yoldan savurma mesafesi (px, enemy.gd apply_skill_push)
 const EVO_VAMPIR_R_EXTRA_BATS := 2 ## Büyüyen Sürü
@@ -10349,7 +10467,7 @@ func _skill_vampir_blood_drain() -> void:
 		var is_crit: bool = _roll_ability_crit()
 		var dmg: float = _apply_ability_crit(damage_bonus * VAMPIR_Q_DAMAGE_RATIO, is_crit)
 		if t.has_method("take_damage"):
-			t.take_damage(dmg, is_crit, 0.0, true) ## 3 hedefe birden: çoklu hedefli = alan
+			t.take_damage(dmg, is_crit, 0.0, true) ## birden çok hedefe: çoklu hedefli = alan
 			total_dealt += dmg
 		points.append(t.global_position)
 	if points.is_empty():
@@ -10364,7 +10482,7 @@ func _skill_vampir_blood_drain() -> void:
 		gain_text = "+%d Maks. Can" % int(VAMPIR_Q_MAX_HEALTH_GAIN)
 		## Can emme yazısıyla (aynı anda +N) üst üste binmesin diye biraz daha yukarıda.
 		_spawn_floating_text(gain_text, Color(0.95, 0.25, 0.35), true, -62.0)
-	## Evrimler "Kanla Beslenme" / "Kan Kalkanı": Q'nun verdiği hasarın %3'ü can / kalkan.
+	## Evrimler "Kanla Beslenme" (hasarın %3'ü can) / "Kan Kalkanı" (hasarın %6'sı kalkan).
 	if has_evo("vampir_q3"):
 		_vampir_add_heal(total_dealt * EVO_VAMPIR_Q_HEAL_RATIO)
 	if has_evo("vampir_q4") and item_shield_max > 0.0:
@@ -10946,7 +11064,7 @@ func _spirit_blink_through(from: Vector2, dir: Vector2, dist: float) -> Vector2:
 	while walked >= step:
 		var p: Vector2 = from + dir * walked
 		var in_map: bool = map_rect.size == Vector2.ZERO or map_rect.grow(-MAP_EDGE_INSET).has_point(p)
-		if in_map and not GameManager.is_position_blocked_by_forest(p) and _blink_spot_has_room(p):
+		if in_map and not GameManager.is_position_blocked_by_walls(p) and _blink_spot_has_room(p):
 			return p
 		walked -= step
 	return from
@@ -10955,7 +11073,7 @@ func _spirit_blink_through(from: Vector2, dir: Vector2, dist: float) -> Vector2:
 ## Hedefin hemen çevresi de açık mı (karakter gövdesi yarı yarıya duvara gömülmesin).
 func _blink_spot_has_room(p: Vector2) -> bool:
 	for off: Vector2 in [Vector2(12, 0), Vector2(-12, 0), Vector2(0, 12), Vector2(0, -12)]:
-		if GameManager.is_position_blocked_by_forest(p + off):
+		if GameManager.is_position_blocked_by_walls(p + off):
 			return false
 	return true
 
@@ -10968,7 +11086,7 @@ func _spirit_walk_clear(from: Vector2, dir: Vector2, dist: float) -> Vector2:
 	var walked: float = step
 	while walked <= dist + 0.01:
 		var p: Vector2 = from + dir * walked
-		if GameManager.is_position_blocked_by_forest(p):
+		if GameManager.is_position_blocked_by_walls(p):
 			break
 		if map_rect.size != Vector2.ZERO and not map_rect.has_point(p):
 			break
@@ -11129,7 +11247,7 @@ func _spirit_merchant_landing_spot() -> Vector2:
 	var center: Vector2 = GameManager.merchant_zone_pos
 	for offset in [Vector2(0, 46), Vector2(-46, 30), Vector2(46, 30), Vector2(0, -46), Vector2(-60, 0), Vector2(60, 0)]:
 		var p: Vector2 = center + offset
-		if not GameManager.is_position_blocked_by_forest(p):
+		if not GameManager.is_position_blocked_by_walls(p):
 			return p
 	return center
 
@@ -11809,7 +11927,7 @@ func _process_hadime_ghost(delta: float) -> void:
 	_process_item_shield(delta)
 	_process_shield_regen_tick(delta)
 	_process_hadime(delta)
-	if rising or is_chat_typing or is_in_merchant_zone:
+	if rising or _skill_keys_blocked() or is_in_merchant_zone:
 		return
 	if Input.is_action_just_pressed("skill") and _skill_slot_unlocked_or_warn("skill"):
 		_hadime_toggle_q()
@@ -12154,6 +12272,9 @@ var FxEvoKunaiHitScene: PackedScene:
 	get:
 		return _evo_scene("res://scenes/fx_evo_kunai_hit.tscn")
 ## Büyücü Kız "Efsunlu Büyü": efsunlu varyasyon dökülünce ayak altında altın-mor rün parlaması + yükselen kıvılcımlar.
+var FxBuyucuSurgeWaveScene: PackedScene:
+	get:
+		return _evo_scene("res://scenes/fx_buyucu_surge_wave.tscn")
 var FxEvoBuyucuEnchantScene: PackedScene:
 	get:
 		return _evo_scene("res://scenes/fx_evo_buyucu_enchant.tscn")
@@ -12631,7 +12752,7 @@ func _elara_evo_dash() -> void:
 	var end_pos: Vector2 = start_pos
 	for i in range(1, 9):
 		var p: Vector2 = start_pos + dir * EVO_ELARA_DASH_DISTANCE * (float(i) / 8.0)
-		if GameManager.is_position_blocked_by_forest(p):
+		if GameManager.is_position_blocked_by_walls(p):
 			break
 		end_pos = p
 	if end_pos.distance_to(start_pos) < 4.0:
@@ -12876,6 +12997,68 @@ func evo_area_hit(e: Node, dmg: float, kind: String, dir: Vector2) -> void:
 		_evo_world_fx(FxEvoKunaiHitScene, (e as Node2D).global_position, 0.0, rot, "assasin_evo_hit", 0.06)
 
 
+## ============================================================== GERİ KATILIM (2026-10-04)
+## Kullanıcı isteği: "oyundan düşen oyuncu kaldığı haliyle geri katılabilsin; herkesin leveli aynı olmalı, seçemediği seviye
+## kartlarının statları rastgele verilsin". Düşen oyuncunun istemcisi bu anlık görüntüyü periyodik olarak host'a gönderir
+## (main.gd -> NetworkManager.report_rejoin_snapshot); geri girince host aynısını geri yollar ve restore_from_rejoin_snapshot uygular.
+func get_rejoin_snapshot() -> Dictionary:
+	return {
+		"gm": GameManager.capture_run_state(), "level": level, "upgrades": upgrade_log.duplicate(true),
+		"evos": skill_evolutions.keys(), "hp": health, "max_hp": max_health, "shield": item_shield_hp,
+		"pos": global_position, "indoors": is_indoors, "char": GameManager.selected_char_id,
+	}
+
+
+## Yeni kurulmuş Player'a (silahlar _ready'de GameManager.owned_weapons'tan kuruldu) kaydedilmiş durumu uygular ve TAKIM seviyesine
+## eşitler: seviye kazanımları (can/saldırı gücü/eşya yuvası) tüm seviyeler için, kaydedilmiş kartlar aynı yoldan, düşükken
+## kaçırılan seviyelerin kartları RASTGELE (evrim seviyelerinde rastgele evrim). Anlık görüntü boşsa (hiç gönderilememişse) de
+## seviye eşitlenir. Döner: kaçırılan seviye sayısı.
+func restore_from_rejoin_snapshot(snap: Dictionary, team_level: int) -> int:
+	var snap_level: int = int(snap.get("level", 1))
+	## 1) Seviye kazanımları (on_team_leveled_up) - takım seviyesine kadar HER seviye için
+	for lvl in range(2, team_level + 1):
+		on_team_leveled_up(lvl)
+	level = maxi(level, team_level)
+	## 2) Kaydedilmiş kartlar (günlük temizlenip aynı yoldan yeniden yazılır) + evrimler
+	var log_copy: Array = (snap.get("upgrades", []) as Array).duplicate(true)
+	upgrade_log.clear()
+	upgrade_counts.clear()
+	for entry in log_copy:
+		apply_upgrade(str((entry as Array)[0]), int((entry as Array)[1]))
+	for evo_id in (snap.get("evos", []) as Array):
+		apply_skill_evolution(str(evo_id), true)
+	## 3) Eşyaların statları (kayıtlar GameManager.restore_run_state'te yazıldı) + kalkan
+	_rebuild_item_counts()
+	for e in GameManager.owned_items:
+		_apply_item_stats(str((e as Dictionary).get("key", "")), 1.0)
+	_item_after_inventory_change()
+	refresh_shield_stats()
+	## 4) Düşükken kaçırılan seviyeler: rastgele kart / evrim
+	var missed: int = 0
+	var cards_pool: Array = ((load("res://scripts/level_up_screen.gd") as GDScript).get_script_constant_map().get("UPGRADES", []) as Array)
+	for lvl in range(snap_level + 1, team_level + 1):
+		missed += 1
+		GameManager.gold += GameManager.LEVEL_UP_GOLD_REWARD ## o seviyelerin altın ödülü de kaçmıştı
+		var picked_evo: bool = false
+		if SkillEvolutionsScript.has_evolutions(GameManager.selected_char_id) and SkillEvolutionsScript.is_evolution_level(lvl):
+			var offer: Array = SkillEvolutionsScript.available(GameManager.selected_char_id, skill_evolutions, lvl)
+			if not offer.is_empty():
+				apply_skill_evolution(str((offer[randi() % offer.size()] as Dictionary)["id"]), true)
+				picked_evo = true
+		if not picked_evo and not cards_pool.is_empty():
+			var card: Dictionary = cards_pool[randi() % cards_pool.size()]
+			apply_upgrade(str(card["id"]), TierSystem.roll(luck))
+	_apply_weapon_bonuses()
+	## 5) Can / kalkan: kaydedilen oran (en az %35) - kaçırılan seviyelerin can kazanımları dahil dolu bar hissi
+	var frac: float = clampf(float(snap.get("hp", max_health)) / maxf(1.0, float(snap.get("max_hp", max_health))), 0.35, 1.0)
+	health = max_health * frac
+	health_changed.emit(health, max_health)
+	if item_shield_max > 0.0:
+		item_shield_hp = minf(item_shield_max, maxf(float(snap.get("shield", item_shield_max)), item_shield_max * 0.35))
+		item_shield_changed.emit(item_shield_hp, item_shield_max)
+	return missed
+
+
 ## ---------- Büyücü Kız (2026-10-04) ----------
 ## Q = Büyü Değişimi (_skill_buyucu_switch_variation), E/R = varyasyonlar (_buyucu_try_activate_variation[_r] ->
 ## _buyucu_cast_variation). Süre/bekleme evrimleri _evo_timing'de, hız _evo_move_bonus'ta, hava (Yükseliş) take_damage +
@@ -12923,8 +13106,12 @@ func _buyucu_cast_variation(variation: int, slot: String) -> void:
 	_buyucu_on_skill_used(slot, variation)
 
 
-## PASİF "Büyü Dalgası" + Q evrimleri - her yetenek kullanımında (Q set değişimi dahil; slot "skill"/"skill2"/"skill3").
+## PASİF "Büyü Dalgası" + Q evrimlerinin "her yetenek" etkileri - E ve R kullanımında (slot "skill2"/"skill3"). Q (set değişimi) bunu
+## ÇAĞIRMAZ (2026-10-04: "Q yeteneğiyle etkinleşmesini istemiyorum").
 func _buyucu_on_skill_used(slot: String, _variation: int) -> void:
+	## Pasif "Büyü Dalgası" HİSSEDİLSİN (2026-10-04): karakterin ayağından mor bir dalga yayılır (kaster + diğer oyuncular aynı sahneyi
+	## görür), silahlar da sertçe ileri fırlar (weapon.gd arcane_surge).
+	_play_and_broadcast_skill_fx(FxBuyucuSurgeWaveScene)
 	for w in owned_weapon_nodes:
 		if is_instance_valid(w) and w.has_method("arcane_surge"):
 			w.arcane_surge(BUYUCU_PASSIVE_SHOT_MULT)
@@ -13321,7 +13508,7 @@ func _golem_safe_jump_end(start: Vector2, dir: Vector2) -> Vector2:
 	var last: Vector2 = start
 	for i in range(1, steps + 1):
 		var p: Vector2 = start + dir * ShamanGolemMath.E_DISTANCE * float(i) / float(steps)
-		if GameManager.is_position_blocked_by_forest(p):
+		if GameManager.is_position_blocked_by_walls(p):
 			break
 		last = p
 	return last

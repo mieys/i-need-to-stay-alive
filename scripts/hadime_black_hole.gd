@@ -129,7 +129,7 @@ func _process_move(delta: float) -> void:
 			var step: float = minf(HadimeMath.HOLE_PULL_SPEED * delta, to_goal.length())
 			if step > 0.01:
 				var np: Vector2 = global_position + to_goal.normalized() * step
-				if not GameManager.is_position_blocked_by_forest(np):
+				if not GameManager.is_position_blocked_by_walls(np):
 					global_position = np
 		if NetworkManager.is_multiplayer_active:
 			_net_send_timer -= delta
@@ -182,6 +182,6 @@ func _pull(delta: float, drag: Vector2) -> void:
 		var np: Vector2 = ep
 		if d > HadimeMath.HOLE_PULL_DEADZONE:
 			np = ep + to_c / d * minf(HadimeMath.HOLE_PULL_SPEED * delta, d - HadimeMath.HOLE_PULL_DEADZONE)
-		if GameManager.is_position_blocked_by_forest(np):
+		if GameManager.is_position_blocked_by_walls(np):
 			continue
 		(e as Node2D).global_position = np

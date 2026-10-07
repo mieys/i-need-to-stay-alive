@@ -24,6 +24,14 @@ extends RefCounted
 ## KART METİNLERİ: tam cümle, kısaltma yok ("SG" değil "saldırı gücü"), değişimler "önce → sonra".
 ## Efsun ekranı SADECE elit sandıklardan gelir (bkz. enemy.gd _drop_chest / main.gd _show_elite_chest).
 
+## 2026-10-07 KULLANICI İSTEĞİ: "Efsunu oyundan kaldır ama bilgilerini silme" - efsunlar OYUNDAN çıkarıldı (kartlarda hiç çıkmaz,
+## kimse alamaz) ama TÜM veri (DEFS, scripts/enchants/*.gd, assets/fx/enchant, enchant_area/behavior altyapısı, testler) yerinde:
+## geri açmak için bu anahtarı true yapmak yeter. Sadece SİLAH efsunları kapanır; kalkan seçimi/geliştirmeleri
+## (shield_enchant_defs.gd, aynı elit sandık ekranından gelir) ve genel kartlar (Tepkime Gücü / Keskinlik / altın) aynen çalışır.
+## Tek giriş noktası enchants_for(): kart havuzu Temel kartları SADECE buradan üretir; elde efsunlu silah olmadığı sürece
+## geliştirme/Final kartı da çıkmaz. Testler ihtiyaç duyunca true yapıp işi bitince false'a döndürür.
+static var enabled: bool = false
+
 const GENERAL_REACTION_POWER := 0.03 ## genel kart: Tepkime Gücü (efsun kalmayınca doldurucu)
 const GENERAL_DAMAGE_PERCENT := 0.02 ## genel kart: Keskinlik
 const BANISH_PER_RUN := 3
@@ -382,7 +390,234 @@ const DEFS := {
 		"final": {"name": "Olay Ufku", "text": "3 nesne birleşip 5 saniyelik dev bir kozmik diske dönüşür: bosslar dışındaki düşmanları içine çeker, 0,3 saniyede bir silah hasarının %90'ı kadar vurur ve süre bitince dışa patlayarak herkesi savurur.",
 			"set": {"cosmic": 0.9}},
 	},
+	## ------------------------------------------------------------------ KALICI SİLAH ÖZELLİKLERİ (2026-10-08, yeni 12 tanım)
+	## Kullanıcının efsun seçim listesinden (silah başına bir efsun, TRAITS) seçtikleri. Silahı alan HER oyuncuya doğuştan gelir;
+	## 4 geliştirme + final demirci dükkanından alınır (bkz. weapon_shop_logic.gd). Geliştirme/final metinlerini Claude yazdı
+	## (kullanıcı: "ben yazayım" seçeneği) - mevcut desen: her geliştirme tek bir sayıyı iter, final bir imza ekstra ekler.
+	"kanayan_kesikler": {
+		"weapons": ["dagger"], "name": "Kanayan Kesikler", "element": "kanama",
+		"desc": "Her vuruş üst üste binen bir kanama bırakır; kombonun son vuruşu kanamaları anında patlatır.",
+		"base": {"text": "Her vuruş 4 saniyelik bir kanama yığını bırakır (yığın başına saniyede saldırı gücünün %6'sı). Yığınlar 5'e kadar üst üste biner. Kombonun 3. vuruşu hedefteki kanamaları anında patlatır: kalan hasarın tamamı tek seferde verilir.",
+			"set": {"kb_ap": 0.06, "kb_dur": 4.0, "kb_cap": 5, "kb_combo": 3, "kb_burst": 1.0, "kb_spread": false}},
+		"upgrades": [
+			{"name": "Derin Kesik", "text": "Kanama hasarı: yığın başına saniyede saldırı gücünün %6'sı → %8'i.", "add": {"kb_ap": 0.02}},
+			{"name": "Uzun Kanama", "text": "Kanama 2 saniye daha uzun sürer (4 → 6 sn).", "add": {"kb_dur": 2.0}},
+			{"name": "Kalın Damar", "text": "Kanama yığın sınırı 5 → 8.", "add": {"kb_cap": 3}},
+			{"name": "Kan Patlaması", "text": "Kombonun 3. vuruşundaki patlama hasarı %50 artar.", "add": {"kb_burst": 0.5}},
+		],
+		"final": {"name": "Kızıl Hasat", "text": "Kanayan bir düşman ölünce yığınlarının tamamı 100 birim içindeki en yakın düşmana geçer. Patlatma kombosu 3 vuruştan 2 vuruşa düşer.",
+			"set": {"kb_spread": true, "kb_combo": 2}},
+	},
+	"kanli_pence": {
+		"weapons": ["pence"], "name": "Kanlı Pençe", "element": "kanama",
+		"desc": "Pençe darbeleri kanama bırakır; kanayan düşmana vurdukça can kazanırsın.",
+		"base": {"text": "Her pençe 3 saniyelik kanama bırakır (saniyede saldırı gücünün %7'si, her vuruş süreyi yeniler). Kanayan bir düşmana her vurduğunda verdiğin hasarın %4'ü kadar can kazanırsın.",
+			"set": {"kp_ap": 0.07, "kp_dur": 3.0, "kp_leech": 0.04, "bleeding_bonus": 0.0, "kp_kill_haste": 0.0, "kp_kill_heal": 0.0}},
+		"upgrades": [
+			{"name": "Derin Pençe", "text": "Kanama hasarı: saniyede saldırı gücünün %7'si → %9'u.", "add": {"kp_ap": 0.02}},
+			{"name": "Uzun Kanama", "text": "Kanama 1,5 saniye daha uzun sürer (3 → 4,5 sn).", "add": {"kp_dur": 1.5}},
+			{"name": "Kan Emici", "text": "Can emme oranı: %4 → %6.", "add": {"kp_leech": 0.02}},
+			{"name": "Yırtıcı Darbe", "text": "Kanayan düşmana verdiğin hasar %15 artar.", "set": {"bleeding_bonus": 0.15}},
+		],
+		"final": {"name": "Kan Susuzluğu", "text": "Kanayan bir düşmanı öldürdüğünde 3 saniye boyunca saldırı hızın %30 artar ve maksimum canının %3'ü kadar iyileşirsin.",
+			"set": {"kp_kill_haste": 0.3, "kp_kill_heal": 0.03}},
+	},
+	"zincir_yildirim": {
+		"weapons": ["lightning_staff"], "name": "Zincir Yıldırım", "element": "sok",
+		"desc": "Işın hedefinden en yakın düşmanlara zincirleme atlar.",
+		"base": {"text": "Işın hedefinden en yakın 2 düşmana atlar (220 birim içinde, hasarın %50'si).",
+			"set": {"chain_add": 2, "chain_pct": 0.5, "chain_range": 1.0, "chain_slow": 0.0}},
+		"upgrades": [
+			{"name": "Güçlü Atlayış", "text": "Atlayan şimşeğin hasarı: ışının %50'si → %65'i.", "add": {"chain_pct": 0.15}},
+			{"name": "Geniş Zincir", "text": "Atlama menzili %30 uzar (220 → 286 birim).", "add": {"chain_range": 0.3}},
+			{"name": "Üçüncü Halka", "text": "Atlama sayısı 2 → 3.", "add": {"chain_add": 1}},
+			{"name": "Çarpılma", "text": "Atlayan şimşeğin vurduğu düşmanlar 1 saniye %25 yavaşlar.", "set": {"chain_slow": 0.25}},
+		],
+		"final": {"name": "Fırtına Zinciri", "text": "Atlama sayısı 2 daha artar ve atlayan şimşeklerin hasarı ışının %100'üne çıkar.",
+			"add": {"chain_add": 2}, "set": {"chain_pct": 1.0}},
+	},
+	"seri_parmak": {
+		"weapons": ["tabanca"], "name": "Seri Parmak", "element": "fiziksel",
+		"desc": "Her öldürme saldırı hızını geçici olarak artırır; atışlar sıklaşır.",
+		"base": {"text": "Öldürdüğün her düşman 3 saniye boyunca saldırı hızını %12 artırır. Etki 5 kata kadar üst üste biner ve her öldürme süreyi yeniler.",
+			"set": {"sp_per": 0.12, "sp_cap": 5, "sp_dur": 3.0, "sp_extra": 0.0, "sp_full_double": false}},
+		"upgrades": [
+			{"name": "Hızlı Parmak", "text": "Yığın başına saldırı hızı: %12 → %15.", "add": {"sp_per": 0.03}},
+			{"name": "Uzun Seri", "text": "Yığınlar 1,5 saniye daha uzun sürer (3 → 4,5 sn).", "add": {"sp_dur": 1.5}},
+			{"name": "Çifte Seri", "text": "Yığın sınırı 5 → 7.", "add": {"sp_cap": 2}},
+			{"name": "Kurşun Yağmuru", "text": "3 ve üstü yığındayken her atış %20 ihtimalle ek bir mermi daha atar.", "set": {"sp_extra": 0.2}},
+		],
+		"final": {"name": "Ölüm Sağanağı", "text": "Yığın sınırı 3 artar ve sınıra ulaşınca her atış iki mermi atar.",
+			"add": {"sp_cap": 3}, "set": {"sp_full_double": true}},
+	},
+	"bulasici_salgi": {
+		"weapons": ["tuftuf"], "name": "Bulaşıcı Salgı", "element": "zehir",
+		"desc": "Dartlar zehirler; zehirli düşman ölünce zehir çevresindeki düşmanlara bulaşır.",
+		"base": {"text": "Her dart 4 saniyelik zehir yükü bırakır (yük başına saniyede saldırı gücünün %6'sı), yükler 5'e kadar üst üste biner. Zehirli bir düşman ölünce zehri olduğu gibi 100 birim içindeki en çok 6 düşmana bulaşır.",
+			"set": {"poison_stacks": 1, "poison_dps": 0.06, "poison_dur": 4.0, "poison_cap": 5.0, "plague_radius": 100.0, "plague_ratio": 1.0}},
+		"upgrades": [
+			{"name": "Yoğun Zehir", "text": "Zehir hasarı: yük başına saniyede saldırı gücünün %6'sı → %8'i.", "add": {"poison_dps": 0.02}},
+			{"name": "Uzun Etki", "text": "Zehir 2 saniye daha uzun sürer (4 → 6 sn).", "add": {"poison_dur": 2.0}},
+			{"name": "Geniş Salgın", "text": "Bulaşma yarıçapı 100 → 140 birim.", "add": {"plague_radius": 40.0}},
+			{"name": "Kalın Birikim", "text": "Zehir yığın sınırı 5 → 8.", "add": {"poison_cap": 3.0}},
+		],
+		"final": {"name": "Kara Veba", "text": "Bulaşan zehir yükleri %50 artar ve bulaşma yarıçapı 50 birim daha büyür.",
+			"add": {"plague_ratio": 0.5, "plague_radius": 50.0}},
+	},
+	"delici_mermi": {
+		"weapons": ["tufek"], "name": "Delici Mermi", "element": "fiziksel",
+		"desc": "Mermi bir düşmanda durmaz, arkasındakileri de delip geçer ve her delişte güçlenir.",
+		"base": {"text": "Mermi arkasındaki 2 düşmanı da deler (toplam 3 düşmana vurur). Delinen her düşmanla mermi hasarı %10 artar.",
+			"set": {"pierce": 2, "pierce_pct": 1.0, "pierce_ramp": 0.10, "proj_speed": 1.0, "slow_pct": 0.0, "shield_pen": 0.0}},
+		"upgrades": [
+			{"name": "Sivri Uç", "text": "Delinen düşman sayısı 2 → 3.", "add": {"pierce": 1}},
+			{"name": "Kinetik Enerji", "text": "Delişte hasar artışı: %10 → %15.", "add": {"pierce_ramp": 0.05}},
+			{"name": "Hızlı Mermi", "text": "Mermi %25 daha hızlı uçar.", "set": {"proj_speed": 1.25}},
+			{"name": "Ezici Darbe", "text": "Vurulan düşmanlar 1 saniye %20 yavaşlar.", "set": {"slow_pct": 0.2, "slow_dur": 1.0}},
+		],
+		"final": {"name": "Zırh Delen Salvo", "text": "Mermi 3 düşman daha deler ve düşmanların kalkan korumasını %30 yok sayar.",
+			"add": {"pierce": 3}, "set": {"shield_pen": 0.3}},
+	},
+	"yankilanan_buyu": {
+		"weapons": ["arcane"], "name": "Yankılanan Büyü", "element": "kaos",
+		"desc": "İsabet hedefin yerinde bir yankı bırakır; kısa süre sonra aynı yerde ikinci bir küre patlar.",
+		"base": {"text": "Her isabet %25 ihtimalle (4 isabette bir kesin) hedefin yerinde bir yankı bırakır. 0,8 saniye sonra aynı noktada ikinci bir küre patlar: 45 birim içindekilere silah hasarının %70'i kadar vurur.",
+			"set": {"echo_chance": 0.25, "echo_pity": 4, "echo_delay": 0.8, "echo_dmg": 0.7, "echo_radius": 45.0, "echo_repeat": 0, "echo_stun": 0.0}},
+		"upgrades": [
+			{"name": "Sık Yankı", "text": "Yankı ihtimali: %25 → %35.", "add": {"echo_chance": 0.10}},
+			{"name": "Güçlü Yankı", "text": "Yankı patlamasının hasarı: silah hasarının %70'i → %90'ı.", "add": {"echo_dmg": 0.2}},
+			{"name": "Geniş Yankı", "text": "Yankı patlamasının alanı 45 → 60 birim.", "add": {"echo_radius": 15.0}},
+			{"name": "Çift Yankı", "text": "Yankı 0,5 saniye sonra bir kez daha patlar (hasarın %50'si).", "add": {"echo_repeat": 1}},
+		],
+		"final": {"name": "Çınlayan Boşluk", "text": "Yankı ihtimali %60'a çıkar ve patlamaya yakalananlar 0,5 saniye sersemler.",
+			"set": {"echo_chance": 0.6, "echo_stun": 0.5}},
+	},
+	"uclu_ok": {
+		"weapons": ["yay"], "name": "Üçlü Ok", "element": "fiziksel",
+		"desc": "Belirli aralıklarla ana okun yanında yelpaze halinde ek oklar çıkar.",
+		"base": {"text": "Her 3. atışta ana okun yanında 2 ok daha yelpaze halinde çıkar (yan oklar hasarın %80'i).",
+			"set": {"fan_every": 3, "fan_extra": 2, "fan_deg": 10.0, "fan_dmg": 0.8, "fan_haste": 0.0, "pierce": 0}},
+		"upgrades": [
+			{"name": "Seri Çekiş", "text": "Yelpaze her 3. atış yerine her 2. atışta çıkar.", "add": {"fan_every": -1}},
+			{"name": "Keskin Yan Oklar", "text": "Yan okların hasarı: ana okun %80'i → %100'ü.", "add": {"fan_dmg": 0.2}},
+			{"name": "Geniş Yelpaze", "text": "Yan ok sayısı 2 → 4 (toplam 5 ok).", "add": {"fan_extra": 2}},
+			{"name": "Delici Uçlar", "text": "Oklar bir düşmanı delip geçer.", "set": {"pierce": 1}},
+		],
+		"final": {"name": "Ok Yağmuru Salvosu", "text": "Yan ok sayısı 2 daha artar ve her yelpazeden sonra 1,5 saniye boyunca saldırı hızın %30 artar.",
+			"add": {"fan_extra": 2}, "set": {"fan_haste": 0.3}},
+	},
+	"zincir_civata": {
+		"weapons": ["crossbow"], "name": "Zincir Cıvata", "element": "fiziksel",
+		"desc": "Cıvata hedefi delip arkasındaki düşmana da çarpar ve onu sersemletir.",
+		"base": {"text": "Cıvata hedefi delip arkasındaki ilk düşmana da çarpar ve onu 0,4 saniye sersemletir.",
+			"set": {"pierce": 1, "pierce_pct": 1.0, "cv_stun": 0.4, "cv_slow": 0.0, "cv_splash": 0.0, "cv_all_stun": false}},
+		"upgrades": [
+			{"name": "Uzun Sersemlik", "text": "Sersemletme süresi 0,4 → 0,7 saniye.", "add": {"cv_stun": 0.3}},
+			{"name": "Çift Delme", "text": "Cıvata 1 yerine 2 düşmanı delip geçer.", "add": {"pierce": 1}},
+			{"name": "Ağır Cıvata", "text": "Sersemleyen düşman 1,5 saniye %25 yavaşlar.", "set": {"cv_slow": 0.25}},
+			{"name": "Şok Dalgası", "text": "Sersemleyen düşmanın 60 birim çevresindekilere cıvata hasarının %50'si kadar vurur.", "set": {"cv_splash": 0.5}},
+		],
+		"final": {"name": "Zincir Kırıcı", "text": "Cıvata 2 düşman daha deler ve vurduğu HER düşmanı 1 saniye sersemletir.",
+			"add": {"pierce": 2}, "set": {"cv_stun": 1.0, "cv_all_stun": true}},
+	},
+	"cifte_donus": {
+		"weapons": ["boomerang"], "name": "Çifte Dönüş", "element": "fiziksel",
+		"desc": "Belirli aralıklarla ikinci bir bumerang ters yönlü bir yay çizerek gider.",
+		"base": {"text": "Her 4. atışta ikinci bir bumerang ters yönlü bir yay çizerek gider (hasarın %70'i).",
+			"set": {"twin_every": 4, "twin_dmg": 0.7, "twin_angle": 40.0, "twin_third": 0.0, "range_mult": 1.0}},
+		"upgrades": [
+			{"name": "Sık Çift", "text": "İkinci bumerang her 4. atış yerine her 3. atışta gelir.", "add": {"twin_every": -1}},
+			{"name": "Güçlü İkiz", "text": "İkinci bumerangın hasarı: %70 → %90.", "add": {"twin_dmg": 0.2}},
+			{"name": "Geniş Yay", "text": "İkinci bumerang daha geniş bir yay çizer ve %15 daha uzağa gider.", "add": {"twin_angle": 15.0}, "set": {"range_mult": 1.15}},
+			{"name": "Üçüncü Kol", "text": "İkiz atışa üçüncü bir bumerang eklenir (hasarın %50'si).", "set": {"twin_third": 0.5}},
+		],
+		"final": {"name": "Bumerang Fırtınası", "text": "İkiz atış her 2. atışta gelir ve üçüncü bumerangın hasarı %70'e çıkar.",
+			"set": {"twin_every": 2, "twin_third": 0.7}},
+	},
+	"kirik_buz": {
+		"weapons": ["buz_asasi"], "name": "Kırık Buz", "element": "donma",
+		"desc": "Asa düşmanları dondurur; donmuşken ölen düşman parçalanır.",
+		"base": {"text": "Her 3. isabet düşmanı 1,5 saniye dondurur. Donmuşken ölen düşman parçalanır: 90 birim içindekilere saldırı gücünün %100'ü kadar vurur ve onları 1 saniye %40 yavaşlatır.",
+			"set": {"freeze_after": 3, "freeze_dur": 1.5, "shatter_ap": 1.0, "shatter_radius": 90.0, "shatter_slow": 0.4, "shatter_slow_dur": 1.0, "shatter_freeze": false}},
+		"upgrades": [
+			{"name": "Çabuk Don", "text": "Dondurmak için her 3. isabet yerine her 2. isabet yeter.", "add": {"freeze_after": -1}},
+			{"name": "Uzun Buz", "text": "Donma süresi 1,5 → 2 saniye.", "add": {"freeze_dur": 0.5}},
+			{"name": "Keskin Kırıklar", "text": "Parçalanma hasarı: saldırı gücünün %100'ü → %140'ı.", "add": {"shatter_ap": 0.4}},
+			{"name": "Geniş Parçalanma", "text": "Parçalanma alanı 90 → 120 birim.", "add": {"shatter_radius": 30.0}},
+		],
+		"final": {"name": "Buzul Çöküşü", "text": "Parçalanma hasarı saldırı gücünün %200'üne çıkar ve parçaların vurduğu komşuları 1,5 saniye dondurur.",
+			"set": {"shatter_ap": 2.0, "shatter_freeze": true}},
+	},
+	"kivilcim_yagmuru": {
+		"weapons": ["fisek"], "name": "Kıvılcım Yağmuru", "element": "yanma",
+		"desc": "Fişek patladığı yerde bir süre rastgele kıvılcım patlamaları bırakır.",
+		"base": {"text": "Fişek patlayınca patlama yerinde 3 saniye boyunca rastgele kıvılcım patlamaları olur: 45 birimlik alanda 0,4 saniyede bir, her biri 22 birim içine saldırı gücünün %25'i kadar vurur.",
+			"set": {"spark_dur": 3.0, "spark_gap": 0.4, "spark_ap": 0.25, "spark_area": 45.0, "spark_radius": 22.0, "spark_count": 1, "spark_mult": 1.0}},
+		"upgrades": [
+			{"name": "Sık Kıvılcım", "text": "Kıvılcımlar 0,4 yerine 0,3 saniyede bir patlar.", "add": {"spark_gap": -0.1}},
+			{"name": "Uzun Yağmur", "text": "Yağmur 1,5 saniye daha uzun sürer (3 → 4,5 sn).", "add": {"spark_dur": 1.5}},
+			{"name": "Güçlü Kıvılcım", "text": "Kıvılcım hasarı: saldırı gücünün %25'i → %35'i.", "add": {"spark_ap": 0.10}},
+			{"name": "Geniş Alan", "text": "Kıvılcımların yağdığı alan 45 → 65 birim.", "add": {"spark_area": 20.0}},
+		],
+		"final": {"name": "Kıvılcım Fırtınası", "text": "Her seferinde 2 kıvılcım patlar ve kıvılcım hasarları %50 artar.",
+			"set": {"spark_count": 2, "spark_mult": 1.5}},
+	},
 }
+
+## KALICI SİLAH ÖZELLİKLERİ (kullanıcı kararı 2026-10-08: "bu efsunlar silahlarda kalıcı olacak tıpkı onlara göre bir özellik gibi";
+## seçimler artifact "Silah Efsunları" sayfasından). Silah anahtarı -> o silahın doğuştan efsunu. Silahı alan (başlangıç, sandık,
+## demirci, debug) herkes bu efsunla başlar; geliştirmeler demirci dükkanında satılır (weapon_shop_logic.gd "SİLAH EFSUNU").
+## `enabled` (kart havuzu) bununla ilgisiz: kartlardan efsun hâlâ çıkmaz, özellik doğrudan silaha takılır.
+const TRAITS := {
+	"dagger": "kanayan_kesikler", "pence": "kanli_pence", "topuz": "sismik_dalga", "uzunkilic": "wind_sword",
+	"fire_staff": "destiny", "lightning_staff": "zincir_yildirim", "tabanca": "seri_parmak", "tuftuf": "bulasici_salgi",
+	"tufek": "delici_mermi", "arcane": "yankilanan_buyu", "yay": "uclu_ok", "crossbow": "zincir_civata",
+	"boomerang": "cifte_donus", "buz_asasi": "kirik_buz", "fisek": "kivilcim_yagmuru",
+}
+
+
+## Bu silahın doğuştan efsun kimliği ("" = yok).
+static func trait_of(weapon_key: String) -> String:
+	return str(TRAITS.get(weapon_key, ""))
+
+
+## Silah kopyasının başlangıç efsun kaydı ({"id","ups","final"}); özelliği olmayan silah için {}.
+static func new_trait_record(weapon_key: String) -> Dictionary:
+	var id: String = trait_of(weapon_key)
+	return {"id": id, "ups": [], "final": false} if id != "" else {}
+
+
+## Yeni bir owned_weapons girdisi: özellik kaydıyla birlikte (tüm silah ekleme yolları bunu kullanır).
+static func new_weapon_entry(weapon_key: String, level: int = 1, spent: int = 0) -> Dictionary:
+	var e: Dictionary = {"key": weapon_key, "level": level, "spent": spent}
+	var rec: Dictionary = new_trait_record(weapon_key)
+	if not rec.is_empty():
+		e["enchant"] = rec
+	return e
+
+
+## Girdide özellik kaydı yoksa (eski kayıt, geri katılım, debug ekleme) doğuştan olanı ekler. true = değişti.
+static func ensure_trait(entry: Dictionary) -> bool:
+	if entry.has("enchant") and not (entry["enchant"] as Dictionary).is_empty():
+		return false
+	var rec: Dictionary = new_trait_record(str(entry.get("key", "")))
+	if rec.is_empty():
+		return false
+	entry["enchant"] = rec
+	return true
+
+
+## Demirci dükkanındaki geliştirme satırları: 4 normal + final ([{name, text, final}]).
+static func upgrade_rows(id: String) -> Array:
+	var def: Dictionary = get_def(id)
+	var out: Array = []
+	if def.is_empty():
+		return out
+	var ups: Array = def["upgrades"]
+	for i in range(ups.size()):
+		out.append({"index": i, "name": str(ups[i]["name"]), "text": str(ups[i]["text"]), "final": false})
+	out.append({"index": ups.size(), "name": str(def["final"]["name"]), "text": str(def["final"]["text"]), "final": true})
+	return out
 
 
 static func get_def(id: String) -> Dictionary:
@@ -396,6 +631,8 @@ static func has_weapon(weapon_key: String) -> bool:
 ## Bu silaha uyan efsunlar (DEFS sırasıyla).
 static func enchants_for(weapon_key: String) -> Array:
 	var out: Array = []
+	if not enabled:
+		return out ## efsunlar oyundan kaldırıldı (bkz. enabled) - veri duruyor, havuz boş
 	for id in DEFS:
 		if (DEFS[id]["weapons"] as Array).has(weapon_key):
 			out.append(id)

@@ -1079,7 +1079,7 @@ func _on_buy_copy(item: String) -> void:
 	if GameManager.gold < cost:
 		return
 	GameManager.gold -= cost
-	GameManager.owned_weapons.append({"key": item, "level": 1, "spent": cost})
+	GameManager.owned_weapons.append(EnchantDefs.new_weapon_entry(item, 1, cost))
 
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.has_method("buy_weapon_copy"):

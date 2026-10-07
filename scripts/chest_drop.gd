@@ -1,11 +1,13 @@
 extends Area2D
 
 ## Yerdeki sandık. Kullanıcı isteği (2026-09-25): "elite sandıklar ve normal sandıklar olarak 2 ayrım oluştur - elitler
-## bosslardan ve güçlü yaratıklardan nadiren düşsün, normal sandıklar yaratıklardan rasgele düşsün ... normal
-## sandıklardan eşya, elit sandıklardan efsun çıksın" + "normal sandıklar tek oyuncuya gider elit sandıklar ise
-## paylaşılır". Normal: toplayana (NetworkManager.host_award_chest), açılınca eşya kartı (chest_menu.gd). Elit: HER
-## yaşayan oyuncuya bir elit sandık (NetworkManager.host_award_elite_chest), açılınca efsun ekranı (main.gd
-## _show_elite_chest). Düşme kuralları enemy.gd _drop_chest'te.
+## bosslardan ve güçlü yaratıklardan nadiren düşsün, normal sandıklar yaratıklardan rasgele düşsün" + "normal sandıklar tek
+## oyuncuya gider elit sandıklar ise paylaşılır". 2026-10-07: "elit sandıklardan sadece epik item çıkacak çünkü efsunları
+## kaldırmıştık" + "normal sandıklar sırayla oyunculara verilecek (alan kişi sıradaki değilse sandık grup penceresinden
+## sıradakinin barına gidecek), elit sandıklar herkese eşit dağıtılacak". Normal: SIRADAKİ oyuncuya
+## (NetworkManager.host_award_chest / next_chest_turn), açılınca parça kartı (chest_menu.gd). Elit: HER yaşayan oyuncuya bir
+## elit sandık (NetworkManager.host_award_elite_chest), açılınca epik eşya kartı (main.gd _show_elite_chest, chest_menu.gd
+## elit mod). Düşme kuralları enemy.gd _drop_chest'te.
 ##
 ## Görsel: tools/gen_chest_sprites.py sayfası (20 kare x 48 px, düzen o dosyanın başında) - burada 0-3 bekleme,
 ## toplanınca 4-12 (sallanma + kapak patlaması). Sandık sprite'ı hafifçe sallanır, gölgesi yerde sabit kalır.
@@ -26,7 +28,7 @@ const ELITE_IDLE_STEP := 0.16
 
 ## "KADEME" - hangi dünya evresinden düştü (sandık menüsünün başlığı, bkz. chest_menu.gd CHEST_TITLES). Görsele etkisi yok.
 @export var chest_tier: int = 0
-## Elit sandık (efsun, herkese). Ağ kopyası için broadcast_drop "elite_chest" türü bunu add_child'dan önce kurar.
+## Elit sandık (epik eşya, herkese). Ağ kopyası için broadcast_drop "elite_chest" türü bunu add_child'dan önce kurar.
 @export var is_elite: bool = false:
 	set(val):
 		is_elite = val
@@ -172,9 +174,9 @@ func _open_chest_for(_body: Node, award_to_local: bool = true) -> void:
 	)
 
 
-## Multiplayer: host tarafında, sandığı GERÇEKTEN toplayan oyuncu için açar. Normal sandık TOPLAYANA gider (kullanıcı
-## isteği 2026-09-24, NetworkManager.host_award_chest); elit sandık yaşayan HER oyuncuya birer tane (2026-09-25,
-## NetworkManager.host_award_elite_chest). Tek oyunculu (multiplayer kapalı) akışta toplayan alır.
+## Multiplayer: host tarafında, sandığı GERÇEKTEN toplayan oyuncu için açar. Normal sandık SIRADAKİ oyuncuya gider (toplayan
+## sıradaki değilse sandık ona uçar - 2026-10-07, NetworkManager.host_award_chest); elit sandık yaşayan HER oyuncuya birer tane
+## (2026-09-25, NetworkManager.host_award_elite_chest). Tek oyunculu (multiplayer kapalı) akışta toplayan alır.
 ## Kullanıcı isteği (2026-10-02, yeni eşya sistemiyle birlikte): "oyunda yere düşen sandıklardan 90-150 civarı altın
 ## çıkmasını ve bu altınların oyuncularla paylaşılmasını istiyorum (herkese aynı miktar gönderilir oyuncu başına bu miktar
 ## %10 azalır)". Yetkili taraf (host / tek oyunculu) bir kez çeker; her katılımcı AYNI payı alır: miktar x (1 - %10 x

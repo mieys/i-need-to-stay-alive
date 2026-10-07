@@ -51,7 +51,8 @@ func test_pad_navigates_to_card_and_a_buys_once() -> void:
 	var player := FakePlayer.new()
 	add_child(merchant)
 	add_child(player)
-	var stock: Array = [{"type": "weapon", "key": "fire_staff"}, {"type": "weapon", "key": "arcane_staff"},
+	## 2026-10-07: silahlar demirci dükkanına taşındı - satıcıda üç eşya kartı.
+	var stock: Array = [{"type": "item", "key": "tecrube_kitabi", "tier": 1}, {"type": "item", "key": "isik_parcacigi", "tier": 1},
 		{"type": "item", "key": "kutsal_tilsim", "tier": 1}]
 	var screen: CanvasLayer = MerchantScreenScript.new()
 	add_child(screen)

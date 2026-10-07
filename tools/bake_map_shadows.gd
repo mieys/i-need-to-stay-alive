@@ -22,7 +22,8 @@ const CATS := {
 	## (OtOnKatman/"Çalılar ön" katmanları oyun açılırken bu katmanlardan ayrılıyor - sahne dosyasında çalının tamamı burada.)
 	"bush": ["Shader Eklenecek/Çalılar", "Shader Eklenecek/Çalılar1", "Shader Eklenecek/Animasyonsuz çalılar",
 		"Shader Eklenecek/Çiçekler 1"],
-	"house": ["ev/Ev ayrıntı", "ev/Ev", "ev/ev kapı", "ev/Ev Çatı 1"],
+	## 2026-10-07: demirci binası (Blacksmith + kapısı) eklendi; "baca duman" duman animasyonu olduğu için gölge almaz.
+	"house": ["ev/Blacksmith", "ev/blacksmith kapı", "ev/Ev ayrıntı", "ev/Ev", "ev/ev kapı", "ev/Ev Çatı 1"],
 	"farm": ["tarla/tarla 1", "tarla/tarla 1_5", "tarla/tarla 2"],
 	"rock": ["Etkileşimler/Maden", "Etkileşimler/Maden 1", "Düşman Üssü/Özel maden", "Düşman Üssü/Düşman üssü"],
 	"cliff": ["Orman parçaları/orman parçaları -1", "Orman parçaları/Orman parçaları", "Orman parçaları/Orman parçaları 2",

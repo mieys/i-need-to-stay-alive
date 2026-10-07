@@ -267,10 +267,72 @@ func _register_ui_opacity() -> void:
 		UISound.register_ui_opacity(_chat_scroll)
 
 
+## SİLAH PARÇACIĞI sayacı (kullanıcı isteği 2026-10-08, demirci dükkanında silah almak için): altın göstergesinin HEMEN altında aynı
+## levha stilinde. hud.tscn'e YAZILMIYOR (editör sahneyi geri alıyor, bkz. _layout_shop_inventory_buttons notu) - kodla kurulur.
+var _shard_indicator: PanelContainer = null
+var _shard_label: Label = null
+var _shard_shown: int = -1
+const SHARD_ICON_PATH := "res://assets/pickups/weapon_shard/shard_icon.png"
+
+
+func _ensure_shard_indicator() -> void:
+	if is_instance_valid(_shard_indicator):
+		return
+	_shard_indicator = PanelContainer.new()
+	_shard_indicator.name = "ShardIndicator"
+	_shard_indicator.process_mode = Node.PROCESS_MODE_ALWAYS
+	var margin := MarginContainer.new()
+	for side: String in ["left", "right"]:
+		margin.add_theme_constant_override("margin_" + side, 10)
+	for side: String in ["top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 6)
+	_shard_indicator.add_child(margin)
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	margin.add_child(box)
+	var icon := TextureRect.new()
+	icon.texture = load(SHARD_ICON_PATH) as Texture2D
+	icon.custom_minimum_size = Vector2(44, 44) ## 22 px sanat x2 (tam sayı ölçek, bulanıklaşmaz)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.add_child(icon)
+	_shard_label = Label.new()
+	_shard_label.add_theme_font_size_override("font_size", 40)
+	_shard_label.add_theme_color_override("font_color", Color(0.30, 0.38, 0.55)) ## bej levhada okunur çelik mavisi
+	_shard_label.text = "0"
+	box.add_child(_shard_label)
+	add_child(_shard_indicator)
+	_set_mouse_ignore_recursive(_shard_indicator)
+	UISound.register_ui_opacity(_shard_indicator)
+	if _gold_indicator_normal_style:
+		_shard_indicator.add_theme_stylebox_override("panel", _gold_indicator_normal_style)
+	if not GameManager.weapon_shards_changed.is_connected(_on_weapon_shards_changed):
+		GameManager.weapon_shards_changed.connect(_on_weapon_shards_changed)
+	_on_weapon_shards_changed(GameManager.weapon_shards)
+
+
+func _on_weapon_shards_changed(total: int) -> void:
+	if _shard_label and total != _shard_shown:
+		_shard_shown = total
+		_shard_label.text = str(total)
+
+
+## Sol sütunun (ENVANTER + altın + parçacık) alt kenarı: grup paneli ve DEBUG düğmesi bunun altına yerleşir.
+func _left_stack_bottom() -> float:
+	var y: float = gold_indicator.get_global_rect().end.y
+	if is_instance_valid(_shard_indicator) and _shard_indicator.visible:
+		y = maxf(y, _shard_indicator.get_global_rect().end.y)
+	return y
+
+
 func _layout_shop_inventory_buttons() -> void:
 	var minimap: Control = get_node_or_null("MinimapControl")
 	if not minimap:
 		return
+	_ensure_shard_indicator()
 	const ORIGINAL_BTN_W := 240.0
 	const ORIGINAL_BTN_H := 62.0
 	const SHRINK_RATIO := 0.7 ## %30 küçültme
@@ -330,6 +392,17 @@ func _layout_shop_inventory_buttons() -> void:
 		c.pivot_offset = Vector2.ZERO
 		c.scale = Vector2.ONE * mobile_u
 
+	## Silah parçacığı sayacı: altın göstergesinin altında, aynı genişlik/ölçek. Yükseklik içeriğe göre (min boy) - altın kutusuyla aynı kural.
+	var gold_h: float = maxf(btn_h, gold_indicator.get_combined_minimum_size().y)
+	_shard_indicator.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_shard_indicator.offset_left = left_edge
+	_shard_indicator.offset_right = left_edge + btn_w
+	_shard_indicator.offset_top = gold_indicator.offset_top + (gold_h + GAP) * mobile_u
+	_shard_indicator.offset_bottom = _shard_indicator.offset_top + maxf(btn_h, _shard_indicator.get_combined_minimum_size().y)
+	_shard_indicator.pivot_offset = Vector2.ZERO
+	_shard_indicator.scale = Vector2.ONE * mobile_u
+	_shard_indicator.visible = true
+
 	## DÜZELTME (kullanıcı isteği: "dükkan paneli ekranın ortasında açılsın
 	## sağ altta değil") - burada eskiden dükkan penceresini minimapın
 	## üstünü kapatmasın diye sabit bir "sol-alt" konuma zorlayan bir blok
@@ -385,6 +458,8 @@ func _style_envanter_and_gold_buttons() -> void:
 	plaque_clean.texture = load("res://assets/ui/game/hud_plaque_clean.png")
 	_gold_indicator_normal_style = plaque_clean
 	gold_indicator.add_theme_stylebox_override("panel", _gold_indicator_normal_style)
+	if is_instance_valid(_shard_indicator):
+		_shard_indicator.add_theme_stylebox_override("panel", _gold_indicator_normal_style)
 	## 2026-09-24: levha artık bej parşömen (oyun içi kit) - sahnedeki açık sarı yazı okunmuyordu, koyu altın.
 	if gold_indicator_label:
 		gold_indicator_label.add_theme_color_override("font_color", UIKit.C_GOLD)
@@ -896,6 +971,7 @@ const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 var _mobile_inv_dim: ColorRect = null
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const TouchControlsScript := preload("res://scripts/touch_controls.gd")
+const TouchScrollScript := preload("res://scripts/touch_scroll.gd")
 const ROUND_FRAME: Texture2D = preload("res://assets/ui/kit/hud_skill_frame_round.png")
 const ROUND_FRAME_SPIRIT: Texture2D = preload("res://assets/ui/kit/hud_skill_frame_spirit_round.png")
 const ROUND_MASK_SHADER: Shader = preload("res://shaders/round_mask.gdshader")
@@ -1289,7 +1365,9 @@ func _make_mobile_icon_button(n: String, map: Array[String]) -> Button:
 	return b
 
 
-## Joystick bölgesinde kalan dokunulabilir HUD: grup satırları (altın gönder) + açılır pencereleri, açıkken sohbet kutusu.
+## Joystick bölgesinde kalan dokunulabilir HUD: grup satırları (altın gönder) + açılır pencereleri, açıkken sohbet kutusu,
+## taşan (kaydırılabilir) sohbet günlüğü - kullanıcı bildirimi (2026-10-05): sohbeti kaydırmak joystick'i de başlatıp karakteri
+## yürütüyordu. Sığan (kaydırılmayan) sohbet joystick'e engel olmaz.
 func _mobile_joy_exclude() -> Array:
 	var out: Array = []
 	var party: Node = get_node_or_null("PartyPanelLayer/PartyPanel")
@@ -1297,6 +1375,8 @@ func _mobile_joy_exclude() -> Array:
 		out.append_array(party.call("touch_blocking_controls"))
 	if _chat_input and _chat_input.visible:
 		out.append(_chat_input)
+	if _chat_scroll and is_instance_valid(_chat_scroll) and TouchScrollScript._scrollable(_chat_scroll):
+		out.append(_chat_scroll)
 	return out
 
 
@@ -1318,7 +1398,7 @@ func _fit_mobile_party() -> void:
 	var u: float = MobileUIScript.HUD_SCALE
 	var e: Rect2 = _mobile_edges()
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var top: float = gold_indicator.get_global_rect().end.y + 12.0 * u
+	var top: float = _left_stack_bottom() + 12.0 * u
 	## DEBUG düğmesi (debug modunda) de altın göstergesinin altına yerleşir (bkz. _position_debug_button) - panel onun altına.
 	if is_instance_valid(_debug_button) and _debug_button.visible:
 		top = maxf(top, _debug_button.get_global_rect().end.y + 12.0 * u)
@@ -1893,6 +1973,15 @@ func _refresh_round_fill(bar: TextureProgressBar) -> void:
 	fill.modulate = bar.tint_progress
 
 
+## Sandık sırası efekti (bkz. chest_pass_fx.gd): yerel oyuncunun alttaki can çubuğunun ekrandaki (canvas) ortası; HUD henüz
+## kurulmadıysa / çubuk gizliyse Vector2.INF.
+func get_own_bar_center() -> Vector2:
+	for c: Control in [dock_hp_bar, dock_frame]:
+		if is_instance_valid(c) and c.is_visible_in_tree():
+			return c.get_global_transform_with_canvas() * (c.size * 0.5)
+	return Vector2.INF
+
+
 func update_health(current: float, max_value: float) -> void:
 	health_bar.max_value = max(max_value, 0.001)
 	health_bar.value = current
@@ -1974,6 +2063,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+## Telefon: sohbet yazma kutusu açıkken DIŞINA dokunmak kutuyu kapatır. Godot'da odaktaki bir LineEdit dışarı tıklanınca
+## odağı bırakmaz; ekran klavyesi geri hareketiyle kapatılınca kutu açık kalıp `is_chat_typing` oyuncuyu (hareket + yetenek)
+## kilitliyordu - çıkış yolu yoktu (kullanıcı bildirimi 2026-10-05: "takılı kalıp oyunu oynamama engel oluyor").
+## Sohbet düğmesi kendi aç/kapa mantığını _process'te yürütür (burada yok sayılır, yoksa kapatıp hemen yeniden açardı).
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventScreenTouch) or not (event as InputEventScreenTouch).pressed:
+		return
+	if _chat_input == null or not _chat_input.visible:
+		return
+	var pos: Vector2 = (event as InputEventScreenTouch).position
+	if _chat_input.get_global_rect().has_point(pos):
+		return
+	if is_instance_valid(mobile_chat_button) and mobile_chat_button.visible and mobile_chat_button.get_global_rect().has_point(pos):
+		return
+	_close_chat_input()
+
+
 ## ==============================================================================
 ## CHAT (kullanıcı isteği: "oyuna chat ekle, enter tuşuna basarak mesaj
 ## yazabiliriz solda chat penceresi olacak ve karakterler konuşunca
@@ -2015,6 +2121,10 @@ func _create_chat_ui() -> void:
 	_chat_scroll.offset_bottom = -38.0
 	_chat_scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_chat_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	if MobileUIScript.enabled:
+		## Telefonda sohbet parmakla kaydırılır (touch_scroll.gd); varsayılan kaydırma çubuğu (36 px, tema yok) kısa
+		## mesajların yanında panelin en sağında yalnız başına duruyordu ("çok sağa kayık") ve parmağı joystick'ten çalıyordu.
+		_chat_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	panel.add_child(_chat_scroll)
 
 	_chat_log = VBoxContainer.new()
@@ -2073,6 +2183,9 @@ func _on_chat_input_submitted(text: String) -> void:
 func _close_chat_input() -> void:
 	if not _chat_input:
 		return
+	## Odağı da bırak: telefonda ekran klavyesi ancak böyle kapanır (focus_exited -> bu fonksiyona bir kez daha girer, zararsız).
+	if _chat_input.has_focus():
+		_chat_input.release_focus()
 	_chat_input.visible = false
 	_chat_input.text = ""
 	if is_instance_valid(player) and "is_chat_typing" in player:
@@ -2126,7 +2239,7 @@ func _position_debug_button() -> void:
 	## (sol kenara hizalı - eski sağ kenar hizası için gereken gerçek genişlik/viewport hesabı artık yok).
 	var below_y: float = 330.0
 	if gold_indicator and gold_indicator.visible:
-		below_y = gold_indicator.get_global_rect().end.y + 10.0
+		below_y = _left_stack_bottom() + 10.0
 	var left_x: float = gold_indicator.get_global_rect().position.x if gold_indicator else 20.0
 	_debug_button.position = Vector2(left_x, below_y)
 
@@ -2184,8 +2297,12 @@ func _process(delta: float) -> void:
 	if MobileUIScript.enabled and touch_controls != null:
 		if Input.is_action_just_pressed(&"mobile_party_toggle"):
 			_toggle_mobile_party()
-		if Input.is_action_just_pressed(&"mobile_chat_open") and _chat_input and not _chat_input.visible:
-			_open_chat_input()
+		if Input.is_action_just_pressed(&"mobile_chat_open") and _chat_input:
+			## Sohbet düğmesi aç/kapa: kutu açıkken tekrar dokunmak kapatır (eskiden hiçbir şey olmazdı).
+			if _chat_input.visible:
+				_close_chat_input()
+			else:
+				_open_chat_input()
 		if Input.is_action_just_pressed(&"mobile_party_stats"):
 			_open_mobile_stats()
 	_position_debug_button()

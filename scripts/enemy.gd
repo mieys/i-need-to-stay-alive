@@ -89,6 +89,8 @@ var _ranged_timer: float = 0.0:
 			_ew_world.set_ranged_timer(_ew_slot, v)
 const EnemyProjectileScene := preload("res://scenes/enemy_projectile.tscn")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+const BossBarArtScript: GDScript = preload("res://scripts/boss_bar_art.gd")
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 
 ## Only used for enemies whose visual is a plain Sprite2D with hframes/vframes
 ## set (e.g. the boss and the rat), instead of an AnimatedSprite2D with a
@@ -305,8 +307,11 @@ const RAGE_SPEED_MULT := 2.0 * RAGE_SPEED_CUT_2026_09_25
 ## Kullanıcı isteği (2026-09-24 yaratık yetenekleri): "Orkların ragesi %50 canın altında gerçekleşir, bu esnada hareket
 ## hızları normal rageye göre 1.5 kat daha fazla artar" - normal öfke +%100 (x2.0) -> ork +%150 (x2.5); 2026-09-25 kesintisi
 ## ork öfkesine de aynı oranda uygulanır.
+## Kullanıcı isteği (2026-10-06): "Orkların özel yeteneğini %15 zayıflat" - ork öfkesinin hız ARTIŞI (+%150) x0.85 olur (+%127,5);
+## tetik eşiği (%50 can) aynı. Normal öfke (RAGE_SPEED_MULT) bu kesintiden etkilenmez.
+const ORK_RAGE_NERF_2026_10_06 := 0.85
 const ORK_RAGE_HP_THRESHOLD := 0.50
-const ORK_RAGE_SPEED_MULT := (1.0 + (2.0 - 1.0) * 1.5) * RAGE_SPEED_CUT_2026_09_25
+const ORK_RAGE_SPEED_MULT := (1.0 + (2.0 - 1.0) * 1.5 * ORK_RAGE_NERF_2026_10_06) * RAGE_SPEED_CUT_2026_09_25
 
 ## ---------- Yaratık yetenekleri (kullanıcı isteği 2026-09-24, bkz. enemy_abilities.gd) ----------
 const EnemyAbilitiesScript := preload("res://scripts/enemy_abilities.gd")
@@ -371,6 +376,9 @@ func set_ability_invisible(on: bool) -> void:
 			_overhead_bar.visible = false
 	elif has_meta(UNTARGETABLE_META):
 		remove_meta(UNTARGETABLE_META)
+		## Hayalet boss yeniden göründüğünde kafatası işareti de dönsün (kalıcı görünür bossta başka bir şey geri açmıyordu).
+		if _overhead_bar_always_visible and _overhead_bar and is_instance_valid(_overhead_bar):
+			_overhead_bar.visible = true
 
 
 ## İstemci tarafı: host'un broadcast_enemy_vfx ile gönderdiği yetenek olayları (bkz. network_manager.gd).
@@ -554,6 +562,7 @@ const XpOrb := preload("res://scenes/xp_orb.tscn")
 const GoldDrop := preload("res://scenes/gold_drop.tscn")
 const FoodDrop := preload("res://scenes/food_drop.tscn")
 const ChestDropScene := preload("res://scenes/chest_drop.tscn")
+const WeaponShardDropScript := preload("res://scripts/weapon_shard_drop.gd")
 ## BUG DÜZELTMESİ (kullanıcı bildirimi: "oyunda hiç mıknatıs düşmüyor") - kök
 ## neden bulundu: magnet_drop.gd'nin kendi dosya başı yorumu "bkz. enemy.gd
 ## _drop_magnet()" diyordu ama bu fonksiyon dosyada HİÇ yoktu (muhtemelen bir
@@ -2413,6 +2422,20 @@ func _rage_hp_threshold() -> float:
 	return ORK_RAGE_HP_THRESHOLD if creature_family() == "ork" else RAGE_HP_THRESHOLD
 
 
+## Kademe kapısı hızlandırması (2026-10-06, bkz. enemy_spawner.gd GATE_RUSH_*): kapıyı tutan ve oyuncuların görüşü dışındaki eski kademe
+## yaratığı bu çarpanla yaklaşır. Saf hız çarpanı - C++ "rage" çarpan kanalına öfke çarpanıyla ÇARPILARAK gider (_ew_push_state);
+## öfke/yavaşlatma/donma kuralları değişmez. Sadece host'ta (yaratık AI'ı host'ta) çağrılır.
+var gate_rush_mult: float = 1.0
+
+
+func set_gate_rush(mult: float) -> void:
+	if is_equal_approx(mult, gate_rush_mult):
+		return
+	gate_rush_mult = mult
+	if _ew_slot >= 0 and _ew_world != null:
+		_ew_push_state()
+
+
 func _refresh_chill_tint() -> void:
 	var target: CanvasItem = null
 	if anim_sprite:
@@ -2810,6 +2833,16 @@ func get_overhead_bar_offset() -> float:
 	if frame_sprite:
 		return -(cell_size * frame_sprite.scale.y * 0.5 + 26.0)
 	return -70.0
+
+
+## Boss kafatası plakasının ÜST kenarı (yerel y): sprite'ın gerçek en üst opak pikselinin PLATE_GAP üstünde duran plakanın tepesi
+## (kullanıcı isteği 2026-10-05; eski formül hücre boyuna göre olduğu için golemde kafanın ~100 px üstünde havada kalıyordu).
+## get_overhead_bar_offset() BİLEREK değişmedi: korku/sersemleme/zehir efektleri hâlâ onu kullanıyor. Doku okunamazsa eski formül.
+func get_boss_marker_offset() -> float:
+	var head: Variant = BossBarArtScript.head_top_local(frame_sprite)
+	if head == null:
+		return get_overhead_bar_offset()
+	return float(head) - BossBarArtScript.PLATE_GAP - float(BossBarArtScript.PLATE_SIZE)
 
 
 ## Genel hız ayarı: oyundaki her şeyin hareket hızı %20 düşürüldü, ardından
@@ -3324,11 +3357,12 @@ func _create_overhead_bar() -> void:
 		return
 	if _overhead_bar and is_instance_valid(_overhead_bar):
 		return
+	## Kullanıcı isteği (2026-10-05): boss'un üstündeki can/kalkan çubuğu KALDIRILDI - can ve kalkan artık sadece üst ortadaki boss
+	## barında (boss_bar_top.gd). Boss'un üstünde sadece kafatası plakası durur (boss_skull_marker.gd, eski çubukla AYNI arayüz).
 	_overhead_bar = Node2D.new()
-	_overhead_bar.set_script(preload("res://scripts/overhead_bar.gd"))
-	_overhead_bar.set("health_color", _overhead_bar.HEALTH_COLOR_ENEMY) ## düşman boss: kırmızı can barı
+	_overhead_bar.set_script(preload("res://scripts/boss_skull_marker.gd"))
 	add_child(_overhead_bar)
-	_overhead_bar.set_offset(get_overhead_bar_offset())
+	_overhead_bar.set_offset(get_boss_marker_offset())
 	_overhead_bar.set_health(health, max_health)
 	_overhead_bar.set_shield(item_shield_hp, item_shield_max)
 	_overhead_bar.visible = _overhead_bar_always_visible
@@ -3708,7 +3742,7 @@ func _ew_push_state() -> void:
 	if sm != _ew_sent_speed_mult:
 		_ew_sent_speed_mult = sm
 		_ew_world.set_speed_mult(_ew_slot, sm)
-	var rm: float = _rage_speed_mult() if is_raging else 1.0
+	var rm: float = (_rage_speed_mult() if is_raging else 1.0) * gate_rush_mult
 	if rm != _ew_sent_rage_mult:
 		_ew_sent_rage_mult = rm
 		_ew_world.set_rage_mult(_ew_slot, rm)
@@ -4495,6 +4529,8 @@ func die() -> void:
 	## Görev sistemi (bkz. world_event_manager.gd "Alanı Güvenceye Al") - bkz. GameManager.
 	## enemy_died üstündeki not.
 	GameManager.enemy_died.emit(global_position)
+	if is_boss: ## kamera sarsıntısı: boss yıkıldı (her peer kendi kamerasına uzaklığa göre; bkz. camera_shake.gd)
+		CameraShakeScript.add_at(global_position, 0.6, 1600.0)
 
 	## DÜZELTME (kullanıcı bildirimi: "yaratıkların ölüm animasyonu
 	## katılımcılarda farklı görünüyor"): host'un ölümü katılımcılara
@@ -4565,6 +4601,7 @@ func die() -> void:
 	_drop_food()
 	_drop_magnet()
 	_drop_chest()
+	_drop_weapon_shards()
 	_enter_state(State.DEATH)
 
 	var death_time: float = _anim_length_for(State.DEATH)
@@ -4581,6 +4618,36 @@ func die() -> void:
 	## kaydırma, bkz. _route_direction) - küçük bir rastgele gecikme
 	## eşzamanlılığı kırar, tek bir yaratıkta gözle fark edilmez.
 	death_time += randf_range(0.0, 0.15)
+	get_tree().create_timer(death_time).timeout.connect(_on_death_anim_done)
+
+
+## ZAFER anında (Final bossları ölünce, bkz. enemy_spawner.gd _rpc_victory_dissolve) kalan yaratıkları ÖDÜLSÜZ kaldırır:
+## die()'ın görsel/kayıt kısmı (C++ kaydı silinir, ölüm animasyonu, solup silinme) AYNEN, ama öldürme SAYILMAZ - GameManager.
+## enemy_died yok (görev sayacı), oyuncuya öldürme bildirimi yok (pasifler, öldürme sayacı, rekor), drop yok, ölüm sesi yok
+## (250 yaratığın aynı anda sesi), zombi asidi yok. Her peer kendi kopyasında yerel çağırır (RPC call_local) - ağ ölüm
+## bildirimi gerekmez; sonradan gelen net_dead die()'ı is_dead korumasıyla zaten boşa düşer.
+func dismiss_without_reward() -> void:
+	if is_dead:
+		return
+	is_dead = true
+	_ew_unregister() ## EnemyWorld yolu: C++ kaydı silinir (die() ile aynı sıra)
+	velocity = Vector2.ZERO
+	if is_ability_invisible:
+		set_ability_invisible(false)
+	is_feared = false
+	_fear_wander = false
+	_remove_fear_status_fx()
+	_remove_entangle_fx()
+	_remove_frost_chill_fx()
+	if hit_area:
+		hit_area.set_deferred("monitoring", false)
+	if body_collision:
+		body_collision.set_deferred("disabled", true)
+	_enter_state(State.DEATH)
+	var death_time: float = _anim_length_for(State.DEATH)
+	if death_time <= 0.0:
+		death_time = 0.4
+	death_time += randf_range(0.0, 0.15) ## aynı karede yüzlerce tween+free yığılmasın (bkz. die() notu)
 	get_tree().create_timer(death_time).timeout.connect(_on_death_anim_done)
 
 
@@ -4739,7 +4806,7 @@ func _drop_xp() -> void:
 	## havuz TÜM oyuncuların öldürmeleriyle doluyordu - 2 oyuncuda seviyeler ~2.3 kat hızlı geliyordu. Kademe 3+
 	## yaratıklarının XP'si oyuncu sayısına bölünür (oyuncu başı seviye hızı tek oyuncuya eşitlenir); Kademe 1-2 aynen.
 	if NetworkManager.is_multiplayer_active and _current_tier >= MP_XP_SPLIT_MIN_TIER:
-		per_orb /= float(maxi(1, NetworkManager.lobby_players.size()))
+		per_orb /= float(maxi(1, NetworkManager.game_player_count()))
 	var scene_root: Node = get_tree().current_scene
 	for i in range(count):
 		## Her orb KENDİ tier'ını ayrı ayrı zar atarak seçiyor (bkz.
@@ -5010,6 +5077,41 @@ func _drop_chest() -> void:
 		_spawn_chest_drop(false)
 	if _current_tier >= ELITE_CHEST_MIN_TIER and randf() <= ELITE_CHEST_CHANCE * luck:
 		_spawn_chest_drop(true)
+
+
+## SİLAH PARÇACIĞI (kullanıcı isteği 2026-10-08): "silah parçacığı yaratıklardan %0.5 ihtimalle düşecek. elit yaratıklardan kesin 1 tane düşecek
+## bosslardan 5 tane düşecek. bu silah parçacıkları oyunculara eşit miktarda gidecek". Demirci dükkanında silah almak için gerekir (bkz.
+## weapon_shop_logic.gd SHARD_COST_*). Yerdeki drop'lar yemek gibi durur (weapon_shard_drop.gd); toplanınca yaşayan HER oyuncuya aynı miktar gider.
+## Şans: sıradan yaratığın %0.5'i diğer drop'larla AYNI çarpımsal şansla büyür (bkz. LUCK_DROP_MULT_PER_POINT) - elit/boss garantisi şansa bağlı değil.
+## Boss 5 AYRI drop düşürür (her biri 1 parça, etrafa saçılır), elit 1. Çağrı sırası/ağ kapısı diğer _drop_* ile aynı: sadece host/tek oyunculu.
+const WEAPON_SHARD_CHANCE := 0.005
+const WEAPON_SHARD_ELITE_COUNT := 1
+const WEAPON_SHARD_BOSS_COUNT := 5
+
+
+## Bu ölümde kaç silah parçacığı düşer. roll: 0..1 zar (testler sabitleyebilsin diye parametre), luck_mult: killer'ın şans çarpanı.
+static func weapon_shard_count(boss: bool, elite: bool, roll: float, luck_mult: float = 1.0) -> int:
+	if boss:
+		return WEAPON_SHARD_BOSS_COUNT
+	if elite:
+		return WEAPON_SHARD_ELITE_COUNT
+	return 1 if roll <= WEAPON_SHARD_CHANCE * luck_mult else 0
+
+
+func _drop_weapon_shards() -> void:
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		return
+	var count: int = weapon_shard_count(is_boss, is_elite, randf(), _luck_mult(LUCK_DROP_MULT_PER_POINT))
+	if count <= 0:
+		return
+	var tree: SceneTree = get_tree()
+	for i in range(count):
+		## Tek parça yakına, çoklu (boss) halka şeklinde saçılır - yerde 5 ayrı parça okunur.
+		var offset: Vector2 = Vector2(randf_range(-10.0, 10.0), randf_range(-10.0, 10.0))
+		if count > 1:
+			offset = Vector2.from_angle(TAU * float(i) / float(count) + randf_range(-0.3, 0.3)) * randf_range(26.0, 44.0)
+		var drop_pos: Vector2 = global_position + offset
+		_queue_drop_spawn(func() -> void: WeaponShardDropScript.spawn(tree, drop_pos, 1))
 
 
 func _spawn_chest_drop(elite: bool) -> void:

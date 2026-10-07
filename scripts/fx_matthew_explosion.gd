@@ -10,6 +10,7 @@ class_name MatthewExplosionFx
 ## dönen kehribar cam kıymıkları, yükselen tilki ateşi korları. Dünyada durur (1 sanat pikseli = TEXEL dünya birimi).
 ## Diğer oyunculara player.gd "hitscan_impact" yayınıyla AYNI sahne gider (bkz. oradaki çağrı).
 
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 const TEXEL := 1.212
 const FRAMES := preload("res://assets/fx/matthew_fox_shield/explosion_frames.tres")
 const SAFETY_LIFETIME := 4.0
@@ -19,6 +20,7 @@ var _anim: AnimatedSprite2D = null
 
 func _ready() -> void:
 	z_index = 12
+	call_deferred("_shake") ## konum add_child'dan sonra verilebilir: sarsıntı bir kare sonra (bkz. camera_shake.gd)
 	_anim = AnimatedSprite2D.new()
 	_anim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_anim.sprite_frames = FRAMES
@@ -34,6 +36,10 @@ func _ready() -> void:
 	get_tree().create_timer(SAFETY_LIFETIME, false).timeout.connect(func() -> void:
 		if is_instance_valid(self):
 			queue_free())
+
+
+func _shake() -> void:
+	CameraShakeScript.add_at(global_position, 0.55, 1100.0)
 
 
 ## Görsel bitti ama kırılma sesi animasyondan uzun sürebilir - düğüm (ve ses) ses bitince silinir.

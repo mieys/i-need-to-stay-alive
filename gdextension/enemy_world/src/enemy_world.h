@@ -168,6 +168,7 @@ private:
 
 	// ---------------------------------------------------------------- harita ızgarası (orman duvarı)
 	std::vector<uint8_t> blocked;
+	std::vector<uint8_t> fog_blocked; // sadece orman duvarı (boşsa sis blocked'ı kullanır) - bkz. set_grid
 	int gox = 0, goy = 0, gw = 0, gh = 0;
 	float cell = 16.0f, lox = 0.0f, loy = 0.0f;
 
@@ -220,6 +221,7 @@ private:
 
 	void ensure_capacity(int32_t n);
 	inline bool solid_cell(int cx, int cy) const;
+	inline bool fog_solid_cell(int cx, int cy) const;
 	inline bool solid_world(float x, float y) const;
 	void rebuild_flow(int32_t t);
 	bool cells_line_blocked(float ax, float ay, float bx, float by) const;
@@ -253,7 +255,7 @@ protected:
 public:
 	// Kurulum
 	void set_grid(const PackedByteArray &p_blocked, const Vector2i &p_origin, const Vector2i &p_size, float p_cell,
-			const Vector2 &p_layer_origin);
+			const Vector2 &p_layer_origin, const PackedByteArray &p_fog_blocked = PackedByteArray());
 	void set_targets(const PackedVector2Array &p_pos, const PackedInt32Array &p_kind, const PackedByteArray &p_targetable,
 			const PackedByteArray &p_ghost, const PackedFloat32Array &p_body, const PackedFloat32Array &p_zone,
 			const PackedInt64Array &p_ids);

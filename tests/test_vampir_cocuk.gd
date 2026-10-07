@@ -1,8 +1,8 @@
 extends Node
 
 ## Kullanıcı isteği (2026-09-21): yeni karakter "Vampir Çocuk" (roster id 13) - yetenekleri kalkan yerine can harcar
-## (Q/E maks. canın %4'ü, R açıkken saniyede %5'i), pasif %1 can emme + her 1 saldırı gücü için 1 can.
-##   Q: yakındaki 3 düşmana %130 hasar + kalıcı +1 maks. can (6sn)
+## (E maks. canın %4'ü, R açıkken saniyede %2,5'i; Q standart kalkan tarifesini öder - 2026-10-08), pasif %1 can emme + her 1 saldırı gücü için 1 can.
+##   Q: yakındaki 4 düşmana %130 hasar (6sn); Kan Kalkanı evrimi hasarın %6'sı kadar kalkan yeniler
 ##   E: 5sn yarasa formu: %60 hız, %80 hasar azaltma, temas hasarı %80, silahlar gövdeye çekilir (22sn)
 ##   R: 6 küçük yarasa, %60 hasar, dönünce saldırı gücünün %5'i kadar can, hız saldırı hızıyla artar
 ## Bu test oyun mantığını (player.gd), paylaşılan formülleri (vampir_math.gd) ve diğer istemcideki kozmetik kopyayı
@@ -140,7 +140,8 @@ func test_timing_tables() -> void:
 	assert(float(P.SKILL_TIMING[40]["cooldown"]) == 6.0, "Q 6sn")
 	assert(float(P.SKILL2_TIMING[41]["duration"]) == 5.0 and float(P.SKILL2_TIMING[41]["cooldown"]) == 22.0, "E 5sn süre / 22sn bekleme")
 	assert(float(P.SKILL3_TIMING[42]["cooldown"]) == 0.0, "R toggle: bekleme yok")
-	assert(P.VAMPIR_SKILL_COST_PERCENT == 0.04 and P.VAMPIR_ULTI_COST_PERCENT_PER_SEC == 0.05)
+	## 2026-10-06: R'nin can bedeli yarıya indi (%5 -> %2,5 saniyede).
+	assert(P.VAMPIR_SKILL_COST_PERCENT == 0.04 and P.VAMPIR_ULTI_COST_PERCENT_PER_SEC == 0.025)
 	assert(P.VAMPIR_Q_DAMAGE_RATIO == 1.3 and P.VAMPIR_BAT_CONTACT_DAMAGE_RATIO == 0.8)
 	assert(P.VAMPIR_R_DAMAGE_RATIO == 0.6 and P.VAMPIR_R_HEAL_RATIO == 0.05)
 	## 2026-09-28 yetenek evrimleri: taban yarasa formu %30 hız / hasar azaltma yok; "Gece Uçuşu" %60, "Gölge Kanatlar" %70 azaltma.
@@ -209,14 +210,17 @@ func _q_shield_cost(player: Node) -> float:
 		* (1.0 - player.item_skill_shield_cost_reduction)
 
 
-func test_q_hits_nearest_three_and_pays_shield() -> void:
+## Kullanıcı isteği (2026-10-08): "vampir çocuğun Q su kalkan harcasın ... 3 yerine 4 kişiden kan emsin" - kalkan bedeli geri geldi
+## (2026-10-06'daki bedelsizlik kalktı), hedef sayısı 4.
+func test_q_hits_nearest_four_and_pays_the_standard_shield_cost() -> void:
 	var player: Node = _make_player()
 	_ready_player(player)
 	_give_shield(player, 200.0)
 	var e1: FakeEnemy = _make_enemy(Vector2(1050, 1000))
 	var e2: FakeEnemy = _make_enemy(Vector2(1000, 1100))
 	var e3: FakeEnemy = _make_enemy(Vector2(1200, 1000))
-	var e4: FakeEnemy = _make_enemy(Vector2(1000, 1300)) ## menzil içinde ama 4. yakın
+	var e4: FakeEnemy = _make_enemy(Vector2(1000, 1300)) ## menzil içinde, 4. yakın (artık vurulur)
+	var e5: FakeEnemy = _make_enemy(Vector2(1000, 1318)) ## menzil içinde ama 5. yakın
 	var far: FakeEnemy = _make_enemy(Vector2(3000, 3000))
 	var max0: float = player.max_health
 	var h0: float = player.health
@@ -225,14 +229,49 @@ func test_q_hits_nearest_three_and_pays_shield() -> void:
 	player._activate_skill()
 	assert(player.skill_state == "active", "Q tetiklenmeli")
 	var expected: float = player.damage_bonus * 1.3
-	for e in [e1, e2, e3]:
-		assert(e.hits.size() == 1 and is_equal_approx(e.hits[0], expected), "en yakın 3 düşman %%130 alır: %s" % str(e.hits))
-	assert(e4.hits.is_empty() and far.hits.is_empty(), "4. yakın ve uzak düşman vurulmamalı")
+	for e in [e1, e2, e3, e4]:
+		assert(e.hits.size() == 1 and is_equal_approx(e.hits[0], expected), "en yakın 4 düşman %%130 alır: %s" % str(e.hits))
+	assert(e5.hits.is_empty() and far.hits.is_empty(), "5. yakın ve uzak düşman vurulmamalı")
 	## 2026-09-28: kalıcı +1 maks. can artık temel yetenekte değil ("Kan Bağı" evrimi - aşağıdaki test).
 	assert(is_equal_approx(player.max_health, max0), "evrimsiz Q maks. canı değiştirmez")
 	assert(is_equal_approx(player.health, h0), "Q artık can harcamaz: %s / %s" % [player.health, h0])
 	assert(cost > 0.0 and absf(player.item_shield_hp - (200.0 - cost)) < 0.01,
-		"bedel standart Q kalkan tarifesi (%s) olmalı, kalan kalkan: %s" % [cost, player.item_shield_hp])
+		"Q standart temel tarifeyi (%s) kalkandan öder, kalan kalkan: %s" % [cost, player.item_shield_hp])
+	_cleanup()
+
+
+## Kalkan yetmezse Q hiç tetiklenmez (kalkan harcanmaz, yaratığa vurulmaz, bekleme başlamaz).
+func test_q_does_not_fire_without_enough_shield() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	player.item_shield_max = 200.0
+	player.item_shield_hp = 5.0 ## tarife 28
+	var e1: FakeEnemy = _make_enemy(Vector2(1050, 1000))
+	player._activate_skill()
+	assert(player.skill_state != "active", "kalkan yetersizken Q tetiklenmemeli")
+	assert(e1.hits.is_empty(), "vurulmamalı")
+	assert(is_equal_approx(player.item_shield_hp, 5.0), "kalkan harcanmamalı")
+	_cleanup()
+
+
+## Kan Kalkanı evrimi: hasarın %3'ü değil %6'sı kadar kalkan (2026-10-08); bedel önce düşer, yenileme sonra eklenir.
+func test_blood_shield_evolution_restores_six_percent_of_damage_dealt() -> void:
+	var player: Node = _make_player()
+	_ready_player(player)
+	player.apply_skill_evolution("vampir_q4", true)
+	assert(is_equal_approx(player.EVO_VAMPIR_Q_SHIELD_RATIO, 0.06), "oran %6")
+	player.item_shield_max = 400.0
+	player.item_shield_hp = 100.0
+	player.damage_bonus = 100.0
+	var enemies: Array = []
+	for i in range(4):
+		enemies.append(_make_enemy(Vector2(1040 + i * 30, 1000)))
+	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE
+	var cost: float = _q_shield_cost(player)
+	player._activate_skill()
+	var dealt: float = 4.0 * 130.0
+	var expected: float = minf(player.item_shield_max, 100.0 - cost + dealt * 0.06 * player.heal_power_mult())
+	assert(absf(player.item_shield_hp - expected) < 0.05, "kalkan = 100 - bedel %s + hasarın %%6'sı: %s (beklenen %s)" % [cost, player.item_shield_hp, expected])
 	_cleanup()
 
 
@@ -243,7 +282,7 @@ func test_q_evolutions_blood_bond_feast_and_cooldown() -> void:
 		player.apply_skill_evolution(id, true)
 	_give_shield(player, 200.0)
 	var enemies: Array = []
-	for i in range(6):
+	for i in range(7):
 		enemies.append(_make_enemy(Vector2(1040 + i * 30, 1000)))
 	var max0: float = player.max_health
 	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE
@@ -257,7 +296,7 @@ func test_q_evolutions_blood_bond_feast_and_cooldown() -> void:
 	_cleanup()
 
 
-func test_q_without_target_or_with_too_little_shield_does_not_fire() -> void:
+func test_q_without_target_does_not_fire_and_zero_shield_blocks_it() -> void:
 	var player: Node = _make_player()
 	_ready_player(player)
 	_give_shield(player, 200.0)
@@ -266,9 +305,11 @@ func test_q_without_target_or_with_too_little_shield_does_not_fire() -> void:
 	assert(player.skill_state == "ready" and is_equal_approx(player.health, h0) and is_equal_approx(player.item_shield_hp, 200.0),
 		"hedef yokken bedel ödenmez/bekleme başlamaz: state=%s hp=%s kalkan=%s" % [player.skill_state, player.health, player.item_shield_hp])
 	var e: FakeEnemy = _make_enemy(Vector2(1050, 1000))
-	player.item_shield_hp = 0.0 ## kalkan bedeli karşılanamıyor - diğer karakterlerin Q'su gibi "KALKAN YETERSİZ"
+	player.item_shield_hp = 0.0 ## 2026-10-08: Q'nun kalkan bedeli geri geldi - kalkan yoksa "KALKAN YETERSİZ", tetiklenmez
+	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE
 	player._activate_skill()
-	assert(player.skill_state == "ready" and is_equal_approx(player.health, h0) and e.hits.is_empty(), "kalkan yetersizse tetiklenmez, can da harcanmaz")
+	assert(player.skill_state == "ready" and e.hits.is_empty(), "kalkansız tetiklenmemeli: state=%s vuruş=%d" % [player.skill_state, e.hits.size()])
+	assert(is_equal_approx(player.health, h0), "can harcanmaz")
 	_cleanup()
 
 
@@ -363,7 +404,7 @@ func test_r_toggle_pays_per_second_and_bats_attack_and_heal() -> void:
 	_ready_player(player)
 	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE ## kritik yok (taban %5 de sıfırlanır)
 	var enemy: FakeEnemy = _make_enemy(player.global_position + Vector2(140, 0))
-	var per_sec: float = player.max_health * 0.05
+	var per_sec: float = player.max_health * 0.025 ## 2026-10-06: %5 -> %2,5
 	player._vampir_toggle_bats()
 	assert(player._vampir_bats_active and player.is_skill3_active(), "R açık")
 	assert(is_equal_approx(player.health, player.max_health - per_sec), "aktivasyonda ilk saniyenin bedeli")
@@ -405,7 +446,7 @@ func test_r_refuses_when_it_would_kill_and_stops_itself_when_health_runs_out() -
 	player.health = 2.0
 	player._vampir_toggle_bats()
 	assert(not player._vampir_bats_active, "can yetmiyorsa açılmaz (kendini öldürmez)")
-	player.health = player.max_health * 0.055 ## ilk saniyeyi (%5) öder, ikincisine yetmez
+	player.health = player.max_health * 0.03 ## ilk saniyeyi (%2,5) öder, ikincisine yetmez
 	player._vampir_toggle_bats()
 	assert(player._vampir_bats_active, "açılır")
 	for i in range(200):
@@ -626,7 +667,7 @@ func test_shrug_plays_on_q_and_r_but_not_on_e() -> void:
 	_ready_player(player)
 	var target: FakeEnemy = _make_enemy(Vector2(1050, 1000))
 	assert(target != null)
-	_give_shield(player, 200.0) ## Q artık kalkan bedeli öder (2026-10-01)
+	_give_shield(player, 200.0) ## (Q'nun kalkan bedeli 2026-10-06'da kaldırıldı; kalkan test için gereksiz ama zararsız)
 	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE
 	player._activate_skill()
 	assert(player.skill_state == "active", "Q tetiklenmeli")

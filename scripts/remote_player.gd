@@ -447,6 +447,7 @@ func _physics_process(delta: float) -> void:
 	_process_hadime_remote(delta)
 	if _beam_fx and is_instance_valid(_beam_fx) and (is_dead or Time.get_ticks_msec() - _beam_last_net_msec > BEAM_NET_TIMEOUT_MSEC):
 		_stop_beam_vfx() ## bkz. BEAM_NET_TIMEOUT_MSEC
+	_update_beam_tremor()
 	if is_dead:
 		return
 	# Smoothly interpolate position towards target
@@ -1548,6 +1549,37 @@ func _start_beam_vfx(_beam_type: String, target_pos: Vector2, extra_data: Dictio
 		if _beam_fx.has_method("setup_network"):
 			_beam_fx.setup_network(target_pos, extra_data)
 
+## Yıldırım asası aktifken (ışın açık) ikon hafifçe titrer (kullanıcı isteği 2026-10-04) - kasterde weapon.gd _apply_beam_tremor,
+## AYNI WeaponJuice.tremor_offset. Konum dinlenme yuvasına (WEAPON_ICON_SLOTS) göre; yuvanın konumunu başka bir sistem yönetirken
+## (formasyon / Vampir çekilmesi / ölüm düşüşü) dokunulmaz.
+var _beam_tremor_on: bool = false
+
+
+func _update_beam_tremor() -> void:
+	var active: bool = _beam_fx != null and is_instance_valid(_beam_fx) and not is_dead
+	if not active and not _beam_tremor_on:
+		return
+	_beam_tremor_on = active
+	if _talon_formation != "" or _vampir_pull > 0.0:
+		return
+	for slot in range(_weapon_keys.size()):
+		if str(_weapon_keys[slot]) != "lightning_staff":
+			continue
+		var info: Array = get_weapon_icon_info(slot)
+		if info.is_empty():
+			continue
+		var icon: Node2D = info[0] as Node2D
+		var idx: int = _weapon_icons.find(icon)
+		if idx < 0 or idx >= WEAPON_ICON_SLOTS.size():
+			continue
+		if (idx < _weapon_grounded.size() and _weapon_grounded[idx]) or (idx < _weapon_falling.size() and _weapon_falling[idx]) 				or (idx < _weapon_rising.size() and _weapon_rising[idx]):
+			continue
+		if idx < _weapon_fire_tweens.size() and _weapon_fire_tweens[idx] is Tween and (_weapon_fire_tweens[idx] as Tween).is_valid():
+			continue ## kritik tikinin "jitter" tween'i sürerken ona karışılmaz (kasterde weapon.gd _apply_beam_tremor aynısı)
+		var base_pos: Vector2 = WEAPON_ICON_SLOTS[idx]
+		icon.position = base_pos + (WeaponJuice.tremor_offset(Time.get_ticks_msec() / 1000.0) if active else Vector2.ZERO)
+
+
 func _stop_beam_vfx() -> void:
 	if _beam_fx and is_instance_valid(_beam_fx):
 		_beam_fx.queue_free()
@@ -1949,11 +1981,36 @@ func _animate_weapon_recoil(slot_index: int) -> void:
 	if _talon_formation != "" or _vampir_pull > 0.0:
 		_kick_formation_icon(slot_index, Vector2.UP, recoil_dist) ## bkz. _formation_kick notu
 		return
+	## Geri tepmesi "weapon_fire" yayınındaki tam animasyonla (WeaponJuice.ranged_recoil) oynanan silahlarda bu basit aşağı
+	## itme atlanır - iki tween aynı ikonda çekişirdi.
+	if slot_index < _weapon_keys.size() and WeaponJuice.has_ranged_recoil(str(_weapon_keys[slot_index])):
+		return
 	var base_pos: Vector2 = WEAPON_ICON_SLOTS[slot_index] if slot_index < WEAPON_ICON_SLOTS.size() else icon.position
 	# Quick kick-back tween
 	var tw := create_tween()
 	tw.tween_property(icon, "position", base_pos + Vector2(0, recoil_dist), 0.04)
 	tw.tween_property(icon, "position", base_pos, 0.08).set_delay(0.02)
+
+
+## Büyücü Kız pasifi "Büyü Dalgası" - atışsız yetenek kullanımında (hedef yok / şarjör / bumerang havada) silah ikonunun sertçe
+## ileri fırlaması (kasterde weapon.gd _surge_visual). Atışlı durumda aynı görsel "weapon_fire" yayınındaki "surge" ile gelir.
+func _animate_weapon_surge(slot_index: int, dir: Vector2) -> void:
+	if slot_index < 0 or slot_index >= _weapon_icons.size():
+		return
+	var icon: Node2D = _weapon_icons[slot_index]
+	if not is_instance_valid(icon) or not icon.visible:
+		return
+	if _talon_formation != "" or _vampir_pull > 0.0:
+		WeaponJuice.surge_flash(self, icon) ## konumu başka bir sistem yönetiyor (bkz. _formation_kick): sadece parlama + kıvılcım
+		WeaponJuice.spawn_surge_spark(self, icon)
+		return
+	var base_pos: Vector2 = WEAPON_ICON_SLOTS[slot_index] if slot_index < WEAPON_ICON_SLOTS.size() else icon.position
+	var base_scale: Vector2 = _weapon_base_scales[slot_index] if slot_index < _weapon_base_scales.size() else icon.scale
+	if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
+		(_weapon_fire_tweens[slot_index] as Tween).kill()
+	var tw: Tween = WeaponJuice.arcane_surge(self, icon, dir, base_pos, base_scale)
+	if slot_index < _weapon_fire_tweens.size():
+		_weapon_fire_tweens[slot_index] = tw
 
 
 ## Kapsamlı silah ateş animasyonu — ana oyuncunun weapon.gd'deki tam birebir
@@ -1991,6 +2048,8 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 	var is_surge: bool = bool(data.get("surge", false))
 	if is_surge:
 		WeaponJuice.surge_flash(self, icon)
+		if is_melee:
+			WeaponJuice.spawn_surge_spark(self, icon) ## menzilli silahta kıvılcım WeaponJuice.arcane_surge içinde
 
 	if is_melee and formation_owns_position:
 		_kick_formation_icon(slot_index, dir, float(_weapon_recoil_distance[slot_index]) if slot_index < _weapon_recoil_distance.size() else 8.0)
@@ -2103,6 +2162,16 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 			var r_tw: Tween = WeaponCritAnim.play_ranged(self, icon, wkey, dir, base_pos, base_scale, recoil_dist)
 			if slot_index < _weapon_fire_tweens.size():
 				_weapon_fire_tweens[slot_index] = r_tw
+			return
+
+		if WeaponJuice.has_ranged_recoil(wkey):
+			## Yay/crossbow/tabanca/ateş-buz asası/tüfek/tüftüf: kasterle (weapon.gd _do_recoil) AYNI geri tepme + namlu kalkması.
+			var old_rr_punch: Variant = icon.get_meta("punch_tween") if icon.has_meta("punch_tween") else null
+			if old_rr_punch is Tween and (old_rr_punch as Tween).is_valid():
+				(old_rr_punch as Tween).kill()
+			var rr_tw: Tween = WeaponJuice.ranged_recoil(self, icon, wkey, dir, base_pos, base_scale, recoil_dist)
+			if slot_index < _weapon_fire_tweens.size():
+				_weapon_fire_tweens[slot_index] = rr_tw
 			return
 
 		var tw := create_tween()

@@ -17,6 +17,10 @@ extends CanvasLayer
 ##   GoldRewardFx.hold(get_tree(), miktar, &"mission", yedek_dünya_konumu) + release(&"mission", ekran_konumu)
 ##       # görev: altın hemen eklenir ama paralar "Görev Tamamlandı" penceresi açılınca ondan fırlar
 ##       # (mission_complete_window.gd); pencere HOLD_TIMEOUT içinde gelmezse yedek konumdan fırlar.
+##   GoldRewardFx.give_shattered(get_tree(), miktar, ekran_konumu, eşya_dokusu, ekran_boyutu_px)
+##       # SATIŞ (2026-10-08, kullanıcı isteği: "item satınca itemin parçalanıp altına dönüşme animasyonu"): eşyanın ikonu
+##       # SHATTER_GRID x SHATTER_GRID parçaya bölünüp saçılır, parçalar sırayla altın paraya dönüşüp panele uçar. Altın zaten
+##       # başka yerde eklendiyse (envanter satışı) show_shatter: sadece animasyon, altını ÇİFT eklemez.
 ## Düşman altınları (gold_drop.gd, papağan) bunu KULLANMAZ - onlar zaten dünyada oyuncuya uçuyor.
 ## Oyun duraklatılmışken (sandık/efsun ekranı açık) paralar bekler, ekran kapanınca fırlar - give_now_from_screen hariç
 ## (sandık altını: kart inince duraklatılmış ekranın üstünden hemen fırlar, HUD sayacı da burada güncellenir).
@@ -48,12 +52,27 @@ const CHEST_SCALE := 5.0
 const CHEST_POP_TIME := 0.2 ## sandık belirdikten sonra ilk para bu kadar sonra fışkırır
 const CHEST_COINS_SFX := preload("res://Sound FX Starter Pack Vol. 1/Medieval/Loot Gold.wav")
 
+## Parçalanma (satış) animasyonu: ikon g x g parçaya bölünür; her parça yukarı/yana fırlar, yerçekimiyle düşer, dönerken kırılma
+## parlaması söner; ilk SHATTER_CONVERT_BASE sn sonra (her parça için +SHATTER_CONVERT_STEP) parça altınsı parlayıp bir altın paraya dönüşür
+## ve diğer ödül paralarıyla AYNI yoldan (kıvrılarak) panele uçar. Para sayısından fazla parça sadece solup gider.
+const SHATTER_SFX := preload("res://Sound FX Starter Pack Vol. 1/Hollywood/Metal Glass Destruction.wav")
+const SHATTER_SFX_LENGTH := 1.0 ## kaynak ses 2,1 sn - ilk saniyesi (kırılma + dökülme) yeter
+const SHATTER_GRID := 4
+const SHARD_SPEED_MIN := 150.0
+const SHARD_SPEED_MAX := 380.0
+const SHARD_GRAVITY := 820.0
+const SHATTER_CONVERT_BASE := 0.28
+const SHATTER_CONVERT_STEP := 0.03
+const SHARD_FADE := 0.12
+const SHARD_FLASH := 0.08 ## kırılma anı parlaması bu sürede söner
+
 static var _inst: Node = null
 
 var _rewards: Array = [] ## henüz fırlamamış: {amount, from, world, source}
 var _held: Dictionary = {} ## anahtar -> {amount, fallback, t}
 var _coins: Array = [] ## uçanlar: {node, p0, p1, t, dur, share, idx}
 var _chests: Array = [] ## {node, t, life}
+var _shards: Array = [] ## parçalanan eşya parçaları: {node, start, vel, spin, t, conv, life}
 var _pending: int = 0
 var _shown: float = 0.0
 ## Panele VARAN uçan paraların henüz sayaca akmamış kısmı (tıkır tıkır sayılır). Kullanıcı isteği (2026-10-02): "karakter
@@ -77,6 +96,32 @@ static func give_now_from_screen(tree: SceneTree, amount: int, from_screen: Vect
 
 static func give_from_screen(tree: SceneTree, amount: int, from_screen: Vector2, source: StringName = &"") -> void:
 	_give(tree, amount, from_screen, false, source)
+
+
+## Eşya SATIŞI: ikon parçalanıp altına döner (altın da burada eklenir). texture = eşya ikonu, size_px = ekrandaki boyutu.
+static func give_shattered(tree: SceneTree, amount: int, from_screen: Vector2, texture: Texture2D, size_px: Vector2) -> void:
+	_give(tree, amount, from_screen, false, &"shatter", false, {"texture": texture, "size": size_px})
+
+
+## give_shattered'ın sadece-animasyon hali: altın ZATEN eklendiyse (envanter satışı player.sell_owned_item) çift eklemez; sayaç yine
+## paralar varınca yükselir (HUD display_gold yoldaki payı düşer).
+static func show_shatter(tree: SceneTree, amount: int, from_screen: Vector2, texture: Texture2D, size_px: Vector2) -> void:
+	if amount <= 0:
+		return
+	var inst: Node = _ensure(tree)
+	if inst == null:
+		return
+	inst.call("_add_reward", amount, from_screen, false, &"shatter", false, {"texture": texture, "size": size_px})
+
+
+## Ödül için fırlayacak para sayısı (launch_reward ve çağıranların zamanlaması için TEK kaynak).
+static func coin_count(amount: int) -> int:
+	return mini(clampi(int(round(sqrt(float(maxi(amount, 0))) * 2.5)), MIN_COINS, MAX_COINS), maxi(amount, 0))
+
+
+## Paraların TAMAMININ fırlaması bu kadar sürer (sandık altını: kart bu sırada ya da hemen sonra çıkar, bkz. chest_menu.gd).
+static func burst_duration(amount: int) -> float:
+	return LAUNCH_GAP * float(coin_count(amount))
 
 
 ## Altını hemen ekler, paraları release() gelene kadar tutar (görev penceresi). Aynı anahtarda birikir.
@@ -107,14 +152,14 @@ static func display_gold() -> int:
 	return GameManager.gold
 
 
-static func _give(tree: SceneTree, amount: int, from: Vector2, world: bool, source: StringName, now: bool = false) -> void:
+static func _give(tree: SceneTree, amount: int, from: Vector2, world: bool, source: StringName, now: bool = false, fx: Dictionary = {}) -> void:
 	if amount <= 0:
 		return
 	var inst: Node = _ensure(tree)
 	GameManager.gold += amount
 	if inst == null:
 		return
-	inst.call("_add_reward", amount, from, world, source, now)
+	inst.call("_add_reward", amount, from, world, source, now, fx)
 
 
 static func _ensure(tree: SceneTree) -> Node:
@@ -146,9 +191,9 @@ func _exit_tree() -> void:
 		_inst = null
 
 
-func _add_reward(amount: int, from: Vector2, world: bool, source: StringName, now: bool = false) -> void:
+func _add_reward(amount: int, from: Vector2, world: bool, source: StringName, now: bool = false, fx: Dictionary = {}) -> void:
 	_pending += amount
-	_rewards.append({"amount": amount, "from": from, "world": world, "source": source, "now": now})
+	_rewards.append({"amount": amount, "from": from, "world": world, "source": source, "now": now, "fx": fx})
 
 
 func _add_held(amount: int, key: StringName, fallback_world: Vector2) -> void:
@@ -192,6 +237,7 @@ func _process(delta: float) -> void:
 			break
 		_launch_reward(_rewards.pop_at(idx))
 	_update_chests(delta)
+	_update_shards(delta)
 	_update_coins(delta)
 	var target: float = float(maxi(0, GameManager.gold - _pending))
 	_count_left = clampf(_count_left, 0.0, target)
@@ -223,12 +269,15 @@ func _launch_reward(r: Dictionary) -> void:
 	var from: Vector2 = r["from"]
 	if bool(r["world"]):
 		from = get_viewport().get_canvas_transform() * from
-	var n: int = clampi(int(round(sqrt(float(amount)) * 2.5)), MIN_COINS, MAX_COINS)
-	n = mini(n, amount)
+	var n: int = coin_count(amount)
 	var base_share: int = amount / n
 	var extra: int = amount % n
 	var lead: float = 0.0
 	var source: StringName = r.get("source", &"")
+	var fx: Dictionary = r.get("fx", {})
+	if source == &"shatter" and fx.get("texture") is Texture2D:
+		_launch_shatter(from, fx["texture"] as Texture2D, fx.get("size", Vector2(96.0, 96.0)) as Vector2, n, base_share, extra)
+		return
 	if CHEST_SHEETS.has(source):
 		_spawn_chest(source, from, CHEST_POP_TIME + LAUNCH_GAP * float(n) + 0.45)
 		lead = CHEST_POP_TIME
@@ -251,6 +300,136 @@ func _launch_reward(r: Dictionary) -> void:
 		})
 	## Bir sonraki ödül bu partinin fırlaması bitince başlar (aynı anda gelen iki ödül iç içe geçmesin).
 	_launch_cd = lead + LAUNCH_GAP * float(n)
+
+
+## Satış: ikon parçalanır, parçalar altına döner (bkz. SHATTER_* sabitleri). from = ikonun ekran merkezi, size_px = ekrandaki boyutu.
+func _launch_shatter(from: Vector2, tex: Texture2D, size_px: Vector2, n: int, base_share: int, extra_coins: int) -> void:
+	var g: int = SHATTER_GRID
+	var tex_size: Vector2 = tex.get_size()
+	var tile: Vector2 = tex_size / float(g)
+	var px: Vector2 = Vector2(size_px.x / maxf(tex_size.x, 1.0), size_px.y / maxf(tex_size.y, 1.0)) ## doku pikseli -> ekran pikseli
+	var order: Array = range(g * g)
+	order.shuffle()
+	var coin_of_shard: Dictionary = {} ## parça dizini -> para sırası
+	for j in mini(n, order.size()):
+		coin_of_shard[int(order[j])] = j
+	_play_shatter_sfx()
+	_spawn_flash(from, maxf(size_px.x, size_px.y))
+	for si in g * g:
+		var gx: int = si % g
+		var gy: int = si / g
+		var atlas := AtlasTexture.new()
+		atlas.atlas = tex
+		atlas.region = Rect2(Vector2(gx, gy) * tile, tile)
+		var spr := Sprite2D.new()
+		spr.texture = atlas
+		spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		spr.scale = px
+		spr.modulate = Color(2.0, 2.0, 2.0, 1.0) ## kırılma parlaması
+		var centre_off: Vector2 = ((Vector2(gx, gy) + Vector2(0.5, 0.5)) * tile - tex_size * 0.5) * px
+		var start: Vector2 = from + centre_off
+		spr.position = start
+		add_child(spr)
+		var dir: Vector2 = centre_off.normalized() if centre_off.length() > 1.0 else Vector2.from_angle(randf() * TAU)
+		dir = dir.rotated(randf_range(-0.45, 0.45))
+		var vel: Vector2 = dir * randf_range(SHARD_SPEED_MIN, SHARD_SPEED_MAX) + Vector2(0.0, -randf_range(60.0, 170.0))
+		var conv: float = -1.0
+		if coin_of_shard.has(si):
+			var j: int = int(coin_of_shard[si])
+			conv = SHATTER_CONVERT_BASE + SHATTER_CONVERT_STEP * float(j)
+			## Para, parçanın O ANKİ (analitik) konumunda belirir ve oradan panele kıvrılarak uçar.
+			var at_conv: Vector2 = start + vel * conv + Vector2(0.0, 0.5 * SHARD_GRAVITY * conv * conv)
+			var coin := AnimatedSprite2D.new()
+			coin.sprite_frames = COIN_FRAMES
+			coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			coin.scale = Vector2.ONE * COIN_SCALE
+			coin.position = at_conv
+			coin.visible = false
+			coin.play("spin")
+			coin.frame = randi() % maxi(1, COIN_FRAMES.get_frame_count("spin"))
+			add_child(coin)
+			var ang: float = randf_range(-PI * 0.95, -PI * 0.05)
+			var spray: Vector2 = Vector2(cos(ang), sin(ang)) * SPRAY_DIST * randf_range(0.35, 0.75)
+			_coins.append({
+				"node": coin, "p0": at_conv, "p1": at_conv + spray, "t": -conv, "dur": FLIGHT_TIME * randf_range(0.9, 1.15),
+				"share": base_share + (1 if j < extra_coins else 0), "idx": j, "pop": true,
+			})
+		_shards.append({"node": spr, "start": start, "vel": vel, "spin": randf_range(-9.0, 9.0), "t": 0.0, "conv": conv,
+			"life": randf_range(0.42, 0.62)})
+	## Bir sonraki ödül, bu partinin son parçası paraya dönene kadar beklesin (iç içe geçmesin).
+	_launch_cd = SHATTER_CONVERT_BASE + SHATTER_CONVERT_STEP * float(n)
+
+
+func _update_shards(delta: float) -> void:
+	var i: int = 0
+	while i < _shards.size():
+		var s: Dictionary = _shards[i]
+		var spr: Sprite2D = s["node"]
+		if not is_instance_valid(spr):
+			_shards.remove_at(i)
+			continue
+		var t: float = float(s["t"]) + delta
+		s["t"] = t
+		var vel: Vector2 = s["vel"]
+		spr.position = (s["start"] as Vector2) + vel * t + Vector2(0.0, 0.5 * SHARD_GRAVITY * t * t)
+		spr.rotation = float(s["spin"]) * t
+		var conv: float = float(s["conv"])
+		var tint: Color = Color.WHITE
+		var alpha: float = 1.0
+		if t < SHARD_FLASH:
+			tint = Color(2.0, 2.0, 2.0).lerp(Color.WHITE, t / SHARD_FLASH)
+		if conv >= 0.0:
+			## Para olacak parça: dönüşmeden hemen önce altınsı parlar, dönüşünce solar (yerini para alır).
+			var warm: float = clampf((t - (conv - 0.1)) / 0.1, 0.0, 1.0)
+			tint = tint.lerp(Color(1.7, 1.35, 0.45), warm)
+			if t >= conv:
+				alpha = 1.0 - clampf((t - conv) / SHARD_FADE, 0.0, 1.0)
+		else:
+			var life: float = float(s["life"])
+			alpha = 1.0 - clampf((t - (life - 0.2)) / 0.2, 0.0, 1.0)
+		spr.modulate = Color(tint.r, tint.g, tint.b, alpha)
+		if alpha <= 0.0:
+			spr.queue_free()
+			_shards.remove_at(i)
+			continue
+		i += 1
+
+
+## Kırılma anında ikonun üstünde kısa, yumuşak bir parlama (kart/ekran aynı karede kaybolurken geçişi örter).
+func _spawn_flash(at: Vector2, diameter: float) -> void:
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1.0, 0.95, 0.75, 0.95))
+	grad.set_color(1, Color(1.0, 0.8, 0.3, 0.0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 128
+	tex.height = 128
+	var spr := Sprite2D.new()
+	spr.texture = tex
+	spr.position = at
+	var base: float = maxf(diameter, 32.0) / 128.0 * 1.6
+	spr.scale = Vector2.ONE * base * 0.6
+	add_child(spr)
+	var tw := spr.create_tween().set_parallel(true)
+	tw.tween_property(spr, "scale", Vector2.ONE * base * 1.5, 0.22).set_ease(Tween.EASE_OUT)
+	tw.tween_property(spr, "modulate:a", 0.0, 0.22)
+	tw.chain().tween_callback(spr.queue_free)
+
+
+## Kırılma sesi: kaynak ses 2,1 sn, ilk saniyesi çalar (oyun duraklatılmışken de - bu düğüm PROCESS_MODE_ALWAYS).
+func _play_shatter_sfx() -> void:
+	var sfx := AudioStreamPlayer.new()
+	sfx.stream = SHATTER_SFX
+	sfx.volume_db = -9.0
+	sfx.pitch_scale = randf_range(0.95, 1.1)
+	add_child(sfx)
+	sfx.play()
+	get_tree().create_timer(SHATTER_SFX_LENGTH, true).timeout.connect(func() -> void:
+		if is_instance_valid(sfx):
+			sfx.queue_free())
 
 
 ## Kaynak noktada açık bir sandık belirir (sandık ekranındaki sandığın küçük hali), paralar ağzından fışkırır, sonra
@@ -323,6 +502,8 @@ func _update_coins(delta: float) -> void:
 		node.position = a.lerp(b, e)
 		node.visible = true
 		node.scale = Vector2.ONE * COIN_SCALE * lerpf(1.0, 0.75, k)
+		if c.get("pop", false): ## parçadan doğan para: belirirken kısa bir büyüyüp oturma
+			node.scale *= 1.0 + 0.6 * clampf(1.0 - k / 0.12, 0.0, 1.0)
 		if k >= 1.0:
 			_arrive(c)
 			node.queue_free()

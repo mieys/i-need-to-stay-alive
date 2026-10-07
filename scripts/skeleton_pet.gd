@@ -277,16 +277,16 @@ func _update_focus_target() -> void:
 func _block_movement_into_terrain() -> void:
 	if velocity.length() < 0.1:
 		return
-	if GameManager.is_position_blocked_by_forest(global_position):
+	if GameManager.is_position_blocked_by_walls(global_position):
 		return
 	var probe_dist: float = 10.0
 	if velocity.x != 0.0:
 		var probe_x: Vector2 = global_position + Vector2(sign(velocity.x) * probe_dist, 0.0)
-		if GameManager.is_position_blocked_by_forest(probe_x):
+		if GameManager.is_position_blocked_by_walls(probe_x):
 			velocity.x = 0.0
 	if velocity.y != 0.0:
 		var probe_y: Vector2 = global_position + Vector2(0.0, sign(velocity.y) * probe_dist)
-		if GameManager.is_position_blocked_by_forest(probe_y):
+		if GameManager.is_position_blocked_by_walls(probe_y):
 			velocity.y = 0.0
 
 

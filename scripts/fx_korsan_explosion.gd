@@ -16,6 +16,7 @@ extends Node2D
 const SOUND_EXPLOSION: AudioStream = preload("res://assets/audio/fire_staff_explosion.mp3")
 const BIG_FRAMES := preload("res://assets/fx/korsan/explosion_big_frames.tres")
 const SMALL_FRAMES := preload("res://assets/fx/korsan/explosion_small_frames.tres")
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 const BIG_R0 := 150.0
 const SMALL_R0 := 68.0
 const TEXEL := 1.212 ## PixelDraw.TEXEL
@@ -33,6 +34,12 @@ func setup(radius: float, color: Color = DEFAULT_TINT) -> void:
 	blast_radius = clampf(radius, 30.0, 320.0)
 	tint = color
 	_apply_size()
+	if blast_radius >= 120.0: ## sadece büyük patlama (bomba); Bombardıman mermileri (68) sarsmaz
+		call_deferred("_shake")
+
+
+func _shake() -> void:
+	CameraShakeScript.add_at(global_position, 0.4, 1000.0)
 
 
 func _ready() -> void:

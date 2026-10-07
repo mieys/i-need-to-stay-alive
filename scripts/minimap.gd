@@ -36,6 +36,10 @@ const COLOR_REMOTE_PLAYER: Color = Color("#2a58a8")
 const COLOR_ENEMY: Color = Color("#b8321e")
 const COLOR_BOSS: Color = Color("#d8661a")
 const COLOR_MERCHANT: Color = Color("#d6a23a")
+## Ölü / yerde yatan oyuncu işareti (2026-10-07, bkz. _process): kararmış portre, koyu kırmızı halka, parlak kırmızı çarpı.
+const COLOR_DEAD: Color = Color("#a01818")
+const COLOR_DEAD_X: Color = Color("#ff4a3a")
+const DEAD_PORTRAIT_TINT: Color = Color(0.5, 0.5, 0.55, 1.0)
 
 ## Seyyar satıcı belirdiğinde/ayrıldığında main.gd tarafından ayarlanır (bkz.
 ## traveling_merchant.gd -> NetworkManager.merchant_spawned/merchant_departed
@@ -136,17 +140,20 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 	# Collect ALL player positions (local + remote)
-	var player_dots: Array = []
+	## 2026-10-07 KULLANICI İSTEĞİ: "Ölen oyuncu haritada konumu gözüksün" - ölü/yerde yatan oyuncular artık atlanmıyor: konumları
+	## "dead" işaretiyle (kararmış portre + kırmızı çarpı + nabız halkası) çizilir, canlıların ALTINDA kalır. Kalıcı ölü ceset de
+	## yerde yatan (kurtarılabilir) arkadaş da aynı işareti alır - aranıp bulunabilsin.
+	var alive_dots: Array = []
+	var dead_dots: Array = []
 	var local_id: int = 0
 	if multiplayer.has_multiplayer_peer():
 		local_id = multiplayer.get_unique_id()
 	for p: Node in get_tree().get_nodes_in_group("player"):
 		if not is_instance_valid(p) or not ("global_position" in p):
 			continue
-		if p.get("is_dead") == true:
-			continue
 		var is_local: bool = (p == _player)
-		player_dots.append({"pos": p.global_position, "is_local": is_local, "char_id": GameManager.selected_char_id})
+		var local_dead: bool = p.get("is_dead") == true
+		(dead_dots if local_dead else alive_dots).append({"pos": p.global_position, "is_local": is_local, "char_id": GameManager.selected_char_id, "dead": local_dead})
 	## DÜZELTME (#29'un yan etkisi olarak keşfedildi): minimap eskiden SADECE
 	## "player" grubunu tarıyordu - ama RemotePlayer kuklaları "player"
 	## grubuna hiç eklenmiyor (bkz. remote_player.gd add_to_group çağrıları:
@@ -156,14 +163,14 @@ func _process(delta: float) -> void:
 	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
 		if not is_instance_valid(rp) or not ("global_position" in rp):
 			continue
-		if rp.get("is_dead") == true:
-			continue
+		## Yerde yatan uzak oyuncu ağa is_dead=false (+ is_downed=true) olarak bildirilir (bkz. main.gd state_snapshot) - ikisi de ölü sayılır.
+		var remote_dead: bool = rp.get("is_dead") == true or rp.get("is_downed") == true
 		var remote_char_id: int = 1
 		if "char_id" in rp:
 			remote_char_id = rp.char_id
-		player_dots.append({"pos": rp.global_position, "is_local": false, "char_id": remote_char_id})
-	_player_dots = player_dots
-	_has_any_player = not player_dots.is_empty()
+		(dead_dots if remote_dead else alive_dots).append({"pos": rp.global_position, "is_local": false, "char_id": remote_char_id, "dead": remote_dead})
+	_player_dots = dead_dots + alive_dots ## ölüler önce çizilir: canlılar üstte kalır
+	_has_any_player = not _player_dots.is_empty()
 
 	_enemy_refresh_timer += delta
 	if _enemy_refresh_timer >= ENEMY_REFRESH_INTERVAL:
@@ -277,7 +284,8 @@ func _draw() -> void:
 			offset = offset.normalized() * (RADIUS - 5.0)
 			ppos = center + offset
 		var is_local: bool = dot["is_local"] as bool
-		var pcol: Color = COLOR_PLAYER if is_local else COLOR_REMOTE_PLAYER
+		var is_dead_dot: bool = bool(dot.get("dead", false))
+		var pcol: Color = COLOR_DEAD if is_dead_dot else (COLOR_PLAYER if is_local else COLOR_REMOTE_PLAYER)
 		var psize: float = 5.0 if is_local else 4.0
 		## #29 DÜZELTME (kullanıcı bildirimi: "Minimap'te karakter portreleri
 		## (kafalar) görünsün"): düz renkli noktalar yerine, portre bulunabiliyorsa
@@ -289,12 +297,21 @@ func _draw() -> void:
 			var icon_radius: float = psize + 2.0
 			var icon_size: float = icon_radius * 2.0
 			var rect: Rect2 = Rect2(ppos - Vector2(icon_radius, icon_radius), Vector2(icon_size, icon_size))
-			draw_texture_rect(portrait, rect, false)
+			draw_texture_rect(portrait, rect, false, DEAD_PORTRAIT_TINT if is_dead_dot else Color.WHITE)
 			draw_circle(ppos, icon_radius, pcol, false, 1.5)
 		else:
 			draw_circle(ppos, psize, pcol)
 			# Small border for visibility
 			draw_circle(ppos, psize + 1.0, Color(0.1, 0.1, 0.1, 0.5), false, 1.0)
+		if is_dead_dot:
+			## Ölü/yerde yatan: kırmızı çarpı (koyu konturlu) + dışa doğru nabız atan halka - uzaktan da fark edilsin.
+			var xr: float = psize + 1.0
+			for sgn in [1.0, -1.0]:
+				draw_line(ppos + Vector2(-xr, -xr * sgn), ppos + Vector2(xr, xr * sgn), Color("#2a0a0a"), 4.0)
+			for sgn2 in [1.0, -1.0]:
+				draw_line(ppos + Vector2(-xr, -xr * sgn2), ppos + Vector2(xr, xr * sgn2), COLOR_DEAD_X, 2.0)
+			var pulse: float = fposmod(float(Time.get_ticks_msec()) / 1000.0, 1.4) / 1.4
+			draw_circle(ppos, psize + 2.0 + pulse * 6.0, Color(COLOR_DEAD.r, COLOR_DEAD.g, COLOR_DEAD.b, 0.75 * (1.0 - pulse)), false, 1.5)
 
 	# --- Seyyar satıcı işareti ---
 	if _merchant_marker_active:

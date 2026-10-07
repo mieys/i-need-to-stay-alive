@@ -12,6 +12,9 @@ const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn")
 const EnchantPool: GDScript = preload("res://scripts/enchant_pool.gd")
 const RUN_TIME := 5.0
+## 2026-10-08 kalıcı silah özellikleri (bkz. test_weapon_traits.gd): kart döneminin duman testi bunları kapsamaz.
+const NEW_TRAIT_IDS := ["kanayan_kesikler", "kanli_pence", "zincir_yildirim", "seri_parmak", "bulasici_salgi", "delici_mermi", "yankilanan_buyu",
+	"uclu_ok", "zincir_civata", "cifte_donus", "kirik_buz", "kivilcim_yagmuru"]
 const ENEMY_HP := 60000.0
 ## Efsuna özgü iz sayılan script'ler (fx_enchant_sprite = sprite sayfası, enchant_area = alan, evo_area = gölge kopyası).
 const TRACE_SCRIPTS := ["res://scripts/fx_enchant_sprite.gd", "res://scripts/enchant_area.gd", "res://scripts/evo_area.gd"]
@@ -31,8 +34,34 @@ func _full(id: String) -> Dictionary:
 
 # ------------------------------------------------------------------ veri / havuz
 
+## 2026-10-07: efsunlar oyundan kaldırıldı ama bilgileri silinmedi (EnchantDefs.enabled = false). Aşağıdaki kural testleri
+## efsunları geçici olarak açar; bu test varsayılan (kapalı) durumu ve verinin yerinde durduğunu doğrular.
+func test_enchants_are_removed_from_the_game_but_data_is_kept() -> void:
+	assert(not EnchantDefs.enabled, "efsunlar varsayılan olarak KAPALI olmalı")
+	assert(EnchantDefs.DEFS.size() == 21 + NEW_TRAIT_IDS.size(), "bilgiler silinmemeli: %d efsun tanımı" % EnchantDefs.DEFS.size())
+	for id in EnchantDefs.DEFS:
+		assert(ResourceLoader.exists("res://scripts/enchants/%s.gd" % id) or id == "delici_mermi", "%s: davranış scripti yerinde olmalı" % id)
+		assert(not (EnchantDefs.get_def(id)["upgrades"] as Array).is_empty(), "%s: tanım okunabilmeli" % id)
+	for w in EnchantDefs.WEAPON_NAMES:
+		assert(EnchantDefs.enchants_for(w).is_empty(), "kapalıyken %s için efsun sunulmamalı" % w)
+	_prev_weapons = GameManager.owned_weapons.duplicate(true)
+	GameManager.owned_weapons = [{"key": "fire_staff"}, {"key": "uzunkilic"}, {"key": "boomerang"}]
+	var weapon_cards: int = 0
+	for _i in range(40):
+		for c in EnchantPool.build(null):
+			if str(c["type"]) in ["temel", "step", "final"]:
+				weapon_cards += 1
+	GameManager.owned_weapons = _prev_weapons
+	assert(weapon_cards == 0, "kapalıyken kart havuzunda silah efsunu çıkmamalı (çıkan: %d)" % weapon_cards)
+	## Açılınca (geri alma yolu) aynı veri yeniden kullanılabilir.
+	EnchantDefs.enabled = true
+	assert(not EnchantDefs.enchants_for("fire_staff").is_empty(), "açılınca efsunlar geri gelmeli")
+	EnchantDefs.enabled = false
+
+
 func test_defs_shape() -> void:
-	assert(EnchantDefs.DEFS.size() == 21, "kullanıcının 21 efsunu: %d" % EnchantDefs.DEFS.size())
+	EnchantDefs.enabled = true
+	assert(EnchantDefs.DEFS.size() == 21 + NEW_TRAIT_IDS.size(), "kullanıcının 21 efsunu + 12 kalıcı özellik: %d" % EnchantDefs.DEFS.size())
 	for id in EnchantDefs.DEFS:
 		var d: Dictionary = EnchantDefs.DEFS[id]
 		var ups: int = (d["upgrades"] as Array).size()
@@ -43,6 +72,7 @@ func test_defs_shape() -> void:
 		assert(str(d["base"]["text"]) != "" and str(d["final"]["text"]) != "", "%s: metin boş" % id)
 	for w in EnchantDefs.WEAPON_NAMES:
 		assert(not EnchantDefs.enchants_for(w).is_empty(), "efsunu olmayan silah: %s" % w)
+	EnchantDefs.enabled = false
 
 
 func test_upgrade_order_does_not_matter() -> void:
@@ -63,6 +93,7 @@ func test_upgrade_order_does_not_matter() -> void:
 
 
 func test_pool_random_upgrades_final_and_no_askin() -> void:
+	EnchantDefs.enabled = true
 	_prev_weapons = GameManager.owned_weapons.duplicate(true)
 	_prev_items = GameManager.owned_items.duplicate(true)
 	GameManager.owned_items = []
@@ -99,6 +130,7 @@ func test_pool_random_upgrades_final_and_no_askin() -> void:
 	assert(ids.has("nuukler") and ids.has("matryoshka") and ids.size() == 2, "Fişek'in 2 efsunu Temel kartı olarak gelmeli: %s" % str(ids))
 	GameManager.owned_weapons = _prev_weapons
 	GameManager.owned_items = _prev_items
+	EnchantDefs.enabled = false
 
 
 # ------------------------------------------------------------------ duman testi
@@ -117,6 +149,8 @@ func test_every_enchant_fights_with_real_weapon() -> void:
 	get_tree().node_added.connect(_on_node_added)
 	var failures: Array = []
 	for id in EnchantDefs.DEFS:
+		if NEW_TRAIT_IDS.has(id):
+			continue
 		for key in EnchantDefs.DEFS[id]["weapons"]:
 			var res: Array = await _run_one(str(id), str(key))
 			print("ENCH %-20s %-16s iz=%d hasar=%d" % [id, key, int(res[0]), int(res[1])])

@@ -35,6 +35,8 @@ const FIT_LAYER_SCRIPTS: Array[String] = [
 	"res://scripts/pause_menu.gd",
 	"res://scripts/keybind_menu.gd",
 	"res://scripts/graphics_settings_menu.gd",
+	"res://scripts/victory_overlay.gd", ## zafer penceresi: 24 px yazı / 52 px düğme telefonda ~3 mm kalıyordu (2026-10-05)
+	"res://scripts/records_screen.gd", ## ana menüdeki REKORLAR penceresi
 ]
 ## SEÇİM EKRANLARI (kullanıcı seçimi 2026-10-03, prototip "A - ekranı dolduran kartlar", tools/mobile_ui/proto_choice.gd):
 ## level atlama / yetenek evrimi / efsun kartları telefonda MenuFitter ile sığdırılmaz, kendi büyük yerleşimini kurar:

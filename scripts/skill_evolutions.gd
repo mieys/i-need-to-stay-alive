@@ -57,8 +57,8 @@ const DEFS := {
 			{"id": "vampir_q1", "name": "Kan Bağı", "desc": "Kan Emme'yi her kullandığında maksimum canın kalıcı olarak 1 artar."},
 			{"id": "vampir_q2", "name": "Açlık", "desc": "Kan Emme'nin bekleme süresi %50 azalır."},
 			{"id": "vampir_q3", "name": "Kanla Beslenme", "desc": "Kan Emme ile verdiğin hasarın %3'ü kadar can yenilersin."},
-			{"id": "vampir_q4", "name": "Kan Kalkanı", "desc": "Kan Emme ile verdiğin hasarın %3'ü kadar kalkan yenilersin."},
-			{"id": "vampir_qf", "name": "Kan Ziyafeti", "desc": "Kan Emme 3 yerine 5 yaratığın kanını emer.", "final": true},
+			{"id": "vampir_q4", "name": "Kan Kalkanı", "desc": "Kan Emme ile verdiğin hasarın %6'sı kadar kalkan yenilersin."},
+			{"id": "vampir_qf", "name": "Kan Ziyafeti", "desc": "Kan Emme 4 yerine 5 yaratığın kanını emer.", "final": true},
 		],
 		"skill2": [
 			{"id": "vampir_e1", "name": "Gölge Kanatlar", "desc": "Yarasa formundayken aldığın hasar %70 azalır."},
@@ -264,7 +264,7 @@ const DEFS := {
 	4: {
 		"skill": [
 			{"id": "buyucu_q1", "name": "Kalkan Akışı", "desc": "Her set değiştirdiğinde maksimum kalkanının %10'u yenilenir (bu etkinin 10 saniye bekleme süresi vardır)."},
-			{"id": "buyucu_q2", "name": "Büyü Rüzgarı", "desc": "Her yetenek kullandığında 2 saniye boyunca %20 hareket hızı kazanırsın."},
+			{"id": "buyucu_q2", "name": "Büyü Rüzgarı", "desc": "E veya ulti yeteneğini kullandığında 2 saniye boyunca %20 hareket hızı kazanırsın."},
 			{"id": "buyucu_q3", "name": "Akıcı Büyü", "desc": "Tüm yeteneklerinin bekleme süresi %15 azalır."},
 			{"id": "buyucu_q4", "name": "Tutumlu Büyü", "desc": "Yeteneklerinin kalkan bedeli %25 azalır."},
 			{"id": "buyucu_qf", "name": "Efsunlu Büyü", "desc": "Her 5 yetenek kullanımında (Q hariç) yeteneklerinden biri efsunlanır ve butonu parıldar: bir sonraki kullanımında boyutu ve hasarı %25 artar.", "final": true},

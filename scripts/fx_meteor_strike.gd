@@ -1,6 +1,8 @@
 extends Node2D
 class_name FxMeteorStrike
 
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
+
 ## Büyücü Kız'ın Meteor Patlaması varyasyonu için gökten düşen piksel meteor ve yer patlaması efekti.
 
 var target_pos: Vector2 = Vector2.ZERO
@@ -54,6 +56,7 @@ func _process(delta: float) -> void:
 
 func _explode() -> void:
 	global_position = target_pos
+	CameraShakeScript.add_at(target_pos, 0.55, 1200.0) ## kamera sarsıntısı (bkz. camera_shake.gd)
 	var exp_node := Node2D.new()
 	exp_node.z_index = 53
 	var anim_sprite := AnimatedSprite2D.new()

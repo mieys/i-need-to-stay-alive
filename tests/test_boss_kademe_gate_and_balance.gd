@@ -157,8 +157,10 @@ func test_boss_health_and_shield_targets() -> void:
 	var cut: float = SpawnerScript.BOSS_CUT_2026_09_25B
 	var cut_0926: float = SpawnerScript.DURABILITY_CUT_2026_09_26 ## 2026-09-26: tüm yaratıklar can/kalkan x0.9
 	assert(is_equal_approx(cut, 0.85), "Boss kesintisi x0.85 olmalı")
-	assert(absf(float(boss.max_health) - prev_health * 0.85 * cut * cut_0926) < 0.01, "Boss canı öncekinin TAM %%85'i olmalı: %s (önceki %s)" % [boss.max_health, prev_health])
-	assert(absf(float(boss.item_shield_max) - prev_shield * 0.90 * cut * cut_0926) < 0.01, "Boss kalkanı öncekinin TAM %%90'ı olmalı: %s (önceki %s)" % [boss.item_shield_max, prev_shield])
+	## 2026-10-06 (Kademe 3 denge turu): ilk bossların can/kalkanı BOSS_PACING ile ayrıca ölçeklenir (Kademe 3: x0.6) - kalkan candan türediği için ikisi de.
+	var pace: float = SpawnerScript.boss_health_pacing(3) * SpawnerScript.late_durability_mult(3) ## 2026-10-06: BOSS_PACING + Kademe 3+ x0.9
+	assert(absf(float(boss.max_health) - prev_health * 0.85 * cut * cut_0926 * pace) < 0.01, "Boss canı öncekinin TAM %%85'i x pacing olmalı: %s (önceki %s)" % [boss.max_health, prev_health])
+	assert(absf(float(boss.item_shield_max) - prev_shield * 0.90 * cut * cut_0926 * pace) < 0.01, "Boss kalkanı öncekinin TAM %%90'ı x pacing olmalı: %s (önceki %s)" % [boss.item_shield_max, prev_shield])
 	_cleanup()
 
 
@@ -177,7 +179,7 @@ func test_boss_damage_up_ten_and_all_creature_damage_down_ten() -> void:
 	var raw_damage: float = (3.0 + 3.0 * 2.2) * float(mult["dmg"])
 	var prev_boss_damage: float = raw_damage * PREV_BOSS_DAMAGE_MULT * PREV_GLOBAL_DAMAGE_BUFF
 	## Net: x1.1 (boss) x0.9 (tüm yaratıklar) = x0.99, üstüne 2026-09-24 denge turunun x1.6'sı.
-	assert(absf(float(boss.contact_damage) - prev_boss_damage * 1.1 * 0.9 * 1.6 * 1.2 * SpawnerScript.BOSS_CUT_2026_09_25B) < 0.001,
+	assert(absf(float(boss.contact_damage) - prev_boss_damage * 1.1 * 0.9 * 1.6 * 1.2 * SpawnerScript.BOSS_CUT_2026_09_25B * SpawnerScript.boss_damage_pacing(3) * SpawnerScript.LATE_TIER_DAMAGE_MULT) < 0.001,
 		"Boss hasarı öncekinin x1.1 x0.9'u olmalı: %s (önceki %s)" % [boss.contact_damage, prev_boss_damage])
 
 	var rat: Node = RatScene.instantiate()

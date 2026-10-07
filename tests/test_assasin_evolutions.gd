@@ -98,7 +98,7 @@ func test_slots_swapped_and_base_nerfs() -> void:
 	assert(int(Characters.DEFS[ASSASIN]["skill"]) == 5 and int(Characters.DEFS[ASSASIN]["skill2"]) == 30,
 		"Q = Şahin Hamlesi (5), E = Gölge Adımı (30)")
 	var p := _make_player()
-	assert(is_equal_approx(p.ASSASIN_DASH2_RECHARGE_TIME, 10.0), "hamle yük başı bekleme 10 sn")
+	assert(is_equal_approx(p.ASSASIN_DASH2_RECHARGE_TIME, 8.0), "hamle yük başı bekleme 8 sn")
 	assert(p.get_assasin_dash2_max_charges() == 2 and p.assasin_dash2_charges == 2, "Şahin Hamlesi temel 2 yük")
 	assert(not p.get_assasin_dash_charge_state().is_empty(), "HUD'un Q ikonu hamle yüklerini göstermeli")
 	var ap0: float = p.damage_bonus

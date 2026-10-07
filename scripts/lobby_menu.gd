@@ -698,7 +698,16 @@ func _update_lobby_ui() -> void:
 		ready_btn.visible = not NetworkManager.is_host
 		var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 		var local_ready: bool = NetworkManager.lobby_players.get(my_id, {}).get("is_ready", false)
-		ready_btn.text = "HAZIR DEĞİLİM" if local_ready else "HAZIRIM"
+		## Oda zaten oyundaysa (2026-10-04 geç katılım) hazır olmak oyuna girmek demek - düğme bunu söylesin.
+		if NetworkManager.is_join_blocked_by_game():
+			ready_btn.text = "OYUN BAŞLAMIŞ"
+			ready_btn.disabled = true
+		elif NetworkManager.is_room_game_in_progress():
+			ready_btn.disabled = false
+			ready_btn.text = "OYUNA KATILIYOR..." if local_ready else "OYUNA KATIL"
+		else:
+			ready_btn.disabled = false
+			ready_btn.text = "HAZIR DEĞİLİM" if local_ready else "HAZIRIM"
 		close_room_btn.visible = NetworkManager.is_host
 		if _lan_host_btn: _lan_host_btn.disabled = true
 		if _lan_join_btn: _lan_join_btn.disabled = true

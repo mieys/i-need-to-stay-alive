@@ -151,10 +151,13 @@ func test_taunt_locks_target_for_five_seconds_even_if_ally_is_closer() -> void:
 	enemy.apply_taunt(PlayerScript.PALADIN_TAUNT_DURATION, paladin)
 	## dost hep en yakın aday kalsın (0.5px: yaratık Şovalye'ye yapışınca mesafe eşitliği hedefi kaydırmasın)
 	var keep_ally_closest := func() -> void: ally.global_position = enemy.global_position + Vector2(0.5, 0.0)
-	_step(DT * 2.0, keep_ally_closest)
+	## C++ yapay zekâsı 3 karede bir düşünür (AI_THINK_INTERVAL_FRAMES): kışkırtma en geç bir sonraki düşünmede uygulanır. Eskiden 2 kare
+	## beklenirdi ama bu yaratığın düşünme fazına (yaratık dizini mod 3 ile köprü kare sayacı) bağlı olduğundan ortam kare sayısı bir kayınca
+	## sınama bozuluyordu (2026-10-08): 3 kare = her fazda bir düşünme garantisi.
+	_step(DT * 3.0, keep_ally_closest)
 	assert(_target_of(enemy) == paladin, "Kışkırtılan yaratık Şovalye'yi hedeflemeli")
 	## 4.5sn sonra hâlâ kilitli, 5sn'yi geçince serbest.
-	_step(4.5 - DT * 2.0, keep_ally_closest)
+	_step(4.5 - DT * 3.0, keep_ally_closest)
 	assert(_target_of(enemy) == paladin, "4.5sn sonra kışkırtma sürmeli")
 	_step(0.9, keep_ally_closest)
 	assert(_target_of(enemy) == ally, "5sn sonra yaratık normal hedefine dönmeli")
@@ -167,7 +170,7 @@ func test_taunt_is_dropped_when_taunter_dies() -> void:
 	var enemy: Node2D = _make_enemy(Vector2(340.0, 0.0))
 	await get_tree().process_frame
 	enemy.apply_taunt(5.0, paladin)
-	_step(DT * 2.0)
+	_step(DT * 3.0) ## bkz. yukarıdaki not: 3 karede bir düşünme
 	paladin.is_dead = true
 	_step(DT * 5.0)
 	assert(_target_of(enemy) == ally, "Kışkırtan ölünce yaratık boşa kilitli kalmamalı")

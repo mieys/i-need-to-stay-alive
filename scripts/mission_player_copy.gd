@@ -289,7 +289,7 @@ func set_weapon_keys(keys: Array) -> void:
 		interval = maxf(0.25, interval)
 		_weapons.append({"icon": icon, "key": key, "melee": is_melee, "forward": forward, "mirror": mirror,
 			"slot": slots[i], "recoil": 0.0, "interval": interval, "ratio": ratio, "reach": reach,
-			"timer": randf_range(0.3, 1.0) * interval})
+			"info": attack_info(key), "timer": randf_range(0.3, 1.0) * interval})
 	_recompute_preferred_dist()
 
 
@@ -368,7 +368,7 @@ func _process_attacks(delta: float, target: Node2D, dist: float) -> void:
 				NetworkManager.broadcast_world_event_copy_swing.rpc(mission_id, copy_index, swing_dir)
 		else:
 			w["recoil"] = RECOIL_DISTANCE
-			_fire_at(target, (w["icon"] as Node2D).global_position, dmg)
+			_fire_at(target, (w["icon"] as Node2D).global_position, dmg, w)
 
 
 func _weapon_hit_damage(ratio: float) -> float:
@@ -522,7 +522,7 @@ func _pick_mode(to_n: Vector2) -> void:
 		var ang: float = (-to_n).angle() + randf_range(0.7, 1.75) * (1.0 if randf() < 0.5 else -1.0)
 		var d: float = _preferred_dist * randf_range(0.85, 1.2)
 		_reposition_point = _perceived_pos + Vector2.from_angle(ang) * d
-		if GameManager.is_position_blocked_by_forest(_reposition_point):
+		if GameManager.is_position_blocked_by_walls(_reposition_point):
 			_mode = MODE_STRAFE
 
 
@@ -543,13 +543,13 @@ func _route_dir(delta: float) -> Vector2:
 ## enemy.gd _block_movement_into_terrain). Duvara dayanınca yana kayma yönünü de çevirir. Zaten duvarın içindeyse
 ## engelleme atlanır (sonsuza dek hapsolmasın - enemy.gd'deki aynı güvenlik ağı).
 func _block_walls() -> void:
-	if velocity.length_squared() < 0.01 or GameManager.is_position_blocked_by_forest(global_position):
+	if velocity.length_squared() < 0.01 or GameManager.is_position_blocked_by_walls(global_position):
 		return
 	var probe: float = 12.0
-	if velocity.x != 0.0 and GameManager.is_position_blocked_by_forest(global_position + Vector2(signf(velocity.x) * probe, 0.0)):
+	if velocity.x != 0.0 and GameManager.is_position_blocked_by_walls(global_position + Vector2(signf(velocity.x) * probe, 0.0)):
 		velocity.x = 0.0
 		_strafe_sign = -_strafe_sign
-	if velocity.y != 0.0 and GameManager.is_position_blocked_by_forest(global_position + Vector2(0.0, signf(velocity.y) * probe)):
+	if velocity.y != 0.0 and GameManager.is_position_blocked_by_walls(global_position + Vector2(0.0, signf(velocity.y) * probe)):
 		velocity.y = 0.0
 		_strafe_sign = -_strafe_sign
 
@@ -582,27 +582,102 @@ func _update_move_anim(move: Vector2, face: Vector2 = Vector2.ZERO) -> void:
 
 
 ## Hedefin gideceği yere (hızının AIM_LEAD oranında) önden nişan; mermi nişan noktasının biraz ötesine kadar uçar.
-func _fire_at(target: Node2D, from_pos: Vector2, dmg: float) -> void:
+## KOPYA SİLAHLARIYLA ATEŞ EDER (kullanıcı bildirimi 2026-10-05: "kopya benim silahlarıma sahip ama onlarla ateş etmiyor, başka
+## ateşler ediyor"): mermi görseli/hızı silahın KENDİ mermi sahnesinden gelir (attack_info), Şimşek Asası anlık ışın çizer.
+## Hasar mantığı aynı (yolu boyunca değen ilk oyuncuya vurur, DAMAGE_DEALT_MULT).
+func _fire_at(target: Node2D, from_pos: Vector2, dmg: float, w: Dictionary = {}) -> void:
+	var key: String = str(w.get("key", ""))
+	var info: Dictionary = w.get("info", {})
 	var tp: Vector2 = target.global_position
-	var t_flight: float = from_pos.distance_to(tp) / BOLT_SPEED
+	if info.get("beam") != null:
+		## Işın silahı (Şimşek Asası): anında vurur; ışın görseli kısa süre görünür (bkz. spawn_bolt/_spawn_beam_fx).
+		_melee_hit(target, dmg)
+		spawn_bolt(from_pos, tp, 0.0, self, true, key)
+		if NetworkManager.is_multiplayer_active:
+			NetworkManager.broadcast_world_event_copy_bolt.rpc(from_pos, tp, key)
+		return
+	var speed: float = float(info.get("speed", BOLT_SPEED))
+	var t_flight: float = from_pos.distance_to(tp) / maxf(speed, 1.0)
 	var aim: Vector2 = tp + _target_vel * t_flight * AIM_LEAD
 	var dir: Vector2 = (aim - from_pos).normalized() if aim.distance_to(from_pos) > 1.0 else Vector2.RIGHT
 	var end_pos: Vector2 = from_pos + dir * (from_pos.distance_to(aim) + 140.0)
-	spawn_bolt(from_pos, end_pos, dmg, self, false)
-	## Mermi SADECE host'ta gerçek (hasar veren) - diğer istemciler aynı atışın hasarsız
-	## kozmetik kopyasını görsün (bkz. CLAUDE.md "kaster görür, diğerleri görmez" sınıfı).
+	spawn_bolt(from_pos, end_pos, dmg, self, false, key)
+	## Mermi SADECE host'ta gerçek (hasar veren) - diğer istemciler aynı atışın hasarsız kozmetik kopyasını görsün
+	## (bkz. CLAUDE.md "kaster görür, diğerleri görmez" sınıfı). Silah anahtarı da gider ki istemci AYNI mermi görselini
+	## çizsin (anahtardan attack_info ile türetilir - ikinci bir yol/yol dizgisi yazılmaz).
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.broadcast_world_event_copy_bolt.rpc(from_pos, end_pos)
+		NetworkManager.broadcast_world_event_copy_bolt.rpc(from_pos, end_pos, key)
 
 
-static func spawn_bolt(from_pos: Vector2, to_pos: Vector2, damage: float, source: Node2D, cosmetic: bool) -> void:
+## Silah anahtarından saldırı görseli (host VE istemci aynı fonksiyonu kullanır): {"proj": mermi sahnesi | null, "speed": px/sn,
+## "scale": ölçek çarpanı, "rot": dönüş ofseti, "beam": ışın sahnesi | null}. Silah sahnesi AĞACA EKLENMEDEN örneklenir
+## (weapon.gd _ready çalışmaz). Anahtar başına bir kez hesaplanır. Bilinmeyen anahtar -> boş sözlük (eski mor mermi).
+static var _attack_info_cache: Dictionary = {}
+
+
+static func attack_info(key: String) -> Dictionary:
+	if _attack_info_cache.has(key):
+		return _attack_info_cache[key]
+	var info: Dictionary = {}
+	var scene: PackedScene = RemotePlayerScript.WEAPON_SCENES.get(key)
+	if scene != null:
+		var root: Node = scene.instantiate()
+		info = {"proj": null, "speed": BOLT_SPEED, "scale": 1.0, "rot": 0.0, "beam": null}
+		var ps: Variant = root.get("projectile_scene") if "projectile_scene" in root else null
+		if ps is PackedScene:
+			info["proj"] = ps
+			var p: Node = (ps as PackedScene).instantiate()
+			if "speed" in p and float(p.get("speed")) > 0.0:
+				info["speed"] = float(p.get("speed"))
+			p.free()
+			if "ranged_projectile_scale_mult" in root:
+				info["scale"] = float(root.get("ranged_projectile_scale_mult"))
+			if "ranged_projectile_rotation_offset" in root:
+				info["rot"] = float(root.get("ranged_projectile_rotation_offset"))
+		var bs: Variant = root.get("beam_scene") if "beam_scene" in root else null
+		if bs is PackedScene:
+			info["beam"] = bs
+		root.free()
+	_attack_info_cache[key] = info
+	return info
+
+
+## key verilirse silahın kendi mermisi/ışını (bkz. attack_info), yoksa eski mor mermi. Işın silahında hasar burada değil
+## çağıranda (anlık) uygulanır; bu yalnız görseli çizer.
+static func spawn_bolt(from_pos: Vector2, to_pos: Vector2, damage: float, source: Node2D, cosmetic: bool, key: String = "") -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null or tree.current_scene == null:
 		return
+	var info: Dictionary = attack_info(key) if key != "" else {}
+	if info.get("beam") != null:
+		_spawn_beam_fx(info["beam"] as PackedScene, from_pos, to_pos)
+		return
+	var visual: Dictionary = {}
+	if info.get("proj") != null:
+		visual = {"proj": info["proj"], "speed": info["speed"], "scale": info["scale"], "rot": info["rot"]}
 	var bolt := Node2D.new()
 	bolt.set_script(BoltScript)
+	## setup, add_child'dan ÖNCE: bolt _ready'de görselini `visual`dan kurar (add_child sonrası setup çok geç kalırdı).
+	bolt.call("setup", from_pos, to_pos, damage, source, cosmetic, visual)
 	tree.current_scene.add_child(bolt)
-	bolt.call("setup", from_pos, to_pos, damage, source, cosmetic)
+	bolt.global_position = from_pos
+
+
+## Şimşek Asası ışını: namludan hedefe kısa süre görünür (fx_lightning_beam.gd, uzak oyuncuların kullandığı AYNI ağ kipi).
+const BEAM_FX_SECONDS := 0.45
+
+
+static func _spawn_beam_fx(scene: PackedScene, from_pos: Vector2, to_pos: Vector2) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	var fx: Node2D = scene.instantiate() as Node2D
+	if fx == null:
+		return
+	tree.current_scene.add_child(fx)
+	if fx.has_method("setup_network"):
+		fx.call("setup_network", to_pos, {"from_pos": from_pos})
+	tree.create_timer(BEAM_FX_SECONDS).timeout.connect(func() -> void:
+		if is_instance_valid(fx):
+			fx.queue_free())
 
 
 func _find_nearest_player() -> Node2D:

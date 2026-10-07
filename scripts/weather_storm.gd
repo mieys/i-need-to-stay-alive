@@ -16,6 +16,7 @@ extends Node
 ## Maliyet: yıldırım başına 1 kök düğüm + en fazla 4 sprite/ses çocuğu, birkaç saniyede bir; yaratık taraması SADECE
 ## çarpma anında, host'ta, tek geçiş (enemies grubu). Kare başına iş: birkaç sayaç.
 
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 const StrikeScene := preload("res://scenes/fx_storm_strike.tscn")
 const DropAttraction := preload("res://scripts/drop_attraction.gd")
 const DISTANT_SOUNDS := ["res://assets/audio/storm/thunder_distant_1.wav", "res://assets/audio/storm/thunder_distant_2.wav"]
@@ -148,6 +149,7 @@ func _on_strike_landed(pos: Vector2) -> void:
 	_apply_damage(pos)
 	if indoors:
 		return
+	CameraShakeScript.add_at(pos, 0.5, 1400.0) ## kamera sarsıntısı (uzaktaki yıldırım azalır, bkz. camera_shake.gd)
 	var cam := get_viewport().get_camera_2d()
 	if cam and cam.get_screen_center_position().distance_to(pos) <= FLASH_RANGE:
 		flash = 1.0

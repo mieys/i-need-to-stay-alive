@@ -319,7 +319,7 @@ func status(t: Node, what: String) -> bool:
 		"frozen":
 			return t.has_method("is_frozen_now") and t.is_frozen_now()
 		"bleeding":
-			return Time.get_ticks_msec() - int(_bled.get(t.get_instance_id(), -100000)) < 4000
+			return dot_stacks(t) > 0 or Time.get_ticks_msec() - int(_bled.get(t.get_instance_id(), -100000)) < 4000
 		"boss":
 			return t.get("is_boss") == true
 	return false
@@ -816,8 +816,120 @@ func _process(delta: float) -> void:
 				proj.rotation = nd.angle() + float(weapon.get("ranged_projectile_rotation_offset"))
 			alive.append(pair)
 		_homing = alive
+	_tick_dots()
 	process_extra(delta)
 
 
 func process_extra(_delta: float) -> void:
 	pass
+
+
+## ------------------------------------------------------------------ süreli, yığınlı hasar (Kanayan Kesikler, Kanlı Pençe)
+## Kanama elementi yaratık ölene kadar sürer (enemy.gd apply_bleed) - "4 saniyelik kanama" gibi SÜRELİ etkiler bu yerel kayıtla
+## yürür: düşman kimliği -> {"node", "stacks": [bitiş msec...], "dps", "next", "pos"}. Hasar hit() ile gider (istemcide host'a
+## yönlenir); sadece KASTERDE çalışır. Tik görseli yerel (ağa yayınlanmaz - tik başına RPC yağmasın).
+const DOT_TICK_MSEC := 500
+var _dots: Dictionary = {}
+
+
+## Hedefe bir yük ekler (en çok `cap`; üstündeyse en eski düşer = süre tazelenir). Dönen: güncel yük sayısı.
+func dot_add(t: Node, dps: float, dur: float, cap: int) -> int:
+	if not is_enemy(t):
+		return 0
+	var now: int = Time.get_ticks_msec()
+	var id: int = t.get_instance_id()
+	var rec: Dictionary = _dots.get(id, {"node": t, "stacks": [], "dps": dps, "next": now + DOT_TICK_MSEC, "pos": (t as Node2D).global_position})
+	var st: Array = []
+	for e in (rec["stacks"] as Array):
+		if int(e) > now:
+			st.append(int(e))
+	st.append(now + int(dur * 1000.0))
+	while st.size() > maxi(1, cap):
+		st.pop_front()
+	rec["stacks"] = st
+	rec["dps"] = dps
+	_dots[id] = rec
+	return st.size()
+
+
+func dot_stacks(t: Node) -> int:
+	if not is_instance_valid(t):
+		return 0
+	var rec: Dictionary = _dots.get(t.get_instance_id(), {})
+	if rec.is_empty():
+		return 0
+	var now: int = Time.get_ticks_msec()
+	var c: int = 0
+	for e in (rec["stacks"] as Array):
+		if int(e) > now:
+			c += 1
+	return c
+
+
+## Hedefteki yüklerin kalan toplam hasarı (patlatma için).
+func dot_remaining(t: Node) -> float:
+	if not is_instance_valid(t):
+		return 0.0
+	var rec: Dictionary = _dots.get(t.get_instance_id(), {})
+	if rec.is_empty():
+		return 0.0
+	var now: int = Time.get_ticks_msec()
+	var total: float = 0.0
+	for e in (rec["stacks"] as Array):
+		if int(e) > now:
+			total += float(int(e) - now) / 1000.0 * float(rec["dps"])
+	return total
+
+
+func dot_clear(t: Node) -> void:
+	if is_instance_valid(t):
+		_dots.erase(t.get_instance_id())
+
+
+## Ölen kurbanın yüklerini başka bir düşmana geçirir (rec["left"] = kalan süreler, sn).
+func dot_transfer(rec: Dictionary, to: Node, cap: int) -> void:
+	for secs in (rec.get("left", []) as Array):
+		dot_add(to, float(rec["dps"]), float(secs), cap)
+
+
+## Yükü olan bir düşman ölünce (kendi tikimiz ya da başka bir kaynak) bir kez çağrılır: rec["left"] kalan süreler, rec["pos"] ölüm yeri.
+func on_dot_victim_died(_rec: Dictionary) -> void:
+	pass
+
+
+func dot_tick_fx(t: Node, _stacks: int) -> void:
+	EnchantFx.spawn(get_tree(), "sprite", (t as Node2D).global_position, {"sheet": "shuriken_hit", "scale": Vector2(0.7, 0.7), "z": 9})
+
+
+func _tick_dots() -> void:
+	if _dots.is_empty():
+		return
+	var now: int = Time.get_ticks_msec()
+	for id in _dots.keys():
+		var rec: Dictionary = _dots[id]
+		## Tipsiz: serbest bırakılmış düğümü tipli değişkene atamak hata verir (bkz. hafıza: freed == null).
+		var t = rec["node"]
+		if not is_instance_valid(t):
+			_dots.erase(id)
+			continue
+		var live: int = 0
+		var left: Array = []
+		for e in (rec["stacks"] as Array):
+			if int(e) > now:
+				live += 1
+				left.append(float(int(e) - now) / 1000.0)
+		if t.get("is_dead") == true:
+			_dots.erase(id)
+			if live > 0:
+				rec["left"] = left
+				rec["pos"] = (t as Node2D).global_position
+				on_dot_victim_died(rec)
+			continue
+		if live == 0:
+			_dots.erase(id)
+			continue
+		rec["pos"] = (t as Node2D).global_position
+		if now >= int(rec["next"]):
+			rec["next"] = now + DOT_TICK_MSEC
+			hit(t, float(rec["dps"]) * float(live) * float(DOT_TICK_MSEC) / 1000.0)
+			dot_tick_fx(t, live)

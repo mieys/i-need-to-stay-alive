@@ -76,7 +76,8 @@ inline float len2(float x, float y) { return x * x + y * y; }
 } // namespace
 
 void EnemyWorld::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("set_grid", "blocked", "origin", "size", "cell", "layer_origin"), &EnemyWorld::set_grid);
+	ClassDB::bind_method(D_METHOD("set_grid", "blocked", "origin", "size", "cell", "layer_origin", "fog_blocked"), &EnemyWorld::set_grid,
+			DEFVAL(PackedByteArray()));
 	ClassDB::bind_method(D_METHOD("set_targets", "pos", "kind", "targetable", "ghost", "body", "zone", "ids"), &EnemyWorld::set_targets);
 	ClassDB::bind_method(D_METHOD("set_merchant_zone", "active", "pos", "radius"), &EnemyWorld::set_merchant_zone);
 	ClassDB::bind_method(D_METHOD("set_body_block_scale", "scale"), &EnemyWorld::set_body_block_scale);
@@ -175,7 +176,7 @@ void EnemyWorld::_bind_methods() {
 // ===================================================================================================== kurulum
 
 void EnemyWorld::set_grid(const PackedByteArray &p_blocked, const Vector2i &p_origin, const Vector2i &p_size, float p_cell,
-		const Vector2 &p_layer_origin) {
+		const Vector2 &p_layer_origin, const PackedByteArray &p_fog_blocked) {
 	gox = p_origin.x;
 	goy = p_origin.y;
 	gw = p_size.x;
@@ -184,6 +185,13 @@ void EnemyWorld::set_grid(const PackedByteArray &p_blocked, const Vector2i &p_or
 	lox = p_layer_origin.x;
 	loy = p_layer_origin.y;
 	blocked.assign(p_blocked.ptr(), p_blocked.ptr() + p_blocked.size());
+	// Görüş (sis) ızgarası: SADECE orman duvarı. Hareket/yol ızgarası (blocked) su + bina tabanı + ağaç gövdesi + maden gibi
+	// geçilmez ama görüşü KESMEYEN nesneleri de içerir (2026-10-08); verilmezse (boş / boyut uymuyor) sis da blocked'ı kullanır.
+	if (p_fog_blocked.size() == p_blocked.size() && p_fog_blocked.size() > 0) {
+		fog_blocked.assign(p_fog_blocked.ptr(), p_fog_blocked.ptr() + p_fog_blocked.size());
+	} else {
+		fog_blocked.clear();
+	}
 	bfs_queue.assign((size_t)gw * (size_t)gh, 0);
 	for (Flow &f : flows) {
 		f.dist.clear();
@@ -657,6 +665,17 @@ inline bool EnemyWorld::solid_cell(int cx, int cy) const {
 		return false; // ızgara dışı: enemy.gd'deki gibi engel sayılmaz (orman katmanı yok)
 	}
 	return blocked[(size_t)y * gw + x] != 0;
+}
+
+inline bool EnemyWorld::fog_solid_cell(int cx, int cy) const {
+	if (fog_blocked.empty()) {
+		return solid_cell(cx, cy);
+	}
+	const int x = cx - gox, y = cy - goy;
+	if (x < 0 || y < 0 || x >= gw || y >= gh) {
+		return false;
+	}
+	return fog_blocked[(size_t)y * gw + x] != 0;
 }
 
 inline bool EnemyWorld::solid_world(float x, float y) const {
@@ -1244,7 +1263,7 @@ bool EnemyWorld::fog_ray_blocked(float ax, float ay, float bx, float by) const {
 			cy += sy;
 			t_max_y += inv_y;
 		}
-		if (solid_cell(cx, cy)) {
+		if (fog_solid_cell(cx, cy)) {
 			if (!entered) {
 				entered = true;
 				t_enter = t_cross;

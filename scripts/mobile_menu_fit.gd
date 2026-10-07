@@ -37,6 +37,10 @@ func on_node_added(n: Node) -> void:
 ## Girdi: Godot GUI olayları katman dönüşümünü hesaba katar - düğmeler büyümüş halleriyle tıklanır.
 class MenuFitter extends Node:
 	const FIT_WINDOW := 0.6
+	const RESIZE_POLL := 0.25
+	const RESIZE_TOL := 6.0 ## px - hover/animasyon titreşimi yeniden ölçümü tetiklemesin
+	var _fit_size: Vector2 = Vector2.ZERO
+	var _resize_poll: float = 0.0
 	var _scale: float = 0.0
 	var _age: float = 0.0
 	var _was_visible: bool = false
@@ -58,7 +62,12 @@ class MenuFitter extends Node:
 			_age = 0.0
 		var sig: int = _visible_children(layer)
 		if _age > FIT_WINDOW and sig == _child_sig:
-			return
+			## Alt-düğüm sayısı aynı ama içerik BOYU sonradan değiştiyse (zafer penceresinde diğer oyuncuların takım tablosu satırları
+			## ağdan geç gelir) baştan ölç: kilitli kalan ölçek büyüyen pencereyi ekran dışına taşırırdı.
+			if not _resized_since_fit(layer, delta):
+				return
+			_scale = 0.0
+			_age = 0.0
 		if sig != _child_sig and _age > FIT_WINDOW:
 			_scale = 0.0 ## yeni bir alt panel açıldı/kapandı: baştan ölç
 			_age = 0.0
@@ -72,7 +81,17 @@ class MenuFitter extends Node:
 		if _scale > 0.0:
 			s = minf(s, _scale)
 		_scale = s
+		_fit_size = r.size
 		layer.transform = MobileUIScript.fit_transform(r, s, vp)
+
+	## Son ölçümden beri içerik boyu RESIZE_TOL'dan fazla değişti mi? Yalnız RESIZE_POLL aralığıyla bakılır.
+	func _resized_since_fit(layer: CanvasLayer, delta: float) -> bool:
+		_resize_poll += delta
+		if _resize_poll < RESIZE_POLL:
+			return false
+		_resize_poll = 0.0
+		var r: Rect2 = MobileUIScript.content_rect(layer, layer.get_viewport().get_visible_rect().size)
+		return r.size.x >= 1.0 and (r.size - _fit_size).length() > RESIZE_TOL
 
 	func _visible_children(layer: Node) -> int:
 		var n: int = 0

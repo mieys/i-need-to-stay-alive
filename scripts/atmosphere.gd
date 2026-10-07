@@ -130,6 +130,16 @@ func _ready() -> void:
 
 	NetworkManager.atmosphere_state_received.connect(_on_state_received)
 	NetworkManager.peer_needs_game_catchup.connect(_on_peer_needs_game_catchup)
+	## HOST DEVRİ: yeni host gün saatini/havayı eski host'un son yayınından sürdürür (bkz. NetworkManager "HOST DEVRİ" bloğu).
+	var migrated: Dictionary = NetworkManager.peek_migration_handover().get("atmosphere", {})
+	if not migrated.is_empty() and NetworkManager.is_host:
+		cycle_time = AtmosphereMath.wrap_time(float(migrated.get("t", cycle_time)))
+		weather = int(migrated.get("w", weather))
+		rain_intensity = float(migrated.get("ri", rain_intensity))
+		wind_intensity = float(migrated.get("wi", wind_intensity))
+		storm_intensity = float(migrated.get("si", storm_intensity))
+		wind_angle = float(migrated.get("wa", wind_angle))
+		_weather_remaining = float(migrated.get("wr", _weather_remaining))
 	get_tree().node_added.connect(_on_node_added)
 	_scan_existing.call_deferred()
 	_grade = AtmosphereMath.grade(cycle_time, rain_intensity, wind_intensity)
