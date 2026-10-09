@@ -360,7 +360,7 @@ func _ready() -> void:
 	EntityScale.shrink_collision(get_node_or_null("CollisionShape2D"))
 	var bubble: Node2D = get_node_or_null("ShieldVisual/BubbleSprite")
 	if bubble:
-		bubble.scale *= EntityScale.SIZE
+		bubble.scale *= EntityScale.ATTACHED_SIZE ## kalkan gövdeyle birlikte küçülmez (bkz. EntityScale.ATTACHED_SIZE)
 	_target_position = global_position
 
 	if overhead_bar:

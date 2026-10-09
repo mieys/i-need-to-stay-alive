@@ -108,8 +108,11 @@ func refresh() -> void:
 		"name": ArtScript.display_name(str(boss.get_meta("creature_id", ""))),
 		"hp": _ratio(float(boss.get("health")), float(boss.get("max_health"))),
 		"sh": _ratio(float(boss.get("item_shield_hp")), float(boss.get("item_shield_max"))),
+		## Çubukların içindeki sayılar (2026-10-09): "şimdiki / en çok". İmza bunları içerir - oran 0,001'den az değişse de sayı değişince yeniden çizilir.
+		"hp_text": ArtScript.bar_text(float(boss.get("health")), float(boss.get("max_health"))),
+		"sh_text": ArtScript.bar_text(float(boss.get("item_shield_hp")), float(boss.get("item_shield_max"))),
 	}
-	var sig: String = "%s:%d:%d" % [e["name"], int(round(float(e["hp"]) * 1000.0)), int(round(float(e["sh"]) * 1000.0))]
+	var sig: String = "%s:%d:%d:%s:%s" % [e["name"], int(round(float(e["hp"]) * 1000.0)), int(round(float(e["sh"]) * 1000.0)), e["hp_text"], e["sh_text"]]
 	if not _shown:
 		_shown = true
 		visible = true
@@ -145,4 +148,5 @@ func _layout() -> void:
 func _draw() -> void:
 	if _entry.is_empty():
 		return
-	ArtScript.top_plaque(self, Vector2.ZERO, scale_px, str(_entry["name"]), float(_entry["hp"]), float(_entry["sh"]))
+	ArtScript.top_plaque(self, Vector2.ZERO, scale_px, str(_entry["name"]), float(_entry["hp"]), float(_entry["sh"]), ArtScript.TOP_W,
+			str(_entry.get("hp_text", "")), str(_entry.get("sh_text", "")))

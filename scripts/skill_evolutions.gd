@@ -186,17 +186,17 @@ const DEFS := {
 	## ---------------------------------------------------------------- Matthew
 	3: {
 		"skill": [
-			{"id": "matthew_q1", "name": "Savuran Pençe", "desc": "Tilki vurduğu yaratıkları senden uzağa iter."},
-			{"id": "matthew_q2", "name": "Bedava Av", "desc": "Tilki Hücumu kalkan harcamaz."},
-			{"id": "matthew_q3", "name": "Keskin Dişler", "desc": "Tilki Hücumu'nun hasarı %30 artar."},
-			{"id": "matthew_q4", "name": "Çevik Tilki", "desc": "Tilki Hücumu'nun bekleme süresi %30 azalır."},
-			{"id": "matthew_qf", "name": "Sürü Avı", "desc": "Tilki Hücumu'nun hedef sayısı 6'dan 10'a çıkar.", "final": true},
+			{"id": "matthew_q1", "name": "Savuran Pençe", "desc": "Köpek vurduğu yaratıkları senden uzağa iter."},
+			{"id": "matthew_q2", "name": "Bedava Av", "desc": "Köpek Hücumu kalkan harcamaz."},
+			{"id": "matthew_q3", "name": "Keskin Dişler", "desc": "Köpek Hücumu'nun hasarı %30 artar."},
+			{"id": "matthew_q4", "name": "Çevik Köpek", "desc": "Köpek Hücumu'nun bekleme süresi %30 azalır."},
+			{"id": "matthew_qf", "name": "Sürü Avı", "desc": "Köpek Hücumu'nun hedef sayısı 6'dan 10'a çıkar.", "final": true},
 		],
 		"skill2": [
 			{"id": "matthew_e1", "name": "Vahşi Koşu", "desc": "Hareket hızı bonusu %30'a, saldırı hızı bonusu %50'ye çıkar."},
 			{"id": "matthew_e2", "name": "Uzun Av", "desc": "Vahşi Hız'ın etki süresi 4 saniye artar."},
-			{"id": "matthew_e3", "name": "Tilki Ruhu", "desc": "Tilkin Vahşi Hız'ın sağladığı bonusların 2 katını kazanır."},
-			{"id": "matthew_e4", "name": "Sersemleten Isırık", "desc": "Vahşi Hız aktifken tilkinin saldırıları yaratıkları 1 saniye sersemletir."},
+			{"id": "matthew_e3", "name": "Köpek Ruhu", "desc": "Köpeğin Vahşi Hız'ın sağladığı bonusların 2 katını kazanır."},
+			{"id": "matthew_e4", "name": "Sersemleten Isırık", "desc": "Vahşi Hız aktifken köpeğin saldırıları yaratıkları 1 saniye sersemletir."},
 			{"id": "matthew_ef", "name": "Avcı Sabrı", "desc": "Vahşi Hız aktif değilken 3 saniye hasar almazsan %15 hareket hızı kazanırsın; hasar alınca kaybolur.", "final": true},
 		],
 		"skill3": [

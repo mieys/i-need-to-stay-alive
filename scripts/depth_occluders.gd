@@ -10,8 +10,13 @@ extends Node
 ##  - Katmanların bir KOPYASI z_index 2'de (oyuncuların üstünde) çizilir; shader kopyada SADECE kökü (yere değdiği çizgi) bir karakterin ayağından
 ##    AŞAĞIDA olan (yani karakterin önünde duran) nesne piksellerini ve SADECE o karakterin gövde dikdörtgeninde bırakır (derinlik_on_katman.gdshader).
 ##  - Karakter nesnenin arkasındayken (ayağı kökün üstünde) kopya hiçbir şey çizmez -> oyuncu önde kalır; "önündeyken" nesne zaten oyuncunun altında.
-## Karakterler = yerel oyuncu + uzak oyuncu kuklaları (grass_sway.gd ile AYNI ayak/gövde ölçüleri). Yaratıklar bu önceliğe dahil DEĞİL (eskisi gibi
-## nesnelerin üstünde). Tamamen yerel/kozmetik: ağ gerekmez.
+## Karakterler = yerel oyuncu + uzak oyuncu kuklaları (grass_sway.gd ile AYNI ayak/gövde ölçüleri). Tamamen yerel/kozmetik: ağ gerekmez.
+##
+## YARATIKLAR (2026-10-09, kullanıcı: "yaratıklar ağaçların ve evlerin üstünde yürüyor"): AYNI kural yaratıklara da uygulanır. Yaratık sayısı yüzlerce olabilir ve
+## shader'a hepsi verilemez; bu yüzden her 2 karede bir SADECE görüntüdeki, bir nesne kümesine değen (altında/yanında kökü ayağından aşağıda ya da hemen yakınında
+## olan nesne hücresi var: kaba ızgara `_coarse`, 32 px) en çok MAX_CREATURES yaratığın gövde dikdörtgeni `yaratiklar` dizisine yazılır. Açık arazide dizi boştur
+## (shader döngüsü hiç çalışmaz). Gövde ölçüsü sprite karesinin görünen (opak) alanından, bir kez ölçülür (`creature_body`). Kopyalar z_index 3'te: öne alınmış
+## (oyuncunun önündeki, z 2) yaratıklar da ağacın arkasındaysa örtülsün (bkz. creature_depth.gd).
 ##
 ## KÖK nasıl bulunur (hepsi haritadaki GERÇEK yerleşimden, oyun başında):
 ##  - AĞAÇLAR ("Shader Eklenecek/Ağaç 0/1/2"): sallanan ağaç shader'ının kendi hücre verisi zaten ağaç başına kökü taşıyor (tree_sway.gd, atlasta komşu
@@ -23,16 +28,28 @@ extends Node
 ## orman duvarından geçemiyor, bkz. GameManager.is_position_blocked_by_forest).
 ## Tuzak: Tiled'da bu katman adları değişirse aşağıdaki sabitler güncellenmeli; bulunamayan katman sessizce atlanır (test_depth_occluders bulunduklarını sınar).
 
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const SHADER_PATH := "res://scenes/derinlik_on_katman.gdshader"
 const TREE_SHADER_PATH := "res://scenes/sallanan ağaç.gdshader"
 const TREE_PARENT := "Shader Eklenecek"
 const TREE_PREFIX := "Ağaç"
 const FRONT_ROOT_NAME := "DerinlikOnKatman"
 const MAX_CHARACTERS := 8
+const MAX_CREATURES := 32 ## shader'daki `yaratiklar` dizisi uzunluğu (derinlik_on_katman.gdshader + sallanan ağaç.gdshader ile AYNI)
+const FRONT_Z := 3 ## kopya katmanların z_index'i: oyuncular 1, oyuncunun önüne alınan yaratıklar 2 (creature_depth.gd)
+const COARSE := 32.0 ## kaba nesne ızgarası hücre boyu (dünya px)
+## Yaratığın ayağının bu kadar altına kadar kökü olan nesneler de "ilgili" sayılır: yaratık nesnenin ÖNÜNDEYSE de aynı pikselde başka bir varlığı
+## örtmesin diye shader'ın bilmesi gerekir (shader orter(): önündeki varlık hep görünür kalır).
+const FRONT_SLACK := 48.0
+const CREATURE_UPDATE_FRAMES := 2
+const CREATURE_VIEW_PAD := 120.0 ## görüş yarıçapına eklenen pay (yaratık gövdesi ekran dışından içeri taşar)
+const BODY_FALLBACK := Vector2(24.0, 44.0)
+const NEAR_CELLS := 3 ## ön eleme çevresi (kaba hücre = 96 px): yaratık gövdesinin yarı genişliği + ayak payı
+const BODY_MARGIN := 1.15 ## ölçülen opak alana ek pay (animasyon kareleri birbirinden biraz farklı)
 ## Karakter ayak noktası / gövde (dünya px) - grass_sway.gd FEET_OFFSET/BODY_* ile AYNI (oyuncu kökü ölçek 0.5'te, sprite zemine ~+15 px'te değer).
-const FEET_OFFSET := 15.0
-const BODY_HALF_WIDTH := 11.0
-const BODY_HEIGHT := 34.0
+const FEET_OFFSET := 15.0 * EntityScale.BODY_REL ## 2026-10-09: karakterler %15 küçüldü (eski ölçü 15 / 11 / 34)
+const BODY_HALF_WIDTH := 11.0 * EntityScale.BODY_REL
+const BODY_HEIGHT := 34.0 * EntityScale.BODY_REL
 const OPAQUE_ALPHA := 0.4
 const CELL := 16.0
 
@@ -58,6 +75,13 @@ var _tree_pairs: Array = [] ## [asıl materyal, kopya materyal]
 var _image_cache: Dictionary = {}
 var _rows_cache: Dictionary = {}
 var _last_chars: Array[Vector4] = []
+var _main: Node = null ## harita kökünün ebeveyni (Main): yaratık ayağı için _creature_foot_y
+var _coarse: Dictionary = {} ## Vector2i(kaba hücre) -> o hücreye değen nesne hücrelerinin EN BÜYÜK kök y'si (sadece setup(); iç mekanda yok)
+var _near: Dictionary = {} ## Vector2i(kaba hücre) -> true: bir nesne hücresine NEAR_CELLS kaba hücre içinde olan her hücre (ucuz ön eleme: açık arazideki yaratık tek sorguda elenir)
+var _creatures_on: bool = false
+var _creature_entries: Array[Vector4] = [] ## son yazılan (ayak x, ayak y, yarım genişlik, boy) listesi (testler/hata ayıklama)
+var _creature_frame: int = 0
+static var _body_cache: Dictionary = {} ## "doku|hframes|vframes" -> opak alan boyu (px, ölçeksiz)
 ## Bulunan/kurulan ön katmanlar (testler ve hata ayıklama için): [{"layer": asıl, "front": kopya, "mode": "tree"|"building"|"object"}]
 var fronts: Array = []
 
@@ -74,6 +98,9 @@ func setup(harita: Node) -> void:
 		var layer := harita.get_node_or_null(path) as TileMapLayer
 		if layer != null and layer.tile_set != null and not layer.get_used_cells().is_empty():
 			_setup_object_layer(layer)
+	_main = harita.get_parent()
+	_build_coarse()
+	_creatures_on = not _coarse.is_empty()
 
 
 ## İç mekanlar (demirci, ev içi, seyyar satıcı arabası): kökün altındaki adı verilen mobilya/nesne katmanları atlas komşuluğuyla nesne sayılır (maden/çalı
@@ -94,7 +121,7 @@ func _begin(root: Node) -> void:
 	root.add_child(self)
 	_front_root = Node2D.new()
 	_front_root.name = FRONT_ROOT_NAME
-	_front_root.z_index = 2
+	_front_root.z_index = FRONT_Z
 	root.add_child(_front_root)
 
 
@@ -406,12 +433,172 @@ func _process(_delta: float) -> void:
 		if strength != null and strength != (pair[1] as ShaderMaterial).get_shader_parameter("strength"):
 			(pair[1] as ShaderMaterial).set_shader_parameter("strength", strength)
 	var chars: Array[Vector4] = collect_characters(get_tree())
-	var count: int = chars.size()
-	if chars == _last_chars:
+	if chars != _last_chars:
+		_last_chars = chars.duplicate()
+		var count: int = chars.size()
+		while chars.size() < MAX_CHARACTERS:
+			chars.append(Vector4.ZERO)
+		for m in _front_materials:
+			m.set_shader_parameter("karakter_sayisi", count)
+			m.set_shader_parameter("karakterler", chars)
+	if _creatures_on:
+		## CreatureDepth + main.gd çizim sırası ÇİFT karelerde çalışır: bu güncelleme TEK karelerde (aynı karede yığılmasınlar)
+		_creature_frame += 1
+		if _creature_frame % CREATURE_UPDATE_FRAMES == 1:
+			update_creatures()
+
+
+# ------------------------------------------------------------------ yaratıklar (ağaç/ev arkasında yürüyen yaratık örtülsün)
+
+## Kaba ızgara: her kopya katmanın nesne hücresi -> o hücreye değen 32 px'lik kaba hücrelerde EN BÜYÜK kök y'si.
+func _build_coarse() -> void:
+	_coarse.clear()
+	_near.clear()
+	for f: Dictionary in fronts:
+		var layer: TileMapLayer = f["layer"]
+		var ofset: Vector2 = _cell_origin(layer)
+		var bases: Dictionary = f["bases"]
+		for cell: Vector2i in bases:
+			var x0: float = ofset.x + float(cell.x) * CELL
+			var y0: float = ofset.y + float(cell.y) * CELL
+			var base: float = float(bases[cell])
+			for cx in range(floori(x0 / COARSE), floori((x0 + CELL - 1.0) / COARSE) + 1):
+				for cy in range(floori(y0 / COARSE), floori((y0 + CELL - 1.0) / COARSE) + 1):
+					var key := Vector2i(cx, cy)
+					if base > float(_coarse.get(key, -1.0e9)):
+						_coarse[key] = base
+	for key: Vector2i in _coarse:
+		for dx in range(-NEAR_CELLS, NEAR_CELLS + 1):
+			for dy in range(-NEAR_CELLS, NEAR_CELLS + 1):
+				_near[key + Vector2i(dx, dy)] = true
+
+
+## Dikdörtgene (x0..x1, y0..y1) değen kaba hücrelerdeki en büyük nesne kökü (yoksa -1e9).
+func max_base_in(x0: float, y0: float, x1: float, y1: float) -> float:
+	var best: float = -1.0e9
+	for cx in range(floori(x0 / COARSE), floori(x1 / COARSE) + 1):
+		for cy in range(floori(y0 / COARSE), floori(y1 / COARSE) + 1):
+			var v: float = float(_coarse.get(Vector2i(cx, cy), -1.0e9))
+			if v > best:
+				best = v
+	return best
+
+
+## Görüntü merkezi + yarıçap (z). Kamera yoksa (testler) ilk karakterin çevresi; o da yoksa yarıçap -1.
+func _view_circle() -> Vector3:
+	var cam: Camera2D = get_viewport().get_camera_2d() if is_inside_tree() else null
+	if cam != null:
+		var size: Vector2 = get_viewport().get_visible_rect().size / cam.zoom
+		var c: Vector2 = cam.get_screen_center_position()
+		return Vector3(c.x, c.y, size.length() * 0.5 + CREATURE_VIEW_PAD)
+	if not _last_chars.is_empty():
+		return Vector3(_last_chars[0].x, _last_chars[0].y, 900.0)
+	return Vector3(0.0, 0.0, -1.0)
+
+
+## Yaratığın ayağının dünya y'si (main.gd'nin ölçtüğü değer; main yoksa kök noktası).
+func _foot_y(n: Node2D) -> float:
+	if _main != null and is_instance_valid(_main) and _main.has_method("_creature_foot_y"):
+		return float(_main.call("_creature_foot_y", n))
+	return n.global_position.y
+
+
+## Nesne kümesine değen yaratıkların gövde dikdörtgenlerini (ayak x, ayak y, yarım genişlik, boy) bulup tüm kopya katmanlara yazar.
+func update_creatures() -> void:
+	var entries: Array[Vector4] = []
+	var view: Vector3 = _view_circle()
+	if view.z > 0.0:
+		var center := Vector2(view.x, view.y)
+		var found: Array = []
+		var seen: Dictionary = {}
+		var cand: Array = EnemyQueryScript.candidates(get_tree(), center, view.z)
+		for group_name in ["player_ally", "player_allies"]:
+			cand = cand + get_tree().get_nodes_in_group(group_name)
+		var half: Vector2 = Vector2(view.z, view.z)
+		var cam: Camera2D = get_viewport().get_camera_2d()
+		if cam != null:
+			half = get_viewport().get_visible_rect().size / cam.zoom * 0.5 + Vector2(CREATURE_VIEW_PAD, CREATURE_VIEW_PAD)
+		for n in cand:
+			var n2 := n as Node2D
+			if n2 == null or not is_instance_valid(n2) or not n2.visible:
+				continue
+			var pos: Vector2 = n2.global_position
+			var d: Vector2 = pos - center
+			if absf(d.x) > half.x or absf(d.y) > half.y:
+				continue
+			## ucuz ön eleme: yakınında hiç nesne hücresi olmayan (açık arazi) yaratığın gövdesi/ayağı hesaplanmaz
+			if not _near.has(Vector2i(floori(pos.x / COARSE), floori(pos.y / COARSE))):
+				continue
+			if seen.has(n2) or n2.get("is_dead") == true:
+				continue
+			seen[n2] = true
+			var body: Vector2 = creature_body(n2)
+			var foot: float = _foot_y(n2)
+			if max_base_in(pos.x - body.x, foot - body.y, pos.x + body.x, foot) > foot - FRONT_SLACK:
+				found.append([d.length_squared(), Vector4(pos.x, foot, body.x, body.y)])
+		if found.size() > MAX_CREATURES:
+			found.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+			found.resize(MAX_CREATURES)
+		for item: Array in found:
+			entries.append(item[1])
+	if entries == _creature_entries:
 		return
-	_last_chars = chars.duplicate()
-	while chars.size() < MAX_CHARACTERS:
-		chars.append(Vector4.ZERO)
+	_creature_entries = entries.duplicate()
+	var count: int = entries.size()
+	while entries.size() < MAX_CREATURES:
+		entries.append(Vector4.ZERO)
 	for m in _front_materials:
-		m.set_shader_parameter("karakter_sayisi", count)
-		m.set_shader_parameter("karakterler", chars)
+		m.set_shader_parameter("yaratik_sayisi", count)
+		m.set_shader_parameter("yaratiklar", entries)
+
+
+## Yaratığın gövde yarı genişliği ve boyu (dünya px): görselin ilk karesindeki opak alandan x ölçek, BODY_MARGIN payla. Düğüm başına bir kez (meta).
+func creature_body(n: Node2D) -> Vector2:
+	if n.has_meta("_depth_body"):
+		return n.get_meta("_depth_body")
+	var vis: Node2D = null
+	for child_name in ["Sprite2D", "AnimatedSprite2D"]:
+		var c: Node = n.get_node_or_null(child_name)
+		if c is Sprite2D or c is AnimatedSprite2D:
+			vis = c as Node2D
+			break
+	var body: Vector2 = BODY_FALLBACK
+	if vis != null:
+		var used: Vector2 = _used_size(vis)
+		if used.x > 0.0 and used.y > 0.0:
+			var sc: Vector2 = vis.global_scale.abs()
+			body = Vector2(maxf(used.x * 0.5 * sc.x * BODY_MARGIN, 10.0), maxf(used.y * sc.y * BODY_MARGIN, 16.0))
+	n.set_meta("_depth_body", body)
+	return body
+
+
+## Sprite karesinin (hframes x vframes bölünmüş ilk kare ya da AnimatedSprite2D'nin geçerli animasyonunun ilk karesi) opak alan boyu (px, ölçeksiz); ölçülemezse (0,0).
+func _used_size(vis: Node2D) -> Vector2:
+	var tex: Texture2D = null
+	var frame_size := Vector2.ZERO
+	var key := ""
+	if vis is Sprite2D:
+		var s := vis as Sprite2D
+		tex = s.texture
+		if tex != null:
+			frame_size = tex.get_size() / Vector2(maxi(s.hframes, 1), maxi(s.vframes, 1))
+			key = "%d|%d|%d" % [tex.get_rid().get_id(), s.hframes, s.vframes]
+	elif vis is AnimatedSprite2D:
+		var a := vis as AnimatedSprite2D
+		if a.sprite_frames != null and a.sprite_frames.has_animation(a.animation) and a.sprite_frames.get_frame_count(a.animation) > 0:
+			tex = a.sprite_frames.get_frame_texture(a.animation, 0)
+			if tex != null:
+				frame_size = tex.get_size()
+				key = "%d|a|%s" % [tex.get_rid().get_id(), str((tex as AtlasTexture).region) if tex is AtlasTexture else ""]
+	if tex == null or frame_size.x <= 0.0 or frame_size.y <= 0.0:
+		return Vector2.ZERO
+	if _body_cache.has(key):
+		return _body_cache[key]
+	var size := Vector2.ZERO
+	var img: Image = _image_of(tex)
+	if img != null:
+		var fr := Rect2i(Vector2i.ZERO, Vector2i(frame_size)).intersection(Rect2i(Vector2i.ZERO, img.get_size()))
+		var used: Rect2i = img.get_region(fr).get_used_rect()
+		size = Vector2(used.size)
+	_body_cache[key] = size
+	return size

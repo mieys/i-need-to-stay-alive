@@ -124,7 +124,7 @@ func test_front_copies_sit_above_players_and_match_the_original_transform() -> v
 	var dep: Node = DepthScript.new()
 	dep.setup(harita)
 	var root_node: Node2D = harita.get_node("DerinlikOnKatman") as Node2D
-	assert(root_node != null and root_node.z_index == 2, "kopyalar oyuncuların (z 1) üstünde, z_index 2")
+	assert(root_node != null and root_node.z_index == DepthScript.FRONT_Z and DepthScript.FRONT_Z > 2, "kopyalar oyuncuların (z 1) VE öne alınmış yaratıkların (z 2) üstünde, z_index 3")
 	assert(dep.fronts.size() == 3, "Ev + Ev Çatı + Maden: %d" % dep.fronts.size())
 	for f: Dictionary in dep.fronts:
 		var layer: TileMapLayer = f["layer"]
@@ -220,6 +220,148 @@ func test_real_map_front_layers_roots_and_tree_sway_sync() -> void:
 	((first_tree["layer"] as TileMapLayer).material as ShaderMaterial).set_shader_parameter("strength", 3.25)
 	dep._process(0.016)
 	assert(float(((first_tree["front"] as TileMapLayer).material as ShaderMaterial).get_shader_parameter("strength")) == 3.25, "sallanma gücü asıldan kopyaya taşınmalı")
+	dep.free()
+	tree_sway.free()
+	_cleanup()
+
+
+# ------------------------------------------------------------------ yaratıklar (2026-10-09: "yaratıklar ağaçların ve evlerin üstünde yürüyor")
+
+class DeadCreature extends Node2D:
+	var is_dead: bool = true
+
+
+func _creature(pos: Vector2, size: Vector2i = Vector2i(32, 48), dead: bool = false) -> Node2D:
+	var e: Node2D = DeadCreature.new() if dead else Node2D.new()
+	e.add_to_group("enemies")
+	var img := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.8, 0.2, 0.2, 1.0))
+	var spr := Sprite2D.new()
+	spr.name = "Sprite2D"
+	spr.texture = ImageTexture.create_from_image(img)
+	e.add_child(spr)
+	_track(e)
+	add_child(e)
+	e.global_position = pos
+	return e
+
+
+func _setup_creature_world() -> Array:
+	var harita: Node2D = _track(_make_map()) as Node2D
+	add_child(harita)
+	var dep: Node = DepthScript.new()
+	dep.setup(harita)
+	var player := Node2D.new()
+	player.add_to_group("player")
+	player.global_position = Vector2(91, 300)
+	_track(player)
+	add_child(player)
+	dep._process(0.016) ## karakter listesi (kamera yok: görüntü çemberi ilk karakterin çevresi)
+	return [harita, dep]
+
+
+func _material_creature_count(dep: Node) -> int:
+	var f: Dictionary = dep.fronts[0]
+	return int(((f["front"] as TileMapLayer).material as ShaderMaterial).get_shader_parameter("yaratik_sayisi"))
+
+
+## Bina A'nın (hücre 5-6 x 8-10, harita kayması (3,7): x 83-115, y 71-183, kök 183) ARKASINDA ve hemen önünde duran yaratıklar kaba ızgarada yakalanır, uzaktakiler yakalanmaz;
+## gövde ölçüsü sprite karesinin opak alanından (x1,15 pay) gelir ve değerler her kopya katmanın materyaline yazılır.
+func test_creatures_touching_an_object_get_a_mask_entry_and_far_ones_do_not() -> void:
+	var w: Array = _setup_creature_world()
+	var dep: Node = w[1]
+	assert(dep._creatures_on, "nesne hücreleri olan haritada yaratık maskesi açık")
+	var behind: Node2D = _creature(Vector2(91, 150)) ## ayak 150 < kök 183: binanın arkasında
+	var just_in_front: Node2D = _creature(Vector2(91, 200)) ## ayak 200 > kök 183 ama görseli binaya değiyor (önündeki yaratık da shader'a bildirilir)
+	var far_front: Node2D = _creature(Vector2(91, 500)) ## binadan uzak
+	var far_side: Node2D = _creature(Vector2(900, 150))
+	var dead: Node2D = _creature(Vector2(91, 140), Vector2i(32, 48), true) ## ölüm animasyonu: örtülmez
+	assert(far_front != null and far_side != null and just_in_front != null and dead != null)
+	dep.update_creatures()
+	var entries: Array = dep._creature_entries
+	assert(entries.size() == 2, "arkadaki + hemen öndeki yaratık: %s" % str(entries))
+	var body: Vector2 = dep.creature_body(behind)
+	assert(is_equal_approx(body.x, 16.0 * DepthScript.BODY_MARGIN) and is_equal_approx(body.y, 48.0 * DepthScript.BODY_MARGIN), "gövde = opak alan 32x48 x pay: %s" % str(body))
+	var found_behind: bool = false
+	for e: Vector4 in entries:
+		if is_equal_approx(e.x, 91.0) and is_equal_approx(e.y, 150.0):
+			found_behind = true
+			assert(is_equal_approx(e.z, body.x) and is_equal_approx(e.w, body.y), "dizi girdisi (ayak x, ayak y, yarım genişlik, boy)")
+	assert(found_behind, "arkadaki yaratığın girdisi var")
+	for f: Dictionary in dep.fronts:
+		var mat := (f["front"] as TileMapLayer).material as ShaderMaterial
+		assert(int(mat.get_shader_parameter("yaratik_sayisi")) == 2, "her kopya katman aynı yaratık listesini alır")
+		var arr: Array = mat.get_shader_parameter("yaratiklar")
+		assert(arr.size() == DepthScript.MAX_CREATURES, "shader dizisi %d uzunlukta" % DepthScript.MAX_CREATURES)
+	## yaratık binadan uzaklaşınca girdi kalkar
+	behind.global_position = Vector2(700, 150)
+	just_in_front.global_position = Vector2(700, 600)
+	dep.update_creatures()
+	assert(dep._creature_entries.is_empty() and _material_creature_count(dep) == 0, "açık arazide dizi boş (shader döngüsü çalışmaz)")
+	dep.free()
+	_cleanup()
+
+
+## 40 yaratık aynı binanın arkasında: shader dizisi MAX_CREATURES ile sınırlı ve görüntü merkezine (karakter) EN YAKIN olanlar kalır.
+func test_creature_entries_are_capped_and_keep_the_nearest() -> void:
+	var w: Array = _setup_creature_world()
+	var dep: Node = w[1]
+	for i in range(40):
+		_creature(Vector2(86.0 + float(i) * 0.5, 150.0 + float(i) * 0.5)) ## hepsi binaya (y 135-183) değiyor
+	dep.update_creatures()
+	assert(dep._creature_entries.size() == DepthScript.MAX_CREATURES, "en çok %d girdi: %d" % [DepthScript.MAX_CREATURES, dep._creature_entries.size()])
+	assert(_material_creature_count(dep) == DepthScript.MAX_CREATURES)
+	## oyuncu (91,300): ayağı en aşağıdaki (y büyük) yaratıklar en yakın - en küçük y'li olanlar elenmiş olmalı
+	var min_y: float = 1.0e9
+	for e: Vector4 in dep._creature_entries:
+		min_y = minf(min_y, e.y)
+	assert(min_y >= 150.0 + 8.0 * 0.5 - 0.01, "en uzak 8 yaratık elendi: en küçük ayak y %.1f" % min_y)
+	dep.free()
+	_cleanup()
+
+
+## GERÇEK harita: gerçek bir ağacın kökünün hemen ARKASINA konan yaratık maske girdisi alır, kökten çok uzaktaki almaz.
+func test_real_map_creature_behind_a_tree_gets_a_mask_entry() -> void:
+	var main := Node2D.new()
+	main.name = "Main"
+	_track(main)
+	add_child(main)
+	var harita: Node = (load("res://scenes/harita_baked.tscn") as PackedScene).instantiate()
+	harita.name = "Harita"
+	main.add_child(harita)
+	var tree_sway: Node = TreeSwayScript.new()
+	tree_sway.setup(harita)
+	var dep: Node = DepthScript.new()
+	dep.setup(harita)
+	var tree_front: Dictionary = _front_named(dep, "Ağaç 0")
+	var layer: TileMapLayer = tree_front["layer"]
+	var bases: Dictionary = tree_front["bases"]
+	var pick: Vector2 = Vector2.ZERO
+	var base: float = 0.0
+	for cell: Vector2i in bases:
+		var wp: Vector2 = layer.to_global(layer.map_to_local(cell))
+		if absf(float(bases[cell]) - (wp.y + 8.0)) < 3.0:
+			pick = wp
+			base = float(bases[cell])
+			break
+	assert(base > 0.0, "gerçek haritada bir ağaç kökü bulundu")
+	var player := Node2D.new()
+	player.add_to_group("player")
+	player.global_position = pick + Vector2(0, 200)
+	_track(player)
+	add_child(player)
+	dep._process(0.016)
+	var behind: Node2D = _creature(Vector2(pick.x, base - 10.0))
+	dep.update_creatures()
+	var hit: bool = false
+	for e: Vector4 in dep._creature_entries:
+		if is_equal_approx(e.x, pick.x) and is_equal_approx(e.y, base - 10.0):
+			hit = true
+	assert(hit, "ağacın arkasındaki yaratık shader'a bildirildi: %s" % str(dep._creature_entries))
+	behind.global_position = Vector2(pick.x, base + 500.0)
+	dep.update_creatures()
+	for e: Vector4 in dep._creature_entries:
+		assert(not is_equal_approx(e.x, pick.x) or e.y < base + 300.0, "ağaçtan çok uzaktaki yaratık bildirilmedi")
 	dep.free()
 	tree_sway.free()
 	_cleanup()

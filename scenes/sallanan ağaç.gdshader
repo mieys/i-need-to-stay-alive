@@ -12,7 +12,7 @@ shader_type canvas_item;
 // Ağaç kimliği/kök/boy HÜCRE başına bir veri dokusundan okunur - scripts/tree_sway.gd oyun başında haritadaki gerçek
 // yerleşimden (atlasta komşu karo = aynı ağaç) hesaplar. Veri yoksa (editör önizlemesi) ağaç durur.
 //
-// ÖN KATMAN (on_katman = true, 2026-10-08): scripts/depth_occluders.gd bu katmanların bir kopyasını oyuncuların ÜSTÜNDE (z_index 2) çizer;
+// ÖN KATMAN (on_katman = true, 2026-10-08): scripts/depth_occluders.gd bu katmanların bir kopyasını oyuncuların ve öne alınmış yaratıkların ÜSTÜNDE (z_index 3) çizer;
 // kopya SADECE kökü bir karakterin ayağından aşağıda (yani karakterin önünde) olan ağaç piksellerini ve sadece o karakterin gövde
 // dikdörtgeninin içinde bırakır - karakter ağacın arkasındayken ağaç onu örter (bkz. derinlik_on_katman.gdshader). Kopya AYNI köşe
 // kaydırmasını (sallanma) uyguladığı için asıl ağaçla birebir örtüşür.
@@ -41,6 +41,8 @@ uniform vec2 hucre_ofset = vec2(0.0);                       // hücre (0,0)'ın 
 uniform bool on_katman = false;
 uniform int karakter_sayisi = 0;
 uniform vec4 karakterler[8];
+uniform int yaratik_sayisi = 0;                              // YARATIKLAR (2026-10-09): derinlik_on_katman.gdshader ile AYNI kural/biçim
+uniform vec4 yaratiklar[32];
 
 varying vec2 world_orijin; // köşenin sallanmadan ÖNCEki dünya konumu (ön katmanda hücreyi bulmak için)
 
@@ -89,21 +91,34 @@ void vertex() {
 	}
 }
 
+// Pikseli içeren varlıklardan biri ağacın ARKASINDAYSA (ayağı kökten yukarıda) kopya çizilir; pikseli içeren bir varlık ağacın ÖNÜNDEYSE
+// (ayağı kökten aşağıda / aynı hizada) o varlık görünür kalsın diye çizilmez (bkz. derinlik_on_katman.gdshader orter()).
+bool orter(vec2 p, float kok_y) {
+	bool arkada = false;
+	for (int i = 0; i < 8; i++) {
+		if (i >= karakter_sayisi) { break; }
+		vec4 c = karakterler[i];
+		if (abs(p.x - c.x) <= c.z && p.y >= c.y - c.w && p.y <= c.y + 1.0) {
+			if (kok_y > c.y) { arkada = true; } else { return false; }
+		}
+	}
+	for (int i = 0; i < 32; i++) {
+		if (i >= yaratik_sayisi) { break; }
+		vec4 c = yaratiklar[i];
+		if (abs(p.x - c.x) <= c.z && p.y >= c.y - c.w && p.y <= c.y + 1.0) {
+			if (kok_y > c.y) { arkada = true; } else { return false; }
+		}
+	}
+	return arkada;
+}
+
 void fragment() {
 	if (on_katman) {
 		vec2 hucre = floor((world_orijin - hucre_ofset) / 16.0);
 		vec4 v = hucre_verisi(hucre);
 		bool onde = false;
 		if (v.r > 0.5) {
-			float kok_y = hucre_ofset.y + hucre.y * 16.0 + v.r;
-			for (int i = 0; i < 8; i++) {
-				if (i >= karakter_sayisi) { break; }
-				vec4 c = karakterler[i];
-				if (kok_y > c.y && abs(world_orijin.x - c.x) <= c.z && world_orijin.y >= c.y - c.w && world_orijin.y <= c.y + 1.0) {
-					onde = true;
-					break;
-				}
-			}
+			onde = orter(world_orijin, hucre_ofset.y + hucre.y * 16.0 + v.r);
 		}
 		if (!onde) { discard; }
 	}

@@ -19,6 +19,7 @@ extends RefCounted
 ## ==============================================================================
 
 const FxScript := preload("res://scripts/fx_enemy_ability.gd")
+const MinotaurChargeScript := preload("res://scripts/minotaur_charge.gd")
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
 const GHOST_FRAMES := preload("res://assets/fx/enemy_abilities/ghost_frames.tres")
 const VAMPIRE_FRAMES := preload("res://assets/fx/enemy_abilities/vampire_frames.tres")
@@ -76,6 +77,8 @@ const ACID_DURATION := 4.0
 ## Kullanıcı isteği (2026-09-24): "zombinin zehrinin hasarını %50 azalt" - tik başına hasar = temas hasarı x bu çarpan.
 const ACID_DAMAGE_MULT := 0.5
 
+## --- Minotaur (Kademe 3 bossu, kullanıcı isteği 2026-10-08): boynuz hücumu + boğa koşusu - tüm mantık minotaur_charge.gd, sayılar minotaur_math.gd.
+
 ## Oyuncu gövde yarıçapı (enemy.gd PLAYER_BODY_RADIUS ile aynı mertebe) - alan/çizgi isabet toleransı.
 const TARGET_BODY_RADIUS := 12.0
 
@@ -85,6 +88,7 @@ var _cd: float = 0.0
 var _timer: float = 0.0
 var _pending: float = -1.0
 var _vision_check: float = 0.0
+var _minotaur = null ## MinotaurCharge (RefCounted) - sadece "minotaur" ailesinde
 
 
 func setup(owner_enemy: Node2D, fam: String) -> void:
@@ -101,10 +105,18 @@ func setup(owner_enemy: Node2D, fam: String) -> void:
 			_cd = randf_range(2.0, 5.0)
 		"agac":
 			_cd = randf_range(3.0, 8.0)
+		"minotaur":
+			_minotaur = MinotaurChargeScript.new()
+			_minotaur.setup(e)
 
 
 static func family_has_ability(fam: String) -> bool:
-	return fam in ["hayalet", "vampire", "rontgen", "iblis", "agac"]
+	return fam in ["hayalet", "vampire", "rontgen", "iblis", "agac", "minotaur"]
+
+
+## Yetenek şu an yaratığın yakın dövüş (temas) vuruşunu bastırıyor mu? (Minotaur hücum/toparlanma sırasında - bkz. enemy.gd _ew_on_event)
+func melee_blocked() -> bool:
+	return _minotaur != null and _minotaur.blocks_melee()
 
 
 ## Host'ta her fizik karesi (yaratık donmuş/korkmuş/sersemlemişken çağrılmaz - bkz. enemy.gd). player/dist: yaratığın
@@ -121,6 +133,8 @@ func process(delta: float, player: Node2D, dist: float) -> void:
 			_process_fireball(delta, player, dist)
 		"agac":
 			_process_thorns(delta, player, dist)
+		"minotaur":
+			_minotaur.process(delta, player, dist)
 
 
 func _valid_target(player: Node2D) -> bool:
@@ -292,6 +306,12 @@ static func _broadcast_world_fx(kind: String, pos: Vector2, data: Dictionary) ->
 		NetworkManager.broadcast_enemy_ability_fx.rpc(kind, pos, data)
 
 
+## Dünya etkisini host'ta yerelde doğurur VE çok oyunculuda istemcilere görsel kopya olarak yayınlar (hasarsız şerit/uyarı etkileri için).
+static func spawn_synced_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Dictionary, source: Node2D = null) -> void:
+	spawn_world_fx(tree, kind, pos, data, true, source, 0.0)
+	_broadcast_world_fx(kind, pos, data)
+
+
 ## Zombi ölüm kancası (enemy.gd die(), SADECE host): asit gölünü yetkili olarak doğurur ve istemcilere yayınlar.
 static func spawn_zombie_acid(tree: SceneTree, pos: Vector2, damage: float, source: Node2D) -> void:
 	var data: Dictionary = {"duration": ACID_DURATION}
@@ -314,6 +334,10 @@ static func spawn_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Di
 			script_path = "res://scripts/enemy_acid_pool.gd"
 		"fireball":
 			script_path = "res://scripts/enemy_fireball.gd"
+		"charge_lane":
+			script_path = "res://scripts/enemy_charge_lane.gd"
+		"worm_acid":
+			script_path = "res://scripts/worm_acid.gd"
 		_:
 			return null
 	var node := Node2D.new()
@@ -327,7 +351,7 @@ static func spawn_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Di
 	node.position = pos
 	tree.current_scene.add_child(node)
 	node.global_position = pos
-	if kind == "acid":
+	if kind == "acid" or kind == "charge_lane": ## zemin etkileri: yaratık/oyuncunun ALTINDA çizilsin
 		place_on_ground(tree, node)
 	return node
 

@@ -54,6 +54,7 @@ func _cleanup() -> void:
 		if is_instance_valid(n):
 			n.free()
 	_made.clear()
+	GameManager.bosses_enabled = false
 	GameManager.game_time = 0.0
 	GameManager.victory_reached = false
 	GameManager.endless_active = false
@@ -63,8 +64,10 @@ func _cleanup() -> void:
 	NetworkManager.is_multiplayer_active = false
 
 
+## 2026-10-08: boss sistemi varsayılan KAPALI (GameManager.bosses_enabled, bkz. CLAUDE.md madde 39) - bu dosya boss/Final akışını sınar, bu yüzden geçici açar
 func _spawner() -> Node:
 	_cleanup()
+	GameManager.bosses_enabled = true
 	_victory_heard = 0
 	_endless_heard = 0
 	_layers_heard.clear()

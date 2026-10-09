@@ -1,0 +1,60 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://scripts/worm_limb.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/enemies/sandworm/sandworm_idle.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/enemies/sandworm/sandworm_emerge.png" id="3"]
+[ext_resource type="Texture2D" path="res://assets/enemies/sandworm/sandworm_lash.png" id="4"]
+[ext_resource type="Texture2D" path="res://assets/enemies/sandworm/sandworm_spit.png" id="5"]
+[ext_resource type="Texture2D" path="res://assets/enemies/sandworm/sandworm_hide.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/enemies/sandworm/sandworm_death.png" id="7"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 18.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hit"]
+radius = 24.0
+
+[node name="Enemy_Sandworm1" type="CharacterBody2D" groups=["enemies"]]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("1")
+emerge_texture = ExtResource("3")
+lash_texture = ExtResource("4")
+spit_texture = ExtResource("5")
+hide_texture = ExtResource("6")
+speed = 0.0
+max_health = 2000.0
+contact_damage = 130.0
+contact_interval = 99.0
+xp_value = 0.0
+orb_count = 0
+gold_chance = 0.0
+gold_min = 0
+gold_max = 0
+food_chance = 0.0
+magnet_chance = 0.0
+sprite_fps = 10.0
+cell_size = 80
+walk_texture = ExtResource("2")
+idle_texture = ExtResource("2")
+hurt_texture = ExtResource("2")
+death_texture = ExtResource("7")
+attack_texture = ExtResource("4")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(2.4, 2.4)
+texture = ExtResource("2")
+hframes = 4
+vframes = 4
+offset = Vector2(0, -20)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="HitArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="HitCollision" type="CollisionShape2D" parent="HitArea"]
+shape = SubResource("CircleShape2D_hit")

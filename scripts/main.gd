@@ -365,6 +365,7 @@ func _ready() -> void:
 	var creature_depth: Node = CreatureDepthScript.new()
 	creature_depth.name = "CreatureDepth"
 	add_child(creature_depth)
+	_install_draw_order_guard()
 	## Grafik ayarı "Çözünürlük ölçeği" (bkz. world_render_scale.gd; %100'de hiçbir şey kurmaz).
 	WorldRenderScaleScript.attach(self)
 
@@ -626,6 +627,38 @@ func _update_creature_draw_order() -> void:
 
 
 const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
+
+## ÇİZİM SIRASI KORUMASI (2026-10-09, kullanıcı: "solucanlar bazen glitchlenip diğerinin üstünde görünüyor"): yeni yolda yaratıkların sırası düğümler taşınmadan `canvas_item_set_draw_index` ile
+## verilir (yukarıdaki not). Godot ise Main'in bir çocuğu AĞAÇTAN ÇIKINCA (ölen yaratık, biten FX/küre/hasar yazısı...) ondan sonraki TÜM kardeşlerin çizim indeksini ağaç sırasına geri sarar
+## (NOTIFICATION_MOVED_IN_PARENT). Düzeltme en erken sonraki 2 karelik güncellemede geldiği için o kare(ler)de arkadaki yaratık öndekinin üstüne çiziliyordu (gerçek renderer ekran görüntüsüyle
+## doğrulandı: çocuk silinince bir kare boyunca ters sıra) - büyük sprite'lı Yeraltı Canavarı uzuvlarında göze batıyordu. Çocuk çıkınca/sırası değişince bayrak kalkar, sıra o karenin ÇİZİMİNDEN
+## HEMEN ÖNCE (RenderingServer.frame_pre_draw: süreç + silme kuyruğu bitmiş) yeniden uygulanır.
+var _draw_order_dirty: bool = false
+
+
+func _install_draw_order_guard() -> void:
+	if not child_exiting_tree.is_connected(_mark_draw_order_dirty):
+		child_exiting_tree.connect(_mark_draw_order_dirty)
+	if has_signal(&"child_order_changed") and not is_connected(&"child_order_changed", _mark_draw_order_dirty):
+		connect(&"child_order_changed", _mark_draw_order_dirty)
+	if not RenderingServer.frame_pre_draw.is_connected(_on_frame_pre_draw):
+		RenderingServer.frame_pre_draw.connect(_on_frame_pre_draw)
+
+
+func _mark_draw_order_dirty(_child: Node = null) -> void:
+	_draw_order_dirty = true
+
+
+func _on_frame_pre_draw() -> void:
+	if not _draw_order_dirty:
+		return
+	_draw_order_dirty = false
+	if not is_inside_tree():
+		return
+	var ew: Object = EnemyWorldBridgeScript.fog_world(get_tree())
+	if ew != null:
+		_update_creature_draw_order_ew(ew)
+
 
 ## Yeni yol: C++'a kayıtlı yaratıkların ayak y'sini C++ hesaplar (görsel + yerel ayak satırı bir kez set_foot ile verilir);
 ## kayıtsız olanlar (ölüm animasyonundaki yaratıklar, görev kopyaları, müttefikler) burada hesaplanıp ekstra olarak verilir.
@@ -2508,6 +2541,8 @@ func _announce_achievements(result: Dictionary) -> void:
 
 ## Koşu ölüm ekranından geçmeden de bitebilir (menüye çıkış, yeniden başlatma) - toplamlar yine işlensin. 30 sn'den kısa koşu sayılmaz.
 func _exit_tree() -> void:
+	if RenderingServer.frame_pre_draw.is_connected(_on_frame_pre_draw):
+		RenderingServer.frame_pre_draw.disconnect(_on_frame_pre_draw)
 	_record_run_end_once()
 
 
@@ -2556,13 +2591,15 @@ func _on_endless_started() -> void:
 	if _victory_overlay and is_instance_valid(_victory_overlay):
 		_victory_overlay.queue_free()
 		_victory_overlay = null
-	_show_network_toast("SONSUZ MOD BAŞLADI! Her kat yaratıklar güçlenir, 3 katta bir boss dalgası gelir.", 5.0, true)
+	var started_text: String = "SONSUZ MOD BAŞLADI! Her kat yaratıklar güçlenir"
+	started_text += ", 3 katta bir boss dalgası gelir." if GameManager.bosses_enabled else "."
+	_show_network_toast(started_text, 5.0, true)
 	_update_endless_label()
 
 
 func _on_endless_layer_reached(layer: int) -> void:
 	var text: String = "SONSUZ KAT %d - yaratıklar güçlendi." % layer
-	if EndlessMathScript.is_boss_wave_layer(layer):
+	if GameManager.bosses_enabled and EndlessMathScript.is_boss_wave_layer(layer):
 		text += " Bu katta BOSS DALGASI var!"
 	_show_network_toast(text, 4.0, true)
 	_update_endless_label()
@@ -2590,7 +2627,7 @@ func _update_endless_label() -> void:
 		UIKit.style_label(_endless_label, 32 if MobileUI.enabled else 28, UIKit.C_CREAM, 6)
 		layer.add_child(_endless_label)
 	var text: String = "SONSUZ MOD - KAT %d" % GameManager.endless_layer
-	if EndlessMathScript.is_boss_wave_layer(GameManager.endless_layer):
+	if GameManager.bosses_enabled and EndlessMathScript.is_boss_wave_layer(GameManager.endless_layer):
 		text += " - BOSS DALGASI"
 	_endless_label.text = text
 	_endless_label.visible = true

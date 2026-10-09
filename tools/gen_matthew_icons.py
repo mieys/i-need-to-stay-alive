@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Matthew'in yetenek ikonlari (Q Tilki Hucumu / E Vahsi Hiz / R Feda Kalkani / pasif) -> assets/skills/*.png
+"""Matthew'in yetenek ikonlari (Q Kopek Hucumu (eskiden Tilki Hucumu) / E Vahsi Hiz / R Feda Kalkani / pasif) -> assets/skills/*.png
 
 Kullanim (repo kokunden):
     python tools/gen_matthew_icons.py      (sonra Godot editorune donunce import olur ya da `--headless --import`)
@@ -7,7 +7,8 @@ Kullanim (repo kokunden):
 Kullanici istegi (2026-09-25): "matthewin yeteneklerinin ikonlarini yeteneklerine uyumlu sekilde pixel tarzinda sifirdan
 tasarlamani istiyorum, distan hafif vinyetli minimalist 48x48 sirin pixel art". Eskiden buyuk (1000 px) yumusak AI
 cizimleriydi, pasif yuvarlak bir madalyondu ve Q (Tilki Hucumu) kendine ait ikonu olmadigi icin R'nin (Feda Kalkani)
-ikonunu kullaniyordu - artik matthew_tilki_hucumu_icon.png ayri.
+ikonunu kullaniyordu - artik ayri ikonu var. 2026-10-08: evcil hayvan tilkiden KOPEGE (hellhound) dondu -> Q ikonu matthew_kopek_hucumu_icon.png
+(kopek yuzu; renkler assets/pets/dog/dog_sheet.png'den). E (pati izi) ve R (kubbe + kulaklar) ikonlari degismedi.
 
 Dil: tools/gen_elara_korsan_icons.py ile AYNI kare karo (tile: koyu kontur, dither'li 4 bant degrade, yumusak isik,
 kose vinyeti) ve AYNI yardimcilar; 48x48 sanat izgarasi, 1 px detay, 3x NEAREST -> 144x144 PNG. Tilkinin renkleri
@@ -105,28 +106,74 @@ def streak(fx, x0, x1, y, col_hi, col_lo, thick=1):
                 put(fx, [(x0 + i, y + k)], c)
 
 
-# ============================================================== Q - Tilki Hucumu
-def tilki_hucumu():
+# ============================================================== Q - Kopek Hucumu
+# Hellhound sayfasinin renkleri (assets/pets/dog/dog_sheet.png): kontur #2e222f, turuncu #f57d4a, kirmizi #b33831, kehribar #fbb954, koyu kirmizi #6e2727.
+D_OUT = C('#2e222f')
+D_ORG = C('#f57d4a')
+D_RED = C('#b33831')
+D_AMB = C('#fbb954')
+D_DRK = C('#6e2727')
+D_TONGUE = C('#ff8a8a')
+
+# Kopek yuzu, SOL YARI (son sutun = orta sutun; sag yari aynalanir) -> 19 satir x 19 sutun.
+#  K koyu (kulak ucu/goz/burun), I kulak ici, O turuncu, A kehribar (alin cizgisi + burun bolgesi), R koyu kirmizi golge, E goz, H goz parlamasi, N burun, T dil
+DOG_FACE_LEFT = [
+    "KK........",
+    "KOK.......",
+    "KIOK......",
+    "OIIOO.....",
+    "OIIIOOOOOO",
+    "OIIIOOOOOO",
+    "ORIOOOOOAA",
+    "OOOOOOOOAA",
+    "OOOOOOOOOO",
+    "OOO@@OOOOO",
+    "OOO##OOOOO",
+    ".OOOOOOOOO",
+    "..ROOOAAAA",
+    "...OOAAAAA",
+    "....AAAAAA",
+    "....AAANNN",
+    ".....AANNN",
+    "......ATTT",
+    ".......TTT",
+]
+DOG_EYES = ("HE", "EE")
+
+
+def dog_face(e, x0, y0):
+    """19x19 kopek yuzu (sivri kulaklar, daralan burun, koyu burun ucu, dil), sol ust kosesi (x0, y0)."""
+    pal = {'K': D_OUT, 'I': D_RED, 'O': D_ORG, 'A': D_AMB, 'R': D_DRK, 'E': D_OUT, 'H': EYE_HI, 'N': D_OUT, 'T': D_TONGUE}
+    for y, r in enumerate(DOG_FACE_LEFT):
+        r = r.replace("@@", DOG_EYES[0]).replace("##", DOG_EYES[1])
+        row = r + r[-2::-1]
+        for x, ch in enumerate(row):
+            col = pal.get(ch)
+            if col is not None:
+                put(e, [(x0 + x, y0 + y)], col)
+
+
+def kopek_hucumu():
     im = tile(C('#b8463a'), C('#3a1218'), C('#e2704a'), C('#f7a07a'), C('#4a1418'), glow_center=(29, 22), glow_r=(14, 13))
     e = canvas()
     fx = canvas()
-    fox_face(e, 20, 12, "open")
-    # ileri atilan tilkinin arkasinda hiz cizgileri
+    dog_face(e, 19, 8)
+    # ileri atilan kopegin arkasinda hiz cizgileri
     y_hi, y_lo = C('#ffe6a8'), C('#e0703a')
-    streak(fx, 4, 19, 16, y_hi, y_lo, 2)
-    streak(fx, 8, 19, 21, y_hi, y_lo, 1)
-    streak(fx, 3, 18, 25, y_hi, y_lo, 2)
+    streak(fx, 4, 18, 16, y_hi, y_lo, 2)
+    streak(fx, 8, 18, 21, y_hi, y_lo, 1)
+    streak(fx, 3, 17, 25, y_hi, y_lo, 2)
     # pence izi: uc egik cizik (yuzun altinda, sagda)
     claw_hi, claw_lo = C('#fff6e0'), C('#ffb060')
-    for i, (x, y) in enumerate(((25, 43), (30, 43), (35, 42))):
-        n = 11
+    for (x, y) in ((25, 44), (30, 44), (35, 43)):
+        n = 10
         for k in range(n):
             px = x + (k * 6) // n
             put(fx, [(px, y - k)], claw_hi if 2 <= k <= n - 3 else claw_lo)
             if 3 <= k <= n - 4:
                 put(fx, [(px + 1, y - k)], claw_lo)
     sparkle(fx, 42, 9, C('#ffffff'), C('#ffd48a'), 1)
-    finish(im, e, fx, "matthew_tilki_hucumu_icon.png")
+    finish(im, e, fx, "matthew_kopek_hucumu_icon.png")
 
 
 # ============================================================== E - Vahsi Hiz
@@ -244,7 +291,7 @@ def pasif():
 
 if __name__ == "__main__":
     print("Matthew ikonlari:")
-    tilki_hucumu()
+    kopek_hucumu()
     vahsi_hiz()
     feda_kalkani()
     pasif()

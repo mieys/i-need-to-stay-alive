@@ -127,7 +127,7 @@ func test_pool_random_upgrades_final_and_no_askin() -> void:
 		for c in EnchantPool.build(null):
 			if str(c["type"]) == "temel":
 				ids[str(c["id"])] = true
-	assert(ids.has("nuukler") and ids.has("matryoshka") and ids.size() == 2, "Fişek'in 2 efsunu Temel kartı olarak gelmeli: %s" % str(ids))
+	assert(ids.has("nuukler") and ids.has("matryoshka") and ids.has("kivilcim_yagmuru") and ids.size() == 3, "Fişek'in 3 efsunu (2 kart dönemi + kalıcı özellik Kıvılcım Yağmuru) Temel kartı olarak gelmeli: %s" % str(ids))
 	GameManager.owned_weapons = _prev_weapons
 	GameManager.owned_items = _prev_items
 	EnchantDefs.enabled = false

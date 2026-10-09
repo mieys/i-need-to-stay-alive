@@ -47,7 +47,7 @@ const CAP_H := 7
 
 ## Ana plaket (T1) ölçüsü (sanat pikseli).
 const TOP_W := 224
-const TOP_H := 38
+const TOP_H := 44 ## 2026-10-09: çubuklar sayı yazılabilsin diye yükseltildi (kalkan 9, can 11 sanat pikseli; eskiden 6 + 10, sayısızdı)
 ## Kafatası plakası (boss üstü) ölçüsü ve kafanın üstünde bırakılan boşluk (yerel birim = 2 ekran px -> 12 px).
 const PLATE_SIZE := 15
 const PLATE_GAP := 6.0
@@ -171,10 +171,38 @@ static func text(ci: CanvasItem, o: Vector2, s: float, x: float, cap_y: float, s
 	ci.draw_string(font(), pos, str_, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 
+## Büyük sayıyı binlik noktalı yazar (Türkçe): 164549 -> "164.549". Negatif/NaN 0'a kırpılır.
+static func fmt_int(v: float) -> String:
+	var n: int = int(roundf(maxf(v, 0.0)))
+	var digits: String = str(n)
+	var out: String = ""
+	for i in range(digits.length()):
+		if i > 0 and (digits.length() - i) % 3 == 0:
+			out += "."
+		out += digits[i]
+	return out
+
+
+## "şimdiki / en çok" çubuk yazısı (boss barı); en çok <= 0 ise (ör. kalkansız boss) boş.
+static func bar_text(current: float, maximum: float) -> String:
+	if maximum <= 0.0:
+		return ""
+	return "%s / %s" % [fmt_int(current), fmt_int(maximum)]
+
+
+## Çubuğun içine ortalanmış sayı (krem yazı, koyu anahatlı - hem kırmızı hem mavi bantta okunur). bar_h = çubuğun sanat piksel yüksekliği.
+static func bar_label(ci: CanvasItem, o: Vector2, s: float, x: float, y: float, bar_w: float, bar_h: float, str_: String) -> void:
+	if str_.is_empty():
+		return
+	var tw: float = text_width(str_, s)
+	text(ci, o, s, x + roundf((bar_w - tw) * 0.5), y + floorf((bar_h - float(CAP_H)) * 0.5), str_, CREAM, OUT2)
+
+
 # ---------------------------------------------------------------- T1: ana ahşap plaket
 ## origin = plaketin sol-üst köşesi (ekran px). name = boss adı (parşömen tabelada), hp/sh = 0..1.
+## hp_text / sh_text (2026-10-09, "bossların can ve kalkan sayısı görünmüyor"): çubukların içine yazılan sayılar ("164.549 / 165.000"); boşsa yazı yok.
 @warning_ignore("integer_division")
-static func top_plaque(ci: CanvasItem, o: Vector2, s: float, name_: String, hp: float, sh: float, w: int = TOP_W) -> void:
+static func top_plaque(ci: CanvasItem, o: Vector2, s: float, name_: String, hp: float, sh: float, w: int = TOP_W, hp_text: String = "", sh_text: String = "") -> void:
 	var tw: float = text_width(name_, s)
 	var sw: int = int(tw) + 22
 	var sx: int = (w - sw) / 2
@@ -190,7 +218,7 @@ static func top_plaque(ci: CanvasItem, o: Vector2, s: float, name_: String, hp: 
 	text(ci, o, s, sx + 11, 3, name_, INK)
 	# ana plaket
 	var fy: int = 11
-	var fh: int = 27
+	var fh: int = 33
 	rrect(ci, o, s, 0, fy, w, fh, OUT)
 	r(ci, o, s, 1, fy + 1, w - 2, fh - 2, W_FACE)
 	r(ci, o, s, 1, fy + 1, w - 2, 1, W_HI)
@@ -206,20 +234,24 @@ static func top_plaque(ci: CanvasItem, o: Vector2, s: float, name_: String, hp: 
 	for p: Vector2 in [Vector2(3, fy + 3), Vector2(w - 5, fy + 3), Vector2(3, fy + fh - 5), Vector2(w - 5, fy + fh - 5)]:
 		nail(ci, o, s, p.x, p.y)
 	# kafatası yuvası (HUD'daki kalp yuvasının karşılığı)
-	rrect(ci, o, s, 5, fy + 4, 19, 19, OUT)
-	r(ci, o, s, 6, fy + 5, 17, 17, RED_D)
-	r(ci, o, s, 6, fy + 5, 17, 1, RED_M)
-	skull(ci, o, s, 10, fy + 9)
-	# çubuklar: üstte ince kalkan, altta can
+	rrect(ci, o, s, 5, fy + 7, 19, 19, OUT)
+	r(ci, o, s, 6, fy + 8, 17, 17, RED_D)
+	r(ci, o, s, 6, fy + 8, 17, 1, RED_M)
+	skull(ci, o, s, 10, fy + 12)
+	# çubuklar: üstte kalkan (9), altta can (11) - ikisinin de içinde sayı
 	var x0: int = 30
 	var bw: int = w - 30 - 6
 	var sy: int = fy + 4
-	var hy: int = fy + 13
-	r(ci, o, s, x0 - 1, sy - 1, bw + 2, 8, OUT)
-	fill_bar(ci, o, s, x0, sy, bw, 6, sh, SH_BANDS, EMPTY_BLUE)
-	r(ci, o, s, x0 - 1, hy - 1, bw + 2, 12, OUT)
-	fill_bar(ci, o, s, x0, hy, bw, 10, hp, HP_BANDS, TRACK)
-	ticks(ci, o, s, x0, hy, bw, 10, 10)
+	var sh_h: int = 9
+	var hy: int = fy + 16
+	var hp_h: int = 11
+	r(ci, o, s, x0 - 1, sy - 1, bw + 2, sh_h + 2, OUT)
+	fill_bar(ci, o, s, x0, sy, bw, sh_h, sh, SH_BANDS, EMPTY_BLUE)
+	r(ci, o, s, x0 - 1, hy - 1, bw + 2, hp_h + 2, OUT)
+	fill_bar(ci, o, s, x0, hy, bw, hp_h, hp, HP_BANDS, TRACK)
+	ticks(ci, o, s, x0, hy, bw, hp_h, 10)
+	bar_label(ci, o, s, x0, sy, bw, sh_h, sh_text)
+	bar_label(ci, o, s, x0, hy, bw, hp_h, hp_text)
 
 
 # ---------------------------------------------------------------- boss üstü kafatası plakası (O1'in kafatası parçası)
@@ -287,7 +319,7 @@ static func _measure_cell_tops(tex: Texture2D, hframes: int, vframes: int) -> Pa
 const NAMES := {
 	"agac": "AĞAÇ", "bitki": "BİTKİ", "demon": "DEMON", "golem": "GOLEM", "hayalet": "HAYALET", "iblis": "İBLİS",
 	"iskelet": "İSKELET", "lich": "LICH", "mantar": "MANTAR", "ork": "ORK", "rat": "FARE", "rontgen": "RÖNTGEN",
-	"slime": "SLIME", "vampire": "VAMPİR", "zombie": "ZOMBİ",
+	"slime": "SLIME", "vampire": "VAMPİR", "zombie": "ZOMBİ", "minotaur": "MİNOTAUR", "underground": "YERALTI CANAVARI", "sandworm": "SOLUCAN",
 }
 
 

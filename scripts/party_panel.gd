@@ -34,8 +34,12 @@ const ROW_WIDTH := 270.0 ## world_event_banner.gd ROW_WIDTH ile aynı - sağ sü
 const AVATAR_SIZE := 48.0 ## portre PNG'leri 48x48 - 1:1 çizilir (bulanık/yamuk ölçek yok)
 const AVATAR_BORDER := 2.0
 const GOLD_BTN_SIZE := 32.0
-const HP_BAR_HEIGHT := 10.0
-const SHIELD_BAR_HEIGHT := 6.0
+## Çubukların içine "şimdiki/en çok" sayısı yazılır (kullanıcı isteği 2026-10-09: "dostların can ve kalkan sayısı grup sekmesindeki barlarında görünmüyor"):
+## Sayılar HUD'daki kendi can/kalkan sayısıyla AYNI "%d/%d" biçiminde; 2x (32 punto, rakam 14 px) piksel-net çizilir (bar_value_label.gd) -> çubuklar 10/6 -> 22/18 px.
+## (Kullanıcı 2026-10-09 ikinci tur: "sayıların konumu aşağıda kalmış, zor okunuyor, sığmıyor": ilk sürüm 24 punto Label + 16/14 px çubuktu.)
+const HP_BAR_HEIGHT := 22.0
+const SHIELD_BAR_HEIGHT := 18.0
+const BarValueLabelScript: GDScript = preload("res://scripts/bar_value_label.gd")
 const FS_ROW := 24 ## m5x7 3x - görev satırlarıyla aynı (16 1080p'de okunmuyor)
 ## Sağ üstteki minimap'in (hud.tscn MinimapControl: sağdan 36, alt kenar 186) hemen altı.
 const RIGHT_MARGIN := 36.0
@@ -63,6 +67,8 @@ class PartyRow:
 	var name_label: Label
 	var health_bar: TextureProgressBar
 	var shield_bar: TextureProgressBar
+	var health_label: Control ## health_bar'ın içinde ortalı sayı (bar_value_label.gd; .text)
+	var shield_label: Control ## shield_bar'ın içinde ortalı sayı (kalkan yoksa boş)
 	var gold_button: Button
 	var downed_label: Label
 	var peer_id: int = 0
@@ -86,6 +92,7 @@ var _stats_list: VBoxContainer = null
 
 
 func _ready() -> void:
+	add_to_group(&"party_panel") ## modal pencereler bu şeridin soluna sığar (bkz. modal_safe_area.gd)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	## Sağ üst, minimapın altı (bkz. RIGHT_MARGIN/TOP_Y). Kök sıfır genişlikte sağ kenara yapışık; arka plan kutusu
 	## (Background) sağdan SOLA doğru büyür - içerik genişlese de ekran dışına taşmaz.
@@ -445,9 +452,11 @@ func _create_row(peer_id: int) -> PartyRow:
 	well.add_child(bars)
 	row.health_bar = _make_bar(HP_BAR_HEIGHT)
 	bars.add_child(row.health_bar)
+	row.health_label = _add_bar_label(row.health_bar)
 	row.shield_bar = _make_bar(SHIELD_BAR_HEIGHT)
 	row.shield_bar.tint_progress = SHIELD_COLOR
 	bars.add_child(row.shield_bar)
+	row.shield_label = _add_bar_label(row.shield_bar)
 
 	## Sağda küçük ahşap altın butonu (tıklanınca miktar seçip hediye).
 	var gold_button := _wood_button("", Vector2(GOLD_BTN_SIZE, GOLD_BTN_SIZE))
@@ -480,6 +489,14 @@ func _create_row(peer_id: int) -> PartyRow:
 	hbox.add_child(gold_button)
 	row.gold_button = gold_button
 	return row
+
+
+## Çubuğun içine ortalanmış piksel-net sayı etiketi (çubuğun çocuğu: çubukla birlikte konumlanır/boyutlanır, fareyi geçirir).
+func _add_bar_label(bar: TextureProgressBar) -> Control:
+	var lbl: Control = BarValueLabelScript.new()
+	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bar.add_child(lbl)
+	return lbl
 
 
 ## Görev ilerleme çubuğuyla (world_event_banner.gd) aynı HUD çubuk dokusu - 9 parçalı, piksel.
@@ -541,12 +558,18 @@ func _update_row(row: PartyRow, ally: Node) -> void:
 	var well: Control = row.health_bar.get_parent().get_parent() as Control
 	if well != null and well.tooltip_text != tip:
 		well.tooltip_text = tip
+	if row.health_label != null and row.health_label.text != tip:
+		row.health_label.text = tip
 
 	## Kalkan çubuğu hep görünür (kalkansızken boş) - satır yüksekliği kalkan alınca zıplamasın.
 	var shield_max: float = float(ally.get("item_shield_max"))
 	var shield_hp: float = float(ally.get("item_shield_hp"))
 	var sh_pct: float = clampf(shield_hp / max(shield_max, 0.001), 0.0, 1.0) if shield_max > 0.0 else 0.0
 	_set_bar(row.shield_bar, sh_pct, SHIELD_COLOR)
+	if row.shield_label != null:
+		var sh_tip: String = "%d/%d" % [int(round(maxf(shield_hp, 0.0))), int(round(shield_max))] if shield_max > 0.0 else ""
+		if row.shield_label.text != sh_tip:
+			row.shield_label.text = sh_tip
 
 	## Ölü/yerde yatan (downed) müttefik: portre griye boyanır ve durum yazısı çıkar (remote_player.gd ile aynı görsel dil).
 	var is_dead: bool = bool(ally.get("is_dead"))

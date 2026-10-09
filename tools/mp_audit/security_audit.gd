@@ -75,6 +75,8 @@ func _run() -> void:
 		var el: float = float(Time.get_ticks_msec() - t0) / 1000.0
 		if spawner:
 			spawner.set("_spawn_timer", 1.0e9)
+		if _role == "host" and float(player.get("health")) < 1.0e9 - 5000.0:
+			_events.append({"t": snappedf(el, 0.1), "e": "HOST_PLAYER_TOOK_FORGED_DAMAGE", "amount": snappedf(1.0e9 - float(player.get("health")), 1.0)})
 		player.set("health", 1.0e9)
 		## ---- host: yabancı lobide İKEN (dosya bayrağı) ve kovulduktan SONRA birer test yaratığı doğurur
 		if _role == "host":
@@ -92,6 +94,15 @@ func _run() -> void:
 			_nm.broadcast_victory.rpc_id(1, 123.0)
 			_nm.sync_game_time.rpc_id(1, 99999.0)
 			_events.append({"t": el, "e": "forged_host_rpcs_sent"})
+		## ---- istemci (2026-10-09): host'a SAHTE hasar + SAHTE ölüm/vfx bildirimi (forward_damage_to_peer, forward_special_damage_to_peer, broadcast_enemy_vfx death_state) - hepsi reddedilmeli
+		if _role == "client" and el > 30.0 and not did.has("forge2"):
+			did["forge2"] = true
+			_nm.forward_damage_to_peer.rpc_id(1, 99999.0, 0, false)
+			_nm.forward_special_damage_to_peer.rpc_id(1, 99999.0, 0, "minotaur")
+			for e2 in get_nodes_in_group("enemies"):
+				if is_instance_valid(e2) and e2.has_meta("network_enemy_id"):
+					_nm.broadcast_enemy_vfx.rpc_id(1, int(e2.get_meta("network_enemy_id")), "death_state", {})
+			_events.append({"t": el, "e": "forged_damage_and_death_state_sent"})
 		for e in get_nodes_in_group("enemies"):
 			if is_instance_valid(e) and e.has_meta("network_enemy_id"):
 				var nid: int = int(e.get_meta("network_enemy_id"))
@@ -106,7 +117,11 @@ func _run() -> void:
 				"game_over": bool(_gm.get("is_game_over")) if _gm.get("is_game_over") != null else false, "time": snappedf(float(_gm.get("game_time")), 1.0),
 				"victory": bool(_gm.get("victory_reached")) if _gm.get("victory_reached") != null else false})
 		await process_frame
-	var res := {"role": _role, "samples": _samples, "events": _events, "msgs": _msgs, "enemies": _seen, "base_level": base_level, "probe_ids": enemy_ids}
+	var probes := {}
+	for e3 in get_nodes_in_group("enemies"):
+		if is_instance_valid(e3) and e3.has_meta("probe_label"):
+			probes[str(e3.get_meta("probe_label"))] = {"is_dead": bool(e3.get("is_dead"))}
+	var res := {"role": _role, "samples": _samples, "events": _events, "msgs": _msgs, "enemies": _seen, "base_level": base_level, "probe_ids": enemy_ids, "probes": probes}
 	var out := FileAccess.open(_dir.path_join(_role + ".json"), FileAccess.WRITE)
 	out.store_string(JSON.stringify(res)); out.close()
 	_log("bitti: %d örnek" % _samples.size())

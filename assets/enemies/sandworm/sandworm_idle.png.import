@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d2prh406i3vuk"
-path="res://.godot/imported/matthew_tilki_hucumu_icon.png-6e4959c327bc53ac6a30d2227c3cb13c.ctex"
+uid="uid://dlygb0upuphnb"
+path="res://.godot/imported/sandworm_idle.png-f0fcf559721401adcc39613d53109d11.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/skills/matthew_tilki_hucumu_icon.png"
-dest_files=["res://.godot/imported/matthew_tilki_hucumu_icon.png-6e4959c327bc53ac6a30d2227c3cb13c.ctex"]
+source_file="res://assets/enemies/sandworm/sandworm_idle.png"
+dest_files=["res://.godot/imported/sandworm_idle.png-f0fcf559721401adcc39613d53109d11.ctex"]
 
 [params]
 

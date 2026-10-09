@@ -587,9 +587,31 @@ static func new_trait_record(weapon_key: String) -> Dictionary:
 	return {"id": id, "ups": [], "final": false} if id != "" else {}
 
 
+## SATIŞ İADESİ (kullanıcı 2026-10-09: "silahı satınca harcanan silah parçacığının %70ini geri vermiyor"): bir silah kopyası satılınca harcanan
+## altının VE harcanan silah parçacığının %70'i geri verilir. Altın defteri "spent", parçacık defteri "shards_spent" (demirci: silahı alırken
+## 10 + her efsun geliştirmesinde 5/10; bkz. weapon_shop_logic.gd). Defteri olmayan eski/başlangıç silahı 0 sayılır. İki satış yolu da
+## (envanter: inventory_panel.gd, geliştirmeler sekmesi: shop_panel.gd) bu iki işlevi çağırır - oran tek yerde.
+const SELL_REFUND_RATIO := 0.7
+
+
+static func sell_refund_gold(entry: Dictionary) -> int:
+	return int(round(int(entry.get("spent", 0)) * SELL_REFUND_RATIO))
+
+
+static func sell_refund_shards(entry: Dictionary) -> int:
+	return int(round(int(entry.get("shards_spent", 0)) * SELL_REFUND_RATIO))
+
+
+## Bir silah kopyasına parçacık harcandığını deftere yazar (alım ve geliştirme yolları çağırır).
+static func record_shards_spent(entry: Dictionary, amount: int) -> void:
+	if amount > 0:
+		entry["shards_spent"] = int(entry.get("shards_spent", 0)) + amount
+
+
 ## Yeni bir owned_weapons girdisi: özellik kaydıyla birlikte (tüm silah ekleme yolları bunu kullanır).
-static func new_weapon_entry(weapon_key: String, level: int = 1, spent: int = 0) -> Dictionary:
+static func new_weapon_entry(weapon_key: String, level: int = 1, spent: int = 0, shards_spent: int = 0) -> Dictionary:
 	var e: Dictionary = {"key": weapon_key, "level": level, "spent": spent}
+	record_shards_spent(e, shards_spent)
 	var rec: Dictionary = new_trait_record(weapon_key)
 	if not rec.is_empty():
 		e["enchant"] = rec

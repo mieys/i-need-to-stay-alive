@@ -45,6 +45,7 @@ signal closed
 ## _apply_mini_wood_button_style/MAX_LEVELS/_upgrade_cost) script referansı
 ## üzerinden erişiliyor, instance gerekmiyor.
 const ShopScript := preload("res://scripts/shop_panel.gd")
+const ModalSafeArea := preload("res://scripts/modal_safe_area.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
 
 ## "Deliberate copy" - shop_panel.gd/chest_menu.gd/weapon_select_screen.gd
@@ -120,6 +121,8 @@ var _details_block: Label
 var _gold_label: Label = null
 var _stat_value_labels: Dictionary = {}
 var _stats_timer: float = 0.0
+var _fit_callables: Array[Callable] = [] ## pencere sığdırıcıları (grup paneli değişince yeniden çağrılır)
+var _last_reserved: float = -1.0
 var _inventory_overlay: Control = null
 var _inventory_body: VBoxContainer = null
 ## Kullanıcı bildirimi (2026-09-24, ekran görüntüsüyle): "dükkanda envantere tıklayınca çok eşyamız varsa eşya gösterme
@@ -185,6 +188,8 @@ func _process(delta: float) -> void:
 	_stats_timer -= delta
 	if _stats_timer <= 0.0:
 		_stats_timer = 0.25
+		if not _phone:
+			_refit_if_party_changed()
 		_refresh_stats()
 		_refresh_reroll_button() ## altın dükkan açıkken de değişebilir (paylaşılan altın vb.)
 
@@ -248,20 +253,35 @@ func _apply_window_scale(window: Control) -> void:
 			return
 		window.pivot_offset = window.size * 0.5
 		var view: Vector2 = window.get_viewport_rect().size
-		var fit: float = minf(view.x * 0.97 / maxf(1.0, window.size.x), view.y * 0.97 / maxf(1.0, window.size.y))
+		## Grup paneli (sağ üst, layer 96) pencerelerin ÜSTÜNDE durur: pencere o şeridin soluna sığıp ortalanır ki X düğmesi altında kalmasın
+		## (bkz. modal_safe_area.gd). Panel görünmüyorsa alan tüm ekrandır.
+		var safe: Rect2 = ModalSafeArea.rect(window.get_tree(), view)
+		var fit: float = minf(safe.size.x * 0.97 / maxf(1.0, window.size.x), safe.size.y * 0.97 / maxf(1.0, window.size.y))
 		window.scale = Vector2.ONE * minf(WINDOW_SCALE, fit)
 		## position (ham, ölçeksiz) kullanılır - 4.7'de global_position pivot/ölçek kaymasını içeriyor (ölçülerek görüldü).
 		var parent_ci := window.get_parent() as CanvasItem
-		var center_local: Vector2 = view * 0.5
+		var center_local: Vector2 = safe.get_center()
 		if parent_ci:
 			center_local = parent_ci.get_global_transform().affine_inverse() * center_local
 		window.position = (center_local - window.size * 0.5).round()
+	_fit_callables.append(fit_scale)
 	var parent: Node = window.get_parent()
 	if parent is Container:
 		(parent as Container).sort_children.connect(fit_scale)
 	else:
 		window.resized.connect(fit_scale)
 	fit_scale.call()
+
+
+## Grup paneli sonradan görünür/gizli olursa (oyuncu katıldı/ayrıldı) ya da genişliği değişirse pencere yeniden sığdırılır.
+func _refit_if_party_changed() -> void:
+	var reserved: float = ModalSafeArea.reserved_right(get_tree(), get_viewport().get_visible_rect().size)
+	if is_equal_approx(reserved, _last_reserved):
+		return
+	_last_reserved = reserved
+	for c in _fit_callables:
+		if c.is_valid():
+			c.call()
 
 
 func _build_ui() -> void:

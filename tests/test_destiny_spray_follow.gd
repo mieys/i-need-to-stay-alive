@@ -110,6 +110,18 @@ func test_local_spray_follows_staff_tip() -> void:
 			var aim_dir: Vector2 = icon.global_transform.basis_xform(Vector2.from_angle(deg_to_rad(fwd))).normalized()
 			var to_e: Vector2 = (e.global_position - tip).normalized()
 			assert(absf(aim_dir.angle_to(to_e)) < deg_to_rad(20.0), "%s: asa hedefe bakmıyor (%.1f°)" % [key, rad_to_deg(aim_dir.angle_to(to_e))])
+			## 2026-10-08: alev yönü asanın ÇİZİLİ bakışından alınır (alt alev açısı = aim_rot_offset) - asa yumuşak dönerken alev ondan
+			## kopmasın ("ateş asasının alevi ateş asasıyla ayrı yerlerde, senkronize değil").
+			assert(bool(s.get("follow_aim")), "%s: alev asanın bakışına bağlı olmalı" % key)
+			var flame_diff: float = absf(angle_difference(s.global_rotation, aim_dir.angle() + float(s.get("aim_rot_offset"))))
+			assert(flame_diff < deg_to_rad(2.0), "%s: alev yönü asanın bakışından %.1f° sapıyor" % [key, rad_to_deg(flame_diff)])
+			## Asayı elle başka yöne çevir: alev ASAYLA birlikte döner (dünyada sabit kalmaz).
+			var rot0: float = s.global_rotation
+			icon.rotation += 0.6
+			await get_tree().process_frame
+			if is_instance_valid(s):
+				var turned: float = angle_difference(rot0, s.global_rotation)
+				assert(absf(absf(turned) - 0.6) < 0.35, "%s: asa 0,6 rad dönünce alev de dönmeli (%.2f)" % [key, turned])
 			## Oyuncu yer değiştirir: sprite ömrü içinde asanın YENİ ucunda olmalı (eskiden eski yerde kalıyordu).
 			var start: Vector2 = s.global_position
 			p.global_position += Vector2(40.0, -30.0)
@@ -126,6 +138,53 @@ func test_local_spray_follows_staff_tip() -> void:
 	GameManager.owned_weapons = prev_weapons
 	await get_tree().process_frame
 	if prev_scene != null and is_instance_valid(prev_scene) and prev_scene.get_parent() == get_tree().root:
+		get_tree().current_scene = prev_scene
+
+
+## Uzak ekran: kuklanın asası kendi yerel hedefine döner; alev kasterin yayınladığı açıya değil BU asanın bakışına bağlı olmalı.
+func test_remote_flame_follows_puppet_staff_aim() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	var fake_main := FakeMain.new()
+	get_tree().root.add_child(fake_main)
+	get_tree().current_scene = fake_main
+	var puppet: RemotePlayer = RemotePlayerScene.instantiate()
+	puppet.peer_id = FAKE_PEER_ID
+	fake_main.add_child(puppet)
+	fake_main.puppet = puppet
+	puppet.global_position = Vector2(500.0, 400.0)
+	puppet.update_weapon_visuals(["dagger", "fire_staff"])
+	var info: Array = puppet.get_weapon_icon_info(1)
+	var icon: Sprite2D = info[0]
+	var fwd: float = float(info[1])
+	icon.rotation = 2.0 ## kuklanın asası şu an böyle bakıyor
+	var was_mp: bool = NetworkManager.is_multiplayer_active
+	NetworkManager.is_multiplayer_active = true
+	## Kasterin yayınladığı mutlak "rot" (0.3) kuklanın asa bakışından FARKLI; follow_aim açıkken yok sayılmalı.
+	var n: Node2D = SpriteFx.spawn(get_tree(), Vector2.ZERO, {"sheet": "flame_fire", "follow_slot": 1, "follow_peer": FAKE_PEER_ID,
+		"rot": 0.3, "follow_aim": true, "rot_offset": 0.2, "offset": Vector2(25.5, -1.1), "key": "test:aimflame", "loop_time": 2.0, "z": 9})
+	NetworkManager.is_multiplayer_active = was_mp
+	assert(n != null and n.get_parent() == puppet, "uzak alev kuklanın asasına bağlanmalı")
+	var want: float = icon.global_rotation + deg_to_rad(fwd) + 0.2
+	assert(absf(angle_difference(n.global_rotation, want)) < 0.01, "alev yönü = kukla asasının bakışı + açı farkı: %.3f / %.3f" % [n.global_rotation, want])
+	assert(absf(angle_difference(n.global_rotation, 0.3)) > 0.3, "yayınlanan mutlak açı yok sayılmalı")
+	icon.rotation = -0.8 ## kukla asası başka hedefe döndü
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if is_instance_valid(n):
+		var want2: float = icon.global_rotation + deg_to_rad(fwd) + 0.2
+		assert(absf(angle_difference(n.global_rotation, want2)) < 0.01, "asa dönünce alev anında onunla döner: %.3f / %.3f" % [n.global_rotation, want2])
+	## Aynı anahtarla yenilenen istek yönü bozmaz, sadece açı farkını günceller.
+	NetworkManager.is_multiplayer_active = true
+	SpriteFx.spawn(get_tree(), Vector2.ZERO, {"sheet": "flame_fire", "follow_slot": 1, "follow_peer": FAKE_PEER_ID, "rot": 2.0,
+		"follow_aim": true, "rot_offset": -0.2, "key": "test:aimflame", "loop_time": 2.0})
+	NetworkManager.is_multiplayer_active = was_mp
+	await get_tree().process_frame
+	if is_instance_valid(n):
+		var want3: float = icon.global_rotation + deg_to_rad(fwd) - 0.2
+		assert(absf(angle_difference(n.global_rotation, want3)) < 0.01, "yenilenen istek açı farkını günceller: %.3f / %.3f" % [n.global_rotation, want3])
+	fake_main.queue_free()
+	await get_tree().process_frame
+	if prev_scene != null and is_instance_valid(prev_scene):
 		get_tree().current_scene = prev_scene
 
 

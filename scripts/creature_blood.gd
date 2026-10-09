@@ -27,6 +27,8 @@ const BY_ID := {
 	"rontgen1": Color(0.77, 0.64, 0.57), "rontgen2": Color(0.66, 0.31, 0.24), "rontgen3": Color(0.67, 0.27, 0.84),
 	"vampire1": Color(0.43, 0.23, 0.2), "vampire2": Color(0.26, 0.35, 0.52), "vampire3": Color(0.68, 0.27, 0.22),
 	"iblis1": Color(0.7, 0.55, 0.45), "iblis2": Color(0.66, 0.46, 0.33), "iblis3": Color(0.59, 0.22, 0.25),
+	"minotaur1": Color(0.62, 0.17, 0.13),
+	"sandworm1": Color(0.45, 0.58, 0.22), ## solucan uzvu: yeşilimsi sarı sıvı
 }
 
 const SCENE_PREFIX := "res://scenes/creatures/enemy_"

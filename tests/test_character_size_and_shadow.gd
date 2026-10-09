@@ -44,7 +44,8 @@ const FEET_ROW := 41.0
 ## Ayakların orijinden uzaklığı (px) - player.gd/remote_player.gd'nin
 ## anim.scale + anim.offset uygulamasının birebir matematiksel karşılığı.
 func _feet_px(def: Dictionary) -> float:
-	return (FEET_ROW - FRAME_H * 0.5 + float(def["offset"].y)) * float(def["scale"].x) * EntityScale.SIZE
+	## DEFS verisi (ground_shadow_y) eski 0,95 boyutundaki birimdedir; GroundShadow.apply_to çalışma anında BODY_REL ile çarpar - veri düzeyinde karşılaştırma eski boyutla.
+	return (FEET_ROW - FRAME_H * 0.5 + float(def["offset"].y)) * float(def["scale"].x) * EntityScale.LEGACY_SIZE
 
 
 func test_each_character_is_exactly_25_percent_bigger() -> void:
@@ -155,11 +156,11 @@ func test_player_really_applies_the_new_size_offset_and_shadow() -> void:
 		assert(shadow_node.visible, "%s: gölge görünür değil" % name)
 		assert(str(shadow_node.get_script().resource_path).ends_with("ground_shadow.gd"),
 			"%s: gölge piksel-elips script'ine geçmemiş" % name)
-		assert(is_equal_approx(shadow_node.position.y, float(def["ground_shadow_y"])),
+		assert(is_equal_approx(shadow_node.position.y, float(def["ground_shadow_y"]) * EntityScale.BODY_REL),
 			"%s: gölge ayak çizgisine oturmamış: %s" % [name, shadow_node.position.y])
 		var applied_radius: Vector2 = shadow_node.get("radius")
-		assert(applied_radius.distance_to(def["ground_shadow"]) < 0.01,
-			"%s: gölge yarıçapı DEFS ile aynı değil: %s" % [name, applied_radius])
+		assert(applied_radius.distance_to(Vector2(def["ground_shadow"]) * EntityScale.BODY_REL) < 0.01,
+			"%s: gölge yarıçapı DEFS x BODY_REL ile aynı değil: %s" % [name, applied_radius])
 
 		player.queue_free()
 	get_tree().current_scene = previous_scene

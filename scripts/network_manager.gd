@@ -2665,6 +2665,9 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## bir dal eklersen buraya da yaz.
 @rpc("any_peer", "call_remote", "reliable")
 func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictionary = {}) -> void:
+	## SADECE host yayınlar (2026-10-09 denetimi: gönderen kontrolü yoktu - herhangi bir peer sahte "death_state"/"worm_pose"/"minotaur_pose" yollayıp başkasının yaratıklarını öldürebilir/bozabilirdi).
+	if not _from_host():
+		return
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if not target_enemy or not is_instance_valid(target_enemy):
 		return
@@ -2758,6 +2761,16 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		## olması/görünür olması, vampirin ışınlanması (extra_data: from, to) - yaratığın KENDİ durumu değiştiği için
 		## burada (dünyada duran etkiler ayrı RPC'de: broadcast_enemy_ability_fx).
 		"ghost_vanish", "ghost_reveal", "vampire_blink":
+			if target_enemy.has_method("on_ability_vfx"):
+				target_enemy.on_ability_vfx(vfx_type, extra_data)
+		## Minotaur (Kademe 3 bossu, 2026-10-08, bkz. minotaur_charge.gd): minotaur_pose (extra_data: pose, cap - hücum/eğilme/doğrulma
+		## pozu + ağ hızı tavanı), minotaur_impact (extra_data: pos, dir, power - isabet/duvar tozu + kamera sarsıntısı).
+		"minotaur_pose", "minotaur_impact":
+			if target_enemy.has_method("on_ability_vfx"):
+				target_enemy.on_ability_vfx(vfx_type, extra_data)
+		## Yeraltı Canavarı (Kademe 5 bossu, 2026-10-09, bkz. underground_boss.gd / worm_limb.gd): worm_setup (extra_data: kind), worm_pose (pose),
+		## worm_strike (pos, dir, power) - uzuv; worm_rumble/worm_growl (v), worm_ambient - boss'un yeraltı sesleri (her peer yerelde çalar).
+		"worm_setup", "worm_pose", "worm_strike", "worm_rumble", "worm_growl", "worm_ambient":
 			if target_enemy.has_method("on_ability_vfx"):
 				target_enemy.on_ability_vfx(vfx_type, extra_data)
 		"chill_tint":
@@ -3417,6 +3430,8 @@ func spend_gold(amount: int) -> void:
 ## take_special_damage'da o oyuncunun kendi makinesinde uygulanır.
 @rpc("any_peer", "call_remote", "reliable")
 func forward_special_damage_to_peer(amount: float, enemy_net_id: int, kind: String) -> void:
+	if not _from_host(): ## SADECE host (yaratık/boss yetenek hasarı); sahte RPC başkasına hasar yazamasın (2026-10-09)
+		return
 	var local_player: Node = get_tree().get_first_node_in_group("player")
 	if not local_player or not is_instance_valid(local_player):
 		return
@@ -3425,6 +3440,18 @@ func forward_special_damage_to_peer(amount: float, enemy_net_id: int, kind: Stri
 		local_player.take_special_damage(amount, enemy_node, kind)
 	elif local_player.has_method("take_damage"):
 		local_player.take_damage(amount, enemy_node)
+
+
+## Minotaur boynuz hücumu / boğa koşusu isabeti (bkz. minotaur_charge.gd _hit_player): host, vurulan GERÇEK uzak oyuncuya hasarın
+## (forward_special_damage_to_peer, kind "minotaur") hemen ardından savrulmayı iletir. Savrulma o oyuncunun KENDİ makinesinde,
+## kendi duvar haritasıyla kısaltılarak uygulanır (player.gd apply_boss_fling) - hasar gerçekten işlendiyse; kaçınan savrulmaz.
+@rpc("any_peer", "call_remote", "reliable")
+func forward_player_fling_to_peer(dir: Vector2, distance: float) -> void:
+	if not _from_host():
+		return
+	var local_player: Node = get_tree().get_first_node_in_group("player")
+	if local_player and is_instance_valid(local_player) and local_player.has_method("apply_boss_fling"):
+		local_player.apply_boss_fling(dir, distance)
 
 
 ## Yaratık yeteneklerinin DÜNYADA duran etkileri (kind: "laser"/"thorns"/"acid"/"fireball", bkz. enemy_abilities.gd
@@ -3448,6 +3475,8 @@ func broadcast_enemy_ability_fx(kind: String, pos: Vector2, data: Dictionary) ->
 ## yoktu) düzeltir.
 @rpc("any_peer", "call_remote", "reliable")
 func forward_damage_to_peer(amount: float, enemy_net_id: int, is_barrier_damage: bool) -> void:
+	if not _from_host(): ## SADECE host (yaratık temas/mermi hasarı); sahte RPC başkasına hasar yazamasın (2026-10-09)
+		return
 	var local_player: Node = get_tree().get_first_node_in_group("player")
 	if not local_player or not is_instance_valid(local_player):
 		return

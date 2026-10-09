@@ -14,7 +14,7 @@ func _ready() -> void:
 	## isim fontlarını 2 kat büyüt" - font 14 -> 28, kutu da (kırpılmasın diye)
 	## orantılı büyütüldü; alt kenarı eskisiyle AYNI yerde kalsın diye (can/
 	## kalkan çubuğuna değmesin) konum yukarı kaydırıldı.
-	position = Vector2(-110.0, -128.0)
+	position = Vector2(-110.0, -120.0) ## 2026-10-09: çubukla birlikte 8 px aşağı (karakterler %15 küçüldü, bkz. overhead_bar.gd CHARACTER_Y_OFFSET)
 	size = Vector2(220.0, 36.0)
 	horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vertical_alignment = VERTICAL_ALIGNMENT_CENTER

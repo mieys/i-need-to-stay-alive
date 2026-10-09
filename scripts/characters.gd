@@ -160,21 +160,23 @@ const DEFS := {
 		## Q'ya geldi, Vahşi Hız (id 21) E'de DEĞİŞMEDEN kaldı, Feda Kalkanı (id 9) R/skill3'e taşındı
 		## (bkz. player.gd _activate_skill/_activate_skill3 - eşleşen "Matthew Q/R yer değişimi" notları).
 		"skill": 43,
-		"skill_name": "Tilki Hücumu",
+		## 2026-10-08 (kullanıcı: "matthewin tilkisini wolf-hellhound spritesheet'indeki ile değiştir... adını köpek yapalım"): evcil hayvan
+		## artık KÖPEK - Tilki Hücumu -> Köpek Hücumu (skill id 43 ve kod içi `fox` adları BİLEREK aynı kaldı).
+		"skill_name": "Köpek Hücumu",
 		## 2026-09-28 yetenek evrimleri: itme "Savuran Pençe" evrimine geçti, bekleme 8 -> 10 sn.
-		"skill_desc": "YETENEK: Tilkisini anında yanına ışınlayıp görüş alanındaki en fazla 6 düşmana dash saldırısı attırır, saldırı gücünün %110'u kadar hasar verir. (10sn bekleme)",
+		"skill_desc": "YETENEK: Köpeğini anında yanına ışınlayıp görüş alanındaki en fazla 6 düşmana dash saldırısı attırır, saldırı gücünün %110'u kadar hasar verir. (10sn bekleme)",
 		## Kullanıcı isteği (2026-09-25): Matthew'in 4 ikonu 48x48 piksel olarak sıfırdan çizildi (tools/gen_matthew_icons.py) -
 		## Q artık Feda Kalkanı'nın ikonunu paylaşmıyor, kendi ikonu var.
-		"skill_icon": "res://assets/skills/matthew_tilki_hucumu_icon.png",
+		"skill_icon": "res://assets/skills/matthew_kopek_hucumu_icon.png",
 		"skill2": 21,
 		"skill2_name": "Vahşi Hız",
-		"skill2_desc": "TEMEL: Kendine ve tilkisine 6 saniye boyunca %40 saldırı hızı ve %15 hareket hızı kazandırır. (35sn bekleme)",
+		"skill2_desc": "TEMEL: Kendine ve köpeğine 6 saniye boyunca %40 saldırı hızı ve %15 hareket hızı kazandırır. (35sn bekleme)",
 		"skill2_icon": "res://assets/skills/matthew_vahsi_hiz_icon.png",
 		"skill3": 9,
 		"skill3_name": "Feda Kalkanı",
 		"skill3_desc": "ULTİ: Yaratığı feda edip 15sn süren koruyucu bir kalkan çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer. (120sn bekleme)",
 		"skill3_icon": "res://assets/skills/matthew_feda_kalkani_icon.png",
-		"passive": "Hedef alınamayan bir tilkin var: saldırı gücünün, saldırı hızının ve kritik şansı/hasarının %200'üyle saldırır. Ölürse 30sn sonra yeniden doğar.",
+		"passive": "Hedef alınamayan bir köpeğin var: saldırı gücünün, saldırı hızının ve kritik şansı/hasarının %200'üyle saldırır. Ölürse 30sn sonra yeniden doğar.",
 		"passive_icon": "res://assets/skills/matthew_passive_icon.png",
 		"frames": "res://assets/characters/matthew_frames.tres",
 		"portrait": "res://assets/characters/matthew_portrait.png",

@@ -46,9 +46,9 @@ static func apply_to(node: Node2D, def: Dictionary) -> bool:
 		return false
 	node.set_script(load("res://scripts/ground_shadow.gd"))
 	node.scale = Vector2.ONE
-	node.position = Vector2(0.0, float(def.get("ground_shadow_y", 33.4)))
+	node.position = Vector2(0.0, float(def.get("ground_shadow_y", 33.4)) * EntityScale.BODY_REL) ## 2026-10-09: karakter %15 küçüldü, gölge de
 	node.visible = true
-	node.set("radius", def["ground_shadow"])
+	node.set("radius", Vector2(def["ground_shadow"]) * EntityScale.BODY_REL)
 	## Betik çalışma anında değiştirildiği için _process kendiliğinden açılmayabilir (bkz. ölüm gölgesi notu).
 	node.set_process(true)
 	node.queue_redraw()

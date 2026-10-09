@@ -21,8 +21,10 @@ func _on_tier(tier: int) -> void:
 	_heard.append(tier)
 
 
+## 2026-10-08: boss sistemi varsayılan KAPALI (GameManager.bosses_enabled, bkz. CLAUDE.md madde 39) - bu dosya boss/Final akışını sınar, bu yüzden geçici açar
 func _spawner() -> Node:
 	_cleanup()
+	GameManager.bosses_enabled = true
 	GameManager.game_time = 0.0
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
@@ -39,6 +41,7 @@ func _cleanup() -> void:
 		if is_instance_valid(n):
 			n.free()
 	_made.clear()
+	GameManager.bosses_enabled = false
 	GameManager.game_time = 0.0
 	NetworkManager.is_multiplayer_active = false
 

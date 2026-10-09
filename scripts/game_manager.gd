@@ -44,6 +44,13 @@ var is_game_over: bool = false
 ## açıldığındaki game_time (karakter seçimi sırasında da aktığı için "Süre" oradan başlamasın; çok oyunculuda game_time zaten
 ## _rpc_start_game'de sıfırlanıyor, origin 0 kalır).
 var victory_reached: bool = false
+## BOSS SİSTEMİ ANAHTARI (kullanıcı 2026-10-08: "tüm bosslar elit yaratıkların yerine geçsin... yeni bossları sana sonradan atacağım"):
+## false = Kademe bossları, Final (13'lü dalga), zafer penceresi ve sonsuzdaki boss dalgaları KAPALI; eski bosslar elit olarak çıkar
+## (enemy_spawner.gd ELITE_POOL) ve Kademe XV bitince oyun doğrudan sonsuz modda devam eder. Yeni bosslar TEK TEK gelir: her biri
+## enemy_spawner.gd NEW_BOSS_TIERS'a eklenir ve bu anahtar KAPALIYKEN de çalışır (2026-10-08: ilki Kademe 3 Minotaur'u, CLAUDE.md madde 40).
+## Anahtar sadece TÜM yeni bosslar + Final hazır olunca true yapılıp BOSS_TIERS/FINAL_CREATURES onlarla doldurulur. Sabit ayar (ağdan
+## gitmez, her peer'de aynı); testler eski boss akışını sınarken geçici true yapar.
+var bosses_enabled: bool = false
 var endless_active: bool = false
 var endless_layer: int = 0 ## 0 = sonsuz mod değil; 1.. = şu anki kat
 var run_max_tier: int = 1
@@ -184,7 +191,8 @@ func start_mini_shop_cooldown() -> void:
 ## player.gd) kadar, türü karışık olabilir. Her kopyanın KENDİNE ÖZEL bir
 ## seviyesi var (paylaşılmaz). Her eleman: {"key": String, "level": int,
 ## "spent": int (o kopyaya şu ana kadar harcanan toplam altın - satışta %70
-## iade hesabı için)}.
+## iade hesabı için), isteğe bağlı "shards_spent": int (harcanan silah parçacığı,
+## satışta yine %70 - bkz. EnchantDefs.sell_refund_shards)}.
 var owned_weapons: Array = []
 
 ## Oyuncunun sahip olduğu TÜM eşyalar (bkz. scripts/items.gd Items.DEFS) -

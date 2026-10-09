@@ -17,6 +17,7 @@ signal closed
 
 const Logic := preload("res://scripts/weapon_shop_logic.gd")
 const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
+const ModalSafeArea := preload("res://scripts/modal_safe_area.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
@@ -35,6 +36,8 @@ enum Tab { WEAPONS, SHIELDS, ENCHANTS }
 var _player: Node = null
 var _tab: int = Tab.WEAPONS
 var _selected: Dictionary = {} ## {"type": "weapon"|"shield"|"upgrade"|"wupgrade", "key": String, "index": int, "slot": int, "final": bool}
+var _fit_callables: Array[Callable] = [] ## pencere sığdırıcıları (grup paneli değişince yeniden çağrılır)
+var _last_reserved: float = -1.0
 var _trait_slot: int = 0 ## EFSUNLAR sekmesinde seçili silah kopyası (owned_weapons dizini)
 var _rows: Array = [] ## [{entry, panel, price, sub, buy}]
 var _phone: bool = false
@@ -89,6 +92,8 @@ func _process(delta: float) -> void:
 	_stats_timer -= delta
 	if _stats_timer <= 0.0:
 		_stats_timer = 0.25
+		if not _phone:
+			_refit_if_party_changed()
 		## Altın/envanter başka yoldan da değişebilir (sandık payı, görev ödülü, dışarıdan gelen eşya...) - sadece durum
 		## değiştiyse yenile (envanter paneli her seferinde yeniden kurulduğu için ucuz imza kontrolü).
 		if _state_sig() != _last_sig:
@@ -172,19 +177,34 @@ func _apply_window_scale(window: Control) -> void:
 			return
 		window.pivot_offset = window.size * 0.5
 		var view: Vector2 = window.get_viewport_rect().size
-		var fit: float = minf(view.x * 0.97 / maxf(1.0, window.size.x), view.y * 0.97 / maxf(1.0, window.size.y))
+		## Grup paneli (sağ üst, layer 96) pencerelerin ÜSTÜNDE durur: pencere o şeridin soluna sığıp ortalanır ki X düğmesi altında kalmasın
+		## (bkz. modal_safe_area.gd). Panel görünmüyorsa alan tüm ekrandır.
+		var safe: Rect2 = ModalSafeArea.rect(window.get_tree(), view)
+		var fit: float = minf(safe.size.x * 0.97 / maxf(1.0, window.size.x), safe.size.y * 0.97 / maxf(1.0, window.size.y))
 		window.scale = Vector2.ONE * minf(WINDOW_SCALE, fit)
 		var parent_ci := window.get_parent() as CanvasItem
-		var center_local: Vector2 = view * 0.5
+		var center_local: Vector2 = safe.get_center()
 		if parent_ci:
 			center_local = parent_ci.get_global_transform().affine_inverse() * center_local
 		window.position = (center_local - window.size * 0.5).round()
+	_fit_callables.append(fit_scale)
 	var parent: Node = window.get_parent()
 	if parent is Container:
 		(parent as Container).sort_children.connect(fit_scale)
 	else:
 		window.resized.connect(fit_scale)
 	fit_scale.call()
+
+
+## Grup paneli sonradan görünür/gizli olursa (oyuncu katıldı/ayrıldı) ya da genişliği değişirse pencere yeniden sığdırılır.
+func _refit_if_party_changed() -> void:
+	var reserved: float = ModalSafeArea.reserved_right(get_tree(), get_viewport().get_visible_rect().size)
+	if is_equal_approx(reserved, _last_reserved):
+		return
+	_last_reserved = reserved
+	for c in _fit_callables:
+		if c.is_valid():
+			c.call()
 
 
 func _build_title_bar() -> Control:

@@ -206,12 +206,12 @@ func test_talon_matthew_base_nerfs_and_cooldowns() -> void:
 	matthew.apply_skill_evolution("matthew_e1", true)
 	matthew.apply_skill_evolution("matthew_e2", true)
 	matthew.apply_skill_evolution("matthew_e3", true)
-	assert(is_equal_approx(float(matthew._skill_timing_for(43)["cooldown"]), 7.0), "Çevik Tilki -%30")
+	assert(is_equal_approx(float(matthew._skill_timing_for(43)["cooldown"]), 7.0), "Çevik Köpek -%30")
 	assert(is_equal_approx(float(matthew._skill2_timing_for(21)["duration"]), 10.0), "Uzun Av +4 sn")
 	assert(matthew._evo_skill_free("skill") and not matthew._evo_skill_free("skill2"), "Bedava Av yalnız Q")
 	assert(is_equal_approx(matthew.matthew_haste_bonus("move"), 0.3) and move0 < 0.3, "Vahşi Koşu hareket %30")
 	assert(is_equal_approx(matthew.matthew_haste_bonus("attack"), 0.5), "Vahşi Koşu saldırı %50")
-	assert(is_equal_approx(matthew.matthew_haste_bonus("move", true), 0.6), "Tilki Ruhu: tilki 2 kat")
+	assert(is_equal_approx(matthew.matthew_haste_bonus("move", true), 0.6), "Köpek Ruhu: köpek 2 kat")
 	_cleanup()
 
 

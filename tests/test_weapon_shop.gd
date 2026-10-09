@@ -9,6 +9,8 @@ const Logic := preload("res://scripts/weapon_shop_logic.gd")
 const ScreenScript := preload("res://scripts/weapon_shop_screen.gd")
 const ShopScript := preload("res://scripts/weapon_shop.gd")
 const MobileUIPath := "res://scripts/mobile_ui.gd"
+const InventoryPanelScene: PackedScene = preload("res://scenes/inventory_panel.tscn")
+const ShopPanelScene: PackedScene = preload("res://scenes/shop_panel.tscn")
 
 ## Oyuncu arayüzü (silah/kalkan satın alma + giriş/çıkış için).
 class FakePlayer extends CharacterBody2D:
@@ -34,6 +36,9 @@ class FakePlayer extends CharacterBody2D:
 	func apply_enchant_choice(card: Dictionary) -> void:
 		cards.append(card)
 		ShieldEnchantDefs.apply(card)
+
+	func remove_owned_weapon(_index: int) -> bool:
+		return true
 
 	func set_combat_active(active: bool) -> void:
 		combat_active = active
@@ -164,6 +169,66 @@ func test_weapon_purchase_costs_ten_shards_plus_the_old_gold() -> void:
 	for k in ["yay", "tufek", "dagger", "arcane", "fire_staff"]:
 		GameManager.owned_weapons.append({"key": k, "level": 1, "spent": 0})
 	assert(Logic.weapon_block_reason(p, "boomerang") == "Silah slotları dolu (5/5)", "slot dolu sebebi öncelikli: %s" % Logic.weapon_block_reason(p, "boomerang"))
+	p.free()
+	_restore_state()
+
+
+## Kullanıcı isteği 2026-10-09: "silahı satınca harcanan silah parçacığının %70ini geri vermiyor" - alım parçacığı + geliştirme parçacığı deftere
+## ("shards_spent") yazılır, iki satış yolu (envanter + geliştirmeler sekmesi) altınla birlikte parçacığın %70'ini geri verir.
+func test_selling_a_weapon_refunds_seventy_percent_of_the_shards_spent() -> void:
+	_save_state()
+	var p := FakePlayer.new()
+	add_child(p)
+	GameManager.weapon_shards = 100
+	GameManager.owned_weapons = [EnchantDefs.new_weapon_entry("dagger", 1, 0)] ## başlangıç silahı: defterde parçacık yok
+	assert(Logic.buy_weapon(p, "yay"), "silah alınır")
+	var entry: Dictionary = GameManager.owned_weapons[1]
+	assert(int(entry["shards_spent"]) == 10 and EnchantDefs.sell_refund_shards(entry) == 7, "10 parçacık harcandı -> %%70 = 7: %s" % str(entry))
+	assert(EnchantDefs.sell_refund_shards(GameManager.owned_weapons[0]) == 0, "defteri olmayan (başlangıç/eski kayıt) silah 0 iade")
+	assert(EnchantDefs.sell_refund_shards({"key": "x", "level": 1}) == 0 and EnchantDefs.sell_refund_gold({"spent": 30}) == 21, "oran: 30 altın -> 21")
+	## Envanter yolu.
+	var panel: Control = InventoryPanelScene.instantiate()
+	panel.player = p
+	add_child(panel)
+	var shards: int = GameManager.weapon_shards
+	var gold: int = GameManager.gold
+	panel._on_sell_weapon_equip(1) ## onay penceresi metni parçacığı da söyler
+	assert("7 Silah Parçacığı" in panel._sell_confirm_dialog.dialog_text, "onay metni: %s" % panel._sell_confirm_dialog.dialog_text)
+	panel._do_sell_weapon_equip(1)
+	assert(GameManager.owned_weapons.size() == 1, "silah satıldı")
+	assert(GameManager.weapon_shards == shards + 7, "envanterden satış 7 parçacık geri verir: %d -> %d" % [shards, GameManager.weapon_shards])
+	assert(GameManager.gold == gold + 21, "altın iadesi aynen: %d" % (GameManager.gold - gold))
+	assert(GameManager.weapon_shards == 100 - 10 + 7, "net kayıp 3 parçacık")
+	panel.free()
+	## Geliştirmeler sekmesi yolu + efsun geliştirmeleri de deftere girer (yay: Üçlü Ok, geliştirme 5 parçacık).
+	GameManager.weapon_shards = 100
+	GameManager.gold = 100000
+	assert(Logic.buy_weapon(p, "yay"))
+	var slot: int = GameManager.owned_weapons.size() - 1
+	assert(Logic.buy_wupgrade(null, slot, 0) and Logic.buy_wupgrade(null, slot, 1), "iki geliştirme alınır")
+	assert(int(GameManager.owned_weapons[slot]["shards_spent"]) == 10 + 5 + 5, "defter: alım 10 + 2 x 5 = %s" % str(GameManager.owned_weapons[slot]))
+	assert(GameManager.weapon_shards == 80)
+	var shop: Control = ShopPanelScene.instantiate()
+	add_child(shop)
+	shop._on_sell_weapon(slot)
+	assert(GameManager.owned_weapons.size() == 1 and GameManager.weapon_shards == 80 + 14, "geliştirmeler dahil 20 parçacığın %%70'i = 14 geri: %d" % GameManager.weapon_shards)
+	shop.free()
+	p.free()
+	_restore_state()
+
+
+func test_failed_or_free_purchases_leave_the_shard_ledger_empty() -> void:
+	_save_state()
+	var p := FakePlayer.new()
+	p.accept_weapons = false
+	add_child(p)
+	assert(not Logic.buy_weapon(p, "yay") and GameManager.owned_weapons.is_empty(), "reddedilen alım defter bırakmaz")
+	p.accept_weapons = true
+	GameManager.weapon_shards = 100
+	assert(Logic.buy_weapon(p, "tufek"))
+	GameManager.weapon_shards = 0 ## parçacık yok: geliştirme alınamaz, defter değişmez
+	assert(not Logic.buy_wupgrade(null, 0, 0) and int(GameManager.owned_weapons[0]["shards_spent"]) == 10, "başarısız geliştirme deftere yazmaz")
+	assert(not EnchantDefs.new_weapon_entry("yay", 1, 0).has("shards_spent"), "parçacıksız yeni kayıt anahtar taşımaz")
 	p.free()
 	_restore_state()
 

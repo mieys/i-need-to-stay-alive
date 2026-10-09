@@ -43,7 +43,8 @@ var y_offset: float = -62.0
 ## (remote_player_name.gd, -92) ile arasında hâlâ boşluk var. player.gd, remote_player.gd ve mission_player_copy.gd
 ## (oyuncunun kopyası) bunu set_offset ile uygular; varsayılan (-62) yaratık dışı diğer kullanıcılar (ağaç görevi) için
 ## değişmedi. downed_timer_label.gd de bu yüksekliğe hizalı.
-const CHARACTER_Y_OFFSET := -76.0
+## 2026-10-09: karakterler %15 küçüldü (EntityScale.BODY_REL) - en uzun şapka -52,7 -> ~-44,8; çubuk -76'dan -68'e indi (şapkanın üstündeki boşluk ~aynı kaldı).
+const CHARACTER_Y_OFFSET := -68.0
 
 var health_current: float = 1.0
 var health_max: float = 1.0

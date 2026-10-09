@@ -36,8 +36,13 @@ func _make_player() -> Node:
 
 
 func test_entity_scale_constants() -> void:
-	assert(is_equal_approx(EntityScale.SIZE, 0.95),
-		"Boyut çarpanı %%5 küçültme olmalı, bulunan: %s" % EntityScale.SIZE)
+	assert(is_equal_approx(EntityScale.LEGACY_SIZE, 0.95) and is_equal_approx(EntityScale.BODY_REL, 0.85),
+		"eski boyut 0,95, yaratık/oyuncu %%15 küçülmesi: %s %s" % [EntityScale.LEGACY_SIZE, EntityScale.BODY_REL])
+	assert(is_equal_approx(EntityScale.SIZE, 0.95 * 0.85),
+		"Boyut çarpanı eski boyutun %%85'i olmalı, bulunan: %s" % EntityScale.SIZE)
+	assert(is_equal_approx(EntityScale.SIZE * EntityScale.BOSS_EXTRA, 0.95 * 0.80),
+		"bosslar eski boyutun %%80'i (yaratıkların %%15'inin ÜSTÜNE binmez): %s" % (EntityScale.SIZE * EntityScale.BOSS_EXTRA))
+	assert(is_equal_approx(EntityScale.ATTACHED_SIZE, 0.95), "kalkan baloncuğu (karaktere bağlı) eski boyutta kalır")
 	assert(is_equal_approx(EntityScale.SPEED, 0.9),
 		"Hız çarpanı %%10 azaltma olmalı, bulunan: %s" % EntityScale.SPEED)
 
@@ -78,8 +83,8 @@ func test_player_collision_and_shield_bubble_shrunk() -> void:
 		"Oyuncu gövde çemberi %%5 küçülmemiş: %s" % body.shape.radius)
 	var bubble: Node2D = player.get_node_or_null("ShieldVisual/BubbleSprite")
 	assert(bubble != null, "Kalkan baloncuğu bulunamadı")
-	assert(absf(bubble.scale.x - 4.37475 * EntityScale.SIZE) < 0.01,
-		"Kalkan baloncuğu %%5 küçülmemiş: %s" % bubble.scale)
+	assert(absf(bubble.scale.x - 4.37475 * EntityScale.ATTACHED_SIZE) < 0.01,
+		"Kalkan baloncuğu gövdeyle birlikte KÜÇÜLMEZ (eski 0,95 boyutunda kalır): %s" % bubble.scale)
 	player.queue_free()
 
 
@@ -119,7 +124,7 @@ func test_enemy_speed_and_size() -> void:
 
 
 ## Ortak şekil kaynağı yerinde değiştirilirse ikinci örnek iki kez küçülür
-## (0.95² = 0.9025) - sahne başına paylaşılan kaynak bu yüzden duplicate.
+## (katlanırsa SIZE²) - sahne başına paylaşılan kaynak bu yüzden duplicate.
 func test_second_enemy_is_not_double_shrunk() -> void:
 	var first: Node = EnemyScene.instantiate()
 	add_child(first)
@@ -144,10 +149,10 @@ func test_boss_scale_composes_with_shrink() -> void:
 	enemy.apply_boss_stats(500.0, 20.0, boss_mult, 5)
 
 	var sprite: Sprite2D = enemy.get_node("Sprite2D")
-	assert(sprite.scale.is_equal_approx(base_sprite * EntityScale.SIZE * boss_mult),
+	assert(sprite.scale.is_equal_approx(base_sprite * EntityScale.SIZE * EntityScale.BOSS_EXTRA * boss_mult),
 		"Boss ölçeği küçültmeyle çarpımsal birleşmiyor: %s" % sprite.scale)
 	var body: CollisionShape2D = enemy.get_node("CollisionShape2D")
-	assert(absf(body.shape.radius - base_radius * EntityScale.SIZE * boss_mult) < 0.01,
+	assert(absf(body.shape.radius - base_radius * EntityScale.SIZE * EntityScale.BOSS_EXTRA * boss_mult) < 0.01,
 		"Boss gövde yarıçapı yanlış: %s" % body.shape.radius)
 	enemy.queue_free()
 
@@ -209,8 +214,8 @@ func test_remote_player_puppet_shrunk_too() -> void:
 	assert(absf(body.shape.radius - base_radius * EntityScale.SIZE) < 0.01,
 		"Uzak oyuncu kuklasının gövde çemberi %%5 küçülmemiş: %s" % body.shape.radius)
 	var bubble: Node2D = puppet.get_node("ShieldVisual/BubbleSprite")
-	assert(absf(bubble.scale.x - base_bubble * EntityScale.SIZE) < 0.01,
-		"Uzak oyuncu kuklasının kalkan baloncuğu %%5 küçülmemiş: %s" % bubble.scale)
+	assert(absf(bubble.scale.x - base_bubble * EntityScale.ATTACHED_SIZE) < 0.01,
+		"Uzak oyuncu kuklasının kalkan baloncuğu yerel oyuncuyla AYNI (eski boyutta): %s" % bubble.scale)
 	## Görsel ölçek de yerel oyuncuyla aynı kuraldan (DEFS tabanı x 0.95).
 	var def_scale: Vector2 = Characters.get_def(1).get("scale", Vector2(1.27575, 1.27575))
 	assert(puppet.anim.scale.is_equal_approx(def_scale * EntityScale.SIZE),

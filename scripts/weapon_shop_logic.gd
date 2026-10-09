@@ -119,7 +119,7 @@ static func buy_weapon(player: Node, key: String) -> bool:
 	var shards: int = weapon_shard_cost()
 	GameManager.gold -= cost
 	GameManager.add_weapon_shards(-shards)
-	GameManager.owned_weapons.append(EnchantDefs.new_weapon_entry(key, 1, cost))
+	GameManager.owned_weapons.append(EnchantDefs.new_weapon_entry(key, 1, cost, shards))
 	if player != null and is_instance_valid(player) and player.has_method("buy_weapon_copy"):
 		if not bool(player.buy_weapon_copy(key, 1)):
 			GameManager.owned_weapons.pop_back()
@@ -202,8 +202,11 @@ static func buy_wupgrade(player: Node, slot: int, index: int) -> bool:
 	if not can_buy_wupgrade(slot, index):
 		return false
 	var final_up: bool = wupgrade_is_final(slot, index)
+	var shards: int = wupgrade_shard_cost(slot, index)
 	GameManager.gold -= wupgrade_price(slot, index)
-	GameManager.add_weapon_shards(-wupgrade_shard_cost(slot, index))
+	GameManager.add_weapon_shards(-shards)
+	if slot >= 0 and slot < GameManager.owned_weapons.size():
+		EnchantDefs.record_shards_spent(GameManager.owned_weapons[slot], shards) ## satışta %70'i geri gelir
 	var card: Dictionary = {"type": "final", "slot": slot} if final_up else {"type": "step", "slot": slot, "up": index}
 	if player != null and is_instance_valid(player) and player.has_method("apply_enchant_choice"):
 		player.apply_enchant_choice(card)

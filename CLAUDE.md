@@ -147,7 +147,7 @@ diğer oyuncularda eski/hiç görsel kalır.
    C++'a kaydolur; yaratık hareketi sınayan test köprüyü elle adımlar (`EnemyWorldBridgeScript._instance._physics_process(DT)`,
    örnek tests/test_enemy_pathing.gd).
 
-10. **Zafer + Sonsuz Mod + koşu rekorları/başarımlar (2026-10-05).** Final Kademe'nin 13 bossu da ölünce HOST zaferi ilan eder
+10. **[2026-10-08: boss/Final/zafer KAPALI - bkz. madde 39; aşağıdaki akış `GameManager.bosses_enabled = true` olunca geçerli]** **Zafer + Sonsuz Mod + koşu rekorları/başarımlar (2026-10-05).** Final Kademe'nin 13 bossu da ölünce HOST zaferi ilan eder
    (`enemy_spawner.gd` "ZAFER + SONSUZ MOD" bloğu: `_check_victory` -> `NetworkManager.broadcast_victory` -> `main.gd`
    `_on_victory_reached` -> `victory_overlay.gd`). Kalan yaratıklar `enemy.gd dismiss_without_reward` ile ÖDÜLSÜZ/öldürme
    sayılmadan dağılır. Devam kararını sadece host verir ("Sonsuza Devam Et" -> `begin_endless` -> `broadcast_endless_started`).
@@ -164,7 +164,7 @@ diğer oyuncularda eski/hiç görsel kalır.
    Testler: `test_endless_math/mode`, `test_run_records`, `test_victory_and_records_ui` (hepsi `run_tests.ps1`); gerçek 2 süreçli akış
    (zafer -> devam -> kat 1/2/3 -> boss dalgası -> yakalama) 2026-10-05'te geçti. Oynarken değerlendirilecek: sonsuz zorluk eğrisi.
 
-11. **Boss barı (2026-10-05).** Boss'un can/kalkanı SADECE ekranın üst ortasındaki TEK barda gösterilir (`scripts/boss_bar_top.gd`,
+11. **[2026-10-08: şu an boss yok - bkz. madde 39]** **Boss barı (2026-10-05).** Boss'un can/kalkanı SADECE ekranın üst ortasındaki TEK barda gösterilir (`scripts/boss_bar_top.gd`,
    prototip T1 "Ahşap Plaket"; `main.gd` `_boss_bar_top`, CanvasLayer 38): kamera merkezine en yakın canlı boss (histerezisli
    `order_bosses`), her peer kendi ekranı için "boss" grubundan okur (ağdan bir şey gitmez). Boss'un ÜSTÜNDE artık çubuk yok, sadece
    kafatası plakası (`boss_skull_marker.gd`; kafaya göre yerleşim `boss_bar_art.gd head_top_local`, `enemy.gd get_boss_marker_offset`;
@@ -380,7 +380,7 @@ diğer oyuncularda eski/hiç görsel kalır.
    (ayağı aşağıda) ve örtüşen yaratık geçici z 2; histerezis 2 px; evcil/müttefik dahil değil. Tuzaklar: yassı (zemine serili) bir katmanı OBJECT_LAYERS'a ekleme -
    oyuncuyu ayağının üstünde örter; Tiled'da katman adı değişirse sabitler güncellenmeli (sessizce atlanır). Testler: `test_depth_occluders` (5), `test_creature_depth`
    (2). Gerçek pencereli ekran görüntüsüyle ağaç/ev/maden doğrulandı (oyuncu arkadayken örtülüyor, önde görünüyor); düşman üssü, iç mekan ve yaratık z'si gerçek ekranda izlenmedi.
-   (Collision için bkz. madde 27.)
+   (Collision için bkz. madde 27. Yaratıkların ağaç/ev arkasında örtülmesi, kopyaların z 3'e alınması ve çizim sırası koruması için bkz. madde 45.)
 
 26. **Assasin pasifi + Q bekleme, Vampir Q kalkan bedeli (2026-10-08).** (a) Assasin "Bıçak Uzmanlığı" ("yetenek kullanımından sonra 3 sn garantili kritik") HİÇ
    uygulanmamıştı (sadece açıklama metniydi) - şimdi `player.gd _assasin_passive_on_skill_used` (Q `_try_assasin_dash2`, E `_activate_skill2`, R `_activate_skill3`; her kullanım
@@ -486,6 +486,11 @@ diğer oyuncularda eski/hiç görsel kalır.
    `test_sale_shatter_and_chest_gold_first` (10, mutasyonla denendi). FPS: kullanıcı "bu animasyonlarda fps düştü" dedi; geliştirme makinesinde (150 yaratıklı dünyada
    da) ölçülemedi - animasyonlu/animasyonsuz kare süresi aynı (GPU ~0.7 ms), tek seferlik 40-55 ms kare var (satış anı, `_refresh` + ilk parçalar); gerçek cihazda
    tekrar ederse `tools`/scratchpad'deki ölçüm koşucusu (kare süresi + GPU) ile bak, olası kısaltmalar: SHATTER_GRID 4->3, para üst sınırı, `_pulse_panel` tween yeniden yaratma.
+   **KÜÇÜLTÜLDÜ (2026-10-08, kullanıcı: "item satınca çıkan parçalanma efekti ekranı çok kaplıyor ve göz yorucu, animasyonun ve altın dağılımının ufak olmasını istiyorum"):**
+   `gold_reward_fx.gd` `SHATTER_GRID` 4 -> 3 (9 parça), parça hızı 45-115 (eskiden 150-380), yerçekimi 380 (820), yukarı tekme 15-55, parça ömrü 0,28-0,42 sn, dönüşüm 0,2 sn + 0,035/para;
+   kırılma parlaması en çok 96 px'lik ikon boyunda ve 0,16 sn; para sayısı `shatter_coin_count` = `coin_count` en çok `SHATTER_MAX_COINS` (6; normal ödül 24 kalır), satış parası
+   `SHATTER_COIN_SCALE` 1,35 (ödül parası 2,0), saçılma `SHATTER_SPRAY_MULT` 0,4 (paraya `"scale"` anahtarı yazılır, `_update_coins` onu okur). Panele uçuş süresi aynı. Test:
+   `test_shatter_stays_small_and_uses_few_small_coins` (parçalar ikonun 1,3 katından uzağa gitmez, az+küçük para, altın TAM; mutasyonla denendi). Gerçek ekranda izlenmedi.
 
 34. **Kalıcı silah özellikleri (efsun) + demirci geliştirmeleri (2026-10-08).** Kullanıcı: "bu efsunlar silahlarda kalıcı olacak tıpkı onlara göre bir özellik
    gibi" (seçimler artifact "Silah Efsunları"nda yapıldı) + "bu efsunlı özellik olarak kendine alan silahların geliştirmeleri blacksmithde 5 parçacık + bir miktar
@@ -506,6 +511,233 @@ diğer oyuncularda eski/hiç görsel kalır.
    `tools/gen_enchant_fx.py` desenini izle. Testler: `test_weapon_traits` (8: tablo, tanım şekli, doğuştan kayıt, demirci kuralları + ekran, GERÇEK silah/yaratıkla her özelliğin kendi
    gözlemi - mutasyonla denendi), `test_new_enchants` (21 eski efsun duman testi, yeni 12 hariç). Gerçek iki süreçli çok oyunculu doğrulama YAPILMADI (yeni efsunlar mevcut
    `fx()/sprite()/blast()` yayın yollarını kullanır; kanama tik görselleri bilerek yerel).
+
+35. **Silah kademe göstergesi artık KONTÜR (2026-10-08).** Kullanıcı: "efsun leveline göre verdiğimiz parıltı efektinin daha sade olmasını istiyorum" -> artifact
+   "Parıltı Prototipleri"nden **A · Kontür** seçildi; "final hali hafif yanıp sönerken diğer versiyonlar yanıp sönmüyor onun gibi" -> hafif nefes alma TÜM kademelerde.
+   `scripts/enchant_weapon_glow.gd` yeniden yazıldı: silüetin dışına kontür (ilk sürüm dünya pikseli dokusuydu; şimdiki yöntem aşağıda: ekran uzayı shader'ı), kademe rengi. **Temel (kademe 1) KONTÜRSÜZ** (kullanıcı: "1. level aynı kalsın" - her silah efsunlu doğuyor, olduğu gibi görünür);
+   2 yeşil, 3 mavi, 4 mor, 5 (final) kırmızı, sarı kalktı; renkler ilk başta bilerek SÖNÜK/doygunluğu kısıktı ("silahlarla uyuşmazlık yaşamasın") ama oyunda kayboldu
+   (aşağıdaki "OYUN İÇİ GÖRÜNÜRLÜK" notu): TIER_COLORS tek yerden ayarlanır, MIN_TIER = 2; artifact "Kademe Kontürleri" 15 silah x 5 kademeyi çim/toprak/gece zemininde gösterir. FİNAL: ikinci, koyu halka daha.
+   **EKRAN UZAYI KONTÜR (2026-10-08, kullanıcı: "bazı silahların dışı pürüzlü ve asimetrik" -> dünya pikseli yumuşatması -> "dünkü parıltı smooth efekti hiç güzel
+   olmadı" -> sorulunca "çizgi ince ve kesik kesik"):** kontür artık DOKUYA YAZILMIYOR. Kök neden: kontür dünya pikseli çözünürlüğünde bir dokuydu; oyun 1920x1080
+   tuvalini pencereye ölçekleyince (ve ikonlar x0,2-0,5 küçültülünce) o 1 dünya pikseli ekranda bir yerde 1 bir yerde 2 piksel çıkıyordu, silüet pürüzü de çizgiyi kesik gösteriyordu;
+   yumuşatma (`_clean_mask`, LANCZOS + 3x3 kapama) ise kenarları şişirip pençe/diken aralarını dolduruyordu - SİLİNDİ. Şimdi doku = ikonun ALFA kapsamı (kaynak çözünürlükte,
+   kenarlarda `PAD_WORLD_PX` 9 dünya pikseli boşluk, mip zincirli, `_build_coverage`), ölçek 1 (ikonun ölçeğini devralır) ve shader her ekran pikselinde `dFdx/dFdy(UV)` ile
+   "ekranda `OUTLINE_PX` (2,4) piksel çevrede silüet var mı" diye 8 yönde bakar (`ring`) -> kalınlık ölçekten/dönmeden/aynalamadan BAĞIMSIZ sabit, çizgi kesintisiz;
+   mip düzeyi ekran pikselinin kapsadığı doku sayısından seçilir (küçültülmüş ikonun gürültülü kenarı süzülür); tam iç pikseller erken `discard` (performans). Final (5):
+   `double_ring` -> dışında aynı kalınlıkta ikinci, koyu (x0,55) halka. Parlaklık nefesi shader'da (0,82..1,0, ~2,7 sn). Dış API aynı (`attach(icon, tier)`, `tier_for(ench)`;
+   weapon.gd + remote_player.gd dokunulmadı). Tuzaklar: shader'da `TEXTURE` sadece `fragment()` içinde var, yardımcı işlevlere `sampler2D` parametresiyle geçilir; kenar payı
+   ikon küçülürse (pad = 9/ölçek doku pikseli, ÖLÇEK `_rebuild`'de okunur) azalır - ikon ölçeği oyunda sonradan %27'den fazla küçülürse en dış halka kesilir. Test:
+   `test_enchant_weapon_glow` (6; kademe kuralları, doku kenar payı + mip + alfa korunumu, hizalama, animasyonlu ikon yeniden kurma; mutasyonla 2'si kırıldı; shader'ın kendisi ekransızda
+   derlenmez - gerçek renderer'da 0/30/90/135/180/-60 derece, aynalama ve 4 ölçekle ekran görüntüsü alındı, kalınlık sabit). Oyunda hareket halinde, telefonda ve çok oyunculu uzak
+   kopyada elle izlenmedi (uzak kopya AYNI attach yolundan geçer).
+   **OYUN İÇİ GÖRÜNÜRLÜK (2026-10-08, kullanıcı oyun içi ekran görüntüsüyle: "kontürler oyunda hiç belli olmuyor"):** 1,7 px çizgi + sönük tonlar gerçek çimen/toprak
+   zeminde kayboluyordu (özellikle kademe 2 yeşili çimle aynı renkti). Gerçek zemin renkleriyle (çimen 126,176,84 / toprak 150,122,92) 4 varyant yan yana denendi: çizgi 2,4 px +
+   canlı tonlar EN İYİ çıktı (şimdiki hâl: yeşil 120,232,90 / mavi 80,160,255 / mor 186,124,255 / kırmızı 255,84,72); koyu dış çizgi ("rim") zemin üstünde KİRLİ göründü, atıldı. Kalınlık/renk
+   ayarı `OUTLINE_PX` + `TIER_COLORS` (iki satır). Gerçek oyunda yeniden izlenmedi.
+
+36. **Dükkan pencereleri grup panelinin soluna sığar (2026-10-08).** Kullanıcı: "oyundaki bazı arayüzler içeriğine göre büyüyüp küçülüyor dükkanlar gibi.
+   grup panelinin altında kalınca çarpıya basamıyorum". KÖK NEDEN: grup paneli `hud.gd` "PartyPanelLayer" = CanvasLayer 96 (bilerek TÜM modallerin üstünde: hangi ekran
+   açık olursa olsun müttefike altın gönderilsin); içeriğe göre boyutlanan, ekran ortasına konan dükkan penceresi (layer 80) kısaldıkça başlık çubuğu/X sağ sütundaki
+   grup levhalarının altına düşüyordu. DÜZELTME: `scripts/modal_safe_area.gd` (`reserved_right(tree, view)` / `rect(tree, view)`): panel `party_panel` grubunda
+   (party_panel.gd `_ready`), görünürse `Background` çocuğunun sol kenarına + 16 px boşluğa kadar sağ şerit ayrılır (en çok ekranın %40'ı); `weapon_shop_screen.gd` ve
+   `merchant_shop_screen.gd` `_apply_window_scale` pencereyi o GÜVENLİ ALANDA ortalar ve gerekirse küçültür, `_refit_if_party_changed` (0,25 sn'lik sayaçta, sadece PC)
+   panel sonradan görünür/gizlenir ya da genişlik değişirse yeniden sığdırır. Panel yoksa (tek oyunculu) alan tüm ekran = eski davranış; telefon yolu (`_phone`) BİLEREK
+   dokunulmadı. KATMAN SIRASI DEĞİŞMEDİ: grup paneli yine 96'da; seviye atlama/evrim kartları, sandık, ölüm ekranı vb. ekranlara DOKUNULMADI (kullanıcı: "level atlama
+   kartlarının falan üstte olması gerekiyor onlara dokunma"). Yeni içerik-boyutlu bir modal pencere eklersen yerleşiminde `ModalSafeArea.rect(...)` kullan. Hâlâ
+   kapsam dışı: `mini_shop_screen.gd`, `shop_panel.gd`, envanter/istatistik panelleri (aynı sorun orada görülürse aynı yardımcıyla çözülür). Test: `test_modal_safe_area`
+   (6; şerit hesabı, demirci + satıcı pencere kenarı ve X düğmesi şeritle kesişmiyor, sekme değişince, panel sonradan görünür/gizli; mutasyonla 4'ü kırıldı). Gerçek
+   pencerede elle denenmedi.
+
+37. **Ateş/Buz Asası alevi asanın BAKIŞINA bağlı (2026-10-08).** Kullanıcı: "ateş asasının alevi ateş asasıyla ayrı yerlerde olabiliyor birbiriyle senkronize değil".
+   Ateş/Buz Asası artık doğuştan Destiny özelliğiyle (madde 34) sürekli alev püskürtüyor (`scripts/enchants/destiny.gd`). KÖK NEDEN: alevin yönü dünyada SABİT bir açıydı (`rot`, tikte
+   hedeften hesaplanıp 0,25 sn'de bir yenilenir): (1) uzak ekranda kuklanın asası KENDİ yerel hedefine döner (`remote_player.gd _update_local_weapon_aim`), alev ise kasterin yayınladığı
+   açıya bakardı -> asa bir yöne, alev başka yöne; (2) yerelde asa yumuşak döner (`AIM_EASE_RATE` 12) ama alev yalnız tikte yön alırdı (mutasyonla ölçüldü: 8,6° sapma). DÜZELTME:
+   `fx_enchant_sprite.gd` yeni `follow_aim` + `rot_offset` verisi: yön HER KARE asanın çizili bakışından (`icon_aim_angle(icon, ileri_açı)` = ikon dönüşü + ileri açı, flip_h için PI - ileri)
+   + `rot_offset` (koni alt alevinin eksenden açısı) alınır; `destiny.gd` bunu yollar (`part_off`). Konum zaten asanın ucundaydı (weapon_tip.gd). Yerel ve uzak kopya AYNI yoldan geçtiği için iki
+   ekranda da alev asanın ucundan asanın baktığı yöne çıkar; hasar konisi (host/kaster) eski yönle (tip->hedef) aynen çalışır - uzak ekranda alev kuklanın asasının baktığı yere gider, hasar yönü değil
+   (ikisi aynı "en yakın düşman" algoritmasıyla zaten çoğunlukla aynı yere bakar). `follow_aim` olmayan eski kullanımlar (mutlak `rot`) değişmedi. Yeni bir silaha-bağlı sürekli efekt yazarsan
+   yönünü dünyada sabit bırakma, `follow_aim` kullan. Test: `test_destiny_spray_follow` (3: yerel alev yönü asanın bakışıyla ±2°, asa elle çevrilince alev döner, uzak kuklada asa döndükçe alev de
+   döner + yenilenen istek açı farkını günceller; mutasyonla 2'si kırıldı). Gerçek iki süreçli oyunda gözle izlenmedi.
+
+38. **Matthew'in evcil hayvanı artık KÖPEK + yeni takip/savaş yapay zekâsı (2026-10-08).** Kullanıcı: "masaüstünde wolf-hellhound spritesheet'i ve wolf-guide resmi var, guide'dan
+   öğrendiklerinle matthewin tilkisini bununla değiştir; yetenek açıklamaları isimleri de buna göre" + "adını köpek yapalım hatta kurt değil bu sanırım" + "yeni köpeğin hareket anlayışını
+   değiştir, çok bugluydu tilkiyken. Matthewi takip etmesi, çevresindeki yaratıklara saldırması gerekiyordu. takip anlayışı çok tuhaf". (a) SPRITE: `assets/pets/dog/dog_sheet.png`
+   (Desktop/wolf-hellhound.png kopyası: 48x48 hücre, 5 sütun, 19 satır: yürüme/koşma 4 yön x 4 kare, yeme/ısırma 4 yön x 5, uluma sol/sağ, uyku) + `dog_frames.tres`;
+   ikisini de `tools/import_dog_sheet.py` üretir (kılavuz düzeni orada yazılı). Pet sözleşmesi tilkiden kalma `idle/walk/run/hurt/death x 4 yön`: köpek sayfasında idle/hurt/death YOK ->
+   idle = yürüyüşün 0. karesi, hurt = aynı kare, death = uyku (yatma) kareleri; `bite_<yön>` (5 kare, 16 fps) saldırı klibi; eat/howl/sleep hazır ama kullanılmıyor. `scenes/player_pet.tscn`:
+   köpek kareleri, ölçek 1, ofset (0,2), + `Shadow` düğümü (köpek sayfasında gömülü gölge yok: `GroundShadow.apply_to` piksel elips, `SHADOW_RADIUS/SHADOW_Y`; sprite gizlenince
+   `_set_body_visible` ile birlikte gizlenir). Eski `assets/pets/fox/` DURUYOR (kullanılmıyor, istenirse silinir). (b) İSİMLER: "Tilki Hücumu" -> "Köpek Hücumu" (characters.gd, skill id 43 aynı),
+   açıklamalar (köpeğini/köpeğine/köpeğin), evrim kartları (skill_evolutions.gd: Çevik Köpek, Köpek Ruhu, "Köpek vurduğu...", "Köpeğin..."), Q ikonu `matthew_kopek_hucumu_icon.png`
+   (`tools/gen_matthew_icons.py` `kopek_hucumu()`: köpek yüzü, hellhound paleti; eski tilki ikonu silindi). KOD İÇİ `fox`/`_matthew_fox_*`/`fx_matthew_fox_*` adları ve Feda Kalkanı kubbesinin
+   (kulaklı) görseli BİLEREK aynı kaldı. (c) YAPAY ZEKÂ (`scripts/player_pet.gd` "HEDEF SEÇİMİ + TAKİP + SAVAŞ" notu): eski sorunlar = sahibe 90 px kala durup her adımda 0,2 sn bekletmeli
+   DUR-KALK, 220 px'te "kayarak ışınlanma", savaşta hedefe DÖNMEDEN ısırma, anlık hız değişimiyle fırlama, sadece hedef ölünce hedef yenileme. Yeni: TAKİP = sahibin hareket yönünün arkasındaki
+   yan "topuk noktası" (HEEL_*), hedef hız = sahibin hızı + hata x HEEL_GAIN (sahip yürürken DURMADAN akar, durunca yumuşakça yavaşlayıp durur; durma 20 px / kalkış 64 px histerezis), hız
+   ACCEL ile değişir; SAVAŞ = AKIN (sortie; kullanıcı 2. tur: "silahlarım yakına gelenleri hemen öldürdüğü için köpek hemen hedef değiştirmek zorunda kalıyor, gittiği yönde kararlı bir
+   şekilde yaratık öldürüp sonra gelsin, zigzag çizerek kararsızca hedef aramasın"; ilk sürüm "sahibe en yakın yaratık + 70 px daha yakın aday çıkınca hedef değiştir" idi ve silahlar hedefi
+   ölünce köpek sürekli başka yöne dönüyordu): köpek sahibinin yanındayken (`SORTIE_REGROUP_RADIUS` 120 px, bekleme `SORTIE_COOLDOWN` 1 sn bitmiş) sahibin FOCUS_RADIUS 240'ındaki yaratıkların
+   EN YOĞUN yönünü seçer (`_choose_sortie_dir`: 12 pencere x +-45 derece, eşitlikte en yakın), o yönün +-`SORTIE_SECTOR_HALF_DEG` 55 derece konisinde (sahibe 45 px yakın olanlar her zaman dahil, tasma
+   LEASH_RADIUS 360) YAPIŞKAN hedeflerle saldırır: hedef ölene / koniden çıkana kadar değişmez, ölünce AYNI koniden KÖPEĞE en yakın yaratığa geçer (`_pick_sortie_target`, sahibe değil: köpek
+   ileri ilerler). Akın biter: koni `SORTIE_END_EMPTY` 1 sn boş kalırsa, köpek tasmayı aşarsa, ya da `SORTIE_MAX` 9 sn dolunca en yoğun yön DEĞİŞMİŞSE (aynı yöndeyse
+   `SORTIE_SAME_DIR_DEG` 60 sürer - dönüp aynı yöne çıkmak ters dönüş olurdu); bitince topuk noktasına döner. Yaklaşırken yavaşlar, durunca hedefe DÖNER ve ısırır (`_play_bite` + `_do_cone_attack`); uzak (>480 px: ışınlanma/ev girişi) ya da sıkışmış (1,5 sn ilerleyemedi) köpek topuk
+   noktasına ATLAR (`_warp_to_heel`, kopyalara teleport bayrağı), sıkışınca hedef 3 sn yok sayılır; seyyar satıcı güvenli bölgesinde kovalamaz. Animasyon: hız süzülür (`_speed_smooth`),
+   idle<->walk<->run eşikleri histerezisli + en az `ANIM_HOLD` sn (klip titremesi yok). (d) ÇOK OYUNCULU: ısırma `broadcast_pet_state(is_attacking=true, sprite_row=yön dizini FACINGS)` ile
+   kopyalara gider (yeni RPC yok; kopya `update_network_pet_state` aynı yönde `bite_<yön>` oynar); kopya konumu paketler arası hızdan (`_net_velocity`) AKARAK izler (eski üstel lerp hız
+   dalgalanması yaratıp walk/run titretiyordu), durmuş paket ileri besleme hızını hemen sıfırlar, durunca aşma geri geri yürümek yerine kayarak düzelir (`NET_SLIDE_*`). Testler:
+   `test_matthew_dog` (12: sayfa/klip sözleşmesi, sahip yürürken durmadan akış, sahip durunca yumuşak duruş + titremesiz bekleme, uzak atlayış, yakın yaratığa koşup dönüp ısırma, AKIN: silahlar
+   sürekli öldürürken tek yöne bağlı kalma + boşalan yönden dönüş + tasma + süre sonrası devam kuralı (mutasyonla koni 180 derece açılınca kırılıyor), güvenli bölge, kopya akışı + ısırma klibi + teleport; ESKİ yapay zekâyla 6'sı kırılıyor: 170 karede 52 duraklama, hiç atlamama, hiç saldırmama) + GERÇEK İKİ SÜREÇ
+   `tools/mp_audit/run_audit.ps1 -Mode dog` (host = Matthew; `dog_audit.gd` + `dog_audit_compare.py`; host köpeği vs istemci kopyası kare kare): konum hatası ort 4,4 px (p95 17), ısırma 5'e 5,
+   günlük temiz. AKIN ÖLÇÜMÜ (sentetik: dört yönde sürekli yaratık, silahlar 0,4 sn'de bir sahibe en yakını öldürüyor, 30 sn, headless): eski mantık 15 hedef değişimi / köpek 2285 px yürüdü; akın 6 hedef değişimi /
+   806 px, 3 akın (gerçek iki süreçli denetimde savaş fazında yaratık çok az olduğundan fark ölçülemedi: ikisinde de ~0 ters dönüş). Tuzak: başarısız bir `assert` testi yarıda keser ve `_cleanup()`'a ulaşılmaz -
+   sızan yaratıklar SONRAKİ testleri bozar (köpek akın testlerinde yaşandı: ilk hataya bak). Tuzak: klip titremesi/aşma gibi ağ kopyası sorunları TEK süreçli testte görünmedi, iki süreçli denetim ve kare kare hız dökümü buldu. Gerçek oyunda uzun oynanarak
+   (özellikle engelli arazide takılma, kapıdan eve girip çıkma, 4 oyuncu) izlenmedi.
+
+39. **Bosslar elit oldu, boss/Final/zafer geçici KAPALI (2026-10-08).** Kullanıcı: "tüm bosslar bundan sonra elit yaratıkların yerine geçsin, elitler gibi hafif büyük ve yıldızlı
+   olacaklar, yeni bossları sana sonradan atacağım" + "canları ve kalkanları o kademedeki yaratıkların 15 katı olsun, şuanki halleri boss haliyle çok güçlü olur" + (soruya cevap)
+   "her kademenin tek eliti boss havuzundan gelsin" + "Final ve zafer geçici kapansın". (a) ANAHTAR `GameManager.bosses_enabled` (varsayılan **false**, ağdan gitmez): kapalıyken
+   `enemy_spawner.gd` `_check_boss_tiers` (Kademe bossları), `_check_final_tier` (13'lü Final), `_final_pending`, "Kademe XVI" bildirimi (`_check_tier_announcement` tavanı 15) ve sonsuzdaki boss
+   dalgaları (`_check_endless_boss_wave`) çalışmaz; main.gd'deki "boss dalgası" yazıları da çıkmaz. Kademe saati 15. kademeyi (15 x tier_duration) bitirince `_check_auto_endless` -> `_enter_endless`
+   (`begin_endless` ile ortak gövde) oyunu zafer penceresi OLMADAN doğrudan sonsuz Kat 1'e geçirir (yaratık doğumu kesilmez, kapı/bekleme yok). (b) ELİT HAVUZU `ELITE_POOL` = eski 14 boss
+   yaratığı (iskelet3, lich3, ork3, agac3, golem3, rontgen2/3, demon3, hayalet3, mantar3, rat3, vampire3, zombie3, iblis3): her Kademe'nin (ve sonsuz katın) TEK eliti artık rastgele roster
+   yaratığı değil `elite_candidates(roster_kademesi)` listesinden gelir = havuzdan o kademenin roster AİLELERİNE uyanlar (Kademe 1: fare; 12: ağaç/golem/mantar; 13-15: demon/hayalet/vampir/iblis/röntgen);
+   hiçbiri uymazsa (Kademe 9 = sadece slime) komşu kademelere genişler. `_spawn_regular_enemy` elit vadesini id seçiminden ÖNCE atar (`_roll_elite_for`), doğum başarısızsa vade geri verilir
+   (`_unroll_elite`). Elit kuralları aynen: yıldız + aura, boy x1,5, hasar x1,5, hız x0,85, garanti elit sandık, sersemletmeye açık; DEĞİŞEN: `enemy.gd ELITE_DEFENSE_MULT` 4 -> **15** (can VE
+   kalkan, "o kademedeki aynı aileden sıradan yaratığın 15 katı": testle ölçüldü). Boss koduna/verisine (BOSS_TIERS, FINAL_CREATURES, boss barı/kafatası, zafer penceresi, boss dengesi,
+   endless_math boss dalgası) DOKUNULMADI - yeni bosslar gelince `bosses_enabled = true` yap, BOSS_TIERS/FINAL_CREATURES'ı yeni bosslarla doldur (ELITE_POOL elit kalır). Boss akışını sınayan 4 test
+   dosyası (`test_boss_kademe_gate_and_balance`, `test_tier_starts_when_previous_dead`, `test_endless_mode`, `test_creature_tier_announcement`) `_spawner()` içinde anahtarı geçici açar.
+   Testler: `test_elite_pool_and_bosses_off` (9: havuz = eski boss listesi, aday kuralı, 15 kat can/kalkan, boss yok, otomatik sonsuz, XVI bildirimi/boss dalgası yok, sonsuz elit havuzdan; mutasyonla
+   denendi). KAPANAN OYUN ÖZELLİKLERİ (bosslar dönene kadar): "Hayatta Kaldım!" ve 3 zafer başarımı (achievements.gd victory*), "Final Karşılaşması" (tier 16), zafer penceresi/zafer rekoru.
+   Gerçek oyunda ve iki süreçli MP'de elit görünümü/yeni havuz izlenmedi (elit RPC yolu eskisiyle aynı: id + is_elite).
+
+40. **Kademe 3 bossu: MINOTAUR (2026-10-08).** Kullanıcı: masaüstü `minotaur` paketi = Kademe 3'ün yeni bossu; "oyuncuya doğru hızlı, geniş çizgi halinde,
+   oyuncuya yetişebilecek boynuz dashi; bazen durur hızlanarak koşar; boynuz darbesi hasar verip etrafa savurur (kimse collision'ın içine giremez); Canı 80.000
+   Kalkanı 90.000 Kalkan Soğurması %80 Hasarı 100" - aynı gün "kalkanını ve canını %60 azalt" dedi -> NİHAİ can 32.000, kalkan 36.000. Soru sorulabilirdi, sorulmadı - aşağıdaki "Benim seçimlerim" listesi.
+   (a) **YENİ BOSS MEKANİZMASI:** `enemy_spawner.gd` `NEW_BOSS_TIERS = {3: ["minotaur1"]}` `GameManager.bosses_enabled` KAPALIYKEN de çalışır (Final, zafer,
+   sonsuz boss dalgası, diğer kademelerin bossu kapalı kalır; `_active_boss_tiers()`); `bosses_enabled` açıkken eski `BOSS_TIERS` (testler için). Yeni boss geldikçe
+   `NEW_BOSS_TIERS` + `FIXED_BOSS_STATS` (nihai statlar) + `boss_bar_art.gd NAMES` + `SCENES`/`ID_FAMILY` satırı ekle; HEPSİ gelince `BOSS_TIERS` onlarla değişir. Boss
+   kurulumu host + istemci için TEK yerde: `_setup_boss_enemy` (eskiden iki kopyaydı). Kademe boss kapısı aynen çalışır: boss ölmeden Kademe IV açılmaz (saat 300 sn'de durur).
+   `_spawn_boss_group` boş dönerse (canlı çapa yok) tetik "doğdu" sayılmaz, sonraki 0,25 sn'de yeniden dener.
+   (b) **STATLAR** `FIXED_BOSS_STATS["minotaur1"]`: can 32.000, kalkan 36.000 (ilk verilen 80.000/90.000 idi, %60 azaltıldı), soğurma 0,8, hasar 100 - global çarpan zincirini ATLAR (tek oyunculu = tam bu sayılar). Çok oyunculuda
+   can/kalkan, tüm yaratıklarla aynı kuralla ekstra oyuncu başına +%50 (hasar büyümez). Altın/XP ödülü Kademe 3'ün eski referans bossuyla (`reward_ref` iskelet3) AYNI. Etkin
+   dayanıklılık: kalkanın %80 emmesiyle kalkan 45.000 hasarı yutar (9.000'i cana gider) + kalan 23.000 can = ~68.000 hasar (eski K3 bossu ~10.500; ilk sayılarla ~170.000 idi) - tek tablo, istenirse düşür.
+   (c) **HÜCUMLAR** (`minotaur_math.gd` = TÜM sayılar + saf hesaplar; `minotaur_charge.gd` = host durum makinesi, `enemy_abilities.gd`'de "minotaur" ailesi): CHASE (C++ kovalama +
+   normal temas saldırısı) -> WINDUP (durur, eğilir; 0,4 sn hedefi izler sonra yön KİLİTLENİR ve yerde uyarı şeridi çıkar, 0,55 sn tepki) -> CHARGE (hareketi BU betik sürer:
+   `ability_move_lock` C++ hareketini kapatır, konum her karede elle ilerler - C++ benimser, vampir ışınlanmasıyla aynı yol) -> RECOVER (1 sn; duvara çarptıysa 1,7 sn sersemleme).
+   BOYNUZ HÜCUMU: 640 px/sn (oyuncu 252), 76 px geniş şerit, ilk 0,35 sn hafif kıvrılır. BOĞA KOŞUSU (hedef >= 240 px'te %35): 1,25 sn durup kazır, 70 -> 520 px/sn ~1,5 sn'de hızlanır,
+   80 derece/sn kavisle kovalar, vurunca 0,5 sn sonra biter. Her hücum her oyuncuya EN FAZLA BİR vuruş (`_hit_ids`). Hücum/toparlanma sırasında C++ temas olayı
+   `enemy.gd _ew_on_event EW_E_MELEE` başında `_abilities.melee_blocked()` ile bastırılır (yoksa hasar üst üste biner). Boss düğümü duvar/engele GİRMEZ (`MinotaurMath.step_blocked`,
+   `GameManager.is_position_blocked_by_walls`, 22 px pay).
+   (d) **SAVRULMA:** hasar `deal_special_damage(kind "minotaur")`, ardından yerel oyuncuda `player.apply_boss_fling(dir, 190)`, uzak oyuncuda yeni RPC `NetworkManager.forward_player_fling_to_peer`
+   (`_from_host` korumalı). Savrulma SADECE hasar gerçekten işlendiyse (`player.gd take_special_damage` damgası `_minotaur_hit_msec`, 600 ms) - kaçınan/dokunulmaz/ölü savrulmaz. Mesafe o makinenin duvar
+   haritasıyla ÖNCEDEN kısaltılır (`clip_fling_distance`) + `_block_movement_into_terrain` yoklaması savrulma boyunca da çalışır; hız tavanı 560 px/sn (karede <= 9,3 px: 10 px'lik yoklama hücreyi
+   atlayamaz). `apply_knockback_force` (400 tavan) DEĞİŞMEDİ.
+   (e) **ÇOK OYUNCULU:** karar + hasar + savrulma host'ta. İstemcilere: uyarı şeridi `spawn_synced_world_fx("charge_lane")` (hasarsız kopya), poz `broadcast_enemy_vfx "minotaur_pose"` (host ve istemci AYNI
+   `enemy.gd _apply_minotaur_pose`'u çalıştırır; hücum pozunda istemci kuklasının ağ hızı tavanı `_net_speed_cap_override` 760 px/sn'e çıkar - yoksa 3,5x hız sınırında kalıp geriden gelir), toz/sarsıntı
+   `"minotaur_impact"`. Konum her zamanki yaratık paketiyle (0,15 sn; kukla ölü hesaplama ile akar). Pozlar saldırı sayfasının kare aralıkları (`enemy.gd _advance_frame_sprite`): eğilme 1-2, hücum 0-2 döngü, doğrulma 3-5.
+   (f) **SANAT:** `tools/import_minotaur_sheets.py` (paketin "black outline / 100% (80x80)" sayfaları; paket satır sırası aşağı/SOL/SAĞ/yukarı -> projenin aşağı/YUKARI/sol/sağ düzenine çevrilir) ->
+   `assets/enemies/minotaur/`; sahne `scenes/creatures/enemy_minotaur1.tscn` (hücre 80, ölçek 1,6 x boss 1,7). Kullanılmayan paket sayfaları: punch/stomp attack, hitbox sayfaları. Ölüm sesi ork'tan ödünç
+   (`creature_death_sound.gd ALIASES`), kan rengi `creature_blood.gd`, boss adı "MİNOTAUR".
+   **Benim seçimlerim (kullanıcı vermedi):** çok oyunculu can/kalkan ölçeği; ödül = eski K3 bossu; normal temas saldırısı da 100 hasar / 1,6 sn (sahne `contact_interval`); iki hücumun sayıları/oranları; duvara çarpınca uzun
+   sersemleme; savrulma 190 px; "bazen durur hızlanarak koşar" = boğa koşusu yorumu. Hepsi `minotaur_math.gd` / `FIXED_BOSS_STATS` / sahnede tek satır.
+   **Testler:** `test_minotaur_boss` (saf hesaplar, durum makinesi sahte yaratıkla: zamanlama/şerit/isabet/duvar/ivmelenme/iptal; gerçek boss statları + ödül eşitliği + kalkan %80 + kademe kapısı; pozlar; ağ hız tavanı;
+   şerit; gerçek Player savrulması; GERÇEK HARİTADA duvar kenarında savrulma + boss hücumu, mutasyonla 4'ü kırıldı; debug menüsünden gerçek boss) = 23 test, `test_elite_pool_and_bosses_off` güncellendi.
+   **İKİ SÜREÇLİ GERÇEK DENETİM** `tools/mp_audit/run_audit.ps1 -Mode minotaur -Secs 60` (+ `minotaur_audit.gd`, `minotaur_audit_compare.py`; host boss'u istemcinin yakınında doğurur, istemci dört yöne yürür):
+   ~9 tam hücum döngüsünde poz dizisi host ve istemcide AYNI, istemcideki boss kuklası hücum süresince ortalama 13 px / p95 35 px (hücum dışı 1,5 px) sapma, ağ gecikmesi ~0,04 sn, istemci oyuncusu her
+   isabette tam 100 hasar aldı + 70-310 px savruldu (yürüyüşle birlikte), hiçbir karede duvar hücresine girmedi, uyarı şeridi ve ağ hızı tavanı (760) istemcide göründü. Can/kalkan 2 oyuncuda 120.000/135.000 (x1,5; bu koşu %60 kesintiden ÖNCE alındı, şimdi 48.000/54.000).
+   Not: boss oyuncunun >= 15 px yanında durur (C++ gövde engeli küçük) ve hedef < 90 px'teyken hücum etmez (RANGE_MIN) - yerinde duran bir oyuncu sadece temas saldırısı alır; hücumlar oyuncu uzaklaşınca gelir.
+   Denetimin sonunda istemcide "harita_baked.tscn:31 Parse Error" görünür: host denetimi bitirip çıkınca istemcide host devri yükleme ekranı açılır, çıkışta yarım kalan yükleme - düzenek artığı, oyun hatası değil.
+   **Doğrulanmayan:** gerçek oyunda elle oynanış hissi (hücum/dash hissi, savrulmanın göze nasıl göründüğü), 3-4 oyuncu, telefon, boss savaş süresi/denge (kullanıcıya uyarıldı; ~68.000 etkin hasar). Tam paket: 900 test, tek hata
+   `test_endless_mode::test_regular_spawns_in_endless_use_the_scaled_tier_but_the_tier_15_roster` (rastgele: sonsuz katın elit'i havuzdan demon3 gelirse roster kontrolü düşer, 3 koşunun 1'inde; Minotaur'dan bağımsız, madde 39'dan kalma).
+
+41. **Kademe 5 bossu: YERALTI CANAVARI (2026-10-09).** Kullanıcı: masaüstü "solucan boss" paketi (sand worm). "Yeraltından kocaman solucanlar çıkaran ama yeryüzüne çıkamayan boss; yeryüzüne
+   solucan UZUVLARI çıkarır, oyuncunun yakınında rastgele konumlarda doğarlar, bazıları asit atar bazıları saldırır; sürekli oyuncunun ÖNÜNÜ KESMEYE odaklanır, bazı yerlerde dümdüz sıralanıp yolu keser;
+   oyuncular uzuvlara saldırarak bossun kendi canını azaltır (uzuvların hasar eşiği var: aşılınca parçalanır, bazıları deliğine geri döner); yeraltından korkutucu sesler; Can 50.000 Kalkan 60.000, asit
+   110, solucan saldırısı 130". (Masaüstündeki `boss ve yetenekleri.txt`te aynı boss "Kademe 6 / 60.000 / 70.000 / 120 / 150" yazıyor - sohbet mesajı daha yeni olduğu için ONUNLA gidildi: Kademe 5.)
+   (a) **MİMARİ:** boss = GÖRÜNMEZ, VURULAMAZ bir havuz düğümü (`scripts/underground_boss.gd`, `extends enemy.gd`; `enemy_underground1.tscn`): can + kalkan (üst boss barı), C++ EnemyWorld'e KAYITLI
+   DEĞİL (`_ew_try_register` boş: mermi/alan sorgularında görünmez, mermiyi yutmaz), `take_damage/take_damage_host/_take_dot_damage` yok sayılır, minimap/silah hedeflemesi meta ile kapalı
+   (`hide_on_minimap`, `untargetable`), üstünde kafatası plakası yok. Konumu 0,25 sn'de bir oyuncuların ortasına gider (ganimet/ses oraya). Hasar SADECE uzuvlardan gelir: `worm_limb.gd`
+   (`extends enemy.gd`, `enemy_sandworm1.tscn`, C++'a KAYITLI normal Enemy: silahlar hedefler, mermiler vurur) `_apply_damage`'te uzvun YEDİĞİ hasarı `boss.absorb_limb_damage`'e iletir (fazla hasar: sadece
+   uzvun kalan eşiği). Toplam hasar = can + kalkan = 110.000 (kalkan soğurması p ne olursa olsun). Soğurma verilmedi -> standart boss %90 (`FIXED_BOSS_STATS["underground1"]`, ödül = K5 referans bossu).
+   (b) **YÖNETMEN** (`underground_boss.gd _director_tick`, sadece host/tek oyunculu; sayılar `worm_boss_math.gd`): oyuncu hızını izler; 1,3-2 sn'de bir uzvu bir oyuncunun GİTTİĞİ yönün 150-250 px önüne (+-70 yan; duruyorsa 130-230 px halka)
+   çıkarır (hiçbir oyuncunun 95 px içine, başka uzvun 96 px içine, engele/satıcı bölgesine değil); 13-19 sn'de bir hareket eden oyuncunun 200-280 px önüne gidiş yönüne DİK 4-6 uzuvluk DAĞINIK SIRA
+   (**2026-10-09'dan beri**: eskiden 5 uzuv 46 px aralıkla dümdüz duvardı, sprite'lar üst üste biniyordu; kullanıcı "dip dibe dizilmesini istemiyorum, daha ayrık ve rastgele olsun" dedi -> `worm_boss_math.gd scattered_line`: komşu yan
+   aralığı rastgele 100-170 px, her uzuv gidiş yönünde +-45 px kayık, sıra +-60 px yana kayık, çıkış sırası KARIŞIK ve gecikmeleri rastgele 0,08-0,45 sn, hepsi yakın dövüş; engelli nokta atlanır, en az 2 uzuv kurulabilirse sıra
+   başlar). Aynı anda en çok 7 (+ekstra oyuncu başına 2; sıra olayı üst sınırın ÜSTÜNE en çok 6 ekler). SERT GÖVDE: `player.gd _block_movement_into_enemies`
+   artık `hard_block_radius` olan yaratıkta (uzuv = 18 px) yumuşak blok (~11 px) yerine sert yarıçapla durdurur ve uzvu itmez; sıra artık geçit BIRAKIR (komşu aralığı >= 100 px -> boşluk >= 64 px > oyuncu çapı 22,8), "yolu keser" ama duvar değil;
+   içine girmiş oyuncu geri çekilebilir (tuzak yok).
+   (c) **UZUV** (`worm_limb.gd`): çık (0,45 sn) -> bekle -> YAKIN DÖVÜŞ (menzil 104 px, kıvrılma+savurma 0,7 sn, isabet karesi 0,33 sn, savurmadan önce kırmızı nabız uyarısı, 130 hasar, tür "worm", bekleme 1,7 sn) ya da ASİT ATAN
+   (yeşilimsi ton; 40-430 px + görüş, 0,3 sn'de ağızdan hedefin o anki konumuna `worm_acid.gd` damlası: 240 px/sn, 110 hasar, tür "worm_acid", kaçınılabilir, orman duvarı/satıcı/Şovalye kalkanına çarpınca sıçrar). Kader:
+   %65 PARÇALANIR (eşik 2.000 hasar, `die()` = `dismiss_without_reward`: drop yok, öldürme sayılmaz, toz + ses), %35 DELİĞİNE DÖNER (eşiğin %55'inde, 8 karelik gömülme, gömülürken dokunulmaz/hedeflenemez); ömrü (9-14 sn, sıra 13-17) dolunca da döner.
+   Boss ölünce tüm uzuvlar parçalanır. Uzuv hiç hareket etmez (`ability_move_lock` + hız 0), C++ temas saldırısı kapalı (`_ew_on_event`).
+   (d) **ÇOK OYUNCULU:** karar/hasar/atış host'ta; `emit_ability_vfx` (YENİ, enemy.gd: yerelde işle + host'sa yayınla) ile "worm_setup" (tür), "worm_pose" (çıkış/savurma/tükürme/gömülme sayfası), "worm_strike" (toz+sarsıntı), boss'un
+   "worm_rumble/worm_growl/worm_ambient" sesleri `broadcast_enemy_vfx`'ten HER peer'de yerelde. Uzuv `_rpc_client_spawn_creature`'da `LIMB_IDS` ile çarpansız kurulur (istemcide tier/kalkan/global çarpan yok). Geç katılana `send_catchup_to_peer`
+   (tür + poz). TUZAK (bulundu, düzeltildi): uzuv poz numaraları 1-4 iken enemy.gd'nin MİNOTAUR poz dalı (`_pose_override` 1-3) onları kendi kare aralıklarına çeviriyordu -> uzuv pozları 11-14, o dal sadece 1-9.
+   (e) **SES:** `underground_sound.gd` (HER peer yerelde, başsızda sessiz): `tools/gen_underground_sounds.py` (numpy) ile sentezlenen `assets/audio/underground/` (rumble_1-3 5-9 sn'de bir + çok hafif yer sarsıntısı, growl_1-2 9-15 sn'de bir, emerge/burst/spit/hiss
+   uzuv sesleri) + Horror paketinden "Gore And Larvae Loop" (16-26 sn'de bir, çok kısık). Sesleri DİNLEYEMEDİM (kullanıcı beğenmezse sayılar/dosyalar tek yerde).
+   (f) **SANAT:** `tools/import_sandworm_sheets.py` (paket satır sırası aşağı/SAĞ/SOL/yukarı -> projenin aşağı/yukarı/sol/sağ düzeni; minotaur paketinden FARKLI) -> `assets/enemies/sandworm/` (uzuv ölçeği 2,4 = ~115 px, oyuncu 34 px) + asit damlası
+   şeritleri; `empty.png` boss düğümünün saydam sprite'ı. Kullanılmayan paket sayfaları: hit, attack hitbox, 200% sürümler.
+   **Benim seçimlerim (kullanıcı vermedi):** uzuv eşiği 2.000 (toplam hasar sabit; eşik sadece kaç uzvun gerektiğini belirler ~55), %35 geri dönüş, ömür/aralık/üst sınır/sıra sayıları, sert gövde 18 px, asit hızı 240, tükürük/savurma menzilleri, boss soğurması %90,
+   uzuvların kendi canı yok-eşik. **Testler:** `test_underground_boss` (19: saf hesaplar, sprite/sahne sözleşmesi, boss statları + vurulamazlık + havuz toplamı 110.000, kademe kapısı + ölüm, savurma zamanlaması/130, asit 110 + kaçınma, hasar iletimi + fazla hasar,
+   ödülsüzlük, geri dönüş + dokunulmazlık + silinme, ömür, istemci kurulumu, yönetmen yol kesme/dağınık sıra (madde 45)/üst sınır/kimse dışarıda değilken, pozlar, ağ yönlendirici, sert gövde bloğu gerçek Player ile), `test_minotaur_boss` + `test_elite_pool_and_bosses_off` güncellendi.
+   **İKİ SÜREÇLİ GERÇEK DENETİM** `run_audit.ps1 -Mode underground -Secs 70` (+ `underground_audit.gd/_compare.py`): 70 sn'de 43 benzersiz uzuv doğdu, istemcide HEPSİ göründü (%100, 1102/1102 kayıt), uzuv konum farkı en çok 8,6 px, tür farkı 0, poz
+   farkı 4/1102; boss havuzu host/istemci ortalama 1, en çok 15 farkla AYNI; asit damlaları iki tarafta (3/3); oyuncular tam 130 (savurma) ve 110 (asit) hasar aldı, duvar hücresine girmediler; 2 oyuncuda boss 75.000/90.000 (x1,5). İlk koşuda silahlar
+   havuzu sadece ~900 azalttı (başlangıç silahı + yürüyen oyuncular): gerçek savaş süresi hesaplanamadı. STRES koşusu (`$env:MP_STRESS=1`, iki oyuncu da uzuvlara doğrudan hasar basar, 45. sn'de havuz yapay düşürülür): istemci hasarı host'a RPC ile gitti, havuz iki tarafta
+   aynı eğriyle erdi (fark <= 900 = bir senkron aralığı), parçalanma/geri dönüş uzuv kayıtlarının %99,3'ünde iki tarafta aynı, BOSS HER İKİ TARAFTA ~0,25 sn farkla öldü ve tüm uzuvlar dağıldı (sonda yüzeyde 0/0). **Doğrulanmayan:** elle oynanış hissi (yol kesme/sıra adil mi, uzuv ömrü/eşik/üst sınır), gerçek build'le havuzun erime hızı (110.000 hasar; uzuv
+   ömrü ~11 sn içinde yeterli DPS gerekir - ağır gelirse `LIFETIME_*`/`MAX_ACTIVE`/`LIMB_THRESHOLD`), sesler (dinlenmedi), 3-4 oyuncu, geç katılan oyuncuya uzuv yakalaması, telefon.
+
+42. **Boss çok oyunculu senkron denetimi + RPC güvenliği (2026-10-09, Minotaur + Yeraltı Canavarı sonrası "senkronda eksik var mı" sorusu).** (a) **BULUNAN + DÜZELTİLEN:** `network_manager.gd`'de host'tan gelmesi gereken
+   üç RPC'de gönderen kontrolü YOKTU: `broadcast_enemy_vfx` (sahte "death_state"/"worm_pose"/"minotaur_pose" ile başkasının yaratığını öldürme/bozma), `forward_damage_to_peer` + `forward_special_damage_to_peer` (herhangi bir
+   peer başkasına istediği hasarı yazabiliyordu). Üçüne de `if not _from_host(): return` konuldu (tüm çağrıcılar host tarafı: `emit_ability_vfx`, `RemotePlayer.take_damage/take_special_damage`). KANIT: `run_audit.ps1 -Mode security` artık istemciden
+   99999 sahte hasar + sahte death_state yolluyor; korumalar KAPALIYKEN host oyuncusu 99.849 hasar yedi (negatif kontrol, sonra geri yüklendi, md5 doğrulandı), AÇIKKEN hiçbir şey olmadı. DİKKAT: `network_manager.gd`'de hâlâ 83 kadar `any_peer` RPC'de `_from_host()`
+   YOK - çoğu meşru istemci->host isteği (request_*) ya da herkesten herkese yayın, ama bazıları host-only olabilir (`grant_weapon_shards`, `sync_ally_heal`, `sync_evo_buff`, `receive_gold_gift`, `sync_*`...): bu turda dokunulmadı, ayrı bir tarama işi (liste: network_manager.gd'de
+   `@rpc("any_peer")` + gövdesinde `_from_host()` olmayanlar). (b) **YAKALAMA:** `run_audit.ps1 -Mode bosscatchup` (+`boss_catchup_audit.gd/_compare.py`): iki boss + uzuvlar varken istemci düşüp yeniden katıldı; eşzamanlı anlık görüntüde bossların kimlik/statları (x1,5 dahil)/havuzu/kademesi
+   ve uzuvların kümesi/türü/pozu/gömülme durumu iki tarafta AYNI (SONUÇ: TEMİZ). Küçük boşluk kapatıldı: hücumun ortasında katılan oyuncuya Minotaur pozu + ağ hızı tavanı gitmiyordu - `enemy.gd send_catchup_to_peer` (spawner yakalama döngüsünden çağrılır; uzuv kendi sürümünü tanımlar).
+   (c) **HOST'UN KENDİ OYUNCUSU HEDEFKEN:** `MP_MINO_TARGET=host` ile Minotaur denetimi (yerel hasar + yerel `apply_boss_fling` yolu): tam 100 hasar, 105-233 px savrulma, kukla hatası istemci hedefliyle aynı (ort ~11 px hücumda). (d) **STRES:** `MP_STRESS=1` ile Yeraltı Canavarı (istemci hasarı host'a RPC, havuz
+   iki tarafta aynı eğri, boss iki tarafta ~0,25 sn farkla öldü, uzuvlar dağıldı). **HÂLÂ DOĞRULANMAYAN:** 3-4 GERÇEK süreç (run_audit.ps1 ikiden fazlasını başlatmıyor; oyuncu sayısı ölçekleri birim testle sınandı), host devri sırasında YAŞAYAN boss (kural: yeni host bossu tam canla yeniden doğurur, uzuvlar sıfırlanır - denenmedi),
+   boss kill kredisi/ödül dağılımı (son vuruş istemcideyse `notify_kill_passive`), seslerin duyulabilirliği, hücumun ortasında yakalama (Minotaur poz yakalaması yazıldı ama o ana denk getirilip sınanmadı), boss hasarı host'taki UZAK OYUNCU KUKLASININ konumuna göre hesaplanır (diğer yaratık saldırılarıyla aynı: gecikmeli oyuncu host'un bildiği yerde vurulur).
+
+43. **Boss ve müttefik can/kalkan SAYILARI (2026-10-09).** Kullanıcı: "bossların can ve kalkan sayısı görünmüyor, dostların can ve kalkan sayısı grup sekmesindeki barlarında görünmüyor". (a) Üst boss barı (`boss_bar_art.gd top_plaque`, `boss_bar_top.gd`): plaket
+   38 -> 44 sanat pikseli, kalkan çubuğu 9, can çubuğu 11 px; ikisinin İÇİNDE "şimdiki / en çok" (binlik noktalı: `fmt_int`/`bar_text`, krem yazı + koyu anahat, m5x7). Kalkansız bossta kalkan yazısı yok. Bar imzası sayıyı içerir (oran 0,001'den az değişse de
+   yeniden çizilir). `top_plaque`'a opsiyonel `hp_text`/`sh_text` (boşsa sayısız çizer). Boss havuzu 100.000+ olduğundan sayı gerekliydi (Yeraltı Canavarı 165.000). (b) Grup paneli (`party_panel.gd`): her müttefikin can ve kalkan çubuğunun içinde HUD'daki kendi sayısıyla AYNI "%d/%d". İKİ TUR: ilk sürüm 24 punto Label + 16/14 px çubuktu - kullanıcı "sayılar aşağıda kalmış, zor okunuyor, sığmıyor" dedi
+   (Label satır yüksekliğine göre ortalanıp ~2-3 px aşağı oturuyordu, 1,5 kat piksel yazı bulanıktı). İkinci sürüm: `scripts/bar_value_label.gd` (Control, kendi `_draw`): yazı TAM 2x (32 punto, rakam 14 px) ve tam piksele yuvarlı, taban çizgisi
+   çubuk ortası + rakam yüksekliği/2 (22 px can çubuğunda üst/alt 4'er px, 18 px kalkanda 2'şer px); sığmazsa 24 -> 16'ya düşer (panelde çubuk 130 px, PAD_X 8: 9 karaktere kadar 2x, "9999/10000" 1,5x, daha uzunu 1x). Çubuklar 10/6 -> 22/18 px (satır ~30 px uzadı).
+   Kalkansız müttefikte kalkan çubuğu yerinde kalır, yazısı boş (satır zıplamaz). `PartyRow.health_label/shield_label` (.text). Test: `test_hp_numbers_on_bars` (6) +
+   `test_boss_bar_top` (16) geçti; gerçek renderer görüntüsüyle 1920x1080'de boss barı ve 4 müttefik satırı (büyük sayılı dahil) doğrulandı. Telefon yerleşimi (ölçek 2) elle izlenmedi.
+44. **Silah satışında parçacık iadesi (2026-10-09).** Kullanıcı: "silahı satınca harcanan silah parçacığının %70ini geri vermiyor". Silah kopyasının defteri
+   artık iki alanlı: `"spent"` (altın) ve `"shards_spent"` (parçacık; anahtar yoksa 0 - başlangıç silahı/eski kayıt/sandıktan gelen silah iade etmez). Parçacık deftere
+   `weapon_shop_logic.gd buy_weapon` (10) ve `buy_wupgrade` (efsun geliştirmesi 5, final 10) içinde `EnchantDefs.record_shards_spent` ile yazılır (rollback'te silinir).
+   İade oranı TEK yerde: `EnchantDefs.SELL_REFUND_RATIO` (0,7) + `sell_refund_gold(entry)` / `sell_refund_shards(entry)`; iki satış yolu da (envanter `inventory_panel.gd
+   _do_sell_weapon_equip`, geliştirmeler sekmesi `shop_panel.gd _on_sell_weapon`) altını ve parçacığı ikisinden de alır (`GameManager.add_weapon_shards`). Yeni bir silah
+   SATIŞ yolu yazarsan aynı iki işlevi çağır. Arayüz: envanter ipucu "+N Altın, +M Silah Parçacığı", onay penceresi/telefon şeridi ek satır, geliştirmeler sekmesi SAT
+   düğmesinin ipucu; envanter yuva imzası defteri de içerir (geliştirme alınca ipucu tazelenir). BİLİNÇLİ: geliştirmelere harcanan parçacık da deftere girer ("harcanan
+   parçacığın %70'i" - kullanıcı sözünün benim yorumum) ama efsun geliştirmelerinin ALTINI hâlâ `spent`'e yazılmaz (iade edilmez, madde 34'teki gibi); parçacık
+   iadesini sadece silahın kendi 10'una indirmek istenirse `buy_wupgrade`'deki `record_shards_spent` satırı silinir. Testler: `test_weapon_shop` (23; mutasyonla
+   envanter yolu kırıldı). Gerçek oyunda elle satılarak izlenmedi.
+45. **Yaratık derinliği: ağaç/ev arkasında örtülme, kendi aralarında sıra kapanışı, kare başı çizim sırası koruması (2026-10-09).** Kullanıcı: "yaratıkların Y eksenleri düzgün çalışmıyor, ağaçların ve evlerin
+   üstünde yürüyorlar; yeraltı canavarı (uzuvlar) yan yana dizilince birbirinin üzerinde görünüyor, eksenler yanlış; ayrıca önümü keserken dip dibe dizilmesin" + sonra "üst üste binmiyor ama solucanlar bazen glitchlenip
+   diğerinin üstünde görünüyor". ÜÇ AYRI kök neden (hepsi gerçek renderer ekran görüntüsüyle önce/sonra doğrulandı): (a) **AĞAÇ/EV ÖRTÜSÜ**: madde 25'in ön kopya katmanları SADECE oyuncuları örtüyordu, yaratıklar haritanın üstünde z 0'da çiziliyordu. Artık
+   `depth_occluders.gd update_creatures` (3. karede bir, TEK karelerde) görüntüdeki, bir nesne kümesine değen en çok 32 yaratığın gövde dikdörtgenini (ayak x, ayak y, yarım genişlik, boy) kopya katmanların `yaratiklar[32]` uniform'una yazar
+   (`derinlik_on_katman.gdshader` VE `sallanan ağaç.gdshader` - ikisinde AYNI `orter()` kuralı); kural: piksel kökü varlığın ayağından aşağıdaysa kopya o piksele çizilir, pikseli içeren bir varlık nesnenin ÖNÜNDEYSE (ayağı köke eşit/aşağıda)
+   hep görünür kalır (oyuncu/yaratık "önde kazanır"). Ucuz ön eleme: kaba 32 px ızgara (`_coarse` en büyük kök, `_near` 3 hücre genişletilmiş): açık arazideki yaratık tek sözlük sorgusuyla elenir; yaratık gövdesi sprite karesinin OPAK alanından bir kez ölçülür
+   (`creature_body`, meta `_depth_body`, x1,15 pay); oyuncu müttefikleri (köpek) de dahil. **Kopya katmanlar artık z_index 3** (oyuncu 1, oyuncunun önüne alınan yaratık 2): önündeki yaratık da ağacın arkasındaysa örtülsün. Yeni bir "nesne" katmanı eklersen madde 25'teki
+   gibi OBJECT_LAYERS/BUILDING_GROUPS'a yaz, yaratık örtüsü ona OTOMATİK uygulanır. Sadece `setup()` (dış harita) yaratık örtüsünü açar; iç mekan (`setup_interior`) kapalı (yaratık içeri girmez). Ağaç sallanma shader'ındaki kopya yolu aynı uniform'ları taşımalı (kopyalanırken
+   `_copy_material` hepsini aktarır). (b) **Z KAPANIŞI** (`creature_depth.gd close_over`): oyuncunun önündeki yaratık z 2'ye alınınca, onun ÖNÜNDEKİ (ayağı daha aşağıda) ve örtüşen komşusu oyuncuyla örtüşmediği için z 0'da kalıyordu -> arkadaki yaratık öndekinin üstüne
+   çiziliyordu (z 2 > z 0). Artık yükselen küme ayak sırasında aşağıya doğru KAPALI (yükselen birinin önündeki örtüşebilen her yaratık da yükselir; hep doğrudur çünkü o da oyuncunun önünde). Tarama yarıçapı 130 + 240 kapanış payı; konumu karakterin ayağından 130 px'ten fazla
+   yukarıdaki yaratık hiç hesaplanmaz (ABOVE_SKIP), gövde ölçüsü düğümde önbellekli (`_depth_extent`). (c) **KARE BAŞI ÇİZİM SIRASI BOZULMASI** (kullanıcının "glitch"i): yeni yolda yaratık çizim sırası düğüm taşınmadan `canvas_item_set_draw_index` ile verilir (C++ `draw_order`, 2 karede bir). Godot ise
+   Main'in BİR ÇOCUĞU AĞAÇTAN ÇIKINCA (ölen yaratık, biten FX/küre/hasar yazısı - saniyede onlarca kez) ondan sonraki TÜM kardeşlerin çizim indeksini ağaç sırasına geri sarıyor (NOTIFICATION_MOVED_IN_PARENT); düzeltme en erken sonraki güncellemede
+   geldiği için o kare(ler)de arkadaki yaratık öndekinin üstündeydi (ölçüldü: çocuk silinen karede ters sıra). `main.gd _install_draw_order_guard`: `child_exiting_tree`/`child_order_changed` bayrak kaldırır, `RenderingServer.frame_pre_draw` (süreç + silme kuyruğu bitti, çizim öncesi)
+   sırayı hemen yeniden uygular (~0,1 ms, 150 yaratıkta). Yeni bir "Main çocuğunun sırasını bozan" kod yazarsan (move_child) aynı bayrağı zaten `child_order_changed` kaldırır. Eski GDScript yolu (move_child) bu sorundan etkilenmez. Ölçüm (150 yaratık, yoğun orman, EN KÖTÜ durum): yaratık
+   örtüsü ~0,8 ms + creature_depth ~0,7 ms güncelleme başına, ikisi de 2 karede bir ve farklı karelerde (ortalama ~0,75 ms/kare); açık arazide çok daha az. Testler: `test_depth_occluders` (+3: kaba ızgara girdileri/uzak elenir, 32 üst sınırı en yakınları tutar, GERÇEK haritada ağaç arkası), `test_creature_depth` (+2: kapanış, saf kural),
+   `test_underground_boss` (dağınık sıra). Gerçek pencerede doğrulandı: ağaç arkasındaki ork örtülüyor (önce/sonra), dağınık sıra ayrık, silme karesindeki ters sıra bitti. Doğrulanmayan: telefon, iki oyunculu uzak kukla örtüsü (aynı yoldan geçer), ev/maden/düşman üssü arkasında gerçek ekran
+   (aynı shader yolu, ağaçla aynı kural), kapanışta yaratıkların grup sınırında (370 px) kısa z titremesi ihtimali.
+46. **Yaratıklar/oyuncular %15, bosslar %20 küçüldü (2026-10-09).** Kullanıcı: "tüm yaratıkları ve oyuncuları %15 küçült, bossları %20 küçült" + "herşeyle beraber küçült ama silahlar kalkan v.b."
+   (SON CÜMLE BELİRSİZDİ: "hariç" olarak yorumlandı - silahlar ve kalkan baloncuğu KÜÇÜLMEDİ; yanlışsa `EntityScale.ATTACHED_SIZE`'ı `SIZE`'a eşitle ve silah slotlarını/ikon boyunu BODY_REL ile çarp). `scripts/entity_scale.gd`: `LEGACY_SIZE` 0,95 (eski boyut), `BODY_REL` 0,85,
+   `SIZE = LEGACY_SIZE x BODY_REL` = 0,8075 (yaratıklar, oyuncular, uzak kukla, evcil hayvanlar, görev kopyası - hepsi zaten SIZE'ı kullanıyordu); bosslar eski boyutun TOPLAM %80'i (`BOSS_REL` 0,80; yaratıkların %15'inin ÜSTÜNE binmez):
+   `enemy.gd apply_boss_stats` `_scale_body(scale_mult x BOSS_EXTRA)` (BOSS_EXTRA = 0,80 / 0,85) ve Yeraltı Canavarı UZUVLARI (bossun görünen gövdesi) `worm_limb.gd _size_extra()` ile aynı ek çarpanı alır (enemy.gd `_size_extra()` kancası, normalde 1). Elitler (x1,5) boss
+   DEĞİL, sadece SIZE alır. Gövde boyutuna bağlı ELLE YAZILMIŞ sabitler yeni boyuta uyarlandı (hepsi `EntityScale.BODY_REL` ile; yeni bir "karakter boyuna bağlı" sabit eklersen 0,8075'e göre ölç ya da BODY_REL ile çarp): `overhead_bar.gd CHARACTER_Y_OFFSET` -76 -> -68,
+   isim etiketi y -128 -> -120 (`remote_player_name.gd`), `depth_occluders.gd` + `grass_sway.gd` FEET_OFFSET/BODY_HALF_WIDTH/BODY_HEIGHT (15/11/34 x BODY_REL), `ground_shadow.gd apply_to` (DEFS `ground_shadow`/`ground_shadow_y` verisi ESKİ boyutun birimindedir, çalışma anında BODY_REL ile çarpılır),
+   `hadime_math.gd CHAR_TEXEL` (= 2,2368375 x SIZE). BİLEREK DEĞİŞMEDİ: FX piksel ızgarası `TEXEL` 1,212 (pixel_draw/vampir_math/hadime_math: efektler karaktere göre küçülmez), silah slotları/ikon boyu (WeaponOrbitMath, kendi ICON_SIZE_MULT'ü), kalkan baloncuğu
+   (`ATTACHED_SIZE` = 0,95), terrain_collision ayak payı (15 px), oyun mekaniği sayıları (menzil, hasar alanları, sert gövde 18 px, Minotaur şerit genişliği), kamera. Testler: `test_entity_scale` (11), `test_character_size_and_shadow` (9; veri düzeyi kontroller `LEGACY_SIZE` ile), `test_minotaur_boss` (23). Gerçek pencerede doğrulandı:
+   oyuncu animasyon ölçeği 1,806, ork 1,183, Minotaur 2,067 (= eski 2,584'ün %80'i), çubuk/isim/kalkan yerleşimi tutarlı. Doğrulanmayan: telefon, tüm 15 karakter tek tek (can çubuğu şapka boşluğu en uzun karakterlere göre ölçüldü, elle bakılmadı), uzuv/boss çarpışma hissi (çarpışma çemberleri de küçüldü).
 
 ## Test/doğrulama
 

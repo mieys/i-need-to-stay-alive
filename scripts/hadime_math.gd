@@ -35,8 +35,8 @@ const R_SKILL_ID := 48
 ## (main.tscn / remote_player.tscn) - karakterin ÇOCUĞU olan efektlerde bu yerel birimdir, sahneye (dünyaya) eklenenlerde
 ## dünya birimidir. Karakterin yerel birimindeki ofsetler dünyaya to_global() ile çevrilir.
 const TEXEL := 1.212
-## Karakter dokusunun 1 sanat pikseli, karakterin YEREL biriminde (DEFS scale 2.2368375 x EntityScale 0.95).
-const CHAR_TEXEL := 2.125
+## Karakter dokusunun 1 sanat pikseli, karakterin YEREL biriminde (DEFS scale 2.2368375 x EntityScale.SIZE; 2026-10-09'dan beri 1,806).
+const CHAR_TEXEL := 2.2368375 * EntityScale.SIZE
 
 ## ---------- Q: Lanet Kitabı ----------
 const Q_TARGET_RADIUS := 320.0

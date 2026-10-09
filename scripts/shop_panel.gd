@@ -1125,7 +1125,8 @@ func _on_sell_weapon(index: int) -> void:
 	if index < 0 or index >= GameManager.owned_weapons.size():
 		return
 	var entry: Dictionary = GameManager.owned_weapons[index]
-	var refund: int = int(round(int(entry.get("spent", 0)) * 0.7))
+	var refund: int = EnchantDefs.sell_refund_gold(entry)
+	var shard_refund: int = EnchantDefs.sell_refund_shards(entry)
 
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.has_method("remove_owned_weapon"):
@@ -1133,6 +1134,7 @@ func _on_sell_weapon(index: int) -> void:
 
 	GameManager.owned_weapons.remove_at(index)
 	GameManager.gold += refund
+	GameManager.add_weapon_shards(shard_refund)
 
 	_refresh()
 
@@ -1298,8 +1300,10 @@ func _refresh_upgrade_page() -> void:
 		_apply_wood_button_style(upgrade_button)
 
 		var sell_button: Button = row.get_node("SellButton")
-		var refund: int = int(round(int(entry.get("spent", 0)) * 0.7))
+		var refund: int = EnchantDefs.sell_refund_gold(entry)
+		var shard_refund: int = EnchantDefs.sell_refund_shards(entry)
 		## Son kalan silah da satılabilir (bkz. _on_sell_weapon üstündeki not).
 		sell_button.disabled = false
 		sell_button.text = "Sat (%d)" % refund
+		sell_button.tooltip_text = ("Satınca +%d Silah Parçacığı da geri gelir" % shard_refund) if shard_refund > 0 else ""
 		_apply_wood_button_style(sell_button)

@@ -41,48 +41,86 @@ const BASE_DAMAGE := 12.0 ## sadece sahip yoksa (yedek)
 ##   kritik şansı = Matthew'in yetenek kritik şansı (taban %5 + kart) x FOX_STAT_RATIO (en fazla %100)
 ##   kritik hasar = Matthew'in kritik hasar çarpanı (taban 1.5 + kart) x FOX_STAT_RATIO
 const FOX_STAT_RATIO := 2.0
-## Matthew'a (sahibine) bu mesafe içine giren yaratıklara focus atar - "ona
-## yakın olan ve ona saldırmak üzere olan yaratıklara focus atmalı" (kullanıcı
-## isteği). Kendi konumuna göre değil, SAHİBİNİN konumuna göre ölçülüyor.
-## Eskiden 260.0 idi - kullanıcı bildirimi ("çok yavaş, yaratıklara
-## saldıramıyor koşmaktan") üzerine daha da sıkılaştırıldı: artık sadece
-## Matthew'a GERÇEKTEN yakın (yakında ona saldıracak) yaratıklara odaklanıyor,
-## uzaktaki bir yaratığın peşinden koşup yetişememesi engelleniyor.
-const FOCUS_RADIUS := 170.0
+## Matthew'a (sahibine) bu mesafe içine giren yaratıklara focus atar - "ona yakın olan ve ona saldırmak üzere olan yaratıklara
+## focus atmalı" (kullanıcı isteği). Kendi konumuna göre değil, SAHİBİNİN konumuna göre ölçülüyor.
+## 2026-10-08: 170 -> 240 ("çevresindeki yaratıklara saldırması gerekiyordu"; eski değer sahibine neredeyse dokunana kadar bekletiyordu).
+const FOCUS_RADIUS := 240.0
+## Savaşta bile sahibinden bu kadar uzaklaşmaz: hedef bu halkanın dışına çıkarsa bırakılır (uzak yaratığın peşinde kaybolmasın).
+const LEASH_RADIUS := 360.0
+const RETARGET_INTERVAL := 0.25 ## yeni akın için yaratık taraması aralığı
+## AKIN (sortie) - kullanıcı 2026-10-08: "silahlarım yakına gelenleri hemen öldürdüğü için köpek hemen hedef değiştirmek zorunda kalıyor; gittiği
+## yönde kararlı bir şekilde yaratık öldürüp sonra gelsin, sürekli zigzag çizerek kararsızca hedef aramasın". Köpek tek yaratığın değil bir
+## YÖNÜN peşine düşer: en yoğun yön seçilir, o yönün konisinde yaratık bitene kadar (ölen hedefin yerine AYNI koniden köpeğe en yakın) saldırır, sonra
+## sahibine döner; yeni akın için bekleme + sahibin yanında toplanma gerekir (bkz. _update_focus_target).
+const SORTIE_SECTOR_HALF_DEG := 55.0 ## akının konisi: seçilen yönün +- bu kadarı
+const SORTIE_PICK_HALF_DEG := 45.0 ## yön seçerken pencere yarı açısı
+const SORTIE_PICK_WINDOWS := 12 ## yön penceresi sayısı (30 derecede bir)
+const SORTIE_ALWAYS_RADIUS := 45.0 ## sahibe bu kadar yakın yaratık her zaman konide sayılır
+const SORTIE_END_EMPTY := 1.0 ## konide bu kadar sn yaratık yoksa akın biter
+const SORTIE_MAX := 9.0 ## bu süre dolunca en yoğun yön değiştiyse akın biter (aynı yöndeyse sürer, bkz. _update_sortie)
+const SORTIE_SAME_DIR_DEG := 60.0 ## "aynı yön" sayılan en büyük sapma
+const SORTIE_COOLDOWN := 1.0 ## akın bittikten sonra yenisi için bekleme
+const SORTIE_REGROUP_RADIUS := 120.0 ## yeni akın için köpek sahibine bu kadar yakın olmalı (önce geri döner)
+const SORTIE_PICK_INTERVAL := 0.1 ## akın içinde hedefsizken yeniden bakış aralığı
 ## Yakın dövüş menzili - bu mesafenin altına inince saldırmaya başlar.
 const MELEE_RANGE := 34.0
-## Hedefe koşarken (savaş modunda) normal takip hızından daha hızlı gider -
-## kullanıcı isteği: pet artık yaratıklara yetişip saldırabilsin diye.
-## Eskiden 1.6 idi - "hâlâ yetişemiyor" bildirimi üzerine arttırıldı.
+const ATTACK_REACH_SLACK := 10.0 ## durma menzilinde ufak oynamalar ısırmayı kaçırmasın
+## Hedefe koşarken (savaş modunda) normal takip hızından daha hızlı gider (kullanıcı isteği: pet yaratıklara yetişip saldırabilsin).
 const COMBAT_SPEED_MULT := 2.2
-## Kullanıcı isteği: "tilki önüne doğru 180 derece alan hasarı versin" -
-## saldırı artık tek hedefe değil, hedefe olan yönü merkez alan yarım
-## dairelik bir alana (bkz. _do_cone_attack) hasar veriyor. Yarıçap
-## MELEE_RANGE'den biraz geniş tutuldu ki yakın kümelenen yaratıklar da
-## isabet alsın.
+const CHASE_SLOW_ZONE := 90.0 ## hedefe bu kadar kala yavaşlamaya başlar (fırlama/titreme olmasın)
+## Kullanıcı isteği: "tilki önüne doğru 180 derece alan hasarı versin" - saldırı artık tek hedefe değil, hedefe olan yönü merkez
+## alan yarım dairelik bir alana (bkz. _do_cone_attack) hasar veriyor. Yarıçap MELEE_RANGE'den biraz geniş tutuldu ki yakın
+## kümelenen yaratıklar da isabet alsın.
 const ATTACK_RADIUS := 60.0
 const ATTACK_ARC_DEG := 180.0
-## Kullanıcı isteği (2026-09-23): "oto saldırılarına özel pixel tarzda bir slash-pençe tarzı bir saldırı
-## efekti hazırla" - eskiden Pençe silahının slash_frames.tres'i turuncu tonlanmış olarak yeniden
-## kullanılıyordu (bkz. fx_matthew_claw_slash.gd dosya üstü notu), artık kendi özel PixelDraw çizimi var.
+## Kullanıcı isteği (2026-09-23): "oto saldırılarına özel pixel tarzda bir slash-pençe tarzı bir saldırı efekti hazırla" - eskiden Pençe
+## silahının slash_frames.tres'i turuncu tonlanmış olarak yeniden kullanılıyordu (bkz. fx_matthew_claw_slash.gd dosya üstü notu), artık
+## kendi özel PixelDraw çizimi var.
 const SlashFxScene := preload("res://scenes/fx_matthew_claw_slash.tscn")
 const ATTACK_INTERVAL := 1.0
-const FOLLOW_DISTANCE := 90.0 ## hedefi yokken sahibe bu kadar yakın durur
-## Eskiden 260.0 idi - kullanıcı bildirimi "Matthew'i düzgün takip edemiyor,
-## çok geride kalıyor" üzerine düşürüldü, bu sınıra ulaşınca artık daha
-## çabuk (görünmez şekilde) sahibin yanına ışınlanıyor.
-const CATCH_UP_DISTANCE := 220.0
-## Sahip FOLLOW_DISTANCE dışına çıkar çıkmaz anında peşinden gitmesin diye -
-## kısa bir tepki gecikmesi (bkz. _process_follow) daha gerçekçi bir "fark
-## edip sonra harekete geçen" evcil hayvan hissi verir. Eskiden 0.5sn idi -
-## "geride kalıyor" bildirimi üzerine kısaltıldı, artık daha çabuk tepki verir.
-const FOLLOW_REACTION_DELAY := 0.2
-## Sahibi takip ederken sahibin KENDİ hızından daha yavaş gitmez, DAHA HIZLI
-## gider - eşit hızla asla kapanmayan (sabit) bir mesafe farkı yerine,
-## gerçekten arayı kapatıp yanına gelebilsin diye (kullanıcı isteği: "2
-## [saniye/adım] geride bekliyor, düzgün takip edemiyor").
-const FOLLOW_SPEED_MULT := 1.45
-var _follow_delay_timer: float = 0.0
+## ---- Takip (topuk noktası) - bkz. "HEDEF SEÇİMİ + TAKİP + SAVAŞ" notu
+const HEEL_BEHIND := 54.0 ## sahibin hareket yönünün ARKASINDA
+const HEEL_SIDE := 30.0 ## ve yanında
+const HEEL_IDLE_RADIUS := 20.0 ## sahip duruyorsa topuk noktasına bu kadar yaklaşınca durur
+const HEEL_RESUME_RADIUS := 64.0 ## sahip duruyorken bu kadar uzaklaşırsa (ittirilme vb.) tekrar yürür (histerezis)
+const HEEL_GAIN := 4.5 ## hata (px) başına hız (px/sn): yaklaştıkça yumuşakça yavaşlar
+const FOLLOW_SPEED_CAP_MULT := 1.6 ## takipte en çok sahibin hızının bu kadar katı (yakalama)
+const OWNER_MOVING_SPEED := 25.0 ## sahibin bu hızın üstü "yürüyor" sayılır
+const HEADING_SMOOTH := 5.0 ## yön süzgeci (1/sn): sahip kıvrılırken topuk noktası zıplamasın
+const ACCEL := 2600.0 ## px/sn^2: hız bu ivmeyle değişir (ani sıçrama yok)
+const WARP_DISTANCE := 480.0 ## bu kadar uzakta topuk noktasına atlar (ışınlanma, ev girişi)
+const STUCK_WARP_SECONDS := 1.5
+## Animasyon eşikleri (px/sn): bunun altı idle, WALK_SPEED_MAX altı walk, üstü run (histerezisli, bkz. _update_animation).
+const IDLE_SPEED_MIN := 12.0
+const WALK_SPEED_MAX := 130.0
+## Kozmetik kopya (bkz. _process_network_visual)
+const NET_FOLLOW_GAIN := 6.0
+const NET_SLIDE_MIN_SPEED := 24.0 ## ağ hızı bunun altındaysa hedef durmuş sayılır
+const NET_SLIDE_RANGE := 28.0 ## bu kadar yakın geri düzeltmeler hız vermeden kaydırılır
+const NET_FACING_MIN_SPEED := 50.0 ## duruş anındaki küçük aşmalar bakış yönünü çevirmesin (iki süreçli denetimde görüldü)
+const NET_ACCEL := 4000.0
+const NET_SNAP_DISTANCE := 260.0
+var _heading: Vector2 = Vector2.DOWN
+var _heel_active: bool = false
+var _retarget_cd: float = 0.0
+var _sortie_active: bool = false
+var _sortie_dir: Vector2 = Vector2.ZERO
+var _sortie_t: float = 0.0
+var _sortie_empty_t: float = 0.0
+var _sortie_cooldown: float = 0.0
+var _stuck_t: float = 0.0
+var _stuck_sample_t: float = 0.0
+var _stuck_ref: Vector2 = Vector2.ZERO
+var _ignored_id: int = 0
+var _ignored_until_ms: int = 0
+var _bite_left: float = 0.0
+var _anim_hold: float = 0.0
+var _speed_smooth: float = 0.0
+const ANIM_HOLD := 0.14 ## idle/walk/run türü en az bu kadar sürer (titreme yok)
+const SPEED_SMOOTH_RATE := 9.0 ## animasyon hızı süzgeci (1/sn)
+var _net_velocity: Vector2 = Vector2.ZERO
+var _net_last_ms: int = 0
+var _net_last_dir: Vector2 = Vector2.ZERO
 
 @onready var anim: AnimatedSprite2D = $AnimatedSprite2D
 
@@ -131,7 +169,14 @@ var _matthew_shield_owner: Node2D = null
 const MATTHEW_SHIELD_ARRIVAL_DISTANCE := 18.0
 
 
+## Köpek sayfasında GÖMÜLÜ gölge yok (tilki sayfasında vardı): karakterlerle AYNI piksel elips ayak gölgesi (ground_shadow.gd). Köpek
+## küçük olduğu için yarıçap küçük; y = ayak çizgisi (sprite ofseti + %5 küçültme sonrası).
+const SHADOW_RADIUS := Vector2(10.5, 3.6)
+const SHADOW_Y := 9.5
+
+
 func _ready() -> void:
+	GroundShadow.apply_to(get_node_or_null("Shadow") as Node2D, {"ground_shadow": SHADOW_RADIUS, "ground_shadow_y": SHADOW_Y})
 	## Kullanıcı isteği (bkz. EntityScale): tüm varlıklar gibi evcil hayvanlar da
 	## %5 küçülür - görsel ve gövde çemberi orantılı.
 	EntityScale.shrink(anim, get_node_or_null("CollisionShape2D"))
@@ -159,6 +204,9 @@ func setup_from_player(player: Node) -> void:
 func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
+	_bite_left = maxf(0.0, _bite_left - delta)
+	_anim_hold = maxf(0.0, _anim_hold - delta)
+	_speed_smooth = lerpf(_speed_smooth, velocity.length(), minf(1.0, delta * SPEED_SMOOTH_RATE))
 	if _matthew_shield_form:
 		_process_matthew_shield_form(delta)
 		return
@@ -170,7 +218,7 @@ func _physics_process(delta: float) -> void:
 		## Periyodik konum yayını bu sırada BİLEREK yapılmıyor: dash_to() varış noktasını kendisi yayınlıyor,
 		## ara konumlar gönderilseydi kozmetik kopya kendi dash'ini bitirince eski bir ara noktaya geri kayardı.
 		return
-	_update_focus_target()
+	_update_focus_target(delta)
 	_process_movement(delta)
 	_process_attack(delta)
 	_process_temp_regen(delta)
@@ -191,9 +239,9 @@ func begin_matthew_shield_form(owner: Node2D) -> void:
 	_matthew_shield_form = true
 	_matthew_shield_owner = owner
 	_focus_target = null
+	_sortie_active = false
 	_in_melee_stance = false
-	if anim:
-		anim.visible = true
+	_set_body_visible(true)
 
 
 ## BUG DÜZELTMESİ (derin multiplayer denetimi bulgusu: "oyuncuların yarattığı
@@ -227,8 +275,7 @@ func _process_matthew_shield_form(delta: float) -> void:
 	else:
 		velocity = Vector2.ZERO
 		global_position = _matthew_shield_owner.global_position
-		if anim:
-			anim.visible = false
+		_set_body_visible(false)
 
 
 func end_matthew_shield_form() -> void:
@@ -237,9 +284,18 @@ func end_matthew_shield_form() -> void:
 	velocity = Vector2.ZERO
 	if owner_player and is_instance_valid(owner_player):
 		global_position = owner_player.global_position + Vector2(48.0, 0.0)
+	_set_body_visible(true)
 	if anim:
-		anim.visible = true
 		anim.play("idle_" + facing)
+
+
+## Sprite + ayak gölgesi birlikte gizlenir/gösterilir (Feda Kalkanı formunda köpek sahibe girip kaybolur).
+func _set_body_visible(v: bool) -> void:
+	if anim:
+		anim.visible = v
+	var sh: CanvasItem = get_node_or_null("Shadow") as CanvasItem
+	if sh:
+		sh.visible = v
 
 
 func mark_as_network_visual() -> void:
@@ -247,26 +303,43 @@ func mark_as_network_visual() -> void:
 
 
 ## network_manager.gd broadcast_pet_state RPC'sinin çağırdığı karşılık.
-## DÜZELTME (kullanıcı bildirimi: "diğer oyuncular matthewin tilkisini ve
-## animasyonunu efektini göremiyor") - remote_player.gd _update_pet_visual_
-## state() bu fonksiyonu 3 argümanla (sprite_row dahil) çağırıyordu ama imza
-## sadece 2 kabul ediyordu ("too many arguments" - bkz. skeleton_pet.gd'deki
-## AYNI düzeltmenin karşılığı). Çağrı sessizce başarısız olduğu için
-## _network_target_position/_network_state_received HİÇBİR ZAMAN set
-## edilmiyordu - tilki diğer oyuncularda spawn noktasında sonsuza dek
-## hareketsiz/idle kalıyordu.
-## "dash" true ise (ağdaki adı hâlâ "teleport" - bkz. network_manager.gd broadcast_pet_state) gerçek tilki
-## Tilki Hücumu'nda pos'a atılıyor demektir: kozmetik kopya yumuşak kaymak yerine AYNI dash_to() görselini
-## (hızlı hareket + hız çizgileri + hayalet izler) kendisi oynatır - efekt her istemcide AYNI koddan çıkar.
-func update_network_pet_state(pos: Vector2, _is_attacking: bool, _sprite_row: int = -1, dash: bool = false) -> void:
+## DÜZELTME (kullanıcı bildirimi: "diğer oyuncular matthewin tilkisini ve animasyonunu efektini göremiyor") - remote_player.gd
+## _update_pet_visual_state() bu fonksiyonu sprite_row dahil çağırıyordu ama imza kabul etmiyordu (bkz. skeleton_pet.gd'deki AYNI düzeltme).
+## "dash" true ise (ağdaki adı hâlâ "teleport" - bkz. network_manager.gd broadcast_pet_state) gerçek köpek Köpek Hücumu'nda ya da
+## topuk noktasına atlayışta pos'a gitti demektir: kozmetik kopya yumuşak kaymak yerine AYNI dash_to() görselini oynatır.
+## 2026-10-08: "is_attacking" true ise gerçek köpek ISIRDI; sprite_row = bakış yönü dizini (FACINGS) -> kopya aynı yöne dönüp aynı
+## ısırma klibini oynatır (kaster doğru görür, diğerleri görmez hata sınıfı).
+const FACINGS := ["down", "left", "right", "up"]
+
+
+func update_network_pet_state(pos: Vector2, is_attacking: bool, sprite_row: int = -1, dash: bool = false) -> void:
+	## Gelen konumlar arasındaki hızdan "ağ hızı" çıkarılır (kopya ona göre AKAR; eskiden her paketten sonra üstel yaklaşma
+	## hız dalgalanması yaratıp walk/run klibini titretiyordu).
+	var now_ms: int = Time.get_ticks_msec()
+	if _net_last_ms > 0 and not dash:
+		var dt: float = float(now_ms - _net_last_ms) / 1000.0
+		if dt > 0.03 and dt < 1.0:
+			var step: Vector2 = pos - _network_target_position
+			## Durmuş paket (konum değişmedi): ileri besleme hızı HEMEN sıfırlanır - yavaş sönerse kopya hedefi aşıp geri geri yürüyordu
+			## (iki süreçli denetim + test_matthew_dog: duruşta 17 px aşma, bakış sola dönüyordu).
+			_net_velocity = Vector2.ZERO if step.length() < 1.0 else _net_velocity.lerp(step / dt, 0.6)
+			if _net_velocity.length() > NET_SLIDE_MIN_SPEED:
+				_net_last_dir = _net_velocity.normalized()
+	elif dash:
+		_net_velocity = Vector2.ZERO
+	_net_last_ms = now_ms
 	_network_target_position = pos
 	_network_state_received = true
 	if dash:
 		dash_to(pos)
+	elif is_attacking:
+		if sprite_row >= 0 and sprite_row < FACINGS.size():
+			facing = FACINGS[sprite_row]
+		_play_bite()
 
 
-## Kozmetik kopyanın fizik adımı: kendi (zaten owner_player'sız çalışmayan)
-## takip/savaş mantığı yerine gerçek tilkinin bildirdiği konuma kayar.
+## Kozmetik kopyanın fizik adımı: kendi (zaten çalışmayan) yapay zekası yerine gerçek köpeğin bildirdiği konumu AKARAK izler
+## (ağ hızı + konum hatasıyla orantılı düzeltme); animasyon gerçek hızdan seçilir.
 func _process_network_visual(delta: float) -> void:
 	if _dash_moving:
 		return ## dash_to()'nun tween'i konumu ve "run" klibini yönetiyor
@@ -275,16 +348,21 @@ func _process_network_visual(delta: float) -> void:
 		_update_animation()
 		return
 	var to_target: Vector2 = _network_target_position - global_position
-	if to_target.length() > 2.0:
-		# _update_animation() walk/run eşiğini velocity BÜYÜKLÜĞÜNE göre
-		# seçtiği için burada gerçek bir hız değeri kullanılıyor (ham
-		# mesafe vektörü değil) - yoksa uzaktaki bir hedefe kısa bir anlık
-		# kayarken yanlışlıkla hep "run" animasyonu tetiklenirdi.
-		velocity = to_target.normalized() * speed
-		_update_facing(to_target)
-	else:
+	if to_target.length() > NET_SNAP_DISTANCE:
+		global_position = _network_target_position ## geç katılan / çok uzak: anında yerine
 		velocity = Vector2.ZERO
-	global_position = global_position.lerp(_network_target_position, min(1.0, delta * 12.0))
+	else:
+		var desired: Vector2 = _net_velocity + to_target * NET_FOLLOW_GAIN
+		if to_target.length() < 6.0 and _net_velocity.length() < IDLE_SPEED_MIN * 2.0:
+			desired = Vector2.ZERO
+		if to_target.length() < NET_SLIDE_RANGE and _net_velocity.length() < NET_SLIDE_MIN_SPEED and to_target.dot(_net_last_dir) < 0.0:
+			## Hedef durdu ve kopya onu (tahmin yüzünden) az aştı: geri geri yürümek yerine hız/klip OLMADAN yumuşakça yerine kay.
+			desired = Vector2.ZERO
+			global_position = global_position.lerp(_network_target_position, minf(1.0, delta * 10.0))
+		velocity = velocity.move_toward(desired, NET_ACCEL * delta)
+		global_position += velocity * delta
+		if velocity.length() > NET_FACING_MIN_SPEED and _bite_left <= 0.0:
+			_update_facing(velocity)
 	_update_animation()
 
 
@@ -323,8 +401,8 @@ func dash_to(dest: Vector2) -> void:
 	var travel: Vector2 = dest - global_position
 	if travel.length() > 0.5:
 		_update_facing(travel)
+	_set_body_visible(true)
 	if anim:
-		anim.visible = true
 		anim.play("run_" + facing)
 	if _dash_tween and _dash_tween.is_valid():
 		_dash_tween.kill()
@@ -383,8 +461,10 @@ var _dash_strike_active: bool = false
 
 
 func begin_dash_strike() -> void:
+	_bite_left = 0.0
 	_dash_strike_active = true
 	_focus_target = null
+	_sortie_active = false
 	_in_melee_stance = false
 	velocity = Vector2.ZERO
 
@@ -394,103 +474,291 @@ func end_dash_strike() -> void:
 	_dash_strike_active = false
 
 
-## Matthew'a (sahibine) EN YAKIN, FOCUS_RADIUS içindeki yaratığı seçer -
-## pet'in kendi konumuna göre değil. Mevcut hedef hâlâ geçerliyse (ölmediyse
-## ve hâlâ Matthew'a yakınsa) değiştirmiyor, gereksiz hedef atlamasını önler.
-func _update_focus_target() -> void:
-	if _focus_target and is_instance_valid(_focus_target) and _focus_target.get("is_dead") != true:
-		if owner_player and is_instance_valid(owner_player) and owner_player.global_position.distance_to(_focus_target.global_position) <= FOCUS_RADIUS:
+## ================================================================================================================
+## HEDEF SEÇİMİ + TAKİP + SAVAŞ (2026-10-08 BAŞTAN YAZILDI)
+## Kullanıcı: "yeni köpeğin hareket anlayışını değiştir, çok bugluydu tilkiyken. Matthewi takip etmesi, onun çevresindeki
+## yaratıklara saldırması gerekiyordu. takip anlayışı çok tuhaf". Eski davranışın sorunları (kodda ölçüldü/okundu):
+##  - sahibe 90 px kala DURUR, sahip her adımda bu çemberin dışına çıkıp 0,2 sn bekletme + yeniden kalkışla DUR-KALK yapardı;
+##  - 220 px'te "yumuşak yakalama" = hız 0 + lerp ile KAYARDI (koşu klibi yok, ışınlanma gibi);
+##  - savaş duruşunda durup hedefe DÖNMEDEN ısırırdı (bakış yönü sadece hareket ederken güncelleniyordu), hedefe anlık hız
+##    değişimiyle fırlayıp durur (titreme/ters tepme), uzaktaki hedefe takılıp sahibini bırakırdı;
+##  - hedef seçimi sadece hedef ÖLÜNCE yenilenirdi: sahibe dokunan yaratık varken uzaktaki eskisinin peşinde koşardı.
+## Yeni model:
+##  1) TAKİP = "topuk noktası": sahibin hareket yönünün ARKASINDA ve yanında sabit bir nokta (HEEL_*). Hedef hız = sahibin hızı
+##     (ileri besleme) + hataya orantılı düzeltme -> sahip yürürken köpek DURMADAN onunla akar, sahip durunca yumuşakça yavaşlayıp
+##     durur. Durma/kalkma eşikleri farklı (histerezis). Hız ivmeyle değişir (ACCEL) -> ani dönüş/fırlama yok.
+##  2) SAVAŞ = AKIN (sortie, bkz. SORTIE_* sabitleri; 2026-10-08 ikinci tur: "silahlarım yakındakileri öldürüyor, köpek zigzag çizerek hedef arıyor"):
+##     sahibin FOCUS_RADIUS'undaki en YOĞUN yön seçilir, köpek o yönün konisinde YAPIŞKAN hedeflerle (ölünce aynı koniden köpeğe en yakın) saldırır,
+##     koni boşalınca / tasma aşılınca / süre dolunca sahibine döner. Hedefe yaklaşırken yavaşlar, durunca hedefe DÖNER ve ısırır.
+##  3) Çok uzakta (ışınlanma/ev girişi/Hadime vb.) ya da sıkışmışsa (haritada engele takıldı) topuk noktasına atlar.
+func _focus_target_ok() -> bool:
+	return is_instance_valid(_focus_target) and _focus_target.get("is_dead") != true
+
+
+func _update_focus_target(delta: float) -> void:
+	_sortie_cooldown = maxf(0.0, _sortie_cooldown - delta)
+	if not is_instance_valid(_focus_target) or not _focus_target_ok():
+		_focus_target = null
+	if not _owner_ok():
+		return
+	if owner_player.get("is_in_merchant_zone") == true:
+		_end_sortie(0.0) ## güvenli bölgede kovalamaz
+		return
+	if _sortie_active:
+		_update_sortie(delta)
+		return
+	## Akın dışında (sahibin yanında): bekleme bitmiş, köpek sahibinin yanına toplanmış ve yakında yaratık varsa YENİ akın başlat.
+	_retarget_cd -= delta
+	if _retarget_cd > 0.0 or _sortie_cooldown > 0.0:
+		return
+	_retarget_cd = RETARGET_INTERVAL
+	if global_position.distance_to(owner_player.global_position) > SORTIE_REGROUP_RADIUS:
+		return
+	var dir: Vector2 = _choose_sortie_dir()
+	if dir == Vector2.ZERO:
+		return
+	_sortie_active = true
+	_sortie_dir = dir
+	_sortie_t = 0.0
+	_sortie_empty_t = 0.0
+	_focus_target = _pick_sortie_target()
+
+
+## Akın sürerken: hedef YAPIŞKAN (ölene / koniden çıkana / tasma dışına kadar değişmez); ölünce AYNI koniden köpeğe en yakın yaratığa geçer;
+## koni SORTIE_END_EMPTY sn boş kalırsa, akın SORTIE_MAX sn'yi geçerse ya da köpek sahibinden LEASH_RADIUS uzaklaşırsa akın biter (geri dönüş).
+func _update_sortie(delta: float) -> void:
+	_sortie_t += delta
+	if global_position.distance_to(owner_player.global_position) > LEASH_RADIUS:
+		_end_sortie(SORTIE_COOLDOWN)
+		return
+	if _sortie_t >= SORTIE_MAX:
+		## Süre doldu: en yoğun yön hâlâ AYNI yöndeyse (yaratık akışı o taraftan sürüyor) akın kesilmeden sürer - sahibine dönüp aynı yöne
+		## yeniden çıkmak anlamsız bir ters dönüş olurdu; yön değiştiyse dönüp yeni akın başlatılır.
+		var nd: Vector2 = _choose_sortie_dir()
+		if nd == Vector2.ZERO or absf(_sortie_dir.angle_to(nd)) > deg_to_rad(SORTIE_SAME_DIR_DEG):
+			_end_sortie(SORTIE_COOLDOWN)
 			return
-	_focus_target = _pick_focus_target()
+		_sortie_t = 0.0
+	if _focus_target_ok() and _in_sortie_sector(_focus_target):
+		_sortie_empty_t = 0.0
+		return
+	_focus_target = null
+	_retarget_cd -= delta
+	if _retarget_cd <= 0.0:
+		_retarget_cd = SORTIE_PICK_INTERVAL
+		_focus_target = _pick_sortie_target()
+	if _focus_target != null:
+		_sortie_empty_t = 0.0
+		return
+	_sortie_empty_t += delta
+	if _sortie_empty_t >= SORTIE_END_EMPTY:
+		_end_sortie(SORTIE_COOLDOWN)
 
 
-func _pick_focus_target() -> Node2D:
-	if not owner_player or not is_instance_valid(owner_player):
-		return null
-	var nearest: Node2D = null
-	var nearest_dist: float = FOCUS_RADIUS
-	for e in EnemyQueryScript.candidates(get_tree(), owner_player.global_position, FOCUS_RADIUS + 1.0):
+func _end_sortie(cooldown: float) -> void:
+	_sortie_active = false
+	_focus_target = null
+	_in_melee_stance = false
+	_sortie_cooldown = cooldown
+	_retarget_cd = 0.0
+
+
+## Yaratık, akının konisinde mi? Sahibin 45 px içindekiler (sahibe dokunanlar) her zaman; diğerleri tasma içinde ve akın yönünün +-SORTIE_SECTOR_HALF_DEG'inde.
+func _in_sortie_sector(e: Node2D) -> bool:
+	var v: Vector2 = e.global_position - owner_player.global_position
+	var d: float = v.length()
+	if d > LEASH_RADIUS:
+		return false
+	if d < SORTIE_ALWAYS_RADIUS:
+		return true
+	return absf(_sortie_dir.angle_to(v)) <= deg_to_rad(SORTIE_SECTOR_HALF_DEG)
+
+
+## Akının hedefi: konideki canlı yaratıklardan KÖPEĞE en yakın (sahibe değil: köpek koni içinde ileri doğru ilerler, sahibin silahları
+## yakındakileri öldürdükçe geri sahibe dönmez). Sıkışıp bırakılan hedef kısa süre yok sayılır.
+func _pick_sortie_target() -> Node2D:
+	var best: Node2D = null
+	var best_d: float = INF
+	var now_ms: int = Time.get_ticks_msec()
+	for e in EnemyQueryScript.candidates(get_tree(), owner_player.global_position, LEASH_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
-		var d: float = owner_player.global_position.distance_to(e.global_position)
-		if d <= nearest_dist:
-			nearest_dist = d
-			nearest = e
-	return nearest
+		if _ignored_id == e.get_instance_id() and now_ms < _ignored_until_ms:
+			continue
+		if not _in_sortie_sector(e):
+			continue
+		var d: float = global_position.distance_squared_to(e.global_position)
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
 
 
-## Menzile girip duracağı mesafe ile TEKRAR koşmaya başlayacağı mesafe
-## FARKLI (histerezis) - aksi halde tam sınırda (MELEE_RANGE civarında)
-## hedef veya pet ufak bir titreşimle ileri geri gidip gelirse, DUR/KOŞ
-## durumu her karede yer değiştirip "glitch" gibi görünen bir titremeye yol
-## açıyordu - kullanıcı bildirimi "hayvan saldırırken bazen glitchleniyor",
-## özellikle COMBAT_SPEED_MULT'un yüksek olmasıyla (hızlı gidip aniden
-## durma/tekrar fırlama) çok daha belirgindi.
+## Akın yönü: sahibin FOCUS_RADIUS'undaki yaratıkların en YOĞUN yönü (12 pencere, her biri +-SORTIE_PICK_HALF_DEG; eşitlikte en yakın olan).
+## Dönen vektör penceredeki yaratıkların birim yönlerinin ortalaması; yaratık yoksa Vector2.ZERO. Böylece köpek tek bir yaratığın rastgele
+## yönüne değil, vuracak en çok şey olan yöne gider ve oraya bağlı kalır.
+func _choose_sortie_dir() -> Vector2:
+	var o: Vector2 = owner_player.global_position
+	var vs: Array[Vector2] = []
+	var now_ms: int = Time.get_ticks_msec()
+	for e in EnemyQueryScript.candidates(get_tree(), o, FOCUS_RADIUS + 1.0):
+		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		if _ignored_id == e.get_instance_id() and now_ms < _ignored_until_ms:
+			continue
+		var v: Vector2 = e.global_position - o
+		if v.length() <= FOCUS_RADIUS:
+			vs.append(v)
+	if vs.is_empty():
+		return Vector2.ZERO
+	var best_score: float = -INF
+	var best_dir: Vector2 = Vector2.ZERO
+	for i in range(SORTIE_PICK_WINDOWS):
+		var center: float = TAU * float(i) / float(SORTIE_PICK_WINDOWS)
+		var sum: Vector2 = Vector2.ZERO
+		var cnt: int = 0
+		var nearest: float = INF
+		for v in vs:
+			if absf(angle_difference(center, v.angle())) <= deg_to_rad(SORTIE_PICK_HALF_DEG):
+				sum += v.normalized()
+				cnt += 1
+				nearest = minf(nearest, v.length())
+		if cnt == 0:
+			continue
+		var score: float = float(cnt) * 1000.0 - nearest
+		if score > best_score:
+			best_score = score
+			best_dir = sum.normalized() if sum.length() > 0.01 else Vector2.from_angle(center)
+	return best_dir
+
+
+## Menzile girip duracağı mesafe ile TEKRAR koşmaya başlayacağı mesafe FARKLI (histerezis) - aksi halde tam sınırda hedef ya da
+## pet ufak titreşse DUR/KOŞ her karede yer değiştirip "glitch" gibi görünürdü (kullanıcı bildirimi "hayvan saldırırken bazen glitchleniyor").
 const MELEE_STOP_RANGE := MELEE_RANGE
 const MELEE_RESUME_CHASE_RANGE := MELEE_RANGE * 1.6
 var _in_melee_stance: bool = false
 
 
-## Hedefi varsa ona koşup yakın dövüş menziline girince durur; yoksa eskisi
-## gibi sahibi takip eder (bkz. _process_follow).
+func _owner_velocity() -> Vector2:
+	if _owner_ok() and "velocity" in owner_player:
+		return owner_player.get("velocity") as Vector2
+	return Vector2.ZERO
+
+
+## Köpeğin taban hızı: sahibin O ANKİ hızı x1,1 (kart/eşya hız alınca köpek geride kalmasın); sahip yoksa kurulumdaki değer.
+func _base_speed() -> float:
+	if _owner_ok() and "speed" in owner_player:
+		return float(owner_player.get("speed")) * 1.1
+	return speed
+
+
 func _process_movement(delta: float) -> void:
-	if _focus_target and is_instance_valid(_focus_target):
-		var to_target: Vector2 = _focus_target.global_position - global_position
-		var dist: float = to_target.length()
-		if _in_melee_stance:
-			if dist > MELEE_RESUME_CHASE_RANGE:
-				_in_melee_stance = false
-		else:
-			if dist <= MELEE_STOP_RANGE:
-				_in_melee_stance = true
-		if not _in_melee_stance:
-			## Savaş modunda (bir hedefe koşarken) normal takip hızından daha
-			## hızlı - bkz. COMBAT_SPEED_MULT sınıf üstü yorumu.
-			velocity = to_target.normalized() * speed * COMBAT_SPEED_MULT * _get_speed_mult()
-			_block_movement_into_terrain()
-			move_and_slide()
-			_update_facing(to_target)
-		else:
-			velocity = Vector2.ZERO
-		return
-	_in_melee_stance = false
-	_process_follow(delta)
-
-
-func _process_follow(delta: float) -> void:
-	if not owner_player or not is_instance_valid(owner_player):
-		return
-	var to_owner: Vector2 = owner_player.global_position - global_position
-	var dist: float = to_owner.length()
-	if dist > CATCH_UP_DISTANCE:
-		## bkz. skeleton_pet.gd/golem_pet.gd'deki AYNI BUG DÜZELTMESİ notu
-		## ("bir anda ... yanına ışınlanıyor") - anlık atama yerine yumuşak
-		## yakalama.
-		var catch_up_target: Vector2 = owner_player.global_position - to_owner.normalized() * FOLLOW_DISTANCE
-		global_position = global_position.lerp(catch_up_target, min(1.0, delta * 6.0))
-		velocity = Vector2.ZERO
-		_follow_delay_timer = 0.0
-		return
-	if dist > FOLLOW_DISTANCE:
-		## Sahip yeni yeni uzaklaşmaya başladıysa hemen atılmaz - kısa bir
-		## süre "fark etme" gecikmesi yaşar, sonra peşinden gider.
-		_follow_delay_timer += delta
-		if _follow_delay_timer < FOLLOW_REACTION_DELAY:
-			velocity = Vector2.ZERO
-			return
-		## Sahibin hızıyla BİREBİR aynı hızda gitmek, aradaki farkı asla
-		## kapatamaz (sabit bir mesafede sonsuza dek "geride" kalır) - bkz.
-		## FOLLOW_SPEED_MULT sınıf üstü yorumu. Bu yüzden sahibinden HER ZAMAN
-		## belirgin şekilde daha hızlı gidip gerçekten yanına ulaşabiliyor.
-		var base_follow_speed: float = owner_player.speed if "speed" in owner_player else speed
-		var follow_speed: float = base_follow_speed * FOLLOW_SPEED_MULT * _get_speed_mult()
-		velocity = to_owner.normalized() * follow_speed
+	var desired: Vector2 = Vector2.ZERO
+	if _focus_target_ok():
+		desired = _chase_velocity(_focus_target)
+	else:
+		_in_melee_stance = false
+		desired = _follow_velocity(delta)
+	## Hız ivmeyle değişir: ani yön/hız sıçraması (titreme, fırlama, ters tepme) olmaz.
+	velocity = velocity.move_toward(desired, ACCEL * delta)
+	if velocity.length() > 1.0:
 		_block_movement_into_terrain()
 		move_and_slide()
-		_update_facing(to_owner)
+		if not _in_melee_stance and velocity.length() > IDLE_SPEED_MIN:
+			_update_facing(velocity)
+	_check_stuck(delta, desired.length() > 80.0)
+
+
+## Hedefe koş, yaklaşırken yavaşla, menzile girince dur ve hedefe dön (ısırma _process_attack'ta).
+func _chase_velocity(tgt: Node2D) -> Vector2:
+	var to_t: Vector2 = tgt.global_position - global_position
+	var dist: float = to_t.length()
+	if _in_melee_stance:
+		if dist > MELEE_RESUME_CHASE_RANGE:
+			_in_melee_stance = false
+	elif dist <= MELEE_STOP_RANGE:
+		_in_melee_stance = true
+	if _in_melee_stance:
+		_update_facing(to_t)
+		return Vector2.ZERO
+	var spd: float = _base_speed() * COMBAT_SPEED_MULT * _get_speed_mult()
+	spd *= clampf((dist - MELEE_STOP_RANGE * 0.5) / CHASE_SLOW_ZONE, 0.35, 1.0)
+	return to_t.normalized() * spd
+
+
+## Takip: sahibin arkasındaki yan "topuk noktası"na ileri besleme + orantılı düzeltmeyle akar (bkz. yukarıdaki model notu).
+func _follow_velocity(delta: float) -> Vector2:
+	if not _owner_ok():
+		return Vector2.ZERO
+	var o: Vector2 = owner_player.global_position
+	if global_position.distance_to(o) > WARP_DISTANCE:
+		_warp_to_heel()
+		return Vector2.ZERO
+	var ov: Vector2 = _owner_velocity()
+	var owner_moving: bool = ov.length() > OWNER_MOVING_SPEED
+	if owner_moving:
+		_heading = _heading.lerp(ov.normalized(), minf(1.0, delta * HEADING_SMOOTH))
+		_heading = _heading.normalized() if _heading.length() > 0.05 else ov.normalized()
+	var err: Vector2 = _heel_point() - global_position
+	var d: float = err.length()
+	if _heel_active:
+		if not owner_moving and d < HEEL_IDLE_RADIUS:
+			_heel_active = false
+	elif owner_moving or d > HEEL_RESUME_RADIUS:
+		_heel_active = true
+	if not _heel_active:
+		return Vector2.ZERO
+	var v: Vector2 = (ov if owner_moving else Vector2.ZERO) + err * HEEL_GAIN
+	var cap: float = _base_speed() * FOLLOW_SPEED_CAP_MULT * _get_speed_mult()
+	return v.limit_length(cap)
+
+
+## Topuk noktası: sahibin hareket yönünün arkası + yan (sahibin tam önüne/üstüne basmasın). Engelin içindeyse sahibin kendi konumu.
+func _heel_point() -> Vector2:
+	var o: Vector2 = owner_player.global_position
+	var p: Vector2 = o - _heading * HEEL_BEHIND + _heading.orthogonal() * HEEL_SIDE
+	if GameManager.is_position_blocked_by_terrain(p):
+		return o
+	return p
+
+
+## Çok uzaktaki (ışınlanma/ev girişi) ya da sıkışmış köpeği topuk noktasına atlatır; kozmetik kopyalar AYNI atlayışı alır (teleport bayrağı).
+func _warp_to_heel() -> void:
+	if not _owner_ok():
+		return
+	var dest: Vector2 = _heel_point()
+	global_position = dest
+	velocity = Vector2.ZERO
+	_heel_active = false
+	_stuck_t = 0.0
+	if not _is_network_visual and NetworkManager.is_multiplayer_active and not network_instance_id.is_empty():
+		NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, dest, false, -1.0, -1.0, -1, true)
+
+
+## Gitmek istediği halde 0,5 sn'de 14 px'ten az ilerliyorsa "sıkışık" sayar; STUCK_WARP_SECONDS sürerse: savaşta o hedefi 3 sn
+## bırakır (yola dönsün), takipte sahibe uzaksa topuk noktasına atlar.
+func _check_stuck(delta: float, wants_move: bool) -> void:
+	_stuck_sample_t += delta
+	if _stuck_sample_t < 0.5:
+		return
+	var moved: float = global_position.distance_to(_stuck_ref)
+	_stuck_ref = global_position
+	_stuck_sample_t = 0.0
+	if wants_move and moved < 14.0:
+		_stuck_t += 0.5
 	else:
-		velocity = Vector2.ZERO
-		_follow_delay_timer = 0.0
+		_stuck_t = 0.0
+		return
+	if _stuck_t < STUCK_WARP_SECONDS:
+		return
+	_stuck_t = 0.0
+	if _focus_target_ok():
+		_ignored_id = _focus_target.get_instance_id()
+		_ignored_until_ms = Time.get_ticks_msec() + 3000
+		_focus_target = null
+		_in_melee_stance = false
+	elif _owner_ok() and global_position.distance_to(owner_player.global_position) > 140.0:
+		_warp_to_heel()
 
 
 ## Same axis-dominance logic as player.gd's _update_facing - keeps the last
@@ -506,20 +774,31 @@ func _update_facing(direction: Vector2) -> void:
 		facing = "up" if direction.y < 0 else "down"
 
 
-## Tilki hareket ettiği anda koşu animasyonu kullanır. Takip/savaş hızları
-## oyuncunun ölçeğine ve statlarına göre değişebildiği için sabit hız eşiği
-## kullanmak, görsel olarak hızlı giden tilkinin yanlışlıkla walk oynamasına
-## neden oluyordu. Artık hareket = run, hareketsiz = idle.
+## Köpek (eskiden tilki) animasyonu: ısırma klibi bitene kadar ezilmez; hareket hızına göre idle / walk / run (kullanıcı bildirimi
+## 2026-10-08: eski "hareket = run" kuralı yavaş süzülmede de koşu klibi oynatıyordu). walk <-> run eşiği histerezisli: eşik civarında
+## klip her karede değişmesin. 2026-10-08 (iki süreçli denetim: kopyada duruş sırasında idle<->walk 0,1 sn aralıkla titriyordu): hız süzülür
+## (_speed_smooth), idle<->hareket eşikleri histerezisli ve hareket klibi türü (idle/walk/run) en az ANIM_HOLD sn sürer.
 func _update_animation() -> void:
 	if not anim:
 		return
 	var current: String = String(anim.animation)
 	if current.begins_with("death") and anim.is_playing():
 		return
-	var prefix: String = "idle_"
-	if velocity.length() > 0.1:
-		prefix = "run_"
-	var target_anim: String = prefix + facing
+	if _bite_left > 0.0 and current.begins_with("bite"):
+		return
+	var cur_prefix: String = current.get_slice("_", 0) + "_"
+	var moving_clip: bool = cur_prefix == "walk_" or cur_prefix == "run_"
+	var spd: float = _speed_smooth
+	var want_prefix: String = "idle_"
+	if spd > (IDLE_SPEED_MIN * 0.5 if moving_clip else IDLE_SPEED_MIN * 1.6):
+		var run_threshold: float = WALK_SPEED_MAX * (0.8 if cur_prefix == "run_" else 1.1)
+		want_prefix = "run_" if spd > run_threshold else "walk_"
+	if want_prefix != cur_prefix and (cur_prefix == "idle_" or moving_clip):
+		if _anim_hold > 0.0:
+			want_prefix = cur_prefix
+		else:
+			_anim_hold = ANIM_HOLD
+	var target_anim: String = want_prefix + facing
 	if anim.animation != target_anim:
 		anim.play(target_anim)
 
@@ -528,24 +807,24 @@ func _process_attack(delta: float) -> void:
 	_attack_timer -= delta * _get_attack_speed_mult() * _owner_attack_speed_mult()
 	if _attack_timer > 0.0:
 		return
-	## DÜZELTME (kullanıcı bildirimi: "Shopta kalkan baloncuğunun içinde
-	## silahlar ateş etmesin") - Matthew'in tilkisi hiçbir zaman _necro_
-	## active_pets'e kaydedilmiyordu (bkz. player.gd _spawn_matthew_pet), bu
-	## yüzden set_combat_active()'in devre dışı bıraktığı silahların/necro
-	## yaratıklarının aksine, Matthew seyyar satıcının güvenli bölgesine
-	## girse BİLE saldırmaya devam ediyordu - totem_base.gd _process()'teki
-	## AYNI kontrol.
-	if is_instance_valid(owner_player) and owner_player.get("is_in_merchant_zone") == true:
+	## DÜZELTME (kullanıcı bildirimi: "Shopta kalkan baloncuğunun içinde silahlar ateş etmesin") - pet seyyar satıcının güvenli
+	## bölgesindeki sahibini korurken saldırmaz (totem_base.gd _process()'teki AYNI kontrol).
+	if _owner_ok() and owner_player.get("is_in_merchant_zone") == true:
 		return
-	if not _focus_target or not is_instance_valid(_focus_target) or _focus_target.get("is_dead") == true:
+	if not _focus_target_ok():
 		return
 	var to_target: Vector2 = _focus_target.global_position - global_position
-	if to_target.length() > MELEE_RANGE:
+	if to_target.length() > MELEE_RANGE + ATTACK_REACH_SLACK:
 		return
 	_attack_timer = ATTACK_INTERVAL
 	var attack_dir: Vector2 = to_target.normalized() if to_target.length() > 0.1 else Vector2.DOWN
+	## 2026-10-08: ısırmadan ÖNCE hedefe dön (eskiden bakış yönü sadece hareket ederken güncelleniyordu: savaş duruşunda durup
+	## hedefe SIRTINI dönük ısırırdı) ve ısırma klibini oynat; uzak kopyalar aynı klibi is_attacking + yön (sprite_row) ile alır.
+	_update_facing(attack_dir)
+	_play_bite()
 	_do_cone_attack(attack_dir)
 	_spawn_slash_fx(attack_dir)
+	_broadcast_bite()
 
 
 ## Önüne doğru (attack_dir merkezli) 180 derecelik bir alandaki TÜM
@@ -596,6 +875,25 @@ func _spawn_slash_fx(attack_dir: Vector2) -> void:
 			"scene_path": SlashFxScene.resource_path,
 			"rotation": rot,
 		})
+
+
+## Isırma klibi (köpek sayfasının BITE_<yön> satırı, 5 kare, bkz. tools/import_dog_sheet.py). Gerçek köpek _process_attack'tan, kozmetik
+## kopya is_attacking paketinden (update_network_pet_state) çağırır; klip bitene kadar _update_animation onu ezmez (_bite_left).
+func _play_bite() -> void:
+	if not anim or not anim.sprite_frames:
+		return
+	var clip: String = "bite_" + facing
+	if not anim.sprite_frames.has_animation(clip):
+		return
+	anim.play(clip)
+	_bite_left = float(anim.sprite_frames.get_frame_count(clip)) / maxf(0.1, anim.sprite_frames.get_animation_speed(clip))
+
+
+## Gerçek köpek ısırdığını (konum + bakış yönü dizini) kozmetik kopyalara hemen bildirir (periyodik yayın is_attacking=false gönderir).
+func _broadcast_bite() -> void:
+	if _is_network_visual or not NetworkManager.is_multiplayer_active or network_instance_id.is_empty():
+		return
+	NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, global_position, true, -1.0, -1.0, FACINGS.find(facing), false)
 
 
 func _spawn_claw_slash_at(pos: Vector2, rot: float) -> void:

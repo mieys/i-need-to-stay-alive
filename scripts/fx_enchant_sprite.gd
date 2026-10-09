@@ -69,11 +69,18 @@ var _glow_cone_px: float = 0.0
 ## efekt de onunla gider; ebeveynin (fizik interpolasyonlu) akıcı konumunu kendiliğinden izler. YÖN ise dünyada sabit
 ## "rot" kalır (gerçek hasar yönü): uzak kuklanın asası kendi hedef seçimiyle hafif farklı bakabilir, püskürtme yine de
 ## hasarın gittiği yere gitmeli (yerelde asa zaten aynı hedefe nişan alır - enchant_behavior.aim_target).
+## 2026-10-08 (kullanıcı: "ateş asasının alevi ateş asasıyla ayrı yerlerde olabiliyor, birbiriyle senkronize değil"): dünyada sabit yön
+## iki yerde asadan KOPUYORDU - (1) uzak ekranda kuklanın asası kendi yerel hedefine döner, alev ise kasterin yayınladığı açıya
+## bakardı; (2) yerelde asa yumuşak döner (AIM_EASE_RATE) ama alev yönünü yalnız tikte (0,25 sn'de bir) alırdı, hedef/oyuncu hareket
+## edince ikisi ayrı yöne bakardı. Çözüm "follow_aim": yön her karede ASANIN ÇİZİLİ BAKIŞ yönünden (ikon dönüşü + ileri açı) +
+## "rot_offset" (koni parçasının asa eksenine göre açısı) alınır -> her ekranda alev asanın baktığı yere, asanın ucundan çıkar.
 ## Kullanıcı bildirimi (2026-09-30): "ejder nefesi efsunundaki ateş ve buz püskürtme efekti silahı takip etmiyor, konumu
 ## yanlış" - eskiden asanın ORTASINDAN dünyaya sabit bırakılıyordu. Silah bulunamazsa eski davranış (pos + rot, sabit).
 var follow_icon: Sprite2D = null
 var follow_fwd_deg: float = 0.0
 var _world_rot: float = 0.0
+var follow_aim: bool = false ## true: yön = asanın bakışı + aim_rot_offset (bkz. yukarıdaki 2026-10-08 notu)
+var aim_rot_offset: float = 0.0
 
 var _spr: AnimatedSprite2D = null
 var _t: float = 0.0
@@ -130,6 +137,8 @@ static func spawn(tree: SceneTree, pos: Vector2, data: Dictionary) -> Node2D:
 			n.follow_icon = info[0]
 			n.follow_fwd_deg = float(info[1])
 			n._world_rot = n.rotation
+			n.follow_aim = bool(data.get("follow_aim", false))
+			n.aim_rot_offset = float(data.get("rot_offset", 0.0))
 			(info[0] as Node).get_parent().add_child(n)
 			n._follow_update()
 			return n
@@ -157,6 +166,7 @@ static func weapon_icon_info(tree: SceneTree, peer: int, slot: int) -> Array:
 ## Aynı anahtarla gelen yeni istek (bkz. spawn): ömrü uzat, yönü/ölçeği/konumu güncelle - animasyon kesilmeden sürer.
 func _refresh(pos: Vector2, data: Dictionary) -> void:
 	_target_rot = float(data.get("rot", _target_rot))
+	aim_rot_offset = float(data.get("rot_offset", aim_rot_offset))
 	var sc: Variant = data.get("scale", 1.0)
 	sprite_scale = sc if sc is Vector2 else Vector2.ONE * float(sc)
 	if _spr:
@@ -174,6 +184,13 @@ func _exit_tree() -> void:
 		_live.erase(key)
 
 
+## Silah ikonunun ÇİZİLİ bakış yönü (dünya radyanı). weapon.gd _update_aim / remote_player.gd _update_local_weapon_aim ile aynı bağıntı:
+## normal ikon rotation = yön - ileri; aynalı (flip_h, tabanca gibi) rotation = yön - PI + ileri.
+static func icon_aim_angle(icon: Sprite2D, forward_deg: float) -> float:
+	var f: float = deg_to_rad(forward_deg)
+	return icon.global_rotation + ((PI - f) if icon.flip_h else f)
+
+
 func _follow_update() -> void:
 	if not is_instance_valid(follow_icon):
 		follow_icon = null
@@ -184,6 +201,8 @@ func _follow_update() -> void:
 	var gs: Vector2 = par.global_scale
 	scale = Vector2(1.0 / maxf(absf(gs.x), 0.001), 1.0 / maxf(absf(gs.y), 0.001))
 	position = WeaponTip.tip_in_parent(follow_icon, follow_fwd_deg)
+	if follow_aim:
+		_world_rot = icon_aim_angle(follow_icon, follow_fwd_deg) + aim_rot_offset
 	global_rotation = _world_rot
 
 
@@ -253,7 +272,8 @@ func _process(delta: float) -> void:
 		## Sürekli efekt yeni yönüne yumuşak döner (tik başına sıçramasın).
 		var w: float = minf(1.0, delta * ROT_SMOOTH)
 		if follow_icon != null:
-			_world_rot = lerp_angle(_world_rot, _target_rot, w)
+			if not follow_aim:
+				_world_rot = lerp_angle(_world_rot, _target_rot, w)
 		else:
 			rotation = lerp_angle(rotation, _target_rot, w)
 	if follow_icon != null:

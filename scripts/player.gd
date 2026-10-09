@@ -1631,7 +1631,7 @@ func _apply_entity_size_scale() -> void:
 	## küçülünce baloncuk da küçülmezse orantısız geniş kalırdı.
 	var bubble: Node2D = get_node_or_null("ShieldVisual/BubbleSprite")
 	if bubble:
-		bubble.scale *= EntityScale.SIZE
+		bubble.scale *= EntityScale.ATTACHED_SIZE ## kalkan gövdeyle birlikte küçülmez (bkz. EntityScale.ATTACHED_SIZE)
 
 
 func _load_character_frames() -> void:
@@ -2087,6 +2087,33 @@ func apply_knockback_force(dir: Vector2, force: float) -> void:
 		_knockback_velocity = _knockback_velocity.normalized() * 400.0
 
 
+## MINOTAUR savrulması (kullanıcı isteği 2026-10-08: boynuz darbesi "etrafa savurur", kimse collision'ın içine giremez). Host, hasarı
+## (take_special_damage kind "minotaur") ilettikten HEMEN sonra çağırır - yerelde doğrudan, uzak oyuncuda NetworkManager.
+## forward_player_fling_to_peer RPC'siyle. Hasar gerçekten işlenmediyse (kaçınma / dokunulmazlık / ev içi) savrulma da yok.
+## Mesafe, bu makinenin duvar haritasıyla (GameManager.is_position_blocked_by_walls) ÖNCEDEN kısaltılır: oyuncu hiçbir zaman
+## engel hücresine girmez; ayrıca hareket kodundaki _block_movement_into_terrain yoklaması savrulma boyunca da çalışır.
+## Hız tavanı: 60 Hz'de karede <= ~9,3 px - o yoklamanın 10 px'lik adımından küçük kalır (daha hızlısı bir hücreyi atlayabilirdi).
+const MinotaurMathScript: GDScript = preload("res://scripts/minotaur_math.gd")
+const BOSS_FLING_MAX_SPEED := 560.0
+const BOSS_FLING_WINDOW_MSEC := 600
+var _minotaur_hit_msec: int = -100000
+
+
+func apply_boss_fling(dir: Vector2, distance: float) -> void:
+	if is_dead or distance <= 0.0 or dir.length() < 0.001:
+		return
+	if Time.get_ticks_msec() - _minotaur_hit_msec > BOSS_FLING_WINDOW_MSEC:
+		return
+	_minotaur_hit_msec = -100000
+	var d: Vector2 = dir.normalized()
+	var allowed: float = MinotaurMathScript.clip_fling_distance(global_position, d, distance,
+			func(p: Vector2) -> bool: return GameManager.is_position_blocked_by_walls(p))
+	if allowed < 6.0:
+		return
+	## Mevcut itişin YERİNE geçer (birikmez): mesafe tam olarak `allowed` olsun (v^2 = 2 a d, sönüm KNOCKBACK_DECAY).
+	_knockback_velocity = d * minf(MinotaurMathScript.fling_speed(allowed, KNOCKBACK_DECAY), BOSS_FLING_MAX_SPEED)
+
+
 ## DÜZELTME (kullanıcı isteği: "sadece karakterler yaratıklara doğru hareket
 ## edince onları gidiş hızına bağlı olarak azıcık itebilsin yoksa içlerinde
 ## sıkışır yine. (onlar bizi asla itemez unutma)") - eskiden oyuncu bir
@@ -2163,6 +2190,11 @@ func _block_movement_into_enemies() -> void:
 			continue
 		var enemy_radius: float = e._body_radius if "_body_radius" in e else 20.0
 		var required_sep: float = (enemy_radius + PLAYER_BODY_RADIUS) * GameManager.BODY_BLOCK_SCALE
+		## SERT gövde (Yeraltı Canavarı'nın solucan uzuvları, bkz. worm_limb.gd hard_block_radius): yumuşak blok yerine bu yarıçap - oyuncu yaklaşamaz ve
+		## uzvu itmez (yerinden oynamaz); uzuv SIRALARI böylece yolu gerçekten keser. İçine girmişse uzaklaşabilir (approach_speed <= 0 kuralı) - tuzak yok.
+		var hard_radius: float = float(e.get("hard_block_radius")) if "hard_block_radius" in e else 0.0
+		if hard_radius > 0.0:
+			required_sep = maxf(required_sep, hard_radius + PLAYER_BODY_RADIUS)
 		var to_enemy: Vector2 = e.global_position - global_position
 		var dist: float = to_enemy.length()
 		if dist <= 0.001 or dist >= required_sep:
@@ -2171,9 +2203,10 @@ func _block_movement_into_enemies() -> void:
 		var approach_speed: float = velocity.dot(into_dir)
 		if approach_speed > 0.0:
 			velocity -= into_dir * approach_speed
-			if e.has_method("apply_knockback_force"):
+			if hard_radius <= 0.0 and e.has_method("apply_knockback_force"):
 				e.apply_knockback_force(into_dir, approach_speed * PLAYER_PUSH_ENEMY_RATIO)
-		still_overlapping.append([e, into_dir])
+		if hard_radius <= 0.0:
+			still_overlapping.append([e, into_dir])
 	for entry in still_overlapping:
 		var stuck_enemy: Node = entry[0]
 		if stuck_enemy.has_method("apply_knockback_force"):
@@ -4787,6 +4820,8 @@ func take_special_damage(amount: float, source: Node2D, kind: String) -> void:
 	_special_dmg_is_dot = false
 	if kind == "fireball" and not is_dead and health + item_shield_hp < before:
 		apply_enemy_burn(amount * ENEMY_BURN_DPS_RATIO)
+	if kind == "minotaur" and not is_dead and health + item_shield_hp < before:
+		_minotaur_hit_msec = Time.get_ticks_msec() ## hasar gerçekten işlendi: hemen ardından gelen savrulma (apply_boss_fling) geçerli
 
 
 func apply_enemy_burn(dps: float) -> void:
@@ -12133,7 +12168,7 @@ const EVO_SOVALYE_R_REFLECT := 0.5 ## Yansıtan Kubbe
 const EVO_SOVALYE_R_WALK_MULT := 0.3 ## Yürüyen Kale
 ## Matthew
 const EVO_MATTHEW_Q_DAMAGE_MULT := 1.3 ## Keskin Dişler
-const EVO_MATTHEW_Q_CD_MULT := 0.7 ## Çevik Tilki
+const EVO_MATTHEW_Q_CD_MULT := 0.7 ## Çevik Köpek (eski adı Çevik Tilki)
 const EVO_MATTHEW_Q_TARGETS := 10 ## Sürü Avı
 const EVO_MATTHEW_HASTE_MOVE := 0.3 ## Vahşi Koşu
 const EVO_MATTHEW_HASTE_ATTACK := 0.5

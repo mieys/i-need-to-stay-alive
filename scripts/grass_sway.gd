@@ -24,9 +24,9 @@ const LAYER_PARENT := "Shader Eklenecek"
 const LAYER_NAMES: Array[String] = ["Çalılar", "Çalılar1"]
 const MAX_CHARACTERS := 8      ## shader'daki karakterler dizi boyu
 ## Karakter ayak noktası (dünya px, köke göre): oyuncu kökü ölçek 0.5'te, sprite'ın zemine değdiği yer ~+30 yerel.
-const FEET_OFFSET := 15.0
-const BODY_HALF_WIDTH := 11.0
-const BODY_HEIGHT := 34.0
+const FEET_OFFSET := 15.0 * EntityScale.BODY_REL ## 2026-10-09: karakterler %15 küçüldü (eski ölçü 15 / 11 / 34)
+const BODY_HALF_WIDTH := 11.0 * EntityScale.BODY_REL
+const BODY_HEIGHT := 34.0 * EntityScale.BODY_REL
 ## TEMAS (kullanıcı isteği 2026-09-26: "oyuncular çalıya dokunduğu zaman çalının buna göre sallanmasını istiyorum"): ayağı otun
 ## kökünün çevresindeki kutuda olan oyuncu otu kendinden UZAĞA eğer (tam ortasındaysa yürüdüğü yöne); değmeye başladığı an
 ## hızına göre bir itki verir -> yay-sönüm ile birkaç kez sallanıp durulur. Sadece hareket eden otlar güncellenir.

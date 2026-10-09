@@ -101,11 +101,15 @@ func process_extra(delta: float) -> void:
 	## Sürekli alevin anahtarı: oyuncu + silah slotu + alt alev - her istemcide aynı (bkz. fx_enchant_sprite "key").
 	var key_base: String = "destiny:%d:%d" % [my_peer(), slot if slot >= 0 else weapon.get_instance_id()]
 	for k in range(parts):
-		var d: Dictionary = {"rot": dir.angle() - half + sub_half * float(2 * k + 1), "scale": Vector2(sx, sy),
+		var part_off: float = -half + sub_half * float(2 * k + 1) ## bu alt alevin koni ekseninden (asanın bakışından) açısı
+		var d: Dictionary = {"rot": dir.angle() + part_off, "scale": Vector2(sx, sy),
 			"offset": FLAME_OFFSET, "z": 9, "loop_time": iv + FLAME_LINGER, "key": "%s:%d" % [key_base, k]}
 		if slot >= 0:
 			d["follow_slot"] = slot
 			d["follow_peer"] = my_peer()
+			## Yön asanın ÇİZİLİ bakışından alınır (her ekranda asayla aynı yöne bakar; bkz. fx_enchant_sprite "follow_aim").
+			d["follow_aim"] = true
+			d["rot_offset"] = part_off
 		sprite(sheet, origin, d)
 	var seen: Dictionary = {}
 	var push_now: bool = f("spray_push") > 0.0 and _push_t <= 0.0

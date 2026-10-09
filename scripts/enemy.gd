@@ -405,6 +405,54 @@ func on_ability_vfx(kind: String, data: Dictionary) -> void:
 			if scene_root:
 				EnemyAbilitiesScript.FxScript.spawn(scene_root, from, EnemyAbilitiesScript.VAMPIRE_FRAMES, &"blink", 2)
 				EnemyAbilitiesScript.FxScript.spawn(scene_root, to, EnemyAbilitiesScript.VAMPIRE_FRAMES, &"blink", 2)
+		"minotaur_pose":
+			_apply_minotaur_pose(int(data.get("pose", 0)), float(data.get("cap", 0.0)))
+		"minotaur_impact":
+			MinotaurDustScript.burst(get_tree() if is_inside_tree() else null, Vector2(data.get("pos", global_position)),
+					Vector2(data.get("dir", Vector2.UP)), float(data.get("power", 0.4)))
+
+
+## Yetenek görsel olayını HOST'ta yerelde işler (on_ability_vfx) ve çok oyunculuda istemcilere yayınlar - iki taraf AYNI işlevi çalıştırır (Yeraltı Canavarı:
+## underground_boss.gd / worm_limb.gd). NetworkManager.broadcast_enemy_vfx'in match'ine yeni tür eklemeyi unutma (yoksa istemciye ulaşmaz).
+func emit_ability_vfx(kind: String, data: Dictionary) -> void:
+	on_ability_vfx(kind, data)
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.broadcast_enemy_vfx.rpc(net_id, kind, data)
+
+
+## MINOTAUR (Kademe 3 bossu, bkz. minotaur_charge.gd) görsel pozu - host (yerelde) ve istemci (broadcast_enemy_vfx "minotaur_pose")
+## AYNI işlevi çalıştırır. Poz saldırı sayfasını (attack_texture = boynuz saldırısı, 6 kare) kullanır: 1 = baş eğik/kazıma (kare 1-2),
+## 2 = hücum (kare 0-2 döngü), 3 = boynuz savurup doğrulma (kare 3-5, son karede kalır), 0 = normale dön. cap > 0: istemci kuklasının
+## ağ hızı tavanı (px/sn) - hücum 3,5x hız sınırının çok üstünde, yoksa kukla geriden gelir (bkz. update_network_state).
+const MinotaurDustScript: GDScript = preload("res://scripts/minotaur_dust.gd")
+var _pose_override: int = 0
+var _net_speed_cap_override: float = 0.0
+
+
+## Geç katılan / yeniden katılan oyuncuya (host, enemy_spawner.gd _on_peer_needs_game_catchup) Minotaur'un o anki hücum pozu ve ağ hızı tavanı -
+## yoksa hücumun ortasında gelen oyuncu bir sonraki poz mesajına kadar bossu eğilmeden/yavaş kukla hızıyla görürdü. (worm_limb.gd kendi sürümünü tanımlar.)
+func send_catchup_to_peer(peer_id: int) -> void:
+	if is_dead or _pose_override <= 0 or _pose_override >= 10:
+		return
+	var net_id: int = int(get_meta("network_enemy_id", 0))
+	if net_id > 0:
+		NetworkManager.broadcast_enemy_vfx.rpc_id(peer_id, net_id, "minotaur_pose", {"pose": _pose_override, "cap": _net_speed_cap_override})
+
+
+func _apply_minotaur_pose(pose: int, cap: float) -> void:
+	if is_dead:
+		return
+	_net_speed_cap_override = cap
+	_pose_override = pose
+	if pose == 0:
+		if _state == State.ATTACK:
+			_enter_state(State.WALK)
+		return
+	MinotaurDustScript.attach(self)
+	_enter_state(State.ATTACK, 0.0) ## süre 0: poz değişene kadar kalır (otomatik yürümeye dönüş yok)
+	_ew_wake()
 
 ## Flat armor scaling as Kademe rises - see apply_tier_scaling(). Kademe
 ## (tier) itself now ALSO scales health/damage directly (TIER_HEALTH_RAMP_*/
@@ -844,7 +892,7 @@ func apply_boss_stats(new_max_health: float, new_damage: float, scale_mult: floa
 	gold_max = max(gold_min + 1, int(new_max_health * BOSS_GOLD_MAX_HEALTH_RATIO))
 	gold_chance = 1.0
 	health_changed.emit(health, max_health)
-	_scale_body(scale_mult)
+	_scale_body(scale_mult * EntityScale.BOSS_EXTRA) ## bosslar yaratıkların %15'i yerine %20 küçülür (bkz. EntityScale.BOSS_REL)
 
 
 ## Görseli ve çarpışmayı birlikte büyütür (boss ve elit yaratık - bkz. apply_boss_stats / make_elite).
@@ -869,14 +917,15 @@ func _scale_body(scale_mult: float) -> void:
 
 ## ELİT YARATIK (kullanıcı isteği 2026-10-02: "oyunda elit sandık düşürecek elit düşmanlar ekleyeceğiz"). Kurallar:
 ## görünüm AYNI kalır, sadece başının üstünde mor piksel yıldız (elite_star.gd) + ayaklarında aura (elite_aura.gd, kullanıcı
-## seçimi "B - Yükselen Kıvılcımlar"); can ve kalkan "%300 daha fazla" (x4);
+## seçimi "B - Yükselen Kıvılcımlar"); can ve kalkan o kademedeki yaratığın 15 KATI (kullanıcı 2026-10-08: eski bosslar elit oldu,
+## "canları ve kalkanları o kademedeki yaratıkların 15 katı olsun"; eskiden "%300 daha fazla" = x4);
 ## hasar +%50 (yetenekler dahil - yaratık yetenekleri hasarını contact_damage/ranged_damage'den türetiyor, bkz.
 ## enemy_abilities.gd, enemy_*.gd mermi/alanlar); boyut +%50; yürüme %15 yavaş + yürüme animasyonu biraz yavaş ("büyük
 ## olduğu hissedilsin"); sersemletme/yavaşlatma/sabitlemeye BAĞIŞIK DEĞİL (is_boss'a bakan hiçbir korumaya girmez);
 ## ölünce garanti elit sandık (_drop_chest). Hangi yaratığın, ne zaman elit olacağını host seçer (enemy_spawner.gd
 ## ELİT YARATIK bloğu, kademe başına 1) ve istemcilere _rpc_client_spawn_creature'ın is_elite bayrağıyla bildirir - host
 ## ve istemci AYNI make_elite()'i çağırır (iki yerde ayrı formül yok, bkz. CLAUDE.md).
-const ELITE_DEFENSE_MULT := 4.0
+const ELITE_DEFENSE_MULT := 15.0
 const ELITE_DAMAGE_MULT := 1.5
 const ELITE_SCALE_MULT := 1.5
 const ELITE_SPEED_MULT := 0.85
@@ -3295,15 +3344,21 @@ func _pairwise_separation_push(e: Node) -> Vector2:
 ## değerleri DEĞİŞTİRİLMEDİ (60+ yaratık sahnesini elle düzenlemek yerine
 ## tek çarpan - bkz. EntityScale üstündeki gerekçe).
 func _apply_global_size_scale() -> void:
-	if is_equal_approx(EntityScale.SIZE, 1.0):
+	var k: float = EntityScale.SIZE * _size_extra()
+	if is_equal_approx(k, 1.0):
 		return
 	if frame_sprite:
-		frame_sprite.scale *= EntityScale.SIZE
+		frame_sprite.scale *= k
 	if anim_sprite:
-		anim_sprite.scale *= EntityScale.SIZE
-	EntityScale.shrink_collision(body_collision)
+		anim_sprite.scale *= k
+	EntityScale.shrink_collision(body_collision, k)
 	if hit_area:
-		EntityScale.shrink_collision(hit_area.get_node_or_null("HitCollision"))
+		EntityScale.shrink_collision(hit_area.get_node_or_null("HitCollision"), k)
+
+
+## Global boyut çarpanına (EntityScale.SIZE) EK çarpan: Yeraltı Canavarı uzuvları bossun görünen gövdesi olduğu için boss gibi küçülür (worm_limb.gd). Normal yaratıkta 1.
+func _size_extra() -> float:
+	return 1.0
 
 
 func _ready() -> void:
@@ -3575,6 +3630,8 @@ func _ew_on_event(type: int, target: Node2D) -> void:
 		EW_E_MELEE:
 			if target == null:
 				return
+			if _abilities != null and _abilities.melee_blocked():
+				return ## Minotaur hücum/toparlanma sırasında temas vuruşu yok (hücum hasarı minotaur_charge.gd'de)
 			if not is_ranged:
 				var dur: float = _anim_length_for(State.ATTACK)
 				_enter_state(State.ATTACK, dur if dur > 0.0 else 0.35)
@@ -4203,6 +4260,15 @@ func _advance_frame_sprite(delta: float) -> void:
 		## Idle sayfası varsa döngüde oynar; yoksa (yedek: walk sayfası) yürüme karelerini
 		## döndürmek yerine duruş karesinde (0) bekler.
 		col = int(_frame_time) % cols if idle_texture else 0
+	elif _state == State.ATTACK and _pose_override > 0 and _pose_override < 10: ## 11+ = Yeraltı Canavarı uzuv pozları (worm_limb.gd: sayfa başına tek seferlik, aşağıdaki else)
+		## Minotaur pozları (bkz. _apply_minotaur_pose): saldırı sayfasının kare aralıkları, tek seferlik değil döngü/tutma.
+		match _pose_override:
+			1: ## baş eğik, kazıma: kare 1 <-> 2 yavaşça
+				col = mini(1 + (int(_frame_time / 1.5) % 2), cols - 1)
+			2: ## hücum: baş eğik koşu, kare 0-2 döngü
+				col = int(_frame_time * 1.4) % mini(3, cols)
+			_: ## doğrulma: kare 3-5 bir kez, son karede kalır
+				col = mini(3 + int(_frame_time * 0.7), cols - 1)
 	else:
 		col = min(int(_frame_time), cols - 1)
 	frame_sprite.frame = _sprite_row * cols + col
@@ -4244,7 +4310,7 @@ func update_network_state(net_position: Vector2, net_dead: bool = false, net_hea
 		_network_time_since_update = _ew_world.get_net_time(_ew_slot)
 	if _network_state_received and _network_time_since_update > 0.02:
 		var raw_velocity: Vector2 = (net_position - _network_target_position) / _network_time_since_update
-		var max_speed: float = max(speed, 40.0) * 3.5
+		var max_speed: float = maxf(max(speed, 40.0) * 3.5, _net_speed_cap_override) ## Minotaur hücumunda tavan yükselir (bkz. _apply_minotaur_pose)
 		if raw_velocity.length() > max_speed:
 			raw_velocity = raw_velocity.normalized() * max_speed
 		_network_velocity = raw_velocity

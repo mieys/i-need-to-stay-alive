@@ -179,13 +179,17 @@ func _ensure_sell_confirm_dialog() -> ConfirmationDialog:
 	return _sell_confirm_dialog
 
 
-func _request_sell_confirmation(item_label: String, refund: int, action: Callable, desc: String = "") -> void:
+func _request_sell_confirmation(item_label: String, refund: int, action: Callable, desc: String = "", shard_refund: int = 0) -> void:
 	if _mobile:
 		## Telefon: onay penceresi yerine alttaki bilgi şeridi (ad + açıklama + büyük SAT) - dokunmak önce bilgiyi gösterir.
+		if shard_refund > 0:
+			desc += "\n+%d Silah Parçacığı geri alırsın." % shard_refund
 		_show_detail(item_label, desc, refund, action)
 		return
 	var dialog: ConfirmationDialog = _ensure_sell_confirm_dialog()
 	dialog.dialog_text = "%s eşyasını satmak istediğine emin misin?\n\n+%d Altın kazanacaksın." % [item_label, refund]
+	if shard_refund > 0:
+		dialog.dialog_text += "\n+%d Silah Parçacığı geri alacaksın." % shard_refund
 	_pending_sell_action = action
 	dialog.popup_centered()
 
@@ -383,7 +387,7 @@ func _refresh_weapons() -> void:
 		
 	var sig: String = ""
 	for entry: Dictionary in GameManager.owned_weapons:
-		sig += entry.get("key", "") + ":" + str(entry.get("level", 1)) + ","
+		sig += entry.get("key", "") + ":" + str(entry.get("level", 1)) + ":" + str(entry.get("shards_spent", 0)) + "," ## parçacık defteri: ipucundaki iade/efsun sayısı güncel kalsın
 	if sig == _last_weapons_signature:
 		return
 	_last_weapons_signature = sig
@@ -408,9 +412,9 @@ func _refresh_weapons() -> void:
 			var entry: Dictionary = GameManager.owned_weapons[i]
 			var key: String = entry.get("key", "")
 			var level: int = entry.get("level", 1)
-			var spent: int = int(entry.get("spent", 0))
-			var refund: int = int(round(spent * 0.7))
-			
+			var refund: int = EnchantDefs.sell_refund_gold(entry)
+			var shard_refund: int = EnchantDefs.sell_refund_shards(entry)
+
 			btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 			## Kalıcı silah özelliği (EnchantDefs.TRAITS): adı + alınan geliştirme sayısı (geliştirmeler demirci dükkanında).
 			var trait_line: String = ""
@@ -419,7 +423,8 @@ func _refresh_weapons() -> void:
 			if not trait_def.is_empty():
 				var done: int = (EnchantDefs.upgrades_taken(trait_rec) as Array).size() + (1 if EnchantDefs.is_complete(trait_rec) else 0)
 				trait_line = "\nEfsun: %s (%d/%d)" % [str(trait_def["name"]), done, (trait_def["upgrades"] as Array).size() + 1]
-			btn.tooltip_text = "%s Lv%d%s\n\nSatmak için tıklayın (+%d Altın)" % [WEAPON_NAMES.get(key, key), level, trait_line, refund]
+			btn.tooltip_text = "%s Lv%d%s\n\nSatmak için tıklayın (+%d Altın%s)" % [WEAPON_NAMES.get(key, key), level, trait_line, refund,
+					(", +%d Silah Parçacığı" % shard_refund) if shard_refund > 0 else ""]
 			btn.pressed.connect(_on_sell_weapon_equip.bind(i))
 			
 			var icon_tex: Texture2D = WEAPON_ICON_TEXTURES.get(key)
@@ -473,9 +478,10 @@ func _on_sell_weapon_equip(index: int) -> void:
 		return
 	var entry: Dictionary = GameManager.owned_weapons[index]
 	var key: String = entry.get("key", "")
-	var refund: int = int(round(int(entry.get("spent", 0)) * 0.7))
+	var refund: int = EnchantDefs.sell_refund_gold(entry)
 	_request_sell_confirmation(WEAPON_NAMES.get(key, key), refund, _do_sell_weapon_equip.bind(index),
-			"Silah  ·  Seviye %d" % int(entry.get("level", 1)) + ("\nSon silah satılamaz." if GameManager.owned_weapons.size() <= 1 else ""))
+			"Silah  ·  Seviye %d" % int(entry.get("level", 1)) + ("\nSon silah satılamaz." if GameManager.owned_weapons.size() <= 1 else ""),
+			EnchantDefs.sell_refund_shards(entry))
 
 
 func _do_sell_weapon_equip(index: int) -> void:
@@ -485,13 +491,15 @@ func _do_sell_weapon_equip(index: int) -> void:
 		return
 
 	var entry: Dictionary = GameManager.owned_weapons[index]
-	var refund: int = int(round(int(entry.get("spent", 0)) * 0.7))
+	var refund: int = EnchantDefs.sell_refund_gold(entry)
+	var shard_refund: int = EnchantDefs.sell_refund_shards(entry)
 
 	if player and is_instance_valid(player) and player.has_method("remove_owned_weapon"):
 		player.remove_owned_weapon(index)
 
 	GameManager.owned_weapons.remove_at(index)
 	GameManager.gold += refund
+	GameManager.add_weapon_shards(shard_refund)
 	_last_weapons_signature = ""
 	_refresh()
 

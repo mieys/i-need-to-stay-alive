@@ -9,6 +9,12 @@ extends Node
 ## Sadece "enemies" (+ görev kopyaları, EnemyQuery.candidates'in döndürdüğü): evcil hayvan/müttefik (player_ally*) oyuncunun altında KALIR (eskisi gibi).
 ## Ölüm animasyonundaki (is_dead) yaratık yerde yatar - hep oyuncunun altında kalır.
 ## Titreme koruması: yükselme ayak farkı > +HYSTERESIS, inme < -HYSTERESIS (yan yana yürürken z her karede gidip gelmesin).
+##
+## KAPANIŞ (2026-10-09, kullanıcı: "yeraltı canavarı yan yana dizilince birbirinin üzerinde görünüyor, eksenler yanlış"): yükseltilen yaratıklar (z 2) HER ZAMAN yükseltilmeyenlerin
+## (z 0) üstüne çizilir - yükseltilen yaratık ARKADAYSA ve ayağı daha aşağıdaki (önündeki) komşusu yükseltilmediyse (oyuncuyla örtüşmüyor / tarama yarıçapının dışında), arkadaki yaratık
+## öndekinin ÜSTÜNE çiziliyordu (Yeraltı Canavarı uzuvları: büyük sprite, sıra boyunca bir kısmı oyuncunun yanında). Çözüm: oyuncuyla örtüşen yaratıklardan başlayıp, ayağı daha aşağıda olan VE
+## onunla örtüşebilen her yaratık da yükseltilir (`close_over`; yükseltilen bir yaratığın önündeki her şey de oyuncunun önündedir, yani yükseltmek hep doğrudur). Böylece yükseltilen küme,
+## ayak sırasında "aşağıya doğru kapalı" kalır ve yaratıkların kendi aralarındaki sıra (main.gd _update_creature_draw_order) bozulmaz.
 
 const DepthScript := preload("res://scripts/depth_occluders.gd")
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -18,6 +24,11 @@ const FRONT_Z := 2
 const SCAN_RADIUS := 130.0
 const HYSTERESIS := 2.0
 const FALLBACK_HEIGHT := 48.0
+const FALLBACK_HALF_WIDTH := 24.0
+## Kapanış taraması doğrudan tarama yarıçapından bu kadar geniş (oyuncuyla örtüşen yaratığın önündeki komşular bu bandın içinde aranır).
+const CLOSURE_PAD := 240.0
+## Konumu karakterin ayağından bu kadar YUKARIDA olan yaratık ne yükselir ne de yükselen birinin önünde olabilir (ayak - konum farkı en çok ~70 px): hiç hesaplanmaz.
+const ABOVE_SKIP := 130.0
 
 var _raised: Dictionary = {} ## yaratık düğümü -> yükselmeden önceki z_index
 
@@ -39,20 +50,54 @@ func _process(_delta: float) -> void:
 	update_now()
 
 
+## Saf kural (testler için): `want` (yükseltilecek düğümler) kümesini AYAK SIRASINDA aşağıya doğru kapatır. pool: düğüm -> [ayak y, x, yarım genişlik, boy]. Bir yaratık, kendisinden
+## YUKARIDA (ayağı daha küçük) ve onunla örtüşebilen yükseltilmiş bir yaratık varsa o da yükseltilir. Döner: eklenen yaratık sayısı.
+static func close_over(want: Dictionary, pool: Dictionary) -> int:
+	if want.is_empty() or pool.size() <= want.size():
+		return 0
+	var keys: Array = [] ## Vector2(ayak y, sıra) - Array.sort() yerleşik karşılaştırmayla sıralar
+	var nodes: Array = pool.keys()
+	for i in range(nodes.size()):
+		keys.append(Vector2(float((pool[nodes[i]] as Array)[0]), float(i)))
+	keys.sort()
+	var raised: Array = [] ## yükseltilmiş yaratıkların bilgisi
+	var added: int = 0
+	for k: Vector2 in keys:
+		var n: Variant = nodes[int(k.y)]
+		var info: Array = pool[n]
+		if want.has(n):
+			raised.append(info)
+			continue
+		for a: Array in raised:
+			if float(a[0]) < float(info[0]) - 0.5 and absf(float(a[1]) - float(info[1])) < float(a[2]) + float(info[2]) and float(info[0]) - float(info[3]) < float(a[0]):
+				want[n] = true
+				raised.append(info)
+				added += 1
+				break
+	return added
+
+
 func update_now() -> void:
 	var want: Dictionary = {}
+	var pool: Dictionary = {} ## düğüm -> [ayak y, x, yarım genişlik, boy] (kapanış için)
 	var chars: Array[Vector4] = DepthScript.collect_characters(get_tree())
 	for c in chars:
-		for e in EnemyQueryScript.candidates(get_tree(), Vector2(c.x, c.y), SCAN_RADIUS):
+		for e in EnemyQueryScript.candidates(get_tree(), Vector2(c.x, c.y), SCAN_RADIUS + CLOSURE_PAD):
 			var n := e as Node2D
 			if n == null or not is_instance_valid(n) or not n.visible or n.get("is_dead") == true:
 				continue
-			if absf(n.global_position.x - c.x) > SCAN_RADIUS or absf(n.global_position.y - c.y) > SCAN_RADIUS:
+			var adx: float = absf(n.global_position.x - c.x)
+			var ady: float = absf(n.global_position.y - c.y)
+			if adx > SCAN_RADIUS + CLOSURE_PAD or ady > SCAN_RADIUS + CLOSURE_PAD or n.global_position.y < c.y - ABOVE_SKIP:
 				continue
-			if want.has(n):
-				continue
-			if should_cover(_foot_y(n), _height(n), n.global_position.x - c.x, c.y, _raised.has(n)):
-				want[n] = true
+			var foot: float = _foot_y(n)
+			var ext: Vector2 = _extent(n)
+			if not pool.has(n):
+				pool[n] = [foot, n.global_position.x, ext.x, ext.y]
+			if adx <= SCAN_RADIUS and ady <= SCAN_RADIUS and not want.has(n):
+				if should_cover(foot, ext.y, n.global_position.x - c.x, c.y, _raised.has(n)):
+					want[n] = true
+	close_over(want, pool)
 	for n: Node2D in want:
 		if not _raised.has(n):
 			_raised[n] = n.z_index
@@ -73,28 +118,40 @@ func _foot_y(n: Node2D) -> float:
 	return n.global_position.y
 
 
-## Yaratık görselinin ekrandaki boyu (px): Sprite2D / AnimatedSprite2D karesi x ölçek. Bulunamazsa FALLBACK_HEIGHT.
-func _height(n: Node2D) -> float:
+## Yaratık görselinin ekrandaki (yarım genişlik, boy) ölçüsü (px): Sprite2D / AnimatedSprite2D KARESİ x ölçek (opak alan değil, kare). Bulunamazsa FALLBACK_*.
+func _extent(n: Node2D) -> Vector2:
+	if n.has_meta("_depth_extent"):
+		return n.get_meta("_depth_extent")
 	var vis: Node2D = null
-	for child_name in ["Sprite2D", "AnimatedSprite2D"]:
-		var c: Node = n.get_node_or_null(child_name)
-		if c is Sprite2D or c is AnimatedSprite2D:
-			vis = c as Node2D
-			break
+	var vis_v: Variant = n.get_meta("_depth_vis") if n.has_meta("_depth_vis") else null
+	if is_instance_valid(vis_v):
+		vis = vis_v
+	else:
+		for child_name in ["Sprite2D", "AnimatedSprite2D"]:
+			var c: Node = n.get_node_or_null(child_name)
+			if c is Sprite2D or c is AnimatedSprite2D:
+				vis = c as Node2D
+				n.set_meta("_depth_vis", vis)
+				break
 	if vis == null:
-		return FALLBACK_HEIGHT
-	var h: float = 0.0
+		return Vector2(FALLBACK_HALF_WIDTH, FALLBACK_HEIGHT)
+	var size := Vector2.ZERO
 	if vis is Sprite2D:
 		var s := vis as Sprite2D
 		if s.texture != null:
-			h = s.texture.get_size().y / float(maxi(s.vframes, 1))
+			size = s.texture.get_size() / Vector2(maxi(s.hframes, 1), maxi(s.vframes, 1))
 	else:
 		var a := vis as AnimatedSprite2D
 		if a.sprite_frames != null and a.sprite_frames.has_animation(a.animation) and a.sprite_frames.get_frame_count(a.animation) > 0:
 			var t: Texture2D = a.sprite_frames.get_frame_texture(a.animation, 0)
 			if t != null:
-				h = t.get_size().y
-	return h * absf(vis.global_scale.y) if h > 0.0 else FALLBACK_HEIGHT
+				size = t.get_size()
+	if size.y <= 0.0:
+		return Vector2(FALLBACK_HALF_WIDTH, FALLBACK_HEIGHT)
+	var sc: Vector2 = vis.global_scale.abs()
+	var ext := Vector2(size.x * sc.x * 0.5, size.y * sc.y)
+	n.set_meta("_depth_extent", ext) ## düğüm başına bir kez (ölçek doğuşta belli; poz/animasyon sayfaları aynı kare boyunda)
+	return ext
 
 
 func _exit_tree() -> void:

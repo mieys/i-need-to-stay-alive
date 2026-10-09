@@ -18,10 +18,27 @@ extends RefCounted
 ## çarpanı uygulanır, böylece ileride "biraz daha küçült/büyüt" isteği TEK bir
 ## sayıyı değiştirmekle tüm oyuna uygulanır.
 
-## Tüm varlıkların görseli VE ona bağlı çarpışma çemberi %5 küçülür.
+## 2026-10-09'a kadarki boyut (%5 küçültme). Elle ölçülmüş sabitler (can çubuğu yüksekliği, ayak/gövde ofseti, gölge, kalkan baloncuğu...)
+## bu boyuta göre yazılmıştı; yeni boyuta uyarlarken `LEGACY_SIZE` ya da `BODY_REL` ile çarpılır.
+const LEGACY_SIZE := 0.95
+
+## Kullanıcı isteği (2026-10-09): "tüm yaratıkları ve oyuncuları %15 küçült" - eski boyuta GÖRE çarpan. Gövde boyutuna bağlı elle yazılmış
+## sabitler (ayak ofseti, gölge, çubuk yüksekliği...) bununla çarpılır.
+const BODY_REL := 0.85
+
+## "bossları %20 küçült" - eski boyuta göre bossların TOPLAM çarpanı (yaratıkların %15'inin ÜSTÜNE binmez: boss = eski boyutun %80'i).
+## Bosslar zaten SIZE ile küçüldüğü için ek çarpan BOSS_REL / BODY_REL (apply_boss_stats ve uzuvlar uygular).
+const BOSS_REL := 0.80
+const BOSS_EXTRA := BOSS_REL / BODY_REL
+
+## Tüm varlıkların görseli VE ona bağlı çarpışma çemberi küçülür (0.95 x 0.85 = %19,25 küçültme, bkz. LEGACY_SIZE).
 ## (Projedeki "hem scale hem collision" deseni - bkz. xp_orb.gd TIERS ve
 ## enemy.gd apply_boss_stats, ikisi de aynı şeyi yapar.)
-const SIZE := 0.95
+const SIZE := LEGACY_SIZE * BODY_REL
+
+## Karaktere BAĞLI ama gövdeyle birlikte küçülmeyen parçalar (kalkan baloncuğu; silahlar zaten kendi ICON_SIZE_MULT'ünde): kullanıcı 2026-10-09
+## "herşeyle beraber küçült ama silahlar kalkan v.b." - bunların boyutu eski kaldı. Karakterle birlikte küçülsünler istenirse SIZE'a eşitle.
+const ATTACHED_SIZE := LEGACY_SIZE
 
 ## Tüm hareket hızları %10 azalır.
 ## NOT: yaratıklarda bu, sahnelere tek tek yazılmış hızların üstüne
@@ -45,11 +62,11 @@ static func shrink(visual: Node2D, collision: CollisionShape2D = null) -> void:
 ## CircleShape2D dışındaki şekiller desteklenmiyor: projedeki TÜM varlık
 ## gövdeleri çember (bkz. creature .tscn'leri, pet .tscn'leri, enemy.gd
 ## apply_boss_stats de yalnızca radius ölçekliyor).
-static func shrink_collision(collision: CollisionShape2D) -> void:
+static func shrink_collision(collision: CollisionShape2D, mult: float = SIZE) -> void:
 	if collision == null or not (collision.shape is CircleShape2D):
 		return
 	## Şekil paylaşılan bir kaynak olabilir (ayrı .tscn'ler aynı shape'i
 	## kullanmıyorsa da duplicate en güvenlisi) - asla yerinde değiştirilmez.
 	var shape: CircleShape2D = collision.shape.duplicate()
-	shape.radius *= SIZE
+	shape.radius *= mult
 	collision.shape = shape

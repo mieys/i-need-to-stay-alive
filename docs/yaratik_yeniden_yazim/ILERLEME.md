@@ -6,6 +6,7 @@
 
 ## Şu an
 
+- **2026-10-08 (yeniden yazım DIŞI ama enemy_spawner.gd/enemy.gd'ye dokundu - çakışmasın):** bosslar ELİT oldu: `GameManager.bosses_enabled = false` boss/Final/zafer/boss dalgasını kapatır, her kademenin eliti `enemy_spawner.gd` `ELITE_POOL` (eski 14 boss) + `elite_candidates`'ten gelir, `enemy.gd ELITE_DEFENSE_MULT` 4 -> 15, Kademe XV bitince doğrudan sonsuz mod (`_check_auto_endless`). C++ (`gdextension/enemy_world`) değişmedi. Ayrıntı: CLAUDE.md madde 39.
 - **EN GÜNCEL (2026-10-03, 07:04 sonrası - kota kesintisi sonrası doğrulandı):** Eski GDScript host simülasyonu SİLİNDİ,
   istemci kuklaları da C++'ta (ayrıntı: "Oturum kayıtları"nın en üstündeki iki kayıt). Aşağıdaki "7. bölüm sonu"
   maddesindeki "SIRADAKİ (2) eski yolu silmek" ARTIK YAPILDI - o madde tarihçedir. Son durum:

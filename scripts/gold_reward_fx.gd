@@ -57,12 +57,17 @@ const CHEST_COINS_SFX := preload("res://Sound FX Starter Pack Vol. 1/Medieval/Lo
 ## ve diğer ödül paralarıyla AYNI yoldan (kıvrılarak) panele uçar. Para sayısından fazla parça sadece solup gider.
 const SHATTER_SFX := preload("res://Sound FX Starter Pack Vol. 1/Hollywood/Metal Glass Destruction.wav")
 const SHATTER_SFX_LENGTH := 1.0 ## kaynak ses 2,1 sn - ilk saniyesi (kırılma + dökülme) yeter
-const SHATTER_GRID := 4
-const SHARD_SPEED_MIN := 150.0
-const SHARD_SPEED_MAX := 380.0
-const SHARD_GRAVITY := 820.0
-const SHATTER_CONVERT_BASE := 0.28
-const SHATTER_CONVERT_STEP := 0.03
+## 2026-10-08 (kullanıcı: "item satınca çıkan parçalanma efekti ekranı çok kaplıyor ve göz yorucu, animasyonun ve altın dağılımının ufak olmasını istiyorum"):
+## 4x4 parça -> 3x3, saçılma hızı/yerçekimi/parlama ~yarıya, para sayısı en çok SHATTER_MAX_COINS ve para boyutu SHATTER_COIN_SCALE.
+const SHATTER_GRID := 3
+const SHARD_SPEED_MIN := 45.0
+const SHARD_SPEED_MAX := 115.0
+const SHARD_GRAVITY := 380.0
+const SHATTER_CONVERT_BASE := 0.2
+const SHATTER_CONVERT_STEP := 0.035
+const SHATTER_MAX_COINS := 6
+const SHATTER_COIN_SCALE := 1.35 ## 16 px para -> ~22 px (ödül paraları 32 px)
+const SHATTER_SPRAY_MULT := 0.4 ## satış paralarının saçılma mesafesi çarpanı
 const SHARD_FADE := 0.12
 const SHARD_FLASH := 0.08 ## kırılma anı parlaması bu sürede söner
 
@@ -117,6 +122,11 @@ static func show_shatter(tree: SceneTree, amount: int, from_screen: Vector2, tex
 ## Ödül için fırlayacak para sayısı (launch_reward ve çağıranların zamanlaması için TEK kaynak).
 static func coin_count(amount: int) -> int:
 	return mini(clampi(int(round(sqrt(float(maxi(amount, 0))) * 2.5)), MIN_COINS, MAX_COINS), maxi(amount, 0))
+
+
+## Satış (parçalanma) için para sayısı: normal ödülden az (ekran dolmasın), yine altından fazla olamaz.
+static func shatter_coin_count(amount: int) -> int:
+	return mini(coin_count(amount), SHATTER_MAX_COINS)
 
 
 ## Paraların TAMAMININ fırlaması bu kadar sürer (sandık altını: kart bu sırada ya da hemen sonra çıkar, bkz. chest_menu.gd).
@@ -269,11 +279,11 @@ func _launch_reward(r: Dictionary) -> void:
 	var from: Vector2 = r["from"]
 	if bool(r["world"]):
 		from = get_viewport().get_canvas_transform() * from
-	var n: int = coin_count(amount)
+	var source: StringName = r.get("source", &"")
+	var n: int = shatter_coin_count(amount) if source == &"shatter" else coin_count(amount)
 	var base_share: int = amount / n
 	var extra: int = amount % n
 	var lead: float = 0.0
-	var source: StringName = r.get("source", &"")
 	var fx: Dictionary = r.get("fx", {})
 	if source == &"shatter" and fx.get("texture") is Texture2D:
 		_launch_shatter(from, fx["texture"] as Texture2D, fx.get("size", Vector2(96.0, 96.0)) as Vector2, n, base_share, extra)
@@ -332,7 +342,7 @@ func _launch_shatter(from: Vector2, tex: Texture2D, size_px: Vector2, n: int, ba
 		add_child(spr)
 		var dir: Vector2 = centre_off.normalized() if centre_off.length() > 1.0 else Vector2.from_angle(randf() * TAU)
 		dir = dir.rotated(randf_range(-0.45, 0.45))
-		var vel: Vector2 = dir * randf_range(SHARD_SPEED_MIN, SHARD_SPEED_MAX) + Vector2(0.0, -randf_range(60.0, 170.0))
+		var vel: Vector2 = dir * randf_range(SHARD_SPEED_MIN, SHARD_SPEED_MAX) + Vector2(0.0, -randf_range(15.0, 55.0))
 		var conv: float = -1.0
 		if coin_of_shard.has(si):
 			var j: int = int(coin_of_shard[si])
@@ -342,20 +352,20 @@ func _launch_shatter(from: Vector2, tex: Texture2D, size_px: Vector2, n: int, ba
 			var coin := AnimatedSprite2D.new()
 			coin.sprite_frames = COIN_FRAMES
 			coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			coin.scale = Vector2.ONE * COIN_SCALE
+			coin.scale = Vector2.ONE * SHATTER_COIN_SCALE
 			coin.position = at_conv
 			coin.visible = false
 			coin.play("spin")
 			coin.frame = randi() % maxi(1, COIN_FRAMES.get_frame_count("spin"))
 			add_child(coin)
 			var ang: float = randf_range(-PI * 0.95, -PI * 0.05)
-			var spray: Vector2 = Vector2(cos(ang), sin(ang)) * SPRAY_DIST * randf_range(0.35, 0.75)
+			var spray: Vector2 = Vector2(cos(ang), sin(ang)) * SPRAY_DIST * SHATTER_SPRAY_MULT * randf_range(0.5, 1.0)
 			_coins.append({
 				"node": coin, "p0": at_conv, "p1": at_conv + spray, "t": -conv, "dur": FLIGHT_TIME * randf_range(0.9, 1.15),
-				"share": base_share + (1 if j < extra_coins else 0), "idx": j, "pop": true,
+				"share": base_share + (1 if j < extra_coins else 0), "idx": j, "pop": true, "scale": SHATTER_COIN_SCALE,
 			})
 		_shards.append({"node": spr, "start": start, "vel": vel, "spin": randf_range(-9.0, 9.0), "t": 0.0, "conv": conv,
-			"life": randf_range(0.42, 0.62)})
+			"life": randf_range(0.28, 0.42)})
 	## Bir sonraki ödül, bu partinin son parçası paraya dönene kadar beklesin (iç içe geçmesin).
 	_launch_cd = SHATTER_CONVERT_BASE + SHATTER_CONVERT_STEP * float(n)
 
@@ -410,12 +420,12 @@ func _spawn_flash(at: Vector2, diameter: float) -> void:
 	var spr := Sprite2D.new()
 	spr.texture = tex
 	spr.position = at
-	var base: float = maxf(diameter, 32.0) / 128.0 * 1.6
+	var base: float = minf(maxf(diameter, 32.0), 96.0) / 128.0 * 1.1 ## en çok 96 px'lik ikon kadar (büyük kartta ekranı kaplamasın)
 	spr.scale = Vector2.ONE * base * 0.6
 	add_child(spr)
 	var tw := spr.create_tween().set_parallel(true)
-	tw.tween_property(spr, "scale", Vector2.ONE * base * 1.5, 0.22).set_ease(Tween.EASE_OUT)
-	tw.tween_property(spr, "modulate:a", 0.0, 0.22)
+	tw.tween_property(spr, "scale", Vector2.ONE * base * 1.3, 0.16).set_ease(Tween.EASE_OUT)
+	tw.tween_property(spr, "modulate:a", 0.0, 0.16)
 	tw.chain().tween_callback(spr.queue_free)
 
 
@@ -501,9 +511,9 @@ func _update_coins(delta: float) -> void:
 		var b: Vector2 = (c["p1"] as Vector2).lerp(target, e)
 		node.position = a.lerp(b, e)
 		node.visible = true
-		node.scale = Vector2.ONE * COIN_SCALE * lerpf(1.0, 0.75, k)
+		node.scale = Vector2.ONE * float(c.get("scale", COIN_SCALE)) * lerpf(1.0, 0.75, k)
 		if c.get("pop", false): ## parçadan doğan para: belirirken kısa bir büyüyüp oturma
-			node.scale *= 1.0 + 0.6 * clampf(1.0 - k / 0.12, 0.0, 1.0)
+			node.scale *= 1.0 + 0.35 * clampf(1.0 - k / 0.12, 0.0, 1.0)
 		if k >= 1.0:
 			_arrive(c)
 			node.queue_free()

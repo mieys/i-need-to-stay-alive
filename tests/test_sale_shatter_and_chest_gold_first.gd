@@ -148,7 +148,7 @@ func test_shatter_splits_the_icon_into_shards_and_turns_them_into_coins_that_pay
 	fx._launch_reward(fx._rewards.pop_at(0))
 	var grid: int = FxScript.SHATTER_GRID
 	assert(fx._shards.size() == grid * grid, "ikon %d parçaya bölünür: %d" % [grid * grid, fx._shards.size()])
-	var n: int = FxScript.coin_count(30)
+	var n: int = FxScript.shatter_coin_count(30)
 	assert(fx._coins.size() == n, "her para bir parçadan doğar: %d" % fx._coins.size())
 	var total_share: int = 0
 	var conv_times: Array = []
@@ -196,7 +196,38 @@ func test_shards_scatter_outward_and_fall() -> void:
 		if now_pos.distance_to(before[i]) > 5.0:
 			moved += 1
 	assert(moved == fx._shards.size(), "tüm parçalar hareket eder")
-	assert(spread_after > spread_before * 1.5, "parçalar merkezden uzaklaşır (saçılma): %.0f -> %.0f" % [spread_before, spread_after])
+	assert(spread_after > spread_before * 1.1, "parçalar merkezden uzaklaşır (saçılma): %.0f -> %.0f" % [spread_before, spread_after])
+	_end()
+
+
+## Kullanıcı 2026-10-08: "parçalanma efekti ekranı çok kaplıyor ve göz yorucu, animasyonun ve altın dağılımının ufak olmasını istiyorum".
+func test_shatter_stays_small_and_uses_few_small_coins() -> void:
+	_begin()
+	GameManager.gold = 5000
+	var fx: Node = _fx()
+	var origin := Vector2(600, 400)
+	var icon: float = 128.0
+	fx._add_reward(2000, origin, false, &"shatter", false, {"texture": _tex(), "size": Vector2(icon, icon)})
+	fx._launch_reward(fx._rewards.pop_at(0))
+	assert(FxScript.shatter_coin_count(2000) == FxScript.SHATTER_MAX_COINS and FxScript.SHATTER_MAX_COINS < FxScript.MAX_COINS, "satışta para sayısı normal ödülden az")
+	assert(fx._coins.size() == FxScript.SHATTER_MAX_COINS, "büyük altında bile en çok %d para: %d" % [FxScript.SHATTER_MAX_COINS, fx._coins.size()])
+	var total: int = 0
+	for c in fx._coins:
+		total += int(c["share"])
+		assert(is_equal_approx(float(c["scale"]), FxScript.SHATTER_COIN_SCALE) and FxScript.SHATTER_COIN_SCALE < FxScript.COIN_SCALE, "satış parası daha küçük")
+	assert(total == 2000, "az para yine de TAM altını taşır: %d" % total)
+	var max_far: float = 0.0
+	var steps: int = 0
+	while not fx._shards.is_empty() and steps < 200:
+		fx._update_shards(0.016)
+		for s in fx._shards:
+			if is_instance_valid(s["node"]):
+				max_far = maxf(max_far, ((s["node"] as Sprite2D).position - origin).length())
+		steps += 1
+	assert(max_far <= icon * 1.3, "parçalar ikonun ~1,3 katından uzağa saçılmaz: en uzak %.0f px (ikon %.0f)" % [max_far, icon])
+	while not fx._coins.is_empty() and steps < 900:
+		fx._update_coins(0.016)
+		steps += 1
 	_end()
 
 

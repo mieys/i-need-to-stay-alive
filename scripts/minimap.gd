@@ -210,6 +210,9 @@ func _process(delta: float) -> void:
 				## Görünmez hayalet (yaratık yeteneği, bkz. enemy.gd set_ability_invisible) minimapte de ele verilmesin.
 				if enemy.get("is_ability_invisible") == true:
 					continue
+				## Yeraltı Canavarı'nın havuz düğümü (underground_boss.gd) oyuncuların ortasında durur ve görünmezdir: minimapte nokta/yön oku olmasın.
+				if enemy.has_meta(&"hide_on_minimap"):
+					continue
 				if VisionFogScript.fog_visibility_of(enemy) < VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY:
 					continue
 				var is_boss: bool = false

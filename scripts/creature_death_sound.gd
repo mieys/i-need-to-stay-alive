@@ -20,6 +20,9 @@ const VOLUME_DB := -13.0
 const BOSS_VOLUME_DB := -8.0
 const MAX_DISTANCE := 1000.0
 
+## Kendi ses dosyası olmayan aile -> ses ödünç aldığı aile (Minotaur 2026-10-08: ork homurtusu, boss perdesiyle derinleşir).
+const ALIASES := {"minotaur": "ork"}
+
 static var _instance: Node = null
 static var _streams: Dictionary = {} ## aile -> Array[AudioStream] (boş dizi = bu ailenin sesi yok)
 static var _last_play: Dictionary = {} ## aile -> Time.get_ticks_msec()
@@ -30,6 +33,7 @@ var _voices: Array[AudioStreamPlayer2D] = []
 static func play(tree: SceneTree, family: String, pos: Vector2, is_boss: bool = false) -> void:
 	if tree == null or family.is_empty() or DisplayServer.get_name() == "headless":
 		return
+	family = ALIASES.get(family, family)
 	var streams: Array = _streams_for(family)
 	if streams.is_empty():
 		return

@@ -1,5 +1,5 @@
 # Çok oyunculu senkron denetimi - iki GERÇEK süreç (host + istemci, başsız LAN). Kullanım:
-#   powershell -ExecutionPolicy Bypass -File tools/mp_audit/run_audit.ps1 [-Mode sync|rejoin|security] [-Secs 40] [-N 70]
+#   powershell -ExecutionPolicy Bypass -File tools/mp_audit/run_audit.ps1 [-Mode sync|rejoin|security|migration|revive|dog|minotaur|underground|bosscatchup] [-Secs 40] [-N 70]
 # Çıktı: %TEMP%\lilslayers_mp_audit\<mod>\{host,client}.json + özet. Karşılaştırma: python tools/mp_audit/sync_audit_compare.py <klasör> (sync modu).
 #   sync   : host = Assasin, istemci = Vampir; yaratıklar + yetenekler + dükkan alımı; her 1 sn'de gerçek durum vs diğer tarafın kuklası, yaratık/drop sayıları,
 #            ENet trafiği. rejoin : istemci 12. sn'de düşer, 2 sn sonra aynı kimlikle geri katılır; yakalama (yaratık/drop/silah/seviye) karşılaştırılır.
@@ -9,7 +9,7 @@ $proj = (Resolve-Path "$PSScriptRoot\..\..").Path
 $dir = Join-Path $env:TEMP "lilslayers_mp_audit\$Mode$Net"
 New-Item -ItemType Directory -Force $dir | Out-Null
 Remove-Item (Join-Path $dir "*") -Force -ErrorAction SilentlyContinue
-$runner = if ($Mode -eq "rejoin") { "res://tools/mp_audit/rejoin_audit.gd" } elseif ($Mode -eq "security") { "res://tools/mp_audit/security_audit.gd" } elseif ($Mode -eq "migration") { "res://tools/mp_audit/migration_audit.gd" } elseif ($Mode -eq "revive") { "res://tools/mp_audit/revive_audit.gd" } else { "res://tools/mp_audit/sync_audit.gd" }
+$runner = if ($Mode -eq "rejoin") { "res://tools/mp_audit/rejoin_audit.gd" } elseif ($Mode -eq "security") { "res://tools/mp_audit/security_audit.gd" } elseif ($Mode -eq "migration") { "res://tools/mp_audit/migration_audit.gd" } elseif ($Mode -eq "revive") { "res://tools/mp_audit/revive_audit.gd" } elseif ($Mode -eq "dog") { "res://tools/mp_audit/dog_audit.gd" } elseif ($Mode -eq "minotaur") { "res://tools/mp_audit/minotaur_audit.gd" } elseif ($Mode -eq "underground") { "res://tools/mp_audit/underground_audit.gd" } elseif ($Mode -eq "bosscatchup") { "res://tools/mp_audit/boss_catchup_audit.gd" } else { "res://tools/mp_audit/sync_audit.gd" }
 $env:MP_NET = $Net; $env:MP_TAG = "MPA" + (Get-Random -Maximum 99999); $env:MP_DIR = $dir; $env:MP_PORT = "$Port"; $env:MP_SECS = "$Secs"; $env:MP_N = "$N"
 $args0 = @("--headless", "--path", "`"$proj`"")
 $env:MP_KILL = $Kill
