@@ -62,6 +62,12 @@ const OBJECT_LAYERS: Array = [
 	"Etkileşimler/Maden", "Etkileşimler/Maden 1", "Shader Eklenecek/Animasyonsuz çalılar", "Düşman Üssü/Düşman üssü", "Düşman Üssü/Özel maden",
 ]
 
+## KÖPRÜLER (2026-10-09, kullanıcı: "buranın altından geçen insanların üstünde köprü görünmeli"): alt + üst katman TEK yapı (bina gibi tek kök). Fark: kopya
+## SADECE köprünün ALTINDAN geçen (zemin katı) karakterlere uygulanır; güvertede yürüyen karakter köprünün üstünde kalır (bkz. bridge_deck.gd). Yaratıklar
+## köprü kopyasına dahil DEĞİL (hep köprünün üstünde çizilir, eskisi gibi).
+const BRIDGE_LAYERS: Array = ["Köprü/Köprü alt", "Köprü/Köprü üst"]
+const BridgeDeckScript := preload("res://scripts/bridge_deck.gd")
+
 ## Demirci iç mekanı (scenes/silah_saticisi_baked.tscn) mobilya katmanları - yere serili/duvara asılı süslerin (Various_objects, Torches_back) hiçbiri YOK:
 ## yassı bir nesne "önde" sayılırsa oyuncuyu ayağının üstünde örterdi.
 const SMITHY_INTERIOR_LAYERS: Array = [
@@ -70,6 +76,10 @@ const SMITHY_INTERIOR_LAYERS: Array = [
 
 var _front_root: Node2D = null
 var _front_materials: Array[ShaderMaterial] = []
+var _bridge_materials: Array[ShaderMaterial] = [] ## köprü kopyalarının materyalleri: karakter listesi süzülür (güvertedekiler hariç), yaratık yok
+var bridge_rects: Array[Rect2] = [] ## köprü dikdörtgenleri (dünya px) - bridge_deck.gd durum makinesi bunlara göre çalışır
+var _deck: Dictionary = {} ## karakter düğümü örnek kimliği -> bridge_deck.gd durumu
+var _last_bridge_chars: Array[Vector4] = []
 ## Ağaç kopyaları asıl katmanın materyalini paylaşamaz (on_katman farklı) - sallanma gücü (rüzgar) asıldan kopyaya her karede taşınır.
 var _tree_pairs: Array = [] ## [asıl materyal, kopya materyal]
 var _image_cache: Dictionary = {}
@@ -98,6 +108,7 @@ func setup(harita: Node) -> void:
 		var layer := harita.get_node_or_null(path) as TileMapLayer
 		if layer != null and layer.tile_set != null and not layer.get_used_cells().is_empty():
 			_setup_object_layer(layer)
+	_setup_bridges(harita)
 	_main = harita.get_parent()
 	_build_coarse()
 	_creatures_on = not _coarse.is_empty()
@@ -157,6 +168,26 @@ func _setup_building_group(harita: Node, paths: Array) -> void:
 	var per_layer: Dictionary = building_bases(layers)
 	for layer in layers:
 		_add_object_front(layer, per_layer.get(layer, {}), "building")
+
+
+## Köprüler: alt + üst katman bina gibi TEK kökte birleşir (kopya yalnız zemin katı karakterler için, bkz. BRIDGE_LAYERS / bridge_deck.gd).
+func _setup_bridges(harita: Node) -> void:
+	var layers: Array[TileMapLayer] = []
+	for path: String in BRIDGE_LAYERS:
+		var layer := harita.get_node_or_null(path) as TileMapLayer
+		if layer != null and layer.tile_set != null and not layer.get_used_cells().is_empty():
+			layers.append(layer)
+	if layers.is_empty():
+		return
+	var per_layer: Dictionary = building_bases(layers)
+	var world_cells: Dictionary = {} ## dünya hücre anahtarı -> sol-üst dünya px (katmanlar arası birleşik)
+	for layer in layers:
+		_add_object_front(layer, per_layer.get(layer, {}), "bridge")
+		var ofset: Vector2 = _cell_origin(layer)
+		for cell in layer.get_used_cells():
+			var px := Vector2(ofset.x + float(cell.x) * CELL, ofset.y + float(cell.y) * CELL)
+			world_cells[Vector2i(roundi(px.x / CELL), roundi(px.y / CELL))] = px
+	bridge_rects = BridgeDeckScript.component_rects(world_cells, CELL)
 
 
 ## Birlikte tek yapı sayılan katmanların hücre kökleri: layer -> {harita hücresi -> kökün dünya y'si}. Katmanların dolu hücreleri 8-komşu bağlı bileşenlere
@@ -270,7 +301,10 @@ func _add_object_front(layer: TileMapLayer, cell_bases: Dictionary, mode: String
 	mat.set_shader_parameter("veri_boyut", Vector2(rect.size))
 	mat.set_shader_parameter("hucre_ofset", _cell_origin(layer))
 	var front: TileMapLayer = _make_front(layer, mat)
-	_front_materials.append(mat)
+	if mode == "bridge":
+		_bridge_materials.append(mat) ## karakter listesi _update_bridges'ten gelir; yaratık dizisi hep boş
+	else:
+		_front_materials.append(mat)
 	fronts.append({"layer": layer, "front": front, "mode": mode, "bases": cell_bases})
 
 
@@ -414,18 +448,67 @@ func _union(parent: Dictionary, a: Vector2i, b: Vector2i) -> void:
 ## Karakter listesi: yerel oyuncu + uzak oyuncu kuklaları (ayak x, ayak y, yarım genişlik, boy) - grass_sway.gd ile aynı kurallar.
 static func collect_characters(tree: SceneTree) -> Array[Vector4]:
 	var chars: Array[Vector4] = []
-	for group_name in ["player", "remote_players"]:
-		for n in tree.get_nodes_in_group(group_name):
-			if chars.size() >= MAX_CHARACTERS:
-				break
-			if not (n is Node2D) or not is_instance_valid(n) or n.get("is_dead") == true or not (n as Node2D).is_visible_in_tree():
-				continue
-			var feet: Vector2 = (n as Node2D).global_position + Vector2(0.0, FEET_OFFSET)
-			chars.append(Vector4(feet.x, feet.y, BODY_HALF_WIDTH, BODY_HEIGHT))
+	for n: Node2D in character_nodes(tree):
+		var feet: Vector2 = n.global_position + Vector2(0.0, FEET_OFFSET)
+		chars.append(Vector4(feet.x, feet.y, BODY_HALF_WIDTH, BODY_HEIGHT))
 	return chars
 
 
+## collect_characters'ın düğümleri (aynı süzgeç, aynı sıra): köprü katı durumu karakter başına tutulur.
+static func character_nodes(tree: SceneTree) -> Array[Node2D]:
+	var nodes: Array[Node2D] = []
+	for group_name in ["player", "remote_players"]:
+		for n in tree.get_nodes_in_group(group_name):
+			if nodes.size() >= MAX_CHARACTERS:
+				break
+			if not (n is Node2D) or not is_instance_valid(n) or n.get("is_dead") == true or not (n as Node2D).is_visible_in_tree():
+				continue
+			nodes.append(n as Node2D)
+	return nodes
+
+
+## Köprü katı: her karakterin durumunu (güvertede mi / altında mı) ilerletir, SADECE zemin katındakileri köprü kopyalarına verir.
+func _update_bridges() -> void:
+	var ground: Array[Vector4] = []
+	var live: Dictionary = {}
+	for n: Node2D in character_nodes(get_tree()):
+		var id: int = n.get_instance_id()
+		live[id] = true
+		var feet: Vector2 = n.global_position + Vector2(0.0, FEET_OFFSET)
+		var st: Dictionary = BridgeDeckScript.step_state(_deck.get(id, {}), feet, bridge_rects)
+		_deck[id] = st
+		## Köprüden uzaktaki karakter listeye girmez (liste sabit kalır -> shader parametresi her karede yazılmaz).
+		if not bool(st["deck"]) and _near_bridge(feet):
+			ground.append(Vector4(feet.x, feet.y, BODY_HALF_WIDTH, BODY_HEIGHT))
+	for id in _deck.keys():
+		if not live.has(id):
+			_deck.erase(id)
+	if ground == _last_bridge_chars:
+		return
+	_last_bridge_chars = ground.duplicate()
+	var count: int = ground.size()
+	while ground.size() < MAX_CHARACTERS:
+		ground.append(Vector4.ZERO)
+	for m in _bridge_materials:
+		m.set_shader_parameter("karakter_sayisi", count)
+		m.set_shader_parameter("karakterler", ground)
+
+
+func _near_bridge(feet: Vector2) -> bool:
+	for r: Rect2 in bridge_rects:
+		if r.grow(BODY_HEIGHT + 32.0).has_point(feet):
+			return true
+	return false
+
+
+## Karakter köprünün GÜVERTESİNDE mi (testler / hata ayıklama).
+func is_on_deck(n: Node2D) -> bool:
+	return bool((_deck.get(n.get_instance_id(), {}) as Dictionary).get("deck", false))
+
+
 func _process(_delta: float) -> void:
+	if not _bridge_materials.is_empty():
+		_update_bridges()
 	if _front_materials.is_empty():
 		return
 	for pair: Array in _tree_pairs:
@@ -455,6 +538,8 @@ func _build_coarse() -> void:
 	_coarse.clear()
 	_near.clear()
 	for f: Dictionary in fronts:
+		if f["mode"] == "bridge":
+			continue ## yaratıklar köprü kopyasına dahil değil
 		var layer: TileMapLayer = f["layer"]
 		var ofset: Vector2 = _cell_origin(layer)
 		var bases: Dictionary = f["bases"]
