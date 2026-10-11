@@ -52,7 +52,7 @@ func hit_extra(t: Node, _dmg: float, _is_primary: bool, proj: Node2D) -> void:
 	proj.remove_meta("charged_shot") ## sersemletme/dalga mermi başına bir kez (delip geçse bile)
 	var stun: float = maxf(f("charged_stun"), 1.0 if f("charged_shock") > 0.0 else 0.0)
 	if stun > 0.0 and is_enemy(t):
-		t.apply_element("stun", {"dur": stun})
+		el(t, "stun", {"dur": stun})
 	if f("charged_shock") <= 0.0:
 		return
 	var at: Vector2 = (t as Node2D).global_position

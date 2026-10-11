@@ -245,17 +245,23 @@ func test_weapon_purchase_rollback_refunds_shards_too() -> void:
 	_restore_state()
 
 
-func test_shields_and_upgrades_need_no_shards() -> void:
+func test_shield_type_needs_no_shards_but_each_shield_upgrade_needs_one() -> void:
 	_save_state()
 	var p := FakePlayer.new()
 	add_child(p)
 	GameManager.weapon_shards = 0
-	assert(Logic.entry_shard_cost("weapon") == 10 and Logic.entry_shard_cost("shield") == 0 and Logic.entry_shard_cost("upgrade") == 0,
-		"kalkan türü ve geliştirmeler parçacıksız (kullanıcı kararı)")
-	assert(Logic.buy_shield(p, "shield_savas"), "kalkan parçacıksız alınır")
-	assert(Logic.buy_upgrade(p, 0), "geliştirme parçacıksız alınır")
-	assert(GameManager.weapon_shards == 0, "kalkan/geliştirme parçacığa dokunmaz")
-	assert(Logic.shard_shortfall_reason(0) == "" and Logic.shard_shortfall_reason(5) == "Silah parçacığı yetersiz (0/5)", "ileride maliyet konursa uyarı hazır")
+	assert(Logic.entry_shard_cost("weapon") == 10 and Logic.entry_shard_cost("shield") == 0 and Logic.entry_shard_cost("upgrade") == 1,
+		"kalkan türü parçacıksız, kalkan geliştirmesi 1 parçacık (kullanıcı 2026-10-10)")
+	assert(Logic.buy_shield(p, "shield_savas"), "kalkan türü parçacıksız alınır")
+	assert(GameManager.weapon_shards == 0, "kalkan türü parçacığa dokunmaz")
+	assert(Logic.upgrade_block_reason(0) == "Silah parçacığı yetersiz (0/1)", "parçacıksız geliştirme alınamaz: %s" % Logic.upgrade_block_reason(0))
+	var gold: int = GameManager.gold
+	assert(not Logic.buy_upgrade(p, 0) and GameManager.gold == gold and Logic.upgrade_count(0) == 0, "başarısız alım hiçbir şeyi değiştirmez")
+	GameManager.weapon_shards = 2
+	assert(Logic.buy_upgrade(p, 0) and GameManager.weapon_shards == 1, "geliştirme 1 parçacık harcar: %d" % GameManager.weapon_shards)
+	assert(Logic.buy_upgrade(p, 0) and GameManager.weapon_shards == 0, "ikinci geliştirme de 1 parçacık")
+	assert(not Logic.can_buy_upgrade(0), "parçacık bitti")
+	assert(Logic.shard_shortfall_reason(0) == "" and Logic.shard_shortfall_reason(5) == "Silah parçacığı yetersiz (0/5)")
 	p.free()
 	_restore_state()
 

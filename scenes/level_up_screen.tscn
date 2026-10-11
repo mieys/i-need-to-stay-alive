@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://0dhrk4yr507x"]
 
 [ext_resource type="Script" uid="uid://krtyh8gjafik" path="res://scripts/level_up_screen.gd" id="1"]
-[ext_resource type="AudioStream" uid="uid://boa1jfiv6y5rw" path="res://assets/audio/levelup.wav" id="2"]
+[ext_resource type="AudioStream" path="res://assets/audio/level_ekrani.wav" id="2"]
 [ext_resource type="Script" uid="uid://bkrgady81j21j" path="res://scripts/stat_icon.gd" id="3"]
 [ext_resource type="Theme" uid="uid://ceslvnp1x5pxb" path="res://assets/fonts/theme_original.tres" id="4"]
 [ext_resource type="Material" path="res://shaders/backdrop_blur_material.tres" id="5"]

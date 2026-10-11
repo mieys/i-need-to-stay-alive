@@ -61,6 +61,8 @@ const GrassSwayScript := preload("res://scripts/grass_sway.gd")
 const TreeSwayScript := preload("res://scripts/tree_sway.gd")
 const DepthOccludersScript := preload("res://scripts/depth_occluders.gd")
 const CreatureDepthScript := preload("res://scripts/creature_depth.gd")
+const HideBrushManagerScript := preload("res://scripts/hide_brush_manager.gd")
+const GuardCampsScript := preload("res://scripts/guard_camps.gd")
 const MapShadowsScript := preload("res://scripts/map_shadows.gd")
 const GroundTexelPassScript := preload("res://scripts/ground_texel_pass.gd")
 const WorldRenderScaleScript := preload("res://scripts/world_render_scale.gd")
@@ -126,6 +128,7 @@ var _match_stats_by_peer: Dictionary = {}
 
 ## ZAFER + SONSUZ MOD + koşu sonu rekor/başarım (kullanıcı isteği 2026-10-05) - bkz. _on_victory_reached, _run_summary, _record_run.
 const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const RunSummaryUIScript: GDScript = preload("res://scripts/run_summary_ui.gd")
 const VictoryOverlayScript: GDScript = preload("res://scripts/victory_overlay.gd")
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
@@ -204,6 +207,8 @@ func _ready() -> void:
 	NetworkManager.creature_tier_reached.connect(_on_creature_tier_reached)
 	NetworkManager.victory_reached.connect(_on_victory_reached)
 	GameManager.run_about_to_reset.connect(_record_run_end_once)
+	if not GameManager.run_record_suppressed:
+		BalanceLogScript.reset() ## yeni koşu: balans telemetrisi sıfırdan (devirde koşu sürüyor, sayaçlar korunur)
 	GameManager.run_record_suppressed = false ## yeni Main: devirden gelen bastırma bitti
 	NetworkManager.endless_started.connect(_on_endless_started)
 	NetworkManager.endless_layer_reached.connect(_on_endless_layer_reached)
@@ -365,6 +370,14 @@ func _ready() -> void:
 	var creature_depth: Node = CreatureDepthScript.new()
 	creature_depth.name = "CreatureDepth"
 	add_child(creature_depth)
+	## Saklanma çalılığı kuralları (bkz. hide_brush_manager.gd): karar host'ta, görsel her peer'de.
+	var hide_brush: Node = HideBrushManagerScript.new()
+	hide_brush.name = "HideBrushManager"
+	add_child(hide_brush)
+	## Kenar bekçileri (haritanın kenarlarındaki yaratık kampları, bkz. guard_camps.gd): karar host'ta.
+	var guard_camps: Node = GuardCampsScript.new()
+	guard_camps.name = "GuardCamps"
+	add_child(guard_camps)
 	_install_draw_order_guard()
 	## Grafik ayarı "Çözünürlük ölçeği" (bkz. world_render_scale.gd; %100'de hiçbir şey kurmaz).
 	WorldRenderScaleScript.attach(self)
@@ -373,6 +386,10 @@ func _ready() -> void:
 	var ambient: Node = preload("res://scripts/wind_breeze_ambient.gd").new()
 	ambient.name = "WindBreezeAmbient"
 	add_child(ambient)
+	## Akarsu sesi: suya yaklaştıkça yükselir, uzaklaştıkça kısılır (bkz. stream_ambient.gd).
+	var stream_ambient: Node = preload("res://scripts/stream_ambient.gd").new()
+	stream_ambient.name = "StreamAmbient"
+	add_child(stream_ambient)
 	## BUG DÜZELTMESİ (kullanıcı bildirimi: "oyunumu başlatınca bi ses bugda
 	## kalıyor arkada sürekli çalıyor") - kök neden: oyun artık doğrudan evin
 	## İÇİNDE başlıyor (bkz. house_interior.gd _ready() -> _do_enter_house(),
@@ -502,6 +519,7 @@ func _process(delta: float) -> void:
 	_process_rejoin_report(delta)
 	if NetworkManager.is_multiplayer_active and is_instance_valid(player):
 		_process_multiplayer_sync(delta)
+		_sweep_ghost_remote_players(delta)
 	if not _remote_players.is_empty():
 		_update_character_draw_order()
 	_update_creature_draw_order()
@@ -519,6 +537,25 @@ func _process(delta: float) -> void:
 	## - kullanıcı bildirimi: "geri sayım paneli açılıyor ama geriye
 	## saymıyor" tam olarak buydu.
 
+
+
+## Güvenlik ağı: bağlantısı kalmamış peer'in kuklası (ayrılış bildirimi kaçsa bile) saniyede bir temizlenir.
+## Host devri sürerken peer listesi geçici boş olduğu için atlanır.
+var _ghost_sweep_timer: float = 0.0
+
+
+func _sweep_ghost_remote_players(delta: float) -> void:
+	_ghost_sweep_timer += delta
+	if _ghost_sweep_timer < 1.0 or _remote_players.is_empty():
+		return
+	_ghost_sweep_timer = 0.0
+	if NetworkManager.is_host_migrating() or not multiplayer.has_multiplayer_peer():
+		return
+	var connected: PackedInt32Array = multiplayer.get_peers()
+	for pid in _remote_players.keys():
+		if not connected.has(int(pid)):
+			NetworkManager._net_log("hayalet kukla temizlendi: peer %d bağlı değil" % int(pid))
+			_despawn_remote_player(int(pid))
 
 
 func _setup_multiplayer_players() -> void:
@@ -884,6 +921,10 @@ func _process_multiplayer_sync(delta: float) -> void:
 			"base_speed": player.get_base_move_speed() if player.has_method("get_base_move_speed") else 0.0,
 			## Taban "Hasar" statı - host'taki kopya bu oyuncunun silah hasarını bundan türetir (bkz. mission_player_copy.gd).
 			"dmg": player.damage_bonus,
+			## 2026-10-11: host'taki kopya bu oyuncunun saldırı hızını ve kritik değerlerini de kopyalar (bkz. mission_player_copy.gd).
+			"atk_iv": player.get_attack_interval_mult() if player.has_method("get_attack_interval_mult") else 1.0,
+			"cc": float(player.get("crit_chance_bonus")) if "crit_chance_bonus" in player else 0.0,
+			"cd": float(player.get("crit_damage_bonus")) if "crit_damage_bonus" in player else 0.0,
 			## DÜZELTME (kullanıcı bildirimi #41: "Diğer oyuncuların kalkan
 			## baloncukları sürekli görünür kalıyor"): remote_player.gd eskiden
 			## sadece "item_shield_hp > 0.0" bakıyordu - bu, kalkan dolu/sabit
@@ -1050,7 +1091,12 @@ func _process_multiplayer_sync(delta: float) -> void:
 func _get_or_spawn_remote_player(sender_id: int, allow_spawn: bool = true) -> RemotePlayer:
 	if _remote_players.has(sender_id) and not is_instance_valid(_remote_players[sender_id]):
 		_remote_players.erase(sender_id)
-	if allow_spawn and not _remote_players.has(sender_id):
+	## HAYALET OYUNCU DÜZELTMESİ (2026-10-12, Epic odası: "oyuncu adında sahte oyuncular grupta"): ayrılan peer'den kuyrukta kalan son
+	## güvenilir paket kopma sinyalinden SONRA işlenince lobby_players'ta olmayan gönderen için "Oyuncu" adlı kukla doğuyordu; ayrılış
+	## bildirimi bir kez geldiği için kimse onu silmiyor, düşmanlar ona vurdukça host kapalı ID'ye RPC yağdırıyordu ("unknown peer ID").
+	## Artık lobiden silinmiş / bağlı olmayan gönderen kukla doğuramaz.
+	if allow_spawn and not _remote_players.has(sender_id) and NetworkManager.lobby_players.has(sender_id) \
+			and multiplayer.get_peers().has(sender_id):
 		var pinfo: Dictionary = NetworkManager.lobby_players.get(sender_id, {})
 		_spawn_remote_player(sender_id, pinfo.get("char_id", 1), pinfo.get("name", "Oyuncu"))
 	return _remote_players.get(sender_id, null)
@@ -2317,7 +2363,8 @@ func _on_host_left_game() -> void:
 func _on_player_left_game(p_name: String, peer_id: int = 0) -> void:
 	if not is_inside_tree():
 		return
-	_show_network_toast("%s oyundan ayrıldı." % p_name)
+	if not p_name.is_empty():
+		_show_network_toast("%s oyundan ayrıldı." % p_name)
 	_despawn_remote_player(peer_id)
 
 
@@ -2522,10 +2569,20 @@ func _record_run(kind: String) -> Dictionary:
 			result = RunRecordsScript.record_victory(s)
 		"end":
 			result = RunRecordsScript.record_run_end(s)
+			_write_balance_record(s)
 		_:
 			result = RunRecordsScript.note_progress(s)
+			BalanceLogScript.note_tier(GameManager.run_max_tier)
 	RunRecordsScript.merge_results(_run_results, result)
 	return result
+
+
+## Balans telemetrisi (bkz. balance_log.gd): koşu kaydı yerel dosyaya yazılır; istemciyse host'a da gönderilir (host kendi dosyasına ekler).
+func _write_balance_record(summary: Dictionary) -> void:
+	var rec: Dictionary = BalanceLogScript.write_run(player, summary, "end")
+	if not rec.is_empty() and NetworkManager.is_multiplayer_active and not NetworkManager.is_host and multiplayer.has_multiplayer_peer():
+		NetworkManager.submit_balance_record.rpc_id(NetworkManager._host_peer_id(), JSON.stringify(rec))
+	BalanceLogScript.reset()
 
 
 ## Koşu ilerlerken (yeni kademe / sonsuz kat): en iyi değerler anında kaydedilir, yeni açılan başarım toast ile bildirilir.

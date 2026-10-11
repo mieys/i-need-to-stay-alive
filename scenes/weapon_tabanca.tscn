@@ -19,7 +19,7 @@ crit_damage = 1.5
 attack_range = 210.0
 sprite_forward_angle_deg = -13.513748616850307
 ranged_projectile_rotation_offset = -0.005471964169398338
-card_damage_bonus_ratio = 0.891
+card_damage_bonus_ratio = 1.15
 mirror_icon_when_aiming_left = true
 
 [node name="FireTimer" type="Timer" parent="."]

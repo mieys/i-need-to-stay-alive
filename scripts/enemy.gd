@@ -110,6 +110,11 @@ const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 @export var hurt_texture: Texture2D
 @export var death_texture: Texture2D
 @export var attack_texture: Texture2D
+## BOSS ÖZEL ANİMASYONLARI (2026-10-09, Balkabağı Kafa vb.): ad -> 4 satırlı sprite sayfası (aynı hücre boyu). play_special_anim(ad) host'ta yerelde çalar ve
+## emit_ability_vfx("boss_event", {"k": "anim", ...}) ile istemcilere de gider; süre bitince yürümeye/beklemeye döner (normal saldırı durumu üzerinden).
+@export var special_textures: Dictionary = {}
+## true: oyuncular bu yaratığın İÇİNDEN geçebilir (uçan Banshee/Uçan Şeytan; player.gd _block_movement_into_enemies atlar).
+var no_body_block: bool = false
 
 ## Item-shield, mirroring the player's own mechanic (see player.gd's
 ## item_shield_hp / shield_protection / take_damage): a separate HP pool that
@@ -315,6 +320,7 @@ const ORK_RAGE_SPEED_MULT := (1.0 + (2.0 - 1.0) * 1.5 * ORK_RAGE_NERF_2026_10_06
 
 ## ---------- Yaratık yetenekleri (kullanıcı isteği 2026-09-24, bkz. enemy_abilities.gd) ----------
 const EnemyAbilitiesScript := preload("res://scripts/enemy_abilities.gd")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const CreatureDeathSound := preload("res://scripts/creature_death_sound.gd")
 ## Görünmez hayaletin sprite opaklığı - kullanıcı tercihi (2026-09-24): "%25 soluk gölge" (hedef alınamaz ama nerede olduğu tahmin edilebilir).
 const GHOST_INVISIBLE_ALPHA := 0.25
@@ -408,8 +414,18 @@ func on_ability_vfx(kind: String, data: Dictionary) -> void:
 		"minotaur_pose":
 			_apply_minotaur_pose(int(data.get("pose", 0)), float(data.get("cap", 0.0)))
 		"minotaur_impact":
+			CameraShakeScript.add(MinotaurMathScript.IMPACT_SHAKE) ## boynuz isabeti / duvara çarpma: herkeste, uzaklıktan bağımsız (yakındakine burst ayrıca add_at ekler)
 			MinotaurDustScript.burst(get_tree() if is_inside_tree() else null, Vector2(data.get("pos", global_position)),
 					Vector2(data.get("dir", Vector2.UP)), float(data.get("power", 0.4)))
+		"boss_event":
+			## Yeni bosslar (Balkabağı Kafa...): "k" = tür. anim -> özel animasyon; diğerleri ability sınıfına (varsa) gider.
+			var bk: String = str(data.get("k", ""))
+			if bk == "anim":
+				play_special_anim(str(data.get("n", "")), float(data.get("d", 0.0)))
+			elif bk == "dismiss":
+				dismiss_without_reward()
+			elif _abilities != null and _abilities.has_method("on_boss_event"):
+				_abilities.on_boss_event(data)
 
 
 ## Yetenek görsel olayını HOST'ta yerelde işler (on_ability_vfx) ve çok oyunculuda istemcilere yayınlar - iki taraf AYNI işlevi çalıştırır (Yeraltı Canavarı:
@@ -441,6 +457,9 @@ func send_catchup_to_peer(peer_id: int) -> void:
 		NetworkManager.broadcast_enemy_vfx.rpc_id(peer_id, net_id, "minotaur_pose", {"pose": _pose_override, "cap": _net_speed_cap_override})
 
 
+var _pose_override_prev: int = 0
+const MinotaurMathScript: GDScript = preload("res://scripts/minotaur_math.gd")
+
 func _apply_minotaur_pose(pose: int, cap: float) -> void:
 	if is_dead:
 		return
@@ -451,6 +470,9 @@ func _apply_minotaur_pose(pose: int, cap: float) -> void:
 			_enter_state(State.WALK)
 		return
 	MinotaurDustScript.attach(self)
+	if pose == MinotaurMathScript.POSE_CHARGE and _pose_override_prev != pose:
+		CameraShakeScript.add(MinotaurMathScript.CHARGE_SHAKE) ## hücum başladı: herkeste, uzaklıktan bağımsız
+	_pose_override_prev = pose
 	_enter_state(State.ATTACK, 0.0) ## süre 0: poz değişene kadar kalır (otomatik yürümeye dönüş yok)
 	_ew_wake()
 
@@ -503,8 +525,8 @@ const TIER_DAMAGE_RAMP_LATE_QUAD := 0.0037
 ## TIME_HEALTH_GROWTH_START'ı geçtiği her dakika için +%1 - 25. dakikada ~+%22. Bosslar hariç (apply_boss_stats
 ## bu fonksiyonu çağırmaz; boss canı kullanıcı tarafından defalarca ayrıca ayarlandı).
 const TIME_HEALTH_GROWTH_MIN_TIER := 3
-const TIME_HEALTH_GROWTH_START := 200.0 ## sn - Kademe 3'ün nominal başlangıcı (2 x tier_duration)
-const TIME_HEALTH_GROWTH_PER_MIN := 0.01
+const TIME_HEALTH_GROWTH_START := 300.0 ## sn - Kademe 3'ün nominal başlangıcı (2 x tier_duration; 2026-10-10: tier_duration 100 -> 150 olunca 200 -> 300)
+const TIME_HEALTH_GROWTH_PER_MIN := 0.0066667 ## 2026-10-10: 0,01 -> x100/150 (Kademe süresi 150 sn oldu: KADEME başına büyüme eskisi gibi kalsın)
 ## Kullanıcı isteği: "ileri kademedeki yaratıkların hareket hızını arttır" -
 ## eskiden Kademe hareket hızını HİÇ etkilemiyordu (sadece can/hasar
 ## ölçekleniyordu). Doğrusal, ölçülü bir artış - Kademe 15'te taban hızın
@@ -681,8 +703,8 @@ var _taunt_status_fx: Node2D = null
 ## artık neredeyse tamamen kısıldı (~dakikada %1) - oyunun asıl güç eğrisi
 ## artık SADECE apply_tier_scaling()'den (Kademe değiştiğinde adım adım
 ## atlayan) geliyor, bu ikisi arasında sürekli/görünmez bir tırmanma yok.
-const DIFFICULTY_HEALTH_RAMP := 0.00017 ## ~%1.0/dakika (eskiden 0.0016 = ~%9.6/dakika)
-const DIFFICULTY_DAMAGE_RAMP := 0.00012 ## ~%0.7/dakika (eskiden 0.0004 = ~%2.4/dakika)
+const DIFFICULTY_HEALTH_RAMP := 0.00011333 ## ~%0.68/dakika (2026-10-10: 0.00017 x100/150, Kademe süresi 150 sn oldu - kademe başına aynı; eskiden 0.0016)
+const DIFFICULTY_DAMAGE_RAMP := 0.00008 ## ~%0.48/dakika (2026-10-10: 0.00012 x100/150; eskiden 0.0004)
 
 
 func _apply_difficulty_scaling() -> void:
@@ -720,7 +742,9 @@ func apply_taunt(duration: float, taunter: Node2D = null) -> void:
 			var taunter_peer: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 			if taunter != null and is_instance_valid(taunter) and "peer_id" in taunter:
 				taunter_peer = int(taunter.peer_id)
-			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "taunt", duration, float(taunter_peer), 0.0)
+			## Necromancer "Son Çare Golemi": kışkırtan oyuncu değil GOLEM - host o oyuncunun en yeni golem kopyasını hedef yapar.
+			var kind: String = "taunt_ally" if (taunter != null and is_instance_valid(taunter) and taunter.has_method("apply_size_evo")) else "taunt"
+			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, kind, duration, float(taunter_peer), 0.0)
 		return
 	if _ew_slot >= 0:
 		_taunt_timer = _ew_world.get_taunt_time(_ew_slot) ## EnemyWorld yolu: süre C++'ta azalıyor
@@ -808,6 +832,8 @@ func _schedule_melee_hit(delay: float, target_player: Node) -> void:
 	var true_contact_separation_now: float = (_body_radius + PLAYER_BODY_RADIUS) * GameManager.BODY_BLOCK_SCALE
 	if d > true_contact_separation_now + 40.0:
 		return
+	if _abilities != null and _abilities.handle_melee_hit(target_player):
+		return ## yaratığa özel vuruş (yarasa ısırığı: kanama) - normal hasar atlanır
 	target_player.take_damage(contact_damage, self)
 	_apply_mutual_bounce(target_player)
 
@@ -930,11 +956,11 @@ const ELITE_DAMAGE_MULT := 1.5
 const ELITE_SCALE_MULT := 1.5
 const ELITE_SPEED_MULT := 0.85
 const ELITE_WALK_ANIM_MULT := 0.8
-const EliteStarScript := preload("res://scripts/elite_star.gd")
 ## Aura "B - Yükselen Kıvılcımlar" (kullanıcı seçimi 2026-10-02) - bkz. elite_aura.gd.
 const EliteAuraScript := preload("res://scripts/elite_aura.gd")
-## Yıldızın başın görünen üst kenarından yukarı mesafesi (dünya birimi).
-const ELITE_STAR_GAP := 10.0
+const EliteBarScript := preload("res://scripts/elite_bar.gd")
+## Çubuğun alt kenarı başın görünen üst kenarından bu kadar yukarıda.
+const ELITE_BAR_GAP := 8.0
 
 var is_elite: bool = false
 ## Yürüme animasyonu kare hızı çarpanı (elitlerde < 1, bkz. _advance_frame_sprite).
@@ -968,10 +994,12 @@ func make_elite() -> void:
 	## Ayak (gölge) merkezi: görselin alt kenarından ~3 yaratık texel'i yukarı (sayfalarda gömülü gölgenin ortası).
 	var texel: float = absf(frame_sprite.scale.y) if frame_sprite else 1.0
 	aura.setup(self, Vector2(vis.get_center().x, vis.end.y - 3.0 * texel), vis.size.x)
-	var star: Node2D = EliteStarScript.new()
-	star.name = "EliteStar"
-	star.set("base_y", vis.position.y - ELITE_STAR_GAP)
-	add_child(star)
+	## Can + kalkan barı (kullanıcı isteği 2026-10-11): boss barına benzer, kırmızı can, her zaman görünür; elit YILDIZI (eski başın üstünde süzülen
+	## EliteStar yerine) barın solunda durur (elite_bar.gd, eski kafatasının yeri). Yıldız sanatı elite_star.gd'de.
+	var bar: Node2D = EliteBarScript.new()
+	bar.name = "EliteBar"
+	add_child(bar)
+	bar.setup(self, vis.position.y - ELITE_BAR_GAP)
 
 
 static var _visual_bounds_cache: Dictionary = {} ## doku yolu|hücre -> hücre içindeki dolu dikdörtgen (px, tüm kareler)
@@ -2220,7 +2248,8 @@ func apply_slow(percent: float, duration: float, allow_boss: bool = false) -> vo
 	## Aşırı eşya yığılmasında yavaşlatmanın %100'ü geçip hızın negatife
 	## inmemesi için tavan (bkz. items.gd Kitelama Seti - her kopya %10
 	## ekler, çok kopya alınırsa toplam kolayca %100'ü aşabilirdi).
-	_slow_percent = max(_slow_percent, min(percent, 0.75)) ## aynı vuruşta en güçlüsü kalır
+	## 2026-10-11: tavan 0.75 -> 0.80 (Melek R bosslara %80 yavaşlatma uygular; eşya yığılmasında da en fazla %80).
+	_slow_percent = max(_slow_percent, min(percent, 0.80)) ## aynı vuruşta en güçlüsü kalır
 	_slow_timer = duration ## refresh - baştan başlar
 	## GÖRSEL: hedefin üzerinde dönen boşluk girdabı göstergesi + ömrünün
 	## tazelenmesi (Alan Totemi yavaşlatmayı her saniye yeniliyor).
@@ -4102,6 +4131,10 @@ func _enter_state(new_state: int, duration: float = 0.0) -> void:
 	## PERF: zaten bu durumdaysa (ör. alan hasarında art arda "hurt") sadece
 	## süreyi/kareyi yeniden başlat - doku/kare ızgarası/animasyon zaten doğru.
 	var same_state: bool = _state == new_state
+	## Özel animasyondan normal saldırıya geçerken (aynı durum) doku yenilensin; başka duruma geçerken özel doku silinir.
+	if _special_tex != null and not _special_setting and (new_state != State.ATTACK or same_state):
+		_special_tex = null
+		same_state = false
 	_state = new_state
 	_state_duration = duration
 	_frame_time = 0.0
@@ -4152,6 +4185,30 @@ func _broadcast_attack_state() -> void:
 func _enter_state_networked() -> void:
 	var dur: float = _anim_length_for(State.ATTACK)
 	_enter_state(State.ATTACK, dur if dur > 0.0 else 0.4)
+
+
+## Boss özel animasyonu (bkz. special_textures): tek seferlik, `duration` sn (0 = sayfanın doğal süresi). Yerel çağrı; ağ için emit_ability_vfx("boss_event", {"k": "anim", "n": ad, "d": süre}).
+var _special_tex: Texture2D = null
+var _special_setting: bool = false
+
+
+func play_special_anim(anim_name: String, duration: float = 0.0) -> void:
+	if is_dead or frame_sprite == null:
+		return
+	var tex: Texture2D = special_textures.get(anim_name) as Texture2D
+	if tex == null:
+		return
+	var cols: int = maxi(int(tex.get_width() / float(cell_size)), 1)
+	if duration <= 0.0:
+		duration = float(cols) / maxf(sprite_fps, 1.0)
+	_special_setting = true
+	_special_tex = tex
+	_enter_state(State.ATTACK, duration)
+	_special_setting = false
+	frame_sprite.texture = tex
+	frame_sprite.hframes = cols
+	frame_sprite.vframes = 4
+	_frame_time = 0.0
 
 
 ## Host'ta bir yaratık hasar alınca istemcilerde de beyaz vuruş parlaması (_flash)
@@ -4212,6 +4269,8 @@ func _texture_for_state(state: int) -> Texture2D:
 		State.DEATH:
 			return death_texture if death_texture else walk_texture
 		State.ATTACK:
+			if _special_tex != null:
+				return _special_tex
 			return attack_texture if attack_texture else walk_texture
 		State.IDLE:
 			return idle_texture if idle_texture else walk_texture
@@ -4346,6 +4405,7 @@ func update_network_state(net_position: Vector2, net_dead: bool = false, net_hea
 ## is_area: bu isabet bir ALAN hasarından mı geliyor (patlama, sıçrama, dönen kılıç, çoklu hedefli yetenek...). Sadece CAN EMME
 ## hesabı için (bkz. player.gd on_dealer_hit): alan hasarında can emme GameManager.LIFESTEAL_EFFECTIVENESS (%33) kadar geçerli.
 func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float = 0.0, is_area: bool = false) -> void:
+	var _bl_src: String = BalanceLogScript.take_src() ## balans telemetrisi: hasar kaynağı etiketi (erken dönüşte de silinsin)
 	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır (anahtar kapalıyken boş)
 	if is_dead:
 		return
@@ -4363,6 +4423,7 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 	var _dealer: Node = get_tree().get_first_node_in_group("player")
 	if amount > 0.0 and _dealer and "match_damage_dealt" in _dealer:
 		_dealer.match_damage_dealt += amount
+		BalanceLogScript.on_hit(_bl_src, amount, is_crit)
 	## Vampir Çocuk'un pasif can emmesi (verilen hasarın %4'ü) - bkz. player.gd on_dealer_hit. Genel
 	## on_damage_dealt (aşağıdaki _apply_damage) SADECE host'ta çalıştığı için istemci Vampir'i
 	## iyileştiremezdi; burası tam vuran istemcide çalışıyor.
@@ -4412,6 +4473,7 @@ func _take_dot_damage(amount: float, shield_pen: float = 0.0) -> void:
 		var dealer: Node = get_tree().get_first_node_in_group("player")
 		if dealer and "match_damage_dealt" in dealer:
 			dealer.match_damage_dealt += amount
+			BalanceLogScript.on_hit("dot", amount, false)
 		if dealer and dealer.has_method("on_dealer_hit"):
 			dealer.on_dealer_hit(amount, false)
 	_apply_damage(amount, false, shield_pen)
@@ -4574,6 +4636,8 @@ func die() -> void:
 	if is_dead:
 		return
 	is_dead = true
+	if _abilities != null:
+		_abilities.on_owner_died() ## bossa özel kapanış (Banshee: gece kilidi açılır)
 	_ew_unregister() ## EnemyWorld yolu: C++ kaydı silinir, ölüm animasyonu eski _physics_process'ten
 	velocity = Vector2.ZERO
 	## Yaratık yetenekleri (2026-09-24): görünmez ölen hayalet ölüm animasyonunu görünür oynatsın; zombi ölünce
@@ -5150,7 +5214,7 @@ func _drop_chest() -> void:
 ## weapon_shop_logic.gd SHARD_COST_*). Yerdeki drop'lar yemek gibi durur (weapon_shard_drop.gd); toplanınca yaşayan HER oyuncuya aynı miktar gider.
 ## Şans: sıradan yaratığın %0.5'i diğer drop'larla AYNI çarpımsal şansla büyür (bkz. LUCK_DROP_MULT_PER_POINT) - elit/boss garantisi şansa bağlı değil.
 ## Boss 5 AYRI drop düşürür (her biri 1 parça, etrafa saçılır), elit 1. Çağrı sırası/ağ kapısı diğer _drop_* ile aynı: sadece host/tek oyunculu.
-const WEAPON_SHARD_CHANCE := 0.005
+const WEAPON_SHARD_CHANCE := 0.01 ## 2026-10-11: %1,5 -> %1 (kullanıcı). 2026-10-10: %0,5 -> %1,5
 const WEAPON_SHARD_ELITE_COUNT := 1
 const WEAPON_SHARD_BOSS_COUNT := 5
 

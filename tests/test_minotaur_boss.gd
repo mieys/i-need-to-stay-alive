@@ -193,6 +193,37 @@ func test_math_clipping_never_reaches_a_blocked_cell_and_fling_speed_matches_the
 
 # ------------------------------------------------------------------ hücum durum makinesi
 
+## 2026-10-10 (kullanıcı: "boynuz vuruşu alanın dışından bile vurabiliyor, sıyrılamıyoruz"): yön kilitlenip şerit çizildikten sonra yana kaçan oyuncu, AYAKLARI şeridin
+## dışındaysa vurulmaz (eskiden kök + tüm gövde yarıçapı sayılıyordu ve hücum ilk 0,35 sn oyuncuya doğru kıvrılıyordu); ayakları şeridin içindeyse vurulur.
+func _dodge_run(feet_off: float) -> Array:
+	var r: Array = _rig(Vector2(200, 0))
+	var e: StubEnemy = r[0]
+	var mc: RefCounted = r[1]
+	var p: StubPlayer = r[2]
+	mc.forced_mode = MathScript.MODE_HORN
+	var dodged: bool = false
+	var t: float = 0.0
+	while t < 4.0:
+		mc.process(DT, p, e.global_position.distance_to(p.global_position))
+		t += DT
+		if not dodged and mc.phase == ChargeScript.Phase.CHARGE:
+			dodged = true
+			p.global_position = Vector2(200.0, feet_off - MathScript.FEET_OFFSET)
+		if dodged and mc.phase == ChargeScript.Phase.CHASE:
+			break
+	var hits: Array = p.hits.duplicate()
+	_cleanup()
+	return hits
+
+
+func test_horn_charge_misses_a_player_whose_feet_left_the_drawn_lane() -> void:
+	assert(MathScript.HORN_HOMING_DEG == 0.0, "kilitlendikten sonra hücum kıvrılmaz (çizilen şerit = gerçek yol)")
+	var half: float = MathScript.LANE_WIDTH * 0.5
+	assert(_dodge_run(half + MathScript.HIT_MARGIN + 3.0).is_empty(), "ayakları şeridin 3 px dışındaki oyuncu vurulmamalı")
+	assert(_dodge_run(-(half + MathScript.HIT_MARGIN + 3.0)).is_empty(), "öbür yandan da")
+	assert(_dodge_run(half - 4.0).size() == 1, "ayakları şeridin içindeki oyuncu vurulur")
+
+
 func test_horn_charge_full_cycle_windup_lane_charge_hit_recover() -> void:
 	var r: Array = _rig(Vector2(200, 0))
 	var e: StubEnemy = r[0]
@@ -230,7 +261,8 @@ func test_horn_charge_full_cycle_windup_lane_charge_hit_recover() -> void:
 	assert(float(charge_vfx[0][1]["cap"]) == MathScript.NET_SPEED_CAP, "hücum pozunda istemci ağ hızı tavanı yükselir")
 	var other_caps: Array = e.vfx.filter(func(v: Array) -> bool: return v[0] == "minotaur_pose" and int(v[1]["pose"]) != MathScript.POSE_CHARGE and float(v[1]["cap"]) != 0.0)
 	assert(other_caps.is_empty(), "diğer pozlarda tavan sıfırlanır")
-	assert(p.hits.size() == 1 and p.hits[0][0] == 100.0 and p.hits[0][1] == "minotaur", "oyuncu hücum başına BİR kez, 100 hasarla vuruldu: %s" % str(p.hits))
+	## 2026-10-10: boynuz hücumu isabeti temas hasarının x1,3'ü (kullanıcı: "hasarını %30 arttır").
+	assert(p.hits.size() == 1 and is_equal_approx(p.hits[0][0], 100.0 * MathScript.HORN_DAMAGE_MULT) and p.hits[0][1] == "minotaur", "oyuncu hücum başına BİR kez, 130 hasarla vuruldu: %s" % str(p.hits))
 	assert(p.flings.size() == 1 and p.flings[0][0].x > 0.4 and absf(p.flings[0][1] - MathScript.FLING_DISTANCE) < 0.01, "ve savruldu: %s" % str(p.flings))
 	assert(e.kinds().has("minotaur_impact"), "isabette toz/sarsıntı olayı")
 	assert(absf(e.global_position.x - lane_len) < 12.0 and absf(e.global_position.y) < 0.01, "boss şerit boyunca (tam uzunlukta) ilerledi: %s" % str(e.global_position))
@@ -372,6 +404,7 @@ func _spawner() -> Node:
 	var sp: Node = SpawnerScript.new()
 	_add(sp)
 	sp.max_concurrent_enemies = 100000
+	sp.tier_duration = 100.0 ## testler 100 sn'lik kademelere göre yazıldı (varsayılan 2026-10-10'da 150 oldu; kademe süresi bu testlerin konusu değil)
 	var fp := FakePlayer.new()
 	fp.add_to_group("player")
 	_add(fp)
@@ -418,7 +451,7 @@ func test_boss_has_exactly_the_requested_stats_in_single_player_and_scales_with_
 	assert(b.max_health == 32000.0 and b.health == 32000.0, "can 32.000: %.1f" % b.max_health)
 	assert(b.item_shield_max == 36000.0 and b.item_shield_hp == 36000.0, "kalkan 36.000: %.1f" % b.item_shield_max)
 	assert(is_equal_approx(b.shield_protection, 0.8), "kalkan soğurması yüzde 80: %.2f" % b.shield_protection)
-	assert(b.contact_damage == 100.0, "hasar 100: %.1f" % b.contact_damage)
+	assert(is_equal_approx(b.contact_damage, 100.0 * SpawnerScript.CREATURE_DAMAGE_CUT), "hasar 100 x0,8 = 80 (2026-10-11): %.1f" % b.contact_damage)
 	assert(b._current_tier == 3, "Kademe 3 bossu")
 	## Boyut: sahne 1,6 x global küçültme x boss ek küçültmesi (eski boyutun %80'i) x boss 1,7
 	assert(absf(b.frame_sprite.scale.x - 1.6 * EntityScale.SIZE * EntityScale.BOSS_EXTRA * 1.7) < 0.001, "boss boyutu: %.3f" % b.frame_sprite.scale.x)
@@ -427,7 +460,7 @@ func test_boss_has_exactly_the_requested_stats_in_single_player_and_scales_with_
 	c.add_to_group("boss")
 	sp._setup_boss_enemy(c, "minotaur1", 3, 3)
 	assert(absf(c.max_health - 64000.0) < 0.5 and absf(c.item_shield_max - 72000.0) < 0.5, "3 oyuncuda can/kalkan x2: %.0f / %.0f" % [c.max_health, c.item_shield_max])
-	assert(c.contact_damage == 100.0 and is_equal_approx(c.shield_protection, 0.8), "hasar ve soğurma oyuncu sayısıyla değişmez")
+	assert(is_equal_approx(c.contact_damage, 100.0 * SpawnerScript.CREATURE_DAMAGE_CUT) and is_equal_approx(c.shield_protection, 0.8), "hasar ve soğurma oyuncu sayısıyla değişmez")
 	## Ödül, Kademe 3'ün referans bossuyla (iskelet3) aynı - boss canına göre şişmez.
 	var ref: Node = sp._spawn_creature("iskelet3", Vector2(1000, 1000), 999003)
 	ref.add_to_group("boss")
@@ -491,7 +524,7 @@ func test_debug_menu_spawns_the_minotaur_as_a_real_boss() -> void:
 	assert(sp.debug_spawn_creature("minotaur1", 3, 1, Vector2(500.0, 500.0)) == 1, "debug doğuşu")
 	var bosses: Array = _boss_nodes()
 	assert(bosses.size() == 1 and bosses[0].is_boss and bosses[0].max_health == 32000.0 and bosses[0].item_shield_max == 36000.0, "gerçek boss statlarıyla doğar: %s" % str(bosses))
-	assert(bosses[0].get_node_or_null("EliteStar") == null, "elit değil")
+	assert(bosses[0].get_node_or_null("EliteBar") == null, "elit değil")
 	_cleanup()
 
 

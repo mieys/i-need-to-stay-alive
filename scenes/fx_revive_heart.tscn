@@ -4,7 +4,8 @@
 [ext_resource type="SpriteFrames" path="res://assets/generated/fx_revive_heart_frames.tres" id="2"]
 
 [node name="FxReviveHeart" type="AnimatedSprite2D"]
-position = Vector2(0, -165)
+position = Vector2(0, -88)
+scale = Vector2(1.75, 1.75)
 z_index = 58
 sprite_frames = ExtResource("2")
 script = ExtResource("1")

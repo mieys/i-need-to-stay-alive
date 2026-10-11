@@ -21,7 +21,7 @@ extends Node
 
 const SHADER_PATH := "res://scenes/sallanan ot.gdshader"
 const LAYER_PARENT := "Shader Eklenecek"
-const LAYER_NAMES: Array[String] = ["Çalılar", "Çalılar1"]
+const LAYER_NAMES: Array[String] = ["Çalılar", "Çalılar1", "Çiçekler 1"] ## Çiçekler 1: 2026-10-09 (kullanıcı: "çiçekler de çalılar gibi sallansın, y eksenine sahip olsun, dokununca sallansın")
 const MAX_CHARACTERS := 8      ## shader'daki karakterler dizi boyu
 ## Karakter ayak noktası (dünya px, köke göre): oyuncu kökü ölçek 0.5'te, sprite'ın zemine değdiği yer ~+30 yerel.
 const FEET_OFFSET := 15.0 * EntityScale.BODY_REL ## 2026-10-09: karakterler %15 küçüldü (eski ölçü 15 / 11 / 34)
@@ -46,7 +46,7 @@ var _base_strength: float = 1.35
 var _last_mult: float = -1.0
 var _atmosphere: Node = null
 var _image_cache: Dictionary = {}
-## Katman başına temas durumu: {"rect", "ofset", "data" (kök/boy RG8), "bend_img" (R8), "bend_tex", "plants" (kök hücresi ->
+## Katman başına temas durumu: {"rect", "ofset", "data" (kök/boy/faz/komşu RGBA8), "bend_img" (R8), "bend_tex", "plants" (kök hücresi ->
 ## [eğilme, hız]), "touching" (önceki karede değilen kök hücreleri)}
 var _layer_states: Array[Dictionary] = []
 var _prev_feet: Dictionary = {}
@@ -79,12 +79,18 @@ func setup(harita: Node) -> void:
 			mat = ShaderMaterial.new()
 			mat.shader = load(SHADER_PATH)
 		layer.material = mat
+		layer.use_parent_material = false ## Tiled'daki 'use_parent_material' özelliği shader'ı yok sayardı (bkz. bake_harita.gd _make_carried_material_visible)
+		if layer_name == "Çiçekler 1":
+			## Çiçeklerin renkleri sabit kalır: ot shader'ının renk çeşitliliği (hue/doygunluk kayması) yeşiller içindi, çiçeği başka renge çevirirdi.
+			mat.set_shader_parameter("hue_shift_amount", 0.0)
+			mat.set_shader_parameter("sat_shift_amount", 0.0)
+			mat.set_shader_parameter("val_shift_amount", 0.0)
 		if _materials.is_empty():
 			var s: Variant = mat.get_shader_parameter("strength")
 			if s == null and mat.shader:
 				s = RenderingServer.shader_get_parameter_default(mat.shader.get_rid(), "strength")
 			_base_strength = float(s) if s != null else 1.35
-		var state: Dictionary = _write_cell_data(mat, layer)
+		var state: Dictionary = _write_cell_data(mat, layer, layer_name == "Çiçekler 1")
 		if not state.is_empty():
 			_layer_states.append(state)
 		_materials.append(mat)
@@ -113,16 +119,23 @@ func _copy_material(src: ShaderMaterial) -> ShaderMaterial:
 	return dst
 
 
-## Hücre başına kök/boy -> RG8 veri dokusu (R = kökün karonun üstünden uzaklığı (texel), G = boy). Kök ve boy haritadaki
+## Hücre başına kök/boy -> RGBA8 veri dokusu (R = kökün karonun üstünden uzaklığı (texel), G = boy, B = geniş ot grubunun fazı (0 = tek karo / dikey ot),
+## A = grup komşu bitleri: 1 = atlasta SOLDAKİ karo da aynı grupta, 2 = atlasta SAĞDAKİ). Kök ve boy haritadaki
 ## GERÇEK komşuluğa göre: altındaki hücrede aynı otun devamı (atlasta hemen alttaki karo, aynı kaynak/çevirme, çizgi kesintisiz)
 ## varsa kök alttaki karoda; üstündekinin devamıysa boy üst yarıdan başlar; yoksa tek karoluk ot.
-func _write_cell_data(mat: ShaderMaterial, layer: TileMapLayer) -> Dictionary:
+##
+## GENİŞ ÇALILAR (2026-10-09, kullanıcı: "bazı çalılar rüzgarla hareketlenince ikiye üçe bölünüyor"): shader pikseli karonun İÇİNDE kaydırır; kayma
+## komşu karoda farklı faz alınca ya da içerik karodan taşınca karo sınırında boşluk/kopma oluşuyordu. Yatay (atlasta bitişik) ya da dikey bitişik karolar
+## TEK bitki sayılır: ortak kök/boy (grubun en alt satırı), ortak faz (B), ve karo sınırında kayan içerik komşu karonun GERÇEK piksellerinden doldurulur
+## (A bitleri; shader). En az iki sütunlu gruplar bu yolu kullanır, tek karo/dikey ot eskisi gibi kalır.
+func _write_cell_data(mat: ShaderMaterial, layer: TileMapLayer, generic_links: bool = false) -> Dictionary:
 	var rect: Rect2i = layer.get_used_rect()
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		return {}
-	var data := Image.create(rect.size.x, rect.size.y, false, Image.FORMAT_RG8)
+	var data := Image.create(rect.size.x, rect.size.y, false, Image.FORMAT_RGBA8)
 	var ts: TileSet = layer.tile_set
 	var src_for_padding: TileSetAtlasSource = null
+	var infos: Dictionary = {} ## hücre -> {"root","top","sid","alt","coords","flip"} (kök/üst: hücre üstüne göre, devam dahil)
 	for cell in layer.get_used_cells():
 		var src := ts.get_source(layer.get_cell_source_id(cell)) as TileSetAtlasSource
 		if src == null or src.texture == null:
@@ -149,9 +162,95 @@ func _write_cell_data(mat: ShaderMaterial, layer: TileMapLayer) -> Dictionary:
 			var ra: Vector2i = _opaque_rows(img, src.get_tile_texture_region(coords + Vector2i(0, -1)))
 			if ra.x >= 0:
 				top = ra.x - 16
+		var td: TileData = layer.get_cell_tile_data(cell)
+		infos[cell] = {"root": root, "top": top, "sid": layer.get_cell_source_id(cell), "alt": layer.get_cell_alternative_tile(cell),
+				"coords": coords, "flip": td != null and td.flip_h, "flat": td == null or not (td.flip_v or td.transpose),
+				"region": region, "img": img}
+	## Bitişik karolar (atlasta yatay +1 / çevrikte -1, dikey +1; aynı kaynak + alternatif) = tek bitki grubu.
+	var parent: Dictionary = {}
+	for cell: Vector2i in infos:
+		parent[cell] = cell
+	for cell: Vector2i in infos:
+		var a: Dictionary = infos[cell]
+		var right: Vector2i = cell + Vector2i(1, 0)
+		if infos.has(right):
+			var b: Dictionary = infos[right]
+			if b["sid"] == a["sid"] and b["alt"] == a["alt"] and b["coords"] == a["coords"] + (Vector2i(-1, 0) if a["flip"] else Vector2i(1, 0)):
+				_union(parent, cell, right)
+		var down: Vector2i = cell + Vector2i(0, 1)
+		if infos.has(down):
+			var c: Dictionary = infos[down]
+			if c["sid"] == a["sid"] and c["alt"] == a["alt"] and c["coords"] == a["coords"] + Vector2i(0, 1):
+				_union(parent, cell, down)
+	## ÇİÇEKLER (2026-10-11, kullanıcı: "çiçeklerin animasyonu ikiye bölünüyor"): çiçekler haritada atlas sırasına UYMADAN, sadece görsel olarak
+	## birleşecek şekilde dizilmiş (ör. atlasta (1,54),(0,54) yan yana değil ama haritada yan yana duruyor) -> yukarıdaki atlas komşuluğu onları ayrı
+	## bitki sayıp her biri kendi fazıyla kayıyordu. Bu katmanda haritada yan yana/alt alta olan ve karo sınırında piksel piksel devam eden
+	## karolar da aynı bitkidir (shader taşan içeriği komşunun GERÇEK pikselinden alır, bkz. komsu_veri).
+	if generic_links:
+		for cell: Vector2i in infos:
+			var a2: Dictionary = infos[cell]
+			if not a2["flat"]:
+				continue
+			var right2: Vector2i = cell + Vector2i(1, 0)
+			if infos.has(right2) and _link_ok(a2, infos[right2]) and _edge_touches(a2, infos[right2], true):
+				_union(parent, cell, right2)
+			var down2: Vector2i = cell + Vector2i(0, 1)
+			if infos.has(down2) and _link_ok(a2, infos[down2]) and _edge_touches(a2, infos[down2], false):
+				_union(parent, cell, down2)
+	var groups: Dictionary = {}
+	for cell: Vector2i in infos:
+		var r: Vector2i = _find(parent, cell)
+		if not groups.has(r):
+			groups[r] = {"cells": [], "root": -1000000, "top": 1000000, "min_x": 1000000, "max_x": -1000000}
+		var g: Dictionary = groups[r]
+		(g["cells"] as Array).append(cell)
+		g["root"] = maxi(int(g["root"]), cell.y * 16 + int(infos[cell]["root"]))
+		g["top"] = mini(int(g["top"]), cell.y * 16 + int(infos[cell]["top"]))
+		g["min_x"] = mini(int(g["min_x"]), cell.x)
+		g["max_x"] = maxi(int(g["max_x"]), cell.x)
+	var wide_group: Dictionary = {} ## hücre -> grup kökü (sadece en az iki sütunlu gruplar)
+	for r: Vector2i in groups:
+		var g: Dictionary = groups[r]
+		if int(g["max_x"]) > int(g["min_x"]) or (generic_links and (g["cells"] as Array).size() > 1):
+			for cell: Vector2i in g["cells"]:
+				wide_group[cell] = r
+	## Ekran-solu/sağ komşu karonun atlas koordinatı (komsu_veri: 2 piksel/hücre, R = x, G = y, B = çevirme, A = 255 komşu var) + temas grupları.
+	var nb := Image.create(rect.size.x * 2, rect.size.y, false, Image.FORMAT_RGBA8)
+	var members: Dictionary = {} ## grup temsilcisi (rect'e göreli hücre) -> [rect'e göreli hücreler] (sadece geniş gruplar)
+	var rep_of: Dictionary = {}  ## rect'e göreli hücre -> grup temsilcisi
+	for cell: Vector2i in infos:
+		var inf: Dictionary = infos[cell]
 		var p: Vector2i = cell - rect.position
-		data.set_pixel(p.x, p.y, Color8(clampi(root, 0, 255), clampi(maxi(1, root - top), 1, 255), 0))
+		var root: int = int(inf["root"])
+		var top: int = int(inf["top"])
+		var phase: int = 0
+		var flags: int = 0
+		if wide_group.has(cell):
+			var g: Dictionary = groups[wide_group[cell]]
+			root = int(g["root"]) - cell.y * 16
+			top = int(g["top"]) - cell.y * 16
+			phase = 1 + (absi(int(g["min_x"]) * 73 + int(g["root"]) * 131) % 255)
+			var left_cell: Vector2i = cell + Vector2i(1, 0) if inf["flip"] else cell + Vector2i(-1, 0)
+			var right_cell: Vector2i = cell + Vector2i(-1, 0) if inf["flip"] else cell + Vector2i(1, 0)
+			if wide_group.get(left_cell, Vector2i(-9999, -9999)) == wide_group[cell]:
+				flags |= 1
+			if wide_group.get(right_cell, Vector2i(-9999, -9999)) == wide_group[cell]:
+				flags |= 2
+			var rep: Vector2i = wide_group[cell] - rect.position
+			rep_of[p] = rep
+			if not members.has(rep):
+				members[rep] = []
+			(members[rep] as Array).append(p)
+			for side in 2:
+				var nc: Vector2i = cell + Vector2i(-1 if side == 0 else 1, 0)
+				if wide_group.get(nc, Vector2i(-9999, -9999)) == wide_group[cell]:
+					var ni: Dictionary = infos[nc]
+					var nco: Vector2i = ni["coords"]
+					if nco.x < 256 and nco.y < 256:
+						nb.set_pixel(p.x * 2 + side, p.y, Color8(nco.x, nco.y, 255 if ni["flip"] else 0, 255))
+		data.set_pixel(p.x, p.y, Color8(clampi(root, 0, 255), clampi(maxi(1, root - top), 1, 255), phase, flags))
 	mat.set_shader_parameter("veri", ImageTexture.create_from_image(data))
+	mat.set_shader_parameter("komsu_veri", ImageTexture.create_from_image(nb))
 	## Temas eğilmesi dokusu (128 = eğilme yok) - ön katman kopyası da aynı dokuyu kullanır (_copy_material).
 	var bend_img := Image.create(rect.size.x, rect.size.y, false, Image.FORMAT_R8)
 	bend_img.fill(Color8(128, 0, 0))
@@ -167,7 +266,22 @@ func _write_cell_data(mat: ShaderMaterial, layer: TileMapLayer) -> Dictionary:
 		## Shader dolgulu (use_texture_padding) çalışma anı dokusunu görür: karolar 18'lik hücrelerde, 1 px içeride.
 		mat.set_shader_parameter("karo_hucre", float(src_for_padding.texture_region_size.x + (2 if src_for_padding.use_texture_padding else 0)))
 		mat.set_shader_parameter("karo_dolgu", 1.0 if src_for_padding.use_texture_padding else 0.0)
-	return {"rect": rect, "ofset": ofset, "data": data, "bend_img": bend_img, "bend_tex": bend_tex, "plants": {}, "touching": {}}
+	return {"rect": rect, "ofset": ofset, "data": data, "bend_img": bend_img, "bend_tex": bend_tex, "plants": {}, "touching": {}, "rep_of": rep_of, "members": members}
+
+
+func _find(parent: Dictionary, c: Vector2i) -> Vector2i:
+	var r: Vector2i = c
+	while parent[r] != r:
+		parent[r] = parent[parent[r]]
+		r = parent[r]
+	return r
+
+
+func _union(parent: Dictionary, a: Vector2i, b: Vector2i) -> void:
+	var ra: Vector2i = _find(parent, a)
+	var rb: Vector2i = _find(parent, b)
+	if ra != rb:
+		parent[rb] = ra
 
 
 ## other hücresinde bu otun devamı var mı (dir = 1 alttaki, -1 üstteki): atlasta dikey komşu karo, aynı kaynak ve aynı
@@ -183,6 +297,38 @@ func _is_continuation(layer: TileMapLayer, cell: Vector2i, other: Vector2i, img:
 	var upper: Rect2i = src.get_tile_texture_region(coords if dir == 1 else other_coords)
 	var lower: Rect2i = src.get_tile_texture_region(other_coords if dir == 1 else coords)
 	return _continues(img, upper, lower)
+
+
+## İki karo aynı bitki olabilir mi: aynı kaynak (aynı doku), hiçbiri döndürülmüş/dikey çevrilmemiş.
+func _link_ok(a: Dictionary, b: Dictionary) -> bool:
+	return a["sid"] == b["sid"] and b["flat"] and a["img"] == b["img"]
+
+
+## Karonun EKRANDAKİ sütun sx / satır y pikselinin opaklığı (yatay çevrilmiş karoda atlas sütunu aynalanır).
+func _screen_alpha(inf: Dictionary, sx: int, y: int) -> float:
+	var r: Rect2i = inf["region"]
+	var x: int = (r.size.x - 1 - sx) if inf["flip"] else sx
+	return (inf["img"] as Image).get_pixel(r.position.x + x, r.position.y + clampi(y, 0, r.size.y - 1)).a
+
+
+## a ile b'nin ortak kenarında (yatay: a solda b sağda; dikey: a üstte b altta) iki yanda da opak piksel var mı (±1 satır/sütun payıyla).
+func _edge_touches(a: Dictionary, b: Dictionary, horizontal: bool) -> bool:
+	var size: Vector2i = (a["region"] as Rect2i).size
+	if horizontal:
+		for y in size.y:
+			if _screen_alpha(a, size.x - 1, y) < 0.1:
+				continue
+			for dy in [-1, 0, 1]:
+				if _screen_alpha(b, 0, y + dy) > 0.1:
+					return true
+	else:
+		for x in size.x:
+			if _screen_alpha(a, x, size.y - 1) < 0.1:
+				continue
+			for dx in [-1, 0, 1]:
+				if _screen_alpha(b, clampi(x + dx, 0, size.x - 1), 0) > 0.1:
+					return true
+	return false
 
 
 func _image_of(tex: Texture2D) -> Image:
@@ -227,6 +373,8 @@ func _update_touch(state: Dictionary, touchers: Array, delta: float) -> void:
 	var ofset: Vector2 = state["ofset"]
 	var data: Image = state["data"]
 	var plants: Dictionary = state["plants"]
+	var rep_of: Dictionary = state["rep_of"]
+	var members: Dictionary = state["members"]
 	var touching: Dictionary = {}
 	var targets: Dictionary = {}
 	for t in touchers:
@@ -249,13 +397,15 @@ func _update_touch(state: Dictionary, touchers: Array, delta: float) -> void:
 					continue
 				var dir: float = signf(dx) if absf(dx) > 1.5 else signf(vel.x)
 				var amt: float = 1.0 - clampf(absf(dx) / TOUCH_HALF_WIDTH, 0.0, 1.0) * 0.5
-				targets[p] = clampf(float(targets.get(p, 0.0)) + dir * amt * BEND_MAX, -BEND_MAX, BEND_MAX)
-				touching[p] = true
-				if not plants.has(p):
-					plants[p] = [0.0, 0.0]
-				if not (state["touching"] as Dictionary).has(p):
+				## Geniş bitki (grup) TEK bitki gibi eğilir: tüm karolar grup temsilcisinin eğilmesini paylaşır (yoksa dokunulan karo kayar, komşusu kalır = bölünme).
+				var key: Vector2i = rep_of.get(p, p)
+				targets[key] = clampf(float(targets.get(key, 0.0)) + dir * amt * BEND_MAX, -BEND_MAX, BEND_MAX)
+				touching[key] = true
+				if not plants.has(key):
+					plants[key] = [0.0, 0.0]
+				if not (state["touching"] as Dictionary).has(key):
 					var push: float = clampf(vel.length() * BEND_IMPULSE_RATIO, 0.0, BEND_IMPULSE_MAX)
-					plants[p][1] = float(plants[p][1]) + (dir if dir != 0.0 else 1.0) * push
+					plants[key][1] = float(plants[key][1]) + (dir if dir != 0.0 else 1.0) * push
 	state["touching"] = touching
 	if plants.is_empty():
 		return
@@ -272,7 +422,8 @@ func _update_touch(state: Dictionary, touchers: Array, delta: float) -> void:
 			done.append(p)
 		plants[p] = [bend, v]
 		var px := Color8(clampi(roundi(128.0 + bend * BEND_TEX_SCALE), 0, 255), 0, 0)
-		img.set_pixel(p.x, p.y, px)
+		for m: Vector2i in members.get(p, [p]):
+			img.set_pixel(m.x, m.y, px)
 		## 2 karoluk otun üst yarısı (üstteki hücre, kökü bu hücrede) da aynı eğilmeyi alır.
 		if p.y > 0 and roundi(data.get_pixel(p.x, p.y - 1).r * 255.0) >= 16:
 			img.set_pixel(p.x, p.y - 1, px)

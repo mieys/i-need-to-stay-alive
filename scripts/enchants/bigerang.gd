@@ -74,8 +74,8 @@ func process_extra(delta: float) -> void:
 		sprite("vortex", at, {"loop_time": VORTEX_EVERY + 0.1, "scale": VORTEX_RADIUS / (99.0 * 1.212), "z": 8})
 		for e in enemies_near(at, VORTEX_RADIUS):
 			hit(e, ap() * VORTEX_AP)
-			if e.is_boss:
+			if status(e, "boss"):
 				continue
 			var to_c: Vector2 = at - e.global_position
 			if to_c.length() > 12.0:
-				e.apply_element("knock", {"dir": to_c.normalized(), "dist": minf(30.0, to_c.length() - 10.0), "quiet": true})
+				el(e, "knock", {"dir": to_c.normalized(), "dist": minf(30.0, to_c.length() - 10.0), "quiet": true})

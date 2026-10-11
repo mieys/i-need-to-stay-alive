@@ -59,6 +59,12 @@ const SCENES := {
 	"minotaur1": preload("res://scenes/creatures/enemy_minotaur1.tscn"), ## Kademe 3 bossu (bkz. NEW_BOSS_TIERS)
 	"underground1": preload("res://scenes/creatures/enemy_underground1.tscn"), ## Kademe 5 bossu: Yeraltı Canavarı (görünmez havuz)
 	"sandworm1": preload("res://scenes/creatures/enemy_sandworm1.tscn"), ## Yeraltı Canavarı'nın solucan uzvu (bkz. LIMB_IDS)
+	"balkabagi1": preload("res://scenes/creatures/enemy_balkabagi1.tscn"), ## Kademe 8 bossu: Balkabağı Kafa (bkz. NEW_BOSS_TIERS)
+	"wendigo1": preload("res://scenes/creatures/enemy_wendigo1.tscn"), ## Kademe 12 bossu: Wendigo (bkz. NEW_BOSS_TIERS)
+	"banshee1": preload("res://scenes/creatures/enemy_banshee1.tscn"), ## Kademe 15 bossu: Banshee (bkz. NEW_BOSS_TIERS, NIGHT_BOSS_TIERS)
+	"ucansetan1": preload("res://scenes/creatures/enemy_ucansetan1.tscn"), ## FİNAL bossu: Uçan Şeytan (bkz. NEW_FINAL_BOSSES)
+	"kabak1": preload("res://scenes/creatures/enemy_kabak1.tscn"), ## Balkabağı Kafa'nın patlayan balkabağı minyonu (bkz. SUMMON_STATS)
+	"yarasa1": preload("res://scenes/creatures/enemy_yarasa1.tscn"), ## Balkabağı Kafa'nın kanatan yarasası (bkz. SUMMON_STATS)
 }
 
 ## hp/dmg multiplier per family, used only to compute a fresh, tier-appropriate
@@ -96,6 +102,7 @@ const ID_FAMILY := {
 	"iblis1": "iblis", "iblis2": "iblis", "iblis3": "iblis",
 	"minotaur1": "minotaur",
 	"underground1": "underground", "sandworm1": "sandworm",
+	"balkabagi1": "balkabagi", "kabak1": "kabak", "yarasa1": "yarasa", "wendigo1": "wendigo", "banshee1": "banshee", "ucansetan1": "ucansetan",
 }
 
 ## Regular spawn roster per Kademe (1-15) - NOT cumulative: only the current
@@ -153,7 +160,14 @@ const BOSS_TIERS := {
 const NEW_BOSS_TIERS := {
 	3: ["minotaur1"],
 	5: ["underground1"],
+	8: ["balkabagi1"],
+	12: ["wendigo1"],
+	15: ["banshee1"],
 }
+
+## Gece bossları (Banshee, 2026-10-09: "zifiri gece olduğunda doğar, var olduğu sürece asla gündüz olmaz"): bu kademelerin bossu doğmadan önce atmosphere.gd gece kilidi istenir ve DERİN GECE
+## olunca doğar (gündüzse saat hızla geceye akar, ~10 sn). Kilit, boss ölünce (ya da kalmayınca) kendiliğinden açılır.
+const NIGHT_BOSS_TIERS := [15]
 
 ## Elle belirlenmiş NİHAİ statlı bosslar (kullanıcı isteği 2026-10-08, Minotaur: "Canı 80.000, Kalkanı 90.000, Kalkan Soğurması %80, Hasarı 100",
 ## sonra aynı gün "Kalkanını ve canını %60 azalt" -> can 32.000, kalkan 36.000).
@@ -166,6 +180,24 @@ const FIXED_BOSS_STATS := {
 	## Yeraltı Canavarı (2026-10-09, "Bossun canı 50.000 Kalkanı 60.000"; kalkan soğurması verilmedi -> standart boss %90; hasarlar uzuvlarda: asit 110, savurma 130, bkz. worm_boss_math.gd).
 	## Bu havuz SADECE uzuvlar üzerinden azalır: toplam ~110.000 hasar (can + kalkan) = ~55 uzuv (worm_boss_math.gd LIMB_THRESHOLD 2.000).
 	"underground1": {"health": 50000.0, "shield": 60000.0, "protection": 0.9, "damage": 0.0, "reward_ref": "iskelet3"},
+	## Balkabağı Kafa (2026-10-09, Kademe 8): kullanıcı can/kalkan VERMEDİ (benim seçimim: 100.000 / 120.000, soğurma %85 - Minotaur 32k/36k ile Wendigo 200k/280k arası); "normal halinden 2 kat büyük" -> "scale" 2.0;
+	## normal saldırı 20 (ateş topu 10, kabak patlaması 20, yarasa kanaması 5/sn pumpkin_boss.gd / pumpkin_minions.gd'de). reward_ref: Kademe 8 referans bossu (ork3).
+	## 2026-10-10 (kullanıcı: "balkabağı bossunun boyutunu %30 küçült ... hasarını 2 kat arttır"): scale 2.0 -> 1.4, normal saldırı 20 -> 40 (ateş topu/kabak patlaması/yarasa x2: pumpkin_boss.gd/pumpkin_minions.gd/SUMMON_STATS).
+	"balkabagi1": {"health": 100000.0, "shield": 120000.0, "protection": 0.85, "damage": 40.0, "reward_ref": "ork3", "scale": 1.4},
+	## Wendigo (2026-10-09, Kademe 12, belgeden AYNEN): Can 200.000 Kalkan 280.000 Kalkan soğurması %85; normal saldırı 120 (sarmaşık 100 / kaya 130 wendigo_boss.gd'de); "normal halinden 3 kat büyük" -> scale 3.0.
+	"wendigo1": {"health": 200000.0, "shield": 280000.0, "protection": 0.85, "damage": 120.0, "reward_ref": "agac3", "scale": 3.0},
+	## Banshee (2026-10-09, Kademe 15, belgeden): Can 300.000 Kalkan 480.000, 3x boy. Soğurma ve hasar belgede YOK -> benim seçimim: soğurma %90, atılış 120 (= contact_damage), çığlık 130 (banshee_boss.gd).
+	## Uçan Şeytan (2026-10-09, FİNAL, belgeden AYNEN): Can 1.000.000 Kalkan 1.200.000 Soğurma %90; normal saldırı 150 (ateş topu 200 + yanma 50/sn, kozmik ışın 100/0,5 sn demon_boss.gd'de); "4 kat büyük" -> scale 4.0.
+	"ucansetan1": {"health": 1000000.0, "shield": 1200000.0, "protection": 0.9, "damage": 150.0, "reward_ref": "rontgen3", "scale": 4.0},
+	## 2026-10-10 (kullanıcı: "banshee çok güçsüzdü, boyutunu %30 küçültüp daha agresif daha hızlı olmalı, hasarını 2 kat arttır"): scale 3.0 -> 2.1, atılış 120 -> 240 (çığlık 130 -> 260 banshee_boss.gd).
+	"banshee1": {"health": 300000.0, "shield": 480000.0, "protection": 0.9, "damage": 240.0, "reward_ref": "rontgen3", "scale": 2.1},
+}
+
+## BOSS MİNYONLARI (kullanıcı isteği 2026-10-09, Balkabağı Kafa): stat çarpanları - can/kalkan = o kademedeki sıradan yaratığın ("hp" oranı), hız = sıradan yaratığa göre ("speed" çarpanı).
+## Doğuş spawn_summon'da: sıradan yaratık gibi kademe ölçeği + kalkan + global çarpan, sonra bu oranlar; ödüller küçültülür ("reward").
+const SUMMON_STATS := {
+	"kabak1": {"hp": 0.7, "speed": 1.2, "reward": 0.3},
+	"yarasa1": {"hp": 0.3, "speed": 1.3, "reward": 0.3, "damage": 2.0}, ## damage: ısırık hasarı çarpanı (2026-10-10: Balkabağı hasarı x2)
 }
 
 ## Boss havuzuna bağlı solucan UZUVLARI: sıradan yaratık değil - tier ölçeği / kalkan / global çarpan / ödül YOK (kendi eşiği sahnede, hasarı bossa gider; bkz. worm_limb.gd).
@@ -174,6 +206,10 @@ const LIMB_IDS := ["sandworm1"]
 
 ## Final Kademe: every boss-tier creature spawns at once, all 13 together.
 const FINAL_TIER := 16
+## YENİ FİNAL (2026-10-09, kullanıcı: "Uçan Şeytan tüm kademeler bittikten sonra ortaya çıkar; final bossu öldürdükten sonra sonsuz mod açılacak"): GameManager.bosses_enabled KAPALIYKEN de
+## Final bu listedeki boss(lar)la gelir (eski 13'lü FINAL_CREATURES değil); ölünce zafer penceresi -> "Sonsuza Devam Et" -> sonsuz mod. `new_final_enabled` kapatılırsa eski davranış (Kademe XV bitince doğrudan sonsuz).
+const NEW_FINAL_BOSSES := ["ucansetan1"]
+var new_final_enabled: bool = true
 const FINAL_CREATURES := [
 	"agac3", "demon3", "golem3", "hayalet3", "lich3", "mantar3", "ork3",
 	"rat3", "rontgen3", "vampire3", "zombie3", "iblis3", "iskelet3",
@@ -183,7 +219,10 @@ const FINAL_CREATURES := [
 ## sürüyor, 50 -> 150) - oyun çok hızlı ilerleyip bosslar aniden geliyordu.
 ## Kullanıcı isteği (yeni tur): "yüksek kademelerin gelme hızı %50 artsın" -
 ## 150 -> 100 (süre /1.5, yani atlama hızı %50 arttı).
-@export var tier_duration: float = 100.0 ## seconds spent in each Kademe
+## Kullanıcı isteği (2026-10-10): "kademeler çok kısa sürüyor daha uzun sürmeli %50 civarı" - 100 -> 150. Bu sayıyı kopyalayan YERLER (hepsi birlikte
+## değişmeli, testle eşitlikleri sınanır - test_tier_pacing): merchant_shop_screen.gd MERCHANT_PRICE_TIER_DURATION (fiyat kademesi), enemy.gd
+## TIME_HEALTH_GROWTH_START (Kademe 3'ün başı = 2 x tier_duration) ve difficulty_ramp (zamana bağlı doğuş sıklığı: kademe başına eğri aynı kalsın diye x100/150).
+@export var tier_duration: float = 150.0 ## seconds spent in each Kademe
 @export var boss_trigger_fraction: float = 0.75 ## how far into a tier its boss fires
 
 ## Regular spawn-rate pacing - unrelated to WHICH creature spawns (that's the
@@ -222,7 +261,9 @@ const FINAL_CREATURES := [
 ## 0.001 -> 0.0006. Ölçüm (tools yok, gerçek koddan: yaratık canı x doğuş sıklığı = "saniyede öldürülmesi gereken can"): Kademe 3->8 arası
 ## doğuş sıklığı x3.9 (2.3 -> 9.1/sn) artıp yaratık canı da x6 artıyordu (toplam x24). 0.0006 ile aynı aralıkta doğuş x1.65 (2.0 -> 3.3/sn);
 ## 0.16 tavanına ~1230 sn'de (Kademe 12) varılır. Kademe 1-2'de doğuş en fazla ~%8 azalır (zaten kolay), zorlaşan hiçbir şey yok.
-@export var difficulty_ramp: float = 0.0006
+## 2026-10-10: Kademe süresi 100 -> 150 sn olunca doğuş sıklığının KADEME BAŞINA eğrisi eskisiyle aynı kalsın diye 0.0006 -> 0.0004 (x100/150): eğri saniyeye bağlı,
+## yoksa her Kademe'deki yoğunluk %50 artardı (kullanıcı kademeleri UZATMAK istedi, zorlaştırmak değil). 0.16 tavanına ~1850 sn'de (yine Kademe 12) varılır.
+@export var difficulty_ramp: float = 0.0004
 ## Kullanıcı isteği: "yaratık sayısını %50 arttır" - eskiden 42, ×1.5 (63).
 ## Kullanıcı isteği: "yaratık spawnını %150 arttır" - 63 -> 158 (×2.5).
 ## DÜZELTME (kullanıcı bildirimi: optimizasyonlar sonrası bile hâlâ kasıyor,
@@ -252,7 +293,10 @@ const FINAL_CREATURES := [
 ## Oyuncu başı +20 ve kademe kısması (_tier_crowding_scale) BİLEREK aynı kaldı.
 ## Kullanıcı isteği (2026-10-04): "maksimum spawnlanabilecek yaratık sayısını 250 ile sınırla, oyuncu başına bu sınır 50 artsın" -
 ## 500 -> 250, ek oyuncu başı +20 -> +50 (ENEMY_CAP_PER_EXTRA_PLAYER). Kademe kısması (_tier_crowding_scale) aynı kaldı.
-@export var max_concurrent_enemies: int = 250
+## Kullanıcı isteği (2026-10-10): "oyundaki maksimum yaratık sayısını 100'e düşür, oyuncu başına 20 artsın; yaratıkların hasarı ve can kalkanı da %50 artsın" -
+## 250 -> 100 ve ek oyuncu başı +50 -> +20 (ENEMY_CAP_PER_EXTRA_PLAYER). Kademe kısması (_tier_crowding_scale) aynı kaldı. Hasar/can/kalkan +%50: CREATURE_STAT_BOOST.
+## 2026-10-10 (2. tur, kullanıcı: "maksimum yaratık sayısını 150 yapıp oyuncu başına 30 artması ile değiştir"): 100 -> 150, ek oyuncu başı +20 -> +30.
+@export var max_concurrent_enemies: int = 150
 ## Multiplayer enemy scaling: solo keeps the original cap; each additional
 ## player adds room for more creatures and slightly increases spawn frequency.
 ## Kullanıcı isteği: "oyuncu başına yaratık sayısı %50 [artsın]" - eskiden 18, ×1.5 (27).
@@ -266,7 +310,7 @@ const FINAL_CREATURES := [
 ## "maksimum yaratık sayısı 5 oyuncu varken olsun; 4 oyuncuda 180, 3'te 160, 2'de 140, tek oyunculuda 120" -
 ## max_concurrent_enemies (200) artık 5 oyuncunun tavanı, her eksik oyuncu için ENEMY_CAP_STEP_PER_MISSING_PLAYER düşer.
 ## 2026-09-27: yeni kural - tek oyuncu max_concurrent_enemies (100), her ek oyuncu +20 (2 -> 120, 3 -> 140, 4 -> 160...).
-const ENEMY_CAP_PER_EXTRA_PLAYER := 50
+const ENEMY_CAP_PER_EXTRA_PLAYER := 30 ## 2026-10-10: 50 -> 20 -> 30
 ## Kullanıcı isteği (2026-09-24 denge turu: "her kademe için oyuncu başına %30 spawn ve %50 can") - 0.25 -> 0.30.
 const EXTRA_PLAYER_SPAWN_RATE := 0.30
 @export var min_spawn_distance: float = 480.0
@@ -525,6 +569,16 @@ const BOSS_PACING := {3: [0.6, 0.8], 6: [0.75, 0.9], 8: [0.85, 0.95]}
 ## Kullanıcı isteği (2026-09-25): "hasarlarını %20 arttır" - 1.512 -> 1.8144 (×1.2), bosslar DAHİL. Yaratık yetenekleri
 ## (asit, ateş topu, lazer, dikenler) ve menzilli saldırılar da bu çarpanla büyüyen contact/ranged_damage'den türüyor.
 const GLOBAL_DAMAGE_BUFF := 1.8144 ## sadece hasar için (eskiden 1.512, ondan önce 1.68, ondan önce ortak 1.3)
+## Kullanıcı isteği (2026-10-10): "yaratıkların hasarı ve can kalkanı da %50 artsın" (yaratık sayısı tavanı aynı anda 250 -> 100'e indi). SIRADAN yaratıklar (elitler dahil: elit
+## sıradan yaratığın katı olarak türer) için can, kalkan ve temas/menzilli hasar x1,5; _apply_global_buff'ta, tüm doğuş yolları (normal, görev, pusu, bekçi, minyon, istemci RPC) buradan
+## geçer. Elle statlı bosslar (FIXED_BOSS_STATS) ve eski bosslar etkilenmez (kendi sayıları belirli).
+const CREATURE_STAT_BOOST := 1.5
+## Kullanıcı isteği (2026-10-11): "tüm yaratıkların hasarını %20 azalt" - TÜM yaratıkların temas/menzilli hasarı x0,8: sıradanlar + elitler + eski
+## bosslar (_apply_global_buff) VE elle statlı yeni bosslar (_apply_fixed_boss_stats). Bu ikisinden türeyen yetenekler (asit, ateş topu, lazer,
+## dikenler, Minotaur boynuzu, yarasa ısırığı, Banshee atılışı) kendiliğinden düşer; bossların SABİT yetenek hasarları kendi dosyalarında x0,8
+## (pumpkin_boss/pumpkin_minions/wendigo_boss/banshee_boss/demon_boss, player.gd DEMON_BURN_DPS/ENEMY_BLEED_DPS). Yeraltı Canavarı ayrı: -%40
+## (worm_boss_math.gd, kullanıcı ayrıca istedi; bu çarpan oraya UYGULANMAZ - uzuvların hasarı sabit).
+const CREATURE_DAMAGE_CUT := 1.0 ## 2026-10-11 (sonra): x0,8 kesintisi İPTAL edildi (kullanıcı: "%20 hasar azaltmayı tüm yaratıklardan iptal edelim"); çarpan kodda kaldı, 1.0 = etkisiz
 
 ## Kullanıcı isteği (#26): "yaratıklardan çok az altın düşüyor, altın düşme
 ## oranını arttır." Her yaratık sahnesinin (scenes/creatures/enemy_*.tscn)
@@ -952,7 +1006,7 @@ var _gate_check_accum: float = GATE_CHECK_SECONDS ## ilk karede hemen bak
 
 
 func _check_tier_announcement() -> void:
-	var top_tier: int = FINAL_TIER if GameManager.bosses_enabled else FINAL_TIER - 1 ## Final kapalıyken "Kademe XVI" bildirimi yok
+	var top_tier: int = FINAL_TIER if _final_active() else FINAL_TIER - 1 ## Final yokken "Kademe XVI" bildirimi yok
 	var time_tier: int = mini(1 + int(_tier_time() / tier_duration), top_tier)
 	if time_tier < _announced_tier: ## yeni oyun: saat sıfırlandı
 		_announced_tier = time_tier
@@ -968,7 +1022,7 @@ func _check_tier_announcement() -> void:
 	_resolve_spawn_tier() ## kapı açıksa _spawn_tier zaman kademesine yetişir
 	_gate_rush_tick()
 	var started: int = _spawn_tier
-	if GameManager.bosses_enabled and time_tier >= FINAL_TIER and _final_gate_open():
+	if _final_active() and time_tier >= FINAL_TIER and _final_gate_open():
 		started = FINAL_TIER
 	if started > _announced_tier:
 		_announced_tier = started
@@ -1044,6 +1098,11 @@ func _tier_crowding_scale() -> float:
 	var progress: float = clampf(_tier_time() / (14.0 * tier_duration), 0.0, 1.0)
 	return lerp(TIER_1_CAP_SCALE, 1.0, progress)
 
+## Tavan sayımı: kenar bekçileri (guard_camps.gd, "guards" grubu) ve boss minyonları ("summons") sayılmaz - 60+ bekçi sıradan doğuşu tavanda kilitlerdi.
+func _regular_enemy_count() -> int:
+	return get_tree().get_nodes_in_group("enemies").size() - get_tree().get_nodes_in_group("guards").size() - get_tree().get_nodes_in_group("summons").size()
+
+
 func _scaled_enemy_cap() -> int:
 	## bkz. DEBUG_RAMP_TEST_ENABLED üstündeki GEÇİCİ TEST notu - Kademe 1'in
 	## kasıtlı TIER_1_CAP_SCALE (0.35) kısıtlaması olmasa 200 hedefine hiç
@@ -1055,7 +1114,7 @@ func _scaled_enemy_cap() -> int:
 	return max(1, int(round(player_enemy_cap(_player_count()) * _tier_crowding_scale())))
 
 
-## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->250, 2->300, 3->350, 4->400, 5->450 (2026-10-04, bkz.
+## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->100, 2->120, 3->140, 4->160, 5->180 (2026-10-10; eskiden 250 + 50/oyuncu, bkz.
 ## max_concurrent_enemies notu). Erken kademelerde bu tavan _tier_crowding_scale ile ayrıca kısılır (değişmedi).
 ## Yaratık canı/kalkanı oyuncu sayısından BAĞIMSIZ olarak ayrı ölçeklenir - burası sadece sayı.
 func player_enemy_cap(players: int) -> int:
@@ -1259,6 +1318,8 @@ func _gate_rush_tick() -> void:
 	for e: Node in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or not e.has_method("set_gate_rush"):
 			continue
+		if e.is_in_group("boss"):
+			continue ## bossun kendi hız çarpanı (Balkabağı atılışı) bu döngüce sıfırlanmasın
 		var want: float = 1.0
 		if waiting and e.get("is_dead") != true and not e.is_in_group("boss"):
 			var t: int = int(e.get_meta("spawn_tier", 0))
@@ -1340,8 +1401,17 @@ var _final_gate_opened: bool = false
 var _final_gate_wait_started_msec: int = 0
 
 
+## Final var mı: eski 13'lü Final (bosses_enabled) ya da yeni tek bossluk Final (new_final_enabled).
+func _final_active() -> bool:
+	return GameManager.bosses_enabled or (new_final_enabled and not NEW_FINAL_BOSSES.is_empty())
+
+
+func _final_ids() -> Array:
+	return FINAL_CREATURES if GameManager.bosses_enabled else NEW_FINAL_BOSSES
+
+
 func _final_pending() -> bool:
-	if not GameManager.bosses_enabled:
+	if not _final_active():
 		return false ## Final yok: yeni yaratık doğumu 15. kademeden sonra durmaz
 	return not _final_gate_opened and not _final_spawned and _tier_time() >= (FINAL_TIER - 1) * tier_duration
 
@@ -1458,7 +1528,7 @@ func _spawn_regular_enemy() -> void:
 		if ambush_pos != null:
 			spawn_count += randi_range(AMBUSH_PACK_MIN, AMBUSH_PACK_MAX) - 1
 	for i in range(spawn_count):
-		if get_tree().get_nodes_in_group("enemies").size() >= _scaled_enemy_cap():
+		if _regular_enemy_count() >= _scaled_enemy_cap():
 			return
 		## ELİT önce atılır: elitse yaratık kimliği ELİT HAVUZUNDAN (eski bosslar) seçilir, değilse roster'dan.
 		var elite: bool = _roll_elite_for(tier)
@@ -1508,14 +1578,25 @@ func _check_boss_tiers() -> void:
 			continue
 		var trigger_time: float = (tier - 1) * tier_duration + tier_duration * boss_trigger_fraction
 		if t >= trigger_time:
+			if NIGHT_BOSS_TIERS.has(int(tier)) and not _night_ready_for_boss():
+				continue ## gece kilidi istendi, derin geceyi bekliyor (bir sonraki bakışta tekrar)
 			_boss_tiers_spawned[tier] = true
 			var spawned: Array = _spawn_boss_group(boss_tiers[tier], tier)
 			if spawned.is_empty():
 				_boss_tiers_spawned.erase(tier) ## hiç doğmadı (ör. o an canlı oyuncu çapası yoktu): sonraki bakışta yeniden dene
 
 
+## Gece bossu için gece hazır mı: atmosfer varsa gece kilidini ister ve derin gece olunca true döner; atmosfer yoksa (test/ana menü) hemen true.
+func _night_ready_for_boss() -> bool:
+	var atmo: Node = get_tree().get_first_node_in_group("atmosphere")
+	if atmo == null or not atmo.has_method("set_night_lock"):
+		return true
+	atmo.call("set_night_lock", true)
+	return bool(atmo.call("is_deep_night"))
+
+
 func _check_final_tier() -> void:
-	if not GameManager.bosses_enabled:
+	if not _final_active():
 		_check_auto_endless() ## boss/Final yok: Kademe XV bitince doğrudan sonsuz mod
 		return
 	if _final_spawned:
@@ -1523,7 +1604,7 @@ func _check_final_tier() -> void:
 	## 15. kademenin bossları ölmeden Final gelmez (bkz. _tier_time) VE 1-15. kademelerin yaratıkları ölmeden de gelmez (bkz. _final_gate_open)
 	if _final_gate_open():
 		_final_spawned = true
-		var spawned: Array = _spawn_boss_group(FINAL_CREATURES, FINAL_TIER)
+		var spawned: Array = _spawn_boss_group(_final_ids(), FINAL_TIER)
 		if spawned.is_empty():
 			_final_spawned = false ## hiç doğmadı (ör. o an canlı oyuncu çapası yoktu): sonraki karede yeniden dene - yoksa Final ve zafer hiç gelmezdi
 		else:
@@ -1599,6 +1680,12 @@ func _rpc_client_spawn_creature(id: String, pos: Vector2, tier: int, is_boss: bo
 		_setup_boss_enemy(enemy, id, tier, player_count)
 	elif LIMB_IDS.has(id):
 		return ## uzuv: kurulumu sahnede + worm_setup/worm_pose olaylarıyla (çarpan/kalkan/ödül yok)
+	elif SUMMON_STATS.has(id):
+		if enemy.has_method("apply_tier_scaling"):
+			enemy.apply_tier_scaling(tier)
+		_enable_regular_shield(enemy, tier)
+		_apply_global_buff(enemy, player_count)
+		_apply_summon_stats(enemy, SUMMON_STATS[id])
 	else:
 		if enemy.has_method("apply_tier_scaling"):
 			enemy.apply_tier_scaling(tier)
@@ -1616,7 +1703,7 @@ func _setup_boss_enemy(enemy: Node, id: String, tier: int, player_count: int = 0
 	## Elle statlı bosslarda zincir referans bossun taban statıyla çalışır: ödül (altın/XP) o referansa eşit kalır, sağlık/kalkan/hasar aşağıda ezilir.
 	var base_stats: Dictionary = boss_base_stats(str(fixed.get("reward_ref", id)), tier)
 	if enemy.has_method("apply_boss_stats"):
-		enemy.apply_boss_stats(float(base_stats["health"]), float(base_stats["damage"]), BOSS_SCALE_MULT, tier)
+		enemy.apply_boss_stats(float(base_stats["health"]), float(base_stats["damage"]), float(fixed.get("scale", BOSS_SCALE_MULT)), tier)
 	if enemy.has_method("enable_item_shield"):
 		enemy.enable_item_shield(BOSS_SHIELD_PROTECTION, BOSS_SHIELD_RATIO)
 	# Global güçlendirme - boss stats SONRASI uygulanır
@@ -1635,9 +1722,9 @@ func _apply_fixed_boss_stats(enemy: Node, fixed: Dictionary) -> void:
 	enemy.item_shield_max = float(fixed["shield"]) * defense_mult
 	enemy.item_shield_hp = enemy.item_shield_max
 	enemy.shield_protection = float(fixed["protection"])
-	enemy.contact_damage = float(fixed["damage"])
+	enemy.contact_damage = float(fixed["damage"]) * CREATURE_DAMAGE_CUT
 	if enemy.ranged_damage > 0.0:
-		enemy.ranged_damage = float(fixed["damage"])
+		enemy.ranged_damage = float(fixed["damage"]) * CREATURE_DAMAGE_CUT
 	enemy.health_changed.emit(enemy.health, enemy.max_health)
 	enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
 
@@ -1824,6 +1911,79 @@ func _attach_boss_bar(enemy: Node) -> void:
 		enemy.set_overhead_bar_always_visible()
 
 
+## BOSS MİNYONU doğur (pumpkin_boss.gd çağırır; sadece host/tek oyunculu): `kind` SUMMON_STATS'ta ("kabak1"/"yarasa1"), `boss` çağıran boss. Sıradan yaratık gibi kademe ölçeği + kalkan + global çarpan,
+## sonra can/kalkan SUMMON_STATS oranında kısılır, hız çarpanı uygulanır, ödüller küçülür. "summons" grubunda (doğuş tavanını doldurmaz), kademe kapısını tutmaz (spawn_tier yok).
+func spawn_summon(kind: String, pos: Vector2, boss: Node) -> Node:
+	var stats: Dictionary = SUMMON_STATS.get(kind, {})
+	if stats.is_empty():
+		return null
+	var tier: int = _current_tier()
+	var scale_tier: int = _scale_tier_for(tier)
+	var network_id: int = _next_network_enemy_id
+	_next_network_enemy_id += 1
+	var enemy = _spawn_creature(kind, pos, network_id)
+	if not enemy:
+		return null
+	if enemy.has_method("apply_tier_scaling"):
+		enemy.apply_tier_scaling(scale_tier)
+	_enable_regular_shield(enemy, tier)
+	_apply_global_buff(enemy)
+	_apply_summon_stats(enemy, stats)
+	enemy.add_to_group("summons")
+	enemy.set_meta("summoner", boss)
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		_announce_spawn(enemy, kind, pos, scale_tier, false, network_id, false, false)
+	return enemy
+
+
+## Minyon oranlarını uygular (host spawn_summon + istemci _rpc_client_spawn_creature AYNI işlevi çağırır: iki ayrı kopya olmasın).
+func _apply_summon_stats(enemy: Node, stats: Dictionary) -> void:
+	var hp: float = float(stats["hp"])
+	enemy.max_health *= hp
+	enemy.health = enemy.max_health
+	enemy.item_shield_max *= hp
+	enemy.item_shield_hp = enemy.item_shield_max
+	enemy.speed *= float(stats["speed"])
+	var dmg_mult: float = float(stats.get("damage", 1.0))
+	if dmg_mult != 1.0:
+		enemy.contact_damage *= dmg_mult
+		if enemy.ranged_damage > 0.0:
+			enemy.ranged_damage *= dmg_mult
+	var reward: float = float(stats["reward"])
+	enemy.xp_value *= reward
+	enemy.gold_chance *= reward
+	if enemy.has_signal("health_changed"):
+		enemy.health_changed.emit(enemy.health, enemy.max_health)
+		enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
+
+
+## KENAR BEKÇİSİ doğur (guard_camps.gd çağırır; sadece host/tekli): _spawn_regular_enemy ile AYNI kurulum (kademe ölçeği, kalkan, global çarpan, istemcilere yayın),
+## fark: konum verilir, "guards" grubuna girer, "spawn_tier" meta'sı YOK (kademe kapısı ve kapı hızlandırması onları saymaz). Elit olmaz. Dönüş: yaratık ya da null.
+func spawn_guard(pos: Vector2) -> Node:
+	var tier: int = _resolve_spawn_tier()
+	if tier <= 0:
+		tier = _current_tier()
+	var roster: Array = _spawnable_roster(tier)
+	if roster.is_empty():
+		return null
+	var scale_tier: int = _scale_tier_for(tier)
+	var id: String = roster[randi() % roster.size()]
+	var network_id: int = _next_network_enemy_id
+	_next_network_enemy_id += 1
+	var enemy = _spawn_creature(id, pos, network_id)
+	if not enemy:
+		return null
+	if enemy.has_method("apply_tier_scaling"):
+		enemy.apply_tier_scaling(scale_tier)
+	_enable_regular_shield(enemy, tier)
+	_apply_global_buff(enemy)
+	enemy.add_to_group("guards")
+	enemy.set_meta("guard", true)
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		_announce_spawn(enemy, id, pos, scale_tier, false, network_id, false, false)
+	return enemy
+
+
 func _spawn_creature(id: String, pos: Vector2, network_id: int = 0) -> Node:
 	var scene: PackedScene = SCENES.get(id)
 	if not scene:
@@ -1907,7 +2067,7 @@ func spawn_mission_wave(center: Vector2, ring_radius: float, count: int) -> int:
 	var scale_tier: int = _scale_tier_for(tier) ## sonsuzda görev dalgası da o katın ölçeğinde
 	var spawned := 0
 	for i in range(count):
-		if get_tree().get_nodes_in_group("enemies").size() >= _scaled_enemy_cap():
+		if _regular_enemy_count() >= _scaled_enemy_cap():
 			break
 		var id: String = roster[randi() % roster.size()]
 		var angle: float = randf() * TAU
@@ -2050,17 +2210,18 @@ func _apply_global_buff(enemy: Node, player_count: int = 0) -> void:
 	var trait_health: float = float(fam_trait.get("health", 1.0))
 	var trait_shield: float = float(fam_trait.get("shield", 1.0))
 	enemy.speed *= float(fam_trait.get("speed", 1.0))
-	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_health * boss_cut * DURABILITY_CUT_2026_09_26 * early_cut * late_cut
+	var boost: float = 1.0 if enemy.is_boss else CREATURE_STAT_BOOST ## bkz. CREATURE_STAT_BOOST
+	enemy.max_health *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_health * boss_cut * DURABILITY_CUT_2026_09_26 * early_cut * late_cut * boost
 	enemy.health = enemy.max_health
-	enemy.contact_damage *= GLOBAL_DAMAGE_BUFF * boss_cut * dmg_taper
+	enemy.contact_damage *= GLOBAL_DAMAGE_BUFF * boss_cut * dmg_taper * boost * CREATURE_DAMAGE_CUT
 	if enemy.ranged_damage > 0.0:
-		enemy.ranged_damage *= GLOBAL_DAMAGE_BUFF * boss_cut * dmg_taper
+		enemy.ranged_damage *= GLOBAL_DAMAGE_BUFF * boss_cut * dmg_taper * boost * CREATURE_DAMAGE_CUT
 	# Kalkan zaten max_health * shield_ratio ile hesaplandı; oranı bozmamak
 	# için item_shield_max ve item_shield_hp'yi de aynı (savunma) çarpanla
 	# büyütüyoruz.
 	if enemy.item_shield_max > 0.0:
 		## Kalkan zaten (trait'siz) candan türetilmişti: GLOBAL çarpanlar + ailenin KENDİ kalkan çarpanı.
-		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_shield * boss_cut * DURABILITY_CUT_2026_09_26 * early_cut * late_cut
+		enemy.item_shield_max *= GLOBAL_DEFENSE_BUFF * multiplayer_defense_mult * health_shield_mult * trait_shield * boss_cut * DURABILITY_CUT_2026_09_26 * early_cut * late_cut * boost
 		enemy.item_shield_hp = enemy.item_shield_max
 		enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
 	enemy.health_changed.emit(enemy.health, enemy.max_health)

@@ -277,3 +277,57 @@ func test_drawing_runs_without_errors_for_all_layouts() -> void:
 		bar.call("refresh")
 		await get_tree().process_frame ## _draw bu karede çalışır (script hatası koşturucuda yakalanır)
 	_cleanup()
+
+
+# ---------------------------------------------------------------- R2 son hasar izi (2026-10-10)
+func test_trail_waits_then_slides_down_to_health() -> void:
+	var st: Vector2 = BarScript.trail_step(0.8, 0.5, BarScript.TRAIL_HOLD, 0.2)
+	assert(is_equal_approx(st.x, 0.8), "bekleme süresince iz yerinde kalmalı: %s" % str(st))
+	st = BarScript.trail_step(0.8, 0.5, 0.0, 0.1)
+	assert(st.x < 0.8 and st.x > 0.5, "bekleme bitince iz cana doğru inmeli: %s" % str(st))
+	st = BarScript.trail_step(0.52, 0.5, 0.0, 1.0)
+	assert(is_equal_approx(st.x, 0.5), "iz candan aşağı inmemeli: %s" % str(st))
+	st = BarScript.trail_step(0.4, 0.5, 0.3, 0.1)
+	assert(is_equal_approx(st.x, 0.5) and st.y == 0.0, "can izi geçince iz = can")
+
+
+func test_bar_keeps_a_trail_after_damage_and_it_catches_up() -> void:
+	_cleanup()
+	var bar: Control = _bar()
+	var b: FakeBoss = _boss("golem3", Vector2(100, 0), 100.0)
+	bar.call("refresh")
+	assert(is_equal_approx(float(bar.get("_trail")), 1.0))
+	b.health = 60.0
+	bar.call("refresh")
+	assert(is_equal_approx(float(bar.get("_trail")), 1.0), "hasardan hemen sonra iz eski canda kalmalı")
+	for i in range(40): ## ~2 sn: bekleme + iniş
+		bar.call("_process", 0.05)
+	assert(is_equal_approx(float(bar.get("_trail")), 0.6), "iz sonunda cana yetişmeli: %s" % str(bar.get("_trail")))
+	b.health = 90.0 ## iyileşme: iz hemen cana eşitlenir
+	bar.call("refresh")
+	assert(is_equal_approx(float(bar.get("_trail")), 0.9))
+	_cleanup()
+
+
+func test_trail_resets_when_another_boss_takes_the_bar() -> void:
+	_cleanup()
+	var bar: Control = _bar()
+	var a: FakeBoss = _boss("golem3", Vector2(100, 0), 100.0)
+	bar.call("refresh")
+	a.health = 20.0
+	bar.call("refresh")
+	a.free()
+	_boss("lich3", Vector2(150, 0), 70.0)
+	bar.call("refresh")
+	assert(is_equal_approx(float(bar.get("_trail")), 0.7), "yeni bossa önceki bossun izi taşınmamalı: %s" % str(bar.get("_trail")))
+	_cleanup()
+
+
+func test_medal_bar_parts_are_cached_and_fit_the_bar_size() -> void:
+	var parts: Dictionary = ArtScript._medal_parts(ArtScript.TOP_W)
+	assert(ArtScript._medal_parts(ArtScript.TOP_W) == parts, "sabit parçalar önbellekten gelmeli")
+	for key in ["base", "front"]:
+		assert(not (parts[key] as Array).is_empty())
+		for run: Array in parts[key]:
+			assert(run[0] >= 0 and run[0] + run[2] <= ArtScript.TOP_W and run[1] >= 0 and run[1] < ArtScript.TOP_H,
+					"%s parçası barın dışına taşıyor: %s" % [key, str(run)])

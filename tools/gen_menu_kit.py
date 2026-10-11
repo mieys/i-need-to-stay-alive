@@ -1278,28 +1278,29 @@ LEVELUP_TIER = {
 }
 LEVELUP_ROW_W, LEVELUP_ROW_H = 268, 50
 LEVELUP_BODY = hexc('#2b2a30')
+# 2026-10-11 "Yüzen Kapsül" (kullanıcı 4 sade prototipten seçti: "cozy, göz yormayan, köşeler azıcık oval"): kahve kontur,
+# 3 tonlu kenar, iç koyu halka ve ikon yuvası KALKTI -> tek ince tier kenarı + oval köşe (rr_mask 8 = 5/3/2/1/1 kesik) +
+# gövdenin 2 sanat px altında yumuşak gölge (doku 268x52; level_up_screen.gd ROW_ART_SIZE/ROW_SHADOW). İkon gövdenin üstünde.
+LEVELUP_ROW_RADIUS = 8
+LEVELUP_ROW_SHADOW = 2
 
 
 def levelup_row(t, w=LEVELUP_ROW_W, h=LEVELUP_ROW_H):
     f = LEVELUP_TIER.get(t, TIER_FIELD[t])
-    body = mix(LEVELUP_BODY, f['deep'], 0.35)
-    a = Art(w, h)
+    body = mix(hexc('#2c292f'), f['deep'], 0.25)
+    rim = mix(f['md'], body, 0.10)
+    a = Art(w, h + LEVELUP_ROW_SHADOW)
+    outer = rr_mask(w, h, LEVELUP_ROW_RADIUS)
+    inner = rr_mask(w - 2, h - 2, LEVELUP_ROW_RADIUS - 2)
     for y in range(h):
         for x in range(w):
-            if x in (0, w - 1) or y in (0, h - 1):
-                c = OUTL
-            elif x in (1, w - 2) or y in (1, h - 2):
-                c = f['hi'] if y == 1 else f['dk'] if y == h - 2 else f['md']
-            elif x in (2, w - 3) or y in (2, h - 3):
-                c = f['deep']
-            else:
-                c = body
-            a.set(x, y, c)
-    # ikon yuvası: (6,6)..(43,43) = 38x38 (114 px): kontur + açık halka + koyu tier içi
-    for y in range(6, 44):
-        for x in range(6, 44):
-            d = min(x - 6, 43 - x, y - 6, 43 - y)
-            a.set(x, y, OUTL if d == 0 else f['lt'] if d == 1 else f['dd'])
+            if outer[y][x]:
+                a.set(x, y + LEVELUP_ROW_SHADOW, (12, 10, 14, 110))
+    for y in range(h):
+        for x in range(w):
+            if outer[y][x]:
+                ins = 0 < x < w - 1 and 0 < y < h - 1 and inner[y - 1][x - 1]
+                a.set(x, y, body if ins else rim)
     return a
 
 
@@ -1472,7 +1473,7 @@ def build_game():
     save(tier_card_glow(), 'tier_card_glow.png')
     for t in range(1, 5):
         save(levelup_row(t), 'levelup_row_%d.png' % t)
-    save(tier_card_glow(LEVELUP_ROW_W, LEVELUP_ROW_H, 5, 0), 'levelup_row_glow.png')
+    save(tier_card_glow(LEVELUP_ROW_W, LEVELUP_ROW_H, 5, LEVELUP_ROW_RADIUS), 'levelup_row_glow.png')
     for st in ('normal', 'hover', 'pressed', 'disabled'):
         save(levelup_reroll(st), 'levelup_reroll_%s.png' % st)
     save(levelup_die(), 'levelup_die.png')

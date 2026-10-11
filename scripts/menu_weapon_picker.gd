@@ -108,7 +108,7 @@ func select(key: String, emit: bool = true) -> void:
 		_cat_label.add_theme_color_override("font_color", WeaponCatalog.category_color(key))
 	if _desc_label:
 		## "HASAR: 13 + %100 saldırı gücü · Ateş hızı ..." - kart metninin "HASAR:" başlığı kompakt satırda gereksiz.
-		_desc_label.text = str(WeaponCatalog.DESCRIPTIONS.get(key, "")).replace("HASAR: ", "Hasar ")
+		_desc_label.text = WeaponCatalog.trait_text(key) ## 2026-10-10: istatistik yerine silahın doğuştan özelliği
 	if emit:
 		picked.emit(key)
 
@@ -170,7 +170,7 @@ func _open_grid() -> void:
 		b.focus_mode = Control.FOCUS_ALL
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		b.tooltip_text = "%s (%s)\n%s" % [WeaponCatalog.display_name(key), WeaponCatalog.category_label(key),
-				str(WeaponCatalog.DESCRIPTIONS.get(key, ""))]
+				WeaponCatalog.trait_text(key)]
 		var style: StyleBox = MenuKit.style("slot_selected" if key == current else "slot_normal")
 		for st in ["normal", "hover", "pressed", "focus"]:
 			b.add_theme_stylebox_override(st, MenuKit.style("slot_hover") if st == "hover" and key != current else style)

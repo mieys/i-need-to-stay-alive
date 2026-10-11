@@ -43,7 +43,9 @@ extends Node2D
 ## boyutunu %20 arttır" - fire_rate/card_damage_bonus_ratio bkz.
 ## weapon_fisek.tscn, buradaki alan 55 -> 66 (+%20, patlama FX'i de
 ## fx_hit_big_burst.tscn'de aynı oranda büyütüldü).
-@export var splash_radius: float = 66.0
+## 2026-10-10 (kullanıcı: "havai fişeğin patlama alanını %20 arttır"): 66 -> 79,2. Patlama efekti de aynı oranda büyür (_spawn_impact: FX_BASE_RADIUS'a göre ölçek).
+@export var splash_radius: float = 79.2
+const FX_BASE_RADIUS := 66.0 ## fx_hit_big_burst.tscn bu yarıçapa göre boyutlu
 @export var impact_scene: PackedScene
 @export var impact_sounds: Array[AudioStream] = []
 @export var impact_sound_volume_db: float = -8.79
@@ -86,6 +88,7 @@ const ROTATION_CORRECTION := PI / 2.0
 ## Kullanıcı isteği (2026-09-24): "füze ateşlendiğinde arkasında partiküller bıraksın füze olduğu hissedilsin" - kıvılcım ->
 ## alev -> duman izi (pixel spritesheet, bkz. fx_particle_trail.gd "missile"). Patlayınca (_done) iz bırakmayı keser.
 const ParticleTrail := preload("res://scripts/fx_particle_trail.gd")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 
 func _ready() -> void:
@@ -167,6 +170,7 @@ func _explode() -> void:
 		if not e.has_method("take_damage"):
 			continue
 		if global_position.distance_to(e.global_position) <= splash_radius:
+			BalanceLogScript.tag(&"w:fisek")
 			e.take_damage(damage, is_crit, shield_pen_percent, true) ## patlama alanı
 			if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_projectile_hit"):
 				source_weapon.enchant_on_projectile_hit(self, e, damage, true)
@@ -187,6 +191,8 @@ func _spawn_impact() -> void:
 	var fx = impact_scene.instantiate()
 	get_tree().current_scene.add_child(fx)
 	fx.global_position = global_position
+	if fx is Node2D and splash_radius > 0.0:
+		(fx as Node2D).scale *= splash_radius / FX_BASE_RADIUS
 
 
 func _play_impact_sound() -> void:

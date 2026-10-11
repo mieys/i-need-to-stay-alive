@@ -220,3 +220,54 @@ func test_texture_matches_grid() -> void:
 				filled += 1
 	assert(filled == cells.size(), "Texture'daki dolu texel sayısı hücre sayısına eşit olmalı: %d / %d" % [filled, cells.size()])
 	_cleanup()
+
+
+## --- AĞAÇLAR (2026-10-09, "ağaçların arkasının da görünmesini istemiyorum" -> taç dahil tüm ağaç görüşü keser) ---
+
+func _trees_occluders(forest: TileMapLayer, trees: TileMapLayer) -> RefCounted:
+	var occ: RefCounted = VisionOccludersScript.new()
+	occ.build(forest, [trees])
+	return occ
+
+
+func test_tree_layer_cells_block_sight_like_a_wall() -> void:
+	var forest: TileMapLayer = _layer(WallLayerFactory.rect_cells(0, 0, 1, 0))
+	## 3x4 hücrelik "ağaç": taç + gövde
+	var trees: TileMapLayer = _layer(WallLayerFactory.rect_cells(9, 8, 11, 11))
+	var occ: RefCounted = _trees_occluders(forest, trees)
+	var front: Vector2 = _world(forest, Vector2(10.5, 14.5))
+	assert(not occ.is_ray_blocked(front, _world(forest, Vector2(10.5, 11.5))), "Ağacın KENDİ yüzü (gövde) engellendi")
+	assert(not occ.is_ray_blocked(front, _world(forest, Vector2(10.5, 8.5))), "Ağacın tacı engellendi (ağaç görünür kalmalı)")
+	assert(occ.is_ray_blocked(front, _world(forest, Vector2(10.5, 6.5))), "Ağacın ARKASI görünür kaldı")
+	assert(not occ.is_ray_blocked(front, _world(forest, Vector2(14.5, 14.5))), "Ağaçtan bağımsız yön engellendi")
+	## Ağaç katmanı verilmezse eskisi gibi: arkası görünür.
+	var plain: RefCounted = _occluders(forest)
+	assert(not plain.is_ray_blocked(front, _world(forest, Vector2(10.5, 6.5))), "Ağaçsız ızgara ağaç arkasını kesti")
+	_cleanup()
+
+
+func test_source_under_a_canopy_sees_out_of_it() -> void:
+	var forest: TileMapLayer = _layer(WallLayerFactory.rect_cells(0, 0, 1, 0))
+	var trees: TileMapLayer = _layer(WallLayerFactory.rect_cells(8, 8, 12, 11)) ## 5x4 taç
+	var occ: RefCounted = _trees_occluders(forest, trees)
+	var under: Vector2 = _world(forest, Vector2(10.5, 9.5)) ## taç hücrelerinin ortası
+	for target: Vector2 in [Vector2(10.5, 5.5), Vector2(10.5, 15.5), Vector2(4.5, 9.5), Vector2(16.5, 9.5), Vector2(14.5, 13.5)]:
+		assert(not occ.is_ray_blocked(under, _world(forest, target)), "Tacın altındaki kaynak dışarıyı göremedi: %s" % target)
+	## Dışarıdaki BAŞKA bir ağaç yine keser.
+	var other: TileMapLayer = _layer(WallLayerFactory.rect_cells(10, 3, 10, 4))
+	var occ2: RefCounted = VisionOccludersScript.new()
+	occ2.build(forest, [trees, other])
+	assert(occ2.is_ray_blocked(under, _world(forest, Vector2(10.5, 0.5))), "Kendi tacından çıkınca ikinci ağacın arkası görünür kaldı")
+	assert(not occ2.is_ray_blocked(under, _world(forest, Vector2(10.5, 3.5))), "İkinci ağacın kendi yüzü engellendi")
+	_cleanup()
+
+
+func test_cliff_wall_rule_unchanged_for_sources_outside() -> void:
+	## Kaynak engelin dışındayken kural eskisi gibi (kalın duvar tamamen görünür, ardı gizli) - ağaç kuralı duvarı bozmadı.
+	var forest: TileMapLayer = _layer(WallLayerFactory.rect_cells(0, 10, 20, 12))
+	var trees: TileMapLayer = _layer([Vector2i(40, 40)])
+	var occ: RefCounted = _trees_occluders(forest, trees)
+	var source: Vector2 = _world(forest, Vector2(10.5, 14.5))
+	assert(not occ.is_ray_blocked(source, _world(forest, Vector2(10.5, 10.5))), "Kalın duvarın yüzü engellendi")
+	assert(occ.is_ray_blocked(source, _world(forest, Vector2(10.5, 8.5))), "Kalın duvarın ardı görünür kaldı")
+	_cleanup()

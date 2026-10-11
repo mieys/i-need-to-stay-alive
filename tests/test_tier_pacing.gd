@@ -117,7 +117,7 @@ func test_tier_three_and_later_creature_damage_is_ten_percent_lower() -> void:
 		assert(is_equal_approx(SpawnerScript.tier_damage_mult(t, true), 0.9), "Kademe %d bossu x0.9" % t)
 	assert(SpawnerScript.tier_damage_mult(0, false) == 1.0, "Kademe 0 (bilinmeyen) değişmez")
 	var sp: Node = _spawner()
-	var buff: float = SpawnerScript.GLOBAL_DAMAGE_BUFF
+	var buff: float = SpawnerScript.GLOBAL_DAMAGE_BUFF * SpawnerScript.CREATURE_DAMAGE_CUT ## 2026-10-11 x0,8
 	for pair in [[2, 1.0], [3, 0.85 * 0.9], [5, 0.95 * 0.9], [6, 0.9], [10, 0.9], [16, 0.9]]:
 		var rat: Node = RatScene.instantiate()
 		add_child(rat)
@@ -126,8 +126,10 @@ func test_tier_three_and_later_creature_damage_is_ten_percent_lower() -> void:
 		rat.contact_damage = 10.0
 		rat.ranged_damage = 4.0
 		sp._apply_global_buff(rat)
-		assert(absf(float(rat.contact_damage) - 10.0 * buff * float(pair[1])) < 0.001, "K%d temas hasarı: %s" % [pair[0], rat.contact_damage])
-		assert(absf(float(rat.ranged_damage) - 4.0 * buff * float(pair[1])) < 0.001, "K%d menzilli hasarı: %s" % [pair[0], rat.ranged_damage])
+		## 2026-10-10: sıradan yaratıkların hasarı ayrıca x1,5 (CREATURE_STAT_BOOST).
+		var boost: float = SpawnerScript.CREATURE_STAT_BOOST
+		assert(absf(float(rat.contact_damage) - 10.0 * buff * float(pair[1]) * boost) < 0.001, "K%d temas hasarı: %s" % [pair[0], rat.contact_damage])
+		assert(absf(float(rat.ranged_damage) - 4.0 * buff * float(pair[1]) * boost) < 0.001, "K%d menzilli hasarı: %s" % [pair[0], rat.ranged_damage])
 	_cleanup()
 
 
@@ -158,18 +160,20 @@ func test_tier_three_and_later_durability_is_ten_percent_lower_and_rewards_uncha
 
 func test_spawn_ramp_is_slower_and_early_game_is_not_harder() -> void:
 	var sp: Node = _spawner()
-	GameManager.game_time = 50.0
+	## Kademe ortası zamanları kademe SÜRESİNE göre (2026-10-10: 100 -> 150 sn oldu; eğri kademe başına aynı kalsın diye difficulty_ramp x100/150 ölçeklendi).
+	var td: float = float(sp.tier_duration)
+	GameManager.game_time = 0.5 * td
 	assert(float(sp.call("_current_interval")) >= 0.57 - 0.001, "Kademe 1 doğuş aralığı eskisinden SIK olmamalı: %s" % sp.call("_current_interval"))
-	GameManager.game_time = 150.0
+	GameManager.game_time = 1.5 * td
 	assert(float(sp.call("_current_interval")) >= 0.50 - 0.001, "Kademe 2 doğuş aralığı eskisinden SIK olmamalı: %s" % sp.call("_current_interval"))
-	GameManager.game_time = 250.0
+	GameManager.game_time = 2.5 * td
 	var i3: float = float(sp.call("_current_interval"))
-	GameManager.game_time = 750.0
+	GameManager.game_time = 7.5 * td
 	var i8: float = float(sp.call("_current_interval"))
 	assert(i3 > 0.47 and i3 < 0.53, "K3'te ~0.50 sn: %s" % i3)
 	assert(i8 > 0.27 and i8 < 0.33, "K8'de ~0.30 sn (eskiden 0.11): %s" % i8)
 	assert(i3 / i8 < 1.8, "K3 -> K8 doğuş artışı x1.8'i aşmamalı (eskiden x3.9): x%.2f" % (i3 / i8))
-	GameManager.game_time = 2000.0
+	GameManager.game_time = 20.0 * td
 	assert(absf(float(sp.call("_current_interval")) - sp.min_interval / 1.5) < 0.0001, "tavan (min_interval/1.5) hâlâ var")
 	_cleanup()
 
@@ -181,17 +185,18 @@ func test_no_cliff_between_tiers_measured_with_the_real_spawn_path() -> void:
 	for tier in range(1, 9):
 		ehp[tier] = _avg_ehp(sp, tier)
 		r[tier] = float(ehp[tier]) / float(sp.call("_current_interval")) ## saniyede öldürülmesi gereken etkin can
-	## Kademe 1-2 BİLEREK kolay kaldı: ölçümdeki değerler (K1 ~5, K2 ~23) değişmedi.
-	assert(absf(float(ehp[1]) - 5.0) < 1.5, "Kademe 1 etkin canı değişmemeli: %.1f" % ehp[1])
-	assert(absf(float(ehp[2]) - 23.0) < 3.0, "Kademe 2 etkin canı değişmemeli: %.1f" % ehp[2])
+	## Kademe 1-2 BİLEREK kolay kaldı: ölçümdeki değerler (K1 ~5, K2 ~23) değişmedi. 2026-10-10: sıradan yaratık canı/kalkanı x1,5 (CREATURE_STAT_BOOST) -> mutlak değerler x1,5, ORANLAR aynı.
+	var boost: float = SpawnerScript.CREATURE_STAT_BOOST
+	assert(absf(float(ehp[1]) - 5.0 * boost) < 1.5 * boost, "Kademe 1 etkin canı (x1,5) değişmemeli: %.1f" % ehp[1])
+	assert(absf(float(ehp[2]) - 23.0 * boost) < 3.0 * boost, "Kademe 2 etkin canı (x1,5) değişmemeli: %.1f" % ehp[2])
 	## Kademe 2 -> 3 sıçraması: eskiden R x5.3 (46 -> 242), şimdi ~x3.
 	assert(float(r[3]) / float(r[2]) < 3.6, "K2 -> K3 sıçraması x3.6'yı aşmamalı: x%.2f" % (float(r[3]) / float(r[2])))
-	assert(float(r[3]) < 170.0, "Kademe 3 R'si eskiden 242'ydi, ~130 olmalı: %.0f" % r[3])
+	assert(float(r[3]) < 170.0 * boost, "Kademe 3 R'si eskiden 242'ydi, ~130 x1,5 olmalı: %.0f" % r[3])
 	## Sonraki her adım sınırlı (eskiden K7 -> K8 x2.15 ve genel x1.4-2.3; şimdi en çok ~x2.4 - roster değişiminin getirdiği K5).
 	for tier in range(4, 9):
 		var step: float = float(r[tier]) / float(r[tier - 1])
 		assert(step < 2.6, "K%d -> K%d R artışı x2.6'yı aşmamalı: x%.2f" % [tier - 1, tier, step])
-	assert(float(r[8]) < 2600.0, "Kademe 8 R'si eskiden 5745'ti: %.0f" % r[8])
+	assert(float(r[8]) < 2600.0 * boost, "Kademe 8 R'si eskiden 5745'ti: %.0f" % r[8])
 	_cleanup()
 
 
@@ -226,4 +231,27 @@ func test_first_bosses_are_proportionate_and_formula_is_single_sourced() -> void
 	var unpaced_base: float = (10.0 + 27.0) * SpawnerScript.BOSS_HEALTH_MULT
 	var expected_xp: float = round(unpaced_base * SpawnerScript.GLOBAL_DEFENSE_BUFF * SpawnerScript.BOSS_HEALTH_SHIELD_MULT / SpawnerScript.DURABILITY_CUT_2026_09_25 * Enemy.BOSS_XP_HEALTH_RATIO)
 	assert(absf(float(host_boss.xp_value) - expected_xp) <= 1.0, "boss XP ödülü aynı kalmalı: %s (beklenen %s)" % [host_boss.xp_value, expected_xp])
+	_cleanup()
+
+
+const MerchantShopScript: GDScript = preload("res://scripts/merchant_shop_screen.gd")
+
+
+## 2026-10-10 toplu istek: kademeler %50 uzun (tier_duration 100 -> 150), yaratık tavanı 100 (+20/oyuncu), sıradan yaratık can/kalkan/hasar x1,5. Kademe süresini KOPYALAYAN yerler birlikte değişmeli
+## (yoksa kademe başına zorluk eğrisi kayar) - bu test hepsini tek yerden sınar.
+func test_tier_duration_curves_player_cap_and_stat_boost_stay_in_sync() -> void:
+	var sp: Node = _spawner()
+	var td: float = float(sp.tier_duration)
+	assert(is_equal_approx(td, 150.0), "kademe süresi 150 sn (eskiden 100): %s" % td)
+	assert(is_equal_approx(float(MerchantShopScript.MERCHANT_PRICE_TIER_DURATION), td), "seyyar satıcı fiyat kademesi spawner'la AYNI süre: %s" % MerchantShopScript.MERCHANT_PRICE_TIER_DURATION)
+	assert(is_equal_approx(float(Enemy.TIME_HEALTH_GROWTH_START), 2.0 * td), "zamana bağlı can büyümesi Kademe 3'ün başında (2 x kademe süresi) başlar: %s" % Enemy.TIME_HEALTH_GROWTH_START)
+	## Saniyeye bağlı eğriler KADEME BAŞINA eskisiyle aynı: (eğim x kademe süresi) sabit kalmalı (eski kademe süresi 100 sn).
+	assert(absf(float(sp.difficulty_ramp) * td - 0.0006 * 100.0) < 0.0001, "doğuş sıklığı eğrisi kademe başına aynı: %s" % (float(sp.difficulty_ramp) * td))
+	assert(absf(float(Enemy.TIME_HEALTH_GROWTH_PER_MIN) * td - 0.01 * 100.0) < 0.001, "zamana bağlı can büyümesi kademe başına aynı: %s" % (float(Enemy.TIME_HEALTH_GROWTH_PER_MIN) * td))
+	assert(absf(float(Enemy.DIFFICULTY_HEALTH_RAMP) * td - 0.00017 * 100.0) < 0.0001, "can zorluk eğrisi kademe başına aynı: %s" % (float(Enemy.DIFFICULTY_HEALTH_RAMP) * td))
+	assert(absf(float(Enemy.DIFFICULTY_DAMAGE_RAMP) * td - 0.00012 * 100.0) < 0.0001, "hasar zorluk eğrisi kademe başına aynı: %s" % (float(Enemy.DIFFICULTY_DAMAGE_RAMP) * td))
+	## Yaratık tavanı: 1 oyuncu 150, her ek oyuncu +30.
+	assert(int(sp.max_concurrent_enemies) == 150 and int(SpawnerScript.ENEMY_CAP_PER_EXTRA_PLAYER) == 30, "tavan 150, ek oyuncu başına +30")
+	assert(int(sp.player_enemy_cap(1)) == 150 and int(sp.player_enemy_cap(2)) == 180 and int(sp.player_enemy_cap(5)) == 270, "1/2/5 oyuncu: 150/180/270")
+	assert(is_equal_approx(SpawnerScript.CREATURE_STAT_BOOST, 1.5), "sıradan yaratık can/kalkan/hasar x1,5")
 	_cleanup()

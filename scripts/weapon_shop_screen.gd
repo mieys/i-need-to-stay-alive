@@ -616,6 +616,8 @@ func _entry_block(entry: Dictionary) -> String:
 	var key: String = str(entry.get("key", ""))
 	match str(entry.get("type", "")):
 		"weapon":
+			if not is_instance_valid(_player):
+				return "" ## ekran kapanırken oyuncu silinmiş olabilir (son yenileme karesi) - silinmiş nesne tipli parametreye geçemez
 			return Logic.weapon_block_reason(_player, key)
 		"shield":
 			return Logic.shield_block_reason(key)

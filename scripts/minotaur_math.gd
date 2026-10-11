@@ -32,14 +32,20 @@ const AIM_LOCK_AT := 0.4 ## bu ana kadar hedefi izler, sonra yön KİLİTLENİR 
 const STAMPEDE_STOP_TIME := 1.25 ## koşuda "durup kazıma" daha uzun (hızlanmadan önceki gerilim)
 
 # ---------------------------------------------------------------- boynuz hücumu
-const LANE_WIDTH := 76.0 ## şerit genişliği (dünya birimi) ~ boss gövdesi; isabet yarıçapı = LANE_WIDTH/2 + oyuncu yarıçapı
+const LANE_WIDTH := 86.0 ## şerit genişliği (dünya birimi); isabet = oyuncunun AYAĞI şeridin yarısı + HIT_MARGIN içinde. 2026-10-10: 76 -> 86 (kullanıcı: "genişliğini azıcık arttır")
+## Boynuz hücumu başlarken / isabet edince HER peer'in kamerası sarsılır, uzaklıktan BAĞIMSIZ (2026-10-10, kullanıcı: "boynuz darbesi yaptığında ekran sallansın, herkeste").
+## enemy.gd _apply_minotaur_pose (POSE_CHARGE) ve "minotaur_impact" işler - ikisi de zaten herkese yayınlanıyor.
+const CHARGE_SHAKE := 0.32
+const IMPACT_SHAKE := 0.5
 const HORN_SPEED := 640.0 ## px/sn (oyuncu 252)
 const HORN_START_SPEED := 180.0
 const HORN_EASE_TIME := 0.14 ## START_SPEED -> SPEED geçiş süresi
 const HORN_OVERSHOOT := 170.0 ## hedefin ÖTESİNE bu kadar daha koşar
 const HORN_MIN_LEN := 360.0
 const HORN_MAX_LEN := 620.0
-const HORN_HOMING_DEG := 45.0 ## derece/sn kıvrılma, sadece ilk HORN_HOMING_TIME sn
+## 2026-10-10 (kullanıcı: "boynuz vuruşu alanın dışından bile vurabiliyor, sıyrılamıyoruz"): yön kilitlendikten (uyarı şeridi çizildikten) sonra hücum ARTIK KIVRILMAZ -
+## eskiden ilk 0,35 sn 45 derece/sn dönüp gösterilen şeridin dışına sapıyordu. Hücum = tam olarak çizilen şerit.
+const HORN_HOMING_DEG := 0.0 ## derece/sn kıvrılma, sadece ilk HORN_HOMING_TIME sn
 const HORN_HOMING_TIME := 0.35
 
 # ---------------------------------------------------------------- boğa koşusu
@@ -58,7 +64,13 @@ const RECOVER_WALL_TIME := 1.7 ## duvara çarpınca sersemleme (boss açıkta)
 const ABORT_GAP_MSEC := 400 ## yetenek tiki bu kadar sessiz kalırsa (donma/korku...) hücum iptal
 
 # ---------------------------------------------------------------- isabet / savrulma
-const PLAYER_HIT_RADIUS := 11.4 ## player.gd PLAYER_BODY_RADIUS
+const PLAYER_HIT_RADIUS := 11.4 ## player.gd PLAYER_BODY_RADIUS (artık isabette KULLANILMIYOR, bkz. HIT_MARGIN)
+## 2026-10-10: isabet = oyuncunun AYAK noktası (yerde çizilen şeritle aynı düzlem; kök gövde ortasıdır) şeridin içinde mi (+ küçük pay). Eskiden kök + tüm gövde yarıçapı
+## (11,4) sayılıyordu: şeridin kenarından ~12 px dışarıda (ve yatay şeritte ayak/kök farkıyla daha da dışarıda) duran oyuncu vuruluyordu.
+const HIT_MARGIN := 3.0
+const FEET_OFFSET := 15.0 * EntityScale.BODY_REL ## oyuncu kökünden ayağa (EntityScale.BODY_REL ile ölçekli; hide_brush.gd FEET_OFFSET ile aynı)
+## Boynuz hücumu (boynuz hücumu + boğa koşusu) isabet hasarı = temas hasarı x bu (kullanıcı 2026-10-10: "hasarını %30 arttır"; normal temas vuruşu aynı).
+const HORN_DAMAGE_MULT := 1.3
 const FLING_DISTANCE := 190.0 ## savrulma mesafesi (px); player.gd BOSS_FLING_MAX_SPEED ile ~196 px'e kadar çıkabilir
 const FLING_SIDE_BIAS := 0.9 ## savrulma yönü = hücum yönü + yan bileşen (şeridin hangi tarafındaysa o yana)
 const WALL_MARGIN := 22.0 ## boss merkezi duvar karosuna bu kadar yaklaşmadan durur (gövde yarıçapı ~32)

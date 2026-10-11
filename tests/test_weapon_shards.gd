@@ -43,15 +43,15 @@ func _frames(n: int) -> void:
 
 func test_drop_count_rules_boss_five_elite_one_normal_half_percent() -> void:
 	_begin()
-	assert(Enemy.WEAPON_SHARD_CHANCE == 0.005, "sıradan yaratık %0.5")
+	assert(Enemy.WEAPON_SHARD_CHANCE == 0.01, "sıradan yaratık %1")
 	assert(Enemy.weapon_shard_count(true, false, 0.999) == 5, "boss: şansa bakmadan 5")
 	assert(Enemy.weapon_shard_count(true, true, 0.999) == 5, "elit boss yine 5 (toplanmaz)")
 	assert(Enemy.weapon_shard_count(false, true, 0.999) == 1, "elit: şansa bakmadan 1")
-	assert(Enemy.weapon_shard_count(false, false, 0.004) == 1, "zar şansın altında: 1")
-	assert(Enemy.weapon_shard_count(false, false, 0.005) == 1, "tam sınırda: 1")
-	assert(Enemy.weapon_shard_count(false, false, 0.0051) == 0, "zar şansın üstünde: 0")
-	assert(Enemy.weapon_shard_count(false, false, 0.0099, 2.0) == 1 and Enemy.weapon_shard_count(false, false, 0.0101, 2.0) == 0,
-		"şans çarpanı (luck) %0.5'i büyütür")
+	assert(Enemy.weapon_shard_count(false, false, 0.009) == 1, "zar şansın altında: 1")
+	assert(Enemy.weapon_shard_count(false, false, 0.01) == 1, "tam sınırda: 1")
+	assert(Enemy.weapon_shard_count(false, false, 0.0101) == 0, "zar şansın üstünde: 0")
+	assert(Enemy.weapon_shard_count(false, false, 0.0199, 2.0) == 1 and Enemy.weapon_shard_count(false, false, 0.0201, 2.0) == 0,
+		"şans çarpanı (luck) %1'i büyütür")
 	_end()
 
 
@@ -62,7 +62,7 @@ func test_normal_creature_rate_is_about_half_a_percent() -> void:
 	var hits: int = 0
 	for i in range(200000):
 		hits += Enemy.weapon_shard_count(false, false, rng.randf())
-	assert(hits >= 800 and hits <= 1200, "200.000 ölümde ~1000 parçacık beklenir, bulunan: %d" % hits)
+	assert(hits >= 1800 and hits <= 2200, "200.000 ölümde ~2000 parçacık beklenir (2026-10-11 %1), bulunan: %d" % hits)
 	_end()
 
 

@@ -36,6 +36,12 @@ const COLOR_REMOTE_PLAYER: Color = Color("#2a58a8")
 const COLOR_ENEMY: Color = Color("#b8321e")
 const COLOR_BOSS: Color = Color("#d8661a")
 const COLOR_MERCHANT: Color = Color("#d6a23a")
+## 2026-10-10 (kullanıcı: "minimapte silah satıcısının konumu gözükmüyor ve bazı şeyler hiç belirgin değil, dostları bulmak zor"): demirci kapısı işareti (örs,
+## daire dışındaysa kenarda yön göstergesi) + dostlar büyük portre, parlak turkuaz halka + koyu kontur; dairenin dışındaki dosta kenarda yön oku.
+const COLOR_SMITH: Color = Color("#8e98a8")
+const COLOR_SMITH_DARK: Color = Color("#2a2d33")
+const COLOR_ALLY_RING: Color = Color("#5fe0ff")
+const COLOR_OUTLINE: Color = Color("#1a120a")
 ## Ölü / yerde yatan oyuncu işareti (2026-10-07, bkz. _process): kararmış portre, koyu kırmızı halka, parlak kırmızı çarpı.
 const COLOR_DEAD: Color = Color("#a01818")
 const COLOR_DEAD_X: Color = Color("#ff4a3a")
@@ -288,8 +294,16 @@ func _draw() -> void:
 			ppos = center + offset
 		var is_local: bool = dot["is_local"] as bool
 		var is_dead_dot: bool = bool(dot.get("dead", false))
-		var pcol: Color = COLOR_DEAD if is_dead_dot else (COLOR_PLAYER if is_local else COLOR_REMOTE_PLAYER)
-		var psize: float = 5.0 if is_local else 4.0
+		var clamped: bool = (_world_to_map(dot["pos"] as Vector2) - center).length() > RADIUS - 5.0
+		var pcol: Color = COLOR_DEAD if is_dead_dot else (COLOR_PLAYER if is_local else COLOR_ALLY_RING)
+		var psize: float = 5.0 if is_local else 6.0
+		if not is_local and not is_dead_dot and clamped:
+			## daire dışındaki dost: kenarda dışa bakan ok (nerede olduğu bulunsun)
+			var dir: Vector2 = (ppos - center).normalized()
+			var tip: Vector2 = ppos + dir * 9.0
+			var side: Vector2 = dir.orthogonal() * 5.0
+			draw_colored_polygon(PackedVector2Array([tip + dir * 1.5, ppos + dir * 2.0 + side * 1.3, ppos + dir * 2.0 - side * 1.3]), COLOR_OUTLINE)
+			draw_colored_polygon(PackedVector2Array([tip, ppos + dir * 3.0 + side, ppos + dir * 3.0 - side]), COLOR_ALLY_RING)
 		## #29 DÜZELTME (kullanıcı bildirimi: "Minimap'te karakter portreleri
 		## (kafalar) görünsün"): düz renkli noktalar yerine, portre bulunabiliyorsa
 		## küçük bir kare ikon olarak karakterin kendi portresi çiziliyor,
@@ -300,8 +314,9 @@ func _draw() -> void:
 			var icon_radius: float = psize + 2.0
 			var icon_size: float = icon_radius * 2.0
 			var rect: Rect2 = Rect2(ppos - Vector2(icon_radius, icon_radius), Vector2(icon_size, icon_size))
+			draw_circle(ppos, icon_radius + 2.5, COLOR_OUTLINE) ## koyu taban (yeşil haritada okunsun)
 			draw_texture_rect(portrait, rect, false, DEAD_PORTRAIT_TINT if is_dead_dot else Color.WHITE)
-			draw_circle(ppos, icon_radius, pcol, false, 1.5)
+			draw_circle(ppos, icon_radius + 1.0, pcol, false, 2.0)
 		else:
 			draw_circle(ppos, psize, pcol)
 			# Small border for visibility
@@ -315,6 +330,23 @@ func _draw() -> void:
 				draw_line(ppos + Vector2(-xr, -xr * sgn2), ppos + Vector2(xr, xr * sgn2), COLOR_DEAD_X, 2.0)
 			var pulse: float = fposmod(float(Time.get_ticks_msec()) / 1000.0, 1.4) / 1.4
 			draw_circle(ppos, psize + 2.0 + pulse * 6.0, Color(COLOR_DEAD.r, COLOR_DEAD.g, COLOR_DEAD.b, 0.75 * (1.0 - pulse)), false, 1.5)
+
+	# --- Demirci (silah satıcısı) kapısı: örs simgesi, uzaktaysa kenarda ---
+	var smith: Vector2 = _smith_pos()
+	if smith != Vector2.ZERO:
+		var spos: Vector2 = _world_to_map(smith)
+		var soff: Vector2 = spos - center
+		if soff.length() > RADIUS - 7.0:
+			spos = center + soff.normalized() * (RADIUS - 7.0)
+		spos = spos.round()
+		draw_circle(spos, 7.0, COLOR_OUTLINE)
+		draw_circle(spos, 6.0, Color("#d8c39a"))
+		## örs: üst tabla + gövde + taban (piksel)
+		draw_rect(Rect2(spos + Vector2(-4, -3), Vector2(8, 2)), COLOR_SMITH_DARK)
+		draw_rect(Rect2(spos + Vector2(-5, -3), Vector2(2, 1)), COLOR_SMITH_DARK)
+		draw_rect(Rect2(spos + Vector2(-1, -1), Vector2(3, 2)), COLOR_SMITH_DARK)
+		draw_rect(Rect2(spos + Vector2(-3, 1), Vector2(7, 2)), COLOR_SMITH_DARK)
+		draw_rect(Rect2(spos + Vector2(-3, -3), Vector2(6, 1)), COLOR_SMITH)
 
 	# --- Seyyar satıcı işareti ---
 	if _merchant_marker_active:
@@ -352,6 +384,18 @@ func _draw() -> void:
 
 	# --- Piksel ahşap halka çerçeve (kenarlık) ---
 	draw_texture(RING_TEXTURE, center - Vector2(RING_HALF, RING_HALF))
+
+## Demircinin kapısının önü (dünya; weapon_shop.gd get_exterior_anchor_pos) - sahnede yoksa Vector2.ZERO. Düğüm bir kez aranır.
+var _smith_node: Node = null
+func _smith_pos() -> Vector2:
+	if _smith_node == null or not is_instance_valid(_smith_node):
+		var scene: Node = get_tree().current_scene if is_inside_tree() else null
+		_smith_node = scene.get_node_or_null("WeaponShop") if scene != null else null
+		if _smith_node == null or not _smith_node.has_method("get_exterior_anchor_pos"):
+			_smith_node = null
+			return Vector2.ZERO
+	return _smith_node.call("get_exterior_anchor_pos")
+
 
 ## Oyuncu merkezli: görünüm merkezine göre dünya -> minimap. Daire dışına düşen noktayı çağıran taraf kenara kıstırır/eler.
 func _world_to_map(world: Vector2) -> Vector2:

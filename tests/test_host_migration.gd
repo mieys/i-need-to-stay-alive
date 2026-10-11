@@ -166,3 +166,86 @@ func test_handover_travels_as_a_plain_dictionary_between_peers() -> void:
 	var round_trip = bytes_to_var(var_to_bytes(packed))
 	assert(round_trip is Dictionary and (round_trip["spawner"] as Dictionary).has("boss_tiers"), "paket serileşir")
 	a.free()
+
+
+# ------------------------------------------------------------------ duraklı ağaçta Epic + devir sırasında donuk dünya (2026-10-10)
+
+## KÖK NEDEN (kullanıcı: "host ayrılınca host değişimi düzgün çalışmıyor"): Epic eklentisinin EOSGRuntime autoload'ı IEOS.tick()'i _process'te çağırır ve varsayılan olarak
+## duraklamada durur; devir sırasında ağaç duraklı olduğundan istemcinin Epic bağlantısı yeni host'a HİÇ kurulamıyordu (3 süreçli denetimde: oyuncular bölünüp ayrı oyun açtı).
+func test_eos_runtime_keeps_ticking_while_the_tree_is_paused() -> void:
+	var runtime: Node = get_node_or_null("/root/EOSGRuntime")
+	if runtime == null:
+		return ## Epic eklentisi yüklü değil (örn. bu platformda): kontrol edilecek bir şey yok
+	assert(runtime.process_mode == Node.PROCESS_MODE_ALWAYS, "EOSGRuntime duraklamada da işlemeli: %d" % runtime.process_mode)
+	get_tree().paused = true
+	var can: bool = runtime.can_process()
+	get_tree().paused = false
+	assert(can, "ağaç duraklıyken EOS tik'i çalışabilmeli (can_process)")
+	## idempotent: ikinci çağrı da durumu bozmaz
+	EosOnline.call("_keep_eos_ticking")
+	assert(runtime.process_mode == Node.PROCESS_MODE_ALWAYS)
+
+
+func _fake_migration(status: String) -> Dictionary:
+	var now: int = Time.get_ticks_msec()
+	return {"cands": [{"uid": "x", "name": "X", "addr": "127.0.0.1", "eos": "", "char": 1}, {"uid": "y", "name": "Y", "addr": "127.0.0.1", "eos": "", "char": 1}],
+		"idx": 0, "t0": now, "attempt_start": now, "status": status, "last_try": now, "failed": false, "online": false}
+
+
+func test_the_world_stays_paused_while_a_migration_is_running_even_if_a_screen_unpauses_it() -> void:
+	_begin()
+	get_tree().paused = false
+	NetworkManager._migration = _fake_migration("connecting")
+	NetworkManager._process_migration()
+	assert(get_tree().paused, "devir sürerken (bağlanma) dünya geri duraklatılır")
+	## bir ekran kapanırken ağacı açarsa bir sonraki karede yine donar
+	get_tree().paused = false
+	NetworkManager._process_migration()
+	assert(get_tree().paused, "ekran ağacı açsa da donuk kalır")
+	## yeni host kuran taraf ("hosting") kendi duraklamasını yönetir: zorla duraklatılmaz
+	get_tree().paused = false
+	NetworkManager._migration = _fake_migration("hosting")
+	NetworkManager._process_migration()
+	assert(not get_tree().paused, "hosting durumunda zorla duraklatma yok")
+	## devir yokken hiçbir şeye dokunmaz
+	NetworkManager._migration = {}
+	NetworkManager._process_migration()
+	assert(not get_tree().paused, "devir yokken ağaç duraklatılmaz")
+	get_tree().paused = false
+	_end()
+
+
+## Host internet odasının penceresini kapatırsa (X / Alt+F4) oda kapatılır (istemciler 12 sn beklemeden devri başlatır) - ama SADECE sürmekte olan internet odasının host'unda;
+## LAN, istemci, lobi ve tekli oyunda hiçbir şey değişmez (yanlış tetiklenirse oyun kapanmaz ya da menüden çıkış gibi davranır). Tam akış: run_audit.ps1 -Mode migration -Kill winclose -Net epic.
+func test_closing_the_window_only_closes_the_room_for_a_host_of_a_running_online_game() -> void:
+	var saved := {"active": NetworkManager.is_multiplayer_active, "host": NetworkManager.is_host, "online": NetworkManager.is_online_session,
+		"in_game": NetworkManager._is_game_in_progress, "peer": NetworkManager._peer}
+	var fake_peer := OfflineMultiplayerPeer.new()
+	NetworkManager._peer = fake_peer
+	NetworkManager.is_multiplayer_active = true
+	NetworkManager.is_host = true
+	NetworkManager.is_online_session = true
+	NetworkManager._is_game_in_progress = true
+	assert(NetworkManager._hosting_online_game(), "internet odası host'u, oyun sürüyor: kapatılırken oda kapatılır")
+	NetworkManager.is_online_session = false
+	assert(not NetworkManager._hosting_online_game(), "LAN host'u: ENet çıkışta kendisi düzgün kapatır, dokunulmaz")
+	NetworkManager.is_online_session = true
+	NetworkManager.is_host = false
+	assert(not NetworkManager._hosting_online_game(), "istemci: dokunulmaz")
+	NetworkManager.is_host = true
+	NetworkManager._is_game_in_progress = false
+	assert(not NetworkManager._hosting_online_game(), "lobi (oyun başlamadı): dokunulmaz")
+	NetworkManager._is_game_in_progress = true
+	NetworkManager.is_multiplayer_active = false
+	assert(not NetworkManager._hosting_online_game(), "tekli oyun: dokunulmaz")
+	NetworkManager.is_multiplayer_active = true
+	NetworkManager._peer = null
+	assert(not NetworkManager._hosting_online_game(), "bağlantı yok: dokunulmaz")
+	## Koşullar tutmuyorsa tetikleyici çıkışı DEVRALMAZ (auto_accept_quit açık kalır, tekrar girişi engelleyen bayrak kurulmaz).
+	NetworkManager._graceful_quit_if_hosting()
+	assert(get_tree().auto_accept_quit and not NetworkManager._closing_for_quit, "koşullar tutmazken çıkış devralınmaz")
+	NetworkManager.is_multiplayer_active = saved["active"]
+	NetworkManager.is_host = saved["host"]
+	NetworkManager.is_online_session = saved["online"]
+	NetworkManager._is_game_in_progress = saved["in_game"]
+	NetworkManager._peer = saved["peer"]

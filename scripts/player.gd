@@ -1,6 +1,10 @@
 extends CharacterBody2D
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const WallSlideScript := preload("res://scripts/wall_slide.gd")
+const HideBrushScript := preload("res://scripts/hide_brush.gd")
+const DepthOccludersFeet := preload("res://scripts/depth_occluders.gd")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const DeathBlood := preload("res://scripts/death_blood.gd")
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
@@ -62,11 +66,11 @@ const SKILL_TIMING := {
 	## kendisini erken bitirip cooldown'a sokuyor.
 	## Kullanıcı isteği: bekleme süresi 120sn'ye düşürüldü (eskiden 180sn).
 	## 2026-09-25 slot değişimi: Koruma Baloncuğu artık R/skill3 (bkz. SKILL3_TIMING[11]) - bu kayıt zararsız duruyor.
-	11: {"duration": 60.0, "cooldown": 120.0},
+	11: {"duration": 60.0, "cooldown": 108.0}, ## 2026-10-10: Şovalye bekleme sürelerinin hepsi %10 kısaldı (120 -> 108); asıl kayıt SKILL3_TIMING[11]
 	## Şovalye Adam YENİ Q - Kalkan Yenileme + Kışkırtma (id 45, kullanıcı isteği 2026-09-25: "E si yeni Q olacak").
 	## Eskiden E/skill2 id 10'du (Melek/Oakley ile paylaşılan id) - Q/skill tablosunda karışmasın diye Şovalye'ye özel
 	## yeni id açıldı. Sayılar eski E ile AYNI: 6sn kalkan yenileme, 25sn bekleme (bkz. SOVALYE_KALKAN_YENILEME_COOLDOWN).
-	45: {"duration": 6.0, "cooldown": 25.0},
+	45: {"duration": 6.0, "cooldown": 22.5}, ## 2026-10-10 kullanıcı: "Şovalye adamın yeteneklerinin bekleme süresini %10 azalt" (25 -> 22,5)
 	## DÜZELTME (kullanıcı isteği: "Elaranın R ile Q yeteneğinin yerini
 	## değiştir") - eskiden Çift Tetik buradaydı (bkz. SKILL3_TIMING[31]
 	## şimdi orada), id 12 Kalkan Sıçraması'nın (dash) evi oldu.
@@ -152,7 +156,7 @@ const SKILL2_TIMING := {
 	10: {"duration": 6.0, "cooldown": 15.0},
 	## Elara TEMEL (Gerçek Hasar). Kullanıcı isteği (2026-09-25): "6 saldırı yerine 6 saniye sürsün", "bekleme süresini
 	## 25 saniyeye düşür" - eskiden süresizdi (silah başına 6 hak tükenince biterdi, 9999 güvenlik tavanı), 35sn bekleme.
-	11: {"duration": 6.0, "cooldown": 25.0},
+	11: {"duration": 6.0, "cooldown": 20.0}, ## 2026-10-10: 25 -> 20 sn (kullanıcı isteği)
 	## Matthew TEMEL (Vahşi Hız, id 21): kendine+tilkisine 10sn boyunca %40
 	## saldırı hızı + %15 hareket hızı (bkz. _skill_matthew_haste,
 	## player_pet.gd _get_speed_mult/_get_attack_speed_mult - tilki tarafı
@@ -163,7 +167,7 @@ const SKILL2_TIMING := {
 	21: {"duration": 6.0, "cooldown": 35.0},
 	## Şovalye Adam Koruma Bariyeri (id 29) - 2026-09-25 slot değişimi ("R si de E olacak"): SKILL3_TIMING'den buraya
 	## (sayılar AYNI: 15sn aktif, 60sn bekleme).
-	29: {"duration": 15.0, "cooldown": 60.0},
+	29: {"duration": 15.0, "cooldown": 54.0}, ## 2026-10-10: %10 kısaldı (60 -> 54), bkz. SKILL_TIMING[45]
 	## Assasin Çocuk E = Gölge Adımı (id 30) - 2026-09-30 Q/E değişimiyle SKILL_TIMING'den buraya (sayılar AYNI: 6 sn görünmezlik,
 	## 60 sn bekleme; "Uzun Gölge" evrimi süreyi _evo_timing'de uzatır). Şahin Hamlesi (id 5, yük tabanlı) artık Q'da ve standart
 	## makineyi kullanmadığı için hiçbir tabloda girdisi yok (bkz. _physics_process "skill" dalı, ASSASIN_DASH2_* sabitleri).
@@ -183,9 +187,9 @@ const SKILL2_TIMING := {
 	## dinamik döndüğü id'ye göre BURADAN okuyor), Korsan/Necromancer'ın
 	## şarj-tabanlı TEMEL'leriyle AYNI mimari desen.
 	22: {"duration": 0.35, "cooldown": 4.0}, ## Varyasyon 1: Arcane Lanet
-	23: {"duration": 0.5, "cooldown": 45.0}, ## Varyasyon 2: Don Nova (2026-10-04: 30 -> 45)
+	23: {"duration": 0.5, "cooldown": 35.0}, ## Varyasyon 2: Don Nova (2026-10-04: 30 -> 45; 2026-10-10 Büyücü buff: 45 -> 35)
 	24: {"duration": 15.0, "cooldown": 30.0}, ## Varyasyon 3: Hortum (2026-10-04: 45 -> 30)
-	25: {"duration": 5.0, "cooldown": 120.0}, ## Varyasyon 4: Meteor Patlaması
+	25: {"duration": 3.0, "cooldown": 75.0}, ## Varyasyon 4: Meteor Patlaması (2026-10-10 Büyücü buff: kanal 5 -> 3 sn, bekleme 120 -> 75)
 	## Shaman E = Kalkan Totemi (id 26) - 2026-09-29 slot değişimiyle SKILL_TIMING'den buraya (sayılar AYNI, bkz. SKILL_TIMING[27]
 	## üstündeki notlar: "duration" kullanılmıyor, 45sn bekleme). Saldırı Totemi (27) artık Q'da.
 	26: {"duration": 0.0, "cooldown": 45.0},
@@ -224,7 +228,7 @@ const SKILL3_TIMING := {
 	## _skill_elara_double_fire) yeni evi - "duration" gerçek buff süresiyle
 	## birebir eşleşiyor, 120sn bekleme.
 	## Kullanıcı isteği (2026-09-24 denge turu): süre 25sn -> 15sn (hasar %60 aynı kaldı).
-	31: {"duration": 15.0, "cooldown": 120.0},
+	31: {"duration": 15.0, "cooldown": 100.0}, ## 2026-10-10: 120 -> 100 sn (kullanıcı isteği)
 	## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
 	## yerini değiştir") - eskiden Gölge Adımı (id 30) buradaydı (bkz.
 	## SKILL_TIMING[30] şimdi orada), id 16 artık Gölge Hücumu'nun
@@ -232,13 +236,12 @@ const SKILL3_TIMING := {
 	## Kullanıcı isteği (2026-09-24 denge turu): Gölge Hücumu artık 25 hedeflik bir zincir değil, 10sn süren bir
 	## saldırı penceresi (bkz. _skill_assasin_dash) - "duration" o pencerenin kendisi.
 	16: {"duration": 10.0, "cooldown": 90.0},
-	## Kullanıcı isteği: Melek'in yeni 3. yeteneği (Korku, id 32) - "duration"
-	## sadece büyü animasyonu penceresi, gerçek etki (4sn korku) enemy.gd'nin
-	## kendi _fear_timer'ında ayrıca tutulur.
-	32: {"duration": 0.3, "cooldown": 45.0},
+	## Melek ULTİ (Kutsal Korku, id 32) - 2026-10-11 rework: "duration" = havalanma (hareket kilidi + kanat FX, tek kaynak
+	## fx_melek_ascend.gd LIFE); korku/yavaşlatma (5sn) enemy.gd'nin kendi sayaçlarında ayrıca tutulur.
+	32: {"duration": MELEK_R_ASCEND_TIME, "cooldown": 120.0},
 	## Şovalye Adam Koruma Baloncuğu (id 11) - 2026-09-25 slot değişimi ("Q su R olacak"): SKILL_TIMING[11]'den buraya.
 	## "duration" sadece güvenlik tavanı; gerçek bitiş kalkan tükenince (bkz. _process_paladin_ulti).
-	11: {"duration": 60.0, "cooldown": 120.0},
+	11: {"duration": 60.0, "cooldown": 108.0}, ## 2026-10-10: %10 kısaldı (120 -> 108), bkz. SKILL_TIMING[45]
 	## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
 	## yeteneği olacak") - Arı Sürüsü (eskiden burada, id 33) Q'ya taşındı
 	## (bkz. SKILL_TIMING[33] şimdi orada). Yeni R (Koruyucu Büyü, id 39):
@@ -430,7 +433,10 @@ var weapon_range_bonus: float = 0.0 ## KESİR: her silahın attack_range'ine +%X
 ## "dodge" dalı). DÜZELTME (2026-09-24): kalkan modu/Deri Çizme hareket bonusu
 ## artık bu cap'in DIŞINDA değil - tüm stat kaynakları take_damage'da birlikte
 ## kırpılır, sadece yetenekler (Elara Q) üstüne çıkabilir (bkz. effective_dodge).
-const DODGE_CHANCE_CAP := 0.6
+## 2026-10-10 (kullanıcı: "sınırı %40'a düşürüp Rüzgâr Yürüyen Çizmeleri ile %50 olabilmesini sağla"): genel sınır 0,6 -> 0,4; çizmelerle 0,5 (dodge_cap()).
+## Ham değer (dodge_chance) artık eklenirken 1,0'da kırpılır, sınır KULLANIMDA uygulanır (take_damage) - sınır eşyayla değişebildiği için.
+const DODGE_CHANCE_CAP := 0.4
+const DODGE_CHANCE_CAP_BOOTS := 0.5
 var dodge_chance: float = 0.0      ## 0-1 chance to fully evade incoming damage
 
 ## Yeni stat: "Bekleme Süresi Azaltma" (level kartı, bkz. apply_upgrade
@@ -986,6 +992,12 @@ var upgrade_counts: Dictionary = {}
 var upgrade_log: Array = []
 
 
+## Masaüstü kamera yakınlaştırması (player.tscn Camera2D zoom 2,0 x bu = 2,25). Kullanıcı %15 istedi; %12,5 seçildi çünkü tuval 1920x1080 tam ekran 2560x1440'a
+## x4/3 ölçekleniyor: zoom 2,25 x 4/3 = TAM 3 ekran pikseli / harita pikseli (keskin, kaydırırken titremesiz). 2,3 -> 3,07 px (her ~15 pikselde bir 4 px sütun = yürürken
+## hafif dalgalanma); eski 2,0 -> 2,67 px. 1080p ekranda 2,25 px (eskisi 2 px tam). Telefon etkilenmez (bkz. _ready).
+const DESKTOP_CAMERA_CLOSER := 1.0 ## 2026-10-10 2. tur: kullanıcı yakınlaştırmayı iptal etti ("%12.5 uzaklaştır, iptal et") -> eski 2,0. Çarpan yerinde (1,0 = etkisiz).
+
+
 func get_upgrade_count(id: String) -> int:
 	return upgrade_counts.get(id, 0)
 
@@ -997,7 +1009,10 @@ func _ready() -> void:
 	add_to_group("player")
 	## Telefon: arayüz ölçeği dünyayı da büyütür - kamera zoom'u geri alır (bkz. mobile_ui.gd).
 	if death_camera:
-		death_camera.zoom = MobileUIScript.camera_zoom(death_camera.zoom)
+		## Masaüstü %12,5 yakın (2026-10-10, kullanıcı: "kamerayı yaklaştır %15 kadar ama harita/oyuncu glitchli olmasın"): 2,0 -> 2,25 (neden: DESKTOP_CAMERA_CLOSER). Telefon kendi
+		## CAMERA_CLOSER'ıyla 2,0 tabanından AYNI kalır (zaten 3,25).
+		var base_zoom: Vector2 = death_camera.zoom * (1.0 if MobileUIScript.enabled else DESKTOP_CAMERA_CLOSER)
+		death_camera.zoom = MobileUIScript.camera_zoom(base_zoom)
 	## Kullanıcı isteği: "oyundaki tüm oynanabilir karakterleri ve yaratıkları
 	## v.s %5 küçültüp hareket hızlarını %10 azaltmanı istiyorum" - bkz.
 	## EntityScale. Sahnedeki speed değeri elle değiştirilmedi, çarpan burada
@@ -1229,7 +1244,7 @@ func _apply_item_stats(key: String, stat_sign: float, power_mult: float = 1.0) -
 				## Eşyalar için taşma başka bir stat'a DÖNÜŞMEZ (kullanıcı
 				## isteği: "Maksimum stat sınırlarını geçemezler") - basitçe
 				## cap'te kırpılır, satarken de aynı şekilde kırpılı kalır.
-				dodge_chance = clamp(dodge_chance + delta, 0.0, DODGE_CHANCE_CAP)
+				dodge_chance = clamp(dodge_chance + delta, 0.0, 1.0) ## sınır kullanımda (dodge_cap)
 			"knockback_stat":
 				knockback_stat += delta
 				knockback_force += delta
@@ -1772,10 +1787,15 @@ func _configure_topuz_melee(w) -> void:
 ## (hit_segments 1); süpürülen alan (55 px) içindeki herkes TAM hasar alır (aoe_percent 1.0) - eski dönen kılıç da
 ## değdiği herkese tam hasar veriyordu, kılıcın "kalabalığa karşı" kimliği korunuyor. Ses: weapon_uzunkilic.tscn'nin
 ## kendi AttackSound'u (3 kılıç sesi).
+## NERF (2026-10-10, "kılıç inanılmaz güçlü"): süpürülen alandaki ikincil hedefler artık 1,0 yerine bu oranda hasar alır (ana hedef tam hasar; Bıçak/Topuz/Pençe zaten %50).
+## Saldırı gücü oranı weapon.gd SWORD_AP_RATIO'da.
+const UZUNKILIC_AOE_PERCENT := 0.7
+
+
 func _configure_uzunkilic_melee(w) -> void:
 	if not w.has_method("configure_melee"):
 		return
-	w.configure_melee(115.0, 55.0, 1.0, [], "", 8.0, 0.0, 1, 1.0, -12.0, false, false)
+	w.configure_melee(115.0, 55.0, UZUNKILIC_AOE_PERCENT, [], "", 8.0, 0.0, 1, 1.0, -12.0, false, false)
 
 
 ## Fizik interpolasyonu: bu adımdan ÖNCEKİ konum - _process'te buna yapışan görseller
@@ -1788,6 +1808,7 @@ func _physics_process(delta: float) -> void:
 	_interp_prev_pos = global_position ## bkz. PhysicsInterp.visual_position
 	_interp_prev_frame = Engine.get_physics_frames()
 	_refresh_ui_skill_block() ## dükkan/envanter açıkken yetenek tuşları kilitli (bkz. _skill_keys_blocked); erken dönüşlerden ÖNCE
+	_refresh_item_ap_percent() ## eşya saldırı gücü yüzdesi + Ahenk Bastiyonu (bkz. _refresh_item_ap_percent)
 	## "efekt sistemi" (ölüm.png/diriltme.png/kalp.png): durum ne olursa
 	## olsun HER karede reaktif olarak güncelleniyor - bkz. fonksiyonların
 	## kendi üstündeki DÜZELTME notları.
@@ -1841,8 +1862,8 @@ func _physics_process(delta: float) -> void:
 	## Büyücü Kız'ın "Meteor Patlaması" varyasyonu (bkz. _skill_buyucu_meteor):
 	## 5sn boyunca yerinde kalıp odaklanması gerekiyor - Assasin Çocuk'un
 	## dash'iyle AYNI desende hareket kontrolü alınıyor.
-	if _paladin_movement_locked or _menu_input_locked or is_assasin_dashing or _talon_dashing or _evo_dash_lock or is_buyucu_channeling or is_chat_typing \
-			or _shaman_golem_jumping:
+	if _paladin_movement_locked or _menu_input_locked or is_assasin_dashing or _talon_dashing or _evo_dash_lock or (is_buyucu_channeling and not BUYUCU_METEOR_CAN_MOVE) or is_chat_typing \
+			or _shaman_golem_jumping or _melek_ascending():
 		velocity = Vector2.ZERO
 		effective_direction = Vector2.ZERO
 	else:
@@ -1856,6 +1877,7 @@ func _physics_process(delta: float) -> void:
 	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * delta)
 	
 	_block_movement_into_enemies()
+	_block_movement_into_blockers()
 	_block_movement_into_players()
 	_block_movement_into_terrain()
 	move_and_slide()
@@ -1872,6 +1894,7 @@ func _physics_process(delta: float) -> void:
 	_update_animation(effective_direction.length() > 0.1 and not _paladin_movement_locked)
 	_process_regen(delta)
 	_process_enemy_burn(delta)
+	_process_enemy_bleed(delta)
 	_process_skill(delta)
 	_process_skill2(delta)
 	_process_item_shield(delta)
@@ -1893,6 +1916,7 @@ func _physics_process(delta: float) -> void:
 	_process_assasin_dash2_charges(delta)
 	_process_shaman_q_charges(delta)
 	_process_necro_skeleton_cooldown(delta)
+	_process_necro(delta)
 	_process_matthew_speed_lines(delta)
 	_process_buyucu(delta)
 	_process_hadime(delta)
@@ -2156,6 +2180,27 @@ const STUCK_ESCAPE_PUSH_FORCE := 220.0
 ## collision_mask artık 0 (bkz. player.tscn) - yaratıklarla tüm etkileşim
 ## SADECE bu fonksiyondaki (ve enemy.gd'deki karşılığı) elle yazılan mesafe/
 ## hız mantığından geçiyor, motor seviyesinde hiçbir fiziksel itiş kalmadı.
+## Görev nesneleri (ağaç gövdesi, konvoy arabası; 2026-10-10, kullanıcı: "ağaç ve konvoy collision shape içermeli"): "move_blockers" grubundaki düğümlerin
+## block_center()/block_radius çemberine girmeye çalışan hız bileşeni iptal edilir (yaratıkların sert gövde kuralıyla aynı; içindeyse dışarı çıkabilir).
+func _block_movement_into_blockers() -> void:
+	if velocity.length() < 0.1:
+		return
+	for b: Node in get_tree().get_nodes_in_group("move_blockers"):
+		if not (b is Node2D) or not is_instance_valid(b) or not b.has_method("block_center"):
+			continue
+		var c: Vector2 = b.call("block_center")
+		var r: float = float(b.get("block_radius")) + PLAYER_BODY_RADIUS
+		var feet: Vector2 = global_position + Vector2(0.0, 12.75)
+		var to_b: Vector2 = c - feet
+		var dist: float = to_b.length()
+		if dist <= 0.001 or dist >= r:
+			continue
+		var into_dir: Vector2 = to_b / dist
+		var approach: float = velocity.dot(into_dir)
+		if approach > 0.0:
+			velocity -= into_dir * approach
+
+
 func _block_movement_into_enemies() -> void:
 	## Kullanıcı isteği: Assasin Çocuk'un yeni 3. yeteneği (Gölge Adımı,
 	## skill3 id 30) görünmezken yaratıkların içinden geçebilmeli - bkz.
@@ -2188,6 +2233,8 @@ func _block_movement_into_enemies() -> void:
 	for e in EnemyQueryScript.candidates(get_tree(), global_position, block_reach):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
+		if e.get("no_body_block") == true:
+			continue ## uçan boss: içinden geçilir
 		var enemy_radius: float = e._body_radius if "_body_radius" in e else 20.0
 		var required_sep: float = (enemy_radius + PLAYER_BODY_RADIUS) * GameManager.BODY_BLOCK_SCALE
 		## SERT gövde (Yeraltı Canavarı'nın solucan uzuvları, bkz. worm_limb.gd hard_block_radius): yumuşak blok yerine bu yarıçap - oyuncu yaklaşamaz ve
@@ -2291,15 +2338,16 @@ func _block_movement_into_terrain() -> void:
 	## kısıtlanmadan hareket edip dışarı çıkabilir.
 	if GameManager.is_position_blocked_by_walls(global_position):
 		return
-	var probe_dist: float = 10.0
-	if velocity.x != 0.0:
-		var probe_x: Vector2 = global_position + Vector2(sign(velocity.x) * probe_dist, 0.0)
-		if GameManager.is_position_blocked_by_walls(probe_x):
+	## Köprü güvertesinde yanlardan (korkuluk) inilemez, sadece uçlardan (depth_occluders.gd deck_blocks).
+	var occ: Node = get_tree().get_first_node_in_group("depth_occluders")
+	if occ != null and occ.has_method("deck_blocks"):
+		var feet: Vector2 = global_position + Vector2(0.0, DepthOccludersFeet.FEET_OFFSET)
+		if velocity.x != 0.0 and occ.deck_blocks(self, feet + Vector2(sign(velocity.x) * DepthOccludersFeet.DECK_PROBE, 0.0)):
 			velocity.x = 0.0
-	if velocity.y != 0.0:
-		var probe_y: Vector2 = global_position + Vector2(0.0, sign(velocity.y) * probe_dist)
-		if GameManager.is_position_blocked_by_walls(probe_y):
+		if velocity.y != 0.0 and occ.deck_blocks(self, feet + Vector2(0.0, sign(velocity.y) * DepthOccludersFeet.DECK_PROBE)):
 			velocity.y = 0.0
+	## Engelli eksen sıfırlanır; karşıdan gidiyorsa köşe/basamak kenarına doğru kayılır (wall_slide.gd, kullanıcı isteği 2026-10-11).
+	velocity = WallSlideScript.resolve(global_position, velocity, GameManager.is_position_blocked_by_walls)
 
 
 
@@ -2358,6 +2406,9 @@ func _process_shield_regen_tick(delta: float) -> void:
 	if applied > 0.0:
 		item_shield_hp = min(item_shield_max, item_shield_hp + applied)
 		item_shield_changed.emit(item_shield_hp, item_shield_max)
+		## Kalkan Bağı (2026-10-10, kullanıcı: "kalkan bağı doğru çalışmıyor, hiç etkisini görmedim"): kalkanın ANA kaynağı olan doğal yenilenme
+		## buradan geçiyor ama bağa hiç yansımıyordu (sadece heal_shield yansıyordu) -> bağ pratikte yalnız HASARI paylaşıyordu.
+		_kalkan_bagi_mirror(applied)
 
 
 ## Eşyaların (bkz. scripts/items.gd) zamanla/koşula bağlı pasiflerini işler -
@@ -2517,44 +2568,68 @@ func _process_healer_shield_tick(delta: float) -> void:
 		_melek_shield_ally_aura_on = false
 
 
-## Kullanıcı isteği: Melek'in 3. yeteneği - kendi etrafında VE Can Basma/
-## Kalkan Yenileme ile bağ kurduğu bir dostun (_oakley_q_ally_target/
-## _oakley_e_ally_target) etrafında yakındaki tüm yaratıkları 4sn korkutup
-## kaçırır. _do_repel()/_skill_berserk() (AOE tarama + mesafe kontrolü)
-## deseninin çok-merkezli versiyonu.
+## Melek ULTİ - Kutsal Korku (skill3 id 32). 2026-10-11 REWORK (kullanıcı isteği): "Melek 2 saniyeliğine havalanıp (arkasından
+## sarı beyaz parıltılı sihirli melek kanatları görünür ve bu esnada hareket edemez) ... sarı parıltılı ışıkla parlayarak
+## etrafındaki tüm yaratıkları 5 saniye boyunca geriye itip korkutur (bossları ise sadece uzağa iterek %80 yavaşlatır) ...
+## aktifleştiğinde etrafındaki müttefiklere ve kendine anında %100 saldırı gücü kadar can ve kalkan yeniler. (120 sn)".
+## Eskiden 4 sn korku + bağlı dostların etrafında da merkez vardı; artık TEK merkez Melek'in kendisi.
+## Havalanma: skill3 "active" süresi (MELEK_R_ASCEND_TIME) boyunca _physics_process hareketi kilitler (_melek_ascending);
+## kanat/parlama/yükselme görseli fx_melek_ascend.gd (yerel + ağ, _play_and_broadcast_skill_fx).
 const MELEK_FEAR_RADIUS := MelekHolyScript.RADIUS ## fx_melek_holy.gd sok halkasi ayni yaricapa kadar genisler (tek kaynak)
-const MELEK_FEAR_DURATION := 4.0
+const MELEK_FEAR_DURATION := 5.0
+const MELEK_R_ASCEND_TIME := MelekAscendScript.LIFE
+const MELEK_R_PUSH_DISTANCE := 140.0 ## normal yaratıklar: anlık geri itme (sonra 5 sn kaçarlar)
+const MELEK_R_BOSS_PUSH_DISTANCE := 400.0 ## bosslar "uzağa": enemy.gd SKILL_PUSH_BOSS_MULT (x0,4) sonrası ~160 px
+const MELEK_R_BOSS_SLOW := 0.80
+const MELEK_R_HEAL_SHIELD_RATIO := 1.0 ## saldırı gücünün %100'ü kadar can VE kalkan (kendine + yarıçaptaki dostlara)
+
+func _melek_ascending() -> bool:
+	return skill3_state == "active" and get_skill3_id() == 32
+
 
 func _skill_melek_fear() -> void:
-	var centers: Array = [global_position]
-	if is_instance_valid(_oakley_q_ally_target):
-		centers.append(_oakley_q_ally_target.global_position)
-	if is_instance_valid(_oakley_e_ally_target):
-		centers.append(_oakley_e_ally_target.global_position)
-	if is_instance_valid(_melek_q_ally_target2):
-		centers.append(_melek_q_ally_target2.global_position)
-	## Evrimler "Kutsal Işık" (etki alanındaki dostlar + Melek saldırı gücünün %50'si can) ve "Yeniden Doğuş" (R finali -
-	## Q/E beklemeleri sıfırlanır) - korkutmadan önce, aynı merkezlerle.
-	_melek_fear_evolutions(centers)
-	var feared: Array = []
-	for center in centers:
-		for e in get_tree().get_nodes_in_group("enemies"):
-			if not is_instance_valid(e) or e.get("is_dead") == true or feared.has(e):
-				continue
-			if center.distance_to(e.global_position) <= MELEK_FEAR_RADIUS:
-				if e.has_method("apply_fear"):
-					e.apply_fear(center, MELEK_FEAR_DURATION)
-					feared.append(e)
-	## Kullanıcı isteği: Melek'in ultisinde etrafında sarı, güçlü pixel parıltı; can/kalkan bağı kurduğu dostun etrafında da
-	## çıksın. Kendi üstünde: _play_and_broadcast_skill_fx (yerel + diğer oyuncular). Dost üstünde: _set_ally_aura "holy"
-	## (dostun kendi istemcisi + üçüncü izleyiciler dahil, ağ üzerinden). Eski yumuşak parçacık/halka kaldırıldı.
+	var center: Vector2 = global_position
+	for e in Enemy.get_enemies_near(get_tree(), center, MELEK_FEAR_RADIUS):
+		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		if center.distance_to(e.global_position) > MELEK_FEAR_RADIUS:
+			continue
+		var dir: Vector2 = e.global_position - center
+		if dir.length() < 1.0:
+			dir = Vector2.from_angle(randf() * TAU)
+		if e.get("is_boss") == true:
+			if e.has_method("apply_skill_push"):
+				e.apply_skill_push(dir, MELEK_R_BOSS_PUSH_DISTANCE)
+			if e.has_method("apply_slow"):
+				e.apply_slow(MELEK_R_BOSS_SLOW, MELEK_FEAR_DURATION, true)
+		else:
+			if e.has_method("apply_skill_push"):
+				e.apply_skill_push(dir, MELEK_R_PUSH_DISTANCE)
+			if e.has_method("apply_fear"):
+				e.apply_fear(center, MELEK_FEAR_DURATION)
+	## Anında can + kalkan: kendine ve yarıçaptaki dostlara (gerçek oyuncular RPC ile kendi istemcilerinde, bkz.
+	## _apply_heal_to_ally / _apply_shield_heal_to_ally - İyileştirme ve Kalkan Gücü VERENİN çarpanıyla).
+	var is_crit: bool = _roll_ability_crit()
+	var amount: float = _apply_ability_crit(damage_bonus * MELEK_R_HEAL_SHIELD_RATIO, is_crit)
+	heal(amount)
+	heal_shield(amount)
+	for ally in get_tree().get_nodes_in_group("player_ally"):
+		if ally == self or not is_instance_valid(ally) or ally.get("is_dead") == true or not (ally is Node2D):
+			continue
+		if center.distance_to((ally as Node2D).global_position) > MELEK_FEAR_RADIUS:
+			continue
+		_apply_heal_to_ally(ally as Node2D, amount)
+		_apply_shield_heal_to_ally(ally as Node2D, amount)
+		_set_ally_aura(ally as Node2D, "holy", true)
+	## "Yeniden Doğuş" (R finali): Q ve E beklemeleri sıfırlanır.
+	if has_evo("melek_rf"):
+		_evo_reset_cooldown("skill")
+		_evo_reset_cooldown("skill2")
+		_play_and_broadcast_skill_fx(FxEvoCooldownResetScene)
+	## Görsel: anlık kutsal patlama (şok halkası korku yarıçapını gösterir) + 2 sn kanatlı havalanma (yerel + diğer oyuncular).
 	_play_and_broadcast_skill_fx(FxMelekHolyScene)
+	_play_and_broadcast_skill_fx(FxMelekAscendScene)
 	_play_skill_sfx("melek_fear")
-	var linked: Array = []
-	for ally in [_oakley_q_ally_target, _oakley_e_ally_target, _melek_q_ally_target2]:
-		if is_instance_valid(ally) and not linked.has(ally):
-			linked.append(ally)
-			_set_ally_aura(ally, "holy", true)
 
 
 ## Baloncuk iki ayrı kaynaktan görünür olabilir: Şovalye Adam'ın R-tuşu
@@ -2781,6 +2856,12 @@ func _passive_melek(delta: float) -> void:
 	## bir miktar, Melek'in KENDİ damage_bonus'undan hesaplanır, hem kendisine
 	## hem her müttefike (aşağısı) AYNI şekilde uygulanır.
 	var passive_heal: float = damage_bonus * MELEK_PASSIVE_ATTACK_POWER_PERCENT
+	_melek_sparkle_count += 1
+	var sparkle: bool = _melek_sparkle_count % MELEK_SPARKLE_EVERY_TICKS == 0
+	var sparkle_peers: Array = []
+	if sparkle:
+		_spawn_melek_sparkle(self)
+		sparkle_peers.append(multiplayer.get_unique_id() if NetworkManager.is_multiplayer_active else 1)
 	if max_health > 0.0 and health < max_health:
 		health = min(max_health, health + passive_heal)
 		health_changed.emit(health, max_health)
@@ -2794,6 +2875,25 @@ func _passive_melek(delta: float) -> void:
 			continue
 		## Uzak oyuncuya RPC + iki tarafta da sayı, pete doğrudan heal() - bkz. _apply_heal_to_ally.
 		_apply_heal_to_ally(ally as Node2D, passive_heal)
+		if sparkle and "peer_id" in ally and int(ally.get("peer_id")) > 0:
+			_spawn_melek_sparkle(ally as Node2D)
+			sparkle_peers.append(int(ally.get("peer_id")))
+	if sparkle and NetworkManager.is_multiplayer_active and not sparkle_peers.is_empty():
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "melek_sparkle", global_position, {"peers": sparkle_peers})
+
+
+## Melek pasifinin görsel işareti (2026-10-10, prototip A "Artı Işıltısı"): MELEK_SPARKLE_EVERY_TICKS iyileştirme tikinde bir (ara ara) Melek'in ve menzildeki
+## oyuncu müttefiklerin başında. Diğer istemciler "melek_sparkle" ile AYNI sahneyi (fx_melek_heal_sparkle.gd) hedef peer'lerin düğümüne kurar.
+const MELEK_SPARKLE_EVERY_TICKS := 3
+const FxMelekSparkleScript := preload("res://scripts/fx_melek_heal_sparkle.gd")
+var _melek_sparkle_count: int = 0
+
+
+func _spawn_melek_sparkle(target: Node2D) -> void:
+	if target == null or not is_instance_valid(target):
+		return
+	var fx: Node2D = FxMelekSparkleScript.new()
+	target.add_child(fx)
 
 
 ## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su bundan sonra
@@ -2944,6 +3044,8 @@ func get_status_effects() -> Array:
 	## yavaşlar (bkz. item_shield_ability_slow_timer/_process_item_shield) - hangi karakter olursa olsun aynı.
 	if _enemy_burn_timer > 0.0:
 		out.append({"id": "enemy_burn", "kind": "burn", "is_buff": false, "stacks": 0, "remaining": _enemy_burn_timer, "duration": ENEMY_BURN_DURATION})
+	if _enemy_bleed_timer > 0.0:
+		out.append({"id": "enemy_bleed", "kind": "bleed", "is_buff": false, "stacks": 0, "remaining": _enemy_bleed_timer, "duration": ENEMY_BLEED_DURATION})
 	if item_shield_ability_slow_timer > 0.0:
 		out.append({"id": "shield_slow", "kind": "shield_slow", "is_buff": false, "stacks": 0, "remaining": item_shield_ability_slow_timer, "duration": maxf(_shield_hit_regen_delay(), 0.01)})
 	## Ruhani Yetenek "Savaş Şevki" - biriken yığın (kullanıcı isteği: "Biriken saldırı güçleri skillbarın
@@ -3010,9 +3112,12 @@ const NECRO_SOUL_PER_BOSS_KILL := 5
 ## "necromancerın goleminin ruh bedelini 100 yap" - eskiden 3/10'du.
 ## Kullanıcı isteği (2026-09-25): "necromancer kalkan ile yaratık doğuramasın ancak ruh bedellerini %50 azalt" -
 ## İskelet 10 -> 5, Golem 50 -> 25; ruh yetmezse artık kalkandan ÖDENMEZ, çağırma hiç olmaz.
-const NECRO_SKELETON_SOUL_COST := 5
+## 2026-10-11 (kullanıcı: Necromancer evrimleri): "iskelet çıkarma sınırı 10'a düşecek, ruh bedeli 8 olacak çünkü geliştirmelere eklenmeli" -
+## 5 -> 8 (evrim "Ucuz Ruhlar" 5'e indirir, bkz. necro_skeleton_soul_cost).
+const NECRO_SKELETON_SOUL_COST := 8
 ## Kullanıcı isteği (2026-09-24): "golemi spawnlamak için gereken ruh da 50 ye düşsün" (100 -> 50), 2026-09-25: 50 -> 25.
-const NECRO_GOLEM_SOUL_COST := 25
+## 2026-10-11: 25 -> 50 (evrim "Ucuz Golem" 35'e indirir, bkz. necro_golem_soul_cost).
+const NECRO_GOLEM_SOUL_COST := 50
 ## Kullanıcı isteği: "necromancerın iskelet çağırma skiline 1 saniye bekleme
 ## süresi ekle" - eskiden TEMEL'in (İskelet Çağır) hiç bekleme süresi yoktu,
 ## sadece ruh sayısı/yaratık sınırı kısıtlıyordu (bkz. yukarıdaki "Necromancer"
@@ -3061,13 +3166,27 @@ var necro_souls: int = 0
 ## 20 yap") - 10 -> 20. Saldırmama sorunu için bkz. skeleton_pet.gd/
 ## wraith_pet.gd (bu dosyada değil, ayrı script'ler).
 var _necro_active_pets: Array = []
-const NECRO_MAX_ACTIVE_PETS := 20
+## 2026-10-11: 20 -> 10 (evrim "Kemik Ordusu" 20'ye çıkarır, bkz. necro_max_active_pets).
+const NECRO_MAX_ACTIVE_PETS := 10
 ## Kullanıcı isteği: "necromancer en fazla 2 golem çağırabilsin" - genel
 ## NECRO_MAX_ACTIVE_PETS (iskelet+golem toplamı) sınırından AYRI, sadece
 ## Golem'e özgü ikinci bir sınır (bkz. _necro_active_golem_count/
 ## _skill_necro_summon_golem/_activate_skill).
 var _necro_active_golems: Array = []
 const NECRO_MAX_GOLEMS := 2
+
+## ---- Necromancer evrimleri (kart metinleriyle birebir - bkz. skill_evolutions.gd DEFS[11]) ----
+const EVO_NECRO_MAX_PETS := 20 ## Q1 Kemik Ordusu
+const EVO_NECRO_SKELETON_COST := 5 ## Q2 Ucuz Ruhlar
+const EVO_NECRO_SKELETON_HP_MULT := 1.2 ## Q3 Sert Kemikler (iskeletin kalkanı yok: yalnız can büyür)
+const EVO_NECRO_SKELETON_LIFE_ADD := 15.0 ## Q4 Dayanıklı Ruhlar (sn)
+const EVO_NECRO_LOW_HP_RATIO := 0.20 ## Q finali + E finali tetik eşiği (maks. canın oranı)
+const EVO_NECRO_QF_AP_RATIO := 0.10 ## Q finali: hayatta olan iskelet başına saldırı gücünün %10'u kadar can VE kalkan
+const EVO_NECRO_GOLEM_COST := 35 ## E1 Ucuz Golem
+const EVO_NECRO_GOLEM_HP_MULT := 1.3 ## E3 Taş Gövde (kalkan canın oranı olduğundan o da %30 artar)
+const EVO_NECRO_EF_COOLDOWN := 120.0 ## E finali bekleme (sn)
+const EVO_NECRO_EF_TAUNT_RADIUS := 800.0 ## "tüm yaratıkları kışkırtarak": ekran çevresi (sonsuz yarıçap sunucuya yüzlerce istek atardı)
+const EVO_NECRO_EF_TAUNT_DURATION := 6.0
 ## Bkz. NECRO_SKELETON_COOLDOWN yorumu - İskelet Çağır'ın 1sn bekleme süresi
 ## için ayrı zamanlayıcı (Korsan bomba şarjı ile aynı desen).
 var _necro_skeleton_cooldown_timer: float = 0.0
@@ -3561,25 +3680,48 @@ func _skill_necro_summon_skeleton() -> void:
 		return
 	## Kullanıcı isteği: "necromancerın yaratık spawnlama sınırını 10 ile
 	## sınırla".
-	if _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
-		_spawn_floating_text("YARATIK SINIRI (%d)" % NECRO_MAX_ACTIVE_PETS, Color(0.9, 0.6, 0.3))
+	var max_pets: int = necro_max_active_pets()
+	if _necro_active_pet_count() >= max_pets:
+		_spawn_floating_text("YARATIK SINIRI (%d)" % max_pets, Color(0.9, 0.6, 0.3))
 		return
 	## Kullanıcı isteği (2026-09-25): "necromancer kalkan ile yaratık doğuramasın" - 2026-09-24'teki "ruh yetmezse
 	## kalkandan öde" yolu kaldırıldı: ruh yetmezse iskelet çağrılmaz, 1sn bekleme de başlamaz.
-	if necro_souls < NECRO_SKELETON_SOUL_COST:
-		_spawn_floating_text("RUH YETERSİZ (%d)" % NECRO_SKELETON_SOUL_COST, Color(0.6, 0.9, 0.5))
+	var cost: int = necro_skeleton_soul_cost()
+	if necro_souls < cost:
+		_spawn_floating_text("RUH YETERSİZ (%d)" % cost, Color(0.6, 0.9, 0.5))
 		return
-	necro_souls -= NECRO_SKELETON_SOUL_COST
+	necro_souls -= cost
 	_necro_skeleton_cooldown_timer = NECRO_SKELETON_COOLDOWN
+	_spawn_necro_skeleton(global_position)
+
+
+## Ruhsuz/sınırsız çıplak doğurma (çağıran ruh + sınır kontrolünü yapar): Q yeteneği ve evrim "Lanetli Mühür" (ölen lanetli yaratık -> iskelet).
+func _spawn_necro_skeleton(at: Vector2) -> Node2D:
 	var pet: Node2D = SkeletonPetScene.instantiate() as Node2D
 	get_tree().current_scene.add_child(pet)
-	pet.global_position = global_position
+	pet.global_position = at
+	var hp_pct: float = NECRO_SKELETON_HP_PERCENT * (EVO_NECRO_SKELETON_HP_MULT if has_evo("necro_q3") else 1.0)
+	var life: float = NECRO_SKELETON_LIFESPAN + (EVO_NECRO_SKELETON_LIFE_ADD if has_evo("necro_q4") else 0.0)
 	if pet.has_method("setup_from_player"):
-		pet.setup_from_player(self, NECRO_SKELETON_STAT_PERCENT, NECRO_SKELETON_HP_PERCENT, NECRO_SKELETON_LIFESPAN, NECRO_SKELETON_SPEED_PERCENT)
+		pet.setup_from_player(self, NECRO_SKELETON_STAT_PERCENT, hp_pct, life, NECRO_SKELETON_SPEED_PERCENT)
 	_register_necro_pet(pet)
 	_spawn_necro_summon_fx(pet.global_position)
 	_broadcast_necro_pet_spawn(pet, "res://scenes/skeleton_pet.tscn")
 	_play_skill_sfx("necro_skeleton")
+	return pet
+
+
+## Evrim sayıları: yaratık sınırı / ruh bedelleri (kartsız = NECRO_* sabitleri).
+func necro_max_active_pets() -> int:
+	return EVO_NECRO_MAX_PETS if has_evo("necro_q1") else NECRO_MAX_ACTIVE_PETS
+
+
+func necro_skeleton_soul_cost() -> int:
+	return EVO_NECRO_SKELETON_COST if has_evo("necro_q2") else NECRO_SKELETON_SOUL_COST
+
+
+func necro_golem_soul_cost() -> int:
+	return EVO_NECRO_GOLEM_COST if has_evo("necro_e1") else NECRO_GOLEM_SOUL_COST
 
 
 ## Bkz. NECRO_SKELETON_COOLDOWN yorumu - Korsan'ın _process_korsan_bombs'u ile
@@ -3608,16 +3750,147 @@ func _spawn_necro_summon_fx(pet_pos: Vector2) -> void:
 		})
 
 
-## Necromancer YENİ ULTİ - Lanetli Kafatası (skill3 id 44): kafatası 10sn boyunca kalabalığa/bosslara çarpar, her çarpmada
-## %110 AP alan hasarı + 3sn rastgele-yürüme korkusu. Tüm mantık/ağ yayını necro_skull.gd'de (bkz. dosya başı).
+## Necromancer ULTİ - Lanetli Kafatası (skill3 id 44), REWORK 2026-10-11: R açıldıktan sonra (10. seviye) %50 küçük bir kafatası HER ZAMAN
+## Necromancer'ın etrafında döner ve yakındaki yaratıklara saldırır (PASİF: %60 saldırı gücü alan hasarı); R tuşu onu 10sn AKTİF yapar
+## (%100 büyür, vuruş alanı %100 artar, %150 saldırı gücü). Tüm mantık/ağ yayını necro_skull.gd'de (bkz. dosya başı).
 const NecroSkullScript := preload("res://scripts/necro_skull.gd")
+var _necro_skull: Node2D = null
+
+
+func _ensure_necro_skull() -> void:
+	if is_instance_valid(_necro_skull) or get_tree().current_scene == null:
+		return
+	_necro_skull = NecroSkullScript.new()
+	get_tree().current_scene.add_child(_necro_skull)
+	_necro_skull.setup(self)
 
 
 func _skill_necro_skull() -> void:
-	var skull: Node2D = NecroSkullScript.new()
-	get_tree().current_scene.add_child(skull)
-	skull.setup(self)
+	_ensure_necro_skull()
+	if is_instance_valid(_necro_skull):
+		_necro_skull.set_active(NecroSkullScript.DURATION)
 	_play_skill_sfx("necro_skull")
+
+
+## R süresi dolunca / erken iptalde (bkz. _end_skill3_effects): kafatası pasif boyuta döner.
+func _end_necro_skull_active() -> void:
+	if is_instance_valid(_necro_skull) and _necro_skull.is_active():
+		_necro_skull.set_active(0.0)
+
+
+## Necromancer'ın her karelik işleri (yalnız roster id 11): kalıcı pasif kafatası + canı azalınca tetiklenen finaller + lanet takibi.
+func _process_necro(delta: float) -> void:
+	if GameManager.selected_char_id != 11:
+		return
+	if not is_dead and is_skill_slot_unlocked("skill3"):
+		_ensure_necro_skull()
+	_process_necro_final_evos(delta)
+	_process_necro_curse()
+
+
+var _necro_qf_armed: bool = true
+var _necro_ef_armed: bool = true
+var _necro_ef_cd: float = 0.0
+
+
+## Q finali "Kemik Fedası" + E finali "Son Çare Golemi": canın %20'nin altına İNDİĞİ an bir kez tetiklenir; can %20'nin üstüne çıkınca yeniden kurulur
+## (aksi halde yeni çağrılan iskelet hâlâ düşük canda hemen tüketilirdi). E finali ayrıca 120sn bekler.
+func _process_necro_final_evos(delta: float) -> void:
+	if _necro_ef_cd > 0.0:
+		_necro_ef_cd = maxf(0.0, _necro_ef_cd - delta)
+	if is_dead or is_downed or max_health <= 0.0:
+		return
+	if health >= max_health * EVO_NECRO_LOW_HP_RATIO:
+		_necro_qf_armed = true
+		_necro_ef_armed = true
+		return
+	if has_evo("necro_qf") and _necro_qf_armed and _necro_active_skeleton_count() > 0:
+		_necro_qf_armed = false
+		_necro_bone_sacrifice()
+	if has_evo("necro_ef") and _necro_ef_armed and _necro_ef_cd <= 0.0:
+		_necro_ef_armed = false
+		_necro_last_stand_golem()
+
+
+## Golem olmayan, hayatta olan iskeletler.
+func _necro_living_skeletons() -> Array:
+	var out: Array = []
+	for pet in _necro_active_pets:
+		if is_instance_valid(pet) and pet.get("is_dead") != true and not _necro_active_golems.has(pet):
+			out.append(pet)
+	return out
+
+
+func _necro_active_skeleton_count() -> int:
+	return _necro_living_skeletons().size()
+
+
+## Q finali: tüm iskeletlerin ruhunu tüketir; hayatta olan her iskelet başına saldırı gücünün %10'u kadar can VE kalkan yeniler.
+func _necro_bone_sacrifice() -> void:
+	var skeletons: Array = _necro_living_skeletons()
+	if skeletons.is_empty():
+		return
+	for pet in skeletons:
+		if pet.has_method("_expire"):
+			pet._expire()
+	var amount: float = damage_bonus * EVO_NECRO_QF_AP_RATIO * float(skeletons.size())
+	heal(amount)
+	heal_shield(amount)
+	_spawn_floating_text("KEMİK FEDASI", Color(0.6, 0.95, 0.7))
+	_spawn_necro_summon_fx(global_position)
+
+
+## E finali: bedelsiz 1 golem (yaratık/golem sınırlarına takılmaz - son çare), doğduğu an çevredeki tüm yaratıkları kışkırtır.
+func _necro_last_stand_golem() -> void:
+	_necro_ef_cd = EVO_NECRO_EF_COOLDOWN
+	var golem: Node2D = _spawn_necro_golem()
+	_spawn_floating_text("SON ÇARE GOLEMİ", Color(0.8, 0.55, 1.0))
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, EVO_NECRO_EF_TAUNT_RADIUS):
+		if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
+			continue
+		if global_position.distance_to((e as Node2D).global_position) > EVO_NECRO_EF_TAUNT_RADIUS:
+			continue
+		if e.has_method("apply_taunt"):
+			e.apply_taunt(EVO_NECRO_EF_TAUNT_DURATION, golem)
+
+
+## R finali "Lanetli Mühür": kafatasının lanetlediği yaratıklar (instance id -> {"e", "until"}); ölen lanetli %1 ihtimalle iskelet olur.
+## Ölüm host'ta olur ama kukla yaratık her istemcide is_dead olur (enemy.gd die()), bu yüzden burada yerel olarak izlenir.
+var _necro_curse: Dictionary = {}
+var _necro_curse_poll: float = 0.0
+
+
+func _necro_curse_mark(enemy: Node, duration: float) -> void:
+	if not is_instance_valid(enemy):
+		return
+	_necro_curse[enemy.get_instance_id()] = {"e": enemy, "until": Time.get_ticks_msec() + int(duration * 1000.0)}
+
+
+func _process_necro_curse() -> void:
+	if _necro_curse.is_empty():
+		return
+	_necro_curse_poll -= get_process_delta_time()
+	if _necro_curse_poll > 0.0:
+		return
+	_necro_curse_poll = 0.1
+	var now: int = Time.get_ticks_msec()
+	for id in _necro_curse.keys():
+		var entry: Dictionary = _necro_curse[id]
+		var e: Variant = entry["e"]
+		if not is_instance_valid(e) or now > int(entry["until"]):
+			_necro_curse.erase(id)
+			continue
+		if e.get("is_dead") == true:
+			_necro_curse.erase(id)
+			_necro_curse_died(e as Node2D)
+
+
+func _necro_curse_died(e: Node2D) -> void:
+	if randf() >= NecroSkullScript.EVO_CURSE_SKELETON_CHANCE or is_dead:
+		return
+	if _necro_active_pet_count() >= necro_max_active_pets():
+		return
+	_spawn_necro_skeleton(e.global_position)
 
 
 ## Necromancer TEMEL (Golem Çağır, skill id 20, E tuşu - kullanıcı isteği 2026-09-24, eskiden R) - _activate_skill2()
@@ -3628,12 +3901,20 @@ func _skill_necro_skull() -> void:
 ## GolemPetScene (%200 stat/can, kalkanlı, bkz. golem_pet.gd) çağırıyor.
 func _skill_necro_summon_golem() -> void:
 	## Ruh yeterliliği _activate_skill2 başında (_necro_golem_can_summon) kontrol edildi - ruh yoksa buraya gelinmez.
-	necro_souls = maxi(0, necro_souls - NECRO_GOLEM_SOUL_COST)
+	necro_souls = maxi(0, necro_souls - necro_golem_soul_cost())
+	_spawn_necro_golem()
+
+
+## Ruhsuz/sınırsız çıplak doğurma (çağıran ruh + sınır kontrolünü yapar): E yeteneği ve evrim "Son Çare Golemi".
+func _spawn_necro_golem() -> Node2D:
 	var pet: Node2D = GolemPetScene.instantiate() as Node2D
 	get_tree().current_scene.add_child(pet)
 	pet.global_position = global_position
+	var hp_pct: float = NECRO_GOLEM_HP_PERCENT * (EVO_NECRO_GOLEM_HP_MULT if has_evo("necro_e3") else 1.0)
 	if pet.has_method("setup_from_player"):
-		pet.setup_from_player(self, NECRO_GOLEM_STAT_PERCENT, NECRO_GOLEM_HP_PERCENT, NECRO_GOLEM_LIFESPAN, NECRO_GOLEM_SPEED_PERCENT, NECRO_GOLEM_ATTACK_POWER_PERCENT)
+		pet.setup_from_player(self, NECRO_GOLEM_STAT_PERCENT, hp_pct, NECRO_GOLEM_LIFESPAN, NECRO_GOLEM_SPEED_PERCENT, NECRO_GOLEM_ATTACK_POWER_PERCENT)
+	if pet.has_method("apply_necro_evos"):
+		pet.apply_necro_evos(self) ## E2 geri itme, E4 büyüme
 	_register_necro_pet(pet)
 	## bkz. NECRO_MAX_GOLEMS notu - genel pet listesine EK olarak, Golem'e özgü
 	## sayaca da ekleniyor.
@@ -3645,6 +3926,7 @@ func _skill_necro_summon_golem() -> void:
 	_spawn_necro_summon_fx(pet.global_position)
 	_broadcast_necro_pet_spawn(pet, "res://scenes/golem_pet.tscn")
 	_play_skill_sfx("necro_golem")
+	return pet
 
 
 ## Golem Çağır ön kontrolleri (ruh, toplam yaratık sınırı, en fazla NECRO_MAX_GOLEMS golem) - yetersizse sebebi yazar,
@@ -3652,11 +3934,13 @@ func _skill_necro_summon_golem() -> void:
 ## 2026-09-24'teki "ruh yetmezse ulti kadar kalkan harca" yolu kaldırıldı. (E'nin herkeste olan TEMEL kalkan tarifesi
 ## _activate_skill2'de aynen duruyor - o ruhun YERİNE değil, her E yeteneği gibi.)
 func _necro_golem_can_summon() -> bool:
-	if necro_souls < NECRO_GOLEM_SOUL_COST:
-		_spawn_floating_text("RUH YETERSİZ (%d)" % NECRO_GOLEM_SOUL_COST, Color(0.6, 0.9, 0.5))
+	var cost: int = necro_golem_soul_cost()
+	if necro_souls < cost:
+		_spawn_floating_text("RUH YETERSİZ (%d)" % cost, Color(0.6, 0.9, 0.5))
 		return false
-	if _necro_active_pet_count() >= NECRO_MAX_ACTIVE_PETS:
-		_spawn_floating_text("YARATIK SINIRI (%d)" % NECRO_MAX_ACTIVE_PETS, Color(0.9, 0.6, 0.3))
+	var max_pets: int = necro_max_active_pets()
+	if _necro_active_pet_count() >= max_pets:
+		_spawn_floating_text("YARATIK SINIRI (%d)" % max_pets, Color(0.9, 0.6, 0.3))
 		return false
 	if _necro_active_golem_count() >= NECRO_MAX_GOLEMS:
 		_spawn_floating_text("GOLEM SINIRI (%d)" % NECRO_MAX_GOLEMS, Color(0.75, 0.5, 1.0))
@@ -3996,6 +4280,9 @@ func refresh_shield_stats() -> void:
 		item_shield_changed.emit(0.0, 0.0)
 		return
 	var new_max: float = (float(t["power"]) + item_shield_power_flat) * (1.0 + shield_max_percent)
+	if has_item("ahenk_bastiyonu"):
+		new_max += max_health * ITEM_BASTION_HP_TO_SHIELD
+		_bastion_last_max_hp = max_health
 	if item_shield_max <= 0:
 		## Kalkan İLK KEZ veriliyor (başlangıç Standart Kalkanı) - anında dolu
 		## başlamıyor, 0'dan başlayıp kendi kendine yenileniyor (bkz.
@@ -4658,6 +4945,17 @@ func _on_weapon_fired(_direction: Vector2) -> void:
 		})
 
 
+## SAKLANMA ÇALILIĞI durumu (0 değil / 1 saklı / 2 görülmüş; host belirler, bkz. hide_brush_manager.gd): sadece görsel - karakter sprite'ı soluklaşır.
+## Hedeflemeyi C++ EnemyWorld.set_stealth yapar. `anim.self_modulate` kullanılır: modulate'ı vuruş/zehir/görünmezlik efektleri yazıyor.
+var brush_state: int = 0
+
+
+func set_brush_state(state: int) -> void:
+	brush_state = state
+	if anim != null:
+		anim.self_modulate.a = HideBrushScript.alpha_for(state)
+
+
 ## Büyücü "Yükseliş" (R1) havadayken de hedef alınamaz (yaratık hedeflemesi + C++ köprüsü bunu okur; uzak kukla extra["byc_fly"]).
 func is_invisible_now() -> bool:
 	return is_invisible or is_buyucu_airborne()
@@ -4700,6 +4998,11 @@ func set_combat_active(active: bool) -> void:
 			if is_instance_valid(p):
 				p.visible = active
 				p.process_mode = mode
+
+
+## Toplam can çalma şansı (kart + eşya + ruhani Adc + evrimler) - on_damage_dealt ve envanter/satıcı stat pencereleri AYNI değeri okur.
+func get_total_lifesteal() -> float:
+	return lifesteal_percent + spirit_lifesteal + _evo_lifesteal_bonus() + evo_hit_lifesteal + item_extra_lifesteal
 
 
 func get_pickup_range() -> float:
@@ -4795,6 +5098,7 @@ const FxBloodSplatterScene := preload("res://scenes/fx_blood_splatter.tscn")
 ##   "thorns"/"acid" - normal hasar kuralları.
 const ENEMY_LASER_SHIELD_MULT := 2.0
 const ENEMY_BURN_DURATION := 3.0
+const DEMON_BURN_DPS := 50.0 ## x0,8 kesintisi iptal edildi (40 -> 50). ## Uçan Şeytan (FİNAL) ateş topu yanması: "yakarak her saniye 50 hasar"; 2026-10-11: x0,8 (kullanıcı: "tüm yaratıkların hasarını %20 azalt"), 50 -> 40
 const ENEMY_BURN_DPS_RATIO := 0.25 ## saniyede ateş topu isabet hasarının %25'i (3 sn = isabetin %75'i kadar ek hasar)
 const ENEMY_BURN_TICK := 0.5
 const FxEnemyBurnScene := preload("res://scenes/fx_enemy_burn_status.tscn")
@@ -4814,14 +5118,53 @@ func take_special_damage(amount: float, source: Node2D, kind: String) -> void:
 	var before: float = health + item_shield_hp
 	_special_dmg_shield_mult = ENEMY_LASER_SHIELD_MULT if kind == "laser" else 1.0
 	## Asit gölü de SÜREKLİ hasar (bkz. enemy_acid_pool.gd TICK_INTERVAL notu): sıyrılma/temas kilidi tikleri yutmasın.
-	_special_dmg_is_dot = kind == "burn" or kind == "acid"
+	_special_dmg_is_dot = kind == "burn" or kind == "acid" or kind == "bleed"
 	take_damage(amount, source)
 	_special_dmg_shield_mult = 1.0
 	_special_dmg_is_dot = false
 	if kind == "fireball" and not is_dead and health + item_shield_hp < before:
 		apply_enemy_burn(amount * ENEMY_BURN_DPS_RATIO)
+	if kind == "demonfire" and not is_dead and health + item_shield_hp < before:
+		apply_enemy_burn(DEMON_BURN_DPS) ## Uçan Şeytan ateş topu: patlama hasarı + yakarak saniyede 50
+	if kind == "bat_bite" and not is_dead and health + item_shield_hp < before:
+		apply_enemy_bleed(ENEMY_BLEED_DPS)
 	if kind == "minotaur" and not is_dead and health + item_shield_hp < before:
 		_minotaur_hit_msec = Time.get_ticks_msec() ## hasar gerçekten işlendi: hemen ardından gelen savrulma (apply_boss_fling) geçerli
+
+
+## KANAMA (2026-10-09, Balkabağı Kafa'nın yarasaları: "ısırınca kanama bırakarak her saniye 5 hasar verir"): ısırık isabet ettiyse ENEMY_BLEED_DURATION sn boyunca saniyede
+## ENEMY_BLEED_DPS sürekli hasar (dokunulmazlık kilidine tabi değil, sıvışmaya bakmaz - yanma gibi). Yeniden ısırılınca süre tazelenir, hasar yığılmaz.
+const ENEMY_BLEED_DURATION := 4.0
+const ENEMY_BLEED_DPS := 10.0 ## x0,8 kesintisi iptal edildi (8 -> 10). ## 2026-10-11: x0,8 (kullanıcı: "tüm yaratıkların hasarını %20 azalt"), 10 -> 8. 2026-10-10: 5 -> 10 (kullanıcı: "balkabağı bossunun hasarını 2 kat arttır")
+const ENEMY_BLEED_TICK := 0.5
+var _enemy_bleed_timer: float = 0.0
+var _enemy_bleed_dps: float = 0.0
+var _enemy_bleed_tick_timer: float = 0.0
+
+
+func apply_enemy_bleed(dps: float) -> void:
+	if dps <= 0.0 or is_dead:
+		return
+	_enemy_bleed_dps = maxf(_enemy_bleed_dps if _enemy_bleed_timer > 0.0 else 0.0, dps)
+	_enemy_bleed_timer = ENEMY_BLEED_DURATION
+	if _enemy_bleed_tick_timer <= 0.0:
+		_enemy_bleed_tick_timer = ENEMY_BLEED_TICK
+
+
+func _process_enemy_bleed(delta: float) -> void:
+	if _enemy_bleed_timer <= 0.0:
+		return
+	if is_dead:
+		_enemy_bleed_timer = 0.0
+		return
+	_enemy_bleed_timer -= delta
+	_enemy_bleed_tick_timer -= delta
+	if _enemy_bleed_tick_timer <= 0.0:
+		_enemy_bleed_tick_timer += ENEMY_BLEED_TICK
+		take_special_damage(_enemy_bleed_dps * ENEMY_BLEED_TICK, null, "bleed")
+	if _enemy_bleed_timer <= 0.0:
+		_enemy_bleed_dps = 0.0
+		_enemy_bleed_tick_timer = 0.0
 
 
 func apply_enemy_burn(dps: float) -> void:
@@ -4851,6 +5194,15 @@ func _process_enemy_burn(delta: float) -> void:
 		_enemy_burn_tick_timer = 0.0
 const FxOakleyLeafBarrierScene := preload("res://scenes/fx_oakley_leaf_barrier.tscn")
 const FxOakleyWardCastScene := preload("res://scenes/fx_oakley_ward_cast.tscn")
+
+## Koruma Bariyeri ile bir dosttan Şovalye'ye aktarılan hasar (network_manager.gd sync_redirected_damage): normal take_damage yolundan (kalkan,
+## hasar azaltma) geçer AMA temas kilidine (CONTACT_DAMAGE_IFRAME_MS) ve sıyrılmaya takılmaz - eskiden kilit aynı anda gelen aktarımların çoğunu yutuyordu.
+func take_redirected_damage(amount: float) -> void:
+	var was_dot: bool = _special_dmg_is_dot
+	_special_dmg_is_dot = true
+	take_damage(amount, null)
+	_special_dmg_is_dot = was_dot
+
 
 func take_damage(amount: float, source: Node2D = null) -> void:
 	if is_dead:
@@ -4913,6 +5265,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## dalı) bu bir gelen hasarı savuşturmaktır, takım adına "tanklamak"
 	## sayılır.
 	match_damage_taken += amount
+	BalanceLogScript.on_taken(amount, source)
 	## Kamera sarsıntısı (kullanıcı isteği 2026-10-05): maks canın %12'sini aşan ağır tek vuruş; sürekli hasar (yanma/asit) hariç.
 	if not _special_dmg_is_dot and max_health > 0.0 and amount / max_health >= 0.12:
 		CameraShakeScript.add_limited("hit_heavy", clampf(0.2 + amount / max_health * 0.8, 0.25, 0.55), 0.25)
@@ -4985,7 +5338,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## çıkarabiliyordu. Artık TÜM stat kaynakları (kart + eşya + hareket pasifi) birlikte DODGE_CHANCE_CAP'te
 	## kırpılır (taşma boşa gider, hiçbir stata dönüşmez); SADECE yetenek kaynaklı sıvışma (Elara'nın Q'su,
 	## _current_elara_evasion_dodge) bu sınırın üstüne biner.
-	var stat_dodge: float = minf(DODGE_CHANCE_CAP, dodge_chance + item_move_dodge_active)
+	var stat_dodge: float = minf(dodge_cap(), dodge_chance + item_move_dodge_active)
 	## Assasin "Rüzgar Gibi" evrimi (hamleden sonra 0,75 sn %100) de yetenek kaynaklı - sınırın üstüne biner.
 	var effective_dodge: float = clamp(stat_dodge + _current_elara_evasion_dodge() + _assasin_evade_dodge(), 0.0, 1.0)
 	if not _special_dmg_is_dot and effective_dodge > 0.0 and randf() < effective_dodge:
@@ -4999,7 +5352,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 		if amount <= 0.0:
 			return
 
-	## Ruhani Yetenek "Tank": alınan hasarın %60'ı hasarı verene yansır + eksik kalkanın %3'ü yenilenir.
+	## Ruhani Yetenek "Tank": alınan hasarın %200'ü (TANK_REFLECT) hasarı verene yansır + eksik kalkanın %3'ü yenilenir.
 	_spirit_tank_on_hit(amount, source)
 	_item_on_hit_taken() ## Kırılmaz İrade (eşya): her isabette kalkan
 	## Yetenek evrimleri: Şovalye "İntikam Patlaması" (E sürerken alınan tüm hasar - azaltmalardan sonra, kalkana gitse de -
@@ -5007,6 +5360,15 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	if _sovalye_retribution_active:
 		_sovalye_retribution_accum += amount
 	_matthew_patience_timer = 0.0
+	## Şovalye Adam'ın Koruma Bariyeri (E, id 29; bkz. _skill_paladin_barrier/_apply_damage_redirect_to_ally): buflanmış dostun aldığı hasarın
+	## damage_redirect_percent'i Şovalye'ye gider. DÜZELTME (2026-10-10, kullanıcı: "Şovalye'nin E'si arkadaşlarının hasarını emmiyor, etkisini görmedim"):
+	## aktarım eskiden dostun KALKANI hasarı emdikten SONRA, sadece cana giden kısımdan yapılıyordu (kalkanı olan dosta hiç işlemiyordu) - artık
+	## kalkandan ÖNCE, gelen hasarın tamamından. Şovalye tarafı take_redirected_damage (temas kilidine/sıyrılmaya takılmaz).
+	if damage_redirect_percent > 0.0 and damage_redirect_peer_id > 0 and NetworkManager.is_multiplayer_active:
+		var redirected_amount: float = amount * damage_redirect_percent
+		if redirected_amount > 0.0:
+			amount -= redirected_amount
+			NetworkManager.sync_redirected_damage.rpc(damage_redirect_peer_id, redirected_amount)
 
 	var remaining: float = amount
 	## Kullanıcı isteği: "kalkansız hasar alma ... ses kalkan yokken karakter
@@ -5096,11 +5458,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## take_damage()'ından geçecek (RPC alıcı tarafta local_player.take_
 	## damage() çağırır, bkz. network_manager.gd sync_redirected_damage) -
 	## kalkanı normal işler, bypass YOK.
-	if damage_redirect_percent > 0.0 and damage_redirect_peer_id > 0:
-		var redirected_amount: float = effective_damage * damage_redirect_percent
-		effective_damage -= redirected_amount
-		if NetworkManager.is_multiplayer_active and redirected_amount > 0.0:
-			NetworkManager.sync_redirected_damage.rpc(damage_redirect_peer_id, redirected_amount)
+	## (Koruma Bariyeri aktarımı artık kalkandan ÖNCE yapılıyor - bkz. remaining'in hemen üstü.)
 	health -= effective_damage
 	health_changed.emit(health, max_health)
 	_spawn_floating_text("%d" % int(round(effective_damage)), Color(1.0, 1.0, 1.0))
@@ -5308,10 +5666,12 @@ func _update_revive_rewind_fx() -> void:
 	## false'a geçişini burada yakalıyoruz (_complete_revive tam olarak bunu
 	## yapıyor), _finalize_death'te is_downed zaten false'a düşürülüp is_dead
 	## true kaldığı için (kalıcı ölüm) yanlışlıkla tetiklenmez.
+	## 2026-10-10 (kullanıcı: "doğan kişinin üstünde minik kalpler çıkması için spritesheet yüklemiştik ama o oynatılmıyor"): bayrak eskiden SADECE
+	## is_downed'ı izliyordu -> kalıcı ölümden dönüş (dükkandan diriltme, ölüden kalkış) hiç kalp göstermiyordu. Artık ölü YA DA yerde yatan -> canlı geçişi.
 	if _was_downed_for_heart_fx and not is_downed and not is_dead:
 		var heart := FxReviveHeartScene.instantiate()
 		add_child(heart)
-	_was_downed_for_heart_fx = is_downed
+	_was_downed_for_heart_fx = is_downed or is_dead
 
 
 func _go_down() -> void:
@@ -5417,6 +5777,11 @@ func get_downed_remaining_seconds() -> float:
 	return max(0.0, DOWNED_NO_RESCUER_GRACE - _no_rescuer_time)
 
 
+## Dirilen oyuncunun canı ve kalkanı azaminin bu oranıyla başlar (2026-10-10, kullanıcı: "bundan sonra bir oyuncu dirildiğinde %100 değil %50 can
+## ve kalkanla dirilecek") - arkadaş diriltmesi (_complete_revive) ve dükkan/kalıcı ölümden diriltme (revive_from_permadeath) ikisi de.
+const REVIVE_RESTORE_RATIO := 0.5
+
+
 func _complete_revive() -> void:
 	CameraShakeScript.add(0.25) ## dirilme anı hafif titreme (bkz. camera_shake.gd)
 	## DÜZELTME (bkz. die() üstündeki DÜZELTME notu): revive hakkı artık
@@ -5438,9 +5803,9 @@ func _complete_revive() -> void:
 	_revive_progress = 0.0
 	if downed_timer_label:
 		downed_timer_label.set_remaining_seconds(0.0)
-	health = max_health
+	health = max_health * REVIVE_RESTORE_RATIO
 	if item_shield_max > 0.0:
-		item_shield_hp = item_shield_max
+		item_shield_hp = item_shield_max * REVIVE_RESTORE_RATIO
 	health_changed.emit(health, max_health)
 	item_shield_changed.emit(item_shield_hp, item_shield_max)
 	_spawn_floating_text("CANLANDIN!", Color(1.0, 0.8, 0.2))
@@ -5612,9 +5977,9 @@ func revive_from_permadeath() -> void:
 	var col: CollisionShape2D = get_node_or_null("CollisionShape2D")
 	if col:
 		col.set_deferred("disabled", false)
-	health = max_health
+	health = max_health * REVIVE_RESTORE_RATIO
 	if item_shield_max > 0.0:
-		item_shield_hp = item_shield_max
+		item_shield_hp = item_shield_max * REVIVE_RESTORE_RATIO
 	health_changed.emit(health, max_health)
 	item_shield_changed.emit(item_shield_hp, item_shield_max)
 	_spawn_floating_text("CANLANDIN!", Color(1.0, 0.8, 0.2))
@@ -5709,7 +6074,7 @@ func _rise_from_permadeath_to_downed() -> void:
 func on_damage_dealt(amount: float, is_area: bool = false) -> void:
 	## Ruhani Yetenek "Adc": aktifken +%1 can emme eklenir (bkz. spirit_lifesteal). Yetenek evrimi Elara "Kan Oku": Gerçek
 	## Hasar (E) aktifken +%10 can çalma (oyunun can çalma kuralıyla: isabet başına o ihtimalle +1 can).
-	var total_lifesteal: float = lifesteal_percent + spirit_lifesteal + _evo_lifesteal_bonus() + evo_hit_lifesteal
+	var total_lifesteal: float = get_total_lifesteal()
 	if is_dead or total_lifesteal <= 0.0 or amount <= 0.0:
 		return
 	## Kan Ağlayan: can doluyken can çalma kalkana yazılır (aynı şans kuralı).
@@ -5717,13 +6082,13 @@ func on_damage_dealt(amount: float, is_area: bool = false) -> void:
 		if has_item("kan_aglayan"):
 			var chance_full: float = total_lifesteal * (GameManager.LIFESTEAL_EFFECTIVENESS if is_area else 1.0)
 			if randf() < chance_full:
-				_item_lifesteal_overflow(heal_power_mult())
+				_item_lifesteal_overflow(GameManager.LIFESTEAL_HEAL * heal_power_mult())
 		return
 	## KULLANICI İSTEĞİ (2026-09-21): "Can emme bundan sonra alan hasarı vuran skillerde ve silahlarda sadece %33 geçerli
 	## olmalı" - alan hasarı isabetlerinde şans, LIFESTEAL_EFFECTIVENESS ile çarpılır (tek hedefli isabetlerde tam).
 	var chance: float = total_lifesteal * (GameManager.LIFESTEAL_EFFECTIVENESS if is_area else 1.0)
 	if randf() < chance:
-		health = min(max_health, health + 1.0 * heal_power_mult())
+		health = min(max_health, health + GameManager.LIFESTEAL_HEAL * heal_power_mult())
 		health_changed.emit(health, max_health)
 
 
@@ -5965,7 +6330,7 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 			## Kullanıcı isteği: "level atlama kartlarındaki can yenilenmesi
 			## oranını 0.75'den 0.50'ye düşür" - eskiden _nice_up(1.3)*0.5=0.75,
 			## şimdi doğrudan 0.5.
-			heal_regen_card_bonus += HEALTH_REGEN_CARD_PER_TIER * tier_mult ## 2026-10-02: 0.5 -> 2 (artık 5 saniyede bir)
+			heal_regen_card_bonus += TierSystem.regen_card_for_tier(tier) ## 2026-10-10: kademe 1-4 = 2/4/6/8 (kullanıcı); eskiden HEALTH_REGEN_CARD_PER_TIER x paylaşılan eğri
 		"shield_protection":
 			## DÜZELTME (kullanıcı isteği: "kalkan emilimi statının adını
 			## kalkan soğurma olarak değiştir ve level atlama kartlarına
@@ -6032,7 +6397,7 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 			## dönüşürdü, artık zırh olmadığı için basitçe cap'te duruyor
 			## (taşma kaybolur).
 			var dodge_gain: float = _nice_up(0.025 * 1.3, 0.005) * tier_mult ## eskiden 0.025 (ondan önce 0.05), +%30 -> 0.035
-			dodge_chance = min(DODGE_CHANCE_CAP, dodge_chance + dodge_gain)
+			dodge_chance = min(1.0, dodge_chance + dodge_gain) ## sınır kullanımda (dodge_cap)
 		"knockback":
 			## BUG DÜZELTMESİ (kullanıcı bildirimi: "geri tepme yaratıkları geri
 			## itmiyor") - kod yolu (weapon.gd _apply_knockback/projectile.gd
@@ -6136,7 +6501,7 @@ func _skill_timing_for(char_id: int) -> Dictionary:
 ## doğrudan değiştirmek Şovalye/Melek'i de etkilerdi, bu yüzden Şovalye ve
 ## Oakley için ayrı bekleme süresi döndürülüyor - "duration" (6sn, hepsinde
 ## aynı) paylaşılan tablodan geliyor.
-const SOVALYE_KALKAN_YENILEME_COOLDOWN := 25.0 ## kullanıcı isteği (2026-09-24): "Şovalye adamın E yeteneğinin bekleme süresini 25 saniyeye düşür" (eskiden 50)
+const SOVALYE_KALKAN_YENILEME_COOLDOWN := 22.5 ## kullanıcı isteği (2026-09-24): "Şovalye adamın E yeteneğinin bekleme süresini 25 saniyeye düşür" (eskiden 50); 2026-10-10: %10 daha kısa (25 -> 22,5)
 const OAKLEY_VINES_COOLDOWN := 16.0
 ## DÜZELTME (kullanıcı isteği: "Melek karakterinin E yeteneğinin bekleme
 ## süresini %15 arttır") - üstteki Şovalye/Oakley ayrımıyla AYNI desen,
@@ -6225,7 +6590,8 @@ func _activate_skill2() -> void:
 	## Yetenek Kitabı: bkz. item_skill_shield_cost_reduction üstündeki yorum.
 	var skill2_shield_cost: float = (item_shield_max * SKILL2_SHIELD_COST_PERCENT_OF_MAX + SKILL2_SHIELD_COST_FLAT) * (1.0 - item_skill_shield_cost_reduction)
 	## Shaman Kalkan Totemi (id 26, 2026-09-29'da Q'dan E'ye) kalkan VEREN bir yetenek - Q'daki eski muafiyetini korur.
-	var is_shield_related_skill2: bool = (skill2_id == 10 and GameManager.selected_char_id != 2) or skill2_id == 26 or _evo_skill_free("skill2")
+	## Büyücü Arcane Lanet (22): 2026-10-10 buff ile kalkan HARCAMAZ (4 sn beklemeyle dakikada ~15 kullanım kalkanı eritiyordu).
+	var is_shield_related_skill2: bool = (skill2_id == 10 and GameManager.selected_char_id != 2) or skill2_id == 26 or skill2_id == 22 or _evo_skill_free("skill2")
 	## Vampir Çocuk TEMEL'i (Yarasa Formu, id 41) kalkan YERİNE maksimum canın %4'ünü harcar - can
 	## yetmiyorsa hiç tetiklenmez (bkz. _vampir_try_pay_health), kalkan bedeli ödenmez.
 	if skill2_id == 41:
@@ -6510,6 +6876,9 @@ func _end_skill3_effects() -> void:
 		49:
 			if _shaman_golem_active:
 				_end_shaman_golem()
+		## Necromancer Lanetli Kafatası (id 44): aktif süre bitince kafatası pasif (küçük) boyuta döner.
+		44:
+			_end_necro_skull_active()
 
 
 func _activate_skill() -> void:
@@ -6872,6 +7241,8 @@ const FxMelekShieldAuraScene := preload("res://scenes/fx_recovery_mana.tscn")
 ## Melek R (Kutsal Korku) sari pixel parilti - bkz. fx_melek_holy.gd. "holy" aura tipi start_ally_aura_fx ile ally uzerinde de cikar.
 const FxMelekHolyScene := preload("res://scenes/fx_melek_holy.tscn")
 const MelekHolyScript := preload("res://scripts/fx_melek_holy.gd")
+const FxMelekAscendScene := preload("res://scenes/fx_melek_ascend.tscn")
+const MelekAscendScript := preload("res://scripts/fx_melek_ascend.gd")
 var _ally_aura_fx: Dictionary = {}
 ## _process_healer_heal_tick/_process_healer_shield_tick'teki "bağ hâlâ
 ## menzilde mi" geçişlerini izlemek için - aura start/stop'u sadece GERÇEK
@@ -7191,13 +7562,13 @@ const BUYUCU_ARCANE_BOUNCE_DELAY := 0.14
 const BUYUCU_NOVA_RADIUS := 320.0
 const BUYUCU_NOVA_SLOW_PERCENT := 0.8
 const BUYUCU_NOVA_SLOW_DURATION := 6.0
-const BUYUCU_NOVA_DAMAGE_RATIO := 1.0
+const BUYUCU_NOVA_DAMAGE_RATIO := 2.0 ## 2026-10-10 Büyücü buff: %100 -> %200
 
 ## PASİF "Büyü Dalgası" (kullanıcı isteği 2026-10-04): "Büyücü kız her yetenek kullandığında silahları aniden sertçe ileri itilip
 ## aynı anda atış yaparak verdikleri sonraki atışın hasarını %30 arttırır. (saldırı hızı bekleme süresi sıfırlanır ve aniden ateş
 ## ederler)". Q (set değişimi) pasifi TETİKLEMEZ (kullanıcı isteği 2026-10-04: "Q yeteneğiyle etkinleşmesini istemiyorum"). Silah
 ## tarafı weapon.gd arcane_surge (bekleme sıfırlama + %30'luk atış + hedefin tersine geri tepme WeaponJuice.arcane_surge - uzak kopya aynı).
-const BUYUCU_PASSIVE_SHOT_MULT := 1.3
+const BUYUCU_PASSIVE_SHOT_MULT := 1.6 ## 2026-10-10 Büyücü buff: +%30 -> +%60
 
 ## Varyasyon 3: Hortum - bkz. fx_buyucu_tornado.gd (bağımsız, dolaşan bir
 ## varlık olarak ayrı bir script dosyasında implemente edildi).
@@ -7212,7 +7583,12 @@ const BUYUCU_TORNADO_TOUCH_RADIUS := 46.0
 ## is_buyucu_channeling/_physics_process hareket kilidi), bu süre boyunca
 ## etrafa telegraph edilen (kısa bir uyarı halkasıyla önceden gösterilen)
 ## meteorlar düşer.
-const BUYUCU_METEOR_CHANNEL_TIME := 5.0
+## 2026-10-10 BÜYÜCÜ BUFF (kullanıcı: "büyücü çok güçsüz diye kimse oynamıyor" -> analiz önerilerinin hepsi onaylandı): meteor kanalı 5 -> 3 sn, kanal boyunca YÜRÜNEBİLİR
+## (BUYUCU_METEOR_CAN_MOVE; meteorlar oyuncunun O ANKİ konumunun çevresine düşer), meteorlar artık YARATIKLARIN üstüne düşer (BUYUCU_METEOR_AIM_CHANCE; eskiden 420 px
+## dairede rastgele noktaya düşüp bir yaratığa ortalama ~0,3 meteor isabet ediyordu), bekleme 120 -> 75 sn (SKILL2_TIMING[25]).
+const BUYUCU_METEOR_CAN_MOVE := true
+const BUYUCU_METEOR_AIM_CHANCE := 0.8 ## meteorun bu olasılıkla menzildeki rastgele bir yaratığın (+-18 px) üstüne düşmesi; yoksa rastgele nokta
+const BUYUCU_METEOR_CHANNEL_TIME := 3.0
 const BUYUCU_METEOR_RADIUS := 420.0
 const BUYUCU_METEOR_HIT_RATIO := 1.20
 const BUYUCU_METEOR_IMPACT_RADIUS := 70.0
@@ -7311,7 +7687,7 @@ func _buyucu_variation_text(variation: int) -> String:
 	## Sayı/oranlar evrimlerle güncel (Büyü Fırtınası 7 sekme / 5 hortum, Güçlü Büyü x1,3) - ipucu gerçekte olanı söylesin.
 	match variation:
 		0:
-			return "TEMEL (Arcane Lanet): yaratıklar arasında %d kez sekip her sekişte saldırı gücünün %%%d'ü kadar hasar verir. (%.0fsn bekleme)" % [
+			return "TEMEL (Arcane Lanet): kalkan harcamaz; yaratıklar arasında %d kez sekip her sekişte saldırı gücünün %%%d'ü kadar hasar verir. (%.0fsn bekleme)" % [
 				_buyucu_arcane_bounce_count(), int(round(_buyucu_arcane_ratio() * 100.0)), float(SKILL2_TIMING[22]["cooldown"])]
 		1:
 			return "TEMEL (Don Nova): etraftaki tüm yaratıkları %.0fsn boyunca %%%d yavaşlatır ve saldırı gücünün %%%d'ü kadar hasar verir. (%.0fsn bekleme)" % [
@@ -7320,7 +7696,7 @@ func _buyucu_variation_text(variation: int) -> String:
 			return "ULTİ (Hortum): %.0fsn boyunca dolaşan %d hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %%%d'ü kadar hasar verir. (%.0fsn bekleme)" % [
 				BUYUCU_TORNADO_DURATION, _buyucu_tornado_count(), int(round(_buyucu_tornado_ratio() * 100.0)), float(SKILL2_TIMING[24]["cooldown"])]
 		3:
-			return "ULTİ (Meteor Patlaması): %.0fsn hareketsiz odaklanıp etrafa saldırı gücünün %%%d'ü kadar hasar veren meteorlar yağdırır. (%.0fsn bekleme)" % [
+			return "ULTİ (Meteor Patlaması): %.0fsn odaklanıp (yürüyebilirsin) çevrendeki yaratıkların üstüne saldırı gücünün %%%d'ü kadar hasar veren meteorlar yağdırır. (%.0fsn bekleme)" % [
 				BUYUCU_METEOR_CHANNEL_TIME, int(BUYUCU_METEOR_HIT_RATIO * 100.0), float(SKILL2_TIMING[25]["cooldown"])]
 		_:
 			return ""
@@ -7854,9 +8230,18 @@ func _process_buyucu_meteor(delta: float) -> void:
 func _spawn_buyucu_meteor_strike() -> void:
 	var power: float = _buyucu_meteor_power
 	var impact_radius: float = BUYUCU_METEOR_IMPACT_RADIUS * power
-	var angle: float = randf() * TAU
-	var dist: float = randf_range(0.0, BUYUCU_METEOR_RADIUS)
-	var strike_pos: Vector2 = _buyucu_meteor_origin + Vector2(cos(angle), sin(angle)) * dist
+	var origin: Vector2 = global_position if BUYUCU_METEOR_CAN_MOVE else _buyucu_meteor_origin
+	var strike_pos: Vector2 = Vector2.INF
+	if randf() < BUYUCU_METEOR_AIM_CHANCE:
+		var pool: Array = []
+		for e in EnemyQueryScript.candidates(get_tree(), origin, BUYUCU_METEOR_RADIUS):
+			if is_instance_valid(e) and e.get("is_dead") != true and VisionFogScript.can_target(e) 					and origin.distance_to((e as Node2D).global_position) <= BUYUCU_METEOR_RADIUS:
+				pool.append(e)
+		if not pool.is_empty():
+			strike_pos = (pool[randi() % pool.size()] as Node2D).global_position + Vector2(randf_range(-18.0, 18.0), randf_range(-18.0, 18.0))
+	if strike_pos == Vector2.INF:
+		var angle: float = randf() * TAU
+		strike_pos = origin + Vector2(cos(angle), sin(angle)) * randf_range(0.0, BUYUCU_METEOR_RADIUS)
 	_spawn_local_telegraph_ring(strike_pos, impact_radius, Color(1.0, 0.35, 0.1))
 	## DÜZELTME (kullanıcı bildirimi: "yeni efektler yaptırılmıştı ziva agent
 	## tarafından" ama görünmüyorlardı): gökten düşen taş + toz izi + patlama
@@ -8105,10 +8490,11 @@ func flash_paladin_barrier(attacker: Node2D = null) -> void:
 func take_paladin_barrier_damage(amount: float, attacker: Node2D = null) -> void:
 	if is_dead or not paladin_zone_active:
 		return
-	## Evrim "Yansıtan Kubbe": kalkana vuran yaratık vurduğu hasarın %50'sini geri alır (istemcide take_damage host'a gider).
+	## Evrim "Yansıtan Kubbe": kalkana vuran yaratık Şovalye'nin AZAMİ kalkanının %10'u kadar hasar alır (2026-10-10; eskiden vurduğu hasarın %50'si).
+	## İstemcide take_damage host'a gider.
 	if has_evo("sovalye_r2") and attacker != null and is_instance_valid(attacker) and attacker.get("is_dead") != true \
 			and attacker.has_method("take_damage") and attacker.is_in_group("enemies"):
-		attacker.take_damage(amount * EVO_SOVALYE_R_REFLECT, false, 0.0, false)
+		attacker.take_damage(item_shield_max * EVO_SOVALYE_R_REFLECT, false, 0.0, false)
 		_evo_world_fx(FxEvoReflectSparkScene, attacker.global_position, 0.0, (attacker.global_position - global_position).angle(), "sovalye_reflect", 0.12)
 	var shield_damage: float = amount * PALADIN_ULTI_SHIELD_COST_MULT
 	item_shield_hp = max(0.0, item_shield_hp - shield_damage)
@@ -8266,10 +8652,9 @@ var elara_true_damage_active: bool = false
 func _elara_passive_fire_rate_mult() -> float:
 	if get_skill_character_id() != 12 and get_skill2_id() != 11:
 		return 1.0
-	## fire_rate_mult zaten "çarpan küçüldükçe hızlanır" mantığında (bkz.
-	## weapon.gd set_fire_rate_mult) - bu yüzden bonus burada 1.0'dan
-	## ÇIKARILARAK uygulanıyor (örn. %50 bonus -> 0.5 çarpan -> 2 kat hız).
-	return 1.0 - min(level * ELARA_PASSIVE_ATK_SPEED_PER_LEVEL, ELARA_PASSIVE_ATK_SPEED_CAP)
+	## 2026-10-12 denge (kullanıcı: "Elara neden bu kadar bozuk"): eskiden bonus 1.0'dan ÇIKARILIYORDU (%50 -> 0.5 çarpan = 2 KAT hız, +%100) ve
+	## metin "%50" diyordu; üstüne sınır aşımı -> saldırı gücü dönüşümünü iki katlıyordu. Artık gerçekten +%50 hız: aralık = 1 / (1 + bonus).
+	return 1.0 / (1.0 + min(level * ELARA_PASSIVE_ATK_SPEED_PER_LEVEL, ELARA_PASSIVE_ATK_SPEED_CAP))
 
 
 func _skill_elara_double_fire() -> void:
@@ -10348,7 +10733,7 @@ const VAMPIR_BAT_CONTACT_DAMAGE_RATIO := 0.8
 const VAMPIR_BAT_CONTACT_INTERVAL := 0.6
 const VAMPIR_BAT_CONTACT_REACH := 38.0 ## yaratık gövde yarıçapına eklenen "yarasa kanadı" payı
 const VAMPIR_R_DAMAGE_RATIO := 0.6
-const VAMPIR_R_HEAL_RATIO := 0.05
+const VAMPIR_R_HEAL_RATIO := 0.04 ## 2026-10-10: 0,05 -> 0,04 (kullanıcı: "ulti can yenileme saldırı gücü oranını %5 den %4 e düşür")
 const VAMPIR_R_RADIUS := 260.0
 ## Kullanıcı isteği (2026-09-21): "yarasalar daha yavaş uçup geri dönsün" - eskiden 320 (dönüş 1.1x = 352).
 ## Kullanıcı isteği (2026-09-28, yetenek evrimleri): "yarasa sayısını 3'e düşürüyoruz ve uçup dönme hızlarını %20
@@ -11149,15 +11534,56 @@ const MAP_EDGE_INSET := 16.0
 ## "atış ARALIĞI çarpanı"nda birleşir (düşük = hızlı); silahlar (_apply_weapon_bonuses), Vampir yarasaları ve stat
 ## ekranları (get_attack_speed_bonus_percent) AYNI değeri okur. Eskiden stat ekranı bunun yerine SADECE ilk silahın
 ## saniyedeki atışını gösteriyordu - ilk silah değişince/başka silah yükseltilince değer atlıyor ya da hiç değişmiyordu.
-func get_attack_interval_mult() -> float:
-	## item_fire_rate_percent + ruhani "Adc" toplamının üst sınırı %90 - aşırı yığılma negatif çarpana yol açmasın.
-	var safe_item_mult: float = maxf(0.1, 1.0 - item_fire_rate_percent - spirit_attack_speed)
+##
+## SALDIRI HIZI ÜST SINIRI + TAŞMA (kullanıcı isteği 2026-10-11): toplam saldırı hızı bonusu en çok %600 (aralık çarpanı >= 1/7). Sınırı AŞAN
+## her 1 puan saldırı hızı, 0.5 saldırı gücüne (damage_bonus) dönüşür - ama KALICI DEĞİL: taşma her an CANLI hesaplanır (toplam saldırı hızı
+## geçici bir buff'la - ör. ruhani "Adc", Işığın Muhafızı - sınırın üstüne çıktıysa kazanılan güç buff bitince geri alınır; bkz.
+## _sync_attack_speed_overflow_ap). Kart/eşya gibi kalıcı kaynaklar da aynı canlı hesaba girer (eşya satılırsa güç düşer).
+## Sabitler GameManager.ATTACK_SPEED_CAP_PERCENT / ATTACK_SPEED_OVERFLOW_AP_PER_PERCENT (weapon.gd de okur).
+
+
+## Sınırsız aralık çarpanı (düşük = hızlı). item_fire_rate_percent + ruhani "Adc" toplamı negatif çarpana yol açmasın diye 0.01'de kesilir.
+func _attack_interval_mult_uncapped() -> float:
+	var safe_item_mult: float = maxf(0.01, 1.0 - item_fire_rate_percent - spirit_attack_speed)
 	return fire_rate_mult * _elara_passive_fire_rate_mult() * safe_item_mult
 
 
-## Toplam saldırı hızı bonusu (%): 1/aralık_çarpanı - 1. Kart/eşya aldıkça yalnızca ARTAR (geçici "Adc" bitince düşer).
+func get_attack_interval_mult() -> float:
+	return maxf(_attack_interval_mult_uncapped(), 1.0 / (1.0 + GameManager.ATTACK_SPEED_CAP_PERCENT / 100.0))
+
+
+## Sınırsız toplam saldırı hızı bonusu (%): 1/aralık_çarpanı - 1 (üst sınır UYGULANMAZ; taşma hesabı bunu okur).
+func _attack_speed_bonus_percent_uncapped() -> float:
+	return (1.0 / maxf(0.01, _attack_interval_mult_uncapped()) - 1.0) * 100.0
+
+
+## Toplam saldırı hızı bonusu (%), en çok ATTACK_SPEED_CAP_PERCENT. Kart/eşya aldıkça ARTAR (geçici "Adc" bitince düşer).
 func get_attack_speed_bonus_percent() -> float:
-	return (1.0 / maxf(0.01, get_attack_interval_mult()) - 1.0) * 100.0
+	return minf(_attack_speed_bonus_percent_uncapped(), GameManager.ATTACK_SPEED_CAP_PERCENT)
+
+
+## Sınırı aşan saldırı hızı puanı (%) - 0 = sınırın altında.
+func get_attack_speed_overflow_percent() -> float:
+	## Elara pasifi taşma->saldırı gücü dönüşümüne GİRMEZ (2026-10-12 denge): sınır aşımı yalnız kart/eşya/ruhani hızdan sayılır.
+	var no_passive: float = fire_rate_mult * maxf(0.01, 1.0 - item_fire_rate_percent - spirit_attack_speed)
+	var total_pct: float = minf(_attack_speed_bonus_percent_uncapped(), (1.0 / maxf(0.01, no_passive) - 1.0) * 100.0)
+	return maxf(0.0, total_pct - GameManager.ATTACK_SPEED_CAP_PERCENT)
+
+
+## Taşmadan gelen saldırı gücü (şu anki toplam saldırı hızına göre). Son Şans ile AYNI fark-uygulama deseni (damage_bonus'a yalnız değişim eklenir).
+func attack_speed_overflow_ap() -> float:
+	return get_attack_speed_overflow_percent() * GameManager.ATTACK_SPEED_OVERFLOW_AP_PER_PERCENT
+
+
+var _attack_speed_overflow_ap_applied: float = 0.0
+
+
+func _sync_attack_speed_overflow_ap() -> void:
+	var want: float = attack_speed_overflow_ap()
+	if not is_equal_approx(want, _attack_speed_overflow_ap_applied):
+		damage_bonus += want - _attack_speed_overflow_ap_applied
+		_attack_speed_overflow_ap_applied = want
+		_apply_weapon_bonuses()
 
 
 ## Sadece KALICI hız (taban + hız kartları + eşyalar) - yetenek/ruhani/geçici buff'lar HARİÇ. "Kopyanı Öldür"
@@ -11220,16 +11646,15 @@ func _spirit_cast_dukkan() -> void:
 	_spirit_channel_sound = _spirit_play_sound(str(SpiritualSkillsScript.get_def(SpiritualSkillsScript.DUKKAN)["sound"]), -6.0)
 
 
-## Odaklanma sırasında her karede: hareket, hasar alma, satıcının ayrılması ya da içeri girme odaklanmayı böler.
+## Odaklanma sırasında her karede: hareket, satıcının ayrılması ya da içeri girme odaklanmayı böler (hasar 2026-10-10'dan beri bölmez).
 func _process_spirit_channel() -> void:
 	var moving: bool = Input.get_vector("move_left", "move_right", "move_up", "move_down").length() > 0.1 and not is_chat_typing
 	var total: float = health + item_shield_hp
 	var took_damage: bool = total < _spirit_channel_last_total - 0.001
 	_spirit_channel_last_total = total
+	## 2026-10-10 (kullanıcı: "dükkana ışınlanma ruhani yeteneği hasar alırken bile kullanılabilsin"): hasar artık odaklanmayı BÖLMEZ (took_damage yalnız bilgi).
 	if moving:
 		_spirit_cancel_channel("İPTAL")
-	elif took_damage:
-		_spirit_cancel_channel("İPTAL (HASAR)")
 	elif not GameManager.merchant_zone_active or is_indoors:
 		_spirit_cancel_channel("SATICI AYRILDI")
 
@@ -11496,6 +11921,7 @@ func receive_kalkan_bagi_shield_delta(delta_amount: float) -> void:
 	if not _kalkan_bagi_active or item_shield_max <= 0.0:
 		return
 	if delta_amount > 0.0:
+		show_received_shield_number(delta_amount) ## bağdan gelen kalkan görünür olsun (mavi sayı; heal_shield'den ÖNCE - "zaten dolu" kontrolü)
 		heal_shield(delta_amount, false, false)
 	elif delta_amount < 0.0:
 		item_shield_hp = max(0.0, item_shield_hp + delta_amount)
@@ -12103,8 +12529,8 @@ const EVO_MELEK_E_DAMAGE_REDUCTION := 0.15 ## Kutsal Zırh: %15 hasar azaltma
 const EVO_MELEK_E_CD_MULT := 0.75 ## Çabuk Kalkan
 const EVO_MELEK_SHIELD_MULT := 1.25 ## Güçlü Kalkan
 const EVO_MELEK_E_SPEED := 0.25 ## Kanatlı Adımlar
-const EVO_MELEK_R_CD_MULT := 0.75 ## Çabuk Korku
-const EVO_MELEK_R_HEAL_RATIO := 0.5 ## Kutsal Işık: saldırı gücünün %50'si can
+const EVO_MELEK_R_CD_MULT := 0.85 ## Bedelsiz Işık (2026-10-11 R rework): kalkan harcamaz + %15 az bekleme
+const EVO_MELEK_HEAL_SHIELD_POWER := 0.15 ## Kutsal Lütuf: +%15 İyileştirme ve Kalkan Gücü (get_heal_shield_power)
 const EVO_MELEK_SPEED_LINE_COLOR := Color(0.75, 0.9, 1.0, 0.7)
 ## Talon
 const EVO_TALON_Q_CD_MULT := 0.7 ## Çevik Hamle
@@ -12164,7 +12590,7 @@ const EVO_SOVALYE_E_MOVE_MULT := 1.2 ## Koruyucu Adım
 const EVO_SOVALYE_RETRIBUTION_RADIUS := 200.0 ## İntikam Patlaması (dünya birimi)
 const EVO_SOVALYE_R_PUSH_RADIUS := 240.0 ## Sarsıcı Patlama
 const EVO_SOVALYE_R_PUSH_DISTANCE := 230.0
-const EVO_SOVALYE_R_REFLECT := 0.5 ## Yansıtan Kubbe
+const EVO_SOVALYE_R_REFLECT := 0.10 ## Yansıtan Kubbe: vuran yaratığa Şovalye'nin azami kalkanının bu oranı (2026-10-10, kullanıcı: "kalkanının %10'u kadar hasar versin")
 const EVO_SOVALYE_R_WALK_MULT := 0.3 ## Yürüyen Kale
 ## Matthew
 const EVO_MATTHEW_Q_DAMAGE_MULT := 1.3 ## Keskin Dişler
@@ -12434,7 +12860,7 @@ func _evo_timing(skill_id: int, base: Dictionary) -> Dictionary:
 			elif skill_id == 10 and has_evo("melek_e2"):
 				cd_mult *= EVO_MELEK_E_CD_MULT
 			elif skill_id == 32 and has_evo("melek_r1"):
-				cd_mult *= EVO_MELEK_R_CD_MULT
+				cd_mult *= EVO_MELEK_R_CD_MULT ## Bedelsiz Işık (kalkan bedeli: _evo_skill_free)
 		1: ## Talon: Q 38, E 36, R 37
 			if skill_id == 38 and has_evo("talon_q2"):
 				cd_mult *= EVO_TALON_Q_CD_MULT
@@ -12494,6 +12920,8 @@ func _evo_skill_free(slot: String) -> bool:
 			return slot == "skill" and has_evo("matthew_q2")
 		8:
 			return slot == "skill3" and has_evo("elara_rf")
+		10:
+			return slot == "skill3" and has_evo("melek_r1")
 	return false
 
 
@@ -12626,28 +13054,8 @@ func _melek_refresh_e_buffs(ally_bonded: bool) -> void:
 			_evo_give_buff(t, "speed", EVO_MELEK_E_SPEED, EVO_BUFF_REFRESH_TIME)
 
 
-## Kutsal Korku evrimleri: "Kutsal Işık" (korku merkezlerinin yarıçapındaki dostlar + Melek saldırı gücünün %50'si can,
-## her birinin üstünde şifa nabzı) ve "Yeniden Doğuş" (Q ve E bekleme süreleri sıfırlanır).
-func _melek_fear_evolutions(centers: Array) -> void:
-	if has_evo("melek_r2"):
-		var amount: float = damage_bonus * EVO_MELEK_R_HEAL_RATIO
-		heal(amount)
-		_evo_world_fx(FxEvoHealPulseScene, global_position)
-		for ally in get_tree().get_nodes_in_group("player_ally"):
-			if not is_instance_valid(ally) or ally.get("is_dead") == true or not (ally is Node2D):
-				continue
-			var in_area: bool = false
-			for c in centers:
-				if (c as Vector2).distance_to((ally as Node2D).global_position) <= MELEK_FEAR_RADIUS:
-					in_area = true
-					break
-			if in_area:
-				_apply_heal_to_ally(ally as Node2D, amount)
-				_evo_world_fx(FxEvoHealPulseScene, (ally as Node2D).global_position)
-	if has_evo("melek_rf"):
-		_evo_reset_cooldown("skill")
-		_evo_reset_cooldown("skill2")
-		_play_and_broadcast_skill_fx(FxEvoCooldownResetScene)
+## (Kutsal Korku evrimleri 2026-10-11 R rework'üyle değişti: "Bedelsiz Işık" -> _evo_skill_free + _evo_timing, "Kutsal
+## Lütuf" -> get_heal_shield_power, "Yeniden Doğuş" -> _skill_melek_fear içinde.)
 
 
 ## Bekleme süresindeki bir yuvayı anında hazır yapar (bir sonraki karede "ready" - _process_skill*'in 0 bekleme koruması).
@@ -13677,6 +14085,34 @@ var _owned_item_counts: Dictionary = {} ## anahtar -> adet (has_item hızlı yol
 var _item_olum_cd: float = 0.0
 var _item_gunes_cd: float = 0.0
 var _item_zaman_cd: float = 0.0
+var _item_anka_revive_cd: float = 0.0 ## Anka Mührü (bkz. _item_after_health_damage)
+const ITEM_ANKA_REVIVE_COOLDOWN := 180.0
+## Yeni efsanevi/epik eşya pasifleri (2026-10-10, kullanıcının "Yeni eşyalar.txt"i; tanımlar items.gd):
+var item_ap_percent: float = 0.0 ## Savaşçı Bileyi %5, Kıyamet Bıçağı %25: saldırı gücünü yüzdece artırır (bkz. _refresh_item_ap_percent)
+var item_extra_lifesteal: float = 0.0 ## Kanlı Biçer "%1 Can Emme" (can çalma şansına eklenir)
+var _ap_pct_applied: float = 0.0
+var _bastion_last_max_hp: float = -1.0
+const ITEM_BASTION_HP_TO_SHIELD := 0.30 ## Ahenk Bastiyonu: azami canın %30'u kadar ek azami kalkan
+
+
+## Saldırı gücü yüzdesi: damage_bonus'u okuyan HER yer (silahlar, yetenekler, köpek...) etkin değeri görsün diye yüzde payı damage_bonus'un İÇİNE
+## yazılır ve her karede yeniden hesaplanır (taban = damage_bonus - önceki pay; kart/eşya/Savaş Şevki tabanı değiştirse de doğru kalır).
+func _refresh_item_ap_percent() -> void:
+	var base: float = damage_bonus - _ap_pct_applied
+	var want: float = base * item_ap_percent
+	if absf(want - _ap_pct_applied) > 0.01:
+		damage_bonus = base + want
+		_ap_pct_applied = want
+		_apply_weapon_bonuses()
+	## Ahenk Bastiyonu: azami can değişince ek kalkan da güncellensin
+	if has_item("ahenk_bastiyonu") and not is_equal_approx(max_health, _bastion_last_max_hp):
+		_bastion_last_max_hp = max_health
+		refresh_shield_stats()
+
+
+## Etkin sıvışma sınırı (Rüzgâr Yürüyen Çizmeleri ile yükselir).
+func dodge_cap() -> float:
+	return DODGE_CHANCE_CAP_BOOTS if has_item("ruzgar_yuruyen_cizmeleri") else DODGE_CHANCE_CAP
 var _item_invuln_timer: float = 0.0
 var _item_gunes_heal_left: float = 0.0
 var _item_gunes_heal_rate: float = 0.0
@@ -13765,7 +14201,7 @@ func _ensure_item_signals() -> void:
 ## Her kare (bkz. _process_item_passives).
 func _process_new_item_passives(delta: float) -> void:
 	_ensure_item_signals()
-	for cd_name in ["_item_olum_cd", "_item_gunes_cd", "_item_zaman_cd", "_item_invuln_timer", "_item_aegis_fx_cd",
+	for cd_name in ["_item_olum_cd", "_item_gunes_cd", "_item_zaman_cd", "_item_anka_revive_cd", "_item_invuln_timer", "_item_aegis_fx_cd",
 			"_item_anka_fx_cd", "_item_blood_fx_cd"]:
 		var v: float = float(get(cd_name))
 		if v > 0.0:
@@ -13788,9 +14224,10 @@ func _process_new_item_passives(delta: float) -> void:
 		if _light_guard_timer <= 0.0:
 			_end_light_guard_buff()
 	_sync_son_sans_ap()
+	_sync_attack_speed_overflow_ap() ## saldırı hızı %600'ü aşan kısım -> canlı saldırı gücü (geçici buff bitince geri alınır)
 	## Aegis'in Sonsuz Muhafızı: kalkan %40'ın altındayken (yenilenme beklemesinde de) saniyede maksimumun %0.5'i.
 	if has_item("aegisin_muhafizi") and not is_dead and item_shield_max > 0.0 and item_shield_hp < item_shield_max * ITEM_AEGIS_SHIELD:
-		_shield_regen_tick_pending += item_shield_max * ITEM_AEGIS_PER_SEC * (1.0 + heal_shield_power) * delta
+		_shield_regen_tick_pending += item_shield_max * ITEM_AEGIS_PER_SEC * heal_power_mult() * delta
 		if _item_aegis_fx_cd <= 0.0:
 			_item_aegis_fx_cd = 1.2
 			_item_fx("aegis")
@@ -13845,6 +14282,18 @@ func _item_after_health_damage() -> void:
 		_item_freeze_vision_enemies()
 		_item_fx("time_freeze")
 		_spawn_floating_text("ZAMAN DURDU!", Color(0.6, 0.9, 1.0))
+	## Anka Mührü (efsanevi, 2026-10-10): ölümcül darbede anında %100 can ve kalkanla dirilirsin, 1 sn dokunulmaz (3 dk bekleme).
+	if health <= 0.0 and has_item("anka_muhru") and _item_anka_revive_cd <= 0.0:
+		_item_anka_revive_cd = ITEM_ANKA_REVIVE_COOLDOWN
+		health = max_health
+		health_changed.emit(health, max_health)
+		if item_shield_max > 0.0:
+			item_shield_hp = item_shield_max
+			item_shield_changed.emit(item_shield_hp, item_shield_max)
+		_item_invuln_timer = 1.0
+		_play_and_broadcast_skill_fx(FxReviveHeartScene)
+		_spawn_floating_text("ANKA MÜHRÜ!", Color(1.0, 0.55, 0.25))
+		CameraShakeScript.add(0.25)
 	if health <= 0.0:
 		return
 	if has_item("olum_esigi") and _item_olum_cd <= 0.0 and health < max_health * ITEM_OLUM_ESIGI_HP and item_shield_max > 0.0:
@@ -13855,7 +14304,7 @@ func _item_after_health_damage() -> void:
 		_item_gunes_cd = ITEM_PASSIVE_COOLDOWN
 		if item_shield_max > 0.0:
 			heal_shield(maxf(0.0, damage_bonus) * ITEM_GUNES_SHIELD_AP)
-		_item_gunes_heal_left = max_health * ITEM_GUNES_HEAL * (1.0 + heal_shield_power)
+		_item_gunes_heal_left = max_health * ITEM_GUNES_HEAL * heal_power_mult()
 		_item_gunes_heal_rate = _item_gunes_heal_left / ITEM_GUNES_HEAL_TIME
 		_item_fx("sun_will")
 
@@ -13935,7 +14384,15 @@ func item_first_hit(target: Node) -> bool:
 
 ## İyileştirme ve Kalkan Gücü çarpanı (oyuncunun SAĞLADIĞI can/kalkan).
 func heal_power_mult() -> float:
-	return 1.0 + maxf(0.0, heal_shield_power)
+	return 1.0 + maxf(0.0, get_heal_shield_power())
+
+
+## Toplam İyileştirme ve Kalkan Gücü: eşyalar (heal_shield_power) + Melek "Kutsal Lütuf" evrimi. İstatistik panelleri de bunu okur.
+func get_heal_shield_power() -> float:
+	var p: float = heal_shield_power
+	if GameManager.selected_char_id == 10 and has_evo("melek_r2"):
+		p += EVO_MELEK_HEAL_SHIELD_POWER
+	return p
 
 
 ## Işığın Muhafızı Parşomeni (veren taraf): arkadaşa can/kalkan verince ona 6 sn %15 saldırı hızı + 5 saldırı gücü.

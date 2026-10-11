@@ -89,7 +89,7 @@ func test_don_nova_now_casts_from_r_with_ulti_cost() -> void:
 	assert(e.frost_slows == [[p.BUYUCU_NOVA_SLOW_PERCENT, p.BUYUCU_NOVA_SLOW_DURATION]] and e.freezes.is_empty() and e.hits.size() == 1,
 		"R'de Don Nova %%80 yavaşlatır (dondurmaz) + vurur: %s %s %s" % [str(e.frost_slows), str(e.freezes), str(e.hits)])
 	assert(p.item_shield_hp < shield0, "ULTİ kalkan bedeli ödendi")
-	assert(p._buyucu_variation_cooldowns[1] > 44.0, "Don Nova kendi bekleme sayacını kullanır (45 sn)")
+	assert(p._buyucu_variation_cooldowns[1] > 34.0, "Don Nova kendi bekleme sayacını kullanır (35 sn, 2026-10-10)")
 	assert(p.get_skill3_progress() < 0.1, "R halkası bekleme gösterir")
 	## Aynı tuşa tekrar: bekleme yüzünden çalışmaz.
 	e.frost_slows.clear()

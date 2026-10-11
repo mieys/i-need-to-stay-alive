@@ -1,6 +1,7 @@
 extends Area2D
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 @export var speed: float = 400.0 ## genel hız ayarı: 500'den %20 düşürüldü
 @export var impact_scene: PackedScene
@@ -301,6 +302,7 @@ func _on_body_entered(body: Node) -> void:
 	## yani ilk isabet hiç bonus almaz, N'inci isabet (N-1) yük kadar bonus alır.
 	if mark_max_stacks > 0 and body.has_method("get_mark_damage_mult"):
 		hit_damage *= body.get_mark_damage_mult()
+	BalanceLogScript.tag_weapon(source_weapon)
 	body.take_damage(hit_damage, is_crit, shield_pen_percent)
 	if mark_max_stacks > 0 and body.has_method("apply_mark_stack"):
 		body.apply_mark_stack(mark_max_stacks)
@@ -368,6 +370,7 @@ func _apply_splash_damage(direct_hit: Node) -> void:
 		if not e.has_method("take_damage"):
 			continue
 		if global_position.distance_to(e.global_position) <= splash_radius:
+			BalanceLogScript.tag_weapon(source_weapon)
 			e.take_damage(damage, is_crit, shield_pen_percent, true) ## patlama alanı
 			## Efsun: patlamanın vurduğu her düşman da bir (ikincil) isabet (bkz. enchant_behavior.gd on_hit).
 			if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_projectile_hit"):
@@ -396,6 +399,10 @@ func _spawn_impact() -> void:
 ## kesilmeden bitene kadar çalmaya devam eder ve sonra kendini serbest bırakır.
 func _play_impact_sound() -> void:
 	if impact_sounds.is_empty():
+		return
+	## SES BÜTÇESİ (2026-10-10, Talon E ölçümü: yüksek atış hızında saniyede ~100 isabet sesi düğümü): mermi isabet sesi en çok 25 ms'de bir (40/sn) - ayrı ayrı duyulamayan
+	## sesler zaten üst üste biniyor. Genel (tüm mermiler) sınır; hasar/etki sesten bağımsız.
+	if NetworkManager.should_throttle("projectile_impact_sound", 0.025):
 		return
 	var s := AudioStreamPlayer2D.new()
 	s.stream = impact_sounds[randi_range(0, impact_sounds.size() - 1)]

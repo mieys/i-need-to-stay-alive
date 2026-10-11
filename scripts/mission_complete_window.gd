@@ -76,10 +76,9 @@ func _build() -> void:
 	if _gold > 0:
 		_gold_icon = _icon(INGOT_ICON)
 		rewards.add_child(_row(_gold_icon, "+%d altın" % _gold, UIKit.C_GOLD))
-	var chest_tex := AtlasTexture.new()
-	chest_tex.atlas = ELITE_CHEST_SHEET
-	chest_tex.region = Rect2(0, 0, 48, 48)
-	rewards.add_child(_row(_icon(chest_tex), "+1 Elit Sandık", UIKit.C_TEXT))
+	## 2026-10-10: görev ödülü elit sandık yerine silah parçacığı (bkz. world_event_manager.gd MISSION_SHARD_REWARD).
+	var shard_tex: Texture2D = load("res://assets/pickups/weapon_shard/shard_icon.png") as Texture2D
+	rewards.add_child(_row(_icon(shard_tex), "+%d Silah Parçacığı" % int((load("res://scripts/world_event_manager.gd") as GDScript).get_script_constant_map().get("MISSION_SHARD_REWARD", 5)), UIKit.C_TEXT))
 	## Boyut içerikten - ekranın üst ortasına, açık başka bir pencere varsa onun altına.
 	_panel.reset_size()
 	var view: Vector2 = get_viewport().get_visible_rect().size

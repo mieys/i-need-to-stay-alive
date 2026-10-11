@@ -28,6 +28,7 @@ func _spawner() -> Node:
 	GameManager.game_time = 0.0
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
+	sp.tier_duration = 100.0 ## test 100 sn'lik kademelere göre yazıldı (varsayılan 2026-10-10'da 150 oldu)
 	_made.append(sp)
 	_heard.clear()
 	NetworkManager.creature_tier_reached.connect(_on_tier)

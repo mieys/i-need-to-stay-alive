@@ -91,6 +91,11 @@ func _build_ui() -> void:
 		var desc: Label = MenuKit.make_label("      " + str(d["desc"]), MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
 		row.add_child(desc)
 
+	## Balans telemetrisi (balance_log.gd): koşu verisi klasörünü aç - arkadaşın kosular.jsonl dosyasını sana yollayabilsin.
+	if OS.has_feature("pc"):
+		var balance_btn: Button = MenuKit.make_button("BALANS VERİSİ KLASÖRÜ", "tan", MenuKit.FS_SMALL, 44)
+		balance_btn.pressed.connect(_on_open_balance_folder)
+		v.add_child(balance_btn)
 	_close_btn = MenuKit.make_button("KAPAT", "sage", MenuKit.FS_BODY, 52)
 	_close_btn.pressed.connect(_on_close_pressed)
 	v.add_child(_close_btn)
@@ -109,6 +114,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		_on_close_pressed()
 		get_viewport().set_input_as_handled()
+
+
+func _on_open_balance_folder() -> void:
+	var dir: String = ProjectSettings.globalize_path("user://balans")
+	DirAccess.make_dir_recursive_absolute(dir)
+	OS.shell_open(dir)
 
 
 func _on_close_pressed() -> void:

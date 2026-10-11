@@ -10,11 +10,12 @@ const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn")
 const Logic: GDScript = preload("res://scripts/weapon_shop_logic.gd")
 const WeaponCatalogScript: GDScript = preload("res://scripts/weapon_catalog.gd")
+const WeaponTraitsScript: GDScript = preload("res://scripts/weapon_traits/weapon_traits.gd")
 
 ## Kullanıcının seçtiği silah -> efsun (artifact "Silah Efsunları", 2026-10-08).
 const EXPECTED := {
 	"dagger": "kanayan_kesikler", "pence": "kanli_pence", "topuz": "sismik_dalga", "uzunkilic": "wind_sword",
-	"fire_staff": "destiny", "lightning_staff": "zincir_yildirim", "tabanca": "seri_parmak", "tuftuf": "bulasici_salgi",
+	"fire_staff": "ates_nefesi", "lightning_staff": "zincir_yildirim", "tabanca": "seri_parmak", "tuftuf": "bulasici_salgi",
 	"tufek": "delici_mermi", "arcane": "yankilanan_buyu", "yay": "uclu_ok", "crossbow": "zincir_civata",
 	"boomerang": "cifte_donus", "buz_asasi": "kirik_buz", "fisek": "kivilcim_yagmuru",
 }
@@ -34,14 +35,20 @@ var _saved_shards: int = 0
 # ------------------------------------------------------------------ veri
 
 func test_trait_table_is_exactly_the_users_picks() -> void:
-	assert(EnchantDefs.TRAITS == EXPECTED, "TRAITS tablosu kullanıcının seçimleriyle birebir aynı olmalı: %s" % str(EnchantDefs.TRAITS))
+	var traits: Dictionary = WeaponTraitsScript.TRAITS
+	assert(traits == EXPECTED, "TRAITS tablosu kullanıcının seçimleriyle birebir aynı olmalı: %s" % str(traits))
+	## 2026-10-11: özellikler silah kodunun yanında - tablo + tanımlar weapon_traits.gd, davranışlar scripts/weapon_traits/.
+	for key in traits:
+		var tid: String = str(traits[key])
+		assert(WeaponTraitsScript.DEFS.has(tid), "%s: tanımı weapon_traits.gd'de olmalı" % tid)
+		assert(ResourceLoader.exists(WeaponTraitsScript.script_path(tid)) or tid == "delici_mermi", "%s: davranışı scripts/weapon_traits/'ta olmalı" % tid)
 	for key in WeaponCatalogScript.KEYS:
 		var id: String = EnchantDefs.trait_of(str(key))
 		assert(id != "" and not EnchantDefs.get_def(id).is_empty(), "%s: özelliği (tanımı) olmalı" % key)
 	var seen: Dictionary = {}
-	for key in EnchantDefs.TRAITS:
-		assert(not seen.has(EnchantDefs.TRAITS[key]), "iki silah aynı efsunu paylaşmamalı: %s" % EnchantDefs.TRAITS[key])
-		seen[EnchantDefs.TRAITS[key]] = true
+	for key in traits:
+		assert(not seen.has(traits[key]), "iki silah aynı efsunu paylaşmamalı: %s" % traits[key])
+		seen[traits[key]] = true
 
 
 func test_new_definitions_have_four_upgrades_and_a_final() -> void:
@@ -59,7 +66,7 @@ func test_new_definitions_have_four_upgrades_and_a_final() -> void:
 		var rev: Dictionary = EnchantDefs.resolve({"id": id, "ups": [3, 2, 1, 0], "final": true}, str(d["weapons"][0]))
 		assert(full == rev, "%s: geliştirme sırası sonucu değiştirmemeli" % id)
 		assert(bool(full["is_final"]) and int(full["up_count"]) == 4, "%s: çözüm durumu" % id)
-		assert(ResourceLoader.exists("res://scripts/enchants/%s.gd" % id) or id == "delici_mermi", "%s: davranış scripti yerinde olmalı (delici_mermi tamamen ortak anahtarlarla)" % id)
+		assert(ResourceLoader.exists(WeaponTraitsScript.script_path(id)) or id == "delici_mermi", "%s: davranış scripti yerinde olmalı (delici_mermi tamamen ortak anahtarlarla)" % id)
 
 
 func test_new_weapon_entry_and_ensure_trait() -> void:
@@ -211,7 +218,7 @@ func _run_trait(key: String) -> Dictionary:
 	if str(st.get("id", "")) != id:
 		fails.append("yanlış efsun: %s" % str(st.get("id", "")))
 	var script_path: String = str(beh.get_script().resource_path)
-	if ResourceLoader.exists("res://scripts/enchants/%s.gd" % id) and not script_path.ends_with("/%s.gd" % id):
+	if ResourceLoader.exists(WeaponTraitsScript.script_path(id)) and script_path != WeaponTraitsScript.script_path(id):
 		fails.append("davranış scripti %s olmalı: %s" % [id, script_path])
 	## Şansa bağlı ek tetikleyiciler kesin olsun (kod yolu doğrulanır, oranlar veri testinde).
 	for k in ["wave_chance", "echo_chance", "seis_chance"]:
@@ -264,8 +271,8 @@ func _run_trait(key: String) -> Dictionary:
 			if max_dots <= 0:
 				fails.append("kanama yükü hiç birikmedi")
 		"zincir_yildirim":
-			if int(beh.call("chain_bonus")) != 2 or not is_equal_approx(float(beh.call("chain_pct", 0.5)), 0.5):
-				fails.append("zincir: 2 atlama / %50 olmalı")
+			if int(beh.call("chain_bonus")) != 2 or not is_equal_approx(float(beh.call("chain_pct", 0.5)), 0.35) or not is_equal_approx(float(beh.call("chain_range_mult")), 0.75):
+				fails.append("zincir: 2 atlama / %35 / menzil x0,75 olmalı (2026-10-10 denge)")
 		"seri_parmak":
 			notes += " yığın=%d" % max_stacks
 			if max_stacks < 1:
@@ -274,8 +281,8 @@ func _run_trait(key: String) -> Dictionary:
 			if not any_poison or not any_plague:
 				fails.append("zehir ya da bulaşma kaydı yok (zehir %s, bulaşma %s)" % [str(any_poison), str(any_plague)])
 		"delici_mermi":
-			if int(beh.call("n", "pierce")) != 2 or not is_equal_approx(float(beh.call("f", "pierce_ramp")), 0.1):
-				fails.append("delme 2 / artış %10 olmalı")
+			if int(beh.call("n", "pierce")) != 2 or not is_equal_approx(float(beh.call("f", "pierce_ramp")), 0.0):
+				fails.append("delme 2 / tabanda artış YOK olmalı (2026-10-10 denge; artış Kinetik Enerji geliştirmesinde)")
 		"yankilanan_buyu":
 			notes += " patlama=%d" % int(_node_counts.get("res://scenes/fx_korsan_explosion.tscn", 0))
 			if _trace_nodes <= 0:
@@ -299,7 +306,7 @@ func _run_trait(key: String) -> Dictionary:
 		"kivilcim_yagmuru":
 			if _trace_nodes <= 0:
 				fails.append("kıvılcım yağmuru izi yok")
-		"destiny", "sismik_dalga", "wind_sword":
+		"ates_nefesi", "sismik_dalga", "wind_sword":
 			pass ## kart döneminden kalan davranışlar (test_new_enchants duman testi ayrıntılı)
 	## Temizlik.
 	for n in _spawned:
@@ -342,6 +349,44 @@ func test_kirik_buz_shatter_hits_neighbours_and_slows_them() -> void:
 	assert(is_equal_approx(float(far.health), ENEMY_HP), "uzaktaki düşman etkilenmemeli")
 	assert(is_equal_approx(float(victim.health), ENEMY_HP), "parçalanan düşmanın kendisi vurulmaz (zaten ölü)")
 	for n in [p, victim, near, far]:
+		if is_instance_valid(n):
+			n.free()
+	GameManager.owned_weapons = _saved_weapons
+	if prev_scene != null and is_instance_valid(prev_scene) and prev_scene.get_parent() == get_tree().root:
+		get_tree().current_scene = prev_scene
+
+
+## 2026-10-10 (kullanıcı: "buz asası hiç dondurmuyor"): asa hedeflerini bilerek FARKLI donmamış düşmanlara dağıtıyor; dondurma sayacı düşman başına olunca aynı düşman
+## 2-3 kez neredeyse hiç vurulmuyordu. Sayaç artık asaya bağlı: her biri FARKLI düşmana giden isabetlerin her 2.'si dondurur.
+func test_kirik_buz_freezes_every_second_hit_even_when_every_hit_is_a_different_enemy() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	NetworkManager.is_multiplayer_active = false
+	GameManager.selected_char_id = 1
+	GameManager.selected_character = int(Characters.DEFS[1]["skill"])
+	_saved_weapons = GameManager.owned_weapons.duplicate(true)
+	GameManager.owned_weapons = [EnchantDefs.new_weapon_entry("buz_asasi", 1, 0)]
+	var p: Node2D = PlayerScene.instantiate()
+	add_child(p)
+	for w in p.owned_weapon_nodes.duplicate():
+		if is_instance_valid(w):
+			w.queue_free()
+	p.owned_weapon_nodes.clear()
+	p.global_position = Vector2(3000.0, 3000.0)
+	assert(p.buy_weapon_copy("buz_asasi", 1))
+	var beh: Node = p.owned_weapon_nodes[0].get("enchant_behavior")
+	assert(beh != null, "Buz Asası doğuştan Kırık Buz özelliğiyle gelir")
+	var foes: Array = []
+	for i in range(6):
+		foes.append(_make_enemy(Vector2(3060.0 + 40.0 * i, 3000.0), ENEMY_HP))
+	await get_tree().physics_frame
+	for e in foes:
+		beh.call("on_hit", e, 10.0, true, null)
+	var frozen: Array = []
+	for i in range(foes.size()):
+		frozen.append(bool(foes[i].get("is_frozen")))
+	assert(frozen == [false, true, false, true, false, true], "her 2. isabet (farklı düşmanlara) dondurmalı: %s" % str(frozen))
+	for n in [p] + foes:
 		if is_instance_valid(n):
 			n.free()
 	GameManager.owned_weapons = _saved_weapons
@@ -405,3 +450,13 @@ func test_screen_enchants_tab_lists_rows_and_buys_per_copy() -> void:
 	screen._on_close_pressed()
 	p.free()
 	_end_shop()
+
+
+## 2026-10-10 Ateş Asası buff (kullanıcı: "ateş asası aşırı güçsüz"): asanın TEK hasar kaynağı Destiny püskürtmesi - saniyede %108 saldırı gücü, menzil 140, yanma %14/sn.
+func test_fire_staff_spray_buff_numbers_and_catalog_text_agree() -> void:
+	var base: Dictionary = (EnchantDefs.get_def("ates_nefesi") as Dictionary)["base"]["set"]
+	var per_sec: float = float(base["spray_ap"]) / float(base["spray_tick"])
+	assert(absf(per_sec - 1.08) < 0.001, "püskürtme saniyede %%108 saldırı gücü: %.3f" % per_sec)
+	assert(float(base["spray_range"]) == 140.0 and float(base["elem_ap"]) == 0.14, "menzil 140, yanma %14")
+	var text: String = str(WeaponCatalogScript.DESCRIPTIONS["fire_staff"])
+	assert(text.contains("%108") and text.contains("140"), "katalog metni sayılarla aynı: " + text)

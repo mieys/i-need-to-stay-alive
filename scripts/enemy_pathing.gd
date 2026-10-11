@@ -29,8 +29,8 @@ extends RefCounted
 ##    "içerideyse engelleme atlanır" güvenlik ağıyla tutarlı).
 ##
 ## Engel kümesi (2026-10-08, kullanıcı: "collision shapeleri herşey için yeniden hesapla"): orman duvarı + terrain_collision.gd'nin hesapladığı su / bina
-## tabanı / ağaç gövdesi / maden / düşman üssü hücreleri (_blocked: hareket + yol bulma). SADECE orman ayrıca `_fog_blocked`'ta tutulur: görüş (sis) bu
-## nesnelerle KESİLMESİN diye C++ fog ışını onu kullanır (bkz. enemy_world_bridge.gd _refresh_grid, EnemyWorld.set_grid fog_blocked).
+## tabanı / ağaç gövdesi / maden / düşman üssü hücreleri (_blocked: hareket + yol bulma). SADECE orman duvarı + AĞAÇ katmanları (2026-10-09, taç dahil) `_fog_blocked`'ta tutulur: görüş (sis) su/bina/maden ile
+## KESİLMEZ, ağaç/orman ile kesilir; C++ fog ışını onu kullanır (bkz. enemy_world_bridge.gd _refresh_grid, EnemyWorld.set_grid fog_blocked).
 
 ## Aramaya izin verilen en uzak yaratık-hedef mesafesi (dünya birimi). Doğuş halkası
 ## 480-640 (bkz. enemy_spawner.gd); çok uzaktaki yaratıklar zaten ekran dışı.
@@ -185,9 +185,16 @@ static func _build(layer: TileMapLayer) -> void:
 	## Orman duvarı + haritadaki nesnelerin engel hücreleri (su, bina tabanı, ağaç gövdesi, maden...) - bkz. terrain_collision.gd.
 	var used: Array[Vector2i] = forest_cells.duplicate()
 	used.append_array(TerrainCollisionScript.ensure(layer).keys())
+	## Ağaç katmanlarının hücreleri SADECE görüşü (sis) keser, hareketi/yol bulmayı etkilemez (gövde çarpışması terrain_collision.gd'den) - vision_occluders.gd AĞAÇLAR notu.
+	var tree_cells: Array[Vector2i] = []
+	for tree_layer: TileMapLayer in GameManager.get_vision_tree_layers():
+		tree_cells.append_array(tree_layer.get_used_cells())
 	var mn: Vector2i = used[0]
 	var mx: Vector2i = used[0]
 	for cell: Vector2i in used:
+		mn = Vector2i(mini(mn.x, cell.x), mini(mn.y, cell.y))
+		mx = Vector2i(maxi(mx.x, cell.x), maxi(mx.y, cell.y))
+	for cell: Vector2i in tree_cells:
 		mn = Vector2i(mini(mn.x, cell.x), mini(mn.y, cell.y))
 		mx = Vector2i(maxi(mx.x, cell.x), maxi(mx.y, cell.y))
 	var margin := Vector2i(GRID_MARGIN, GRID_MARGIN)
@@ -205,6 +212,8 @@ static func _build(layer: TileMapLayer) -> void:
 	astar.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
 	astar.update()
 	for cell: Vector2i in forest_cells:
+		_fog_blocked[(cell.y - _origin.y) * _size.x + (cell.x - _origin.x)] = 1
+	for cell: Vector2i in tree_cells:
 		_fog_blocked[(cell.y - _origin.y) * _size.x + (cell.x - _origin.x)] = 1
 	for cell: Vector2i in used:
 		astar.set_point_solid(cell, true)

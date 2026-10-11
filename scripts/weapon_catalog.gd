@@ -35,23 +35,35 @@ const ICONS := {
 }
 ## bkz. player.gd buy_weapon_copy() - _configure_*_melee() yalnız bu 4 anahtar için; diğerleri menzilli.
 const MELEE_KEYS := ["dagger", "pence", "topuz", "uzunkilic"]
+## 2026-10-10 denge turu 2: Arbalet ateş hızı 0,72 -> 0,8 sn, Buz Asası oranı 0,693 -> 0,9, Arcane 0,99 -> 1,25, Tüftüf menzili 128 -> 150, Bıçak 0,765 -> 0,88,
+## Pençe 0,9 -> 1,035, Fişek ateş aralığı 3,72 -> 3,2 sn (sahne dosyaları); Tüfek delme artışı ve Yıldırım sekmesi efsun tabanında (enchant_defs.gd). Eski "N + %X" metinleri düz hasarı olmayan silahlarda yanlıştı.
 const DESCRIPTIONS := {
-	"dagger": "HASAR: 10 + %85 saldırı gücü · Yakın dövüş, hedefin çevresine hafif alan hasarı",
-	"fire_staff": "HASAR: 13 + %100 saldırı gücü · Ateş hızı 1.4sn · Menzil 168 · Patlayıcı mermi",
+	"dagger": "HASAR: %88 saldırı gücü · Yakın dövüş, hedefin çevresine hafif alan hasarı",
+	"fire_staff": "HASAR: saniyede %108 saldırı gücü (koni, alandaki herkese) · Menzil 140 · Sürekli alev püskürtür, 3 sn yakar (saniyede %14)", ## 2026-10-10 buff: Destiny püskürtmesi %15 -> %27 / 0,25 sn, menzil 110 -> 140, yanma %8 -> %14
 	"lightning_staff": "HASAR: 12/sn + %140 saldırı gücü · Menzil 168 · Kesintisiz ışın",
-	"tabanca": "HASAR: 17 + %99 saldırı gücü · Ateş hızı 0.9sn · Menzil 210",
-	"tuftuf": "HASAR: %100 saldırı gücü · Ateş hızı 1.4sn · Menzil 128",
+	"tabanca": "HASAR: %115 saldırı gücü · Ateş hızı 0.9sn · Menzil 210", ## 2026-10-10: oran 0,891 -> 1,15 (sahne card_damage_bonus_ratio)
+	"tuftuf": "HASAR: %100 saldırı gücü (gerçek hasar: kalkanı deler) · Ateş hızı 1.4sn · Menzil 150",
 	"tufek": "HASAR: %160 saldırı gücü · Ateş hızı 1.3sn · Menzil 302",
-	"arcane": "HASAR: 16 + %110 saldırı gücü · Ateş hızı 1.4sn · Menzil 168",
-	"yay": "HASAR: 14 + %70 saldırı gücü · Ateş hızı 0.8sn · Menzil 266 · Ateşten önce ok çeker",
-	"crossbow": "HASAR: 16 + %110 saldırı gücü · Ateş hızı 0.7sn · Menzil 245",
+	"arcane": "HASAR: %125 saldırı gücü · Ateş hızı 1.4sn · Menzil 151",
+	"yay": "HASAR: %64 saldırı gücü · Ateş hızı 0.77sn · Menzil 266 · Ateşten önce ok çeker", ## 2026-10-10: saldırı hızı +%20 (sahne fire_rate 0,7844 -> 0,6537)
+	"crossbow": "HASAR: %99 saldırı gücü · Ateş hızı 0.8sn · Menzil 220",
 	"boomerang": "HASAR: 16 + %90 saldırı gücü · Ateş hızı 0.3sn · Menzil 167 · Gidip döner, 2 kez vurabilir; saldırı hızı arttıkça daha hızlı gidip döner",
-	"buz_asasi": "HASAR: 12 + %77 saldırı gücü · Ateş hızı 1.4sn · Menzil 168",
-	"fisek": "HASAR: 14 + %230 saldırı gücü (sadece alan hasarı) · Ateş hızı 3.7sn · Menzil 252",
-	"pence": "HASAR: 20 + %100 saldırı gücü · Yakın dövüş (menzil 110) · Çift pençe darbesi",
+	"buz_asasi": "HASAR: %90 saldırı gücü · Ateş hızı 1.1sn · Menzil 151 · Her 2. isabet dondurur",
+	"fisek": "HASAR: %208 saldırı gücü (sadece alan hasarı) · Ateş hızı 3.2sn · Menzil 227",
+	"pence": "HASAR: %103 saldırı gücü · Yakın dövüş (menzil 110) · Çift pençe darbesi",
 	"topuz": "HASAR: 20 + %105 saldırı gücü · Yakın dövüş (menzil 120) · Geniş alan hasarı",
-	"uzunkilic": "HASAR: 18 + %100 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş",
+	"uzunkilic": "HASAR: %120 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş (çevredekilere %70)",
 }
+
+
+## Silahın doğuştan özelliği (efsun) metni: "<özellik adı>: <kısa açıklama>" - 2026-10-10 (kullanıcı: "efsunlar artık silahın bir parçası; oyun başında silah
+## seçerken saldırı gücü oranı, saldırı hızı vb. yerine sadece silahın özelliği yazsın"). Kaynak EnchantDefs.TRAITS/DEFS (tek tablo).
+static func trait_text(key: String) -> String:
+	var id: String = EnchantDefs.trait_of(key)
+	var d: Dictionary = EnchantDefs.get_def(id) if id != "" else {}
+	if d.is_empty():
+		return str(DESCRIPTIONS.get(key, ""))
+	return "%s: %s" % [str(d.get("name", id)), str(d.get("desc", ""))]
 
 
 static func is_valid(key: String) -> bool:

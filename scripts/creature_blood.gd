@@ -5,30 +5,29 @@ extends RefCounted
 ## Renkler her yaratığın yürüme dokusundaki baskın gövde renginden çıkarıldı; kemik/ten/saç karışan birkaç tanesi elle
 ## düzeltildi (iskelet/lich = kemik tozu, zombi1/3 = soluk yeşil ten, ork2 = turkuaz ten). Kan efekti (fx_hit_blood.gd)
 ## doğduğu yerdeki yaratığa bakıp rengi buradan alır; listede olmayan yaratıkta kan kırmızı kalır.
-## Yeni bir yaratık eklersen buraya da bir satır ekle (anahtar = scenes/creatures/enemy_<id>.tscn'deki <id>).
+## ORGANİK yaratıklar (fare, ork, vampir, şeytan/iblis, Minotaur, yarasa, Wendigo) listede YOK: normal KIRMIZI kan çıkarır
+## (kullanıcı düzeltmesi 2026-10-11: "organik yaratıklar normal kırmızı kan çıkarmalı"). Renkli kan sadece organik olmayanlarda: balçık, kemik,
+## ağaç/bitki/mantar, golem, hayalet, balkabağı, solucan...
+## Yeni bir yaratık eklersen (organik değilse) buraya da bir satır ekle (anahtar = scenes/creatures/enemy_<id>.tscn'deki <id>).
 
 const BONE := Color(0.86, 0.83, 0.74)
+const GREEN := Color(0.38, 0.72, 0.22)
 
 const BY_ID := {
-	"rat1": Color(0.52, 0.46, 0.42), "rat2": Color(0.65, 0.27, 0.22), "rat3": Color(0.33, 0.36, 0.47),
 	"slime1": Color(0.36, 0.72, 0.59), "slime2": Color(0.27, 0.41, 0.59), "slime3": Color(0.91, 0.65, 0.21),
 	"slime4": Color(0.44, 0.85, 0.97), "slime5": Color(0.9, 0.67, 0.19), "slime6": Color(0.44, 0.85, 0.97),
 	"slime7": Color(0.42, 0.1, 0.13),
 	"iskelet1": BONE, "iskelet2": BONE, "iskelet3": BONE,
 	"lich1": BONE, "lich2": BONE, "lich3": BONE,
-	"zombie1": Color(0.55, 0.62, 0.45), "zombie2": Color(0.34, 0.36, 0.45), "zombie3": Color(0.55, 0.62, 0.45),
-	"ork1": Color(0.42, 0.53, 0.19), "ork2": Color(0.3, 0.56, 0.5), "ork3": Color(0.3, 0.52, 0.37),
 	"agac1": Color(0.45, 0.32, 0.17), "agac2": Color(0.5, 0.28, 0.22), "agac3": Color(0.15, 0.47, 0.28),
 	"bitki1": Color(0.66, 0.26, 0.21), "bitki2": Color(0.37, 0.61, 0.77), "bitki3": Color(0.53, 0.25, 0.71),
 	"golem1": Color(0.63, 0.43, 0.31), "golem2": Color(0.58, 0.3, 0.75), "golem3": Color(0.25, 0.4, 0.7),
 	"mantar1": Color(0.58, 0.42, 0.34), "mantar2": Color(0.54, 0.23, 0.2), "mantar3": Color(0.58, 0.42, 0.34),
-	"demon1": Color(0.64, 0.52, 0.72), "demon2": Color(0.68, 0.29, 0.22), "demon3": Color(0.53, 0.31, 0.21),
 	"hayalet1": Color(0.53, 0.78, 1.0), "hayalet2": Color(0.26, 0.37, 0.53), "hayalet3": Color(0.54, 0.2, 0.24),
 	"rontgen1": Color(0.77, 0.64, 0.57), "rontgen2": Color(0.66, 0.31, 0.24), "rontgen3": Color(0.67, 0.27, 0.84),
-	"vampire1": Color(0.43, 0.23, 0.2), "vampire2": Color(0.26, 0.35, 0.52), "vampire3": Color(0.68, 0.27, 0.22),
-	"iblis1": Color(0.7, 0.55, 0.45), "iblis2": Color(0.66, 0.46, 0.33), "iblis3": Color(0.59, 0.22, 0.25),
-	"minotaur1": Color(0.62, 0.17, 0.13),
-	"sandworm1": Color(0.45, 0.58, 0.22), ## solucan uzvu: yeşilimsi sarı sıvı
+	"balkabagi1": Color(0.85, 0.42, 0.1), "kabak1": Color(0.95, 0.5, 0.1), "banshee1": Color(0.45, 0.78, 0.95), "ucansetan1": Color(0.4, 0.25, 0.7),
+	"sandworm1": GREEN, "underground1": GREEN, ## solucan (uzuv + ana gövde): yeşil kan
+	"zombie1": GREEN, "zombie2": GREEN, "zombie3": GREEN, ## zombiler: yeşil kan (kullanıcı 2026-10-11)
 }
 
 const SCENE_PREFIX := "res://scenes/creatures/enemy_"

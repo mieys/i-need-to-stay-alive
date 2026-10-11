@@ -38,14 +38,14 @@ const CORRECTION_RATE := 1.2
 ## İstemcinin kendi yürüttüğü hava şiddeti host'unkinden bu kadar saparsa doğrudan host değeri alınır.
 const INTENSITY_SNAP := 0.2
 
-## Kullanıcı seçimi (2026-09-25): yağmur ve rüzgar sesi Claude tarafından üretildi (tools/gen_weather_sounds.py).
+## Rüzgar sesi Claude tarafından üretildi (tools/gen_weather_sounds.py). Yağmur (2026-10-11): kullanıcının masaüstü kaydı, dikişsiz döngü (tools/make_seamless_ambience.py).
 ## Dosya yoksa/henüz import edilmediyse sessiz kalınır (hata yok).
-const RAIN_SOUND_PATH := "res://assets/audio/weather_rain_loop.wav"
+const RAIN_SOUND_PATH := "res://assets/audio/rain_ambience_loop.ogg"
 const WIND_SOUND_PATH := "res://assets/audio/weather_wind_loop.wav"
 ## Kullanıcı bildirimi (2026-09-25): "hava durumu sesleri biraz fazla oyunda" - bütün hava sesleri ~5 dB kısıldı
 ## (yağmur -10 -> -15, rüzgar -12 -> -17, sağanak eki +3 -> +2, fırtına uğultusu -3 -> -9 / hamle ±3 -> ±2; yıldırım ve uzak
 ## gök gürültüsü weather_storm.gd / fx_storm_strike.gd'de aynı oranda).
-const RAIN_VOLUME_DB := -15.0
+const RAIN_VOLUME_DB := -8.0
 const WIND_VOLUME_DB := -17.0
 ## Sağanak (kullanıcı isteği 2026-09-25): yağmur ve rüzgar BİRLİKTE, ikisi de daha gür; yağmur damlası yoğunluğu x1.6.
 const STORM_EXTRA_DB := 2.0
@@ -82,6 +82,10 @@ var storm_intensity: float = 0.0
 var wind_angle: float = 0.0
 ## Debug menüsü: saati hızlandırır (1 = normal). Host'ta ayarlanır, istemcilere de gider.
 var debug_time_scale: float = 1.0
+## GECE KİLİDİ (Banshee bossu, bkz. atmosphere_math.gd NIGHT_LOCK_*): true iken saat gece yarısına akar ve orada durur. Yetkili (host/tekli) belirler, durumla herkese gider.
+## "night_lock_boss" grubunda canlı bir boss kalmadıysa host kilidi kendisi açar (boss ölümü/silinmesi/host devri ne olursa olsun takılı kalmasın).
+var night_lock: bool = false
+var _lock_check: float = 0.0
 
 var _weather_remaining: float = 0.0
 var _sync_timer: float = 0.0
@@ -171,8 +175,37 @@ func is_authority() -> bool:
 	return not NetworkManager.is_multiplayer_active or NetworkManager.is_host
 
 
+## Gece kilidini aç/kapat (SADECE yetkili; çok oyunculuda host). Dönüş: uygulandı mı.
+func set_night_lock(on: bool) -> bool:
+	if not is_authority():
+		return false
+	if night_lock != on:
+		night_lock = on
+		_lock_check = 2.0
+		_broadcast_state()
+	return true
+
+
+func is_deep_night() -> bool:
+	return AtmosphereMath.is_deep_night(cycle_time)
+
+
 func _process(delta: float) -> void:
-	cycle_time = AtmosphereMath.wrap_time(cycle_time + delta * AtmosphereMath.CLOCK_SPEED * debug_time_scale)
+	if night_lock:
+		cycle_time = AtmosphereMath.night_lock_step(cycle_time, delta)
+		if is_authority():
+			_lock_check -= delta
+			if _lock_check <= 0.0:
+				_lock_check = 2.0
+				var alive: bool = false
+				for b: Node in get_tree().get_nodes_in_group("night_lock_boss"):
+					if is_instance_valid(b) and b.get("is_dead") != true:
+						alive = true
+						break
+				if not alive:
+					set_night_lock(false)
+	else:
+		cycle_time = AtmosphereMath.wrap_time(cycle_time + delta * AtmosphereMath.CLOCK_SPEED * debug_time_scale)
 	if is_authority():
 		_process_weather_authority(delta)
 	elif _time_fix != 0.0:
@@ -231,6 +264,7 @@ func _state() -> Dictionary:
 		"wa": wind_angle,
 		"wr": _weather_remaining,
 		"ts": debug_time_scale,
+		"nl": night_lock,
 	}
 
 
@@ -260,6 +294,7 @@ func _on_state_received(state: Dictionary) -> void:
 	wind_angle = float(state.get("wa", wind_angle))
 	_weather_remaining = float(state.get("wr", _weather_remaining))
 	debug_time_scale = float(state.get("ts", 1.0))
+	night_lock = bool(state.get("nl", false))
 	var ri: float = float(state.get("ri", rain_intensity))
 	var wi: float = float(state.get("wi", wind_intensity))
 	var si: float = float(state.get("si", storm_intensity))
@@ -333,10 +368,17 @@ func _on_node_added(node: Node) -> void:
 		_attach_glow.call_deferred(node, raw)
 
 
+## IŞIK BÜTÇESİ (2026-10-10, Talon E FPS ölçümü: her mermi/efekt bir ışık düğümü takıyordu, E'de saniyede ~100 yeni ışık): aynı anda en çok bu kadar gece ışığı;
+## doluyken YENİ gelen geçici efekt ışık almaz (ışıklar sadece kozmetik; oyuncu/silah/boss gibi kalıcı kaynaklar sahneye erken girip ışığını önceden alır).
+const MAX_GLOWS := 96
+
+
 func _attach_glow(target: Node, raw: Dictionary) -> void:
 	if not is_instance_valid(target) or not target.is_inside_tree() or target.is_queued_for_deletion():
 		return
 	if target.has_node("NightGlow"):
+		return
+	if get_tree().get_node_count_in_group(NightGlowScript.GROUP) >= MAX_GLOWS:
 		return
 	var profile: Dictionary = GlowCatalog.resolve(target, raw)
 	if profile.is_empty():
@@ -368,7 +410,11 @@ func _make_loop_player(node_name: String, path: String) -> AudioStreamPlayer:
 	player.process_mode = Node.PROCESS_MODE_ALWAYS
 	if ResourceLoader.exists(path):
 		var stream: AudioStream = load(path) as AudioStream
-		if stream is AudioStreamWAV:
+		if stream is AudioStreamOggVorbis:
+			## Masaüstü yağmur kaydı: uçları çapraz geçişle birleştirilmiş DİKİŞSİZ döngü (tools/make_seamless_ambience.py).
+			(stream as AudioStreamOggVorbis).loop = true
+			(stream as AudioStreamOggVorbis).loop_offset = 0.0
+		elif stream is AudioStreamWAV:
 			var wav := stream as AudioStreamWAV
 			wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 			wav.loop_begin = 0

@@ -32,7 +32,7 @@ func _cleanup() -> void:
 
 # ------------------------------------------------------------------ veri
 func test_defs_are_consistent() -> void:
-	assert(Items.KEYS.size() == 42, "11 parça + 15 epik + 16 efsanevi = 42, bulunan %d" % Items.KEYS.size())
+	assert(Items.KEYS.size() == 50, "11 parça + 16 epik + 23 efsanevi = 50 (2026-10-10: +1 epik, +7 efsanevi tarifsiz), bulunan %d" % Items.KEYS.size())
 	assert(Items.KEYS.size() == Items.DEFS.size(), "KEYS ile DEFS aynı eşyalar")
 	var counts: Array = [0, 0, 0]
 	var player: Node = _make_player()
@@ -42,6 +42,8 @@ func test_defs_are_consistent() -> void:
 		var rec: Array = Items.recipe(k)
 		if kd == 1:
 			assert(rec.is_empty(), "%s: parçanın tarifi olmamalı" % k)
+		elif rec.is_empty():
+			assert(Items.cost(k) > 0, "%s: tarifsiz eşyanın (2026-10-10) düz fiyatı olmalı" % k)
 		else:
 			var sum: int = 0
 			for c in rec:
@@ -52,7 +54,7 @@ func test_defs_are_consistent() -> void:
 		assert(ResourceLoader.exists(Items.icon_path(k)), "%s: ikon yok" % k)
 		for stat in Items.get_def(k).get("stats", {}):
 			assert(stat in player, "%s: player.gd'de '%s' statı yok" % [k, stat])
-	assert(counts == [11, 15, 16], "kademe sayıları: %s" % str(counts))
+	assert(counts == [11, 16, 23], "kademe sayıları: %s" % str(counts))
 	_cleanup()
 
 

@@ -16,7 +16,8 @@ var cards: Dictionary = {}
 
 
 ## cols / k: telefon karakter seçimi (character_select.gd _build_mobile) daha az sütun ve 4/3 büyük kart ister.
-func build(cols: int = COLUMNS, k: float = 1.0) -> void:
+## face: kartlarda tam boy sprite yerine yüz portresi (çok oyunculu karakter seçimi, bkz. menu_character_card.gd).
+func build(cols: int = COLUMNS, k: float = 1.0, face: bool = false) -> void:
 	columns = cols
 	add_theme_constant_override("h_separation", H_SEP)
 	add_theme_constant_override("v_separation", V_SEP)
@@ -27,7 +28,7 @@ func build(cols: int = COLUMNS, k: float = 1.0) -> void:
 		var card: Control = CardScript.new()
 		card.name = "Card%d" % char_id
 		add_child(card)
-		card.setup(char_id, Characters.DEFS[char_id], k)
+		card.setup(char_id, Characters.DEFS[char_id], k, face)
 		card.pressed.connect(_on_card_pressed)
 		cards[char_id] = card
 

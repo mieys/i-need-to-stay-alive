@@ -33,7 +33,7 @@ const DEFS := {
 	"kanli_yakut": {"name": "Kanlı Yakut", "kademe": 1, "cost": 330, "recipe": [],
 		"stats": {"max_health": 50.0, "damage_bonus": 5.0}},
 	"yasam_kristali": {"name": "Yaşam Kristali", "kademe": 1, "cost": 270, "recipe": [],
-		"stats": {"max_health": 80.0, "item_health_regen": 1.0}},
+		"stats": {"max_health": 80.0, "item_health_regen": 3.0}}, ## 2026-10-11: can yenilenmesi x3 (1 -> 3)
 	"ceviklik_yuzugu": {"name": "Çeviklik Yüzüğü", "kademe": 1, "cost": 300, "recipe": [],
 		"stats": {"item_fire_rate_percent": 0.10}},
 	"kutsal_tilsim": {"name": "Kutsal Tılsım", "kademe": 1, "cost": 250, "recipe": [],
@@ -96,8 +96,8 @@ const DEFS := {
 		"stats": {"heal_shield_power": 0.08, "cooldown_reduction_percent": 0.05}},
 	"yenilenme_ozutu": {"name": "Yenilenme Özütü", "kademe": 2, "cost": 790,
 		"recipe": ["yasam_kristali", "yasam_kristali", "kutsal_tilsim"],
-		"stats": {"max_health": 110.0, "item_health_regen": 1.0, "item_vitamin_regen_bonus": 2.0},
-		"passive": "Hasar almak 6 saniye boyunca 2 can yenilenmesi kazandırır."},
+		"stats": {"max_health": 110.0, "item_health_regen": 3.0, "item_vitamin_regen_bonus": 6.0}, ## 2026-10-11: x3 (1 -> 3, pasif 2 -> 6)
+		"passive": "Hasar almak 6 saniye boyunca 6 can yenilenmesi kazandırır."},
 	"olum_esigi": {"name": "Ölüm Eşiği", "kademe": 2, "cost": 830,
 		"recipe": ["isik_parcacigi", "isik_parcacigi", "kanli_yakut"],
 		"stats": {"item_shield_power_flat": 90.0},
@@ -106,6 +106,11 @@ const DEFS := {
 		"recipe": ["kan_disi", "yasam_kristali", "tecrube_kitabi"],
 		"stats": {"lifesteal_percent": 0.05},
 		"passive": "Bir birimi katlettiğinde %10 şansla eksik canının %1'ini yenilersin."},
+	## 2026-10-10 kullanıcının "Yeni eşyalar.txt"i: TARİFSİZ (kullanıcı: "tarifsiz, düz fiyat") - satıcıdan doğrudan alınır, parça tüketmez.
+	## Fiyatları kullanıcı vermedi (benim seçimim, güce göre).
+	"savasci_bileyi": {"name": "Savaşçı Bileyi", "kademe": 2, "cost": 800, "recipe": [],
+		"stats": {"damage_bonus": 15.0, "item_ap_percent": 0.05},
+		"passive": "Saldırı gücünü %5 arttırır."},
 	"ruhlarin_akisi": {"name": "Ruhların Akışı", "kademe": 2, "cost": 850,
 		"recipe": ["tecrube_kitabi", "ayakkabi_bagcigi", "ceviklik_yuzugu"],
 		"stats": {"exp_gain_percent": 0.10},
@@ -114,7 +119,7 @@ const DEFS := {
 	## ------------------------------------------------------------------ 3. kademe: Efsanevi eşyalar
 	"anka_kusunun_kalbi": {"name": "Anka Kuşunun Kalbi", "kademe": 3, "cost": 1850,
 		"recipe": ["yenilenme_ozutu", "yenilenme_ozutu", "yasam_kristali"],
-		"stats": {"max_health": 200.0, "item_health_regen": 5.0},
+		"stats": {"max_health": 200.0, "item_health_regen": 15.0}, ## 2026-10-11: x3 (5 -> 15)
 		"passive": "Canın %40'ın altına düştüğünde can yenilenmen 2 katına çıkar."},
 	"ilidaricin_kilici": {"name": "Ilıdaric'in Kılıcı", "kademe": 3, "cost": 1950,
 		"recipe": ["ruzgar_eldiveni", "savascinin_kilici", "ceviklik_yuzugu", "ceviklik_yuzugu"],
@@ -174,6 +179,28 @@ const DEFS := {
 		"recipe": ["keskin_goz_hanceri", "savascinin_kilici", "suikastci_kamasi", "bile_tasi"],
 		"stats": {"damage_bonus": 35.0},
 		"passive": "Her yaratığa ilk vuruşun garanti kritik vurur ve fazladan saldırı gücünün %20'si kadar hasar verir."},
+	## 2026-10-10 "Yeni eşyalar.txt" efsanevileri: TARİFSİZ, düz fiyat (benim seçimim); pasif kodları player.gd (anka/ahenk/ap yüzdesi/can emme/sıvışma sınırı).
+	"sifa_feneri": {"name": "Şifa Feneri", "kademe": 3, "cost": 2300, "recipe": [],
+		"stats": {"max_health": 250.0, "item_shield_power_flat": 100.0, "heal_shield_power": 0.25},
+		"passive": "%25 İyileştirme ve Kalkan Gücü kazandırır."},
+	"anka_muhru": {"name": "Anka Mührü", "kademe": 3, "cost": 2450, "recipe": [],
+		"stats": {"damage_bonus": 20.0, "max_health": 100.0},
+		"passive": "Katledildiğinde anında tam can ve kalkanla yeniden dirilirsin. (180 sn bekleme süresi)"},
+	"bilgenin_pusulasi": {"name": "Bilgenin Pusulası", "kademe": 3, "cost": 2250, "recipe": [],
+		"stats": {"max_health": 150.0, "cooldown_reduction_percent": 0.10, "exp_gain_percent": 0.20, "item_pickup_range_percent": 1.0},
+		"passive": "Nesne ve eşya toplama menzilini 2 katına çıkarır."},
+	"ruzgar_yuruyen_cizmeleri": {"name": "Rüzgâr Yürüyen Çizmeleri", "kademe": 3, "cost": 2400, "recipe": [],
+		"stats": {"damage_bonus": 15.0, "item_fire_rate_percent": 0.15, "dodge_chance": 0.10, "item_speed_percent": 0.05},
+		"passive": "Maksimum sıvışma sınırını %40'tan %50'ye çıkarır."},
+	"kanli_bicer": {"name": "Kanlı Biçer", "kademe": 3, "cost": 2400, "recipe": [],
+		"stats": {"damage_bonus": 25.0, "lifesteal_percent": 0.10, "item_extra_lifesteal": 0.01},
+		"passive": "%1 Can Emme kazandırır."},
+	"ahenk_bastiyonu": {"name": "Ahenk Bastiyonu", "kademe": 3, "cost": 2400, "recipe": [],
+		"stats": {"item_shield_power_flat": 250.0, "shield_protection_bonus": 0.08},
+		"passive": "Azami canının %30'u kadar ilave kalkan kazandırır."},
+	"kiyamet_bicagi": {"name": "Kıyamet Bıçağı", "kademe": 3, "cost": 2600, "recipe": [],
+		"stats": {"damage_bonus": 40.0, "item_ap_percent": 0.25},
+		"passive": "Saldırı gücünü %25 arttırır."},
 	"aegisin_muhafizi": {"name": "Aegis'in Sonsuz Muhafızı", "kademe": 3, "cost": 2360,
 		"recipe": ["sarsilmaz_kabuk", "olum_esigi", "aura_kristali"],
 		"stats": {"item_shield_power_flat": 250.0, "item_shield_regen_flat": 1.5},
@@ -186,10 +213,11 @@ const KEYS: Array = [
 	"ceviklik_yuzugu", "tornavida", "kanli_yakut", "bile_tasi",
 	"kemik_kolye", "suikastci_kamasi", "ruh_emici", "keskin_goz_hanceri", "ruzgar_eldiveni", "zirh_soken_hancer",
 	"savascinin_kilici", "sarsilmaz_kabuk", "kirilmaz_irade", "aura_kristali", "lutuf_madalyonu", "yenilenme_ozutu",
-	"olum_esigi", "kizil_hasat", "ruhlarin_akisi",
+	"olum_esigi", "savasci_bileyi", "kizil_hasat", "ruhlarin_akisi",
 	"anka_kusunun_kalbi", "ilidaricin_kilici", "canavarlastirma_ozutu", "son_felaket_pencesi", "kabuk_delen",
 	"kralin_kadehi", "ninjanin_el_kitabi", "zamanbukenin_eldiveni", "isigin_muhafizi", "zaman_kiran", "astral_zirh_ozu",
-	"kan_aglayan", "gunesin_iradesi", "son_sans", "azrailin_gozu", "aegisin_muhafizi",
+	"kan_aglayan", "gunesin_iradesi", "son_sans", "bilgenin_pusulasi", "sifa_feneri", "azrailin_gozu", "aegisin_muhafizi",
+	"ruzgar_yuruyen_cizmeleri", "kanli_bicer", "ahenk_bastiyonu", "anka_muhru", "kiyamet_bicagi",
 ]
 
 ## Stat etiketleri (açıklama metni + ipuçları). percent=true: değer kesir, "%X" yazılır.
@@ -201,11 +229,11 @@ const STAT_LABELS := {
 	"lifesteal_percent": ["Can Çalma", true], "luck": ["Şans", false], "exp_gain_percent": ["EXP Kazanımı", true],
 	"item_speed_percent": ["Hareket Hızı", true], "dodge_chance": ["Sıvışma", true],
 	"cooldown_reduction_percent": ["Bekleme Süresinde Azalma", true], "shield_pen_percent": ["Kalkan Delme", true],
-	"crit_chance_bonus": ["Kritik Şansı", true],
+	"crit_chance_bonus": ["Kritik Şansı", true], "shield_protection_bonus": ["Kalkan Soğurma", true],
 }
 ## Pasifin kendisi olan (açıklamada stat satırı olarak tekrar yazılmayan) statlar.
 const PASSIVE_ONLY_STATS := ["item_flat_hit_damage", "item_damage_mult_bonus", "item_crit_damage_bonus",
-	"item_vitamin_regen_bonus", "item_shield_delay_reduction"]
+	"item_vitamin_regen_bonus", "item_shield_delay_reduction", "item_ap_percent", "item_extra_lifesteal", "item_pickup_range_percent"]
 
 
 static func get_def(key: String) -> Dictionary:

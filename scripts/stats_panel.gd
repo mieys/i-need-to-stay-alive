@@ -23,6 +23,8 @@ extends Control
 ## Kalkan Gücü" ve 5 saniyede bir işleyen Can Yenilenmesi.
 var heal_power_value: Label = null
 var regen_value: Label = null
+## 2026-10-11 (kullanıcı: "envanterdeki stat penceresinde bazı eksik statlar var, örneğin can çalma gözükmüyor"): kodla eklenen diğer satırlar.
+var _extra_values: Dictionary = {} ## satır id -> değer Label'ı
 
 ## Her satırın başındaki küçük ikon (bkz. stat_icon.gd - level atlama
 ## kartlarıyla AYNI script/AYNI PNG'ler, res://assets/ui/level_up_icons/,
@@ -147,10 +149,23 @@ func _apply_text_colors() -> void:
 			val_lbl.add_theme_stylebox_override("normal", sb)
 
 
+## Sahnede olmayan, kodla eklenen satırlar: [id (ikon = stat_icon.gd), ad, ipucu].
+const EXTRA_ROWS := [
+	["max_health", "Can", "Can: şimdiki / en fazla can."],
+	["shield_max", "Kalkan", "Kalkan: şimdiki / en fazla kalkan (eşyalardan)."],
+	["lifesteal", "Can Çalma", "Can Çalma: her isabette bu ihtimalle 2 can yenilersin (alan hasarında etkisi %33)."],
+	["health_regen", "Can Yenilenmesi", "Can Yenilenmesi: 5 saniyede bir yenilenen can (kartlar ve eşyalardan; İyileştirme Gücü ile büyür)."],
+	["shield_regen", "Kalkan Yenilenmesi", "Kalkan Yenilenmesi: saniyede yenilenen kalkan (eşyalardan)."],
+	["heal_power", "İyileştirme Gücü", "İyileştirme ve Kalkan Gücü: yaptığın bütün iyileştirmeleri, can yenilenmesini, can çalmayı ve kalkan doldurmayı yüzde olarak arttırır."],
+	["cooldown_reduction", "Bekleme Azaltma", "Bekleme Süresi Azaltma: yeteneklerin bekleme süreleri bu oranda kısalır."],
+	["pickup_range", "Toplama Menzili", "Toplama Menzili: XP, altın ve eşyaları bu uzaklıktan çekersin."],
+]
+
+
 ## [ikon, ad, değer] üçlüsü - sahnedeki satırlarla aynı düzen; stil/renk _apply_kit_style ve _apply_text_colors'tan gelir.
 func _add_runtime_rows() -> void:
 	var grid: GridContainer = $Frame/Margin/VBox/GridScroll/Grid as GridContainer
-	for row in [["health_regen", "Can Yenilenmesi"], ["heal_power", "İyileştirme Gücü"]]:
+	for row in EXTRA_ROWS:
 		var icon_node := Control.new()
 		icon_node.set_script(preload("res://scripts/stat_icon.gd"))
 		icon_node.name = "Runtime_%s_Icon" % row[0]
@@ -165,12 +180,13 @@ func _add_runtime_rows() -> void:
 		for n in [icon_node, name_lbl, val_lbl]:
 			grid.add_child(n)
 		_icon_nodes[row[0]] = icon_node
+		name_lbl.tooltip_text = str(row[2])
 		if row[0] == "health_regen":
 			regen_value = val_lbl
-			name_lbl.tooltip_text = "Can Yenilenmesi: 5 saniyede bir yenilenen can (kartlar ve eşyalardan; İyileştirme Gücü ile büyür)."
-		else:
+		elif row[0] == "heal_power":
 			heal_power_value = val_lbl
-			name_lbl.tooltip_text = "İyileştirme ve Kalkan Gücü: yaptığın bütün iyileştirmeleri, can yenilenmesini, can çalmayı ve kalkan doldurmayı yüzde olarak arttırır."
+		else:
+			_extra_values[row[0]] = val_lbl
 		name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 
 
@@ -222,8 +238,28 @@ func _refresh() -> void:
 	if regen_value and "heal_regen_card_bonus" in player:
 		var regen: float = float(player.heal_regen_card_bonus) + float(player.get("item_health_regen") if "item_health_regen" in player else 0.0)
 		regen_value.text = "%s/5sn" % format_luck(snappedf(regen, 0.1))
-	if heal_power_value and "heal_shield_power" in player:
-		heal_power_value.text = "+%%%d" % int(round(float(player.heal_shield_power) * 100.0))
+	if heal_power_value and player.has_method("get_heal_shield_power"):
+		heal_power_value.text = "+%%%d" % int(round(float(player.get_heal_shield_power()) * 100.0))
+	_refresh_extra_rows()
+
+
+func _refresh_extra_rows() -> void:
+	var t: Dictionary = {
+		"max_health": "%d/%d" % [int(player.health), int(player.max_health)],
+		"shield_max": "%d/%d" % [int(player.get("item_shield_hp")), int(player.get("item_shield_max"))] if "item_shield_max" in player else "-",
+		"lifesteal": format_percent(float(player.call("get_total_lifesteal"))) if player.has_method("get_total_lifesteal") else "-",
+		"shield_regen": ("%s/sn" % format_luck(snappedf(float(player.get("item_shield_regen_flat")), 0.1))) if "item_shield_regen_flat" in player else "-",
+		"cooldown_reduction": format_percent(float(player.get("cooldown_reduction_percent"))) if "cooldown_reduction_percent" in player else "-",
+		"pickup_range": str(int(round(float(player.call("get_pickup_range"))))) if player.has_method("get_pickup_range") else "-",
+	}
+	for id in _extra_values:
+		(_extra_values[id] as Label).text = str(t.get(id, "-"))
+
+
+## Kesir -> "%X" (küçük değerlerde bir ondalık: %2,5).
+static func format_percent(v: float) -> String:
+	var pct: float = v * 100.0
+	return ("%%%d" % int(round(pct))) if is_equal_approx(pct, round(pct)) else ("%%%.1f" % pct)
 
 
 ## Telefon (kullanıcı bildirimi 2026-10-03: "envanter paneli çok kötü mobile uyumlu değil"): hud.gd bu paneli küçültüp
@@ -273,14 +309,14 @@ func _setup_stat_tooltips() -> void:
 	var descriptions: Dictionary = {
 		"speed": "Hız: Karakterin hareket hızını arttırır.",
 		"damage": "Saldırı Gücü: Tüm silahların verdiği hasarı arttırır.",
-		"fire_rate": "Saldırı Hızı: Tüm silahların saldırı sıklığını arttırır. Seviye kartları, eşyalar ve pasiflerden gelen toplam bonus.",
+		"fire_rate": "Saldırı Hızı: Tüm silahların saldırı sıklığını arttırır. Seviye kartları, eşyalar ve pasiflerden gelen toplam bonus. En çok %600; aşan her %1, anlık olarak 0.5 saldırı gücü verir.",
 		"shield_protection": "Kalkan Soğurma: Kalkanın hasar emme oranını arttırır.",
 		"crit_chance": "Kritik Oran/Hasar: Kritik vuruş yapma şansını ve kritik hasar çarpanını arttırır.",
 		"shield_pen_percent": "Kalkan Delme: Düşmanların kalkan soğurmasını yüzde olarak yok sayar.",
 		"exp_gain": "Tecrübe Kazanımı: Kazanılan tecrübe puanını (XP) arttırır.",
 		"luck": "Şans (puan): Her 1 puan öldürdüğün yaratıkların yemek/mıknatıs/sandık düşürme ihtimalini %5 (20 puan = 2 kat), altın düşürme ihtimalini %1 arttırır; seviye kartlarında, sandık ödüllerinde ve satıcı eşyalarında üst kademe çıkma ağırlığını %1.5 arttırır.",
 		"range": "Menzil: Silahların vuruş ve menzil uzaklığını arttırır.",
-		"dodge": "Sıvışma: Saldırılardan kaçınma şansı verir (Maks %60, fazlası boşa gider).",
+		"dodge": "Sıvışma: Saldırılardan kaçınma şansı verir (Maks %40, Rüzgâr Yürüyen Çizmeleri ile %50; fazlası boşa gider).",
 		"knockback": "Geri Tepme: Silahların düşmanları geri itme gücünü arttırır.",
 		"shield_amount": "Kalkan Miktarı: Maksimum kalkan kapasitesini arttırır."
 	}

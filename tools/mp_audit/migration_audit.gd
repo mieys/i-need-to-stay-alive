@@ -52,7 +52,7 @@ func _sample(el: float) -> void:
 		"host": bool(_nm.get("is_host")), "migrating": bool(_nm.call("is_host_migrating")), "peers": get_multiplayer().get_peers().size(),
 		"lobby": _nm.get("lobby_players").size(), "count": int(_nm.call("game_player_count")), "wk": _wk(p), "level": int(_gm.get("team_level")),
 		"gold": int(_gm.get("gold")), "time": snappedf(float(_gm.get("game_time")), 1.0), "enemies": enemies,
-		"remotes": get_nodes_in_group("remote_players").size(), "over": bool(_gm.get("is_game_over")), "pstat": (int(get_multiplayer().multiplayer_peer.get_connection_status()) if get_multiplayer().multiplayer_peer != null else -1),
+		"remotes": get_nodes_in_group("remote_players").size(), "over": bool(_gm.get("is_game_over")), "paused": paused, "pstat": (int(get_multiplayer().multiplayer_peer.get_connection_status()) if get_multiplayer().multiplayer_peer != null else -1),
 		"pcls": (get_multiplayer().multiplayer_peer.get_class() if get_multiplayer().multiplayer_peer != null else ""), "uid": int(get_multiplayer().get_unique_id()),
 		"mig": ({"status": str(_nm.get("_migration").get("status", "")), "idx": int(_nm.get("_migration").get("idx", -1))} if not (_nm.get("_migration") as Dictionary).is_empty() else {}),
 		"roster": (_nm.get("_migration_roster") as Array).map(func(e: Dictionary) -> String: return "%s|%s|%s" % [str(e.get("uid", "")).left(6), str(e.get("addr", "")), str(e.get("eos", "")).left(8)])})
@@ -132,6 +132,9 @@ func _run() -> void:
 			paused = false ## devir sırasında dünya BİLEREK donuk (NetworkManager); koşucu açılış duraklamasını kaldırırken buna dokunmasın
 		var el: float = float(Time.get_ticks_msec() - t0) / 1000.0
 		if current_scene != null and current_scene.name == "Main":
+			## Seviye atlama ekranı açık kalırsa devir sırasında ağacı KENDİLİĞİNDEN açar (kapanırken paused = false) ve devrin asıl hatasını (Epic'te duraklı ağaçta EOS tik'i durur,
+			## bkz. eos_online.gd _keep_eos_ticking) maskeler. Bu denetimde kimse seviye atlamasın: gerçek oyunda devir anında açık ekran olmayabilir.
+			_gm.set("team_xp_needed", 1.0e9)
 			var sp: Node = current_scene.get_node_or_null("EnemySpawner")
 			if sp:
 				sp.set("_spawn_timer", 1.0e9)
@@ -164,6 +167,16 @@ func _run() -> void:
 			_flush_result()
 			if _kill == "crash":
 				OS.kill(OS.get_process_id())
+			elif _kill == "winclose":
+				## Gerçek pencere kapatma: kapatma isteği bildirimi NetworkManager'a ulaşır (host internet odasındaysa odayı kapatıp 0,6 sn sonra kendisi çıkar).
+				root.propagate_notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
+				await _wait(4.0)
+				quit()
+				return
+			elif _kill == "quit":
+				## Pencereyi kapatmak: close_room ÇAĞRILMADAN normal çıkış (NetworkManager menüden çıkış yolunu atlar) - istemciler ne kadar sürede fark eder?
+				quit()
+				return
 			else:
 				_nm.call("close_room")
 				await _wait(1.0)

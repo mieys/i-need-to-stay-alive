@@ -210,7 +210,7 @@ func test_level_up_grants_twenty_health_and_two_damage() -> void:
 
 
 func test_lifesteal_card_and_item_tiers() -> void:
-	var expected: Array = [0.01, 0.015, 0.02, 0.025]
+	var expected: Array = [0.02, 0.04, 0.06, 0.08] ## 2026-10-11 kart merdiveni
 	for i in range(4):
 		assert(is_equal_approx(TierSystem.lifesteal_percent_for_tier(i + 1), expected[i]), "Kart tier %d" % (i + 1))
 	## Kartın gerçekten uyguladığı değer ve ekranda yazan sayı.
@@ -225,7 +225,7 @@ func test_lifesteal_card_and_item_tiers() -> void:
 		assert(is_equal_approx(player.lifesteal_percent - before, expected[tier - 1]),
 			"apply_upgrade tier %d kazancı, bulunan: %s" % [tier, player.lifesteal_percent - before])
 		var shown: String = screen._scaled_desc_value("+%1", tier, "lifesteal")
-		var want: String = "+%%%s" % (str(int(expected[tier - 1] * 100.0)) if tier % 2 == 1 else "%.1f" % (expected[tier - 1] * 100.0))
+		var want: String = "+%%%d" % roundi(expected[tier - 1] * 100.0)
 		assert(shown == want, "Kart yazısı tier %d: '%s' beklenen '%s'" % [tier, shown, want])
 	_cleanup()
 

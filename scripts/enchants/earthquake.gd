@@ -27,7 +27,7 @@ func hit_extra(t: Node, _dmg: float, is_primary: bool, proj: Node2D) -> void:
 		if e.global_position.distance_to(Geometry2D.get_closest_point_to_segment(e.global_position, a, b)) > half_w:
 			continue
 		hit(e, ap() * f("quake_ap"))
-		e.apply_element("stun", {"dur": f("quake_stun", 0.5)})
+		el(e, "stun", {"dur": f("quake_stun", 0.5)})
 	if flag("rift"):
 		area("line", a, {"to": b, "width": half_w, "tick": 1.0, "damage": ap() * 0.15, "slow": 0.3, "duration": 3.0,
 			"sheet": "rift_tile_wide", "sheet_scale": Vector2(1.0, f("quake_width", 40.0) / 40.0)})

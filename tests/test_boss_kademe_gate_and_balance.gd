@@ -49,6 +49,7 @@ func _spawner() -> Node:
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
 	sp.max_concurrent_enemies = 100000
+	sp.tier_duration = 100.0 ## testler 100 sn'lik kademelere göre yazıldı (varsayılan 2026-10-10'da 150 oldu; kademe süresi bu testlerin konusu değil)
 	get_tree().current_scene = self
 	_track(sp)
 	var p := FakePlayer.new()
@@ -182,7 +183,7 @@ func test_boss_damage_up_ten_and_all_creature_damage_down_ten() -> void:
 	var raw_damage: float = (3.0 + 3.0 * 2.2) * float(mult["dmg"])
 	var prev_boss_damage: float = raw_damage * PREV_BOSS_DAMAGE_MULT * PREV_GLOBAL_DAMAGE_BUFF
 	## Net: x1.1 (boss) x0.9 (tüm yaratıklar) = x0.99, üstüne 2026-09-24 denge turunun x1.6'sı.
-	assert(absf(float(boss.contact_damage) - prev_boss_damage * 1.1 * 0.9 * 1.6 * 1.2 * SpawnerScript.BOSS_CUT_2026_09_25B * SpawnerScript.boss_damage_pacing(3) * SpawnerScript.LATE_TIER_DAMAGE_MULT) < 0.001,
+	assert(absf(float(boss.contact_damage) - prev_boss_damage * 1.1 * 0.9 * 1.6 * 1.2 * SpawnerScript.BOSS_CUT_2026_09_25B * SpawnerScript.boss_damage_pacing(3) * SpawnerScript.LATE_TIER_DAMAGE_MULT * SpawnerScript.CREATURE_DAMAGE_CUT) < 0.001,
 		"Boss hasarı öncekinin x1.1 x0.9'u olmalı: %s (önceki %s)" % [boss.contact_damage, prev_boss_damage])
 
 	var rat: Node = RatScene.instantiate()
@@ -190,6 +191,8 @@ func test_boss_damage_up_ten_and_all_creature_damage_down_ten() -> void:
 	_track(rat)
 	rat.contact_damage = 10.0
 	sp._apply_global_buff(rat)
-	assert(absf(float(rat.contact_damage) - 10.0 * SpawnerScript.GLOBAL_DAMAGE_BUFF) < 0.001, "Normal yaratık hasarı x GLOBAL_DAMAGE_BUFF olmalı")
-	assert(absf(float(rat.contact_damage) - 10.0 * PREV_GLOBAL_DAMAGE_BUFF * 0.9 * 1.2) < 0.001, "Normal yaratık hasarı öncekinin %%90'ı x1.2 olmalı: %s" % rat.contact_damage)
+	## 2026-10-10: sıradan yaratıkların hasarı/canı/kalkanı +%50 (CREATURE_STAT_BOOST); bosslar (yukarıdaki) bu çarpanı almaz.
+	assert(is_equal_approx(SpawnerScript.CREATURE_STAT_BOOST, 1.5), "yaratık güç çarpanı 1,5")
+	assert(absf(float(rat.contact_damage) - 10.0 * SpawnerScript.GLOBAL_DAMAGE_BUFF * SpawnerScript.CREATURE_STAT_BOOST * SpawnerScript.CREATURE_DAMAGE_CUT) < 0.001, "Normal yaratık hasarı x GLOBAL_DAMAGE_BUFF x CREATURE_STAT_BOOST olmalı")
+	assert(absf(float(rat.contact_damage) - 10.0 * PREV_GLOBAL_DAMAGE_BUFF * 0.9 * 1.2 * 1.5) < 0.001, "Normal yaratık hasarı öncekinin %%90'ı x1.2 x1.5 olmalı: %s" % rat.contact_damage)
 	_cleanup()

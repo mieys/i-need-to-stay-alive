@@ -13,8 +13,8 @@ extends RefCounted
 ## SİLAH PARÇACIĞI (kullanıcı isteği 2026-10-08: "blacksmithdeki silahların silah parçacığı ile alınmasını istiyorum ... silah almak 10 parçacık +
 ## bir miktar altın"): silah = SHARD_COST_WEAPON parçacık + yukarıdaki altın (altın fiyatları AYNEN kaldı, kullanıcı seçti). Parçacık yaratıklardan düşer
 ## ve herkese eşit gider (bkz. weapon_shard_drop.gd). Kalkan türü ve geliştirmeleri PARÇACIKSIZ (kullanıcı: "kalkanlar geliştirme için parçacık
-## istemeyecek" ve netleştirmede "geliştirmeler de parçacıksız") - sabitler SHARD_COST_UPGRADE/SHARD_COST_SHIELD 0; ilk mesajındaki "geliştirme başına 5
-## parçacık" istenirse tek satırlık değişiklikle (SHARD_COST_UPGRADE = 5) devreye girer, kod ve ekran hazır. Parçacıkta "Para" indirimi yok.
+## istemeyecek" ve netleştirmede "geliştirmeler de parçacıksız") - sabitler SHARD_COST_UPGRADE/SHARD_COST_SHIELD 0. 2026-10-10 (kullanıcı: "kalkan geliştirmesi için bundan
+## sonra silah parçacığı gerekmeli": "kalkan geliştirmesi için bundan sonra silah 1 parçası gerekmeli"): SHARD_COST_UPGRADE = 1 (kalkan TÜRÜ hâlâ parçacıksız). Parçacıkta "Para" indirimi yok.
 ##
 ## KALKAN: Savaş / Enerji / Kale (ShieldEnchantDefs.ENCHANT_KEYS) 250 altın, satın alınca Standart'ın yerine geçer. Tür KALICI
 ## (eski efsun kuralı: bir tür seçilince diğer ikisi o oyunda bir daha alınamaz) - değiştirilebilir olsun istenirse
@@ -31,7 +31,7 @@ const UPGRADE_BASE_PRICE := 100
 const UPGRADE_PRICE_STEP := 25
 const DEFAULT_MAX_WEAPONS := 5
 const SHARD_COST_WEAPON := 10
-const SHARD_COST_UPGRADE := 0
+const SHARD_COST_UPGRADE := 1 ## kalkan geliştirmesi başına (2026-10-10: 0 -> 1)
 const SHARD_COST_SHIELD := 0
 ## SİLAH EFSUNU GELİŞTİRMELERİ (kullanıcı isteği 2026-10-08: "bu efsunlı özellik olarak kendine alan silahların geliştirmeleri
 ## blacksmithde 5 parçacık + bir miktar altın ile alınabilecek"; final için "daha pahalı: 10 parçacık + yüksek altın"). Altın tutarlarını

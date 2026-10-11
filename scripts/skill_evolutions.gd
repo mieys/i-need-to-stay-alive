@@ -90,9 +90,10 @@ const DEFS := {
 			{"id": "melek_ef", "name": "Kanatlı Adımlar", "desc": "Kalkan bağı sürerken bağlı dostun ve sen %25 hareket hızı kazanırsınız.", "final": true},
 		],
 		"skill3": [
-			{"id": "melek_r1", "name": "Çabuk Korku", "desc": "Kutsal Korku'nun bekleme süresi %25 azalır."},
-			{"id": "melek_r2", "name": "Kutsal Işık", "desc": "Kullandığında etki alanındaki dostların ve sen saldırı gücünün %50'si kadar can yenilersiniz."},
-			{"id": "melek_rf", "name": "Yeniden Doğuş", "desc": "Kullandığında Can Basma (Q) ve Kalkan Yenileme (E) bekleme süreleri anında sıfırlanır.", "final": true},
+			## 2026-10-11 R rework'üyle yenilendi (kimlikler aynı kaldı - kayıt/geri katılım listeleri bozulmasın).
+			{"id": "melek_r1", "name": "Bedelsiz Işık", "desc": "Kutsal Korku kalkan harcamaz ve bekleme süresi %15 azalır."},
+			{"id": "melek_r2", "name": "Kutsal Lütuf", "desc": "%15 İyileştirme ve Kalkan Gücü kazanırsın."},
+			{"id": "melek_rf", "name": "Yeniden Doğuş", "desc": "Kutsal Korku'yu kullandığında diğer yeteneklerinin (Can Basma ve Kalkan Yenileme) bekleme süresi anında sıfırlanır.", "final": true},
 		],
 	},
 	## ---------------------------------------------------------------- Talon
@@ -179,7 +180,7 @@ const DEFS := {
 		],
 		"skill3": [
 			{"id": "sovalye_r1", "name": "Sarsıcı Patlama", "desc": "Kalkan patladığında yaratıkları çok uzağa iter."},
-			{"id": "sovalye_r2", "name": "Yansıtan Kubbe", "desc": "Yetenek aktifken kalkana vuran yaratıklar vurdukları hasarın %50'sini geri alır."},
+			{"id": "sovalye_r2", "name": "Yansıtan Kubbe", "desc": "Yetenek aktifken kalkana vuran yaratıklar, Şovalye Adam'ın azami kalkanının %10'u kadar hasar alır."},
 			{"id": "sovalye_rf", "name": "Yürüyen Kale", "desc": "Yetenek aktifken hareket hızının %30'uyla kalkanla birlikte yürüyebilirsin.", "final": true},
 		],
 	},
@@ -280,6 +281,31 @@ const DEFS := {
 			{"id": "buyucu_r1", "name": "Yükseliş", "desc": "Meteor Patlaması süresince havaya yükselir ve hedef alınamaz olursun. Don Nova yaratıkları etki alanının dışına iter."},
 			{"id": "buyucu_r2", "name": "Meteor Sağanağı", "desc": "Meteorlar %30 daha sık düşer. Don Nova kalkan harcamaz."},
 			{"id": "buyucu_rf", "name": "Ateş ve Buz", "desc": "Meteorlar yere krater bırakır; üstüne basan yaratıklar yanarak 3 saniye boyunca saniyede saldırı gücünün %30'u kadar hasar alır. Don Nova yaratıkları ilk 3 saniye dondurur.", "final": true},
+		],
+	},
+	## ---------------------------------------------------------------- Necromancer (kullanıcı isteği 2026-10-11)
+	## Q = İskelet Çağır (19), E = Golem Çağır (20), R = Lanetli Kafatası (44, pasif etrafında döner / aktif büyür). Temel yeteneklerin
+	## taban değerleri bu yüzden kötüleşti (yaratık sınırı 20 -> 10, iskelet 5 -> 8 ruh, golem 25 -> 50 ruh, golemin sersemletmesi kaldırıldı,
+	## kafatasının korkusu kaldırıldı) - "çünkü geliştirmelere eklenmeli". Sayılar player.gd EVO_NECRO_* / golem_pet.gd EVO_* / necro_skull.gd.
+	11: {
+		"skill": [
+			{"id": "necro_q1", "name": "Kemik Ordusu", "desc": "Aynı anda sahip olabileceğin yaratık (iskelet + golem) sınırı 10'dan 20'ye çıkar."},
+			{"id": "necro_q2", "name": "Ucuz Ruhlar", "desc": "İskelet yaratmanın ruh bedeli 8 yerine 5 olur."},
+			{"id": "necro_q3", "name": "Sert Kemikler", "desc": "İskeletlerin canı ve kalkanı %20 artar."},
+			{"id": "necro_q4", "name": "Dayanıklı Ruhlar", "desc": "İskeletlerin hayatta kalma süresi 15 saniye artar."},
+			{"id": "necro_qf", "name": "Kemik Fedası", "desc": "Canın %20'nin altına düştüğünde anında tüm iskeletlerin ruhunu tüketirsin; hayatta olan her iskelet başına saldırı gücünün %10'u kadar can ve kalkan yenilersin.", "final": true},
+		],
+		"skill2": [
+			{"id": "necro_e1", "name": "Ucuz Golem", "desc": "Golem çağırmanın ruh bedeli 50 yerine 35 olur."},
+			{"id": "necro_e2", "name": "Yıkıcı Yumruk", "desc": "Golemlerin saldırıları düşmanları geriye iter."},
+			{"id": "necro_e3", "name": "Taş Gövde", "desc": "Golemin canı ve kalkanı %30 artar."},
+			{"id": "necro_e4", "name": "Dev Golem", "desc": "Golemler %20 büyür; vuruş alanları ve hasarları %20 artar."},
+			{"id": "necro_ef", "name": "Son Çare Golemi", "desc": "Canın %20'nin altına düştüğünde anında bedelsiz 1 golem doğar; doğduğu anda tüm yaratıkları kışkırtarak kendisine saldırtır. (120 saniye bekleme süresi)", "final": true},
+		],
+		"skill3": [
+			{"id": "necro_r1", "name": "Korku Darbesi", "desc": "Kafatası vurduğu düşmanları 1 saniye boyunca korkutur."},
+			{"id": "necro_r2", "name": "Hızlı Ezme", "desc": "Kafatasının vuruş hızı saldırı hızına bağlı olarak artar."},
+			{"id": "necro_rf", "name": "Lanetli Mühür", "desc": "Kafatası hasar verdiği yaratıkları 10 saniye boyunca lanetler; lanetli yaratıklar aldıkları tüm hasarı %10 daha fazla alır ve bu sürede ölürlerse %1 ihtimalle iskelete dönüşüp senin tarafında savaşır.", "final": true},
 		],
 	},
 }

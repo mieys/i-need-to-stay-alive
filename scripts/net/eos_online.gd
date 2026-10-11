@@ -18,11 +18,14 @@ const CREDENTIALS_PATH := "res://eos_credentials.cfg"
 const REQUIRED_KEYS := ["product_id", "sandbox_id", "deployment_id", "client_id", "client_secret"]
 ## P2P soket adı (host ve katılımcı aynı adı kullanmalı) ve oda ilanlarının "kovası" (sadece bu oyunun odaları aranır).
 const SOCKET_ID := "INSAGAME" ## sadece harf/rakam (EOSG alt çizgiyi reddediyor)
-const BUCKET_ID := "insa:v1"
+## v2 (2026-10-11, lobi sistemi: oda adı + şifre doğrulaması) - eski sürümün odalarıyla karışmasın.
+const BUCKET_ID := "insa:v2"
 const ATTR_HOST_NAME := "HOSTNAME"
 const ATTR_PLAYERS := "PLAYERS"
 const ATTR_MAX := "MAXPLAYERS"
 const ATTR_IN_GAME := "INGAME"
+const ATTR_ROOM_NAME := "ROOMNAME"
+const ATTR_LOCKED := "LOCKED"
 
 var _platform_ready: bool = false
 var _setup_running: bool = false
@@ -38,6 +41,20 @@ var _searching: bool = false
 
 func _ready() -> void:
 	HLog.log_level = HLog.LogLevel.WARN
+	_keep_eos_ticking()
+	_keep_eos_ticking.call_deferred() ## EOSGRuntime bu autoload'dan SONRA eklenmişse (autoload sırası) ertelenmiş çağrı yakalar
+
+
+## KÖK NEDEN (host devri incelemesi, 2026-10-10: "host ayrılınca host değişimi düzgün çalışmıyor"): Epic eklentisinin EOSGRuntime autoload'ı her karede IEOS.tick() çağırır - bağlantı istekleri, P2P
+## bildirimleri ve lobi geri çağrılarının TAMAMI bu tikte işlenir - ama varsayılan process_mode'u PAUSABLE: SceneTree duraklayınca (seviye atlama / sandık / kart ekranları, duraklatma menüsü
+## ve HOST DEVRİ - bkz. network_manager.gd _try_begin_host_migration) Epic de tamamen duruyordu. Devirde ağaç duraklı olduğu için yeni host'a bağlanmaya çalışan oyuncunun Epic bağlantısı HİÇ
+## kurulamıyordu (ölçüm: duraklı ağaçta 100 sn / 20 deneme, bağlantı yok; process_mode ALWAYS ile 0,8 sn): pencere dolunca oyuncu kendini host ilan edip AYRI bir oyun açıyor (bölünmüş oyun) ya da
+## ana menüye düşüyordu. Önceki denetimler devir sırasında açık kalan bir seviye atlama ekranı kapanıp ağacı açtığı için tesadüfen geçiyordu. LAN (ENet) etkilenmez: SceneTree ENet'i duraklıyken de yoklar.
+## Not: NetworkManager de aynı sebeple PROCESS_MODE_ALWAYS (bkz. network_manager.gd _ready).
+func _keep_eos_ticking() -> void:
+	var runtime: Node = get_node_or_null("/root/EOSGRuntime")
+	if runtime != null and runtime.process_mode != Node.PROCESS_MODE_ALWAYS:
+		runtime.process_mode = Node.PROCESS_MODE_ALWAYS
 
 
 ## Kimlik dosyası var ve zorunlu alanlar dolu mu? (Değilse lobi ekranı internet seçeneğini kapalı gösterir.)
@@ -74,6 +91,7 @@ func ensure_ready_async(display_name: String) -> String:
 	var creds := _load_credentials()
 	if creds == null:
 		return "Epic ayarları eksik (eos_credentials.cfg)."
+	_keep_eos_ticking()
 	if _setup_running:
 		await _setup_finished
 	if not _platform_ready:
@@ -99,7 +117,7 @@ func ensure_ready_async(display_name: String) -> String:
 
 
 ## ------------------------------------------------------------------ oda ilanı (host)
-func host_lobby_async(host_name: String, max_players: int) -> bool:
+func host_lobby_async(host_name: String, max_players: int, room_name: String = "", locked: bool = false) -> bool:
 	await close_lobby_async()
 	var opts := EOS.Lobby.CreateLobbyOptions.new()
 	opts.bucket_id = BUCKET_ID
@@ -118,6 +136,8 @@ func host_lobby_async(host_name: String, max_players: int) -> bool:
 	_lobby.add_attribute(ATTR_PLAYERS, 1)
 	_lobby.add_attribute(ATTR_MAX, max_players)
 	_lobby.add_attribute(ATTR_IN_GAME, false)
+	_lobby.add_attribute(ATTR_ROOM_NAME, room_name if not room_name.is_empty() else host_name)
+	_lobby.add_attribute(ATTR_LOCKED, locked)
 	await _lobby.update_async()
 	return true
 
@@ -183,6 +203,8 @@ func search_lobbies_async(display_name: String) -> Array:
 					"players": int(_attr(lobby, ATTR_PLAYERS, 1)),
 					"max_players": int(_attr(lobby, ATTR_MAX, lobby.max_members)),
 					"in_game": bool(_attr(lobby, ATTR_IN_GAME, false)),
+					"room_name": str(_attr(lobby, ATTR_ROOM_NAME, _attr(lobby, ATTR_HOST_NAME, "Oda"))),
+					"locked": bool(_attr(lobby, ATTR_LOCKED, false)),
 				})
 	_searching = false
 	lobbies_updated.emit(out)

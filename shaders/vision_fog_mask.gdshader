@@ -88,7 +88,9 @@ bool ray_blocked(vec2 a, vec2 b) {
 		d.y > 0.0 ? float(cell.y + 1) - a.y : a.y - float(cell.y));
 	vec2 t_max = to_edge * inv;
 	float ray_length = length(d);
-	bool entered = false;
+	// Kaynak bir engelin içindeyse (ağaç tacının altı) o kümeden ilk çıkış sayılmaz - vision_occluders.gd.
+	bool ignore_exit = is_occluder(cell);
+	bool entered = ignore_exit;
 	float t_enter = 0.0;
 	for (int i = 0; i < 96; i++) {
 		if (cell == end_cell || min(t_max.x, t_max.y) > 1.0) {
@@ -108,6 +110,11 @@ bool ray_blocked(vec2 a, vec2 b) {
 				t_enter = t_cross;
 			}
 		} else if (entered) {
+			if (ignore_exit) {
+				ignore_exit = false;
+				entered = false;
+				continue;
+			}
 			// Duvardan çıkış: yeterince kalın bir gövdeden mi geçtik, köşesine mi sürtündük?
 			if ((t_cross - t_enter) * ray_length >= min_wall_crossing) {
 				return true;

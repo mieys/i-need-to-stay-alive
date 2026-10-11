@@ -36,4 +36,4 @@ func hit_extra(t: Node, _dmg: float, is_primary: bool, proj: Node2D) -> void:
 		sprite("crack_x", at, {"z": 9})
 		for e in enemies_near(at, X_RADIUS):
 			hit(e, w * f("crack_x_dmg", 0.6))
-			e.apply_element("stun", {"dur": f("crack_x_stun", 0.75)})
+			el(e, "stun", {"dur": f("crack_x_stun", 0.75)})

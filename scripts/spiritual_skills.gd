@@ -41,7 +41,7 @@ const ADC_LIFESTEAL := 0.01 ## +%1 can emme
 const ADC_COOLDOWN := 120.0
 
 const TANK_DURATION := 10.0
-const TANK_REFLECT := 0.60 ## alınan hasarın %60'ı hasarı verene yansır
+const TANK_REFLECT := 2.0 ## alınan hasarın %200'ü hasarı verene yansır (2026-10-10: %60 -> %200, kullanıcı isteği)
 const TANK_SHIELD_REGEN := 0.03 ## her hasarda eksik kalkanın %3'ü yenilenir
 const TANK_COOLDOWN := 100.0
 
@@ -116,7 +116,7 @@ const DEFS := {
 		"duration": TANK_DURATION,
 		"icon": "res://assets/skills/spirit_tank_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_tank.wav",
-		"desc": "10 saniye boyunca aldığın hasarın %60'ını hasarı verene yansıtırsın ve her hasar aldığında eksik kalkanının %3'ü yenilenir. (100sn bekleme)",
+		"desc": "10 saniye boyunca aldığın hasarın %200'ünü hasarı verene yansıtırsın ve her hasar aldığında eksik kalkanının %3'ü yenilenir. (100sn bekleme)",
 	},
 	TAKTIK: {
 		"name": "Taktiksel",
@@ -134,7 +134,7 @@ const DEFS := {
 		"duration": DUKKAN_CHANNEL,
 		"icon": "res://assets/skills/spirit_dukkan_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_dukkan.wav",
-		"desc": "3 saniye odaklanıp dükkana (seyyar satıcıya) ışınlanırsın. Odaklanırken hareket eder ya da hasar alırsan iptal olur; satıcı yokken kullanılamaz. (120sn bekleme)",
+		"desc": "3 saniye odaklanıp dükkana (seyyar satıcıya) ışınlanırsın. Odaklanırken hareket edersen iptal olur (hasar almak iptal etmez); satıcı yokken kullanılamaz. (120sn bekleme)",
 	},
 	SAVAS_SEVKI: {
 		"name": "Savaş Şevki",

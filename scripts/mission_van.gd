@@ -26,6 +26,13 @@ const MOVE_ANIM_HOLD := 0.35 ## son ilerleme değişiminden bu kadar sn sonra ar
 const DISPLAY_SMOOTHING := 8.0 ## 1/sn - ağdan 10 Hz gelen ilerlemeyi karede yumuşat
 const ROUTE_DOT_SPACING := 26.0
 const ROUTE_DOT_COLOR := Color(1.0, 0.92, 0.55, 0.55)
+## Çarpışma + derinlik (2026-10-10, kullanıcı: "konvoy görevi de y eksenine uygun olmalı ve collision shape içermeli"): "move_blockers" grubu (player.gd
+## _block_movement_into_blockers; araba kasası ~58x53 dünya px) + oyuncu arabanın arkasındaysa (ayağı tekerlek satırının yukarısında) araba onun üstüne çizilir.
+const BLOCK_RADIUS := 20.0
+const BLOCK_CENTER_UP := 12.0
+const DEPTH_HALF_WIDTH := 30.0
+const DEPTH_HEIGHT := 50.0
+var block_radius: float = BLOCK_RADIUS
 
 var route: PackedVector2Array = PackedVector2Array()
 var push_radius: float = 130.0
@@ -82,7 +89,8 @@ func setup(p_route: PackedVector2Array, p_push_radius: float) -> void:
 
 
 func _ready() -> void:
-	z_index = 0 ## oyuncu (z 1) arabanın önünde; itme dairesi zemin gibi
+	z_index = 0 ## itme dairesi zemin gibi; arabanın kendisi _update_depth ile oyuncunun önüne/arkasına geçer
+	add_to_group("move_blockers")
 	_anim = AnimatedSprite2D.new()
 	_anim.sprite_frames = WagonFrames
 	_anim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -120,6 +128,7 @@ func _process(delta: float) -> void:
 		_shown_dist = _target_dist
 	global_position = point_on_path(route, _shown_dist)
 	_update_facing()
+	_update_depth()
 	_move_hold -= delta
 	if _move_hold <= 0.0:
 		_move_dir = 0
@@ -135,6 +144,22 @@ func _process(delta: float) -> void:
 		_last_drawn_dist = _shown_dist
 		queue_redraw()
 		_route_layer.queue_redraw()
+
+
+func block_center() -> Vector2:
+	return global_position - Vector2(0.0, BLOCK_CENTER_UP)
+
+
+func _update_depth() -> void:
+	var behind: bool = false
+	for group_name in ["player", "remote_players"]:
+		for p: Node in get_tree().get_nodes_in_group(group_name):
+			if not (p is Node2D) or not is_instance_valid(p):
+				continue
+			var feet: Vector2 = (p as Node2D).global_position + Vector2(0.0, 12.75)
+			if feet.y < global_position.y and feet.y > global_position.y - DEPTH_HEIGHT and absf(feet.x - global_position.x) < DEPTH_HALF_WIDTH:
+				behind = true
+	_anim.z_index = 2 if behind else 0
 
 
 ## Şu anki rota segmentinin yönüne göre 4 yönlü klip (araba geri kayarken de yüzü gidiş yönünde kalır).

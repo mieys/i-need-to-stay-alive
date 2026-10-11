@@ -33,6 +33,13 @@ const BODY_BLOCK_SCALE := 0.36
 ## DÜZELTME (kullanıcı isteği 2026-09-24): eskiden yanında bir AOE_DAMAGE_EFFECTIVENESS (0.33) daha vardı ve
 ## yakın dövüş sıçrama HASARINI da %33'e indiriyordu - istenmemişti, kaldırıldı (bkz. weapon.gd melee AoE).
 const LIFESTEAL_EFFECTIVENESS := 0.33
+## Can çalma tetiklenince yenilenen can (isabet başına %X ihtimalle). 2026-10-11 (kullanıcı: "can çalma bundan sonra 1 can yerine 2 can
+## versin"): 1 -> 2. player.gd on_damage_dealt (+ Kan Ağlayan'ın kalkana yazdığı) bunu okur.
+const LIFESTEAL_HEAL := 1.0 ## 2026-10-11 (sonra): 2 çok güçlü bulundu, 1'e döndü (kullanıcı: "1 can vermeye devam etsin")
+## SALDIRI HIZI ÜST SINIRI + TAŞMA (kullanıcı isteği 2026-10-11): toplam saldırı hızı bonusu en çok %600 (aralık çarpanı >= 1/7); sınırı aşan her 1
+## puan canlı olarak 0.5 saldırı gücüne dönüşür (kalıcı değil - bkz. player.gd _sync_attack_speed_overflow_ap). player.gd + weapon.gd okur (TEK kaynak).
+const ATTACK_SPEED_CAP_PERCENT := 600.0
+const ATTACK_SPEED_OVERFLOW_AP_PER_PERCENT := 0.5
 
 var game_time: float = 0.0
 var is_game_over: bool = false
@@ -1003,9 +1010,11 @@ func set_team_xp_state(new_xp: float, new_needed: float, new_level: int) -> void
 ## yeniden düzenlenip bake edildiğinde OTOMATİK olarak güncel kalır (ekstra
 ## bir post-bake düzeltmesi gerekmez, animation_columns/ekstra 2 gibi).
 const TerrainCollisionScript := preload("res://scripts/terrain_collision.gd")
+const VisionOccludersScript := preload("res://scripts/vision_occluders.gd")
 var _terrain_su_layer: TileMapLayer = null
 var _terrain_ev_layer: TileMapLayer = null
 var _terrain_forest_layer: TileMapLayer = null
+var _terrain_tree_layers: Array[TileMapLayer] = []
 var _terrain_layers_searched: bool = false
 var _map_world_rect: Rect2 = Rect2()
 var _map_world_rect_searched: bool = false
@@ -1024,6 +1033,13 @@ func _find_terrain_layers() -> void:
 	_terrain_su_layer = harita.get_node_or_null("Su/Su") as TileMapLayer
 	_terrain_ev_layer = harita.get_node_or_null("ev/Ev") as TileMapLayer
 	_terrain_forest_layer = harita.get_node_or_null("Orman parçaları/Orman parçaları") as TileMapLayer
+	## Ağaç katmanları ("Shader Eklenecek/Ağaç 0/1/2" - terrain_collision.gd TREE_PARENT/TREE_PREFIX ile aynı kural): görüşü keser (vision_occluders.gd).
+	_terrain_tree_layers.clear()
+	var tree_parent: Node = harita.get_node_or_null(TerrainCollisionScript.TREE_PARENT)
+	if tree_parent != null:
+		for child: Node in tree_parent.get_children():
+			if child is TileMapLayer and (child as TileMapLayer).tile_set != null and String(child.name).begins_with(TerrainCollisionScript.TREE_PREFIX):
+				_terrain_tree_layers.append(child as TileMapLayer)
 
 
 ## KULLANICI İSTEĞİ (2026-09-21): "Oyuncular haritanın dışını görememeli" - ana haritanın (sahnedeki "Harita" düğümü)
@@ -1095,6 +1111,24 @@ func is_spawn_blocked_by_early_corner(pos: Vector2) -> bool:
 func get_forest_layer() -> TileMapLayer:
 	_find_terrain_layers()
 	return _terrain_forest_layer if is_instance_valid(_terrain_forest_layer) else null
+
+
+## Su katmanı (Harita/Su/Su - çarpışmalı su). Akarsu sesi (stream_ambient.gd) en yakın suya uzaklığı buradan hesaplar. Harita yoksa null.
+func get_water_layer() -> TileMapLayer:
+	_find_terrain_layers()
+	return _terrain_su_layer if is_instance_valid(_terrain_su_layer) else null
+
+
+## Görüşü kesen ağaç katmanları (Harita/Shader Eklenecek/Ağaç *); harita yoksa ya da VisionOccluders.TREES_BLOCK_VISION kapalıysa boş.
+func get_vision_tree_layers() -> Array[TileMapLayer]:
+	_find_terrain_layers()
+	var out: Array[TileMapLayer] = []
+	if not VisionOccludersScript.TREES_BLOCK_VISION:
+		return out
+	for l: TileMapLayer in _terrain_tree_layers:
+		if is_instance_valid(l):
+			out.append(l)
+	return out
 
 
 ## world_pos'ta orman katmanında (Harita/Orman parçaları/Orman parçaları) bir
@@ -1234,6 +1268,7 @@ func reset() -> void:
 	_terrain_su_layer = null
 	_terrain_ev_layer = null
 	_terrain_forest_layer = null
+	_terrain_tree_layers.clear()
 	_terrain_layers_searched = false
 	TerrainCollisionScript.reset()
 	_map_world_rect = Rect2()

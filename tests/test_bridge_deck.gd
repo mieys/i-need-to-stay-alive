@@ -159,10 +159,10 @@ func test_bridge_setup_makes_two_bridge_fronts_not_covering_creatures() -> void:
 	## Köprü kopyaları yaratıkların kaba ızgarasına GİRMEZ: köprüye yakın bir yaratık değerlendirilmez (sadece Maden hücresi girer).
 	assert(dep.max_base_in(160.0, 320.0, 320.0, 352.0) < -1.0e8, "köprü hücreleri kaba ızgarada yok")
 	assert(dep.max_base_in(640.0, 640.0, 656.0, 656.0) > 0.0, "Maden hâlâ kaba ızgarada")
-	## Alt + üst TEK kökü paylaşır (bina gibi): üst satırdaki üst-katman hücresinin kökü = güvertenin alt kenarı (352).
+	## Alt + üst TEK kökü paylaşır (bina gibi): üst satırdaki üst-katman hücresinin kökü = güvertenin alt kenarı (352) + köprü kökü payı.
 	for f: Dictionary in dep.fronts:
 		if f["mode"] == "bridge":
-			assert(is_equal_approx(float((f["bases"] as Dictionary).get(Vector2i(12, 20), -1.0)), 352.0), "köprü kökü tek: %s" % str(f["bases"].get(Vector2i(12, 20))))
+			assert(is_equal_approx(float((f["bases"] as Dictionary).get(Vector2i(12, 20), -1.0)), 352.0 + DepthScript.BRIDGE_ROOT_SLACK), "köprü kökü tek: %s" % str(f["bases"].get(Vector2i(12, 20))))
 	dep.free()
 	_cleanup()
 
@@ -239,3 +239,37 @@ func test_real_map_bridge_right_end_is_walkable_onto_the_right_hill() -> void:
 		for y in [120, 121]:
 			assert(forest.get_cell_source_id(Vector2i(x, y)) == -1, "güverte/sol uç serbest: (%d,%d)" % [x, y])
 	harita.free()
+
+
+func test_deck_railing_blocks_sides_but_not_the_ends() -> void:
+	var r := Rect2(100, 200, 200, 32) ## yatay köprü; yürünebilir şerit y 212..231
+	assert(not DepthScript.deck_exit_blocked(r, Vector2(200, 222)), "güvertede yürümek serbest")
+	assert(not DepthScript.deck_exit_blocked(r, Vector2(90, 222)), "sol uçtan inmek serbest")
+	assert(not DepthScript.deck_exit_blocked(r, Vector2(310, 222)), "sağ uçtan inmek serbest")
+	assert(DepthScript.deck_exit_blocked(r, Vector2(200, 240)), "güney kenardan inmek engelli")
+	assert(DepthScript.deck_exit_blocked(r, Vector2(200, 195)), "kuzey kenardan inmek engelli")
+	assert(DepthScript.deck_exit_blocked(r, Vector2(90, 240)), "uçtan sonra yana kaçmak engelli")
+	## Korkuluk satırında doğan karakter (uçtan girip y 205'te) şeride DÖNEBİLİR, daha da dışarı gidemez.
+	assert(not DepthScript.deck_exit_blocked(r, Vector2(200, 208), Vector2(200, 205)), "şeride dönen adım serbest")
+	assert(DepthScript.deck_exit_blocked(r, Vector2(200, 202), Vector2(200, 205)), "daha da dışarı çıkan adım engelli")
+
+
+func test_deck_blocks_only_applies_to_a_character_standing_on_the_deck() -> void:
+	var harita: Node2D = _track(_make_map()) as Node2D
+	add_child(harita)
+	var dep: Node = DepthScript.new()
+	dep.setup(harita)
+	var walker: Node2D = _player(harita, Vector2(150.0, 340.0 - DepthScript.FEET_OFFSET))
+	dep._process(0.0)
+	walker.global_position = Vector2(200.0, 340.0 - DepthScript.FEET_OFFSET) ## sol uçtan girdi sonra içeride
+	dep._process(0.0)
+	walker.global_position = Vector2(170.0, 340.0 - DepthScript.FEET_OFFSET)
+	dep._process(0.0)
+	assert(dep.is_on_deck(walker), "güvertede")
+	assert(dep.deck_blocks(walker, Vector2(200.0, 380.0)), "güvertedeki karakter güneyden inemez")
+	assert(not dep.deck_blocks(walker, Vector2(200.0, 340.0)), "güvertede ilerlemek serbest")
+	var ground: Node2D = _player(harita, Vector2(240.0, 305.0 - DepthScript.FEET_OFFSET), "remote_players")
+	dep._process(0.0)
+	assert(not dep.deck_blocks(ground, Vector2(240.0, 400.0)), "güvertede olmayan karakter etkilenmez")
+	dep.free()
+	_cleanup()

@@ -2,6 +2,7 @@ extends CharacterBody2D
 class_name RemotePlayer
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const HideBrushScript := preload("res://scripts/hide_brush.gd")
 const DeathBlood := preload("res://scripts/death_blood.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
 const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
@@ -35,6 +36,10 @@ var synced_base_move_speed: float = 0.0 ## bkz. get_base_move_speed
 ## Sahibinin taban "Hasar" statı (player.gd damage_bonus, main.gd extra["dmg"]) - host'taki "Kopyanı Öldür" kopyası
 ## silah hasarını bundan türetir (bkz. mission_player_copy.gd _weapon_hit_damage). Yerel oyuncuyla aynı alan adı.
 var damage_bonus: float = 10.0
+## Saldırı hızı çarpanı + kritik bonusları (main.gd extra "atk_iv"/"cc"/"cd") - host'taki "Kopyanı Öldür" kopyası kopyalar (2026-10-11).
+var synced_attack_interval_mult: float = 1.0
+var crit_chance_bonus: float = 0.0
+var crit_damage_bonus: float = 0.0
 var item_shield_hp: float = 0.0
 var item_shield_max: float = 0.0
 var is_dead: bool = false
@@ -65,6 +70,8 @@ const CharAnim := preload("res://scripts/char_anim.gd")
 const VAMPIR_BATS_TIMEOUT := 1.0
 const FxReviveRewindScene := preload("res://scenes/fx_revive_rewind.tscn")
 const FxReviveHeartScene := preload("res://scenes/fx_revive_heart.tscn")
+const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
+const REMOTE_HEART_Y := -142.0
 var _death_status_fx: Node = null
 var _revive_rewind_fx: Node = null
 var _was_downed_for_heart_fx: bool = false
@@ -1088,8 +1095,9 @@ func _update_revive_rewind_fx() -> void:
 
 	if _was_downed_for_heart_fx and not is_downed and not is_dead:
 		var heart := FxReviveHeartScene.instantiate()
+		(heart as Node2D).position.y = REMOTE_HEART_Y ## isim yazısının (-120) üstü
 		add_child(heart)
-	_was_downed_for_heart_fx = is_downed
+	_was_downed_for_heart_fx = is_downed or is_dead ## bkz. player.gd aynı satır (kalıcı ölümden dönüşte de kalp)
 
 
 ## Talon Ayna Formu (R) boyutu: karakter sprite'ı + silah ikonları (taban ölçekleri de) FORM_SCALE_MULT kadar büyür.
@@ -1154,6 +1162,16 @@ func get_talon_ward_radius() -> float:
 var _enchant_ward: float = 0.0
 
 
+## SAKLANMA ÇALILIĞI (bkz. player.gd set_brush_state / hide_brush_manager.gd): host bu oyuncunun çalı durumunu bildirir; kukla soluklaşır.
+var brush_state: int = 0
+
+
+func set_brush_state(state: int) -> void:
+	brush_state = state
+	if anim != null:
+		anim.self_modulate.a = HideBrushScript.alpha_for(state)
+
+
 ## Vampir Çocuk yarasa formundayken (anim adı bat_*) yaratıklar bu kuklanın içinden geçilebilir sayar - player.gd is_ghost_now ile aynı
 ## sözleşme (enemy.gd host'ta çalışır, uzak Vampir'i bu kukla temsil eder).
 func is_ghost_now() -> bool:
@@ -1166,6 +1184,10 @@ func is_ghost_now() -> bool:
 ## oyuncunun gerçek taban hızı player.tscn'de 91 x EntityScale.SPEED = ~82: host olmayan oyuncunun kopyası ondan ~2.5
 ## kat hızlıydı ("kopya sürekli karaktere ışınlanıyor ve bırakmıyor" bildiriminin kök nedeni).
 ## Sahibinin KALICI hızı (yetenek buff'sız, main.gd extra["base_speed"]) - bkz. player.gd get_base_move_speed.
+func get_attack_interval_mult() -> float:
+	return synced_attack_interval_mult
+
+
 func get_base_move_speed() -> float:
 	if synced_base_move_speed > 0.0:
 		return synced_base_move_speed
@@ -1212,6 +1234,9 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	synced_move_speed = float(extra.get("move_speed", synced_move_speed))
 	synced_base_move_speed = float(extra.get("base_speed", synced_base_move_speed))
 	damage_bonus = float(extra.get("dmg", damage_bonus))
+	synced_attack_interval_mult = float(extra.get("atk_iv", synced_attack_interval_mult))
+	crit_chance_bonus = float(extra.get("cc", crit_chance_bonus))
+	crit_damage_bonus = float(extra.get("cd", crit_damage_bonus))
 	health = hp
 	max_health = max_hp
 	item_shield_hp = s_hp
@@ -1289,6 +1314,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 		_remove_barrier_visual()
 
 	# Matthew dome visual
+	_elara_double = bool(extra.get("elara_double", false)) ## Elara ultisi: tüm silah ikonları titrer (bkz. _update_beam_tremor)
 	if extra.get("matthew_dome", false):
 		_ensure_matthew_dome_visual()
 	else:
@@ -1555,15 +1581,24 @@ func _start_beam_vfx(_beam_type: String, target_pos: Vector2, extra_data: Dictio
 var _beam_tremor_on: bool = false
 
 
+var _elara_double: bool = false
+
+
+## Yıldırım ışını (sadece asa) + 2026-10-10 Elara ultisi Çift Tetik (TÜM silahlar; kullanıcı: "Elara'nın ultisi aktifken tüm silahlarının titremesini istiyorum")
+## - kasterde weapon.gd _apply_beam_tremor / _apply_ult_tremor ile AYNI WeaponJuice.tremor_offset.
 func _update_beam_tremor() -> void:
-	var active: bool = _beam_fx != null and is_instance_valid(_beam_fx) and not is_dead
+	var beam_on: bool = _beam_fx != null and is_instance_valid(_beam_fx) and not is_dead
+	var all_on: bool = _elara_double and not is_dead
+	var active: bool = beam_on or all_on
 	if not active and not _beam_tremor_on:
 		return
 	_beam_tremor_on = active
 	if _talon_formation != "" or _vampir_pull > 0.0:
 		return
 	for slot in range(_weapon_keys.size()):
-		if str(_weapon_keys[slot]) != "lightning_staff":
+		## yakın dövüş silahları (savuruş konumu) kasterdeki gibi titremez
+		var slot_on: bool = (all_on and not WeaponCatalogScript.MELEE_KEYS.has(str(_weapon_keys[slot]))) or (beam_on and str(_weapon_keys[slot]) == "lightning_staff")
+		if not slot_on and not all_on and str(_weapon_keys[slot]) != "lightning_staff":
 			continue
 		var info: Array = get_weapon_icon_info(slot)
 		if info.is_empty():
@@ -1577,7 +1612,7 @@ func _update_beam_tremor() -> void:
 		if idx < _weapon_fire_tweens.size() and _weapon_fire_tweens[idx] is Tween and (_weapon_fire_tweens[idx] as Tween).is_valid():
 			continue ## kritik tikinin "jitter" tween'i sürerken ona karışılmaz (kasterde weapon.gd _apply_beam_tremor aynısı)
 		var base_pos: Vector2 = WEAPON_ICON_SLOTS[idx]
-		icon.position = base_pos + (WeaponJuice.tremor_offset(Time.get_ticks_msec() / 1000.0) if active else Vector2.ZERO)
+		icon.position = base_pos + (WeaponJuice.tremor_offset(Time.get_ticks_msec() / 1000.0 + float(slot) * 0.37) if slot_on else Vector2.ZERO)
 
 
 func _stop_beam_vfx() -> void:
@@ -1662,6 +1697,9 @@ func _spawn_pet_visual(pet_scene_path: String, instance_id: String = "") -> void
 		pet_visual.setup_from_player(self)
 	if pet_visual.has_method("mark_as_network_visual"):
 		pet_visual.mark_as_network_visual()
+	## Necromancer golem evrimleri (E4 boyut): kozmetik kopya da sahibinin evrimlerine göre büyür (golem_pet.gd apply_necro_evos).
+	if pet_visual.has_method("apply_necro_evos"):
+		pet_visual.apply_necro_evos(self)
 	_pet_visuals[instance_id] = pet_visual
 	## Kozmetik kopya sahneden HERHANGİ bir sebeple (kendi ömrü, harici bir
 	## queue_free, vs.) çıkarsa sözlükten HEMEN silinsin - yoksa burada kalan
@@ -1673,6 +1711,16 @@ func _spawn_pet_visual(pet_scene_path: String, instance_id: String = "") -> void
 		if _pet_visuals.get(instance_id) == pet_visual:
 			_pet_visuals.erase(instance_id)
 	)
+
+
+## Bu oyuncunun en yeni Necromancer golem kopyası (Son Çare Golemi kışkırtmasının hedefi, bkz. network_manager.gd "taunt_ally"); yoksa null.
+func get_newest_golem_visual() -> Node2D:
+	var best: Node2D = null
+	for key in _pet_visuals.keys():
+		var v: Variant = _pet_visuals[key]
+		if is_instance_valid(v) and v.has_method("apply_size_evo"):
+			best = v
+	return best
 
 
 func _despawn_pet_visual(instance_id: String = "") -> void:

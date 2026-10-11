@@ -21,6 +21,8 @@ const EnchantLayer := preload("res://scripts/enchant_layer.gd")
 
 
 static func play(tree: SceneTree, kind: String, pos: Vector2, data: Dictionary = {}) -> void:
+	if kind == "sprite" and SpriteFxScript.over_budget(data):
+		return ## efekt bütçesi dolu (bkz. fx_enchant_sprite.gd MAX_ONESHOT): kozmetik efekt atlanır, ağa da gitmez
 	spawn(tree, kind, pos, data)
 	if NetworkManager.is_multiplayer_active:
 		## Kalıcı alan / alan bitişi tek seferlik ve kaybı görünür -> güvenilir kanal (bkz. broadcast_enchant_area).

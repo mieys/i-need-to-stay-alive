@@ -47,11 +47,11 @@ func test_lifesteal_area_hits_use_one_third_chance() -> void:
 	p.health = 10.0
 	for i in range(trials):
 		p.on_dealer_hit(50.0, false)
-	var single_heals: float = p.health - 10.0
+	var single_heals: float = (p.health - 10.0) / GameManager.LIFESTEAL_HEAL ## 2026-10-11: tetik başına 1 can -> tetik sayısı
 	p.health = 10.0
 	for i in range(trials):
 		p.on_dealer_hit(50.0, true)
-	var area_heals: float = p.health - 10.0
+	var area_heals: float = (p.health - 10.0) / GameManager.LIFESTEAL_HEAL
 	## beklenen: tek hedef 0.5*6000 = 3000, alan 0.5*0.33*6000 = 990 (istatistiksel, geniş aralık)
 	assert(single_heals > 2700.0 and single_heals < 3300.0, "tek hedef can emme: %s" % single_heals)
 	assert(area_heals > 800.0 and area_heals < 1200.0, "alan can emme %%33 olmali: %s" % area_heals)
@@ -66,7 +66,7 @@ func test_lifesteal_default_arg_is_single_target() -> void:
 	p.health = 10.0
 	for i in range(200):
 		p.on_damage_dealt(20.0)
-	assert(p.health - 10.0 == 200.0, "%%100 can emme, tek hedef: her vurus 1 can")
+	assert(p.health - 10.0 == 200.0 * GameManager.LIFESTEAL_HEAL, "%%100 can emme, tek hedef: her vurus LIFESTEAL_HEAL (1) can")
 	_cleanup()
 
 

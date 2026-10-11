@@ -30,6 +30,17 @@ const C_WHITE_HOT := Color(1.0, 0.95, 0.7, 1.0)
 
 var _host: Node2D = null
 var _t: float = 0.0
+## 2026-10-10 (kullanıcı: "E'deki zincirin gerçek bir zincir gibi dönmesini istiyorum, düz bir hizada değil, hafif kıvrılarak"): zincir artık düz çizgi
+## değil eğri - silah döndükçe dönüşün TERSİNE geride kalan bir yay (açısal hıza göre, LAG_*) + üzerinde merkezden silaha akan hafif bir dalga (WAVE_*);
+## halkalar eğrinin o noktadaki yönüne döner. Açısal hız silah başına yerelde ölçülür (kaster ve uzak kopya AYNI kod).
+const LAG_PER_RADPS := 0.16 ## yay sapması = açısal hız (rad/sn) x bu x zincir boyu
+const LAG_MAX_RATIO := 0.32 ## en çok zincir boyunun bu oranı kadar sapar
+const LAG_MIN_RATIO := 0.06 ## hiç dönmüyorken bile hafif sarkık kalsın
+const WAVE_AMP := 2.2 ## texel
+const WAVE_SPEED := 7.0
+const CURVE_SAMPLES := 24
+var _prev_angle: Dictionary = {} ## silah sırası -> önceki açı
+var _ang_vel: Dictionary = {} ## silah sırası -> süzülmüş açısal hız (rad/sn)
 
 ## PERF (kullanıcı bildirimi 2026-09-24: "talon oyunu çok kastırıyor yetenek kullandığında"): ÖLÇÜM (gerçek render,
 ## 60 yaratık + 5 silah): Silah Salvosu sırasında bu FX tek başına ~2.3 ms/kare (168 -> 122 fps; Ayna Formu'nun 10
@@ -130,7 +141,22 @@ func _process(delta: float) -> void:
 	if _host == null or not is_instance_valid(_host) or _t >= _life():
 		queue_free()
 		return
+	var pts: Array = _weapon_points()
+	for j in range(pts.size()):
+		var a: float = ((pts[j] as Vector2) - _host.global_position).angle()
+		if _prev_angle.has(j) and delta > 0.0:
+			var w: float = wrapf(a - float(_prev_angle[j]), -PI, PI) / delta
+			_ang_vel[j] = lerpf(float(_ang_vel.get(j, 0.0)), clampf(w, -20.0, 20.0), 0.18)
+		_prev_angle[j] = a
 	queue_redraw()
+
+
+## Eğri üzerindeki nokta: P0 -> P2 arası, orta noktası `lag` kadar yana sapmış ikinci derece Bezier + merkezden silaha akan dalga (uçlarda sıfır).
+func _curve_point(p0: Vector2, p2: Vector2, normal: Vector2, lag: float, f: float, phase: float) -> Vector2:
+	var p1: Vector2 = (p0 + p2) * 0.5 + normal * lag
+	var u: float = 1.0 - f
+	var b: Vector2 = p0 * (u * u) + p1 * (2.0 * u * f) + p2 * (f * f)
+	return b + normal * (PixelDraw.TEXEL * WAVE_AMP * sin(f * TAU - _t * WAVE_SPEED + phase) * sin(f * PI))
 
 
 ## Halka şekilleri (eskiden _oval/_bar her karede noktası noktasına çiziyordu): _ensure_link_textures'ta yön başına bir
@@ -165,18 +191,41 @@ func _draw() -> void:
 			continue
 		var dir: Vector2 = v / length
 		var normal := Vector2(-dir.y, dir.x)
-		var dir_i: int = _dir_index(dir)
 		var start_off: float = belt_r ## zincir kemerin kenarından başlar
 		var usable: float = length - start_off - texel * 3.5 ## silah ucundaki kelepçeye kadar
-		var reach: float = usable * extent
 		var pitch: float = texel * LINK_PITCH
+		## Eğri: dönüşün tersine geride kalan yay + dalga; noktalar yay uzunluğuna göre örneklenir (halkalar eşit aralıklı kalsın).
+		var lag_ratio: float = clampf(-float(_ang_vel.get(j, 0.0)) * LAG_PER_RADPS, -LAG_MAX_RATIO, LAG_MAX_RATIO)
+		if absf(lag_ratio) < LAG_MIN_RATIO:
+			lag_ratio = LAG_MIN_RATIO * (signf(lag_ratio) if lag_ratio != 0.0 else 1.0)
+		var lag: float = lag_ratio * usable
+		var p0: Vector2 = origin + dir * start_off
+		var p2: Vector2 = origin + dir * (start_off + usable)
+		var phase: float = float(j) * 1.9
+		var samples := PackedVector2Array()
+		var cum := PackedFloat32Array()
+		var total_len: float = 0.0
+		for k in range(CURVE_SAMPLES + 1):
+			var q: Vector2 = _curve_point(p0, p2, normal, lag, float(k) / float(CURVE_SAMPLES), phase)
+			if k > 0:
+				total_len += q.distance_to(samples[k - 1])
+			samples.append(q)
+			cum.append(total_len)
+		var reach: float = total_len * extent
 		var count: int = int(reach / pitch)
-		## Hafif sarkma/titreşim: bağ gergin ama canlı.
-		var sag_amp: float = texel * 1.4 * sin(_t * 6.0 + float(j) * 1.9)
 		var pulse_f: float = fmod(_t * 1.5 + float(j) * 0.27, 1.0)
+		var seg: int = 1
+		var link_pts: Array = []
 		for i in range(count):
-			var f: float = (float(i) + 0.5) * pitch / maxf(usable, 1.0)
-			var c: Vector2 = origin + dir * (start_off + f * usable) + normal * sag_amp * sin(f * PI)
+			var sd: float = (float(i) + 0.5) * pitch
+			while seg < CURVE_SAMPLES and cum[seg] < sd:
+				seg += 1
+			var seg_len: float = maxf(cum[seg] - cum[seg - 1], 0.001)
+			var c: Vector2 = samples[seg - 1].lerp(samples[seg], clampf((sd - cum[seg - 1]) / seg_len, 0.0, 1.0))
+			var tangent: Vector2 = (samples[seg] - samples[seg - 1]).normalized()
+			var link_dir_i: int = _dir_index(tangent)
+			link_pts.append(c)
+			var f: float = sd / maxf(total_len, 1.0)
 			## Isı: ısı dalgası merkezden silaha akar; pulse_f'e yakın halkalar akkor
 			var heat: float = 0.35 + 0.25 * sin(_t * 3.0 - float(i) * 0.7)
 			var dp: float = absf(f - pulse_f)
@@ -188,26 +237,24 @@ func _draw() -> void:
 			## Yer gölgesi
 			var shadow := Color(0.05, 0.03, 0.03, 0.35 * extent)
 			if i % 2 == 0:
-				_link("oval_outer", c + Vector2(0, texel * 1.6), dir_i, shadow)
-				_link("oval_outer", c, dir_i, C_IRON_D)
-				_link("oval_inner", c, dir_i, col)
+				_link("oval_outer", c + Vector2(0, texel * 1.6), link_dir_i, shadow)
+				_link("oval_outer", c, link_dir_i, C_IRON_D)
+				_link("oval_inner", c, link_dir_i, col)
 			else:
-				_link("bar", c + Vector2(0, texel * 1.6), dir_i, shadow)
-				_link("bar_hi", c + Vector2(0, texel * 1.6), dir_i, shadow)
-				_link("bar", c, dir_i, col)
-				_link("bar_hi", c, dir_i, C_WHITE_HOT if heat > 0.8 else C_HEAT_HI)
+				_link("bar", c + Vector2(0, texel * 1.6), link_dir_i, shadow)
+				_link("bar_hi", c + Vector2(0, texel * 1.6), link_dir_i, shadow)
+				_link("bar", c, link_dir_i, col)
+				_link("bar_hi", c, link_dir_i, C_WHITE_HOT if heat > 0.8 else C_HEAT_HI)
 		## Kor kıvılcımı: zincirden yükselen tek pixel
 		var seed_i: int = int(_t * 10.0) * 7 + j * 31
 		if count > 2 and PixelDraw.hash01(seed_i) < 0.6:
-			var k_idx: int = int(PixelDraw.hash01(seed_i + 3) * float(count))
+			var k_idx: int = mini(int(PixelDraw.hash01(seed_i + 3) * float(count)), link_pts.size() - 1)
 			var rise: float = fmod(_t * 10.0, 1.0)
-			var kf: float = (float(k_idx) + 0.5) * pitch / maxf(usable, 1.0)
-			var kp: Vector2 = origin + dir * (start_off + kf * usable) + Vector2((PixelDraw.hash01(seed_i + 9) - 0.5) * texel * 3.0, -texel * (2.0 + rise * 7.0))
+			var kp: Vector2 = (link_pts[k_idx] as Vector2) + Vector2((PixelDraw.hash01(seed_i + 9) - 0.5) * texel * 3.0, -texel * (2.0 + rise * 7.0))
 			PixelDraw.px(self, kp, 1, Color(1.0, 0.7, 0.2, 1.0 - rise))
 		## Uç: büyürken parlak uç kıvılcımı
 		if extent < 0.999 and count > 0:
-			var tip: Vector2 = origin + dir * (start_off + reach)
-			PixelDraw.px(self, tip, 2, C_WHITE_HOT)
+			PixelDraw.px(self, link_pts[link_pts.size() - 1], 2, C_WHITE_HOT)
 		## Silah ucu: kenetleyen kelepçe (koyu çelik kare + akkor göz) ve nabız gibi atan ince halka
 		if extent >= 0.999:
 			var clasp: Vector2 = end_full - dir * texel * 2.5

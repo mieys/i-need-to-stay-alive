@@ -1,6 +1,7 @@
 extends Node2D
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const EnchantFx := preload("res://scripts/enchant_fx.gd")
 
 signal fired(direction: Vector2)
@@ -47,6 +48,22 @@ var chain_damage_percent: float = 0.5
 ## yarıçap içindeki düşmanlar aday sayılıyor.
 ## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
 const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
+const HideBrushScript: GDScript = preload("res://scripts/hide_brush.gd")
+
+
+## Silahın hedef süzgeci: sis görünürlüğü (VisionFogScript.can_target) + SAKLANMA ÇALILIĞI kuralı (2026-10-10, kullanıcı: "oyuncular saklanma çalısındayken
+## sadece çalının içindeki düşmanlara saldırabilmeli, dışındakilere değil, çünkü gizli kalmamız gerek"): silahın sahibinin ayağı çalılık hücresindeyse yalnız
+## ayağı da çalılık hücresinde olan yaratık hedeflenir. Uzak kuklanın silah kopyası kendi sahibinin (kuklanın) konumuyla aynı kuralı uygular.
+func _can_target(e: Node) -> bool:
+	if not VisionFogScript.can_target(e):
+		return false
+	var owner_char: Node2D = get_parent() as Node2D
+	if owner_char == null or not (e is Node2D):
+		return true
+	var tree: SceneTree = get_tree()
+	if not HideBrushScript.contains(tree, owner_char.global_position + Vector2(0.0, HideBrushScript.FEET_OFFSET)):
+		return true
+	return HideBrushScript.contains(tree, (e as Node2D).global_position + Vector2(0.0, 6.0))
 const WeaponTargetPriorityScript := preload("res://scripts/weapon_target_priority.gd")
 const TuftufTargetingScript: GDScript = preload("res://scripts/tuftuf_targeting.gd")
 
@@ -162,6 +179,17 @@ var _reload_timer: float = 0.0
 ## sadece yüzdesel (Uzunkılıç'ın zaten kullandığı) stat kaldı.
 var weapon_shield_pen_bonus: float = 0.0
 
+## KALKAN DELME ÜST SINIRI (kullanıcı 2026-10-10: "kalkan delme üst sınırını %40 seviyesine düşür"): silah + eşya + Ruhani "Adc" + efsun kalkan delmesinin
+## TOPLAMI bir isabette en çok %40 (eskiden %100'e kadar yığılabiliyordu). Gerçek hasar silahları (Tüftüf always_true_damage) bilinçli istisna: onların
+## kimliği kalkanı tamamen yok saymak.
+const SHIELD_PEN_CAP := 0.40
+
+
+static func cap_shield_pen(pen: float, true_damage: bool = false) -> float:
+	if true_damage:
+		return 1.0
+	return clampf(pen, 0.0, SHIELD_PEN_CAP)
+
 ## Elara TEMEL (E) "Gerçek Hasar". Kullanıcı isteği (2026-09-25): "6 saldırı yerine 6 saniye sürsün", "bonus hasarını
 ## kaldır, saldırı hızını %30 TOPLAM saldırı hızı olarak güncelle (mevcut saldırı hızını güncel haliyle %30 arttıracak),
 ## bekleme süresi 25 sn". Eskiden silah başına 6 hak sayacı (+%50 hasar, x2 saldırı hızı) vardı - kaldırıldı. Artık
@@ -197,6 +225,10 @@ func _effective_fire_wait() -> float:
 	var owner_p: Node = get_parent()
 	if owner_p and owner_p.has_method("enchant_haste_value"):
 		wait /= 1.0 + float(owner_p.enchant_haste_value())
+	## Saldırı hızı üst sınırı (kullanıcı isteği 2026-10-11, GameManager.ATTACK_SPEED_CAP_PERCENT): kart/eşya havuzunun dışındaki hızlandırmalar
+	## (efsun, yetenek çarpanları, Elara E) üst üste binse de silahın kendi taban hızının (dükkan seviyesi dahil) en çok 7 katına çıkılır.
+	if _base_fire_rate > 0.0:
+		wait = maxf(wait, _base_fire_rate * _shop_fire_rate_mult / (1.0 + GameManager.ATTACK_SPEED_CAP_PERCENT / 100.0))
 	return wait
 ## Elara ULTİ (R): 25sn boyunca her atış bu oranda hasar verir (%60) - "2 kez
 ## tetiklenir" kısmı _on_fire_timer_timeout/_process'teki draw-ready dalında
@@ -454,8 +486,9 @@ func set_yay_multishot_bonus(bonus: int) -> void:
 
 ## ================================================================ EFSUN (2026-09-25)
 ## Bu silah kopyasının efsunu (bkz. EnchantDefs, player.gd _apply_enchant_to_weapon). Davranış bu silahın çocuğu olan
-## bir Node'dur (scripts/enchants/<id>.gd, temel: enchant_behavior.gd) - _fire_at/projectile.gd kancalarından çağrılır.
+## bir Node'dur (scripts/weapon_traits/<id>.gd ya da eski kapalı kartlarda scripts/enchants/<id>.gd, temel: enchant_behavior.gd) - _fire_at/projectile.gd kancalarından çağrılır.
 var enchant_behavior: Node = null
+const WeaponTraitsScript := preload("res://scripts/weapon_traits/weapon_traits.gd")
 var enchant_stats: Dictionary = {}
 ## Efsunun kendi ek atışları (yelpaze dart, ek ok, halka...) sırasında true - ek atış kendi ek atışını doğurmaz,
 ## "her N. saldırı" sayaçlarına girmez, yayın çekiliş döngüsünü baştan başlatmaz.
@@ -476,8 +509,10 @@ func set_enchant(ench: Dictionary) -> void:
 	_enchant_orig_props.clear()
 	if not ench.is_empty():
 		enchant_stats = EnchantDefs.resolve(ench, str(get_meta("shop_key", "")))
-		## Efsuna özgü script yoksa (tamamen ortak mekaniklerle çalışan efsunlar) temel sınıf.
-		var path: String = "res://scripts/enchants/%s.gd" % str(ench.get("id", ""))
+		## Davranış: silahın kalıcı özelliği scripts/weapon_traits/<id>.gd (2026-10-11 silah koduyla aynı yerde), eski kapalı
+		## efsun kartı scripts/enchants/<id>.gd. Özgü script yoksa (tamamen ortak mekaniklerle çalışan) temel sınıf.
+		var ench_id: String = str(ench.get("id", ""))
+		var path: String = WeaponTraitsScript.script_path(ench_id) if WeaponTraitsScript.is_trait(ench_id) else "res://scripts/enchants/%s.gd" % ench_id
 		if not ResourceLoader.exists(path):
 			path = "res://scripts/enchant_behavior.gd"
 		if not enchant_stats.is_empty():
@@ -797,6 +832,8 @@ var _is_arcane: bool = false
 ## etrafımızda dönmesi yerine hedeflediği düşmana doğru savurulsun") - savuruşun konum/zaman matematiği ve hilal efekti
 ## scripts/sword_swing_math.gd'de TEK yerde (remote_player.gd aynı dosyayı çağırır).
 var _is_uzunkilic: bool = false
+## Kılıcın saldırı gücü oranı (nerf notu: _ready). Süpürülen alandaki ikincil hedeflerin hasar yüzdesi player.gd UZUNKILIC_AOE_PERCENT'te.
+const SWORD_AP_RATIO := 1.2
 const SwordSwingMath := preload("res://scripts/sword_swing_math.gd")
 const SwordHitFxScene := preload("res://scenes/fx_sword_hit.tscn")
 
@@ -815,7 +852,10 @@ func _ready() -> void:
 	if _is_uzunkilic:
 		## Kullanıcı isteği: "her silahın saldırı gücü oranını %10 azalt" -
 		## eskiden 1.8, %10 azaltılmış hali 1.62.
-		card_damage_bonus_ratio = 1.62
+		## NERF (2026-10-10, kullanıcı: "kılıç inanılmaz güçlü, nerflenmesi gerekiyor makul seviyelere"): 1.62 -> SWORD_AP_RATIO (1,2). KÖK NEDEN: dört yakın dövüş silahı AYNI atış aralığında
+		## (1,11 sn) ama kılıcın saldırı gücü oranı diğerlerinin 1,7-2,1 katıydı (Bıçak 0,765, Pençe 0,9, Topuz 0,945; kılıç 1,62) ve süpürülen alandaki HERKESE tam hasar veriyordu
+		## (diğerleri alan hasarında %50) - saldırı gücü arttıkça tek hedefte ~2 kat, kalabalıkta daha da fazla. Kılıç yine en sert tek vuruşlu yakın dövüş silahı kalır (kalın savuruş + Wind Sword).
+		card_damage_bonus_ratio = SWORD_AP_RATIO
 		## Yakın dövüş bayrağı SAHNEDEN değil burada: player.gd _configure_uzunkilic_melee'den ÖNCE ve uzak kuklanın
 		## (remote_player.gd update_weapon_visuals) okuduğu geçici kopyada da doğru olsun - yoksa kukla kılıcı menzilli
 		## sanıp hedefe nişan döndürürdü.
@@ -1557,6 +1597,7 @@ func _process(delta: float) -> void:
 		_apply_beam_tremor()
 		return
 
+	_apply_ult_tremor()
 	var target_wait: float = max(0.05, _effective_fire_wait())
 	if abs(fire_timer.wait_time - target_wait) > 0.01:
 		fire_timer.wait_time = target_wait
@@ -1882,7 +1923,7 @@ func _get_nearest_enemy() -> Node2D:
 		for c in get_tree().get_nodes_in_group("mission_copies"):
 			if not is_instance_valid(c) or not c.is_in_group("enemies") or c.get("is_dead") == true:
 				continue
-			if not VisionFogScript.can_target(c):
+			if not _can_target(c):
 				continue
 			var dc: float = o.distance_to((c as Node2D).global_position)
 			if dc < best_d:
@@ -1906,7 +1947,7 @@ func _get_nearest_enemy() -> Node2D:
 		# instead of the actual nearest live threat.
 		if e.get("is_dead") == true:
 			continue
-		if not VisionFogScript.can_target(e):
+		if not _can_target(e):
 			continue
 		var d := origin.distance_to(e.global_position)
 		if d < nearest_dist:
@@ -1943,7 +1984,7 @@ func _find_enemy_on_facing_ray(origin: Vector2, dir: Vector2, reach: float) -> N
 	for e in EnemyQueryScript.candidates(get_tree(), origin, reach + EnemyQueryScript.BODY_PAD + FACING_MELEE_RAY_MARGIN):
 		if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
 			continue
-		if not VisionFogScript.can_target(e):
+		if not _can_target(e):
 			continue
 		var epos: Vector2 = (e as Node2D).global_position
 		var closest: Vector2 = Geometry2D.get_closest_point_to_segment(epos, origin, ray_end)
@@ -1987,7 +2028,7 @@ func _get_target_enemy() -> Node2D:
 	## Menzilde boss / görev kopyası varsa silah DAİMA onlara odaklanır (kullanıcı isteği 2026-09-25) - kural TEK yerde:
 	## weapon_target_priority.gd (uzak kuklanın nişanı da aynısını çağırır).
 	var priority: Node2D = WeaponTargetPriorityScript.nearest_priority_target(get_tree(), _attack_origin(), attack_range,
-			func(e: Node) -> bool: return VisionFogScript.can_target(e))
+			func(e: Node) -> bool: return _can_target(e))
 	if priority != null:
 		if target_prefer_unfrozen:
 			_claimed_frost_target = priority
@@ -2065,7 +2106,7 @@ func _get_nearest_unfrozen_enemy() -> Node2D:
 			continue
 		if e.get("is_dead") == true:
 			continue
-		if not VisionFogScript.can_target(e):
+		if not _can_target(e):
 			continue
 		var d := origin.distance_to(e.global_position)
 		if d < nearest_dist:
@@ -2133,7 +2174,7 @@ func _pick_random_nearby_unfrozen(preferred: Node2D, claimed_by_siblings: Array)
 	for e in EnemyQueryScript.candidates(get_tree(), preferred.global_position, PREFER_UNFROZEN_MAX_EXTRA_DIST + 1.0):
 		if e == preferred or not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
-		if not VisionFogScript.can_target(e):
+		if not _can_target(e):
 			continue
 		if e.get("is_frozen") == true:
 			continue
@@ -2154,7 +2195,7 @@ func _get_highest_health_enemy() -> Node2D:
 	var enemies: Array = EnemyQueryScript.candidates(get_tree(), _attack_origin(), attack_range + 1.0 if attack_range > 0.0 else INF)
 	if enemies.is_empty():
 		return null
-	return TuftufTargetingScript.pick(enemies, _attack_origin(), attack_range, func(e: Node) -> bool: return VisionFogScript.can_target(e))
+	return TuftufTargetingScript.pick(enemies, _attack_origin(), attack_range, func(e: Node) -> bool: return _can_target(e))
 
 
 ## Şimşek Asası: her karede menzildeki hedefi tazeler - hedef değişirse
@@ -2247,6 +2288,26 @@ func _apply_beam_tremor() -> void:
 		return
 	icon_sprite.position = WeaponJuice.tremor_offset(Time.get_ticks_msec() / 1000.0)
 	_beam_tremor_on = true
+
+
+## Elara ultisi (Çift Tetik) aktifken TÜM silah ikonları titrer (2026-10-10, kullanıcı isteği). Uzak kopya remote_player.gd _update_beam_tremor ("elara_double"
+## bayrağı). Yakın dövüş/savuruş/kritik tween'i sürerken karışılmaz (ikon zaten hareket ediyor).
+var _ult_tremor_on: bool = false
+
+
+func _apply_ult_tremor() -> void:
+	if not icon_sprite:
+		return
+	var owner_char: Node = get_parent()
+	var on: bool = owner_char != null and owner_char.get("elara_double_fire_active") == true and owner_char.get("is_dead") != true and not melee
+	if _punch_tween and _punch_tween.is_valid():
+		return
+	if on:
+		icon_sprite.position = WeaponJuice.tremor_offset(Time.get_ticks_msec() / 1000.0 + float(get_index()) * 0.37)
+		_ult_tremor_on = true
+	elif _ult_tremor_on:
+		icon_sprite.position = Vector2.ZERO
+		_ult_tremor_on = false
 
 
 func _stop_beam_tremor() -> void:
@@ -2343,6 +2404,8 @@ func _deal_beam_tick(target: Node2D) -> void:
 	if ench:
 		final_damage = ench.modify_damage(final_damage * (1.0 + GameManager.enchant_damage_percent), target)
 		shield_pen += ench.extra_shield_pen()
+	shield_pen = cap_shield_pen(shield_pen, always_true_damage)
+	BalanceLogScript.tag_weapon(self)
 	target.take_damage(final_damage, is_crit, shield_pen)
 	if ench and is_instance_valid(target):
 		ench.on_beam_tick(target, final_damage)
@@ -2377,7 +2440,7 @@ func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shi
 			continue
 		if not e.has_method("take_damage"):
 			continue
-		if not VisionFogScript.can_target(e):
+		if not _can_target(e):
 			continue
 		## DÜZELTME: sekme artık sadece birincil hedefin CHAIN_JUMP_RANGE
 		## yarıçapı içindeki yaratıkları aday sayıyor (bkz. sabit üstündeki not).
@@ -2393,6 +2456,7 @@ func _apply_chain_jumps(primary: Node2D, chain_damage: float, is_crit: bool, shi
 	var chain_from: Node2D = primary
 	for i in range(n):
 		var chain_to: Node2D = candidates[i]
+		BalanceLogScript.tag_weapon(self)
 		chain_to.take_damage(chain_damage, is_crit, shield_pen, true) ## zincir sıçraması = alan
 		if not shaman_burn_applied and chain_to.has_method("try_shaman_weapon_burn"):
 			shaman_burn_applied = chain_to.try_shaman_weapon_burn()
@@ -2601,6 +2665,7 @@ func _fire_at(target: Node2D) -> void:
 	shield_pen += _player_stat("shield_pen_percent") + _player_stat("spirit_shield_pen") ## + Ruhani Yetenek "Adc" (%15)
 	if ench:
 		shield_pen += ench.extra_shield_pen() ## ör. Topuz Ağır Darbe II
+	shield_pen = cap_shield_pen(shield_pen, always_true_damage)
 
 	if melee:
 		if _is_uzunkilic:
@@ -2621,6 +2686,7 @@ func _fire_at(target: Node2D) -> void:
 
 	if hitscan:
 		if target.has_method("take_damage"):
+			BalanceLogScript.tag_weapon(self)
 			target.take_damage(final_damage, is_crit, shield_pen)
 			_apply_knockback(target)
 			_apply_item_slow_on_hit(target)
@@ -2905,6 +2971,7 @@ func _melee_strike(target: Node2D, center: Vector2, real_hit: bool, final_damage
 			## istemiyorum") - eskiden burada ayrıca ×0.33 (GameManager.AOE_DAMAGE_EFFECTIVENESS) vardı; asıl istek
 			## sadece alan hasarında CAN EMMENİN %33 olmasıydı (LIFESTEAL_EFFECTIVENESS, dokunulmadı). Sıçrama artık
 			## silahın kendi melee_aoe_damage_percent payını (varsayılan %50) aynen verir.
+			BalanceLogScript.tag_weapon(self)
 			e.take_damage(final_damage * melee_aoe_damage_percent, false, shield_pen, true)
 			_apply_knockback(e)
 			_apply_item_slow_on_hit(e)
@@ -2992,11 +3059,13 @@ func _sword_contact(target_v: Variant, center: Vector2, real_hit: bool, final_da
 ## enemy.take_damage zaten is_dead kontrolüyle sonraki parçaları no-op yapar.
 func _deal_melee_damage(target: Node, total_damage: float, is_crit: bool, shield_pen: float) -> void:
 	if melee_hit_segments <= 1:
+		BalanceLogScript.tag_weapon(self)
 		target.take_damage(total_damage, is_crit, shield_pen)
 		return
 	var per_hit: float = total_damage / float(melee_hit_segments)
 	for i in range(melee_hit_segments):
 		if i == 0:
+			BalanceLogScript.tag_weapon(self)
 			target.take_damage(per_hit, is_crit, shield_pen)
 		else:
 			get_tree().create_timer(i * melee_hit_segment_delay).timeout.connect(
@@ -3017,6 +3086,7 @@ func _apply_delayed_segment(target, amount: float, is_crit: bool, shield_pen: fl
 	if owner_node and owner_node.get("is_in_merchant_zone") == true:
 		return
 	if is_instance_valid(target) and target.has_method("take_damage"):
+		BalanceLogScript.tag_weapon(self)
 		target.take_damage(amount, is_crit, shield_pen)
 
 

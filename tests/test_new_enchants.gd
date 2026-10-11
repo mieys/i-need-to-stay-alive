@@ -38,7 +38,8 @@ func _full(id: String) -> Dictionary:
 ## efsunları geçici olarak açar; bu test varsayılan (kapalı) durumu ve verinin yerinde durduğunu doğrular.
 func test_enchants_are_removed_from_the_game_but_data_is_kept() -> void:
 	assert(not EnchantDefs.enabled, "efsunlar varsayılan olarak KAPALI olmalı")
-	assert(EnchantDefs.DEFS.size() == 21 + NEW_TRAIT_IDS.size(), "bilgiler silinmemeli: %d efsun tanımı" % EnchantDefs.DEFS.size())
+	## 2026-10-11: 12 yeni özellik tanımı silah kodunun yanına taşındı (weapon_traits.gd) - burada eski 21 kart kalır.
+	assert(EnchantDefs.DEFS.size() == 21, "bilgiler silinmemeli: %d efsun tanımı" % EnchantDefs.DEFS.size())
 	for id in EnchantDefs.DEFS:
 		assert(ResourceLoader.exists("res://scripts/enchants/%s.gd" % id) or id == "delici_mermi", "%s: davranış scripti yerinde olmalı" % id)
 		assert(not (EnchantDefs.get_def(id)["upgrades"] as Array).is_empty(), "%s: tanım okunabilmeli" % id)
@@ -61,7 +62,7 @@ func test_enchants_are_removed_from_the_game_but_data_is_kept() -> void:
 
 func test_defs_shape() -> void:
 	EnchantDefs.enabled = true
-	assert(EnchantDefs.DEFS.size() == 21 + NEW_TRAIT_IDS.size(), "kullanıcının 21 efsunu + 12 kalıcı özellik: %d" % EnchantDefs.DEFS.size())
+	assert(EnchantDefs.DEFS.size() == 21, "kullanıcının 21 efsunu + 12 kalıcı özellik: %d" % EnchantDefs.DEFS.size())
 	for id in EnchantDefs.DEFS:
 		var d: Dictionary = EnchantDefs.DEFS[id]
 		var ups: int = (d["upgrades"] as Array).size()
@@ -127,7 +128,8 @@ func test_pool_random_upgrades_final_and_no_askin() -> void:
 		for c in EnchantPool.build(null):
 			if str(c["type"]) == "temel":
 				ids[str(c["id"])] = true
-	assert(ids.has("nuukler") and ids.has("matryoshka") and ids.has("kivilcim_yagmuru") and ids.size() == 3, "Fişek'in 3 efsunu (2 kart dönemi + kalıcı özellik Kıvılcım Yağmuru) Temel kartı olarak gelmeli: %s" % str(ids))
+	## 2026-10-11: kalıcı özellikler (Kıvılcım Yağmuru) silahın parçası - kart havuzunda değil (weapon_traits.gd), sadece 2 kart dönemi efsunu.
+	assert(ids.has("nuukler") and ids.has("matryoshka") and ids.size() == 2, "Fişek'in 2 kart efsunu Temel kartı olarak gelmeli: %s" % str(ids))
 	GameManager.owned_weapons = _prev_weapons
 	GameManager.owned_items = _prev_items
 	EnchantDefs.enabled = false
@@ -186,7 +188,9 @@ func _run_one(id: String, key: String) -> Array:
 	assert(p.buy_weapon_copy(key, 1), "silah verilemedi: %s" % key)
 	var w: Node = p.owned_weapon_nodes[0]
 	var beh: Node = w.get("enchant_behavior")
-	assert(beh != null and str(beh.get_script().resource_path).ends_with("/%s.gd" % id), "%s: davranış script'i kurulmadı" % id)
+	## 2026-10-11: Ateş Asası'ndaki eski "destiny" kaydı kalıcı özellik "ates_nefesi"ne çevrilir (EnchantDefs.RENAMED_TRAITS) - aynı davranış.
+	var want_script: String = "ates_nefesi" if id == "destiny" and key == "fire_staff" else id
+	assert(beh != null and str(beh.get_script().resource_path).ends_with("/%s.gd" % want_script), "%s: davranış script'i kurulmadı" % id)
 	## Şansa bağlı tetikleyiciler kesin olsun (kod yolu doğrulanır; oranları test_upgrade_order / veri testi kontrol eder).
 	var st: Dictionary = beh.get("stats")
 	for k in ["wave_chance_final", "rain_chance_final", "exec_chance", "exec_elite", "crystal_chance", "seis_chance_final"]:

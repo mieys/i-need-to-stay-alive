@@ -29,6 +29,8 @@ extends Node
 ## Tuzak: Tiled'da bu katman adları değişirse aşağıdaki sabitler güncellenmeli; bulunamayan katman sessizce atlanır (test_depth_occluders bulunduklarını sınar).
 
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+const HideBrushScript := preload("res://scripts/hide_brush.gd")
+const HideBrushVisualScript := preload("res://scripts/hide_brush_visual.gd")
 const SHADER_PATH := "res://scenes/derinlik_on_katman.gdshader"
 const TREE_SHADER_PATH := "res://scenes/sallanan ağaç.gdshader"
 const TREE_PARENT := "Shader Eklenecek"
@@ -67,6 +69,12 @@ const OBJECT_LAYERS: Array = [
 ## köprü kopyasına dahil DEĞİL (hep köprünün üstünde çizilir, eskisi gibi).
 const BRIDGE_LAYERS: Array = ["Köprü/Köprü alt", "Köprü/Köprü üst"]
 const BridgeDeckScript := preload("res://scripts/bridge_deck.gd")
+const BRIDGE_ROOT_SLACK := 8.0 ## köprü kökü payı (dünya px), bkz. _setup_bridges
+## Güvertedeki karakterin köprü kenarlarından kuzey/güney çıkışı engellenir (korkuluk); sadece uçlardan inilir. Yoklama mesafesi (px, ayak noktasından ileri).
+const DECK_PROBE := 3.0
+## Yatay köprüde yürünebilir şerit: dikdörtgenin üstündeki korkuluk satırı (px) ve alttaki sarkma payı dışarıda kalır (ayak tahtaların üstünde dursun).
+const DECK_TOP_INSET := 12.0
+const DECK_BOTTOM_INSET := 1.0
 
 ## Demirci iç mekanı (scenes/silah_saticisi_baked.tscn) mobilya katmanları - yere serili/duvara asılı süslerin (Various_objects, Torches_back) hiçbiri YOK:
 ## yassı bir nesne "önde" sayılırsa oyuncuyu ayağının üstünde örterdi.
@@ -76,6 +84,9 @@ const SMITHY_INTERIOR_LAYERS: Array = [
 
 var _front_root: Node2D = null
 var _front_materials: Array[ShaderMaterial] = []
+var _brush_materials: Array[ShaderMaterial] = [] ## saklanma çalılığı kopyası: içindeki karakter için yaprak opaklığı karakter başına yazılır
+var _last_brush_orter: Array[float] = []
+var brush_visual: Node = null ## hide_brush_visual.gd (sallanma + hışırtı)
 var _bridge_materials: Array[ShaderMaterial] = [] ## köprü kopyalarının materyalleri: karakter listesi süzülür (güvertedekiler hariç), yaratık yok
 var bridge_rects: Array[Rect2] = [] ## köprü dikdörtgenleri (dünya px) - bridge_deck.gd durum makinesi bunlara göre çalışır
 var _deck: Dictionary = {} ## karakter düğümü örnek kimliği -> bridge_deck.gd durumu
@@ -108,6 +119,11 @@ func setup(harita: Node) -> void:
 		var layer := harita.get_node_or_null(path) as TileMapLayer
 		if layer != null and layer.tile_set != null and not layer.get_used_cells().is_empty():
 			_setup_object_layer(layer)
+	## Saklanma çalılığı (2026-10-09): içindeki karakter, ayağından aşağıdaki tutamların ARKASINDA kalır (çalının içinde durma görünümü); katman Tiled'da
+	## taşınabildiği için AD'la bulunur (hide_brush.gd). 2026-10-10: sallanan çalı + içindeki karakter için yarı saydam yaprak (hide_brush_visual.gd).
+	var brush_layer: TileMapLayer = HideBrushScript.find_layer(harita)
+	if brush_layer != null and brush_layer.tile_set != null and not brush_layer.get_used_cells().is_empty():
+		brush_visual = HideBrushVisualScript.install(self, brush_layer)
 	_setup_bridges(harita)
 	_main = harita.get_parent()
 	_build_coarse()
@@ -129,6 +145,7 @@ func setup_interior(interior_root: Node, layer_names: Array) -> void:
 
 func _begin(root: Node) -> void:
 	name = "DepthOccluders"
+	add_to_group("depth_occluders")
 	root.add_child(self)
 	_front_root = Node2D.new()
 	_front_root.name = FRONT_ROOT_NAME
@@ -180,6 +197,13 @@ func _setup_bridges(harita: Node) -> void:
 	if layers.is_empty():
 		return
 	var per_layer: Dictionary = building_bases(layers)
+	## KÖPRÜ KÖKÜ PAYI (2026-10-09, kullanıcı: "köprünün altından geçince köprünün bir kısmı üstümde görünüyor, bir kısmı görünmüyor"): köprü karakterin üstünde
+	## durur; kök en alt opak satır olunca ayağı tahtaların son satırını biraz geçen karakter (köprü dikdörtgeninin güney kenarı) "önde" sayılıp tahtalar gövdesini
+	## örtmüyor, sadece korkuluk örtüyordu. Kök payı kadar aşağıya taşınır: ayağı köprü dikdörtgeninin içindeyken (ve kenarından BRIDGE_ROOT_SLACK px sonrasına kadar) tüm köprü örter.
+	for layer in layers:
+		var cb: Dictionary = per_layer.get(layer, {})
+		for k in cb.keys():
+			cb[k] = float(cb[k]) + BRIDGE_ROOT_SLACK
 	var world_cells: Dictionary = {} ## dünya hücre anahtarı -> sol-üst dünya px (katmanlar arası birleşik)
 	for layer in layers:
 		_add_object_front(layer, per_layer.get(layer, {}), "bridge")
@@ -306,6 +330,28 @@ func _add_object_front(layer: TileMapLayer, cell_bases: Dictionary, mode: String
 	else:
 		_front_materials.append(mat)
 	fronts.append({"layer": layer, "front": front, "mode": mode, "bases": cell_bases})
+
+
+## Saklanma çalılığı ön kopyası (hide_brush_visual.gd çağırır): yer katmanının sallanan materyalinin kopyası + derinlik kökleri. cell_bases: hücre -> ÇALININ kökünün dünya y'si.
+func add_brush_front(layer: TileMapLayer, cell_bases: Dictionary, ground_mat: ShaderMaterial) -> void:
+	var rect: Rect2i = layer.get_used_rect()
+	if rect.size.x <= 0 or rect.size.y <= 0 or cell_bases.is_empty():
+		return
+	var data := Image.create(rect.size.x, rect.size.y, false, Image.FORMAT_RGBA8)
+	for cell: Vector2i in cell_bases:
+		var p: Vector2i = cell - rect.position
+		var y: int = clampi(roundi(float(cell_bases[cell])), 0, 65535)
+		data.set_pixel(p.x, p.y, Color8(y & 255, y >> 8, 255, 255))
+	var mat: ShaderMaterial = _copy_material(ground_mat)
+	mat.set_shader_parameter("on_katman", true)
+	mat.set_shader_parameter("veri", ImageTexture.create_from_image(data))
+	mat.set_shader_parameter("veri_baslangic", Vector2(rect.position))
+	mat.set_shader_parameter("veri_boyut", Vector2(rect.size))
+	mat.set_shader_parameter("hucre_ofset", _cell_origin(layer))
+	var front: TileMapLayer = _make_front(layer, mat)
+	_front_materials.append(mat)
+	_brush_materials.append(mat)
+	fronts.append({"layer": layer, "front": front, "mode": "brush", "bases": cell_bases})
 
 
 ## Asıl katmanın kopyası: aynı karolar/dönüşüm, oyuncuların üstünde (z_index 2 köklü Node2D altında).
@@ -450,8 +496,41 @@ static func collect_characters(tree: SceneTree) -> Array[Vector4]:
 	var chars: Array[Vector4] = []
 	for n: Node2D in character_nodes(tree):
 		var feet: Vector2 = n.global_position + Vector2(0.0, FEET_OFFSET)
-		chars.append(Vector4(feet.x, feet.y, BODY_HALF_WIDTH, BODY_HEIGHT))
+		var hb: Vector2 = character_extent(n)
+		chars.append(Vector4(feet.x, feet.y, hb.x, hb.y))
 	return chars
+
+
+## Karakterin örtülecek gövdesi (yarım genişlik, ayaktan yukarı boy; dünya px). 2026-10-10 (kullanıcı: "Assasin çocuğun saçı ağaçların arkasında
+## görünmüyor"): eskiden HERKES sabit 29 px boy alıyordu; uzun saçlı/şapkalı karakterlerin tepesi bu dikdörtgenin dışında kaldığı için ağacın önünde
+## çiziliyordu. Artık karakterin AnimatedSprite2D'sinin geçerli animasyonunun ilk karesindeki opak alanın TEPESİ ölçülür (animasyon başına bir kez, meta
+## önbelleği), en az eski sabitler. Yön/kare değişince tepe birkaç px oynayabilir - +2 px pay.
+static func character_extent(n: Node2D) -> Vector2:
+	var a: AnimatedSprite2D = n.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	if a == null or a.sprite_frames == null or not a.sprite_frames.has_animation(a.animation):
+		return Vector2(BODY_HALF_WIDTH, BODY_HEIGHT)
+	var key: String = "%d|%s" % [a.sprite_frames.get_instance_id(), String(a.animation)]
+	var cache: Dictionary = n.get_meta("_depth_char_ext", {}) if n.has_meta("_depth_char_ext") else {}
+	var rect_px: Variant = cache.get(key)
+	if rect_px == null:
+		rect_px = Rect2()
+		var tex: Texture2D = a.sprite_frames.get_frame_texture(a.animation, 0)
+		var img: Image = tex.get_image() if tex != null else null
+		if img != null and not img.is_empty():
+			if img.is_compressed():
+				img.decompress()
+			var used: Rect2i = img.get_used_rect()
+			rect_px = Rect2(Vector2(used.position) - Vector2(img.get_size()) * 0.5 if a.centered else Vector2(used.position), Vector2(used.size))
+		cache[key] = rect_px
+		n.set_meta("_depth_char_ext", cache)
+	var r: Rect2 = rect_px
+	if r.size == Vector2.ZERO:
+		return Vector2(BODY_HALF_WIDTH, BODY_HEIGHT)
+	var sc: Vector2 = a.global_scale.abs()
+	var top_y: float = a.global_position.y + (a.offset.y + r.position.y) * sc.y
+	var feet_y: float = n.global_position.y + FEET_OFFSET
+	var half_w: float = maxf(BODY_HALF_WIDTH, r.size.x * 0.5 * sc.x * 0.8)
+	return Vector2(minf(half_w, BODY_HALF_WIDTH * 1.6), clampf(feet_y - top_y + 2.0, BODY_HEIGHT, BODY_HEIGHT * 2.2))
 
 
 ## collect_characters'ın düğümleri (aynı süzgeç, aynı sıra): köprü katı durumu karakter başına tutulur.
@@ -479,7 +558,8 @@ func _update_bridges() -> void:
 		_deck[id] = st
 		## Köprüden uzaktaki karakter listeye girmez (liste sabit kalır -> shader parametresi her karede yazılmaz).
 		if not bool(st["deck"]) and _near_bridge(feet):
-			ground.append(Vector4(feet.x, feet.y, BODY_HALF_WIDTH, BODY_HEIGHT))
+			var hb: Vector2 = character_extent(n)
+			ground.append(Vector4(feet.x, feet.y, hb.x, hb.y))
 	for id in _deck.keys():
 		if not live.has(id):
 			_deck.erase(id)
@@ -499,6 +579,40 @@ func _near_bridge(feet: Vector2) -> bool:
 		if r.grow(BODY_HEIGHT + 32.0).has_point(feet):
 			return true
 	return false
+
+
+## GÜVERTE KORKULUĞU (2026-10-09, kullanıcı: "köprünün üstündeyken yere yürüyebiliyorum"): güvertedeki karakter ayağı `to_feet`'e giderse köprü dikdörtgeninin
+## YANINDAN (uzun eksene dik kenar: korkuluk) çıkıyorsa true (engelle); köprünün iki ucundan (uzun eksen boyunca, dikdörtgenin genişliği içinde) çıkış serbest.
+## Güvertede değilse ya da köprü yoksa false. player.gd `_block_movement_into_terrain` çağırır.
+func deck_blocks(n: Node2D, to_feet: Vector2) -> bool:
+	var st: Dictionary = _deck.get(n.get_instance_id(), {})
+	if not bool(st.get("deck", false)):
+		return false
+	var idx: int = int(st.get("idx", -1))
+	if idx < 0 or idx >= bridge_rects.size():
+		return false
+	var from_feet: Vector2 = n.global_position + Vector2(0.0, FEET_OFFSET)
+	return deck_exit_blocked(bridge_rects[idx], to_feet, from_feet)
+
+
+static func deck_exit_blocked(rect: Rect2, to_feet: Vector2, from_feet: Vector2 = Vector2(INF, INF)) -> bool:
+	var long_x: bool = rect.size.x >= rect.size.y
+	var across: float = to_feet.y if long_x else to_feet.x
+	var c0: float = rect.position.y if long_x else rect.position.x
+	var c1: float = rect.end.y if long_x else rect.end.x
+	if long_x:
+		c0 = minf(c0 + DECK_TOP_INSET, c1 - 4.0)
+		c1 -= DECK_BOTTOM_INSET
+	if across >= c0 and across < c1:
+		return false ## şeridin içinde: köprüde yürümek ya da uçtan dışarı çıkmak serbest
+	## Şerit dışı: sadece şeride DÖNEN adım serbest (uçtan girip korkuluk satırında doğan karakter sıkışmasın).
+	if from_feet.is_finite():
+		var from_across: float = from_feet.y if long_x else from_feet.x
+		var d_from: float = maxf(c0 - from_across, from_across - c1)
+		var d_to: float = maxf(c0 - across, across - c1)
+		if d_to < d_from:
+			return false
+	return true
 
 
 ## Karakter köprünün GÜVERTESİNDE mi (testler / hata ayıklama).
@@ -524,11 +638,28 @@ func _process(_delta: float) -> void:
 		for m in _front_materials:
 			m.set_shader_parameter("karakter_sayisi", count)
 			m.set_shader_parameter("karakterler", chars)
+	if not _brush_materials.is_empty():
+		_update_brush_alpha(_last_chars)
 	if _creatures_on:
 		## CreatureDepth + main.gd çizim sırası ÇİFT karelerde çalışır: bu güncelleme TEK karelerde (aynı karede yığılmasınlar)
 		_creature_frame += 1
 		if _creature_frame % CREATURE_UPDATE_FRAMES == 1:
 			update_creatures()
+
+
+## Saklanma çalılığı: çalının İÇİNDEKİ karakterin (ayağı çalılık hücresinde) üstüne yapraklar INSIDE_FOLIAGE_ALPHA opaklıkla çizilir, dışındakine tam (karakter_orter = opaklık + 1; 0 = yazılmadı).
+func _update_brush_alpha(chars: Array[Vector4]) -> void:
+	var vals: Array[float] = []
+	var tree: SceneTree = get_tree()
+	for c: Vector4 in chars:
+		vals.append(HideBrushVisualScript.INSIDE_FOLIAGE_ALPHA + 1.0 if HideBrushScript.contains(tree, Vector2(c.x, c.y)) else 2.0)
+	if vals == _last_brush_orter:
+		return
+	_last_brush_orter = vals.duplicate()
+	while vals.size() < MAX_CHARACTERS:
+		vals.append(0.0)
+	for m in _brush_materials:
+		m.set_shader_parameter("karakter_orter", vals)
 
 
 # ------------------------------------------------------------------ yaratıklar (ağaç/ev arkasında yürüyen yaratık örtülsün)

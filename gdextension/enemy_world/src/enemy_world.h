@@ -23,6 +23,8 @@
 #include <godot_cpp/variant/rid.hpp>
 
 #include <cstdint>
+#include <algorithm>
+#include <unordered_map>
 #include <vector>
 
 namespace godot {
@@ -124,6 +126,9 @@ private:
 	// hedefsiz dolaşma
 	std::vector<float> wander_x, wander_y, wander_timer;
 	std::vector<uint8_t> wander_moving;
+	// KENAR BEKÇİLERİ (2026-10-09): uykudaki (dormant) yaratık hiçbir oyuncuyu hedeflemez; GDScript (guard_camps.gd) verdiği hedef noktaya (goal) yürür, yoksa durur.
+	std::vector<uint8_t> dormant, goal_on;
+	std::vector<float> goal_x, goal_y, goal_mult;
 	// geri itme (mesafe) tekrar penceresi
 	std::vector<int64_t> last_kb_msec;
 	// HitArea eşleniği: yerel oyuncunun fizik çemberi yaratığın temas çemberine GİRDİĞİ kare temas zamanlayıcısı sıfırlanır
@@ -229,6 +234,15 @@ private:
 	bool los_clear(float ax, float ay, float bx, float by) const;
 	bool flow_waypoint(int32_t t, float x, float y, float &wx, float &wy) const;
 	int32_t find_closest(int32_t i) const;
+	// SAKLANMA ÇALILIĞI (2026-10-09): çalıdaki oyuncu (hedef düğüm kimliği) `stealth`te kayıtlıysa SADECE listedeki yaratık düğümleri (girişte onu gören / yanından geçen) hedefleyebilir.
+	std::unordered_map<uint64_t, std::vector<uint64_t>> stealth;
+	inline bool concealed_from(int32_t i, int32_t t) const {
+		if (stealth.empty()) {
+			return false;
+		}
+		const auto it = stealth.find(t_id[t]);
+		return it != stealth.end() && !std::binary_search(it->second.begin(), it->second.end(), node_id[i]);
+	}
 	int32_t apply_overrides(int32_t i, int32_t t);
 	bool has_los(int32_t i, int32_t t);
 	void rebuild_buckets();
@@ -256,6 +270,10 @@ public:
 	// Kurulum
 	void set_grid(const PackedByteArray &p_blocked, const Vector2i &p_origin, const Vector2i &p_size, float p_cell,
 			const Vector2 &p_layer_origin, const PackedByteArray &p_fog_blocked = PackedByteArray());
+	void set_dormant(int32_t s, bool on);
+	void set_goal(int32_t s, float x, float y, float mult);
+	bool is_dormant(int32_t s) const;
+	void set_stealth(const PackedInt64Array &p_target_ids, const Array &p_reveals);
 	void set_targets(const PackedVector2Array &p_pos, const PackedInt32Array &p_kind, const PackedByteArray &p_targetable,
 			const PackedByteArray &p_ghost, const PackedFloat32Array &p_body, const PackedFloat32Array &p_zone,
 			const PackedInt64Array &p_ids);

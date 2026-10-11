@@ -79,6 +79,7 @@ func _spawner() -> Node:
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
 	sp.max_concurrent_enemies = 100000 ## kapasite testlerin konusu değil
+	sp.tier_duration = 100.0 ## testler 100 sn'lik kademelere göre yazıldı (varsayılan 2026-10-10'da 150 oldu; kademe süresi bu testlerin konusu değil)
 	get_tree().current_scene = self ## _spawn_creature current_scene'e ekliyor
 	_made.append(sp)
 	return sp
@@ -277,7 +278,13 @@ func test_regular_spawns_in_endless_use_the_scaled_tier_but_the_tier_15_roster()
 	for e in spawned:
 		assert(int(e.get("_current_tier")) == 18, "Kat 3 yaratığının ölçek kademesi 18 olmalı: %d" % int(e.get("_current_tier")))
 		assert(int(e.get_meta("spawn_tier", 0)) == 15, "roster kademesi (meta) 15'te kalmalı")
-		assert(SpawnerScript.TIER_ROSTER[15].has(str(e.get_meta("creature_id", ""))), "roster 15'ten: %s" % str(e.get_meta("creature_id", "")))
+		var cid: String = str(e.get_meta("creature_id", ""))
+		if bool(e.get("is_elite")):
+			## Elit rastgele vadeyle doğar ve ELİT HAVUZUNDAN gelir (2026-10-08, ELITE_POOL) - roster listesinde olmak zorunda değil (örn. demon3). Bu test sıradan yaratığı sınar;
+			## eskiden elit denk gelirse rastgele düşüyordu (3 koşuda ~1 kez, 2026-10-10'da kalıcı olarak düzeltildi).
+			assert(SpawnerScript.ELITE_POOL.has(cid), "elit, elit havuzundan: %s" % cid)
+		else:
+			assert(SpawnerScript.TIER_ROSTER[15].has(cid), "roster 15'ten: %s" % cid)
 	_cleanup()
 
 

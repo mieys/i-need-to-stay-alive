@@ -328,7 +328,8 @@ func _ensure_occluders() -> void:
 	## haritadan kaldırdım, bu layerdaki HER ŞEY görüşü engellesin" - eskiden 20
 	## hücreden küçük kümeler (taş/mantar/çalı) eleniyordu, artık katmanın tüm
 	## hücreleri keser (çarpışmayla, bkz. GameManager.is_position_blocked_by_forest, aynı küme).
-	built.build(layer)
+	## Ağaç katmanları (taç dahil) da keser - kullanıcı isteği 2026-10-09, bkz. vision_occluders.gd AĞAÇLAR notu.
+	built.build(layer, GameManager.get_vision_tree_layers())
 	set_occluders(built)
 
 

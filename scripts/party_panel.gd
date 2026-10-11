@@ -37,9 +37,10 @@ const GOLD_BTN_SIZE := 32.0
 ## Çubukların içine "şimdiki/en çok" sayısı yazılır (kullanıcı isteği 2026-10-09: "dostların can ve kalkan sayısı grup sekmesindeki barlarında görünmüyor"):
 ## Sayılar HUD'daki kendi can/kalkan sayısıyla AYNI "%d/%d" biçiminde; 2x (32 punto, rakam 14 px) piksel-net çizilir (bar_value_label.gd) -> çubuklar 10/6 -> 22/18 px.
 ## (Kullanıcı 2026-10-09 ikinci tur: "sayıların konumu aşağıda kalmış, zor okunuyor, sığmıyor": ilk sürüm 24 punto Label + 16/14 px çubuktu.)
-const HP_BAR_HEIGHT := 22.0
-const SHIELD_BAR_HEIGHT := 18.0
+const HP_BAR_HEIGHT := 30.0 ## 2026-10-10: piksel çubuk (çerçeve+gölge payı 6 px dahil) - içte 22 px
+const SHIELD_BAR_HEIGHT := 27.0
 const BarValueLabelScript: GDScript = preload("res://scripts/bar_value_label.gd")
+const PartyPixelBarScript: GDScript = preload("res://scripts/party_pixel_bar.gd")
 const FS_ROW := 24 ## m5x7 3x - görev satırlarıyla aynı (16 1080p'de okunmuyor)
 ## Sağ üstteki minimap'in (hud.tscn MinimapControl: sağdan 36, alt kenar 186) hemen altı.
 const RIGHT_MARGIN := 36.0
@@ -65,8 +66,8 @@ class PartyRow:
 	var container: Control
 	var avatar: TextureRect
 	var name_label: Label
-	var health_bar: TextureProgressBar
-	var shield_bar: TextureProgressBar
+	var health_bar: Control ## party_pixel_bar.gd (2026-10-10: karakter üstü çubuk stili)
+	var shield_bar: Control
 	var health_label: Control ## health_bar'ın içinde ortalı sayı (bar_value_label.gd; .text)
 	var shield_label: Control ## shield_bar'ın içinde ortalı sayı (kalkan yoksa boş)
 	var gold_button: Button
@@ -441,19 +442,19 @@ func _create_row(peer_id: int) -> PartyRow:
 	row.downed_label = downed_label
 
 	## 2. satır: görev çubuğuyla aynı gömme çukur; içinde can (kalın) + kalkan (ince) üst üste.
-	var well := PanelContainer.new()
-	well.add_theme_stylebox_override("panel", UIKit.panel_style("inset_tight"))
+	## 2026-10-10: gömme çukur (inset panel) kalktı - çubuklar karakter üstü çubuklarla aynı kendi çerçeveleriyle çizilir (party_pixel_bar.gd).
+	var well := MarginContainer.new()
 	well.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	well.mouse_filter = Control.MOUSE_FILTER_PASS ## can değeri ipucu (tooltip) için
 	info_vbox.add_child(well)
 	var bars := VBoxContainer.new()
-	bars.add_theme_constant_override("separation", 2)
+	bars.add_theme_constant_override("separation", 0)
 	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	well.add_child(bars)
-	row.health_bar = _make_bar(HP_BAR_HEIGHT)
+	row.health_bar = _make_pixel_bar(HP_BAR_HEIGHT, Color(0.12, 0.04, 0.04, 1.0))
 	bars.add_child(row.health_bar)
 	row.health_label = _add_bar_label(row.health_bar)
-	row.shield_bar = _make_bar(SHIELD_BAR_HEIGHT)
+	row.shield_bar = _make_pixel_bar(SHIELD_BAR_HEIGHT, Color(0.04, 0.08, 0.14, 1.0))
 	row.shield_bar.tint_progress = SHIELD_COLOR
 	bars.add_child(row.shield_bar)
 	row.shield_label = _add_bar_label(row.shield_bar)
@@ -491,8 +492,16 @@ func _create_row(peer_id: int) -> PartyRow:
 	return row
 
 
+func _make_pixel_bar(height: float, bg: Color) -> Control:
+	var bar: Control = PartyPixelBarScript.new()
+	bar.bg_color = bg
+	bar.custom_minimum_size = Vector2(0.0, height)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return bar
+
+
 ## Çubuğun içine ortalanmış piksel-net sayı etiketi (çubuğun çocuğu: çubukla birlikte konumlanır/boyutlanır, fareyi geçirir).
-func _add_bar_label(bar: TextureProgressBar) -> Control:
+func _add_bar_label(bar: Control) -> Control:
 	var lbl: Control = BarValueLabelScript.new()
 	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bar.add_child(lbl)
@@ -583,7 +592,7 @@ func _update_row(row: PartyRow, ally: Node) -> void:
 		row.avatar.modulate = Color(1, 1, 1, 1)
 
 
-func _set_bar(bar: TextureProgressBar, ratio: float, tint: Color) -> void:
+func _set_bar(bar: Control, ratio: float, tint: Color) -> void:
 	if not is_equal_approx(bar.value, ratio):
 		bar.value = ratio
 	if not bar.tint_progress.is_equal_approx(tint):

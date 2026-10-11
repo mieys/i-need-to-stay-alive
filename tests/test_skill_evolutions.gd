@@ -11,7 +11,7 @@ const HadimeMath: GDScript = preload("res://scripts/hadime_math.gd")
 const VampirMath: GDScript = preload("res://scripts/vampir_math.gd")
 
 ## Kullanıcının evrimlerini yazdığı karakterler (roster id) - 2026-09-30: Assasin Çocuk (5) eklendi.
-const EVO_CHARS := [14, 13, 10, 1, 8, 9, 7, 3, 5, 12, 4] ## 12 = Shaman, 4 = Büyücü Kız (2026-10-04)
+const EVO_CHARS := [14, 13, 10, 1, 8, 9, 7, 3, 5, 12, 4, 11] ## 12 = Shaman, 4 = Büyücü Kız (2026-10-04), 11 = Necromancer (2026-10-11)
 
 var _spawned: Array[Node] = []
 var _prev_char_id: int = 1
@@ -228,6 +228,44 @@ func test_korsan_vampir_counts() -> void:
 	assert(VampirMath.BAT_COUNT == 3 and vampir._vampir_bat_count() == 3, "R temel 3 yarasa")
 	vampir.apply_skill_evolution("vampir_r1", true)
 	assert(vampir._vampir_bat_count() == 5, "Büyüyen Sürü +2 yarasa")
+	_cleanup()
+
+
+## 2026-10-11 Melek R rework: 2 sn havalanma (hareket kilidi), 120 sn, anında %100 saldırı gücü can + kalkan; evrimler
+## Bedelsiz Işık (kalkan bedeli yok + bekleme -%15), Kutsal Lütuf (+%15 İyileştirme ve Kalkan Gücü), Yeniden Doğuş (Q/E sıfır).
+func test_melek_r_rework() -> void:
+	var melek := _make_player(10)
+	var r0: Dictionary = melek._skill3_timing_for(32)
+	assert(is_equal_approx(float(r0["duration"]), 2.0) and is_equal_approx(float(r0["cooldown"]), 120.0), "R: 2 sn havalanma, 120 sn bekleme")
+	assert(is_equal_approx(melek.MELEK_FEAR_DURATION, 5.0), "korku 5 sn")
+	melek.damage_bonus = 100.0
+	melek.max_health = 10000.0
+	melek.health = 1000.0
+	melek.item_shield_max = 10000.0
+	melek.item_shield_hp = 1000.0
+	melek._skill_melek_fear()
+	assert(melek.health >= 1099.0, "kendine saldırı gücünün %%100'ü can (can: %s)" % str(melek.health))
+	assert(melek.item_shield_hp >= 1099.0, "kendine saldırı gücünün %%100'ü kalkan (kalkan: %s)" % str(melek.item_shield_hp))
+	assert(melek.get_skill3_id() == 32)
+	melek.skill3_state = "active"
+	assert(melek._melek_ascending(), "R aktifken havalanma kilidi")
+	melek.skill3_state = "ready"
+	assert(not melek._melek_ascending(), "R bitince kilit kalkar")
+	## Evrimler
+	assert(not melek._evo_skill_free("skill3"))
+	var hp0: float = melek.heal_power_mult()
+	melek.apply_skill_evolution("melek_r1", true)
+	assert(melek._evo_skill_free("skill3") and not melek._evo_skill_free("skill"), "Bedelsiz Işık yalnız R")
+	assert(is_equal_approx(float(melek._skill3_timing_for(32)["cooldown"]), 102.0), "Bedelsiz Işık bekleme -%15")
+	melek.apply_skill_evolution("melek_r2", true)
+	assert(is_equal_approx(melek.heal_power_mult(), hp0 + 0.15), "Kutsal Lütuf +%15 İyileştirme ve Kalkan Gücü")
+	melek.apply_skill_evolution("melek_rf", true)
+	melek.skill_state = "cooldown"
+	melek.skill_timer = 10.0
+	melek.skill2_state = "cooldown"
+	melek.skill2_timer = 10.0
+	melek._skill_melek_fear()
+	assert(melek.skill_timer == 0.0 and melek.skill2_timer == 0.0, "Yeniden Doğuş: Q/E bekleme sıfırlanır")
 	_cleanup()
 
 

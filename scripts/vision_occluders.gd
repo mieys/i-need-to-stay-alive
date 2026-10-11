@@ -17,6 +17,16 @@ extends RefCounted
 ## (duvarın yüzü) ışın hiç çıkmadığı için engelli SAYILMAZ; kaynağın kendi karosu yok sayılır.
 ## Böylece kaya duvar kalınlığı ne olursa olsun (saçak + kaya + ...) tamamen görünür,
 ## sadece ardındaki dünya "görüş dışı" olur. GLSL karşılığı: vision_fog_mask.gdshader ray_blocked().
+##
+## AĞAÇLAR (kullanıcı isteği 2026-10-09: "ağaçların arkasının da görünmesini istemiyorum", soruya cevap: "tüm ağaç, taç dahil görüşü kessin"):
+## ağaç katmanlarının ("Shader Eklenecek/Ağaç 0/1/2", bkz. GameManager.get_vision_tree_layers) dolu hücreleri de AYNI ızgaraya girer.
+## Taç oyuncunun üstüne gelebildiği için kural bir şeyle genişledi: KAYNAK bir engel karosunun İÇİNDEYSE (ağacın altında/tacında duruyor), o
+## engel kümesinden İLK çıkış sayılmaz - kendi tacının altından dışarıyı görür (yoksa ağacın altında kör kalırdı). Dışarıdaki başka bir
+## ağaç/duvar yine keser. Orman duvarında kaynak normalde içeride olmaz, o yüzden eski davranış aynı. EnemyWorld C++ (fog_ray_blocked)
+## ve GLSL (ray_blocked) AYNI kuralı uygular - üçü birlikte değişir.
+
+## Ağaç katmanları da görüşü keser mi (kullanıcı isteği 2026-10-09, bkz. dosya başı AĞAÇLAR notu)? false = sadece orman/uçurum duvarı (eski davranış).
+const TREES_BLOCK_VISION := false ## 2026-10-11 (kullanıcı: "ağaçların arkasının görünmemesi olayını kapat"): ağaçlar görüşü KESMEZ; çarpışma (TerrainCollision) değişmedi
 
 ## Işının atlayabileceği en fazla karo adımı (görüş menzili ~35 karo yatay + ~25 dikey).
 ## vision_fog_mask.gdshader'daki döngü sınırıyla AYNI olmalı.
@@ -43,13 +53,16 @@ var _texture: ImageTexture = null
 ## görüşü engellememe sınırını kaldır, onları haritadan kaldırdım, bu layerdaki HER ŞEY
 ## görüşü engellesin" - eskiden burada bitişik hücre kümelerinden küçük olanlar (taş,
 ## mantar, çalı gibi dağınık dekorlar) eleniyordu; o filtre kaldırıldı. Boş/null katmanda
-## ızgara boş kalır.
-func build(layer: TileMapLayer) -> void:
+## ızgara boş kalır. `extra_layers` (ağaç katmanları): hücreleri aynı ızgaraya eklenir; hepsi `layer` ile AYNI dönüşümde (kardeş katmanlar) olmalı.
+func build(layer: TileMapLayer, extra_layers: Array = []) -> void:
 	_cells = PackedByteArray()
 	_texture = null
 	if layer == null or layer.tile_set == null:
 		return
 	var used: Array[Vector2i] = layer.get_used_cells()
+	for extra: Variant in extra_layers:
+		if extra is TileMapLayer and is_instance_valid(extra):
+			used.append_array((extra as TileMapLayer).get_used_cells())
 	if used.is_empty():
 		return
 	var rect := Rect2i(used[0], Vector2i.ONE)
@@ -127,7 +140,9 @@ func is_ray_blocked(from_world: Vector2, to_world: Vector2) -> bool:
 		(cell.y + 1 - a.y) if d.y > 0.0 else (a.y - cell.y))
 	var t_max: Vector2 = to_edge * inv
 	var ray_length: float = d.length()
-	var entered: bool = false
+	## Kaynak bir engelin içindeyse (ağaç tacının altı) o kümeden ilk çıkış sayılmaz (dosya başı notu).
+	var ignore_exit: bool = blocks_cell(cell)
+	var entered: bool = ignore_exit
 	var t_enter: float = 0.0
 	for _i: int in range(MAX_RAY_STEPS):
 		if cell == end_cell or minf(t_max.x, t_max.y) > 1.0:
@@ -144,6 +159,10 @@ func is_ray_blocked(from_world: Vector2, to_world: Vector2) -> bool:
 				entered = true
 				t_enter = t_cross
 		elif entered:
+			if ignore_exit:
+				ignore_exit = false
+				entered = false
+				continue
 			## Duvardan çıkış: yeterince kalın bir gövdeden mi geçtik, yoksa köşesine mi sürtündük?
 			if (t_cross - t_enter) * ray_length >= MIN_WALL_CROSSING:
 				return true

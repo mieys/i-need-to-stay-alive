@@ -11,6 +11,9 @@ const EnemyScript: GDScript = preload("res://scripts/enemy.gd")
 const MathScript: GDScript = preload("res://scripts/worm_boss_math.gd")
 const AbilitiesScript: GDScript = preload("res://scripts/enemy_abilities.gd")
 const SoundScript: GDScript = preload("res://scripts/underground_sound.gd")
+const CracksScript: GDScript = preload("res://scripts/underground_cracks.gd")
+const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
+const EnemyWorldBridgeScript: GDScript = preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 const BossBarArtScript: GDScript = preload("res://scripts/boss_bar_art.gd")
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const LimbScene: PackedScene = preload("res://scenes/creatures/enemy_sandworm1.tscn")
@@ -50,6 +53,9 @@ func _cleanup() -> void:
 	for c: Node in get_children():
 		if is_instance_valid(c) and c.get_script() != null and str(c.get_script().resource_path).ends_with("worm_acid.gd"):
 			c.free()
+	for fx: Node in get_tree().get_nodes_in_group(CracksScript.GROUP):
+		if is_instance_valid(fx):
+			fx.free() ## zemin çatlak efekti (2026-10-10) bir sonraki teste sızmasın
 	GameManager.bosses_enabled = false
 	GameManager.game_time = 0.0
 	NetworkManager.is_multiplayer_active = false
@@ -71,6 +77,7 @@ func _rig(player_positions: Array = [Vector2(500, 500)]) -> Array:
 	var sp: Node = SpawnerScript.new()
 	_add(sp)
 	sp.max_concurrent_enemies = 100000
+	sp.tier_duration = 100.0 ## testler 100 sn'lik kademelere göre yazıldı (varsayılan 2026-10-10'da 150 oldu; kademe süresi bu testlerin konusu değil)
 	var players: Array = []
 	for pos: Vector2 in player_positions:
 		var p := StubPlayer.new()
@@ -165,7 +172,7 @@ func test_math_kinds_fates_paths_lines_and_spawn_rules() -> void:
 	assert(not MathScript.spawn_ok(Vector2(500, 0), players, [], wall), "engele çıkmaz")
 	assert(not MathScript.spawn_ok(Vector2(200, 0), players, [Vector2(230, 0)], open), "başka uzuvla çakışmaz")
 	assert(MathScript.spawn_ok(Vector2(200, 0), players, [Vector2(230, 0)], open, 20.0), "gevşek aralık parametresi")
-	assert(MathScript.max_active(1) == 7 and MathScript.max_active(3) == 11, "üst sınır oyuncu sayısıyla büyür")
+	assert(MathScript.max_active(1) == 10 and MathScript.max_active(3) == 16, "üst sınır oyuncu sayısıyla büyür (2026-10-10: 10 + 3 / ekstra oyuncu)")
 	## Savurma isabeti: menzil + ön yarım düzlem
 	assert(MathScript.lash_hits(Vector2.ZERO, Vector2.RIGHT, Vector2(90, 20)), "önünde, menzilde")
 	assert(not MathScript.lash_hits(Vector2.ZERO, Vector2.RIGHT, Vector2(-60, 0)), "arkasında")
@@ -307,14 +314,14 @@ func _boss_nodes() -> Array:
 
 # ------------------------------------------------------------------ uzuv: saldırılar, eşik, geri dönüş
 
-func test_lasher_strikes_a_player_in_reach_for_130_after_emerging_and_not_one_outside_it() -> void:
+func test_lasher_strikes_a_player_in_reach_for_lash_damage_after_emerging_and_not_one_outside_it() -> void:
 	var r: Array = _rig([Vector2(1000, 1000)])
 	var boss: Node = r[1]
 	var p: StubPlayer = r[2][0]
 	var limb: Node = _limb_at(boss, Vector2(1080, 1000), MathScript.KIND_LASHER, MathScript.FATE_BURST) ## 80 px: menzilde (104)
 	assert(limb != null and limb._ws == 0, "uzuv çıkış evresinde (doğunca)")
 	var t: float = _run_limb(limb, func() -> bool: return not p.hits.is_empty(), 4.0)
-	assert(p.hits.size() == 1 and p.hits[0][0] == 130.0 and p.hits[0][1] == "worm", "savurma 130 hasar, tür 'worm': %s" % str(p.hits))
+	assert(p.hits.size() == 1 and p.hits[0][0] == MathScript.LASH_DAMAGE and p.hits[0][1] == "worm", "savurma LASH_DAMAGE hasar, tür 'worm': %s" % str(p.hits))
 	var expected: float = MathScript.EMERGE_TIME + MathScript.FIRST_ATTACK_DELAY + MathScript.LASH_STRIKE_AT
 	assert(absf(t - expected) < 0.12, "ilk vuruş çıkış + bekleme + savurma karesinde: %.2f (beklenen %.2f)" % [t, expected])
 	## Aynı savurma bir kez vurur; bekleme sonrası tekrar eder.
@@ -328,114 +335,70 @@ func test_lasher_strikes_a_player_in_reach_for_130_after_emerging_and_not_one_ou
 	_cleanup()
 
 
-func test_spitter_fires_a_dodgeable_acid_drop_for_110_and_misses_when_the_player_steps_aside() -> void:
+func _acid_drops() -> Array:
+	var out: Array = []
+	for c: Node in get_children():
+		if c.get_script() != null and str(c.get_script().resource_path).ends_with("worm_acid.gd") and not c.is_queued_for_deletion():
+			out.append(c)
+	return out
+
+
+## Yelpazenin ORTA damlası (hedefe doğru olan): sola bakan damlaların işaretli sapma açısına göre ortanca.
+func _center_drop(drops: Array) -> Node2D:
+	var sorted: Array = drops.duplicate()
+	sorted.sort_custom(func(a: Node, b: Node) -> bool: return atan2(float(a._dir.y), -float(a._dir.x)) < atan2(float(b._dir.y), -float(b._dir.x)))
+	return sorted[sorted.size() / 2] as Node2D
+
+
+func test_spitter_fires_a_dodgeable_acid_volley_for_110_and_misses_when_the_player_steps_aside() -> void:
 	var r: Array = _rig([Vector2(1000, 1000)])
 	var boss: Node = r[1]
 	var p: StubPlayer = r[2][0]
 	var limb: Node = _limb_at(boss, Vector2(1250, 1000), MathScript.KIND_SPITTER, MathScript.FATE_BURST) ## 250 px: tükürme menzilinde
-	var acid: Node2D = null
+	var drops: Array = []
 	var t: float = 0.0
-	while t < 5.0 and acid == null:
+	while t < 5.0 and drops.is_empty():
 		limb._limb_tick(DT)
 		t += DT
-		for c: Node in get_children():
-			if c.get_script() != null and str(c.get_script().resource_path).ends_with("worm_acid.gd"):
-				acid = c as Node2D
-	assert(acid != null, "asit damlası doğdu")
+		drops = _acid_drops()
+	assert(not drops.is_empty(), "asit damlası doğdu")
+	assert(drops.size() == MathScript.ACID_VOLLEY and MathScript.ACID_VOLLEY == 3, "tükürme bir YELPAZE: %d damla" % drops.size())
 	var expected: float = MathScript.EMERGE_TIME + MathScript.FIRST_ATTACK_DELAY + MathScript.SPIT_FIRE_AT
 	assert(absf(t - expected) < 0.12, "tükürme atış karesinde: %.2f (beklenen %.2f)" % [t, expected])
+	var acid: Node2D = _center_drop(drops)
 	assert(acid.authoritative and acid._dir.x < -0.9, "hedefe doğru uçar, hasar yetkili örnekte")
-	## Oyuncu hareketsiz: damla vurur (110, tür 'worm_acid').
+	## hedefe giden yön (tükürük ağızdan çıkar: ~5 derece aşağı) etrafında -13 / 0 / +13 derece (işaretli sapma, sola bakan damlalar için)
+	var angles: Array = drops.map(func(d: Node) -> float: return rad_to_deg(atan2(float(d._dir.y), -float(d._dir.x))))
+	angles.sort()
+	assert(absf(float(angles[1]) - float(angles[0]) - MathScript.ACID_VOLLEY_FAN_DEG) < 0.5 and absf(float(angles[2]) - float(angles[1]) - MathScript.ACID_VOLLEY_FAN_DEG) < 0.5,
+		"komşu damlalar %.0f derece arayla: %s" % [MathScript.ACID_VOLLEY_FAN_DEG, str(angles)])
+	assert(absf(float(angles[1])) < 12.0, "orta damla hedefe doğru (ağız ofseti payıyla): %f" % float(angles[1]))
+	## Oyuncu hareketsiz: orta damla vurur (110, tür 'worm_acid'), yan damlalar yanından geçer.
+	for d in drops:
+		if d != acid:
+			d.free()
 	var guard: int = 0
-	while is_instance_valid(acid) and not acid.is_queued_for_deletion() and guard < 240:
+	while is_instance_valid(acid) and not acid.is_queued_for_deletion() and guard < 300:
 		acid._physics_process(DT)
 		guard += 1
-	assert(p.hits.size() == 1 and p.hits[0][0] == 110.0 and p.hits[0][1] == "worm_acid", "asit 110: %s" % str(p.hits))
-	## İkinci damla: oyuncu yana kaçtı -> ıskalar (damla menzilini aşıp sönmeli, hasar yok).
+	assert(p.hits.size() == 1 and p.hits[0][0] == MathScript.ACID_DAMAGE and p.hits[0][1] == "worm_acid", "asit ACID_DAMAGE: %s" % str(p.hits))
+	## İkinci yelpaze: oyuncu yana kaçtı -> hiçbiri vurmaz (damlalar menzilini aşıp sönmeli, hasar yok).
 	p.hits.clear()
 	p.global_position = Vector2(1000, 1000 + 160)
-	var acid2: Node2D = null
+	var drops2: Array = []
 	t = 0.0
-	while t < 6.0 and acid2 == null:
+	while t < 6.0 and drops2.is_empty():
 		limb._limb_tick(DT)
 		t += DT
-		for c: Node in get_children():
-			if c.get_script() != null and str(c.get_script().resource_path).ends_with("worm_acid.gd") and c != acid and not c.is_queued_for_deletion():
-				acid2 = c as Node2D
-	assert(acid2 != null, "ikinci damla")
-	p.global_position = Vector2(1000, 1000 + 400) ## damla uçarken çok uzağa çekildi
-	guard = 0
-	while is_instance_valid(acid2) and not acid2.is_queued_for_deletion() and guard < 400:
-		acid2._physics_process(DT)
-		guard += 1
-	assert(p.hits.is_empty(), "kaçınılan damla hasar vermez")
-	_cleanup()
-
-
-func test_every_hit_on_a_limb_drains_the_boss_pool_by_exactly_what_the_limb_absorbed() -> void:
-	var r: Array = _rig()
-	var boss: Node = r[1]
-	var limb: Node = _limb_at(boss, Vector2(800, 800), MathScript.KIND_LASHER, MathScript.FATE_BURST)
-	var pool_before: float = boss.item_shield_hp + boss.health
-	limb.take_damage_host(500.0, false, 0.0, 0)
-	assert(absf(limb.health - 1500.0) < 0.5, "uzvun eşiği düşer: %.1f" % limb.health)
-	assert(absf(pool_before - (boss.item_shield_hp + boss.health) - 500.0) < 0.5, "boss havuzu tam 500 azaldı")
-	assert(absf(boss.item_shield_hp - (60000.0 - 450.0)) < 0.5 and absf(boss.health - (50000.0 - 50.0)) < 0.5, "kalkana %%90, cana %%10: %.1f / %.1f" % [boss.item_shield_hp, boss.health])
-	## Fazla hasar (overkill): sadece uzvun KALAN eşiği kadar düşer.
-	pool_before = boss.item_shield_hp + boss.health
-	limb.take_damage_host(9000.0, false, 0.0, 0)
-	assert(limb.is_dead, "eşik aşıldı: parçalandı")
-	assert(absf(pool_before - (boss.item_shield_hp + boss.health) - 1500.0) < 0.5, "boss yalnız uzvun kalan 1500'ünü yedi: %.1f" % (pool_before - (boss.item_shield_hp + boss.health)))
-	assert(boss._limbs.is_empty(), "uzuv listeden düştü")
-	_cleanup()
-
-
-func test_a_burst_limb_gives_no_rewards_and_does_not_count_as_a_kill() -> void:
-	var r: Array = _rig()
-	var boss: Node = r[1]
-	GameManager.enemy_died.connect(_on_enemy_died)
-	_died_signals = 0
-	var limb: Node = _limb_at(boss, Vector2(800, 800), MathScript.KIND_LASHER, MathScript.FATE_BURST)
-	limb.take_damage_host(5000.0, false, 0.0, 0)
-	assert(limb.is_dead and limb._state == EnemyScript.State.DEATH, "ölüm animasyonuna girdi")
-	assert(EnemyScript._drop_spawn_queue.is_empty(), "XP/altın/yemek/sandık düşmedi")
-	assert(_died_signals == 0, "öldürme sayılmadı (GameManager.enemy_died yok)")
-	assert(limb.get_meta(&"untargetable", false) == false, "ölü, ödülsüz (gömülme değil)")
-	_cleanup()
-
-
-func test_retreat_fate_limb_returns_to_its_hole_at_55_percent_and_is_immune_while_hiding() -> void:
-	var r: Array = _rig()
-	var boss: Node = r[1]
-	var limb: Node = _limb_at(boss, Vector2(800, 800), MathScript.KIND_LASHER, MathScript.FATE_RETREAT)
-	limb.take_damage_host(1000.0, false, 0.0, 0) ## %50: henüz eşik değil
-	assert(limb._ws != 3 and not limb.is_dead, "%%50'de hâlâ yüzeyde")
-	limb.take_damage_host(150.0, false, 0.0, 0) ## toplam 1150 >= 1100
-	assert(limb._ws == 3 and not limb.is_dead, "eşiğin %%55'inde deliğine döner (ölmez): ws %d" % limb._ws)
-	assert(limb.get_meta(&"untargetable", false) == true and limb._pose_override == MathScript.POSE_HIDE, "gömülürken hedeflenemez, gömülme animasyonu")
-	var pool: float = boss.item_shield_hp + boss.health
-	limb.take_damage_host(5000.0, false, 0.0, 0)
-	assert(is_equal_approx(pool, boss.item_shield_hp + boss.health) and not limb.is_dead, "gömülürken dokunulmaz: boss havuzu değişmez")
-	assert(boss._limbs.is_empty(), "boss listesinden çıktı")
-	await get_tree().create_timer(MathScript.HIDE_TIME + 0.5).timeout
-	assert(not is_instance_valid(limb) or limb.is_queued_for_deletion(), "gömülme bitince silinir")
-	_cleanup()
-
-
-func test_a_limb_returns_to_its_hole_when_its_lifetime_runs_out() -> void:
-	var r: Array = _rig([Vector2(5000, 5000)]) ## oyuncu çok uzakta: saldırı yok
-	var boss: Node = r[1]
-	var limb: Node = _limb_at(boss, Vector2(800, 800), MathScript.KIND_LASHER, MathScript.FATE_BURST, 2.0)
-	_run_limb(limb, func() -> bool: return limb._ws == 3, 4.0)
-	assert(limb._ws == 3 and limb._pose_override == MathScript.POSE_HIDE, "ömür dolunca gömülür")
-	_cleanup()
-
-
-func test_client_side_spawn_builds_a_plain_limb_without_scaling_shield_or_boss_flags() -> void:
-	var r: Array = _rig()
-	var sp: Node = r[0]
-	sp._rpc_client_spawn_creature("sandworm1", Vector2(900, 900), 5, false, 777001, false, false, 3)
-	var limb: Node = NetworkManager.find_enemy_by_net_id(777001)
+		drops2 = _acid_drops()
+	assert(not drops2.is_empty(), "ikinci yelpaze")
+	p.global_position = Vector2(1000, 1000 + 400) ## damlalar uçarken çok uzağa çekildi
+	for d2 in drops2:
+		guard = 0
+		while is_instance_valid(d2) and not d2.is_queued_for_deletion() and guard < 400:
+			d2._physics_process(DT)
+			guard += 1
+	assert(p.hits.is_empty(), "kaçınılan damlalar hasar vermez")
 	assert(limb != null and limb.max_health == 2000.0 and limb.health == 2000.0, "eşik çarpansız: %.0f" % limb.max_health)
 	assert(limb.item_shield_max == 0.0 and not limb.is_boss and not limb.is_elite, "kalkan/boss/elit yok")
 	assert(limb.has_method("begin_limb") and limb.get("hard_block_radius") == 18.0, "uzuv betiği")
@@ -638,3 +601,218 @@ func test_host_only_rpcs_used_by_the_bosses_reject_other_senders() -> void:
 		assert(i >= 0, "RPC bulundu: %s" % fn)
 		assert(src.substr(i, 700).contains("_from_host()"), "%s ilk satırlarda _from_host() korumalı" % fn)
 	assert(NetworkManager._from_host(), "tekli oyunda yerel çağrı geçer")
+
+
+# ------------------------------------------------------------------ 2026-10-10: bakış titremesi, daha tehlikeli/hareketli uzuvlar, zemin çatlakları + deprem
+
+func test_face_row_has_axis_hysteresis_and_ignores_tiny_directions() -> void:
+	var R = MathScript
+	assert(R.face_row(Vector2(1, 0.2), -1) == R.ROW_RIGHT and R.face_row(Vector2(-1, 0.2), -1) == R.ROW_LEFT, "ilk atama: baskın eksen")
+	assert(R.face_row(Vector2(0.2, 1), -1) == R.ROW_DOWN and R.face_row(Vector2(0.2, -1), -1) == R.ROW_UP)
+	## yatay satırdayken dikey eksen az farkla baskın olunca satır DEĞİŞMEZ (köşegen titremesi yok), belirgin baskınsa değişir
+	assert(R.face_row(Vector2(0.9, 1.0), R.ROW_RIGHT) == R.ROW_RIGHT, "köşegende yatay kalır")
+	assert(R.face_row(Vector2(0.5, 1.0), R.ROW_RIGHT) == R.ROW_DOWN, "dikey belirgin baskın: değişir")
+	assert(R.face_row(Vector2(1.0, 0.9), R.ROW_DOWN) == R.ROW_DOWN, "köşegende dikey kalır")
+	assert(R.face_row(Vector2(1.0, 0.4), R.ROW_DOWN) == R.ROW_RIGHT, "yatay belirgin baskın: değişir")
+	assert(R.face_row(Vector2(0.01, 0.02), R.ROW_LEFT) == R.ROW_LEFT, "çok küçük yön satırı bozmaz")
+	assert(R.ROW_DOWN == EnemyScript.ROW_DOWN and R.ROW_UP == EnemyScript.ROW_UP and R.ROW_LEFT == EnemyScript.ROW_LEFT and R.ROW_RIGHT == EnemyScript.ROW_RIGHT, "satır numaraları enemy.gd ile aynı")
+
+
+func test_limb_facing_does_not_flicker_when_the_target_wobbles_around_the_diagonal() -> void:
+	var r: Array = _rig([Vector2(1000, 1000)])
+	var boss: Node = r[1]
+	var p: StubPlayer = r[2][0]
+	var limb: Node = _limb_at(boss, Vector2(1000, 1000), MathScript.KIND_LASHER, MathScript.FATE_BURST)
+	var changes: int = 0
+	var last: int = -2
+	var t: float = 0.0
+	while t < 4.0:
+		## hedef 200 px çevrede 40-50 derece arasında saniyede ~4 kez gidip geliyor (köşegen sınırı 45 derece)
+		var ang: float = deg_to_rad(45.0 + 5.0 * sin(t * TAU * 4.0))
+		p.global_position = limb.global_position + Vector2.from_angle(ang) * 200.0
+		limb._ws = limb.WS.ACTIVE
+		limb._cd = 99.0 ## saldırmasın: sadece bakış
+		limb._limb_tick(DT)
+		if limb._face_row != last:
+			if last != -2:
+				changes += 1
+			last = limb._face_row
+		t += DT
+	assert(changes <= 1, "köşegen etrafında titreyen hedefte bakış %d kez değişti (histerezis + tutma süresiyle <= 1 olmalı)" % changes)
+	_cleanup()
+
+
+func test_limb_row_changes_are_held_for_a_moment_but_attack_aim_is_immediate() -> void:
+	var r: Array = _rig([Vector2(1000, 1000)])
+	var boss: Node = r[1]
+	var limb: Node = _limb_at(boss, Vector2(1000, 1000), MathScript.KIND_LASHER, MathScript.FATE_BURST)
+	limb._face_toward(Vector2(1, 0))
+	assert(limb._face_row == MathScript.ROW_RIGHT)
+	limb._face_toward(Vector2(-1, 0)) ## tutma süresi içinde: yok sayılır
+	assert(limb._face_row == MathScript.ROW_RIGHT, "tutma süresinde yeni yön kabul edilmez")
+	limb._face_toward(Vector2(-1, 0), true) ## saldırı nişanı hemen
+	assert(limb._face_row == MathScript.ROW_LEFT, "nişan anında dönülür")
+	limb._face_cd = 0.0
+	limb._face_toward(Vector2(0, 1))
+	assert(limb._face_row == MathScript.ROW_DOWN, "süre dolunca normal dönüş")
+	_cleanup()
+
+
+func test_limb_puts_the_cpp_ai_to_sleep_so_only_the_worm_script_writes_its_facing() -> void:
+	var r: Array = _rig([Vector2(1000, 1000)])
+	var boss: Node = r[1]
+	var limb: Node = _limb_at(boss, Vector2(1400, 1400), MathScript.KIND_LASHER, MathScript.FATE_BURST)
+	await get_tree().process_frame
+	var world: Object = EnemyWorldBridgeScript.fog_world(get_tree())
+	assert(world != null and int(limb._ew_slot) >= 0, "uzuv C++ dünyada kayıtlı")
+	limb._sleep_cpp_ai()
+	assert(world.is_dormant(int(limb._ew_slot)), "C++ yapay zekâsı uykuda: hedef seçmez, yön yazmaz (kök neden: iki yazıcı)")
+	## uykuda olsa da silahlar uzvu hedefleyebilir/vurabilir: kayıt silinmedi
+	assert(int(limb._ew_slot) >= 0 and limb.get("is_dead") != true)
+	_cleanup()
+
+
+func test_worm_face_message_turns_the_client_puppet() -> void:
+	var r: Array = _rig([Vector2(1000, 1000)])
+	var boss: Node = r[1]
+	var limb: Node = _limb_at(boss, Vector2(1400, 1400), MathScript.KIND_LASHER, MathScript.FATE_BURST)
+	await get_tree().process_frame
+	limb.on_ability_vfx("worm_face", {"dir": Vector2(-1, 0)})
+	var world: Object = EnemyWorldBridgeScript.fog_world(get_tree())
+	assert(int(world.get_facing_row(int(limb._ew_slot))) == MathScript.ROW_LEFT, "worm_face kuklayı sola çevirdi")
+	_cleanup()
+
+
+func test_limbs_are_far_more_dangerous_and_busy_than_before() -> void:
+	## eskiden: en çok 7 (+2), çıkış 1,3-2,0 sn, asit atan %45, ömür 9-14 sn, savurma beklemesi 1,7, tükürme beklemesi 2,4-3,4, tek damla
+	assert(MathScript.MAX_ACTIVE >= 10 and MathScript.SPAWN_INTERVAL_MAX <= 1.0 and MathScript.SPITTER_CHANCE <= 0.5, "daha çok, daha sık uzuv; asit atan oranı 2026-10-11 dengesiyle %45")
+	assert(MathScript.LIFETIME_MAX <= 8.0 and MathScript.LASH_COOLDOWN <= 1.2 and MathScript.SPIT_COOLDOWN_MIN >= 2.0, "kısa ömür (sürekli yenilenir), sık savurma; tükürme 2026-10-11 dengesiyle seyrek")
+	assert(MathScript.ACID_VOLLEY >= 3 and MathScript.volley_angles().size() == MathScript.ACID_VOLLEY, "asit yelpazesi")
+	var sum: float = 0.0
+	for a: float in MathScript.volley_angles():
+		sum += a
+	assert(absf(sum) < 0.001, "yelpaze hedef etrafında simetrik")
+
+
+func test_director_keeps_respawning_limbs_around_a_moving_player_because_they_leave_quickly() -> void:
+	seed(20261010)
+	var r: Array = _rig([Vector2(3000, 3000)])
+	var boss: Node = r[1]
+	var p: StubPlayer = r[2][0]
+	boss._line_timer = 1.0e9 ## sıra olayı bu testte yok (tekil çıkışlar sayılıyor)
+	var seen: Array = []
+	var t: float = 0.0
+	while t < 30.0:
+		p.global_position += Vector2(150, 0) * DT
+		boss._director_tick(DT)
+		for l in boss._limbs.duplicate():
+			if is_instance_valid(l):
+				l._limb_tick(DT) ## uzuvlar ömürlerini yaşar ve gömülür (bu testte C++ tiki yok)
+				if not seen.has(l):
+					seen.append(l)
+		t += DT
+	assert(seen.size() >= 25, "30 sn'de en az 25 uzuv çıktı (eskiden en çok ~18): %d" % seen.size())
+	assert(boss._limbs.size() <= MathScript.MAX_ACTIVE, "üst sınır aşılmadı")
+	_cleanup()
+
+
+func test_cracks_are_deterministic_per_seed_and_cover_most_of_the_ground() -> void:
+	var a: Dictionary = CracksScript.cluster_for(Vector2i(3, -2), 12345)
+	var b: Dictionary = CracksScript.cluster_for(Vector2i(3, -2), 12345)
+	assert(str(a) == str(b), "aynı tohum + hücre = aynı çatlaklar (her peer'de aynı görünür)")
+	assert(str(CracksScript.cluster_for(Vector2i(3, -2), 99999)) != str(a) or a.is_empty(), "farklı tohum farklı çatlak")
+	var filled: int = 0
+	var cells: int = 0
+	for x in range(-10, 10):
+		for y in range(-10, 10):
+			cells += 1
+			var cl: Dictionary = CracksScript.cluster_for(Vector2i(x, y), 777)
+			if cl.is_empty():
+				continue
+			filled += 1
+			assert(float(cl["delay"]) >= 0.0 and float(cl["delay"]) <= CracksScript.FADE_IN, "çıkış gecikmesi aralıkta")
+			var origin: Vector2 = cl["origin"]
+			assert(origin.x >= x * CracksScript.CELL and origin.x <= (x + 1) * CracksScript.CELL, "küme kendi hücresinde")
+			for crack: Dictionary in cl["cracks"]:
+				var pts: PackedVector2Array = crack["pts"]
+				assert(pts.size() >= 3, "çatlak en az 3 köşe")
+				assert(pts[0].distance_to(origin) < 330.0 and pts[pts.size() - 1].distance_to(origin) < 420.0, "çatlaklar kümeden fazla uzaklaşmaz")
+	var ratio: float = float(filled) / float(cells)
+	assert(ratio > 0.75 and ratio < 0.95, "hücrelerin ~yüzde 85'inde çatlak ('zemin çatlaklarla dolu'): %.2f" % ratio)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var spokes: Array[PackedVector2Array] = CracksScript.burst_spokes(rng)
+	assert(spokes.size() >= 6 and spokes.size() <= 9, "çıkış yıldızı 6-9 kollu: %d" % spokes.size())
+	for sp: PackedVector2Array in spokes:
+		assert(sp[0] == Vector2.ZERO and sp.size() >= 3, "kollar merkezden başlar")
+
+
+## 2026-10-10 FPS düzeltmesi: çatlaklar sprite karesi (her karede _draw yok), kare yalnız büyüme değişince yazılır, görüntüden çıkan hücre havuza döner.
+func test_cracks_are_sprite_decals_without_per_frame_drawing() -> void:
+	assert(not CracksScript.new().has_method("_draw"), "çatlaklar artık _draw ile çizilmez")
+	assert(CracksScript.grow_frame(0.0) == -1 and CracksScript.grow_frame(0.01) == 1 and CracksScript.grow_frame(1.0) == CracksScript.SHEET_FRAMES - 1, "büyüme kareleri")
+	var cl: Dictionary = {}
+	for x in range(20):
+		cl = CracksScript.cluster_for(Vector2i(x, 4), 31)
+		if not cl.is_empty():
+			break
+	var decals: Array = cl["decals"]
+	assert(decals.size() >= 1 and decals.size() <= 2, "hücrede 1-2 çatlak karesi")
+	for d: Dictionary in decals:
+		assert(int(d["v"]) >= 0 and int(d["v"]) < CracksScript.CRACK_VARIANTS, "çeşit sayfada")
+	var tex: Texture2D = CracksScript.CRACK_SHEET
+	assert(tex.get_width() == CracksScript.CRACK_PX * CracksScript.SHEET_FRAMES and tex.get_height() == CracksScript.CRACK_PX * CracksScript.CRACK_VARIANTS, "sayfa boyutu")
+	var fx: Node2D = CracksScript.new()
+	add_child(fx)
+	fx.boss = self ## canlı "boss" yerine geçer
+	fx._age = 3.0
+	fx._sync_cells(Rect2i(Vector2i(0, 0), Vector2i(4, 4)))
+	var n: int = 0
+	for cell in fx._shown:
+		n += (fx._shown[cell] as Array).size()
+	assert(n >= 10, "4x4 hücrede çatlak sprite'ları: %d" % n)
+	var layer_children: int = fx._layer.get_child_count()
+	fx._sync_cells(Rect2i(Vector2i(10, 0), Vector2i(4, 4)))
+	assert(fx._layer.get_child_count() <= layer_children + 6, "kaydırınca eski sprite'lar yeniden kullanılır (havuz): %d -> %d" % [layer_children, fx._layer.get_child_count()])
+	fx._age = 100.0
+	assert(not fx._update_growth(), "tam boyda büyüme güncellemesi biter")
+	fx.queue_free()
+
+
+func test_cracks_effect_appears_with_the_boss_adds_bursts_pulses_and_fades_away_after_death() -> void:
+	var r: Array = _rig([Vector2(1000, 1000)])
+	var boss: Node = r[1]
+	await get_tree().process_frame ## _attach_cracks ertelenmiş çağrı
+	await get_tree().process_frame
+	var fx: Node = get_tree().get_first_node_in_group(CracksScript.GROUP)
+	assert(fx != null and is_instance_valid(fx), "boss doğunca zemin çatlak efekti kuruldu")
+	assert(fx.get("boss") == boss and int(fx.get("seed_value")) == int(boss.get_meta("network_enemy_id", 1)) * 7919 + 13, "tohum bossun ağ kimliğinden")
+	assert(CracksScript.ensure(boss) == fx, "ikinci çağrı aynı düğümü verir (tek efekt)")
+	assert(fx.get_parent() == self, "sahnede (haritanın üstünde, yaratıkların altında)")
+	## uzuv çıkışı çatlak yıldızı ekler
+	var limb: Node = _limb_at(boss, Vector2(1400, 1400), MathScript.KIND_LASHER, MathScript.FATE_BURST)
+	var before: int = fx._bursts.size()
+	limb._apply_worm_pose(MathScript.POSE_EMERGE)
+	assert(fx._bursts.size() == before + 1, "uzuv çıkınca çıkış yıldızı: %d -> %d" % [before, fx._bursts.size()])
+	## gümbürtü: çatlaklar parlar
+	boss.on_ability_vfx("worm_rumble", {"v": 1})
+	assert(fx._pulse > 0.99, "gümbürtüde çatlak parlaması")
+	## sürekli HAFİF deprem tabanı (başsız çalışmada test için zorlanır)
+	CameraShakeScript.set_strength_override(1.0)
+	CameraShakeScript.reset()
+	fx.force_quake = true
+	fx._age = 10.0
+	fx._quake()
+	assert(CameraShakeScript.trauma >= CracksScript.QUAKE_FLOOR - 0.001 and CracksScript.QUAKE_FLOOR <= 0.3, "deprem tabanı hafif ve sürekli: %.3f" % CameraShakeScript.trauma)
+	CameraShakeScript.set_strength_override(0.0)
+	CameraShakeScript.reset()
+	fx._quake()
+	assert(CameraShakeScript.trauma == 0.0, "sarsıntı ayarı kapalıyken deprem de yok")
+	CameraShakeScript.set_strength_override(-1.0)
+	CameraShakeScript.reset()
+	## boss ölünce çatlaklar solar ve düğüm silinir
+	boss.is_dead = true
+	for i in range(10):
+		fx._process(1.0)
+	assert(fx.is_queued_for_deletion() or not is_instance_valid(fx), "boss ölünce çatlak efekti silindi")
+	_cleanup()

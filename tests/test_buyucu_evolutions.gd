@@ -139,7 +139,7 @@ func test_every_skill_use_surges_weapons() -> void:
 	p._skill_buyucu_switch_variation() ## Set 1 (Arcane Lanet)
 	spy.calls.clear()
 	p._buyucu_try_activate_variation()
-	assert(spy.calls == [1.3], "E kullanımı da: %s" % str(spy.calls))
+	assert(spy.calls == [p.BUYUCU_PASSIVE_SHOT_MULT], "E kullanımı da: %s" % str(spy.calls))
 	p.owned_weapon_nodes.erase(spy)
 	await get_tree().create_timer(0.4).timeout ## sekme coroutine'i bitsin (serbest kalmış oyuncuda devam etmesin)
 	_cleanup()
@@ -202,7 +202,7 @@ func test_q2_speed_q3_cooldowns_q4_cost() -> void:
 	p._buyucu_on_skill_used("skill2", 0)
 	assert(is_equal_approx(p._evo_move_bonus(), base_speed + 0.2), "E/R kullanımında +%20 hız")
 	assert(is_equal_approx(float(p._skill_timing_for(3)["cooldown"]), 0.85), "Q bekleme -%15")
-	assert(is_equal_approx(float(p._skill2_timing_for(25)["cooldown"]), 120.0 * 0.85), "Meteor bekleme -%15")
+	assert(is_equal_approx(float(p._skill2_timing_for(25)["cooldown"]), 75.0 * 0.85), "Meteor bekleme -%15 (2026-10-10 taban 75)")
 	## Tutumlu Büyü: E bedeli x0,75 (Hortum - hedef gerektirmez).
 	var e_shield0: float = p.item_shield_hp
 	p._buyucu_try_activate_variation() ## şu an Set 2: Hortum
@@ -244,7 +244,7 @@ func test_qf_enchant_every_five_uses_and_empowered_cast() -> void:
 	var e: FakeEnemy = _make_enemy(Vector2(1360.0, 1000.0))
 	await get_tree().physics_frame
 	p._buyucu_try_activate_variation_r()
-	assert(e.hits.size() == 1 and is_equal_approx(float(e.hits[0]), 125.0), "efsunlu Don Nova 400 px, x1,25 hasar: %s" % str(e.hits))
+	assert(e.hits.size() == 1 and is_equal_approx(float(e.hits[0]), 250.0), "efsunlu Don Nova 400 px, x1,25 hasar (2026-10-10 taban %%200): %s" % str(e.hits))
 	assert(not p._buyucu_enchanted.has(1), "efsun tüketildi")
 	assert(p._buyucu_cast_power == 1.0, "döküm sonrası çarpan sıfırlandı")
 	_cleanup()
@@ -256,7 +256,7 @@ func test_e2_e3_ef_numbers() -> void:
 	_evo(p, ["buyucu_e2", "buyucu_e3", "buyucu_ef"])
 	assert(is_equal_approx(float(p._skill2_timing_for(22)["cooldown"]), 4.0 * 0.8), "Arcane bekleme -%20")
 	assert(is_equal_approx(float(p._skill2_timing_for(24)["cooldown"]), 30.0 * 0.8), "Hortum bekleme -%20")
-	assert(is_equal_approx(float(p._skill2_timing_for(23)["cooldown"]), 45.0), "R varyasyonları etkilenmez")
+	assert(is_equal_approx(float(p._skill2_timing_for(23)["cooldown"]), 35.0), "R varyasyonları etkilenmez (2026-10-10 taban 35)")
 	assert(is_equal_approx(p._buyucu_arcane_ratio(), 0.8 * 1.3) and is_equal_approx(p._buyucu_tornado_ratio(), 0.9 * 1.3), "oranlar x1,3")
 	assert(p._buyucu_arcane_bounce_count() == 7, "7 sekme")
 	p._skill_buyucu_switch_variation() ## Set 2: Hortum
@@ -446,7 +446,7 @@ func test_passive_is_visible_even_without_target() -> void:
 				wave_seen = true
 	assert(max_move >= 15.0, "ikon dünya biriminde belirgin fırlar (>= 15 px), ölçülen: %.1f" % max_move)
 	assert(wave_seen, "karakterin ayağında mor dalga efekti çıkar")
-	assert(w._surge_pending_mult == 1.3, "güçlendirme bekler")
+	assert(is_equal_approx(w._surge_pending_mult, p.BUYUCU_PASSIVE_SHOT_MULT), "güçlendirme bekler")
 	p.owned_weapon_nodes.erase(w)
 	await get_tree().create_timer(0.8).timeout
 	_cleanup()

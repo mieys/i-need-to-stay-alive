@@ -12,6 +12,7 @@ extends "res://scripts/enemy.gd"
 
 const MathScript := preload("res://scripts/worm_boss_math.gd")
 const SoundScript := preload("res://scripts/underground_sound.gd")
+const CracksScript := preload("res://scripts/underground_cracks.gd")
 
 @export var emerge_texture: Texture2D
 @export var lash_texture: Texture2D
@@ -35,6 +36,9 @@ var _aim: Vector2 = Vector2.DOWN
 var _warn_t: float = 0.0 ## >0: savurma uyarısı (kırmızı parlama) sürüyor
 var _base_tint: Color = Color.WHITE
 var _retreating_visual: bool = false
+var _dormant_set: bool = false ## C++ yapay zekâsı kapatıldı mı (bkz. WormBossMath FACE_HOLD notu)
+var _face_row: int = -1 ## son uygulanan bakış satırı (-1 = henüz yok)
+var _face_cd: float = 0.0 ## >0: yeni bakış yönü kabul edilmez
 
 
 # ---------------------------------------------------------------------------------------------------- kurulum
@@ -91,6 +95,7 @@ func _ew_on_event(_type: int, _target: Node2D) -> void:
 
 
 func _ew_tick(delta: float) -> void:
+	_sleep_cpp_ai()
 	if not is_dead and _is_authority() and not _ew_puppet:
 		_limb_tick(delta)
 	if not is_dead:
@@ -98,13 +103,37 @@ func _ew_tick(delta: float) -> void:
 	super._ew_tick(delta)
 
 
+## Uzvun bakışını SADECE bu betik belirler: C++ yapay zekâsı uykuya alınır (hedef seçmez, yön yazmaz). Slot yoksa (test/istemci kukla) sessizce geçer.
+func _sleep_cpp_ai() -> void:
+	if _dormant_set or _ew_slot < 0 or _ew_world == null:
+		return
+	_dormant_set = true
+	_ew_world.set_dormant(_ew_slot, true)
+
+
+## Bakış yönü: satır değişimi FACE_HOLD ile seyreltilir + eksen histerezisi (face_row); `force` = saldırı nişanı (hemen). Satır değişince istemcilere de "worm_face" gider.
+func _face_toward(dir: Vector2, force: bool = false) -> void:
+	if dir.length() < 0.1:
+		return
+	var row: int = MathScript.face_row(dir, _face_row)
+	if row == _face_row:
+		return
+	if _face_cd > 0.0 and _face_row != -1 and not force:
+		return
+	_face_row = row
+	_face_cd = MathScript.FACE_HOLD
+	_update_facing(dir)
+	emit_ability_vfx("worm_face", {"dir": dir})
+
+
 func _limb_tick(delta: float) -> void:
 	_t += delta
+	_face_cd = maxf(0.0, _face_cd - delta)
 	var target: Node2D = _nearest_target()
 	if target != null and _ws != WS.RETREATING and (_ws != WS.ATTACKING):
 		var to_t: Vector2 = target.global_position - global_position
 		if to_t.length() > 1.0:
-			_update_facing(to_t.normalized())
+			_face_toward(to_t.normalized())
 	match _ws:
 		WS.EMERGING:
 			if _t >= MathScript.EMERGE_TIME:
@@ -156,7 +185,7 @@ func _start_attack(which: int, target: Node2D) -> void:
 	_atk = which
 	_fired = false
 	_aim = (target.global_position - global_position).normalized()
-	_update_facing(_aim)
+	_face_toward(_aim, true)
 	_emit_pose(MathScript.POSE_LASH if which == 1 else MathScript.POSE_SPIT)
 
 
@@ -184,7 +213,7 @@ func _end_attack(cooldown: float) -> void:
 
 ## SAVURMA: isabet anında menzildeki (ve savurma yönünün önündeki) her oyuncu BİR kez vurulur.
 func _lash_strike() -> void:
-	emit_ability_vfx("worm_strike", {"pos": global_position + _aim * 64.0, "dir": _aim, "power": 0.2})
+	emit_ability_vfx("worm_strike", {"pos": global_position + _aim * 64.0, "dir": _aim, "power": 0.1}) ## 0,2 -> 0,1: her savurmada sarsıntı daha hafif (2026-10-10)
 	for p: Node in EnemyAbilitiesScript.damageable_players(get_tree()):
 		if not (p is Node2D) or p.get("is_indoors") == true or p.get("is_in_merchant_zone") == true or p.get("is_downed") == true:
 			continue
@@ -196,8 +225,10 @@ func _lash_strike() -> void:
 func _fire_acid(target: Node2D) -> void:
 	var muzzle: Vector2 = global_position + Vector2(0.0, -34.0) + _aim * 26.0
 	var dir: Vector2 = (target.global_position - muzzle).normalized() if is_instance_valid(target) else _aim
-	var data: Dictionary = {"dir": dir, "speed": MathScript.ACID_SPEED, "range": MathScript.ACID_RANGE, "damage": MathScript.ACID_DAMAGE}
-	EnemyAbilitiesScript.spawn_synced_world_fx(get_tree(), "worm_acid", muzzle, data, self)
+	## 2026-10-10: tek damla yerine ACID_VOLLEY damlalık yelpaze (orta damla hedefe, yanlar ±ACID_VOLLEY_FAN_DEG): daha çok asit, hâlâ kaçınılabilir.
+	for angle: float in MathScript.volley_angles():
+		var data: Dictionary = {"dir": dir.rotated(angle), "speed": MathScript.ACID_SPEED, "range": MathScript.ACID_RANGE, "damage": MathScript.ACID_DAMAGE}
+		EnemyAbilitiesScript.spawn_synced_world_fx(get_tree(), "worm_acid", muzzle, data, self)
 
 
 # ---------------------------------------------------------------------------------------------------- geri dönüş / ölüm
@@ -249,6 +280,9 @@ func on_ability_vfx(vfx_kind: String, data: Dictionary) -> void:
 			_apply_worm_setup(int(data.get("kind", 0)))
 		"worm_pose":
 			_apply_worm_pose(int(data.get("pose", 0)))
+		"worm_face":
+			## istemci kuklası: host'un seçtiği bakış (yön C++ kukla yolunda hareketle gelmez: uzuv yerinden oynamaz)
+			_update_facing(Vector2(data.get("dir", Vector2.DOWN)))
 		"worm_strike":
 			MinotaurDustScript.burst(get_tree() if is_inside_tree() else null, Vector2(data.get("pos", global_position)),
 					Vector2(data.get("dir", Vector2.UP)), float(data.get("power", 0.2)))
@@ -291,6 +325,7 @@ func _apply_worm_pose(pose: int) -> void:
 	match pose:
 		MathScript.POSE_EMERGE:
 			SoundScript.play(get_tree(), &"emerge", global_position)
+			CracksScript.add_burst(get_tree(), global_position) ## çıkış noktasında zemin çatlıyor
 		MathScript.POSE_LASH:
 			_warn_t = MathScript.LASH_STRIKE_AT
 			SoundScript.play(get_tree(), &"hiss", global_position)

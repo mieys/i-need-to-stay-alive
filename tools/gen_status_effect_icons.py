@@ -7,6 +7,7 @@ görünsün" - eski tek harfli (G/H/İ/Y/K) kısaltmalar kaldırıldı, her efek
   bat (Yarasa Formu)         -> YARASA KANADI (mor)
   shield_slow (Kalkan Yavaş) -> ÇATLAK KALKAN + aşağı ok (kırmızı, debuff)
   burn (Yanma)               -> ALEV (İblis ateş topu, debuff)
+  bleed (Kanama)             -> KAN DAMLASI (Balkabağı Kafa'nın yarasaları, debuff)
 48x48 sanat ızgarası (bkz. hafıza "Pixel density 48x48"), gen_shield_icons.py'daki AYNI küçük
 yardımcı (Icon/poly/circle/rect/outline/dilate) deseni - o dosyaya bağımlı değil, kendi küçük kopyası.
 
@@ -182,6 +183,19 @@ def flame():
     return ic
 
 
+def blood_drop():
+    """Kanama (debuff - yarasa ısırığı, 2026-10-09): koyu kırmızı damla, parlak vurgu + küçük sıçrama damlası."""
+    ic = Icon()
+    drop = poly([(24, 4), (31, 16), (36, 26), (35, 35), (30, 41), (24, 43), (18, 41), (13, 35), (12, 26), (17, 16)])
+    ic.outline(drop)
+    ic.fill_fn(drop, lambda x, y: hexc('#e0303c') if x < 28 and y < 36 else hexc('#a31524'))
+    ic.fill(poly([(18, 24), (21, 20), (22, 28), (19, 33)]), hexc('#ff8a92'))
+    small = circle(37, 14, 3)
+    ic.outline(small)
+    ic.fill(small, hexc('#c4222f'))
+    return ic
+
+
 def build():
     os.makedirs(OUTDIR, exist_ok=True)
     icons = {
@@ -191,6 +205,7 @@ def build():
         'bat': bat_wing(),
         'shield_slow': cracked_shield(),
         'burn': flame(),
+        'bleed': blood_drop(),
     }
     for k, ic in icons.items():
         ic.image().save(os.path.join(OUTDIR, '%s.png' % k))

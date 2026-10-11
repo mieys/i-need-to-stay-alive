@@ -11,6 +11,7 @@ extends "res://scripts/enemy.gd"
 
 const MathScript := preload("res://scripts/worm_boss_math.gd")
 const SoundScript := preload("res://scripts/underground_sound.gd")
+const CracksScript := preload("res://scripts/underground_cracks.gd")
 const LIMB_ID := "sandworm1"
 const LIMB_TIER := 5 ## uzuvların yaratık kademesi (spawn_tier meta KONMAZ: Kademe kapısı sayımına girmesin)
 
@@ -31,6 +32,14 @@ func _ready() -> void:
 	set_meta(&"hide_on_minimap", true) ## minimap.gd: havuz düğümü çizilmez
 	set_meta(&"untargetable", true) ## silah hedeflemesi (vision_fog.gd can_target) bossu seçmez
 	super._ready()
+	call_deferred("_attach_cracks") ## ağ kimliği (tohum) doğuştan hemen sonra yazılıyor: bir kare sonra
+
+
+## Boss yaşadıkça zemin çatlaklarla dolar + hafif deprem (HER peer'de yerel; tohum ağ kimliğinden: herkeste aynı çatlaklar). Bkz. underground_cracks.gd.
+func _attach_cracks() -> void:
+	if is_dead or not is_inside_tree():
+		return
+	CracksScript.ensure(self)
 
 
 func _ew_try_register() -> void:
@@ -260,7 +269,8 @@ func on_ability_vfx(vfx_kind: String, data: Dictionary) -> void:
 		"worm_rumble":
 			if is_inside_tree():
 				SoundScript.play(get_tree(), StringName("rumble_%d" % clampi(int(data.get("v", 1)), 1, 3)))
-				CameraShakeScript.add_limited("worm_rumble", 0.12, 2.0) ## yer sarsılıyor (çok hafif)
+				CameraShakeScript.add_limited("worm_rumble", 0.25, 1.5) ## yer sarsılıyor: gümbürtü anında belirgin ama kısa (arka planda CracksScript sürekli hafif deprem tutar)
+				CracksScript.pulse(get_tree())
 		"worm_growl":
 			if is_inside_tree():
 				SoundScript.play(get_tree(), StringName("growl_%d" % clampi(int(data.get("v", 1)), 1, 2)))

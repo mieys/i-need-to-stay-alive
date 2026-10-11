@@ -40,6 +40,10 @@ const ICON_PATHS := {
 	"knockback": "stat_knockback.png",
 	"shield_amount": "stat_shield.png",
 	"cooldown_reduction": "stat_speed.png",
+	## 2026-10-11: Can Çalma kendi ikonu (tools/gen_lifesteal_icon.py) - level atlama kartı ("lifesteal") + envanter/satıcı satırı.
+	"lifesteal": "stat_lifesteal.png",
+	"shield_max": "stat_shield.png",
+	"shield_regen": "stat_shield.png",
 }
 
 ## stat_id -> Texture2D önbelleği, her setup() çağrısında yeniden yüklemesin diye.

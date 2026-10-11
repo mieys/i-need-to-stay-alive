@@ -181,7 +181,7 @@ func _process_charge(delta: float, player: Node2D) -> void:
 
 func _check_hits(from: Vector2, to: Vector2) -> void:
 	var lane_w: float = MathScript.LANE_WIDTH if mode == MathScript.MODE_HORN else MathScript.STAMPEDE_LANE_WIDTH
-	var radius: float = lane_w * 0.5 + MathScript.PLAYER_HIT_RADIUS
+	var radius: float = lane_w * 0.5 + MathScript.HIT_MARGIN
 	for p: Node in _abilities_script().damageable_players(e.get_tree()):
 		if not is_instance_valid(p) or not (p is Node2D):
 			continue
@@ -190,7 +190,7 @@ func _check_hits(from: Vector2, to: Vector2) -> void:
 			continue
 		if p.get("is_indoors") == true or p.get("is_in_merchant_zone") == true or p.get("is_downed") == true:
 			continue
-		if MathScript.segment_distance((p as Node2D).global_position, from, to) > radius:
+		if MathScript.segment_distance((p as Node2D).global_position + Vector2(0.0, MathScript.FEET_OFFSET), from, to) > radius:
 			continue
 		_hit_ids[id] = true
 		_hit_player(p as Node2D)
@@ -198,7 +198,7 @@ func _check_hits(from: Vector2, to: Vector2) -> void:
 
 func _hit_player(p: Node2D) -> void:
 	_hit_count += 1
-	var dmg: float = float(e.get("contact_damage"))
+	var dmg: float = float(e.get("contact_damage")) * MathScript.HORN_DAMAGE_MULT
 	_abilities_script().deal_special_damage(p, dmg, e, "minotaur")
 	var fling: Vector2 = MathScript.fling_direction(_dir, e.global_position, p.global_position)
 	if p.is_in_group("remote_players"):

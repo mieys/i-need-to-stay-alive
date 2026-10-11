@@ -6,6 +6,9 @@ extends AnimatedSprite2D
 ## süre boyunca son karede sabit kalır, TOPLAM 3 saniye sonra kendini siler.
 
 const TOTAL_DURATION := 3.0
+## 2026-10-10 (kullanıcı: "kalpler oynatılmıyor"): animasyon oynuyordu ama kalp 50 px karede ~14 px'ti ve -165'te (karakterler %15 küçüldükten sonra
+## can çubuğunun ~65 px üstünde, ekran kenarına yakın) zor seçiliyordu. Sahne artık -88 + x1,75 (can çubuğunun hemen üstü); uzak oyuncu kopyasında
+## isim yazısının üstüne çıkarılır (remote_player.gd REMOTE_HEART_Y).
 
 func _ready() -> void:
 	animation_finished.connect(_on_animation_finished)

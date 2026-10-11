@@ -30,6 +30,33 @@ const AFTERNOON_DARKNESS := 0.12
 ## orantılı: ikindi hafifçe, gün batımında kademeli daralır, gün doğumunda aynı yavaşlıkla geri açılır.
 const NIGHT_VISION_MULT := 0.75
 
+## GECE KİLİDİ (2026-10-09, Banshee bossu: "zifiri gece olduğunda doğar, var olduğu sürece asla gündüz olmaz"): kilit açıkken saat gece yarısına (NIGHT_LOCK_TIME) doğru
+## NIGHT_LOCK_SPEED (döngü birimi/sn) hızla ilerler ve orada DURUR; "derin gece" = NIGHT_DEEP_MIN..NIGHT_DEEP_MAX arası.
+const NIGHT_LOCK_TIME := 465.0
+const NIGHT_LOCK_SPEED := 70.0
+const NIGHT_DEEP_MIN := 420.0
+const NIGHT_DEEP_MAX := 510.0
+
+
+## Kilitliyken bir adım: `t` saatini gece yarısına doğru (ileri yönde; gündüzden geceye hızlıca akar) ilerletir, ulaşınca sabit tutar.
+static func night_lock_step(t: float, delta: float) -> float:
+	t = wrap_time(t)
+	if absf(t - NIGHT_LOCK_TIME) < 0.01:
+		return NIGHT_LOCK_TIME
+	## Gece yarısından SONRA (şafağa doğru) ise geri dönmek yerine ileri sararak değil, doğrudan geriye gider (kısa yol); öncesindeyse ileri.
+	var step: float = NIGHT_LOCK_SPEED * delta
+	var diff: float = NIGHT_LOCK_TIME - t
+	if diff > 0.0:
+		return minf(t + step, NIGHT_LOCK_TIME)
+	## t > gece yarısı: şafak bölgesindeyse (540-600) ileri sararak gündüz boyunca gitmek yerine geri sar
+	return maxf(t - step, NIGHT_LOCK_TIME)
+
+
+static func is_deep_night(t: float) -> bool:
+	t = wrap_time(t)
+	return t >= NIGHT_DEEP_MIN and t <= NIGHT_DEEP_MAX
+
+
 ## Zaman renk anahtarları: [döngü saniyesi, ortam çarpanı (sahne rengi kanal kanal bununla çarpılır), doygunluk,
 ## kaldırma (karanlık bölgelere eklenen hafif renk - gece siyahlar zifiri olmasın, lacivert kalsın)].
 ## İki anahtar arası smoothstep ile karışır. Tam gündüz = (1,1,1)/1/0: oyunun bugünkü görünümüne HİÇ dokunulmaz.

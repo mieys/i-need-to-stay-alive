@@ -3,6 +3,7 @@ extends Node
 ## Vampir Çocuk FX yardımcısı (broadcast_player_vfx "vampir_fx" dalı).
 const VampirMathScript := preload("res://scripts/vampir_math.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 ## Suriyeli Hadime "hadime_fx" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
 const HadimeMathScript := preload("res://scripts/hadime_math.gd")
@@ -85,6 +86,9 @@ var local_char_id: int = 1
 const PLAYER_NAME_CONFIG_PATH := "user://player_settings.cfg"
 
 func _save_local_player_name() -> void:
+	## Test/denetim süreçleri (LILSLAYERS_UID ile başlatılır, bkz. tools/mp_audit) oyuncunun kayıtlı adını ezmesin.
+	if OS.get_environment("LILSLAYERS_UID") != "":
+		return
 	var config := ConfigFile.new()
 	config.set_value("player", "name", local_player_name)
 	config.save(PLAYER_NAME_CONFIG_PATH)
@@ -137,6 +141,236 @@ var _loading_done: Dictionary = {} ## peer_id (int) -> true
 var _peer: MultiplayerPeer = null
 
 const MAX_PLAYERS := 8
+
+## ============================================================================
+## ODA AYARLARI + GİRİŞ DOĞRULAMASI + LOBİ AŞAMASI (kullanıcı isteği 2026-10-11: "insanlar oda kurup odalarına şifre koyup
+## oyuncu sayısı v.b limitleri koyup birbirlerinin odalarına girebilmeli ... önce lobi kurulacak sonra karakter seçim ekranına
+## geçilecek ve hazır olunca host oyunu başlatacak")
+## ============================================================================
+## Akış: oda listesi (room_browser.gd) -> oda lobisi (room_lobby.gd, lobby_phase "room") -> host "karakter seçimine geç" ->
+## karakter seçimi (lobby_menu.gd, lobby_phase "select") -> herkes hazır -> host oyunu başlatır.
+## GİRİŞ: bağlanan peer host'ta önce DOĞRULANIR (bkz. _on_peer_connected): host rastgele bir kod (nonce) yollar, istemci
+## sha256(kod + şifre) + protokol sürümü + kalıcı kimliğiyle cevap verir (_rpc_auth_response). Şifre ağdan AÇIK gitmez; oda
+## listesinde sadece "kilitli" bilgisi yayınlanır. Yanlış şifre / oda dolu / atılmış / eski sürüm -> sebep mesajı + bağlantı kesilir.
+## Kabul edilmeden istemci kendini odaya yazmaz/yayınlamaz (eski _on_connected_to_server gövdesi artık _complete_admission'da).
+## Host devri: kabul edilen herkes şifreyi bilir (room_password = girdiği şifre) - yeni host aynı ayarlarla kurar, diğerleri aynı
+## şifreyle otomatik doğrulanır.
+const ROOM_MIN_PLAYERS := 2
+const LOBBY_PROTOCOL := "lobi-2" ## eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
+const AUTH_TIMEOUT_MS := 10000 ## host: bu sürede doğrulanmayanı atar; istemci: bu sürede kabul gelmezse vazgeçer
+const PHASE_ROOM := "room"
+const PHASE_SELECT := "select"
+## Reddetme sebepleri (istemci arayüzü şifre sorusunu buna göre açar).
+const REJECT_PASSWORD_NEEDED := 1
+const REJECT_PASSWORD_WRONG := 2
+const REJECT_FULL := 3
+const REJECT_KICKED := 4
+const REJECT_VERSION := 5
+
+signal room_entered ## host odayı kurdu / istemci odaya KABUL edildi (arayüz oda lobisine ya da karakter seçimine geçer)
+signal room_join_rejected(code: int, message: String)
+signal lobby_phase_changed(phase: String)
+
+var room_name: String = ""
+## Host: kurulan şifre (boş = açık oda). İstemci: kabul edilince girdiği şifre (host devrinde gerekir).
+var room_password: String = ""
+var room_max_players: int = MAX_PLAYERS
+## İstemci: katılmaya çalışırken girilen şifre (oda listesi / IP ile katıl doldurur).
+var join_password: String = ""
+var lobby_phase: String = PHASE_ROOM
+## Son bağlantı durumu metni (oda listesine geri dönülünce gösterilir; bkz. _ready'deki bağlantı).
+var last_status_message: String = ""
+## Lobi sohbeti geçmişi (oda lobisi <-> karakter seçimi sahne değişince kaybolmasın); bkz. menu_lobby_chat.gd.
+var lobby_chat_log: Array = [] ## [{"name": String, "text": String}]
+const LOBBY_CHAT_KEEP := 50
+var _auth_nonce: Dictionary = {} ## host: peer_id -> {"nonce": String, "deadline": int}
+var _admitted: Dictionary = {} ## host: kabul edilmiş peer_id -> true
+var _kicked_uids: Dictionary = {} ## host: bu odadan atılanların kalıcı kimlikleri (oda kapanana kadar geri giremez)
+var _auth_deadline_msec: int = 0 ## istemci: kabul beklenirken zaman aşımı
+var _rejected_message: String = "" ## istemci: host reddetti, bağlantı kopunca "koptu" yerine bunu göster
+
+
+## Oda listesinden "Oda kur" penceresi çağırır - host_lan/host_online ÖNCESİ.
+func configure_room(p_name: String, password: String, max_players: int) -> void:
+	room_name = p_name.strip_edges().replace("|", " ").left(32)
+	room_password = password
+	room_max_players = clampi(max_players, ROOM_MIN_PLAYERS, MAX_PLAYERS)
+
+
+func _default_room_name() -> String:
+	return "%s odası" % local_player_name
+
+
+## Odada yer var mı (host, doğrulama sırasında). Oyun sürerken geri katılanlar da sayıya dahil.
+func _room_has_space() -> bool:
+	return lobby_players.size() < room_max_players
+
+
+static func password_proof(nonce: String, password: String) -> String:
+	return "" if password.is_empty() else (nonce + password).sha256_text()
+
+
+## host_lan/host_online başarıyla kurulunca: yeni odanın lobi durumu (ayarlar configure_room'dan kalır).
+func _begin_hosted_room() -> void:
+	if room_name.is_empty():
+		room_name = _default_room_name()
+	lobby_phase = PHASE_ROOM
+	_admitted.clear()
+	_auth_nonce.clear()
+	_kicked_uids.clear()
+
+
+func _on_chat_for_lobby_log(_peer_id: int, player_name: String, text: String) -> void:
+	lobby_chat_log.append({"name": player_name, "text": text})
+	while lobby_chat_log.size() > LOBBY_CHAT_KEEP:
+		lobby_chat_log.pop_front()
+
+
+## Host: yeni bağlanan peer'i doğrulamaya al (bkz. blok başı notu).
+func _begin_peer_auth(peer_id: int) -> void:
+	var nonce: String = Crypto.new().generate_random_bytes(16).hex_encode()
+	_auth_nonce[peer_id] = {"nonce": nonce, "deadline": Time.get_ticks_msec() + AUTH_TIMEOUT_MS}
+	_rpc_auth_challenge.rpc_id(peer_id, nonce, not room_password.is_empty())
+
+
+## Host -> bağlanan: doğrulama kodu. İstemci girdiği şifreyle kanıt üretip cevaplar.
+@rpc("any_peer", "reliable")
+func _rpc_auth_challenge(nonce: String, _locked: bool) -> void:
+	if is_host or not _from_host():
+		return
+	_rpc_auth_response.rpc_id(_host_peer_id(), password_proof(nonce, join_password), LOBBY_PROTOCOL, local_player_uid)
+
+
+## İstemci -> host: kanıt. Host karar verir: kabul (_rpc_auth_accepted + kendi bilgisini yollar) ya da ret (sebep + bağlantı kesilir).
+@rpc("any_peer", "reliable")
+func _rpc_auth_response(proof: String, protocol: String, uid: String) -> void:
+	if not is_host:
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if not _auth_nonce.has(sender_id):
+		return
+	var nonce: String = str(_auth_nonce[sender_id]["nonce"])
+	_auth_nonce.erase(sender_id)
+	var code: int = 0
+	if protocol != LOBBY_PROTOCOL:
+		code = REJECT_VERSION
+	elif _kicked_uids.has(uid):
+		code = REJECT_KICKED
+	elif not room_password.is_empty() and proof != password_proof(nonce, room_password):
+		code = REJECT_PASSWORD_NEEDED if proof.is_empty() else REJECT_PASSWORD_WRONG
+	elif not _room_has_space():
+		code = REJECT_FULL
+	if code != 0:
+		_reject_peer(sender_id, code)
+		return
+	_admitted[sender_id] = true
+	_rpc_auth_accepted.rpc_id(sender_id, room_name, room_max_players, not room_password.is_empty(), lobby_phase)
+	## Eskiden _on_peer_connected'daydı: host'un kendi bilgisi ancak kabulden sonra gider.
+	var my_info: Dictionary = lobby_players.get(multiplayer.get_unique_id(), {"name": local_player_name, "char_id": local_char_id})
+	_rpc_sync_player_info.rpc_id(sender_id, my_info["name"], my_info["char_id"], true)
+	_rpc_sync_player_loadout.rpc_id(sender_id, GameManager.selected_start_weapon, GameManager.selected_spiritual)
+
+
+static func reject_message(code: int) -> String:
+	match code:
+		REJECT_PASSWORD_NEEDED:
+			return "Bu oda şifreli. Şifreyi girip tekrar dene."
+		REJECT_PASSWORD_WRONG:
+			return "Şifre yanlış. Tekrar dene."
+		REJECT_FULL:
+			return "Oda dolu."
+		REJECT_KICKED:
+			return "Host seni bu odadan çıkardı."
+		REJECT_VERSION:
+			return "Oyun sürümün bu odayla uyuşmuyor. İkiniz de aynı sürümü kullanmalısınız."
+	return "Odaya girilemedi."
+
+
+func _reject_peer(peer_id: int, code: int) -> void:
+	_rpc_auth_rejected.rpc_id(peer_id, code, reject_message(code))
+	_disconnect_peer_later(peer_id)
+
+
+## Ret mesajının ulaşması için kısa gecikmeyle bağlantıyı kes (_kick_stranger_later ile aynı desen).
+func _disconnect_peer_later(peer_id: int) -> void:
+	await get_tree().create_timer(0.6).timeout
+	if is_host and _peer != null and multiplayer.get_peers().has(peer_id):
+		_peer.disconnect_peer(peer_id)
+
+
+@rpc("any_peer", "reliable")
+func _rpc_auth_rejected(code: int, message: String) -> void:
+	if is_host or not _from_host():
+		return
+	_auth_deadline_msec = 0
+	_rejected_message = message
+	connection_status_changed.emit(message)
+	room_join_rejected.emit(code, message)
+
+
+@rpc("any_peer", "reliable")
+func _rpc_auth_accepted(p_room_name: String, p_max: int, _locked: bool, phase: String) -> void:
+	if is_host or not _from_host():
+		return
+	_auth_deadline_msec = 0
+	room_name = p_room_name
+	room_max_players = clampi(p_max, ROOM_MIN_PLAYERS, MAX_PLAYERS)
+	room_password = join_password
+	lobby_phase = phase if phase in [PHASE_ROOM, PHASE_SELECT] else PHASE_ROOM
+	_complete_admission()
+	room_entered.emit()
+
+
+## Host: kabul edilmemiş (doğrulamayı geçmemiş) bir peer'in lobi RPC'si mi? Öyleyse yok sayılır - odaya kendini yazamaz.
+func _from_unadmitted_peer() -> bool:
+	if not is_host or not is_multiplayer_active:
+		return false
+	var sender: int = multiplayer.get_remote_sender_id()
+	return sender > 1 and not _admitted.has(sender)
+
+
+## Host: oyuncuyu odadan çıkar (oda kapanana kadar geri giremez).
+func kick_player(peer_id: int) -> void:
+	if not is_host or peer_id == multiplayer.get_unique_id() or not lobby_players.has(peer_id):
+		return
+	var uid: String = str(_peer_uid.get(peer_id, ""))
+	if uid != "":
+		_kicked_uids[uid] = true
+	_reject_peer(peer_id, REJECT_KICKED)
+
+
+## Host: herkes oda lobisinden karakter seçimine (ya da geri). Hazır durumları sıfırlanır (host hep hazır).
+func set_lobby_phase(phase: String) -> void:
+	if not is_host or not is_multiplayer_active or not (phase in [PHASE_ROOM, PHASE_SELECT]):
+		return
+	_rpc_set_lobby_phase.rpc(phase)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_set_lobby_phase(phase: String) -> void:
+	if not _from_host() or not (phase in [PHASE_ROOM, PHASE_SELECT]):
+		return
+	lobby_phase = phase
+	for pid in lobby_players.keys():
+		lobby_players[pid]["is_ready"] = (int(pid) == _host_peer_id())
+	lobby_updated.emit()
+	lobby_phase_changed.emit(phase)
+
+
+## Her karede: host doğrulanmayanları, istemci gelmeyen kabulü zaman aşımına uğratır.
+func _process_room_auth() -> void:
+	var now: int = Time.get_ticks_msec()
+	if is_host and not _auth_nonce.is_empty():
+		for pid in _auth_nonce.keys():
+			if now > int(_auth_nonce[pid]["deadline"]):
+				_auth_nonce.erase(pid)
+				if _peer != null and multiplayer.get_peers().has(int(pid)):
+					_peer.disconnect_peer(int(pid))
+	if not is_host and _auth_deadline_msec > 0 and now > _auth_deadline_msec:
+		_auth_deadline_msec = 0
+		_clear_peer_state()
+		connection_status_changed.emit("Oda cevap vermedi (sürüm farkı olabilir). Listeyi yenileyip tekrar dene.")
+		server_disconnected.emit()
 
 ## Şu an host kabul edilen gerçek peer id (bkz. _refresh_host). 0 = henüz
 ## belirlenmedi (bağlı değiliz).
@@ -219,6 +453,8 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	lobby_updated.connect(_sync_online_lobby_state)
+	connection_status_changed.connect(func(t: String) -> void: last_status_message = t)
+	chat_message_received.connect(_on_chat_for_lobby_log)
 	## Level atlama geri sayımı (bkz. update_level_up_timer) TAM OLARAK
 	## oyun duraklatılmışken (get_tree().paused = true, level atlama
 	## ekranı açıkken) işlemesi gerekiyor - varsayılan process_mode
@@ -254,6 +490,7 @@ func _process(delta: float) -> void:
 	if is_multiplayer_active and is_host:
 		_process_batched_syncs(delta)
 	_process_online_session()
+	_process_room_auth()
 	_process_host_heartbeat(delta)
 	_process_migration()
 
@@ -301,6 +538,7 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 		"spirit": GameManager.selected_spiritual,
 	}
 
+	_begin_hosted_room()
 	connection_status_changed.emit("LAN Sunucu Kuruldu! Port: %d" % port)
 	lobby_updated.emit()
 	## Artık kendisi de ağda bir "beacon" (duyuru) yayınlar - bkz. LAN OTOMATİK KEŞİF
@@ -308,6 +546,7 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 	## ekranındaki "Bulunan Oyunlar" listesinden tıklayıp katılabilir.
 	stop_lan_discovery_listen()
 	_start_lan_beacon(port)
+	room_entered.emit()
 	return true
 
 
@@ -318,6 +557,7 @@ func join_lan(ip: String = "127.0.0.1", port: int = 7777, player_name: String = 
 	is_host = false
 	_host_peer = 1
 	room_code = "%s:%d" % [ip, port]
+	_rejected_message = ""
 
 	var peer := ENetMultiplayerPeer.new()
 	var err: Error = peer.create_client(ip, port)
@@ -374,7 +614,9 @@ func host_online(player_name: String = "Oyuncu", char_id: int = 1) -> void:
 		connection_status_changed.emit("İnternet odası kurulamadı (Epic P2P).")
 		return
 	connection_status_changed.emit("İnternet odası ilan ediliyor...")
-	var listed: bool = await EosOnline.host_lobby_async(local_player_name, MAX_PLAYERS)
+	if room_name.is_empty():
+		room_name = _default_room_name()
+	var listed: bool = await EosOnline.host_lobby_async(local_player_name, room_max_players, room_name, not room_password.is_empty())
 	if attempt != _online_attempt:
 		eos_peer.close()
 		EosOnline.close_lobby_async()
@@ -400,8 +642,10 @@ func host_online(player_name: String = "Oyuncu", char_id: int = 1) -> void:
 		"spirit": GameManager.selected_spiritual,
 	}
 	stop_lan_discovery_listen()
+	_begin_hosted_room()
 	connection_status_changed.emit("İnternet odası kuruldu! Arkadaşların listede görüp katılabilir.")
 	lobby_updated.emit()
+	room_entered.emit()
 
 
 ## host_id: odayı kuranın Epic kullanıcı kimliği (EosOnline.search_lobbies_async sonucundaki "host_id").
@@ -426,6 +670,7 @@ func join_online(host_id: String, host_name: String, player_name: String = "Oyun
 	is_host = false
 	_host_peer = 1
 	room_code = "İnternet (Epic) - %s" % host_name
+	_rejected_message = ""
 	_peer = FragmentPeerScript.new(eos_peer)
 	multiplayer.multiplayer_peer = _peer
 	_online_connect_deadline_msec = Time.get_ticks_msec() + ONLINE_CONNECT_TIMEOUT_MS
@@ -478,7 +723,8 @@ func _sync_online_lobby_state() -> void:
 ## CLAUDE.md "Test/doğrulama" - host+client'ı tek PC'de test etme) sessizce hiçbir
 ## şey BOZULMAZ: manuel IP:Port alanı her zaman olduğu gibi çalışmaya devam eder.
 const DISCOVERY_PORT := 7778
-const DISCOVERY_MAGIC := "INSA_LAN_v1"
+## v2 (2026-10-11, lobi sistemi): oda adı / oyuncu sayısı / sınır / kilit / oyunda bilgisi de taşır. v1 (doğrulamasız eski sürüm) yok sayılır.
+const DISCOVERY_MAGIC := "INSA_LAN_v2"
 const DISCOVERY_BEACON_INTERVAL := 1.0
 const DISCOVERY_STALE_SEC := 4.0
 
@@ -534,11 +780,11 @@ func _stop_lan_beacon() -> void:
 func _send_lan_beacon() -> void:
 	if _discovery_send_peer == null:
 		return
-	## "|" ile ayrılan 3 alan: sihirli önek (rastgele ağ trafiğine yanlış tepki
-	## vermemek için) + host adı ("|" karakteri ismde olamaz, güvenlik için değiştirilir)
-	## + gerçek oyun (ENet) portu.
+	## "|" ile ayrılan 8 alan: sihirli önek (rastgele ağ trafiğine yanlış tepki vermemek için) + host adı ("|" isimde olamaz,
+	## değiştirilir) + gerçek oyun (ENet) portu + oda adı + oyuncu sayısı + oda sınırı + kilitli (1/0) + oyunda (1/0). Şifrenin kendisi GİTMEZ.
 	var safe_name: String = local_player_name.replace("|", " ")
-	var payload: PackedByteArray = ("%s|%s|%d" % [DISCOVERY_MAGIC, safe_name, _discovery_hosting_port]).to_utf8_buffer()
+	var payload: PackedByteArray = ("%s|%s|%d|%s|%d|%d|%d|%d" % [DISCOVERY_MAGIC, safe_name, _discovery_hosting_port, room_name.replace("|", " "),
+		maxi(1, lobby_players.size()), room_max_players, 1 if not room_password.is_empty() else 0, 1 if _is_game_in_progress else 0]).to_utf8_buffer()
 	var peer: PacketPeerUDP = _discovery_send_peer
 	## DÜZELTME (gerçek makinede test edilip bulundu): genel yayın adresi
 	## (255.255.255.255) bu makinede bir VPN/sanal ağ bağdaştırıcısı (Radmin/Hamachi
@@ -598,11 +844,12 @@ func _poll_lan_discovery() -> void:
 	while peer.get_available_packet_count() > 0:
 		var buf: PackedByteArray = peer.get_packet()
 		var parts: PackedStringArray = buf.get_string_from_utf8().split("|")
-		if parts.size() == 3 and parts[0] == DISCOVERY_MAGIC and parts[2].is_valid_int():
+		if parts.size() == 8 and parts[0] == DISCOVERY_MAGIC and parts[2].is_valid_int():
 			var ip: String = peer.get_packet_ip()
 			var g_port: int = int(parts[2])
 			var key: String = "%s:%d" % [ip, g_port]
-			_discovered_games[key] = {"ip": ip, "port": g_port, "name": parts[1], "last_seen_msec": Time.get_ticks_msec()}
+			_discovered_games[key] = {"ip": ip, "port": g_port, "name": parts[1], "room_name": parts[3], "players": int(parts[4]),
+				"max_players": int(parts[5]), "locked": parts[6] == "1", "in_game": parts[7] == "1", "last_seen_msec": Time.get_ticks_msec()}
 			changed = true
 	## Beacon'ı kesilen (host kapanmış/ayrılmış) oyunları listeden düşür.
 	var now: int = Time.get_ticks_msec()
@@ -621,6 +868,7 @@ func disconnect_from_room(show_status: bool = true) -> void:
 
 
 func _clear_peer_state() -> void:
+	_net_log("_clear_peer_state (oturum kapanıyor / tek oyunculuya dönüş) çağıran: %s" % str(get_stack().slice(1, 4)))
 	if _peer:
 		_peer.close()
 		_peer = null
@@ -677,6 +925,13 @@ func _clear_peer_state() -> void:
 	_join_blocked_by_game = false
 	_denied_by_game = false
 	_pending_rejoin = {}
+	_admitted.clear()
+	_auth_nonce.clear()
+	_kicked_uids.clear()
+	_auth_deadline_msec = 0
+	_rejected_message = ""
+	lobby_phase = PHASE_ROOM
+	lobby_chat_log.clear()
 	## Oda kapandı/bağlantı kesildi - host'sak artık "buradayım" yayınını durdur
 	## (bkz. LAN OTOMATİK KEŞİF bloğu). Dinleme YENİDEN başlatılmıyor burada -
 	## lobby_menu.gd _ready()'de zaten tekrar start_lan_discovery_listen() çağırır.
@@ -684,11 +939,19 @@ func _clear_peer_state() -> void:
 
 
 func _on_connected_to_server() -> void:
-	var my_id: int = multiplayer.get_unique_id()
 	## Sunucu (host) her zaman peer id 1'dir; bu callback sadece client'ta tetiklenir.
 	is_host = false
 	_host_peer = 1
+	if not _migration.is_empty():
+		_migration["status"] = "joining"
+	## Odaya girmeden önce host'un doğrulaması (bkz. ODA AYARLARI bloğu) - kabul gelince _complete_admission.
+	_auth_deadline_msec = Time.get_ticks_msec() + AUTH_TIMEOUT_MS
+	connection_status_changed.emit("Bağlanıldı, oda onayı bekleniyor...")
 
+
+## Host kabul etti (bkz. _rpc_auth_accepted): kendimi odaya yazıp herkese duyururum.
+func _complete_admission() -> void:
+	var my_id: int = multiplayer.get_unique_id()
 	lobby_players[my_id] = {
 		"name": local_player_name,
 		"char_id": local_char_id,
@@ -698,10 +961,8 @@ func _on_connected_to_server() -> void:
 		"spirit": GameManager.selected_spiritual,
 	}
 
-	connection_status_changed.emit("Sunucuya bağlanıldı! Adres: " + room_code)
+	connection_status_changed.emit("Odaya girildi: %s" % room_name)
 	lobby_updated.emit()
-	if not _migration.is_empty():
-		_migration["status"] = "joining"
 
 	## Host'a kalıcı kimliğimi bildir (oyun sürüyorsa geri katılma hakkımı buna göre verir/vermez).
 	_rpc_register_uid.rpc_id(1, local_player_uid, EosOnline.local_user_id() if is_online_session else "")
@@ -1008,6 +1269,7 @@ func _reset_for_restart_lobby() -> void:
 	## Lobideki ilk halinin aynısı: sadece host hazır, herkes karakterini yeniden seçip "HAZIRIM"a basar.
 	for pid in lobby_players.keys():
 		lobby_players[pid]["is_ready"] = (int(pid) == _host_peer_id())
+	lobby_phase = PHASE_SELECT ## yeniden başlatma doğrudan karakter seçimine döner
 	restart_returned_to_lobby = true
 
 
@@ -1042,6 +1304,7 @@ func close_room() -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_close_room() -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
+	_net_log("_rpc_close_room alındı, gönderen %d" % sender_id)
 	if sender_id != 0 and sender_id != _host_peer_id():
 		return
 	## sender_id == 0 -> bu, host'un KENDİ çağrısı (yerel) - host'a "host
@@ -1166,7 +1429,30 @@ func _on_connection_failed() -> void:
 	connection_status_changed.emit("Sunucuya bağlanılamadı. IP/port doğru mu ve host sunucuyu kurdu mu?")
 
 
+## Bağlantı olay günlüğü (2026-10-12, "oyuncular durduk yere single player'a atılıyor" araştırması): kopma/devir kararlarının NEDENİ
+## `user://net_log.txt` dosyasına yazılır (yeniden başlatmada 1 MB üstü sıfırlanır). Sadece çok oyunculu oturumda yazar.
+func _net_log(msg: String) -> void:
+	if not is_multiplayer_active and not msg.begins_with("!"):
+		return
+	var path := "user://net_log.txt"
+	var mode: FileAccess.ModeFlags = FileAccess.READ_WRITE if FileAccess.file_exists(path) else FileAccess.WRITE
+	var f := FileAccess.open(path, mode)
+	if f == null:
+		return
+	if f.get_length() > 1048576:
+		f.close()
+		f = FileAccess.open(path, FileAccess.WRITE)
+		if f == null:
+			return
+	f.seek_end()
+	var who: String = "host" if is_host else "istemci"
+	f.store_line("[%s] %s | %s peer=%d host_peer=%d online=%s oyunda=%s devir=%s | %s" % [Time.get_datetime_string_from_system(), "t=%.0f" % (Time.get_ticks_msec() / 1000.0),
+		who, multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1, _host_peer, str(is_online_session), str(_is_game_in_progress), str(not _migration.is_empty()), msg])
+	f.close()
+
+
 func _on_server_disconnected() -> void:
+	_net_log("server_disconnected sinyali; son host mesajından beri %d ms" % (Time.get_ticks_msec() - _last_host_msg_msec))
 	if not is_multiplayer_active:
 		return
 	if not _migration.is_empty():
@@ -1175,7 +1461,12 @@ func _on_server_disconnected() -> void:
 	if _try_begin_host_migration():
 		return
 	var was_denied: bool = _denied_by_game
+	var rejected: String = _rejected_message
 	_clear_peer_state()
+	if not rejected.is_empty():
+		connection_status_changed.emit(rejected)
+		server_disconnected.emit()
+		return
 	if was_denied:
 		connection_status_changed.emit("Bu oyun başlamış - sadece oyundan düşen oyuncular geri katılabilir.")
 		return
@@ -1184,13 +1475,17 @@ func _on_server_disconnected() -> void:
 
 
 func _on_peer_connected(peer_id: int) -> void:
+	_net_log("peer_connected: %d" % peer_id)
 	if is_host and _peer is ENetMultiplayerPeer:
 		var enet_peer: ENetPacketPeer = (_peer as ENetMultiplayerPeer).get_peer(peer_id)
 		if enet_peer != null:
 			_peer_addr[peer_id] = enet_peer.get_remote_address() ## devirde diğer istemciler yeni host'a bu adresle ulaşır
-	## İnternet odası (bkz. host_online): ENet'teki gibi bir bağlantı sınırı yok - oda doluysa yeni geleni geri çevir.
-	if is_online_session and is_host and _real_peers().size() > MAX_PLAYERS - 1:
-		_peer.disconnect_peer(peer_id)
+	## Host: önce doğrulama (şifre / oda sınırı / atılmış / sürüm - bkz. ODA AYARLARI bloğu). Host'un kendi bilgisi ancak kabulde gider.
+	if is_host:
+		_begin_peer_auth(peer_id)
+		return
+	## İstemci: henüz kabul edilmediysem kimseye (host'a da - istemcide host için de peer_connected gelir) bilgi yollamam.
+	if not lobby_players.has(multiplayer.get_unique_id()):
 		return
 	# Send our info to the newly joined peer
 	var my_info: Dictionary = lobby_players.get(multiplayer.get_unique_id(), {
@@ -1205,6 +1500,9 @@ func _on_peer_connected(peer_id: int) -> void:
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	_net_log("peer_disconnected: %d (oyun peer'i: %s)" % [peer_id, str(_game_peers.has(peer_id))])
+	_admitted.erase(peer_id)
+	_auth_nonce.erase(peer_id)
 	var was_game_peer: bool = _game_peers.erase(peer_id)
 	_peer_addr.erase(peer_id)
 	_peer_eos.erase(peer_id)
@@ -1262,12 +1560,14 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	## görüntüsünün asıl kaynağı muhtemelen buydu. Artık peer_id de sinyalle
 	## birlikte gönderiliyor, main.gd bu id'ye ait RemotePlayer'ı (ve onun
 	## tüm pet kozmetik kopyalarını) gerçekten sahneden kaldırıyor.
-	if is_multiplayer_active and not left_name.is_empty():
-		player_left_game.emit(left_name, peer_id)
+	if is_multiplayer_active:
+		player_left_game.emit(left_name, peer_id) ## isim boşsa bile kukla silinsin (main.gd bildirimi atlar)
 
 
 @rpc("any_peer", "reliable")
 func _rpc_sync_player_info(p_name: String, p_char_id: int, p_is_host: bool) -> void:
+	if _from_unadmitted_peer():
+		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	var prev_ready: bool = false
 	if lobby_players.has(sender_id):
@@ -2026,6 +2326,21 @@ func sync_match_stats(peer_id: int, player_name: String, damage_dealt: float, da
 	match_stats_received.emit(peer_id, player_name, damage_dealt, damage_taken, kills)
 
 
+## Balans telemetrisi (bkz. balance_log.gd): istemci koşu bitince kaydını host'a yollar, host kendi dosyasına ekler. SADECE host işler;
+## boyut sınırı balance_log.gd'de, oturum başına peer başına en çok 20 kayıt.
+var _balance_records_by_peer: Dictionary = {}
+
+@rpc("any_peer", "call_remote", "reliable")
+func submit_balance_record(json_text: String) -> void:
+	if not is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender <= 0 or int(_balance_records_by_peer.get(sender, 0)) >= 20:
+		return
+	if BalanceLogScript.ingest_remote(json_text, sender):
+		_balance_records_by_peer[sender] = int(_balance_records_by_peer.get(sender, 0)) + 1
+
+
 ## Sync game time from host to clients so difficulty scaling stays consistent.
 @rpc("any_peer", "call_remote", "unreliable")
 func sync_game_time(time: float) -> void:
@@ -2636,6 +2951,14 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 				var taunter_peer: int = int(param2)
 				var taunter: Node = _find_player_by_peer_id(taunter_peer) if taunter_peer > 0 else null
 				target_enemy.apply_taunt(param1, taunter as Node2D)
+		## Necromancer E finali (Son Çare Golemi): param2=sahibin peer id'si; host o oyuncunun EN YENİ golem kopyasını kışkırtan yapar
+		## (bkz. remote_player.gd get_newest_golem_visual). Kopya henüz yoksa sessizce yok sayılır.
+		"taunt_ally":
+			if target_enemy.has_method("apply_taunt") and int(param2) > 0:
+				var owner_rp: RemotePlayer = _find_remote_player(int(param2))
+				var golem: Node2D = owner_rp.get_newest_golem_visual() if owner_rp != null else null
+				if golem != null:
+					target_enemy.apply_taunt(param1, golem)
 
 
 ## Broadcast enemy status VFX so all peers see poison/freeze/chill visuals.
@@ -2770,7 +3093,7 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 				target_enemy.on_ability_vfx(vfx_type, extra_data)
 		## Yeraltı Canavarı (Kademe 5 bossu, 2026-10-09, bkz. underground_boss.gd / worm_limb.gd): worm_setup (extra_data: kind), worm_pose (pose),
 		## worm_strike (pos, dir, power) - uzuv; worm_rumble/worm_growl (v), worm_ambient - boss'un yeraltı sesleri (her peer yerelde çalar).
-		"worm_setup", "worm_pose", "worm_strike", "worm_rumble", "worm_growl", "worm_ambient":
+		"worm_setup", "worm_pose", "worm_strike", "worm_rumble", "worm_growl", "worm_ambient", "boss_event":
 			if target_enemy.has_method("on_ability_vfx"):
 				target_enemy.on_ability_vfx(vfx_type, extra_data)
 		"chill_tint":
@@ -2966,6 +3289,9 @@ const RELIABLE_PLAYER_VFX := {
 	"oakley_flower_spawn": true, "oakley_flower_bond": true, "spirit_blink": true, "spirit_cancel": true,
 	"weapon_surge": true, ## Büyücü pasifi - yetenek başına bir kez, kaybolması pasifin görünmemesi demek
 }
+## "melek_sparkle" (2026-10-10): Melek pasifinin iyileştirme işareti - extra "peers" = işaretin çıkacağı oyuncular (Melek dahil); her istemci kendi
+## yerel oyuncusu ya da ilgili kukla altında fx_melek_heal_sparkle.gd kurar. Güvenilmez (kaybolursa bir sonraki 3 sn'de yine gelir).
+const FxMelekSparkleScript := preload("res://scripts/fx_melek_heal_sparkle.gd")
 
 
 func send_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_data: Dictionary) -> void:
@@ -2986,6 +3312,12 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 	if not rp:
 		return
 	match vfx_type:
+		"melek_sparkle":
+			var my_id: int = multiplayer.get_unique_id()
+			for pid in (extra_data.get("peers", []) as Array):
+				var host_node: Node = get_tree().get_first_node_in_group("player") if int(pid) == my_id else _find_remote_player(int(pid))
+				if host_node != null and is_instance_valid(host_node):
+					host_node.add_child(FxMelekSparkleScript.new())
 		"muzzle_flash":
 			var scene_path: String = str(extra_data.get("scene_path", ""))
 			if scene_path.is_empty():
@@ -3119,10 +3451,11 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			get_tree().current_scene.add_child(chain_fx)
 			if chain_fx.has_method("setup_positions"):
 				chain_fx.setup_positions(Vector2(extra_data.get("from_pos", pos)), pos)
-		## Necromancer ULTİ (Lanetli Kafatası, bkz. necro_skull.gd dosya başı): extra_data.phase = "start" (pos = doğuş),
-		## "leg" (pos = hedef, from/dur), "end". Her oyuncu için tek kozmetik kafatası (_necro_skull_visuals) - hasar/korku
-		## YOK, sadece yetkili kafatasının bacaklarını aynı sürede uçar ve bacak sonunda aynı çarpma efektini oynatır.
-		"necro_skull":
+		## Necromancer ULTİ (Lanetli Kafatası, bkz. necro_skull.gd dosya başı): extra_data.phase = "start" (pos = doğuş), "hb" (kalp atışı:
+		## kopya yoksa kurar), "mode" (aktif/pasif + kalan süre), "leg" (pos = hedef, from/dur - "necro_skull_leg" güvenilmez kanaldan), "end".
+		## Her oyuncu için tek kozmetik kafatası (_necro_skull_visuals) - hasar/korku YOK, sadece yetkili kafatasının bacaklarını aynı sürede
+		## uçar, boştayken sahibinin kuklasının etrafında döner ve bacak sonunda aynı çarpma efektini oynatır.
+		"necro_skull", "necro_skull_leg":
 			var phase: String = str(extra_data.get("phase", ""))
 			var skull: Node = _necro_skull_visuals.get(player_id)
 			if skull != null and not is_instance_valid(skull):
@@ -3135,13 +3468,15 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			if skull == null or phase == "start":
 				if skull and skull.has_method("network_end"):
 					skull.network_end()
-				var start_pos: Vector2 = pos if phase == "start" else Vector2(extra_data.get("from", pos))
+				var start_pos: Vector2 = pos if phase != "leg" else Vector2(extra_data.get("from", pos))
 				skull = NecroSkullScript.new()
-				skull.setup_network(start_pos)
+				skull.setup_network(start_pos, player_id)
 				get_tree().current_scene.add_child(skull)
 				_necro_skull_visuals[player_id] = skull
 			if phase == "leg" and skull.has_method("network_leg"):
 				skull.network_leg(Vector2(extra_data.get("from", pos)), pos, float(extra_data.get("dur", 0.5)))
+			elif (phase == "mode" or phase == "hb" or phase == "start") and skull.has_method("network_mode"):
+				skull.network_mode(bool(extra_data.get("active", false)), float(extra_data.get("t", 10.0)))
 		"arcane_skull_bounce":
 			## Büyücü Kız'ın Arcane Lanet varyasyonu - "chain_lightning" ile
 			## BİREBİR AYNI gerekçe (bkz. yukarısı): uzak oyuncularda gerçek
@@ -4096,7 +4431,9 @@ func sync_redirected_damage(target_peer_id: int, amount: float) -> void:
 	if local_id != target_peer_id:
 		return
 	var local_player: Node = get_tree().get_first_node_in_group("player")
-	if local_player and local_player.has_method("take_damage"):
+	if local_player and local_player.has_method("take_redirected_damage"):
+		local_player.take_redirected_damage(amount)
+	elif local_player and local_player.has_method("take_damage"):
 		local_player.take_damage(amount)
 
 
@@ -4170,6 +4507,17 @@ func sync_revive_consumed(peer_id: int, new_remaining: int) -> void:
 ## Dirilme hakkı yenilenme sayacı (bkz. GameManager._process_revive_regen) - host, bir oyuncunun hakkı 0'a düşüp
 ## 5 dakikalık sayaç başlayınca ve sonra periyodik olarak kalan süreyi yayınlar; istemciler kalbin altındaki geri
 ## sayımı buradan gösterir. seconds_left < 0: sayaç bitti/iptal.
+## SAKLANMA ÇALILIĞI (2026-10-09, bkz. hide_brush_manager.gd): host bir oyuncunun çalı durumunu (0 değil / 1 saklı / 2 görülmüş) herkese bildirir; her peer
+## karakterin (yerel Player ya da o peer'in kuklası) saydamlığını buna göre ayarlar. Karar host'ta, burası sadece görsel.
+signal brush_state_received(peer_key: int, state: int)
+
+@rpc("authority", "call_remote", "reliable")
+func sync_brush_state(peer_key: int, state: int) -> void:
+	if not _from_host():
+		return
+	brush_state_received.emit(peer_key, state)
+
+
 @rpc("authority", "call_remote", "reliable")
 func sync_revive_regen(peer_id: int, seconds_left: float, rate: float = 1.0) -> void:
 	GameManager.apply_revive_regen_sync(peer_id, seconds_left, rate)
@@ -4316,6 +4664,8 @@ func update_local_loadout() -> void:
 
 @rpc("any_peer", "reliable")
 func _rpc_sync_player_loadout(weapon: String, spirit: String) -> void:
+	if _from_unadmitted_peer():
+		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	var info: Dictionary = lobby_players.get(sender_id, {})
 	info["weapon"] = weapon
@@ -4467,6 +4817,33 @@ func is_host_migrating() -> bool:
 	return not _migration.is_empty()
 
 
+## HOST PENCERESİNİ KAPATIRSA (menüden çıkmadan, X / Alt+F4; 2026-10-10 ölçüm): LAN'da çıkış ENet bağlantılarını düzgün kapatır, istemciler ~0,5 sn'de fark eder; Epic'te ise süreç sessizce
+## kaybolur ve istemciler 12 sn kalp atışı sessizliğini (HOST_SILENCE_LIMIT_MSEC) beklerdi (devir ~16 sn sürerdi, close_room ile ~4,5 sn). Oyun sürerken internet odasının host'u kapatılırken
+## önce odayı kapat (istemcilere "oda kapandı" gider -> devir hemen başlar), paketlere gitmek için kısa süre tanı, sonra çık. Diğer her durumda (LAN, istemci, lobi, tekli oyun) dokunmaz.
+const QUIT_GRACE_SEC := 0.6
+var _closing_for_quit: bool = false
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_graceful_quit_if_hosting()
+
+
+## Sürmekte olan bir internet odasının host'u muyuz (pencere kapatılırken odayı kapatmaya değer mi)?
+func _hosting_online_game() -> bool:
+	return is_host and is_multiplayer_active and is_online_session and _is_game_in_progress and _peer != null
+
+
+func _graceful_quit_if_hosting() -> void:
+	if _closing_for_quit or not _hosting_online_game():
+		return
+	_closing_for_quit = true
+	get_tree().auto_accept_quit = false ## pencere kapatma isteği bu bildirimden SONRA gelen sinyalle çıkışı başlatır; çıkışı biz tetikleriz
+	close_room()
+	await get_tree().create_timer(QUIT_GRACE_SEC, true, false, true).timeout
+	get_tree().quit()
+
+
 ## Host: sıra listesini oluşturup oyundaki herkese yollar. Değişimlerde (oyun başı, geri katılım, ayrılma) çağrılır.
 func _publish_migration_roster() -> void:
 	if not is_host or not is_multiplayer_active or not multiplayer.has_multiplayer_peer() or not _is_game_in_progress or _peer == null:
@@ -4541,6 +4918,7 @@ func _process_host_heartbeat(delta: float) -> void:
 	if stalled:
 		_last_host_msg_msec = now
 	elif now - _last_host_msg_msec > HostMigrationScript.HOST_SILENCE_LIMIT_MSEC:
+		_net_log("KALP ATIŞI SESSİZLİĞİ: %d ms host'tan ses yok (limit %d) -> host düşmüş sayılıyor" % [now - _last_host_msg_msec, HostMigrationScript.HOST_SILENCE_LIMIT_MSEC])
 		_last_host_msg_msec = now
 		_on_server_disconnected() ## sessizlik: ENet henüz bildirmese de host düşmüş say
 
@@ -4561,6 +4939,7 @@ func _try_begin_host_migration() -> bool:
 	var cands: Array = HostMigrationScript.candidates(_migration_roster, HostMigrationScript.host_uid(_migration_roster))
 	if HostMigrationScript.index_of(cands, local_player_uid) < 0:
 		return false
+	_net_log("HOST DEVRİ BAŞLIYOR: aday sayısı %d, ben %d. sıradayım" % [cands.size(), HostMigrationScript.index_of(cands, local_player_uid)])
 	_capture_migration_resume()
 	_migration = {"cands": cands, "idx": 0, "t0": Time.get_ticks_msec(), "attempt_start": 0, "status": "idle", "last_try": 0, "failed": false,
 		"online": is_online_session}
@@ -4619,6 +4998,11 @@ func _apply_migration_resume_gm() -> void:
 func _process_migration() -> void:
 	if _migration.is_empty():
 		return
+	## Devir sürerken dünya donuk kalmalı: açık kalan bir seviye atlama / sandık ekranı kapanırken get_tree().paused = false yapar, silahlar bağlantısız eşe RPC atıp hata yağdırır ve
+	## (host yolunda) yarım kurulmuş dünya oynamaya başlardı - her karede geri duraklat ("hosting" durumu kendi duraklamasını açıp sahneyi değiştirir). Epic'in tiki duraklamadan
+	## etkilenmez (bkz. eos_online.gd _keep_eos_ticking), duraklı beklemek bağlantıyı bozmaz.
+	if str(_migration.get("status", "")) != "hosting" and not get_tree().paused:
+		get_tree().paused = true
 	var now: int = Time.get_ticks_msec()
 	var online: bool = bool(_migration.get("online", false))
 	var total_sec: float = HostMigrationScript.TOTAL_TIMEOUT_ONLINE_SEC if online else HostMigrationScript.TOTAL_TIMEOUT_SEC
@@ -4642,6 +5026,7 @@ func _process_migration() -> void:
 				_migration_host_start()
 			else:
 				_migration["status"] = "connecting"
+				host_migration_state.emit("Yeni host: %s - bağlanılıyor..." % str(cand.get("name", "Oyuncu")), false)
 				_migration_try_connect(cand)
 		"connecting":
 			if window_over:
@@ -4703,6 +5088,7 @@ func _migration_try_connect(cand: Dictionary) -> void:
 
 ## Sıradaki aday BENİM: aynı portta (internet odasında Epic soketinde) sunucu kurar, host rolünü alır ve koşuyu yükleme ekranından yeniden açar.
 func _migration_host_start() -> void:
+	_net_log("YENİ HOST OLUYORUM (devir): sunucu kuruluyor")
 	var online: bool = bool(_migration.get("online", false))
 	var new_peer: MultiplayerPeer = null
 	if online:
@@ -4760,8 +5146,10 @@ func _migration_host_start() -> void:
 	_catchup_requested = false
 	migration_handover = {"migrated": true, "spawner": host_handover.get("spawner", {}), "atmosphere": _last_atmosphere_state.duplicate(true)}
 	_migration = {}
+	_admitted.clear()
+	_auth_nonce.clear()
 	if online:
-		EosOnline.host_lobby_async(local_player_name, MAX_PLAYERS) ## arkada: yeni oda ilanı (geri katılacaklar listede görsün)
+		EosOnline.host_lobby_async(local_player_name, room_max_players, room_name, not room_password.is_empty()) ## arkada: yeni oda ilanı (geri katılacaklar listede görsün)
 		_sync_online_lobby_state()
 	else:
 		_start_lan_beacon(_migration_port)
@@ -4781,6 +5169,7 @@ func _migration_host_start() -> void:
 
 ## Devir olmadı: eski davranış (ana menüye dön).
 func _abort_migration(reason: String) -> void:
+	_net_log("HOST DEVRİ İPTAL: %s" % reason)
 	_migration = {}
 	_pending_rejoin = {}
 	_migration_resume_gm = {}
@@ -4812,11 +5201,21 @@ var _last_report_msec: int = 0
 
 @rpc("any_peer", "reliable")
 func _rpc_register_uid(uid: String, eos_id: String = "") -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id <= 0:
 		return
+	## Aynı oyuncu (kimlik) yeni bir peer id ile geri bağlandı: Epic'in kopma bildirimi geç gelebilir, eski kayıt (hayalet) kalmasın.
+	if uid != "":
+		for old_id in _peer_uid.keys():
+			if int(old_id) != sender_id and str(_peer_uid[old_id]) == uid:
+				_net_log("aynı kimlikle yeni bağlantı: eski peer %d temizleniyor (yeni %d)" % [int(old_id), sender_id])
+				_peer_uid.erase(old_id)
+				if _peer != null and multiplayer.get_peers().has(int(old_id)):
+					_peer.disconnect_peer(int(old_id))
+				elif lobby_players.has(int(old_id)) or _game_peers.has(int(old_id)):
+					_on_peer_disconnected(int(old_id))
 	_peer_uid[sender_id] = uid
 	if eos_id != "":
 		_peer_eos[sender_id] = eos_id

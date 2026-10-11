@@ -253,5 +253,6 @@ func test_target_selection_sites_still_check_visibility() -> void:
 	}
 	for path: String in expected:
 		var src: String = FileAccess.get_file_as_string(path)
-		var n: int = src.count("VisionFogScript.can_target(")
+		## weapon.gd 2026-10-10'dan beri hedef süzgecini _can_target() üzerinden çağırır (sis + saklanma çalılığı; içinde VisionFogScript.can_target)
+		var n: int = src.count("VisionFogScript.can_target(") + (src.count("_can_target(") - 1 if path.ends_with("weapon.gd") else 0)
 		assert(n >= int(expected[path]), "%s içinde en az %d görünürlük kontrolü olmalı, bulunan: %d" % [path, int(expected[path]), n])

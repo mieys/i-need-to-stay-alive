@@ -12,6 +12,7 @@ extends Control
 signal pressed(char_id: int)
 
 const PreviewScript: GDScript = preload("res://scripts/menu_character_preview.gd")
+const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 
 var char_id: int = -1
 var selected: bool = false: set = set_selected
@@ -25,7 +26,12 @@ var _preview: Control = null
 var _k: float = 1.0
 
 
-func setup(id: int, def: Dictionary, k: float = 1.0) -> void:
+## face = true (çok oyunculu karakter seçimi, 2026-10-11 lobi prototipi A): kartta tam boy sprite yerine portrenin YÜZÜ
+## (menu_lobby_ui.gd face_texture, 24x24 sanat px -> 5x), çimen tümseğinin üstünde. Tam boy görünüş sağdaki vitrinde.
+const FACE_SCALE := 5.0
+
+
+func setup(id: int, def: Dictionary, k: float = 1.0, face: bool = false) -> void:
 	char_id = id
 	_k = k
 	var card_size: Vector2 = MenuKit.CARD_SIZE * k
@@ -36,10 +42,22 @@ func setup(id: int, def: Dictionary, k: float = 1.0) -> void:
 	focus_mode = Control.FOCUS_ALL
 	tooltip_text = ""
 
-	_preview = PreviewScript.new()
-	add_child(_preview)
-	MenuKit.place(_preview, Vector2.ZERO, card_size)
-	_preview.setup(def, roundi(3.0 * k), MenuKit.CARD_GROUND_Y * k)
+	var face_tex: Texture2D = LobbyUI.face_texture(str(def.get("portrait", ""))) if face else null
+	if face_tex != null:
+		var px: float = roundf(FACE_SCALE * k) * float(LobbyUI.FACE_ART)
+		var face_rect := TextureRect.new()
+		face_rect.texture = face_tex
+		face_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		face_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		face_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		face_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(face_rect)
+		MenuKit.place(face_rect, Vector2(roundf((card_size.x - px) * 0.5), MenuKit.CARD_GROUND_Y * k - px), Vector2(px, px))
+	else:
+		_preview = PreviewScript.new()
+		add_child(_preview)
+		MenuKit.place(_preview, Vector2.ZERO, card_size)
+		_preview.setup(def, roundi(3.0 * k), MenuKit.CARD_GROUND_Y * k)
 
 	## ÖNCE ağaca ekle, SONRA boyutlandır: ağaç dışındayken projenin genel teması (theme.tres, varsayılan yazı 88 px)
 	## geçerli olduğu için minimum boyut ona göre hesaplanıp size yukarı kırpılıyordu (isimler plakadan taşıyordu).

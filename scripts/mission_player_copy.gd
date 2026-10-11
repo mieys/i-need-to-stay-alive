@@ -27,7 +27,13 @@ class_name MissionPlayerCopy
 ## oyuncunun canının ve kalkanının 10 katı olarak güncelle" - DAMAGE_TAKEN_MULT 0.10 -> 1.0 (tam hasar alır),
 ## HEALTH_MULT/SHIELD_MULT 3 -> 10 (aşağıda). Net dayanıklılık eskiden 3/0.1 = 30 kat idi, şimdi 10 kat.
 const DAMAGE_TAKEN_MULT := 1.0
-const DAMAGE_DEALT_MULT := 0.10
+## 2026-10-11 (kullanıcı: "kopyalar oyuncunun saldırı odaklı statlarının %100'üne, can ve kalkan statlarının %3000'üne sahip olsun fakat %80 daha az
+## hasar versin; bizim silahlarımıza sahip olup tıpkı bizim gibi silahlarıyla bize ateş edebilir"): hasar çarpanı 0,10 -> 0,20 (%80 az); saldırı
+## statları kaynağınki AYNEN: saldırı gücü (damage_bonus), saldırı hızı (get_attack_interval_mult - silah aralıkları buna çarpılır), kritik şans/
+## hasar (crit_chance_bonus / crit_damage_bonus, silahların taban %5 / x1,5'i üstüne). Can/kalkan x30 (HEALTH_MULT/SHIELD_MULT).
+const DAMAGE_DEALT_MULT := 0.20
+const BASE_CRIT_CHANCE := 0.05 ## weapon.gd crit_chance varsayılanı
+const BASE_CRIT_DAMAGE := 1.5 ## weapon.gd crit_damage varsayılanı
 const SPEED_MULT := 0.80
 ## 2026-09-26 ("görev süreleri gereksiz uzun"): 300 -> 150 sn. world_event_manager.gd COPY_LIFETIME bunu okur (tek kaynak).
 const LIFETIME := 150.0
@@ -38,8 +44,9 @@ const SYNC_INTERVAL := 0.15
 ## düşer (mission_tree.gd ile aynı), SHIELD_REGEN_DELAY sn hasar almayınca saniyede max'ın SHIELD_REGEN_PER_SEC'i dolar.
 ## Kullanıcı isteği (2026-09-25, ikinci tur): "kopyanın kalkan soğurmasını %20 azalt ve can ve kalkan artışını da normal
 ## karakterin can ve kalkanının %200'ü kadar yap" - 10 -> 2 (kopya, kaynak oyuncunun canının/kalkanının 2 katı).
-const HEALTH_MULT := 2.0
-const SHIELD_MULT := 2.0
+## 2026-10-11: 2 -> 30 (kullanıcı: "can ve kalkan statlarının %3000'ü").
+const HEALTH_MULT := 30.0
+const SHIELD_MULT := 30.0
 ## Kalkanın bir isabetten emdiği pay (oyuncu kalkanındaki "koruma payı" gibi): eskiden hasarın TAMAMI önce kalkandan
 ## düşüyordu; artık %80'i kalkana, %20'si kalkan dolu olsa bile doğrudan cana gider (aynı istek: "soğurmayı %20 azalt").
 const SHIELD_ABSORB_RATIO := 0.8
@@ -112,6 +119,7 @@ const HOVER_BOB := 3.0
 var mission_id: int = 0
 var copy_index: int = 0
 var is_dead: bool = false
+var is_boss: bool = false ## silah özellikleri "boss değilse it/sersemlet" kuralına bakar
 var _is_host_simulated: bool = true
 var health: float = 100.0
 var max_health: float = 100.0
@@ -358,7 +366,7 @@ func _process_attacks(delta: float, target: Node2D, dist: float) -> void:
 				shot_clear = not EnemyPathingScript.line_blocked(global_position, target.global_position)
 			if not shot_clear:
 				continue
-		w["timer"] = float(w["interval"]) * randf_range(0.95, 1.1)
+		w["timer"] = float(w["interval"]) * _source_interval_mult() * randf_range(0.95, 1.1)
 		var dmg: float = _weapon_hit_damage(float(w["ratio"]))
 		if w["melee"]:
 			var swing_dir: Vector2 = (target.global_position - global_position).normalized()
@@ -372,7 +380,26 @@ func _process_attacks(delta: float, target: Node2D, dist: float) -> void:
 
 
 func _weapon_hit_damage(ratio: float) -> float:
-	return maxf(1.0, damage_bonus * ratio * DAMAGE_DEALT_MULT)
+	var dmg: float = damage_bonus * ratio * DAMAGE_DEALT_MULT
+	if randf() < BASE_CRIT_CHANCE + _source_stat("crit_chance_bonus"):
+		dmg *= BASE_CRIT_DAMAGE + _source_stat("crit_damage_bonus")
+	return maxf(1.0, dmg)
+
+
+## Kaynak oyuncunun saldırı hızı çarpanı (atış aralığı; < 1 = hızlı). Yerel Player'da player.gd, uzak oyuncuda remote_player.gd (main.gd
+## extra "atk_iv" ile senkron) aynı adlı işlevi verir.
+func _source_interval_mult() -> float:
+	if source_player and is_instance_valid(source_player) and source_player.has_method("get_attack_interval_mult"):
+		return clampf(float(source_player.call("get_attack_interval_mult")), 0.1, 3.0)
+	return 1.0
+
+
+func _source_stat(prop: String) -> float:
+	if source_player and is_instance_valid(source_player):
+		var v: Variant = source_player.get(prop)
+		if v != null:
+			return float(v)
+	return 0.0
 
 
 func _melee_hit(target: Node2D, dmg: float) -> void:
@@ -392,6 +419,9 @@ func _swing_melee_icon(w: Dictionary, dir: Vector2) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if is_dead:
+		return
+	_process_dots(delta)
 	if is_dead:
 		return
 	if not _is_host_simulated:
@@ -417,8 +447,10 @@ func _physics_process(delta: float) -> void:
 	## get_base_move_speed) her karede yeniden okunur.
 	if source_player and is_instance_valid(source_player) and source_player.has_method("get_base_move_speed"):
 		move_speed = float(source_player.call("get_base_move_speed")) * SPEED_MULT
+	if Time.get_ticks_msec() < _slow_until_msec:
+		move_speed *= 1.0 - _slow_pct
 	var desired := Vector2.ZERO
-	if _target:
+	if _target and not _is_disabled_now(): ## donmuş / sersemlemiş kopya yürümez ve saldırmaz (silah özellikleri)
 		_track_target(delta)
 		desired = _desired_direction(delta)
 		_process_attacks(delta, _target, global_position.distance_to(_target.global_position))
@@ -717,6 +749,210 @@ func take_damage(amount: float, _is_crit: bool = false, _shield_pen_percent: flo
 		_overhead_bar.call("set_shield", shield, max_shield)
 	if health <= 0.0:
 		_die()
+
+
+## ------------------------------------------------------------------ SİLAH ÖZELLİKLERİ (ELEMENT) GİRİŞİ
+## 2026-10-11 (kullanıcı: "silah özellikleri bazı yaratıklara işlemiyor, mesela kopyanı öldür görevinde alev asasının püskürtmesi
+## çalışmıyor"): silah özellikleri (scripts/weapon_traits/) yaratıklara enemy.gd apply_element ile element/durum uygular; kopyada bu
+## yoktu ve özellik kodu kopyayı "düşman değil" sayıp hiç vurmuyordu. Kopyanın kendi sade element sistemi:
+##  - yanma / zehir / kanama: saniyede bir hasar (yığınlı, süreli; kanama yaratıklardaki gibi ölene kadar), take_damage yolundan
+##    (istemcide host'a iletilir)
+##  - donma / sersemletme: süre boyunca yürüyemez ve saldıramaz; yavaşlatma: hız düşer; itme: apply_knockback_distance
+##  - diğerleri (işaret, şok, öldürme izi...) kopyada etkisiz. Kontrol etkileri sadece host'ta (kopyayı host simüle eder).
+const ELEMENT_DOT_TICK := 1.0
+const BLEED_FOREVER := 9999.0
+var _dots: Dictionary = {} ## "burn"/"poison"/"bleed" -> {"per": hasar/sn/yığın, "stacks": int, "until": msec}
+var _dot_timer: float = ELEMENT_DOT_TICK
+var _stun_until_msec: int = 0
+var _frozen_until_msec: int = 0
+var _slow_pct: float = 0.0
+var _slow_until_msec: int = 0
+
+
+func apply_element(kind: String, p: Dictionary) -> void:
+	if is_dead:
+		return
+	var now: int = Time.get_ticks_msec()
+	match kind:
+		"burn":
+			_add_dot("burn", float(p.get("tick", 1.0)), 1, maxi(1, int(p.get("max_stacks", 1))), float(p.get("dur", 3.0)), now)
+		"poison":
+			_add_dot("poison", float(p.get("dps", 1.0)), clampi(int(p.get("stacks", 1)), 1, 50), 50, float(p.get("dur", 10.0)), now)
+		"bleed":
+			_add_dot("bleed", float(p.get("tick", 1.0)), maxi(1, int(p.get("stacks", 1))), maxi(1, int(p.get("cap", 10))), BLEED_FOREVER, now)
+		"freeze":
+			_frozen_until_msec = maxi(_frozen_until_msec, now + int(float(p.get("dur", 1.5)) * 1000.0))
+		"stun":
+			_stun_until_msec = maxi(_stun_until_msec, now + int(float(p.get("dur", 0.5)) * 1000.0))
+		"slow":
+			_slow_pct = clampf(float(p.get("pct", 0.3)), 0.0, 0.9)
+			_slow_until_msec = now + int(float(p.get("dur", 1.5)) * 1000.0)
+		"knock":
+			apply_knockback_distance(Vector2(p.get("dir", Vector2.RIGHT)), float(p.get("dist", 0.0)))
+
+
+func _add_dot(kind: String, per: float, add: int, cap: int, dur: float, now: int) -> void:
+	var d: Dictionary = _dots.get(kind, {"per": per, "stacks": 0, "until": 0})
+	if int(d["until"]) < now:
+		d["stacks"] = 0
+	d["per"] = maxf(float(d["per"]), per)
+	d["stacks"] = mini(cap, int(d["stacks"]) + add)
+	d["until"] = maxi(int(d["until"]), now + int(dur * 1000.0))
+	_dots[kind] = d
+
+
+func _process_dots(delta: float) -> void:
+	if _dots.is_empty():
+		return
+	_dot_timer -= delta
+	if _dot_timer > 0.0:
+		return
+	_dot_timer = ELEMENT_DOT_TICK
+	var now: int = Time.get_ticks_msec()
+	var total: float = 0.0
+	for kind in _dots.keys():
+		var d: Dictionary = _dots[kind]
+		if int(d["until"]) < now:
+			_dots.erase(kind)
+			continue
+		total += float(d["per"]) * int(d["stacks"])
+	if total > 0.0:
+		take_damage(total, false, 0.0, true)
+
+
+func _is_disabled_now() -> bool:
+	var now: int = Time.get_ticks_msec()
+	return now < _stun_until_msec or now < _frozen_until_msec
+
+
+## Silah özelliklerinin durum sorguları (enchant_behavior.gd status) - yaratıklarla aynı adlar.
+func is_burning() -> bool:
+	return _dots.has("burn") and int(_dots["burn"]["until"]) >= Time.get_ticks_msec()
+
+
+func is_poisoned() -> bool:
+	return _dots.has("poison") and int(_dots["poison"]["until"]) >= Time.get_ticks_msec()
+
+
+func is_frozen_now() -> bool:
+	return Time.get_ticks_msec() < _frozen_until_msec
+
+
+## ------------------------------------------------------------------ YARATIK API UYUMU
+## 2026-10-12 (kullanıcı: "kopyalar yaratık gibi algılanmıyor, çok yeteneğimiz onlara işlemiyor"): yetenekler/evrimler/eşyalar hedefe
+## `e.has_method("apply_burn")`, `apply_slow`, `apply_stun`, `apply_chill`... diye bakıp yoksa SESSİZCE atlıyordu; kopyada yalnızca
+## take_damage/apply_element/itme vardı. Aşağıdaki işlevler enemy.gd ile AYNI imzayla, hepsi kopyanın kendi sade element sistemine
+## (apply_element) yönlenir. Kopya boss gibi sayılır (is_boss): korku/çekme gibi yer değiştiren-yönlendiren etkiler bilerek etkisiz.
+var mark_stacks: int = 0 ## enemy.gd ile aynı ad: element_reactions.gd doğrudan okur
+var _mark_until_msec: int = 0
+
+
+func apply_burn(tick_damage: float, duration: float) -> void:
+	apply_element("burn", {"tick": tick_damage, "dur": duration})
+
+
+func apply_poison(dps_per_stack: float, max_stacks: float, duration: float) -> void:
+	apply_element("poison", {"dps": dps_per_stack, "dur": duration, "stacks": 1})
+
+
+func apply_bee_poison(tick_damage_per_stack: float) -> void:
+	apply_element("poison", {"dps": tick_damage_per_stack, "dur": 5.0, "stacks": 1})
+
+
+func apply_bleed(tick_damage_per_stack: float, stacks_to_add: int, max_stacks: int) -> void:
+	apply_element("bleed", {"tick": tick_damage_per_stack, "stacks": stacks_to_add, "cap": max_stacks})
+
+
+func apply_slow(percent: float, duration: float, _allow_boss: bool = false) -> void:
+	apply_element("slow", {"pct": minf(percent, 0.8), "dur": duration})
+
+
+func apply_frost_slow(percent: float, duration: float) -> void:
+	apply_element("slow", {"pct": minf(percent, 0.8), "dur": duration})
+
+
+func apply_chill(_stacks_to_add: int) -> void:
+	apply_element("slow", {"pct": 0.15, "dur": Enemy.CHILL_DURATION})
+
+
+func apply_stun(duration: float) -> void:
+	apply_element("stun", {"dur": duration})
+
+
+func apply_freeze_full(duration: float, _allow_boss: bool = false) -> void:
+	apply_element("freeze", {"dur": duration})
+
+
+func apply_root(duration: float) -> void:
+	apply_element("slow", {"pct": 0.9, "dur": duration})
+
+
+func apply_skill_push(dir: Vector2, distance: float) -> void:
+	apply_knockback_distance(dir, distance)
+
+
+func apply_element_host(kind: String, p: Dictionary, _attacker_peer: int) -> void:
+	apply_element(kind, p)
+
+
+## Boss gibi: korkutma / kışkırtma kopyanın hedef seçimini bozmaz (çağrı sorunsuz geçer, etkisiz).
+func apply_fear(_source_pos: Vector2, _duration: float = 0.0) -> void:
+	pass
+
+
+func apply_fear_wander(_duration: float, _affect_boss: bool = false) -> void:
+	pass
+
+
+func apply_taunt(_duration: float, _taunter: Node2D = null) -> void:
+	pass
+
+
+func set_ability_invisible(_on: bool) -> void:
+	pass
+
+
+func is_shocked() -> bool:
+	return false
+
+
+## İşaret (Tabanca pasifi vb.): yükler 20 sn durur, her yük %1 ek hasar (enemy.gd ile aynı sabitler).
+func apply_mark_stack(max_stacks: int) -> void:
+	if is_dead:
+		return
+	if Time.get_ticks_msec() > _mark_until_msec:
+		mark_stacks = 0
+	mark_stacks = mini(mark_stacks + Enemy.MARK_STACKS_PER_HIT, max_stacks)
+	_mark_until_msec = Time.get_ticks_msec() + int(Enemy.MARK_DURATION * 1000.0)
+
+
+func get_mark_damage_mult() -> float:
+	if Time.get_ticks_msec() > _mark_until_msec:
+		mark_stacks = 0
+	return 1.0 + mark_stacks * Enemy.MARK_PERCENT_PER_STACK
+
+
+## Şaman totemi içindeki hedefe silah vuruşunda yanma (enemy.gd ile aynı kural).
+func try_shaman_weapon_burn() -> bool:
+	var dealer: Node = get_tree().get_first_node_in_group("player")
+	if not (dealer and "damage_bonus" in dealer and dealer is Node2D):
+		return false
+	for totem in get_tree().get_nodes_in_group("shaman_totems"):
+		if not is_instance_valid(totem) or not (totem is Node2D):
+			continue
+		var totem_r: float = float(totem.get("totem_radius")) if "totem_radius" in totem else 0.0
+		if totem_r > 0.0 and (totem as Node2D).global_position.distance_to((dealer as Node2D).global_position) <= totem_r:
+			apply_burn(float(dealer.damage_bonus) * 0.10, 3.0)
+			return true
+	return false
+
+
+func take_damage_host(amount: float, is_crit: bool, shield_pen_percent: float, _attacker_id: int = 0) -> void:
+	take_damage(amount, is_crit, shield_pen_percent)
+
+
+func get_overhead_bar_offset() -> float:
+	return -30.0
 
 
 func _die() -> void:

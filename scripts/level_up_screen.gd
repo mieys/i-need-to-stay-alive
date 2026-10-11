@@ -82,7 +82,8 @@ const UPGRADES = [
 	## Kullanıcı isteği (2026-10-04): "toplama mesafesi ve menzili level atlama kartlarından kaldırıyoruz ancak bu statlar
 	## oyundan silinmesin ilerde eşyalara vb ekleyeceğim" - "pickup_range" ve "range" kartları havuzdan çıktı; statlar,
 	## player.gd apply_upgrade dalları, stat ikonları ve DURUMUN satırları duruyor.
-	{"id": "shield_pen_percent", "title": "Kalkan Delme", "desc": "+%5", "cat": "Saldırı", "color": CAT_ATTACK},
+	## 2026-10-10 (kullanıcı: "level atlama kartlarından gelen kalkan delme statlarını kaldır"): "shield_pen_percent" kartı havuzdan çıktı; stat eşya/ruhani yetenekten gelir
+	## (player.gd apply_upgrade dalı duruyor, kayıtlı eski kartlar bozulmasın).
 	{"id": "exp_gain", "title": "Tecrübe Kazanımı", "desc": "+%5", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "luck", "title": "Şans", "desc": "+1", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "dodge", "title": "Sıvışma", "desc": "+%2.5", "cat": "Savunma", "color": CAT_DEFENSE},
@@ -497,7 +498,10 @@ func _apply_card_tier_frame(card: Button, tier: int) -> void:
 ## TierCardFx'in aynı kodu - satır boyutu ve dokusu kart meta'larıyla verilir (bkz. TierCardFx.ensure_glow). Sandık ödül
 ## kartları (chest_menu.gd) savaş kartında kalır.
 const ROW_SIZE := Vector2(804, 150)
-const ROW_ART_SIZE := Vector2(268, 50)
+## 2026-10-11 "Yüzen Kapsül" (kullanıcı seçimi): doku gövdenin 2 sanat px (6 px) altında yumuşak gölge taşır -> 268x52 sanat
+## px; satırın kendisi (tıklama alanı, yazılar, hale) yine 804x150, Frame TextureRect gölge kadar aşağı taşar.
+const ROW_ART_SIZE := Vector2(268, 52)
+const ROW_SHADOW := 6.0
 const ROW_SEPARATION := 22
 ## Ekran ortasına göre (başlığın altı, karıştır butonunun üstü). 2026-09-25: yeni başlık/karıştır butonu seçilen
 ## prototipteki yerleşimle geldi - satırlar y 216'dan başlıyor (eskiden 270), buton satırların 90 px altında (y 800).
@@ -514,7 +518,7 @@ const ROW_TIER_TEXT := [Color("#cdd1d6"), Color("#a6c6f4"), Color("#d8aef4"), Co
 const ROW_GLOW_COLORS := [Color("#dfe4ea"), Color("#9cc4ff"), Color("#dcb0ff"), Color("#ffc65a")]
 const ROW_VALUE_COLOR := Color("#ffd66e")
 const ROW_DIM_COLOR := Color("#e6d2b0")
-## Satır içi yerleşim (px): ikon yuvasının içi (dokuda 18..132, kenar halkası düşülmüş); yazılar yuvanın sağından, değer sağa yaslı.
+## Satır içi yerleşim (px): ikon (Yüzen Kapsül'de yuva yok, ikon doğrudan gövdede); yazılar ikonun sağından, değer sağa yaslı.
 const ROW_ICON_RECT := Rect2(24, 24, 102, 102)
 const ROW_TEXT_X := 156.0
 const ROW_RIGHT_PAD := 36.0
@@ -553,7 +557,7 @@ func _layout_rows() -> void:
 		var frame: TextureRect = card.get_node_or_null("Frame") as TextureRect
 		if frame:
 			frame.offset_right = row_size.x
-			frame.offset_bottom = row_size.y
+			frame.offset_bottom = row_size.y + ROW_SHADOW
 		var content: VBoxContainer = card.get_node("Content") as VBoxContainer
 		content.clip_contents = false
 		content.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -804,6 +808,8 @@ func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 		scaled = TierSystem.lifesteal_percent_for_tier(tier) * 100.0
 	elif id == "max_health":
 		scaled = TierSystem.health_card_for_tier(tier) ## 15/24/30/38 - bkz. TierSystem (player.gd ile tek kaynak)
+	elif id == "health_regen":
+		scaled = TierSystem.regen_card_for_tier(tier) ## 2/4/6/8 - bkz. TierSystem
 	else:
 		scaled = rest.to_float() * (1.0 + float(tier - 1) * 0.3)
 	var formatted: String

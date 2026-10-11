@@ -57,6 +57,7 @@ func _spawner() -> Node:
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
 	sp.max_concurrent_enemies = 100000 ## kapasite testlerin konusu değil
+	sp.tier_duration = 100.0 ## testler 100 sn'lik kademelere göre yazıldı (varsayılan 2026-10-10'da 150 oldu; kademe süresi bu testlerin konusu değil)
 	get_tree().current_scene = self ## _spawn_creature current_scene'e ekliyor
 	return _track(sp)
 
@@ -310,8 +311,10 @@ func test_regular_creature_health_and_shield_are_ten_percent_lower() -> void:
 	var old_health: float = 100.0 * SpawnerScript.GLOBAL_DEFENSE_BUFF * OLD_HEALTH_SHIELD_MULT
 	## 2026-10-06: Kademe 3+ ayrıca can/kalkan x0.9 (late_durability_mult).
 	var late: float = SpawnerScript.late_durability_mult(6)
-	assert(absf(float(enemy.max_health) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26 * late) < 0.01, "Normal yaratığın canı eskisinin %%90'ı (x0.85) olmalı: %s (eski %s)" % [enemy.max_health, old_health])
-	assert(absf(float(enemy.item_shield_max) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26 * late) < 0.01, "Normal yaratığın kalkanı eskisinin %%90'ı (x0.85) olmalı: %s" % enemy.item_shield_max)
+	## 2026-10-10: sıradan yaratığın canı/kalkanı ayrıca x1,5 (CREATURE_STAT_BOOST).
+	var boost: float = SpawnerScript.CREATURE_STAT_BOOST
+	assert(absf(float(enemy.max_health) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26 * late * boost) < 0.01, "Normal yaratığın canı eskisinin %%90'ı (x0.85) x1,5 olmalı: %s (eski %s)" % [enemy.max_health, old_health])
+	assert(absf(float(enemy.item_shield_max) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26 * late * boost) < 0.01, "Normal yaratığın kalkanı eskisinin %%90'ı (x0.85) x1,5 olmalı: %s" % enemy.item_shield_max)
 	_cleanup()
 
 

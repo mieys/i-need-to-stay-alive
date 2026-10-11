@@ -17,7 +17,9 @@ void fragment() {
 	float d = (px.x + px.y * 0.5) / (art_size.x + art_size.y * 0.5);
 	float band = 1.0 - step(0.045, abs(d - shine_pos));
 	float band2 = 1.0 - step(0.014, abs(d - (shine_pos - 0.075)));
-	c.rgb += vec3(band + band2 * 0.6) * shine_strength;
-	c.rgb = mix(c.rgb, vec3(1.0, 0.97, 0.86), clamp(flash, 0.0, 1.0));
+	// Yarı saydam pikseller (level atlama satırının altındaki yumuşak gölge) parlamaz / beyazlamaz.
+	float solid = step(0.6, c.a);
+	c.rgb += vec3(band + band2 * 0.6) * shine_strength * solid;
+	c.rgb = mix(c.rgb, vec3(1.0, 0.97, 0.86), clamp(flash, 0.0, 1.0) * solid);
 	COLOR = c;
 }

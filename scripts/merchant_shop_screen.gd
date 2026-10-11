@@ -232,6 +232,8 @@ func _fit_phone_columns() -> void:
 		return
 	var avail: float = _phone_scroll.size.x - 20.0
 	var cols: int = maxi(1, int(floor((avail + 14.0) / (228.0 + 14.0))))
+	## 2026-10-10: stok kademe başına 4'lük satırlardır (parça / epik / efsanevi) - sütun sayısı 4 ya da 2 olmalı ki satırlar karışmasın.
+	cols = 4 if cols >= 4 else (2 if cols >= 2 else 1)
 	if _grid:
 		if _grid.columns != cols:
 			_grid.columns = cols
@@ -527,7 +529,7 @@ func _build_details_panel() -> Control:
 
 func _build_grid() -> Control:
 	## 2026-10-02: silah ve eşya ayrı bölümlerdi; 2026-10-07: silahlar demirci dükkanına taşındı (weapon_shop.gd), burada sadece
-	## EŞYALAR (4x2) kaldı.
+	## EŞYALAR kaldı. 2026-10-10: 4x3 - üst satır parçalar, orta epikler, alt efsaneviler (traveling_merchant.gd ROW_ITEMS).
 	var row := VBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	var ibox := VBoxContainer.new()
@@ -863,6 +865,7 @@ const STAT_ROWS := [
 	{"id": "pickup", "label": "Toplama", "color": UIKit.C_TEXT},
 	{"id": "absorb", "label": "Soğurma", "color": UIKit.C_TEXT},
 	{"id": "dodge", "label": "Sıvışma", "color": UIKit.C_TEXT},
+	{"id": "lifesteal", "label": "Can Çalma", "color": Color(UIKit.INK["damage"])}, ## 2026-10-11: eksikti
 	{"id": "luck", "label": "Şans", "color": UIKit.C_GOOD},
 	{"id": "heal_power", "label": "İyileştirme", "color": Color(UIKit.INK["health"])},
 	{"id": "xp", "label": "Tecrübe", "color": Color(UIKit.INK["exp"])},
@@ -894,8 +897,11 @@ func _refresh_stats() -> void:
 	t["absorb"] = "%%%d" % int(round(p.shield_protection * 100.0))
 	t["dodge"] = "%%%d" % int(round(p.dodge_chance * 100.0))
 	t["luck"] = ("%d" % int(round(p.luck))) if is_equal_approx(p.luck, round(p.luck)) else ("%.1f" % p.luck)
+	if p.has_method("get_total_lifesteal"):
+		var ls: float = float(p.call("get_total_lifesteal")) * 100.0
+		t["lifesteal"] = ("%%%d" % int(round(ls))) if is_equal_approx(ls, round(ls)) else ("%%%.1f" % ls)
 	t["xp"] = "+%%%d" % int(round(p.exp_gain_percent * 100.0))
-	t["heal_power"] = ("+%%%d" % int(round(float(p.heal_shield_power) * 100.0))) if "heal_shield_power" in p else "-"
+	t["heal_power"] = ("+%%%d" % int(round(float(p.get_heal_shield_power()) * 100.0))) if p.has_method("get_heal_shield_power") else "-"
 	for id in _stat_value_labels:
 		(_stat_value_labels[id] as Label).text = str(t.get(id, "-"))
 
@@ -1119,7 +1125,7 @@ func _fit_inventory_scroll() -> void:
 ## sadece bir kısmı istenir (küçük eşyalar 20 altın tabanına sıkışır),
 ## Kademe ilerledikçe (oyuncular daha çok kazandıkça) fiyat da katlanarak
 ## artar.
-const MERCHANT_PRICE_TIER_DURATION := 100.0 ## enemy_spawner.gd tier_duration ile AYNI değer
+const MERCHANT_PRICE_TIER_DURATION := 150.0 ## enemy_spawner.gd tier_duration ile AYNI değer (2026-10-10: 100 -> 150, testle eşitliği sınanır)
 const MERCHANT_PRICE_MIN := 20
 const MERCHANT_PRICE_EARLY_SCALE := 0.25 ## Kademe 1'de taban fiyatın ~%25'i istenir
 const MERCHANT_PRICE_PER_TIER_GROWTH := 0.12 ## Kademe başına +%12

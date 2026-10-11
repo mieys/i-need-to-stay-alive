@@ -21,7 +21,10 @@ const OverheadBarScript := preload("res://scripts/overhead_bar.gd")
 ## Kullanıcı isteği (2026-10-02): "diriltilirkenki saat efektinin de karakterin can ve kalkan barının üst kısımlarında
 ## olmasını istiyorum durum etkisi gibi görünmesi için" - gövdenin ortası yerine can/kalkan barının (yerdeyken gizli) hemen
 ## üstünde küçük bir durum simgesi. Ebeveyn: Player/RemotePlayer kökü ya da Hadime cesedi (ikisi de aynı yerel ölçekte).
-const STATUS_SCALE := 0.5
+## 2026-10-10 (kullanıcı: "diriltme saat efekti çok ufak, can ve kalkan barının genişliği kadar büyümeli"): saat karede ~60 px; can barı (overhead_bar.gd WIDTH) 44
+## birim -> ölçek 44/60. Bar genişliği değişirse bu da ona göre büyür.
+const CLOCK_CONTENT_PX := 60.0
+const STATUS_SCALE := OverheadBarScript.WIDTH / CLOCK_CONTENT_PX
 const STATUS_GAP := 2.0
 const FRAME_PX := 64.0
 

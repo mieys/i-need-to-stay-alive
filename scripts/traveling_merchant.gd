@@ -83,10 +83,13 @@ const SPAWN_CANDIDATE_ATTEMPTS := 30
 ## Kullanıcı isteği (2026-09-21): "Seyyar satıcıda sadece 6 item sunuluyor bunu 8'e çıkarmanı istiyorum".
 ## 2026-10-07 (kullanıcı isteği: "seyyar satıcıda silah satılmayacak bundan böyle"): silahlar ve kalkanlar artık SADECE demirci
 ## dükkanında (scripts/weapon_shop.gd, weapon_shop_screen.gd); seyyar satıcıda yalnızca eşya kaldı (4 silah kartı çıkarıldı).
-const STOCK_SIZE := 8 ## = ITEM_STOCK
-const ITEM_STOCK := 8
+## 2026-10-10 (kullanıcı: "eşya sayısını 1 satır daha arttır, yeni satır komple efsanevi eşyalara; üstündeki satır epik, diğer satır parçalar"):
+## 3 SATIR x ROW_ITEMS - sıra: parçalar, epikler, efsaneviler (efsaneviler SADECE son satırda). Ekran 4 sütunlu ızgarada satırlar kendiliğinden ayrılır.
+const ROW_ITEMS := 4
+const STOCK_SIZE := 12 ## = ITEM_STOCK
+const ITEM_STOCK := 12
 ## Eşya kartlarının kademe ağırlıkları (parça, epik, efsanevi) - kademe içinde eşit.
-const ITEM_TIER_WEIGHTS := [0.5, 0.35, 0.15]
+const ITEM_TIER_WEIGHTS := [0.5, 0.35, 0.15] ## 2026-10-10: artık KULLANILMIYOR (satır başına kademe, bkz. ROW_ITEMS)
 ## Kullanıcı isteği: "seyyar satıcı herkese aynı eşyayı satıyor, herkese
 ## farklı şeyler çıkmalıydı" - _generate_stock() artık HOST'ta bir kere
 ## üretilip ağdan dağıtılmıyor, HER istemci kendi stokunu KENDİ yerel
@@ -292,23 +295,13 @@ func _generate_stock() -> Array:
 		if Items.is_support_only(k) and not Items.is_ally_support_char(GameManager.selected_char_id):
 			continue
 		candidates.append(k)
-	var per_tier: Dictionary = {}
-	for k in candidates:
-		per_tier[Items.kademe(k)] = int(per_tier.get(Items.kademe(k), 0)) + 1
+	## 2026-10-10: kademe başına bir satır (ROW_ITEMS), kademe içinde eşit olasılık; sıra parça -> epik -> efsanevi (bkz. ROW_ITEMS notu).
 	var picked: Array = []
-	while picked.size() < ITEM_STOCK and not candidates.is_empty():
-		var total: float = 0.0
-		for k in candidates:
-			total += float(ITEM_TIER_WEIGHTS[Items.kademe(k) - 1]) / float(per_tier[Items.kademe(k)])
-		var r: float = randf() * total
-		var chosen: String = str(candidates[-1])
-		for k in candidates:
-			r -= float(ITEM_TIER_WEIGHTS[Items.kademe(k) - 1]) / float(per_tier[Items.kademe(k)])
-			if r <= 0.0:
-				chosen = str(k)
-				break
-		candidates.erase(chosen)
-		picked.append(chosen)
+	for kd in [Items.KADEME_PARCA, Items.KADEME_EPIK, Items.KADEME_EFSANEVI]:
+		var pool: Array = candidates.filter(func(k: String) -> bool: return Items.kademe(k) == kd)
+		pool.shuffle()
+		for i in range(mini(ROW_ITEMS, pool.size())):
+			picked.append(pool[i])
 	for k in picked:
 		stock.append({"type": "item", "key": k})
 	return stock

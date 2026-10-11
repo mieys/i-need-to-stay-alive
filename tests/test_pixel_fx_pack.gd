@@ -126,17 +126,52 @@ func test_wave_beam_pixel_lifecycle_for_both_themes() -> void:
 	_cleanup()
 
 
-func test_melek_r_spawns_holy_glow_on_self_and_on_linked_ally() -> void:
+## 2026-10-11 R rework: parıltı + kanatlı havalanma Melek'te; yarıçaptaki dostta kutsal parıltı (bağ şartı yok), uzaktakinde yok.
+func test_melek_r_spawns_holy_glow_on_self_and_on_ally_in_range() -> void:
 	var player: Node = _make_player(10, 32)
-	var puppet: Node = RemotePlayerScene.instantiate()
-	add_child(puppet)
-	_spawned.append(puppet)
-	puppet.setup(77, 2, "Dost")
-	player._oakley_q_ally_target = puppet
+	var near: Node = RemotePlayerScene.instantiate()
+	add_child(near)
+	_spawned.append(near)
+	near.setup(77, 2, "Dost")
+	near.global_position = player.global_position + Vector2(120, 0)
+	var far: Node = RemotePlayerScene.instantiate()
+	add_child(far)
+	_spawned.append(far)
+	far.setup(78, 2, "Uzak")
+	far.global_position = player.global_position + Vector2(900, 0)
 	assert(is_equal_approx(player.MELEK_FEAR_RADIUS, 260.0), "korku yarıçapı FX ile aynı tek kaynaktan")
 	player._skill_melek_fear()
 	assert(_count_children_with_script(player, "fx_melek_holy.gd") == 1, "Melek'in kendi üstünde sarı pixel parıltı")
-	assert(_count_children_with_script(puppet, "fx_melek_holy.gd") == 1, "bağlı dostun üstünde de çıkar")
+	assert(_count_children_with_script(player, "fx_melek_ascend.gd") == 1, "Melek'te kanatlı havalanma efekti")
+	assert(_count_children_with_script(near, "fx_melek_holy.gd") == 1, "yarıçaptaki dostun üstünde de çıkar")
+	assert(_count_children_with_script(far, "fx_melek_holy.gd") == 0, "yarıçap dışındaki dosta çıkmaz")
+	_cleanup()
+
+
+## Havalanma: sprite yükselir, ön katmanda altın kopya doğar; ömür sonunda offset geri döner ve efekt kendini siler.
+func test_melek_ascend_lifts_sprite_and_restores() -> void:
+	var player: Node = _make_player(10, 32)
+	var anim: AnimatedSprite2D = player.get_node("AnimatedSprite2D")
+	var base_offset: Vector2 = anim.offset
+	var fx: Node2D = (load("res://scenes/fx_melek_ascend.tscn") as PackedScene).instantiate()
+	player.add_child(fx)
+	await get_tree().process_frame
+	for i in range(40):
+		fx._process(0.016)
+		fx.queue_redraw()
+	assert(anim.offset.y < base_offset.y - 3.0, "havalanırken sprite yukarı kalkar")
+	var glow_found: bool = false
+	for c in player.get_children():
+		if c is Sprite2D and c.material is CanvasItemMaterial:
+			glow_found = true
+	assert(glow_found, "kendi karesinin altın (ADD) kopyası ön katmanda")
+	var t: float = 0.0
+	while is_instance_valid(fx) and not fx.is_queued_for_deletion() and t < 3.0:
+		fx._process(0.05)
+		t += 0.05
+	await get_tree().process_frame
+	assert(not is_instance_valid(fx), "ömür sonunda kendini siler")
+	assert(anim.offset.is_equal_approx(base_offset), "sprite yerine döner")
 	_cleanup()
 
 

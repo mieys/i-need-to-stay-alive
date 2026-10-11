@@ -37,8 +37,14 @@ uniform float karo_dolgu = 1.0;
 
 // ---------------- HÜCRE VERİSİ (grass_sway.gd yazar): her harita hücresi için R = kökün karonun üstünden uzaklığı (texel),
 // G = otun boyu - haritadaki GERÇEK yerleşimden (2 karoluk otun üst yarısı tek başına konmuşsa kökü kendi içinde).
+// B = GENİŞ çalı grubunun fazı (0 = tek karo / dikey ot), A = grup komşu bitleri (1 = atlasta solda, 2 = atlasta sağda aynı grupta karo var).
+// Geniş çalı (2026-10-09): tüm karolar aynı faz + aynı kök/boy ile AYNI kaymayı alır; kayan içerik karo sınırından taşınca komşu karonun
+// gerçek pikselinden alınır (eskiden discard: her karo sınırında 1-2 px boşluk, çalı "ikiye üçe bölünüyordu").
 // Veri yoksa (editör önizlemesi): kök = karonun alt kenarı.
 uniform sampler2D veri : filter_nearest;
+// komsu_veri (2026-10-11): grup içi EKRAN-sol/sağ komşu karonun atlas koordinatı. 2 piksel/hücre (x*2 = sol, x*2+1 = sağ): R = atlas x, G = atlas y,
+// B = 255 komşu yatay çevrilmiş, A = 255 komşu var. Çiçekler haritada atlas sırasına uymadan yan yana dizildiği için komşu "atlasta yanındaki karo" DEĞİL.
+uniform sampler2D komsu_veri : filter_nearest;
 uniform bool veri_var = false;
 uniform vec2 veri_baslangic = vec2(0.0);
 uniform vec2 veri_boyut = vec2(1.0);
@@ -101,13 +107,18 @@ void fragment() {
 	float kok = 15.0;
 	float boy = 13.0;
 	float egilme = 0.0;
+	float grup_faz = 0.0;
+	ivec2 hucre_i = ivec2(-1);
 	if (veri_var) {
 		vec2 hucre = floor((karo_dunya - hucre_ofset) / 16.0 + 0.5) - veri_baslangic;
 		if (hucre.x >= 0.0 && hucre.y >= 0.0 && hucre.x < veri_boyut.x && hucre.y < veri_boyut.y) {
-			vec2 v = texelFetch(veri, ivec2(hucre), 0).rg * 255.0;
+			hucre_i = ivec2(hucre);
+			vec4 v4 = texelFetch(veri, hucre_i, 0) * 255.0;
+			vec2 v = v4.rg;
 			if (v.y > 0.5) {
 				kok = v.x;
 				boy = v.y;
+				grup_faz = v4.b;
 			}
 			egilme = (texelFetch(egilme_veri, ivec2(hucre), 0).r * 255.0 - 128.0) / 16.0;
 		}
@@ -132,18 +143,28 @@ void fragment() {
 	// göre sürekli (texel altı) hesaplanır; 2026-09-26 ilk denemedeki "her satır tam texel kaysın" ince çapraz yaprakları
 	// kopuk basamaklara bölüp çizimi bozuyordu (kullanıcı: "eski hali gibi görünüp sallanmasını istedim, şu an çok çirkin").
 	// Faz: otun dünya konumu (2 karoluk otun iki yarısı aynı eğriyle).
-	float faz = hash12(vec2(karo_dunya.x, kok_dunya_y));
+	bool grup = grup_faz > 0.5;
+	float faz = grup ? fract(grup_faz * 0.6180339) : hash12(vec2(karo_dunya.x, kok_dunya_y));
 	float h = kok + 1.0 - ac.y;
 	float k = pow(clamp(h / max(boy, 1.0), 0.0, 1.0), egri_ussu);
-	float t = TIME * salinim_hizi + faz * 6.2832 + karo_dunya.x * dalga_olcegi;
+	float t = TIME * salinim_hizi + faz * 6.2832 + (grup ? 0.0 : karo_dunya.x * dalga_olcegi);
 	float sway = strength * (sin(t) * 0.8 + sin(t * 2.3 + faz * 3.1) * 0.2) + egilme;
 	float kaynak = ac.x - (ayna ? -sway * k : sway * k); // içerik ekranda sağa (sway > 0) kayar
-	if (kaynak < 0.0 || kaynak >= 16.0) {
-		discard;
-	}
 	float kaynak_x = floor(kaynak);
+	// Doku: karonun içindeyse kendi texel'i; taşan kısım grup içi EKRAN komşusunun GERÇEK pikselinden (komsu_veri; karolar atlasta karo_hucre aralıklı).
+	vec2 doku = vec2(karo.x + kaynak_x, karo.y + yerel.y);
+	if (kaynak < 0.0 || kaynak >= 16.0) {
+		if (hucre_i.x < 0 || grup_faz < 0.5) { discard; }
+		float sp = ayna ? 15.0 - kaynak_x : kaynak_x; // ekran piksel indeksi (karo dışında: <0 sol, >=16 sağ)
+		bool sol = sp < 0.0;
+		vec4 nb = texelFetch(komsu_veri, ivec2(hucre_i.x * 2 + (sol ? 0 : 1), hucre_i.y), 0) * 255.0;
+		if (nb.a < 128.0) { discard; }
+		float lsp = sol ? sp + 16.0 : sp - 16.0;      // komşuda ekran pikseli 0..15
+		float lax = nb.b > 128.0 ? 15.0 - lsp : lsp;  // komşunun atlas pikseli (çevrilmişse aynalanır)
+		doku = vec2(floor(nb.r + 0.5) * karo_hucre + karo_dolgu + lax, floor(nb.g + 0.5) * karo_hucre + karo_dolgu + yerel.y);
+	}
 	// textureLod 0: hesaplanan UV texel kenarlarında sıçradığı için texture() yanlış (düşük) mip seçip rengi koyulaştırıyordu.
-	vec4 col = textureLod(TEXTURE, (karo + vec2(kaynak_x, yerel.y) + 0.5) * TEXTURE_PIXEL_SIZE, 0.0);
+	vec4 col = textureLod(TEXTURE, (doku + 0.5) * TEXTURE_PIXEL_SIZE, 0.0);
 	if (col.a < 0.01) {
 		discard;
 	}

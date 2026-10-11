@@ -24,9 +24,9 @@ const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 ##   komponenti) burada da kullanılıyor ve HER ZAMAN görünür (bkz.
 ##   _create_overhead_bar) - "tıpkı diğer karakterlerinki gibi" isteğiyle
 ##   birebir eşleşsin diye.
-## - 6 saniyede bir "yere vurup" menzilindeki tüm yaratıkları 1sn sersemletir
-##   (bkz. _process_golem_slam, enemy.gd apply_stun - Talon'un Yer Sarsıntısı
-##   _skill_berserk() ile AYNI CC mekanizması).
+## - (2026-10-11, kullanıcı: "golemin sersemletme gücünü kaldırıyoruz") 6sn'de bir yaratıkları sersemleten periyodik yer vuruşu
+##   KALDIRILDI. Golem artık Necromancer evrimleriyle güçlenir (apply_necro_evos: E2 geri itme, E4 %20 büyük/güçlü; E3 can/kalkan
+##   player.gd'de hp_percent ile verilir).
 ## - Sprite'a hafif mor bir modulate uygulanıyor (bkz. GOLEM_TINT_COLOR,
 ##   "golem biraz mor tonlarında görünmeli oyunun içinde filtre eklersin").
 ##
@@ -102,11 +102,9 @@ const ATTACK_INTERVAL := GOLEM_BASE_ATTACK_INTERVAL * (1.0 + GOLEM_ATTACK_SLOWDO
 const FOLLOW_DISTANCE := 110.0
 const CATCH_UP_DISTANCE := 320.0
 
-## Kullanıcı isteği: "golem 6 saniyede bir yere vurarak çevresindeki
-## yaratıkları 1 saniye sersemletir".
-const GOLEM_SLAM_INTERVAL := 6.0
-const GOLEM_SLAM_RADIUS := 160.0
-const GOLEM_SLAM_STUN_DURATION := 1.0
+## Necromancer evrimleri (skill_evolutions.gd DEFS[11] "necro_e2" / "necro_e4"). Sayılar kart metinleriyle birebir.
+const EVO_KNOCKBACK_DISTANCE := 70.0 ## E2 Yıkıcı Yumruk: golemin her isabetinde yaratığın geri itildiği mesafe (px, enemy.gd apply_skill_push)
+const EVO_SIZE_MULT := 1.2 ## E4 Dev Golem: boyut + vuruş alanı + hasar
 
 ## Kullanıcı isteği: "kalkanı da vardır" - kalkan kapasitesi Golem'in kendi
 ## (zaten %200'e çıkarılmış) canının bir oranı olarak belirleniyor. Hasar
@@ -151,7 +149,8 @@ var _attack_timer: float = 0.0
 var _focus_target: Node2D = null
 var _in_melee_stance: bool = false
 var _incoming_dmg_timer: float = 0.0
-var _slam_timer: float = GOLEM_SLAM_INTERVAL
+var evo_knockback: float = 0.0 ## >0 iken saldırıları yaratıkları bu kadar geri iter (E2)
+var size_mult: float = 1.0 ## E4: görsel/çarpışma/vuruş alanı çarpanı
 var _animation_state: String = "idle"
 var _animation_frame: int = 0
 var _animation_elapsed: float = 0.0
@@ -259,6 +258,31 @@ func setup_from_player(player: Node, stat_percent: float, hp_percent: float, lif
 		_overhead_bar.set_shield(shield, max_shield)
 
 
+## Necromancer evrimleri (E2 geri itme, E4 büyüme). `evo_owner`: GERÇEK golemde oyuncu (player.gd), kozmetik kopyada uzak oyuncu
+## kuklası (remote_player.gd has_evo) - ikisi de has_evo(id) sunar. Çağırmadan önce sahneye eklenmiş olmalı (_ready ölçeği küçültür).
+func apply_necro_evos(evo_owner: Node) -> void:
+	if evo_owner == null or not evo_owner.has_method("has_evo"):
+		return
+	if evo_owner.has_evo("necro_e2"):
+		evo_knockback = EVO_KNOCKBACK_DISTANCE
+	if evo_owner.has_evo("necro_e4"):
+		apply_size_evo(EVO_SIZE_MULT)
+
+
+func apply_size_evo(mult: float) -> void:
+	if mult <= 0.0 or is_equal_approx(mult, size_mult):
+		return
+	var ratio: float = mult / size_mult
+	size_mult = mult
+	if sprite:
+		sprite.scale *= ratio
+	EntityScale.shrink_collision(get_node_or_null("CollisionShape2D"), ratio)
+	_body_radius *= ratio
+	attack_power *= ratio ## hasar da %20 artar (kopyada anlamsız ama zararsız)
+	if _overhead_bar and is_instance_valid(_overhead_bar):
+		_overhead_bar.set_offset(GOLEM_BAR_Y_OFFSET * size_mult)
+
+
 func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
@@ -273,7 +297,6 @@ func _physics_process(delta: float) -> void:
 	_process_movement(delta)
 	_process_attack(delta)
 	_process_incoming_damage(delta)
-	_process_golem_slam(delta)
 	_process_shield_regen(delta)
 	_broadcast_network_state()
 
@@ -404,9 +427,9 @@ func _process_movement(delta: float) -> void:
 		var to_target: Vector2 = _focus_target.global_position - global_position
 		var dist: float = to_target.length()
 		if _in_melee_stance:
-			if dist > MELEE_RESUME_CHASE_RANGE:
+			if dist > MELEE_RESUME_CHASE_RANGE * size_mult:
 				_in_melee_stance = false
-		elif dist <= MELEE_STOP_RANGE:
+		elif dist <= MELEE_STOP_RANGE * size_mult:
 			_in_melee_stance = true
 		if not _in_melee_stance:
 			## Duvar arkasındaki hedefe A* rotasıyla dolanır (bkz. pet_router.gd); rota izlerken yürüdüğü yöne bakar.
@@ -594,14 +617,14 @@ func _process_attack(delta: float) -> void:
 		return
 	if not _focus_target or not is_instance_valid(_focus_target) or _focus_target.get("is_dead") == true:
 		return
-	if global_position.distance_to(_focus_target.global_position) > MELEE_STOP_RANGE + 6.0:
+	if global_position.distance_to(_focus_target.global_position) > MELEE_STOP_RANGE * size_mult + 6.0:
 		return
 	_attack_timer = ATTACK_INTERVAL
 	_play_attack_animation()
 	## DÜZELTME (kullanıcı bildirimi: "necromancerin golemi yaratıklara
 	## saldırınca alan hasarı vermiyor tekli hasar veriyor") - eskiden SADECE
 	## _focus_target'a hasar veriyordu. Golem büyük/ağır bir yakın dövüşçü
-	## (bkz. 6sn'de bir uyguladığı GOLEM_SLAM_RADIUS'lu alan sersemletmesi ile
+	## (eski 6sn'lik alan sersemletmesi kaldırıldı, 2026-10-11) ile
 	## AYNI ruh) - normal saldırısı da artık GOLEM_ATTACK_AOE_RADIUS içindeki
 	## TÜM yaratıklara birden vuruyor, tek bir hedefe kilitli kalmıyor.
 	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir" - Golem'i
@@ -614,13 +637,17 @@ func _process_attack(delta: float) -> void:
 		is_crit = owner_player._roll_ability_crit()
 		dmg = owner_player._apply_ability_crit(dmg, is_crit)
 	var spark_scene: PackedScene = load("res://scenes/fx_hit_mini_spark.tscn")
-	for e in EnemyQueryScript.candidates(get_tree(), global_position, GOLEM_ATTACK_AOE_RADIUS + 1.0):
+	var aoe_radius: float = GOLEM_ATTACK_AOE_RADIUS * size_mult
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, aoe_radius + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
-		if global_position.distance_to(e.global_position) > GOLEM_ATTACK_AOE_RADIUS:
+		if global_position.distance_to(e.global_position) > aoe_radius:
 			continue
 		if e.has_method("take_damage"):
 			e.take_damage(dmg, is_crit)
+		## E2 Yıkıcı Yumruk: saldırı yaratığı golemden uzağa iter (enemy.gd apply_skill_push; bosslar x0,4).
+		if evo_knockback > 0.0 and is_instance_valid(e) and e.has_method("apply_skill_push"):
+			e.apply_skill_push(e.global_position - global_position, evo_knockback)
 		# Saldırdığına dair mor kıvılcım efekti (Golem'in mor tonuyla uyumlu)
 		if spark_scene:
 			var spark := spark_scene.instantiate() as Node2D
@@ -630,51 +657,8 @@ func _process_attack(delta: float) -> void:
 			_broadcast_impact_fx(spark_scene.resource_path, e.global_position, spark.modulate)
 
 
-## Kullanıcı isteği: "golem 6 saniyede bir yere vurarak çevresindeki
-## yaratıkları 1 saniye sersemletir" - Talon'un Yer Sarsıntısı
-## (player.gd _skill_berserk/TALON_SLAM_RADIUS) ile AYNI enemy.gd apply_stun
-## mekanizması, sadece bu periyodik ve otomatik (savaş durumundan bağımsız,
-## Golem hayatta olduğu sürece 6 saniyede bir tetiklenir).
-func _process_golem_slam(delta: float) -> void:
-	_slam_timer -= delta
-	if _slam_timer > 0.0:
-		return
-	_slam_timer = GOLEM_SLAM_INTERVAL
-	## DÜZELTME (kullanıcı bildirimi: "necromancerın golemi bazen etrafta
-	## yaratık olmasa bile yere saldırıyor") - bu periyodik yer vuruşu
-	## KOŞULSUZDU: 6 saniyede bir menzilde hiç yaratık olmasa da saldırı
-	## animasyonunu ve mor patlama efektini oynatıyordu. Artık menzilde
-	## (GOLEM_SLAM_RADIUS) en az bir canlı yaratık yoksa hiçbir görsel/efekt
-	## tetiklenmiyor - golem sadece gerçekten vuracağı bir şey varken "saldırı"
-	## gösteriyor.
-	var any_target_in_range: bool = false
-	for e in EnemyQueryScript.candidates(get_tree(), global_position, GOLEM_SLAM_RADIUS + 1.0):
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
-		if global_position.distance_to(e.global_position) <= GOLEM_SLAM_RADIUS:
-			any_target_in_range = true
-			if e.has_method("apply_stun"):
-				e.apply_stun(GOLEM_SLAM_STUN_DURATION)
-	if not any_target_in_range:
-		return
-	## DÜZELTME (kullanıcı bildirimi: "necromancerin golemi 6 saniyede bir
-	## sersemleme skilini attığında saldırı animasyonunu yapmıyor") - bu
-	## periyodik yer vuruşu, normal yakın dövüş saldırısının (bkz.
-	## _process_attack) aksine _play_attack_animation() hiç çağırmıyordu,
-	## golem sersemletirken/patlama efekti çıkarken sprite'ı hangi
-	## durumdaysa (yürüme/bekleme) onda donuk kalıyordu.
-	_play_attack_animation()
-	var burst_scene: PackedScene = load("res://scenes/fx_hit_big_burst.tscn")
-	if burst_scene:
-		var burst := burst_scene.instantiate() as Node2D
-		get_tree().current_scene.add_child(burst)
-		burst.global_position = global_position
-		burst.modulate = Color(0.8, 0.55, 1.05) # Mor patlama
-		_broadcast_impact_fx(burst_scene.resource_path, global_position, burst.modulate)
-
-
-## BUG DÜZELTMESİ (çok oyunculu senkron denetimi 2026-09-25): Golem'in saldırı kıvılcımları ve 6 sn'lik yer vuruşu
-## patlaması SADECE Necromancer'ın kendi ekranında çıkıyordu (kozmetik kopya yalnızca saldırı animasyonunu oynatıyordu).
+## BUG DÜZELTMESİ (çok oyunculu senkron denetimi 2026-09-25): Golem'in saldırı kıvılcımları (eskiden 6 sn'lik yer vuruşu
+## patlaması da) SADECE Necromancer'ın kendi ekranında çıkıyordu (kozmetik kopya yalnızca saldırı animasyonunu oynatıyordu).
 ## Artık dünya konumlu "hitscan_impact" olarak (renk tonuyla) diğer oyunculara da gider. Sadece GERÇEK golem çağırır
 ## (kozmetik kopya _physics_process'te _process_network_visual'a döner, bu fonksiyonlara hiç girmez).
 func _broadcast_impact_fx(scene_path: String, pos: Vector2, tint: Color) -> void:
@@ -689,7 +673,7 @@ func _broadcast_impact_fx(scene_path: String, pos: Vector2, tint: Color) -> void
 ## enemy.gd sadece "player" grubunu hedef aldığı için (bkz. skeleton_pet.gd
 ## dosya başı notu) bu müttefiğin GERÇEKTEN hasar alabilmesi için kendi
 ## yakınındaki yaratıkları kendisi tarar.
-const INCOMING_CONTACT_RANGE := 60.0
+const INCOMING_CONTACT_RANGE := 60.0 ## E4'te size_mult ile çarpılır
 const INCOMING_TICK_INTERVAL := 1.0
 const INCOMING_FALLBACK_DAMAGE := 6.0
 
@@ -698,10 +682,11 @@ func _process_incoming_damage(delta: float) -> void:
 	if _incoming_dmg_timer > 0.0:
 		return
 	var total: float = 0.0
-	for e in EnemyQueryScript.candidates(get_tree(), global_position, INCOMING_CONTACT_RANGE + 1.0):
+	var contact_range: float = INCOMING_CONTACT_RANGE * size_mult
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, contact_range + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
-		if global_position.distance_to(e.global_position) <= INCOMING_CONTACT_RANGE:
+		if global_position.distance_to(e.global_position) <= contact_range:
 			total += float(e.get("contact_damage")) if "contact_damage" in e else INCOMING_FALLBACK_DAMAGE
 	if total > 0.0:
 		_incoming_dmg_timer = INCOMING_TICK_INTERVAL

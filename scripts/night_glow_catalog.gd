@@ -265,6 +265,7 @@ const BY_SCRIPT := {
 	## görselin merkezinde / koni boyunca (get_glow_segment) - bkz. fx_enchant_sprite.gd GLOW notu.
 	"res://scripts/fx_enchant_sprite.gd": {"cp": "glow_color", "rp": "glow_radius", "rs": 1.0, "c": Color(1.0, 0.8, 0.5), "r": 30.0, "e": 1.0, "f": 0.12},
 	"res://scripts/fx_kalkan_bagi_link.gd": {"c": Color(0.45, 0.8, 1.0), "r": 24.0, "e": 0.4},
+	"res://scripts/mission_tree_bolt.gd": {"c": Color(0.45, 0.85, 1.0), "r": 18.0, "e": 0.5}, ## görev ağacının kristal mermisi (2026-10-10)
 	"res://scripts/fx_matthew_dash_lines.gd": {"c": Color(1.0, 0.7, 0.4), "r": 30.0, "e": 0.4, "d": 0.3},
 	"res://scripts/fx_melek_ally_aura.gd": {"c": Color(1.0, 0.9, 0.55), "r": 50.0, "e": 0.45},
 	"res://scripts/fx_oakley_flower_bond.gd": {"c": Color(0.6, 1.0, 0.5), "r": 22.0, "e": 0.45},
@@ -298,6 +299,10 @@ const BY_SCRIPT := {
 	"res://scripts/mission_tree.gd": {"c": Color(0.6, 1.0, 0.55), "r": 60.0, "e": 0.45},
 	## --- Düşman büyüleri (soru-cevap seçimi) - sis içindeyken çizilmez ---
 	"res://scripts/enemy_fireball.gd": {"c": Color(1.0, 0.5, 0.18), "r": 35.2, "e": 0.5, "f": 0.3, "fog": true},
+	"res://scripts/demon_fireball.gd": {"c": Color(1.0, 0.5, 0.2), "r": 40.0, "e": 0.6, "f": 0.3, "fog": true}, ## Uçan Şeytan ateş topu
+	"res://scripts/cosmic_beam.gd": {"c": Color(0.7, 0.45, 1.0), "r": 60.0, "e": 0.5, "f": 0.2, "fog": true}, ## Kozmik ışın
+	"res://scripts/wendigo_rock.gd": {"c": Color(1.0, 0.35, 0.2), "r": 30.0, "e": 0.25, "f": 0.2, "fog": true}, ## Wendigo kaya uyarısı
+	"res://scripts/boss_spell.gd": {"c": Color(1.0, 0.55, 0.2), "r": 38.0, "e": 0.55, "f": 0.3, "fog": true}, ## Balkabağı Kafa ateş topu (2026-10-09)
 	"res://scripts/enemy_laser.gd": {"c": Color(0.95, 0.6, 1.0), "r": 24.0, "e": 0.5, "fog": true},
 	"res://scripts/enemy_acid_pool.gd": {"c": Color(0.5, 0.9, 0.25), "r": 40.0, "e": 0.25, "fog": true},
 	"res://scripts/mission_copy_bolt.gd": {"c": Color(0.8, 0.35, 0.95), "r": 24.0, "e": 0.44, "fog": true},

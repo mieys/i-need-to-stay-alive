@@ -23,6 +23,15 @@ class FakeOwner extends Node2D:
 		global_position += velocity * delta
 
 
+## Kritik/hız bonuslu sahip (köpeğin bu statları nasıl okuduğunu sınamak için; FakeOwner'da yok -> kritik 0).
+class FakeCritOwner extends FakeOwner:
+	var crit_chance_bonus: float = 0.10
+	var crit_damage_bonus: float = 0.3
+
+	func get_attack_speed_bonus_percent() -> float:
+		return 40.0
+
+
 func _phys(n: int) -> void:
 	for _i in range(n):
 		await get_tree().physics_frame
@@ -168,6 +177,56 @@ func test_dog_attacks_creatures_near_the_owner_facing_them_and_biting() -> void:
 	e.global_position += Vector2(5000.0, 0.0)
 	await _phys(150)
 	assert(pet.global_position.distance_to(o.global_position) < 110.0, "hedef bitince sahibinin yanına döner: %.0f px" % pet.global_position.distance_to(o.global_position))
+	get_tree().current_scene = prev_scene
+	_cleanup()
+
+
+## NERF (2026-10-10, kullanıcı: "matthew inanılmaz güçlü, makul seviyelere"): köpek Matthew'in statlarının %100'üyle (eskiden %200) ısırır ve bir ısırık yarım dairedeki en yakın
+## FOX_MAX_TARGETS yaratığa vurur (eskiden hepsine). Isırık hasarı = sahibin saldırı gücü, kritik/hız oranı da 1.
+func test_dog_bite_uses_the_owner_stats_at_100_percent_and_hits_only_the_nearest_few() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	var PetScript: GDScript = load("res://scripts/player_pet.gd")
+	assert(float(PetScript.FOX_STAT_RATIO) == 1.0 and int(PetScript.FOX_MAX_TARGETS) == 5, "köpek oranı 1,0 ve ısırık başına en çok 5 hedef")
+	var pair: Array = _make(Vector2(3000, 3000))
+	var o: FakeOwner = pair[0]
+	var pet: Node2D = pair[1]
+	o.damage_bonus = 40.0
+	pet.global_position = Vector2(3000, 3000)
+	await _phys(2)
+	## Köpeğin önünde (sağa) yarım dairede 9 yaratık, yakından uzağa: 14, 20, ... 54 px; ayrıca arkasında 1 yaratık (yarım daire dışı).
+	var front: Array = []
+	for i in range(9):
+		var d: float = 14.0 + 5.0 * i
+		front.append(_enemy(pet.global_position + Vector2(d, float(i % 3) * 2.0)))
+	var behind: Node2D = _enemy(pet.global_position + Vector2(-20.0, 0.0))
+	await _phys(2)
+	var hp0: float = float(front[0].health)
+	var targets: Array = pet.call("cone_targets", Vector2.RIGHT)
+	assert(targets.size() == 5, "ısırık en çok 5 yaratığı seçer: %d" % targets.size())
+	for t in targets:
+		assert(front.find(t) >= 0 and front.find(t) < 5, "seçilenler köpeğe en yakın 5 yaratık (indeks %d)" % front.find(t))
+	assert(not targets.has(behind), "yarım daire dışındaki (arkadaki) yaratık seçilmez")
+	pet.call("_do_cone_attack", Vector2.RIGHT)
+	var hit_count: int = 0
+	for i in range(9):
+		var lost: float = hp0 - float(front[i].health)
+		if lost > 0.0:
+			hit_count += 1
+			## Hasar = sahibin saldırı gücü x 1: ana hedef (odak yoksa en yakın) tam 40, alandaki diğerleri %50 = 20 (2026-10-10 FOX_SPLASH_RATIO)
+			var want: float = 40.0 if i == 0 else 40.0 * float(PetScript.FOX_SPLASH_RATIO)
+			assert(absf(lost - want) < 0.5, "yaratık %d hasarı %.0f olmalı: %.2f" % [i, want, lost])
+	assert(hit_count == 5, "tek ısırıkta tam 5 yaratık hasar alır: %d" % hit_count)
+	assert(is_equal_approx(float(behind.health), 600000.0), "arkadaki yaratık hasar almaz")
+	assert(is_equal_approx(float(pet.call("_owner_attack_power")), 40.0), "saldırı gücü okunur")
+	## Kritik şansı / kritik çarpanı / saldırı hızı da sahibinkine EŞİT (eskiden x2): şans 5 + 10 = %15, çarpan 1,5 + 0,3 = 1,8, hız +%40 -> 1,4.
+	var co := FakeCritOwner.new()
+	add_child(co)
+	_nodes.append(co)
+	pet.set("owner_player", co)
+	assert(absf(float(pet.call("_crit_chance")) - 0.15) < 0.001, "kritik şansı sahibinkiyle aynı: %.3f" % float(pet.call("_crit_chance")))
+	assert(absf(float(pet.call("_crit_damage_mult")) - 1.8) < 0.001, "kritik çarpanı sahibinkiyle aynı: %.3f" % float(pet.call("_crit_damage_mult")))
+	assert(absf(float(pet.call("_owner_attack_speed_mult")) - 1.4) < 0.001, "saldırı hızı çarpanı sahibinkiyle aynı: %.3f" % float(pet.call("_owner_attack_speed_mult")))
 	get_tree().current_scene = prev_scene
 	_cleanup()
 

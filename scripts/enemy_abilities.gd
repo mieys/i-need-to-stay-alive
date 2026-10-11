@@ -20,6 +20,11 @@ extends RefCounted
 
 const FxScript := preload("res://scripts/fx_enemy_ability.gd")
 const MinotaurChargeScript := preload("res://scripts/minotaur_charge.gd")
+const PumpkinBossScript := preload("res://scripts/pumpkin_boss.gd")
+const WendigoBossScript := preload("res://scripts/wendigo_boss.gd")
+const BansheeBossScript := preload("res://scripts/banshee_boss.gd")
+const DemonBossScript := preload("res://scripts/demon_boss.gd")
+const PumpkinMinionsScript := preload("res://scripts/pumpkin_minions.gd")
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
 const GHOST_FRAMES := preload("res://assets/fx/enemy_abilities/ghost_frames.tres")
 const VAMPIRE_FRAMES := preload("res://assets/fx/enemy_abilities/vampire_frames.tres")
@@ -44,6 +49,13 @@ const VAMPIRE_COOLDOWN := 15.0
 const VAMPIRE_DELAY_MIN := 1.0
 const VAMPIRE_DELAY_MAX := 6.0
 const VAMPIRE_BLINK_DISTANCE := 46.0 ## hedefin bu kadar yanına belirir (temas mesafesi civarı)
+## ŞOVALYE KORUMA BALONCUĞU (R) kuralı (kullanıcı 2026-10-10: "şovalye adamın kalkanının içine yaratıkların bazı büyüleri girebiliyor"; önceki istek: "ne olursa olsun hiçbir
+## yaratığın kalkanın içine giremeyip atışların da kalkanın içine girememesi lazım"): menzilli mermiler zaten sınırda yok oluyordu (enemy_projectile/fireball/boss_spell/...);
+## bunlar EKSİKTİ: vampir ışınlanması hedefin 46 px yanına (baloncuğun içine) iniyordu, diken/asit/Wendigo sarmaşığı-kayası/kabak patlaması efektleri hedefin tam ayağında
+## doğuyordu, lazer baloncuğu kesiyordu ve özel hasar (deal_special_damage) içerideki oyuncuya işliyordu. Artık: (1) içerideki hedefe özel hasar HİÇ işlemez, (2) merkezi
+## baloncuğun içinde olacak yer efektleri doğmaz (host + istemci kopyası), (3) lazer baloncuk sınırında biter, (4) ışınlanma baloncuğun dışına iner.
+const DOME_BLINK_MARGIN := 30.0 ## ışınlanma noktası baloncuk yarıçapının en az bu kadar DIŞINDA
+const DOME_BLOCKED_FX_KINDS := ["thorns", "acid", "wendigo_vine", "wendigo_rock", "pumpkin_blast"] ## merkezi baloncuğun içinde doğamayan yer efektleri
 const VAMPIRE_VISION_CHECK_INTERVAL := 0.25
 
 ## --- Röntgen ("baktıkları yöne doğru düz bir çizgi halinde lazer ışını gönderir. Bu ışınlar isabet halinde
@@ -89,6 +101,7 @@ var _timer: float = 0.0
 var _pending: float = -1.0
 var _vision_check: float = 0.0
 var _minotaur = null ## MinotaurCharge (RefCounted) - sadece "minotaur" ailesinde
+var _boss_kit = null ## PumpkinBoss / PumpkinMinions (RefCounted) - "balkabagi" / "kabak" / "yarasa" ailelerinde (2026-10-09)
 
 
 func setup(owner_enemy: Node2D, fam: String) -> void:
@@ -108,15 +121,49 @@ func setup(owner_enemy: Node2D, fam: String) -> void:
 		"minotaur":
 			_minotaur = MinotaurChargeScript.new()
 			_minotaur.setup(e)
+		"balkabagi":
+			_boss_kit = PumpkinBossScript.new()
+			_boss_kit.setup(e)
+		"wendigo":
+			_boss_kit = WendigoBossScript.new()
+			_boss_kit.setup(e)
+		"banshee":
+			_boss_kit = BansheeBossScript.new()
+			_boss_kit.setup(e)
+		"ucansetan":
+			_boss_kit = DemonBossScript.new()
+			_boss_kit.setup(e)
+		"kabak", "yarasa":
+			_boss_kit = PumpkinMinionsScript.new()
+			_boss_kit.setup(e, family)
 
 
 static func family_has_ability(fam: String) -> bool:
-	return fam in ["hayalet", "vampire", "rontgen", "iblis", "agac", "minotaur"]
+	return fam in ["hayalet", "vampire", "rontgen", "iblis", "agac", "minotaur", "balkabagi", "kabak", "yarasa", "wendigo", "banshee", "ucansetan"]
 
 
 ## Yetenek şu an yaratığın yakın dövüş (temas) vuruşunu bastırıyor mu? (Minotaur hücum/toparlanma sırasında - bkz. enemy.gd _ew_on_event)
 func melee_blocked() -> bool:
+	if _boss_kit != null and _boss_kit.has_method("blocks_melee") and _boss_kit.blocks_melee():
+		return true
 	return _minotaur != null and _minotaur.blocks_melee()
+
+
+## Boss olayı (enemy.gd on_ability_vfx "boss_event", host + istemciler): kit kendi görsel/durum olaylarını işler (Uçan Şeytan faz 2 / iyileşme rengi).
+func on_boss_event(data: Dictionary) -> void:
+	if _boss_kit != null and _boss_kit.has_method("on_boss_event"):
+		_boss_kit.on_boss_event(data)
+
+
+## Sahip yaratık öldü (enemy.gd die()): boss kiti kapanış yapar (Banshee gece kilidini açar).
+func on_owner_died() -> void:
+	if _boss_kit != null and _boss_kit.has_method("on_owner_died"):
+		_boss_kit.on_owner_died()
+
+
+## Yarasa ısırığı gibi yaratığa özel temas vuruşu (enemy.gd _schedule_melee_hit): true = vuruş burada işlendi, normal take_damage atlanır.
+func handle_melee_hit(target: Node) -> bool:
+	return _boss_kit != null and _boss_kit.has_method("handle_melee_hit") and _boss_kit.handle_melee_hit(target)
 
 
 ## Host'ta her fizik karesi (yaratık donmuş/korkmuş/sersemlemişken çağrılmaz - bkz. enemy.gd). player/dist: yaratığın
@@ -135,6 +182,8 @@ func process(delta: float, player: Node2D, dist: float) -> void:
 			_process_thorns(delta, player, dist)
 		"minotaur":
 			_minotaur.process(delta, player, dist)
+		"balkabagi", "kabak", "yarasa", "wendigo", "banshee", "ucansetan":
+			_boss_kit.process(delta, player, dist)
 
 
 func _valid_target(player: Node2D) -> bool:
@@ -213,6 +262,8 @@ func _vampire_blink() -> bool:
 			continue
 		if GameManager.merchant_zone_active and cand.distance_to(GameManager.merchant_zone_pos) <= GameManager.MERCHANT_ZONE_RADIUS:
 			continue
+		if dome_owner_at(e.get_tree(), cand, DOME_BLINK_MARGIN) != null: ## Şovalye baloncuğunun içine/hemen kenarına ışınlanma yok
+			continue
 		to = cand
 		found = true
 		break
@@ -240,7 +291,7 @@ func _process_laser(delta: float, player: Node2D, dist: float) -> void:
 		return
 	var to_p: Vector2 = player.global_position - e.global_position
 	var dir: Vector2 = to_p.normalized() if to_p.length() > 0.1 else Vector2.RIGHT
-	var length: float = clip_ray_to_walls(e.global_position, dir, LASER_LENGTH)
+	var length: float = clip_ray_to_domes(e.get_tree(), e.global_position, dir, clip_ray_to_walls(e.global_position, dir, LASER_LENGTH))
 	var dmg: float = float(e.get("contact_damage")) * LASER_DAMAGE_MULT
 	e.set("ability_move_lock", LASER_WARN_TIME + LASER_FIRE_TIME)
 	e.set("_ranged_timer", maxf(float(e.get("_ranged_timer")), LASER_WARN_TIME + LASER_FIRE_TIME + 0.2))
@@ -302,6 +353,8 @@ func _broadcast_enemy_vfx(kind: String, data: Dictionary) -> void:
 
 
 static func _broadcast_world_fx(kind: String, pos: Vector2, data: Dictionary) -> void:
+	if DOME_BLOCKED_FX_KINDS.has(kind) and dome_owner_at(Engine.get_main_loop() as SceneTree, pos) != null:
+		return ## host baloncuğun içinde doğurmadığı efekti istemcilere de göstermez (bkz. spawn_world_fx)
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 		NetworkManager.broadcast_enemy_ability_fx.rpc(kind, pos, data)
 
@@ -324,6 +377,8 @@ static func spawn_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Di
 		source: Node2D = null, damage: float = 0.0) -> Node2D:
 	if tree == null or tree.current_scene == null:
 		return null
+	if authoritative and DOME_BLOCKED_FX_KINDS.has(kind) and dome_owner_at(tree, pos) != null:
+		return null ## Şovalye baloncuğunun içinde yaratık büyüsü doğmaz (bkz. DOME_BLOCKED_FX_KINDS)
 	var script_path: String = ""
 	match kind:
 		"laser":
@@ -338,6 +393,20 @@ static func spawn_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Di
 			script_path = "res://scripts/enemy_charge_lane.gd"
 		"worm_acid":
 			script_path = "res://scripts/worm_acid.gd"
+		"boss_spell":
+			script_path = "res://scripts/boss_spell.gd"
+		"pumpkin_blast":
+			script_path = "res://scripts/pumpkin_blast.gd"
+		"banshee_wave":
+			script_path = "res://scripts/banshee_wave.gd"
+		"demon_fire":
+			script_path = "res://scripts/demon_fireball.gd"
+		"cosmic_beam":
+			script_path = "res://scripts/cosmic_beam.gd"
+		"wendigo_vine":
+			script_path = "res://scripts/wendigo_vine.gd"
+		"wendigo_rock":
+			script_path = "res://scripts/wendigo_rock.gd"
 		_:
 			return null
 	var node := Node2D.new()
@@ -393,11 +462,50 @@ static func damageable_players(tree: SceneTree) -> Array:
 static func deal_special_damage(target: Node, amount: float, source, kind: String) -> void:
 	if target == null or not is_instance_valid(target) or amount <= 0.0:
 		return
+	## Şovalye Koruma Baloncuğu: içerideki oyuncuya (sahibi ve içindeki dostlar) hiçbir yaratık büyüsü/saldırısı işlemez (bkz. DOME_BLINK_MARGIN üstündeki not).
+	if target is Node2D and target.is_inside_tree() and dome_owner_at(target.get_tree(), (target as Node2D).global_position) != null:
+		return
 	var src: Node2D = (source as Node2D) if is_instance_valid(source) else null
 	if target.has_method("take_special_damage"):
 		target.call("take_special_damage", amount, src, kind)
 	elif target.has_method("take_damage"):
 		target.call("take_damage", amount, src)
+
+
+## `pos` (dünya) aktif bir Şovalye Koruma Baloncuğunun (player.gd paladin_zone_active/paladin_zone_radius; yerel oyuncu + uzak kuklalar) içinde mi? İçindeyse baloncuğun sahibi,
+## değilse null. margin: yarıçapa eklenen pay (ışınlanma noktaları için).
+static func dome_owner_at(tree: SceneTree, pos: Vector2, margin: float = 0.0) -> Node2D:
+	if tree == null:
+		return null
+	for p in damageable_players(tree):
+		var pn := p as Node2D
+		if pn == null or pn.get("paladin_zone_active") != true:
+			continue
+		if pos.distance_to(pn.global_position) <= float(pn.get("paladin_zone_radius")) + margin:
+			return pn
+	return null
+
+
+## Işını Şovalye baloncuklarının sınırında keser (lazer kalkanın içine girmesin) - clip_ray_to_walls ile aynı 8 birimlik adım. Baloncuk yoksa max_len aynen döner.
+static func clip_ray_to_domes(tree: SceneTree, origin: Vector2, dir: Vector2, max_len: float) -> float:
+	if tree == null:
+		return max_len
+	var domes: Array = []
+	for p in damageable_players(tree):
+		var pn := p as Node2D
+		if pn != null and pn.get("paladin_zone_active") == true:
+			domes.append([pn.global_position, float(pn.get("paladin_zone_radius"))])
+	if domes.is_empty():
+		return max_len
+	var step: float = 8.0
+	var d: float = step
+	while d < max_len:
+		var pt: Vector2 = origin + dir * d
+		for dome: Array in domes:
+			if pt.distance_to(dome[0]) <= float(dome[1]):
+				return maxf(d - step * 0.5, step)
+		d += step
+	return max_len
 
 
 ## Işını orman duvarına kadar kısaltır (duvarın arkasına geçmesin) - 8 birimlik adımlarla örnekler.

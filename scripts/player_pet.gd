@@ -40,7 +40,16 @@ const BASE_DAMAGE := 12.0 ## sadece sahip yoksa (yedek)
 ##   saldırı hızı = Matthew'in saldırı hızı BONUSU x FOX_STAT_RATIO (ör. Matthew +%20 -> tilki +%40); Vahşi Hız (E) ayrıca
 ##   kritik şansı = Matthew'in yetenek kritik şansı (taban %5 + kart) x FOX_STAT_RATIO (en fazla %100)
 ##   kritik hasar = Matthew'in kritik hasar çarpanı (taban 1.5 + kart) x FOX_STAT_RATIO
-const FOX_STAT_RATIO := 2.0
+## NERF (2026-10-10, kullanıcı: "matthew inanılmaz güçlü, nerflenmesi gerekiyor makul seviyelere"): oran 2.0 -> 1.0 (köpek artık Matthew'in statlarının %100'üyle saldırır) ve ısırık başına en
+## fazla FOX_MAX_TARGETS yaratığa vurur. KÖK NEDEN: dört kanal (hasar, saldırı hızı bonusu, kritik şansı, kritik çarpanı) AYNI ANDA 2 ile çarpılıyordu - orta oyunda (saldırı gücü ~60, +%40 hız, +%10 kritik)
+## köpeğin tek ısırığı 120 hasar, saniyede 1,8 ısırık (E'de 2,5), beklenen kritik çarpanı 1,78x: yaratık başına ~380 hasar/sn (ortalama bir silahın ~2,4 katı) ve HEPSİ yarım daire alana, yani kalabalıkta
+## 5-8 yaratığa birden iniyordu (toplam ~2000-3000 hasar/sn). Yeni değerlerle aynı örnekte ~94 hasar/sn yaratık başına, en çok 5 yaratık: köpek hâlâ güçlü bir pasif ama tek başına silah sayısını geçmez.
+## Daha fazla/az güç: bu oran + FOX_MAX_TARGETS (iki satır); test_matthew_dog "köpek ısırığı" testleri sayıları sabitler.
+const FOX_STAT_RATIO := 1.0
+const FOX_MAX_TARGETS := 5
+## NERF 2 (2026-10-10, kullanıcı "en dengeli öneriyi yapalım"): ısırık ANA hedefe (odaklanılan yaratık; yoksa en yakın) tam, alandaki diğerlerine bu oranda vurur -
+## yakın dövüş silahlarının alan kuralıyla aynı (%50). Kalabalıkta toplam hasar 5x -> 3x (~%40 az), tek hedefte değişmez.
+const FOX_SPLASH_RATIO := 0.5
 ## Matthew'a (sahibine) bu mesafe içine giren yaratıklara focus atar - "ona yakın olan ve ona saldırmak üzere olan yaratıklara
 ## focus atmalı" (kullanıcı isteği). Kendi konumuna göre değil, SAHİBİNİN konumuna göre ölçülüyor.
 ## 2026-10-08: 170 -> 240 ("çevresindeki yaratıklara saldırması gerekiyordu"; eski değer sahibine neredeyse dokunana kadar bekletiyordu).
@@ -837,6 +846,23 @@ func _process_attack(delta: float) -> void:
 ## tilkiye özel) ile üst üste biniyordu. Artık SADECE hasar veriliyor.
 func _do_cone_attack(attack_dir: Vector2) -> void:
 	var base_dmg: float = _owner_attack_power() * FOX_STAT_RATIO
+	var targets: Array = cone_targets(attack_dir)
+	var primary: Node = _focus_target if (_focus_target != null and targets.has(_focus_target)) else (targets[0] if not targets.is_empty() else null)
+	for e in targets:
+		var is_crit: bool = randf() < _crit_chance()
+		var share: float = 1.0 if e == primary else FOX_SPLASH_RATIO
+		e.take_damage(base_dmg * share * (_crit_damage_mult() if is_crit else 1.0), is_crit)
+		## Yetenek evrimi "Sersemleten Isırık" (2026-09-28): Vahşi Hız aktifken tilkinin saldırıları sersemletir - süre
+		## sahibinden (player.gd matthew_fox_stun_time, 0 = yok).
+		if _owner_ok() and owner_player.has_method("matthew_fox_stun_time"):
+			var stun_t: float = float(owner_player.call("matthew_fox_stun_time"))
+			if stun_t > 0.0 and e.has_method("apply_stun"):
+				e.apply_stun(stun_t)
+
+
+## Isırığın vuracağı yaratıklar: yarım daire alandaki (ATTACK_RADIUS, ATTACK_ARC_DEG) canlı yaratıklar, köpeğe EN YAKIN FOX_MAX_TARGETS tanesi (kalabalıkta alan hasarı sınırsız katlanmasın, bkz. FOX_STAT_RATIO notu).
+func cone_targets(attack_dir: Vector2) -> Array:
+	var found: Array = []
 	for e in EnemyQueryScript.candidates(get_tree(), global_position, ATTACK_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
@@ -849,14 +875,14 @@ func _do_cone_attack(attack_dir: Vector2) -> void:
 			if angle > deg_to_rad(ATTACK_ARC_DEG * 0.5):
 				continue
 		if e.has_method("take_damage"):
-			var is_crit: bool = randf() < _crit_chance()
-			e.take_damage(base_dmg * (_crit_damage_mult() if is_crit else 1.0), is_crit)
-			## Yetenek evrimi "Sersemleten Isırık" (2026-09-28): Vahşi Hız aktifken tilkinin saldırıları sersemletir - süre
-			## sahibinden (player.gd matthew_fox_stun_time, 0 = yok).
-			if _owner_ok() and owner_player.has_method("matthew_fox_stun_time"):
-				var stun_t: float = float(owner_player.call("matthew_fox_stun_time"))
-				if stun_t > 0.0 and e.has_method("apply_stun"):
-					e.apply_stun(stun_t)
+			found.append([dist, e])
+	found.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0]) ## en yakın önce (ana hedef yedeği, bkz. _do_cone_attack)
+	if found.size() > FOX_MAX_TARGETS:
+		found.resize(FOX_MAX_TARGETS)
+	var out: Array = []
+	for pair: Array in found:
+		out.append(pair[1])
+	return out
 
 
 ## BUG DÜZELTMESİ (derin multiplayer denetimi bulgusu, CLAUDE.md'nin "kaster görür diğeri görmez" hata

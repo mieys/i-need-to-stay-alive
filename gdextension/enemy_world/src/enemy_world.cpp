@@ -78,6 +78,10 @@ inline float len2(float x, float y) { return x * x + y * y; }
 void EnemyWorld::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_grid", "blocked", "origin", "size", "cell", "layer_origin", "fog_blocked"), &EnemyWorld::set_grid,
 			DEFVAL(PackedByteArray()));
+	ClassDB::bind_method(D_METHOD("set_dormant", "slot", "on"), &EnemyWorld::set_dormant);
+	ClassDB::bind_method(D_METHOD("set_goal", "slot", "x", "y", "mult"), &EnemyWorld::set_goal);
+	ClassDB::bind_method(D_METHOD("is_dormant", "slot"), &EnemyWorld::is_dormant);
+	ClassDB::bind_method(D_METHOD("set_stealth", "target_ids", "reveals"), &EnemyWorld::set_stealth);
 	ClassDB::bind_method(D_METHOD("set_targets", "pos", "kind", "targetable", "ghost", "body", "zone", "ids"), &EnemyWorld::set_targets);
 	ClassDB::bind_method(D_METHOD("set_merchant_zone", "active", "pos", "radius"), &EnemyWorld::set_merchant_zone);
 	ClassDB::bind_method(D_METHOD("set_body_block_scale", "scale"), &EnemyWorld::set_body_block_scale);
@@ -198,6 +202,22 @@ void EnemyWorld::set_grid(const PackedByteArray &p_blocked, const Vector2i &p_or
 		f.stamp.clear();
 		f.cx = f.cy = -99999;
 		f.owner = 0;
+	}
+}
+
+// reveals[k] = PackedInt64Array: target_ids[k] hedefini görebilen yaratıkların düğüm kimlikleri (boş = kimse göremez). Her çağrı tüm kaydı değiştirir.
+void EnemyWorld::set_stealth(const PackedInt64Array &p_target_ids, const Array &p_reveals) {
+	stealth.clear();
+	for (int k = 0; k < p_target_ids.size(); k++) {
+		std::vector<uint64_t> ids;
+		if (k < p_reveals.size()) {
+			const PackedInt64Array arr = p_reveals[k];
+			for (int j = 0; j < arr.size(); j++) {
+				ids.push_back((uint64_t)arr[j]);
+			}
+		}
+		std::sort(ids.begin(), ids.end());
+		stealth[(uint64_t)p_target_ids[k]] = std::move(ids);
 	}
 }
 
@@ -335,6 +355,11 @@ void EnemyWorld::ensure_capacity(int32_t n) {
 	wander_y.resize(s, 0.0f);
 	wander_timer.resize(s, 0.0f);
 	wander_moving.resize(s, 0);
+	dormant.resize(s, 0);
+	goal_on.resize(s, 0);
+	goal_x.resize(s, 0.0f);
+	goal_y.resize(s, 0.0f);
+	goal_mult.resize(s, 1.0f);
 	last_kb_msec.resize(s, -100000);
 	hit_radius.resize(s, 0.0f);
 	hit_inside.resize(s, 0);
@@ -427,6 +452,9 @@ int32_t EnemyWorld::add_enemy(Object *p_node, Object *p_sprite, const Vector2 &p
 	is_stuck[i] = 0;
 	wander_x[i] = wander_y[i] = wander_timer[i] = 0.0f;
 	wander_moving[i] = 0;
+	dormant[i] = goal_on[i] = 0;
+	goal_x[i] = goal_y[i] = 0.0f;
+	goal_mult[i] = 1.0f;
 	last_kb_msec[i] = -100000;
 	hit_radius[i] = (float)p_params.get("hit_radius", 0.0);
 	hit_inside[i] = 0;
@@ -607,6 +635,30 @@ float EnemyWorld::get_target_dist(int32_t s) const { return SLOT_OK(s) ? target_
 int32_t EnemyWorld::get_facing_row(int32_t s) const { return SLOT_OK(s) ? facing_row[s] : ROW_DOWN; }
 bool EnemyWorld::get_face_left(int32_t s) const { return SLOT_OK(s) && face_left[s]; }
 bool EnemyWorld::is_wandering(int32_t s) const { return SLOT_OK(s) && wandering[s]; }
+
+void EnemyWorld::set_dormant(int32_t s, bool on) {
+	if (!SLOT_OK(s)) {
+		return;
+	}
+	dormant[s] = on ? 1 : 0;
+	if (!on) {
+		goal_on[s] = 0;
+	}
+	has_decision[s] = 0; // bir sonraki karede yeniden düşün
+}
+
+void EnemyWorld::set_goal(int32_t s, float x, float y, float mult) {
+	if (!SLOT_OK(s)) {
+		return;
+	}
+	goal_on[s] = mult > 0.0f ? 1 : 0;
+	goal_x[s] = x;
+	goal_y[s] = y;
+	goal_mult[s] = mult;
+}
+
+bool EnemyWorld::is_dormant(int32_t s) const { return SLOT_OK(s) && dormant[s]; }
+
 
 // ===================================================================================================== itme formülleri
 
@@ -870,10 +922,13 @@ bool EnemyWorld::flow_waypoint(int32_t t, float x, float y, float &wx, float &wy
 // ALLY_AGGRO_RADIUS içindeyse mesafesi ALLY_AGGRO_BIAS ile küçültülür). Ağaç burada aday değil (geçersiz kılma).
 int32_t EnemyWorld::find_closest(int32_t i) const {
 	const int n = (int)tx.size();
+	if (dormant[i]) {
+		return -1;
+	}
 	int32_t best = -1;
 	float best_d = INFINITY;
 	for (int t = 0; t < n; t++) {
-		if (!t_targetable[t] || t_kind[t] == T_TREE) {
+		if (!t_targetable[t] || t_kind[t] == T_TREE || concealed_from(i, t)) {
 			continue;
 		}
 		float d = std::sqrt(len2(tx[t] - px[i], ty[t] - py[i]));
@@ -1249,7 +1304,9 @@ bool EnemyWorld::fog_ray_blocked(float ax, float ay, float bx, float by) const {
 	float t_max_x = (dx > 0.0f ? (cx + 1 - a_x) : (a_x - cx)) * inv_x;
 	float t_max_y = (dy > 0.0f ? (cy + 1 - a_y) : (a_y - cy)) * inv_y;
 	const float ray_length = std::sqrt(dx * dx + dy * dy);
-	bool entered = false;
+	// Kaynak bir engelin içindeyse (ağaç tacının altı) o kümeden ilk çıkış sayılmaz - vision_occluders.gd.
+	bool ignore_exit = fog_solid_cell(cx, cy);
+	bool entered = ignore_exit;
 	float t_enter = 0.0f;
 	for (int k = 0; k < MAX_RAY_STEPS; k++) {
 		if ((cx == ex && cy == ey) || std::min(t_max_x, t_max_y) > 1.0f) {
@@ -1269,6 +1326,11 @@ bool EnemyWorld::fog_ray_blocked(float ax, float ay, float bx, float by) const {
 				t_enter = t_cross;
 			}
 		} else if (entered) {
+			if (ignore_exit) {
+				ignore_exit = false;
+				entered = false;
+				continue;
+			}
 			if ((t_cross - t_enter) * ray_length >= MIN_WALL_CROSSING) {
 				return true;
 			}
@@ -1576,6 +1638,24 @@ void EnemyWorld::steer(int32_t i, float &dx, float &dy) const {
 
 // enemy.gd _compute_wander_velocity.
 void EnemyWorld::wander_velocity(int32_t i, float delta, float &vx, float &vy) {
+	if (dormant[i]) {
+		// kenar bekçisi: rastgele gezinmez; GDScript'in verdiği hedef noktaya yürür (yoksa durur)
+		if (!goal_on[i]) {
+			return;
+		}
+		const float gdx = goal_x[i] - px[i], gdy = goal_y[i] - py[i];
+		const float gl = std::sqrt(gdx * gdx + gdy * gdy);
+		if (gl <= 14.0f) {
+			return;
+		}
+		float dx = gdx / gl, dy = gdy / gl;
+		steer(i, dx, dy);
+		face(i, dx, dy);
+		const float sp = speed[i] * goal_mult[i] * speed_mult[i] * rage_mult[i];
+		vx = dx * sp;
+		vy = dy * sp;
+		return;
+	}
 	vx = vy = 0.0f;
 	wander_timer[i] -= delta;
 	if (wander_timer[i] <= 0.0f ||
@@ -1719,7 +1799,7 @@ void EnemyWorld::step(float delta) {
 			bool think = !has_decision[i] || (frame % AI_THINK_INTERVAL_FRAMES) == (uint64_t)(i % AI_THINK_INTERVAL_FRAMES);
 			if (!think && !wandering[i]) {
 				const int32_t ct = target[i];
-				if (ct < 0 || ct >= nt || !t_targetable[ct]) {
+				if (ct < 0 || ct >= nt || !t_targetable[ct] || concealed_from(i, ct)) {
 					think = true;
 				}
 			}
@@ -1755,13 +1835,13 @@ void EnemyWorld::step(float delta) {
 				routing[i] = 0;
 				// "en yakın" önbelleği 4 karede bir (kaydırmalı) ya da geçersizse; geçersiz kılmalar her düşünmede
 				int32_t c = closest[i];
-				if (c < 0 || c >= nt || !t_targetable[c] || t_kind[c] == T_TREE ||
+				if (c < 0 || c >= nt || !t_targetable[c] || t_kind[c] == T_TREE || concealed_from(i, c) ||
 						(frame % TARGET_UPDATE_INTERVAL_FRAMES) == (uint64_t)(i % TARGET_UPDATE_INTERVAL_FRAMES)) {
 					c = find_closest(i);
 					closest[i] = c;
 				}
 				t = apply_overrides(i, c);
-				if (t >= 0 && t_targetable[t]) {
+				if (t >= 0 && t_targetable[t] && !concealed_from(i, t)) {
 					const float tpx = tx[t] - px[i], tpy = ty[t] - py[i];
 					dist = std::sqrt(tpx * tpx + tpy * tpy);
 					const float dirx = dist > 0.1f ? tpx / dist : 0.0f, diry = dist > 0.1f ? tpy / dist : 0.0f;

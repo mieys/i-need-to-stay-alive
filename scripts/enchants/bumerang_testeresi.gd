@@ -52,9 +52,9 @@ func process_extra(delta: float) -> void:
 			hit(e, ap() * f("saw_ap") * ramp)
 		if flag("saw_pull"):
 			for e in enemies_near(at, r * 2.2):
-				if e.is_boss:
+				if status(e, "boss"):
 					continue
 				var to_c: Vector2 = at - e.global_position
 				if to_c.length() > 10.0:
-					e.apply_element("knock", {"dir": to_c.normalized(), "dist": minf(26.0, to_c.length() - 8.0), "quiet": true})
+					el(e, "knock", {"dir": to_c.normalized(), "dist": minf(26.0, to_c.length() - 8.0), "quiet": true})
 	_saws = keep

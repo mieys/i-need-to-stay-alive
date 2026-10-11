@@ -85,6 +85,7 @@ func _spawner() -> Node:
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
 	sp.max_concurrent_enemies = 100000
+	sp.tier_duration = 100.0 ## testler 100 sn'lik kademelere göre yazıldı (varsayılan 2026-10-10'da 150 oldu; kademe süresi bu testlerin konusu değil)
 	get_tree().current_scene = self ## _spawn_creature current_scene'e ekliyor
 	_made.append(sp)
 	var p := FakePlayer.new()

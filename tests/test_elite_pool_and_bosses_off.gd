@@ -45,6 +45,7 @@ func _spawner() -> Node:
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
 	sp.max_concurrent_enemies = 100000
+	sp.tier_duration = 100.0 ## testler 100 sn'lik kademelere göre yazıldı (varsayılan 2026-10-10'da 150 oldu; kademe süresi bu testlerin konusu değil)
 	get_tree().current_scene = self
 	_made.append(sp)
 	var p := FakePlayer.new()
@@ -121,7 +122,7 @@ func test_the_tier_elite_comes_from_the_pool_with_15x_health_and_shield_and_the_
 	var cid: String = str(elite.get_meta("creature_id", ""))
 	assert(SpawnerScript.elite_candidates(5).has(cid), "elit havuzdan, Kademe 5 ailelerinden: %s" % cid)
 	assert(elite.is_in_group("elite_enemies") and not elite.is_in_group("boss") and elite.get("is_boss") != true, "elit, boss değil")
-	assert(elite.get_node_or_null("EliteStar") != null and elite.get_node_or_null("EliteAura") != null, "yıldız + aura")
+	assert(elite.get_node_or_null("EliteBar") != null and elite.get_node_or_null("EliteAura") != null, "can barı (yıldızlı) + aura")
 	## Aynı kimlikli sıradan yaratık, aynı kademe ölçeği + kalkan + global çarpanla: elit tam 15 katı.
 	var ref: Node = sp._spawn_creature(cid, Vector2(900.0, 900.0), 999001)
 	ref.apply_tier_scaling(5)
@@ -159,15 +160,16 @@ func test_bosses_are_off_by_default_and_only_the_new_tier_3_boss_spawns() -> voi
 		GameManager.game_time = time
 		sp._check_boss_tiers()
 	for b: Node in _boss_nodes():
-		assert(["minotaur1", "underground1"].has(str(b.get_meta("creature_id", ""))), "yeni bosslar dışında boss yok: %s" % str(b.get_meta("creature_id", "")))
+		assert(["minotaur1", "underground1", "balkabagi1", "wendigo1", "banshee1"].has(str(b.get_meta("creature_id", ""))), "yeni bosslar dışında boss yok: %s" % str(b.get_meta("creature_id", "")))
 	assert(_boss_nodes().size() <= 2, "Kademe 6/8/12/15'te boss doğmaz")
-	assert(sp._boss_tiers_spawned.keys().all(func(k: int) -> bool: return k == 3 or k == 5), "boss kaydı yalnız Kademe 3 + 5: %s" % str(sp._boss_tiers_spawned.keys()))
-	assert(SpawnerScript.NEW_BOSS_TIERS.keys() == [3, 5], "yeni boss tablosunda Kademe 3 (Minotaur) + 5 (Yeraltı Canavarı): %s" % str(SpawnerScript.NEW_BOSS_TIERS.keys()))
+	assert(sp._boss_tiers_spawned.keys().all(func(k: int) -> bool: return [3, 5, 8, 12, 15].has(k)), "boss kaydı yalnız yeni boss kademeleri: %s" % str(sp._boss_tiers_spawned.keys()))
+	assert(SpawnerScript.NEW_BOSS_TIERS.keys() == [3, 5, 8, 12, 15], "yeni boss tablosunda Kademe 3 Minotaur, 5 Yeraltı Canavarı, 8 Balkabağı Kafa, 12 Wendigo, 15 Banshee: %s" % str(SpawnerScript.NEW_BOSS_TIERS.keys()))
 	_cleanup()
 
 
 func test_after_tier_15_the_run_continues_straight_into_endless_without_final_or_victory() -> void:
 	var sp: Node = _spawner()
+	sp.new_final_enabled = false ## Final kapalıyken eski davranış (varsayılan Final için test_demon_boss)
 	GameManager.game_time = 1400.0
 	sp._check_final_tier()
 	assert(sp.get_endless_layer() == 0, "Kademe XV bitmeden sonsuz yok")
@@ -185,6 +187,7 @@ func test_after_tier_15_the_run_continues_straight_into_endless_without_final_or
 
 func test_no_final_tier_announcement_and_no_endless_boss_wave_while_bosses_are_off() -> void:
 	var sp: Node = _spawner()
+	sp.new_final_enabled = false ## eski davranış (2026-10-09'dan beri varsayılan Final Uçan Şeytan'dır, bkz. test_demon_boss)
 	NetworkManager.creature_tier_reached.connect(_on_tier)
 	GameManager.game_time = 1600.0
 	sp._check_tier_announcement()

@@ -4,7 +4,7 @@ extends Node
 ## (E maks. canın %4'ü, R açıkken saniyede %2,5'i; Q standart kalkan tarifesini öder - 2026-10-08), pasif %1 can emme + her 1 saldırı gücü için 1 can.
 ##   Q: yakındaki 4 düşmana %130 hasar (6sn); Kan Kalkanı evrimi hasarın %6'sı kadar kalkan yeniler
 ##   E: 5sn yarasa formu: %60 hız, %80 hasar azaltma, temas hasarı %80, silahlar gövdeye çekilir (22sn)
-##   R: 6 küçük yarasa, %60 hasar, dönünce saldırı gücünün %5'i kadar can, hız saldırı hızıyla artar
+##   R: 6 küçük yarasa, %60 hasar, dönünce saldırı gücünün %4'ü kadar can (2026-10-10: %5 -> %4), hız saldırı hızıyla artar
 ## Bu test oyun mantığını (player.gd), paylaşılan formülleri (vampir_math.gd) ve diğer istemcideki kozmetik kopyayı
 ## (remote_player.gd) doğrular - kaster görür ama diğerleri görmez hata sınıfı için (bkz. CLAUDE.md).
 
@@ -143,7 +143,7 @@ func test_timing_tables() -> void:
 	## 2026-10-06: R'nin can bedeli yarıya indi (%5 -> %2,5 saniyede).
 	assert(P.VAMPIR_SKILL_COST_PERCENT == 0.04 and P.VAMPIR_ULTI_COST_PERCENT_PER_SEC == 0.025)
 	assert(P.VAMPIR_Q_DAMAGE_RATIO == 1.3 and P.VAMPIR_BAT_CONTACT_DAMAGE_RATIO == 0.8)
-	assert(P.VAMPIR_R_DAMAGE_RATIO == 0.6 and P.VAMPIR_R_HEAL_RATIO == 0.05)
+	assert(P.VAMPIR_R_DAMAGE_RATIO == 0.6 and P.VAMPIR_R_HEAL_RATIO == 0.04)
 	## 2026-09-28 yetenek evrimleri: taban yarasa formu %30 hız / hasar azaltma yok; "Gece Uçuşu" %60, "Gölge Kanatlar" %70 azaltma.
 	assert(P.VAMPIR_BAT_SPEED_MULT == 1.3 and P.EVO_VAMPIR_BAT_FAST_SPEED_MULT == 1.6 and P.EVO_VAMPIR_BAT_DAMAGE_TAKEN_MULT == 0.3)
 	assert(VampirMath.BAT_COUNT == 3 and P.EVO_VAMPIR_R_EXTRA_BATS == 2, "R: 3 yarasa (+2 evrimle)")
@@ -426,13 +426,15 @@ func test_r_toggle_pays_per_second_and_bats_attack_and_heal() -> void:
 	_cleanup()
 
 
-func test_r_bat_return_heals_five_percent_of_attack_power_and_speed_scales_with_attack_speed() -> void:
+func test_r_bat_return_heals_four_percent_of_attack_power_and_speed_scales_with_attack_speed() -> void:
 	var player: Node = _make_player()
 	_ready_player(player)
 	player.health = player.max_health - 40.0
 	var h0: float = player.health
 	player.vampir_bat_returned(Vector2.ZERO)
-	assert(is_equal_approx(player.health, h0 + player.damage_bonus * 0.05), "dönüş: AP'nin %%5'i kadar can")
+	## 2026-10-10 (kullanıcı: "ulti can yenileme saldırı gücü oranını %5 den %4 e düşür"): 0,05 -> 0,04.
+	assert(is_equal_approx(float(player.VAMPIR_R_HEAL_RATIO), 0.04), "oran sabiti 0,04")
+	assert(is_equal_approx(player.health, h0 + player.damage_bonus * 0.04), "dönüş: AP'nin %%4'ü kadar can")
 	player.fire_rate_mult = 1.0
 	assert(is_equal_approx(player._vampir_attack_speed_mult(), 1.0))
 	player.fire_rate_mult = 0.5 ## yarı bekleme = 2x saldırı hızı

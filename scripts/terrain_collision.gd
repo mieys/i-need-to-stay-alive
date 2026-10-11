@@ -11,7 +11,7 @@ extends RefCounted
 ## ayağı kökün ~15 px aşağısında olduğundan ayak izi 15 px YUKARI kaydırılır (FEET_SHIFT) - böylece AYAK nesneye değince durulur. Bir hücre ancak içine
 ## MIN_PIXELS piksel düşerse engel olur (ağaç gövdesi ~2 hücre, bina duvarı bandı ~2 hücre kalınlığında). Su: "Su/Su" katmanının hücreleri (1 hücre yukarı
 ## kaydırılmış); "Köprü/Köprü alt" altındaki su hücreleri açık (köprüden yürünür).
-## Görüşü KESMEZ: sis/görüş sadece orman duvarıdır (enemy_pathing.gd _fog_blocked -> C++ set_grid fog_blocked); mermiler de (orman/uçurum duvarı hariç) geçer.
+## Su/bina/maden görüşü KESMEZ: sis/görüş orman duvarı + (2026-10-09) ağaç katmanlarıdır (vision_occluders.gd, enemy_pathing.gd _fog_blocked -> C++ set_grid fog_blocked); mermiler orman/uçurum duvarı hariç geçer.
 ## Kategori başına açma/kapama sabitleri aşağıda (hepsi açık).
 ## Tuzaklar: Tiled'da bu katman adları değişirse sabitler güncellenmeli (bulunamayan katman sessizce atlanır; test_terrain_collision hepsinin bulunduğunu sınar);
 ## yassı/zemine serili bir katmanı nesne katmanlarına ekleme (ayak izi olarak yürünmez bir şerit çıkar); Düşman üssü ve maden bandı kalınlıkları gözle ayarlıydı.
@@ -32,6 +32,11 @@ const MINE_BAND := 14.0
 const BASE_BAND := 12.0
 
 const WATER_LAYER := "Su/Su"
+## 2026-10-11 (collision analizi, madde 85): Su katmanı düz mavi + hücre bazlı; kıyıyı bu "ayrıntı" katmanları çimenle örtüyor ve Su katmanına
+## kara olarak boyanmış yeşil çimen karoları da var. Hücre ancak GÖRÜNEN su pikseli (kıyı çimeni/kara karoları düşülünce) WATER_MIN_PIXELS'ten
+## fazlaysa engel olur (eskiden ~%14'ü görünür su olmayan hayalet hücreydi).
+const WATER_DETAIL_LAYERS: Array = ["Su/Su ayrıntılar 2", "Su/Su ayrıntılar 3", "Su/Su ayrıntıları 4"]
+const WATER_MIN_PIXELS := 100
 const BRIDGE_LAYER := "Köprü/Köprü alt"
 ## Bina DUVARI + kapısı (çatı/ayrıntı değil): ayak izi duvarın tabanı. Yürünüp kapıya etkileşimle girilir (yakınlık tabanlı), kapı hücreleri de engel.
 const HOUSE_WALL_LAYERS: Array = ["ev/Blacksmith", "ev/blacksmith kapı", "ev/Ev", "ev/ev kapı"]
@@ -145,8 +150,16 @@ static func _add_water(helper: Node, harita: Node, g0: Vector2) -> void:
 	var wofs: Vector2 = helper.cell_origin(water)
 	var shift := Vector2i(roundi((wofs.x - g0.x) / 16.0), roundi((wofs.y - g0.y) / 16.0) - 1)
 	var found: Dictionary = {}
+	var details: Array = [] ## [{layer, shift}]: Su hücresinin üstünü örten katmanlar (çizim sırasıyla)
+	for path: String in WATER_DETAIL_LAYERS:
+		var dl := harita.get_node_or_null(path) as TileMapLayer
+		if dl != null and dl.tile_set != null and not dl.get_used_cells().is_empty():
+			var dofs: Vector2 = helper.cell_origin(dl)
+			details.append({"layer": dl, "shift": Vector2i(roundi((dofs.x - wofs.x) / 16.0), roundi((dofs.y - wofs.y) / 16.0))})
+	var mask_cache: Dictionary = {}
 	for cell in water.get_used_cells():
-		found[cell + shift] = true
+		if _visible_water_pixels(helper, water, cell, details, mask_cache) >= WATER_MIN_PIXELS:
+			found[cell + shift] = true
 	var bridge := harita.get_node_or_null(BRIDGE_LAYER) as TileMapLayer
 	if bridge != null and bridge.tile_set != null:
 		var bofs: Vector2 = helper.cell_origin(bridge)
@@ -185,3 +198,65 @@ static func _commit(category: String, counts: Dictionary) -> void:
 			list.append(gc)
 	stats[category] = list.size()
 	by_category[category] = list
+
+
+## Su hücresinde GÖRÜNEN su pikseli sayısı: Su karosunun mavi pikselleri - üstündeki ayrıntı katmanlarının (kıyı çimeni vb.) mavi OLMAYAN opak pikselleri.
+## Su karosu mavi değilse (kara olarak boyanmış çimen karosu) 0.
+static func _visible_water_pixels(helper: Node, water: TileMapLayer, cell: Vector2i, details: Array, cache: Dictionary) -> int:
+	var base: PackedByteArray = _class_mask(helper, water, cell, cache)
+	if base.is_empty():
+		return 0
+	var visible: PackedByteArray = base.duplicate()
+	for d: Dictionary in details:
+		var dl: TileMapLayer = d["layer"]
+		var dc: Vector2i = cell - (d["shift"] as Vector2i)
+		if dl.get_cell_source_id(dc) == -1:
+			continue
+		var over: PackedByteArray = _class_mask(helper, dl, dc, cache)
+		for i in range(over.size()):
+			if over[i] == 2:
+				visible[i] = 0
+	var n := 0
+	for i in range(visible.size()):
+		if visible[i] == 1:
+			n += 1
+	return n
+
+
+## 16x16 karo maskesi (satır satır): 0 saydam, 1 opak mavi (su gibi), 2 opak mavi olmayan (çimen/kıyı/toprak). Çevirme/döndürme uygulanır; boş karo = boş dizi.
+static func _class_mask(helper: Node, layer: TileMapLayer, cell: Vector2i, cache: Dictionary) -> PackedByteArray:
+	var sid: int = layer.get_cell_source_id(cell)
+	var src := layer.tile_set.get_source(sid) as TileSetAtlasSource
+	if src == null or src.texture == null:
+		return PackedByteArray()
+	var coords: Vector2i = layer.get_cell_atlas_coords(cell)
+	if not src.has_tile(coords):
+		return PackedByteArray()
+	var td: TileData = layer.get_cell_tile_data(cell)
+	var fh: bool = td != null and td.flip_h
+	var fv: bool = td != null and td.flip_v
+	var tr: bool = td != null and td.transpose
+	var key := Vector4i(src.texture.get_instance_id() & 0x7fffffff, coords.x * 4096 + coords.y, int(fh) + 2 * int(fv) + 4 * int(tr), 0)
+	if cache.has(key):
+		return cache[key]
+	var out := PackedByteArray()
+	out.resize(256)
+	var img: Image = helper._image_of(src.texture)
+	if img == null:
+		return PackedByteArray()
+	var region: Rect2i = src.get_tile_texture_region(coords)
+	for y in range(16):
+		for x in range(16):
+			var sx: int = 15 - x if fh else x
+			var sy: int = 15 - y if fv else y
+			if tr:
+				var t: int = sx
+				sx = sy
+				sy = t
+			var c: Color = img.get_pixel(region.position.x + clampi(sx, 0, region.size.x - 1), region.position.y + clampi(sy, 0, region.size.y - 1))
+			var cls := 0
+			if c.a > 0.5:
+				cls = 1 if (c.b > c.g + 0.03 and c.b > c.r + 0.1) else 2
+			out[y * 16 + x] = cls
+	cache[key] = out
+	return out

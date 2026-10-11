@@ -108,7 +108,7 @@ func test_generated_stock_has_no_weapons() -> void:
 	var merchant_node: Node = (load("res://scripts/traveling_merchant.gd") as GDScript).new()
 	for i in range(20):
 		var stock: Array = merchant_node.call("_generate_stock")
-		assert(stock.size() == 8, "stok 8 eşya olmalı, bulunan: %d" % stock.size())
+		assert(stock.size() == 12, "stok 12 eşya olmalı (2026-10-10: 3 satır x 4), bulunan: %d" % stock.size())
 		for e: Dictionary in stock:
 			assert(str(e.get("type")) == "item", "satıcı sadece eşya satmalı: %s" % str(e))
 	merchant_node.free()

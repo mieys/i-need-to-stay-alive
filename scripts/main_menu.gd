@@ -313,7 +313,9 @@ func _on_start_pressed() -> void:
 
 
 func _on_multiplayer_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/lobby_menu.tscn")
+	## 2026-10-11 lobi sistemi: önce oda listesi (oda kur / şifreli odaya gir), sonra oda lobisi, sonra karakter seçimi.
+	NetworkManager.disconnect_from_room(false)
+	get_tree().change_scene_to_file("res://scenes/room_browser.tscn")
 
 
 ## Kullanıcı isteği: "oyunun başlangıç ekranına çıkış düğmesi ekle".

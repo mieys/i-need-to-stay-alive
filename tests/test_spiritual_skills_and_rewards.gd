@@ -84,7 +84,7 @@ func test_spiritual_definitions_match_the_spec() -> void:
 	assert(S.PARA_INTERVAL == 10.0 and S.PARA_GOLD == 5 and is_equal_approx(S.PARA_SHOP_DISCOUNT, 0.10), "Para: 10sn / 5 altın / %10")
 	assert(is_equal_approx(S.CAN_HEAL_PERCENT, 0.08) and is_equal_approx(S.CAN_SHIELD_PERCENT, 0.15) and S.CAN_INVULN_TIME == 3.0 and S.CAN_COOLDOWN == 90.0, "Can")
 	assert(S.ADC_DURATION == 10.0 and is_equal_approx(S.ADC_ATTACK_SPEED, 0.30) and is_equal_approx(S.ADC_SHIELD_PEN, 0.15) and is_equal_approx(S.ADC_LIFESTEAL, 0.01) and S.ADC_COOLDOWN == 120.0, "Adc")
-	assert(S.TANK_DURATION == 10.0 and is_equal_approx(S.TANK_REFLECT, 0.60) and is_equal_approx(S.TANK_SHIELD_REGEN, 0.03) and S.TANK_COOLDOWN == 100.0, "Tank")
+	assert(S.TANK_DURATION == 10.0 and is_equal_approx(S.TANK_REFLECT, 2.0) and is_equal_approx(S.TANK_SHIELD_REGEN, 0.03) and S.TANK_COOLDOWN == 100.0, "Tank")
 	assert(is_equal_approx(S.TAKTIK_SPEED_BONUS, 0.30) and S.TAKTIK_SPEED_TIME == 3.0 and S.TAKTIK_COOLDOWN == 30.0, "Taktiksel")
 	assert(S.DUKKAN_CHANNEL == 3.0 and S.DUKKAN_COOLDOWN == 120.0, "Dükkan")
 	for id in S.ORDER:
@@ -202,7 +202,7 @@ func test_tank_reflects_sixty_percent_and_regens_missing_shield() -> void:
 	player._try_spirit_skill()
 	var shield_before: float = player.item_shield_hp
 	player.take_damage(50.0, enemy)
-	assert(enemy.hits.size() == 1 and is_equal_approx(float(enemy.hits[0]), 30.0), "alınan hasarın %%60'ı yansımalı: %s" % str(enemy.hits))
+	assert(enemy.hits.size() == 1 and is_equal_approx(float(enemy.hits[0]), 100.0), "alınan hasarın %%200'ü yansımalı (2026-10-10): %s" % str(enemy.hits))
 	## Yenileme: eksik kalkanın %3'ü (hasar emiliminden önce).
 	assert(player.item_shield_hp > shield_before - 50.0 * 0.65 + 0.5, "eksik kalkanın bir kısmı yenilenmeli")
 	player._process_spirit(10.1)
@@ -229,7 +229,7 @@ func test_taktik_teleports_forward_and_gives_speed_for_three_seconds() -> void:
 
 # ------------------------------------------------------------------ Dükkan
 
-func test_dukkan_needs_merchant_channels_three_seconds_and_cancels_on_move_or_damage() -> void:
+func test_dukkan_needs_merchant_channels_three_seconds_and_damage_does_not_cancel() -> void:
 	var player: Node = _make_player(1, S.DUKKAN)
 	player._try_spirit_skill()
 	assert(player.spirit_state == "ready", "satıcı yokken kullanılamaz, bekleme başlamamalı")
@@ -237,16 +237,12 @@ func test_dukkan_needs_merchant_channels_three_seconds_and_cancels_on_move_or_da
 	GameManager.merchant_zone_pos = Vector2(2000.0, 2000.0)
 	player._try_spirit_skill()
 	assert(player.spirit_state == "active" and player._spirit_channeling, "odaklanma başladı")
-	## Hasar alınca iptal
+	## 2026-10-10: hasar artık odaklanmayı BÖLMEZ (kullanıcı isteği)
 	player.health -= 5.0
 	player._process_spirit(0.5)
-	assert(not player._spirit_channeling and player.spirit_state == "cooldown", "hasar odaklanmayı bölmeli")
-	assert(player.spirit_timer <= S.DUKKAN_CANCEL_LOCKOUT + 0.01, "iptalde tam bekleme yok")
-	player._process_spirit(S.DUKKAN_CANCEL_LOCKOUT + 0.1)
-	assert(player.spirit_state == "ready", "kilit bitti")
-	## Tamamlanma
-	player._try_spirit_skill()
-	for i in range(31):
+	assert(player._spirit_channeling and player.spirit_state == "active", "hasar odaklanmayı bölmemeli")
+	## Tamamlanma (hasar bölmediği için ilk 0,5 sn sayıldı: 0,5 + 2,6 = 3,1 sn)
+	for i in range(26):
 		player._process_spirit(0.1)
 	assert(player.global_position.distance_to(Vector2(2000.0, 2000.0)) < 120.0, "satıcının yanına ışınlanmalı: %s" % str(player.global_position))
 	assert(player.spirit_state == "cooldown" and absf(player.spirit_timer - 120.0) < 0.5, "120sn bekleme")
@@ -257,8 +253,8 @@ func test_dukkan_needs_merchant_channels_three_seconds_and_cancels_on_move_or_da
 
 ## Eskiden 4 silah + 8 eşya = 12 kartlı stoktu (2026-10-02 eşya sistemi); 2026-10-07'de silahlar ve kalkanlar demirci dükkanına
 ## (weapon_shop.gd) taşındı - satıcıda yalnızca 8 BENZERSİZ eşya kalır.
-func test_merchant_stock_is_eight_unique_items_and_no_weapons() -> void:
-	assert(MerchantScript.STOCK_SIZE == 8, "stok 8 olmalı (sadece eşya)")
+func test_merchant_stock_is_three_tier_rows_and_no_weapons() -> void:
+	assert(MerchantScript.STOCK_SIZE == 12, "stok 12 olmalı (sadece eşya; 2026-10-10: 3 satır x 4)")
 	var m: Node = MerchantScript.new()
 	add_child(m)
 	_spawned.append(m)
@@ -272,7 +268,11 @@ func test_merchant_stock_is_eight_unique_items_and_no_weapons() -> void:
 			assert(not seen.has(k), "tekrarlı eşya kartı: %s" % k)
 			seen[k] = true
 			items += 1
-		assert(items == MerchantScript.ITEM_STOCK, "8 eşya: %d" % items)
+		assert(items == MerchantScript.ITEM_STOCK, "12 eşya: %d" % items)
+		## satırlar: 0-3 parça, 4-7 epik, 8-11 efsanevi (efsanevi SADECE son satırda)
+		for idx in range(stock.size()):
+			var want: int = [Items.KADEME_PARCA, Items.KADEME_EPIK, Items.KADEME_EFSANEVI][idx / MerchantScript.ROW_ITEMS]
+			assert(Items.kademe(str(stock[idx]["key"])) == want, "satır %d kademesi %d olmalı" % [idx / MerchantScript.ROW_ITEMS, want])
 
 
 ## Eskiden "başlangıç silahı satıcıda ağırlıklı çıkmasın" testiydi; silah satışı kalktığı için karşılığı: sahip olunan silahlar

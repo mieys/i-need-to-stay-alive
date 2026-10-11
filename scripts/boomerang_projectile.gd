@@ -152,6 +152,7 @@ const TRAIL_FOLLOW_SPEEDS := [22.0, 14.0, 9.0] ## büyük = az gecikme (ön), k�
 ## (kuyruklu yıldız) artık beyaz girdap değil, AYNI bumerangın küçülerek solan "hayalet" kopyaları. Geri yakalanınca
 ## kısa bir parıltı. Eski Bullet (icon.png'nin kendisi, düz döndürülen) gizlenir.
 const RotFrames := preload("res://assets/weapons/boomerang/rot24_frames.tres")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const CatchFrames := preload("res://assets/fx/boomerang/catch_frames.tres")
 const ROT_STEPS := 24
 ## Sanat pikseli başına ölçek - kafadaki ikonla AYNI: icon.png = art48 x4, weapon_boomerang.tscn Icon ölçeği (ICON_SCALE) x 0.9
@@ -401,6 +402,7 @@ func _on_body_entered(body: Node) -> void:
 	if _returning and not pausing and return_crit and not is_crit:
 		hit_crit = true
 		hit_dmg *= float(source_weapon.get("crit_damage")) if is_instance_valid(source_weapon) and "crit_damage" in source_weapon else 2.0
+	BalanceLogScript.tag_weapon(source_weapon)
 	body.take_damage(hit_dmg, hit_crit, shield_pen_percent)
 	_grow_on_hit()
 	if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_projectile_hit"):

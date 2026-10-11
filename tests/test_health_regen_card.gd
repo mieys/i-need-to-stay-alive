@@ -47,3 +47,26 @@ func test_stat_regen_heals_value_every_five_seconds() -> void:
 func test_level_up_screen_description_matches() -> void:
 	assert(LevelUpScreenScript.UPGRADES.any(func(u): return u["id"] == "health_regen" and u["desc"] == "+2"),
 		"health_regen kartının açıklaması +2 olmalı")
+
+
+## 2026-10-10 (kullanıcı): Can Yenilenmesi kartı kademe 1-4 = 2 / 4 / 6 / 8 (kartta yazan ile uygulanan TEK kaynak: TierSystem.regen_card_for_tier).
+func test_health_regen_card_tiers_give_2_4_6_8() -> void:
+	var player: Node = PlayerScene.instantiate()
+	add_child(player)
+	var want: Array = [2.0, 4.0, 6.0, 8.0]
+	for tier in range(1, 5):
+		assert(is_equal_approx(TierSystem.regen_card_for_tier(tier), want[tier - 1]), "kademe %d tablo" % tier)
+		var before: float = player.heal_regen_card_bonus
+		player.apply_upgrade("health_regen", tier)
+		assert(is_equal_approx(player.heal_regen_card_bonus - before, want[tier - 1]), "kademe %d kartı +%s vermeli: %s" % [tier, want[tier - 1], player.heal_regen_card_bonus - before])
+	player.free()
+
+
+## 2026-10-10 (kullanıcı): kalkan delme üst sınırı %40 ve level atlama havuzunda Kalkan Delme kartı yok.
+func test_shield_pen_card_removed_and_total_pen_capped_at_forty_percent() -> void:
+	for u: Dictionary in LevelUpScreenScript.UPGRADES:
+		assert(str(u["id"]) != "shield_pen_percent", "Kalkan Delme kartı havuzda olmamalı")
+	var W: GDScript = load("res://scripts/weapon.gd")
+	assert(is_equal_approx(W.SHIELD_PEN_CAP, 0.40))
+	assert(is_equal_approx(W.cap_shield_pen(0.95), 0.40) and is_equal_approx(W.cap_shield_pen(0.25), 0.25), "toplam delme en çok %40")
+	assert(is_equal_approx(W.cap_shield_pen(0.0, true), 1.0), "gerçek hasar silahı (Tüftüf) istisna")

@@ -12,12 +12,17 @@ extends Node2D
 ##              yönü/ölçeği güncellenir (yön yumuşak döner). İstekler kesilince son loop_time sonunda söner. Kullanıcı
 ##              (2026-10-03, Destiny püskürtmesi): "spritesheet oynatılıp kapatılıyordu, sürekli devam etmesini istiyorum".
 ##              Her istemci aynı RPC'leri aldığı için uzak ekranlarda da aynı tek sürekli efekt olur.
+##   loop_sfx   (2026-10-11) SÜREKLİ efektin döngü sesi (res:// .wav): efekt yaşadıkça çalar, efektle birlikte solar. Veri RPC'yle
+##              gittiği için diğer oyuncularda da aynı ses (Ateş Asası püskürtmesi: assets/audio/fire_staff_spray_loop.wav).
+##   sfx_db     loop_sfx ses seviyesi (dB, varsayılan LOOP_SFX_DB)
 
 const WeaponTip := preload("res://scripts/weapon_tip.gd")
 const EnchantLayer := preload("res://scripts/enchant_layer.gd")
 const TEXEL := 1.212
 const DIR := "res://assets/fx/enchant/"
 const FADE := 0.25
+const LOOP_SFX_DB := -9.0
+const LOOP_SFX_FADE_IN := 0.08
 const SAFETY := 12.0
 
 static var _frames_cache: Dictionary = {}
@@ -53,6 +58,9 @@ const GLOW := {
 }
 
 var sheet: String = ""
+var loop_sfx: String = ""
+var sfx_db: float = LOOP_SFX_DB
+var _sfx: AudioStreamPlayer2D = null
 var loop_time: float = 0.0
 var sprite_scale: Vector2 = Vector2.ONE
 var sprite_offset: Vector2 = Vector2.ZERO
@@ -87,6 +95,14 @@ var _t: float = 0.0
 
 ## Sürekli (anahtarlı) efektler - bkz. dosya başı "key".
 static var _live: Dictionary = {}
+## EFEKT BÜTÇESİ (2026-10-10, kullanıcı: "talonun E si fpsi inanılmaz düşürüyor, nedenini anlamaya çalış"). KÖK NEDEN (gerçek Main + gerçek renderer ölçümü, 250 yaratık, 5 silah):
+## silahların kalıcı efsun özellikleri (kanama tikleri, Sismik Dalga, rüzgar kılıcı...) her isabette / her kanama tikinde (0,5 sn, kanayan HER yaratıkta) tek seferlik bir sprite efekti
+## doğurur; Talon E (Silah Salvosu) atış hızını 5-6 katına çıkarınca isabet ve tik sayısı da katlanıyordu: saniyede ~900 düğüm (327'si bu efekt), kare 12 -> 25 ms (81 -> 40 fps), 50-60 ms takılmalar.
+## Düzeltme: aynı anda canlı TEK SEFERLİK efekt sayısı en çok MAX_ONESHOT (üstü atlanır; sadece kozmetik - hasar/etki efektin düğümüne bağlı DEĞİL). Sürekli (anahtarlı/döngülü) ve silaha
+## yapışık efektler bütçeye girmez. Atlanan efekt ağdan da yayınlanmaz (enchant_fx.gd play).
+const MAX_ONESHOT := 40
+static var _oneshots: int = 0
+var _counted: bool = false
 const ROT_SMOOTH := 14.0 ## 1/sn - anahtarlı efektin yeni yöne dönüş hızı
 var key: String = ""
 var _target_rot: float = 0.0
@@ -99,8 +115,29 @@ static func frames(name: String) -> SpriteFrames:
 	return _frames_cache[name]
 
 
+## Bu istek tek seferlik bir efekt mi (bütçeye girer): anahtarsız, döngüsüz, silaha yapışık değil.
+static func is_oneshot(data: Dictionary) -> bool:
+	return str(data.get("key", "")) == "" and not data.has("follow_slot") and float(data.get("loop_time", 0.0)) <= 0.0
+
+
+## Bütçe dolu mu (yeni tek seferlik efekt atlanmalı mı). enchant_fx.gd play() yerelde doğurmadan ve ağa yollamadan önce sorar.
+static func over_budget(data: Dictionary) -> bool:
+	return is_oneshot(data) and _oneshots >= MAX_ONESHOT
+
+
+## Testler: sayaç + önbellek sıfırla.
+static func reset_budget() -> void:
+	_oneshots = 0
+
+
+static func live_oneshots() -> int:
+	return _oneshots
+
+
 static func spawn(tree: SceneTree, pos: Vector2, data: Dictionary) -> Node2D:
 	if tree == null or tree.current_scene == null:
+		return null
+	if over_budget(data):
 		return null
 	var k: String = str(data.get("key", ""))
 	if k != "":
@@ -110,6 +147,8 @@ static func spawn(tree: SceneTree, pos: Vector2, data: Dictionary) -> Node2D:
 			return live
 	var n: Node2D = (load("res://scripts/fx_enchant_sprite.gd") as GDScript).new()
 	n.sheet = str(data.get("sheet", ""))
+	n.loop_sfx = str(data.get("loop_sfx", ""))
+	n.sfx_db = float(data.get("sfx_db", LOOP_SFX_DB))
 	n.loop_time = float(data.get("loop_time", 0.0))
 	var sc: Variant = data.get("scale", 1.0)
 	n.sprite_scale = sc if sc is Vector2 else Vector2.ONE * float(sc)
@@ -120,6 +159,9 @@ static func spawn(tree: SceneTree, pos: Vector2, data: Dictionary) -> Node2D:
 	if k != "":
 		n.key = k
 		_live[k] = n
+	if is_oneshot(data):
+		n._counted = true
+		_oneshots += 1
 	if GLOW.has(n.sheet):
 		var g: Array = GLOW[n.sheet]
 		n.night_glow_off = false
@@ -179,9 +221,31 @@ func _refresh(pos: Vector2, data: Dictionary) -> void:
 		global_position = pos
 
 
+## Döngü sesi: wav çalışma anında döngüye alınır (.import ayarı gerekmez, atmosphere.gd ile aynı yol). Ses düğümü efekte bağlı
+## (follow_slot'lu alev asayla yürür) - efekt silinince ses de biter.
+func _start_loop_sfx() -> void:
+	var stream: AudioStream = load(loop_sfx)
+	if stream is AudioStreamWAV:
+		var wav := (stream as AudioStreamWAV).duplicate() as AudioStreamWAV
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_begin = 0
+		wav.loop_end = int(round(wav.get_length() * float(wav.mix_rate)))
+		stream = wav
+	_sfx = AudioStreamPlayer2D.new()
+	_sfx.name = "LoopSfx"
+	_sfx.stream = stream
+	_sfx.volume_db = sfx_db - 30.0
+	_sfx.max_distance = 1500.0
+	add_child(_sfx)
+	_sfx.play(randf() * maxf(0.0, stream.get_length() - 0.1)) ## rastgele noktadan: iki asa aynı anda çalınca üst üste binmesin
+
+
 func _exit_tree() -> void:
 	if key != "" and _live.get(key) == self:
 		_live.erase(key)
+	if _counted:
+		_counted = false
+		_oneshots = maxi(0, _oneshots - 1)
 
 
 ## Silah ikonunun ÇİZİLİ bakış yönü (dünya radyanı). weapon.gd _update_aim / remote_player.gd _update_local_weapon_aim ile aynı bağıntı:
@@ -218,6 +282,8 @@ func _ready() -> void:
 	if _spr.sprite_frames == null:
 		queue_free()
 		return
+	if loop_sfx != "" and loop_time > 0.0 and ResourceLoader.exists(loop_sfx) and DisplayServer.get_name() != "headless":
+		_start_loop_sfx()
 	if loop_time > 0.0 and _spr.sprite_frames.has_animation(&"loop"):
 		_spr.play(&"loop")
 	elif _spr.sprite_frames.has_animation(&"play"):
@@ -280,6 +346,9 @@ func _process(delta: float) -> void:
 		_follow_update()
 	if loop_time > 0.0:
 		modulate.a = clampf(minf(_t / 0.12, (loop_time - _t) / FADE), 0.0, 1.0)
+		if _sfx != null:
+			var a: float = clampf(minf(_t / LOOP_SFX_FADE_IN, (loop_time - _t) / FADE), 0.0, 1.0)
+			_sfx.volume_db = sfx_db + linear_to_db(maxf(a, 0.001))
 		if _t >= loop_time:
 			queue_free()
 	elif _t >= SAFETY:

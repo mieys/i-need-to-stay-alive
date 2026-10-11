@@ -13,13 +13,17 @@ extends RefCounted
 const FIRST_SPAWN_DELAY := 1.2 ## boss doğunca ilk uzvun çıkışına kadar
 
 # ---------------------------------------------------------------- uzuv sayısı / çıkış sıklığı
-const MAX_ACTIVE := 7 ## aynı anda yüzeyde en çok uzuv (tek oyunculu)
-const MAX_ACTIVE_PER_EXTRA_PLAYER := 2 ## her ekstra oyuncu için +2
-const SPAWN_INTERVAL_MIN := 1.3 ## iki tekil çıkış arası (sn)
-const SPAWN_INTERVAL_MAX := 2.0
-const LINE_INTERVAL_MIN := 13.0 ## iki "dümdüz sıra" olayı arası
-const LINE_INTERVAL_MAX := 19.0
-const FIRST_LINE_DELAY := 8.0
+## KULLANICI İSTEĞİ (2026-10-10): "yeraltı canavarları çok zararsızlar, yeterince asit atışı yapmıyorlar ve yeterince hareketli değiller, oyuncuların etrafında sürekli spawnlanıp durmaları gerekiyor":
+## çıkış ~2,2 kat sık (0,55-0,95 sn), yüzeyde aynı anda 7 -> 10 uzuv, ömürler yarıya (5-8 sn: durmadan çıkıp gömülürler), asit atanlar %45 -> %60 ve ~2 kat sık atar + 3 damlalık yelpaze,
+## savurma bekleme 1,7 -> 1,1 sn, dümdüz sıra olayı daha sık. Eski değerler: MAX_ACTIVE 7 (+2), SPAWN_INTERVAL 1,3-2,0, LINE 13-19 (ilk 8), SPITTER_CHANCE 0,45, LIFETIME 9-14 / sıra 13-17,
+## LASH_COOLDOWN 1,7, SPIT_COOLDOWN 2,4-3,4, SPIT_RANGE_MAX 430, ACID_RANGE 520, tek damla.
+const MAX_ACTIVE := 10 ## aynı anda yüzeyde en çok uzuv (tek oyunculu)
+const MAX_ACTIVE_PER_EXTRA_PLAYER := 3 ## her ekstra oyuncu için +3
+const SPAWN_INTERVAL_MIN := 0.55 ## iki tekil çıkış arası (sn)
+const SPAWN_INTERVAL_MAX := 0.95
+const LINE_INTERVAL_MIN := 9.0 ## iki "dümdüz sıra" olayı arası
+const LINE_INTERVAL_MAX := 13.0
+const FIRST_LINE_DELAY := 5.0
 ## "Yol kesen sıra" (kullanıcı 2026-10-09: "dip dibe dizilmesini istemiyorum, daha ayrık ve rastgele olmalılar"): eskiden 5 uzuv 46 px aralıkla DÜMDÜZ bir duvardı (sprite'lar üst üste biniyordu, geçit yoktu).
 ## Şimdi 4-6 uzuv, gidiş yönüne DİK ama aralıkları rastgele (100-170 px: sprite'lar birbirine değmez, aralarından geçilir), her biri gidiş yönünde ayrı ayrı kayık (+-45 px) ve
 ## çıkış sırası/gecikmesi rastgele: "yolu kesen dağınık bir engel dizisi", düz çizgi değil.
@@ -34,7 +38,7 @@ const LINE_DISTANCE_MAX := 280.0
 const LINE_STAGGER_MIN := 0.08 ## ardışık iki uzvun çıkışı arası gecikme (rastgele; çıkış sırası da karışık)
 const LINE_STAGGER_MAX := 0.45
 const LINE_MIN_LIMB_GAP := 80.0 ## sıradaki bir uzuv, yüzeydeki başka bir uzuvdan en az bu kadar uzakta çıkar
-const SPITTER_CHANCE := 0.45 ## tekil çıkışta asit atan olma olasılığı (sıra uzuvları hep YAKIN DÖVÜŞ: yolu bedenleriyle keser)
+const SPITTER_CHANCE := 0.45 ## 2026-10-11: 0,6 -> 0,45 (kullanıcı: "asitler çok büyük ve çok sık, kazanmak imkansız") - tekil çıkışta asit atan olma olasılığı (sıra uzuvları hep YAKIN DÖVÜŞ: yolu bedenleriyle keser)
 
 # ---------------------------------------------------------------- konum seçimi (yol kesme)
 const LEAD_MIN := 150.0 ## oyuncunun gidiş yönünde ne kadar ileride
@@ -45,7 +49,7 @@ const STILL_RING_MIN := 130.0 ## duran oyuncunun çevresinde halka
 const STILL_RING_MAX := 230.0
 const MIN_PLAYER_DIST := 95.0 ## hiçbir oyuncunun bu kadar yakınında çıkmaz (altında/dibinde doğup sıkıştırmasın)
 const MIN_LIMB_SPACING := 96.0 ## tekil çıkışta başka uzuvdan en az bu kadar uzak (sprite ~55 px geniş: üst üste binmesinler)
-const PLACE_TRIES := 14
+const PLACE_TRIES := 20
 
 # ---------------------------------------------------------------- uzuv
 const KIND_LASHER := 0 ## yakın dövüş (savurma)
@@ -55,38 +59,52 @@ const FATE_RETREAT := 1 ## eşiğin RETREAT_FRACTION'ında deliğine döner
 const LIMB_THRESHOLD := 2000.0 ## uzvun alabileceği toplam hasar = bossun bu kadar havuzu eriyip gider (sahnedeki max_health ile AYNI)
 const RETREAT_FRACTION := 0.55
 const FATE_RETREAT_CHANCE := 0.35
-const LIFETIME_MIN := 9.0 ## ömrü dolunca kendiliğinden döner
-const LIFETIME_MAX := 14.0
-const LINE_LIFETIME_MIN := 13.0
-const LINE_LIFETIME_MAX := 17.0
+const LIFETIME_MIN := 5.0 ## ömrü dolunca kendiliğinden döner
+const LIFETIME_MAX := 8.0
+const LINE_LIFETIME_MIN := 8.0
+const LINE_LIFETIME_MAX := 11.0
 const HARD_BLOCK_RADIUS := 18.0 ## oyuncuyu ŞU mesafede durduran sert gövde (normal yaratıkların yumuşak bloğu ~11 px, bkz. player.gd)
 const EMERGE_TIME := 0.45 ## çıkış animasyonu (4 kare)
 const HIDE_TIME := 0.85 ## gömülme animasyonu (8 kare)
-const FIRST_ATTACK_DELAY := 0.8 ## çıktıktan sonra ilk saldırıya kadar
+const FIRST_ATTACK_DELAY := 0.5 ## çıktıktan sonra ilk saldırıya kadar
 
 # ---------------------------------------------------------------- saldırılar
-const LASH_DAMAGE := 130.0
+const LASH_DAMAGE := 46.8 ## 2026-10-11: 78 -> 46,8 (kullanıcı yine: "yeraltı canavarının hasarını %40 azalt"; genel %20 kesinti buna ayrıca UYGULANMAZ). 2026-10-10: 130 -> 78
 const LASH_RANGE := 104.0 ## merkez-hedef mesafesi: bu kadar yakınsa savurur
 const LASH_REACH := 112.0 ## isabet yarıçapı (menzil + oyuncu payı)
 const LASH_ANIM := 0.7 ## 7 kare
 const LASH_STRIKE_AT := 0.33 ## isabet karesi (kare 3)
 const LASH_WARN_FROM := 0.0 ## uyarı (kırmızı parlama) animasyon başından savurmaya kadar
-const LASH_COOLDOWN := 1.7
+const LASH_COOLDOWN := 1.1
 const LASH_CONE_DOT := 0.0 ## savurma yönüne göre ön yarım düzlem (dot > bu)
-const ACID_DAMAGE := 110.0
+const ACID_DAMAGE := 39.6 ## 2026-10-11: 66 -> 39,6 (%40 az). 2026-10-10: 110 -> 66 (%40 az)
 const SPIT_RANGE_MIN := 40.0 ## yakındaki oyuncuya da tükürür (bedende değilse)
-const SPIT_RANGE_MAX := 430.0
+const SPIT_RANGE_MAX := 520.0
 const SPIT_ANIM := 0.6 ## 6 kare
 const SPIT_FIRE_AT := 0.30
+## 2026-10-11: 1,1-1,7 -> 2,4-3,4 (asit yoğunluğu ~%65 az; 3 damlalık yelpaze kaldı)
 const SPIT_COOLDOWN_MIN := 2.4
 const SPIT_COOLDOWN_MAX := 3.4
+const ACID_VOLLEY := 3 ## her tükürmede bu kadar damla, yelpaze halinde (orta damla hedefe)
+const ACID_VOLLEY_FAN_DEG := 13.0 ## komşu damlalar arası açı
 const ACID_SPEED := 240.0
-const ACID_RANGE := 520.0
-const ACID_HIT_RADIUS := 16.0 ## + oyuncu gövdesi
+const ACID_RANGE := 620.0
+const ACID_HIT_RADIUS := 11.0 ## + oyuncu gövdesi (2026-10-11: 16 -> 11, damla görseliyle birlikte küçüldü)
+
+# ---------------------------------------------------------------- uzvun bakışı (2026-10-10: "bazı uzuvlar sağa sola dönmeyi spamlıyor")
+## KÖK NEDEN: uzuv C++ EnemyWorld'de normal yaratık olarak kayıtlıydı; C++ yapay zekâsı her düşünmede KENDİ hedefine (müttefik/köpek/kışkırtan/baloncuk sahibi dahil) çeviriyor,
+## worm_limb.gd ise her karede en yakın OYUNCUYA çeviriyordu: iki yazıcı farklı yönler yazınca satır (sağ/sol/üst/alt) kare kare titriyordu. Düzeltme: uzuv C++'ta UYKUYA alınır (set_dormant: hedef/
+## yön yok), yön SADECE worm_limb.gd'den gelir, tutma süresi + eksen histerezisi ile ve her satır değişimi "worm_face" ile istemcilere de gider.
+const FACE_HOLD := 0.35 ## bir yön değişiminden sonra bu kadar süre yeni yön kabul edilmez (saldırı nişanı hariç)
+const FACE_AXIS_HYSTERESIS := 1.35 ## yatay <-> dikey satır değişimi için yeni eksenin baskınlık payı
+const ROW_DOWN := 0 ## enemy.gd ROW_* ile AYNI (aşağı/yukarı/sol/sağ ızgara düzeni)
+const ROW_UP := 1
+const ROW_LEFT := 2
+const ROW_RIGHT := 3
 
 # ---------------------------------------------------------------- boss sesleri
-const RUMBLE_MIN := 5.0 ## yeraltı gümbürtüsü aralığı (sn)
-const RUMBLE_MAX := 9.0
+const RUMBLE_MIN := 6.0 ## 2026-10-10 2. tur: "çok sık sarsıntı" -> 3-6 sn'den 6-10 sn'ye ## yeraltı gümbürtüsü aralığı (sn; 2026-10-10: deprem hissi için 5-9 -> 3-6)
+const RUMBLE_MAX := 10.0
 const GROWL_MIN := 9.0
 const GROWL_MAX := 15.0
 const AMBIENT_MIN := 16.0 ## Horror paketinden "Gore And Larvae" katmanı
@@ -99,6 +117,25 @@ const POSE_EMERGE := 11
 const POSE_LASH := 12
 const POSE_SPIT := 13
 const POSE_HIDE := 14
+
+
+## Bakış satırı (ROW_*): `dir` yönüne göre; mevcut satır `current_row` ise EKSEN HİSTEREZİSİ uygulanır (yatay satırdayken dikey ancak FACE_AXIS_HYSTERESIS kat baskınsa, tersi de).
+## Yön çok küçükse (< 0,1) satır değişmez. Saf hesap (testli).
+static func face_row(dir: Vector2, current_row: int) -> int:
+	if dir.length() < 0.1:
+		return current_row
+	var ax: float = absf(dir.x)
+	var ay: float = absf(dir.y)
+	var horizontal: bool
+	if current_row == ROW_LEFT or current_row == ROW_RIGHT:
+		horizontal = ax * FACE_AXIS_HYSTERESIS >= ay
+	elif current_row == ROW_UP or current_row == ROW_DOWN:
+		horizontal = ax >= ay * FACE_AXIS_HYSTERESIS
+	else:
+		horizontal = ax > ay
+	if horizontal:
+		return ROW_RIGHT if dir.x > 0.0 else ROW_LEFT
+	return ROW_DOWN if dir.y > 0.0 else ROW_UP
 
 
 ## Uzvun türü: roll 0..1 (asit atan olma şansı SPITTER_CHANCE).
@@ -168,6 +205,14 @@ static func spawn_ok(p: Vector2, players: Array, limbs: Array, blocked: Callable
 		if p.distance_to(l as Vector2) < min_limb_spacing:
 			return false
 	return true
+
+
+## Asit yelpazesinin açıları (radyan, orta damla 0): ACID_VOLLEY damla, komşular ACID_VOLLEY_FAN_DEG arayla ortalanmış.
+static func volley_angles() -> Array[float]:
+	var out: Array[float] = []
+	for i in range(ACID_VOLLEY):
+		out.append((float(i) - float(ACID_VOLLEY - 1) * 0.5) * deg_to_rad(ACID_VOLLEY_FAN_DEG))
+	return out
 
 
 ## Aynı anda yüzeyde olabilecek uzuv sayısı (oyuncu sayısına göre).

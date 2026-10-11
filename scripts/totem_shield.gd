@@ -15,7 +15,7 @@ class_name TotemShield
 const SELF_PERCENT := 0.005
 ## Kullanıcı isteği (2026-09-24 denge turu): "Shaman'ın kalkanı %12 AP olsun" - 0.20 -> 0.12 (30sn boyunca tüm takıma
 ## saniyede AP'nin %20'si kalkan, AP ile sınırsız büyüyen en güçlü takım savunmalarından biriydi).
-const ATTACK_POWER_RATIO := 0.12
+const ATTACK_POWER_RATIO := 0.07 ## 2026-10-10: 0,12 -> 0,07 (kullanıcı: "Shaman'ın kalkan veren yeteneğinin saldırı gücü oranlarını biraz düşür, çok kalkan veriyor")
 ## Yetenek evrimleri (kart metinleri skill_evolutions.gd DEFS[12]): "Güçlü Kalkan" (shaman_e4) verilen kalkan x1.5;
 ## "Savaş Ritmi" (shaman_e2) alandaki oyunculara +%15 saldırı hızı (player.gd enchant_haste_value "atk_speed" buff'ı okur).
 const EVO_SHIELD_MULT := 1.5

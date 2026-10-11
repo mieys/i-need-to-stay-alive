@@ -1,7 +1,7 @@
 extends Control
 
 ## ÜST ORTA BOSS BARI (kullanıcı isteği 2026-10-05: "boss aktifken diğer oyunlardaki gibi ekranın üst ortasında, kendine özel can ve
-## kalkan barı tasarımı"; prototip T1 "Ahşap Plaket" seçildi). Sahnede canlı en az bir boss ("boss" grubu) varken gösterilir.
+## kalkan barı tasarımı"; prototip T1 "Ahşap Plaket" seçildi; 2026-10-10'dan beri 3. tur R2 "Kafatası Madalyonu"). Sahnede canlı en az bir boss ("boss" grubu) varken gösterilir.
 ##
 ## Her peer KENDİ ekranı için kendi seçimini yapar (ağdan bir şey gönderilmez): host'ta gerçek yaratıkları, istemcide kuklaları okur
 ## (can, kalkan ve ölüm zaten senkron; maks can/kalkan istemcide aynı formülle hesaplanıyor, bkz. enemy_spawner _rpc_client_spawn_creature).
@@ -19,6 +19,10 @@ const FADE_SECONDS := 0.25
 ## Ana boss el değiştirsin diye gereken üstünlük: yeni en yakın, eski ana bossun mesafesinin bu oranından (+ pay) yakın olmalı.
 const FOCUS_RATIO := 1.25
 const FOCUS_SLACK := 120.0
+## SON HASAR İZİ (R2, 2026-10-10): can düşünce kırmızının arkasında açık renkli şerit kalır, TRAIL_HOLD sn bekler (her yeni vuruş
+## beklemeyi yeniler) sonra saniyede TRAIL_SPEED bar oranıyla cana iner. Sadece görsel, ağdan bir şey gitmez.
+const TRAIL_HOLD := 0.45
+const TRAIL_SPEED := 0.55
 
 var scale_px: float = 3.0 ## 1 sanat pikseli = kaç ekran pikseli (telefonda 2)
 ## Üst kenar (ekran y) sağlayıcısı: main.gd verir (telefonda görev satırlarının altı). Boşsa sabit TOP_Y.
@@ -30,6 +34,9 @@ var _main_id: int = 0
 var _timer: float = 0.0
 var _shown: bool = false
 var _tween: Tween = null
+var _trail: float = 0.0 ## son hasar izinin ulaştığı can oranı (>= gösterilen can)
+var _trail_hold: float = 0.0
+var _trail_id: int = 0 ## izin ait olduğu boss (ana boss değişince iz sıfırlanır)
 
 
 func _ready() -> void:
@@ -46,6 +53,13 @@ func get_bottom_y() -> float:
 
 
 func _process(delta: float) -> void:
+	if not _entry.is_empty():
+		var hp: float = float(_entry["hp"])
+		if _trail > hp:
+			var st: Vector2 = trail_step(_trail, hp, _trail_hold, delta)
+			_trail = st.x
+			_trail_hold = st.y
+			queue_redraw()
 	_timer += delta
 	if _timer < REFRESH_SECONDS:
 		return
@@ -81,6 +95,26 @@ func _view_center() -> Vector2:
 	return cam.get_screen_center_position() if cam else Vector2.ZERO
 
 
+## İz kuralı (SAF - testler çağırır): bekleme bitene kadar iz yerinde kalır, sonra TRAIL_SPEED ile cana iner. Döner: (iz, kalan bekleme).
+static func trail_step(trail: float, hp: float, hold: float, delta: float) -> Vector2:
+	if trail <= hp:
+		return Vector2(hp, 0.0)
+	if hold > 0.0:
+		return Vector2(trail, maxf(hold - delta, 0.0))
+	return Vector2(maxf(hp, trail - TRAIL_SPEED * delta), 0.0)
+
+
+## Yeni okunan can oranına göre izi günceller: başka boss / can arttı -> iz = can; can düştü -> beklemeyi yeniler (iz yerinde kalır).
+func _update_trail(id: int, hp: float) -> void:
+	if id != _trail_id or _entry.is_empty() or hp >= _trail:
+		_trail_id = id
+		_trail = hp
+		_trail_hold = 0.0
+		return
+	if hp < float(_entry["hp"]) - 0.00001:
+		_trail_hold = TRAIL_HOLD
+
+
 static func _ratio(value: float, maximum: float) -> float:
 	return clampf(value / maximum, 0.0, 1.0) if maximum > 0.0 else 0.0
 
@@ -113,6 +147,7 @@ func refresh() -> void:
 		"sh_text": ArtScript.bar_text(float(boss.get("item_shield_hp")), float(boss.get("item_shield_max"))),
 	}
 	var sig: String = "%s:%d:%d:%s:%s" % [e["name"], int(round(float(e["hp"]) * 1000.0)), int(round(float(e["sh"]) * 1000.0)), e["hp_text"], e["sh_text"]]
+	_update_trail(_main_id, float(e["hp"]))
 	if not _shown:
 		_shown = true
 		visible = true
@@ -149,4 +184,4 @@ func _draw() -> void:
 	if _entry.is_empty():
 		return
 	ArtScript.top_plaque(self, Vector2.ZERO, scale_px, str(_entry["name"]), float(_entry["hp"]), float(_entry["sh"]), ArtScript.TOP_W,
-			str(_entry.get("hp_text", "")), str(_entry.get("sh_text", "")))
+			str(_entry.get("hp_text", "")), str(_entry.get("sh_text", "")), _trail)

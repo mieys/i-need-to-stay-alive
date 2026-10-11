@@ -145,8 +145,8 @@ const ESCORT_PUSH_RADIUS := 130.0
 ## rota/hız ile hesaplandığı için (ESCORT_TIMEOUT_BUFFER) o da orantılı kısalır.
 const ESCORT_BASE_SPEED := 9.6
 const ESCORT_RETREAT_RATIO := 0.2 ## "%20si kadar"
-const ESCORT_SPEED_PER_EXTRA_PLAYER := 0.15 ## "biraz hızı artabilir"
-const ESCORT_MAX_SPEED_MULT := 1.6
+const ESCORT_SPEED_PER_EXTRA_PLAYER := 0.35 ## "biraz hızı artabilir"; 2026-10-10: 0,15 -> 0,35 (kullanıcı: "oyuncu sayısına bağlı olarak hızlanmıyor" - %15 fark edilmiyordu)
+const ESCORT_MAX_SPEED_MULT := 2.05 ## 2026-10-10: 1,6 -> 2,05 (4 iten oyuncu = x2,05)
 ## Kullanıcı isteği (2026-09-24): "arabayı götüreceğimiz yerler çok daha uzak olmalı görevler çok kolay ve hızlı
 ## bitiyor süreleri uzamalı" - eskiden 500-900 birimlik DÜZ bir çizgiydi (8 u/sn'de ~1-2 dk). Artık ROTA UZUNLUĞU
 ## (duvarları dolanan yol, bkz. _escort_route) 1600-2600 birim (~3.5-5.5 dk kesintisiz itme; geri kaymalarla daha uzun).
@@ -515,7 +515,7 @@ func _end_mission(slot_i: int, success: bool) -> void:
 				reward = COPY_REWARD_GOLD
 				reward_radius = 999999.0 ## kopyalar dağınık yerlerde - takım hep birlikte ödüllenir
 		_grant_reward_to_zone_players(reward_pos, reward_radius, reward)
-		_grant_chest_to_all_players()
+		_grant_shards_to_all_players()
 	## Temizlik (bkz. ilgili mission_*.gd notları).
 	match slot["kind"]:
 		MissionKind.DEFEND_TREE:
@@ -598,6 +598,21 @@ func _grant_reward_to_zone_players(pos: Vector2, radius: float, gold: int) -> vo
 
 ## bkz. yukarıdaki görev sandığı notu. Host kendi kuyruğuna ekler, uzak oyunculara open_elite_chest_for_peer (elit
 ## sandık paylaşımıyla AYNI RPC, bkz. NetworkManager.host_award_elite_chest).
+## 2026-10-10 (kullanıcı: "bundan sonra görevlerden elit sandık yerine her oyuncuya 5 tane silah parçacığı versin"): görev ödülü artık yaşayan HER oyuncuya
+## MISSION_SHARD_REWARD silah parçacığı (bölünmez; düşen parçacıkla aynı dağıtım yolu NetworkManager.host_award_weapon_shards). Eski elit sandık ödülü
+## _grant_chest_to_all_players olarak duruyor (kullanılmıyor).
+const MISSION_SHARD_REWARD := 5
+
+
+func _grant_shards_to_all_players() -> void:
+	if NetworkManager.is_multiplayer_active:
+		if NetworkManager.is_host:
+			NetworkManager.host_award_weapon_shards(MISSION_SHARD_REWARD)
+		return
+	GameManager.add_weapon_shards(MISSION_SHARD_REWARD)
+	NetworkManager.show_weapon_shard_text(MISSION_SHARD_REWARD)
+
+
 func _grant_chest_to_all_players() -> void:
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
 	for p: Dictionary in NetworkManager.get_reward_participants():
@@ -819,37 +834,51 @@ func _copy_weapon_keys_of(p: Node) -> Array:
 	return keys
 
 
+## 2026-10-11 (kullanıcı: "multiplayerda kopya görevi her oyuncunun kopyası olarak toplu bir şekilde ekip halinde gelmeliler"): eskiden her kopya
+## haritada AYRI rastgele bir yerde doğuyordu. Artık tek bir rastgele buluşma noktası seçilir, kopyalar onun çevresinde COPY_TEAM_RADIUS'luk
+## halkaya dizilir (duvara denk gelen yer merkeze çekilir) - takım olarak birlikte gelirler.
+const COPY_TEAM_RADIUS := 70.0
+
+
 func _spawn_copies(mission_id: int) -> Dictionary:
 	var copies: Array = []
 	var meta: Array = []
 	var idx := 0
+	var sources: Array = []
 	for group_name in ["player", "remote_players"]:
 		for p: Node in get_tree().get_nodes_in_group(group_name):
-			if not is_instance_valid(p) or p.get("is_dead") == true or _is_hadime_ghost(p):
-				continue
-			var pos: Vector2 = _random_map_position(float(SPAWN_CLEARANCE[MissionKind.KILL_YOUR_COPY]))
-			if pos == Vector2.ZERO:
-				continue
-			var char_id: int = int(p.get("char_id")) if "char_id" in p else int(GameManager.selected_char_id)
-			## Gerçek (bonuslu) yürüme hızı - bkz. player.gd/remote_player.gd get_effective_move_speed. Kopya ayrıca
-			## source_player üzerinden bunu her karede yeniden okur (hız buff'ları anında yansısın).
-			## Kalıcı hız (yetenek buff'ları hariç - bkz. mission_player_copy.gd hız notu).
-			var spd: float = float(p.call("get_base_move_speed")) if p.has_method("get_base_move_speed") else Characters.BASE_MOVE_SPEED
-			var maxhp_v: Variant = p.get("max_health")
-			var maxhp: float = float(maxhp_v) if maxhp_v != null else 100.0
-			## Kalkan (kullanıcı isteği 2026-09-24: "kopyanın kalkanı yok") - yerel Player ve RemotePlayer'da aynı alan adı.
-			var maxsh_v: Variant = p.get("item_shield_max")
-			var maxsh: float = float(maxsh_v) if maxsh_v != null else 0.0
-			var dmg_v: Variant = p.get("damage_bonus")
-			var dmg: float = float(dmg_v) if dmg_v != null else COPY_BASE_DAMAGE
-			var copy: CharacterBody2D = CopyScript.new()
-			get_tree().current_scene.add_child(copy)
-			copy.global_position = pos
-			copy.setup(mission_id, idx, char_id, maxhp, maxsh, spd, dmg, true)
-			copy.set("source_player", p)
-			var weapon_keys: Array = _copy_weapon_keys_of(p)
-			copy.set_weapon_keys(weapon_keys)
-			copies.append(copy)
-			meta.append({"char_id": char_id, "pos": pos, "weapons": weapon_keys, "max_hp": maxhp, "max_shield": maxsh})
-			idx += 1
+			if is_instance_valid(p) and p.get("is_dead") != true and not _is_hadime_ghost(p):
+				sources.append(p)
+	var center: Vector2 = _random_map_position(float(SPAWN_CLEARANCE[MissionKind.KILL_YOUR_COPY]))
+	if center == Vector2.ZERO:
+		return {"nodes": copies, "meta": meta}
+	for i in sources.size():
+		var p: Node = sources[i]
+		var pos: Vector2 = center
+		if sources.size() > 1:
+			var spot: Vector2 = center + Vector2.RIGHT.rotated(TAU * float(i) / float(sources.size())) * COPY_TEAM_RADIUS
+			if not GameManager.is_position_blocked_by_walls(spot):
+				pos = spot
+		var char_id: int = int(p.get("char_id")) if "char_id" in p else int(GameManager.selected_char_id)
+		## Gerçek (bonuslu) yürüme hızı - bkz. player.gd/remote_player.gd get_effective_move_speed. Kopya ayrıca
+		## source_player üzerinden bunu her karede yeniden okur (hız buff'ları anında yansısın).
+		## Kalıcı hız (yetenek buff'ları hariç - bkz. mission_player_copy.gd hız notu).
+		var spd: float = float(p.call("get_base_move_speed")) if p.has_method("get_base_move_speed") else Characters.BASE_MOVE_SPEED
+		var maxhp_v: Variant = p.get("max_health")
+		var maxhp: float = float(maxhp_v) if maxhp_v != null else 100.0
+		## Kalkan (kullanıcı isteği 2026-09-24: "kopyanın kalkanı yok") - yerel Player ve RemotePlayer'da aynı alan adı.
+		var maxsh_v: Variant = p.get("item_shield_max")
+		var maxsh: float = float(maxsh_v) if maxsh_v != null else 0.0
+		var dmg_v: Variant = p.get("damage_bonus")
+		var dmg: float = float(dmg_v) if dmg_v != null else COPY_BASE_DAMAGE
+		var copy: CharacterBody2D = CopyScript.new()
+		get_tree().current_scene.add_child(copy)
+		copy.global_position = pos
+		copy.setup(mission_id, idx, char_id, maxhp, maxsh, spd, dmg, true)
+		copy.set("source_player", p)
+		var weapon_keys: Array = _copy_weapon_keys_of(p)
+		copy.set_weapon_keys(weapon_keys)
+		copies.append(copy)
+		meta.append({"char_id": char_id, "pos": pos, "weapons": weapon_keys, "max_hp": maxhp, "max_shield": maxsh})
+		idx += 1
 	return {"nodes": copies, "meta": meta}

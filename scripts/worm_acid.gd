@@ -12,7 +12,7 @@ const LOOP_TEX := preload("res://assets/enemies/sandworm/acid_loop.png")
 const END_TEX := preload("res://assets/enemies/sandworm/acid_end.png")
 const FRAME_W := 20
 const FRAME_H := 21
-const TEXEL := 2.2 ## dünya birimi / doku pikseli (solucan 2,4)
+const TEXEL := 1.5 ## dünya birimi / doku pikseli (solucan 2,4); 2026-10-11: 2,2 -> 1,5 (kullanıcı: "asitlerin boyutu çok büyük")
 const FPS := 14.0
 const WALL_IGNORE_TIME := 0.08
 

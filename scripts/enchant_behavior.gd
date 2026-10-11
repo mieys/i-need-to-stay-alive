@@ -82,7 +82,7 @@ func sprite(sheet_name: String, pos: Vector2, data: Dictionary = {}) -> void:
 ## -> silahlar -> on_event). Hasardan ÖNCE çağrılmalı (bayrak isteği hasar isteğinden önce aynı güvenilir kanaldan gider).
 func mark_kill(t: Node, event: String, dur: float = 0.6) -> void:
 	if is_enemy(t):
-		t.apply_element("evo_kill", {"dur": dur, "event": event})
+		el(t, "evo_kill", {"dur": dur, "event": event})
 
 
 ## Sahibin çevresinde düşman mermilerini yok eden çember (yarıçap, süre) - bkz. player.gd enchant_ward.
@@ -276,8 +276,17 @@ func roll_pity(key: String, chance: float, pity: int) -> bool:
 	return false
 
 
+## Hasar alabilen her düşman (gerçek yaratık, boss, görev kopyası...). 2026-10-11: eskiden apply_element şartı vardı -
+## görev kopyasında yoktu, özellikler (Ateş Asası püskürtmesi vb.) "Kopyanı Öldür" görevinde hiç vurmuyordu.
 func is_enemy(t: Node) -> bool:
-	return is_instance_valid(t) and t.has_method("apply_element") and t.get("is_dead") != true
+	return is_instance_valid(t) and t.has_method("take_damage") and t.get("is_dead") != true
+
+
+## Element/durum uygula (yanma, zehir, kanama, donma, sersemletme, yavaşlatma, itme...) - TEK giriş: elementi bilmeyen
+## hedefte sessizce atlanır. Özellik kodları doğrudan `e.apply_element(...)` çağırmaz.
+func el(t: Node, kind: String, p: Dictionary) -> void:
+	if is_instance_valid(t) and t.has_method("apply_element") and t.get("is_dead") != true:
+		t.call("apply_element", kind, p)
 
 
 func is_moving() -> bool:
@@ -288,7 +297,7 @@ func is_moving() -> bool:
 func enemies_near(pos: Vector2, radius: float, exclude: Node = null) -> Array:
 	var out: Array = []
 	for e in Enemy.get_enemies_near(get_tree(), pos, radius):
-		if is_instance_valid(e) and e != exclude and not e.is_dead:
+		if is_instance_valid(e) and e != exclude and e.get("is_dead") != true:
 			out.append(e)
 	return out
 
@@ -297,7 +306,7 @@ func nearest_enemy(pos: Vector2, radius: float, exclude: Array = []) -> Node:
 	var best: Node = null
 	var best_d: float = INF
 	for e in Enemy.get_enemies_near(get_tree(), pos, radius):
-		if not is_instance_valid(e) or e.is_dead or exclude.has(e):
+		if not is_instance_valid(e) or e.get("is_dead") == true or exclude.has(e):
 			continue
 		var d: float = e.global_position.distance_squared_to(pos)
 		if d < best_d:
@@ -362,7 +371,7 @@ func apply_poison_to(t: Node, extra: Dictionary = {}) -> void:
 		"death_burst": n("poison_death_burst"), "kobra": flag("kobra")})
 	p.merge(poison_extra(), true)
 	p.merge(extra, true)
-	t.apply_element("poison", p)
+	el(t, "poison", p)
 
 
 ## Efsuna özgü zehir parametreleri (Salgın: bulaşma) - her zehir uygulamasına eklenir.
@@ -381,7 +390,7 @@ func apply_burn_to(t: Node, extra: Dictionary = {}) -> void:
 	var bp: Dictionary = elem({"tick": tick, "dur": f("burn_dur", 3.0), "max_stacks": n("burn_stacks", 1),
 		"burn_spread": flag("burn_spread"), "burn_death_blast": flag("burn_death_blast")})
 	bp.merge(extra, true)
-	t.apply_element("burn", bp)
+	el(t, "burn", bp)
 
 
 ## Sahnesiz alanlara (lav, alev izi) verilecek yanma parametreleri.
@@ -394,7 +403,7 @@ func apply_bleed_to(t: Node, stacks: int = -1) -> void:
 	if not is_enemy(t):
 		return
 	_bled[t.get_instance_id()] = Time.get_ticks_msec()
-	t.apply_element("bleed", elem({"tick": ap() * f("bleed_ap", 0.03) * pw("bleed"), "stacks": stacks if stacks > 0 else n("bleed_stacks", 1),
+	el(t, "bleed", elem({"tick": ap() * f("bleed_ap", 0.03) * pw("bleed"), "stacks": stacks if stacks > 0 else n("bleed_stacks", 1),
 		"cap": n("bleed_cap", 10), "fast": flag("bleed_fast"), "bleed_transfer": flag("bleed_transfer"), "burst": flag("bleed_burst"),
 		"burst_pct": 0.5 * power, "bleed_death_blast": flag("bleed_death_blast"), "bleed_kill": flag("bleed_kill")}))
 
@@ -406,19 +415,19 @@ func shock_params() -> Dictionary:
 
 func apply_shock_to(t: Node) -> void:
 	if is_enemy(t):
-		t.apply_element("shock", shock_params())
+		el(t, "shock", shock_params())
 
 
 func apply_mark_to(t: Node, stacks: int = -1) -> void:
 	if is_enemy(t):
-		t.apply_element("mark", elem({"stacks": stacks if stacks > 0 else n("mark_stacks", 1), "cap": n("mark_cap", 20),
+		el(t, "mark", elem({"stacks": stacks if stacks > 0 else n("mark_stacks", 1), "cap": n("mark_cap", 20),
 			"dur": f("mark_dur", 20.0), "pct": f("mark_pct", 0.01), "decree": flag("decree"), "mark_transfer": flag("mark_transfer"),
 			"mark_soul": flag("mark_soul"), "mark_death_blast": flag("mark_death_blast")}))
 
 
 func freeze(t: Node, dur: float) -> void:
 	if is_enemy(t):
-		t.apply_element("freeze", elem({"dur": dur, "boss_hits": n("boss_freeze_hits"), "linger_slow": f("linger_slow"),
+		el(t, "freeze", elem({"dur": dur, "boss_hits": n("boss_freeze_hits"), "linger_slow": f("linger_slow"),
 			"contagious": flag("contagious"), "frozen_shards": flag("frozen_shards"), "shards_freeze": flag("shards_freeze")}))
 
 
@@ -571,9 +580,11 @@ func _generic_hit(t: Node, dmg: float, is_primary: bool, proj: Node2D) -> void:
 		if _elem_hits % maxi(1, n("shock_every", 1)) == 0:
 			apply_shock_to(t)
 	if f("slow_pct") > 0.0:
-		t.apply_element("slow", {"pct": f("slow_pct"), "dur": f("slow_dur", 2.0)})
+		el(t, "slow", {"pct": f("slow_pct"), "dur": f("slow_dur", 2.0)})
 	if n("freeze_after") > 0:
-		var id: int = t.get_instance_id()
+		## freeze_count_global: sayaç düşmana değil SİLAHA bağlı ("asanın her N. isabeti"). Buz Asası hedeflerini bilerek farklı donmamış düşmanlara dağıttığı için
+		## düşman başına sayaçla aynı düşman N kez neredeyse hiç vurulmuyordu -> "hiç dondurmuyor" (kullanıcı 2026-10-10).
+		var id: int = 0 if flag("freeze_count_global") else t.get_instance_id()
 		var c: int = int(_hits_on.get(id, 0)) + 1
 		if c >= n("freeze_after"):
 			c = 0
@@ -584,7 +595,7 @@ func _generic_hit(t: Node, dmg: float, is_primary: bool, proj: Node2D) -> void:
 	if n("mark_stacks") > 0:
 		apply_mark_to(t)
 	if f("stun_on_hit") > 0.0:
-		t.apply_element("stun", {"dur": f("stun_on_hit")})
+		el(t, "stun", {"dur": f("stun_on_hit")})
 	if f("lifesteal") > 0.0 and dmg > 0.0:
 		var ls: float = f("lifesteal") * pw("heal")
 		var pl: Node = owner_player()
