@@ -79,7 +79,7 @@ const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuf
 ## silah sayısı (başlangıç silahı dahil). Hiçbir karakterin ayrı bir ana
 ## silahı olmadığı için herkeste aynı: WEAPON_ICON_SLOTS.size() (bkz.
 ## player.gd) ile birebir = 5.
-const MAX_OWNED_WEAPONS := 5
+const MAX_OWNED_WEAPONS := 3 ## 2026-10-12 deneme: 5 -> 3 (bkz. player.gd MAX_OWNED_WEAPONS)
 ## Fiyat etiketi eklendiğinde kartın custom_minimum_size.y'sine eklenen ekstra
 ## boşluk (bkz. _ready() içindeki PriceLabel oluşturma döngüsü) - metnin
 ## kartın dışına taşmaması için.

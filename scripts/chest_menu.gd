@@ -718,7 +718,7 @@ func _build_card(candidate: Dictionary) -> Control:
 	var gm = _get_game_manager()
 	if is_weapon:
 		if _player and gm and "owned_weapons" in gm:
-			var max_w: int = 5
+			var max_w: int = 3
 			if _player.has_method("get_max_owned_weapons"):
 				max_w = _player.get_max_owned_weapons()
 			has_slots = gm.owned_weapons.size() < max_w
@@ -866,7 +866,7 @@ func _on_al_pressed(candidate: Dictionary, item_cost: int, power_mult: float = 1
 
 	var item_key: String = candidate.get("key", "")
 	if candidate.get("type", "item") == "weapon":
-		var max_w: int = 5
+		var max_w: int = 3
 		if _player.has_method("get_max_owned_weapons"):
 			max_w = _player.get_max_owned_weapons()
 		if gm.owned_weapons.size() >= max_w:

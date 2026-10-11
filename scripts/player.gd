@@ -1101,7 +1101,8 @@ const WEAPON_SCENES_BY_KEY := {
 ## için aynı: WEAPON_ICON_SLOTS.size() ile birebir (kullanıcının çizdiği
 ## yıldız diyagramındaki 5 nokta) - artık "ana silah ayrı sayılır mı"
 ## sorusu yok, çünkü ayrı bir ana silah kavramı hiç yok.
-const MAX_OWNED_WEAPONS := 5
+## 2026-10-12 DENEME (kullanıcı): silah sınırı 5 -> 3 (8 kişilik oda yükü + net build kimliği); telafi: silah hasarı +%50 (weapon.gd WEAPON_DAMAGE_MULT), yakın dövüşe ek buff.
+const MAX_OWNED_WEAPONS := 3
 
 func get_max_owned_weapons() -> int:
 	## Talon'un Ayna Formu (skill id 38, bkz. _skill_talon_mirror_form) 15sn
@@ -1693,6 +1694,8 @@ func _load_character_frames() -> void:
 	_melee = true
 	lifesteal_percent = def.get("lifesteal", 0.0)
 	thorns_reflect_percent = def.get("thorns_reflect_percent", 0.0)
+	low_hp_damage_reduction = def.get("low_hp_damage_reduction", 0.0)
+	low_hp_threshold = def.get("low_hp_threshold", 0.0)
 	## Generator'dan çıkan karakterlerin gölgesi karelerin içinde gömülü
 	## geldiği için ayrı gölge blob'u kullanılmıyor - İSTİSNA: DEFS'te "ground_shadow" veren karakter (Vampir Çocuk: yeni
 	## sprite sayfalarında gömülü gölge yok) piksel elips ayak gölgesi alır (bkz. ground_shadow.gd, remote_player.gd ile ortak).
@@ -4639,6 +4642,15 @@ var lifesteal_percent: float = 0.0
 ## 0'dan büyükse cana işleyen hasarın bu oranı saldırgana geri yansıtılır
 ## (Şovalye Adam pasifi - "Dikenli Zırh"). bkz. take_damage().
 var thorns_reflect_percent: float = 0.0
+## Karakter tanımından gelir (Characters.DEFS "low_hp_damage_reduction" / "low_hp_threshold"): can oranı eşiğin ALTINDAyken gelen hasar bu
+## oranda azalır (Şovalye Adam pasifi "Dirençli Duruş", 2026-10-12: %40 altı -> %20 az hasar). bkz. take_damage().
+var low_hp_damage_reduction: float = 0.0
+var low_hp_threshold: float = 0.0
+
+
+## Dirençli Duruş şu an aktif mi (uzak kopyadaki efekt de aynı koşulu kendi canından okur - bkz. remote_player.gd).
+func _low_hp_passive_active() -> bool:
+	return low_hp_damage_reduction > 0.0 and max_health > 0.0 and health / max_health < low_hp_threshold and not is_dead and not is_downed
 
 ## Şovalye Adam'ın Koruma Bariyeri (skill3, id 29) - bu oyuncu buflanmışsa
 ## aldığı hasarın bu oranı damage_redirect_peer_id'ye yansır (bkz. take_
@@ -5286,6 +5298,8 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	if _vampir_bat_form_active and has_evo("vampir_e1"):
 		amount *= EVO_VAMPIR_BAT_DAMAGE_TAKEN_MULT
 	amount *= enchant_damage_taken_mult() ## efsun kısa hasar azaltma (Topuz Ağır Darbe V)
+	if _low_hp_passive_active():
+		amount *= 1.0 - low_hp_damage_reduction ## Şovalye pasifi: canı eşiğin altındayken %20 az hasar
 	## Yetenek evrimlerinin hasar azaltmaları (Şovalye "Sağlam Duruş", Melek "Kutsal Zırh" dost buff'ı) - bkz. _evo_damage_taken_mult.
 	amount *= _evo_damage_taken_mult()
 	## Shaman Elemental Golem formu (R): %40 hasar azaltma (bkz. shaman_golem_math.gd DAMAGE_TAKEN_MULT).

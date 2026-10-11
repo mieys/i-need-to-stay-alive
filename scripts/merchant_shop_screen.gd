@@ -74,7 +74,7 @@ const WEAPON_ICON_TEXTURES := {
 	"topuz": "res://assets/weapons/topuz/icon.png",
 	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
 }
-const MAX_OWNED_WEAPONS := 5
+const MAX_OWNED_WEAPONS := 3 ## 2026-10-12 deneme: 5 -> 3 (bkz. player.gd MAX_OWNED_WEAPONS)
 
 var _player: Node = null
 var _stock: Array = []

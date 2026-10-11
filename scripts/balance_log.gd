@@ -15,7 +15,7 @@ extends RefCounted
 ## enemy.gd DOT tiki ("dot"). Yetenek (Q/E/R) kırılımı için player.gd'deki take_damage çağrılarına tag(&"s:q") eklenebilir.
 
 const CharactersScript: GDScript = preload("res://scripts/characters.gd")
-const BALANCE_REV := 7 ## 7: Elara pasifi gerçek +%50 hız + taşma dışı, Tüfek delme hasarı %70 (2026-10-12); 6: yaratık hasarı x0,8 iptal + Balkabağı güçlendirme (2026-10-11)
+const BALANCE_REV := 10 ## 10: Ejderha Nefesi menzil x1,5 / açı x1,25 (eskiden x2 / x1,5) (2026-10-12); 9: silah sınırı 3 + silah hasarı x1,5 (yakın dövüş x2,1) deneme (2026-10-12); 8: Şovalye pasifi Dirençli Duruş (%40 altı %20 az hasar; Dikenli Zırh kalktı) (2026-10-12); 7: Elara pasifi gerçek +%50 hız + taşma dışı, Tüfek delme hasarı %70 (2026-10-12); 6: yaratık hasarı x0,8 iptal + Balkabağı güçlendirme (2026-10-11)
 const SCHEMA := 1
 const DIR_PATH := "user://balans"
 const FILE_NAME := "kosular.jsonl"

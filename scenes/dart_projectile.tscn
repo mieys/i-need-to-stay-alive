@@ -16,6 +16,8 @@ speed = 460.0
 face_direction = true
 impact_scene = ExtResource("4")
 impact_offset = Vector2(0, -32)
+impact_max_alive = 8
+impact_scale = 0.8
 impact_sounds = Array[AudioStream]([ExtResource("3")])
 impact_sound_volume_db = -8.79
 

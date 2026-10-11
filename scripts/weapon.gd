@@ -1032,8 +1032,22 @@ func set_tier_damage_mult(mult: float) -> void:
 	_recompute_damage()
 
 
+## 2026-10-12 DENEME (kullanıcı: "sınırı 3'e çekip silahların statlarını %50 arttıralım" + "yakın dövüş çok güçsüz, kimse almıyor (kılıç hariç, o menzilli gibi)"):
+## TÜM silah hasarı x1,5 (silah sınırı 5 -> 3 telafisi); Bıçak/Pençe/Topuz ek x1,4 (toplam x2,1). Tek yer: `damage` bu çarpanla kurulur, mermi/ışın/püskürtme/
+## savuruş hep `damage`ı okur. Kılıç (uzunkilic) menzilli gibi güçlü olduğundan ek buff almaz. Katalog metinleri (weapon_catalog.gd DESCRIPTIONS) buna göre güncel.
+const WEAPON_DAMAGE_MULT := 1.5
+const MELEE_EXTRA_DAMAGE_MULT := 1.4
+
+
+func damage_stat_mult() -> float:
+	var src: String = scene_file_path if scene_file_path != "" else String(name)
+	if src.containsn("dagger") or src.containsn("pence") or src.containsn("topuz"):
+		return WEAPON_DAMAGE_MULT * MELEE_EXTRA_DAMAGE_MULT
+	return WEAPON_DAMAGE_MULT
+
+
 func _recompute_damage() -> void:
-	damage = (_base_damage + _card_damage_bonus + _shop_damage_bonus) * _tier_damage_mult
+	damage = (_base_damage + _card_damage_bonus + _shop_damage_bonus) * _tier_damage_mult * damage_stat_mult()
 
 
 func set_shop_fire_rate_mult(mult: float) -> void:

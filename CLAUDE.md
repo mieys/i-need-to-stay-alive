@@ -118,3 +118,6 @@ temizliği atlar - sonraki testler zincirleme bozulur: İLK hataya bak. Çok oyu
 - 85. Collision analizi: su hayalet hücreler (145 çimen karosu + 362 örtülü), 10 px yoklama, orman düşük dolu karolar; düzeltme önerisi (2026-10-11). -> `docs/notlar/madde_81-90.md`
 - 86. Su collision düzeltmesi (görünür su), engele takılınca kayma (wall_slide.gd), elit can barı + yıldız (elite_bar.gd) (2026-10-11). -> `docs/notlar/madde_81-90.md`
 - 87. Kopya yaratık API'si, bağlantı olay günlüğü (net_log.txt), hayalet kukla düzeltmesi (2026-10-12). -> `docs/notlar/madde_81-90.md`
+- 88. Şovalye pasif rework Dirençli Duruş (%40 altı %20 az hasar) + 4 efekt prototipi (2026-10-12). -> `docs/notlar/madde_81-90.md`
+- 89. DENEME: silah sınırı 3 + silah hasarı x1,5 (yakın dövüş x2,1) (2026-10-12). -> `docs/notlar/madde_81-90.md`
+- 90. Ateş Asası ekran kaplaması (A+B+C) + Tüftüf efekt bütçesi (2026-10-12). -> `docs/notlar/madde_81-90.md`

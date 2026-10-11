@@ -37,22 +37,23 @@ const ICONS := {
 const MELEE_KEYS := ["dagger", "pence", "topuz", "uzunkilic"]
 ## 2026-10-10 denge turu 2: Arbalet ateş hızı 0,72 -> 0,8 sn, Buz Asası oranı 0,693 -> 0,9, Arcane 0,99 -> 1,25, Tüftüf menzili 128 -> 150, Bıçak 0,765 -> 0,88,
 ## Pençe 0,9 -> 1,035, Fişek ateş aralığı 3,72 -> 3,2 sn (sahne dosyaları); Tüfek delme artışı ve Yıldırım sekmesi efsun tabanında (enchant_defs.gd). Eski "N + %X" metinleri düz hasarı olmayan silahlarda yanlıştı.
+## 2026-10-12 deneme: TÜM hasar sayıları x1,5, Bıçak/Pençe/Topuz x2,1 (weapon.gd WEAPON_DAMAGE_MULT / MELEE_EXTRA_DAMAGE_MULT); eski değerler sahne oranlarıdır.
 const DESCRIPTIONS := {
-	"dagger": "HASAR: %88 saldırı gücü · Yakın dövüş, hedefin çevresine hafif alan hasarı",
-	"fire_staff": "HASAR: saniyede %108 saldırı gücü (koni, alandaki herkese) · Menzil 140 · Sürekli alev püskürtür, 3 sn yakar (saniyede %14)", ## 2026-10-10 buff: Destiny püskürtmesi %15 -> %27 / 0,25 sn, menzil 110 -> 140, yanma %8 -> %14
-	"lightning_staff": "HASAR: 12/sn + %140 saldırı gücü · Menzil 168 · Kesintisiz ışın",
-	"tabanca": "HASAR: %115 saldırı gücü · Ateş hızı 0.9sn · Menzil 210", ## 2026-10-10: oran 0,891 -> 1,15 (sahne card_damage_bonus_ratio)
-	"tuftuf": "HASAR: %100 saldırı gücü (gerçek hasar: kalkanı deler) · Ateş hızı 1.4sn · Menzil 150",
-	"tufek": "HASAR: %160 saldırı gücü · Ateş hızı 1.3sn · Menzil 302",
-	"arcane": "HASAR: %125 saldırı gücü · Ateş hızı 1.4sn · Menzil 151",
-	"yay": "HASAR: %64 saldırı gücü · Ateş hızı 0.77sn · Menzil 266 · Ateşten önce ok çeker", ## 2026-10-10: saldırı hızı +%20 (sahne fire_rate 0,7844 -> 0,6537)
-	"crossbow": "HASAR: %99 saldırı gücü · Ateş hızı 0.8sn · Menzil 220",
-	"boomerang": "HASAR: 16 + %90 saldırı gücü · Ateş hızı 0.3sn · Menzil 167 · Gidip döner, 2 kez vurabilir; saldırı hızı arttıkça daha hızlı gidip döner",
-	"buz_asasi": "HASAR: %90 saldırı gücü · Ateş hızı 1.1sn · Menzil 151 · Her 2. isabet dondurur",
-	"fisek": "HASAR: %208 saldırı gücü (sadece alan hasarı) · Ateş hızı 3.2sn · Menzil 227",
-	"pence": "HASAR: %103 saldırı gücü · Yakın dövüş (menzil 110) · Çift pençe darbesi",
-	"topuz": "HASAR: 20 + %105 saldırı gücü · Yakın dövüş (menzil 120) · Geniş alan hasarı",
-	"uzunkilic": "HASAR: %120 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş (çevredekilere %70)",
+	"dagger": "HASAR: %185 saldırı gücü · Yakın dövüş, hedefin çevresine hafif alan hasarı",
+	"fire_staff": "HASAR: saniyede %162 saldırı gücü (koni, alandaki herkese) · Menzil 140 · Sürekli alev püskürtür, 3 sn yakar (saniyede %14)", ## 2026-10-10 buff: Destiny püskürtmesi %15 -> %27 / 0,25 sn, menzil 110 -> 140, yanma %8 -> %14
+	"lightning_staff": "HASAR: 18/sn + %210 saldırı gücü · Menzil 168 · Kesintisiz ışın",
+	"tabanca": "HASAR: %173 saldırı gücü · Ateş hızı 0.9sn · Menzil 210", ## 2026-10-10: oran 0,891 -> 1,15 (sahne card_damage_bonus_ratio)
+	"tuftuf": "HASAR: %150 saldırı gücü (gerçek hasar: kalkanı deler) · Ateş hızı 1.4sn · Menzil 150",
+	"tufek": "HASAR: %240 saldırı gücü · Ateş hızı 1.3sn · Menzil 302",
+	"arcane": "HASAR: %188 saldırı gücü · Ateş hızı 1.4sn · Menzil 151",
+	"yay": "HASAR: %96 saldırı gücü · Ateş hızı 0.77sn · Menzil 266 · Ateşten önce ok çeker", ## 2026-10-10: saldırı hızı +%20 (sahne fire_rate 0,7844 -> 0,6537)
+	"crossbow": "HASAR: %149 saldırı gücü · Ateş hızı 0.8sn · Menzil 220",
+	"boomerang": "HASAR: 24 + %135 saldırı gücü · Ateş hızı 0.3sn · Menzil 167 · Gidip döner, 2 kez vurabilir; saldırı hızı arttıkça daha hızlı gidip döner",
+	"buz_asasi": "HASAR: %135 saldırı gücü · Ateş hızı 1.1sn · Menzil 151 · Her 2. isabet dondurur",
+	"fisek": "HASAR: %312 saldırı gücü (sadece alan hasarı) · Ateş hızı 3.2sn · Menzil 227",
+	"pence": "HASAR: %216 saldırı gücü · Yakın dövüş (menzil 110) · Çift pençe darbesi",
+	"topuz": "HASAR: 42 + %221 saldırı gücü · Yakın dövüş (menzil 120) · Geniş alan hasarı",
+	"uzunkilic": "HASAR: %180 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş (çevredekilere %70)",
 }
 
 

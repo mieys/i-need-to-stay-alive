@@ -1,7 +1,7 @@
 extends Control
 
 ## Yeni "Envanter" paneli: sahip olunan silahları küçük ikonlarla (üst sıra,
-## en fazla 5 - bkz. GameManager.owned_weapons/player.gd MAX_OWNED_WEAPONS)
+## en fazla 3 (2026-10-12 deneme; eskiden 5) - bkz. GameManager.owned_weapons/player.gd MAX_OWNED_WEAPONS)
 ## ve altın/tecrübe miktarını gösterir. HUD'daki tek bir "ENVANTER" butonu
 ## bu paneli VE stats_panel.tscn'i (istatistikler) birlikte açıp kapatıyor
 ## (bkz. hud.gd _on_envanter_toggle) - referans görselde ikisi yan yana
@@ -403,7 +403,8 @@ func _refresh_weapons() -> void:
 	style_box.texture_margin_right = 5.0
 	style_box.texture_margin_bottom = 5.0
 	
-	for i: int in range(5):
+	var weapon_slot_count: int = int(player.get_max_owned_weapons()) if is_instance_valid(player) and player.has_method("get_max_owned_weapons") else 3
+	for i: int in range(weapon_slot_count):
 		var btn: Button = Button.new()
 		btn.custom_minimum_size = Vector2(_slot, _slot)
 		_decorate_slot(btn)

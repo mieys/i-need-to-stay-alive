@@ -364,15 +364,15 @@ const DEFS := {
 		## Kullanıcı isteği (2026-09-25): ikonu yoktu - tools/gen_sovalye_icons.py.
 		"skill2_icon": "res://assets/skills/sovalye_koruma_bariyeri_icon.png",
 		## Kullanıcı bildirimi: "bazı karakterlerin pasifi oyun içindeyken
-		## görünmüyor" - kök neden Şovalye Adam'ın hiç pasifi olmamasıydı
-		## (tek istisna, diğer 10 karakterin hepsinde var). Kullanıcı isteğiyle
-		## eklendi: aldığı hasarın bir kısmını saldırgana geri yansıtır (bkz.
-		## player.gd thorns_reflect_percent/take_damage). "passive_vector_id" (skill_icon.gd _icon_thorns) artık
-		## sadece yedek - 2026-09-25'ten beri gerçek piksel ikonu var (tools/gen_sovalye_icons.py).
-		"passive": "Dikenli Zırh: Aldığı hasarın %10'unu saldırgana geri yansıtır.",
+		## görünmüyor" - kök neden Şovalye Adam'ın hiç pasifi olmamasıydı. 2026-10-12 REWORK (kullanıcı isteği): eski "Dikenli Zırh"
+		## (hasarın %10'unu yansıt) kalktı; yerine canı %40'un altındayken aldığı hasar %20 azalır (bkz. player.gd
+		## low_hp_damage_reduction / _low_hp_passive_active / take_damage). "passive_vector_id" (skill_icon.gd _icon_thorns) sadece yedek -
+		## 2026-09-25'ten beri gerçek piksel ikonu var (tools/gen_sovalye_icons.py).
+		"passive": "Dirençli Duruş: Canı %40'un altına düştüğünde aldığı hasar %20 azalır.",
 		"passive_icon": "res://assets/skills/sovalye_passive_icon.png",
 		"passive_vector_id": 16,
-		"thorns_reflect_percent": 0.10,
+		"low_hp_damage_reduction": 0.20,
+		"low_hp_threshold": 0.40,
 		"skill3": 11,
 		"skill3_name": "Koruma Baloncuğu",
 		"skill3_desc": "ULTİ: Kalkanı bitene kadar içine düşman/mermi girmeyen koruma alanı açar (%30 menzil, kalkan hasarı %95 azalır). Hareket edemez. (108sn bekleme)",

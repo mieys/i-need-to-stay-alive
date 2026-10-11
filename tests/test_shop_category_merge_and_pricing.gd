@@ -115,9 +115,9 @@ func test_weapon_purchase_is_still_blocked_only_by_the_slot_cap() -> void:
 	panel.queue_free()
 
 
-func test_max_owned_weapons_still_caps_at_five() -> void:
-	assert(ShopPanelScript.MAX_OWNED_WEAPONS == 5,
-		"En fazla 5 silah kopyasi limiti degismemis olmali")
+func test_max_owned_weapons_caps_at_three() -> void:
+	assert(ShopPanelScript.MAX_OWNED_WEAPONS == 3,
+		"En fazla 3 silah (2026-10-12 deneme: 5 -> 3) limiti olmali")
 
 
 func test_inventory_utility_slots_capped_at_two() -> void:

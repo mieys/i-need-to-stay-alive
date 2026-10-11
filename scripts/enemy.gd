@@ -1136,6 +1136,7 @@ func _apply_poison_stack(dps_per_stack: float, max_stacks: float, duration: floa
 		_poison_status_fx = PoisonStatusFxScene.instantiate()
 		_poison_status_fx.position = Vector2(0, get_overhead_bar_offset() * 0.5)
 		add_child(_poison_status_fx)
+		_apply_poison_fx_budget()
 		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 			var net_id: int = int(get_meta("network_enemy_id", 0))
 			if net_id > 0:
@@ -1148,6 +1149,25 @@ func _spawn_poison_status_fx() -> void:
 		_poison_status_fx = PoisonStatusFxScene.instantiate()
 		_poison_status_fx.position = Vector2(0, get_overhead_bar_offset() * 0.5)
 		add_child(_poison_status_fx)
+		_apply_poison_fx_budget()
+
+## 2026-10-12 (kullanıcı: "Tüftüf'ün efekti çok fazla"): zehir salgınında bütün kalabalık zehirli olunca her yaratıkta dönen zehir balonu ekranı dolduruyordu.
+## Aynı anda en fazla POISON_STATUS_FX_MAX görünür durum efekti; fazlası GİZLİ + durdurulmuş düğüm olarak kalır (düğümün varlığı `is_poisoned()`ın
+## kaynağı - zehir mantığı/tepkimeler etkilenmez).
+const POISON_STATUS_FX_MAX := 12
+
+
+func _apply_poison_fx_budget() -> void:
+	var fx: Node2D = _poison_status_fx
+	if fx == null or not is_instance_valid(fx):
+		return
+	if get_tree().get_node_count_in_group(&"poison_status_fx_visible") >= POISON_STATUS_FX_MAX:
+		fx.visible = false
+		if fx is AnimatedSprite2D:
+			(fx as AnimatedSprite2D).stop()
+	else:
+		fx.add_to_group(&"poison_status_fx_visible")
+
 
 func _remove_poison_status_fx() -> void:
 	if _poison_status_fx and is_instance_valid(_poison_status_fx):
@@ -2099,9 +2119,14 @@ func _on_death_elements() -> void:
 				for t in _poison_stack_time:
 					rem += t
 				dur = maxf(1.0, rem / float(stacks))
+			var infected: int = 0
 			for v in ElementReactions._nearest(tree, self, pos, float(_plague.get("radius", 80.0)), 6):
 				v._receive_plague(n, float(_plague.get("dps", 1.0)), float(_plague.get("cap", 10.0)), dur, _plague)
-			EnchantFxScript.play(tree, "ring", pos, {"radius": float(_plague.get("radius", 80.0)), "color": Color(0.55, 0.9, 0.35, 0.9)})
+				infected += 1
+			## Halka (2026-10-12, "Tüftüf'ün efekti çok fazla"): eskiden bulaşma yarıçapı kadar (100-190 birim) devasa halka HER zehirli ölümde çıkıyordu;
+			## artık yalnızca gerçekten birine bulaştıysa, küçük (en çok 44 birim) ve en çok 0,15 sn'de bir.
+			if infected > 0 and not NetworkManager.should_throttle("plague_ring_fx", 0.15):
+				EnchantFxScript.play(tree, "ring", pos, {"radius": minf(float(_plague.get("radius", 80.0)), 44.0), "color": Color(0.55, 0.9, 0.35, 0.9)})
 		if bool(_plague.get("final", false)):
 			_notify_enchant_owner(int(_plague.get("peer", 0)), "plague_death", {})
 	if not _death_poison_burst.is_empty() and stacks > 0:

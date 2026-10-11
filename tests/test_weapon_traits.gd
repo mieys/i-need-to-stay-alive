@@ -459,4 +459,4 @@ func test_fire_staff_spray_buff_numbers_and_catalog_text_agree() -> void:
 	assert(absf(per_sec - 1.08) < 0.001, "püskürtme saniyede %%108 saldırı gücü: %.3f" % per_sec)
 	assert(float(base["spray_range"]) == 140.0 and float(base["elem_ap"]) == 0.14, "menzil 140, yanma %14")
 	var text: String = str(WeaponCatalogScript.DESCRIPTIONS["fire_staff"])
-	assert(text.contains("%108") and text.contains("140"), "katalog metni sayılarla aynı: " + text)
+	assert(text.contains("%162") and text.contains("140"), "katalog metni sayılarla aynı (%108 x1,5 silah hasarı çarpanı, 2026-10-12 deneme): " + text)

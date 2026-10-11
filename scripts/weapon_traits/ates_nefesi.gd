@@ -19,7 +19,13 @@ const FLAME_OFFSET := Vector2(25.5, -1.1) ## namlu (kare içinde (0, 17.1)) dü�
 ## Sanatın doğal genişliğinin karşıladığı yarı açı (varsayılan 60° koni). Daha geniş konide dikey en fazla FLAME_MAX_STRETCH
 ## gerilir; onu da aşınca (Final 90-108°) koni yan yana, ortada örtüşen alevlere bölünür (yoksa "V" gibi ayrık iki dil).
 const FLAME_BASE_HALF_DEG := 30.0
-const FLAME_MAX_STRETCH := 1.35
+## 2026-10-12 (kullanıcı: "ateş asasının efekti çok ekranı kaplıyor"; Ejderha Nefesi'nde 322 birim x 108° tek gerilmiş sprite ekranın %60 yüksekliğini / %90 genişliğini kaplıyordu):
+## (A) alevin ÇİZİLEN boyu FLAME_VISUAL_MAX_LEN ile sınırlı (hasar menzili aynı kalır; kalan uç alevin sönen kuyruğuna denk gelir),
+## (C) geniş koni artık gerilmek yerine yan yana doğal oranlı dilimlere bölünür (FLAME_MAX_STRETCH 1,35 -> 1,15), (B) Ejderha Nefesi'nin büyümesi
+## kısıldı (menzil x2 -> x1,5, açı x1,5 -> x1,25: weapon_traits.gd "final" + _half()).
+const FLAME_MAX_STRETCH := 1.15
+const FLAME_VISUAL_MAX_LEN := 205.0 ## dünya birimi; taban 140 x ~1,46
+const FINAL_ANGLE_MULT := 1.25 ## spray_size > 1 (Ejderha Nefesi) iken açı çarpanı
 const SUB_CONE_OVERLAP := 1.3
 ## Son tikten sonra alevin kalma süresi - fx_enchant_sprite.FADE'den (0,25) uzun: tik arasında alev solup yanıp sönmesin.
 const FLAME_LINGER := 0.35
@@ -28,6 +34,9 @@ const MIN_TICK := 0.06
 ## Püskürtme sesi (2026-10-11, kullanıcı: "ateş asası ateş püskürtünce ses efekti çıkarsın"): tools/gen_flame_sounds.py.
 const FLAME_SFX := "res://assets/audio/fire_staff_spray_loop.wav" ## çok yüksek saldırı hızında bile en sık bu kadar (saniyede ~16 tik)
 const PUSH_EVERY := 0.5
+## Püskürtme sesi seviyesi (2026-10-12, kullanıcı: "ateş asasına ateş püskürtme sesi ekler misin" - ses zaten vardı ama duyulmuyordu): döngünün RMS'i -24,5 dBFS idi ve -9 dB'de
+## çalınca etkin seviye ~-33,5 dBFS kalıyordu; Tüftüf dart isabeti ~-25 dBFS. -1 dB -> ~-25,5 dBFS (diğer silah sesleriyle aynı mertebe). Tepe -3,1 dBFS: kırpma yok.
+const FLAME_SFX_DB := -1.0
 
 const WeaponTip := preload("res://scripts/weapon_tip.gd")
 
@@ -57,7 +66,7 @@ func _range() -> float:
 
 func _half() -> float:
 	## Final "boyut iki katına": menzil x2, açı x1.5 (en fazla 140°) - koni oyuncunun arkasına dönmesin.
-	var ang: float = f("spray_angle", 60.0) * (1.5 if f("spray_size", 1.0) > 1.0 else 1.0)
+	var ang: float = f("spray_angle", 60.0) * (FINAL_ANGLE_MULT if f("spray_size", 1.0) > 1.0 else 1.0)
 	return deg_to_rad(minf(140.0, ang)) * 0.5
 
 
@@ -101,7 +110,7 @@ func process_extra(delta: float) -> void:
 	var r: float = _range()
 	var half: float = _half()
 	var sheet: String = "flame_ice" if _ice() else "flame_fire"
-	var sx: float = r / (FLAME_LEN_PX * TEXEL)
+	var sx: float = minf(r, FLAME_VISUAL_MAX_LEN) / (FLAME_LEN_PX * TEXEL) ## çizilen boy sınırlı, hasar menzili (r) aynı
 	var base_half: float = deg_to_rad(FLAME_BASE_HALF_DEG)
 	var parts: int = maxi(1, ceili(half / (base_half * FLAME_MAX_STRETCH)))
 	var sub_half: float = half / float(parts)
@@ -121,6 +130,7 @@ func process_extra(delta: float) -> void:
 			"offset": FLAME_OFFSET, "z": 9, "loop_time": iv + FLAME_LINGER, "key": "%s:%d" % [key_base, k]}
 		if k == 0 and not _ice():
 			d["loop_sfx"] = FLAME_SFX ## sürekli alevin sesi (bkz. fx_enchant_sprite "loop_sfx") - alt alevlerden sadece biri çalar
+			d["sfx_db"] = FLAME_SFX_DB
 		if slot >= 0:
 			d["follow_slot"] = slot
 			d["follow_peer"] = my_peer()
@@ -136,7 +146,7 @@ func process_extra(delta: float) -> void:
 		var to_e: Vector2 = e.global_position - origin
 		if to_e.length() > 6.0 and absf(dir.angle_to(to_e)) > half:
 			continue
-		hit(e, ap() * f("spray_ap"))
+		hit(e, ap() * f("spray_ap") * _weapon_stat_mult())
 		var id: int = e.get_instance_id()
 		seen[id] = true
 		if _ice():
@@ -174,3 +184,8 @@ func _pick_target(origin: Vector2) -> Node:
 			best_d = d
 			best = e
 	return best
+
+
+## Asanın TEK hasar kaynağı püskürtme `ap()` ile hesaplanır (silahın `damage`ından geçmez): silah hasarı çarpanı (weapon.gd damage_stat_mult, 2026-10-12 deneme) buraya da biner.
+func _weapon_stat_mult() -> float:
+	return float(weapon.call("damage_stat_mult")) if is_instance_valid(weapon) and weapon.has_method("damage_stat_mult") else 1.0

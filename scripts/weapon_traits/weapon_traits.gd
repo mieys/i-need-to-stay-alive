@@ -50,8 +50,8 @@ const DEFS := {
 			{"name": "Kalıcı Yanık", "text": "Yanma süresi %30 uzar (3 → 3,9 saniye).", "add": {"elem_dur_mult": 0.3}},
 			{"name": "Nefes Basıncı", "text": "Alev konisi değdiği düşmanları hafifçe geri iterek yaklaşmalarını engeller (bosslar hariç).", "set": {"spray_push": 14.0}},
 		],
-		"final": {"name": "Ejderha Nefesi", "text": "Koni iki kat uzar (140 → 280 birim) ve 1,5 kat genişler (60° → 90°). Alevin ucuna saniyede bir lav birikintisi düşer: 3 saniye kalır, içindekiler saniyede saldırı gücünün %20'si kadar yanar.",
-			"set": {"spray_size": 2.0, "dragon": true}},
+		"final": {"name": "Ejderha Nefesi", "text": "Koni 1,5 kat uzar (140 → 210 birim) ve 1,25 kat genişler (60° → 75°). Alevin ucuna saniyede bir lav birikintisi düşer: 3 saniye kalır, içindekiler saniyede saldırı gücünün %20'si kadar yanar.",
+			"set": {"spray_size": 1.5, "dragon": true}},
 	},
 	"wind_sword": {
 		"weapons": ["uzunkilic"], "name": "Wind Sword", "element": "fiziksel",

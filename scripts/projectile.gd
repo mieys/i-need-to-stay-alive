@@ -383,11 +383,26 @@ func _apply_splash_damage(direct_hit: Node) -> void:
 				_shaman_burn_used = e.try_shaman_weapon_burn()
 
 
+## Aynı anda ekranda en fazla bu kadar isabet efekti (0 = sınırsız) ve efekt ölçeği - Tüftüf zehir isabeti (2026-10-12, "efekti çok fazla"): yüksek atış hızında
+## 64 px'lik zehir patlamaları üst üste yığılıyordu. Hasar/ses etkilenmez, yalnız görsel.
+@export var impact_max_alive: int = 0
+@export var impact_scale: float = 1.0
+
+
 func _spawn_impact() -> void:
 	if not impact_scene:
 		return
+	var budget_group: StringName = &""
+	if impact_max_alive > 0:
+		budget_group = StringName("impact_fx_" + impact_scene.resource_path.get_file())
+		if get_tree().get_node_count_in_group(budget_group) >= impact_max_alive:
+			return
 	var fx = impact_scene.instantiate()
 	get_tree().current_scene.add_child(fx)
+	if budget_group != &"":
+		(fx as Node).add_to_group(budget_group)
+	if impact_scale != 1.0 and fx is Node2D:
+		(fx as Node2D).scale *= impact_scale
 	fx.global_position = global_position + impact_offset
 	if impact_face_direction and fx is Node2D and direction.length() > 0.001:
 		fx.rotation = direction.angle()
