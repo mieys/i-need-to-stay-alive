@@ -262,6 +262,21 @@ static func current_radius(tree: SceneTree) -> float:
 	return float(fog.get("_vision_radius"))
 
 
+## Sadece TEK bir kaynağın (ör. yerel oyuncunun KENDİ) görüşü: sisle AYNI elips + duvar/ağaç ışını, ama takım arkadaşlarının
+## görüşü SAYILMAZ (can_target/is_world_pos_visible takım görüşünü de sayar). Kullanıcı isteği (2026-10-12): Korsan Patlat
+## sadece KENDİ görüş alanındaki bombaları patlatır. Sis yoksa (ana menü, testler) sadece elips.
+static func own_vision_contains(tree: SceneTree, source: Vector2, world_pos: Vector2) -> bool:
+	var fog: Node = tree.get_first_node_in_group(FOG_GROUP) if tree else null
+	var radius: float = current_radius(tree)
+	if normalized_distance(world_pos - source, radius, VISION_WIDTH_SCALE) > 1.0:
+		return false
+	if fog != null:
+		var occ: Variant = fog.get("_occluders")
+		if occ != null and (occ as RefCounted).call("is_ray_blocked", source, world_pos):
+			return false
+	return true
+
+
 func _push_mask_uniforms(delta: float) -> void:
 	var viewport: Viewport = get_viewport()
 	var size: Vector2 = viewport.get_visible_rect().size

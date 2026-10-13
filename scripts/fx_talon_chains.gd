@@ -1,120 +1,94 @@
 extends Node2D
 
-## Talon'un Silah Salvosu (E): karakter ile HER silahı arasında pixel-art DEMİR ZİNCİR (kızgın demir: koyu çelik gövde + akkor turuncu ısı).
-## Kullanıcı geri bildirimi (2026-09-21): "zincir efektlerini beğenmedim, pixel tarzda daha iyi yap". Eski hali eksene hizalı kare parçalardan
-## oluşuyordu; çapraz zincirler kırık dama deseni gibi görünüyordu. Şimdi (1 texel detay, bkz. hafıza "Pixel density 48x48"):
-##  - her halka zincir yönüne DÖNDÜRÜLMÜŞ ince oval (pixel'e oturtulmuş), ardışık halkalar dönüşümlü: yüzü bize dönük oval / kenardan görünen çubuk
-##    => gerçek iç içe geçmiş zincir okunuşu, hangi açıda olursa olsun
-##  - halkaların altında yer gölgesi (çim üstünde okunaklı), ısı dalgası her halkayı sırayla akkor turuncuya çevirir
-##  - merkezde beli saran demir kemer halkası (perçinli, dönen turuncu işaret), silah ucunda kenetleyen kelepçe
-##  - zincirden zaman zaman uçan kor kıvılcımları
+## Talon'un Silah Salvosu (E): karakter ile HER silahı arasında pixel-art zincir.
+## YENİDEN ÜRETİM (kullanıcı 2026-10-12: "zincirler daha uyumlu ve oval kıvrılabilecek şekilde olacak silahlar dönerken" -> prototip A · Oval yay,
+## tools/proto_20261012/gen_talon_form_zincir.py):
+##  - İP FİZİĞİ: her zincir 10 parçalı bir Verlet ipi (iki ucu sabit: bel halkası + silahın iç ucu, parçalar uzamaz, hız sönümü = hava direnci).
+##    İp kirişten %10 uzun olduğu için silah döndükçe arkasında oval bir yay çizer; karakter yürür/atılırsa zincir gerçek zincir gibi salınır.
+##    Halkalar düğümlerden geçen Catmull-Rom eğrisine eşit aralıkla dizilir ve eğrinin o noktadaki yönüne döner.
+##  - HALKALAR: 1 halka pikseli = 0,5 dünya pikseli (= 1080p'de 1 ekran pikseli, silah ikonlarının yoğunluğu), 180 derece üzerinde 32 yön için önceden pişirilmiş
+##    (assets/fx/talon_chain/links.png, tools/gen_talon_chain_links.py): dönüşümlü yüzü dönük oval / kenardan görünen halka. Bir katmandaki TÜM
+##    halkaların önce alt katmanı (kontur + yer gölgesi), sonra gövdeleri çizilir -> zincirin bütünü tek koyu konturla çevrilir.
+##  - RENK: çelik gri + merkezden silaha akan turuncu akkor nabız; Ayna Formu (R) açıkken kızıl gövde + beyaz akkor nabız.
+##  - KATMAN: silahı belin kuzeyinde kalan zincirler karakterin ARKASINDA (bu düğüm, show_behind_parent), güneydekiler ÖNÜNDE (_front, top_level -
+##    eski tek katman gibi her şeyin üstünde). Zincirler beldeki basık oval halkaya bağlanır (arka yarısı arkada, ön yarısı önde).
 ## Player (yetkili) ve RemotePlayer (kozmetik kopya) ikisi de bu sahnenin ebeveyni olabilir: silah konumları player.owned_weapon_nodes /
-## remote._weapon_icons'tan okunur, çizim iki tarafta AYNI koddur (bkz. proje kökündeki CLAUDE.md).
-## Ömür: TalonMath.SALVO_DURATION (3sn) + kısa toparlanma; zincir merkezden dışa uzar, bitince toplanır.
+## remote._weapon_icons'tan okunur, fizik + çizim iki tarafta AYNI koddur, her istemci kendi yerelinde simüle eder (bkz. CLAUDE.md).
+## Ömür salvo bayrağını izler (yerel: _talon_weapon_salvo_active, uzak: _talon_formation == "salvo") - "Uzun Girdap" evrimiyle uzayan salvoda
+## zincir de sürer; bitince RETRACT_TIME'da son şekli üzerinden bele toplanır.
+##
+## PERF (bkz. git geçmişi: 2026-09-24 "talon oyunu çok kastırıyor"): halka başına 2 draw_texture_rect_region (eskiden 3-4), zincir başına
+## kare başına 1 fizik adımı (10 parça x 4 tur).
 
-const PixelDraw := preload("res://scripts/pixel_draw.gd")
 const TalonMath := preload("res://scripts/talon_formation_math.gd")
+const LinkAtlas: Texture2D = preload("res://assets/fx/talon_chain/links.png")
 
 const GROW_TIME := 0.2
 const RETRACT_TIME := 0.25
-const LINK_PITCH := 4.8 ## texel: iki halka merkezi arası (halka boyundan kısa => iç içe geçer)
-const LINK_HALF_LEN := 3.1 ## texel: oval yarı boyu (zincir yönünde)
-const LINK_HALF_WID := 1.9 ## texel: oval yarı eni
-const BELT_RADIUS := 4.5 ## texel: merkezdeki kemer halkası
+const NO_FLAG_GRACE := 1.5 ## uzak kopyada durum paketi gecikirse salvo bayrağı henüz gelmemiş olabilir
+const MAX_LIFE := 12.0 ## emniyet: bayrak hiç düşmezse
+## Dünya pikseli / halka pikseli. Prototipte halka = karakter sanat pikseli (0,903) idi ama orada silah çemberi yanlışlıkla 2 kat geniş
+## çizilmişti (130 YEREL birim = 65 dünya pikseli, weapon.gd ofseti kök ölçeğiyle çarpar): gerçek ölçekte o boyda zincir 11 kalın halkada
+## kalıyor, yay okunmuyordu. 0,5 = kamera yakınlığı 2 iken tam 1 ekran pikseli (silah ikonlarıyla aynı yoğunluk) -> ~22 halka, prototipteki oran.
+const LINK_PX := 0.5
+const LINK_PITCH := 4.8 ## halka pikseli: iki halka merkezi arası (links.png ile aynı ölçü)
+const LINK_DIRS := 32
+const LINK_CELL := 16
+const LINK_CENTER := Vector2(7, 6) ## hücrede halkanın merkez pikseli
+const ROPE_SEGS := 10
+const ROPE_ITERS := 4
+const ROPE_SLACK := 0.10 ## ip kirişten bu kadar uzun (prototip A; 0.28 = "girdap")
+const ROPE_DAMP := 9.0 ## 1/sn hız sönümü
+const MIN_CHORD := 30.0 ## dünya pikseli: silah bundan yakınsa (dizilime henüz geçmemiş) zincir bağlanmaz (salvo yarıçapı 130 yerel = 65 dünya)
+const BELT_OFFSET := Vector2(0, 1) ## dünya pikseli: zincirlerin bağlandığı bel noktası (karakter kökü bel hizasında; eski -6 göğüs/boyundu)
+const BELT_RX := 7.5 ## bel halkası (yukarıdan bakış -> basık oval)
+const BELT_RY := 3.6
+const BELT_POINTS := 20 ## yarım halka başına
+const TIP_INSET := 10.0 ## zincir silah merkezinin bu kadar içinde biter
 
-const C_IRON_D := Color(0.16, 0.12, 0.13, 1.0)
-const C_IRON := Color(0.42, 0.36, 0.4, 1.0)
-const C_HEAT_LO := Color(0.62, 0.2, 0.08, 1.0)
-const C_HEAT_HI := Color(1.0, 0.62, 0.16, 1.0)
-const C_WHITE_HOT := Color(1.0, 0.95, 0.7, 1.0)
+## [gövde, nabız ortası, nabız tepesi, kontur]
+const SCHEME_STEEL: Array[Color] = [Color8(150, 154, 172), Color8(255, 150, 50), Color8(255, 244, 204), Color8(26, 22, 30)]
+const SCHEME_FORM: Array[Color] = [Color8(182, 20, 28), Color8(255, 128, 118), Color8(255, 255, 255), Color8(18, 4, 8)]
 
 var _host: Node2D = null
+var _front: Node2D = null
 var _t: float = 0.0
-## 2026-10-10 (kullanıcı: "E'deki zincirin gerçek bir zincir gibi dönmesini istiyorum, düz bir hizada değil, hafif kıvrılarak"): zincir artık düz çizgi
-## değil eğri - silah döndükçe dönüşün TERSİNE geride kalan bir yay (açısal hıza göre, LAG_*) + üzerinde merkezden silaha akan hafif bir dalga (WAVE_*);
-## halkalar eğrinin o noktadaki yönüne döner. Açısal hız silah başına yerelde ölçülür (kaster ve uzak kopya AYNI kod).
-const LAG_PER_RADPS := 0.16 ## yay sapması = açısal hız (rad/sn) x bu x zincir boyu
-const LAG_MAX_RATIO := 0.32 ## en çok zincir boyunun bu oranı kadar sapar
-const LAG_MIN_RATIO := 0.06 ## hiç dönmüyorken bile hafif sarkık kalsın
-const WAVE_AMP := 2.2 ## texel
-const WAVE_SPEED := 7.0
-const CURVE_SAMPLES := 24
-var _prev_angle: Dictionary = {} ## silah sırası -> önceki açı
-var _ang_vel: Dictionary = {} ## silah sırası -> süzülmüş açısal hız (rad/sn)
-
-## PERF (kullanıcı bildirimi 2026-09-24: "talon oyunu çok kastırıyor yetenek kullandığında"): ÖLÇÜM (gerçek render,
-## 60 yaratık + 5 silah): Silah Salvosu sırasında bu FX tek başına ~2.3 ms/kare (168 -> 122 fps; Ayna Formu'nun 10
-## silahıyla iki katı). Kök neden: her halka ~14 noktalı bir ovalin 3 katı (gölge/kontur/ısı) = halka başına ~40 ayrı
-## PixelDraw.px (draw_rect) çağrısı. Zincirler hareketli silahlara bağlı olduğu için tek bir spritesheet'e pişirilemez;
-## bunun yerine halka ŞEKİLLERİ (oval kontur, oval iç, kenar çubuk, çubuk sırtı) 16 yön için BİR KEZ, aynı piksel
-## matematiğiyle küçük beyaz dokulara çizilir (static önbellek) ve her halka rengine göre modulate edilen 2-3
-## draw_texture_rect ile çizilir. Görünüm aynı (yön 22.5 derecelik adıma yuvarlanır).
-const LINK_DIRS := 16
-const LINK_TEX_SIZE := 11 ## texel
-const LINK_TEX_CENTER := 5
-static var _link_tex: Dictionary = {} ## "oval_outer"/"oval_inner"/"bar"/"bar_hi" -> Array[ImageTexture] (LINK_DIRS)
-
-
-static func _dir_index(dir: Vector2) -> int:
-	return posmod(int(round(dir.angle() / (TAU / float(LINK_DIRS)))), LINK_DIRS)
-
-
-static func _ensure_link_textures() -> void:
-	if not _link_tex.is_empty():
-		return
-	var kinds: Array = ["oval_outer", "oval_inner", "bar", "bar_hi"]
-	for kind in kinds:
-		_link_tex[kind] = []
-	for d in range(LINK_DIRS):
-		var a0: float = float(d) * TAU / float(LINK_DIRS)
-		var dir := Vector2(cos(a0), sin(a0))
-		var normal := Vector2(-dir.y, dir.x)
-		for kind in kinds:
-			var img := Image.create(LINK_TEX_SIZE, LINK_TEX_SIZE, false, Image.FORMAT_RGBA8)
-			var cells: Array = []
-			match kind:
-				"oval_outer", "oval_inner":
-					var hl: float = LINK_HALF_LEN if kind == "oval_outer" else LINK_HALF_LEN - 0.9
-					var hw: float = LINK_HALF_WID if kind == "oval_outer" else LINK_HALF_WID - 0.6
-					for k in range(14):
-						var a: float = TAU * float(k) / 14.0
-						cells.append(dir * cos(a) * hl + normal * sin(a) * hw)
-				"bar":
-					for s in [-1.5, -0.5, 0.5, 1.5]:
-						cells.append(dir * s)
-				"bar_hi":
-					cells.append(normal * -0.7)
-			for c in cells:
-				var x: int = int(round(c.x)) + LINK_TEX_CENTER
-				var y: int = int(round(c.y)) + LINK_TEX_CENTER
-				if x >= 0 and y >= 0 and x < LINK_TEX_SIZE and y < LINK_TEX_SIZE:
-					img.set_pixel(x, y, Color.WHITE)
-			(_link_tex[kind] as Array).append(ImageTexture.create_from_image(img))
-
-
-## Halka dokusunu `center`e (texel ızgarasına oturtulmuş) `col` rengiyle çizer.
-func _link(kind: String, center: Vector2, dir_i: int, col: Color) -> void:
-	var texel: float = PixelDraw.TEXEL
-	var size: float = float(LINK_TEX_SIZE) * texel
-	var origin: Vector2 = PixelDraw.snap(center) - Vector2(float(LINK_TEX_CENTER) + 0.5, float(LINK_TEX_CENTER) + 0.5) * texel
-	draw_texture_rect((_link_tex[kind] as Array)[dir_i], Rect2(origin, Vector2(size, size)), false, col)
+var _seen_on: bool = false
+var _closing: float = 0.0 ## 0 = açık, >0 = toplanıyor (sn)
+var _link_px: float = LINK_PX
+var _prev_dt: float = 1.0 / 60.0
+var _last_host_pos: Vector2 = Vector2.ZERO
+## İpler (silah sırasıyla): düğümler dünya koordinatında. Boş dizi = henüz bağlanmamış.
+var _rope_x: Array[PackedVector2Array] = []
+var _rope_prev: Array[PackedVector2Array] = []
+var _rope_len: PackedFloat32Array = PackedFloat32Array()
+var _rope_born: PackedFloat32Array = PackedFloat32Array()
+## Çizim listeleri [arka, ön]: halka hücresinin sol üst köşesi (dünya), yön + tür * 64, gövde rengi; bloklar = [merkez, yarıçap, renk]
+var _l_pos: Array[PackedVector2Array] = [PackedVector2Array(), PackedVector2Array()]
+var _l_meta: Array[PackedInt32Array] = [PackedInt32Array(), PackedInt32Array()]
+var _l_col: Array[PackedColorArray] = [PackedColorArray(), PackedColorArray()]
+var _l_blocks: Array = [[], []]
+var _scheme: Array[Color] = SCHEME_STEEL
+var _belt_on: bool = false
 
 
 func _ready() -> void:
-	top_level = true
+	show_behind_parent = true ## arka katman: karakterin arkasında
 	z_index = 0
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_host = get_parent() as Node2D
-	global_position = Vector2.ZERO
-	_ensure_link_textures()
+	if _host != null:
+		_last_host_pos = _host.global_position
+	_front = Node2D.new()
+	_front.top_level = true
+	_front.z_index = 0
+	_front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_front.draw.connect(_draw_front)
+	add_child(_front)
+	_front.global_position = Vector2.ZERO
 
 
-func _life() -> float:
-	return TalonMath.SALVO_DURATION + RETRACT_TIME
-
-
-## Gece ışığı (bkz. night_glow.gd): kök (0,0)'da (top_level, dünya koordinatıyla çiziyor) - kızgın zincirlerin sıcak
-## ışığı Talon'un üstünde.
+## Gece ışığı (bkz. night_glow.gd): zincirlerin ışığı Talon'un üstünde.
 func get_glow_segment() -> Array:
 	if _host == null or not is_instance_valid(_host):
 		return []
@@ -136,132 +110,254 @@ func _weapon_points() -> Array:
 	return pts
 
 
+func _salvo_on() -> bool:
+	if "_talon_weapon_salvo_active" in _host:
+		return bool(_host._talon_weapon_salvo_active)
+	if "_talon_formation" in _host:
+		return str(_host._talon_formation) == "salvo"
+	return _t < TalonMath.SALVO_DURATION
+
+
+func _form_on() -> bool:
+	if "_talon_mirror_form_active" in _host:
+		return bool(_host._talon_mirror_form_active)
+	if "_talon_form_active" in _host:
+		return bool(_host._talon_form_active)
+	return false
+
+
+func _origin() -> Vector2:
+	return _host.global_position + BELT_OFFSET
+
+
+## Zincirin iki ucu: bel halkasının silaha bakan noktası + silahın iç ucu.
+func _anchor_belt(origin: Vector2, dir: Vector2) -> Vector2:
+	return origin + Vector2(dir.x * BELT_RX, dir.y * BELT_RY)
+
+
 func _process(delta: float) -> void:
 	_t += delta
-	if _host == null or not is_instance_valid(_host) or _t >= _life():
+	if _host == null or not is_instance_valid(_host):
 		queue_free()
 		return
-	var pts: Array = _weapon_points()
-	for j in range(pts.size()):
-		var a: float = ((pts[j] as Vector2) - _host.global_position).angle()
-		if _prev_angle.has(j) and delta > 0.0:
-			var w: float = wrapf(a - float(_prev_angle[j]), -PI, PI) / delta
-			_ang_vel[j] = lerpf(float(_ang_vel.get(j, 0.0)), clampf(w, -20.0, 20.0), 0.18)
-		_prev_angle[j] = a
+	if _salvo_on():
+		_seen_on = true
+	elif _closing <= 0.0 and (_seen_on or _t > NO_FLAG_GRACE):
+		_closing = 0.0001
+	if _closing <= 0.0 and _t > MAX_LIFE:
+		_closing = 0.0001
+	var host_pos: Vector2 = _host.global_position
+	if _closing > 0.0:
+		_closing += delta
+		if _closing >= RETRACT_TIME:
+			queue_free()
+			return
+		## Toplanırken fizik durur (silahlar yerine döndü): son şekil karakterle birlikte taşınır.
+		var shift: Vector2 = host_pos - _last_host_pos
+		if shift != Vector2.ZERO:
+			for j in range(_rope_x.size()):
+				var xs: PackedVector2Array = _rope_x[j]
+				for i in range(xs.size()):
+					xs[i] += shift
+				_rope_x[j] = xs
+	else:
+		_simulate(clampf(delta, 1.0 / 240.0, 1.0 / 30.0))
+	_last_host_pos = host_pos
+	_build_links()
 	queue_redraw()
+	_front.queue_redraw()
 
 
-## Eğri üzerindeki nokta: P0 -> P2 arası, orta noktası `lag` kadar yana sapmış ikinci derece Bezier + merkezden silaha akan dalga (uçlarda sıfır).
-func _curve_point(p0: Vector2, p2: Vector2, normal: Vector2, lag: float, f: float, phase: float) -> Vector2:
-	var p1: Vector2 = (p0 + p2) * 0.5 + normal * lag
-	var u: float = 1.0 - f
-	var b: Vector2 = p0 * (u * u) + p1 * (2.0 * u * f) + p2 * (f * f)
-	return b + normal * (PixelDraw.TEXEL * WAVE_AMP * sin(f * TAU - _t * WAVE_SPEED + phase) * sin(f * PI))
-
-
-## Halka şekilleri (eskiden _oval/_bar her karede noktası noktasına çiziyordu): _ensure_link_textures'ta yön başına bir
-## kez pişirilir - "oval_*" zincir yönüne döndürülmüş ince oval (yüzü bize dönük halka), "bar*" kenardan görünen halka
-## (zincir yönünde kısa çubuk + 1 texel parlak sırt).
-func _heat_color(h: float) -> Color:
-	return C_IRON.lerp(C_HEAT_LO, clampf(h * 2.0, 0.0, 1.0)).lerp(C_HEAT_HI, clampf(h * 2.0 - 1.0, 0.0, 1.0))
-
-
-func _draw() -> void:
-	var extent: float = minf(1.0, _t / GROW_TIME)
-	extent = minf(extent, clampf((_life() - _t) / RETRACT_TIME, 0.0, 1.0))
-	if extent <= 0.0:
-		return
-	var origin: Vector2 = _host.global_position + Vector2(0, -6)
-	var texel: float = PixelDraw.TEXEL
+func _simulate(dt: float) -> void:
 	var pts: Array = _weapon_points()
-	var belt_r: float = texel * BELT_RADIUS
-	## --- Merkez kemer halkası (zincirlerin bağlandığı yer) ---
-	PixelDraw.ring(self, origin + Vector2(0, texel * 1.5), belt_r, Color(0.05, 0.03, 0.03, 0.4 * extent), 1) ## yer gölgesi
-	PixelDraw.ring(self, origin, belt_r, C_IRON, 1)
-	PixelDraw.ring(self, origin, belt_r - texel, C_IRON_D, 1)
-	PixelDraw.ring(self, origin, belt_r, Color(C_HEAT_HI.r, C_HEAT_HI.g, C_HEAT_HI.b, 0.9 * extent), 1, 3, 4, _t * 14.0) ## dönen turuncu işaretler
-	for k in range(6): ## perçinler
-		var pa: float = float(k) * TAU / 6.0 + _t * 0.5
-		PixelDraw.px(self, origin + Vector2(cos(pa), sin(pa)) * belt_r, 1, C_WHITE_HOT if k == 0 else C_IRON)
+	if pts.size() != _rope_x.size(): ## silah sayısı değişti (Ayna Formu açıldı/kapandı): hepsi yeniden bağlanır
+		_rope_x.clear()
+		_rope_prev.clear()
+		_rope_len.clear()
+		_rope_born.clear()
+		for _j in range(pts.size()):
+			_rope_x.append(PackedVector2Array())
+			_rope_prev.append(PackedVector2Array())
+			_rope_len.append(0.0)
+			_rope_born.append(0.0)
+	var origin: Vector2 = _origin()
+	var keep: float = exp(-ROPE_DAMP * dt) * (dt / _prev_dt)
 	for j in range(pts.size()):
-		var end_full: Vector2 = pts[j]
-		var v: Vector2 = end_full - origin
-		var length: float = v.length()
-		if length < texel * (BELT_RADIUS + 6.0):
+		var wp: Vector2 = pts[j]
+		var v: Vector2 = wp - origin
+		var dist: float = v.length()
+		if dist < MIN_CHORD:
+			_rope_x[j] = PackedVector2Array()
 			continue
-		var dir: Vector2 = v / length
-		var normal := Vector2(-dir.y, dir.x)
-		var start_off: float = belt_r ## zincir kemerin kenarından başlar
-		var usable: float = length - start_off - texel * 3.5 ## silah ucundaki kelepçeye kadar
-		var pitch: float = texel * LINK_PITCH
-		## Eğri: dönüşün tersine geride kalan yay + dalga; noktalar yay uzunluğuna göre örneklenir (halkalar eşit aralıklı kalsın).
-		var lag_ratio: float = clampf(-float(_ang_vel.get(j, 0.0)) * LAG_PER_RADPS, -LAG_MAX_RATIO, LAG_MAX_RATIO)
-		if absf(lag_ratio) < LAG_MIN_RATIO:
-			lag_ratio = LAG_MIN_RATIO * (signf(lag_ratio) if lag_ratio != 0.0 else 1.0)
-		var lag: float = lag_ratio * usable
-		var p0: Vector2 = origin + dir * start_off
-		var p2: Vector2 = origin + dir * (start_off + usable)
-		var phase: float = float(j) * 1.9
-		var samples := PackedVector2Array()
-		var cum := PackedFloat32Array()
-		var total_len: float = 0.0
-		for k in range(CURVE_SAMPLES + 1):
-			var q: Vector2 = _curve_point(p0, p2, normal, lag, float(k) / float(CURVE_SAMPLES), phase)
-			if k > 0:
-				total_len += q.distance_to(samples[k - 1])
-			samples.append(q)
-			cum.append(total_len)
-		var reach: float = total_len * extent
-		var count: int = int(reach / pitch)
+		var dir: Vector2 = v / dist
+		var p0: Vector2 = _anchor_belt(origin, dir)
+		var p1: Vector2 = wp - dir * TIP_INSET
+		var chord: float = p0.distance_to(p1)
+		var x: PackedVector2Array = _rope_x[j]
+		if x.is_empty():
+			## İlk bağlanış: dönüşün tersine (TalonMath.SALVO_SPIN_DIR yönünde döner) sarkan yay - geçici titreme olmadan başlasın.
+			_rope_len[j] = chord * (1.0 + ROPE_SLACK)
+			_rope_born[j] = _t
+			var bow: Vector2 = Vector2(dir.y, -dir.x) * TalonMath.SALVO_SPIN_DIR * (chord * sqrt(0.375 * ROPE_SLACK))
+			x.resize(ROPE_SEGS + 1)
+			for i in range(ROPE_SEGS + 1):
+				var f: float = float(i) / float(ROPE_SEGS)
+				x[i] = p0.lerp(p1, f) + bow * (4.0 * f * (1.0 - f))
+			x = _solve(x, p0, p1, _rope_len[j] / float(ROPE_SEGS), 12)
+			_rope_x[j] = x
+			_rope_prev[j] = x.duplicate()
+			continue
+		var prev: PackedVector2Array = _rope_prev[j]
+		for i in range(1, ROPE_SEGS):
+			var cur: Vector2 = x[i]
+			x[i] = cur + (cur - prev[i]) * keep
+			prev[i] = cur
+		## Silah normalden uzağa savrulursa (ateş tepmesi) ip kopmasın: boy en az kiriş kadar.
+		x = _solve(x, p0, p1, maxf(_rope_len[j], chord * 1.02) / float(ROPE_SEGS), ROPE_ITERS)
+		_rope_x[j] = x
+		_rope_prev[j] = prev
+	_prev_dt = dt
+
+
+## Uzunluk kısıtı: uçlar sabit, her parça `seg` boyuna çekilir. Sonucu DÖNDÜRÜR: tipli Packed*Array değer gibi davranır (yazınca kopyalanır,
+## bkz. hafıza "Packed*Array gotcha") - çağıran geri atamalı.
+static func _solve(x: PackedVector2Array, p0: Vector2, p1: Vector2, seg: float, iters: int) -> PackedVector2Array:
+	var last: int = x.size() - 1
+	x[0] = p0
+	x[last] = p1
+	for _it in range(iters):
+		for i in range(last):
+			var d: Vector2 = x[i + 1] - x[i]
+			var corr: Vector2 = d * (1.0 - seg / maxf(d.length(), 0.001))
+			if i == 0:
+				x[1] -= corr
+			elif i == last - 1:
+				x[i] += corr
+			else:
+				x[i] += corr * 0.5
+				x[i + 1] -= corr * 0.5
+	return x
+
+
+func _cell(center: Vector2) -> Vector2:
+	return Vector2(floorf(center.x / _link_px), floorf(center.y / _link_px))
+
+
+func _build_links() -> void:
+	_scheme = SCHEME_FORM if _form_on() else SCHEME_STEEL
+	_belt_on = false
+	for li in range(2):
+		_build_layer(li)
+
+
+## Bir katmanın (0 arka, 1 ön) çizim listeleri. Yerel dizilere yazılıp sonda atanır (Packed*Array'e kap içinden ekleme kaybolabilir).
+func _build_layer(li: int) -> void:
+	var l_pos := PackedVector2Array()
+	var l_meta := PackedInt32Array()
+	var l_col := PackedColorArray()
+	var l_blocks: Array = []
+	var origin: Vector2 = _origin()
+	var pitch: float = LINK_PITCH * _link_px
+	var retract: float = clampf(1.0 - _closing / RETRACT_TIME, 0.0, 1.0) if _closing > 0.0 else 1.0
+	var body: Color = _scheme[0]
+	for j in range(_rope_x.size()):
+		var x: PackedVector2Array = _rope_x[j]
+		if x.size() != ROPE_SEGS + 1:
+			continue
+		if (1 if x[ROPE_SEGS].y > origin.y else 0) != li:
+			continue
+		var extent: float = minf(clampf((_t - _rope_born[j]) / GROW_TIME, 0.0, 1.0), retract)
+		if extent <= 0.0:
+			continue
+		_belt_on = true
+		var seg: float = x[0].distance_to(x[1])
+		var total: float = seg * float(ROPE_SEGS)
+		var count: int = int(total * extent / pitch)
 		var pulse_f: float = fmod(_t * 1.5 + float(j) * 0.27, 1.0)
-		var seg: int = 1
-		var link_pts: Array = []
+		var tip: Vector2 = x[0]
 		for i in range(count):
 			var sd: float = (float(i) + 0.5) * pitch
-			while seg < CURVE_SAMPLES and cum[seg] < sd:
-				seg += 1
-			var seg_len: float = maxf(cum[seg] - cum[seg - 1], 0.001)
-			var c: Vector2 = samples[seg - 1].lerp(samples[seg], clampf((sd - cum[seg - 1]) / seg_len, 0.0, 1.0))
-			var tangent: Vector2 = (samples[seg] - samples[seg - 1]).normalized()
-			var link_dir_i: int = _dir_index(tangent)
-			link_pts.append(c)
-			var f: float = sd / maxf(total_len, 1.0)
-			## Isı: ısı dalgası merkezden silaha akar; pulse_f'e yakın halkalar akkor
-			var heat: float = 0.35 + 0.25 * sin(_t * 3.0 - float(i) * 0.7)
-			var dp: float = absf(f - pulse_f)
-			if dp < 0.08:
-				heat = 1.0 - dp / 0.08 * 0.4
-			var col: Color = _heat_color(heat)
-			if heat > 0.9:
-				col = col.lerp(C_WHITE_HOT, (heat - 0.9) * 6.0)
-			## Yer gölgesi
-			var shadow := Color(0.05, 0.03, 0.03, 0.35 * extent)
-			if i % 2 == 0:
-				_link("oval_outer", c + Vector2(0, texel * 1.6), link_dir_i, shadow)
-				_link("oval_outer", c, link_dir_i, C_IRON_D)
-				_link("oval_inner", c, link_dir_i, col)
-			else:
-				_link("bar", c + Vector2(0, texel * 1.6), link_dir_i, shadow)
-				_link("bar_hi", c + Vector2(0, texel * 1.6), link_dir_i, shadow)
-				_link("bar", c, link_dir_i, col)
-				_link("bar_hi", c, link_dir_i, C_WHITE_HOT if heat > 0.8 else C_HEAT_HI)
-		## Kor kıvılcımı: zincirden yükselen tek pixel
-		var seed_i: int = int(_t * 10.0) * 7 + j * 31
-		if count > 2 and PixelDraw.hash01(seed_i) < 0.6:
-			var k_idx: int = mini(int(PixelDraw.hash01(seed_i + 3) * float(count)), link_pts.size() - 1)
-			var rise: float = fmod(_t * 10.0, 1.0)
-			var kp: Vector2 = (link_pts[k_idx] as Vector2) + Vector2((PixelDraw.hash01(seed_i + 9) - 0.5) * texel * 3.0, -texel * (2.0 + rise * 7.0))
-			PixelDraw.px(self, kp, 1, Color(1.0, 0.7, 0.2, 1.0 - rise))
-		## Uç: büyürken parlak uç kıvılcımı
-		if extent < 0.999 and count > 0:
-			PixelDraw.px(self, link_pts[link_pts.size() - 1], 2, C_WHITE_HOT)
-		## Silah ucu: kenetleyen kelepçe (koyu çelik kare + akkor göz) ve nabız gibi atan ince halka
-		if extent >= 0.999:
-			var clasp: Vector2 = end_full - dir * texel * 2.5
-			PixelDraw.px(self, clasp + Vector2(0, texel * 1.6), 3, Color(0.05, 0.03, 0.03, 0.35))
-			PixelDraw.px(self, clasp, 3, C_IRON_D)
-			PixelDraw.px(self, clasp, 2, C_IRON)
-			var glow: float = 0.6 + 0.4 * sin(_t * 8.0 + float(j))
-			PixelDraw.px(self, clasp, 1, C_HEAT_HI.lerp(C_WHITE_HOT, glow))
-			var pr: float = texel * (4.0 + 0.7 * sin(_t * 9.0 + float(j)))
-			PixelDraw.ring(self, end_full, pr, Color(C_HEAT_HI.r, C_HEAT_HI.g, C_HEAT_HI.b, 0.75), 1, 3, 3, _t * 10.0)
+			var s: float = sd / maxf(seg, 0.001)
+			var idx: int = mini(int(s), ROPE_SEGS - 1)
+			var u: float = s - float(idx)
+			var q1: Vector2 = x[idx]
+			var q2: Vector2 = x[idx + 1]
+			var q0: Vector2 = x[idx - 1] if idx > 0 else q1 * 2.0 - q2
+			var q3: Vector2 = x[idx + 2] if idx + 2 <= ROPE_SEGS else q2 * 2.0 - q1
+			## Catmull-Rom noktası + türevi (teğet)
+			var a1: Vector2 = q2 - q0
+			var a2: Vector2 = q0 * 2.0 - q1 * 5.0 + q2 * 4.0 - q3
+			var a3: Vector2 = q1 * 3.0 - q0 - q2 * 3.0 + q3
+			var c: Vector2 = (q1 * 2.0 + a1 * u + a2 * (u * u) + a3 * (u * u * u)) * 0.5
+			var tan: Vector2 = a1 + a2 * (2.0 * u) + a3 * (3.0 * u * u)
+			var d_i: int = posmod(roundi(tan.angle() / (PI / float(LINK_DIRS))), LINK_DIRS)
+			## Akkor nabız: merkezden silaha akar
+			var dp: float = absf(sd / maxf(total, 1.0) - pulse_f)
+			var heat: float = maxf(0.0, 1.0 - minf(dp, 1.0 - dp) / 0.1)
+			var col: Color = body
+			if heat > 0.0:
+				col = col.lerp(_scheme[1], minf(1.0, heat * 2.0))
+				if heat > 0.5:
+					col = col.lerp(_scheme[2], heat * 2.0 - 1.0)
+			l_pos.append((_cell(c) - LINK_CENTER) * _link_px)
+			l_meta.append(d_i + (i % 2) * 64)
+			l_col.append(col)
+			tip = c
+		if extent >= 0.999: ## silah ucundaki kelepçe
+			l_blocks.append([x[ROPE_SEGS], 2, body])
+			l_blocks.append([x[ROPE_SEGS], 0, _scheme[2]])
+		elif count > 0: ## uzarken/toplanırken uçta akkor nokta
+			l_blocks.append([tip, 1, _scheme[2]])
+	_l_pos[li] = l_pos
+	_l_meta[li] = l_meta
+	_l_col[li] = l_col
+	_l_blocks[li] = l_blocks
+
+
+## Kontur karesi (2r+1) + içinde gövde karesi (2r-1); r = 0 -> tek piksel.
+func _block(ci: CanvasItem, center: Vector2, r: int, col: Color) -> void:
+	var o: Vector2 = (_cell(center) - Vector2(r, r)) * _link_px
+	if r <= 0:
+		ci.draw_rect(Rect2(o, Vector2(_link_px, _link_px)), col)
+		return
+	ci.draw_rect(Rect2(o, Vector2(2 * r + 1, 2 * r + 1) * _link_px), _scheme[3])
+	ci.draw_rect(Rect2(o + Vector2(_link_px, _link_px), Vector2(2 * r - 1, 2 * r - 1) * _link_px), col)
+
+
+func _draw_layer(ci: CanvasItem, li: int) -> void:
+	var pos: PackedVector2Array = _l_pos[li]
+	var meta: PackedInt32Array = _l_meta[li]
+	var col: PackedColorArray = _l_col[li]
+	var size := Vector2(LINK_CELL, LINK_CELL) * _link_px
+	var cell := float(LINK_CELL)
+	## 1) alt katman: tüm halkaların konturu (+ ovallerin yer gölgesi)
+	for i in range(pos.size()):
+		var m: int = meta[i]
+		ci.draw_texture_rect_region(LinkAtlas, Rect2(pos[i], size), Rect2(float(m & 63) * cell, float(m >> 6) * 2.0 * cell, cell, cell), _scheme[3])
+	## 2) gövdeler: önce yüzü dönük ovaller, üstüne kenardan görünen halkalar (deliklerden geçer)
+	for kind in range(2):
+		for i in range(pos.size()):
+			var m: int = meta[i]
+			if (m >> 6) == kind:
+				ci.draw_texture_rect_region(LinkAtlas, Rect2(pos[i], size), Rect2(float(m & 63) * cell, float(kind * 2 + 1) * cell, cell, cell), col[i])
+	## 3) bel halkasının bu katmandaki yarısı (arka yarı koyu)
+	if _belt_on:
+		var origin: Vector2 = _origin()
+		var arc := PackedVector2Array()
+		for k in range(BELT_POINTS + 1):
+			var a: float = PI * float(k) / float(BELT_POINTS) + (0.0 if li == 1 else PI)
+			arc.append(origin + Vector2(cos(a) * BELT_RX, sin(a) * BELT_RY))
+		ci.draw_polyline(arc, _scheme[3], _link_px * 3.0)
+		ci.draw_polyline(arc, _scheme[0] if li == 1 else _scheme[0].darkened(0.4), _link_px)
+	for b in (_l_blocks[li] as Array):
+		_block(ci, b[0], int(b[1]), b[2])
+
+
+## Arka katman bu düğümün kendisi (ebeveynin çocuğu -> ebeveyn yerelinde çizer): listeler dünya koordinatında olduğu için dönüşüm geri alınır.
+func _draw() -> void:
+	draw_set_transform_matrix(get_global_transform().affine_inverse())
+	_draw_layer(self, 0)
+
+
+func _draw_front() -> void:
+	_draw_layer(_front, 1)

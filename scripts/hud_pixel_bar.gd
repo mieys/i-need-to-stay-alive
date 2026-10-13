@@ -46,5 +46,5 @@ func _draw() -> void:
 		var f: Font = get_theme_default_font()
 		var ts: Vector2 = f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 		var p := Vector2(round((size.x - ts.x) * 0.5), round((size.y + ts.y * 0.62) * 0.5))
-		draw_string_outline(f, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 6, OUTLINE)
+		draw_string_outline(f, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, maxi(3, int(round(font_size * 0.2))), OUTLINE) ## kontur yazıyla orantılı (eskiden sabit 6: küçük yazıyı dolduruyordu)
 		draw_string(f, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, TEXT_COLOR)

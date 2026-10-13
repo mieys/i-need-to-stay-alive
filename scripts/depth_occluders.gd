@@ -536,7 +536,8 @@ static func character_extent(n: Node2D) -> Vector2:
 ## collect_characters'ın düğümleri (aynı süzgeç, aynı sıra): köprü katı durumu karakter başına tutulur.
 static func character_nodes(tree: SceneTree) -> Array[Node2D]:
 	var nodes: Array[Node2D] = []
-	for group_name in ["player", "remote_players"]:
+	## "npc_actors": demirci / seyyar satıcı NPC'leri (npc_actor.gd) - oyuncularla aynı derinlik kuralı; SON sırada, oyuncuların yerini almazlar.
+	for group_name in ["player", "remote_players", "npc_actors"]:
 		for n in tree.get_nodes_in_group(group_name):
 			if nodes.size() >= MAX_CHARACTERS:
 				break

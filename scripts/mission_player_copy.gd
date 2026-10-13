@@ -883,6 +883,11 @@ func apply_freeze_full(duration: float, _allow_boss: bool = false) -> void:
 	apply_element("freeze", {"dur": duration})
 
 
+## Cadı'nın Delilik İksiri: kopyalar delirmez (elit sayılır) - API eşliği için boş (bkz. enemy.gd apply_madness).
+func apply_madness(_duration: float) -> void:
+	pass
+
+
 func apply_root(duration: float) -> void:
 	apply_element("slow", {"pct": 0.9, "dur": duration})
 

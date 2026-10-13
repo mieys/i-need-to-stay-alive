@@ -215,7 +215,9 @@ func _refresh() -> void:
 	if not player or not is_instance_valid(player):
 		return
 
-	speed_value.text = str(int(player.speed))
+	## Hareket hızı = KALICI hız: taban x (1 + eşya + "Hız" kartları). Eskiden ham `player.speed` (taban x 0.9) yazılıyordu - kart/eşya
+	## alsan da sayı hiç değişmiyordu (2026-10-12). Geçici etkiler (yetenek/ruhani/evrim buff'ları) bilerek katılmaz, sayı titremesin.
+	speed_value.text = str(int(round(player.get_base_move_speed()))) if player.has_method("get_base_move_speed") else str(int(player.speed))
 	var w = player.get_primary_weapon()
 	if w:
 		damage_value.text = str(int(w.damage))
@@ -249,7 +251,7 @@ func _refresh_extra_rows() -> void:
 		"shield_max": "%d/%d" % [int(player.get("item_shield_hp")), int(player.get("item_shield_max"))] if "item_shield_max" in player else "-",
 		"lifesteal": format_percent(float(player.call("get_total_lifesteal"))) if player.has_method("get_total_lifesteal") else "-",
 		"shield_regen": ("%s/sn" % format_luck(snappedf(float(player.get("item_shield_regen_flat")), 0.1))) if "item_shield_regen_flat" in player else "-",
-		"cooldown_reduction": format_percent(float(player.get("cooldown_reduction_percent"))) if "cooldown_reduction_percent" in player else "-",
+		"cooldown_reduction": format_percent(float(player.call("get_cooldown_reduction")) if player.has_method("get_cooldown_reduction") else float(player.get("cooldown_reduction_percent"))) if "cooldown_reduction_percent" in player else "-",
 		"pickup_range": str(int(round(float(player.call("get_pickup_range"))))) if player.has_method("get_pickup_range") else "-",
 	}
 	for id in _extra_values:

@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_matthew_sheet.gd" id="1"]
+
+[node name="FxMatthewShieldCast" type="Node2D"]
+script = ExtResource("1")
+kind = "cast"
+z = 13
+offset_px = Vector2(0, -31)
+sound_path = "res://assets/audio/storm/thunder_strike_3.wav"
+sound_db = -12.0
+sound_pitch = 1.15

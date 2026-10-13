@@ -141,6 +141,9 @@ func _on_body_entered(body: Node) -> void:
 		queue_free()
 		return
 
+	## Çift ödül düzeltmesi (2026-10-12, sandıkla aynı sınıf - bkz. chest_drop.gd _awarded): host'un fiziksel teması ve bir istemcinin request_drop_pickup'ı ayrı işaret kullanıyordu; ikisi aynı karede gelirse ödül iki kez veriliyordu. Ortak işaret "claimed".
+	if get_meta("claimed", false):
+		return
 	## BUG DÜZELTMESİ (kullanıcı bildirimi: "diğer karakterler birşey
 	## toplayınca üstlerinde birikiyor ama yok olmuyor") - bkz. xp_orb.gd
 	## aynı notu: burası eskiden SADECE "player" grubunu kabul edip host'un
@@ -179,6 +182,7 @@ func _on_body_entered(body: Node) -> void:
 	else:
 		return
 
+	set_meta("claimed", true)
 	if NetworkManager.is_multiplayer_active:
 		var drop_id: int = int(get_meta("drop_network_id", 0))
 		if drop_id > 0:

@@ -162,22 +162,23 @@ const DEFS := {
 		"skill": 43,
 		## 2026-10-08 (kullanıcı: "matthewin tilkisini wolf-hellhound spritesheet'indeki ile değiştir... adını köpek yapalım"): evcil hayvan
 		## artık KÖPEK - Tilki Hücumu -> Köpek Hücumu (skill id 43 ve kod içi `fox` adları BİLEREK aynı kaldı).
-		"skill_name": "Köpek Hücumu",
-		## 2026-09-28 yetenek evrimleri: itme "Savuran Pençe" evrimine geçti, bekleme 8 -> 10 sn.
-		"skill_desc": "YETENEK: Köpeğini anında yanına ışınlayıp görüş alanındaki en fazla 6 düşmana dash saldırısı attırır, saldırı gücünün %110'u kadar hasar verir. (10sn bekleme)",
-		## Kullanıcı isteği (2026-09-25): Matthew'in 4 ikonu 48x48 piksel olarak sıfırdan çizildi (tools/gen_matthew_icons.py) -
-		## Q artık Feda Kalkanı'nın ikonunu paylaşmıyor, kendi ikonu var.
-		"skill_icon": "res://assets/skills/matthew_kopek_hucumu_icon.png",
-		"skill2": 21,
-		"skill2_name": "Vahşi Hız",
-		"skill2_desc": "TEMEL: Kendine ve köpeğine 6 saniye boyunca %40 saldırı hızı ve %15 hareket hızı kazandırır. (35sn bekleme)",
-		"skill2_icon": "res://assets/skills/matthew_vahsi_hiz_icon.png",
+		## 2026-10-12 REWORK (madde 98, kullanıcı: "Q bundan sonra köpeğiyle değil kendi şimşek gücüyle alakalı ... artık köpek yok ama
+		## dosyalarını silme"): köpek gitti, kit şimşek oldu. Q aynı kurallar (id 43) - köpek yerine şimşek; E YENİ (Elektrik Topu, id 50;
+		## eski Vahşi Hız id 21 kalktı); R aynı kalkan (id 9) ama köpek gerektirmez, yıldırım temalı; pasif YENİ (Yıldırım Hızı).
+		## Sayılar scripts/matthew_lightning.gd'de; ikonlar tools/gen_matthew_lightning_fx.py (eski köpek/pati/tilki ikonları duruyor).
+		"skill_name": "Şimşek Hücumu",
+		"skill_desc": "YETENEK: Görüş alanındaki en yakın 6 düşmana sırayla şimşek çaktırır, her biri saldırı gücünün %110'u kadar hasar verir. (10sn bekleme)",
+		"skill_icon": "res://assets/skills/matthew_simsek_hucumu_icon.png",
+		"skill2": 50,
+		"skill2_name": "Elektrik Topu",
+		"skill2_desc": "TEMEL: 3 saniye boyunca elektrik topuna dönüşürsün: dokunulmaz olursun, silahların içe çekilir ve %20 toplam hareket hızı kazanırsın. Değdiğin yaratık saldırı gücünün %200'ü kadar hasar alıp fırlar; fırlayan yaratık başka bir yaratığa çarparsa o da aynı hasarı alır. (20sn bekleme)",
+		"skill2_icon": "res://assets/skills/matthew_elektrik_topu_icon.png",
 		"skill3": 9,
-		"skill3_name": "Feda Kalkanı",
-		"skill3_desc": "ULTİ: Yaratığı feda edip 15sn süren koruyucu bir kalkan çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer. (120sn bekleme)",
-		"skill3_icon": "res://assets/skills/matthew_feda_kalkani_icon.png",
-		"passive": "Hedef alınamayan bir köpeğin var: senin saldırı gücünle, saldırı hızınla ve kritik şansı/hasarınla (%100) saldırır, her ısırışta hedefine tam, önündeki en yakın 4 yaratığa daha %50 hasarla vurur. Ölürse 30sn sonra yeniden doğar.",
-		"passive_icon": "res://assets/skills/matthew_passive_icon.png",
+		"skill3_name": "Yıldırım Kalkanı",
+		"skill3_desc": "ULTİ: 15sn süren yıldırımdan bir kalkan çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer; hasarla kırılırsa çevresindeki yaratıklara hasar verip onları iter. Kalkan açıkken Şimşek Hücumu ve pasifin çalışmaya devam eder. (120sn bekleme)",
+		"skill3_icon": "res://assets/skills/matthew_yildirim_kalkani_icon.png",
+		"passive": "Yıldırım Hızı: hareket ettiğin her saniye %1 hareket hızı ve %1 saldırı hızı kazanırsın (en fazla %30); durunca bonus 5 saniyede söner. Arkanda 1 saniye süren bir yıldırım izi bırakırsın. Tam hızda iz güçlenir: değdiği yaratığı 1 saniye sersemletir ve saldırı gücünün %80'i kadar hasar verir.",
+		"passive_icon": "res://assets/skills/matthew_yildirim_hizi_icon.png",
 		"frames": "res://assets/characters/matthew_frames.tres",
 		"portrait": "res://assets/characters/matthew_portrait.png",
 		## Kullanıcı isteği (2026-09-23, new characters.zip #2): yeni 48x48 sprite sayfaları
@@ -451,7 +452,7 @@ const DEFS := {
 		## Kullanıcı isteği (2026-09-22): "Korsanın Q'sunun bekleme süresini kaldır ve mana bedelini de
 		## kaldır" - bkz. player.gd SKILL_TIMING[18] (cooldown 0.0) ve _activate_skill()'teki kalkan
 		## bedeli muafiyet listesi (char_id != 18 eklendi).
-		"skill_desc": "YETENEK: Bırakılmış tüm saatli bombaları patlatır. (Bekleme yok, kalkan harcamaz)",
+		"skill_desc": "YETENEK: Görüş alanındaki (turuncu kesik çizgili sınır) tüm saatli bombaları patlatır. (Bekleme yok, kalkan harcamaz)",
 		"skill_icon": "res://assets/skills/korsan_patlat_icon.png",
 		"skill2": 17,
 		"skill2_name": "Saatli Bomba",
@@ -476,9 +477,10 @@ const DEFS := {
 		## Kullanıcı isteği (2026-09-24): Korsan'ın 4 ikonu (Q/E/R/pasif) 48x48 piksel sanat kare ikon olarak yeniden
 		## çizildi - bkz. tools/gen_elara_korsan_icons.py (eski halka-rozet üreticisi gen_korsan_bombardment_icon.py silindi).
 		"skill3_icon": "res://assets/skills/korsan_bombardiman_icon.png",
-		## Kullanıcı isteği (2026-09-26): eski pasif (öldürmede %10+ şansla 1 altın) -> Papağan (bkz. scripts/korsan_parrot.gd,
+		## 2026-10-12: pasif "Altın Avcısı" oldu (player.gd _korsan_gold_on_kill / _refresh_korsan_gold_ap); Papağan kodu duruyor, başka yere eklenecek.
+		## (Eski, 2026-09-26: öldürmede %10+ şansla 1 altın -> Papağan, bkz. scripts/korsan_parrot.gd,
 		## ikon/sprite tools/gen_korsan_parrot.py).
-		"passive": "Papağan: Omzundaki papağan yakındaki altınları uçarak toplayıp sana getirir (aynı anda en fazla 3 altın, ayağının altında taşır). Her getirişte +1 bonus altın kazanırsın. Papağan senin hareket hızının 1,2 katı hızla uçar.",
+		"passive": "Altın Avcısı: Her öldürmede 1 altın kazanırsın. Cüzdanındaki her 30 altın için +1 saldırı gücü kazanırsın (güncel altınına göre hesaplanır, altın harcayınca düşer).",
 		"passive_icon": "res://assets/skills/korsan_papagan_icon.png",
 		"frames": "res://assets/characters/korsan_frames.tres",
 		"portrait": "res://assets/characters/korsan_portrait.png",
@@ -770,6 +772,35 @@ const DEFS := {
 		## tools/import_character_sheets.py (anahtar "hadime") - aynı üretici kanvası (OLCU: gövde 16x33, ayak satırı 40),
 		## Şovalye Adam'la birebir aynı gövde ölçüsü: aynı ölçek/offset/gölge. SpriteFrames'te ayrıca ölümün tersi
 		## "ghostrise_<yön>" klibi var (hayalet kalkışı - bkz. importer REVERSED_CLIPS).
+		"scale": Vector2(2.2368375, 2.2368375),
+		"offset": Vector2(0, -1.8),
+		"ground_shadow": Vector2(17.5, 6.25),
+		"ground_shadow_y": 32.5,
+		"run_speed_ratio": 1.15,
+	},
+	## Cadı (kullanıcı isteği 2026-10-13, masaüstü "cadı" klasörü). Yetenek kodu player.gd Cadı bloğu, sabitler/formüller
+	## scripts/cadi_math.gd (TEK kaynak - buradaki sayılar oradaki sabitlerle aynı olmalı), evrimler skill_evolutions.gd DEFS[15].
+	15: {
+		"name": "Cadı",
+		"skill": 51,
+		"skill_name": "Zehirli Duman",
+		"skill_desc": "YETENEK (AÇ/KAPA): Arkasında uçan zehir şişesi dumanını yere döker; bulut 3 saniye yerde kalır. Dumana değen yaratıklar her saniye saldırı gücünün %120'si kadar hasar alır. Açık kaldığı sürece her saniye temel yetenek kalkan bedelinin yarısı kadar kalkan harcar. Tekrar basınca (ya da kalkan yetmeyince) kapanır ve 8sn bekleme süresine girer.",
+		"skill_icon": "res://assets/skills/cadi_zehirli_duman_icon.png",
+		"skill2": 52,
+		"skill2_name": "Uçan Süpürge",
+		"skill2_desc": "TEMEL: Süpürgesine atlar; 8 saniye boyunca %20 hareket hızı kazanır ve her saniye saldırı gücünün %10'u kadar can ve kalkan yeniler. Değdiği takım arkadaşları da süpürgeye biner: aynı bonusları kazanır, silah ve yetenek kullanabilir, ilk 1 saniyeden sonra hareket ederek inebilirler. Süpürgeyi yalnızca Cadı sürer. (20sn bekleme)",
+		"skill2_icon": "res://assets/skills/cadi_supurge_icon.png",
+		"skill3": 53,
+		"skill3_name": "İksir Çantası",
+		"skill3_desc": "ULTİ: 5 yükü vardır (yük başına 8sn bekleme). Her yük rastgele bir iksir fırlatır - sıradaki iksir ikonda görünür. Şişe kırıldığı yerde 4 saniyelik bir alan açar: Delilik (yaratıklar 4sn birbirine saldırır), Don (2sn dondurur, %100 saldırı gücü hasar), Patlama (alan açmaz, %200 hasar), Şifa (üstündeki müttefikler saniyede %20 can yeniler), Korku (2sn korkutur, %100 hasar). Saldırı iksirleri en kalabalık yaratık kümesine, şifa canı en az müttefike atılır.",
+		"skill3_icon": "res://assets/skills/cadi_iksir_icon.png",
+		"passive": "Şans Tılsımı: Eksik her %5 canı için 1 şans kazanır.",
+		"passive_icon": "res://assets/skills/cadi_passive_icon.png",
+		"frames": "res://assets/characters/cadi_frames.tres",
+		"portrait": "res://assets/characters/cadi_portrait.png",
+		## tools/import_character_sheets.py (anahtar "cadi", klasör "cadı") - aynı üretici kanvası (OLCU: gövde 16x35, ayak
+		## satırı 40), Hadime/Şovalye ile aynı gövde genişliği: aynı ölçek/offset/gölge. SpriteFrames'te ayrıca süpürge oturuşu
+		## "ride_<yön>" klibi var (tools/add_ride_clips.py - içe aktarma yeniden yapılırsa o betik de koşulmalı).
 		"scale": Vector2(2.2368375, 2.2368375),
 		"offset": Vector2(0, -1.8),
 		"ground_shadow": Vector2(17.5, 6.25),

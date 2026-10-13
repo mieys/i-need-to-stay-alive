@@ -7,6 +7,8 @@ const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 ## Suriyeli Hadime "hadime_fx" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
 const HadimeMathScript := preload("res://scripts/hadime_math.gd")
+## Cadı "cadi_fx" / "cadi_throw" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
+const CadiMathScript := preload("res://scripts/cadi_math.gd")
 ## Yetenek evrimi dünya alanları (Korsan ateş/mayın) - broadcast_evo_area.
 const EvoAreaScript := preload("res://scripts/evo_area.gd")
 const PixelDrawScript := preload("res://scripts/pixel_draw.gd")
@@ -1447,7 +1449,7 @@ func _net_log(msg: String) -> void:
 	f.seek_end()
 	var who: String = "host" if is_host else "istemci"
 	f.store_line("[%s] %s | %s peer=%d host_peer=%d online=%s oyunda=%s devir=%s | %s" % [Time.get_datetime_string_from_system(), "t=%.0f" % (Time.get_ticks_msec() / 1000.0),
-		who, multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1, _host_peer, str(is_online_session), str(_is_game_in_progress), str(not _migration.is_empty()), msg])
+		who, multiplayer.get_unique_id() if (multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED) else -1, _host_peer, str(is_online_session), str(_is_game_in_progress), str(not _migration.is_empty()), msg])
 	f.close()
 
 
@@ -2917,6 +2919,10 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 		"slow":
 			if target_enemy.has_method("apply_slow"):
 				target_enemy.apply_slow(param1, param2, param3 > 0.5)
+		## Cadı'nın Delilik İksiri - param1=süre (bkz. enemy.gd apply_madness; boss/elit orada elenir).
+		"madness":
+			if target_enemy.has_method("apply_madness"):
+				target_enemy.apply_madness(param1)
 		## Oakley'in Sarmaşıklar yeteneği - bkz. enemy.gd apply_root.
 		"root":
 			if target_enemy.has_method("apply_root"):
@@ -3062,6 +3068,13 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		## Yavaşlatma göstergesi (Alan Totemi) - bkz. enemy.gd apply_slow/
 		## _spawn_slow_status_fx. duration, istemcinin kendi başına sayacağı
 		## görsel ömürdür; yavaşlatma SİMÜLASYONU yalnızca host'ta çalışır.
+		## Cadı'nın Delilik İksiri göstergesi (bkz. enemy.gd _set_mad_visual).
+		"mad_start":
+			if target_enemy.has_method("_spawn_mad_status_fx"):
+				target_enemy._spawn_mad_status_fx(float(extra_data.get("duration", 4.0)))
+		"mad_stop":
+			if target_enemy.has_method("_remove_mad_status_fx"):
+				target_enemy._remove_mad_status_fx()
 		"slow_start":
 			if target_enemy.has_method("_spawn_slow_status_fx"):
 				var slow_fx_duration: float = float(extra_data.get("duration", 1.5))
@@ -3288,6 +3301,7 @@ const RELIABLE_PLAYER_VFX := {
 	"beam_start": true, "beam_stop": true, "weapon_icon_visibility": true, "necro_skull": true,
 	"oakley_flower_spawn": true, "oakley_flower_bond": true, "spirit_blink": true, "spirit_cancel": true,
 	"weapon_surge": true, ## Büyücü pasifi - yetenek başına bir kez, kaybolması pasifin görünmemesi demek
+	"cadi_throw": true, ## Cadı R şişesi - kaybolursa alan/patlama diğer oyuncularda hiç görünmez (8 sn'de bir, trafik önemsiz)
 }
 ## "melek_sparkle" (2026-10-10): Melek pasifinin iyileştirme işareti - extra "peers" = işaretin çıkacağı oyuncular (Melek dahil); her istemci kendi
 ## yerel oyuncusu ya da ilgili kukla altında fx_melek_heal_sparkle.gd kurar. Güvenilmez (kaybolursa bir sonraki 3 sn'de yine gelir).
@@ -3648,6 +3662,25 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				vampir_opts["points"] = extra_data.get("points", PackedVector2Array())
 				vampir_opts["sink"] = rp
 			VampirMathScript.spawn_fx(get_tree().current_scene, vampir_kind, pos, vampir_opts)
+		## Cadı (bkz. cadi_math.gd - yerel oyuncu AYNI yardımcıları çağırır). Kozmetik kopyalar: hasar/etki sadece kasterde.
+		##  "cadi_fx"   kind "smoke" (Q bulutu; life/size = evrimli ömür/boyut) | "poof" (biniş/iniş dumanı)
+		##  "cadi_throw" R şişesi: pos = çıkış, to = hedef, potion, duration/size (alanın/patlamanın görseli şişe yere değince açılır)
+		"cadi_fx":
+			var cadi_kind: String = str(extra_data.get("kind", ""))
+			if cadi_kind == "smoke":
+				CadiMathScript.spawn_smoke(get_tree().current_scene, pos, false, {
+					"life": float(extra_data.get("life", CadiMathScript.SMOKE_LIFE)),
+					"size": float(extra_data.get("size", 1.0)),
+					"owner_peer": player_id,
+				})
+			elif cadi_kind == "poof":
+				CadiMathScript.spawn_poof(get_tree().current_scene, pos)
+		"cadi_throw":
+			CadiMathScript.spawn_bottle(get_tree().current_scene, clampi(int(extra_data.get("potion", 0)), 0, CadiMathScript.POTION_COUNT - 1), pos,
+					Vector2(extra_data.get("to", pos)), Callable(), {
+				"duration": float(extra_data.get("duration", CadiMathScript.ZONE_DURATION)),
+				"size": float(extra_data.get("size", 1.0)),
+			})
 		## Suriyeli Hadime (bkz. hadime_math.gd spawn_fx - yerel oyuncu AYNI fonksiyonu çağırır, iki taraf sapamaz).
 		## Kozmetik: hasar/kalkan emme sadece kasterin kendi kopyasında (on_land burada yok).
 		"hadime_fx":
@@ -4192,6 +4225,35 @@ func broadcast_korsan_parrot(player_id: int, state: int, target: Vector2, carry:
 		rp.korsan_parrot_event(state, target, carry, speed)
 
 
+## Kelebek Ruhu (evcil hayvan, scripts/kelebek_ruhu.gd): sahibinin ekranı "buradayım" (shot=false, seyrek) ya da "target noktasına
+## lazer atışı yaptım" (shot=true, saniyede en çok ~8) der; diğer ekranlardaki kukla ilk olayda kurulur ve atışı hasarsız oynatır.
+## Sadece görsel + sık olduğu için güvenilmez kanal (kaybolan bir atış görseli sorun değil).
+@rpc("any_peer", "call_remote", "unreliable")
+func broadcast_kelebek_ruhu(player_id: int, target: Vector2, shot: bool) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if rp and rp.has_method("kelebek_ruhu_event"):
+		rp.kelebek_ruhu_event(target, shot)
+
+
+## Peri (evcil hayvan, scripts/peri_pet.gd): sahibinin ekranı "buradayım" (cast=false, 8 sn'de bir) ya da "can basma büyüsü
+## yaptım" (cast=true, en sık 6 sn'de bir) der; diğer ekranlardaki kukla ilk olayda kurulur ve büyüyü cansız (sadece görsel) oynatır.
+## Seyrek olduğu için güvenilir kanal.
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_peri(player_id: int, cast: bool) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if rp and rp.has_method("peri_event"):
+		rp.peri_event(cast)
+
+
+## Kirpi (evcil hayvan, scripts/kirpi_pet.gd): sahibinin ekranı dikenlerin durumunu (open = sahibin görüşünde yaratık var) değişince ve 8 sn'de
+## bir "buradayım" diye bildirir; diğer ekranlardaki kukla ilk olayda kurulur. Seyrek + durum olduğu için güvenilir kanal.
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_kirpi(player_id: int, open: bool) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if rp and rp.has_method("kirpi_event"):
+		rp.kirpi_event(open)
+
+
 ## Şans faktörüyle her oyuncunun kişisel altınına doğrudan ekleme yapar -
 ## bkz. remote_player.gd collect_gold. Kullanıcı isteği: "oyundaki para
 ## ortak olmamalı herkesin parası kişisel olmalı" - eskiden share_gold TÜM
@@ -4295,6 +4357,8 @@ func receive_gold_gift(from_name: String, amount: int) -> void:
 	else:
 		GoldRewardFx.give(get_tree(), amount, (local_player as Node2D).global_position if local_player is Node2D else Vector2.ZERO)
 	if local_player and is_instance_valid(local_player):
+		if local_player.has_method("play_heart_fx"):
+			local_player.play_heart_fx() ## kullanıcı isteği (2026-10-13): hediyeyi alanın üstünde diriltmedeki gibi kalp
 		var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
 		if ft_scene:
 			var ft = ft_scene.instantiate()
@@ -4827,6 +4891,33 @@ var _closing_for_quit: bool = false
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_graceful_quit_if_hosting()
+		_flush_balance_then_quit_if_client()
+
+
+## Balans kaydı (bkz. main.gd flush_run_record_before_leave): istemci oyundan çıkarken (menü ya da pencere kapatma) kaydını host'a
+## bağlantı KESİLMEDEN yollar. Eskiden çıkışta önce bağlantı kapanıyor, kayıt sonra yollanmaya çalışılıp kayboluyordu.
+const BALANCE_FLUSH_SEC := 0.35
+
+
+func flush_balance_before_leave() -> void:
+	if not is_multiplayer_active or is_host or _peer == null:
+		return
+	var main: Node = get_tree().current_scene
+	if main != null and main.has_method("flush_run_record_before_leave") and bool(main.call("flush_run_record_before_leave")):
+		await get_tree().create_timer(BALANCE_FLUSH_SEC, true, false, true).timeout
+
+
+func _flush_balance_then_quit_if_client() -> void:
+	if _closing_for_quit or is_host or not is_multiplayer_active or _peer == null or not _is_game_in_progress:
+		return
+	var main: Node = get_tree().current_scene
+	if main == null or not main.has_method("flush_run_record_before_leave"):
+		return
+	_closing_for_quit = true
+	get_tree().auto_accept_quit = false
+	if bool(main.call("flush_run_record_before_leave")):
+		await get_tree().create_timer(BALANCE_FLUSH_SEC, true, false, true).timeout
+	get_tree().quit()
 
 
 ## Sürmekte olan bir internet odasının host'u muyuz (pencere kapatılırken odayı kapatmaya değer mi)?
@@ -5637,6 +5728,8 @@ func request_drop_pickup(drop_network_id: int, drop_type: String) -> void:
 						real_drop._on_body_entered(sender_player)
 			"xp":
 				## Ortak EXP: Host doğrudan GameManager'ın ortak havuzuna ekler ve herkese yayınlar
+				if "merged_count" in real_drop:
+					grant_orb_extra(sender_id, int(real_drop.merged_count) - 1) ## birleşen küre: küre başına eşya etkileri (bkz. drop_merge.gd)
 				if "xp_value" in real_drop:
 					## Tecrübe Kazanımı: toplayan oyuncunun bonusu (bkz. xp_orb.gd xp_gain_mult_for).
 					var xp_local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
@@ -5654,6 +5747,29 @@ func request_drop_pickup(drop_network_id: int, drop_type: String) -> void:
 					real_drop._collect()
 	# Görsel kopyayı tüm client'larda temizle (batch ile)
 	queue_remove_drop(drop_network_id)
+
+
+## Birleşen XP küresi (bkz. drop_merge.gd) toplanınca toplayanın küre başına tetiklenen eşya etkileri (Ruhların Akışı, XP can şansı)
+## `extra` kez daha işlenir. Toplayan host'sa doğrudan, uzak bir istemciyse ona RPC ile (SADECE extra > 0 iken gider).
+func grant_orb_extra(collector_peer_id: int, extra: int) -> void:
+	if extra <= 0:
+		return
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	if collector_peer_id <= 0 or collector_peer_id == local_id:
+		var lp: Node = get_tree().get_first_node_in_group("player")
+		if lp != null and lp.has_method("on_xp_collected_extra"):
+			lp.on_xp_collected_extra(extra)
+	elif is_host:
+		sync_orb_extra.rpc_id(collector_peer_id, extra)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_orb_extra(extra: int) -> void:
+	if not _from_host():
+		return
+	var lp: Node = get_tree().get_first_node_in_group("player")
+	if lp != null and lp.has_method("on_xp_collected_extra"):
+		lp.on_xp_collected_extra(clampi(extra, 0, 64))
 
 
 ## Yemek iyileştirmesi senkronizasyonu: bir oyuncu yemek topladığında

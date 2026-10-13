@@ -30,6 +30,35 @@ func _cleanup() -> void:
 	_reset()
 
 
+## 2026-10-13: eşya kaynaklı bekleme azaltma da %60'ta kırpılır (eskiden sadece kart yolu kırpıyordu; 20 Kol Saati beklemeyi sıfırlıyordu).
+func test_item_cooldown_reduction_is_capped_but_raw_stays_symmetric() -> void:
+	var p: Node = _make_player()
+	p._apply_item_stats("kol_saati", 1.0)
+	assert(is_equal_approx(p.get_cooldown_reduction(), 0.05), "tek Kol Saati %5")
+	p.cooldown_reduction_percent = 1.5 ## 30 Kol Saati
+	assert(is_equal_approx(p.get_cooldown_reduction(), p.COOLDOWN_REDUCTION_CAP), "etkin azaltma %60'ı aşmamalı")
+	p._apply_item_stats("kol_saati", -1.0)
+	assert(is_equal_approx(p.cooldown_reduction_percent, 1.45), "satış ham değeri simetrik geri almalı")
+	p.cooldown_reduction_percent = 0.0
+	_cleanup()
+
+
+## 2026-10-13: sınırına ulaşmış stat içeren eşyalar sandık havuzundan elenir.
+func test_chest_pool_skips_items_with_capped_stats() -> void:
+	var ChestMenu: GDScript = preload("res://scripts/chest_menu.gd")
+	var p: Node = _make_player()
+	assert(ChestMenu.item_pool(false, 1, p).has("kol_saati"), "sınır dolmadan Kol Saati çıkabilir")
+	p.cooldown_reduction_percent = p.COOLDOWN_REDUCTION_CAP
+	assert(p.is_stat_capped("cooldown_reduction_percent") and p.item_has_capped_stat("kol_saati"))
+	var pool: Array = ChestMenu.item_pool(false, 1, p)
+	assert(not pool.has("kol_saati") and not pool.is_empty(), "bekleme sınırı dolunca Kol Saati çıkmaz, diğerleri çıkar")
+	## Kaçınma sınırı dolunca Ayakkabı Bağcığı (hız + kaçınma) da elenir.
+	p.dodge_chance = p.dodge_cap()
+	assert(not ChestMenu.item_pool(false, 1, p).has("ayakkabi_bagcigi"), "kaçınma sınırında Ayakkabı Bağcığı elenir")
+	assert(ChestMenu.item_pool(false, 1).has("kol_saati"), "oyuncu verilmezse süzme yok")
+	_cleanup()
+
+
 # ------------------------------------------------------------------ veri
 func test_defs_are_consistent() -> void:
 	assert(Items.KEYS.size() == 50, "11 parça + 16 epik + 23 efsanevi = 50 (2026-10-10: +1 epik, +7 efsanevi tarifsiz), bulunan %d" % Items.KEYS.size())
@@ -107,13 +136,13 @@ func test_slot_limits_and_unique_legendary() -> void:
 	_cleanup()
 
 
-func test_sell_refunds_seventy_percent_of_full_price() -> void:
+func test_sell_refunds_half_of_full_price() -> void:
 	_reset()
 	var player: Node = _make_player()
 	player.acquire_item("savascinin_kilici", {}, 0)
 	var g0: int = GameManager.gold
 	var refund: int = player.sell_owned_item(0)
-	assert(refund == 490 and GameManager.gold - g0 == 490, "700 x %%70 = 490, bulunan %d" % refund)
+	assert(refund == 350 and GameManager.gold - g0 == 350, "700 x %%50 = 350, bulunan %d" % refund)
 	assert(GameManager.owned_items.is_empty(), "satılan eşya envanterden çıkmalı")
 	_cleanup()
 

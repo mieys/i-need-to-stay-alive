@@ -663,6 +663,28 @@ func test_team_vision_sees_past_the_wall() -> void:
 	_cleanup()
 
 
+## Korsan Patlat (2026-10-12): sadece KENDİ görüşü - elips dışı, duvar arkası ve (takım görüşünün aksine) müttefikin açtığı nokta sayılmaz.
+func test_own_vision_ignores_team_vision_and_respects_ellipse_and_walls() -> void:
+	var fog: CanvasLayer = _make_fog()
+	var src: Dictionary = _source_cell_center()
+	var center: Vector2 = src["pos"]
+	_add_actor("player", center)
+	_give_fog_a_wall(fog, _wall_three_cells_above(src["cell"]))
+	var tree: SceneTree = get_tree()
+	var r: float = VisionFogScript.current_radius(tree)
+	fog.update_fog(TICK_STEP)
+	assert(VisionFogScript.own_vision_contains(tree, center, center + Vector2(0.0, 80.0)), "Elips içi, duvarsız nokta kendi görüşümde olmalı")
+	assert(not VisionFogScript.own_vision_contains(tree, center, center + Vector2(0.0, r * 1.2)), "Elips dışı nokta kendi görüşümde sayıldı")
+	assert(VisionFogScript.own_vision_contains(tree, center, center + Vector2(r * VisionFogScript.VISION_WIDTH_SCALE * 0.9, 0.0)), "Yatay elips genişliği kullanılmalı")
+	var behind_pos: Vector2 = center + Vector2(0.0, -80.0)
+	assert(not VisionFogScript.own_vision_contains(tree, center, behind_pos), "Duvarın arkası kendi görüşümde sayıldı")
+	_add_actor("remote_players", center + Vector2(0.0, -112.0))
+	fog.update_fog(TICK_STEP)
+	assert(fog.is_world_pos_visible(behind_pos), "Ön koşul: müttefik görüşü o noktayı açmalı")
+	assert(not VisionFogScript.own_vision_contains(tree, center, behind_pos), "Müttefik görüşü KENDİ görüşüm sayıldı")
+	_cleanup()
+
+
 func test_wall_beyond_vision_range_changes_nothing() -> void:
 	var fog: CanvasLayer = _make_fog()
 	var src: Dictionary = _source_cell_center()

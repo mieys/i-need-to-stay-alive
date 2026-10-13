@@ -88,9 +88,15 @@ func _process(delta: float) -> void:
 		sprite.frame = 2 if t > NORMAL_GLINT_EVERY - 0.16 and t <= NORMAL_GLINT_EVERY - 0.08 else 3 if t > NORMAL_GLINT_EVERY - 0.08 else 0
 
 var _is_opening: bool = false
+## ÇİFT AÇILIŞ DÜZELTMESİ (2026-10-12, kullanıcı: "arkadaşımla aynı elit sandığı aldık, 2 sandık açıldı"): sandığın iki giriş yolu vardı -
+## host'un kendi fiziksel teması (_on_body_entered, _is_opening'i işaretler) ve bir istemcinin RPC'si (request_drop_pickup ->
+## _open_for_player, "claimed" işaretler) - ikisi birbirinin işaretini görmüyordu. Host ile bir istemci aynı anda alınca ödül İKİ KEZ
+## dağıtılıyordu (elitte herkese 2 sandık). Artık ödül dağıtımı TEK kapıdan geçer: _open_for_player ilk çağrıda _awarded'ı kurar,
+## sonrakiler (temas ya da RPC, hangi sırayla gelirse gelsin) hiçbir şey yapmaz.
+var _awarded: bool = false
 
 func _on_body_entered(body: Node) -> void:
-	if _is_opening or not is_instance_valid(body):
+	if _is_opening or _awarded or not is_instance_valid(body):
 		return
 	if not (body.is_in_group("player") or body.is_in_group("remote_players")):
 		return
@@ -228,6 +234,10 @@ func _award_chest_gold(chest_receivers: Array) -> void:
 
 
 func _open_for_player(player_node: Node) -> void:
+	if _awarded:
+		return
+	_awarded = true
+	set_meta("claimed", true)
 	if not NetworkManager.is_multiplayer_active:
 		if player_node and is_instance_valid(player_node) and player_node.is_in_group("player"):
 			_open_chest_for(player_node)

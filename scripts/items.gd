@@ -21,7 +21,7 @@ const KADEME_EFSANEVI := 3
 const KADEME_NAMES := ["Parça", "Epik", "Efsanevi"]
 const EPIC_SLOT_LIMIT := 10
 const LEGENDARY_SLOT_LIMIT := 5
-const SELL_REFUND_RATIO := 0.7
+const SELL_REFUND_RATIO := 0.5 ## 2026-10-12: %70 -> %50 (kullanıcı: sandıktan çıkan eşyaların satış bedeli; envanter satışı + sandık kartı SAT aynı oran)
 const ICON_DIR := "res://assets/items/"
 
 ## Arkadaşlarına can/kalkan verebilen karakterler (roster id) - Işığın Muhafızı Parşomeni yalnız bunlara çıkar:

@@ -17,6 +17,7 @@ const RosterScript: GDScript = preload("res://scripts/menu_character_roster.gd")
 const DetailsScript: GDScript = preload("res://scripts/menu_character_details.gd")
 const ShowcaseScript: GDScript = preload("res://scripts/menu_character_showcase.gd")
 const WeaponPickerScript: GDScript = preload("res://scripts/menu_weapon_picker.gd")
+const PetPickerScript: GDScript = preload("res://scripts/menu_pet_picker.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const ChatScript: GDScript = preload("res://scripts/menu_lobby_chat.gd")
@@ -177,12 +178,17 @@ func _build_mobile() -> void:
 	roster.character_picked.connect(_on_character_pressed)
 	scroll.add_child(roster)
 
-	var weapon_h: float = roundf(body_h * 0.42)
+	var weapon_h: float = roundf(body_h * 0.32)
+	var pet_h: float = roundf(body_h * 0.34)
 	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
 	add_child(spirit_picker)
 	spirit_picker.setup(3)
 	spirit_picker.picked.connect(func(_id: String) -> void: NetworkManager.update_local_loadout())
-	_place(spirit_picker, Vector2(x1 - right_w, body_y), Vector2(right_w, body_h - weapon_h))
+	_place(spirit_picker, Vector2(x1 - right_w, body_y), Vector2(right_w, body_h - weapon_h - pet_h))
+	var pet_picker: PanelContainer = PetPickerScript.new()
+	add_child(pet_picker)
+	pet_picker.setup(true)
+	_place(pet_picker, Vector2(x1 - right_w, body_y + body_h - weapon_h - pet_h), Vector2(right_w, pet_h))
 	var weapon_picker: PanelContainer = WeaponPickerScript.new()
 	add_child(weapon_picker)
 	weapon_picker.setup(true)
@@ -302,18 +308,27 @@ func _build_center() -> void:
 
 ## ------------------------------------------------------------------ sağ: vitrin + ruhani yetenek
 func _build_right_column() -> void:
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 12)
-	add_child(col)
+	## Elle yerleşim (2026-10-12, evcil hayvan eklenince): VBox'ta ruhani yetenek paneli doğal boyuna (~560) şişip hayvan seçiciyi ekrandan
+	## itiyordu. Vitrin üstte, hayvan seçici altta sabit; ruhani yetenek ikisinin arasındaki boşluğa sığar (character_select.gd ile aynı desen).
+	var col_x: float = SCREEN.x - EDGE - SIDE
 	showcase = ShowcaseScript.new()
-	col.add_child(showcase)
+	add_child(showcase)
 	showcase.build(false)
+	var showcase_h: float = showcase.get_combined_minimum_size().y
+	_place(showcase, Vector2(col_x, TOP), Vector2(SIDE, showcase_h))
+	var pet_h: float = PetPickerScript.COMPACT_HEIGHT
+	var bottom_y: float = SCREEN.y - BOTTOM
+	var spirit_y: float = TOP + showcase_h + 12.0
 	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
-	spirit_picker.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(spirit_picker)
+	add_child(spirit_picker)
 	spirit_picker.setup(3)
 	spirit_picker.picked.connect(func(_id: String) -> void: NetworkManager.update_local_loadout())
-	_place(col, Vector2(SCREEN.x - EDGE - SIDE, TOP), Vector2(SIDE, SCREEN.y - TOP - BOTTOM))
+	_place(spirit_picker, Vector2(col_x, spirit_y), Vector2(SIDE, bottom_y - pet_h - 12.0 - spirit_y))
+	## Evcil hayvan (bkz. menu_pet_picker.gd).
+	var pet_picker: PanelContainer = PetPickerScript.new()
+	add_child(pet_picker)
+	pet_picker.setup(false, true)
+	_place(pet_picker, Vector2(col_x, bottom_y - pet_h), Vector2(SIDE, pet_h))
 
 
 func _on_character_pressed(char_id: int) -> void:

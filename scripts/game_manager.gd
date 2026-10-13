@@ -120,6 +120,9 @@ var selected_spiritual: String = ""
 ## başlayınca main.gd _start_initial_loadout_selection verir. Boş/geçersizse WeaponCatalog.DEFAULT_KEY (bkz. weapon_catalog.gd).
 ## Ruhani yetenek gibi yerel tercih - ağdan gitmez (her oyuncu kendi silahını kendi istemcisinde alır).
 var selected_start_weapon: String = ""
+## Evcil hayvan (kullanıcı isteği 2026-10-12): karakter seçim ekranında / lobide seçilir (menu_pet_picker.gd, pet_catalog.gd), oyun başlayınca
+## player.gd _setup_pet() kurar. Boş/geçersizse PetCatalog.DEFAULT_KEY (köpek). Silah gibi yerel tercih - ağdan gitmez.
+var selected_pet: String = ""
 
 var gold: int = 0
 

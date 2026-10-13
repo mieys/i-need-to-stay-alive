@@ -1,4 +1,5 @@
 extends Node2D
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -175,6 +176,7 @@ func _process(delta: float) -> void:
 			if owner_player and is_instance_valid(owner_player) and owner_player.has_method("_roll_ability_crit"):
 				is_crit = owner_player._roll_ability_crit()
 				dmg = owner_player._apply_ability_crit(dmg, is_crit)
+			BalanceLogScript.tag(&"s:buyucu_kasirga")
 			e.take_damage(dmg, is_crit, 0.0, true)
 
 	_broadcast_network_state()

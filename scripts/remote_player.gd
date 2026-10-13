@@ -6,6 +6,9 @@ const HideBrushScript := preload("res://scripts/hide_brush.gd")
 const DeathBlood := preload("res://scripts/death_blood.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
 const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
+const KelebekRuhuScript := preload("res://scripts/kelebek_ruhu.gd")
+const PeriPetScript := preload("res://scripts/peri_pet.gd")
+const KirpiPetScript := preload("res://scripts/kirpi_pet.gd")
 const KORSAN_CHAR_ID := 9 ## Characters.DEFS roster id'si (player.gd ile aynı)
 const WeaponTargetPriorityScript := preload("res://scripts/weapon_target_priority.gd")
 ## Aday sorgusu (host'ta yeni yolda C++ ızgarası, aksi halde tüm grup) - nişan seçicilerinin süzgeçleri aynen kalır.
@@ -62,8 +65,12 @@ const VampirMath := preload("res://scripts/vampir_math.gd")
 const VampirBatSwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.gd")
 ## Suriyeli Hadime: süzülme/form görünümü/ceset/aura player.gd ile PAYLAŞILAN yardımcılardan (bkz. hadime_math.gd).
 const HadimeMath := preload("res://scripts/hadime_math.gd")
+const CadiMath := preload("res://scripts/cadi_math.gd")
 ## Shaman R - Elemental Golem: form kuralları player.gd ile PAYLAŞILIR (bkz. shaman_golem_math.gd).
 const ShamanGolemMath := preload("res://scripts/shaman_golem_math.gd")
+## Matthew rework (2026-10-12, madde 98): şimşek kiti - player.gd ile PAYLAŞILAN sayılar/sayfalar/parıltı.
+const MatthewLightning := preload("res://scripts/matthew_lightning.gd")
+const MatthewTrailScript := preload("res://scripts/fx_matthew_trail.gd")
 ## Klip adı kuralları (player.gd ile ortak) - bkz. char_anim.gd.
 const CharAnim := preload("res://scripts/char_anim.gd")
 ## Son yarasa konum paketinden bu kadar süre (sn) geçtiyse (kapanış paketi kaybolduysa) kozmetik sürü silinir.
@@ -189,6 +196,18 @@ var item_extra_gold_chance: float = 0.0
 var exp_gain_percent: float = 0.0
 var _vampir_pull: float = 0.0
 var _vampir_rest_positions: Array = []
+## Matthew rework (2026-10-12, madde 98; main.gd extra["mt"] -> _apply_matthew_net_state): kasterdeki SÜREKLİ durumların kukladaki
+## karşılığı. Top formu (0 yok / 1 normal / 2 büyük): sprite gizlenir, top döngüsü oynar, silahlar içe çekilir, yaratıklar içinden
+## geçer. Güçlenmiş iz: kukla kendi hareketinden iz bırakır (fx_matthew_trail.gd), tam hızdaysa güçlenmiş sayfayla. Parıltı
+## basamağı (0..10): Yıldırım Kalkanı kırılmaya yaklaştıkça sarı parıltı (shaders/matthew_glow.gdshader).
+var _matthew_has_mt: bool = false
+var _matthew_ball: int = 0
+var _matthew_ball_fx: Node2D = null
+var _matthew_empowered: bool = false
+var _matthew_glow_step: int = 0
+var _matthew_trail: Node = null
+var _matthew_trail_prev: Vector2 = Vector2.ZERO
+var _matthew_move_grace: float = 0.0
 ## Suriyeli Hadime (bkz. _apply_hadime_net_state / main.gd extra["hadime"]). hadime_ghost_active herkese açık:
 ## world_event_manager.gd hayaleti görev bölgesinde saymasın diye okur.
 var hadime_ghost_active: bool = false
@@ -411,6 +430,7 @@ func _load_character_frames() -> void:
 	_base_anim_scale = anim.scale
 	anim.offset = def.get("offset", Vector2(0, -5))
 	_hadime_base_offset = anim.offset
+	cadi_base_offset = anim.offset ## Cadı'nın süpürgesine binince yükselme bu tabana eklenir
 	## Ayak gölgesi (Vampir): yerel oyuncuyla AYNI yardımcı/DEFS değerleri (bkz. ground_shadow.gd) - uzak ekranda da görünsün.
 	GroundShadow.apply_to(get_node_or_null("Shadow") as Node2D, def)
 	var frames_path: String = def.get("frames", "")
@@ -419,19 +439,59 @@ func _load_character_frames() -> void:
 		if res is SpriteFrames:
 			anim.sprite_frames = res
 	anim.play("idle_down")
-	## Korsan pasifi papağanı - KUKLA modunda: kararları sahibinin ekranı verir, buraya olay olarak gelir (bkz.
-	## korsan_parrot.gd, NetworkManager.broadcast_korsan_parrot -> korsan_parrot_event).
-	if char_id == KORSAN_CHAR_ID and not has_node("KorsanParrot"):
-		var parrot: Node2D = KorsanParrotScript.new()
-		add_child(parrot)
-		parrot.setup(self, anim, true)
+	## Papağan (evcil hayvan) - KUKLA modunda: kararları sahibinin ekranı verir, buraya olay olarak gelir (bkz.
+	## korsan_parrot.gd, NetworkManager.broadcast_korsan_parrot -> korsan_parrot_event); kukla ilk olayda kurulur.
 
 
 ## bkz. _load_character_frames papağan notu.
 func korsan_parrot_event(state: int, target: Vector2, carry: int, speed: float) -> void:
 	var parrot: Node = get_node_or_null("KorsanParrot")
+	if parrot == null and anim != null:
+		var puppet: Node2D = KorsanParrotScript.new()
+		add_child(puppet)
+		puppet.setup(self, anim, true)
+		parrot = puppet
 	if parrot and parrot.has_method("apply_event"):
 		parrot.apply_event(state, target, carry, speed)
+
+
+## Kelebek Ruhu (evcil hayvan) - KUKLA: sahibinin ekranından gelen "buradayım" / "şuraya atış yaptım" olayı (bkz. kelebek_ruhu.gd,
+## NetworkManager.broadcast_kelebek_ruhu). Kukla ilk olayda kurulur; atış sadece görsel (hasarı sahibinin ekranı verir).
+func kelebek_ruhu_event(target: Vector2, shot: bool) -> void:
+	var kelebek: Node = get_node_or_null("KelebekRuhu")
+	if kelebek == null and anim != null:
+		var puppet: Node2D = KelebekRuhuScript.new()
+		add_child(puppet)
+		puppet.setup(self, anim, true)
+		kelebek = puppet
+	if shot and kelebek and kelebek.has_method("fire_visual"):
+		kelebek.fire_visual(target)
+
+
+## Peri (evcil hayvan) - KUKLA: sahibinin ekranından gelen "buradayım" / "can basma büyüsü yaptım" olayı (bkz. peri_pet.gd,
+## NetworkManager.broadcast_peri). Kukla ilk olayda kurulur; büyü sadece görsel (canı sahibinin ekranı verir).
+func peri_event(cast: bool) -> void:
+	var peri: Node = get_node_or_null("Peri")
+	if peri == null and anim != null:
+		var puppet: Node2D = PeriPetScript.new()
+		add_child(puppet)
+		puppet.setup(self, anim, true)
+		peri = puppet
+	if cast and peri and peri.has_method("play_cast_visual"):
+		peri.play_cast_visual()
+
+
+## Kirpi (evcil hayvan) - KUKLA: sahibinin ekranından gelen "dikenler açık/kapalı" olayı (bkz. kirpi_pet.gd, NetworkManager.broadcast_kirpi).
+## Kukla ilk olayda kurulur; konumunu kendi hesaplar, hasar kuralları sadece sahibin ekranında (player.gd _kirpi_on_hit).
+func kirpi_event(open: bool) -> void:
+	var kirpi: Node = get_node_or_null("Kirpi")
+	if kirpi == null and anim != null:
+		var puppet: Node2D = KirpiPetScript.new()
+		add_child(puppet)
+		puppet.setup(self, anim, true)
+		kirpi = puppet
+	if kirpi and kirpi.has_method("apply_remote_state"):
+		kirpi.apply_remote_state(open)
 
 
 
@@ -452,6 +512,8 @@ func _physics_process(delta: float) -> void:
 	_process_weapon_drop_physics_all(delta)
 	_process_vampir_remote(delta)
 	_process_hadime_remote(delta)
+	_process_matthew_remote(delta)
+	_process_cadi_remote(delta) ## Hadime'den SONRA: binen bir Hadime'nin ofsetini süpürge belirler
 	if _beam_fx and is_instance_valid(_beam_fx) and (is_dead or Time.get_ticks_msec() - _beam_last_net_msec > BEAM_NET_TIMEOUT_MSEC):
 		_stop_beam_vfx() ## bkz. BEAM_NET_TIMEOUT_MSEC
 	_update_beam_tremor()
@@ -467,6 +529,10 @@ func _physics_process(delta: float) -> void:
 	var extrap_time: float = min(_network_time_since_update, 0.4)
 	var predicted_target: Vector2 = _target_position + _network_velocity * extrap_time
 	global_position = global_position.lerp(predicted_target, 18.0 * delta)
+	## Cadı'nın süpürgesinde YOLCU: kukla ağ konumunu beklemeden cadının arkasındaki koltuğuna oturtulur - her ekranda
+	## süpürgeye yapışık görünür (yolcunun kendi istemcisi de AYNI formülle konumlanır, bkz. player.gd _cadi_passenger_follow).
+	if cadi_ride_host_peer != 0:
+		_cadi_snap_to_seat()
 	## Kullanıcı isteği: "en yaygın/en sağlıklı ne ise onu yap" - menzilli
 	## silahların nişan dönüşü artık ağdan HİÇ gelmiyor (bkz. main.gd/
 	## _rpc_update_player_transform'un kısaltılmış imzası). Her katılımcı
@@ -859,7 +925,8 @@ func _process_vampir_remote(delta: float) -> void:
 	var prev: float = _vampir_pull
 	## Yetenek evrimi "Silahlı Yarasa" (Vampir E finali): silahlar formda çekilmez - player.gd _vampir_weapons_absorbed ile aynı karar.
 	## Shaman golem formu da aynı çekilmeyi kullanır (player.gd _vampir_weapons_absorbed ile aynı karar).
-	var absorbed: bool = (_vampir_bat_form and not has_evo("vampir_ef")) or _shaman_golem_form
+	## Matthew'in Elektrik Topu (2026-10-12) da.
+	var absorbed: bool = (_vampir_bat_form and not has_evo("vampir_ef")) or _shaman_golem_form or _matthew_ball > 0
 	_vampir_pull = VampirMath.step_pull(_vampir_pull, absorbed and not is_dead, delta)
 	if _vampir_pull > 0.0:
 		if prev <= 0.0:
@@ -1176,7 +1243,8 @@ func set_brush_state(state: int) -> void:
 ## sözleşme (enemy.gd host'ta çalışır, uzak Vampir'i bu kukla temsil eder).
 func is_ghost_now() -> bool:
 	## Suriyeli Hadime Q'da havaya süzülürken de (main.gd extra["hadime"].q) - host'taki yaratıklar onu dışarı itmesin.
-	return _vampir_bat_form or _elara_evasion or _hadime_q or _shaman_golem_jumping or _item_ninja
+	## Matthew'in Elektrik Topu formunda da (main.gd extra["mt"][0]).
+	return _vampir_bat_form or _elara_evasion or _hadime_q or _shaman_golem_jumping or _item_ninja or _matthew_ball > 0
 
 
 ## player.gd get_effective_move_speed ile AYNI sözleşme. Durum paketi henüz gelmediyse yerel oyuncunun hızı (aynı
@@ -1319,6 +1387,8 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 		_ensure_matthew_dome_visual()
 	else:
 		_remove_matthew_dome_visual()
+	_apply_matthew_net_state(extra.get("mt", null))
+	_apply_cadi_net_state(extra.get("cadi", null), int(extra.get("cride", 0)))
 
 	## DÜZELTME (derin multiplayer görsel denetimi): Elara'nın "Çift Tetik"
 	## efekti TEK SEFERLİK (kısa süreli,
@@ -1460,7 +1530,8 @@ var _matthew_dome_fx: Node2D = null
 func _ensure_matthew_dome_visual() -> void:
 	if _matthew_dome_fx and is_instance_valid(_matthew_dome_fx):
 		return
-	var shield_scene: PackedScene = load("res://scenes/fx_matthew_fox_shield.tscn") as PackedScene
+	## 2026-10-12 rework: tilki kulaklı kubbe yerine Yıldırım Kalkanı (player.gd _skill_shield_dome ile AYNI sahne).
+	var shield_scene: PackedScene = load("res://scenes/fx_matthew_lightning_shield.tscn") as PackedScene
 	if not shield_scene:
 		return
 	_matthew_dome_fx = shield_scene.instantiate() as Node2D
@@ -1473,6 +1544,63 @@ func _remove_matthew_dome_visual() -> void:
 		else:
 			_matthew_dome_fx.queue_free()
 	_matthew_dome_fx = null
+
+
+## Matthew rework (2026-10-12, madde 98): main.gd extra["mt"] = [top (0/1/2), iz güçlenmiş mi (0/1), kalkan parıltı basamağı (0..10)]
+## (matthew_lightning.gd pack_state). Anahtar yoksa (Matthew değil) hiçbir şey yapılmaz.
+func _apply_matthew_net_state(st: Variant) -> void:
+	if not (st is Array) or (st as Array).size() < 3:
+		return
+	var arr: Array = st
+	_matthew_has_mt = true
+	var ball: int = int(arr[0])
+	if ball != _matthew_ball:
+		_set_matthew_ball(ball)
+	_matthew_empowered = int(arr[1]) != 0
+	_matthew_glow_step = int(arr[2])
+	MatthewLightning.apply_glow(anim, float(_matthew_glow_step) / 10.0)
+
+
+## Top formu aç/kapa: karakter sprite'ı gizlenir, yerine player.gd _skill_matthew_ball ile AYNI sahne (fx_matthew_ball.tscn) oynar.
+## Dönüşüm patlaması ayrı gelir ("hitscan_impact", fx_matthew_form_burst.tscn); silah çekilmesi _process_vampir_remote'ta.
+func _set_matthew_ball(ball: int) -> void:
+	_matthew_ball = ball
+	if is_instance_valid(_matthew_ball_fx):
+		_matthew_ball_fx.queue_free()
+	_matthew_ball_fx = null
+	if anim and is_instance_valid(anim):
+		anim.visible = ball == 0
+	if ball <= 0:
+		return
+	var scene: PackedScene = load("res://scenes/fx_matthew_ball.tscn") as PackedScene
+	if scene == null:
+		return
+	_matthew_ball_fx = scene.instantiate() as Node2D
+	_matthew_ball_fx.set("big", ball >= 2)
+	add_child(_matthew_ball_fx)
+
+
+## Her fizik karesi: kukla ölürse topu kapat; yıldırım izini kuklanın KENDİ hareketinden bırak (kasterdeki _process_matthew_lightning
+## ile aynı betik). "Hareket ediyor" ağ aralıklarında titremesin diye kısa bir tolerans süresi var.
+func _process_matthew_remote(delta: float) -> void:
+	if not _matthew_has_mt:
+		return
+	if is_dead and _matthew_ball > 0:
+		_set_matthew_ball(0)
+	if not is_instance_valid(_matthew_trail):
+		_matthew_trail = Node.new()
+		_matthew_trail.set_script(MatthewTrailScript)
+		add_child(_matthew_trail)
+		_matthew_trail_prev = global_position
+	var step_speed: float = global_position.distance_to(_matthew_trail_prev) / maxf(delta, 0.0001)
+	_matthew_trail_prev = global_position
+	if step_speed > MatthewLightning.MOVING_SPEED:
+		_matthew_move_grace = 0.15
+	else:
+		_matthew_move_grace = maxf(0.0, _matthew_move_grace - delta)
+	var moving: bool = _matthew_move_grace > 0.0 and not is_dead and not is_downed
+	_matthew_trail.set("level", 0 if not moving else (2 if _matthew_empowered else 1))
+	_matthew_trail.set("intensity", 1.0 if _matthew_empowered else 0.5)
 
 
 var _barrier_visual: Node2D = null
@@ -2366,6 +2494,82 @@ func take_paladin_barrier_damage(amount: float, attacker: Node2D = null) -> void
 	if attacker and is_instance_valid(attacker):
 		enemy_net_id = int(attacker.get_meta("network_enemy_id", 0))
 	NetworkManager.forward_damage_to_peer.rpc_id(peer_id, amount, enemy_net_id, true)
+
+
+## ================= Cadı (kozmetik kopya) + süpürge yolculuğu (HER karakter) =================
+## player.gd get_cadi_net_state -> main.gd extra["cadi"] = [Q açık mı, süpürgede mi]; extra["cride"] = süpürgesine binilen
+## cadının peer id'si (her karakterde; binmiyorken anahtar yok). Görseller player.gd ile AYNI yardımcılardan (cadi_math.gd -
+## CLAUDE.md madde 3). Dünya efektleri (bulut, şişe, biniş dumanı) ayrıca "cadi_fx" / "cadi_throw" (network_manager.gd).
+var cadi_ride_host_peer: int = 0
+var cadi_base_offset: Vector2 = Vector2.ZERO
+var _cadi_q: bool = false
+var _cadi_broom: bool = false
+var _cadi_broom_time: float = 0.0
+var _cadi_ride_time: float = 0.0
+var _cadi_potion_on: bool = false
+var _cadi_broom_visual_on: bool = false
+var _cadi_lift_applied: bool = false
+
+
+## Süpürge görseli ve yolcular sorar (player.gd'de aynı adlı karşılıkları var).
+func is_cadi_broom_active() -> bool:
+	return _cadi_broom and not is_dead
+
+
+func cadi_broom_time() -> float:
+	return _cadi_broom_time
+
+
+func cadi_peer() -> int:
+	return peer_id
+
+
+func _apply_cadi_net_state(st: Variant, ride_host: int) -> void:
+	cadi_ride_host_peer = ride_host
+	if not CadiMath.is_cadi(char_id) or not (st is Array) or (st as Array).size() < 2:
+		_cadi_q = false
+		_cadi_broom = false
+		return
+	_cadi_q = int(st[0]) != 0
+	var broom: bool = int(st[1]) != 0
+	if broom and not _cadi_broom:
+		_cadi_broom_time = 0.0
+	_cadi_broom = broom
+
+
+func _process_cadi_remote(delta: float) -> void:
+	if _cadi_broom:
+		_cadi_broom_time += delta
+	_cadi_ride_time = _cadi_ride_time + delta if cadi_ride_host_peer != 0 else 0.0
+	var riding: bool = (_cadi_broom or cadi_ride_host_peer != 0) and not is_dead
+	if anim and is_instance_valid(anim):
+		if riding:
+			var t: float = _cadi_broom_time
+			if not _cadi_broom:
+				var host: Node = CadiMath.player_node(get_tree(), cadi_ride_host_peer)
+				t = float(host.call("cadi_broom_time")) if host != null and host.has_method("cadi_broom_time") else _cadi_ride_time
+			anim.offset = cadi_base_offset + Vector2(0, -CadiMath.rider_lift(t))
+			_cadi_lift_applied = true
+		elif _cadi_lift_applied:
+			anim.offset = cadi_base_offset
+			_cadi_lift_applied = false
+	if not CadiMath.is_cadi(char_id):
+		return
+	var q_on: bool = _cadi_q and not is_dead
+	if _cadi_potion_on != q_on:
+		_cadi_potion_on = q_on
+		CadiMath.set_potion_visual(self, q_on)
+	var broom_on: bool = _cadi_broom and not is_dead
+	if _cadi_broom_visual_on != broom_on:
+		_cadi_broom_visual_on = broom_on
+		CadiMath.set_broom_visual(self, broom_on)
+
+
+func _cadi_snap_to_seat() -> void:
+	var host: Node2D = CadiMath.player_node(get_tree(), cadi_ride_host_peer)
+	if not CadiMath.is_broom_rider(host):
+		return
+	global_position = host.global_position + CadiMath.seat_offset(CadiMath.seat_index(get_tree(), cadi_ride_host_peer, peer_id), CadiMath.facing_of(host))
 
 
 ## ================= Suriyeli Hadime (kozmetik kopya) =================

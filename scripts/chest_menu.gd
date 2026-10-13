@@ -156,10 +156,16 @@ const ELITE_CARD_TIER := 3
 
 ## Sandıktan çıkabilecek eşyalar: normal sandık = parçalar (1. kademe), elit sandık = epikler (2. kademe). Efsanevi hiçbir
 ## sandıktan çıkmaz. Sadece destekçilere çıkan eşyalar (Items.is_support_only) char_id destekçi karakter değilse elenir.
-static func item_pool(elite: bool, char_id: int = -1) -> Array:
+## player verilirse: sınırına ulaşmış bir stat içeren eşyalar elenir (2026-10-13; hepsi elenirse süzme uygulanmaz - sandık boş açılmasın, eşya satılabilir).
+static func item_pool(elite: bool, char_id: int = -1, player: Node = null) -> Array:
 	var kademe: int = Items.KADEME_EPIK if elite else Items.KADEME_PARCA
-	return Items.KEYS.filter(func(k) -> bool:
+	var pool: Array = Items.KEYS.filter(func(k) -> bool:
 		return Items.kademe(str(k)) == kademe and (not Items.is_support_only(str(k)) or Items.is_ally_support_char(char_id)))
+	if player != null and is_instance_valid(player) and player.has_method("item_has_capped_stat"):
+		var useful: Array = pool.filter(func(k) -> bool: return not player.item_has_capped_stat(str(k)))
+		if not useful.is_empty():
+			return useful
+	return pool
 
 
 func setup(player: Node, chest_tier: int, elite: bool = false) -> void:
@@ -227,7 +233,7 @@ func setup(player: Node, chest_tier: int, elite: bool = false) -> void:
 	## (kullanıcı seçimi: "Boş açılsın"), bkz. _reveal_reward_card "empty" dalı.
 	## 2026-10-02 yeni eşya sistemi: sandıktan SADECE parça (1. kademe) çıkar, eski Tier1-4 güç çarpanı yok (kullanıcı
 	## seçimi) - kart çerçevesi parçanın kademesi (Tier 1 rengi). 2026-10-07: ELİT sandıktan sadece EPİK çıkar (item_pool).
-	var parts: Array = item_pool(_is_elite, GameManager.selected_char_id)
+	var parts: Array = item_pool(_is_elite, GameManager.selected_char_id, _player)
 	var item_key: String = str(parts[randi() % parts.size()]) if not parts.is_empty() else ""
 	_reward_tier = ELITE_CARD_TIER if _is_elite else 1
 	var candidate: Dictionary = {"type": "item", "key": item_key} if item_key != "" else {"type": "empty"}
@@ -765,7 +771,7 @@ func _build_card(candidate: Dictionary) -> Control:
 	column.set_meta("al_button", al_btn)
 
 	# 8. Sat Button
-	var refund_gold: int = int(round(cost_base * 0.7))
+	var refund_gold: int = int(round(cost_base * Items.SELL_REFUND_RATIO))
 	var sat_btn := Button.new()
 	sat_btn.custom_minimum_size = Vector2(0, CARD_BUTTON_HEIGHT)
 	sat_btn.add_theme_font_size_override("font_size", CARD_BUTTON_FONT_SIZE)

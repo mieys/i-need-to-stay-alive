@@ -1,4 +1,5 @@
 extends Node2D
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Korsan'ın TEMEL yeteneği (Saatli Bomba, skill2 id 17, bkz. player.gd _korsan_try_place_bomb/characters.gd DEFS[9])
 ## ile bırakılan saatli bomba. Kendisi hiçbir çarpışma/Area2D içermez - patlama hasarı doğrudan bir mesafe
@@ -76,6 +77,7 @@ func detonate() -> void:
 		if global_position.distance_to(e.global_position) <= radius and e.has_method("take_damage"):
 			if gold_on_kill and e.has_method("apply_element"):
 				e.apply_element("evo_gold", {"dur": 0.6})
+			BalanceLogScript.tag(&"s:korsan_bomba")
 			e.take_damage(dmg, is_crit, 0.0, true)
 			if stun_time > 0.0 and e.has_method("apply_stun"):
 				e.apply_stun(stun_time)

@@ -743,7 +743,7 @@ func _on_sell_item(index: int) -> void:
 			Items.KADEME_NAMES[Items.kademe(key) - 1] + "  ·  " + Items.describe(key))
 
 
-## Satış iadesi eşyanın TAM fiyatının %70'i (tarifle ucuza alınmış olsa da - parçaları tek tek satmakla aynı değer).
+## Satış iadesi eşyanın TAM fiyatının %50'si (tarifle ucuza alınmış olsa da - parçaları tek tek satmakla aynı değer).
 ## Kullanıcı isteği (2026-10-08): "item satınca itemin parçalanıp altına dönüşme animasyonu" - yuvanın ikonu parçalanır, parçalar altın
 ## paraya dönüp altın paneline uçar (gold_reward_fx.gd show_shatter; altın burada/oyuncuda eklenir, animasyon çift eklemez).
 func _do_sell_item(index: int) -> void:

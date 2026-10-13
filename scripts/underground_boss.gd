@@ -62,7 +62,7 @@ func take_damage_host(_amount: float, _is_crit: bool, _shield_pen_percent: float
 	return
 
 
-func _take_dot_damage(_amount: float, _shield_pen: float = 0.0) -> void:
+func _take_dot_damage(_amount: float, _shield_pen: float = 0.0, _bl_src: String = "dot") -> void:
 	return
 
 

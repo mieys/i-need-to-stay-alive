@@ -100,7 +100,7 @@ static func land_fx(owner: Node, card: Control, frame: TextureRect, tier: int, e
 		p.volume_db = -10.0 + float(t)
 		p.pitch_scale = 1.0 + 0.04 * float(t - 1)
 		p.process_mode = Node.PROCESS_MODE_ALWAYS
-		owner.add_child(p)
+		owner.get_tree().root.add_child(p) ## ekran kapanınca ses kesilmesin (bkz. tier_card_fx.gd celebrate)
 		p.play()
 		p.finished.connect(p.queue_free)
 

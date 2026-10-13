@@ -89,3 +89,41 @@ func buy_item(key: String) -> bool:
 	
 	menu.free()
 	dummy_player.free()
+
+
+## Çift açılış düzeltmesi (2026-10-12): host teması + istemci isteği aynı sandığı iki kez ödüllendirmemeli (hangi sırayla gelirse gelsin).
+func _sfx_count(drop: Node) -> int:
+	var n: int = 0
+	for c in drop.get_children():
+		if c is AudioStreamPlayer2D:
+			n += 1
+	return n
+
+
+func test_chest_is_awarded_only_once_via_open_for_player() -> void:
+	var drop = (load("res://scenes/chest_drop.tscn") as PackedScene).instantiate()
+	add_child(drop)
+	var p := Node2D.new()
+	p.add_to_group("player")
+	add_child(p)
+	drop._open_for_player(p)
+	assert(drop._awarded and drop.get_meta("claimed", false), "ilk açılış sandığı işaretlemeli")
+	drop._open_for_player(p) ## ikinci giriş (ör. aynı anda gelen RPC)
+	assert(_sfx_count(drop) == 1, "ikinci açılış hiçbir şey yapmamalı (tek açılış sesi): %d" % _sfx_count(drop))
+	p.remove_from_group("player")
+	p.queue_free()
+	drop.queue_free()
+
+
+func test_body_contact_after_rpc_claim_does_nothing() -> void:
+	var drop = (load("res://scenes/chest_drop.tscn") as PackedScene).instantiate()
+	add_child(drop)
+	var p := Node2D.new()
+	p.add_to_group("player")
+	add_child(p)
+	drop._awarded = true ## istemci isteği sandığı zaten ödüllendirdi
+	drop._on_body_entered(p)
+	assert(not drop._is_opening and _sfx_count(drop) == 0, "ödüllendirilmiş sandığa temas yeni açılış başlatmamalı")
+	p.remove_from_group("player")
+	p.queue_free()
+	drop.queue_free()

@@ -1,5 +1,6 @@
 extends Node2D
 class_name TotemBase
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -433,6 +434,7 @@ func _process_area_damage(delta: float) -> void:
 		var hit_dmg: float = dmg
 		if caster.has_method("_apply_ability_crit"):
 			hit_dmg = caster._apply_ability_crit(dmg, is_crit)
+		BalanceLogScript.tag(&"s:shaman_totem_alan")
 		e.call("take_damage", hit_dmg, is_crit)
 		_spawn_void_wisp((e as Node2D).global_position)
 

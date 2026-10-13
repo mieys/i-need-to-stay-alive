@@ -32,8 +32,8 @@ func _ready() -> void:
 	_speed = float(data.get("speed", 200.0))
 	_max_life = float(data.get("life", 3.0))
 	_radius = float(data.get("radius", 9.0))
-	## Sayfadaki top SOLA bakar (kuyruk sağda): uçuş yönüne göre döndürülür.
-	rotation = _dir.angle() + PI
+	## Sayfadaki top SAĞA bakar (beyaz baş sağda, turuncu kuyruk solda): uçuş yönüne göre döndürülür (2026-10-12: eskiden +PI ile ters uçuyordu).
+	rotation = _dir.angle()
 	var sp := AnimatedSprite2D.new()
 	sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sp.sprite_frames = FxUtil.frames_from_strip(FLY_PATH, 36, 40, &"fly", 14.0, true)

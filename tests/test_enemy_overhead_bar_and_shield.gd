@@ -18,9 +18,17 @@ func _make_enemy() -> Node:
 	return enemy
 
 
-func test_shield_protection_is_fixed_30_percent() -> void:
-	assert(is_equal_approx(EnemySpawnerScript.SHIELD_PROTECTION, 0.3),
-		"SHIELD_PROTECTION 0.3 (%%30) olmalı, bulunan: %s" % EnemySpawnerScript.SHIELD_PROTECTION)
+func test_shield_protection_is_fixed_60_percent() -> void:
+	assert(is_equal_approx(EnemySpawnerScript.SHIELD_PROTECTION, 0.6),
+		"SHIELD_PROTECTION 0.6 (%%60) olmalı, bulunan: %s" % EnemySpawnerScript.SHIELD_PROTECTION)
+
+
+func test_elite_shield_protection_is_80_percent() -> void:
+	var enemy: Node = _make_enemy()
+	enemy.enable_item_shield(0.18, EnemySpawnerScript.REGULAR_SHIELD_RATIO)
+	enemy.make_elite()
+	assert(is_equal_approx(enemy.shield_protection, 0.8), "elit kalkan soğurması %%80: %s" % enemy.shield_protection)
+	enemy.queue_free()
 
 
 func test_shield_ratio_exceeds_health_for_regular_and_boss() -> void:
@@ -48,10 +56,10 @@ func test_shield_absorbs_exactly_protection_share_of_hit() -> void:
 	var health_before: float = enemy.health
 	var shield_before: float = enemy.item_shield_hp
 	enemy._apply_damage(100.0, false, 0.0)
-	assert(absf((shield_before - enemy.item_shield_hp) - 30.0) < 0.01,
-		"100 hasarın %%30'u (30) kalkana gitmeli, bulunan: %s" % (shield_before - enemy.item_shield_hp))
-	assert(absf((health_before - enemy.health) - 70.0) < 0.01,
-		"Cana 70 kalmalı, bulunan: %s" % (health_before - enemy.health))
+	assert(absf((shield_before - enemy.item_shield_hp) - 60.0) < 0.01,
+		"100 hasarın %%60'ı (60) kalkana gitmeli, bulunan: %s" % (shield_before - enemy.item_shield_hp))
+	assert(absf((health_before - enemy.health) - 40.0) < 0.01,
+		"Cana 40 kalmalı, bulunan: %s" % (health_before - enemy.health))
 	enemy.queue_free()
 
 

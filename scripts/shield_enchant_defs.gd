@@ -26,10 +26,10 @@ const TYPES := {
 	"shield_savas": {
 		"name": "Savaş Kalkanı",
 		"power": 160.0, "absorption": 0.60, "regen": 4.0, "delay": 0.0, "always_regen": true,
-		"desc": "Savaştayken bile yenilenir, hasar alınca beklemez.",
+		"desc": "Savaştayken bile yenilenir, hasar alınca beklemez (son 3 sn içinde hasar aldıysan yarı hızda).",
 		"color": Color(0.95, 0.3, 0.3),
 		"upgrades": [
-			{"limit": 0, "power": 60.0, "regen": 2.0},
+			{"limit": 0, "power": 60.0, "regen": 1.5},
 			{"limit": 8, "power": 60.0, "absorption": 0.03},
 		],
 	},

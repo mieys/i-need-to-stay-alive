@@ -190,13 +190,22 @@ const BY_SCENE := {
 	"res://scenes/fx_talha_rage.tscn": {"c": Color(1.0, 0.25, 0.15), "r": 50.0, "e": 0.6},
 	"res://scenes/fx_talon_chains.tscn": {"c": Color(1.0, 0.6, 0.2), "r": 36.0, "e": 0.45},
 	"res://scenes/fx_talon_dash.tscn": {"c": Color(1.0, 0.92, 0.6), "r": 36.0, "e": 0.55, "d": 0.4},
-	"res://scenes/fx_talon_form.tscn": {"c": Color(1.0, 0.88, 0.5), "r": 55.0, "e": 0.6},
+	"res://scenes/fx_talon_form.tscn": {"c": Color(1.0, 0.3, 0.25), "r": 55.0, "e": 0.6},
 	"res://scenes/fx_matthew_explosion.tscn": {"c": Color(1.0, 0.6, 0.22), "r": 90.0, "e": 0.95, "d": 0.6},
 	"res://scenes/fx_matthew_claw_slash.tscn": {"c": Color(1.0, 0.58, 0.2), "r": 40.0, "e": 0.7, "d": 0.3},
 	"res://scenes/fx_matthew_fox_strike.tscn": {"c": Color(1.0, 0.6, 0.18), "r": 44.0, "e": 0.75, "d": 0.35},
 	"res://scenes/fx_matthew_fox_afterimage.tscn": {"c": Color(1.0, 0.7, 0.4), "r": 26.0, "e": 0.35, "d": 0.3},
 	"res://scenes/fx_matthew_fox_shield.tscn": {"c": Color(1.0, 0.6, 0.25), "r": 50.0, "e": 0.6},
 	"res://scenes/fx_matthew_sacrifice.tscn": {"c": Color(1.0, 0.7, 0.3), "r": 70.0, "e": 0.8},
+	## Matthew rework (2026-10-12, madde 98): sarı-altın şimşek kiti. Şimşeğin ışığı başlangıç ucunda (Matthew'in elinde) yanar.
+	"res://scenes/fx_matthew_bolt.tscn": {"c": Color(1.0, 0.86, 0.3), "r": 46.0, "e": 0.8, "d": 0.3},
+	"res://scenes/fx_matthew_spark.tscn": {"c": Color(1.0, 0.88, 0.35), "r": 38.0, "e": 0.75, "d": 0.3},
+	"res://scenes/fx_matthew_spark_ring.tscn": {"c": Color(1.0, 0.88, 0.35), "r": 50.0, "e": 0.85, "d": 0.3},
+	"res://scenes/fx_matthew_form_burst.tscn": {"c": Color(1.0, 0.9, 0.45), "r": 60.0, "e": 0.85, "d": 0.3},
+	"res://scenes/fx_matthew_shield_cast.tscn": {"c": Color(1.0, 0.9, 0.45), "r": 70.0, "e": 0.9, "d": 0.4},
+	"res://scenes/fx_matthew_nova.tscn": {"c": Color(1.0, 0.86, 0.3), "r": 95.0, "e": 0.95, "d": 0.7},
+	"res://scenes/fx_matthew_ball.tscn": {"c": Color(1.0, 0.88, 0.35), "r": 56.0, "e": 0.7, "f": 0.2},
+	"res://scenes/fx_matthew_lightning_shield.tscn": {"c": Color(1.0, 0.86, 0.3), "r": 52.0, "e": 0.6, "f": 0.15},
 	"res://scenes/fx_wave_beam.tscn": {"c": Color(0.5, 1.0, 0.6), "r": 30.0, "e": 0.7},
 	"res://scenes/fx_skill_burst.tscn": {"cp": "glow_color", "c": Color(1.0, 0.9, 0.7), "r": 60.0, "e": 0.75, "d": 0.8},
 	"res://scenes/fx_skill_ring.tscn": {"cp": "_color", "rp": "_radius", "rs": 0.7, "c": Color(1.0, 0.9, 0.7), "r": 60.0, "e": 0.6, "d": 0.6},
@@ -292,6 +301,11 @@ const BY_SCRIPT := {
 	## saçmaz - kan sıçramalarıyla aynı kural, bkz. NO_GLOW_SCENES.)
 	"res://scripts/oakley_flower.gd": {"c": Color(1.0, 0.7, 0.85), "r": 30.0, "e": 0.35},
 	"res://scripts/wraith_pet.gd": {"c": Color(0.6, 0.9, 1.0), "r": 36.0, "e": 0.35},
+	## Evcil hayvanlar (2026-10-13, kullanıcı: "kelebek ruhu ve peri karanlıktayken parıldamalı"): kukla kopyaları aynı betikten kurulur.
+	## Kelebek Ruhu pembe ışık küresi (atışları da pembe), Peri soğuk mavi-beyaz; ikisi de hafif titrek.
+	"res://scripts/kelebek_ruhu.gd": {"c": Color(1.0, 0.55, 0.85), "r": 44.0, "e": 0.55, "f": 0.15},
+	"res://scripts/fx_kelebek_bolt.gd": {"c": Color(1.0, 0.55, 0.85), "r": 32.0, "e": 0.8},
+	"res://scripts/peri_pet.gd": {"c": Color(0.7, 0.88, 1.0), "r": 44.0, "e": 0.55, "f": 0.15},
 	## --- Görev objeleri (soru-cevap seçimi) ---
 	"res://scripts/mission_collect_item.gd": {"c": Color(0.45, 1.0, 0.9), "r": 38.0, "e": 0.6, "o": Vector2(0.0, -10.0)},
 	"res://scripts/mission_zone.gd": {"c": Color(0.55, 0.85, 1.0), "r": 70.0, "e": 0.5},

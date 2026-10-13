@@ -1,6 +1,7 @@
 extends Area2D
 
 const DropAttraction := preload("res://scripts/drop_attraction.gd")
+const DropMerge := preload("res://scripts/drop_merge.gd")
 
 var xp_value: float = 5.0
 ## Kullanıcı isteği: "oyundaki exp orblarını silip yerine bunu koy" - hangi
@@ -10,6 +11,11 @@ var xp_value: float = 5.0
 ## enemy.gd _max_orb_tier_for_enemy_tier/_roll_orb_tier/_drop_xp) ki her
 ## Kademe aralığında hep AYNI renk düşmesin (kullanıcı isteği).
 var xp_tier: int = 1
+## Birleştirme (bkz. drop_merge.gd): bu küre kaç öldürmenin değerini taşıyor. Toplanınca küre başına tetiklenen eşya etkileri
+## (Ruhların Akışı, XP can şansı) bu sayı kadar tekrarlanır (player.gd on_xp_collected_extra). Yalnız host'un gerçek küresinde anlamlı.
+var merged_count: int = 1
+## Uyku (bkz. drop_attraction.gd set_visual_awake): ekran dışında uyuyan küre nabız/animasyon işini durdurur.
+var visual_asleep: bool = false
 var is_magnetized: bool = false
 var attract_speed: float = 0.0
 ## #32 DÜZELTME (kullanıcı bildirimi: "Mıknatısla çekilen objeler her zaman
@@ -99,6 +105,37 @@ var _pulse_time: float = 0.0
 ## yoktu. Artık gerçek orb da AYNI 300sn'de kendini temizliyor (bkz.
 ## _on_expire) - client'ların zaten sahip olduğu davranışla tutarlı.
 const EXPIRE_SECONDS := 300.0
+
+
+## Birleştirme kaydı: yalnız host'un/tek oyunculunun GERÇEK küresi (istemci görsel kopyası "network_spawned" - değeri yok).
+func _enter_tree() -> void:
+	if not get_meta("network_spawned", false):
+		DropMerge.register(DropMerge.KIND_XP, self)
+
+
+func _exit_tree() -> void:
+	DropMerge.unregister(self)
+
+
+## Yeni doğan bir küre YENİ DÜĞÜM AÇMAK yerine buna eklenebilir mi (aynı kademe, çekilmiyor, toplanmıyor, sınır dolmadı).
+func can_merge(tier: int, max_merged: int) -> bool:
+	return xp_tier == tier and merged_count < max_merged and not is_magnetized and _recoil_t < 0.0 and not is_queued_for_deletion() and not get_meta("claimed", false) and not get_meta("network_spawned", false)
+
+
+func merge_in(value: float) -> void:
+	xp_value += value
+	merged_count += 1
+
+
+## Birleşen küre toplanınca: ilk küre on_xp_collected ile (ses dahil) işlendi, kalanlar için yalnız eşya etkileri.
+func _grant_extra_pickups(collector: Node) -> void:
+	var extra: int = merged_count - 1
+	if extra <= 0:
+		return
+	if collector.has_method("on_xp_collected_extra"):
+		collector.on_xp_collected_extra(extra)
+	elif NetworkManager.is_multiplayer_active and collector.is_in_group("remote_players"):
+		NetworkManager.grant_orb_extra(int(collector.get("peer_id")), extra)
 
 
 func _ready() -> void:
@@ -194,7 +231,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _chase_valid() -> bool:
-	return _chase_target != null and is_instance_valid(_chase_target) and _chase_target.is_inside_tree() 		and _chase_target.get("is_dead") != true
+	return _chase_target != null and is_instance_valid(_chase_target) and _chase_target.is_inside_tree() and _chase_target.get("is_dead") != true
 
 
 ## bkz. gold_drop.gd::_resolve_attraction_target aynı yorumu - XP takım
@@ -274,9 +311,14 @@ func _on_body_entered(body: Node) -> void:
 	## kabul ediliyor: kim gerçekten dokunursa toplama anında gerçekleşiyor.
 	if not (body.is_in_group("player") or body.is_in_group("remote_players")):
 		return
+	## Çift ödül düzeltmesi (2026-10-12, sandıkla aynı sınıf - bkz. chest_drop.gd _awarded): host'un fiziksel teması ve bir istemcinin request_drop_pickup'ı ayrı işaret kullanıyordu; ikisi aynı karede gelirse ödül iki kez veriliyordu. Ortak işaret "claimed".
+	if get_meta("claimed", false):
+		return
+	set_meta("claimed", true)
 
 	if body.has_method("on_xp_collected"):
 		body.on_xp_collected()
+	_grant_extra_pickups(body)
 
 	if NetworkManager.is_multiplayer_active:
 		# Host tarafındaki gerçek drop (host'un kendisi VEYA host'taki

@@ -1,4 +1,5 @@
 extends CharacterBody2D
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -111,6 +112,8 @@ const NET_ACCEL := 4000.0
 const NET_SNAP_DISTANCE := 260.0
 var _heading: Vector2 = Vector2.DOWN
 var _heel_active: bool = false
+const PetFollowScript := preload("res://scripts/pet_follow.gd")
+var _follow = PetFollowScript.new()
 var _retarget_cd: float = 0.0
 var _sortie_active: bool = false
 var _sortie_dir: Vector2 = Vector2.ZERO
@@ -191,6 +194,8 @@ func _ready() -> void:
 	EntityScale.shrink(anim, get_node_or_null("CollisionShape2D"))
 	## Kullanıcı isteği: yaratıklar onu tamamen görmezden gelsin - hiçbir
 	## Area/Body onu artık fiziksel olarak algılamıyor.
+	_follow.comfort_radius = 46.0 ## köpek: sahibe bu kadar yaklaşınca durur, 80 px uzaklaşınca yeniden yürür (pet_follow.gd)
+	_follow.start_radius = 80.0
 	collision_layer = 0
 	collision_mask = 0
 	if anim:
@@ -695,7 +700,9 @@ func _chase_velocity(tgt: Node2D) -> Vector2:
 	return to_t.normalized() * spd
 
 
-## Takip: sahibin arkasındaki yan "topuk noktası"na ileri besleme + orantılı düzeltmeyle akar (bkz. yukarıdaki model notu).
+## Takip (2026-10-13, kullanıcı: "petler sahibini aynı hızda takip etmemeli, daha doğal takip etmeliler"): sahibin hızı ARTIK ileri beslenmez ve sabit
+## bir topuk noktasına kilitlenilmez - bkz. pet_follow.gd (sahip uzaklaşınca uzaklığa göre hızlanıp yaklaşınca yavaşlayan, rahat bölgede duran model).
+## _heading/_heel_point yalnız ışınlanma/atlama noktası için kalır.
 func _follow_velocity(delta: float) -> Vector2:
 	if not _owner_ok():
 		return Vector2.ZERO
@@ -704,22 +711,11 @@ func _follow_velocity(delta: float) -> Vector2:
 		_warp_to_heel()
 		return Vector2.ZERO
 	var ov: Vector2 = _owner_velocity()
-	var owner_moving: bool = ov.length() > OWNER_MOVING_SPEED
-	if owner_moving:
+	if ov.length() > OWNER_MOVING_SPEED:
 		_heading = _heading.lerp(ov.normalized(), minf(1.0, delta * HEADING_SMOOTH))
 		_heading = _heading.normalized() if _heading.length() > 0.05 else ov.normalized()
-	var err: Vector2 = _heel_point() - global_position
-	var d: float = err.length()
-	if _heel_active:
-		if not owner_moving and d < HEEL_IDLE_RADIUS:
-			_heel_active = false
-	elif owner_moving or d > HEEL_RESUME_RADIUS:
-		_heel_active = true
-	if not _heel_active:
-		return Vector2.ZERO
-	var v: Vector2 = (ov if owner_moving else Vector2.ZERO) + err * HEEL_GAIN
 	var cap: float = _base_speed() * FOLLOW_SPEED_CAP_MULT * _get_speed_mult()
-	return v.limit_length(cap)
+	return _follow.ground_velocity(global_position, o, delta, cap)
 
 
 ## Topuk noktası: sahibin hareket yönünün arkası + yan (sahibin tam önüne/üstüne basmasın). Engelin içindeyse sahibin kendi konumu.
@@ -739,6 +735,7 @@ func _warp_to_heel() -> void:
 	global_position = dest
 	velocity = Vector2.ZERO
 	_heel_active = false
+	_follow.active = false
 	_stuck_t = 0.0
 	if not _is_network_visual and NetworkManager.is_multiplayer_active and not network_instance_id.is_empty():
 		NetworkManager.broadcast_pet_state.rpc(multiplayer.get_unique_id(), network_instance_id, dest, false, -1.0, -1.0, -1, true)
@@ -816,6 +813,9 @@ func _process_attack(delta: float) -> void:
 	_attack_timer -= delta * _get_attack_speed_mult() * _owner_attack_speed_mult()
 	if _attack_timer > 0.0:
 		return
+	## 2026-10-12: sahibi ölü/yerde yatıyorsa pet saldırmaz (is_dead yerde yatarken de true).
+	if _owner_ok() and owner_player.get("is_dead") == true:
+		return
 	## DÜZELTME (kullanıcı bildirimi: "Shopta kalkan baloncuğunun içinde silahlar ateş etmesin") - pet seyyar satıcının güvenli
 	## bölgesindeki sahibini korurken saldırmaz (totem_base.gd _process()'teki AYNI kontrol).
 	if _owner_ok() and owner_player.get("is_in_merchant_zone") == true:
@@ -851,6 +851,7 @@ func _do_cone_attack(attack_dir: Vector2) -> void:
 	for e in targets:
 		var is_crit: bool = randf() < _crit_chance()
 		var share: float = 1.0 if e == primary else FOX_SPLASH_RATIO
+		BalanceLogScript.tag(&"s:matthew_kopek")
 		e.take_damage(base_dmg * share * (_crit_damage_mult() if is_crit else 1.0), is_crit)
 		## Yetenek evrimi "Sersemleten Isırık" (2026-09-28): Vahşi Hız aktifken tilkinin saldırıları sersemletir - süre
 		## sahibinden (player.gd matthew_fox_stun_time, 0 = yok).

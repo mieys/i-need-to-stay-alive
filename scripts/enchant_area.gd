@@ -1,4 +1,5 @@
 extends Node2D
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## EFSUN ALAN VARLIKLARI - dünyada bir süre duran/hareket eden efsun etkileri. TEK script hem yetkili kopya
 ## (authoritative = true: hasar/element uygular - kaster oyuncunun makinesi, tepkime/ölüm alanlarında host) hem uzak
@@ -342,6 +343,7 @@ func _enemies_in(radius: float, at: Vector2 = global_position) -> Array:
 
 func _hit(e: Node, amount: float) -> void:
 	if amount > 0.0 and is_instance_valid(e) and e.has_method("take_damage"):
+		BalanceLogScript.tag(StringName("w:" + str(p["wk"])) if p.has("wk") else &"w:efsun") ## silah özelliği alanı = o silahın hasarı
 		e.take_damage(amount, false, float(p.get("pen", 0.0)), true)
 
 

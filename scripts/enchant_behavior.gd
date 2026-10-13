@@ -1,4 +1,5 @@
 extends Node
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## EFSUN DAVRANIŞI TEMEL SINIFI. Her efsunun mantığı scripts/enchants/<efsun id>.gd içinde bunu genişletir; silah
 ## (weapon.gd set_enchant) onu kendi çocuğu olarak kurar ve atış/isabet anlarında kancaları çağırır.
@@ -337,6 +338,8 @@ func status(t: Node, what: String) -> bool:
 func area(kind: String, pos: Vector2, params: Dictionary) -> Node2D:
 	var d: Dictionary = params.duplicate()
 	d["peer"] = my_peer()
+	if is_instance_valid(weapon) and weapon.has_meta("shop_key"):
+		d["wk"] = str(weapon.get_meta("shop_key")) ## balans telemetrisi: alan hasarı silaha yazılsın (bkz. enchant_area.gd _hit)
 	return EnchantArea.spawn(get_tree(), kind, pos, d, true)
 
 
@@ -347,6 +350,7 @@ func fx(kind: String, pos: Vector2, data: Dictionary = {}) -> void:
 ## Alan/ek hasar (patlama, dalga, dal) - is_area = true (can emme %33 kuralı).
 func hit(t: Node, amount: float) -> void:
 	if amount > 0.0 and is_enemy(t):
+		BalanceLogScript.tag_weapon(weapon)
 		t.take_damage(amount, false, 0.0, true)
 
 

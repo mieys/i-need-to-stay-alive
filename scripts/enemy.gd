@@ -121,7 +121,7 @@ var no_body_block: bool = false
 ## eats a fixed share of every hit before health does, and slowly regenerates
 ## after a few hitless seconds. Nothing here by default - granted at spawn
 ## time by enemy_spawner.gd via enable_item_shield(): Kademe 3+ regular
-## enemies get SHIELD_PROTECTION (şu an %30), her boss BOSS_SHIELD_PROTECTION
+## enemies get SHIELD_PROTECTION (şu an %60, kademeli), elites ELITE_SHIELD_PROTECTION (%80), her boss BOSS_SHIELD_PROTECTION
 ## (şu an %85) kadarını emer. No shield VFX/hit-flash
 ## by design (kalkan efektine gerek yok) - just the numbers.
 var shield_protection: float = 0.0 ## 0 = this enemy has no shield at all
@@ -630,6 +630,7 @@ var _idle_timer: float = 0.0
 const DamageNumbersScript := preload("res://scripts/damage_numbers.gd")
 const XpOrb := preload("res://scenes/xp_orb.tscn")
 const GoldDrop := preload("res://scenes/gold_drop.tscn")
+const DropMerge := preload("res://scripts/drop_merge.gd") ## yerdeki XP/altın birleştirme + üst sınır (kullanıcı isteği 2026-10-12)
 const FoodDrop := preload("res://scenes/food_drop.tscn")
 const ChestDropScene := preload("res://scenes/chest_drop.tscn")
 const WeaponShardDropScript := preload("res://scripts/weapon_shard_drop.gd")
@@ -952,6 +953,7 @@ func _scale_body(scale_mult: float) -> void:
 ## ELİT YARATIK bloğu, kademe başına 1) ve istemcilere _rpc_client_spawn_creature'ın is_elite bayrağıyla bildirir - host
 ## ve istemci AYNI make_elite()'i çağırır (iki yerde ayrı formül yok, bkz. CLAUDE.md).
 const ELITE_DEFENSE_MULT := 15.0
+const ELITE_SHIELD_PROTECTION := 0.8 ## 2026-10-13 (kullanıcı isteği): kalkanı olan elit, vuruşun %80'ini kalkana yedirir (kademeli açılan normal oranın yerine geçer)
 const ELITE_DAMAGE_MULT := 1.5
 const ELITE_SCALE_MULT := 1.5
 const ELITE_SPEED_MULT := 0.85
@@ -977,6 +979,7 @@ func make_elite() -> void:
 	max_health *= ELITE_DEFENSE_MULT
 	health = max_health
 	if item_shield_max > 0.0:
+		shield_protection = ELITE_SHIELD_PROTECTION
 		item_shield_max *= ELITE_DEFENSE_MULT
 		item_shield_hp = item_shield_max
 		item_shield_changed.emit(item_shield_hp, item_shield_max)
@@ -1331,7 +1334,7 @@ func _process_burn(delta: float) -> void:
 	if _burn_tick_timer <= 0.0:
 		_burn_tick_timer += BURN_TICK_INTERVAL
 		## Efsun yanma yığını (Alevli Ok V): 0/1 yük = eski tek tik.
-		_take_dot_damage(burn_tick_damage * float(maxi(1, _burn_stacks)))
+		_take_dot_damage(burn_tick_damage * float(maxi(1, _burn_stacks)), 0.0, "dot:yanma")
 	if burn_time_left <= 0.0:
 		burn_tick_damage = 0.0
 		_burn_stacks = 0
@@ -1384,13 +1387,13 @@ func _process_poison(delta: float) -> void:
 		var whole_damage: float = floorf(_poison_damage_accum)
 		if whole_damage >= 1.0:
 			_poison_damage_accum -= whole_damage
-			_take_dot_damage(whole_damage, 1.0 if _poison_true else 0.0)
+			_take_dot_damage(whole_damage, 1.0 if _poison_true else 0.0, "dot:zehir")
 	if all_expired:
 		## Son kesir (<1): en yakın tam sayıya yuvarlanıp uygulanır (0.5+ ise 1).
 		var rest_damage: float = roundf(_poison_damage_accum)
 		_poison_damage_accum = 0.0
 		if rest_damage >= 1.0:
-			_take_dot_damage(rest_damage, 1.0 if _poison_true else 0.0)
+			_take_dot_damage(rest_damage, 1.0 if _poison_true else 0.0, "dot:zehir")
 		if _poison_status_fx and is_instance_valid(_poison_status_fx):
 			_poison_status_fx.queue_free()
 			_poison_status_fx = null
@@ -2180,7 +2183,7 @@ func _process_bleed(delta: float) -> void:
 		_bleed_tick_timer += _bleed_interval
 		## Kristal Kan tepkimesi: donmuş kalan süre boyunca kanama tikleri x2 (bkz. element_reactions.gd).
 		var bleed_mult: float = 2.0 if Time.get_ticks_msec() < _bleed_double_until_msec else 1.0
-		_take_dot_damage(bleed_tick_damage_per_stack * bleed_stacks * bleed_mult)
+		_take_dot_damage(bleed_tick_damage_per_stack * bleed_stacks * bleed_mult, 0.0, "dot:kanama")
 		_spawn_bleed_fx()
 		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 			var net_id: int = int(get_meta("network_enemy_id", 0))
@@ -2331,6 +2334,130 @@ func apply_root(duration: float) -> void:
 	_set_root_visual(true, _root_timer)
 
 
+## ---------- Delilik (Cadı R - Delilik İksiri, 2026-10-13) ----------
+## Deliren yaratık oyuncuları bırakır, en yakın YARATIĞA yürür ve ona kendi temas hasarını (contact_damage) vurur
+## ("delirerek etrafındaki herkese saldırır, birbirlerine dahil"). Boss ve elitler delirmez (kullanıcı cevabı).
+## C++ tarafına YENİ kural eklenmedi: kenar bekçilerinin mekanizması kullanılır - yaratık "uykuya" alınır (set_dormant:
+## oyuncu hedeflemez) ve her MAD_RETARGET'te kurbanın konumu hedef nokta olarak verilir (set_goal; guard_camps.gd ile aynı
+## iki çağrı). Bitince eski uyku durumu geri yazılır (bekçiyse guard_camps.gd kaldığı yerden sürdürür).
+## Host/tek oyunculuda işler; istemciden gelen çağrı apply_root ile AYNI yolla host'a taşınır (request_enemy_effect "madness").
+## Vuruş take_damage_host ile verilir (take_damage "vuran = bu makinedeki oyuncu" sayıp hasarı host oyuncusuna yazardı).
+const MadStatusFxScript := preload("res://scripts/fx_cadi_mad_status.gd")
+const MAD_ATTACK_INTERVAL := 1.0
+const MAD_SEARCH_RADIUS := 240.0
+const MAD_RETARGET := 0.25
+const MAD_SPEED_MULT := 1.15
+const MAD_REACH := 16.0
+var is_mad: bool = false
+var _mad_timer: float = 0.0
+var _mad_attack_timer: float = 0.0
+var _mad_retarget_timer: float = 0.0
+var _mad_victim: Node2D = null
+var _mad_was_dormant: bool = false
+var _mad_status_fx: Node2D = null
+
+
+func apply_madness(duration: float) -> void:
+	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır (anahtar kapalıyken boş)
+	if is_dead or is_boss or is_elite or duration <= 0.0:
+		return
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "madness", duration, 0.0, 0.0)
+		return
+	if not is_mad:
+		is_mad = true
+		_mad_attack_timer = 0.35
+		_mad_retarget_timer = 0.0
+		_mad_victim = null
+		if _ew_slot >= 0:
+			_mad_was_dormant = _ew_world.is_dormant(_ew_slot)
+			_ew_world.set_dormant(_ew_slot, true)
+	_mad_timer = maxf(_mad_timer, duration)
+	_set_mad_visual(true, _mad_timer)
+
+
+func _process_madness(delta: float) -> void:
+	_mad_timer -= delta
+	if _mad_timer <= 0.0 or is_dead:
+		_end_madness()
+		return
+	_mad_retarget_timer -= delta
+	if _mad_retarget_timer <= 0.0 or not is_instance_valid(_mad_victim) or _mad_victim.get("is_dead") == true:
+		_mad_retarget_timer = MAD_RETARGET
+		_mad_victim = _mad_pick_victim()
+		if _ew_slot >= 0:
+			if _mad_victim != null:
+				_ew_world.set_goal(_ew_slot, _mad_victim.global_position.x, _mad_victim.global_position.y, MAD_SPEED_MULT)
+			else:
+				_ew_world.set_goal(_ew_slot, 0.0, 0.0, 0.0)
+	_mad_attack_timer -= delta
+	if _mad_attack_timer > 0.0 or _mad_victim == null or is_frozen or is_stunned:
+		return
+	var victim_body: float = float(_mad_victim.get("_body_radius")) if "_body_radius" in _mad_victim else 20.0
+	if global_position.distance_to(_mad_victim.global_position) > _body_radius + victim_body + MAD_REACH:
+		return
+	_mad_attack_timer = MAD_ATTACK_INTERVAL
+	if _mad_victim.has_method("take_damage_host"):
+		_mad_victim.take_damage_host(contact_damage, false, 0.0)
+
+
+func _mad_pick_victim() -> Node2D:
+	var best: Node2D = null
+	var best_d: float = INF
+	for e in get_enemies_near(get_tree(), global_position, MAD_SEARCH_RADIUS):
+		if e == self or not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
+			continue
+		var d: float = global_position.distance_squared_to((e as Node2D).global_position)
+		if d < best_d:
+			best_d = d
+			best = e as Node2D
+	return best
+
+
+func _end_madness() -> void:
+	if not is_mad:
+		return
+	is_mad = false
+	_mad_timer = 0.0
+	_mad_victim = null
+	if _ew_slot >= 0:
+		_ew_world.set_goal(_ew_slot, 0.0, 0.0, 0.0)
+		_ew_world.set_dormant(_ew_slot, _mad_was_dormant)
+	_set_mad_visual(false)
+
+
+## Delilik göstergesi (fx_cadi_mad_status.gd) - korku/kök göstergeleriyle AYNI yaşam döngüsü: host karar verir,
+## broadcast_enemy_vfx "mad_start"/"mad_stop" ile yayınlar.
+func _set_mad_visual(on: bool, duration: float = 0.0) -> void:
+	if on:
+		_spawn_mad_status_fx(duration)
+	else:
+		_remove_mad_status_fx()
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			if on:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "mad_start", {"duration": duration})
+			else:
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "mad_stop")
+
+
+func _spawn_mad_status_fx(duration: float) -> void:
+	if not _mad_status_fx or not is_instance_valid(_mad_status_fx):
+		_mad_status_fx = AnimatedSprite2D.new()
+		_mad_status_fx.set_script(MadStatusFxScript)
+		add_child(_mad_status_fx)
+	_mad_status_fx.call("setup", duration)
+
+
+func _remove_mad_status_fx() -> void:
+	if _mad_status_fx and is_instance_valid(_mad_status_fx):
+		_mad_status_fx.queue_free()
+	_mad_status_fx = null
+
+
 func _process_root(delta: float) -> void:
 	if _root_timer <= 0.0:
 		return
@@ -2417,7 +2544,7 @@ func _process_bee_poison(delta: float) -> void:
 	_bee_poison_tick_timer -= delta
 	if _bee_poison_tick_timer <= 0.0:
 		_bee_poison_tick_timer += BEE_POISON_TICK_INTERVAL
-		_take_dot_damage(_bee_poison_stacks.size() * _bee_poison_per_tick_damage)
+		_take_dot_damage(_bee_poison_stacks.size() * _bee_poison_per_tick_damage, 0.0, "dot:ari_zehri")
 
 
 ## Soğuma yükü VARKEN hafif mavimsi bir modulate uygular (bkz. kullanıcı
@@ -3672,7 +3799,7 @@ func _ew_still_active() -> bool:
 			or shock_time_left > 0.0 or _sleep_time > 0.0 or not _plague.is_empty() or not _enchant_flags.is_empty() \
 			or chill_stacks > 0 or _boss_chill_stacks > 0 \
 			or _slow_timer > 0.0 or _slow_fx_time_left > 0.0 or _slow_fx_broadcast_cooldown > 0.0 \
-			or _root_timer > 0.0 or not _bee_poison_stacks.is_empty()
+			or _root_timer > 0.0 or not _bee_poison_stacks.is_empty() or is_mad
 
 
 ## C++ olayı (köprü çağırır). target = olayın hedef adayı (oyuncu / uzak oyuncu / müttefik / ağaç). Gövdeler
@@ -3788,6 +3915,8 @@ func _ew_tick(delta: float) -> void:
 		_process_slow(delta)
 	if _root_timer > 0.0:
 		_process_root(delta)
+	if is_mad:
+		_process_madness(delta)
 	if not _bee_poison_stacks.is_empty():
 		_process_bee_poison(delta)
 	if is_dead or _ew_slot < 0:
@@ -4241,6 +4370,8 @@ func play_special_anim(anim_name: String, duration: float = 0.0) -> void:
 ## tetikliyordu - HURT kaldırıldı, bkz. _apply_damage). Bu yayın SİLİNMEMELİ: host'un
 ## _flash() çağrısı sadece host'ta çalışır, istemciler parlamayı YALNIZCA buradan alır.
 func _broadcast_hit_flash() -> void:
+	if is_boss:
+		return ## bosslarda vuruş parlaması yok (bkz. _flash)
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		## DÜZELTME (kullanıcı bildirimi: "multiplayerda katılımcılar yine lag
@@ -4488,7 +4619,7 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 ## Tüftüf zehriyle ölen yaratıkta öldürme ödülü (şans, Korsan altını, Necromancer ruhu, Savaş Şevki) ve can emme host'a
 ## gidiyordu. Artık tik, son DOĞRUDAN vuranın kimliğini korur (etkiyi genelde o uygulamıştır); istatistik/can emme sadece
 ## o kişi bu makinenin oyuncusuysa (tek oyunculu ya da host'un kendi vuruşu) burada işlenir.
-func _take_dot_damage(amount: float, shield_pen: float = 0.0) -> void:
+func _take_dot_damage(amount: float, shield_pen: float = 0.0, bl_src: String = "dot") -> void:
 	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır (anahtar kapalıyken boş)
 	if is_dead or is_ability_invisible or amount <= 0.0:
 		return
@@ -4498,7 +4629,7 @@ func _take_dot_damage(amount: float, shield_pen: float = 0.0) -> void:
 		var dealer: Node = get_tree().get_first_node_in_group("player")
 		if dealer and "match_damage_dealt" in dealer:
 			dealer.match_damage_dealt += amount
-			BalanceLogScript.on_hit("dot", amount, false)
+			BalanceLogScript.on_hit(bl_src, amount, false)
 		if dealer and dealer.has_method("on_dealer_hit"):
 			dealer.on_dealer_hit(amount, false)
 	_apply_damage(amount, false, shield_pen)
@@ -4628,7 +4759,20 @@ const HIT_FLASH_DURATION := 0.12
 var _hit_flash_material: ShaderMaterial = null
 
 
+## Kullanıcı isteği (2026-10-13): "beyaz parıltıların tetiklenmesinin bir sınırı olsun, bosslarda çıkmasın
+## yoksa hep beyaz görünüyorlar" - hızlı ateş/DOT yaratığı sürekli beyaz tutuyordu. Artık iki vuruş parlaması
+## arasında en az HIT_FLASH_MIN_INTERVAL sn var; bosslarda parlama hiç yok (çok sık vurulup hep beyaz kalıyorlardı).
+const HIT_FLASH_MIN_INTERVAL := 0.4
+var _last_flash_msec: int = -100000
+
+
 func _flash() -> void:
+	if is_boss:
+		return
+	var now_msec: int = Time.get_ticks_msec()
+	if float(now_msec - _last_flash_msec) < HIT_FLASH_MIN_INTERVAL * 1000.0:
+		return
+	_last_flash_msec = now_msec
 	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır (anahtar kapalıyken boş)
 	var target: CanvasItem = null
 	if anim_sprite:
@@ -4979,6 +5123,11 @@ func _drop_xp() -> void:
 		## çökertiyordu (bkz. kullanıcı bildirimi: "oyun birden kapandı, 5sn
 		## oynadıktan sonra"). call_deferred ile güvenli bir ana ertelenir.
 		_queue_drop_spawn(func() -> void:
+			## Birleştirme + üst sınır (bkz. drop_merge.gd): yakında aynı kademede küre varsa yeni düğüm açılmaz; sınır doluysa değer doğrudan yazılır.
+			if DropMerge.absorb_xp(drop_pos, orb_tier, tiered_value):
+				return
+			if DropMerge.xp_over_cap() and DropMerge.credit_xp(scene_root.get_tree(), drop_pos, tiered_value):
+				return
 			var orb = XpOrb.instantiate()
 			orb.xp_value = tiered_value
 			orb.xp_tier = orb_tier
@@ -5056,6 +5205,12 @@ func _drop_gold() -> void:
 		var drop_pos: Vector2 = global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-10.0, 10.0))
 		var scene_root: Node = get_tree().current_scene
 		_queue_drop_spawn(func() -> void:
+			## Boss altını (oyuncular arasında paylaşılır) asla birleşmez/doğrudan yazılmaz (bkz. drop_merge.gd).
+			if not is_boss:
+				if DropMerge.absorb_gold(drop_pos, amount):
+					return
+				if DropMerge.gold_over_cap() and DropMerge.credit_gold(scene_root.get_tree(), drop_pos, amount):
+					return
 			var drop = GoldDrop.instantiate()
 			drop.amount = amount
 			drop.is_boss_gold = is_boss ## boss altını çok oyunculuda eşit paylaşılır (bkz. gold_drop.gd)
@@ -5082,6 +5237,8 @@ func _roll_extra_item_gold() -> void:
 	var drop_pos: Vector2 = global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-10.0, 10.0))
 	var scene_root: Node = get_tree().current_scene
 	_queue_drop_spawn(func() -> void:
+		if DropMerge.absorb_gold(drop_pos, 1) or (DropMerge.gold_over_cap() and DropMerge.credit_gold(scene_root.get_tree(), drop_pos, 1)):
+			return
 		var drop = GoldDrop.instantiate()
 		drop.amount = 1
 		drop.global_position = drop_pos
@@ -5239,7 +5396,7 @@ func _drop_chest() -> void:
 ## weapon_shop_logic.gd SHARD_COST_*). Yerdeki drop'lar yemek gibi durur (weapon_shard_drop.gd); toplanınca yaşayan HER oyuncuya aynı miktar gider.
 ## Şans: sıradan yaratığın %0.5'i diğer drop'larla AYNI çarpımsal şansla büyür (bkz. LUCK_DROP_MULT_PER_POINT) - elit/boss garantisi şansa bağlı değil.
 ## Boss 5 AYRI drop düşürür (her biri 1 parça, etrafa saçılır), elit 1. Çağrı sırası/ağ kapısı diğer _drop_* ile aynı: sadece host/tek oyunculu.
-const WEAPON_SHARD_CHANCE := 0.01 ## 2026-10-11: %1,5 -> %1 (kullanıcı). 2026-10-10: %0,5 -> %1,5
+const WEAPON_SHARD_CHANCE := 0.005 ## 2026-10-12: %1 -> %0,5 (kullanıcı). 2026-10-11: %1,5 -> %1 (kullanıcı). 2026-10-10: %0,5 -> %1,5
 const WEAPON_SHARD_ELITE_COUNT := 1
 const WEAPON_SHARD_BOSS_COUNT := 5
 

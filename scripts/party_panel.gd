@@ -37,8 +37,8 @@ const GOLD_BTN_SIZE := 32.0
 ## Çubukların içine "şimdiki/en çok" sayısı yazılır (kullanıcı isteği 2026-10-09: "dostların can ve kalkan sayısı grup sekmesindeki barlarında görünmüyor"):
 ## Sayılar HUD'daki kendi can/kalkan sayısıyla AYNI "%d/%d" biçiminde; 2x (32 punto, rakam 14 px) piksel-net çizilir (bar_value_label.gd) -> çubuklar 10/6 -> 22/18 px.
 ## (Kullanıcı 2026-10-09 ikinci tur: "sayıların konumu aşağıda kalmış, zor okunuyor, sığmıyor": ilk sürüm 24 punto Label + 16/14 px çubuktu.)
-const HP_BAR_HEIGHT := 30.0 ## 2026-10-10: piksel çubuk (çerçeve+gölge payı 6 px dahil) - içte 22 px
-const SHIELD_BAR_HEIGHT := 27.0
+const HP_BAR_HEIGHT := 22.0 ## 2026-10-13 (kullanıcı: "çok kalın ve kaba"): 30 -> 22; piksel çubuk (çerçeve+gölge payı 6 px dahil) - içte 16 px, yazı 1,5x (rakam 11 px)
+const SHIELD_BAR_HEIGHT := 20.0 ## 27 -> 20 (içte 14 px)
 const BarValueLabelScript: GDScript = preload("res://scripts/bar_value_label.gd")
 const PartyPixelBarScript: GDScript = preload("res://scripts/party_pixel_bar.gd")
 const FS_ROW := 24 ## m5x7 3x - görev satırlarıyla aynı (16 1080p'de okunmuyor)
@@ -503,6 +503,7 @@ func _make_pixel_bar(height: float, bg: Color) -> Control:
 ## Çubuğun içine ortalanmış piksel-net sayı etiketi (çubuğun çocuğu: çubukla birlikte konumlanır/boyutlanır, fareyi geçirir).
 func _add_bar_label(bar: Control) -> Control:
 	var lbl: Control = BarValueLabelScript.new()
+	lbl.max_font = 24 ## 2026-10-13: ince çubuk - 1,5x yazı
 	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bar.add_child(lbl)
 	return lbl

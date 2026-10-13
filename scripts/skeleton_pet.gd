@@ -1,4 +1,5 @@
 extends CharacterBody2D
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -494,6 +495,9 @@ func _play_attack_animation() -> void:
 func _process_attack(delta: float) -> void:
 	## Bekleme animasyon sırasında da akar (bkz. ATTACK_INTERVAL notu); yeni vuruş yine de önceki animasyon bitince başlar.
 	_attack_timer -= delta
+	## 2026-10-12: sahibi ölü/yerde yatıyorsa saldırmaz.
+	if is_instance_valid(owner_player) and owner_player.get("is_dead") == true:
+		return
 	if _animation_state == "attack":
 		return
 	if _attack_timer > 0.0:
@@ -513,6 +517,7 @@ func _process_attack(delta: float) -> void:
 		if owner_player and is_instance_valid(owner_player) and owner_player.has_method("_roll_ability_crit"):
 			is_crit = owner_player._roll_ability_crit()
 			dmg = owner_player._apply_ability_crit(dmg, is_crit)
+		BalanceLogScript.tag(&"s:necro_iskelet")
 		_focus_target.take_damage(dmg, is_crit)
 	
 	# Saldırdığına dair yeşil kıvılcım efekti

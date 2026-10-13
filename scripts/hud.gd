@@ -825,8 +825,13 @@ const DOCK_BOTTOM_MARGIN := 30.0 ## kullanıcı: "bi 10px daha yukarı" (20 -> 3
 const DOCK_PORTRAIT := 96.0 ## hud_avatar_frame.png doğal boyu
 const DOCK_PORTRAIT_GAP := 14.0
 const DOCK_ROW_GAP := 6.0
-const DOCK_HP_H := 22.0
-const DOCK_SHIELD_H := 16.0
+const DOCK_HP_H := 28.0 ## 2026-10-13 (kullanıcı: "can ve kalkan miktarı çok zor okunuyor"): 22 -> 28, kalkan 16 -> 22; yazı da büyüdü
+const DOCK_SHIELD_H := 22.0
+const DOCK_HP_FONT := 22
+const DOCK_SHIELD_FONT := 18
+## Telefon HUD'u eski ölçüleri korur (MOBILE_CLUSTER_H bunlara göre).
+const MOBILE_HP_H := 22.0
+const MOBILE_SHIELD_H := 16.0
 const DOCK_BAR_GAP := 2.0
 const DOCK_BADGE_OVERHANG := 26.0 ## seviye rozeti portre çerçevesinin altından bu kadar taşar (hud.tscn LevelBadge 70..122)
 const HEARTS_TAB_W := 100.0
@@ -873,11 +878,12 @@ func _create_player_dock() -> void:
 		dock_hp_bar = Control.new()
 		dock_hp_bar.name = "DockHpBar"
 		dock_hp_bar.set_script(PixelBarScript)
+		dock_hp_bar.set("font_size", DOCK_HP_FONT)
 		cluster.add_child(dock_hp_bar)
 		dock_shield_bar = Control.new()
 		dock_shield_bar.name = "DockShieldBar"
 		dock_shield_bar.set_script(PixelBarScript)
-		dock_shield_bar.set("font_size", 16)
+		dock_shield_bar.set("font_size", DOCK_SHIELD_FONT)
 		dock_shield_bar.set("fill", SHIELD_BAR_COLOR)
 		dock_shield_bar.set("ratio", 0.0)
 		dock_shield_bar.set("text", "0/0")
@@ -950,9 +956,11 @@ func _layout_player_dock() -> void:
 	if dock_hp_bar:
 		dock_hp_bar.position = Vector2(bx, by)
 		dock_hp_bar.size = Vector2(row_w, DOCK_HP_H)
+		dock_hp_bar.set("font_size", DOCK_HP_FONT)
 	if dock_shield_bar:
 		dock_shield_bar.position = Vector2(bx, by + DOCK_HP_H + DOCK_BAR_GAP)
 		dock_shield_bar.size = Vector2(row_w, DOCK_SHIELD_H)
+		dock_shield_bar.set("font_size", DOCK_SHIELD_FONT)
 
 	_layout_hearts_tab(x0, y0)
 
@@ -1221,16 +1229,18 @@ func _layout_mobile_hud() -> void:
 	_cluster_rect(cluster, "LevelLabel", Rect2(0, 0, 52, 52))
 	if dock_hp_bar:
 		dock_hp_bar.position = Vector2(60.0, 4.0)
-		dock_hp_bar.size = Vector2(MOBILE_BAR_W, DOCK_HP_H)
+		dock_hp_bar.size = Vector2(MOBILE_BAR_W, MOBILE_HP_H)
+		dock_hp_bar.set("font_size", 24)
 	if dock_shield_bar:
-		dock_shield_bar.position = Vector2(60.0, 4.0 + DOCK_HP_H + DOCK_BAR_GAP)
-		dock_shield_bar.size = Vector2(MOBILE_BAR_W, DOCK_SHIELD_H)
+		dock_shield_bar.position = Vector2(60.0, 4.0 + MOBILE_HP_H + DOCK_BAR_GAP)
+		dock_shield_bar.size = Vector2(MOBILE_BAR_W, MOBILE_SHIELD_H)
+		dock_shield_bar.set("font_size", 16)
 	if revive_hearts:
 		revive_hearts.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		revive_hearts.pivot_offset = Vector2.ZERO
 		revive_hearts.scale = Vector2.ONE * 0.8 * u
 		revive_hearts.offset_left = e.position.x + 60.0 * u
-		revive_hearts.offset_top = e.position.y + (4.0 + DOCK_HP_H + DOCK_BAR_GAP + DOCK_SHIELD_H + 6.0) * u
+		revive_hearts.offset_top = e.position.y + (4.0 + MOBILE_HP_H + DOCK_BAR_GAP + MOBILE_SHIELD_H + 6.0) * u
 		revive_hearts.offset_right = revive_hearts.offset_left + 90.0
 		revive_hearts.offset_bottom = revive_hearts.offset_top + 32.0
 	## Minimap: sağ üst, can kümesiyle AYNI kenar payında (simetrik) ve x HUD_SCALE.
@@ -2413,6 +2423,9 @@ func _process(delta: float) -> void:
 			## ruh rozeti hiç gösterilmez olmuştu. Roster id'sine (11) göre.
 			if player.has_method("get_necro_souls") and GameManager.selected_char_id == 11:
 				passive_icon.set_stack_count(player.get_necro_souls())
+			## Cadı pasifi (Şans Tılsımı, 2026-10-13): eksik candan o an gelen şans.
+			elif player.has_method("get_cadi_passive_luck") and GameManager.selected_char_id == 15:
+				passive_icon.set_stack_count(player.get_cadi_passive_luck())
 			else:
 				passive_icon.set_stack_count(-1)
 		## Üçüncü aktif yetenek (bkz. _create_skill3_icon) - skill/skill2 ile
@@ -2434,6 +2447,20 @@ func _process(delta: float) -> void:
 					if v_tex_r:
 						skill3_icon.custom_texture = v_tex_r
 				skill3_icon.update_state(player.get_skill3_progress(), player.is_skill3_active(), player.get_buyucu_variation_cooldown_remaining_r(), player.get_skill3_active_fraction())
+			## Cadı R (İksir Çantası, 2026-10-13): yük boncukları + SIRADAKİ iksirin ikonu/adı/açıklaması (kullanıcı: "rastgele olsun
+			## fakat sonraki iksirin ne olduğunu görelim") - player.gd get_cadi_r_hud_state. Standart skill3 makinesi kullanılmaz.
+			elif GameManager.selected_char_id == 15 and player.has_method("get_cadi_r_hud_state"):
+				var cadi_r: Dictionary = player.get_cadi_r_hud_state()
+				skill3_icon.skill_id = player.get_skill3_id()
+				skill3_icon.name_override = str(cadi_r.get("name", ""))
+				skill3_icon.desc_override = str(cadi_r.get("desc", ""))
+				var cadi_tex: Texture2D = _cached_texture(str(cadi_r.get("icon", "")))
+				if cadi_tex and skill3_icon.custom_texture != cadi_tex:
+					skill3_icon.custom_texture = cadi_tex
+				var cadi_has_charge: bool = int(cadi_r.get("charges", 0)) > 0
+				skill3_icon.update_state(1.0 if cadi_has_charge else float(cadi_r.get("fraction", 0.0)), false, 0.0 if cadi_has_charge else float(cadi_r.get("remaining", 0.0)), 0.0)
+				if skill3_icon.has_method("set_charges"):
+					skill3_icon.set_charges(int(cadi_r.get("charges", 0)), int(cadi_r.get("max", 0)), float(cadi_r.get("fraction", 0.0)))
 			else:
 				skill3_icon.name_override = ""
 				skill3_icon.desc_override = ""

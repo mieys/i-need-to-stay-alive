@@ -158,6 +158,10 @@ static func _near_any_player(pos: Vector2) -> bool:
 
 
 ## Düşmenin _physics_process'i attraction_target() null döndürüp last_query_far true ise bunu çağırır.
+## UYKU (2026-10-12, kullanıcı isteği "yere düşen şeyler FPS düşürüyor" - seçenek A): fizik kapanır; GÖRSEL işler (nabız _process'i,
+## sprite animasyonu, altının zıplaması + gölgesi) ise yalnız düşme EKRANDA DEĞİLSE (ya da sisle gizliyse) durdurulur - ekrandaki
+## düşmeler canlı kalır (ölçüm: 500 uyuyan küre +2,1 ms, 1500 altın +12,5 ms; maliyet düşme başına her karede _process + animasyon).
+## Durumu ticker her WAKE_CHECK_SPREAD karede bir düşme başına günceller. Düğümler `visual_asleep` alanını tutar (xp_orb/gold_drop).
 static func put_to_sleep(drop: Node2D) -> void:
 	drop.set_physics_process(false)
 	_sleeping.append(drop)
@@ -171,6 +175,39 @@ static func put_to_sleep(drop: Node2D) -> void:
 ## Mıknatıs (attract_to_player) - listeden çıkarma tembel: ticker geçersiz/uyanık girdileri kendisi atar.
 static func wake(drop: Node2D) -> void:
 	drop.set_physics_process(true)
+	set_visual_awake(drop, true)
+
+
+## Düşmenin görsel işlerini aç/kapat (idempotent). Uyanık = _process (nabız/zıplama) + sprite animasyonu + gölge güncellemesi.
+static func set_visual_awake(drop: Node2D, awake: bool) -> void:
+	if not is_instance_valid(drop) or bool(drop.get("visual_asleep")) == (not awake):
+		return
+	drop.set("visual_asleep", not awake)
+	drop.set_process(awake)
+	var spr: AnimatedSprite2D = drop.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	if spr != null:
+		if awake:
+			spr.play() ## adsız play: duran animasyonu kaldığı kareden sürdürür
+		else:
+			spr.pause()
+	var shadow: Node = drop.get_node_or_null("DropShadow")
+	if shadow != null and (not awake or shadow.get("_root_bob") == true):
+		shadow.set_process(awake)
+
+
+## Ekranda (+ kenar payı) ve görünür mü: ekran dışı/sisle gizli uyuyan düşmenin görsel işleri kapatılır.
+static func _on_screen(drop: Node2D, view: Rect2) -> bool:
+	return drop.is_visible_in_tree() and view.has_point(drop.global_position)
+
+
+## pos'a en yakın canlı, toplayabilen oyuncu (yoksa null) - tavan aşımında düşmenin değerini doğrudan yazmak için (drop_merge.gd).
+static func nearest_collector(tree: SceneTree, pos: Vector2) -> Node2D:
+	_refresh(tree)
+	var idx: int = _target_index(pos, false, -1)
+	if idx < 0 or not _alive[idx]:
+		return null
+	var n: Node2D = _nodes[idx]
+	return n if is_instance_valid(n) else null
 
 
 func _physics_process(_delta: float) -> void:
@@ -178,6 +215,9 @@ func _physics_process(_delta: float) -> void:
 	if n == 0:
 		return
 	_refresh(get_tree())
+	## Görünür dünya dikdörtgeni (kamera + zoom dahil) + 96 px pay: kenardaki düşme belirmeden önce canlanır.
+	var vp: Viewport = get_viewport()
+	var view: Rect2 = (vp.get_canvas_transform().affine_inverse() * vp.get_visible_rect()).grow(96.0)
 	var budget: int = int(ceil(float(n) / float(WAKE_CHECK_SPREAD)))
 	if _wake_cursor >= n:
 		_wake_cursor = 0
@@ -190,11 +230,13 @@ func _physics_process(_delta: float) -> void:
 		var drop_out: bool = not is_instance_valid(d) or (d as Node2D).is_queued_for_deletion() or (d as Node2D).is_physics_processing()
 		if not drop_out and ((d as Node2D).get("is_magnetized") == true or _near_any_player((d as Node2D).global_position)):
 			(d as Node2D).set_physics_process(true)
+			set_visual_awake(d as Node2D, true)
 			drop_out = true
 		if drop_out:
 			## Sırasız hızlı silme: son elemanı bu yuvaya taşı, aynı i'yi tekrar incele.
 			_sleeping[i] = _sleeping[_sleeping.size() - 1]
 			_sleeping.pop_back()
 		else:
+			set_visual_awake(d as Node2D, _on_screen(d as Node2D, view))
 			i += 1
 	_wake_cursor = i

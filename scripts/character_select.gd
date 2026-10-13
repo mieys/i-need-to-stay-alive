@@ -14,6 +14,7 @@ const RosterScript: GDScript = preload("res://scripts/menu_character_roster.gd")
 const DetailsScript: GDScript = preload("res://scripts/menu_character_details.gd")
 const ShowcaseScript: GDScript = preload("res://scripts/menu_character_showcase.gd")
 const WeaponPickerScript: GDScript = preload("res://scripts/menu_weapon_picker.gd")
+const PetPickerScript: GDScript = preload("res://scripts/menu_pet_picker.gd")
 const WEAPON_PICKER_H := 300.0
 
 ## Ortak ızgara ölçüleri (lobby_menu.gd de aynılarını kullanır): yan sütunlar 376 px, orta sütun 1104 px (6 kart = 1100).
@@ -31,6 +32,7 @@ var showcase: PanelContainer
 var start_button: Button
 var back_button: Button
 var weapon_picker: PanelContainer
+var pet_picker: PanelContainer
 
 
 func _ready() -> void:
@@ -60,7 +62,12 @@ func _ready() -> void:
 	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
 	add_child(spirit_picker)
 	spirit_picker.setup(3)
-	_place(spirit_picker, Vector2(EDGE, TOP), Vector2(SIDE, col_h - WEAPON_PICKER_H - GAP))
+	_place(spirit_picker, Vector2(EDGE, TOP), Vector2(SIDE, col_h - WEAPON_PICKER_H - PetPickerScript.DESKTOP_HEIGHT - 2.0 * GAP))
+	## Evcil hayvan (kullanıcı isteği 2026-10-12): ruhani yetenekle silah arasında, bkz. menu_pet_picker.gd.
+	pet_picker = PetPickerScript.new()
+	add_child(pet_picker)
+	pet_picker.setup(false)
+	_place(pet_picker, Vector2(EDGE, TOP + col_h - WEAPON_PICKER_H - GAP - PetPickerScript.DESKTOP_HEIGHT), Vector2(SIDE, PetPickerScript.DESKTOP_HEIGHT))
 	weapon_picker = WeaponPickerScript.new()
 	add_child(weapon_picker)
 	weapon_picker.setup(false)
@@ -189,11 +196,16 @@ func _build_mobile() -> void:
 	var center_w: float = w - left_w - right_w
 
 	## Sol: ruhani yetenek (üst) + başlangıç silahı (alt).
-	var weapon_h: float = roundf(body_h * 0.42)
+	var weapon_h: float = roundf(body_h * 0.32)
+	var pet_h: float = roundf(body_h * 0.34)
 	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
 	add_child(spirit_picker)
 	spirit_picker.setup(3)
-	_place(spirit_picker, Vector2(x0, body_y), Vector2(left_w, body_h - weapon_h))
+	_place(spirit_picker, Vector2(x0, body_y), Vector2(left_w, body_h - weapon_h - pet_h))
+	pet_picker = PetPickerScript.new()
+	add_child(pet_picker)
+	pet_picker.setup(true)
+	_place(pet_picker, Vector2(x0, body_y + body_h - weapon_h - pet_h), Vector2(left_w, pet_h))
 	weapon_picker = WeaponPickerScript.new()
 	add_child(weapon_picker)
 	weapon_picker.setup(true)

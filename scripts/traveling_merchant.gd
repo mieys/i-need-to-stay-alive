@@ -150,6 +150,7 @@ const HitchLogScript := preload("res://scripts/hitch_log.gd") ## takılma kaydı
 ## kullanılıyor - sadece radius/color farklı, teknik/görsel dil AYNI.
 ## 2026-09-25: Şovalye'nin ESKİ (shader) baloncuğu, satıcıya ayrılmış kopya + boğuk ses (bkz. fx_merchant_bubble.gd).
 const ProtectionBubbleScript := preload("res://scripts/fx_merchant_bubble.gd")
+const MerchantNpcScript := preload("res://scripts/merchant_npc.gd")
 
 
 func _ready() -> void:
@@ -435,6 +436,11 @@ func _spawn_visual(pos: Vector2) -> void:
 		_visual = _create_placeholder_visual(pos)
 	get_tree().current_scene.add_child(_visual)
 	_visual.add_child(_create_protection_bubble())
+	## Satıcının kendisi (kullanıcı isteği 2026-10-13): balonun içinde durur, oyuncular gelince dükkanına yürür/selam verir/vedalaşır (bkz. merchant_npc.gd).
+	## Görselin çocuğu: ziyaret bitince (_free_visual) onunla birlikte silinir.
+	var npc: Node2D = MerchantNpcScript.new()
+	_visual.add_child(npc)
+	npc.call("configure")
 
 
 func _free_visual() -> void:

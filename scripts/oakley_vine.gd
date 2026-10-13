@@ -1,4 +1,5 @@
 extends Node2D
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -239,6 +240,7 @@ func _pick_new_target() -> void:
 func _on_hit() -> void:
 	if is_instance_valid(_target) and not bool(_target.get("is_dead")):
 		if _target.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:oakley_sarmasik")
 			_target.call("take_damage", _damage_bonus * DAMAGE_RATIO)
 		var is_boss: bool = bool(_target.get("is_boss"))
 		if is_boss:

@@ -1,6 +1,7 @@
 extends Area2D
 
 const DropAttraction := preload("res://scripts/drop_attraction.gd")
+const DropMerge := preload("res://scripts/drop_merge.gd")
 const DropShadowScript := preload("res://scripts/drop_shadow.gd")
 
 const FloatingText := preload("res://scenes/floating_text.tscn")
@@ -9,6 +10,8 @@ const ATTRACT_ACCEL := 720.0 ## genel hız ayarı: %20 düşürüldü
 const MAX_ATTRACT_SPEED := 496.0
 
 var amount: int = 1
+## Uyku (bkz. drop_attraction.gd set_visual_awake): ekran dışında uyuyan altın zıplama/animasyon işini durdurur.
+var visual_asleep: bool = false
 ## Kullanıcı isteği (2026-09-21): bosslardan düşen altın, biri aldığında TÜM oyuncular arasında eşit paylaşılır
 ## (bkz. NetworkManager.host_share_boss_gold). enemy.gd _drop_gold boss için true yapar; SADECE host'taki gerçek drop'ta anlamlı.
 var is_boss_gold: bool = false
@@ -35,6 +38,25 @@ var _collected: bool = false
 ## altın da artık client kozmetik kopyalarıyla (300sn fallback) tutarlı bir
 ## yaşam süresine sahip.
 const EXPIRE_SECONDS := 300.0
+
+
+## Birleştirme kaydı (bkz. drop_merge.gd): yalnız host'un/tek oyunculunun gerçek altını; boss altını (paylaşımlı) birleşmez.
+func _enter_tree() -> void:
+	if not get_meta("network_spawned", false):
+		DropMerge.register(DropMerge.KIND_GOLD, self)
+
+
+func _exit_tree() -> void:
+	DropMerge.unregister(self)
+
+
+func can_merge(_tier: int, max_merged: int) -> bool:
+	return not is_boss_gold and not _collected and not is_magnetized and not is_queued_for_deletion() and not get_meta("claimed", false) and not get_meta("parrot_taken", false) and not get_meta("network_spawned", false) and int(get_meta("merged_n", 1)) < max_merged
+
+
+func merge_in(add_amount: int) -> void:
+	amount += add_amount
+	set_meta("merged_n", int(get_meta("merged_n", 1)) + 1)
 
 
 func _ready() -> void:
@@ -153,7 +175,7 @@ func _on_body_entered(body: Node) -> void:
 	## - eskiden burada share_gold.rpc() TÜM peer'lere aynı miktarı
 	## yayınlıyordu (ortak/paylaşımlı para), bu artık kaldırıldı.
 	## Boss altını: çok oyunculuda tüm katılımcılar arasında eşit bölünür, her pay sahibine doğru uçar.
-	var shared: bool = is_boss_gold and NetworkManager.is_multiplayer_active 			and NetworkManager.host_share_boss_gold(amount, global_position, body)
+	var shared: bool = is_boss_gold and NetworkManager.is_multiplayer_active and NetworkManager.host_share_boss_gold(amount, global_position, body)
 	if shared:
 		pass
 	elif body.is_in_group("player"):

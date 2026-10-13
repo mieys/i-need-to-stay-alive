@@ -164,6 +164,7 @@ func _on_restart() -> void:
 ## kendi bağlantısını kesiyor.
 func _on_menu() -> void:
 	_unlock_local_input()
+	await NetworkManager.flush_balance_before_leave() ## koşu kaydı bağlantı kesilmeden host'a ulaşsın
 	if NetworkManager.is_multiplayer_active:
 		if NetworkManager.is_host:
 			NetworkManager.close_room()

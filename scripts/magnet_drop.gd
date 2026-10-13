@@ -80,6 +80,10 @@ func _on_body_entered(body: Node) -> void:
 		queue_free()
 		return
 
+	## Çift ödül düzeltmesi (2026-10-12, sandıkla aynı sınıf - bkz. chest_drop.gd _awarded): host'un fiziksel teması ve bir istemcinin request_drop_pickup'ı ayrı işaret kullanıyordu; ikisi aynı karede gelirse ödül iki kez veriliyordu. Ortak işaret "claimed".
+	if get_meta("claimed", false):
+		return
+	set_meta("claimed", true)
 	## #32 DÜZELTME (kullanıcı bildirimi: "Mıknatısla çekilen objeler her
 	## zaman mıknatısı tutana gitmeli"): eskiden hiçbir hedef belirtilmeden
 	## attract_to_player() çağrılıyordu, bu da xp_orb.gd/gold_drop.gd'nin

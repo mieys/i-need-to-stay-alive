@@ -18,6 +18,8 @@ const OUTLINE_COLOR := Color(0, 0, 0, 1) ## damage_numbers.gd OUTLINE_COLOR ile 
 
 static var _font: Font = null
 
+## En büyük yazı puntosu: grup paneli ince çubuklarda 24 (1,5x) ister (kullanıcı 2026-10-13: "çubuklar çok kalın ve kaba, yazılar da ona göre incelsin").
+var max_font: int = 32
 var text: String = "":
 	set(v):
 		if v != text:
@@ -32,8 +34,10 @@ static func font() -> Font:
 
 
 ## Yazı için en büyük sığan punto: genişlik avail_w içinde, büyük harf yüksekliği + PAD_Y avail_h içinde. Hiçbiri sığmazsa en küçüğü.
-static func pick_size(str_: String, avail_w: float, avail_h: float) -> int:
+static func pick_size(str_: String, avail_w: float, avail_h: float, max_fs: int = 32) -> int:
 	for fs in SIZES:
+		if fs > max_fs:
+			continue
 		var w: float = font().get_string_size(str_, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		if w <= avail_w and roundf(float(fs) * CAP_RATIO) + PAD_Y <= avail_h:
 			return fs
@@ -48,14 +52,14 @@ func _ready() -> void:
 func _draw() -> void:
 	if text.is_empty():
 		return
-	var fs: int = pick_size(text, size.x - PAD_X * 2.0, size.y)
+	var fs: int = pick_size(text, size.x - PAD_X * 2.0, size.y, max_font)
 	var f: Font = font()
 	var tw: float = f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	var cap: float = roundf(float(fs) * CAP_RATIO)
 	## Taban çizgisi: büyük harfin (rakamın) üstü çubuk ortasının cap/2 üstünde, altı cap/2 altında.
 	var pos := Vector2(roundf((size.x - tw) * 0.5), roundf((size.y + cap) * 0.5))
 	## Kontür kalınlığı: yazı pikseli (16 punto = 1 px) başına 1 - hasar sayılarındaki 1 dünya pikseli kontürle aynı oran.
-	var o: float = float(maxi(1, int(roundf(float(fs) / 16.0))))
+	var o: float = 1.0 if fs <= 24 else float(maxi(1, int(roundf(float(fs) / 16.0)))) ## 1,5x ve altı: ince 1 px kontür (2 px yazıyı kalın/kaba gösteriyordu)
 	for off in [Vector2(0.0, -o), Vector2(-o, 0.0), Vector2(o, 0.0), Vector2(0.0, o)]:
 		draw_string(f, pos + off, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, OUTLINE_COLOR)
 	draw_string(f, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, TEXT_COLOR)

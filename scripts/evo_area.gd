@@ -1,4 +1,5 @@
 extends Node2D
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## YETENEK EVRİMİ DÜNYA ALANLARI (2026-09-28) - dünyada bir süre duran evrim etkileri. enchant_area.gd ile AYNI desen: TEK
 ## script hem yetkili kopya (authoritative = true: kasterin makinesi - hasar/yavaşlatma burada, istemcide take_damage/apply_*
@@ -380,6 +381,7 @@ func _deal(e: Node, dmg: float, dir: Vector2) -> void:
 	if is_instance_valid(source) and source.has_method("evo_area_hit"):
 		source.evo_area_hit(e, dmg, kind, dir)
 	elif e.has_method("take_damage"):
+		BalanceLogScript.tag(StringName("s:evo_" + kind))
 		e.take_damage(dmg, false, 0.0, true)
 
 
@@ -409,6 +411,7 @@ func _mine_check() -> void:
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(StringName("s:evo_" + kind))
 			e.take_damage(float(p.get("dmg", 10.0)), false, 0.0, false)
 		if e.has_method("apply_slow"):
 			e.apply_slow(float(p.get("slow", 0.3)), MINE_SLOW_TIME)

@@ -99,6 +99,7 @@ func _tick() -> void:
 		var evo_ls: float = float(caster.call("get_shaman_totem_lifesteal")) if caster.has_method("get_shaman_totem_lifesteal") else 0.0
 		if evo_ls > 0.0 and "evo_hit_lifesteal" in caster:
 			caster.set("evo_hit_lifesteal", evo_ls)
+		BalanceLogScript.tag(&"s:shaman_totem")
 		target.call("take_damage", dmg, is_crit)
 		if evo_ls > 0.0 and "evo_hit_lifesteal" in caster:
 			caster.set("evo_hit_lifesteal", 0.0)
@@ -126,6 +127,7 @@ func _explode(hit_target: Node2D, center: Vector2, blast_dmg: float, radius: flo
 		if center.distance_to((e as Node2D).global_position) > radius:
 			continue
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:shaman_totem")
 			e.call("take_damage", blast_dmg, false, 0.0, true)
 
 

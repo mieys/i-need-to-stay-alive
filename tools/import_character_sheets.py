@@ -46,6 +46,9 @@ CHARS = {
     "oakley": ("oakley", "oyku_frames.tres", "oyku_portrait.png"),
     # 2026-09-25: yeni karakter Suriyeli Hadime (hadime.zip; read.png ayri geldi, ayni klasore konur).
     "hadime": ("hadime", "hadime_frames.tres", "hadime_portrait.png"),
+    # 2026-10-13: yeni karakter Cadi (masaustu "cadı" klasoru -> ascii_key "cad"; dosyalar "$_<ad>_f<kare>.png" adli,
+    # pickup sayfasi YOK, sit sayfasi VAR - bkz. OPTIONAL_SHEETS / sheet_name).
+    "cad": ("cadi", "cadi_frames.tres", "cadi_portrait.png"),
 }
 
 # Karaktere ozel TERS klipler: (yeni klip adi, kaynak sayfa, fps) - kaynak sayfanin kareleri SONDAN BASA dizilir.
@@ -75,13 +78,30 @@ SHEETS = [
     ("strike", ["strike"], False, 10.0),
     ("chop", ["chop"], False, 10.0),
     ("pickup", ["pickup"], False, 10.0),
+    ("sit", ["sit"], True, 4.0),
 ]
+# Kaynak klasorde yoksa atlanan sayfalar (klipleri de yazilmaz): pickup oyunda hicbir yerde oynatilmiyor; sit eski
+# karakterlere tools/import_ek_animasyonlar.py ile SONRADAN eklendi (o karakterler buradan yeniden ice alinirsa sit
+# klipleri icin o betik tekrar kosulmali).
+OPTIONAL_SHEETS = {"pickup", "sit"}
 BAT_ANIM = ("bat", 4, True, 10.0)
 
 
 def ascii_key(name):
     s = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").lower()
     return s.replace("y", "y")
+
+
+def sheet_name(filename):
+    """Kaynak dosya adi -> sayfa adi: "idle.png" ya da yeni paket bicimi "$_idle_f4.png" -> "idle.png"."""
+    n = filename.lower()
+    if n.startswith("$_"):
+        n = n[2:]
+    stem, ext = os.path.splitext(n)
+    parts = stem.rsplit("_f", 1)
+    if len(parts) == 2 and parts[1].isdigit():
+        stem = parts[0]
+    return stem + ext
 
 
 def find_char_dirs(src):
@@ -138,6 +158,8 @@ def write_frames(key, frames_name, sheet_counts):
 
     sheet_ext = {}
     for sheet, _names, loop, speed in SHEETS:
+        if sheet not in sheet_counts:
+            continue
         count = sheet_counts[sheet]
         ext_id = add_ext(f"{res_dir}/sheets/{sheet}.png")
         sheet_ext[sheet] = ext_id
@@ -212,7 +234,7 @@ def import_char(entry_key, src_dir):
     print(f"== {key}  ({src_dir})")
     out_dir = os.path.join(CHAR_DIR, key, "sheets")
     os.makedirs(out_dir, exist_ok=True)
-    found = {f.lower(): f for f in os.listdir(src_dir)}
+    found = {sheet_name(f): f for f in os.listdir(src_dir)}
     counts = {}
     idle_small = None
     for sheet, names, _loop, _speed in SHEETS:
@@ -222,6 +244,9 @@ def import_char(entry_key, src_dir):
                 fn = found[n + ".png"]
                 break
         if fn is None:
+            if sheet in OPTIONAL_SHEETS:
+                print(f"    {sheet}: kaynakta yok, atlandi")
+                continue
             raise SystemExit(f"eksik sayfa: {names} ({src_dir})")
         small, cols, k = downsample(os.path.join(src_dir, fn))
         counts[sheet] = cols

@@ -11,7 +11,7 @@ const HadimeMath: GDScript = preload("res://scripts/hadime_math.gd")
 const VampirMath: GDScript = preload("res://scripts/vampir_math.gd")
 
 ## Kullanıcının evrimlerini yazdığı karakterler (roster id) - 2026-09-30: Assasin Çocuk (5) eklendi.
-const EVO_CHARS := [14, 13, 10, 1, 8, 9, 7, 3, 5, 12, 4, 11] ## 12 = Shaman, 4 = Büyücü Kız (2026-10-04), 11 = Necromancer (2026-10-11)
+const EVO_CHARS := [14, 13, 10, 1, 8, 9, 7, 3, 5, 12, 4, 11, 15] ## 12 = Shaman, 4 = Büyücü Kız (2026-10-04), 11 = Necromancer (2026-10-11)
 
 var _spawned: Array[Node] = []
 var _prev_char_id: int = 1
@@ -199,19 +199,16 @@ func test_talon_matthew_base_nerfs_and_cooldowns() -> void:
 	_cleanup()
 	var matthew := _make_player(3)
 	assert(is_equal_approx(float(matthew._skill_timing_for(43)["cooldown"]), 10.0), "Matthew Q temel bekleme 10 sn")
-	assert(is_equal_approx(float(matthew._skill2_timing_for(21)["duration"]), 6.0), "Matthew E temel süre 6 sn")
-	var move0: float = matthew.matthew_haste_bonus("move")
+	## 2026-10-12 rework (madde 98): E artık Elektrik Topu (id 50; 3 sn / 20 sn) - eski Vahşi Hız (21) evrimleri kalktı.
+	## Ayrıntılı kit testi: tests/test_matthew_lightning.gd.
+	assert(is_equal_approx(float(matthew._skill2_timing_for(50)["duration"]), 3.0), "Matthew E temel süre 3 sn")
+	assert(is_equal_approx(float(matthew._skill2_timing_for(50)["cooldown"]), 20.0), "Matthew E bekleme 20 sn")
 	matthew.apply_skill_evolution("matthew_q2", true)
 	matthew.apply_skill_evolution("matthew_q4", true)
-	matthew.apply_skill_evolution("matthew_e1", true)
 	matthew.apply_skill_evolution("matthew_e2", true)
-	matthew.apply_skill_evolution("matthew_e3", true)
-	assert(is_equal_approx(float(matthew._skill_timing_for(43)["cooldown"]), 7.0), "Çevik Köpek -%30")
-	assert(is_equal_approx(float(matthew._skill2_timing_for(21)["duration"]), 10.0), "Uzun Av +4 sn")
-	assert(matthew._evo_skill_free("skill") and not matthew._evo_skill_free("skill2"), "Bedava Av yalnız Q")
-	assert(is_equal_approx(matthew.matthew_haste_bonus("move"), 0.3) and move0 < 0.3, "Vahşi Koşu hareket %30")
-	assert(is_equal_approx(matthew.matthew_haste_bonus("attack"), 0.5), "Vahşi Koşu saldırı %50")
-	assert(is_equal_approx(matthew.matthew_haste_bonus("move", true), 0.6), "Köpek Ruhu: köpek 2 kat")
+	assert(is_equal_approx(float(matthew._skill_timing_for(43)["cooldown"]), 7.0), "Hızlı Şarj -%30")
+	assert(is_equal_approx(float(matthew._skill2_timing_for(50)["duration"]), 4.5), "Uzun Deşarj +1,5 sn")
+	assert(matthew._evo_skill_free("skill") and not matthew._evo_skill_free("skill2"), "Bedava Akım yalnız Q")
 	_cleanup()
 
 

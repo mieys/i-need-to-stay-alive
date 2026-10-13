@@ -1,4 +1,5 @@
 extends Node2D
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -68,6 +69,7 @@ func _process(delta: float) -> void:
 			continue
 		_hit_timers[id] = hit_interval
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:korsan_papagan_firtinasi")
 			e.take_damage(damage_amount, false, 0.0, true)
 
 	for ft in _feathers:

@@ -21,6 +21,9 @@ extends Node2D
 ## ölçeği karakterin sprite ölçeğinden kopyalanır). Omuzdayken oyuncunun normal çocuğu (oyuncunun akıcı/interpolasyonlu
 ## konumunu kendiliğinden izler), uçarken top_level.
 
+## 2026-10-12: artık Korsan'a özel DEĞİL - menüden seçilen evcil hayvan (pet_catalog.gd "papagan"; player.gd _setup_pet, remote_player.gd
+## korsan_parrot_event). Korsan'ın pasifi "Altın Avcısı" oldu (player.gd _korsan_gold_on_kill). Dosya/sınıf adları eski kaldı.
+
 const CharAnim := preload("res://scripts/char_anim.gd")
 const FRAMES: SpriteFrames = preload("res://assets/characters/korsan_parrot/parrot_frames.tres")
 const ANCHOR_OFFSET := Vector2(0.0, -6.0) ## hücrede ayak noktası (24, 30) -> düğüm orijini (bkz. gen_korsan_parrot.py)
@@ -76,6 +79,10 @@ var _awaiting: Dictionary = {}
 var _bonus_due: Dictionary = {}
 var _trip_no: int = 0
 var _carry_visual: int = 0
+## "Buradayım" kalp atışı: papağan omuzda dururken HİÇ olay üretmediği için diğer ekranlardaki kukla ilk uçuşa kadar hiç kurulmuyordu
+## (evcil hayvan olarak seçilince altın yoksa/seyrekse papağan başkalarına görünmezdi). Kelebek Ruhu/Peri ile aynı desen.
+const NET_HEARTBEAT := 8.0
+var _net_idle: float = NET_HEARTBEAT - 1.0
 
 
 func setup(body: Node2D, anim_src: AnimatedSprite2D, puppet: bool) -> void:
@@ -114,9 +121,12 @@ func _process(delta: float) -> void:
 func _process_local(delta: float) -> void:
 	_speed = maxf(MIN_SPEED, SPEED_MULT * (float(owner_body.get_effective_move_speed()) if owner_body.has_method("get_effective_move_speed") else 200.0))
 	var busy: bool = owner_body.get("is_dead") == true or owner_body.get("is_downed") == true or owner_body.get("is_indoors") == true
+	_net_idle += delta
 	match state:
 		State.PERCH:
 			_perch_follow()
+			if _net_idle >= NET_HEARTBEAT:
+				_broadcast(State.PERCH, Vector2.ZERO)
 			if busy:
 				return
 			_scan_timer -= delta
@@ -294,6 +304,7 @@ func _start_return() -> void:
 
 
 func _broadcast(s: int, target: Vector2) -> void:
+	_net_idle = 0.0
 	if is_puppet or not NetworkManager.is_multiplayer_active:
 		return
 	NetworkManager.broadcast_korsan_parrot.rpc(multiplayer.get_unique_id(), s, target, _carried.size(), _speed)

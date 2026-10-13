@@ -1,5 +1,6 @@
 extends Node2D
 class_name NecroSkull
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Necromancer ULTİ - Lanetli Kafatası (skill3 id 44). Kullanıcı isteği (2026-10-11, ULTİ REWORK): kafatası %50 KÜÇÜLDÜ.
 ##  PASİF (R açıldıktan sonra HER ZAMAN): küçük kafatası Necromancer'ın etrafında döner; yakında yaratık görünce ona doğru uçup yere
@@ -299,6 +300,7 @@ func _impact(pos: Vector2) -> void:
 		if dmg > 0.0 and e.has_method("take_damage"):
 			var is_crit: bool = caster.has_method("_roll_ability_crit") and caster._roll_ability_crit()
 			var hit: float = caster._apply_ability_crit(dmg, is_crit) if caster.has_method("_apply_ability_crit") else dmg
+			BalanceLogScript.tag(&"s:necro_kafatasi")
 			e.take_damage(hit, is_crit, 0.0, true)
 		if not is_instance_valid(e):
 			continue

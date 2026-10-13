@@ -118,7 +118,7 @@ func _on_mouse_entered() -> void:
 			current_cd = base_cd
 		if cooldown_override >= 0.0:
 			base_cd = cooldown_override
-			var cdr_q: float = float(player.cooldown_reduction_percent) if player and is_instance_valid(player) and "cooldown_reduction_percent" in player else 0.0
+			var cdr_q: float = float(player.get_cooldown_reduction()) if player and is_instance_valid(player) and "cooldown_reduction_percent" in player else 0.0
 			current_cd = base_cd * (1.0 - cdr_q)
 			detail_duration = 0.0
 			
@@ -177,7 +177,7 @@ func _on_mouse_entered() -> void:
 				timing3 = player.call("_skill3_timing_for", skill3_id_val) as Dictionary
 			base_cd3 = timing3["cooldown"] as float
 			detail_duration = float(timing3.get("duration", 0.0))
-			var cdr3: float = float(player.cooldown_reduction_percent) if "cooldown_reduction_percent" in player else 0.0
+			var cdr3: float = float(player.get_cooldown_reduction()) if "cooldown_reduction_percent" in player else 0.0
 			current_cd3 = base_cd3 * (1.0 - cdr3)
 		else:
 			current_cd3 = base_cd3
@@ -227,14 +227,14 @@ func _on_mouse_entered() -> void:
 			## süresi azaltma statını (cooldown_reduction_percent) doğrudan
 			## temel süreye uygulayan bu formül TÜM karakterlerde doğru sonucu
 			## verir ve Büyücü'ye özel bir dal gerektirmez.
-			var cdr: float = float(player.cooldown_reduction_percent) if "cooldown_reduction_percent" in player else 0.0
+			var cdr: float = float(player.get_cooldown_reduction()) if "cooldown_reduction_percent" in player else 0.0
 			current_cd = base_cd * (1.0 - cdr)
 		else:
 			base_cd = 15.0
 			current_cd = base_cd
 		if cooldown_override >= 0.0:
 			base_cd = cooldown_override
-			var cdr_e: float = float(player.cooldown_reduction_percent) if player and is_instance_valid(player) and "cooldown_reduction_percent" in player else 0.0
+			var cdr_e: float = float(player.get_cooldown_reduction()) if player and is_instance_valid(player) and "cooldown_reduction_percent" in player else 0.0
 			current_cd = base_cd * (1.0 - cdr_e)
 			detail_duration = 0.0
 			

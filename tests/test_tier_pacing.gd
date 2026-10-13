@@ -74,16 +74,16 @@ func _avg_ehp(sp: Node, tier: int) -> float:
 
 
 func test_shield_absorption_phases_in_from_tier_three() -> void:
-	assert(is_equal_approx(SpawnerScript.SHIELD_PROTECTION, 0.3), "tam soğurma değeri değişmemeli (testler/oyun tasarımı bunu bekliyor)")
+	assert(is_equal_approx(SpawnerScript.SHIELD_PROTECTION, 0.6), "tam soğurma değeri %60 (2026-10-13)")
 	assert(SpawnerScript.regular_shield_protection(1) == 0.0 and SpawnerScript.regular_shield_protection(2) == 0.0, "Kademe 1-2'de kalkan yok")
 	var prev: float = 0.0
 	for tier in range(3, 8):
 		var p: float = SpawnerScript.regular_shield_protection(tier)
 		assert(p > prev, "soğurma her Kademe artmalı: K%d %.3f <= %.3f" % [tier, p, prev])
 		prev = p
-	assert(is_equal_approx(SpawnerScript.regular_shield_protection(3), 0.3 / 5.0), "Kademe 3'te tam değerin 1/5'i")
-	assert(is_equal_approx(SpawnerScript.regular_shield_protection(7), 0.3), "Kademe 7'de tam %30")
-	assert(is_equal_approx(SpawnerScript.regular_shield_protection(16), 0.3) and is_equal_approx(SpawnerScript.regular_shield_protection(40), 0.3), "Final/sonsuzda tam")
+	assert(is_equal_approx(SpawnerScript.regular_shield_protection(3), 0.6 / 5.0), "Kademe 3'te tam değerin 1/5'i")
+	assert(is_equal_approx(SpawnerScript.regular_shield_protection(7), 0.6), "Kademe 7'de tam %60")
+	assert(is_equal_approx(SpawnerScript.regular_shield_protection(16), 0.6) and is_equal_approx(SpawnerScript.regular_shield_protection(40), 0.6), "Final/sonsuzda tam")
 
 
 func test_early_cut_fades_instead_of_vanishing_at_tier_three() -> void:
@@ -96,7 +96,7 @@ func test_early_cut_fades_instead_of_vanishing_at_tier_three() -> void:
 	var prev: float = SpawnerScript.early_durability_cut(2)
 	for tier in range(3, 8):
 		var f: float = SpawnerScript.early_durability_cut(tier) / (1.0 - SpawnerScript.regular_shield_protection(tier))
-		assert(f > prev and f / prev <= 1.2, "dayanıklılık basamağı K%d: %.3f -> %.3f (x%.2f) 1.2'yi aşmamalı" % [tier, prev, f, f / prev])
+		assert(f > prev and f / prev <= 1.35, "dayanıklılık basamağı K%d: %.3f -> %.3f (x%.2f) 1.35'i aşmamalı (%%60 soğurmayla basamaklar büyüdü, 2026-10-13)" % [tier, prev, f, f / prev])
 		prev = f
 
 
@@ -196,7 +196,7 @@ func test_no_cliff_between_tiers_measured_with_the_real_spawn_path() -> void:
 	for tier in range(4, 9):
 		var step: float = float(r[tier]) / float(r[tier - 1])
 		assert(step < 2.6, "K%d -> K%d R artışı x2.6'yı aşmamalı: x%.2f" % [tier - 1, tier, step])
-	assert(float(r[8]) < 2600.0 * boost, "Kademe 8 R'si eskiden 5745'ti: %.0f" % r[8])
+	assert(float(r[8]) < 3300.0 * boost, "Kademe 8 R'si eskiden 5745'ti (2026-10-13 %%60 soğurmayla ~2850 x1,5): %.0f" % r[8])
 	_cleanup()
 
 

@@ -53,7 +53,7 @@ P "# Balans raporu"
 P ""
 P ("Uretildi: {0} | Revizyon: {1} | Analiz edilen koşu: {2} (baska revizyon/kisa koşu: {3}) | Oyuncu: {4} | Dosya: {5}" -f (Get-Date -Format "yyyy-MM-dd HH:mm"), $Rev, $runs.Count, $other, (@($runs | ForEach-Object { $_.player } | Sort-Object -Unique).Count), $files)
 P ""
-P "> Kucuk orneklem uyarisi: **az veri** isaretli satirlar $MinKosu koşudan azdir, yorumlama. Silah hasari yalniz etiketli kaynaklari (silahlar) kapsar; yetenek/evrim/efsun hasari **diger** altindadir."
+P "> Kucuk orneklem uyarisi: **az veri** isaretli satirlar $MinKosu koşudan azdir, yorumlama. Silah hasari yalniz etiketli kaynaklari (silahlar) kapsar; yetenek hasari "s:" kaynaklari (asagida "Yetenek hasari"), efsun/etiketsiz hasar **diger** altindadir."
 P ""
 
 # ---- Karakterler ----
@@ -127,6 +127,33 @@ foreach ($w in ($wRows | Sort-Object Dps -Descending)) {
 }
 P ""
 
+# ---- Yetenekler (s:<karakter>_<yetenek> / s:evo_<evrim alani>) ----
+$sAgg = @{}
+foreach ($r in $runs) {
+	$time = [math]::Max(1.0, [double]$r.time)
+	foreach ($p in (Props $r.by_src)) {
+		if (-not $p.Name.StartsWith("s:")) { continue }
+		$key = $r.char_name + "|" + $p.Name.Substring(2)
+		if (-not $sAgg.ContainsKey($key)) { $sAgg[$key] = [pscustomobject]@{ Char = [string]$r.char_name; Ad = $p.Name.Substring(2); N = 0; Dmg = 0.0; Time = 0.0; Hits = 0; Crits = 0; Dealt = 0.0 } }
+		$a = $sAgg[$key]
+		$a.N++; $a.Time += $time; $a.Dmg += [double]$p.Value[0]; $a.Hits += [int]$p.Value[1]; $a.Crits += [int]$p.Value[2]; $a.Dealt += [double]$r.dealt
+	}
+}
+P "## Yetenek hasari"
+P ""
+P "Q/E/R, pasifler, evrimler, evcil hayvan/totem/golem hasari. Kaynak adi = s:<karakter>_<yetenek> (evrim alanlari s:evo_<alan>). **Pay %** = o yetenegin, onu kullanan koşulardaki toplam hasarin payi."
+P ""
+P "| Karakter | Yetenek | Koşu | Hasar/sn | Pay % | Vurus | Kritik % |"
+P "|---|---|---|---|---|---|---|"
+foreach ($a in ($sAgg.Values | Sort-Object Char, { -$_.Dmg })) {
+	$share = if ($a.Dealt -gt 0) { 100.0 * $a.Dmg / $a.Dealt } else { 0 }
+	$crit = if ($a.Hits -gt 0) { 100.0 * $a.Crits / $a.Hits } else { 0 }
+	P ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f $a.Char, $a.Ad, $a.N, (F1 ($a.Dmg / $a.Time)), (F1 $share), $a.Hits, (F1 $crit))
+	if ($a.N -ge $MinKosu -and $share -ge 60) { $flags.Add("Yetenek **$($a.Char)/$($a.Ad)**: karakterin hasarinin %$(F1 $share)'i tek yetenekten.") }
+}
+if ($sAgg.Count -eq 0) { P "(Henuz yetenek etiketli kayit yok - yeni surumle oynanan koşular gerekir.)" }
+P ""
+
 # ---- Hasar kaynaklari / kapsama ----
 $srcTotal = @{}
 foreach ($r in $runs) { foreach ($p in (Props $r.by_src)) { if (-not $srcTotal.ContainsKey($p.Name)) { $srcTotal[$p.Name] = 0.0 }; $srcTotal[$p.Name] += [double]$p.Value[0] } }
@@ -138,7 +165,7 @@ P "|---|---|---|"
 foreach ($k in ($srcTotal.Keys | Sort-Object { -$srcTotal[$_] } | Select-Object -First 15)) { P ("| {0} | {1} | {2} |" -f $k, (F1 $srcTotal[$k]), (F1 (100.0 * $srcTotal[$k] / [math]::Max(1.0, $sumAll)))) }
 $dig = if ($srcTotal.ContainsKey("diger")) { 100.0 * $srcTotal["diger"] / [math]::Max(1.0, $sumAll) } else { 0 }
 P ""
-P ("Etiketsiz (**diger**: yetenek/evrim/efsun) hasar payi: %{0}. Yuksekse yetenek hasari ayri olculemiyor (player.gd take_damage cagrilarina tag eklenebilir)." -f (F1 $dig))
+P ("Etiketsiz (**diger**) hasar payi: %{0}. Yetenekler artik s: etiketli; kalan diger = efsun/etiketsiz kaynak (yuksekse yeni bir take_damage cagrisini etiketle)." -f (F1 $dig))
 P ""
 
 # ---- Kademe duvari ve olum sebebi ----
@@ -185,6 +212,65 @@ foreach ($i in ($iRows | Sort-Object D -Descending)) { P ("| {0} | {1} | {2} | {
 if ($iRows.Count -eq 0) { P "| (yeterli veri yok) | | | | |" }
 P ""
 P "> Esya 'sebep' degil 'iyi koşunun gostergesi' de olabilir (iyi koşular daha cok esya alir) - fark buyukse yine de bakmaya deger."
+P ""
+
+# ---- Olum zamani, kalkan, evcil hayvan, edinme zamani (rev 15+ kayitlari; eski kayitlarda alanlar yok) ----
+$withDeath = @($runs | Where-Object { $null -ne $_.death_t -and [double]$_.death_t -ge 0 })
+P "## Ölüm zamanı (kalıcı ölümün koşu dakikası)"
+P ""
+if ($withDeath.Count -eq 0) { P "(Bu revizyonda ölüm zamanı kayıtlı koşu yok.)" } else {
+	P "| Karakter | Koşu | Ort. ölüm (dk) | Ort. ölüm kademesi | Ort. yere düşüş |"
+	P "|---|---|---|---|---|"
+	foreach ($g in ($withDeath | Group-Object char_name | Sort-Object Name)) {
+		$dt = $g.Group | ForEach-Object { [double]$_.death_t / 60.0 }
+		$dk = $g.Group | ForEach-Object { [double]$_.death_tier }
+		$dn = $g.Group | ForEach-Object { @($_.downs).Count }
+		P ("| {0} | {1} | {2} | {3} | {4} |" -f $g.Name, $g.Count, (F1 (Avg $dt)), (F1 (Avg $dk)), (F1 (Avg $dn)))
+	}
+	## Takım içi sıra: aynı zamanda biten koşularda ilk düşenden son düşene kaç sn geçti (çöküş hızı).
+	$byTeam = $withDeath | Where-Object { $_.team -gt 1 } | Group-Object { [math]::Round([double]$_.time) }
+	foreach ($tg in ($byTeam | Where-Object { $_.Count -ge 2 })) {
+		$ts = @($tg.Group | ForEach-Object { [double]$_.death_t } | Sort-Object)
+		P ""
+		P ("Takım ({0} kişi, koşu {1} dk): ilk ölüm {2} dk, son ölüm {3} dk -> çöküş {4} sn." -f $tg.Count, (F1 ([double]$tg.Name / 60.0)), (F1 ($ts[0] / 60.0)), (F1 ($ts[-1] / 60.0)), (F1 ($ts[-1] - $ts[0])))
+	}
+}
+P ""
+$withShield = @($runs | Where-Object { $_.shield })
+P "## Kalkan türü"
+P ""
+if ($withShield.Count -eq 0) { P "(Kalkan türü kayıtlı koşu yok.)" } else {
+	P "| Kalkan | Koşu | Ort. kademe | Ort. alınan/sn | Ort. geliştirme |"
+	P "|---|---|---|---|---|"
+	foreach ($g in ($withShield | Group-Object shield | Sort-Object Name)) {
+		$tk = $g.Group | ForEach-Object { [double]$_.taken / [math]::Max(1.0, [double]$_.time) }
+		$up = $g.Group | ForEach-Object { (@($_.shield_ups) | Measure-Object -Sum).Sum }
+		P ("| {0} | {1} | {2} | {3} | {4} |" -f $g.Name, $g.Count, (F1 (Avg ($g.Group | ForEach-Object { [double]$_.tier }))), (F1 (Avg $tk)), (F1 (Avg $up)))
+	}
+}
+P ""
+$withPet = @($runs | Where-Object { $null -ne $_.pet })
+P "## Evcil hayvan"
+P ""
+if ($withPet.Count -eq 0) { P "(Evcil hayvan kayıtlı koşu yok.)" } else {
+	P "| Evcil | Koşu | Ort. kademe | Ort. hasar/sn |"
+	P "|---|---|---|---|"
+	foreach ($g in ($withPet | Group-Object { if ($_.pet) { $_.pet } else { "(yok)" } } | Sort-Object Name)) {
+		P ("| {0} | {1} | {2} | {3} |" -f $g.Name, $g.Count, (F1 (Avg ($g.Group | ForEach-Object { [double]$_.tier }))), (F1 (Avg ($g.Group | ForEach-Object { [double]$_.dealt / [math]::Max(1.0, [double]$_.time) }))))
+	}
+}
+P ""
+$gotW = @{}
+foreach ($r in $runs) { foreach ($e in @($r.got_weapons)) { if ($e -and $e.Count -ge 2) { $k = [string]$e[0]; if (-not $gotW.ContainsKey($k)) { $gotW[$k] = New-Object System.Collections.ArrayList }; [void]$gotW[$k].Add([double]$e[1] / 60.0) } } }
+P "## Silah edinme zamanı"
+P ""
+if ($gotW.Count -eq 0) { P "(Edinme zamanı kayıtlı koşu yok.)" } else {
+	P "Çözünürlük ~5 sn. Edinme sayısı = kaç kopya alındığı (aynı silahı birden çok almak dahil)."
+	P ""
+	P "| Silah | Edinilen | Ort. edinme (dk) | En erken (dk) |"
+	P "|---|---|---|---|"
+	foreach ($k in ($gotW.Keys | Sort-Object)) { P ("| {0} | {1} | {2} | {3} |" -f $k, $gotW[$k].Count, (F1 (Avg $gotW[$k])), (F1 (($gotW[$k] | Measure-Object -Minimum).Minimum))) }
+}
 P ""
 
 # ---- Ozet uyarilar ----

@@ -11,6 +11,9 @@ extends RefCounted
 const SALVO_RADIUS: float = 130.0
 const SALVO_DURATION: float = 3.0
 const SALVO_ROTATIONS: float = 2.0
+## Dönüş yönü (kullanıcı 2026-10-12: "Talon'un E'si ters dönüyor"): -1 = saat yönünün tersi (ekranda y aşağı olduğu için açı AZALIR),
+## +1 = eski yön. TEK kaynak: yerel oyuncu, uzak kopya ve zincirin başlangıç yayı (fx_talon_chains.gd) bunu okur.
+const SALVO_SPIN_DIR: float = -1.0
 const MIRROR_RADIUS: float = 110.0
 
 ## Hamle Vuruşu'nun (Q) süresi: player.gd TALON_DASH_TIME/SKILL_TIMING[38] ve fx_talon_dash.gd (iz efekti) AYNI sayıyı
@@ -75,5 +78,5 @@ const EVO_SALVO_SPIN_MULT: float = 1.2
 
 
 static func advance_salvo_angle(angle_in: float, delta: float, spin_mult: float = 1.0) -> float:
-	var rotation_speed: float = (TAU * SALVO_ROTATIONS) / SALVO_DURATION * spin_mult
+	var rotation_speed: float = (TAU * SALVO_ROTATIONS) / SALVO_DURATION * spin_mult * SALVO_SPIN_DIR
 	return angle_in + delta * rotation_speed

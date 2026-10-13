@@ -15,7 +15,7 @@ extends RefCounted
 ## enemy.gd DOT tiki ("dot"). Yetenek (Q/E/R) kırılımı için player.gd'deki take_damage çağrılarına tag(&"s:q") eklenebilir.
 
 const CharactersScript: GDScript = preload("res://scripts/characters.gd")
-const BALANCE_REV := 10 ## 10: Ejderha Nefesi menzil x1,5 / açı x1,25 (eskiden x2 / x1,5) (2026-10-12); 9: silah sınırı 3 + silah hasarı x1,5 (yakın dövüş x2,1) deneme (2026-10-12); 8: Şovalye pasifi Dirençli Duruş (%40 altı %20 az hasar; Dikenli Zırh kalktı) (2026-10-12); 7: Elara pasifi gerçek +%50 hız + taşma dışı, Tüfek delme hasarı %70 (2026-10-12); 6: yaratık hasarı x0,8 iptal + Balkabağı güçlendirme (2026-10-11)
+const BALANCE_REV := 21 ## 21: eşya kaynaklı bekleme azaltma da %60 üst sınırında (eskiden sadece kartlar) (2026-10-13); 20: yaratık kalkan soğurması normal %30 -> %60 (Kademe 7'de tam), elit %80 (2026-10-13); 19: eşya/ruhani/evcil saldırı hızı havuzu hıza EKLENİR (aralık = 1/(1+toplam)); eskiden 1'den çıkarılıp yüzük yığınında katlanıyordu (2026-10-13); 18: evcil hayvan Kirpi (sana saldıran yaratık azami kalkanının %5'i kadar hasar alır; kalkan varken alınan hasar %5 az) (2026-10-13); 17: evcil hayvan Peri (can eksikken 6 sn'de bir saldırı gücünün %10'u kadar can) (2026-10-12); 16: evcil hayvan Kelebek Ruhu (+%10 saldırı hızı, ilk silah isabetine saldırı gücünün %20'si lazer) (2026-10-12); 15: Savaş Kalkanı savaşta (son 3 sn hasar) yenilenme x0,5 + geliştirme başına yenilenme +2 -> +1,5 (2026-10-12); 14: evcil hayvanlar (köpek: sahibin statlarıyla saldırır; papağan: altın toplar + 10 şans) (2026-10-12); 13: Korsan pasifi Altın Avcısı (öldürme başına 1 altın, 30 altın = +1 saldırı gücü; Papağan kalktı) (2026-10-12); 12: silah parçacığı düşme şansı %1 -> %0,5, eşya satış iadesi %70 -> %50 (2026-10-12); 11: Matthew rework - köpek yok, şimşek kiti (pasif Yıldırım Hızı, E Elektrik Topu, R köpeksiz) (2026-10-12); 10: Ejderha Nefesi menzil x1,5 / açı x1,25 (eskiden x2 / x1,5) (2026-10-12); 9: silah sınırı 3 + silah hasarı x1,5 (yakın dövüş x2,1) deneme (2026-10-12); 8: Şovalye pasifi Dirençli Duruş (%40 altı %20 az hasar; Dikenli Zırh kalktı) (2026-10-12); 7: Elara pasifi gerçek +%50 hız + taşma dışı, Tüfek delme hasarı %70 (2026-10-12); 6: yaratık hasarı x0,8 iptal + Balkabağı güçlendirme (2026-10-11)
 const SCHEMA := 1
 const DIR_PATH := "user://balans"
 const FILE_NAME := "kosular.jsonl"
@@ -31,6 +31,18 @@ static var _dealt_tier: Dictionary = {} ## kademe(int) -> verilen hasar
 static var _taken_tier: Dictionary = {} ## kademe(int) -> alınan hasar
 static var _tier_time: Dictionary = {} ## kademe(int) -> o kademeye ilk girilen koşu saniyesi
 static var _killer: String = "" ## bize en son vuran kaynak ailesi (ölüm sebebi tahmini)
+## 2026-10-12 (madde 105): ölüm zamanı, silah/eşya edinme zamanı. Edinme, her ~5 sn'de bir sahip olunanları bir önceki örnekle karşılaştırarak
+## bulunur (silah/eşya ekleyen 6 yere kanca koymamak için); çözünürlük SAMPLE_INTERVAL.
+const SAMPLE_INTERVAL := 5.0
+const MAX_DOWNS := 12
+static var _downs: Array = [] ## [[koşu sn, kademe], ...] yere düşüş + kalıcı ölüm sırasıyla
+static var _death_t: float = -1.0 ## kalıcı ölümün koşu saniyesi (-1 = ölmedi)
+static var _death_tier: int = 0
+static var _got_weapons: Array = [] ## [[anahtar, koşu sn], ...] edinme sırasıyla
+static var _got_items: Array = []
+static var _seen_weapons: Dictionary = {} ## anahtar -> görülen adet
+static var _seen_items: Dictionary = {}
+static var _next_sample: float = 0.0
 
 
 static func reset() -> void:
@@ -41,6 +53,14 @@ static func reset() -> void:
 	_taken_tier.clear()
 	_tier_time.clear()
 	_killer = ""
+	_downs.clear()
+	_death_t = -1.0
+	_death_tier = 0
+	_got_weapons.clear()
+	_got_items.clear()
+	_seen_weapons.clear()
+	_seen_items.clear()
+	_next_sample = 0.0
 
 
 ## ---- Etiketleme ----
@@ -81,6 +101,7 @@ static func on_hit(source: String, amount: float, is_crit: bool) -> void:
 	_dealt[key] = row
 	var t: int = GameManager.run_max_tier
 	_dealt_tier[t] = float(_dealt_tier.get(t, 0.0)) + amount
+	_maybe_sample()
 
 
 static func on_taken(amount: float, source: Node) -> void:
@@ -91,6 +112,46 @@ static func on_taken(amount: float, source: Node) -> void:
 	_killer = fam
 	var t: int = GameManager.run_max_tier
 	_taken_tier[t] = float(_taken_tier.get(t, 0.0)) + amount
+	_maybe_sample()
+
+
+## player.gd _go_down (permanent=false) / _finalize_death (permanent=true) çağırır.
+static func note_down(permanent: bool) -> void:
+	var now: float = GameManager.run_elapsed()
+	if _downs.size() < MAX_DOWNS:
+		_downs.append([_r1(now), GameManager.run_max_tier])
+	if permanent and _death_t < 0.0:
+		_death_t = now
+		_death_tier = GameManager.run_max_tier
+
+
+static func _maybe_sample() -> void:
+	var now: float = GameManager.run_elapsed()
+	if now < _next_sample:
+		return
+	_next_sample = now + SAMPLE_INTERVAL
+	sample_loadout()
+
+
+## Sahip olunan silah/eşya adetlerini bir önceki örnekle karşılaştırır; artanlar şimdiki koşu saniyesiyle "edinildi" listesine eklenir.
+static func sample_loadout() -> void:
+	var now: float = _r1(GameManager.run_elapsed())
+	_diff_owned(GameManager.owned_weapons, _seen_weapons, _got_weapons, now)
+	_diff_owned(GameManager.owned_items, _seen_items, _got_items, now)
+
+
+static func _diff_owned(owned: Array, seen: Dictionary, got: Array, now: float) -> void:
+	var counts: Dictionary = {}
+	for e in owned:
+		if e is Dictionary:
+			var k: String = str((e as Dictionary).get("key", ""))
+			counts[k] = int(counts.get(k, 0)) + 1
+	for k in counts:
+		for _i in range(int(counts[k]) - int(seen.get(k, 0))):
+			if got.size() < MAX_KEYS * 2:
+				got.append([k, now])
+	seen.clear()
+	seen.merge(counts)
 
 
 static func note_tier(tier: int) -> void:
@@ -178,6 +239,11 @@ static func build_record(player: Node, summary: Dictionary, kind: String) -> Dic
 	for e in GameManager.owned_items:
 		if e is Dictionary:
 			items.append(str((e as Dictionary).get("key", "")))
+	sample_loadout() ## son örnek: koşu bitmeden alınanlar da kayda girsin
+	var shield_key: String = ShieldEnchantDefs.owned_type()
+	var shield_ups: Array = []
+	for u in GameManager.shield_enchant_ups:
+		shield_ups.append(int(u))
 	var evo: Array = []
 	var dealt_total: float = 0.0
 	var taken_total: float = 0.0
@@ -222,6 +288,14 @@ static func build_record(player: Node, summary: Dictionary, kind: String) -> Dic
 		"dealt_tier": dealt_tier,
 		"taken_tier": taken_tier,
 		"tier_time": tier_time,
+		"shield": shield_key,
+		"shield_ups": shield_ups,
+		"pet": str(GameManager.selected_pet),
+		"downs": _downs.duplicate(),
+		"death_t": _r1(_death_t) if _death_t >= 0.0 else -1.0,
+		"death_tier": _death_tier,
+		"got_weapons": _got_weapons.duplicate(),
+		"got_items": _got_items.duplicate(),
 	}
 
 

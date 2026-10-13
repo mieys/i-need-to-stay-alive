@@ -120,7 +120,10 @@ static func celebrate(owner: Node, card: Control, frame: TextureRect, tier: int,
 	player.stream = PICK_SOUND
 	player.volume_db = -3.0
 	player.pitch_scale = 1.0 + 0.03 * float(t - 1)
-	owner.add_child(player)
+	## Ses ekrandan BAĞIMSIZ çalar: eskiden owner'ın (level ekranı) çocuğuydu, ekran seçimden 1 sn sonra (PICK_DURATION) serbest
+	## kalınca ~2,6 sn'lik ses (sönümü 1,1 sn'de başlar) aniden kesiliyordu. Kökte, duraklatmadan etkilenmez, bitince kendini siler.
+	player.process_mode = Node.PROCESS_MODE_ALWAYS
+	owner.get_tree().root.add_child(player)
 	player.play()
 	player.finished.connect(player.queue_free)
 

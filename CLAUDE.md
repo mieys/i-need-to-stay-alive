@@ -121,3 +121,25 @@ temizliği atlar - sonraki testler zincirleme bozulur: İLK hataya bak. Çok oyu
 - 88. Şovalye pasif rework Dirençli Duruş (%40 altı %20 az hasar) + 4 efekt prototipi (2026-10-12). -> `docs/notlar/madde_81-90.md`
 - 89. DENEME: silah sınırı 3 + silah hasarı x1,5 (yakın dövüş x2,1) (2026-10-12). -> `docs/notlar/madde_81-90.md`
 - 90. Ateş Asası ekran kaplaması (A+B+C) + Tüftüf efekt bütçesi (2026-10-12). -> `docs/notlar/madde_81-90.md`
+- 91. Balans kaydı: kayıp istemci kayıtları düzeltmesi (menüde önce kayıt sonra bağlantı kesme) + yetenek/pasif hasar etiketleri `s:` (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 92. Seçim sesi level ekranı kapanınca kesiliyordu -> ses köke taşındı (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 93. Yerdeki XP/altın: uyku görselleri + doğarken birleştirme + üst sınır (`drop_merge.gd`) + tüm betik derleme testi (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 94. Çift sandık/ödül: host teması + istemci isteği aynı düşmeyi iki kez ödüllendiriyordu -> tek kapı (`_awarded`/`claimed`) (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 95-96. K5 duvarı analizi + golem etiketi; hareket hızı göstergesi kart/eşyayı yansıtmıyordu (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 97. Talon E zinciri (Verlet ip, oval yay, halka sayfası) + R formu (kırmızı-siyah shader, beyaz göz, kırmızı-beyaz silah, partikül); çember 65 dünya px tuzağı (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 98. MATTHEW REWORK: köpek yok, şimşek kiti - pasif Yıldırım Hızı (iz), Q şimşek, E Elektrik Topu (id 50, bilardo), R Yıldırım Kalkanı (parıltı); tek kaynak `matthew_lightning.gd`, oran/hız tuzakları (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 99. FPS: Matthew Q şimşeği hesaplanan çizimden döşeme sayfasına (~30 ms -> 0,3 ms); Talon zincir/form ölçüldü, değişmedi (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 100. Korsan Patlat sadece KENDİ görüşündeki bombaları patlatır + ince elips menzil göstergesi (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 101. Silah parçacığı şansı %0,5 + eşya/sandık kartı satış iadesi %50 (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 102. Korsan pasifi Altın Avcısı (öldürme başına 1 altın, 30 altın = +1 saldırı gücü); Papağan kodu duruyor, bağlanmıyor (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 103. Evcil hayvanlar: köpek + papağan (+10 şans), karakter seçim + lobi menüsünden seçilir (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 104. Talon E dönüş yönü, pet ölü sahibi, Melek ölüye can, Balkabağı ateş topu yönü (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 105. Balans kaydına kalkan türü, evcil, ölüm zamanı, silah/eşya edinme zamanı eklendi (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 106. Evcil hayvan Kelebek Ruhu (4 yön, +%10 saldırı hızı, ilk silah isabetine lazer atışı %20 güç) + çok hayvanlı (sadece ikon) evcil seçici (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 107. Evcil hayvan Peri (4 yön + büyü kareleri; can eksikken 6 sn'de bir saldırı gücünün %10'u kadar can) (2026-10-12). -> `docs/notlar/madde_91-100.md`
+- 108. Son eklenenlerin MP + FPS denetimi: yeni `newfx` denetimi, papağan kalp atışı, shader makro düzeltmesi (2026-10-13). -> `docs/notlar/madde_91-100.md`
+- 109. Evcil hayvan Kirpi (saldırana azami kalkanın %5'i hasar, kalkan varken %5 az hasar, diken görüşte düşmanla açık/kapalı) (2026-10-13). -> `docs/notlar/madde_91-100.md`
+- 110. Kalp efekti döngüde (3 sn, solarak biter) + arkadaştan altın hediyesi alana kalp (2026-10-13). -> `docs/notlar/madde_91-100.md`
+- 111. Yeni kirpi görseli "Tombul Kirpi" (prototip A; `tools/gen_kirpi.py` yeniden yazıldı, `walk_` klipleri, eski sanat yedeği) (2026-10-13). -> `docs/notlar/madde_91-100.md`
+- 112. `ek animasyonlar` paketi: 12 karaktere oturma (`sit_*`) klibi, Matthew/Elara yeni görünüm, Demirci (örste vurur, raflara bakar) + Seyyar satıcı (balon içinde, selam/veda/düşünme) NPC'leri (2026-10-13). -> `docs/notlar/madde_111-120.md`
+- 113. Yeni karakter CADI (id 15): Q Zehirli Duman (aç/kapa), E Uçan Süpürge (yolcu taşır, `ride_*` klibi), R İksir Çantası (5 yük, rastgele iksir); delilik C++'sız (uyku + hedef nokta); `tools/gen_cadi_fx.py`, `run_audit.ps1 -Mode cadi` (2026-10-13). -> `docs/notlar/madde_111-120.md`

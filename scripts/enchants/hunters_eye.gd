@@ -61,6 +61,7 @@ func _try_execute(t: Node) -> void:
 		return
 	var at: Vector2 = (t as Node2D).global_position
 	sprite("execute_mark", at, {"z": 9})
+	BalanceLogScript.tag(&"w:efsun")
 	t.take_damage(hp * 10.0 + 100000.0, true, 1.0, false)
 	if f("exec_crit_time") > 0.0:
 		_crit_until_msec = Time.get_ticks_msec() + int(f("exec_crit_time") * 1000.0)

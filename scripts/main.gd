@@ -993,6 +993,17 @@ func _process_multiplayer_sync(delta: float) -> void:
 			var hadime_state: Dictionary = player.get_hadime_net_state()
 			if not hadime_state.is_empty():
 				extra["hadime"] = hadime_state
+		## Matthew (2026-10-12 rework, madde 98): Elektrik Topu formu, güçlenmiş yıldırım izi, kalkan parıltı basamağı (bkz. player.gd
+		## matthew_net_state / remote_player.gd _apply_matthew_net_state). Diğer karakterlerde anahtar hiç eklenmez.
+		if GameManager.selected_char_id == 3 and player.has_method("matthew_net_state"):
+			extra["mt"] = player.matthew_net_state()
+		## Cadı (2026-10-13): [Q açık mı, süpürgede mi] (bkz. player.gd get_cadi_net_state / remote_player.gd _apply_cadi_net_state).
+		## Diğer karakterlerde anahtar hiç eklenmez.
+		if GameManager.selected_char_id == 15 and player.has_method("get_cadi_net_state"):
+			extra["cadi"] = player.get_cadi_net_state()
+		## Cadı'nın süpürgesinde YOLCULUK (HER karakter): süpürgesine bindiğimiz cadının peer id'si. Binmiyorken anahtar yok.
+		if "cadi_ride_host_peer" in player and int(player.cadi_ride_host_peer) != 0:
+			extra["cride"] = int(player.cadi_ride_host_peer)
 
 		## Klasik canlanma sistemi (bkz. player.gd is_downed/_go_down/
 		## _process_downed): downed iken hp/max_hp alanları GERÇEK canı
@@ -2578,11 +2589,28 @@ func _record_run(kind: String) -> Dictionary:
 
 
 ## Balans telemetrisi (bkz. balance_log.gd): koşu kaydı yerel dosyaya yazılır; istemciyse host'a da gönderilir (host kendi dosyasına ekler).
+## Kayıp kayıt düzeltmesi (2026-10-12): istemci menüye çıkarken ÖNCE bağlantıyı kesiyor, kaydı SONRA (_exit_tree) yolluyordu -> o an
+## bağlantı yok, kayıt host'a hiç gitmiyordu (4 kişilik oyunda yalnız 2 kayıt). Artık çıkış yolları flush_run_record_before_leave()
+## ile kaydı bağlantı AÇIKKEN yollar; host bağlı değilse (düşmüş) yollamaya çalışmaz.
+var _balance_sent_to_host: bool = false
+
+
 func _write_balance_record(summary: Dictionary) -> void:
 	var rec: Dictionary = BalanceLogScript.write_run(player, summary, "end")
 	if not rec.is_empty() and NetworkManager.is_multiplayer_active and not NetworkManager.is_host and multiplayer.has_multiplayer_peer():
-		NetworkManager.submit_balance_record.rpc_id(NetworkManager._host_peer_id(), JSON.stringify(rec))
+		var host_id: int = NetworkManager._host_peer_id()
+		if host_id > 0 and multiplayer.get_peers().has(host_id):
+			NetworkManager.submit_balance_record.rpc_id(host_id, JSON.stringify(rec))
+			_balance_sent_to_host = true
 	BalanceLogScript.reset()
+
+
+## Bağlantıyı kesmeden ÖNCE çağrılır (NetworkManager.flush_balance_before_leave). Koşu kaydını şimdi yazar/yollar; true = host'a RPC gitti
+## (çıkan, paketin ağa çıkması için kısa süre beklemeli: ENet close() kuyruktaki paketleri atar).
+func flush_run_record_before_leave() -> bool:
+	_balance_sent_to_host = false
+	_record_run_end_once()
+	return _balance_sent_to_host
 
 
 ## Koşu ilerlerken (yeni kademe / sonsuz kat): en iyi değerler anında kaydedilir, yeni açılan başarım toast ile bildirilir.
@@ -3054,6 +3082,7 @@ func _refresh_death_summary() -> void:
 ## host ise odayı kapatır (diğerlerini de düzgünce koparır), değilse sadece
 ## kendi bağlantısını keser.
 func _on_death_overlay_menu_pressed() -> void:
+	await NetworkManager.flush_balance_before_leave() ## koşu kaydı bağlantı kesilmeden host'a ulaşsın
 	get_tree().paused = false
 	if NetworkManager.is_multiplayer_active:
 		if NetworkManager.is_host:

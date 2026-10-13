@@ -235,11 +235,71 @@ func test_talon_e_spawns_chain_fx_and_r_grows_character_and_weapons_ten_percent(
 	player._process_talon_mirror_form(0.016)
 	for w in player.owned_weapon_nodes:
 		assert(is_equal_approx(w.form_scale_mult, TalonMath.FORM_SCALE_MULT), "silahlar (kopyalar dahil) %10 büyük")
-	assert(player.modulate.r > 0.9 and player.modulate.g < 0.8 and player.modulate.b < 0.5, "turuncu-kırmızı ton: %s" % str(player.modulate))
+	## 2026-10-12: form görünümü kök tonda değil shader'da (kırmızı-siyah gövde + beyaz göz; silahlar kırmızı-beyaz) - fx_talon_form.gd takar.
+	assert(player.modulate.is_equal_approx(Color.WHITE), "kök ton yok (beyaz gözleri boyamasın): %s" % str(player.modulate))
+	var char_mat := player.anim.material as ShaderMaterial
+	assert(char_mat != null and char_mat.shader.resource_path.ends_with("talon_form.gdshader"), "karaktere form shader'ı takıldı")
+	assert(player.owned_weapon_nodes.size() == 4, "2 silah + 2 ayna kopyası")
+	for w in player.owned_weapon_nodes:
+		var weapon_mat := w.icon_sprite.material as ShaderMaterial
+		assert(weapon_mat != null and weapon_mat.shader.resource_path.ends_with("talon_form_weapon.gdshader"), "silah ikonlarına (kopyalar dahil) form shader'ı")
+	await _wait(0.4)
+	assert(float(char_mat.get_shader_parameter("amount")) > 0.99, "0,25 sn'de tam forma geçti")
 	player._end_talon_mirror_form()
 	assert(player.char_base_anim_scale.is_equal_approx(base_scale) and player.anim.scale.is_equal_approx(base_scale), "form bitince orijinal boyut")
 	for w in player.owned_weapon_nodes:
 		assert(is_equal_approx(w.form_scale_mult, 1.0), "silah boyutu geri döndü")
+	await _wait(1.0)
+	assert(_count_children_with_script(player, "fx_talon_form.gd") == 0, "form FX'i kapandı")
+	assert(player.anim.material == null, "karakterin materyali geri alındı")
+	for w in player.owned_weapon_nodes:
+		assert(w.icon_sprite.material == null, "silah ikonlarının materyali geri alındı")
+	_cleanup()
+
+
+func test_talon_chain_ropes_follow_weapons_on_player_and_remote_puppet() -> void:
+	var player: Node = _make_player(1, 38)
+	player.buy_weapon_copy("dagger", 1)
+	player.buy_weapon_copy("tabanca", 1)
+	player._skill_talon_weapon_salvo()
+	var fx: Node = null
+	for c in player.get_children():
+		if c.get_script() != null and str(c.get_script().resource_path).ends_with("fx_talon_chains.gd"):
+			fx = c
+	assert(fx != null)
+	await _wait(0.4)
+	assert(fx._rope_x.size() == 2, "silah başına bir ip: %d" % fx._rope_x.size())
+	var links: int = 0
+	for j in range(2):
+		var x: PackedVector2Array = fx._rope_x[j]
+		assert(x.size() == fx.ROPE_SEGS + 1, "ip düğümleri kuruldu")
+		var wp: Vector2 = player.owned_weapon_nodes[j].global_position
+		## Silah fizik karesinde döner (~8 px/kare), ip çizim karesinde bağlanır: ölçüm arasında bir kare fark olabilir.
+		assert(x[fx.ROPE_SEGS].distance_to(wp) < fx.TIP_INSET + 14.0, "ipin ucu silahta: %s" % x[fx.ROPE_SEGS].distance_to(wp))
+		assert(x[0].distance_to(player.global_position) < 16.0, "ipin başı belde")
+		var length: float = 0.0
+		for i in range(fx.ROPE_SEGS):
+			length += x[i].distance_to(x[i + 1])
+		var chord: float = x[0].distance_to(x[fx.ROPE_SEGS])
+		assert(length > chord * 1.03 and length < chord * 1.25, "ip kirişten uzun (oval yay): boy %s kiriş %s" % [length, chord])
+	for li in range(2):
+		links += (fx._l_pos[li] as PackedVector2Array).size()
+	## Halka adımı 2,4 dünya pikseli: testte oyuncu kökü ölçeksiz (çember 130 px) -> zincir başına ~47 halka (oyunda çember 65 px, ~22).
+	assert(links > 40, "halkalar dizildi: %d" % links)
+	player._end_talon_weapon_salvo()
+	await _wait(fx.RETRACT_TIME + 0.2)
+	assert(not is_instance_valid(fx), "salvo bitince zincir toplanıp kapanır")
+	## Uzak kukla: AYNI sahne, silah konumları _weapon_icons'tan
+	var rp: Node = RemotePlayerScene.instantiate()
+	add_child(rp)
+	_spawned.append(rp)
+	rp.setup(89, 1, "Talon")
+	rp.update_weapon_visuals(["dagger", "tabanca"], {})
+	rp.update_extra_state_from_net(100.0, 100.0, 0.0, 0.0, false, false, ["dagger", "tabanca"], {"talon_formation": "salvo"})
+	var rfx: Node = load("res://scenes/fx_talon_chains.tscn").instantiate()
+	rp.add_child(rfx)
+	await _wait(0.4)
+	assert(rfx._rope_x.size() == 2 and (rfx._rope_x[0] as PackedVector2Array).size() == rfx.ROPE_SEGS + 1, "uzak kuklada da ipler kuruldu")
 	_cleanup()
 
 

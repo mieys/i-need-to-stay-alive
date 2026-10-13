@@ -20,12 +20,18 @@ const VampirMath := preload("res://scripts/vampir_math.gd")
 const VampirBatSwarmScript: GDScript = preload("res://scripts/vampir_bat_swarm.gd")
 ## Suriyeli Hadime: sabitler/lanet eğrisi/form görünümü/ceset remote_player.gd ve network_manager.gd ile PAYLAŞILIR.
 const HadimeMath := preload("res://scripts/hadime_math.gd")
+const CadiMath := preload("res://scripts/cadi_math.gd")
 ## Shaman R - Elemental Golem: sayılar/klip adları/form görünümü remote_player.gd, ground_shadow.gd ve hud.gd ile PAYLAŞILIR.
 const ShamanGolemMath := preload("res://scripts/shaman_golem_math.gd")
+## Matthew rework (2026-10-12, madde 98): şimşek kiti - sayılar/formüller/sprite sayfaları remote_player.gd ile PAYLAŞILIR.
+const MatthewLightning := preload("res://scripts/matthew_lightning.gd")
 ## Klip adı kuralları (remote_player.gd ile ortak) ve dükkan/kart ekranı izleyicisi - bkz. o dosyaların üst notları.
 const CharAnim := preload("res://scripts/char_anim.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
+const KelebekRuhuScript := preload("res://scripts/kelebek_ruhu.gd")
+const PeriPetScript := preload("res://scripts/peri_pet.gd")
+const KirpiPetScript := preload("res://scripts/kirpi_pet.gd")
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const KORSAN_CHAR_ID := 9 ## Characters.DEFS roster id'si
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
@@ -137,6 +143,9 @@ const SKILL_TIMING := {
 	## biter, bkz. _process_hadime_q). "duration" sadece HUD'un "aktif" çerçevesi dolu görünsün diye büyük bir tavan;
 	## bekleme süresi kanal bitince başlar. Standart _activate_skill() HİÇ çağrılmaz (Necro iskeletiyle aynı bypass).
 	46: {"duration": 9999.0, "cooldown": HadimeMath.Q_COOLDOWN},
+	## Cadı Q'su (Zehirli Duman, id 51): AÇ/KAPA - Hadime Q'suyla aynı düzen (süre tavanı sadece HUD çerçevesi için; standart
+	## _activate_skill() hiç çağrılmaz, bkz. _cadi_toggle_q).
+	51: {"duration": 9999.0, "cooldown": CadiMath.Q_COOLDOWN},
 }
 var _skill_duration: float = DEFAULT_SKILL_DURATION
 var _skill_cooldown: float = DEFAULT_SKILL_COOLDOWN
@@ -165,6 +174,9 @@ const SKILL2_TIMING := {
 	## eksik olan SADECE Matthew'in KENDİSİNE uygulanan kısmıydı).
 	## Kullanıcı isteği (2026-09-28, yetenek evrimleri): "etki süresi 6 saniyeye düşecek çünkü geliştirmelere ekleniyor" - 10 -> 6.
 	21: {"duration": 6.0, "cooldown": 35.0},
+	## Matthew YENİ E "Elektrik Topu" (id 50, 2026-10-12 rework, madde 98): 3 sn top formu, 20 sn bekleme. (Vahşi Hız, id 21, artık
+	## hiçbir karakterde yok - kaydı yukarıda zararsız duruyor.) Sayılar matthew_lightning.gd BALL_DURATION / BALL_COOLDOWN ile aynı.
+	50: {"duration": 3.0, "cooldown": 20.0},
 	## Şovalye Adam Koruma Bariyeri (id 29) - 2026-09-25 slot değişimi ("R si de E olacak"): SKILL3_TIMING'den buraya
 	## (sayılar AYNI: 15sn aktif, 60sn bekleme).
 	29: {"duration": 15.0, "cooldown": 54.0}, ## 2026-10-10: %10 kısaldı (60 -> 54), bkz. SKILL_TIMING[45]
@@ -203,6 +215,8 @@ const SKILL2_TIMING := {
 	## Suriyeli Hadime TEMEL (Kara Delik, id 47 - 2026-09-25 ikinci istekle "Kara Büyü"nün yerine): 6 sn duran kara delik,
 	## 18 sn bekleme (proje kuralı: bekleme aktif süre bitince başlar) - standart skill2 makinesi.
 	47: {"duration": HadimeMath.HOLE_DURATION, "cooldown": HadimeMath.HOLE_COOLDOWN},
+	## Cadı TEMEL (Uçan Süpürge, id 52): 8 sn süpürgede, 20 sn bekleme - standart skill2 makinesi (bitiş _end_skill2_effects).
+	52: {"duration": CadiMath.E_DURATION, "cooldown": CadiMath.E_COOLDOWN},
 }
 var _skill2_duration: float = DEFAULT_SKILL2_DURATION
 var _skill2_cooldown: float = DEFAULT_SKILL2_COOLDOWN
@@ -278,6 +292,9 @@ const SKILL3_TIMING := {
 	## Suriyeli Hadime ULTİ (Karabasan, id 48): 15 sn form, 100 sn bekleme - standart skill3 makinesi (bitiş
 	## _end_skill3_effects -> _end_hadime_nightmare).
 	48: {"duration": HadimeMath.R_DURATION, "cooldown": HadimeMath.R_COOLDOWN},
+	## Cadı ULTİ (İksir Çantası, id 53): YÜK tabanlı (5 yük, yük başına 8 sn) - standart makine kullanılmaz (bkz.
+	## _cadi_try_throw); bu giriş sadece ipucundaki bekleme süresi için.
+	53: {"duration": 0.0, "cooldown": CadiMath.R_RECHARGE},
 }
 var _skill3_duration: float = DEFAULT_SKILL2_DURATION
 var _skill3_cooldown: float = DEFAULT_SKILL2_COOLDOWN
@@ -445,6 +462,38 @@ var dodge_chance: float = 0.0      ## 0-1 chance to fully evade incoming damage
 ## _activate_skill2. Kart başına +%4, üst sınır %60.
 const COOLDOWN_REDUCTION_CAP := 0.60
 var cooldown_reduction_percent: float = 0.0
+
+## Etkin bekleme azaltma: kart yolu (aşağıdaki kart dalı) zaten COOLDOWN_REDUCTION_CAP'te kırpıyordu ama eşyalar (Kol Saati vb.) genel stat yoluyla
+## sınırsız ekleniyordu - 20 Kol Saati %100 yapıp beklemeyi sıfırlıyordu (2026-10-13). Ham değer (eşya al/sat simetrisi için) olduğu gibi tutulur,
+## bekleme hesapları ve gösterimler HEP bu fonksiyondan okur.
+func get_cooldown_reduction() -> float:
+	return clampf(cooldown_reduction_percent, 0.0, COOLDOWN_REDUCTION_CAP)
+
+
+## Bu stat şu an sınırına ulaşmış mı (daha fazla eşya/kart ona boşa gider)? Sandık, böyle bir stat içeren eşyayı bu oyuncuya çıkarmaz
+## (kullanıcı isteği 2026-10-13: "sınıra ulaşmış statların olduğu şeyler sandıktan çıkmasın"). Sadece GERÇEKTEN kırpılan statlar: kaçınma,
+## kalkan delme, kalkan soğurma, kritik şansı, bekleme azaltma. (Saldırı hızı taşması saldırı gücüne döndüğü için boşa gitmez - sayılmaz.)
+func is_stat_capped(stat_name: String) -> bool:
+	match stat_name:
+		"dodge_chance":
+			return dodge_chance >= dodge_cap() - 0.0001
+		"shield_pen_percent":
+			return shield_pen_percent >= 1.0 - 0.0001
+		"shield_protection_bonus":
+			return shield_protection >= SHIELD_PROTECTION_CAP - 0.0001
+		"crit_chance_bonus":
+			return crit_chance_bonus >= 1.0 - 0.0001
+		"cooldown_reduction_percent":
+			return cooldown_reduction_percent >= COOLDOWN_REDUCTION_CAP - 0.0001
+	return false
+
+
+## Eşyanın statlarından en az biri sınırına ulaşmışsa true (sandık havuzundan elenir).
+func item_has_capped_stat(key: String) -> bool:
+	for stat_name in Items.get_def(key).get("stats", {}):
+		if is_stat_capped(str(stat_name)):
+			return true
+	return false
 
 ## Read live by weapon.gd/projectile.gd - 0 means "no effect", same convention
 ## as talon_damage_bonus. Currently only Talon's rage sets these.
@@ -844,6 +893,10 @@ var _stat_regen_timer: float = 0.0
 var item_shield_hp: float = 0.0
 var item_shield_max: float = 0.0
 var item_shield_regen_delay: float = 0.0
+## Savaş Kalkanı: son hasardan bu yana kalan "savaşta" süresi; bu sürede yenilenme x SAVAS_COMBAT_REGEN_MULT (kullanıcı 2026-10-12).
+const SAVAS_COMBAT_WINDOW := 3.0
+const SAVAS_COMBAT_REGEN_MULT := 0.5
+var _shield_combat_timer: float = 0.0
 ## Bir yetenek kullanıldıktan sonra kalkan yenilenmesini TAMAMEN durdurmaz
 ## (bkz. item_shield_regen_delay - o SADECE hasar alınca dolar), sadece
 ## _shield_hit_regen_delay() kadar bir süre boyunca yenilenme hızını %50
@@ -1668,6 +1721,7 @@ func _load_character_frames() -> void:
 		anim.scale = char_base_anim_scale
 		anim.offset = def.get("offset", DEFAULT_ANIM_OFFSET)
 		_hadime_base_offset = anim.offset ## Hadime Q'daki havaya süzülme bu tabana eklenir
+		cadi_base_offset = anim.offset ## Cadı'nın süpürgesine binince (her karakter) yükselme bu tabana eklenir
 	else:
 		base_modulate = Color(1, 1, 1, 1)
 		char_base_anim_scale = DEFAULT_ANIM_SCALE * EntityScale.SIZE
@@ -1679,12 +1733,8 @@ func _load_character_frames() -> void:
 		var reading_watcher := ReadingUiWatcher.new()
 		reading_watcher.name = "ReadingUiWatcher"
 		add_child(reading_watcher)
-	## Korsan pasifi: omuzdaki papağan (roster id'sine göre - yetenek id'leri tuşlar arasında taşınabiliyor, bkz. Necro
-	## notu). Diğer oyuncuların ekranındaki kopyası remote_player.gd _load_character_frames'te kurulur.
-	if GameManager.selected_char_id == KORSAN_CHAR_ID and anim and not has_node("KorsanParrot"):
-		var parrot: Node2D = KorsanParrotScript.new()
-		add_child(parrot)
-		parrot.setup(self, anim, false)
+	## Evcil hayvan (2026-10-12): menüde seçilen köpek / papağan (bkz. _setup_pet).
+	_setup_pet()
 	## Silah kurulumu artık burada YOK - hiçbir karakterin ayrı bir "ana
 	## silahı" olmadığı için herkesin başlangıç silahı (bkz.
 	## STARTING_WEAPON_BY_CHAR) tamamen standart yoldan, _ready()'deki
@@ -1811,6 +1861,7 @@ func _physics_process(delta: float) -> void:
 	_interp_prev_pos = global_position ## bkz. PhysicsInterp.visual_position
 	_interp_prev_frame = Engine.get_physics_frames()
 	_refresh_ui_skill_block() ## dükkan/envanter açıkken yetenek tuşları kilitli (bkz. _skill_keys_blocked); erken dönüşlerden ÖNCE
+	_refresh_korsan_gold_ap() ## Korsan pasifi: cüzdandaki her 30 altın = +1 saldırı gücü (yüzde payından ÖNCE, taban buna göre)
 	_refresh_item_ap_percent() ## eşya saldırı gücü yüzdesi + Ahenk Bastiyonu (bkz. _refresh_item_ap_percent)
 	## "efekt sistemi" (ölüm.png/diriltme.png/kalp.png): durum ne olursa
 	## olsun HER karede reaktif olarak güncelleniyor - bkz. fonksiyonların
@@ -1823,9 +1874,14 @@ func _physics_process(delta: float) -> void:
 	_process_vampir(delta)
 	## Suriyeli Hadime: süzülme/Karabasan/hayalet görünümü + ceset - ölü/düşmüşken de (hayalet tam o sırada) çalışmalı.
 	_process_hadime_visuals(delta)
+	## Cadı: şişe/süpürge görseli + süpürgeye binen HER karakterin yükselmesi; ölünce/düşünce süpürgeden iner (Hadime'den SONRA -
+	## binen bir Hadime'nin ofsetini süpürge belirler).
+	_process_cadi_visuals(delta)
 	## Shaman Elemental Golem (R): darbeler/Q-E bekleme sayaçları/silah çekilmesi - ölü/düşmüşken formu kapatıp silahları
 	## geri çıkarabilsin diye erken dönüşlerden ÖNCE (Vampir'le aynı sebep).
 	_process_shaman_golem(delta)
+	## Matthew (2026-10-12 rework): ölürken/düşerken Elektrik Topu formunu kapatır, silah çekilmesini ilerletir - aynı sebeple burada.
+	_process_matthew_form(delta)
 	## Ruhani Yetenek (F, bkz. dosya sonundaki blok): Para pasifi, dokunulmazlık/aktif/bekleme süreleri, Dükkan odaklanması.
 	_process_spirit(delta)
 	## Adım sesleri burada da güncelleniyor: aşağıdaki erken dönüşler
@@ -1876,14 +1932,21 @@ func _physics_process(delta: float) -> void:
 		## yeteneği alındığında verdiği azalarak kaybolan geçici hız bonusu.
 		velocity = input_direction * get_effective_move_speed()
 
-	velocity += _knockback_velocity
-	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * delta)
-	
-	_block_movement_into_enemies()
-	_block_movement_into_blockers()
-	_block_movement_into_players()
-	_block_movement_into_terrain()
-	move_and_slide()
+	## Cadı'nın süpürgesinde YOLCU (her karakter): konum cadıya göre kurulur, normal hareket/çarpışma atlanır (bkz. _cadi_passenger_follow).
+	var cadi_passenger: bool = _cadi_passenger_follow(input_direction, delta)
+	if cadi_passenger:
+		velocity = Vector2.ZERO
+		_knockback_velocity = Vector2.ZERO
+		effective_direction = Vector2.ZERO
+	else:
+		velocity += _knockback_velocity
+		_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * delta)
+
+		_block_movement_into_enemies()
+		_block_movement_into_blockers()
+		_block_movement_into_players()
+		_block_movement_into_terrain()
+		move_and_slide()
 	_clamp_to_map_bounds()
 
 	## Adım sesleri: animasyonun kullandığı AYNI "hareket ediyor mu" ölçütü
@@ -1913,6 +1976,7 @@ func _physics_process(delta: float) -> void:
 	_process_xp_streak(delta)
 	_process_character_passive(delta)
 	_process_korsan_bombs(delta)
+	_process_pet(delta)
 	_process_korsan_bombardment(delta)
 	_process_talon_weapon_salvo(delta)
 	_process_talon_mirror_form(delta)
@@ -1923,6 +1987,7 @@ func _physics_process(delta: float) -> void:
 	_process_matthew_speed_lines(delta)
 	_process_buyucu(delta)
 	_process_hadime(delta)
+	_process_cadi(delta)
 	_process_evo(delta) ## yetenek evrimlerinin süreli/sürekli etkileri (dosya sonundaki "YETENEK EVRİMLERİ" bloğu)
 	_process_skill3(delta)
 	_process_oakley_bond(delta)
@@ -1962,6 +2027,9 @@ func _physics_process(delta: float) -> void:
 		## basınca kapansın, basılı tutmak zor oluyor") - standart _activate_skill() makinesi bypass edilir.
 		elif get_skill_character_id() == HadimeMath.Q_SKILL_ID:
 			_hadime_toggle_q()
+		## Cadı Q (Zehirli Duman, id 51): AÇ/KAPA - Hadime Q'suyla aynı bypass (bkz. _cadi_toggle_q).
+		elif get_skill_character_id() == CadiMath.Q_SKILL_ID:
+			_cadi_toggle_q()
 		## Assasin Çocuk Q = Şahin Hamlesi (id 5, 8 yönlü hamle; 2026-09-30 Q/E değişimiyle E'den buraya) - Korsan'ın bomba
 		## şarjıyla AYNI desen, standart bekleme makinesi yerine kendi yük sayacını kullanır (bkz. ASSASIN_DASH2_*/_try_assasin_dash2).
 		## _activate_skill()'e ASLA düşmemeli: oradaki match'in "_" varsayılanı _skill_heal (eski "Assasin'in Q'su Oakley'nin
@@ -2025,6 +2093,9 @@ func _physics_process(delta: float) -> void:
 		elif skill3_id_pressed == 42:
 			_vampir_toggle_bats()
 		## Necromancer'ın R'si (Lanetli Kafatası, id 44) standart skill3_state makinesini kullanır - özel dal yok.
+		## Cadı R (İksir Çantası, id 53): YÜK tabanlı - standart skill3_state makinesi bypass edilir (bkz. _cadi_try_throw).
+		elif skill3_id_pressed == CadiMath.R_SKILL_ID:
+			_cadi_try_throw()
 		elif skill3_state == "ready" and skill3_id_pressed != 0:
 			_activate_skill3()
 		## Şovalye'nin Koruma Baloncuğu (id 11, tam hareketsiz kalır) tuşa tekrar basılarak erken iptal edilebilir
@@ -2188,6 +2259,9 @@ const STUCK_ESCAPE_PUSH_FORCE := 220.0
 func _block_movement_into_blockers() -> void:
 	if velocity.length() < 0.1:
 		return
+	## Cadı "Yüksek Uçuş" evrimi: görev nesnelerinin (ağaç gövdesi, konvoy) üstünden de uçar.
+	if _cadi_broom_active and has_evo("cadi_e1"):
+		return
 	for b: Node in get_tree().get_nodes_in_group("move_blockers"):
 		if not (b is Node2D) or not is_instance_valid(b) or not b.has_method("block_center"):
 			continue
@@ -2279,6 +2353,9 @@ func _block_movement_into_players() -> void:
 	## Suriyeli Hadime Q: havaya süzülürken arkadaşlarının da içinden geçer ("birimlerin içinden geçebilme").
 	if _hadime_q_active:
 		return
+	## Cadı süpürgedeyken arkadaşlarına takılmaz: değdiği arkadaş süpürgeye biner, binenler zaten arkasında oturur.
+	if _cadi_broom_active:
+		return
 	var required_sep: float = (PLAYER_BODY_RADIUS * 2.0) * GameManager.BODY_BLOCK_SCALE
 	for rp in get_tree().get_nodes_in_group("remote_players"):
 		if not is_instance_valid(rp) or rp.get("is_dead") == true:
@@ -2327,6 +2404,9 @@ func _block_movement_into_terrain() -> void:
 	## Vampir Çocuk'un Yarasa Formu (E): duvarların (orman/uçurum karoları) içinden geçer - 2026-09-28'den beri SADECE
 	## "Gece Uçuşu" evrimiyle (kullanıcı: "duvarların üstünden uçabilme özelliğini kaldırıyoruz ... geliştirmeye eklenecek").
 	if _vampir_bat_form_active and has_evo("vampir_e2"):
+		return
+	## Cadı "Yüksek Uçuş" evrimi: süpürge engellerin (orman/uçurum/su karoları) üstünden uçar.
+	if _cadi_broom_active and has_evo("cadi_e1"):
 		return
 	## DÜZELTME (kullanıcı bildirimi: "düşmanlar bizi hala itip duvara
 	## sıkıştırıyor ve bir daha çıkamıyoruz duvarın içinden oyun bitene
@@ -2379,12 +2459,15 @@ func _process_item_shield(delta: float) -> void:
 	## (item_shield_regen_delay) ile KARIŞTIRILMASIN, bu SADECE hızı düşürür.
 	var ability_slow_mult: float = 0.5 if item_shield_ability_slow_timer > 0.0 else 1.0
 
+	_shield_combat_timer = maxf(0.0, _shield_combat_timer - delta)
 	if item_shield_regen_delay > 0:
 		item_shield_regen_delay -= delta
 		return
 
 	if item_shield_hp < item_shield_max:
-		_shield_regen_tick_pending += base_regen_rate * ability_slow_mult * delta
+		## 2026-10-12: Savaş Kalkanı (always_regen) savaşta da yenilenir ama SAVAS_COMBAT_REGEN_MULT hızında (son SAVAS_COMBAT_WINDOW sn içinde hasar alındıysa).
+		var combat_mult: float = SAVAS_COMBAT_REGEN_MULT if _shield_combat_timer > 0.0 and ShieldEnchantDefs.owned_type() == "shield_savas" else 1.0
+		_shield_regen_tick_pending += base_regen_rate * ability_slow_mult * combat_mult * delta
 		_shield_regenerating = true
 
 
@@ -2617,7 +2700,7 @@ func _skill_melek_fear() -> void:
 	heal(amount)
 	heal_shield(amount)
 	for ally in get_tree().get_nodes_in_group("player_ally"):
-		if ally == self or not is_instance_valid(ally) or ally.get("is_dead") == true or not (ally is Node2D):
+		if ally == self or not is_instance_valid(ally) or _ally_is_down(ally) or not (ally is Node2D):
 			continue
 		if center.distance_to((ally as Node2D).global_position) > MELEK_FEAR_RADIUS:
 			continue
@@ -2870,7 +2953,7 @@ func _passive_melek(delta: float) -> void:
 		health_changed.emit(health, max_health)
 
 	for ally: Node in get_tree().get_nodes_in_group("player_ally"):
-		if not is_instance_valid(ally):
+		if not is_instance_valid(ally) or _ally_is_down(ally):
 			continue
 		if global_position.distance_to(ally.global_position) > MELEK_PASSIVE_RANGE:
 			continue
@@ -3092,6 +3175,13 @@ var _korsan_bomb_recharge_timer: float = 0.0
 ## korsan_bomb.gd dosya başı notu - kozmetik uzak-oyuncu kopyaları bu
 ## diziye asla girmez).
 var _korsan_bombs: Array = []
+## Patlat (R) sadece Korsan'ın KENDİ görüş alanındaki bombaları patlatır (kullanıcı isteği 2026-10-12): menzil göstergesi
+## (kesik çizgili elips, korsan_detonate_range.gd) yerde bomba varken görünür; menzil dışı bombalar sönük çizilir.
+const KorsanDetonateRangeScript: GDScript = preload("res://scripts/korsan_detonate_range.gd")
+const KORSAN_BOMB_OUT_OF_RANGE_ALPHA := 0.5
+const KORSAN_RANGE_CHECK_INTERVAL := 0.1
+var _korsan_range_fx: Node2D = null
+var _korsan_range_timer: float = 0.0
 
 ## ---------- Necromancer (roster 11, "skill": 20/"skill2": 19) ----------
 ## Pasif: yakında ölen her düşman ruh kazandırır (bosslar 5, diğerleri 1,
@@ -3198,12 +3288,11 @@ var _necro_skeleton_cooldown_timer: float = 0.0
 ## Matthew: owns a following/attacking pet at all times, auto-respawning
 ## MATTHEW_RESPAWN_DELAY seconds after it dies (whether killed in combat or
 ## sacrificed for his active - see _skill_shield_dome()).
+## 2026-10-12 REWORK (madde 98, kullanıcı: "Artık köpek yok ama dosyalarını silme onu ilerde kullanacağız"): pasif artık
+## "Yıldırım Hızı" (_process_matthew_lightning). Köpeğin doğurma/ölüm kodu (_spawn_matthew_pet / _on_matthew_pet_died, player_pet.gd,
+## assets/pets/dog) yerinde duruyor ama hiçbir yerden ÇAĞRILMIYOR.
 func _passive_matthew(delta: float) -> void:
-	if _matthew_pet_alive:
-		return
-	_matthew_respawn_timer -= delta
-	if _matthew_respawn_timer <= 0.0:
-		_spawn_matthew_pet()
+	_process_matthew_lightning(delta)
 
 
 func _spawn_matthew_pet() -> void:
@@ -3250,6 +3339,7 @@ func on_enemy_killed(enemy: Node) -> void:
 	_apply_kill_heal_item()
 	_item_on_kill()
 	_savas_sevki_on_kill(is_boss_kill)
+	_korsan_gold_on_kill()
 	## DÜZELTME (kullanıcı bildirimi: "Necromancer ölen düşmanlardan ruh
 	## toplayamıyor") - kök neden: burada Necromancer id 20'ye (Golem Çağır'ın
 	## SKILL id'si) göre dallanıyordu - bu SADECE Golem Q/skill slotundayken
@@ -3282,6 +3372,7 @@ func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZER
 	_apply_kill_heal_item()
 	_item_on_kill()
 	_savas_sevki_on_kill(is_boss_kill)
+	_korsan_gold_on_kill()
 	## bkz. on_enemy_killed() üstündeki AYNI düzeltme notu - roster id'sine
 	## göre, artık hangi yetenek Q/E/R'de olursa olsun doğru çalışır.
 	if GameManager.selected_char_id == 11:
@@ -3296,6 +3387,34 @@ func on_enemy_killed_remote(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZER
 func _apply_kill_heal_item() -> void:
 	if item_kill_heal_amount > 0.0:
 		heal(item_kill_heal_amount)
+
+
+## Korsan pasifi "Altın Avcısı" (kullanıcı isteği 2026-10-12): her öldürmede 1 altın + cüzdandaki her mevcut 30 altın için +1 saldırı gücü
+## (GÜNCEL altından hesaplanır - altın harcanınca/düşünce saldırı gücü de geri düşer, kalıcı değil). on_enemy_killed/_remote'un HER İKİ
+## yolundan çağrılır (host olmayan oyuncu da pasifini alsın). Eski Papağan pasifi bırakıldı, kodu duruyor (bkz. korsan_parrot.gd AUTO_ATTACH_TO_KORSAN).
+const KORSAN_GOLD_PER_KILL := 1
+const KORSAN_GOLD_PER_AP := 30 ## 2026-10-12: 10 -> 30 (kullanıcı: çok fazla oldu)
+var _korsan_gold_ap_applied: float = 0.0
+
+func _korsan_gold_on_kill() -> void:
+	if GameManager.selected_char_id != KORSAN_CHAR_ID:
+		return
+	GameManager.gold += KORSAN_GOLD_PER_KILL
+
+
+## Saldırı gücü payı damage_bonus'un İÇİNE yazılır ve her karede yeniden hesaplanır (damage_bonus'u okuyan HER yer - silahlar,
+## yetenekler, bombalar, ağ senkronu - etkin değeri görsün; bkz. _refresh_item_ap_percent ile AYNI desen: fark yazılır, taban korunur).
+static func korsan_gold_ap(gold: int) -> float:
+	return floorf(float(maxi(gold, 0)) / float(KORSAN_GOLD_PER_AP))
+
+
+func _refresh_korsan_gold_ap() -> void:
+	var want: float = korsan_gold_ap(GameManager.gold) if GameManager.selected_char_id == KORSAN_CHAR_ID else 0.0
+	if is_equal_approx(want, _korsan_gold_ap_applied):
+		return
+	damage_bonus += want - _korsan_gold_ap_applied
+	_korsan_gold_ap_applied = want
+	_apply_weapon_bonuses()
 
 
 ## Ruhani Yetenek "Savaş Şevki" (pasif) - karakterden bağımsız, _apply_kill_heal_item() ile AYNI desen:
@@ -3323,6 +3442,87 @@ func has_savas_sevki() -> bool:
 	return get_spirit_id() == SpiritualSkillsScript.SAVAS_SEVKI
 
 
+## ---------- EVCİL HAYVAN (kullanıcı isteği 2026-10-12: "petler karakter seçim ekranında silah seçer gibi seçilecek") ----------
+## Seçim GameManager.selected_pet (menu_pet_picker.gd / pet_catalog.gd); hangi karakterle oynanırsa oynansın aynı. Boş = menüden geçilmedi
+## (editörden doğrudan sahne, testler) -> hayvan yok (ruhani yetenekle aynı kural).
+##  - köpek: eski Matthew köpeği (player_pet.gd, _spawn_matthew_pet) - yaratıklara saldırır, statları sahibinden (FOX_STAT_RATIO). Ölümsüz;
+##    yine de yok olursa MATTHEW_RESPAWN_DELAY sonra yeniden doğar (_process_pet).
+##  - papağan: eski Korsan papağanı (korsan_parrot.gd) - altın toplar/getirir, getiriş başına +1 altın; ayrıca PetCatalog.LUCK_BONUS şans.
+##    Diğer oyuncuların ekranındaki kukla ilk olayında kurulur (remote_player.gd korsan_parrot_event).
+##  - kelebek: Kelebek Ruhu (kelebek_ruhu.gd) - pet_attack_speed saldırı hızı + İLK silahın vurduğu düşmana lazer atışı
+##    (_kelebek_on_weapon_hit, evo_weapon_hit kancasından). Kuklası ilk olayında kurulur (remote_player.gd kelebek_ruhu_event).
+##  - peri: Peri (peri_pet.gd) - can eksikken 6 sn'de bir heal() ile can basar; bütün mantık hayvanın kendi betiğinde.
+##  - kirpi: Kirpi (kirpi_pet.gd) - hasar kuralları _kirpi_on_hit'te (take_damage kancası), betik sadece görsel (diken açık = sahibin görüşünde yaratık var).
+const PetCatalog := preload("res://scripts/pet_catalog.gd")
+var _pet_kind: String = ""
+
+func _setup_pet() -> void:
+	var kind: String = str(GameManager.selected_pet)
+	if _pet_kind != "" or not PetCatalog.is_valid(kind):
+		return
+	_pet_kind = kind
+	if kind == "papagan":
+		luck += PetCatalog.LUCK_BONUS
+		if anim and not has_node("KorsanParrot"):
+			var parrot: Node2D = KorsanParrotScript.new()
+			add_child(parrot)
+			parrot.setup(self, anim, false)
+	elif kind == "kelebek":
+		pet_attack_speed = PetCatalog.KELEBEK_ATTACK_SPEED
+		if anim and not has_node("KelebekRuhu"):
+			var kelebek: Node2D = KelebekRuhuScript.new()
+			add_child(kelebek)
+			kelebek.setup(self, anim, false)
+	elif kind == "peri":
+		if anim and not has_node("Peri"):
+			var peri: Node2D = PeriPetScript.new()
+			add_child(peri)
+			peri.setup(self, anim, false)
+	elif kind == "kirpi":
+		if anim and not has_node("Kirpi"):
+			var kirpi: Node2D = KirpiPetScript.new()
+			add_child(kirpi)
+			kirpi.setup(self, anim, false)
+
+
+## Kirpi (evcil hayvan, kullanıcı 2026-10-13): take_damage'den (sıvışma/efsun engellemesinden SONRA, kalkan emilimlerinden ÖNCE) çağrılır.
+##  - Sana saldıran yaratık sahibin AZAMİ kalkanının KIRPI_REFLECT_RATIO'su (%5) kadar hasar alır (kalkan hasar emmiş olsun olmasın; kalkanı
+##    olmayanda 0). Sadece "enemies" grubundaki canlı yaratığa; sürekli hasar (yanma/asit) saldırgan sayılmaz. Hasar istemcide host'a gider.
+##  - Kalkan (item_shield_hp) VARKEN gelen hasar KIRPI_SHIELD_REDUCTION (%5) azalır (kalkan o vuruşla kırılsa da: vuruşun başındaki duruma bakılır).
+## Döner: azaltılmış hasar.
+func _kirpi_on_hit(amount: float, source: Node2D) -> float:
+	if _pet_kind != "kirpi":
+		return amount
+	if item_shield_max > 0.0 and not _special_dmg_is_dot and source != null and is_instance_valid(source) 			and source.is_in_group("enemies") and source.get("is_dead") != true and source.has_method("take_damage"):
+		BalanceLogScript.tag(&"s:evcil_kirpi")
+		source.take_damage(item_shield_max * PetCatalog.KIRPI_REFLECT_RATIO, false, 0.0, false)
+	if item_shield_hp > 0.0:
+		amount *= 1.0 - PetCatalog.KIRPI_SHIELD_REDUCTION
+	return amount
+
+
+## Kelebek Ruhu: İLK silah (owned_weapon_nodes[0]) canlı bir yaratığa isabet edince lazer atışı. Aynı yaratığa en sık
+## KELEBEK_SHOT_INTERVAL aralıkla (bkz. _evo_hit_ready). Sahip yerdeyken/ölüyken atmaz (madde 104 kuralı).
+func _kelebek_on_weapon_hit(weapon: Node, target: Node2D) -> void:
+	if _pet_kind != "kelebek" or is_dead or _get_weapon_index(weapon) != 0:
+		return
+	if not is_instance_valid(target) or target.get("is_dead") == true or not target.has_method("take_damage"):
+		return
+	if not _evo_hit_ready(target, "kelebek", PetCatalog.KELEBEK_SHOT_INTERVAL):
+		return
+	var kelebek: Node = get_node_or_null("KelebekRuhu")
+	if kelebek:
+		kelebek.fire_at(target)
+
+
+func _process_pet(delta: float) -> void:
+	if _pet_kind != "kopek" or _matthew_pet_alive or not is_inside_tree():
+		return
+	_matthew_respawn_timer -= delta ## 0'dan başlar: ilk karede doğar
+	if _matthew_respawn_timer <= 0.0:
+		_spawn_matthew_pet()
+
+
 ## Korsan pasifi "Papağan" (2026-09-26): omzundaki papağan yakındaki altınları toplayıp getirir - mantık/görsel
 ## scripts/korsan_parrot.gd'de. İstemcide host'un "papağan şu altını aldı" cevabı buraya gelir (NetworkManager.
 ## parrot_gold_result) ve papağana iletilir.
@@ -3345,6 +3545,38 @@ func _process_korsan_bombs(delta: float) -> void:
 		if _korsan_bomb_recharge_timer <= 0.0:
 			korsan_bomb_charges += 1
 			_korsan_bomb_recharge_timer = _korsan_bomb_recharge_time() if korsan_bomb_charges < max_charges else 0.0
+	_update_korsan_range_indicator(delta)
+
+
+## Patlat menzil göstergesi + menzil dışı bombaların sönükleştirilmesi (0,1 sn'de bir, bomba yokken hiç iş yok).
+func _update_korsan_range_indicator(delta: float) -> void:
+	var show_range: bool = not _korsan_bombs.is_empty() and not is_dead
+	if _korsan_range_fx == null or not is_instance_valid(_korsan_range_fx):
+		if not show_range:
+			return
+		_korsan_range_fx = Node2D.new()
+		_korsan_range_fx.set_script(KorsanDetonateRangeScript)
+		add_child(_korsan_range_fx)
+	if _korsan_range_fx.visible != show_range:
+		_korsan_range_fx.visible = show_range
+		if show_range:
+			_korsan_range_fx.queue_redraw()
+	if not show_range:
+		return
+	_korsan_range_timer -= delta
+	if _korsan_range_timer > 0.0:
+		return
+	_korsan_range_timer = KORSAN_RANGE_CHECK_INTERVAL
+	var in_range: Array = _korsan_bombs_in_vision()
+	for b in _korsan_bombs:
+		if is_instance_valid(b):
+			(b as CanvasItem).modulate.a = 1.0 if in_range.has(b) else KORSAN_BOMB_OUT_OF_RANGE_ALPHA
+
+
+## Korsan'ın KENDİ görüş alanındaki (takım görüşü sayılmaz, bkz. VisionFog.own_vision_contains) gerçek bombalar.
+func _korsan_bombs_in_vision() -> Array:
+	return _korsan_bombs.filter(func(b): return is_instance_valid(b) and b.has_method("detonate") \
+			and VisionFogScript.own_vision_contains(get_tree(), global_position, (b as Node2D).global_position))
 
 
 ## Yük üst sınırı: taban 3, "Dolu Cephanelik" evrimiyle 5 (HUD'daki boncuklar da buradan - hud.gd).
@@ -3436,8 +3668,9 @@ func _korsan_try_place_bomb() -> void:
 ## tetiklenmeyeceği için (bkz. _activate_skill() başındaki #39 kontrolü)
 ## aşağıdaki "any_detonated" kontrolü artık salt savunma amaçlı.
 func _skill_korsan_detonate_all() -> void:
-	var bombs_to_detonate: Array = _korsan_bombs.filter(func(x): return is_instance_valid(x) and x.has_method("detonate"))
-	_korsan_bombs.clear()
+	## Kullanıcı isteği (2026-10-12): sadece KENDİ görüş alanındaki bombalar patlar; menzil dışındakiler yerinde kalır.
+	var bombs_to_detonate: Array = _korsan_bombs_in_vision()
+	_korsan_bombs = _korsan_bombs.filter(func(x): return is_instance_valid(x) and not bombs_to_detonate.has(x))
 	## Kullanıcı isteği: Korsan efektleri sıfırdan pixel-art. Patlat: dedonatör kıvılcımı + bombalar KORSAN'A EN YAKINDAN
 	## UZAĞA doğru, uzaklıkla orantılı gecikmeli bir dalga halinde patlar (bkz. KorsanFxMath.CHAIN_* / korsan_chain_delays
 	## - çok sayıda bomba tek karede patlayıp FPS düşürmesin).
@@ -3622,6 +3855,7 @@ func _apply_korsan_bombardment_tick() -> void:
 		if center.distance_to(e.global_position) > radius:
 			continue
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:korsan_bombardiman")
 			e.take_damage(dmg, is_crit, 0.0, true)
 
 
@@ -4124,7 +4358,7 @@ func _skill_shaman_attack_totem() -> void:
 
 
 func _shaman_q_recharge_time() -> float:
-	return float(_skill_timing_for(SHAMAN_ATTACK_TOTEM_ID).get("cooldown", DEFAULT_SKILL_COOLDOWN)) * (1.0 - cooldown_reduction_percent)
+	return float(_skill_timing_for(SHAMAN_ATTACK_TOTEM_ID).get("cooldown", DEFAULT_SKILL_COOLDOWN)) * (1.0 - get_cooldown_reduction())
 
 
 func _shaman_start_q_recharge() -> void:
@@ -4178,7 +4412,7 @@ func _nearest_ally_in_range(max_range: float) -> Node2D:
 	var nearest: Node2D = null
 	var nearest_dist: float = max_range
 	for ally in get_tree().get_nodes_in_group("player_ally"):
-		if not is_instance_valid(ally):
+		if not is_instance_valid(ally) or _ally_is_down(ally):
 			continue
 		var d: float = global_position.distance_to(ally.global_position)
 		if d <= nearest_dist:
@@ -4197,7 +4431,7 @@ func _lowest_health_ally_in_range(max_range: float, exclude: Array = []) -> Node
 	for ally in get_tree().get_nodes_in_group("player_ally"):
 		if not is_instance_valid(ally) or not ("max_health" in ally) or not ("health" in ally):
 			continue
-		if exclude.has(ally):
+		if exclude.has(ally) or _ally_is_down(ally):
 			continue
 		if ally.get("max_health") <= 0.0:
 			continue
@@ -4222,7 +4456,7 @@ func _lowest_shield_ally_in_range(max_range: float) -> Node2D:
 	var best: Node2D = null
 	var best_ratio: float = 1.0
 	for ally in get_tree().get_nodes_in_group("player_ally"):
-		if not is_instance_valid(ally) or not ("item_shield_max" in ally) or not ("item_shield_hp" in ally):
+		if not is_instance_valid(ally) or not ("item_shield_max" in ally) or not ("item_shield_hp" in ally) or _ally_is_down(ally):
 			continue
 		if ally.get("item_shield_max") <= 0.0:
 			continue
@@ -4712,6 +4946,15 @@ func _process_damage_redirect_range_check(delta: float) -> void:
 
 
 func _update_animation(is_moving: bool) -> void:
+	## Cadı'nın süpürgesi (süren cadı VE yolcular): ride_<yön> oturuş klibi her şeyin önüne geçer. Klip ADI ağdan gittiği
+	## için uzak kopya da aynısını oynatır (tools/add_ride_clips.py; oturma sayfası olmayan karakter - Oakley - bekleme pozunda kalır).
+	if _cadi_broom_active or cadi_ride_host_peer != 0:
+		var ride_anim: String = CharAnim.pick(anim.sprite_frames, [CadiMath.RIDE_ANIM_PREFIX + facing, "idle_" + facing])
+		if ride_anim != "":
+			if anim.animation != ride_anim:
+				anim.play(ride_anim)
+			anim.speed_scale = 1.0
+			return
 	## Vampir Çocuk'un Yarasa Formu: bat_<yön> döngüsü her şeyin (idle/walk/spellcast) önüne geçer.
 	## Anim ADI ağdan diğer istemcilere gittiği için (bkz. main.gd cur_anim) remote_player.gd de
 	## aynı adı görüp hem klibi oynatır hem silahları gövdeye çeker (VampirMath.is_bat_anim).
@@ -5264,6 +5507,9 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 		return
 	if is_assasin_dashing:
 		return
+	## Matthew "Elektrik Topu" (E): form boyunca dokunulmaz (sürekli hasar dahil hiçbir şey işlemez).
+	if _matthew_ball_active:
+		return
 	if is_revive_invulnerable:
 		return
 	## Evrim "Hayalet Hamle" (Talon Q finali): hamle boyunca %100 sıvışma - sınırı aşar, sürekli hasar dahil hiçbir şey işlemez.
@@ -5354,7 +5600,8 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	## _current_elara_evasion_dodge) bu sınırın üstüne biner.
 	var stat_dodge: float = minf(dodge_cap(), dodge_chance + item_move_dodge_active)
 	## Assasin "Rüzgar Gibi" evrimi (hamleden sonra 0,75 sn %100) de yetenek kaynaklı - sınırın üstüne biner.
-	var effective_dodge: float = clamp(stat_dodge + _current_elara_evasion_dodge() + _assasin_evade_dodge(), 0.0, 1.0)
+	## Cadı "Kıvrak Süpürge" evrimi (süpürgedeyken %25 - cadı ve yolcular) de yetenek kaynaklı.
+	var effective_dodge: float = clamp(stat_dodge + _current_elara_evasion_dodge() + _assasin_evade_dodge() + _cadi_ride_dodge(), 0.0, 1.0)
 	if not _special_dmg_is_dot and effective_dodge > 0.0 and randf() < effective_dodge:
 		_spawn_floating_text("SIYRILDI", Color(0.7, 0.95, 1.0))
 		_notify_enchants_dodge() ## efsun: Gölge Dansı / Kılıç Ustası sıyrılma tetikleri
@@ -5366,14 +5613,14 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 		if amount <= 0.0:
 			return
 
+	amount = _kirpi_on_hit(amount, source) ## evcil hayvan Kirpi (bkz. _kirpi_on_hit)
 	## Ruhani Yetenek "Tank": alınan hasarın %200'ü (TANK_REFLECT) hasarı verene yansır + eksik kalkanın %3'ü yenilenir.
 	_spirit_tank_on_hit(amount, source)
 	_item_on_hit_taken() ## Kırılmaz İrade (eşya): her isabette kalkan
 	## Yetenek evrimleri: Şovalye "İntikam Patlaması" (E sürerken alınan tüm hasar - azaltmalardan sonra, kalkana gitse de -
-	## birikir), Matthew "Avcı Sabrı" (hasar alınca 3 sn'lik bekleme baştan başlar, hız bonusu kaybolur).
+	## birikir).
 	if _sovalye_retribution_active:
 		_sovalye_retribution_accum += amount
-	_matthew_patience_timer = 0.0
 	## Şovalye Adam'ın Koruma Bariyeri (E, id 29; bkz. _skill_paladin_barrier/_apply_damage_redirect_to_ally): buflanmış dostun aldığı hasarın
 	## damage_redirect_percent'i Şovalye'ye gider. DÜZELTME (2026-10-10, kullanıcı: "Şovalye'nin E'si arkadaşlarının hasarını emmiyor, etkisini görmedim"):
 	## aktarım eskiden dostun KALKANI hasarı emdikten SONRA, sadece cana giden kısımdan yapılıyordu (kalkanı olan dosta hiç işlemiyordu) - artık
@@ -5385,6 +5632,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 			NetworkManager.sync_redirected_damage.rpc(damage_redirect_peer_id, redirected_amount)
 
 	var remaining: float = amount
+	_shield_combat_timer = SAVAS_COMBAT_WINDOW ## Savaş Kalkanı: hasar aldıktan sonra yenilenme yavaşlar (bkz. _process_item_shield)
 	## Kullanıcı isteği: "kalkansız hasar alma ... ses kalkan yokken karakter
 	## hasar alırsa çıkacak." - aşağıdaki eşya-kalkanı dalı bu bayrağı
 	## işaretler; cana hasar işlerken (bu fonksiyonun sonu) hiçbir kalkan bu
@@ -5497,6 +5745,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	if thorns_reflect_percent > 0.0 and source and is_instance_valid(source) and source.has_method("take_damage"):
 		var thorns_reflect_amount: float = effective_damage * thorns_reflect_percent
 		if thorns_reflect_amount > 0.0:
+			BalanceLogScript.tag(&"s:esya_diken")
 			source.take_damage(thorns_reflect_amount)
 	## Eşya pasifleri (Yenilenme Özütü penceresi, Zaman Kıran / Ölüm Eşiği / Güneşin İradesi) - ölüm kontrolünden ÖNCE
 	## (Zaman Kıran bu isabetten sağ çıkarır).
@@ -5688,12 +5937,22 @@ func _update_revive_rewind_fx() -> void:
 	_was_downed_for_heart_fx = is_downed or is_dead
 
 
+## Üstümüzde (ve diğer oyuncularda) 3 sn dönen kalp efekti: diriltme, Anka Mührü ve arkadaştan altın hediyesi (network_manager.gd receive_gold_gift).
+## Uzak ekranlarda kalp isim yazısının üstünde (remote_player.gd REMOTE_HEART_Y).
+func play_heart_fx() -> void:
+	add_child(FxReviveHeartScene.instantiate())
+	if NetworkManager.is_multiplayer_active and not FxReviveHeartScene.resource_path.is_empty():
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "skill_scene", global_position,
+			{"scene_path": FxReviveHeartScene.resource_path, "position": Vector2(0.0, -142.0)})
+
+
 func _go_down() -> void:
 	## Suriyeli Hadime: Q kanalı / Karabasan formu kapanır (bkz. _hadime_on_go_down) - diğer karakterlerde no-op.
 	_hadime_on_go_down()
 	## Shaman: golem formu yere düşmeden ÖNCE biter (yerde yatma klibi insan formunda oynasın).
 	_shaman_golem_on_go_down()
 	EventSfx.play(get_tree(), &"self_down")
+	BalanceLogScript.note_down(false)
 	is_downed = true
 	is_dead = true
 	health = 0
@@ -5866,6 +6125,7 @@ func grant_revive_invulnerability(duration: float = REVIVE_INVULNERABILITY_TIME)
 ## Kalıcı ölüm - eskiden die()'ın alt kısmıydı (revive hakkı yoksa ya da
 ## downed kanalı/bleedout süresi başarısız olursa buraya düşülür).
 func _finalize_death() -> void:
+	BalanceLogScript.note_down(true)
 	## Yerde yatarken ölüyorsa düşme sesi zaten _go_down'da çaldı; diriltme hakkı yokken doğrudan ölümde burada çalar.
 	if not is_downed:
 		EventSfx.play(get_tree(), &"self_down")
@@ -6122,10 +6382,24 @@ func on_xp_collected() -> void:
 	if is_dead:
 		return
 	_play_xp_pickup_sound()
+	_xp_orb_item_effects()
+
+
+## Küre başına tetiklenen eşya etkileri (ses hariç): Ruhların Akışı yığını + XP can şansı.
+func _xp_orb_item_effects() -> void:
 	_item_on_xp_orb()
 	if item_xp_heal_chance > 0.0 and health < max_health and randf() < item_xp_heal_chance:
 		health = min(max_health, health + 1.0)
 		health_changed.emit(health, max_health)
+
+
+## Birleşen XP küresi (bkz. drop_merge.gd) tek toplamada birden çok küre yerine geçer: ilk küre on_xp_collected ile (ses dahil),
+## kalanlar buradan - birleştirme küre sayısına bağlı eşyaları zayıflatmasın. Ses tek kalır (aynı anda onlarca ses olmasın).
+func on_xp_collected_extra(extra: int) -> void:
+	if is_dead:
+		return
+	for i in mini(extra, 32):
+		_xp_orb_item_effects()
 
 
 ## Ortak takım seviyesi atlandığında GameManager tarafından tetiklenir - her
@@ -6460,7 +6734,8 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 			## _activate_skill2). Bilinçli olarak +%30 kart-güçlendirme
 			## çarpanına TABİ DEĞİL - kullanıcı bu statı şimdi tanımlarken
 			## değerini doğrudan %4 olarak belirtti.
-			cooldown_reduction_percent = min(COOLDOWN_REDUCTION_CAP, cooldown_reduction_percent + 0.04 * tier_mult)
+			if cooldown_reduction_percent < COOLDOWN_REDUCTION_CAP: ## sınırdaysa eşya taşmasını ezme (eşya satılırsa ham değer simetrik kalsın)
+				cooldown_reduction_percent = min(COOLDOWN_REDUCTION_CAP, cooldown_reduction_percent + 0.04 * tier_mult)
 			## DÜZELTME (kullanıcı bildirimi #46: "bekleme süresinde azalma
 			## aldığında skillerin bekleme süresi kısalmıyor") - eskiden yeni
 			## oran SADECE _activate_skill/_activate_skill2 bir SONRAKİ kez
@@ -6473,13 +6748,13 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 			## anında yeni orana göre ORANTILI olarak kısaltılıyor.
 			if skill_state == "cooldown":
 				var raw_cd: float = _skill_timing_for(get_skill_character_id()).get("cooldown", DEFAULT_SKILL_COOLDOWN)
-				var new_cd: float = raw_cd * (1.0 - cooldown_reduction_percent)
+				var new_cd: float = raw_cd * (1.0 - get_cooldown_reduction())
 				if _skill_cooldown > 0.0:
 					skill_timer *= new_cd / _skill_cooldown
 				_skill_cooldown = new_cd
 			if skill2_state == "cooldown":
 				var raw_cd2: float = _skill2_timing_for(get_skill2_id()).get("cooldown", DEFAULT_SKILL2_COOLDOWN)
-				var new_cd2: float = raw_cd2 * (1.0 - cooldown_reduction_percent)
+				var new_cd2: float = raw_cd2 * (1.0 - get_cooldown_reduction())
 				if _skill2_cooldown > 0.0:
 					skill2_timer *= new_cd2 / _skill2_cooldown
 				_skill2_cooldown = new_cd2
@@ -6630,7 +6905,7 @@ func _activate_skill2() -> void:
 	_skill2_duration = timing["duration"]
 	## Bekleme Süresi Azaltma statı (level kartı, bkz. apply_upgrade
 	## "cooldown_reduction") - üst sınır COOLDOWN_REDUCTION_CAP.
-	_skill2_cooldown = timing["cooldown"] * (1.0 - cooldown_reduction_percent)
+	_skill2_cooldown = timing["cooldown"] * (1.0 - get_cooldown_reduction())
 	skill2_state = "active"
 	skill2_timer = _skill2_duration
 	skill2_total_elapsed = 0.0
@@ -6643,7 +6918,9 @@ func _activate_skill2() -> void:
 	## _buyucu_try_activate_variation - hariç, o zaten kendi spellcast'ini
 	## çalıyor, buraya hiç ulaşmıyor). Vampir'in Yarasa Formu (id 41) hariç: dönüşüm kendi
 	## "bat_*" animasyonunu oynatır (bkz. _skill_vampir_bat_form).
-	if skill2_id != 41:
+	## Matthew'in Elektrik Topu (id 50) de: karakter sprite'ı gizlenip top döngüsü oynar (bkz. _skill_matthew_ball).
+	## Cadı'nın Uçan Süpürgesi (id 52) de: oturuş klibi (ride_*) oynar (bkz. _update_animation).
+	if skill2_id != 41 and skill2_id != 50 and skill2_id != CadiMath.E_SKILL_ID:
 		_play_cast_animation()
 	match skill2_id:
 		## Assasin Çocuk E = Gölge Adımı (id 30) - 2026-09-30 Q/E değişimiyle _activate_skill()'ten buraya. (Şahin Hamlesi, id 5,
@@ -6656,7 +6933,9 @@ func _activate_skill2() -> void:
 		11: _skill_elara_true_damage()
 		## Şovalye Adam YENİ E (Koruma Bariyeri, id 29) - 2026-09-25 slot değişimi ("R si de E olacak").
 		29: _skill_paladin_barrier()
-		21: _skill_matthew_haste()
+		21: _skill_matthew_haste() ## artık hiçbir karakterde yok (Matthew E 2026-10-12'de Elektrik Topu oldu)
+		## Matthew YENİ E (Elektrik Topu, id 50 = MatthewLightning.E_SKILL_ID) - 2026-10-12 rework, madde 98.
+		50: _skill_matthew_ball()
 		## Shaman E (Kalkan Totemi) - 2026-09-29 slot değişimiyle Q'dan buraya, bkz. characters.gd DEFS[12].
 		26: _skill_shaman_shield_totem()
 		## Vampir Çocuk TEMEL (Yarasa Formu) - bkz. characters.gd DEFS[13].
@@ -6665,12 +6944,20 @@ func _activate_skill2() -> void:
 		20: _skill_necro_summon_golem()
 		## Suriyeli Hadime TEMEL (Kara Delik) - bkz. characters.gd DEFS[14], dosya sonundaki Hadime bloğu.
 		47: _skill_hadime_black_hole()
+		## Cadı TEMEL (Uçan Süpürge, id 52 = CadiMath.E_SKILL_ID) - bkz. dosya sonundaki Cadı bloğu.
+		52: _skill_cadi_broom()
 
 
 func _end_skill2_effects() -> void:
+	## Cadı'nın süpürgesi süresi dolunca iner (bkz. _end_cadi_broom).
+	if _cadi_broom_active:
+		_end_cadi_broom()
 	## Vampir Çocuk'un Yarasa Formu süresi dolunca insan formuna döner (bkz. _end_vampir_bat_form).
 	if _vampir_bat_form_active:
 		_end_vampir_bat_form()
+	## Matthew'in Elektrik Topu süresi dolunca insan formuna döner (bkz. _end_matthew_ball).
+	if _matthew_ball_active:
+		_end_matthew_ball()
 	## Talon TEMEL (Silah Salvosu, id 36) biterken silah ikonlarını normal
 	## konumuna döndürür (bkz. _skill_talon_weapon_salvo/_end_talon_weapon_salvo).
 	if _talon_weapon_salvo_active:
@@ -6787,7 +7074,7 @@ func _activate_skill3() -> void:
 	item_shield_ability_slow_timer = _shield_hit_regen_delay()
 	var timing: Dictionary = _skill3_timing_for(skill3_id)
 	_skill3_duration = timing["duration"]
-	_skill3_cooldown = timing["cooldown"] * (1.0 - cooldown_reduction_percent)
+	_skill3_cooldown = timing["cooldown"] * (1.0 - get_cooldown_reduction())
 	skill3_state = "active"
 	skill3_timer = _skill3_duration
 	skill3_total_elapsed = 0.0
@@ -6916,6 +7203,10 @@ func _activate_skill() -> void:
 	if char_id == 18 and _korsan_bombs.is_empty():
 		_spawn_floating_text("BOMBA YOK", Color(1.0, 0.4, 0.4))
 		return
+	## Kullanıcı isteği (2026-10-12): Patlat sadece KENDİ görüş alanındaki bombaları patlatır - hiçbiri görüşte değilse tetiklenmez.
+	if char_id == 18 and _korsan_bombs_in_vision().is_empty():
+		_spawn_floating_text("BOMBA MENZİLDE DEĞİL", Color(1.0, 0.4, 0.4))
+		return
 	## Vampir Çocuk Q'su (Kan Emme, id 40): hedef yoksa hiç tetiklenmez, bekleme süresine girmez (Korsan'ın "BOMBA YOK" deseni).
 	## Kullanıcı isteği (2026-10-01): "vampir çocuğun Q su candan değil diğer karakterlerdeki gibi kalkandan harcasın" - o tarihte
 	## maksimum canın %4'ü yerine standart Q (temel) kalkan tarifesine geçti; 2026-10-06: "Q sunun kalkan bedelini kaldır" - artık
@@ -6923,11 +7214,7 @@ func _activate_skill() -> void:
 	if char_id == 40 and _vampir_q_targets().is_empty():
 		_spawn_floating_text("HEDEF YOK", Color(1.0, 0.4, 0.4))
 		return
-	## Matthew'in yeni Q'su (Tilki Hücumu, id 43) tilkiyi ışınlayıp saldırtıyor - Feda Kalkanı'nın
-	## (bkz. _skill_shield_dome) "YARATIK YOK" kontrolüyle AYNI desen: tilki yoksa hiç tetiklenmez.
-	if char_id == 43 and not (_matthew_pet_alive and _matthew_pet and is_instance_valid(_matthew_pet)):
-		_spawn_floating_text("YARATIK YOK", Color(1.0, 0.4, 0.4))
-		return
+	## (Matthew Q, id 43: 2026-10-12 rework'ünden beri köpek gerektirmez - eski "YARATIK YOK" kontrolü kalktı, madde 98.)
 	## Paladin'in ULTİ'si (id 11, Koruma Baloncuğu / kalkan yenilenmesi) kalkanla İLGİLİ/kalkan VEREN
 	## bir yetenek olduğu için muaf - bkz. _activate_skill2() üstündeki aynı gerekçe (kullanıcı
 	## isteği #31: "kalkan veren yetenekler kalkan harcamamalı").
@@ -7022,7 +7309,7 @@ func _activate_skill() -> void:
 	item_shield_ability_slow_timer = _shield_hit_regen_delay()
 	var timing: Dictionary = _skill_timing_for(char_id)
 	_skill_duration = timing["duration"]
-	_skill_cooldown = timing["cooldown"] * (1.0 - cooldown_reduction_percent)
+	_skill_cooldown = timing["cooldown"] * (1.0 - get_cooldown_reduction())
 	skill_state = "active"
 	skill_timer = _skill_duration
 	skill_total_elapsed = 0.0
@@ -7070,7 +7357,7 @@ func _activate_skill() -> void:
 		## DÜZELTME (kullanıcı isteği: "Matthew'in yeni skili... kalkan yeteneğini
 		## R'ye yerleştir") - Feda Kalkanı (id 9) buradan R/skill3'e taşındı (bkz.
 		## _activate_skill3()'teki eşleşen düzeltme), Q'ya yeni Tilki Hücumu geldi.
-		43: _skill_matthew_fox_strike()
+		43: _skill_matthew_lightning_strike() ## 2026-10-12 rework: köpek atılışı yerine şimşek (eski: _skill_matthew_fox_strike)
 		## Şovalye Adam YENİ Q (Kalkan Yenileme + Kışkırtma, id 45) - 2026-09-25 slot değişimi; Koruma Baloncuğu (id 11)
 		## buradan R/skill3'e taşındı (bkz. _activate_skill3()).
 		45: _skill_sovalye_taunt()
@@ -7401,8 +7688,13 @@ func _skill_heal() -> void:
 ## değişir ve normal senkronizasyonla herkese yayılır. peer_id'si olmayan
 ## yerel müttefikler (ör. Matthew'in yaratığı) eskisi gibi doğrudan .heal()
 ## alır.
+## 2026-10-12: ölü / yerde yatan (kukla yere düşünce is_dead false gelir, is_downed true) dosta can/kalkan basılmaz.
+func _ally_is_down(ally: Variant) -> bool:
+	return ally != null and is_instance_valid(ally) and (ally.get("is_dead") == true or ally.get("is_downed") == true)
+
+
 func _apply_heal_to_ally(ally: Node2D, amount: float) -> void:
-	if amount <= 0.0 or not is_instance_valid(ally):
+	if amount <= 0.0 or not is_instance_valid(ally) or _ally_is_down(ally):
 		return
 	amount *= heal_power_mult() ## İyileştirme ve Kalkan Gücü (veren taraf)
 	_item_light_guard_on_support(ally)
@@ -7427,7 +7719,7 @@ func _apply_heal_to_ally(ally: Node2D, amount: float) -> void:
 ## hedefine DOĞRUDAN .heal_shield() çağırıyordu - RemotePlayer hedeflerde bu
 ## sadece kozmetik kuklayı etkiliyordu.
 func _apply_shield_heal_to_ally(ally: Node2D, amount: float) -> void:
-	if amount <= 0.0 or not is_instance_valid(ally):
+	if amount <= 0.0 or not is_instance_valid(ally) or _ally_is_down(ally):
 		return
 	amount *= heal_power_mult() ## İyileştirme ve Kalkan Gücü (veren taraf)
 	_item_light_guard_on_support(ally)
@@ -7800,7 +8092,7 @@ func _buyucu_try_activate_variation() -> void:
 	_spend_ability_shield_cost(skill2_shield_cost)
 	item_shield_ability_slow_timer = _shield_hit_regen_delay()
 	var timing: Dictionary = _skill2_timing_for(BUYUCU_VARIATION_SKILL2_IDS[buyucu_variation])
-	_buyucu_variation_cooldowns[buyucu_variation] = float(timing["cooldown"]) * (1.0 - cooldown_reduction_percent)
+	_buyucu_variation_cooldowns[buyucu_variation] = float(timing["cooldown"]) * (1.0 - get_cooldown_reduction())
 	_play_cast_animation()
 	_buyucu_cast_variation(buyucu_variation, "skill2")
 
@@ -7830,7 +8122,7 @@ func _buyucu_try_activate_variation_r() -> void:
 		_spend_ability_shield_cost(skill3_shield_cost)
 	item_shield_ability_slow_timer = _shield_hit_regen_delay() ## bedelsiz yeteneklerde de (Q'nun _activate_skill'deki notu)
 	var timing: Dictionary = _skill2_timing_for(BUYUCU_VARIATION_SKILL2_IDS[variation])
-	_buyucu_variation_cooldowns[variation] = float(timing["cooldown"]) * (1.0 - cooldown_reduction_percent)
+	_buyucu_variation_cooldowns[variation] = float(timing["cooldown"]) * (1.0 - get_cooldown_reduction())
 	_play_cast_animation()
 	_buyucu_cast_variation(variation, "skill3")
 
@@ -8017,6 +8309,7 @@ func _run_buyucu_arcane_bounce(first_target: Node2D, power: float = 1.0) -> void
 			## her sekiş kendi başına ayrı bir kritik zarı atıyor.
 			var is_crit: bool = _roll_ability_crit()
 			var hit_dmg: float = _apply_ability_crit(dmg, is_crit)
+			BalanceLogScript.tag(&"s:buyucu_sekme")
 			current_target.take_damage(hit_dmg, is_crit)
 			## Evrim "Arcane Patlama" (E1): isabet noktasında patlar, çevredekilere bu isabetin %75'i (hedefin kendisi hariç).
 			if has_evo("buyucu_e1"):
@@ -8089,6 +8382,7 @@ func _skill_buyucu_frost_nova() -> void:
 			continue
 		hit_any = true
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:buyucu_buz_nova")
 			e.take_damage(_apply_ability_crit(dmg, is_crit), is_crit, 0.0, true)
 		if e.has_method("apply_frost_slow"):
 			e.apply_frost_slow(BUYUCU_NOVA_SLOW_PERCENT, BUYUCU_NOVA_SLOW_DURATION)
@@ -8288,6 +8582,7 @@ func _spawn_buyucu_meteor_strike() -> void:
 		if strike_pos.distance_to(e.global_position) > impact_radius:
 			continue
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:buyucu_meteor")
 			e.take_damage(_apply_ability_crit(dmg, is_crit), is_crit, 0.0, true)
 	## Evrim "Ateş ve Buz" (R finali): düştüğü yerde yanan krater (evo_area.gd "buyucu_crater" - üstüne basan yaratık 3 sn,
 	## saniyede saldırı gücünün %30'u yanar; diğer oyuncular aynı krateri görür).
@@ -8508,8 +8803,16 @@ func take_paladin_barrier_damage(amount: float, attacker: Node2D = null) -> void
 	## İstemcide take_damage host'a gider.
 	if has_evo("sovalye_r2") and attacker != null and is_instance_valid(attacker) and attacker.get("is_dead") != true \
 			and attacker.has_method("take_damage") and attacker.is_in_group("enemies"):
+		BalanceLogScript.tag(&"s:sovalye_yansitma")
 		attacker.take_damage(item_shield_max * EVO_SOVALYE_R_REFLECT, false, 0.0, false)
 		_evo_world_fx(FxEvoReflectSparkScene, attacker.global_position, 0.0, (attacker.global_position - global_position).angle(), "sovalye_reflect", 0.12)
+	_shield_combat_timer = SAVAS_COMBAT_WINDOW
+	## Baloncuğa vuran her yaratık bir "hasar alma" anıdır (take_damage'deki aynı kancalar): istatistik/balans kaydı, Ruhani "Tank"
+	## (yansıtma + eksik kalkan yenilenmesi), Kırılmaz İrade. Kullanıcı bildirimi 2026-10-13: ulti açıkken kalkan hasar alınca bunlar işlemiyordu.
+	match_damage_taken += amount
+	BalanceLogScript.on_taken(amount, attacker)
+	_spirit_tank_on_hit(amount, attacker)
+	_item_on_hit_taken()
 	var shield_damage: float = amount * PALADIN_ULTI_SHIELD_COST_MULT
 	item_shield_hp = max(0.0, item_shield_hp - shield_damage)
 	if item_shield_hp <= 0.0:
@@ -9073,6 +9376,7 @@ func _assasin_dash2_execute() -> void:
 		if e.has_method("take_damage"):
 			_assasin_mark_dash_kill(e) ## evrim "Av Zinciri" - hasardan ÖNCE (bkz. o fonksiyon)
 			var is_crit: bool = _roll_ability_crit()
+			BalanceLogScript.tag(&"s:assasin_dash2")
 			e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
 			_spawn_assasin_dash_hit_fx((e as Node2D).global_position, dash_dir)
 	## Evrim "Kunai Yağmuru" (Q finali - hamle 2026-09-30'dan beri Q'da): hamle bittiği noktadan çevreye 6 kunai (biri hamle yönünde).
@@ -9242,6 +9546,7 @@ func _skill_assasin_dash() -> void:
 		## sıçrayış/vuruş kendi kritik zarını atıyor.
 		if target_enemy.has_method("take_damage"):
 			var is_crit: bool = _roll_ability_crit()
+			BalanceLogScript.tag(&"s:assasin_dash")
 			target_enemy.call("take_damage", _apply_ability_crit(total_damage, is_crit), is_crit)
 
 		hit_enemies.append(target_enemy)
@@ -9815,6 +10120,7 @@ func _matthew_fox_dash_sequence() -> void:
 		if not is_instance_valid(e) or e.get("is_dead") == true or not e.has_method("take_damage"):
 			continue
 		var is_crit: bool = _roll_ability_crit()
+		BalanceLogScript.tag(&"s:matthew_tilki_hucumu")
 		e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
 		hits += 1
 		## Kullanıcı isteği (2026-09-28, yetenek evrimleri): "artık düşmanları geri itmiyor" - itme "Savuran Pençe" evrimiyle.
@@ -9866,6 +10172,321 @@ func _spawn_matthew_claw_hit_fx(pos: Vector2, dir: Vector2) -> void:
 			"scene_path": FxMatthewClawSlashScene.resource_path,
 			"rotation": fx.rotation,
 		})
+
+
+## ============================================================== MATTHEW REWORK: ŞİMŞEK KİTİ (2026-10-12, madde 98)
+## Kullanıcı: "Q bundan sonra köpeğiyle değil kendi şimşek gücüyle alakalı ... Artık köpek yok ama dosyalarını silme ... yeni pasif ...
+## yeni E ... yeni ulti: şuanki ile aynı fakat Q'nun ve pasifin çalışmasını önlemeyecek, kalkan yıldırım temalı". Sayılar, formüller
+## ve sprite sayfaları scripts/matthew_lightning.gd'de (remote_player.gd ile PAYLAŞILIR). Yukarıdaki köpek sekansı
+## (_skill_matthew_fox_strike / _matthew_fox_dash_sequence) ve Vahşi Hız (_skill_matthew_haste) artık çağrılmıyor - köpek geri
+## gelirse diye yerinde bırakıldı.
+## Ağ (MP iki-yer kuralı): şimşek / isabet / dönüşüm / patlama = _evo_world_fx ("hitscan_impact", sahne yolu); kalkan çağırma
+## şimşeği = _play_and_broadcast_skill_fx; SÜREKLİ durumlar (top formu, güçlenmiş iz, kalkan parıltısı) = main.gd extra["mt"]
+## (matthew_net_state) -> remote_player.gd _apply_matthew_net_state aynı sahneleri/betikleri kurar.
+const FxMatthewBoltScene := preload("res://scenes/fx_matthew_bolt.tscn")
+const FxMatthewSparkScene := preload("res://scenes/fx_matthew_spark.tscn")
+const FxMatthewSparkRingScene := preload("res://scenes/fx_matthew_spark_ring.tscn")
+const FxMatthewFormBurstScene := preload("res://scenes/fx_matthew_form_burst.tscn")
+const FxMatthewShieldCastScene := preload("res://scenes/fx_matthew_shield_cast.tscn")
+const FxMatthewNovaScene := preload("res://scenes/fx_matthew_nova.tscn")
+const FxMatthewBallScene := preload("res://scenes/fx_matthew_ball.tscn")
+const FxMatthewLightningShieldScene := preload("res://scenes/fx_matthew_lightning_shield.tscn")
+const MatthewTrailScript := preload("res://scripts/fx_matthew_trail.gd")
+const MATTHEW_HIT_SOUND := "res://assets/audio/matthew_fox_impact.wav"
+
+var _matthew_momentum: float = 0.0 ## pasif hız birikimi (0..MOMENTUM_MAX): hareket hızına canlı, saldırı hızına tam yüzdeyle işler
+var _matthew_momentum_percent: int = 0 ## silahlara uygulanmış tam yüzde (her değişimde _apply_weapon_bonuses)
+var _matthew_trail: Node = null
+var _matthew_trail_scan_timer: float = 0.0
+var _matthew_ball_active: bool = false
+var _matthew_ball_fx: Node2D = null
+var _matthew_ball_cooldowns: Dictionary = {} ## yaratık instance_id -> yeniden vurulabilmesine kalan sn
+var _matthew_hit_sfx_msec: int = 0
+var matthew_dome_max: float = 0.0 ## kalkanın açılıştaki kapasitesi (parıltı oranı için)
+
+
+func _is_matthew() -> bool:
+	return GameManager.selected_char_id == MatthewLightning.CHAR_ID
+
+
+## Saldırı aralığı çarpanına pasifin payı (bkz. _attack_interval_mult_uncapped): her %1 hareket hızı = %1 saldırı hızı.
+func _matthew_momentum_fire_mult() -> float:
+	return MatthewLightning.fire_interval_mult(_matthew_momentum_percent)
+
+
+func _matthew_apply_momentum_percent(pct: int) -> void:
+	if pct == _matthew_momentum_percent:
+		return
+	_matthew_momentum_percent = pct
+	_apply_weapon_bonuses()
+
+
+func _matthew_enemy_ok(e: Node) -> bool:
+	return is_instance_valid(e) and e is Node2D and e.get("is_dead") != true and e.has_method("take_damage") and VisionFogScript.can_target(e)
+
+
+func _matthew_enemy_radius(e: Node) -> float:
+	return float(e._body_radius) if "_body_radius" in e else 20.0
+
+
+## Çok yaratığa aynı karede değince ses yığılmasın (yerelde ve yayında aynı kapı).
+func _matthew_hit_sound(pitch: float, volume_db: float) -> void:
+	var now: int = Time.get_ticks_msec()
+	if now - _matthew_hit_sfx_msec < 70:
+		return
+	_matthew_hit_sfx_msec = now
+	_play_networked_sound(MATTHEW_HIT_SOUND, pitch, volume_db)
+
+
+## Her fizik karesinde, is_downed/is_dead erken dönüşlerinden ÖNCE (Vampir/Shaman ile aynı sebep): ölürken/düşerken top formunu
+## kapatır, izi keser, silah çekilme animasyonunu ilerletir.
+func _process_matthew_form(delta: float) -> void:
+	if not _is_matthew():
+		return
+	if is_dead or is_downed:
+		if _matthew_ball_active:
+			if skill2_state == "active" and get_skill2_id() == MatthewLightning.E_SKILL_ID:
+				_end_skill2_effects()
+				skill2_state = "cooldown"
+				skill2_timer = _skill2_cooldown
+				skill2_total_elapsed = _skill2_duration
+			else:
+				_end_matthew_ball()
+		_matthew_momentum = MatthewLightning.step_momentum(_matthew_momentum, false, delta)
+		_matthew_apply_momentum_percent(int(floor(_matthew_momentum * 100.0 + 0.0001)))
+		if is_instance_valid(_matthew_trail):
+			_matthew_trail.set("level", 0)
+		_matthew_update_glow()
+	_process_vampir_weapon_pull(delta)
+
+
+## ---------- Pasif: Yıldırım Hızı (hayattayken her fizik karesi - bkz. _passive_matthew) ----------
+func _process_matthew_lightning(delta: float) -> void:
+	var moving: bool = velocity.length() > MatthewLightning.MOVING_SPEED
+	_matthew_momentum = MatthewLightning.step_momentum(_matthew_momentum, moving, delta)
+	_matthew_apply_momentum_percent(int(floor(_matthew_momentum * 100.0 + 0.0001)))
+	if not is_instance_valid(_matthew_trail):
+		_matthew_trail = Node.new()
+		_matthew_trail.set_script(MatthewTrailScript)
+		add_child(_matthew_trail)
+	_matthew_trail.set("level", MatthewLightning.trail_level(_matthew_momentum, moving))
+	_matthew_trail.set("intensity", _matthew_momentum / MatthewLightning.MOMENTUM_MAX)
+	_matthew_trail_scan(delta)
+	_process_matthew_ball(delta)
+	_matthew_update_glow()
+
+
+## Güçlenmiş iz (tam hız): ize değen yaratık 1 sn sersemler + %80 AP, aynı yaratık 3 sn'de bir. Kare başı değil, 0,1 sn'de bir;
+## izin sınır kutusu için tek EnemyQuery sorgusu (her karede "enemies" taraması yok).
+func _matthew_trail_scan(delta: float) -> void:
+	_matthew_trail_scan_timer -= delta
+	if _matthew_trail_scan_timer > 0.0 or not is_instance_valid(_matthew_trail):
+		return
+	_matthew_trail_scan_timer = MatthewLightning.TRAIL_SCAN_INTERVAL
+	var pts: PackedVector2Array = _matthew_trail.call("live_points")
+	if pts.is_empty():
+		return
+	var lo: Vector2 = pts[0]
+	var hi: Vector2 = pts[0]
+	for p: Vector2 in pts:
+		lo = lo.min(p)
+		hi = hi.max(p)
+	var center: Vector2 = (lo + hi) * 0.5
+	for e: Node in EnemyQueryScript.candidates(get_tree(), center, center.distance_to(hi) + MatthewLightning.TRAIL_HIT_RADIUS + 48.0):
+		if not _matthew_enemy_ok(e):
+			continue
+		var ep: Vector2 = (e as Node2D).global_position
+		var reach: float = _matthew_enemy_radius(e) + MatthewLightning.TRAIL_HIT_RADIUS
+		var touching: bool = false
+		for p: Vector2 in pts:
+			if p.distance_squared_to(ep) <= reach * reach:
+				touching = true
+				break
+		if not touching or not _evo_hit_ready(e, "mtrail", MatthewLightning.TRAIL_HIT_INTERVAL):
+			continue
+		var is_crit: bool = _roll_ability_crit()
+		BalanceLogScript.tag(&"s:matthew_yildirim_izi")
+		e.call("take_damage", _apply_ability_crit(damage_bonus * MatthewLightning.TRAIL_DAMAGE_RATIO, is_crit), is_crit, 0.0, true)
+		if e.has_method("apply_stun"):
+			e.call("apply_stun", MatthewLightning.TRAIL_STUN) ## bosslar sersemlemez (enemy.gd apply_stun), sadece hasar alır
+		_evo_world_fx(FxMatthewSparkScene, ep + Vector2(0.0, -8.0), 0.0, 0.0, "mt_trail_fx", 0.08)
+		_matthew_hit_sound(randf_range(1.3, 1.5), -9.0)
+
+
+## ---------- Q: Şimşek Hücumu (id 43) ----------
+## Eski Köpek Hücumu'nun kuralları AYNEN (Matthew'e o an en yakın, görüşteki hedefler sırayla; %110 AP; evrimler q1-qf aynı) -
+## köpek hedefe atılmak yerine Matthew'dan hedefe şimşek çakar. Köpek gerekmediği için "YARATIK YOK" hali de yok.
+func _skill_matthew_lightning_strike() -> void:
+	_matthew_bolt_sequence()
+
+
+func _matthew_bolt_sequence() -> void:
+	var hit_damage: float = damage_bonus * MATTHEW_FOX_STRIKE_DAMAGE_RATIO * (EVO_MATTHEW_Q_DAMAGE_MULT if has_evo("matthew_q3") else 1.0)
+	var max_targets: int = EVO_MATTHEW_Q_TARGETS if has_evo("matthew_qf") else MATTHEW_FOX_STRIKE_MAX_TARGETS
+	var already_hit: Dictionary = {}
+	var hits: int = 0
+	while hits < max_targets:
+		if not is_inside_tree() or is_dead or is_downed:
+			return
+		## Her çakışta yeniden seçilir: ölen/uzaklaşan hedefin yerine sıradaki geçer (eski sekansla aynı kural).
+		var e: Node2D = _matthew_fox_next_target(already_hit)
+		if e == null:
+			break
+		already_hit[e.get_instance_id()] = true
+		var target_pos: Vector2 = e.global_position + Vector2(0.0, -8.0)
+		var body: Vector2 = _matthew_body_center()
+		var from: Vector2 = body + (target_pos - body).limit_length(5.0)
+		var span: Vector2 = target_pos - from
+		_evo_world_fx(FxMatthewBoltScene, from, maxf(span.length(), 6.0), span.angle())
+		var is_crit: bool = _roll_ability_crit()
+		BalanceLogScript.tag(&"s:matthew_simsek_hucumu")
+		e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
+		hits += 1
+		## Evrim "Savuran Şimşek" (q1): vurulan yaratık Matthew'dan uzağa itilir.
+		if has_evo("matthew_q1") and e.has_method("apply_skill_push"):
+			var away: Vector2 = e.global_position - global_position
+			e.call("apply_skill_push", away.normalized() if away.length() > 1.0 else _facing_to_vector(facing), MATTHEW_FOX_STRIKE_PUSH_DISTANCE)
+		_evo_world_fx(FxMatthewSparkScene, target_pos)
+		_play_networked_sound(MATTHEW_HIT_SOUND, randf_range(1.15, 1.4), -5.0)
+		await get_tree().create_timer(MatthewLightning.BOLT_INTERVAL).timeout
+	if hits == 0:
+		_spawn_floating_text("HEDEF YOK", Color(1.0, 0.9, 0.4))
+
+
+## ---------- E: Elektrik Topu (id 50) ----------
+func _skill_matthew_ball() -> void:
+	_matthew_ball_active = true
+	skill2_speed_multiplier = MatthewLightning.EVO_BALL_SPEED_MULT if has_evo("matthew_e4") else MatthewLightning.BALL_SPEED_MULT
+	_matthew_ball_cooldowns.clear()
+	## Silahlar Vampir yarasa formunun mekanizmasıyla içe çekilir ve susar (bkz. _vampir_weapons_absorbed); form bitince
+	## _process_vampir_weapon_pull onları geri çıkarıp yeniden açar.
+	_vampir_capture_weapon_offsets()
+	_vampir_set_weapons_processing(false)
+	if is_instance_valid(anim):
+		anim.visible = false
+	if is_instance_valid(_matthew_ball_fx):
+		_matthew_ball_fx.queue_free()
+	_matthew_ball_fx = FxMatthewBallScene.instantiate() as Node2D
+	_matthew_ball_fx.set("big", has_evo("matthew_ef"))
+	add_child(_matthew_ball_fx)
+	## Dönüşüm patlaması karaktere bağlı (top sayfasıyla aynı piksel boyu) - diğer oyunculara da gider.
+	_play_and_broadcast_skill_fx(FxMatthewFormBurstScene, {"position": MatthewLightning.BODY_CENTER})
+
+
+func _end_matthew_ball() -> void:
+	if not _matthew_ball_active:
+		return
+	_matthew_ball_active = false
+	skill2_speed_multiplier = 1.0
+	_matthew_ball_cooldowns.clear()
+	if is_instance_valid(_matthew_ball_fx):
+		_matthew_ball_fx.queue_free()
+	_matthew_ball_fx = null
+	if is_instance_valid(anim):
+		anim.visible = true
+	if not is_dead and is_inside_tree():
+		_play_and_broadcast_skill_fx(FxMatthewFormBurstScene, {"position": MatthewLightning.BODY_CENTER})
+
+
+## Gövde ortasının DÜNYA konumu (BODY_CENTER yerel koordinat - oyuncu kökü sahnede 0,5 ölçekli).
+func _matthew_body_center() -> Vector2:
+	return global_position + MatthewLightning.BODY_CENTER * global_scale
+
+
+func _matthew_ball_radius() -> float:
+	return MatthewLightning.BALL_REACH * (MatthewLightning.BALL_BIG_MULT if has_evo("matthew_ef") else 1.0)
+
+
+## Temas: topun değdiği her yaratık %200 AP alıp fırlar (aynı yaratığa BALL_REHIT_INTERVAL'de bir).
+func _process_matthew_ball(delta: float) -> void:
+	if not _matthew_ball_active:
+		return
+	for id: int in _matthew_ball_cooldowns.keys():
+		_matthew_ball_cooldowns[id] -= delta
+		if _matthew_ball_cooldowns[id] <= 0.0:
+			_matthew_ball_cooldowns.erase(id)
+	if is_in_merchant_zone:
+		return
+	var center: Vector2 = _matthew_body_center()
+	var ball_r: float = _matthew_ball_radius()
+	var near: Array = EnemyQueryScript.candidates(get_tree(), center, ball_r + MatthewLightning.BALL_FLING_DISTANCE + 80.0)
+	for e: Node in near:
+		if not _matthew_enemy_ok(e):
+			continue
+		var reach: float = _matthew_enemy_radius(e) + ball_r
+		if center.distance_squared_to((e as Node2D).global_position) > reach * reach:
+			continue
+		var id: int = e.get_instance_id()
+		if _matthew_ball_cooldowns.has(id):
+			continue
+		_matthew_ball_cooldowns[id] = MatthewLightning.BALL_REHIT_INTERVAL
+		_matthew_ball_hit(e as Node2D, near, center, ball_r)
+
+
+## Topun (ve bilardoda çarpılan ikinci yaratığın) hasarı: %200 AP; e1 her 10 hareket hızı için +%1; e3 verilen hasarın %5'i can.
+func _matthew_ball_damage(e: Node) -> void:
+	var is_crit: bool = _roll_ability_crit()
+	var dmg: float = _apply_ability_crit(damage_bonus * MatthewLightning.BALL_DAMAGE_RATIO
+			* MatthewLightning.ball_damage_mult(get_effective_move_speed(), has_evo("matthew_e1")), is_crit)
+	BalanceLogScript.tag(&"s:matthew_elektrik_topu")
+	e.call("take_damage", dmg, is_crit, 0.0, true)
+	if has_evo("matthew_e3"):
+		heal(dmg * MatthewLightning.EVO_BALL_HEAL_RATIO)
+
+
+func _matthew_ball_hit(en: Node2D, near: Array, center: Vector2, ball_r: float) -> void:
+	_matthew_ball_damage(en)
+	var to_e: Vector2 = en.global_position - center
+	var out_dir: Vector2 = to_e.normalized() if to_e.length() > 0.1 else _facing_to_vector(facing)
+	## Fırlama yönü: topun gidiş yönü ağırlıklı, merkezden dışa doğru biraz açılır (tam öndeki ileri, sıyrılan yana gider).
+	var dir: Vector2 = out_dir
+	if velocity.length() > MatthewLightning.MOVING_SPEED:
+		dir = (velocity.normalized() * 0.65 + out_dir * 0.35).normalized()
+	_evo_world_fx(FxMatthewSparkRingScene, center + out_dir * ball_r, 0.0, 0.0, "mt_ball_fx", 0.05)
+	_matthew_hit_sound(randf_range(0.8, 0.95), -4.0)
+	if not en.has_method("apply_skill_push"):
+		return
+	## Bilardo (kullanıcı seçimi: "çarpan fırlar, çarptığı da yanar"): fırlayanın yolundaki İLK yaratık bulunur; fırlayan ona
+	## vardığı anda (enemy.gd itme kinematiğiyle aynı süre) o da %200 AP alır ve itilir. Tek seviye - zincir uzamaz.
+	var fling: float = MatthewLightning.BALL_FLING_DISTANCE * (0.4 if en.get("is_boss") == true else 1.0) ## enemy.gd SKILL_PUSH_BOSS_MULT
+	var others: Array = []
+	for o: Node in near:
+		if o != en and _matthew_enemy_ok(o):
+			others.append([(o as Node2D).global_position, _matthew_enemy_radius(o), o])
+	var found: Array = MatthewLightning.first_on_path(en.global_position, dir, fling, _matthew_enemy_radius(en), others)
+	en.call("apply_skill_push", dir, MatthewLightning.BALL_FLING_DISTANCE)
+	if not found.is_empty():
+		_matthew_ball_chain_hit(found[0] as Node2D, dir, MatthewLightning.push_travel_time(fling, float(found[1])))
+
+
+func _matthew_ball_chain_hit(victim: Node2D, dir: Vector2, delay: float) -> void:
+	if delay > 0.02:
+		await get_tree().create_timer(delay).timeout
+	if not is_inside_tree() or not is_instance_valid(victim) or victim.get("is_dead") == true:
+		return
+	## Çarpılan yaratık hemen ardından topa da değerse aynı anda iki kez yanmasın.
+	if not _matthew_ball_cooldowns.has(victim.get_instance_id()):
+		_matthew_ball_cooldowns[victim.get_instance_id()] = MatthewLightning.BALL_REHIT_INTERVAL
+	_matthew_ball_damage(victim)
+	if victim.has_method("apply_skill_push"):
+		victim.call("apply_skill_push", dir, MatthewLightning.BALL_CHAIN_PUSH)
+	_evo_world_fx(FxMatthewSparkRingScene, victim.global_position + Vector2(0.0, -8.0), 0.0, 0.0, "mt_ball_fx2", 0.05)
+	_matthew_hit_sound(randf_range(0.95, 1.1), -5.0)
+
+
+## ---------- R: Yıldırım Kalkanı (id 9) - kalkan kırılmaya yaklaştıkça sarı parıltı ----------
+func _matthew_update_glow() -> void:
+	var level: float = MatthewLightning.glow_level(matthew_dome_hp, matthew_dome_max) if matthew_dome_active else 0.0
+	MatthewLightning.apply_glow(anim, level)
+
+
+## main.gd extra["mt"]: diğer oyunculardaki kuklanın kuracağı sürekli durumlar (bkz. matthew_lightning.gd pack_state).
+func matthew_net_state() -> Array:
+	var ball: int = 0
+	if _matthew_ball_active:
+		ball = 2 if has_evo("matthew_ef") else 1
+	var glow: int = MatthewLightning.glow_step(MatthewLightning.glow_level(matthew_dome_hp, matthew_dome_max)) if matthew_dome_active else 0
+	return MatthewLightning.pack_state(ball, MatthewLightning.is_empowered(_matthew_momentum) and not is_dead and not is_downed, glow)
 
 
 ## player_pet.gd _physics_process'teki tilki hız çizgisi kontrolüyle BİREBİR
@@ -10303,6 +10924,7 @@ func _talon_dash_apply_hits(pending: Array, path_fraction: float, hit_damage: fl
 			pending.remove_at(i)
 			if is_instance_valid(e) and e.get("is_dead") != true and e.has_method("take_damage") and is_inside_tree():
 				var is_crit: bool = _roll_ability_crit()
+				BalanceLogScript.tag(&"s:talon_dash")
 				e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
 				## 2026-09-28: isabet başına eksik kalkan yenilemesi temel yetenekten çıktı - "Kalkan Hamlesi" evrimiyle %3.
 				if has_evo("talon_q1") and item_shield_max > 0.0:
@@ -10361,20 +10983,10 @@ func _skill_talon_mirror_form() -> void:
 	_talon_form_apply_scale(true)
 	_play_and_broadcast_skill_fx(FxTalonFormScene)
 	_play_skill_sfx("talon_mirror")
-	## kullanıcı isteği: "Talonun ultisi açıkken kendisi ve silahları kırmızı
-	## tonlarında parlamalı" (Ayna Formu/R, 15sn - bkz. AskUserQuestion cevabı).
-	## Kök `modulate`e uygulanıyor: Godot'ta CanvasItem modulate alt öğelere
-	## ÇARPIMSAL yayılır, anim VE owned_weapon_nodes ikisi de Player'ın
-	## çocuğu olduğu için TEK bu satır hem karakteri hem silahları kırmızıya
-	## boyuyor. main.gd zaten bu kök modulate'i
-	## (anim.modulate ile çarpıp) diğer oyunculara yayınlıyor (bkz.
-	## _process_multiplayer_sync extra["modulate"]) - ekstra senkron kodu
-	## GEREKMİYOR. Geri alma _end_talon_mirror_form()'da (gerçek 15sn
-	## dolunca) - _end_skill_effects()'teki GENEL modulate sıfırlaması
-	## BİLEREK bunu ES GEÇİYOR (bkz. o fonksiyondaki skill3 koruması), yoksa
-	## Talon'un Q'sunu (0.16sn'lik ayrı bir zamanlayıcı) her kullanışında bu
-	## kırmızı ton ZAMANINDAN ÖNCE (R hâlâ sürerken) sıfırlanırdı.
-	modulate = Color(1.0, 0.62, 0.36, 1.0) ## turuncu-kırmızı (eskiden düz kırmızı 1.0/0.4/0.4)
+	## Form görünümü (kullanıcı 2026-10-12: "kırmızı-siyah bir forma geçip gözleri beyaz parıldayacak ve silahlar da kırmızı beyaz görünecek"):
+	## fx_talon_form.gd karaktere shaders/talon_form.gdshader, silah ikonlarına talon_form_weapon.gdshader takar (uzak kuklada AYNI sahne takar,
+	## ekstra senkron yok). Eskiden burada kök modulate turuncu-kırmızıya boyanıyordu (Color(1.0, 0.62, 0.36)); KALDIRILDI - beyaz gözleri ve
+	## silahlardaki beyazı da turuncuya çeviriyordu. _end_talon_mirror_form()'daki modulate sıfırlaması zararsız olduğu için duruyor.
 
 
 ## Sabit dairesel dizilim (Silah Salvosu'nun aksine DÖNMÜYOR) - her karede
@@ -10481,30 +11093,21 @@ const MATTHEW_DOME_AP_RATIO := 10.0 ## %1000 saldırı gücü
 
 
 func _skill_shield_dome() -> void:
-	if not _matthew_pet_alive or not _matthew_pet or not is_instance_valid(_matthew_pet) or not ("health" in _matthew_pet):
-		_spawn_floating_text("YARATIK YOK", Color(1.0, 0.4, 0.4))
-		return
-	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir ... kalkan
-	## verme de dahil bunlar pozitif olarak artacak" - kritikte kalkana
-	## dönüşen tilki canı normalden fazla sayılıyor.
-	## Kullanıcı isteği (2026-09-28): "Matthew'in R yeteneği bundan sonra saldırı gücünün %1000'i oranında bir koruma
-	## kapasitesine sahip olsun" - eskiden kapasite feda anında tilkinin kalan CANIydı. Artık saldırı gücü x
-	## MATTHEW_DOME_AP_RATIO (tilki yine feda edilir/kalkana dönüşür, sadece kapasitenin kaynağı değişti).
-	## Evrim "Kalın Kürk": koruma kapasitesi %50 fazla (%1000 -> %1500 saldırı gücü).
+	## 2026-10-12 REWORK (madde 98): "Yıldırım Kalkanı" - kullanıcı: "şuanki ile aynı fakat Q'nun ve pasifin çalışmasını
+	## önlemeyecek ve etrafındaki kalkanın yıldırım temalı bir kalkan olması gerekiyor". Köpek feda edilmez (köpek yok) -
+	## eski "YARATIK YOK" hali kalktı; kapasite/süre/bekleme/patlama/evrimler AYNI.
+	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir ... kalkan verme de dahil" - kritikte kapasite büyür.
+	## Kullanıcı isteği (2026-09-28): kapasite = saldırı gücü x MATTHEW_DOME_AP_RATIO (%1000). Evrim r1: %50 fazla (%1500).
 	matthew_dome_hp = _apply_ability_crit(damage_bonus * MATTHEW_DOME_AP_RATIO * (EVO_MATTHEW_DOME_MULT if has_evo("matthew_r1") else 1.0), _roll_ability_crit())
+	matthew_dome_max = matthew_dome_hp ## parıltı oranı (bkz. _matthew_update_glow): kalkan yıprandıkça Matthew sarı parıldar
 	matthew_dome_active = true
-	# The fox runs to Matthew instead of dying instantly, then becomes the shield.
-	if _matthew_pet.has_method("begin_matthew_shield_form"):
-		_matthew_pet.begin_matthew_shield_form(self)
-	_spawn_burst(Color(0.95, 0.55, 0.2))
-	
-	if FxMatthewSacrificeScene:
-		var sacrifice_fx: Node2D = FxMatthewSacrificeScene.instantiate() as Node2D
-		add_child(sacrifice_fx)
-	if FxMatthewFoxShieldScene:
-		_matthew_fox_shield_fx = FxMatthewFoxShieldScene.instantiate() as Node2D
-		add_child(_matthew_fox_shield_fx)
-	_broadcast_skill_scene("res://scenes/fx_matthew_sacrifice.tscn")
+	## Gökten Matthew'in başına inen çağırma şimşeği (karaktere bağlı, tek seferlik - diğer oyunculara da gider).
+	_play_and_broadcast_skill_fx(FxMatthewShieldCastScene, {"position": MatthewLightning.HEAD_TOP})
+	## Halka: kasterde burada, diğer ekranlarda remote_player.gd _ensure_matthew_dome_visual (main.gd extra["matthew_dome"]).
+	if is_instance_valid(_matthew_fox_shield_fx):
+		_matthew_fox_shield_fx.queue_free()
+	_matthew_fox_shield_fx = FxMatthewLightningShieldScene.instantiate() as Node2D
+	add_child(_matthew_fox_shield_fx)
 
 
 func _pop_matthew_dome(exploded: bool) -> void:
@@ -10541,6 +11144,7 @@ func _matthew_dome_explosion() -> void:
 		if d > RADIUS:
 			continue
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:matthew_kubbe")
 			e.take_damage(dmg, is_crit, 0.0, true)
 		if d > 0.1:
 			var dir: Vector2 = (e.global_position - global_position).normalized()
@@ -10548,18 +11152,10 @@ func _matthew_dome_explosion() -> void:
 				e.apply_knockback_force(dir, KNOCKBACK)
 			else:
 				e.global_position += dir * KNOCKBACK
-	_spawn_burst(Color(0.95, 0.55, 0.2))
-	
-	if FxMatthewExplosionScene:
-		var fx := FxMatthewExplosionScene.instantiate() as Node2D
-		# Add directly to main scene so it stays at the explosion position
-		# rather than following player if player moves away quickly.
-		fx.global_position = global_position
-		get_tree().current_scene.add_child(fx)
-		if NetworkManager.is_multiplayer_active:
-			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", global_position, {
-				"scene_path": "res://scenes/fx_matthew_explosion.tscn"
-			})
+	## 2026-10-12 rework: yıldırım patlaması (ışınsal şimşekler + zikzak şok dalgası, yarıçap 220 = hasar yarıçapı) - eski
+	## tilki ateşi patlaması (fx_matthew_explosion.tscn) ve pürüzsüz _spawn_burst halkası yerine. Dünyada kalır, diğer
+	## oyunculara aynı sahne gider.
+	_evo_world_fx(FxMatthewNovaScene, _matthew_body_center())
 
 
 ## Helper: broadcast a skill overlay scene to remote players.
@@ -10774,8 +11370,9 @@ func _is_vampir() -> bool:
 ## enemy.gd (host'un yaratık simülasyonu) bu oyuncunun/kuklasının "içinden geçilebilir" olup olmadığını buradan öğrenir
 ## (remote_player.gd is_ghost_now'ın karşılığı) - aksi halde yaratık, üstüne binen yarasayı sert yapıştırmayla dışarı iterdi.
 func is_ghost_now() -> bool:
-	## Shaman golem sıçrayışında havadayken de (uzak kuklada: golem_jump_* klibi).
-	return _vampir_bat_form_active or _elara_evasion_timer > 0.0 or _hadime_q_active or _shaman_golem_jumping \
+	## Shaman golem sıçrayışında havadayken de (uzak kuklada: golem_jump_* klibi). Matthew'in Elektrik Topu da: yaratıkların
+	## içinden geçer (değdiğini zaten fırlatır).
+	return _vampir_bat_form_active or _elara_evasion_timer > 0.0 or _hadime_q_active or _shaman_golem_jumping or _matthew_ball_active \
 		or has_item("ninjanin_el_kitabi")
 
 
@@ -10901,6 +11498,7 @@ func _skill_vampir_blood_drain() -> void:
 		var is_crit: bool = _roll_ability_crit()
 		var dmg: float = _apply_ability_crit(damage_bonus * VAMPIR_Q_DAMAGE_RATIO, is_crit)
 		if t.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:vampir_kan_emme")
 			t.take_damage(dmg, is_crit, 0.0, true) ## birden çok hedefe: çoklu hedefli = alan
 			total_dealt += dmg
 		points.append(t.global_position)
@@ -10948,7 +11546,8 @@ func _skill_vampir_bat_form() -> void:
 ## has_evo("vampir_ef") ile verir (uzak ekranda da silahlar dışarıda kalsın).
 func _vampir_weapons_absorbed() -> bool:
 	## Shaman golem formu da aynı çekilme mekanizmasını kullanır (silahlar devre dışı + gövdeye çekilip solar).
-	return (_vampir_bat_form_active and not has_evo("vampir_ef")) or _shaman_golem_active
+	## Matthew'in Elektrik Topu (2026-10-12) da.
+	return (_vampir_bat_form_active and not has_evo("vampir_ef")) or _shaman_golem_active or _matthew_ball_active
 
 
 func _end_vampir_bat_form() -> void:
@@ -11021,6 +11620,7 @@ func _vampir_process_contact(delta: float) -> void:
 		var is_crit: bool = _roll_ability_crit()
 		var dmg: float = _apply_ability_crit(damage_bonus * VAMPIR_BAT_CONTACT_DAMAGE_RATIO, is_crit)
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:vampir_yarasa_temas")
 			e.take_damage(dmg, is_crit, 0.0, true) ## temas: birden çok yaratığa değer = alan
 		_vampir_hit_fx(e.global_position)
 		## Evrim "Kanat Darbesi": çarptığı yaratık uçuş yolunun YANINA savrulur (hangi taraftaysa o yana) - geçtiği yol temizlenir.
@@ -11170,6 +11770,7 @@ func vampir_bat_hit(target: Node, pos: Vector2) -> void:
 	var dmg: float = _apply_ability_crit(damage_bonus * VAMPIR_R_DAMAGE_RATIO, is_crit)
 	var burst_center: Vector2 = target.global_position
 	if target.has_method("take_damage"):
+		BalanceLogScript.tag(&"s:vampir_yarasa_r")
 		target.take_damage(dmg, is_crit)
 	_vampir_hit_fx(pos)
 	## Evrim "Kan Patlaması" (R finali): vurulan yaratığın çevresinde kan patlar - yarıçaptaki HERKESE (vurulan dahil)
@@ -11179,6 +11780,7 @@ func vampir_bat_hit(target: Node, pos: Vector2) -> void:
 		var burst_dmg: float = _apply_ability_crit(damage_bonus * EVO_VAMPIR_R_BURST_RATIO, burst_crit)
 		for e in Enemy.get_enemies_near(get_tree(), burst_center, EVO_VAMPIR_R_BURST_RADIUS):
 			if is_instance_valid(e) and e.get("is_dead") != true and e.has_method("take_damage"):
+				BalanceLogScript.tag(&"s:vampir_r_patlama")
 				e.take_damage(burst_dmg, burst_crit, 0.0, true)
 		_evo_world_fx(FxEvoBloodBurstScene, burst_center, EVO_VAMPIR_R_BURST_RADIUS)
 
@@ -11226,6 +11828,7 @@ var _spirit_para_timer: float = SpiritualSkillsScript.PARA_INTERVAL
 var _spirit_invuln_timer: float = 0.0
 ## Aktif buff'ların stat karşılıkları (weapon.gd _player_stat, on_damage_dealt, _current_temp_speed_boost okur).
 var spirit_attack_speed: float = 0.0 ## Adc: +%30 saldırı hızı
+var pet_attack_speed: float = 0.0 ## Kelebek Ruhu: +%10 saldırı hızı (aynı toplanan havuz, bkz. _attack_interval_mult_uncapped)
 var spirit_shield_pen: float = 0.0 ## Adc: +%15 kalkan delme
 var spirit_lifesteal: float = 0.0 ## Adc: +%1 can emme
 var spirit_speed_bonus: float = 0.0 ## Taktiksel: +%30 hareket hızı
@@ -11454,6 +12057,7 @@ func _spirit_tank_on_hit(incoming: float, source: Node2D) -> void:
 	if item_shield_max > 0.0 and item_shield_hp < item_shield_max:
 		heal_shield((item_shield_max - item_shield_hp) * SpiritualSkillsScript.TANK_SHIELD_REGEN)
 	if source and is_instance_valid(source) and source.has_method("take_damage") and incoming > 0.0:
+		BalanceLogScript.tag(&"s:ruhani_tank")
 		source.take_damage(incoming * SpiritualSkillsScript.TANK_REFLECT)
 		var now_msec: int = Time.get_ticks_msec()
 		if now_msec - _spirit_last_reflect_msec > 120:
@@ -11556,10 +12160,20 @@ const MAP_EDGE_INSET := 16.0
 ## Sabitler GameManager.ATTACK_SPEED_CAP_PERCENT / ATTACK_SPEED_OVERFLOW_AP_PER_PERCENT (weapon.gd de okur).
 
 
-## Sınırsız aralık çarpanı (düşük = hızlı). item_fire_rate_percent + ruhani "Adc" toplamı negatif çarpana yol açmasın diye 0.01'de kesilir.
+## Eşya + ruhani "Adc" + evcil hayvan saldırı hızı havuzunun ARALIK çarpanı. 2026-10-13 (kullanıcı: "çeviklik yüzüğü toplam saldırı hızını
+## arttırıyor, oyunu aşırı bozuyor"): eskiden toplam 1'den ÇIKARILIYORDU (aralık = 1 - toplam) - %10'luk 5 yüzük aralığı 0,5'e (= +%100 hız),
+## 9 yüzük 0,1'e (= +%900) indiriyordu; yani "+%10 saldırı hızı" yığıldıkça katlanarak büyüyordu (parça slotu = seviye kadar, 27. seviyede 27 yüzük).
+## Artık toplam HIZA eklenir: aralık = 1 / (1 + toplam) - 5 yüzük = +%50, 10 yüzük = +%100 (metindeki "%10" gerçekten %10).
+func _item_attack_interval_mult() -> float:
+	return 1.0 / maxf(0.1, 1.0 + item_fire_rate_percent + spirit_attack_speed + pet_attack_speed)
+
+
+## Sınırsız aralık çarpanı (düşük = hızlı).
 func _attack_interval_mult_uncapped() -> float:
-	var safe_item_mult: float = maxf(0.01, 1.0 - item_fire_rate_percent - spirit_attack_speed)
-	return fire_rate_mult * _elara_passive_fire_rate_mult() * safe_item_mult
+	var safe_item_mult: float = _item_attack_interval_mult()
+	## Matthew pasifi "Yıldırım Hızı" (2026-10-12): hız birikiminin her %1'i = %1 saldırı hızı. Elara pasifi gibi taşma->saldırı
+	## gücü dönüşümüne GİRMEZ (get_attack_speed_overflow_percent bu çarpanı saymaz).
+	return fire_rate_mult * _elara_passive_fire_rate_mult() * _matthew_momentum_fire_mult() * safe_item_mult
 
 
 func get_attack_interval_mult() -> float:
@@ -11579,7 +12193,7 @@ func get_attack_speed_bonus_percent() -> float:
 ## Sınırı aşan saldırı hızı puanı (%) - 0 = sınırın altında.
 func get_attack_speed_overflow_percent() -> float:
 	## Elara pasifi taşma->saldırı gücü dönüşümüne GİRMEZ (2026-10-12 denge): sınır aşımı yalnız kart/eşya/ruhani hızdan sayılır.
-	var no_passive: float = fire_rate_mult * maxf(0.01, 1.0 - item_fire_rate_percent - spirit_attack_speed)
+	var no_passive: float = fire_rate_mult * _item_attack_interval_mult()
 	var total_pct: float = minf(_attack_speed_bonus_percent_uncapped(), (1.0 / maxf(0.01, no_passive) - 1.0) * 100.0)
 	return maxf(0.0, total_pct - GameManager.ATTACK_SPEED_CAP_PERCENT)
 
@@ -12054,7 +12668,7 @@ func _hadime_try_start_q() -> void:
 	item_shield_ability_slow_timer = _shield_hit_regen_delay()
 	var timing: Dictionary = _skill_timing_for(HadimeMath.Q_SKILL_ID)
 	_skill_duration = timing["duration"]
-	_skill_cooldown = timing["cooldown"] * (1.0 - cooldown_reduction_percent)
+	_skill_cooldown = timing["cooldown"] * (1.0 - get_cooldown_reduction())
 	skill_state = "active"
 	skill_timer = _skill_duration
 	skill_total_elapsed = 0.0
@@ -12124,7 +12738,7 @@ func _hadime_end_q() -> void:
 	_hadime_q_active = false
 	skill_state = "cooldown"
 	_skill_duration = 0.0
-	_skill_cooldown = float(_skill_timing_for(HadimeMath.Q_SKILL_ID)["cooldown"]) * (1.0 - cooldown_reduction_percent)
+	_skill_cooldown = float(_skill_timing_for(HadimeMath.Q_SKILL_ID)["cooldown"]) * (1.0 - get_cooldown_reduction())
 	skill_timer = _skill_cooldown
 	skill_total_elapsed = 0.0
 
@@ -12189,12 +12803,14 @@ func _on_hadime_curse_land(target, _pos: Vector2) -> void:
 	var dmg: float = _apply_ability_crit(damage_bonus * HadimeMath.Q_DAMAGE_RATIO * _hadime_damage_mult(), is_crit)
 	var land_pos: Vector2 = HadimeMath.enemy_hit_point(target)
 	if target.has_method("take_damage"):
+		BalanceLogScript.tag(&"s:hadime_lanet")
 		target.take_damage(dmg, is_crit, 0.0, false)
 	## Evrim "Patlayan Lanet": düştüğü yerde patlar, çevresindeki DİĞER yaratıklara verdiği hasarın %70'i.
 	if has_evo("hadime_q1"):
 		for e in Enemy.get_enemies_near(get_tree(), land_pos, HadimeMath.EVO_CURSE_BURST_RADIUS):
 			if e == target or not is_instance_valid(e) or e.get("is_dead") == true or not e.has_method("take_damage"):
 				continue
+			BalanceLogScript.tag(&"s:hadime_lanet_patlama")
 			e.take_damage(dmg * HadimeMath.EVO_CURSE_BURST_RATIO, is_crit, 0.0, true)
 		_evo_world_fx(FxEvoHadimeCurseBurstScene, land_pos, HadimeMath.EVO_CURSE_BURST_RADIUS)
 	_play_skill_sfx("hadime_curse", randf_range(0.92, 1.08))
@@ -12238,6 +12854,7 @@ func _on_hadime_hole_tick(center: Vector2, radius: float = HadimeMath.HOLE_RADIU
 		if center.distance_squared_to((e as Node2D).global_position) > r2:
 			continue
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:hadime_kuyu")
 			e.take_damage(dmg, is_crit, 0.0, true)
 			dealt += dmg
 	if has_evo("hadime_e3"):
@@ -12251,6 +12868,7 @@ func _on_hadime_hole_end(center: Vector2, radius: float) -> void:
 	var dmg: float = _apply_ability_crit(damage_bonus * HadimeMath.EVO_HOLE_BURST_RATIO * _hadime_damage_mult(), is_crit)
 	for e in Enemy.get_enemies_near(get_tree(), center, radius):
 		if is_instance_valid(e) and e.get("is_dead") != true and e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:hadime_kuyu")
 			e.take_damage(dmg, is_crit, 0.0, true)
 	_evo_world_fx(FxEvoHadimeHoleBurstScene, center, radius)
 	_play_skill_sfx("hadime_blackhole", 0.7)
@@ -12330,6 +12948,7 @@ func _process_hadime_nightmare(delta: float) -> void:
 			if global_position.distance_to((e as Node2D).global_position) > HadimeMath.R_RADIUS:
 				continue
 			if e.has_method("take_damage"):
+				BalanceLogScript.tag(&"s:hadime_kabus")
 				e.take_damage(dmg, is_crit, 0.0, true)
 
 
@@ -12502,6 +13121,673 @@ func get_hadime_net_state() -> Dictionary:
 		st["cp"] = _hadime_corpse_pos
 		st["cc"] = _hadime_corpse_clip
 	return st
+
+
+## =====================================================================================
+## CADI (roster id 15, kullanıcı isteği 2026-10-13) - sabitler/formüller/görsel yardımcılar scripts/cadi_math.gd (TEK kaynak)
+## =====================================================================================
+## Pasif Şans Tılsımı, Q Zehirli Duman (aç/kapa), E Uçan Süpürge (takım arkadaşlarını da taşır), R İksir Çantası (5 yük,
+## rastgele iksir). Tasarım notu cadi_math.gd başında. Çok oyunculu:
+##  - sürekli durumlar (Q açık mı, süpürgede mi) main.gd extra["cadi"] ile, YOLCULUK (her karakter) extra["cride"] ile gider;
+##  - dünya efektleri (bulut, şişe atışı, biniş dumanı) "cadi_fx" / "cadi_throw" (network_manager.gd) - kopyalar sadece görsel;
+##  - hasar/yaratık etkileri kasterin kopyasında bir kez hesaplanır (yaratık tarafı istemciden host'a kendi yoluyla taşır).
+var _cadi_passive_luck: float = 0.0
+var _cadi_q_active: bool = false
+var _cadi_q_cost_timer: float = 0.0
+var _cadi_since_smoke: float = 0.0
+var _cadi_last_smoke_pos: Vector2 = Vector2.INF
+var _cadi_potion_side: int = -1
+var _cadi_potion_on: bool = false
+var _cadi_smoke_scan: float = 0.0
+## Yaratık (instance id) -> dumandan bir sonraki hasarı alabileceği an (msn): kaç bulutun içinde olursa olsun saniyede BİR.
+var _cadi_smoke_next_hit: Dictionary = {}
+var _cadi_broom_active: bool = false
+var _cadi_broom_time: float = 0.0
+var _cadi_broom_visual_on: bool = false
+var _cadi_regen_timer: float = 0.0
+var _cadi_knock_bonus: float = 0.0
+var _cadi_contact_cooldowns: Dictionary = {}
+var cadi_r_charges: int = CadiMath.R_MAX_CHARGES
+var _cadi_r_recharge_timer: float = 0.0
+var _cadi_r_recharge_total: float = 0.0
+var _cadi_r_lock: float = 0.0
+var _cadi_next_potion: int = -1
+var _cadi_last_potion: int = -1
+## Karakter sprite'ının taban ofseti (DEFS "offset") - süpürgedeyken yükselme bu tabana eklenir; süpürge görseli de okur.
+var cadi_base_offset: Vector2 = Vector2(0, -1.8)
+## YOLCULUK (HER karakter): süpürgesine bindiğimiz cadının peer id'si (0 = binmiyoruz).
+var cadi_ride_host_peer: int = 0
+var _cadi_ride_time: float = 0.0
+var _cadi_remount_lock: float = 0.0
+var _cadi_lift_applied: bool = false
+
+
+func _is_cadi() -> bool:
+	return CadiMath.is_cadi(GameManager.selected_char_id)
+
+
+## Süpürge görseli ve yolcular bu üçünü sorar (remote_player.gd'de aynı adlı karşılıkları var).
+func is_cadi_broom_active() -> bool:
+	return _cadi_broom_active
+
+
+func cadi_broom_time() -> float:
+	return _cadi_broom_time
+
+
+func cadi_peer() -> int:
+	return CadiMath.local_peer(get_tree())
+
+
+## main.gd extra["cadi"]: [Q açık mı, süpürgede mi] - remote_player.gd _apply_cadi_net_state.
+func get_cadi_net_state() -> Array:
+	return [1 if _cadi_q_active else 0, 1 if _cadi_broom_active else 0]
+
+
+func _cadi_facing_vector() -> Vector2:
+	match facing:
+		"left":
+			return Vector2.LEFT
+		"right":
+			return Vector2.RIGHT
+		"up":
+			return Vector2.UP
+	return Vector2.DOWN
+
+
+func _cadi_feet() -> Vector2:
+	return global_position + CadiMath.FEET_LOCAL * 0.5
+
+
+## Her kare, ölü/düşmüşken de (erken dönüşlerden ÖNCE): ölünce süpürge/duman kapanır, binenlerin yükselmesi ve cadının
+## şişe/süpürge görselleri güncellenir. Yolculuk kısmı HER karakterde çalışır.
+func _process_cadi_visuals(delta: float) -> void:
+	if is_dead or is_downed:
+		if cadi_ride_host_peer != 0:
+			_cadi_dismount()
+		if _cadi_broom_active:
+			_cadi_cancel_broom()
+		if _cadi_q_active:
+			_cadi_end_q()
+	if _cadi_broom_active:
+		_cadi_broom_time += delta
+	var riding: bool = _cadi_broom_active or cadi_ride_host_peer != 0
+	if is_instance_valid(anim):
+		if riding:
+			var t: float = _cadi_broom_time
+			if not _cadi_broom_active:
+				var host: Node = CadiMath.player_node(get_tree(), cadi_ride_host_peer)
+				t = float(host.call("cadi_broom_time")) if host != null and host.has_method("cadi_broom_time") else _cadi_ride_time
+			anim.offset = cadi_base_offset + Vector2(0, -CadiMath.rider_lift(t))
+			_cadi_lift_applied = true
+		elif _cadi_lift_applied:
+			anim.offset = cadi_base_offset
+			_cadi_lift_applied = false
+	if not _is_cadi():
+		return
+	if _cadi_potion_on != _cadi_q_active:
+		_cadi_potion_on = _cadi_q_active
+		CadiMath.set_potion_visual(self, _cadi_potion_on)
+	if _cadi_broom_visual_on != _cadi_broom_active:
+		_cadi_broom_visual_on = _cadi_broom_active
+		CadiMath.set_broom_visual(self, _cadi_broom_visual_on)
+
+
+func _process_cadi(delta: float) -> void:
+	if not _is_cadi():
+		return
+	_process_cadi_passive()
+	_process_cadi_q(delta)
+	_process_cadi_smoke(delta)
+	_process_cadi_broom(delta)
+	_process_cadi_r(delta)
+
+
+## ---------- Pasif: Şans Tılsımı ----------
+## Her eksik %5 can başına +1 şans. Şans tek bir sayaç (luck) olduğu için fark kadar eklenip çıkarılır.
+func _process_cadi_passive() -> void:
+	var want: float = 0.0
+	if not is_dead and max_health > 0.0:
+		var missing: float = clampf(1.0 - health / max_health, 0.0, 1.0)
+		## 0,001: tam eşikteki (ör. tam %95 can) kayan nokta hatası bir basamak eksik saymasın.
+		want = floorf(missing / CadiMath.PASSIVE_HP_STEP + 0.001) * CadiMath.PASSIVE_LUCK_PER_STEP
+	if not is_equal_approx(want, _cadi_passive_luck):
+		luck += want - _cadi_passive_luck
+		_cadi_passive_luck = want
+
+
+## HUD pasif rozeti (hud.gd): şu an pasiften gelen şans.
+func get_cadi_passive_luck() -> int:
+	return int(_cadi_passive_luck)
+
+
+## ---------- Q: Zehirli Duman ----------
+## Saniyelik bedel = temel yetenek kalkan bedelinin yarısı (Hadime Q'suyla aynı formül). Evrim "Tutumlu Karışım": yarısı.
+func _cadi_q_cost() -> float:
+	if _evo_skill_free("skill"):
+		return 0.0
+	var evo_mult: float = CadiMath.EVO_Q_COST_MULT if has_evo("cadi_q3") else 1.0
+	return (item_shield_max * SKILL2_SHIELD_COST_PERCENT_OF_MAX + SKILL2_SHIELD_COST_FLAT) * CadiMath.Q_COST_RATIO \
+		* (1.0 - item_skill_shield_cost_reduction) * evo_mult
+
+
+## Q tuşu: kapalıysa (ve hazırsa) açar, açıksa kapatır - açıldıktan sonraki 1 sn'de gelen basış yok sayılır (spam koruması).
+func _cadi_toggle_q() -> void:
+	if _cadi_q_active:
+		if _toggle_close_allowed("skill"):
+			_cadi_end_q()
+	elif skill_state == "ready":
+		_cadi_try_start_q()
+
+
+func _cadi_try_start_q() -> void:
+	if _cadi_q_active or skill_state != "ready":
+		return
+	var cost: float = _cadi_q_cost()
+	if not _has_enough_ability_shield(cost):
+		_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
+		return
+	_spend_ability_shield_cost(cost)
+	item_shield_ability_slow_timer = _shield_hit_regen_delay()
+	var timing: Dictionary = _skill_timing_for(CadiMath.Q_SKILL_ID)
+	_skill_duration = timing["duration"]
+	_skill_cooldown = timing["cooldown"] * (1.0 - get_cooldown_reduction())
+	skill_state = "active"
+	skill_timer = _skill_duration
+	skill_total_elapsed = 0.0
+	_cadi_q_active = true
+	_toggle_mark_opened("skill")
+	_cadi_q_cost_timer = 1.0
+	## İlk bulut hemen düşsün.
+	_cadi_since_smoke = CadiMath.SMOKE_IDLE_INTERVAL
+	_play_cast_animation()
+	_play_skill_sfx("hadime_q") ## geçici: Cadı'ya özel ses yok (kullanıcıdan referans bekleniyor - bkz. madde notu)
+
+
+## Q'ya tekrar basılınca, satıcı bölgesine/eve girilince ya da bir sonraki saniyenin kalkan bedeli yetmeyince biter.
+## Yerdeki bulutlar ömürlerini tamamlar (hasar vermeye devam eder).
+func _cadi_end_q() -> void:
+	if not _cadi_q_active:
+		return
+	_cadi_q_active = false
+	skill_state = "cooldown"
+	_skill_duration = 0.0
+	_skill_cooldown = float(_skill_timing_for(CadiMath.Q_SKILL_ID)["cooldown"]) * (1.0 - get_cooldown_reduction())
+	skill_timer = _skill_cooldown
+	skill_total_elapsed = 0.0
+
+
+func _process_cadi_q(delta: float) -> void:
+	if not _cadi_q_active:
+		return
+	if is_in_merchant_zone or is_indoors:
+		_cadi_end_q()
+		return
+	_cadi_q_cost_timer -= delta
+	if _cadi_q_cost_timer <= 0.0:
+		_cadi_q_cost_timer += 1.0
+		var cost: float = _cadi_q_cost()
+		if not _has_enough_ability_shield(cost):
+			_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
+			_cadi_end_q()
+			return
+		_spend_ability_shield_cost(cost)
+		item_shield_ability_slow_timer = _shield_hit_regen_delay()
+	## Şişe cadının baktığı yönün tersinde (görsel düğümle AYNI kural - cadi_potion_visual.gd); bulut dumanın indiği noktada doğar.
+	_cadi_potion_side = CadiMath.potion_side(facing, _cadi_potion_side)
+	_cadi_since_smoke += delta
+	var land: Vector2 = global_position + CadiMath.smoke_land_offset(_cadi_potion_side)
+	var moved: bool = _cadi_last_smoke_pos == Vector2.INF or land.distance_to(_cadi_last_smoke_pos) >= CadiMath.SMOKE_MIN_STEP
+	if (moved and _cadi_since_smoke >= CadiMath.SMOKE_DROP_INTERVAL) or _cadi_since_smoke >= CadiMath.SMOKE_IDLE_INTERVAL:
+		_cadi_drop_smoke(land)
+
+
+func _cadi_drop_smoke(pos: Vector2) -> void:
+	_cadi_since_smoke = 0.0
+	_cadi_last_smoke_pos = pos
+	## Evrimler: Kalıcı Duman (+1,5 sn), Yoğun Duman (+%30 boyut) - diğer oyunculardaki kopyalar AYNI seçeneklerle kurulur.
+	var life: float = CadiMath.SMOKE_LIFE + (CadiMath.EVO_SMOKE_LIFE_BONUS if has_evo("cadi_q2") else 0.0)
+	var size: float = CadiMath.EVO_SMOKE_SIZE_MULT if has_evo("cadi_q4") else 1.0
+	var my_peer: int = cadi_peer()
+	CadiMath.spawn_smoke(get_tree().current_scene, pos, true, {"life": life, "size": size, "owner_peer": my_peer})
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.send_player_vfx(my_peer, "cadi_fx", pos, {"kind": "smoke", "life": life, "size": size})
+
+
+## Dumandaki yaratıklar: saniyede saldırı gücünün %120'si. Q kapansa da yerdeki bulutlar sürdüğü için her zaman çalışır.
+func _process_cadi_smoke(delta: float) -> void:
+	_cadi_smoke_scan -= delta
+	if _cadi_smoke_scan > 0.0:
+		return
+	_cadi_smoke_scan = CadiMath.Q_SCAN_INTERVAL
+	var clouds: Array = []
+	for s in get_tree().get_nodes_in_group("cadi_smokes"):
+		if is_instance_valid(s) and s.get("authoritative") == true and s.is_active():
+			clouds.append(s)
+	var now: int = Time.get_ticks_msec()
+	if clouds.is_empty():
+		if _cadi_smoke_next_hit.size() > 0:
+			_cadi_smoke_next_hit.clear()
+		return
+	if _cadi_smoke_next_hit.size() > 512:
+		_cadi_smoke_next_hit.clear()
+	var slow: bool = has_evo("cadi_q1")
+	var leech: bool = has_evo("cadi_qf")
+	var seen: Dictionary = {}
+	for s in clouds:
+		var reach: float = CadiMath.SMOKE_RX * float(s.size_mult) + 30.0
+		for e in EnemyQueryScript.candidates(get_tree(), s.global_position, reach):
+			if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
+				continue
+			var id: int = e.get_instance_id()
+			if seen.has(id):
+				continue
+			var body: float = float(e._body_radius) if "_body_radius" in e else 20.0
+			if not s.contains((e as Node2D).global_position, body * 0.5):
+				continue
+			seen[id] = true
+			if now < int(_cadi_smoke_next_hit.get(id, 0)):
+				continue
+			_cadi_smoke_next_hit[id] = now + int(CadiMath.Q_HIT_INTERVAL * 1000.0)
+			var is_crit: bool = _roll_ability_crit()
+			var dmg: float = _apply_ability_crit(damage_bonus * CadiMath.Q_DAMAGE_RATIO, is_crit)
+			if e.has_method("take_damage"):
+				BalanceLogScript.tag(&"s:cadi_duman")
+				e.take_damage(dmg, is_crit, 0.0, true)
+			## Evrim "Yapışkan Duman": hasar tikiyle birlikte yenilenir (saniyede bir - her taramada değil, istemciden
+			## host'a giden etki isteği sayısı düşük kalsın); süre bir sonraki tike kadar yeter.
+			if slow and e.has_method("apply_slow"):
+				e.apply_slow(CadiMath.EVO_SMOKE_SLOW, CadiMath.Q_HIT_INTERVAL + CadiMath.EVO_SMOKE_SLOW_TIME)
+			## Evrim "Kan Buharı": dumanın %3 can emmesi - oyunun can emme kuralıyla (isabet başına o ihtimalle sabit can;
+			## alan hasarı olduğu için şans x LIFESTEAL_EFFECTIVENESS).
+			if leech and not is_dead and health < max_health and randf() < CadiMath.EVO_SMOKE_LIFESTEAL * GameManager.LIFESTEAL_EFFECTIVENESS:
+				health = min(max_health, health + GameManager.LIFESTEAL_HEAL * heal_power_mult())
+				health_changed.emit(health, max_health)
+
+
+## ---------- E: Uçan Süpürge ----------
+func _skill_cadi_broom() -> void:
+	_cadi_broom_active = true
+	_cadi_broom_time = 0.0
+	_cadi_regen_timer = CadiMath.E_REGEN_TICK
+	_cadi_contact_cooldowns.clear()
+	## Evrim "Rüzgâr Süpürgesi": hız bonusu %20 -> %50.
+	skill2_speed_multiplier = CadiMath.EVO_E_SPEED_MULT if has_evo("cadi_e3") else CadiMath.E_SPEED_MULT
+	## Evrim "Süpüren Darbe": süpürgedeyken cadının silah isabetleri yaratıkları geri iter (yolculara verilmez) -
+	## weapon.gd/projectile.gd'nin okuduğu knockback_force'a süre boyunca eklenir.
+	if has_evo("cadi_e4"):
+		_cadi_knock_bonus = CadiMath.EVO_E_KNOCKBACK
+		knockback_force += _cadi_knock_bonus
+	_notify_enchants_skill_used() ## cast klibi (shrug) oynamadığı için efsun "yetenek kullanınca" tetiği elle
+	_cadi_poof()
+	_play_skill_sfx("vampir_bat_form") ## geçici: Cadı'ya özel ses yok
+
+
+func _end_cadi_broom() -> void:
+	if not _cadi_broom_active:
+		return
+	_cadi_broom_active = false
+	skill2_speed_multiplier = 1.0
+	if _cadi_knock_bonus != 0.0:
+		knockback_force -= _cadi_knock_bonus
+		_cadi_knock_bonus = 0.0
+	_cadi_contact_cooldowns.clear()
+	_cadi_poof()
+
+
+## Ölünce/düşünce: doğal bitişle AYNI sonuç (temizlik + tam bekleme), sadece süre dolmadan.
+func _cadi_cancel_broom() -> void:
+	if not _cadi_broom_active:
+		return
+	if skill2_state != "active":
+		_end_cadi_broom()
+		return
+	_end_skill2_effects()
+	skill2_state = "cooldown"
+	skill2_timer = _skill2_cooldown
+	skill2_total_elapsed = _skill2_duration
+
+
+func _cadi_poof() -> void:
+	var pos: Vector2 = global_position + Vector2(0, 4)
+	CadiMath.spawn_poof(get_tree().current_scene, pos)
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.send_player_vfx(cadi_peer(), "cadi_fx", pos, {"kind": "poof"})
+
+
+func _process_cadi_broom(delta: float) -> void:
+	if not _cadi_broom_active:
+		return
+	_cadi_regen_timer -= delta
+	if _cadi_regen_timer <= 0.0:
+		_cadi_regen_timer += CadiMath.E_REGEN_TICK
+		## "Her saniye saldırı gücünün %10'u kadar kalkan ve can" - yolcular da (cadının saldırı gücüyle; RPC ile kendi istemcilerine).
+		var amount: float = damage_bonus * CadiMath.E_REGEN_RATIO
+		heal(amount)
+		heal_shield(amount)
+		for peer in CadiMath.riders_of(get_tree(), cadi_peer()):
+			var rider: Node2D = CadiMath.player_node(get_tree(), int(peer))
+			if rider != null:
+				_apply_heal_to_ally(rider, amount)
+				_apply_shield_heal_to_ally(rider, amount)
+	if has_evo("cadi_ef"):
+		_cadi_process_contact(delta)
+
+
+## Evrim "Pike" (E finali): süpürgedeyken değdiği yaratığa saldırı gücünün %100'ü + 2 sn yere sabitleme (aynı yaratığa
+## EVO_E_CONTACT_INTERVAL'de bir - sabitlemeden uzun, yaratık sonsuza dek kilitlenmez).
+func _cadi_process_contact(delta: float) -> void:
+	for id in _cadi_contact_cooldowns.keys():
+		_cadi_contact_cooldowns[id] -= delta
+		if _cadi_contact_cooldowns[id] <= 0.0:
+			_cadi_contact_cooldowns.erase(id)
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, 90.0):
+		if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
+			continue
+		var reach: float = (float(e._body_radius) if "_body_radius" in e else 20.0) + CadiMath.EVO_E_CONTACT_REACH
+		if global_position.distance_squared_to((e as Node2D).global_position) > reach * reach:
+			continue
+		var id: int = e.get_instance_id()
+		if _cadi_contact_cooldowns.has(id):
+			continue
+		_cadi_contact_cooldowns[id] = CadiMath.EVO_E_CONTACT_INTERVAL
+		var is_crit: bool = _roll_ability_crit()
+		var dmg: float = _apply_ability_crit(damage_bonus * CadiMath.EVO_E_CONTACT_DAMAGE, is_crit)
+		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:cadi_supurge_temas")
+			e.take_damage(dmg, is_crit, 0.0, true)
+		if e.has_method("apply_root"):
+			e.apply_root(CadiMath.EVO_E_CONTACT_ROOT)
+
+
+## Süpürgedeyken sıvışma (evrim "Kıvrak Süpürge", %25): cadı VE yolcular (yolcu cadının evrimine bakar). Yetenek kaynaklı
+## olduğu için genel sıvışma sınırının üstüne biner (Elara Q'su gibi - bkz. take_damage).
+func _cadi_ride_dodge() -> float:
+	if _cadi_broom_active:
+		return CadiMath.EVO_E_DODGE if has_evo("cadi_e2") else 0.0
+	if cadi_ride_host_peer != 0:
+		var host: Node = CadiMath.player_node(get_tree(), cadi_ride_host_peer)
+		if host != null and host.has_method("has_evo") and bool(host.call("has_evo", "cadi_e2")):
+			return CadiMath.EVO_E_DODGE
+	return 0.0
+
+
+## ---------- Yolculuk (HER karakter; _physics_process hareket bölümünden çağrılır) ----------
+## Dönen: bu karede cadının süpürgesinde yolcu muyuz (evetse konum cadıya göre kuruldu, normal hareket atlanır).
+## İlk DISMOUNT_LOCK saniye inilemez; sonra hareket girdisi indirir (kullanıcı cevabı 2026-10-13). Silah ve yetenekler çalışır.
+func _cadi_passenger_follow(input_dir: Vector2, delta: float) -> bool:
+	if _cadi_remount_lock > 0.0:
+		_cadi_remount_lock -= delta
+	if cadi_ride_host_peer == 0:
+		_cadi_try_mount()
+		if cadi_ride_host_peer == 0:
+			return false
+	var host: Node2D = CadiMath.player_node(get_tree(), cadi_ride_host_peer)
+	if not CadiMath.is_broom_rider(host) or is_indoors:
+		_cadi_dismount()
+		return false
+	_cadi_ride_time += delta
+	if _cadi_ride_time >= CadiMath.DISMOUNT_LOCK and input_dir.length() > 0.2:
+		_cadi_dismount()
+		return false
+	var host_facing: String = CadiMath.facing_of(host)
+	var seat: int = CadiMath.seat_index(get_tree(), cadi_ride_host_peer, cadi_peer())
+	global_position = host.global_position + CadiMath.seat_offset(seat, host_facing)
+	facing = host_facing
+	return true
+
+
+## Süpürgedeki bir cadıya değince bineriz (yolcunun KENDİ istemcisi karar verir - konumunu da o yayınlar).
+func _cadi_try_mount() -> void:
+	if not NetworkManager.is_multiplayer_active or _cadi_remount_lock > 0.0 or _cadi_broom_active or is_indoors or is_in_merchant_zone:
+		return
+	## Kendi formundayken (yarasa, golem, top, hayalet, hamle/kanal kilitleri) binilmez.
+	if _vampir_bat_form_active or _shaman_golem_active or _matthew_ball_active or _hadime_ghost_active or _paladin_movement_locked \
+			or is_assasin_dashing or _talon_dashing or is_buyucu_channeling:
+		return
+	for rp in get_tree().get_nodes_in_group("remote_players"):
+		if not CadiMath.is_broom_rider(rp):
+			continue
+		if global_position.distance_to((rp as Node2D).global_position) > CadiMath.MOUNT_RADIUS:
+			continue
+		if CadiMath.riders_of(get_tree(), int(rp.peer_id)).size() >= CadiMath.MAX_PASSENGERS:
+			continue
+		cadi_ride_host_peer = int(rp.peer_id)
+		_cadi_ride_time = 0.0
+		_cadi_poof()
+		return
+
+
+func _cadi_dismount() -> void:
+	if cadi_ride_host_peer == 0:
+		return
+	cadi_ride_host_peer = 0
+	_cadi_ride_time = 0.0
+	_cadi_remount_lock = CadiMath.REMOUNT_LOCK
+	if not is_dead and not is_downed:
+		_cadi_poof()
+
+
+## ---------- R: İksir Çantası ----------
+## Yük dolum süresi: 8 sn; evrim "Hızlı Demleme" dolum hızını %25 artırır. Bekleme azaltma statı da geçerli (Shaman yükleri gibi).
+func _cadi_r_recharge_time() -> float:
+	var base: float = CadiMath.R_RECHARGE / (CadiMath.EVO_R_RECHARGE_DIV if has_evo("cadi_r2") else 1.0)
+	return maxf(0.05, base * (1.0 - get_cooldown_reduction()))
+
+
+func _cadi_start_r_recharge() -> void:
+	_cadi_r_recharge_total = _cadi_r_recharge_time()
+	_cadi_r_recharge_timer = _cadi_r_recharge_total
+
+
+func _process_cadi_r(delta: float) -> void:
+	if _cadi_next_potion < 0:
+		_cadi_next_potion = CadiMath.roll_potion(_cadi_last_potion)
+	if _cadi_r_lock > 0.0:
+		_cadi_r_lock -= delta
+	if cadi_r_charges >= CadiMath.R_MAX_CHARGES:
+		return
+	_cadi_r_recharge_timer -= delta
+	if _cadi_r_recharge_timer <= 0.0:
+		cadi_r_charges += 1
+		_cadi_r_recharge_timer = 0.0
+		if cadi_r_charges < CadiMath.R_MAX_CHARGES:
+			_cadi_start_r_recharge()
+
+
+## Atış başına kalkan bedeli: ulti tarifesinin 1/5'i (5 yük = bir ulti bedeli).
+func _cadi_r_cost() -> float:
+	if _evo_skill_free("skill3"):
+		return 0.0
+	return (item_shield_max * SKILL_SHIELD_COST_PERCENT_OF_MAX + SKILL_SHIELD_COST_FLAT) * CadiMath.R_COST_SHARE * (1.0 - item_skill_shield_cost_reduction)
+
+
+func _cadi_try_throw() -> void:
+	if _cadi_r_lock > 0.0:
+		return ## spam koruması: atışlar arası 0,5 sn (sessiz)
+	if cadi_r_charges <= 0:
+		_spawn_floating_text("YÜK YOK", Color(1.0, 0.55, 0.25))
+		return
+	var cost: float = _cadi_r_cost()
+	if not _has_enough_ability_shield(cost):
+		_spawn_floating_text("KALKAN YETERSİZ", Color(0.4, 0.7, 1.0))
+		return
+	_spend_ability_shield_cost(cost)
+	item_shield_ability_slow_timer = _shield_hit_regen_delay()
+	if _cadi_next_potion < 0:
+		_cadi_next_potion = CadiMath.roll_potion(_cadi_last_potion)
+	var potion: int = _cadi_next_potion
+	_cadi_last_potion = potion
+	_cadi_next_potion = CadiMath.roll_potion(potion)
+	cadi_r_charges -= 1
+	if _cadi_r_recharge_timer <= 0.0:
+		_cadi_start_r_recharge()
+	_cadi_r_lock = CadiMath.R_THROW_LOCK
+	## Süpürgedeyken oturuş pozu bozulmasın (cast klibi _update_animation'da zaten ezilirdi; efsun tetiği elle).
+	if _cadi_broom_active or cadi_ride_host_peer != 0:
+		_notify_enchants_skill_used()
+	else:
+		_play_cast_animation()
+	## Evrimler: Uzun Etki (+1,5 sn alan), Geniş Karışım (+%40 alan/patlama) - diğer oyunculardaki kopya AYNI seçeneklerle.
+	var opts: Dictionary = {
+		"duration": CadiMath.ZONE_DURATION + (CadiMath.EVO_ZONE_DURATION_BONUS if has_evo("cadi_r1") else 0.0),
+		"size": CadiMath.EVO_ZONE_SIZE_MULT if has_evo("cadi_rf") else 1.0,
+	}
+	var from: Vector2 = global_position + Vector2(0, -14)
+	var to: Vector2 = _cadi_pick_throw_target(potion, float(opts["size"]))
+	CadiMath.spawn_bottle(get_tree().current_scene, potion, from, to, _on_cadi_bottle_land.bind(opts), opts)
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.send_player_vfx(cadi_peer(), "cadi_throw", from, {"to": to, "potion": potion, "duration": opts["duration"], "size": opts["size"]})
+	_play_skill_sfx("korsan_bomb_place") ## geçici: Cadı'ya özel ses yok
+
+
+## Otomatik hedef (kullanıcı cevabı): şifa -> menzildeki canı (oran) en az müttefik, herkes tamsa cadının kendisi;
+## diğer iksirler -> menzilde görülebilen yaratıklardan, alan yarıçapında en çok komşusu olanın üstü (en kalabalık küme).
+## Yaratık yoksa baktığı yöne sabit mesafe.
+func _cadi_pick_throw_target(potion: int, size_mult: float) -> Vector2:
+	var feet: Vector2 = _cadi_feet()
+	if potion == CadiMath.POTION_HEAL:
+		var best: Vector2 = feet
+		var best_ratio: float = health / maxf(1.0, max_health)
+		for rp in get_tree().get_nodes_in_group("remote_players"):
+			if not is_instance_valid(rp) or _ally_is_down(rp):
+				continue
+			if global_position.distance_to((rp as Node2D).global_position) > CadiMath.R_RANGE:
+				continue
+			var ratio: float = float(rp.get("health")) / maxf(1.0, float(rp.get("max_health")))
+			if ratio < best_ratio - 0.001:
+				best_ratio = ratio
+				best = (rp as Node2D).global_position + CadiMath.FEET_LOCAL * 0.5
+		return best
+	var cands: Array = []
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, CadiMath.R_RANGE + 1.0):
+		if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
+			continue
+		if global_position.distance_to((e as Node2D).global_position) > CadiMath.R_RANGE or not VisionFogScript.can_target(e):
+			continue
+		cands.append((e as Node2D).global_position)
+		if cands.size() >= 80:
+			break
+	if cands.is_empty():
+		return feet + _cadi_facing_vector() * CadiMath.R_FALLBACK_DISTANCE
+	var r: Vector2 = CadiMath.zone_radius(size_mult)
+	var best_pos: Vector2 = cands[0]
+	var best_n: int = -1
+	var best_d: float = INF
+	for p in cands:
+		var n: int = 0
+		for q in cands:
+			if CadiMath.in_ellipse(q, p, r.x, r.y):
+				n += 1
+		var d: float = global_position.distance_squared_to(p)
+		if n > best_n or (n == best_n and d < best_d):
+			best_n = n
+			best_d = d
+			best_pos = p
+	return best_pos
+
+
+## Şişe yere değdi (SADECE kasterin kopyası): patlama anında hasar verir, diğerleri alan açar.
+func _on_cadi_bottle_land(potion: int, pos: Vector2, opts: Dictionary) -> void:
+	if not is_inside_tree():
+		return
+	var size: float = float(opts.get("size", 1.0))
+	if potion == CadiMath.POTION_BOOM:
+		CadiMath.spawn_boom(get_tree().current_scene, pos, size)
+		var radius: float = CadiMath.BOOM_RADIUS * size
+		for e in EnemyQueryScript.candidates(get_tree(), pos, radius + 30.0):
+			if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true or not e.has_method("take_damage"):
+				continue
+			var body: float = float(e._body_radius) if "_body_radius" in e else 20.0
+			if pos.distance_to((e as Node2D).global_position) > radius + body * 0.5:
+				continue
+			var is_crit: bool = _roll_ability_crit()
+			BalanceLogScript.tag(&"s:cadi_patlama")
+			e.take_damage(_apply_ability_crit(damage_bonus * CadiMath.BOOM_DAMAGE_RATIO, is_crit), is_crit, 0.0, true)
+		return
+	CadiMath.spawn_zone(get_tree().current_scene, potion, pos, true, _on_cadi_zone_scan, opts)
+
+
+## Yetkili alan kopyasının taraması (cadi_zone.gd, ZONE_SCAN_INTERVAL'de bir).
+func _on_cadi_zone_scan(zone: Node2D, dt: float) -> void:
+	if not is_instance_valid(zone) or not is_inside_tree():
+		return
+	var potion: int = int(zone.get("potion"))
+	if potion == CadiMath.POTION_HEAL:
+		zone.heal_timer -= dt
+		if zone.heal_timer > 0.0:
+			return
+		zone.heal_timer += CadiMath.HEAL_TICK
+		## "Müttefikler üstünde durunca her saniye cadının saldırı gücünün %20'si kadar can" - cadının kendisi dahil.
+		var amount: float = damage_bonus * CadiMath.HEAL_RATIO
+		if not is_dead and not is_downed and zone.contains(_cadi_feet()):
+			heal(amount)
+		for rp in get_tree().get_nodes_in_group("remote_players"):
+			if is_instance_valid(rp) and zone.contains((rp as Node2D).global_position + CadiMath.FEET_LOCAL * 0.5):
+				_apply_heal_to_ally(rp as Node2D, amount)
+		return
+	var hits: Dictionary = zone.hit_ids
+	var now: int = Time.get_ticks_msec()
+	var r: Vector2 = zone.radius()
+	for e in EnemyQueryScript.candidates(get_tree(), zone.global_position, r.x + 30.0):
+		if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
+			continue
+		var body: float = float(e._body_radius) if "_body_radius" in e else 20.0
+		if not zone.contains((e as Node2D).global_position, body * 0.5):
+			continue
+		var id: int = e.get_instance_id()
+		match potion:
+			CadiMath.POTION_MAD:
+				## Boss ve elitler delirmez (kullanıcı cevabı). Alanda kaldıkça süre MAD_REAPPLY'de bir tazelenir.
+				if e.get("is_boss") == true or e.get("is_elite") == true or not e.has_method("apply_madness"):
+					continue
+				if now - int(hits.get(id, -1000000)) < int(CadiMath.MAD_REAPPLY * 1000.0):
+					continue
+				hits[id] = now
+				e.apply_madness(CadiMath.MAD_DURATION)
+			CadiMath.POTION_ICE:
+				if hits.has(id):
+					continue
+				hits[id] = now
+				if e.has_method("apply_freeze_full"):
+					e.apply_freeze_full(CadiMath.ICE_FREEZE_TIME)
+				_cadi_zone_damage(e, CadiMath.ICE_DAMAGE_RATIO, &"s:cadi_don")
+			CadiMath.POTION_FEAR:
+				if hits.has(id):
+					continue
+				hits[id] = now
+				if e.has_method("apply_fear"):
+					e.apply_fear(zone.global_position, CadiMath.FEAR_TIME)
+				_cadi_zone_damage(e, CadiMath.FEAR_DAMAGE_RATIO, &"s:cadi_korku")
+
+
+func _cadi_zone_damage(e: Node, ratio: float, tag: StringName) -> void:
+	if not e.has_method("take_damage"):
+		return
+	var is_crit: bool = _roll_ability_crit()
+	BalanceLogScript.tag(tag)
+	e.take_damage(_apply_ability_crit(damage_bonus * ratio, is_crit), is_crit, 0.0, true)
+
+
+## HUD (hud.gd R ikonu): {} = bu karakter Cadı değil. Yük sayısı/dolumu + SIRADAKİ iksirin ikonu/adı/açıklaması.
+func get_cadi_r_hud_state() -> Dictionary:
+	if not _is_cadi():
+		return {}
+	var full: bool = cadi_r_charges >= CadiMath.R_MAX_CHARGES
+	var fraction: float = 1.0 if full or _cadi_r_recharge_total <= 0.0 \
+		else clampf(1.0 - _cadi_r_recharge_timer / _cadi_r_recharge_total, 0.0, 1.0)
+	var p: int = clampi(_cadi_next_potion, 0, CadiMath.POTION_COUNT - 1)
+	return {
+		"charges": cadi_r_charges,
+		"max": CadiMath.R_MAX_CHARGES,
+		"fraction": fraction,
+		"remaining": 0.0 if full else _cadi_r_recharge_timer,
+		"icon": CadiMath.R_ICONS[p],
+		"name": "%s - sıradaki: %s" % [str(Characters.get_def(CadiMath.CHAR_ID).get("skill3_name", "")), str(CadiMath.POTION_NAMES[p])],
+		"desc": "SIRADAKİ - %s: %s
+
+%s" % [str(CadiMath.POTION_NAMES[p]), str(CadiMath.POTION_DESCS[p]), str(Characters.get_def(CadiMath.CHAR_ID).get("skill3_desc", ""))],
+	}
 
 
 ## =====================================================================================
@@ -12785,9 +14071,6 @@ var _evo_korsan_speed_until_msec: int = 0
 ## Şovalye
 var _sovalye_retribution_active: bool = false
 var _sovalye_retribution_accum: float = 0.0
-## Matthew
-var _matthew_patience_timer: float = 0.0
-var _matthew_patience_was_active: bool = false
 ## Assasin Çocuk
 var _assasin_empower_fx: Node = null
 var _assasin_clone: Variant = null ## evo_area.gd "assasin_clone" (tipsiz: güvenlik süresinde kendi kendine silinebilir)
@@ -12892,11 +14175,11 @@ func _evo_timing(skill_id: int, base: Dictionary) -> Dictionary:
 				dur_add += EVO_SOVALYE_Q_EXTRA_DURATION
 			elif skill_id == 29 and has_evo("sovalye_e1"):
 				cd_mult *= EVO_SOVALYE_E_CD_MULT
-		3: ## Matthew: Q 43, E 21, R 9
+		3: ## Matthew: Q 43, E 50 (Elektrik Topu - 2026-10-12 rework; eski Vahşi Hız 21), R 9
 			if skill_id == 43 and has_evo("matthew_q4"):
 				cd_mult *= EVO_MATTHEW_Q_CD_MULT
-			elif skill_id == 21 and has_evo("matthew_e2"):
-				dur_add += EVO_MATTHEW_E_EXTRA_DURATION
+			elif skill_id == MatthewLightning.E_SKILL_ID and has_evo("matthew_e2"):
+				dur_add += MatthewLightning.EVO_BALL_EXTRA_DURATION
 			elif skill_id == 9 and has_evo("matthew_r2"):
 				cd_mult *= EVO_MATTHEW_R_CD_MULT
 		12: ## Shaman: Q 27 (Saldırı Totemi - yük başına bekleme, bkz. _shaman_q_recharge_time)
@@ -12972,11 +14255,11 @@ func _evo_move_mult() -> float:
 	return 1.0
 
 
-## get_effective_move_speed ek yüzdesi: Melek "Kanatlı Adımlar" buff'ı, Matthew "Avcı Sabrı".
+## get_effective_move_speed ek yüzdesi: Melek "Kanatlı Adımlar" buff'ı, Matthew pasifi "Yıldırım Hızı" (hız birikimi, 0..%30 -
+## 2026-10-12 rework; eski "Avcı Sabrı" evrimi kalktı, matthew_ef artık Elektrik Topu'nun finali).
 func _evo_move_bonus() -> float:
 	var b: float = _evo_buff("speed")
-	if _matthew_patience_active():
-		b += EVO_MATTHEW_PATIENCE_SPEED
+	b += _matthew_momentum
 	if _assasin_invis_active() and has_evo("assasin_e4"):
 		b += EVO_ASSASIN_E_SPEED
 	if Time.get_ticks_msec() < _evo_buyucu_speed_until_msec:
@@ -13034,7 +14317,7 @@ func _evo_give_buff(target: Variant, key: String, value: float, duration: float)
 ## ---------- Melek ----------
 ## Bağ hâlâ geçerli mi: hedef yaşıyor VE (menzilde ya da "kopmaz bağ" evrimi var). target tipsiz: serbest kalmış olabilir.
 func _melek_bond_holds(target: Variant, base_range: float, unbreakable_evo: String) -> bool:
-	if target == null or not is_instance_valid(target) or target.get("is_dead") == true:
+	if target == null or not is_instance_valid(target) or _ally_is_down(target):
 		return false
 	if has_evo(unbreakable_evo):
 		return true
@@ -13091,6 +14374,7 @@ func _evo_reset_cooldown(slot: String) -> void:
 ## Oklar"), yavaşlatma (Matthew "Ağır Pençeler"), kopya silah can çalması (Talon "Kan Aynası"). Tek hedefli etkiler aynı
 ## yaratığa sınırlı sıklıkla uygulanır (her biri istemcide host'a bir RPC).
 func evo_weapon_hit(weapon: Node, target: Node2D, dmg: float, dir: Vector2) -> void:
+	_kelebek_on_weapon_hit(weapon, target)
 	if skill_evolutions.is_empty() and _evo_buffs.is_empty():
 		return
 	if not is_instance_valid(target) or target.get("is_dead") == true:
@@ -13102,6 +14386,7 @@ func evo_weapon_hit(weapon: Node, target: Node2D, dmg: float, dir: Vector2) -> v
 	if knock > 0.0 and target.has_method("apply_skill_push") and _evo_hit_ready(target, "knock", EVO_KNOCK_INTERVAL):
 		target.apply_skill_push(push_dir.normalized(), knock)
 	if elara_true_damage_active and has_evo("elara_e1") and dmg > 0.0 and target.has_method("take_damage"):
+		BalanceLogScript.tag(&"s:elara_gercek_hasar")
 		target.take_damage(dmg * EVO_ELARA_TRUE_DAMAGE_RATIO, false, 1.0)
 	if matthew_dome_active and has_evo("matthew_rf") and target.has_method("apply_slow") and _evo_hit_ready(target, "slow", 0.5):
 		target.apply_slow(EVO_MATTHEW_R_SLOW, EVO_MATTHEW_R_SLOW_TIME)
@@ -13194,6 +14479,7 @@ func _process_talon_spin_hits(_delta: float) -> void:
 				continue
 			_evo_talon_spin_hit_cd[key] = now + int(EVO_TALON_SPIN_HIT_INTERVAL * 1000.0)
 			var is_crit: bool = _roll_ability_crit()
+			BalanceLogScript.tag(&"s:talon_spin")
 			e.take_damage(_apply_ability_crit(damage_bonus * EVO_TALON_SPIN_DAMAGE_RATIO, is_crit), is_crit, 0.0, true)
 			_evo_world_fx(FxEvoSpinSparkScene, e.global_position, 0.0, (e.global_position - global_position).angle(), "talon_spin_spark", 0.1)
 
@@ -13271,6 +14557,7 @@ func _sovalye_retribution_explode() -> void:
 		return
 	for e in Enemy.get_enemies_near(get_tree(), global_position, EVO_SOVALYE_RETRIBUTION_RADIUS):
 		if is_instance_valid(e) and e.get("is_dead") != true and e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:sovalye_misilleme")
 			e.take_damage(total, false, 0.0, true)
 	_evo_world_fx(FxEvoRetributionScene, global_position, EVO_SOVALYE_RETRIBUTION_RADIUS)
 	_spawn_floating_text("İNTİKAM %d" % int(round(total)), Color(1.0, 0.82, 0.35), true, -58.0)
@@ -13278,11 +14565,7 @@ func _sovalye_retribution_explode() -> void:
 
 
 ## ---------- Matthew ----------
-## "Avcı Sabrı" (E finali): Vahşi Hız aktif DEĞİLKEN 3 sn hasar alınmazsa +%15 hareket hızı (hasar alınca - take_damage -
-## sayaç sıfırlanır).
-func _matthew_patience_active() -> bool:
-	return _matthew_patience_timer >= EVO_MATTHEW_PATIENCE_TIME and has_evo("matthew_ef") \
-		and not (is_skill2_active() and get_skill2_id() == 21)
+## (Eski E finali "Avcı Sabrı" 2026-10-12 rework'ünde kalktı - matthew_ef artık Elektrik Topu'nun finali, bkz. _matthew_ball_radius.)
 
 
 ## ---------- Assasin Çocuk (2026-09-30) ----------
@@ -13448,6 +14731,7 @@ func evo_area_hit(e: Node, dmg: float, kind: String, dir: Vector2) -> void:
 	if kind == "assasin_kunai":
 		_assasin_mark_dash_kill(e)
 	var is_crit: bool = _roll_ability_crit()
+	BalanceLogScript.tag(StringName("s:evo_" + kind))
 	e.take_damage(_apply_ability_crit(dmg, is_crit), is_crit, 0.0, true)
 	if e is Node2D:
 		var rot: float = dir.angle() if dir.length() > 0.01 else randf() * TAU
@@ -13629,6 +14913,7 @@ func _buyucu_arcane_explode(pos: Vector2, dmg: float, is_crit: bool, exclude: No
 			continue
 		if pos.distance_to((e as Node2D).global_position) > r:
 			continue
+		BalanceLogScript.tag(&"s:buyucu_arcane_patlama")
 		e.take_damage(dmg, is_crit, 0.0, true)
 	_spawn_world_explosion_fx(pos, r / EVO_BUYUCU_ARCANE_BLAST_FX_BASE)
 
@@ -13661,23 +14946,11 @@ func _process_evo(delta: float) -> void:
 			modulate.a = 1.0
 	if skill_evolutions.is_empty() and _evo_buffs.is_empty():
 		return
-	## Matthew "Avcı Sabrı": sayaç sadece Vahşi Hız kapalıyken ilerler.
-	if has_evo("matthew_ef"):
-		if is_skill2_active() and get_skill2_id() == 21:
-			_matthew_patience_timer = 0.0
-		else:
-			_matthew_patience_timer += delta
-		var patience: bool = _matthew_patience_active()
-		if patience and not _matthew_patience_was_active:
-			_spawn_floating_text("AVCI SABRI", Color(1.0, 0.8, 0.4), false, -52.0)
-		_matthew_patience_was_active = patience
 	## Hız veren evrim buff'larının hız çizgileri (Melek "Kanatlı Adımlar", Matthew "Avcı Sabrı", Korsan "Patlama Rüzgarı") -
 	## Elara/Matthew'in mevcut hız çizgisi sahnesi ("speed_line" yayını, diğer oyuncular da görür).
 	var line_color: Color = Color(0, 0, 0, 0)
 	if _evo_buff("speed") > 0.0:
 		line_color = EVO_MELEK_SPEED_LINE_COLOR
-	elif _matthew_patience_active():
-		line_color = EVO_MATTHEW_SPEED_LINE_COLOR
 	elif Time.get_ticks_msec() < _evo_korsan_speed_until_msec:
 		line_color = Color(1.0, 0.6, 0.25, 0.7)
 	elif _assasin_invis_active() and has_evo("assasin_e4"):
@@ -13849,7 +15122,7 @@ func _shaman_golem_on_kill() -> void:
 
 
 func _golem_cd(base: float) -> float:
-	return base * (1.0 - cooldown_reduction_percent)
+	return base * (1.0 - get_cooldown_reduction())
 
 
 func _golem_enemy_near(radius: float) -> bool:
@@ -13906,6 +15179,7 @@ func _golem_area_damage(center: Vector2, radius: float, ratio: float, stun: floa
 			e.apply_stun(stun)
 		if e.has_method("take_damage"):
 			var is_crit: bool = _roll_ability_crit()
+			BalanceLogScript.tag(&"s:shaman_golem_alan")
 			e.take_damage(_apply_ability_crit(base, is_crit), is_crit, 0.0, true)
 		hits += 1
 	return hits

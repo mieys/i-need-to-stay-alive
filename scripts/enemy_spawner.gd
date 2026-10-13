@@ -410,7 +410,7 @@ const BOSS_SCALE_MULT := 1.7
 ## (kalkan hâlâ var ve hâlâ candan büyük, ama eskisi kadar "ekstra can
 ## katmanı" hissi vermiyor).
 const REGULAR_SHIELD_MIN_TIER := 3
-const SHIELD_PROTECTION := 0.3 ## eskiden 0.4 - normal yaratıklarda sabit %30 hasar azaltımı
+const SHIELD_PROTECTION := 0.6 ## 2026-10-13 (kullanıcı isteği): %30 -> %60 (Kademe 3'ten kademeli açılır, bkz. SHIELD_PHASE_IN_TIERS; Kademe 7'de tam). Eskiden 0.4
 ## DÜZELTME (kullanıcı isteği: "bossların kalkanlarının hasar soğurmasını
 ## %70'e yükselt") - bosslar bir süredir normal yaratıklarla AYNI SHIELD_
 ## PROTECTION'ı (bkz. yukarıdaki yorum geçmişi - eskiden bosslarda zaten
@@ -542,7 +542,7 @@ const EARLY_TIER_MAX := 2
 ## KADEME 3 GEÇİŞ YUMUŞATMASI (kullanıcı bildirimi 2026-10-06, bkz. difficulty_ramp üstündeki ölçüm notu): Kademe 2 -> 3'te yaratık dayanıklılığı
 ## BİR ANDA ~x1.8 artıyordu (Kademe 1-2'nin x0.8 kesintisi kalkıyor + %30 soğurmalı kalkan tam güçle geliyordu) ve ortalama yaratık "etkin canı"
 ## 23 -> 104 (x4.5) olup tek adımda oyuncunun kapasitesini aşıyordu. Kademe 1-2 BİLEREK aynı kaldı (kullanıcı kolay istedi); geçiş basamaklandı:
-##  - kalkan soğurması Kademe 3'te SHIELD_PROTECTION'ın 1/SHIELD_PHASE_IN_TIERS'i, her Kademe +1/N, Kademe 7'de tam %30 (bkz. regular_shield_protection),
+##  - kalkan soğurması Kademe 3'te SHIELD_PROTECTION'ın 1/SHIELD_PHASE_IN_TIERS'i, her Kademe +1/N, Kademe 7'de tam %60 (2026-10-13; eskiden %30) (bkz. regular_shield_protection),
 ##  - Kademe 1-2'nin x0.8 kesintisi Kademe 3-5'te EARLY_CUT_TAPER ile yumuşayarak kalkar (bkz. early_durability_cut).
 ## Etkin dayanıklılık çarpanı (kesinti / (1 - soğurma)): K2 0.80, K3 0.91, K4 1.02, K5 1.16, K6 1.32, K7+ 1.43 (eskiden K2 0.80 -> K3 1.43).
 const SHIELD_PHASE_IN_TIERS := 5

@@ -29,6 +29,28 @@ const SLOT_KEYS := {"skill": "Q", "skill2": "E", "skill3": "R"}
 
 ## roster id -> yuva -> [ {id, name, desc, final?} ... ] (final her zaman listenin sonunda)
 const DEFS := {
+	## ---------------------------------------------------------------- Cadı (2026-10-13; sayılar scripts/cadi_math.gd EVO_*)
+	15: {
+		"skill": [
+			{"id": "cadi_q1", "name": "Yapışkan Duman", "desc": "Dumana değen yaratıklar %30 yavaşlar."},
+			{"id": "cadi_q2", "name": "Kalıcı Duman", "desc": "Duman yerde 1,5 saniye daha uzun kalır."},
+			{"id": "cadi_q3", "name": "Tutumlu Karışım", "desc": "Zehirli Duman saniyede %50 daha az kalkan harcar."},
+			{"id": "cadi_q4", "name": "Yoğun Duman", "desc": "Dumanın boyutu %30 artar."},
+			{"id": "cadi_qf", "name": "Kan Buharı", "desc": "Duman %3 can emme kazanır (alan hasarı olduğu için etkisi %33'tür).", "final": true},
+		],
+		"skill2": [
+			{"id": "cadi_e1", "name": "Yüksek Uçuş", "desc": "Süpürge engellerin üstünden uçabilir."},
+			{"id": "cadi_e2", "name": "Kıvrak Süpürge", "desc": "Süpürgedeyken %25 sıvışma kazanırsın (binen arkadaşların da)."},
+			{"id": "cadi_e3", "name": "Rüzgâr Süpürgesi", "desc": "Süpürgenin hız bonusu %50'ye yükselir."},
+			{"id": "cadi_e4", "name": "Süpüren Darbe", "desc": "Süpürgedeyken silahlarının saldırıları yaratıkları kısa bir mesafe geri iter (binen arkadaşlara verilmez)."},
+			{"id": "cadi_ef", "name": "Pike", "desc": "Süpürgedeyken değdiğin yaratıklara saldırı gücünün %100'ü kadar hasar verir ve onları 2 saniye yere sabitlersin.", "final": true},
+		],
+		"skill3": [
+			{"id": "cadi_r1", "name": "Uzun Etki", "desc": "İksir alanlarının yerde kalma süresi 1,5 saniye artar."},
+			{"id": "cadi_r2", "name": "Hızlı Demleme", "desc": "İksir yükleri %25 daha hızlı dolar."},
+			{"id": "cadi_rf", "name": "Geniş Karışım", "desc": "İksirlerin etki alanı %40 artar.", "final": true},
+		],
+	},
 	## ---------------------------------------------------------------- Suriyeli Hadime
 	14: {
 		"skill": [
@@ -187,23 +209,25 @@ const DEFS := {
 	## ---------------------------------------------------------------- Matthew
 	3: {
 		"skill": [
-			{"id": "matthew_q1", "name": "Savuran Pençe", "desc": "Köpek vurduğu yaratıkları senden uzağa iter."},
-			{"id": "matthew_q2", "name": "Bedava Av", "desc": "Köpek Hücumu kalkan harcamaz."},
-			{"id": "matthew_q3", "name": "Keskin Dişler", "desc": "Köpek Hücumu'nun hasarı %30 artar."},
-			{"id": "matthew_q4", "name": "Çevik Köpek", "desc": "Köpek Hücumu'nun bekleme süresi %30 azalır."},
-			{"id": "matthew_qf", "name": "Sürü Avı", "desc": "Köpek Hücumu'nun hedef sayısı 6'dan 10'a çıkar.", "final": true},
+			## 2026-10-12 REWORK (madde 98): köpek gitti, kit şimşek oldu. Q ve R geliştirmelerinin ETKİLERİ (ve id'leri) aynı, yalnız
+			## adlar/açıklamalar şimşeğe uyarlandı; E geliştirmeleri kullanıcının yeni listesi (Elektrik Topu).
+			{"id": "matthew_q1", "name": "Savuran Şimşek", "desc": "Şimşek vurduğu yaratıkları senden uzağa iter."},
+			{"id": "matthew_q2", "name": "Bedava Akım", "desc": "Şimşek Hücumu kalkan harcamaz."},
+			{"id": "matthew_q3", "name": "Yüksek Gerilim", "desc": "Şimşek Hücumu'nun hasarı %30 artar."},
+			{"id": "matthew_q4", "name": "Hızlı Şarj", "desc": "Şimşek Hücumu'nun bekleme süresi %30 azalır."},
+			{"id": "matthew_qf", "name": "Fırtına Zinciri", "desc": "Şimşek Hücumu'nun hedef sayısı 6'dan 10'a çıkar.", "final": true},
 		],
 		"skill2": [
-			{"id": "matthew_e1", "name": "Vahşi Koşu", "desc": "Hareket hızı bonusu %30'a, saldırı hızı bonusu %50'ye çıkar."},
-			{"id": "matthew_e2", "name": "Uzun Av", "desc": "Vahşi Hız'ın etki süresi 4 saniye artar."},
-			{"id": "matthew_e3", "name": "Köpek Ruhu", "desc": "Köpeğin Vahşi Hız'ın sağladığı bonusların 2 katını kazanır."},
-			{"id": "matthew_e4", "name": "Sersemleten Isırık", "desc": "Vahşi Hız aktifken köpeğin saldırıları yaratıkları 1 saniye sersemletir."},
-			{"id": "matthew_ef", "name": "Avcı Sabrı", "desc": "Vahşi Hız aktif değilken 3 saniye hasar almazsan %15 hareket hızı kazanırsın; hasar alınca kaybolur.", "final": true},
+			{"id": "matthew_e1", "name": "Hız Akımı", "desc": "Elektrik Topu'nun hasarı her 10 hareket hızı başına %1 artar."},
+			{"id": "matthew_e2", "name": "Uzun Deşarj", "desc": "Elektrik Topu'nun etki süresi 1,5 saniye uzar."},
+			{"id": "matthew_e3", "name": "Geri Besleme", "desc": "Elektrik Topu'yla verdiğin hasarın %5'i kadar iyileşirsin."},
+			{"id": "matthew_e4", "name": "Aşırı Yük", "desc": "Elektrik Topu'nun hareket hızı bonusu %30 toplam hareket hızına çıkar."},
+			{"id": "matthew_ef", "name": "Dev Küre", "desc": "Elektrik topunun büyüklüğü %50 artar.", "final": true},
 		],
 		"skill3": [
-			{"id": "matthew_r1", "name": "Kalın Kürk", "desc": "Feda Kalkanı'nın koruma kapasitesi %50 artar."},
-			{"id": "matthew_r2", "name": "Çabuk Fedakarlık", "desc": "Feda Kalkanı'nın bekleme süresi %25 azalır."},
-			{"id": "matthew_rf", "name": "Ağır Pençeler", "desc": "Feda Kalkanı aktifken saldırıların yaratıkları %30 yavaşlatır.", "final": true},
+			{"id": "matthew_r1", "name": "Yoğun Alan", "desc": "Yıldırım Kalkanı'nın koruma kapasitesi %50 artar."},
+			{"id": "matthew_r2", "name": "Çabuk Dolum", "desc": "Yıldırım Kalkanı'nın bekleme süresi %25 azalır."},
+			{"id": "matthew_rf", "name": "Statik Yük", "desc": "Yıldırım Kalkanı aktifken saldırıların yaratıkları %30 yavaşlatır.", "final": true},
 		],
 	},
 	## ---------------------------------------------------------------- Assasin Çocuk (kullanıcı isteği 2026-09-30)

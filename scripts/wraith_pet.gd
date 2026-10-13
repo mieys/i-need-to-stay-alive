@@ -325,6 +325,9 @@ func _play_attack_animation() -> void:
 
 
 func _process_attack(delta: float) -> void:
+	## 2026-10-12: sahibi ölü/yerde yatıyorsa saldırmaz.
+	if is_instance_valid(owner_player) and owner_player.get("is_dead") == true:
+		return
 	if _animation_state == "attack":
 		return
 	_attack_timer -= delta

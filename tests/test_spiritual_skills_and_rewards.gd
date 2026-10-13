@@ -212,6 +212,26 @@ func test_tank_reflects_sixty_percent_and_regens_missing_shield() -> void:
 	_cleanup()
 
 
+func test_tank_and_combat_timer_trigger_on_paladin_barrier_hit() -> void:
+	## 2026-10-13: Şovalye ultisinin baloncuğuna vurulunca Tank (yansıtma + kalkan yenileme) ve Savaş Kalkanı savaş sayacı işlemiyordu.
+	var player: Node = _make_player(1, S.TANK)
+	player.item_shield_max = 100.0
+	player.item_shield_hp = 40.0
+	var enemy := FakeEnemy.new()
+	add_child(enemy)
+	_spawned.append(enemy)
+	player._try_spirit_skill()
+	player.paladin_zone_active = true
+	player._shield_combat_timer = 0.0
+	var before: float = player.item_shield_hp
+	player.take_paladin_barrier_damage(50.0, enemy)
+	assert(enemy.hits.size() == 1 and is_equal_approx(float(enemy.hits[0]), 100.0), "baloncuk isabetinde Tank yansıtmalı: %s" % str(enemy.hits))
+	assert(player.item_shield_hp > before - 50.0 * 0.1 + 0.5, "baloncuk isabetinde eksik kalkan yenilenmeli")
+	assert(player._shield_combat_timer > 0.0, "Savaş Kalkanı savaş sayacı başlamalı")
+	player.paladin_zone_active = false
+	_cleanup()
+
+
 # ------------------------------------------------------------------ Taktiksel
 
 func test_taktik_teleports_forward_and_gives_speed_for_three_seconds() -> void:

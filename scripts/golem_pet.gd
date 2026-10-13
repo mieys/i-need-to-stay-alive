@@ -1,4 +1,5 @@
 extends CharacterBody2D
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -610,6 +611,9 @@ func _play_attack_animation() -> void:
 
 
 func _process_attack(delta: float) -> void:
+	## 2026-10-12: sahibi ölü/yerde yatıyorsa saldırmaz.
+	if is_instance_valid(owner_player) and owner_player.get("is_dead") == true:
+		return
 	if _animation_state == "attack":
 		return
 	_attack_timer -= delta
@@ -644,6 +648,7 @@ func _process_attack(delta: float) -> void:
 		if global_position.distance_to(e.global_position) > aoe_radius:
 			continue
 		if e.has_method("take_damage"):
+			BalanceLogScript.tag(&"s:necro_golem")
 			e.take_damage(dmg, is_crit)
 		## E2 Yıkıcı Yumruk: saldırı yaratığı golemden uzağa iter (enemy.gd apply_skill_push; bosslar x0,4).
 		if evo_knockback > 0.0 and is_instance_valid(e) and e.has_method("apply_skill_push"):

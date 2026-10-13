@@ -20,6 +20,7 @@ const InteriorScene: PackedScene = preload("res://scenes/silah_saticisi_baked.ts
 const ShopScreenScript := preload("res://scripts/weapon_shop_screen.gd")
 const HouseScript := preload("res://scripts/house_interior.gd")
 const DepthOccludersScript := preload("res://scripts/depth_occluders.gd")
+const BlacksmithNpcScript := preload("res://scripts/blacksmith_npc.gd")
 
 ## Ev içi (20000,0) ile çakışmasın diye 4000 birim yanda; harita 0..4096 (camera_map_limits.gd: haritadan 2048'den uzaktaki kamera
 ## limitsiz sayılır).
@@ -92,6 +93,8 @@ var _near_entrance: bool = false
 var _transitioning: bool = false
 var _inside: bool = false
 var _door_cells: Array[Vector2i] = []
+var _collision_cells: Dictionary = {} ## çarpışma hücreleri (Vector2i -> true), _add_collisions - demirci NPC'sinin yol bulması için
+var _smith: Node2D = null ## demirci NPC'si (blacksmith_npc.gd), iç mekanın çocuğu
 var _backdrop: ColorRect = null
 var _outside_style: StringName = OUTSIDE_STYLE
 
@@ -181,9 +184,37 @@ func _spawn_interior() -> void:
 	if floor_layer != null:
 		_add_bounds(floor_layer)
 	_add_collisions()
+	_spawn_smith(floor_layer)
 	_hide_wall_filler()
 	_add_backdrop()
 	set_outside_style(_outside_style)
+
+
+## Demirci NPC'si (kullanıcı isteği 2026-10-13): iç mekanın çocuğu (iç mekan gizliyken o da gizli). Yürünebilir hücreler = zemin - çarpışma - kapı
+## hücreleri (NPC kapıdan çıkıp gitmesin). Örs/kapı konumları yukarıdaki katman işaretçilerinden - Tiled'da değişirse kendiliğinden uyar.
+func _spawn_smith(floor_layer: TileMapLayer) -> void:
+	if floor_layer == null or not _anvil_local.is_finite():
+		return
+	var walkable: Dictionary = {}
+	for c: Vector2i in floor_layer.get_used_cells():
+		if not _collision_cells.has(c) and not _door_cells.has(c):
+			walkable[c] = true
+	var tile: Vector2 = Vector2(floor_layer.tile_set.tile_size) if floor_layer.tile_set != null else Vector2(16.0, 16.0)
+	var door_local: Vector2 = FALLBACK_EXIT_POS
+	var door_layer: TileMapLayer = _find_layer(EXIT_DOOR_LAYER)
+	if door_layer != null and not _door_cells.is_empty():
+		door_local = Vector2.ZERO
+		for c: Vector2i in _door_cells:
+			door_local += door_layer.position + door_layer.map_to_local(c)
+		door_local /= float(_door_cells.size())
+	_smith = BlacksmithNpcScript.new()
+	_interior.add_child(_smith)
+	_smith.call("configure", walkable, tile, _anvil_local, door_local)
+
+
+## Demirci NPC'si (testler/hata ayıklama).
+func get_smith() -> Node2D:
+	return _smith
 
 
 func _find_layer(layer_name_lower: String) -> TileMapLayer:
@@ -278,6 +309,7 @@ func _add_collisions() -> void:
 	cells.merge(object_cells)
 	for c: Vector2i in _door_cells:
 		cells.erase(c)
+	_collision_cells = cells
 	if cells.is_empty():
 		return
 	var body := StaticBody2D.new()
