@@ -360,8 +360,8 @@ func _process_incoming_damage(delta: float) -> void:
 		return
 	var total: float = 0.0
 	for e in EnemyQueryScript.candidates(get_tree(), global_position, INCOMING_CONTACT_RANGE + 1.0):
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
+		if not is_instance_valid(e) or e.get("is_dead") == true or e.get("is_frozen") == true:
+			continue ## donmuş/sersemlemiş yaratık temas hasarı vermez
 		if global_position.distance_to(e.global_position) <= INCOMING_CONTACT_RANGE:
 			total += float(e.get("contact_damage")) if "contact_damage" in e else INCOMING_FALLBACK_DAMAGE
 	if total > 0.0:

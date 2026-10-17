@@ -17,7 +17,7 @@ const BoltScript := preload("res://scripts/mission_tree_bolt.gd")
 ## HOST'ta gerçek simülasyon (can/kalkan/hasar) çalışır, istemcide salt görsel kopya. Can/kalkan görüntüsü world_event_progress (value=health+shield,
 ## target=max_health+max_shield) ile senkron (world_event_manager.gd _tick_mission). Kristal atışları istemcide AYNI hedefleme kuralıyla kozmetik (hasarsız).
 
-const NUM_PHASES := 5 ## eski 5 fazlı büyüme (görev süresi world_event_manager.gd TREE_NUM_PHASES x TREE_PHASE_DURATION; görsel artık ilk saniyelerde büyür)
+const NUM_PHASES := 5 ## eski 5 fazlı büyüme (görev süresi world_event_manager.gd TREE_DURATION; görsel artık ilk saniyelerde büyür)
 const PHASE_DURATION := 10.0
 const ACTIVE_SHEET := preload("res://assets/fx/mission_tree/tree_active.png")
 const GROW_SHEET := preload("res://assets/fx/mission_tree/tree_grow_aligned.png")
@@ -38,14 +38,15 @@ const ATTACK_RANGE := 300.0
 const ATTACK_INTERVAL := 0.8
 ## Kademeye göre uyum (2026-10-10, kullanıcı: "canı/kalkanı/hasarı mevcut kademeye uyumlu olmalı, ne çok güçlü ne çok zayıf, biz yetişene kadar başının çaresine
 ## bakabilsin"): görev başında host yaşayan SIRADAN yaratıkların ortalama azami canını ve temas hasarını ölçer.
-##  - can = ort. hasar x HP_PER_ENEMY_HIT, kalkan = ort. hasar x SHIELD_PER_ENEMY_HIT (ölçek x oyuncu çarpanı): ~6 yaratık aynı anda vururken ~10-12 sn dayanır.
+##  - can = ort. hasar x HP_PER_ENEMY_HIT, kalkan = ort. hasar x SHIELD_PER_ENEMY_HIT (ölçek x oyuncu çarpanı): ~6 yaratık aynı anda vururken ~7-9 sn dayanır.
 ##  - kristal vuruşu = ort. yaratık canı x BOLT_HP_RATIO (sıradan bir yaratığı ~3 atışta, 0,8 sn aralıkla ~2,4 sn'de öldürür).
 ## Ölçülecek yaratık yoksa (başta) FALLBACK_* (eski sabitler).
-const HP_PER_ENEMY_HIT := 70.0
-const SHIELD_PER_ENEMY_HIT := 22.0
+## 2026-10-17 (kullanıcı: "ağaç çok dayanıklı, biraz hassaslaşsın"): can/kalkan ~%25 düştü (70 -> 52, 22 -> 16, yedek 3000/800 -> 2250/600), görev süresi 50 -> 170 sn.
+const HP_PER_ENEMY_HIT := 52.0
+const SHIELD_PER_ENEMY_HIT := 16.0
 const BOLT_HP_RATIO := 0.34
-const FALLBACK_MAX_HEALTH := 3000.0
-const FALLBACK_MAX_SHIELD := 800.0
+const FALLBACK_MAX_HEALTH := 2250.0
+const FALLBACK_MAX_SHIELD := 600.0
 const FALLBACK_BOLT_DAMAGE := 35.0
 ## Kullanıcı isteği (2026-09-24): hasar almadığında 7 sn sonra kalkan yavaşça (max'ın %5'i/sn) yenilenir.
 const SHIELD_REGEN_DELAY := 7.0

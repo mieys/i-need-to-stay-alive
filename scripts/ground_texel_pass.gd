@@ -34,6 +34,7 @@ const MARGIN := 8
 ## Dünya görünümü (alt-piksel sayısı) ekran pikselinin bu oranından büyükse geçiş kapanır (kazanç yok).
 const MAX_PIXEL_RATIO := 0.6
 const GROUP := &"ground_texel_pass"
+const MapColorGradeScript := preload("res://scripts/map_color_grade.gd")
 ## GRAFİK AYARI "Zemin ayrıntısı" (UISound.gfx_ground_detail, Düşük'te kapalı): kapalıyken bu katmanların desen shader'ı
 ## kaldırılır (düz karo rengi), açılınca aynı materyal geri takılır. Harita köküne göre yollar ("Su ayrıntılar 2" çimen
 ## materyalini paylaşır).
@@ -45,6 +46,10 @@ var _sub: SubViewport = null
 var _layers: Array[CanvasItem] = []
 var _on: bool = false
 var _detail_materials: Dictionary = {} ## CanvasItem -> özgün Material
+## Plato tepelerindeki zemin deseni (madde 186, orman_parcalari_doku.gdshader cim_efekt) de "Zemin ayrıntısı"na uyar: kapalıyken zemin
+## desensiz, plato tepesi desenli kalmasın. map_color_grade.gd orman shader'ını bundan ÖNCE değiştirmiş olmalı (main.gd sırası).
+const PLATEAU_LAYER_PATH := "Orman parçaları/Orman parçaları 2"
+var _plateau_material: ShaderMaterial = null
 
 
 ## main.gd çağırır. Katmanlar bulunamazsa (harita yeniden bake edildi, adlar değişti) hiçbir şey yapmaz - eski yol çalışır.
@@ -94,6 +99,11 @@ func _ready() -> void:
 		var ci := harita.get_node_or_null(path) as CanvasItem
 		if ci and ci.material:
 			_detail_materials[ci] = ci.material
+			## Sakin doku değerleri (madde 184) bu materyallere de: ayrıntı kapalı açılışta katmanda değiller, sonra geri takılırlar.
+			MapColorGradeScript.apply_calm(ci.material)
+	var plateau := harita.get_node_or_null(PLATEAU_LAYER_PATH) as CanvasItem
+	if plateau:
+		_plateau_material = plateau.material as ShaderMaterial
 	UISound.graphics_changed.connect(_apply_detail)
 	_apply_detail()
 
@@ -105,7 +115,10 @@ func is_on() -> bool:
 func _apply_detail() -> void:
 	for ci: CanvasItem in _detail_materials:
 		if is_instance_valid(ci):
-			ci.material = _detail_materials[ci] if UISound.gfx_ground_detail else null
+			## Ayrıntı kapalıyken bile harita renk ayarı kalsın (madde 181) - null verilirse zemin eski parlak renkte çizilir.
+			ci.material = _detail_materials[ci] if UISound.gfx_ground_detail else MapColorGradeScript.plain_material()
+	if _plateau_material:
+		_plateau_material.set_shader_parameter("cim_efekt", 1.0 if UISound.gfx_ground_detail else 0.0)
 
 
 func _exit_tree() -> void:

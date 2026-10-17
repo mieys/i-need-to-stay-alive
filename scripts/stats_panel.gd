@@ -152,11 +152,11 @@ func _apply_text_colors() -> void:
 ## Sahnede olmayan, kodla eklenen satırlar: [id (ikon = stat_icon.gd), ad, ipucu].
 const EXTRA_ROWS := [
 	["max_health", "Can", "Can: şimdiki / en fazla can."],
-	["shield_max", "Kalkan", "Kalkan: şimdiki / en fazla kalkan (eşyalardan)."],
+	["shield_max", "Mana Kalkanı", "Mana Kalkanı: şimdiki / en fazla mana kalkanı (eşyalardan)."],
 	["lifesteal", "Can Çalma", "Can Çalma: her isabette bu ihtimalle 2 can yenilersin (alan hasarında etkisi %33)."],
 	["health_regen", "Can Yenilenmesi", "Can Yenilenmesi: 5 saniyede bir yenilenen can (kartlar ve eşyalardan; İyileştirme Gücü ile büyür)."],
-	["shield_regen", "Kalkan Yenilenmesi", "Kalkan Yenilenmesi: saniyede yenilenen kalkan (eşyalardan)."],
-	["heal_power", "İyileştirme Gücü", "İyileştirme ve Kalkan Gücü: yaptığın bütün iyileştirmeleri, can yenilenmesini, can çalmayı ve kalkan doldurmayı yüzde olarak arttırır."],
+	["shield_regen", "Mana Kalkanı Yenilenmesi", "Mana Kalkanı Yenilenmesi: saniyede yenilenen mana kalkanı (eşyalardan)."],
+	["heal_power", "İyileştirme Gücü", "İyileştirme ve Mana Kalkanı Gücü: yaptığın bütün iyileştirmeleri, can yenilenmesini, can çalmayı ve mana kalkanı doldurmayı yüzde olarak arttırır."],
 	["cooldown_reduction", "Bekleme Azaltma", "Bekleme Süresi Azaltma: yeteneklerin bekleme süreleri bu oranda kısalır."],
 	["pickup_range", "Toplama Menzili", "Toplama Menzili: XP, altın ve eşyaları bu uzaklıktan çekersin."],
 ]
@@ -307,21 +307,25 @@ static func format_luck(points: float) -> String:
 	return "%.1f" % points
 
 
+## Satır ipuçları - hud_stat_panel.gd (mini stat paneli) de buradan okur (tek kaynak).
+const STAT_TIPS: Dictionary = {
+	"speed": "Hız: Karakterin hareket hızını arttırır.",
+	"damage": "Saldırı Gücü: Tüm silahların verdiği hasarı arttırır.",
+	"fire_rate": "Saldırı Hızı: Tüm silahların saldırı sıklığını arttırır. Seviye kartları, eşyalar ve pasiflerden gelen toplam bonus. En çok %600; aşan her %1, anlık olarak 0.5 saldırı gücü verir.",
+	"shield_protection": "Mana Kalkanı Soğurma: Mana kalkanının hasar emme oranını arttırır.",
+	"crit_chance": "Kritik Oran/Hasar: Kritik vuruş yapma şansını ve kritik hasar çarpanını arttırır.",
+	"shield_pen_percent": "Kalkan Delme: Düşmanların kalkan soğurmasını yüzde olarak yok sayar.",
+	"exp_gain": "Tecrübe Kazanımı: Kazanılan tecrübe puanını (XP) arttırır.",
+	"luck": "Şans (puan): Her 1 puan öldürdüğün yaratıkların yemek/mıknatıs/sandık düşürme ihtimalini %5 (20 puan = 2 kat), altın düşürme ihtimalini %1 arttırır; seviye kartlarında, sandık ödüllerinde ve satıcı eşyalarında üst kademe çıkma ağırlığını %1.5 arttırır.",
+	"range": "Menzil: Silahların vuruş ve menzil uzaklığını arttırır.",
+	"dodge": "Sıvışma: Saldırılardan kaçınma şansı verir (Maks %40, Rüzgâr Yürüyen Çizmeleri ile %50; fazlası boşa gider).",
+	"knockback": "Geri Tepme: Silahların düşmanları geri itme gücünü arttırır.",
+	"shield_amount": "Mana Kalkanı Miktarı: Maksimum mana kalkanı kapasitesini arttırır."
+}
+
+
 func _setup_stat_tooltips() -> void:
-	var descriptions: Dictionary = {
-		"speed": "Hız: Karakterin hareket hızını arttırır.",
-		"damage": "Saldırı Gücü: Tüm silahların verdiği hasarı arttırır.",
-		"fire_rate": "Saldırı Hızı: Tüm silahların saldırı sıklığını arttırır. Seviye kartları, eşyalar ve pasiflerden gelen toplam bonus. En çok %600; aşan her %1, anlık olarak 0.5 saldırı gücü verir.",
-		"shield_protection": "Kalkan Soğurma: Kalkanın hasar emme oranını arttırır.",
-		"crit_chance": "Kritik Oran/Hasar: Kritik vuruş yapma şansını ve kritik hasar çarpanını arttırır.",
-		"shield_pen_percent": "Kalkan Delme: Düşmanların kalkan soğurmasını yüzde olarak yok sayar.",
-		"exp_gain": "Tecrübe Kazanımı: Kazanılan tecrübe puanını (XP) arttırır.",
-		"luck": "Şans (puan): Her 1 puan öldürdüğün yaratıkların yemek/mıknatıs/sandık düşürme ihtimalini %5 (20 puan = 2 kat), altın düşürme ihtimalini %1 arttırır; seviye kartlarında, sandık ödüllerinde ve satıcı eşyalarında üst kademe çıkma ağırlığını %1.5 arttırır.",
-		"range": "Menzil: Silahların vuruş ve menzil uzaklığını arttırır.",
-		"dodge": "Sıvışma: Saldırılardan kaçınma şansı verir (Maks %40, Rüzgâr Yürüyen Çizmeleri ile %50; fazlası boşa gider).",
-		"knockback": "Geri Tepme: Silahların düşmanları geri itme gücünü arttırır.",
-		"shield_amount": "Kalkan Miktarı: Maksimum kalkan kapasitesini arttırır."
-	}
+	var descriptions: Dictionary = STAT_TIPS
 	
 	var grid: GridContainer = $Frame/Margin/VBox/GridScroll/Grid as GridContainer
 	if not grid:

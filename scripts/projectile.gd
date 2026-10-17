@@ -2,6 +2,7 @@ extends Area2D
 
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
+const ProjectileRangeScript := preload("res://scripts/projectile_range.gd")
 
 @export var speed: float = 400.0 ## genel hız ayarı: 500'den %20 düşürüldü
 @export var impact_scene: PackedScene
@@ -126,15 +127,30 @@ const TRAIL_CRIT_COLOR := Color(1.0, 0.72, 0.52)
 const ParticleTrail := preload("res://scripts/fx_particle_trail.gd")
 const PARTICLE_TRAILS := {
 	"fire_projectile": "fire", ## Ateş Asası: yükselen alev dilleri + kor
-	"ice_bolt_projectile": "ice", ## Buz Asası: buz kristali parıltısı + kar kırıntısı + sis
+	## Madde 201 mermi sanatı (fx_particle_trail.gd yeni stiller, 0,575 dünya px pikseli): Buz C camgöbeği kar artıları, Arcane C mor
+	## kıvılcım, Tüftüf A düşen zehir damlası. Eski Buz "ice" stili artık kullanılmıyor.
+	"ice_bolt_projectile": "buz_c",
+	"arcane_projectile": "arcane_c",
+	"dart_projectile": "zehir_damla",
 }
 const TRAIL_SCALE := 1.212 ## 1 sanat pikseli = PixelDraw.TEXEL dünya birimi
 var _trail: AnimatedSprite2D = null
 var _trail_oriented: bool = false
+var _trail_scale: float = TRAIL_SCALE
+## MERMİ SANATI (madde 201, scripts/projectile_art.gd): Yay/Arbalet/Tüftüf (A) + Tabanca/Tüfek/Arcane/Buz (C) gövdesi. Her fizik
+## adımında uçuş yönüne çevrilir (bkz. _physics_process). null = eski görünüm (diğer mermiler).
+const ProjectileArt := preload("res://scripts/projectile_art.gd")
+var _art_body: Node2D = null
 
 
 func _setup_trail() -> void:
 	var key: String = scene_file_path.get_file().get_basename()
+	if ProjectileArt.has_art(key):
+		var parts: Dictionary = ProjectileArt.apply(self, key, TRAIL_CRIT_COLOR if is_crit else Color.WHITE)
+		_art_body = parts["body"]
+		_trail = parts["trail"]
+		_trail_scale = ProjectileArt.WORLD_PX
+		return
 	if not TRAIL_COLORS.has(key):
 		return
 	_trail = AnimatedSprite2D.new()
@@ -212,8 +228,18 @@ func _physics_process(delta: float) -> void:
 	if _trail and not _trail_oriented:
 		_trail_oriented = true
 		_trail.global_rotation = direction.angle()
-		_trail.global_scale = Vector2.ONE * TRAIL_SCALE
+		_trail.global_scale = Vector2.ONE * _trail_scale
 		_trail.visible = true
+	if _art_body:
+		## Madde 201 sanatı +x = uçuş yönü çizildi: silahın eski çapraz sprite ofseti (ranged_projectile_rotation_offset, Tüftüf/Arcane
+		## ~-2,3 rad) ve uzak kopyanın ofsetsiz güdüm dönüşü (_net_homing) ne olursa olsun gövde + iz her adımda uçuş yönüne bakar.
+		_art_body.global_rotation = direction.angle()
+		_trail.global_rotation = _art_body.global_rotation
+		if not _art_body.visible:
+			_art_body.visible = true
+	if not ProjectileRangeScript.within(self): ## menzil = görüş elipsi (bkz. projectile_range.gd)
+		queue_free()
+		return
 	_net_homing(delta)
 	position += direction * speed * delta
 	_ew_poll_hits()
@@ -390,6 +416,9 @@ func _apply_splash_damage(direct_hit: Node) -> void:
 
 
 func _spawn_impact() -> void:
+	## Büyücü pasifi güçlendirilmiş mermi: ilk isabette mor patlama (madde 188; kaster + uzak kopya, impact_scene'den bağımsız).
+	if has_meta("buyucu_surge"):
+		preload("res://scripts/buyucu_fx.gd").surge_impact(self)
 	if not impact_scene:
 		return
 	var budget_group: StringName = &""

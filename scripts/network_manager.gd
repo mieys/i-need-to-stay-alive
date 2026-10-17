@@ -3,12 +3,18 @@ extends Node
 ## Vampir Çocuk FX yardımcısı (broadcast_player_vfx "vampir_fx" dalı).
 const VampirMathScript := preload("res://scripts/vampir_math.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
+const ParrotTreeLoot := preload("res://scripts/parrot_tree_loot.gd")
+const AudioBuses := preload("res://scripts/audio_buses.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
+const KillGold := preload("res://scripts/kill_gold.gd")
+const AssistScript := preload("res://scripts/assist.gd")
 ## Suriyeli Hadime "hadime_fx" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
 const HadimeMathScript := preload("res://scripts/hadime_math.gd")
 ## Cadı "cadi_fx" / "cadi_throw" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
 const CadiMathScript := preload("res://scripts/cadi_math.gd")
+## Assasin ULTİ (Gölge Hücumu) "assasin_fx" / "assasin_blink" kozmetik efektleri - yerel oyuncuyla AYNI yardımcı (2026-10-16).
+const AssasinUltFxScript := preload("res://scripts/assasin_ult_fx.gd")
 ## Yetenek evrimi dünya alanları (Korsan ateş/mayın) - broadcast_evo_area.
 const EvoAreaScript := preload("res://scripts/evo_area.gd")
 const PixelDrawScript := preload("res://scripts/pixel_draw.gd")
@@ -149,8 +155,11 @@ const MAX_PLAYERS := 8
 ## oyuncu sayısı v.b limitleri koyup birbirlerinin odalarına girebilmeli ... önce lobi kurulacak sonra karakter seçim ekranına
 ## geçilecek ve hazır olunca host oyunu başlatacak")
 ## ============================================================================
-## Akış: oda listesi (room_browser.gd) -> oda lobisi (room_lobby.gd, lobby_phase "room") -> host "karakter seçimine geç" ->
-## karakter seçimi (lobby_menu.gd, lobby_phase "select") -> herkes hazır -> host oyunu başlatır.
+## Akış: oda listesi (room_browser.gd) -> karakter seçimi (lobby_menu.gd, lobby_phase "select") -> herkes hazır -> host oyunu başlatır.
+## 2026-10-16 (kullanıcı: "oda kurulduktan sonra direk karakter seçim ekranına geçilsin ve o esnada oyuncular bağlansın, 2 aşamalı
+## halden hoşlanmıyorum"): kurulan oda DOĞRUDAN "select" aşamasında başlar, oda lobisi (room_lobby.gd, "room") aradan çıktı -
+## katılanlar kabul edilince seçim ekranına düşer; host bağlanmakta olanları pending_join_count() ile "BAĞLANIYOR" kartı olarak görür.
+## PHASE_ROOM sadece bağlantı sıfırlanınca kalan varsayılan (eski sürümle uyum); arayüz artık ona geçmez.
 ## GİRİŞ: bağlanan peer host'ta önce DOĞRULANIR (bkz. _on_peer_connected): host rastgele bir kod (nonce) yollar, istemci
 ## sha256(kod + şifre) + protokol sürümü + kalıcı kimliğiyle cevap verir (_rpc_auth_response). Şifre ağdan AÇIK gitmez; oda
 ## listesinde sadece "kilitli" bilgisi yayınlanır. Yanlış şifre / oda dolu / atılmış / eski sürüm -> sebep mesajı + bağlantı kesilir.
@@ -158,7 +167,7 @@ const MAX_PLAYERS := 8
 ## Host devri: kabul edilen herkes şifreyi bilir (room_password = girdiği şifre) - yeni host aynı ayarlarla kurar, diğerleri aynı
 ## şifreyle otomatik doğrulanır.
 const ROOM_MIN_PLAYERS := 2
-const LOBBY_PROTOCOL := "lobi-2" ## eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
+const LOBBY_PROTOCOL := "lobi-8" ## (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
 const AUTH_TIMEOUT_MS := 10000 ## host: bu sürede doğrulanmayanı atar; istemci: bu sürede kabul gelmezse vazgeçer
 const PHASE_ROOM := "room"
 const PHASE_SELECT := "select"
@@ -216,7 +225,7 @@ static func password_proof(nonce: String, password: String) -> String:
 func _begin_hosted_room() -> void:
 	if room_name.is_empty():
 		room_name = _default_room_name()
-	lobby_phase = PHASE_ROOM
+	lobby_phase = PHASE_SELECT ## 2026-10-16: oda lobisi yok, doğrudan karakter seçimi (bkz. blok başı notu)
 	_admitted.clear()
 	_auth_nonce.clear()
 	_kicked_uids.clear()
@@ -321,6 +330,13 @@ func _rpc_auth_accepted(p_room_name: String, p_max: int, _locked: bool, phase: S
 	lobby_phase = phase if phase in [PHASE_ROOM, PHASE_SELECT] else PHASE_ROOM
 	_complete_admission()
 	room_entered.emit()
+
+
+## Host: bağlanmış ama henüz doğrulanmamış (şifre/sürüm kontrolü süren) oyuncu sayısı - seçim ekranında "BAĞLANIYOR" kartı.
+func pending_join_count() -> int:
+	if not is_host or not is_multiplayer_active:
+		return 0
+	return _auth_nonce.size()
 
 
 ## Host: kabul edilmemiş (doğrulamayı geçmemiş) bir peer'in lobi RPC'si mi? Öyleyse yok sayılır - odaya kendini yazamaz.
@@ -466,6 +482,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
+var _assist_poll_timer: float = 0.0
+
+
 func _process(delta: float) -> void:
 	## Level atlama geri sayımını her karede tikle - fonksiyonun kendisi
 	## zaten level_up_timer_active değilse hemen çıkıyor, bu yüzden
@@ -490,6 +509,10 @@ func _process(delta: float) -> void:
 		_sweep_stale_throttle_keys()
 
 	if is_multiplayer_active and is_host:
+		_assist_poll_timer -= delta
+		if _assist_poll_timer <= 0.0:
+			_assist_poll_timer = 1.0
+			AssistScript.poll_paladins(get_tree()) ## Şovalye E/R koruması asist kaydı (bkz. assist.gd)
 		_process_batched_syncs(delta)
 	_process_online_session()
 	_process_room_auth()
@@ -1004,7 +1027,7 @@ func _refresh_host(_include_self_floor: bool = true) -> void:
 ## tohumlanır; enemy_spawner.gd gibi diğer node'lar için sinyal yayınlanır.
 func _on_became_host() -> void:
 	var max_drop_id: int = 0
-	for group_name in ["xp_orbs", "gold_drops", "food_drops", "magnet_drops", "chest_drops", "weapon_shard_drops"]:
+	for group_name in ["xp_orbs", "gold_drops", "food_drops", "magnet_drops", "chest_drops", "weapon_shard_drops", "shield_orb_drops"]:
 		for n: Node in get_tree().get_nodes_in_group(group_name):
 			if is_instance_valid(n):
 				max_drop_id = max(max_drop_id, int(n.get_meta("drop_network_id", 0)))
@@ -2137,6 +2160,9 @@ func _spawn_visual_drop(drop_type: String, pos: Vector2, amount: int, network_id
 			drop_scene = load("res://scenes/korsan_bomb.tscn")
 		"magnet":
 			drop_scene = load("res://scenes/magnet_drop.tscn")
+		## Kalkan orbu (2026-10-14): "amount" = orb kademesi (1 = %15, 2 = %30), bkz. shield_orb_drop.gd.
+		"shield_orb":
+			drop_scene = load("res://scenes/shield_orb_drop.tscn")
 		_:
 			return
 	if not drop_scene:
@@ -2170,7 +2196,7 @@ func _spawn_visual_drop(drop_type: String, pos: Vector2, amount: int, network_id
 	## host'un enemy.gd._drop_food()'da zaten ağırlıklı rastgele seçtiği
 	## görsel/heal tier numarasını (1-5) taşıyor - kozmetik kopya add_child'dan
 	## ÖNCE bunu görmeli ki _ready()/_setup_visual() doğru ikonu göstersin.
-	if drop_type == "food" and "tier" in drop:
+	if (drop_type == "food" or drop_type == "shield_orb") and "tier" in drop:
 		drop.tier = amount
 	## Elit sandık (2026-09-25): kopya da elit görünsün (mor sandık); toplanınca host'taki GERÇEK sandık kuralı uygular.
 	if drop_type == "elite_chest":
@@ -2338,9 +2364,13 @@ func submit_balance_record(json_text: String) -> void:
 		return
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender <= 0 or int(_balance_records_by_peer.get(sender, 0)) >= 20:
+		_net_log("balans: istemci kaydı REDDEDİLDİ (peer %d): peer başına 20 kayıt sınırı ya da geçersiz gönderen" % sender)
 		return
 	if BalanceLogScript.ingest_remote(json_text, sender):
 		_balance_records_by_peer[sender] = int(_balance_records_by_peer.get(sender, 0)) + 1
+		_net_log("balans: istemci kaydı alındı (peer %d, %d karakter)" % [sender, json_text.length()])
+	else:
+		_net_log("balans: istemci kaydı REDDEDİLDİ (peer %d, %d karakter): %s" % [sender, json_text.length(), BalanceLogScript.last_ingest_reason])
 
 
 ## Sync game time from host to clients so difficulty scaling stays consistent.
@@ -2362,6 +2392,22 @@ signal chat_message_received(peer_id: int, player_name: String, text: String)
 @rpc("any_peer", "call_local", "reliable")
 func broadcast_chat_message(peer_id: int, player_name: String, text: String) -> void:
 	chat_message_received.emit(peer_id, player_name, text)
+
+
+## DEBUG MODU UYARISI (kullanıcı isteği 2026-10-13: "multiplayerda biri debug modundan bişey yaparsa diğer tüm oyunculara uyarı ve
+## bildirim gelsin"): debug menüsünden/chat koduyla yapılan HER eylem herkese bildirilir (ekranda uyarı + sohbet satırı, bkz. main.gd
+## _on_debug_action_announced). Tek oyunculuda ağ yok -> no-op (uyarılacak kimse yok). Metin kısa tutulur/kırpılır (sahte uzun metin yok).
+signal debug_action_announced(player_name: String, text: String)
+
+func announce_debug_action(text: String) -> void:
+	if not is_multiplayer_active:
+		return
+	broadcast_debug_action.rpc(local_player_name, text)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_debug_action(player_name: String, text: String) -> void:
+	debug_action_announced.emit(player_name.substr(0, 24), text.substr(0, 120))
 
 
 ## Seyyar satıcı (kullanıcı isteği: "dükkan geldiğinde oyunculara bildirim
@@ -2703,6 +2749,11 @@ func broadcast_wave_fx(from_pos: Vector2, target_node_path: String, wave_type: S
 			target = _find_remote_player(target_peer_id)
 	if target == null:
 		target = get_tree().root.get_node_or_null(target_node_path) as Node2D
+	## Melek Q/E bağı (madde 212): tik = hedefin bağının üstünden dalga paketi (bkz. player.gd _spawn_wave_beam_to_ally,
+	## melek_bond_fx.gd). Bağın kendisi broadcast_ally_aura_start ile kuruldu; henüz yoksa (sıra) paket sessizce düşer.
+	if wave_type == "heal" or wave_type == "shield":
+		MelekBondScript.pulse_on(target, wave_type)
+		return
 	var wave_scene: PackedScene = load("res://scenes/fx_wave_beam.tscn")
 	if wave_scene:
 		var wave: Node2D = wave_scene.instantiate() as Node2D
@@ -2732,10 +2783,12 @@ func _resolve_aura_target(target_peer_id: int) -> Node2D:
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func broadcast_ally_aura_start(_caster_peer_id: int, target_peer_id: int, aura_type: String) -> void:
+func broadcast_ally_aura_start(caster_peer_id: int, target_peer_id: int, aura_type: String) -> void:
 	var target: Node2D = _resolve_aura_target(target_peer_id)
 	if target and target.has_method("start_ally_aura_fx"):
-		target.start_ally_aura_fx(aura_type)
+		## Melek bağının ipi kasterin halesinden çıkar (madde 212) - kaster bu istemcide hep bir kukla (call_remote).
+		var caster: Node2D = _find_remote_player(caster_peer_id) if caster_peer_id > 0 else null
+		target.start_ally_aura_fx(aura_type, caster)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -3301,11 +3354,16 @@ const RELIABLE_PLAYER_VFX := {
 	"beam_start": true, "beam_stop": true, "weapon_icon_visibility": true, "necro_skull": true,
 	"oakley_flower_spawn": true, "oakley_flower_bond": true, "spirit_blink": true, "spirit_cancel": true,
 	"weapon_surge": true, ## Büyücü pasifi - yetenek başına bir kez, kaybolması pasifin görünmemesi demek
+	"cadi_fx": true, ## Cadı Q bulutu + biniş dumanı - kaybolursa diğer ekranda bulut eksik/erken söner (0,3-1,2 sn'de bir, trafik önemsiz)
 	"cadi_throw": true, ## Cadı R şişesi - kaybolursa alan/patlama diğer oyuncularda hiç görünmez (8 sn'de bir, trafik önemsiz)
+	"assasin_blink": true, ## Assasin R cast/dönüş patlaması - ulti başına 2 (sıçrayış/kesik "assasin_fx" saniyede ~9, güvenilmez kalır)
+	"assasin_passive": true, ## Assasin pasifi (Bıçak Uzmanlığı) tetiklenmesi - yetenek başına bir kez; kaybolursa 3 sn'lik dış hat hiç görünmez
 }
 ## "melek_sparkle" (2026-10-10): Melek pasifinin iyileştirme işareti - extra "peers" = işaretin çıkacağı oyuncular (Melek dahil); her istemci kendi
 ## yerel oyuncusu ya da ilgili kukla altında fx_melek_heal_sparkle.gd kurar. Güvenilmez (kaybolursa bir sonraki 3 sn'de yine gelir).
 const FxMelekSparkleScript := preload("res://scripts/fx_melek_heal_sparkle.gd")
+const FxSovalyeEchoScript := preload("res://scripts/fx_sovalye_echo.gd")
+const MelekBondScript := preload("res://scripts/melek_bond_fx.gd")
 
 
 func send_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_data: Dictionary) -> void:
@@ -3502,6 +3560,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			var skull_fx: Node2D = skull_scene.instantiate() as Node2D
 			## Büyücü "Efsunlu Büyü" (Q finali): efsunlu Arcane Lanet'in kafatası %25 büyük (kasterle aynı ölçek).
 			skull_fx.scale = Vector2.ONE * float(extra_data.get("fx_scale", 1.0))
+			skull_fx.set("hop", int(extra_data.get("hop", 0))) ## kaçıncı sekme (lanet gözü boyu + ilk sekmede kalkış mührü, madde 188)
 			get_tree().current_scene.add_child(skull_fx)
 			if skull_fx.has_method("setup_positions"):
 				skull_fx.setup_positions(Vector2(extra_data.get("from_pos", pos)), pos)
@@ -3581,6 +3640,11 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 					asp.max_distance = 900.0
 					asp.attenuation = 1.6
 					asp.pitch_scale = float(extra_data.get("pitch", 1.0))
+					## Şovalye kubbesinin dış halkasından ateşlenen silah (bkz. dome_weapon_ring.gd): ses silahın konumunda çalar ki
+					## kubbenin boğuk-ses halkasına (dome_sound_muffle.gd) düşsün; normalde kuklanın üstünde çalar.
+					if bool(extra_data.get("rim", false)):
+						asp.global_position = pos
+						AudioBuses.route_rim_sound(asp, true) ## yerel oyuncu kubbedeyse sert boğuk (halka silahı)
 					asp.finished.connect(asp.queue_free)
 					asp.play()
 		"weapon_recoil":
@@ -3615,21 +3679,34 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		"paladin_barrier_flash":
 			if rp._barrier_visual and is_instance_valid(rp._barrier_visual) and rp._barrier_visual.has_method("flash_from_angle"):
 				rp._barrier_visual.flash_from_angle(float(extra_data.get("angle", 0.0)))
+		## Şovalye E "Yankı Darbesi" (bkz. player.gd _sovalye_echo_fx): rp = hasarı alan dost, extra k = Şovalye'nin peer id'si
+		## (bu istemcinin kendisi olabilir), a = darbe yönü, b = büyük darbe. Güvenilmez (sık, kozmetik).
+		"sovalye_echo":
+			var echo_k: int = int(extra_data.get("k", 0))
+			var echo_knight: Node2D = null
+			if echo_k > 0 and echo_k == multiplayer.get_unique_id():
+				echo_knight = get_tree().get_first_node_in_group("player") as Node2D
+			elif echo_k > 0:
+				echo_knight = _find_remote_player(echo_k)
+			if echo_knight == null:
+				return
+			var echo_fx := FxSovalyeEchoScript.new()
+			get_tree().current_scene.add_child(echo_fx)
+			echo_fx.setup(rp, echo_knight, float(extra_data.get("a", PI)), bool(extra_data.get("b", false)))
 		## Aynı bildirim: Sihirli Kalkan/kalkan modu hasar aldığında oynayan
 		## baloncuk parıldaması (+ isteğe bağlı halka efekti) da eskiden
 		## sadece sahibinin kendi ekranında görünüyordu (bkz. player.gd
 		## _broadcast_shield_visual_flash()).
+		## 2026-10-14 (madde 148): with_ring = MANA KALKANI darbesi -> kuklanın mana_shield_fx.gd'si ("B - Mühür"; broke =
+		## bu darbe kalkanı bitirdi, her taraftan kırılma). with_ring yoksa Şovalye R baloncuğunun parıltısı (is_shielded).
 		"shield_hit_flash":
 			var flash_angle: float = float(extra_data.get("angle", 0.0))
-			if rp.shield_visual and rp.shield_visual.has_method("flash"):
-				rp.shield_visual.flash(flash_angle)
 			if bool(extra_data.get("with_ring", false)):
-				var hit_fx := Node2D.new()
-				hit_fx.set_script(load("res://scripts/fx_shield_hit.gd"))
-				rp.add_child(hit_fx)
-				hit_fx.position = Vector2.ZERO
-				if hit_fx.has_method("setup"):
-					hit_fx.setup(flash_angle)
+				var mfx: Node = rp.get_node_or_null("ManaShieldFx")
+				if mfx and mfx.has_method("hit"):
+					mfx.hit(flash_angle, bool(extra_data.get("broke", false)))
+			elif rp.shield_visual and rp.shield_visual.has_method("flash"):
+				rp.shield_visual.flash(flash_angle)
 		## Vampir Çocuk pixel FX'i (bkz. vampir_math.gd spawn_fx / vampir_fx.gd): kind = "hit" (vuruş
 		## patlaması), "puff" (Yarasa Formu geçişi), "drain" (Kan Emme - "points" kaynak konumları,
 		## damlalar bu kukla'ya akar; "text" varsa "+1 Maks. Can" gibi kukla üstünde yazı).
@@ -3663,7 +3740,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				vampir_opts["sink"] = rp
 			VampirMathScript.spawn_fx(get_tree().current_scene, vampir_kind, pos, vampir_opts)
 		## Cadı (bkz. cadi_math.gd - yerel oyuncu AYNI yardımcıları çağırır). Kozmetik kopyalar: hasar/etki sadece kasterde.
-		##  "cadi_fx"   kind "smoke" (Q bulutu; life/size = evrimli ömür/boyut) | "poof" (biniş/iniş dumanı)
+		##  "cadi_fx"   kind "smoke" (Q bulutu; life/size = evrimli ömür/boyut, vert = dikey bulut) | "poof" (biniş/iniş dumanı)
 		##  "cadi_throw" R şişesi: pos = çıkış, to = hedef, potion, duration/size (alanın/patlamanın görseli şişe yere değince açılır)
 		"cadi_fx":
 			var cadi_kind: String = str(extra_data.get("kind", ""))
@@ -3672,6 +3749,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 					"life": float(extra_data.get("life", CadiMathScript.SMOKE_LIFE)),
 					"size": float(extra_data.get("size", 1.0)),
 					"owner_peer": player_id,
+					"vert": bool(extra_data.get("vert", false)),
 				})
 			elif cadi_kind == "poof":
 				CadiMathScript.spawn_poof(get_tree().current_scene, pos)
@@ -3681,6 +3759,24 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				"duration": float(extra_data.get("duration", CadiMathScript.ZONE_DURATION)),
 				"size": float(extra_data.get("size", 1.0)),
 			})
+		## Assasin ULTİ (Gölge Hücumu, bkz. assasin_ult_fx.gd - kaster player.gd _spawn_assasin_dash_*_fx / _spawn_assasin_ult_cut_fx
+		## ile AYNI fonksiyonları çağırır). Kozmetik: hasar sadece kasterde.
+		##  "assasin_fx"    kind "step" (pos = sıçrayış başı, to = sonu, t = sıçrayış süresi; hayalet karesi kukladan okunur)
+		##                  | "cut" (pos = isabet, rot = hamle açısı, flip = ayna, snd = HIT_SOUNDS sırası)
+		##  "assasin_blink" vanish = cast anı (sesli) / dönüş
+		"assasin_fx":
+			var af_kind: String = str(extra_data.get("kind", ""))
+			if af_kind == "step":
+				AssasinUltFxScript.spawn_step(get_tree().current_scene, rp, pos, Vector2(extra_data.get("to", pos)),
+						clampf(float(extra_data.get("t", 0.09)), 0.02, 0.5))
+			elif af_kind == "cut":
+				AssasinUltFxScript.spawn_cut(get_tree().current_scene, pos, float(extra_data.get("rot", 0.0)),
+						bool(extra_data.get("flip", false)), int(extra_data.get("snd", 0)), true)
+		"assasin_blink":
+			AssasinUltFxScript.spawn_blink(get_tree().current_scene, pos, bool(extra_data.get("vanish", true)))
+		##  "assasin_passive" t = garantili kritik süresi: kuklada tetiklenme parlaması + kırmızı dış hat (assasin_passive_fx.gd)
+		"assasin_passive":
+			AssasinUltFxScript.trigger_passive(rp, clampf(float(extra_data.get("t", 3.0)), 0.1, 6.0))
 		## Suriyeli Hadime (bkz. hadime_math.gd spawn_fx - yerel oyuncu AYNI fonksiyonu çağırır, iki taraf sapamaz).
 		## Kozmetik: hasar/kalkan emme sadece kasterin kendi kopyasında (on_land burada yok).
 		"hadime_fx":
@@ -4099,6 +4195,7 @@ func _rpc_spirit_team_buff(caster_id: int) -> void:
 	## her hedef kendi miktarını apply_spirit_can_buff ile kendi ekranında zaten görüyor, üçüncü kişiler görmez.
 	var is_caster: bool = multiplayer.has_multiplayer_peer() and caster_id == multiplayer.get_unique_id()
 	if is_caster:
+		report_support_all()
 		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
 			if not is_instance_valid(rp) or rp.get("is_dead") == true or rp.get("is_downed") == true \
 					or not rp.has_method("show_support_number"):
@@ -4216,6 +4313,21 @@ func parrot_gold_result(drop_network_id: int, amount: int) -> void:
 		local_player.korsan_parrot_gold_result(drop_network_id, amount)
 
 
+## Papağan ağaç gagalama ödülü (madde 203): istemcinin papağanı ağaçta 3-4 sn gagalayınca host zarı atar ve ödülü ağacın dibine düşürür.
+## Konum sahibin yakınında olmalı (hileli uzak spawn yok) ve istek sıklığı sınırlı.
+@rpc("any_peer", "call_remote", "reliable")
+func request_parrot_tree_drop(world_pos: Vector2) -> void:
+	if not is_host:
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if should_throttle("parrot_tree_%d" % sender_id, 2.0):
+		return
+	var sender: Node = _find_player_by_peer_id(sender_id)
+	if sender == null or (sender as Node2D).global_position.distance_to(world_pos) > 900.0:
+		return
+	ParrotTreeLoot.spawn(get_tree(), world_pos, ParrotTreeLoot.roll())
+
+
 ## Papağanın durum değişikliği (uç / dön / kon + ayağındaki altın sayısı + hız) -> diğer oyuncuların ekranındaki kukla
 ## papağan aynı hareketi korsan_parrot.gd'nin AYNI koduyla oynatır. Seyrek (saniyede birkaç) olduğu için güvenilir kanal.
 @rpc("any_peer", "call_remote", "reliable")
@@ -4275,6 +4387,44 @@ func grant_personal_gold(amount: int) -> void:
 			ft.global_position = local_player.global_position + Vector2(14, -34)
 			if ft.has_method("setup"):
 				ft.setup("+%d altın" % amount, Color(1.0, 0.85, 0.25))
+
+
+## Yaratık öldürme altını (2026-10-15, bkz. kill_gold.gd): öldüren uzak oyuncunun kişisel altınına eklenir; yazı + ses yaratığın
+## öldüğü yerde (world_pos) SADECE onun ekranında çıkar. Sadece host'tan gelir.
+@rpc("any_peer", "call_remote", "reliable")
+func grant_kill_gold(amount: int, world_pos: Vector2, assist: int = 0) -> void:
+	if not _from_host() or amount <= 0:
+		return
+	GameManager.gold += amount
+	KillGold.show_at(get_tree(), amount, world_pos, assist)
+
+
+## ASİST (2026-10-15, bkz. assist.gd): can/kalkan basan, buff veren, bağ kuran oyuncu hedefi bildirir. Host'ta doğrudan kayda geçer,
+## istemcide host'a (hedef başına en çok saniyede 1) gider. hold = etkisi süren buff'ın süresi.
+func report_support(target_peer_id: int, hold: float = 0.0) -> void:
+	if not is_multiplayer_active or target_peer_id <= 0 or not multiplayer.has_multiplayer_peer():
+		return
+	var me: int = multiplayer.get_unique_id()
+	if target_peer_id == me or should_throttle("support_%d" % target_peer_id, 1.0):
+		return
+	BalanceLogScript.note_support_sent()
+	if is_host:
+		AssistScript.note_support(me, target_peer_id, hold)
+	else:
+		_rpc_report_support.rpc_id(_host_peer_id(), target_peer_id, hold)
+
+
+## Ruhani "Can" gibi herkese giden destek: her canlı katılımcıya bildirir.
+func report_support_all(hold: float = 0.0) -> void:
+	for p: Dictionary in get_reward_participants():
+		report_support(int(p["peer_id"]), hold)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_report_support(target_peer_id: int, hold: float) -> void:
+	if not is_host:
+		return
+	AssistScript.note_support(multiplayer.get_remote_sender_id(), target_peer_id, hold)
 
 
 ## Işığın Muhafızı Parşomeni (eşya, 2026-10-02): can/kalkan veren oyuncu bu RPC'yi SADECE hedefin peer'ine yollar
@@ -4582,6 +4732,25 @@ func sync_brush_state(peer_key: int, state: int) -> void:
 	brush_state_received.emit(peer_key, state)
 
 
+## MADEN DAYANIKLILIĞI (bkz. mine_world.gd / mine_sites.gd): karar host'ta. İstemci kazma vuruşunu host'a bildirir (`request_mine_hit`), host dayanıklılığı düşürür;
+## kırık maden listesi (indeksler) değişince ve 5 sn'de bir TÜM istemcilere gider (`sync_mine_state`) - geç katılan/kaçırılan güncelleme de böylece düzelir.
+signal mine_state_received(broken: Array)
+signal mine_hit_requested(site: int)
+
+@rpc("authority", "call_remote", "reliable")
+func sync_mine_state(broken: Array) -> void:
+	if not _from_host():
+		return
+	mine_state_received.emit(broken)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_mine_hit(site: int) -> void:
+	if not is_host:
+		return
+	mine_hit_requested.emit(site)
+
+
 @rpc("authority", "call_remote", "reliable")
 func sync_revive_regen(peer_id: int, seconds_left: float, rate: float = 1.0) -> void:
 	GameManager.apply_revive_regen_sync(peer_id, seconds_left, rate)
@@ -4662,6 +4831,37 @@ func _consume_revive_authoritative(peer_id: int) -> bool:
 	GameManager.peer_revives[peer_id] = remaining
 	sync_revive_consumed.rpc(peer_id, remaining)
 	return true
+
+
+## KALICI "Dirilme Hakkı" geliştirmesi (Ruh Mağazası, meta_upgrades.gd): dirilme hakları host'ta tutulduğu için, +1 hakkı olan oyuncu
+## koşu başında bunu host'a bildirir (main.gd _ready). Host sadece o oyuncunun kaydı HENÜZ YOKSA (hiç ölmemiş / bildirmemiş) uygular ve
+## en fazla MetaUpgrades.max_level("revive") kadar fazlalık kabul eder; istemci doğrulaması yok (kilitlerle aynı güven modeli).
+func announce_meta_revive_bonus() -> void:
+	if not is_multiplayer_active:
+		return
+	var bonus: int = GameManager.max_revives - GameManager.MetaUpgradesScript.BASE_REVIVES
+	if bonus <= 0:
+		return
+	if is_host:
+		_host_apply_meta_revive_bonus(multiplayer.get_unique_id(), bonus)
+	else:
+		request_meta_revive_bonus.rpc_id(1, bonus)
+
+
+@rpc("any_peer", "reliable")
+func request_meta_revive_bonus(bonus: int) -> void:
+	if not is_host:
+		return
+	_host_apply_meta_revive_bonus(multiplayer.get_remote_sender_id(), bonus)
+
+
+func _host_apply_meta_revive_bonus(peer_id: int, bonus: int) -> void:
+	if GameManager.peer_revives.has(peer_id):
+		return
+	var extra: int = clampi(bonus, 0, GameManager.MetaUpgradesScript.max_level("revive"))
+	if extra <= 0:
+		return
+	sync_revive_consumed.rpc(peer_id, GameManager.MetaUpgradesScript.BASE_REVIVES + extra)
 
 
 @rpc("any_peer", "reliable")
@@ -4900,11 +5100,80 @@ const BALANCE_FLUSH_SEC := 0.35
 
 
 func flush_balance_before_leave() -> void:
-	if not is_multiplayer_active or is_host or _peer == null:
+	if is_host:
+		_flush_own_balance_record() ## host'un KENDİ kaydı da oda kapanmadan önce (bkz. altta)
+		await collect_client_balance_records() ## host: istemcilerin kayıtları odayı kapatmadan önce toplanır
+		return
+	if not is_multiplayer_active or _peer == null:
 		return
 	var main: Node = get_tree().current_scene
 	if main != null and main.has_method("flush_run_record_before_leave") and bool(main.call("flush_run_record_before_leave")):
 		await get_tree().create_timer(BALANCE_FLUSH_SEC, true, false, true).timeout
+
+
+## Host'un kendi koşu kaydı da odayı kapatmadan ÖNCE yazılır (2026-10-17, madde 223). Eskiden host menüye çıkarken önce close_room() oda durumunu
+## siliyor (is_multiplayer_active=false, peer yok), kayıt sonra Main'in _exit_tree'sinde alınıyordu -> host'un kaydı HEP "solo=True, team=1"
+## çıkıyor, çok oyunculu oyunun takım sayısı/solo bilgisi kayboluyordu (16 Ekim 00:48 oyunu: host team=1, istemciler team=3). Kayıt bir kez
+## yazılır (_run_end_recorded): sonraki _exit_tree çağrısı hiçbir şey yapmaz.
+func _flush_own_balance_record() -> void:
+	if not is_host or not is_multiplayer_active:
+		return
+	var main: Node = get_tree().current_scene
+	if main != null and main.has_method("flush_run_record_before_leave"):
+		main.call("flush_run_record_before_leave")
+
+
+## HOST ana menüye dönünce / pencereyi kapatınca oda kapanıyor ve istemciler kayıtlarını gönderemeden düşüyordu (2026-10-14: 3 kişilik
+## maçta yalnız host'un kaydı kaldı). Odayı kapatmadan ÖNCE istemcilere "kaydını yolla" denir (_rpc_request_balance_flush); istemci kaydı
+## yollar ve aynı güvenilir kanaldan onay verir (kayıt onaydan ÖNCE varır). Host onayları (en çok BALANCE_COLLECT_TIMEOUT_SEC) bekler.
+const BALANCE_COLLECT_TIMEOUT_SEC := 2.0
+const BALANCE_COLLECT_POLL_SEC := 0.05
+var _balance_ack_pending: Dictionary = {}
+var _balance_collecting: bool = false
+
+
+func collect_client_balance_records() -> void:
+	if _balance_collecting or not is_host or not is_multiplayer_active or _peer == null or not _is_game_in_progress:
+		return
+	_balance_ack_pending.clear()
+	var connected: Array = multiplayer.get_peers()
+	for pid in game_ready_peers():
+		if connected.has(int(pid)):
+			_balance_ack_pending[int(pid)] = true
+	if _balance_ack_pending.is_empty():
+		return
+	_balance_collecting = true
+	_rpc_request_balance_flush.rpc()
+	var waited: float = 0.0
+	while not _balance_ack_pending.is_empty() and waited < BALANCE_COLLECT_TIMEOUT_SEC:
+		await get_tree().create_timer(BALANCE_COLLECT_POLL_SEC, true, false, true).timeout
+		waited += BALANCE_COLLECT_POLL_SEC
+		var still: Array = multiplayer.get_peers() if multiplayer.has_multiplayer_peer() else []
+		for pid in _balance_ack_pending.keys():
+			if not still.has(int(pid)):
+				_balance_ack_pending.erase(pid) ## bu arada düşen peer'i bekleme
+	_net_log("balans toplama bitti: bekleyen=%d, süre=%.2f sn" % [_balance_ack_pending.size(), waited])
+	_balance_ack_pending.clear()
+	_balance_collecting = false
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_balance_flush() -> void:
+	if is_host or not _from_host() or multiplayer.get_remote_sender_id() == 0:
+		return
+	var main: Node = get_tree().current_scene
+	if main != null and main.has_method("flush_run_record_before_leave"):
+		main.call("flush_run_record_before_leave") ## kaydı yazar + host'a yollar (zaten yazıldıysa hiçbir şey yapmaz)
+	var host_id: int = _host_peer_id()
+	if host_id > 0 and multiplayer.get_peers().has(host_id):
+		_rpc_balance_flush_ack.rpc_id(host_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_balance_flush_ack() -> void:
+	if not is_host:
+		return
+	_balance_ack_pending.erase(multiplayer.get_remote_sender_id())
 
 
 func _flush_balance_then_quit_if_client() -> void:
@@ -4930,6 +5199,8 @@ func _graceful_quit_if_hosting() -> void:
 		return
 	_closing_for_quit = true
 	get_tree().auto_accept_quit = false ## pencere kapatma isteği bu bildirimden SONRA gelen sinyalle çıkışı başlatır; çıkışı biz tetikleriz
+	_flush_own_balance_record() ## host'un kendi kaydı close_room()'dan ÖNCE (solo/team doğru çıksın)
+	await collect_client_balance_records() ## istemci balans kayıtları odayla birlikte kaybolmasın
 	close_room()
 	await get_tree().create_timer(QUIT_GRACE_SEC, true, false, true).timeout
 	get_tree().quit()
@@ -5534,7 +5805,7 @@ func request_game_catchup() -> void:
 ## göremiyor, host'ta toplanınca da "remove" gelmiyordu. Her drop broadcast_drop'la AYNI alanlarla (tür, konum, miktar/kademe, kimlik,
 ## gerçek xp) küçük gruplar halinde güvenilir yollanır; istemci aynı kurulumu kullanır (_spawn_visual_drop, kimlik tekrarını yok sayar).
 const DROP_CATCHUP_BATCH := 30
-const DROP_CATCHUP_GROUPS := ["xp_orbs", "gold_drops", "food_drops", "magnet_drops", "chest_drops", "weapon_shard_drops"]
+const DROP_CATCHUP_GROUPS := ["xp_orbs", "gold_drops", "food_drops", "magnet_drops", "chest_drops", "weapon_shard_drops", "shield_orb_drops"]
 
 
 func _send_drop_catchup(peer_id: int) -> void:
@@ -5575,6 +5846,9 @@ func collect_drop_catchup() -> Array:
 				"weapon_shard_drops":
 					kind = "weapon_shard"
 					amount = int(n.get("amount"))
+				"shield_orb_drops":
+					kind = "shield_orb"
+					amount = int(n.get("tier"))
 			if kind != "":
 				entries.append([kind, (n as Node2D).global_position, amount, drop_id, real_xp])
 	return entries
@@ -5672,6 +5946,11 @@ func request_drop_pickup(drop_network_id: int, drop_type: String) -> void:
 				if is_instance_valid(ws) and int(ws.get_meta("drop_network_id", -1)) == drop_network_id:
 					real_drop = ws
 					break
+		"shield_orb":
+			for so: Node in get_tree().get_nodes_in_group("shield_orb_drops"):
+				if is_instance_valid(so) and int(so.get_meta("drop_network_id", -1)) == drop_network_id:
+					real_drop = so
+					break
 	
 	if real_drop and is_instance_valid(real_drop):
 		## BUG DÜZELTMESİ (derin multiplayer denetimi bulgusu): burada eskiden
@@ -5701,6 +5980,20 @@ func request_drop_pickup(drop_network_id: int, drop_type: String) -> void:
 						eater.heal(heal_amount)
 				else:
 					sync_food_heal.rpc(heal_amount, sender_id) ## uzaktaki oyuncuya heal sync gönder
+				real_drop.queue_free()
+			"shield_orb":
+				## Kalkan orbu: yüzde toplayanın AZAMİ kalkanına göre (bkz. shield_orb_drop.gd). Toplayan host'un kendisiyse doğrudan,
+				## uzak bir istemciyse host'taki kuklasının (state kanalından gelen) item_shield_max'i üzerinden hesaplanıp ona yollanır.
+				var orb_local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+				if sender_id == orb_local_id or sender_id == 0:
+					if real_drop.has_method("apply_to_local_player"):
+						real_drop.apply_to_local_player(get_tree().get_first_node_in_group("player"))
+				else:
+					var orb_puppet: Node = _find_remote_player(sender_id)
+					var orb_max: float = float(orb_puppet.item_shield_max) if (orb_puppet != null and "item_shield_max" in orb_puppet) else 0.0
+					var orb_amount: float = real_drop.get_shield_amount(orb_max) if real_drop.has_method("get_shield_amount") else 0.0
+					if orb_amount > 0.0:
+						sync_ally_shield_heal.rpc(sender_id, orb_amount)
 				real_drop.queue_free()
 			"magnet":
 				## #32 DÜZELTME (kullanıcı bildirimi: "Mıknatısla çekilen

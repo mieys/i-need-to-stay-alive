@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cxabw3i3tlyqy"]
 
 [ext_resource type="Script" uid="uid://c1op7g5ux3u1l" path="res://scripts/loading_screen.gd" id="1"]
-[ext_resource type="Texture2D" path="res://assets/ui/menu_bg.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/ui/yukleme/yukleme_bg.png" id="2"]
 [ext_resource type="Theme" uid="uid://ceslvnp1x5pxb" path="res://assets/fonts/theme_original.tres" id="3_theme"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bg"]
@@ -41,16 +41,7 @@ grow_horizontal = 2
 grow_vertical = 2
 texture = ExtResource("2")
 expand_mode = 1
-stretch_mode = 6
-
-[node name="Darken" type="ColorRect" parent="." unique_id=700949542]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.08, 0.05, 0.1, 0.6)
+stretch_mode = 0
 
 [node name="StatusLabel" type="Label" parent="." unique_id=1060591107]
 layout_mode = 1

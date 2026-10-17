@@ -50,7 +50,7 @@ const SOURCE_GROUPS: Array[String] = ["player", "remote_players"]
 ## görünmesini istemiyorum, xp orb, sandık, altın v.b. yaratıkların görünmediği gibi onların da görünmemesini
 ## istiyorum") - yerdeki düşürülen eşyalar da (bkz. drop_attraction.gd/xp_orb.gd/gold_drop.gd/food_drop.gd/
 ## chest_drop.gd/magnet_drop.gd) artık düşmanlarla AYNI kurala tabi: görüş alanı dışında gizli.
-const HIDEABLE_GROUPS: Array[String] = ["enemies", "enemy_projectiles", "xp_orbs", "gold_drops", "food_drops", "chest_drops", "magnet_drops"]
+const HIDEABLE_GROUPS: Array[String] = ["enemies", "enemy_projectiles", "xp_orbs", "gold_drops", "food_drops", "chest_drops", "magnet_drops", "shield_orb_drops"]
 
 const HIDDEN_META := &"vision_fog_hidden"
 const ALPHA_META := &"vision_fog_alpha"

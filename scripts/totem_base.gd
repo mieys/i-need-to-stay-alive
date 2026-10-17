@@ -161,7 +161,7 @@ func _play_plant_animation() -> void:
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_totem_sprite, "modulate:a", 1.0, 0.20)
 	_spawn_dust_child(PlantDustScene)
-	_spawn_rune_flash(Vector2(0, -22), 0.75)
+	_spawn_rune_flash(Vector2(0, -16), 0.75)  ## v4 totem (madde 176): altın bilezik/taş hizası
 
 
 ## Yetenek renginde rün parlaması (bkz. totem_color). Kozmetik ağ kopyaları da
@@ -277,7 +277,7 @@ func _draw() -> void:
 	var texel: float = PixelDraw.TEXEL
 	## Zemin gölgesi
 	for iy in range(-3, 4):
-		var hw: int = int(round(sqrt(maxf(0.0, 1.0 - pow(float(iy) / 3.5, 2.0))) * 12.0))
+		var hw: int = int(round(sqrt(maxf(0.0, 1.0 - pow(float(iy) / 3.5, 2.0))) * 10.0))  ## v4 totem kaidesi ~19 birim geniş (madde 176)
 		for ix in range(-hw, hw + 1):
 			if ((ix + iy) & 1) == 0:
 				continue

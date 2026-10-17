@@ -17,14 +17,67 @@ func test_items_defs_exist() -> void:
 func test_chest_drop_uses_normal_or_elite_sheet() -> void:
 	var drop = (load("res://scenes/chest_drop.tscn") as PackedScene).instantiate()
 	add_child(drop)
-	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_normal_t1.png"), "normal sandık normal sayfayı kullanmalı")
+	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_normal.png"), "normal sandık dünya sayfasını kullanmalı")
 	assert(drop.sprite.hframes == 20 and drop.sprite.vframes == 1, "sayfa 20 yatay kare olmalı")
 	assert(drop.sprite.frame == 0, "kapalı sandık karesiyle başlamalı")
+	## 2026-10-17 (madde 242 "B Işık Sütunu"): 96 px kare x 0,5 = eski 48 dünya px; arkasında ayrı ışık sütunu sprite'ı.
+	assert(drop.sprite.texture.get_width() == 96 * 20 and is_equal_approx(drop.sprite.scale.x, 0.5), "96 px kare, 0,5 ölçek")
+	var beam: Sprite2D = drop.get_node_or_null("Beam")
+	assert(beam != null and beam.texture.resource_path.ends_with("chests/chest_beam.png"), "normal sandığın arkasında ışık sütunu olmalı")
+	assert(beam.get_index() < drop.sprite.get_index(), "ışık sütunu sandığın ARKASINDA çizilmeli")
+	assert(beam.hframes == 37 and beam.texture.get_height() == 192, "sütun sayfası 37 kare x 128x192")
+	## İki sprite'ta sandığın alt-ortası aynı dünya noktasına düşmeli (sütun sandıktan kaymasın).
+	var chest_bottom: Vector2 = drop.sprite.position + (Vector2(48, 84) - Vector2(48, 48)) * drop.sprite.scale
+	var beam_bottom: Vector2 = beam.position + (Vector2(64, 176) - Vector2(64, 96)) * beam.scale
+	assert(chest_bottom.distance_to(beam_bottom) < 0.01, "sütun sandığın altına hizalı olmalı: %s / %s" % [chest_bottom, beam_bottom])
+	assert(is_equal_approx(chest_bottom.y, 8.0), "sandık tabanı kökün 8 px altında (gölge ile aynı)")
 	drop.chest_tier = 3
-	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_normal_t1.png"), "kademe görseli değiştirmemeli")
+	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_normal.png"), "kademe görseli değiştirmemeli")
 	drop.is_elite = true
 	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_elite.png"), "elit sandık elit sayfayı kullanmalı")
+	assert(beam.texture.resource_path.ends_with("chests/chest_beam_elite.png"), "elit sandığın sütunu elit sayfadan")
 	drop.free()
+
+
+## Gece ışığı (madde 243): sandık katalogda, rengi sütunla aynı (normal sıcak altın / elit mor), kalıcı (ışık bütçesine takılmaz).
+func test_chest_beam_glows_at_night() -> void:
+	get_tree().current_scene = self
+	var Catalog: GDScript = load("res://scripts/night_glow_catalog.gd")
+	var AtmosphereScript: GDScript = load("res://scripts/atmosphere.gd")
+	var atmo := Node2D.new()
+	atmo.set_script(AtmosphereScript)
+	add_child(atmo)
+	for elite: bool in [false, true]:
+		var drop = (load("res://scenes/chest_drop.tscn") as PackedScene).instantiate()
+		drop.is_elite = elite
+		add_child(drop)
+		var raw: Dictionary = Catalog.profile_for(drop)
+		assert(bool(raw.get("perm", false)), "sandık ışığı kalıcı olmalı (yerde uzun kalır, bütçe doluyken de yansın)")
+		var prof: Dictionary = Catalog.resolve(drop, raw)
+		var want: Color = Color(0.86, 0.64, 1.0) if elite else Color(1.0, 0.8, 0.45)
+		assert((prof["color"] as Color).is_equal_approx(want), "ışık rengi sütunla aynı (elit=%s): %s" % [elite, prof["color"]])
+		atmo._attach_glow(drop, raw)
+		var glow: Node = drop.get_node_or_null("NightGlow")
+		assert(glow != null and glow.is_in_group(AtmosphereScript.PERM_GLOW_GROUP), "sandığa kalıcı gece ışığı takılmalı")
+		drop.free()
+	atmo.free()
+
+
+## Açılışta ışık sütunu sandıkla eş: sallanmada 24-27, patlamadan sonra çöker ve biter (dünyada çökme 2 kat hızlı).
+func test_chest_beam_frames_follow_open_sequence() -> void:
+	var ChestArt: GDScript = load("res://scripts/chest_art.gd")
+	assert(ChestArt.beam_frame_for_open(4) == 24 and ChestArt.beam_frame_for_open(7) == 27, "sallanma kareleri eş")
+	assert(ChestArt.beam_frame_for_open(8) == 28, "patlamada çökme başlar")
+	assert(ChestArt.beam_frame_for_open(12) == 36, "dünya açılışının son karesinde son çökme karesi")
+	assert(ChestArt.beam_frame_for_open(13) == -1, "çökmeden sonra sütun gizlenir")
+	var anim: Control = (load("res://scripts/chest_open_anim.gd") as GDScript).new()
+	anim.setup(false, 2)
+	add_child(anim)
+	assert(anim.custom_minimum_size == Vector2(384, 384), "ödül ekranı sandığı yine 384 px")
+	assert(anim.get("_beam_sheet").resource_path.ends_with("chests/chest_beam_t2.png"), "ödül ekranında sütun rengi = nadirlik")
+	anim.skip()
+	assert(not anim.get("_beam_rect").visible, "atlanınca sütun gizlenir")
+	anim.free()
 
 
 ## Elit sandıklar ayrı sayaçta ama normal sandıklarla AYNI "bekleyen sandık var mı" kapısından geçer (main.gd sandık akışı).

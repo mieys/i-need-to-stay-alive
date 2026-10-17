@@ -1073,7 +1073,7 @@ func _max_owned_weapons() -> int:
 ## diğer kopyalarla hiçbir şey paylaşmaz. Toplamda (türü fark etmeksizin)
 ## _max_owned_weapons()'a ulaşıldıysa yeni kopya alınamaz.
 func _on_buy_copy(item: String) -> void:
-	if GameManager.owned_weapons.size() >= _max_owned_weapons():
+	if GameManager.owned_weapons.size() >= _max_owned_weapons() or GameManager.owns_weapon(item):
 		return
 	var cost: int = _copy_cost(item, GameManager.owned_weapons.size() + 1)
 	if GameManager.gold < cost:

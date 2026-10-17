@@ -69,3 +69,18 @@ func test_baked_fx_resources_have_their_animations() -> void:
 		assert(load("res://assets/fx/enemy_abilities/laser_beam_%d.png" % i) != null)
 	assert(load("res://assets/fx/enemy_abilities/laser_warn.png") != null)
 	assert(load("res://assets/ui/status/burn.png") != null)
+
+## Donmuş/sersemlemiş yaratığın uyarısı başlamış büyüsü (lazer, diken) iptal olur (kullanıcı: "donan düşmanlar hala uzaktan ateş edebiliyor").
+class _FakeCaster extends Node2D:
+	var frozen: bool = false
+	func is_incapacitated_now() -> bool:
+		return frozen
+
+
+func test_frozen_caster_cancels_telegraphed_spell() -> void:
+	var c := _FakeCaster.new()
+	assert(not AbilitiesScript.caster_disabled(c, {}))
+	c.frozen = true
+	assert(AbilitiesScript.caster_disabled(c, {}))
+	assert(not AbilitiesScript.caster_disabled(null, {"src": 5})) ## tek oyunculu/host'ta kaynak yoksa iptal yok
+	c.free()

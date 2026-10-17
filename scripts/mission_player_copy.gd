@@ -1,8 +1,8 @@
 extends CharacterBody2D
 class_name MissionPlayerCopy
 
-## "Kopyanı Öldür" (Kill your copy) - kullanıcı isteği: aynı silah/statlar ama %90 daha az
-## hasar alır/verir, %20 daha yavaş, yetenek kullanamaz. Görünüm: GÜNCELLEME (kullanıcı isteği 2026-09-24:
+## "Kopyanı Öldür" (Kill your copy) - kullanıcı isteği: aynı silah/statlar, verdiği/aldığı hasar zamanla artan oranda azalır
+## (bkz. RESIST_*), yetenek kullanamaz. Görünüm: GÜNCELLEME (kullanıcı isteği 2026-09-24:
 ## "negatif yerine benden bir şekilde farklı görünmesini sağlayacak bir ton değişikliği yap üzerinde genel") - eski
 ## RGB invert shader yerine COPY_TINT_SHADER_CODE: mor "gölge klonu" tonu (bkz. orada).
 ## 5 dakika sürer, öldürülmezse yok olur (ödülsüz).
@@ -23,34 +23,23 @@ class_name MissionPlayerCopy
 ## deseni. Diğer istemcilerde bu Node salt kozmetik, konumunu/canlılığını/can-kalkan oranını
 ## NetworkManager.world_event_copy_state'ten alır (bkz. network_manager.gd notu).
 
-## Kullanıcı isteği (2026-09-25): "kopyaların aldığı hasar azaltmasını kaldır, onun yerine canlarını ve kalkanlarını
-## oyuncunun canının ve kalkanının 10 katı olarak güncelle" - DAMAGE_TAKEN_MULT 0.10 -> 1.0 (tam hasar alır),
-## HEALTH_MULT/SHIELD_MULT 3 -> 10 (aşağıda). Net dayanıklılık eskiden 3/0.1 = 30 kat idi, şimdi 10 kat.
-const DAMAGE_TAKEN_MULT := 1.0
-## 2026-10-11 (kullanıcı: "kopyalar oyuncunun saldırı odaklı statlarının %100'üne, can ve kalkan statlarının %3000'üne sahip olsun fakat %80 daha az
-## hasar versin; bizim silahlarımıza sahip olup tıpkı bizim gibi silahlarıyla bize ateş edebilir"): hasar çarpanı 0,10 -> 0,20 (%80 az); saldırı
-## statları kaynağınki AYNEN: saldırı gücü (damage_bonus), saldırı hızı (get_attack_interval_mult - silah aralıkları buna çarpılır), kritik şans/
-## hasar (crit_chance_bonus / crit_damage_bonus, silahların taban %5 / x1,5'i üstüne). Can/kalkan x30 (HEALTH_MULT/SHIELD_MULT).
-const DAMAGE_DEALT_MULT := 0.20
+## 2026-10-14 (kullanıcı: "kopya ilk levellerde çok dayanıklı çok az hasar veren bir şeyken late gamede tek yiyor"): TÜM eski çarpanlar
+## (can/kalkan x30, hız %80, kalkan yedeği) SİLİNDİ - kopya kaynak oyuncunun can/kalkan/hız/saldırı statlarına AYNEN sahiptir.
+## Tek ayar: verdiği VE aldığı hasar aynı oranda azalır (direnç). %50 ile başlar, oyunda geçen (GameManager.game_time) her 20 sn için
+## %1 artar, en fazla %95 olur (15. dakikada dolar). Hasar verirken `damage x (1 - direnç)`, hasar alırken `amount x (1 - direnç)`.
+const RESIST_START := 0.50
+const RESIST_PER_STEP := 0.01
+const RESIST_STEP_SECONDS := 20.0
+const RESIST_MAX := 0.95
 const BASE_CRIT_CHANCE := 0.05 ## weapon.gd crit_chance varsayılanı
 const BASE_CRIT_DAMAGE := 1.5 ## weapon.gd crit_damage varsayılanı
-const SPEED_MULT := 0.80
 ## 2026-09-26 ("görev süreleri gereksiz uzun"): 300 -> 150 sn. world_event_manager.gd COPY_LIFETIME bunu okur (tek kaynak).
 const LIFETIME := 150.0
 const SYNC_INTERVAL := 0.15
-## Kullanıcı isteği (2026-09-24): "Kopyanın canı ve kalkanı normal oyuncunun 3 katı olmalı" + "kopyanın kalkanı yok".
-## Kalkan = kaynak oyuncunun kalkan maksimumu (item_shield_max) x3; oyuncunun kalkanı yoksa (henüz kalkan eşyası
-## seçilmemiş) canının SHIELD_FALLBACK_OF_HP oranı taban alınır ki kopya yine kalkansız doğmasın. Hasar önce kalkandan
+## Kalkan = kaynak oyuncunun kalkan maksimumu (item_shield_max); oyuncunun kalkanı yoksa kopyanınki de yoktur. Hasar önce kalkandan
 ## düşer (mission_tree.gd ile aynı), SHIELD_REGEN_DELAY sn hasar almayınca saniyede max'ın SHIELD_REGEN_PER_SEC'i dolar.
-## Kullanıcı isteği (2026-09-25, ikinci tur): "kopyanın kalkan soğurmasını %20 azalt ve can ve kalkan artışını da normal
-## karakterin can ve kalkanının %200'ü kadar yap" - 10 -> 2 (kopya, kaynak oyuncunun canının/kalkanının 2 katı).
-## 2026-10-11: 2 -> 30 (kullanıcı: "can ve kalkan statlarının %3000'ü").
-const HEALTH_MULT := 30.0
-const SHIELD_MULT := 30.0
-## Kalkanın bir isabetten emdiği pay (oyuncu kalkanındaki "koruma payı" gibi): eskiden hasarın TAMAMI önce kalkandan
-## düşüyordu; artık %80'i kalkana, %20'si kalkan dolu olsa bile doğrudan cana gider (aynı istek: "soğurmayı %20 azalt").
+## Kalkanın bir isabetten emdiği pay (oyuncu kalkanındaki "koruma payı" gibi): %80'i kalkana, %20'si kalkan dolu olsa bile doğrudan cana gider.
 const SHIELD_ABSORB_RATIO := 0.8
-const SHIELD_FALLBACK_OF_HP := 0.3
 const SHIELD_REGEN_DELAY := 7.0
 const SHIELD_REGEN_PER_SEC := 0.05
 
@@ -62,8 +51,8 @@ const SHIELD_REGEN_PER_SEC := 0.05
 ## Artık HER silah kendi sahnesindeki atış aralığı/menzil/hasar oranıyla (weapon.gd'deki fire_rate, attack_range x0.9,
 ## card_damage_bonus_ratio) bağımsız saldırır; menzilli mermi hedefin gideceği yere hafif önden nişan alır ve yolu
 ## boyunca değdiği İLK oyuncuya vurur (bkz. mission_copy_bolt.gd); yakın dövüş silahları kendi erişimi içinde doğrudan
-## vurur. Hasar: kaynak oyuncunun taban "Hasar" statı (damage_bonus) x silah oranı x DAMAGE_DEALT_MULT (orijinal
-## "%90 az hasar" kuralı aynen - kopya oyuncuyla birlikte güçlenir).
+## vurur. Hasar: kaynak oyuncunun taban "Hasar" statı (damage_bonus) x silah oranı x (1 - direnç) (bkz. RESIST_*;
+## kopya oyuncuyla birlikte güçlenir).
 const MELEE_REACH := 62.0
 const UZUNKILIC_REACH := 115.0 ## weapon.gd _ready: uzunkılıç attack_range = 115
 const DEFAULT_RANGED_RANGE := 260.0 ## sahnede attack_range = 0 (sınırsız) olan menzilli silahlar için
@@ -110,11 +99,24 @@ void fragment() {
 ## player.gd'nin karakter ölçeği/ofseti ve remote_player.gd'nin silah yuvası konumları birebir geçerli.
 const VISUAL_ROOT_SCALE := 0.5
 const RemotePlayerScript := preload("res://scripts/remote_player.gd")
+const BalanceLogScript := preload("res://scripts/balance_log.gd")
+const DamageNumbersScript := preload("res://scripts/damage_numbers.gd")
+const WeaponTierArtScript := preload("res://scripts/weapon_tier_art.gd")
 const WAND_SCALE_MULT := 0.3 ## remote_player.gd REMOTE_WAND_SCALE_MULT ile aynı
 const MELEE_KEYS := ["dagger", "pence", "topuz", "uzunkilic"]
 const AIM_EASE_RATE := 10.0
 const RECOIL_DISTANCE := 10.0
 const HOVER_BOB := 3.0
+
+## Verdiği/aldığı hasarın azalma oranı (0..1) - oyunda geçen süreye göre (bkz. RESIST_*). Host ve istemci aynı game_time'ı okur.
+static func resist_at(game_time: float) -> float:
+	var steps: int = int(floor(maxf(game_time, 0.0) / RESIST_STEP_SECONDS))
+	return minf(RESIST_MAX, RESIST_START + float(steps) * RESIST_PER_STEP)
+
+
+static func resist_now() -> float:
+	return resist_at(GameManager.game_time)
+
 
 var mission_id: int = 0
 var copy_index: int = 0
@@ -207,7 +209,7 @@ func _ready() -> void:
 	NetworkManager.world_event_copy_swing.connect(_on_net_swing)
 
 
-## p_max_health / p_max_shield: KAYNAK oyuncunun değerleri (HEALTH_MULT/SHIELD_MULT burada uygulanır). İstemcideki kozmetik kopyada can/kalkan
+## p_max_health / p_max_shield: KAYNAK oyuncunun değerleri (çarpansız aynen kullanılır). İstemcideki kozmetik kopyada can/kalkan
 ## ORANLARI ağdan geldiği için bu değerler sadece çubuğun kalkan bölümünün görünmesi için önemli.
 func setup(mid: int, idx: int, char_id: int, p_max_health: float, p_max_shield: float, p_speed: float,
 		p_damage_bonus: float, simulated: bool) -> void:
@@ -215,12 +217,11 @@ func setup(mid: int, idx: int, char_id: int, p_max_health: float, p_max_shield: 
 	copy_index = idx
 	_is_host_simulated = simulated
 	var base_hp: float = p_max_health if p_max_health >= 20.0 else 100.0 ## yerdeyken max_hp 1.0 senkronlanıyor
-	max_health = base_hp * HEALTH_MULT
+	max_health = base_hp
 	health = max_health
-	var base_shield: float = p_max_shield if p_max_shield > 0.0 else base_hp * SHIELD_FALLBACK_OF_HP
-	max_shield = base_shield * SHIELD_MULT
+	max_shield = maxf(p_max_shield, 0.0)
 	shield = max_shield
-	move_speed = p_speed * SPEED_MULT
+	move_speed = p_speed
 	damage_bonus = p_damage_bonus
 	_strafe_sign = 1.0 if randf() < 0.5 else -1.0
 	if _overhead_bar:
@@ -265,6 +266,7 @@ func set_weapon_keys(keys: Array) -> void:
 		var interval: float = float(root.get("fire_rate")) if "fire_rate" in root else 1.0
 		if key == "yay":
 			interval /= 0.85
+		interval /= GameManager.WEAPON_ATTACK_SPEED_MULT ## genel silah yavaşlatması (2026-10-17, -%30 saldırı hızı)
 		var ratio: float = float(root.get("card_damage_bonus_ratio")) if "card_damage_bonus_ratio" in root else 1.0
 		var is_melee: bool = key in MELEE_KEYS
 		var reach: float = MELEE_REACH
@@ -291,6 +293,10 @@ func set_weapon_keys(keys: Array) -> void:
 		else:
 			icon.scale *= 0.9
 		icon.scale *= WeaponOrbitMath.ICON_SIZE_MULT ## 2026-09-25: silahlar %15 küçük (oyuncu/kukla ile aynı)
+		## Zanaatkâr seti (madde 196): remote_player.gd ile AYNI sanat/ölçek/duruş (weapon_tier_art.gd). Kopya kademeyi bilmez -> 1. seviye.
+		if WeaponTierArtScript.has_art(key) and WeaponTierArtScript.set_art(icon, key, 1):
+			icon.scale = Vector2.ONE * WeaponTierArtScript.PUPPET_ICON_SCALE
+			forward = deg_to_rad(float(WeaponTierArtScript.FORWARD[key]))
 		icon.position = slots[i]
 		icon.material = _tint_material
 		_visual_root.add_child(icon)
@@ -380,7 +386,7 @@ func _process_attacks(delta: float, target: Node2D, dist: float) -> void:
 
 
 func _weapon_hit_damage(ratio: float) -> float:
-	var dmg: float = damage_bonus * ratio * DAMAGE_DEALT_MULT
+	var dmg: float = damage_bonus * ratio * (1.0 - resist_now())
 	if randf() < BASE_CRIT_CHANCE + _source_stat("crit_chance_bonus"):
 		dmg *= BASE_CRIT_DAMAGE + _source_stat("crit_damage_bonus")
 	return maxf(1.0, dmg)
@@ -446,7 +452,7 @@ func _physics_process(delta: float) -> void:
 	## kart + eşya; yetenek buff'ları HARİÇ - "yetenek kullanamamalı", bkz. player.gd/remote_player.gd
 	## get_base_move_speed) her karede yeniden okunur.
 	if source_player and is_instance_valid(source_player) and source_player.has_method("get_base_move_speed"):
-		move_speed = float(source_player.call("get_base_move_speed")) * SPEED_MULT
+		move_speed = float(source_player.call("get_base_move_speed"))
 	if Time.get_ticks_msec() < _slow_until_msec:
 		move_speed *= 1.0 - _slow_pct
 	var desired := Vector2.ZERO
@@ -616,7 +622,7 @@ func _update_move_anim(move: Vector2, face: Vector2 = Vector2.ZERO) -> void:
 ## Hedefin gideceği yere (hızının AIM_LEAD oranında) önden nişan; mermi nişan noktasının biraz ötesine kadar uçar.
 ## KOPYA SİLAHLARIYLA ATEŞ EDER (kullanıcı bildirimi 2026-10-05: "kopya benim silahlarıma sahip ama onlarla ateş etmiyor, başka
 ## ateşler ediyor"): mermi görseli/hızı silahın KENDİ mermi sahnesinden gelir (attack_info), Şimşek Asası anlık ışın çizer.
-## Hasar mantığı aynı (yolu boyunca değen ilk oyuncuya vurur, DAMAGE_DEALT_MULT).
+## Hasar mantığı aynı (yolu boyunca değen ilk oyuncuya vurur, direnç oranında azaltılmış).
 func _fire_at(target: Node2D, from_pos: Vector2, dmg: float, w: Dictionary = {}) -> void:
 	var key: String = str(w.get("key", ""))
 	var info: Dictionary = w.get("info", {})
@@ -661,6 +667,17 @@ static func attack_info(key: String) -> Dictionary:
 			var p: Node = (ps as PackedScene).instantiate()
 			if "speed" in p and float(p.get("speed")) > 0.0:
 				info["speed"] = float(p.get("speed"))
+			## İsabet efekti + sesi (projectile.gd _spawn_impact / _play_impact_sound ile aynı veri): kopyanın mermisi de oyuncununki gibi patlasın.
+			var imp: Variant = p.get("impact_scene") if "impact_scene" in p else null
+			var imp_sounds: Variant = p.get("impact_sounds") if "impact_sounds" in p else null
+			if imp is PackedScene or (imp_sounds is Array and not (imp_sounds as Array).is_empty()):
+				info["impact"] = {"scene": imp if imp is PackedScene else null,
+					"scale": float(p.get("impact_scale")) if "impact_scale" in p else 1.0,
+					"offset": Vector2(p.get("impact_offset")) if "impact_offset" in p else Vector2.ZERO,
+					"face": bool(p.get("impact_face_direction")) if "impact_face_direction" in p else false,
+					"max_alive": int(p.get("impact_max_alive")) if "impact_max_alive" in p else 0,
+					"sounds": (imp_sounds as Array) if imp_sounds is Array else [],
+					"db": float(p.get("impact_sound_volume_db")) if "impact_sound_volume_db" in p else -8.79}
 			p.free()
 			if "ranged_projectile_scale_mult" in root:
 				info["scale"] = float(root.get("ranged_projectile_scale_mult"))
@@ -686,7 +703,7 @@ static func spawn_bolt(from_pos: Vector2, to_pos: Vector2, damage: float, source
 		return
 	var visual: Dictionary = {}
 	if info.get("proj") != null:
-		visual = {"proj": info["proj"], "speed": info["speed"], "scale": info["scale"], "rot": info["rot"]}
+		visual = {"proj": info["proj"], "speed": info["speed"], "scale": info["scale"], "rot": info["rot"], "impact": info.get("impact", {})}
 	var bolt := Node2D.new()
 	bolt.set_script(BoltScript)
 	## setup, add_child'dan ÖNCE: bolt _ready'de görselini `visual`dan kurar (add_child sonrası setup çok geç kalırdı).
@@ -726,10 +743,14 @@ func _find_nearest_player() -> Node2D:
 	return best
 
 
-## Enemy.gd ile AYNI imza (bkz. dosya başı not) - gerçek oyuncu silahları bunu çağırır. Hasar önce kalkandan düşer.
-func take_damage(amount: float, _is_crit: bool = false, _shield_pen_percent: float = 0.0, _is_area: bool = false) -> void:
+## Enemy.gd ile AYNI imza (bkz. dosya başı not) - gerçek oyuncu silahları/yetenekleri bunu çağırır. Hasar önce kalkandan düşer.
+## Vuran tarafın işleri (enemy.gd take_damage ile aynı sıra) BU makinenin yerel oyuncusu için burada yapılır: hasar sayısı, maç
+## istatistiği, balans kaydı, can çalma. Hasar uygulamak ise host'ta (_apply_hit); istemcideki kozmetik kopya miktarı host'a iletir.
+func take_damage(amount: float, is_crit: bool = false, _shield_pen_percent: float = 0.0, is_area: bool = false) -> void:
+	var bl_src: String = BalanceLogScript.take_src() ## balans etiketi erken dönüşte de silinsin
 	if is_dead:
 		return
+	_credit_local_dealer(amount * (1.0 - resist_now()), is_crit, is_area, bl_src)
 	## DÜZELTME (kullanıcı bildirimi 2026-09-24: görevler çok oyunculuda da çalışmalı) - host olmayan bir
 	## istemcinin silahı SADECE bu kozmetik kopyaya vuruyordu ve hasar burada sessizce yok oluyordu (kopya
 	## hiç ölmüyordu). Artık hasar host'taki GERÇEK kopyaya iletiliyor.
@@ -737,7 +758,15 @@ func take_damage(amount: float, _is_crit: bool = false, _shield_pen_percent: flo
 		if NetworkManager.is_multiplayer_active:
 			NetworkManager.request_world_event_copy_damage.rpc_id(NetworkManager._host_peer_id(), mission_id, copy_index, amount)
 		return
-	var dmg: float = amount * DAMAGE_TAKEN_MULT
+	_apply_hit(amount)
+
+
+## Kopyaya gerçekten hasar işler (SADECE host'ta): direnç düşer, kalkan/can azalır, ölürse biter. Uzaktan gelen hasar da buradan geçer
+## (vuran istemci sayısını/istatistiğini kendi makinesinde zaten yaptı, bkz. take_damage).
+func _apply_hit(amount: float) -> void:
+	if is_dead:
+		return
+	var dmg: float = amount * (1.0 - resist_now())
 	_no_damage_timer = 0.0
 	if shield > 0.0:
 		var absorbed: float = minf(shield, dmg * SHIELD_ABSORB_RATIO)
@@ -749,6 +778,44 @@ func take_damage(amount: float, _is_crit: bool = false, _shield_pen_percent: flo
 		_overhead_bar.call("set_shield", shield, max_shield)
 	if health <= 0.0:
 		_die()
+
+
+## Yerel oyuncu bu kopyaya vurdu: enemy.gd take_damage'ın vuran tarafı (maç hasar istatistiği, balans kaydı, can çalma/Vampir) + hasar
+## sayısı. Sayı yalnız vuranın ekranında çıkar (kullanıcı isteği 2026-09-25) - her makine kendi vuruşunu kendisi gösterir.
+func _credit_local_dealer(shown: float, is_crit: bool, is_area: bool, bl_src: String) -> void:
+	if shown <= 0.0:
+		return
+	var dealer: Node = get_tree().get_first_node_in_group("player")
+	if dealer:
+		if "match_damage_dealt" in dealer:
+			dealer.match_damage_dealt += shown
+			BalanceLogScript.on_hit(bl_src, shown, is_crit)
+		if dealer.has_method("on_dealer_hit"):
+			dealer.on_dealer_hit(shown, is_area)
+	_spawn_damage_number(shown, is_crit)
+
+
+const DMG_SPAWN_OFFSET := Vector2(0, -36)
+const DMG_SCATTER := Vector2(22, 14)
+const DMG_MAX_LIVE := 5
+var _dmg_ids: Array[int] = []
+
+
+## Yaratıklarla aynı toplu sayı sistemi (damage_numbers.gd, enemy.gd _spawn_floating_text ile aynı görünüm).
+func _spawn_damage_number(amount: float, is_crit: bool) -> void:
+	var dn = DamageNumbersScript.get_instance(get_tree())
+	if dn == null:
+		return
+	var alive: Array[int] = []
+	for id in _dmg_ids:
+		if dn.is_alive(id):
+			alive.append(id)
+	while alive.size() >= DMG_MAX_LIVE:
+		dn.remove(alive.pop_front())
+	var jitter := Vector2(randf_range(-DMG_SCATTER.x, DMG_SCATTER.x), randf_range(-DMG_SCATTER.y, DMG_SCATTER.y))
+	var color: Color = Color(1.0, 0.25, 0.2) if is_crit else Color(1.0, 1.0, 1.0)
+	alive.append(dn.spawn_fixed(self, global_position + DMG_SPAWN_OFFSET + jitter, "%d" % maxi(1, int(round(amount))), color))
+	_dmg_ids = alive
 
 
 ## ------------------------------------------------------------------ SİLAH ÖZELLİKLERİ (ELEMENT) GİRİŞİ
@@ -952,8 +1019,8 @@ func try_shaman_weapon_burn() -> bool:
 	return false
 
 
-func take_damage_host(amount: float, is_crit: bool, shield_pen_percent: float, _attacker_id: int = 0) -> void:
-	take_damage(amount, is_crit, shield_pen_percent)
+func take_damage_host(amount: float, _is_crit: bool, _shield_pen_percent: float, _attacker_id: int = 0) -> void:
+	_apply_hit(amount) ## host'ta, başka bir oyuncunun vuruşu - vuran tarafın işleri (sayı/istatistik) onun makinesinde yapılır
 
 
 func get_overhead_bar_offset() -> float:
@@ -1032,7 +1099,7 @@ func _on_remote_knockback(mid: int, idx: int, dir: Vector2, distance: float) -> 
 func _on_remote_damage(mid: int, idx: int, amount: float) -> void:
 	if not _is_host_simulated or mid != mission_id or idx != copy_index:
 		return
-	take_damage(amount)
+	_apply_hit(amount)
 
 
 ## Kozmetik kopyalarda (bkz. dosya başı not) - host'un gerçek kopyasından gelen konum/canlılık/can/kalkan.

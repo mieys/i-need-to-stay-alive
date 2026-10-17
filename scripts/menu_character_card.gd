@@ -11,8 +11,11 @@ extends Control
 
 signal pressed(char_id: int)
 
+const UiAnim := preload("res://scripts/ui_anim.gd")
 const PreviewScript: GDScript = preload("res://scripts/menu_character_preview.gd")
 const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const LockBadgeScript: GDScript = preload("res://scripts/lock_badge.gd")
 
 var char_id: int = -1
 var selected: bool = false: set = set_selected
@@ -77,6 +80,18 @@ func setup(id: int, def: Dictionary, k: float = 1.0, face: bool = false) -> void
 	focus_exited.connect(_set_hover.bind(false))
 
 
+## Ruh Mağazası kilidi (bkz. meta_progress.gd): kart karartılır + kilit çizilir, ipucu bedeli söyler. Kart yine tıklanır (karakter incelenebilir).
+func set_locked(value: bool) -> void:
+	var old: Node = get_node_or_null("LockBadge")
+	if old:
+		old.queue_free()
+	if value:
+		LockBadgeScript.attach(self)
+		tooltip_text = MetaProgressScript.lock_text(MetaProgressScript.CHAR, char_id)
+	else:
+		tooltip_text = ""
+
+
 func set_selected(value: bool) -> void:
 	selected = value
 	_refresh()
@@ -84,6 +99,8 @@ func set_selected(value: bool) -> void:
 
 func _set_hover(value: bool) -> void:
 	_hover = value
+	if value:
+		UiAnim.pop(self) ## madde 200
 	_refresh()
 
 

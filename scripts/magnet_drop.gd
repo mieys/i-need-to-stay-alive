@@ -22,9 +22,8 @@ const EXPIRE_SECONDS := 300.0
 func _ready() -> void:
 	add_to_group("magnet_drops")
 	body_entered.connect(_on_body_entered)
-	queue_redraw()
-	## Gölge (2026-10-02, bkz. drop_shadow.gd): mıknatıs _draw ile çiziliyor (sprite yok) - görünen alan elle (yay r=7 + kalınlık).
-	DropShadowScript.attach(self, null, true, 2, Rect2(-9.5, -9.5, 19.0, 19.0))
+	## Gölge (2026-10-02, bkz. drop_shadow.gd): kök zıplıyor (position.y += bob) - gölge yerde kalır.
+	DropShadowScript.attach(self, get_node_or_null("AnimatedSprite2D") as Node2D, true)
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
 	_place_on_ground.call_deferred()
 
@@ -45,12 +44,9 @@ func _on_expire() -> void:
 	queue_free()
 
 
-func _draw() -> void:
-	draw_arc(Vector2(0, 0), 7.0, PI * 0.15, PI * 0.85, 16, Color(0.75, 0.1, 0.15), 5.0, true)
-	draw_rect(Rect2(-8.5, -2, 3.5, 7), Color(0.8, 0.8, 0.85))
-	draw_rect(Rect2(5.0, -2, 3.5, 7), Color(0.8, 0.8, 0.85))
-	draw_rect(Rect2(-8.5, 3, 3.5, 2), Color(0.7, 0.15, 0.2))
-	draw_rect(Rect2(5.0, 3, 3.5, 2), Color(0.7, 0.15, 0.2))
+## Görünüş (2026-10-16): eski _draw() yay + dikdörtgen yerine piksel sanatı sayfa (AnimatedSprite2D, assets/pickups/magnet/,
+## üretici tools/gen_magnet.py). Kök ölçeği 1 (1 sanat pikseli = 1 dünya pikseli, silah parçacığıyla aynı); toplama yarıçapı
+## eskisiyle aynı dünya boyutu (9 x 0,6 = 5,4).
 
 
 func _process(delta: float) -> void:

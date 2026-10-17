@@ -94,7 +94,42 @@ const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 func _ready() -> void:
 	if sparkle and sparkle.sprite_frames and sparkle.sprite_frames.has_animation("loop"):
 		sparkle.play("loop")
-	ParticleTrail.attach(self, "missile")
+	## Madde 201 (A Zanaatkâr): eski kalın "missile" duman izi yerine silah pikselinde düşen kıvılcım + yükselen duman.
+	ParticleTrail.attach(self, "fisek_kivilcim")
+	ParticleTrail.attach(self, "fisek_duman")
+	set_art_tier(1)
+
+
+const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
+const ProjectileArt := preload("res://scripts/projectile_art.gd")
+## Zanaatkâr seti (madde 196): uçan fişek de kafadaki ikonun kademe sanatı (çapraz çizim, burun -45 derece) -> açı düzeltmesi
+## ve kuyruk kıvılcımı yeni çizime göre. Eski düz yukarı ikonda ROTATION_CORRECTION (PI/2) kullanılıyordu.
+var _rot_correction: float = ROTATION_CORRECTION
+
+
+## Kaster weapon.gd _fire_at (kademe > 1), uzak kopya EnchantFx.apply_projectile_look ("art_tier").
+func set_art_tier(tier: int) -> void:
+	var icon: Sprite2D = get_node_or_null("Icon") as Sprite2D
+	var tex: Texture2D = WeaponTierArt.texture("fisek", tier)
+	if icon == null or tex == null:
+		return
+	icon.texture = tex
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.scale = Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE
+	_rot_correction = WeaponTierArt.fisek_rotation_correction()
+	if sparkle:
+		## Madde 201 (A Zanaatkâr): eski parıltı yerine egzoz alevi + kısa duman (projectile_art.gd). Alev -x yönüne çizildi, roket ikonda
+		## çapraz (burun sağ-üst) -> -45 derece; kademenin kuyruk noktasına (ikon pikseli x ikon ölçeği) oturur, ikonun ARKASINDA çizilir.
+		sparkle.sprite_frames = ProjectileArt.fisek_flame_frames()
+		sparkle.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sparkle.centered = true
+		sparkle.offset = Vector2(ProjectileArt.FLAME_OFFSET_X, 0.0)
+		sparkle.scale = Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE
+		sparkle.rotation = -PI / 4.0
+		sparkle.position = ProjectileArt.fisek_tail(tier) * WeaponTierArt.PUPPET_ICON_SCALE
+		if sparkle.get_index() > icon.get_index():
+			move_child(sparkle, icon.get_index())
+		sparkle.play("loop")
 
 
 ## weapon.gd _fire_at() önce add_child() çağırıp SONRA global_position/
@@ -134,7 +169,7 @@ func _bezier_tangent(t: float) -> Vector2:
 func _rotation_for_tangent(tangent: Vector2) -> float:
 	if tangent.length() < 0.001:
 		return rotation
-	return tangent.angle() + ROTATION_CORRECTION
+	return tangent.angle() + _rot_correction
 
 
 func _process(delta: float) -> void:

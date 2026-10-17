@@ -3,7 +3,7 @@ extends Node
 ## Kullanıcı isteği (2026-10-08): "bir arkadaş öldüğünde ve hiç canı kalmadığında canının 5 dakikalık bekleme süresi yanında bulunan ve onu
 ## diriltmek için yanında bekleyen her arkadaş başına %80 hızlansın." Kural GameManager'da (revive_regen_rate / revive_assist_count /
 ## _process_revive_regen): hakkı 0 olan, ÖLÜ/YERDE YATAN oyuncunun cesedinin diriltme menzilindeki (player.gd REVIVE_RANGE) hayatta, yerde
-## yatmayan her arkadaş için hız +0.8 (toplamsal: 1 arkadaş 1,8x, 2 arkadaş 2,6x). Sayaç zaten sadece hak 0'ken işler.
+## yatmayan her arkadaş için hız +0.8 (toplamsal: 1 arkadaş 1,8x, 2 arkadaş 2,6x). Yanında bekleme hızı 0 kalpteki ceset için geçerlidir (sayaç artık her kalp eksikliğinde işler, bkz. test_counter_*).
 
 const PlayerScript: GDScript = preload("res://scripts/player.gd")
 
@@ -169,10 +169,45 @@ func test_a_player_with_lives_has_no_timer_and_completion_grants_one_life() -> v
 	GameManager._revive_regen_left[2] = 1.0
 	GameManager._process_revive_regen(0.3) ## 3 arkadaş: hız 3,4 -> 1,02 sn düşer -> süre bitti
 	assert(GameManager.get_peer_revives(2) == 1, "süre dolunca TAM 1 can verilir: %d" % GameManager.get_peer_revives(2))
-	assert(not GameManager._revive_regen_left.has(2) and not GameManager._revive_regen_rate.has(2), "sayaç ve hız kaydı temizlenir")
-	## Hakkı olanın sayacı yok
+	assert(is_equal_approx(float(GameManager._revive_regen_left[2]), GameManager.REVIVE_REGEN_INTERVAL_ONE_HEART), "1 kalp oldu, azamının altında: sayaç 6,5 dk ile baştan başlar")
+	assert(not GameManager._revive_regen_rate.has(2), "hız kaydı temizlenir")
+	## Azamıya ulaşan oyuncunun sayacı yok
+	GameManager.peer_revives[2] = 3
 	GameManager._process_revive_regen(1.0)
-	assert(not GameManager._revive_regen_left.has(2), "hakkı olan oyuncuda sayaç işlemez")
+	assert(not GameManager._revive_regen_left.has(2), "kalpleri tam oyuncuda sayaç işlemez")
+	_end()
+
+
+func test_interval_depends_on_current_hearts() -> void:
+	assert(is_equal_approx(GameManager.revive_regen_interval(0), 300.0), "0 kalp: 5 dk")
+	assert(is_equal_approx(GameManager.revive_regen_interval(1), 390.0), "1 kalp: 6,5 dk")
+	assert(is_equal_approx(GameManager.revive_regen_interval(2), 480.0), "2 kalp: 8 dk")
+	assert(is_equal_approx(GameManager.revive_regen_interval(3), 480.0), "3+ kalp: 8 dk")
+
+
+func test_counter_starts_when_any_heart_is_lost_and_chains_to_full() -> void:
+	_begin()
+	_host_session([1, 2])
+	GameManager.peer_revives = {1: 3, 2: 2}
+	_remote(2, Vector2.ZERO, false)
+	GameManager._process_revive_regen(1.0)
+	assert(is_equal_approx(float(GameManager._revive_regen_left[2]), 479.0), "2 kalpken sayaç 8 dk'dan başlar: %s" % GameManager._revive_regen_left[2])
+	GameManager._revive_regen_left[2] = 0.5
+	GameManager._process_revive_regen(1.0)
+	assert(GameManager.get_peer_revives(2) == 3, "süre dolunca 3. kalp geldi")
+	assert(not GameManager._revive_regen_left.has(2), "azamıya ulaşınca sayaç biter")
+	_end()
+
+
+func test_remaining_time_is_clamped_when_a_heart_is_spent_while_counting() -> void:
+	_begin()
+	_host_session([1, 2])
+	GameManager.peer_revives = {1: 3, 2: 2}
+	_remote(2, Vector2.ZERO, false)
+	GameManager._process_revive_regen(1.0) ## 479 kaldı
+	GameManager.peer_revives[2] = 0 ## kalp harcandı
+	GameManager._process_revive_regen(1.0)
+	assert(is_equal_approx(float(GameManager._revive_regen_left[2]), 299.0), "0 kalpte kalan süre 5 dk'yı aşamaz: %s" % GameManager._revive_regen_left[2])
 	_end()
 
 

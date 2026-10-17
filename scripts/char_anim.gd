@@ -25,6 +25,25 @@ const CAST_PREFIXES: Array[String] = ["shrug_", "spellcast_"]
 
 const DIRECTIONS: Array[String] = ["down", "left", "right", "up"]
 
+## MADEN KAZMA (kullanıcı isteği 2026-10-14, bkz. mine_sites.gd + player.gd _process_mining): kazma klibi "strike_<yön>" (4 kare; 0-1 kaldır, 2 DARBE, 3 savrulma).
+## Aksiyon klibi DEĞİL (yürümeye geçince hemen kesilir) ve loop=false: yerel oyuncu bitince yeniden başlatır, uzak kukla da aynısını yapar
+## (remote_player.gd update_position_and_anim_from_net). Yavaş oynar (MINE_ANIM_SPEED) ki darbe başına ~0,8 sn düşsün.
+## ASSASIN ULTİ ATILMA POZU (kullanıcı isteği 2026-10-16: "ulti esnasında sabit durmasın, koşarkenki atılmaya benzer framelerden
+## biri olsun gittiği yöne doğru"): "dash_<yön>" = run_<yön> klibinin en geniş adımlı TEK karesi (DASH_POSE_RUN_FRAME). Gölge
+## Hücumu sürerken player.gd her sıçrayışta yönü kurup bunu oynatır (aksiyon klibi DEĞİL, tek kare döngü); adı ağdan gider.
+## Sıçrayış hayaletleri (fx_assasin_ult_streak.gd) de bu klipten çizilir. 2026-10-17: Talon Q atılışı da aynı pozu oynatır
+## (player.gd _talon_dashing). Klip sadece assasin_frames.tres + talha_frames.tres'te (tools/add_dash_pose_clips.py).
+const DASH_POSE_PREFIX := "dash_"
+const DASH_POSE_RUN_FRAME := 2
+
+const MINE_ANIM_PREFIX := "strike_"
+const MINE_ANIM_SPEED := 0.5
+const MINE_HIT_FRAME := 2
+
+
+static func is_mine_anim(anim_name: String) -> bool:
+	return anim_name.begins_with(MINE_ANIM_PREFIX)
+
 
 static func is_action_anim(anim_name: String) -> bool:
 	for p in ACTION_PREFIXES:
@@ -64,3 +83,13 @@ static func dir_of(anim_name: String) -> String:
 		if anim_name.ends_with("_" + d):
 			return d
 	return "down"
+
+
+## Bir hareket vektörünün klip yönü (baskın eksen, eşitlikte yatay). player.gd _update_facing'in 1,3 eşikli histerezi YOK -
+## tek seferlik sıçrayış/atılma pozları için (Assasin dash_<yön>): yerelde ve uzak kopyada aynı vektörden AYNI yön çıkar.
+static func dir_from_vector(v: Vector2) -> String:
+	if v.length() < 0.001:
+		return "down"
+	if absf(v.x) >= absf(v.y):
+		return "right" if v.x > 0.0 else "left"
+	return "down" if v.y > 0.0 else "up"

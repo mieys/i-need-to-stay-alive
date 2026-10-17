@@ -1,126 +1,406 @@
 extends Control
 
-## Ana menü. Kullanıcı isteği (2026-09-24): "ana menü, singleplayer ve multiplayer karakter menülerindeki tüm kartları ve
-## arayüz arkaplanlarını ... sıfırdan tasarla ... hafif cozy ... bej/açık kahverengi tonlarında" - ekran bej menü kitiyle
-## (MenuKit, assets/ui/menu, tools/gen_menu_kit.py) KODLA kurulur: iplerle asılı ahşap başlık tabelası, parşömen panelde
-## büyük butonlar, aynı dilde ayarlar penceresi (kaydırıcı/açma-kapama/açılır liste de kit dokularıyla).
-## Davranış (sahne geçişleri, ses/tam ekran/çözünürlük/FPS ayarları, tuş atamaları, debug modu) eskisiyle AYNI.
+## Ana menü. 2026-10-16 YENİDEN (kullanıcı: "ana menü için 4 prototip, yapay zeka kullanma, hafif koyu tonlar" -> sol panel yerleşimi;
+## arka plan için "haritanın bir parçası yerine yeni sade bir arka plan, oyunun asset'leriyle" -> 4 sade sahneden "Ocak Başı" seçildi):
+##   arka plan = tools/proto_20261016/gen_ana_menu_bg.py --oyun -> assets/ui/ana_menu/ocak_basi.png (480x270, Ev içi karolarından elle
+##   dizilmiş oda, ışık sadece şömine + ayaklı lambada), üstünde CANLI şömine ateşi (ocak_ates.png 6 kare) + şömineye dönük oturan parti
+##   (gerçek sprite'lar, sit_ klipleri) + lambanın yanında uyuyan köpek; hepsi x4 tam kat.
+##   sol: "D - Panelsiz Ateş Işığı" (2026-10-16, ilk düz koyu panel "ruhsuz ve sıradan" bulundu; 4 prototipten D seçildi): kutu yok,
+##   sol taraf basamaklı kararır (sol_golge.png), büyük başlık + kiriş süsü, öğeler ikon + başlık + alt yazı, seçilide yanan mum.
+## AYARLAR: ortak settings_screen.gd (duraklatma menüsüyle aynı "Ateş Işığı" ekranı, madde 234) - açıkken tabela + menü gizlenir. Davranış (sahne geçişleri, ayarlar, debug modu) eskisiyle AYNI.
+## Telefon: mobile_menu_fit.gd "TitleSign" + "MenuPanel" adlı düğümleri ekrana sığdırır (adlar korunur).
 
-const KeybindMenuScript := preload("res://scripts/keybind_menu.gd")
-const GraphicsSettingsMenuScript := preload("res://scripts/graphics_settings_menu.gd")
+const UiAnim := preload("res://scripts/ui_anim.gd")
+const SettingsScreenScript := preload("res://scripts/settings_screen.gd")
 const RecordsScreenScript := preload("res://scripts/records_screen.gd")
+const SoulShopScreenScript := preload("res://scripts/soul_shop_screen.gd")
+const DK := preload("res://scripts/menu_dark_kit.gd")
+const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
+const WC := preload("res://scripts/weapon_catalog.gd")
+const PC := preload("res://scripts/pet_catalog.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
 
 ## Oyun adı (2026-10-04): "Lil'Slayers" (birleşik). Eski ad: "I NEED TO STAY ALIVE" (72 punto).
 const TITLE := "LIL'SLAYERS"
 const SCREEN := Vector2(1920, 1080)
-## Kullanıcı isteği (2026-09-26): "başlangıç menüsündeki başlığı ve arayüzü biraz küçült" - başlık 96 -> 72, tabela 186 -> 150,
-## butonlar 64/84 -> 48/66, panel 540 -> 408 (hepsi ~%75; boyutlar 3'ün katı, yazı 8'in katı: pikseller keskin kalır).
-const SIGN_TOP := 120.0
-const SIGN_H := 150.0 ## tabela dokusunun kendi boyu (50 sanat px x 3) - bkz. tools/gen_menu_kit.py sign()
-const MENU_W := 408.0
-const MENU_Y := 336.0
-const MENU_FONT := 48
-const MENU_BTN_H := 66.0
-const TITLE_FONT := 96 ## kısa ad için büyütüldü (uzun adla 72 idi; tabela genişliği yazıya göre hesaplanır)
+const COL_W := 560.0
+## Sahne: 480x270 tuval, x4 = 1920x1080. Konumlar tuval pikselinde (gen_ana_menu_bg.py bg_c ile aynı yerler).
+const ART_K := 4.0
+const FIRE_POS := Vector2(300, 70) ## şömine karesinin sol üstü (FIRE_X, base_y - 56)
+const FIRE_FRAME := Vector2(48, 64)
+const FIRE_FRAMES := 6
+const FIRE_FPS := 8.0
+const SCENE_TINT := Color(0.98, 0.78, 0.62) ## ateş ışığındaki karakterler (sahnenin sıcak ortamı)
+## [karakter id, klip, ayak ortası (tuval px)] - şömineye dönük halıda (sit_up = sırtı bize), Şovalye yandan.
+const PARTY := [[1, "sit_up", Vector2(300, 180)], [4, "sit_up", Vector2(324, 192)], [8, "sit_up", Vector2(348, 180)], [7, "sit_left", Vector2(374, 164)]]
+const DOG := ["kopek", "sleep_down", Vector2(262, 214)]
 
-var settings_panel: Control
-var volume_slider: HSlider
-var volume_value: Label
-var fullscreen_check: CheckButton
-var resolution_option: OptionButton
-var fps_check: CheckButton
-var keybind_button: Button
+var _settings_screen: Control = null
 
 var _start_btn: Button
 var _multiplayer_btn: Button
 var _records_btn: Button
+var _soul_shop_btn: Button
 var _settings_btn: Button
 var _exit_btn: Button
+var _stage: Control = null
+var _shard_label: Label = null
+
+
+## Bir sayfadaki kareleri (yatay şerit) sırayla oynatan piksel-tam çizim (şömine ateşi).
+class SheetAnim extends Control:
+	var tex: Texture2D = null
+	var frame_size: Vector2 = Vector2.ZERO
+	var count: int = 1
+	var fps: float = 8.0
+	var k: float = 4.0
+	var _t: float = 0.0
+
+	func _init(t: Texture2D, fsz: Vector2, n: int, speed: float, scale_k: float) -> void:
+		tex = t
+		frame_size = fsz
+		count = n
+		fps = speed
+		k = scale_k
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		custom_minimum_size = fsz * scale_k
+
+	func _process(delta: float) -> void:
+		_t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		if tex == null:
+			return
+		var i: int = int(_t * fps) % count
+		draw_texture_rect_region(tex, Rect2(Vector2.ZERO, frame_size * k), Rect2(Vector2(i * frame_size.x, 0), frame_size))
+
+
+## Gerçek SpriteFrames klibi, ayak ortası `foot`a oturur (tam kat k), altında piksel gölge; klip kendi hızında döner.
+## sit_ klipleri "oturma HAREKETİ" (kare 0 ayakta -> son kare oturmuş; ride_ klipleri de son kareyi kullanır): döngüde oynarsa karakter
+## kalkıp oturur -> sit_ için SON KARE sabit tutulur (hold).
+class SceneSprite extends Control:
+	var frames: SpriteFrames = null
+	var anim: StringName = &"idle_down"
+	var k: float = 4.0
+	var hold: int = -1 ## >= 0: bu kare sabit
+	var _t: float = 0.0
+	var _used: Rect2i = Rect2i()
+	var _fsize: Vector2 = Vector2.ZERO
+
+	func _init(sf: SpriteFrames, clip: String, scale_k: float) -> void:
+		frames = sf
+		anim = StringName(clip) if sf != null and sf.has_animation(clip) else &"idle_down"
+		k = scale_k
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		if frames != null:
+			if clip.begins_with("sit_"):
+				hold = frames.get_frame_count(anim) - 1
+			var img: Image = frames.get_frame_texture(anim, maxi(hold, 0)).get_image()
+			if img.is_compressed():
+				img.decompress()
+			_used = img.get_used_rect()
+			_fsize = Vector2(img.get_width(), img.get_height())
+		custom_minimum_size = _fsize * k
+
+	## Kontrolün sol üstü: ayak ortası foot (tuval px) olacak şekilde.
+	func place_at(foot: Vector2) -> void:
+		position = (foot - Vector2(_used.position.x + _used.size.x * 0.5, _used.end.y)).floor() * k ## sanat pikseli ızgarasında (arka planla hizalı)
+		size = _fsize * k
+
+	func _ready() -> void:
+		set_process(hold < 0)
+
+	func _process(delta: float) -> void:
+		_t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		if frames == null:
+			return
+		var n: int = frames.get_frame_count(anim)
+		var spd: float = frames.get_animation_speed(anim)
+		var i: int = hold if hold >= 0 else int(_t * spd) % maxi(1, n)
+		var sw: float = maxf(12.0, _used.size.x * 0.7)
+		var cx: float = _used.position.x + _used.size.x * 0.5
+		draw_rect(Rect2((cx - sw * 0.5) * k, (_used.end.y - 1) * k, sw * k, 2 * k), Color(0, 0, 0, 0.32))
+		draw_texture_rect(frames.get_frame_texture(anim, i), Rect2(Vector2.ZERO, _fsize * k), false)
 
 
 func _ready() -> void:
 	DisplayServer.window_set_title("Lil'Slayers")
 	theme = MenuKit.theme()
-	MenuKit.add_background(self)
-	_build_title_sign()
-	_build_menu()
-	_create_debug_mode_button()
-	_build_settings()
+	_build_scene()
+	_build_left_panel()
 	UISound.connect_all_buttons(self)
 	_start_btn.grab_focus()
 
 
-## Başlık: iki örgü iple yukarıdan asılı, 3 tahtalı ahşap tabela; yazı krem, koyu kahve konturlu (tabela boyası).
-func _build_title_sign() -> void:
-	var f: Font = MenuKit.font()
-	var text_w: float = f.get_string_size(TITLE, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_FONT).x
-	var sign_w: float = ceilf((text_w + 2.0 * 72.0) / 6.0) * 6.0
-	var x: float = roundf((SCREEN.x - sign_w) / 6.0) * 3.0
-
-	for rx: float in [x + sign_w * 0.2, x + sign_w * 0.8]:
-		var rope := TextureRect.new()
-		rope.name = "Rope" ## telefonda tabelayla birlikte büyür (bkz. mobile_menu_fit.gd RootFitter)
-		rope.texture = MenuKit.tex("rope.png")
-		rope.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		rope.stretch_mode = TextureRect.STRETCH_TILE
-		rope.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(rope)
-		MenuKit.place(rope, Vector2(roundf(rx / 3.0) * 3.0 - 6.0, 0.0), Vector2(12, SIGN_TOP + 15.0))
-
-	var sb := StyleBoxTexture.new()
-	sb.texture = MenuKit.tex("sign.png")
-	sb.texture_margin_left = 42
-	sb.texture_margin_right = 42
-	sb.texture_margin_top = SIGN_H / 2.0
-	sb.texture_margin_bottom = SIGN_H / 2.0
-	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
-	## İçerik payları açıkça verilmezse StyleBoxTexture doku paylarını (75+75) minimum boy sayar ve tabela büyürdü.
-	sb.content_margin_left = 72
-	sb.content_margin_right = 72
-	sb.content_margin_top = 0
-	sb.content_margin_bottom = 6
-	var sign_panel := PanelContainer.new()
-	sign_panel.name = "TitleSign"
-	sign_panel.add_theme_stylebox_override("panel", sb)
-	sign_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(sign_panel)
-
-	var title := MenuKit.make_label(TITLE, TITLE_FONT, MenuKit.C_CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-	title.name = "Title"
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	title.add_theme_color_override("font_outline_color", MenuKit.C_OUTLINE)
-	title.add_theme_constant_override("outline_size", 14)
-	title.add_theme_color_override("font_shadow_color", Color(0.29, 0.17, 0.10, 0.9))
-	title.add_theme_constant_override("shadow_offset_x", 0)
-	title.add_theme_constant_override("shadow_offset_y", 6)
-	title.add_theme_constant_override("shadow_outline_size", 14)
-	sign_panel.add_child(title)
-	## Ağaca eklendikten SONRA (menü teması geçerliyken) konum/boyut - bkz. character_select.gd _place notu.
-	MenuKit.place(sign_panel, Vector2(x, SIGN_TOP), Vector2(sign_w, SIGN_H))
+## ------------------------------------------------------------------ arka plan sahnesi
+## Tam ekran katman (telefonda RootFitter ekranın tamamına yayar) + içinde 1920x1080 sahne; sahne katmanı ÖRTECEK kadar büyütülür
+## (KEEP_ASPECT_COVERED gibi) - ateş/parti arka planla birlikte ölçeklenir, hizası bozulmaz.
+func _build_scene() -> void:
+	var layer := Control.new()
+	layer.name = "BackgroundImage"
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.clip_contents = true
+	add_child(layer)
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_stage = Control.new()
+	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_stage)
+	_stage.size = SCREEN
+	var bg := TextureRect.new()
+	bg.texture = load("res://assets/ui/ana_menu/ocak_basi.png")
+	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stage.add_child(bg)
+	bg.position = Vector2.ZERO
+	bg.size = SCREEN
+	var shade := TextureRect.new() ## sol menünün okunurluğu: basamaklı karartma (ışık değil), sahneyle birlikte ölçeklenir
+	shade.texture = load("res://assets/ui/ana_menu/sol_golge.png")
+	shade.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fire := SheetAnim.new(load("res://assets/ui/ana_menu/ocak_ates.png"), FIRE_FRAME, FIRE_FRAMES, FIRE_FPS, ART_K)
+	_stage.add_child(fire)
+	fire.position = FIRE_POS * ART_K
+	fire.size = FIRE_FRAME * ART_K
+	var pet_spec: Array = PC.FRAMES.get(DOG[0], [])
+	if not pet_spec.is_empty():
+		_add_scene_sprite(load(str(pet_spec[0])) as SpriteFrames, str(DOG[1]), DOG[2])
+	var party: Array = PARTY.duplicate()
+	party.sort_custom(func(a: Array, b: Array) -> bool: return (a[2] as Vector2).y < (b[2] as Vector2).y)
+	for p: Array in party:
+		_add_scene_sprite(load(str(Characters.get_def(int(p[0])).get("frames", ""))) as SpriteFrames, str(p[1]), p[2])
+	_stage.add_child(shade)
+	shade.position = Vector2.ZERO
+	shade.size = SCREEN
+	layer.resized.connect(_fit_stage.bind(layer))
+	_fit_stage(layer)
 
 
-func _build_menu() -> void:
-	var panel := MenuKit.make_panel("panel")
-	panel.name = "MenuPanel"
-	panel.custom_minimum_size = Vector2(MENU_W, 0)
-	add_child(panel)
-	MenuKit.place(panel, Vector2(roundf((SCREEN.x - MENU_W) / 6.0) * 3.0, MENU_Y), Vector2(MENU_W, 0))
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 9)
-	panel.add_child(v)
+func _add_scene_sprite(sf: SpriteFrames, clip: String, foot: Vector2) -> void:
+	if sf == null:
+		return
+	var s := SceneSprite.new(sf, clip, ART_K)
+	_stage.add_child(s)
+	s.place_at(foot)
+	s.modulate = SCENE_TINT
 
-	_start_btn = MenuKit.make_button("TEK OYUNCULU", "sage", MENU_FONT, MENU_BTN_H)
-	_multiplayer_btn = MenuKit.make_button("ÇOK OYUNCULU", "tan", MENU_FONT, MENU_BTN_H)
-	_settings_btn = MenuKit.make_button("AYARLAR", "tan", MENU_FONT, MENU_BTN_H)
-	_records_btn = MenuKit.make_button("REKORLAR", "tan", MENU_FONT, MENU_BTN_H)
-	_exit_btn = MenuKit.make_button("ÇIKIŞ", "rose", MENU_FONT, MENU_BTN_H)
-	for b: Button in [_start_btn, _multiplayer_btn, _records_btn, _settings_btn, _exit_btn]:
+
+func _fit_stage(layer: Control) -> void:
+	if _stage == null or layer.size.x < 1.0:
+		return
+	var s: float = maxf(layer.size.x / SCREEN.x, layer.size.y / SCREEN.y)
+	_stage.scale = Vector2(s, s)
+	_stage.position = ((layer.size - SCREEN * s) * 0.5).floor()
+
+
+## ------------------------------------------------------------------ sol menü: "D - Panelsiz Ateş Işığı" (2026-10-16, kullanıcı seçti)
+## Kutu yok: sahnenin sol tarafı basamaklı kararır (sol_golge.png, sahne katmanında), üstte büyük başlık + kiriş süsü ayracı, öğeler
+## ikon + 48 punto başlık + alt yazı. Seçili öğe (fare üstünde = odak; kumanda/klavye de odakla gezer) altın yazı + yanında YANAN MUM.
+const ITEM_ICON := 48.0
+const ITEM_H := 92.0
+const C_GOLD := Color("#f4c56e")
+const C_GOLD_DIM := Color("#e2c08a")
+const C_CREAM := Color("#efe2c6")
+const C_SUB := Color("#b09878")
+const C_TAG := Color("#c8b28e")
+const C_RED := Color("#dc7f60")
+
+var _items: Array = [] ## [{btn, title, sub, candle, danger}]
+
+
+## İki karelik mum alevi (seçili öğenin yanında).
+class Candle extends Control:
+	const COL := 3 ## Candles.png sütunu (32x32); satır 0/1 = iki alev karesi
+	var tex: Texture2D = null
+	var _t: float = 0.0
+
+	func _init(t: Texture2D) -> void:
+		tex = t
+		custom_minimum_size = Vector2(64, 64)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
+	func _process(delta: float) -> void:
+		_t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		if tex == null:
+			return
+		var row: int = int(_t * 4.0) % 2
+		draw_texture_rect_region(tex, Rect2(Vector2.ZERO, Vector2(64, 64)), Rect2(Vector2(COL * 32, row * 32), Vector2(32, 32)))
+
+
+func _lbl(t: String, fs: int, c: Color) -> Label:
+	var l := DK.lbl(t, fs, c)
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
+	l.add_theme_constant_override("shadow_offset_y", 3)
+	return l
+
+
+## Öğe ikonu: yüz / üç yüz / kıymık / eşya ikonu; hepsi aynı genişlikte kutu (yazılar hizalı kalsın).
+func _item_icon(spec: String) -> Control:
+	var box := CenterContainer.new()
+	box.custom_minimum_size = Vector2(ITEM_ICON * 1.6, ITEM_ICON)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	match spec:
+		"face1":
+			box.add_child(DK.icon(_face_tex(1), ITEM_ICON))
+		"faces":
+			var c := Control.new()
+			c.custom_minimum_size = Vector2(ITEM_ICON * 1.6, ITEM_ICON)
+			c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			for i in 3:
+				var f: Control = DK.icon(_face_tex([4, 8, 1][i]), ITEM_ICON * 0.75)
+				f.position = Vector2(i * ITEM_ICON * 0.42, ITEM_ICON * 0.25 if i == 1 else 0.0)
+				c.add_child(f)
+			box.add_child(c)
+		"shard":
+			box.add_child(DK.ShardIcon.new(ITEM_ICON * 0.66))
+		_:
+			box.add_child(DK.icon(load(spec) as Texture2D, ITEM_ICON))
+	return box
+
+
+func _face_tex(id: int) -> Texture2D:
+	return LobbyUI.face_texture(str(Characters.get_def(id).get("portrait", "")))
+
+
+func _record_text() -> String:
+	var data: Dictionary = RunRecordsScript.load_all()
+	if int(data.get("runs", 0)) <= 0:
+		return "Henüz koşu yok"
+	var t: int = int(float(data.get("best_time", 0.0)))
+	return "En iyi: Kademe %d · %d:%02d" % [int(data.get("best_tier", 0)), t / 60, t % 60]
+
+
+## Bir menü öğesi: görünmez düğme (tıklama/odak) + içinde mum yuvası, ikon, başlık, alt yazı.
+func _menu_item(title: String, sub: String, icon_spec: String, danger: bool = false) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(COL_W, ITEM_H)
+	b.flat = true
+	for st: String in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	var row := DK.h(14)
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var candle := Candle.new(load("res://harita/Ev içi/Candles.png") as Texture2D)
+	candle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	candle.visible = false
+	var slot := CenterContainer.new()
+	slot.custom_minimum_size = Vector2(64, 64)
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.add_child(candle)
+	row.add_child(slot)
+	row.add_child(_item_icon(icon_spec))
+	var v := DK.v(-2)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	var tl := _lbl(title, DK.FS_TITLE, C_RED if danger else C_CREAM)
+	v.add_child(tl)
+	var sl := _lbl(sub, DK.FS_LABEL, C_SUB)
+	v.add_child(sl)
+	row.add_child(v)
+	b.add_child(row)
+	var it := {"btn": b, "title": tl, "sub": sl, "candle": candle, "danger": danger, "row": row}
+	_items.append(it)
+	## Fare üstüne gelmek = odak: tek bir "seçili" görünümü (kumanda/klavyeyle aynı).
+	b.mouse_entered.connect(func() -> void: b.grab_focus())
+	b.focus_entered.connect(_set_item_selected.bind(it, true))
+	b.focus_exited.connect(_set_item_selected.bind(it, false))
+	return b
+
+
+func _set_item_selected(it: Dictionary, on: bool) -> void:
+	var tl: Label = it["title"]
+	(it["candle"] as Control).visible = on
+	UiAnim.slide_x(it["row"] as Control, 12.0 if on else 0.0) ## seçili öğe hafifçe öne (sağa) çıkar, madde 200
+	if on:
+		tl.add_theme_color_override("font_color", C_GOLD)
+		tl.add_theme_color_override("font_outline_color", Color(0.35, 0.16, 0.04, 1))
+		tl.add_theme_constant_override("outline_size", 6)
+		(it["sub"] as Label).add_theme_color_override("font_color", C_GOLD_DIM)
+	else:
+		tl.add_theme_color_override("font_color", C_RED if bool(it["danger"]) else C_CREAM)
+		tl.add_theme_constant_override("outline_size", 0)
+		(it["sub"] as Label).add_theme_color_override("font_color", C_SUB)
+
+
+func _build_left_panel() -> void:
+	var logo := DK.v(0)
+	logo.name = "TitleSign"
+	var lh := DK.h(14)
+	var left_ic: CenterContainer = DK.icon(WC.icon("dagger"), 64)
+	if left_ic.get_child_count() > 0:
+		(left_ic.get_child(0) as TextureRect).flip_h = true
+	lh.add_child(left_ic)
+	var title := DK.lbl(TITLE, 96, C_GOLD)
+	title.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 1))
+	title.add_theme_constant_override("outline_size", 16)
+	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	title.add_theme_constant_override("shadow_offset_y", 8)
+	title.add_theme_constant_override("shadow_outline_size", 16)
+	lh.add_child(title)
+	lh.add_child(DK.icon(WC.icon("fire_staff"), 64))
+	logo.add_child(lh)
+	logo.add_child(_lbl("Hayatta kal. Birlikte.", DK.FS_BODY, C_TAG))
+	logo.add_child(DK.sp(0, 14))
+	var trim := TextureRect.new()
+	trim.texture = load("res://assets/ui/ana_menu/kiris_suslu.png")
+	trim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	trim.stretch_mode = TextureRect.STRETCH_TILE
+	trim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	trim.custom_minimum_size = Vector2(480, 48)
+	trim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	logo.add_child(trim)
+	add_child(logo)
+	MenuKit.place(logo, Vector2(40, 80), Vector2(0, 0))
+
+	var v := DK.v(0)
+	v.name = "MenuPanel"
+	_start_btn = _menu_item("TEK OYUNCULU", "Tek başına hayatta kal", "face1")
+	_multiplayer_btn = _menu_item("ÇOK OYUNCULU", "Oda kur ya da arkadaşına katıl", "faces")
+	_soul_shop_btn = _menu_item("RUH MAĞAZASI", "", "shard")
+	_shard_label = _items[_items.size() - 1]["sub"]
+	_refresh_shards()
+	_records_btn = _menu_item("REKORLAR", _record_text(), "res://assets/items/kralin_kadehi.png")
+	_settings_btn = _menu_item("AYARLAR", "Ses, görüntü, tuşlar", "res://assets/items/tornavida.png")
+	_exit_btn = _menu_item("ÇIKIŞ", "Masaüstüne dön", "res://assets/items/ruzgar_yuruyen_cizmeleri.png", true)
+	for b: Button in [_start_btn, _multiplayer_btn, _soul_shop_btn, _records_btn, _settings_btn, _exit_btn]:
 		v.add_child(b)
+	add_child(v)
+	MenuKit.place(v, Vector2(40, 320), Vector2(COL_W, 0))
+	UiAnim.cascade(v, 0.05) ## menü öğeleri sırayla belirir (madde 200)
 	_start_btn.pressed.connect(_on_start_pressed)
 	_multiplayer_btn.pressed.connect(_on_multiplayer_pressed)
+	_soul_shop_btn.pressed.connect(_on_soul_shop_pressed)
 	_records_btn.pressed.connect(_on_records_pressed)
 	_settings_btn.pressed.connect(_on_settings_pressed)
 	_exit_btn.pressed.connect(_on_exit_pressed)
+
+	## Alt: şömine başındaki parti yüzleri + en iyi koşu.
+	var bot := DK.h(10)
+	bot.name = "PartyLine"
+	for p: Array in PARTY:
+		bot.add_child(DK.icon(_face_tex(int(p[0])), 48))
+	bot.add_child(DK.sp(6))
+	bot.add_child(_lbl(_record_text(), DK.FS_LABEL, C_TAG))
+	add_child(bot)
+	MenuKit.place(bot, Vector2(104, SCREEN.y - 132.0), Vector2(0, 48))
+	_create_debug_mode_button()
+
+
+func _refresh_shards() -> void:
+	if is_instance_valid(_shard_label):
+		_shard_label.text = "%d kıymık · kilit aç" % MetaProgressScript.shards()
 
 
 ## Kullanıcı isteği (2026-09-24): "bu modun otomatik olarak açıldığı bir debugmode haritası
@@ -130,173 +410,16 @@ func _build_menu() -> void:
 ## debug_mode_unlocked'ı sahne değişmeden ÖNCE true yapması - hud.gd _setup_debug_mode() bunu
 ## okuyup DEBUG butonunu baştan görünür kurar, chate "baykusseverim" yazmaya gerek kalmaz.
 func _create_debug_mode_button() -> void:
-	var btn := MenuKit.make_button("Debug Modu", "tan", MenuKit.FS_SMALL, 42)
-	btn.custom_minimum_size = Vector2(168, 42)
+	var btn := Button.new()
+	btn.name = "DebugButton"
+	btn.text = "Debug Modu"
+	btn.add_theme_font_override("font", DK.font())
+	btn.add_theme_font_size_override("font_size", DK.FS_LABEL)
+	btn.custom_minimum_size = Vector2(168, 40)
+	DK.style_button_colors(btn, Color(0.1, 0.07, 0.05, 0.7), Color("#45372a"), C_SUB, C_GOLD, 2, 4, 6.0)
 	btn.pressed.connect(_on_debug_mode_pressed)
 	add_child(btn)
-	MenuKit.place(btn, Vector2(24, SCREEN.y - 66), btn.custom_minimum_size)
-
-
-## Ayarlar penceresi: menünün üstünde, arkası sıcak kahve tonla karartılmış, ortalanmış parşömen panel.
-func _build_settings() -> void:
-	settings_panel = Control.new()
-	settings_panel.name = "SettingsPanel"
-	settings_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	settings_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	settings_panel.visible = false
-	add_child(settings_panel)
-	var dim := ColorRect.new()
-	dim.color = Color(0.20, 0.11, 0.05, 0.45)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	settings_panel.add_child(dim)
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	settings_panel.add_child(center)
-
-	var box := MenuKit.make_panel("panel")
-	box.custom_minimum_size = Vector2(720, 0)
-	center.add_child(box)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 18)
-	box.add_child(v)
-	v.add_child(MenuKit.make_section_header("Ayarlar", MenuKit.FS_TITLE))
-
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 24)
-	grid.add_theme_constant_override("v_separation", 18)
-	v.add_child(grid)
-
-	grid.add_child(_row_label("Oyun Sesi"))
-	var vol_row := HBoxContainer.new()
-	vol_row.add_theme_constant_override("separation", 12)
-	vol_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	volume_slider = HSlider.new()
-	volume_slider.min_value = 0
-	volume_slider.max_value = 100
-	volume_slider.custom_minimum_size = Vector2(300, 42)
-	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	volume_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	vol_row.add_child(volume_slider)
-	volume_value = MenuKit.make_label("100%", MenuKit.FS_BODY, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
-	volume_value.custom_minimum_size = Vector2(84, 0)
-	volume_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	vol_row.add_child(volume_value)
-	grid.add_child(vol_row)
-
-	grid.add_child(_row_label("Tam Ekran"))
-	fullscreen_check = CheckButton.new()
-	fullscreen_check.size_flags_horizontal = Control.SIZE_SHRINK_END
-	grid.add_child(fullscreen_check)
-
-	grid.add_child(_row_label("Çözünürlük"))
-	resolution_option = OptionButton.new()
-	resolution_option.custom_minimum_size = Vector2(300, 48)
-	resolution_option.size_flags_horizontal = Control.SIZE_SHRINK_END
-	grid.add_child(resolution_option)
-
-	grid.add_child(_row_label("FPS Göstergesi"))
-	fps_check = CheckButton.new()
-	fps_check.size_flags_horizontal = Control.SIZE_SHRINK_END
-	grid.add_child(fps_check)
-
-	## Kullanıcı isteği (2026-09-25): "arayüzler için ayarlara opaklık ayarı getir" - ses satırıyla aynı düzen (bkz.
-	## UISound.ui_opacity_percent; pause_menu.gd'de AYNI satır).
-	grid.add_child(_row_label("Arayüz Opaklığı"))
-	var op_row := HBoxContainer.new()
-	op_row.add_theme_constant_override("separation", 12)
-	op_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var op_slider := HSlider.new()
-	op_slider.min_value = UISound.UI_OPACITY_MIN_PERCENT
-	op_slider.max_value = 100
-	op_slider.step = 5
-	op_slider.custom_minimum_size = Vector2(300, 42)
-	op_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	op_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	op_row.add_child(op_slider)
-	var op_value: Label = MenuKit.make_label("100%", MenuKit.FS_BODY, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
-	op_value.custom_minimum_size = Vector2(84, 0)
-	op_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	op_row.add_child(op_value)
-	grid.add_child(op_row)
-	op_slider.value = UISound.ui_opacity_percent
-	op_value.text = "%d%%" % int(op_slider.value)
-	op_slider.value_changed.connect(func(value: float) -> void:
-		UISound.set_ui_opacity_percent(value)
-		op_value.text = "%d%%" % int(value))
-
-	## Ekran sarsıntısı (kullanıcı isteği 2026-10-05, bkz. camera_shake.gd): 0 = kapalı (hareket hassasiyeti için).
-	grid.add_child(_row_label("Ekran Sarsıntısı"))
-	var sh_row := HBoxContainer.new()
-	sh_row.add_theme_constant_override("separation", 12)
-	sh_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sh_slider := HSlider.new()
-	sh_slider.name = "ShakeSlider"
-	sh_slider.min_value = 0
-	sh_slider.max_value = 100
-	sh_slider.step = 10
-	sh_slider.custom_minimum_size = Vector2(300, 42)
-	sh_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sh_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	sh_row.add_child(sh_slider)
-	var sh_value: Label = MenuKit.make_label("100%", MenuKit.FS_BODY, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
-	sh_value.custom_minimum_size = Vector2(120, 0)
-	sh_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	sh_row.add_child(sh_value)
-	grid.add_child(sh_row)
-	sh_slider.value = UISound.camera_shake_percent
-	sh_value.text = "Kapalı" if int(sh_slider.value) == 0 else "%d%%" % int(sh_slider.value)
-	sh_slider.value_changed.connect(func(value: float) -> void:
-		UISound.set_camera_shake_percent(value)
-		sh_value.text = "Kapalı" if int(value) == 0 else "%d%%" % int(value))
-
-	## Tuş atamaları + Grafik (2026-10-03, bkz. graphics_settings_menu.gd) yan yana - ikisi de kendi penceresini açar.
-	var sub_row := HBoxContainer.new()
-	sub_row.add_theme_constant_override("separation", 12)
-	v.add_child(sub_row)
-	keybind_button = MenuKit.make_button("Tuş Atamaları", "tan", MenuKit.FS_BODY, 52)
-	keybind_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sub_row.add_child(keybind_button)
-	var gfx_button: Button = MenuKit.make_button("Grafik", "tan", MenuKit.FS_BODY, 52)
-	gfx_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	gfx_button.pressed.connect(_on_graphics_pressed)
-	sub_row.add_child(gfx_button)
-	var close_btn := MenuKit.make_button("KAPAT", "sage", MenuKit.FS_BODY, 52)
-	v.add_child(close_btn)
-
-	close_btn.pressed.connect(_on_settings_closed)
-	keybind_button.pressed.connect(_on_keybind_pressed)
-	volume_slider.value = UISound.master_volume_percent
-	volume_slider.value_changed.connect(_on_volume_changed)
-	_update_volume_label(volume_slider.value)
-	## Kullanıcı isteği: "ayarlara çözünürlük ve tam ekran özelliği ekle,
-	## değiştirilebilsin" - bkz. ui_sound.gd (UISound autoload'ında
-	## set_fullscreen/set_resolution, aynı ConfigFile deseni volume ile).
-	for label in UISound.get_resolution_labels():
-		resolution_option.add_item(label)
-	resolution_option.selected = UISound.resolution_index
-	fullscreen_check.button_pressed = UISound.is_fullscreen
-	resolution_option.disabled = UISound.is_fullscreen
-	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
-	resolution_option.item_selected.connect(_on_resolution_selected)
-	## Kullanıcı isteği: "fps göstergesi ekle ayarlardan açılıp kapatılabilsin" -
-	## fullscreen_check ile BİREBİR AYNI desen (UISound'daki show_fps'e bağlı,
-	## bkz. pause_menu.gd'deki AYNI kopya).
-	fps_check.button_pressed = UISound.show_fps
-	fps_check.toggled.connect(_on_fps_toggled)
-
-
-func _row_label(text: String) -> Label:
-	var l := MenuKit.make_label(text, MenuKit.FS_BODY, MenuKit.C_TEXT)
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	return l
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if settings_panel and settings_panel.visible and event.is_action_pressed("ui_cancel"):
-		_on_settings_closed()
-		get_viewport().set_input_as_handled()
+	MenuKit.place(btn, Vector2(40, SCREEN.y - 64.0), btn.custom_minimum_size)
 
 
 func _on_debug_mode_pressed() -> void:
@@ -333,56 +456,42 @@ func _on_records_pressed() -> void:
 	)
 
 
+## Ruh Mağazası (bkz. soul_shop_screen.gd, meta_progress.gd): koşularda kazanılan Ruh Kıymığı ile karakter/silah/evcil/ruhani yetenek kilidi açılır.
+func _on_soul_shop_pressed() -> void:
+	var screen: CanvasLayer = SoulShopScreenScript.new()
+	add_child(screen)
+	screen.closed.connect(func() -> void:
+		_refresh_shards() ## mağazada harcanan kıymık öğedeki bakiyeye yansısın
+		if is_instance_valid(_soul_shop_btn):
+			_soul_shop_btn.grab_focus()
+	)
+
+
+## Ayarlar (madde 234): ortak "Ateş Işığı" ayar ekranı, kendi başlığı + kategori sütunuyla; açıkken menünün tabelası/öğeleri gizlenir.
+## Tasarım boyutunda (1920x1080) sola-üste yaslı - telefonda RootFitter tam ekran çocukları ekrana yayar, bu ekranın içeriği
+## tasarım koordinatında kalmalı.
+const SETTINGS_HIDE := ["TitleSign", "MenuPanel", "PartyLine", "DebugButton"]
+
+
 func _on_settings_pressed() -> void:
-	settings_panel.visible = true
-	volume_slider.grab_focus()
+	if is_instance_valid(_settings_screen):
+		return
+	for n: String in SETTINGS_HIDE:
+		var c := get_node_or_null(n) as CanvasItem
+		if c:
+			c.visible = false
+	_settings_screen = SettingsScreenScript.new("Ana menüye dön", 0.74)
+	_settings_screen.closed.connect(_on_settings_closed)
+	add_child(_settings_screen)
+	_settings_screen.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_settings_screen.position = Vector2.ZERO
+	_settings_screen.size = SCREEN
 
 
 func _on_settings_closed() -> void:
-	settings_panel.visible = false
-	_settings_btn.grab_focus()
-
-
-func _on_volume_changed(value: float) -> void:
-	UISound.set_master_volume_percent(value)
-	_update_volume_label(value)
-
-
-func _update_volume_label(value: float) -> void:
-	volume_value.text = "%d%%" % int(round(value))
-
-
-func _on_fullscreen_toggled(enabled: bool) -> void:
-	UISound.set_fullscreen(enabled)
-	resolution_option.disabled = enabled
-
-
-func _on_resolution_selected(index: int) -> void:
-	UISound.set_resolution(index)
-
-
-func _on_fps_toggled(enabled: bool) -> void:
-	UISound.set_show_fps(enabled)
-
-
-## Grafik ayarları penceresi (bkz. graphics_settings_menu.gd) - tuş atamalarıyla AYNI desen.
-func _on_graphics_pressed() -> void:
-	settings_panel.visible = false
-	var menu := GraphicsSettingsMenuScript.new()
-	add_child(menu)
-	menu.closed.connect(func() -> void:
-		if is_instance_valid(settings_panel):
-			settings_panel.visible = true
-	)
-
-
-## bkz. pause_menu.gd _on_keybind_pressed - AYNI desen (tek kaynak
-## keybind_menu.gd/game_manager.gd, burada ikinci bir kopya YOK).
-func _on_keybind_pressed() -> void:
-	settings_panel.visible = false
-	var menu := KeybindMenuScript.new()
-	add_child(menu)
-	menu.closed.connect(func() -> void:
-		if is_instance_valid(settings_panel):
-			settings_panel.visible = true
-	)
+	_settings_screen = null
+	for n: String in SETTINGS_HIDE:
+		var c := get_node_or_null(n) as CanvasItem
+		if c:
+			c.visible = true
+	_settings_btn.grab_focus.call_deferred()

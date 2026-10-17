@@ -92,7 +92,7 @@ func test_elite_candidates_follow_the_tier_families_and_never_leave_the_pool() -
 		assert(not c.is_empty(), "Kademe %d için aday var" % t)
 		for id in c:
 			assert(SpawnerScript.ELITE_POOL.has(id), "aday havuzdan olmalı: %s (Kademe %d)" % [id, t])
-	assert(SpawnerScript.elite_candidates(1) == ["rat3"], "Kademe 1 (fare + slime): sadece fare: %s" % str(SpawnerScript.elite_candidates(1)))
+	assert(SpawnerScript.elite_candidates(1) == ["slime2"], "Kademe 1 (slime): sadece slime: %s" % str(SpawnerScript.elite_candidates(1)))
 	var c13: Array = SpawnerScript.elite_candidates(13)
 	for id in c13:
 		assert(["demon", "hayalet", "rontgen", "vampire", "iblis"].has(SpawnerScript.ID_FAMILY[id]), "Kademe 13 ailesi: %s" % id)

@@ -1,4 +1,5 @@
 shader_type canvas_item;
+#include "res://shaders/harita_renk.gdshaderinc"
 
 // ==================================================
 // ZEMİN TOPRAK - kuru çatlak + çakıl (Harita > Yer > "Zemin Toprak")
@@ -45,6 +46,7 @@ uniform float catlak_hucre : hint_range(6.0, 30.0) = 13.0;            // çatlak
 uniform float catlak_kesik : hint_range(0.0, 1.0) = 0.30;             // büyük = daha kesik/az çatlak
 
 // ---------------- ÇAKILLAR
+// OYUNDA bu yoğunluk/renk kayması değerlerinin bir kısmını scripts/map_color_grade.gd CALM_PARAMS ezer (madde 184, sahnedeki değer değil).
 uniform float ince_cakil_seyrek : hint_range(0.0, 1.0) = 0.05;        // 5 px hücre: açık/kuru lekelerde
 uniform float ince_cakil_sik : hint_range(0.0, 1.0) = 0.32;           // 5 px hücre: koyu lekelerde
 uniform float iri_cakil_yogunlugu : hint_range(0.0, 1.0) = 0.12;      // 17 px hücre
@@ -157,4 +159,5 @@ void fragment() {
 	}
 
 	COLOR = vec4(mix(tex.rgb, c, toprak_maske * toprak_efekt), tex.a);
+	COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
 }

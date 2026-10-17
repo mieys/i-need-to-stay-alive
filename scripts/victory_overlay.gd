@@ -10,6 +10,7 @@ extends CanvasLayer
 signal continue_pressed
 signal menu_pressed
 
+const UiAnim := preload("res://scripts/ui_anim.gd")
 const RunSummaryUIScript: GDScript = preload("res://scripts/run_summary_ui.gd")
 
 var _summary: Dictionary = {}
@@ -131,6 +132,7 @@ func _ready() -> void:
 	if _continue_btn:
 		UIKit.style_button(_continue_btn, "green", false, UIKit.FS_BODY)
 	UIKit.style_button(_menu_btn, "wood", false, UIKit.FS_BODY)
+	UiAnim.window_in(self)
 
 
 func _on_continue() -> void:

@@ -71,6 +71,9 @@ func _set_texture(tex: Texture2D) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	if not _fired and AbilitiesScript.caster_disabled(source, data):
+		queue_free() ## sahibi uyarı sırasında dondu/sersemledi: ışın hiç ateşlenmez
+		return
 	if _t < _warn:
 		## Uyarı: çizgi akar, sona yaklaştıkça hızlı yanıp söner ve belirginleşir.
 		var k: float = _t / maxf(_warn, 0.01)

@@ -3,12 +3,14 @@ class_name ReviveHeartsHUD
 
 ## Mini heart-shaped Revive display on the left edge.
 ## Shows 3 retro pixel-art hearts, lighting up red when available, gray when consumed.
-## Kullanıcı isteği (2026-09-24): hiç hak kalmayınca 1 kalp 5 dakikada yenilenir ve "altında da bekleme süresi
+## Kullanıcı isteği (2026-09-24): her kalp eksildiğinde (2 kalp 8 dk, 1 kalp 6,5 dk, 0 kalp 5 dk) bir kalp yenilenir ve "altında da bekleme süresi
 ## görünsün" - sayaç GameManager'da (bkz. _process_revive_regen), burada ilk kalbin altında m:ss gösterilir ve
 ## yenilenen kalp dolum oranında soluk kırmızıyla aşağıdan yukarı dolar.
 
-const MAX_REVIVES := 3
+const MAX_REVIVES := 4 ## 3 + kalıcı "Dirilme Hakkı" geliştirmesi (meta_upgrades.gd); boş kalpler hep 3 çizilir, 4. sadece hak varsa
+const BASE_SLOTS := 3
 var revives_remaining: int = 3
+var _slots_shown: int = BASE_SLOTS
 var _regen_left: float = -1.0
 var _regen_label: Label = null
 
@@ -27,8 +29,9 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	var left: float = GameManager.get_local_revive_regen_left()
-	if revives_remaining > 0:
-		left = -1.0
+	if _dock_mode:
+		_process_dock(left)
+		return
 	var shown: bool = left >= 0.0
 	if shown != _regen_label.visible:
 		_regen_label.visible = shown
@@ -46,6 +49,60 @@ func _process(_delta: float) -> void:
 		_regen_left = left
 		queue_redraw()
 
+## ---------------------------------------------------------------- PANEL KİPİ (masaüstü oyuncu paneli)
+## 2026-10-14 (panel yeniden tasarımı, kullanıcı: "kalp yenilenme geri sayımı paneli de daima görünür olmalı" + "geri sayım
+## çok ufak ve hiç okunmuyor"): kalpler panelin içinde, altlarında HER ZAMAN duran koyu sayaç levhası. Sayaç yokken "-:--"
+## (soluk); yanında bekleyen arkadaş sayacı hızlandırırken (bkz. GameManager.REVIVE_REGEN_ASSIST_BONUS) yazı YEŞİL olur -
+## "x2.6" çarpanı levhaya sığmıyor. Yazı kalın piksel yazı tipinin tam katında (PixeloidSans 9 x 3). Telefon bu kipi açmaz.
+const PixelIcons := preload("res://scripts/hud_pixel_icons.gd")
+const DOCK_FONT: Font = preload("res://assets/fonts/PixeloidSans-Bold.ttf")
+const DOCK_FONT_SIZE := 27
+const DOCK_CAP := 21.0 ## rakam yüksekliği (7 sanat pikseli x 3)
+const DOCK_PLATE_TOP := 28.0
+const DOCK_PLATE_H := 34.0
+const HudTheme := preload("res://scripts/hud_theme.gd")
+const DOCK_PLATE_FILL := HudTheme.INSET
+const DOCK_TIMER_COLOR := Color(1.0, 0.78, 0.8)
+const DOCK_TIMER_BOOST := Color(0.62, 1.0, 0.6)
+const DOCK_TIMER_IDLE := HudTheme.DIM
+var _dock_mode: bool = false
+var _dock_text: String = "-:--"
+var _dock_color: Color = DOCK_TIMER_IDLE
+
+
+func set_dock_mode(on: bool) -> void:
+	if on == _dock_mode:
+		return
+	_dock_mode = on
+	if on:
+		custom_minimum_size = Vector2.ZERO
+		if _regen_label:
+			_regen_label.visible = false
+	queue_redraw()
+
+
+func _process_dock(left: float) -> void:
+	var text: String = "-:--"
+	var color: Color = DOCK_TIMER_IDLE
+	if left >= 0.0:
+		var secs: int = int(ceil(left))
+		text = "%d:%02d" % [secs / 60, secs % 60]
+		color = DOCK_TIMER_BOOST if GameManager.get_local_revive_regen_rate() > 1.01 else DOCK_TIMER_COLOR
+	if text != _dock_text or color != _dock_color or absf(left - _regen_left) >= 0.5 or (left < 0.0) != (_regen_left < 0.0):
+		_dock_text = text
+		_dock_color = color
+		_regen_left = left
+		queue_redraw()
+
+
+func _draw_dock_plate() -> void:
+	var r := Rect2(0.0, DOCK_PLATE_TOP, size.x, DOCK_PLATE_H)
+	PixelIcons.draw_plate(self, r, DOCK_PLATE_FILL)
+	var w: float = DOCK_FONT.get_string_size(_dock_text, HORIZONTAL_ALIGNMENT_LEFT, -1, DOCK_FONT_SIZE).x
+	var p := Vector2(roundf((size.x - w) * 0.5), roundf(r.position.y + (r.size.y + DOCK_CAP) * 0.5))
+	draw_string(DOCK_FONT, p, _dock_text, HORIZONTAL_ALIGNMENT_LEFT, -1, DOCK_FONT_SIZE, _dock_color)
+
+
 ## Oyuncu paneli (hud.gd dock) kalpleri küçük bir sekmeye koyar - yenilenme sayacı kalplerin ALTINA değil yanına gelsin.
 func set_regen_label_position(p: Vector2) -> void:
 	if _regen_label:
@@ -58,6 +115,7 @@ func is_regen_visible() -> bool:
 
 func set_revives(count: int) -> void:
 	revives_remaining = clamp(count, 0, MAX_REVIVES)
+	_slots_shown = maxi(_slots_shown, revives_remaining) ## 4. hak bir kez görüldüyse koşu boyunca 4. (boş) kalp de kalır
 	queue_redraw()
 
 ## YENİDEN TASARIM (kullanıcı isteği 2026-09-25: "kalan dirilme haklarımızın göründüğü kalpleri yeniden daha iyi bir şekilde
@@ -93,13 +151,21 @@ static func _in_heart(x: int, y: int) -> bool:
 
 
 func _draw() -> void:
-	for i in range(MAX_REVIVES):
+	var slots: int = maxi(BASE_SLOTS, maxi(_slots_shown, mini(GameManager.max_revives, MAX_REVIVES))) ## 4. kalp geliştirmesi varsa boşken de görünür (yenilenir)
+	## 4 kalp 90 px'e sığsın diye sıkışık yerleşim (22 px kalp, boşluksuz); 3 kalpte eski aralık.
+	var spacing: float = 22.0 if slots > BASE_SLOTS else HEART_SPACING
+	var left: float = 2.0 if slots > BASE_SLOTS else 4.0
+	if _dock_mode:
+		## Panel kipi: kalp sırası levhanın üstünde ortalı (3 kalp 74 px, 4 kalp 88 px), altında sayaç levhası.
+		left = roundf((size.x - (float(slots - 1) * spacing + 22.0)) * 0.5)
+		_draw_dock_plate()
+	for i in range(slots):
 		var active: bool = i < revives_remaining
-		var pos := Vector2(4.0 + float(i) * HEART_SPACING, 4.0)
-		## Yenilenen kalp (ilk boş kalp = 0. kalp): sayacın ilerlemesi kadarı aşağıdan yukarı soluk kırmızı dolar.
+		var pos := Vector2(left + float(i) * spacing, 4.0)
+		## Yenilenen kalp (ilk boş kalp = revives_remaining. kalp): sayacın ilerlemesi kadarı aşağıdan yukarı soluk kırmızı dolar.
 		var fill: float = 0.0
-		if i == 0 and not active and _regen_left >= 0.0:
-			fill = clampf(1.0 - _regen_left / GameManager.REVIVE_REGEN_INTERVAL, 0.0, 1.0)
+		if i == revives_remaining and _regen_left >= 0.0:
+			fill = clampf(1.0 - _regen_left / GameManager.revive_regen_interval(revives_remaining), 0.0, 1.0)
 		_draw_pixel_heart(pos, active, fill)
 
 

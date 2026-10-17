@@ -22,6 +22,7 @@ extends Sprite2D
 ## (kademe 5): dışında ikinci, koyu bir halka daha. Canlılık: yavaş nefes alan parlaklık (shader), tüm kademelerde aynı.
 
 ## Kontürü olan ilk kademe: Temel (1) göstergesiz; geliştirme aldıkça 2 yeşil, 3 mavi, 4 mor, 5 (final) kırmızı.
+const GLOW_ENABLED := false
 const MIN_TIER := 2
 const TIER_COLORS: Array[Color] = [
 	Color8(120, 232, 90), ## 2 - yeşil (çimen üstünde de okunsun diye açık/canlı limon yeşili)
@@ -101,7 +102,8 @@ static func attach(icon: Node2D, new_tier: int) -> Node:
 	if icon == null:
 		return null
 	var existing: Node = icon.get_node_or_null("EnchantGlow")
-	if new_tier < MIN_TIER:
+	## Kademe parıltısı/kontürü oyundan kaldırıldı (2026-10-17, kullanıcı isteği); yeniden açmak için false yap.
+	if not GLOW_ENABLED or new_tier < MIN_TIER:
 		if existing:
 			existing.queue_free()
 		return null

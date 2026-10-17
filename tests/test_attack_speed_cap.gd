@@ -93,16 +93,18 @@ func test_other_ap_changes_are_preserved_when_overflow_ends() -> void:
 	_cleanup()
 
 
-## Elara pasifi (2026-10-12 denge): metindeki gibi gerçekten +%50 hız (aralık 1/1,5) ve sınır aşımı -> saldırı gücü dönüşümüne GİRMEZ.
+## Elara pasifi (2026-10-12 denge; 2026-10-13 sınır %30): gerçekten +%bonus hız (aralık 1/(1+bonus)) ve sınır aşımı -> saldırı gücü dönüşümüne GİRMEZ.
 func test_elara_passive_is_true_fifty_percent_and_not_in_overflow() -> void:
 	var p: Node = _make_player()
 	var saved: int = GameManager.selected_character
 	GameManager.selected_character = 12
 	p.level = 50
-	assert(absf(p._elara_passive_fire_rate_mult() - 1.0 / 1.5) < 0.0001, "50. seviyede aralık çarpanı 1/1,5 olmalı: %f" % p._elara_passive_fire_rate_mult())
+	assert(absf(p._elara_passive_fire_rate_mult() - 1.0 / 1.3) < 0.0001, "50. seviyede sınır +%%30: aralık çarpanı 1/1,3 olmalı: %f" % p._elara_passive_fire_rate_mult())
+	p.level = 30
+	assert(absf(p._elara_passive_fire_rate_mult() - 1.0 / 1.3) < 0.0001, "30. seviyede sınıra dayanır")
 	p.level = 20
 	assert(absf(p._elara_passive_fire_rate_mult() - 1.0 / 1.2) < 0.0001, "20. seviyede +%20")
-	## Kartlar toplam +%500 verir, pasif (+%50) sınırı aşırır: gösterilen hız 600'de durur ama taşma (kart/eşya kaynaklı) 0 kalır.
+	## Kartlar toplam +%500 verir, pasif (+%30) sınırı aşırır: gösterilen hız 600'de durur ama taşma (kart/eşya kaynaklı) 0 kalır.
 	p.level = 50
 	_set_total_bonus(p, 500.0)
 	p._sync_attack_speed_overflow_ap()

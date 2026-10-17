@@ -332,6 +332,33 @@ func _add_object_front(layer: TileMapLayer, cell_bases: Dictionary, mode: String
 	fronts.append({"layer": layer, "front": front, "mode": mode, "bases": cell_bases})
 
 
+## Nesne katmanındaki bazı karoları SİL / GERİ KOY (maden kırılınca/doğunca, bkz. mine_world.gd): asıl katman + ön kopya + derinlik kökleri.
+## tiles: [{"cell", "sid", "atlas", "alt"}, ...]; saved_bases: silerken kökler buraya yazılır, geri koyarken buradan okunur (hücre -> kök y).
+func set_object_tiles(layer: TileMapLayer, tiles: Array, present: bool, saved_bases: Dictionary) -> void:
+	var changed: bool = false
+	for f: Dictionary in fronts:
+		if f["layer"] != layer or f["mode"] != "object":
+			continue
+		var front: TileMapLayer = f["front"]
+		var bases: Dictionary = f["bases"]
+		for t: Dictionary in tiles:
+			var cell: Vector2i = t["cell"]
+			if present:
+				if is_instance_valid(front):
+					front.set_cell(cell, int(t["sid"]), t["atlas"], int(t["alt"]))
+				if saved_bases.has(cell):
+					bases[cell] = saved_bases[cell]
+			else:
+				if is_instance_valid(front):
+					front.erase_cell(cell)
+				if bases.has(cell):
+					saved_bases[cell] = bases[cell]
+					bases.erase(cell)
+		changed = true
+	if changed:
+		_build_coarse()
+
+
 ## Saklanma çalılığı ön kopyası (hide_brush_visual.gd çağırır): yer katmanının sallanan materyalinin kopyası + derinlik kökleri. cell_bases: hücre -> ÇALININ kökünün dünya y'si.
 func add_brush_front(layer: TileMapLayer, cell_bases: Dictionary, ground_mat: ShaderMaterial) -> void:
 	var rect: Rect2i = layer.get_used_rect()

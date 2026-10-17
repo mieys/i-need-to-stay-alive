@@ -4,7 +4,7 @@ extends Node
 ## 1) Şovalye kalkan baloncuğu: içine giren DOST agroyu çekemesin - baloncuğa doğru yürüyen
 ##    her yaratık baloncuğun SAHİBİNE (Şovalye) odaklansın ve kalkana saldırsın.
 ## 2) Şovalye E (Kalkan Yenileme) çevredeki yaratıkların agrosunu 5sn kendine çekmeli.
-## 3) Şovalye baloncuğu hasar azaltımı %95 (PALADIN_ULTI_SHIELD_COST_MULT 0.05).
+## 3) Şovalye baloncuğu hasar azaltımı %92 (PALADIN_ULTI_SHIELD_COST_MULT 0.08).
 ## 4) Tüm kalkanların soğurması +5 puan; seviye başına +20 can / +2 saldırı gücü.
 ## 5) Can çalma kademeleri %1/1.5/2/2.5; Pençe can emme = verilen hasarın yüzdesi.
 ## 6) Talon Silah Salvosu: namlular (aynalanan tabanca/tüfek dahil) DIŞA baksın.
@@ -117,7 +117,23 @@ func test_creature_targets_bubble_owner_when_ally_is_inside() -> void:
 	assert(ally.get("normal_damage_taken") == 0.0 and paladin.normal_damage_taken == 0.0,
 		"Baloncuk açıkken normal temas hasarı verilmemeli")
 	var dist: float = enemy.global_position.distance_to(paladin.global_position)
-	assert(dist >= 126.0 - 1.0, "Yaratık baloncuğun içine girmemeli, mesafe: %s" % dist)
+	## 2026-10-14: alan elips - yatayda kenar 126 (C++ zone_r_along)
+	assert(dist >= 126.0 - 1.0, "Yaratık baloncuğun (elipsin yatay kenarı) içine girmemeli, mesafe: %s" % dist)
+	_cleanup()
+
+
+## İzometrik kubbe (madde 160): alan 2:1 elips - aşağıdan gelen yaratık dikey kenarda (63) durur, eski daireye (126) değil.
+func test_creature_stops_at_the_ellipse_edge_from_below() -> void:
+	var paladin := _make_player(Vector2.ZERO)
+	paladin.paladin_zone_active = true
+	paladin.paladin_zone_radius = 126.0
+	var enemy: Node2D = _make_enemy(Vector2(0.0, 400.0))
+	await get_tree().process_frame
+	_step(12.0)
+	var d: Vector2 = enemy.global_position - paladin.global_position
+	assert(d.length() >= 63.0 - 1.0, "Yaratık elipsin dikey kenarından içeri girmemeli: %s" % d)
+	assert(d.length() < 100.0, "Yaratık eski dairenin (126) değil elipsin kenarına kadar yaklaşmalı: %s" % d)
+	assert(paladin.barrier_damage_taken > 0.0, "Kenara varınca kalkana saldırmalı")
 	_cleanup()
 
 
@@ -176,15 +192,15 @@ func test_taunt_is_dropped_when_taunter_dies() -> void:
 	assert(_target_of(enemy) == ally, "Kışkırtan ölünce yaratık boşa kilitli kalmamalı")
 	_cleanup()
 
-func test_paladin_bubble_reduction_is_ninety_five_percent() -> void:
-	assert(is_equal_approx(PlayerScript.PALADIN_ULTI_SHIELD_COST_MULT, 0.05),
-		"Baloncuğun hasar azaltımı %%95 (çarpan 0.05) olmalı, bulunan: %s" % PlayerScript.PALADIN_ULTI_SHIELD_COST_MULT)
+func test_paladin_bubble_reduction_is_ninety_two_percent() -> void:
+	assert(is_equal_approx(PlayerScript.PALADIN_ULTI_SHIELD_COST_MULT, 0.08),
+		"Baloncuğun hasar azaltımı %%92 (çarpan 0.08) olmalı, bulunan: %s" % PlayerScript.PALADIN_ULTI_SHIELD_COST_MULT)
 	var def: Dictionary = Characters.get_def(7)
 	## 2026-09-25 slot değişimi: baloncuk (ulti) artık R/skill3, kışkırtma Q/skill.
-	assert(str(def.get("skill3_desc", "")).find("%95") != -1, "Ulti açıklaması %%95 yazmalı: %s" % def.get("skill3_desc"))
+	assert(str(def.get("skill3_desc", "")).find("%92") != -1, "Ulti açıklaması %%92 yazmalı: %s" % def.get("skill3_desc"))
 	## 2026-09-28 (yetenek evrimleri): temel Q artık SADECE kalkan yeniler; kışkırtma "Meydan Okuma" evrimine taşındı
 	## (player.gd _skill_sovalye_taunt) - açıklama kalkan yenilemeyi anlatmalı (2026-10-03 test güncellemesi).
-	assert(str(def.get("skill_desc", "")).find("kalkan yeniler") != -1, "Q açıklaması kalkan yenilemeyi anlatmalı: %s" % def.get("skill_desc"))
+	assert(str(def.get("skill_desc", "")).find("kalkanı yeniler") != -1, "Q açıklaması (mana) kalkanı yenilemeyi anlatmalı: %s" % def.get("skill_desc"))
 
 
 func test_shield_absorption_bases_are_up_five_points() -> void:
@@ -204,7 +220,7 @@ func test_level_up_grants_twenty_health_and_two_damage() -> void:
 	var hp0: float = player.max_health
 	var dmg0: float = player.damage_bonus
 	player.on_team_leveled_up(2)
-	assert(is_equal_approx(player.max_health - hp0, 20.0), "Seviye başına +20 can, bulunan: %s" % (player.max_health - hp0))
+	assert(is_equal_approx(player.max_health - hp0, 15.0), "Seviye başına +15 can, bulunan: %s" % (player.max_health - hp0))
 	assert(is_equal_approx(player.damage_bonus - dmg0, 2.0), "Seviye başına +2 saldırı gücü, bulunan: %s" % (player.damage_bonus - dmg0))
 	_cleanup()
 
@@ -284,10 +300,10 @@ func test_talon_formation_on_real_weapons_faces_outward_even_with_stale_mirror()
 	var player: Node = PlayerScene.instantiate()
 	add_child(player)
 	_track(player)
-	for key in ["tabanca", "tufek", "fire_staff", "dagger"]:
+	for key in ["tabanca", "tufek", "fire_staff"]: ## silah sınırı 3 (2026-10-12)
 		player.buy_weapon_copy(key, 1)
 	var iconed: Array = player._talon_iconed_weapons()
-	assert(iconed.size() >= 4, "Dört silah da ikonlu olmalı, bulunan: %d" % iconed.size())
+	assert(iconed.size() >= 3, "Üç silah da ikonlu olmalı, bulunan: %d" % iconed.size())
 	## Son nişanın bıraktığı BAYAT durum: aynalanan silahlar sola bakarken kalmış olsun.
 	for w in iconed:
 		if bool(w.mirror_icon_when_aiming_left):

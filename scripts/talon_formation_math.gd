@@ -76,6 +76,22 @@ static func compute_icon_pose(angle: float, forward_rad: float, mirror_when_left
 ## (EVO_SALVO_SPIN_MULT) - uzak kopya kasterin evrim listesinden (remote_player.gd has_evo) aynı çarpanı verir.
 const EVO_SALVO_SPIN_MULT: float = 1.2
 
+## Silah Salvosu saldırı hızı bonusu: +%400 (5 kat), "Ateş Seli" evrimiyle +%500 - player.gd TALON_SALVO_FIRE_RATE_MULT bunlardan türer.
+const SALVO_FIRE_BONUS: float = 4.0
+const EVO_SALVO_FIRE_BONUS: float = 5.0
+## Şovalye kubbesinde E = KUBBE GİRDABI (2026-10-15, kullanıcı: "talon bunun içindeyken buradaki tüm silahları E yeteneğiyle döndürebilsin
+## (avantajların %50 daha az etkili olması kaydıyla)") - kubbe halkasındaki HERKESİN silahı döner, dışa bakıp baktığı yöne ateş eder.
+## Avantajlar yarı etkili: saldırı hızı bonusu +%200 (evrimle +%250), Koşan Salvo hızı ve Keskin Çember hasarı yarıya; -%40 hasar
+## cezası aynen. Halka büyük olduğu için dönüş Talon'un kendi salvosunun yarı açısal hızında (silahlar bulanık uçmasın).
+const DOME_SPIN_ADVANTAGE: float = 0.5
+const DOME_SPIN_SPEED_MULT: float = 0.5
+const SALVO_DAMAGE_PENALTY: float = 0.0 ## 2026-10-17: kullanıcı isteğiyle -%40 hasar cezası kaldırıldı
+
+
+## Salvo atış aralığı çarpanı (fire_rate_multiplier). advantage: bonusun ne kadarı geçerli (kubbe girdabında DOME_SPIN_ADVANTAGE).
+static func salvo_fire_mult(evo_fire: bool, advantage: float = 1.0) -> float:
+	return 1.0 / (1.0 + (EVO_SALVO_FIRE_BONUS if evo_fire else SALVO_FIRE_BONUS) * advantage)
+
 
 static func advance_salvo_angle(angle_in: float, delta: float, spin_mult: float = 1.0) -> float:
 	var rotation_speed: float = (TAU * SALVO_ROTATIONS) / SALVO_DURATION * spin_mult * SALVO_SPIN_DIR

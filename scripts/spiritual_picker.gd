@@ -9,6 +9,8 @@ extends PanelContainer
 ## eski 76 px (1.58x) ölçek her sanat pikselini eşit olmayan boyutta çiziyordu.
 
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const LockBadgeScript: GDScript = preload("res://scripts/lock_badge.gd")
 
 signal picked(id: String)
 
@@ -44,7 +46,8 @@ var _columns: int = 3
 func setup(columns: int = 3) -> void:
 	_columns = columns
 	_build()
-	select(GameManager.selected_spiritual if SpiritualSkillsScript.is_valid(GameManager.selected_spiritual) else SpiritualSkillsScript.DEFAULT_ID)
+	var prev: String = GameManager.selected_spiritual
+	select(prev if SpiritualSkillsScript.is_valid(prev) and MetaProgressScript.is_unlocked(MetaProgressScript.SPIRIT, prev) else SpiritualSkillsScript.DEFAULT_ID)
 
 
 func _build() -> void:
@@ -75,13 +78,19 @@ func _build() -> void:
 		var tex_path: String = str(def.get("icon", ""))
 		if ResourceLoader.exists(tex_path):
 			btn.texture_normal = load(tex_path)
+		var locked: bool = not MetaProgressScript.is_unlocked(MetaProgressScript.SPIRIT, id)
 		btn.tooltip_text = str(def.get("name", ""))
+		if locked:
+			btn.tooltip_text += "
+" + MetaProgressScript.lock_text(MetaProgressScript.SPIRIT, id)
 		btn.pressed.connect(_on_icon_pressed.bind(id))
 		btn.mouse_entered.connect(_set_hover.bind(id))
 		btn.mouse_exited.connect(_set_hover.bind(""))
 		btn.focus_entered.connect(_set_hover.bind(id))
 		btn.focus_exited.connect(_set_hover.bind(""))
 		frame.add_child(btn)
+		if locked:
+			LockBadgeScript.attach(frame)
 		frame.add_child(_make_select_ring())
 		grid.add_child(frame)
 		_frames[id] = frame
@@ -115,6 +124,8 @@ func _build() -> void:
 
 
 func _on_icon_pressed(id: String) -> void:
+	if not MetaProgressScript.is_unlocked(MetaProgressScript.SPIRIT, id):
+		return ## kilitli: ipucu bedeli söyler (bkz. meta_progress.gd)
 	select(id)
 	picked.emit(id)
 

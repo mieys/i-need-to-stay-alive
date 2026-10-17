@@ -24,7 +24,7 @@ func test_pick_replaces_standart_and_only_upgrades_follow() -> void:
 	assert(ShieldEnchantDefs.owned_type() == "shield_kale", "Kale seçilince sahip olunan kalkan Kale olmalı")
 	var s: Dictionary = ShieldEnchantDefs.stats()
 	assert(is_equal_approx(float(s["power"]), 200.0) and is_equal_approx(float(s["absorption"]), 0.75), "Kale tabanı yanlış: %s" % str(s))
-	assert(is_equal_approx(float(s["regen"]), 7.0) and is_equal_approx(float(s["delay"]), 8.0), "Kale tabanı yanlış: %s" % str(s))
+	assert(is_equal_approx(float(s["regen"]), 7.0 * GameManager.SHIELD_REGEN_SPEED_MULT) and is_equal_approx(float(s["delay"]), 8.0), "Kale tabanı yanlış: %s" % str(s))
 	## İkinci bir kalkan efsunu seçilemez.
 	ShieldEnchantDefs.apply({"type": "shield_pick", "id": "shield_savas"})
 	assert(ShieldEnchantDefs.owned_type() == "shield_kale", "İkinci kalkan efsunu öncekinin yerine geçmemeli")
@@ -48,7 +48,7 @@ func test_upgrade_limits_and_totals() -> void:
 	var s: Dictionary = ShieldEnchantDefs.stats()
 	## 110 + (3+5+8)*50 = 910 kalkan; 9 + 3*4 = 21/sn; %55 + 5*%3 = %70; 6 - 8*0.5 = 2 sn
 	assert(is_equal_approx(float(s["power"]), 910.0), "Kalkan toplamı yanlış: %s" % str(s["power"]))
-	assert(is_equal_approx(float(s["regen"]), 21.0), "Yenilenme toplamı yanlış: %s" % str(s["regen"]))
+	assert(is_equal_approx(float(s["regen"]), 21.0 * GameManager.SHIELD_REGEN_SPEED_MULT), "Yenilenme toplamı yanlış: %s" % str(s["regen"]))
 	assert(is_equal_approx(float(s["absorption"]), 0.70), "Soğurma toplamı yanlış: %s" % str(s["absorption"]))
 	assert(is_equal_approx(float(s["delay"]), 2.0), "Bekleme toplamı yanlış: %s" % str(s["delay"]))
 	_reset_shield_state()
@@ -70,7 +70,7 @@ func test_cards_are_epic_and_described() -> void:
 	_reset_shield_state()
 	var out: Dictionary = {}
 	ShieldEnchantDefs.describe({"type": "shield_pick", "id": "shield_savas"}, out)
-	assert(str(out.get("title", "")) == "Savaş Kalkanı", "Kart başlığı: %s" % str(out.get("title")))
+	assert(str(out.get("title", "")) == "Savaş Mana Kalkanı", "Kart başlığı: %s" % str(out.get("title")))
 	## 2026-10-03 sade kart: başlangıç kartı sadece kalkanın nasıl çalıştığını yazar (stat karşılaştırması geliştirme kartında).
 	assert(str(out.get("body", "")) == str(ShieldEnchantDefs.TYPES["shield_savas"]["desc"]), "Kalkan seçme kartı çalışma biçimini göstermeli: %s" % str(out.get("body")))
 	var up_out: Dictionary = {}

@@ -1,6 +1,10 @@
 extends Control
 
-## Çok oyunculu KARAKTER SEÇİMİ (lobi akışının son adımı). 2026-10-11 lobi sistemi (kullanıcı onaylı prototip A): bağlantı /
+## Çok oyunculu KARAKTER SEÇİMİ. 2026-10-16 (kullanıcı: "oda kurulduktan sonra direk karakter seçim ekranına geçilsin ve o esnada
+## oyuncular bağlansın"): oda kurulunca/katılınca DOĞRUDAN burası açılır (oda lobisi aşaması yok). MASAÜSTÜ yerleşimi artık
+## lobby_select_desktop.gd ("SEÇİM D", koyu kit menu_dark_kit.gd) - bu dosya onu kurar, ağ olaylarını iletir. Aşağıdaki eski
+## yerleşim notu sadece TELEFON yerleşimi (_build_mobile) için geçerli.
+## (eski) 2026-10-11 lobi sistemi (kullanıcı onaylı prototip A): bağlantı /
 ## oda kurma / katılma artık oda listesinde (room_browser.gd), toplanma oda lobisinde (room_lobby.gd); burası sadece seçim:
 ##   sol  : oda adı + "x / y hazır" + odadaki oyuncular (yüz portresi + seçtiği silah/ruhani ikon + HAZIR/SEÇİYOR rozeti) +
 ##          sohbet + HAZIRIM / OYUNU BAŞLAT (host) / LOBİYE DÖN (host) / ODADAN ÇIK
@@ -22,14 +26,10 @@ const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const ChatScript: GDScript = preload("res://scripts/menu_lobby_chat.gd")
 const CharSelectScript: GDScript = preload("res://scripts/character_select.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const DesktopScript: GDScript = preload("res://scripts/lobby_select_desktop.gd")
+const HearthBg := preload("res://scripts/menu_hearth_bg.gd")
 
-## character_select.gd ile AYNI ızgara ölçüleri.
-const SCREEN := Vector2(1920, 1080)
-const EDGE := 16.0
-const GAP := 16.0
-const SIDE := 376.0
-const TOP := 108.0
-const BOTTOM := 16.0
 ## Telefon kart ızgarası: yan yana 3 (kullanıcı isteği 2026-10-03 "karakterler 3 sıralı olsun").
 const M_COLUMNS := 3
 const M_TOPBAR_FRAC := 0.11
@@ -43,13 +43,14 @@ var player_list_container: VBoxContainer
 var start_game_btn: Button
 var ready_btn: Button
 var close_room_btn: Button
-var back_to_room_btn: Button
+var _desk: Control = null ## masaüstü SEÇİM D ekranı (telefonda null)
 
 var roster: GridContainer
 var details: PanelContainer
 var showcase: PanelContainer
 
 var selected_char_id: int = 1
+var _viewing_locked: bool = false ## şu an kilitli bir karaktere bakılıyor (hazır/başlat kapalı)
 
 var _mobile: bool = false
 var _sz: Dictionary = {}
@@ -64,8 +65,9 @@ var _leaving: bool = false
 
 func _ready() -> void:
 	theme = MenuKit.theme()
-	MenuKit.add_background(self)
 	_mobile = MobileUIScript.enabled
+	## Arka plan ana menüyle aynı "Ocak Başı" sahnesi (2026-10-16); masaüstünde koyu kite uysun diye kısılır.
+	HearthBg.add_to(self, 0.0 if _mobile else HearthBg.DIM_DESKTOP)
 	_sz = LobbyUI.sizes(_mobile)
 	_fs_body = int(_sz["fs_body"])
 	_fs_small = int(_sz["fs_small"])
@@ -83,14 +85,15 @@ func _ready() -> void:
 	NetworkManager.lobby_phase_changed.connect(_on_phase_changed)
 	NetworkManager.connection_status_changed.connect(_on_status_changed)
 
-	selected_char_id = NetworkManager.local_char_id if Characters.DEFS.has(NetworkManager.local_char_id) else 1
+	selected_char_id = NetworkManager.local_char_id if Characters.DEFS.has(NetworkManager.local_char_id) \
+			and MetaProgressScript.is_unlocked(MetaProgressScript.CHAR, NetworkManager.local_char_id) else 1
 	_on_character_pressed(selected_char_id)
 	_update_lobby_ui()
 	## Yeniden başlatma onaylandıysa (bkz. network_manager.gd _return_to_lobby_for_restart) herkes
 	## buraya döner: karakter seçimi yeniden yapılır, hazır olunur, host oyunu başlatır.
 	if NetworkManager.restart_returned_to_lobby:
 		NetworkManager.restart_returned_to_lobby = false
-		status_label.text = "Yeniden başlatma onaylandı: karakterini yeniden seç ve hazır ol, host oyunu başlatsın."
+		_set_status("Yeniden başlatma onaylandı: karakterini yeniden seç ve hazır ol, host oyunu başlatsın.")
 
 	UISound.connect_all_buttons(self)
 
@@ -105,23 +108,14 @@ func _place(c: Control, pos: Vector2, sz: Vector2) -> void:
 
 
 func _build_desktop() -> void:
-	## NOT: her node ÖNCE ağaca eklenir, SONRA MenuKit.place ile offset olarak yerleştirilir (bkz. o fonksiyonun notu).
-	back_btn = MenuKit.make_button("< Lobiye Dön" if NetworkManager.is_host else "< Odadan Çık", "tan", MenuKit.FS_BODY, 56)
-	back_btn.pressed.connect(_on_back_pressed)
-	add_child(back_btn)
-	_place(back_btn, Vector2(EDGE, 24), Vector2(220, 56))
-
-	var banner := MenuKit.make_banner("Karakterini Seç")
-	add_child(banner)
-	var bs: Vector2 = banner.get_combined_minimum_size()
-	_place(banner, Vector2(roundf((SCREEN.x - bs.x) / 6.0) * 3.0, 18.0), bs)
-
-	var panel: PanelContainer = _build_lobby_panel()
-	_place(panel, Vector2(EDGE, TOP), Vector2(SIDE, SCREEN.y - TOP - BOTTOM))
-	_build_center()
-	_build_right_column()
-	var lock_x: float = EDGE + SIDE + GAP * 0.5
-	_build_lock(Rect2(lock_x, TOP, SCREEN.x - lock_x, SCREEN.y - TOP))
+	## Ekran lobby_select_desktop.gd'de kurulur (arka plan _ready'de, menu_hearth_bg.gd).
+	_desk = DesktopScript.new()
+	add_child(_desk)
+	_desk.call("build")
+	_desk.connect("character_picked", _on_character_pressed)
+	_desk.connect("start_pressed", _on_start_game_pressed)
+	_desk.connect("ready_pressed", _on_ready_pressed)
+	_desk.connect("leave_pressed", _on_close_room_pressed)
 
 
 ## ------------------------------------------------------------------ telefon
@@ -141,7 +135,7 @@ func _build_mobile() -> void:
 	var bar := MenuKit.make_panel("panel_tight")
 	add_child(bar)
 	_place(bar, Vector2(x0, y0), Vector2(w, topbar_h))
-	back_btn = MenuKit.make_button("< Lobi" if NetworkManager.is_host else "< Çık", "tan", 40, topbar_h - 24.0)
+	back_btn = MenuKit.make_button("< Kapat" if NetworkManager.is_host else "< Çık", "tan", 40, topbar_h - 24.0)
 	back_btn.pressed.connect(_on_back_pressed)
 	add_child(back_btn)
 	_place(back_btn, Vector2(x0 + 12.0, y0 + 12.0), Vector2(240.0, topbar_h - 24.0))
@@ -249,18 +243,10 @@ func _build_lobby_panel() -> PanelContainer:
 	v.add_child(ready_btn)
 	start_game_btn = MenuKit.make_button("OYUNU BAŞLAT", "sage", _fs_body, btn_h)
 	v.add_child(start_game_btn)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	v.add_child(row)
-	back_to_room_btn = MenuKit.make_button("LOBİYE DÖN", "tan", _fs_body, btn_h)
-	back_to_room_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(back_to_room_btn)
 	close_room_btn = MenuKit.make_button("ODAYI KAPAT" if NetworkManager.is_host else "ODADAN ÇIK", "rose", _fs_body, btn_h)
-	close_room_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(close_room_btn)
+	v.add_child(close_room_btn)
 	start_game_btn.pressed.connect(_on_start_game_pressed)
 	ready_btn.pressed.connect(_on_ready_pressed)
-	back_to_room_btn.pressed.connect(_on_back_to_room_pressed)
 	close_room_btn.pressed.connect(_on_close_room_pressed)
 	return panel
 
@@ -281,64 +267,21 @@ func _build_lock(r: Rect2) -> void:
 	lbl.offset_bottom = -24
 
 
-## ------------------------------------------------------------------ orta: kartlar + yetenek paneli
-func _build_center() -> void:
-	var center_x: float = EDGE + SIDE + GAP
-	var center_w: float = SCREEN.x - 2.0 * center_x
-	roster = RosterScript.new()
-	add_child(roster)
-	roster.build(RosterScript.COLUMNS, 1.0, true)
-	var grid_size: Vector2 = RosterScript.grid_size(Characters.DEFS.size())
-	_place(roster, Vector2(center_x + floorf((center_w - grid_size.x) * 0.5), TOP), grid_size)
-	roster.character_picked.connect(_on_character_pressed)
-
-	details = DetailsScript.new()
-	add_child(details)
-	var details_y: float = TOP + grid_size.y + GAP
-	## Başlangıç silahı (menu_weapon_picker.gd): yetenek panelinin sağında; "Değiştir" -> 15 silahın açılır ızgarası.
-	var details_h: float = SCREEN.y - BOTTOM - details_y
-	var picker_w: float = 376.0
-	_place(details, Vector2(center_x, details_y), Vector2(center_w - picker_w - GAP, details_h))
-	var weapon_picker: PanelContainer = WeaponPickerScript.new()
-	add_child(weapon_picker)
-	weapon_picker.setup(false)
-	weapon_picker.picked.connect(func(_key: String) -> void: NetworkManager.update_local_loadout())
-	_place(weapon_picker, Vector2(center_x + center_w - picker_w, details_y), Vector2(picker_w, details_h))
-
-
-## ------------------------------------------------------------------ sağ: vitrin + ruhani yetenek
-func _build_right_column() -> void:
-	## Elle yerleşim (2026-10-12, evcil hayvan eklenince): VBox'ta ruhani yetenek paneli doğal boyuna (~560) şişip hayvan seçiciyi ekrandan
-	## itiyordu. Vitrin üstte, hayvan seçici altta sabit; ruhani yetenek ikisinin arasındaki boşluğa sığar (character_select.gd ile aynı desen).
-	var col_x: float = SCREEN.x - EDGE - SIDE
-	showcase = ShowcaseScript.new()
-	add_child(showcase)
-	showcase.build(false)
-	var showcase_h: float = showcase.get_combined_minimum_size().y
-	_place(showcase, Vector2(col_x, TOP), Vector2(SIDE, showcase_h))
-	var pet_h: float = PetPickerScript.COMPACT_HEIGHT
-	var bottom_y: float = SCREEN.y - BOTTOM
-	var spirit_y: float = TOP + showcase_h + 12.0
-	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
-	add_child(spirit_picker)
-	spirit_picker.setup(3)
-	spirit_picker.picked.connect(func(_id: String) -> void: NetworkManager.update_local_loadout())
-	_place(spirit_picker, Vector2(col_x, spirit_y), Vector2(SIDE, bottom_y - pet_h - 12.0 - spirit_y))
-	## Evcil hayvan (bkz. menu_pet_picker.gd).
-	var pet_picker: PanelContainer = PetPickerScript.new()
-	add_child(pet_picker)
-	pet_picker.setup(false, true)
-	_place(pet_picker, Vector2(col_x, bottom_y - pet_h), Vector2(SIDE, pet_h))
-
-
 func _on_character_pressed(char_id: int) -> void:
 	selected_char_id = char_id
-	roster.select(char_id)
+	## Kilitli karakter (Ruh Mağazası, bkz. meta_progress.gd) incelenebilir ama SEÇİLMEZ: ağa gönderilmez, hazır/başlat düğmeleri kapanır.
+	_viewing_locked = not MetaProgressScript.is_unlocked(MetaProgressScript.CHAR, char_id)
+	if roster:
+		roster.select(char_id)
 	if details:
 		details.show_character(char_id)
 	if showcase:
 		showcase.show_character(char_id)
-	NetworkManager.update_local_character(char_id)
+	if _desk:
+		_desk.call("show_character", char_id, _viewing_locked)
+	if not _viewing_locked:
+		NetworkManager.update_local_character(char_id)
+	_update_lobby_ui()
 
 
 func _local_ready() -> bool:
@@ -354,10 +297,6 @@ func _on_ready_pressed() -> void:
 	NetworkManager.set_local_ready(not _local_ready())
 
 
-func _on_back_to_room_pressed() -> void:
-	NetworkManager.set_lobby_phase(NetworkManager.PHASE_ROOM)
-
-
 func _on_close_room_pressed() -> void:
 	_leaving = true
 	if NetworkManager.is_host:
@@ -369,23 +308,30 @@ func _on_close_room_pressed() -> void:
 
 
 func _on_back_pressed() -> void:
-	if NetworkManager.is_host:
-		_on_back_to_room_pressed()
-	else:
-		_on_close_room_pressed()
+	_on_close_room_pressed() ## oda lobisi yok (2026-10-16): geri = odayı kapat / odadan çık
 
 
+## Eski sürümlü bir host oda lobisine dönerse (PHASE_ROOM) eski ekrana geçilir; bu sürüm bu aşamaya hiç geçmez.
 func _on_phase_changed(phase: String) -> void:
 	if phase == NetworkManager.PHASE_ROOM and is_inside_tree():
 		get_tree().change_scene_to_file.call_deferred("res://scenes/room_lobby.tscn")
 
 
 func _on_status_changed(status_text: String) -> void:
-	if status_label:
-		status_label.text = status_text
+	_set_status(status_text)
+
+
+func _set_status(text: String) -> void:
+	if _desk:
+		_desk.call("set_status", text)
+	elif status_label:
+		status_label.text = text
 
 
 func _update_lobby_ui() -> void:
+	if _desk:
+		_desk.call("refresh")
+		return
 	if player_list_container == null or not NetworkManager.is_multiplayer_active:
 		return
 	var lp: Dictionary = NetworkManager.lobby_players
@@ -396,8 +342,7 @@ func _update_lobby_ui() -> void:
 	room_info_label.text = "%s   (%d / %d hazır)" % [NetworkManager.room_name, ready_count, lp.size()]
 	var host: bool = NetworkManager.is_host
 	start_game_btn.visible = host
-	start_game_btn.disabled = not NetworkManager.all_players_ready()
-	back_to_room_btn.visible = host
+	start_game_btn.disabled = not NetworkManager.all_players_ready() or _viewing_locked
 	ready_btn.visible = not host
 	var local_ready: bool = _local_ready()
 	## Oda zaten oyundaysa (geç katılım) hazır olmak oyuna girmek demek - düğme bunu söylesin.
@@ -410,6 +355,9 @@ func _update_lobby_ui() -> void:
 	else:
 		ready_btn.disabled = false
 		ready_btn.text = "HAZIR DEĞİLİM" if local_ready else "HAZIRIM"
+		if _viewing_locked and not local_ready:
+			ready_btn.disabled = true
+			ready_btn.text = "KİLİTLİ KARAKTER"
 	if _lock:
 		_lock.visible = local_ready and not host
 

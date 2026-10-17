@@ -354,7 +354,9 @@ func test_main_menu_settings_has_the_shake_slider_and_shows_off_at_zero() -> voi
 	add_child(menu)
 	_made.append(menu)
 	await get_tree().process_frame
-	var slider: HSlider = menu.find_child("ShakeSlider", true, false)
+	menu.call("_on_settings_pressed") ## ortak ayarlar ekranı (settings_screen.gd, madde 234) açılınca kurulur
+	await get_tree().process_frame
+	var slider: Range = menu.find_child("ShakeSlider", true, false)
 	assert(slider != null, "ana menü ayarlarında 'Ekran Sarsıntısı' kaydırıcısı olmalı")
 	assert(slider.min_value == 0.0 and slider.max_value == 100.0, "0-100 aralığı (0 = kapalı)")
 	assert(slider.value == 0.0, "kayıtlı değer kaydırıcıya yansımalı")
@@ -374,9 +376,11 @@ func test_pause_menu_settings_has_the_shake_slider() -> void:
 	add_child(menu)
 	_made.append(menu)
 	await get_tree().process_frame
-	var slider: HSlider = menu.find_child("ShakeSlider", true, false)
+	menu.call("_on_settings_pressed")
+	await get_tree().process_frame
+	var slider: Range = menu.find_child("ShakeSlider", true, false)
 	assert(slider != null and is_equal_approx(slider.value, 40.0), "duraklatma menüsü ayarlarında kaydırıcı ve değeri")
 	var value_lbl: Label = menu.find_child("ShakeValue", true, false)
-	assert(value_lbl != null and value_lbl.text == "40%", "değer etiketi: %s" % (value_lbl.text if value_lbl else "yok"))
+	assert(value_lbl != null and value_lbl.text == "%40", "değer etiketi: %s" % (value_lbl.text if value_lbl else "yok"))
 	UISound.camera_shake_percent = original
 	_cleanup()

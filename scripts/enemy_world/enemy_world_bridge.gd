@@ -209,6 +209,12 @@ func _physics_process(delta: float) -> void:
 	last_bridge_ms = float(t2 - t0) / 1000.0
 
 
+## Izgara içeriği değişti (maden kırıldı/doğdu, bkz. mine_world.gd EnemyPathing.sync_cells): C++ tarafına yeniden yaz.
+func reload_grid() -> void:
+	_grid_ready = false
+	_refresh_grid()
+
+
 ## Orman ızgarası: enemy_pathing.gd'nin kurduğu bayt dizisi (aynı katman, aynı kenar payı). EnemyPathing kapalı olsa
 ## bile (testler) duvarlar geçerli kalmalı - enemy.gd _block_movement_into_terrain da yol bulmadan bağımsız.
 func _refresh_grid() -> void:

@@ -152,3 +152,138 @@ func test_death_downs_and_acquisition_recorded() -> void:
 	GameManager.owned_weapons = old_w
 	assert(got.size() == 3 and str(got[2][0]) == "dagger", "iki yay + bir hançer edinilmiş görünmeli: %s" % str(got))
 	_end()
+
+
+## 2026-10-14: host menüye dönerken istemci kayıtlarını toplama (network_manager.gd collect_client_balance_records) - tek süreçte sadece
+## korumalar sınanabilir (gerçek peer yok): bağlantı/oyun yokken hemen döner, bekleme listesini bırakmaz, tekrar girişe izin vermez.
+func test_collect_client_balance_records_returns_at_once_without_peers() -> void:
+	var nm: Node = get_node("/root/NetworkManager")
+	var t0: int = Time.get_ticks_msec()
+	await nm.collect_client_balance_records()
+	assert(Time.get_ticks_msec() - t0 < 200, "peer yokken beklememeli")
+	assert((nm._balance_ack_pending as Dictionary).is_empty(), "bekleme listesi boş")
+	assert(not nm._balance_collecting, "toplama bayrağı kapalı")
+	assert(nm.BALANCE_COLLECT_TIMEOUT_SEC >= 1.0 and nm.BALANCE_COLLECT_TIMEOUT_SEC <= 4.0, "bekleme sınırı makul (oda kapanışını uzatmasın)")
+
+
+## 2026-10-15 (madde 168): öldürme/asist altını + verilen destek sayısı kayda girer (alıcı makinede KillGold.show_at çağırır).
+func test_gold_and_assist_recorded() -> void:
+	_begin()
+	BalanceLogScript.on_kill_gold(5, 0)
+	BalanceLogScript.on_kill_gold(3, 0)
+	BalanceLogScript.on_kill_gold(4, 1) ## hasar asisti
+	BalanceLogScript.on_kill_gold(2, 2) ## destek asisti
+	BalanceLogScript.on_kill_gold(2, 2)
+	BalanceLogScript.on_kill_gold(1, 3) ## ikisi
+	BalanceLogScript.on_kill_gold(0, 1) ## 0 altın sayılmaz
+	BalanceLogScript.note_support_sent()
+	BalanceLogScript.note_support_sent()
+	var rec: Dictionary = BalanceLogScript.build_record(null, _summary(), "end")
+	assert(rec["gold_kill"] == [2, 8], "öldürme altını [adet, altın]: %s" % str(rec["gold_kill"]))
+	var ga: Dictionary = rec["gold_assist"]
+	assert(ga["dmg"] == [1, 4] and ga["sup"] == [2, 4] and ga["both"] == [1, 1], "asist türleri: %s" % str(ga))
+	assert(int(rec["sup_sent"]) == 2, "destek sayısı")
+	BalanceLogScript.reset()
+	var rec2: Dictionary = BalanceLogScript.build_record(null, _summary(), "end")
+	assert(rec2["gold_kill"] == [0, 0] and (rec2["gold_assist"] as Dictionary).is_empty() and int(rec2["sup_sent"]) == 0, "reset sıfırlar")
+	_end()
+
+
+## 2026-10-17 (madde 223): kayıt kapalıyken NEDEN kapalı olduğu okunur (main.gd / network_manager.gd net_log satırları bunu yazar) ve host
+## reddettiği istemci kaydının nedenini bırakır. Debug bayrağı assert'ten ÖNCE geri alınır (assert yarıda keserse sonraki testlere sızmasın).
+func test_disabled_reason_and_ingest_reject_reason() -> void:
+	_begin()
+	var open_reason: String = BalanceLogScript.disabled_reason()
+	var json: String = JSON.stringify(BalanceLogScript.build_record(null, _summary(), "end"))
+	var accepted: bool = BalanceLogScript.ingest_remote(json, 7)
+	var accepted_reason: String = BalanceLogScript.last_ingest_reason
+	var bad_json: bool = BalanceLogScript.ingest_remote("bu json degil", 7)
+	var json_reason: String = BalanceLogScript.last_ingest_reason
+	var bad_schema: bool = BalanceLogScript.ingest_remote(JSON.stringify({"schema": 99, "run_id": "x"}), 7)
+	var schema_reason: String = BalanceLogScript.last_ingest_reason
+	var too_big: bool = BalanceLogScript.ingest_remote("x".repeat(BalanceLogScript.MAX_RECORD_CHARS + 1), 7)
+	var big_reason: String = BalanceLogScript.last_ingest_reason
+	GameManager.debug_mode_unlocked = true
+	var debug_reason: String = BalanceLogScript.disabled_reason()
+	var debug_write: Dictionary = BalanceLogScript.write_run(null, _summary(), "end")
+	var debug_ingest: bool = BalanceLogScript.ingest_remote(json, 7)
+	var debug_ingest_reason: String = BalanceLogScript.last_ingest_reason
+	GameManager.debug_mode_unlocked = false
+	OS.set_environment(BalanceLogScript.ENV_PATH, "")
+	var headless_reason: String = BalanceLogScript.disabled_reason()
+	var lines: int = _lines().size()
+	assert(open_reason == "", "yol verilmiş + debug kapalı: kayıt açık (%s)" % open_reason)
+	assert(accepted and accepted_reason == "", "geçerli kayıt kabul edilir, neden boş")
+	assert(not bad_json and "JSON" in json_reason, "bozuk kayıt: %s" % json_reason)
+	assert(not bad_schema and "şema" in schema_reason, "yanlış şema: %s" % schema_reason)
+	assert(not too_big and "büyük" in big_reason, "aşırı büyük: %s" % big_reason)
+	assert("debug" in debug_reason, "debug açıkken neden debug olmalı: %s" % debug_reason)
+	assert(debug_write.is_empty() and not debug_ingest, "debug açıkken ne yerel kayıt yazılır ne istemci kaydı kabul edilir")
+	assert("debug" in debug_ingest_reason, "host kaydı debug yüzünden reddetti: %s" % debug_ingest_reason)
+	assert("headless" in headless_reason, "headless + yol yok: %s" % headless_reason)
+	assert(lines == 1, "yalnız ilk geçerli kayıt dosyaya yazıldı (%d satır)" % lines)
+	_end()
+
+
+## main.gd kayıt günlüğü yardımcıları: neden metni, atlama satırının Main başına bir kez yazılması, headless'ta gerçek net_log'a YAZMAMA.
+func test_main_record_log_helpers() -> void:
+	var m: Node = (load("res://scripts/main.gd") as GDScript).new()
+	var headless_reason: String = m._record_skip_reason()
+	GameManager.debug_mode_unlocked = true
+	var debug_reason: String = m._record_skip_reason()
+	GameManager.debug_mode_unlocked = false
+	m._record_log_once("a")
+	m._record_log_once("a")
+	m._record_log_once("b")
+	var seen: int = (m._record_log_seen as Dictionary).size()
+	var marker: String = "HEADLESS_MARKER_%d" % Time.get_ticks_usec()
+	m._record_log(marker)
+	var leaked: bool = false
+	if FileAccess.file_exists("user://net_log.txt"):
+		leaked = FileAccess.get_file_as_string("user://net_log.txt").contains(marker)
+	m.free()
+	assert(headless_reason == "headless", "testte neden headless: %s" % headless_reason)
+	assert("debug" in debug_reason, "debug açıkken neden debug: %s" % debug_reason)
+	assert(seen == 2, "aynı atlama satırı bir kez (%d farklı satır)" % seen)
+	assert(not leaked, "headless koşu gerçek net_log.txt'ye yazmamalı")
+
+
+## 2026-10-17 (madde 223): host menüye çıkarken KENDİ kaydı odayı kapatmadan ÖNCE yazılır (Main'in flush_run_record_before_leave'i oda hâlâ
+## açıkken çağrılır) - eskiden close_room() sonrası _exit_tree'de alındığı için host'un kaydı hep solo=True, team=1 çıkıyordu. Bu test dosyası
+## sahte "Main" olur (aşağıdaki flush_run_record_before_leave).
+var _flush_calls: int = 0
+var _flush_mp_active: bool = false
+
+
+func flush_run_record_before_leave() -> bool:
+	_flush_calls += 1
+	_flush_mp_active = NetworkManager.is_multiplayer_active
+	return false
+
+
+func test_host_flushes_own_record_while_room_still_open() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	var old_host: bool = NetworkManager.is_host
+	var old_active: bool = NetworkManager.is_multiplayer_active
+	_flush_calls = 0
+	NetworkManager.is_host = true
+	NetworkManager.is_multiplayer_active = true
+	await NetworkManager.flush_balance_before_leave()
+	var host_calls: int = _flush_calls
+	var active_at_call: bool = _flush_mp_active
+	NetworkManager.is_multiplayer_active = false ## host ama çok oyunculu değil: dokunmaz (tek oyunculuda _exit_tree zaten doğru)
+	await NetworkManager.flush_balance_before_leave()
+	var inactive_calls: int = _flush_calls
+	NetworkManager.is_host = false ## istemci: bu yol host'un kaydını yazmaz (kendi kaydı flush_run_record_before_leave ile peer varken gider)
+	NetworkManager.is_multiplayer_active = true
+	await NetworkManager.flush_balance_before_leave()
+	var client_calls: int = _flush_calls
+	NetworkManager.is_host = old_host
+	NetworkManager.is_multiplayer_active = old_active
+	if prev_scene != null and is_instance_valid(prev_scene) and prev_scene.get_parent() == get_tree().root:
+		get_tree().current_scene = prev_scene
+	assert(host_calls == 1, "host menüye çıkarken kendi kaydını bir kez yazmalı (%d)" % host_calls)
+	assert(active_at_call, "kayıt oda HÂLÂ açıkken (is_multiplayer_active true) alınmalı")
+	assert(inactive_calls == 1, "çok oyunculu değilse host yolu dokunmaz (%d)" % inactive_calls)
+	assert(client_calls == 1, "istemci bu yoldan host kaydı yazmaz (%d)" % client_calls)

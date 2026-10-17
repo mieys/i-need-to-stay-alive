@@ -5,6 +5,7 @@ extends Node2D
 ## Orman duvarına, Şovalye kalkanına, Talon kalkan çemberine ve satıcı bölgesine çarpınca söner.
 ## data: dir (Vector2), speed (px/sn), life (sn), radius (isabet yarıçapı), look ("pumpkin": turuncu büyü).
 
+const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
 const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
 const FxUtil := preload("res://scripts/boss_fx_util.gd")
 const FLY_PATH := "res://assets/fx/pumpkin/spell_fly.png"
@@ -56,8 +57,7 @@ func _physics_process(delta: float) -> void:
 		return
 	for p in AbilitiesScript.damageable_players(get_tree()):
 		var pn := p as Node2D
-		if "paladin_zone_active" in pn and pn.get("paladin_zone_active") == true \
-				and global_position.distance_to(pn.global_position) <= float(pn.get("paladin_zone_radius")):
+		if PaladinDome.node_contains(pn, global_position):
 			_burst()
 			return
 		if pn.has_method("get_talon_ward_radius"):

@@ -475,7 +475,7 @@ func _process(_delta: float) -> void:
 		if is_instance_valid(_shop_screen):
 			_hide_prompt()
 		elif _near_anvil() and _player.get("is_dead") != true:
-			_show_prompt("Silah ve kalkan almak için %s tuşuna bas" % key_label)
+			_show_prompt("Silah ve mana kalkanı almak için %s tuşuna bas" % key_label)
 			if interact:
 				_open_shop()
 		else:

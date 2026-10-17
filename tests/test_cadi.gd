@@ -112,7 +112,7 @@ func test_definitions_and_evolution_cards() -> void:
 
 func test_sheets_match_the_contract() -> void:
 	var table: Dictionary = {
-		"potion": ["loop"], "stream": ["loop"], "smoke": ["intro", "loop", "outro"], "poof": ["default"], "spark": ["gold", "lilac"],
+		"potion": ["loop", "down"], "stream": ["loop", "down"], "smoke": ["intro", "loop", "outro", "intro_v", "loop_v", "outro_v"], "poof": ["default"], "spark": ["gold", "lilac"],
 		"broom_vert": ["down", "up"], "boom": ["default"], "mad_status": ["loop"],
 		"zone_mad": ["intro", "loop", "outro"], "zone_ice": ["intro", "loop", "outro"], "zone_heal": ["intro", "loop", "outro"], "zone_fear": ["intro", "loop", "outro"],
 	}
@@ -136,11 +136,30 @@ func test_sheets_match_the_contract() -> void:
 
 func test_shared_formulas() -> void:
 	assert(is_equal_approx(CM.WORLD_TEXEL, 2.2368375 * EntityScale.SIZE * 0.5), "efekt pikseli = karakter pikseli")
-	assert(CM.potion_side("right", 1) == -1 and CM.potion_side("left", -1) == 1 and CM.potion_side("up", 1) == 1 and CM.potion_side("down", -1) == -1, "şişe bakılan yönün tersinde; dikeyde son yanında")
-	var left: Vector2 = CM.smoke_land_offset(-1)
-	var right: Vector2 = CM.smoke_land_offset(1)
-	assert(left.x < 0.0 and is_equal_approx(left.x, -right.x) and is_equal_approx(left.y, right.y), "dumanın indiği nokta iki yanda simetrik")
-	assert(CM.potion_body_offset(-1).x < 0.0 and CM.potion_body_offset(1).x > 0.0, "şişe gövdesi yanına göre")
+	## Şişe ve dumanın indiği nokta HER yönde cadının tam arkasında (ayağa göre: sağa bakarken solda, yukarı bakarken altta...).
+	var feet: Vector2 = CM.FEET_LOCAL * 0.5
+	var land_r: Vector2 = CM.smoke_land_offset("right") - feet
+	var land_l: Vector2 = CM.smoke_land_offset("left") - feet
+	assert(land_r.x < 0.0 and is_equal_approx(land_r.x, -land_l.x) and is_equal_approx(land_r.y, land_l.y), "dumanın indiği nokta iki yanda simetrik")
+	assert(absf(land_r.x) < CM.SMOKE_RX and absf(land_r.y) < 2.0, "yanda duman topuğun hemen arkasına iner (cadı bulutun izinde): %s" % land_r)
+	var land_u: Vector2 = CM.smoke_land_offset("up") - feet
+	var land_d: Vector2 = CM.smoke_land_offset("down") - feet
+	assert(is_zero_approx(land_u.x) and land_u.y > 0.0 and is_zero_approx(land_d.x) and land_d.y < 0.0, "yukarı bakarken altına, aşağı bakarken üstüne iner: %s %s" % [land_u, land_d])
+	assert(CM.potion_body_offset("right").x < 0.0 and CM.potion_body_offset("left").x > 0.0, "şişe gövdesi yanda bakılan yönün tersinde")
+	assert(is_zero_approx(CM.potion_body_offset("up").x) and is_zero_approx(CM.potion_body_offset("down").x), "dikeyde şişe yanda DEĞİL, tam arkada")
+	## Süpürgedeyken şişe süpürgenin ARKASINDA: yolcu başına sap uzar, şişe kayar; duman yine yere iner.
+	for f: String in ["left", "right", "up", "down"]:
+		var d0: Vector2 = CM.potion_body_art(f, 0)
+		var d3: Vector2 = CM.potion_body_art(f, 3)
+		assert(not d0.is_equal_approx(CM.potion_body_art(f)), "süpürgede şişe yeri değişir: %s" % f)
+		assert(is_equal_approx((d3 - d0).length(), 3.0 * (CM.SEAT_ART if f == "left" or f == "right" else CM.SEAT_VERT_ART)), "yolcu başına sap boyu kadar kayar: %s" % f)
+		assert(is_equal_approx(CM.smoke_land_offset(f, 0).y - CM.smoke_land_offset(f).y, 0.0), "duman süpürgedeyken de yere iner: %s" % f)
+	assert(CM.potion_body_art("right", 2).x < CM.potion_body_art("right", 0).x and CM.potion_body_art("left", 2).x > CM.potion_body_art("left", 0).x, "yolcu arttıkça şişe arkaya kayar")
+	for f: String in ["left", "right", "up"]:
+		assert(is_equal_approx(CM.potion_drop_art(f).y, 26.0), "şişe inişin 26 px üstünde süzülür: %s" % f)
+	assert(CM.smoke_is_vertical("up") and CM.smoke_is_vertical("down") and not CM.smoke_is_vertical("left") and not CM.smoke_is_vertical("right"), "yukarı/aşağı yürürken dikey bulut")
+	assert(CM.SMOKE_V_RX < CM.SMOKE_RX and CM.SMOKE_V_RY > CM.SMOKE_RY and CM.SMOKE_V_RY * 2.0 > 82.0 * CM.SMOKE_DROP_INTERVAL, "dikey bulut dar + derin: izler yürüme yönünde üst üste biner")
+	assert(absf(CM.SMOKE_V_RX * CM.SMOKE_V_RY - CM.SMOKE_RX * CM.SMOKE_RY) < 0.05 * CM.SMOKE_RX * CM.SMOKE_RY, "dikey bulutun alanı yatayla aynı (%5 içinde)")
 	assert(CM.seat_offset(0, "left") == Vector2.ZERO, "cadı koltuk 0")
 	assert(CM.seat_offset(2, "left").x > 0.0 and CM.seat_offset(2, "right").x < 0.0, "yan görünümde yolcular cadının ARKASINDA")
 	assert(CM.seat_offset(1, "down").y < 0.0 and CM.seat_offset(1, "up").y > 0.0, "aşağı/yukarı bakarken yolcular derinlikte arkada")
@@ -178,13 +197,15 @@ func test_passive_gives_luck_per_missing_five_percent() -> void:
 
 func test_q_toggles_drops_smoke_and_pays_per_second() -> void:
 	var player: Node = _make_player()
+	player.facing = "right"
 	player.skill_state = "ready"
 	var shield0: float = player.item_shield_hp
 	player._cadi_toggle_q()
 	assert(player._cadi_q_active and player.skill_state == "active", "Q açıldı")
 	var cost: float = player._cadi_q_cost()
 	assert(is_equal_approx(shield0 - player.item_shield_hp, cost), "açılışta ilk saniyenin bedeli")
-	assert(is_equal_approx(cost, (1000.0 * player.SKILL2_SHIELD_COST_PERCENT_OF_MAX + player.SKILL2_SHIELD_COST_FLAT) * 0.5), "bedel = temel yetenek bedelinin yarısı: %s" % cost)
+	assert(player.item_shield_ability_slow_timer == 0.0, "Q kalkan yenilenmesini yavaşlatmaz (diğer Q'lar gibi)")
+	assert(is_equal_approx(cost, 1000.0 * CM.Q_COST_PERCENT_OF_MAX + CM.Q_COST_FLAT), "bedel = azami kalkanın %%0,5'i + 5: %s" % cost)
 	player._cadi_toggle_q()
 	assert(player._cadi_q_active, "açıldıktan sonraki 1 sn'de basış kapatmaz (spam koruması)")
 	player._process_cadi_visuals(0.016)
@@ -192,14 +213,35 @@ func test_q_toggles_drops_smoke_and_pays_per_second() -> void:
 	player._process_cadi_q(0.05)
 	assert(_group_count("cadi_smokes") == 1, "ilk bulut hemen düşer: %d" % _group_count("cadi_smokes"))
 	var smoke: Node2D = get_tree().get_nodes_in_group("cadi_smokes")[0]
-	assert(smoke.global_position.distance_to(player.global_position + CM.smoke_land_offset(player._cadi_potion_side)) < 0.5, "bulut dumanın indiği noktada doğar")
-	## Yerinde dururken bulut yığılmaz: bir sonraki SMOKE_IDLE_INTERVAL sonra.
+	assert(smoke.global_position.distance_to(player.global_position + CM.smoke_land_offset(player.facing)) < 0.5, "bulut dumanın indiği noktada doğar")
+	## Katman: yaratıkların (z 0) üstünde, oyuncunun (aynı z, ağaç sırasında sonra) altında.
+	smoke._place_under_players()
+	assert(smoke.z_index == CM.SMOKE_Z and CM.SMOKE_Z == 1, "bulut z 1: yaratıkların üstünde (main.tscn'de Player da z 1)")
+	assert(smoke.get_parent() != player.get_parent() or smoke.get_index() < player.get_index(), "bulut ağaçta oyuncudan önce: oyuncu dumanın üstünde çizilir")
+	## Yerinde dururken bulut yığılmaz: bir sonraki SMOKE_IDLE_INTERVAL sonra...
 	player._process_cadi_q(CM.SMOKE_DROP_INTERVAL + 0.05)
 	assert(_group_count("cadi_smokes") == 1, "dururken sık bulut yok")
+	## ...ve o zaman da yeni bulut açılmaz, aynı bulutun ömrü baştan başlar (%50 saydam bulutlar üst üste yığılmasın).
+	smoke._t = 3.0
+	player._process_cadi_q(CM.SMOKE_IDLE_INTERVAL)
+	assert(_group_count("cadi_smokes") == 1 and smoke._t < 0.5, "dururken aynı bulut yenilenir: %d bulut, t=%s" % [_group_count("cadi_smokes"), smoke._t])
 	## Yürürken SMOKE_DROP_INTERVAL'de bir.
 	player.global_position.x += 60.0
 	player._process_cadi_q(CM.SMOKE_DROP_INTERVAL + 0.05)
 	assert(_group_count("cadi_smokes") == 2, "yürürken yeni bulut: %d" % _group_count("cadi_smokes"))
+	assert(not smoke.vert and smoke.contains(smoke.global_position + Vector2(CM.SMOKE_RX - 1.0, 0)), "yatay yürürken geniş bulut")
+	## Yukarı/aşağı yürürken DİKEY bulut: dar + derin iz, kendi klipleri.
+	player.facing = "up"
+	player.global_position.y -= 60.0
+	player._process_cadi_q(CM.SMOKE_DROP_INTERVAL + 0.05)
+	assert(_group_count("cadi_smokes") == 3, "yukarı yürürken yeni bulut: %d" % _group_count("cadi_smokes"))
+	var vsmoke: Node2D = null
+	for n: Node in get_tree().get_nodes_in_group("cadi_smokes"):
+		if n.vert:
+			vsmoke = n
+	assert(vsmoke != null and vsmoke._sprite.animation == &"intro_v", "dikey bulut kendi klibiyle açılır")
+	assert(vsmoke.contains(vsmoke.global_position + Vector2(0, CM.SMOKE_V_RY - 1.0)) and not vsmoke.contains(vsmoke.global_position + Vector2(CM.SMOKE_V_RX + 1.0, 0)), "dikey iz dar + derin")
+	player.facing = "down"
 	## Saniyelik bedel.
 	var before: float = player.item_shield_hp
 	player._process_cadi_q(1.0)
@@ -217,9 +259,10 @@ func test_q_toggles_drops_smoke_and_pays_per_second() -> void:
 func test_smoke_damages_once_per_second_regardless_of_overlap() -> void:
 	var player: Node = _make_player()
 	var pos: Vector2 = player.global_position + Vector2(300, 0)
-	## Aynı yerde üç bulut: yaratık yine saniyede BİR hasar alır.
-	for _i in range(3):
-		CM.spawn_smoke(self, pos, true, {})
+	## Üst üste binen üç bulut (aynı noktadakiler tek buluta birleşir, o yüzden SMOKE_MIN_STEP'ten uzak): yaratık yine saniyede BİR hasar alır.
+	for i in range(3):
+		CM.spawn_smoke(self, pos + Vector2((i - 1) * (CM.SMOKE_MIN_STEP + 2.0), 0), true, {})
+	assert(_group_count("cadi_smokes") == 3, "üç ayrı bulut")
 	var inside: Node2D = _enemy(pos + Vector2(10, 4))
 	var outside: Node2D = _enemy(pos + Vector2(0, 90))
 	player._cadi_smoke_scan = 0.0
@@ -253,7 +296,7 @@ func test_q_evolutions() -> void:
 	player.apply_skill_evolution("cadi_q4", true)
 	player._cadi_drop_smoke(player.global_position + Vector2(200, 0))
 	var smoke: Node2D = get_tree().get_nodes_in_group("cadi_smokes")[0]
-	assert(is_equal_approx(float(smoke.life), CM.SMOKE_LIFE + 1.5) and is_equal_approx(float(smoke.size_mult), 1.3), "Kalıcı Duman +1,5 sn, Yoğun Duman +%30")
+	assert(is_equal_approx(float(smoke.life), CM.SMOKE_LIFE + 3.0) and is_equal_approx(float(smoke.size_mult), 1.3), "Kalıcı Duman +3 sn, Yoğun Duman +%30")
 	## Büyük bulut daha geniş alanı kapsar.
 	var edge: Vector2 = smoke.global_position + Vector2(CM.SMOKE_RX * 1.2, 0)
 	assert(smoke.contains(edge), "büyüyen bulutun izi de büyür")
@@ -345,7 +388,21 @@ func test_passenger_seats_are_the_same_on_every_client() -> void:
 	assert(player.global_position.distance_to(other.global_position) > 5.0, "iki yolcu aynı koltukta değil")
 	## İlk 1 sn hareket indirmez; sonra indirir.
 	assert(player._cadi_passenger_follow(Vector2.RIGHT, 0.2), "ilk 1 sn inilemez")
-	assert(not player._cadi_passenger_follow(Vector2.RIGHT, 1.0) and player.cadi_ride_host_peer == 0, "1 sn sonra hareket indirir")
+	## Kilit bitince bile kısa dokunuş (0,5 sn'den az) indirmez; kesintisiz 0,5 sn basılı tutmak indirir.
+	assert(player._cadi_passenger_follow(Vector2.ZERO, 0.9), "kilit bitti, girdi yok")
+	assert(player._cadi_passenger_follow(Vector2.RIGHT, 0.3), "0,3 sn dokunuş indirmez")
+	assert(player._cadi_passenger_follow(Vector2.ZERO, 0.1), "girdi bırakılınca sayaç sıfırlanır")
+	assert(player._cadi_passenger_follow(Vector2.RIGHT, 0.3), "ikinci kısa dokunuş da indirmez")
+	assert(not player._cadi_passenger_follow(Vector2.RIGHT, 0.3) and player.cadi_ride_host_peer == 0, "0,5 sn kesintisiz basılı tutunca iner")
+	assert(is_zero_approx(player._cadi_autorun_left), "basılı girdiyle inince otomatik koşu yok")
+	## Cadı süpürgeden inince (girdi yok) yolcu cadının baktığı yöne otomatik koşarak başlar.
+	player._cadi_remount_lock = 0.0
+	player.global_position = witch.global_position
+	assert(player._cadi_passenger_follow(Vector2.ZERO, 0.016), "yeniden bindi (otomatik koşu sınaması)")
+	witch._apply_cadi_net_state([0, 0], 0)
+	assert(not player._cadi_passenger_follow(Vector2.ZERO, 0.016) and player._cadi_autorun_left > 0.0 and player._cadi_autorun_dir.length() > 0.9, "süpürge bitince otomatik koşu başlar")
+	witch._apply_cadi_net_state([0, 1], 0)
+	player._cadi_autorun_left = 0.0
 	## İner inmez yeniden binmez (kilit).
 	assert(not player._cadi_passenger_follow(Vector2.ZERO, 0.1), "inince hemen yeniden binmez")
 	## Cadı süpürgeden inince yolcu da iner.
@@ -354,6 +411,26 @@ func test_passenger_seats_are_the_same_on_every_client() -> void:
 	assert(player._cadi_passenger_follow(Vector2.ZERO, 0.016), "yeniden bindi")
 	witch._apply_cadi_net_state([0, 0], 0)
 	assert(not player._cadi_passenger_follow(Vector2.ZERO, 0.016) and player.cadi_ride_host_peer == 0, "süpürge bitince yolcu iner")
+	## Cadı Demirci/ev içine girince (başka köşeye ışınlanır, is_indoors=true) yolcu peşinden ışınlanmaz, olduğu yerde iner.
+	witch._apply_cadi_net_state([0, 1], 0)
+	player._cadi_remount_lock = 0.0
+	player.global_position = witch.global_position
+	assert(player._cadi_passenger_follow(Vector2.ZERO, 0.016), "yeniden bindi (iç mekan sınaması)")
+	var door_pos: Vector2 = player.global_position
+	witch.is_indoors = true
+	witch.global_position = Vector2(90000.0, 90000.0)
+	assert(not player._cadi_passenger_follow(Vector2.ZERO, 0.016) and player.cadi_ride_host_peer == 0, "cadı içeri girince yolcu iner")
+	assert(player.global_position.distance_to(door_pos) < 0.5, "yolcu cadının peşinden ışınlanmamalı: %s" % str(player.global_position))
+	## Bayrak gecikse bile (ağda konum bayraktan önce gelir) ani büyük sıçrama da indirir, kukla yolcu da oturtmaz.
+	witch.is_indoors = false
+	player._cadi_remount_lock = 0.0
+	witch.global_position = door_pos
+	assert(player._cadi_passenger_follow(Vector2.ZERO, 0.016), "yeniden bindi (sıçrama sınaması)")
+	witch.global_position = door_pos + Vector2(5000.0, 0.0)
+	assert(not player._cadi_passenger_follow(Vector2.ZERO, 0.016), "büyük sıçrama yolcuyu indirir")
+	var puppet_before: Vector2 = other.global_position
+	other._cadi_snap_to_seat()
+	assert(other.global_position == puppet_before, "kukla yolcu uzağa sıçrayan cadıya oturtulmaz")
 	_cleanup()
 
 

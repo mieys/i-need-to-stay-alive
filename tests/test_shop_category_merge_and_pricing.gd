@@ -81,20 +81,18 @@ func test_copy_cost_scales_with_total_owned_count() -> void:
 ## alamıyorum") - "aynı silah birden fazla alınmaz" isteği yanlış anlaşılmıştı: asıl kural seyyar
 ## satıcıda kart başına ziyaret başına 1 kez alma hakkı (bkz. test_merchant_one_purchase_per_visit).
 ## Bu kalıcı dükkanda sahip olunan silah TEKRAR alınabilmeli, sadece slot sınırı geçerli.
-func test_owned_weapon_can_be_bought_again_while_slots_remain() -> void:
+func test_owned_weapon_cannot_be_bought_twice_but_others_can() -> void:
 	var panel: Control = ShopPanelScene.instantiate()
 	add_child(panel)
 	panel._ready()
 	GameManager.owned_weapons = [{"key": "dagger", "level": 1, "spent": 0}]
 	GameManager.gold = 100000
 	assert(panel._count_owned("dagger") == 1, "dagger zaten sahip olunmali")
-	var label: String = panel._display_cost_text("dagger")
-	assert(label != "SAHİPSİN" and label.ends_with("Altın"),
-		"Sahip olunan silahin fiyat etiketi normal fiyat olmali, bulunan: %s" % label)
 	var gold_before: int = GameManager.gold
 	panel._on_buy_copy("dagger")
-	assert(GameManager.owned_weapons.size() == 2, "Sahip olunan silahin ikinci kopyasi alinabilmeli")
-	assert(GameManager.gold < gold_before, "Satin almada altin harcanmali")
+	assert(GameManager.owned_weapons.size() == 1 and GameManager.gold == gold_before, "2026-10-14: her silahtan 1 tane - ikinci kopya alinamaz, altin harcanmaz")
+	panel._on_buy_copy("tabanca")
+	assert(GameManager.owned_weapons.size() == 2 and GameManager.gold < gold_before, "baska bir silah alinabilir")
 	GameManager.owned_weapons = []
 	panel.queue_free()
 

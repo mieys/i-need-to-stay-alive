@@ -60,11 +60,16 @@ const AtmosphereScript := preload("res://scripts/atmosphere.gd")
 const GrassSwayScript := preload("res://scripts/grass_sway.gd")
 const TreeSwayScript := preload("res://scripts/tree_sway.gd")
 const DepthOccludersScript := preload("res://scripts/depth_occluders.gd")
+const ForestCanopyScript := preload("res://scripts/forest_canopy.gd")
 const CreatureDepthScript := preload("res://scripts/creature_depth.gd")
 const HideBrushManagerScript := preload("res://scripts/hide_brush_manager.gd")
+const MineWorldScript := preload("res://scripts/mine_world.gd")
 const GuardCampsScript := preload("res://scripts/guard_camps.gd")
 const MapShadowsScript := preload("res://scripts/map_shadows.gd")
 const GroundTexelPassScript := preload("res://scripts/ground_texel_pass.gd")
+const MapColorGradeScript := preload("res://scripts/map_color_grade.gd")
+const WaterFxScript := preload("res://scripts/water_fx.gd")
+const FxWarmupScript := preload("res://scripts/fx_warmup.gd")
 const WorldRenderScaleScript := preload("res://scripts/world_render_scale.gd")
 const MobileUI := preload("res://scripts/mobile_ui.gd")
 const SunCloudsScript := preload("res://scripts/sun_clouds.gd")
@@ -132,10 +137,14 @@ const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const RunSummaryUIScript: GDScript = preload("res://scripts/run_summary_ui.gd")
 const VictoryOverlayScript: GDScript = preload("res://scripts/victory_overlay.gd")
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 const EndlessMathScript: GDScript = preload("res://scripts/endless_math.gd")
 const BossBarTopScript: GDScript = preload("res://scripts/boss_bar_top.gd")
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 const TierDisplayScript: GDScript = preload("res://scripts/tier_display.gd")
+const GameOverBoardScript := preload("res://scripts/game_over_board.gd") ## oyun bitti ekranı gövdesi (madde 224)
+const ShopDarkKitScript := preload("res://scripts/shop_dark_kit.gd") ## oyun bitti ekranı Seyyar Satıcı kitinde (madde 224)
+const DEATH_WINDOW_TOP := 72.0 ## ölüm/oyun bitti penceresinin üstü (madalyon bunun üstüne taşar)
 var _boss_bar_top: Control = null ## üst ortadaki boss barı (boss_bar_top.gd)
 var _victory_overlay: CanvasLayer = null
 var _endless_label: Label = null
@@ -175,6 +184,7 @@ const EXTRA_STATE_HEARTBEAT_TICKS := 40 ## 40 * 0.05sn = ~2 saniyede bir
 
 
 func _ready() -> void:
+	FxWarmupScript.run(self) ## efekt shader'ları ilk kullanımda takılmasın (madde 215)
 	player.health_changed.connect(hud.update_health)
 	GameManager.team_xp_changed.connect(hud.update_xp)
 	GameManager.team_xp_changed.connect(_on_team_xp_changed_for_level_up_delay)
@@ -207,9 +217,19 @@ func _ready() -> void:
 	NetworkManager.creature_tier_reached.connect(_on_creature_tier_reached)
 	NetworkManager.victory_reached.connect(_on_victory_reached)
 	GameManager.run_about_to_reset.connect(_record_run_end_once)
+	## Ruh Kıymığı: süre/kademe puanı dakikada bir de bankalanır (oyundan düşen/çöken oyuncu o ana kadarkini kaybetmesin, bkz. _bank_meta).
+	var meta_timer := Timer.new()
+	meta_timer.name = "MetaBankTimer"
+	meta_timer.wait_time = 60.0
+	meta_timer.autostart = true
+	meta_timer.timeout.connect(_on_meta_bank_tick)
+	add_child(meta_timer)
+	NetworkManager.announce_meta_revive_bonus() ## kalıcı "Dirilme Hakkı" geliştirmesi (host'a bildirilir; tekli oyunda no-op)
 	if not GameManager.run_record_suppressed:
 		BalanceLogScript.reset() ## yeni koşu: balans telemetrisi sıfırdan (devirde koşu sürüyor, sayaçlar korunur)
 	GameManager.run_record_suppressed = false ## yeni Main: devirden gelen bastırma bitti
+	var record_skip: String = _record_skip_reason()
+	_record_log("koşu başladı: kayıt %s" % ("AÇIK" if record_skip == "" else "KAPALI - " + record_skip))
 	NetworkManager.endless_started.connect(_on_endless_started)
 	NetworkManager.endless_layer_reached.connect(_on_endless_layer_reached)
 	## Tek oyunculuda game_time karakter seçimi sırasında da akıyor - koşu süresi Main açıldığı andan sayılsın (bkz. GameManager.run_clock_origin).
@@ -305,6 +325,7 @@ func _ready() -> void:
 	## (gönderen kendisiyse yerel player, değilse eşleşen RemotePlayer)
 	## üstünde mini balonu tetikler.
 	NetworkManager.chat_message_received.connect(_on_chat_message_received)
+	NetworkManager.debug_action_announced.connect(_on_debug_action_announced)
 	_update_stats_display()
 	hud.update_level(GameManager.team_level)
 	hud.update_xp(GameManager.team_xp, GameManager.team_xp_needed)
@@ -361,10 +382,17 @@ func _ready() -> void:
 		TreeSwayScript.new().setup(harita_node)
 		## Derinlik (y-sıralama): ağaç/bina/maden önde kalınca oyuncunun üstüne çizilir (bkz. depth_occluders.gd; TreeSway'DEN SONRA kurulmalı).
 		DepthOccludersScript.new().setup(harita_node)
+		## Orman parçaları 2 karakterlerin üstünde; duvar geçen (uçan) karakter onun üstüne çıkar (bkz. forest_canopy.gd).
+		ForestCanopyScript.new().setup(harita_node)
 		## Harita gölgeleri (2026-10-02, "B - Tepe gölgesi"): pişmiş doku zeminin üstüne, objelerin altına (bkz. map_shadows.gd).
 		MapShadowsScript.attach(harita_node)
 		## Zemin shader'ları (çimen/toprak) dünya pikseli çözünürlüğünde çizilip büyütülür - telefonda GPU'nun en büyük yükü
 		## (bkz. ground_texel_pass.gd, görüntü birebir aynı).
+		## Harita görünümü (madde 181/184/186): renk ayarı, sakin doku, başıboş çimen karoları, plato deseni. Ön kopyalardan SONRA (onların
+		## materyalleri de ayarlansın), zemin geçişinden ÖNCE (ground_texel_pass.gd ayrıntı ayarını değiştirilmiş orman shader'ına uygulasın).
+		MapColorGradeScript.attach(harita_node)
+		## Su (madde 214): akıntılı dalgacık shader'ına kıyı uzaklığı + akış dokuları, çarpışmasız su da aynı materyal (bkz. water_fx.gd).
+		WaterFxScript.attach(harita_node)
 		GroundTexelPassScript.attach(harita_node)
 	## Yaratık-oyuncu derinliği: oyuncunun önünde duran yaratık oyuncunun üstüne çizilir (bkz. creature_depth.gd).
 	var creature_depth: Node = CreatureDepthScript.new()
@@ -374,6 +402,10 @@ func _ready() -> void:
 	var hide_brush: Node = HideBrushManagerScript.new()
 	hide_brush.name = "HideBrushManager"
 	add_child(hide_brush)
+	## Maden dayanıklılığı / kırılma / yeniden doğma (bkz. mine_world.gd): karar host'ta, görsel her peer'de.
+	var mine_world: Node = MineWorldScript.new()
+	mine_world.name = "MineWorld"
+	add_child(mine_world)
 	## Kenar bekçileri (haritanın kenarlarındaki yaratık kampları, bkz. guard_camps.gd): karar host'ta.
 	var guard_camps: Node = GuardCampsScript.new()
 	guard_camps.name = "GuardCamps"
@@ -386,6 +418,14 @@ func _ready() -> void:
 	var ambient: Node = preload("res://scripts/wind_breeze_ambient.gd").new()
 	ambient.name = "WindBreezeAmbient"
 	add_child(ambient)
+	## Boss varken çalan müzik (bkz. boss_music.gd).
+	var boss_music: Node = preload("res://scripts/boss_music.gd").new()
+	boss_music.name = "BossMusic"
+	add_child(boss_music)
+	## Şovalye kubbesindeki oyuncuların silahları bariyerin dış halkasına dizilir (bkz. dome_weapon_ring.gd).
+	var dome_ring: Node = preload("res://scripts/dome_weapon_ring.gd").new()
+	dome_ring.name = "DomeWeaponRing"
+	add_child(dome_ring)
 	## Akarsu sesi: suya yaklaştıkça yükselir, uzaklaştıkça kısılır (bkz. stream_ambient.gd).
 	var stream_ambient: Node = preload("res://scripts/stream_ambient.gd").new()
 	stream_ambient.name = "StreamAmbient"
@@ -879,6 +919,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 			"extra_gold": player.item_extra_gold_chance if "item_extra_gold_chance" in player else 0.0,
 			"exp_gain": player.exp_gain_percent if "exp_gain_percent" in player else 0.0,
 			"elara_double": player.elara_double_fire_active if "elara_double_fire_active" in player else false,
+			## Elara E (Gerçek Hasar / odak) açık mı - uzak kopyada kehribar halka + silah parıltısı (elara_fx.gd, madde 178).
+			"elara_focus": player.elara_true_damage_active if "elara_true_damage_active" in player else false,
 			"talon_giant": player._talon_ulti_active if "_talon_ulti_active" in player else false,
 			## Talon Ayna Formu (R) aktif mi - diger oyuncularda +%10 boyut ve alev aurasi icin (remote_player.gd _talon_form_active).
 			## "talon_formation" bunun yerine gecmez: Silah Salvosu (E) acikken o "salvo" doner, R bilgisi kaybolurdu.
@@ -2571,7 +2613,9 @@ func _run_summary(victory: bool) -> Dictionary:
 ## kind: "progress" (kademe/kat ilerledi) | "victory" | "end" (koşu bitti). Sonuçları _run_results'a biriktirir.
 ## Debug modu (istediğin yaratığı doğurma) ve headless koşular (testler gerçek rekorları kirletmesin) HİÇ kayıt yazmaz.
 func _record_run(kind: String) -> Dictionary:
-	if GameManager.debug_mode_unlocked or DisplayServer.get_name() == "headless":
+	var skip: String = _record_skip_reason()
+	if skip != "":
+		_record_log_once("%s ATLANDI: %s" % [kind, skip])
 		return {}
 	var s: Dictionary = _run_summary(kind == "victory")
 	var result: Dictionary
@@ -2585,7 +2629,71 @@ func _record_run(kind: String) -> Dictionary:
 			result = RunRecordsScript.note_progress(s)
 			BalanceLogScript.note_tier(GameManager.run_max_tier)
 	RunRecordsScript.merge_results(_run_results, result)
+	_bank_meta(s, kind, result)
+	_record_log("%s yazıldı: süre=%.0f kademe=%d öldürme=%d solo=%s takım=%d" % [kind, float(s.get("time", 0.0)), int(s.get("tier", 0)),
+			int(s.get("kills", 0)), str(s.get("solo", true)), BalanceLogScript.multiplayer_peer_count()])
 	return result
+
+
+## Kayıt kararı günlüğü (2026-10-17, madde 223): 4 kişilik 54 dakikalık bir host oyununda rekor/Ruh Kıymığı/balans kaydının HİÇBİRİ yazılmadı ve
+## nedeni dosyalardan anlaşılamadı (dört yol da aynı kapıya bağlı: debug modu / headless). Artık her atlama ve yazım user://net_log.txt'ye
+## "!kayıt: ..." satırı olarak düşer (solo/debug'da da yazılır, bkz. NetworkManager._net_log "!"). Atlama satırları Main başına BİR kez.
+var _record_log_seen: Dictionary = {}
+var _meta_tick_count: int = 0
+
+
+## Kayıt yazımını engelleyen neden (boş = kayıt açık). Debug modu bayrağı işlem boyunca açık kalır (ana menüye dönmek kapatmaz).
+func _record_skip_reason() -> String:
+	if GameManager.debug_mode_unlocked:
+		return "debug modu açık (GameManager.debug_mode_unlocked)"
+	if DisplayServer.get_name() == "headless":
+		return "headless"
+	return ""
+
+
+func _record_log(msg: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		return ## testler gerçek net_log'u kirletmesin
+	NetworkManager._net_log("!kayıt: " + msg)
+
+
+func _record_log_once(msg: String) -> void:
+	if _record_log_seen.has(msg):
+		return
+	_record_log_seen[msg] = true
+	_record_log(msg)
+
+
+## RUH KIYMIĞI (bkz. meta_progress.gd): süre + kademe + sonsuz kat puanı BANKALANIR (her çağrıda toplamla bankalanan arasındaki fark
+## anında diske yazılır -> bağlantı kopsa/çökse kaybolmaz), zafer ve yeni başarım ödülü bir kez. Kazanç _run_results["shards"]'ta birikir
+## (ölüm/zafer ekranında "+N Ruh Kıymığı"). Banka sayacı GameManager'da (host devrinde Main yeniden kurulur).
+func _bank_meta(summary: Dictionary, kind: String, result: Dictionary) -> void:
+	var gained: int = 0
+	var banked: int = MetaProgressScript.bank_run(summary, GameManager.run_shards_banked)
+	gained += banked - GameManager.run_shards_banked
+	GameManager.run_shards_banked = banked
+	if kind == "victory" and not GameManager.run_victory_shards_given:
+		GameManager.run_victory_shards_given = true
+		gained += MetaProgressScript.grant_victory()
+	gained += MetaProgressScript.grant_achievements((result.get("achievements", []) as Array).size())
+	_run_results["shards"] = int(_run_results.get("shards", 0)) + gained
+
+
+func _on_meta_bank_tick() -> void:
+	if _run_end_recorded:
+		return
+	if GameManager.run_record_suppressed:
+		_record_log_once("tick ATLANDI: host devri (run_record_suppressed)")
+		return
+	var skip: String = _record_skip_reason()
+	if skip != "":
+		_record_log_once("tick ATLANDI: %s" % skip)
+		return
+	var before: int = GameManager.run_shards_banked
+	_bank_meta(_run_summary(false), "tick", {})
+	_meta_tick_count += 1
+	if _meta_tick_count == 1 or _meta_tick_count % 10 == 0: ## her dakika yazılmaz (54 dk = 54 satır); ilk + her 10. tik
+		_record_log("tick #%d: süre=%.0f banka %d -> %d" % [_meta_tick_count, GameManager.run_elapsed(), before, GameManager.run_shards_banked])
 
 
 ## Balans telemetrisi (bkz. balance_log.gd): koşu kaydı yerel dosyaya yazılır; istemciyse host'a da gönderilir (host kendi dosyasına ekler).
@@ -2597,11 +2705,17 @@ var _balance_sent_to_host: bool = false
 
 func _write_balance_record(summary: Dictionary) -> void:
 	var rec: Dictionary = BalanceLogScript.write_run(player, summary, "end")
+	if rec.is_empty():
+		_record_log("balans kaydı yazılmadı: %s" % BalanceLogScript.disabled_reason())
+	var sent: bool = false
 	if not rec.is_empty() and NetworkManager.is_multiplayer_active and not NetworkManager.is_host and multiplayer.has_multiplayer_peer():
 		var host_id: int = NetworkManager._host_peer_id()
 		if host_id > 0 and multiplayer.get_peers().has(host_id):
 			NetworkManager.submit_balance_record.rpc_id(host_id, JSON.stringify(rec))
 			_balance_sent_to_host = true
+			sent = true
+	if not rec.is_empty():
+		_record_log("balans kaydı yazıldı: run_id=%s, host'a gönderildi=%s" % [str(rec.get("run_id", "")), str(sent)])
 	BalanceLogScript.reset()
 
 
@@ -2635,10 +2749,15 @@ func _exit_tree() -> void:
 ## (yeniden başlatma: reset, Main kalkmadan ÖNCE süreyi/öldürmeyi sıfırlıyordu - bkz. GameManager.run_about_to_reset).
 func _record_run_end_once() -> void:
 	if GameManager.run_record_suppressed:
+		_record_log_once("end ATLANDI: host devri (run_record_suppressed)")
 		return ## host devri: koşu sürüyor, bu Main sadece yeniden kuruluyor
-	if not _run_end_recorded and GameManager.run_elapsed() >= 30.0:
-		_run_end_recorded = true
-		_record_run("end")
+	if _run_end_recorded:
+		return ## zaten işlendi (ölüm ekranı / menüye çıkıştan önce flush) - beklenen durum, günlüğe yazılmaz
+	if GameManager.run_elapsed() < 30.0:
+		_record_log_once("end ATLANDI: koşu süresi %.0f sn < 30 sn" % GameManager.run_elapsed())
+		return
+	_run_end_recorded = true
+	_record_run("end")
 
 
 ## Final bosslarının hepsi öldü (HER peer'de, bkz. NetworkManager.victory_reached): zafer penceresi + zafer kaydı.
@@ -3037,6 +3156,16 @@ func _on_chat_message_received(peer_id: int, player_name: String, text: String) 
 			rp.show_chat_bubble(text)
 
 
+## Birinin debug modunda yaptığı eylem (bkz. network_manager.gd debug_action_announced notu): üst ortada uyarı + sohbet kaydına satır
+## (toast kaybolsa bile ne yapıldığı kalır). Gönderen KENDİMİZ de olsak gelir ("call_local") - ne yaptığını görmek zararsız.
+func _on_debug_action_announced(player_name: String, text: String) -> void:
+	var line: String = "[DEBUG] %s: %s" % [player_name, text]
+	_show_network_toast("DEBUG MODU UYARISI\n" + line, 4.0, true)
+	EventSfx.play(get_tree(), &"chat")
+	if hud and hud.has_method("append_chat_message"):
+		hud.append_chat_message("DEBUG", "%s: %s" % [player_name, text])
+
+
 ## Oyun sonu istatistik ekranındaki tabloyu (isim | verdiği hasar | tankladığı
 ## hasar) o ana kadar toplanmış _match_stats_by_peer'den yeniden çizer -
 ## sonuçlar (özellikle multiplayer'da diğer peer'lerin RPC'si) art arda
@@ -3048,10 +3177,22 @@ func _refresh_match_stats_ui() -> void:
 		_victory_overlay.call("refresh_stats", _match_stats_by_peer)
 	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
 		return
-	var grid: GridContainer = _death_overlay_layer.get_node_or_null("Window/VBox/StatsBox/StatsGrid")
-	if not grid:
+	## 2026-10-17 (madde 224): ölüm ekranının tablosu artık game_over_board.gd'de portreli çiziliyor.
+	var board: Control = _death_overlay_layer.get_node_or_null("Window/VBox/StatsBox/Board")
+	if not board:
 		return
-	RunSummaryUIScript.fill_stats_grid(grid, _match_stats_by_peer)
+	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0 ## _record_local_match_stats ile AYNI anahtar
+	board.call("set_team", _match_stats_by_peer, _match_stats_char_ids(my_id), my_id)
+
+
+## Tablo portreleri için peer -> karakter id: kendimiz GameManager'dan, arkadaşlar sahnedeki kuklalarından (ölü bedenleri de
+## orada durur; kopmuş bir arkadaşın kuklası yoksa portre yerine kuru kafa çizilir). Ek RPC alanı gerekmez.
+func _match_stats_char_ids(my_id: int) -> Dictionary:
+	var out: Dictionary = {my_id: GameManager.selected_char_id}
+	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+		if is_instance_valid(rp) and "peer_id" in rp and "char_id" in rp:
+			out[int(rp.get("peer_id"))] = int(rp.get("char_id"))
+	return out
 
 
 ## Ölüm ekranı (is_final) koşu özeti: üstte SÜRE/KADEME/(KAT)/ÖLDÜRME satırı, altta bu koşuda kırılan rekor + açılan başarımlar.
@@ -3059,21 +3200,10 @@ func _refresh_match_stats_ui() -> void:
 func _refresh_death_summary() -> void:
 	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
 		return
-	var stats_box: VBoxContainer = _death_overlay_layer.get_node_or_null("Window/VBox/StatsBox")
-	if not stats_box:
+	var board: Control = _death_overlay_layer.get_node_or_null("Window/VBox/StatsBox/Board")
+	if not board:
 		return
-	for old_name in ["SummaryRow", "ExtrasBox"]:
-		var old: Node = stats_box.get_node_or_null(old_name)
-		if old:
-			stats_box.remove_child(old)
-			old.queue_free()
-	var summary: Dictionary = _run_summary(false)
-	var row: Control = RunSummaryUIScript.summary_row(summary)
-	stats_box.add_child(row)
-	stats_box.move_child(row, 0)
-	var extras: Control = RunSummaryUIScript.extras_box(_run_results, summary)
-	if extras:
-		stats_box.add_child(extras)
+	board.call("set_summary", _run_summary(false), _run_results)
 
 
 ## bkz. pause_menu.gd::_on_menu() - ölüm overlay'indeki "Ana Menüye Dön"
@@ -3141,22 +3271,38 @@ func _show_death_overlay(is_final: bool) -> void:
 		add_child(_death_overlay_layer)
 
 		var dim := ColorRect.new()
-		dim.color = Color(0.12, 0.07, 0.03, 0.55)
+		dim.name = "Dim" ## izleyicide düz karartma; oyun bitince vinyet (aşağıda)
+		dim.color = Color(0.02, 0.02, 0.03, 0.55)
 		dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 		dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_death_overlay_layer.add_child(dim)
 
 		## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap kite geçti - ölüm/izleyici ekranı
 		## artık bir kit penceresinde (eskiden dünya üstünde çıplak yazılar + 88 px'lik varsayılan fontla dev butonlar).
+		## 2026-10-17 (madde 224, kullanıcı 4 prototipten "A - Ahşap Pano"yu seçti, renkler "seyyar satıcıya benzesin"): bej pencere
+		## -> Seyyar Satıcı kiti (shop_dark_kit.gd PAL_SLATE: kayrak panel + altın vurgu), tepesinde kuru kafa madalyonu; gövde
+		## (stat kutuları + portreli tablo + kazanımlar) game_over_board.gd. Başlık/alt yazı/düğmeler gerçek düğüm kaldı (kumanda,
+		## ses, yeniden başlatma oylaması aynı).
+		var kit = ShopDarkKitScript.new(ShopDarkKitScript.PAL_SLATE)
 		var window := PanelContainer.new()
 		window.name = "Window"
-		window.theme = UIKit.theme()
-		window.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+		window.theme = kit.theme()
+		var win_style: StyleBoxFlat = kit.sb(kit.c("panel"), kit.c("line_hi"), 3, 8)
+		win_style.shadow_color = Color(0, 0, 0, 0.45)
+		win_style.shadow_size = 14
+		win_style.shadow_offset = Vector2(0, 8)
+		win_style.content_margin_left = 40
+		win_style.content_margin_right = 40
+		win_style.content_margin_top = 64 ## madalyon üst kenara biner
+		win_style.content_margin_bottom = 28
+		window.add_theme_stylebox_override("panel", win_style)
+		window.custom_minimum_size = Vector2(760, 0)
 		window.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		window.offset_top = 80
-		window.offset_left = -380 ## 2026-10-05: tabloya "Öldürme" sütunu geldi (4 sütun) - 660 -> 760 genişlik
+		window.offset_top = DEATH_WINDOW_TOP
+		window.offset_left = -380
 		window.offset_right = 380
 		window.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		window.resized.connect(_fit_death_window)
 		_death_overlay_layer.add_child(window)
 
 		var box := VBoxContainer.new()
@@ -3165,17 +3311,28 @@ func _show_death_overlay(is_final: bool) -> void:
 		box.add_theme_constant_override("separation", 12)
 		window.add_child(box)
 
+		var medallion: Control = GameOverBoardScript.Medallion.new()
+		medallion.name = "Medallion"
+		medallion.lift = 60.0 ## merkez pencerenin üst kenarının 4 px altında (içerik payı 64)
+		box.add_child(medallion)
+
 		var title := Label.new()
 		title.name = "Title"
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_BAD, 0)
+		UIKit.style_label(title, UIKit.FS_BIG, kit.c("bad"), 0)
+		title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+		title.add_theme_constant_override("shadow_offset_x", 4)
+		title.add_theme_constant_override("shadow_offset_y", 4)
 		box.add_child(title)
 
 		var sub := Label.new()
 		sub.name = "Subtitle"
 		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		sub.autowrap_mode = TextServer.AUTOWRAP_WORD
-		UIKit.style_label(sub, 24, UIKit.C_TEXT_DIM, 0)
+		UIKit.style_label(sub, 24, kit.c("dim"), 0)
+		sub.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.45))
+		sub.add_theme_constant_override("shadow_offset_x", 3)
+		sub.add_theme_constant_override("shadow_offset_y", 3)
 		box.add_child(sub)
 
 		## #54: sadece takım hâlâ hayattayken (is_final=false) anlamlı olan
@@ -3200,7 +3357,7 @@ func _show_death_overlay(is_final: bool) -> void:
 		spectate_label.name = "SpectateLabel"
 		spectate_label.custom_minimum_size = Vector2(220, 0)
 		spectate_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		UIKit.style_label(spectate_label, 24, UIKit.C_GOLD, 0)
+		UIKit.style_label(spectate_label, 24, kit.c("accent"), 0)
 		spectate_row.add_child(spectate_label)
 
 		var next_btn := Button.new()
@@ -3223,19 +3380,9 @@ func _show_death_overlay(is_final: bool) -> void:
 		stats_box.alignment = BoxContainer.ALIGNMENT_CENTER
 		box.add_child(stats_box)
 
-		var stats_title := Label.new()
-		stats_title.name = "StatsTitle"
-		stats_title.text = "İSTATİSTİKLER"
-		stats_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		UIKit.style_label(stats_title, UIKit.FS_BODY, UIKit.C_ACCENT, 0)
-		stats_box.add_child(stats_title)
-
-		var stats_grid := GridContainer.new()
-		stats_grid.name = "StatsGrid"
-		stats_grid.columns = 3
-		stats_grid.add_theme_constant_override("h_separation", 24)
-		stats_grid.add_theme_constant_override("v_separation", 4)
-		stats_box.add_child(stats_grid)
+		var board: Control = GameOverBoardScript.new()
+		board.name = "Board" ## stat kutuları + portreli tablo + kazanımlar (_refresh_death_summary/_refresh_match_stats_ui doldurur)
+		stats_box.add_child(board)
 
 		var death_btn_row := HBoxContainer.new()
 		death_btn_row.name = "DeathButtonRow"
@@ -3255,7 +3402,7 @@ func _show_death_overlay(is_final: bool) -> void:
 		_death_overlay_restart_btn = Button.new()
 		_death_overlay_restart_btn.name = "RestartButton"
 		_death_overlay_restart_btn.text = "Yeniden Başla"
-		_death_overlay_restart_btn.custom_minimum_size = Vector2(240, 52)
+		_death_overlay_restart_btn.custom_minimum_size = Vector2(380, 64)
 		_death_overlay_restart_btn.pressed.connect(_on_death_overlay_restart_pressed)
 		## pause_menu.gd _ready() ile AYNI kural: çok oyunculuda SADECE host
 		## yeniden başlatmayı tetikleyebilir, client'larda gizli.
@@ -3266,7 +3413,7 @@ func _show_death_overlay(is_final: bool) -> void:
 		var menu_btn := Button.new()
 		menu_btn.name = "BackToMenuButton"
 		menu_btn.text = "Ana Menüye Dön"
-		menu_btn.custom_minimum_size = Vector2(240, 52)
+		menu_btn.custom_minimum_size = Vector2(380, 64)
 		menu_btn.pressed.connect(_on_death_overlay_menu_pressed)
 		death_btn_row.add_child(menu_btn)
 
@@ -3276,9 +3423,13 @@ func _show_death_overlay(is_final: bool) -> void:
 		## ağacını değil sadece bu overlay'i taramak yeterli/daha ucuz.
 		UISound.connect_all_buttons(_death_overlay_layer)
 		UISound.apply_wood_buttons(_death_overlay_layer)
-		## Yeniden Başla = onay (adaçayı), Ana Menü = ten; yazılar okunur 32 px (eskiden varsayılan 88 px).
-		UIKit.style_button(_death_overlay_restart_btn, "green", false, UIKit.FS_BODY)
-		UIKit.style_button(menu_btn, "wood", false, UIKit.FS_BODY)
+		## Satıcı kiti düğmeleri (madde 224): Yeniden Başla = altın dolgu ("SATIN AL" gibi), Ana Menü + izleyici okları = çerçeveli koyu.
+		kit.btn_style(_death_overlay_restart_btn, "primary")
+		kit.btn_style(menu_btn, "ghost")
+		kit.btn_style(prev_btn, "ghost")
+		kit.btn_style(next_btn, "ghost")
+		_death_overlay_restart_btn.add_theme_font_size_override("font_size", UIKit.FS_BODY)
+		menu_btn.add_theme_font_size_override("font_size", UIKit.FS_BODY)
 
 		_death_overlay_label = title
 
@@ -3305,6 +3456,11 @@ func _show_death_overlay(is_final: bool) -> void:
 		if spectate_row_node:
 			spectate_row_node.visible = false
 		_end_spectate_mode()
+		## madde 224: kenarlara koyulaşan vinyet + oyun içi göstergeler kalkar (sohbet kalır - "iyi oyundu" yazılabilsin)
+		var dim_node: ColorRect = _death_overlay_layer.get_node_or_null("Dim")
+		if dim_node and dim_node.material == null:
+			dim_node.material = GameOverBoardScript.vignette_material()
+		_hide_hud_for_game_over()
 	else:
 		if title_lbl:
 			title_lbl.text = "SEN ÖLDÜN"
@@ -3313,6 +3469,33 @@ func _show_death_overlay(is_final: bool) -> void:
 		if spectate_row_node:
 			spectate_row_node.visible = true
 		_begin_spectate_mode()
+
+
+## Ölüm/oyun bitti penceresi ekrana sığmazsa (8 oyunculu tablo, çok başarım, telefon) üst ortadan küçülür (madde 224).
+## Pencerenin her boyut değişiminde (tablo RPC'lerle doldukça) çağrılır.
+func _fit_death_window() -> void:
+	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
+		return
+	var win: Control = _death_overlay_layer.get_node_or_null("Window")
+	if not win:
+		return
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var s: float = minf(1.0, minf((vp.y - DEATH_WINDOW_TOP - 12.0) / maxf(win.size.y, 1.0), (vp.x - 32.0) / maxf(win.size.x, 1.0)))
+	win.pivot_offset = Vector2(win.size.x * 0.5, 0.0)
+	win.scale = Vector2(s, s)
+
+
+## Oyun bitti: HUD'un oyun içi göstergeleri (yetenek paneli, grup paneli, minimap, altın...) gizlenir, sohbet katmanı kalır.
+## Geri açılmaz - bu ekrandan sonra ya sahne değişir (yeniden başla / ana menü) ya da oyun biter.
+func _hide_hud_for_game_over() -> void:
+	if not hud or not is_instance_valid(hud):
+		return
+	var chat: Variant = hud.get("_chat_layer")
+	for ch: Node in hud.get_children():
+		if ch == chat:
+			continue
+		if ch is CanvasItem or ch is CanvasLayer:
+			ch.set("visible", false)
 
 
 ## #54 DÜZELTME (kullanıcı isteği: "Ölüm ekranında seçilebilir müttefik

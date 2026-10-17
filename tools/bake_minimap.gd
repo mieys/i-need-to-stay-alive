@@ -100,7 +100,7 @@ func _run() -> void:
 	quit()
 
 
-## GameManager.get_map_world_rect() ile birebir aynı hesap (harita sahnede değilken o fonksiyon çalışmadığı için kopya).
+## GameManager.get_map_world_rect() (OYUN ALANI: katman alanları MAP_PLAY_CELLS'e kırpılır, dış çerçeve dahil değil - madde 119) ile birebir aynı hesap (harita sahnede değilken o fonksiyon çalışmadığı için kopya).
 func _map_rect(harita: Node) -> Rect2:
 	var total := Rect2()
 	var found := false
@@ -112,7 +112,7 @@ func _map_rect(harita: Node) -> Rect2:
 		if not (n is TileMapLayer):
 			continue
 		var layer: TileMapLayer = n
-		var used: Rect2i = layer.get_used_rect()
+		var used: Rect2i = layer.get_used_rect().intersection(Rect2i(0, 0, 256, 256))
 		if used.size == Vector2i.ZERO:
 			continue
 		var half: Vector2 = (Vector2(layer.tile_set.tile_size) if layer.tile_set != null else Vector2(16.0, 16.0)) * 0.5

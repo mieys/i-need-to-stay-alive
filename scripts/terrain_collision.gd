@@ -17,6 +17,7 @@ extends RefCounted
 ## yassı/zemine serili bir katmanı nesne katmanlarına ekleme (ayak izi olarak yürünmez bir şerit çıkar); Düşman üssü ve maden bandı kalınlıkları gözle ayarlıydı.
 
 const DepthScript := preload("res://scripts/depth_occluders.gd")
+const MapFrameScript := preload("res://scripts/map_frame.gd")
 
 const ENABLE_WATER := true
 const ENABLE_HOUSES := true
@@ -70,6 +71,11 @@ static func ensure(forest: TileMapLayer) -> Dictionary:
 	if id != _layer_id:
 		_build(forest)
 	return _cells
+
+
+## Ağaç gövdesi hücrelerinin (by_category["trees"]) DÜNYA konumu: hücre merkezi + ayak kaydırması = ağacın dibi (papağan gagalama hedefi, madde 203).
+static func cell_world_base(cell: Vector2i) -> Vector2:
+	return _inv.affine_inverse() * ((Vector2(cell) + Vector2(0.5, 0.5)) * _cell_px) + Vector2(0.0, FEET_SHIFT)
 
 
 ## world_pos'ta (orman duvarı DEĞİL, bu dosyanın nesneleri) engel hücresi var mı. GameManager.is_position_blocked_by_walls kullanır.
@@ -158,6 +164,8 @@ static func _add_water(helper: Node, harita: Node, g0: Vector2) -> void:
 			details.append({"layer": dl, "shift": Vector2i(roundi((dofs.x - wofs.x) / 16.0), roundi((dofs.y - wofs.y) / 16.0))})
 	var mask_cache: Dictionary = {}
 	for cell in water.get_used_cells():
+		if not MapFrameScript.PLAY_CELLS.has_point(cell):
+			continue ## dış çerçevedeki su (madde 119): hücre zaten orman katmanında dolu = engel; yüzlerce hücreyi taramak yükleme süresini uzatırdı
 		if _visible_water_pixels(helper, water, cell, details, mask_cache) >= WATER_MIN_PIXELS:
 			found[cell + shift] = true
 	var bridge := harita.get_node_or_null(BRIDGE_LAYER) as TileMapLayer
@@ -198,6 +206,21 @@ static func _commit(category: String, counts: Dictionary) -> void:
 			list.append(gc)
 	stats[category] = list.size()
 	by_category[category] = list
+
+
+## Bir kategorinin hücrelerini (maden kırılınca/yeniden doğunca, bkz. mine_world.gd) açar/kapar. Başka bir kategorinin (su/bina/ağaç/üs) hücresi AÇILMAZ.
+## `by_category[category]` listesi (testler/hata ayıklama) değişmez: o her zaman "tam doğmuş" ayak izidir.
+static func set_category_cells_blocked(category: String, cells: Array, blocked: bool) -> void:
+	var others: Dictionary = {}
+	for key: String in by_category:
+		if key != category:
+			for gc: Vector2i in by_category[key]:
+				others[gc] = true
+	for gc: Vector2i in cells:
+		if blocked:
+			_cells[gc] = true
+		elif not others.has(gc):
+			_cells.erase(gc)
 
 
 ## Su hücresinde GÖRÜNEN su pikseli sayısı: Su karosunun mavi pikselleri - üstündeki ayrıntı katmanlarının (kıyı çimeni vb.) mavi OLMAYAN opak pikselleri.

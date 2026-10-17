@@ -26,7 +26,7 @@ const EVOS := [
 ## Efsun örnekleri (enchant_defs.gd + kalkan efsunları - ekrandaki metinler).
 const ENCHANTS := [
 	{"icon": "res://assets/ui/shields/type_enerji.png", "tier": "Epik · Kalkan", "tier_i": 2, "cat": "Kalkan efsunu",
-		"name": "Enerji Kalkanı",
+		"name": "Enerji Mana Kalkanı",
 		"text": "Hasar alınca kısa bir süre bekler, sonra çok hızlı dolar. Şu anki kalkanının yerine geçer.",
 		"head": "BU KART (kalkanını değiştirir)",
 		"lines": "Kalkan: 150 → 110\nHasar soğurma: %65 → %55\nYenilenme: 10/sn → 9/sn\nBekleme: 8 sn → 6 sn"},
@@ -36,7 +36,7 @@ const ENCHANTS := [
 		"head": "BU KART (efsunu başlatır)",
 		"lines": "Her savuruş %25 ihtimalle 180 birim giden bir rüzgar dalgası yaratır: saldırı gücünün %70'i kadar hasar, 60 birim savurma."},
 	{"icon": "res://assets/ui/shields/type_kale.png", "tier": "Epik · Kalkan", "tier_i": 2, "cat": "Kalkan efsunu",
-		"name": "Kale Kalkanı",
+		"name": "Kale Mana Kalkanı",
 		"text": "En çok kalkan ve en yüksek soğurma, ama yavaş dolar. Şu anki kalkanının yerine geçer.",
 		"head": "BU KART (kalkanını değiştirir)",
 		"lines": "Kalkan: 150 → 200\nHasar soğurma: %65 → %75\nYenilenme: 10/sn → 7/sn\nBekleme: 8 sn → 8 sn"},

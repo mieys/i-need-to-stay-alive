@@ -78,4 +78,19 @@ func test_night_glow_attachments_stop_at_the_cap_but_existing_lights_stay() -> v
 	assert(total <= AtmosphereScript.MAX_GLOWS, "ışık sayısı sınırı aşmaz: %d" % total)
 	assert(lights.size() == AtmosphereScript.MAX_GLOWS - (total - lights.size()), "ilk gelenler ışık aldı, sonrakiler almadı")
 	assert(AtmosphereScript.MAX_GLOWS >= 64, "sınır, normal yoğunlukta (oyuncular + silahlar + birkaç efekt) hiç devreye girmeyecek kadar geniş")
+	## Bütçe DOLUYKEN kalıcı ("perm") ışık yine takılır (görev kristalleri) ve bütçeyi tüketmez.
+	var perm_raw: Dictionary = {"c": Color(0.45, 1.0, 0.9), "r": 38.0, "e": 0.6, "perm": true}
+	var perm_targets: Array = []
+	for i in range(60):
+		var pt := Node2D.new()
+		add_child(pt)
+		_made.append(pt)
+		atmo._attach_glow(pt, perm_raw)
+		assert(pt.has_node("NightGlow"), "kalıcı ışık bütçe doluyken de takılır (%d)" % i)
+		perm_targets.append(pt)
+	var plain := Node2D.new()
+	add_child(plain)
+	_made.append(plain)
+	atmo._attach_glow(plain, raw)
+	assert(not plain.has_node("NightGlow"), "kalıcı ışıklar geçici efekt bütçesini genişletmez (bütçe hâlâ dolu)")
 	_cleanup()

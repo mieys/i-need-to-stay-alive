@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://c3go1jkpbftyj"]
 
-[ext_resource type="Texture2D" path="res://assets/fx/shield_hit/hit_sheet.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://bqtqawmhfle8l" path="res://assets/fx/shield_hit/hit_sheet.png" id="1"]
 
 [sub_resource type="AtlasTexture" id="AT_0"]
 atlas = ExtResource("1")
@@ -295,300 +295,231 @@ animations = [{
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AT_0")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_1")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_2")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_3")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_4")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_5")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_6")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_7")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_8")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_9")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_10")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_11")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_12")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_13")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_14")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_15")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_16")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_17")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_18")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_19")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_20")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_21")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_22")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_23")
 }],
-"loop": false,
+"loop": 0,
 "name": &"hit_0",
 "speed": 43.63636363636363
 }, {
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AT_24")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_25")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_26")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_27")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_28")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_29")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_30")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_31")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_32")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_33")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_34")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_35")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_36")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_37")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_38")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_39")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_40")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_41")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_42")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_43")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_44")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_45")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_46")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_47")
 }],
-"loop": false,
+"loop": 0,
 "name": &"hit_1",
 "speed": 43.63636363636363
 }, {
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AT_48")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_49")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_50")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_51")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_52")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_53")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_54")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_55")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_56")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_57")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_58")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_59")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_60")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_61")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_62")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_63")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_64")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_65")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_66")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_67")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_68")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_69")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_70")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("AT_71")
 }],
-"loop": false,
+"loop": 0,
 "name": &"hit_2",
 "speed": 43.63636363636363
 }]

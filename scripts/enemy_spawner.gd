@@ -111,12 +111,12 @@ const ID_FAMILY := {
 ## swarm, Kademe 10-12 is forest monsters, Kademe 13-15 is the undead/demon
 ## chapter, etc). Tier 1 = starting enemies, tier 15 = hardest regular tier.
 const TIER_ROSTER := {
-	1: ["rat1", "slime1"],
-	2: ["rat1", "slime1", "iskelet1"],
-	3: ["rat2", "zombie1", "iskelet1", "iskelet2"],
-	4: ["rat2", "rat3", "zombie1", "zombie2", "iskelet2"],
+	1: ["slime1"],
+	2: ["slime1", "iskelet1"],
+	3: ["slime1", "zombie1", "iskelet1", "iskelet2"],
+	4: ["slime1", "zombie1", "zombie2", "iskelet2"],
 	5: ["lich1", "zombie2", "zombie3", "iskelet1", "iskelet2"],
-	6: ["ork1", "rat3", "zombie3", "iskelet2"],
+	6: ["ork1", "slime1", "zombie3", "iskelet2"],
 	7: ["lich1", "lich2", "ork1", "ork2", "iskelet2"],
 	8: ["lich2", "ork2", "ork3", "slime2", "iskelet3"],
 	9: ["slime1", "slime2", "slime3", "slime4", "slime5", "slime6"],
@@ -131,7 +131,8 @@ const TIER_ROSTER := {
 ## Kullanıcı isteği (2026-09-27): "oyun başlangıcındaki kademe 1 slimelar 90 saniye sonra doğmaya başlasın" - oyunun ilk
 ## SLIME_START_DELAY saniyesinde (game_time) rosterdeki slime'lar çıkarılır (Kademe 1'de sadece fareler doğar). Normal
 ## doğma ve görev dalgası aynı yardımcıyı (_spawnable_roster) kullanır.
-const SLIME_START_DELAY := 90.0
+## 2026-10-17: fareler oyundan kalktı, slime'lar onların yerine geldi -> gecikme kapalı (0).
+const SLIME_START_DELAY := 0.0
 
 
 func _spawnable_roster(tier: int) -> Array:
@@ -212,7 +213,7 @@ const NEW_FINAL_BOSSES := ["ucansetan1"]
 var new_final_enabled: bool = true
 const FINAL_CREATURES := [
 	"agac3", "demon3", "golem3", "hayalet3", "lich3", "mantar3", "ork3",
-	"rat3", "rontgen3", "vampire3", "zombie3", "iblis3", "iskelet3",
+	"slime2", "rontgen3", "vampire3", "zombie3", "iblis3", "iskelet3",
 ]
 
 ## Kademe atlama hızı %200 yavaşlatıldı (yani her kademe eskisinin 3 katı
@@ -296,7 +297,8 @@ const FINAL_CREATURES := [
 ## Kullanıcı isteği (2026-10-10): "oyundaki maksimum yaratık sayısını 100'e düşür, oyuncu başına 20 artsın; yaratıkların hasarı ve can kalkanı da %50 artsın" -
 ## 250 -> 100 ve ek oyuncu başı +50 -> +20 (ENEMY_CAP_PER_EXTRA_PLAYER). Kademe kısması (_tier_crowding_scale) aynı kaldı. Hasar/can/kalkan +%50: CREATURE_STAT_BOOST.
 ## 2026-10-10 (2. tur, kullanıcı: "maksimum yaratık sayısını 150 yapıp oyuncu başına 30 artması ile değiştir"): 100 -> 150, ek oyuncu başı +20 -> +30.
-@export var max_concurrent_enemies: int = 150
+## 2026-10-17 (kullanıcı: "yaratıkların sayısını ve oyuncu başına artan yaratık sayısını %30 azalt"): 150 -> 105, ek oyuncu başı +30 -> +21 (1/2/3/4/5 oyuncu: 105/126/147/168/189).
+@export var max_concurrent_enemies: int = 105
 ## Multiplayer enemy scaling: solo keeps the original cap; each additional
 ## player adds room for more creatures and slightly increases spawn frequency.
 ## Kullanıcı isteği: "oyuncu başına yaratık sayısı %50 [artsın]" - eskiden 18, ×1.5 (27).
@@ -310,7 +312,7 @@ const FINAL_CREATURES := [
 ## "maksimum yaratık sayısı 5 oyuncu varken olsun; 4 oyuncuda 180, 3'te 160, 2'de 140, tek oyunculuda 120" -
 ## max_concurrent_enemies (200) artık 5 oyuncunun tavanı, her eksik oyuncu için ENEMY_CAP_STEP_PER_MISSING_PLAYER düşer.
 ## 2026-09-27: yeni kural - tek oyuncu max_concurrent_enemies (100), her ek oyuncu +20 (2 -> 120, 3 -> 140, 4 -> 160...).
-const ENEMY_CAP_PER_EXTRA_PLAYER := 30 ## 2026-10-10: 50 -> 20 -> 30
+const ENEMY_CAP_PER_EXTRA_PLAYER := 21 ## 2026-10-10: 50 -> 20 -> 30; 2026-10-17: 30 -> 21 (-%30)
 ## Kullanıcı isteği (2026-09-24 denge turu: "her kademe için oyuncu başına %30 spawn ve %50 can") - 0.25 -> 0.30.
 const EXTRA_PLAYER_SPAWN_RATE := 0.30
 @export var min_spawn_distance: float = 480.0
@@ -612,7 +614,7 @@ var _next_network_enemy_id: int = 1
 ## hiçbiri uymazsa komşu kademelere genişler - ör. sadece slime olan Kademe 9). Boss sistemi kapalıdır (GameManager.bosses_enabled).
 const ELITE_POOL := [
 	"iskelet3", "lich3", "ork3", "agac3", "golem3", "rontgen2", "rontgen3",
-	"demon3", "hayalet3", "mantar3", "rat3", "vampire3", "zombie3", "iblis3",
+	"demon3", "hayalet3", "mantar3", "slime2", "vampire3", "zombie3", "iblis3",
 ]
 var _boss_tiers_spawned: Dictionary = {}
 var _final_spawned: bool = false
@@ -1021,6 +1023,7 @@ func _check_tier_announcement() -> void:
 	_announce_poll_msec = now_msec
 	_resolve_spawn_tier() ## kapı açıksa _spawn_tier zaman kademesine yetişir
 	_gate_rush_tick()
+	_boss_hold_rescue_tick()
 	var started: int = _spawn_tier
 	if _final_active() and time_tier >= FINAL_TIER and _final_gate_open():
 		started = FINAL_TIER
@@ -1114,7 +1117,7 @@ func _scaled_enemy_cap() -> int:
 	return max(1, int(round(player_enemy_cap(_player_count()) * _tier_crowding_scale())))
 
 
-## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->100, 2->120, 3->140, 4->160, 5->180 (2026-10-10; eskiden 250 + 50/oyuncu, bkz.
+## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->105, 2->126, 3->147, 4->168, 5->189 (2026-10-17; 2026-10-10'da 150 + 30/oyuncu, ondan önce 250 + 50/oyuncu, bkz.
 ## max_concurrent_enemies notu). Erken kademelerde bu tavan _tier_crowding_scale ile ayrıca kısılır (değişmedi).
 ## Yaratık canı/kalkanı oyuncu sayısından BAĞIMSIZ olarak ayrı ölçeklenir - burası sadece sayı.
 func player_enemy_cap(players: int) -> int:
@@ -1300,6 +1303,55 @@ const GATE_RUSH_SPEED_MULT := 3.0
 const GATE_RUSH_VISION_MARGIN := 1.3 ## görüş elipsinin (normalleştirilmiş 1.0) bu kadar katından uzaktakiler hızlanır
 var _gate_rush_active: bool = false
 
+## 2026-10-14 KULLANICI BİLDİRİMİ: "kademe atlamalarında bazen bazı yaratıklar bir yere takılınca oyun sonraki kademeye geçmiyor". Kapıyı
+## tutan yaratık hızlansa bile duvar/su köşesinde sıkışıp hiç ilerlemiyorsa (ya da kademe bossu görüş dışında takılıysa: boss tutuşunun
+## zaman aşımı YOK) kapı 90 sn dolana kadar (boss için hiç) açılmıyordu. Kural (eskiler ölmeden yeni kademe yok) aynı; takılanı oyuncunun
+## görüşü DIŞINDA, ona en yakın doğuş halkasına ışınlarız (enemy.gd teleport_to), oradan yürüyüp öldürülür.
+const GATE_RESCUE_DELAY_MSEC := 12000 ## kapı/boss tutuşu bu kadar sürüp yaratık hâlâ görüş dışındaysa ışınla (sonra aynı aralıkla tekrar)
+const BOSS_HOLD_RESCUE_MSEC := 30000
+var _boss_hold_started_msec: int = 0
+
+
+## Yaratığı en yakın canlı oyuncunun doğuş halkasına (görüş elipsinin dışı, su/ev değil) taşır.
+func _rescue_stuck_enemy(e: Node, anchors: Array[Vector2]) -> void:
+	if anchors.is_empty() or not e.has_method("teleport_to"):
+		return
+	var from: Vector2 = (e as Node2D).global_position
+	var nearest: Vector2 = anchors[0]
+	for ap: Vector2 in anchors:
+		if ap.distance_squared_to(from) < nearest.distance_squared_to(from):
+			nearest = ap
+	e.teleport_to(_random_spawn_position(nearest, e.is_in_group("boss")))
+
+
+## Kademe saati bir bossun yüzünden duruyorsa ve o boss HİÇBİR oyuncunun görüşünde değilse (takılı) BOSS_HOLD_RESCUE_MSEC'te bir ışınla.
+func _boss_hold_rescue_tick() -> void:
+	if _tier_bosses.is_empty() or not is_tier_held_by_boss():
+		_boss_hold_started_msec = 0
+		return
+	var now_msec: int = Time.get_ticks_msec()
+	if _boss_hold_started_msec == 0:
+		_boss_hold_started_msec = now_msec
+		return
+	if now_msec - _boss_hold_started_msec < BOSS_HOLD_RESCUE_MSEC:
+		return
+	var anchors: Array[Vector2] = _living_player_positions()
+	if anchors.is_empty():
+		return
+	var vision_r: float = VisionFogScript.current_radius(get_tree())
+	for tier in _tier_bosses.keys():
+		for b in _tier_bosses[tier]:
+			if not is_instance_valid(b) or b.get("is_dead") == true or not (b is Node2D):
+				continue
+			var seen: bool = false
+			for ap: Vector2 in anchors:
+				if VisionFogScript.normalized_distance((b as Node2D).global_position - ap, vision_r, VisionFogScript.VISION_WIDTH_SCALE) <= GATE_RUSH_VISION_MARGIN:
+					seen = true
+					break
+			if not seen:
+				_rescue_stuck_enemy(b, anchors)
+	_boss_hold_started_msec = now_msec ## bir sonraki ışınlama bir aralık sonra (boss yaklaşıp oyuncuyla karşılaşsın)
+
 
 ## Kapı beklerken kapıyı tutan, görüş dışındaki eski yaratıkları hızlandırır; bekleme bitince (ya da hiç yokken) hızları sıfırlar.
 ## _check_tier_announcement'tan çağrılır (kapı beklerken 250 ms'de bir, bekleme yokken her kare ama hemen çıkar).
@@ -1335,6 +1387,11 @@ func _gate_rush_tick() -> void:
 				if holds_gate and not in_sight:
 					want = GATE_RUSH_SPEED_MULT
 					any_rushed = true
+					## Hızlanmaya rağmen GATE_RESCUE_DELAY_MSEC'tir kapıyı tutuyorsa duvar/su kenarında TAKILMIŞTIR: görüş dışında
+					## doğuş halkasına ışınla (görünür ışınlanma yok), oradan hızlı yaklaşıp ölsün.
+					if now_msec - wait_started >= GATE_RESCUE_DELAY_MSEC and now_msec - int(e.get_meta("gate_rescue_msec", 0)) >= GATE_RESCUE_DELAY_MSEC:
+						e.set_meta("gate_rescue_msec", now_msec)
+						_rescue_stuck_enemy(e, anchors)
 		e.set_gate_rush(want)
 	_gate_rush_active = any_rushed
 
@@ -1959,10 +2016,13 @@ func _apply_summon_stats(enemy: Node, stats: Dictionary) -> void:
 
 ## KENAR BEKÇİSİ doğur (guard_camps.gd çağırır; sadece host/tekli): _spawn_regular_enemy ile AYNI kurulum (kademe ölçeği, kalkan, global çarpan, istemcilere yayın),
 ## fark: konum verilir, "guards" grubuna girer, "spawn_tier" meta'sı YOK (kademe kapısı ve kapı hızlandırması onları saymaz). Elit olmaz. Dönüş: yaratık ya da null.
-func spawn_guard(pos: Vector2) -> Node:
+## tiers_ahead (guard_camps.gd "ahead"): bekçi o anki kademenin bu kadar kademe ÖTESİNİN rosterinden (15'te kısılır) doğar ve O KADEMENİN statlarıyla/kalkanıyla güçlenir
+## (sağ alt tehlikeli bölge: sonraki kademeden yaratıklar da var).
+func spawn_guard(pos: Vector2, tiers_ahead: int = 0) -> Node:
 	var tier: int = _resolve_spawn_tier()
 	if tier <= 0:
 		tier = _current_tier()
+	tier = mini(tier + maxi(tiers_ahead, 0), 15)
 	var roster: Array = _spawnable_roster(tier)
 	if roster.is_empty():
 		return null

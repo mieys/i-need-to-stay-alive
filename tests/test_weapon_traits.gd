@@ -394,6 +394,49 @@ func test_kirik_buz_freezes_every_second_hit_even_when_every_hit_is_a_different_
 		get_tree().current_scene = prev_scene
 
 
+## 2026-10-17 (kullanıcı: "pençe çok güçsüz ve az can basıyor" -> "kanama %20 sg olsun kanama birikmesin"): Kanlı Pençe yeni hedefe İLK vuruşta da
+## can basar (%6; eskiden can kontrolü kanamadan önceydi -> 0), alan payında %33; kanama saldırı gücünün %20'si/sn, tek yük (birikmez).
+func test_kanli_pence_heals_on_first_hit_and_bleed_does_not_stack() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	NetworkManager.is_multiplayer_active = false
+	GameManager.selected_char_id = 1
+	GameManager.selected_character = int(Characters.DEFS[1]["skill"])
+	_saved_weapons = GameManager.owned_weapons.duplicate(true)
+	GameManager.owned_weapons = [EnchantDefs.new_weapon_entry("pence", 1, 0)]
+	var p: Node2D = PlayerScene.instantiate()
+	add_child(p)
+	for w in p.owned_weapon_nodes.duplicate():
+		if is_instance_valid(w):
+			w.queue_free()
+	p.owned_weapon_nodes.clear()
+	p.global_position = Vector2(3000.0, 3000.0)
+	assert(p.buy_weapon_copy("pence", 1))
+	var beh: Node = p.owned_weapon_nodes[0].get("enchant_behavior")
+	assert(beh != null and str(beh.get_script().resource_path).ends_with("kanli_pence.gd"), "Pençe doğuştan Kanlı Pençe ile gelir")
+	var e: Node2D = _make_enemy(Vector2(3060.0, 3000.0), ENEMY_HP)
+	var other: Node2D = _make_enemy(Vector2(3100.0, 3000.0), ENEMY_HP)
+	await get_tree().physics_frame
+	var mult: float = float(p.call("heal_power_mult"))
+	p.max_health = 5000.0
+	p.health = 1000.0
+	beh.call("on_hit", e, 100.0, true, null)
+	assert(absf(float(p.health) - 1000.0 - 6.0 * mult) < 0.01, "yeni hedefe ilk vuruşta %%6 can: %.2f" % (float(p.health) - 1000.0))
+	beh.call("on_hit", e, 100.0, true, null)
+	assert(int(beh.call("dot_stacks", e)) == 1, "kanama birikmez (tek yük)")
+	var rec: Dictionary = (beh.get("_dots") as Dictionary)[e.get_instance_id()]
+	assert(is_equal_approx(float(rec["dps"]), float(beh.call("ap")) * 0.20), "kanama saldırı gücünün %%20'si/sn: %.2f" % float(rec["dps"]))
+	var h0: float = float(p.health)
+	beh.call("on_hit", other, 100.0, false, null)
+	assert(absf(float(p.health) - h0 - 6.0 * GameManager.LIFESTEAL_EFFECTIVENESS * mult) < 0.01, "alan payında can emme %%33")
+	for n in [p, e, other]:
+		if is_instance_valid(n):
+			n.free()
+	GameManager.owned_weapons = _saved_weapons
+	if prev_scene != null and is_instance_valid(prev_scene) and prev_scene.get_parent() == get_tree().root:
+		get_tree().current_scene = prev_scene
+
+
 # ------------------------------------------------------------------ demirci ekranı: EFSUNLAR sekmesi
 
 const ScreenScript: GDScript = preload("res://scripts/weapon_shop_screen.gd")
@@ -431,14 +474,14 @@ func test_screen_enchants_tab_lists_rows_and_buys_per_copy() -> void:
 	assert(str(screen._rows[0]["entry"]["type"]) == "wupgrade" and str(screen._rows[0]["entry"]["key"]) == "dagger", "ilk silah (Bıçak) satırları")
 	assert(str(screen._rows[0]["price"].text) == "100" and str(screen._rows[0]["shard_cost"].text) == "5", "geliştirme: 100 altın + 5 parçacık")
 	assert(str(screen._rows[4]["price"].text) == "400" and str(screen._rows[4]["shard_cost"].text) == "10", "final: 400 altın + 10 parçacık")
-	assert((screen._rows[4]["buy"] as Button).disabled, "final 4 geliştirme bitmeden kapalı")
+	assert(not screen._entry_can_buy(screen._rows[4]["entry"]), "final 4 geliştirme bitmeden kapalı")
 	screen._select(screen._rows[4]["entry"])
 	assert(str(screen._details_block.text).begins_with("Önce"), "final ayrıntısında sebep: %s" % screen._details_block.text)
-	assert("Kanayan Kesikler" in screen._details_desc.text, "ayrıntıda efsunun adı/metni: %s" % screen._details_desc.text)
+	assert("Kanayan Kesikler" in screen._details_trait.text and screen._details_desc.text != "", "vitrinde efsunun adı + temel metni: %s / %s" % [screen._details_trait.text, screen._details_desc.text])
 	screen._on_buy_pressed(screen._rows[0]["entry"])
 	assert((GameManager.owned_weapons[0]["enchant"]["ups"] as Array) == [0], "AL geliştirmeyi o kopyanın kaydına işler")
 	assert(GameManager.gold == 2900 and GameManager.weapon_shards == 45, "100 altın + 5 parçacık düştü")
-	assert(str(screen._rows[0]["price"].text) == "ALINDI" and (screen._rows[0]["buy"] as Button).disabled, "alınan plaka ALINDI + kapalı")
+	assert(str(screen._rows[0]["price"].text) == "ALINDI" and not screen._entry_can_buy(screen._rows[0]["entry"]), "alınan plaka ALINDI + kapalı")
 	assert(str(screen._rows[1]["price"].text) == "130", "sonraki geliştirme 130: %s" % screen._rows[1]["price"].text)
 	## İkinci silaha geç: onun satırları sıfırdan (kopya başına).
 	screen._trait_slot = 1
@@ -459,4 +502,4 @@ func test_fire_staff_spray_buff_numbers_and_catalog_text_agree() -> void:
 	assert(absf(per_sec - 1.08) < 0.001, "püskürtme saniyede %%108 saldırı gücü: %.3f" % per_sec)
 	assert(float(base["spray_range"]) == 140.0 and float(base["elem_ap"]) == 0.14, "menzil 140, yanma %14")
 	var text: String = str(WeaponCatalogScript.DESCRIPTIONS["fire_staff"])
-	assert(text.contains("%162") and text.contains("140"), "katalog metni sayılarla aynı (%108 x1,5 silah hasarı çarpanı, 2026-10-12 deneme): " + text)
+	assert(text.contains("%108") and text.contains("140"), "katalog metni sayılarla aynı (%108; 2026-10-14'te silah hasarı çarpanı x1,5 -> x1,0): " + text)

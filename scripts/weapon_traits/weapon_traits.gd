@@ -71,8 +71,8 @@ const DEFS := {
 	},
 	"sismik_dalga": {
 		"weapons": ["topuz"], "name": "Sismik Dalga", "element": "fiziksel",
-		"desc": "Topuz yere vurduğunda şansa bağlı olarak çevrene yayılan, düşmanları sarsan bir şok dalgası çıkar.",
-		"base": {"text": "Her vuruş %40 ihtimalle çevrene yayılan bir dalga çıkarır (4 vuruş üst üste çıkmazsa sonraki kesin çıkar): 110 birim içindekilere saldırı gücünün %70'i kadar hasar verir ve onları 20 birim sarsar (topuzun menzilinden atmaz).",
+		"desc": "Topuz yere vurduğunda şansa bağlı olarak vuruş noktasından yayılan, düşmanları sarsan bir şok dalgası çıkar.",
+		"base": {"text": "Her vuruş %40 ihtimalle vuruş noktasından yayılan bir dalga çıkarır (4 vuruş üst üste çıkmazsa sonraki kesin çıkar): 110 birim içindekilere saldırı gücünün %70'i kadar hasar verir ve onları 20 birim sarsar (topuzun menzilinden atmaz).",
 			"set": {"seis_chance": 0.40, "seis_pity": 4, "seis_radius": 110.0, "seis_ap": 0.7, "seis_push": 20.0, "seis_pulses": 1}},
 		"upgrades": [
 			{"name": "Halka Yankısı", "text": "Dalga ihtimali: %40 → %50.", "add": {"seis_chance": 0.10}},
@@ -99,13 +99,15 @@ const DEFS := {
 	},
 	"kanli_pence": {
 		"weapons": ["pence"], "name": "Kanlı Pençe", "element": "kanama",
-		"desc": "Pençe darbeleri kanama bırakır; kanayan düşmana vurdukça can kazanırsın.",
-		"base": {"text": "Her pençe 3 saniyelik kanama bırakır (saniyede saldırı gücünün %7'si, her vuruş süreyi yeniler). Kanayan bir düşmana her vurduğunda verdiğin hasarın %4'ü kadar can kazanırsın.",
-			"set": {"kp_ap": 0.07, "kp_dur": 3.0, "kp_leech": 0.04, "bleeding_bonus": 0.0, "kp_kill_haste": 0.0, "kp_kill_heal": 0.0}},
+		"desc": "Pençe darbeleri kanama bırakır; her pençe darbesinde can kazanırsın.",
+		## 2026-10-17 (kullanıcı: "pençe çok güçsüz ve az can basıyor" -> "kanama %20 sg olsun kanama birikmesin"): kanama %7 -> %20 (tek
+		## yük, birikmez), can emme %4 -> %6 ve artık İLK vuruşta da (eskiden sadece zaten kanayan hedefte: yeni hedefe ilk vuruş 0 can).
+		"base": {"text": "Her pençe 3 saniyelik kanama bırakır (saniyede saldırı gücünün %20'si; birikmez, her vuruş süreyi yeniler). Her pençe darbesinde verdiğin hasarın %6'sı kadar can kazanırsın (alandaki diğer yaratıklara verilen hasardan üçte biri).",
+			"set": {"kp_ap": 0.20, "kp_dur": 3.0, "kp_leech": 0.06, "bleeding_bonus": 0.0, "kp_kill_haste": 0.0, "kp_kill_heal": 0.0}},
 		"upgrades": [
-			{"name": "Derin Pençe", "text": "Kanama hasarı: saniyede saldırı gücünün %7'si → %9'u.", "add": {"kp_ap": 0.02}},
+			{"name": "Derin Pençe", "text": "Kanama hasarı: saniyede saldırı gücünün %20'si → %25'i.", "add": {"kp_ap": 0.05}},
 			{"name": "Uzun Kanama", "text": "Kanama 1,5 saniye daha uzun sürer (3 → 4,5 sn).", "add": {"kp_dur": 1.5}},
-			{"name": "Kan Emici", "text": "Can emme oranı: %4 → %6.", "add": {"kp_leech": 0.02}},
+			{"name": "Kan Emici", "text": "Can emme oranı: %6 → %8.", "add": {"kp_leech": 0.02}},
 			{"name": "Yırtıcı Darbe", "text": "Kanayan düşmana verdiğin hasar %15 artar.", "set": {"bleeding_bonus": 0.15}},
 		],
 		"final": {"name": "Kan Susuzluğu", "text": "Kanayan bir düşmanı öldürdüğünde 3 saniye boyunca saldırı hızın %30 artar ve maksimum canının %3'ü kadar iyileşirsin.",
@@ -142,16 +144,16 @@ const DEFS := {
 	"bulasici_salgi": {
 		"weapons": ["tuftuf"], "name": "Bulaşıcı Salgı", "element": "zehir",
 		"desc": "Dartlar zehirler; zehirli düşman ölünce zehir çevresindeki düşmanlara bulaşır.",
-		"base": {"text": "Her dart 4 saniyelik zehir yükü bırakır (yük başına saniyede saldırı gücünün %6'sı), yükler 5'e kadar üst üste biner. Zehirli bir düşman ölünce zehri olduğu gibi 100 birim içindeki en çok 6 düşmana bulaşır.",
-			"set": {"poison_stacks": 1, "poison_dps": 0.06, "poison_dur": 4.0, "poison_cap": 5.0, "plague_radius": 100.0, "plague_ratio": 1.0}},
+		"base": {"text": "Her dart 4 saniyelik zehir yükü bırakır (yük başına saniyede saldırı gücünün %7'si), yükler 5'e kadar üst üste biner. Zehirli bir düşman ölünce zehri olduğu gibi 50 birim içindeki en çok 6 düşmana bulaşır.",
+			"set": {"poison_stacks": 1, "poison_dps": 0.07, "poison_dur": 4.0, "poison_cap": 5.0, "plague_radius": 50.0, "plague_ratio": 1.0}},
 		"upgrades": [
-			{"name": "Yoğun Zehir", "text": "Zehir hasarı: yük başına saniyede saldırı gücünün %6'sı → %8'i.", "add": {"poison_dps": 0.02}},
+			{"name": "Yoğun Zehir", "text": "Zehir hasarı: yük başına saniyede saldırı gücünün %7'si → %9'u.", "add": {"poison_dps": 0.02}},
 			{"name": "Uzun Etki", "text": "Zehir 2 saniye daha uzun sürer (4 → 6 sn).", "add": {"poison_dur": 2.0}},
-			{"name": "Geniş Salgın", "text": "Bulaşma yarıçapı 100 → 140 birim.", "add": {"plague_radius": 40.0}},
+			{"name": "Geniş Salgın", "text": "Bulaşma yarıçapı 50 → 70 birim.", "add": {"plague_radius": 20.0}},
 			{"name": "Kalın Birikim", "text": "Zehir yığın sınırı 5 → 8.", "add": {"poison_cap": 3.0}},
 		],
-		"final": {"name": "Kara Veba", "text": "Bulaşan zehir yükleri %50 artar ve bulaşma yarıçapı 50 birim daha büyür.",
-			"add": {"plague_ratio": 0.5, "plague_radius": 50.0}},
+		"final": {"name": "Kara Veba", "text": "Bulaşan zehir yükleri %50 artar ve bulaşma yarıçapı 25 birim daha büyür.",
+			"add": {"plague_ratio": 0.5, "plague_radius": 25.0}},
 	},
 	"delici_mermi": {
 		"weapons": ["tufek"], "name": "Delici Mermi", "element": "fiziksel",
@@ -184,11 +186,11 @@ const DEFS := {
 	"uclu_ok": {
 		"weapons": ["yay"], "name": "Üçlü Ok", "element": "fiziksel",
 		"desc": "Belirli aralıklarla ana okun yanında yelpaze halinde ek oklar çıkar.",
-		"base": {"text": "Her 3. atışta ana okun yanında 2 ok daha yelpaze halinde çıkar (yan oklar hasarın %80'i).",
-			"set": {"fan_every": 3, "fan_extra": 2, "fan_deg": 10.0, "fan_dmg": 0.8, "fan_haste": 0.0, "pierce": 0}},
+		"base": {"text": "Her 3. atışta ana okun yanında 2 ok daha yelpaze halinde çıkar (yan oklar hasarın %60'ı).",
+			"set": {"fan_every": 3, "fan_extra": 2, "fan_deg": 10.0, "fan_dmg": 0.6, "fan_haste": 0.0, "pierce": 0}},
 		"upgrades": [
 			{"name": "Seri Çekiş", "text": "Yelpaze her 3. atış yerine her 2. atışta çıkar.", "add": {"fan_every": -1}},
-			{"name": "Keskin Yan Oklar", "text": "Yan okların hasarı: ana okun %80'i → %100'ü.", "add": {"fan_dmg": 0.2}},
+			{"name": "Keskin Yan Oklar", "text": "Yan okların hasarı: ana okun %60'ı → %75'i.", "add": {"fan_dmg": 0.15}},
 			{"name": "Geniş Yelpaze", "text": "Yan ok sayısı 2 → 4 (toplam 5 ok).", "add": {"fan_extra": 2}},
 			{"name": "Delici Uçlar", "text": "Oklar bir düşmanı delip geçer.", "set": {"pierce": 1}},
 		],

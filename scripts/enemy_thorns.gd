@@ -44,6 +44,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	if not _erupted:
+		if AbilitiesScript.caster_disabled(source, data):
+			queue_free() ## sahibi uyarı sırasında dondu/sersemledi: dikenler hiç çıkmaz
+			return
 		if _t < _warn:
 			return
 		_erupted = true

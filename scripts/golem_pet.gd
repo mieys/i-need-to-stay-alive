@@ -3,6 +3,7 @@ const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 ## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+const ProjectileRangeScript := preload("res://scripts/projectile_range.gd")
 
 ## Necromancer'ın ULTİ'si (skill id 20, R tuşu, bkz. player.gd
 ## _skill_necro_summon_golem/characters.gd DEFS[11]) ile çağrılan Golem.
@@ -296,6 +297,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_update_focus_target()
 	_process_movement(delta)
+	_leash_to_owner_vision()
 	_process_attack(delta)
 	_process_incoming_damage(delta)
 	_process_shield_regen(delta)
@@ -376,11 +378,19 @@ func _broadcast_network_state() -> void:
 ## yakın tehdide yönelir (saldırı zaten alan hasarlı, bkz. _process_attack,
 ## bu yüzden hangi belirli hedefe kilitlendiği hasarı etkilemiyor, sadece
 ## hangi yöne yürüdüğünü etkiliyor).
+## 2026-10-17: minyon sahibinin görüş alanından çıkamaz; hedef de o alanın içinde olmalı.
+func _leash_to_owner_vision() -> void:
+	if owner_player and is_instance_valid(owner_player) and is_inside_tree():
+		global_position = ProjectileRangeScript.clamp_to_owner_vision(global_position, owner_player.global_position, get_tree())
+
+
 func _update_focus_target() -> void:
 	var nearest: Node2D = null
 	var nearest_dist: float = SEEK_RADIUS
 	for e in EnemyQueryScript.candidates(get_tree(), global_position, SEEK_RADIUS + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
+			continue
+		if owner_player and is_instance_valid(owner_player) and not ProjectileRangeScript.inside_owner_vision(e.global_position, owner_player.global_position, get_tree()):
 			continue
 		var d: float = global_position.distance_to(e.global_position)
 		if d <= nearest_dist:
@@ -689,8 +699,8 @@ func _process_incoming_damage(delta: float) -> void:
 	var total: float = 0.0
 	var contact_range: float = INCOMING_CONTACT_RANGE * size_mult
 	for e in EnemyQueryScript.candidates(get_tree(), global_position, contact_range + 1.0):
-		if not is_instance_valid(e) or e.get("is_dead") == true:
-			continue
+		if not is_instance_valid(e) or e.get("is_dead") == true or e.get("is_frozen") == true:
+			continue ## donmuş/sersemlemiş yaratık temas hasarı vermez
 		if global_position.distance_to(e.global_position) <= contact_range:
 			total += float(e.get("contact_damage")) if "contact_damage" in e else INCOMING_FALLBACK_DAMAGE
 	if total > 0.0:

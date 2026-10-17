@@ -190,7 +190,8 @@ func _process(delta: float) -> void:
 		## kontrolüyle - içerideyken minimap'teki yaratık noktaları boşaltılır.
 		var player_indoors: bool = _player != null and is_instance_valid(_player) and _player.has_method("is_indoors_now") and _player.is_indoors_now()
 		if player_indoors:
-			_enemy_dots = []
+			## Bosslar ev içindeyken de daima görünür (kullanıcı isteği: "Bossların yeri haritada daima görünsün").
+			_enemy_dots = _collect_boss_dots()
 			_ew_dots_world = null
 		else:
 			## Kullanıcı isteği (LoL tarzı görüş alanı): sisin içindeki düşman
@@ -219,11 +220,10 @@ func _process(delta: float) -> void:
 				## Yeraltı Canavarı'nın havuz düğümü (underground_boss.gd) oyuncuların ortasında durur ve görünmezdir: minimapte nokta/yön oku olmasın.
 				if enemy.has_meta(&"hide_on_minimap"):
 					continue
-				if VisionFogScript.fog_visibility_of(enemy) < VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY:
+				var is_boss: bool = enemy.is_in_group("boss") or ("is_boss" in enemy and bool(enemy.is_boss))
+				## Boss sisin içinde de gizlenmez (yeri daima görünür); sıradan yaratıklar sise tabi.
+				if not is_boss and VisionFogScript.fog_visibility_of(enemy) < VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY:
 					continue
-				var is_boss: bool = false
-				if "is_boss" in enemy:
-					is_boss = bool(enemy.is_boss)
 				dots.append({"node": enemy, "is_boss": is_boss})
 			_enemy_dots = dots
 
@@ -236,6 +236,17 @@ func _process(delta: float) -> void:
 		## bağladık: minimap artık saniyede 5 kez çiziliyor, oyuncu noktaları
 		## da bu aralıkta güncelleniyor (küçük köşe UI'ı için gözle fark
 		## edilmez bir ödün, ama büyük CPU kazancı).
+
+## Yaşayan bosslar: sis ve ev içi süzgecinden bağımsız, minimapte daima (görünüm dışındaysa kenarda yön oku olarak) çizilir.
+func _collect_boss_dots() -> Array:
+	var out: Array = []
+	for boss: Node in get_tree().get_nodes_in_group("boss"):
+		if not is_instance_valid(boss) or not ("global_position" in boss):
+			continue
+		if boss.get("is_dead") == true or boss.has_meta(&"hide_on_minimap"):
+			continue
+		out.append({"node": boss, "is_boss": true})
+	return out
 
 func _draw() -> void:
 	var center: Vector2 = Vector2(RADIUS + 2.0, RADIUS + 2.0)

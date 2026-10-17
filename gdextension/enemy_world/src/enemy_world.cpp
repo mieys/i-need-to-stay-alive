@@ -73,6 +73,13 @@ constexpr float IDLE_SPEED_SMOOTHING = 20.0f;
 constexpr int ROW_DOWN = 0, ROW_UP = 1, ROW_LEFT = 2, ROW_RIGHT = 3;
 
 inline float len2(float x, float y) { return x * x + y * y; }
+
+// Şovalye baloncuğu ELİPS (2026-10-14, izometrik kubbe, madde 160): t_zone = r = elipsin yatay yarıçapı, dikey r/2 (2:1).
+// (ux, uy) birim yönde merkezden kenara uzaklık. GDScript karşılığı: scripts/paladin_dome.gd radius_along (X_MULT 1, Y_MULT 0.5).
+inline float zone_r_along(float r, float ux, float uy) {
+	const float d = ux * ux + 4.0f * uy * uy;
+	return d > 1e-6f ? r / std::sqrt(d) : r;
+}
 } // namespace
 
 void EnemyWorld::_bind_methods() {
@@ -976,7 +983,9 @@ int32_t EnemyWorld::apply_overrides(int32_t i, int32_t t) {
 		if (z == t) {
 			return t; // hedef zaten bir baloncuğun sahibi
 		}
-		if (std::sqrt(len2(tx[t] - tx[z], ty[t] - ty[z])) > t_zone[z] + ZONE_FOCUS_MARGIN) {
+		const float zx = tx[t] - tx[z], zy = ty[t] - ty[z];
+		const float zd = std::sqrt(len2(zx, zy));
+		if (zd > 0.01f && zd > zone_r_along(t_zone[z], zx / zd, zy / zd) + ZONE_FOCUS_MARGIN) {
 			continue;
 		}
 		const float od = std::sqrt(len2(tx[z] - px[i], ty[z] - py[i]));
@@ -1847,7 +1856,7 @@ void EnemyWorld::step(float delta) {
 					const float dirx = dist > 0.1f ? tpx / dist : 0.0f, diry = dist > 0.1f ? tpy / dist : 0.0f;
 					float fdx = dirx, fdy = diry;
 					true_contact = (radius[i] + t_body[t]) * body_block_scale;
-					min_sep = std::max(true_contact, t_zone[t]);
+					min_sep = std::max(true_contact, t_zone[t] > 0.0f ? zone_r_along(t_zone[t], dirx, diry) : 0.0f);
 					if (ranged && dist <= ranged_range[i] && taunt_t[i] <= 0.0f && has_los(i, t)) {
 						update_stuck(i, think_dt, false);
 					} else if (dist <= min_sep) {
@@ -1948,10 +1957,12 @@ void EnemyWorld::step(float delta) {
 		if (!frozen && t >= 0 && !t_ghost[t] && min_sep > 0.0f && kl_now < KNOCKBACK_CLAMP_SKIP) {
 			const float ax = tx[t] - px[i], ay = ty[t] - py[i];
 			const float ad = std::sqrt(ax * ax + ay * ay);
-			if (ad < min_sep) {
-				const float ux = ad > 0.5f ? -ax / ad : 1.0f, uy = ad > 0.5f ? -ay / ad : 0.0f;
-				px[i] = tx[t] + ux * min_sep;
-				py[i] = ty[t] + uy * min_sep;
+			const float ux = ad > 0.5f ? -ax / ad : 1.0f, uy = ad > 0.5f ? -ay / ad : 0.0f;
+			// elips baloncukta mesafe yöne bağlı: o anki yönde yeniden ölç (min_sep düşünme karesindeki yönden)
+			const float sep = t_zone[t] > 0.0f ? std::max(true_contact, zone_r_along(t_zone[t], ux, uy)) : min_sep;
+			if (ad < sep) {
+				px[i] = tx[t] + ux * sep;
+				py[i] = ty[t] + uy * sep;
 			}
 		}
 		if (!frozen) {
@@ -1961,10 +1972,11 @@ void EnemyWorld::step(float delta) {
 				}
 				const float ax = tx[z] - px[i], ay = ty[z] - py[i];
 				const float ad = std::sqrt(ax * ax + ay * ay);
-				if (ad < t_zone[z]) {
-					const float ux = ad > 0.5f ? -ax / ad : 1.0f, uy = ad > 0.5f ? -ay / ad : 0.0f;
-					px[i] = tx[z] + ux * t_zone[z];
-					py[i] = ty[z] + uy * t_zone[z];
+				const float ux = ad > 0.5f ? -ax / ad : 1.0f, uy = ad > 0.5f ? -ay / ad : 0.0f;
+				const float zr = zone_r_along(t_zone[z], ux, uy);
+				if (ad < zr) {
+					px[i] = tx[z] + ux * zr;
+					py[i] = ty[z] + uy * zr;
 				}
 			}
 			if (merchant_active) {
@@ -1976,6 +1988,12 @@ void EnemyWorld::step(float delta) {
 					py[i] = merchant_y + uy * merchant_r;
 				}
 			}
+		}
+		// Şovalye kubbesi SERT bariyerdir (2026-10-17, Yürüyen Kale): yukarıdaki yapıştırmalar donukken ve geri itilirken (hız >=
+		// KNOCKBACK_CLAMP_SKIP) atlanıyor - kayan kubbe silah darbesiyle savrulan / dondurulmuş yaratığın üstünden geçip onu içeri
+		// alıyordu. Bu durumlarda da elipsin dışına çıkarılır (hedef gövde yapıştırması ayrı kalır, sadece kubbe).
+		if (frozen || kl_now >= KNOCKBACK_CLAMP_SKIP) {
+			push_out_of_zones(i, t);
 		}
 
 		// ---- yakın dövüş / baloncuk saldırısı olayları (mesafe hareketten ÖNCEKİ, enemy.gd ile aynı)
@@ -2089,6 +2107,28 @@ void EnemyWorld::step_puppet(int32_t i, float delta) {
 	const float k = std::min(1.0f, delta * 18.0f);
 	px[i] += tox * k;
 	py[i] += toy * k;
+	// Şovalye kubbesi istemcide de bariyer: host konumları gecikmeli (+ ileri tahmin) geldiği, kubbe sahibi de bu ekranda başka
+	// bir gecikmeyle çizildiği için yürüyen kubbe yaratıkların üstüne biniyordu. Sadece GÖRÜNÜR konum düzeltilir; host kuralı aynı.
+	push_out_of_zones(i, -1);
+}
+
+// Şovalye kubbelerinin (elips) içindeki yaratığı merkezden kenara doğru dışarı iter. skip_ghost_target: hayalet (içinden
+// geçilebilen) hedefin kendi kubbesi atlanır (ana yapıştırmayla aynı kural).
+void EnemyWorld::push_out_of_zones(int32_t i, int32_t skip_ghost_target) {
+	const int nt = (int)tx.size();
+	for (int z = 0; z < nt; z++) {
+		if (t_zone[z] <= 0.0f || (z == skip_ghost_target && t_ghost[z])) {
+			continue;
+		}
+		const float ax = tx[z] - px[i], ay = ty[z] - py[i];
+		const float ad = std::sqrt(ax * ax + ay * ay);
+		const float ux = ad > 0.5f ? -ax / ad : 1.0f, uy = ad > 0.5f ? -ay / ad : 0.0f;
+		const float zr = zone_r_along(t_zone[z], ux, uy);
+		if (ad < zr) {
+			px[i] = tx[z] + ux * zr;
+			py[i] = ty[z] + uy * zr;
+		}
+	}
 }
 
 // Düğüm konumu C++'ın son yazdığından farklıysa biri dışarıdan taşımıştır (doğumda add_child SONRASI konumlama,

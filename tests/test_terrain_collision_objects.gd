@@ -11,6 +11,7 @@ const HaritaScene: PackedScene = preload("res://scenes/harita_baked.tscn")
 const TerrainCollisionScript: GDScript = preload("res://scripts/terrain_collision.gd")
 const DepthScript: GDScript = preload("res://scripts/depth_occluders.gd")
 const EnemyPathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
+const MapFrameScript := preload("res://scripts/map_frame.gd")
 const EnemyWorldBridgeScript: GDScript = preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 const SPEED := 120.0
 const DT := 0.05
@@ -188,7 +189,12 @@ func test_pathing_grid_has_objects_but_the_fog_grid_is_forest_only() -> void:
 	for i in range(EnemyPathingScript._blocked.size()):
 		blocked += 1 if EnemyPathingScript._blocked[i] != 0 else 0
 		fog += 1 if EnemyPathingScript._fog_blocked[i] != 0 else 0
-	assert(fog == _forest.get_used_cells().size(), "fog ızgarası tam orman hücreleri olmalı: %d / %d" % [fog, _forest.get_used_cells().size()])
+	## dış çerçeve (madde 119): ızgara çerçevenin sadece PATH_RING_KEEP hücrelik kısmını tutar (MapFrame.in_path_grid)
+	var expected: int = 0
+	for fc: Vector2i in _forest.get_used_cells():
+		if MapFrameScript.in_path_grid(fc):
+			expected += 1
+	assert(fog == expected, "fog ızgarası tam orman hücreleri olmalı: %d / %d" % [fog, expected])
 	assert(blocked > fog + 3000, "hareket ızgarası orman + su/bina/ağaç/maden içermeli: %d / %d" % [blocked, fog])
 	var w: Vector2i = TerrainCollisionScript.by_category["water"][0]
 	assert(EnemyPathingScript._is_solid(w), "su hücresi yol bulma ızgarasında engel olmalı")
@@ -289,4 +295,17 @@ func test_water_does_not_cut_the_fog_but_forest_walls_still_do() -> void:
 	world.call("fog_update", PackedVector2Array([wall["src"]]), 400.0, 1.4, 0.2, 0.05, 1, 2)
 	assert(not enemy.visible, "orman duvarının arkasındaki yaratık gizlenmeli")
 	enemy.free()
+	_unload_map()
+
+
+## Papağan ağaç hedefi (madde 203): gövde hücresinin "dibi" hücre merkezinin FEET_SHIFT altında ve orman katmanı hücresi aynı hücre (dünya dönüşümü doğru).
+func test_tree_base_world_position_matches_cell() -> void:
+	_load_map()
+	var cells: Array = TerrainCollisionScript.by_category.get("trees", [])
+	assert(cells.size() > 50)
+	for i in range(0, mini(cells.size(), 40)):
+		var c: Vector2i = cells[i]
+		var base: Vector2 = TerrainCollisionScript.cell_world_base(c)
+		var center: Vector2 = base - Vector2(0.0, TerrainCollisionScript.FEET_SHIFT)
+		assert(_forest.local_to_map(_forest.to_local(center)) == c, "hücre %s dünya karşılığı yanlış: %s" % [str(c), str(center)])
 	_unload_map()

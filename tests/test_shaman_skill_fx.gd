@@ -86,7 +86,7 @@ func test_plant_collapse_and_rune_puffs_carry_their_kind() -> void:
 		fx.free()
 
 
-## Totem sahneleri: 48x64 karelik 6 kareli döngü, NEAREST, TotemSprite adıyla (TotemBase bulur).
+## Totem sahneleri (v4, madde 176): 40x56 karelik 8 kareli döngü, Shaman pikseli ölçeğinde (0.903), NEAREST, TotemSprite adıyla (TotemBase bulur).
 func test_totem_scenes_use_48px_pixel_sprites() -> void:
 	for path: String in TOTEM_SCENES:
 		var inst: Node = (load(path) as PackedScene).instantiate()
@@ -94,10 +94,11 @@ func test_totem_scenes_use_48px_pixel_sprites() -> void:
 		assert(spr != null, "%s 'TotemSprite' taşımalı" % path)
 		assert(spr.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "%s NEAREST olmalı" % path)
 		var anim: StringName = spr.animation
-		assert(spr.sprite_frames.get_frame_count(anim) == 6, "%s 6 kare olmalı" % path)
+		assert(spr.sprite_frames.get_frame_count(anim) == 8, "%s 8 kare olmalı" % path)
+		assert(is_equal_approx(spr.scale.x, 0.903), "%s Shaman pikseli ölçeğinde (0.903) olmalı" % path)
 		assert(spr.sprite_frames.get_animation_loop(anim), "%s idle döngüsü olmalı" % path)
 		var tex: Texture2D = spr.sprite_frames.get_frame_texture(anim, 0)
-		assert(tex.get_width() == 48 and tex.get_height() == 64, "%s kareleri 48x64 olmalı - v2 totem tasarımı, bkz. tools/shaman_totem_art.py (bulunan %s)" % [path, tex.get_size()])
+		assert(tex.get_width() == 40 and tex.get_height() == 56, "%s kareleri 40x56 olmalı - v4 totem, bkz. tools/gen_shaman_totems_v4.py (bulunan %s)" % [path, tex.get_size()])
 		inst.free()
 
 

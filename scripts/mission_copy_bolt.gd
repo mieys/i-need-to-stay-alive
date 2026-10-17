@@ -30,7 +30,9 @@ var _total_dist: float = 0.0
 var _dir: Vector2 = Vector2.RIGHT
 var _cosmetic: bool = false ## host olmayan istemcideki salt görsel kopya - hasar VERMEZ
 var _speed: float = SPEED
-var _visual: Dictionary = {} ## {"proj": PackedScene, "speed", "scale", "rot"} - boşsa mor mermi
+var _visual: Dictionary = {} ## {"proj": PackedScene, "speed", "scale", "rot", "impact"} - boşsa mor mermi
+var _visual_clone: Node2D = null
+var _impacting: bool = false ## "impact" animasyonu oynuyor: uçuş durdu, bitince silinir
 
 ## Silahın mermi sahnesinin kopyası, oyuncunun karakter ölçeğiyle çarpılır (weapon.gd _fire_at: proj.scale *= karakter ölçeği).
 const VISUAL_CHAR_SCALE := 0.5
@@ -54,6 +56,7 @@ func _ready() -> void:
 	if _visual.get("proj") is PackedScene:
 		clone = make_visual(_visual["proj"], float(_visual.get("scale", 1.0)), float(_visual.get("rot", 0.0)))
 	if clone != null:
+		_visual_clone = clone
 		add_child(clone)
 	else:
 		var rect := ColorRect.new()
@@ -96,11 +99,13 @@ func _physics_process(delta: float) -> void:
 	var step: float = _speed * delta
 	_traveled += step
 	position += _dir * step
+	if _impacting:
+		return
 	var victim: Node = _touching_player()
 	if victim:
 		if not _cosmetic and victim.has_method("take_damage"):
 			victim.take_damage(_damage, _source if is_instance_valid(_source) else null)
-		queue_free()
+		_play_impact((victim as Node2D).global_position)
 		return
 	if _traveled >= _total_dist or GameManager.is_position_blocked_by_forest(global_position):
 		queue_free()
@@ -113,4 +118,61 @@ func _touching_player() -> Node:
 				continue
 			if (p as Node2D).global_position.distance_to(global_position) <= HIT_RADIUS:
 				return p
+	return null
+
+
+## İsabet: silahın kendi isabet efekti (impact_scene) + sesi + merminin kendi "impact" animasyonu (projectile.gd _spawn_impact /
+## _play_impact_sound / _finish_or_play_impact ile aynı kurallar). Hem host'taki gerçek hem istemcideki kozmetik mermi oynatır.
+## Veri yoksa (mor mermi / efektsiz silah) mermi anında silinir.
+func _play_impact(at: Vector2) -> void:
+	var imp: Dictionary = _visual.get("impact", {})
+	if imp.get("scene") is PackedScene:
+		var group: StringName = &""
+		var max_alive: int = int(imp.get("max_alive", 0))
+		var scene: PackedScene = imp["scene"]
+		if max_alive > 0:
+			group = StringName("impact_fx_" + scene.resource_path.get_file())
+		if group == &"" or get_tree().get_node_count_in_group(group) < max_alive:
+			var fx: Node = scene.instantiate()
+			get_tree().current_scene.add_child(fx)
+			if group != &"":
+				fx.add_to_group(group)
+			if fx is Node2D:
+				var fx2d: Node2D = fx as Node2D
+				var sc: float = float(imp.get("scale", 1.0))
+				if sc != 1.0:
+					fx2d.scale *= sc
+				fx2d.global_position = at + Vector2(imp.get("offset", Vector2.ZERO))
+				if bool(imp.get("face", false)):
+					fx2d.rotation = _dir.angle()
+	var sounds: Array = imp.get("sounds", [])
+	if not sounds.is_empty() and not NetworkManager.should_throttle("projectile_impact_sound", 0.025):
+		var snd := AudioStreamPlayer2D.new()
+		snd.stream = sounds[randi_range(0, sounds.size() - 1)]
+		snd.volume_db = float(imp.get("db", -8.79))
+		snd.pitch_scale = randf_range(0.92, 1.08)
+		snd.max_distance = 1500.0
+		get_tree().current_scene.add_child(snd)
+		snd.global_position = at
+		snd.play()
+		snd.finished.connect(snd.queue_free)
+	var spr: AnimatedSprite2D = _impact_sprite()
+	if spr == null:
+		queue_free()
+		return
+	_impacting = true
+	global_position = at
+	spr.animation_finished.connect(queue_free)
+	spr.play("impact")
+
+
+## Mermi görselinde "impact" animasyonu olan AnimatedSprite2D (kökün kendisi ya da çocuğu), yoksa null.
+func _impact_sprite() -> AnimatedSprite2D:
+	if _visual_clone == null or not is_instance_valid(_visual_clone):
+		return null
+	var nodes: Array = [_visual_clone]
+	nodes.append_array(_visual_clone.get_children())
+	for c in nodes:
+		if c is AnimatedSprite2D and (c as AnimatedSprite2D).sprite_frames != null 				and (c as AnimatedSprite2D).sprite_frames.has_animation("impact"):
+			return c as AnimatedSprite2D
 	return null

@@ -158,6 +158,65 @@ func test_wait_limit_still_starts_the_tier_if_a_creature_never_dies() -> void:
 	_cleanup()
 
 
+# ---------------------------------------------------------------- takılan yaratık kurtarma (2026-10-14)
+class StuckEnemy extends Node2D:
+	var is_dead: bool = false
+	var teleports: int = 0
+
+	func set_gate_rush(_m: float) -> void:
+		pass
+
+	func teleport_to(p: Vector2) -> void:
+		teleports += 1
+		global_position = p
+
+
+func test_gate_holder_that_stays_out_of_sight_is_teleported_out_to_the_spawn_ring() -> void:
+	var sp: Node = _spawner()
+	var e := StuckEnemy.new()
+	e.add_to_group("enemies")
+	e.set_meta("spawn_tier", 1)
+	add_child(e)
+	_made.append(e)
+	e.global_position = Vector2(500.0 + 1000.0, 500.0) ## görüş dışı ama kapıyı tutan (<1600 px) = duvar dibinde takılı
+	GameManager.game_time = TIER_SECONDS + 1.0
+	sp._check_tier_announcement()
+	assert(e.teleports == 0, "kapı daha yeni beklemeye başladı: ışınlanmamalı")
+	sp._gate_wait_started_msec = Time.get_ticks_msec() - sp.GATE_RESCUE_DELAY_MSEC - 10
+	sp._announce_poll_msec = 0
+	sp._check_tier_announcement()
+	assert(e.teleports == 1, "kapıyı GATE_RESCUE_DELAY_MSEC'tir tutan görüş dışı yaratık ışınlanmalı: %d" % e.teleports)
+	var d: float = e.global_position.distance_to(Vector2(500.0, 500.0))
+	assert(d >= sp.min_spawn_distance - 1.0 and d <= sp.max_spawn_distance + 1.0, "oyuncunun doğuş halkasına gitmeli: %f" % d)
+	sp._announce_poll_msec = 0
+	sp._check_tier_announcement()
+	assert(e.teleports == 1, "aralık dolmadan tekrar ışınlanmamalı")
+	_cleanup()
+
+
+func test_stuck_tier_boss_out_of_sight_is_teleported_while_it_holds_the_clock() -> void:
+	var sp: Node = _spawner()
+	var boss := StuckEnemy.new()
+	boss.add_to_group("enemies")
+	boss.add_to_group("boss")
+	add_child(boss)
+	_made.append(boss)
+	boss.global_position = Vector2(500.0 + 3000.0, 500.0) ## çok uzakta takılı
+	sp._tier_bosses[1] = [boss]
+	GameManager.game_time = TIER_SECONDS + 30.0 ## boss sağken saat 1. kademenin sonunda tutulur
+	assert(sp.is_tier_held_by_boss(), "boss saati tutmalı")
+	sp._boss_hold_rescue_tick()
+	assert(boss.teleports == 0, "tutuş yeni başladı")
+	sp._boss_hold_started_msec = Time.get_ticks_msec() - sp.BOSS_HOLD_RESCUE_MSEC - 10
+	sp._boss_hold_rescue_tick()
+	assert(boss.teleports == 1, "görüş dışında takılı boss ışınlanmalı: %d" % boss.teleports)
+	assert(boss.global_position.distance_to(Vector2(500.0, 500.0)) < 1500.0, "boss oyuncunun yakınına gelmeli")
+	boss.is_dead = true
+	sp._boss_hold_rescue_tick()
+	assert(sp._boss_hold_started_msec == 0, "boss ölünce sayaç sıfırlanmalı")
+	_cleanup()
+
+
 # ---------------------------------------------------------------- kapı: boss
 func test_tier_boss_does_not_spawn_before_its_tier_has_started() -> void:
 	var sp: Node = _spawner()

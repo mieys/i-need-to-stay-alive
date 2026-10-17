@@ -37,23 +37,27 @@ const ICONS := {
 const MELEE_KEYS := ["dagger", "pence", "topuz", "uzunkilic"]
 ## 2026-10-10 denge turu 2: Arbalet ateş hızı 0,72 -> 0,8 sn, Buz Asası oranı 0,693 -> 0,9, Arcane 0,99 -> 1,25, Tüftüf menzili 128 -> 150, Bıçak 0,765 -> 0,88,
 ## Pençe 0,9 -> 1,035, Fişek ateş aralığı 3,72 -> 3,2 sn (sahne dosyaları); Tüfek delme artışı ve Yıldırım sekmesi efsun tabanında (enchant_defs.gd). Eski "N + %X" metinleri düz hasarı olmayan silahlarda yanlıştı.
-## 2026-10-12 deneme: TÜM hasar sayıları x1,5, Bıçak/Pençe/Topuz x2,1 (weapon.gd WEAPON_DAMAGE_MULT / MELEE_EXTRA_DAMAGE_MULT); eski değerler sahne oranlarıdır.
+## 2026-10-12 deneme: TÜM hasar sayıları x1,5, Bıçak/Pençe/Topuz x2,1; 2026-10-14: genel çarpan x1,0'a döndü (Bıçak/Pençe/Topuz x1,4) - weapon.gd WEAPON_DAMAGE_MULT / MELEE_EXTRA_DAMAGE_MULT; eski değerler sahne oranlarıdır.
+## 2026-10-17: TÜM silahların saldırı hızı -%30 (GameManager.WEAPON_ATTACK_SPEED_MULT 0,7): aşağıdaki "Ateş hızı" saniyeleri sahne oranı / 0,7 (gerçek atış aralığı).
+## 2026-10-17 (kullanıcı: "pençe çok güçsüz"): yüzdeler 10-12 denemesinin x1,5'iyle şişik kalmıştı (ör. Pençe %216, gerçek %145) ve "N +" düz
+## hasarları yoktu - hepsi GERÇEK orana çekildi: sahne card_damage_bonus_ratio x WEAPON_DAMAGE_MULT (1,0) x yakın dövüş MELEE_EXTRA_DAMAGE_MULT (1,4;
+## Bıçak/Pençe/Topuz), Uzunkılıç SWORD_AP_RATIO (1,2). Ateş Asası metni ayrı formül (püskürtme/saniye), dokunulmadı. Oran değişirse BURAYI da güncelle.
 const DESCRIPTIONS := {
-	"dagger": "HASAR: %185 saldırı gücü · Yakın dövüş, hedefin çevresine hafif alan hasarı",
-	"fire_staff": "HASAR: saniyede %162 saldırı gücü (koni, alandaki herkese) · Menzil 140 · Sürekli alev püskürtür, 3 sn yakar (saniyede %14)", ## 2026-10-10 buff: Destiny püskürtmesi %15 -> %27 / 0,25 sn, menzil 110 -> 140, yanma %8 -> %14
-	"lightning_staff": "HASAR: 18/sn + %210 saldırı gücü · Menzil 168 · Kesintisiz ışın",
-	"tabanca": "HASAR: %173 saldırı gücü · Ateş hızı 0.9sn · Menzil 210", ## 2026-10-10: oran 0,891 -> 1,15 (sahne card_damage_bonus_ratio)
-	"tuftuf": "HASAR: %150 saldırı gücü (gerçek hasar: kalkanı deler) · Ateş hızı 1.4sn · Menzil 150",
-	"tufek": "HASAR: %240 saldırı gücü · Ateş hızı 1.3sn · Menzil 302",
-	"arcane": "HASAR: %188 saldırı gücü · Ateş hızı 1.4sn · Menzil 151",
-	"yay": "HASAR: %96 saldırı gücü · Ateş hızı 0.77sn · Menzil 266 · Ateşten önce ok çeker", ## 2026-10-10: saldırı hızı +%20 (sahne fire_rate 0,7844 -> 0,6537)
-	"crossbow": "HASAR: %149 saldırı gücü · Ateş hızı 0.8sn · Menzil 220",
-	"boomerang": "HASAR: 24 + %135 saldırı gücü · Ateş hızı 0.3sn · Menzil 167 · Gidip döner, 2 kez vurabilir; saldırı hızı arttıkça daha hızlı gidip döner",
-	"buz_asasi": "HASAR: %135 saldırı gücü · Ateş hızı 1.1sn · Menzil 151 · Her 2. isabet dondurur",
-	"fisek": "HASAR: %312 saldırı gücü (sadece alan hasarı) · Ateş hızı 3.2sn · Menzil 227",
-	"pence": "HASAR: %216 saldırı gücü · Yakın dövüş (menzil 110) · Çift pençe darbesi",
-	"topuz": "HASAR: 42 + %221 saldırı gücü · Yakın dövüş (menzil 120) · Geniş alan hasarı",
-	"uzunkilic": "HASAR: %180 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş (çevredekilere %70)",
+	"dagger": "HASAR: %123 saldırı gücü · Yakın dövüş, hedefin çevresine hafif alan hasarı",
+	"fire_staff": "HASAR: saniyede %108 saldırı gücü (koni, alandaki herkese) · Menzil 140 · Sürekli alev püskürtür, 3 sn yakar (saniyede %14)", ## 2026-10-10 buff: Destiny püskürtmesi %15 -> %27 / 0,25 sn, menzil 110 -> 140, yanma %8 -> %14
+	"lightning_staff": "HASAR: %140 saldırı gücü · Menzil 168 · Kesintisiz ışın",
+	"tabanca": "HASAR: %115 saldırı gücü · Ateş hızı 1.3sn · Menzil 210", ## 2026-10-10: oran 0,891 -> 1,15 (sahne card_damage_bonus_ratio)
+	"tuftuf": "HASAR: %100 saldırı gücü (gerçek hasar: kalkanı deler) · Ateş hızı 2.0sn · Menzil 150",
+	"tufek": "HASAR: %160 saldırı gücü · Ateş hızı 1.9sn · Menzil 302",
+	"arcane": "HASAR: %125 saldırı gücü · Ateş hızı 2.1sn · Menzil 151",
+	"yay": "HASAR: %64 saldırı gücü · Ateş hızı 1.1sn · Menzil 266 · Ateşten önce ok çeker", ## 2026-10-10: saldırı hızı +%20 (sahne fire_rate 0,7844 -> 0,6537)
+	"crossbow": "HASAR: %99 saldırı gücü · Ateş hızı 1.1sn · Menzil 220",
+	"boomerang": "HASAR: %81 saldırı gücü · Ateş hızı 0.5sn · Menzil 167 · Gidip döner, 2 kez vurabilir; saldırı hızı arttıkça daha hızlı gidip döner",
+	"buz_asasi": "HASAR: %90 saldırı gücü · Ateş hızı 1.6sn · Menzil 151 · Her 2. isabet dondurur",
+	"fisek": "HASAR: %208 saldırı gücü (sadece alan hasarı) · Ateş hızı 4.6sn · Menzil 227",
+	"pence": "HASAR: %145 saldırı gücü · Yakın dövüş (menzil 110) · Çift pençe darbesi, çevresine alan hasarı (80)",
+	"topuz": "HASAR: %132 saldırı gücü · Yakın dövüş (menzil 120) · Geniş alan hasarı",
+	"uzunkilic": "HASAR: %120 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş (çevredekilere %70)",
 }
 
 
@@ -82,6 +86,10 @@ static func display_name(key: String) -> String:
 
 
 static func icon(key: String) -> Texture2D:
+	## Zanaatkâr seti (madde 196): arayüzde (silah seçici, lobi, Ruh Mağazası) 1. seviye sanatı; dosya yoksa eski ikon.
+	var z: String = "res://assets/weapons/zanaat/%s_L1.png" % key
+	if ResourceLoader.exists(z):
+		return load(z) as Texture2D
 	var p: String = str(ICONS.get(key, ""))
 	return load(p) as Texture2D if p != "" and ResourceLoader.exists(p) else null
 

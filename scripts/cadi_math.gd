@@ -6,9 +6,9 @@ extends RefCounted
 ##
 ## Tasarım (kullanıcı isteği 2026-10-13, masaüstü "cadı özellikleri.txt" + soru-cevap; efektler tools/gen_cadi_fx.py):
 ##  Pasif Şans Tılsımı        : her eksik %5 can başına +1 şans.
-##  Q Zehirli Duman (id 51)   : AÇ/KAPA. Arkasında uçan zehir şişesi dumanı ağzından yere döker; bulut 3 sn kalır, dumana değen
+##  Q Zehirli Duman (id 51)   : AÇ/KAPA. Arkasında uçan zehir şişesi dumanı ağzından yere döker; bulut 6 sn kalır, dumana değen
 ##                              yaratık saniyede saldırı gücünün %120'si hasar alır (kaç bulut üst üste olursa olsun saniyede BİR).
-##                              Her saniye temel yetenek kalkan bedelinin YARISI. Kapatınca 8 sn bekleme (metinde yoktu - Hadime
+##                              Her saniye azami kalkanın %0,5'i + 5 kalkan. Kapatınca 8 sn bekleme (metinde yoktu - Hadime
 ##                              Q'suyla aynı seçildi).
 ##  E Uçan Süpürge (id 52)    : 8 sn süpürgeye biner (+%20 hız, saniyede saldırı gücünün %10'u can VE kalkan). Değdiği takım
 ##                              arkadaşları da biner: cadıya yapışık giderler, AYNI bonusları alırlar (evrimler dahil), silah ve
@@ -40,13 +40,15 @@ const PASSIVE_HP_STEP := 0.05
 const PASSIVE_LUCK_PER_STEP := 1.0
 
 ## ---------- Q: Zehirli Duman ----------
-const Q_COST_RATIO := 0.5
+## Saniyelik bedel (2026-10-13, kullanıcı): azami kalkanın %0,5'i + 5 (eskiden temel yetenek bedelinin yarısı = %2 + 10).
+const Q_COST_PERCENT_OF_MAX := 0.005
+const Q_COST_FLAT := 5.0
 const Q_COOLDOWN := 8.0
 const Q_DAMAGE_RATIO := 1.2
 ## Aynı yaratık dumandan en fazla bu aralıkla hasar alır ("her saniye"); yaratıklar bu sıklıkla taranır.
 const Q_HIT_INTERVAL := 1.0
 const Q_SCAN_INTERVAL := 0.25
-const SMOKE_LIFE := 3.0
+const SMOKE_LIFE := 6.0 ## 2026-10-13 kullanıcı: 3 -> 6 sn
 ## Yürürken bu aralıkla yeni bulut; yerinde dururken (son buluttan SMOKE_MIN_STEP'ten az uzaklaşmışken) SMOKE_IDLE_INTERVAL.
 const SMOKE_DROP_INTERVAL := 0.4
 const SMOKE_IDLE_INTERVAL := 1.2
@@ -54,22 +56,52 @@ const SMOKE_MIN_STEP := 14.0
 ## Bulutun zemindeki izi (dünya birimi; sayfadaki kütlenin tabanı) - hasar/yavaşlatma bu elipsin içinde.
 const SMOKE_RX := 32.0
 const SMOKE_RY := 17.0
-const SMOKE_ALPHA := 0.8
-## Sayfa karesinde bulut merkezi karenin ortasına göre (sanat pikseli): 96x68, merkez (48, 42).
-const SMOKE_CENTER_ART := Vector2(0, 8)
+## Cadı yukarı/aşağı yürürken bırakılan DİKEY bulut (kullanıcı 2026-10-13: "yukarı ve aşağı pozisyonda kötü oluyor, ona
+## göre bir uyumu yok"): yatay bulut 64 geniş x 34 derin - yan yana kesintisiz şerit olur ama alt alta (33 birim arayla)
+## dizilince geniş kaburgalar gibi durur, izler de ancak birbirine değer. Dikey bulut dar + derin: sütun kesintisiz.
+## Alan neredeyse aynı (pi x 24 x 22 = 1659, yatay 1709). Ayrı klipler (intro_v/loop_v/outro_v) ve orijin (52, 46).
+const SMOKE_V_RX := 24.0
+const SMOKE_V_RY := 22.0
+const SMOKE_V_CENTER_ART := Vector2(0, 8)
+## Dikey yürüyüşte bulutlar daha sık bırakılır (25 birimde bir; yatayda 33): gerçek çizicide 0,4 sn'de cadıyla sütun
+## arasında boşluk kalıyor, bulutlar tek tek seçiliyordu. Hasar bulut sayısından bağımsız (saniyede BİR), bedel aynı.
+const SMOKE_V_DROP_INTERVAL := 0.3
+## Dikey bulutların her biri bu kadar sağa/sola kayık çizilir (sadece görsel; sütun ip gibi dizilmesin).
+const SMOKE_V_JITTER_ART := 4.0
+## 2026-10-13 kullanıcı: duman yaratıkların (ve oyuncuların) ÜSTÜNDE, her bulut ayrı %50 saydam (eskiden zeminde, %80).
+## Oyuncular dumanın ÜSTÜNDE kalır (kendi karakterin ve can barın silikleşmesin - gerçek çizicide denendi, kötü durdu).
+## Katman: yaratık z 0, oyuncu z 1 (CLAUDE.md madde 25/45) -> bulut z 1 + sahnenin en başına taşınır (cadi_smoke.gd).
+const SMOKE_ALPHA := 0.5
+const SMOKE_Z := 1
+## Sayfa karesinde bulut ORİJİNİ (zemindeki izin merkezi) karenin ortasına göre (sanat pikseli): 104x76, orijin (52, 53).
+const SMOKE_CENTER_ART := Vector2(0, 15)
 const SMOKE_OUTRO_TIME := 0.7
-## Şişe: gövde merkezi cadının AYAĞINA göre (sanat pikseli, şişe solda = sağa bakarken). Ağız = merkez + (-8.1, +8.1),
-## dumanın yere indiği nokta = ağız + (-18, +18) (tools/gen_cadi_fx.py ÖLÇÜ çıktısı).
-const POTION_BODY_ART := Vector2(-20, -30)
-const POTION_MOUTH_ART := Vector2(-8.1, 8.1)
-const POTION_LAND_ART := Vector2(-26.1, 26.1)
+## Şişe HER yönde cadının TAM ARKASINDA süzülür (kullanıcı 2026-10-13: "sağa sola dönükken duman arkasından çıkmıyor,
+## arkaya dönükken şişe arkasında değil yanlarında duruyor"). Gövde merkezi cadının AYAĞINA göre (sanat pikseli):
+##   sağa bakarken solunda (sola bakarken aynası), 45 derece eğik; duman topuğunun hemen arkasına iner
+##   yukarı bakarken (sırtı kameraya) ekranda ALTINDA, karakterin ÖNÜNDE çizilir; ağzı dümdüz aşağı
+##   aşağı bakarken (yüzü kameraya) başının üstünden görünür, karakterin ARKASINDA çizilir; ağzı dümdüz aşağı
+## Gövde her duruşta inişin 26 px üstünde; ağız/iniş ölçüleri tools/gen_cadi_fx.py ÖLÇÜ çıktısı (POT_POSES, ST_POSES).
+const POTION_BODY_SIDE_ART := Vector2(-15, -27)
+const POTION_BODY_UP_ART := Vector2(0, -13)
+const POTION_BODY_DOWN_ART := Vector2(0, -36)
+const POTION_DROP_SIDE_ART := Vector2(-12, 26)
+const POTION_DROP_VERT_ART := Vector2(0, 26)
+## Aşağı bakarken akış cadının gövdesinin ardında (görünmez): bulut biraz daha geride doğar, yoksa başının çevresinde açılıyor.
+const POTION_DROP_DOWN_ART := Vector2(0, 14)
+const POTION_MOUTH_SIDE_ART := Vector2(-8.06, 8.06)
+const POTION_MOUTH_VERT_ART := Vector2(0, 11.4)
+## Yön değişince şişe yeni yerine bu hızla süzülür (1/sn, üstel).
+const POTION_FOLLOW_RATE := 12.0
 const POTION_BOB_ART := 1.5
 const POTION_BOB_SPEED := 2.6
+## Süpürgedeyken şişe gövdesi, cadı merkezinden samanın ucunun bu kadar ardında (sanat pikseli; sap 31 + yarım şişe).
+const POTION_BROOM_TAIL_ART := 37.0
 const POTION_NODE := "CadiPotion"
 ## Evrimler
 const EVO_SMOKE_SLOW := 0.3
 const EVO_SMOKE_SLOW_TIME := 0.6
-const EVO_SMOKE_LIFE_BONUS := 1.5
+const EVO_SMOKE_LIFE_BONUS := 3.0 ## 2026-10-13 kullanıcı: 1,5 -> 3 sn
 const EVO_Q_COST_MULT := 0.5
 const EVO_SMOKE_SIZE_MULT := 1.3
 const EVO_SMOKE_LIFESTEAL := 0.03
@@ -104,8 +136,12 @@ const MAX_PASSENGERS := 7
 const SEAT_ART := 14.0
 const SEAT_VERT_ART := 9.0
 ## Binme: yolcunun KENDİ istemcisi süpürgedeki cadıya bu kadar (dünya birimi) yaklaşınca biner.
-const MOUNT_RADIUS := 22.0
+const MOUNT_RADIUS := 27.5
 const DISMOUNT_LOCK := 1.0
+## İnmek için hareket girdisi bu kadar saniye KESİNTİSİZ basılı tutulmalı (istemeden dokunma düşürmesin, kullanıcı isteği 2026-10-14).
+const DISMOUNT_HOLD := 0.5
+## İnişte girdi yoksa (süre doldu / cadı indi) cadının gittiği yöne bu kadar saniye otomatik koşulur; yeni hareket girdisi devralır.
+const DISMOUNT_AUTORUN := 0.8
 const REMOUNT_LOCK := 1.5
 const RIDE_ANIM_PREFIX := "ride_"
 
@@ -132,7 +168,7 @@ const POTION_DESCS := [
 	"Üstünde duran müttefikler her saniye saldırı gücünün %20'si kadar can yeniler.",
 	"Değen yaratıkları 2 saniye korkutur ve saldırı gücünün %100'ü kadar hasar verir.",
 ]
-const ZONE_DURATION := 4.0
+const ZONE_DURATION := 6.0 ## 4 -> 6 sn (kullanıcı isteği 2026-10-14: "iksirler 2 saniye daha uzun sürsün")
 ## Alanın zemindeki izi (dünya birimi): sayfadaki 58x30 px elips.
 const ZONE_RX := 58.0 * WORLD_TEXEL
 const ZONE_RY := 30.0 * WORLD_TEXEL
@@ -236,27 +272,74 @@ static func spawn_oneshot(root: Node, sheet: String, anim_name: StringName, worl
 
 
 ## ---------- Q: şişe + duman ----------
-## side: şişe cadının hangi yanında (-1 sol = sağa bakarken, +1 sağ). Dünya birimi, cadının KÖKÜNE göre (kök 0,5 ölçekli).
-static func potion_side(facing: String, last_side: int) -> int:
-	if facing == "right":
-		return -1
-	if facing == "left":
-		return 1
-	return last_side if last_side != 0 else -1
+## Şişenin yeri bakılan yöne göre (bkz. POTION_BODY_*_ART). Sanat pikseli, cadının ayağına göre.
+## riders: süpürgedeki cadıda yolcu sayısı (-1 = süpürgede değil). Süpürgedeyken şişe cadının değil SÜPÜRGENİN arkasında durur:
+## sap yolcu başına SEAT kadar uzar, şişe samanın ucunun ardına kayar ve süpürgeyle birlikte RIDE_LIFT kadar yükselir.
+static func potion_body_art(facing: String, riders: int = -1) -> Vector2:
+	var art: Vector2
+	match facing:
+		"right":
+			art = POTION_BODY_SIDE_ART
+		"left":
+			art = Vector2(-POTION_BODY_SIDE_ART.x, POTION_BODY_SIDE_ART.y)
+		"up":
+			art = POTION_BODY_UP_ART
+		_:
+			art = POTION_BODY_DOWN_ART
+	if riders < 0:
+		return art
+	var n: float = float(mini(riders, MAX_PASSENGERS))
+	match facing:
+		"right":
+			art.x = -(POTION_BROOM_TAIL_ART + SEAT_ART * n)
+		"left":
+			art.x = POTION_BROOM_TAIL_ART + SEAT_ART * n
+		"up":
+			art.y += SEAT_VERT_ART * n
+		_:
+			art.y -= SEAT_VERT_ART * n
+	art.y -= RIDE_LIFT_ART
+	return art
+
+
+## Dumanın yere indiği nokta, şişe gövdesine göre (sanat pikseli).
+static func potion_drop_art(facing: String) -> Vector2:
+	match facing:
+		"right":
+			return POTION_DROP_SIDE_ART
+		"left":
+			return Vector2(-POTION_DROP_SIDE_ART.x, POTION_DROP_SIDE_ART.y)
+		"up":
+			return POTION_DROP_VERT_ART
+	return POTION_DROP_DOWN_ART
+
+
+## Bu bakışta bırakılan bulut dikey mi (dar + derin) - bkz. SMOKE_V_RX.
+static func smoke_is_vertical(facing: String) -> bool:
+	return facing == "up" or facing == "down"
 
 
 static func _feet_world() -> Vector2:
 	return FEET_LOCAL * 0.5
 
 
-static func potion_body_offset(side: int) -> Vector2:
-	return _feet_world() + Vector2(POTION_BODY_ART.x if side == -1 else -POTION_BODY_ART.x, POTION_BODY_ART.y) * WORLD_TEXEL
+## Dünya birimi, cadının KÖKÜNE göre (kök 0,5 ölçekli).
+static func potion_body_offset(facing: String, riders: int = -1) -> Vector2:
+	return _feet_world() + potion_body_art(facing, riders) * WORLD_TEXEL
 
 
-## Dumanın yere indiği nokta = bulutun doğduğu yer (cadının köküne göre, dünya birimi).
-static func smoke_land_offset(side: int) -> Vector2:
-	var land: Vector2 = POTION_BODY_ART + POTION_LAND_ART
-	return _feet_world() + Vector2(land.x if side == -1 else -land.x, land.y) * WORLD_TEXEL
+## Dumanın yere indiği nokta = bulutun doğduğu yer (cadının köküne göre, dünya birimi). Süpürgedeyken şişe havada olsa da
+## duman YERE iner (yükselme geri eklenir).
+static func smoke_land_offset(facing: String, riders: int = -1) -> Vector2:
+	var lift_back := Vector2(0.0, RIDE_LIFT_ART if riders >= 0 else 0.0)
+	return _feet_world() + (potion_body_art(facing, riders) + lift_back + potion_drop_art(facing)) * WORLD_TEXEL
+
+
+## Cadı süpürgedeyse yolcu sayısı, değilse -1 (şişe/duman konumu için). host: Player ya da RemotePlayer.
+static func broom_riders(host: Node) -> int:
+	if not is_broom_rider(host) or not host.has_method("cadi_peer") or not host.is_inside_tree():
+		return -1
+	return riders_of(host.get_tree(), int(host.call("cadi_peer"))).size()
 
 
 static func set_potion_visual(host: Node, on: bool) -> void:
@@ -272,15 +355,28 @@ static func set_potion_visual(host: Node, on: bool) -> void:
 		fx.queue_free()
 
 
-## opts: "life" (sn), "size" (çarpan), "owner_peer". authoritative kopya hasar taramasına girer (player.gd _process_cadi_smoke).
+## opts: "life" (sn), "size" (çarpan), "owner_peer", "vert" (dikey bulut). authoritative kopya hasar taramasına girer (player.gd _process_cadi_smoke).
+## Aynı cadının SMOKE_MIN_STEP'ten yakın bir bulutu varsa yenisi AÇILMAZ, onun ömrü baştan başlar (yerinde dururken 1,2 sn'de
+## bir aynı noktaya dökülür): bulutlar %50 saydam ve karakterlerin üstünde - üst üste 5 bulut cadıyı tamamen kapatıyordu.
+## Kaster de diğer istemcilerdeki kopyalar da bu işlevden geçtiği için kural her ekranda aynı; alan/süre değişmez.
 static func spawn_smoke(root: Node, world_pos: Vector2, authoritative: bool, opts: Dictionary = {}) -> Node2D:
 	if root == null or not is_instance_valid(root):
 		return null
+	var life: float = float(opts.get("life", SMOKE_LIFE))
+	var size: float = float(opts.get("size", 1.0))
+	var owner_peer: int = int(opts.get("owner_peer", 0))
+	var vert: bool = bool(opts.get("vert", false))
+	if root.is_inside_tree():
+		for c in root.get_tree().get_nodes_in_group("cadi_smokes"):
+			if c.get_parent() == root and c.get("owner_peer") == owner_peer and c.get("authoritative") == authoritative \
+					and (c as Node2D).global_position.distance_to(world_pos) < SMOKE_MIN_STEP and bool(c.call("refresh", life, size, vert)):
+				return c as Node2D
 	var s := Node2D.new()
 	s.set_script(res(SmokeScript))
-	s.set("life", float(opts.get("life", SMOKE_LIFE)))
-	s.set("size_mult", float(opts.get("size", 1.0)))
-	s.set("owner_peer", int(opts.get("owner_peer", 0)))
+	s.set("life", life)
+	s.set("size_mult", size)
+	s.set("owner_peer", owner_peer)
+	s.set("vert", vert)
 	s.set("authoritative", authoritative)
 	root.add_child(s)
 	s.global_position = world_pos
@@ -333,6 +429,16 @@ static func local_peer(tree: SceneTree) -> int:
 ## Bu düğüm (Player / RemotePlayer) şu an KENDİ süpürgesini süren bir cadı mı.
 static func is_broom_rider(node: Node) -> bool:
 	return node != null and is_instance_valid(node) and node.has_method("is_cadi_broom_active") and bool(node.call("is_cadi_broom_active"))
+
+
+## Yolcu cadıya yapışık gidebilir mi: süpürge açık VE cadı iç mekanda (Demirci/ev) değil. İç mekan dünyanın başka köşesindedir
+## (INTERIOR_OFFSET); cadı içeri girince yolcu da peşinden ışınlanırdı (2026-10-14 kullanıcı bildirimi).
+static func can_ride(host: Node) -> bool:
+	return is_broom_rider(host) and host.get("is_indoors") != true
+
+
+## Cadı bir karede bu kadardan fazla uzaklaştıysa (ışınlanma/iç mekana giriş, ağ gecikmesi değil) yolcu peşinden gitmez, iner.
+const RIDE_BREAK_DIST := 300.0
 
 
 ## Cadının süpürgesindeki yolcuların peer id'leri, küçükten büyüğe (her istemcide AYNI sıra -> aynı koltuklar).

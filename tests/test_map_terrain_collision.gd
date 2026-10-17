@@ -54,6 +54,8 @@ func _clear_game_manager_map() -> void:
 ## boş olsun diye kuzey ve güney komşu kontrol edilir (dikey yaklaşma testi).
 func _find_forest_wall_from_above(forest: TileMapLayer) -> Dictionary:
 	for cell: Vector2i in forest.get_used_cells():
+		if not Rect2i(4, 4, 248, 248).has_point(cell):
+			continue ## dış çerçeve (madde 119) hücreleri değil, eski oyun alanındaki duvar parçaları
 		var north: Vector2i = cell + Vector2i(0, -1)
 		if forest.get_cell_source_id(north) != -1:
 			continue
@@ -303,6 +305,28 @@ func test_enemy_is_blocked_by_water_now_that_water_collision_is_on() -> void:
 	_clear_game_manager_map()
 
 
+## Su üstünde duran AMA çevresindeki (10-40 px) noktaların >= %75'i açık olan bir nokta (nehir kıyısı). WATER_POINT (8,8) kuzeybatı deniz köşesi: 2026-10-13 dış çerçeve (madde 119)
+## sonrası etrafı tamamen su/engel; eskiden harita dışı 'serbest' sayıldığı için spawner orada başarılı oluyordu.
+func _find_water_edge_point(harita: Node) -> Vector2:
+	var su: TileMapLayer = harita.get_node("Su/Su")
+	for cell: Vector2i in su.get_used_cells():
+		if cell.x < 20 or cell.y < 20 or cell.x > 235 or cell.y > 235:
+			continue
+		var c: Vector2 = su.to_global(su.map_to_local(cell))
+		if not GameManager.is_position_blocked_by_terrain(c):
+			continue
+		var free: int = 0
+		var total: int = 0
+		for ang in range(0, 360, 30):
+			for dist in [14.0, 26.0, 38.0]:
+				total += 1
+				if not GameManager.is_position_blocked_by_terrain(c + Vector2.from_angle(deg_to_rad(float(ang))) * dist):
+					free += 1
+		if free >= int(total * 0.75):
+			return c
+	return Vector2.ZERO
+
+
 func test_spawner_never_picks_water_or_house_position() -> void:
 	var harita: Node = _inject_map_into_game_manager()
 
@@ -313,7 +337,8 @@ func test_spawner_never_picks_water_or_house_position() -> void:
 
 	## Su noktasının hemen yanında bir "oyuncu" merkezi seçip defalarca
 	## spawn pozisyonu üretiyoruz - hiçbiri su/ev üstüne düşmemeli.
-	var center: Vector2 = WATER_POINT
+	var center: Vector2 = _find_water_edge_point(harita)
+	assert(center != Vector2.ZERO, "çevresi çoğunlukla açık bir su noktası bulundu")
 	for _i in range(30):
 		var pos: Vector2 = spawner._random_spawn_position(center, false)
 		assert(not GameManager.is_position_blocked_by_terrain(pos),

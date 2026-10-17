@@ -2,14 +2,17 @@ extends AudioStreamPlayer
 
 ## AKARSU SESİ (kullanıcı isteği 2026-10-11: "akarsu sesi akarsuya yakınken uzaklık farkına göre az/çok çıksın, aşırı fazla olmasın").
 ## Konumsuz tek bir döngü; ses seviyesi OYUNCUNUN en yakın su karosuna uzaklığıyla değişir:
-##   FULL_DISTANCE içinde en yüksek (MAX_DB), MAX_DISTANCE'tan uzakta tamamen susar; arası yumuşak (smoothstep) eğri.
+##   FULL_DISTANCE içinde en yüksek (MAX_DB), MAX_DISTANCE'tan uzakta tamamen susar; arası yumuşak (smoothstep) eğri, KARESİ alınır
+##   (kuyruk hızlı söner). 2026-10-17 kullanıcı: "nehrin sesi uzaktayken bile geliyor, yaklaşınca gelmeliydi" - eski 640 px menzil ekranın
+##   yarı genişliğinin (240 px) 2,7 katıydı ve harita alanının ~%66'sı bir su karosuna 640 px'ten yakın (ses neredeyse hep açıktı);
+##   menzil 320 px'e indi, ekran kenarında (~240 px) neredeyse duyulmaz, ~10 karo yakında belirgin, kıyıda tam.
 ## Yağmurdan (atmosphere.gd RAIN_VOLUME_DB) daha kısık tutuldu. Seviye değişimi üstel yumuşatılır (suya hızlı yaklaşınca ani sıçrama yok);
 ## yok olurken -38 dB altında durdurulur (tık sesi olmaz). Kaynak: tools/make_seamless_ambience.py (dikişsiz OGG döngü).
 ## Yalnız yerel ortam sesi - ağ senkronu gerekmez. Ev içindeyken (player.is_indoors) susar. Ambient yolu: Şovalye kubbesi içinde boğulur.
 
 const STREAM_PATH := "res://assets/audio/stream_loop.ogg"
-const FULL_DISTANCE := 80.0 ## px: kıyıya bu kadar yakında tam seviye (bir karo = 16 px)
-const MAX_DISTANCE := 640.0 ## px: bundan uzakta duyulmaz
+const FULL_DISTANCE := 48.0 ## px: kıyıya bu kadar yakında tam seviye (bir karo = 16 px)
+const MAX_DISTANCE := 320.0 ## px: bundan uzakta duyulmaz
 const MAX_DB := -7.0 ## kıyıdaki en yüksek seviye (normalize kaynak -26 dBFS RMS: yağmurdan kısık)
 const SMOOTH_RATE := 3.0 ## 1/sn: hedef seviyeye yaklaşma hızı
 const QUERY_INTERVAL := 0.2
@@ -70,7 +73,8 @@ func _target_amount() -> float:
 			best = d
 	var dist: float = sqrt(best) - 8.0 ## karo merkezinden kıyıya (yarım karo)
 	var t: float = clampf((dist - FULL_DISTANCE) / (MAX_DISTANCE - FULL_DISTANCE), 0.0, 1.0)
-	return 1.0 - t * t * (3.0 - 2.0 * t)
+	var near: float = 1.0 - t * t * (3.0 - 2.0 * t)
+	return near * near
 
 
 func _load_water() -> bool:

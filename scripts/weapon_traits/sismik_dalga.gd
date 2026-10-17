@@ -1,8 +1,9 @@
 extends "res://scripts/enchant_behavior.gd"
 
-## Sismik Dalga (Topuz) - bkz. EnchantDefs "sismik_dalga". Her ana hedef isabeti şansa bağlı olarak sahibin çevresine yayılan
-## bir dalga (seismic_ring sayfası): hasar + hafif itme (2026-10-04: 60 -> 20 birim - eski itme düşmanları topuzun 120'lik
-## menzilinden atıp silahın kendi hasarını düşürüyordu); seis_pity vuruş üst üste tutmazsa sonraki kesin; Çift Nabız ile 0,25 sn arayla 2 dalga. Final: şans %50, dalga düşmanları
+## Sismik Dalga (Topuz) - bkz. EnchantDefs "sismik_dalga". Her ana hedef isabeti şansa bağlı olarak VURUŞ NOKTASINDAN (ana hedefin
+## konumu = topuzun kendi alan hasarının merkezi) yayılan bir dalga (seismic_ring sayfası): hasar + hafif itme. 2026-10-17 (madde 239,
+## kullanıcı: "patlama alanı topuzun vuruşunun merkezinde olmalı karakterin merkezinde değil"): eskiden sahibin çevresindeydi.
+## İtme 2026-10-04'te 60 -> 20 birim (eski itme düşmanları topuzun 120'lik menzilinden atıp silahın kendi hasarını düşürüyordu); seis_pity vuruş üst üste tutmazsa sonraki kesin; Çift Nabız ile 0,25 sn arayla 2 dalga. Final: şans %50, dalga düşmanları
 ## 1,5 sn yere serer (sersemletme); savrulan düşmanın düşeceği yerde başka bir düşman varsa ikisi de çarpışma hasarı alır.
 
 const PULSE_GAP := 0.25
@@ -14,19 +15,19 @@ func hit_extra(t: Node, _dmg: float, is_primary: bool, proj: Node2D) -> void:
 		return
 	if not roll_pity("seis", maxf(f("seis_chance"), f("seis_chance_final")), n("seis_pity")):
 		return
+	## Merkez isabet anında sabitlenir: Çift Nabız'ın ikinci dalgası da aynı noktada (hedef ölüp kaybolsa / savrulsa bile).
+	var at: Vector2 = (t as Node2D).global_position
 	var pulses: int = maxi(1, n("seis_pulses", 1))
 	for i in range(pulses):
 		if i == 0:
-			_pulse()
+			_pulse(at)
 		else:
-			get_tree().create_timer(PULSE_GAP * float(i), false).timeout.connect(_pulse)
+			get_tree().create_timer(PULSE_GAP * float(i), false).timeout.connect(_pulse.bind(at))
 
 
-func _pulse() -> void:
-	var pl: Node2D = owner_player() as Node2D
-	if pl == null or not can_act():
+func _pulse(at: Vector2) -> void:
+	if owner_player() == null or not can_act():
 		return
-	var at: Vector2 = pl.global_position
 	var r: float = f("seis_radius", 110.0)
 	var push: float = f("seis_push", 20.0)
 	sprite("seismic_ring", at, {"scale": r / (91.0 * 1.212), "z": 3})

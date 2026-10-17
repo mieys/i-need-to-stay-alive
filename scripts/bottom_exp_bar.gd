@@ -13,8 +13,9 @@ extends Control
 ## piksel ızgarasında kalsın diye 10), altın/turuncu yerine mor tonlar. hud.gd DOCK_BOTTOM_MARGIN bu yüksekliğe göre boşluk bırakır.
 const BAR_HEIGHT := 10.0
 const OUTLINE := 1.0
-const C_BG := Color(0.11, 0.07, 0.15, 1.0)
-const C_OUTLINE := Color(0.52, 0.34, 0.74, 1.0)
+const HudTheme := preload("res://scripts/hud_theme.gd")
+const C_BG := HudTheme.INSET
+const C_OUTLINE := HudTheme.RIM
 const C_FILL := Color(0.6, 0.33, 0.93, 1.0)
 const C_SHINE := Color(0.82, 0.66, 1.0, 0.9)
 const C_FLASH := Color(0.95, 0.86, 1.0, 1.0)

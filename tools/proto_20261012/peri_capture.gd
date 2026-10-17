@@ -64,10 +64,9 @@ func _run() -> void:
 	await _wait(0.6)
 	_player.health = _player.max_health - 40.0
 	var hp0: float = _player.health
-	await _wait(0.16)
-	await _grab()
-	await _wait(0.35)
-	await _grab()
+	for gap in [0.12, 0.13, 0.15, 0.2, 0.25, 0.3]: ## büyü 0,8 sn + efekt 1,3 sn (fx_peri_heal.gd)
+		await _wait(gap)
+		await _grab()
 	print("CAN +%s (beklenen %s)  bekleme=%s" % [_player.health - hp0, 10.0 * _player.heal_power_mult(), k._cooldown])
 	var out := Image.create(TILE.x * _tiles.size(), TILE.y, false, Image.FORMAT_RGBA8)
 	for i in _tiles.size():

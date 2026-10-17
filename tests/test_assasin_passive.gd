@@ -160,3 +160,40 @@ func test_q_hamle_recharge_is_eight_seconds_per_charge() -> void:
 	assert(p.assasin_dash2_charges == 2, "8 sn'de yük geri gelir")
 	assert(String(Characters.DEFS[ASSASIN]["skill_desc"]).contains("8sn"), "açıklama 8sn demeli")
 	_cleanup()
+
+
+## Pasif GÖRSELİ (kullanıcı isteği 2026-10-16: "pasifin varlığı hiç belli olmuyor"): tetiklenince gövdeye TEK "AssasinPassiveFx"
+## düğümü (kırmızı dış hat kopyası + tetiklenme parlaması) eklenir, yeni kullanım ikinci düğüm açmadan süreyi yeniler, süre
+## dolunca silinir; Assasin olmayan oyuncuda görsel de yok.
+func test_passive_visual_follows_the_crit_window() -> void:
+	const OutlineShader: Shader = preload("res://shaders/assasin_passive_outline.gdshader")
+	var p := _make_player()
+	assert(p.get_node_or_null("AssasinPassiveFx") == null, "yetenek kullanılmadan görsel yok")
+	p._assasin_passive_on_skill_used()
+	var fx: Node = p.get_node_or_null("AssasinPassiveFx")
+	assert(fx != null, "pasif tetiklenince görsel düğümü eklenmeli")
+	var has_outline: bool = false
+	var procs: int = 0
+	for c: Node in fx.get_children():
+		if c is Sprite2D and (c as Sprite2D).material is ShaderMaterial and ((c as Sprite2D).material as ShaderMaterial).shader == OutlineShader:
+			has_outline = (c as Sprite2D).texture != null
+		elif c is AnimatedSprite2D:
+			procs += 1
+	assert(has_outline, "dış hat kopyası karakterin karesini almalı")
+	assert(procs == 1, "tetiklenme parlaması oynamalı: %d" % procs)
+	fx._process(2.5)
+	p._assasin_passive_on_skill_used()
+	var count: int = 0
+	for c: Node in p.get_children():
+		if String(c.name).begins_with("AssasinPassiveFx"):
+			count += 1
+	assert(count == 1 and is_equal_approx(float(fx.call("time_left")), p.ASSASIN_PASSIVE_CRIT_DURATION),
+		"yeniden kullanım aynı düğümü yenilemeli: düğüm=%d kalan=%.2f" % [count, float(fx.call("time_left"))])
+	fx._process(p.ASSASIN_PASSIVE_CRIT_DURATION + 0.05)
+	assert(fx.is_queued_for_deletion(), "süre dolunca görsel silinmeli")
+	_cleanup()
+	var other := _make_player()
+	GameManager.selected_character = 1
+	other._assasin_passive_on_skill_used()
+	assert(other.get_node_or_null("AssasinPassiveFx") == null, "Assasin olmayan oyuncuda pasif görseli yok")
+	_cleanup()

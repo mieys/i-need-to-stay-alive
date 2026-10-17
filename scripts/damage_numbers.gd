@@ -27,7 +27,7 @@ const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 ## yumuşakça yukarı kaydırma) şu an kullanılmıyor, sütun dizilimi istenirse hazır. Maliyet aynı: sayı başına karede yine
 ## 1 transform (+ değişirse 1 modulate) çağrısı.
 const RISE := 22.0
-const POP_SCALE := 1.45
+const POP_SCALE := 1.3
 const POP_TIME := 0.14
 const LIFT_SMOOTH := 16.0
 const LIFETIME := 0.9

@@ -1,0 +1,1019 @@
+extends CanvasLayer
+
+## RUH MAĞAZASI (kullanıcı isteği 2026-10-13, bkz. meta_progress.gd): koşularda kazanılan Ruh Kıymığı ile kilitli karakter / başlangıç silahı /
+## evcil hayvan / ruhani yetenek açılır + kalıcı GELİŞTİRMELER (meta_upgrades.gd). Ana menüdeki "RUH MAĞAZASI" düğmesi açar.
+## Yanlışlıkla harcamaya karşı iki adım: ilk basış "ONAYLA?" yapar, ikinci basış satın alır (başka bir şeye basınca ilk adım geri alınır).
+##
+## AÇILABİLİRLER sekmesinin 4 YERLEŞİMİ var (kullanıcı isteği 2026-10-13: "4 prototipi oyuna ekle"; prototipler tools/proto_20261013/soul_shop_proto.gd):
+## A Vitrin (kategori sekmesi + kart ızgarası + sağda ayrıntı), B Rehber (ilerleme çubuklu kategori listesi + satır listesi),
+## C Raflar (4 raf tek bakışta + alt şerit), D Hedef (sıradaki hedef + filtre çipleri + ızgara). Üstteki "Görünüm" çipleriyle değişir, seçim
+## user://soul_shop_ui.cfg'de saklanır. Kullanıcı birini seçince diğer üçü ve çipler silinebilir (her yerleşim bir `_view_x` işlevi).
+
+signal closed
+
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+const WeaponCatalog := preload("res://scripts/weapon_catalog.gd")
+const PetCatalog := preload("res://scripts/pet_catalog.gd")
+const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
+const MetaUpgradesScript: GDScript = preload("res://scripts/meta_upgrades.gd")
+const StatIconScript: GDScript = preload("res://scripts/stat_icon.gd")
+
+const TAB_UNLOCKS := "unlocks"
+const TAB_UPGRADES := "upgrades"
+
+const UI_CFG := "user://soul_shop_ui.cfg"
+const LAYOUTS: Array = [["a", "Vitrin"], ["b", "Rehber"], ["c", "Raflar"], ["d", "Hedef"]]
+
+const ROW_ICON := 64.0
+## C_GOLD bej zeminde silik kalıyordu: fiyatlar daha koyu amber.
+const C_PRICE := Color("#8f5a10")
+const C_RING := Color("#e0a82e")
+
+var _close_btn: Button = null
+var _balance_label: Label = null
+var _list: Container = null ## sadece GELİŞTİRMELER sekmesinde dolu (20 satır)
+var _scroll: ScrollContainer = null
+var _content: VBoxContainer = null
+var _confirm_id: String = "" ## "<tür>:<anahtar>" - onay bekleyen satır ("reset" = geliştirmeleri sıfırla)
+var _tab: String = TAB_UNLOCKS
+var _tab_buttons: Dictionary = {}
+var _layout_buttons: Dictionary = {}
+var _layout_row: Control = null
+var _layout: String = "a"
+var _cat: String = MetaProgressScript.CHAR ## A ve B'de açık kategori
+var _filter: String = "can" ## D'de: "all" / "can" / tür adı
+var _sel_kind: String = ""
+var _sel_key: Variant = null
+
+
+## Pikselli "Ruh Kıymığı" kristali (sanat dosyası yok, kodla çizilir; lock_badge.gd ile aynı yaklaşım).
+class ShardIcon extends Control:
+	var dim: bool = false
+
+	func _init(px: float = 32.0, dimmed: bool = false) -> void:
+		custom_minimum_size = Vector2(px, px)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		dim = dimmed
+
+	func _draw() -> void:
+		var s: float = size.x
+		var c: float = s * 0.5
+		var top := Vector2(c, s * 0.02)
+		var mid_y: float = s * 0.38
+		var l := Vector2(s * 0.10, mid_y)
+		var r := Vector2(s * 0.90, mid_y)
+		var bot := Vector2(c, s * 0.98)
+		var m := Vector2(c, mid_y)
+		var k: float = 0.55 if dim else 1.0
+		var tint := Color(k, k, k, 1.0)
+		draw_colored_polygon(PackedVector2Array([top, m, l]), Color("#a8f0f4") * tint)
+		draw_colored_polygon(PackedVector2Array([top, r, m]), Color("#6fd0da") * tint)
+		draw_colored_polygon(PackedVector2Array([l, m, bot]), Color("#3f9fb0") * tint)
+		draw_colored_polygon(PackedVector2Array([m, r, bot]), Color("#2a7a8c") * tint)
+		draw_polyline(PackedVector2Array([top, r, bot, l, top]), Color("#4a2c1a"), maxf(2.0, s / 12.0))
+
+
+## Düz ilerleme çubuğu (bej oluk + dolgu).
+class Bar extends Control:
+	var frac: float = 0.0
+	var fill: Color = Color("#c9922e")
+
+	func _init(w: float, h: float, f: float, c: Color = Color("#c9922e")) -> void:
+		custom_minimum_size = Vector2(w, h)
+		frac = f
+		fill = c
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, size), Color("#4a2c1a"))
+		draw_rect(Rect2(3, 3, size.x - 6, size.y - 6), Color("#e7d6ae"))
+		var fw: float = (size.x - 6) * clampf(frac, 0.0, 1.0)
+		draw_rect(Rect2(3, 3, fw, size.y - 6), fill)
+		draw_rect(Rect2(3, 3, fw, 3), fill.lightened(0.35))
+
+
+## Raf tahtası (C yerleşimi).
+class Plank extends Control:
+	func _init() -> void:
+		custom_minimum_size = Vector2(10, 14)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		draw_rect(Rect2(0, 0, size.x, size.y), Color("#7a5534"))
+		draw_rect(Rect2(0, 0, size.x, 4), Color("#a87a48"))
+		draw_rect(Rect2(0, size.y - 3, size.x, 3), Color("#4a2c1a"))
+
+
+func _ready() -> void:
+	add_to_group(&"gamepad_modal")
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	layer = 95
+	_layout = _load_layout()
+	_build_ui()
+	if _close_btn:
+		_close_btn.grab_focus()
+
+
+static func _load_layout() -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load(UI_CFG) == OK:
+		var v: String = str(cfg.get_value("ui", "layout", "a"))
+		for pair: Array in LAYOUTS:
+			if pair[0] == v:
+				return v
+	return "a"
+
+
+func _save_layout() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("ui", "layout", _layout)
+	cfg.save(UI_CFG)
+
+
+## ---------------------------------------------------------------- İSKELET: başlık + sekmeler + görünüm çipleri + içerik
+func _build_ui() -> void:
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.theme = MenuKit.theme()
+	add_child(root)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0.20, 0.11, 0.05, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(dim)
+
+	var box := MenuKit.make_panel("panel")
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 50.0
+	box.offset_right = -50.0
+	box.offset_top = 26.0
+	box.offset_bottom = -26.0
+	root.add_child(box)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	box.add_child(v)
+
+	## Başlık satırı: GERİ | kurdele | bakiye
+	var head := HBoxContainer.new()
+	v.add_child(head)
+	var hl := HBoxContainer.new()
+	hl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(hl)
+	_close_btn = MenuKit.make_button("< GERİ", "rose", MenuKit.FS_SMALL, 44)
+	_close_btn.custom_minimum_size.x = 160.0
+	_close_btn.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_close_btn.pressed.connect(_on_close_pressed)
+	hl.add_child(_close_btn)
+	head.add_child(MenuKit.make_banner("Ruh Mağazası"))
+	var hr := HBoxContainer.new()
+	hr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hr.alignment = BoxContainer.ALIGNMENT_END
+	head.add_child(hr)
+	hr.add_child(_make_balance_chip())
+
+	## Sekme satırı: AÇILABİLİRLER / GELİŞTİRMELER solda, görünüm çipleri sağda
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 10)
+	v.add_child(tabs)
+	for pair: Array in [[TAB_UNLOCKS, "AÇILABİLİRLER"], [TAB_UPGRADES, "GELİŞTİRMELER"]]:
+		var tb: Button = MenuKit.make_button(str(pair[1]), "tan", MenuKit.FS_BODY, 52)
+		tb.custom_minimum_size.x = 280.0
+		tb.pressed.connect(_on_tab_pressed.bind(str(pair[0])))
+		tabs.add_child(tb)
+		_tab_buttons[pair[0]] = tb
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tabs.add_child(sp)
+	var lr := HBoxContainer.new()
+	lr.add_theme_constant_override("separation", 8)
+	_layout_row = lr
+	tabs.add_child(lr)
+	var vl: Label = MenuKit.make_label("Görünüm:", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM)
+	vl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	lr.add_child(vl)
+	for pair: Array in LAYOUTS:
+		var lb: Button = MenuKit.make_button(str(pair[1]), "tan", MenuKit.FS_SMALL, 44)
+		lb.custom_minimum_size.x = 120.0
+		lb.pressed.connect(_on_layout_pressed.bind(str(pair[0])))
+		lr.add_child(lb)
+		_layout_buttons[pair[0]] = lb
+
+	_content = VBoxContainer.new()
+	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content.add_theme_constant_override("separation", 0)
+	v.add_child(_content)
+	_rebuild_list(true)
+
+
+func _make_balance_chip() -> PanelContainer:
+	var p := MenuKit.make_panel("inset")
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 12)
+	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	p.add_child(h)
+	var ic := ShardIcon.new(40.0)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(ic)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", -4)
+	h.add_child(col)
+	col.add_child(MenuKit.make_label("BAKİYE", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM))
+	_balance_label = MenuKit.make_label("", MenuKit.FS_BODY, C_PRICE)
+	col.add_child(_balance_label)
+	return p
+
+
+## İçeriği baştan kurar (satın alma / seçim / onay durumu değişince). Kaydırma konumu ve odaktaki düğme korunur.
+func _rebuild_list(reset_scroll: bool = false) -> void:
+	var keep: int = 0
+	if not reset_scroll and is_instance_valid(_scroll):
+		keep = _scroll.scroll_vertical
+	var focus_sid: String = ""
+	var fo: Control = get_viewport().gui_get_focus_owner() if is_inside_tree() else null
+	if fo != null and fo.has_meta("sid"):
+		focus_sid = str(fo.get_meta("sid"))
+	_scroll = null
+	_list = null
+	for c in _content.get_children():
+		_content.remove_child(c)
+		c.queue_free()
+	_balance_label.text = str(MetaProgressScript.shards())
+	for key: String in _tab_buttons.keys():
+		MenuKit.style_button(_tab_buttons[key] as Button, "sage" if key == _tab else "tan", MenuKit.FS_BODY)
+	for key: String in _layout_buttons.keys():
+		MenuKit.style_button(_layout_buttons[key] as Button, "sage" if key == _layout else "tan", MenuKit.FS_SMALL)
+	_layout_row.visible = _tab == TAB_UNLOCKS
+	if _tab == TAB_UPGRADES:
+		_build_upgrades_tab()
+	else:
+		var items: Array = _items()
+		_ensure_selection(items)
+		var view: Control = call("_view_" + _layout, items)
+		view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_content.add_child(view)
+	UISound.connect_all_buttons(self)
+	_restore_view.call_deferred(keep, focus_sid)
+
+
+func _restore_view(scroll_v: int, focus_sid: String) -> void:
+	if is_instance_valid(_scroll):
+		_scroll.scroll_vertical = scroll_v
+	if focus_sid == "":
+		return
+	for b: Node in find_children("*", "Button", true, false):
+		if b.has_meta("sid") and str(b.get_meta("sid")) == focus_sid and not (b as Button).disabled:
+			(b as Button).grab_focus()
+			return
+
+
+func _on_tab_pressed(tab: String) -> void:
+	if tab == _tab:
+		return
+	_tab = tab
+	_confirm_id = ""
+	_rebuild_list(true)
+
+
+func _on_layout_pressed(l: String) -> void:
+	if l == _layout:
+		return
+	_layout = l
+	_sel_kind = ""
+	_sel_key = null
+	_confirm_id = ""
+	_save_layout()
+	_rebuild_list(true)
+
+
+## ---------------------------------------------------------------- VERİ
+## Satır bilgisi: {"name", "desc", "icon"} - her tür kendi kataloğundan.
+func _info(kind: String, key: Variant) -> Dictionary:
+	match kind:
+		MetaProgressScript.CHAR:
+			var def: Dictionary = Characters.get_def(int(key))
+			var skills: Array = []
+			for pair: Array in [["skill_name", "Q"], ["skill2_name", "E"], ["skill3_name", "R"]]:
+				var sn: String = str(def.get(pair[0], ""))
+				if sn != "":
+					skills.append("%s: %s" % [pair[1], sn])
+			return {"name": str(def.get("name", key)), "desc": "  ".join(skills),
+					"icon": LobbyUI.face_texture(str(def.get("portrait", "")))}
+		MetaProgressScript.WEAPON:
+			var wk: String = str(key)
+			return {"name": WeaponCatalog.display_name(wk), "desc": "%s - %s" % [WeaponCatalog.category_label(wk), WeaponCatalog.trait_text(wk)],
+					"icon": WeaponCatalog.icon(wk)}
+		MetaProgressScript.PET:
+			var pk: String = str(key)
+			return {"name": PetCatalog.display_name(pk), "desc": PetCatalog.description(pk), "icon": PetCatalog.icon(pk)}
+		MetaProgressScript.SPIRIT:
+			var sd: Dictionary = SpiritualSkillsScript.get_def(str(key))
+			var tex_path: String = str(sd.get("icon", ""))
+			return {"name": str(sd.get("name", key)), "desc": str(sd.get("desc", "")),
+					"icon": load(tex_path) as Texture2D if tex_path != "" and ResourceLoader.exists(tex_path) else null}
+	return {"name": str(key)}
+
+
+## Tüm kilitli/açık katalog öğeleri (tür sırası, ucuzdan pahalıya).
+func _items() -> Array:
+	var out: Array = []
+	for it: Dictionary in MetaProgressScript.locked_items():
+		var info: Dictionary = _info(it["kind"], it["key"])
+		out.append({"kind": it["kind"], "key": it["key"], "cost": int(it["cost"]), "name": str(info.get("name", it["key"])),
+				"desc": str(info.get("desc", "")), "icon": info.get("icon", null),
+				"open": MetaProgressScript.is_unlocked(it["kind"], it["key"]), "can": MetaProgressScript.can_buy(it["kind"], it["key"])})
+	return out
+
+
+func _of_kind(items: Array, kind: String) -> Array:
+	return items.filter(func(i: Dictionary) -> bool: return i["kind"] == kind)
+
+
+func _id(it: Dictionary) -> String:
+	return "%s:%s" % [it["kind"], str(it["key"])]
+
+
+func _state(it: Dictionary) -> String:
+	return "open" if it["open"] else ("can" if it["can"] else "no")
+
+
+func _need(it: Dictionary) -> int:
+	return maxi(0, int(it["cost"]) - MetaProgressScript.shards())
+
+
+## Alınabilir -> alınamayan (ucuzdan pahalıya) -> açık olanlar.
+func _sorted(items: Array) -> Array:
+	var a: Array = items.duplicate()
+	a.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
+		var gx: int = 2 if x["open"] else (0 if x["can"] else 1)
+		var gy: int = 2 if y["open"] else (0 if y["can"] else 1)
+		if gx != gy:
+			return gx < gy
+		return int(x["cost"]) < int(y["cost"]))
+	return a
+
+
+func _open_count(items: Array) -> int:
+	var n: int = 0
+	for i: Dictionary in items:
+		if i["open"]:
+			n += 1
+	return n
+
+
+func _find_sel(items: Array) -> Dictionary:
+	if _sel_kind == "":
+		return {}
+	for i: Dictionary in items:
+		if i["kind"] == _sel_kind and str(i["key"]) == str(_sel_key):
+			return i
+	return {}
+
+
+## Seçili öğe geçerli mi: A seçili kategoriden, C ilk (en alınabilir) öğeden başlar; D'de seçim yoksa "sıradaki hedef" gösterilir.
+func _ensure_selection(items: Array) -> void:
+	var cur: Dictionary = _find_sel(items)
+	if _layout == "d":
+		if cur.is_empty():
+			_sel_kind = ""
+			_sel_key = null
+		return
+	if _layout == "a" and (cur.is_empty() or cur["kind"] != _cat):
+		cur = (_sorted(_of_kind(items, _cat)) as Array)[0]
+	elif cur.is_empty():
+		cur = (_sorted(items) as Array)[0]
+	_sel_kind = str(cur["kind"])
+	_sel_key = cur["key"]
+
+
+func _select(it: Dictionary) -> void:
+	_sel_kind = str(it["kind"])
+	_sel_key = it["key"]
+	_confirm_id = ""
+	_rebuild_list()
+
+
+func _set_cat(kind: String) -> void:
+	_cat = kind
+	_sel_kind = ""
+	_confirm_id = ""
+	_rebuild_list(true)
+
+
+func _on_buy_pressed(kind: String, key: Variant) -> void:
+	var id: String = "%s:%s" % [kind, str(key)]
+	if _confirm_id != id:
+		_confirm_id = id
+		_rebuild_list()
+		return
+	_confirm_id = ""
+	MetaProgressScript.buy(kind, key)
+	_rebuild_list()
+
+
+## ---------------------------------------------------------------- ORTAK PARÇALAR
+func _tag_sid(b: Control, sid: String) -> void:
+	b.set_meta("sid", sid)
+
+
+func _icon(tex: Texture2D, px: float, dim: bool = false) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = tex
+	t.custom_minimum_size = Vector2(px, px)
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	t.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	if dim:
+		t.modulate = Color(0.7, 0.66, 0.62)
+	return t
+
+
+func _price(cost: int, px: float, color: Color, font: int = MenuKit.FS_BODY, dimmed: bool = false) -> HBoxContainer:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 6)
+	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ic := ShardIcon.new(px, dimmed)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(ic)
+	h.add_child(MenuKit.make_label(str(cost), font, color))
+	return h
+
+
+func _spacer(expand_x: bool = true) -> Control:
+	var c := Control.new()
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if expand_x:
+		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	else:
+		c.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	return c
+
+
+func _chip(text: String, active: bool, w: float, cb: Callable, sid: String = "") -> Button:
+	var b: Button = MenuKit.make_button(text, "sage" if active else "tan", MenuKit.FS_SMALL, 48)
+	b.custom_minimum_size.x = w
+	b.pressed.connect(cb)
+	if sid != "":
+		_tag_sid(b, sid)
+	return b
+
+
+## Şeffaf tıklama katmanı: üzerine gelince hafif parlar, gamepad odağında koyu çerçeve çıkar.
+func _click_overlay(wrap: Control, cb: Callable, sid: String) -> void:
+	var b := Button.new()
+	b.flat = true
+	b.set_anchors_preset(Control.PRESET_FULL_RECT)
+	b.focus_mode = Control.FOCUS_ALL
+	for st: String in ["normal", "pressed", "disabled"]:
+		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	var hv := StyleBoxFlat.new()
+	hv.bg_color = Color(1.0, 0.95, 0.8, 0.18)
+	b.add_theme_stylebox_override("hover", hv)
+	var fc := StyleBoxFlat.new()
+	fc.bg_color = Color(0, 0, 0, 0)
+	fc.border_color = MenuKit.C_OUTLINE
+	fc.set_border_width_all(4)
+	b.add_theme_stylebox_override("focus", fc)
+	b.pressed.connect(cb)
+	_tag_sid(b, sid)
+	wrap.add_child(b)
+
+
+func _ring(wrap: Control, color: Color, width: int) -> void:
+	var ring := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.border_color = color
+	sb.set_border_width_all(width)
+	ring.add_theme_stylebox_override("panel", sb)
+	ring.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrap.add_child(ring)
+
+
+## Satın alma düğmesi: açık = pasif "AÇIK", alınabilir = "AÇ" (ikinci basışta "ONAYLA?"), yetmiyor = pasif "N EKSİK".
+func _buy_btn(it: Dictionary, h: float = 56.0, fs: int = MenuKit.FS_BODY, with_price: bool = false) -> Button:
+	var st: String = _state(it)
+	var id: String = _id(it)
+	var b: Button
+	if st == "open":
+		b = MenuKit.make_button("AÇIK", "sage", fs, h)
+		b.disabled = true
+	elif st == "can":
+		var asking: bool = _confirm_id == id
+		var label: String = "ONAYLA?" if asking else ("AÇ  -  %d" % int(it["cost"]) if with_price else "AÇ")
+		b = MenuKit.make_button(label, "rose" if asking else "sage", fs, h)
+		b.pressed.connect(_on_buy_pressed.bind(it["kind"], it["key"]))
+	else:
+		b = MenuKit.make_button("%d EKSİK" % _need(it), "tan", fs, h)
+		b.disabled = true
+	_tag_sid(b, "buy:" + id)
+	return b
+
+
+## Kare kart: ikon + isim + fiyat/durum. Alınabilir = altın halka, alınamaz = soluk ikon + kırmızı fiyat, açık = yeşil "AÇIK",
+## seçili = kalın koyu halka. Tıklayınca öğeyi seçer.
+func _card(it: Dictionary, w: float, h: float, icon_px: float, selected: bool, expand: bool = true) -> Control:
+	var st: String = _state(it)
+	var wrap := Control.new()
+	wrap.custom_minimum_size = Vector2(w, h)
+	if expand:
+		wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var p := MenuKit.make_panel("slot_selected" if selected else "slot_normal")
+	p.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wrap.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	p.add_child(v)
+	v.add_child(_icon(it["icon"], icon_px, st == "no"))
+	var nm: Label = MenuKit.make_label(str(it["name"]), MenuKit.FS_SMALL, MenuKit.C_GOOD if st == "open" else MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	MenuKit.fit_label_font(nm, str(it["name"]), MenuKit.FS_BODY if w > 200.0 else MenuKit.FS_SMALL, w - 40.0)
+	v.add_child(nm)
+	match st:
+		"open":
+			v.add_child(MenuKit.make_label("AÇIK", MenuKit.FS_SMALL, MenuKit.C_GOOD, HORIZONTAL_ALIGNMENT_CENTER))
+		"can":
+			v.add_child(_price(it["cost"], 24, C_PRICE, MenuKit.FS_SMALL))
+		_:
+			v.add_child(_price(it["cost"], 24, MenuKit.C_BAD, MenuKit.FS_SMALL, true))
+	if st == "can" or selected:
+		_ring(wrap, MenuKit.C_OUTLINE if selected else C_RING, 6 if selected else 3)
+	_click_overlay(wrap, _select.bind(it), "card:" + _id(it))
+	return wrap
+
+
+## Kazanım tablosu (meta_progress.gd sabitlerinden): "nasıl kıymık kazanırım?"
+func _earn_box(width: float, compact: bool = false) -> PanelContainer:
+	var p := MenuKit.make_panel("inset")
+	p.custom_minimum_size.x = width
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 0)
+	p.add_child(v)
+	v.add_child(MenuKit.make_label("NASIL KAZANILIR?", MenuKit.FS_SMALL, MenuKit.C_ACCENT))
+	for pair: Array in [["Kademe (%d, %d, %d...)" % [MetaProgressScript.SHARDS_FIRST_TIER, MetaProgressScript.SHARDS_FIRST_TIER + MetaProgressScript.SHARDS_TIER_STEP, MetaProgressScript.SHARDS_FIRST_TIER + 2 * MetaProgressScript.SHARDS_TIER_STEP], MetaProgressScript.SHARDS_FIRST_TIER], ["Hayatta kalınan dakika", MetaProgressScript.SHARDS_PER_MINUTE],
+			["Sonsuz mod katı", MetaProgressScript.SHARDS_PER_LAYER], ["Zafer (bir kez)", MetaProgressScript.SHARDS_VICTORY],
+			["Yeni başarım", MetaProgressScript.SHARDS_ACHIEVEMENT]]:
+		var row := HBoxContainer.new()
+		row.add_child(MenuKit.make_label(pair[0], MenuKit.FS_SMALL, MenuKit.C_TEXT))
+		row.add_child(_spacer())
+		row.add_child(MenuKit.make_label("+%d" % pair[1], MenuKit.FS_SMALL, C_PRICE))
+		v.add_child(row)
+	if not compact:
+		v.add_child(MenuKit.make_label("Oyundan düşsen de kazandığın kaybolmaz.", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM))
+	return p
+
+
+func _scrolled(inner: Control) -> ScrollContainer:
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(inner)
+	_scroll = sc
+	return sc
+
+
+func _desc_label(text: String, fs: int, align: int = HORIZONTAL_ALIGNMENT_LEFT, max_lines: int = 0) -> Label:
+	var d: Label = MenuKit.make_label(text, fs, MenuKit.C_TEXT_DIM, align)
+	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d.custom_minimum_size.x = 100.0 ## otomatik kaydırmalı etiket sıfır genişlikte kelime kelime bölünmesin
+	d.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if max_lines > 0:
+		d.max_lines_visible = max_lines
+	return d
+
+
+## ================================================================ A: VİTRİN (kategori sekmesi + kart ızgarası + sağda ayrıntı)
+func _view_a(items: Array) -> Control:
+	var sel: Dictionary = _find_sel(items)
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 20)
+
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 10)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(left)
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 8)
+	left.add_child(tabs)
+	for kind: String in MetaProgressScript.KINDS:
+		var list: Array = _of_kind(items, kind)
+		var t: Button = _chip("%s  %d/%d" % [MetaProgressScript.KIND_LABELS[kind], _open_count(list), list.size()], kind == _cat, 0.0,
+				_set_cat.bind(kind), "cat:" + kind)
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tabs.add_child(t)
+	var grid_panel := MenuKit.make_panel("inset")
+	grid_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left.add_child(grid_panel)
+	var grid := GridContainer.new()
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	for it: Dictionary in _sorted(_of_kind(items, _cat)):
+		grid.add_child(_card(it, 200, 270, 104, it["kind"] == _sel_kind and str(it["key"]) == str(_sel_key)))
+	grid_panel.add_child(_scrolled(grid))
+	left.add_child(MenuKit.make_label("Bir karta dokun: sağda ayrıntısı çıkar.  Altın çerçeveli = şimdi alabilirsin.",
+			MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER))
+
+	var right := MenuKit.make_panel("panel_tight")
+	right.custom_minimum_size.x = 500.0
+	body.add_child(right)
+	var rv := VBoxContainer.new()
+	rv.add_theme_constant_override("separation", 8)
+	right.add_child(rv)
+	rv.add_child(MenuKit.make_label(str(MetaProgressScript.KIND_LABELS[sel["kind"]]).to_upper(), MenuKit.FS_SMALL, MenuKit.C_ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
+	var stage := MenuKit.make_panel("inset")
+	var sc := CenterContainer.new()
+	sc.add_child(_icon(sel["icon"], 160, _state(sel) == "no"))
+	stage.add_child(sc)
+	rv.add_child(stage)
+	rv.add_child(MenuKit.make_label(str(sel["name"]), MenuKit.FS_TITLE, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+	var dtxt: String = str(sel["desc"])
+	if sel["kind"] == MetaProgressScript.CHAR:
+		dtxt = dtxt.replace("  ", "\n")
+	rv.add_child(_desc_label(dtxt, MenuKit.FS_BODY, HORIZONTAL_ALIGNMENT_CENTER))
+	rv.add_child(_spacer(false))
+	if _state(sel) != "open":
+		rv.add_child(MenuKit.make_section_header("FİYAT", MenuKit.FS_SMALL))
+		var after: int = MetaProgressScript.shards() - int(sel["cost"])
+		for trio: Array in [["Fiyat", int(sel["cost"]), C_PRICE], ["Bakiye", MetaProgressScript.shards(), MenuKit.C_TEXT],
+				["Alınca kalan", after, MenuKit.C_GOOD if after >= 0 else MenuKit.C_BAD]]:
+			var row := HBoxContainer.new()
+			row.add_child(MenuKit.make_label(trio[0], MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM))
+			row.add_child(_spacer())
+			row.add_child(_price(int(trio[1]), 24, trio[2], MenuKit.FS_BODY))
+			rv.add_child(row)
+	rv.add_child(_buy_btn(sel, 68, MenuKit.FS_BODY, true))
+	return body
+
+
+## ================================================================ B: REHBER (kategori listesi + ilerleme çubuğu, sağda iki sütun satır listesi)
+func _view_b(items: Array) -> Control:
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 20)
+
+	var left := VBoxContainer.new()
+	left.custom_minimum_size.x = 470.0
+	left.add_theme_constant_override("separation", 10)
+	body.add_child(left)
+	for kind: String in MetaProgressScript.KINDS:
+		var list: Array = _of_kind(items, kind)
+		var on: bool = kind == _cat
+		var wrap := Control.new()
+		wrap.custom_minimum_size.y = 120.0
+		var row := MenuKit.make_panel("slot_selected" if on else "slot_normal")
+		row.set_anchors_preset(Control.PRESET_FULL_RECT)
+		wrap.add_child(row)
+		var rv := VBoxContainer.new()
+		rv.add_theme_constant_override("separation", 4)
+		rv.alignment = BoxContainer.ALIGNMENT_CENTER
+		var pad := MarginContainer.new()
+		pad.add_theme_constant_override("margin_left", 14)
+		pad.add_theme_constant_override("margin_right", 14)
+		row.add_child(pad)
+		pad.add_child(rv)
+		var top := HBoxContainer.new()
+		top.add_child(MenuKit.make_label(MetaProgressScript.KIND_LABELS[kind], MenuKit.FS_BODY, MenuKit.C_ACCENT if on else MenuKit.C_TEXT))
+		top.add_child(_spacer())
+		var afford: int = list.filter(func(i: Dictionary) -> bool: return i["can"]).size()
+		if afford > 0:
+			top.add_child(MenuKit.make_label("%d alınabilir" % afford, MenuKit.FS_SMALL, C_PRICE))
+		rv.add_child(top)
+		var pr := HBoxContainer.new()
+		pr.add_theme_constant_override("separation", 10)
+		var bar := Bar.new(240, 22, float(_open_count(list)) / float(list.size()), MenuKit.C_GOOD)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		pr.add_child(bar)
+		pr.add_child(MenuKit.make_label("%d/%d açık" % [_open_count(list), list.size()], MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM))
+		rv.add_child(pr)
+		if on:
+			_ring(wrap, MenuKit.C_OUTLINE, 4)
+		_click_overlay(wrap, _set_cat.bind(kind), "cat:" + kind)
+		left.add_child(wrap)
+	left.add_child(_spacer(false))
+	left.add_child(_earn_box(470.0))
+
+	var right := MenuKit.make_panel("inset")
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(right)
+	var rv2 := VBoxContainer.new()
+	rv2.add_theme_constant_override("separation", 10)
+	right.add_child(rv2)
+	var title_row := HBoxContainer.new()
+	title_row.add_child(MenuKit.make_label(MetaProgressScript.KIND_LABELS[_cat], MenuKit.FS_TITLE, MenuKit.C_TEXT))
+	title_row.add_child(_spacer())
+	title_row.add_child(MenuKit.make_label("Sıra: alınabilirler önce, sonra ucuzdan pahalıya", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM))
+	rv2.add_child(title_row)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 10)
+	for it: Dictionary in _sorted(_of_kind(items, _cat)):
+		grid.add_child(_row(it))
+	rv2.add_child(_scrolled(grid))
+	return body
+
+
+func _row(it: Dictionary) -> Control:
+	var st: String = _state(it)
+	var p := MenuKit.make_panel("slot_normal")
+	p.custom_minimum_size.y = 112.0
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 12)
+	p.add_child(h)
+	h.add_child(_icon(it["icon"], 72, st == "no"))
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", -2)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	h.add_child(col)
+	col.add_child(MenuKit.make_label(str(it["name"]), MenuKit.FS_BODY, MenuKit.C_GOOD if st == "open" else MenuKit.C_TEXT))
+	col.add_child(_desc_label(str(it["desc"]), MenuKit.FS_SMALL, HORIZONTAL_ALIGNMENT_LEFT, 2))
+	var side := VBoxContainer.new()
+	side.alignment = BoxContainer.ALIGNMENT_CENTER
+	side.add_theme_constant_override("separation", 2)
+	side.custom_minimum_size.x = 136.0
+	h.add_child(side)
+	if st != "open":
+		side.add_child(_price(it["cost"], 28, C_PRICE if st == "can" else MenuKit.C_BAD, MenuKit.FS_BODY, st == "no"))
+	side.add_child(_buy_btn(it, 44, MenuKit.FS_SMALL))
+	return p
+
+
+## ================================================================ C: RAFLAR (4 raf tek bakışta + altta seçili öğe şeridi)
+func _view_c(items: Array) -> Control:
+	var sel: Dictionary = _find_sel(items)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	v.add_child(_shelf(items, MetaProgressScript.CHAR, true))
+	v.add_child(_shelf(items, MetaProgressScript.WEAPON, true))
+	var low := HBoxContainer.new()
+	low.add_theme_constant_override("separation", 28)
+	low.add_child(_shelf(items, MetaProgressScript.PET, false))
+	low.add_child(_shelf(items, MetaProgressScript.SPIRIT, false))
+	low.add_child(_spacer())
+	var eb: PanelContainer = _earn_box(440.0, true)
+	eb.size_flags_vertical = Control.SIZE_SHRINK_END
+	low.add_child(eb)
+	v.add_child(low)
+	v.add_child(_spacer(false))
+
+	var strip := MenuKit.make_panel("inset")
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 16)
+	strip.add_child(h)
+	h.add_child(_icon(sel["icon"], 72, _state(sel) == "no"))
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", -2)
+	h.add_child(col)
+	col.add_child(MenuKit.make_label("%s   -   %s" % [sel["name"], MetaProgressScript.KIND_LABELS[sel["kind"]]], MenuKit.FS_BODY, MenuKit.C_TEXT))
+	col.add_child(_desc_label(str(sel["desc"]), MenuKit.FS_SMALL, HORIZONTAL_ALIGNMENT_LEFT, 2))
+	if _state(sel) != "open":
+		h.add_child(_price(int(sel["cost"]), 32, C_PRICE if _state(sel) == "can" else MenuKit.C_BAD, MenuKit.FS_TITLE))
+	var buy: Button = _buy_btn(sel, 64)
+	buy.custom_minimum_size.x = 220.0
+	h.add_child(buy)
+	v.add_child(strip)
+	return v
+
+
+func _shelf(items: Array, kind: String, expand: bool) -> Control:
+	var list: Array = _sorted(_of_kind(items, kind))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	if expand:
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(MenuKit.make_section_header("%s   %d / %d" % [MetaProgressScript.KIND_LABELS[kind], _open_count(list), list.size()], MenuKit.FS_SMALL))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	for it: Dictionary in list:
+		row.add_child(_card(it, 150, 164, 68, it["kind"] == _sel_kind and str(it["key"]) == str(_sel_key), expand))
+	col.add_child(row)
+	col.add_child(Plank.new())
+	return col
+
+
+## ================================================================ D: HEDEF ODAKLI (sol: seçili/sıradaki hedef + kazanım, sağ: filtre çipleri + ızgara)
+func _view_d(items: Array) -> Control:
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 20)
+
+	var left := VBoxContainer.new()
+	left.custom_minimum_size.x = 560.0
+	left.add_theme_constant_override("separation", 10)
+	body.add_child(left)
+	var sel: Dictionary = _find_sel(items)
+	var is_goal: bool = sel.is_empty()
+	if is_goal: ## hedef = alınamayan en ucuz öğe (alınabilirler zaten ızgarada altın çerçeveli)
+		for it: Dictionary in _sorted(items):
+			if not it["open"] and not it["can"]:
+				sel = it
+				break
+	var hero := MenuKit.make_panel("panel_tight")
+	hero.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left.add_child(hero)
+	var hv := VBoxContainer.new()
+	hv.add_theme_constant_override("separation", 6)
+	hero.add_child(hv)
+	if sel.is_empty():
+		hv.add_child(MenuKit.make_section_header("HEPSİ AÇIK", MenuKit.FS_BODY))
+		hv.add_child(MenuKit.make_label("Tüm kilitleri açtın. Tebrikler!", MenuKit.FS_BODY, MenuKit.C_GOOD, HORIZONTAL_ALIGNMENT_CENTER))
+	else:
+		hv.add_child(MenuKit.make_section_header("SIRADAKİ HEDEF" if is_goal else "SEÇİLİ", MenuKit.FS_SMALL))
+		var stage := MenuKit.make_panel("inset")
+		stage.custom_minimum_size.y = 230.0
+		var sc := CenterContainer.new()
+		sc.add_child(_icon(sel["icon"], 160, _state(sel) == "no"))
+		stage.add_child(sc)
+		hv.add_child(stage)
+		hv.add_child(MenuKit.make_label(str(sel["name"]), MenuKit.FS_TITLE, MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+		hv.add_child(_desc_label(str(sel["desc"]).replace("  ", "\n") if sel["kind"] == MetaProgressScript.CHAR else str(sel["desc"]),
+				MenuKit.FS_SMALL, HORIZONTAL_ALIGNMENT_CENTER, 3))
+		hv.add_child(_spacer(false))
+		var st: String = _state(sel)
+		if st == "no":
+			var bar := Bar.new(480, 28, float(MetaProgressScript.shards()) / float(sel["cost"]))
+			bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			hv.add_child(bar)
+			hv.add_child(MenuKit.make_label("%d / %d    -    %d kıymık eksik" % [MetaProgressScript.shards(), sel["cost"], _need(sel)],
+					MenuKit.FS_SMALL, C_PRICE, HORIZONTAL_ALIGNMENT_CENTER))
+			var avg: int = maxi(1, MetaProgressScript.shards_for_run({"time": 420.0, "tier": 5, "layer": 0}))
+			hv.add_child(MenuKit.make_label("Ortalama bir koşu ~%d kıymık: yaklaşık %d koşu sonra" % [avg, int(ceil(float(_need(sel)) / float(avg)))],
+					MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER))
+		elif st == "can":
+			var row := HBoxContainer.new()
+			row.add_child(MenuKit.make_label("Alınca kalan", MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM))
+			row.add_child(_spacer())
+			row.add_child(_price(MetaProgressScript.shards() - int(sel["cost"]), 24, MenuKit.C_GOOD, MenuKit.FS_BODY))
+			hv.add_child(row)
+			hv.add_child(_buy_btn(sel, 64, MenuKit.FS_BODY, true))
+		else:
+			hv.add_child(_buy_btn(sel, 64))
+	left.add_child(_earn_box(560.0, true))
+
+	var right := MenuKit.make_panel("inset")
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(right)
+	var rv := VBoxContainer.new()
+	rv.add_theme_constant_override("separation", 10)
+	right.add_child(rv)
+	var afford_n: int = items.filter(func(i: Dictionary) -> bool: return i["can"]).size()
+	var chips := HBoxContainer.new()
+	chips.add_theme_constant_override("separation", 8)
+	var kind_short: Dictionary = {MetaProgressScript.CHAR: "Karakter", MetaProgressScript.WEAPON: "Silah",
+			MetaProgressScript.PET: "Evcil", MetaProgressScript.SPIRIT: "Ruhani"}
+	for pair: Array in [["all", "Hepsi %d" % items.size()], ["can", "Alınabilir %d" % afford_n]]:
+		chips.add_child(_chip(str(pair[1]), _filter == pair[0], 190.0, _set_filter.bind(str(pair[0])), "chip:" + str(pair[0])))
+	for kind: String in MetaProgressScript.KINDS:
+		chips.add_child(_chip(str(kind_short[kind]), _filter == kind, 130.0, _set_filter.bind(kind), "chip:" + kind))
+	rv.add_child(chips)
+	var shown: Array = _sorted(items)
+	if _filter == "can":
+		shown = shown.filter(func(i: Dictionary) -> bool: return i["can"])
+	elif _filter != "all":
+		shown = shown.filter(func(i: Dictionary) -> bool: return i["kind"] == _filter)
+	var grid := GridContainer.new()
+	grid.columns = 6
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	for it: Dictionary in shown:
+		grid.add_child(_card(it, 150, 176, 76, not is_goal and it["kind"] == _sel_kind and str(it["key"]) == str(_sel_key)))
+	if shown.is_empty():
+		rv.add_child(MenuKit.make_label("Bu filtrede şu an alabileceğin bir şey yok.", MenuKit.FS_BODY, MenuKit.C_TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER))
+	rv.add_child(_scrolled(grid))
+	return body
+
+
+func _set_filter(f: String) -> void:
+	_filter = f
+	_rebuild_list(true)
+
+
+## ---------------------------------------------------------------- GELİŞTİRMELER sekmesi (kalıcı güçlendirmeler, scripts/meta_upgrades.gd)
+func _build_upgrades_tab() -> void:
+	var intro: Label = MenuKit.make_label("Kalıcı güçlendirmeler her koşuda otomatik uygulanır. Seviye atladıkça fiyat artar.",
+			MenuKit.FS_SMALL, MenuKit.C_TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	_content.add_child(intro)
+	var panel := MenuKit.make_panel("inset")
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content.add_child(panel)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 8)
+	_list = grid
+	for d: Dictionary in MetaUpgradesScript.LIST:
+		var cell := MenuKit.make_panel("slot_normal")
+		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cell.add_child(_make_upgrade_row(d))
+		grid.add_child(cell)
+	panel.add_child(_scrolled(grid))
+	_content.add_child(_make_reset_row())
+
+
+func _make_upgrade_row(d: Dictionary) -> Control:
+	var id: String = str(d["id"])
+	var lv: int = MetaUpgradesScript.level(id)
+	var mx: int = int(d["max"])
+	var maxed: bool = lv >= mx
+	var per: float = float(d["per"])
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = Vector2(ROW_ICON, ROW_ICON)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var icon_key: String = str(d.get("icon", ""))
+	var icon_file: String = str(StatIconScript.ICON_PATHS.get(icon_key, ""))
+	if icon_file != "" and ResourceLoader.exists(StatIconScript.ICON_DIR + icon_file):
+		icon.texture = load(StatIconScript.ICON_DIR + icon_file) as Texture2D
+	row.add_child(icon)
+
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 0)
+	row.add_child(col)
+	col.add_child(MenuKit.make_label("%s   %d / %d" % [str(d["name"]), lv, mx], MenuKit.FS_BODY, MenuKit.C_GOOD if maxed else MenuKit.C_TEXT))
+	var effect: String = "şu an %s" % MetaUpgradesScript.format_value(id, per * float(lv))
+	if not maxed:
+		effect += "  ->  sonraki %s" % MetaUpgradesScript.format_value(id, per * float(lv + 1))
+	col.add_child(_desc_label("%s  (%s)" % [str(d["desc"]), effect], MenuKit.FS_SMALL))
+
+	var side := VBoxContainer.new()
+	side.alignment = BoxContainer.ALIGNMENT_CENTER
+	side.custom_minimum_size.x = 150.0
+	row.add_child(side)
+	var btn: Button
+	if maxed:
+		btn = MenuKit.make_button("TAM", "sage", MenuKit.FS_SMALL, 44)
+		btn.disabled = true
+	else:
+		var can: bool = MetaUpgradesScript.can_buy(id)
+		side.add_child(_price(MetaUpgradesScript.next_cost(id), 28, C_PRICE if can else MenuKit.C_BAD, MenuKit.FS_BODY, not can))
+		btn = MenuKit.make_button("YÜKSELT", "sage" if can else "tan", MenuKit.FS_SMALL, 44)
+		btn.disabled = not can
+		btn.pressed.connect(_on_upgrade_pressed.bind(id))
+	_tag_sid(btn, "up:" + id)
+	side.add_child(btn)
+	return row
+
+
+func _make_reset_row() -> Control:
+	var panel := MenuKit.make_panel("inset")
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	panel.add_child(row)
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(col)
+	col.add_child(MenuKit.make_label("Geliştirmeleri Sıfırla", MenuKit.FS_BODY, MenuKit.C_TEXT))
+	var info: String = "Sıfırlanacak geliştirme yok."
+	if MetaUpgradesScript.can_reset():
+		info = "Harcanan %d Ruh Kıymığı, %d ücret kesilip %d olarak iade edilir." % [
+				MetaUpgradesScript.total_spent(), MetaUpgradesScript.reset_fee(), MetaUpgradesScript.reset_refund()]
+	col.add_child(_desc_label(info, MenuKit.FS_SMALL))
+	var asking: bool = _confirm_id == "reset"
+	var btn: Button = MenuKit.make_button("ONAYLA?" if asking else "SIFIRLA", "rose" if asking else "tan", MenuKit.FS_BODY, 52)
+	btn.disabled = not MetaUpgradesScript.can_reset()
+	btn.custom_minimum_size.x = 200.0
+	btn.pressed.connect(_on_reset_pressed)
+	_tag_sid(btn, "reset")
+	row.add_child(btn)
+	return panel
+
+
+func _on_upgrade_pressed(id: String) -> void:
+	_confirm_id = ""
+	MetaUpgradesScript.buy(id)
+	_rebuild_list()
+
+
+func _on_reset_pressed() -> void:
+	if _confirm_id != "reset":
+		_confirm_id = "reset"
+		_rebuild_list()
+		return
+	_confirm_id = ""
+	MetaUpgradesScript.reset_all()
+	_rebuild_list()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		_on_close_pressed()
+		get_viewport().set_input_as_handled()
+
+
+func _on_close_pressed() -> void:
+	closed.emit()
+	queue_free()

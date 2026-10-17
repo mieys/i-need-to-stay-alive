@@ -1,117 +1,57 @@
 extends Control
 
-## Tek oyunculu karakter seçim ekranı. Kullanıcı isteği (2026-09-24): menülerin kartları/arka planları bej/cozy piksel
-## kitle (MenuKit) SIFIRDAN yeniden tasarlandı; ekran tamamen KODLA kurulur (.tscn sadece kök).
-## Yerleşim (1920x1080, simetrik üç sütun - çok oyunculu lobi ile AYNI ızgara):
-##   sol  : Ruhani Yetenek seçici (spiritual_picker.gd)
-##   orta : kurdele başlık + 6 sütunlu karakter kartları (menu_character_roster.gd; 13 karakterle 3 satır) + yetenek bilgi
-##          paneli (menu_character_details.gd)
-##   sağ  : seçili karakterin animasyonlu vitrini (menu_character_showcase.gd) + BAŞLA
-## Kartlar/bilgi paneli/vitrin lobby_menu.gd ile ORTAK bileşenler - eskiden iki ekranda "birebir aynı" tutulan kopyalar vardı.
+## Tek oyunculu karakter seçim ekranı; ekran tamamen KODLA kurulur (.tscn sadece kök).
+## MASAÜSTÜ (2026-10-16, kullanıcı: "tek oyunculu modun tasarımını çok oyunculu moda uygun hale getir"): çok oyunculu "SEÇİM D" ekranının
+## (lobby_select_desktop.gd, koyu kit menu_dark_kit.gd) TEK OYUNCULU kipi - sol mod kutusu (ANA MENÜ, Ruh Kıymığı) + kendi kartın + en iyi
+## koşular, orta karakter ızgarası + statlar + Q/E/R, sağ vitrin + SİLAH/EVCİL/RUHANİ sekmeleri, alt sağ OYUNU BAŞLAT. Arka plan ana
+## menüyle aynı "Ocak Başı" sahnesi (menu_hearth_bg.gd).
+## TELEFON: eski bej MenuKit yerleşimi (_build_mobile, prototip P1; ortak bileşenler menu_character_roster/menu_weapon_picker/...).
 
 const SpiritualPickerScript: GDScript = preload("res://scripts/spiritual_picker.gd")
 const RosterScript: GDScript = preload("res://scripts/menu_character_roster.gd")
-const DetailsScript: GDScript = preload("res://scripts/menu_character_details.gd")
-const ShowcaseScript: GDScript = preload("res://scripts/menu_character_showcase.gd")
 const WeaponPickerScript: GDScript = preload("res://scripts/menu_weapon_picker.gd")
 const PetPickerScript: GDScript = preload("res://scripts/menu_pet_picker.gd")
-const WEAPON_PICKER_H := 300.0
-
-## Ortak ızgara ölçüleri (lobby_menu.gd de aynılarını kullanır): yan sütunlar 376 px, orta sütun 1104 px (6 kart = 1100).
-const SCREEN := Vector2(1920, 1080)
-const EDGE := 16.0
-const GAP := 16.0
-const SIDE := 376.0
-const TOP := 108.0
-const BOTTOM := 16.0
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const DesktopScript: GDScript = preload("res://scripts/lobby_select_desktop.gd")
+const HearthBg := preload("res://scripts/menu_hearth_bg.gd")
 
 var selected_char: int = -1
 var roster: GridContainer
-var details: PanelContainer
-var showcase: PanelContainer
 var start_button: Button
 var back_button: Button
 var weapon_picker: PanelContainer
 var pet_picker: PanelContainer
+var _desk: Control = null ## masaüstü SEÇİM D ekranı (telefonda null)
 
 
 func _ready() -> void:
 	theme = MenuKit.theme()
-	MenuKit.add_background(self)
-	if MobileUIScript.enabled:
+	var mobile: bool = MobileUIScript.enabled
+	HearthBg.add_to(self, 0.0 if mobile else HearthBg.DIM_DESKTOP)
+	if mobile:
 		_build_mobile()
 		return
-
-	## NOT: her node ÖNCE ağaca eklenir (menü teması ancak o zaman geçerli - ağaç dışında projenin genel theme.tres'i,
-	## 88 px yazıyla), SONRA MenuKit.place ile OFFSET olarak yerleştirilir (`size =` ataması geçici minimum boya kırpılıp
-	## kalıcı büyüyordu - bkz. MenuKit.place notu).
-	back_button = MenuKit.make_button("< Geri Dön", "tan", MenuKit.FS_BODY, 56)
-	back_button.pressed.connect(_on_back_pressed)
-	add_child(back_button)
-	_place(back_button, Vector2(EDGE, 24), Vector2(200, 56))
-
-	var banner := MenuKit.make_banner("Karakterini Seç")
-	add_child(banner)
-	_center_top(banner, 18.0)
-
-	## Sol: Ruhani Yetenek (kullanıcı isteği: oyun başında karakter seçim ekranında herkes 1 tane seçer). Seçim doğrudan
-	## GameManager.selected_spiritual'a yazılır.
-	## Sol sütunun altı: başlangıç silahı (kullanıcı isteği 2026-10-03 - oyun başındaki silah kartı ekranı kaldırıldı,
-	## bkz. menu_weapon_picker.gd). Ruhani yetenek seçici kalan yüksekliği kullanır (açıklaması gerekirse kayar).
-	var col_h: float = SCREEN.y - TOP - BOTTOM
-	var spirit_picker: PanelContainer = SpiritualPickerScript.new()
-	add_child(spirit_picker)
-	spirit_picker.setup(3)
-	_place(spirit_picker, Vector2(EDGE, TOP), Vector2(SIDE, col_h - WEAPON_PICKER_H - PetPickerScript.DESKTOP_HEIGHT - 2.0 * GAP))
-	## Evcil hayvan (kullanıcı isteği 2026-10-12): ruhani yetenekle silah arasında, bkz. menu_pet_picker.gd.
-	pet_picker = PetPickerScript.new()
-	add_child(pet_picker)
-	pet_picker.setup(false)
-	_place(pet_picker, Vector2(EDGE, TOP + col_h - WEAPON_PICKER_H - GAP - PetPickerScript.DESKTOP_HEIGHT), Vector2(SIDE, PetPickerScript.DESKTOP_HEIGHT))
-	weapon_picker = WeaponPickerScript.new()
-	add_child(weapon_picker)
-	weapon_picker.setup(false)
-	_place(weapon_picker, Vector2(EDGE, TOP + col_h - WEAPON_PICKER_H), Vector2(SIDE, WEAPON_PICKER_H))
-
-	var center_x: float = EDGE + SIDE + GAP
-	var center_w: float = SCREEN.x - 2.0 * center_x
-	roster = RosterScript.new()
-	add_child(roster)
-	roster.build()
-	var grid_size: Vector2 = RosterScript.grid_size(Characters.DEFS.size())
-	_place(roster, Vector2(center_x + floorf((center_w - grid_size.x) * 0.5), TOP), grid_size)
-	roster.character_picked.connect(_on_character_pressed)
-
-	details = DetailsScript.new()
-	add_child(details)
-	var details_y: float = TOP + grid_size.y + GAP
-	_place(details, Vector2(center_x, details_y), Vector2(center_w, SCREEN.y - BOTTOM - details_y))
-
-	showcase = ShowcaseScript.new()
-	add_child(showcase)
-	showcase.build(true)
-	var content: VBoxContainer = showcase.get_content()
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_child(spacer)
-	start_button = MenuKit.make_button("BAŞLA", "sage", MenuKit.FS_HUGE, 120)
-	start_button.pressed.connect(_on_start_pressed)
-	content.add_child(start_button)
-	_place(showcase, Vector2(SCREEN.x - EDGE - SIDE, TOP), Vector2(SIDE, SCREEN.y - TOP - BOTTOM))
-
-	start_button.disabled = true
-	_on_character_pressed(1)
+	_desk = DesktopScript.new()
+	_desk.set("solo", true)
+	add_child(_desk)
+	_desk.call("build")
+	_desk.connect("character_picked", _on_character_pressed)
+	_desk.connect("start_pressed", _on_start_pressed)
+	_desk.connect("leave_pressed", _on_back_pressed)
+	var first: int = _first_character()
+	_on_character_pressed(first)
 	UISound.connect_all_buttons(self)
-	roster.focus_card(1)
+	_desk.call("focus_character", first)
+
+
+## Son seçilen karakter (açıksa), yoksa Talon.
+func _first_character() -> int:
+	var prev: int = GameManager.selected_char_id
+	return prev if Characters.DEFS.has(prev) and MetaProgressScript.is_unlocked(MetaProgressScript.CHAR, prev) else 1
 
 
 func _place(c: Control, pos: Vector2, sz: Vector2) -> void:
 	MenuKit.place(c, pos, sz)
-
-
-func _center_top(c: Control, y: float) -> void:
-	var s: Vector2 = c.get_combined_minimum_size()
-	MenuKit.place(c, Vector2(roundf((SCREEN.x - s.x) / 6.0) * 3.0, y), s)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -122,13 +62,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_character_pressed(char_id: int) -> void:
 	selected_char = char_id
+	## Kilitli karakter (Ruh Mağazası, bkz. meta_progress.gd) incelenebilir ama başlatılamaz.
+	var locked: bool = not MetaProgressScript.is_unlocked(MetaProgressScript.CHAR, char_id)
+	if _desk:
+		_desk.call("show_character", char_id, locked)
+		return
 	roster.select(char_id)
-	if details:
-		details.show_character(char_id)
-	if showcase:
-		showcase.show_character(char_id)
 	_mobile_show_character(char_id)
-	start_button.disabled = false
+	start_button.disabled = locked
+	start_button.text = "KİLİTLİ" if locked else "BAŞLA"
 
 
 ## ---------------------------------------------------------------- TELEFON (prototip P1 "Büyütülmüş Klasik", 2026-10-03)
@@ -280,8 +222,7 @@ func _build_mobile() -> void:
 	col.add_child(start_button)
 
 	start_button.disabled = true
-	var first: int = GameManager.selected_char_id if Characters.DEFS.has(GameManager.selected_char_id) else 1
-	_on_character_pressed(first)
+	_on_character_pressed(_first_character())
 	UISound.connect_all_buttons(self)
 
 
@@ -323,7 +264,7 @@ func _on_back_pressed() -> void:
 
 
 func _on_start_pressed() -> void:
-	if selected_char == -1:
+	if selected_char == -1 or not MetaProgressScript.is_unlocked(MetaProgressScript.CHAR, selected_char):
 		return
 	var def: Dictionary = Characters.get_def(selected_char)
 	GameManager.selected_char_id = selected_char

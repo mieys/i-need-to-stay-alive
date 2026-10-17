@@ -1,94 +1,129 @@
 extends CanvasLayer
 
-const KeybindMenuScript := preload("res://scripts/keybind_menu.gd")
-const GraphicsSettingsMenuScript := preload("res://scripts/graphics_settings_menu.gd")
+## DURAKLATMA (ESC) MENÜSÜ - "B - Ateş Işığı" (2026-10-17, madde 234; prototip madde 229, kullanıcı "B" seçti).
+## Ana menünün D dili (madde 192): kutu yok, oyun dünyası hafif kararır + sol basamaklı gölge, büyük altın başlık + koşu satırı
+## (kademe / süre / takım seviyesi) + kiriş süsü, öğeler mum + ikon + başlık + alt yazı. "Ayarlar" aynı katmanda ortak
+## settings_screen.gd'yi açar (sol sütun kategorilere döner) - eski bej pencere + ayrı Grafik / Tuş Atamaları pencereleri kalktı.
+## Sahne (pause_menu.tscn) sadece kök + betik; arayüz kodla kurulur. Yeniden başlatma / ana menü / çok oyunculu davranışı aynı.
 
-@onready var settings_panel: Panel = $SettingsPanel
-@onready var volume_slider: HSlider = $SettingsPanel/VolumeSlider
-@onready var volume_value: Label = $SettingsPanel/VolumeValue
-@onready var fullscreen_check: CheckButton = $SettingsPanel/FullscreenCheck
-@onready var resolution_option: OptionButton = $SettingsPanel/ResolutionOption
-@onready var fps_check: CheckButton = $SettingsPanel/FpsCheck
-@onready var keybind_button: Button = $SettingsPanel/KeybindButton
+const FM := preload("res://scripts/fire_menu_kit.gd")
+const DK := preload("res://scripts/menu_dark_kit.gd")
+const UiAnim := preload("res://scripts/ui_anim.gd")
+const SettingsScreenScript := preload("res://scripts/settings_screen.gd")
+const TierDisplayScript := preload("res://scripts/tier_display.gd")
+const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
+
+var _root: Control = null
+var _main_view: Control = null
+var _items: Array[Button] = []
+var _resume_btn: Button = null
+var _settings_btn: Button = null
+var _restart_btn: Button = null
+var _menu_btn: Button = null
+var _settings: Control = null
 
 
 func _ready() -> void:
 	add_to_group(&"gamepad_modal") ## kumandayla menü gezinmesi: açılınca ilk düğmeye odak (bkz. gamepad_ui.gd)
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	layer = 91 ## modal ekranlar 90+: HUD + sohbet (40) üstünde, yeniden başlatma onayı / ölüm ekranı (95) altında
+	var mp: bool = NetworkManager.is_multiplayer_active
+	_root = Control.new()
+	_root.name = "Root"
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_STOP ## oyun dünyasına tıklama geçmesin
+	_root.theme = DK.theme()
+	add_child(_root)
+	var dim := ColorRect.new()
+	dim.name = "Dim"
+	dim.color = Color(0.10, 0.06, 0.03, 0.35)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(dim)
+	_root.add_child(FM.left_shade())
+
+	_main_view = Control.new()
+	_main_view.name = "MainView"
+	_main_view.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_main_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_main_view)
+	## Çok oyunculuda oyun durmaz (main.gd _toggle_pause: sadece yerel karakter kilitlenir) - başlık bunu söylesin.
+	var sub := DK.v(0)
+	sub.add_child(_run_line())
+	if mp:
+		sub.add_child(FM.lbl("Oyun sürüyor - karakterin bekliyor", DK.FS_LABEL, FM.C_RED))
+	var logo := FM.title_block("MENÜ" if mp else "DURAKLATILDI", sub)
+	_main_view.add_child(logo)
+	logo.position = FM.TITLE_POS
+
+	var v := DK.v(0)
+	v.name = "MenuPanel"
+	var portrait: Texture2D = LobbyUI.face_texture(str(Characters.get_def(GameManager.selected_char_id).get("portrait", "")))
+	_resume_btn = FM.item("DEVAM ET", "Kaldığın yerden sürdür",
+			FM.tex_icon(portrait) if portrait else null)
+	_resume_btn.name = "ResumeButton"
+	_settings_btn = FM.item("AYARLAR", "Ses, ekran, grafik, tuşlar", FM.tex_icon(load("res://assets/items/tornavida.png")))
+	_settings_btn.name = "SettingsButton"
+	_restart_btn = FM.item("YENİDEN BAŞLA", _restart_sub(), FM.tex_icon(load("res://assets/items/zaman_kiran.png")))
+	_restart_btn.name = "RestartButton"
+	var menu_sub := "Koşu burada biter"
+	if mp:
+		menu_sub = "Oda kapanır, herkes çıkar" if NetworkManager.is_host else "Odadan ayrılırsın"
+	_menu_btn = FM.item("ANA MENÜ", menu_sub, FM.tex_icon(load("res://assets/items/ruzgar_yuruyen_cizmeleri.png")), true)
+	_menu_btn.name = "MenuButton"
+	for b: Button in [_resume_btn, _settings_btn, _restart_btn, _menu_btn]:
+		v.add_child(b)
+		_items.append(b)
+	_main_view.add_child(v)
+	v.position = FM.COL_POS
+	v.custom_minimum_size.x = FM.COL_W
+	var hint := FM.hint([["ESC", "devam et"], ["W/S", "seç"], ["Enter", "onayla"]])
+	_main_view.add_child(hint)
+	hint.position = Vector2(64, 1000)
 	UISound.connect_all_buttons(self)
-	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
-	## Kullanıcı isteği (2026-09-21): duraklatma/ayar panelleri UIKit ahşap pencere çerçevesinde (konum/boyut aynı).
-	$Panel.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
-	$SettingsPanel.add_theme_stylebox_override("panel", UIKit.panel_style("window"))
-	## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap kite geçti - panellerin kendi teması
-	## (koyu yazı, kit kaydırıcı/açma-kapama/açılır liste), sıcak karartma, başlıklar kiremit vurgu renginde 48 px.
-	var game_theme: Theme = UIKit.theme()
-	$Panel.theme = game_theme
-	$SettingsPanel.theme = game_theme
-	$Dim.color = Color(0.12, 0.07, 0.03, 0.55)
-	for title: Label in [$Panel/VBox/Title, $SettingsPanel/Title]:
-		UIKit.style_label(title, UIKit.FS_TITLE, UIKit.C_ACCENT, 0)
-	## DÜZELTME: "DURAKLATILDI" başlığı hiç görünmüyordu - sahnede clip_text + autowrap birlikte açıktı, bu ikilide Label minimum
-	## yüksekliğini 1 px bildiriyor, VBox ona 1 px verip hiçbir satır çizilmiyordu (çalışma anında ölçüldü: rect yüksekliği 1,
-	## visible_lines 0). Tek satırlık kısa başlık - kaydırma/kırpmaya gerek yok.
-	var pause_title: Label = $Panel/VBox/Title
-	pause_title.clip_text = false
-	pause_title.autowrap_mode = TextServer.AUTOWRAP_OFF
-	$Panel/VBox/ResumeButton.pressed.connect(_on_resume)
-	$Panel/VBox/RestartButton.pressed.connect(_on_restart)
-	$Panel/VBox/MenuButton.pressed.connect(_on_menu)
-	$Panel/VBox/SettingsButton.pressed.connect(_on_settings_pressed)
-	$SettingsPanel/CloseButton.pressed.connect(_on_settings_closed)
-	keybind_button.pressed.connect(_on_keybind_pressed)
-	_build_graphics_button()
-	volume_slider.value = UISound.master_volume_percent
-	volume_slider.value_changed.connect(_on_volume_changed)
-	_update_volume_label(volume_slider.value)
-	## Kullanıcı isteği: "ayarlara çözünürlük ve tam ekran özelliği ekle,
-	## değiştirilebilsin" - bkz. ui_sound.gd (UISound autoload'ında
-	## set_fullscreen/set_resolution, aynı ConfigFile deseni volume ile).
-	for label in UISound.get_resolution_labels():
-		resolution_option.add_item(label)
-	resolution_option.selected = UISound.resolution_index
-	fullscreen_check.button_pressed = UISound.is_fullscreen
-	resolution_option.disabled = UISound.is_fullscreen
-	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
-	resolution_option.item_selected.connect(_on_resolution_selected)
-	## Kullanıcı isteği: "fps göstergesi ekle ayarlardan açılıp kapatılabilsin" -
-	## fullscreen_check ile BİREBİR AYNI desen (UISound'daki show_fps'e bağlı).
-	fps_check.button_pressed = UISound.show_fps
-	fps_check.toggled.connect(_on_fps_toggled)
-	_build_ui_opacity_row()
-	_build_camera_shake_row()
-	settings_panel.visible = false
-	## DÜZELTME (kullanıcı isteği: "Multiplayerda host oyunu yeniden
-	## başlatabilsin eskiden yeniden başlatmayı seçerek fakat önce diğer
-	## oyunculara onayı sorulsun") - eskiden çok oyunculuda bu buton
-	## TAMAMEN gizliydi (sadece kendi ekranını resetleyip diğer peer'leri
-	## askıda bırakırdı). Artık SADECE host görebiliyor (client'larda hâlâ
-	## gizli - onlar isteği başlatamaz, sadece gelen onay isteğine cevap
-	## verir, bkz. main.gd _on_restart_request_received) ve host'un basması
-	## gerçek bir yeniden başlatma YERİNE bir onay oylaması başlatıyor (bkz.
-	## _on_restart, NetworkManager.request_restart_vote).
-	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
-		$Panel/VBox/RestartButton.visible = false
-	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
-		## Oylama reddedilirse/zaman aşımına uğrarsa (bkz. main.gd
-		## _on_restart_vote_result - asıl toast/unpause işini o yapar) bu menü
-		## hâlâ açıksa butonu "Onay bekleniyor..." donuk halinde bırakmamak
-		## için normale döndürür.
+
+	_resume_btn.pressed.connect(_on_resume)
+	_restart_btn.pressed.connect(_on_restart)
+	_menu_btn.pressed.connect(_on_menu)
+	_settings_btn.pressed.connect(_on_settings_pressed)
+	## Çok oyunculuda yeniden başlatmayı SADECE host görür ve basması bir onay oylaması başlatır (bkz. _on_restart,
+	## NetworkManager.request_restart_vote); client'lar sadece gelen onay isteğine cevap verir (main.gd _on_restart_request_received).
+	if mp and not NetworkManager.is_host:
+		_restart_btn.visible = false
+	if mp and NetworkManager.is_host:
+		## Oylama reddedilirse/zaman aşımına uğrarsa (asıl toast/unpause işi main.gd _on_restart_vote_result) menü hâlâ açıksa
+		## "onay bekleniyor" donuk hâlinde kalmasın.
 		NetworkManager.restart_vote_result.connect(func(_approved: bool, _rejecter: String):
-			if is_instance_valid(self):
-				$Panel/VBox/RestartButton.disabled = false
-				$Panel/VBox/RestartButton.text = "Yeniden Başla"
+			if is_instance_valid(self) and is_instance_valid(_restart_btn):
+				_restart_btn.disabled = false
+				FM.set_texts(_restart_btn, "YENİDEN BAŞLA", _restart_sub())
+				FM.set_selected(_restart_btn, _restart_btn.has_focus())
 		)
+	UiAnim.cascade(v, 0.04)
+	_resume_btn.grab_focus.call_deferred()
 
 
-## #28 DÜZELTME: main.gd _toggle_pause() artık multiplayer'da get_tree().
-## paused KULLANMIYOR (bkz. o dosyadaki not) - bu menü DOĞRUDAN (ESC'ye değil,
-## kendi butonuna) kapandığında da aynı şekilde SADECE bu istemcinin kendi
-## karakterinin hareket kilidini açması gerekiyor, yoksa "Devam Et"e basan
-## oyuncu menü kapandıktan sonra da hareketsiz kalırdı.
+func _restart_sub() -> String:
+	return "Herkesin onayıyla baştan" if NetworkManager.is_multiplayer_active else "Aynı karakterle baştan"
+
+
+## "KADEME IV  ◆  12:34  ◆  SEVİYE 18" (GameManager.run_max_tier / run_elapsed / team_level)
+func _run_line() -> HBoxContainer:
+	var h := DK.h(14)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var t: int = int(GameManager.run_elapsed())
+	var parts: Array[String] = ["KADEME " + TierDisplayScript.to_roman(maxi(GameManager.run_max_tier, 1)),
+			"%d:%02d" % [t / 60, t % 60], "SEVİYE %d" % GameManager.team_level]
+	for i in parts.size():
+		if i > 0:
+			h.add_child(DK.glyph(FM.G_DIAMOND, FM.C_GOLD_DIM, 2))
+		h.add_child(FM.lbl(parts[i], DK.FS_BODY, FM.C_TAG))
+	return h
+
+
+## #28 DÜZELTME: main.gd _toggle_pause() multiplayer'da get_tree().paused KULLANMIYOR - bu menü DOĞRUDAN (ESC'ye değil,
+## kendi düğmesine) kapandığında da aynı şekilde SADECE bu istemcinin kendi karakterinin hareket kilidini açması gerekiyor,
+## yoksa "Devam Et"e basan oyuncu menü kapandıktan sonra da hareketsiz kalırdı.
 func _unlock_local_input() -> void:
 	get_tree().paused = false
 	if NetworkManager.is_multiplayer_active:
@@ -102,66 +137,67 @@ func _on_resume() -> void:
 	queue_free()
 
 
-## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle" - kök neden analizi
-## sırasında bulunan mevcut hata): tekli oyuncuda menü açılınca get_tree().
-## paused=true olur, ve bunu tetikleyen main.gd'nin KENDİ _process()'i
-## (varsayılan PROCESS_MODE_PAUSABLE) tam o anda duraklar - yani main.gd
-## İKİNCİ bir ESC/gamepad-B basışını GÖREMEZ, menü bugüne kadar SADECE
-## "Devam Et" butonuyla kapanabiliyordu. Bu panel zaten PROCESS_MODE_ALWAYS
-## olduğu için (bkz. _ready()) kendi kontrolünü ekliyoruz.
-##
-## Çift tetiklenme YOK: bu kontrol SADECE get_tree().paused iken çalışıyor -
-## bu sadece tekli oyuncuda true olabiliyor (_on_restart()'ın çok oyunculu
-## dalı HARİÇ, bkz. aşağıdaki restart_vote_pending koruması), ve tam o anda
-## main.gd'nin kendi _process'i zaten donmuş durumda - ikisi asla aynı
-## karede aktif olamaz. Çok oyunculuda (normal durumda) bu her zaman no-op
-## (ağaç hiç duraklamıyor), mevcut multiplayer-güvenli davranış korunuyor.
+## Tek oyunculuda menü açılınca get_tree().paused=true olur ve main.gd'nin _process'i durur - ikinci ESC'yi bu menü (ALWAYS)
+## yakalar. Çok oyunculuda ağaç durmaz, ESC'yi main.gd'nin "pause_game" denetimi işler (burada no-op). Ayarlar açıkken ESC
+## ayarlar ekranınındır (settings_screen.gd kapanırken mark_ui_cancel_consumed - aynı basış menüyü de kapatmasın).
 func _process(_delta: float) -> void:
 	if not get_tree().paused:
 		return
-	## İSTİSNA: host bir "yeniden başlatma onayı" bekliyorken de (çok
-	## oyunculuda BİLEREK) get_tree().paused=true olur (bkz. _on_restart()
-	## aşağıda) - bu bekleme durumu ui_cancel ile ERKEN kapatılmamalı, oylama
-	## sonucu main.gd _on_restart_vote_result üzerinden merkezi olarak
-	## yönetiliyor (reddedilirse/zaman aşımında ORADA açılıyor).
+	## Host "yeniden başlatma onayı" beklerken de (çok oyunculuda BİLEREK) paused=true - oylama sonucu main.gd'de yönetilir.
 	if NetworkManager.is_multiplayer_active and NetworkManager.restart_vote_pending:
+		return
+	if is_instance_valid(_settings) or GameManager.was_ui_cancel_consumed():
 		return
 	if Input.is_action_just_pressed("ui_cancel"):
 		_on_resume()
 
 
-## DÜZELTME (kullanıcı isteği: "Multiplayerda host oyunu yeniden başlatabilsin
-## fakat önce diğer oyunculara onayı sorulsun") - multiplayer'da (SADECE
-## host bu butonu görebiliyor, bkz. _ready) artık doğrudan resetlemek yerine
-## bir onay oylaması başlatılıyor (bkz. network_manager.gd "YENİDEN BAŞLATMA
-## ONAYI" bloğu) - gerçek yeniden başlatma SADECE herkes onaylarsa, sonucu
-## main.gd _on_restart_vote_result üzerinden işleyip _rpc_start_game()
-## çağırınca gerçekleşir.
+## Öğeler arasında W/S (oklar/D-pad zaten Godot odak gezinmesiyle çalışır).
+func _input(event: InputEvent) -> void:
+	if is_instance_valid(_settings) or not _main_view.visible:
+		return
+	var d := 0
+	if InputMap.has_action("move_up") and event.is_action_pressed("move_up", true) and not event is InputEventJoypadMotion:
+		d = -1
+	elif InputMap.has_action("move_down") and event.is_action_pressed("move_down", true) and not event is InputEventJoypadMotion:
+		d = 1
+	if d == 0:
+		return
+	var vis: Array[Button] = []
+	for b in _items:
+		if b.visible and not b.disabled:
+			vis.append(b)
+	if vis.is_empty():
+		return
+	var cur: int = -1
+	for i in vis.size():
+		if vis[i].has_focus():
+			cur = i
+	vis[clampi(cur + d, 0, vis.size() - 1) if cur >= 0 else 0].grab_focus()
+	get_viewport().set_input_as_handled()
+
+
+## Çok oyunculuda (SADECE host görür) doğrudan resetlemek yerine onay oylaması başlatılır (network_manager.gd "YENİDEN BAŞLATMA
+## ONAYI"); gerçek yeniden başlatma herkes onaylarsa main.gd _on_restart_vote_result -> _rpc_start_game ile olur.
 func _on_restart() -> void:
 	if NetworkManager.is_multiplayer_active:
 		if not NetworkManager.is_host or NetworkManager.restart_vote_pending:
 			return
 		NetworkManager.request_restart_vote()
-		## Diğer oyuncular cevap verene kadar oyunu duraklat (bkz. main.gd
-		## _on_restart_request_received - client'larda AYNI şekilde duraklıyor,
-		## _on_restart_vote_result reddedilirse/zaman aşımında herkes için
-		## açıyor) - host da dahil, kimse oylama bitmeden ilerlemesin.
+		## Diğer oyuncular cevap verene kadar oyunu duraklat (client'larda da aynı, bkz. main.gd _on_restart_request_received).
 		get_tree().paused = true
-		$Panel/VBox/RestartButton.disabled = true
-		$Panel/VBox/RestartButton.text = "Onay bekleniyor..."
+		_restart_btn.disabled = true
+		FM.set_texts(_restart_btn, "ONAY BEKLENİYOR", "Diğer oyuncuların cevabı bekleniyor")
+		FM.set_selected(_restart_btn, false)
+		_resume_btn.grab_focus()
 		return
 	_unlock_local_input()
 	GameManager.reset()
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
-## Kullanıcı bildirimi: "host oyunu kapattığında veya ana menüye döndüğünde
-## diğer oyuncuların bağlantısı kesilmiyor oyuna devam edebiliyorlar" - eskiden
-## burada sahne DOĞRUDAN değiştiriliyordu, NetworkManager bağlantısı hiç
-## kapatılmıyordu (multiplayer_peer sahne değişse bile SceneTree seviyesinde
-## açık kalmaya devam eder). Artık host ise close_room() ile TÜM peer'lere
-## "oda kapandı" bildirilip bağlantı düzgünce kesiliyor, client ise sadece
-## kendi bağlantısını kesiyor.
+## Host ise close_room() ile TÜM peer'lere "oda kapandı" bildirilip bağlantı düzgünce kesilir, client sadece kendi bağlantısını
+## keser (eskiden sahne doğrudan değişiyor, diğer oyuncular oyunda kalıyordu).
 func _on_menu() -> void:
 	_unlock_local_input()
 	await NetworkManager.flush_balance_before_leave() ## koşu kaydı bağlantı kesilmeden host'a ulaşsın
@@ -174,182 +210,20 @@ func _on_menu() -> void:
 
 
 func _on_settings_pressed() -> void:
-	settings_panel.visible = true
-	volume_slider.grab_focus()
+	if is_instance_valid(_settings):
+		return
+	_main_view.visible = false
+	_settings = SettingsScreenScript.new("Duraklatma menüsüne dön", 0.8)
+	_settings.closed.connect(_on_settings_closed)
+	_root.add_child(_settings)
 
 
 func _on_settings_closed() -> void:
-	settings_panel.visible = false
-	$Panel/VBox/SettingsButton.grab_focus()
+	_settings = null
+	_main_view.visible = true
+	_settings_btn.grab_focus.call_deferred()
 
 
-func _on_volume_changed(value: float) -> void:
-	UISound.set_master_volume_percent(value)
-	_update_volume_label(value)
-
-
-func _update_volume_label(value: float) -> void:
-	volume_value.text = "%d%%" % int(round(value))
-
-
-func _on_fullscreen_toggled(enabled: bool) -> void:
-	UISound.set_fullscreen(enabled)
-	resolution_option.disabled = enabled
-
-
-func _on_resolution_selected(index: int) -> void:
-	UISound.set_resolution(index)
-
-
-func _on_fps_toggled(enabled: bool) -> void:
-	UISound.set_show_fps(enabled)
-
-
-## Kullanıcı isteği (2026-09-25): "arayüzler için ayarlara opaklık ayarı getir" (bkz. UISound.ui_opacity_percent).
-## Ayar paneli sahnede (pause_menu.tscn) mutlak konumlu - .tscn'e dokunmadan (editör açıkken ezilme riski, CLAUDE.md)
-## kodla ekleniyor: ses satırıyla AYNI düzen (etiket + % değeri, altında kaydırıcı), FPS satırının altına; Kapat butonu
-## ve panel bu iki satır kadar (100 px) aşağı uzatılıyor, panel ekranda ortalı kalsın diye üst kenar da 50 px yukarı.
-const UI_OPACITY_ROW_EXTRA := 100.0
-var _ui_opacity_value: Label = null
-
-
-func _build_ui_opacity_row() -> void:
-	var panel: Panel = settings_panel
-	panel.offset_top -= UI_OPACITY_ROW_EXTRA * 0.5
-	panel.offset_bottom += UI_OPACITY_ROW_EXTRA * 0.5
-	var close_btn: Control = $SettingsPanel/CloseButton
-	close_btn.offset_top += UI_OPACITY_ROW_EXTRA
-	close_btn.offset_bottom += UI_OPACITY_ROW_EXTRA
-	var ref_label: Label = $SettingsPanel/VolumeLabel
-	var label := Label.new()
-	label.name = "UiOpacityLabel"
-	label.text = "Arayüz Opaklığı"
-	label.position = Vector2(40.0, 395.0)
-	label.size = Vector2(280.0, 40.0)
-	label.vertical_alignment = ref_label.vertical_alignment
-	for override_name in ["font_size"]:
-		if ref_label.has_theme_font_size_override(override_name):
-			label.add_theme_font_size_override(override_name, ref_label.get_theme_font_size(override_name))
-	panel.add_child(label)
-	_ui_opacity_value = Label.new()
-	_ui_opacity_value.name = "UiOpacityValue"
-	_ui_opacity_value.position = Vector2(430.0, 395.0)
-	_ui_opacity_value.size = Vector2(90.0, 40.0)
-	_ui_opacity_value.horizontal_alignment = volume_value.horizontal_alignment
-	_ui_opacity_value.vertical_alignment = volume_value.vertical_alignment
-	if volume_value.has_theme_font_size_override("font_size"):
-		_ui_opacity_value.add_theme_font_size_override("font_size", volume_value.get_theme_font_size("font_size"))
-	panel.add_child(_ui_opacity_value)
-	var slider := HSlider.new()
-	slider.name = "UiOpacitySlider"
-	slider.min_value = UISound.UI_OPACITY_MIN_PERCENT
-	slider.max_value = 100.0
-	slider.step = 5.0
-	slider.position = Vector2(40.0, 440.0)
-	slider.size = Vector2(480.0, 40.0)
-	slider.value = UISound.ui_opacity_percent
-	slider.value_changed.connect(_on_ui_opacity_changed)
-	panel.add_child(slider)
-	_ui_opacity_value.text = "%d%%" % int(slider.value)
-
-
-func _on_ui_opacity_changed(value: float) -> void:
-	UISound.set_ui_opacity_percent(value)
-	if _ui_opacity_value:
-		_ui_opacity_value.text = "%d%%" % int(value)
-
-
-## Ekran sarsıntısı (kullanıcı isteği 2026-10-05, bkz. camera_shake.gd): "Arayüz Opaklığı" satırıyla AYNI düzen, onun altında; 0 = kapalı.
-## Panel yine 100 px uzuyor (üst kenar 50 yukarı, alt kenar 50 aşağı), Kapat butonu 100 px iniyor.
-const SHAKE_ROW_EXTRA := 100.0
-var _shake_value: Label = null
-
-
-func _build_camera_shake_row() -> void:
-	var panel: Panel = settings_panel
-	panel.offset_top -= SHAKE_ROW_EXTRA * 0.5
-	panel.offset_bottom += SHAKE_ROW_EXTRA * 0.5
-	var close_btn: Control = $SettingsPanel/CloseButton
-	close_btn.offset_top += SHAKE_ROW_EXTRA
-	close_btn.offset_bottom += SHAKE_ROW_EXTRA
-	var ref_label: Label = $SettingsPanel/VolumeLabel
-	var label := Label.new()
-	label.name = "ShakeLabel"
-	label.text = "Ekran Sarsıntısı"
-	label.position = Vector2(40.0, 495.0)
-	label.size = Vector2(280.0, 40.0)
-	label.vertical_alignment = ref_label.vertical_alignment
-	if ref_label.has_theme_font_size_override("font_size"):
-		label.add_theme_font_size_override("font_size", ref_label.get_theme_font_size("font_size"))
-	panel.add_child(label)
-	_shake_value = Label.new()
-	_shake_value.name = "ShakeValue"
-	_shake_value.position = Vector2(400.0, 495.0)
-	_shake_value.size = Vector2(120.0, 40.0)
-	_shake_value.horizontal_alignment = volume_value.horizontal_alignment
-	_shake_value.vertical_alignment = volume_value.vertical_alignment
-	if volume_value.has_theme_font_size_override("font_size"):
-		_shake_value.add_theme_font_size_override("font_size", volume_value.get_theme_font_size("font_size"))
-	panel.add_child(_shake_value)
-	var slider := HSlider.new()
-	slider.name = "ShakeSlider"
-	slider.min_value = 0.0
-	slider.max_value = 100.0
-	slider.step = 10.0
-	slider.position = Vector2(40.0, 540.0)
-	slider.size = Vector2(480.0, 40.0)
-	slider.value = UISound.camera_shake_percent
-	slider.value_changed.connect(_on_camera_shake_changed)
-	panel.add_child(slider)
-	_shake_value.text = _shake_text(slider.value)
-
-
-func _shake_text(value: float) -> String:
-	return "Kapalı" if int(value) == 0 else "%d%%" % int(value)
-
-
-func _on_camera_shake_changed(value: float) -> void:
-	UISound.set_camera_shake_percent(value)
-	if _shake_value:
-		_shake_value.text = _shake_text(value)
-
-
-## Grafik ayarları (2026-10-03, bkz. graphics_settings_menu.gd): ayar paneli sahnede mutlak konumlu - .tscn'e dokunmadan
-## (editör açıkken ezilme riski, CLAUDE.md) "Tuş Atamaları" butonu satırın sol yarısına daraltılıp sağ yarıya AYNI
-## görünümde bir "Grafik" butonu kodla ekleniyor (panel yüksekliği değişmez).
-func _build_graphics_button() -> void:
-	var gfx := keybind_button.duplicate(0) as Button
-	gfx.name = "GraphicsButton"
-	gfx.text = "Grafik"
-	keybind_button.offset_left = 40.0
-	keybind_button.offset_right = 275.0
-	gfx.offset_left = 285.0
-	gfx.offset_right = 520.0
-	gfx.offset_top = keybind_button.offset_top
-	gfx.offset_bottom = keybind_button.offset_bottom
-	settings_panel.add_child(gfx)
-	gfx.pressed.connect(_on_graphics_pressed)
-
-
-func _on_graphics_pressed() -> void:
-	settings_panel.visible = false
-	var menu := GraphicsSettingsMenuScript.new()
-	add_child(menu)
-	menu.closed.connect(func() -> void:
-		if is_instance_valid(settings_panel):
-			settings_panel.visible = true
-	)
-
-
-## Kullanıcı isteği: "tuş ataması için ayarlarda bir menü hazırla, ayarlar
-## paneli ufak olduğu için ona sığmaz" - mevcut 560x460 SettingsPanel'in
-## ÜSTÜNE değil, onu gizleyip kendi büyük penceresini açan ayrı bir popup
-## (bkz. keybind_menu.gd).
-func _on_keybind_pressed() -> void:
-	settings_panel.visible = false
-	var menu := KeybindMenuScript.new()
-	add_child(menu)
-	menu.closed.connect(func() -> void:
-		if is_instance_valid(settings_panel):
-			settings_panel.visible = true
-	)
+## Testler / araçlar için: açık ayarlar ekranı (yoksa null).
+func get_settings_screen() -> Control:
+	return _settings if is_instance_valid(_settings) else null

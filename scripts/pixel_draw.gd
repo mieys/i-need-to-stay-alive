@@ -116,17 +116,20 @@ static func ground_shadow(ci: CanvasItem, center: Vector2, radius: Vector2, edge
 
 
 ## Ateş renk rampası: t 0 (en sıcak, sarı-beyaz) -> 1 (soğuk, koyu kırmızı).
+## (Madde 215: durak dizisi her çağrıda yeniden kurulmuyordu diye sabite alındı - efektler kare başı onlarca kez çağırıyor.)
+const _FIRE_STOPS: Array[Color] = [
+	Color(1.0, 0.96, 0.7),
+	Color(1.0, 0.78, 0.22),
+	Color(1.0, 0.5, 0.1),
+	Color(0.9, 0.2, 0.06),
+	Color(0.45, 0.08, 0.06),
+]
+
+
 static func fire_color(t: float) -> Color:
-	var stops: Array[Color] = [
-		Color(1.0, 0.96, 0.7),
-		Color(1.0, 0.78, 0.22),
-		Color(1.0, 0.5, 0.1),
-		Color(0.9, 0.2, 0.06),
-		Color(0.45, 0.08, 0.06),
-	]
-	var f: float = clampf(t, 0.0, 1.0) * float(stops.size() - 1)
-	var i: int = mini(int(f), stops.size() - 2)
-	return stops[i].lerp(stops[i + 1], f - float(i))
+	var f: float = clampf(t, 0.0, 1.0) * 4.0
+	var i: int = mini(int(f), 3)
+	return _FIRE_STOPS[i].lerp(_FIRE_STOPS[i + 1], f - float(i))
 
 
 ## Deterministik (id ile) 0..1 sahte rastgele - yeniden çizimde titremesin diye.

@@ -47,9 +47,12 @@ func _make(group: String, pos: Vector2, dome: bool) -> FakePlayer:
 func test_dome_owner_lookup_uses_the_radius_and_the_margin() -> void:
 	var owner_p: FakePlayer = _make("player", Vector2.ZERO, true)
 	var tree: SceneTree = get_tree()
-	assert(AbilitiesScript.dome_owner_at(tree, Vector2(100.0, 0.0)) == owner_p, "126 px içinde = baloncuğun içinde")
-	assert(AbilitiesScript.dome_owner_at(tree, Vector2(140.0, 0.0)) == null, "126 px dışında")
+	## 2026-10-14: alan ELİPS (yatay 126, dikey 63; paladin_dome.gd)
+	assert(AbilitiesScript.dome_owner_at(tree, Vector2(100.0, 0.0)) == owner_p, "yatayda 126 px içinde = baloncuğun içinde")
+	assert(AbilitiesScript.dome_owner_at(tree, Vector2(140.0, 0.0)) == null, "yatayda 126 px dışında")
 	assert(AbilitiesScript.dome_owner_at(tree, Vector2(140.0, 0.0), 30.0) == owner_p, "pay eklenince 156 px'e kadar")
+	assert(AbilitiesScript.dome_owner_at(tree, Vector2(0.0, 55.0)) == owner_p, "dikeyde 63 px içinde")
+	assert(AbilitiesScript.dome_owner_at(tree, Vector2(0.0, 80.0)) == null, "dikeyde 63 px dışında (eski dairenin içi)")
 	owner_p.paladin_zone_active = false
 	assert(AbilitiesScript.dome_owner_at(tree, Vector2(10.0, 0.0)) == null, "baloncuk kapalıyken kimse korunmaz")
 	_cleanup()
@@ -93,7 +96,7 @@ func test_rays_end_at_the_dome_boundary() -> void:
 	assert(is_equal_approx(AbilitiesScript.clip_ray_to_domes(tree, Vector2(-500.0, 0.0), Vector2.RIGHT, 440.0), 440.0), "baloncuk yokken uzunluk aynı")
 	_make("player", Vector2.ZERO, true)
 	var cut: float = AbilitiesScript.clip_ray_to_domes(tree, Vector2(-500.0, 0.0), Vector2.RIGHT, 440.0)
-	assert(cut < 380.0 and cut > 360.0, "lazer x=-126'da (374 px) biter: %f" % cut)
+	assert(cut < 380.0 and cut > 360.0, "lazer elipsin yatay kenarında x=-126'da (374 px) biter: %f" % cut)
 	assert(is_equal_approx(AbilitiesScript.clip_ray_to_domes(tree, Vector2(-500.0, 300.0), Vector2.RIGHT, 440.0), 440.0), "baloncuğa değmeyen ışın kısalmaz")
 	_cleanup()
 

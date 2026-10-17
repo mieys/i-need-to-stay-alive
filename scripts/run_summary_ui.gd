@@ -8,6 +8,7 @@ extends RefCounted
 const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
 const TierDisplayScript: GDScript = preload("res://scripts/tier_display.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 
 const STAT_FS := 24
 
@@ -103,11 +104,14 @@ static func record_value_text(key: String, summary: Dictionary) -> String:
 static func extras_box(results: Dictionary, summary: Dictionary) -> VBoxContainer:
 	var records: Array = results.get("records", [])
 	var achievements: Array = results.get("achievements", [])
-	if records.is_empty() and achievements.is_empty():
+	var shards: int = int(results.get("shards", 0))
+	if records.is_empty() and achievements.is_empty() and shards <= 0:
 		return null
 	var box := VBoxContainer.new()
 	box.name = "ExtrasBox"
 	box.add_theme_constant_override("separation", 4)
+	if shards > 0:
+		_add_line(box, "+%d %s (Ruh Mağazası'nda kullan)" % [shards, MetaProgressScript.CURRENCY_NAME], UIKit.C_GOLD)
 	for key in records:
 		var text: String = "YENİ REKOR: %s" % RunRecordsScript.RECORD_LABELS.get(key, key)
 		var value: String = record_value_text(str(key), summary)

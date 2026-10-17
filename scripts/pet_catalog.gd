@@ -5,7 +5,7 @@ extends RefCounted
 ## yetenek gibi yerel tercih - ağdan gitmez; köpek zaten broadcast_pet_spawn ile, papağan ilk olayında (remote_player.gd
 ## korsan_parrot_event) diğer oyunculara görünür.
 ##  - kopek: eski Matthew köpeği (player_pet.gd) - yakındaki yaratıklara saldırır, hasar/saldırı hızı/kritik sahibin statlarından.
-##  - papagan: eski Korsan papağanı (korsan_parrot.gd) - yakındaki altınları toplayıp getirir (getiriş başına +1 altın) + LUCK_BONUS şans.
+##  - papagan: eski Korsan papağanı (korsan_parrot.gd) - yakındaki ağaçları 3-4 sn gagalayıp yere eşya düşürür (yiyecek / kalkan orbu / mıknatıs / silah parçacığı, değerliler nadir) + LUCK_BONUS şans.
 ##  - kelebek: Kelebek Ruhu (kelebek_ruhu.gd) - KELEBEK_ATTACK_SPEED saldırı hızı + sahibin İLK silahının vurduğu düşmana pembe lazer
 ##    atışı (saldırı gücünün KELEBEK_DAMAGE_RATIO kadarı); kuklası ilk olayında kurulur (remote_player.gd kelebek_ruhu_event).
 ##  - peri: Peri (peri_pet.gd) - sahibin canı eksikken PERI_HEAL_INTERVAL saniyede bir can basar (saldırı gücünün PERI_HEAL_RATIO
@@ -34,10 +34,10 @@ const KIRPI_REFLECT_RATIO := 0.05
 const KIRPI_SHIELD_REDUCTION := 0.05
 const DESCRIPTIONS := {
 	"kopek": "Yakındaki yaratıklara saldırır. Statları senin statlarınla aynıdır.",
-	"papagan": "Altınları toplayıp getirir (getiriş başına +1 altın). +10 şans verir.",
+	"papagan": "Ağaçları gagalayıp yere eşya düşürür (yiyecek, kalkan, nadiren mıknatıs/parçacık). +10 şans verir.",
 	"kelebek": "+%10 saldırı hızı. İlk silahının vurduğuna lazer atar (%20 saldırı gücü).",
 	"peri": "Canın eksikken 6 saniyede bir can basar (saldırı gücünün %10'u).",
-	"kirpi": "Saldıran yaratıklar kalkan gücünün %5'i kadar hasar alır. Kalkanın varken %5 az hasar alırsın.",
+	"kirpi": "Saldıran yaratıklar mana kalkanı gücünün %5'i kadar hasar alır. Mana kalkanın varken %5 az hasar alırsın.",
 }
 ## Ikon: oyundaki hayvanın kendi sprite karesi (yeni sanat yok) - bkz. icon().
 const FRAMES := {

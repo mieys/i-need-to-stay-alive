@@ -2,7 +2,9 @@
 # EnemyWorld GDExtension derlemesi (yaratık yeniden yazımı, docs/yaratik_yeniden_yazim/PLAN.md §6.1).
 # SCons'u `python` takma adıyla DEĞİL doğrudan %LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe ile çalıştır.
 #   Windows: ... -m SCons platform=windows use_mingw=yes use_llvm=yes target=template_debug   (ve template_release)
+#            (PATH başına %LOCALAPPDATA%\Toolchains\llvm-mingw-*\bin eklenir)
 #   Android: ... -m SCons platform=android arch=arm64 target=template_debug                   (ve template_release)
+#            (ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk ve ANDROID_NDK_ROOT=...\Sdk\ndk\<sürüm> ŞART, yoksa ANDROID_HOME KeyError)
 import os
 
 godot_cpp = os.environ.get("GODOT_CPP", os.path.join(os.environ.get("LOCALAPPDATA", ""), "Toolchains", "godot-cpp"))

@@ -3,7 +3,9 @@ extends RefCounted
 ## MATTHEW REWORK (2026-10-12, madde 98; kullanıcı: "Q bundan sonra köpeğiyle değil kendi şimşek gücüyle alakalı ... yeni pasif ... yeni E ...
 ## yeni ulti") - sayılar, formüller ve sprite sayfaları TEK yerde. player.gd (kaster) ile remote_player.gd (diğer ekranlardaki kukla)
 ## AYNI sabitleri/fonksiyonları buradan okur (CLAUDE.md "MP iki-yer hatası": görsel iki tarafta ayrı kurulur, biri unutulmasın).
-##   Pasif  Yıldırım Hızı   - hareket ederken saniyede +%1 hareket hızı (en çok %30), aynı oranda saldırı hızı; dururken 5 sn'de söner.
+##   Pasif  Yıldırım Hızı   - hareket ederken saniyede +%1 hareket hızı (en çok %15; 2026-10-14'te %30'dan düştü); dururken 5 sn'de söner.
+##                            Saldırı hızı: TOPLAM hareket hızı bonusunun (her kaynaktan: bu pasif + kart + eşya + ruhani...) her %1'i = %0,5 saldırı hızı
+##                            (genel %600 saldırı hızı sınırına kadar; pasif payı taşma->saldırı gücü dönüşümüne girmez).
 ##                            Arkasında 1 sn'de incelip sönen yıldırım izi; tam hızda iz GÜÇLENİR: değdiği yaratık 1 sn sersemler + %80 AP
 ##                            (aynı yaratığa 3 sn'de bir).
 ##   Q      Şimşek Hücumu   - eski Köpek Hücumu'nun AYNISI (en yakın 6 hedef, %110 AP), köpek yerine Matthew'dan çakan şimşek.
@@ -34,7 +36,9 @@ const BODY_CENTER := Vector2(0.0, -3.0)
 const HEAD_TOP := Vector2(0.0, -28.0)
 
 # ---------------------------------------------------------------- Pasif: Yıldırım Hızı
-const MOMENTUM_MAX := 0.30 ## en fazla %30 hareket hızı (= %30 saldırı hızı)
+const MOMENTUM_MAX := 0.15 ## en fazla %15 hareket hızı (2026-10-14: %30 -> %15, kullanıcı isteği)
+## 2026-10-14 (kullanıcı): "her %1 hareket hızı başına %0,5 saldırı hızı (her kaynaktan, %600 sınırına kadar)". Eskiden birikimin kendisi = aynı oranda saldırı hızıydı.
+const MOVE_TO_ATTACK_RATIO := 0.5
 const MOMENTUM_GAIN_PER_SEC := 0.01 ## hareket ederken saniyede +%1
 const MOMENTUM_DECAY_TIME := 5.0 ## dururken TAM bonus 5 sn'de sıfıra iner
 const MOVING_SPEED := 20.0 ## bu hızın üstü "hareket ediyor"
@@ -182,10 +186,10 @@ static func trail_level(momentum: float, moving: bool) -> int:
 	return 2 if is_empowered(momentum) else 1
 
 
-## Saldırı aralığı çarpanı (düşük = hızlı): her %1 hareket hızı bonusu = %1 saldırı hızı. Silahlara yalnız TAM yüzde değişince
-## yeniden uygulanır (player.gd _matthew_apply_momentum_percent) - bu yüzden yüzdeye yuvarlanmış değer.
-static func fire_interval_mult(momentum_percent: int) -> float:
-	return 1.0 / (1.0 + float(maxi(momentum_percent, 0)) / 100.0)
+## Saldırı aralığı çarpanı (düşük = hızlı): TOPLAM hareket hızı bonusunun her %1'i = MOVE_TO_ATTACK_RATIO (%0,5) saldırı hızı. Silahlara yalnız TAM yüzde
+## değişince yeniden uygulanır (player.gd _matthew_refresh_move_percent) - bu yüzden yüzdeye yuvarlanmış değer.
+static func fire_interval_mult(move_speed_percent: int) -> float:
+	return 1.0 / (1.0 + float(maxi(move_speed_percent, 0)) * MOVE_TO_ATTACK_RATIO / 100.0)
 
 
 # ---------------------------------------------------------------- E formülleri

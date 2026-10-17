@@ -55,6 +55,7 @@ const GRID_MARGIN := 24
 static var enabled: bool = true
 
 const TerrainCollisionScript := preload("res://scripts/terrain_collision.gd")
+const MapFrameScript := preload("res://scripts/map_frame.gd")
 
 
 static func set_enabled(value: bool) -> void:
@@ -178,7 +179,10 @@ static func _build(layer: TileMapLayer) -> void:
 	_astar = null
 	_blocked = PackedByteArray()
 	_fog_blocked = PackedByteArray()
-	var forest_cells: Array[Vector2i] = layer.get_used_cells()
+	var forest_cells: Array[Vector2i] = []
+	for fc: Vector2i in layer.get_used_cells():
+		if MapFrameScript.in_path_grid(fc):
+			forest_cells.append(fc) ## dış çerçevenin (madde 119) sadece PATH_RING_KEEP hücrelik kısmı: ızgara küçük kalsın, derindeki hücreye kimse ulaşamaz
 	if forest_cells.is_empty():
 		_size = Vector2i.ONE ## "boş katman" işareti (bkz. _ensure_grid)
 		return
@@ -235,6 +239,19 @@ static func _build(layer: TileMapLayer) -> void:
 				near[idx] = 1
 				astar.set_point_weight_scale(Vector2i(cell.x + dx, cell.y + dy), WALL_ADJACENT_WEIGHT)
 	_astar = astar
+
+
+## Maden kırılınca/doğunca (mine_world.gd, TerrainCollision._cells ZATEN güncellendikten sonra): kurulu yol ızgarasında bu hücreleri engel/boş yapar.
+## Orman duvarı hücresi her zaman engeldir. Izgara kurulu değilse (ilk kullanımda zaten güncel kurulur) hiçbir şey yapmaz.
+static func sync_cells(cells: Array) -> void:
+	if _astar == null or _layer == null or not is_instance_valid(_layer):
+		return
+	for cell: Vector2i in cells:
+		if not _in_bounds(cell):
+			continue
+		var solid: bool = TerrainCollisionScript._cells.has(cell) or _layer.get_cell_source_id(cell) != -1
+		_astar.set_point_solid(cell, solid)
+		_blocked[(cell.y - _origin.y) * _size.x + (cell.x - _origin.x)] = 1 if solid else 0
 
 
 static func _in_bounds(cell: Vector2i) -> bool:

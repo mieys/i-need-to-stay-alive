@@ -90,7 +90,7 @@ func test_skeleton_hp_and_lifetime_evolutions() -> void:
 	p.apply_skill_evolution("necro_q4", true)
 	var evo: Node2D = p._spawn_necro_skeleton(Vector2(1000, 1000))
 	assert(absf(evo.max_health - base.max_health * 1.2) < 0.01, "Sert Kemikler: can +%%20 (%f -> %f)" % [base.max_health, evo.max_health])
-	assert(absf(evo.lifespan - (base.lifespan + 15.0)) < 0.01, "Dayanıklı Ruhlar: +15sn (%f -> %f)" % [base.lifespan, evo.lifespan])
+	assert(absf(evo.lifespan - (base.lifespan + 7.5)) < 0.01, "Dayanıklı Ruhlar: +7,5sn (%f -> %f)" % [base.lifespan, evo.lifespan])
 	_cleanup()
 
 

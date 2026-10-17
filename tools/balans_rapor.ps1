@@ -273,6 +273,35 @@ if ($gotW.Count -eq 0) { P "(Edinme zamanı kayıtlı koşu yok.)" } else {
 }
 P ""
 
+# ---- Altin ve asist (rev 45+ kayitlari: gold_kill / gold_assist / sup_sent; eski kayitlarda alanlar yok) ----
+$gRuns = @($runs | Where-Object { $null -ne $_.gold_kill })
+P "## Altın ve asist"
+P ""
+if ($gRuns.Count -eq 0) { P "(Altın/asist kaydı olan koşu yok.)" } else {
+	P "Altın = yaratık öldürme altını (yere düşmez, anında verilir). Asist = çok oyunculuda öldürmeden önceki 8 sn içinde hasar/destek verip aldığın pay (hasar / destek / ikisi). Destek gönderilen = arkadaşa can/kalkan/buff bildirimi sayısı."
+	P ""
+	P "| Karakter | Koşu (takım>1) | Ort. kill altını | Ort. asist sayısı | Ort. asist altını | Asist payı % | Hasar/Destek/İkisi (adet) | Destek gönderilen/dk |"
+	P "|---|---|---|---|---|---|---|---|"
+	foreach ($g in ($gRuns | Group-Object char_name | Sort-Object Name)) {
+		$rs = @($g.Group)
+		$mp = @($rs | Where-Object { [int]$_.team -gt 1 })
+		$killG = Avg ($rs | ForEach-Object { [double]$_.gold_kill[1] })
+		$aN = 0.0; $aG = 0.0; $nd = 0; $ns = 0; $nb = 0
+		foreach ($r in $mp) {
+			foreach ($p in (Props $r.gold_assist)) {
+				$aN += [double]$p.Value[0]; $aG += [double]$p.Value[1]
+				if ($p.Name -eq "dmg") { $nd += [int]$p.Value[0] } elseif ($p.Name -eq "sup") { $ns += [int]$p.Value[0] } else { $nb += [int]$p.Value[0] }
+			}
+		}
+		$n = [math]::Max(1, $mp.Count)
+		$mpKill = if ($mp.Count -gt 0) { Avg ($mp | ForEach-Object { [double]$_.gold_kill[1] }) } else { 0.0 }
+		$share = if ($mp.Count -gt 0 -and ($aG / $n + $mpKill) -gt 0) { 100.0 * ($aG / $n) / ($aG / $n + $mpKill) } else { 0.0 }
+		$supRate = if ($mp.Count -gt 0) { Avg ($mp | ForEach-Object { [double]$_.sup_sent / [math]::Max(1.0, [double]$_.time / 60.0) }) } else { 0.0 }
+		P ("| {0} | {1} ({2}) | {3} | {4} | {5} | {6} | {7}/{8}/{9} | {10} |" -f $g.Name, $rs.Count, $mp.Count, (F1 $killG), (F1 ($aN / $n)), (F1 ($aG / $n)), (F1 $share), $nd, $ns, $nb, (F1 $supRate))
+	}
+}
+P ""
+
 # ---- Ozet uyarilar ----
 $head = New-Object System.Collections.Generic.List[string]
 $head.Add("## Öne çıkanlar")

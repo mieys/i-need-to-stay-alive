@@ -2,14 +2,27 @@ extends Control
 
 ## Çok oyunculu ODA LİSTESİ (kullanıcı isteği 2026-10-11: "insanlar oda kurup odalarına şifre koyup oyuncu sayısı v.b limitleri
 ## koyup birbirlerinin odalarına girebilmeli"; onaylanan prototip: oda listesi + "Oda kur" penceresi + şifre sorusu).
-## Akış: burası -> oda lobisi (room_lobby.gd) -> karakter seçimi (lobby_menu.gd). Ekran tamamen KODLA kurulur (.tscn sadece kök).
+## Akış: burası -> karakter seçimi (lobby_menu.gd; 2026-10-16 oda lobisi room_lobby.gd aradan çıktı, sadece eski sürümlü host için duruyor). Ekran tamamen KODLA kurulur (.tscn sadece kök).
 ## Liste: aynı ağdaki (LAN beacon v2) + internet (Epic) odaları TEK listede; satır = oda adı, host, oyuncu x/sınır, tür, şifre,
 ## durum. Kilitli odaya tıklayınca satırın altında şifre sorulur; dolu oda tıklanmaz; "oyunda" oda tıklanır (sadece o oyundan
 ## düşenler geri girebilir - host kalanları reddeder). Altta elle "IP ile katıl" yedeği. Şifre/sınır kontrolü HOST'ta yapılır
 ## (bkz. network_manager.gd ODA AYARLARI bloğu), buradaki kilit sadece arayüz bilgisi.
+## MASAÜSTÜ (2026-10-16, kullanıcı: "oda kurma ekranını çok oyunculu moda uygun hale getir" + "arka plan ana menüdekiyle aynı olsun"):
+## karakter seçimiyle (lobby_select_desktop.gd "SEÇİM D") AYNI ızgara + koyu kit (menu_dark_kit.gd) + "Ocak Başı" arka planı
+## (menu_hearth_bg.gd): sol sütun mod kutusu (ANA MENÜ, durum) + adın + HEP AÇIK "ODA KUR" formu (eski açılır pencere), sağ oda listesi,
+## alt sağ IP ile katıl. TELEFON: eski bej yerleşim (_build_mobile + _build_dialog açılır pencere), arka plan aynı sahne.
 
+const UiAnim := preload("res://scripts/ui_anim.gd")
 const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const DK := preload("res://scripts/menu_dark_kit.gd")
+const HearthBg := preload("res://scripts/menu_hearth_bg.gd")
+## Masaüstü ızgarası (lobby_select_desktop.gd LEFT / MID+RIGHT / START_Y ile aynı sütunlar).
+const D_LEFT := Rect2(32, 24, 440, 1024)
+const D_LIST := Rect2(488, 24, 1400, 908)
+const D_IP := Rect2(488, 948, 1400, 100)
+const D_ROW_H := 68.0
+const D_INPUT_H := 52.0
 const ONLINE_REFRESH_SEC := 8.0
 const LAN_PORT := 7777
 const PLAYER_CHOICES := [2, 3, 4, 5, 6, 7, 8]
@@ -54,18 +67,24 @@ var _online_choice_btn: Button = null
 var _lan_choice_btn: Button = null
 var _use_online: bool = false
 var _dialog_error: Label = null
+## Masaüstü: oda sayısı (liste başlığı) + bağlantı seçiminin açıklaması.
+var _count_label: Label = null
+var _conn_hint: Label = null
 
 
 func _ready() -> void:
-	theme = MenuKit.theme()
-	MenuKit.add_background(self)
 	_mobile = MobileUIScript.enabled
+	theme = MenuKit.theme() if _mobile else DK.theme()
+	HearthBg.add_to(self, 0.0 if _mobile else HearthBg.DIM_DESKTOP)
 	_sz = LobbyUI.sizes(_mobile)
 	if NetworkManager.is_multiplayer_active:
 		_go_to_room.call_deferred()
 		return
-	_build()
-	_build_dialog()
+	if _mobile:
+		_build_mobile()
+		_build_dialog()
+	else:
+		_build_desktop()
 	NetworkManager.room_entered.connect(_on_room_entered)
 	NetworkManager.room_join_rejected.connect(_on_join_rejected)
 	NetworkManager.connection_status_changed.connect(_on_status)
@@ -96,8 +115,314 @@ func _process(_delta: float) -> void:
 		_set_busy(false)
 
 
-# ---------------------------------------------------------------------------------------------------- yerleşim
-func _build() -> void:
+func _unhandled_input(event: InputEvent) -> void:
+	if _mobile or not event.is_action_pressed("ui_cancel"):
+		return
+	get_viewport().set_input_as_handled()
+	if not _pw_key.is_empty(): ## açık şifre sorusu önce kapanır
+		_pw_key = ""
+		_pw_error = ""
+		_rebuild_list()
+	else:
+		_on_back_pressed()
+
+
+# ---------------------------------------------------------------------------------------------------- masaüstü yerleşimi (SEÇİM D)
+func _build_desktop() -> void:
+	var col := DK.v(16)
+	col.add_child(_d_mode_box())
+	col.add_child(_d_name_card())
+	var form := _d_create_box()
+	form.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(form)
+	_d_put(col, D_LEFT)
+	_d_put(_d_list_box(), D_LIST)
+	_d_put(_d_ip_box(), D_IP)
+	_room_name_input.text = "%s odası" % _player_name()
+	_set_max_players(DEFAULT_MAX_PLAYERS)
+	_set_connection(NetworkManager.is_online_available())
+
+
+func _d_put(c: Control, r: Rect2) -> void:
+	add_child(c)
+	MenuKit.place(c, r.position, r.size)
+
+
+func _d_input(text: String, placeholder: String, max_len: int) -> LineEdit:
+	var e := LineEdit.new()
+	e.text = text
+	e.placeholder_text = placeholder
+	e.max_length = max_len
+	e.custom_minimum_size = Vector2(0, D_INPUT_H)
+	e.add_theme_font_size_override("font_size", DK.FS_BODY)
+	e.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	e.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return e
+
+
+## Seçimdeki oda kutusunun yerinde: başlık + ANA MENÜ + bilgi çipleri + durum metni.
+func _d_mode_box() -> PanelContainer:
+	var box := DK.box(DK.C_PANEL, DK.C_LINE, 14)
+	var v := DK.v(8)
+	var head := DK.h(10)
+	var title := DK.lbl("ÇOK OYUNCULU", DK.FS_TITLE, DK.C_ACCENT)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var back := DK.btn("ANA MENÜ", "ghost", DK.FS_LABEL, 44, 0)
+	back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	back.tooltip_text = "Ana menüye dön (Esc)"
+	back.pressed.connect(_on_back_pressed)
+	head.add_child(back)
+	v.add_child(head)
+	var chips := DK.h(8)
+	chips.add_child(DK.chip(DK.G_GLOBE, "İnternet + LAN" if NetworkManager.is_online_available() else "Sadece LAN", DK.C_DIM))
+	chips.add_child(DK.chip(DK.G_PERSON, "%d-%d kişi" % [NetworkManager.ROOM_MIN_PLAYERS, NetworkManager.MAX_PLAYERS], DK.C_DIM))
+	v.add_child(chips)
+	_status_label = DK.wrap("Bir odaya katıl ya da kendi odanı kur.", DK.FS_LABEL, DK.C_DIM, D_LEFT.size.x - 28, 3)
+	v.add_child(_status_label)
+	box.add_child(v)
+	return box
+
+
+## Adın: seçimdeki kendi oyuncu kartının görünümü (renk şeridi + yüz), ad yerinde düzenlenir.
+func _d_name_card() -> PanelContainer:
+	var card := DK.box(DK.C_PANEL3, DK.C_ACCENT, 10)
+	var hb := DK.h(12)
+	var stripe := ColorRect.new()
+	stripe.color = DK.player_color(0)
+	stripe.custom_minimum_size = Vector2(6, 0)
+	stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hb.add_child(stripe)
+	var fb := DK.box(DK.C_INSET, DK.C_LINE, 2, 2, 3)
+	fb.add_child(DK.icon(LobbyUI.face_texture(str(Characters.get_def(NetworkManager.local_char_id).get("portrait", ""))), 72))
+	hb.add_child(fb)
+	var v := DK.v(4)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(DK.lbl("ADIN", DK.FS_LABEL, DK.C_ACCENT))
+	_name_input = _d_input(NetworkManager.local_player_name, "Adını gir", 20)
+	_name_input.text_submitted.connect(func(_t: String) -> void: _commit_name())
+	_name_input.focus_exited.connect(_commit_name)
+	v.add_child(_name_input)
+	hb.add_child(v)
+	card.add_child(hb)
+	return card
+
+
+## Eski "Oda kur" penceresinin alanları, hep açık.
+func _d_create_box() -> PanelContainer:
+	var box := DK.box(DK.C_PANEL, DK.C_LINE, 16)
+	var v := DK.v(10)
+	v.add_child(DK.title_bar("ODA KUR"))
+	v.add_child(DK.lbl("Oda adı", DK.FS_LABEL, DK.C_DIM))
+	_room_name_input = _d_input("", "Odanın adı", 32)
+	_room_name_input.text_submitted.connect(func(_t: String) -> void: _on_create_pressed())
+	v.add_child(_room_name_input)
+	v.add_child(DK.lbl("Şifre  (boşsa herkes girebilir)", DK.FS_LABEL, DK.C_DIM))
+	_room_pw_input = _d_input("", "Şifresiz", PASSWORD_MAX_LEN)
+	_room_pw_input.secret = true
+	_room_pw_input.text_submitted.connect(func(_t: String) -> void: _on_create_pressed())
+	v.add_child(_room_pw_input)
+	v.add_child(DK.lbl("En fazla oyuncu", DK.FS_LABEL, DK.C_DIM))
+	var max_row := DK.h(6)
+	for n in PLAYER_CHOICES:
+		var b := DK.btn(str(n), "tile", DK.FS_BODY, D_INPUT_H, 0)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(_set_max_players.bind(int(n)))
+		max_row.add_child(b)
+		_max_buttons[int(n)] = b
+	v.add_child(max_row)
+	v.add_child(DK.lbl("Bağlantı", DK.FS_LABEL, DK.C_DIM))
+	var conn := DK.h(6)
+	_online_choice_btn = DK.btn("İnternet", "tile", DK.FS_BODY, D_INPUT_H, 0)
+	_online_choice_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_online_choice_btn.pressed.connect(_set_connection.bind(true))
+	conn.add_child(_online_choice_btn)
+	_lan_choice_btn = DK.btn("Aynı ağ (LAN)", "tile", DK.FS_BODY, D_INPUT_H, 0)
+	_lan_choice_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_lan_choice_btn.pressed.connect(_set_connection.bind(false))
+	conn.add_child(_lan_choice_btn)
+	if not NetworkManager.is_online_available():
+		_online_choice_btn.disabled = true
+		_online_choice_btn.tooltip_text = "Epic ayarları eksik (eos_credentials.cfg) - şimdilik sadece LAN."
+	v.add_child(conn)
+	_conn_hint = DK.wrap("", DK.FS_LABEL, DK.C_DIM, D_LEFT.size.x - 32, 2)
+	v.add_child(_conn_hint)
+	v.add_child(DK.sp(0, 0, false, true))
+	_dialog_error = DK.wrap("", DK.FS_LABEL, DK.C_BAD, D_LEFT.size.x - 32, 2)
+	v.add_child(_dialog_error)
+	_create_btn = DK.btn("ODAYI KUR", "primary", DK.FS_TITLE, 72, 0)
+	_create_btn.pressed.connect(_on_create_pressed)
+	v.add_child(_create_btn)
+	box.add_child(v)
+	return box
+
+
+## Sağ: oda listesi (seçimdeki orta + sağ sütunun yerinde).
+func _d_list_box() -> PanelContainer:
+	var box := DK.box(DK.C_PANEL, DK.C_LINE, 16)
+	var v := DK.v(10)
+	var right := DK.h(14)
+	_count_label = DK.lbl("", DK.FS_LABEL, DK.C_DIM)
+	right.add_child(_count_label)
+	_refresh_btn = DK.btn("YENİLE", "ghost", DK.FS_LABEL, 40, 0)
+	_refresh_btn.pressed.connect(_on_refresh_pressed)
+	right.add_child(_refresh_btn)
+	v.add_child(DK.title_bar("AÇIK ODALAR", right))
+	var head := MarginContainer.new()
+	head.add_theme_constant_override("margin_left", 16)
+	head.add_theme_constant_override("margin_right", 16)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hc := DK.h(16)
+	var titles: Array = ["ODA", "HOST", "OYUNCU", "TÜR", "ŞİFRE", "DURUM"]
+	for i in titles.size():
+		var l := DK.lbl(titles[i], DK.FS_LABEL, DK.C_DIM)
+		_d_col_size(l, i)
+		hc.add_child(l)
+	head.add_child(hc)
+	v.add_child(head)
+	v.add_child(DK.hline())
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_list = DK.v(8)
+	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_list.mouse_filter = Control.MOUSE_FILTER_PASS
+	scroll.add_child(_list)
+	v.add_child(scroll)
+	box.add_child(v)
+	return box
+
+
+## Sütunlar: oda adı esner; host, oyuncu, tür, şifre, durum sabit.
+const D_COLS := [-1.0, 240.0, 120.0, 170.0, 150.0, 120.0]
+
+
+func _d_col_size(c: Control, i: int) -> void:
+	if float(D_COLS[i]) < 0.0:
+		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		c.custom_minimum_size.x = 80
+	else:
+		c.custom_minimum_size.x = float(D_COLS[i])
+	if c is Label:
+		(c as Label).clip_text = true
+		(c as Label).text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+
+
+## Glif + yazı hücresi (sabit genişlikte).
+func _d_cell(i: int, pat: Array, t: String, col: Color) -> HBoxContainer:
+	var hb := DK.h(8)
+	hb.add_child(DK.glyph(pat, col, 3))
+	var l := DK.lbl(t, DK.FS_LABEL, col)
+	l.clip_text = true
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hb.add_child(l)
+	_d_col_size(hb, i)
+	return hb
+
+
+func _d_room_row(r: Dictionary) -> Button:
+	var in_game: bool = bool(r["in_game"])
+	var full: bool = int(r["players"]) >= int(r["max_players"]) and not in_game
+	var open: bool = str(r["key"]) == _pw_key
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(0, D_ROW_H)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.disabled = full or _busy
+	DK.style_button(b, "tile_on" if open else ("tile_locked" if b.disabled else "tile"), 4, 6.0)
+	b.pressed.connect(_on_room_pressed.bind(r))
+	var muted: bool = full or in_game
+	var cols := DK.h(16)
+	var nm := DK.lbl(str(r["room_name"]), DK.FS_BODY, DK.C_ACCENT if open else (DK.C_DIM if muted else DK.C_TEXT))
+	_d_col_size(nm, 0)
+	cols.add_child(nm)
+	cols.add_child(_d_cell(1, DK.G_CROWN, str(r["host_name"]), DK.C_DIM))
+	cols.add_child(_d_cell(2, DK.G_PERSON, "%d/%d" % [int(r["players"]), int(r["max_players"])], DK.C_BAD if full else DK.C_TEXT))
+	cols.add_child(_d_cell(3, DK.G_GLOBE, "İnternet" if r["kind"] == "online" else "LAN", DK.C_DIM))
+	var locked: bool = bool(r["locked"])
+	cols.add_child(_d_cell(4, DK.G_LOCK if locked else DK.G_OPEN, "Şifreli" if locked else "Açık", DK.C_PRICE if locked else DK.C_DIM))
+	var status: String = "Oyunda" if in_game else ("Dolu" if full else "Lobide")
+	var st := DK.lbl(status, DK.FS_LABEL, DK.C_PRICE if in_game else (DK.C_BAD if full else DK.C_GOOD))
+	_d_col_size(st, 5)
+	cols.add_child(st)
+	DK.btn_row(b, cols, false)
+	b.tooltip_text = "%s - host: %s" % [r["room_name"], r["host_name"]]
+	if in_game:
+		b.tooltip_text += " (oyunda: sadece bu oyundan düşenler geri girebilir)"
+	return b
+
+
+func _d_password_row(r: Dictionary) -> PanelContainer:
+	var box := DK.box(DK.C_INSET, DK.C_ACCENT_DK, 12)
+	var v := DK.v(6)
+	var row := DK.h(12)
+	row.add_child(DK.glyph(DK.G_LOCK, DK.C_PRICE, 3))
+	row.add_child(DK.lbl("Şifre:", DK.FS_LABEL, DK.C_TEXT))
+	_pw_input = _d_input("", "Oda şifresi", PASSWORD_MAX_LEN)
+	_pw_input.secret = true
+	_pw_input.text_submitted.connect(func(_t: String) -> void: _submit_password(r))
+	_pw_input.text_changed.connect(func(_t: String) -> void: _pw_error = "")
+	row.add_child(_pw_input)
+	var join := DK.btn("KATIL", "primary", DK.FS_BODY, D_INPUT_H, 150)
+	join.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	join.pressed.connect(_submit_password.bind(r))
+	row.add_child(join)
+	var cancel := DK.btn("VAZGEÇ", "ghost", DK.FS_BODY, D_INPUT_H, 150)
+	cancel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cancel.pressed.connect(func() -> void:
+		_pw_key = ""
+		_pw_error = ""
+		_rebuild_list())
+	row.add_child(cancel)
+	v.add_child(row)
+	if not _pw_error.is_empty():
+		v.add_child(DK.lbl(_pw_error, DK.FS_LABEL, DK.C_BAD))
+	box.add_child(v)
+	_focus_password.call_deferred(_pw_input)
+	return box
+
+
+func _d_empty(msg: String, searching: bool) -> Control:
+	var v := DK.v(10)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_child(DK.sp(0, 180))
+	var g := DK.glyph(DK.G_GLOBE if searching else DK.G_PERSON, DK.C_LINE_HI, 6)
+	g.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	v.add_child(g)
+	v.add_child(DK.lbl(msg, DK.FS_BODY, DK.C_DIM, HORIZONTAL_ALIGNMENT_CENTER))
+	if not searching:
+		v.add_child(DK.lbl("Soldaki ODA KUR ile kendi odanı kur - kurunca doğrudan karakter seçimine geçersin.", DK.FS_LABEL, DK.C_DIM,
+			HORIZONTAL_ALIGNMENT_CENTER))
+	return v
+
+
+func _d_ip_box() -> PanelContainer:
+	var box := DK.box(DK.C_PANEL, DK.C_LINE, 14)
+	var row := DK.h(12)
+	row.add_child(DK.glyph(DK.G_GLOBE, DK.C_DIM, 3))
+	row.add_child(DK.lbl("Listede yok mu? IP ile katıl:", DK.FS_LABEL, DK.C_DIM))
+	_ip_input = _d_input("", "192.168.1.50:7777", 64)
+	_ip_input.text_submitted.connect(func(_t: String) -> void: _on_ip_join_pressed())
+	row.add_child(_ip_input)
+	var b := DK.btn("KATIL", "ghost", DK.FS_BODY, D_INPUT_H, 160)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	b.pressed.connect(_on_ip_join_pressed)
+	row.add_child(b)
+	box.add_child(row)
+	return box
+
+
+## Seçim düğmesi (en fazla oyuncu / bağlantı): telefonda bej sage/tan, masaüstünde koyu kit karosu.
+func _style_choice(b: Button, on: bool) -> void:
+	if _mobile:
+		MenuKit.style_button(b, "sage" if on else "tan")
+	else:
+		DK.style_button(b, "tile_on" if on else ("tile_locked" if b.disabled else "tile"), 4, 6.0)
+
+
+# ---------------------------------------------------------------------------------------------------- telefon yerleşimi
+func _build_mobile() -> void:
 	var rect: Rect2 = LobbyUI.safe_rect(self, _mobile)
 	var fs: int = int(_sz["fs_body"])
 	var ctl_h: float = float(_sz["ctl_h"])
@@ -259,18 +584,22 @@ func _rebuild_list() -> void:
 		c.queue_free()
 	_pw_input = null
 	var rooms: Array = _rooms()
+	if _count_label:
+		_count_label.text = ("%d oda" % rooms.size()) if not rooms.is_empty() else ""
 	if rooms.is_empty():
-		var msg: String = "Henüz açık oda yok - \"ODA KUR\" ile sen kurabilirsin."
-		if NetworkManager.is_online_available() and not _online_searched:
-			msg = "Odalar aranıyor..."
+		var searching: bool = NetworkManager.is_online_available() and not _online_searched
+		if not _mobile:
+			_list.add_child(_d_empty("Odalar aranıyor..." if searching else "Henüz açık oda yok.", searching))
+			return
+		var msg: String = "Odalar aranıyor..." if searching else "Henüz açık oda yok - \"ODA KUR\" ile sen kurabilirsin."
 		var empty := MenuKit.make_label(msg, _fs_label(), MenuKit.C_TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
 		empty.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_list.add_child(empty)
 		return
 	for r in rooms:
-		_list.add_child(_make_room_row(r))
+		_list.add_child(_make_room_row(r) if _mobile else _d_room_row(r))
 		if str(r["key"]) == _pw_key:
-			_list.add_child(_make_password_row(r))
+			_list.add_child(_make_password_row(r) if _mobile else _d_password_row(r))
 	UISound.connect_all_buttons(_list)
 
 
@@ -408,8 +737,12 @@ func _set_busy(value: bool) -> void:
 	_busy_since_msec = Time.get_ticks_msec()
 	if _create_btn:
 		_create_btn.disabled = value
+		if not _mobile:
+			DK.style_button(_create_btn, "off" if value else "primary")
 	if _refresh_btn:
 		_refresh_btn.disabled = value
+		if not _mobile:
+			DK.style_button(_refresh_btn, "off" if value else "ghost")
 	_rebuild_list()
 
 
@@ -440,7 +773,11 @@ func _commit_name() -> void:
 		return
 	var n: String = _name_input.text.strip_edges()
 	if not n.is_empty() and n != NetworkManager.local_player_name:
+		## Masaüstünde form hep açık: oda adı hâlâ "<eski ad> odası" ise yeni adla güncellenir (elle yazılmışsa dokunulmaz).
+		var was_default: bool = not _mobile and _room_name_input != null and _room_name_input.text == "%s odası" % NetworkManager.local_player_name
 		NetworkManager.update_local_player_name(n)
+		if was_default:
+			_room_name_input.text = "%s odası" % NetworkManager.local_player_name
 
 
 func _on_room_entered() -> void:
@@ -460,7 +797,7 @@ func _on_back_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
-# ---------------------------------------------------------------------------------------------------- "Oda kur" penceresi
+# ---------------------------------------------------------------------------------------------------- "Oda kur" penceresi (telefon; masaüstünde form solda hep açık)
 func _build_dialog() -> void:
 	_dialog = Control.new()
 	_dialog.visible = false
@@ -552,13 +889,20 @@ func _build_dialog() -> void:
 func _set_max_players(n: int) -> void:
 	_max_players = n
 	for k in _max_buttons:
-		MenuKit.style_button(_max_buttons[k], "sage" if int(k) == n else "tan")
+		_style_choice(_max_buttons[k], int(k) == n)
 
 
 func _set_connection(online: bool) -> void:
 	_use_online = online and NetworkManager.is_online_available()
-	MenuKit.style_button(_online_choice_btn, "sage" if _use_online else "tan")
-	MenuKit.style_button(_lan_choice_btn, "tan" if _use_online else "sage")
+	_style_choice(_online_choice_btn, _use_online)
+	_style_choice(_lan_choice_btn, not _use_online)
+	if _conn_hint:
+		if not NetworkManager.is_online_available():
+			_conn_hint.text = "Epic ayarları eksik - şimdilik sadece aynı ağdakiler katılabilir."
+		elif _use_online:
+			_conn_hint.text = "PC + Android, port açmaya gerek yok."
+		else:
+			_conn_hint.text = "Aynı Wi-Fi / kablolu ağdakiler oda listesinde görür."
 
 
 func _open_dialog() -> void:
@@ -569,6 +913,7 @@ func _open_dialog() -> void:
 	_room_pw_input.text = ""
 	_dialog_error.text = ""
 	_dialog.visible = true
+	UiAnim.window_in(_dialog)
 	if not _mobile:
 		_room_name_input.grab_focus.call_deferred()
 
@@ -579,8 +924,10 @@ func _on_create_pressed() -> void:
 		_dialog_error.text = "Oda adı gir."
 		return
 	_commit_name()
+	_dialog_error.text = ""
 	NetworkManager.configure_room(rname, _room_pw_input.text, _max_players)
-	_dialog.visible = false
+	if _dialog:
+		_dialog.visible = false
 	_set_busy(true)
 	if _use_online:
 		_status_label.text = "İnternet odası kuruluyor..."

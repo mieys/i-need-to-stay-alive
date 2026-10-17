@@ -5,7 +5,7 @@ extends Node
 ## bozmayacak şekilde ayarla... dükkan kategori butonları veya aşırı dar
 ## olan butonlar için mini button dosyasını kullan." Bu test, DAHA ÖNCE
 ## UISound.apply_wood_buttons/ShopPanel._apply_wood_button_style'ın HİÇ
-## ulaşmadığı panelleri (keybind_menu, weapon_select_screen, party_panel,
+## ulaşmadığı panelleri (weapon_select_screen, party_panel,
 ## main.gd ölüm ekranı) ve global tema güvenlik ağını (theme.tres) kontrol
 ## eder.
 
@@ -39,30 +39,9 @@ func _find_buttons_recursive(node: Node, out: Array) -> void:
 		_find_buttons_recursive(c, out)
 
 
-func test_pause_menu_buttons_use_new_texture() -> void:
-	var scene: PackedScene = load("res://scenes/pause_menu.tscn")
-	var panel: CanvasLayer = scene.instantiate()
-	add_child(panel) ## add_child bu ortamda _ready()'i zaten tetikliyor - elle tekrar cagirmiyoruz (cift baglanti onlemek icin).
-	var resume_btn: Button = panel.get_node("Panel/VBox/ResumeButton")
-	assert(_style_texture_path(resume_btn, "normal") == ButtonPngPath,
-		"ResumeButton yeni Button.png dokusunu kullanmiyor: %s" % _style_texture_path(resume_btn, "normal"))
-	panel.queue_free()
-
-
-func test_keybind_menu_buttons_get_wood_style() -> void:
-	var script: GDScript = load("res://scripts/keybind_menu.gd")
-	var kb: CanvasLayer = script.new()
-	add_child(kb)
-	var all_buttons: Array = []
-	_find_buttons_recursive(kb, all_buttons)
-	var close_btn: Button = null
-	for b in all_buttons:
-		if b.text == "KAPAT":
-			close_btn = b
-	assert(close_btn != null, "keybind_menu KAPAT butonu bulunamadi (bulunanlar: %s)" % [all_buttons.map(func(b): return b.text)])
-	assert(_style_texture_path(close_btn, "normal") == ButtonPngPath,
-		"keybind_menu KAPAT butonu yeni dokuyu almiyor - bkz. eksik apply_wood_buttons cagrisi")
-	kb.queue_free()
+## (2026-10-17, madde 234) duraklatma menüsü + tuş atama penceresi testleri kaldırıldı: ESC menüsü ve ayarlar artık ana menünün
+## "Ateş Işığı" dilinde (kutusuz, ahşap düğme dokusu yok - fire_menu_kit.gd), keybind_menu.gd silindi (TUŞLAR = settings_screen.gd).
+## Yeni ekranların testleri: tests/test_settings_screen.gd.
 
 
 ## (2026-10-03) weapon_select_screen.gd testi kaldırıldı: oyun başındaki silah seçim ekranı silindi (silah artık karakter

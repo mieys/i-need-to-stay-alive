@@ -25,6 +25,7 @@ extends RefCounted
 
 const ShopScript := preload("res://scripts/shop_panel.gd")
 const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
+const MetaProgressScript := preload("res://scripts/meta_progress.gd")
 
 const SHIELD_PRICE := 250
 const UPGRADE_BASE_PRICE := 100
@@ -46,8 +47,14 @@ const SHARD_COST_WFINAL := 10
 
 # ------------------------------------------------------------------ silah
 
+## Demirci SADECE Ruh Mağazası'nda açılmış silahları gösterir/satar (2026-10-14, kullanıcı: "demirci sahip olmadığımız silahları bile
+## alabilmemizi sağlıyor, silahlar görünmemeli"). Kilitli silah listede hiç yok (debug modunda hepsi açık - MetaProgress.is_unlocked).
 static func weapon_keys() -> Array:
-	return WeaponCatalogScript.KEYS
+	var out: Array = []
+	for key in WeaponCatalogScript.KEYS:
+		if MetaProgressScript.is_unlocked(MetaProgressScript.WEAPON, key):
+			out.append(key)
+	return out
 
 
 static func max_weapons(player: Node) -> int:
@@ -100,6 +107,10 @@ static func shard_shortfall_reason(cost: int) -> String:
 static func weapon_block_reason(player: Node, key: String) -> String:
 	if not WeaponCatalogScript.is_valid(key):
 		return "Bilinmeyen silah"
+	if not MetaProgressScript.is_unlocked(MetaProgressScript.WEAPON, key):
+		return "Silah kilitli (Ruh Mağazası)" ## görünmez olmalı; son savunma
+	if GameManager.owns_weapon(key):
+		return "Bu silaha zaten sahipsin" ## her silahtan en fazla 1 (2026-10-14)
 	var max_w: int = max_weapons(player)
 	if GameManager.owned_weapons.size() >= max_w:
 		return "Silah slotları dolu (%d/%d)" % [GameManager.owned_weapons.size(), max_w]
@@ -233,11 +244,11 @@ static func shield_price() -> int:
 
 static func shield_block_reason(key: String) -> String:
 	if not ShieldEnchantDefs.ENCHANT_KEYS.has(key):
-		return "Bilinmeyen kalkan"
+		return "Bilinmeyen mana kalkanı"
 	if GameManager.shield_enchant == key:
-		return "Bu kalkan sende"
+		return "Bu mana kalkanı sende"
 	if GameManager.shield_enchant != "":
-		return "Başka bir kalkan türü seçildi"
+		return "Başka bir mana kalkanı türü seçildi"
 	return shard_shortfall_reason(SHARD_COST_SHIELD)
 
 
@@ -279,7 +290,7 @@ static func upgrade_price(index: int) -> int:
 
 static func upgrade_block_reason(index: int) -> String:
 	if GameManager.shield_enchant == "":
-		return "Önce bir kalkan türü al"
+		return "Önce bir mana kalkanı türü al"
 	var lines: Array = upgrade_lines()
 	if index < 0 or index >= lines.size() or index >= GameManager.shield_enchant_ups.size():
 		return "Bilinmeyen geliştirme"
@@ -310,9 +321,9 @@ static func upgrade_effect_text(index: int) -> String:
 	var up: Dictionary = lines[index]
 	var parts: Array = []
 	if float(up.get("power", 0.0)) != 0.0:
-		parts.append("%+d Kalkan" % int(round(float(up["power"]))))
+		parts.append("%+d Mana Kalkanı" % int(round(float(up["power"]))))
 	if float(up.get("regen", 0.0)) != 0.0:
-		parts.append("%s Yenilenme/sn" % _signed(float(up["regen"])))
+		parts.append("%s Yenilenme/sn" % _signed(float(up["regen"]) * GameManager.SHIELD_REGEN_SPEED_MULT))
 	if float(up.get("absorption", 0.0)) != 0.0:
 		parts.append("%+d%% Soğurma" % int(round(float(up["absorption"]) * 100.0)))
 	if float(up.get("delay", 0.0)) != 0.0:
@@ -325,7 +336,7 @@ static func shield_summary(key: String) -> String:
 	var d: Dictionary = ShieldEnchantDefs.TYPES.get(key, {})
 	if d.is_empty():
 		return ""
-	return "%d kalkan · %%%d soğurma · %s/sn" % [int(round(float(d["power"]))), int(round(float(d["absorption"]) * 100.0)), _num(float(d["regen"]))]
+	return "%d mana kalkanı · %%%d soğurma · %s/sn" % [int(round(float(d["power"]))), int(round(float(d["absorption"]) * 100.0)), _num(float(d["regen"]))]
 
 
 static func _num(v: float) -> String:

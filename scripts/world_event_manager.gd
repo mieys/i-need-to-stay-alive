@@ -163,8 +163,8 @@ const VanScript := preload("res://scripts/mission_van.gd")
 
 ## Defend the Tree (kullanıcı isteği: can+kalkan, faz her 10sn, mavi ateş topu, yaratıklar
 ## ağaca odaklanır; "geçici bi ağaç yap sonra değiştiririz").
-const TREE_NUM_PHASES := 5
-const TREE_PHASE_DURATION := 10.0
+## Görev süresi (2026-10-17, kullanıcı: "çok kısa sürüyor, 2 dakika daha korumak gereksin"): eski 5 faz x 10 sn = 50 sn -> 50 + 120 = 170 sn.
+const TREE_DURATION := 170.0
 const TREE_REWARD_GOLD := 220
 const TreeScript := preload("res://scripts/mission_tree.gd")
 
@@ -380,7 +380,7 @@ func _activate_mission(slot_i: int) -> void:
 			extra["route"] = route
 			extra["push_radius"] = ESCORT_PUSH_RADIUS
 		MissionKind.DEFEND_TREE:
-			slot["timer"] = float(TREE_NUM_PHASES) * TREE_PHASE_DURATION
+			slot["timer"] = TREE_DURATION
 			slot["target"] = 1.0
 			var tree: Node2D = TreeScript.new()
 			get_tree().current_scene.add_child(tree)
@@ -459,7 +459,7 @@ func _tick_mission(slot_i: int, delta: float) -> void:
 			else:
 				_sync_progress(slot, tree.health + tree.shield, tree.max_health + tree.max_shield)
 				if slot["timer"] <= 0.0:
-					## Faz süresi (kullanıcı isteği: her 10sn'de bir faz, TREE_NUM_PHASES fazın
+					## Görev süresi (TREE_DURATION; eskiden her 10sn'de bir faz, 5 fazın
 					## tamamı) bitene kadar ağaç hayattaysa görev BAŞARILI - normal "süre dolunca
 					## başarısız" kuralının TERSİ, bu görevde süre = hayatta kalma hedefi.
 					done = true

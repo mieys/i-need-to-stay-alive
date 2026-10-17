@@ -3,17 +3,19 @@ extends Control
 ## Sandık açılış animasyonu - ödül ekranında (normal + elit: chest_menu.gd; efsun elit sandığı: enchant_screen.gd intro_chest). Kartlar burst
 ## anında sandığın ağzından fırlar (reward_reveal.gd). Kullanıcı isteği
 ## (2026-09-25): "sandık açarken daha iyi ve ödüllendirici heyecan uyandırıcı sandık açma animasyonu ... pixel tarzda
-## sprite sheet olarak". Sayfa: tools/gen_chest_sprites.py (20 kare x 48x48, kare düzeni o dosyanın başında). Sırası:
-## kısa bekleme -> sallanma + aralıktan ışık -> kapak patlar (ekran flaşı + sarsıntı + ses) -> ışınlar/altınlar -> açık
-## bekleme. Normal sandıkta ışığın rengi ÇIKACAK eşyanın nadirliği (tier 1-4) - kart görünmeden önce ipucu.
+## sprite sheet olarak". Sayfalar: chest_art.gd (tools/gen_chest_sprites.py, 2026-10-17 "B Işık Sütunu": 20 kare x 96 px =
+## 48 dünya px, kare düzeni o dosyanın başında). Sırası: kısa bekleme -> sallanma + aralıktan ışık -> kapak patlar (ekran flaşı +
+## sarsıntı + ses) -> ışınlar/altınlar -> açık bekleme. Normal sandıkta ışığın (ve sandığın arkasındaki IŞIK SÜTUNUNUN) rengi
+## ÇIKACAK eşyanın nadirliği (tier 1-4) - kart görünmeden önce ipucu; sütun patlamada sandığa çöker.
 ## Tıklama / herhangi bir tuş animasyonu atlar (çok oyunculuda 25 sn'lik sandık süresi zaten işliyor).
 ## Oyun duraklatılmışken çalışır: süreyi kendi _process'i sayar (sahibi PROCESS_MODE_ALWAYS bir CanvasLayer).
 
 signal burst ## kapağın açıldığı an (8. kare) - sahibi ödülü hazırlamaya başlayabilir
 signal finished ## animasyon (ya da atlama) bitti
 
-const FRAME := 48
-const DISPLAY_SCALE := 8 ## 48 px kare -> 384 px (sandık ~176-208 px) - heyecan anında ekranda iri dursun
+const ChestArt := preload("res://scripts/chest_art.gd")
+const FRAME := ChestArt.FRAME_PX ## doku px
+const DISPLAY_SCALE := 8 ## dünya px başına ekran px: 48'lik kare -> 384 px (sandık ~184-216 px) - heyecan anında ekranda iri dursun
 const BURST_FRAME := 8
 const OPEN_LOOP := [16, 17, 18, 19]
 const OPEN_LOOP_STEP := 0.12
@@ -24,14 +26,9 @@ const TIMELINE := [
 	[4, 0.14], [5, 0.12], [6, 0.12], [7, 0.14],
 	[8, 0.07], [9, 0.06], [10, 0.06], [11, 0.06], [12, 0.07], [13, 0.07], [14, 0.08], [15, 0.08],
 ]
-const NORMAL_SHEETS := [
-	preload("res://assets/sprites/chests/chest_normal_t1.png"),
-	preload("res://assets/sprites/chests/chest_normal_t2.png"),
-	preload("res://assets/sprites/chests/chest_normal_t3.png"),
-	preload("res://assets/sprites/chests/chest_normal_t4.png"),
-]
-const ELITE_SHEET := preload("res://assets/sprites/chests/chest_elite.png")
-## Işık renkleri gen_chest_sprites.py LIGHTS ile aynı (ekran flaşı bu renkte).
+const NORMAL_SHEETS := ChestArt.NORMAL_TIER_SHEETS
+const ELITE_SHEET := ChestArt.ELITE_SHEET
+## Ekran flaşının rengi - gen_chest_sprites.py LIGHTS (sandık içi + sütun) ile aynı aile.
 const LIGHT_COLORS := [Color("#e6ebf2"), Color("#9cc4ff"), Color("#dcb0ff"), Color("#ffc65a")]
 const ELITE_LIGHT := Color("#c77dff")
 
@@ -41,6 +38,11 @@ const SFX_REWARD := preload("res://Sound FX Starter Pack Vol. 1/Hollywood/Reward
 const SFX_ELITE := preload("res://Sound FX Starter Pack Vol. 1/Magic/Magic Seal.wav")
 
 var _sheet: Texture2D = null
+var _beam_sheet: Texture2D = null
+var _beam_rect: TextureRect = null
+var _beam_atlas: AtlasTexture = null
+var _elapsed: float = 0.0
+var _since_burst: float = -1.0
 var _light: Color = Color.WHITE
 var _elite: bool = false
 var _tier: int = 1
@@ -65,14 +67,29 @@ func setup(elite: bool, reward_tier: int = 1) -> void:
 	_elite = elite
 	_tier = clampi(reward_tier, 1, 4)
 	_sheet = ELITE_SHEET if elite else NORMAL_SHEETS[_tier - 1]
+	_beam_sheet = ChestArt.ELITE_BEAM_SHEET if elite else ChestArt.BEAM_TIER_SHEETS[_tier - 1]
 	_light = ELITE_LIGHT if elite else LIGHT_COLORS[_tier - 1]
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(FRAME, FRAME) * DISPLAY_SCALE
+	custom_minimum_size = Vector2(ChestArt.FRAME_WU, ChestArt.FRAME_WU) * DISPLAY_SCALE
 	if _sheet == null:
 		setup(false, 1)
+	## Işık sütunu: sandığın ARKASINDA (önce eklenir), kutunun dışına (yukarı) taşar; sandığın alt-ortasına hizalı.
+	var k: float = ChestArt.TEXEL * DISPLAY_SCALE
+	_beam_atlas = AtlasTexture.new()
+	_beam_atlas.atlas = _beam_sheet
+	_beam_atlas.region = Rect2(0, 0, ChestArt.BEAM_W, ChestArt.BEAM_H)
+	_beam_rect = TextureRect.new()
+	_beam_rect.texture = _beam_atlas
+	_beam_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_beam_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_beam_rect.stretch_mode = TextureRect.STRETCH_SCALE
+	_beam_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_beam_rect.size = Vector2(ChestArt.BEAM_W, ChestArt.BEAM_H) * k
+	_beam_rect.position = (ChestArt.CHEST_ANCHOR_PX - ChestArt.BEAM_ANCHOR_PX) * k
+	add_child(_beam_rect)
 	_atlas = AtlasTexture.new()
 	_atlas.atlas = _sheet
 	_rect = TextureRect.new()
@@ -116,6 +133,7 @@ func _process(_delta: float) -> void:
 	var now: int = Time.get_ticks_usec()
 	var dt: float = 0.0 if _last_us == 0 else float(now - _last_us) / 1000000.0
 	_last_us = now
+	_update_beam(dt)
 	if _hold_left >= 0.0:
 		_loop_t += dt
 		_show_frame(OPEN_LOOP[int(_loop_t / OPEN_LOOP_STEP) % OPEN_LOOP.size()])
@@ -130,10 +148,32 @@ func _process(_delta: float) -> void:
 		_t = carry
 
 
+## Işık sütunu: beklemede döngü, sallanmada sandıkla eş kareler, patlamadan sonra 0,05 sn arayla çöker ve gizlenir.
+func _update_beam(dt: float) -> void:
+	if _beam_rect == null or not _beam_rect.visible:
+		return
+	_elapsed += dt
+	var f: int
+	if _since_burst >= 0.0:
+		_since_burst += dt
+		var j: int = int(_since_burst / ChestArt.BEAM_COLLAPSE_STEP)
+		if j >= ChestArt.BEAM_COLLAPSE_FRAMES:
+			_beam_rect.visible = false
+			return
+		f = ChestArt.BEAM_COLLAPSE + j
+	elif _step >= 0 and _step < TIMELINE.size() and int(TIMELINE[_step][0]) >= 4:
+		f = ChestArt.BEAM_SHAKE + mini(3, int(TIMELINE[_step][0]) - 4)
+	else:
+		f = int(_elapsed / ChestArt.BEAM_IDLE_STEP) % ChestArt.BEAM_IDLE
+	_beam_atlas.region = Rect2(f * ChestArt.BEAM_W, 0, ChestArt.BEAM_W, ChestArt.BEAM_H)
+
+
 func skip() -> void:
 	if _done or _hold_left >= 0.0:
 		return
 	skipped = true
+	if _beam_rect != null:
+		_beam_rect.visible = false
 	if not _burst_sent:
 		_on_burst()
 	_advance(TIMELINE.size())
@@ -153,6 +193,7 @@ func _on_burst() -> void:
 	if _burst_sent:
 		return
 	_burst_sent = true
+	_since_burst = 0.0
 	_play(SFX_COINS, -2.0, 1.0)
 	if chime_on_burst:
 		play_reward_chime(get_tree(), _tier, _elite)

@@ -371,6 +371,7 @@ func _on_node_added(node: Node) -> void:
 ## IŞIK BÜTÇESİ (2026-10-10, Talon E FPS ölçümü: her mermi/efekt bir ışık düğümü takıyordu, E'de saniyede ~100 yeni ışık): aynı anda en çok bu kadar gece ışığı;
 ## doluyken YENİ gelen geçici efekt ışık almaz (ışıklar sadece kozmetik; oyuncu/silah/boss gibi kalıcı kaynaklar sahneye erken girip ışığını önceden alır).
 const MAX_GLOWS := 96
+const PERM_GLOW_GROUP := &"night_glow_perm" ## bütçeye sayılmayan kalıcı ışıklar (bkz. _attach_glow)
 
 
 func _attach_glow(target: Node, raw: Dictionary) -> void:
@@ -378,12 +379,18 @@ func _attach_glow(target: Node, raw: Dictionary) -> void:
 		return
 	if target.has_node("NightGlow"):
 		return
-	if get_tree().get_node_count_in_group(NightGlowScript.GROUP) >= MAX_GLOWS:
+	## KALICI ışıklar (katalogda "perm": görev kristalleri gibi sahnede uzun süre duran, her biri tek ışık) bütçeye sayılmaz ve bütçeden
+	## reddedilmez: Topla görevi 40-60 kristal birden kurar, bütçe dolu olunca sonradan gelenler gece hiç parlamıyordu (kullanıcı 2026-10-14).
+	var perm: bool = bool(raw.get("perm", false))
+	var tree: SceneTree = get_tree()
+	if not perm and tree.get_node_count_in_group(NightGlowScript.GROUP) - tree.get_node_count_in_group(PERM_GLOW_GROUP) >= MAX_GLOWS:
 		return
 	var profile: Dictionary = GlowCatalog.resolve(target, raw)
 	if profile.is_empty():
 		return
-	NightGlowScript.attach(target, profile)
+	var glow: Node2D = NightGlowScript.attach(target, profile)
+	if perm and glow != null:
+		glow.add_to_group(PERM_GLOW_GROUP)
 
 
 ## Atmosfer kurulmadan ÖNCE sahnede zaten olan silahlar/efektler (ör. yeniden başlatmada geri yüklenen silahlar).

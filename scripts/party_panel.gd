@@ -51,8 +51,9 @@ const PLAQUE_CLEAN := preload("res://assets/ui/game/hud_plaque_clean.png")
 const BarUnder := preload("res://assets/ui/kit/hud_bar_under.png")
 const BarFill := preload("res://assets/ui/kit/hud_bar_fill.png")
 ## Görev okunun kutusuyla aynı koyu çerçeve (world_event_banner.gd ArrowBox).
-const BOX_OUTLINE := Color("#3a2212")
-const BOX_FILL := Color("#5a361d")
+const HudTheme := preload("res://scripts/hud_theme.gd") ## madde 207: grup satırları + açılır pencereleri koyu HUD temasında
+const BOX_OUTLINE := HudTheme.OUTLINE
+const BOX_FILL := HudTheme.INSET
 const SHIELD_COLOR := Color(0.35, 0.72, 1.0, 1.0) ## overhead_bar.gd kalkan rengi ile AYNI
 const DAMAGE_BAR_COLOR := Color("#e0aa3e") ## görev çubuğunun altın tonu
 
@@ -109,7 +110,7 @@ func _ready() -> void:
 	UISound.connect_all_buttons(self)
 
 
-## Perçinsiz bej levha (altın göstergesiyle aynı: plaque.png payları + hud_plaque_clean.png dokusu).
+## Perçinsiz levha (altın göstergesiyle aynı: plaque.png payları + hud_plaque_clean.png dokusu; madde 207 HUD teması).
 static func _plaque_style(pad_x: float, pad_y: float) -> StyleBoxTexture:
 	var sb := MenuKit._tex_style("plaque.png", [6, 5, 6, 5], [pad_x, pad_y, pad_x, pad_y], false, MenuKit.GAME_DIR)
 	sb.texture = PLAQUE_CLEAN
@@ -121,7 +122,7 @@ static func _wood_button(text: String, min_size: Vector2) -> Button:
 	btn.text = text
 	btn.custom_minimum_size = min_size
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	UIKit.style_button(btn, "wood", true, FS_ROW)
+	UIKit.style_button(btn, "hud", true, FS_ROW)
 	return btn
 
 
@@ -176,7 +177,7 @@ func _build_gift_popup() -> void:
 	_gift_popup.add_child(vbox)
 
 	_gift_amount_label = Label.new()
-	UIKit.style_label(_gift_amount_label, FS_ROW, UIKit.C_TEXT, 0)
+	UIKit.style_label(_gift_amount_label, FS_ROW, HudTheme.TEXT, 0)
 	_gift_amount_label.text = "Altın gönder"
 	vbox.add_child(_gift_amount_label)
 
@@ -220,7 +221,7 @@ func _build_stats_popup() -> void:
 	title.text = "Hasar Sıralaması"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	UIKit.style_label(title, FS_ROW, UIKit.C_ACCENT, 0)
+	UIKit.style_label(title, FS_ROW, HudTheme.ACCENT, 0)
 	header.add_child(title)
 	## Kullanıcı bildirimi (eski): sadece kendi kapat butonuyla kapanmalı (dışına tıklayınca değil).
 	var close_btn := _wood_button("x", Vector2(32, 32))
@@ -382,7 +383,7 @@ func _create_row(peer_id: int) -> PartyRow:
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	plaque.add_child(hbox)
 
-	## Portre: görev okunun kutusuyla aynı koyu çerçeve, içinde HUD avatarının bej zemini + 1:1 portre.
+	## Portre: görev okunun kutusuyla aynı koyu çerçeve, içinde HUD avatarının zemini + 1:1 portre.
 	var box_size: float = AVATAR_SIZE + AVATAR_BORDER * 2.0
 	var avatar_box := Panel.new()
 	avatar_box.custom_minimum_size = Vector2(box_size, box_size)
@@ -428,7 +429,7 @@ func _create_row(peer_id: int) -> PartyRow:
 	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info_vbox.add_child(name_row)
 	var name_label := Label.new()
-	UIKit.style_label(name_label, FS_ROW, UIKit.C_TEXT, 0)
+	UIKit.style_label(name_label, FS_ROW, HudTheme.TEXT, 0)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -436,7 +437,7 @@ func _create_row(peer_id: int) -> PartyRow:
 	row.name_label = name_label
 	var downed_label := Label.new()
 	downed_label.text = "YERDE"
-	UIKit.style_label(downed_label, FS_ROW, UIKit.C_BAD, 0)
+	UIKit.style_label(downed_label, FS_ROW, HudTheme.BAD, 0)
 	downed_label.visible = false
 	name_row.add_child(downed_label)
 	row.downed_label = downed_label
@@ -698,7 +699,7 @@ func _refresh_stats_popup() -> void:
 	if entries.is_empty():
 		var empty_lbl := Label.new()
 		empty_lbl.text = "Veri yok"
-		UIKit.style_label(empty_lbl, FS_ROW, UIKit.C_TEXT_DIM, 0)
+		UIKit.style_label(empty_lbl, FS_ROW, HudTheme.DIM, 0)
 		_stats_list.add_child(empty_lbl)
 		return
 	var top: float = maxf(float(entries[0].get("dealt", 0.0)), 1.0)
@@ -714,7 +715,7 @@ func _refresh_stats_popup() -> void:
 		var rank_lbl := Label.new()
 		rank_lbl.text = "%d." % (i + 1)
 		rank_lbl.custom_minimum_size = Vector2(30, 0)
-		UIKit.style_label(rank_lbl, FS_ROW, UIKit.C_ACCENT if i == 0 else UIKit.C_TEXT_DIM, 0)
+		UIKit.style_label(rank_lbl, FS_ROW, HudTheme.ACCENT if i == 0 else HudTheme.DIM, 0)
 		row.add_child(rank_lbl)
 
 		var name_lbl := Label.new()
@@ -723,7 +724,7 @@ func _refresh_stats_popup() -> void:
 		name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_lbl.custom_minimum_size = Vector2(110, 0)
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UIKit.style_label(name_lbl, FS_ROW, UIKit.C_TEXT, 0)
+		UIKit.style_label(name_lbl, FS_ROW, HudTheme.TEXT, 0)
 		row.add_child(name_lbl)
 
 		var dealt: float = float(entry.get("dealt", 0.0))
@@ -731,11 +732,11 @@ func _refresh_stats_popup() -> void:
 		dmg_lbl.text = "%d" % int(round(dealt))
 		dmg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		dmg_lbl.custom_minimum_size = Vector2(64, 0)
-		UIKit.style_label(dmg_lbl, FS_ROW, UIKit.C_GOLD, 0)
+		UIKit.style_label(dmg_lbl, FS_ROW, HudTheme.PRICE, 0)
 		row.add_child(dmg_lbl)
 
 		var well := PanelContainer.new()
-		well.add_theme_stylebox_override("panel", UIKit.panel_style("inset_tight"))
+		well.add_theme_stylebox_override("panel", UIKit.panel_style("hud_inset_tight"))
 		well.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		block.add_child(well)
 		var bar: TextureProgressBar = _make_bar(8.0)

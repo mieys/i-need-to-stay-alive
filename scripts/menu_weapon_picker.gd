@@ -13,6 +13,8 @@ extends PanelContainer
 signal picked(key: String)
 
 const WeaponCatalog := preload("res://scripts/weapon_catalog.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const LockBadgeScript: GDScript = preload("res://scripts/lock_badge.gd")
 const SELECT_RING_COLOR := Color(1.0, 0.78, 0.22)
 
 var mobile: bool = false
@@ -96,8 +98,8 @@ func _build() -> void:
 
 
 func select(key: String, emit: bool = true) -> void:
-	if not WeaponCatalog.is_valid(key):
-		key = WeaponCatalog.DEFAULT_KEY
+	if not WeaponCatalog.is_valid(key) or not MetaProgressScript.is_unlocked(MetaProgressScript.WEAPON, key):
+		key = WeaponCatalog.DEFAULT_KEY ## geçersiz ya da Ruh Mağazası'nda kilitli (bkz. meta_progress.gd)
 	GameManager.selected_start_weapon = key
 	if _icon:
 		_icon.texture = WeaponCatalog.icon(key)
@@ -174,7 +176,13 @@ func _open_grid() -> void:
 		var style: StyleBox = MenuKit.style("slot_selected" if key == current else "slot_normal")
 		for st in ["normal", "hover", "pressed", "focus"]:
 			b.add_theme_stylebox_override(st, MenuKit.style("slot_hover") if st == "hover" and key != current else style)
+		var locked: bool = not MetaProgressScript.is_unlocked(MetaProgressScript.WEAPON, key)
+		if locked:
+			b.tooltip_text += "
+" + MetaProgressScript.lock_text(MetaProgressScript.WEAPON, key)
 		b.pressed.connect(func() -> void:
+			if locked:
+				return ## kilitli silah incelenir (ipucu bedeli söyler) ama seçilmez
 			select(key)
 			_close_grid())
 		var ic := TextureRect.new()
@@ -194,6 +202,8 @@ func _open_grid() -> void:
 		var cat := MenuKit.make_label(WeaponCatalog.category_label(key), _gs(MenuKit.FS_SMALL, 32), WeaponCatalog.category_color(key), HORIZONTAL_ALIGNMENT_CENTER)
 		b.add_child(cat)
 		MenuKit.place(cat, Vector2(4.0, icon_px + _gs(44, 62)), Vector2(cell.x - 8.0, _gs(30, 40)))
+		if locked:
+			LockBadgeScript.attach(b)
 		grid.add_child(b)
 		if key == current:
 			b.grab_focus.call_deferred()

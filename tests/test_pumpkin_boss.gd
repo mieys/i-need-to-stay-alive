@@ -267,7 +267,7 @@ func test_boss_spell_hits_a_player_once_for_10_and_stops_at_walls() -> void:
 
 ## 2026-10-10 (kullanıcı: "balkabağı bossunun boyutunu %30 küçült ve daha güçlü olması gerekiyor, yeteri kadar yetenek ve yaratık spamlamıyor, hasarını 2 kat arttır").
 func test_damage_numbers_are_doubled_and_the_kit_is_much_busier() -> void:
-	assert(BossKitScript.FIREBALL_DAMAGE == 20.0 and MinionsScript.BLAST_DAMAGE == 40.0, "ateş topu 20, kabak patlaması 40 (x0,8 iptal 2026-10-11)")
+	assert(BossKitScript.FIREBALL_DAMAGE == 30.0 and MinionsScript.BLAST_DAMAGE == 40.0, "ateş topu 30, kabak patlaması 40 (x0,8 iptal 2026-10-11)")
 	assert(float(SpawnerScript.FIXED_BOSS_STATS["balkabagi1"]["damage"]) == 40.0, "normal saldırı 40")
 	assert(float(SpawnerScript.SUMMON_STATS["yarasa1"]["damage"]) == 2.0, "yarasa ısırığı x2")
 	## eskiden: salvo 3,2-4,8 sn / 5 top, kabak 11-14 sn x6 (en çok 20), yarasa 15-19 sn x4 (en çok 12)

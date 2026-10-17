@@ -103,7 +103,7 @@ static func button_style(variant: String = "wood", state: String = "normal", min
 
 ## Herhangi bir Button'a tek çağrıda 5 durumlu kit stilini + varyantın yazı renklerini uygular.
 ## variant: wood (varsayılan, ten) / green (onay/satın al/başla, adaçayı) / dark (ikincil, koyu ahşap + krem yazı) /
-## red (tehlikeli/kapat, kiremit). Yazı rengi VARYANTA göre her zaman yazılır (eski koyu kitte krem yazı sabitti; açık
+## red (tehlikeli/kapat, kiremit) / hud (oyun içi göstergeler: kısık koyu ahşap, açık yazı; madde 207). Yazı rengi VARYANTA göre her zaman yazılır (eski koyu kitte krem yazı sabitti; açık
 ## butonlar üstünde krem okunmazdı) - özel bir renk isteyen çağıran, bu çağrıdan SONRA kendi rengini verir.
 static func style_button(btn: Button, variant: String = "wood", mini: bool = false, font_size: int = -1) -> void:
 	if not is_instance_valid(btn):
@@ -125,7 +125,7 @@ static func style_button(btn: Button, variant: String = "wood", mini: bool = fal
 
 ## Panel türleri: window / window_tight (ahşap pencere + parşömen iç), inset (çukur bej alan), card / card_selected /
 ## card_sold (eşya kartı), plaque (başlık levhası: parşömen şerit, koyu yazı), banner (kurdele), status_badge / ability_bar
-## (HUD, assets/ui/kit). İçerik payları eski kitle AYNI (mevcut ekranların yerleşimi değişmesin).
+## (HUD, assets/ui/kit), hud_plaque / hud_inset_tight (HUD teması, koyu; madde 207). İçerik payları eski kitle AYNI.
 static func panel_style(kind: String = "window") -> StyleBox:
 	var key: String = "p|" + kind
 	if _style_cache.has(key):
@@ -151,6 +151,12 @@ static func panel_style(kind: String = "window") -> StyleBox:
 			sb = MenuKit._tex_style("card_sold.png", [5, 5, 5, 5], [14, 14, 14, 14], true, GAME)
 		"plaque":
 			sb = MenuKit._tex_style("plaque.png", [6, 5, 6, 5], [22, 6, 22, 6], false, GAME)
+		"hud_plaque":
+			## HUD teması (madde 207): koyu kahve levha, plaque.png payları (görev satırları vb.; yazı HudTheme.TEXT).
+			sb = MenuKit._tex_style("hud_plaque_clean.png", [6, 5, 6, 5], [22, 6, 22, 6], false, GAME)
+		"hud_inset_tight":
+			## HUD teması: koyu kuyu (grup/görev çubuk yuvaları), inset_tight payları.
+			sb = MenuKit._tex_style("hud_inset.png", [4, 4, 4, 4], [6, 4, 6, 4], true, GAME)
 		"banner":
 			sb = MenuKit.style("banner", GAME)
 		"status_badge":

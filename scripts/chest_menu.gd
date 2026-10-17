@@ -157,10 +157,15 @@ const ELITE_CARD_TIER := 3
 ## Sandıktan çıkabilecek eşyalar: normal sandık = parçalar (1. kademe), elit sandık = epikler (2. kademe). Efsanevi hiçbir
 ## sandıktan çıkmaz. Sadece destekçilere çıkan eşyalar (Items.is_support_only) char_id destekçi karakter değilse elenir.
 ## player verilirse: sınırına ulaşmış bir stat içeren eşyalar elenir (2026-10-13; hepsi elenirse süzme uygulanmaz - sandık boş açılmasın, eşya satılabilir).
+## Elit sandık: zaten SAHİP olunan epikler elenir (2026-10-14, epikler tekil - bkz. items.gd; hepsine sahipse süzme uygulanmaz, kart satılabilir).
 static func item_pool(elite: bool, char_id: int = -1, player: Node = null) -> Array:
 	var kademe: int = Items.KADEME_EPIK if elite else Items.KADEME_PARCA
 	var pool: Array = Items.KEYS.filter(func(k) -> bool:
 		return Items.kademe(str(k)) == kademe and (not Items.is_support_only(str(k)) or Items.is_ally_support_char(char_id)))
+	if elite:
+		var fresh: Array = pool.filter(func(k) -> bool: return not Items.owns(GameManager.owned_items, str(k)))
+		if not fresh.is_empty():
+			pool = fresh
 	if player != null and is_instance_valid(player) and player.has_method("item_has_capped_stat"):
 		var useful: Array = pool.filter(func(k) -> bool: return not player.item_has_capped_stat(str(k)))
 		if not useful.is_empty():
@@ -875,7 +880,7 @@ func _on_al_pressed(candidate: Dictionary, item_cost: int, power_mult: float = 1
 		var max_w: int = 3
 		if _player.has_method("get_max_owned_weapons"):
 			max_w = _player.get_max_owned_weapons()
-		if gm.owned_weapons.size() >= max_w:
+		if gm.owned_weapons.size() >= max_w or gm.owns_weapon(item_key):
 			return
 		## shop_panel.gd _on_buy_copy ile AYNI sıra: önce deftere (owned_weapons)
 		## ekle, sonra gerçek silah node'unu spawn et - tek fark burada gold

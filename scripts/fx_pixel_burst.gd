@@ -39,6 +39,11 @@ func _palette_colors(name: String) -> Array:
 			return [Color(0.94, 0.8, 1.0), Color(0.72, 0.4, 0.95), Color(0.45, 0.2, 0.75), Color(0.2, 0.08, 0.4)]
 		"dust":
 			return [Color(0.55, 0.45, 0.32), Color(0.7, 0.6, 0.44), Color(0.4, 0.32, 0.22)]
+		## Maden kazma kıvılcımı (bkz. player.gd _mine_hit): bakır = turuncu parçalar, gri = mavimsi kristal parçaları.
+		"ore_copper":
+			return [Color(1.0, 0.86, 0.55), Color(0.92, 0.52, 0.22), Color(0.68, 0.3, 0.14), Color(1.0, 0.95, 0.75)]
+		"ore_gray":
+			return [Color(0.9, 0.96, 1.0), Color(0.6, 0.74, 0.92), Color(0.4, 0.5, 0.76), Color(0.28, 0.32, 0.5)]
 		_:
 			return [Color(1.0, 0.92, 0.5), Color(1.0, 0.65, 0.15), Color(0.95, 0.35, 0.08), Color(0.7, 0.14, 0.06)]
 

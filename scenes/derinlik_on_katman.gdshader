@@ -1,4 +1,5 @@
 shader_type canvas_item;
+#include "res://shaders/harita_renk.gdshaderinc"
 
 // ==================================================
 // DERİNLİK ÖN KATMANI - bina / maden / çalı karo katmanlarının "oyuncunun ÖNÜNDE kalan" kopyası
@@ -64,4 +65,5 @@ void fragment() {
 		}
 	}
 	if (!onde) { discard; }
+	COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
 }

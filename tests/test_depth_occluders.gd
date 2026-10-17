@@ -339,6 +339,8 @@ func test_real_map_creature_behind_a_tree_gets_a_mask_entry() -> void:
 	var pick: Vector2 = Vector2.ZERO
 	var base: float = 0.0
 	for cell: Vector2i in bases:
+		if not Rect2i(20, 20, 216, 216).has_point(cell):
+			continue ## dış çerçevede tamamlanan kenar ağaçları (madde 119) değil, eski oyun alanının içi
 		var wp: Vector2 = layer.to_global(layer.map_to_local(cell))
 		if absf(float(bases[cell]) - (wp.y + 8.0)) < 3.0:
 			pick = wp

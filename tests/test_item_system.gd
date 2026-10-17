@@ -117,6 +117,24 @@ func test_recursive_components_for_legendary() -> void:
 	_cleanup()
 
 
+## 2026-10-17 (kullanıcı: "bazı efsanevi eşyaların alt parçaları yok, özelliklerine göre ata"): artık HİÇBİR efsanevi eşya tarifsiz değil;
+## yeni tarifler de sahip olunan parçaları tüketip fiyattan düşer (fiyat = bileşen toplamı kuralı test_defs_is_consistent'te).
+func test_every_legendary_has_a_recipe_and_new_recipes_discount() -> void:
+	_reset()
+	for k in Items.KEYS:
+		if Items.kademe(k) == Items.KADEME_EFSANEVI:
+			assert(not (Items.recipe(k) as Array).is_empty(), "%s: efsanevi eşyanın alt parçaları (tarifi) olmalı" % k)
+	## Kıyamet Bıçağı = Savaşçı Bileyi + Savaşçının Kılıcı + Zırh Söken Hançer + Bile Taşı: sahip olunan epik + parça tüketilir.
+	var player: Node = _make_player()
+	player.acquire_item("savasci_bileyi", {}, 0)
+	player.acquire_item("bile_tasi", {}, 0)
+	var plan: Dictionary = Items.plan_purchase("kiyamet_bicagi", GameManager.owned_items)
+	assert(int(plan["cost"]) == Items.cost("kiyamet_bicagi") - Items.cost("savasci_bileyi") - Items.cost("bile_tasi"), "Kıyamet Bıçağı: bileyi + bile taşı fiyattan düşmeli, bulunan %d" % int(plan["cost"]))
+	assert((plan["consume"] as Array).size() == 2, "bileyi ve bile taşı tüketilmeli")
+	## Tanrının Eli'nin (anka_muhru) dirilişi tarifle bozulmaz: parçalar tüketilip eşya alınınca pasif hâlâ çalışır (kendi testi aşağıda).
+	_cleanup()
+
+
 func test_slot_limits_and_unique_legendary() -> void:
 	_reset()
 	var player: Node = _make_player()
@@ -133,6 +151,45 @@ func test_slot_limits_and_unique_legendary() -> void:
 	for k in ["son_sans", "kabuk_delen", "kan_aglayan", "anka_kusunun_kalbi", "zaman_kiran"]:
 		GameManager.owned_items.append({"key": k})
 	assert(Items.purchase_block_reason("azrailin_gozu", GameManager.owned_items, 1) != "", "en fazla 5 efsanevi")
+	_cleanup()
+
+
+## 2026-10-14 (kullanıcı: "her epik itemden sadece 1 tane alınabilsin"): epikler tekil; parçalar serbest; efsanevi tarifi aynı epikten 2 isterse 1'i sahip olunandan tüketilir.
+func test_epics_are_unique_but_parts_and_legendary_recipes_still_work() -> void:
+	_reset()
+	var player: Node = _make_player()
+	player.max_item_slots = 4
+	assert(player.acquire_item("bile_tasi", {}, 0) and player.acquire_item("bile_tasi", {}, 0), "parçadan istenildiği kadar (slot sınırına kadar)")
+	assert(player.acquire_item("savasci_bileyi", {}, 0), "ilk epik alınır")
+	assert(Items.purchase_block_reason("savasci_bileyi", GameManager.owned_items, 4) == "Zaten sende var", "aynı epik ikinci kez alınamaz")
+	assert(not player.acquire_item("savasci_bileyi", {}, 0), "acquire_item de ikinciyi reddeder")
+	assert(Items.purchase_block_reason("kemik_kolye", GameManager.owned_items, 4) != "Zaten sende var", "başka epik alınabilir")
+	## Efsanevi tarifi aynı epikten 2 ister (Anka: 2 Yenilenme Özütü + Yaşam Kristali); 1 tanesi elde: tüketilir, ikincisi tarifle gelir.
+	_reset()
+	player = _make_player()
+	player.acquire_item("yenilenme_ozutu", {}, 0)
+	var plan: Dictionary = Items.plan_purchase("anka_kusunun_kalbi", GameManager.owned_items)
+	assert((plan["consume"] as Array).size() == 1, "sahip olunan epik tarifte tüketilir")
+	assert(Items.purchase_block_reason("anka_kusunun_kalbi", GameManager.owned_items, 4, plan) == "", "efsanevi yine alınabilir")
+	assert(player.acquire_item("anka_kusunun_kalbi", plan, int(plan["cost"])), "efsanevi alınır")
+	assert(not Items.owns(GameManager.owned_items, "yenilenme_ozutu"), "epik tüketildi")
+	assert(Items.purchase_block_reason("yenilenme_ozutu", GameManager.owned_items, 4) == "", "tüketilen epik tekrar alınabilir")
+	_cleanup()
+
+
+func test_elite_chest_and_merchant_skip_owned_epics() -> void:
+	_reset()
+	var ChestMenu: GDScript = preload("res://scripts/chest_menu.gd")
+	var epics: Array = ChestMenu.item_pool(true, 1)
+	assert(not epics.is_empty())
+	var owned: String = str(epics[0])
+	GameManager.owned_items.append({"key": owned})
+	assert(not ChestMenu.item_pool(true, 1).has(owned), "elit sandık sahip olunan epiği vermez")
+	for k in epics:
+		if not Items.owns(GameManager.owned_items, str(k)):
+			GameManager.owned_items.append({"key": str(k)})
+	assert(not ChestMenu.item_pool(true, 1).is_empty(), "hepsine sahipse sandık boş açılmaz (kart satılabilir)")
+	_reset()
 	_cleanup()
 
 
@@ -162,6 +219,32 @@ func test_zaman_kiran_survives_and_cools_down() -> void:
 	player._last_damage_taken_at_msec = -999999
 	player.take_damage(5.0)
 	assert(is_equal_approx(player.health, hp), "ölümsüzken hasar almamalı")
+	_cleanup()
+
+
+## Anka Mührü: ölümcül darbede tam can + kalkanla dirilir, 1 sn dokunulmaz, 180 sn bekleme; bekleme sürerken normal ölür.
+func test_anka_muhru_revives_once() -> void:
+	_reset()
+	var player: Node = _make_player()
+	player.acquire_item("anka_muhru", {}, 0)
+	player.health = 20.0
+	player.item_shield_hp = 0.0
+	player._last_damage_taken_at_msec = -999999
+	player.take_damage(5000.0)
+	assert(not player.is_dead and not player.is_downed, "Anka Mührü ölümcül isabette dirilmeli")
+	assert(is_equal_approx(player.health, player.max_health), "tam canla dirilmeli: %s / %s" % [player.health, player.max_health])
+	assert(player._item_invuln_timer > 0.0 and player._item_anka_revive_cd > 100.0, "1 sn dokunulmaz + 180 sn bekleme")
+	_cleanup()
+
+
+## Şifa Feneri: %25 İyileştirme ve Mana Kalkanı Gücü SADECE pasif (stat satırı yok), sahipken etkin.
+func test_sifa_feneri_heal_power_is_passive_only() -> void:
+	_reset()
+	var player: Node = _make_player()
+	var base: float = player.get_heal_shield_power()
+	assert(not (Items.DEFS["sifa_feneri"]["stats"] as Dictionary).has("heal_shield_power"), "Şifa Feneri stat satırında iyileştirme gücü olmamalı")
+	player.acquire_item("sifa_feneri", {}, 0)
+	assert(is_equal_approx(player.get_heal_shield_power() - base, 0.25), "pasif +0.25 vermeli: %s" % (player.get_heal_shield_power() - base))
 	_cleanup()
 
 

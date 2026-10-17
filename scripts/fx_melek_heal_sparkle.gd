@@ -1,7 +1,7 @@
 extends Node2D
 
 ## Melek pasifi iyileştirme işareti (2026-10-10, kullanıcı prototip "A · Artı Işıltısı"nı seçti; tools/proto_20261010/gen_protos.py eff_plus):
-## karakterin başının üstünde iki küçük yeşil-beyaz artı (5x5 piksel, ortası beyaz) yükselip söner. Minimalist, kozmetik, ~1 sn.
+## karakterin başının üstünde iki küçük mavi-beyaz artı (5x5 piksel, ortası beyaz) yükselip söner. Minimalist, kozmetik, ~1 sn.
 ## Melek'in kendi istemcisinde player.gd _melek_heal_sparkles kurar; diğer istemcilere NetworkManager "melek_sparkle" ile gider (hedef peer'lerin
 ## düğümüne eklenir). Ebeveynin (karakter kökü) üstünde yerel konumla durur, karakterle birlikte hareket eder.
 
@@ -9,8 +9,8 @@ const PixelDraw := preload("res://scripts/pixel_draw.gd")
 const LIFE := 1.0
 const RISE := 16.0 ## texel
 const HEAD_Y := -44.0 ## karakter kökünden başın üstü (dünya px; karakterler %15 küçüldükten sonra)
-const C_ARM := Color(0.47, 0.92, 0.55)
-const C_CORE := Color(0.94, 1.0, 0.94)
+const C_ARM := Color(0.40, 0.68, 1.0) ## mavi: pasif artık kalkan verir (2026-10-14)
+const C_CORE := Color(0.93, 0.97, 1.0)
 const PLUSES := [[-7.0, 0.0], [6.0, 0.35]] ## [x texel, gecikme sn]
 
 var _t: float = 0.0

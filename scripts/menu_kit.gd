@@ -156,6 +156,7 @@ const BTN_TEXT := {
 	"sage": [Color("#2e3b14"), Color("#3a4a1a")],
 	"rose": [Color("#4a1d0e"), Color("#5a2614")],
 	"bark": [Color("#fff0d6"), Color("#ffffff")],
+	"hud": [Color("#f3e6cc"), Color("#ffffff")], ## HUD teması (btn_hud_*, tools/gen_hud_tema.py) = HudTheme.TEXT
 }
 
 ## Paletler: aynı tema kurucusu (build_theme) iki kit için. Oyun paleti bir ton koyu parşömen -> yazılar da bir ton koyu.
@@ -406,18 +407,34 @@ static func add_background(root: Control) -> void:
 	root.add_child(bg)
 
 
-## Bir karakterin temel istatistikleri - ikon + değer (bkz. tools/gen_menu_kit.py STAT_ICONS). Tüm karakterler aynı
-## temel değerlerle başlıyor (bkz. character_select.gd eski BASE_STATS).
-const BASE_STATS := [
-	{"icon": "stat_hp.png", "label": "Can", "value": "100"},
-	{"icon": "stat_speed.png", "label": "Hız", "value": "240"},
-	{"icon": "stat_dmg.png", "label": "Hasar", "value": "10"},
-	{"icon": "stat_rate.png", "label": "Atış", "value": "1/sn"},
+## Bir karakterin temel istatistikleri - ikon + değer (bkz. tools/gen_menu_kit.py STAT_ICONS). Değerler karakter başına
+## Characters.BASE_STATS'tan gelir (madde 123); ikon/etiket sırası burada.
+const STAT_ROWS := [
+	{"icon": "stat_hp.png", "label": "Can", "key": "hp"},
+	{"icon": "stat_speed.png", "label": "Hız", "key": "speed"},
+	{"icon": "stat_dmg.png", "label": "Hasar", "key": "ap"},
+	{"icon": "stat_rate.png", "label": "Atış", "key": "atk"},
 ]
 
 
+static func base_stat_text(char_id: int, key: String) -> String:
+	var b: Dictionary = Characters.get_base_stats(char_id)
+	if key == "atk":
+		## Saldırı Hızı bonusu puanı -> saniyedeki atış (taban 1/sn).
+		return ("%.1f/sn" % (1.0 + float(b["atk"]) / 100.0)).replace(".", ",")
+	return str(int(round(float(b[key]))))
+
+
+## Seçili karakter değişince vitrin altındaki istatistik kutusunu günceller (make_stats_grid'in döndürdüğü kutu).
+static func set_stats_grid_character(box: Control, char_id: int) -> void:
+	var labels: Array = box.get_meta("stat_labels", [])
+	for i in range(mini(labels.size(), STAT_ROWS.size())):
+		var row: Dictionary = STAT_ROWS[i]
+		(labels[i] as Label).text = "%s %s" % [row["label"], base_stat_text(char_id, str(row["key"]))]
+
+
 ## Vitrin altındaki 2x2 istatistik kutusu (çukur bej zemin, ikon + değer).
-static func make_stats_grid() -> PanelContainer:
+static func make_stats_grid(char_id: int = 1) -> PanelContainer:
 	var box := make_panel("inset")
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -426,7 +443,8 @@ static func make_stats_grid() -> PanelContainer:
 	grid.add_theme_constant_override("v_separation", 6)
 	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(grid)
-	for s: Dictionary in BASE_STATS:
+	var labels: Array = []
+	for s: Dictionary in STAT_ROWS:
 		var cell := HBoxContainer.new()
 		cell.add_theme_constant_override("separation", 9)
 		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -436,8 +454,11 @@ static func make_stats_grid() -> PanelContainer:
 		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cell.add_child(icon)
-		var l := make_label("%s %s" % [s["label"], s["value"]], FS_BODY, C_TEXT)
+		var l := make_label("", FS_BODY, C_TEXT)
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		cell.add_child(l)
 		grid.add_child(cell)
+		labels.append(l)
+	box.set_meta("stat_labels", labels)
+	set_stats_grid_character(box, char_id)
 	return box

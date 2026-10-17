@@ -3,6 +3,8 @@ extends Node
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const MobileUI := preload("res://scripts/mobile_ui.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+const MetaUpgradesScript: GDScript = preload("res://scripts/meta_upgrades.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 
 ## "Body block" sınırının (bkz. enemy.gd PLAYER_BODY_RADIUS/_body_radius ve
 ## player.gd'nin karşılık gelen engelleme kodu) her iki tarafta da AYNI
@@ -40,6 +42,10 @@ const LIFESTEAL_HEAL := 1.0 ## 2026-10-11 (sonra): 2 çok güçlü bulundu, 1'e 
 ## puan canlı olarak 0.5 saldırı gücüne dönüşür (kalıcı değil - bkz. player.gd _sync_attack_speed_overflow_ap). player.gd + weapon.gd okur (TEK kaynak).
 const ATTACK_SPEED_CAP_PERCENT := 600.0
 const ATTACK_SPEED_OVERFLOW_AP_PER_PERCENT := 0.5
+## TÜM SİLAHLARIN saldırı hızı çarpanı (kullanıcı isteği 2026-10-17: "tüm silahların saldırı hızını %30 azalt"): atış aralığı / 0.7 (= her silah %30 yavaş).
+## weapon.gd _effective_fire_wait en SON adımda uygular (kart/eşya/pasif/üst sınır sonrası, yani gösterilen "Saldırı Hızı %" değişmez, silahlar o orana göre yavaş vurur).
+## Işın/alev tiki ve yay çekilişi aynı fonksiyondan/oranlardan geldiği için kendiliğinden yavaşlar; kopya görevi silahları (mission_player_copy.gd) da okur.
+const WEAPON_ATTACK_SPEED_MULT := 0.7
 
 var game_time: float = 0.0
 var is_game_over: bool = false
@@ -66,6 +72,10 @@ var run_clock_origin: float = 0.0
 ## HOST DEVRİ (bkz. NetworkManager "HOST DEVRİ" bloğu): koşu SÜRÜYOR ama sahne yeniden kuruluyor - eski Main bu koşuyu "bitti" diye
 ## kayda yazmasın (rekor/başarım çift sayılmasın). Yeni Main açılışında false'a döner (main.gd _ready).
 var run_record_suppressed: bool = false
+## Ruh Kıymığı bankası (bkz. meta_progress.gd bank_run): bu koşuda şimdiye kadar diske YAZILMIŞ süre/kademe/kat puanı + zafer ödülü verildi mi.
+## Main'de değil burada: host devrinde Main yeniden kurulur, sayaç sıfırlanırsa aynı koşunun puanı ikinci kez verilirdi.
+var run_shards_banked: int = 0
+var run_victory_shards_given: bool = false
 
 
 ## Koşunun oyun saati (saniye): seyyar satıcı bölgesindeyken akmayan game_time'a göre.
@@ -79,7 +89,12 @@ func run_elapsed() -> float:
 ## spawn tetikleyicisi) bu üç bayrağı doğrudan okuyor, ayrı bir sinyal/RPC gerekmiyor: hepsi SADECE
 ## bu istemcinin KENDİ yerel deneyimini etkiliyor (ölümsüzlük/spawn kapatma başka oyunculara
 ## YAYILMIYOR - bkz. debug_menu.gd dosya başı notu, çok oyunculuda bilerek böyle).
-var debug_mode_unlocked: bool = false
+## Debug modunda HER ŞEY açık: Ruh Mağazası kilitleri (karakter/silah/evcil/ruhani) + Q/E/R yetenekleri 1. seviyeden
+## (bkz. meta_progress.gd debug_open - kayda yazılmaz). Çok oyunculuda açan oyuncu herkese bildirilir (bkz. NetworkManager.announce_debug_action).
+var debug_mode_unlocked: bool = false:
+	set(v):
+		debug_mode_unlocked = v
+		MetaProgressScript.set_debug_open(v)
 var debug_immortal: bool = false
 var debug_enemy_spawns_enabled: bool = true
 
@@ -205,6 +220,14 @@ func start_mini_shop_cooldown() -> void:
 ## satışta yine %70 - bkz. EnchantDefs.sell_refund_shards)}.
 var owned_weapons: Array = []
 
+## 2026-10-14 (kullanıcı: "her silahtan sadece 1 tane alınabilinsin"): aynı silah anahtarı ikinci kez alınamaz (dükkan/sandık/başlangıç). Talon Ayna Formu kopyaları bundan MUAF (player.gd buy_weapon_copy allow_duplicate).
+func owns_weapon(key: String) -> bool:
+	for w in owned_weapons:
+		if str((w as Dictionary).get("key", "")) == key:
+			return true
+	return false
+
+
 ## Oyuncunun sahip olduğu TÜM eşyalar (bkz. scripts/items.gd Items.DEFS) -
 ## silahların aksine seviyelenmezler, sadece kopya sayısı önemli (bkz.
 ## player.gd _apply_item_stats - N kopya = statlar N ile çarpılır). Her
@@ -292,7 +315,7 @@ var enchant_damage_percent: float = 0.0 ## genel Aşkın kartı "hasar"
 
 
 ## Kullanıcı isteği: "ayarlara tuş ataması özelliği ekle, isteyen istediği
-## tuşu istediği şeyle değiştirebilsin" - bkz. keybind_menu.gd (yeni ayrı
+## tuşu istediği şeyle değiştirebilsin" - bkz. settings_screen.gd TUŞLAR bölümü (eski keybind_menu.gd; yeni ayrı
 ## popup - mevcut ayarlar paneli sığmadığı için) ve set_keybind_override/
 ## get_keybind_keycode altındaki notlar. ui_sound.gd'nin ses/görüntü
 ## ayarlarıyla AYNI ConfigFile + user:// deseni.
@@ -393,7 +416,7 @@ func _save_override(section: String, action_name: String, value) -> void:
 	config.save(KEYBIND_SETTINGS_PATH)
 
 
-## keybind_menu.gd'den çağrılır - bir action'ın KLAVYE tuşunu anında
+## settings_screen.gd'den çağrılır - bir action'ın KLAVYE tuşunu anında
 ## değiştirir VE diske kaydeder. Gamepad ataması varsa (bkz. yukarıdaki kök
 ## neden notu) artık DOKUNULMUYOR.
 func set_keybind_override(action_name: String, keycode: int) -> void:
@@ -405,7 +428,7 @@ func set_keybind_override(action_name: String, keycode: int) -> void:
 	_save_override("keybinds", action_name, keycode)
 
 
-## keybind_menu.gd'den çağrılır - bir action'ın GAMEPAD atamasını anında
+## settings_screen.gd'den çağrılır - bir action'ın GAMEPAD atamasını anında
 ## değiştirir VE diske kaydeder. `descriptor`: {"kind":JoypadKind.BUTTON,
 ## "button":JoyButton} ya da {"kind":JoypadKind.AXIS,"axis":JoyAxis,
 ## "sign":1.0/-1.0}. Klavye atamasına DOKUNMUYOR.
@@ -427,7 +450,7 @@ func get_keybind_keycode(action_name: String) -> int:
 
 
 ## Bir action'a şu an atanmış gamepad tanımlayıcısını döndürür (yoksa boş
-## Dictionary) - keybind_menu.gd'nin gamepad sütununu doldurmak için.
+## Dictionary) - settings_screen.gd'nin kumanda sütununu doldurmak için.
 func get_keybind_joypad_descriptor(action_name: String) -> Dictionary:
 	for event in InputMap.action_get_events(action_name):
 		if event is InputEventJoypadButton:
@@ -598,10 +621,19 @@ func get_action_key_label(action_name: String) -> String:
 
 ## Ruhani Yetenek "Para" pasifi: dükkandaki altın bedelleri %10 azalır (kullanıcı isteği). Tüm dükkan fiyatları
 ## (shop_panel.gd _upgrade_cost/_copy_cost/_item_cost, merchant_shop_screen.gd _entry_cost) son adımda buradan geçer.
+## Kalıcı "Fiyat İndirimi" geliştirmesi (Ruh Mağazası, meta_upgrades.gd) ile TOPLANIR (en fazla MetaUpgradesScript.DISCOUNT_CAP).
+func shop_discount_fraction() -> float:
+	var d: float = MetaUpgradesScript.bonus("discount")
+	if selected_spiritual == SpiritualSkillsScript.PARA:
+		d += SpiritualSkillsScript.PARA_SHOP_DISCOUNT
+	return minf(d, MetaUpgradesScript.DISCOUNT_CAP)
+
+
 func apply_shop_discount(cost: int) -> int:
-	if selected_spiritual != SpiritualSkillsScript.PARA or cost <= 1:
+	var d: float = shop_discount_fraction()
+	if d <= 0.0 or cost <= 1:
 		return cost
-	return maxi(1, int(round(float(cost) * (1.0 - SpiritualSkillsScript.PARA_SHOP_DISCOUNT))))
+	return maxi(1, int(round(float(cost) * (1.0 - d))))
 
 
 ## ---------- Seyyar Satıcı güvenli bölgesi ----------
@@ -681,7 +713,9 @@ func _process(delta: float) -> void:
 		_process_revive_regen(delta)
 
 
-var max_revives: int = 3
+var max_revives: int = 3 ## bu makinenin oyuncusunun başlangıç hakkı: 3 + kalıcı "Dirilme Hakkı" geliştirmesi (bkz. reset)
+## Kalıcı "Ücretsiz Karıştırma" geliştirmesi: bu koşuda kalan bedava level kartı karıştırması (bkz. try_use_free_reroll).
+var free_rerolls_left: int = 0
 ## Tek oyunculu (ve multiplayer'da eski/yedek yol) için - tek oyuncu olduğu
 ## için zaten "kişisel" sayılır, dokunulmadı.
 var revives_remaining: int = 3
@@ -699,7 +733,19 @@ var revives_remaining: int = 3
 var peer_revives: Dictionary = {}
 
 func get_peer_revives(peer_id: int) -> int:
-	return int(peer_revives.get(peer_id, max_revives))
+	## Henüz bildirilmemiş BAŞKA bir oyuncu için taban 3 (kendi geliştirmesini NetworkManager.announce_meta_revive_bonus ile bildirir);
+	## bu makinenin oyuncusu için max_revives (taban + kendi geliştirmesi).
+	var local_id: int = multiplayer.get_unique_id() if multiplayer != null and multiplayer.has_multiplayer_peer() else 0
+	var fallback: int = max_revives if peer_id == local_id or local_id == 0 else MetaUpgradesScript.BASE_REVIVES
+	return int(peer_revives.get(peer_id, fallback))
+
+
+## Level kartı karıştırması bedavaysa hakkı harcar ve true döner (çağıran altın düşmez).
+func try_use_free_reroll() -> bool:
+	if free_rerolls_left <= 0:
+		return false
+	free_rerolls_left -= 1
+	return true
 
 signal revives_updated(remaining: int)
 
@@ -712,7 +758,16 @@ signal revives_updated(remaining: int)
 ## NetworkManager.sync_revive_regen'den alıp HUD için yerelde sayar (bkz. get_revive_regen_left).
 ## Kalıcı ölmüş (izleyici) bir oyuncuda da işler - hak kendiliğinden diriltmez, sadece sonraki ölüm için hazır bekler
 ## (dükkandan diriltme satın alınırsa işe yarar).
-const REVIVE_REGEN_INTERVAL := 300.0 ## 5 dakika
+## Kalkan TÜRLERİNİN (ShieldEnchantDefs) kendi yenilenme değeri çarpanı (kullanıcı isteği 2026-10-14: "kalkanların kalkan yenilenmesi %30").
+## Sadece ShieldEnchantDefs.stats() (oyun + kart/demirci metinleri aynı sayıyı gösterir); eşya düz/yüzde yenilenmesi, Şovalye Q, Aegis, Kalkan Bağı, evcil/görev kalkanları DEĞİŞMEDİ.
+const SHIELD_REGEN_SPEED_MULT := 1.3
+## GÜNCELLEME (kullanıcı isteği 2026-10-14: "hiç can kalmadığında değil her kalp eksildiğinde kalp yenilenme süresi başlayacak: 2 kalp varsa 8 dk,
+## 1 kalp varsa 6,5 dk, 0 kalp varsa 5 dk"): sayaç artık azami kalbin ALTINDA olunca işler (eskiden sadece 0'ken); süre MEVCUT kalp sayısına göre
+## seçilir (2+ kalp 8 dk, 1 kalp 6,5 dk, 0 kalp 5 dk). Süre dolunca +1 kalp verilir, hâlâ azamının altındaysa sayaç yeni kalp sayısının süresiyle
+## yeniden başlar. Sayaç çalışırken kalp sayısı değişirse (kalp harcandı / dükkandan alındı) kalan süre yeni sürenin ÜSTÜNE çıkamaz (min ile kısılır).
+const REVIVE_REGEN_INTERVAL := 300.0 ## 0 kalpken: 5 dakika
+const REVIVE_REGEN_INTERVAL_ONE_HEART := 390.0 ## 1 kalpken: 6,5 dakika
+const REVIVE_REGEN_INTERVAL_TWO_PLUS := 480.0 ## 2+ kalpken: 8 dakika
 const REVIVE_REGEN_SYNC_INTERVAL := 5.0 ## host, istemci aynasını bu aralıkla düzeltir (kayma birikmesin)
 ## Anahtar -> kalan saniye (tek oyunculu: 0, çok oyunculu: peer_id). Host/tek oyunculuda gerçek sayaç, istemcide ayna.
 var _revive_regen_left: Dictionary = {}
@@ -733,6 +788,30 @@ var _revive_assist_timer: float = 0.0
 
 static func revive_regen_rate(assist_count: int) -> float:
 	return 1.0 + REVIVE_REGEN_ASSIST_BONUS * float(maxi(0, assist_count))
+
+
+## Mevcut kalp sayısına göre bir kalbin yenilenme süresi (saniye): 0 -> 300, 1 -> 390, 2+ -> 480.
+static func revive_regen_interval(hearts: int) -> float:
+	if hearts <= 0:
+		return REVIVE_REGEN_INTERVAL
+	if hearts == 1:
+		return REVIVE_REGEN_INTERVAL_ONE_HEART
+	return REVIVE_REGEN_INTERVAL_TWO_PLUS
+
+
+## Host: bir oyuncunun yenilenmeyle ulaşabileceği azami kalp. Kendi makinem: max_revives; diğerleri: tabanın üstü, o oyuncunun
+## gördüğümüz en yüksek kalp sayısı (kalıcı "Dirilme Hakkı" geliştirmesi ilan edilince peer_revives'a yazılır, bkz. announce_meta_revive_bonus).
+var _revive_peak: Dictionary = {} ## peer_id -> görülen en yüksek kalp sayısı
+var _revive_regen_hearts: Dictionary = {} ## peer_id -> sayaç çalışırken son görülen kalp sayısı (değişince kalan süre kısılır)
+
+
+func _revive_cap_for(peer_id: int, hearts: int) -> int:
+	var local_id: int = multiplayer.get_unique_id() if multiplayer != null and multiplayer.has_multiplayer_peer() else 0
+	if peer_id == local_id or local_id == 0:
+		return maxi(max_revives, hearts)
+	var peak: int = maxi(int(_revive_peak.get(peer_id, 0)), hearts)
+	_revive_peak[peer_id] = peak
+	return maxi(MetaUpgradesScript.BASE_REVIVES, peak)
 
 
 ## peer_id'nin oyuncu düğümü: yerel Player ya da peer_id'li RemotePlayer (ceset sahnede KALIR, bkz. remote_player.gd _play_death_animation).
@@ -777,16 +856,21 @@ func revive_assist_count(peer_id: int) -> int:
 
 func _process_revive_regen(delta: float) -> void:
 	if not NetworkManager.is_multiplayer_active:
-		if revives_remaining > 0:
+		var hearts_sp: int = revives_remaining
+		if hearts_sp >= max_revives:
 			_revive_regen_left.erase(0)
 			return
-		var left: float = float(_revive_regen_left.get(0, REVIVE_REGEN_INTERVAL)) - delta
-		if left <= 0.0:
-			_revive_regen_left.erase(0)
-			revives_remaining = 1
+		var interval_sp: float = revive_regen_interval(hearts_sp)
+		var left_sp: float = minf(float(_revive_regen_left.get(0, interval_sp)), interval_sp) - delta
+		if left_sp <= 0.0:
+			revives_remaining = hearts_sp + 1
+			if revives_remaining >= max_revives:
+				_revive_regen_left.erase(0)
+			else:
+				_revive_regen_left[0] = revive_regen_interval(revives_remaining)
 			revives_updated.emit(revives_remaining)
 		else:
-			_revive_regen_left[0] = left
+			_revive_regen_left[0] = left_sp
 		return
 	if not NetworkManager.is_host:
 		## İstemci aynası: sadece HUD göstergesi için geri sayar (host'un bildirdiği hızla); hakkı host verir (sync_revive_consumed).
@@ -802,33 +886,48 @@ func _process_revive_regen(delta: float) -> void:
 	if recount_assist:
 		_revive_assist_timer = REVIVE_REGEN_ASSIST_CHECK_INTERVAL
 	for peer_id in NetworkManager.lobby_players.keys():
-		if get_peer_revives(peer_id) > 0:
+		var hearts: int = get_peer_revives(peer_id)
+		if hearts >= _revive_cap_for(int(peer_id), hearts):
 			if _revive_regen_left.has(peer_id):
 				_revive_regen_left.erase(peer_id)
 				_revive_regen_assist.erase(peer_id)
 				_revive_regen_rate.erase(peer_id)
 				_revive_regen_rate_sent.erase(peer_id)
+				_revive_regen_hearts.erase(peer_id)
 				NetworkManager.sync_revive_regen.rpc(peer_id, -1.0)
 			continue
+		var interval: float = revive_regen_interval(hearts)
 		var started: bool = not _revive_regen_left.has(peer_id)
+		## Sayaç çalışırken kalp sayısı değiştiyse (harcandı / satın alındı) kalan süre yeni sürenin üstüne çıkamaz; istemciye hemen bildirilir.
+		var hearts_changed: bool = not started and int(_revive_regen_hearts.get(peer_id, hearts)) != hearts
+		_revive_regen_hearts[peer_id] = hearts
 		if recount_assist or started:
 			_revive_regen_assist[peer_id] = revive_assist_count(int(peer_id))
 		var rate: float = revive_regen_rate(int(_revive_regen_assist.get(peer_id, 0)))
 		_revive_regen_rate[peer_id] = rate
-		var left: float = float(_revive_regen_left.get(peer_id, REVIVE_REGEN_INTERVAL)) - delta * rate
+		var left: float = minf(float(_revive_regen_left.get(peer_id, interval)), interval) - delta * rate
 		if left <= 0.0:
-			_revive_regen_left.erase(peer_id)
 			_revive_regen_assist.erase(peer_id)
 			_revive_regen_rate.erase(peer_id)
 			_revive_regen_rate_sent.erase(peer_id)
-			peer_revives[peer_id] = 1
-			NetworkManager.sync_revive_consumed.rpc(peer_id, 1)
-			NetworkManager.sync_revive_regen.rpc(peer_id, -1.0)
+			var new_hearts: int = hearts + 1
+			peer_revives[peer_id] = new_hearts
+			NetworkManager.sync_revive_consumed.rpc(peer_id, new_hearts)
+			if new_hearts >= _revive_cap_for(int(peer_id), new_hearts):
+				_revive_regen_left.erase(peer_id)
+				_revive_regen_hearts.erase(peer_id)
+				NetworkManager.sync_revive_regen.rpc(peer_id, -1.0)
+			else:
+				## Hâlâ azamının altında: sayaç yeni kalp sayısının süresiyle baştan başlar.
+				var next_interval: float = revive_regen_interval(new_hearts)
+				_revive_regen_left[peer_id] = next_interval
+				_revive_regen_hearts[peer_id] = new_hearts
+				NetworkManager.sync_revive_regen.rpc(peer_id, next_interval, 1.0)
 			continue
 		_revive_regen_left[peer_id] = left
 		## Hız değişince (arkadaş geldi/gitti) hemen bildir ki istemcideki geri sayım doğru hızda aksın.
 		var rate_changed: bool = absf(float(_revive_regen_rate_sent.get(peer_id, 1.0)) - rate) > 0.001
-		if started or periodic_sync or rate_changed:
+		if started or periodic_sync or rate_changed or hearts_changed:
 			_revive_regen_rate_sent[peer_id] = rate
 			NetworkManager.sync_revive_regen.rpc(peer_id, left, rate)
 
@@ -1020,6 +1119,7 @@ var _terrain_forest_layer: TileMapLayer = null
 var _terrain_tree_layers: Array[TileMapLayer] = []
 var _terrain_layers_searched: bool = false
 var _map_world_rect: Rect2 = Rect2()
+var _camera_world_rect: Rect2 = Rect2()
 var _map_world_rect_searched: bool = false
 
 
@@ -1049,18 +1149,43 @@ func _find_terrain_layers() -> void:
 ## DÜNYA koordinatlarındaki sınırları: içindeki tüm TileMapLayer'ların dolu karo alanlarının birleşimi. Sınırı elle bir
 ## sabite yazmak yerine karolardan okumak, harita Tiled'da büyütülüp yeniden bake edilince kendiliğinden güncel kalır.
 ## Harita sahnede yoksa (ana menü, testler) Rect2() döner ve sonuç ÖNBELLEĞE ALINMAZ (harita sonradan gelirse bulunur).
-## Tüketici: camera_map_limits.gd.
+##
+## DIŞ ÇERÇEVE (2026-10-13, madde 119): harita eski 256x256 oyun alanının DIŞINA 32/20 hücrelik geçilmez orman + su çerçevesi aldı (kenara yaklaşınca kamera
+## sınıra dayanıp oyuncu ekranın kenarına kaçıyor, "boğucu" hissettiriyordu). Artık iki dikdörtgen var:
+##  - get_map_world_rect()    = OYUN ALANI (eski 256x256 hücre = 4096x4096 px; MAP_PLAY_CELLS ile kırpılmış katman alanları). Oyuncu/boss/görev/satıcı/minimap/çatlak
+##                              sınırlarının hepsi bunu kullanır - eski davranış AYNEN korunur.
+##  - get_camera_world_rect() = çerçeve DAHİL tüm katmanların birleşimi. SADECE camera_map_limits.gd (kamera limiti) kullanır: kamera artık oyuncu eski kenarda dururken
+##                              bile sınıra değmez, çünkü çerçeve ekran yarısından (480x270 px, zoom 2,0) daha geniştir.
+const MapFrameScript := preload("res://scripts/map_frame.gd")
+const MAP_PLAY_CELLS: Rect2i = MapFrameScript.PLAY_CELLS
+
 func get_map_world_rect() -> Rect2:
+	_compute_map_rects()
+	return _map_world_rect
+
+
+func get_camera_world_rect() -> Rect2:
+	_compute_map_rects()
+	return _camera_world_rect
+
+
+func _compute_map_rects() -> void:
 	if _map_world_rect_searched:
-		return _map_world_rect
+		return
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null or tree.current_scene == null:
-		return Rect2()
+		_map_world_rect = Rect2()
+		_camera_world_rect = Rect2()
+		return
 	var harita: Node = tree.current_scene.get_node_or_null("Harita")
 	if harita == null:
-		return Rect2()
+		_map_world_rect = Rect2()
+		_camera_world_rect = Rect2()
+		return
 	var total: Rect2 = Rect2()
+	var total_play: Rect2 = Rect2()
 	var found: bool = false
+	var found_play: bool = false
 	var stack: Array[Node] = [harita]
 	while not stack.is_empty():
 		var n: Node = stack.pop_back()
@@ -1073,16 +1198,27 @@ func get_map_world_rect() -> Rect2:
 		if used.size == Vector2i.ZERO:
 			continue
 		var half: Vector2 = (Vector2(layer.tile_set.tile_size) if layer.tile_set != null else Vector2(16.0, 16.0)) * 0.5
-		var top_left: Vector2 = layer.to_global(layer.map_to_local(used.position) - half)
-		var bottom_right: Vector2 = layer.to_global(layer.map_to_local(used.position + used.size - Vector2i.ONE) + half)
-		var r: Rect2 = Rect2(top_left, Vector2.ZERO).expand(bottom_right)
+		var r: Rect2 = _cells_world_rect(layer, used, half)
 		total = r if not found else total.merge(r)
 		found = true
+		var used_play: Rect2i = used.intersection(MAP_PLAY_CELLS)
+		if used_play.size != Vector2i.ZERO:
+			var rp: Rect2 = _cells_world_rect(layer, used_play, half)
+			total_play = rp if not found_play else total_play.merge(rp)
+			found_play = true
 	if not found:
-		return Rect2()
-	_map_world_rect = total
+		_map_world_rect = Rect2()
+		_camera_world_rect = Rect2()
+		return
+	_camera_world_rect = total
+	_map_world_rect = total_play if found_play else total
 	_map_world_rect_searched = true
-	return _map_world_rect
+
+
+func _cells_world_rect(layer: TileMapLayer, cells: Rect2i, half: Vector2) -> Rect2:
+	var top_left: Vector2 = layer.to_global(layer.map_to_local(cells.position) - half)
+	var bottom_right: Vector2 = layer.to_global(layer.map_to_local(cells.position + cells.size - Vector2i.ONE) + half)
+	return Rect2(top_left, Vector2.ZERO).expand(bottom_right)
 
 
 ## Kullanıcı isteği (2026-09-26): "oyunun ilk 10 dakikasında görevler ve seyyar satıcı haritanın köşelerine yakın
@@ -1283,6 +1419,8 @@ func reset() -> void:
 	endless_layer = 0
 	run_max_tier = 1
 	run_kills = 0
+	run_shards_banked = 0
+	run_victory_shards_given = false
 	run_clock_origin = 0.0
 	## Önceki oyundan kalma bir seyyar satıcı bölgesi yeni oyuna sızmasın.
 	merchant_zone_active = false
@@ -1292,12 +1430,16 @@ func reset() -> void:
 	team_xp = 0.0
 	team_xp_needed = _xp_needed_for_level(1)
 	team_xp_changed.emit(team_xp, team_xp_needed)
+	max_revives = MetaUpgradesScript.BASE_REVIVES + int(MetaUpgradesScript.bonus("revive"))
+	free_rerolls_left = int(MetaUpgradesScript.bonus("free_reroll"))
 	revives_remaining = max_revives
 	peer_revives.clear()
 	_revive_regen_left.clear()
 	_revive_regen_assist.clear()
 	_revive_regen_rate.clear()
 	_revive_regen_rate_sent.clear()
+	_revive_regen_hearts.clear()
+	_revive_peak.clear()
 	_revive_assist_timer = 0.0
 	_revive_regen_sync_timer = 0.0
 	revives_updated.emit(revives_remaining)

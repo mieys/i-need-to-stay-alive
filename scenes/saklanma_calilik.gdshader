@@ -1,4 +1,5 @@
 shader_type canvas_item;
+#include "res://shaders/harita_renk.gdshaderinc"
 
 // ==================================================
 // SAKLANMA ÇALILIĞI - rüzgarda ve içinden yürüyünce sallanan çalılık + karakteri YARI SAYDAM örten ön kopya
@@ -147,4 +148,5 @@ void fragment() {
 	if (col.a < 0.01) { discard; }
 	col.a *= opak;
 	COLOR = col;
+	COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
 }

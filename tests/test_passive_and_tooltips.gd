@@ -19,12 +19,10 @@ func test_passive_icon_node_exists() -> void:
 	var skill_icon: TextureRect = skill_bar.get_node("SkillIcon") as TextureRect
 	assert(skill_icon != null, "SkillIcon node must exist under SkillBar")
 	
-	# Position verification: PassiveIcon must be to the left of Q's SkillIcon
-	assert(passive_icon.offset_left < skill_icon.offset_left, "PassiveIcon must be positioned to the left of Q skill icon")
-	
-	# 2026-09-27 oyuncu paneli (dock): yetenek dizisindeki her slot AYNI boyutta (hud.gd _layout_ability_icons - eski "%40 küçük
-	# pasif" kuralı dock tasarımıyla kalktı; 2026-10-03 test güncellemesi). Pasif yine Q'nun solunda (yukarıda).
-	assert(is_equal_approx(passive_icon.size.x, skill_icon.size.x), "Dock'ta pasif ikon Q ile aynı boyutta olmalı")
+	# 2026-10-14 panel yeniden tasarımı (madde 140): pasif artık yeteneklerin SAĞINDA ve KÜÇÜK (56 px'e karşı 36 px) -
+	# kullanıcı: "pasif ikonu çok büyük, pasif ikonları ufak olur genelde" (hud.gd _layout_ability_icons).
+	assert(passive_icon.offset_left > skill_icon.offset_right, "Pasif ikon Q'nun (yetenek sırasının) sağında olmalı")
+	assert(passive_icon.size.x < skill_icon.size.x * 0.75, "Pasif ikon yetenek ikonlarından belirgin küçük olmalı")
 	
 	hud.queue_free()
 

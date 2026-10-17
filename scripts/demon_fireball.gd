@@ -4,6 +4,7 @@ extends Node2D
 ## Düz çizgide uçar; ilk değdiği oyuncuda / duvarda / Şovalye kalkanında / satıcı bölgesinde PATLAR: yarıçaptaki HER oyuncuya `damage` (take_special_damage "demonfire": player.gd isabette
 ## 50/sn yanma başlatır). Yetkili örnek hasar verir, istemcideki görsel kopya sadece uçar + patlar. Sanat: paketin "fire shot (red)" şeridi (kare 0 uçuş, 1-3 patlama). data: dir, speed, life, radius, blast.
 
+const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
 const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
 const FxUtil := preload("res://scripts/boss_fx_util.gd")
 const SHEET := "res://assets/fx/demon/fire_shot.png"
@@ -16,6 +17,7 @@ var damage: float = 0.0
 
 var _dir: Vector2 = Vector2.RIGHT
 var _speed: float = 300.0
+const ProjectileRangeScript := preload("res://scripts/projectile_range.gd") ## menzil = görüş elipsi (bkz. projectile_range.gd)
 var _max_life: float = 3.0
 var _radius: float = 9.0
 var _blast: float = 44.0
@@ -51,6 +53,9 @@ func _physics_process(delta: float) -> void:
 	if _life >= _max_life:
 		queue_free()
 		return
+	if not ProjectileRangeScript.within(self):
+		queue_free()
+		return
 	global_position += _dir * _speed * delta
 	if _life >= WALL_IGNORE_TIME and GameManager.is_position_blocked_by_forest(global_position):
 		_explode()
@@ -60,8 +65,7 @@ func _physics_process(delta: float) -> void:
 		return
 	for p in AbilitiesScript.damageable_players(get_tree()):
 		var pn := p as Node2D
-		if "paladin_zone_active" in pn and pn.get("paladin_zone_active") == true \
-				and global_position.distance_to(pn.global_position) <= float(pn.get("paladin_zone_radius")):
+		if PaladinDome.node_contains(pn, global_position):
 			_explode(false)
 			return
 		if pn.has_method("get_talon_ward_radius"):

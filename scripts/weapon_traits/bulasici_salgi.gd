@@ -7,4 +7,4 @@ extends "res://scripts/enchant_behavior.gd"
 
 
 func poison_extra() -> Dictionary:
-	return {"plague": {"radius": f("plague_radius", 100.0), "ratio": f("plague_ratio", 1.0), "refresh": false}}
+	return {"plague": {"radius": f("plague_radius", 50.0), "ratio": f("plague_ratio", 1.0), "refresh": false}}

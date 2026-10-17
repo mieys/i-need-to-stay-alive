@@ -16,6 +16,7 @@ extends CanvasLayer
 
 signal enchant_chosen(choice: Dictionary)
 
+const UiAnim := preload("res://scripts/ui_anim.gd")
 const EnchantPool := preload("res://scripts/enchant_pool.gd")
 const ChestOpenAnim := preload("res://scripts/chest_open_anim.gd")
 const RewardReveal := preload("res://scripts/reward_reveal.gd")
@@ -218,6 +219,7 @@ func _build() -> void:
 		card.focus_entered.connect(_on_card_hover.bind(i, true))
 		card.focus_exited.connect(_on_card_hover.bind(i, false))
 		_cards.append(card)
+		UiAnim.skip(card) ## kendi animasyonu var (madde 200)
 		var rays: Control = RewardRays.new()
 		_rays_layer.add_child(rays)
 		rays.setup(card, _card_size, CARD_TEXEL * _k, 1, intro_chest, RAYS_REACH_SCALE)

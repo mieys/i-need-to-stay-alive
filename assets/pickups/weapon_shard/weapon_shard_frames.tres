@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" load_steps=8 format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://b8du3r4y4j33d"]
 
-[ext_resource type="Texture2D" path="res://assets/pickups/weapon_shard/shard_sheet.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://bc0fjk78xdxtj" path="res://assets/pickups/weapon_shard/shard_sheet.png" id="1"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_1"]
 atlas = ExtResource("1")
@@ -47,7 +47,7 @@ animations = [{
 "duration": 3.0,
 "texture": SubResource("AtlasTexture_6")
 }],
-"loop": true,
+"loop": 1,
 "name": &"shine",
 "speed": 8.0
 }]

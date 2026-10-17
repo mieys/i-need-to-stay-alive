@@ -98,7 +98,7 @@ const DEFS := {
 		"duration": CAN_INVULN_TIME,
 		"icon": "res://assets/skills/spirit_can_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_can.wav",
-		"desc": "Sana ve tüm takım arkadaşlarına mesafe fark etmeksizin anında %8 can ve %15 kalkan kazandırır ve 3 saniyeliğine hasar görmez hale getirir. (90sn bekleme)",
+		"desc": "Sana ve tüm takım arkadaşlarına mesafe fark etmeksizin anında %8 can ve %15 mana kalkanı kazandırır ve 3 saniyeliğine hasar görmez hale getirir. (90sn bekleme)",
 	},
 	ADC: {
 		"name": "Adc",
@@ -116,7 +116,7 @@ const DEFS := {
 		"duration": TANK_DURATION,
 		"icon": "res://assets/skills/spirit_tank_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_tank.wav",
-		"desc": "10 saniye boyunca aldığın hasarın %200'ünü hasarı verene yansıtırsın ve her hasar aldığında eksik kalkanının %3'ü yenilenir. (100sn bekleme)",
+		"desc": "10 saniye boyunca aldığın hasarın %200'ünü hasarı verene yansıtırsın ve her hasar aldığında eksik mana kalkanının %3'ü yenilenir. (100sn bekleme)",
 	},
 	TAKTIK: {
 		"name": "Taktiksel",
@@ -149,7 +149,7 @@ const DEFS := {
 		"cooldown": KALKAN_BAGI_COOLDOWN,
 		"icon": "res://assets/skills/spirit_kalkan_bagi_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_kalkan_bagi.wav",
-		"desc": "En yakın arkadaşınla kalkan bağı kurarsın: hasarlar, yetenek bedelinden giden kalkanlar ve kalkan artışları gibi her türlü kalkan değişikliği %50 birbirinize yansır; kalkanı daha az olan, arkadaşının kalkan artışlarından %80 pay alır. Kalkanı biten, arkadaşının kalkanını kullanır. Aktifken ikinizin de kalkanı saniyede %0.5 yenilenir ve %10 kalkan hasar soğurması kazanırsınız. Tekrar kullanana ya da uzaklaşıp bağ kopana kadar sürer. (60sn bekleme)",
+		"desc": "En yakın arkadaşınla kalkan bağı kurarsın: hasarlar, yetenek bedelinden giden mana kalkanları ve mana kalkanı artışları gibi her türlü mana kalkanı değişikliği %50 birbirinize yansır; mana kalkanı daha az olan, arkadaşının mana kalkanı artışlarından %80 pay alır. Mana kalkanı biten, arkadaşının mana kalkanını kullanır. Aktifken ikinizin de mana kalkanı saniyede %0.5 yenilenir ve %10 mana kalkanı hasar soğurması kazanırsınız. Tekrar kullanana ya da uzaklaşıp bağ kopana kadar sürer. (60sn bekleme)",
 	},
 }
 

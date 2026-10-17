@@ -155,6 +155,24 @@ const RotFrames := preload("res://assets/weapons/boomerang/rot24_frames.tres")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const CatchFrames := preload("res://assets/fx/boomerang/catch_frames.tres")
 const ROT_STEPS := 24
+const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
+
+
+## Kademe sanatı (madde 196): kaster weapon.gd _fire_at, uzak kopya EnchantFx.apply_projectile_look ("art_tier").
+func set_art_tier(tier: int) -> void:
+	var sf: SpriteFrames = WeaponTierArt.boomerang_rot_frames(tier)
+	if sf == null or _body == null:
+		return
+	var fr: int = _body.frame
+	_body.sprite_frames = sf
+	_body.animation = &"spin"
+	_body.frame = fr
+	for tn in _trail_nodes:
+		if tn:
+			var f2: int = (tn as AnimatedSprite2D).frame
+			(tn as AnimatedSprite2D).sprite_frames = sf
+			(tn as AnimatedSprite2D).animation = &"spin"
+			(tn as AnimatedSprite2D).frame = f2
 ## Sanat pikseli başına ölçek - kafadaki ikonla AYNI: icon.png = art48 x4, weapon_boomerang.tscn Icon ölçeği (ICON_SCALE) x 0.9
 ## (weapon.gd menzilli-olmayan silah küçültmesi) x ICON_SIZE_MULT; ikisi de karakterin kök ölçeğiyle çarpılır (weapon.gd
 ## _fire_at proj.scale). 2026-09-26 (kullanıcı: "boyutunu da %20 küçült çok büyük görünüyor karakterin üstündeyken bile"):
@@ -176,10 +194,13 @@ func _ready() -> void:
 	if bullet:
 		bullet.visible = false ## bkz. "YENİ GÖRÜNÜM" notu
 	_body = AnimatedSprite2D.new()
-	_body.sprite_frames = RotFrames
+	## Zanaatkâr seti (madde 196): kafadaki ikonla aynı kademe sanatı dönerek uçar (varsayılan 1. seviye; daha yüksek kademe kasterde
+	## weapon.gd _fire_at, uzak kopyada "look" art_tier -> set_art_tier). Doku pikseli = ikonla aynı 0,5 dünya px.
+	var tier_frames: SpriteFrames = WeaponTierArt.boomerang_rot_frames(1)
+	_body.sprite_frames = tier_frames if tier_frames else RotFrames
 	_body.animation = &"spin"
 	_body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_body.scale = Vector2.ONE * BODY_SCALE
+	_body.scale = Vector2.ONE * (WeaponTierArt.PUPPET_ICON_SCALE if tier_frames else BODY_SCALE)
 	add_child(_body)
 	_base_bullet_scale = _body.scale
 	if spin_fx:
@@ -187,7 +208,7 @@ func _ready() -> void:
 	for i in range(_trail_nodes.size()):
 		var tn: AnimatedSprite2D = _trail_nodes[i]
 		if tn:
-			tn.sprite_frames = RotFrames
+			tn.sprite_frames = _body.sprite_frames
 			tn.animation = &"spin"
 			tn.stop()
 			tn.visible = false ## Trail1 ilk _update_trail'de (ölçeği doğru kurulunca) görünür olur; Trail2/3 hep gizli

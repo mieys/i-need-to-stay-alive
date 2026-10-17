@@ -568,7 +568,7 @@ func _refresh_equipments() -> void:
 		icon.offset_bottom = _icon_px * 0.5
 		shield_btn.add_child(icon)
 	else:
-		shield_btn.tooltip_text = "Kalkan Yuvası (Boş)"
+		shield_btn.tooltip_text = "Mana Kalkanı Yuvası (Boş)"
 		_dim_slot(shield_btn)
 		
 	equip_grid.add_child(shield_btn)

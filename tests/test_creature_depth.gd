@@ -4,6 +4,8 @@ extends Node
 ## çizilir (z 2), ARKASINDA kalan/uzak/ölü yaratık eski z'de kalır; ayrılınca z geri döner. Gerçek çizimin sonucu pencereli ekran görüntüsüyle bakıldı.
 
 const CreatureDepthScript := preload("res://scripts/creature_depth.gd")
+const PaladinDomeScript := preload("res://scripts/paladin_dome.gd")
+const ForestCanopyScript := preload("res://scripts/forest_canopy.gd")
 
 var _spawned: Array = []
 
@@ -136,3 +138,67 @@ func test_close_over_pure_rule() -> void:
 	for n in [n1, n2, n3, n4]:
 		n.free()
 		_spawned.erase(n)
+
+
+## Şovalye kubbesi (2026-10-17, kullanıcı: "şovalye adamın bariyerinin altında gibi görünüyor yaratıklar. y eksenine tabi değil bu bariyer"): kubbenin ön kabuğu
+## z 20'de; elipsin DIŞINDA ve merkezin GÜNEYİNDE duran, kabukla örtüşen varlık kabuğun önündedir (üstüne çizilmeli), içerideki/kuzeydeki altında kalır.
+func test_dome_front_shell_rule_table() -> void:
+	var c := Vector2(0, 0)
+	var r: float = 126.0 ## elips 126 x 63
+	var H: float = CreatureDepthScript.HYSTERESIS
+	assert(PaladinDomeScript.in_front_of_shell(c, r, 0.0, 80.0, 16.0, 48.0, H), "güneyde, elipsin dışında, kabukla örtüşüyor -> önde")
+	assert(not PaladinDomeScript.in_front_of_shell(c, r, 0.0, 40.0, 16.0, 48.0, H), "elipsin içinde -> camın içinde, kabuğun altında")
+	assert(not PaladinDomeScript.in_front_of_shell(c, r, 0.0, -80.0, 16.0, 48.0, H), "kuzeyde -> kubbenin arkasında")
+	assert(not PaladinDomeScript.in_front_of_shell(c, r, 0.0, 200.0, 16.0, 48.0, H), "görseli tamamen kubbenin altında -> örtüşme yok")
+	assert(not PaladinDomeScript.in_front_of_shell(c, r, 300.0, 20.0, 16.0, 48.0, H), "yatayda uzak -> örtüşme yok")
+	assert(PaladinDomeScript.in_front_of_shell(c, r, 130.0, 10.0, 16.0, 48.0, H), "yanda, merkezin hemen güneyinde ve dışarıda -> önde")
+	assert(not PaladinDomeScript.in_front_of_shell(c, r, 0.0, 64.0, 16.0, 48.0, H), "kenarın 1 px dışı: yükselmek için yetmez (titreme koruması)")
+	assert(PaladinDomeScript.in_front_of_shell(c, r, 0.0, 64.0, 16.0, 48.0, -H), "zaten öndeyse kenarda kalır")
+
+
+class FakeKnight extends Node2D:
+	var is_dead: bool = false
+	var paladin_zone_active: bool = true
+	var paladin_zone_radius: float = 126.0
+
+
+func test_creatures_and_players_in_front_of_the_dome_are_drawn_over_its_shell() -> void:
+	var knight := FakeKnight.new()
+	knight.add_to_group("remote_players")
+	_track(knight)
+	add_child(knight)
+	knight.global_position = Vector2(500, 500) ## elips: x 374..626, y 437..563
+	var front: Node2D = _creature(Vector2(500, 580)) ## ayağı elipsin dışında (alt uç 563), üstü (532) kabukla örtüşür -> kabuğun önünde
+	var behind: Node2D = _creature(Vector2(500, 420)) ## kuzeyde
+	var inside: Node2D = _creature(Vector2(520, 505)) ## camın içinde (Şovalye'nin ayağının arkasında: oyuncu kuralına da girmez)
+	var cd: Node = CreatureDepthScript.new()
+	_track(cd)
+	add_child(cd)
+	cd.update_now()
+	assert(front.z_index == CreatureDepthScript.DOME_FRONT_Z and front.z_index > PaladinDomeScript.SHELL_Z, "kabuğun önündeki yaratık kabuğun üstüne: z=%d" % front.z_index)
+	assert(behind.z_index == 0 and inside.z_index == 0, "arkadaki/içerideki kabuğun altında kalır: %d %d" % [behind.z_index, inside.z_index])
+	## kabuğun önündeki oyuncu kabuğun üstüne, onun da önündeki yaratık oyuncunun üstüne (kubbeyle örtüşmese bile)
+	var player := Node2D.new()
+	player.add_to_group("player")
+	_track(player)
+	add_child(player)
+	player.global_position = Vector2(500, 572) ## ayak 584,75: elipsin dışında, gövdesi kabukla örtüşür
+	var before_player: Node2D = _creature(Vector2(505, 630)) ## oyuncunun önünde ve onunla örtüşüyor; kabuğun tamamen altında (üstü 582)
+	cd.update_now()
+	assert(player.z_index == CreatureDepthScript.DOME_FRONT_CHAR_Z, "kabuğun önündeki oyuncu: z=%d" % player.z_index)
+	assert(front.z_index == CreatureDepthScript.DOME_FRONT_Z and front.z_index < player.z_index, "oyuncunun arkasındaki yaratık oyuncunun altında: z=%d" % front.z_index)
+	assert(before_player.z_index == CreatureDepthScript.DOME_FRONT_Z + CreatureDepthScript.FRONT_Z, "kabuğun önündeki oyuncunun önündeki yaratık en üstte: z=%d" % before_player.z_index)
+	## kubbe kapanınca hepsi eski düzenine döner
+	knight.paladin_zone_active = false
+	cd.update_now()
+	assert(front.z_index == 0 and player.z_index == 0, "kubbe yokken eski z: %d %d" % [front.z_index, player.z_index])
+	assert(before_player.z_index == CreatureDepthScript.FRONT_Z, "oyuncunun önündeki yaratık normal kurala döner: z=%d" % before_player.z_index)
+	## duvar geçen (uçan) oyuncunun z'si forest_canopy'nin: dokunulmaz
+	knight.paladin_zone_active = true
+	player.set_meta(ForestCanopyScript.META_BASE_Z, 0)
+	player.z_index = ForestCanopyScript.FLYER_Z
+	cd.update_now()
+	assert(player.z_index == ForestCanopyScript.FLYER_Z, "uçan oyuncuya dokunulmaz: z=%d" % player.z_index)
+	cd.free()
+	_spawned.erase(cd)
+	_cleanup()

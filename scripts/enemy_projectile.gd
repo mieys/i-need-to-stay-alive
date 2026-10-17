@@ -1,5 +1,6 @@
 extends Node2D
 
+const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 
 ## Mirror of scripts/projectile.gd (the player's shot) but for ranged enemies
@@ -22,6 +23,7 @@ const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 
 const HIT_RADIUS := 8.0 ## eski CircleShape2D yarıçapı
 const TARGET_LAYER_MASK := 2 ## eski Area2D collision_mask (main.tscn Player / remote_player.tscn katmanı)
+const ProjectileRangeScript := preload("res://scripts/projectile_range.gd") ## menzil = görüş elipsi (bkz. projectile_range.gd)
 const LIFETIME := 3.0
 const ImpactScript: GDScript = preload("res://scripts/fx_enemy_bolt_impact.gd")
 ## Kullanıcı bildirimi (2026-09-24): yaratıklar duvar arkasından ateş edebiliyordu - ateş etme artık görüş hattına bağlı
@@ -120,6 +122,9 @@ func _physics_process(delta: float) -> void:
 	if _life >= LIFETIME:
 		queue_free()
 		return
+	if not ProjectileRangeScript.within(self):
+		queue_free()
+		return
 	if homing:
 		var player := get_tree().get_first_node_in_group("player")
 		if player and is_instance_valid(player):
@@ -139,7 +144,7 @@ func _physics_process(delta: float) -> void:
 	## HERHANGİ bir oyuncu (yerel + tüm RemotePlayer'lar) kontrol ediliyor,
 	## mermi kime hedeflenmiş olursa olsun.
 	for p in _dome_owners:
-		if is_instance_valid(p) and global_position.distance_to(p.global_position) <= float(p.get("paladin_zone_radius")):
+		if is_instance_valid(p) and PaladinDome.contains(p.global_position, float(p.get("paladin_zone_radius")), global_position):
 			queue_free()
 			return
 	for w in _ward_owners:

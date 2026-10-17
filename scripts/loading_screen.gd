@@ -1,58 +1,42 @@
 extends Control
 
-## Yükleme ekranı: "BAŞLAT"tan sonra ana oyun sahnesine (main.tscn) geçişte
-## gösterilir. Alttaki bar, kullanıcı isteği ("yükleme barında aşağıda
-## yükleme dolma barı olucak") doğrultusunda sabit bir sürede 0'dan 100'e
-## dolar.
+## Yükleme ekranı: "BAŞLAT"tan sonra ana oyun sahnesine (main.tscn) geçişte gösterilir.
 ##
-## NOT (mühendislik kararı): main.tscn'i ResourceLoader.load_threaded_
-## request ile arka planda yükleyip GERÇEK ilerlemeyi göstermek denendi,
-## ama bu projede TUTARLI ŞEKİLDE başarısız oluyor - player.gd (main.tscn'in
-## bir bağımlılığı) bir arka plan iş parçacığında derlenirken güvenilir
-## şekilde "Parse Error: Failed" veriyor (bkz. test: --scene ile DOĞRUDAN
-## yüklemek her seferinde temiz, load_threaded_request ile SÜREKLİ
-## başarısız - Godot 4.7'nin GDScript derleyicisinde iş parçacığı
-## güvenliğiyle ilgili bilinen bir sınıf soruna işaret ediyor). Bu yüzden
-## asıl sahne geçişi (aşağıdaki _proceed) HER ZAMAN senkron/ana iş
-## parçacığında yapılıyor.
-## GERÇEK İLERLEME (kullanıcı bildirimi 2026-09-27: "yükleme ekranı barı gerçek dolmayı yansıtmıyor doluyor ama oyun
-## başlamıyor dolduğunda, tam dolduğunda başlamasını istiyorum"): eskiden bar 1.4 sn'de sahte doluyor, SONRA main.tscn tek
-## seferde yükleniyordu (ölçüldü: ~6.2 sn bağımlılık yükleme - çoğu GDScript derleme - + ~0.5 sn kurulum + ~0.5 sn ilk kare),
-## yani dolu barda donup bekliyordu. İkinci tur (kullanıcı: "bu sefer de donarak doluyor"): bağımlılıklar ana iş
-## parçacığında yüklenince büyük betiklerin derlemesi ekranı donduruyordu (main.gd 2.2 sn, player.gd 1.6 sn). Yukarıdaki
-## "iş parçacığında Parse Error" sorunu 2026-09-27'de tekrar ölçüldü ve ARTIK OLUŞMUYOR (main.tscn iş parçacığında temiz
-## yüklendi, en uzun kare 20 ms). 2026-10-05: AMA ARALIKLI OLUŞUYOR (headless 10 denemenin 2-3'ü): player.gd/main.gd arka planda
-## derlenirken içlerindeki preload("...tscn") çağrıları "Could not preload resource file" ile başarısız oluyor ve iş parçacığı görevi
-## sonsuza dek "devam ediyor" kalıyor (bar %20-30'da sonsuz takılma; kullanıcı host'ta yaşadı, istemciler 30 sn sonra host'suz
-## başladı). Bu yüzden: GDScript'ler ANA iş parçacığında yüklenir (bir betik bütçeyi aşınca kare çizilir, derleme sırasında kısa
-## donmalar olur - kabul edildi), doku/ses/sahne arka planda kalır ve REQ_STALL_MSEC bekçisi vardır. Şimdi: main.tscn'in bağımlılık
-## ağacı taranır, her bağımlılık SIRAYLA yüklenir - bar gerçek (türe göre ağırlıklı) ilerlemeyi gösterir
-## (%95'e kadar); iş parçacığında yüklenemeyen olursa ana iş parçacığında yeniden denenir. Sonra görsel en üst katmanıyla
-## (loading_overlay.gd) köke taşınır, sahne değişir; yeni sahnenin kurulumu + ilk karesi (zorunlu ana iş parçacığı, ~1 sn)
-## sırasında kahraman patikanın sonunda durur, ilk kare hazır olunca bar %100 olur ve bir kare sonra oyun görünür.
+## YÜKLEME TEK BİR ÖZEL İŞ PARÇACIĞINDA (2026-10-17, kullanıcı: "yüklenirken animasyonlar donmasın"). Geçmiş:
+## - 2026-09-27: bağımlılıklar ana iş parçacığında yüklenince büyük betiklerin derlemesi ekranı donduruyordu.
+## - 2026-10-05: ResourceLoader.load_threaded_request (WorkerThreadPool) ile betik derlemesi ARALIKLI kilitleniyordu: player.gd görevi
+##   sonsuza dek "devam ediyor" kalıyor, ardından gelen her istek de takılıyordu (bar %20-30'da sonsuz takılma). O gün çözüm "betikler
+##   ana iş parçacığında" oldu - bedeli donmalar: 2026-10-17 başsız ölçüm, 15,5 sn'lik yüklemenin 13,6 sn'si donmuş kare (player.gd
+##   3,3 sn, main.gd 3,5 sn, enemy_spawner 1,4 sn, hud 1,1 sn, sahne kurulumu 2,7 sn).
+## - 2026-10-17 ölçüm: WorkerThreadPool'da betik derlemesi 4.7.2'de HÂLÂ kilitleniyor (12 denemenin 3'ü, hep player.gd). Aynı yükleme
+##   KENDİ Thread'imizde düz ResourceLoader.load ile 15/15 temiz ve yükleme boyunca hiç uzun kare yok. Yani kilit WorkerThreadPool
+##   görevlerinde; bu yüzden: bağımlılık ağacı taraması + her bağımlılığın sırayla yüklenmesi + main.tscn tek bir Thread'de
+##   (_load_worker). Ana iş parçacığı sadece çizer ve ilerlemeyi okur (_mutex). load_threaded_request KULLANMA.
+## Sahne kurulumu (Main._ready + ilk kare) zorunlu ana iş parçacığı işidir (~1-3 sn) ve donar: o ana kadar kahraman yolun sonundaki
+## kulübenin kapısına varır, içeri girer, sahne kararır (_arrive) - donma karanlık "OYUN BAŞLIYOR" karesinde geçer, canlı bir
+## animasyonun ortasında değil. Görsel en üst katmanıyla (loading_overlay.gd) köke taşınır, oyunun ilk karesi hazır olunca bar %100
+## olur ve katman solarak kaybolur.
+## İlerleme DOSYA SAYISINA göre değil yaklaşık maliyete göre (türe göre ağırlık x boyut, bkz. LOAD_WEIGHT_PER_KB); uzun bir adım
+## (büyük betik) sürerken bar o adımın payına doğru süzülür.
 ##
-## Multiplayer'da (kullanıcı isteği: "bundan sonra multiplayerda herkesin
-## yükleme barı dolmadan oyun başlamamalı") yerel bar dolunca
-## NetworkManager'a bildirilir; TÜM oyuncular bitirene kadar (bkz.
-## NetworkManager.all_players_loading_done) burada "Diğer oyuncular
-## bekleniyor..." yazısıyla beklenir, sahneye geçiş ancak o zaman
-## gerçekleşir - böylece hiçbir oyuncu diğerlerinden önce oyuna düşmez.
-## Bir peer donup asla haber vermezse sonsuza dek takılı kalınmaması için
-## bir güvenlik zaman aşımı var.
+## Multiplayer'da (kullanıcı isteği: "bundan sonra multiplayerda herkesin yükleme barı dolmadan oyun başlamamalı") yerel yükleme
+## bitince NetworkManager'a bildirilir; TÜM oyuncular bitirene kadar (NetworkManager.all_players_loading_done) "Diğer oyuncular
+## bekleniyor..." yazısıyla beklenir. Bir peer donup asla haber vermezse sonsuza dek takılı kalınmasın diye zaman aşımı var.
 
 const MAIN_SCENE_PATH := "res://scenes/main.tscn"
-const LOAD_BUDGET_MS := 24 ## kare başına en fazla bu kadar yükleme (animasyon akmaya devam etsin)
-const LOAD_SHARE := 95.0 ## bağımlılıklar yüklenince barın ulaştığı yer; kalan %5 = sahne kurulumu + ilk kare
+const LOAD_SHARE := 95.0 ## yükleme bitince barın ulaştığı yer; kalan %5 = sahne kurulumu + ilk kare
 const HANDOFF_VALUE := 97.0 ## sahne değişirken (kurulum sürerken) gösterilen değer
 const FILL_SPEED := 160.0 ## gösterilen değer hedefe en fazla bu hızla (%/sn) yaklaşır - önbellekten anında yüklenince zıplamasın
 const NO_DEP_SCAN_EXT: Array[String] = ["png", "jpg", "webp", "svg", "wav", "mp3", "ogg", "ttf", "otf", "gdshader"]
 const OverlayScript: GDScript = preload("res://scripts/loading_overlay.gd")
-## İlerleme DOSYA SAYISINA göre değil yaklaşık maliyete göre: ölçümde (2026-09-27) sürenin ~%90'ı GDScript derlemesi
-## (boyutla orantılı - player.gd/main.gd tek başına saniyeler), ~%10'u sahneler, dokular/sesler ihmal edilebilir. Ağırlık =
-## dosya boyutu x türe göre çarpan (bayt başına); boyut okunamazsa türün varsayılanı.
+const SceneParts := preload("res://scripts/loading_scene_parts.gd")
+## İlerleme ağırlığı: ölçümde (2026-09-27) sürenin ~%90'ı GDScript derlemesi (boyutla orantılı), ~%10'u sahneler, dokular/sesler
+## ihmal edilebilir. Ağırlık = dosya boyutu x türe göre çarpan (bayt başına); boyut okunamazsa türün varsayılanı.
 const LOAD_WEIGHT_PER_KB := {"gd": 1.0, "tscn": 0.25, "scn": 0.25, "tres": 0.02, "res": 0.02}
 const LOAD_WEIGHT_FALLBACK := {"gd": 20.0, "tscn": 10.0, "scn": 10.0}
 const LOAD_WEIGHT_DEFAULT := 0.05
+const STEP_CREEP_MAX := 0.85 ## uzun bir adım sürerken bar o adımın payının en fazla bu kadarına süzülür
+const STEP_CREEP_RATE := 0.5 ## /sn
 const WAIT_FOR_OTHERS_TIMEOUT := 30.0
 const WAIT_FOR_HOST_TIMEOUT := 120.0 ## host yüklemesini bitirmediyse istemci bu kadar bekler (bkz. NetworkManager.is_host_loading_done)
 
@@ -68,26 +52,51 @@ var _wait_elapsed: float = 0.0
 var _dots_timer: float = 0.0
 var _dots_count: int = 0
 
-## ---------------------------------------------------------------- KAÇIŞ SAHNESİ
-## Kullanıcı isteği (2026-09-27): "oyun yükleme ekranını oyunla uygun olacak bir şekilde yapay zeka içeriği olmayan birşey
-## ile değiştir" - 4 prototipten "C - Kaçış" seçildi, düzeltmelerle ("slime ve fare barın üstünde uçuyor ve oyunun isminin
-## üstte görünmesine gerek yok"). Eski arka plan (assets/ui/loading_bg.png, yapay zeka görseli) artık kullanılmıyor.
-## SADECE oyunun kendi içeriği: arka plan = harita karolarından kurulan menü arka planı (assets/ui/menu_bg.png) gece tonunda;
-## doluluk çubuğu bir patika - seçili karakter doluluğun ucunda koşar, Kademe yaratıkları peşinden gelir.
-## Ayak hizası: her sprite'ın dokusundaki en alt dolu satır (gölgesiyle birlikte) patikanın üst kenarına oturur - kare
-## tuvallerinin altındaki boşluk yüzünden yaratıklar havada duruyordu (bkz. _foot_offset).
-const NIGHT_TINT := Color(0.05, 0.07, 0.16, 0.72)
-## Ekran ortasına göre (1920x1080 taban): patika = doluluk çubuğu.
+## ---------------------------------------------------------------- YÜKLEME İŞ PARÇACIĞI
+## _t_* alanlarını iş parçacığı yazar, ana iş parçacığı _mutex altında okur. _loaded_refs'e sadece iş parçacığı yazar; ana iş parçacığı
+## ona wait_to_finish'ten SONRA dokunur (önbellekte kalsınlar diye referans - sahne değişince main kendi referanslarını tutar).
+var _thread: Thread = null
+var _mutex := Mutex.new()
+var _abort: bool = false
+var _t_scan_done: bool = false
+var _t_scan_seen: int = 0
+var _t_scan_pending: int = 0
+var _t_weight_total: float = 0.0
+var _t_weight_done: float = 0.0
+var _t_cur_weight: float = 0.0 ## şu an yüklenen bağımlılığın ağırlığı (0 = yok)
+var _t_cur_msec: int = 0
+var _loaded_refs: Array = []
+## Testler kapatır (yükleyiciyi küçük bir sahneyle elle başlatırlar); oyunda hep main.tscn.
+var autostart_loader: bool = true
+var main_scene_path: String = MAIN_SCENE_PATH
+
+## ---------------------------------------------------------------- EVE DÖNÜŞ SAHNESİ
+## Kullanıcı isteği (2026-09-27): oyunun içeriğiyle, yapay zekâ görseli olmadan - "C - Kaçış" kovalamacası seçildi: doluluk çubuğu bir
+## yol, seçili karakter doluluğun ucunda koşar, Kademe yaratıkları peşinden gelir. 2026-10-17 ("yükleme ekranının arkaplanı için daha iyi
+## bir sahne hazırla"): arka plan artık bu kovalamacanın YERİ - karanlık ormandan çıkan toprak yol, yolun sonunda pencereleri yanan kütük
+## kulübe (bar dolunca kahraman kapıya varır). Sanat SADECE harita tileset'lerinden, üretici tools/gen_yukleme_bg.py (640x360 tuval, x3;
+## kahraman/yaratıklar da sanat pikseli başına 3 ekran pikseli). Canlı parçalar (rüzgârda sallanan ağaçlar + baca dumanı) kare şeritleri,
+## yerleşimleri scripts/loading_scene_parts.gd'de (üretici yazar).
+## Ayak hizası: her sprite'ın dokusundaki en alt dolu satır (gölgesiyle birlikte) patikanın üst kenarına oturur (bkz. _foot_offset).
+const SCENE_DIR := "res://assets/ui/yukleme/"
+## Ekran ortasına göre (1920x1080 taban): patika = doluluk çubuğu = sahnedeki yolun ortası (tuval y 213..227).
 const PATH_RECT := Rect2(-720.0, 100.0, 1440.0, 40.0)
 const PATH_INSET := 6.0 ## çubuk dolgusu çukurun içinde başlar (panel_style "inset" payı)
 const HERO_SCALE := 3.0 ## 2.2368 taban karakter ölçeğinde (bkz. characters.gd "scale"); diğerleri oranlanır
 const CHAR_BASE_SCALE := 2.2368375
 const CREATURE_SCALE := 3.6 ## yaratığın kendi Sprite2D ölçeği x bu
-const CHASERS: Array[String] = ["rat1", "slime1", "iskelet1", "zombie1", "slime3"]
+const CHASERS: Array[String] = ["slime1", "slime2", "iskelet1", "zombie1", "slime3"]
 const CHASER_GAP := 130.0
 const CHASER_START_GAP := 170.0
 const FOOT_SINK := 4.0 ## gölge patikanın üst kenarına biraz binsin (üstünde duruyor gibi)
 const CREATURE_ROW_RIGHT := 3 ## enemy.gd ROW_RIGHT
+## Varış: bar HANDOFF_VALUE'ya akar (kahraman kapıya koşar), sonra kahraman kapıda kaybolur ve sahne kararır.
+const ARRIVE_RUN_TIME := 0.35
+const ARRIVE_FADE_TIME := 0.4
+const ARRIVE_DIM := Color(0.2, 0.2, 0.27)
+const MOON_TINT := Color(0.9, 0.92, 1.0) ## karakterler gece sahnesine otursun (hafif ay ışığı), okunurluk kalsın
+const TROUGH_COLOR := Color(0.17, 0.13, 0.1, 0.85)
+const TROUGH_BORDER := Color(0.35, 0.27, 0.2)
 const TIPS: Array[String] = [
 	"Satıcının güvenli bölgesinde zaman durur - yaratıklar güçlenmez.",
 	"F tuşu ruhani yeteneğini kullanır.",
@@ -100,32 +109,45 @@ const TIPS: Array[String] = [
 	"Q, E ve R yeteneklerin seviye atladıkça açılır.",
 ]
 
-var _stage: Control = null
+var _scene: Control = null ## arka plan + canlı parçalar (640x360 tuval, ekranı örtecek kadar ölçekli)
+var _stage: Control = null ## kahraman + yaratıklar (ekran ortasına bağlı, patika ile aynı koordinat)
 var _overlay: CanvasLayer = null
-## Bağımlılık ağacı taraması + yükleme durumu (bkz. _step_loading).
-var _scan_stack: Array = [MAIN_SCENE_PATH]
-var _scan_seen: Dictionary = {}
-var _load_order: Array = []
-var _scan_done: bool = false
-var _load_index: int = 0
-var _loaded_refs: Array = [] ## önbellekte kalsınlar diye referans (sahne değişince main kendi referanslarını tutar)
-var _weight_total: float = 0.0
-var _weight_done: float = 0.0
-## Şu an arka planda yüklenen bağımlılık (boş = yok), ağırlığı ve o adım sürerken barın süzülme oranı (0..STEP_CREEP_MAX).
-var _req_path: String = ""
-var _root_scripts: Array = []
-var _weights: Dictionary = {}
-var _req_weight: float = 0.0
-var _req_creep: float = 0.0
-const REQ_STALL_MSEC := 12000 ## arka plan isteği (doku/ses/sahne) bundan uzun sürerse atlanır (bkz. _step_loading bekçisi)
-var _req_started_msec: int = 0
-const STEP_CREEP_MAX := 0.85 ## uzun bir adım (büyük betik) sürerken bar o adımın payının en fazla bu kadarına süzülür
-const STEP_CREEP_RATE := 0.5 ## /sn
 var _hero: AnimatedSprite2D = null
 var _hero_foot: float = 0.0
-## [Sprite2D, hframes, fps, foot offset (px, ölçekli)]
+## [Sprite2D, hframes, fps, foot offset (px, ölçekli), faz]
 var _chasers: Array = []
 var _anim_time: float = 0.0
+var _chasers_running: bool = true
+
+
+## Kare şeridinden oynayan sahne parçası (sallanan ağaç, baca dumanı); sadece kare değişince yeniden çizer.
+class LiveSheet extends Control:
+	var tex: Texture2D = null
+	var frame_size: Vector2 = Vector2.ZERO
+	var count: int = 1
+	var fps: float = 10.0
+	var _t: float = 0.0
+	var _frame: int = -1
+
+	func _init(t: Texture2D, fsz: Vector2, n: int, speed: float) -> void:
+		tex = t
+		frame_size = fsz
+		count = maxi(1, n)
+		fps = speed
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		size = fsz
+
+	func _process(delta: float) -> void:
+		_t += delta
+		var f: int = int(_t * fps) % count
+		if f != _frame:
+			_frame = f
+			queue_redraw()
+
+	func _draw() -> void:
+		if tex:
+			draw_texture_rect_region(tex, Rect2(Vector2.ZERO, frame_size), Rect2(Vector2(maxi(_frame, 0) * frame_size.x, 0.0), frame_size))
 
 
 func _ready() -> void:
@@ -134,6 +156,24 @@ func _ready() -> void:
 	progress_bar.value = 0.0
 	NetworkManager.host_left_game.connect(_on_disconnected)
 	NetworkManager.server_disconnected.connect(_on_disconnected)
+	## Sahne (kahraman/yaratık kareleri) ana iş parçacığında yüklendi; bundan sonra ana iş parçacığı yüklemeye dokunmaz.
+	if autostart_loader:
+		start_loader()
+
+
+func start_loader() -> void:
+	_thread = Thread.new()
+	_thread.start(_load_worker)
+
+
+func _exit_tree() -> void:
+	## Bağlantı kesilip menüye dönülürse: iş parçacığı sıradaki dosyadan önce durur; şu anki dosyanın bitmesi beklenir.
+	_mutex.lock()
+	_abort = true
+	_mutex.unlock()
+	if _thread and _thread.is_started():
+		_thread.wait_to_finish()
+		_thread = null
 
 
 func _build_chase_scene() -> void:
@@ -148,33 +188,35 @@ func _build_chase_scene() -> void:
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay.add_child(holder)
-	for n: String in ["Background", "Darken", "StatusLabel", "ProgressBar"]:
+	for n: String in ["Background", "StatusLabel", "ProgressBar"]:
 		var c: Node = get_node_or_null(n)
 		if c:
 			c.reparent(holder, false)
-	var darken: ColorRect = holder.get_node_or_null("Darken") as ColorRect
-	if darken:
-		darken.color = NIGHT_TINT
-	var bg: TextureRect = holder.get_node_or_null("Background") as TextureRect
-	if bg:
-		bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_build_backdrop(holder) ## sahne kendi gece ışığıyla çizildi - üstüne karartma örtüsü yok
 
 	## Sahne (karakterler) ekranın ortasına bağlı bir Control'ün altında - patika ile aynı koordinat.
 	_stage = Control.new()
 	_stage.name = "ChaseStage"
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.set_anchors_preset(Control.PRESET_CENTER)
+	_stage.modulate = MOON_TINT
 	holder.add_child(_stage)
 
-	## Patika = doluluk çubuğu: bej çukur + adaçayı dolgu (eski yükleme çubuğunun renkleri).
+	## Patika = doluluk çubuğu: adaçayı dolgu (eski yükleme çubuğunun rengi) + yolda kazılmış koyu çukur (2026-10-17: eski bej çukur
+	## [UIKit inset] gece sahnesinde parlak bir şerit gibi duruyordu).
+	var trough := StyleBoxFlat.new()
+	trough.bg_color = TROUGH_COLOR
+	trough.border_color = TROUGH_BORDER
+	trough.set_border_width_all(3)
+	trough.set_corner_radius_all(3)
+	trough.anti_aliasing = false
 	var fill := StyleBoxFlat.new()
 	fill.bg_color = Color("#88a24f")
 	fill.border_color = Color("#4f652d")
 	fill.set_border_width_all(3)
 	fill.set_corner_radius_all(3)
 	fill.anti_aliasing = false
-	progress_bar.add_theme_stylebox_override("background", UIKit.panel_style("inset"))
+	progress_bar.add_theme_stylebox_override("background", trough)
 	progress_bar.add_theme_stylebox_override("fill", fill)
 	_center_anchor(progress_bar, PATH_RECT)
 
@@ -195,6 +237,43 @@ func _build_chase_scene() -> void:
 	for i in range(CHASERS.size()):
 		_build_chaser(CHASERS[i])
 	_layout_chase(0.0)
+
+
+## Arka plan (tscn'deki Background) + canlı parçalar tek bir tuval Control'ünde; tuval ekranı ÖRTECEK kadar ölçeklenir ve ortalanır
+## (1920x1080'de tam x3 - patika yolun üstüne oturur).
+func _build_backdrop(holder: Control) -> void:
+	_scene = Control.new()
+	_scene.name = "Scene"
+	_scene.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(_scene)
+	holder.move_child(_scene, 0)
+	_scene.size = SceneParts.CANVAS
+	var bg: TextureRect = holder.get_node_or_null("Background") as TextureRect
+	if bg:
+		bg.reparent(_scene, false)
+		bg.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg.stretch_mode = TextureRect.STRETCH_SCALE
+		bg.position = Vector2.ZERO
+		bg.size = SceneParts.CANVAS
+	for p: Array in SceneParts.PARTS:
+		var tex: Texture2D = load(SCENE_DIR + str(p[0])) as Texture2D
+		if tex == null:
+			continue
+		var s := LiveSheet.new(tex, p[2], int(p[3]), float(p[4]))
+		_scene.add_child(s)
+		s.position = p[1]
+	holder.resized.connect(_fit_scene.bind(holder))
+	_fit_scene(holder)
+
+
+func _fit_scene(holder: Control) -> void:
+	if not is_instance_valid(_scene) or holder.size.x < 1.0:
+		return
+	var s: float = maxf(holder.size.x / SceneParts.CANVAS.x, holder.size.y / SceneParts.CANVAS.y)
+	_scene.scale = Vector2(s, s)
+	_scene.position = ((holder.size - SceneParts.CANVAS * s) * 0.5).floor()
 
 
 func _center_anchor(c: Control, r: Rect2) -> void:
@@ -282,19 +361,9 @@ func _layout_chase(ratio: float) -> void:
 		sp.position = Vector2(hx - CHASER_START_GAP - i * CHASER_GAP, ground - float(c[3])).round()
 
 
-func _arrive_pose() -> void:
-	set_process(false)
-	if _hero:
-		var idle: String = "idle_right" if _hero.sprite_frames.has_animation("idle_right") else ""
-		if idle != "":
-			_hero.play(idle)
-		else:
-			_hero.stop()
-	for c: Array in _chasers:
-		(c[0] as Sprite2D).frame = CREATURE_ROW_RIGHT * int(c[1])
-
-
 func _animate_chasers(delta: float) -> void:
+	if not _chasers_running:
+		return
 	_anim_time += delta
 	for c: Array in _chasers:
 		var sp: Sprite2D = c[0]
@@ -310,24 +379,24 @@ func _process(delta: float) -> void:
 
 	if not _local_load_done:
 		_elapsed += delta
-		_step_loading(delta)
 		var target: float = _load_progress() * LOAD_SHARE
 		progress_bar.value = move_toward(progress_bar.value, target, FILL_SPEED * delta)
-		
+
 		_dots_timer += delta
 		if _dots_timer >= 0.3:
 			_dots_timer = 0.0
 			_dots_count = (_dots_count + 1) % 4
 			status_label.text = "YÜKLENİYOR" + ".".repeat(_dots_count)
-			
-		if _scan_done and _req_path == "" and _load_index >= _load_order.size() and progress_bar.value >= LOAD_SHARE - 0.01:
+
+		if _loader_finished() and progress_bar.value >= LOAD_SHARE - 0.01:
+			_join_loader()
 			_local_load_done = true
 			NetworkManager.mark_local_loading_done()
 		return
 
 	if NetworkManager.is_multiplayer_active and not NetworkManager.all_players_loading_done():
 		_wait_elapsed += delta
-		
+
 		## Host henüz yüklemesini bitirmediyse onsuz başlanmaz (uzun zaman aşımı): host'suz giren istemci oyunu bozuk görürdü.
 		var host_ready: bool = NetworkManager.is_host_loading_done()
 		var wait_limit: float = WAIT_FOR_OTHERS_TIMEOUT if host_ready else WAIT_FOR_HOST_TIMEOUT
@@ -345,90 +414,120 @@ func _process(delta: float) -> void:
 	_proceed()
 
 
-## Bağımlılık ağacını tarar (önce, ana iş parçacığı - ucuz), sonra yapraklardan başlayarak her birini SIRAYLA arka plan iş
-## parçacığında yükletir (bkz. dosya başı notu). Kare başına LOAD_BUDGET_MS - önbellekteki/hızlı olanlar aynı karede geçer.
-func _step_loading(delta: float) -> void:
-	var t0: int = Time.get_ticks_msec()
-	while Time.get_ticks_msec() - t0 < LOAD_BUDGET_MS:
-		if not _scan_done:
-			if _scan_stack.is_empty():
-				_scan_done = true
-				_load_order.reverse() ## yapraklar önce
-				_load_order.erase(MAIN_SCENE_PATH)
-				## Sahnenin KÖK betikleri (main.gd) preload zinciriyle neredeyse tüm betikleri derler - önce gelirse ilk adım
-				## tüm sürenin yarısını alıyordu (ölçüldü). Sona alınınca diğer betikler tek tek derlenir, bar daha eşit akar.
-				for rp: String in _root_scripts:
-					if _load_order.has(rp):
-						_load_order.erase(rp)
-						_load_order.append(rp)
-				for lp: String in _load_order:
-					_weights[lp] = _estimate_weight(lp)
-					_weight_total += float(_weights[lp])
-				continue
-			var path: String = _scan_stack.pop_back()
-			if _scan_seen.has(path):
-				continue
-			_scan_seen[path] = true
-			if not NO_DEP_SCAN_EXT.has(path.get_extension().to_lower()):
-				for d: String in ResourceLoader.get_dependencies(path):
-					var dp: String = _dep_path(d)
-					if path == MAIN_SCENE_PATH and dp.get_extension() == "gd":
-						_root_scripts.append(dp)
-					if dp != "" and not _scan_seen.has(dp):
-						_scan_stack.append(dp)
-			_load_order.append(path)
-		elif _req_path != "":
-			var prog: Array = []
-			var st: int = ResourceLoader.load_threaded_get_status(_req_path, prog)
-			if st == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-				## Bekçi: bir istek REQ_STALL_MSEC'ten uzun sürüyorsa atlanır - yükleme ekranı tek bir isteğe sonsuza dek bağlı
-				## kalmasın. Atlanan kaynak sahne kurulurken (_proceed) zaten ana iş parçacığında yüklenir.
-				if Time.get_ticks_msec() - _req_started_msec > REQ_STALL_MSEC:
-					push_warning("[LoadingScreen] iş parçacığı isteği %d sn'den uzun sürdü, atlanıyor: %s" % [int(REQ_STALL_MSEC / 1000.0), _req_path])
-					_weight_done += _req_weight
-					_req_path = ""
-					continue
-				_req_creep = minf(STEP_CREEP_MAX, _req_creep + STEP_CREEP_RATE * delta)
-				return ## bu kare iş parçacığını bekle - ekran akmaya devam eder
-			var r: Resource = null
-			if st == ResourceLoader.THREAD_LOAD_LOADED:
-				r = ResourceLoader.load_threaded_get(_req_path)
-			if r == null and ResourceLoader.exists(_req_path):
-				push_warning("[LoadingScreen] iş parçacığında yüklenemedi, ana iş parçacığında deneniyor: " + _req_path)
-				r = load(_req_path)
+## ---------------------------------------------------------------- yükleme iş parçacığı
+
+## İŞ PARÇACIĞI: main.tscn'in bağımlılık ağacını tarar, yapraklardan başlayarak her birini SIRAYLA yükler, en son main.tscn'i.
+## Ana iş parçacığının nesnelerine dokunmaz; paylaşılan sayılar _mutex altında.
+func _load_worker() -> void:
+	var root_path: String = main_scene_path
+	var stack: Array = [root_path]
+	var seen: Dictionary = {}
+	var order: Array = []
+	var roots: Array = []
+	while not stack.is_empty():
+		if _aborted():
+			return
+		var path: String = stack.pop_back()
+		if seen.has(path):
+			continue
+		seen[path] = true
+		if not NO_DEP_SCAN_EXT.has(path.get_extension().to_lower()):
+			for d: String in ResourceLoader.get_dependencies(path):
+				var dp: String = _dep_path(d)
+				if path == root_path and dp.get_extension() == "gd":
+					roots.append(dp)
+				if dp != "" and not seen.has(dp):
+					stack.append(dp)
+		order.append(path)
+		_mutex.lock()
+		_t_scan_seen = seen.size()
+		_t_scan_pending = stack.size()
+		_mutex.unlock()
+	var plan: Array = load_plan(order, roots, root_path)
+	var weights: Array = []
+	var total: float = 0.0
+	for p: String in plan:
+		var w: float = _estimate_weight(p)
+		weights.append(w)
+		total += w
+	_mutex.lock()
+	_t_weight_total = total
+	_t_scan_done = true
+	_mutex.unlock()
+	for i in range(plan.size()):
+		if _aborted():
+			return
+		var p: String = plan[i]
+		if not ResourceLoader.has_cached(p) and ResourceLoader.exists(p):
+			_mutex.lock()
+			_t_cur_weight = float(weights[i])
+			_t_cur_msec = Time.get_ticks_msec()
+			_mutex.unlock()
+			var r: Resource = ResourceLoader.load(p)
 			if r:
 				_loaded_refs.append(r)
-			_weight_done += _req_weight
-			_req_path = ""
-		elif _load_index < _load_order.size():
-			var p: String = _load_order[_load_index]
-			_load_index += 1
-			var w: float = _load_weight(p)
-			if ResourceLoader.has_cached(p) or not ResourceLoader.exists(p):
-				_weight_done += w
-				continue
-			if p.get_extension().to_lower() == "gd":
-				## GDScript ASLA iş parçacığında derlenmez (2026-10-05): betikteki preload("...tscn") çağrıları arka planda rastgele
-				## "Could not preload resource file" ile başarısız oluyor ve görev sonsuza dek "devam ediyor" kalıyordu (yükleme ekranı
-				## %20-30'da sonsuza dek takılıyor, çok oyunculuda host dahil; headless ölçüm: 10 denemenin 2'si). Ana iş parçacığında
-				## derleme (editördeki gibi) güvenli; kare başına bütçe aşılınca döngü biter, kare çizilir.
-				var rs: Resource = load(p)
-				if rs:
-					_loaded_refs.append(rs)
-				_weight_done += w
-				continue
-			if ResourceLoader.load_threaded_request(p, "", false) != OK:
-				var r2: Resource = load(p)
-				if r2:
-					_loaded_refs.append(r2)
-				_weight_done += w
-				continue
-			_req_path = p
-			_req_weight = w
-			_req_creep = 0.0
-			_req_started_msec = Time.get_ticks_msec()
-		else:
-			return
+		_mutex.lock()
+		_t_weight_done += float(weights[i])
+		_t_cur_weight = 0.0
+		_mutex.unlock()
+	if _aborted():
+		return
+	var main_res: Resource = ResourceLoader.load(root_path)
+	if main_res:
+		_loaded_refs.append(main_res)
+
+
+## Tarama sırası (önce-derinlik, ziyaret sırası) -> yükleme sırası: yapraklar önce, kök sahne (main.tscn) hariç. Sahnenin KÖK betikleri (main.gd)
+## preload zinciriyle neredeyse tüm betikleri derler - önce gelirse ilk adım tüm sürenin yarısını alıyordu (ölçüldü). Sona alınınca
+## diğer betikler tek tek derlenir, bar daha eşit akar.
+static func load_plan(scan_order: Array, root_scripts: Array, root_path: String = MAIN_SCENE_PATH) -> Array:
+	var plan: Array = scan_order.duplicate()
+	plan.reverse()
+	plan.erase(root_path)
+	for rp: String in root_scripts:
+		if plan.has(rp):
+			plan.erase(rp)
+			plan.append(rp)
+	return plan
+
+
+func _aborted() -> bool:
+	_mutex.lock()
+	var a: bool = _abort
+	_mutex.unlock()
+	return a
+
+
+func _loader_finished() -> bool:
+	return _thread == null or not _thread.is_alive()
+
+
+func _join_loader() -> void:
+	if _thread and _thread.is_started():
+		_thread.wait_to_finish()
+	_thread = null
+
+
+## 0..1: tarama ilk %5, yükleme kalan %95.
+func _load_progress() -> float:
+	if _loader_finished():
+		return 1.0
+	_mutex.lock()
+	var scan_done: bool = _t_scan_done
+	var seen: int = _t_scan_seen
+	var pending: int = _t_scan_pending
+	var total: float = _t_weight_total
+	var done: float = _t_weight_done
+	var cur_w: float = _t_cur_weight
+	var cur_ms: int = _t_cur_msec
+	_mutex.unlock()
+	if not scan_done:
+		return 0.05 * float(seen) / float(seen + pending + 1)
+	if total <= 0.0:
+		return 1.0
+	if cur_w > 0.0:
+		done += cur_w * minf(STEP_CREEP_MAX, (Time.get_ticks_msec() - cur_ms) / 1000.0 * STEP_CREEP_RATE)
+	return 0.05 + 0.95 * clampf(done / total, 0.0, 1.0)
 
 
 ## "uid://...::Tür::res://yol" ya da "res://yol::Tür" -> res:// yolu.
@@ -439,21 +538,6 @@ static func _dep_path(d: String) -> String:
 		var id: int = ResourceUID.text_to_id(p)
 		p = ResourceUID.get_id_path(id) if ResourceUID.has_id(id) else ""
 	return p
-
-
-## 0..1: tarama ilk %5, yükleme kalan %95.
-func _load_progress() -> float:
-	if not _scan_done:
-		var n: int = _scan_seen.size()
-		return 0.05 * float(n) / float(n + _scan_stack.size() + 1)
-	if _load_order.is_empty() or _weight_total <= 0.0:
-		return 1.0
-	var done: float = _weight_done + (_req_weight * _req_creep if _req_path != "" else 0.0)
-	return 0.05 + 0.95 * clampf(done / _weight_total, 0.0, 1.0)
-
-
-func _load_weight(path: String) -> float:
-	return float(_weights.get(path, LOAD_WEIGHT_DEFAULT))
 
 
 static func _estimate_weight(path: String) -> float:
@@ -483,16 +567,18 @@ static func _file_size(path: String) -> int:
 	return t.get_length() if t else 0
 
 
+## ---------------------------------------------------------------- varış + sahne geçişi
+
 func _proceed() -> void:
 	_proceeded = true
-	var packed: PackedScene = load(MAIN_SCENE_PATH) as PackedScene
-	progress_bar.value = HANDOFF_VALUE
-	_layout_chase(HANDOFF_VALUE / 100.0)
-	## Sahne kurulumu + ilk kare ana iş parçacığında (~1 sn, önlenemez): kahraman patikanın sonuna VARIP durur, yaratıklar
-	## da durur - donma gibi değil "vardı" gibi görünsün.
-	_arrive_pose()
-	## Bu kare (bar %97) çizilsin; sonra görsel köke taşınıp sahne değişir - kurulum + ilk kare boyunca üstte kalır,
-	## ilk kare hazır olunca bar %100 olur ve bir kare sonra silinir (loading_overlay.gd).
+	var packed: PackedScene = load(main_scene_path) as PackedScene ## iş parçacığı yükledi - önbellekten
+	status_label.text = "OYUN BAŞLIYOR"
+	await _arrive()
+	if not is_inside_tree() or _disconnected:
+		return
+	set_process(false)
+	## Bu kare (karanlık sahne, bar %97) çizilsin; sonra görsel köke taşınıp sahne değişir - kurulum + ilk kare boyunca üstte kalır,
+	## ilk kare hazır olunca bar %100 olur ve katman solar (loading_overlay.gd).
 	## (frame_post_draw DEĞİL: başsız/--headless çalışmada hiç yayınlanmıyor - 2 süreçli testte host burada takıldı. Bir sonraki
 	## karenin başı = bu kare çizildi.)
 	await get_tree().process_frame
@@ -504,7 +590,27 @@ func _proceed() -> void:
 	if packed:
 		get_tree().change_scene_to_packed(packed)
 	else:
-		get_tree().change_scene_to_file(MAIN_SCENE_PATH)
+		get_tree().change_scene_to_file(main_scene_path)
+
+
+## Kahraman yolun sonundaki kulübenin kapısına koşar (bar -> HANDOFF_VALUE), kapıda kaybolur, yaratıklar durur, sahne kararır.
+## Ana iş parçacığı bu sırada serbest - animasyonlar akar; ardından gelen sahne kurulumu donması karanlık karede geçer.
+func _arrive() -> void:
+	var tw := create_tween()
+	tw.tween_property(progress_bar, "value", HANDOFF_VALUE, ARRIVE_RUN_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	await tw.finished
+	if not is_inside_tree():
+		return
+	_chasers_running = false
+	for c: Array in _chasers:
+		(c[0] as Sprite2D).frame = CREATURE_ROW_RIGHT * int(c[1])
+	var fade := create_tween().set_parallel(true)
+	if _hero:
+		fade.tween_property(_hero, "modulate:a", 0.0, ARRIVE_FADE_TIME * 0.6)
+	for n: CanvasItem in [_scene, _stage]:
+		if is_instance_valid(n):
+			fade.tween_property(n, "modulate", ARRIVE_DIM, ARRIVE_FADE_TIME)
+	await fade.finished
 
 
 func _on_disconnected() -> void:

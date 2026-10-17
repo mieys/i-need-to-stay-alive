@@ -74,13 +74,15 @@ func test_momentum_formulas() -> void:
 	assert(is_equal_approx(m, 0.10), "10 sn harekette %%10: %s" % m)
 	for _i in range(400):
 		m = ML.step_momentum(m, true, 0.1)
-	assert(is_equal_approx(m, ML.MOMENTUM_MAX), "tavan %%30: %s" % m)
+	assert(is_equal_approx(m, ML.MOMENTUM_MAX), "tavan %%15: %s" % m)
 	assert(ML.is_empowered(m) and ML.trail_level(m, true) == 2 and ML.trail_level(m, false) == 0, "tam hızda iz güçlenir, dururken iz yok")
 	assert(ML.trail_level(0.12, true) == 1, "tavanın altında normal iz")
 	var half: float = ML.step_momentum(m, false, 2.5)
-	assert(is_equal_approx(half, 0.15), "dururken 2,5 sn'de yarısı: %s" % half)
+	assert(is_equal_approx(half, ML.MOMENTUM_MAX * 0.5), "dururken 2,5 sn'de yarısı: %s" % half)
 	assert(is_zero_approx(ML.step_momentum(m, false, 5.0)), "dururken tam bonus 5 sn'de biter")
-	assert(is_equal_approx(ML.fire_interval_mult(30), 1.0 / 1.3) and is_equal_approx(ML.fire_interval_mult(0), 1.0), "her %1 hız = %1 saldırı hızı")
+	assert(is_equal_approx(ML.MOMENTUM_MAX, 0.15), "pasif tavanı %15 (2026-10-14)")
+	assert(is_equal_approx(ML.fire_interval_mult(30), 1.0 / 1.15) and is_equal_approx(ML.fire_interval_mult(0), 1.0), "her %1 hareket hızı = %0,5 saldırı hızı")
+	assert(is_equal_approx(ML.fire_interval_mult(100), 1.0 / 1.5), "%100 hareket hızı = %50 saldırı hızı")
 
 
 func test_ball_and_shield_formulas() -> void:
@@ -209,20 +211,21 @@ func test_passive_gives_move_and_attack_speed() -> void:
 	player.velocity = Vector2(200.0, 0.0)
 	for _i in range(100):
 		player._process_matthew_lightning(0.1)
-	assert(is_equal_approx(float(player._matthew_momentum), 0.10) and int(player._matthew_momentum_percent) == 10, "10 sn'de %%10: %s" % player._matthew_momentum)
+	assert(is_equal_approx(float(player._matthew_momentum), 0.10) and int(player._matthew_move_percent) == 10, "10 sn'de %%10: %s" % player._matthew_momentum)
 	assert(is_equal_approx(player.get_effective_move_speed(), move0 * 1.10), "hareket hızı +%10")
-	assert(is_equal_approx(player.get_attack_interval_mult(), iv0 / 1.10), "saldırı hızı +%10")
+	assert(is_equal_approx(player.get_attack_interval_mult(), iv0 / 1.05), "hareket hızı +%10 -> saldırı hızı +%5")
 	for _i in range(300):
 		player._process_matthew_lightning(0.1)
-	assert(is_equal_approx(player.get_effective_move_speed(), move0 * 1.30), "tavan: hareket hızı +%30")
-	assert(is_equal_approx(player.get_attack_interval_mult(), iv0 / 1.30), "tavan: saldırı hızı +%30")
+	assert(is_equal_approx(float(player._matthew_momentum), 0.15), "pasif tavanı %15")
+	assert(is_equal_approx(player.get_effective_move_speed(), move0 * 1.15), "tavan: hareket hızı +%15")
+	assert(is_equal_approx(player.get_attack_interval_mult(), iv0 / 1.075), "tavan: saldırı hızı +%7,5")
 	assert(is_equal_approx(player.get_attack_speed_overflow_percent(), over0), "pasif saldırı hızı taşma->saldırı gücü dönüşümüne girmez")
 	assert(int(player.matthew_net_state()[1]) == 1, "tam hız ağa 'güçlenmiş' gider")
 	## Durunca 5 sn'de söner.
 	player.velocity = Vector2.ZERO
 	for _i in range(25):
 		player._process_matthew_lightning(0.1)
-	assert(is_equal_approx(float(player._matthew_momentum), 0.15), "2,5 sn duruşta yarıya iner: %s" % player._matthew_momentum)
+	assert(is_equal_approx(float(player._matthew_momentum), 0.075), "2,5 sn duruşta yarıya iner: %s" % player._matthew_momentum)
 	for _i in range(26):
 		player._process_matthew_lightning(0.1)
 	assert(is_zero_approx(float(player._matthew_momentum)) and is_equal_approx(player.get_effective_move_speed(), move0), "5 sn duruşta bonus biter")
@@ -475,4 +478,27 @@ func test_remote_copy_builds_ball_trail_and_glow_from_net_state() -> void:
 	rp._apply_matthew_net_state(ML.pack_state(0, false, 0))
 	assert(int(rp.get("_matthew_ball")) == 0 and rp.anim.visible and rp.anim.material == null, "durum kapanınca kukla normale döner")
 	assert(not rp.is_ghost_now(), "top bitince kukla yeniden katı")
+	_cleanup()
+
+
+## 2026-10-14: saldırı hızı TOPLAM hareket hızından gelir (her kaynak): kart/eşya hızı da sayılır, her %1 = %0,5; Matthew dışında etki yok; %600 sınırı korunur.
+func test_attack_speed_follows_total_move_speed_from_any_source() -> void:
+	var player: Node = _make_player()
+	player.set_physics_process(false)
+	var iv0: float = player.get_attack_interval_mult()
+	var over0: float = player.get_attack_speed_overflow_percent()
+	player.speed_card_percent = 0.40 ## hız kartları +%40
+	player.item_speed_percent = 0.20 ## eşya +%20
+	player._matthew_refresh_move_percent()
+	assert(int(player._matthew_move_percent) == 60, "toplam %%60: %d" % player._matthew_move_percent)
+	assert(is_equal_approx(player.get_attack_interval_mult(), iv0 / 1.30), "%%60 hareket hızı -> %%30 saldırı hızı: %s" % (iv0 / player.get_attack_interval_mult()))
+	assert(is_equal_approx(player.get_attack_speed_overflow_percent(), over0), "pasifin saldırı hızı taşma->saldırı gücü dönüşümüne girmez")
+	## Çok büyük hız: saldırı hızı genel sınırda (%600) durur.
+	player.speed_card_percent = 20.0
+	player._matthew_refresh_move_percent()
+	assert(is_equal_approx(1.0 / player.get_attack_interval_mult() - 1.0, GameManager.ATTACK_SPEED_CAP_PERCENT / 100.0), "toplam saldırı hızı %%600'ü aşmaz")
+	player.speed_card_percent = 0.0
+	player.item_speed_percent = 0.0
+	player._matthew_refresh_move_percent()
+	assert(int(player._matthew_move_percent) == 0 and is_equal_approx(player.get_attack_interval_mult(), iv0), "bonus kalkınca saldırı hızı geri döner")
 	_cleanup()

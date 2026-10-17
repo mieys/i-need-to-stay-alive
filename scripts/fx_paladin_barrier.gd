@@ -18,12 +18,9 @@ extends Node2D
 ## İsabet noktasındaki yönlü piksel çatlak (fx_shield_hit.gd, zaten sprite) önceki gibi kalır.
 ##
 ## BOĞUK SES (aynı istek: "içinde bulunan oyuncular dışardaki sesleri boğuk duymalı sanki bir bariyerin içindeymiş gibi"):
-## yerel oyuncu bu baloncuğun içindeyken baloncuğun DIŞINI kaplayan halka biçimli bir Area2D kurulur; audio_bus_override
-## ile o halkanın içinde (yani baloncuğun dışında) çalan her AudioStreamPlayer2D, alçak geçiren filtreli MUFFLE_BUS'a
-## yönlenir (Godot: 2D ses çalar, bulunduğu noktadaki bus-override'lı alanın bus'ını kullanır). Baloncuğun içindeki
-## sesler (Şovalye'nin/dostların kendi silahları vb.) normal kalır. Alan, hiçbir Area2D sinyali/sorgusu olmayan oyunda
-## çarpışma katmanı 1'de (AudioStreamPlayer2D.area_mask varsayılanı) ama monitorable/monitoring KAPALI durur - başka
-## alanlarla çift oluşturmaz, fiziğe etkisi yoktur. UI sesleri (AudioStreamPlayer) etkilenmez.
+## yerel oyuncu bu baloncuğun içindeyken baloncuğun DIŞINDA çalan her AudioStreamPlayer2D alçak geçiren + yankılı MUFFLE_BUS'a
+## yönlenir, içindeki sesler (Şovalye'nin/dostların kendi sesleri) normal kalır - dome_sound_muffle.gd + dome_sound_router.gd
+## (2026-10-17: eski Area2D audio_bus_override yöntemi Godot 4.7.2'de hiç çalışmıyormuş, madde 218). UI sesleri etkilenmez.
 
 var radius: float = 126.0 ## player.gd _skill_paladin_ulti() PALADIN_ULTI_ZONE_RADIUS ile üzerine yazar - bu sadece varsayılan
 var color: Color = Color(0.35, 0.78, 1.0, 0.95) ## gece ışığı rengi (bkz. night_glow_catalog.gd "cp": "color")
@@ -33,11 +30,25 @@ var active: bool = true
 var variant: String = ""
 var muffle_outside_sound: bool = true
 
-const LoopFrames := preload("res://assets/fx/paladin_dome/loop_frames.tres")
-const FlashFrames := preload("res://assets/fx/paladin_dome/flash_frames.tres")
+## Satıcının altın kubbesi (daire, eski düz görünüm). Şovalye'nin mavi düz daire sayfaları (loop/flash_sheet.png) 2026-10-14'ten beri
+## kullanılmıyor - izometrik kubbeye geçildi (aşağıda), dosyalar geri dönüş için duruyor.
 const LoopFramesGold := preload("res://assets/fx/paladin_dome/loop_gold_frames.tres")
 const FlashFramesGold := preload("res://assets/fx/paladin_dome/flash_gold_frames.tres")
-## Sayfalardaki kubbe yarıçapı (sanat pikseli = dünya birimi) - radius farklıysa sprite orantılı ölçeklenir.
+## İZOMETRİK KUBBE (kullanıcı seçimi 2026-10-14, prototip "C - Işık Perdesi", madde 160): tools/gen_paladin_iso_dome_fx.py.
+## Koruma alanı artık elips (scripts/paladin_dome.gd); görsel o elipsin üstünde duran yarım küre, ÜÇ katman:
+##  zemin ayak izi + ARKA kabuk -> mutlak z 0 (zeminin üstü, karakterlerin [z 1] ALTI), ÖN kabuk + isabet parlaması -> z 20 (karakterlerin üstü).
+const IsoFloorTex := preload("res://assets/fx/paladin_dome/iso_floor.png")
+const IsoBackFrames := preload("res://assets/fx/paladin_dome/iso_back_frames.tres")
+const IsoFrontFrames := preload("res://assets/fx/paladin_dome/iso_front_frames.tres")
+const IsoFlashFrames := preload("res://assets/fx/paladin_dome/iso_flash_frames.tres")
+const PaladinDome := preload("res://scripts/paladin_dome.gd")
+## İzometrik sayfalarda merkezin (Şovalye'nin ayak noktası) kare içindeki yeri (üretici OX/OY, zemin OX/FLOOR_HALF).
+const ISO_ORIGIN := Vector2(128, 128)
+const ISO_FLOOR_ORIGIN := Vector2(128, 68)
+## Isabet çatlağı kubbenin kenarında yerden bu kadar yukarıda (dünya px) - kabuğun yüzeyine denk gelsin.
+const ISO_CRACK_LIFT := 10.0
+## Sayfalardaki kubbe yarıçapı (sanat pikseli = dünya birimi) - radius farklıysa sprite orantılı ölçeklenir. İzometrik sayfalar da
+## yarıçap (elipsin yatay yarıçapı) 126 için üretildi.
 const ART_RADIUS := 126.0
 const APPEAR_TIME := 0.25
 
@@ -57,12 +68,15 @@ var _hit_fx_count: int = 0
 var _hit_fx_cooldown: float = 0.0
 var _loop: AnimatedSprite2D = null
 var _flash: AnimatedSprite2D = null
+## Açılışta büyüyen düğüm: altın kubbede _loop, izometrik kubbede tüm katmanları taşıyan _iso.
+var _grow: Node2D = null
+var _iso: Node2D = null
 var _t: float = 0.0
 
 
 func _ready() -> void:
 	z_as_relative = false
-	z_index = 20 ## zeminin (0) kesinlikle üstünde, kalıcı/güvenilir görünürlük
+	z_index = PaladinDome.SHELL_Z ## zeminin (0) kesinlikle üstünde, kalıcı/güvenilir görünürlük; kubbenin önündekiler creature_depth.gd ile üstüne çıkar
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	## Karakterin kendi ölçeğinden bağımsız global boyut: 1 yerel birim = 1 dünya birimi = 1 sanat pikseli.
 	var p := get_parent()
@@ -71,21 +85,60 @@ func _ready() -> void:
 		if ps.x != 0.0 and ps.y != 0.0:
 			scale = Vector2(1.0 / ps.x, 1.0 / ps.y)
 	var art_scale: float = radius / ART_RADIUS
-	var gold: bool = variant == "gold"
-	_loop = _make_sprite(LoopFramesGold if gold else LoopFrames, art_scale)
-	_loop.play("loop")
-	_loop.frame = randi() % LoopFrames.get_frame_count("loop")
-	_flash = _make_sprite(FlashFramesGold if gold else FlashFrames, art_scale)
+	if variant == "gold":
+		_loop = _make_sprite(LoopFramesGold, art_scale)
+		_loop.play("loop")
+		_loop.frame = randi() % LoopFramesGold.get_frame_count("loop")
+		_flash = _make_sprite(FlashFramesGold, art_scale)
+		_grow = _loop
+	else:
+		_build_iso()
 	_flash.visible = false
 	_flash.animation_finished.connect(func() -> void: _flash.visible = false)
 	if muffle_outside_sound:
 		var muffle := Node2D.new()
 		muffle.set_script(DomeSoundMuffleScript)
 		muffle.set("radius", radius)
+		muffle.set("elliptic", variant != "gold")
 		add_child(muffle)
 	## Açılış: küçükten büyüyerek belirir.
 	modulate.a = 0.0
-	_loop.scale = Vector2.ONE * art_scale * 0.7
+	_grow.scale = Vector2.ONE * art_scale * 0.7
+
+
+func _build_iso() -> void:
+	_iso = Node2D.new()
+	_iso.name = "IsoDome"
+	add_child(_iso)
+	_grow = _iso
+	var floor_spr := Sprite2D.new()
+	floor_spr.texture = IsoFloorTex
+	floor_spr.centered = false
+	floor_spr.offset = -ISO_FLOOR_ORIGIN
+	floor_spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	floor_spr.z_as_relative = false
+	floor_spr.z_index = 0
+	_iso.add_child(floor_spr)
+	var back := _make_iso_layer(IsoBackFrames, true)
+	_loop = _make_iso_layer(IsoFrontFrames, false)
+	var start: int = randi() % IsoFrontFrames.get_frame_count("loop")
+	for s: AnimatedSprite2D in [back, _loop]:
+		s.play("loop")
+		s.frame = start
+	_flash = _make_iso_layer(IsoFlashFrames, false)
+
+
+func _make_iso_layer(frames: SpriteFrames, behind_characters: bool) -> AnimatedSprite2D:
+	var s := AnimatedSprite2D.new()
+	s.sprite_frames = frames
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.centered = false
+	s.offset = -ISO_ORIGIN
+	if behind_characters:
+		s.z_as_relative = false
+		s.z_index = 0
+	_iso.add_child(s)
+	return s
 
 
 func _make_sprite(frames: SpriteFrames, art_scale: float) -> AnimatedSprite2D:
@@ -134,7 +187,12 @@ func _spawn_pixel_hit(angle: float) -> void:
 	add_child(fx)
 	fx.tree_exited.connect(func() -> void: _hit_fx_count -= 1)
 	## Kullanıcı bildirimi (2026-09-24): çatlaklar çok büyüktü - sabit PALADIN_CRACK_SCALE boyutunda, bariyerin kenarında.
-	fx.call("setup", angle, radius, false, PALADIN_CRACK_SCALE)
+	if _iso != null:
+		## İzometrik kubbe: çatlak, saldırı yönündeki ELİPS kenarında, kabuğun yüzeyi olsun diye biraz yukarıda.
+		fx.call("setup", angle, PaladinDome.radius_along(radius, Vector2.from_angle(angle)), false, PALADIN_CRACK_SCALE)
+		fx.position = Vector2(0.0, -ISO_CRACK_LIFT)
+	else:
+		fx.call("setup", angle, radius, false, PALADIN_CRACK_SCALE)
 
 
 func _process(delta: float) -> void:
@@ -145,6 +203,6 @@ func _process(delta: float) -> void:
 		_t += delta
 		var k: float = clampf(_t / APPEAR_TIME, 0.0, 1.0)
 		modulate.a = k
-		_loop.scale = Vector2.ONE * (radius / ART_RADIUS) * lerpf(0.7, 1.0, 1.0 - (1.0 - k) * (1.0 - k))
+		_grow.scale = Vector2.ONE * (radius / ART_RADIUS) * lerpf(0.7, 1.0, 1.0 - (1.0 - k) * (1.0 - k))
 	if _hit_fx_cooldown > 0.0:
 		_hit_fx_cooldown = max(0.0, _hit_fx_cooldown - delta)

@@ -117,7 +117,8 @@ func test_phone_side_panels_scroll_inside_instead_of_growing() -> void:
 			stack.append(c)
 		if n.name == &"SidePanelScroll":
 			found.append(n)
-	assert(found.size() == 2, "detay + stat paneli telefonda kendi kaydırma kutusunda olmalı: %d" % found.size())
+	## 2026-10-16 Klasik Pazar: stat paneli yok - ayrıntı paneli kendi kaydırma kutusunda (stok + çanta _phone_scroll'da).
+	assert(found.size() == 1, "ayrıntı paneli telefonda kendi kaydırma kutusunda olmalı: %d" % found.size())
 	for sp: ScrollContainer in found:
 		assert(sp.get_combined_minimum_size().y < 40.0, "yan panel kaydırma kutusunun en az yüksekliği içeriğe bağlı olmamalı: %.0f" % sp.get_combined_minimum_size().y)
 	_cleanup()

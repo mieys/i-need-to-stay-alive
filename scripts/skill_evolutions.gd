@@ -33,8 +33,8 @@ const DEFS := {
 	15: {
 		"skill": [
 			{"id": "cadi_q1", "name": "Yapışkan Duman", "desc": "Dumana değen yaratıklar %30 yavaşlar."},
-			{"id": "cadi_q2", "name": "Kalıcı Duman", "desc": "Duman yerde 1,5 saniye daha uzun kalır."},
-			{"id": "cadi_q3", "name": "Tutumlu Karışım", "desc": "Zehirli Duman saniyede %50 daha az kalkan harcar."},
+			{"id": "cadi_q2", "name": "Kalıcı Duman", "desc": "Duman yerde 3 saniye daha uzun kalır."},
+			{"id": "cadi_q3", "name": "Tutumlu Karışım", "desc": "Zehirli Duman saniyede %50 daha az mana kalkanı harcar."},
 			{"id": "cadi_q4", "name": "Yoğun Duman", "desc": "Dumanın boyutu %30 artar."},
 			{"id": "cadi_qf", "name": "Kan Buharı", "desc": "Duman %3 can emme kazanır (alan hasarı olduğu için etkisi %33'tür).", "final": true},
 		],
@@ -56,21 +56,21 @@ const DEFS := {
 		"skill": [
 			{"id": "hadime_q1", "name": "Patlayan Lanet", "desc": "Lanet isabet ettiğinde patlar ve çevresindeki yaratıklara verdiği hasarın %70'i kadar hasar verir."},
 			{"id": "hadime_q2", "name": "Hafif Süzülüş", "desc": "Lanet Kitabı artık seni yavaşlatmaz; açıkken %10 hareket hızı kazanırsın."},
-			{"id": "hadime_q3", "name": "Tutumlu Okuma", "desc": "Lanet Kitabı saniyede %50 daha az kalkan harcar."},
+			{"id": "hadime_q3", "name": "Tutumlu Okuma", "desc": "Lanet Kitabı saniyede %50 daha az mana kalkanı harcar."},
 			{"id": "hadime_q4", "name": "Hızlı Okuma", "desc": "Saldırı hızına bağlı olarak lanetleri daha hızlı yaratıp gönderirsin."},
 			{"id": "hadime_qf", "name": "Çifte Lanet", "desc": "Her seferinde gönderdiğin lanet sayısı 2 katına çıkar (3 yerine 6).", "final": true},
 		],
 		"skill2": [
 			{"id": "hadime_e1", "name": "Genişleyen Boşluk", "desc": "Kara deliğin boyutu %50 artar."},
 			{"id": "hadime_e2", "name": "Gezgin Delik", "desc": "Kara delik kalabalık yaratıklara doğru ilerler ve içine çektiklerini kendisiyle sürükler."},
-			{"id": "hadime_e3", "name": "Kalkan Emici", "desc": "Kara delik verdiği hasarın %20'si kadar kalkanını yeniler."},
+			{"id": "hadime_e3", "name": "Kalkan Emici", "desc": "Kara delik verdiği hasarın %20'si kadar mana kalkanını yeniler."},
 			{"id": "hadime_e4", "name": "Hızlı Çöküş", "desc": "Kara deliğin bekleme süresi %30 azalır."},
 			{"id": "hadime_ef", "name": "Süpernova", "desc": "Kara delik ömrünün sonunda patlar ve içindeki yaratıklara saldırı gücünün %150'si kadar hasar verir.", "final": true},
 		],
 		"skill3": [
 			{"id": "hadime_r1", "name": "Uzun Kabus", "desc": "Karabasan formunun süresi 5 saniye artar."},
 			{"id": "hadime_r2", "name": "Tekrarlayan Kabus", "desc": "Karabasan formunun bekleme süresi %25 azalır."},
-			{"id": "hadime_rf", "name": "Bedelsiz Kabus", "desc": "Karabasan formu aktifken yeteneklerin kalkan harcamaz.", "final": true},
+			{"id": "hadime_rf", "name": "Bedelsiz Kabus", "desc": "Karabasan formu aktifken yeteneklerin mana kalkanı harcamaz.", "final": true},
 		],
 	},
 	## ---------------------------------------------------------------- Vampir Çocuk
@@ -79,7 +79,7 @@ const DEFS := {
 			{"id": "vampir_q1", "name": "Kan Bağı", "desc": "Kan Emme'yi her kullandığında maksimum canın kalıcı olarak 1 artar."},
 			{"id": "vampir_q2", "name": "Açlık", "desc": "Kan Emme'nin bekleme süresi %50 azalır."},
 			{"id": "vampir_q3", "name": "Kanla Beslenme", "desc": "Kan Emme ile verdiğin hasarın %3'ü kadar can yenilersin."},
-			{"id": "vampir_q4", "name": "Kan Kalkanı", "desc": "Kan Emme ile verdiğin hasarın %6'sı kadar kalkan yenilersin."},
+			{"id": "vampir_q4", "name": "Kan Kalkanı", "desc": "Kan Emme ile verdiğin hasarın %6'sı kadar mana kalkanı yenilersin."},
 			{"id": "vampir_qf", "name": "Kan Ziyafeti", "desc": "Kan Emme 4 yerine 5 yaratığın kanını emer.", "final": true},
 		],
 		"skill2": [
@@ -105,15 +105,15 @@ const DEFS := {
 			{"id": "melek_qf", "name": "İkiz Şifa", "desc": "Aynı anda 2 dosta can verirsin (ikinci dost bu yeteneğin sağladığının %50'si kadar iyileşir).", "final": true},
 		],
 		"skill2": [
-			{"id": "melek_e1", "name": "Kutsal Zırh", "desc": "Kalkan bağı sürerken bağlı dostun ve sen %10 kalkan soğurma kazanırsınız, aldığınız hasar %15 azalır."},
+			{"id": "melek_e1", "name": "Kutsal Zırh", "desc": "Kalkan bağı sürerken bağlı dostun ve sen %10 mana kalkanı soğurma kazanırsınız, aldığınız hasar %15 azalır."},
 			{"id": "melek_e2", "name": "Çabuk Kalkan", "desc": "Kalkan Yenileme'nin bekleme süresi %25 azalır."},
-			{"id": "melek_e3", "name": "Güçlü Kalkan", "desc": "Kalkan Yenileme'nin verdiği kalkan %25 artar."},
+			{"id": "melek_e3", "name": "Güçlü Kalkan", "desc": "Kalkan Yenileme'nin verdiği mana kalkanı %25 artar."},
 			{"id": "melek_e4", "name": "Sarsılmaz Bağ", "desc": "Kalkan verme menzili %50 artar ve kurulan kalkan bağı bir daha kopmaz."},
 			{"id": "melek_ef", "name": "Kanatlı Adımlar", "desc": "Kalkan bağı sürerken bağlı dostun ve sen %25 hareket hızı kazanırsınız.", "final": true},
 		],
 		"skill3": [
 			## 2026-10-11 R rework'üyle yenilendi (kimlikler aynı kaldı - kayıt/geri katılım listeleri bozulmasın).
-			{"id": "melek_r1", "name": "Bedelsiz Işık", "desc": "Kutsal Korku kalkan harcamaz ve bekleme süresi %15 azalır."},
+			{"id": "melek_r1", "name": "Bedelsiz Işık", "desc": "Kutsal Korku mana kalkanı harcamaz ve bekleme süresi %15 azalır."},
 			{"id": "melek_r2", "name": "Kutsal Lütuf", "desc": "%15 İyileştirme ve Kalkan Gücü kazanırsın."},
 			{"id": "melek_rf", "name": "Yeniden Doğuş", "desc": "Kutsal Korku'yu kullandığında diğer yeteneklerinin (Can Basma ve Kalkan Yenileme) bekleme süresi anında sıfırlanır.", "final": true},
 		],
@@ -121,9 +121,9 @@ const DEFS := {
 	## ---------------------------------------------------------------- Talon
 	1: {
 		"skill": [
-			{"id": "talon_q1", "name": "Kalkan Hamlesi", "desc": "Hamleyle hasar verdiğin her yaratık için eksik kalkanının %3'ü yenilenir."},
+			{"id": "talon_q1", "name": "Kalkan Hamlesi", "desc": "Hamleyle hasar verdiğin her yaratık için eksik mana kalkanının %3'ü yenilenir."},
 			{"id": "talon_q2", "name": "Çevik Hamle", "desc": "Hamle Vuruşu'nun bekleme süresi %30 azalır."},
-			{"id": "talon_q3", "name": "Sert Duruş", "desc": "Hamleden sonra 3 saniye boyunca %15 kalkan soğurma kazanırsın."},
+			{"id": "talon_q3", "name": "Sert Duruş", "desc": "Hamleden sonra 3 saniye boyunca %15 mana kalkanı soğurma kazanırsın."},
 			{"id": "talon_q4", "name": "Sarsıcı Hamle", "desc": "Hamle isabet ettiği yaratıkları 2 saniye sersemletir ve vuruş alanı %30 artar."},
 			{"id": "talon_qf", "name": "Hayalet Hamle", "desc": "Hamle sırasında %100 sıvışma kazanırsın (sıvışma sınırını aşar).", "final": true},
 		],
@@ -159,7 +159,7 @@ const DEFS := {
 		"skill3": [
 			{"id": "elara_r1", "name": "Çabuk Tetik", "desc": "Çift Tetik'in bekleme süresi %20 azalır."},
 			{"id": "elara_r2", "name": "Güçlü Tetik", "desc": "Çift Tetik aktifken %20 saldırı gücü kazanırsın."},
-			{"id": "elara_rf", "name": "Kalkan Tetiği", "desc": "Çift Tetik kalkan harcamaz ve kullandığında kalkanın anında tamamen dolar.", "final": true},
+			{"id": "elara_rf", "name": "Kalkan Tetiği", "desc": "Çift Tetik mana kalkanı harcamaz ve kullandığında mana kalkanın anında tamamen dolar.", "final": true},
 		],
 	},
 	## ---------------------------------------------------------------- Korsan
@@ -188,10 +188,10 @@ const DEFS := {
 	7: {
 		"skill": [
 			{"id": "sovalye_q1", "name": "Meydan Okuma", "desc": "Kullandığında çevrendeki yaratıkları kışkırtıp sana saldırtırsın; kışkırtılan yaratıklar %10 fazla hasar alır."},
-			{"id": "sovalye_q2", "name": "Demir İrade", "desc": "Yetenek aktifken %20 kalkan soğurma kazanırsın (kalkan soğurma sınırını aşabilir)."},
-			{"id": "sovalye_q3", "name": "Güçlü Yenilenme", "desc": "Yeteneğin yenilediği kalkan %25 artar."},
+			{"id": "sovalye_q2", "name": "Demir İrade", "desc": "Yetenek aktifken %20 mana kalkanı soğurma kazanırsın (mana kalkanı soğurma sınırını aşabilir)."},
+			{"id": "sovalye_q3", "name": "Güçlü Yenilenme", "desc": "Yeteneğin yenilediği mana kalkanı %25 artar."},
 			{"id": "sovalye_q4", "name": "Uzun Nöbet", "desc": "Yeteneğin etki süresi 2 saniye artar."},
-			{"id": "sovalye_qf", "name": "Anında Kalkan", "desc": "Kullandığında anında maksimum kalkanının %15'i kadar kalkan yenilersin.", "final": true},
+			{"id": "sovalye_qf", "name": "Anında Kalkan", "desc": "Kullandığında anında maksimum mana kalkanının %15'i kadar mana kalkanı yenilersin.", "final": true},
 		],
 		"skill2": [
 			{"id": "sovalye_e1", "name": "Çabuk Bariyer", "desc": "Koruma Bariyeri'nin bekleme süresi %25 azalır."},
@@ -202,8 +202,8 @@ const DEFS := {
 		],
 		"skill3": [
 			{"id": "sovalye_r1", "name": "Sarsıcı Patlama", "desc": "Kalkan patladığında yaratıkları çok uzağa iter."},
-			{"id": "sovalye_r2", "name": "Yansıtan Kubbe", "desc": "Yetenek aktifken kalkana vuran yaratıklar, Şovalye Adam'ın azami kalkanının %10'u kadar hasar alır."},
-			{"id": "sovalye_rf", "name": "Yürüyen Kale", "desc": "Yetenek aktifken hareket hızının %30'uyla kalkanla birlikte yürüyebilirsin.", "final": true},
+			{"id": "sovalye_r2", "name": "Yansıtan Kubbe", "desc": "Yetenek aktifken mana kalkanına vuran yaratıklar, Şovalye Adam'ın azami mana kalkanının %10'u kadar hasar alır."},
+			{"id": "sovalye_rf", "name": "Yürüyen Kale", "desc": "Yetenek aktifken hareket hızının %30'uyla mana kalkanıyla birlikte yürüyebilirsin.", "final": true},
 		],
 	},
 	## ---------------------------------------------------------------- Matthew
@@ -212,7 +212,7 @@ const DEFS := {
 			## 2026-10-12 REWORK (madde 98): köpek gitti, kit şimşek oldu. Q ve R geliştirmelerinin ETKİLERİ (ve id'leri) aynı, yalnız
 			## adlar/açıklamalar şimşeğe uyarlandı; E geliştirmeleri kullanıcının yeni listesi (Elektrik Topu).
 			{"id": "matthew_q1", "name": "Savuran Şimşek", "desc": "Şimşek vurduğu yaratıkları senden uzağa iter."},
-			{"id": "matthew_q2", "name": "Bedava Akım", "desc": "Şimşek Hücumu kalkan harcamaz."},
+			{"id": "matthew_q2", "name": "Bedava Akım", "desc": "Şimşek Hücumu mana kalkanı harcamaz."},
 			{"id": "matthew_q3", "name": "Yüksek Gerilim", "desc": "Şimşek Hücumu'nun hasarı %30 artar."},
 			{"id": "matthew_q4", "name": "Hızlı Şarj", "desc": "Şimşek Hücumu'nun bekleme süresi %30 azalır."},
 			{"id": "matthew_qf", "name": "Fırtına Zinciri", "desc": "Şimşek Hücumu'nun hedef sayısı 6'dan 10'a çıkar.", "final": true},
@@ -247,7 +247,7 @@ const DEFS := {
 		"skill2": [
 			{"id": "assasin_e1", "name": "Uzun Gölge", "desc": "Görünmezliğin süresi 2 saniye uzar."},
 			{"id": "assasin_e2", "name": "Pusu", "desc": "Gölge Adımı aktifken %25 saldırı gücü kazanırsın."},
-			{"id": "assasin_e3", "name": "Gölge Nefesi", "desc": "Görünmezlik aktifleştiğinde kalkan yenilenmesinin bekleme süresi sıfırlanır; kalkanın hemen dolmaya başlar."},
+			{"id": "assasin_e3", "name": "Gölge Nefesi", "desc": "Görünmezlik aktifleştiğinde mana kalkanı yenilenmesinin bekleme süresi sıfırlanır; mana kalkanın hemen dolmaya başlar."},
 			{"id": "assasin_e4", "name": "Sessiz Adımlar", "desc": "Görünmezken %20 hareket hızı kazanırsın."},
 			{"id": "assasin_ef", "name": "Gölge Kopyası", "desc": "Görünmezliği aktifleştirdiğinde bulunduğun yere bir gölge kopyanı bırakırsın; görünmezlik sürerken E'ye tekrar basmak seni kopyana geri ışınlar.", "final": true},
 		],
@@ -273,7 +273,7 @@ const DEFS := {
 			{"id": "shaman_e1", "name": "Geniş Alan", "desc": "Kalkan Totemi'nin alanı %30 büyür."},
 			{"id": "shaman_e2", "name": "Savaş Ritmi", "desc": "Alanın içindeki oyuncular %15 saldırı hızı kazanır."},
 			{"id": "shaman_e3", "name": "Yapışkan Zemin", "desc": "Alandaki yaratıklar %70 yavaşlar."},
-			{"id": "shaman_e4", "name": "Güçlü Kalkan", "desc": "Totemin verdiği kalkan %50 artar."},
+			{"id": "shaman_e4", "name": "Güçlü Kalkan", "desc": "Totemin verdiği mana kalkanı %50 artar."},
 			{"id": "shaman_ef", "name": "İtici Dalga", "desc": "Alan her hasar verdiğinde yaratıkları totemin merkezinden bir miktar dışarı iter.", "final": true},
 		],
 		"skill3": [
@@ -288,10 +288,10 @@ const DEFS := {
 	## Nova artık dondurmaz, 6 sn %80 yavaşlatır (R finali ilk 3 sn dondurur). Sayılar player.gd EVO_BUYUCU_* sabitlerinde.
 	4: {
 		"skill": [
-			{"id": "buyucu_q1", "name": "Kalkan Akışı", "desc": "Her set değiştirdiğinde maksimum kalkanının %10'u yenilenir (bu etkinin 10 saniye bekleme süresi vardır)."},
+			{"id": "buyucu_q1", "name": "Kalkan Akışı", "desc": "Her set değiştirdiğinde maksimum mana kalkanının %10'u yenilenir (bu etkinin 10 saniye bekleme süresi vardır)."},
 			{"id": "buyucu_q2", "name": "Büyü Rüzgarı", "desc": "E veya ulti yeteneğini kullandığında 2 saniye boyunca %20 hareket hızı kazanırsın."},
 			{"id": "buyucu_q3", "name": "Akıcı Büyü", "desc": "Tüm yeteneklerinin bekleme süresi %15 azalır."},
-			{"id": "buyucu_q4", "name": "Tutumlu Büyü", "desc": "Yeteneklerinin kalkan bedeli %25 azalır."},
+			{"id": "buyucu_q4", "name": "Tutumlu Büyü", "desc": "Yeteneklerinin mana kalkanı bedeli %25 azalır."},
 			{"id": "buyucu_qf", "name": "Efsunlu Büyü", "desc": "Her 5 yetenek kullanımında (Q hariç) yeteneklerinden biri efsunlanır ve butonu parıldar: bir sonraki kullanımında boyutu ve hasarı %25 artar.", "final": true},
 		],
 		"skill2": [
@@ -303,7 +303,7 @@ const DEFS := {
 		],
 		"skill3": [
 			{"id": "buyucu_r1", "name": "Yükseliş", "desc": "Meteor Patlaması süresince havaya yükselir ve hedef alınamaz olursun. Don Nova yaratıkları etki alanının dışına iter."},
-			{"id": "buyucu_r2", "name": "Meteor Sağanağı", "desc": "Meteorlar %30 daha sık düşer. Don Nova kalkan harcamaz."},
+			{"id": "buyucu_r2", "name": "Meteor Sağanağı", "desc": "Meteorlar %30 daha sık düşer. Don Nova mana kalkanı harcamaz."},
 			{"id": "buyucu_rf", "name": "Ateş ve Buz", "desc": "Meteorlar yere krater bırakır; üstüne basan yaratıklar yanarak 3 saniye boyunca saniyede saldırı gücünün %30'u kadar hasar alır. Don Nova yaratıkları ilk 3 saniye dondurur.", "final": true},
 		],
 	},
@@ -315,14 +315,14 @@ const DEFS := {
 		"skill": [
 			{"id": "necro_q1", "name": "Kemik Ordusu", "desc": "Aynı anda sahip olabileceğin yaratık (iskelet + golem) sınırı 10'dan 20'ye çıkar."},
 			{"id": "necro_q2", "name": "Ucuz Ruhlar", "desc": "İskelet yaratmanın ruh bedeli 8 yerine 5 olur."},
-			{"id": "necro_q3", "name": "Sert Kemikler", "desc": "İskeletlerin canı ve kalkanı %20 artar."},
-			{"id": "necro_q4", "name": "Dayanıklı Ruhlar", "desc": "İskeletlerin hayatta kalma süresi 15 saniye artar."},
-			{"id": "necro_qf", "name": "Kemik Fedası", "desc": "Canın %20'nin altına düştüğünde anında tüm iskeletlerin ruhunu tüketirsin; hayatta olan her iskelet başına saldırı gücünün %10'u kadar can ve kalkan yenilersin.", "final": true},
+			{"id": "necro_q3", "name": "Sert Kemikler", "desc": "İskeletlerin canı ve mana kalkanı %20 artar."},
+			{"id": "necro_q4", "name": "Dayanıklı Ruhlar", "desc": "İskeletlerin hayatta kalma süresi 7,5 saniye artar."},
+			{"id": "necro_qf", "name": "Kemik Fedası", "desc": "Canın %20'nin altına düştüğünde anında tüm iskeletlerin ruhunu tüketirsin; hayatta olan her iskelet başına saldırı gücünün %10'u kadar can ve mana kalkanı yenilersin.", "final": true},
 		],
 		"skill2": [
 			{"id": "necro_e1", "name": "Ucuz Golem", "desc": "Golem çağırmanın ruh bedeli 50 yerine 35 olur."},
 			{"id": "necro_e2", "name": "Yıkıcı Yumruk", "desc": "Golemlerin saldırıları düşmanları geriye iter."},
-			{"id": "necro_e3", "name": "Taş Gövde", "desc": "Golemin canı ve kalkanı %30 artar."},
+			{"id": "necro_e3", "name": "Taş Gövde", "desc": "Golemin canı ve mana kalkanı %30 artar."},
 			{"id": "necro_e4", "name": "Dev Golem", "desc": "Golemler %20 büyür; vuruş alanları ve hasarları %20 artar."},
 			{"id": "necro_ef", "name": "Son Çare Golemi", "desc": "Canın %20'nin altına düştüğünde anında bedelsiz 1 golem doğar; doğduğu anda tüm yaratıkları kışkırtarak kendisine saldırtır. (120 saniye bekleme süresi)", "final": true},
 		],

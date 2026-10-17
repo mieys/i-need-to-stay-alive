@@ -51,7 +51,7 @@ func test_necromancer_r_is_the_skull() -> void:
 	var t: Dictionary = PlayerScript.SKILL3_TIMING[44]
 	assert(is_equal_approx(float(t["duration"]), SkullScript.DURATION) and is_equal_approx(SkullScript.DURATION, 10.0), "10sn çarpma")
 	assert(is_equal_approx(float(t["cooldown"]), 60.0), "60sn bekleme")
-	assert(is_equal_approx(SkullScript.PASSIVE_DAMAGE_AP_RATIO, 0.60) and is_equal_approx(SkullScript.ACTIVE_DAMAGE_AP_RATIO, 1.50), "pasif 0.60 / aktif 1.50")
+	assert(is_equal_approx(SkullScript.PASSIVE_DAMAGE_AP_RATIO, 0.50) and is_equal_approx(SkullScript.ACTIVE_DAMAGE_AP_RATIO, 1.25), "pasif 0.50 / aktif 1.25")
 	assert(is_equal_approx(SkullScript.PASSIVE_SCALE, 0.5) and is_equal_approx(SkullScript.EVO_FEAR_DURATION, 1.0), "yarı boy, korku yalnız evrimle 1sn")
 	var src: String = FileAccess.get_file_as_string("res://scripts/player.gd")
 	assert(src.contains("44: _skill_necro_skull()"), "skill3 match'i kafatasını çağırmalı")
@@ -184,12 +184,12 @@ func test_passive_is_half_size_and_weaker_than_active() -> void:
 	add_child(skull)
 	assert(not skull.is_active())
 	assert(is_equal_approx(skull._impact_radius(), SkullScript.IMPACT_RADIUS * 0.5), "pasif vuruş alanı yarım")
-	assert(is_equal_approx(skull._damage_ratio(), 0.60) and skull._seek_range() < SkullScript.SEEK_RANGE)
+	assert(is_equal_approx(skull._damage_ratio(), 0.50) and skull._seek_range() < SkullScript.SEEK_RANGE)
 	skull.set_active(SkullScript.DURATION)
 	assert(skull.is_active() and is_equal_approx(skull._impact_radius(), SkullScript.IMPACT_RADIUS), "aktif: vuruş alanı yüzde 100 artar")
-	assert(is_equal_approx(skull._damage_ratio(), 1.50) and is_equal_approx(skull._seek_range(), SkullScript.SEEK_RANGE))
+	assert(is_equal_approx(skull._damage_ratio(), 1.25) and is_equal_approx(skull._seek_range(), SkullScript.SEEK_RANGE))
 	skull._active_left = 0.0
-	assert(is_equal_approx(skull._damage_ratio(), 0.60), "süre bitince pasife döner")
+	assert(is_equal_approx(skull._damage_ratio(), 0.50), "süre bitince pasife döner")
 	skull.queue_free()
 
 

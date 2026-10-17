@@ -6,6 +6,7 @@ extends CanvasLayer
 
 signal closed
 
+const UiAnim := preload("res://scripts/ui_anim.gd")
 const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
 const RunSummaryUIScript: GDScript = preload("res://scripts/run_summary_ui.gd")
@@ -21,6 +22,7 @@ func _ready() -> void:
 	_build_ui()
 	if _close_btn:
 		_close_btn.grab_focus()
+	UiAnim.window_in(self)
 
 
 func _build_ui() -> void:

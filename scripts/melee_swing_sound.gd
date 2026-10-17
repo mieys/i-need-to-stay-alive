@@ -1,5 +1,7 @@
 extends Node2D
 
+const AudioBuses := preload("res://scripts/audio_buses.gd")
+
 ## Yakın dövüş kombo ses çalıcısı: her saldırıda verilen seslerin HEPSİ
 ## çalar, rastgele sırayla ama art arda bindirmeli - bir ses süresinin
 ## %60'ına geldiğinde bir sonraki başlar (böylece 3 ses üst üste, kombo
@@ -21,6 +23,12 @@ func setup(paths: Array, volume_db: float = -12.0) -> void:
 		s.max_distance = 1500.0
 		add_child(s)
 		_players.append(s)
+
+
+## Silah Şovalye kubbesinin halkasındaysa sesler sert boğuk yola gider (audio_buses.gd route_rim_sound).
+func set_rim_muffled(on: bool) -> void:
+	for s: AudioStreamPlayer2D in _players:
+		AudioBuses.route_rim_sound(s, on)
 
 
 ## Her saldırıda çağrılır: 3 sesi rastgele sırayla, zincirleme başlatır.

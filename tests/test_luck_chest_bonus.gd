@@ -25,7 +25,7 @@ func test_drop_functions_use_killer_luck_multiplier() -> void:
 		assert(i != -1, "%s bulunamadı" % fn)
 		assert(source.substr(i, 900).find("_luck_mult(LUCK_DROP_MULT_PER_POINT)") != -1, "%s çarpımsal şans kullanmalı" % fn)
 	var g: int = source.find("func _drop_gold()")
-	assert(source.substr(g, 400).find("_luck_mult(LUCK_GOLD_MULT_PER_POINT)") != -1, "_drop_gold çarpımsal şans kullanmalı")
+	assert(source.substr(g, 900).find("_luck_mult(LUCK_GOLD_MULT_PER_POINT)") != -1, "_drop_gold çarpımsal şans kullanmalı")
 	var k: int = source.find("func _killer_node()")
 	assert(k != -1 and source.substr(k, 700).find("last_attacker_peer_id") != -1, "öldürenin şansı last_attacker_peer_id'den bulunmalı")
 

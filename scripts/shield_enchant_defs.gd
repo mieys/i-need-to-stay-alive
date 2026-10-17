@@ -20,11 +20,11 @@ const CARD_TIER := 3 ## Epik (mor) - sadece kart rengi
 
 const TYPES := {
 	"shield_standart": {
-		"name": "Standart Kalkan",
+		"name": "Standart Mana Kalkanı",
 		"power": 150.0, "absorption": 0.65, "regen": 10.0, "delay": 8.0, "always_regen": false,
 	},
 	"shield_savas": {
-		"name": "Savaş Kalkanı",
+		"name": "Savaş Mana Kalkanı",
 		"power": 160.0, "absorption": 0.60, "regen": 4.0, "delay": 0.0, "always_regen": true,
 		"desc": "Savaştayken bile yenilenir, hasar alınca beklemez (son 3 sn içinde hasar aldıysan yarı hızda).",
 		"color": Color(0.95, 0.3, 0.3),
@@ -34,10 +34,10 @@ const TYPES := {
 		],
 	},
 	"shield_enerji": {
-		"name": "Enerji Kalkanı",
+		"name": "Enerji Mana Kalkanı",
 		"power": 110.0, "absorption": 0.55, "regen": 9.0, "delay": 6.0, "always_regen": false,
 		"desc": "Hasar alınca kısa bir süre bekler, sonra çok hızlı dolar.",
-		"color": Color(0.66, 0.96, 0.3),
+		"color": Color(1.0, 0.84, 0.26), ## sarı (kullanıcı 2026-10-14; mana_shield_fx.gd PALETTES ile uyumlu)
 		"upgrades": [
 			{"limit": 0, "power": 50.0, "regen": 4.0},
 			{"limit": 5, "power": 50.0, "absorption": 0.03},
@@ -45,10 +45,10 @@ const TYPES := {
 		],
 	},
 	"shield_kale": {
-		"name": "Kale Kalkanı",
+		"name": "Kale Mana Kalkanı",
 		"power": 200.0, "absorption": 0.75, "regen": 7.0, "delay": 8.0, "always_regen": false,
-		"desc": "En çok kalkan ve en yüksek soğurma, ama yavaş dolar.",
-		"color": Color(0.26, 0.86, 0.66),
+		"desc": "En çok mana kalkanı ve en yüksek soğurma, ama yavaş dolar.",
+		"color": Color(0.66, 0.42, 0.96), ## mor (kullanıcı 2026-10-14)
 		"upgrades": [
 			{"limit": 0, "power": 100.0, "regen": 3.5},
 			{"limit": 5, "power": 100.0, "absorption": 0.04},
@@ -96,6 +96,7 @@ static func stats() -> Dictionary:
 			var n: int = upgrade_count(i)
 			for stat in ["power", "absorption", "regen", "delay"]:
 				out[stat] = float(out[stat]) + float(ups[i].get(stat, 0.0)) * n
+	out["regen"] = float(out["regen"]) * GameManager.SHIELD_REGEN_SPEED_MULT
 	return out
 
 
@@ -141,7 +142,7 @@ static func describe(card: Dictionary, out: Dictionary) -> void:
 	var kind: String = str(card.get("type", ""))
 	var now: Dictionary = stats()
 	var tier_name: String = str(TierSystem.NAMES[CARD_TIER - 1])
-	out["category"] = "Kalkan efsunu"
+	out["category"] = "Mana Kalkanı efsunu"
 	out["banishable"] = false
 	if kind == "shield_pick":
 		var key: String = str(card.get("id", ""))
@@ -149,7 +150,7 @@ static func describe(card: Dictionary, out: Dictionary) -> void:
 		out["title"] = str(def.get("name", key))
 		out["icon"] = str(ICONS.get(key, ""))
 		out["color"] = def.get("color", Color.WHITE)
-		out["tier_line"] = "%s · Kalkan" % tier_name
+		out["tier_line"] = "%s · Mana Kalkanı" % tier_name
 		## Sade kart (2026-10-03, bkz. enchant_pool.gd describe notu): başlangıç kartı sadece kalkanın nasıl çalıştığını anlatır.
 		out["body"] = str(def.get("desc", ""))
 		return
@@ -159,10 +160,10 @@ static func describe(card: Dictionary, out: Dictionary) -> void:
 	out["title"] = "%s · Geliştirme %d" % [str(def2.get("name", "")), i + 1]
 	out["icon"] = str(ICONS.get(GameManager.shield_enchant, ""))
 	out["color"] = def2.get("color", Color.WHITE)
-	out["tier_line"] = "%s · Kalkan geliştirmesi" % tier_name
+	out["tier_line"] = "%s · Mana Kalkanı geliştirmesi" % tier_name
 	var after2: Dictionary = now.duplicate()
 	for stat in ["power", "absorption", "regen", "delay"]:
-		after2[stat] = float(now.get(stat, 0.0)) + float(up.get(stat, 0.0))
+		after2[stat] = float(now.get(stat, 0.0)) + float(up.get(stat, 0.0)) * (GameManager.SHIELD_REGEN_SPEED_MULT if stat == "regen" else 1.0)
 	## Geliştirme kartı sadece değişen statları yazar (bkz. enchant_pool.gd describe notu).
 	out["body"] = _compare_lines(now, after2, false)
 
@@ -173,7 +174,7 @@ static func _compare_lines(before: Dictionary, after: Dictionary, all_lines: boo
 	var b_pow: float = float(before.get("power", 0.0))
 	var a_pow: float = float(after.get("power", 0.0))
 	if all_lines or not is_equal_approx(b_pow, a_pow):
-		lines.append("Kalkan: %d → %d" % [int(round(b_pow)), int(round(a_pow))])
+		lines.append("Mana Kalkanı: %d → %d" % [int(round(b_pow)), int(round(a_pow))])
 	var b_abs: float = float(before.get("absorption", 0.0))
 	var a_abs: float = float(after.get("absorption", 0.0))
 	if all_lines or not is_equal_approx(b_abs, a_abs):
@@ -208,4 +209,4 @@ static func summary() -> String:
 	var total: int = 0
 	for n in GameManager.shield_enchant_ups:
 		total += int(n)
-	return "Kalkan: %s (%d geliştirme)" % [type_name(GameManager.shield_enchant), total]
+	return "Mana Kalkanı: %s (%d geliştirme)" % [type_name(GameManager.shield_enchant), total]

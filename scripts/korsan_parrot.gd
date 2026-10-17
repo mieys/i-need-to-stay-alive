@@ -1,52 +1,41 @@
 extends Node2D
 
-## Korsan pasifi "Papağan" (kullanıcı isteği 2026-09-26): "Papağanı korsanın omzunda durur ve etrafta altın varsa uçarak
-## altını alarak korsanın omzuna tekrar geri döner. Topladığı her altından 1 bonus kazanır, aynı anda en fazla 3 altın
-## toplayıp getirebilir. Papağanın uçma hızı korsanın hareket hızının 1.2 katı kadardır. Topladığı altını ayağının altında
-## tutarak korsana getirir." Eski pasif (öldürmede %10+ şansla 1 altın) kaldırıldı.
+## Evcil hayvan Papağan (korsan_parrot.gd; dosya/sınıf adları eski Korsan pasifinden kaldı).
+## 2026-10-17 (madde 203, kullanıcı isteği): artık yerdeki altınları TOPLAMAZ. Sahibinin yakınındaki bir AĞACIN dibine uçar, 3-4 sn gagalar ve
+## ağaçtan yere bir eşya düşer (yiyecek / kalkan orbu / mıknatıs / silah parçacığı, değersizden değerliye; zar `parrot_tree_loot.gd`), sonra omza
+## döner ve kısa bir bekleme sonrası yeni bir ağaca gider.
 ##
 ## TEK script, iki mod:
-##  - YEREL (player.gd, Korsan oynayan kişinin kendi ekranı): altın arar, uçar, alır, getirir, altını hesaba ekler.
-##    Her durum değişikliğini NetworkManager.broadcast_korsan_parrot ile (güvenilir RPC) diğer oyunculara bildirir.
-##  - KUKLA (remote_player.gd, diğer oyuncuların ekranı): hiçbir karar vermez; gelen olaya göre AYNI hareket/görsel
-##    kodu ile hedefe uçar / omza döner / konar ve ayağındaki altın sayısını gösterir (CLAUDE.md "iki ayrı yer" kuralı:
-##    formül tek dosyada).
-## Altın sahipliği (çok oyunculu): altınlar host'ta gerçek, istemcilerde görsel kopya (bkz. gold_drop.gd). Papağan altını
-## aldığı AN: tek oyunculu / host -> NetworkManager.host_take_gold_for_parrot (host'ta "claimed" işareti - iki kişi aynı
-## altını alamaz; boss altını her zamanki gibi herkese paylaştırılır, papağan sadece bonusunu getirir); istemci ->
-## request_parrot_gold ile host'a sorar, cevap (miktar ya da "başkası aldı") parrot_gold_result ile gelir. Altın hesaba
-## papağan omza KONDUĞUNDA eklenir (cevap henüz gelmediyse gelince).
-##
-## Görsel: assets/characters/korsan_parrot (tools/gen_korsan_parrot.py) - karakterle AYNI sanat pikseli yoğunluğu (sprite
-## ölçeği karakterin sprite ölçeğinden kopyalanır). Omuzdayken oyuncunun normal çocuğu (oyuncunun akıcı/interpolasyonlu
-## konumunu kendiliğinden izler), uçarken top_level.
-
-## 2026-10-12: artık Korsan'a özel DEĞİL - menüden seçilen evcil hayvan (pet_catalog.gd "papagan"; player.gd _setup_pet, remote_player.gd
-## korsan_parrot_event). Korsan'ın pasifi "Altın Avcısı" oldu (player.gd _korsan_gold_on_kill). Dosya/sınıf adları eski kaldı.
+##  - YEREL (player.gd, sahibin kendi ekranı): ağaç seçer, uçar, gagalar, ödülü düşürür. Her durum değişikliğini
+##    NetworkManager.broadcast_korsan_parrot ile (güvenilir RPC) diğer oyunculara bildirir. Ödül: host / tek oyunculu doğrudan
+##    ParrotTreeLoot.spawn, istemci NetworkManager.request_parrot_tree_drop ile host'tan ister (drop'lar host'ta gerçek).
+##  - KUKLA (remote_player.gd, diğer oyuncuların ekranı): karar vermez; gelen olaya göre AYNI hareket/görsel kodla uçar / gagalar / konar.
+## Omuzdayken oyuncunun normal çocuğu (akıcı konumunu kendiliğinden izler), uçarken top_level. Görsel: assets/characters/korsan_parrot.
 
 const CharAnim := preload("res://scripts/char_anim.gd")
 const FRAMES: SpriteFrames = preload("res://assets/characters/korsan_parrot/parrot_frames.tres")
 const ANCHOR_OFFSET := Vector2(0.0, -6.0) ## hücrede ayak noktası (24, 30) -> düğüm orijini (bkz. gen_korsan_parrot.py)
 
-## Kullanıcı isteği (aynı gün, ikinci tur): "papağan topladığında değil altını getirdiğinde altın sesi gelsin ve altın başına
-## 1 ekstra altın değil gidiş geliş başına 1 bonus altın kazandırsın" - bonus artık TUR başına (taşınan altın sayısından
-## bağımsız), ses toplarken değil omza konup teslim ederken (kuklada da, diğer oyuncular duysun).
-const TRIP_BONUS := 1
-const GOLD_SOUND: AudioStream = preload("res://assets/audio/gold_pickup.mp3")
-const GOLD_SOUND_DB := -10.0 ## gold_drop.tscn PickupSound ile aynı
+const TerrainCollisionScript := preload("res://scripts/terrain_collision.gd")
+const ParrotTreeLoot := preload("res://scripts/parrot_tree_loot.gd")
 
-const MAX_CARRY := 3
-const SPEED_MULT := 1.2 ## Korsan'ın (etkin) hareket hızının katı
+const SPEED_MULT := 1.2 ## sahibin (etkin) hareket hızının katı
 const MIN_SPEED := 120.0
-const SCAN_RADIUS := 320.0 ## Korsan'a bu mesafedeki altınlar
-const MIN_GOLD_DIST := 64.0 ## bundan yakını Korsan zaten kendisi çekip alır (drop_attraction.gd DEFAULT_PICKUP_RANGE 60)
-const NEXT_GOLD_RADIUS := 160.0 ## bir altını aldıktan sonra devam etmek için papağanın çevresi
-const LEASH := 560.0 ## Korsan'dan bu kadar uzaklaşırsa geri döner
-const SCAN_INTERVAL := 0.25
+const SCAN_RADIUS := 320.0 ## sahibe bu mesafedeki ağaçlar
+const MIN_TREE_DIST := 48.0 ## bundan yakın ağaçlar seçilmez (omuzdan kalkmaya değmez)
+const SAME_TREE_DIST := 40.0 ## az önce gagalanan ağaca tekrar gitme
+const LEASH := 560.0 ## sahipten bu kadar uzaklaşırsa geri döner
+const SCAN_INTERVAL := 0.5
+const TREE_TRIES := 48 ## ağaç hücresi listesinden rastgele kaç deneme (liste binlerce hücre olabilir)
+const PECK_MIN := 3.0 ## kullanıcı: "3-4 saniye gagalayarak"
+const PECK_MAX := 4.0
+const COOLDOWN := 60.0 ## omza döndükten sonra yeni ağaç aramadan önce bekleme (kullanıcı: "60 saniyede bir")
+const PECK_BODY_OFFSET := Vector2(0.0, 3.0) ## papağan ağaç dibinin hemen önünde durur (y-sıralamada gövdenin önünde kalsın, tacın arkasında kaybolmasın)
+const DROP_SCATTER := Vector2(10.0, 8.0) ## ödül ağaç dibinin etrafında bu kadar saçılır (+ biraz önüne)
 const GRAB_DIST := 7.0
 const LAND_DIST := 7.0
 
-## Omuz noktaları: Korsan'ın 48x48 karesinde (sanat pikseli) yöne göre tünek + papağanın bakışı + karakterin ARKASINDA mı
+## Omuz noktaları: sahibin 48x48 karesinde (sanat pikseli) yöne göre tünek + papağanın bakışı + karakterin ARKASINDA mı
 ## (yan görünüşte arka omuzda, başın arkasında kalır).
 const PERCH := {
 	"down": {"p": Vector2(34, 24), "flip": false, "behind": false},
@@ -55,7 +44,7 @@ const PERCH := {
 	"right": {"p": Vector2(19, 24), "flip": false, "behind": true},
 }
 
-enum State { PERCH, FLY_TO, RETURN }
+enum State { PERCH, FLY_TO, RETURN, PECK }
 
 var owner_body: Node2D = null
 var char_anim: AnimatedSprite2D = null
@@ -63,24 +52,18 @@ var is_puppet: bool = false
 
 var state: int = State.PERCH
 var _sprite: AnimatedSprite2D = null
-var _coins: AnimatedSprite2D = null
 var _behind: bool = false
 var _flying: bool = false
 var _speed: float = 200.0
-var _target: Node2D = null ## yerel: hedef altın düğümü
-var _target_pos: Vector2 = Vector2.ZERO ## kukla: hedef nokta
+var _target_pos: Vector2 = Vector2.ZERO ## ağaçta durulacak nokta (yerel: seçilen, kukla: bildirilen)
+var _tree_base: Vector2 = Vector2.ZERO ## yerel: ağacın dibi (ödül buraya düşer)
+var _last_tree: Vector2 = Vector2(INF, INF)
 var _scan_timer: float = 0.0
-## Yerel: taşınan altınlar [{"id": drop id, "amount": int}] - amount PENDING = istemcide host cevabı bekleniyor.
-const PENDING := -2
-var _carried: Array = []
-## Omza konmuş ama host cevabı henüz gelmemiş altınlar (drop id -> tur no) ve bonusu henüz ödenmemiş turlar (tur no -> true;
-## turdaki altınların HİÇBİRİ o an onaylı değilse bonus ilk onayla gelir).
-var _awaiting: Dictionary = {}
-var _bonus_due: Dictionary = {}
-var _trip_no: int = 0
-var _carry_visual: int = 0
-## "Buradayım" kalp atışı: papağan omuzda dururken HİÇ olay üretmediği için diğer ekranlardaki kukla ilk uçuşa kadar hiç kurulmuyordu
-## (evcil hayvan olarak seçilince altın yoksa/seyrekse papağan başkalarına görünmezdi). Kelebek Ruhu/Peri ile aynı desen.
+var _cooldown: float = 3.0
+var _peck_timer: float = 0.0
+var _peck_clock: float = 0.0
+var _arrived: bool = false ## kukla: hedefe vardı (gagalamaya başlar)
+## "Buradayım" kalp atışı: papağan omuzda dururken HİÇ olay üretmediği için diğer ekranlardaki kukla ilk uçuşa kadar hiç kurulmuyordu.
 const NET_HEARTBEAT := 8.0
 var _net_idle: float = NET_HEARTBEAT - 1.0
 
@@ -95,13 +78,6 @@ func setup(body: Node2D, anim_src: AnimatedSprite2D, puppet: bool) -> void:
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_sprite.offset = ANCHOR_OFFSET
 	add_child(_sprite)
-	_coins = AnimatedSprite2D.new()
-	_coins.sprite_frames = FRAMES
-	_coins.animation = &"coins"
-	_coins.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_coins.offset = ANCHOR_OFFSET
-	_coins.visible = false
-	add_child(_coins)
 	_sprite.play("perch")
 	_sprite.frame = randi() % 4
 
@@ -113,7 +89,6 @@ func _process(delta: float) -> void:
 		_process_puppet(delta)
 	else:
 		_process_local(delta)
-	_update_visual()
 
 
 ## ---------------------------------------------------------------- yerel (karar veren) taraf
@@ -129,176 +104,81 @@ func _process_local(delta: float) -> void:
 				_broadcast(State.PERCH, Vector2.ZERO)
 			if busy:
 				return
+			_cooldown -= delta
 			_scan_timer -= delta
-			if _scan_timer > 0.0:
+			if _cooldown > 0.0 or _scan_timer > 0.0:
 				return
 			_scan_timer = SCAN_INTERVAL
-			var g: Node2D = _find_gold(owner_body.global_position, MIN_GOLD_DIST, SCAN_RADIUS)
-			if g:
+			var found: Variant = _find_tree(owner_body.global_position)
+			if found != null:
+				_tree_base = found as Vector2
+				_target_pos = _tree_base + PECK_BODY_OFFSET
 				_take_off()
-				_set_target(g)
+				state = State.FLY_TO
+				_broadcast(State.FLY_TO, _target_pos)
 		State.FLY_TO:
 			if busy or global_position.distance_to(owner_body.global_position) > LEASH:
 				_start_return()
 				return
-			if not _is_takeable(_target):
-				var next: Node2D = _find_gold(owner_body.global_position, MIN_GOLD_DIST, SCAN_RADIUS)
-				if next:
-					_set_target(next)
-				else:
-					_start_return()
+			if _fly_toward(_target_pos, delta, GRAB_DIST):
+				state = State.PECK
+				_peck_timer = randf_range(PECK_MIN, PECK_MAX)
+				_peck_clock = 0.0
+				_broadcast(State.PECK, _target_pos)
+		State.PECK:
+			if busy or global_position.distance_to(owner_body.global_position) > LEASH:
+				_start_return()
 				return
-			if _fly_toward(_target.global_position, delta, GRAB_DIST):
-				_grab(_target)
-				_target = null
-				var next2: Node2D = null
-				if _carried.size() < MAX_CARRY and not busy:
-					next2 = _find_gold(global_position, 0.0, NEXT_GOLD_RADIUS, owner_body.global_position)
-				if next2:
-					_set_target(next2)
-				else:
-					_start_return()
+			_peck_timer -= delta
+			_bob(delta)
+			if _peck_timer <= 0.0:
+				_drop_loot()
+				_last_tree = _tree_base
+				_start_return()
 		State.RETURN:
 			if _fly_toward(_shoulder_global(), delta, LAND_DIST):
 				_land()
-				_deposit()
+				_cooldown = COOLDOWN
 				_broadcast(State.PERCH, Vector2.ZERO)
 
 
-## En yakın alınabilir altın. from: arama merkezi, [min_d, max_d]: from'a uzaklık aralığı; leash_center verilirse ayrıca
-## Korsan'a SCAN_RADIUS içinde olmalı.
-func _find_gold(from: Vector2, min_d: float, max_d: float, leash_center: Variant = null) -> Node2D:
-	var best: Node2D = null
-	var best_d: float = INF
-	var mp: bool = NetworkManager.is_multiplayer_active
-	for n in get_tree().get_nodes_in_group("gold_drops"):
-		var g := n as Node2D
-		if g == null or not _is_takeable(g):
+## Sahibin SCAN_RADIUS'u içinde, çok yakın olmayan rastgele bir ağaç dibi (yoksa null). Ağaç hücre listesi büyük: hepsini taramak yerine
+## rastgele TREE_TRIES deneme (her ~6 sn'de bir çalışır).
+func _find_tree(around: Vector2) -> Variant:
+	var forest: TileMapLayer = GameManager.get_forest_layer()
+	if forest == null:
+		return null
+	TerrainCollisionScript.ensure(forest)
+	var cells: Array = TerrainCollisionScript.by_category.get("trees", [])
+	if cells.is_empty():
+		return null
+	for i in range(TREE_TRIES):
+		var base: Vector2 = TerrainCollisionScript.cell_world_base(cells[randi() % cells.size()])
+		var d: float = base.distance_to(around)
+		if d < MIN_TREE_DIST or d > SCAN_RADIUS:
 			continue
-		## Host gerçek altına, istemci görsel kopyaya bakar (host'ta kopya yok ama yine de süzülür).
-		if mp and NetworkManager.is_host and g.get_meta("network_spawned", false):
+		if base.distance_to(_last_tree) < SAME_TREE_DIST:
 			continue
-		var d: float = from.distance_to(g.global_position)
-		if d < min_d or d > max_d:
-			continue
-		if leash_center != null and (leash_center as Vector2).distance_to(g.global_position) > SCAN_RADIUS:
-			continue
-		if d < best_d:
-			best_d = d
-			best = g
-	return best
+		return base
+	return null
 
 
-func _is_takeable(g: Variant) -> bool:
-	if g == null or not is_instance_valid(g):
-		return false
-	var n := g as Node2D
-	return n != null and n.is_inside_tree() and not n.is_queued_for_deletion() and not n.get_meta("claimed", false) \
-		and not n.get_meta("parrot_taken", false)
-
-
-func _grab(g: Node2D) -> void:
-	if not _is_takeable(g):
-		return
-	g.set_meta("parrot_taken", true)
-	var amount: int = 0
-	var drop_id: int = int(g.get_meta("drop_network_id", 0))
-	## Ses toplarken ÇALMAZ (bkz. TRIP_BONUS notu) - teslimde _play_gold_sound.
-	if not NetworkManager.is_multiplayer_active:
-		amount = int(g.get("amount"))
-		g.queue_free()
-	elif NetworkManager.is_host:
-		amount = NetworkManager.host_take_gold_for_parrot(g, owner_body) ## düğümü kendisi serbest bırakır
-		if amount < 0:
-			return ## başkası çoktan aldı
+## Gagalama bitti: ödül ağaç dibinin hemen önüne düşer (gövde hücresi geçilmez olduğu için biraz güneyde, sahibin alabileceği yerde).
+func _drop_loot() -> void:
+	var pos: Vector2 = _tree_base + Vector2(randf_range(-DROP_SCATTER.x, DROP_SCATTER.x), DROP_SCATTER.y + randf_range(0.0, 6.0))
+	if not NetworkManager.is_multiplayer_active or NetworkManager.is_host:
+		ParrotTreeLoot.spawn(get_tree(), pos, ParrotTreeLoot.roll())
 	else:
-		if drop_id <= 0:
-			return
-		NetworkManager.request_parrot_gold.rpc_id(NetworkManager._host_peer_id(), drop_id)
-		NetworkManager.discard_visual_drop(drop_id)
-		amount = PENDING
-		g.queue_free()
-	_carried.append({"id": drop_id, "amount": amount})
-	_carry_visual = _carried.size()
+		NetworkManager.request_parrot_tree_drop.rpc_id(NetworkManager._host_peer_id(), pos)
 
 
-## Omza konunca: onaylı altınların toplamı + TUR başına 1 bonus. Cevabı gelmemiş olanlar (istemci) cevap gelince eklenir;
-## turda o an hiç onaylı altın yoksa bonus da ilk onayla gelir.
-func _deposit() -> void:
-	if _carried.is_empty():
-		return
-	_trip_no += 1
-	var total: int = 0
-	var any_ok: bool = false
-	var any_pending: bool = false
-	for c: Dictionary in _carried:
-		var amt: int = int(c["amount"])
-		if amt == PENDING:
-			_awaiting[int(c["id"])] = _trip_no
-			any_pending = true
-		elif amt >= 0:
-			total += amt
-			any_ok = true
-	if any_ok:
-		total += TRIP_BONUS
-	elif any_pending:
-		_bonus_due[_trip_no] = true
-	_carried.clear()
-	_carry_visual = 0
-	_play_gold_sound()
-	_credit(total)
-
-
-func _play_gold_sound() -> void:
-	if not is_inside_tree() or get_tree().current_scene == null:
-		return
-	var s := AudioStreamPlayer2D.new()
-	s.stream = GOLD_SOUND
-	s.volume_db = GOLD_SOUND_DB
-	s.max_distance = 1500.0
-	get_tree().current_scene.add_child(s)
-	s.global_position = global_position
-	s.finished.connect(s.queue_free)
-	s.play()
-
-
-func _credit(total: int) -> void:
-	if total <= 0:
-		return
-	GameManager.gold += total
-	if owner_body.has_method("_spawn_floating_text"):
-		owner_body._spawn_floating_text("+%d altın" % total, Color(1.0, 0.85, 0.25))
-
-
-## İstemci: host'un papağan altını cevabı (bkz. NetworkManager.parrot_gold_result). amount < 0 = başkası aldı.
-func on_gold_result(drop_id: int, amount: int) -> void:
-	for c: Dictionary in _carried:
-		if int(c["id"]) == drop_id and int(c["amount"]) == PENDING:
-			c["amount"] = amount if amount >= 0 else -1
-			if amount < 0:
-				_carried.erase(c)
-				_carry_visual = _carried.size()
-				_broadcast(state, _target.global_position if _is_takeable(_target) else Vector2.ZERO)
-			return
-	if _awaiting.has(drop_id):
-		var trip: int = int(_awaiting[drop_id])
-		_awaiting.erase(drop_id)
-		if amount >= 0:
-			var add: int = amount
-			if _bonus_due.has(trip):
-				_bonus_due.erase(trip)
-				add += TRIP_BONUS
-			_credit(add)
-
-
-func _set_target(g: Node2D) -> void:
-	_target = g
-	state = State.FLY_TO
-	_broadcast(State.FLY_TO, g.global_position)
+## Eski altın cevabı (host artık papağana altın vermiyor) - player.gd korsan_parrot_gold_result uyumu için boş.
+func on_gold_result(_drop_id: int, _amount: int) -> void:
+	pass
 
 
 func _start_return() -> void:
-	_target = null
+	_reset_bob()
 	state = State.RETURN
 	_broadcast(State.RETURN, Vector2.ZERO)
 
@@ -307,28 +187,31 @@ func _broadcast(s: int, target: Vector2) -> void:
 	_net_idle = 0.0
 	if is_puppet or not NetworkManager.is_multiplayer_active:
 		return
-	NetworkManager.broadcast_korsan_parrot.rpc(multiplayer.get_unique_id(), s, target, _carried.size(), _speed)
+	NetworkManager.broadcast_korsan_parrot.rpc(multiplayer.get_unique_id(), s, target, 0, _speed)
 
 
 ## ---------------------------------------------------------------- kukla (diğer oyuncuların ekranı)
 
 ## remote_player.gd -> korsan_parrot_event: sahibinin papağanı durum değiştirdi.
-func apply_event(s: int, target: Vector2, carry: int, spd: float) -> void:
+func apply_event(s: int, target: Vector2, _carry: int, spd: float) -> void:
 	_speed = maxf(MIN_SPEED, spd)
-	_carry_visual = clampi(carry, 0, MAX_CARRY)
 	match s:
-		State.FLY_TO:
+		State.FLY_TO, State.PECK:
 			if state == State.PERCH:
 				_take_off()
-			state = State.FLY_TO
+			if s == State.FLY_TO or target != _target_pos:
+				_arrived = false
+			state = s
 			_target_pos = target
 		State.RETURN:
 			if state == State.PERCH:
 				_take_off()
+			_reset_bob()
 			state = State.RETURN
 		State.PERCH:
-			## Konma olayı: uzaktaysa önce uçarak döner, varınca konar (taşıdığı altın varınca teslim sesiyle kaybolur).
+			## Konma olayı: uzaktaysa önce uçarak döner, varınca konar.
 			if state != State.PERCH:
+				_reset_bob()
 				state = State.RETURN
 
 
@@ -336,14 +219,31 @@ func _process_puppet(delta: float) -> void:
 	match state:
 		State.PERCH:
 			_perch_follow()
-		State.FLY_TO:
-			_fly_toward(_target_pos, delta, GRAB_DIST) ## varınca bir sonraki olayı bekler (havada süzülür)
+		State.FLY_TO, State.PECK:
+			if not _arrived:
+				_arrived = _fly_toward(_target_pos, delta, GRAB_DIST)
+			elif state == State.PECK:
+				_bob(delta)
 		State.RETURN:
 			if _fly_toward(_shoulder_global(), delta, LAND_DIST):
 				_land()
-				if _carry_visual > 0:
-					_play_gold_sound() ## sahibinin ekranındaki teslim sesiyle aynı an
-				_carry_visual = 0
+
+
+## Gagalama: papağan hızlı hızlı gövdeye doğru eğilir (yerel y zıplaması, sprite ofsetine eklenir).
+func _bob(delta: float) -> void:
+	_peck_clock += delta
+	if _sprite.animation != &"perch":
+		_sprite.play("perch") ## gagalarken konmuş duruş, kafa vuruşu aşağıdaki ofsetle
+	var nod: float = maxf(0.0, sin(_peck_clock * 14.0))
+	_sprite.position = Vector2(0.0, nod * 2.0)
+
+
+func _reset_bob() -> void:
+	_peck_clock = 0.0
+	if _sprite:
+		_sprite.position = Vector2.ZERO
+		if _flying:
+			_sprite.play("fly")
 
 
 ## ---------------------------------------------------------------- ortak hareket/görsel
@@ -368,11 +268,11 @@ func _perch_follow() -> void:
 	scale = char_anim.scale
 	var cfg: Dictionary = PERCH.get(_facing(), PERCH["down"])
 	_sprite.flip_h = bool(cfg["flip"])
-	_coins.flip_h = _sprite.flip_h
 	_set_behind(bool(cfg["behind"]))
 
 
 func _take_off() -> void:
+	_reset_bob()
 	var gp: Vector2 = global_position
 	top_level = true
 	global_position = gp
@@ -383,6 +283,7 @@ func _take_off() -> void:
 
 
 func _land() -> void:
+	_reset_bob()
 	top_level = false
 	_flying = false
 	state = State.PERCH
@@ -401,7 +302,6 @@ func _fly_toward(dest: Vector2, delta: float, arrive: float) -> bool:
 	global_position += to.normalized() * step
 	if absf(to.x) > 0.5:
 		_sprite.flip_h = to.x < 0.0
-		_coins.flip_h = _sprite.flip_h
 	return false
 
 
@@ -414,9 +314,3 @@ func _set_behind(b: bool) -> void:
 	var si: int = get_index()
 	if (b and si > ai) or (not b and si < ai):
 		get_parent().move_child(self, ai)
-
-
-func _update_visual() -> void:
-	_coins.visible = _carry_visual > 0
-	if _coins.visible:
-		_coins.frame = clampi(_carry_visual, 1, MAX_CARRY) - 1

@@ -16,10 +16,23 @@ extends Node
 ## onunla örtüşebilen her yaratık da yükseltilir (`close_over`; yükseltilen bir yaratığın önündeki her şey de oyuncunun önündedir, yani yükseltmek hep doğrudur). Böylece yükseltilen küme,
 ## ayak sırasında "aşağıya doğru kapalı" kalır ve yaratıkların kendi aralarındaki sıra (main.gd _update_creature_draw_order) bozulmaz.
 
+##
+## ŞOVALYE KUBBESİ (2026-10-17, kullanıcı: "şovalye adamın bariyerinin altında gibi görünüyor yaratıklar. y eksenine tabi değil bu bariyer"): kubbenin ön
+## kabuğu sabit z 20'de (PaladinDome.SHELL_Z) - içerideki/arkadaki her şeyi örtmesi doğru ama ÖNÜNDEKİ (elipsin dışında, merkezin güneyinde) yaratıklar
+## da camın altında kalıyordu. Artık kabukla örtüşen önündeki yaratık SHELL_Z + 1'e çıkar (oyuncunun önündeyse + FRONT_Z), önündeki oyuncu/kukla
+## SHELL_Z + 2'ye (iki yaratık katmanının arası: oyuncu-yaratık kuralı aynen işler). Kubbe kümesi de aşağıya doğru KAPALI (close_over) ve önündeki
+## oyuncunun önündeki yaratıklar da kümeye girer -> z bileşenleri ayak sırasında hep artan, yaratıkların kendi sırası bozulmaz.
+## Bilinen bedel: kabuğun önündeki yaratık/oyuncu ağaç ön kopyalarının (z 3) ve z 4-20 arası efektlerin (düşman mermisi z 11) üstüne çizilir.
+## Duvar geçen (uçan, forest_canopy.gd) oyuncunun z'sine dokunulmaz.
+
 const DepthScript := preload("res://scripts/depth_occluders.gd")
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+const PaladinDome := preload("res://scripts/paladin_dome.gd")
+const ForestCanopyScript := preload("res://scripts/forest_canopy.gd")
 
 const FRONT_Z := 2
+const DOME_FRONT_Z := PaladinDome.SHELL_Z + 1 ## kabuğun önündeki yaratık (oyuncunun da önündeyse + FRONT_Z)
+const DOME_FRONT_CHAR_Z := PaladinDome.SHELL_Z + 2 ## kabuğun önündeki oyuncu/kukla
 ## Karaktere bu uzaklıktan (kök noktası, x ve y ayrı ayrı) yakın yaratıklar incelenir; çok büyük gövdeler (boss ~71 px) için geniş tutuldu.
 const SCAN_RADIUS := 130.0
 const HYSTERESIS := 2.0
@@ -31,6 +44,9 @@ const CLOSURE_PAD := 240.0
 const ABOVE_SKIP := 130.0
 
 var _raised: Dictionary = {} ## yaratık düğümü -> yükselmeden önceki z_index
+var _was_front: Dictionary = {} ## son güncellemede oyuncunun önünde yükselen yaratıklar (histerezis)
+var _was_dome: Dictionary = {} ## son güncellemede kubbe kabuğunun önünde yükselen yaratıklar (histerezis)
+var _raised_chars: Dictionary = {} ## kabuğun önüne çıkarılan oyuncu/kukla -> önceki z_index
 
 
 ## Saf kural (testler için): bu yaratık oyuncunun ÜSTÜNE çizilmeli mi?
@@ -78,11 +94,13 @@ static func close_over(want: Dictionary, pool: Dictionary) -> int:
 
 
 func update_now() -> void:
+	var tree := get_tree()
 	var want: Dictionary = {}
 	var pool: Dictionary = {} ## düğüm -> [ayak y, x, yarım genişlik, boy] (kapanış için)
-	var chars: Array[Vector4] = DepthScript.collect_characters(get_tree())
+	var char_nodes: Array[Node2D] = DepthScript.character_nodes(tree)
+	var chars: Array[Vector4] = DepthScript.collect_characters(tree)
 	for c in chars:
-		for e in EnemyQueryScript.candidates(get_tree(), Vector2(c.x, c.y), SCAN_RADIUS + CLOSURE_PAD):
+		for e in EnemyQueryScript.candidates(tree, Vector2(c.x, c.y), SCAN_RADIUS + CLOSURE_PAD):
 			var n := e as Node2D
 			if n == null or not is_instance_valid(n) or not n.visible or n.get("is_dead") == true:
 				continue
@@ -90,24 +108,90 @@ func update_now() -> void:
 			var ady: float = absf(n.global_position.y - c.y)
 			if adx > SCAN_RADIUS + CLOSURE_PAD or ady > SCAN_RADIUS + CLOSURE_PAD or n.global_position.y < c.y - ABOVE_SKIP:
 				continue
-			var foot: float = _foot_y(n)
-			var ext: Vector2 = _extent(n)
-			if not pool.has(n):
-				pool[n] = [foot, n.global_position.x, ext.x, ext.y]
+			_pool_add(pool, n)
 			if adx <= SCAN_RADIUS and ady <= SCAN_RADIUS and not want.has(n):
-				if should_cover(foot, ext.y, n.global_position.x - c.x, c.y, _raised.has(n)):
+				var info: Array = pool[n]
+				if should_cover(float(info[0]), float(info[3]), n.global_position.x - c.x, c.y, _was_front.has(n)):
 					want[n] = true
 	close_over(want, pool)
-	for n: Node2D in want:
+	## Şovalye kubbesi: kabuğun önündeki yaratıklar + oyuncular (bkz. dosya başı).
+	var dome_want: Dictionary = {}
+	var front_chars: Dictionary = {}
+	var domes: Array[Vector3] = PaladinDome.active_domes(tree)
+	if not domes.is_empty():
+		for d: Vector3 in domes:
+			var center := Vector2(d.x, d.y)
+			for e in EnemyQueryScript.candidates(tree, center, d.z + CLOSURE_PAD):
+				var n := e as Node2D
+				if n == null or not is_instance_valid(n) or not n.visible or n.get("is_dead") == true or n.global_position.y < center.y - ABOVE_SKIP:
+					continue
+				_pool_add(pool, n)
+				var info: Array = pool[n]
+				if not dome_want.has(n) and PaladinDome.in_front_of_shell(center, d.z, float(info[1]), float(info[0]), float(info[2]), float(info[3]),
+						-HYSTERESIS if _was_dome.has(n) else HYSTERESIS):
+					dome_want[n] = true
+			for i in range(mini(char_nodes.size(), chars.size())):
+				var cn: Node2D = char_nodes[i]
+				var c: Vector4 = chars[i]
+				if not front_chars.has(cn) and (cn.is_in_group("player") or cn.is_in_group("remote_players")) \
+						and PaladinDome.in_front_of_shell(center, d.z, c.x, c.y, c.z, c.w, -HYSTERESIS if _raised_chars.has(cn) else HYSTERESIS):
+					front_chars[cn] = c
+		## Kabuğun önüne çıkan oyuncunun önündeki yaratık da kabuğun önündedir (yoksa oyuncu [SHELL_Z + 2] onun üstüne çizilirdi).
+		for cn: Node2D in front_chars:
+			var c: Vector4 = front_chars[cn]
+			for n: Node2D in pool:
+				var info: Array = pool[n]
+				if not dome_want.has(n) and should_cover(float(info[0]), float(info[3]), float(info[1]) - c.x, c.y, _was_dome.has(n)):
+					dome_want[n] = true
+		close_over(dome_want, pool)
+	_apply_creature_z(want, dome_want)
+	_apply_char_z(front_chars)
+
+
+## pool'a yaratığın [ayak y, x, yarım genişlik, boy] bilgisini ekler (zaten varsa dokunmaz).
+func _pool_add(pool: Dictionary, n: Node2D) -> void:
+	if pool.has(n):
+		return
+	var ext: Vector2 = _extent(n)
+	pool[n] = [_foot_y(n), n.global_position.x, ext.x, ext.y]
+
+
+## Yaratık z'si = (kabuğun önündeyse DOME_FRONT_Z) + (oyuncunun önündeyse FRONT_Z); ikisi de değilse eski z'ye döner.
+func _apply_creature_z(want: Dictionary, dome_want: Dictionary) -> void:
+	for n: Node2D in want.keys() + dome_want.keys():
 		if not _raised.has(n):
 			_raised[n] = n.z_index
-			n.z_index = FRONT_Z
+		n.z_index = (DOME_FRONT_Z if dome_want.has(n) else 0) + (FRONT_Z if want.has(n) else 0)
 	for n in _raised.keys():
-		if want.has(n):
+		if want.has(n) or dome_want.has(n):
 			continue
 		if is_instance_valid(n):
 			(n as Node2D).z_index = int(_raised[n])
 		_raised.erase(n)
+	_was_front = want
+	_was_dome = dome_want
+
+
+## Kabuğun önündeki oyuncu/kukla DOME_FRONT_CHAR_Z'ye çıkar, ayrılınca eski z'ye döner. Duvar geçen (uçan) karakterin z'si forest_canopy.gd'nin:
+## ona dokunulmaz; uçmaya başladığında bizim yükselttiğimizse forest_canopy'nin saklayacağı "eski z" bizim sakladığımızla düzeltilir.
+func _apply_char_z(front_chars: Dictionary) -> void:
+	for cn: Node2D in front_chars:
+		if cn.has_meta(ForestCanopyScript.META_BASE_Z):
+			continue
+		if not _raised_chars.has(cn):
+			_raised_chars[cn] = cn.z_index
+		cn.z_index = DOME_FRONT_CHAR_Z
+	for cn in _raised_chars.keys():
+		if not is_instance_valid(cn):
+			_raised_chars.erase(cn)
+			continue
+		var node := cn as Node2D
+		if node.has_meta(ForestCanopyScript.META_BASE_Z):
+			node.set_meta(ForestCanopyScript.META_BASE_Z, int(_raised_chars[cn]))
+			_raised_chars.erase(cn)
+		elif not front_chars.has(cn):
+			node.z_index = int(_raised_chars[cn])
+			_raised_chars.erase(cn)
 
 
 ## Yaratığın ayağının dünya y'si: main.gd'nin ölçtüğü (sprite karesindeki en alt dolu satır) değer; main yoksa kök noktası.
@@ -159,3 +243,6 @@ func _exit_tree() -> void:
 		if is_instance_valid(n):
 			(n as Node2D).z_index = int(_raised[n])
 	_raised.clear()
+	_was_front.clear()
+	_was_dome.clear()
+	_apply_char_z({})

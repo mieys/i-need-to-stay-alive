@@ -1,96 +1,78 @@
 extends Node2D
 class_name FxMeteorStrike
-
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
+const BuyucuFxScript := preload("res://scripts/buyucu_fx.gd")
 
-## Büyücü Kız'ın Meteor Patlaması varyasyonu için gökten düşen piksel meteor ve yer patlaması efekti.
+## Büyücü Kız Meteor Patlaması'nın gökten düşen meteoru (2026-10-17, madde 188; kullanıcı: "yeni hazırladığın meteorlar iyiydi onlar
+## kalsın"). Onaylanan prototip (tools/proto_20261016/gen_buyucu_buyu.py scene_r), sayfalar assets/fx/buyucu/meteor_*.png:
+##  - düşüş boyunca hedefte büyüyen gölge + daralan uyarı halkası (meteor_warn) - eski fx_skill_ring telgraf halkasının yerine,
+##  - korlu kaya + alev kuyruğu (meteor_fall) (-120, -420)'den hızlanarak düşer (eskisi gibi 0,45 sn, hasar player.gd'de 0,5 sn sonra),
+##  - isabette dolu patlama + savrulan kaya parçaları (meteor_burst), hasar yarıçapında (70 dünya x ölçek) ince şok halkası (meteor_ring),
+##    soğuyan krater izi (meteor_crater, ~2,7 sn) + kamera sarsıntısı.
+## Kaster (player.gd _spawn_buyucu_meteor_strike) ve uzak kopya ("hitscan_impact" + setup_pos + fx_scale) AYNI sahne; ölçek = Efsunlu Büyü gücü.
+## Düğüm hedefte durur (gece ışığı patlama noktasında), kaya çocuk sprite olarak düşer.
+
+const START_OFFSET := Vector2(-120.0, -420.0)
+const FX_FPS := 15.0
+const CRATER_FPS := 7.5
+## meteor_fall karesinde kaya (24, 38) - ortalanmış sprite'ta orijine gelsin.
+const FALL_OFFSET := Vector2(0.0, -14.0)
 
 var target_pos: Vector2 = Vector2.ZERO
 var start_pos: Vector2 = Vector2.ZERO
 var duration: float = 0.45
 var elapsed: float = 0.0
 var has_exploded: bool = false
+var _rock: Sprite2D = null
+var _warn: Sprite2D = null
+var _started: bool = false
 
-var rock_tex: Texture2D = preload("res://assets/generated/fx_meteor_rock_pixel_frame_0.png")
-var trail_particles: Array[Dictionary] = []
 
 func setup(p_target: Vector2) -> void:
 	target_pos = p_target
-	# Gökten çapraz aşağı doğru düşüş (ör. 400px yukarıdan ve 150px soldan)
-	start_pos = target_pos + Vector2(-120.0, -420.0)
-	global_position = start_pos
-	z_index = 52
+	start_pos = target_pos + START_OFFSET
+	global_position = target_pos
+	z_index = 0
+	if _started:
+		return
+	_started = true
+	_warn = _sheet("meteor_warn", float(BuyucuFxScript.SHEETS["meteor_warn"]) / duration, 0)
+	_rock = _sheet("meteor_fall", FX_FPS, 52, true)
+	_rock.offset = FALL_OFFSET
+	_rock.position = START_OFFSET / maxf(absf(scale.x), 0.01)
+
+
+func _sheet(name: String, fps: float, z: int, loop: bool = false) -> Sprite2D:
+	var s: Sprite2D = BuyucuFxScript.Sheet.new()
+	s.centered = true
+	s.z_index = z
+	s.scale = Vector2.ONE * BuyucuFxScript.PX
+	add_child(s)
+	s.call("setup", [[name, loop]], fps)
+	return s
+
 
 func _process(delta: float) -> void:
-	elapsed += delta
-	if not has_exploded:
-		var p: float = clamp(elapsed / duration, 0.0, 1.0)
-		# Hızlanarak düşüş (ease-in)
-		var t_eased: float = p * p
-		global_position = start_pos.lerp(target_pos, t_eased)
-
-		# Alev izi parçacıkları
-		trail_particles.append({
-			"pos": global_position + Vector2(randf_range(-4, 4), randf_range(-4, 4)),
-			"alpha": 0.9,
-			"size": randf_range(4.0, 8.0)
-		})
-
-		if p >= 1.0:
-			has_exploded = true
-			_explode()
-
-	var active_tp: Array[Dictionary] = []
-	for tp in trail_particles:
-		tp["alpha"] -= delta * 4.0
-		tp["size"] = max(1.0, tp["size"] - delta * 10.0)
-		if tp["alpha"] > 0.0:
-			active_tp.append(tp)
-	trail_particles = active_tp
-
-	if has_exploded and trail_particles.is_empty():
-		queue_free()
+	if not _started or has_exploded:
 		return
+	elapsed += delta
+	var p: float = clampf(elapsed / duration, 0.0, 1.0)
+	if is_instance_valid(_rock):
+		_rock.position = START_OFFSET * (1.0 - p * p) / maxf(absf(scale.x), 0.01) ## hızlanarak düşüş (ease-in)
+	if p >= 1.0:
+		_explode()
 
-	queue_redraw()
 
 func _explode() -> void:
+	if has_exploded:
+		return
+	has_exploded = true
 	global_position = target_pos
 	CameraShakeScript.add_at(target_pos, 0.55, 1200.0) ## kamera sarsıntısı (bkz. camera_shake.gd)
-	var exp_node := Node2D.new()
-	exp_node.z_index = 53
-	var anim_sprite := AnimatedSprite2D.new()
-	anim_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	var frames := SpriteFrames.new()
-	frames.add_animation("explode")
-	frames.set_animation_loop("explode", false)
-	frames.set_animation_speed("explode", 16.0)
-	var sheet: Texture2D = preload("res://assets/generated/fx_meteor_explosion_anim.png")
-	if sheet:
-		for i in range(6):
-			var at := AtlasTexture.new()
-			at.atlas = sheet
-			at.region = Rect2(i * 64, 0, 64, 64)
-			frames.add_frame("explode", at)
-	anim_sprite.sprite_frames = frames
-	anim_sprite.scale = Vector2(2.2, 2.2)
-	exp_node.add_child(anim_sprite)
-	if get_tree() and get_tree().current_scene:
-		get_tree().current_scene.add_child(exp_node)
-		exp_node.global_position = target_pos
-		anim_sprite.play("explode")
-		anim_sprite.animation_finished.connect(func(): exp_node.queue_free())
-
-func _draw() -> void:
-	# 1. Alev ve duman izleri
-	for tp in trail_particles:
-		var rel_p: Vector2 = tp["pos"] - global_position
-		var c := Color(1.0, randf_range(0.3, 0.7), 0.1, tp["alpha"])
-		draw_circle(rel_p, tp["size"] * 0.5, c)
-		draw_circle(rel_p, tp["size"] * 0.25, Color(1.0, 0.9, 0.4, tp["alpha"]))
-
-	# 2. Meteor Kayası
-	if not has_exploded and rock_tex:
-		var sz: Vector2 = rock_tex.get_size()
-		var rect := Rect2(-sz * 0.5, sz)
-		draw_texture_rect(rock_tex, rect, false, Color(1.1, 1.0, 0.9, 1.0))
+	for n in [_rock, _warn]:
+		if is_instance_valid(n):
+			n.queue_free()
+	_sheet("meteor_burst", FX_FPS, 53)
+	_sheet("meteor_ring", FX_FPS, 1)
+	var crater: Sprite2D = _sheet("meteor_crater", CRATER_FPS, 0)
+	crater.tree_exited.connect(queue_free)

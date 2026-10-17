@@ -9,22 +9,24 @@ extends Area2D
 ## elit sandık (NetworkManager.host_award_elite_chest), açılınca epik eşya kartı (main.gd _show_elite_chest, chest_menu.gd
 ## elit mod). Düşme kuralları enemy.gd _drop_chest'te.
 ##
-## Görsel: tools/gen_chest_sprites.py sayfası (20 kare x 48 px, düzen o dosyanın başında) - burada 0-3 bekleme,
-## toplanınca 4-12 (sallanma + kapak patlaması). Sandık sprite'ı hafifçe sallanır, gölgesi yerde sabit kalır.
+## Görsel (2026-10-17, madde 242 "B Işık Sütunu"): sandık sayfası + arkasında ayrı ışık sütunu sayfası, ikisi de chest_art.gd'den
+## (0,5 dünya px/piksel). Sandık 0-3 bekleme, toplanınca 4-12 (sallanma + kapak patlaması); sütun 0-23 döngü, açılışta sallanır
+## ve sandığa çöker. Lost Ark/Diablo ganimeti gibi sandık YERDE DURUR (eski süzülme kalktı); gölgesi yerde.
 
-const NORMAL_SHEET := preload("res://assets/sprites/chests/chest_normal_t1.png")
+const ChestArt := preload("res://scripts/chest_art.gd")
+const NORMAL_SHEET := ChestArt.NORMAL_SHEET
 const DropShadowScript := preload("res://scripts/drop_shadow.gd")
-const ELITE_SHEET := preload("res://assets/sprites/chests/chest_elite.png")
+const ELITE_SHEET := ChestArt.ELITE_SHEET
 const SHADOW_TEX := preload("res://assets/sprites/chests/chest_shadow.png")
-const FRAME_COUNT := 20
-## Karede sandığın alt kenarı y=42 (48 px kare, ortalı sprite'ta +18): sprite -10'a kayınca taban kökün 8 px altında.
+const FRAME_COUNT := ChestArt.FRAME_COUNT
+## Karede sandığın alt kenarı y=42 dünya px (48'lik kare, ortalı sprite'ta +18): sprite -10'a kayınca taban kökün 8 px altında.
 const SPRITE_Y := -10.0
 const SHADOW_Y := 8.0
 const OPEN_FRAMES := [4, 5, 6, 7, 8, 9, 10, 11, 12]
 const OPEN_FRAME_TIME := 0.05
-## Normal sandık çoğu zaman durur, arada bir kilidinde parıltı gezer; elit sandık sürekli nabız atar.
+## Normal sandık çoğu zaman durur, arada bir asma kilidinde parıltı çakar; elit sandığın mor taşı nabız atar.
 const NORMAL_GLINT_EVERY := 2.4
-const ELITE_IDLE_STEP := 0.16
+const ELITE_IDLE_STEP := 0.3
 
 ## "KADEME" - hangi dünya evresinden düştü (sandık menüsünün başlığı, bkz. chest_menu.gd CHEST_TITLES). Görsele etkisi yok.
 @export var chest_tier: int = 0
@@ -35,9 +37,14 @@ const ELITE_IDLE_STEP := 0.16
 		if is_inside_tree():
 			_update_visual()
 
+## Gece ışığının rengi (night_glow_catalog.gd "cp", madde 243): ışık sütununun rengi.
+var night_glow_color: Color:
+	get:
+		return Color(0.86, 0.64, 1.0) if is_elite else Color(1.0, 0.8, 0.45) ## elit: koyu mor gece zemininde sönük kalıyordu -> açık mor
 var bob_time: float = 0.0
 var sprite: Sprite2D = null
 var _shadow: Sprite2D = null
+var _beam: Sprite2D = null ## ışık sütunu + yer halkası (sandığın arkasında)
 var _idle_t: float = 0.0
 
 func _ready() -> void:
@@ -61,7 +68,7 @@ func _update_visual() -> void:
 	s.hframes = FRAME_COUNT
 	s.vframes = 1
 	s.frame = 0
-	s.scale = Vector2.ONE
+	s.scale = Vector2.ONE * ChestArt.TEXEL
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	s.position = Vector2(0.0, SPRITE_Y)
 	if _shadow == null:
@@ -72,14 +79,26 @@ func _update_visual() -> void:
 		_shadow.position = Vector2(0.0, SHADOW_Y)
 		add_child(_shadow)
 		move_child(_shadow, 0)
+	if _beam == null:
+		_beam = Sprite2D.new()
+		_beam.name = "Beam"
+		_beam.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_beam.hframes = ChestArt.BEAM_FRAMES
+		_beam.scale = Vector2.ONE * ChestArt.TEXEL
+		add_child(_beam)
+		move_child(_beam, s.get_index()) ## sandığın hemen arkası (gölgelerin önü)
+	_beam.texture = ChestArt.ELITE_BEAM_SHEET if is_elite else ChestArt.BEAM_SHEET
+	_beam.position = s.position + ChestArt.BEAM_OFFSET_PX * ChestArt.TEXEL
+	_beam.frame = 0
+	_beam.visible = true
 
 
 func _process(delta: float) -> void:
 	if sprite == null or _is_opening:
 		return
-	bob_time += delta
-	sprite.position.y = SPRITE_Y + sin(bob_time * 4.0) * 2.0
 	_idle_t += delta
+	if _beam != null:
+		_beam.frame = int(_idle_t / ChestArt.BEAM_IDLE_STEP) % ChestArt.BEAM_IDLE
 	if is_elite:
 		sprite.frame = int(_idle_t / ELITE_IDLE_STEP) % 4
 	else:
@@ -160,6 +179,11 @@ func _open_chest_for(_body: Node, award_to_local: bool = true) -> void:
 		tw.tween_callback(func() -> void:
 			if sprite:
 				sprite.frame = f
+			if is_instance_valid(_beam):
+				var bf: int = ChestArt.beam_frame_for_open(f)
+				_beam.visible = bf >= 0
+				if bf >= 0:
+					_beam.frame = bf
 		).set_delay(OPEN_FRAME_TIME)
 	tw.tween_property(self, "modulate:a", 0.0, 0.18)
 

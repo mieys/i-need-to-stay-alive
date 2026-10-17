@@ -27,7 +27,7 @@ func _end() -> void:
 			if is_instance_valid(d):
 				d.free()
 			NetworkManager._visual_drops.erase(id)
-	for g in ["gold_drops", "weapon_shard_drops", "xp_orbs", "food_drops", "chest_drops", "magnet_drops"]:
+	for g in ["gold_drops", "weapon_shard_drops", "xp_orbs", "food_drops", "chest_drops", "magnet_drops", "shield_orb_drops"]:
 		for n in get_tree().get_nodes_in_group(g):
 			if is_instance_valid(n):
 				n.free()

@@ -14,10 +14,10 @@ extends RefCounted
 const PERCENT_REF := [
 	## [metindeki ifade (regex), stat anahtarı, okunur ad]
 	["saldırı gücünün\\s*%(\\d+(?:[.,]\\d+)?)", "ap", "saldırı gücü"],
-	["(?:EKSİK|eksik) kalkan(?:ının|ın)\\s*%(\\d+(?:[.,]\\d+)?)", "missing_shield", "eksik kalkan"],
-	["(?:MAKSİMUM|maksimum|maks\\.?) kalkan(?:ının|ın)\\s*%(\\d+(?:[.,]\\d+)?)", "max_shield", "maks. kalkan"],
+	["(?:EKSİK|eksik) (?:mana )?kalkan(?:ının|ın)\\s*%(\\d+(?:[.,]\\d+)?)", "missing_shield", "eksik mana kalkanı"],
+	["(?:MAKSİMUM|maksimum|maks\\.?) (?:mana )?kalkan(?:ının|ın)\\s*%(\\d+(?:[.,]\\d+)?)", "max_shield", "maks. mana kalkanı"],
 	["(?:maksimum|maks\\.?|MAKSİMUM) can(?:ının|ın)\\s*%(\\d+(?:[.,]\\d+)?)", "max_health", "maks. can"],
-	["saniyede\\s*%(\\d+(?:[.,]\\d+)?)\\s*kalkan", "max_shield", "maks. kalkan"],
+	["saniyede\\s*%(\\d+(?:[.,]\\d+)?)\\s*(?:mana\\s*)?kalkan", "max_shield", "maks. mana kalkanı"],
 	["saniyede\\s*%(\\d+(?:[.,]\\d+)?)\\s*can", "max_health", "maks. can"],
 	["Anında\\s*%(\\d+(?:[.,]\\d+)?)\\s*can", "max_health", "maks. can"],
 ]
@@ -40,7 +40,7 @@ static func _stat(player: Node, key: String) -> float:
 static func _kind(after: String, before: String) -> String:
 	var a: String = after.to_lower()
 	var b: String = before.to_lower()
-	for pair in [["hasar", "Hasar"], ["kalkan yenile", "Kalkan"], ["kalkan", "Kalkan"], ["can yenile", "İyileştirme"],
+	for pair in [["hasar", "Hasar"], ["kalkan yenile", "Mana Kalkanı"], ["kalkan", "Mana Kalkanı"], ["can yenile", "İyileştirme"],
 			["iyileş", "İyileştirme"], ["can", "İyileştirme"], ["soğur", "Soğurma"]]:
 		if a.find(pair[0]) != -1:
 			return pair[1]
@@ -84,7 +84,7 @@ static func build(desc: String, player: Node, duration: float, ink: Dictionary) 
 				sentence = sentence.substr(cut + 1)
 			var per_sec: bool = sentence.find("saniyede") != -1 or sentence.find("her saniye") != -1 \
 					or desc.substr(m.get_start(), 14).begins_with("saniyede")
-			var color: String = ink.get("damage", "#a3301c") if kind == "Hasar" else (ink.get("shield", "#2c5c9a") if kind in ["Kalkan", "Soğurma", "Yenileme"] else ink.get("health", "#3d6616"))
+			var color: String = ink.get("damage", "#a3301c") if kind == "Hasar" else (ink.get("shield", "#2c5c9a") if kind in ["Mana Kalkanı", "Soğurma", "Yenileme"] else ink.get("health", "#3d6616"))
 			var line: String = "• %s: [color=%s][b]%s[/b][/color]" % [kind, color, _fmt(value)]
 			if per_sec:
 				line += " /sn"

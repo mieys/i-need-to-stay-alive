@@ -7,9 +7,10 @@ extends Control
 ## görünümüyle oynar (NetworkManager._rpc_announce_chest_winner) - ağdan konum gitmez, her peer çubukların yerini kendi bilir.
 ## Oyun duraklatılmışken de oynar (sandık menüsü açıkken biri sandık alabilir): kendi CanvasLayer'ı PROCESS_MODE_ALWAYS.
 
-const SHEET := preload("res://assets/sprites/chests/chest_normal_t1.png")
+const ChestArt := preload("res://scripts/chest_art.gd")
+const SHEET := ChestArt.NORMAL_SHEET
 const SFX_LAND := preload("res://Sound FX Starter Pack Vol. 1/Motions and Impacts/Impact Redwood.wav")
-const FRAME := 48
+const FRAME := ChestArt.FRAME_WU ## ekranda 48 px kare (doku karesi ChestArt.FRAME_PX, 0,5 ölçekli sanat)
 const LAYER_NAME := "ChestPassLayer"
 const LAYER_INDEX := 100 ## menülerin (bekleme katmanı 90, grup paneli 96) üstünde
 const POP_TIME := 0.18
@@ -96,7 +97,7 @@ func _start(from_pos: Vector2, to_pos: Vector2) -> void:
 
 	var atlas := AtlasTexture.new()
 	atlas.atlas = SHEET
-	atlas.region = Rect2(0, 0, FRAME, FRAME) ## kapalı sandık karesi
+	atlas.region = Rect2(0, 0, ChestArt.FRAME_PX, ChestArt.FRAME_PX) ## kapalı sandık karesi
 	_icon = TextureRect.new()
 	_icon.texture = atlas
 	_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

@@ -38,6 +38,10 @@ var cooldown_override: float = -1.0
 var tooltip_panel: PanelContainer = null
 ## Shift'e basılı tutulunca ayrıntılar (bkz. skill_details.gd) - ipucu açıkken Shift durumu değişirse yeniden kurulur.
 const SkillDetails := preload("res://scripts/skill_details.gd")
+const UiAnim := preload("res://scripts/ui_anim.gd")
+## Bekleme bitince ikon bir kez parlayıp "nefes" alır (madde 200): 1 -> 0, READY_FLASH_TIME sn.
+const READY_FLASH_TIME := 0.35
+var _ready_flash: float = 0.0
 var _tooltip_shift: bool = false
 
 func _ready() -> void:
@@ -56,6 +60,9 @@ func _process(delta: float) -> void:
 		_pulse_time += delta
 	if _enchant_glow > 0.0:
 		_enchant_glow_t += delta
+		queue_redraw()
+	if _ready_flash > 0.0:
+		_ready_flash = maxf(0.0, _ready_flash - delta / READY_FLASH_TIME)
 		queue_redraw()
 
 func _exit_tree() -> void:
@@ -454,6 +461,9 @@ func _format_lol_style(text: String) -> String:
 	text = text.replace("Can", "[color=%s]Can[/color]" % ink["health"])
 	text = text.replace("kalkan", "[color=%s]kalkan[/color]" % ink["shield"])
 	text = text.replace("Kalkan", "[color=%s]Kalkan[/color]" % ink["shield"])
+	## "mana kalkanı" tek renk olsun (yukarıdaki "kalkan" boyaması "mana"yı dışarıda bırakıyordu).
+	text = text.replace("mana [color=%s]kalkan[/color]" % ink["shield"], "[color=%s]mana kalkan[/color]" % ink["shield"])
+	text = text.replace("Mana [color=%s]Kalkan[/color]" % ink["shield"], "[color=%s]Mana Kalkan[/color]" % ink["shield"])
 	text = text.replace("zırh", "[color=%s]zırh[/color]" % ink["shield_pen"])
 	text = text.replace("Zırh", "[color=%s]Zırh[/color]" % ink["shield_pen"])
 	text = text.replace("saldırı hızı", "[color=%s]saldırı hızı[/color]" % ink["attack_speed"])
@@ -518,6 +528,9 @@ func set_locked_level(lv: int) -> void:
 
 
 func update_state(p_progress: float, p_active: bool, p_remaining: float = 0.0, p_active_fraction: float = 0.0) -> void:
+	if progress < 1.0 and p_progress >= 1.0 and not p_active and locked_level <= 0 and UiAnim.is_enabled():
+		_ready_flash = 1.0
+		UiAnim.pop(self)
 	progress = p_progress
 	is_active = p_active
 	remaining_seconds = p_remaining
@@ -680,6 +693,8 @@ func _draw() -> void:
 	## gösteriliyor, ikisi aynı anda karışmasın diye ayrıştırıldı.
 	if progress < 1.0 and not is_active:
 		_draw_cooldown_veil(inner, progress)
+	if _ready_flash > 0.0:
+		draw_rect(inner, Color(1.0, 0.96, 0.82, 0.42 * _ready_flash), true)
 
 	if is_active:
 		## Kullanıcı isteği: "aktif olan skillerin aktif olduğunu skill

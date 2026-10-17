@@ -1,5 +1,7 @@
 class_name Characters
 
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+
 ## Oyunun karakter kayıt defteri: karakterler LPC generator'da tasarlanıp
 ## kare kare export ediliyor, atlas + SpriteFrames'e çevrilip buraya
 ## ekleniyor. Yetenekler player.gd'deki eski yetenek kimlikleriyle (1-9,
@@ -52,15 +54,15 @@ const DEFS := {
 		"skill": 38,
 		"skill_name": "Hamle Vuruşu",
 		## 2026-09-28 yetenek evrimleri: kalkan yenileme "Kalkan Hamlesi" evrimine geçti, bekleme 4 -> 10 sn.
-		"skill_desc": "YETENEK: İleri kısa bir hamle yapar, isabet ettiği düşmanlara saldırı gücünün %60'ı kadar hasar verir. (10sn bekleme)",
+		"skill_desc": "YETENEK: İleri kısa bir hamle yapar, isabet ettiği düşmanlara saldırı gücünün %60'ı kadar hasar verir; hamle bitince tüm silahlar 3 atışı üst üste ateşler. (10sn bekleme)",
 		"skill_icon": "res://assets/skills/talon_devlesme_icon.png",
 		"skill2": 36,
 		"skill2_name": "Silah Salvosu",
-		"skill2_desc": "TEMEL: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %400 saldırı hızı kazanırlar ama %40 daha az hasar verirler. (15sn bekleme)",
+		"skill2_desc": "TEMEL: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %400 saldırı hızı kazanırlar. (15sn bekleme)",
 		"skill2_icon": "res://assets/skills/talon_yer_sarsintisi_icon.png",
 		"skill3": 37,
 		"skill3_name": "Ayna Formu",
-		"skill3_desc": "ULTİ: 15sn boyunca her silahının bir aynalı kopyası belirir (silah sayısı 2 katına çıkar, hepsi eşit aralıklarla etrafını sarar) - her kopya bağımsız ateş eder. Kopya başına saldırı gücü %8 azalır. (120sn bekleme)",
+		"skill3_desc": "ULTİ: 15sn boyunca her silahının bir aynalı kopyası belirir (silah sayısı 2 katına çıkar, hepsi eşit aralıklarla etrafını sarar) - her kopya bağımsız ateş eder. Kopya başına saldırı gücü %4 azalır. (120sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## Q ile AYNI geçici "talon_devlesme_icon.png" dosyasını paylaşıyordu,
 		## artık kendi özel ikonu var.
@@ -126,7 +128,7 @@ const DEFS := {
 		"skill3": 39,
 		"skill3_name": "Koruyucu Büyü",
 		"skill3_icon": "res://assets/skills/oakley_passive_icon.png",
-		"skill3_desc": "ULTİ: Yakınındaki dostlar arasında canı (oran olarak) en az olana (kendisi dahil, önceliklidir) koruyucu bir büyü yapar. 10sn boyunca hedef her hasar aldığında Oakley'nin saldırı gücünün %20'si kadar can, %10'u kadar kalkan yeniler ve %20 hasar azaltma kazanır. (60sn bekleme)",
+		"skill3_desc": "ULTİ: Yakınındaki dostlar arasında canı (oran olarak) en az olana (kendisi dahil, önceliklidir) koruyucu bir büyü yapar. 10sn boyunca hedef her hasar aldığında Oakley'nin saldırı gücünün %20'si kadar can, %10'u kadar mana kalkanı yeniler ve %20 hasar azaltma kazanır. (60sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su
 		## bundan sonra pasifi olacak, ve otomatik olarak yakınlarına çiçek
 		## bırakacak... 2 yük olayı falan yok bunda dolduğu anda oakleyin
@@ -136,7 +138,7 @@ const DEFS := {
 		## Çiçeğin ALINDIĞINDA verdiği etkiler (can/kalkan/hız, büyüme) hiç
 		## değişmedi - bkz. oakley_flower.gd, SADECE tetikleme yöntemi
 		## (yük yerine otomatik zamanlayıcı + rastgele yakın konum) değişti.
-		"passive": "Her 18 saniyede bir yakınına rastgele bir noktaya kendiliğinden bir çiçek bırakır (kendisi veya bir dost alabilir, 180sn yerde kalır, sihirli yeşil bir aurayla haritadaki dekorlardan ayırt edilir). Alınırsa saldırı gücünün %50'si kadar can + alanın %2 max kalkanı ve saldırı gücünün %15'i kadar kalkan yeniler, ayrıca alanı 2sn boyunca azalarak kaybolan %25 hıza kavuşturur; alınmazsa 5sn'de bir büyüyüp verdiği can/kalkanı kümülatif %40 arttırır (en fazla 2 büyüme).",
+		"passive": "Her 18 saniyede bir yakınına rastgele bir noktaya kendiliğinden bir çiçek bırakır (kendisi veya bir dost alabilir, 180sn yerde kalır, sihirli yeşil bir aurayla haritadaki dekorlardan ayırt edilir). Alınırsa saldırı gücünün %50'si kadar can + alanın %2 max mana kalkanı ve saldırı gücünün %15'i kadar mana kalkanı yeniler, ayrıca alanı 2sn boyunca azalarak kaybolan %25 hıza kavuşturur; alınmazsa 5sn'de bir büyüyüp verdiği can/kalkanı kümülatif %40 arttırır (en fazla 2 büyüme).",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## Melek ile AYNI geçici "oyku_ulti_can_basma_icon.png" dosyasını
 		## paylaşıyordu, artık pasif haline gelen Çiçek'in KENDİ ikonu.
@@ -175,9 +177,9 @@ const DEFS := {
 		"skill2_icon": "res://assets/skills/matthew_elektrik_topu_icon.png",
 		"skill3": 9,
 		"skill3_name": "Yıldırım Kalkanı",
-		"skill3_desc": "ULTİ: 15sn süren yıldırımdan bir kalkan çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer; hasarla kırılırsa çevresindeki yaratıklara hasar verip onları iter. Kalkan açıkken Şimşek Hücumu ve pasifin çalışmaya devam eder. (120sn bekleme)",
+		"skill3_desc": "ULTİ: 15sn süren yıldırımdan bir mana kalkanı çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer; hasarla kırılırsa çevresindeki yaratıklara hasar verip onları iter. Kalkan açıkken Şimşek Hücumu ve pasifin çalışmaya devam eder. (120sn bekleme)",
 		"skill3_icon": "res://assets/skills/matthew_yildirim_kalkani_icon.png",
-		"passive": "Yıldırım Hızı: hareket ettiğin her saniye %1 hareket hızı ve %1 saldırı hızı kazanırsın (en fazla %30); durunca bonus 5 saniyede söner. Arkanda 1 saniye süren bir yıldırım izi bırakırsın. Tam hızda iz güçlenir: değdiği yaratığı 1 saniye sersemletir ve saldırı gücünün %80'i kadar hasar verir.",
+		"passive": "Yıldırım Hızı: hareket ettiğin her saniye %1 hareket hızı kazanırsın (en fazla %15); durunca bonus 5 saniyede söner. Her kaynaktan kazandığın toplam hareket hızının her %1'i sana %0,5 saldırı hızı verir (toplam saldırı hızı sınırı %600). Arkanda 1 saniye süren bir yıldırım izi bırakırsın. Tam hızda iz güçlenir: değdiği yaratığı 1 saniye sersemletir ve saldırı gücünün %80'i kadar hasar verir.",
 		"passive_icon": "res://assets/skills/matthew_yildirim_hizi_icon.png",
 		"frames": "res://assets/characters/matthew_frames.tres",
 		"portrait": "res://assets/characters/matthew_portrait.png",
@@ -238,7 +240,7 @@ const DEFS := {
 		## düşüş (fallback) değeri.
 		"skill2": 22,
 		"skill2_name": "Arcane Lanet (Set 1/2)",
-		"skill2_desc": "TEMEL (2 setli - Q ile değiştirilir):\n1) Arcane Lanet (kalkan harcamaz): yaratıklar arasında 4 kez sekip her sekişte saldırı gücünün %80'i kadar hasar verir. (4sn bekleme)\n2) Hortum: 15sn boyunca dolaşan 3 hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %90'ı kadar hasar verir. (30sn bekleme)",
+		"skill2_desc": "TEMEL (2 setli - Q ile değiştirilir):\n1) Arcane Lanet (mana kalkanı harcamaz): yaratıklar arasında 4 kez sekip her sekişte saldırı gücünün %80'i kadar hasar verir. (4sn bekleme)\n2) Hortum: 15sn boyunca dolaşan 3 hortum çıkarır, her biri değdiği yaratığa saniyede en fazla 1 kez saldırı gücünün %90'ı kadar hasar verir. (30sn bekleme)",
 		## bkz. hud.gd _process (GameManager.selected_char_id == 4 dalı) -
 		## HER karede o anki set'e göre skill2_icon.custom_texture'ı burdan
 		## (buyucu_variation_set index'iyle, 0 veya 1) seçiyor. Sıra: 0=Arcane
@@ -334,7 +336,8 @@ const DEFS := {
 		"skill3_name": "Gölge Hücumu",
 		## 2026-09-30 (yetenek evrimleri): "R artık saldırı hızına göre artmıyor çünkü geliştirmelere eklenecek" - tempo sabit
 		## (saniyede ~4,5 çarpış, eski kartsız tempoyla aynı); saldırı hızına bağlanması evrim "Hızlanan Hücum".
-		"skill3_desc": "ULTİ: 10 saniye boyunca yakındaki yaratıklara sırayla hızla çarpar; her çarpış saldırı gücünün %300'ü kadar hasar verir (saniyede yaklaşık 4,5 çarpış). Vurulmamış yaratık kalmazsa (tek yaratık olsa bile) aynı yaratıklara tekrar saldırır. Bitince kullandığı konuma geri döner. (90sn bekleme)",
+		## Kullanıcı isteği (2026-10-16): bekleme 90 -> 10 sn, sadece KENDİ görüş alanındaki yaratıklar, en fazla 20 çarpış.
+		"skill3_desc": "ULTİ: Görüş alanındaki yaratıklara sırayla hızla çarpar, en fazla 20 kez; her çarpış saldırı gücünün %300'ü kadar hasar verir (saniyede yaklaşık 4,5 çarpış). Vurulmamış yaratık kalmazsa (tek yaratık olsa bile) aynı yaratıklara tekrar saldırır. Bitince kullandığı konuma geri döner. (10sn bekleme)",
 		"passive": "Bıçak Uzmanlığı: yetenek kullanımından sonraki 3 saniye boyunca garantili kritik vurur.",
 		"passive_icon": "res://assets/skills/assasin_passive_icon.png",
 		"frames": "res://assets/characters/assasin_frames.tres",
@@ -357,11 +360,11 @@ const DEFS := {
 		"skill": 45,
 		"skill_name": "Kışkırtma",
 		## 2026-09-28 yetenek evrimleri: kışkırtma temel yetenekten çıktı ("Meydan Okuma" evrimi).
-		"skill_desc": "YETENEK: 6 saniye boyunca her saniye EKSİK kalkanının %5'i + MAKSİMUM kalkanının %5'i kadar kalkan yeniler. (22,5sn bekleme)",
+		"skill_desc": "YETENEK: 6 saniye boyunca her saniye EKSİK mana kalkanının %5'i + MAKSİMUM mana kalkanının %5'i kadar mana kalkanı yeniler. (22,5sn bekleme)",
 		"skill_icon": "res://assets/skills/sovalye_kiskirtma_icon.png",
 		"skill2": 29,
 		"skill2_name": "Koruma Bariyeri",
-		"skill2_desc": "TEMEL: Yakındaki dostların etrafında 15sn boyunca dönen bir bariyer oluşturur, aldıkları hasarın %30'unu kendine yansıtır (kendi kalkanından geçer). Dost çok uzaklaşırsa bariyeri kaybolur. (54sn bekleme)",
+		"skill2_desc": "TEMEL: Yakındaki dostların etrafında 15sn boyunca dönen bir bariyer oluşturur, aldıkları hasarın %30'unu kendine yansıtır (kendi mana kalkanından geçer). Dost çok uzaklaşırsa bariyeri kaybolur. (54sn bekleme)",
 		## Kullanıcı isteği (2026-09-25): ikonu yoktu - tools/gen_sovalye_icons.py.
 		"skill2_icon": "res://assets/skills/sovalye_koruma_bariyeri_icon.png",
 		## Kullanıcı bildirimi: "bazı karakterlerin pasifi oyun içindeyken
@@ -376,7 +379,7 @@ const DEFS := {
 		"low_hp_threshold": 0.40,
 		"skill3": 11,
 		"skill3_name": "Koruma Baloncuğu",
-		"skill3_desc": "ULTİ: Kalkanı bitene kadar içine düşman/mermi girmeyen koruma alanı açar (%30 menzil, kalkan hasarı %95 azalır). Hareket edemez. (108sn bekleme)",
+		"skill3_desc": "ULTİ: Mana kalkanı bitene kadar içine düşman/mermi girmeyen koruma alanı açar (%30 menzil, mana kalkanı hasarı %92 azalır). Hareket edemez. (108sn bekleme)",
 		"skill3_icon": "res://assets/skills/sovalye_ulti_koruma_baloncugu_icon.png",
 		"frames": "res://assets/characters/sovalye_frames.tres",
 		"portrait": "res://assets/characters/sovalye_portrait.png",
@@ -425,7 +428,7 @@ const DEFS := {
 		"skill3_name": "Çift Tetik",
 		"skill3_desc": "ULTİ: 15 saniye boyunca saldırılar 2 kez tetiklenir ama %60 hasar verir. (100sn bekleme)",
 		"skill3_icon": "res://assets/skills/elara_cift_tetik_icon.png",
-		"passive": "Seviye başına %1 saldırı hızı kazanır. (En fazla %50)",
+		"passive": "Seviye başına %1 saldırı hızı kazanır. (En fazla %30)",
 		"passive_icon": "res://assets/skills/elara_passive_icon.png",
 		"frames": "res://assets/characters/elara_frames.tres",
 		"portrait": "res://assets/characters/elara_portrait.png",
@@ -452,7 +455,7 @@ const DEFS := {
 		## Kullanıcı isteği (2026-09-22): "Korsanın Q'sunun bekleme süresini kaldır ve mana bedelini de
 		## kaldır" - bkz. player.gd SKILL_TIMING[18] (cooldown 0.0) ve _activate_skill()'teki kalkan
 		## bedeli muafiyet listesi (char_id != 18 eklendi).
-		"skill_desc": "YETENEK: Görüş alanındaki (turuncu kesik çizgili sınır) tüm saatli bombaları patlatır. (Bekleme yok, kalkan harcamaz)",
+		"skill_desc": "YETENEK: Görüş alanındaki (turuncu kesik çizgili sınır) tüm saatli bombaları patlatır. (Bekleme yok, mana kalkanı harcamaz)",
 		"skill_icon": "res://assets/skills/korsan_patlat_icon.png",
 		"skill2": 17,
 		"skill2_name": "Saatli Bomba",
@@ -535,7 +538,7 @@ const DEFS := {
 		## DÜZELTME (kullanıcı isteği: "Melekin kalkan yeteneğinin saldırı gücü
 		## oranını %40'a düşür") - bkz. player.gd MELEK_E_TICK_ATTACK_RATIO
 		## (Oakley'nin kendi %60'ı DEĞİŞMEDİ).
-		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede %1 kalkan + saldırı gücünün %40'ı kadar kalkan yeniler (kendine+müttefiğe). (15sn bekleme)",
+		"skill2_desc": "TEMEL: 6 saniye boyunca saniyede %1 mana kalkanı + saldırı gücünün %40'ı kadar mana kalkanı yeniler (kendine+müttefiğe). (15sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## Oakley'nin E/R'siyle AYNI geçici "oyku_kalkan_yenileme_icon.png"
 		## dosyasını paylaşıyordu, artık kendi özel ikonu var.
@@ -546,7 +549,7 @@ const DEFS := {
 		"skill3_name": "Kutsal Korku",
 		## 2026-10-11 REWORK (kullanıcı isteği): 2 sn kanatlı havalanma (hareket edemez) + 5 sn itme/korku, bosslara itme + %80
 		## yavaşlatma, kendine ve yakındaki dostlara anında %100 saldırı gücü kadar can + kalkan, 120 sn (bkz. player.gd _skill_melek_fear).
-		"skill3_desc": "ULTİ: 2 saniyeliğine kanatlanıp havalanır (bu sırada hareket edemez) ve parlayarak etrafındaki tüm yaratıkları geri itip 5 saniye boyunca korkutur (bossları uzağa iter ve 5 saniye %80 yavaşlatır). Kullandığı an kendisine ve etrafındaki dostlara saldırı gücünün %100'ü kadar can ve kalkan yeniler. (120sn bekleme)",
+		"skill3_desc": "ULTİ: 2 saniyeliğine kanatlanıp havalanır (bu sırada hareket edemez) ve parlayarak etrafındaki tüm yaratıkları geri itip 5 saniye boyunca korkutur (bossları uzağa iter ve 5 saniye %80 yavaşlatır). Kullandığı an kendisine ve etrafındaki dostlara saldırı gücünün %100'ü kadar can ve mana kalkanı yeniler. (120sn bekleme)",
 		"skill3_icon": "res://assets/skills/melek_kutsal_korku_icon.png",
 		## DÜZELTME (kullanıcı isteği: "Melek'in pasifi %0.5 can yerine saldırı
 		## gücünün %5'si olarak güncelle. Yani 100 saldırı gücü varsa 5 can
@@ -554,7 +557,8 @@ const DEFS := {
 		## MELEK_PASSIVE_ATTACK_POWER_PERCENT.
 		## DÜZELTME (kullanıcı isteği: "Melek'in pasifinin can yenilenmesi
 		## saldırı gücü oranını %5'ten %2'ye düşür").
-		"passive": "Kendisinin ve yakındaki takım arkadaşlarının canını saniyede saldırı gücünün %2'si kadar yeniler.",
+		## 2026-10-14 (kullanıcı isteği): güçlendirme geri alındı (%2), sadece can yerine mana kalkanı yeniliyor; ikon/efekt mavi.
+		"passive": "Kendisinin ve yakındaki takım arkadaşlarının mana kalkanını saniyede saldırı gücünün %2'si kadar yeniler.",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## Oakley ile AYNI geçici "oyku_passive_icon.png" dosyasını
 		## paylaşıyordu, artık kendi özel ikonu var.
@@ -611,20 +615,20 @@ const DEFS := {
 		## Yarasa Sürüsü (35) ve necro_bat.gd/tscn tamamen silindi - yukarıdaki geçmiş notlar eski dizilimleri anlatır.
 		"skill": 19,
 		"skill_name": "İskelet Çağır",
-		"skill_desc": "YETENEK: 8 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (saldırı gücünün %50'si kadar vurur, saniyede ~1.3 kez saldırır, hareket hızının %90'ı, canının %100'ü, kalkansız, 60sn yaşar). Ruh yetmezse çağrılamaz. Toplamda (iskelet+golem) en fazla 10 yaratığa sahip olabilirsin. (0.2sn bekleme)",
+		"skill_desc": "YETENEK: 8 Ruh tüketerek kendisi için savaşan bir iskelet yaratır (saldırı gücünün %40'ı kadar vurur, saniyede ~1.3 kez saldırır, hareket hızının %90'ı, canının %100'ü, kalkansız, 60sn yaşar). Ruh yetmezse çağrılamaz. Toplamda (iskelet+golem) en fazla 10 yaratığa sahip olabilirsin. (0.2sn bekleme)",
 		"skill_icon": "res://assets/skills/necromancer_iskelet_cagir_icon.png",
 		## Kullanıcı isteği (2026-09-24): "iskelet Q golem E kafatası da R olmalı yarasayı ... yok et" - Golem Çağır
 		## (id 20) R'den E'ye taşındı (standart skill2 makinesi, E kalkan tarifesi), Yarasa Sürüsü (id 35) tamamen silindi.
 		"skill2": 20,
 		"skill2_name": "Golem Çağır",
-		"skill2_desc": "TEMEL: 50 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %50 oranında), kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 120sn yaşar). Ruh yetmezse çağrılamaz. (10sn bekleme)",
+		"skill2_desc": "TEMEL: 50 Ruh tüketerek canının %200'üne sahip (hareket hızı %70, saldırı gücü %40 oranında), mana kalkanlı bir Golem çağırır (en fazla 2 tane, %20 daha yavaş saldırır, 120sn yaşar). Ruh yetmezse çağrılamaz. (10sn bekleme)",
 		"skill2_icon": "res://assets/skills/necromancer_hortlak_cagir_icon.png",
 		## Kullanıcı isteği (2026-09-24): Necromancer'ın ULTİ'si artık Lanetli Kafatası (skill3 id 44, R tuşu) - Golem Çağır'ın
 		## (id 20) yerine. Standart skill3_state makinesi (10sn aktif + 60sn bekleme, bkz. player.gd SKILL3_TIMING[44] /
 		## _skill_necro_skull, mantık scripts/necro_skull.gd). Ruh tüketmez (istekte ruh bedeli yok, bekleme süresi var).
 		"skill3": 44,
 		"skill3_name": "Lanetli Kafatası",
-		"skill3_desc": "PASİF + ULTİ: Küçük bir lanetli kafatası her zaman etrafında döner; yakında bir yaratık görünce ona çakılır ve isabet alanındaki düşmanlara saldırı gücünün %60'ı kadar hasar verir. ULTİ (R): kafatası 10sn boyunca %100 büyür, vuruş alanı %100 artar ve her çarpışta saldırı gücünün %150'si kadar hasar verir. (60sn bekleme)",
+		"skill3_desc": "PASİF + ULTİ: Küçük bir lanetli kafatası her zaman etrafında döner; yakında bir yaratık görünce ona çakılır ve isabet alanındaki düşmanlara saldırı gücünün %50'si kadar hasar verir. ULTİ (R): kafatası 10sn boyunca %100 büyür, vuruş alanı %100 artar ve her çarpışta saldırı gücünün %125'i kadar hasar verir. (60sn bekleme)",
 		"skill3_icon": "res://assets/skills/necromancer_lanetli_kafatasi_icon.png",
 		"passive": "Etrafta ölen her düşman 1 ruh biriktirir (bosslar 5 ruh). Biriken ruh sayısı pasif ikonunun üstünde görünür.",
 		"passive_icon": "res://assets/skills/necromancer_passive_icon.png",
@@ -664,7 +668,7 @@ const DEFS := {
 		"skill_icon": "res://assets/skills/shaman_saldiri_totemi_icon.png",
 		"skill2": 26,
 		"skill2_name": "Kalkan Totemi",
-		"skill2_desc": "TEMEL (kalkan harcamaz): Bulunduğun konuma bir totem diker. Totem 30sn boyunca her saniye etrafındaki müttefiklere (ve sana) kendi kalkanının %0.5'i + saldırı gücünün %7'si kadar kalkan yeniler ve etrafına bir alan açar - alanda duran düşmanlar her saniye saldırı gücünün %20'si kadar hasar alır. (45sn bekleme)",
+		"skill2_desc": "TEMEL (mana kalkanı harcamaz): Bulunduğun konuma bir totem diker. Totem 30sn boyunca her saniye etrafındaki müttefiklere (ve sana) kendi mana kalkanının %0.5'i + saldırı gücünün %7'si kadar mana kalkanı yeniler ve etrafına bir alan açar - alanda duran düşmanlar her saniye saldırı gücünün %20'si kadar hasar alır. (45sn bekleme)",
 		"skill2_icon": "res://assets/skills/shaman_kalkan_totemi_icon.png",
 		## Kullanıcı isteği (2026-09-30): yeni R - Elemental Golem (id 49). Sayılar/klip adları scripts/shaman_golem_math.gd'de
 		## (tek kaynak), mantık player.gd dosya sonundaki "SHAMAN: ELEMENTAL GOLEM" bloğunda. Form boyunca Q ve E aşağıdaki
@@ -672,13 +676,13 @@ const DEFS := {
 		## get_hud_skill_override); form bitince totemler geri gelir. Bekleme süresi (90 sn) kullanıcı vermediği için seçildi.
 		"skill3": 49,
 		"skill3_name": "Elemental Golem",
-		"skill3_desc": "ULTİ: 20sn boyunca dev bir elemental goleme dönüşür. Yakınında yaratık varsa saldırı hızına bağlı olarak düzenli aralıklarla yere alan hasarı veren darbeler indirir (yakın mesafe, her darbe saldırı gücünün %120'si kadar hasar verir, kritik vurabilir). Form boyunca aldığın hasar %40 azalır, yeteneklerin kalkan harcamaz, silahlar gövdeye çekilir ve Q ile E değişir: Q - Sarsıcı Darbe, E - Golem Sıçrayışı. (90sn bekleme)",
+		"skill3_desc": "ULTİ: 20sn boyunca dev bir elemental goleme dönüşür. Yakınında yaratık varsa saldırı hızına bağlı olarak düzenli aralıklarla yere alan hasarı veren darbeler indirir (yakın mesafe, her darbe saldırı gücünün %120'si kadar hasar verir, kritik vurabilir). Form boyunca aldığın hasar %40 azalır, yeteneklerin mana kalkanı harcamaz, silahlar gövdeye çekilir ve Q ile E değişir: Q - Sarsıcı Darbe, E - Golem Sıçrayışı. (90sn bekleme)",
 		"skill3_icon": "res://assets/skills/shaman_elemental_golem_icon.png",
 		"golem_skill_name": "Sarsıcı Darbe",
-		"golem_skill_desc": "GOLEM FORMU (kalkan harcamaz): Yere sert bir darbe indirerek etraftaki yaratıkları 1 saniye sersemletir ve saldırı gücünün %250'si kadar hasar verir (bosslar sersemlemez). (3sn bekleme)",
+		"golem_skill_desc": "GOLEM FORMU (mana kalkanı harcamaz): Yere sert bir darbe indirerek etraftaki yaratıkları 1 saniye sersemletir ve saldırı gücünün %250'si kadar hasar verir (bosslar sersemlemez). (3sn bekleme)",
 		"golem_skill_icon": "res://assets/skills/shaman_sarsici_darbe_icon.png",
 		"golem_skill2_name": "Golem Sıçrayışı",
-		"golem_skill2_desc": "GOLEM FORMU (kalkan harcamaz): Zıplayıp ileri doğru atlar; düştüğü yerdeki yaratıkları birbirine çeker ve saldırı gücünün %150'si kadar hasar verir. (8sn bekleme)",
+		"golem_skill2_desc": "GOLEM FORMU (mana kalkanı harcamaz): Zıplayıp ileri doğru atlar; düştüğü yerdeki yaratıkları birbirine çeker ve saldırı gücünün %150'si kadar hasar verir. (8sn bekleme)",
 		"golem_skill2_icon": "res://assets/skills/shaman_golem_sicrayisi_icon.png",
 		"passive": "Totem Auraları: totemlerine yakın müttefiklerin düşmanlara verdiği hasar, düşmana 3sn boyunca her saniye o müttefiğin saldırı gücünün %10'u kadar yakma hasarı bırakır.",
 		"passive_icon": "res://assets/skills/shaman_passive_icon.png",
@@ -753,7 +757,7 @@ const DEFS := {
 		"name": "Suriyeli Hadime",
 		"skill": 46,
 		"skill_name": "Lanet Kitabı",
-		"skill_desc": "YETENEK (AÇ/KAPA): Kitabını okuyarak odaklanır; hafifçe havaya süzülür, birimlerin içinden geçebilir ve %30 yavaş hareket eder. Saniyede bir kitaptan yukarı 3 lanet birden fırlar, etraftaki farklı yaratıklara düşer ve her biri saldırı gücünün %110'u kadar hasar verir. Açık kaldığı sürece her saniye temel yetenek kalkan bedelinin yarısı kadar kalkan harcar. Tekrar basınca (ya da kalkan yetmeyince) kapanır ve 8sn bekleme süresine girer.",
+		"skill_desc": "YETENEK (AÇ/KAPA): Kitabını okuyarak odaklanır; hafifçe havaya süzülür, birimlerin içinden geçebilir ve %30 yavaş hareket eder. Saniyede bir kitaptan yukarı 3 lanet birden fırlar, etraftaki farklı yaratıklara düşer ve her biri saldırı gücünün %110'u kadar hasar verir. Açık kaldığı sürece her saniye temel yetenek mana kalkanı bedelinin yarısı kadar mana kalkanı harcar. Tekrar basınca (ya da mana kalkanı yetmeyince) kapanır ve 8sn bekleme süresine girer.",
 		"skill_icon": "res://assets/skills/hadime_lanet_kitabi_icon.png",
 		"skill2": 47,
 		## Kullanıcı isteği (2026-09-25, ikinci tur): "hadimenin E sini kara delik yeteneğiyle değiştiriyoruz" - eski Kara Büyü
@@ -784,15 +788,15 @@ const DEFS := {
 		"name": "Cadı",
 		"skill": 51,
 		"skill_name": "Zehirli Duman",
-		"skill_desc": "YETENEK (AÇ/KAPA): Arkasında uçan zehir şişesi dumanını yere döker; bulut 3 saniye yerde kalır. Dumana değen yaratıklar her saniye saldırı gücünün %120'si kadar hasar alır. Açık kaldığı sürece her saniye temel yetenek kalkan bedelinin yarısı kadar kalkan harcar. Tekrar basınca (ya da kalkan yetmeyince) kapanır ve 8sn bekleme süresine girer.",
+		"skill_desc": "YETENEK (AÇ/KAPA): Arkasında uçan zehir şişesi dumanını yere döker; bulut 6 saniye yerde kalır. Dumana değen yaratıklar her saniye saldırı gücünün %120'si kadar hasar alır. Açık kaldığı sürece her saniye azami mana kalkanın %0,5'i + 5 mana kalkanı harcar. Tekrar basınca (ya da mana kalkanı yetmeyince) kapanır ve 8sn bekleme süresine girer.",
 		"skill_icon": "res://assets/skills/cadi_zehirli_duman_icon.png",
 		"skill2": 52,
 		"skill2_name": "Uçan Süpürge",
-		"skill2_desc": "TEMEL: Süpürgesine atlar; 8 saniye boyunca %20 hareket hızı kazanır ve her saniye saldırı gücünün %10'u kadar can ve kalkan yeniler. Değdiği takım arkadaşları da süpürgeye biner: aynı bonusları kazanır, silah ve yetenek kullanabilir, ilk 1 saniyeden sonra hareket ederek inebilirler. Süpürgeyi yalnızca Cadı sürer. (20sn bekleme)",
+		"skill2_desc": "TEMEL: Süpürgesine atlar; 8 saniye boyunca %20 hareket hızı kazanır ve her saniye saldırı gücünün %10'u kadar can ve mana kalkanı yeniler. Değdiği takım arkadaşları da süpürgeye biner: aynı bonusları kazanır, silah ve yetenek kullanabilir, ilk 1 saniyeden sonra hareket ederek inebilirler. Süpürgeyi yalnızca Cadı sürer. (20sn bekleme)",
 		"skill2_icon": "res://assets/skills/cadi_supurge_icon.png",
 		"skill3": 53,
 		"skill3_name": "İksir Çantası",
-		"skill3_desc": "ULTİ: 5 yükü vardır (yük başına 8sn bekleme). Her yük rastgele bir iksir fırlatır - sıradaki iksir ikonda görünür. Şişe kırıldığı yerde 4 saniyelik bir alan açar: Delilik (yaratıklar 4sn birbirine saldırır), Don (2sn dondurur, %100 saldırı gücü hasar), Patlama (alan açmaz, %200 hasar), Şifa (üstündeki müttefikler saniyede %20 can yeniler), Korku (2sn korkutur, %100 hasar). Saldırı iksirleri en kalabalık yaratık kümesine, şifa canı en az müttefike atılır.",
+		"skill3_desc": "ULTİ: 5 yükü vardır (yük başına 8sn bekleme). Her yük rastgele bir iksir fırlatır - sıradaki iksir ikonda görünür. Şişe kırıldığı yerde 6 saniyelik bir alan açar: Delilik (yaratıklar 4sn birbirine saldırır), Don (2sn dondurur, %100 saldırı gücü hasar), Patlama (alan açmaz, %200 hasar), Şifa (üstündeki müttefikler saniyede %20 can yeniler), Korku (2sn korkutur, %100 hasar). Saldırı iksirleri en kalabalık yaratık kümesine, şifa canı en az müttefike atılır.",
 		"skill3_icon": "res://assets/skills/cadi_iksir_icon.png",
 		"passive": "Şans Tılsımı: Eksik her %5 canı için 1 şans kazanır.",
 		"passive_icon": "res://assets/skills/cadi_passive_icon.png",
@@ -826,6 +830,8 @@ const MAIN_WEAPON := {
 		"res://assets/audio/assasin_swing2.mp3",
 		"res://assets/audio/assasin_swing3.mp3",
 	],
+	## 2026-10-17 (madde 231): bıçak artık bu efekti KULLANMIYOR - weapon.gd _start_dagger_stab kendi saplama efektini
+	## (scenes/fx_dagger_stab.tscn, dagger_stab_math.gd) çıkarır; değer configure_melee imzası için duruyor.
 	"slash_fx": "res://scenes/fx_assasin_slash.tscn",
 	"melee_hit_segments": 3,
 	## weapon.gd artık efekti/ikonu hedefin (yaratığın) gerçek konumuna
@@ -842,6 +848,32 @@ const MAIN_WEAPON := {
 }
 
 
+## Karakter başına BAŞLANGIÇ statları (2026-10-13, kullanıcı onaylı liste - madde 123). hp = Can, speed = Hız (BASE_MOVE_SPEED ile aynı ölçek),
+## ap = Saldırı Gücü (player.gd damage_bonus tabanı), atk = Saldırı Hızı bonusu (puan, negatif olabilir; player.gd fire_rate_mult = 1/(1+atk/100)).
+## Tek kaynak: player.gd _ready (oyun) + MenuKit.make_stats_grid (seçim ekranı) ikisi de buradan okur. Listede olmayan id -> ortak taban.
+const BASE_STATS_DEFAULT := {"hp": 100.0, "speed": BASE_MOVE_SPEED, "ap": 10.0, "atk": 0.0}
+const BASE_STATS := {
+	1: {"hp": 110.0, "speed": 252.0, "ap": 16.0, "atk": 0.0},  ## Talon
+	2: {"hp": 100.0, "speed": 252.0, "ap": 11.0, "atk": 0.0},  ## Oakley
+	3: {"hp": 90.0, "speed": 265.0, "ap": 10.0, "atk": 0.0},   ## Matthew
+	4: {"hp": 80.0, "speed": 245.0, "ap": 12.0, "atk": -10.0}, ## Büyücü Kız
+	5: {"hp": 95.0, "speed": 260.0, "ap": 14.0, "atk": 10.0},  ## Assasin Çocuk
+	7: {"hp": 150.0, "speed": 238.0, "ap": 8.0, "atk": 0.0},   ## Şovalye Adam
+	8: {"hp": 85.0, "speed": 252.0, "ap": 10.0, "atk": 10.0},  ## Elara
+	9: {"hp": 110.0, "speed": 252.0, "ap": 12.0, "atk": 0.0},  ## Korsan
+	10: {"hp": 90.0, "speed": 252.0, "ap": 12.0, "atk": 0.0},  ## Melek
+	11: {"hp": 85.0, "speed": 248.0, "ap": 12.0, "atk": 0.0},  ## Necromancer
+	12: {"hp": 100.0, "speed": 245.0, "ap": 11.0, "atk": 0.0}, ## Shaman
+	13: {"hp": 80.0, "speed": 258.0, "ap": 12.0, "atk": 0.0},  ## Vampir Çocuk (pasif: 1 SG = 1 maks can)
+	14: {"hp": 90.0, "speed": 245.0, "ap": 12.0, "atk": -5.0}, ## Suriyeli Hadime
+	15: {"hp": 95.0, "speed": 258.0, "ap": 10.0, "atk": 0.0},  ## Cadı
+}
+
+
+static func get_base_stats(char_id: int) -> Dictionary:
+	return BASE_STATS.get(char_id, BASE_STATS_DEFAULT)
+
+
 static func get_def(char_id: int) -> Dictionary:
 	return DEFS.get(char_id, DEFS[1])
 
@@ -856,4 +888,6 @@ const SKILL_UNLOCK_LEVELS := {"skill": 1, "skill2": 5, "skill3": 10}
 
 
 static func skill_unlock_level(char_id: int, slot: String) -> int:
+	if MetaProgressScript.debug_open: ## debug modu: Q/E/R baştan açık
+		return 1
 	return int(get_def(char_id).get(slot + "_unlock_level", SKILL_UNLOCK_LEVELS.get(slot, 1)))

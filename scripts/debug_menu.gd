@@ -212,6 +212,11 @@ func _set_status(text: String, good: bool = true) -> void:
 		_status_label.add_theme_color_override("font_color", UIKit.C_GOOD if good else UIKit.C_BAD)
 
 
+## Çok oyunculuda yapılan her debug eylemi diğer oyunculara bildirilir (bkz. NetworkManager.announce_debug_action); tekli oyunda no-op.
+func _announce(text: String) -> void:
+	NetworkManager.announce_debug_action(text)
+
+
 func _is_client() -> bool:
 	return NetworkManager.is_multiplayer_active and not NetworkManager.is_host
 
@@ -329,6 +334,8 @@ func _on_spawn_pressed() -> void:
 		return
 	var spawned: int = spawner.call("debug_spawn_creature", _selected_creature, _tier, _count, player.global_position)
 	_set_status("%d/%d %s spawnlandı (Kademe %d)." % [spawned, _count, _pretty(_selected_creature), _tier], spawned > 0)
+	if spawned > 0:
+		_announce("%d x %s spawnladı (Kademe %d)" % [spawned, _pretty(_selected_creature), _tier])
 
 
 ## ------------------------------------------------------------------ Eşya / silah
@@ -381,11 +388,15 @@ func _give(key: String) -> void:
 		var ok: bool = player.call("buy_weapon_copy", key, 1)
 		if not ok:
 			GameManager.owned_weapons.pop_back()
-		_set_status(("'%s' verildi." % ChestMenuScript.WEAPON_NAMES.get(key, key)) if ok else "Silah envanteri dolu (en fazla 5).", ok)
+		_set_status(("'%s' verildi." % ChestMenuScript.WEAPON_NAMES.get(key, key)) if ok else "Silah envanteri dolu.", ok)
+		if ok:
+			_announce("kendine silah verdi: %s" % ChestMenuScript.WEAPON_NAMES.get(key, key))
 	else:
 		## 2026-10-02: player.acquire_item() kaydı da yazar (tüketimsiz, bedava; kademe slot kuralları geçerli).
 		var ok2: bool = player.call("acquire_item", key, {}, 0)
 		_set_status(("'%s' verildi." % Items.item_name(key)) if ok2 else Items.purchase_block_reason(key, GameManager.owned_items, int(player.call("get_max_item_slots"))), ok2)
+		if ok2:
+			_announce("kendine eşya verdi: %s" % Items.item_name(key))
 
 
 ## ------------------------------------------------------------------ Oyuncu
@@ -394,12 +405,14 @@ func _build_player_page(page: VBoxContainer) -> void:
 	_immortal_btn = _button("", "wood", Vector2(0, 96), FS_TAB)
 	_immortal_btn.pressed.connect(func() -> void:
 		GameManager.debug_immortal = not GameManager.debug_immortal
+		_announce("ÖLÜMSÜZLÜĞÜ %s" % ("AÇTI" if GameManager.debug_immortal else "KAPATTI"))
 		_refresh_toggles())
 	page.add_child(_immortal_btn)
 	_header(page, "Dünya")
 	_spawns_btn = _button("", "wood", Vector2(0, 96), FS_TAB)
 	_spawns_btn.pressed.connect(func() -> void:
 		GameManager.debug_enemy_spawns_enabled = not GameManager.debug_enemy_spawns_enabled
+		_announce("yaratık doğuşunu %s" % ("AÇTI" if GameManager.debug_enemy_spawns_enabled else "KAPATTI"))
 		_refresh_toggles())
 	page.add_child(_spawns_btn)
 	## Efsun prototipi testi (2026-09-25): 5 level beklemeden efsun ekranını açmak ve finallerin katalizörlerini almak için.
@@ -410,6 +423,7 @@ func _build_player_page(page: VBoxContainer) -> void:
 		var main: Node = get_tree().current_scene
 		if main and main.has_method("debug_open_enchant_screen"):
 			close()
+			_announce("efsun ekranını açtı")
 			main.debug_open_enchant_screen())
 	ench_grid.add_child(open_btn)
 	## Sandık açılış animasyonunu level beklemeden görmek için (2026-09-25): normal = parça kartı, elit = epik eşya kartı.
@@ -420,6 +434,7 @@ func _build_player_page(page: VBoxContainer) -> void:
 			var m: Node = get_tree().current_scene
 			if m and m.has_method("debug_open_chest"):
 				close()
+				_announce("%ssandık açtı" % ("elit " if elite else ""))
 				m.debug_open_chest(elite))
 		ench_grid.add_child(chest_btn)
 	UISound.connect_all_buttons(ench_grid)
@@ -431,6 +446,7 @@ func _build_player_page(page: VBoxContainer) -> void:
 		var m: Node = get_tree().current_scene
 		if m and m.has_method("debug_open_evolution_screen"):
 			close()
+			_announce("evrim ekranını açtı")
 			if not bool(m.debug_open_evolution_screen()):
 				_set_status("Bu karakterin evrimi yok ya da ekran zaten açık", false))
 	evo_grid.add_child(evo_open_btn)
@@ -439,6 +455,8 @@ func _build_player_page(page: VBoxContainer) -> void:
 		var m: Node = get_tree().current_scene
 		if m and m.has_method("debug_grant_all_evolutions"):
 			var n: int = int(m.debug_grant_all_evolutions())
+			if n > 0:
+				_announce("kendine TÜM evrimleri verdi (%d)" % n)
 			_set_status("%d evrim verildi" % n, n > 0))
 	evo_grid.add_child(evo_all_btn)
 	UISound.connect_all_buttons(evo_grid)
@@ -450,6 +468,7 @@ func _build_player_page(page: VBoxContainer) -> void:
 		shard_btn.pressed.connect(func() -> void:
 			GameManager.add_weapon_shards(shard_amount)
 			NetworkManager.show_weapon_shard_text(shard_amount)
+			_announce("kendine %d silah parçacığı verdi" % shard_amount)
 			_set_status("Parçacık: %d" % GameManager.weapon_shards, true))
 		shard_grid.add_child(shard_btn)
 	var shard_drop_btn := _button("Parçacık düşür (yanıma)", "green", Vector2(420, 76))
@@ -460,6 +479,7 @@ func _build_player_page(page: VBoxContainer) -> void:
 			return
 		const WeaponShardDropScript := preload("res://scripts/weapon_shard_drop.gd")
 		WeaponShardDropScript.spawn(get_tree(), pl.global_position + Vector2(70, 0), 1)
+		_announce("silah parçacığı düşürdü")
 		_set_status("Parçacık düştü", true))
 	shard_grid.add_child(shard_drop_btn)
 	UISound.connect_all_buttons(shard_grid)
@@ -503,6 +523,8 @@ func _start_mission(kind_name: String) -> void:
 		return
 	var ok: bool = wem.call("debug_force_start_mission", kind_name, player.global_position)
 	_set_status(("Görev başlatıldı: %s" % kind_name) if ok else "Görev başlatılamadı (harita hazır değil?).", ok)
+	if ok:
+		_announce("görev başlattı: %s" % kind_name)
 
 
 ## ------------------------------------------------------------------ Hava (gün-gece + hava durumu, bkz. atmosphere.gd)
@@ -562,6 +584,7 @@ func _atmosphere_call(method: String, arg: Variant) -> void:
 		_set_status("Sadece host saati/havayı değiştirebilir.", false)
 	else:
 		_set_status("Tamam.")
+		_announce("havayı/saati değiştirdi (%s)" % method.trim_prefix("debug_"))
 	_refresh_atmosphere_label()
 
 

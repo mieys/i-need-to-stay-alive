@@ -26,8 +26,8 @@ const ShamanSfx := preload("res://scripts/shaman_sfx.gd")
 const IMPACT_SOUND := "res://assets/audio/topuz_hit.mp3"
 
 const DURATION := 10.0 ## AKTİF (R) süresi - player.gd SKILL3_TIMING[44] ile aynı
-const PASSIVE_DAMAGE_AP_RATIO := 0.60
-const ACTIVE_DAMAGE_AP_RATIO := 1.50
+const PASSIVE_DAMAGE_AP_RATIO := 0.50 ## 2026-10-13 denge: 0,60 -> 0,50 (kullanıcı: "necromancera dengeleme şart", zayıflat)
+const ACTIVE_DAMAGE_AP_RATIO := 1.25 ## 2026-10-13 denge: 1,50 -> 1,25
 const PASSIVE_SCALE := 0.5 ## kafatası boyutu çarpanı (aktifte 1.0 = eski boyut)
 const SCALE_RATE := 1.4 ## 1/sn: pasif <-> aktif geçişinde boyut yumuşatma
 const EVO_FEAR_DURATION := 1.0 ## R1 Korku Darbesi

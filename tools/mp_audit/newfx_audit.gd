@@ -115,6 +115,7 @@ func _sample_puppet() -> void:
 		var peri: Node = rp.get_node_or_null("Peri")
 		if peri != null and peri.get("_sprite") is AnimatedSprite2D:
 			_note("pup.peri_anim", String((peri.get("_sprite") as AnimatedSprite2D).animation).begins_with("cast"))
+		_note("pup.peri_heal_fx", rp.get_node_or_null("PeriHealFx") != null)
 		_note("pup.formation", str(rp.get("_talon_formation")))
 		_note("pup.form", bool(rp.get("_talon_form_active")))
 		var chains: Node = _find_script_child(rp, "fx_talon_chains")

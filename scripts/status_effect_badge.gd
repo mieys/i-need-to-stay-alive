@@ -37,12 +37,12 @@ const INFO := {
 	"speed": ["Hız Artışı", "Geçici hareket hızı bonusu."],
 	"invuln": ["Yenilmezlik", "Ruhani Yetenek \"Kalkan\" aktif - bu süre boyunca hiç hasar almazsın."],
 	"bat": ["Yarasa Formu", "Vampir Çocuk'un yarasa formu aktif: daha hızlısın ama sürekli can harcarsın."],
-	"shield_slow": ["Kalkan Yenilemesi Yavaş", "Bir yetenek kullandın - kalkan yenilenme hızın kısa süreliğine %50 düştü."],
+	"shield_slow": ["Mana Kalkanı Yenilemesi Yavaş", "Bir yetenek kullandın - mana kalkanı yenilenme hızın kısa süreliğine %50 düştü."],
 	"burn": ["Yanma", "Bir İblis'in ateş topu seni tutuşturdu - 3 saniye boyunca yanarak hasar alırsın."],
 	"bleed": ["Kanama", "Bir yarasa seni ısırdı - 4 saniye boyunca saniyede 5 hasar alırsın."],
 	"savas_sevki": ["Savaş Şevki", "Öldürdükçe yığılan savaş şevki - 50'de kalıcı +1 saldırı gücüne dönüşür."],
-	"golem": ["Elemental Golem", "Golem formundasın: aldığın hasar %40 azalır ve yeteneklerin kalkan harcamaz."],
-	"kalkan_bagi": ["Kalkan Bağı", "Arkadaşınla kalkanınız birbirine bağlı - hasar/bedel/artış %50-%50 paylaşılıyor, ikinizin de kalkanı daha hızlı yenileniyor."],
+	"golem": ["Elemental Golem", "Golem formundasın: aldığın hasar %40 azalır ve yeteneklerin mana kalkanı harcamaz."],
+	"kalkan_bagi": ["Kalkan Bağı", "Arkadaşınla mana kalkanınız birbirine bağlı - hasar/bedel/artış %50-%50 paylaşılıyor, ikinizin de mana kalkanı daha hızlı yenileniyor."],
 }
 
 @onready var panel: Panel = $Panel

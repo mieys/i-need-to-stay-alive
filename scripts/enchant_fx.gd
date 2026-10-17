@@ -121,6 +121,9 @@ static func apply_projectile_look(proj: Node2D, look: Dictionary) -> void:
 		ParticleTrail.attach(proj, str(look["trail"]))
 	if look.has("pierce"):
 		proj.set_meta("visual_pierce", int(look["pierce"]))
+	## Zanaatkâr seti (madde 196): bumerang/fişek mermisi silahın kademe sanatıyla (kaster weapon.gd _fire_at aynı anahtar).
+	if look.has("art_tier") and proj.has_method("set_art_tier"):
+		proj.call("set_art_tier", int(look["art_tier"]))
 	## Güdüm hedefinin ağ kimliği - yalnız uzak (network_spawned) kopya kullanır (projectile.gd _net_homing); kasterde
 	## güdüm enchant_behavior'da.
 	if look.has("home_id"):
@@ -137,3 +140,9 @@ static func apply_projectile_look(proj: Node2D, look: Dictionary) -> void:
 	## çarpıldığı için bu anahtar yalnızca ağdan gelen kopyada uygulanır.
 	if look.has("spin_mult") and "spin_speed_deg" in proj:
 		proj.set("spin_speed_deg", float(proj.get("spin_speed_deg")) * float(look["spin_mult"]))
+	## Elara E/R mermi görünümü (madde 178) - yalnızca ağdan gelen kopyada buraya gelir (kaster weapon.gd _fire_at'te doğrudan uygular).
+	if look.has("elara"):
+		ElaraFx.style_projectile(proj, int(look["elara"]))
+	## Büyücü pasifi güçlendirilmiş mermi (madde 188) - kaster weapon.gd _fire_at'te doğrudan uygular.
+	if look.has("surge"):
+		preload("res://scripts/buyucu_fx.gd").style_surge_projectile(proj)

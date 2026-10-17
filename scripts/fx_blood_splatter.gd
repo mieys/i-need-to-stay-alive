@@ -15,6 +15,7 @@ extends AnimatedSprite2D
 ## eski/yok" hatasının aksine burada paylaşılan bir oyun durumu YOK) fark
 ## edilmeyecek kadar önemsiz bir sapma.
 
+const GroundBlood := preload("res://scripts/ground_blood.gd")
 const VARIANTS := ["blood1", "blood2", "blood3", "blood4"]
 const SCATTER_RADIUS := 12.0
 
@@ -24,3 +25,6 @@ func _ready() -> void:
 	var variant: String = VARIANTS[randi() % VARIANTS.size()]
 	position = Vector2(randf_range(-SCATTER_RADIUS, SCATTER_RADIUS), randf_range(-SCATTER_RADIUS, SCATTER_RADIUS))
 	play(variant)
+	## Yere sıçrayan + bir süre kalan kan (2026-10-14). Buradan doğar: bu sahne kasterde ve diğer istemcilerde zaten
+	## açıldığı için leke de her ekranda çıkar (ek RPC yok).
+	GroundBlood.spawn(get_parent() as Node2D)

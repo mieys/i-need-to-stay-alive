@@ -8,6 +8,8 @@ extends GridContainer
 signal character_picked(char_id: int)
 
 const CardScript: GDScript = preload("res://scripts/menu_character_card.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const LockBadgeScript: GDScript = preload("res://scripts/lock_badge.gd")
 const COLUMNS := 6
 const H_SEP := 4
 const V_SEP := 6
@@ -31,6 +33,8 @@ func build(cols: int = COLUMNS, k: float = 1.0, face: bool = false) -> void:
 		card.setup(char_id, Characters.DEFS[char_id], k, face)
 		card.pressed.connect(_on_card_pressed)
 		cards[char_id] = card
+		if not MetaProgressScript.is_unlocked(MetaProgressScript.CHAR, char_id):
+			card.set_locked(true)
 
 
 ## Izgaranın toplam boyutu (yerleşim hesapları için): 6 x 180 + 5 x 4 = 1100 px genişlik, satır x 216 + (satır-1) x 6 yükseklik

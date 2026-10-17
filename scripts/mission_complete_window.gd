@@ -7,6 +7,7 @@ extends CanvasLayer
 ## satırındaki külçeden release edilir, paralar sol üstteki altın paneline uçar (gold_reward_fx.gd). Bu oyuncu görev
 ## bölgesinde değildiyse altın satırı çıkmaz. Oyunu durdurmaz, tıklamaları yutmaz, kendi kendine kapanır.
 
+const UiAnim := preload("res://scripts/ui_anim.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const INGOT_ICON := preload("res://assets/ui/newui/icon_gold_coin.png") ## altın simgesi = oyun içi madeni paranın animasyonsuz ilk karesi (2026-10-04)
 const ELITE_CHEST_SHEET := preload("res://assets/sprites/chests/chest_elite.png")
@@ -45,6 +46,7 @@ func _ready() -> void:
 	_open.append(self)
 	_gold = GoldRewardFx.held_amount(&"mission")
 	_build()
+	UiAnim.window_in(self)
 
 
 func _exit_tree() -> void:

@@ -5,9 +5,11 @@ elbiseli, asasını havaya kaldırmış peri. Can %100'ün altındayken 6 sn'de 
   - Arka: saç başı örter (yüz yok), asa izleyicinin SOLUNDA, kanat kökleri sırtta gövdenin ÜSTÜNDE.
   - Yan (sağa bakar): profil baş, asa önde; kanat olarak öndeki görünümün SOL kanadı (arkada kalan tek kanat).
   fly_<yön>  : 4 kare (kanat yukarı, açık, aşağı, açık), döngü, 10 fps
-  cast_<yön> : 4 kare, tek sefer, 10 fps - asanın yeşil yıldızı büyür, patlar, halka olur, söner (can basma büyüsü)
+  cast_<yön> : 8 kare, tek sefer, 10 fps (can basma büyüsü; 2026-10-13 kullanıcı: "iyileştirme animasyonu yok" - eski 4 karede sadece
+               yıldız birkaç piksel değişiyordu, oyunda fark edilmiyordu): peri 2 piksel yükselir, kanatlar hızlı çırpar, gövdesi
+               yeşil ışıldar, asanın yıldızı büyüyüp halka halinde patlar ve söner. Uçuş kareleri piksel piksel AYNI.
 Gövde merkezi her karede hücrenin 23. sütununda, göğüs ~24. satırda -> düğüm orijini = gövde.
-Çıktı: assets/pets/peri/peri_sheet.png (8 x 3 hücre, 48x48) + peri_frames.tres
+Çıktı: assets/pets/peri/peri_sheet.png (12 x 3 hücre, 48x48) + peri_frames.tres
        tools/proto_20261012/out/peri_yonler.{png,gif} (önizleme)
 Kullanım (proje kökünden): python -I tools/gen_peri.py   (sonra Godot --headless --path . --import)
 """
@@ -24,9 +26,10 @@ from gen_perf_sprite_fx_tres import write_sprite_frames  # noqa: E402
 OUT = os.path.join(ROOT, 'assets', 'pets', 'peri')
 PREVIEW = os.path.join(HERE, 'proto_20261012', 'out')
 CELL = 48
-ART_W, ART_H = 25, 21
-TOP = 3                      # satırlar yıldız patlaması için 3 aşağı kaydırılır
-ART_AT = (11, 13)            # sanatın hücredeki sol üst köşesi
+PAD = 4                      # büyü patlaması + yükselme için üstte ek boşluk (uçuş karelerinin hücredeki yeri değişmez)
+ART_W, ART_H = 25, 21 + PAD
+TOP = 3 + PAD                # satırlar yıldız patlaması için aşağı kaydırılır
+ART_AT = (11, 13 - PAD)      # sanatın hücredeki sol üst köşesi
 PAL = {
     'o': (46, 30, 44), 's': (248, 216, 186), 'e': (44, 28, 36),
     'd': (196, 134, 34), 'h': (246, 198, 72), 'H': (255, 238, 158),
@@ -36,6 +39,11 @@ PAL = {
 }
 ALPHA = {'v': 215, 'w': 215, 'W': 235}
 FLAP = ['U', 'M', 'D', 'M']
+## Can basma büyüsü, kare kare: (kanat pozu, yıldız durumu, yükselme pikseli, gövde ışıltısı alfa)
+CAST = [
+    ('U', 'c0', 0, 0), ('D', 'c1', 1, 120), ('U', 'b0', 2, 200), ('D', 'b1', 2, 230),
+    ('U', 'b2', 2, 200), ('D', 'c2', 1, 140), ('U', 'c3', 1, 70), ('M', 'idle', 0, 0),
+]
 
 ## Sol kanat (13 sütun: 0..12, orta 12). Ön/arka için aynalanır; yan görünümde olduğu gibi kullanılır.
 WINGS = {
@@ -163,6 +171,22 @@ def star_cells(state):
     elif state == 'c3':
         out += [(dx * 4, dy * 4, 'm') for dx, dy in N4] + [(dx * 3, dy * 3, 'm') for dx, dy in DIAG]
         out += [(dx, dy, 'T') for dx, dy in N4] + [(0, 0, 'Y')]
+    elif state == 'b0':   # en büyük yıldız
+        out += [(dx * 5, dy * 5, 'T') for dx, dy in N4] + [(dx * 3, dy * 3, 'T') for dx, dy in DIAG]
+        out += [(dx * k, dy * k, 'Y') for dx, dy in N4 for k in (1, 2, 3, 4)] + [(dx * k, dy * k, 'Y') for dx, dy in DIAG for k in (1, 2)]
+        out += [(0, 0, 'Y')]
+    elif state == 'b1':   # patlama halkası
+        out += ring_cells(5, 'Y') + [(dx * 2, dy * 2, 'T') for dx, dy in N4] + [(dx, dy, 'Y') for dx, dy in N4] + [(0, 0, 'Y')]
+    elif state == 'b2':   # halka genişler, söner
+        out += ring_cells(6, 'T') + [(dx * 4, dy * 4, 'm') for dx, dy in DIAG]
+        out += [(dx, dy, 'T') for dx, dy in N4] + [(0, 0, 'Y')]
+    return out
+
+
+def ring_cells(r, ch):
+    d = int(round(r * 0.7))
+    out = [(dx * r, dy * r, ch) for dx, dy in N4] + [(dx * d, dy * d, ch) for dx, dy in DIAG]
+    out += [(sx * (r - 1), sy * 2, ch) for sx in (-1, 1) for sy in (-1, 1)] + [(sx * 2, sy * (r - 1), ch) for sx in (-1, 1) for sy in (-1, 1)]
     return out
 
 
@@ -184,7 +208,8 @@ def wing_rows(pose, mirror):
     return [r + r[-2::-1] for r in WINGS[pose]] if mirror else WINGS[pose]
 
 
-def frame(direction, pose, star):
+def frame(direction, pose, star, lift=0, aura=0):
+    """lift: bütün kare kaç piksel yukarı (büyüde peri yükselir); aura: gövdenin çevresine 1 piksellik yeşil ışıltı (alfa)."""
     im = Image.new('RGBA', (ART_W, ART_H), (0, 0, 0, 0))
     px = im.load()
     if direction == 'up':
@@ -196,9 +221,19 @@ def frame(direction, pose, star):
     else:
         draw_rows(px, wing_rows(pose, direction == 'down'))
         draw_rows(px, BODY[direction])
+    if aura:
+        solid = [(x, y) for y in range(ART_H) for x in range(ART_W) if px[x, y][3] > 0]
+        for x, y in solid:
+            for dx, dy in N4:
+                if 0 <= x + dx < ART_W and 0 <= y + dy < ART_H and px[x + dx, y + dy][3] == 0:
+                    px[x + dx, y + dy] = PAL['T'] + (aura,)
     sx, sy = STAR_AT[direction]
     for dx, dy, ch in star_cells(star):
         put(px, sx + dx, sy + dy, ch)
+    if lift:
+        up = Image.new('RGBA', (ART_W, ART_H), (0, 0, 0, 0))
+        up.paste(im, (0, -lift))
+        return up
     return im
 
 
@@ -212,8 +247,8 @@ def font(sz):
 def main():
     dirs = ['down', 'up', 'side']
     fly = {d: [frame(d, k, 'idle') for k in FLAP] for d in dirs}
-    cast = {d: [frame(d, k, 'c%d' % i) for i, k in enumerate(FLAP)] for d in dirs}
-    sheet = Image.new('RGBA', (CELL * 8, CELL * 3), (0, 0, 0, 0))
+    cast = {d: [frame(d, k, st, lift, aura) for k, st, lift, aura in CAST] for d in dirs}
+    sheet = Image.new('RGBA', (CELL * 12, CELL * 3), (0, 0, 0, 0))
     for row, d in enumerate(dirs):
         for col, f in enumerate(fly[d] + cast[d]):
             sheet.alpha_composite(f, (col * CELL + ART_AT[0], row * CELL + ART_AT[1]))
@@ -223,7 +258,7 @@ def main():
     anims = []
     for row, d in enumerate(dirs):
         anims.append(('fly_' + d, (0, row), 4, True, 10.0))
-        anims.append(('cast_' + d, (4, row), 4, False, 10.0))
+        anims.append(('cast_' + d, (4, row), 8, False, 10.0))
     write_sprite_frames(os.path.join(OUT, 'peri_frames.tres'), 'res://assets/pets/peri/peri_sheet.png', CELL, CELL, anims)
     print('wrote', png, sheet.size)
 
@@ -246,13 +281,15 @@ def main():
         return im
 
     os.makedirs(PREVIEW, exist_ok=True)
-    frames = [strip(i) for i in range(4)]
+    full = fly
+    fly = {d: fly[d] * 2 for d in dirs}
+    frames = [strip(i) for i in range(8)]
     gif = [f.convert('P', palette=Image.ADAPTIVE, colors=64) for f in frames]
     gif[0].save(os.path.join(PREVIEW, 'peri_yonler.gif'), save_all=True, append_images=gif[1:], duration=100, loop=0, disposal=2)
     Zc = 4
-    chk = Image.new('RGBA', (8 * (ART_W * Zc + 4), 3 * (ART_H * Zc + 4)), (34, 30, 40, 255))
+    chk = Image.new('RGBA', (12 * (ART_W * Zc + 4), 3 * (ART_H * Zc + 4)), (34, 30, 40, 255))
     for row, d in enumerate(dirs):
-        for col, f in enumerate(fly[d] + cast[d]):
+        for col, f in enumerate(full[d] + cast[d]):
             p = Image.new('RGBA', (ART_W, ART_H), (58, 66, 74, 255))
             p.alpha_composite(f)
             chk.alpha_composite(p.resize((ART_W * Zc, ART_H * Zc), Image.NEAREST), (col * (ART_W * Zc + 4), row * (ART_H * Zc + 4)))

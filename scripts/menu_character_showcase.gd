@@ -10,6 +10,7 @@ var _name_label: Label
 var _stage: TextureRect
 var _preview: Control
 var _content: VBoxContainer
+var _stats_grid: Control
 var _stage_def: Dictionary
 
 
@@ -35,8 +36,9 @@ func build(big: bool) -> void:
 	_preview = PreviewScript.new()
 	_stage.add_child(_preview)
 	MenuKit.place(_preview, Vector2.ZERO, _stage_def["size"])
-	## Temel istatistikler (herkes aynı değerlerle başlıyor - bkz. MenuKit.BASE_STATS).
-	_content.add_child(MenuKit.make_stats_grid())
+	## Temel istatistikler (karakter başına - bkz. Characters.BASE_STATS; show_character günceller).
+	_stats_grid = MenuKit.make_stats_grid()
+	_content.add_child(_stats_grid)
 
 
 func get_content() -> VBoxContainer:
@@ -46,5 +48,7 @@ func get_content() -> VBoxContainer:
 func show_character(char_id: int) -> void:
 	var def: Dictionary = Characters.get_def(char_id)
 	_name_label.text = str(def.get("name", ""))
+	if is_instance_valid(_stats_grid):
+		MenuKit.set_stats_grid_character(_stats_grid, char_id)
 	_preview.setup(def, int(_stage_def["scale"]), float(_stage_def["ground_y"]))
 	_preview.playing = true

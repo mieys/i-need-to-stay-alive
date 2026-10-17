@@ -11,7 +11,7 @@ extends CanvasLayer
 ## tıkır tıkır yükselir ve altın toplama sesi (gold_drop.tscn ile aynı dosya/ses seviyesi) üst üste çalar.
 ##
 ## Kullanım (altını ekleyen de bu çağrılar):
-##   GoldRewardFx.give(get_tree(), miktar, dünya_konumu)                 # boss payı, Para ruhani yeteneği, hediye
+##   GoldRewardFx.give(get_tree(), miktar, dünya_konumu)                 # artık UÇMAZ (2026-10-15): anında eklenir + altın sesi; Para ruhani yeteneği, altın kartı
 ##   GoldRewardFx.give_from_screen(get_tree(), miktar, ekran_konumu, &"chest" / &"elite_chest")
 ##       # sandık: kaynak noktada açık bir sandık belirir, paralar onun ağzından fışkırır (sandık ekranındaki sandığın yeri)
 ##   GoldRewardFx.hold(get_tree(), miktar, &"mission", yedek_dünya_konumu) + release(&"mission", ekran_konumu)
@@ -25,6 +25,7 @@ extends CanvasLayer
 ## Oyun duraklatılmışken (sandık/efsun ekranı açık) paralar bekler, ekran kapanınca fırlar - give_now_from_screen hariç
 ## (sandık altını: kart inince duraklatılmış ekranın üstünden hemen fırlar, HUD sayacı da burada güncellenir).
 
+const KillGold := preload("res://scripts/kill_gold.gd")
 const COIN_FRAMES := preload("res://assets/pickups/gold/gold_coin_frames.tres")
 const PICKUP_SOUND := preload("res://assets/audio/gold_pickup.mp3")
 const SOUND_DB := -10.0 ## gold_drop.tscn PickupSound ile aynı
@@ -39,16 +40,17 @@ const FLIGHT_TIME := 0.62
 const SPRAY_DIST := 70.0 ## önce kaynağın çevresine saçılır, sonra panele kıvrılır
 const HOLD_TIMEOUT := 3.0
 
-## Sandık kaynağı: chest_open_anim.gd'nin sayfası (20 kare x 48 px; 12 = kapak açıldı, 16-19 açık bekleme döngüsü).
+## Sandık kaynağı: chest_art.gd sayfası (20 kare x 96 px = 48 dünya px; 12 = kapak açıldı, 16-19 açık bekleme döngüsü).
+const ChestArt := preload("res://scripts/chest_art.gd")
 const CHEST_SHEETS := {
-	&"chest": preload("res://assets/sprites/chests/chest_normal_t1.png"),
-	&"elite_chest": preload("res://assets/sprites/chests/chest_elite.png"),
+	&"chest": ChestArt.NORMAL_SHEET,
+	&"elite_chest": ChestArt.ELITE_SHEET,
 }
-const CHEST_FRAMES := 20
+const CHEST_FRAMES := ChestArt.FRAME_COUNT
 const CHEST_OPEN_FRAME := 12
 const CHEST_LOOP := [16, 17, 18, 19]
 const CHEST_LOOP_STEP := 0.12
-const CHEST_SCALE := 5.0
+const CHEST_SCALE := 5.0 * ChestArt.TEXEL ## eski 48 px karenin x5 boyu (96 px kare, 0,5 sanat pikseli)
 const CHEST_POP_TIME := 0.2 ## sandık belirdikten sonra ilk para bu kadar sonra fışkırır
 const CHEST_COINS_SFX := preload("res://Sound FX Starter Pack Vol. 1/Medieval/Loot Gold.wav")
 
@@ -90,8 +92,17 @@ var _launch_cd: float = 0.0
 var _pulse_tw: Tween = null
 
 
-static func give(tree: SceneTree, amount: int, from_world: Vector2) -> void:
-	_give(tree, amount, from_world, true, &"")
+## 2026-10-15 (kullanıcı: "bundan sonra oyuncudan altın barına doğru gitmesin altınlar"): dünya konumlu altın artık panele UÇMAZ -
+## anında eklenir, sadece altın sesi çalar (yazıyı çağıran gösterir; with_text = "+N" yazısı da bu çıkarsın). Sandık/görev/satış (ekran
+## konumlu) ödülleri ve arkadaş hediyesi hâlâ uçar.
+static func give(tree: SceneTree, amount: int, from_world: Vector2, with_text: bool = false) -> void:
+	if amount <= 0:
+		return
+	GameManager.gold += amount
+	if with_text:
+		KillGold.show_at(tree, amount, from_world)
+	else:
+		KillGold.play_sound_at(tree, KillGold.resolve_pos(tree, from_world))
 
 
 ## Oyun duraklatılmış olsa bile hemen fırlar (sandık/efsun ekranındaki kartın yerinden, bkz. chest_menu.gd).

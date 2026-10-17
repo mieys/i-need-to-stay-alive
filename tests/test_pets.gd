@@ -8,6 +8,7 @@ extends Node
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const PickerScript: GDScript = preload("res://scripts/menu_pet_picker.gd")
 const PetCatalog := preload("res://scripts/pet_catalog.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 
 var _nodes: Array = []
 var _saved_pet: String = ""
@@ -66,6 +67,7 @@ func test_catalog() -> void:
 func test_picker_writes_selection_and_emits() -> void:
 	_begin()
 	GameManager.selected_pet = ""
+	MetaProgressScript.set_unlock_all(true) ## Ruh Mağazası kilitleri bu testin konusu değil (bkz. test_meta_progress.gd)
 	var picker: PanelContainer = PickerScript.new()
 	add_child(picker)
 	_nodes.append(picker)
@@ -77,6 +79,7 @@ func test_picker_writes_selection_and_emits() -> void:
 	assert(GameManager.selected_pet == "papagan" and got == ["papagan"], "seçim yazılmalı + sinyal")
 	picker.select("yok_boyle")
 	assert(GameManager.selected_pet == "kopek", "geçersiz anahtar varsayılan olur")
+	MetaProgressScript.set_unlock_all(false)
 	_end()
 
 
@@ -290,7 +293,7 @@ func test_peri_has_four_directions_and_cast_frames() -> void:
 	var k: Node = p.get_node("Peri")
 	for d in ["down", "up", "side"]:
 		assert(k.FRAMES.has_animation("fly_" + d) and k.FRAMES.get_frame_count("fly_" + d) == 4 and k.FRAMES.get_animation_loop("fly_" + d), "fly_%s: 4 karelik döngü" % d)
-		assert(k.FRAMES.has_animation("cast_" + d) and k.FRAMES.get_frame_count("cast_" + d) == 4 and not k.FRAMES.get_animation_loop("cast_" + d), "cast_%s: 4 kare, tek sefer" % d)
+		assert(k.FRAMES.has_animation("cast_" + d) and k.FRAMES.get_frame_count("cast_" + d) == 8 and not k.FRAMES.get_animation_loop("cast_" + d), "cast_%s: 8 kare, tek sefer" % d)
 	k._face("up")
 	assert(k._sprite.animation == &"fly_up" and not k._sprite.flip_h)
 	k._face("left")
@@ -298,6 +301,13 @@ func test_peri_has_four_directions_and_cast_frames() -> void:
 	k._play_cast()
 	k._face("right")
 	assert(k._sprite.animation == &"cast_side" and not k._sprite.flip_h, "büyü sırasında yön değişince büyü karesi korunur")
+	var fx: Node = p.get_node_or_null("PeriHealFx")
+	assert(fx != null and fx._u > 0.0 and fx._head.y < fx._feet.y, "büyüde sahibin üstünde can efekti kurulur (ayaktan başa)")
+	assert(fx._from.distance_to(p.to_local(k.global_position)) < 30.0, "efekt perinin asasından çıkar")
+	var mid: Vector2 = k.cast_loop_offset(0.5, Vector2(-30, 2))
+	assert(k._loop_t == 0.0 and mid.x < -8.0 and absf(mid.y) < 1.0, "büyüde oval tur: yarı yolda sahibe yaklaşır")
+	assert(k.cast_loop_offset(0.25, Vector2(-30, 0)).y > 3.0 and k.cast_loop_offset(0.75, Vector2(-30, 0)).y < -3.0, "alttan gider, üstten döner")
+	assert(k.cast_loop_offset(0.0, Vector2(-30, 0)) == Vector2.ZERO and k.cast_loop_offset(1.0, Vector2(-30, 0)) == Vector2.ZERO, "tur yerinde biter")
 	k._on_animation_finished()
 	assert(not k._casting and k._sprite.animation == &"fly_side", "büyü bitince uçuşa döner")
 	_end()
@@ -314,6 +324,7 @@ func test_remote_peri_puppet_is_created_on_first_event_and_never_heals() -> void
 	assert(k != null and k.is_puppet and not k._casting, "\"buradayım\" olayı kuklayı kurar, büyü yok")
 	rp.peri_event(true)
 	assert(k._casting and rp.get_node("Peri") == k, "büyü olayı: görsel büyü, ikinci kukla yok")
+	assert(rp.has_node("PeriHealFx"), "kuklada da can efekti oynar (MP iki-yer kuralı)")
 	k.process_heal(100.0)
 	assert(k._cooldown == 0.0, "kukla can basma kararı vermez")
 	_end()

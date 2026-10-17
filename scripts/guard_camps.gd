@@ -15,10 +15,18 @@ extends Node
 const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 
 ## Kamplar: hücre (Harita karo koordinatı; tools/ analizinde açık alan, yarıçap >= 6 hücre boşluk), bekçi sayısı, dağılma yarıçapı (px), yeniden dolma süresi (sn).
+## İsteğe bağlı: "alert" (uyanan bekçinin arkadaşlarını uyandırma yarıçapı px, 0 = kimseyi çağırmaz; yoksa ALERT_RADIUS) ve "ahead" = [p1, p2]: bekçinin o anki kademenin 1 / 2
+## kademe ÖTESİNDEN doğma olasılığı (kalanı o anki kademeden; kademe 15'te kısılır, bkz. enemy_spawner.gd spawn_guard).
+## SAĞ ALT TEHLİKELİ BÖLGE (2026-10-14, kullanıcı: "haritanın sağ alt kısmı çok tehlikeli olsun, çok sayıda düşman, haritayı gezmesinler, bizi görenler gelsin - hepsi bir anda
+## değil, sonraki kademeden yaratıklar da olabilir"): GD-* kampları (7 kamp, 106 bekçi), `alert` 0 (SADECE görenler kovalar), `ahead` karışımı. Eskiden 3 kamp / 29 bekçi.
 const CAMPS: Array = [
-	{"name": "GD-A", "cell": Vector2i(219, 225), "count": 12, "radius": 90.0, "refill": 150.0},   ## düşman üssü çevresi (en tehlikeli)
-	{"name": "GD-B", "cell": Vector2i(205, 236), "count": 9, "radius": 80.0, "refill": 150.0},
-	{"name": "GD-C", "cell": Vector2i(244, 182), "count": 8, "radius": 80.0, "refill": 150.0},
+	{"name": "GD-A", "cell": Vector2i(219, 225), "count": 24, "radius": 130.0, "refill": 150.0, "alert": 0.0, "ahead": [0.45, 0.25]},   ## düşman üssü çevresi (en tehlikeli)
+	{"name": "GD-B", "cell": Vector2i(205, 236), "count": 16, "radius": 110.0, "refill": 150.0, "alert": 0.0, "ahead": [0.4, 0.2]},
+	{"name": "GD-C", "cell": Vector2i(244, 182), "count": 14, "radius": 100.0, "refill": 150.0, "alert": 0.0, "ahead": [0.4, 0.15]},
+	{"name": "GD-D", "cell": Vector2i(201, 195), "count": 16, "radius": 130.0, "refill": 150.0, "alert": 0.0, "ahead": [0.4, 0.15]},
+	{"name": "GD-E", "cell": Vector2i(174, 219), "count": 14, "radius": 130.0, "refill": 150.0, "alert": 0.0, "ahead": [0.4, 0.15]},
+	{"name": "GD-F", "cell": Vector2i(240, 219), "count": 12, "radius": 110.0, "refill": 150.0, "alert": 0.0, "ahead": [0.4, 0.15]},
+	{"name": "GD-G", "cell": Vector2i(192, 171), "count": 10, "radius": 100.0, "refill": 150.0, "alert": 0.0, "ahead": [0.35, 0.1]},
 	{"name": "K", "cell": Vector2i(125, 10), "count": 4, "radius": 60.0, "refill": 210.0},
 	{"name": "KB", "cell": Vector2i(19, 13), "count": 4, "radius": 60.0, "refill": 210.0},
 	{"name": "KD", "cell": Vector2i(239, 31), "count": 4, "radius": 60.0, "refill": 210.0},
@@ -173,10 +181,23 @@ func _refill(players: Array) -> void:
 			camp["queue"] = int(camp["queue"]) - 1
 			if pos == null:
 				continue
-			var e: Node = spawner.spawn_guard(pos)
+			var e: Node = spawner.spawn_guard(pos, _roll_ahead(def))
 			if e != null:
 				camp["guards"].append(e)
 				register_guard(e, camp)
+
+
+## Kampın "ahead" tablosuna göre bu bekçi kaç kademe ötesinden doğsun (0, 1 ya da 2).
+func _roll_ahead(def: Dictionary) -> int:
+	var table: Array = def.get("ahead", [])
+	if table.size() < 2:
+		return 0
+	var r: float = randf()
+	if r < float(table[1]):
+		return 2
+	if r < float(table[1]) + float(table[0]):
+		return 1
+	return 0
 
 
 ## Bir yaratığı bekçi olarak kaydeder (uykuda IDLE). Testler de kullanır.
@@ -292,8 +313,12 @@ func _patrol(e: Node2D, g: Dictionary, slot: int, world: Object, dt: float, cent
 			return
 
 
-## Uyanan bekçi aynı kamptaki uyuyan/arayan/dönen arkadaşlarını (ALERT_RADIUS içinde) kovalamaya çağırır.
+## Uyanan bekçi aynı kamptaki uyuyan/arayan/dönen arkadaşlarını (kampın "alert" yarıçapı, yoksa ALERT_RADIUS içinde) kovalamaya çağırır.
+## Sağ alt tehlikeli bölgede "alert" 0: arkadaşlarını ÇAĞIRMAZ, yalnız oyuncuyu kendi gören (SIGHT + görüş hattı) bekçiler kovalar.
 func _alert_pack(src: Node2D, sg: Dictionary) -> void:
+	var alert: float = float(((sg["camp"] as Dictionary)["def"] as Dictionary).get("alert", ALERT_RADIUS))
+	if alert <= 0.0:
+		return
 	var world: Object = EnemyWorldBridgeScript.fog_world(get_tree())
 	if world == null:
 		return
@@ -304,7 +329,7 @@ func _alert_pack(src: Node2D, sg: Dictionary) -> void:
 		var o: Object = instance_from_id(id)
 		if o == null or not is_instance_valid(o) or not (o is Node2D) or o == src:
 			continue
-		if (o as Node2D).global_position.distance_to(src.global_position) > ALERT_RADIUS:
+		if (o as Node2D).global_position.distance_to(src.global_position) > alert:
 			continue
 		var slot: int = _slot(o)
 		if slot < 0:

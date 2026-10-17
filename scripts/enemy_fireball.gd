@@ -8,10 +8,12 @@ extends Node2D
 ## Görseller tools/gen_enemy_ability_fx.py spritesheet'leri (tek AnimatedSprite2D, uçuş yönüne döndürülür).
 
 const TEXEL := 1.212
+const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
 const FLY_FRAMES := preload("res://assets/fx/enemy_abilities/fireball_frames.tres")
 const IMPACT_FRAMES := preload("res://assets/fx/enemy_abilities/fire_impact_frames.tres")
 const FxScript := preload("res://scripts/fx_enemy_ability.gd")
 const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
+const ProjectileRangeScript := preload("res://scripts/projectile_range.gd") ## menzil = görüş elipsi (bkz. projectile_range.gd)
 const LIFETIME := 2.2
 const HIT_RADIUS := 9.0
 const WALL_IGNORE_TIME := 0.08
@@ -50,6 +52,9 @@ func _physics_process(delta: float) -> void:
 	if _life >= LIFETIME:
 		queue_free()
 		return
+	if not ProjectileRangeScript.within(self):
+		queue_free()
+		return
 	global_position += _dir * _speed * delta
 	if _life >= WALL_IGNORE_TIME and GameManager.is_position_blocked_by_forest(global_position):
 		_explode()
@@ -59,8 +64,7 @@ func _physics_process(delta: float) -> void:
 		return
 	for p in AbilitiesScript.damageable_players(get_tree()):
 		var pn := p as Node2D
-		if "paladin_zone_active" in pn and pn.get("paladin_zone_active") == true \
-				and global_position.distance_to(pn.global_position) <= float(pn.get("paladin_zone_radius")):
+		if PaladinDome.node_contains(pn, global_position):
 			_explode()
 			return
 		## Talon "Kalkan Çemberi" evrimi (2026-09-28): salvo çemberine değen ateş topu söner.

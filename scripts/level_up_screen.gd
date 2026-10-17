@@ -4,6 +4,7 @@ signal upgrade_chosen(id: String, tier: int)
 
 ## Kategori renkleri artık bej kart parşömeni ÜSTÜNDE okunan koyu tonlar (kullanıcı isteği 2026-09-24: oyun içi arayüzler
 ## menülerle aynı bej/ahşap kite geçti) - TEK kaynak UIKit (silah seçim kartları da aynılarını kullanır).
+const UiAnim := preload("res://scripts/ui_anim.gd")
 const CAT_ATTACK := UIKit.C_CAT_ATTACK
 const CAT_DEFENSE := UIKit.C_CAT_DEFENSE
 const CAT_UTILITY := UIKit.C_CAT_UTILITY
@@ -63,7 +64,7 @@ const TierCardFx := preload("res://scripts/tier_card_fx.gd")
 ## yarıya düşürüldü, buradaki metinler de ona göre güncellendi.
 const UPGRADES = [
 	{"id": "speed", "title": "Hız", "desc": "+%4", "cat": "Yardımcı", "color": CAT_UTILITY},
-	{"id": "max_health", "title": "Can", "desc": "+15", "cat": "Savunma", "color": CAT_DEFENSE},
+	{"id": "max_health", "title": "Can", "desc": "+20", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "damage", "title": "Saldırı Gücü", "desc": "+6", "cat": "Saldırı", "color": CAT_ATTACK},
 	## "Ateş Hızı" -> "Saldırı Hızı" (2026-09-24): eşyalar/stat ekranı aynı stat için "saldırı hızı" diyordu, iki ayrı stat
 	## sanılıyordu (bkz. player.gd get_attack_interval_mult).
@@ -87,7 +88,7 @@ const UPGRADES = [
 	{"id": "exp_gain", "title": "Tecrübe Kazanımı", "desc": "+%5", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "luck", "title": "Şans", "desc": "+1", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "dodge", "title": "Sıvışma", "desc": "+%2.5", "cat": "Savunma", "color": CAT_DEFENSE},
-	{"id": "shield_amount", "title": "Kalkan Miktarı", "desc": "+%5", "cat": "Savunma", "color": CAT_DEFENSE},
+	{"id": "shield_amount", "title": "Mana Kalkanı Miktarı", "desc": "+%5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "cooldown_reduction", "title": "Bekleme Süresi Azaltma", "desc": "-%4", "cat": "Yardımcı", "color": CAT_UTILITY},
 	## Kullanıcı isteği (2026-09-26): "geri tepmeyi level atlama kartlarından kaldırıyoruz ... kalkan soğurmayı da level
 	## atlama kartlarından kaldırıyoruz" - "knockback" (Geri Tepme) ve "shield_protection" (Kalkan Soğurma) kartları
@@ -151,6 +152,7 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	UISound.connect_all_buttons(self)
+	UiAnim.skip($CardsContainer) ## kartların kendi giriş/üstüne gelme/seçim animasyonu var (madde 200)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir (kart butonları "icon slot" gibi dikey orantılı oldukları için bu zaten atlıyor, bkz. o dosyadaki _looks_like_icon_slot)
 	## Yetenek evrimi seviyesi mi (5/10/15... - kartlar evrim kartı olur, bkz. dosya sonundaki "YETENEK EVRİMİ" bloğu).
 	_evo_offers = _roll_evolution_offers()
@@ -807,7 +809,7 @@ func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 	if id == "lifesteal":
 		scaled = TierSystem.lifesteal_percent_for_tier(tier) * 100.0
 	elif id == "max_health":
-		scaled = TierSystem.health_card_for_tier(tier) ## 15/24/30/38 - bkz. TierSystem (player.gd ile tek kaynak)
+		scaled = TierSystem.health_card_for_tier(tier) ## 20/35/50/70 - bkz. TierSystem (player.gd ile tek kaynak)
 	elif id == "health_regen":
 		scaled = TierSystem.regen_card_for_tier(tier) ## 2/4/6/8 - bkz. TierSystem
 	else:
@@ -962,17 +964,23 @@ func _apply_kit_style() -> void:
 
 
 func _refresh_reroll_button() -> void:
+	## Kalıcı "Ücretsiz Karıştırma" geliştirmesi (Ruh Mağazası): koşuda bir kez bedava.
+	if GameManager.free_rerolls_left > 0:
+		reroll_button.text = "Karıştır\nÜCRETSİZ" if MobileUIScript.enabled else "Yeniden Karıştır (ÜCRETSİZ)"
+		reroll_button.disabled = false
+		return
 	var cost: int = _reroll_cost()
 	reroll_button.text = ("Karıştır\n%d altın" if MobileUIScript.enabled else "Yeniden Karıştır (%d altın)") % cost
 	reroll_button.disabled = GameManager.gold < cost
 
 
 func _on_reroll_pressed() -> void:
-	var cost: int = _reroll_cost()
-	if GameManager.gold < cost:
-		return
-	GameManager.gold -= cost
-	_rerolls_this_screen += 1
+	if not GameManager.try_use_free_reroll():
+		var cost: int = _reroll_cost()
+		if GameManager.gold < cost:
+			return
+		GameManager.gold -= cost
+		_rerolls_this_screen += 1
 	_populate_cards()
 	_refresh_reroll_button()
 	_animate_cards_in()

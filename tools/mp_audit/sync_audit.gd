@@ -51,7 +51,7 @@ func _pl(p: Node, remote: bool) -> Dictionary:
 
 func _drops() -> Dictionary:
 	var out := {}
-	for g in ["xp_orbs", "gold_drops", "food_drops", "magnet_drops", "chest_drops", "weapon_shard_drops"]:
+	for g in ["xp_orbs", "gold_drops", "food_drops", "magnet_drops", "chest_drops", "weapon_shard_drops", "shield_orb_drops"]:
 		var total: int = 0
 		var visual: int = 0
 		for n in get_nodes_in_group(g):

@@ -54,6 +54,12 @@ var ui_opacity_percent: float = 100.0
 ## EKRAN SARSINTISI (kullanıcı isteği 2026-10-05: "ayarlara kapatma özelliği de ekle"): 0 = kapalı, 100 = tam güç. Hareket hassasiyeti
 ## olanlar için erişilebilirlik ayarı. camera_shake.gd her olayda ve her karede okur. Aynı "display" ConfigFile bölümü.
 var camera_shake_percent: float = 100.0
+## ARAYÜZ ANİMASYONLARI (2026-10-17, madde 200, bkz. ui_anim.gd): düğme nefesi/parıltısı, pencere açılışı, liste girişi,
+## sahne geçişi. Grafik penceresinden kapatılabilir (kapalıyken her şey anında). Aynı "display" ConfigFile bölümü.
+const UiAnimScript := preload("res://scripts/ui_anim.gd")
+var ui_anim_enabled: bool = true
+## OYUN İMLECİ (2026-10-17, madde 206, bkz. game_cursor.gd): krem piksel ok + düğmede kehribar el + basılı hâli.
+const GameCursorScript := preload("res://scripts/game_cursor.gd")
 
 ## GRAFİK AYARLARI - kullanıcı isteği (2026-10-03): "bunu mobil için optimize etmenin en iyi yolu oyuna grafik ayarı
 ## eklemek" -> "Düşük / Orta / Yüksek" hazır seviye + altında tek tek seçenekler (biri elle değişince seviye "Özel" olur);
@@ -61,7 +67,7 @@ var camera_shake_percent: float = 100.0
 ## perf_probe.gd): güneş/bulut kare -1.8 ms, zemin ayrıntısı GPU -0.9 ms. Sis seçenek DEĞİL (oyun mekaniği, düşman gizler).
 ## Uygulayanlar graphics_changed sinyalini dinler / değeri her kare okur: sun_clouds.gd (güneş/bulut), ground_texel_pass.gd
 ## (zemin ayrıntısı), world_render_scale.gd (çözünürlük ölçeği). FPS sınırı seviyelere DAHİL DEĞİL (ayrı ayar): PC'de
-## varsayılan sınırsız (eskisi gibi), telefonda 60 (mobile_ui.gd'nin eski sabiti). Ekran: graphics_settings_menu.gd.
+## varsayılan sınırsız (eskisi gibi), telefonda 60 (mobile_ui.gd'nin eski sabiti). Ekran: settings_screen.gd GRAFİK bölümü.
 ## Aynı "display" ConfigFile bölümü.
 signal graphics_changed
 enum GfxPreset { LOW, MEDIUM, HIGH, CUSTOM }
@@ -94,6 +100,8 @@ func _ready() -> void:
 	_player.stream = CLICK_SOUND
 	_player.volume_db = -6.0
 	add_child(_player)
+	add_child(UiAnimScript.new()) ## bkz. ui_anim_enabled notu - tüm düğmelere/sahne geçişlerine bağlanır
+	add_child(GameCursorScript.new()) ## bkz. GameCursorScript notu - imleç + düğmelere el şekli
 
 
 func play_click() -> void:
@@ -202,6 +210,12 @@ func set_camera_shake_percent(percent: float) -> void:
 	_save_display_settings()
 
 
+## bkz. ui_anim_enabled notu.
+func set_ui_anim_enabled(enabled: bool) -> void:
+	ui_anim_enabled = enabled
+	_save_display_settings()
+
+
 ## bkz. ui_opacity_percent notu.
 func set_ui_opacity_percent(percent: float) -> void:
 	ui_opacity_percent = clampf(percent, UI_OPACITY_MIN_PERCENT, 100.0)
@@ -305,6 +319,7 @@ func _save_display_settings() -> void:
 	config.set_value("display", "show_fps", show_fps)
 	config.set_value("display", "ui_opacity_percent", ui_opacity_percent)
 	config.set_value("display", "camera_shake_percent", camera_shake_percent)
+	config.set_value("display", "ui_anim_enabled", ui_anim_enabled)
 	config.set_value("display", "gfx_sun_clouds", gfx_sun_clouds)
 	config.set_value("display", "gfx_ground_detail", gfx_ground_detail)
 	config.set_value("display", "gfx_render_scale", gfx_render_scale)
@@ -320,6 +335,7 @@ func _load_display_settings() -> void:
 		show_fps = bool(config.get_value("display", "show_fps", false))
 		ui_opacity_percent = clampf(float(config.get_value("display", "ui_opacity_percent", 100.0)), UI_OPACITY_MIN_PERCENT, 100.0)
 		camera_shake_percent = clampf(float(config.get_value("display", "camera_shake_percent", 100.0)), 0.0, 100.0)
+		ui_anim_enabled = bool(config.get_value("display", "ui_anim_enabled", true))
 		gfx_sun_clouds = bool(config.get_value("display", "gfx_sun_clouds", true))
 		gfx_ground_detail = bool(config.get_value("display", "gfx_ground_detail", true))
 		gfx_render_scale = _nearest_render_scale(float(config.get_value("display", "gfx_render_scale", 1.0)))

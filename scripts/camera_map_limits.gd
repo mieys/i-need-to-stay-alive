@@ -5,8 +5,11 @@ class_name CameraMapLimits
 ## haritanın dışını göstermeyecek şekilde sabit kalmalı."
 ##
 ## Aktif Camera2D'nin (oyuncunun kamerası, ölünce sahneye taşınan izleyici kamerası - ikisi de AYNI node) limit_*
-## değerlerini haritanın dünya dikdörtgenine (GameManager.get_map_world_rect) kilitler. Kamera haritanın kenarına
+## değerlerini haritanın dünya dikdörtgenine (GameManager.get_camera_world_rect) kilitler. Kamera haritanın kenarına
 ## geldiğinde durur, oyuncu kamerayı geçip kenara doğru yürüyebilir.
+##
+## DIŞ ÇERÇEVE (2026-10-13, madde 119): kamera sınırı artık eski 256x256 oyun alanının (get_map_world_rect) DEĞİL, dışına eklenen geçilmez orman/su çerçevesi DAHİL
+## dikdörtgenin (get_camera_world_rect). Oyuncu eski kenara kadar gidebilir, çerçeve ekran yarısından geniş olduğu için kamera o noktada hâlâ serbest takip eder.
 ##
 ## EV İÇİ İSTİSNASI: ev içi haritanın 20000 birim yanında ayrı bir yerde (bkz. house_interior.gd INTERIOR_OFFSET) -
 ## kamera haritadan bu kadar uzaktaysa (OUTSIDE_MARGIN) limit KALDIRILIR, yoksa ev içini gösteremezdi. Ne oyuncunun
@@ -27,7 +30,7 @@ func _process(_delta: float) -> void:
 	var cam: Camera2D = get_viewport().get_camera_2d()
 	if cam == null:
 		return
-	var rect: Rect2 = GameManager.get_map_world_rect()
+	var rect: Rect2 = GameManager.get_camera_world_rect()
 	if rect.size == Vector2.ZERO:
 		return
 	var limited: bool = rect.grow(OUTSIDE_MARGIN).has_point(cam.global_position)

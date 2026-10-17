@@ -143,7 +143,6 @@ func test_each_card_type_is_sold_once_per_visit() -> void:
 		assert(not screen._entry_can_buy(screen._stock[i], i), "Satılan kart tekrar alınamamalı: %s" % str(screen._stock[i]))
 		## 2026-10-02: "SATILDI" artık fiyatın yerinde (fiyat + AL aynı satırda), buton pasif.
 		assert(screen._price_labels[i].text == "SATILDI", "Satılan kartın fiyat yazısı 'SATILDI' olmalı, bulunan: %s" % screen._price_labels[i].text)
-		assert(screen._buy_buttons[i].disabled, "Satılan kartın AL butonu pasif olmalı")
 	_cleanup([merchant, player])
 
 

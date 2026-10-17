@@ -43,15 +43,25 @@ const NO_GLOW_SCENES := [
 	"res://scenes/fx_totem_plant_dust.tscn",
 	"res://scenes/fx_assasin_stealth.tscn",
 	"res://scenes/fx_assasin_slash.tscn",
+	"res://scenes/fx_dagger_stab.tscn", ## bıçak saplaması (madde 231) - çelik vuruş, kıvılcımları küçük
 	"res://scenes/fx_pence_slash.tscn",
 	"res://scenes/fx_sovalye_slash.tscn",
 	"res://scenes/fx_topuz_slash.tscn",
+	"res://scenes/fx_topuz_slam_ground.tscn", ## topuz Yer Sarsıntısı (madde 235) - toz/çatlak/taş, ışık değil
+	"res://scenes/fx_topuz_slam_top.tscn",
+	"res://scenes/fx_topuz_slam_smear.tscn",
+	"res://scenes/fx_pence_hook_top.tscn", ## pençe Kanca Çekiş (madde 237) - krem yırtık/kıvılcım küçük, toz ışık değil
+	"res://scenes/fx_pence_hook_ground.tscn",
+	"res://scenes/fx_pence_hook_smear.tscn",
 	"res://scenes/fx_uzunkilic_slash.tscn",
 	## Uzunkılıç (2026-09-26 savrulan kılıç) isabeti - çelik kesik parlaması. Savuruş hilali sahnesiz (sword_swing_math.gd), zaten parlamaz.
 	"res://scenes/fx_sword_hit.tscn",
 	"res://scenes/fx_crossbow_muzzle.tscn",
 	"res://scenes/fx_speed_line.tscn",
 	"res://scenes/fx_mage_swap.tscn",
+	## Büyücü hortumunun döküm girdabı ve temas kesikleri (rüzgâr - ışık saçmaz; madde 188).
+	"res://scenes/fx_buyucu_tornado_cast.tscn",
+	"res://scenes/fx_buyucu_tornado_hit.tscn",
 	## Oakley Sarmaşıklar'ın yaratığa sarılan dikenleri - bitki, büyü değil.
 	"res://scenes/fx_oakley_entangle.tscn",
 	## Suriyeli Hadime: lanet kıvılcım izi (saniyede ~20 minik düğüm - her birine ışık takılmasın, lanetin kendisi parlar),
@@ -131,6 +141,8 @@ const BY_SCENE := {
 	"res://scenes/fx_korsan_strike.tscn": {"c": Color(1.0, 0.6, 0.2), "r": 60.0, "e": 0.8, "d": 0.4},
 	"res://scenes/fx_korsan_zone.tscn": {"c": Color(1.0, 0.55, 0.25), "r": 70.0, "e": 0.4},
 	"res://scenes/fx_meteor_strike.tscn": {"c": Color(1.0, 0.5, 0.2), "r": 130.0, "e": 1.0, "f": 0.25},
+	## Büyücü meteor kanalı: ayak altındaki ateş yayı + şapka korları (madde 188) - hafif turuncu.
+	"res://scenes/fx_buyucu_meteor_channel.tscn": {"c": Color(1.0, 0.55, 0.25), "r": 45.0, "e": 0.45},
 	"res://scenes/fx_frost_nova_burst.tscn": {"c": Color(0.5, 0.85, 1.0), "r": 110.0, "e": 0.9, "d": 0.7},
 	## Sağanak yıldırımı (2026-09-25): uyarıda hafif, çarpmada güçlü, sonra söner - güç fx_storm_strike.gd
 	## get_night_glow_energy() kancasından.
@@ -143,8 +155,6 @@ const BY_SCENE := {
 	"res://scenes/fx_mage_passive_burst.tscn": {"c": Color(0.85, 0.6, 1.0), "r": 60.0, "e": 0.8, "d": 0.5},
 	"res://scenes/fx_buyucu_fastfire.tscn": {"c": Color(1.0, 0.75, 0.2), "r": 44.0, "e": 0.7, "d": 0.5},
 	"res://scenes/fx_buyucu_tornado.tscn": {"c": Color(0.75, 0.85, 1.0), "r": 60.0, "e": 0.35},
-	"res://scenes/fx_elara_double.tscn": {"c": Color(1.0, 0.82, 0.35), "r": 40.0, "e": 0.6, "d": 0.5},
-	"res://scenes/fx_elara_true.tscn": {"c": Color(1.0, 0.75, 0.25), "r": 50.0, "e": 0.75, "d": 0.6},
 	"res://scenes/fx_assasin_dash.tscn": {"c": Color(0.62, 0.3, 0.9), "r": 30.0, "e": 0.35, "d": 0.4},
 	"res://scenes/fx_assasin_shadow_hit.tscn": {"c": Color(0.6, 0.4, 0.85), "r": 28.0, "e": 0.4, "d": 0.3},
 	"res://scenes/fx_kalkan_yenileme.tscn": {"c": Color(0.4, 0.75, 1.0), "r": 50.0, "e": 0.6},
@@ -161,6 +171,8 @@ const BY_SCENE := {
 	"res://scenes/fx_hadime_curse_impact.tscn": {"c": Color(0.5, 1.0, 0.35), "r": 60.0, "e": 0.8, "d": 0.5},
 	"res://scenes/fx_hadime_black_hole.tscn": {"c": Color(0.78, 0.45, 1.0), "r": 56.0, "e": 0.55, "f": 0.15},
 	"res://scenes/fx_melek_holy.tscn": {"c": Color(1.0, 0.88, 0.4), "r": 80.0, "e": 0.85},
+	## Melek Q/E: bağ renginde hale (madde 212) - glow_color türe göre.
+	"res://scenes/fx_melek_halo.tscn": {"cp": "glow_color", "c": Color(0.55, 1.0, 0.6), "r": 26.0, "e": 0.4},
 	"res://scenes/fx_melek_heal_aura.tscn": {"c": Color(0.55, 1.0, 0.5), "r": 55.0, "e": 0.5},
 	"res://scenes/fx_melek_shield_aura.tscn": {"c": Color(0.4, 0.6, 1.0), "r": 55.0, "e": 0.5},
 	"res://scenes/fx_oyku_heal.tscn": {"c": Color(0.45, 1.0, 0.55), "r": 55.0, "e": 0.6},
@@ -254,6 +266,9 @@ const BY_SCRIPT := {
 	## (elite_aura.gd glow_radius), hafif titrek; sisteyken çizilmez (gizli elitin yerini ele vermesin).
 	"res://scripts/elite_aura.gd": {"rp": "glow_radius", "rs": 1.0, "c": Color(0.62, 0.3, 0.95), "r": 40.0, "e": 0.55, "f": 0.2, "fog": true},
 	"res://scripts/fx_arcane_impact.gd": {"c": Color(0.7, 0.5, 1.0), "r": 50.0, "e": 0.85, "d": 0.4},
+	## Assasin ULTİ (Gölge Hücumu, 2026-10-16) kesik + cast/dönüş patlaması - eski fx_assasin_shadow_hit.tscn profiline yakın mor flaş.
+	## Sıçrayış çizgisi/hayaletler (fx_assasin_ult_streak.gd) parlamaz: saniyede ~4 sıçrayış ışık bütçesini doldurmasın.
+	"res://scripts/fx_assasin_ult_flash.gd": {"c": Color(0.62, 0.38, 0.92), "r": 30.0, "e": 0.45, "d": 0.3},
 	## Efsun sistemi (2026-09-25): tek seferlik pixel halka/dalga/ışık (renk efektin "color"ı), kalıcı alanlar (renk türe
 	## göre enchant_area.gd get_night_glow_color kancasından), yaratığın üstündeki Şok durumu.
 	"res://scripts/fx_enchant_pixel.gd": {"cp": "color", "c": Color(1.0, 0.9, 0.7), "r": 50.0, "e": 0.6, "d": 0.45},
@@ -283,6 +298,11 @@ const BY_SCRIPT := {
 	"res://scripts/fx_merchant_bubble.gd": {"cp": "color", "c": Color(0.35, 0.78, 1.0), "r": 50.0, "e": 0.45},
 	## Koruma Bariyeri (E) baloncuğu 2026-09-25'te mor-mavi sprite'a geçti - ışık da o renkte.
 	"res://scripts/fx_paladin_barrier_link.gd": {"c": Color(0.55, 0.52, 1.0), "r": 40.0, "e": 0.4},
+	## 2026-10-14: Şovalye E Yankı Darbesi (dosttan Şovalye'ye yay) + Melek E kalkan kırıntıları - ikisi de get_glow_segment.
+	"res://scripts/fx_sovalye_echo.gd": {"c": Color(0.62, 0.58, 1.0), "r": 26.0, "e": 0.6, "d": 0.33},
+	"res://scripts/fx_shard_stream.gd": {"c": Color(0.45, 0.7, 1.0), "r": 24.0, "e": 0.5},
+	## 2026-10-17 (madde 212): Melek Q/E bağının dosttaki bel halkası - renk türe göre (glow_color: Q yeşil, E mavi).
+	"res://scripts/melek_bond_fx.gd": {"cp": "glow_color", "c": Color(0.55, 1.0, 0.6), "r": 30.0, "e": 0.45},
 	"res://scripts/fx_paladin_overlay.gd": {"c": Color(1.0, 0.88, 0.45), "r": 40.0, "e": 0.4},
 	"res://scripts/fx_pixel_burst.gd": {"pal": {"fire": Color(1.0, 0.55, 0.2), "spark": Color(1.0, 0.8, 0.4), "void": Color(0.7, 0.4, 1.0)}, "r": 44.0, "e": 0.7, "d": 0.45},
 	"res://scripts/fx_ring.gd": {"cp": "color", "rp": "max_radius", "rs": 0.6, "c": Color(1.0, 0.9, 0.7), "r": 40.0, "e": 0.55, "d": 0.5},
@@ -294,8 +314,8 @@ const BY_SCRIPT := {
 	"res://scripts/fx_spirit_blink.gd": {"c": Color(0.75, 0.55, 1.0), "r": 40.0, "e": 0.7, "d": 0.45},
 	"res://scripts/fx_totem_fire_bolt.gd": {"cp": "bolt_color", "c": Color(1.0, 0.55, 0.25), "r": 34.0, "e": 0.85},
 	"res://scripts/necro_skull.gd": {"c": Color(0.45, 0.9, 0.75), "r": 50.0, "e": 0.8},
-	"res://scripts/totem_attack.gd": {"c": Color(1.0, 0.6, 0.3), "r": 34.0, "e": 0.45},
-	"res://scripts/totem_shield.gd": {"c": Color(0.45, 0.75, 1.0), "r": 40.0, "e": 0.45},
+	"res://scripts/totem_attack.gd": {"c": Color(1.0, 0.6, 0.3), "r": 34.0, "e": 0.45, "o": Vector2(0.0, -25.0)}, ## o: v4 ateş çekirdeği (madde 176)
+	"res://scripts/totem_shield.gd": {"c": Color(0.45, 0.75, 1.0), "r": 40.0, "e": 0.45, "o": Vector2(0.0, -25.0)}, ## o: v4 ışık kalkanı (madde 176)
 	"res://scripts/totem_shield_wave.gd": {"c": Color(0.45, 0.75, 1.0), "r": 60.0, "e": 0.5, "d": 0.6},
 	## (Vampir'in yarasa sürüsü ve kan efektleri (vampir_bat_swarm.gd / vampir_fx.gd) BİLEREK yok: kan/yarasa ışık
 	## saçmaz - kan sıçramalarıyla aynı kural, bkz. NO_GLOW_SCENES.)
@@ -306,8 +326,13 @@ const BY_SCRIPT := {
 	"res://scripts/kelebek_ruhu.gd": {"c": Color(1.0, 0.55, 0.85), "r": 44.0, "e": 0.55, "f": 0.15},
 	"res://scripts/fx_kelebek_bolt.gd": {"c": Color(1.0, 0.55, 0.85), "r": 32.0, "e": 0.8},
 	"res://scripts/peri_pet.gd": {"c": Color(0.7, 0.88, 1.0), "r": 44.0, "e": 0.55, "f": 0.15},
+	## Yerdeki sandığın ışık sütunu (2026-10-17, madde 243, kullanıcı: "gece sandığın ışık sütunu parlasın"; 2026-09-25'te sandık ışığı
+	## seçilmemişti, sütunla değişti). Renk sandıktan (cp: normal sıcak altın / elit mor), ofset sütunun alt-ortası; sandıklar yerde
+	## uzun kalır -> perm (bütçe doluyken de takılır). Görüş dışında sandık gizli -> ışık da söner; açılınca sandıkla birlikte solar.
+	"res://scripts/chest_drop.gd": {"cp": "night_glow_color", "c": Color(1.0, 0.8, 0.45), "r": 56.0, "e": 0.7, "f": 0.08,
+		"o": Vector2(0.0, -26.0), "perm": true},
 	## --- Görev objeleri (soru-cevap seçimi) ---
-	"res://scripts/mission_collect_item.gd": {"c": Color(0.45, 1.0, 0.9), "r": 38.0, "e": 0.6, "o": Vector2(0.0, -10.0)},
+	"res://scripts/mission_collect_item.gd": {"c": Color(0.45, 1.0, 0.9), "r": 38.0, "e": 0.6, "o": Vector2(0.0, -10.0), "perm": true}, ## perm: ışık bütçesine (atmosphere.gd MAX_GLOWS) takılmaz
 	"res://scripts/mission_zone.gd": {"c": Color(0.55, 0.85, 1.0), "r": 70.0, "e": 0.5},
 	"res://scripts/mission_van.gd": {"c": Color(1.0, 0.8, 0.45), "r": 70.0, "e": 0.6},
 	"res://scripts/mission_tree.gd": {"c": Color(0.6, 1.0, 0.55), "r": 60.0, "e": 0.45},

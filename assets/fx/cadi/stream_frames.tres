@@ -4,35 +4,67 @@
 
 [sub_resource type="AtlasTexture" id="AT_0"]
 atlas = ExtResource("1")
-region = Rect2(0, 0, 34, 30)
+region = Rect2(0, 0, 24, 32)
 
 [sub_resource type="AtlasTexture" id="AT_1"]
 atlas = ExtResource("1")
-region = Rect2(34, 0, 34, 30)
+region = Rect2(24, 0, 24, 32)
 
 [sub_resource type="AtlasTexture" id="AT_2"]
 atlas = ExtResource("1")
-region = Rect2(68, 0, 34, 30)
+region = Rect2(48, 0, 24, 32)
 
 [sub_resource type="AtlasTexture" id="AT_3"]
 atlas = ExtResource("1")
-region = Rect2(102, 0, 34, 30)
+region = Rect2(72, 0, 24, 32)
 
 [sub_resource type="AtlasTexture" id="AT_4"]
 atlas = ExtResource("1")
-region = Rect2(136, 0, 34, 30)
+region = Rect2(96, 0, 24, 32)
 
 [sub_resource type="AtlasTexture" id="AT_5"]
 atlas = ExtResource("1")
-region = Rect2(170, 0, 34, 30)
+region = Rect2(120, 0, 24, 32)
 
 [sub_resource type="AtlasTexture" id="AT_6"]
 atlas = ExtResource("1")
-region = Rect2(204, 0, 34, 30)
+region = Rect2(144, 0, 24, 32)
 
 [sub_resource type="AtlasTexture" id="AT_7"]
 atlas = ExtResource("1")
-region = Rect2(238, 0, 34, 30)
+region = Rect2(168, 0, 24, 32)
+
+[sub_resource type="AtlasTexture" id="AT_8"]
+atlas = ExtResource("1")
+region = Rect2(0, 32, 24, 32)
+
+[sub_resource type="AtlasTexture" id="AT_9"]
+atlas = ExtResource("1")
+region = Rect2(24, 32, 24, 32)
+
+[sub_resource type="AtlasTexture" id="AT_10"]
+atlas = ExtResource("1")
+region = Rect2(48, 32, 24, 32)
+
+[sub_resource type="AtlasTexture" id="AT_11"]
+atlas = ExtResource("1")
+region = Rect2(72, 32, 24, 32)
+
+[sub_resource type="AtlasTexture" id="AT_12"]
+atlas = ExtResource("1")
+region = Rect2(96, 32, 24, 32)
+
+[sub_resource type="AtlasTexture" id="AT_13"]
+atlas = ExtResource("1")
+region = Rect2(120, 32, 24, 32)
+
+[sub_resource type="AtlasTexture" id="AT_14"]
+atlas = ExtResource("1")
+region = Rect2(144, 32, 24, 32)
+
+[sub_resource type="AtlasTexture" id="AT_15"]
+atlas = ExtResource("1")
+region = Rect2(168, 32, 24, 32)
 
 [resource]
 animations = [{
@@ -70,5 +102,41 @@ animations = [{
 }],
 "loop": true,
 "name": &"loop",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_13")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_14")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_15")
+}],
+"loop": true,
+"name": &"down",
 "speed": 10.0
 }]

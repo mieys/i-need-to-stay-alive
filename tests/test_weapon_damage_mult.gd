@@ -13,10 +13,10 @@ func _scene_mult(key: String) -> float:
 	return m
 
 
-func test_every_weapon_gets_fifty_percent_and_only_three_melee_get_extra() -> void:
+func test_only_three_melee_weapons_get_the_extra_multiplier() -> void:
 	assert(RemotePlayerScript.WEAPON_SCENES.size() == 15, "15 silah")
 	for key in RemotePlayerScript.WEAPON_SCENES.keys():
-		var want: float = 1.5 * 1.4 if key in ["dagger", "pence", "topuz"] else 1.5
+		var want: float = 1.4 if key in ["dagger", "pence", "topuz"] else 1.0 ## 2026-10-14: genel çarpan x1,5 -> x1,0
 		assert(absf(_scene_mult(key) - want) < 0.0001, "%s çarpanı %f olmalıydı: %f" % [key, want, _scene_mult(key)])
 
 

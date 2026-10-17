@@ -6,7 +6,18 @@ const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 
 ## Silah/yetenek hedef seçiminde görünürlük şartı (bkz. VisionFogScript.can_target).
 const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
-const LoopFrames := preload("res://assets/fx/buyucu_tornado/loop_frames.tres")
+## 2026-10-16 (madde 188, onaylanan prototip): dolu, sarmal şeritli hortum hunisi (şerit aralarından arka duvar / çimen görünür, içinde
+## menekşe kıvılcım + yaprak + çakıl, tabanda toz girdabı) - assets/fx/buyucu/hortum_{in,loop,out}.png (tools/gen_buyucu_fx.py).
+## Eski ince çizgili beyaz huni (assets/fx/buyucu_tornado/loop_*) artık kullanılmıyor. Doğuşta küçük girdaptan büyür (hortum_in),
+## ömrü bitince alttan çözülüp yükselir (hortum_out, begin_out - uzak kopya despawn yayınıyla aynı fonksiyonu çağırır), değdiği
+## yaratıkta rüzgâr kesikleri (fx_buyucu_tornado_hit.tscn, "hitscan_impact" ile diğer oyunculara).
+const BuyucuFxScript := preload("res://scripts/buyucu_fx.gd")
+const HitFxScene := preload("res://scenes/fx_buyucu_tornado_hit.tscn")
+const SHEET_FPS := 15.0
+## Sayfa 48x72, zemin satırı 64 -> ortalanmış sprite ofseti (düğüm orijini = hortumun yere değdiği nokta).
+const SHEET_OFFSET := Vector2(0.0, -28.0)
+## Kozmetik kopyanın despawn'ı / kasterin ömrü bitince çözülme başlar - player.gd bu sinyalle despawn yayınlar (çözülme iki tarafta aynı anda).
+signal ending
 
 ## Büyücü Kız'ın TEMEL yeteneğinin 3. varyasyonu ("Hortum") için bağımsız
 ## bir hortum varlığı - bkz. player.gd _skill_buyucu_tornado(). Oyuncunun
@@ -54,13 +65,16 @@ var _hit_timers: Dictionary = {} ## enemy instance_id -> kalan bekleme (sn)
 ## Büyücü "Efsunlu Büyü" (Q finali, 2026-10-04): efsunlu dökümde hortum %25 büyük (görsel; temas yarıçapını player.gd zaten
 ## büyütüp setup'a verir). Kozmetik kopyaya pet durum yayınının sprite_row alanında x100 gider (hortumun sprite satırı yok).
 var size_mult: float = 1.0
-const BASE_VISUAL_SCALE := 1.05
+## Düğüm ölçeği = size_mult (Efsunlu Büyü); sayfa pikseli BuyucuFx.PX dünya birimi (eski sayfa 1,05 ölçekliydi).
+const BASE_VISUAL_SCALE := 1.0
 
 ## bkz. skeleton_pet.gd dosya başındaki "kozmetik kopya" notu - AYNI desen.
 var network_instance_id: String = ""
 var _is_network_visual: bool = false
 var _network_target_position: Vector2 = Vector2.ZERO
 var _network_state_received: bool = false
+var _sheet: Node = null
+var _ending: bool = false
 
 
 func mark_as_network_visual() -> void:
@@ -77,18 +91,14 @@ func mark_as_network_visual() -> void:
 ## ama görsel ölçeği yine de doğru olmalı.
 func _ready() -> void:
 	scale = Vector2.ONE * BASE_VISUAL_SCALE * size_mult
-	var sprite := AnimatedSprite2D.new()
-	sprite.sprite_frames = LoopFrames
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	sprite.centered = false
-	## bkz. tools/gen_heavy_fx_perf_sprite.py gen_tornado() - PNG'de huninin YERE değdiği nokta
-	## (yerel (0,0)) raster (cx=70, cy=95) - offset bu noktayı node orijinine hizalar.
-	sprite.offset = Vector2(-70.0, -95.0)
-	## Her hortum örneği kendi rastgele başlangıç fazından başlasın (üçü aynı anda doğuyor,
-	## hepsi TIPATIP aynı karede olursa "tek hortumun 3 kopyası" hissi verir).
-	sprite.frame = randi() % LoopFrames.get_frame_count("loop")
-	add_child(sprite)
-	sprite.play("loop")
+	## Üç hortum aynı anda doğuyor: hepsi TIPATIP aynı karede dönerse "tek hortumun 3 kopyası" hissi verir -> doğuşları 0-5 kare
+	## (0-0,33 sn) rastgele gecikir (doğuş sayfası döngünün sonuna dikişsiz bağlandığı için başlangıç karesi kaydırılmaz).
+	_sheet = BuyucuFxScript.Sheet.new()
+	_sheet.centered = true
+	_sheet.offset = SHEET_OFFSET
+	_sheet.scale = Vector2.ONE * BuyucuFxScript.PX
+	add_child(_sheet)
+	_sheet.setup([["hortum_in", false], ["hortum_loop", true]], SHEET_FPS, 0, float(randi() % 6) / SHEET_FPS)
 
 
 func setup(p_owner: Node2D, p_origin: Vector2, p_radius: float, p_damage: float,
@@ -132,12 +142,14 @@ func _pick_new_target() -> void:
 
 
 func _process(delta: float) -> void:
+	if _ending:
+		return
 	if _is_network_visual:
 		_process_network_visual(delta)
 		return
 	_elapsed += delta
 	if _elapsed >= lifetime:
-		queue_free()
+		begin_out() ## hasar/hareket burada biter (eskisi gibi) - görsel çözülüp kendini siler
 		return
 
 	var to_target: Vector2 = _target_pos - global_position
@@ -178,8 +190,34 @@ func _process(delta: float) -> void:
 				dmg = owner_player._apply_ability_crit(dmg, is_crit)
 			BalanceLogScript.tag(&"s:buyucu_kasirga")
 			e.take_damage(dmg, is_crit, 0.0, true)
+			_spawn_hit_fx((e as Node2D).global_position)
 
 	_broadcast_network_state()
+
+
+## Ömür bitti (kaster) ya da sahibinden despawn geldi (uzak kopya, remote_player.gd _despawn_pet_visual): hareket/hasar durur, huni alttan
+## çözülüp yükselir (hortum_out, 0,8 sn), sonra düğüm silinir. İki kez çağrılırsa bir şey yapmaz.
+func begin_out() -> void:
+	if _ending:
+		return
+	_ending = true
+	ending.emit()
+	if is_instance_valid(_sheet):
+		_sheet.tree_exited.connect(queue_free)
+		_sheet.call("finish", "hortum_out")
+	else:
+		queue_free()
+
+
+## Temas anı: yaratığın gövdesinde rüzgâr kesikleri - yerelde + diğer oyunculara "hitscan_impact" (aynı sahne).
+func _spawn_hit_fx(pos: Vector2) -> void:
+	if get_tree() == null or get_tree().current_scene == null:
+		return
+	var fx: Node2D = HitFxScene.instantiate() as Node2D
+	get_tree().current_scene.add_child(fx)
+	fx.global_position = pos
+	if NetworkManager.is_multiplayer_active and not NetworkManager.should_throttle("tornado_hit_%s" % network_instance_id, 0.1):
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "hitscan_impact", pos, {"scene_path": HitFxScene.resource_path})
 
 
 ## bkz. skeleton_pet.gd'deki AYNI fonksiyon - GERÇEK hortum kendi konumunu

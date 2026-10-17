@@ -9,7 +9,12 @@ extends Node2D
 ## Karakterin (Player) ya da diğer istemcideki kuklanın (RemotePlayer) ÇOCUĞU olarak doğar (player.gd _play_and_broadcast_skill_fx).
 ## Hareket kilidi player.gd'de (_melek_ascending) - bu dosya sadece görsel.
 
-const PixelDraw := preload("res://scripts/pixel_draw.gd")
+## FPS (madde 215): kanatlar + dither ışıma + dökülen parıltılar SPRITE SAYFASINA pişirildi (assets/fx/baked/melek_ascend_wings_*,
+## `tools/fx_bake.ps1`; özgün çizim `tools/fx_bake_src/fx_melek_ascend.gd`) - sayfa omuz hizasıyla pişti, burada sadece yükselmeyle
+## birlikte kaldırılır. Kendi karesinin ADD kopyası (parıltı) ve sprite yükselmesi eskisi gibi kodla.
+const BakedFx := preload("res://scripts/baked_fx.gd")
+const WINGS := preload("res://assets/fx/baked/melek_ascend_wings_frames.tres")
+const TEXEL := 1.212 ## PixelDraw.TEXEL - 1 sanat pikseli
 
 ## player.gd MELEK_R_ASCEND_TIME / SKILL3_TIMING[32]["duration"] bunu okur (tek kaynak).
 const LIFE := 2.0
@@ -30,14 +35,14 @@ var _anim: AnimatedSprite2D = null
 var _base_offset: Vector2 = Vector2.ZERO
 var _glow: Sprite2D = null
 var _t: float = 0.0
-var _sparkles: Array = [] ## [pos, age, life]
-var _spawn_acc: float = 0.0
+var _wings: AnimatedSprite2D = null
 
 
 func _ready() -> void:
 	show_behind_parent = true
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_host = get_parent() as Node2D
+	_wings = BakedFx.attach(self, WINGS, TEXEL, false)
 	if _host != null:
 		_anim = _host.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
 	if _anim != null:
@@ -83,17 +88,7 @@ func _process(delta: float) -> void:
 		var bob: float = sin(_t * 5.0) * 0.8 * e
 		_anim.offset = _base_offset + Vector2(0, -(LIFT_ART_PX * e + bob))
 		_update_glow(env)
-	var base: Vector2 = _wing_root()
-	_spawn_acc += delta
-	while _spawn_acc > 0.05 and _t < LIFE - FALL_TIME:
-		_spawn_acc -= 0.05
-		var side: float = -1.0 if randf() < 0.5 else 1.0
-		_sparkles.append([base + Vector2(side * randf_range(14.0, 40.0), randf_range(-24.0, 22.0)), 0.0, randf_range(0.45, 0.8)])
-	for s in _sparkles:
-		s[1] += delta
-		s[0] += Vector2(0, 16.0) * delta ## tüy gibi aşağı süzülür
-	_sparkles = _sparkles.filter(func(s): return float(s[1]) < float(s[2]))
-	queue_redraw()
+	_wings.position = _wing_root()
 
 
 func _update_glow(env: float) -> void:
@@ -113,64 +108,4 @@ func _update_glow(env: float) -> void:
 
 func _wing_root() -> Vector2:
 	var p: Vector2 = _anim.position if _anim != null else Vector2.ZERO
-	return p + SHOULDER - Vector2(0, _lift_local())
-
-
-func _draw() -> void:
-	var env: float = _envelope()
-	if env <= 0.0:
-		return
-	var base: Vector2 = _wing_root()
-	var flick: int = int(_t * 12.0)
-	## Gövde çevresinde dither altın ışıma
-	PixelDraw.disc_dither(self, base + Vector2(0, 10), 34.0 * env, Color(GOLD.r, GOLD.g, GOLD.b, 0.45), flick, 2)
-	## Kanatlar: açılma (env, yumuşak) + çırpma (yavaş, ~1.3 vuruş/sn)
-	var open: float = env * env * (3.0 - 2.0 * env)
-	var flap: float = sin(_t * 8.0)
-	for side in [-1.0, 1.0]:
-		_draw_wing(base, side, open, flap, env)
-	## Kanat uçlarından dökülen parıltılar
-	var texel: float = PixelDraw.TEXEL
-	for s in _sparkles:
-		var k: float = float(s[1]) / float(s[2])
-		var col: Color = WHITE_GOLD if k < 0.5 else GOLD
-		col.a = env
-		PixelDraw.px(self, s[0], 1, col)
-		if k > 0.15 and k < 0.75:
-			for o in [Vector2(2, 0), Vector2(-2, 0), Vector2(0, 2), Vector2(0, -2)]:
-				PixelDraw.px(self, s[0] + o * texel, 1, col)
-
-
-## Tek kanat: omuzdan bileğe uzanan kemik + kemik boyunca dizilmiş FEATHERS tüy (içtekiler aşağı, dıştakiler dışa-yukarı).
-## Önce tüm tüylerin koyu altın kenarı, sonra açık dolgu, sonra beyaz öz - tüyler birbirine kaynayıp tek kanat siluetine döner.
-func _draw_wing(base: Vector2, side: float, open: float, flap: float, env: float) -> void:
-	var root: Vector2 = base + Vector2(side * 3.0, 0)
-	var wrist: Vector2 = root + Vector2(side * 22.0, -18.0 - flap * 4.0) * open
-	var tips: Array = []
-	var roots: Array = []
-	for i in range(FEATHERS):
-		var k: float = float(i) / float(FEATHERS - 1)
-		var r: Vector2 = root.lerp(wrist, 0.25 + 0.75 * k)
-		## Açı: +x'ten, aşağı pozitif. İçteki tüy ~aşağı (100°), dıştaki dışa-yukarı (-25°); çırpma hepsini birlikte döndürür.
-		var ang: float = lerpf(deg_to_rad(100.0), deg_to_rad(-25.0), k) + flap * 0.18
-		var dir: Vector2 = Vector2(cos(ang) * side, sin(ang))
-		var length: float = lerpf(18.0, 32.0, k) * open
-		roots.append(r)
-		tips.append(r + dir * length)
-	var a: float = env
-	var outline := Color(GOLD_DEEP.r, GOLD_DEEP.g, GOLD_DEEP.b, a)
-	var fill := Color(WHITE_GOLD.r, WHITE_GOLD.g, WHITE_GOLD.b, a)
-	var core := Color(1.0, 1.0, 1.0, a)
-	var tip_col := Color(GOLD_LIGHT.r, GOLD_LIGHT.g, GOLD_LIGHT.b, a)
-	PixelDraw.line(self, root, wrist, outline, 4)
-	for i in range(FEATHERS):
-		PixelDraw.line(self, roots[i], tips[i], outline, 4)
-	PixelDraw.line(self, root, wrist, Color(GOLD.r, GOLD.g, GOLD.b, a), 2)
-	for i in range(FEATHERS):
-		PixelDraw.line(self, roots[i], tips[i], fill, 2)
-	for i in range(FEATHERS):
-		var tip: Vector2 = tips[i]
-		PixelDraw.line(self, roots[i], (roots[i] as Vector2).lerp(tip, 0.6), core, 1)
-		## Parıldayan uç: sırayla yanıp sönen beyaz-altın piksel
-		var glint: bool = (i + int(_t * 10.0)) % 4 == 0
-		PixelDraw.px(self, tip, 2, core if glint else tip_col)
+	return p - Vector2(0, _lift_local()) ## omuz hizası (SHOULDER) sayfaya pişti

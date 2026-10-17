@@ -1,73 +1,115 @@
 extends Node
 
-## Kullanıcı bildirimi (2026-10-05): "host olmama rağmen bazen yükleme ekranında kalıyor" (bar %20-30'da sonsuza dek). Kök neden: GDScript
-## (player.gd, bazen main.gd) arka plan iş parçacığında derlenirken içindeki preload("...tscn") çağrıları rastgele "Could not preload
-## resource file" ile başarısız oluyor ve iş parçacığı görevi sonsuza dek "devam ediyor" kalıyordu (headless ölçüm: 10 denemenin 2-3'ü).
-## Düzeltme: betikler ana iş parçacığında yüklenir; doku/ses/sahne arka planda kalır + bekçi. Gerçek akış (loading_screen -> Main) burada
-## değil, elle çoklu koşuyla ölçüldü (16/16 temiz); bu dosya yönlendirme kuralını (hangi tür hangi iş parçacığında) korur.
+## Yükleme ekranı akışı. Geçmiş (bkz. loading_screen.gd başı):
+## - 2026-10-05 "host olmama rağmen bazen yükleme ekranında kalıyor": WorkerThreadPool'da (load_threaded_request) derlenen player.gd
+##   görevi aralıklı olarak sonsuza dek "devam ediyor" kalıyordu. Geçici çözüm betikleri ana iş parçacığında derlemekti -> donmalar.
+## - 2026-10-17 "yüklenirken animasyonlar donmasın": 4.7.2'de WorkerThreadPool hâlâ kilitleniyor (12 denemenin 3'ü), KENDİ Thread'imizde
+##   düz ResourceLoader.load 15/15 temiz ve yükleme boyunca uzun kare yok. Gerçek akış (loading_screen -> Main) burada değil, elle çoklu
+##   süreçle ölçüldü; bu dosya kuralları korur: tek özel Thread, WorkerThreadPool yok, plan sırası, durdurma, sahne parçaları.
 
 const LoadingScene: PackedScene = preload("res://scenes/loading_screen.tscn")
+const LoadingScript: GDScript = preload("res://scripts/loading_screen.gd")
+const SceneParts := preload("res://scripts/loading_scene_parts.gd")
+## Küçük bir sahne (betik + doku bağımlılığı): yükleyiciyi main.tscn yerine bununla koşarız.
+const SMALL_SCENE := "res://scenes/fx_shield_active.tscn"
 
 
 func _screen() -> Control:
 	var s: Control = LoadingScene.instantiate()
+	s.autostart_loader = false
 	add_child(s)
-	s.set_process(false) ## adımı elle süreceğiz
-	s._scan_done = true
-	s._scan_stack.clear()
+	s.set_process(false) ## ilerlemeyi elle okuyacağız
 	return s
 
 
-## Bu süreçte henüz önbellekte olmayan, başka betiği önyüklemeyen küçük bir betik (autoload'lar ve yükleme ekranı bazılarını zaten yükledi).
-func _uncached_script() -> String:
-	var d := DirAccess.open("res://scripts")
-	if d == null:
-		return ""
-	for f in d.get_files():
-		if not f.ends_with(".gd"):
-			continue
-		var p: String = "res://scripts/" + f
-		if ResourceLoader.has_cached(p):
-			continue
-		var bytes: int = FileAccess.get_file_as_bytes(p).size()
-		if bytes > 0 and bytes < 4000:
-			return p
-	return ""
+func _wait_loader(s: Control, limit_msec: int = 20000) -> bool:
+	var t0: int = Time.get_ticks_msec()
+	while not s._loader_finished():
+		if Time.get_ticks_msec() - t0 > limit_msec:
+			return false
+		OS.delay_msec(5)
+	s._join_loader()
+	return true
 
 
-func test_gdscript_is_loaded_on_the_main_thread_not_requested_in_a_worker() -> void:
+## WorkerThreadPool'a geri dönülmesin: 4.7.2'de betik derlemesi orada aralıklı kilitleniyor (yukarıdaki ölçüm).
+func test_loader_never_uses_the_worker_thread_pool() -> void:
+	var src: String = LoadingScript.source_code
+	assert(src != "", "test önkoşulu: betik kaynağı okunabilmeli")
+	assert(not src.contains("load_threaded_request("), "yükleme ekranı load_threaded_request KULLANMAMALI (WorkerThreadPool kilidi)")
+	assert(src.contains("Thread.new()"), "yükleme kendi Thread'inde yapılmalı")
+
+
+func test_worker_loads_the_scene_and_its_dependencies_in_its_own_thread() -> void:
 	var s: Control = _screen()
-	var path: String = _uncached_script()
-	assert(path != "", "test önkoşulu: henüz yüklenmemiş bir betik bulunamadı")
-	s._load_order = [path]
-	s._weights = {path: 1.0}
-	s._weight_total = 1.0
-	s._step_loading(0.016)
-	assert(s._req_path == "", "GDScript için arka plan isteği açılmamalı (iş parçacığında derleme takılıyordu): %s" % s._req_path)
-	assert(s._load_index == 1, "betik bu adımda işlenmiş olmalı")
-	assert(ResourceLoader.has_cached(path), "betik ana iş parçacığında yüklenip önbelleğe girmeli")
-	assert(is_equal_approx(s._weight_done, 1.0), "ağırlığı işlenmiş sayılmalı")
+	s.main_scene_path = SMALL_SCENE
+	s.start_loader()
+	assert(_wait_loader(s), "yükleyici iş parçacığı bitmeli (takılma yok)")
+	var found: bool = false
+	for r: Resource in s._loaded_refs:
+		if r is PackedScene and r.resource_path == SMALL_SCENE:
+			found = true
+	assert(found, "kök sahne iş parçacığında yüklenip referansta tutulmalı")
+	assert(ResourceLoader.has_cached(SMALL_SCENE), "kök sahne önbellekte olmalı (_proceed oradan alır)")
+	assert(is_equal_approx(s._load_progress(), 1.0), "iş parçacığı bitince ilerleme %100")
+	assert(s._t_scan_done, "tarama tamamlanmış olmalı")
 	s.free()
 
 
-func test_textures_still_load_in_the_background() -> void:
+func test_abort_stops_the_worker_before_loading() -> void:
 	var s: Control = _screen()
-	var path := "res://assets/ui/loading_bg.png"
-	if not ResourceLoader.exists(path) or ResourceLoader.has_cached(path):
-		s.free()
-		return
-	s._load_order = [path]
-	s._weights = {path: 1.0}
-	s._weight_total = 1.0
-	s._step_loading(0.016)
-	assert(s._req_path == path or ResourceLoader.has_cached(path), "doku arka plan iş parçacığında istenmeli (animasyon akmaya devam etsin)")
-	## Bekçi: çok eski başlamış bir istek atlanır, yükleme ilerler.
-	if s._req_path != "":
-		s._req_started_msec = Time.get_ticks_msec() - s.REQ_STALL_MSEC - 1000
-		var st: int = ResourceLoader.load_threaded_get_status(s._req_path)
-		if st == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-			s._step_loading(0.016)
-			assert(s._req_path == "", "bekçi uzun süren isteği atlamalı")
+	s.main_scene_path = SMALL_SCENE
+	s._abort = true
+	s.start_loader()
+	assert(_wait_loader(s, 5000), "durdurulan yükleyici hemen bitmeli")
+	assert(s._loaded_refs.is_empty(), "durdurulunca hiçbir şey yüklenmemeli")
+	s.free()
+
+
+## Sahneden çıkılırsa (bağlantı kesildi -> menü) iş parçacığı beklenir; Thread yıkılırken çalışıyor olmamalı.
+func test_exit_tree_joins_the_worker() -> void:
+	var s: Control = _screen()
+	s.main_scene_path = SMALL_SCENE
+	s.start_loader()
+	remove_child(s)
+	assert(s._thread == null, "_exit_tree iş parçacığını beklemeli")
+	s.free()
+
+
+func test_load_plan_puts_leaves_first_and_root_scripts_last() -> void:
+	var order: Array = ["res://root.tscn", "res://main.gd", "res://a.tscn", "res://a.gd", "res://b.png"]
+	var plan: Array = LoadingScript.load_plan(order, ["res://main.gd"], "res://root.tscn")
+	assert(not plan.has("res://root.tscn"), "kök sahne planda olmamalı (en son ayrıca yüklenir)")
+	assert(plan[0] == "res://b.png", "yapraklar önce: %s" % str(plan))
+	assert(plan[plan.size() - 1] == "res://main.gd", "kök betik en sona: %s" % str(plan))
+	assert(plan.size() == 4, "hiçbir bağımlılık düşmemeli")
+
+
+## Canlı sahne parçaları (üretici tools/gen_yukleme_bg.py yazar) dokularıyla uyumlu olmalı: şerit genişliği = kare x kare sayısı.
+func test_scene_parts_match_their_sheets() -> void:
+	var bg: Texture2D = load("res://assets/ui/yukleme/yukleme_bg.png")
+	assert(bg != null, "arka plan dokusu yok")
+	assert(Vector2(bg.get_size()) == SceneParts.CANVAS, "arka plan tuvali %s olmalı" % str(SceneParts.CANVAS))
+	assert(SceneParts.PARTS.size() > 0, "canlı parça yok")
+	for p: Array in SceneParts.PARTS:
+		var tex: Texture2D = load("res://assets/ui/yukleme/" + str(p[0]))
+		assert(tex != null, "parça dokusu yok: %s" % p[0])
+		var fs: Vector2 = p[2]
+		assert(tex.get_width() == int(fs.x) * int(p[3]) and tex.get_height() == int(fs.y), "şerit boyutu uyuşmuyor: %s" % p[0])
+
+
+## Yükleme ekranı kurulduğunda arka plan + canlı parçalar tek tuvalde, patika (çubuk) yolun üstünde.
+func test_backdrop_is_built_on_the_scene_canvas() -> void:
+	var s: Control = _screen()
+	assert(is_instance_valid(s._scene), "sahne tuvali kurulmalı")
+	assert(s._scene.size == SceneParts.CANVAS, "tuval boyutu")
+	var sheets: int = 0
+	for c: Node in s._scene.get_children():
+		if c is TextureRect:
+			assert((c as TextureRect).texture.resource_path.ends_with("yukleme_bg.png"), "arka plan yeni sahne olmalı")
+		elif c.get_class() == "Control" and c.get("frame_size") != null:
+			sheets += 1
+	assert(sheets == SceneParts.PARTS.size(), "her canlı parça bir LiveSheet: %d" % sheets)
 	s.free()
 
 

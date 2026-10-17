@@ -109,6 +109,7 @@ const INTERACT_RADIUS := 80.0
 
 var _active: bool = false
 var _visit_timer: float = 0.0
+var _visit_ends_msec: int = 0 ## get_visit_time_left (her istemcide yerel saat)
 var _cooldown_timer: float = 0.0
 var _visual: Node2D = null
 var _current_stock: Array = []
@@ -235,6 +236,7 @@ func _on_merchant_spawned(_pos: Vector2, _stock: Array) -> void:
 	HitchLogScript.mark("merchant_spawned")
 	_active = true
 	_visit_timer = VISIT_DURATION
+	_visit_ends_msec = Time.get_ticks_msec() + int(VISIT_DURATION * 1000.0)
 	_current_stock = _generate_stock()
 	## Yeni ziyaret: karıştırma fiyatı başa döner (bkz. _visit_started).
 	if not _visit_started:
@@ -257,6 +259,18 @@ func _on_merchant_departed() -> void:
 	if _shop_screen and is_instance_valid(_shop_screen):
 		_shop_screen.queue_free()
 	_shop_screen = null
+
+
+## Satıcının ayrılmasına kalan süre (sn) - dükkan ekranının başlık sayacı. _visit_timer yalnız host'ta azalır; bu her istemcide
+## belirdiği andan yerel saatle sayar (ağ gecikmesi kadar sapabilir, gösterim için yeterli).
+func get_visit_time_left() -> float:
+	if not _active:
+		return 0.0
+	return maxf(0.0, float(_visit_ends_msec - Time.get_ticks_msec()) / 1000.0)
+
+
+func get_visit_duration() -> float:
+	return VISIT_DURATION
 
 
 ## Sıradaki karıştırmanın altın fiyatı (bkz. dosya başı not).
@@ -291,8 +305,8 @@ func _generate_stock() -> Array:
 	var stock: Array = []
 	var candidates: Array = []
 	for k in Items.KEYS:
-		if Items.kademe(k) == Items.KADEME_EFSANEVI and Items.owns(GameManager.owned_items, k):
-			continue
+		if Items.kademe(k) >= Items.KADEME_EPIK and Items.owns(GameManager.owned_items, k):
+			continue ## epikler ve efsaneviler tekil (items.gd): sahip olunan satıcıda çıkmaz
 		if Items.is_support_only(k) and not Items.is_ally_support_char(GameManager.selected_char_id):
 			continue
 		candidates.append(k)

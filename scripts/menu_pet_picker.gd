@@ -11,6 +11,8 @@ extends PanelContainer
 signal picked(key: String)
 
 const PetCatalog := preload("res://scripts/pet_catalog.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const LockBadgeScript: GDScript = preload("res://scripts/lock_badge.gd")
 
 ## Çağıranların yerleşim için bildiği asgari yükseklik (başlık + yuvalar + 2 satır açıklama + kenar boşlukları).
 const DESKTOP_HEIGHT := 250.0
@@ -57,7 +59,11 @@ func _build() -> void:
 		b.focus_mode = Control.FOCUS_ALL
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		b.tooltip_text = "%s\n%s" % [PetCatalog.display_name(key), PetCatalog.description(key)]
-		b.pressed.connect(select.bind(key))
+		var locked: bool = not MetaProgressScript.is_unlocked(MetaProgressScript.PET, key)
+		if locked:
+			b.tooltip_text += "
+" + MetaProgressScript.lock_text(MetaProgressScript.PET, key)
+		b.pressed.connect(_on_slot_pressed.bind(key))
 		var col: BoxContainer = HBoxContainer.new() if compact else VBoxContainer.new()
 		col.alignment = BoxContainer.ALIGNMENT_CENTER
 		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -74,6 +80,8 @@ func _build() -> void:
 		col.add_child(ic)
 		if not _icon_only:
 			col.add_child(MenuKit.make_label(PetCatalog.display_name(key), _fs(MenuKit.FS_SMALL, 40), MenuKit.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+		if locked:
+			LockBadgeScript.attach(b)
 		row.add_child(b)
 		_slots[key] = b
 
@@ -86,8 +94,14 @@ func _build() -> void:
 	v.add_child(_desc_label)
 
 
+## Kilitli hayvan incelenir (ipucu bedeli söyler) ama seçilmez (bkz. meta_progress.gd).
+func _on_slot_pressed(key: String) -> void:
+	if MetaProgressScript.is_unlocked(MetaProgressScript.PET, key):
+		select(key)
+
+
 func select(key: String, emit: bool = true) -> void:
-	if not PetCatalog.is_valid(key):
+	if not PetCatalog.is_valid(key) or not MetaProgressScript.is_unlocked(MetaProgressScript.PET, key):
 		key = PetCatalog.DEFAULT_KEY
 	GameManager.selected_pet = key
 	for k: String in _slots:

@@ -14,7 +14,7 @@ extends RefCounted
 ## boyut x0,7 (enemy_spawner.gd FIXED_BOSS_STATS scale 2.0 -> 1.4; ağız konumu/halka mesafeleri BODY_SCALE_REL ile küçüldü), hasar x2 (normal saldırı 20 -> 40, ateş topu 10 -> 20,
 ## kabak patlaması 20 -> 40, yarasa ısırığı x2 + kanama 5 -> 10/sn), ateş topu salvosu ~2 kat sık ve 7 toplu, YENİ halka salvosu (16 top her yöne), kabak/yarasa dalgaları ~2 kat sık ve büyük,
 ## canı yarıya inince (can + kalkan toplamı) tüm bekleme süreleri x0,65. (Dosya başındaki 5 top / 10 hasar / 11-14 sn gibi eski sayılar artık bunlardır.)
-const FIREBALL_DAMAGE := 20.0 ## 2026-10-11: x0,8 kesintisi iptal edildi (kullanıcı), 16 -> 20
+const FIREBALL_DAMAGE := 30.0 ## 2026-10-17: +%50 (kullanici), 20 -> 30.  2026-10-11: x0,8 kesintisi iptal edildi (kullanıcı), 16 -> 20
 const BODY_SCALE_REL := 0.7       ## boss eskisinden %30 küçük: ağız ofseti ve minyon halkası bu kadar yaklaştı
 const SALVO_COOLDOWN_MIN := 1.8
 const SALVO_COOLDOWN_MAX := 2.8

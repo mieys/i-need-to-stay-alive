@@ -257,6 +257,7 @@ private:
 	inline float randf_range(float a, float b) { return a + (b - a) * randf(); }
 	void write_views();
 	void step_puppet(int32_t i, float delta);
+	void push_out_of_zones(int32_t i, int32_t skip_ghost_target);
 	void step_loco_anim(int32_t i, float delta);
 	void sync_external_moves();
 	void collect_candidates(float minx, float miny, float maxx, float maxy);

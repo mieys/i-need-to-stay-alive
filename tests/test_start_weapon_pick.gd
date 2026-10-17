@@ -5,6 +5,7 @@ extends Node
 ## silahın envantere gelmesi) tools/mobile_ui/capture_screens.gd ile SHOT_WEAPON ortam değişkeniyle görülür.
 
 const WeaponCatalog := preload("res://scripts/weapon_catalog.gd")
+const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 
 
 func test_catalog_has_every_weapon_with_icon_name_and_text() -> void:
@@ -27,6 +28,7 @@ func test_invalid_selection_falls_back_to_default() -> void:
 
 func test_picker_writes_selection_and_grid_lists_all() -> void:
 	var old: String = GameManager.selected_start_weapon
+	MetaProgressScript.set_unlock_all(true) ## Ruh Mağazası kilitleri bu testin konusu değil (bkz. test_meta_progress.gd)
 	var picker: PanelContainer = load("res://scripts/menu_weapon_picker.gd").new()
 	add_child(picker)
 	picker.setup(false)
@@ -43,12 +45,27 @@ func test_picker_writes_selection_and_grid_lists_all() -> void:
 	assert(not is_instance_valid(picker.get("_popup")) or (picker.get("_popup") as Node).is_queued_for_deletion(), "seçince ızgara kapanmadı")
 	picker.queue_free()
 	GameManager.selected_start_weapon = old
+	MetaProgressScript.set_unlock_all(false)
 
 
 func test_character_select_has_weapon_picker() -> void:
 	var scene: Control = (load("res://scenes/character_select.tscn") as PackedScene).instantiate()
 	add_child(scene)
 	await get_tree().process_frame
-	var wp: Node = scene.get("weapon_picker")
-	assert(wp != null and is_instance_valid(wp), "karakter seçim ekranında başlangıç silahı seçicisi yok")
+	## 2026-10-16: masaüstü tek oyunculu ekran çok oyunculu "SEÇİM D" düzeninde (lobby_select_desktop.gd solo) - silah SİLAH sekmesinde.
+	var desk: Node = scene.get("_desk")
+	assert(desk != null and bool(desk.get("solo")), "tek oyunculu masaüstü ekranı SEÇİM D'nin tek oyunculu kipi olmalı")
+	assert((desk.get("_tab_btns") as Dictionary).has("weapon"), "karakter seçim ekranında başlangıç silahı sekmesi yok")
+	var old: String = GameManager.selected_start_weapon
+	MetaProgressScript.set_unlock_all(true)
+	desk.call("_set_tab", "weapon")
+	var other: String = ""
+	for k: String in WeaponCatalog.KEYS:
+		if k != old:
+			other = k
+			break
+	desk.call("_on_option_pressed", other)
+	assert(GameManager.selected_start_weapon == other, "SİLAH sekmesinde seçilen silah başlangıç silahı olmalı")
+	GameManager.selected_start_weapon = old
+	MetaProgressScript.set_unlock_all(false)
 	scene.queue_free()

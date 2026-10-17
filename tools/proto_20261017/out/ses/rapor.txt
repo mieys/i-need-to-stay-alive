@@ -1,0 +1,12 @@
+MEVCUT:
+level_ekrani.wav           süre  3.28 sn | tepe 0.70 | anlık K  -15.2 dB | tepeden -20 dB'e 2.38 sn | bant% <150: 9.2 150-500:27.4 500-2k:33.7 2k-5k:17.1 5k+:12.5 | son 10 ms -180.0 dB | maks sıçrama 0.36
+card_pick.wav              süre  2.75 sn | tepe 0.44 | anlık K  -18.1 dB | tepeden -20 dB'e 1.44 sn | bant% <150:49.5 150-500:19.9 500-2k:15.7 2k-5k: 7.9 5k+: 7.0 | son 10 ms -180.0 dB | maks sıçrama 0.27
+hedef: level -18.2 dB, seçim -21.1 dB (mevcudun 3 dB altı)
+
+ADAYLAR:
+level_A_sicak_yukselis.wav süre  1.13 sn | tepe 0.49 | anlık K  -18.2 dB | tepeden -20 dB'e 0.60 sn | bant% <150: 7.8 150-500:57.0 500-2k:33.5 2k-5k: 1.8 5k+: 0.0 | son 10 ms  -83.8 dB | maks sıçrama 0.08
+level_B_kadife_can.wav     süre  0.94 sn | tepe 0.46 | anlık K  -18.2 dB | tepeden -20 dB'e 0.24 sn | bant% <150: 0.2 150-500:27.1 500-2k:70.2 2k-5k: 2.4 5k+: 0.0 | son 10 ms  -82.8 dB | maks sıçrama 0.07
+level_C_kisa_fanfar.wav    süre  1.11 sn | tepe 0.49 | anlık K  -18.2 dB | tepeden -20 dB'e 0.46 sn | bant% <150:20.6 150-500:41.2 500-2k:37.1 2k-5k: 1.1 5k+: 0.0 | son 10 ms  -83.8 dB | maks sıçrama 0.05
+secim_A_tahta_tik.wav      süre  0.41 sn | tepe 0.48 | anlık K  -21.1 dB | tepeden -20 dB'e 0.14 sn | bant% <150: 0.0 150-500: 0.6 500-2k:94.2 2k-5k: 5.0 5k+: 0.1 | son 10 ms  -74.7 dB | maks sıçrama 0.15
+secim_B_yumusak_pop.wav    süre  0.45 sn | tepe 0.47 | anlık K  -21.1 dB | tepeden -20 dB'e 0.12 sn | bant% <150: 0.0 150-500:36.6 500-2k:63.4 2k-5k: 0.0 5k+: 0.0 | son 10 ms  -80.2 dB | maks sıçrama 0.05
+secim_C_kadife_onay.wav    süre  0.45 sn | tepe 0.66 | anlık K  -21.1 dB | tepeden -20 dB'e 0.14 sn | bant% <150: 0.0 150-500:83.4 500-2k:16.4 2k-5k: 0.1 5k+: 0.0 | son 10 ms  -75.7 dB | maks sıçrama 0.05

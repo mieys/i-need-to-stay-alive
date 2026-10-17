@@ -148,6 +148,8 @@ static func surge_flash(tween_owner: Node, icon: Node2D) -> void:
 
 
 ## İkonun bulunduğu dünya noktasında mor kıvılcım patlaması (tek seferlik sahne; kaster ve uzak kopya aynı fonksiyonu çağırır).
+## 2026-10-16 (madde 188): eski büyük mor halka yerine onaylanan prototipin küçük parıltısı (BuyucuFx "surge_muzzle" - krem disk + mor artı);
+## mor dalga (fx_buyucu_surge_wave) ile üst üste 4 halka karmaşası kalktı.
 static func spawn_surge_spark(tween_owner: Node, icon: Node2D) -> void:
 	if not is_instance_valid(icon) or not icon.is_inside_tree() or not ResourceLoader.exists(SURGE_SPARK_SCENE):
 		return

@@ -305,7 +305,7 @@ func test_q_without_target_does_not_fire_and_zero_shield_blocks_it() -> void:
 	assert(player.skill_state == "ready" and is_equal_approx(player.health, h0) and is_equal_approx(player.item_shield_hp, 200.0),
 		"hedef yokken bedel ödenmez/bekleme başlamaz: state=%s hp=%s kalkan=%s" % [player.skill_state, player.health, player.item_shield_hp])
 	var e: FakeEnemy = _make_enemy(Vector2(1050, 1000))
-	player.item_shield_hp = 0.0 ## 2026-10-08: Q'nun kalkan bedeli geri geldi - kalkan yoksa "KALKAN YETERSİZ", tetiklenmez
+	player.item_shield_hp = 0.0 ## 2026-10-08: Q'nun kalkan bedeli geri geldi - kalkan yoksa "MANA K. YETERSİZ", tetiklenmez
 	player.crit_chance_bonus = -player.ABILITY_BASE_CRIT_CHANCE
 	player._activate_skill()
 	assert(player.skill_state == "ready" and e.hits.is_empty(), "kalkansız tetiklenmemeli: state=%s vuruş=%d" % [player.skill_state, e.hits.size()])

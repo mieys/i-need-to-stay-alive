@@ -74,6 +74,7 @@ const ABILITY_ICON_GAP := 12.0
 const SPIRIT_ICON_GAP := ABILITY_ICON_GAP
 const SPIRIT_FRAME_TINT := Color(1, 1, 1, 1) ## artık tint yok: mor-altın çerçeve kendi dokusu (hud_skill_frame_spirit.png)
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
+const HudTheme := preload("res://scripts/hud_theme.gd") ## HUD teması "Kısık Ahşap" renkleri (madde 207)
 ## Kullanıcı isteği (2026-09-22): "skill kutucuklarının olduğu yere arkasını kaplayacak bir çerçeve" - SkillBar'ın
 ## İLK çocuğu olarak eklenen, o anki GÖRÜNÜR ikonların (P/Q/E/R/F) etrafını saran tek bir "çukur" panel (bkz.
 ## _create_ability_bar_frame/_update_ability_bar_frame). Ayrı bir sahne/asset değil, UIKit.panel_style("inset")
@@ -255,7 +256,7 @@ func _ready() -> void:
 ## KALICI parçaları bu opaklıkla çizilir. Dükkan/envanter panelleri ve sohbet YAZMA kutusu bilerek hariç (açıkken okunmalı).
 const UI_OPACITY_NODES: Array[String] = ["BottomBar", "CharacterCluster", "SkillBar", "GoldIndicator", "MinimapControl",
 	"ReviveHearts", "XPBar", "ShopToggleButton", "EnvanterToggleButton", "FpsLabel", "PartyPanelLayer/PartyPanel",
-	"DockFrame", "HeartsTab"]
+	"DockFrame", "DockLegend", "DockDivider", "DockPet", "DockStats", "DockStatsToggle"]
 
 
 func _register_ui_opacity() -> void:
@@ -301,7 +302,7 @@ func _ensure_shard_indicator() -> void:
 	box.add_child(icon)
 	_shard_label = Label.new()
 	_shard_label.add_theme_font_size_override("font_size", 40)
-	_shard_label.add_theme_color_override("font_color", Color(0.30, 0.38, 0.55)) ## bej levhada okunur çelik mavisi
+	_shard_label.add_theme_color_override("font_color", HudTheme.SHARD) ## koyu levhada açık buz mavisi
 	_shard_label.text = "0"
 	box.add_child(_shard_label)
 	add_child(_shard_indicator)
@@ -445,9 +446,10 @@ func _make_toggle_style(bg: Color, border: Color) -> StyleBoxFlat:
 ## değiştirmeni istiyorum") - ENVANTER/DÜKKAN butonları eskiden düz renkli
 ## ahşap kahverengisi StyleBoxFlat kullanıyordu (bkz. _make_toggle_style),
 ## artık oyundaki HER buton gibi gerçek ahşap plaka dokusuna sahip.
+## 2026-10-17 (madde 207): HUD teması "Kısık Ahşap" - düğmeler "hud" varyantı, levhalar koyu kahve, yazılar açık.
 func _style_envanter_and_gold_buttons() -> void:
-	ShopPanel._apply_wood_button_style(envanter_toggle_button)
-	ShopPanel._apply_wood_button_style(shop_toggle_button)
+	UIKit.style_button(envanter_toggle_button, "hud")
+	UIKit.style_button(shop_toggle_button, "hud")
 
 	## Altın göstergesi artık SADECE bir gösterge (kullanıcı isteği: "sadece
 	## göstergeye çevir") - tıklanabilirlik/hover davranışı kaldırıldı, kendi
@@ -460,9 +462,9 @@ func _style_envanter_and_gold_buttons() -> void:
 	gold_indicator.add_theme_stylebox_override("panel", _gold_indicator_normal_style)
 	if is_instance_valid(_shard_indicator):
 		_shard_indicator.add_theme_stylebox_override("panel", _gold_indicator_normal_style)
-	## 2026-09-24: levha artık bej parşömen (oyun içi kit) - sahnedeki açık sarı yazı okunmuyordu, koyu altın.
+	## 2026-10-17: levha koyu kahve (gen_hud_tema.py) - açık altın yazı.
 	if gold_indicator_label:
-		gold_indicator_label.add_theme_color_override("font_color", UIKit.C_GOLD)
+		gold_indicator_label.add_theme_color_override("font_color", HudTheme.PRICE)
 		gold_indicator_label.add_theme_constant_override("outline_size", 0)
 	_set_mouse_ignore_recursive(gold_indicator)
 
@@ -630,35 +632,51 @@ func _layout_ability_icons() -> bool:
 		return false
 	if MobileUIScript.enabled and touch_controls != null:
 		return _layout_mobile_ability_icons()
-	var slots: Array = [] ## [Control, gap_before]
+	## 2026-10-14 (panel yeniden tasarımı, kullanıcı: "pasif ikonu çok büyük, pasif ikonları ufak olur genelde"): soldan sağa
+	## Q E R, F, ince ayraç, KÜÇÜK pasif, küçük evcil hayvan yuvası (DockPet - SkillBar'ın dışında, ekran pikseli). Ölçüler
+	## ekran pikseli hesaplanır, SkillBar çocuklarına yerel birime (px / k) çevrilerek yazılır. Dizi yerel 0'dan başlar -
+	## SkillBar'ı panelin yetenek bölümüne _layout_player_dock oturtur.
+	var k: float = DOCK_SKILL_PX / SPIRIT_ICON_BASE_SIZE
 	var sz: float = SPIRIT_ICON_BASE_SIZE
-	var group: Array = [skill_icon]
-	if skill2_icon and skill2_icon.visible:
-		group.append(skill2_icon)
-	if skill3_icon and skill3_icon.visible:
-		group.append(skill3_icon)
+	var x: float = 0.0 ## ekran pikseli
+	var sig: String = ""
+	var placed: int = 0
+	for icon in [skill_icon, skill2_icon, skill3_icon, spirit_icon]:
+		if icon == null or not icon.visible:
+			continue
+		if placed > 0:
+			x += DOCK_SPIRIT_GAP if icon == spirit_icon else DOCK_SKILL_GAP
+		icon.offset_left = x / k
+		icon.offset_right = x / k + sz
+		icon.offset_top = 0.0
+		icon.offset_bottom = sz
+		if not is_equal_approx(icon.frame_border, DOCK_SKILL_BORDER_PX / k):
+			icon.frame_border = DOCK_SKILL_BORDER_PX / k ## F'nin kalın çerçevesi de aynı 48 px ikon alanını açar
+			icon.queue_redraw()
+		sig += "%s@%d," % [icon.name, int(x)]
+		x += DOCK_SKILL_PX
+		placed += 1
+	_dock_divider_px = x + DOCK_GROUP_GAP * 0.5 - 1.0
+	x += DOCK_GROUP_GAP
 	if passive_icon and passive_icon.visible:
-		slots.append([passive_icon, 0.0])
-	for i in group.size():
-		var gap: float = 0.0
-		if not slots.is_empty():
-			gap = ABILITY_GROUP_GAP if i == 0 else ABILITY_ICON_GAP
-		slots.append([group[i], gap])
-	if spirit_icon and spirit_icon.visible:
-		slots.append([spirit_icon, ABILITY_GROUP_GAP])
-	## 2026-09-27: dizi artık ekran ortasına değil yerel 0'dan başlar - SkillBar'ı oyuncu paneli (dock) yetenek bölümüne
-	## oturtur (bkz. _layout_player_dock).
-	var x: float = 0.0
-	var sig: String = str(x) + "|" + str(slots.size())
-	for sl in slots:
-		var c: Control = sl[0]
-		x += float(sl[1])
-		c.offset_left = x
-		c.offset_right = x + sz
-		c.offset_top = 0.0
-		c.offset_bottom = sz
-		sig += "," + c.name
-		x += sz
+		var small: float = DOCK_SMALL_PX / k
+		var top: float = (DOCK_SKILL_PX - DOCK_SMALL_PX) * 0.5 / k
+		passive_icon.offset_left = x / k
+		passive_icon.offset_right = x / k + small
+		passive_icon.offset_top = top
+		passive_icon.offset_bottom = top + small
+		if not is_equal_approx(passive_icon.frame_border, DOCK_SMALL_BORDER_PX / k):
+			passive_icon.frame_border = DOCK_SMALL_BORDER_PX / k
+			passive_icon.queue_redraw()
+		## 36 px'lik yuvada "P" harfi ikonun yarısını kapatıyor - pasif tuşla kullanılmaz, harf gizli.
+		var key_label: CanvasItem = passive_icon.get_node_or_null("KeyLabel") as CanvasItem
+		if key_label:
+			key_label.visible = false
+		sig += "P@%d," % int(x)
+		x += DOCK_SMALL_PX + DOCK_SMALL_GAP
+	_dock_pet_px = x
+	x += DOCK_SMALL_PX
+	_dock_row_px = x
 	if sig == _ability_layout_sig:
 		return false
 	_ability_layout_sig = sig
@@ -813,41 +831,74 @@ func _update_ability_bar_frame() -> void:
 ## SkillBar, ReviveHearts) buraya taşındı (@onready referansları/testler geçerli). Eski levha çubukları (HealthBar/
 ## ShieldBar + çerçeve + yazı) gizli ama güncellenmeye devam eder; görünen çubuklar hud_pixel_bar.gd.
 ## Ölçüler 1920x1080 taban, ekranın alt-ortasına göre.
-const DOCK_PAD_X := 16.0
-const DOCK_PAD_TOP := 12.0
-const DOCK_PAD_BOTTOM := 12.0
-## Kullanıcı isteği (2026-09-27, ikinci tur): "alttaki karakter skilleri panelini biraz küçült üp exp barıyla arasında azıcık
-## boşluk olmasını sağla" - panel bütünüyle DOCK_SCALE ile küçülür (portre/rozet/çubuklar CharacterCluster.scale ile, yetenek
-## yuvaları SkillBar.scale ile - yerel yerleşim aynı kalır), XP şeridinin (bottom_exp_bar.gd BAR_HEIGHT 10) üstünde ~10 px boşluk.
-const DOCK_SCALE := 0.85
-const SKILLBAR_BASE_SCALE := 1.275 ## hud.tscn SkillBar ölçeği (panel küçültmesinden önce)
+##
+## YENİDEN TASARIM (2026-10-14, kullanıcı: "can ve kalkan sayıları hiç okunmuyor, kalp geri sayımı çok ufak, pasif ikonu çok
+## büyük, genel bir tasarım güncellemesi gerekiyor" -> iki tur prototipten "2" seçildi, tools/proto_20261014): panel artık
+## ÖLÇEKSİZ, ölçüler 1920x1080 ekran pikseli (eski DOCK_SCALE 0,85 piksel yazıyı kesirli boyuta düşürüp bulandırıyordu).
+## Üst sıra: Q E R  F | pasif (küçük) + evcil hayvan (küçük) + sağ uçta kalpler ve HER ZAMAN görünen sayaç levhası.
+## Alt: solunda kalp/kalkan ikonu olan iki çubuk, sayılar çubuğun sağ ucunda (hud_pixel_bar.gd "merged").
+## Sağa yapışık küçük panel: 5 efsanevi eşya yuvası (hud_legend_slots.gd). Panel + efsanevi paneli birlikte ortalanır.
+const DOCK_H := 152.0
+## 2026-10-17 (kullanıcı: "skill barı arayüz panelini %8 küçült"): tüm panel (çerçeve, yetenekler, çubuklar, kalpler, efsanevi, stat) bu çarpanla
+## alt-orta çapasına göre küçülür; ölçüler 1920x1080 tasarım pikselinde yazılı, çarpan sadece _dock_place/_layout_player_dock'ta.
+const DOCK_UI_SCALE := 0.92
+const DOCK_PAD_TOP := 14.0
+const DOCK_PAD_RIGHT := 12.0
 const DOCK_BOTTOM_MARGIN := 30.0 ## kullanıcı: "bi 10px daha yukarı" (20 -> 30)
-const DOCK_PORTRAIT := 96.0 ## hud_avatar_frame.png doğal boyu
-const DOCK_PORTRAIT_GAP := 14.0
-const DOCK_ROW_GAP := 6.0
-const DOCK_HP_H := 28.0 ## 2026-10-13 (kullanıcı: "can ve kalkan miktarı çok zor okunuyor"): 22 -> 28, kalkan 16 -> 22; yazı da büyüdü
+const DOCK_PORTRAIT_POS := Vector2(14.0, 12.0)
+const DOCK_PORTRAIT := 84.0 ## hud_avatar_frame.png (96) x 0,875
+const DOCK_BADGE_RECT := Rect2(34.0, 74.0, 44.0, 44.0)
+const DOCK_CONTENT_X := 112.0 ## yetenek sırası ve çubukların sol kenarı
+## 2026-10-17 (kullanıcı: "can ve kalkan barları çok büyük, skilleri büyüt"): 56 -> 64 px; çerçeve kenarı 8 px sabit -> ikon
+## alanı tam 48 px = 144 px (48 sanat pikseli x3) yetenek ikonları 1/3 ölçekte BİREBİR keskin (eskiden ~41,7 px, piksel düşüyordu).
+const DOCK_SKILL_PX := 64.0
+const DOCK_SKILL_BORDER_PX := 8.0 ## Q/E/R/F çerçeve kenarı (ekran pikseli; frame_border = bu / k)
+const DOCK_SMALL_BORDER_PX := 4.0 ## küçük pasif yuvanın çerçeve kenarı (ekran pikseli)
+const DOCK_SKILL_GAP := 8.0
+const DOCK_SPIRIT_GAP := 14.0 ## Q-E-R ile F arası
+const DOCK_GROUP_GAP := 22.0 ## yetenekler ile küçük yuvalar (pasif/evcil) arası; ortasında ince ayraç
+const DOCK_SMALL_PX := 36.0
+const DOCK_SMALL_GAP := 4.0
+const DOCK_HEARTS_GAP := 10.0
+const DOCK_HEARTS_SIZE := Vector2(88.0, 64.0) ## 4 kalp (22 px aralık) sığar; revive_hearts_hud.gd panel kipi
+const DOCK_HEARTS_TOP := 10.0
+## Çubuklar inceldi (30/26 -> 24/22): 18 px sayı (14 px rakam + kontur) ve 20 px kalp/kalkan ikonu içine sığar; kazanılan yer yeteneklere.
+const DOCK_HP_Y := 86.0
+const DOCK_HP_H := 24.0
+const DOCK_SHIELD_Y := 114.0
 const DOCK_SHIELD_H := 22.0
-const DOCK_HP_FONT := 22
-const DOCK_SHIELD_FONT := 18
+const DOCK_BAR_RIGHT := 16.0
+const DOCK_LEGEND_OVERLAP := 12.0 ## efsanevi paneli ana panelin altına bu kadar girer ("yapışık")
+const DOCK_LEGEND_TOP := 6.0
+const DOCK_DIVIDER_COLOR := HudTheme.DIVIDER
+const SHIELD_VALUE_COLOR := Color("#bfe0ff")
 ## Telefon HUD'u eski ölçüleri korur (MOBILE_CLUSTER_H bunlara göre).
 const MOBILE_HP_H := 22.0
 const MOBILE_SHIELD_H := 16.0
 const DOCK_BAR_GAP := 2.0
-const DOCK_BADGE_OVERHANG := 26.0 ## seviye rozeti portre çerçevesinin altından bu kadar taşar (hud.tscn LevelBadge 70..122)
-const HEARTS_TAB_W := 100.0
-const HEARTS_TAB_H := 36.0
-const HEARTS_TAB_TIMER_W := 64.0 ## kalp yenilenme sayacı (m:ss) görünürken sekme bu kadar genişler
-const HEARTS_TAB_OVERLAP := 6.0
 const PixelBarScript: GDScript = preload("res://scripts/hud_pixel_bar.gd")
+const LegendSlotsScript: GDScript = preload("res://scripts/hud_legend_slots.gd")
+const PetSlotScript: GDScript = preload("res://scripts/hud_pet_slot.gd")
+## Mini stat paneli (ana panelin SOLUNA yapışık, efsanevi panelin aynası) + portre altındaki aç/kapa düğmesi (2026-10-14).
+const StatPanelScript: GDScript = preload("res://scripts/hud_stat_panel.gd")
+const StatToggleScript: GDScript = preload("res://scripts/hud_stat_toggle.gd")
+const DOCK_STATS_TOGGLE_RECT := Rect2(24.0, 122.0, 64.0, 20.0) ## panel yereli: seviye rozetinin (DOCK_BADGE_RECT) altı
 const SHIELD_BAR_COLOR := Color(0.24, 0.59, 0.91)
 
 var dock_frame: Panel = null
-var hearts_tab: Panel = null
+var dock_legend: Control = null
+var dock_pet: Control = null
+var dock_stats: Control = null
+var dock_stats_toggle: Control = null
+var dock_divider: ColorRect = null
 var dock_hp_bar: Control = null
 var dock_shield_bar: Control = null
 var _icons_lo := Vector2.ZERO
 var _icons_hi := Vector2.ZERO
-var _hearts_tab_wide: bool = false
+## Yetenek sırasının ekran pikseli ölçüleri (sıranın sol ucundan; bkz. _layout_ability_icons): ayraç, evcil yuvası, sıra sonu.
+var _dock_divider_px: float = 0.0
+var _dock_pet_px: float = 0.0
+var _dock_row_px: float = 0.0
 
 
 func _create_player_dock() -> void:
@@ -861,13 +912,39 @@ func _create_player_dock() -> void:
 	add_child(dock_frame)
 	if cluster:
 		move_child(dock_frame, cluster.get_index())
-	hearts_tab = Panel.new()
-	hearts_tab.name = "HeartsTab"
-	hearts_tab.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hearts_tab.add_theme_stylebox_override("panel", UIKit.panel_style("status_badge"))
-	add_child(hearts_tab)
+	if not MobileUIScript.enabled:
+		## Efsanevi paneli ana panelin ARKASINDA (sol 12 px'i örtülür); ayraç + evcil yuvası hemen önünde.
+		dock_legend = Control.new()
+		dock_legend.name = "DockLegend"
+		dock_legend.set_script(LegendSlotsScript)
+		add_child(dock_legend)
+		move_child(dock_legend, dock_frame.get_index())
+		dock_divider = ColorRect.new()
+		dock_divider.name = "DockDivider"
+		dock_divider.color = DOCK_DIVIDER_COLOR
+		dock_divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(dock_divider)
+		move_child(dock_divider, dock_frame.get_index() + 1)
+		dock_pet = Control.new()
+		dock_pet.name = "DockPet"
+		dock_pet.set_script(PetSlotScript)
+		add_child(dock_pet)
+		move_child(dock_pet, dock_frame.get_index() + 1)
+		## Mini stat paneli de ana panelin ARKASINDA (sağ 12 px'i örtülür); aç/kapa düğmesi portrenin üstünde (en son çizilir).
+		dock_stats = Control.new()
+		dock_stats.name = "DockStats"
+		dock_stats.set_script(StatPanelScript)
+		add_child(dock_stats)
+		move_child(dock_stats, dock_frame.get_index())
+		dock_stats_toggle = Control.new()
+		dock_stats_toggle.name = "DockStatsToggle"
+		dock_stats_toggle.set_script(StatToggleScript)
+		add_child(dock_stats_toggle)
+		dock_stats_toggle.call("bind_panel", dock_stats)
 	if revive_hearts:
-		move_child(hearts_tab, revive_hearts.get_index())
+		## Kalpler artık panelin İÇİNDE: çerçeveden sonra çizilmeli.
+		if revive_hearts.get_index() < dock_frame.get_index():
+			move_child(revive_hearts, dock_frame.get_index())
 		if revive_hearts.has_method("set_regen_label_position"):
 			revive_hearts.set_regen_label_position(Vector2(84.0, -3.0))
 	if cluster:
@@ -878,12 +955,10 @@ func _create_player_dock() -> void:
 		dock_hp_bar = Control.new()
 		dock_hp_bar.name = "DockHpBar"
 		dock_hp_bar.set_script(PixelBarScript)
-		dock_hp_bar.set("font_size", DOCK_HP_FONT)
 		cluster.add_child(dock_hp_bar)
 		dock_shield_bar = Control.new()
 		dock_shield_bar.name = "DockShieldBar"
 		dock_shield_bar.set_script(PixelBarScript)
-		dock_shield_bar.set("font_size", DOCK_SHIELD_FONT)
 		dock_shield_bar.set("fill", SHIELD_BAR_COLOR)
 		dock_shield_bar.set("ratio", 0.0)
 		dock_shield_bar.set("text", "0/0")
@@ -901,10 +976,12 @@ func _create_player_dock() -> void:
 
 func _dock_place(c: Control, r: Rect2) -> void:
 	c.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	c.offset_left = r.position.x
-	c.offset_top = r.position.y
-	c.offset_right = r.end.x
-	c.offset_bottom = r.end.y
+	c.offset_left = r.position.x * DOCK_UI_SCALE
+	c.offset_top = r.position.y * DOCK_UI_SCALE
+	c.offset_right = c.offset_left + r.size.x
+	c.offset_bottom = c.offset_top + r.size.y
+	c.pivot_offset = Vector2.ZERO
+	c.scale = Vector2.ONE * DOCK_UI_SCALE
 
 
 func _layout_player_dock() -> void:
@@ -915,54 +992,69 @@ func _layout_player_dock() -> void:
 	var cluster: Control = get_node_or_null("CharacterCluster")
 	if bar == null or cluster == null or not is_instance_valid(dock_frame):
 		return
-	var sc: float = DOCK_SCALE
-	bar.scale = Vector2.ONE * SKILLBAR_BASE_SCALE * sc
-	var k: float = bar.scale.x
-	## Yerel (küçültmesiz) ölçüler - eski yerleşimin aynısı; ekrandaki boyut = yerel x sc.
-	var row_w: float = maxf((_icons_hi.x - _icons_lo.x) * SKILLBAR_BASE_SCALE, 200.0)
-	var row_h: float = maxf((_icons_hi.y - _icons_lo.y) * SKILLBAR_BASE_SCALE, 40.0)
-	var content_h: float = row_h + DOCK_ROW_GAP + DOCK_HP_H + DOCK_BAR_GAP + DOCK_SHIELD_H
-	var dock_h: float = DOCK_PAD_TOP + content_h + DOCK_PAD_BOTTOM
-	var dock_w: float = DOCK_PAD_X + DOCK_PORTRAIT + DOCK_PORTRAIT_GAP + row_w + DOCK_PAD_X
-	var x0: float = roundf(-dock_w * sc * 0.5)
-	var y1: float = -DOCK_BOTTOM_MARGIN
-	var y0: float = roundf(y1 - dock_h * sc)
-	_dock_place(dock_frame, Rect2(x0, y0, dock_w * sc, y1 - y0))
-	_dock_place(cluster, Rect2(x0, y0, dock_w, dock_h))
-	cluster.pivot_offset = Vector2.ZERO
-	cluster.scale = Vector2.ONE * sc
+	## Yetenek yuvaları SkillBar.scale ile 52 birim -> DOCK_SKILL_PX (64) px; gerisi ölçeksiz ekran pikseli.
+	var k: float = DOCK_SKILL_PX / SPIRIT_ICON_BASE_SIZE
+	bar.scale = Vector2.ONE * k * DOCK_UI_SCALE
+	var dock_w: float = DOCK_CONTENT_X + _dock_row_px + DOCK_HEARTS_GAP + DOCK_HEARTS_SIZE.x + DOCK_PAD_RIGHT
+	var legend_w: float = (LegendSlotsScript.PANEL_SIZE.x - DOCK_LEGEND_OVERLAP) if is_instance_valid(dock_legend) else 0.0
+	var x0: float = roundf(-(dock_w + legend_w) * 0.5)
+	var y0: float = -DOCK_BOTTOM_MARGIN - DOCK_H
+	_dock_place(dock_frame, Rect2(x0, y0, dock_w, DOCK_H))
+	_dock_place(cluster, Rect2(x0, y0, dock_w, DOCK_H))
 
-	## Yetenek yuvaları: dock'un sağ üst bölümü (SkillBar ölçekli; yerel ikon dizisi _icons_lo'dan başlar).
-	var sx: float = x0 + (DOCK_PAD_X + DOCK_PORTRAIT + DOCK_PORTRAIT_GAP) * sc
-	var sy: float = y0 + DOCK_PAD_TOP * sc
 	bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bar.offset_left = sx - _icons_lo.x * k
-	bar.offset_top = sy - _icons_lo.y * k
+	bar.offset_left = (x0 + DOCK_CONTENT_X - _icons_lo.x * k) * DOCK_UI_SCALE
+	bar.offset_top = (y0 + DOCK_PAD_TOP - _icons_lo.y * k) * DOCK_UI_SCALE
 	bar.offset_right = bar.offset_left + maxf(_icons_hi.x, 1.0)
 	bar.offset_bottom = bar.offset_top + maxf(_icons_hi.y, 1.0)
+	var small_y: float = y0 + DOCK_PAD_TOP + (DOCK_SKILL_PX - DOCK_SMALL_PX) * 0.5
+	if is_instance_valid(dock_divider):
+		_dock_place(dock_divider, Rect2(x0 + DOCK_CONTENT_X + _dock_divider_px, y0 + DOCK_PAD_TOP + 6.0, 2.0, DOCK_SKILL_PX - 12.0))
+	if is_instance_valid(dock_pet):
+		_dock_place(dock_pet, Rect2(x0 + DOCK_CONTENT_X + _dock_pet_px, small_y, DOCK_SMALL_PX, DOCK_SMALL_PX))
 
-	## Portre + seviye rozeti (küme yerel koordinatı = dock sol üstü). Rozet dock'un içinde kalsın.
-	var py: float = maxf(4.0, dock_h - 4.0 - DOCK_PORTRAIT - DOCK_BADGE_OVERHANG)
-	py = minf(py, DOCK_PAD_TOP - 4.0)
-	var fo := Vector2(DOCK_PAD_X, py)
-	_cluster_rect(cluster, "PortraitFrame", Rect2(fo, Vector2(DOCK_PORTRAIT, DOCK_PORTRAIT)))
-	_cluster_rect(cluster, "PortraitClip", Rect2(fo + Vector2(12, 12), Vector2(72, 72)))
-	_cluster_rect(cluster, "LevelBadge", Rect2(fo + Vector2(22, 70), Vector2(52, 52)))
-	_cluster_rect(cluster, "LevelLabel", Rect2(fo + Vector2(22, 70), Vector2(52, 52)))
+	## Portre (çerçeve 96 -> 84 px; kırpma kutusu aynı oranla ölçeklenir) + seviye rozeti.
+	var pk: float = DOCK_PORTRAIT / 96.0
+	_cluster_rect(cluster, "PortraitFrame", Rect2(DOCK_PORTRAIT_POS, Vector2(DOCK_PORTRAIT, DOCK_PORTRAIT)))
+	_cluster_rect(cluster, "PortraitClip", Rect2((DOCK_PORTRAIT_POS + Vector2(12, 12) * pk).round(), Vector2(72, 72)))
+	var clip: Control = cluster.get_node_or_null("PortraitClip") as Control
+	if clip:
+		clip.pivot_offset = Vector2.ZERO
+		clip.scale = Vector2.ONE * pk
+	_cluster_rect(cluster, "LevelBadge", DOCK_BADGE_RECT)
+	_cluster_rect(cluster, "LevelLabel", DOCK_BADGE_RECT)
 
-	## Can + kalkan: yetenek dizisinin altında, onunla aynı genişlikte.
-	var bx: float = DOCK_PAD_X + DOCK_PORTRAIT + DOCK_PORTRAIT_GAP
-	var by: float = DOCK_PAD_TOP + row_h + DOCK_ROW_GAP
+	## Can + kalkan: içerik genişliğince; ikon solda, sayı çubuğun sağ ucunda.
+	var bar_w: float = dock_w - DOCK_CONTENT_X - DOCK_BAR_RIGHT
 	if dock_hp_bar:
-		dock_hp_bar.position = Vector2(bx, by)
-		dock_hp_bar.size = Vector2(row_w, DOCK_HP_H)
-		dock_hp_bar.set("font_size", DOCK_HP_FONT)
+		dock_hp_bar.position = Vector2(DOCK_CONTENT_X, DOCK_HP_Y)
+		dock_hp_bar.size = Vector2(bar_w, DOCK_HP_H)
+		dock_hp_bar.set("icon_kind", "heart")
+		dock_hp_bar.set("merged", true)
+		dock_hp_bar.queue_redraw()
 	if dock_shield_bar:
-		dock_shield_bar.position = Vector2(bx, by + DOCK_HP_H + DOCK_BAR_GAP)
-		dock_shield_bar.size = Vector2(row_w, DOCK_SHIELD_H)
-		dock_shield_bar.set("font_size", DOCK_SHIELD_FONT)
+		dock_shield_bar.position = Vector2(DOCK_CONTENT_X, DOCK_SHIELD_Y)
+		dock_shield_bar.size = Vector2(bar_w, DOCK_SHIELD_H)
+		dock_shield_bar.set("icon_kind", "shield")
+		dock_shield_bar.set("value_color", SHIELD_VALUE_COLOR)
+		dock_shield_bar.set("merged", true)
+		dock_shield_bar.queue_redraw()
 
-	_layout_hearts_tab(x0, y0)
+	## Kalpler + sayaç levhası: üst sıranın sağ ucu.
+	if revive_hearts:
+		if revive_hearts.has_method("set_dock_mode"):
+			revive_hearts.set_dock_mode(true)
+		_dock_place(revive_hearts, Rect2(Vector2(x0 + dock_w - DOCK_PAD_RIGHT - DOCK_HEARTS_SIZE.x, y0 + DOCK_HEARTS_TOP), DOCK_HEARTS_SIZE))
+	if is_instance_valid(dock_legend):
+		_dock_place(dock_legend, Rect2(Vector2(x0 + dock_w - DOCK_LEGEND_OVERLAP, y0 + DOCK_LEGEND_TOP), LegendSlotsScript.PANEL_SIZE))
+	## Mini stat paneli: sağ kenarı ana panelin altına girer, ALTI efsanevi panelin altıyla hizalı (sekmeler üstte). Açılınca dock
+	## yeniden ORTALANMAZ (yerinden zıplamasın) - panel sola doğru açılır.
+	if is_instance_valid(dock_stats):
+		var ns: Vector2 = StatPanelScript.node_size()
+		var legend_bottom: float = y0 + DOCK_LEGEND_TOP + LegendSlotsScript.PANEL_SIZE.y
+		_dock_place(dock_stats, Rect2(Vector2(x0 - ns.x + DOCK_LEGEND_OVERLAP, legend_bottom - ns.y), ns))
+	if is_instance_valid(dock_stats_toggle):
+		_dock_place(dock_stats_toggle, Rect2(Vector2(x0, y0) + DOCK_STATS_TOGGLE_RECT.position, DOCK_STATS_TOGGLE_RECT.size))
 
 
 ## ---------------------------------------------------------------- TELEFON HUD'u (bkz. mobile_ui.gd)
@@ -1017,8 +1109,6 @@ func _setup_mobile_hud() -> void:
 		return
 	if is_instance_valid(dock_frame):
 		dock_frame.visible = false
-	if is_instance_valid(hearts_tab):
-		hearts_tab.visible = false
 	var cluster: Control = get_node_or_null("CharacterCluster")
 	if cluster:
 		for n: String in ["PortraitFrame", "PortraitClip"]:
@@ -1124,7 +1214,7 @@ func _make_mobile_button(n: String, text: String) -> Button:
 	b.focus_mode = Control.FOCUS_NONE
 	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_theme_font_size_override("font_size", 26)
-	ShopPanel._apply_wood_button_style(b)
+	UIKit.style_button(b, "hud")
 	add_child(b)
 	return b
 
@@ -1554,23 +1644,6 @@ func _cluster_rect(cluster: Control, n: String, r: Rect2) -> void:
 	c.offset_bottom = r.end.y
 
 
-## Kalpler portrenin üstünde küçük sekmede; yenilenme sayacı görünürken sekme sağa genişler (sayaç kalplerin yanında).
-func _layout_hearts_tab(x0: float, y0: float) -> void:
-	if not is_instance_valid(hearts_tab) or revive_hearts == null:
-		return
-	_hearts_tab_wide = revive_hearts.has_method("is_regen_visible") and bool(revive_hearts.is_regen_visible())
-	## Panelle aynı oranda küçülür (DOCK_SCALE).
-	var sc: float = DOCK_SCALE
-	var w: float = roundf((HEARTS_TAB_W + (HEARTS_TAB_TIMER_W if _hearts_tab_wide else 0.0)) * sc)
-	var h: float = roundf(HEARTS_TAB_H * sc)
-	var tx: float = x0 + roundf(10.0 * sc)
-	var tb: float = y0 + roundf(HEARTS_TAB_OVERLAP * sc)
-	_dock_place(hearts_tab, Rect2(tx, tb - h, w, h))
-	_dock_place(revive_hearts, Rect2(tx + roundf(8.0 * sc), tb - h + roundf(5.0 * sc), 90.0, 32.0))
-	revive_hearts.pivot_offset = Vector2.ZERO
-	revive_hearts.scale = Vector2.ONE * sc
-
-
 ## Kullanıcı isteği (2026-09-22): "bufflar solda debufflar sağda görünmeli" - iki HBoxContainer, biri sola
 ## yaslı (soldan sağa büyür), biri sağa yaslı (sağdan sola büyür); ability_bar_frame'in TAM ÜSTÜNE, onunla AYNI
 ## genişlikte oturur (bkz. _update_status_bar_layout).
@@ -1622,7 +1695,7 @@ func _update_status_bar_layout() -> void:
 	var w: float = _icons_hi.x - _icons_lo.x
 	status_bar.offset_left = _icons_lo.x
 	status_bar.offset_right = _icons_hi.x
-	status_bar.offset_bottom = _icons_lo.y - (DOCK_PAD_TOP * DOCK_SCALE + 6.0) / k
+	status_bar.offset_bottom = _icons_lo.y - (DOCK_PAD_TOP + 6.0) / k
 	status_bar.offset_top = status_bar.offset_bottom - STATUS_ROW_HEIGHT
 	if status_buff_row:
 		status_buff_row.offset_left = 0.0
@@ -1765,8 +1838,8 @@ func _setup_portrait() -> void:
 			portrait.texture = tex
 			_fit_portrait_pixel_perfect(tex)
 	_add_portrait_backdrop()
-	## Seviye rozeti artık parşömen içli (tools/gen_ui_kit.py level_badge) - rakam koyu kahve, kontursuz.
-	level_label.add_theme_color_override("font_color", UIKit.C_TEXT)
+	## Seviye rozeti altın halka + koyu yüz (tools/gen_hud_tema.py) - rakam açık, kontursuz.
+	level_label.add_theme_color_override("font_color", HudTheme.TEXT)
 	level_label.add_theme_constant_override("outline_size", 0)
 
 
@@ -2255,9 +2328,12 @@ func _position_debug_button() -> void:
 
 
 func _unlock_debug_mode() -> void:
+	var first: bool = not GameManager.debug_mode_unlocked
 	GameManager.debug_mode_unlocked = true
 	if _debug_button:
 		_debug_button.visible = true
+	if first:
+		NetworkManager.announce_debug_action("DEBUG MODUNU AÇTI (her şey açık)")
 
 
 ## main.gd _on_chat_message_received tarafından (hem yerel yankı hem uzak
@@ -2326,9 +2402,6 @@ func _process(delta: float) -> void:
 			if get_tree().current_scene and get_tree().current_scene.get_node_or_null("EnemyWorldBridge") != null:
 				fps_label.text += " | C++ yaratık"
 	_update_status_bar()
-	if is_instance_valid(hearts_tab) and revive_hearts and revive_hearts.has_method("is_regen_visible") \
-			and bool(revive_hearts.is_regen_visible()) != _hearts_tab_wide:
-		_layout_player_dock()
 	_shop_refresh_timer += delta
 	if _shop_refresh_timer > 0.4:
 		_shop_refresh_timer = 0.0

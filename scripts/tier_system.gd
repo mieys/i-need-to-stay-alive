@@ -71,7 +71,8 @@ static func lifesteal_percent_for_tier(tier: int) -> float:
 ## Kullanıcı isteği (2026-09-25): "tier 1: 15, tier 2: 24, tier 3: 30, tier 4: 38" - level atlama kartındaki "Can"
 ## (max_health) paylaşılan x1.3 tier eğrisinden çıkarıldı, elle verilen merdiven. player.gd apply_upgrade "max_health"
 ## dalı VE level_up_screen.gd _scaled_desc_value (kartta gösterilen sayı) İÇİN TEK kaynak - lifesteal ile aynı desen.
-const HEALTH_CARD_BY_TIER := [15.0, 24.0, 30.0, 38.0]
+## 2026-10-14 (kullanıcı: "can miktarları çok düşük"): 15/24/30/38 -> 20/35/50/70.
+const HEALTH_CARD_BY_TIER := [20.0, 35.0, 50.0, 70.0]
 
 static func health_card_for_tier(tier: int) -> float:
 	return HEALTH_CARD_BY_TIER[clampi(tier, 1, HEALTH_CARD_BY_TIER.size()) - 1]

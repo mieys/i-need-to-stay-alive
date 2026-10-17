@@ -18,6 +18,7 @@ extends RefCounted
 ##    KENDİ makinesinde player.gd take_special_damage (yanma/kalkan x2 gibi özel kurallar orada uygulanır).
 ## ==============================================================================
 
+const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
 const FxScript := preload("res://scripts/fx_enemy_ability.gd")
 const MinotaurChargeScript := preload("res://scripts/minotaur_charge.gd")
 const PumpkinBossScript := preload("res://scripts/pumpkin_boss.gd")
@@ -93,6 +94,8 @@ const ACID_DAMAGE_MULT := 0.5
 
 ## Oyuncu gövde yarıçapı (enemy.gd PLAYER_BODY_RADIUS ile aynı mertebe) - alan/çizgi isabet toleransı.
 const TARGET_BODY_RADIUS := 12.0
+const ENTRY_DELAY_MIN := 0.3 ## menzil/bekleme hazır olduktan sonra rastgele ek gecikme (lazer, ateş topu, diken)
+const ENTRY_DELAY_MAX := 3.5
 
 var e: Node2D = null ## sahip yaratık (Enemy)
 var family: String = ""
@@ -100,6 +103,7 @@ var _cd: float = 0.0
 var _timer: float = 0.0
 var _pending: float = -1.0
 var _vision_check: float = 0.0
+var _entry_delay: float = -1.0 ## menzile girince/bekleme bitince yeteneği hemen atmayıp rastgele bekleme (toplu yığılma olmasın)
 var _minotaur = null ## MinotaurCharge (RefCounted) - sadece "minotaur" ailesinde
 var _boss_kit = null ## PumpkinBoss / PumpkinMinions (RefCounted) - "balkabagi" / "kabak" / "yarasa" ailelerinde (2026-10-09)
 
@@ -285,6 +289,9 @@ func _process_laser(delta: float, player: Node2D, dist: float) -> void:
 	if _cd > 0.0:
 		return
 	if not _valid_target(player) or dist > LASER_TRIGGER_RANGE:
+		_entry_delay = -1.0
+		return
+	if not _entry_gate(delta):
 		return
 	if not bool(e.call("_has_line_of_sight", player)):
 		_cd = 0.5
@@ -297,10 +304,11 @@ func _process_laser(delta: float, player: Node2D, dist: float) -> void:
 	e.set("_ranged_timer", maxf(float(e.get("_ranged_timer")), LASER_WARN_TIME + LASER_FIRE_TIME + 0.2))
 	e.call("_update_facing", dir)
 	e.call("_play_ability_attack_anim")
-	var data: Dictionary = {"dir": dir, "length": length, "warn": LASER_WARN_TIME, "fire": LASER_FIRE_TIME}
+	var data: Dictionary = {"dir": dir, "length": length, "warn": LASER_WARN_TIME, "fire": LASER_FIRE_TIME, "src": _net_id()}
 	spawn_world_fx(e.get_tree(), "laser", e.global_position, data, true, e, dmg)
 	_broadcast_world_fx("laser", e.global_position, data)
 	_cd = randf_range(LASER_COOLDOWN_MIN, LASER_COOLDOWN_MAX)
+	_entry_delay = -1.0
 
 
 # ---------------------------------------------------------------------------------------------------- iblis
@@ -309,6 +317,9 @@ func _process_fireball(delta: float, player: Node2D, dist: float) -> void:
 	if _cd > 0.0:
 		return
 	if not _valid_target(player) or dist > FIREBALL_RANGE:
+		_entry_delay = -1.0
+		return
+	if not _entry_gate(delta):
 		return
 	if not bool(e.call("_has_line_of_sight", player)):
 		_cd = 0.5
@@ -322,6 +333,7 @@ func _process_fireball(delta: float, player: Node2D, dist: float) -> void:
 	spawn_world_fx(e.get_tree(), "fireball", pos, data, true, e, dmg)
 	_broadcast_world_fx("fireball", pos, data)
 	_cd = randf_range(FIREBALL_COOLDOWN_MIN, FIREBALL_COOLDOWN_MAX)
+	_entry_delay = -1.0
 
 
 # ---------------------------------------------------------------------------------------------------- ağaç
@@ -330,6 +342,9 @@ func _process_thorns(delta: float, player: Node2D, dist: float) -> void:
 	if _cd > 0.0:
 		return
 	if not _valid_target(player) or dist > THORNS_RANGE:
+		_entry_delay = -1.0
+		return
+	if not _entry_gate(delta):
 		return
 	if not bool(e.call("_has_line_of_sight", player)):
 		_cd = 0.5
@@ -337,19 +352,45 @@ func _process_thorns(delta: float, player: Node2D, dist: float) -> void:
 	var pos: Vector2 = player.global_position
 	var dmg: float = float(e.get("contact_damage"))
 	e.call("_play_ability_attack_anim")
-	var data: Dictionary = {"warn": THORNS_WARN_TIME, "radius": THORNS_RADIUS}
+	var data: Dictionary = {"warn": THORNS_WARN_TIME, "radius": THORNS_RADIUS, "src": _net_id()}
 	spawn_world_fx(e.get_tree(), "thorns", pos, data, true, e, dmg)
 	_broadcast_world_fx("thorns", pos, data)
 	_cd = THORNS_COOLDOWN + randf() * THORNS_COOLDOWN_RANDOM_EXTRA
+	_entry_delay = -1.0
 
 
 # ---------------------------------------------------------------------------------------------------- ortak
+## Bekleme bitmiş + hedef menzilde: ilk kez hazır olunca rastgele bir gecikme çekilir, dolunca true döner. Menzilden çıkınca
+## çağıran _entry_delay'i -1'e sıfırlar. Böylece aynı anda menzile giren yaratıklar yeteneği aynı karede atmaz.
+func _entry_gate(delta: float) -> bool:
+	if _entry_delay < 0.0:
+		_entry_delay = randf_range(ENTRY_DELAY_MIN, ENTRY_DELAY_MAX)
+	_entry_delay -= delta
+	return _entry_delay <= 0.0
+
+
 func _broadcast_enemy_vfx(kind: String, data: Dictionary) -> void:
 	if not (NetworkManager.is_multiplayer_active and NetworkManager.is_host):
 		return
 	var net_id: int = int(e.get_meta("network_enemy_id", 0))
 	if net_id > 0:
 		NetworkManager.broadcast_enemy_vfx.rpc(net_id, kind, data)
+
+
+func _net_id() -> int:
+	return int(e.get_meta("network_enemy_id", 0))
+
+
+## Uyarısı süren büyünün (lazer, diken) sahibi donmuş/sersemlemiş mi? Öyleyse büyü ateşlenmeden iptal olur ("donan düşman
+## hiçbir şey yapamaz"). Host'ta source düğümünden; istemcide source yok - data.src (ağ kimliği) ile kukla bulunur, onun
+## donma/sersemletme görseline bakılır (host ayrıca iptal yayınlamaz, iki taraf aynı kuralı kendi uygular).
+static func caster_disabled(source: Node2D, data: Dictionary) -> bool:
+	var c: Node = source
+	if c == null and NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		var id: int = int(data.get("src", 0))
+		if id > 0:
+			c = NetworkManager.find_enemy_by_net_id(id)
+	return c != null and is_instance_valid(c) and c.has_method("is_incapacitated_now") and c.is_incapacitated_now()
 
 
 static func _broadcast_world_fx(kind: String, pos: Vector2, data: Dictionary) -> void:
@@ -481,7 +522,7 @@ static func dome_owner_at(tree: SceneTree, pos: Vector2, margin: float = 0.0) ->
 		var pn := p as Node2D
 		if pn == null or pn.get("paladin_zone_active") != true:
 			continue
-		if pos.distance_to(pn.global_position) <= float(pn.get("paladin_zone_radius")) + margin:
+		if PaladinDome.contains(pn.global_position, float(pn.get("paladin_zone_radius")), pos, margin):
 			return pn
 	return null
 
@@ -502,7 +543,7 @@ static func clip_ray_to_domes(tree: SceneTree, origin: Vector2, dir: Vector2, ma
 	while d < max_len:
 		var pt: Vector2 = origin + dir * d
 		for dome: Array in domes:
-			if pt.distance_to(dome[0]) <= float(dome[1]):
+			if PaladinDome.contains(dome[0], float(dome[1]), pt):
 				return maxf(d - step * 0.5, step)
 		d += step
 	return max_len

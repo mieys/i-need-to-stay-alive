@@ -18,6 +18,7 @@ const BAR_TICK_COUNT := 10
 const BarUnder := preload("res://assets/ui/kit/hud_bar_under.png")
 const BarFill := preload("res://assets/ui/kit/hud_bar_fill.png")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const HudTheme := preload("res://scripts/hud_theme.gd") ## madde 207: görev satırları koyu HUD temasında
 const ARROW_BOX := 40.0
 const FS_ROW := 24 ## m5x7 3x (keskin; 16 1080p'de okunmuyor)
 ## Mesafe gösterimi: 10 dünya birimi = 1 m (oyuncu ~8 m/sn koşar).
@@ -37,8 +38,8 @@ class ArrowBox extends Control:
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
-		draw_rect(r, Color("#3a2212"))
-		draw_rect(r.grow(-2.0), Color("#5a361d"))
+		draw_rect(r, HudTheme.OUTLINE)
+		draw_rect(r.grow(-2.0), HudTheme.INSET)
 		var c: Vector2 = size * 0.5
 		if hidden_location:
 			var f: Font = get_theme_default_font()
@@ -47,7 +48,7 @@ class ArrowBox extends Control:
 			draw_string(f, Vector2(c.x - ts.x * 0.5, c.y + ts.y * 0.3), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 			return
 		if inside:
-			draw_rect(Rect2(c - Vector2(5, 5), Vector2(10, 10)), Color("#3a2212"))
+			draw_rect(Rect2(c - Vector2(5, 5), Vector2(10, 10)), HudTheme.OUTLINE)
 			draw_rect(Rect2(c - Vector2(3, 3), Vector2(6, 6)), Color("#7fd04a"))
 			return
 		if dir == Vector2.ZERO:
@@ -212,8 +213,8 @@ func upsert(id: int, title: String, is_warning: bool) -> void:
 	var row: Dictionary = _rows[id]
 	row["title"] = title
 	row["remaining"] = -1.0 ## yeni aşama - main.gd hemen ardından set_countdown ile yeniden kurar
-	(row["label"] as Label).add_theme_color_override("font_color", UIKit.C_BAD if is_warning else UIKit.C_TEXT)
-	(row["time"] as Label).add_theme_color_override("font_color", UIKit.C_BAD if is_warning else UIKit.C_TEXT_DIM)
+	(row["label"] as Label).add_theme_color_override("font_color", HudTheme.BAD if is_warning else HudTheme.TEXT)
+	(row["time"] as Label).add_theme_color_override("font_color", HudTheme.BAD if is_warning else HudTheme.DIM)
 	(row["arrow"] as ArrowBox).color = Color("#9cc8ff") if is_warning else Color("#e0aa3e")
 	_refresh_label(id)
 
@@ -223,7 +224,7 @@ func _small_label(align: HorizontalAlignment) -> Label:
 	l.horizontal_alignment = align
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.add_theme_font_size_override("font_size", FS_ROW)
-	l.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
+	l.add_theme_color_override("font_color", HudTheme.DIM)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
 
@@ -231,7 +232,7 @@ func _small_label(align: HorizontalAlignment) -> Label:
 func _build_row(id: int) -> void:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(ROW_WIDTH, 0.0)
-	panel.add_theme_stylebox_override("panel", UIKit.panel_style("plaque"))
+	panel.add_theme_stylebox_override("panel", UIKit.panel_style("hud_plaque"))
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var margin := MarginContainer.new()
 	for side in ["left", "right"]:
@@ -259,7 +260,7 @@ func _build_row(id: int) -> void:
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.clip_text = true
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	label.add_theme_color_override("font_color", UIKit.C_TEXT)
+	label.add_theme_color_override("font_color", HudTheme.TEXT)
 	top.add_child(label)
 	var dist := _small_label(HORIZONTAL_ALIGNMENT_RIGHT)
 	## 2. satır: ilerleme çubuğu + kalan süre
@@ -268,7 +269,7 @@ func _build_row(id: int) -> void:
 	v.add_child(bottom)
 	## İlerleme: kitin gömme çerçevesi içinde HUD çubuk dokusu (bkz. BAR_HEIGHT üstündeki not).
 	var bar_bg := PanelContainer.new()
-	bar_bg.add_theme_stylebox_override("panel", UIKit.panel_style("inset_tight"))
+	bar_bg.add_theme_stylebox_override("panel", UIKit.panel_style("hud_inset_tight"))
 	bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar_bg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -299,7 +300,7 @@ func _build_row(id: int) -> void:
 	## Toplama görevi: çubuk yerine sayı (bkz. set_count_mode) - aynı yerde, kalın altın yazı.
 	var count_label := _small_label(HORIZONTAL_ALIGNMENT_LEFT)
 	count_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	count_label.add_theme_color_override("font_color", UIKit.C_GOLD)
+	count_label.add_theme_color_override("font_color", HudTheme.PRICE)
 	count_label.visible = false
 	bottom.add_child(count_label)
 	bottom.add_child(dist)

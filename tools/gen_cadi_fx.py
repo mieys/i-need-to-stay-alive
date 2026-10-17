@@ -2,8 +2,9 @@
 
 Kullanıcı isteği (2026-10-13): yeni karakter Cadı; "pixel art birçok efektin yapılıp spritesheet haline getirilmesi
 gerekiyor, eklemeden önce bana göster". Tasarımlar prototip turlarında onaylandı (tools/proto_20261013/out/cadi_*.gif):
-  Q  Zehirli Duman   potion (eğik şişe, döngü) + stream (ağızdan dökülen duman, döngü) + smoke (yerde kalan bulut:
-                     intro / loop / outro). 1. tur koyu yeşil duman "çalı gibi" durdu -> soluk sarı-yeşil, KONTURSUZ, dither.
+  Q  Zehirli Duman   potion (şişe: loop = 45 derece eğik, down = ağzı aşağı) + stream (ağızdan dökülen duman, aynı iki
+                     duruş) + smoke (bulut: intro / loop / outro). 1. tur koyu yeşil duman "çalı gibi" durdu, 2. tur
+                     soluk dither bulut "pek duman gibi değil" bulundu -> TEMİZ, mor gölgeli "Kabaran Duman" (bkz. Q bölümü).
   E  Süpürge         broom_side (sola bakan, satır = yolcu sayısı 0..7; sağ = aynalanır), broom_vert (aşağı: öne uzanan
                      sap / yukarı: sarkan saman - DÜZ; çapraz hali "yamuk" bulundu), poof (biniş dumanı), spark (iz parıltısı)
   R  İksirler        bottles (5 şişe x 4 takla karesi), shatter (kırılma sıçraması), boom (3. iksir patlaması) ve 4 alan
@@ -181,27 +182,64 @@ def save_strip(name, frames):
 
 
 # ====================================================================== Q: uçan zehir şişesi + duman
+# 2026-10-13 yeniden tasarım (kullanıcı: "zehirli duman pek duman gibi değil ... parazitli olmayan"): prototip turları
+# tools/proto_20261013/cadi_duman_proto.py (A-D noktalı, E-H temiz) -> seçilen F "Kabaran Duman": TEMİZ (dither/gürültü
+# yok), toplar ressam sırasıyla tam daire, 4 düz ton, alt gölge MOR, içte açık renk hacim yayları; sönüş = toplar sırayla
+# küçülür. Oyunda yaratıkların ÜSTÜNDE, bulut başına %50 saydam çizilir (cadi_smoke.gd).
 POT_W, POT_H = 24, 24
-POT_CX, POT_CY = 13.5, 9.5  # gövde merkezi; ağız = merkez + (-8.1, +8.1) (sol alta 45 derece eğik: dumanı DÖKER)
-ST_W, ST_H = 34, 30
-ST_MX, ST_MY = 27.0, 5.0  # akış sayfasında şişe ağzının yeri; duman buradan sol alta (-18, +18) iner
+POT_MOUTH = 11.4  # ağız = gövde merkezi + eksen x 11.4
+# Şişe iki duruşta: 'side' ağzı sol alta 45 derece (sağa bakarken; sola bakarken aynalanır), 'down' ağzı dümdüz aşağı
+# (yukarı/aşağı bakarken şişe cadının TAM arkasında durur; çapraz çizilen şey o bakışta "yamuk" duruyor).
+POT_POSES = {'side': ((13.5, 9.5), (-0.70711, 0.70711)), 'down': ((12.0, 8.5), (0.0, 1.0))}
+POT_CX, POT_CY = POT_POSES['side'][0]
+POT_DROP = (-12.0, 26.0)  # 'side': dumanın yere indiği nokta gövde merkezine göre; 'down': (0, 26)
+ST_W, ST_H = 24, 32
+# Akış sayfasında ağzın yeri + ağızdan yere iniş vektörü (= POT_DROP - ağız)
+ST_POSES = {'side': ((15.0, 5.0), (-3.94, 17.94)), 'down': ((12.0, 5.0), (0.0, 14.6))}
+# [-, alt gölge (mor: çimenden/çalıdan ayırır), orta, gövde, ışık]
+SMKF = [None, (116, 92, 152), (148, 186, 110), (194, 224, 144), (232, 247, 192)]
+SMOKE_SQ = 0.92  # topların dikey basıklığı
 
 
-def q_potion_frames():
-    """Zehir şişesi: ağzı sol alta bakacak şekilde 45 derece eğik durur (sağa yürürken; sola yürürken aynalanır).
-    Sıvı dünyaya göre yatay kalır, boyun dolu - duman ağızdan dökülür (bkz. q_stream_frames)."""
+def clean_cloud(cv, puffs, pal, scallop=False, under=2, shade=6, min_r=4.0, rim=(2, 1)):
+    """Temiz duman kütlesi. puffs: (x, y, r) ressam sırasıyla (ilk = en arkada). Gölge top başına DEĞİL kütlenin
+    bütününe göre (top başına parlaklık + hilal "baloncuk yığını" gibi durdu): gövde tek ton, sol-üst kenarda ışık bandı,
+    altta 2 kademe gölge. scallop: öndeki her topun sol-üst kenarı da ışık alır (kütlenin içinde açık yaylar = hacim).
+    min_r'den küçük top çizilmez (serpme piksel = "parazit")."""
+    X, Y = cv.grid()
+    sil = np.zeros((cv.h, cv.w), bool)
+    tone = np.zeros((cv.h, cv.w), np.uint8)
+    for (x, y, r) in puffs:
+        if r < min_r:
+            continue
+        disc = (X - x) ** 2 + ((Y - y) / SMOKE_SQ) ** 2 <= r * r
+        tone[disc] = 3
+        if scallop and r >= 5.0:
+            tx, ty = 0.06 * r + 0.5, 0.11 * r + 0.9
+            tone[disc & ~((X - (x + tx)) ** 2 + ((Y - (y + ty)) / SMOKE_SQ) ** 2 <= r * r)] = 4
+        sil |= disc
+    tone[sil & ~np.roll(sil, rim, (0, 1))] = 4  # dış sol-üst kenar: ışık bandı (rim = kalınlık: aşağı, sağa)
+    tone[sil & ~np.roll(sil, -shade, 0) & (tone == 3)] = 2  # alt gövde: orta ton
+    tone[sil & ~np.roll(sil, -under, 0)] = 1  # en alt: gölge
+    for k in range(1, 5):
+        cv.put(tone == k, pal[k])
+    return sil
+
+
+def q_potion_frames(pose='side'):
+    """Zehir şişesi (döngü). Sıvı dünyaya göre yatay kalır, boyun dolu - duman ağızdan dökülür (bkz. q_stream_frames)."""
+    (cx, cy), (ax, ay) = POT_POSES[pose]
     frames = []
     for f in range(8):
         t = f / 8
         cv = Canvas(POT_W, POT_H)
         X, Y = cv.grid()
-        cx, cy = POT_CX, POT_CY
         dx, dy = X - cx, Y - cy
-        v = (-dx + dy) * 0.70711  # ağıza doğru
-        u = (dx + dy) * 0.70711  # eksene dik
+        v = dx * ax + dy * ay  # ağıza doğru
+        u = dx * ay - dy * ax  # eksene dik
         body = dx ** 2 + dy ** 2 <= 6.3 ** 2
         neck = (np.abs(u) <= 1.45) & (v >= 5.0) & (v <= 10.2)
-        lip = (np.abs(u) <= 2.5) & (v >= 9.6) & (v <= 11.4)
+        lip = (np.abs(u) <= 2.5) & (v >= 9.6) & (v <= POT_MOUTH)
         glass = body | neck | lip
         cv.put(glass, GLASS_FILL)
         level = cy - 3.0 + dx * 0.14 * math.sin(TAU * t)
@@ -210,7 +248,7 @@ def q_potion_frames():
         cv.put(liq & body & (dx < -1.2) & (dy < 3.0), POISON[3])
         cv.put(liq & body & ~erode(body) & ((dx > 1.0) | (dy > 2.5)), POISON[1])
         cv.put(body & (Y >= level) & (Y < level + 1.0), POISON[4])
-        cv.put(lip & (v > 10.3), SMK[3])
+        cv.put(lip & (v > 10.3), SMKF[3])
         for k in range(2):
             pp = (t + k * 0.5) % 1.0
             by = cy + 4.5 - pp * 5.5
@@ -224,80 +262,88 @@ def q_potion_frames():
     return frames
 
 
-def q_stream_frames():
-    """Şişenin ağzından dökülen duman akışı (döngü): ağızda ince, yere doğru genişler; toplar yol boyunca AKAR.
+def q_stream_frames(pose='side'):
+    """Şişenin ağzından yere inen duman akışı (döngü): ağızda ince, yere doğru büyüyen toplar yol boyunca AKAR.
     Yerdeki bulut bu akışın indiği noktada doğar - duman şişeden çıkıyor görünür."""
+    (mx, my), (fx_, fy) = ST_POSES[pose]
     frames = []
-    n = 6
+    n = 5
     for f in range(8):
         t = f / 8
         cv = Canvas(ST_W, ST_H)
-        circles = []
+        puffs = []
         for k in range(n):
-            sv = (k + t) / n
-            x = ST_MX - 18.0 * sv + math.sin(TAU * (sv * 1.5 + t)) * 0.8
-            y = ST_MY + 18.0 * sv ** 1.2
-            r = (1.7 + 5.6 * sv) * min(1.0, (1.0 - sv) / 0.18 + 0.25)
-            circles.append((x, y, r))
-        soft_cloud(cv, circles, SMK, t, 53, squash=1.0, edge=0.3)
+            s = (k + t) / n
+            puffs.append((mx + fx_ * s + math.sin(TAU * (s + t)) * 0.8, my + fy * s ** 1.15, (1.5 + 3.6 * s) * min(1.0, (1.0 - s) / 0.2 + 0.3)))
+        clean_cloud(cv, puffs, SMKF, under=1, shade=3, min_r=1.0, rim=(1, 1))  # ince akışta kalın ışık bandı her şeyi beyazlatıyordu
         frames.append(cv.rgba.copy())
     return frames
 
 
-SMOKE_W, SMOKE_H = 96, 68
+SMOKE_W, SMOKE_H = 104, 76
+SMOKE_BX, SMOKE_BY = 52.0, 56.0  # top düzeninin başvuru noktası
+SMOKE_OX, SMOKE_OY = 52.0, 53.0  # bulutun ORİJİNİ = zemindeki izin (hasar elipsi) merkezi; duman akışı buraya iner
 SMOKE_IN, SMOKE_LOOP, SMOKE_OUT = 5, 8, 7
 
 
-def _smoke_layout():
-    rng = random.Random(7)
-    items = []
-    n = 7
-    for k in range(n):
-        a = TAU * k / n + rng.uniform(-0.2, 0.2)
-        items.append((math.cos(a) * 23 * rng.uniform(0.8, 1.05), math.sin(a) * 8 * rng.uniform(0.8, 1.1), rng.uniform(8.0, 12.0), rng.random(), rng.random()))
-    for (x, y, r) in ((-9, -4, 14), (10, -6, 15), (0, 2, 12)):
-        items.append((x, y, r, rng.random(), rng.random()))
-    for (x, y, r) in ((-5, -14, 9), (12, -15, 8), (-19, -9, 7)):
-        items.append((x, y, r, rng.random(), rng.random()))
-    return items
+def _shrink(e, k):
+    """Sönüşte toplar SIRAYLA küçülür (k: topa özgü 0..1)."""
+    return max(0.0, min(1.0, 1.0 - (e * 1.55 - k * 0.55))) ** 0.8
 
 
-def smoke_frame(g, t, e, big=1.0):
-    """g büyüme (0..1), t döngü evresi, e sönüş (0..1)."""
-    cv = Canvas(int(SMOKE_W * big), int(SMOKE_H * big))
-    cx, cy = cv.bw / 2.0, cv.bh * 42 / 68.0
-    circles = []
-    for (x, y, r, p1, p2) in _smoke_layout():
-        xx = cx + (x * g + math.cos(TAU * (t + p1)) * 1.8) * big
-        yy = cy + (y * g + math.sin(TAU * (t + p1)) * 1.2 - 7.0 * e) * big
-        rr = r * big * (0.4 + 0.6 * g) * (1.0 + 0.1 * math.sin(TAU * (t + p2))) * (1.0 - 0.3 * e)
-        circles.append((xx, yy, rr))
-    # yükselen küçük buhar topları (aynı kütleye katılır)
+def _smoke_puffs(g, t, e):
+    """Tabanda kütle, ARKASINDAN toplar kopup yükselir ve küçülür (duman hissi buradan geliyor)."""
+    rng = random.Random(5)
+    out = []
     for k in range(3):
-        p = (t + k / 3.0) % 1.0
-        r = (4.2 * (1.0 - p) ** 0.7 + 0.5) * g * (1.0 - e) * big
-        if r > 1.2:
-            circles.append((cx + ((-22, 3, 24)[k] + math.sin(TAU * p + k) * 2.0) * big, cy + (-15 - p * 15) * big, r))
-    soft_cloud(cv, circles, SMK, t, 51, squash=0.82, erosion=e)
-    # patlayan zehir kabarcıkları (mor - cadının rengi; yeşil çimende ve çalılıkta dumanı bitkiden ayırır)
-    if e < 0.4 and g > 0.8:
-        for k, (bx, by) in enumerate(((-16, -3), (11, 3), (23, -6), (-2, -10), (-27, 4))):
-            ph = (int(round(t * 8)) + k * 3) % 8
-            if ph == 0:
-                ppx(cv, cx + bx * big, cy + by * big, TOXIC_MOTE)
-            elif ph == 1:
-                star(cv, int(cx + bx * big), int(cy + by * big), 1, core=WHITE, arm=TOXIC_MOTE)
+        ph, bx, R = (k + rng.random() * 0.5) / 3.0, (-15, 16, 1)[k], rng.uniform(9.0, 10.5)
+        p = (t + ph) % 1.0
+        r = R * (1.0 - p) ** 0.7 * min(1.0, p / 0.18) * g * _shrink(e, ph)
+        out.append((SMOKE_BX + bx * (1.0 - 0.25 * p) * g + math.sin(TAU * (p * 0.8 + ph)) * 2.5, SMOKE_BY - 10 - p * 24.0 * g - 8.0 * e, r))
+    for (x, y, r) in ((-8, -8, 13), (9, -7, 12), (-21, -2, 10), (23, -1, 9), (1, 1, 12)):
+        ph = rng.random()
+        out.append((SMOKE_BX + x * g + math.cos(TAU * (t + ph)) * 1.2, SMOKE_BY + y - 4 + math.sin(TAU * (t + ph)) * 0.8 - 8.0 * e,
+                    r * (0.45 + 0.55 * g) * (1.0 + 0.06 * math.sin(TAU * (t + ph * 2.0))) * _shrink(e, ph)))
+    return out
+
+
+# DİKEY bulut (cadı yukarı/aşağı yürürken): kullanıcı 2026-10-13 "zehir dumanı yukarı ve aşağı pozisyonda kötü oluyor, ona
+# göre bir uyumu yok". Yatay bulut 66 px geniş, 35 px yüksek: yan yana dizilince kesintisiz bir şerit olur ama alt alta
+# (36 px arayla) dizilince geniş "kaburgalar" gibi durur. Dikey bulut DAR ve DERİN bir öbek (48 x 46): alt alta binince
+# cadının arkasında kesintisiz bir sütun olur; sıralar arkadan öne (yukarıdan aşağı) boyanır.
+SMOKE_VOX, SMOKE_VOY = 52.0, 46.0  # dikey bulutun orijini (izin merkezi)
+
+
+def _smoke_puffs_v(g, t, e):
+    rng = random.Random(9)
+    out = []
+    for k in range(2):
+        ph, bx, R = (k + rng.random() * 0.5) / 2.0, (-8, 9)[k], rng.uniform(8.0, 9.5)
+        p = (t + ph) % 1.0
+        r = R * (1.0 - p) ** 0.7 * min(1.0, p / 0.18) * g * _shrink(e, ph)
+        out.append((SMOKE_BX + bx * (1.0 - 0.25 * p) * g + math.sin(TAU * (p * 0.8 + ph)) * 2.0, SMOKE_BY - 24 - p * 20.0 * g - 8.0 * e, r))
+    for (x, y, r) in ((-9, -19, 10), (8, -20, 9), (-14, -8, 11), (13, -9, 11), (0, -12, 12), (-9, 3, 11), (10, 2, 10), (0, 8, 10)):
+        ph = rng.random()
+        out.append((SMOKE_BX + x * g + math.cos(TAU * (t + ph)) * 1.2, SMOKE_BY - 4 + (y + 6) * g - 6 + math.sin(TAU * (t + ph)) * 0.8 - 8.0 * e,
+                    r * (0.45 + 0.55 * g) * (1.0 + 0.06 * math.sin(TAU * (t + ph * 2.0))) * _shrink(e, ph)))
+    return out
+
+
+def smoke_frame(g, t, e, vert=False):
+    """g büyüme (0..1), t döngü evresi, e sönüş (0..1)."""
+    cv = Canvas(SMOKE_W, SMOKE_H)
+    clean_cloud(cv, (_smoke_puffs_v if vert else _smoke_puffs)(g, t, e), SMKF, scallop=True)
     return cv.rgba.copy()
 
 
-def smoke_frames(big=1.0):
+def smoke_frames(vert=False):
     out = {'in': [], 'loop': [], 'out': []}
     for i in range(SMOKE_IN):
-        out['in'].append(smoke_frame(lerp(0.25, 1.0, ease_out((i + 1) / SMOKE_IN)), ((i - SMOKE_IN) % SMOKE_LOOP) / SMOKE_LOOP, 0.0, big))
+        out['in'].append(smoke_frame(lerp(0.25, 1.0, ease_out((i + 1) / SMOKE_IN)), ((i - SMOKE_IN) % SMOKE_LOOP) / SMOKE_LOOP, 0.0, vert))
     for i in range(SMOKE_LOOP):
-        out['loop'].append(smoke_frame(1.0, i / SMOKE_LOOP, 0.0, big))
+        out['loop'].append(smoke_frame(1.0, i / SMOKE_LOOP, 0.0, vert))
     for i in range(SMOKE_OUT):
-        out['out'].append(smoke_frame(1.0, (i % SMOKE_LOOP) / SMOKE_LOOP, (i + 1) / (SMOKE_OUT + 0.6), big))
+        out['out'].append(smoke_frame(1.0, (i % SMOKE_LOOP) / SMOKE_LOOP, (i + 1) / (SMOKE_OUT + 0.6), vert))
     return out
 
 
@@ -1100,49 +1146,52 @@ def char_at(dst, frame, fx_, fy, flip=False):
 # ---------------------------------------------------------------------- Q sahnesi
 def scene_q(walk, potion, stream, smoke):
     Z = 3
-    W, H = 300, 96
     fps = 20
-    speed = 91.0 / fps  # 82 dünya/sn = 91 sanat px/sn
-    n = int(round(W / speed))
+    n = 72  # 3,6 sn: bulut aralığının (8 kare) ve yürüme döngüsünün (12 kare) katı -> dikişsiz
+    W, H = 328, 96
+    speed = W / n  # 4,56 px/kare = 91 sanat px/sn (82 dünya/sn)
     drop_every = 8  # 0,4 sn
-    life = 3.0
-    bot_dx, bot_dy = -20, -30  # şişe gövde merkezi (cadının ayağına göre)
-    land_dx = bot_dx - 8.1 - 18.0  # duman akışının yere indiği nokta = bulutun doğduğu yer
+    life = 3.0  # önizlemede; oyunda 6 sn
+    bot_dx, bot_dy = -15, -27  # şişe gövde merkezi (cadının ayağına göre) - cadi_math.gd POTION_BODY_SIDE_ART
+    land_dx, land_dy = bot_dx + POT_DROP[0], bot_dy + POT_DROP[1]  # duman akışının yere indiği nokta = bulutun orijini
+    (smx, smy), _flow = ST_POSES['side']
+    mouth = POT_MOUTH * 0.70711
     ims = []
     key = None
     for f in range(n):
         dst = grass(W, H)
-        wx = (f * speed) % W
+        wx = (40 + f * speed) % W
         wy = 70
+        bob = round(math.sin(TAU * f / 24.0) * 1.5)
+        for off in (-W, 0, W):
+            shadow(dst, wx + off, wy + 1, 8, 2.6)
+            bcx, bcy = wx + off + bot_dx, wy + bot_dy + bob
+            blit(dst, stream[(f // 2) % 8], bcx - mouth - smx, bcy + mouth - smy, alpha=0.9)
+            blit(dst, potion[(f // 2) % 8], bcx - POT_CX, bcy - POT_CY)
+            char_at(dst, walk[2][(f // 2) % 6], wx + off, wy)
         clouds = []
-        for back in range(0, n * 2, 1):
+        for back in range(n):
             ff = f - back
             if ff % drop_every != 0:
                 continue
             age = back / fps
             if age > life:
                 break
-            clouds.append((age, ((ff * speed) % W) + land_dx))
-        for (age, cxp) in sorted(clouds, reverse=True):
-            fi = int(age * 10)
+            clouds.append((age, ((40 + ff * speed) % W) + land_dx, (ff % n) // drop_every))
+        for (age, cxp, ci) in sorted(clouds, reverse=True):
+            fi = int(age * 10 + 1e-6)
             t_out = life - SMOKE_OUT / 10.0
             if fi < SMOKE_IN:
                 fr = smoke['in'][fi]
             elif age >= t_out:
-                fr = smoke['out'][min(SMOKE_OUT - 1, int((age - t_out) * 10))]
+                fr = smoke['out'][min(SMOKE_OUT - 1, int((age - t_out) * 10 + 1e-6))]
             else:
                 fr = smoke['loop'][(fi - SMOKE_IN) % SMOKE_LOOP]
+            flip = random.Random(ci * 7 + 3).random() < 0.5  # oyunda: bulut başına rastgele aynalama
             for off in (-W, 0, W):
-                blit(dst, fr, cxp + off - SMOKE_W / 2, wy - 42 + 2, alpha=0.8)
-        for off in (-W, 0, W):
-            shadow(dst, wx + off, wy + 1, 8, 2.6)
-            bob = round(math.sin(TAU * f / 24.0) * 1.5)
-            bcx, bcy = wx + off + bot_dx, wy + bot_dy + bob
-            blit(dst, stream[(f // 2) % 8], bcx - 8.1 - ST_MX, bcy + 8.1 - ST_MY, alpha=0.88)
-            blit(dst, potion[(f // 2) % 8], bcx - POT_CX, bcy - POT_CY)
-            char_at(dst, walk[2][(f // 2) % 6], wx + off, wy)
+                blit(dst, fr, cxp + off - SMOKE_OX, wy + land_dy - SMOKE_OY, alpha=0.5, flip=flip)
         im = up(dst, Z)
-        label(im, 8, 6, 'Q · Zehirli Duman  (duman şişenin ağzından dökülür, bulut 3 sn kalır; gerçek yürüme hızı)', 15)
+        label(im, 8, 6, 'Q · Zehirli Duman  (karakterlerin üstünde %50; bulut burada 3 sn, oyunda 6 sn; gerçek yürüme hızı)', 15)
         ims.append(im)
         if f == n // 2:
             key = im
@@ -1330,9 +1379,10 @@ def _grid(name, rows, anims):
 
 def build():
     b = {}
-    b['potion'] = q_potion_frames()
-    b['stream'] = q_stream_frames()
+    b['potion'] = {p: q_potion_frames(p) for p in POT_POSES}
+    b['stream'] = {p: q_stream_frames(p) for p in ST_POSES}
     b['smoke'] = smoke_frames()
+    b['smoke_v'] = smoke_frames(True)
     b['poof'] = poof_frames()
     b['spark_g'], b['spark_m'] = spark_frames(GOLD[2]), spark_frames(MAGIC[3])
     b['bottles'] = [bottle_frames(k, p) for (k, p, _n) in POTIONS]
@@ -1346,10 +1396,11 @@ def write_assets(b):
     """Oyun varlıkları: assets/fx/cadi/<ad>_sheet.png + <ad>_frames.tres, assets/skills/cadi_*_icon.png."""
     os.makedirs(ASSET_DIR, exist_ok=True)
     print('Cadı efekt sayfaları ->', os.path.relpath(ASSET_DIR, PROJECT))
-    _grid('potion', [b['potion']], [('loop', True, 10.0)])
-    _grid('stream', [b['stream']], [('loop', True, 10.0)])
-    sm = b['smoke']
-    _grid('smoke', [sm['in'], sm['loop'], sm['out']], [('intro', False, 10.0), ('loop', True, 10.0), ('outro', False, 10.0)])
+    _grid('potion', [b['potion']['side'], b['potion']['down']], [('loop', True, 10.0), ('down', True, 10.0)])
+    _grid('stream', [b['stream']['side'], b['stream']['down']], [('loop', True, 10.0), ('down', True, 10.0)])
+    sm, sv = b['smoke'], b['smoke_v']
+    _grid('smoke', [sm['in'], sm['loop'], sm['out'], sv['in'], sv['loop'], sv['out']],
+          [('intro', False, 10.0), ('loop', True, 10.0), ('outro', False, 10.0), ('intro_v', False, 10.0), ('loop_v', True, 10.0), ('outro_v', False, 10.0)])
     _grid('poof', [b['poof']], [('default', False, 16.0)])
     _grid('spark', [b['spark_g'], b['spark_m']], [('gold', False, 12.0), ('lilac', False, 12.0)])
     side = [[broom_side(n, f)[BROOM_Y0:BROOM_Y0 + BROOM_H, :] for f in range(4)] for n in range(MAX_PASS + 1)]
@@ -1369,9 +1420,10 @@ def write_assets(b):
         ic.resize((144, 144), Image.NEAREST).save(os.path.join(ICON_DIR, nm + '.png'))
     print('   ikonlar:', ', '.join(nm for nm, _ic in icons))
     # kodun kullandığı ölçüler (scripts/cadi_math.gd ile aynı olmalı)
-    print('   ÖLÇÜ potion gövde merkezi (%.1f, %.1f) / %dx%d, ağız = merkez + (-8.1, +8.1)' % (POT_CX, POT_CY, POT_W, POT_H))
-    print('   ÖLÇÜ stream ağız (%.1f, %.1f) / %dx%d, iniş = ağız + (-18, +18)' % (ST_MX, ST_MY, ST_W, ST_H))
-    print('   ÖLÇÜ smoke bulut merkezi (%.1f, %.1f) / %dx%d' % (SMOKE_W / 2.0, SMOKE_H * 42 / 68.0, SMOKE_W, SMOKE_H))
+    for p in POT_POSES:
+        print('   ÖLÇÜ potion %-4s gövde merkezi %s / %dx%d, ağız = merkez + eksen %s x %.1f; stream ağız %s / %dx%d, iniş = ağız + %s'
+              % (p, POT_POSES[p][0], POT_W, POT_H, POT_POSES[p][1], POT_MOUTH, ST_POSES[p][0], ST_W, ST_H, ST_POSES[p][1]))
+    print('   ÖLÇÜ smoke orijin (%.1f, %.1f), dikey (_v) orijin (%.1f, %.1f) / %dx%d' % (SMOKE_OX, SMOKE_OY, SMOKE_VOX, SMOKE_VOY, SMOKE_W, SMOKE_H))
     print('   ÖLÇÜ zone merkez (%.1f, %.1f) / %dx%d, yarıçap %dx%d px' % (ZCX, ZCY, ZW, ZH, RX, RY))
     print('   ÖLÇÜ boom merkez (%.1f, 88.0) / %dx%d' % (BOOM_W / 2.0, BOOM_W, BOOM_H))
     print('   ÖLÇÜ broom_side: karakter hücresi merkezi sayfa karesinde (%d, %d) / %dx%d; broom_vert: (24, %d) / 48x%d; oturuş %d px aşağı'
@@ -1384,7 +1436,7 @@ def write_previews(b):
     walk, idle = load_game_sheet('cadi', 'walk'), load_game_sheet('cadi', 'idle')
     sit, shrug = load_game_sheet('cadi', 'sit'), load_game_sheet('cadi', 'shrug')
     pass1, pass2 = load_game_sheet('hadime', 'sit'), load_game_sheet('korsan', 'sit')
-    scene_q(walk, b['potion'], b['stream'], b['smoke'])
+    scene_q(walk, b['potion']['side'], b['stream']['side'], b['smoke'])
     scene_e(sit, idle, pass1, pass2, b['poof'], b['spark_g'], b['spark_m'])
     scene_r(idle, shrug, b['bottles'], b['shatters'], b['zones'], b['boom'])
     icons = [icon_passive(), icon_q(), icon_e(), icon_r()] + [icon_r(i) for i in range(5)]

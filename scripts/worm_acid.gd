@@ -6,6 +6,7 @@ extends Node2D
 ## ve değince aynı sıçrama animasyonunu oynar (enemy_fireball.gd ile AYNI desen). Görseller paketin "poison shot" sayfaları (20x21 kare, SAĞA uçar).
 ## Sayılar worm_boss_math.gd'de.
 
+const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
 const MathScript := preload("res://scripts/worm_boss_math.gd")
 const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
 const LOOP_TEX := preload("res://assets/enemies/sandworm/acid_loop.png")
@@ -64,8 +65,7 @@ func _physics_process(delta: float) -> void:
 		return
 	for p in AbilitiesScript.damageable_players(get_tree()):
 		var pn := p as Node2D
-		if "paladin_zone_active" in pn and pn.get("paladin_zone_active") == true \
-				and global_position.distance_to(pn.global_position) <= float(pn.get("paladin_zone_radius")):
+		if PaladinDome.node_contains(pn, global_position):
 			_splash()
 			return
 		if pn.has_method("get_talon_ward_radius"):

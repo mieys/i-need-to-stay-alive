@@ -1,4 +1,5 @@
 shader_type canvas_item;
+#include "res://shaders/harita_renk.gdshaderinc"
 
 // ==================================================
 // SALLANAN OT - Harita > "Shader Eklenecek" > "Çalılar" / "Çalılar1" karo katmanları
@@ -25,6 +26,7 @@ uniform float egri_ussu : hint_range(0.5, 4.0) = 1.6;           // büyük = alt
 // ---------------- RENK ÇEŞİTLİLİĞİ - eski sallantı.gdshader'ın BİREBİR aynısı (aynı ızgara, hash ve formül; değerler
 // harita_baked.tscn'deki eski materyalden) ki otlar eskisi gibi görünsün.
 uniform float plant_grid_size : hint_range(4.0, 64.0) = 56.795;
+// OYUNDA bu yoğunluk/renk kayması değerlerinin bir kısmını scripts/map_color_grade.gd CALM_PARAMS ezer (madde 184, sahnedeki değer değil).
 uniform float hue_shift_amount : hint_range(0.0, 0.2) = 0.064;
 uniform float sat_shift_amount : hint_range(0.0, 0.5) = 0.15;
 uniform float val_shift_amount : hint_range(0.0, 0.5) = 0.0;
@@ -179,4 +181,5 @@ void fragment() {
 		col.rgb = hsv2rgb(hsv);
 	}
 	COLOR = col;
+	COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
 }

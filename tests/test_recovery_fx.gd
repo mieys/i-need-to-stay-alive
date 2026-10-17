@@ -62,12 +62,14 @@ func test_life_and_mana_use_different_art_and_aura_keys() -> void:
 	mana.free()
 
 
-## CLAUDE.md hata sınıfı: iki dosya aynı sahneleri ayrı preload ediyor.
-func test_player_and_remote_player_reference_the_new_scenes_and_no_old_ones() -> void:
+## CLAUDE.md hata sınıfı: iki dosya aynı efekti ayrı kuruyor. 2026-10-17 (madde 212): Melek Q/E dost aurası artık SİHİRLİ
+## BAĞ (melek_bond_fx.gd) - iki dosya da onu kurmalı, Life/Mana Recovery aura'ları (Oakley çiçeğinde kaldı) Melek'te kullanılmaz.
+func test_player_and_remote_player_reference_the_bond_and_no_old_auras() -> void:
 	for path: String in ["res://scripts/player.gd", "res://scripts/remote_player.gd"]:
 		var src: String = _strip_comments(_read(path))
-		assert(src.contains("fx_recovery_life.tscn"), "%s Life sahnesini kullanmalı" % path)
-		assert(src.contains("fx_recovery_mana.tscn"), "%s Mana sahnesini kullanmalı" % path)
+		assert(src.contains("melek_bond_fx.gd"), "%s Melek bağını kurmalı" % path)
+		assert(not src.contains("fx_recovery_life.tscn"), "%s Melek için Life aurası kalmamalı" % path)
+		assert(not src.contains("fx_recovery_mana.tscn"), "%s Melek için Mana aurası kalmamalı" % path)
 		assert(not src.contains("fx_melek_heal_aura.tscn"), "%s eski heal aura sahnesine referans vermemeli" % path)
 		assert(not src.contains("fx_melek_shield_aura.tscn"), "%s eski shield aura sahnesine referans vermemeli" % path)
 

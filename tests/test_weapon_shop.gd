@@ -9,6 +9,8 @@ const Logic := preload("res://scripts/weapon_shop_logic.gd")
 const ScreenScript := preload("res://scripts/weapon_shop_screen.gd")
 const ShopScript := preload("res://scripts/weapon_shop.gd")
 const MobileUIPath := "res://scripts/mobile_ui.gd"
+const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
+const MetaProgressTestScript := preload("res://scripts/meta_progress.gd")
 const InventoryPanelScene: PackedScene = preload("res://scenes/inventory_panel.tscn")
 const ShopPanelScene: PackedScene = preload("res://scenes/shop_panel.tscn")
 
@@ -79,9 +81,11 @@ func _save_state() -> void:
 	GameManager.owned_weapons = []
 	GameManager.shield_enchant = ""
 	GameManager.shield_enchant_ups = []
+	MetaProgressTestScript.unlock_all_override = true ## demirci artık sadece açık silahları satar (2026-10-14); eski testler hepsini alabilsin
 
 
 func _restore_state() -> void:
+	MetaProgressTestScript.unlock_all_override = false
 	GameManager.gold = int(_saved.get("gold", 0))
 	GameManager.weapon_shards = int(_saved.get("shards", 0))
 	GameManager.owned_weapons = _saved.get("weapons", [])
@@ -98,8 +102,8 @@ func _frames(n: int) -> void:
 
 func test_all_fifteen_weapons_are_sold_at_the_old_prices() -> void:
 	_save_state()
-	var keys: Array = Logic.weapon_keys()
-	assert(keys.size() == 15, "15 silahın hepsi satılmalı, bulunan: %d" % keys.size())
+	var keys: Array = Logic.weapon_keys() ## _save_state kilitleri açar
+	assert(keys.size() == 15, "kilitler açıkken 15 silahın hepsi satılmalı, bulunan: %d" % keys.size())
 	assert(Logic.weapon_price(0) == ShopPanel.SECOND_WEAPON_COST and Logic.weapon_price(1) == ShopPanel.SECOND_WEAPON_COST,
 		"ilk iki alım eski 'ikinci silah' fiyatı (30): %d / %d" % [Logic.weapon_price(0), Logic.weapon_price(1)])
 	for n in range(2, 5):
@@ -107,22 +111,24 @@ func test_all_fifteen_weapons_are_sold_at_the_old_prices() -> void:
 	_restore_state()
 
 
-func test_weapon_purchase_rules_slot_cap_gold_and_duplicates() -> void:
+func test_weapon_purchase_rules_slot_cap_gold_and_no_duplicates() -> void:
 	_save_state()
 	var p := FakePlayer.new()
 	add_child(p)
+	p.max_weapons = 3 ## 2026-10-12: silah sınırı 3
 	assert(Logic.buy_weapon(p, "fire_staff"), "ilk silah alınabilmeli")
-	assert(Logic.buy_weapon(p, "fire_staff"), "aynı silahtan ikinci kopya da alınabilmeli (bağımsız kopya)")
-	assert(Logic.owned_count("fire_staff") == 2 and GameManager.owned_weapons.size() == 2)
-	assert(p.bought == ["fire_staff", "fire_staff"], "gerçek silah düğümleri de oluşturulmalı")
-	assert(GameManager.gold == 100000 - 30 - 30, "iki alım 30+30 altın: kalan %d" % GameManager.gold)
+	## 2026-10-14 (kullanıcı): her silahtan en fazla 1 tane - aynı silahı ikinci kez almak engellenir, altın harcanmaz.
+	assert(Logic.weapon_block_reason(p, "fire_staff") == "Bu silaha zaten sahipsin", "sebep: %s" % Logic.weapon_block_reason(p, "fire_staff"))
+	var gold_before_dup: int = GameManager.gold
+	assert(not Logic.buy_weapon(p, "fire_staff") and GameManager.gold == gold_before_dup and GameManager.owned_weapons.size() == 1, "aynı silahtan ikinci alım yok")
+	assert(Logic.owned_count("fire_staff") == 1 and p.bought == ["fire_staff"], "gerçek silah düğümü tek")
 	assert(int(GameManager.owned_weapons[0]["level"]) == 1 and int(GameManager.owned_weapons[0]["spent"]) == 30, "kayıt: seviye 1 + harcanan")
-	for k in ["yay", "tufek", "dagger"]:
+	for k in ["yay", "tufek"]:
 		assert(Logic.buy_weapon(p, k), "slot boşken %s alınabilmeli" % k)
-	assert(GameManager.owned_weapons.size() == 5)
-	assert(Logic.weapon_block_reason(p, "arcane") == "Silah slotları dolu (5/5)", "5/5'te sebep: %s" % Logic.weapon_block_reason(p, "arcane"))
+	assert(GameManager.owned_weapons.size() == 3)
+	assert(Logic.weapon_block_reason(p, "arcane") == "Silah slotları dolu (3/3)", "3/3'te sebep: %s" % Logic.weapon_block_reason(p, "arcane"))
 	var gold: int = GameManager.gold
-	assert(not Logic.buy_weapon(p, "arcane") and GameManager.gold == gold and GameManager.owned_weapons.size() == 5, "dolu slotta alım yok")
+	assert(not Logic.buy_weapon(p, "arcane") and GameManager.gold == gold and GameManager.owned_weapons.size() == 3, "dolu slotta alım yok")
 	assert(Logic.weapon_block_reason(p, "olmayan_silah") == "Bilinmeyen silah")
 	GameManager.owned_weapons = []
 	GameManager.gold = 20
@@ -352,7 +358,7 @@ func test_screen_lists_every_weapon_and_buys_through_the_rules() -> void:
 	var seen: Dictionary = {}
 	for r in screen._rows:
 		seen[str(r["entry"]["key"])] = true
-		assert((r["buy"] as Button).disabled == false, "altın varken AL açık: %s" % r["entry"]["key"])
+		assert(screen._entry_can_buy(r["entry"]), "altın varken alınabilir: %s" % r["entry"]["key"])
 		assert(str(r["price"].text) == "30", "ilk silah fiyatı 30: %s" % r["price"].text)
 	assert(seen.size() == 15, "plakalar 15 FARKLI silah olmalı")
 	assert(screen._status_label.text == "Silah yuvası 0/5", "durum: %s" % screen._status_label.text)
@@ -367,7 +373,7 @@ func test_screen_lists_every_weapon_and_buys_through_the_rules() -> void:
 		screen._on_buy_pressed(screen._rows[i]["entry"])
 	assert(GameManager.owned_weapons.size() == 5)
 	for r in screen._rows:
-		assert((r["buy"] as Button).disabled, "slotlar dolunca tüm AL düğmeleri kapanmalı")
+		assert(not screen._entry_can_buy(r["entry"]), "slotlar dolunca hiçbiri alınamaz")
 	screen._select(screen._rows[7]["entry"])
 	assert(screen._details_block.text == "Silah slotları dolu (5/5)", "ayrıntıda sebep: %s" % screen._details_block.text)
 	screen._on_close_pressed()
@@ -384,26 +390,27 @@ func test_screen_shows_shard_counter_cost_and_disables_buy_when_short() -> void:
 	var screen: CanvasLayer = await _open_screen(p)
 	assert(screen._shard_label != null and screen._shard_label.text == "9", "sayaç 9: %s" % screen._shard_label.text)
 	for r in screen._rows:
-		assert((r["shard_row"] as Control).visible and str(r["shard_cost"].text) == "10", "her silah plakasında 10 parçacık maliyeti")
-		assert((r["buy"] as Button).disabled, "9 parçacıkla AL kapalı (altın bol): %s" % r["entry"]["key"])
+		assert(str(r["shard_cost"].text) == "10", "her silahın parçacık maliyeti 10")
+		assert(not screen._entry_can_buy(r["entry"]), "9 parçacıkla alınamaz (altın bol): %s" % r["entry"]["key"])
 	screen._select(screen._rows[0]["entry"])
-	assert(screen._details_shard.visible and "10" in screen._details_shard.text and "Sende: 9" in screen._details_shard.text, "ayrıntı: %s" % screen._details_shard.text)
+	## 2026-10-16 Örs Vitrini: GEREKENLER satırı "10 / 9" (gereken / sende).
+	assert(screen._details_shard_row.visible and screen._details_shard.text == "10" and screen._details_shard_have.text == "/ 9", "gerekenler: %s %s" % [screen._details_shard.text, screen._details_shard_have.text])
 	assert(screen._details_block.text == "Silah parçacığı yetersiz (9/10)", "ayrıntıda sebep: %s" % screen._details_block.text)
 	## Parçacık gelince ekran kendiliğinden güncellenir (bir sonraki _process).
 	GameManager.add_weapon_shards(1)
 	await get_tree().create_timer(0.4).timeout ## ekran durumu 0,25 sn'de bir yoklar
 	assert(screen._shard_label.text == "10", "sayaç kendiliğinden güncellenmeli: %s" % screen._shard_label.text)
 	for r in screen._rows:
-		assert(not (r["buy"] as Button).disabled, "10 parçacıkla AL açılmalı")
+		assert(screen._entry_can_buy(r["entry"]), "10 parçacıkla alınabilmeli")
 	screen._on_buy_pressed(screen._rows[0]["entry"])
 	assert(GameManager.weapon_shards == 0 and GameManager.owned_weapons.size() == 1, "AL parçacığı da harcar")
 	assert(screen._shard_label.text == "0", "harcayınca sayaç düşer: %s" % screen._shard_label.text)
 	for r in screen._rows:
-		assert((r["buy"] as Button).disabled, "parçacık bitince hepsi kapanır")
+		assert(not screen._entry_can_buy(r["entry"]), "parçacık bitince hiçbiri alınamaz")
 	## Kalkan sekmesi: parçacık maliyeti satırı gizli (0), AL parçacıksız açık.
 	screen._show_tab(screen.Tab.SHIELDS)
 	for r in screen._rows:
-		assert(not (r["shard_row"] as Control).visible and not (r["buy"] as Button).disabled, "kalkan türleri parçacıksız")
+		assert(not (r["shard_row"] as Control).visible and screen._entry_can_buy(r["entry"]), "kalkan türleri parçacıksız")
 	screen._on_close_pressed()
 	p.free()
 	_restore_state()
@@ -417,7 +424,7 @@ func test_screen_shield_tab_flow_and_upgrade_rows() -> void:
 	screen._show_tab(screen.Tab.SHIELDS)
 	assert(screen._rows.size() == 3, "tür yokken 3 kalkan plakası, bulunan: %d" % screen._rows.size())
 	for r in screen._rows:
-		assert(str(r["price"].text) == "250" and not (r["buy"] as Button).disabled, "250 altın, alınabilir")
+		assert(str(r["price"].text) == "250" and screen._entry_can_buy(r["entry"]), "250 altın, alınabilir")
 	var kale: Dictionary = {}
 	for r in screen._rows:
 		if str(r["entry"]["key"]) == "shield_kale":
@@ -433,12 +440,12 @@ func test_screen_shield_tab_flow_and_upgrade_rows() -> void:
 		if t == "shield":
 			if str(r["price"].text) == "KİLİTLİ":
 				locked += 1
-				assert((r["buy"] as Button).disabled)
+				assert(not screen._entry_can_buy(r["entry"]))
 			else:
-				assert(str(r["price"].text) == "SENDE" and (r["buy"] as Button).disabled, "alınan tür 'SENDE'")
+				assert(str(r["price"].text) == "SENDE" and not screen._entry_can_buy(r["entry"]), "alınan tür 'SENDE'")
 		else:
 			upgrades += 1
-			assert(not (r["buy"] as Button).disabled and str(r["price"].text) == "100", "geliştirme 100 altın")
+			assert(screen._entry_can_buy(r["entry"]) and str(r["price"].text) == "100", "geliştirme 100 altın")
 	assert(locked == 2 and upgrades == 3, "2 kilitli tür + 3 geliştirme")
 	assert(str(screen._selected.get("type")) == "upgrade", "seçim ilk geliştirmeye geçmeli")
 	screen._on_buy_pressed(screen._selected)
@@ -801,3 +808,40 @@ func test_merchant_maps_smithy_indoor_players_to_the_smithy_door() -> void:
 	shop._do_exit()
 	get_tree().current_scene = previous_scene
 	main.free()
+
+
+## Son savunma: oyuncu düğümü de aynı silahı ikinci kez kabul etmez (Talon Ayna Formu kopyaları allow_duplicate ile muaf).
+func test_player_buy_weapon_copy_refuses_a_duplicate_unless_allowed() -> void:
+	const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
+	var pl: Node = PlayerScene.instantiate()
+	add_child(pl)
+	assert(pl.buy_weapon_copy("yay", 1), "ilk yay")
+	assert(not pl.buy_weapon_copy("yay", 1), "ikinci yay reddedilir")
+	assert(pl.owned_weapon_nodes.size() == 1)
+	assert(pl.buy_weapon_copy("yay", 1, true), "Ayna Formu kopyası (allow_duplicate) kabul edilir")
+	assert(GameManager.owns_weapon("yay") == false, "GameManager.owns_weapon defteri okur (burada boş)")
+	pl.queue_free()
+
+
+## 2026-10-14: Ruh Mağazası'nda açılmamış silah demirci listesinde YOK ve alınamaz (kullanıcı: "silahlar görünmemeli").
+func test_locked_weapons_are_hidden_and_unbuyable() -> void:
+	const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+	_save_state()
+	MetaProgressTestScript.unlock_all_override = false ## gerçek kilitler (yerel tipli const üzerinden atama parse hatası veriyordu)
+	var keys: Array = Logic.weapon_keys()
+	for k in keys:
+		assert(MetaProgressScript.is_unlocked(MetaProgressScript.WEAPON, k), "listede kilitli silah olmamalı: %s" % k)
+	for k in ["dagger", "tabanca", "yay", "uzunkilic"]:
+		assert(keys.has(k), "başlangıç silahları (açık) görünmeli: %s" % k)
+	var locked: Array = []
+	for k in WeaponCatalogScript.KEYS:
+		if not MetaProgressScript.is_unlocked(MetaProgressScript.WEAPON, k):
+			locked.append(k)
+	assert(keys.size() == WeaponCatalogScript.KEYS.size() - locked.size())
+	if not locked.is_empty():
+		var p := FakePlayer.new()
+		add_child(p)
+		assert(Logic.weapon_block_reason(p, str(locked[0])).begins_with("Silah kilitli"), "kilitli silah alınamaz")
+		assert(not Logic.buy_weapon(p, str(locked[0])))
+		p.free()
+	_restore_state()

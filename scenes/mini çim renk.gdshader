@@ -1,9 +1,11 @@
 shader_type canvas_item;
+#include "res://shaders/harita_renk.gdshaderinc"
 
 // Grid / Izgara Ayarı (Bitkileri birbirinden ayırmak için)
 uniform float plant_grid_size : hint_range(4.0, 64.0) = 32.0; 
 
 // --- DOĞAL RENK KAYDIRMA (HSV) AYARLARI ---
+// OYUNDA bu yoğunluk/renk kayması değerlerinin bir kısmını scripts/map_color_grade.gd CALM_PARAMS ezer (madde 184, sahnedeki değer değil).
 uniform float hue_shift_amount : hint_range(0.0, 0.2) = 0.04; 
 uniform float sat_shift_amount : hint_range(0.0, 0.5) = 0.12; 
 uniform float val_shift_amount : hint_range(0.0, 0.5) = 0.08; 
@@ -66,4 +68,5 @@ void fragment() {
     }
     
     COLOR = tex_color;
+    COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
 }
