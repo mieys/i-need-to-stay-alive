@@ -21,6 +21,7 @@ const KNOB_RADIUS := 25.0
 const DEAD_ZONE := 0.12
 const HIT_PAD := 1.2 ## düğme isabet yarıçapı görsel yarıçapın bu katı (parmak toleransı)
 const REST_POS := Vector2(0.17, 0.74) ## joystick'in boştaki hayalet konumu (ekran oranı) - rest_center yoksa
+const FIXED_GRAB := 2.0 ## sabit joystick: dokunuş merkezden en fazla bu kadar yarıçap uzakta başlar
 
 const C_FILL := Color(1.0, 0.96, 0.86, 0.12)
 const C_RING := Color(1.0, 0.94, 0.82, 0.6)
@@ -131,8 +132,12 @@ func _on_down(index: int, pos: Vector2) -> void:
 			if c is Control and is_instance_valid(c) and (c as Control).is_visible_in_tree() 					and (c as Control).get_global_rect().has_point(pos):
 				return
 	if _joy_id == -1 and not _joy_blocked() and pos.x < size.x * JOY_ZONE_W and pos.y > size.y * JOY_ZONE_TOP:
+		## SABİT joystick (Ayarlar > DOKUNMATİK): merkez boştaki yerinde kalır, dokunuş halkanın yakınında başlamalı.
+		var fixed: bool = bool(UISound.get("touch_joystick_fixed"))
+		if fixed and pos.distance_to(_rest()) > JOY_RADIUS * _u * FIXED_GRAB:
+			return
 		_joy_id = index
-		_joy_center = pos
+		_joy_center = _rest() if fixed else pos
 		_joy_move(pos)
 
 
@@ -193,14 +198,19 @@ func _exit_tree() -> void:
 	_release_all()
 
 
-## Joystick: dokunulan yerde belirir (yüzen); boştayken sol altta soluk hayaleti. Piksel kenar (kenar yumuşatma yok).
+func _rest() -> Vector2:
+	return rest_center if rest_center != Vector2.ZERO else Vector2(size.x * REST_POS.x, size.y * REST_POS.y)
+
+
+## Joystick: dokunulan yerde belirir (yüzen) ya da boştaki yerinde kalır (sabit, ayar); boştayken sol altta soluk hayaleti.
+## Piksel kenar (kenar yumuşatma yok).
 func _draw() -> void:
 	if _joy_blocked():
 		return
 	var active: bool = _joy_id != -1
 	var jr: float = JOY_RADIUS * _u
 	var kr: float = KNOB_RADIUS * _u
-	var rest: Vector2 = rest_center if rest_center != Vector2.ZERO else Vector2(size.x * REST_POS.x, size.y * REST_POS.y)
+	var rest: Vector2 = _rest()
 	var c: Vector2 = _joy_center if active else rest
 	var a: float = 1.0 if active else 0.4
 	draw_circle(c, jr, Color(C_FILL, C_FILL.a * a), true, -1.0, false)

@@ -14,15 +14,31 @@ const ITEM_ICON := 48.0
 const TITLE_POS := Vector2(48, 72)
 const COL_POS := Vector2(40, 320) ## ana menü MenuPanel ile aynı yer
 
-const C_GOLD := Color("#f4c56e")
-const C_GOLD_DIM := Color("#e2c08a")
-const C_CREAM := Color("#efe2c6")
-const C_SUB := Color("#b09878")
-const C_TAG := Color("#c8b28e")
-const C_RED := Color("#dc7f60")
-const C_DARK := Color("#140e09") ## kaydırıcı yuvası
-const C_LINE := Color("#3b2a1a")
-const C_KNOB_DK := Color("#1a110a")
+## Renkler static var: telefonda (2026-10-19, kullanıcı seçimi "A düzeni + B renkleri") use_phone_palette() Gece Sıvası'na çevirir;
+## kaydırıcı / seçici / ipucu çizimleri hep buradan okur. Masaüstünde Ateş Işığı değerleri.
+static var C_GOLD := Color("#f4c56e")
+static var C_GOLD_DIM := Color("#e2c08a")
+static var C_CREAM := Color("#efe2c6")
+static var C_SUB := Color("#b09878")
+static var C_TAG := Color("#c8b28e")
+static var C_RED := Color("#dc7f60")
+static var C_DARK := Color("#140e09") ## kaydırıcı yuvası
+static var C_LINE := Color("#3b2a1a")
+static var C_KNOB_DK := Color("#1a110a")
+
+
+## on: telefon (Gece Sıvası, MenuDarkKit renkleri); false: masaüstü Ateş Işığı. Ekranlar kurulurken çağırır (testler aynı süreçte
+## iki kipi de açtığı için tek seferlik değil).
+static func use_phone_palette(on: bool) -> void:
+	C_GOLD = Color("#f4c56e")
+	C_GOLD_DIM = Color("#e2c08a")
+	C_CREAM = Color("#efe6d6") if on else Color("#efe2c6")
+	C_SUB = Color("#a7a2c0") if on else Color("#b09878")
+	C_TAG = Color("#a7a2c0") if on else Color("#c8b28e")
+	C_RED = Color("#e38c7c") if on else Color("#dc7f60")
+	C_DARK = Color("#12121f") if on else Color("#140e09")
+	C_LINE = Color("#3b3a5a") if on else Color("#3b2a1a")
+	C_KNOB_DK = Color("#0a0a12") if on else Color("#1a110a")
 
 const CANDLES_PATH := "res://harita/Ev içi/Candles.png"
 const SHADE_PATH := "res://assets/ui/ana_menu/sol_golge.png"

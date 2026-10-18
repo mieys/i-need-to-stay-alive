@@ -22,6 +22,9 @@ const WeaponCatalog := preload("res://scripts/weapon_catalog.gd")
 const PetCatalog := preload("res://scripts/pet_catalog.gd")
 const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const MetaUpgradesScript: GDScript = preload("res://scripts/meta_upgrades.gd")
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const PK := preload("res://scripts/phone_menu_kit.gd")
+const DK := preload("res://scripts/menu_dark_kit.gd")
 const StatIconScript: GDScript = preload("res://scripts/stat_icon.gd")
 const BG_TEXTURE := "res://assets/ui/ruh_magaza/bg_ruh_magaza.png"
 
@@ -268,6 +271,9 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
+	if MobileUIScript.enabled:
+		_build_phone()
+		return
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.theme = _theme()
@@ -298,6 +304,9 @@ func _build_ui() -> void:
 
 ## Sayfayı baştan kurar (sayfa / seçim / satın alma / onay değişince). Kaydırma konumu ve odaktaki düğme korunur.
 func _rebuild_list(reset_scroll: bool = false) -> void:
+	if _phone:
+		_ph_rebuild()
+		return
 	var keep: int = 0
 	if not reset_scroll and is_instance_valid(_scroll):
 		keep = _scroll.scroll_vertical
@@ -349,7 +358,9 @@ func _go_home() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		if _page != PAGE_HOME:
+		if _phone: ## telefonda ana sayfa yok: geri = kapat
+			_on_close_pressed()
+		elif _page != PAGE_HOME:
 			_go_home()
 		else:
 			_on_close_pressed()
@@ -1409,3 +1420,310 @@ func _reset_row() -> Control:
 	_tag_sid(btn, "reset")
 	row.add_child(btn)
 	return row
+
+
+## ---------------------------------------------------------------- TELEFON
+## TELEFON (2026-10-19, madde 279; kullanıcı seçimi prototip S = B "Yan Ray + Detay", mobil_proto.gd B_ruh): ray KAHRAMAN / SİLAH /
+## EVCİL / RUHANİ / GELİŞTİR; ortada kategorinin ızgarası (karakterde YÜZ, kilitliye kıymık fiyatı, açıkta onay) ya da geliştirme
+## satırları; sağda seçilenin önizlemesi (karakter BOYDAN) + adı + yetenek simgeleri / açıklama + KİLİDİ AÇ (iki dokunuş: ONAYLA?).
+## Veri / satın alma masaüstüyle aynı (_items, _selected, _select, _on_buy_pressed, _on_upgrade_pressed, _on_reset_pressed).
+const PH_PAGES := ["char", "weapon", "pet", "spirit", "upgrades"]
+var _phone: bool = false
+var _ph: Dictionary = {}
+
+
+func _build_phone() -> void:
+	_phone = true
+	if not PH_PAGES.has(_page):
+		_page = MetaProgressScript.CHAR
+	var root := Control.new()
+	root.name = "PhoneSoulShop"
+	root.theme = DK.theme()
+	root.mouse_filter = Control.MOUSE_FILTER_STOP ## alttaki ana menüye tıklama geçmesin
+	add_child(root)
+	PK.fit(root)
+	var bg := TextureRect.new()
+	bg.texture = load(BG_TEXTURE) as Texture2D if ResourceLoader.exists(BG_TEXTURE) else null
+	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(bg)
+	var pet_ic: CenterContainer = DK.icon(PetCatalog.icon(PetCatalog.DEFAULT_KEY), 64)
+	var sp_tex_path: String = str(SpiritualSkillsScript.get_def(SpiritualSkillsScript.DEFAULT_ID).get("icon", ""))
+	var sp_ic: CenterContainer = DK.icon(load(sp_tex_path) as Texture2D if sp_tex_path != "" and ResourceLoader.exists(sp_tex_path) else null, 64)
+	_ph = PK.b_frame(root, [["KAHRAMAN", PK.G_USER], ["SİLAH", PK.G_SWORD], ["EVCİL", pet_ic], ["RUHANİ", sp_ic], ["GELİŞTİR", PK.G_UP]],
+			_on_close_pressed, 820.0, 0.62)
+	var tabs: Array = _ph["tabs"]
+	for i in tabs.size():
+		var pg: String = PH_PAGES[i]
+		(tabs[i] as Button).pressed.connect(func() -> void:
+			if pg != _page:
+				UISound.play_click()
+				_on_tab_pressed(pg))
+	_ph_rebuild()
+
+
+func _ph_rebuild() -> void:
+	PK.set_rail(_ph["tabs"], PH_PAGES.find(_page))
+	var det: VBoxContainer = _ph["det"]
+	PK.clear(det)
+	if _page == PAGE_UPGRADES:
+		PK.set_page(_ph["mid"], _ph_upgrades_page())
+		_ph_upgrades_detail(det)
+	else:
+		var items: Array = _items()
+		PK.set_page(_ph["mid"], _ph_kind_page(items, _page))
+		_ph_kind_detail(det, _selected(items, _page))
+	UISound.connect_all_buttons(self)
+
+
+func _ph_shard_chip() -> PanelContainer:
+	var chip := PK.inset(0.9, 0.0, DK.C_LINE)
+	var st: StyleBoxFlat = chip.get_theme_stylebox("panel")
+	st.content_margin_left = 16
+	st.content_margin_right = 20
+	var h := DK.h(12)
+	h.add_child(DK.ShardIcon.new(32.0))
+	h.add_child(PK.lbl(str(MetaProgressScript.shards()), PK.FS_BODY, PK.C_SOUL))
+	chip.add_child(h)
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return chip
+
+
+## Kategori: başlık + açık sayısı + kıymık, 5 sütun karo (seçili altın kenar; kilitliye fiyat, açıkta onay).
+func _ph_kind_page(items: Array, kind: String) -> Control:
+	var v := DK.v(16)
+	var list: Array = _of_kind(items, kind)
+	var sel: Dictionary = _selected(items, kind)
+	var head := DK.h(16)
+	var t := PK.lbl(str(KIND_NAMES.get(kind, kind)), PK.FS_TITLE, DK.C_ACCENT)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	head.add_child(PK.lbl("%d / %d açık" % [_open_count(list), list.size()], PK.FS_SMALL, DK.C_DIM))
+	head.add_child(_ph_shard_chip())
+	v.add_child(head)
+	var lst: Array = PK.scroll_list(0)
+	v.add_child(lst[0])
+	var grid := GridContainer.new()
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 16)
+	for it: Dictionary in list:
+		grid.add_child(_ph_tile(it, str(it["key"]) == str(sel.get("key", ""))))
+	if list.is_empty():
+		v.add_child(PK.lbl("Bu bölümde açılacak bir şey yok.", PK.FS_BODY, DK.C_DIM, HORIZONTAL_ALIGNMENT_CENTER))
+	(lst[1] as VBoxContainer).add_child(grid)
+	return v
+
+
+func _ph_tile(it: Dictionary, on: bool) -> Button:
+	var st: String = _state(it)
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(196, 232)
+	DK.style_button(b, "tile_on" if on else ("tile" if st != "no" else "tile_locked"), 6, 4.0)
+	var v := DK.v(4)
+	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(DK.icon(it.get("icon") as Texture2D, 144.0, st == "no"))
+	var nm := PK.lbl(str(it["name"]), 24, DK.C_ACCENT if on else (DK.C_DIM if st == "no" else DK.C_TEXT), HORIZONTAL_ALIGNMENT_CENTER)
+	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	v.add_child(nm)
+	b.add_child(v)
+	## Sol üst köşe: açıksa onay, değilse kıymık + fiyat (yetmiyorsa kırmızımsı).
+	var corner := DK.h(6)
+	corner.position = Vector2(10, 8)
+	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if st == "open":
+		corner.add_child(PK.glyph(PK.G_CHECK, DK.C_GOOD, 4))
+	else:
+		corner.add_child(DK.ShardIcon.new(22.0, st == "no"))
+		corner.add_child(PK.lbl(str(int(it["cost"])), 24, PK.C_SOUL if st == "can" else DK.C_BAD))
+	b.add_child(corner)
+	b.pressed.connect(func() -> void:
+		UISound.play_click()
+		_select(it))
+	return b
+
+
+## Sağ sütun (kategori): önizleme + ad + tür + yetenekler / açıklama + KİLİDİ AÇ.
+func _ph_kind_detail(det: VBoxContainer, it: Dictionary) -> void:
+	if it.is_empty():
+		det.add_child(PK.lbl(str(KIND_ONE.get(_page, "")), PK.FS_TITLE, DK.C_ACCENT))
+		return
+	var kind: String = str(it["kind"])
+	var stage := PK.inset(0.8, 0.0, DK.C_LINE)
+	stage.custom_minimum_size = Vector2(0, 340)
+	stage.add_child(DK.Spot.new(DK.C_SPOT, 0.86))
+	var cc := CenterContainer.new()
+	if kind == MetaProgressScript.CHAR: ## karakter BOYDAN (kullanıcı 2026-10-19), tam katlı büyütme
+		var body: Texture2D = _char_body(it)
+		cc.add_child(DK.icon(body, 300.0, false, 300.0))
+	else:
+		cc.add_child(DK.icon(it.get("icon") as Texture2D, 240.0))
+	stage.add_child(cc)
+	det.add_child(stage)
+	det.add_child(DK.sp(0, 12))
+	var nh := DK.h(16)
+	var nm := PK.lbl(str(it["name"]), PK.FS_TITLE, DK.C_ACCENT)
+	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nh.add_child(nm)
+	nh.add_child(PK.lbl(str(KIND_ONE.get(kind, "")), PK.FS_SMALL, DK.C_DIM))
+	det.add_child(nh)
+	if kind == MetaProgressScript.CHAR:
+		var d: Dictionary = _char_def(it)
+		var row := DK.h(20)
+		for slot: Array in [["passive", "P"], ["skill", "Q"], ["skill2", "E"], ["skill3", "R"]]:
+			var p := Control.new()
+			p.custom_minimum_size = Vector2(96, 96)
+			var sl := DK.slot(_ph_tex(str(d.get(str(slot[0]) + "_icon", ""))), 84)
+			sl.set_anchors_preset(Control.PRESET_FULL_RECT)
+			p.add_child(sl)
+			var kb := DK.box(DK.C_INSET, DK.C_ACCENT if slot[1] == "R" else DK.C_LINE_HI, 0, 2, 3)
+			kb.custom_minimum_size = Vector2(34, 34)
+			kb.position = Vector2(-6, 68)
+			kb.add_child(DK.lbl(str(slot[1]), 24, DK.C_ACCENT if slot[1] == "R" else DK.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+			p.add_child(kb)
+			row.add_child(p)
+		det.add_child(DK.sp(0, 8))
+		det.add_child(row)
+	var desc := PK.lbl(str(it.get("desc", "")), PK.FS_SMALL, DK.C_DIM)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	det.add_child(DK.sp(0, 8))
+	det.add_child(desc)
+	det.add_child(DK.sp(0, 0, false, true))
+	var st: String = _state(it)
+	var cost: int = int(it["cost"])
+	var b: Button
+	match st:
+		"open":
+			b = PK.big_button("AÇIK", "Seçim ekranında seçebilirsin", "disabled", PK.G_CHECK, 0.0, 144.0)
+			b.disabled = true
+		"can":
+			var asking: bool = _confirm_id == _id(it)
+			b = PK.big_button("ONAYLA?" if asking else "KİLİDİ AÇ  %d" % cost, "Kalan: %d" % (MetaProgressScript.shards() - cost),
+					"danger" if asking else "primary", [], 0.0, 144.0)
+			b.pressed.connect(_on_buy_pressed.bind(kind, it["key"]))
+		_:
+			b = PK.big_button("KİLİDİ AÇ  %d" % cost, "%d kıymık eksik" % _need(it), "disabled", PK.G_LOCK, 0.0, 144.0)
+			b.disabled = true
+	b.name = "BuyButton"
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	det.add_child(b)
+
+
+func _ph_tex(path: String) -> Texture2D:
+	return load(path) as Texture2D if path != "" and ResourceLoader.exists(path) else null
+
+
+## GELİŞTİR: başlık + toplam seviye, 2 sütun geliştirme satırı (kaydırılır).
+func _ph_upgrades_page() -> Control:
+	var v := DK.v(16)
+	var lv: Vector2i = _upg_levels()
+	var head := DK.h(16)
+	var t := PK.lbl("GELİŞTİRMELER", PK.FS_TITLE, DK.C_ACCENT)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	head.add_child(PK.lbl("%d / %d seviye" % [lv.x, lv.y], PK.FS_SMALL, DK.C_DIM))
+	head.add_child(_ph_shard_chip())
+	v.add_child(head)
+	var lst: Array = PK.scroll_list(0)
+	v.add_child(lst[0])
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 14)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for d: Dictionary in MetaUpgradesScript.LIST:
+		grid.add_child(_ph_upgrade_row(d))
+	(lst[1] as VBoxContainer).add_child(grid)
+	return v
+
+
+func _ph_upgrade_row(d: Dictionary) -> Control:
+	var id: String = str(d["id"])
+	var lv: int = MetaUpgradesScript.level(id)
+	var mx: int = int(d["max"])
+	var maxed: bool = lv >= mx
+	var per: float = float(d["per"])
+	var p := PK.inset(0.85, 14.0, DK.C_LINE)
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p.tooltip_text = str(d["desc"])
+	var h := DK.h(16)
+	var ic := PK.inset(1.0, 6.0, DK.C_LINE_HI)
+	ic.add_child(_upg_icon(d, 64))
+	h.add_child(ic)
+	var tv := DK.v(6)
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var l1 := DK.h(10)
+	var nm := PK.lbl(str(d["name"]), PK.FS_SMALL, DK.C_TEXT)
+	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l1.add_child(nm)
+	l1.add_child(PK.lbl(MetaUpgradesScript.format_value(id, per * float(lv)), 24, DK.C_GOOD if maxed else DK.C_DIM))
+	if not maxed:
+		l1.add_child(PK.lbl(">", 24, DK.C_DIM))
+		l1.add_child(PK.lbl(MetaUpgradesScript.format_value(id, per * float(lv + 1)), 24, DK.C_GOOD))
+	tv.add_child(l1)
+	var l2 := DK.h(10)
+	var pips := Pips.new(mx, lv, DK.C_ACCENT, DK.C_INSET, 12.0)
+	pips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	l2.add_child(pips)
+	l2.add_child(PK.lbl("%d/%d" % [lv, mx], 24, DK.C_DIM))
+	tv.add_child(l2)
+	h.add_child(tv)
+	if maxed:
+		var mxl := PK.lbl("MAKS", PK.FS_SMALL, DK.C_GOOD, HORIZONTAL_ALIGNMENT_CENTER)
+		mxl.custom_minimum_size.x = 170
+		h.add_child(mxl)
+	else:
+		var can: bool = MetaUpgradesScript.can_buy(id)
+		var pb := PK.button(str(MetaUpgradesScript.next_cost(id)), "primary" if can else "disabled", PK.FS_SMALL, [], 170.0, 84.0)
+		var shard := DK.ShardIcon.new(24.0, not can)
+		(pb.get_node("Row") as HBoxContainer).add_child(shard)
+		(pb.get_node("Row") as HBoxContainer).move_child(shard, 0)
+		pb.disabled = not can
+		pb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		pb.pressed.connect(_on_upgrade_pressed.bind(id))
+		h.add_child(pb)
+	p.add_child(h)
+	return p
+
+
+## Sağ sütun (geliştirmeler): açıklama + toplam ilerleme + sıfırlama.
+func _ph_upgrades_detail(det: VBoxContainer) -> void:
+	var lv: Vector2i = _upg_levels()
+	det.add_child(PK.lbl("KALICI GÜÇ", PK.FS_TITLE, DK.C_ACCENT))
+	var info := PK.lbl("Kalıcı güçlendirmeler her koşuda otomatik uygulanır. Seviye atladıkça fiyat artar.", PK.FS_SMALL, DK.C_DIM)
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	det.add_child(info)
+	det.add_child(DK.sp(0, 24))
+	det.add_child(PK.lbl("Toplam seviye %d / %d" % [lv.x, lv.y], PK.FS_BODY, DK.C_TEXT))
+	var bar := Bar.new(float(lv.x) / float(maxi(1, lv.y)), DK.C_ACCENT, DK.C_INSET, 24.0, 0.0)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	det.add_child(bar)
+	det.add_child(DK.sp(0, 0, false, true))
+	var reset_info: String = "Sıfırlanacak geliştirme yok."
+	if MetaUpgradesScript.can_reset():
+		reset_info = "Sıfırlarsan harcanan %d kıymıktan %d ücret kesilir, %d geri gelir." % [
+				MetaUpgradesScript.total_spent(), MetaUpgradesScript.reset_fee(), MetaUpgradesScript.reset_refund()]
+	var ri := PK.lbl(reset_info, PK.FS_SMALL, DK.C_DIM)
+	ri.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	det.add_child(ri)
+	det.add_child(DK.sp(0, 12))
+	var asking: bool = _confirm_id == "reset"
+	var rb := PK.button("ONAYLA?" if asking else "HEPSİNİ SIFIRLA", "danger" if asking else ("ghost" if MetaUpgradesScript.can_reset() else "disabled"),
+			PK.FS_BODY, [], 0.0, 120.0)
+	rb.name = "ResetButton"
+	rb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rb.disabled = not MetaUpgradesScript.can_reset()
+	rb.pressed.connect(_on_reset_pressed)
+	det.add_child(rb)

@@ -9,9 +9,8 @@ const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 ## Kökü Control olan menüler -> büyütülecek çocuk adları (boşsa sadece ortalanır). Bkz. RootFitter.
 ## character_select.gd ve lobby_menu.gd 2026-10-03'ten beri telefonda kendi tam ekran yerleşimini kurar (_build_mobile) -
 ## listede YOK.
-const FIT_ROOT_SCRIPTS: Dictionary = {
-	"res://scripts/main_menu.gd": ["TitleSign", "MenuPanel"],
-}
+## main_menu.gd 2026-10-19'dan beri telefonda kendi yerleşimini kurar (prototip S A_ana_menu, phone_menu_kit.gd fit) - listeden çıktı.
+const FIT_ROOT_SCRIPTS: Dictionary = {}
 
 
 func on_node_added(n: Node) -> void:

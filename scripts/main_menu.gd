@@ -20,6 +20,10 @@ const WC := preload("res://scripts/weapon_catalog.gd")
 const PC := preload("res://scripts/pet_catalog.gd")
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const PK := preload("res://scripts/phone_menu_kit.gd")
+const FM := preload("res://scripts/fire_menu_kit.gd")
+const LastLoadout := preload("res://scripts/last_loadout.gd")
 
 ## Oyun adı (2026-10-04): "Lil'Slayers" (birleşik). Eski ad: "I NEED TO STAY ALIVE" (72 punto).
 const TITLE := "LIL'SLAYERS"
@@ -135,7 +139,10 @@ func _ready() -> void:
 	DisplayServer.window_set_title("Lil'Slayers")
 	theme = MenuKit.theme()
 	_build_scene()
-	_build_left_panel()
+	if MobileUIScript.enabled:
+		_build_phone_menu()
+	else:
+		_build_left_panel()
 	UISound.connect_all_buttons(self)
 	_start_btn.grab_focus()
 
@@ -401,7 +408,206 @@ func _build_left_panel() -> void:
 
 func _refresh_shards() -> void:
 	if is_instance_valid(_shard_label):
-		_shard_label.text = "%d kıymık · kilit aç" % MetaProgressScript.shards()
+		_shard_label.text = "Kilit aç, kalıcı geliştir" if MobileUIScript.enabled else "%d kıymık · kilit aç" % MetaProgressScript.shards()
+	if is_instance_valid(_ph_shard_value):
+		_ph_shard_value.text = str(MetaProgressScript.shards())
+
+
+## ------------------------------------------------------------------ telefon
+## TELEFON (2026-10-19; kullanıcı seçimi prototip S: ana menü = A düzeni + B "Gece Sıvası" renkleri, mobil_proto.gd A_ana_menu): sahne
+## (şömine, parti, köpek) aynı; solda basamaklı lacivert gölge + başlık + 5 iri öğe (seçili = altın zemin + sol şerit + yanan mum,
+## diğerleri soluk elmas), sağ üstte Ruh Kıymığı, sağ altta "Son seçim" kartı + HIZLI BAŞLA (son tek oyunculu seçimle doğrudan
+## oyuna, last_loadout.gd). ÇIKIŞ telefonda yok (sistem geri / ana ekran). MenuFitter bu sahneyi artık büyütmez (PK.fit).
+const PH_ITEM_W := 900.0
+const PH_ITEM_H := 132.0
+const PH_ITEMS_TOP := 352.0
+const PH_CARD_W := 700.0
+var _ph_items: Array[Button] = []
+var _ph_shard_value: Label = null
+
+
+func _build_phone_menu() -> void:
+	var root := Control.new()
+	root.name = "PhoneMenu"
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
+	PK.fit(root)
+	var shade := FM.StepShade.new()
+	shade.name = "PhoneShade"
+	shade.col = Color(PK.DIMBG, 0.9)
+	shade.x0 = 700.0
+	shade.step_w = 80.0
+	shade.steps = 10
+	root.add_child(shade)
+	## Başlık: oyunun adı + slogan + kiriş süsü (masaüstü tabelasıyla aynı parçalar, B renkleri).
+	var logo := DK.v(0)
+	logo.name = "TitleSign"
+	var lh := DK.h(14)
+	var left_ic: CenterContainer = DK.icon(WC.icon("dagger"), 64)
+	if left_ic.get_child_count() > 0:
+		(left_ic.get_child(0) as TextureRect).flip_h = true
+	lh.add_child(left_ic)
+	var title := DK.lbl(TITLE, 96, DK.C_ACCENT)
+	title.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1))
+	title.add_theme_constant_override("outline_size", 16)
+	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	title.add_theme_constant_override("shadow_offset_y", 8)
+	lh.add_child(title)
+	lh.add_child(DK.icon(WC.icon("fire_staff"), 64))
+	logo.add_child(lh)
+	logo.add_child(PK.lbl("Hayatta kal. Birlikte.", PK.FS_SMALL, DK.C_DIM))
+	logo.add_child(DK.sp(0, 14))
+	var trim := TextureRect.new()
+	trim.texture = load("res://assets/ui/ana_menu/kiris_suslu.png")
+	trim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	trim.stretch_mode = TextureRect.STRETCH_TILE
+	trim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	trim.custom_minimum_size = Vector2(480, 48)
+	trim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	logo.add_child(trim)
+	logo.position = Vector2(PK.SIDE + 8.0, 40.0)
+	root.add_child(logo)
+	## Öğeler.
+	var v := DK.v(8)
+	v.name = "MenuPanel"
+	v.position = Vector2(PK.SIDE, PH_ITEMS_TOP)
+	var shard_icon := DK.ShardIcon.new(52.0)
+	_start_btn = _ph_item("TEK OYUNCU", "Tek başına hayatta kal", PK.glyph(PK.G_PLAY, DK.C_TEXT, 7))
+	_multiplayer_btn = _ph_item("ÇOK OYUNCU", "İnternet ya da LAN odası", PK.glyph(PK.G_USERS, DK.C_TEXT, 7))
+	_soul_shop_btn = _ph_item("RUH MAĞAZASI", "Kilit aç, kalıcı geliştir", shard_icon)
+	_records_btn = _ph_item("REKORLAR", "En iyiler ve başarımlar", PK.glyph(PK.G_TROPHY, DK.C_TEXT, 7))
+	_settings_btn = _ph_item("AYARLAR", "Ses, grafik, dokunmatik", PK.glyph(PK.G_GEAR, DK.C_TEXT, 7))
+	for b: Button in [_start_btn, _multiplayer_btn, _soul_shop_btn, _records_btn, _settings_btn]:
+		v.add_child(b)
+	root.add_child(v)
+	_start_btn.pressed.connect(_on_start_pressed)
+	_multiplayer_btn.pressed.connect(_on_multiplayer_pressed)
+	_soul_shop_btn.pressed.connect(_on_soul_shop_pressed)
+	_records_btn.pressed.connect(_on_records_pressed)
+	_settings_btn.pressed.connect(_on_settings_pressed)
+	UiAnim.cascade(v, 0.05)
+	## Sağ üst: Ruh Kıymığı.
+	var chip := PK.inset(0.85, 0.0, DK.C_LINE)
+	chip.name = "ShardChip"
+	(chip.get_theme_stylebox("panel") as StyleBoxFlat).content_margin_left = 20
+	(chip.get_theme_stylebox("panel") as StyleBoxFlat).content_margin_right = 24
+	var ch := DK.h(14)
+	ch.add_child(DK.ShardIcon.new(40.0))
+	_ph_shard_value = PK.lbl(str(MetaProgressScript.shards()), PK.FS_BODY, PK.C_SOUL)
+	ch.add_child(_ph_shard_value)
+	chip.add_child(ch)
+	chip.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	chip.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	chip.offset_right = -PK.SIDE
+	chip.offset_left = -PK.SIDE - 10.0
+	chip.offset_top = PK.TOP + 8.0
+	chip.offset_bottom = PK.TOP + 8.0 + 88.0
+	root.add_child(chip)
+	## Sağ alt: son seçim + HIZLI BAŞLA.
+	var lo: Dictionary = LastLoadout.load_valid()
+	var card := PK.panel(0.85, 16.0)
+	card.name = "LastPick"
+	card.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	card.offset_left = -(PK.SIDE + PH_CARD_W)
+	card.offset_right = -PK.SIDE
+	card.offset_top = -(PK.BOTTOM + PK.BTN_H + 20.0 + 136.0)
+	card.offset_bottom = -(PK.BOTTOM + PK.BTN_H + 20.0)
+	var crow := DK.h(20)
+	crow.add_child(PK.portrait(_face_tex(int(lo["char"])), 104.0))
+	var cv := DK.v(0)
+	cv.alignment = BoxContainer.ALIGNMENT_CENTER
+	cv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cv.add_child(PK.lbl("Son seçim", PK.FS_SMALL, DK.C_DIM))
+	var sl := PK.lbl(LastLoadout.summary(lo), PK.FS_BODY, DK.C_TEXT)
+	sl.clip_text = true
+	sl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	cv.add_child(sl)
+	crow.add_child(cv)
+	card.add_child(crow)
+	root.add_child(card)
+	var quick := PK.button("HIZLI BAŞLA", "primary", PK.FS_TITLE, PK.G_PLAY, PH_CARD_W, PK.BTN_H)
+	quick.name = "QuickStart"
+	quick.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	quick.offset_left = -(PK.SIDE + PH_CARD_W)
+	quick.offset_right = -PK.SIDE
+	quick.offset_top = -(PK.BOTTOM + PK.BTN_H)
+	quick.offset_bottom = -PK.BOTTOM
+	quick.pressed.connect(_on_quick_start_pressed)
+	root.add_child(quick)
+	_create_debug_mode_button()
+	var dbg: Control = get_node_or_null("DebugButton") as Control
+	if dbg: ## sol alt köşe, öğelerin altında kalmasın
+		dbg.reparent(root, false)
+		dbg.position = Vector2(PK.SIDE, 1080.0 - 64.0)
+
+
+## Öğe: görünmez düğme + seçili zemini (altın %14 + 8 px sol şerit) + mum (seçili) / elmas (diğerleri) + 64 px simge + başlık / alt yazı.
+func _ph_item(title: String, sub: String, icon: Control) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(PH_ITEM_W, PH_ITEM_H)
+	b.flat = true
+	for st: String in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	var sel := Panel.new()
+	sel.name = "Sel"
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(DK.C_ACCENT, 0.14)
+	sb.border_width_left = 8
+	sb.border_color = DK.C_ACCENT
+	sel.add_theme_stylebox_override("panel", sb)
+	sel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sel.visible = false
+	b.add_child(sel)
+	var candle := Candle.new(load("res://harita/Ev içi/Candles.png") as Texture2D)
+	candle.scale = Vector2(1.5, 1.5)
+	candle.position = Vector2(24, 18)
+	candle.visible = false
+	b.add_child(candle)
+	var dia := PK.glyph(PK.G_DIAMOND, Color(DK.C_DIM, 0.6), 5)
+	dia.position = (Vector2(72, PH_ITEM_H * 0.5) - dia.custom_minimum_size * 0.5).floor()
+	dia.size = dia.custom_minimum_size
+	b.add_child(dia)
+	var ib := CenterContainer.new()
+	ib.position = Vector2(192 - 40, PH_ITEM_H * 0.5 - 40)
+	ib.size = Vector2(80, 80)
+	ib.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ib.add_child(icon)
+	b.add_child(ib)
+	var tl := PK.lbl(title, PK.FS_TITLE, DK.C_TEXT)
+	tl.position = Vector2(264, 8)
+	tl.size = Vector2(620, 72)
+	b.add_child(tl)
+	var sl := PK.lbl(sub, PK.FS_SMALL, DK.C_DIM)
+	sl.position = Vector2(264, 76)
+	sl.size = Vector2(620, 44)
+	b.add_child(sl)
+	if title == "RUH MAĞAZASI":
+		_shard_label = sl
+	b.set_meta("ph", {"sel": sel, "candle": candle, "dia": dia, "icon": icon, "title": tl})
+	b.mouse_entered.connect(func() -> void: b.grab_focus())
+	b.focus_entered.connect(_ph_item_selected.bind(b, true))
+	b.focus_exited.connect(_ph_item_selected.bind(b, false))
+	_ph_items.append(b)
+	return b
+
+
+func _ph_item_selected(b: Button, on: bool) -> void:
+	var it: Dictionary = b.get_meta("ph")
+	(it["sel"] as Control).visible = on
+	(it["candle"] as Control).visible = on
+	(it["dia"] as Control).visible = not on
+	(it["title"] as Label).add_theme_color_override("font_color", DK.C_ACCENT if on else DK.C_TEXT)
+	var ic: Control = it["icon"]
+	if ic is PK.PGlyph:
+		(ic as PK.PGlyph).set_color(DK.C_ACCENT if on else DK.C_TEXT)
+
+
+## HIZLI BAŞLA: son tek oyunculu seçimle (kilitliler varsayılana çekilmiş) doğrudan yükleme ekranına - karakter seçimi atlanır.
+func _on_quick_start_pressed() -> void:
+	var lo: Dictionary = LastLoadout.load_valid()
+	LastLoadout.apply(lo)
+	get_tree().change_scene_to_file("res://scenes/loading_screen.tscn")
 
 
 ## Kullanıcı isteği (2026-09-24): "bu modun otomatik olarak açıldığı bir debugmode haritası
@@ -469,7 +675,10 @@ func _on_records_pressed() -> void:
 func _on_soul_shop_pressed() -> void:
 	var screen: CanvasLayer = SoulShopScreenScript.new()
 	add_child(screen)
+	if MobileUIScript.enabled: ## telefonda mağaza tam ekran - menü altında görünmesin
+		_set_menu_parts_visible(false)
 	screen.closed.connect(func() -> void:
+		_set_menu_parts_visible(true)
 		_refresh_shards() ## mağazada harcanan kıymık öğedeki bakiyeye yansısın
 		if is_instance_valid(_soul_shop_btn):
 			_soul_shop_btn.grab_focus()
@@ -479,7 +688,7 @@ func _on_soul_shop_pressed() -> void:
 ## Ayarlar (madde 234): ortak "Ateş Işığı" ayar ekranı, kendi başlığı + kategori sütunuyla; açıkken menünün tabelası/öğeleri gizlenir.
 ## Tasarım boyutunda (1920x1080) sola-üste yaslı - telefonda RootFitter tam ekran çocukları ekrana yayar, bu ekranın içeriği
 ## tasarım koordinatında kalmalı.
-const SETTINGS_HIDE := ["TitleSign", "MenuPanel", "PartyLine", "DebugButton"]
+const SETTINGS_HIDE := ["TitleSign", "MenuPanel", "PartyLine", "DebugButton", "PhoneMenu"] ## PhoneMenu: telefon menüsü (madde 279)
 
 
 func _on_settings_pressed() -> void:

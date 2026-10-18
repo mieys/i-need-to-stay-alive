@@ -9,6 +9,7 @@ extends Control
 
 const SpiritualPickerScript: GDScript = preload("res://scripts/spiritual_picker.gd")
 const RosterScript: GDScript = preload("res://scripts/menu_character_roster.gd")
+const LastLoadoutScript := preload("res://scripts/last_loadout.gd")
 const WeaponPickerScript: GDScript = preload("res://scripts/menu_weapon_picker.gd")
 const PetPickerScript: GDScript = preload("res://scripts/menu_pet_picker.gd")
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
@@ -28,9 +29,8 @@ func _ready() -> void:
 	theme = MenuKit.theme()
 	var mobile: bool = MobileUIScript.enabled
 	HearthBg.add_to(self, 0.0 if mobile else HearthBg.DIM_DESKTOP)
-	if mobile:
-		_build_mobile()
-		return
+	## 2026-10-19 (madde 279): telefonda da SEÇİM D ekranı - lobby_select_desktop.gd kendi telefon yerleşimini kurar (prototip S = B,
+	## yüz kartları + sağda boydan önizleme). Eski bej telefon kurucusu (_build_mobile) artık çağrılmıyor.
 	_desk = DesktopScript.new()
 	_desk.set("solo", true)
 	add_child(_desk)
@@ -166,7 +166,9 @@ func _build_mobile() -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	center.add_child(scroll)
 	roster = RosterScript.new()
-	roster.build(M_COLUMNS, k)
+	## Kartlarda YÜZ, tam boy yalnız sağdaki vitrinde (kullanıcı 2026-10-19: "karakter seçimlerinde (hepsi) karakterin yüzü görünsün
+	## sağdaki hali boydan olsun sadece") - çok oyunculu seçimle aynı (lobby_menu.gd).
+	roster.build(M_COLUMNS, k, true)
 	roster.add_theme_constant_override("h_separation", sep)
 	roster.add_theme_constant_override("v_separation", 8)
 	roster.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -269,6 +271,7 @@ func _on_start_pressed() -> void:
 	var def: Dictionary = Characters.get_def(selected_char)
 	GameManager.selected_char_id = selected_char
 	GameManager.selected_character = def["skill"]
+	LastLoadoutScript.save() ## ana menünün "Son seçim" kartı + HIZLI BAŞLA (telefon, madde 279)
 	## Kullanıcı isteği: "oyuna başla dediğimizde yükleme ekranı olsun" -
 	## artık main.tscn'e doğrudan değil, önce loading_screen.gd'nin kendi
 	## yüklediği (ve barını doldurduğu) yükleme ekranına geçiliyor.

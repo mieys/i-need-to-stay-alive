@@ -13,6 +13,8 @@ signal closed
 const FM := preload("res://scripts/fire_menu_kit.gd")
 const DK := preload("res://scripts/menu_dark_kit.gd")
 const UiAnim := preload("res://scripts/ui_anim.gd")
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const PK := preload("res://scripts/phone_menu_kit.gd")
 
 const COL_X := 660.0
 const COL_Y := 150.0
@@ -22,7 +24,17 @@ const SLIDER_W := 300.0
 const VALUE_W := 90.0
 const CHOICE_W := SLIDER_W + VALUE_W
 
-enum Cat { GENEL, GRAFIK, TUSLAR }
+enum Cat { GENEL, GRAFIK, TUSLAR, DOKUNMATIK, SES }
+
+## TELEFON (2026-10-19; kullanıcı seçimi prototip S "A düzeni + B renkleri", tools/proto_20261018/mobil_proto.gd A_ayarlar):
+## üstte kare geri düğmesi + başlık, ortada tek levhada satırlar (ince çizgiyle ayrılır, seçili = altın zemin + sol şerit), altta
+## sekmeler GENEL / GRAFİK / DOKUNMATİK / SES. TUŞLAR telefonda yok; GENEL'den ses ve pencere satırları çıkar (SES sekmesi /
+## telefonda pencere yok). Kaydırıcı + "< değer >" seçicisi aynı sınıflar, k = 2 (prototip ölçüsü).
+const PH_ROW_H := 120.0
+const PH_FS := 48
+const PH_AREA_TOP := 160.0
+const PH_RESET_W := 420.0
+const PH_TABS := [[Cat.GENEL, "GENEL", 300.0], [Cat.GRAFIK, "GRAFİK", 300.0], [Cat.DOKUNMATIK, "DOKUNMATİK", 460.0], [Cat.SES, "SES", 260.0]]
 
 const G_PICTURE := ["#########", "#....##.#", "#....##.#", "#..#....#", "#.###.#.#", "#########"]
 const G_KEY := [".#######.", "#.......#", "#.#.#.#.#", "#.......#", "#.#####.#", "#.......#", ".#######."]
@@ -51,6 +63,7 @@ const JOY_AXIS_LABELS := {
 ## Piksel kaydırıcı (Range: value / min_value / max_value / step + value_changed). Tıkla-sürükle değer verir.
 class FireSlider extends Range:
 	var focused: bool = false
+	var k: float = 1.0 ## telefonda 2 (prototip ölçüsü)
 	var _drag: bool = false
 
 	func _init() -> void:
@@ -74,7 +87,7 @@ class FireSlider extends Range:
 			accept_event()
 
 	func _set_from_x(x: float) -> void:
-		var f: float = clampf((x - 3.0) / maxf(size.x - 6.0, 1.0), 0.0, 1.0)
+		var f: float = clampf((x - 3.0 * k) / maxf(size.x - 6.0 * k, 1.0), 0.0, 1.0)
 		value = min_value + f * (max_value - min_value) ## Range step'e yuvarlar
 
 	func _r(x: float, y: float, w: float, h: float, c: Color) -> void:
@@ -84,24 +97,24 @@ class FireSlider extends Range:
 	func _draw() -> void:
 		var w: float = size.x
 		var h: float = size.y
-		var ty: float = roundf(h * 0.5 - 7.0)
-		_r(0, ty, w, 14, FM.C_LINE)
-		_r(3, ty + 3, w - 6, 8, FM.C_DARK)
-		var fx: float = roundf(3.0 + (w - 6.0) * _frac())
-		_r(3, ty + 3, fx - 3.0, 8, FM.C_GOLD)
-		_r(3, ty + 3, fx - 3.0, 3, FM.C_GOLD.lightened(0.3))
+		var ty: float = roundf(h * 0.5 - 7.0 * k)
+		_r(0, ty, w, 14 * k, FM.C_LINE)
+		_r(3 * k, ty + 3 * k, w - 6 * k, 8 * k, FM.C_DARK)
+		var fx: float = roundf(3.0 * k + (w - 6.0 * k) * _frac())
+		_r(3 * k, ty + 3 * k, fx - 3.0 * k, 8 * k, FM.C_GOLD)
+		_r(3 * k, ty + 3 * k, fx - 3.0 * k, 3 * k, FM.C_GOLD.lightened(0.3))
 		for i in range(1, 4):
-			var tx: float = roundf(3.0 + (w - 6.0) * float(i) / 4.0)
-			if tx > fx + 12.0:
-				_r(tx - 1.0, ty + 3.0, 3, 8, FM.C_LINE)
-		var kw := 18.0
+			var tx: float = roundf(3.0 * k + (w - 6.0 * k) * float(i) / 4.0)
+			if tx > fx + 12.0 * k:
+				_r(tx - 1.0 * k, ty + 3.0 * k, 3 * k, 8 * k, FM.C_LINE)
+		var kw := 18.0 * k
 		var kx: float = clampf(fx - kw * 0.5, 0.0, w - kw)
-		if focused:
+		if focused and k <= 1.0: ## telefonda seçili satırın zemini yeter (halka satırın dışına taşardı)
 			for rc: Rect2 in [Rect2(kx - 2, -3, kw + 4, 3), Rect2(kx - 2, h, kw + 4, 3), Rect2(kx - 5, 0, 3, h), Rect2(kx + kw + 2, 0, 3, h)]:
 				_r(rc.position.x, rc.position.y, rc.size.x, rc.size.y, FM.C_GOLD)
-		_r(kx, 2, kw, h - 4, FM.C_KNOB_DK)
-		_r(kx + 3, 5, kw - 6, h - 10, FM.C_CREAM)
-		_r(kx + 3, 5, kw - 6, 3, FM.C_CREAM.lightened(0.35))
+		_r(kx, 2 * k, kw, h - 4 * k, FM.C_KNOB_DK)
+		_r(kx + 3 * k, 5 * k, kw - 6 * k, h - 10 * k, FM.C_CREAM)
+		_r(kx + 3 * k, 5 * k, kw - 6 * k, 3 * k, FM.C_CREAM.lightened(0.35))
 
 
 ## "< değer >" döngüsü (aç/kapa dahil tüm çoklu seçimler). Fare: sol yarı önceki, sağ yarı sonraki. locked: kilit simgesi, değişmez.
@@ -112,6 +125,7 @@ class Carousel extends Control:
 	var override_text: String = "" ## ör. grafik "Özel" - adım atılınca normale döner
 	var locked: bool = false
 	var focused: bool = false
+	var well: bool = false ## telefon: koyu kuyu içinde, iri ok + 48 px yazı (dokunma alanı belli olsun)
 
 	func _init() -> void:
 		custom_minimum_size = Vector2(CHOICE_W, 44)
@@ -152,21 +166,27 @@ class Carousel extends Control:
 	func _draw() -> void:
 		var w: float = size.x
 		var h: float = size.y
-		var cy: float = roundf(h * 0.5 - 7.0)
+		var gp: float = 6.0 if well else 2.0
+		var cy: float = roundf(h * 0.5 - 3.5 * gp)
+		if well:
+			draw_rect(Rect2(Vector2.ZERO, size), FM.C_LINE)
+			draw_rect(Rect2(Vector2(3, 3), size - Vector2(6, 6)), Color(FM.C_DARK, 0.92))
+		var ax: float = roundf(44.0 - 2.5 * gp) if well else 4.0
 		var ac: Color = FM.C_SUB if locked else FM.C_GOLD
 		if locked:
-			_pat(G_LOCK, Vector2(4, cy), 2, ac)
+			_pat(G_LOCK, Vector2(ax, cy), gp, ac)
 		else:
-			_pat(G_ARROW_L, Vector2(4, cy), 2, ac)
-			_pat(G_ARROW_R, Vector2(w - 14, cy), 2, ac)
+			_pat(G_ARROW_L, Vector2(ax, cy), gp, ac)
+			_pat(G_ARROW_R, Vector2(w - ax - 5.0 * gp, cy), gp, ac)
 		var t: String = override_text
 		if t == "" and index >= 0 and index < options.size():
 			t = str(options[index])
 		var tc: Color = FM.C_SUB if locked else (FM.C_GOLD if focused else FM.C_CREAM)
 		var f: Font = DK.font()
-		var fs: int = DK.FS_BODY
+		var fs: int = PH_FS if well else DK.FS_BODY
+		var mx: float = 88.0 if well else 22.0
 		var by: float = roundf((h - (f.get_ascent(fs) + f.get_descent(fs))) * 0.5 + f.get_ascent(fs))
-		draw_string(f, Vector2(22, by), t, HORIZONTAL_ALIGNMENT_CENTER, w - 44, fs, tc)
+		draw_string(f, Vector2(mx, by), t, HORIZONTAL_ALIGNMENT_CENTER, w - 2.0 * mx, fs, tc)
 
 
 ## Tuş satırının iki hücresi (klavye / kumanda). Tıklanan hücre dinlemeye geçer.
@@ -213,6 +233,9 @@ var band_alpha: float = 0.8
 
 var _cat: int = Cat.GENEL
 var _cat_btns: Array[Button] = []
+## Görünen kategoriler (sekme / Q-E sırası); _cat_btns aynı sırada.
+var _cats: Array = [Cat.GENEL, Cat.GRAFIK, Cat.TUSLAR]
+var _phone: bool = false
 var _col: VBoxContainer = null
 var _hint_holder: Control = null
 var _rows: Array[Dictionary] = []
@@ -233,6 +256,12 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT) ## ağaçtayken set_anchors_preset eski (0) boyutu korurdu
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	theme = DK.theme()
+	_phone = MobileUIScript.enabled
+	FM.use_phone_palette(_phone)
+	if _phone:
+		_build_phone_shell()
+		_set_category(Cat.GENEL, false)
+		return
 	var band := FM.StepShade.new()
 	band.col = Color(0.05, 0.035, 0.025, band_alpha)
 	add_child(band)
@@ -283,9 +312,12 @@ func _ready() -> void:
 ## ------------------------------------------------------------------ kategoriler
 func _set_category(c: int, with_sound: bool) -> void:
 	_cancel_listen()
-	_cat = clampi(c, 0, Cat.size() - 1)
+	_cat = c if _cats.has(c) else int(_cats[0])
 	for i in _cat_btns.size():
-		FM.set_selected(_cat_btns[i], i == _cat)
+		if _phone:
+			PK.set_kind(_cat_btns[i], "selected" if _cats[i] == _cat else "secondary")
+		else:
+			FM.set_selected(_cat_btns[i], _cats[i] == _cat)
 	for ch in _col.get_children():
 		_col.remove_child(ch)
 		ch.queue_free()
@@ -297,24 +329,117 @@ func _set_category(c: int, with_sound: bool) -> void:
 			_build_grafik()
 		Cat.TUSLAR:
 			_build_tuslar()
+		Cat.DOKUNMATIK:
+			_build_dokunmatik()
+		Cat.SES:
+			_build_ses()
 	_focus = 0
 	_update_focus()
-	for ch in _hint_holder.get_children():
-		ch.queue_free()
-	var hv := DK.v(10)
-	hv.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if _cat == Cat.TUSLAR:
-		hv.add_child(FM.hint([["W/S", "seç"], ["A/D", "klavye / kumanda"], ["Enter", "ata"]]))
-	else:
-		hv.add_child(FM.hint([["W/S", "seç"], ["A/D", "değiştir"]]))
-	hv.add_child(FM.hint([["Q/E", "bölüm"], ["ESC", "geri"]]))
-	_hint_holder.add_child(hv)
+	if _hint_holder:
+		for ch in _hint_holder.get_children():
+			ch.queue_free()
+		var hv := DK.v(10)
+		hv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if _cat == Cat.TUSLAR:
+			hv.add_child(FM.hint([["W/S", "seç"], ["A/D", "klavye / kumanda"], ["Enter", "ata"]]))
+		else:
+			hv.add_child(FM.hint([["W/S", "seç"], ["A/D", "değiştir"]]))
+		hv.add_child(FM.hint([["Q/E", "bölüm"], ["ESC", "geri"]]))
+		_hint_holder.add_child(hv)
 	UiAnim.cascade(_col, 0.025)
 	if with_sound:
 		UISound.play_click()
 
 
+func _cycle_category(d: int) -> void:
+	var i: int = maxi(_cats.find(_cat), 0)
+	_set_category(int(_cats[wrapi(i + d, 0, _cats.size())]), true)
+
+
+## Telefon kabuğu: karartma + üst/alt sönümleme, geri + başlık, satır levhası (kaydırılabilir), alt sekmeler. Konumlar çapalı -
+## tuval genişliği telefona göre değişir.
+func _build_phone_shell() -> void:
+	_cats = [Cat.GENEL, Cat.GRAFIK, Cat.DOKUNMATIK, Cat.SES]
+	add_child(PK.dim(0.72))
+	add_child(PK.fade(SIDE_TOP, 200.0, 0.75))
+	add_child(PK.fade(SIDE_BOTTOM, 230.0, 0.85))
+	PK.header(self, "AYARLAR", "", close)
+	var area := PK.panel(0.9, 0.0)
+	area.name = "RowsPanel"
+	area.mouse_filter = Control.MOUSE_FILTER_PASS
+	area.set_anchors_preset(Control.PRESET_FULL_RECT)
+	area.offset_left = PK.SIDE
+	area.offset_right = -PK.SIDE
+	area.offset_top = PH_AREA_TOP
+	area.offset_bottom = -(PK.BOTTOM + PK.BTN_H + 16.0)
+	var sc := ScrollContainer.new()
+	sc.name = "Scroll"
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.mouse_filter = Control.MOUSE_FILTER_PASS
+	area.add_child(sc)
+	_col = DK.v(0)
+	_col.name = "Rows"
+	_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(_col)
+	add_child(area)
+	## Alt sıra levhanın iki kenarına hizalı: sekmeler soldan VARSAYILAN'a kadar (prototip genişlik oranlarıyla) yayılır, VARSAYILAN
+	## sağ kenarda - ortada boşluk kalıp sıra sola yığılmasın.
+	var tabs := DK.h(20)
+	tabs.name = "CategoryTabs"
+	tabs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tabs.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	tabs.offset_left = PK.SIDE
+	tabs.offset_right = -(PK.SIDE + PH_RESET_W + 24.0)
+	tabs.offset_top = -(PK.BOTTOM + PK.BTN_H)
+	tabs.offset_bottom = -PK.BOTTOM
+	for t: Array in PH_TABS:
+		var bt := PK.button(str(t[1]), "secondary", PK.FS_BODY, [], float(t[2]))
+		bt.name = "Tab" + str(t[1])
+		bt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		bt.size_flags_stretch_ratio = float(t[2])
+		var cat: int = int(t[0])
+		bt.pressed.connect(func() -> void:
+			if cat != _cat:
+				_set_category(cat, true))
+		tabs.add_child(bt)
+		_cat_btns.append(bt)
+	add_child(tabs)
+	var reset := PK.button("VARSAYILAN", "ghost", PK.FS_BODY, [], PH_RESET_W)
+	reset.name = "ResetButton"
+	reset.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	reset.offset_left = -(PK.SIDE + PH_RESET_W)
+	reset.offset_right = -PK.SIDE
+	reset.offset_top = -(PK.BOTTOM + PK.BTN_H)
+	reset.offset_bottom = -PK.BOTTOM
+	reset.pressed.connect(_reset_category)
+	add_child(reset)
+	PK.fit(self)
+
+
+## Telefon VARSAYILAN: açık sekmenin ayarlarını ilk kurulum değerlerine döndürür (UISound değişkenlerinin başlangıç değerleri).
+func _reset_category() -> void:
+	match _cat:
+		Cat.GENEL:
+			UISound.set_camera_shake_percent(100.0)
+			UISound.set_ui_anim_enabled(true)
+			UISound.set_show_fps(false)
+		Cat.GRAFIK:
+			UISound.set_gfx_preset(UISound.GfxPreset.HIGH)
+			UISound.set_fps_limit(UISound._default_fps_limit())
+		Cat.DOKUNMATIK:
+			UISound.set_touch_joystick_fixed(false)
+			UISound.set_touch_button_scale_percent(100.0)
+			UISound.set_ui_opacity_percent(100.0)
+			UISound.set_touch_vibration(true)
+		Cat.SES:
+			UISound.set_master_volume_percent(100.0)
+	_sync_all()
+	UISound.play_click()
+
+
 func _section(title: String) -> void:
+	if _phone: ## telefonda tek levha, bölüm başlığı yok (sekmeler ayırır)
+		return
 	var h := DK.h(10)
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	h.custom_minimum_size.y = 48
@@ -339,12 +464,15 @@ func _section(title: String) -> void:
 func _add_row(r: Dictionary, extra: Control = null) -> void:
 	var pc := PanelContainer.new()
 	pc.name = "Row_" + str(r["id"])
-	pc.custom_minimum_size.y = ROW_H
+	pc.custom_minimum_size.y = PH_ROW_H if _phone else ROW_H
 	pc.mouse_filter = Control.MOUSE_FILTER_PASS
-	var h := DK.h(16)
+	var h := DK.h(24 if _phone else 16)
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var lab := DK.lbl(r["label"], DK.FS_BODY, FM.C_CREAM)
+	var lab := DK.lbl(r["label"], PH_FS if _phone else DK.FS_BODY, FM.C_CREAM)
 	lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if _phone: ## prototip: yazı satırın ~%48'i, denetim kalanı
+		lab.size_flags_stretch_ratio = 0.92
+		(r["ctrl"] as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(lab)
 	if extra:
 		h.add_child(extra)
@@ -357,7 +485,15 @@ func _add_row(r: Dictionary, extra: Control = null) -> void:
 	ln.color = Color(FM.C_GOLD_DIM, 0.16)
 	ln.custom_minimum_size = Vector2(0, 2)
 	ln.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wrap.add_child(ln)
+	if _phone:
+		var lm := MarginContainer.new()
+		lm.add_theme_constant_override("margin_left", 28)
+		lm.add_theme_constant_override("margin_right", 28)
+		lm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lm.add_child(ln)
+		wrap.add_child(lm)
+	else:
+		wrap.add_child(ln)
 	_col.add_child(wrap)
 	r["panel"] = pc
 	r["lab"] = lab
@@ -369,7 +505,7 @@ func _add_row(r: Dictionary, extra: Control = null) -> void:
 ## stp: klavye/kumanda adımı; snap: kaydırıcının yuvarlama adımı (fare) - ses eskiden 1'lik adımla kaydediliyordu, yuvarlanmasın.
 func _slider_row(id: String, label: String, lo: float, hi: float, stp: float, getter: Callable, setter: Callable, fmt: Callable,
 		snap: float = -1.0) -> void:
-	var box := DK.h(14)
+	var box := DK.h(20 if _phone else 14)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var s := FireSlider.new()
 	s.name = id.capitalize().replace(" ", "") + "Slider"
@@ -377,10 +513,17 @@ func _slider_row(id: String, label: String, lo: float, hi: float, stp: float, ge
 	s.max_value = hi
 	s.step = snap if snap > 0.0 else stp
 	box.add_child(s)
-	var vl := DK.lbl("", DK.FS_BODY, FM.C_CREAM, HORIZONTAL_ALIGNMENT_RIGHT)
+	var vl := DK.lbl("", PH_FS if _phone else DK.FS_BODY, FM.C_CREAM, HORIZONTAL_ALIGNMENT_RIGHT)
 	vl.name = id.capitalize().replace(" ", "") + "Value"
 	vl.custom_minimum_size.x = VALUE_W - 14.0
 	box.add_child(vl)
+	if _phone: ## prototip: değer solda, kaydırıcı kalan genişlikte
+		s.k = 2.0
+		s.custom_minimum_size = Vector2(240, 64)
+		s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		vl.custom_minimum_size.x = 150.0
+		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		box.move_child(vl, 0)
 	var r := {"id": id, "label": label, "ctrl": box, "slider": s, "value_label": vl}
 	r["sync"] = func() -> void:
 		s.set_value_no_signal(float(getter.call()))
@@ -404,6 +547,9 @@ func _choice_row(id: String, label: String, options: Array, getter: Callable, se
 	var c := Carousel.new()
 	c.name = id.capitalize().replace(" ", "") + "Choice"
 	c.options = options
+	if _phone:
+		c.well = true
+		c.custom_minimum_size = Vector2(300, 88)
 	var hint_lbl: Label = null
 	if lock_hint != "":
 		hint_lbl = DK.lbl(lock_hint, DK.FS_LABEL, FM.C_SUB)
@@ -434,6 +580,14 @@ func _pct(v: float) -> String:
 
 
 func _build_genel() -> void:
+	if _phone: ## telefonda pencere/çözünürlük yok, ses kendi sekmesinde, opaklık DOKUNMATİK'te
+		_slider_row("shake", "Ekran Sarsıntısı", 0.0, 100.0, 10.0, func() -> float: return UISound.camera_shake_percent,
+				func(v: float) -> void: UISound.set_camera_shake_percent(v),
+				func(v: float) -> String: return "Kapalı" if roundi(v) == 0 else _pct(v))
+		_toggle_row("ui_anim", "Arayüz Animasyonları", func() -> bool: return UISound.ui_anim_enabled,
+				func(on: bool) -> void: UISound.set_ui_anim_enabled(on))
+		_toggle_row("fps", "FPS Göstergesi", func() -> bool: return UISound.show_fps, func(on: bool) -> void: UISound.set_show_fps(on))
+		return
 	_section("SES")
 	_slider_row("volume", "Oyun Sesi", 0.0, 100.0, 5.0, func() -> float: return UISound.master_volume_percent,
 			func(v: float) -> void: UISound.set_master_volume_percent(v), _pct, 1.0)
@@ -481,13 +635,31 @@ func _build_grafik() -> void:
 	_choice_row("fps_limit", "FPS Sınırı", fps_names, func() -> int: return maxi(UISound.FPS_LIMITS.find(UISound.fps_limit), 0),
 			func(i: int) -> void: UISound.set_fps_limit(UISound.FPS_LIMITS[i]))
 	_col.add_child(DK.sp(0, 18))
-	var hint := DK.wrap(GFX_HINT, DK.FS_LABEL, FM.C_TAG, COL_W - 40.0)
+	var hint := DK.wrap(GFX_HINT, 32 if _phone else DK.FS_LABEL, FM.C_TAG, 1600.0 if _phone else COL_W - 40.0)
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var m := MarginContainer.new()
-	m.add_theme_constant_override("margin_left", 20)
+	m.add_theme_constant_override("margin_left", 32 if _phone else 20)
 	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	m.add_child(hint)
 	_col.add_child(m)
+
+
+## Telefon: dokunmatik kontroller (UISound touch_* ayarları; joystick touch_controls.gd, düğme boyutu hud.gd) + arayüz opaklığı.
+func _build_dokunmatik() -> void:
+	_choice_row("joystick", "Joystick", ["Yüzen", "Sabit"], func() -> int: return 1 if UISound.touch_joystick_fixed else 0,
+			func(i: int) -> void: UISound.set_touch_joystick_fixed(i == 1))
+	_slider_row("button_size", "Düğme Boyutu", UISound.TOUCH_BUTTON_SCALE_MIN, UISound.TOUCH_BUTTON_SCALE_MAX, 10.0,
+			func() -> float: return UISound.touch_button_scale_percent,
+			func(v: float) -> void: UISound.set_touch_button_scale_percent(v), _pct, 5.0)
+	_slider_row("ui_opacity", "Arayüz Opaklığı", UISound.UI_OPACITY_MIN_PERCENT, 100.0, 5.0,
+			func() -> float: return UISound.ui_opacity_percent, func(v: float) -> void: UISound.set_ui_opacity_percent(v), _pct)
+	_toggle_row("vibration", "Titreşim", func() -> bool: return UISound.touch_vibration,
+			func(on: bool) -> void: UISound.set_touch_vibration(on))
+
+
+func _build_ses() -> void:
+	_slider_row("volume", "Oyun Sesi", 0.0, 100.0, 5.0, func() -> float: return UISound.master_volume_percent,
+			func(v: float) -> void: UISound.set_master_volume_percent(v), _pct, 1.0)
 
 
 func _build_tuslar() -> void:
@@ -554,8 +726,8 @@ func _update_focus() -> void:
 		if on:
 			s.border_width_left = 6
 			s.border_color = FM.C_GOLD
-		s.content_margin_left = 18
-		s.content_margin_right = 18
+		s.content_margin_left = 32 if _phone else 18
+		s.content_margin_right = 24 if _phone else 18
 		s.content_margin_top = 4
 		s.content_margin_bottom = 4
 		(r["panel"] as PanelContainer).add_theme_stylebox_override("panel", s)
@@ -678,10 +850,10 @@ func _input(event: InputEvent) -> void:
 		close()
 	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_Q \
 			or event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_LEFT_SHOULDER:
-		_set_category(wrapi(_cat - 1, 0, Cat.size()), true)
+		_cycle_category(-1)
 	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode in [KEY_E, KEY_TAB] \
 			or event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_RIGHT_SHOULDER:
-		_set_category(wrapi(_cat + 1, 0, Cat.size()), true)
+		_cycle_category(1)
 	elif _act(event, ["ui_up", "move_up"]):
 		_move_focus(-1)
 	elif _act(event, ["ui_down", "move_down"]):
@@ -704,6 +876,16 @@ func _step_focused(d: int) -> void:
 		return
 	if bool((_rows[_focus]["step"] as Callable).call(d)):
 		UISound.play_click()
+
+
+## Grup paneli (HUD, katman 96) ayarlar açıkken görünmez - kullanıcı (2026-10-19): "grup penceresi üstte görünmemeli ayarlar
+## açıkken" (bkz. party_panel.gd set_suppressed).
+func _enter_tree() -> void:
+	get_tree().call_group(&"party_panel", &"set_suppressed", "settings", true)
+
+
+func _exit_tree() -> void:
+	get_tree().call_group(&"party_panel", &"set_suppressed", "settings", false)
 
 
 ## Ekranı kapatır: ESC/B ya da GERİ. Aynı basışla duraklatma menüsü de kapanmasın (main.gd / pause_menu.gd ui_cancel denetimi).

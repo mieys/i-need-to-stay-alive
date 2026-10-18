@@ -27,6 +27,8 @@ const SI := preload("res://scripts/stat_icon.gd")
 const PreviewScript := preload("res://scripts/menu_character_preview.gd")
 const RR := preload("res://scripts/run_records.gd")
 const RunSummaryUI := preload("res://scripts/run_summary_ui.gd")
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const PK := preload("res://scripts/phone_menu_kit.gd")
 
 const LEFT := Rect2(32, 24, 440, 1024)
 const MID := Rect2(488, 24, 760, 1024)
@@ -70,6 +72,14 @@ var _lock: ColorRect = null
 var _pending_shown: int = -1
 var _pending_bars: Array = []
 var _time: float = 0.0
+## Ölçüler (telefonda büyür, bkz. _build_phone).
+var _card: Vector2 = CARD
+var _card_face: float = 96.0
+var _tile: Vector2 = TILE
+var _fs_lab: int = DK.FS_LABEL
+var _fs_small: int = DK.FS_SMALL
+var _prev_k: int = 3
+var _prev_ground: float = 172.0
 
 
 func build() -> void:
@@ -77,6 +87,9 @@ func build() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = DK.theme()
 	_validate_loadout()
+	if MobileUIScript.enabled:
+		_build_phone()
+		return
 	if solo:
 		_build_left_solo()
 	else:
@@ -303,6 +316,8 @@ func _refresh_room() -> void:
 
 
 func _refresh_players() -> void:
+	if _players == null: ## telefon tek oyunculu: oyuncu kartı yok
+		return
 	for c in _players.get_children():
 		_players.remove_child(c)
 		c.queue_free()
@@ -526,29 +541,29 @@ func _char_card(id: int) -> Button:
 	var def: Dictionary = Characters.get_def(id)
 	var lk: bool = not MP.is_unlocked(MP.CHAR, id)
 	var b := Button.new()
-	b.custom_minimum_size = CARD
+	b.custom_minimum_size = _card
 	b.tooltip_text = str(def.get("name", "")) + ("\n" + MP.lock_text(MP.CHAR, id) if lk else "")
 	b.pressed.connect(func() -> void: character_picked.emit(id))
 	var v := DK.v(2)
 	v.set_anchors_preset(Control.PRESET_FULL_RECT)
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(DK.icon(LU.face_texture(str(def.get("portrait", ""))), 96, lk))
+	v.add_child(DK.icon(LU.face_texture(str(def.get("portrait", ""))), _card_face, lk))
 	var nl: Label = null
 	if lk:
 		var ph := DK.h(6)
 		ph.alignment = BoxContainer.ALIGNMENT_CENTER
-		ph.add_child(DK.ShardIcon.new(18, true))
-		ph.add_child(DK.lbl(str(MP.cost(MP.CHAR, id)), DK.FS_LABEL, DK.C_BAD))
+		ph.add_child(DK.ShardIcon.new(18 if _fs_lab <= DK.FS_LABEL else 28, true))
+		ph.add_child(DK.lbl(str(MP.cost(MP.CHAR, id)), _fs_lab, DK.C_BAD))
 		v.add_child(ph)
 	else:
 		var t: String = str(SHORT.get(id, def.get("name", "")))
-		var fs: int = DK.FS_LABEL if DK.font().get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, DK.FS_LABEL).x <= CARD.x - 12 else DK.FS_SMALL
+		var fs: int = _fs_lab if DK.font().get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, _fs_lab).x <= _card.x - 12 else _fs_small
 		nl = DK.lbl(t, fs, DK.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
 		v.add_child(nl)
 	b.add_child(v)
 	if lk:
-		var lg := DK.glyph(DK.G_LOCK, DK.C_DIM, 3)
-		lg.position = Vector2(CARD.x - 30, 8)
+		var lg := DK.glyph(DK.G_LOCK, DK.C_DIM, 3 if _card.x <= CARD.x else 4)
+		lg.position = Vector2(_card.x - (30 if _card.x <= CARD.x else 40), 8)
 		b.add_child(lg)
 	var marks := DK.h(4)
 	marks.position = Vector2(6, 6)
@@ -602,7 +617,7 @@ func show_character(id: int, locked: bool) -> void:
 	_fill_stats(id)
 	_fill_skills(id)
 	if _preview:
-		_preview.call("setup", def, 3, 172.0)
+		_preview.call("setup", def, _prev_k, _prev_ground)
 	_refresh_loadout_header()
 	_refresh_start()
 	if solo:
@@ -631,9 +646,13 @@ func _fill_stats(id: int) -> void:
 	for row: Array in [["max_health", "Can", str(int(bs.get("hp", 100)))], ["speed", "Hız", str(int(bs.get("speed", 252)))],
 			["damage", "Güç", str(int(bs.get("ap", 10)))], ["fire_rate", "Saldırı Hızı", ("%+d%%" % atk) if atk != 0 else "0"]]:
 		var hb := DK.h(8)
-		hb.add_child(DK.icon(_stat_tex(row[0]), 32))
-		hb.add_child(DK.lbl(row[1], DK.FS_LABEL, DK.C_DIM))
-		hb.add_child(DK.lbl(row[2], DK.FS_LABEL))
+		hb.add_child(DK.icon(_stat_tex(row[0]), 32 if _fs_lab <= DK.FS_LABEL else 48))
+		var nlab := DK.lbl(row[1], _fs_lab, DK.C_DIM)
+		if _phone: ## telefon: ad solda, değer sağda (iki sütun eşit genişlikte)
+			nlab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hb.add_child(nlab)
+		hb.add_child(DK.lbl(row[2], _fs_lab))
 		_stats.add_child(hb)
 
 
@@ -656,6 +675,9 @@ func _fill_skills(id: int) -> void:
 		_skills.remove_child(c)
 		c.queue_free()
 	var d: Dictionary = Characters.get_def(id)
+	if _phone:
+		_ph_fill_skills(id, d)
+		return
 	for slot: Array in [["skill", "skill"], ["skill2", "skill2"], ["skill3", "skill3"], ["passive", ""]]:
 		var key: String = slot[0]
 		var nm: String = "Pasif" if key == "passive" else str(d.get(key + "_name", ""))
@@ -812,19 +834,23 @@ func _fill_tab() -> void:
 		var lk: bool = not MP.is_unlocked(_meta_kind(_tab), key)
 		var on: bool = key == cur
 		var b := Button.new()
-		b.custom_minimum_size = TILE
+		b.custom_minimum_size = _tile
 		DK.style_button(b, "tile_on" if on else ("tile_locked" if lk else "tile"), 4, 4.0)
 		b.tooltip_text = _opt_name(_tab, key) + ("\n" + MP.lock_text(_meta_kind(_tab), key) if lk else "")
 		var v := DK.v(2)
 		v.set_anchors_preset(Control.PRESET_FULL_RECT)
 		v.alignment = BoxContainer.ALIGNMENT_CENTER
 		## DK.icon tam katlı ölçekler: 64 kutuda 48 px sanat 1x kalıyordu (silahlar küçük görünürdü) -> silah 96 (2x).
-		v.add_child(DK.icon(_opt_icon(_tab, key), 96 if _tab == "weapon" else 64, lk))
-		v.add_child(DK.lbl(_opt_name(_tab, key), DK.FS_SMALL, DK.C_ACCENT if on else (DK.C_DIM if lk else DK.C_TEXT), HORIZONTAL_ALIGNMENT_CENTER))
+		var isz: float = (96.0 if _tab == "weapon" else 64.0) * (1.5 if _phone else 1.0)
+		v.add_child(DK.icon(_opt_icon(_tab, key), isz, lk))
+		var on_l := DK.lbl(_opt_name(_tab, key), _fs_small, DK.C_ACCENT if on else (DK.C_DIM if lk else DK.C_TEXT), HORIZONTAL_ALIGNMENT_CENTER)
+		on_l.clip_text = true
+		on_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		v.add_child(on_l)
 		b.add_child(v)
 		if lk:
-			var lg := DK.glyph(DK.G_LOCK, DK.C_DIM, 2)
-			lg.position = Vector2(TILE.x - 22, 8)
+			var lg := DK.glyph(DK.G_LOCK, DK.C_DIM, 2 if not _phone else 3)
+			lg.position = Vector2(_tile.x - (22 if not _phone else 32), 8)
 			b.add_child(lg)
 		b.pressed.connect(_on_option_pressed.bind(key))
 		_tab_grid.add_child(b)
@@ -876,6 +902,9 @@ func _fill_detail() -> void:
 func _refresh_loadout_header() -> void:
 	if _load_name == null:
 		return
+	if _phone:
+		_ph_refresh_loadout()
+		return
 	_load_name.text = str(Characters.get_def(_sel_char).get("name", ""))
 	for c in _load_icons.get_children():
 		_load_icons.remove_child(c)
@@ -924,7 +953,7 @@ func _refresh_start() -> void:
 		_start_btn.text = "KİLİTLİ KARAKTER" if _viewing_locked else "OYUNU BAŞLAT"
 		_start_btn.disabled = _viewing_locked
 		DK.style_button(_start_btn, "off" if _viewing_locked else "primary")
-		_start_info.text = MP.lock_text(MP.CHAR, _sel_char) if _viewing_locked else "Tek oyunculu  ·  Esc: ana menü"
+		_start_info.text = MP.lock_text(MP.CHAR, _sel_char) if _viewing_locked else ("" if _phone else "Tek oyunculu  ·  Esc: ana menü")
 		return
 	var lp: Dictionary = NetworkManager.lobby_players
 	var ready_n: int = 0
@@ -964,7 +993,7 @@ func _refresh_start() -> void:
 				kind = "off"
 		info_text += "  ·  host herkes hazır olunca başlatır"
 	DK.style_button(_start_btn, kind)
-	_start_info.text = info_text
+	_start_info.text = info_text.replace("  ·  ", ", ") if _phone else info_text
 	if _lock:
 		_lock.visible = _local_ready() and not NetworkManager.is_host
 
@@ -982,3 +1011,324 @@ func refresh() -> void:
 	_refresh_players()
 	_refresh_marks()
 	_refresh_start()
+
+
+## ------------------------------------------------------------------ telefon
+## TELEFON (2026-10-19, madde 279; kullanıcı seçimi prototip S = B "Yan Ray + Detay", mobil_proto.gd B_karakter; kullanıcı: "karakter
+## seçimlerinde (hepsi) karakterin yüzü görünsün sağdaki hali boydan olsun sadece"): ray [TAKIM (çok oyunculu)] KAHRAMAN / EVCİL / SİLAH /
+## RUHANİ (simgeler o anki seçim); ortada sekmenin ızgarası (YÜZ kartları / seçenek karoları + açıklama) ya da TAKIM (oda, oyuncular,
+## sohbet); sağda BOYDAN canlı önizleme + ad + statlar + yetenek simgeleri (dokununca açıklama) + yükleme + BAŞLAT / HAZIRIM. Aynı üyeler
+## (_cards, _tab_grid, _detail_*, _stats, _skills, _preview, _start_btn, _players, _chat_* ...) masaüstü mantığıyla dolar; geri = leave_pressed.
+var _phone: bool = false
+var _ph: Dictionary = {}
+var _ph_pages: Dictionary = {} ## "team" / "hero" / "opts" -> sayfa
+var _ph_tab_keys: Array = []
+var _ph_rail_icons: Dictionary = {} ## "pet"/"weapon"/"spirit" -> TextureRect (raydaki simge)
+var _ph_opts_title: Label = null
+var _ph_skill_desc: Label = null
+var _ph_skill_sel: int = 0
+
+
+func _build_phone() -> void:
+	_phone = true
+	_card = Vector2(196, 232)
+	_card_face = 144.0
+	_tile = Vector2(196, 232)
+	_fs_lab = 32
+	_fs_small = 32
+	_prev_k = 6
+	_prev_ground = 312.0
+	var root := Control.new()
+	root.name = "PhoneSelect"
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
+	PK.fit(root)
+	var tabs: Array = []
+	if not solo:
+		tabs.append(["TAKIM", PK.G_USERS])
+		_ph_tab_keys.append("team")
+	for k: Array in [["hero", "KAHRAMAN"], ["pet", "EVCİL"], ["weapon", "SİLAH"], ["spirit", "RUHANİ"]]:
+		_ph_tab_keys.append(k[0])
+		if k[0] == "hero":
+			tabs.append([k[1], PK.G_USER])
+		else:
+			var ic: CenterContainer = DK.icon(_opt_icon(str(k[0]), _current(str(k[0]))), 64)
+			if ic.get_child_count() > 0:
+				_ph_rail_icons[k[0]] = ic.get_child(0)
+			tabs.append([k[1], ic])
+	_ph = PK.b_frame(root, tabs, func() -> void: leave_pressed.emit(), 860.0, 0.55)
+	var rail_tabs: Array = _ph["tabs"]
+	for i in rail_tabs.size():
+		var ti: int = i
+		(rail_tabs[i] as Button).pressed.connect(func() -> void:
+			UISound.play_click()
+			_ph_select_tab(ti))
+	var mid: Control = _ph["mid"]
+	_ph_pages["hero"] = _ph_hero_page()
+	_ph_pages["opts"] = _ph_opts_page()
+	if not solo:
+		_ph_pages["team"] = _ph_team_page()
+	for k in _ph_pages:
+		var pg: Control = _ph_pages[k]
+		mid.add_child(pg)
+		pg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_ph_build_detail(_ph["det"])
+	if not solo:
+		_ph_build_lock(root)
+		NetworkManager.chat_message_received.connect(_on_chat_message)
+		set_process(true)
+	else:
+		set_process(false)
+	_tab = "weapon"
+	_detail_key = _current("weapon")
+	_ph_select_tab(_ph_tab_keys.find("hero"))
+
+
+func _ph_select_tab(i: int) -> void:
+	PK.set_rail(_ph["tabs"], i)
+	var key: String = _ph_tab_keys[i]
+	for k in _ph_pages:
+		(_ph_pages[k] as Control).visible = false
+	match key:
+		"team", "hero":
+			(_ph_pages[key] as Control).visible = true
+		_:
+			(_ph_pages["opts"] as Control).visible = true
+			_ph_opts_title.text = {"pet": "EVCİL", "weapon": "SİLAH", "spirit": "RUHANİ"}[key]
+			_set_tab(key)
+
+
+## KAHRAMAN: başlık + açık sayısı + 5 sütun yüz kartı (kaydırılır).
+func _ph_hero_page() -> Control:
+	var v := DK.v(16)
+	v.name = "HeroPage"
+	_open_count = PK.lbl("", PK.FS_SMALL, DK.C_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
+	var head := DK.h(16)
+	var t := PK.lbl("KAHRAMAN", PK.FS_TITLE, DK.C_ACCENT)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	head.add_child(_open_count)
+	v.add_child(head)
+	var lst: Array = PK.scroll_list(0)
+	v.add_child(lst[0])
+	var grid := GridContainer.new()
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 16)
+	var ids: Array = Characters.DEFS.keys()
+	ids.sort()
+	var open_n: int = 0
+	for id in ids:
+		grid.add_child(_char_card(int(id)))
+		if MP.is_unlocked(MP.CHAR, int(id)):
+			open_n += 1
+	_open_count.text = "%d / %d açık" % [open_n, ids.size()]
+	(lst[1] as VBoxContainer).add_child(grid)
+	return v
+
+
+## EVCİL / SİLAH / RUHANİ: başlık + 5 sütun seçenek karosu (kaydırılır) + seçilen/incelenen seçeneğin açıklaması.
+func _ph_opts_page() -> Control:
+	var v := DK.v(16)
+	v.name = "OptionsPage"
+	_ph_opts_title = PK.lbl("", PK.FS_TITLE, DK.C_ACCENT)
+	v.add_child(_ph_opts_title)
+	var lst: Array = PK.scroll_list(0)
+	v.add_child(lst[0])
+	_tab_grid = GridContainer.new()
+	_tab_grid.columns = 5
+	_tab_grid.add_theme_constant_override("h_separation", 16)
+	_tab_grid.add_theme_constant_override("v_separation", 16)
+	(lst[1] as VBoxContainer).add_child(_tab_grid)
+	var wd := PK.inset(0.85, 20.0, DK.C_LINE)
+	wd.custom_minimum_size.y = 236
+	var wdv := DK.v(6)
+	var wh := DK.h(16)
+	_detail_name = PK.lbl("", PK.FS_BODY, DK.C_ACCENT)
+	wh.add_child(_detail_name)
+	_detail_cat = PK.lbl("", PK.FS_SMALL, DK.C_DIM)
+	wh.add_child(_detail_cat)
+	wdv.add_child(wh)
+	_detail_desc = PK.lbl("", PK.FS_SMALL, DK.C_DIM)
+	_detail_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wdv.add_child(_detail_desc)
+	wd.add_child(wdv)
+	v.add_child(wd)
+	return v
+
+
+## TAKIM (çok oyunculu): oda adı + bilgiler + durum, oyuncu kartları (kaydırılır), sohbet.
+func _ph_team_page() -> Control:
+	var v := DK.v(14)
+	v.name = "TeamPage"
+	var head := DK.h(16)
+	_room_name = PK.lbl(NetworkManager.room_name, PK.FS_TITLE, DK.C_ACCENT)
+	_room_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_room_name.clip_text = true
+	_room_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	head.add_child(_room_name)
+	_leave_btn = PK.button("ODAYI KAPAT" if NetworkManager.is_host else "ODADAN ÇIK", "danger", PK.FS_SMALL, [], 0.0, 72.0)
+	_leave_btn.pressed.connect(func() -> void: leave_pressed.emit())
+	head.add_child(_leave_btn)
+	v.add_child(head)
+	_chips = DK.h(8)
+	v.add_child(_chips)
+	_status = PK.lbl("Karakterini, silahını, evcilini ve ruhani yeteneğini seç.", PK.FS_SMALL, DK.C_DIM)
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(_status)
+	var cols := DK.h(20)
+	cols.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var plist := ScrollContainer.new()
+	plist.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	plist.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	plist.size_flags_stretch_ratio = 1.2
+	_players = DK.v(10)
+	_players.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	plist.add_child(_players)
+	cols.add_child(plist)
+	var chat := PK.inset(0.85, 16.0, DK.C_LINE)
+	chat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var cv := DK.v(8)
+	cv.add_child(PK.lbl("SOHBET", PK.FS_SMALL, DK.C_ACCENT))
+	_chat_scroll = ScrollContainer.new()
+	_chat_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_chat_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_chat_log = DK.v(4)
+	_chat_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_chat_scroll.add_child(_chat_log)
+	cv.add_child(_chat_scroll)
+	_chat_input = PK.line_edit("Mesaj yaz", PK.FS_SMALL, 80.0)
+	_chat_input.max_length = 200
+	_chat_input.text_submitted.connect(func(_t: String) -> void: _send_chat())
+	cv.add_child(_chat_input)
+	chat.add_child(cv)
+	cols.add_child(chat)
+	v.add_child(cols)
+	for e in NetworkManager.lobby_chat_log:
+		_add_chat_line(str(e["name"]), str(e["text"]))
+	_scroll_chat_end.call_deferred()
+	return v
+
+
+## Sağ sütun: boydan önizleme + ad + statlar + yetenek simgeleri + yükleme + başlat.
+func _ph_build_detail(det: VBoxContainer) -> void:
+	var sc := PK.inset(0.8, 0.0, DK.C_LINE)
+	sc.custom_minimum_size = Vector2(0, 340)
+	sc.add_child(DK.Spot.new(DK.C_SPOT, 0.86))
+	_preview = PreviewScript.new()
+	_preview.custom_minimum_size = Vector2(0, 340)
+	sc.add_child(_preview)
+	_preview.set("playing", true)
+	det.add_child(sc)
+	det.add_child(DK.sp(0, 12))
+	_char_name = PK.lbl("", PK.FS_TITLE, DK.C_ACCENT)
+	det.add_child(_char_name)
+	_stats = GridContainer.new()
+	_stats.columns = 2
+	_stats.add_theme_constant_override("h_separation", 40)
+	_stats.add_theme_constant_override("v_separation", 4)
+	det.add_child(_stats)
+	det.add_child(DK.sp(0, 12))
+	_skills = DK.v(8)
+	det.add_child(_skills)
+	det.add_child(DK.sp(0, 0, false, true))
+	var lr := DK.h(12)
+	_load_icons = DK.h(8)
+	lr.add_child(_load_icons)
+	_load_name = PK.lbl("", PK.FS_SMALL, DK.C_DIM)
+	_load_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_load_name.clip_text = true
+	_load_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	lr.add_child(_load_name)
+	det.add_child(lr)
+	det.add_child(DK.sp(0, 12))
+	_start_info = PK.lbl("", PK.FS_SMALL, DK.C_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	_start_info.clip_text = true
+	_start_info.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	det.add_child(_start_info)
+	_start_btn = DK.btn("OYUNU BAŞLAT", "off", PK.FS_TITLE, 144, 0)
+	_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_start_btn.pressed.connect(func() -> void:
+		if solo or NetworkManager.is_host:
+			start_pressed.emit()
+		else:
+			ready_pressed.emit())
+	det.add_child(_start_btn)
+
+
+## Yetenek simgeleri (Pasif, Q, E, R) 96 px + tuş rozeti; dokunulan yeteneğin adı + ilk cümlesi altta.
+func _ph_fill_skills(id: int, d: Dictionary) -> void:
+	var row := DK.h(20)
+	var slots: Array = []
+	for slot: Array in [["passive", ""], ["skill", "skill"], ["skill2", "skill2"], ["skill3", "skill3"]]:
+		var key: String = slot[0]
+		var nm: String = "Pasif" if key == "passive" else str(d.get(key + "_name", ""))
+		var desc: String = str(d.get("passive" if key == "passive" else key + "_desc", ""))
+		if nm == "" and desc == "":
+			continue
+		slots.append([key, nm, desc, "P" if key == "passive" else GameManager.get_action_key_label(str(slot[1])).left(1)])
+	_ph_skill_sel = clampi(_ph_skill_sel, 0, maxi(slots.size() - 1, 0))
+	for i in slots.size():
+		var sl: Array = slots[i]
+		var b := Button.new()
+		b.focus_mode = Control.FOCUS_NONE
+		b.custom_minimum_size = Vector2(104, 104)
+		DK.style_button(b, "tile_on" if i == _ph_skill_sel else "tile", 6, 4.0)
+		var holder := CenterContainer.new()
+		holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(DK.icon(_tex(str(d.get(str(sl[0]) + "_icon", ""))), 88))
+		b.add_child(holder)
+		var kb := DK.box(DK.C_INSET, DK.C_ACCENT if str(sl[3]) == "R" else DK.C_LINE_HI, 0, 2, 3)
+		kb.custom_minimum_size = Vector2(36, 36)
+		kb.position = Vector2(-6, 74)
+		kb.add_child(DK.lbl(str(sl[3]), 24, DK.C_ACCENT if str(sl[3]) == "R" else DK.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+		b.add_child(kb)
+		var bi: int = i
+		b.pressed.connect(func() -> void:
+			_ph_skill_sel = bi
+			_fill_skills(_sel_char))
+		row.add_child(b)
+	_skills.add_child(row)
+	_ph_skill_desc = PK.lbl("", PK.FS_SMALL, DK.C_DIM)
+	_ph_skill_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_ph_skill_desc.custom_minimum_size = Vector2(0, 72)
+	if not slots.is_empty():
+		var cur: Array = slots[_ph_skill_sel]
+		var lvl: int = 0 if str(cur[0]) == "passive" else Characters.skill_unlock_level(id, str(cur[0]))
+		_ph_skill_desc.text = "%s%s: %s" % [cur[1], (" (%d. sv.)" % lvl) if lvl > 1 else "", first_sentence(str(cur[2]), 110)]
+	_skills.add_child(_ph_skill_desc)
+
+
+## Yükleme satırı (evcil, silah, ruhani simgeleri + adları) ve raydaki simgeler.
+func _ph_refresh_loadout() -> void:
+	for c in _load_icons.get_children():
+		_load_icons.remove_child(c)
+		c.queue_free()
+	var names: Array = []
+	for kind: String in ["pet", "weapon", "spirit"]:
+		var key: String = _current(kind)
+		_load_icons.add_child(DK.slot(_opt_icon(kind, key), 56, _opt_name(kind, key)))
+		names.append(_opt_name(kind, key))
+		var tr: Variant = _ph_rail_icons.get(kind)
+		if tr is TextureRect and is_instance_valid(tr):
+			(tr as TextureRect).texture = _opt_icon(kind, key)
+	_load_name.text = ", ".join(names)
+
+
+## Hazır olunca (istemci) seçim alanı kilitlenir; HAZIR DEĞİLİM sağ sütunda açık kalır.
+func _ph_build_lock(root: Control) -> void:
+	_lock = ColorRect.new()
+	_lock.color = Color(0.04, 0.04, 0.08, 0.5)
+	_lock.mouse_filter = Control.MOUSE_FILTER_STOP
+	_lock.visible = false
+	_lock.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_lock.offset_left = PK.RAIL_W
+	_lock.offset_right = -(860.0 + 2.0 * PK.EDGE)
+	root.add_child(_lock)
+	var l := PK.lbl("Hazırsın - değiştirmek için HAZIR DEĞİLİM'e bas.", PK.FS_BODY, DK.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_lock.add_child(l)
+	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	l.offset_bottom = -48

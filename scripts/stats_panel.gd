@@ -274,27 +274,104 @@ func apply_mobile_layout(rect: Rect2) -> void:
 	pivot_offset = size * 0.5
 	var margin: MarginContainer = $Frame/Margin as MarginContainer
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 14)
-	($Frame/Margin/VBox/Title as Label).add_theme_font_size_override("font_size", 48)
+		margin.add_theme_constant_override("margin_" + side, 24)
 	var hint: Control = get_node_or_null("Frame/Margin/VBox/CloseHint") as Control
 	if hint:
-		hint.visible = false ## "ENVANTER'e tekrar bas" - telefonda kapatma envanterin X'i / boşluğa dokunma
+		hint.visible = false ## "ENVANTER'e tekrar bas" - telefonda kapatma rayın geri düğmesi
+	_ph_build_cards()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("#1a1a2c")
+	sb.border_color = Color("#5f5c86")
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(10)
+	($Frame as Control).add_theme_stylebox_override("panel", sb)
+	var title: Label = $Frame/Margin/VBox/Title as Label
+	title.text = "ÖZELLİKLER"
+	title.add_theme_font_size_override("font_size", 48)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	title.add_theme_color_override("font_color", Color("#f4c56e"))
+	title.add_theme_constant_override("outline_size", 0)
+	var well := StyleBoxEmpty.new()
+	well.content_margin_top = 12
+	($Frame/Margin/VBox/GridScroll as Control).add_theme_stylebox_override("panel", well)
+
+
+## Telefon (kullanıcı 2026-10-19: "özellikler kısmında ... sayılar arasında çok gereksiz boşluk var kullanışlı değil"): geniş ekranda
+## [simge | ad ........ değer] satırları ad ile değeri ekranın iki ucuna ayırıyordu. Her özellik kendi karosunda: simge + büyük değer,
+## hemen altında adı; 3 sütun, kaydırmadan sığar. Sahnedeki üçlüler (simge, ad, değer) karolara taşınır - değer etiketlerine tutulan
+## başvurular aynı kalır; Grid tek sütunlu kabuğa döner (üçlü gezen eski kod boş geçer). Bir kez kurulur.
+const PH_COLS := 3
+var _ph_cards: GridContainer = null
+
+
+func _ph_build_cards() -> void:
+	if _ph_cards != null:
+		return
 	var grid: GridContainer = $Frame/Margin/VBox/GridScroll/Grid as GridContainer
-	grid.add_theme_constant_override("h_separation", 20)
-	grid.add_theme_constant_override("v_separation", 10)
+	_ph_cards = GridContainer.new()
+	_ph_cards.name = "PhoneCards"
+	_ph_cards.columns = PH_COLS
+	_ph_cards.add_theme_constant_override("h_separation", 16)
+	_ph_cards.add_theme_constant_override("v_separation", 14)
+	_ph_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var kids: Array[Node] = grid.get_children()
-	for i in range(0, kids.size(), 3):
-		if i + 2 >= kids.size():
-			break
-		var icon_node: Control = kids[i] as Control
-		if icon_node:
-			icon_node.custom_minimum_size = Vector2(48, 48)
-		for j in [1, 2]:
-			var lbl: Label = kids[i + j] as Label
-			if lbl:
-				lbl.add_theme_font_size_override("font_size", 40)
-				if j == 2:
-					lbl.custom_minimum_size = Vector2(220, 0)
+	for i in range(0, kids.size() - 2, 3):
+		var icon_node := kids[i] as Control
+		var name_lbl := kids[i + 1] as Label
+		var val_lbl := kids[i + 2] as Label
+		if icon_node == null or name_lbl == null or val_lbl == null:
+			continue
+		var card := PanelContainer.new()
+		card.name = "Card_" + str(name_lbl.name)
+		card.visible = name_lbl.visible ## gizli satır (geri tepme) gizli karo
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.tooltip_text = name_lbl.tooltip_text
+		card.mouse_filter = Control.MOUSE_FILTER_PASS
+		var cs := StyleBoxFlat.new()
+		cs.bg_color = Color("#23233a")
+		cs.border_color = Color("#3b3a5a")
+		cs.set_border_width_all(2)
+		cs.set_corner_radius_all(10)
+		cs.content_margin_left = 20
+		cs.content_margin_right = 20
+		cs.content_margin_top = 12
+		cs.content_margin_bottom = 12
+		card.add_theme_stylebox_override("panel", cs)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 18)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", -6)
+		col.alignment = BoxContainer.ALIGNMENT_CENTER
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		for n: Node in [icon_node, name_lbl, val_lbl]:
+			n.get_parent().remove_child(n)
+		icon_node.custom_minimum_size = Vector2(56, 56)
+		icon_node.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(icon_node)
+		val_lbl.add_theme_font_size_override("font_size", 48)
+		val_lbl.add_theme_color_override("font_color", Color("#f0da94"))
+		val_lbl.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+		val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		val_lbl.custom_minimum_size = Vector2.ZERO
+		val_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		val_lbl.clip_text = true
+		val_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		name_lbl.add_theme_font_size_override("font_size", 32)
+		name_lbl.add_theme_color_override("font_color", Color("#a7a2c0"))
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.custom_minimum_size = Vector2.ZERO
+		name_lbl.clip_text = true
+		name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		col.add_child(val_lbl)
+		col.add_child(name_lbl)
+		row.add_child(col)
+		card.add_child(row)
+		_ph_cards.add_child(card)
+	grid.columns = 1
+	grid.add_child(_ph_cards)
 
 
 ## KULLANICI BİLDİRİMİ (2026-09-21): "şans buga girmiş veya çok bozuk %1500lere kadar ulaşılabiliyor, çok şans alınmamasına

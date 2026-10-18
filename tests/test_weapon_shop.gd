@@ -383,6 +383,35 @@ func test_screen_lists_every_weapon_and_buys_through_the_rules() -> void:
 	_restore_state()
 
 
+## Kullanıcı (2026-10-19): "demircide bir iteme tıklayınca 3 tane tıklama çerçevesi görünüyor onlar 1 tane olmalı" - seçili / odaklı
+## silah kartında tek gösterge (kartın altın kenarı): kumanda odak halkası yok, ikon yuvasının seçim halkası görünmez.
+func _visible_rings(n: Node, out: Array) -> void:
+	if n is CanvasItem and (n.name == "GamepadFocusRing" or n.name == "SelRing") and (n as CanvasItem).visible:
+		out.append(str(n.name))
+	for c in n.get_children():
+		_visible_rings(c, out)
+
+
+func test_selected_weapon_card_shows_a_single_frame() -> void:
+	_save_state()
+	var p := FakePlayer.new()
+	add_child(p)
+	var screen: CanvasLayer = await _open_screen(p)
+	var r: Dictionary = screen._rows[3]
+	(r["panel"] as Control).grab_focus() ## kumanda yolu: odak = seçim
+	screen._select(r["entry"])
+	await _frames(2)
+	var rings: Array = []
+	_visible_rings(r["panel"], rings)
+	var sb: StyleBox = (r["panel"] as PanelContainer).get_theme_stylebox("panel")
+	var accent: bool = sb is StyleBoxFlat and (sb as StyleBoxFlat).border_color == screen._k.c("accent")
+	screen._on_close_pressed()
+	p.free()
+	_restore_state()
+	assert(rings.is_empty(), "seçili kartta ek halka olmamalı: %s" % str(rings))
+	assert(accent, "tek gösterge kartın altın kenarı")
+
+
 ## Ekran: üst çubukta parçacık sayacı, her silah plakasında "10" parçacık maliyeti, yetmeyince AL kapalı + ayrıntıda sebep.
 func test_screen_shows_shard_counter_cost_and_disables_buy_when_short() -> void:
 	_save_state()

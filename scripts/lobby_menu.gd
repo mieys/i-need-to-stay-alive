@@ -76,10 +76,9 @@ func _ready() -> void:
 	if LobbyUI.leave_if_disconnected(self):
 		_leaving = true
 		return
-	if _mobile:
-		_build_mobile()
-	else:
-		_build_desktop()
+	## 2026-10-19 (madde 279): telefonda da SEÇİM D ekranı (lobby_select_desktop.gd) kurulur - o kendi telefon yerleşimini seçer
+	## (_build_phone, prototip S = B). Aşağıdaki eski bej telefon kurucusu (_build_mobile) artık çağrılmıyor.
+	_build_desktop()
 
 	NetworkManager.lobby_updated.connect(_update_lobby_ui)
 	NetworkManager.lobby_phase_changed.connect(_on_phase_changed)

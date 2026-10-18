@@ -605,24 +605,13 @@ func _apply_mobile_layout() -> void:
 		return
 	var vp: Viewport = get_viewport()
 	var view: Vector2 = vp.get_visible_rect().size
+	if not _evo_mode:
+		_apply_phone_cards(vp, view)
+		return
 	var title: Label = get_node_or_null("Title") as Label
 	if title:
 		title.offset_top = 8.0
 		title.offset_bottom = 8.0 + TITLE_SIZE.y
-	var rows: Control = get_node_or_null("Rows") as Control
-	if rows and not _evo_mode:
-		var safe: Rect2 = MobileUIScript.safe_margins(vp)
-		var room_w: float = view.x - safe.position.x - safe.size.x \
-				- 2.0 * (MobileUIScript.CHOICE_SIDE_W + 2.0 * MobileUIScript.CHOICE_SIDE_PAD)
-		var s: float = 2.0 if ROW_SIZE.x * 2.0 <= room_w else 1.5
-		(rows as VBoxContainer).add_theme_constant_override("separation", MOBILE_ROW_SEPARATION)
-		var h: float = ROW_SIZE.y * cards.size() + MOBILE_ROW_SEPARATION * (cards.size() - 1)
-		var top: float = MobileUIScript.CHOICE_TOP + maxf(0.0, (MobileUIScript.CHOICE_BOTTOM - MobileUIScript.CHOICE_TOP - h * s) * 0.5)
-		rows.offset_left = -roundf(ROW_SIZE.x * s * 0.5)
-		rows.offset_right = rows.offset_left + ROW_SIZE.x
-		rows.offset_top = top - view.y * 0.5
-		rows.offset_bottom = rows.offset_top + h
-		rows.scale = Vector2(s, s)
 	## Karıştır: sol kenar, zar yazının üstünde.
 	var rr: Rect2 = MobileUIScript.choice_side_rect(vp, true, 0, 1, 300.0)
 	reroll_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -651,6 +640,204 @@ func _apply_mobile_layout() -> void:
 		if countdown_label:
 			countdown_label.add_theme_font_size_override("font_size", UIKit.FS_TITLE)
 			countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+## ---------------------------------------------------------------- TELEFON KARTLARI (madde 276; kullanıcı onayı 2026-10-18,
+## madde 253 "Seçenek 1"; prototip tools/proto_20261018/mobil_proto.gd S_level): başlık sol üstte "SEVİYE N!", üç DİKEY kart yan
+## yana (640x600 tuval px: nadirlik renkli kenar + şerit, büyük stat simgesi, değer, stat adı, "Şu an" kutusu; kartın kendisi
+## düğme - tek dokunuş), Karıştır sol altta, geri sayım sağ üstte. "DOKUN = SEÇ" ve açıklama cümlesi yok. Prototipteki "YASAKLA"
+## oyunda olmayan bir mekanik - eklenmedi. "Şu an" = HudStatPanel.values_for (oyuncunun o anki değeri; tahmini "-> yeni" yok).
+## Renkler: Gece Sıvası (B) levha + oyunun nadirlik renk ailesi (gri / mavi / mor / kırmızı). Evrim kartları eski telefon yolunda.
+const HudStatPanelScript := preload("res://scripts/hud_stat_panel.gd")
+const ChestMenuScript := preload("res://scripts/chest_menu.gd") ## telefon üst koyulaşma şeridi (top_fade) ortak
+const PH_CARD := Vector2(640, 600)
+const PH_CARD_GAP := 64.0
+const PH_CARD_TOP := 226.0
+const PH_SIDE := 96.0 ## başlık / Karıştır sol kenar payı (prototip SX)
+const PH_DIM := Color(0.03, 0.03, 0.06, 0.66)
+const PH_PANEL := Color("#23233a")
+const PH_INSET := Color("#12121f")
+const PH_LINE := Color("#3b3a5a")
+const PH_TEXT := Color("#efe6d6")
+const PH_DIM_TEXT := Color("#a7a2c0")
+const PH_ACCENT := Color("#f4c56e")
+const PH_GOOD := Color("#a8d69a")
+const PH_TIER := [Color("#9ea4ad"), Color("#5f8fe0"), Color("#a070dc"), Color("#e0604c")]
+const PH_TIER_NAMES := ["SIRADAN", "NADİR", "EPİK", "EFSANEVİ"]
+var _phone_cards: bool = false
+
+
+static func _ph_box(fill: Color, border: Color, bw: int, rad: int) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = fill
+	sb.border_color = border
+	sb.set_border_width_all(bw)
+	sb.set_corner_radius_all(rad)
+	sb.corner_detail = 6
+	return sb
+
+
+func _ph_label(card: Control, n: String, r: Rect2, fs: int, c: Color, align: HorizontalAlignment) -> Label:
+	var lbl: Label = card.get_node_or_null(n) as Label
+	if lbl == null:
+		lbl = Label.new()
+		lbl.name = n
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(lbl)
+	lbl.horizontal_alignment = align
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	lbl.clip_text = true
+	UIKit.style_label(lbl, fs, c, 0)
+	lbl.position = r.position
+	lbl.size = r.size
+	## _row_label boyutu ertelenmiş de yazar (bkz. orası) - bizimki ondan SONRA çalışsın diye yine ertelenmiş.
+	lbl.set_deferred("size", r.size)
+	return lbl
+
+
+func _apply_phone_cards(vp: Viewport, view: Vector2) -> void:
+	_phone_cards = true
+	var safe: Rect2 = MobileUIScript.safe_margins(vp)
+	var dim: ColorRect = get_node_or_null("Dim") as ColorRect
+	if dim:
+		dim.color = PH_DIM
+		var fade: TextureRect = ChestMenuScript.top_fade(view.x)
+		add_child(fade)
+		move_child(fade, dim.get_index() + 1)
+	var title: Label = get_node_or_null("Title") as Label
+	if title:
+		title.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+		UIKit.style_label(title, 96, PH_ACCENT, 6)
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		title.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		title.position = Vector2(safe.position.x + PH_SIDE, 20.0)
+		title.size = Vector2(900, 104)
+		var player: Node = get_tree().get_first_node_in_group("player")
+		title.text = ("SEVİYE %d!" % int(player.get("level"))) if player and "level" in player else "SEVİYE ATLADIN!"
+	var rows: Control = get_node_or_null("Rows") as Control
+	var holder := Control.new()
+	holder.name = "PhoneCards"
+	holder.theme = UIKit.theme()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(holder)
+	if rows:
+		move_child(holder, rows.get_index())
+		rows.visible = false
+	var x0: float = roundf((view.x - (PH_CARD.x * 3.0 + PH_CARD_GAP * 2.0)) * 0.5)
+	var top: float = roundf(PH_CARD_TOP + maxf(0.0, (view.y - 1080.0) * 0.5))
+	for i in cards.size():
+		var card: Button = cards[i]
+		if not is_instance_valid(card):
+			continue
+		card.reparent(holder, false)
+		card.custom_minimum_size = PH_CARD
+		card.position = Vector2(x0 + i * (PH_CARD.x + PH_CARD_GAP), top)
+		card.size = PH_CARD
+		card.clip_contents = false
+		card.remove_meta("glow_texture") ## dikey kartın varsayılan halesi (satır halesi değil)
+		card.set_meta("glow_card_size", PH_CARD)
+		var frame: CanvasItem = card.get_node_or_null("Frame") as CanvasItem
+		if frame:
+			frame.visible = false
+		for nm: String in ["PhBg", "PhBand"]:
+			if card.get_node_or_null(nm) == null:
+				var pn := Panel.new()
+				pn.name = nm
+				pn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				card.add_child(pn)
+				card.move_child(pn, 0 if nm == "PhBg" else 1)
+		var bg: Panel = card.get_node("PhBg") as Panel
+		bg.position = Vector2.ZERO
+		bg.size = PH_CARD
+		var band: Panel = card.get_node("PhBand") as Panel
+		band.position = Vector2(4, 4)
+		band.size = Vector2(PH_CARD.x - 8.0, 72.0)
+		var content: Control = card.get_node("Content") as Control
+		content.offset_left = PH_CARD.x * 0.5 - 96.0
+		content.offset_top = 96.0
+		content.offset_right = PH_CARD.x * 0.5 + 96.0
+		content.offset_bottom = 288.0
+		(content.get_node("Icon") as Control).custom_minimum_size = Vector2(192, 192)
+		_ph_label(card, "PhTier", Rect2(0, 4, PH_CARD.x, 72), 48, PH_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+		_ph_label(card, "PhCount", Rect2(PH_CARD.x - 136.0, 4, 112, 72), 32, PH_DIM_TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
+		_ph_label(card, "RowValue", Rect2(0, 296, PH_CARD.x, 112), 112, PH_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+		_ph_label(card, "RowName", Rect2(0, 416, PH_CARD.x, 64), 64, PH_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+		if card.get_node_or_null("PhNowBox") == null:
+			var nb := Panel.new()
+			nb.name = "PhNowBox"
+			nb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			nb.add_theme_stylebox_override("panel", _ph_box(Color(PH_INSET, 0.85), PH_LINE, 2, 12))
+			card.add_child(nb)
+		var nbox: Panel = card.get_node("PhNowBox") as Panel
+		nbox.position = Vector2(40, 500)
+		nbox.size = Vector2(PH_CARD.x - 80.0, 64)
+		_ph_label(card, "PhNow", Rect2(40, 500, PH_CARD.x - 80.0, 64), 48, PH_GOOD, HORIZONTAL_ALIGNMENT_CENTER)
+		for hide: String in ["RowVerb", "RowSub"]:
+			var h: CanvasItem = card.get_node_or_null(hide) as CanvasItem
+			if h:
+				h.visible = false
+	## Karıştır: sol alt (başparmak); gerçek bedel (altın / ücretsiz) - prototipteki "2 hak" oyunda yok.
+	reroll_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	## Alttaki tek düğme: kartların ekseninde ortalı (kullanıcı 2026-10-19: "asimetrilikler ... varsa düzelt" - sol altta tek başına
+	## kalıyordu; prototipteki sağ alt YASAKLA oyunda yok).
+	reroll_button.size = Vector2(500, 136)
+	reroll_button.position = Vector2(roundf(safe.position.x + (view.x - safe.position.x - safe.size.x - 500.0) * 0.5),
+			view.y - safe.size.y - 164.0)
+	reroll_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	reroll_button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+	reroll_button.autowrap_mode = TextServer.AUTOWRAP_OFF
+	reroll_button.add_theme_font_size_override("font_size", 48)
+	reroll_button.expand_icon = true
+	reroll_button.add_theme_constant_override("icon_max_width", 66) ## zar 33 px -> 2x
+	for state: String in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
+		var sb := reroll_button.get_theme_stylebox(state) as StyleBoxTexture
+		if sb:
+			sb.content_margin_left = 40.0
+			sb.content_margin_right = 24.0
+			sb.content_margin_top = 0.0
+			sb.content_margin_bottom = 0.0
+	## Geri sayım (çok oyunculu): sağ üst, Gece Sıvası levhası.
+	if countdown_panel:
+		countdown_panel.add_theme_stylebox_override("panel", _ph_box(Color(PH_PANEL, 0.94), PH_LINE, 3, 14))
+		countdown_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		countdown_panel.size = Vector2(420, 120)
+		countdown_panel.position = Vector2(view.x - safe.size.x - PH_SIDE - 420.0, 24.0)
+		if countdown_label:
+			UIKit.style_label(countdown_label, 64, PH_ACCENT, 0)
+			countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if waiting_label:
+			UIKit.style_label(waiting_label, 32, PH_DIM_TEXT, 0)
+			waiting_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			waiting_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+## Telefon kartının yazıları + nadirlik rengi (her çekilişte; _fill_row'dan).
+func _fill_phone_card(card: Button, upgrade: Dictionary, tier: int, count: int) -> void:
+	var t: int = clampi(tier, 1, 4) - 1
+	var tc: Color = PH_TIER[t]
+	var light: Color = tc.lightened(0.25)
+	(card.get_node("PhBg") as Panel).add_theme_stylebox_override("panel", _ph_box(Color(PH_PANEL, 0.97), tc, 4, 18))
+	(card.get_node("PhBand") as Panel).add_theme_stylebox_override("panel", _ph_box(Color(tc, 0.3), Color(0, 0, 0, 0), 0, 14))
+	var tier_lbl: Label = card.get_node("PhTier") as Label
+	tier_lbl.text = PH_TIER_NAMES[t]
+	tier_lbl.add_theme_color_override("font_color", light)
+	(card.get_node("PhCount") as Label).text = ("x%d" % count) if count > 0 else ""
+	(card.get_node("RowName") as Label).add_theme_color_override("font_color", light if t > 0 else PH_TEXT)
+	var now: String = ""
+	var player: Node = get_tree().get_first_node_in_group("player")
+	if player:
+		var id: String = str(upgrade["id"])
+		if id == "max_health" and "max_health" in player:
+			now = str(int(round(float(player.get("max_health")))))
+		else:
+			now = str(HudStatPanelScript.values_for(player).get(id, ""))
+	var has_now: bool = now != "" and now != "-"
+	(card.get_node("PhNowBox") as CanvasItem).visible = has_now
+	var now_lbl: Label = card.get_node("PhNow") as Label
+	now_lbl.visible = has_now
+	now_lbl.text = "Şu an  " + now
 
 
 ## PC'de level atlama satırları ve evrim kartları %15 küçük - kullanıcı isteği (2026-10-03): "pcde level atlama kartlarını
@@ -706,6 +893,8 @@ func _fill_row(card: Button, upgrade: Dictionary, tier: int, count: int) -> void
 	var clean_val: String = _scaled_desc_value(upgrade["desc"] as String, tier, str(upgrade["id"])).replace("+", "").replace("-", "")
 	(card.get_node("RowValue") as Label).text = ("-" if is_cdr else "+") + clean_val
 	(card.get_node("RowVerb") as Label).text = "azalır" if is_cdr else "artar"
+	if _phone_cards:
+		_fill_phone_card(card, upgrade, tier, count)
 
 
 func _card_desc(card: Node) -> RichTextLabel:

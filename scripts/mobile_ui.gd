@@ -31,10 +31,9 @@ const MENU_MARGIN := 20.0
 ## İçerikleri ekrana sığacak kadar büyütülen ekranlar (kökü CanvasLayer). Yeni bir modal ekran eklenirse buraya yaz.
 ## level_up_screen.gd / enchant_screen.gd / chest_menu.gd 2026-10-03'ten beri telefonda kendi yerleşimini kurar (bkz. CHOICE_*
 ## aşağıda) - listede YOK.
+## pause_menu.gd ve soul_shop_screen.gd 2026-10-19'dan beri telefonda kendi tam ekran yerleşimini kurar (prototip S) - listeden çıktı.
 const FIT_LAYER_SCRIPTS: Array[String] = [
-	"res://scripts/pause_menu.gd",
 	"res://scripts/victory_overlay.gd", ## zafer penceresi: 24 px yazı / 52 px düğme telefonda ~3 mm kalıyordu (2026-10-05)
-	"res://scripts/soul_shop_screen.gd", ## ana menüdeki RUH MAĞAZASI penceresi
 ]
 ## SEÇİM EKRANLARI (kullanıcı seçimi 2026-10-03, prototip "A - ekranı dolduran kartlar", tools/mobile_ui/proto_choice.gd):
 ## level atlama / yetenek evrimi / efsun kartları telefonda MenuFitter ile sığdırılmaz, kendi büyük yerleşimini kurar:
@@ -110,6 +109,23 @@ static func apply(tree: SceneTree) -> void:
 	w.name = "MobileUIWatcher"
 	root.add_child.call_deferred(w)
 	tree.node_added.connect(w.on_node_added)
+
+
+## Telefon: cana işleyen hasarda kısa titreşim (Ayarlar > DOKUNMATİK > Titreşim; 2026-10-19). frac = hasar / azami can; ağır
+## vuruş biraz daha uzun. Saniyede en fazla ~4 kez (kalabalıkta sürekli vızıldamasın). Sadece gerçek telefonda - Android
+## export'unda permissions/vibrate açık olmalı.
+const VIBRATE_MIN_GAP_MS := 250
+static var _last_vibrate_msec: int = -100000
+
+
+static func vibrate_hit(frac: float) -> void:
+	if not enabled or not is_real_phone() or not bool(UISound.get("touch_vibration")):
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - _last_vibrate_msec < VIBRATE_MIN_GAP_MS:
+		return
+	_last_vibrate_msec = now
+	Input.vibrate_handheld(int(lerpf(35.0, 90.0, clampf(frac * 4.0, 0.0, 1.0))))
 
 
 ## Oyuncu kamerası (player.gd _ready): telefona özel yakınlaştırma.

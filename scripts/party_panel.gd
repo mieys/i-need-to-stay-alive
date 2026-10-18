@@ -301,7 +301,7 @@ func _rebuild_rows() -> void:
 				_hide_gift_popup()
 			_rows.erase(pid)
 
-	visible = not _rows.is_empty() and not collapsed
+	visible = not _rows.is_empty() and not collapsed and _suppress.is_empty()
 	_apply_list_height()
 	if not visible:
 		_hide_stats_popup()
@@ -315,6 +315,26 @@ var collapsed: bool = false
 func set_collapsed(v: bool) -> void:
 	collapsed = v
 	_rebuild_rows()
+
+
+## Gizleme nedenleri (neden -> true). Panel katman 96'da (altın hediyesi için modal ekranların üstünde); kullanıcı (2026-10-19):
+## "grup penceresi üstte görünmemeli ayarlar açıkken" -> ayarlar ekranı "settings" ile gizler; telefonda tam ekran pencereler
+## (duraklatma, envanter, dükkanlar, level/sandık kartları, oyun bitti) hud.gd'den "phone_modal" ile.
+var _suppress: Dictionary = {}
+
+
+func set_suppressed(reason: String, on: bool) -> void:
+	if on == _suppress.has(reason):
+		return
+	if on:
+		_suppress[reason] = true
+	else:
+		_suppress.erase(reason)
+	_rebuild_rows()
+
+
+func is_suppressed() -> bool:
+	return not _suppress.is_empty()
 
 
 func has_allies() -> bool:

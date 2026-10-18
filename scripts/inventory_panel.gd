@@ -89,6 +89,10 @@ func _decorate_slot(btn: Button) -> void:
 	frame.stretch_mode = TextureRect.STRETCH_SCALE
 	## 2026-09-25: tier mini kartları tamamen tier rengine geçti; envanter yuvası kademesiz olduğu için eski sade hücreyi kullanır.
 	frame.texture = UIKit.game_tex("slot_cell.png")
+	if _mobile: ## telefon (madde 276): bej hücre yerine Gece Sıvası kuyusu (dolu eşyada kademe çerçevesi yine üstte)
+		frame.texture = null
+		for st2 in ["normal", "hover", "pressed", "disabled"]:
+			btn.add_theme_stylebox_override(st2, _ph_sb(Color(PH_INSET, 0.92), PH_LINE, 2, 10))
 	btn.add_child(frame)
 	btn.mouse_entered.connect(func() -> void:
 		if is_instance_valid(frame):
@@ -690,7 +694,7 @@ func _refresh_items_grid() -> void:
 				indices.append(i)
 		var head := Label.new()
 		head.text = "%s  %d/%d" % [Items.KADEME_NAMES[kd - 1].to_upper(), indices.size(), limit]
-		UIKit.style_label(head, 40 if _mobile else 24, TierSystem.COLORS[kd - 1], 0)
+		UIKit.style_label(head, 40 if _mobile else 24, PH_TIER[kd - 1] if _mobile else TierSystem.COLORS[kd - 1], 0)
 		items_grid_box.add_child(head)
 		var grid := GridContainer.new()
 		grid.columns = 7 if _mobile else 6
@@ -802,20 +806,28 @@ func apply_mobile_layout(rect: Rect2) -> void:
 	var footer: Control = frame.get_node_or_null("FooterBG") as Control
 	if footer:
 		footer.visible = false
-	var row: Array = [[frame.get_node("GoldIcon"), 0.0], [gold_label, 52.0], [frame.get_node("XPIcon"), 240.0], [xp_label, 292.0]]
+	## Sağ kenara yaslı (28 px iç pay - ayrıntı sütunuyla aynı hizada; eskiden başlığın ortasında yüzüyordu).
+	var row: Array = [[frame.get_node("GoldIcon"), 0.0], [gold_label, 52.0], [frame.get_node("XPIcon"), 260.0], [xp_label, 312.0]]
 	for r in row:
 		var c: Control = r[0] as Control
 		var is_icon: bool = not (c is Label)
 		c.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		c.offset_left = -600.0 + float(r[1])
+		c.offset_left = -520.0 + float(r[1])
 		c.offset_right = c.offset_left + (44.0 if is_icon else 180.0)
 		c.offset_top = 48.0 if is_icon else 34.0
 		c.offset_bottom = 92.0 if is_icon else 106.0
-	## Yuva alanı.
+	## Yuva alanı solda kendi genişliğinde (5 yuva), kalan genişlik sağdaki ayrıntı sütununa (prototip B "Yan Ray + Detay"; kullanıcı
+	## 2026-10-19: yuvalar sola yığılıp sağ taraf boş kalıyordu, ayrıntı ekran boyu alt şeritteydi).
+	var slots_w: float = 5.0 * _slot + 4.0 * 12.0 + 2.0 * 28.0 + 24.0
+	var detail_w: float = maxf(560.0, rect.size.x - slots_w - 28.0 * 3.0)
+	var col_h: float = rect.size.y - 136.0 - 28.0
 	var scroll: ScrollContainer = main_layout.get_parent() as ScrollContainer
 	if scroll:
+		scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+		scroll.offset_left = 28.0
+		scroll.offset_right = -(detail_w + 56.0)
 		scroll.offset_top = 136.0
-		scroll.offset_bottom = -292.0
+		scroll.offset_bottom = -28.0
 	for c in main_layout.get_children():
 		if c is Label:
 			var l := c as Label
@@ -823,36 +835,41 @@ func apply_mobile_layout(rect: Rect2) -> void:
 			l.add_theme_font_size_override("font_size", 40)
 	weapons_grid.add_theme_constant_override("separation", 12)
 	equip_grid.add_theme_constant_override("separation", 12)
-	## Bilgi şeridi.
-	var strip := Panel.new()
-	strip.name = "MobileDetail"
-	strip.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	strip.offset_left = 28.0
+	## Bilgi şeridi (bir kez kurulur; ekran yeniden yerleşince sadece boyutlanır - madde 276: eskiden her çağrıda yenisi eklenip
+	## stil eskisine gidiyordu).
+	var strip: Panel = frame.get_node_or_null("MobileDetail") as Panel
+	var fresh: bool = strip == null
+	if fresh:
+		strip = Panel.new()
+		strip.name = "MobileDetail"
+		strip.add_theme_stylebox_override("panel", UIKit.panel_style("inset"))
+		frame.add_child(strip)
+		_detail_name = Label.new()
+		UIKit.style_label(_detail_name, 48, UIKit.C_TEXT, 0)
+		_detail_name.clip_text = true
+		strip.add_child(_detail_name)
+		_detail_desc = Label.new()
+		UIKit.style_label(_detail_desc, 40, UIKit.C_TEXT_DIM, 0)
+		_detail_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail_desc.clip_text = true
+		strip.add_child(_detail_desc)
+		_detail_sell = Button.new()
+		UIKit.style_button(_detail_sell, "red", false, 40)
+		_detail_sell.pressed.connect(_on_detail_sell)
+		strip.add_child(_detail_sell)
+		UISound.connect_all_buttons(strip)
+	strip.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	strip.offset_left = -(detail_w + 28.0)
 	strip.offset_right = -28.0
-	strip.offset_top = -276.0
+	strip.offset_top = 136.0
 	strip.offset_bottom = -28.0
-	strip.add_theme_stylebox_override("panel", UIKit.panel_style("inset"))
-	frame.add_child(strip)
-	_detail_name = Label.new()
-	UIKit.style_label(_detail_name, 48, UIKit.C_TEXT, 0)
-	_detail_name.position = Vector2(28.0, 16.0)
-	_detail_name.size = Vector2(rect.size.x - 460.0, 60.0)
-	_detail_name.clip_text = true
-	strip.add_child(_detail_name)
-	_detail_desc = Label.new()
-	UIKit.style_label(_detail_desc, 40, UIKit.C_TEXT_DIM, 0)
-	_detail_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detail_desc.position = Vector2(28.0, 84.0)
-	_detail_desc.size = Vector2(rect.size.x - 460.0, 140.0)
-	_detail_desc.clip_text = true
-	strip.add_child(_detail_desc)
-	_detail_sell = Button.new()
-	UIKit.style_button(_detail_sell, "red", false, 40)
-	_detail_sell.position = Vector2(rect.size.x - 56.0 - 360.0, 56.0)
-	_detail_sell.size = Vector2(340.0, 136.0)
-	_detail_sell.pressed.connect(_on_detail_sell)
-	strip.add_child(_detail_sell)
-	UISound.connect_all_buttons(strip)
+	_detail_name.position = Vector2(32.0, 28.0)
+	_detail_name.size = Vector2(detail_w - 64.0, 60.0)
+	_detail_desc.position = Vector2(32.0, 104.0)
+	_detail_desc.size = Vector2(detail_w - 64.0, maxf(80.0, col_h - 104.0 - 136.0 - 64.0))
+	_detail_sell.position = Vector2(32.0, col_h - 136.0 - 32.0)
+	_detail_sell.size = Vector2(detail_w - 64.0, 136.0)
+	_apply_night_style()
 	_clear_detail()
 	## Yuvalar yeni boyutla yeniden kurulsun.
 	_last_weapons_signature = "-"
@@ -865,7 +882,7 @@ func _show_detail(item_label: String, desc: String, refund: int, action: Callabl
 	if _detail_name == null:
 		return
 	_detail_name.text = item_label
-	_detail_name.add_theme_color_override("font_color", UIKit.C_TEXT)
+	_detail_name.add_theme_color_override("font_color", PH_TEXT if _mobile else UIKit.C_TEXT)
 	_detail_desc.text = desc
 	_detail_action = action
 	_detail_sell.visible = action.is_valid()
@@ -876,7 +893,7 @@ func _clear_detail() -> void:
 	if _detail_name == null:
 		return
 	_detail_name.text = "Bir eşyaya dokun"
-	_detail_name.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
+	_detail_name.add_theme_color_override("font_color", PH_DIM if _mobile else UIKit.C_TEXT_DIM)
 	_detail_desc.text = "Ne işe yaradığı ve satış fiyatı burada görünür."
 	_detail_action = Callable()
 	_detail_sell.visible = false
@@ -886,3 +903,59 @@ func _on_detail_sell() -> void:
 	if _detail_action.is_valid():
 		_detail_action.call()
 	_clear_detail()
+
+
+## ---------------------------------------------------------------- TELEFON: Gece Sıvası (madde 276; kullanıcı onayı 2026-10-18,
+## madde 253 "B"): bej kit telefonda mavi-mor sıva paneline döner (çerçeve, başlık, boş yuvalar, kademe başlıkları, ayrıntı şeridi,
+## SAT). Kapatma telefonda hud.gd'nin yan rayındaki geri düğmesi (X gizli). Masaüstü aynı.
+const PH_PANEL := Color("#1a1a2c")
+const PH_INSET := Color("#12121f")
+const PH_LINE := Color("#3b3a5a")
+const PH_LINE_HI := Color("#5f5c86")
+const PH_TEXT := Color("#efe6d6")
+const PH_DIM := Color("#a7a2c0")
+const PH_ACCENT := Color("#f4c56e")
+const PH_TIER := [Color("#c39a64"), Color("#6f9df2"), Color("#b98af2")]
+
+
+static func _ph_sb(fill: Color, border: Color, bw: int, rad: int) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = fill
+	sb.border_color = border
+	sb.set_border_width_all(bw)
+	sb.set_corner_radius_all(rad)
+	sb.corner_detail = 6
+	return sb
+
+
+func _apply_night_style() -> void:
+	var frame: Control = get_node_or_null("Frame") as Control
+	if frame == null:
+		return
+	frame.add_theme_stylebox_override("panel", _ph_sb(Color(PH_PANEL, 0.97), PH_LINE_HI, 3, 10))
+	var header: Panel = frame.get_node_or_null("HeaderBar") as Panel
+	if header:
+		header.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+		var title: Label = header.get_node_or_null("Title") as Label
+		if title:
+			title.text = "ÇANTA"
+			UIKit.style_label(title, 48, PH_ACCENT, 0)
+	close_button.visible = false
+	if main_layout:
+		for c in main_layout.get_children():
+			if c is Label:
+				(c as Label).add_theme_color_override("font_color", PH_DIM)
+	var strip: Panel = frame.get_node_or_null("MobileDetail") as Panel
+	if strip:
+		strip.add_theme_stylebox_override("panel", _ph_sb(Color(PH_INSET, 0.92), PH_LINE, 2, 12))
+	if _detail_desc:
+		_detail_desc.add_theme_color_override("font_color", PH_DIM)
+	if _detail_sell:
+		var red := Color("#6a2a24")
+		_detail_sell.add_theme_stylebox_override("normal", _ph_sb(red, Color("#9a4a3e"), 3, 12))
+		_detail_sell.add_theme_stylebox_override("hover", _ph_sb(red.lightened(0.08), Color("#9a4a3e"), 3, 12))
+		_detail_sell.add_theme_stylebox_override("pressed", _ph_sb(red.darkened(0.12), Color("#9a4a3e"), 3, 12))
+		_detail_sell.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		for fc: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+			_detail_sell.add_theme_color_override(fc, PH_TEXT)
+

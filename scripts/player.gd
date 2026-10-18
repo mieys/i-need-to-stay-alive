@@ -5983,6 +5983,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	health -= effective_damage
 	health_changed.emit(health, max_health)
 	_spawn_floating_text("%d" % int(round(effective_damage)), Color(1.0, 1.0, 1.0))
+	MobileUIScript.vibrate_hit(effective_damage / maxf(max_health, 1.0)) ## telefon titreşimi (ayar; masaüstünde no-op)
 	## Kullanıcı isteği: "kalkansız hasar alma adında bir ses ekledim bu ses
 	## kalkan yokken karakter hasar alırsa çıkacak." (bkz. shield_absorbed_hit
 	## üstündeki not) - kalkan YOKKEN gerçekten cana işleyen her isabette

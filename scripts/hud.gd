@@ -1528,6 +1528,22 @@ func _ph_ping_ms() -> int:
 
 
 ## Her kare (telefon): etkileşim levhası + ping.
+var _ph_modal_timer: float = 0.0
+var _ph_party_suppressed: bool = false
+
+
+## Telefonda ekranı kaplayan bir pencere açık mı: envanter/özellikler, kart/dükkan ekranları (reading_ui), duraklatma / zafer /
+## Ruh Mağazası (gamepad_modal), oyun bitti (phone_fullscreen).
+func _ph_modal_open() -> bool:
+	if _mobile_hud_panel_open():
+		return true
+	for g: StringName in [&"reading_ui", &"gamepad_modal", &"phone_fullscreen"]:
+		for n: Node in get_tree().get_nodes_in_group(g):
+			if is_instance_valid(n) and n.is_inside_tree() and not n.is_queued_for_deletion() and ReadingUiWatcherScript._is_shown(n):
+				return true
+	return false
+
+
 func _ph_tick(delta: float) -> void:
 	if is_instance_valid(_ph_interact_plate) and is_instance_valid(mobile_interact_button):
 		var show: bool = mobile_interact_button.visible
@@ -1542,6 +1558,14 @@ func _ph_tick(delta: float) -> void:
 			var ps: Vector2 = _ph_interact_plate.get_combined_minimum_size()
 			_ph_interact_plate.size = ps
 			_ph_interact_plate.position = Vector2(roundf(br.get_center().x - ps.x * 0.5), roundf(br.end.y - 2.0))
+	## Tam ekran telefon pencereleri açıkken grup paneli (katman 96) gizlenir - sol rayların / kartların üstüne binmesin.
+	_ph_modal_timer -= delta
+	if _ph_modal_timer <= 0.0:
+		_ph_modal_timer = 0.1
+		var modal: bool = _ph_modal_open()
+		if modal != _ph_party_suppressed:
+			_ph_party_suppressed = modal
+			get_tree().call_group(&"party_panel", &"set_suppressed", "phone_modal", modal)
 	_ph_ping_timer -= delta
 	if _ph_ping_timer <= 0.0 and is_instance_valid(_ph_ping):
 		_ph_ping_timer = 0.5
@@ -1644,6 +1668,15 @@ func _setup_mobile_hud() -> void:
 	## denemesinde pencere boyutu (yakalama betiği pencereyi açıldıktan sonra 2400x1080 yapıyor).
 	if not get_viewport().size_changed.is_connected(_on_phone_viewport_resized):
 		get_viewport().size_changed.connect(_on_phone_viewport_resized)
+	if UISound.has_signal(&"touch_settings_changed") and not UISound.touch_settings_changed.is_connected(_on_touch_settings_changed):
+		UISound.touch_settings_changed.connect(_on_touch_settings_changed)
+
+
+func _on_touch_settings_changed() -> void:
+	if not MobileUIScript.enabled or touch_controls == null:
+		return
+	_ability_layout_sig = ""
+	_layout_mobile_ability_icons()
 
 
 func _on_phone_viewport_resized() -> void:
@@ -1676,10 +1709,17 @@ func _fit_mobile_inventory_panels() -> void:
 	var x0: float = safe.position.x + roundf((vp.x - safe.position.x - safe.size.x - (stats_w + gap + inv_w)) * 0.5)
 	var h: float = minf(1000.0, vp.y - 80.0)
 	var y0: float = roundf((vp.y - h) * 0.5)
+	## Madde 274 (prototip B "Yan Ray + Detay"): solda ray (geri, ÇANTA, ÖZELLİK), iki panel aynı alanı paylaşır; ÖZELLİK sekmesi
+	## özellikler panelini çantanın üstünde gösterir. Paneller Gece Sıvası (inventory_panel / stats_panel _apply_night_style).
+	var rail_w: float = 140.0
+	x0 = safe.position.x + 24.0
+	var full_w: float = vp.x - safe.position.x - safe.size.x - 48.0 - rail_w - gap
+	stats_w = full_w
+	inv_w = full_w
 	if _mobile_inv_dim == null:
 		_mobile_inv_dim = ColorRect.new()
 		_mobile_inv_dim.name = "MobileInventoryDim"
-		_mobile_inv_dim.color = Color(0.06, 0.04, 0.02, 0.6)
+		_mobile_inv_dim.color = Color(0.03, 0.03, 0.06, 0.6) ## Gece Sıvası lacivert karartma (madde 276)
 		_mobile_inv_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 		_mobile_inv_dim.visible = false
 		_mobile_inv_dim.gui_input.connect(func(e: InputEvent) -> void:
@@ -1690,15 +1730,21 @@ func _fit_mobile_inventory_panels() -> void:
 	## Envanter paneli PartyPanelLayer'da (katman 96, bkz. _ready) - karartma ve özellikler paneli de oraya, sırayla
 	## karartma -> özellikler -> envanter (hepsi HUD düğmelerinin üstünde).
 	var top_layer: Node = inventory_panel_instance.get_parent()
-	for c in [_mobile_inv_dim, stats_panel_instance, inventory_panel_instance]:
+	## Sıra: karartma -> çanta -> özellikler (madde 276: ÖZELLİK sekmesinde özellikler çantanın ÜSTÜNDE, aynı alanda).
+	for c in [_mobile_inv_dim, inventory_panel_instance, stats_panel_instance]:
 		if c is Node and is_instance_valid(c) and top_layer != null:
 			if c.get_parent() != top_layer:
 				(c as Node).reparent(top_layer, false)
 			top_layer.move_child(c, top_layer.get_child_count() - 1)
+	var panel_rect := Rect2(x0 + rail_w + gap, y0, full_w, h)
 	if stats_panel_instance.has_method("apply_mobile_layout"):
-		stats_panel_instance.call("apply_mobile_layout", Rect2(x0, y0, stats_w, h))
+		stats_panel_instance.call("apply_mobile_layout", panel_rect)
 	if inventory_panel_instance.has_method("apply_mobile_layout"):
-		inventory_panel_instance.call("apply_mobile_layout", Rect2(x0 + stats_w + gap, y0, inv_w, h))
+		inventory_panel_instance.call("apply_mobile_layout", panel_rect)
+	_ph_build_inv_rail(top_layer, Rect2(x0, y0, rail_w, h))
+	## Ray karartmanın ÜSTÜNDE (eskiden karartma her yerleşimde sona alınıp rayı soluklaştırıyordu).
+	if is_instance_valid(_ph_inv_rail) and _ph_inv_rail.get_parent() == top_layer and _mobile_inv_dim.get_parent() == top_layer:
+		top_layer.move_child(_ph_inv_rail, _mobile_inv_dim.get_index() + 1)
 
 
 ## Envanter/özellikler paneli oyunu duraklatmaz - açıkken joystick başlamasın ve çizilmesin (panelin üstüne binmesin).
@@ -1772,9 +1818,12 @@ func _layout_mobile_ability_icons() -> bool:
 	var dx: float = PH_COL_GAP / k
 	var dy1: float = (float(PH_SKILL_Y[0]) - float(PH_SKILL_Y[1])) / k
 	var dy2: float = (float(PH_SKILL_Y[0]) - float(PH_SKILL_Y[2])) / k
-	var slots: Array = [[skill3_icon, Vector2(dx, 0.0), 1.0], [skill2_icon, Vector2(dx, dy1), 1.0], [skill_icon, Vector2(dx, dy2), 1.0],
-			[spirit_icon, Vector2(0.0, dy2), 1.0], [passive_icon, Vector2(0.0, 0.0), PH_PASSIVE_K]]
-	var sig: String = "ph"
+	## Düğme boyutu ayarı (Ayarlar > DOKUNMATİK, %80-130): yuva merkezleri sabit, sadece düğmeler büyür/küçülür (130'da da
+	## komşu yuvaya binmez: 162 x 1,3 = 211 < 212 satır / 216 sütun aralığı). Pasif düğme değil - ayara bağlı değil.
+	var us: float = clampf(float(UISound.get("touch_button_scale_percent")) / 100.0, 0.8, 1.3)
+	var slots: Array = [[skill3_icon, Vector2(dx, 0.0), us], [skill2_icon, Vector2(dx, dy1), us], [skill_icon, Vector2(dx, dy2), us],
+			[spirit_icon, Vector2(0.0, dy2), us], [passive_icon, Vector2(0.0, 0.0), PH_PASSIVE_K]]
+	var sig: String = "ph%d" % roundi(us * 100.0)
 	for s: Array in slots:
 		var c: Control = s[0]
 		if c == null:
@@ -2482,6 +2531,9 @@ func _on_envanter_toggle() -> void:
 	stats_panel_instance.visible = now_visible
 	if _mobile_inv_dim:
 		_mobile_inv_dim.visible = now_visible
+	if is_instance_valid(_ph_inv_rail): ## telefon: ray + sekme (ÇANTA'dan açılır)
+		_ph_inv_rail.visible = now_visible
+		_ph_set_inv_tab(0)
 
 
 ## Envanter panelindeki X'e basılınca (inventory_panel.gd "closed" sinyali)
@@ -2490,6 +2542,61 @@ func _on_envanter_closed() -> void:
 	stats_panel_instance.visible = false
 	if _mobile_inv_dim:
 		_mobile_inv_dim.visible = false
+	if is_instance_valid(_ph_inv_rail):
+		_ph_inv_rail.visible = false
+
+
+## ---------------------------------------------------------------- telefon envanter yan rayı (madde 276)
+const ShopDarkKit := preload("res://scripts/shop_dark_kit.gd")
+const ReadingUiWatcherScript := preload("res://scripts/reading_ui_watcher.gd")
+var _ph_inv_rail: Control = null
+var _ph_inv_tabs: Array = []
+var _ph_inv_kit = null
+
+
+func _ph_build_inv_rail(layer: Node, r: Rect2) -> void:
+	if is_instance_valid(_ph_inv_rail) or layer == null:
+		if is_instance_valid(_ph_inv_rail):
+			_ph_inv_rail.position = r.position
+			_ph_inv_rail.size = r.size
+		return
+	_ph_inv_kit = ShopDarkKit.new(ShopDarkKit.PAL_NIGHT)
+	var bg := PanelContainer.new()
+	bg.name = "PhoneInventoryRail"
+	bg.theme = _ph_inv_kit.theme()
+	var sb: StyleBoxFlat = _ph_inv_kit.sb(_ph_inv_kit.c("panel"), _ph_inv_kit.c("line_hi"), 3, 10)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 14
+	sb.content_margin_bottom = 14
+	bg.add_theme_stylebox_override("panel", sb)
+	bg.visible = inventory_panel_instance.visible
+	var col: VBoxContainer = _ph_inv_kit.v(14)
+	bg.add_child(col)
+	var back: Button = _ph_inv_kit.rail_back(108.0)
+	back.tooltip_text = "Kapat"
+	back.pressed.connect(_on_envanter_toggle)
+	col.add_child(back)
+	_ph_inv_tabs.clear()
+	for i in 2:
+		var t: Button = _ph_inv_kit.rail_tab(["ÇANTA", "ÖZELLİK"][i], [ShopDarkKit.G_BAG, ShopDarkKit.G_STAR][i], i == 0, 108.0, 110.0)
+		t.pressed.connect(_ph_set_inv_tab.bind(i))
+		col.add_child(t)
+		_ph_inv_tabs.append(t)
+	layer.add_child(bg)
+	bg.position = r.position
+	bg.size = r.size
+	_ph_inv_rail = bg
+	UISound.connect_all_buttons(bg)
+
+
+func _ph_set_inv_tab(i: int) -> void:
+	for j in _ph_inv_tabs.size():
+		_ph_inv_kit.set_rail_tab(_ph_inv_tabs[j], j == i)
+	if inventory_panel_instance.visible:
+		stats_panel_instance.visible = i == 1
+	## ÖZELLİK sekmesinde çanta (aynı alanda, altta) görünmesin - özellikler levhasının içinden seçiliyordu.
+	inventory_panel_instance.modulate.a = 0.0 if i == 1 else 1.0
 
 
 ## Oval dolgu: bar'ın oranı kadar genişlikte, iki ucu yuvarlak NinePatchRect; rengi bar'ın tint_progress'i (bkz. _layout_bar_kit).

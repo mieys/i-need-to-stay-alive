@@ -30,6 +30,7 @@ const DMG_COL := Color("#e8885a") ## verilen hasar yazısı (oyun sonu tablosuyl
 
 const WINDOW_SCALE := 1.0
 const PHONE_K := 1.5
+const PHONE_EDGE := 24.0 ## telefonda pencerenin ekran kenarlarına uzaklığı (tuval px)
 const DESC_SCROLLBAR_RESERVE := 28.0
 const LEFT_W := 340.0
 const CENTER_W := 480.0
@@ -129,7 +130,10 @@ func _process(delta: float) -> void:
 func _phone_rect() -> Rect2:
 	var view: Vector2 = get_viewport().get_visible_rect().size
 	var safe: Rect2 = MobileUIScript.safe_margins(get_viewport())
-	return Rect2(safe.position / PHONE_K, (view - safe.position - safe.size) / PHONE_K)
+	## Ekran kenarlarından PHONE_EDGE içeride (kullanıcı 2026-10-19: köşelere yapışık durmasın - çerçeve + yuvarlak köşe ekran kenarında
+	## kesiliyordu).
+	return Rect2((safe.position + Vector2.ONE * PHONE_EDGE) / PHONE_K,
+			(view - safe.position - safe.size - Vector2.ONE * PHONE_EDGE * 2.0) / PHONE_K)
 
 
 func _build_ui() -> void:
@@ -140,6 +144,8 @@ func _build_ui() -> void:
 	add_child(dim)
 
 	_phone = MobileUIScript.enabled
+	if _phone:
+		_k = DarkKit.new(DarkKit.PAL_NIGHT) ## telefon: Gece Sıvası (madde 276)
 	var window := PanelContainer.new()
 	var wst: StyleBoxFlat = _k.sb(_k.c("panel"), _k.c("line_hi"), 3, 8)
 	wst.content_margin_left = 24
@@ -169,7 +175,15 @@ func _build_ui() -> void:
 		_apply_window_scale(window)
 
 	var col: VBoxContainer = _k.v(14)
-	window.add_child(col)
+	if _phone:
+		## Telefon (madde 276; prototip B "Yan Ray + Detay"): sekmeler solda rayda (SİLAHIM / YENİ / KALKAN), sağında içerik.
+		var shell: HBoxContainer = _k.h(16)
+		window.add_child(shell)
+		shell.add_child(_build_phone_rail())
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		shell.add_child(col)
+	else:
+		window.add_child(col)
 	col.add_child(_build_header())
 	col.add_child(_k.hline())
 	var body: HBoxContainer = _k.h(18)
@@ -255,6 +269,10 @@ func _build_header() -> HBoxContainer:
 	ph.add_child(_k.lbl("DEMİRCİ", 40 if _phone else 48, _k.c("accent")))
 	plq.add_child(ph)
 	row.add_child(plq)
+	if _phone: ## sekmeler ve kapat yan rayda
+		row.add_child(_k.sp(0, 0, true))
+		_header_chips(row)
+		return row
 	var tabs: HBoxContainer = _k.h(6)
 	tabs.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	for t: int in TAB_ORDER:
@@ -265,17 +283,37 @@ func _build_header() -> HBoxContainer:
 		_tab_buttons[t] = b
 	row.add_child(tabs)
 	row.add_child(_k.sp(0, 0, true))
+	_header_chips(row)
+	var close_btn: Button = _k.btn("X", "ghost", 32, 56, 56)
+	close_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(_on_close_pressed)
+	row.add_child(close_btn)
+	return row
+
+
+func _header_chips(row: HBoxContainer) -> void:
 	var c1: PanelContainer = _k.chip("shard", "Parçacık")
 	_shard_label = c1.get_meta("label")
 	row.add_child(c1)
 	var c2: PanelContainer = _k.chip("gold", "Altın")
 	_gold_label = c2.get_meta("label")
 	row.add_child(c2)
-	var close_btn: Button = _k.btn("X", "ghost", 32, 56, 56)
-	close_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	close_btn.pressed.connect(_on_close_pressed)
-	row.add_child(close_btn)
-	return row
+
+
+## Telefon yan rayı (madde 276): geri (kapat) + SİLAHIM (geliştir) / YENİ (silah al) / KALKAN (mana kalkanı).
+func _build_phone_rail() -> VBoxContainer:
+	var rail: VBoxContainer = _k.v(12)
+	rail.custom_minimum_size.x = 92
+	var back: Button = _k.rail_back()
+	back.tooltip_text = "Kapat"
+	back.pressed.connect(_on_close_pressed)
+	rail.add_child(back)
+	for spec: Array in [[Tab.ENCHANTS, "SİLAHIM", DarkKit.G_HAMMER], [Tab.WEAPONS, "YENİ", DarkKit.G_PLUS], [Tab.SHIELDS, "KALKAN", DarkKit.G_SHIELD]]:
+		var t: Button = _k.rail_tab(str(spec[1]), spec[2], int(spec[0]) == _tab)
+		t.pressed.connect(_show_tab.bind(int(spec[0])))
+		rail.add_child(t)
+		_tab_buttons[int(spec[0])] = t
+	return rail
 
 
 # ------------------------------------------------------------------ sol: silahların + mana kalkanın
@@ -673,7 +711,10 @@ func _build_right() -> VBoxContainer:
 func _show_tab(tab: int) -> void:
 	_tab = tab
 	for t in _tab_buttons:
-		_k.btn_style(_tab_buttons[t] as Button, "tab_on" if t == tab else "tab")
+		if _phone:
+			_k.set_rail_tab(_tab_buttons[t] as Button, t == tab)
+		else:
+			_k.btn_style(_tab_buttons[t] as Button, "tab_on" if t == tab else "tab")
 	for c in _list_box.get_children():
 		_list_box.remove_child(c)
 		c.queue_free()
@@ -776,6 +817,9 @@ func _build_trait_rows() -> void:
 
 
 ## Odaklanabilir, tıklanabilir seçenek kutusu (kumanda: odak = seçim, A = satın al; fare: tık = seçim, çift tık = satın al).
+## TEK seçim göstergesi = kutunun altın kenarı (_refresh_row). Kullanıcı (2026-10-19): "demircide bir iteme tıklayınca 3 tane
+## tıklama çerçevesi görünüyor onlar 1 tane olmalı" - kumanda odak halkası (tık da odak verir) + kutu kenarı + ikon yuvasının
+## kendi seçim halkası üst üste biniyordu. Odak = seçim olduğundan ayrı odak halkası eklenmez (seyyar satıcıdaki gibi, madde 211).
 func _option_panel(entry: Dictionary) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", _k.sb(_k.c("panel2"), _k.c("line"), 3, 6, 8.0))
@@ -783,7 +827,7 @@ func _option_panel(entry: Dictionary) -> PanelContainer:
 	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	panel.gui_input.connect(_on_row_gui_input.bind(entry))
 	panel.focus_mode = Control.FOCUS_ALL
-	GamepadFocusHelper.add_focus_ring(panel)
+	panel.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	panel.focus_entered.connect(_select.bind(entry))
 	return panel
 
@@ -985,15 +1029,16 @@ func _refresh_row(r: Dictionary) -> void:
 				price_text = "SENDE"
 				price_color = _k.c("good")
 				closed_row = true
-			## Yuva yalnız seçim / sahiplik değişince yeniden kurulur.
-			var vis: String = "%s|%s" % [sel, closed_row]
+			## Yuva yalnız sahiplik değişince yeniden kurulur. Seçim yuvada GÖSTERİLMEZ (halka / altın kenar yok) - tek gösterge kartın
+			## altın kenarı (bkz. _option_panel).
+			var vis: String = str(closed_row)
 			if str(r.get("vis", "")) != vis:
 				r["vis"] = vis
 				var holder: CenterContainer = r["holder"]
 				for c in holder.get_children():
 					holder.remove_child(c)
 					c.queue_free()
-				var t: Control = _k.tile(null, 76.0, _k.c("line_hi") if not sel else _k.c("accent"), {"sel": sel, "dim": closed_row})
+				var t: Control = _k.tile(null, 76.0, _k.c("line_hi"), {"dim": closed_row})
 				var ic: Control = _k.wicon(WeaponCatalogScript.icon(key), 64.0, 1, closed_row)
 				ic.position = ((t.size - ic.size) * 0.5).floor()
 				t.add_child(ic)
@@ -1036,7 +1081,7 @@ func _refresh_row(r: Dictionary) -> void:
 				closed_row = true
 			var n: Label = r["name"]
 			n.add_theme_color_override("font_color", _k.c("dim") if _row_state(w_slot, w_idx) == "locked" else _k.c("text"))
-			_set_lead(r, "w%s|%s" % [_row_state(w_slot, w_idx), sel], func() -> Control: return _up_badge(w_slot, w_idx, 44.0, sel))
+			_set_lead(r, "w%s" % _row_state(w_slot, w_idx), func() -> Control: return _up_badge(w_slot, w_idx, 44.0, false)) ## seçim = satır kenarı
 	if kind != "wupgrade":
 		sub.visible = sub.text != ""
 	price.text = price_text

@@ -18,6 +18,8 @@ const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
 const TierDisplayScript: GDScript = preload("res://scripts/tier_display.gd")
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const PK := preload("res://scripts/phone_menu_kit.gd")
 
 const COL_X := 660.0 ## settings_screen.gd ile aynı satır sütunu
 const COL_Y := 150.0
@@ -92,6 +94,7 @@ class Medal extends Control:
 	var rows: Array = []
 	var metal: Array = []
 	var locked := false
+	var pat_px: float = 0.0 ## desen pikseli (0 = CELL); telefonun iri madalyaları büyütür
 
 	func _init(r: Array, m: Array, is_locked: bool, s: float) -> void:
 		rows = r
@@ -133,9 +136,10 @@ class Medal extends Control:
 		if locked:
 			var g: Color = DARK_RIM.lightened(0.14)
 			cols = {"#": g, "h": g, "k": DARK_FILL.darkened(0.35)}
-		var gw: float = str(rows[0]).length() * CELL
-		var gh: float = rows.size() * CELL
-		_pat(rows, (c - Vector2(gw, gh) * 0.5).round(), CELL, cols)
+		var px: float = pat_px if pat_px > 0.0 else CELL
+		var gw: float = str(rows[0]).length() * px
+		var gh: float = rows.size() * px
+		_pat(rows, (c - Vector2(gw, gh) * 0.5).round(), px, cols)
 		if locked:
 			var lp := (c + Vector2(rad, rad) * 0.66).floor()
 			_disk(lp, 11.0, OUTLINE)
@@ -198,6 +202,11 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	theme = DK.theme()
 	_data = RunRecordsScript.load_all()
+	_phone = MobileUIScript.enabled
+	FM.use_phone_palette(_phone)
+	if _phone:
+		_build_phone()
+		return
 	var band := FM.StepShade.new()
 	band.col = Color(0.05, 0.035, 0.025, band_alpha)
 	add_child(band)
@@ -374,7 +383,9 @@ static func _ach_pattern(d: Dictionary) -> Array:
 
 func _medal(d: Dictionary, s: float = 48.0) -> Medal:
 	var id: String = d["id"]
-	return Medal.new(_ach_pattern(d), METAL[ACH_METAL.get(id, "bronz")], not (_data["achievements"] as Dictionary).has(id), s)
+	var m := Medal.new(_ach_pattern(d), METAL[ACH_METAL.get(id, "bronz")], not (_data["achievements"] as Dictionary).has(id), s)
+	m.pat_px = maxf(Medal.CELL, floorf(s / 26.0)) if _phone else 0.0
+	return m
 
 
 ## ------------------------------------------------------------------ kategoriler
@@ -626,6 +637,11 @@ func _act(event: InputEvent, names: Array) -> bool:
 func _input(event: InputEvent) -> void:
 	if not is_visible_in_tree():
 		return
+	if _phone: ## telefonda dokunmatik: sadece geri (sistem geri tuşu = ui_cancel)
+		if _act(event, ["ui_cancel", "pause_game"]) and not event.is_echo():
+			close()
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseMotion:
 		if not Rect2(Vector2.ZERO, _scroll.size).has_point(_scroll.get_local_mouse_position()):
 			return ## liste penceresi dışında (kaymış, görünmeyen satırlar seçilmesin)
@@ -664,6 +680,197 @@ func _on_open_balance_folder() -> void:
 	var dir: String = ProjectSettings.globalize_path("user://balans")
 	DirAccess.make_dir_recursive_absolute(dir)
 	OS.shell_open(dir)
+
+
+## ------------------------------------------------------------------ telefon
+## TELEFON (2026-10-19; kullanıcı seçimi prototip S = B "Yan Ray + Detay", mobil_proto.gd B_rekor): ray EN İYİ / BAŞARIM, ortada
+## rekor satırları (madalya + ad + iri değer, son koşuda kırılana YENİ) ya da başarım listesi (kilitliler ilerlemeyle, açılanlar
+## tarihle), sağda SIRADAKİ başarım (iri madalya + ilerleme) + SON AÇILANLAR. Veri / sıralama masaüstüyle aynı yardımcılardan.
+var _phone: bool = false
+var _ph: Dictionary = {}
+var _ph_tab: int = 0
+
+
+func _build_phone() -> void:
+	var root := Control.new()
+	root.name = "PhoneRecords"
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
+	PK.fit(root)
+	_ph = PK.b_frame(root, [["EN İYİ", PK.G_TROPHY], ["BAŞARIM", PK.G_STAR]], close, 820.0, 0.6)
+	var tabs: Array = _ph["tabs"]
+	for i in tabs.size():
+		var ti: int = i
+		(tabs[i] as Button).pressed.connect(func() -> void:
+			if ti != _ph_tab:
+				UISound.play_click()
+				_ph_set_tab(ti))
+	_ph_fill_detail()
+	_ph_set_tab(0)
+
+
+func _ph_set_tab(i: int) -> void:
+	_ph_tab = i
+	PK.set_rail(_ph["tabs"], i)
+	PK.set_page(_ph["mid"], _ph_records_page() if i == 0 else _ph_achievements_page())
+
+
+func _ph_records_page() -> Control:
+	var v := DK.v(16)
+	v.add_child(PK.lbl("EN İYİLER", PK.FS_TITLE, DK.C_ACCENT))
+	var fresh: Array = RunRecordsScript.last_run_records(_data)
+	var recs: Array = [
+		["time", P_HOURGLASS, _tm(float(_data["best_time"]))],
+		["tier", P_SKULL, _tier_txt(int(_data["best_tier"]))],
+		["kills", P_SWORD, _num(int(_data["best_kills"])) if int(_data["best_kills"]) > 0 else "-"],
+		["layer", P_MOON, str(int(_data["best_layer"])) if int(_data["best_layer"]) > 0 else "-"],
+		["victory_time", P_CROWN, _tm(float(_data["best_victory_time"]))],
+	]
+	for r: Array in recs:
+		var is_new: bool = fresh.has(str(r[0]))
+		var row := PanelContainer.new()
+		row.name = "Rec_" + str(r[0])
+		row.custom_minimum_size.y = 120
+		row.add_theme_stylebox_override("panel", PK.sb(Color(DK.C_INSET, 0.7), DK.C_ACCENT if is_new else DK.C_LINE, 4 if is_new else 3, 16))
+		var h := DK.h(24)
+		var m := MarginContainer.new()
+		m.add_theme_constant_override("margin_left", 24)
+		m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var md := Medal.new(r[1], METAL["altin"], false, 88.0)
+		md.pat_px = 3.0
+		m.add_child(md)
+		h.add_child(m)
+		var lab := PK.lbl(str(RunRecordsScript.RECORD_LABELS[str(r[0])]), PK.FS_BODY, DK.C_TEXT)
+		lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lab.clip_text = true
+		lab.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		h.add_child(lab)
+		if is_new:
+			var chip := PK.button("YENİ", "danger", PK.FS_SMALL, [], 0.0, 52.0)
+			chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			h.add_child(chip)
+		var val := PK.lbl(str(r[2]), 80, DK.C_PRICE, HORIZONTAL_ALIGNMENT_RIGHT)
+		val.custom_minimum_size.x = 320
+		h.add_child(val)
+		h.add_child(DK.sp(16))
+		row.add_child(h)
+		v.add_child(row)
+	v.add_child(DK.sp(0, 0, false, true))
+	var runs: int = int(_data["runs"])
+	var foot: String = "Henüz koşu yok" if runs <= 0 else "Toplam %d koşu, %d zafer, %s öldürme, %s oyun" % [runs, int(_data["victories"]),
+			_num(int(_data["total_kills"])), _hours(float(_data["total_time"]))]
+	v.add_child(PK.lbl(foot, PK.FS_SMALL, DK.C_DIM))
+	return v
+
+
+func _ph_achievements_page() -> Control:
+	var v := DK.v(12)
+	var unlocked: Dictionary = _data["achievements"]
+	var head := DK.h(16)
+	var t := PK.lbl("BAŞARIMLAR", PK.FS_TITLE, DK.C_ACCENT)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	head.add_child(PK.lbl("%d / %d açıldı" % [unlocked.size(), AchievementsScript.DEFS.size()], PK.FS_SMALL, DK.C_DIM))
+	v.add_child(head)
+	var lst: Array = PK.scroll_list(12)
+	v.add_child(lst[0])
+	var box: VBoxContainer = lst[1]
+	for d: Dictionary in _ph_sorted_achievements():
+		var done: bool = unlocked.has(str(d["id"]))
+		var row := PanelContainer.new()
+		row.custom_minimum_size.y = 112
+		row.add_theme_stylebox_override("panel", PK.sb(Color(DK.C_INSET, 0.7), DK.C_LINE, 3, 16, 12.0))
+		var h := DK.h(20)
+		h.add_child(_medal(d, 80.0))
+		var tv := DK.v(-4)
+		tv.alignment = BoxContainer.ALIGNMENT_CENTER
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tv.add_child(PK.lbl(str(d["name"]), PK.FS_BODY, DK.C_TEXT if done else DK.C_TEXT))
+		var desc := PK.lbl(str(d["desc"]), PK.FS_SMALL, DK.C_DIM)
+		desc.clip_text = true
+		desc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		tv.add_child(desc)
+		h.add_child(tv)
+		var right := DK.h(12)
+		right.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		if done:
+			right.add_child(PK.glyph(PK.G_CHECK, DK.C_ACCENT, 5))
+			right.add_child(PK.lbl(_date(int(unlocked[d["id"]])), PK.FS_SMALL, DK.C_DIM))
+		else:
+			var bar := Bar.new(_ach_frac(d), 220.0)
+			bar.custom_minimum_size.y = 24
+			right.add_child(bar)
+			var cl := PK.lbl(_ach_count(d), PK.FS_SMALL, DK.C_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
+			cl.custom_minimum_size.x = 170
+			right.add_child(cl)
+		h.add_child(right)
+		h.add_child(DK.sp(12))
+		row.add_child(h)
+		box.add_child(row)
+	return v
+
+
+## Masaüstüyle aynı sıra: kilitliler ilerleme oranına göre (eşitlikte tablo sırası), sonra açılanlar en yeniden.
+func _ph_sorted_achievements() -> Array:
+	var unlocked: Dictionary = _data["achievements"]
+	var order: Dictionary = {}
+	var locked: Array = []
+	var done: Array = []
+	for i in AchievementsScript.DEFS.size():
+		var d: Dictionary = AchievementsScript.DEFS[i]
+		order[str(d["id"])] = i
+		(done if unlocked.has(str(d["id"])) else locked).append(d)
+	locked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var fa: float = _ach_frac(a)
+		var fb: float = _ach_frac(b)
+		return fa > fb if fa != fb else int(order[a["id"]]) < int(order[b["id"]]))
+	done.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ta: int = int(unlocked[a["id"]])
+		var tb: int = int(unlocked[b["id"]])
+		return ta > tb if ta != tb else int(order[a["id"]]) < int(order[b["id"]]))
+	return locked + done
+
+
+## Sağ sütun: sıradaki başarım + son açılanlar.
+func _ph_fill_detail() -> void:
+	var det: VBoxContainer = _ph["det"]
+	det.add_child(PK.lbl("SIRADAKİ", PK.FS_TITLE, DK.C_ACCENT))
+	var nx: Dictionary = _next_achievement()
+	if nx.is_empty():
+		det.add_child(DK.sp(0, 24))
+		det.add_child(PK.lbl("Bütün başarımlar açıldı", PK.FS_BODY, DK.C_GOOD, HORIZONTAL_ALIGNMENT_CENTER))
+	else:
+		det.add_child(DK.sp(0, 24))
+		var mc := CenterContainer.new()
+		mc.add_child(_medal(nx, 224.0))
+		det.add_child(mc)
+		det.add_child(DK.sp(0, 16))
+		det.add_child(PK.lbl(str(nx["name"]), PK.FS_TITLE, DK.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+		var desc := PK.lbl(str(nx["desc"]), PK.FS_SMALL, DK.C_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		det.add_child(desc)
+		det.add_child(DK.sp(0, 20))
+		var bar := Bar.new(_ach_frac(nx), 0.0)
+		bar.custom_minimum_size.y = 32
+		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		det.add_child(bar)
+		det.add_child(PK.lbl(_ach_count(nx), PK.FS_SMALL, DK.C_DIM, HORIZONTAL_ALIGNMENT_RIGHT))
+	det.add_child(DK.sp(0, 0, false, true))
+	var unlocked: Dictionary = _data["achievements"]
+	var recent: Array = []
+	for d: Dictionary in _ph_sorted_achievements():
+		if unlocked.has(str(d["id"])):
+			recent.append(d)
+	det.add_child(PK.lbl("SON AÇILANLAR", PK.FS_BODY, DK.C_DIM))
+	det.add_child(DK.sp(0, 12))
+	var row := DK.h(28)
+	if recent.is_empty():
+		row.add_child(PK.lbl("Henüz yok", PK.FS_SMALL, DK.C_DIM))
+	for i in mini(recent.size(), 5):
+		row.add_child(_medal(recent[i], 128.0))
+	det.add_child(row)
+	det.add_child(DK.sp(0, 24))
 
 
 ## Ekranı kapatır: ESC/B ya da GERİ (ayarlar ekranıyla aynı: aynı basış menüde başka bir şeyi tetiklemesin).

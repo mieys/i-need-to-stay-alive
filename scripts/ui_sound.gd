@@ -58,6 +58,27 @@ var camera_shake_percent: float = 100.0
 ## sahne geçişi. Grafik penceresinden kapatılabilir (kapalıyken her şey anında). Aynı "display" ConfigFile bölümü.
 const UiAnimScript := preload("res://scripts/ui_anim.gd")
 var ui_anim_enabled: bool = true
+## TELEFON DOKUNMATİK AYARLARI (2026-10-19; telefon Ayarlar > DOKUNMATİK sekmesi): joystick SABİT (boştaki yerinde durur) ya da
+## YÜZEN (dokunulan yerde belirir, eski davranış), yetenek düğmesi boyutu (hud.gd telefon yuvaları), hasar alınca titreşim
+## (sadece gerçek telefonda; export_presets permissions/vibrate). Aynı "display" ConfigFile bölümü; masaüstünde okunmaz.
+signal touch_settings_changed
+const TOUCH_BUTTON_SCALE_MIN := 80.0
+const TOUCH_BUTTON_SCALE_MAX := 130.0
+var touch_joystick_fixed: bool = false
+var touch_button_scale_percent: float = 100.0
+var touch_vibration: bool = true
+func set_touch_joystick_fixed(on: bool) -> void:
+	touch_joystick_fixed = on
+	_save_display_settings()
+	touch_settings_changed.emit()
+func set_touch_button_scale_percent(percent: float) -> void:
+	touch_button_scale_percent = clampf(snappedf(percent, 5.0), TOUCH_BUTTON_SCALE_MIN, TOUCH_BUTTON_SCALE_MAX)
+	_save_display_settings()
+	touch_settings_changed.emit()
+func set_touch_vibration(on: bool) -> void:
+	touch_vibration = on
+	_save_display_settings()
+	touch_settings_changed.emit()
 ## OYUN İMLECİ (2026-10-17, madde 206, bkz. game_cursor.gd): krem piksel ok + düğmede kehribar el + basılı hâli.
 const GameCursorScript := preload("res://scripts/game_cursor.gd")
 
@@ -324,6 +345,9 @@ func _save_display_settings() -> void:
 	config.set_value("display", "gfx_ground_detail", gfx_ground_detail)
 	config.set_value("display", "gfx_render_scale", gfx_render_scale)
 	config.set_value("display", "fps_limit", fps_limit)
+	config.set_value("display", "touch_joystick_fixed", touch_joystick_fixed)
+	config.set_value("display", "touch_button_scale_percent", touch_button_scale_percent)
+	config.set_value("display", "touch_vibration", touch_vibration)
 	config.save(DISPLAY_SETTINGS_PATH)
 
 
@@ -340,6 +364,9 @@ func _load_display_settings() -> void:
 		gfx_ground_detail = bool(config.get_value("display", "gfx_ground_detail", true))
 		gfx_render_scale = _nearest_render_scale(float(config.get_value("display", "gfx_render_scale", 1.0)))
 		fps_limit = int(config.get_value("display", "fps_limit", _default_fps_limit()))
+		touch_joystick_fixed = bool(config.get_value("display", "touch_joystick_fixed", false))
+		touch_button_scale_percent = clampf(float(config.get_value("display", "touch_button_scale_percent", 100.0)), TOUCH_BUTTON_SCALE_MIN, TOUCH_BUTTON_SCALE_MAX)
+		touch_vibration = bool(config.get_value("display", "touch_vibration", true))
 	else:
 		fps_limit = _default_fps_limit()
 	if not FPS_LIMITS.has(fps_limit):

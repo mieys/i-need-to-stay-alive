@@ -214,6 +214,8 @@ func setup(player: Node, chest_tier: int, elite: bool = false) -> void:
 	# Update Title
 	if title_label:
 		title_label.text = "ELİT SANDIK" if _is_elite else CHEST_TITLES.get(_chest_tier, "EŞYA SANDIĞI")
+	if _mobile():
+		_setup_phone_chrome()
 
 	# Clear existing children just in case
 	if cards_container:
@@ -356,7 +358,8 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 		await get_tree().process_frame
 		if not is_instance_valid(self):
 			return
-		_fit_card_texts(column)
+		if not _mobile():
+			_fit_card_texts(column)
 		var card_panel: Control = column.get_child(0) as Control
 		var buttons: Array = []
 		for b in _side_buttons:
@@ -373,7 +376,7 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 		if card_panel and is_instance_valid(_rays_layer):
 			_rays = RewardRays.new()
 			_rays_layer.add_child(_rays)
-			_rays.setup(card_panel, CARD_SIZE * _k, 3.0 * _k, tier, _is_elite)
+			_rays.setup(card_panel, card_panel.size if _mobile() else CARD_SIZE * _k, 3.0 * _k, tier, _is_elite)
 		if card_panel:
 			## Sütunun tamamı uçar (kart + gizli butonlar); pivot kartın ortası.
 			var mouth: Vector2 = RewardReveal.chest_mouth(_chest_icon) if is_instance_valid(_chest_icon) else card_panel.get_global_rect().get_center()
@@ -583,6 +586,8 @@ func _auto_pick_random_card() -> void:
 ## TierSystem ile level atlama kartlarıyla AYNI görsel dil) belirler. Gerçek
 ## güç çarpanı (bkz. Items.ITEM_TIER_POWER) _on_al_pressed'e kadar taşınır.
 func _build_card(candidate: Dictionary) -> Control:
+	if _mobile():
+		return _build_phone_card(candidate)
 	var card_type: String = candidate.get("type", "item")
 	var item_key: String = candidate.get("key", "")
 	var is_weapon: bool = card_type == "weapon"
@@ -931,3 +936,308 @@ func _close() -> void:
 	get_tree().paused = false
 	closed.emit()
 	queue_free()
+## ---------------------------------------------------------------- TELEFON (madde 276; kullanıcı onayı 2026-10-18, madde 253
+## "Seçenek 1"; prototip tools/proto_20261018/mobil_proto.gd S_sandik). Kullanıcı: "arttırılmış gibi göstermek yerine direk
+## verdiği statlar ve pasif gözüksün, pasif solgun gözükmesin önemli bir açıklama o çünkü". Gece Sıvası (B) kart: kademe renkli
+## kenar + şerit, büyük ikon, ad, eşyanın KENDİ stat satırları (Items.describe satırları), ayrı PASİF kutusu (parlak yazı);
+## SAT kartın solunda (+altın), AL sağında ("çantaya ekle"); başlık sol üstte, geri sayım sağ üstte; SAT'ın üstünde çantadaki aynı
+## kademe eşyalar. Prototipteki sıra/"Senden sonra" satırı oyunda bu menüye gelen bir veri değil - yok. Kart sandıktan yine
+## fırlar (Frame görünmez kalır, animasyon/ışık kodları aynı).
+const PH_CHEST_W := 880.0
+const PH_SIDE_BTN := Vector2(460, 280)
+const PH_PANEL := Color("#23233a")
+const PH_INSET := Color("#12121f")
+const PH_LINE := Color("#3b3a5a")
+const PH_LINE_HI := Color("#5f5c86")
+const PH_TEXT := Color("#efe6d6")
+const PH_DIM_TEXT := Color("#a7a2c0")
+const PH_ACCENT := Color("#f4c56e")
+const PH_ACCENT_TEXT := Color("#231a0a")
+const PH_GOOD := Color("#a8d69a")
+const PH_KADEME_COL := [Color("#c39a64"), Color("#6f9df2"), Color("#b98af2")] ## parça / epik / efsanevi
+const PH_KADEME_UPPER := ["PARÇA", "EPİK", "EFSANEVİ"]
+const PH_BAG_LABEL := ["Çantandaki parçalar", "Çantandaki epikler", "Çantandaki efsaneviler"]
+var _phone_chrome: Control = null
+
+
+## Başlığın arkasında üstten aşağı sönen koyu şerit (prototipteki üst karartma) - alttaki HUD başlığı bozmasın.
+static func top_fade(width: float, h: float = 190.0, alpha: float = 0.75) -> TextureRect:
+	var g := Gradient.new()
+	g.set_color(0, Color(0.03, 0.03, 0.06, alpha))
+	g.set_color(1, Color(0.03, 0.03, 0.06, 0.0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill_from = Vector2(0, 0)
+	gt.fill_to = Vector2(0, 1)
+	gt.width = 4
+	gt.height = 64
+	var tr := TextureRect.new()
+	tr.name = "PhoneTopFade"
+	tr.texture = gt
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tr.position = Vector2.ZERO
+	tr.size = Vector2(width, h)
+	return tr
+
+
+static func _ph_box(fill: Color, border: Color, bw: int, rad: int) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = fill
+	sb.border_color = border
+	sb.set_border_width_all(bw)
+	sb.set_corner_radius_all(rad)
+	sb.corner_detail = 6
+	return sb
+
+
+func _ph_lbl(parent: Control, text: String, r: Rect2, fs: int, c: Color, align: HorizontalAlignment, wrap: bool = false) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = align
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER if not wrap else VERTICAL_ALIGNMENT_TOP
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if wrap else TextServer.AUTOWRAP_OFF
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UIKit.style_label(l, fs, c, 0)
+	parent.add_child(l)
+	l.position = r.position
+	l.size = r.size
+	l.set_deferred("size", r.size)
+	return l
+
+
+## Başlık (sol üst) + alt satır, geri sayım levhası (sağ üst) - ortadaki eski başlık/geri sayım düzeni telefonda gizli.
+func _setup_phone_chrome() -> void:
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	var safe: Rect2 = MobileUIScript.safe_margins(get_viewport())
+	if has_node("Dim"):
+		($Dim as ColorRect).color = Color(0.03, 0.03, 0.06, 0.62)
+	if title_label:
+		title_label.visible = false
+	_phone_chrome = Control.new()
+	_phone_chrome.name = "PhoneChrome"
+	_phone_chrome.theme = UIKit.theme()
+	_phone_chrome.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_phone_chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_phone_chrome)
+	_phone_chrome.add_child(top_fade(view.x))
+	var x0: float = safe.position.x + 96.0
+	_ph_lbl(_phone_chrome, title_label.text if title_label else "SANDIK", Rect2(x0, 20, 1100, 84), 64, PH_ACCENT, HORIZONTAL_ALIGNMENT_LEFT)
+	_ph_lbl(_phone_chrome, "Al ya da sat", Rect2(x0, 100, 900, 48), 32, PH_DIM_TEXT, HORIZONTAL_ALIGNMENT_LEFT)
+	if countdown_panel:
+		countdown_panel.add_theme_stylebox_override("panel", _ph_box(Color(PH_PANEL, 0.94), PH_LINE, 3, 14))
+		countdown_panel.reparent(_phone_chrome, false)
+		countdown_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		countdown_panel.size = Vector2(420, 120)
+		countdown_panel.position = Vector2(view.x - safe.size.x - 96.0 - 420.0, 24.0)
+		if countdown_label:
+			UIKit.style_label(countdown_label, 64, PH_ACCENT, 0)
+			countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var wl: Label = countdown_panel.get_node_or_null("VBox/WaitingLabel") as Label
+		if wl:
+			UIKit.style_label(wl, 32, PH_DIM_TEXT, 0)
+			wl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+func _build_phone_card(candidate: Dictionary) -> Control:
+	var card_type: String = candidate.get("type", "item")
+	var item_key: String = candidate.get("key", "")
+	var is_weapon: bool = card_type == "weapon"
+	var item_def: Dictionary = {} if is_weapon else Items.get_def(item_key)
+	var display_name: String = WEAPON_NAMES.get(item_key, item_key.capitalize()) if is_weapon else item_def.get("name", item_key.capitalize())
+	var desc_text: String = "Yeni bir silah - kalıcı olarak edinilir." if is_weapon else Items.describe(item_key)
+	var icon_path: String = WEAPON_ICON_TEXTURES.get(item_key, "") if is_weapon else Items.icon_path(item_key)
+	var cost_base: int = WEAPON_COST_BASE.get(item_key, 80) if is_weapon else Items.cost(item_key)
+	var kd: int = 1 if is_weapon else clampi(Items.kademe(item_key), 1, 3)
+	var kc: Color = PH_KADEME_COL[kd - 1]
+	var stat_lines: Array = []
+	var passive: String = ""
+	for ln: String in desc_text.split("\n"):
+		if ln.strip_edges() == "":
+			continue
+		if ln.begins_with("Pasif:"):
+			passive = ln.substr(6).strip_edges()
+		else:
+			stat_lines.append(ln)
+	var w: float = PH_CHEST_W
+	## Pasif kutusu metnin satır sayısı kadar uzar (48 px yazı, kutu iç genişliği w - 120).
+	var pass_lines: int = 0
+	if passive != "":
+		var f: Font = UIKit.theme().default_font if UIKit.theme().default_font else ThemeDB.fallback_font
+		pass_lines = maxi(1, int(ceil(f.get_string_size(passive, HORIZONTAL_ALIGNMENT_LEFT, -1, 48).x / (w - 120.0))) + 0)
+	var pass_h: float = (70.0 + pass_lines * 50.0) if passive != "" else 0.0
+	var gold_h: float = 64.0 if _chest_gold > 0 else 0.0
+	var h: float = 392.0 + stat_lines.size() * 58.0 + (pass_h + 28.0 if passive != "" else 0.0) + gold_h + 24.0
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 0)
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(w, h)
+	card.add_theme_stylebox_override("panel", _ph_box(Color(PH_PANEL, 0.97), kc, 4, 18))
+	card.set_meta("glow_card_size", Vector2(w, h))
+	card.set_meta("reward_tier", _reward_tier if not is_weapon else 1)
+	column.add_child(card)
+	## Animasyon / ışık / parıltı kodları kartın Frame'ini bekler (land_fx, start_idle_shine) - telefonda görünmez tutulur.
+	var frame := TextureRect.new()
+	frame.name = "Frame"
+	frame.visible = false
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	TierCardFx.apply_frame(frame, _reward_tier if not is_weapon else 1)
+	card.add_child(frame)
+	var lay := Control.new()
+	lay.name = "Layout"
+	lay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(lay)
+	var band := Panel.new()
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	band.add_theme_stylebox_override("panel", _ph_box(Color(kc, 0.3), Color(0, 0, 0, 0), 0, 14))
+	band.position = Vector2(4, 4)
+	band.size = Vector2(w - 8.0, 72)
+	lay.add_child(band)
+	_ph_lbl(lay, "SİLAH" if is_weapon else PH_KADEME_UPPER[kd - 1], Rect2(0, 4, w, 72), 48, kc.lightened(0.25), HORIZONTAL_ALIGNMENT_CENTER)
+	var icon_rect := TextureRect.new()
+	icon_rect.position = Vector2(w * 0.5 - 96.0, 96.0)
+	icon_rect.size = Vector2(192, 192)
+	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
+		icon_rect.texture = load(icon_path) as Texture2D
+	icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lay.add_child(icon_rect)
+	_card_icon = icon_rect ## SAT'ta bu ikon parçalanır (bkz. _on_sat_pressed)
+	var name_lbl: Label = _ph_lbl(lay, display_name, Rect2(16, 300, w - 32.0, 72), 64, PH_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	name_lbl.clip_text = true
+	var y: float = 392.0
+	for ln: String in stat_lines:
+		_ph_lbl(lay, ln, Rect2(16, y, w - 32.0, 56), 48, PH_GOOD, HORIZONTAL_ALIGNMENT_CENTER)
+		y += 58.0
+	if passive != "":
+		var pb := Panel.new()
+		pb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pb.add_theme_stylebox_override("panel", _ph_box(Color(PH_INSET, 0.92), Color(PH_ACCENT, 0.7), 2, 12))
+		pb.position = Vector2(36, y + 14.0)
+		pb.size = Vector2(w - 72.0, pass_h)
+		lay.add_child(pb)
+		_ph_lbl(lay, "PASİF", Rect2(60, y + 24.0, 300, 44), 32, PH_ACCENT, HORIZONTAL_ALIGNMENT_LEFT)
+		_ph_lbl(lay, passive, Rect2(60, y + 72.0, w - 120.0, pass_lines * 50.0 + 4.0), 48, PH_TEXT, HORIZONTAL_ALIGNMENT_LEFT, true)
+		y += pass_h + 28.0
+	if _chest_gold > 0:
+		var gold_holder := VBoxContainer.new()
+		gold_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		gold_holder.position = Vector2(0, y + 4.0)
+		gold_holder.size = Vector2(w, 56)
+		lay.add_child(gold_holder)
+		_gold_badge = _build_gold_badge(gold_holder)
+
+	var has_slots: bool = true
+	var gm = _get_game_manager()
+	if is_weapon:
+		if _player and gm and "owned_weapons" in gm:
+			var max_w: int = 3
+			if _player.has_method("get_max_owned_weapons"):
+				max_w = _player.get_max_owned_weapons()
+			has_slots = gm.owned_weapons.size() < max_w
+	elif _player and gm and "owned_items" in gm:
+		var part_slots: int = 1
+		if _player.has_method("get_max_item_slots"):
+			part_slots = _player.get_max_item_slots()
+		has_slots = Items.purchase_block_reason(item_key, gm.owned_items, part_slots, {"consume": []}) == ""
+	var power_mult: float = 1.0
+	var refund_gold: int = int(round(cost_base * Items.SELL_REFUND_RATIO))
+	var al_btn := Button.new()
+	al_btn.disabled = not has_slots
+	al_btn.pressed.connect(_on_al_pressed.bind(candidate, cost_base, power_mult))
+	_ph_side_button(al_btn, false, "AL" if has_slots else "DOLU", "çantaya ekle" if has_slots else "yer yok", true)
+	column.set_meta("al_button", al_btn)
+	var sat_btn := Button.new()
+	sat_btn.pressed.connect(_on_sat_pressed.bind(item_key, refund_gold))
+	_ph_side_button(sat_btn, true, "SAT", "+%d altın" % refund_gold, false)
+	column.set_meta("sat_button", sat_btn)
+	_ph_bag_row(kd, is_weapon, has_slots)
+	return column
+
+
+## Telefon AL / SAT: kartın iki yanında büyük düğme (ana yazı + alt satır), ekrana bağlı (kart sandıktan uçarken yerinde bekler).
+func _ph_side_button(btn: Button, left: bool, main: String, sub: String, primary: bool) -> void:
+	if _side_holder == null:
+		_side_holder = Control.new()
+		_side_holder.name = "SideButtons"
+		_side_holder.theme = UIKit.theme()
+		_side_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_side_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_side_holder)
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	var half: float = PH_CHEST_W * 0.5 + 40.0
+	var x: float = view.x * 0.5 - half - PH_SIDE_BTN.x if left else view.x * 0.5 + half
+	var r := Rect2(roundf(x), roundf(view.y * 0.5 - 20.0), PH_SIDE_BTN.x, PH_SIDE_BTN.y)
+	btn.text = ""
+	btn.focus_mode = Control.FOCUS_NONE
+	var fill: Color = PH_ACCENT if primary else PH_PANEL
+	var border: Color = PH_ACCENT.darkened(0.35) if primary else PH_LINE_HI
+	btn.add_theme_stylebox_override("normal", _ph_box(fill, border, 4, 18))
+	btn.add_theme_stylebox_override("hover", _ph_box(fill.lightened(0.08), border, 4, 18))
+	btn.add_theme_stylebox_override("pressed", _ph_box(fill.darkened(0.12), border, 4, 18))
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("disabled", _ph_box(Color(PH_PANEL, 0.6), PH_LINE, 3, 18))
+	_side_holder.add_child(btn)
+	btn.position = r.position
+	btn.size = r.size
+	var tc: Color = PH_ACCENT_TEXT if primary and not btn.disabled else (PH_DIM_TEXT if btn.disabled else PH_TEXT)
+	_ph_lbl(btn, main, Rect2(0, 52, r.size.x, 112), 96 if primary else 64, tc, HORIZONTAL_ALIGNMENT_CENTER)
+	_ph_lbl(btn, sub, Rect2(0, 172, r.size.x, 48), 32, tc if primary else PH_ACCENT, HORIZONTAL_ALIGNMENT_CENTER)
+	_side_buttons.append(btn)
+
+
+## SAT düğmesinin üstünde: çantadaki aynı kademe eşyalar (silahsa silahlar) - dolu yuvalar ikonla, sıradaki boş yuva "+".
+func _ph_bag_row(kd: int, is_weapon: bool, has_slots: bool) -> void:
+	if _side_holder == null:
+		return
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	var x0: float = roundf(view.x * 0.5 - PH_CHEST_W * 0.5 - 40.0 - PH_SIDE_BTN.x)
+	var y0: float = roundf(view.y * 0.5 - 20.0 - 220.0)
+	var icons: Array = []
+	var gm = _get_game_manager()
+	if is_weapon:
+		if gm and "owned_weapons" in gm:
+			for wk in gm.owned_weapons:
+				icons.append(str(WEAPON_ICON_TEXTURES.get(str(wk.get("key", wk)) if wk is Dictionary else str(wk), "")))
+	elif gm and "owned_items" in gm:
+		for it in gm.owned_items:
+			var key: String = str((it as Dictionary).get("key", "")) if it is Dictionary else str(it)
+			if key != "" and Items.kademe(key) == kd:
+				icons.append(Items.icon_path(key))
+	## Satır tek kapta: kart inince düğmelerle birlikte belirir (_side_buttons, bkz. _reveal_reward_card).
+	var row := Control.new()
+	row.name = "PhoneBagRow"
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_side_holder.add_child(row)
+	_side_buttons.append(row)
+	_ph_lbl(row, "Silahların" if is_weapon else PH_BAG_LABEL[kd - 1], Rect2(x0, y0, PH_SIDE_BTN.x, 44), 32, PH_DIM_TEXT, HORIZONTAL_ALIGNMENT_LEFT)
+	var plus_done: bool = false
+	for j in 5:
+		var sr := Rect2(x0 + j * 92.0, y0 + 52.0, 80, 80)
+		var filled: bool = j < icons.size()
+		var plus: bool = not filled and not plus_done and has_slots
+		var slot := Panel.new()
+		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_theme_stylebox_override("panel", _ph_box(Color(PH_ACCENT, 0.15) if plus else Color(PH_INSET, 0.9), PH_ACCENT if plus else PH_LINE, 3 if plus else 2, 10))
+		slot.position = sr.position
+		slot.size = sr.size
+		row.add_child(slot)
+		if filled and str(icons[j]) != "" and ResourceLoader.exists(str(icons[j])):
+			var ic := TextureRect.new()
+			ic.texture = load(str(icons[j])) as Texture2D
+			ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			ic.position = Vector2(8, 8)
+			ic.size = Vector2(64, 64)
+			slot.add_child(ic)
+		elif plus:
+			plus_done = true
+			_ph_lbl(slot, "+", Rect2(0, -4, 80, 80), 64, PH_ACCENT, HORIZONTAL_ALIGNMENT_CENTER)

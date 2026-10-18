@@ -10,13 +10,14 @@ extends Control
 ## MASAÜSTÜ (2026-10-16, kullanıcı: "oda kurma ekranını çok oyunculu moda uygun hale getir" + "arka plan ana menüdekiyle aynı olsun"):
 ## karakter seçimiyle (lobby_select_desktop.gd "SEÇİM D") AYNI ızgara + koyu kit (menu_dark_kit.gd) + "Ocak Başı" arka planı
 ## (menu_hearth_bg.gd): sol sütun mod kutusu (ANA MENÜ, durum) + adın + HEP AÇIK "ODA KUR" formu (eski açılır pencere), sağ oda listesi,
-## alt sağ IP ile katıl. TELEFON: eski bej yerleşim (_build_mobile + _build_dialog açılır pencere), arka plan aynı sahne.
+## alt sağ IP ile katıl. TELEFON (2026-10-19, madde 279): prototip S "Seçenek 1" Gece Sıvası düzeni (_build_phone + _build_dialog açılır pencere), arka plan aynı sahne.
 
 const UiAnim := preload("res://scripts/ui_anim.gd")
 const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const DK := preload("res://scripts/menu_dark_kit.gd")
 const HearthBg := preload("res://scripts/menu_hearth_bg.gd")
+const PK := preload("res://scripts/phone_menu_kit.gd")
 ## Masaüstü ızgarası (lobby_select_desktop.gd LEFT / MID+RIGHT / START_Y ile aynı sütunlar).
 const D_LEFT := Rect2(32, 24, 440, 1024)
 const D_LIST := Rect2(488, 24, 1400, 908)
@@ -74,14 +75,14 @@ var _conn_hint: Label = null
 
 func _ready() -> void:
 	_mobile = MobileUIScript.enabled
-	theme = MenuKit.theme() if _mobile else DK.theme()
+	theme = DK.theme()
 	HearthBg.add_to(self, 0.0 if _mobile else HearthBg.DIM_DESKTOP)
 	_sz = LobbyUI.sizes(_mobile)
 	if NetworkManager.is_multiplayer_active:
 		_go_to_room.call_deferred()
 		return
 	if _mobile:
-		_build_mobile()
+		_build_phone()
 		_build_dialog()
 	else:
 		_build_desktop()
@@ -116,10 +117,14 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _mobile or not event.is_action_pressed("ui_cancel"):
+	if not event.is_action_pressed("ui_cancel"):
 		return
 	get_viewport().set_input_as_handled()
-	if not _pw_key.is_empty(): ## açık şifre sorusu önce kapanır
+	if _mobile and is_instance_valid(_dialog) and _dialog.visible: ## telefonda sistem geri tuşu önce açık pencereyi kapatır
+		_dialog.visible = false
+	elif _mobile and is_instance_valid(_ph_ip_dialog) and _ph_ip_dialog.visible:
+		_ph_ip_dialog.visible = false
+	elif not _pw_key.is_empty(): ## açık şifre sorusu önce kapanır
 		_pw_key = ""
 		_pw_error = ""
 		_rebuild_list()
@@ -416,146 +421,304 @@ func _d_ip_box() -> PanelContainer:
 ## Seçim düğmesi (en fazla oyuncu / bağlantı): telefonda bej sage/tan, masaüstünde koyu kit karosu.
 func _style_choice(b: Button, on: bool) -> void:
 	if _mobile:
-		MenuKit.style_button(b, "sage" if on else "tan")
+		PK.set_kind(b, "selected" if on else ("disabled" if b.disabled else "secondary"))
 	else:
 		DK.style_button(b, "tile_on" if on else ("tile_locked" if b.disabled else "tile"), 4, 6.0)
 
 
-# ---------------------------------------------------------------------------------------------------- telefon yerleşimi
-func _build_mobile() -> void:
-	var rect: Rect2 = LobbyUI.safe_rect(self, _mobile)
-	var fs: int = int(_sz["fs_body"])
-	var ctl_h: float = float(_sz["ctl_h"])
-	var top_h: float = clampf(roundf(rect.size.y * 0.11), 96.0, 150.0) if _mobile else 96.0
+# ---------------------------------------------------------------------------------------------------- telefon (2026-10-19)
+## TELEFON (kullanıcı seçimi prototip S "Seçenek 1", mobil_proto.gd S_oda; Gece Sıvası): üstte geri + ÇOK OYUNCU + durum satırı, sağ
+## üstte İNTERNET / LAN sekmeleri (listeyi süzer); solda HIZLI KATIL (şifresiz, dolu olmayan, oyunda olmayan ilk oda) / ODA KUR /
+## IP İLE KATIL + oyuncu adı kartı; sağda oda satırları (oda türü simgesi, ad + kilit, durum + kuran, dolu/boş oyuncu yuvaları, KATIL /
+## şifreli KATIL / DOLU / oyundaysa GERİ DÖN), şifreli odanın altında şifre satırı. Prototipteki kuranın portresi, oyuncu yüzleri ve
+## ping ağ verisinde YOK - yerine oda türü simgesi + yuvalar. Masaüstü yolu (SEÇİM D) aynı.
+const PH_LEFT_W := 560.0
+const PH_LIST_X := PK.SIDE + PH_LEFT_W + 40.0
+const PH_ROW_H := 178.0
+var _ph_root: Control = null
+var _ph_tab_online: bool = true
+var _ph_tabs: Array[Button] = []
+var _ph_quick: Button = null
+var _ph_ip_dialog: Control = null
 
-	var back := MenuKit.make_button("< Geri", "tan", fs, top_h - 24.0 if _mobile else 56.0)
-	back.pressed.connect(_on_back_pressed)
-	add_child(back)
-	MenuKit.place(back, rect.position + Vector2(16, 12 if _mobile else 24), Vector2(240.0 if _mobile else 200.0, top_h - 24.0 if _mobile else 56.0))
-	var banner := MenuKit.make_banner("Çok Oyunculu", 48 if _mobile else MenuKit.FS_TITLE)
-	add_child(banner)
-	var bs: Vector2 = banner.get_combined_minimum_size()
-	MenuKit.place(banner, Vector2(rect.position.x + roundf((rect.size.x - bs.x) * 0.5), rect.position.y + (6.0 if _mobile else 18.0)), bs)
 
-	## Masaüstünde pencere ekranı kaplamaz (2026-10-11 "arayüzün kendisi çok büyük"): 1200 x en çok 800, ortada.
-	var panel_w: float = rect.size.x - 32.0 if _mobile else minf(PANEL_MAX.x, rect.size.x - 32.0)
-	var panel_h: float = rect.size.y - top_h - 28.0 if _mobile else minf(PANEL_MAX.y, rect.size.y - top_h - 28.0)
-	var panel := MenuKit.make_panel("panel_tight")
-	add_child(panel)
-	var free_y: float = rect.size.y - top_h - 12.0 - panel_h
-	MenuKit.place(panel, Vector2(rect.position.x + roundf((rect.size.x - panel_w) * 0.5), rect.position.y + top_h + 12.0 + (0.0 if _mobile else roundf(free_y * 0.35))),
-		Vector2(panel_w, panel_h))
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 14 if _mobile else 10)
-	panel.add_child(v)
+func _build_phone() -> void:
+	_ph_root = Control.new()
+	_ph_root.name = "PhoneRooms"
+	_ph_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_ph_root)
+	PK.fit(_ph_root)
+	_ph_root.add_child(PK.dim(0.6))
+	_ph_root.add_child(PK.fade(SIDE_TOP, 190.0, 0.7))
+	PK.header(_ph_root, "ÇOK OYUNCU", "", _on_back_pressed)
+	_status_label = PK.lbl("Satırdaki KATIL'a dokun ya da hızlı katıl", PK.FS_SMALL, DK.C_DIM)
+	_status_label.name = "Status"
+	_status_label.position = Vector2(PK.SIDE + PK.BACK + 32.0, PK.TOP + 70.0)
+	_status_label.size = Vector2(1300, 48)
+	_status_label.clip_text = true
+	_status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_ph_root.add_child(_status_label)
+	## Sekmeler (sağ üst).
+	var tabs := DK.h(16)
+	tabs.name = "KindTabs"
+	tabs.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	tabs.offset_left = -(PK.SIDE + 640.0)
+	tabs.offset_right = -PK.SIDE
+	tabs.offset_top = PK.TOP + 8.0
+	tabs.offset_bottom = PK.TOP + 8.0 + 104.0
+	for i in 2:
+		var b := PK.button(["İNTERNET", "LAN"][i], "secondary", PK.FS_BODY, [], 312.0, 104.0)
+		b.name = ["TabOnline", "TabLan"][i]
+		var online: bool = i == 0
+		b.pressed.connect(func() -> void: _ph_set_tab(online))
+		tabs.add_child(b)
+		_ph_tabs.append(b)
+	_ph_root.add_child(tabs)
+	## Sol sütun.
+	var left := DK.v(24)
+	left.name = "Actions"
+	left.position = Vector2(PK.SIDE, 176.0)
+	left.custom_minimum_size.x = PH_LEFT_W
+	_ph_quick = PK.big_button("HIZLI KATIL", "En uygun odaya gir", "primary", PK.G_PLAY, PH_LEFT_W, 236.0)
+	_ph_quick.name = "QuickJoin"
+	_ph_quick.pressed.connect(_ph_quick_join)
+	left.add_child(_ph_quick)
+	_create_btn = PK.big_button("ODA KUR", "Arkadaşlarını çağır", "secondary", PK.G_PLUS, PH_LEFT_W, 180.0)
+	_create_btn.name = "CreateRoom"
+	_create_btn.pressed.connect(_open_dialog)
+	left.add_child(_create_btn)
+	var ip_btn := PK.big_button("IP İLE KATIL", "Aynı ağdaki odaya", "secondary", PK.G_KEY, PH_LEFT_W, 150.0, PK.FS_BODY)
+	ip_btn.name = "IpJoin"
+	ip_btn.pressed.connect(func() -> void:
+		if not _busy:
+			_ph_ip_dialog.visible = true
+			UiAnim.window_in(_ph_ip_dialog))
+	left.add_child(ip_btn)
+	left.add_child(_ph_name_card())
+	_ph_root.add_child(left)
+	## Sağ: oda sayısı + YENİLE + liste.
+	_count_label = PK.lbl("", PK.FS_BODY, DK.C_DIM)
+	_count_label.position = Vector2(PH_LIST_X, 176.0)
+	_count_label.size = Vector2(500, 72)
+	_ph_root.add_child(_count_label)
+	_refresh_btn = PK.button("YENİLE", "ghost", PK.FS_BODY, PK.G_REROLL, 300.0, 88.0)
+	_refresh_btn.name = "Refresh"
+	_refresh_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_refresh_btn.offset_left = -(PK.SIDE + 300.0)
+	_refresh_btn.offset_right = -PK.SIDE
+	_refresh_btn.offset_top = 168.0
+	_refresh_btn.offset_bottom = 256.0
+	_refresh_btn.pressed.connect(_on_refresh_pressed)
+	_ph_root.add_child(_refresh_btn)
+	var lst: Array = PK.scroll_list(16)
+	var sc: ScrollContainer = lst[0]
+	sc.name = "RoomScroll"
+	sc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sc.offset_left = PH_LIST_X
+	sc.offset_right = -PK.SIDE
+	sc.offset_top = 276.0
+	sc.offset_bottom = -PK.BOTTOM
+	_ph_root.add_child(sc)
+	_list = lst[1]
+	_build_ip_dialog()
+	_ph_set_tab(NetworkManager.is_online_available(), false)
 
-	## Oyuncu adı + Yenile + ODA KUR
-	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", 10)
-	v.add_child(top)
-	var name_lbl := MenuKit.make_label("Adın:", _fs_label(), MenuKit.C_TEXT_DIM)
-	name_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	top.add_child(name_lbl)
-	_name_input = LineEdit.new()
+
+func _ph_name_card() -> PanelContainer:
+	var card := PK.panel(0.92, 24.0)
+	card.name = "NameCard"
+	card.add_theme_stylebox_override("panel", PK.sb(Color(PK.C_PANEL, 0.92), DK.C_LINE, 3, 18, 24.0))
+	card.custom_minimum_size = Vector2(PH_LEFT_W, 238.0)
+	var v := DK.v(16)
+	var top := DK.h(20)
+	top.add_child(PK.portrait(LobbyUI.face_texture(str(Characters.get_def(NetworkManager.local_char_id).get("portrait", ""))), 96.0))
+	var tv := DK.v(4)
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tv.add_child(PK.lbl("Oyuncu adın", PK.FS_SMALL, DK.C_DIM))
+	_name_input = PK.line_edit("Adını gir", PK.FS_BODY, 72.0)
+	_name_input.name = "NameInput"
 	_name_input.text = NetworkManager.local_player_name
-	_name_input.placeholder_text = "Adını gir"
 	_name_input.max_length = 20
-	_name_input.custom_minimum_size = Vector2(380.0 if _mobile else 320.0, _input_h())
-	_name_input.add_theme_font_size_override("font_size", _fs_input())
 	_name_input.text_submitted.connect(func(_t: String) -> void: _commit_name())
 	_name_input.focus_exited.connect(_commit_name)
-	top.add_child(_name_input)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(spacer)
-	_refresh_btn = MenuKit.make_button("Yenile", "tan", fs, ctl_h)
-	_refresh_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_refresh_btn.pressed.connect(_on_refresh_pressed)
-	top.add_child(_refresh_btn)
-	_create_btn = MenuKit.make_button("ODA KUR", "sage", fs, ctl_h)
-	_create_btn.custom_minimum_size.x = 260.0 if _mobile else 200.0
-	_create_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_create_btn.pressed.connect(_open_dialog)
-	top.add_child(_create_btn)
-
-	var status_box := MenuKit.make_panel("inset")
-	v.add_child(status_box)
-	_status_label = MenuKit.make_label("Bir odaya katıl ya da kendi odanı kur.", _fs_label(), MenuKit.C_TEXT_DIM)
-	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	status_box.add_child(_status_label)
-
-	## Başlık satırı oda satırlarıyla hizalı: liste kutusunun iç payı + düğme içi pay kadar içeriden.
-	var head_margin := MarginContainer.new()
-	head_margin.add_theme_constant_override("margin_left", 26)
-	head_margin.add_theme_constant_override("margin_right", 26)
-	v.add_child(head_margin)
-	head_margin.add_child(_make_columns(["Oda adı", "Host", "Oyuncu", "Tür", "Şifre", "Durum"], MenuKit.C_ACCENT, _fs_label()))
-	var list_box := MenuKit.make_panel("inset")
-	list_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	v.add_child(list_box)
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	list_box.add_child(scroll)
-	_list = VBoxContainer.new()
-	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list.add_theme_constant_override("separation", 6)
-	scroll.add_child(_list)
-
-	## Yedek: IP ile katıl (keşif güvenlik duvarına takılırsa).
-	var ip_row := HBoxContainer.new()
-	ip_row.add_theme_constant_override("separation", 10)
-	v.add_child(ip_row)
-	var ip_lbl := MenuKit.make_label("Listede yok mu? IP ile katıl:", _fs_label(), MenuKit.C_TEXT_DIM)
-	ip_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	ip_row.add_child(ip_lbl)
-	_ip_input = LineEdit.new()
-	_ip_input.placeholder_text = "192.168.1.50:7777"
-	_ip_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_ip_input.custom_minimum_size = Vector2(0, _input_h())
-	_ip_input.add_theme_font_size_override("font_size", _fs_input())
-	_ip_input.text_submitted.connect(func(_t: String) -> void: _on_ip_join_pressed())
-	ip_row.add_child(_ip_input)
-	var ip_btn := MenuKit.make_button("Katıl", "tan", fs, ctl_h)
-	ip_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	ip_btn.pressed.connect(_on_ip_join_pressed)
-	ip_row.add_child(ip_btn)
+	tv.add_child(_name_input)
+	top.add_child(tv)
+	v.add_child(top)
+	var change := PK.button("DEĞİŞTİR", "ghost", PK.FS_SMALL, [], 0.0, 64.0)
+	change.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	change.pressed.connect(func() -> void:
+		_name_input.grab_focus()
+		_name_input.select_all())
+	v.add_child(change)
+	card.add_child(v)
+	return card
 
 
-## Sütun genişlikleri (telefonda 1,6x): oda adı (esner), host, oyuncu, tür, şifre, durum.
-func _col_widths() -> Array:
-	var m: float = 1.6 if _mobile else 1.0
-	return [-1.0, 200.0 * m, 130.0 * m, 160.0 * m, 100.0 * m, 140.0 * m]
+func _ph_set_tab(online: bool, sound: bool = true) -> void:
+	_ph_tab_online = online and NetworkManager.is_online_available()
+	for i in _ph_tabs.size():
+		var b: Button = _ph_tabs[i]
+		b.disabled = i == 0 and not NetworkManager.is_online_available()
+		PK.set_kind(b, "disabled" if b.disabled else ("selected" if (i == 0) == _ph_tab_online else "secondary"))
+	if sound:
+		UISound.play_click()
+	_pw_key = ""
+	_rebuild_list()
 
 
-func _make_columns(texts: Array, color: Color, fs: int) -> HBoxContainer:
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 10)
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var widths: Array = _col_widths()
-	for i in texts.size():
-		var l := MenuKit.make_label(str(texts[i]), fs, color)
-		l.clip_text = true
-		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if float(widths[i]) < 0.0:
-			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		else:
-			l.custom_minimum_size.x = float(widths[i])
-		h.add_child(l)
-	return h
+## Sekmedeki odalar (İNTERNET = Epic odaları, LAN = keşfedilen + IP ile girilen).
+func _ph_visible_rooms() -> Array:
+	return _rooms().filter(func(r: Dictionary) -> bool: return (str(r["kind"]) == "online") == _ph_tab_online)
 
 
-func _fs_label() -> int:
-	return int(_sz["fs_label"])
+func _ph_quick_join() -> void:
+	if _busy:
+		return
+	for r: Dictionary in _ph_visible_rooms():
+		if not bool(r["locked"]) and not bool(r["in_game"]) and int(r["players"]) < int(r["max_players"]):
+			_join(r, "")
+			return
+	_status_label.text = "Şu an girilebilecek açık oda yok - ODA KUR ile sen kur."
 
 
-func _fs_input() -> int:
-	return int(_sz["fs_input"])
+## Oda satırı: tür simgesi | ad (+ kilit) / durum, kuran | oyuncu yuvaları | KATIL.
+func _ph_room_row(r: Dictionary) -> PanelContainer:
+	var full: bool = int(r["players"]) >= int(r["max_players"]) and not bool(r["in_game"])
+	var faded: bool = full or bool(r["in_game"])
+	var row := PanelContainer.new()
+	row.name = "Room_" + str(r["key"]).replace(":", "_").replace(".", "_")
+	row.custom_minimum_size.y = PH_ROW_H
+	row.tooltip_text = "%s - host: %s" % [r["room_name"], r["host_name"]]
+	row.add_theme_stylebox_override("panel", PK.sb(Color(DK.C_PANEL2, 0.6 if faded else 0.95), DK.C_LINE, 3, 18, 16.0))
+	var h := DK.h(24)
+	var ic := PK.inset(0.9, 0.0, DK.C_LINE_HI)
+	ic.custom_minimum_size = Vector2(144, 144)
+	var icc := CenterContainer.new()
+	icc.add_child(PK.glyph(PK.G_WIFI if str(r["kind"]) == "online" else PK.G_LAN, DK.C_DIM if faded else DK.C_ACCENT, 9))
+	ic.add_child(icc)
+	h.add_child(ic)
+	var tv := DK.v(4)
+	tv.alignment = BoxContainer.ALIGNMENT_CENTER
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var nh := DK.h(16)
+	var nl_ := PK.lbl(str(r["room_name"]), PK.FS_BODY, DK.C_DIM if faded else DK.C_TEXT)
+	nl_.clip_text = true
+	nl_.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	nl_.custom_minimum_size.x = 120
+	nh.add_child(nl_)
+	if bool(r["locked"]):
+		nh.add_child(PK.glyph(PK.G_LOCK, DK.C_BAD, 5))
+	tv.add_child(nh)
+	var status: String = "Oyunda" if bool(r["in_game"]) else ("Dolu" if full else "Lobide")
+	var st := PK.lbl("%s, kuran %s" % [status, str(r["host_name"])], PK.FS_SMALL, DK.C_DIM)
+	st.clip_text = true
+	st.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	tv.add_child(st)
+	h.add_child(tv)
+	var mx: int = clampi(int(r["max_players"]), 1, 8)
+	var slot: float = 76.0 if mx <= 4 else 52.0
+	var slots := DK.h(8)
+	slots.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	for j in mx:
+		var filled: bool = j < int(r["players"])
+		var sbox := PanelContainer.new()
+		sbox.custom_minimum_size = Vector2(slot, slot)
+		sbox.add_theme_stylebox_override("panel", PK.sb(Color(DK.C_INSET, 0.9 if filled else 0.5), DK.C_LINE_HI if filled else Color(DK.C_LINE_HI, 0.5), 2, 10))
+		if filled:
+			var cc := CenterContainer.new()
+			cc.add_child(PK.glyph(PK.G_USER, DK.C_TEXT, 4 if slot >= 64.0 else 3))
+			sbox.add_child(cc)
+		slots.add_child(sbox)
+	h.add_child(slots)
+	var join: Button
+	if full:
+		join = PK.big_button("DOLU", "", "disabled", [], 310.0, 128.0, PK.FS_BODY)
+		join.disabled = true
+	elif bool(r["in_game"]):
+		join = PK.big_button("GERİ DÖN", "oyundan düştüysen", "secondary", [], 310.0, 128.0, PK.FS_BODY)
+	elif bool(r["locked"]):
+		join = PK.big_button("KATIL", "şifreli", "secondary", PK.G_LOCK, 310.0, 128.0, PK.FS_BODY)
+	else:
+		join = PK.big_button("KATIL", "", "primary", PK.G_PLAY, 310.0, 128.0, PK.FS_BODY)
+	join.name = "Join"
+	join.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if _busy and not join.disabled:
+		join.disabled = true
+		join.modulate.a = 0.55
+	join.pressed.connect(_on_room_pressed.bind(r))
+	h.add_child(join)
+	row.add_child(h)
+	return row
 
 
-func _input_h() -> float:
-	return float(_sz["input_h"])
+## Şifreli odanın altında: Şifre kutusu + KATIL / VAZGEÇ (+ hata).
+func _ph_password_row(r: Dictionary) -> PanelContainer:
+	var box := PK.inset(0.95, 20.0, DK.C_ACCENT)
+	var v := DK.v(8)
+	var row := DK.h(16)
+	var l := PK.lbl("Şifre", PK.FS_BODY, DK.C_TEXT)
+	row.add_child(l)
+	_pw_input = PK.line_edit("Oda şifresi", PK.FS_BODY, 96.0)
+	_pw_input.secret = true
+	_pw_input.max_length = PASSWORD_MAX_LEN
+	_pw_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pw_input.text_submitted.connect(func(_t: String) -> void: _submit_password(r))
+	_pw_input.text_changed.connect(func(_t: String) -> void: _pw_error = "")
+	row.add_child(_pw_input)
+	var join := PK.button("KATIL", "primary", PK.FS_BODY, [], 220.0, 96.0)
+	join.pressed.connect(_submit_password.bind(r))
+	row.add_child(join)
+	var cancel := PK.button("VAZGEÇ", "ghost", PK.FS_BODY, [], 240.0, 96.0)
+	cancel.pressed.connect(func() -> void:
+		_pw_key = ""
+		_pw_error = ""
+		_rebuild_list())
+	row.add_child(cancel)
+	v.add_child(row)
+	if not _pw_error.is_empty():
+		v.add_child(PK.lbl(_pw_error, PK.FS_SMALL, DK.C_BAD))
+	box.add_child(v)
+	_focus_password.call_deferred(_pw_input)
+	return box
+
+
+## IP ile katıl penceresi (keşif güvenlik duvarına takılırsa; şifreli odaysa host reddeder, şifre satırı açılır).
+func _build_ip_dialog() -> void:
+	_ph_ip_dialog = Control.new()
+	_ph_ip_dialog.name = "IpDialog"
+	_ph_ip_dialog.visible = false
+	_ph_ip_dialog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_ph_root.add_child(_ph_ip_dialog)
+	var dim := PK.dim(0.7)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_ph_ip_dialog.add_child(dim)
+	var panel := PK.panel(0.98, 40.0, DK.C_LINE_HI)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(1200, 0)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	var v := DK.v(20)
+	v.add_child(PK.lbl("IP İLE KATIL", PK.FS_TITLE, DK.C_ACCENT))
+	v.add_child(PK.lbl("Aynı Wi-Fi'daki odanın adresi (ör. 192.168.1.50:7777)", PK.FS_SMALL, DK.C_DIM))
+	_ip_input = PK.line_edit("192.168.1.50:7777", PK.FS_BODY, 104.0)
+	_ip_input.text_submitted.connect(func(_t: String) -> void:
+		_ph_ip_dialog.visible = false
+		_on_ip_join_pressed())
+	v.add_child(_ip_input)
+	var row := DK.h(20)
+	var cancel := PK.button("VAZGEÇ", "ghost", PK.FS_BODY, [], 0.0, 120.0)
+	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel.pressed.connect(func() -> void: _ph_ip_dialog.visible = false)
+	row.add_child(cancel)
+	var ok := PK.button("KATIL", "primary", PK.FS_BODY, PK.G_PLAY, 0.0, 120.0)
+	ok.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ok.pressed.connect(func() -> void:
+		_ph_ip_dialog.visible = false
+		_on_ip_join_pressed())
+	row.add_child(ok)
+	v.add_child(row)
+	panel.add_child(v)
+	_ph_ip_dialog.add_child(panel)
 
 
 # ---------------------------------------------------------------------------------------------------- liste
@@ -583,82 +746,28 @@ func _rebuild_list() -> void:
 		_list.remove_child(c)
 		c.queue_free()
 	_pw_input = null
-	var rooms: Array = _rooms()
+	var rooms: Array = _ph_visible_rooms() if _mobile else _rooms()
 	if _count_label:
-		_count_label.text = ("%d oda" % rooms.size()) if not rooms.is_empty() else ""
+		if _mobile:
+			_count_label.text = "%d ODA" % rooms.size()
+		else:
+			_count_label.text = ("%d oda" % rooms.size()) if not rooms.is_empty() else ""
 	if rooms.is_empty():
 		var searching: bool = NetworkManager.is_online_available() and not _online_searched
 		if not _mobile:
 			_list.add_child(_d_empty("Odalar aranıyor..." if searching else "Henüz açık oda yok.", searching))
 			return
-		var msg: String = "Odalar aranıyor..." if searching else "Henüz açık oda yok - \"ODA KUR\" ile sen kurabilirsin."
-		var empty := MenuKit.make_label(msg, _fs_label(), MenuKit.C_TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+		var msg: String = "Odalar aranıyor..." if searching and _ph_tab_online else "Henüz açık oda yok - ODA KUR ile sen kurabilirsin."
+		var empty := PK.lbl(msg, PK.FS_BODY, DK.C_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+		empty.custom_minimum_size.y = 200
 		empty.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_list.add_child(empty)
 		return
 	for r in rooms:
-		_list.add_child(_make_room_row(r) if _mobile else _d_room_row(r))
+		_list.add_child(_ph_room_row(r) if _mobile else _d_room_row(r))
 		if str(r["key"]) == _pw_key:
-			_list.add_child(_make_password_row(r) if _mobile else _d_password_row(r))
+			_list.add_child(_ph_password_row(r) if _mobile else _d_password_row(r))
 	UISound.connect_all_buttons(_list)
-
-
-func _make_room_row(r: Dictionary) -> Control:
-	var full: bool = int(r["players"]) >= int(r["max_players"]) and not bool(r["in_game"])
-	var btn := MenuKit.make_button("", "tan", int(_sz["fs_body"]), float(_sz["ctl_h"]))
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.disabled = full or _busy
-	btn.pressed.connect(_on_room_pressed.bind(r))
-	var status: String = "Oyunda" if bool(r["in_game"]) else ("Dolu" if full else "Lobide")
-	var color: Color = MenuKit.C_TEXT_DIM if (full or bool(r["in_game"])) else MenuKit.C_TEXT
-	var cols := _make_columns([str(r["room_name"]), str(r["host_name"]),
-		"%d / %d" % [int(r["players"]), int(r["max_players"])], "İnternet" if r["kind"] == "online" else "LAN",
-		"Var" if bool(r["locked"]) else "-", status], color, _fs_label())
-	btn.add_child(cols)
-	cols.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cols.offset_left = 12
-	cols.offset_right = -12
-	cols.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn.tooltip_text = "%s - host: %s" % [r["room_name"], r["host_name"]]
-	if bool(r["in_game"]):
-		btn.tooltip_text += " (oyunda: sadece bu oyundan düşenler geri girebilir)"
-	return btn
-
-
-func _make_password_row(r: Dictionary) -> Control:
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	box.add_child(row)
-	var fs: int = int(_sz["fs_body"])
-	var pw_lbl := MenuKit.make_label("Şifre:", _fs_label(), MenuKit.C_TEXT)
-	pw_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(pw_lbl)
-	_pw_input = LineEdit.new()
-	_pw_input.secret = true
-	_pw_input.max_length = PASSWORD_MAX_LEN
-	_pw_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pw_input.custom_minimum_size = Vector2(0, _input_h())
-	_pw_input.add_theme_font_size_override("font_size", _fs_input())
-	_pw_input.text_submitted.connect(func(_t: String) -> void: _submit_password(r))
-	_pw_input.text_changed.connect(func(_t: String) -> void: _pw_error = "")
-	row.add_child(_pw_input)
-	var join := MenuKit.make_button("Katıl", "sage", fs, float(_sz["ctl_h"]))
-	join.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	join.pressed.connect(_submit_password.bind(r))
-	row.add_child(join)
-	var cancel := MenuKit.make_button("Vazgeç", "tan", fs, float(_sz["ctl_h"]))
-	cancel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	cancel.pressed.connect(func() -> void:
-		_pw_key = ""
-		_pw_error = ""
-		_rebuild_list())
-	row.add_child(cancel)
-	if not _pw_error.is_empty():
-		box.add_child(MenuKit.make_label(_pw_error, _fs_label(), MenuKit.C_BAD))
-	_focus_password.call_deferred(_pw_input)
-	return box
 
 
 func _focus_password(input: LineEdit) -> void:
@@ -735,6 +844,13 @@ func _on_status(text: String) -> void:
 func _set_busy(value: bool) -> void:
 	_busy = value
 	_busy_since_msec = Time.get_ticks_msec()
+	if _mobile: ## telefon düğmeleri: kapalıyken soluk
+		for b: Button in [_ph_quick, _create_btn, _refresh_btn]:
+			if b:
+				b.disabled = value
+				b.modulate.a = 0.55 if value else 1.0
+		_rebuild_list()
+		return
 	if _create_btn:
 		_create_btn.disabled = value
 		if not _mobile:
@@ -798,90 +914,80 @@ func _on_back_pressed() -> void:
 
 
 # ---------------------------------------------------------------------------------------------------- "Oda kur" penceresi (telefon; masaüstünde form solda hep açık)
+## Telefon (2026-10-19, Gece Sıvası): oda adı, şifre, en fazla oyuncu (2-8), bağlantı (İnternet / LAN), VAZGEÇ / KUR.
 func _build_dialog() -> void:
 	_dialog = Control.new()
+	_dialog.name = "CreateDialog"
 	_dialog.visible = false
-	add_child(_dialog)
+	var host: Control = _ph_root if _ph_root else self
+	host.add_child(_dialog)
 	_dialog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var dim := ColorRect.new()
-	dim.color = Color(0.08, 0.05, 0.02, 0.6)
+	var dim := PK.dim(0.7)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dialog.add_child(dim)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	var fs: int = int(_sz["fs_body"])
-	var ctl_h: float = float(_sz["ctl_h"])
-	var w: float = 1100.0 if _mobile else DIALOG_W
-	var panel := MenuKit.make_panel("panel")
+	var panel := PK.panel(0.98, 40.0, DK.C_LINE_HI)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(1300, 0)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_dialog.add_child(panel)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
+	var v := DK.v(14)
 	panel.add_child(v)
-	v.add_child(MenuKit.make_section_header("Oda kur", MenuKit.FS_TITLE if not _mobile else 48))
-
-	v.add_child(MenuKit.make_label("Oda adı", _fs_label(), MenuKit.C_TEXT_DIM))
-	_room_name_input = LineEdit.new()
+	v.add_child(PK.lbl("ODA KUR", PK.FS_TITLE, DK.C_ACCENT))
+	var cols := DK.h(32)
+	var c1 := DK.v(10)
+	c1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c1.add_child(PK.lbl("Oda adı", PK.FS_SMALL, DK.C_DIM))
+	_room_name_input = PK.line_edit("", PK.FS_BODY, 96.0)
 	_room_name_input.max_length = 32
-	_room_name_input.custom_minimum_size = Vector2(0, _input_h())
-	_room_name_input.add_theme_font_size_override("font_size", _fs_input())
-	v.add_child(_room_name_input)
-
-	v.add_child(MenuKit.make_label("Şifre (boşsa herkes girebilir)", _fs_label(), MenuKit.C_TEXT_DIM))
-	_room_pw_input = LineEdit.new()
+	c1.add_child(_room_name_input)
+	c1.add_child(PK.lbl("Şifre (boşsa herkes girebilir)", PK.FS_SMALL, DK.C_DIM))
+	_room_pw_input = PK.line_edit("", PK.FS_BODY, 96.0)
 	_room_pw_input.secret = true
 	_room_pw_input.max_length = PASSWORD_MAX_LEN
-	_room_pw_input.custom_minimum_size = Vector2(0, _input_h())
-	_room_pw_input.add_theme_font_size_override("font_size", _fs_input())
-	v.add_child(_room_pw_input)
-
-	v.add_child(MenuKit.make_label("En fazla oyuncu", _fs_label(), MenuKit.C_TEXT_DIM))
-	var max_row := HBoxContainer.new()
-	max_row.add_theme_constant_override("separation", 6)
-	v.add_child(max_row)
+	c1.add_child(_room_pw_input)
+	cols.add_child(c1)
+	var c2 := DK.v(10)
+	c2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c2.add_child(PK.lbl("En fazla oyuncu", PK.FS_SMALL, DK.C_DIM))
+	var max_row := DK.h(8)
 	for n in PLAYER_CHOICES:
-		var b := MenuKit.make_button(str(n), "tan", fs, ctl_h)
+		var b := PK.button(str(n), "secondary", PK.FS_BODY, [], 0.0, 96.0)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(_set_max_players.bind(int(n)))
 		max_row.add_child(b)
 		_max_buttons[int(n)] = b
-
-	v.add_child(MenuKit.make_label("Bağlantı", _fs_label(), MenuKit.C_TEXT_DIM))
-	var conn_row := HBoxContainer.new()
-	conn_row.add_theme_constant_override("separation", 6)
-	v.add_child(conn_row)
-	_online_choice_btn = MenuKit.make_button("İnternet", "tan", fs, ctl_h)
-	_online_choice_btn.tooltip_text = "PC + Android, port açmaya gerek yok"
+	c2.add_child(max_row)
+	c2.add_child(PK.lbl("Bağlantı", PK.FS_SMALL, DK.C_DIM))
+	var conn_row := DK.h(8)
+	_online_choice_btn = PK.button("İnternet", "secondary", PK.FS_BODY, [], 0.0, 96.0)
 	_online_choice_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_online_choice_btn.pressed.connect(_set_connection.bind(true))
 	conn_row.add_child(_online_choice_btn)
-	_lan_choice_btn = MenuKit.make_button("Aynı ağ (LAN)", "tan", fs, ctl_h)
+	_lan_choice_btn = PK.button("Aynı ağ (LAN)", "secondary", PK.FS_BODY, [], 0.0, 96.0)
 	_lan_choice_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lan_choice_btn.pressed.connect(_set_connection.bind(false))
 	conn_row.add_child(_lan_choice_btn)
 	if not NetworkManager.is_online_available():
 		_online_choice_btn.disabled = true
-		_online_choice_btn.tooltip_text = "Epic ayarları eksik (eos_credentials.cfg) - şimdilik sadece LAN."
-
-	_dialog_error = MenuKit.make_label("", _fs_label(), MenuKit.C_BAD)
+	c2.add_child(conn_row)
+	_conn_hint = PK.lbl("", PK.FS_SMALL, DK.C_DIM)
+	c2.add_child(_conn_hint)
+	cols.add_child(c2)
+	v.add_child(cols)
+	_dialog_error = PK.lbl("", PK.FS_SMALL, DK.C_BAD)
 	_dialog_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_dialog_error.custom_minimum_size.x = w - 64.0
 	v.add_child(_dialog_error)
-
-	var btn_row := HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 10)
-	v.add_child(btn_row)
-	var cancel := MenuKit.make_button("Vazgeç", "rose", fs, ctl_h)
+	var btn_row := DK.h(20)
+	var cancel := PK.button("VAZGEÇ", "ghost", PK.FS_BODY, [], 0.0, 120.0)
 	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cancel.pressed.connect(func() -> void: _dialog.visible = false)
 	btn_row.add_child(cancel)
-	var create := MenuKit.make_button("Kur", "sage", fs, ctl_h)
+	var create := PK.button("KUR", "primary", PK.FS_BODY, PK.G_PLUS, 0.0, 120.0)
 	create.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	create.pressed.connect(_on_create_pressed)
 	btn_row.add_child(create)
-
-	var view: Vector2 = get_viewport().get_visible_rect().size
-	var ps: Vector2 = Vector2(w, panel.get_combined_minimum_size().y)
-	MenuKit.place(panel, ((view - ps) * 0.5).floor(), ps)
+	v.add_child(btn_row)
 	_set_max_players(DEFAULT_MAX_PLAYERS)
 	_set_connection(NetworkManager.is_online_available())
 

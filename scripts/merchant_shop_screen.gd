@@ -40,6 +40,7 @@ const DarkKit := preload("res://scripts/shop_dark_kit.gd")
 const NPC_FRAMES := "res://assets/npc/seyyar_satici/seyyar_satici_frames.tres"
 const WINDOW_SCALE := 1.0
 const PHONE_K := 1.5
+const PHONE_EDGE := 24.0 ## telefonda pencerenin ekran kenarlarına uzaklığı (tuval px)
 ## Açıklama kutusunun dikey çubuk için ayrılan payı (px) - pay çubuktan büyük olmalı (bkz. dosya başı "yerleşim döngüsü").
 const DESC_SCROLLBAR_RESERVE := 28.0
 ## Pasif açıklama kutusunun (masaüstü) EN AZ yüksekliği: 4 satır (22 px/satır; en uzun pasif 3 satır). Eskiden 56 px (2 satır) idi - 3 satırlık pasifler kırpılıp çubuk çıkıyordu.
@@ -57,6 +58,7 @@ const DETAIL_W_PHONE := 440.0
 const TREE_H := 272.0
 const CELL_W := 150.0
 const CELL_TILE := 96.0
+const PHONE_STOCK_COLS := 4 ## telefonda stok ızgarası sütunu
 const BAG_TILE := 48.0
 
 ## Stat satırlarının simgeleri (Items.STAT_LABELS anahtarı -> doku).
@@ -173,7 +175,10 @@ func _state_sig() -> int:
 func _phone_rect() -> Rect2:
 	var view: Vector2 = get_viewport().get_visible_rect().size
 	var safe: Rect2 = MobileUIScript.safe_margins(get_viewport())
-	return Rect2(safe.position / PHONE_K, (view - safe.position - safe.size) / PHONE_K)
+	## Ekran kenarlarından PHONE_EDGE içeride (kullanıcı 2026-10-19: köşelere yapışık durmasın - çerçeve + yuvarlak köşe ekran kenarında
+	## kesiliyordu).
+	return Rect2((safe.position + Vector2.ONE * PHONE_EDGE) / PHONE_K,
+			(view - safe.position - safe.size - Vector2.ONE * PHONE_EDGE * 2.0) / PHONE_K)
 
 
 ## Container çocuğun ölçeğini her yerleşimde 1'e sıfırladığı için ölçek ve konum yerleşim BİTTİKTEN sonra (sort_children) verilir;
@@ -221,6 +226,8 @@ func _build_ui() -> void:
 	add_child(dim)
 
 	_phone = MobileUIScript.enabled
+	if _phone:
+		_k = DarkKit.new(DarkKit.PAL_NIGHT) ## telefon: Gece Sıvası (madde 276)
 	var window := PanelContainer.new()
 	var wst: StyleBoxFlat = _k.sb(_k.c("panel"), _k.c("line_hi"), 3, 8)
 	wst.content_margin_left = 24
@@ -250,7 +257,15 @@ func _build_ui() -> void:
 		_apply_window_scale(window)
 
 	var col: VBoxContainer = _k.v(14)
-	window.add_child(col)
+	if _phone:
+		## Telefon (madde 276; prototip B "Yan Ray + Detay"): solda ray (geri, PAZAR / ÇANTA, kalan süre), sağında içerik.
+		var shell: HBoxContainer = _k.h(16)
+		window.add_child(shell)
+		shell.add_child(_build_phone_rail())
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		shell.add_child(col)
+	else:
+		window.add_child(col)
 	col.add_child(_build_header())
 	col.add_child(_k.hline())
 	var body: HBoxContainer = _k.h(18)
@@ -266,7 +281,9 @@ func _build_ui() -> void:
 		var inner: VBoxContainer = _k.v(14)
 		inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		inner.add_child(_stock_box)
-		inner.add_child(_build_bag())
+		_phone_bag_panel = _build_bag()
+		_phone_bag_panel.visible = false ## ÇANTA sekmesinde
+		inner.add_child(_phone_bag_panel)
 		_phone_scroll.add_child(inner)
 		body.add_child(_phone_scroll)
 	else:
@@ -287,14 +304,20 @@ func _build_ui() -> void:
 ## Başlık: satıcı portresi | SEYYAR SATICI + ayrılmasına kalan süre ...... YENİLE | altın | X
 func _build_header() -> HBoxContainer:
 	var row: HBoxContainer = _k.h(16)
-	var por: PanelContainer = _k.box(_k.c("inset"), _k.c("line_hi"), 2.0)
-	var sf := load(NPC_FRAMES) as SpriteFrames
-	if sf != null and sf.has_animation(&"idle_down"):
-		por.add_child(_k.icon(sf.get_frame_texture(&"idle_down", 0), 64.0 if _phone else 96.0))
-	row.add_child(por)
+	if not _phone: ## telefonda portre yok, süre ve kapat yan rayda
+		var por: PanelContainer = _k.box(_k.c("inset"), _k.c("line_hi"), 2.0)
+		var sf := load(NPC_FRAMES) as SpriteFrames
+		if sf != null and sf.has_animation(&"idle_down"):
+			por.add_child(_k.icon(sf.get_frame_texture(&"idle_down", 0), 96.0))
+		row.add_child(por)
 	var tv: VBoxContainer = _k.v(2)
 	tv.alignment = BoxContainer.ALIGNMENT_CENTER
 	tv.add_child(_k.lbl("SEYYAR SATICI", 40 if _phone else 48, _k.c("accent")))
+	row.add_child(tv)
+	if _phone:
+		row.add_child(_k.sp(0, 0, true))
+		_build_header_tail(row)
+		return row
 	var tr: HBoxContainer = _k.h(10)
 	tr.add_child(_k.lbl("Ayrılmasına", 24, _k.c("dim")))
 	_timer_label = _k.lbl("", 24, _k.c("text"))
@@ -303,8 +326,17 @@ func _build_header() -> HBoxContainer:
 	_timer_bar = DarkKit.Bar.new(1.0, _k.c("accent"), _k.c("inset"), 10, 150)
 	tr.add_child(_timer_bar)
 	tv.add_child(tr)
-	row.add_child(tv)
 	row.add_child(_k.sp(0, 0, true))
+	_build_header_tail(row)
+	var close_btn: Button = _k.btn("X", "ghost", 32, 56, 56)
+	close_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(_on_close_pressed)
+	row.add_child(close_btn)
+	return row
+
+
+## Başlığın sağı: YENİLE + altın (masaüstünde ardından X).
+func _build_header_tail(row: HBoxContainer) -> void:
 	## YENİLE: altınla taze stok (fiyat ziyaret başına artar - reroll_cost; sayaç TravelingMerchant'ta).
 	var rr: HBoxContainer = _k.h(10)
 	rr.add_child(_k.glyph(DarkKit.G_REROLL, _k.c("text"), 3))
@@ -319,11 +351,53 @@ func _build_header() -> HBoxContainer:
 	var gc: PanelContainer = _k.chip("gold", "Altın")
 	_gold_label = gc.get_meta("label")
 	row.add_child(gc)
-	var close_btn: Button = _k.btn("X", "ghost", 32, 56, 56)
-	close_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	close_btn.pressed.connect(_on_close_pressed)
-	row.add_child(close_btn)
-	return row
+
+
+## ---------------------------------------------------------------- telefon yan rayı (madde 276)
+var _phone_tabs: Array = []
+var _phone_bag_panel: Control = null
+
+
+func _build_phone_rail() -> VBoxContainer:
+	var rail: VBoxContainer = _k.v(12)
+	rail.custom_minimum_size.x = 92
+	var back: Button = _k.rail_back()
+	back.tooltip_text = "Kapat"
+	back.pressed.connect(_on_close_pressed)
+	rail.add_child(back)
+	for i in 2:
+		var t: Button = _k.rail_tab(["PAZAR", "ÇANTA"][i], [[], DarkKit.G_BAG][i], i == 0)
+		if i == 0: ## PAZAR simgesi oyunun altın parası
+			var coin: Control = _k.coin(40.0)
+			coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			for ch in coin.get_children():
+				if ch is Control:
+					(ch as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+			t.get_node("Box").add_child(coin)
+			t.get_node("Box").move_child(coin, 0)
+		t.pressed.connect(_on_phone_tab.bind(i))
+		rail.add_child(t)
+		_phone_tabs.append(t)
+	rail.add_child(_k.sp(0, 0, false, true))
+	var tv: VBoxContainer = _k.v(4)
+	tv.add_child(_k.lbl("Kalan", 24, _k.c("dim"), HORIZONTAL_ALIGNMENT_CENTER))
+	_timer_label = _k.lbl("", 32, _k.c("text"), HORIZONTAL_ALIGNMENT_CENTER)
+	tv.add_child(_timer_label)
+	_timer_bar = DarkKit.Bar.new(1.0, _k.c("accent"), _k.c("inset"), 8, 84)
+	tv.add_child(_timer_bar)
+	rail.add_child(tv)
+	return rail
+
+
+func _on_phone_tab(i: int) -> void:
+	for j in _phone_tabs.size():
+		_k.set_rail_tab(_phone_tabs[j], j == i)
+	if _stock_box:
+		_stock_box.visible = i == 0
+	if _phone_bag_panel:
+		_phone_bag_panel.visible = i == 1
+	if _phone_scroll:
+		_phone_scroll.scroll_vertical = 0
 
 
 func _refresh_header() -> void:
@@ -361,7 +435,7 @@ func _populate_stock() -> void:
 	for i in _cells.size():
 		_cells[i] = {}
 	var titles: Array = ["PARÇALAR", "EPİK EŞYALAR", "EFSANEVİ EŞYALAR"]
-	var rows: Array[HBoxContainer] = []
+	var rows: Array[Container] = []
 	for kd in [Items.KADEME_PARCA, Items.KADEME_EPIK, Items.KADEME_EFSANEVI]:
 		var idxs: Array = []
 		for i in _stock.size():
@@ -378,9 +452,23 @@ func _populate_stock() -> void:
 		head.add_child(bar)
 		head.add_child(_k.lbl(titles[kd - 1], 32, (DarkKit.TIER_COL[kd - 1] as Color).lightened(0.2)))
 		_stock_box.add_child(head)
-		var row: HBoxContainer = _k.h(12)
+		var row: Container
+		if _phone:
+			## Telefon: sabit sütunlu ızgara, kartlar sütunu doldurur (kullanıcı 2026-10-19: kartlar sola yığılıp sağda boşluk
+			## kalıyordu; kademede 4'ten fazla eşya varsa satır taşmak yerine alt satıra geçer).
+			var g := GridContainer.new()
+			g.columns = PHONE_STOCK_COLS
+			g.add_theme_constant_override("h_separation", 12)
+			g.add_theme_constant_override("v_separation", 12)
+			g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row = g
+		else:
+			row = _k.h(12)
 		for i: int in idxs:
-			row.add_child(_build_cell(i))
+			var cell: PanelContainer = _build_cell(i)
+			if _phone:
+				cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(cell)
 		_stock_box.add_child(row)
 		rows.append(row)
 	if not _phone:
@@ -400,7 +488,7 @@ func _populate_stock() -> void:
 	const ENTRY_STEP := 0.07
 	const ENTRY_DELAY := 0.04
 	UiAnim.cascade(_stock_box, ENTRY_STEP, 16, ENTRY_DELAY)
-	for r: HBoxContainer in rows:
+	for r: Container in rows:
 		UiAnim.cascade(r, 0.045, 8, ENTRY_DELAY + float(r.get_index()) * ENTRY_STEP)
 
 
@@ -927,6 +1015,10 @@ func _build_bag() -> PanelContainer:
 func _refresh_bag() -> void:
 	if _bag_body == null:
 		return
+	if _phone_tabs.size() > 1:
+		var cap: Label = (_phone_tabs[1] as Node).get_node_or_null("Box/Caption") as Label
+		if cap:
+			cap.text = "ÇANTA %d" % GameManager.owned_items.size()
 	for c in _bag_body.get_children():
 		_bag_body.remove_child(c)
 		c.queue_free()

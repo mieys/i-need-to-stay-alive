@@ -19,6 +19,15 @@ const PAL_WOOD := {
 	"good": Color("#a9c96e"), "bad": Color("#dc7f60"), "price": Color("#f2c674"), "spot": Color("#c0803a"),
 }
 
+## Telefon (madde 276; kullanıcı onayı 2026-10-18, madde 253 "B - Gece Sıvası"): mavi-mor sıva paneller + altın/krem yazı
+## (prototip tools/proto_20261018/mobil_proto.gd SKINS["B"] ile aynı; menu_dark_kit.gd ailesi). Seyyar satıcı / demirci / envanter.
+const PAL_NIGHT := {
+	"panel": Color("#1a1a2c"), "panel2": Color("#23233a"), "panel3": Color("#302f4c"), "inset": Color("#12121f"),
+	"line": Color("#3b3a5a"), "line_hi": Color("#5f5c86"), "text": Color("#efe6d6"), "dim": Color("#a7a2c0"),
+	"accent": Color("#f4c56e"), "accent_dk": Color("#6a5226"), "accent_text": Color("#231a0a"),
+	"good": Color("#a8d69a"), "bad": Color("#e38c7c"), "price": Color("#f0da94"), "spot": Color("#7c78c8"),
+}
+
 ## Eşya kademesi çerçeve renkleri (oyundaki kahve / mavi / mor) - koyu zeminde okunsun diye açılmış tonlar.
 const TIER_COL := [Color("#c39a64"), Color("#6f9df2"), Color("#b98af2")]
 const TIER_NAME := ["PARÇA", "EPİK", "EFSANEVİ"]
@@ -595,3 +604,61 @@ func chip(kind: String, caption: String) -> PanelContainer:
 	p.set_meta("label", val)
 	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return p
+
+
+## ---------------------------------------------------------------- telefon "yan ray" (madde 276; prototip B "Yan Ray + Detay")
+## Solda dar dikey şerit: üstte geri (kapat) düğmesi, altında simgeli sekmeler (seçili = koyu levha + altın kenar, altın simge/yazı;
+## diğerleri çerçevesiz, soluk). Seyyar satıcı / demirci / envanter aynı parçaları kullanır.
+const G_BACK := ["...#...", "..#....", ".#.....", "#######", ".#.....", "..#....", "...#..."]
+const G_BAG := ["..####..", ".#....#.", "########", "########", "###..###", "########", ".######."]
+const G_STAR := ["...#...", "...#...", "#######", ".#####.", "..###..", ".##.##.", "##...##"]
+const G_PLUS := ["..###..", "..###..", "#######", "#######", "#######", "..###..", "..###.."]
+const G_SHIELD := ["#######", "#######", "#######", ".#####.", ".#####.", "..###..", "...#..."]
+const G_SWORD := ["......#", ".....#.", "....#..", "#..#...", ".##....", ".##....", "#..#..."]
+
+
+func rail_back(w: float = 92.0) -> Button:
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(w, 72)
+	btn_style(b, "ghost", 8)
+	var g := center(glyph(G_BACK, c("text"), 4))
+	g.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(g)
+	return b
+
+
+func rail_tab(caption: String, pat: Array, on: bool, w: float = 92.0, ht: float = 100.0) -> Button:
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(w, ht)
+	var box := v(6)
+	box.name = "Box"
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if not pat.is_empty():
+		var gc := center(glyph(pat, c("dim"), 4))
+		gc.name = "Glyph"
+		gc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(gc)
+	var l := lbl(caption, 24, c("dim"), HORIZONTAL_ALIGNMENT_CENTER)
+	l.name = "Caption"
+	box.add_child(l)
+	b.add_child(box)
+	set_rail_tab(b, on)
+	return b
+
+
+func set_rail_tab(b: Button, on: bool) -> void:
+	btn_style(b, "tab_on" if on else "tab", 8)
+	var col: Color = c("accent") if on else c("dim")
+	var gc: Node = b.get_node_or_null("Box/Glyph")
+	if gc and gc.get_child_count() > 0 and gc.get_child(0) is Glyph:
+		(gc.get_child(0) as Glyph).col = col
+		(gc.get_child(0) as Glyph).queue_redraw()
+	var l: Label = b.get_node_or_null("Box/Caption") as Label
+	if l:
+		l.add_theme_color_override("font_color", col)
+

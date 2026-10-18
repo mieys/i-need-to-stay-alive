@@ -145,6 +145,7 @@ const BossBarTopScript: GDScript = preload("res://scripts/boss_bar_top.gd")
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 const TierDisplayScript: GDScript = preload("res://scripts/tier_display.gd")
 const GameOverBoardScript := preload("res://scripts/game_over_board.gd") ## oyun bitti ekranı gövdesi (madde 224)
+const PhoneGameOverScript := preload("res://scripts/phone_game_over.gd") ## telefonda ölüm / oyun bitti görünümü
 const ShopDarkKitScript := preload("res://scripts/shop_dark_kit.gd") ## oyun bitti ekranı Seyyar Satıcı kitinde (madde 224)
 const DEATH_WINDOW_TOP := 72.0 ## ölüm/oyun bitti penceresinin üstü (madalyon bunun üstüne taşar)
 var _boss_bar_top: Control = null ## üst ortadaki boss barı (boss_bar_top.gd)
@@ -3363,6 +3364,22 @@ func _show_death_overlay(is_final: bool) -> void:
 		if spectate_row_node:
 			spectate_row_node.visible = true
 		_begin_spectate_mode()
+	## Telefon (2026-10-19, prototip S B_oyun_bitti): masaüstü penceresi gizli kalır (veri + düğme işleyicileri orada), üstüne
+	## tam ekran telefon görünümü (phone_game_over.gd).
+	if MobileUI.enabled:
+		_show_phone_death_view(is_final)
+
+
+func _show_phone_death_view(is_final: bool) -> void:
+	var win: Control = _death_overlay_layer.get_node_or_null("Window")
+	if win:
+		win.visible = false
+	var ph: Control = _death_overlay_layer.get_node_or_null("PhoneGameOver")
+	if ph == null:
+		ph = PhoneGameOverScript.new()
+		ph.set("pc_window", win)
+		_death_overlay_layer.add_child(ph)
+	ph.call("set_final", is_final)
 
 
 ## Ölüm/oyun bitti penceresi ekrana sığmazsa (8 oyunculu tablo, çok başarım, telefon) üst ortadan küçülür (madde 224).
