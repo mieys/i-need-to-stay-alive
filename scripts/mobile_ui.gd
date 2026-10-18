@@ -34,7 +34,6 @@ const MENU_MARGIN := 20.0
 const FIT_LAYER_SCRIPTS: Array[String] = [
 	"res://scripts/pause_menu.gd",
 	"res://scripts/victory_overlay.gd", ## zafer penceresi: 24 px yazı / 52 px düğme telefonda ~3 mm kalıyordu (2026-10-05)
-	"res://scripts/records_screen.gd", ## ana menüdeki REKORLAR penceresi
 	"res://scripts/soul_shop_screen.gd", ## ana menüdeki RUH MAĞAZASI penceresi
 ]
 ## SEÇİM EKRANLARI (kullanıcı seçimi 2026-10-03, prototip "A - ekranı dolduran kartlar", tools/mobile_ui/proto_choice.gd):

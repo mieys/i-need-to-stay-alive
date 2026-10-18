@@ -248,6 +248,7 @@ func test_target_selection_sites_still_check_visibility() -> void:
 		"res://scripts/weapon.gd": 6,
 		"res://scripts/totem_attack.gd": 1,
 		"res://scripts/oakley_vine.gd": 1,
+		"res://scripts/oakley_tree.gd": 1,
 		"res://scripts/fx_buyucu_tornado.gd": 1,
 		"res://scripts/player.gd": 4,
 	}

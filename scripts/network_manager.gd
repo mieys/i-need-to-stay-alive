@@ -2671,6 +2671,8 @@ func broadcast_world_event_copy_bolt(from_pos: Vector2, to_pos: Vector2, weapon_
 ## bu yüzden artık cast YAPILMADAN önce geçerlilik kontrol ediliyor.
 @rpc("any_peer", "call_remote", "reliable")
 func remove_drop(network_id: int) -> void:
+	if not _from_host(): ## görsel drop'u sadece host kaldırır (sahte RPC başkasının yerdeki ödülünü silemesin)
+		return
 	if _visual_drops.has(network_id):
 		var drop = _visual_drops[network_id]
 		_visual_drops.erase(network_id)
@@ -2680,6 +2682,8 @@ func remove_drop(network_id: int) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func remove_drops_batch(drop_ids: Array) -> void:
+	if not _from_host():
+		return
 	for drop_id in drop_ids:
 		var net_id: int = int(drop_id)
 		if _visual_drops.has(net_id):
@@ -2977,9 +2981,9 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 			if target_enemy.has_method("apply_madness"):
 				target_enemy.apply_madness(param1)
 		## Oakley'in Sarmaşıklar yeteneği - bkz. enemy.gd apply_root.
-		"root":
+		"root": ## param2 = kök görseli stili (0 E sarmaşığı, 1 Hayat Ağacı kökü - enemy.gd apply_root)
 			if target_enemy.has_method("apply_root"):
-				target_enemy.apply_root(param1)
+				target_enemy.apply_root(param1, int(param2))
 		## Oakley'in Arı Sürüsü yeteneği - bkz. enemy.gd apply_bee_poison.
 		"bee_poison":
 			if target_enemy.has_method("apply_bee_poison"):
@@ -3105,7 +3109,7 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		## Oakley Sarmaşıklar - kök salan yaratığın bacaklarına sarılan dikenler (bkz. enemy.gd _set_root_visual).
 		"root_start":
 			if target_enemy.has_method("_spawn_entangle_fx"):
-				target_enemy._spawn_entangle_fx(float(extra_data.get("duration", 4.0)))
+				target_enemy._spawn_entangle_fx(float(extra_data.get("duration", 4.0)), int(extra_data.get("style", 0)))
 		"root_stop":
 			if target_enemy.has_method("_remove_entangle_fx"):
 				target_enemy._remove_entangle_fx()
@@ -3358,6 +3362,8 @@ const RELIABLE_PLAYER_VFX := {
 	"cadi_throw": true, ## Cadı R şişesi - kaybolursa alan/patlama diğer oyuncularda hiç görünmez (8 sn'de bir, trafik önemsiz)
 	"assasin_blink": true, ## Assasin R cast/dönüş patlaması - ulti başına 2 (sıçrayış/kesik "assasin_fx" saniyede ~9, güvenilmez kalır)
 	"assasin_passive": true, ## Assasin pasifi (Bıçak Uzmanlığı) tetiklenmesi - yetenek başına bir kez; kaybolursa 3 sn'lik dış hat hiç görünmez
+	"oakley_tree": true, ## Oakley R Hayat Ağacı dikimi - ulti başına bir kez; kaybolursa ağaç diğer oyuncularda hiç çıkmaz
+	"oakley_tree_root": true, ## Hayat Ağacı kök dalgası (2 sn'de bir, 3 hedef) - kaybolursa yer altı izi eksik kalır
 }
 ## "melek_sparkle" (2026-10-10): Melek pasifinin iyileştirme işareti - extra "peers" = işaretin çıkacağı oyuncular (Melek dahil); her istemci kendi
 ## yerel oyuncusu ya da ilgili kukla altında fx_melek_heal_sparkle.gd kurar. Güvenilmez (kaybolursa bir sonraki 3 sn'de yine gelir).
@@ -3753,6 +3759,12 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				})
 			elif cadi_kind == "poof":
 				CadiMathScript.spawn_poof(get_tree().current_scene, pos)
+		## Oakley R Hayat Ağacı (madde 266, oakley_tree.gd): kaster gerçek kopyayı kurar; burada KOZMETİK kopya (caster yok - iyileştirme,
+		## sabitleme, çiçek sadece kasterde). "oakley_tree_root": kök dalgasının yer altı izleri (pos = ağaç, to = hedef konumları).
+		"oakley_tree":
+			OakleyTree.spawn(get_tree().current_scene, pos)
+		"oakley_tree_root":
+			OakleyTree.spawn_root_visuals(get_tree().current_scene, pos, PackedVector2Array(extra_data.get("to", PackedVector2Array())))
 		"cadi_throw":
 			CadiMathScript.spawn_bottle(get_tree().current_scene, clampi(int(extra_data.get("potion", 0)), 0, CadiMathScript.POTION_COUNT - 1), pos,
 					Vector2(extra_data.get("to", pos)), Callable(), {
@@ -3876,16 +3888,16 @@ func broadcast_player_fx_stop(player_id: int, scene_path: String) -> void:
 
 ## Gold sharing: when any player picks up gold, all players receive the same amount.
 @rpc("any_peer", "call_remote", "reliable")
-func share_gold(amount: int) -> void:
-	if amount <= 0:
-		return
-	GameManager.gold += amount
+func share_gold(_amount: int) -> void:
+	## KULLANILMIYOR: altın KİŞİSELDİR (kill_gold.gd / gold_drop.gd / shop_panel.gd). İmza eski sürümlerle RPC dizilimi bozulmasın diye
+	## duruyor; eskiden her yabancı peer bu çağrıyla başkasının altınını artırabiliyordu (2026-10-18 denetimi).
+	return
 
 
 ## Gold spending: when a player spends gold in the shop, deduct from all peers.
 @rpc("any_peer", "call_remote", "reliable")
-func spend_gold(amount: int) -> void:
-	GameManager.gold = max(0, GameManager.gold - amount)
+func spend_gold(_amount: int) -> void:
+	return ## KULLANILMIYOR (bkz. share_gold): uzaktan altın düşme kapısı kapalı
 
 
 ## Yaratık yetenekleri (2026-09-24, bkz. enemy_abilities.gd): host'taki yetkili lazer/diken/asit/ateş topu bir

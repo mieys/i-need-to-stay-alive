@@ -36,9 +36,15 @@ var desc_override: String = ""
 var cooldown_override: float = -1.0
 
 var tooltip_panel: PanelContainer = null
-## Shift'e basılı tutulunca ayrıntılar (bkz. skill_details.gd) - ipucu açıkken Shift durumu değişirse yeniden kurulur.
-const SkillDetails := preload("res://scripts/skill_details.gd")
+## Shift'e basılı tutulunca bu oyundaki hasar/can/kalkan (bkz. damage_stats.gd) - ipucu açıkken Shift durumu değişirse yeniden kurulur.
+const DamageStats := preload("res://scripts/damage_stats.gd")
 const UiAnim := preload("res://scripts/ui_anim.gd")
+const HudTheme := preload("res://scripts/hud_theme.gd")
+const HudTooltip := preload("res://scripts/hud_tooltip.gd")
+const COOLDOWN_ICON := preload("res://assets/ui/stat_mini/cooldown_reduction.png")
+## İpucu levhası genişliği (32 px m5x7 ile satır ~24 harf) ve başlıktaki ikon (144 px sanat 1/3 = 3 px/sanat pikseli, keskin).
+const TOOLTIP_WIDTH := 516.0
+const TOOLTIP_ICON := 48.0
 ## Bekleme bitince ikon bir kez parlayıp "nefes" alır (madde 200): 1 -> 0, READY_FLASH_TIME sn.
 const READY_FLASH_TIME := 0.35
 var _ready_flash: float = 0.0
@@ -71,35 +77,40 @@ func _exit_tree() -> void:
 		tooltip_panel = null
 
 func _on_mouse_entered() -> void:
-	if tooltip_panel and is_instance_valid(tooltip_panel):
+	## Shift değişince yeniden kurulur (_process) - o zaman belirme animasyonu yok, sadece ilk açılışta.
+	var rebuilding: bool = tooltip_panel != null and is_instance_valid(tooltip_panel)
+	if rebuilding:
 		tooltip_panel.queue_free()
-	
+
 	var hud_layer: Node = get_parent().get_parent()
 	if not hud_layer:
 		return
-		
+
 	var char_id: int = GameManager.selected_char_id
 	var def: Dictionary = Characters.get_def(char_id)
 	var player: Node = null
 	if is_inside_tree() and get_tree() != null:
 		player = get_tree().get_first_node_in_group("player")
-	
+
 	var title: String = ""
 	var desc: String = ""
-	var cd_text: String = ""
 	var keybind_text: String = ""
-	## Ayrıntılar için yeteneğin etkin süresi (sn) - bilinmiyorsa 0.
-	var detail_duration: float = 0.0
+	## Açıklamanın başında tür yoksa ("ULTİ: ...") etikete yazılacak tür.
+	var kind_fallback: String = "YETENEK"
+	## Bekleme satırı: cd_now < 0 = bekleme yok; cd_base != cd_now ise eski (taban) süre üstü çizili yanında.
+	var cd_now: float = -1.0
+	var cd_base: float = -1.0
+	var cd_note: String = ""
 	_tooltip_shift = Input.is_key_pressed(KEY_SHIFT)
-	
+
 	if name == "PassiveIcon":
-		var passive_name_str: String = "Pasif Yetenek"
-		if def.has("passive_name"):
-			passive_name_str = def["passive_name"] as String
-		title = (def.get("name", "") as String) + " - " + passive_name_str
+		## Pasif adı çoğu karakterde açıklamanın başında ("Yıldırım Hızı: ..."); yoksa başlık karakterin adı.
 		desc = def.get("passive", "Pasif yetenek açıklaması bulunmuyor.") as String
-		cd_text = "Bekleme Süresi: Yok"
-		keybind_text = "PASİF"
+		var pn: Array = _split_passive_name(desc)
+		title = str(def.get("passive_name", pn[0] if pn[0] != "" else def.get("name", "Pasif Yetenek")))
+		desc = pn[1]
+		keybind_text = ""
+		kind_fallback = "PASİF"
 	elif name == "SkillIcon":
 		title = def.get("skill_name", "Aktif Yetenek") as String
 		if not name_override.is_empty():
@@ -108,52 +119,35 @@ func _on_mouse_entered() -> void:
 		if not desc_override.is_empty():
 			desc = desc_override
 		keybind_text = "Q"
-		
+
 		var base_cd: float = 20.0
 		var current_cd: float = 20.0
 		var skill_id_val: int = def.get("skill", 1) as int
-		
+
 		if player and is_instance_valid(player) and "SKILL_TIMING" in player:
 			## Yetenek evrimlerinin bekleme/süre değişiklikleri dahil (player.gd _skill_timing_for -> _evo_timing).
 			var timing: Dictionary = (player.call("_skill_timing_for", skill_id_val) if player.has_method("_skill_timing_for") \
 				else player.SKILL_TIMING.get(skill_id_val, {"cooldown": 20.0})) as Dictionary
 			base_cd = timing["cooldown"] as float
 			current_cd = player._skill_cooldown as float
-			detail_duration = float(timing.get("duration", 0.0))
-		else:
-			base_cd = 20.0
-			current_cd = base_cd
 		if cooldown_override >= 0.0:
 			base_cd = cooldown_override
 			var cdr_q: float = float(player.get_cooldown_reduction()) if player and is_instance_valid(player) and "cooldown_reduction_percent" in player else 0.0
 			current_cd = base_cd * (1.0 - cdr_q)
-			detail_duration = 0.0
-			
-		if current_cd != base_cd:
-			cd_text = "Bekleme Süresi: %.1fs [color=#88ff88](Base: %.1fs)[/color]" % [current_cd, base_cd]
-		else:
-			cd_text = "Bekleme Süresi: %.1fs" % base_cd
-		## DÜZELTME (kullanıcı bildirimi: "bekleme süresinde azalma skillerin
-		## bekleme süresini azaltıyor fakat alttaki skill göstergesinde bekleme
-		## sürelerinin azaldığı görünmüyor açıklamalarda bekleme süresi aynı
-		## görünüyor") - characters.gd'nin statik "skill_desc" metninin içine
-		## gömülü "(Xsn bekleme)" sayısı artık yukarıda zaten hesaplanmış GERÇEK
-		## current_cd ile değiştiriliyor, cd_text ile TUTARLI olsun diye.
-		desc = _apply_live_cooldown_to_desc(desc, current_cd)
+		cd_now = current_cd
+		cd_base = base_cd
 	elif name == "SpiritIcon":
 		## Ruhani Yetenek (F, bkz. spiritual_skills.gd): karakterden bağımsız, kendi tanımından okunur. Bekleme süresi
-		## "Bekleme Süresi Azaltma" statından etkilenmez (kullanıcı isteği) - bu yüzden "Base" karşılaştırması yok.
+		## "Bekleme Süresi Azaltma" statından etkilenmez (kullanıcı isteği) - bu yüzden "taban" karşılaştırması yok.
 		var spirit_def: Dictionary = SpiritualSkillsScript.get_def(GameManager.selected_spiritual)
-		title = "Ruhani Yetenek - %s" % str(spirit_def.get("name", ""))
+		title = str(spirit_def.get("name", "Ruhani Yetenek"))
 		desc = str(spirit_def.get("desc", ""))
-		var spirit_cd: float = float(spirit_def.get("cooldown", 0.0))
-		detail_duration = float(spirit_def.get("duration", 0.0))
+		kind_fallback = "RUHANİ"
 		if bool(spirit_def.get("active", false)):
 			keybind_text = GameManager.get_action_key_label("skill4")
-			cd_text = "Bekleme Süresi: %.0fs (bekleme süresi azaltmadan etkilenmez)" % spirit_cd
-		else:
-			keybind_text = "PASİF"
-			cd_text = "Bekleme Süresi: Yok"
+			cd_now = float(spirit_def.get("cooldown", 0.0))
+			cd_base = cd_now
+			cd_note = "azaltılamaz"
 	elif name == "Skill3Icon":
 		## DÜZELTME (kullanıcı bildirimi: "Tüm ultilerin yetenek açıklamalarında
 		## ... sorun var, ulti açıklamaları yanlış gösteriliyor") - R ikonu
@@ -168,6 +162,7 @@ func _on_mouse_entered() -> void:
 		if not desc_override.is_empty():
 			desc = desc_override
 		keybind_text = "R"
+		kind_fallback = "ULTİ"
 
 		var base_cd3: float = 15.0
 		var current_cd3: float = 15.0
@@ -183,19 +178,14 @@ func _on_mouse_entered() -> void:
 			if player.SKILL3_TIMING.has(skill3_id_val) and player.has_method("_skill3_timing_for"):
 				timing3 = player.call("_skill3_timing_for", skill3_id_val) as Dictionary
 			base_cd3 = timing3["cooldown"] as float
-			detail_duration = float(timing3.get("duration", 0.0))
 			var cdr3: float = float(player.get_cooldown_reduction()) if "cooldown_reduction_percent" in player else 0.0
 			current_cd3 = base_cd3 * (1.0 - cdr3)
 		else:
 			current_cd3 = base_cd3
-		if base_cd3 <= 0.0:
-			## Bekleme süresi olmayan TOGGLE'lar (Vampir Çocuk R'si) - "0.0s" yerine "Yok".
-			cd_text = "Bekleme Süresi: Yok"
-		elif current_cd3 != base_cd3:
-			cd_text = "Bekleme Süresi: %.1fs [color=#88ff88](Base: %.1fs)[/color]" % [current_cd3, base_cd3]
-		else:
-			cd_text = "Bekleme Süresi: %.1fs" % base_cd3
-		desc = _apply_live_cooldown_to_desc(desc, current_cd3)
+		## Bekleme süresi olmayan TOGGLE'lar (Vampir Çocuk R'si) - "0 sn" yerine "bekleme yok".
+		if base_cd3 > 0.0:
+			cd_now = current_cd3
+			cd_base = base_cd3
 	else:
 		## DÜZELTME (Büyücü Kız'ın 4 varyasyonlu TEMEL yeteneği): name_override/
 		## desc_override doluysa (hud.gd _process, sadece Büyücü Kız seçiliyken)
@@ -209,6 +199,7 @@ func _on_mouse_entered() -> void:
 		if not desc_override.is_empty():
 			desc = desc_override
 		keybind_text = "E"
+		kind_fallback = "TEMEL"
 
 		var base_cd: float = 15.0
 		var current_cd: float = 15.0
@@ -227,7 +218,6 @@ func _on_mouse_entered() -> void:
 			var timing: Dictionary = (player.call("_skill2_timing_for", skill2_id_val) if player.has_method("_skill2_timing_for") \
 				else player.SKILL2_TIMING.get(skill2_id_val, {"cooldown": 15.0})) as Dictionary
 			base_cd = timing["cooldown"] as float
-			detail_duration = float(timing.get("duration", 0.0))
 			## DÜZELTME: player._skill2_cooldown Büyücü Kız için hiç
 			## güncellenmiyor (standart skill2_state makinesini kullanmıyor,
 			## bkz. player.gd _buyucu_try_activate_variation) - bekleme
@@ -236,168 +226,124 @@ func _on_mouse_entered() -> void:
 			## verir ve Büyücü'ye özel bir dal gerektirmez.
 			var cdr: float = float(player.get_cooldown_reduction()) if "cooldown_reduction_percent" in player else 0.0
 			current_cd = base_cd * (1.0 - cdr)
-		else:
-			base_cd = 15.0
-			current_cd = base_cd
 		if cooldown_override >= 0.0:
 			base_cd = cooldown_override
 			var cdr_e: float = float(player.get_cooldown_reduction()) if player and is_instance_valid(player) and "cooldown_reduction_percent" in player else 0.0
 			current_cd = base_cd * (1.0 - cdr_e)
-			detail_duration = 0.0
-			
-		if current_cd != base_cd:
-			cd_text = "Bekleme Süresi: %.1fs [color=#88ff88](Base: %.1fs)[/color]" % [current_cd, base_cd]
-		else:
-			cd_text = "Bekleme Süresi: %.1fs" % base_cd
-		## DÜZELTME: bkz. yukarıdaki SkillIcon dalındaki AYNI düzeltme/yorum -
-		## TEMEL yeteneğin açıklamasındaki gömülü bekleme metni de artık canlı.
-		desc = _apply_live_cooldown_to_desc(desc, current_cd)
+		cd_now = current_cd
+		cd_base = base_cd
 
-	if locked_level > 0:
-		cd_text = "[color=#ffb070]Seviye %d'de açılır[/color]\n%s" % [locked_level, cd_text]
+	## Açıklamanın başındaki tür ("ULTİ: ...") etikete taşınır; sondaki gömülü "(20sn bekleme)" atılır - bekleme artık
+	## başlıktaki satırda CANLI (bekleme süresi azaltmasıyla) yazıyor (eskiden metindeki sayı da canlıya çevriliyordu).
+	var parts: Array = _split_kind(desc)
+	var kind: String = str(parts[0]) if str(parts[0]) != "" else kind_fallback
+	desc = _strip_cooldown_note(str(parts[2]))
 
-	# Build Tooltip UI
-	## Kullanıcı isteği: "oyundaki skill göstergelerinin açıklamaları hiç
-	## okunmuyor ... bazıları aşırı küçük" - bu tooltip'in metinleri (aşağıda)
-	## oyunun geri kalanına göre çok küçük kalıyordu, büyütüldü; panel
-	## genişliği de o kadar metne göre orantılı büyütüldü.
-	## DÜZELTME (kullanıcı bildirimi 2026-09-23: "fontlar çok ufak çok zor
-	## okunuyor ve oyunun arayüz temasıyla çok uyumsuz") - kök neden İKİ
-	## KATMANLIYDI: (1) yazı boyutu (17px) oyunun geri kalanının kullandığı
-	## m5x7 piksel fontunun standart ölçeğinden (UIKit.FS_BODY=32, 16'nın
-	## katları - bkz. ui_kit.gd dosya üstü notu) NEREDEYSE YARISI kadardı;
-	## (2) arkaplan düz siyah bir StyleBoxFlat'tı, merchant/envanter/stat gibi
-	## HİÇBİR ekranın kullanmadığı bambaşka bir görsel dil (bkz. ui_kit.gd
-	## panel_style "window"/"inset" notundaki AYNI ders: düz panel SADECE
-	## küçük iç çukurlar için, ana çerçeve HER ZAMAN ahşap+demir "window"
-	## dokusu). Artık ikisi de UIKit'ten: panel UIKit.panel_style
-	## ("window_tight") (ana ekranlarla AYNI ahşap çerçeve, dar iç boşluklu
-	## varyant), yazılar UIKit.FS_BODY/UIKit renk paleti.
-	tooltip_panel = PanelContainer.new()
-	tooltip_panel.custom_minimum_size = Vector2(480, 0)
-	tooltip_panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
+	# --- İpucu (2026-10-18, kullanıcı: "şuanki arayüze uygun olacak şekilde tasarla yeniden"): yetenek panelinin koyu ahşap
+	## levhası (HudTooltip, madde 207 "Kısık Ahşap"), başlıkta ikon + ad + tür etiketi + canlı bekleme + tuş kapağı, açık
+	## mürekkep renkleri (HudTheme.INK), evrimler / bu oyunda bölümleri koyu kuyuda, yuvaya inen basamaklı uç.
+	## Yazı boyutları eskisi gibi: ana metin UIKit.FS_BODY (32, m5x7 keskin), ikincil bölümler 24.
+	tooltip_panel = HudTooltip.make_panel(TOOLTIP_WIDTH)
 
 	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 9)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tooltip_panel.add_child(vbox)
 
-	# Header (Title + Keybind)
+	# Başlık: [ikon] AD / etiket + bekleme  ...  [tuş]
 	var header: HBoxContainer = HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
 	vbox.add_child(header)
 
-	## Kullanıcı isteği: "hepsini aynı boyuta getir" - başlık/tuş rozeti de
-	## artık açıklama/bekleme metniyle (TOOLTIP_BODY_FONT_SIZE, aşağıda
-	## tanımlanmadan önce burada da aynı sabit değer kullanılıyor) BİREBİR
-	## aynı font boyutunda; aralarındaki ayrım artık sadece renk/büyük harf
-	## ile yapılıyor, boyutla değil.
-	const TOOLTIP_HEADER_FONT_SIZE := UIKit.FS_BODY
-	var lbl_title: Label = Label.new()
-	lbl_title.text = title.to_upper()
-	lbl_title.add_theme_font_size_override("font_size", TOOLTIP_HEADER_FONT_SIZE)
-	lbl_title.add_theme_color_override("font_color", UIKit.C_GOLD)
-	lbl_title.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-	lbl_title.add_theme_constant_override("outline_size", 0)
-	header.add_child(lbl_title)
+	var icon_well: PanelContainer = PanelContainer.new()
+	icon_well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_well.add_theme_stylebox_override("panel", HudTooltip.well_style(3.0, 3.0))
+	icon_well.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	header.add_child(icon_well)
+	var mini_icon: Control = (get_script() as GDScript).new()
+	mini_icon.custom_minimum_size = Vector2(TOOLTIP_ICON, TOOLTIP_ICON)
+	mini_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mini_icon.set("frame_border", 0.0)
+	mini_icon.set("skill_id", skill_id)
+	mini_icon.set("custom_texture", custom_texture)
+	icon_well.add_child(mini_icon)
 
-	var spacer: Control = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(spacer)
+	var head_col: VBoxContainer = VBoxContainer.new()
+	head_col.add_theme_constant_override("separation", 3)
+	head_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header.add_child(head_col)
 
-	var lbl_key: Label = Label.new()
-	lbl_key.text = "[" + keybind_text + "]"
-	lbl_key.add_theme_font_size_override("font_size", TOOLTIP_HEADER_FONT_SIZE)
-	lbl_key.add_theme_color_override("font_color", UIKit.C_TEXT_DIM)
-	lbl_key.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-	lbl_key.add_theme_constant_override("outline_size", 0)
-	header.add_child(lbl_key)
+	var lbl_title: Label = HudTooltip.make_label(title.to_upper(), UIKit.FS_BODY, HudTheme.ACCENT)
+	lbl_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	head_col.add_child(lbl_title)
 
-	# Divider
-	var div: ColorRect = ColorRect.new()
-	div.color = MenuKit.C_LINE
-	div.custom_minimum_size = Vector2(0, 2)
-	vbox.add_child(div)
+	var sub: HBoxContainer = HBoxContainer.new()
+	sub.add_theme_constant_override("separation", 9)
+	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head_col.add_child(sub)
+	sub.add_child(HudTooltip.make_tag(kind))
+	## Pasiflerde (tuşu yok) bekleme satırı hiç yok - "Bekleme yok" sadece tuşlu aç/kapa yeteneklerde anlamlı.
+	var show_cd: bool = keybind_text != ""
+	if cd_now >= 0.0:
+		var cd_icon: TextureRect = TextureRect.new()
+		cd_icon.texture = COOLDOWN_ICON
+		cd_icon.custom_minimum_size = Vector2(24, 24)
+		cd_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		cd_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cd_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		cd_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sub.add_child(cd_icon)
+	if show_cd:
+		var lbl_cd: RichTextLabel = HudTooltip.make_rich(UIKit.FS_BODY, HudTheme.TEXT, false)
+		lbl_cd.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		lbl_cd.text = _cooldown_bbcode(cd_now, cd_base, cd_note)
+		sub.add_child(lbl_cd)
 
-	# Cooldown
-	## DÜZELTME (kullanıcı bildirimi: "yetenek açıklamaları penceresindeki
-	## yazılar çok dengesiz, bazıları kocaman bazıları ufacık") - asıl neden:
-	## bu RichTextLabel'larda sadece "normal_font_size" override ediliyordu.
-	## _format_lol_style() ULTİ/TEMEL/PASİF gibi kelimeleri [b]...[/b] (kalın)
-	## etiketiyle sarıyor, ve RichTextLabel'ın KALIN metni AYRI bir tema
-	## anahtarından ("bold_font_size") boyut alıyor - bu hiç override
-	## edilmediği için projenin genel varsayılan tema boyutuna (bkz.
-	## assets/fonts/theme.tres default_font_size = 88!) düşüyordu. Sonuç:
-	## aynı açıklama içinde normal kelimeler 16-17px, kalın kelimeler
-	## (ULTİ/TEMEL/PASİF, sayılar SARILI DEĞİL ama [b] kullanan başka
-	## kelimeler) aniden 88px oluyordu. Artık normal/bold/italics/bold_italics
-	## HEPSİ AYNI boyuta sabitleniyor, tüm metin tutarlı tek bir boyutta.
-	const TOOLTIP_BODY_FONT_SIZE := UIKit.FS_BODY
-	var lbl_cd: RichTextLabel = RichTextLabel.new()
-	lbl_cd.bbcode_enabled = true
-	lbl_cd.text = "[color=%s]%s[/color]" % [UIKit.INK["cooldown"], cd_text]
-	lbl_cd.fit_content = true
-	lbl_cd.autowrap_mode = TextServer.AUTOWRAP_WORD
-	lbl_cd.add_theme_font_size_override("normal_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_cd.add_theme_font_size_override("bold_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_cd.add_theme_font_size_override("italics_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_cd.add_theme_font_size_override("bold_italics_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_cd.add_theme_font_size_override("mono_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_cd.add_theme_color_override("default_color", UIKit.C_TEXT)
-	lbl_cd.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-	lbl_cd.add_theme_constant_override("outline_size", 0)
-	vbox.add_child(lbl_cd)
+	if keybind_text != "":
+		var key: PanelContainer = HudTooltip.make_keycap(keybind_text)
+		key.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		header.add_child(key)
 
-	# Description
-	var lbl_desc: RichTextLabel = RichTextLabel.new()
-	lbl_desc.bbcode_enabled = true
+	if locked_level > 0:
+		vbox.add_child(HudTooltip.make_label("Seviye %d'de açılır" % locked_level, MenuKit.FS_SMALL, HudTheme.BAD))
+
+	vbox.add_child(HudTooltip.make_divider())
+
+	# Açıklama
+	var lbl_desc: RichTextLabel = HudTooltip.make_rich(UIKit.FS_BODY, HudTheme.TEXT)
 	lbl_desc.text = _format_lol_style(desc)
-	lbl_desc.fit_content = true
-	lbl_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
-	lbl_desc.add_theme_font_size_override("normal_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_desc.add_theme_font_size_override("bold_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_desc.add_theme_font_size_override("italics_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_desc.add_theme_font_size_override("bold_italics_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_desc.add_theme_font_size_override("mono_font_size", TOOLTIP_BODY_FONT_SIZE)
-	lbl_desc.add_theme_color_override("default_color", UIKit.C_TEXT)
-	lbl_desc.add_theme_color_override("font_outline_color", UIKit.C_OUTLINE)
-	lbl_desc.add_theme_constant_override("outline_size", 0)
 	vbox.add_child(lbl_desc)
 
-	## Yetenek evrimleri (2026-09-28): bu yuvada alınmış evrimler, açıklamanın hemen altında (ad + ne yaptığı).
+	## Yetenek evrimleri (2026-09-28): bu yuvada alınmış evrimler, açıklamanın hemen altında (ad + ne yaptığı) - koyu kuyuda.
 	var evo_text: String = _evolution_tooltip_text(player)
 	if evo_text != "":
-		var lbl_evo: RichTextLabel = RichTextLabel.new()
-		lbl_evo.bbcode_enabled = true
+		var evo_well: PanelContainer = HudTooltip.make_well()
+		vbox.add_child(evo_well)
+		var lbl_evo: RichTextLabel = HudTooltip.make_rich(MenuKit.FS_SMALL, HudTheme.TEXT)
 		lbl_evo.text = evo_text
-		lbl_evo.fit_content = true
-		lbl_evo.autowrap_mode = TextServer.AUTOWRAP_WORD
-		for key in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size", "mono_font_size"]:
-			lbl_evo.add_theme_font_size_override(key, 24)
-		lbl_evo.add_theme_color_override("default_color", UIKit.C_TEXT)
-		lbl_evo.add_theme_constant_override("outline_size", 0)
-		vbox.add_child(lbl_evo)
+		evo_well.add_child(lbl_evo)
 
-	## Shift: ayrıntılar (hasar/kalkan/iyileştirme sayıları, oyuncunun anlık statlarıyla - bkz. skill_details.gd).
-	var detail_text: String = ""
+	## Shift: bu oyunda bu yeteneğin GERÇEKTEN verdiği hasar / can / kalkan (kullanıcı isteği 2026-10-17; ölçüm kaynağı
+	## DamageStats = balans telemetrisinin kaynak başına sayaçları). Basılı değilken altta tek satır ipucu.
 	if _tooltip_shift:
-		var details: String = SkillDetails.build(desc, player, detail_duration, UIKit.INK)
-		detail_text = "[color=#%s][b]AYRINTILAR[/b][/color]\n%s" % [UIKit.C_ACCENT.to_html(false), details]
+		var slot: String = str(DamageStats.ICON_SLOT.get(String(name), "e"))
+		var ink: Dictionary = HudTheme.INK.duplicate()
+		ink["cooldown"] = "#" + HudTheme.DIM.to_html(false) ## tooltip_bbcode "cooldown"u soluk ikincil yazı olarak kullanır
+		var stats_well: PanelContainer = HudTooltip.make_well()
+		vbox.add_child(stats_well)
+		var lbl_detail: RichTextLabel = HudTooltip.make_rich(UIKit.FS_BODY, HudTheme.TEXT)
+		lbl_detail.text = "[color=#%s]BU OYUNDA[/color]\n%s" % [HudTheme.ACCENT.to_html(false), DamageStats.tooltip_bbcode(slot, ink)]
+		stats_well.add_child(lbl_detail)
 	else:
-		detail_text = "[color=#%s][Shift] basılı tut: ayrıntılar[/color]" % UIKit.C_TEXT_DIM.to_html(false)
-	var lbl_detail: RichTextLabel = RichTextLabel.new()
-	lbl_detail.bbcode_enabled = true
-	lbl_detail.text = detail_text
-	lbl_detail.fit_content = true
-	lbl_detail.autowrap_mode = TextServer.AUTOWRAP_WORD
-	var detail_fs: int = TOOLTIP_BODY_FONT_SIZE if _tooltip_shift else 24
-	for key in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size", "mono_font_size"]:
-		lbl_detail.add_theme_font_size_override(key, detail_fs)
-	lbl_detail.add_theme_color_override("default_color", UIKit.C_TEXT)
-	lbl_detail.add_theme_constant_override("outline_size", 0)
-	vbox.add_child(lbl_detail)
+		var lbl_hint: RichTextLabel = HudTooltip.make_rich(MenuKit.FS_SMALL, HudTheme.DIM)
+		lbl_hint.text = "[color=#%s]Shift[/color] basılı tut: bu oyundaki hasar" % HudTheme.TEXT.to_html(false)
+		vbox.add_child(lbl_hint)
 
 	hud_layer.add_child(tooltip_panel)
-	tooltip_panel.reset_size()
 	_update_tooltip_position()
+	if not rebuilding:
+		UiAnim.reveal(tooltip_panel, 0.0, 0.12)
 
 func _on_mouse_exited() -> void:
 	if tooltip_panel and is_instance_valid(tooltip_panel):
@@ -406,32 +352,58 @@ func _on_mouse_exited() -> void:
 
 func _update_tooltip_position() -> void:
 	if tooltip_panel and is_instance_valid(tooltip_panel):
-		tooltip_panel.reset_size()
-		var center_x: float = global_position.x + (size.x * get_global_transform().get_scale().x - tooltip_panel.size.x) * 0.5
-		var top_y: float = global_position.y - tooltip_panel.size.y - 12
-		tooltip_panel.global_position = Vector2(center_x, top_y)
+		HudTooltip.place_above(tooltip_panel, self)
 
-## characters.gd'nin statik skill_desc/skill2_desc metinlerinin sonunda hep
-## "(Xsn bekleme)" biçiminde gömülü bir sayı var (bkz. characters.gd - örn.
-## "(200sn bekleme)", "(20sn bekleme)"). Bu sayı sabit yazıldığı için
-## cooldown_reduction_percent gibi statlar bekleme süresini gerçekten
-## kısaltsa bile açıklama metni eski/yanlış değeri göstermeye devam
-## ediyordu (kullanıcı bildirimi). Bu fonksiyon o gömülü sayıyı, çağıran
-## yerde (_on_mouse_entered) zaten doğru hesaplanmış GERÇEK current_cd ile
-## değiştirir - cd_text satırıyla (üstteki "Bekleme Süresi: ...") her zaman
-## tutarlı olsun diye AYNI current_cd kullanılıyor.
-func _apply_live_cooldown_to_desc(desc: String, current_cd: float) -> String:
+## characters.gd'nin statik skill_desc/skill2_desc metinlerinin sonunda gömülü "(20sn bekleme)" notu var. İpucu bekleme
+## süresini başlıkta CANLI gösterdiği için (bekleme süresi azaltması dahil) metindeki kopya atılır - eskiden bu sayı
+## canlı değerle değiştiriliyordu (kullanıcı bildirimi: azaltma açıklamada görünmüyordu), şimdi tek yerde.
+func _strip_cooldown_note(desc: String) -> String:
 	var regex: RegEx = RegEx.new()
-	## Lookahead ile SADECE "sn bekleme)" tarafından takip edilen sayıyı
-	## bulur - parantez/"sn bekleme)" kısmı metinde olduğu gibi kalır,
-	## sadece sayı kısmı değiştirilir.
-	var err: Error = regex.compile("\\d+(?:\\.\\d+)?(?=sn bekleme\\))")
-	if err != OK:
+	if regex.compile("\\s*\\(\\d+(?:\\.\\d+)?\\s*sn bekleme\\)") != OK:
 		return desc
-	var m: RegExMatch = regex.search(desc)
-	if m == null:
-		return desc
-	return desc.substr(0, m.get_start()) + _format_cd_number(current_cd) + desc.substr(m.get_end())
+	return regex.sub(desc, "", true).strip_edges()
+
+
+## Açıklamanın başındaki tür ("ULTİ: ...", "YETENEK (aç/kapa): ...") -> [tür, not, gövde]. Tür yoksa ["", "", metin].
+## menu_character_details.gd _split_kind ile aynı kural (karakter seçimindeki yetenek satırları).
+static func _split_kind(desc: String) -> Array:
+	var re := RegEx.new()
+	re.compile("^\\s*((?:\\d+\\.\\s*)?[A-ZÇĞİÖŞÜ]+)\\s*(?:\\(([^)]*)\\))?\\s*:\\s*")
+	var m: RegExMatch = re.search(desc)
+	if m == null or m.get_string(1).length() <= 1:
+		return ["", "", desc]
+	var body: String = desc.substr(m.get_end())
+	if m.get_string(2) != "":
+		body = "(%s) %s" % [m.get_string(2), body]
+	return [m.get_string(1), m.get_string(2), body]
+
+
+## Pasif açıklamasının başındaki kısa ad ("Yıldırım Hızı: ...") -> [ad, gövde]; ad yoksa ["", metin]. Uzun/sayılı/virgüllü
+## önek ad sayılmaz (cümlenin kendisidir).
+static func _split_passive_name(desc: String) -> Array:
+	var i: int = desc.find(": ")
+	if i <= 0 or i > 28:
+		return ["", desc]
+	var head: String = desc.substr(0, i)
+	if head == head.to_upper(): ## "PASİF: ..." gibi tür öneki ad değildir
+		return ["", desc]
+	var re := RegEx.new()
+	re.compile("[0-9(),%]")
+	if re.search(head) != null:
+		return ["", desc]
+	return [head, desc.substr(i + 2)]
+
+
+## Başlıktaki bekleme yazısı: "51 sn" (azalmışsa yanında üstü çizili taban "60 sn"), yoksa "Bekleme yok".
+func _cooldown_bbcode(now: float, base: float, note: String) -> String:
+	if now < 0.0:
+		return "[color=#%s]Bekleme yok[/color]" % HudTheme.DIM.to_html(false)
+	var out: String = "[color=%s]%s sn[/color]" % [HudTheme.INK["cooldown"], _format_cd_number(now)]
+	if base > 0.0 and absf(base - now) > 0.05:
+		out += " [color=#%s][s]%s sn[/s][/color]" % [HudTheme.DIM.to_html(false), _format_cd_number(base)]
+	if note != "":
+		out += " [color=#%s]%s[/color]" % [HudTheme.DIM.to_html(false), note]
+	return out
 
 
 ## "20" gibi tam sayılara yakın değerleri tam sayı olarak ("20"), gerçekten
@@ -445,10 +417,10 @@ func _format_cd_number(v: float) -> String:
 	return "%.1f" % v
 
 
-## 2026-09-24: ipucu penceresi bej parşömen (oyun içi kit) - eski neon tonlar (#55ff55, #ffaa00...) okunmuyordu; renkler
-## parşömen üstünde okunan mürekkep tonları (TEK kaynak UIKit.INK, level kartları da aynılarını kullanır).
+## 2026-10-18: ipucu koyu HUD levhasında (hud_tooltip.gd) - renkler koyu zeminde okunan açık mürekkep tonları (TEK kaynak
+## HudTheme.INK; anahtarlar UIKit.INK ile aynı, level kartları bej zeminde UIKit.INK'i kullanmaya devam eder).
 func _format_lol_style(text: String) -> String:
-	var ink: Dictionary = UIKit.INK
+	var ink: Dictionary = HudTheme.INK
 	# Replace keywords first
 	text = text.replace("ULTİ", "[color=%s][b]ULTİ[/b][/color]" % ink["damage"])
 	text = text.replace("TEMEL", "[color=%s][b]TEMEL[/b][/color]" % ink["shield"])

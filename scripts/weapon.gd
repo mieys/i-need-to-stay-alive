@@ -1020,6 +1020,7 @@ func _ready() -> void:
 
 		top_level = true
 		_target_local_offset = hover_offset + _fan_offset()
+		_wf_shadow_y = _target_local_offset.y
 		var parent = get_parent()
 		if parent and parent is Node2D:
 			global_position = parent.global_position + _target_local_offset
@@ -1363,6 +1364,7 @@ func _fan_offset() -> Vector2:
 func set_icon_offset(offset: Vector2) -> void:
 	if icon_sprite:
 		_target_local_offset = offset
+		_wf_shadow_y = offset.y
 		var parent = get_parent()
 		if parent and parent is Node2D:
 			global_position = parent.global_position + _target_local_offset
@@ -1385,8 +1387,8 @@ func set_icon_offset(offset: Vector2) -> void:
 ## Talon'un Ayna Formu'nda (R) silahlar %10 büyür (TalonFormationMath.FORM_SCALE_MULT) - player.gd her karede yazar,
 ## form bitince 1.0'a döner. scale atanan her yerde (hover takibi, dönen kılıç) çarpılır ki gölge/menzil hesabı tutarlı kalsın.
 var form_scale_mult: float = 1.0
-const HOVER_BOB_AMPLITUDE := 3.5 ## px
-const HOVER_BOB_SPEED := 2.2 ## rad/sn
+const HOVER_BOB_AMPLITUDE := WeaponFollowMath.BOB_AMPLITUDE ## px (kukla remote_player.gd de aynısını kullanır)
+const HOVER_BOB_SPEED := WeaponFollowMath.BOB_SPEED ## rad/sn
 var _target_local_offset: Vector2 = Vector2.ZERO
 var _hover_bob_time: float = 0.0
 ## Her silah kendine özel rastgele bir faz ile başlar ki 5 slotun hepsi
@@ -1647,31 +1649,130 @@ func _update_hover_follow(delta: float) -> void:
 			else:
 				_floaty_global_pos = _floaty_global_pos.lerp(rim_target, 1.0 - exp(-RIM_FOLLOW_RATE * delta))
 			global_position = _floaty_global_pos.round()
+			_wf_force_shown()
 			return
 
-		# İlk başlatmada veya ışınlanmada doğrudan konumu eşitle
-		if _floaty_global_pos == Vector2.ZERO or _floaty_global_pos.distance_to(target_global_pos) > 200.0:
-			_floaty_global_pos = target_global_pos
-			global_position = _floaty_global_pos.round()
-			return
-			
-		# Silahların kafadan kopup uzaklaşmaması için maksimum mesafe limiti (karakter ölçeğine göre)
-		var max_drift: float = 20.0 * parent_node.scale.x
-		
-		# Karakter hareket ederken silahların "ease ease" (9.0 * delta) yumuşaklığıyla geriden gelmesi
-		# Hassasiyeti korumak için lerp işlemini küsüratlı (fractional) _floaty_global_pos üzerinde yapıyoruz
-		var next_pos = _floaty_global_pos.lerp(target_global_pos, 9.0 * delta)
-		
-		# Eğer mesafe limiti aşıldıysa, silahı sınırda tut (kopmasını engeller)
-		var offset = next_pos - target_global_pos
-		if offset.length() > max_drift:
-			next_pos = target_global_pos + offset.normalized() * max_drift
-			
-		_floaty_global_pos = next_pos
-		# Çizimde piksel bulanıklığını (sub-pixel blur) önlemek için pozisyonu tam sayılara (pixel grid) yuvarlıyoruz
-		global_position = _floaty_global_pos.round()
+		## HÜCUM takibi (madde 247): eski "lerp 9 x dt + 20 px kopma sınırı" gecikmesi kalktı (yürürken hep ~9 dünya px geride
+		## kalıyordu) - silah karaktere kilitli + hız yayıyla öne çıkar, görüşte düşman yokken içe çekilir (WeaponFollowMath).
+		_floaty_global_pos = target_global_pos ## kubbe halkası geçişi buradan başlar
+		_wf_update(parent_node as Node2D, bob, delta)
 	else:
 		position = _target_local_offset + Vector2(0, bob)
+
+
+## ---------- HÜCUM takibi (madde 247; kural + sabitler WeaponFollowMath, görseller WeaponFollowFx; kukla remote_player.gd aynısı) ----------
+var _wf_w: Vector2 = Vector2.ZERO ## hız yayı: gidiş yönü x hız oranı
+var _wf_v: Vector2 = Vector2.ZERO
+var _wf_vis: Dictionary = {} ## WeaponFollowMath.step_visibility durumu
+var _wf_alpha: float = 1.0
+var _wf_owner_prev: Vector2 = Vector2.INF
+var _wf_owner_vel: Vector2 = Vector2.ZERO ## sahibin GERÇEK hareketi (konum farkı; duvara yaslanınca 0)
+var _wf_prev_speed: float = 0.0
+var _wf_glint_cd: float = 0.0
+var _wf_reveal_glinted: bool = false
+var _wf_shadow_y: float = 0.0 ## gölge boşluğu için o anki yerel yükseklik (çıkışta göğüsten)
+var _wf_has_target: bool = false ## _process'teki nişan bu karede hedef buldu mu (menzilde düşman -> gizliyse çıkar)
+
+
+func _wf_update(owner_node: Node2D, bob: float, delta: float) -> void:
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var op: Vector2 = owner_node.global_position
+	if _wf_owner_prev == Vector2.INF or delta <= 0.0 or op.distance_to(_wf_owner_prev) > 200.0:
+		_wf_owner_vel = Vector2.ZERO ## ilk kare / ışınlanma
+	else:
+		_wf_owner_vel = (op - _wf_owner_prev) / delta
+	_wf_owner_prev = op
+	var kind: int = WeaponFollowMath.slot_kind(_target_local_offset)
+	var r: Array = WeaponFollowMath.spring_step(_wf_w, _wf_v, WeaponFollowMath.move_target(_wf_owner_vel),
+			WeaponFollowMath.spring_w(kind), WeaponFollowMath.SPRING_ZETA, delta)
+	_wf_w = r[0]
+	_wf_v = r[1]
+	var b: float = bob * WeaponFollowMath.bob_scale(_wf_w)
+	_last_bob = b
+	var home: Vector2 = _target_local_offset + WeaponFollowMath.charge_offset(kind, _wf_w) + Vector2(0.0, b)
+	## Başka bir sistem silahı yönetiyorsa (Talon dizilimi/yetenek nişanı) ya da sahip yerdeyse gizleme yok.
+	var force: bool = not icon_faces_target or owner_node.get("is_dead") == true or owner_node.get("is_downed") == true
+	var sc: Dictionary = WeaponFollowMath.scan(owner_node)
+	WeaponFollowMath.step_visibility(_wf_vis, bool(sc["seen"]) or _wf_has_target, force, now, kind)
+	var p: Dictionary = WeaponFollowMath.pose(_wf_vis, now, kind, home)
+	var st: int = int(_wf_vis["s"])
+	scale *= float(p["scale"])
+	rotation = float(p["spin"])
+	global_position = WeaponFollowMath.snap_half(op + (p["pos"] as Vector2) * owner_node.scale)
+	_wf_shadow_y = (p["pos"] as Vector2).y - b
+	var u: float = float(p["u"])
+	var flash: float = 0.0
+	if st == WeaponFollowMath.REVEAL and u >= WeaponFollowMath.GLINT_REVEAL_AT:
+		flash = 0.6 * clampf(1.0 - (u - WeaponFollowMath.GLINT_REVEAL_AT) / 0.12, 0.0, 1.0)
+	_wf_set_alpha(float(p["alpha"]), flash)
+	## Uç parıltısı: SADECE en üst kademe (demirci 5) - çıkışın sonunda ve karakter durunca.
+	_wf_glint_cd = maxf(0.0, _wf_glint_cd - delta)
+	var speed: float = _wf_owner_vel.length()
+	if WeaponFollowMath.has_glint(WeaponTierArt.clamp_tier(enchant_glow_tier)):
+		if st == WeaponFollowMath.REVEAL and not _wf_reveal_glinted and u >= WeaponFollowMath.GLINT_REVEAL_AT:
+			_wf_reveal_glinted = true
+			_wf_glint()
+		elif st == WeaponFollowMath.SHOWN and _wf_glint_cd <= 0.0 and WeaponFollowMath.just_stopped(_wf_prev_speed, speed):
+			_wf_glint()
+	if st != WeaponFollowMath.REVEAL:
+		_wf_reveal_glinted = false
+	_wf_prev_speed = speed
+
+
+func _wf_glint() -> void:
+	_wf_glint_cd = WeaponFollowMath.GLINT_STOP_COOLDOWN
+	WeaponFollowFx.spawn_glint(self, icon_sprite, sprite_forward_angle_deg)
+
+
+func _wf_set_alpha(a: float, flash: float = 0.0) -> void:
+	_wf_alpha = a
+	modulate = Color(1.0 + flash, 1.0 + flash, 1.0 + flash, a)
+	if shadow_sprite and is_instance_valid(shadow_sprite):
+		shadow_sprite.modulate.a = 0.4 * a ## SHADOW_TRANSPARENCY 0,6 -> taban 0,4
+
+
+## Kubbe halkası / ölüm düşüşü konumu kendisi yönetir: silah görünür, dönmez.
+func _wf_force_shown() -> void:
+	_wf_vis["s"] = WeaponFollowMath.SHOWN
+	_wf_shadow_y = _target_local_offset.y
+	_wf_owner_prev = Vector2.INF
+	rotation = 0.0
+	if _wf_alpha != 1.0 or modulate != Color.WHITE:
+		_wf_set_alpha(1.0)
+
+
+## Uç yönü (madde 247): hedef menzilde değilse yürürken GİDİŞ YÖNÜNE, dururken görüşteki en yakın düşmana (hazır).
+## Yakın dövüş silahı menzilde düşman varken dinlenme pozuna döner (savuruş oradan başlar).
+func _wf_update_facing(delta: float) -> void:
+	var owner_node := get_parent() as Node2D
+	if owner_node == null or icon_sprite == null:
+		return
+	var sc: Dictionary = WeaponFollowMath.scan(owner_node)
+	var focus_dir: Vector2 = ((sc["focus"] as Vector2) - global_position) if sc["seen"] else Vector2.ZERO
+	var t: float = clampf(delta * WeaponFollowMath.TURN_RATE, 0.0, 1.0)
+	if melee and sc["seen"] and attack_range > 0.0 and _attack_origin().distance_to(sc["focus"] as Vector2) <= attack_range:
+		icon_sprite.rotation = lerp_angle(icon_sprite.rotation, deg_to_rad(melee_icon_rest_rotation_deg), t)
+		return
+	var dir: Vector2 = WeaponFollowMath.idle_facing_dir(_wf_owner_vel, focus_dir)
+	if dir == Vector2.ZERO:
+		return
+	_face_dir(dir, t)
+
+
+## İkonun ucunu dünya yönü `dir`'e çevirir (aynalanan ikon dahil) - _update_aim ve _wf_update_facing ortak.
+func _face_dir(dir: Vector2, t: float) -> void:
+	var r: Array = WeaponFollowMath.face_rotation(dir, deg_to_rad(sprite_forward_angle_deg), mirror_icon_when_aiming_left)
+	if not mirror_icon_when_aiming_left:
+		icon_sprite.rotation = lerp_angle(icon_sprite.rotation, float(r[0]), t)
+		return
+	var flip: bool = r[1]
+	if flip != _icon_flipped:
+		## Aynalama durumu değişti: ara kare yok (eski açı yeni aynalama uzayında anlamsız; geçiş noktasında görüntü aynı).
+		icon_sprite.rotation = float(r[0])
+		icon_sprite.flip_h = flip
+		_icon_flipped = flip
+		return
+	icon_sprite.rotation = lerp_angle(icon_sprite.rotation, float(r[0]), t)
 
 
 ## How quickly the icon eases into the new aim angle - higher = snappier,
@@ -1684,6 +1785,7 @@ func _physics_process(delta: float) -> void:
 	if _falling or _rising or _weapon_grounded:
 		_rim_blend = 0.0 ## ölüm/diriliş animasyonu kendi konumunu yönetir (halka geçişi bitmiş sayılır)
 		_set_rim_z(false)
+		_wf_force_shown()
 	## Düşerken/yerdeyken/dönerken hover takibi TAMAMEN durur (bkz.
 	## _process_death_drop üstündeki kök neden notu) - kendi fizik/geçiş
 	## simülasyonları global_position'ı zaten dolduruyor.
@@ -1752,7 +1854,7 @@ func _update_icon_shadow() -> void:
 		## Yer noktası slot yüksekliğine göre (bkz. WeaponOrbitMath.hover_shadow_gap) ve KARAKTERİN ölçeğiyle - eskiden
 		## silahın KENDİ ölçeğiyle (asalar 0.3) çarpılıyordu, asaların gölgesi ikonun hemen dibinde kalıyordu.
 		var owner_scale: float = (get_parent() as Node2D).scale.y if get_parent() is Node2D else 1.0
-		gap = (WeaponOrbitMath.hover_shadow_gap(_target_local_offset.y) + bob_norm * 3.0) * owner_scale
+		gap = (WeaponOrbitMath.hover_shadow_gap(_wf_shadow_y) + bob_norm * 3.0) * owner_scale ## _wf_shadow_y: çıkışta göğüsten
 		bob_factor = 1.0 - bob_norm * 0.05
 
 	## Kullanıcı isteği: "gölgelerin silahın boyutlarına göre genişleyip
@@ -1810,7 +1912,9 @@ func _process(delta: float) -> void:
 	if continuous_beam:
 		_process_continuous_beam(delta)
 		if icon_sprite:
-			_update_aim(delta)
+			_wf_has_target = _update_aim(delta)
+			if not _wf_has_target and icon_faces_target and not _rim_spin and not _rim_active:
+				_wf_update_facing(delta) ## hücum takibi (madde 247)
 		_apply_beam_tremor()
 		return
 
@@ -1859,14 +1963,22 @@ func _process(delta: float) -> void:
 	## tabanca) eskisi gibi her an en yakın düşmana dönmeye devam eder.
 	## Reload sırasında da (Tabanca/Revolver) hedefe dönmeyi durdurur - silah
 	## "elinde meşgul" görünsün diye.
-	if icon_sprite and not melee and not is_reloading and icon_faces_target and not _rim_spin:
-		_update_aim(delta)
+	## Hücum takibi (madde 247): hedef menzilde değilse uç gidiş yönüne / görüşteki düşmana (hazır); yakın dövüş de (savuruşta
+	## ikon gizli, uçan kopya dinlenme pozundan başlar - gizliyken dokunulmaz).
+	if icon_sprite and not is_reloading and icon_faces_target and not _rim_spin and not _rim_active:
+		if not melee:
+			_wf_has_target = _update_aim(delta)
+			if not _wf_has_target:
+				_wf_update_facing(delta)
+		elif icon_sprite.visible:
+			_wf_update_facing(delta)
 
 
 ## Keeps the weapon icon turned towards the nearest enemy at all times, even
 ## while the fire timer is still on cooldown - eased so it swings smoothly
 ## into place instead of snapping instantly to the new angle.
-func _update_aim(delta: float) -> void:
+## Dönen: hedef bulundu mu (yoksa uç hücum kuralıyla döner, bkz. _wf_update_facing).
+func _update_aim(delta: float) -> bool:
 	## Efsun kendi hedefini seçiyorsa (Destiny püskürtmesi normal atışın yerine geçer, koni en yakın düşmana) ikon ona döner -
 	## silaha bağlı efekt (fx_enchant_sprite silah takibi) asanın baktığı yönden çıktığı için ikisi aynı yöne bakmalı.
 	var target: Node2D = null
@@ -1875,36 +1987,11 @@ func _update_aim(delta: float) -> void:
 	if target == null:
 		target = _get_target_enemy()
 	if not target:
-		return
+		return false
 	var dir: Vector2 = (target.global_position - global_position).normalized()
-	var forward: float = deg_to_rad(sprite_forward_angle_deg)
-	var target_rotation: float = 0.0
-	var t: float = 0.0
+	_face_dir(dir, clampf(delta * AIM_EASE_RATE, 0.0, 1.0))
+	return true
 
-	if not mirror_icon_when_aiming_left:
-		target_rotation = dir.angle() - forward
-		t = clamp(delta * AIM_EASE_RATE, 0.0, 1.0)
-		icon_sprite.rotation = lerp_angle(icon_sprite.rotation, target_rotation, t)
-		return
-
-	## Tabanca gibi ikonlar: sola bakarken rotasyonla değil aynalamayla döner,
-	## yoksa 90°'yi geçince ters (baş aşağı) görünür. Sağda hep normal
-	## (flip_h=false), solda hep aynalı (flip_h=true) - flip_h negatif x ile
-	## aynaladığı için düz açı formülü yerine "F' = PI - F" ile hesaplanan
-	## aynalı açı kullanılır (bkz. yorum: iki formül de tam +/-90°'de aynı
-	## görüntüyü verir, yani geçiş anında görsel sıçrama olmaz).
-	var flip: bool = dir.x < 0.0
-	target_rotation = (dir.angle() - PI + forward) if flip else (dir.angle() - forward)
-	if flip != _icon_flipped:
-		## Aynalama durumu bu karede değiştiyse ara kareyi (lerp) atla - eski
-		## ham rotasyon değeri yeni aynalama uzayında anlamsız olur, doğrudan
-		## hedef açıya geç (geçiş noktasında görsel olarak zaten aynı).
-		icon_sprite.rotation = target_rotation
-		icon_sprite.flip_h = flip
-		_icon_flipped = flip
-		return
-	t = clamp(delta * AIM_EASE_RATE, 0.0, 1.0)
-	icon_sprite.rotation = lerp_angle(icon_sprite.rotation, target_rotation, t)
 
 
 ## Yay: bir sonraki atıştan önce oynayacak "ok çekiliş" animasyonu + sesini

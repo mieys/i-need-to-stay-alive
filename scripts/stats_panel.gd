@@ -231,7 +231,7 @@ func _refresh() -> void:
 	shield_protection_value.text = "%%%d" % int(round(player.shield_protection * 100))
 
 	shield_pen_percent_value.text = "%%%d" % int(round(player.shield_pen_percent * 100))
-	exp_gain_value.text = "%%%d" % int(round(player.exp_gain_percent * 100))
+	exp_gain_value.text = "%%%d" % int(round(GameManager.effective_exp_gain(player.exp_gain_percent) * 100)) ## etkin değer (üst sınır +%100, madde 269)
 	luck_value.text = format_luck(player.luck)
 	range_value.text = "+%%%d" % int(round(player.weapon_range_bonus * 100.0))
 	dodge_value.text = "%%%d" % int(round(player.dodge_chance * 100))

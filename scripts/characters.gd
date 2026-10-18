@@ -125,10 +125,12 @@ const DEFS := {
 		## kaldırdığımız pasif ikonu olarak göster" - oakley_passive_icon.png 17 Eylül'de
 		## eklenmişti, pasif Çiçek'e dönüşünce (bkz. "passive_icon" aşağıda, artık
 		## oakley_cicek_icon.png) kullanımdan çıkmıştı; ULTİ (Koruyucu Büyü) ikonu olarak geri geldi.
+		## 2026-10-18 (madde 266): id 39 artık HAYAT AĞACI (Koruyucu Büyü bağlı değil). Sayılar scripts/oakley_tree.gd sabitleri
+		## (DURATION, HEAL_*, SHIELD_AP_RATIO, ROOT_*), metin testi tests/test_oakley_abilities.gd. İkon şimdilik eski R ikonu.
 		"skill3": 39,
-		"skill3_name": "Koruyucu Büyü",
+		"skill3_name": "Hayat Ağacı",
 		"skill3_icon": "res://assets/skills/oakley_passive_icon.png",
-		"skill3_desc": "ULTİ: Yakınındaki dostlar arasında canı (oran olarak) en az olana (kendisi dahil, önceliklidir) koruyucu bir büyü yapar. 10sn boyunca hedef her hasar aldığında Oakley'nin saldırı gücünün %20'si kadar can, %10'u kadar mana kalkanı yeniler ve %20 hasar azaltma kazanır. (60sn bekleme)",
+		"skill3_desc": "ULTİ: Önüne bir tohum eker, tohum 12sn ayakta kalan bir Hayat Ağacı'na dönüşür ve büyüdüğü an çevresindeki yaratıkları geri iter. Gölgesindeki dostlara (kendisi dahil) her saniye ağaçtan bir meyve düşer: saldırı gücünün %15'i + azami canın %1'i kadar can ve saldırı gücünün %8'i kadar mana kalkanı yeniler. Her 2sn'de kökleri en yakın 3 yaratığa uzanır, saldırı gücünün %40'ı kadar hasar verip 4sn yere sabitler (bosslar sabitlenmez, %30 yavaşlar). Ağaç solarken etrafına 3 çiçek bırakır. (60sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su
 		## bundan sonra pasifi olacak, ve otomatik olarak yakınlarına çiçek
 		## bırakacak... 2 yük olayı falan yok bunda dolduğu anda oakleyin
@@ -754,7 +756,7 @@ const DEFS := {
 	## Adlar kullanıcı vermediği için seçildi (Lanet Kitabı / Karabasan / Ruh Göçü; E'yi kullanıcı "Kara Delik" olarak
 	## değiştirdi) - değiştirmek sadece metin.
 	14: {
-		"name": "Suriyeli Hadime",
+		"name": "Hadime",
 		"skill": 46,
 		"skill_name": "Lanet Kitabı",
 		"skill_desc": "YETENEK (AÇ/KAPA): Kitabını okuyarak odaklanır; hafifçe havaya süzülür, birimlerin içinden geçebilir ve %30 yavaş hareket eder. Saniyede bir kitaptan yukarı 3 lanet birden fırlar, etraftaki farklı yaratıklara düşer ve her biri saldırı gücünün %110'u kadar hasar verir. Açık kaldığı sürece her saniye temel yetenek mana kalkanı bedelinin yarısı kadar mana kalkanı harcar. Tekrar basınca (ya da mana kalkanı yetmeyince) kapanır ve 8sn bekleme süresine girer.",

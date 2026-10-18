@@ -53,6 +53,8 @@ static func _dir_index(v: Vector2) -> int:
 
 
 func _process(_delta: float) -> void:
+	if _head == null: ## shrink_head_away başı sahneye taşıdı, düğüm bu kare sonunda siliniyor
+		return
 	var raw: Vector2 = global_position
 	if not _has_last:
 		_last_seg_pos = raw
@@ -97,8 +99,36 @@ func _spawn_segment(at: Vector2, k: int) -> void:
 	s.z_index = 0
 	tree.current_scene.add_child(s)
 	s.global_position = at
-	## Parça kendi tween'iyle söner - sarmaşık düğümü silinse bile iz kendi kendine temizlenir.
+	## Parça kendi tween'iyle gider - sarmaşık düğümü silinse bile iz kendi kendine temizlenir. 2026-10-18 (madde 266, kullanıcı:
+	## "solarak yok olmasın azalarak yok olsun"): saydamlaşma yerine SEG_FADE içinde SHRINK_STEPS adımda küçülür; parçalar
+	## yaş sırasıyla gittiği için iz kuyruktan başa doğru incelerek kısalır.
+	shrink_away(s, SEG_LIFE)
+
+
+## Küçülme adımları (TEXEL'in katı) - kesintisiz ölçek yerine birkaç tam adım: piksel sanatı titremesin.
+const SHRINK_STEPS: Array[float] = [0.72, 0.45, 0.2]
+
+
+static func shrink_away(s: Node2D, delay: float) -> void:
 	var tw := s.create_tween()
-	tw.tween_interval(SEG_LIFE)
-	tw.tween_property(s, "modulate:a", 0.0, SEG_FADE)
+	if delay > 0.0:
+		tw.tween_interval(delay)
+	for k in SHRINK_STEPS:
+		tw.tween_callback(func() -> void: s.scale = Vector2.ONE * TEXEL * k)
+		tw.tween_interval(SEG_FADE / float(SHRINK_STEPS.size()))
 	tw.tween_callback(s.queue_free)
+
+
+## Sarmaşık bitince (oakley_vine.gd despawn - gerçek ve kozmetik kopya) baş bir anda yok olmasın: sahneye taşınıp aynı adımlarla
+## küçülür. Sahne kapanırken çağrılmaz (despawn sadece oyun içi bitişte).
+func shrink_head_away() -> void:
+	if not is_instance_valid(_head) or get_tree() == null or get_tree().current_scene == null:
+		return
+	var at: Vector2 = _head.global_position
+	var h: AnimatedSprite2D = _head
+	_head = null
+	h.pause()
+	h.get_parent().remove_child(h)
+	get_tree().current_scene.add_child(h)
+	h.global_position = at
+	shrink_away(h, 0.0)

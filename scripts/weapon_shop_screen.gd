@@ -25,6 +25,8 @@ const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
 const DarkKit := preload("res://scripts/shop_dark_kit.gd")
 const WeaponScript := preload("res://scripts/weapon.gd")
+const DamageStats := preload("res://scripts/damage_stats.gd")
+const DMG_COL := Color("#e8885a") ## verilen hasar yazısı (oyun sonu tablosuyla aynı)
 
 const WINDOW_SCALE := 1.0
 const PHONE_K := 1.5
@@ -52,6 +54,7 @@ var _phone: bool = false
 var _stats_timer: float = 0.0
 var _last_sig: int = 0
 var _left_sig: int = 0
+var _dmg_labels: Dictionary = {} ## silah anahtarı -> "Hasar" satırı etiketi (kart yeniden kurulmadan canlı güncellenir)
 
 var _gold_label: Label = null
 var _shard_label: Label = null
@@ -113,6 +116,7 @@ func _process(delta: float) -> void:
 	_stats_timer -= delta
 	if _stats_timer <= 0.0:
 		_stats_timer = 0.25
+		_refresh_weapon_damage()
 		if not _phone:
 			_refit_if_party_changed()
 		## Altın / parçacık / silahlar başka yoldan da değişebilir (sandık payı, görev ödülü) - sadece durum değiştiyse yenile.
@@ -287,6 +291,7 @@ func _refresh_left() -> void:
 	for c in _left_box.get_children():
 		_left_box.remove_child(c)
 		c.queue_free()
+	_dmg_labels.clear()
 	var max_w: int = Logic.max_weapons(_player) if is_instance_valid(_player) else 3
 	var head: HBoxContainer = _k.h(10)
 	head.add_child(_k.lbl("SİLAHLARIN", 32, _k.c("accent")))
@@ -359,12 +364,31 @@ func _weapon_card(slot: int) -> PanelContainer:
 	var ptxt: String = "TAMAM" if fin else ("FİNAL HAZIR" if rows_n > 0 and taken >= rows_n else "%d/%d" % [taken, rows_n])
 	ph.add_child(_k.lbl(ptxt, 24, _k.c("accent") if (fin or taken >= rows_n) and rows_n > 0 else _k.c("dim")))
 	v.add_child(ph)
+	## Bu oyunda bu silahın verdiği toplam hasar (kullanıcı isteği 2026-10-17); etiket _process'te canlı güncellenir.
+	var dl: Label = _k.lbl(_weapon_dmg_text(key), 24, DMG_COL)
+	_dmg_labels[key] = dl
+	v.add_child(dl)
 	row.add_child(v)
 	if _tab == Tab.ENCHANTS:
 		p.mouse_filter = Control.MOUSE_FILTER_STOP
 		p.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		p.gui_input.connect(_on_trait_slot_input.bind(slot))
 	return p
+
+
+## "Hasar 12.345 · %38" - henüz vurmadıysa "Hasar -".
+func _weapon_dmg_text(key: String) -> String:
+	var d: Dictionary = DamageStats.weapon_damage(key)
+	if float(d["dmg"]) <= 0.0:
+		return "Hasar -"
+	return "Hasar %s · %%%d" % [DamageStats.fmt(float(d["dmg"])), int(round(float(d["share"]) * 100.0))]
+
+
+func _refresh_weapon_damage() -> void:
+	for key in _dmg_labels.keys():
+		var l: Label = _dmg_labels[key]
+		if is_instance_valid(l):
+			l.text = _weapon_dmg_text(str(key))
 
 
 func _on_trait_slot_input(event: InputEvent, slot: int) -> void:
@@ -511,7 +535,7 @@ func _shield_stat_lines(key: String) -> String:
 		return ""
 	var delay_text: String = "yok (savaşta da dolar)" if bool(d.get("always_regen", false)) else "%s sn" % Logic._num(float(d["delay"]))
 	return "Mana Kalkanı: %d\nHasar soğurma: %%%d\nYenilenme: %s/sn\nBekleme: %s" % [
-		int(round(float(d["power"]))), int(round(float(d["absorption"]) * 100.0)), Logic._num(float(d["regen"])), delay_text]
+		int(round(float(d["power"]))), int(round(float(d["absorption"]) * 100.0)), Logic.type_regen_text(d), delay_text]
 
 
 ## USTALIK YOLU: temel elmas -> I..IV -> taç (final); alınan bölümler yeşil, seçili rozet vurgulu.

@@ -69,3 +69,47 @@ func test_pick_wave_ids_is_deterministic_for_a_seed() -> void:
 	b.seed = 12345
 	assert(EndlessMathScript.pick_wave_ids(FINAL_POOL, 7, a) == EndlessMathScript.pick_wave_ids(FINAL_POOL, 7, b),
 			"aynı tohum aynı seçimi vermeli")
+
+
+## ---- Sonsuz mod baskısı (2026-10-18, madde 269) ----
+
+func test_creature_compound_starts_at_layer_two_and_leaves_normal_game_alone() -> void:
+	for tier in [0, 1, 5, 15, 16]:
+		assert(is_equal_approx(EndlessMathScript.creature_health_mult(tier), 1.0), "kademe %d (normal oyun/Final/kat 1) can çarpanı 1 olmalı" % tier)
+		assert(is_equal_approx(EndlessMathScript.creature_damage_mult(tier), 1.0), "kademe %d hasar çarpanı 1 olmalı" % tier)
+	assert(is_equal_approx(EndlessMathScript.creature_health_mult(EndlessMathScript.scale_tier(2)), 1.0 + EndlessMathScript.HEALTH_COMPOUND_PER_LAYER), "kat 2 = bir adım")
+	var h21: float = EndlessMathScript.creature_health_mult(EndlessMathScript.scale_tier(21))
+	assert(h21 > 4.0 and h21 < 5.5, "kat 21 can çarpanı ~x4,7: %f" % h21)
+	var d21: float = EndlessMathScript.creature_damage_mult(EndlessMathScript.scale_tier(21))
+	assert(d21 > 2.3 and d21 < 3.0, "kat 21 hasar çarpanı ~x2,65: %f" % d21)
+	assert(EndlessMathScript.creature_health_mult(EndlessMathScript.scale_tier(8)) > EndlessMathScript.creature_health_mult(EndlessMathScript.scale_tier(7)), "kat arttıkça çarpan büyür")
+
+
+func test_extra_enemy_cap_grows_per_layer_and_stops() -> void:
+	assert(EndlessMathScript.extra_enemy_cap(0) == 0 and EndlessMathScript.extra_enemy_cap(1) == 0, "kat 0-1 ek yok")
+	assert(EndlessMathScript.extra_enemy_cap(2) == EndlessMathScript.CAP_PER_LAYER, "kat 2 = +3")
+	assert(EndlessMathScript.extra_enemy_cap(11) == 30, "kat 11 = +30")
+	assert(EndlessMathScript.extra_enemy_cap(21) == EndlessMathScript.CAP_MAX_EXTRA, "kat 21 = üst sınır +60")
+	assert(EndlessMathScript.extra_enemy_cap(500) == EndlessMathScript.CAP_MAX_EXTRA, "üst sınır aşılmaz")
+
+
+func test_pool_wave_size_starts_small_and_caps_at_pool() -> void:
+	var expected := {3: 2, 6: 3, 9: 4, 12: 5, 15: 6, 18: 6, 60: 6}
+	for layer: int in expected.keys():
+		assert(EndlessMathScript.pool_wave_size(layer) == expected[layer], "kat %d havuz dalga boyutu %d olmalı, %d geldi" % [layer, expected[layer], EndlessMathScript.pool_wave_size(layer)])
+	assert(EndlessMathScript.pool_wave_size(4) == 0, "boss katı olmayan katta 0")
+	assert(EndlessMathScript.WAVE_POOL.size() == 6, "havuz = 6 yeni boss")
+	var seen := {}
+	for id in EndlessMathScript.WAVE_POOL:
+		assert(not seen.has(id), "tekrarlı havuz kimliği: %s" % id)
+		seen[id] = true
+
+
+func test_wave_boss_mult_only_for_wave_layers_on() -> void:
+	for tier in [3, 5, 8, 12, 15, 16, 17]:
+		assert(is_equal_approx(EndlessMathScript.boss_health_mult(tier), 1.0) and is_equal_approx(EndlessMathScript.boss_damage_mult(tier), 1.0), "kademe bossu/Final/kat 1-2 (ölçek %d) çarpansız" % tier)
+	assert(is_equal_approx(EndlessMathScript.boss_health_mult(EndlessMathScript.scale_tier(3)), 1.0), "ilk dalga (kat 3) x1")
+	assert(is_equal_approx(EndlessMathScript.boss_health_mult(EndlessMathScript.scale_tier(6)), 1.5), "2. dalga x1,5")
+	assert(is_equal_approx(EndlessMathScript.boss_health_mult(EndlessMathScript.scale_tier(21)), 4.0), "7. dalga x4")
+	assert(is_equal_approx(EndlessMathScript.boss_damage_mult(EndlessMathScript.scale_tier(21)), 2.5), "7. dalga hasar x2,5")
+	assert(is_equal_approx(EndlessMathScript.boss_health_mult(EndlessMathScript.scale_tier(4)), 1.0), "boss katı olmayan kat x1")

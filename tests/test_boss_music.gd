@@ -38,7 +38,7 @@ func _boss() -> FakeBoss:
 func test_music_file_loads_and_loops() -> void:
 	var m := _music()
 	assert(m.stream != null, "müzik dosyası yüklenmeli")
-	assert((m.stream as AudioStreamMP3).loop, "müzik döngüde olmalı")
+	assert(m.stream is AudioStreamWAV and (m.stream as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_FORWARD, "müzik (WAV) ileri döngüde olmalı")
 	_cleanup()
 
 

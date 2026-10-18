@@ -37,6 +37,7 @@ const PARTY := [[1, "sit_up", Vector2(300, 180)], [4, "sit_up", Vector2(324, 192
 const DOG := ["kopek", "sleep_down", Vector2(262, 214)]
 
 var _settings_screen: Control = null
+var _records_screen: Control = null
 
 var _start_btn: Button
 var _multiplayer_btn: Button
@@ -446,14 +447,22 @@ func _on_exit_pressed() -> void:
 	get_tree().quit()
 
 
-## Rekorlar + başarımlar penceresi (2026-10-05, bkz. records_screen.gd) - grafik/tuş ayarlarıyla AYNI "kendi penceresi" deseni.
+## Rekorlar + başarımlar (madde 250, "A - Ateş Işığı"): ayarlarla AYNI desen - menünün tabelası/öğeleri gizlenir, ekran tasarım boyutunda.
 func _on_records_pressed() -> void:
-	var screen: CanvasLayer = RecordsScreenScript.new()
-	add_child(screen)
-	screen.closed.connect(func() -> void:
+	if is_instance_valid(_records_screen) or is_instance_valid(_settings_screen):
+		return
+	_set_menu_parts_visible(false)
+	_records_screen = RecordsScreenScript.new()
+	_records_screen.closed.connect(func() -> void:
+		_records_screen = null
+		_set_menu_parts_visible(true)
 		if is_instance_valid(_records_btn):
-			_records_btn.grab_focus()
+			_records_btn.grab_focus.call_deferred()
 	)
+	add_child(_records_screen)
+	_records_screen.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_records_screen.position = Vector2.ZERO
+	_records_screen.size = SCREEN
 
 
 ## Ruh Mağazası (bkz. soul_shop_screen.gd, meta_progress.gd): koşularda kazanılan Ruh Kıymığı ile karakter/silah/evcil/ruhani yetenek kilidi açılır.
@@ -474,12 +483,9 @@ const SETTINGS_HIDE := ["TitleSign", "MenuPanel", "PartyLine", "DebugButton"]
 
 
 func _on_settings_pressed() -> void:
-	if is_instance_valid(_settings_screen):
+	if is_instance_valid(_settings_screen) or is_instance_valid(_records_screen):
 		return
-	for n: String in SETTINGS_HIDE:
-		var c := get_node_or_null(n) as CanvasItem
-		if c:
-			c.visible = false
+	_set_menu_parts_visible(false)
 	_settings_screen = SettingsScreenScript.new("Ana menüye dön", 0.74)
 	_settings_screen.closed.connect(_on_settings_closed)
 	add_child(_settings_screen)
@@ -490,8 +496,13 @@ func _on_settings_pressed() -> void:
 
 func _on_settings_closed() -> void:
 	_settings_screen = null
+	_set_menu_parts_visible(true)
+	_settings_btn.grab_focus.call_deferred()
+
+
+## Tam ekran alt ekranlar (ayarlar, rekorlar) açıkken menünün tabelası / öğeleri / parti satırı gizlenir.
+func _set_menu_parts_visible(on: bool) -> void:
 	for n: String in SETTINGS_HIDE:
 		var c := get_node_or_null(n) as CanvasItem
 		if c:
-			c.visible = true
-	_settings_btn.grab_focus.call_deferred()
+			c.visible = on

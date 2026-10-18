@@ -111,6 +111,9 @@ func _ready() -> void:
 func despawn() -> void:
 	if is_queued_for_deletion():
 		return
+	## 2026-10-18 (madde 266): baş da gövde parçaları gibi küçülerek gider (eskiden düğümle birlikte bir anda yok oluyordu).
+	if is_instance_valid(_visual) and _visual.has_method("shrink_head_away"):
+		_visual.shrink_head_away()
 	queue_free()
 
 

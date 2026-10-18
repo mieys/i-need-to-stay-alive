@@ -336,7 +336,12 @@ static func shield_summary(key: String) -> String:
 	var d: Dictionary = ShieldEnchantDefs.TYPES.get(key, {})
 	if d.is_empty():
 		return ""
-	return "%d mana kalkanı · %%%d soğurma · %s/sn" % [int(round(float(d["power"]))), int(round(float(d["absorption"]) * 100.0)), _num(float(d["regen"]))]
+	return "%d mana kalkanı · %%%d soğurma · %s/sn" % [int(round(float(d["power"]))), int(round(float(d["absorption"]) * 100.0)), type_regen_text(d)]
+
+
+## Kalkan türünün tabanındaki yenilenme, oyunda işleyen değerle (ShieldEnchantDefs.stats() x SHIELD_REGEN_SPEED_MULT) aynı sayı.
+static func type_regen_text(type_def: Dictionary) -> String:
+	return _num(float(type_def["regen"]) * GameManager.SHIELD_REGEN_SPEED_MULT)
 
 
 static func _num(v: float) -> String:

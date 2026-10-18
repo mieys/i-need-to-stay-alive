@@ -63,10 +63,16 @@ func test_darkness_monotonic_through_dusk_and_dawn() -> void:
 		t += 1.0
 
 
-func test_night_vision_is_25_percent_narrower() -> void:
-	assert(is_equal_approx(AtmosphereMath.vision_multiplier(450.0), 0.75))
+func test_night_vision_does_not_shrink() -> void:
+	## 2026-10-18: "gece görüş açısı azalmasın" - gece/gün batımı/gün doğumu her saatte çarpan 1.0.
+	assert(is_equal_approx(AtmosphereMath.NIGHT_VISION_MULT, 1.0))
+	assert(is_equal_approx(AtmosphereMath.vision_multiplier(450.0), 1.0))
 	var dusk_mid: float = AtmosphereMath.vision_multiplier((AtmosphereMath.DAY_END + AtmosphereMath.DUSK_END) * 0.5)
-	assert(dusk_mid < 1.0 and dusk_mid > 0.75)
+	assert(is_equal_approx(dusk_mid, 1.0))
+	var t: float = 0.0
+	while t < AtmosphereMath.CYCLE_LENGTH:
+		assert(is_equal_approx(AtmosphereMath.vision_multiplier(t), 1.0))
+		t += 5.0
 
 
 func test_night_is_dark_blue_but_not_pitch_black() -> void:

@@ -10,7 +10,7 @@ extends Node2D
 ##  - weather_rain.gd / weather_wind.gd : dünyada çizilen piksel yağmur (damlacık sıçramaları) / rüzgar akıntıları.
 ##  - night_glow.gd + night_glow_catalog.gd : yetenek/mermi/namlu/görev/düşman büyüsü ışıkları - SceneTree.node_added
 ##    ile her yeni düğüme katalogdan OTOMATİK takılır (yerel ve uzak kopyalar aynı yoldan üretildiği için ikisine de).
-##  - vision_fog.gd get_vision_multiplier() ile görüş yarıçapını buradan okur (gece x0.75, kademeli).
+##  - vision_fog.gd get_vision_multiplier() ile görüş yarıçapını buradan okur (NIGHT_VISION_MULT, şu an 1.0 = gece daralmaz).
 ##
 ## AĞ (host-yetkili, traveling_merchant.gd/enemy_spawner.gd ile aynı desen): saat ve hava durumunu SADECE host (ya da
 ## tek oyunculu) ilerletir/seçer; NetworkManager.broadcast_atmosphere_state ile SYNC_INTERVAL'da bir + her hava
@@ -162,7 +162,7 @@ func create_overlay_layer() -> CanvasLayer:
 	return _overlay
 
 
-## vision_fog.gd'nin görüş yarıçapı çarpanı (1.0 gündüz -> 0.75 gece, kademeli).
+## vision_fog.gd'nin görüş yarıçapı çarpanı (1.0 gündüz -> NIGHT_VISION_MULT gece, kademeli; şu an 1.0 = gece daralmaz).
 func get_vision_multiplier() -> float:
 	return AtmosphereMath.vision_multiplier(cycle_time)
 

@@ -902,7 +902,7 @@ func _build_start() -> void:
 
 func _build_lock() -> void:
 	_lock = ColorRect.new()
-	_lock.color = Color(0.02, 0.05, 0.05, 0.45)
+	_lock.color = Color(0.04, 0.04, 0.08, 0.45) ## Gece Sıvası (madde 248)
 	_lock.mouse_filter = Control.MOUSE_FILTER_STOP
 	_lock.visible = false
 	_put(_lock, Rect2(MID.position, Vector2(RIGHT.end.x - MID.position.x, RIGHT.size.y)))

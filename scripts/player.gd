@@ -273,9 +273,9 @@ const SKILL3_TIMING := {
 	## (bkz. SKILL_TIMING[33] şimdi orada). Yeni R (Koruyucu Büyü, id 39):
 	## "... aktif kalır... (60 saniye bekleme süresi)" - kullanıcı isteği; süre
 	## ilk istekte 8 yazılmıştı, kullanıcı düzeltmesiyle (2026-09-20) 10sn oldu.
-	## "duration" gerçek buff süresiyle (OAKLEY_BOND_DURATION) AYNI sabite bağlı - iki ayrı
-	## sayı olmasın, ikon "aktif" çerçevesi buf aktifken doğru görünsün.
-	39: {"duration": OAKLEY_BOND_DURATION, "cooldown": 60.0},
+	## 2026-10-18 (madde 266): id 39 artık HAYAT AĞACI - "duration" ağacın ayakta kaldığı süreyle (OakleyTree.DURATION) AYNI
+	## sabite bağlı, ikon "aktif" çerçevesi ağaç dururken görünsün. Bekleme 60 sn aynı kaldı.
+	39: {"duration": OakleyTree.DURATION, "cooldown": 60.0},
 	## Kullanıcı isteği: Korsan'ın yeni 3. yeteneği (Bombardıman, id 34) -
 	## "etrafındaki büyük bir alana 8 saniye boyunca bombardımana alır, her
 	## saniye %150 saldırı gücü kadar hasar verir." Standart skill3_state
@@ -2674,6 +2674,7 @@ func _process_healer_shield_tick(delta: float) -> void:
 		if self_tick > 0.0:
 			_shield_regen_tick_pending += self_tick
 			_shield_regenerating = true
+			BalanceLogScript.on_gain("s:melek_kalkan", 0.0, minf(self_tick, item_shield_max - item_shield_hp))
 
 	## Müttefik: %1 KENDİ max kalkanı + Oakley'nin saldırı gücünün %200'ü -
 	## hedef hâlâ geçerli/canlı VE menzildeyse (multiplayer'da hareket
@@ -2693,7 +2694,7 @@ func _process_healer_shield_tick(delta: float) -> void:
 				## bkz. _apply_shield_heal_to_ally üstündeki BUG DÜZELTMESİ notu -
 				## hedef gerçek bir uzak oyuncuysa RPC ile kendi istemcisine
 				## ulaştırılıyor, doğrudan kozmetik kuklaya yazılmıyor.
-				_apply_shield_heal_to_ally(_oakley_e_ally_target, ally_tick)
+				_apply_shield_heal_to_ally(_oakley_e_ally_target, ally_tick, &"s:melek_kalkan")
 				_spawn_wave_beam_to_ally(_oakley_e_ally_target, "shield")
 	## Kullanıcı isteği ("efekt sistemi" - kalkan.png): "kalkan bağı kesilirse
 	## efekt de kapanmalı" - bkz. heal tarafındaki AYNI geçiş-yakalama deseni.
@@ -2748,15 +2749,15 @@ func _skill_melek_fear() -> void:
 	## _apply_heal_to_ally / _apply_shield_heal_to_ally - İyileştirme ve Kalkan Gücü VERENİN çarpanıyla).
 	var is_crit: bool = _roll_ability_crit()
 	var amount: float = _apply_ability_crit(damage_bonus * MELEK_R_HEAL_SHIELD_RATIO, is_crit)
-	heal(amount)
-	heal_shield(amount)
+	heal(amount, true, &"s:melek_korku")
+	heal_shield(amount, true, true, &"s:melek_korku")
 	for ally in get_tree().get_nodes_in_group("player_ally"):
 		if ally == self or not is_instance_valid(ally) or _ally_is_down(ally) or not (ally is Node2D):
 			continue
 		if center.distance_to((ally as Node2D).global_position) > MELEK_FEAR_RADIUS:
 			continue
-		_apply_heal_to_ally(ally as Node2D, amount)
-		_apply_shield_heal_to_ally(ally as Node2D, amount)
+		_apply_heal_to_ally(ally as Node2D, amount, &"s:melek_korku")
+		_apply_shield_heal_to_ally(ally as Node2D, amount, &"s:melek_korku")
 		_set_ally_aura(ally as Node2D, "holy", true)
 	## "Yeniden Doğuş" (R finali): Q ve E beklemeleri sıfırlanır.
 	if has_evo("melek_rf"):
@@ -3007,7 +3008,7 @@ func _passive_melek(delta: float) -> void:
 	if sparkle:
 		_spawn_melek_sparkle(self)
 		sparkle_peers.append(multiplayer.get_unique_id() if NetworkManager.is_multiplayer_active else 1)
-	heal_shield(passive_heal)
+	heal_shield(passive_heal, true, true, &"s:melek_pasif")
 
 	for ally: Node in get_tree().get_nodes_in_group("player_ally"):
 		if not is_instance_valid(ally) or _ally_is_down(ally):
@@ -3017,7 +3018,7 @@ func _passive_melek(delta: float) -> void:
 		if not ally.has_method("heal_shield"):
 			continue
 		## Uzak oyuncuya RPC + iki tarafta da (mavi) sayı, pete doğrudan heal_shield() - bkz. _apply_shield_heal_to_ally.
-		_apply_shield_heal_to_ally(ally as Node2D, passive_heal)
+		_apply_shield_heal_to_ally(ally as Node2D, passive_heal, &"s:melek_pasif")
 		if sparkle and "peer_id" in ally and int(ally.get("peer_id")) > 0:
 			_spawn_melek_sparkle(ally as Node2D)
 			sparkle_peers.append(int(ally.get("peer_id")))
@@ -3075,29 +3076,9 @@ func _spawn_oakley_flower_auto() -> void:
 	var angle: float = randf() * TAU
 	var dist: float = randf_range(0.0, OAKLEY_FLOWER_DROP_RADIUS)
 	var drop_pos: Vector2 = global_position + Vector2(cos(angle), sin(angle)) * dist
-	_oakley_flower_id_counter += 1
-	var flower_id: String = "%d_%d" % [multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0, _oakley_flower_id_counter]
-	var flower := Node2D.new()
-	flower.set_script(preload("res://scripts/oakley_flower.gd"))
-	get_tree().current_scene.add_child(flower)
-	flower.global_position = drop_pos
-	flower.call("setup", damage_bonus, flower_id)
-	var bond := Node2D.new()
-	bond.set_script(preload("res://scripts/fx_oakley_flower_bond.gd"))
-	get_tree().current_scene.add_child(bond)
-	bond.call("setup", global_position, drop_pos)
-	## bkz. eski _try_oakley_flower() üstündeki AYNI yorum - uzak istemcide
-	## gerçek Oakley referansı olmadığı için gereken tüm veri extra_data ile
-	## taşınıyor. "oakley_flower_spawn" işleneni değişmedi (remote_player.gd),
-	## sadece konum artık drop_pos (global_position değil).
-	if NetworkManager.is_multiplayer_active:
-		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "oakley_flower_spawn", drop_pos, {
-			"caster_damage_bonus": damage_bonus,
-			"flower_id": flower_id
-		})
-		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "oakley_flower_bond", global_position, {
-			"end_pos": drop_pos
-		})
+	## bkz. eski _try_oakley_flower() üstündeki AYNI yorum - uzak istemcide gerçek Oakley referansı olmadığı için gereken tüm veri
+	## extra_data ile taşınıyor (kurulum + yayın _spawn_oakley_flower_at'te, Hayat Ağacı'nın çiçekleriyle ortak - madde 266).
+	_spawn_oakley_flower_at(drop_pos, global_position)
 	_spawn_burst(Color(1.0, 0.7, 0.85))
 
 
@@ -3554,6 +3535,7 @@ func _kirpi_on_hit(amount: float, source: Node2D) -> float:
 		BalanceLogScript.tag(&"s:evcil_kirpi")
 		source.take_damage(item_shield_max * PetCatalog.KIRPI_REFLECT_RATIO, false, 0.0, false)
 	if item_shield_hp > 0.0:
+		BalanceLogScript.on_prevented("s:evcil_kirpi", amount * PetCatalog.KIRPI_SHIELD_REDUCTION) ## evcil yuvası ipucu: engellenen hasar
 		amount *= 1.0 - PetCatalog.KIRPI_SHIELD_REDUCTION
 	return amount
 
@@ -3959,7 +3941,8 @@ func _korsan_pixel_burst(pos: Vector2, palette: String, _count: int, _speed: flo
 func _necro_on_kill(is_boss_kill: bool) -> void:
 	var gained: int = NECRO_SOUL_PER_BOSS_KILL if is_boss_kill else NECRO_SOUL_PER_KILL
 	necro_souls += gained
-	_spawn_floating_text("+%d Ruh" % gained, Color(0.55, 0.95, 0.55))
+	## 2026-10-18 (kullanıcı: "gereksiz yazıları tespit et oyunda savaşırken"): her öldürmede "+N Ruh" yazısı ÇIKMAZ - toplam zaten pasif
+	## simgesinin üstündeki sayıda (hud.gd set_stack_count), yazı ise kalabalıkta öldürme başına ayrı bir FloatingText sahnesiydi.
 
 
 ## Necromancer TEMEL (İskelet Çağır, skill2 id 19, E tuşu) - kullanıcı isteği
@@ -4128,8 +4111,8 @@ func _necro_bone_sacrifice() -> void:
 		if pet.has_method("_expire"):
 			pet._expire()
 	var amount: float = damage_bonus * EVO_NECRO_QF_AP_RATIO * float(skeletons.size())
-	heal(amount)
-	heal_shield(amount)
+	heal(amount, true, &"s:necro_kemik")
+	heal_shield(amount, true, true, &"s:necro_kemik")
 	_spawn_floating_text("KEMİK FEDASI", Color(0.6, 0.95, 0.7))
 	_spawn_necro_summon_fx(global_position)
 
@@ -5542,7 +5525,7 @@ func get_pickup_range() -> float:
 ## (bkz. orada) - Öykü'nün Q/pasif yeteneklerinin "müttefik" hedefi ileride
 ## (multiplayer'da) BAŞKA BİR OYUNCU olursa (bugün sadece Matthew'in
 ## yaratığı "player_ally" grubunda) doğru çalışsın diye buraya da eklendi.
-func heal(amount: float, boost: bool = true) -> void:
+func heal(amount: float, boost: bool = true, src: StringName = &"") -> void:
 	if is_dead or amount <= 0.0:
 		return
 	## İyileştirme ve Kalkan Gücü (2026-10-02): bu oyuncunun kendi sağladığı can büyür; arkadaşın bastığı can
@@ -5552,8 +5535,11 @@ func heal(amount: float, boost: bool = true) -> void:
 	## Can zaten doluyken (ör. Melek pasifinin her saniyelik tiki) boşuna sayı çıkmasın - kaster tarafı da
 	## (remote_player.gd show_support_number) dolu hedefte göstermiyor, iki ekran tutarlı kalsın.
 	var was_full: bool = health >= max_health
+	var hp_before: float = health
 	health = min(max_health, health + amount)
 	health_changed.emit(health, max_health)
+	if src != &"": ## hasar istatistiği: yeteneğin gerçekten bastığı can (bkz. damage_stats.gd)
+		BalanceLogScript.on_gain(String(src), health - hp_before, 0.0)
 	if was_full or int(round(amount)) <= 0:
 		return
 	## DÜZELTME (kullanıcı bildirimi: "yerden yemek alınca verdiği can
@@ -5573,7 +5559,7 @@ func heal(amount: float, boost: bool = true) -> void:
 ## kullanılır (bkz. receive_kalkan_bagi_shield_delta) - aksi halde sonsuz "sen bana yansıt, ben sana yansıt"
 ## döngüsü olurdu. Her ZAMAN "true" olan normal çağrılarda (heal, pickup, regen vb.) bu artış Kalkan Bağı
 ## aktifse partnere de yansır (bkz. _kalkan_bagi_mirror).
-func heal_shield(amount: float, mirror: bool = true, boost: bool = true) -> void:
+func heal_shield(amount: float, mirror: bool = true, boost: bool = true, src: StringName = &"") -> void:
 	if is_dead or amount <= 0.0 or item_shield_max <= 0.0:
 		return
 	## bkz. heal() - arkadaştan/Kalkan Bağı yansımasından gelen kalkan boost=false (verenin gücüyle gelir).
@@ -5582,6 +5568,8 @@ func heal_shield(amount: float, mirror: bool = true, boost: bool = true) -> void
 	var before: float = item_shield_hp
 	item_shield_hp = min(item_shield_max, item_shield_hp + amount)
 	item_shield_changed.emit(item_shield_hp, item_shield_max)
+	if src != &"":
+		BalanceLogScript.on_gain(String(src), 0.0, item_shield_hp - before)
 	if mirror:
 		_kalkan_bagi_mirror(item_shield_hp - before)
 
@@ -7373,8 +7361,8 @@ func _activate_skill3() -> void:
 		## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
 		## yeteneği olacak") - Arı Sürüsü (id 33) Q'ya taşındı (bkz.
 		## _activate_skill()'teki eşleşen düzeltme), yeni R (Koruyucu Büyü,
-		## id 39) buraya geldi.
-		39: _skill_oakley_bond()
+		## id 39) buraya geldi. 2026-10-18: id 39 = Hayat Ağacı (madde 266, Koruyucu Büyü bağlı değil).
+		39: _skill_oakley_tree()
 		34: _skill_korsan_bombardment()
 		## Talon'un yeni 3. yeteneği (Ayna Formu, id 37) - kullanıcı isteği: "R
 		## ile Q'nun yerini değiştir" - eskiden R'de Hamle Vuruşu vardı.
@@ -7906,8 +7894,10 @@ func _skill_heal() -> void:
 	## Evrim "Bereket": Can Basma'nın TÜM iyileştirmesi (anlık + tikler, kendisi + dostlar) %20 fazla.
 	var evo_heal_mult: float = EVO_MELEK_HEAL_MULT if has_evo("melek_q4") else 1.0
 	var heal_amount: float = _apply_ability_crit(max_health * OAKLEY_Q_INSTANT_PERCENT * self_amount_mult * evo_heal_mult, is_crit)
+	var q_hp_before: float = health
 	health = min(max_health, health + heal_amount)
 	health_changed.emit(health, max_health)
+	BalanceLogScript.on_gain("s:melek_can", health - q_hp_before, 0.0) ## hasar istatistiği (damage_stats.gd)
 	_spawn_floating_text("%d" % int(round(heal_amount)), Color(0.4, 0.9, 0.45), true)
 
 	## Evrim "Kopmaz Bağ": can verme menzili %50 fazla (bağ kurulduktan sonra menzil hiç kontrol edilmez - tik'e bkz.).
@@ -7916,7 +7906,7 @@ func _skill_heal() -> void:
 	_melek_heal_ally_aura_on = false
 	if _oakley_q_ally_target and is_instance_valid(_oakley_q_ally_target) and "max_health" in _oakley_q_ally_target:
 		var ally_heal: float = _apply_ability_crit(_oakley_q_ally_target.max_health * OAKLEY_Q_INSTANT_PERCENT * evo_heal_mult, _roll_ability_crit())
-		_apply_heal_to_ally(_oakley_q_ally_target, ally_heal)
+		_apply_heal_to_ally(_oakley_q_ally_target, ally_heal, &"s:melek_can")
 		## Bağ (madde 212): kuruluşun kendisi haleden dosta koşan parlak baş - ayrıca dalga paketi yollanmaz (tiklerde yollanır).
 		_set_ally_aura(_oakley_q_ally_target, "heal", true)
 		_melek_heal_ally_aura_on = true
@@ -7927,7 +7917,7 @@ func _skill_heal() -> void:
 		_melek_q_ally_target2 = _lowest_health_ally_in_range(q_range, [_oakley_q_ally_target])
 		if _melek_q_ally_target2 and is_instance_valid(_melek_q_ally_target2) and "max_health" in _melek_q_ally_target2:
 			var ally2_heal: float = _apply_ability_crit(_melek_q_ally_target2.max_health * OAKLEY_Q_INSTANT_PERCENT * evo_heal_mult * EVO_MELEK_SECOND_TARGET_RATIO, _roll_ability_crit())
-			_apply_heal_to_ally(_melek_q_ally_target2, ally2_heal)
+			_apply_heal_to_ally(_melek_q_ally_target2, ally2_heal, &"s:melek_can")
 			_set_ally_aura(_melek_q_ally_target2, "heal", true)
 			_melek_heal_ally2_aura_on = true
 	## Evrim "İtici Işık": bağ sürerken bağlı dostun VE Melek'in saldırıları geri iter - ilk buff hemen (tiklerde tazelenir).
@@ -7969,11 +7959,14 @@ func _ally_is_down(ally: Variant) -> bool:
 	return ally != null and is_instance_valid(ally) and (ally.get("is_dead") == true or ally.get("is_downed") == true)
 
 
-func _apply_heal_to_ally(ally: Node2D, amount: float) -> void:
+func _apply_heal_to_ally(ally: Node2D, amount: float, src: StringName = &"") -> void:
 	if amount <= 0.0 or not is_instance_valid(ally) or _ally_is_down(ally):
 		return
 	amount *= heal_power_mult() ## İyileştirme ve Kalkan Gücü (veren taraf)
 	_item_light_guard_on_support(ally)
+	if src != &"": ## hasar istatistiği: dostun EKSİK canını aşan kısım sayılmaz
+		var room: float = (float(ally.get("max_health")) - float(ally.get("health"))) if ally.get("max_health") != null and ally.get("health") != null else amount
+		BalanceLogScript.on_gain(String(src), minf(amount, maxf(room, 0.0)), 0.0)
 	if "peer_id" in ally:
 		var target_peer_id: int = int(ally.peer_id)
 		## Kendi sunucumuzda host da geçerli bir peer id'ye (1) sahip olabilir.
@@ -7995,11 +7988,14 @@ func _apply_heal_to_ally(ally: Node2D, amount: float) -> void:
 ## sync_ally_shield_heal). _process_healer_shield_tick() eskiden müttefik
 ## hedefine DOĞRUDAN .heal_shield() çağırıyordu - RemotePlayer hedeflerde bu
 ## sadece kozmetik kuklayı etkiliyordu.
-func _apply_shield_heal_to_ally(ally: Node2D, amount: float) -> void:
+func _apply_shield_heal_to_ally(ally: Node2D, amount: float, src: StringName = &"") -> void:
 	if amount <= 0.0 or not is_instance_valid(ally) or _ally_is_down(ally):
 		return
 	amount *= heal_power_mult() ## İyileştirme ve Kalkan Gücü (veren taraf)
 	_item_light_guard_on_support(ally)
+	if src != &"":
+		var room: float = (float(ally.get("item_shield_max")) - float(ally.get("item_shield_hp"))) if ally.get("item_shield_max") != null and ally.get("item_shield_hp") != null else amount
+		BalanceLogScript.on_gain(String(src), 0.0, minf(amount, maxf(room, 0.0)))
 	if "peer_id" in ally:
 		var target_peer_id: int = int(ally.peer_id)
 		if target_peer_id > 0 and NetworkManager.is_multiplayer_active:
@@ -8067,8 +8063,10 @@ func _process_healer_heal_tick(delta: float) -> void:
 	## atıyor.
 	var self_tick: float = _apply_ability_crit((max_health * OAKLEY_Q_TICK_PERCENT + attack_power_bonus) * self_amount_mult * evo_heal_mult, _roll_ability_crit())
 	if self_tick > 0.0 and health < max_health:
+		var tick_hp_before: float = health
 		health = min(max_health, health + self_tick)
 		health_changed.emit(health, max_health)
+		BalanceLogScript.on_gain("s:melek_can", health - tick_hp_before, 0.0)
 
 	## Müttefik: %1 KENDİ max canı + Oakley'nin saldırı gücünün %60'ı - hedef
 	## hâlâ geçerli/canlı VE menzildeyse (multiplayer'da hareket edebilir).
@@ -8078,7 +8076,7 @@ func _process_healer_heal_tick(delta: float) -> void:
 	if ally_in_range:
 		var ally_tick: float = _apply_ability_crit((_oakley_q_ally_target.max_health * OAKLEY_Q_TICK_PERCENT + attack_power_bonus) * evo_heal_mult, _roll_ability_crit())
 		if ally_tick > 0.0:
-			_apply_heal_to_ally(_oakley_q_ally_target, ally_tick)
+			_apply_heal_to_ally(_oakley_q_ally_target, ally_tick, &"s:melek_can")
 			_spawn_wave_beam_to_ally(_oakley_q_ally_target, "heal")
 	## Evrim "İkiz Şifa": ikinci dost aynı tikin %50'si.
 	var ally2_in_range: bool = _melek_bond_holds(_melek_q_ally_target2, OAKLEY_Q_RANGE, "melek_q3") \
@@ -8086,7 +8084,7 @@ func _process_healer_heal_tick(delta: float) -> void:
 	if ally2_in_range:
 		var ally2_tick: float = _apply_ability_crit((_melek_q_ally_target2.max_health * OAKLEY_Q_TICK_PERCENT + attack_power_bonus) * evo_heal_mult * EVO_MELEK_SECOND_TARGET_RATIO, _roll_ability_crit())
 		if ally2_tick > 0.0:
-			_apply_heal_to_ally(_melek_q_ally_target2, ally2_tick)
+			_apply_heal_to_ally(_melek_q_ally_target2, ally2_tick, &"s:melek_can")
 			_spawn_wave_beam_to_ally(_melek_q_ally_target2, "heal")
 	if ally2_in_range and not _melek_heal_ally2_aura_on:
 		_set_ally_aura(_melek_q_ally_target2, "heal", true)
@@ -8342,7 +8340,7 @@ func _skill_buyucu_switch_variation() -> void:
 	## Evrim "Kalkan Akışı" (Q1): set değişiminde maks. kalkanın %10'u - 10 sn'de en fazla bir kez.
 	if has_evo("buyucu_q1") and item_shield_max > 0.0 and Time.get_ticks_msec() >= _evo_buyucu_q1_ready_msec:
 		_evo_buyucu_q1_ready_msec = Time.get_ticks_msec() + int(EVO_BUYUCU_Q1_COOLDOWN * 1000.0)
-		heal_shield(item_shield_max * EVO_BUYUCU_Q1_SHIELD_RATIO)
+		heal_shield(item_shield_max * EVO_BUYUCU_Q1_SHIELD_RATIO, true, true, &"s:buyucu_degisim")
 		_play_and_broadcast_skill_fx(FxEvoShieldRefillScene)
 	## Q (set değişimi) pasifi TETİKLEMEZ (kullanıcı isteği 2026-10-04) - sadece E ve R (_buyucu_cast_variation).
 
@@ -9273,7 +9271,7 @@ func _skill_sovalye_taunt() -> void:
 		_play_and_broadcast_skill_fx(FxKalkanYenilemeScene)
 		_play_skill_sfx("sovalye_barrier", 1.15)
 	if has_evo("sovalye_qf") and item_shield_max > 0.0:
-		heal_shield(item_shield_max * EVO_SOVALYE_Q_INSTANT_SHIELD)
+		heal_shield(item_shield_max * EVO_SOVALYE_Q_INSTANT_SHIELD, true, true, &"s:sovalye_kiskirtma")
 		_play_and_broadcast_skill_fx(FxEvoShieldRefillScene)
 
 
@@ -9322,7 +9320,7 @@ func _skill_elara_double_fire() -> void:
 		_apply_weapon_bonuses()
 	## Evrim "Kalkan Tetiği" (R finali): kalkan bedeli yok (bkz. _evo_skill_free) + kalkan anında tamamen dolar.
 	if has_evo("elara_rf") and item_shield_max > 0.0:
-		heal_shield(item_shield_max - item_shield_hp)
+		heal_shield(item_shield_max - item_shield_hp, true, true, &"s:elara_cift_tetik")
 		_play_and_broadcast_skill_fx(FxEvoShieldRefillScene)
 
 
@@ -10118,7 +10116,56 @@ func _skill_oakley_bee_swarm() -> void:
 	_play_and_broadcast_skill_fx(FxOakleyBeeGuardScene)
 
 
-## ---------- Oakley YENİ R: Koruyucu Büyü (skill3 id 39) ----------
+## ---------- Oakley R: HAYAT AĞACI (skill3 id 39, madde 266) ----------
+## Kullanıcı: "oakleyin ultisini komple değiştirmeyi düşünüyorum" -> madde 265 prototipleri -> "ağacın sarmaşık efekti C olsun.
+## ağaç ve aurası %30 büyüsün... ağaç olarak da C olsun". Bütün mantık/görsel oakley_tree.gd'de (gerçek kopya burada, diğer
+## oyuncularda "oakley_tree" yayınıyla kozmetik kopya). Oakley eğilip (pickup_<yön> klibi, CharAnim.ACTION_PREFIXES) tohumu
+## önüne eker: sağ/sol/yukarı bakarken o yönde, aşağı bakarken sağ yanına (aşağıya ekilen ağacın tacı Oakley'yi örterdi).
+const OAKLEY_TREE_PLANT_OFFSET := {
+	"right": Vector2(34.0, -14.0), "left": Vector2(-34.0, -14.0), "up": Vector2(0.0, -36.0), "down": Vector2(34.0, -14.0),
+}
+
+func _skill_oakley_tree() -> void:
+	var feet: Vector2 = global_position + Vector2(0.0, OakleyTree.PLAYER_FEET_OFFSET)
+	var plant: Vector2 = feet + Vector2(OAKLEY_TREE_PLANT_OFFSET.get(facing, Vector2(34.0, -14.0)))
+	if GameManager.is_position_blocked_by_walls(plant):
+		plant = feet
+	OakleyTree.spawn(get_tree().current_scene, plant, self)
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "oakley_tree", plant, {})
+	if is_instance_valid(anim):
+		var clip: String = CharAnim.pick(anim.sprite_frames, ["pickup_" + facing])
+		if clip != "":
+			_play_action_anim(clip)
+	_play_skill_sfx("oakley_bond")
+
+
+## Oakley çiçeğini verilen noktaya bırakır (pasifin zamanlayıcısı + Hayat Ağacı solarken 3 çiçek). bond_from: kısa "sihirli
+## bağ" efektinin çıktığı nokta. Ağ yayını ("oakley_flower_spawn"/"oakley_flower_bond") aynı.
+func _spawn_oakley_flower_at(drop_pos: Vector2, bond_from: Vector2) -> void:
+	_oakley_flower_id_counter += 1
+	var flower_id: String = "%d_%d" % [multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0, _oakley_flower_id_counter]
+	var flower := Node2D.new()
+	flower.set_script(preload("res://scripts/oakley_flower.gd"))
+	get_tree().current_scene.add_child(flower)
+	flower.global_position = drop_pos
+	flower.call("setup", damage_bonus, flower_id)
+	var bond := Node2D.new()
+	bond.set_script(preload("res://scripts/fx_oakley_flower_bond.gd"))
+	get_tree().current_scene.add_child(bond)
+	bond.call("setup", bond_from, drop_pos)
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "oakley_flower_spawn", drop_pos, {
+			"caster_damage_bonus": damage_bonus,
+			"flower_id": flower_id
+		})
+		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "oakley_flower_bond", bond_from, {
+			"end_pos": drop_pos
+		})
+
+
+## ---------- ESKİ Oakley R: Koruyucu Büyü (id 39'du; 2026-10-18'den beri R'ye BAĞLI DEĞİL, Hayat Ağacı geldi - madde 266) ----------
+## Kod/ağ yolu (sync_oakley_bond_buff, yaprak bariyeri görseli, testleri) olduğu gibi duruyor, sadece hiçbir tuşa bağlı değil.
 ## Kullanıcı isteği: "Yeni R yeteneği ise canı en az olan arkadaşına koruyucu
 ## bir büyü yapar bu büyü 8 saniye boyunca aktif kalır ve kişi her hasar
 ## aldığında oakley'in saldırı gücünün %10'u kadar can yeniler ve aynı
@@ -10830,7 +10877,7 @@ func _matthew_ball_damage(e: Node) -> void:
 	BalanceLogScript.tag(&"s:matthew_elektrik_topu")
 	e.call("take_damage", dmg, is_crit, 0.0, true)
 	if has_evo("matthew_e3"):
-		heal(dmg * MatthewLightning.EVO_BALL_HEAL_RATIO)
+		heal(dmg * MatthewLightning.EVO_BALL_HEAL_RATIO, true, &"s:matthew_elektrik_topu")
 
 
 func _matthew_ball_hit(en: Node2D, near: Array, center: Vector2, ball_r: float) -> void:
@@ -11353,7 +11400,7 @@ func _talon_dash_apply_hits(pending: Array, path_fraction: float, hit_damage: fl
 				e.call("take_damage", _apply_ability_crit(hit_damage, is_crit), is_crit, 0.0, true)
 				## 2026-09-28: isabet başına eksik kalkan yenilemesi temel yetenekten çıktı - "Kalkan Hamlesi" evrimiyle %3.
 				if has_evo("talon_q1") and item_shield_max > 0.0:
-					heal_shield((item_shield_max - item_shield_hp) * TALON_DASH_SHIELD_REFILL_PERCENT)
+					heal_shield((item_shield_max - item_shield_hp) * TALON_DASH_SHIELD_REFILL_PERCENT, true, true, &"s:talon_dash")
 				## Evrim "Sarsıcı Hamle": isabet eden yaratık 2 sn sersemler (bosslar enemy.gd apply_stun'da bağışık).
 				if has_evo("talon_q4") and e.has_method("apply_stun"):
 					e.call("apply_stun", EVO_TALON_Q_STUN_TIME)
@@ -11818,12 +11865,13 @@ func _vampir_try_pay_health(cost: float, show_text: bool) -> bool:
 
 ## Can yenilemeyi (can emme / yarasa dönüşü) her seferinde ayrı yazı çıkarmadan biriktirip
 ## VAMPIR_HEAL_TEXT_INTERVAL'de bir toplu gösterir (silahlar saniyede onlarca kez vurabilir).
-func _vampir_add_heal(amount: float) -> void:
+func _vampir_add_heal(amount: float, src: StringName = &"s:vampir_pasif") -> void:
 	if is_dead or is_downed or amount <= 0.0 or health >= max_health:
 		return
 	var before: float = health
 	health = minf(max_health, health + amount)
 	health_changed.emit(health, max_health)
+	BalanceLogScript.on_gain(String(src), health - before, 0.0) ## hasar istatistiği (damage_stats.gd)
 	_vampir_heal_display_accum += health - before
 
 
@@ -11931,9 +11979,9 @@ func _skill_vampir_blood_drain() -> void:
 		_spawn_floating_text(gain_text, Color(0.95, 0.25, 0.35), true, -62.0)
 	## Evrimler "Kanla Beslenme" (hasarın %3'ü can) / "Kan Kalkanı" (hasarın %6'sı kalkan).
 	if has_evo("vampir_q3"):
-		_vampir_add_heal(total_dealt * EVO_VAMPIR_Q_HEAL_RATIO)
+		_vampir_add_heal(total_dealt * EVO_VAMPIR_Q_HEAL_RATIO, &"s:vampir_kan_emme")
 	if has_evo("vampir_q4") and item_shield_max > 0.0:
-		heal_shield(total_dealt * EVO_VAMPIR_Q_SHIELD_RATIO)
+		heal_shield(total_dealt * EVO_VAMPIR_Q_SHIELD_RATIO, true, true, &"s:vampir_kan_emme")
 	VampirMath.spawn_fx(get_tree().current_scene, "drain", global_position, {"points": points, "sink": self})
 	_vampir_broadcast_fx("drain", global_position, points, gain_text)
 	## Kan Kalkanı: emilen kan kalkana da akar - drain'in üstüne mavi-kan kalkan parıltısı (diğer oyunculara da).
@@ -12210,7 +12258,7 @@ func vampir_bat_hit(target: Node, pos: Vector2) -> void:
 
 ## Yarasa geri döndü (swarm.gd çağırır): saldırı gücünün %5'i kadar can.
 func vampir_bat_returned(_pos: Vector2) -> void:
-	_vampir_add_heal(damage_bonus * VAMPIR_R_HEAL_RATIO)
+	_vampir_add_heal(damage_bonus * VAMPIR_R_HEAL_RATIO, &"s:vampir_yarasa_r")
 
 
 ## main.gd ağ yayını için: yarasa konumları (sürü yoksa boş dizi).
@@ -12443,10 +12491,10 @@ func _spirit_cast_can() -> void:
 func apply_spirit_can_buff() -> void:
 	if is_dead or is_downed:
 		return
-	heal(max_health * SpiritualSkillsScript.CAN_HEAL_PERCENT)
+	heal(max_health * SpiritualSkillsScript.CAN_HEAL_PERCENT, true, &"s:ruhani_can")
 	if item_shield_max > 0.0:
 		var shield_gain: float = item_shield_max * SpiritualSkillsScript.CAN_SHIELD_PERCENT
-		heal_shield(shield_gain)
+		heal_shield(shield_gain, true, true, &"s:ruhani_can")
 		_spawn_floating_text("+%d mana kalkanı" % int(round(shield_gain)), Color(0.4, 0.7, 1.0), false, -46.0)
 	_spirit_invuln_timer = maxf(_spirit_invuln_timer, SpiritualSkillsScript.CAN_INVULN_TIME)
 	add_child(FxSpiritCanScene.instantiate())
@@ -12478,7 +12526,7 @@ func _spirit_tank_on_hit(incoming: float, source: Node2D) -> void:
 	if not _spirit_tank_on:
 		return
 	if item_shield_max > 0.0 and item_shield_hp < item_shield_max:
-		heal_shield((item_shield_max - item_shield_hp) * SpiritualSkillsScript.TANK_SHIELD_REGEN)
+		heal_shield((item_shield_max - item_shield_hp) * SpiritualSkillsScript.TANK_SHIELD_REGEN, true, true, &"s:ruhani_tank")
 	if source and is_instance_valid(source) and source.has_method("take_damage") and incoming > 0.0:
 		BalanceLogScript.tag(&"s:ruhani_tank")
 		source.take_damage(incoming * SpiritualSkillsScript.TANK_REFLECT)
@@ -12881,7 +12929,7 @@ func _process_kalkan_bagi(delta: float) -> void:
 	if not _kalkan_bagi_active:
 		return
 	if item_shield_max > 0.0:
-		heal_shield(item_shield_max * SpiritualSkillsScript.KALKAN_BAGI_REGEN_PERCENT_PER_SEC * delta, false)
+		heal_shield(item_shield_max * SpiritualSkillsScript.KALKAN_BAGI_REGEN_PERCENT_PER_SEC * delta, false, true, &"s:ruhani_kalkan_bagi")
 	var partner: Node2D = null
 	for rp in get_tree().get_nodes_in_group("remote_players"):
 		if is_instance_valid(rp) and "peer_id" in rp and int(rp.peer_id) == _kalkan_bagi_partner_peer_id:
@@ -13305,6 +13353,7 @@ func _hadime_gain_shield(amount: float) -> void:
 	var gained: float = item_shield_hp - before
 	if gained <= 0.0:
 		return
+	BalanceLogScript.on_gain("s:hadime_kuyu", 0.0, gained)
 	item_shield_changed.emit(item_shield_hp, item_shield_max)
 	_kalkan_bagi_mirror(gained)
 	_spawn_floating_text("+%d" % int(round(gained)), Color(0.4, 0.7, 1.0), true, -46.0)
@@ -13887,13 +13936,13 @@ func _process_cadi_broom(delta: float) -> void:
 		_cadi_regen_timer += CadiMath.E_REGEN_TICK
 		## "Her saniye saldırı gücünün %10'u kadar kalkan ve can" - yolcular da (cadının saldırı gücüyle; RPC ile kendi istemcilerine).
 		var amount: float = damage_bonus * CadiMath.E_REGEN_RATIO
-		heal(amount)
-		heal_shield(amount)
+		heal(amount, true, &"s:cadi_supurge")
+		heal_shield(amount, true, true, &"s:cadi_supurge")
 		for peer in CadiMath.riders_of(get_tree(), cadi_peer()):
 			var rider: Node2D = CadiMath.player_node(get_tree(), int(peer))
 			if rider != null:
-				_apply_heal_to_ally(rider, amount)
-				_apply_shield_heal_to_ally(rider, amount)
+				_apply_heal_to_ally(rider, amount, &"s:cadi_supurge")
+				_apply_shield_heal_to_ally(rider, amount, &"s:cadi_supurge")
 	if has_evo("cadi_ef"):
 		_cadi_process_contact(delta)
 
@@ -14158,10 +14207,10 @@ func _on_cadi_zone_scan(zone: Node2D, dt: float) -> void:
 		## "Müttefikler üstünde durunca her saniye cadının saldırı gücünün %20'si kadar can" - cadının kendisi dahil.
 		var amount: float = damage_bonus * CadiMath.HEAL_RATIO
 		if not is_dead and not is_downed and zone.contains(_cadi_feet()):
-			heal(amount)
+			heal(amount, true, &"s:cadi_iksir")
 		for rp in get_tree().get_nodes_in_group("remote_players"):
 			if is_instance_valid(rp) and zone.contains((rp as Node2D).global_position + CadiMath.FEET_LOCAL * 0.5):
-				_apply_heal_to_ally(rp as Node2D, amount)
+				_apply_heal_to_ally(rp as Node2D, amount, &"s:cadi_iksir")
 		return
 	var hits: Dictionary = zone.hit_ids
 	var now: int = Time.get_ticks_msec()
@@ -15799,6 +15848,8 @@ const ITEM_KIZIL_CHANCE := 0.10
 const ITEM_KIZIL_MISSING := 0.01
 const ITEM_KADEH_KILLS := 40
 const ITEM_KADEH_RADIUS := 650.0
+## 2026-10-18 (kullanıcı): eşya efsanevi oldu ve ilk önce orb başına %1 -> %0,5 yapıldı; sonra "ilk orbun verdiği hız yenilenmesin, %1 kalabilir" dendi:
+## orb başına %1'e DÖNÜLDÜ ama her toplamanın bonusu artık KENDİ 4 sn'sinde söner, yeni orb eskisinin süresini baştan BAŞLATMAZ (bkz. _item_on_xp_orb, _item_flow_tick).
 const ITEM_FLOW_PER_ORB := 0.01
 const ITEM_FLOW_TIME := 4.0
 const ITEM_ZAMANBUKEN_CDR := 0.03
@@ -15845,8 +15896,7 @@ var _item_gunes_heal_left: float = 0.0
 var _item_gunes_heal_rate: float = 0.0
 var _item_ruh_kills: int = 0
 var _item_kadeh_count: int = 0
-var _item_flow_stacks: float = 0.0
-var _item_flow_timer: float = 0.0
+var _item_flow_orbs: Array = [] ## Ruhların Maskesi: [[orb adedi, kalan sn], ...] - her toplamanın kendi süresi var (aynı karedeki orblar tek satırda birleşir)
 var _item_son_sans_ap: float = 0.0
 var _item_aegis_fx_cd: float = 0.0
 var _item_anka_fx_cd: float = 0.0
@@ -15940,11 +15990,9 @@ func _process_new_item_passives(delta: float) -> void:
 		if health < max_health:
 			health = minf(max_health, health + step)
 			health_changed.emit(health, max_health)
-	## Ruhların Akışı: yığın 4 sn'de doğrusal söner (bkz. get_effective_move_speed _item_flow_bonus).
-	if _item_flow_timer > 0.0:
-		_item_flow_timer = maxf(0.0, _item_flow_timer - delta)
-		if _item_flow_timer <= 0.0:
-			_item_flow_stacks = 0.0
+	## Ruhların Maskesi: her toplamanın bonusu kendi 4 sn'sinde doğrusal söner (bkz. get_effective_move_speed _item_flow_bonus).
+	if not _item_flow_orbs.is_empty():
+		_item_flow_tick(delta)
 	## Işığın Muhafızı (alıcı taraf) buff süresi.
 	if _light_guard_timer > 0.0:
 		_light_guard_timer -= delta
@@ -15964,21 +16012,38 @@ func _process_new_item_passives(delta: float) -> void:
 		_item_fx("phoenix")
 
 
-## Ruhların Akışı hız bonusu (azalarak): get_effective_move_speed'e eklenir.
+## Ruhların Maskesi hız bonusu (azalarak): get_effective_move_speed'e eklenir. Her toplamanın payı kendi kalan süresiyle orantılı söner.
 func _item_flow_bonus() -> float:
-	if _item_flow_stacks <= 0.0 or _item_flow_timer <= 0.0:
+	if _item_flow_orbs.is_empty():
 		return 0.0
-	return _item_flow_stacks * ITEM_FLOW_PER_ORB * (_item_flow_timer / ITEM_FLOW_TIME)
+	var total: float = 0.0
+	for e in _item_flow_orbs:
+		total += float(e[0]) * (float(e[1]) / ITEM_FLOW_TIME)
+	return total * ITEM_FLOW_PER_ORB
+
+
+## Her toplamanın kalan süresini azaltır, süresi dolanı atar (yeni orb eskisinin süresini YENİLEMEZ).
+func _item_flow_tick(delta: float) -> void:
+	var keep: Array = []
+	for e in _item_flow_orbs:
+		var left: float = float(e[1]) - delta
+		if left > 0.0:
+			e[1] = left
+			keep.append(e)
+	_item_flow_orbs = keep
 
 
 func _item_on_xp_orb() -> void:
 	if not has_item("ruhlarin_akisi"):
 		return
-	## Birikir; her yeni orb azalmayı baştan başlatır (kullanıcı seçimi). Sönmüş kısım yığından düşülür ki "azalarak
-	## kaybolan" bonus yeni orbla eski tam değerine sıçramasın.
-	var current: float = _item_flow_stacks * (_item_flow_timer / ITEM_FLOW_TIME) if _item_flow_timer > 0.0 else 0.0
-	_item_flow_stacks = current + 1.0
-	_item_flow_timer = ITEM_FLOW_TIME
+	## Birikir; her orbun payı KENDİ süresinde söner, yeni orb eskileri baştan başlatmaz (kullanıcı 2026-10-18). Aynı karede gelenler (birleşen küre
+	## toplaması: 32'ye kadar çağrı) tek satırda birleşir - satırın kalan süresi hâlâ tam ise aynı kare demektir.
+	if not _item_flow_orbs.is_empty():
+		var last: Array = _item_flow_orbs[_item_flow_orbs.size() - 1]
+		if float(last[1]) >= ITEM_FLOW_TIME - 0.0001:
+			last[0] = float(last[0]) + 1.0
+			return
+	_item_flow_orbs.append([1.0, ITEM_FLOW_TIME])
 
 
 ## Son Şans: her 1 şans başına 1 saldırı gücü (şans değiştikçe fark uygulanır).

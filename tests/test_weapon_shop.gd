@@ -280,17 +280,17 @@ func test_shield_types_cost_250_and_lock_after_the_first_pick() -> void:
 	add_child(p)
 	assert(Logic.SHIELD_PRICE == 250 and Logic.shield_price() == 250, "kalkan 250 altın")
 	assert(Logic.shield_keys() == ShieldEnchantDefs.ENCHANT_KEYS, "3 tür: Savaş/Enerji/Kale")
-	assert(Logic.upgrade_block_reason(0) == "Önce bir kalkan türü al", "tür yokken geliştirme alınamaz")
+	assert(Logic.upgrade_block_reason(0) == "Önce bir mana kalkanı türü al", "tür yokken geliştirme alınamaz")
 	assert(Logic.upgrade_lines().is_empty())
 	assert(Logic.buy_shield(p, "shield_kale"), "Kale kalkanı alınabilmeli")
 	assert(GameManager.gold == 100000 - 250 and GameManager.shield_enchant == "shield_kale", "250 düşer, tür yazılır")
 	assert(p.cards == [{"type": "shield_pick", "slot": -1, "id": "shield_kale"}], "efsun kartıyla aynı yol: apply_enchant_choice")
 	assert(GameManager.shield_enchant_ups.size() == 3, "Kale'nin 3 geliştirme sayacı kurulmalı")
-	assert(Logic.shield_block_reason("shield_kale") == "Bu kalkan sende")
-	assert(Logic.shield_block_reason("shield_savas") == "Başka bir kalkan türü seçildi", "tür kalıcı: diğerleri kilitli")
+	assert(Logic.shield_block_reason("shield_kale") == "Bu mana kalkanı sende")
+	assert(Logic.shield_block_reason("shield_savas") == "Başka bir mana kalkanı türü seçildi", "tür kalıcı: diğerleri kilitli")
 	var gold: int = GameManager.gold
 	assert(not Logic.buy_shield(p, "shield_savas") and GameManager.gold == gold and GameManager.shield_enchant == "shield_kale")
-	assert(Logic.shield_block_reason("shield_standart") == "Bilinmeyen kalkan", "Standart satılmaz")
+	assert(Logic.shield_block_reason("shield_standart") == "Bilinmeyen mana kalkanı", "Standart satılmaz")
 	p.free()
 	_restore_state()
 
@@ -319,9 +319,11 @@ func test_shield_upgrades_escalate_in_price_and_respect_limits() -> void:
 	assert(Logic.upgrade_block_reason(7) == "Bilinmeyen geliştirme")
 	GameManager.gold = 10
 	assert(not Logic.can_buy_upgrade(0), "yetersiz altın")
-	assert(Logic.upgrade_effect_text(0) == "+60 Kalkan\n+2 Yenilenme/sn", "etki metni: %s" % Logic.upgrade_effect_text(0))
-	assert(Logic.upgrade_effect_text(1) == "+60 Kalkan\n+3% Soğurma", "etki metni 2: %s" % Logic.upgrade_effect_text(1))
-	assert(Logic.shield_summary("shield_kale") == "200 kalkan · %75 soğurma · 7/sn", "özet: %s" % Logic.shield_summary("shield_kale"))
+	## Yenilenme oyunda işleyen değerle (x SHIELD_REGEN_SPEED_MULT 1,3) gösterilir: Savaş geliştirmesi +1.5 -> +1.95, Kale tabanı 7 -> 9.1.
+	var up_regen: String = Logic._num(1.5 * GameManager.SHIELD_REGEN_SPEED_MULT)
+	assert(Logic.upgrade_effect_text(0) == "+60 Mana Kalkanı\n+%s Yenilenme/sn" % up_regen, "etki metni: %s" % Logic.upgrade_effect_text(0))
+	assert(Logic.upgrade_effect_text(1) == "+60 Mana Kalkanı\n+3% Soğurma", "etki metni 2: %s" % Logic.upgrade_effect_text(1))
+	assert(Logic.shield_summary("shield_kale") == "200 mana kalkanı · %75 soğurma · 9.1/sn", "özet: %s" % Logic.shield_summary("shield_kale"))
 	p.free()
 	_restore_state()
 

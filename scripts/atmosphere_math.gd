@@ -26,9 +26,10 @@ const START_TIME := 15.0
 ## "Kademeli" kararma: gün batımından bu kadar saniye önce (ikindi) çok hafif başlar (altın saat).
 const AFTERNOON_LEAD := 50.0
 const AFTERNOON_DARKNESS := 0.12
-## Gece görüş yarıçapı çarpanı (kullanıcı: "%25 azalacak" -> görüş elipsinin yarıçapı x0.75). Karanlıkla (darkness)
-## orantılı: ikindi hafifçe, gün batımında kademeli daralır, gün doğumunda aynı yavaşlıkla geri açılır.
-const NIGHT_VISION_MULT := 0.75
+## Gece görüş yarıçapı çarpanı. İlk hâli 0.75'ti (2026-09-25 "%25 azalacak"); 2026-10-18 kullanıcı: "gece görüş açısı
+## azalmasın" -> 1.0 (gece de gündüzle aynı). Karanlıkla (darkness) orantılı lerp aynı kaldı: bu değeri <1 yaparsan ikindi
+## hafifçe, gün batımında kademeli daralır, gün doğumunda aynı yavaşlıkla geri açılır.
+const NIGHT_VISION_MULT := 1.0
 
 ## GECE KİLİDİ (2026-10-09, Banshee bossu: "zifiri gece olduğunda doğar, var olduğu sürece asla gündüz olmaz"): kilit açıkken saat gece yarısına (NIGHT_LOCK_TIME) doğru
 ## NIGHT_LOCK_SPEED (döngü birimi/sn) hızla ilerler ve orada DURUR; "derin gece" = NIGHT_DEEP_MIN..NIGHT_DEEP_MAX arası.
@@ -150,7 +151,7 @@ static func darkness(t: float) -> float:
 	return 1.0 - smoothstep(NIGHT_END, CYCLE_LENGTH, t)
 
 
-## Görüş elipsinin yarıçap çarpanı (1.0 gündüz -> 0.75 gece), bkz. vision_fog.gd.
+## Görüş elipsinin yarıçap çarpanı (1.0 gündüz -> NIGHT_VISION_MULT gece; şu an hep 1.0), bkz. vision_fog.gd.
 static func vision_multiplier(t: float) -> float:
 	return lerpf(1.0, NIGHT_VISION_MULT, darkness(t))
 

@@ -343,21 +343,16 @@ func test_left_half_keeps_only_the_left_columns_of_the_skull() -> void:
 
 func test_tier_banner_has_the_roman_title_and_the_skull_row() -> void:
 	var m: Node = MainScript.new() ## ağaca eklenmez: _ready çalışmaz, sadece _tier_banner kurulur
+	## 2026-10-18 (madde 264): duyuru artık game_notice.gd levhası (kurdelede başlık, çizimle) - yazı Label değil, title/body alanı.
 	var banner: Control = m.call("_tier_banner", TierDisplay.title(7), 7)
-	var label: Label = null
 	var row: Control = null
 	for c: Node in banner.get_children():
-		if c is Label:
-			label = c
-		elif c.get_script() == TierDisplay:
+		if c.get_script() == TierDisplay:
 			row = c
-	assert(label != null and label.text == "KADEME VII", "başlık 'KADEME VII' olmalı: %s" % (label.text if label else "yok"))
+	assert(str(banner.get("title")) == "KADEME VII", "başlık 'KADEME VII' olmalı: %s" % str(banner.get("title")))
 	assert(row != null and int(row.call("get_tier")) == 7, "altında kademe VII'nin kuru kafa satırı olmalı")
-	var texts: Array[String] = []
-	for c: Node in banner.get_children():
-		if c is Label:
-			texts.append((c as Label).text)
-	assert(texts.size() == 1, "başlıktan başka yazı olmamalı (eski 'BAŞLADI - güçlendi' yok): %s" % str(texts))
+	assert(str(banner.get("body")) == "", "başlıktan başka yazı olmamalı (eski 'BAŞLADI - güçlendi' yok): %s" % str(banner.get("body")))
+	assert(row.position.y >= 30.0 and row.get_rect().end.y <= banner.size.y, "kuru kafalar levhanın içinde")
 	banner.free()
 	m.free()
 

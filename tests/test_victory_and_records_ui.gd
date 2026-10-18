@@ -151,16 +151,29 @@ func test_victory_window_fits_the_screen_in_the_worst_case() -> void:
 	ov.free()
 
 
+## Madde 250: ekran ana menünün içinde, tasarım boyutunda (1920x1080) açılır; liste penceresi + kategori sütunu ekrandan taşmamalı.
+func _screen() -> Control:
+	var screen: Control = RecordsScreenScript.new()
+	add_child(screen)
+	screen.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	screen.position = Vector2.ZERO
+	screen.size = Vector2(1920, 1080)
+	return screen
+
+
 func test_records_screen_fits_the_screen() -> void:
 	_tmp = "user://test_records_ui_%d.cfg" % Time.get_ticks_usec()
 	RunRecordsScript.set_path_override(_tmp)
-	var screen: CanvasLayer = RecordsScreenScript.new()
-	add_child(screen)
+	var screen := _screen()
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var panel: Control = screen.find_children("*", "PanelContainer", true, false)[0]
-	assert(panel.size.y <= 1080.0, "rekor ekranı ekrandan taşıyor: %.0f" % panel.size.y)
-	assert(panel.size.x <= 1920.0)
+	var list: ScrollContainer = screen.get_node("List")
+	var r := list.get_global_rect()
+	assert(r.end.y <= 1080.0 and r.end.x <= 1920.0, "liste penceresi ekrandan taşıyor: %s" % str(r))
+	var rows: Control = screen.get_node("List/Rows")
+	assert(rows.size.x <= list.size.x + 0.5, "satırlar liste penceresinden geniş: %.0f > %.0f" % [rows.size.x, list.size.x])
+	var back: Control = screen.find_child("BackButton", true, false)
+	assert(back.get_global_rect().end.y <= 952.0, "GERİ sol alttaki tuş ipuçlarının üstüne biniyor: %.0f" % back.get_global_rect().end.y)
 	screen.free()
 	RunRecordsScript.set_path_override("")
 
@@ -173,16 +186,34 @@ func test_records_screen_lists_every_achievement_with_state() -> void:
 	_tmp = "user://test_records_ui_%d.cfg" % Time.get_ticks_usec()
 	RunRecordsScript.set_path_override(_tmp)
 	RunRecordsScript.record_victory({"time": 1520.0, "tier": 16, "kills": 842, "solo": true, "char_id": 3})
-	var screen: CanvasLayer = RecordsScreenScript.new()
-	add_child(screen)
+	var screen := _screen()
 	var unlocked: int = (RunRecordsScript.load_all()["achievements"] as Dictionary).size()
-	assert(_has_text(screen, "Başarımlar  %d / %d" % [unlocked, AchievementsScript.DEFS.size()]), "sayaç: %s" % str(_labels(screen)))
-	for d: Dictionary in AchievementsScript.DEFS:
-		assert(_has_text(screen, str(d["name"])), "başarım listede olmalı: %s" % str(d["name"]))
-	assert(_has_text(screen, "[X] Hayatta Kaldım!"), "açılan başarım işaretli")
-	assert(_has_text(screen, "[ ] Kıyamet Sonrası"), "açılmayan başarım boş kutu")
+	assert(_has_text(screen, "%d / %d açıldı" % [unlocked, AchievementsScript.DEFS.size()]), "sayaç: %s" % str(_labels(screen)))
 	assert(_has_text(screen, "25:20"), "en hızlı zafer / en uzun süre değeri")
 	assert(_has_text(screen, "842"), "en çok öldürme")
+	assert(_has_text(screen, "FİNAL"), "en yüksek kademe Final")
+	screen.call("_set_category", 1, false)
+	for d: Dictionary in AchievementsScript.DEFS:
+		var row: Node = screen.find_child("Row_" + str(d["id"]), true, false)
+		assert(row != null and _has_text(row, str(d["name"])), "başarım listede olmalı: %s" % str(d["name"]))
+	assert(_has_text(screen.find_child("Row_victory", true, false), ".20"), "açılan başarımın tarihi yazılı")
+	assert(_has_text(screen.find_child("Row_layer_25", true, false), "0 / 25"), "kilitli başarımın ilerlemesi yazılı")
+	assert(_has_text(screen, "AÇILANLAR") and _has_text(screen, "YAKINDA"), "iki bölüm")
+	screen.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(_tmp))
+	RunRecordsScript.set_path_override("")
+
+
+## YENİ işareti sadece SON koşuda kırılan rekorda (run_records.last_run_records).
+func test_records_screen_marks_only_last_run_records_new() -> void:
+	_tmp = "user://test_records_ui_%d.cfg" % Time.get_ticks_usec()
+	RunRecordsScript.set_path_override(_tmp)
+	RunRecordsScript.record_run_end({"time": 600.0, "tier": 5, "kills": 300, "solo": true})
+	RunRecordsScript.record_run_end({"time": 400.0, "tier": 4, "kills": 450, "solo": true})
+	var screen := _screen()
+	assert(_has_text(screen.find_child("Row_kills", true, false), "YENİ"), "son koşuda kırılan öldürme rekoru YENİ")
+	for key: String in ["time", "tier", "layer", "victory_time"]:
+		assert(not _has_text(screen.find_child("Row_" + key, true, false), "YENİ"), "eski rekor YENİ olmamalı: %s" % key)
 	screen.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(_tmp))
 	RunRecordsScript.set_path_override("")
@@ -191,24 +222,30 @@ func test_records_screen_lists_every_achievement_with_state() -> void:
 func test_records_screen_closes_and_signals() -> void:
 	_tmp = "user://test_records_ui_%d.cfg" % Time.get_ticks_usec()
 	RunRecordsScript.set_path_override(_tmp)
-	var screen: CanvasLayer = RecordsScreenScript.new()
+	var screen := _screen()
 	var closed_box := [0]
 	screen.connect("closed", func() -> void: closed_box[0] += 1)
-	add_child(screen)
-	var btn: Button = screen.find_children("*", "Button", true, false)[0]
-	assert(btn.text == "KAPAT")
+	var btn: Button = screen.find_child("BackButton", true, false)
 	btn.pressed.emit()
-	assert(closed_box[0] == 1, "KAPAT 'closed' yaymalı")
+	assert(closed_box[0] == 1, "GERİ 'closed' yaymalı")
 	await get_tree().process_frame
 	assert(not is_instance_valid(screen), "ekran kendini silmeli")
+	var screen2 := _screen()
+	var ev := InputEventAction.new()
+	ev.action = "ui_cancel"
+	ev.pressed = true
+	screen2.call("_input", ev)
+	await get_tree().process_frame
+	assert(not is_instance_valid(screen2), "ESC ekranı kapatmalı")
 	RunRecordsScript.set_path_override("")
 
 
-## 2026-10-05: zafer + rekor pencereleri telefon ölçeklemesine (mobile_ui.gd FIT_LAYER_SCRIPTS) eklendi.
+## 2026-10-05: zafer penceresi telefon ölçeklemesine (mobile_ui.gd FIT_LAYER_SCRIPTS) eklendi. Rekorlar ekranı madde 250'den beri
+## CanvasLayer değil, ana menünün çocuğu (ayarlar gibi) - menüyle birlikte RootFitter ölçekler, listede OLMAMALI (kökü Control).
 func test_victory_and_records_screens_are_in_the_phone_fit_list() -> void:
 	var list: Array = (load("res://scripts/mobile_ui.gd") as GDScript).get_script_constant_map()["FIT_LAYER_SCRIPTS"]
 	assert(list.has(VictoryOverlayScript.resource_path), "zafer penceresi telefon ölçeklemesinde olmalı")
-	assert(list.has(RecordsScreenScript.resource_path), "rekorlar penceresi telefon ölçeklemesinde olmalı")
+	assert(not list.has(RecordsScreenScript.resource_path), "rekorlar ekranı ana menünün içinde, katman ölçeklemesinde olmamalı")
 
 
 ## Zafer penceresinde diğer oyuncuların takım tablosu satırları ağdan geç gelir (pencere büyür): MenuFitter ilk 0.6 sn'den sonra da

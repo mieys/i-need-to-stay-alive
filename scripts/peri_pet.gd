@@ -174,7 +174,7 @@ func process_heal(delta: float) -> void:
 	if _cooldown > 0.0 or is_puppet or not owner_needs_heal():
 		return
 	_cooldown = PetCatalog.PERI_HEAL_INTERVAL
-	owner_body.heal(heal_amount())
+	owner_body.heal(heal_amount(), true, &"s:evcil_peri") ## kaynaklı: gerçekten basılan can evcil yuvası ipucunda (damage_stats.gd)
 	_play_cast()
 	_broadcast(true)
 

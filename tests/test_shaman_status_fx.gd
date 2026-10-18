@@ -126,8 +126,8 @@ func test_status_gameplay_numbers_unchanged() -> void:
 		"yakma 'en güçlüsü kalır' kuralı korunmalı")
 	assert(src.contains("burn_time_left = max(burn_time_left, duration)"),
 		"yakma süre tazeleme davranışı korunmalı")
-	assert(src.contains("_slow_percent = max(_slow_percent, min(percent, 0.75))"),
-		"yavaşlatma tavanı (%75) korunmalı")
+	assert(src.contains("_slow_percent = max(_slow_percent, min(percent, 0.80))"),
+		"yavaşlatma tavanı (%80, Melek R ile 0,75'ten çıktı - 2026-10-11) korunmalı")
 	assert(src.contains("_slow_timer = duration"),
 		"yavaşlatma süre tazeleme davranışı korunmalı")
 	## Görsel ömür ayrı bir değişkende tutulmalı - yavaşlatma simülasyonuna

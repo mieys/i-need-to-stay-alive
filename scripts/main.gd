@@ -4,6 +4,8 @@ const LevelUpScreenScene = preload("res://scenes/level_up_screen.tscn")
 ## Yetenek evrimleri (2026-09-28): evrim kartı seçimi "evo:<id>" olarak gelir (bkz. _on_upgrade_chosen).
 const SkillEvolutionsScript := preload("res://scripts/skill_evolutions.gd")
 const MissionCompleteWindowScript := preload("res://scripts/mission_complete_window.gd")
+const GameNoticeScript := preload("res://scripts/game_notice.gd") ## bildirim levhaları (madde 264)
+const WaitOverlayScript := preload("res://scripts/wait_overlay.gd") ## oyuncular bekleniyor ekranı (madde 264)
 const EVO_CHOICE_PREFIX := SkillEvolutionsScript.CHOICE_PREFIX
 const PauseMenuScene = preload("res://scenes/pause_menu.tscn")
 const RemotePlayerScene = preload("res://scenes/remote_player.tscn")
@@ -201,7 +203,6 @@ func _ready() -> void:
 	## peers ile AYNI desene (bkz. network_manager.gd "KART/SİLAH/KALKAN SEÇİM
 	## KUYRUĞU SENKRONİZASYONU" notu) taşındı.
 	NetworkManager.level_up_busy_state_changed.connect(_on_level_up_busy_state_changed)
-	NetworkManager.multiplayer_level_up_timer_tick.connect(_on_level_up_countdown_tick)
 	NetworkManager.merchant_spawned.connect(_on_merchant_spawned)
 	NetworkManager.merchant_departed.connect(_on_merchant_departed)
 	_merchant_arrow = Control.new()
@@ -291,6 +292,7 @@ func _ready() -> void:
 		if anchor_node != null:
 			banner_anchors.append(anchor_node)
 	_world_event_banner.set("hud_anchor_controls", banner_anchors)
+	_notice_anchor_controls = banner_anchors ## sağ sütun bildirimleri de aynı sütunun altına (bkz. _notice_column)
 	## #58 DÜZELTME (kullanıcı bildirimi: "sandık açılımı esnasında oyun diğer
 	## oyuncularda devam ediyor gibi görünüyor, kart bekleme ekranının aktif
 	## kalması gerekiyor o esnada") - bkz. _on_chest_busy_state_changed().
@@ -299,10 +301,8 @@ func _ready() -> void:
 	## periyodik dükkanın açılıp açılmayacağı kararı artık HOST'tan geliyor
 	## (bkz. network_manager.gd "MİNİ DÜKKAN KARARI" bloğu).
 	NetworkManager.mini_shop_decision_received.connect(_on_mini_shop_decision_received)
-	## Kullanıcı isteği: "sandık seçerken diğer oyuncularda da 25 saniyelik
-	## bekleme süresi olmalı" - bekleme overlay'indeki geri sayım etiketini
-	## günceller (bkz. _show_chest_wait_overlay/_on_chest_countdown_tick).
-	NetworkManager.chest_countdown_tick.connect(_on_chest_countdown_tick)
+	## Kullanıcı isteği: "sandık seçerken diğer oyuncularda da 25 saniyelik bekleme süresi olmalı" - bekleme ekranı
+	## (wait_overlay.gd) sayacı NetworkManager.chest_countdown'dan kendisi okur (2026-10-18; eskiden tik sinyaliyle etiket).
 	## Kullanıcı isteği: "host oyunu yeniden başlatabilsin fakat önce diğer
 	## oyunculara onayı sorulsun" - bkz. network_manager.gd "YENİDEN BAŞLATMA
 	## ONAYI" bloğu. İlki (client) gelen isteğe Onayla/Reddet diyaloğu
@@ -1007,6 +1007,9 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## match_damage_dealt zaten hasar verildikçe canlı biriken bir
 			## sayaç (bkz. player.gd on_damage_dealt/match_damage_dealt notu).
 			"dmg_dealt": player.match_damage_dealt,
+			## Alınan hasar (kullanıcı isteği 2026-10-18: "grup istatistiklerinde alınan hasar da olmalı hem pc hem mobilde") -
+			## aynı canlı panel (party_panel.gd _refresh_stats_popup) müttefiğin player.gd match_damage_taken'ını buradan okur.
+			"dmg_taken": player.match_damage_taken,
 			## Yetenek evrimleri (2026-09-28, player.gd skill_evolutions) - diğer oyuncularda kuklanın görsel kararları ve
 			## host'taki simülasyon (Talon mermi kalkanı) bu listeden okur (remote_player.gd has_evo). Sıralı dizi: değişmedikçe
 			## aynı kalır, durum kanalını boşuna tetiklemez.
@@ -1332,11 +1335,8 @@ var _level_up_screen_levels: Array[int] = []
 ## çağrılıp temizlenecek devam adımı (ör. sandık kuyruğuna geçiş, ya da mini
 ## dükkanı açma).
 var _level_up_wait_resume_action: Callable = Callable()
-## chest_wait_overlay ile AYNI görsel desen (bkz. _show_chest_wait_overlay) -
-## sadece kart/silah/kalkan seçim kuyruğu için.
+## Oyuncular bekleniyor ekranı (wait_overlay.gd "level_up") - kart/silah/kalkan seçim kuyruğu için.
 var _level_up_wait_overlay: CanvasLayer = null
-var _level_up_wait_countdown_label: Label = null
-var _level_up_wait_label: Label = null
 ## Kullanıcı isteği: "mini dükkan yerine direk dükkan açılsın" - artık ayrı
 ## bir MiniShopScreen sahnesi YOK, periyodik mola hud.gd'nin PAYLAŞILAN
 ## dükkan panelini açıyor (bkz. _show_mini_shop_screen). Bu bayrak o molanın
@@ -1370,22 +1370,17 @@ const MINI_SHOP_REVIVE_COST := 500
 var _mini_shop_revive_prompt: CanvasLayer = null
 var _mini_shop_revive_button: Button = null
 ## Çok oyunculuda "herkes kapatana kadar bekle" (bkz. _on_mini_shop_screen_
-## closed) - _chest_wait_overlay ile AYNI görsel desen, sadece NetworkManager
-## mini_shop_* sinyallerine bağlı.
+## closed) - wait_overlay.gd "shop" (sayaç/kim dükkanda NetworkManager mini_shop_* verisinden).
 var _mini_shop_wait_overlay: CanvasLayer = null
-var _mini_shop_wait_label: Label = null
-var _mini_shop_wait_countdown_label: Label = null
 ## Kullanıcı isteği: "bir kişi dükkanda çarpıya basınca diğerlerinin bekleme
 ## süresi başlayacak." - dükkanı hâlâ açık olan oyuncuya kalan süreyi gösteren
 ## küçük (tıklamayı engellemeyen) bildirim ve "ben dükkanı kapattım mı" bayrağı.
 var _mini_shop_countdown_notice: CanvasLayer = null
-var _mini_shop_countdown_notice_label: Label = null
+var _mini_shop_countdown_notice_label: Control = null ## game_notice.gd levhası (canlı geri sayım)
 var _mini_shop_closed_locally: bool = false
 ## #58: bkz. _try_open_next_pending_chest/_on_chest_busy_state_changed.
 var _local_chest_menu_open: bool = false
-var _chest_wait_overlay: CanvasLayer = null
-var _chest_wait_countdown_label: Label = null
-var _chest_wait_label: Label = null
+var _chest_wait_overlay: CanvasLayer = null ## wait_overlay.gd "chest"
 
 ## Kullanıcı isteği: "Exp orbu toplarken level atlama kartları çıkmasın, exp
 ## orbu toplamayı 1 saniye bıraktıktan sonra level atlama kartları ekranı
@@ -1660,67 +1655,23 @@ func _finish_mini_shop_close() -> void:
 		_advance_level_up_queue()
 
 
-## Bekleme ekranlarının (dükkan / sandık / level atlama - yalnız çok oyunculu) ortak arka planı: ekranın ortasında oyun içi
-## bej kit penceresi; mesaj ve geri sayım etiketleri tam ekran ortalanmış olduğu için bu pencerenin içine düşer.
-## Kullanıcı isteği (2026-09-24): oyun içi arayüzler menülerle aynı bej/ahşap dile geçti (eskiden karartma üstünde çıplak yazı).
-func _add_kit_wait_panel(layer: CanvasLayer) -> void:
-	var panel := Panel.new()
-	panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -360.0
-	panel.offset_right = 360.0
-	panel.offset_top = -110.0
-	panel.offset_bottom = 110.0
-	layer.add_child(panel)
-
-
-## bkz. _chest_wait_overlay ile AYNI görsel desen - periyodik dükkan
+## Bekleme ekranları (dükkan / sandık / level atlama - yalnız çok oyunculu): "B Ateş Işığı Şeridi" (wait_overlay.gd, madde 264) -
+## vinyet + yatay koyu şerit, herkesin portresi + hazır/bekleniyor durumu + geri sayım. Eskiden ortada 720x220 bej kit penceresi.
+## Periyodik dükkan
 ## molasında çok oyunculuda "herkes kapatana kadar" bekleme ekranı.
 func _show_mini_shop_wait_overlay() -> void:
 	if _mini_shop_wait_overlay and is_instance_valid(_mini_shop_wait_overlay):
 		return
-	_mini_shop_wait_overlay = CanvasLayer.new()
-	_mini_shop_wait_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	_mini_shop_wait_overlay.layer = 90
-	var dim := ColorRect.new()
-	dim.color = Color(0.12, 0.07, 0.03, 0.55)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	_mini_shop_wait_overlay.add_child(dim)
-	_add_kit_wait_panel(_mini_shop_wait_overlay)
-	_mini_shop_wait_label = Label.new()
-	_mini_shop_wait_label.text = "Diğer oyuncular alışverişi bitiriyor...\nLütfen bekleyin"
-	_mini_shop_wait_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_mini_shop_wait_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_mini_shop_wait_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_mini_shop_wait_label.offset_bottom = -40.0
-	_mini_shop_wait_label.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-	_mini_shop_wait_label.add_theme_color_override("font_color", UIKit.C_TEXT)
-	_mini_shop_wait_overlay.add_child(_mini_shop_wait_label)
-	_mini_shop_wait_countdown_label = Label.new()
-	_mini_shop_wait_countdown_label.text = "%ds" % int(ceil(NetworkManager.mini_shop_countdown)) if NetworkManager.mini_shop_timer_active else ""
-	_mini_shop_wait_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_mini_shop_wait_countdown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_mini_shop_wait_countdown_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_mini_shop_wait_countdown_label.offset_top = 40.0
-	_mini_shop_wait_countdown_label.add_theme_font_size_override("font_size", 32)
-	_mini_shop_wait_countdown_label.add_theme_color_override("font_color", UIKit.C_GOLD)
-	_mini_shop_wait_overlay.add_child(_mini_shop_wait_countdown_label)
-	add_child(_mini_shop_wait_overlay)
+	_mini_shop_wait_overlay = WaitOverlayScript.open(self, "shop")
 
 
 func _hide_mini_shop_wait_overlay() -> void:
 	if _mini_shop_wait_overlay and is_instance_valid(_mini_shop_wait_overlay):
 		_mini_shop_wait_overlay.queue_free()
 	_mini_shop_wait_overlay = null
-	_mini_shop_wait_countdown_label = null
-	_mini_shop_wait_label = null
 
 
 func _on_mini_shop_countdown_tick(remaining: float) -> void:
-	if _mini_shop_wait_countdown_label and is_instance_valid(_mini_shop_wait_countdown_label):
-		_mini_shop_wait_countdown_label.text = "%ds" % int(ceil(remaining))
 	_update_mini_shop_countdown_notice(remaining)
 
 
@@ -1740,16 +1691,18 @@ func _update_mini_shop_countdown_notice(remaining: float) -> void:
 		_mini_shop_countdown_notice = CanvasLayer.new()
 		_mini_shop_countdown_notice.process_mode = Node.PROCESS_MODE_ALWAYS
 		_mini_shop_countdown_notice.layer = 94 ## dükkanın (HUD katmanı) üstünde
-		_mini_shop_countdown_notice_label = Label.new()
-		_mini_shop_countdown_notice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_mini_shop_countdown_notice_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-		_mini_shop_countdown_notice_label.offset_top = 24.0
-		_mini_shop_countdown_notice_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_mini_shop_countdown_notice_label.add_theme_font_size_override("font_size", 26)
-		_mini_shop_countdown_notice_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))
-		_mini_shop_countdown_notice.add_child(_mini_shop_countdown_notice_label)
+		## 2026-10-18 (madde 264): düz sarı yazı yerine bildirim levhası (game_notice.gd), sağda canlı "N sn"
+		var n: Control = GameNoticeScript.toast("warn", "Bir oyuncu dükkanı kapattı", "Süre dolunca dükkan kapanır.", 0.0, MobileUI.enabled)
+		n.call("set_countdown", remaining) ## boyut sayaçla belli olur - yerleştirmeden önce
+		n.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		n.offset_left = -roundf(n.size.x * 0.5)
+		n.offset_right = n.offset_left + n.size.x
+		n.offset_top = 24.0
+		n.offset_bottom = 24.0 + n.size.y
+		_mini_shop_countdown_notice.add_child(n)
+		_mini_shop_countdown_notice_label = n
 		add_child(_mini_shop_countdown_notice)
-	_mini_shop_countdown_notice_label.text = "Bir oyuncu dükkanı kapattı - kalan süre: %ds" % int(ceil(remaining))
+	_mini_shop_countdown_notice_label.call("set_countdown", remaining)
 
 
 func _hide_mini_shop_countdown_notice() -> void:
@@ -2161,63 +2114,14 @@ func _on_chest_busy_state_changed() -> void:
 func _show_chest_wait_overlay() -> void:
 	if _chest_wait_overlay and is_instance_valid(_chest_wait_overlay):
 		return
-	_chest_wait_overlay = CanvasLayer.new()
-	_chest_wait_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	_chest_wait_overlay.layer = 90
-	var dim := ColorRect.new()
-	dim.color = Color(0.12, 0.07, 0.03, 0.55)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	_chest_wait_overlay.add_child(dim)
-	_add_kit_wait_panel(_chest_wait_overlay)
-	_chest_wait_label = Label.new()
-	## Kullanıcı isteği: "kimi beklediğimiz yazsın" - bkz. network_manager.gd
-	## get_chest_busy_names, aynı desen level_up_screen.gd/mini_shop_screen.gd
-	## ile paylaşılıyor.
-	_chest_wait_label.text = _chest_wait_message()
-	_chest_wait_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_chest_wait_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_chest_wait_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_chest_wait_label.offset_bottom = -40.0
-	_chest_wait_label.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-	_chest_wait_label.add_theme_color_override("font_color", UIKit.C_TEXT)
-	_chest_wait_overlay.add_child(_chest_wait_label)
-	## Kullanıcı isteği: level kartı seçme ekranındaki "Diğer oyuncular
-	## bekleniyor" panelindeki geri sayımla AYNI fikir - bekleyen oyuncular da
-	## kararın en fazla ne kadar süreceğini görsün (bkz. NetworkManager
-	## chest_countdown_tick / _on_chest_countdown_tick).
-	_chest_wait_countdown_label = Label.new()
-	_chest_wait_countdown_label.text = "%ds" % int(ceil(NetworkManager.chest_countdown)) if NetworkManager.chest_countdown_active else ""
-	_chest_wait_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_chest_wait_countdown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_chest_wait_countdown_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_chest_wait_countdown_label.offset_top = 40.0
-	_chest_wait_countdown_label.add_theme_font_size_override("font_size", 32)
-	_chest_wait_countdown_label.add_theme_color_override("font_color", UIKit.C_GOLD)
-	_chest_wait_overlay.add_child(_chest_wait_countdown_label)
-	add_child(_chest_wait_overlay)
+	## Kullanıcı isteği: "kimi beklediğimiz yazsın" - ekran kimin sandık açtığını (chest_busy_peers) ve 25 sn sayacı kendisi okur.
+	_chest_wait_overlay = WaitOverlayScript.open(self, "chest")
 
 
 func _hide_chest_wait_overlay() -> void:
 	if _chest_wait_overlay and is_instance_valid(_chest_wait_overlay):
 		_chest_wait_overlay.queue_free()
 	_chest_wait_overlay = null
-	_chest_wait_countdown_label = null
-	_chest_wait_label = null
-
-
-func _chest_wait_message() -> String:
-	var names: String = NetworkManager.get_chest_busy_names() if NetworkManager.is_multiplayer_active else ""
-	if names != "":
-		return "Sandık ödülü seçiliyor: %s\nLütfen bekleyin" % names
-	return "Bir oyuncu sandık ödülünü seçiyor...\nLütfen bekleyin"
-
-
-func _on_chest_countdown_tick(remaining: float) -> void:
-	if _chest_wait_countdown_label and is_instance_valid(_chest_wait_countdown_label):
-		_chest_wait_countdown_label.text = "%ds" % int(ceil(remaining))
-	if _chest_wait_label and is_instance_valid(_chest_wait_label):
-		_chest_wait_label.text = _chest_wait_message()
 
 
 ## Host bir yeniden başlatma isteği gönderdiğinde (bkz. pause_menu.gd
@@ -2322,61 +2226,18 @@ func _on_restart_vote_result(approved: bool, rejecter_name: String) -> void:
 		_show_network_toast("Yeniden başlatma onaylanmadı (süre doldu).")
 
 
-## _show_chest_wait_overlay ile BİREBİR AYNI görsel desen - kart/silah/kalkan
-## seçim kuyruğu için (bkz. _finish_level_up_phase).
+## Oyuncular bekleniyor ekranı (wait_overlay.gd "level_up") - kart/silah/kalkan seçim kuyruğu için (bkz. _finish_level_up_phase).
+## Kim seçiyor (level_up_busy_peers) + 25 sn sayaç ekran tarafından okunur.
 func _show_level_up_wait_overlay() -> void:
 	if _level_up_wait_overlay and is_instance_valid(_level_up_wait_overlay):
 		return
-	_level_up_wait_overlay = CanvasLayer.new()
-	_level_up_wait_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	_level_up_wait_overlay.layer = 90
-	var dim := ColorRect.new()
-	dim.color = Color(0.12, 0.07, 0.03, 0.55)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	_level_up_wait_overlay.add_child(dim)
-	_add_kit_wait_panel(_level_up_wait_overlay)
-	_level_up_wait_label = Label.new()
-	_level_up_wait_label.text = _level_up_wait_message()
-	_level_up_wait_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_level_up_wait_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_level_up_wait_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_level_up_wait_label.offset_bottom = -40.0
-	_level_up_wait_label.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-	_level_up_wait_label.add_theme_color_override("font_color", UIKit.C_TEXT)
-	_level_up_wait_overlay.add_child(_level_up_wait_label)
-	_level_up_wait_countdown_label = Label.new()
-	_level_up_wait_countdown_label.text = "%ds" % int(ceil(NetworkManager.level_up_countdown)) if NetworkManager.level_up_timer_active else ""
-	_level_up_wait_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_level_up_wait_countdown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_level_up_wait_countdown_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_level_up_wait_countdown_label.offset_top = 40.0
-	_level_up_wait_countdown_label.add_theme_font_size_override("font_size", 32)
-	_level_up_wait_countdown_label.add_theme_color_override("font_color", UIKit.C_GOLD)
-	_level_up_wait_overlay.add_child(_level_up_wait_countdown_label)
-	add_child(_level_up_wait_overlay)
+	_level_up_wait_overlay = WaitOverlayScript.open(self, "level_up")
 
 
 func _hide_level_up_wait_overlay() -> void:
 	if _level_up_wait_overlay and is_instance_valid(_level_up_wait_overlay):
 		_level_up_wait_overlay.queue_free()
 	_level_up_wait_overlay = null
-	_level_up_wait_countdown_label = null
-	_level_up_wait_label = null
-
-
-func _level_up_wait_message() -> String:
-	var names: String = NetworkManager.get_level_up_busy_names() if NetworkManager.is_multiplayer_active else ""
-	if names != "":
-		return "Seçim yapılıyor: %s\nLütfen bekleyin" % names
-	return "Bir oyuncu seçim yapıyor...\nLütfen bekleyin"
-
-
-func _on_level_up_countdown_tick(remaining: float) -> void:
-	if _level_up_wait_countdown_label and is_instance_valid(_level_up_wait_countdown_label):
-		_level_up_wait_countdown_label.text = "%ds" % int(ceil(remaining))
-	if _level_up_wait_label and is_instance_valid(_level_up_wait_label):
-		_level_up_wait_label.text = _level_up_wait_message()
 
 
 
@@ -2384,7 +2245,7 @@ func _on_multiplayer_server_disconnected() -> void:
 	if not is_inside_tree():
 		return
 	push_warning("[Main] Sunucu/Host bağlantısı kesildi.")
-	_show_network_toast("Sunucu bağlantısı koptu. Ana menüye dönülüyor...")
+	_show_notice("fail", "Sunucu bağlantısı koptu", "Ana menüye dönülüyor...")
 	_return_to_menu_after_disconnect()
 
 
@@ -2409,7 +2270,7 @@ func _on_host_migration_state(text: String, done: bool) -> void:
 func _on_host_left_game() -> void:
 	if not is_inside_tree():
 		return
-	_show_network_toast("Host oyundan ayrıldı. Ana menüye dönülüyor...")
+	_show_notice("left", "Host oyundan ayrıldı", "Ana menüye dönülüyor...")
 	_return_to_menu_after_disconnect()
 
 
@@ -2417,7 +2278,14 @@ func _on_player_left_game(p_name: String, peer_id: int = 0) -> void:
 	if not is_inside_tree():
 		return
 	if not p_name.is_empty():
-		_show_network_toast("%s oyundan ayrıldı." % p_name)
+		## ayrılanın soluk portresi (kukla hemen aşağıda silinir - önce karakterini oku)
+		var face: Texture2D = null
+		var rp = _remote_players.get(peer_id)
+		if rp != null and is_instance_valid(rp):
+			var path: String = str(Characters.get_def(int(rp.get("char_id"))).get("portrait", ""))
+			if path != "" and ResourceLoader.exists(path):
+				face = load(path) as Texture2D
+		_show_notice("left", "%s oyundan ayrıldı" % p_name, "", 2.4, -1.0, face)
 	_despawn_remote_player(peer_id)
 
 
@@ -2452,78 +2320,116 @@ func _return_to_menu_after_disconnect() -> void:
 	)
 
 
-## Basit, kendi kendini yok eden bir üst-orta bildirim etiketi (bkz.
-## kullanıcı bildirimi: "oyundan çıktığını gösteren bir bildirim yok").
-## Herhangi bir sahneye/panele bağımlı değil - doğrudan Main'e eklenir.
+## BİLDİRİMLER - "A Ahşap Levha" (kullanıcı seçimi 2026-10-18, madde 264; çizim scripts/game_notice.gd). Eskiden bej kit levhası +
+## düz yazıydı (UIKit "window_tight"). Kendi kendini yok eden, tıklamayı yutmayan levhalar; doğrudan Main'e eklenir.
+##  - Sağ sütun (PC): HUD'un sağ sütununun (minimap + grup paneli + görev satırları) ALTINA, sağ kenarı onlarla hizalı; aynı anda
+##    birden fazlası ALT ALTA dizilir, satırlar/bildirimler eklenip kalktıkça her karede konum güncellenir.
+##  - top_center (kullanıcı isteği 2026-10-05: "kademe atlamalarındaki bildirim ekranın üst ortasında çıksın"): kademe / sonsuz mod /
+##    debug uyarısı üst ortada (y=56, FPS etiketi ve sonsuz mod yazısının altı), kendi yığını; boss barı görünürken onun altına.
+##  - Telefon (kullanıcı bildirimi 2026-10-03: paneller üst üste): sağ sütun yetenek düğmeleriyle dolu - hepsi üst ortada, 32 px yazı.
 var _active_toast_panels: Array = [] ## ekrandaki bildirimler, eskiden yeniye - alt alta dizilirler
+## Sağ sütun bildirimlerinin hizalandığı HUD parçaları (minimap + grup paneli; _ready doldurur, bkz. world_event_banner.gd).
+var _notice_anchor_controls: Array = []
+const NOTICE_RIGHT_TOP_FALLBACK := 292.0
 
-## top_center (kullanıcı isteği 2026-10-05: "kademe atlamalarındaki bildirim ekranın üst ortasında çıksın"): PC'de bildirim sağ
-## sütun yerine ÜST ORTADA, FPS etiketi (y 8-44) ve sonsuz mod yazısının altında (y=56) çıkar, büyük yazıyla. Kendi yığını vardır:
-## sağ sütundaki bildirimlerle birbirlerinin yerini bozmazlar. Telefonda bildirimler zaten üst ortada - orada fark yok.
-## content: verilirse yazı etiketi yerine bu Control gösterilir (kademe bildirimi: başlık + kuru kafa satırı, bkz. _tier_banner).
-func _show_network_toast(text: String, hold_seconds: float = 2.4, top_center: bool = false, content: Control = null) -> void:
+
+## Genel sistem bildirimi (bağlantı, host devri, yeniden başlatma oylaması...): ilk satır başlık, kalanı gövde.
+## Türü belli bildirimler _show_notice / _show_banner_notice kullanır.
+func _show_network_toast(text: String, hold_seconds: float = 2.4, top_center: bool = false) -> void:
+	var parts: PackedStringArray = text.split("\n", true, 1)
+	var body: String = parts[1] if parts.size() > 1 else ""
+	if top_center:
+		_show_banner_notice("info", parts[0], body, hold_seconds)
+	else:
+		_show_notice("info", parts[0], body, hold_seconds)
+
+
+## Sağ sütun bildirimi. kind: game_notice.gd KIND_COLOR (ok/warn/start/fail/merchant/ach/left/info). countdown >= 0: başlıkta
+## geri sayan "N sn" (görev uyarısı). portrait: "left" bildiriminde ayrılanın soluk portresi.
+func _show_notice(kind: String, title: String, body: String = "", hold_seconds: float = 2.4, countdown: float = -1.0,
+		portrait: Texture2D = null) -> Control:
+	var n: Control = GameNoticeScript.toast(kind, title, body, hold_seconds, MobileUI.enabled)
+	if countdown >= 0.0:
+		n.call("set_countdown", countdown)
+	if portrait != null:
+		n.set("portrait", portrait)
+	_present_notice(n, hold_seconds, false)
+	return n
+
+
+## Üst orta duyuru (kurdele + gövde; tier > 0 ise kuru kafa satırı). kind "tier"/"fail" kırmızı kurdele, diğerleri altın.
+func _show_banner_notice(kind: String, ribbon_text: String, body: String = "", hold_seconds: float = 4.0, tier: int = 0) -> void:
+	_present_notice(GameNoticeScript.banner(kind, ribbon_text, body, hold_seconds, tier), hold_seconds, true)
+
+
+## Kademe duyurusu: kırmızı kurdelede başlık (KADEME VII / FİNAL KADEME) + altında zorluğu gösteren 6 kuru kafa (tier_display.gd).
+func _tier_banner(title: String, tier: int) -> Control:
+	return GameNoticeScript.banner("tier", title, "", 4.0, tier)
+
+
+## Sağ sütun kenarı + üstü: HUD'un minimap + grup paneli parçalarının altı (görev satırları varsa onların altı).
+func _notice_column() -> Vector2:
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var right_edge: float = vp.x - 10.0
+	var top_y: float = NOTICE_RIGHT_TOP_FALLBACK
+	var found: bool = false
+	for c in _notice_anchor_controls:
+		if not (c is Control) or not is_instance_valid(c) or not (c as Control).is_visible_in_tree():
+			continue
+		var r: Rect2 = (c as Control).get_global_rect()
+		if not found:
+			right_edge = r.end.x
+			top_y = r.end.y
+			found = true
+		else:
+			top_y = maxf(top_y, r.end.y)
+	if found:
+		top_y += 10.0
+	if _world_event_banner and is_instance_valid(_world_event_banner):
+		top_y = maxf(top_y, float(_world_event_banner.call("get_rows_bottom_y")) + 8.0)
+	return Vector2(right_edge, top_y)
+
+
+func _present_notice(panel: Control, hold_seconds: float, top_center: bool) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 100
 	add_child(layer)
-	var panel := PanelContainer.new()
-	## 2026-09-24: oyun içi bej kit penceresi (menülerle aynı dil) - koyu yazı.
-	panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
-	## Kullanıcı isteği: "altın gönderildi bildiriminin dükkan butonunun
-	## altında görünmesini istiyorum" - eskiden ekranın üst-ortasında
-	## duruyordu ve hud.tscn'deki dükkan/envanter butonlarının (GoldIndicator,
-	## sağ üstte) üzerine biniyordu. Artık sağ üstte, GoldIndicator'ın hemen
-	## altında beliriyor (bkz. hud.gd _layout_shop_inventory_buttons -
-	## GoldIndicator sağdan 178-10px, alt kenarı ~280px'te bitiyor).
-	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	panel.offset_top = 292
-	panel.offset_left = -270
-	panel.offset_right = -10
-	## Telefon (kullanıcı bildirimi 2026-10-03: paneller üst üste): sağ sütun yetenek düğmeleriyle dolu - bildirimler görev
-	## penceresiyle birlikte ÜST ORTADA (bkz. world_event_banner.gd telefon dalı), telefonda okunur yazı.
 	var phone: bool = MobileUI.enabled
-	if phone:
+	var centered: bool = top_center or phone
+	var sz: Vector2 = panel.size
+	if centered:
 		panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		panel.offset_left = -330
-		panel.offset_right = 330
-	elif top_center:
-		panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-		panel.offset_left = -380
-		panel.offset_right = 380
+		panel.offset_left = -roundf(sz.x * 0.5)
+		panel.offset_right = panel.offset_left + sz.x
+	else:
+		panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	panel.set_meta("top_center", top_center and not phone)
 	layer.add_child(panel)
-	if content != null:
-		panel.add_child(content)
-	else:
-		var lbl := Label.new()
-		lbl.text = text
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-		UIKit.style_label(lbl, 32 if (phone or top_center) else 24, UIKit.C_TEXT, 0)
-		panel.add_child(lbl)
-	## Sağ sütundaki görev satırlarının (bkz. world_event_banner.gd) üstüne binmesin - onların altına yerleşir;
-	## aynı anda birden fazla bildirim varsa (ör. iki görev aynı anda) üst üste binmek yerine ALT ALTA dizilir.
-	## Satırlar/bildirimler eklenip kalktıkça her karede konum güncellenir.
 	_active_toast_panels.append(panel)
 	var follow := func() -> void:
 		if not is_instance_valid(panel):
 			return
-		var centered: bool = bool(panel.get_meta("top_center", false))
-		var y: float = 120.0 if phone else (56.0 if centered else 292.0)
-		## Üst-orta bildirimler görev satırlarıyla (sağ sütun) çakışmaz: o kontrol sadece sağ sütun içindir.
-		if not centered and _world_event_banner and is_instance_valid(_world_event_banner):
-			y = maxf(y, float(_world_event_banner.call("get_rows_bottom_y")) + 8.0)
+		var is_top: bool = bool(panel.get_meta("top_center", false))
+		var y: float = 120.0 if phone else 56.0
+		if not centered:
+			var col: Vector2 = _notice_column()
+			y = col.y
+			panel.position.x = roundf(col.x - panel.size.x)
 		## Üst ortadaki boss barı görünürken üst-orta bildirimler (telefonda tüm bildirimler) onun ALTINA yerleşir.
-		if (centered or phone) and _boss_bar_top and is_instance_valid(_boss_bar_top):
+		if centered and _boss_bar_top and is_instance_valid(_boss_bar_top):
 			var bar_bottom: float = float(_boss_bar_top.call("get_bottom_y"))
 			if bar_bottom > 0.0:
 				y = maxf(y, bar_bottom + 8.0)
 		for other in _active_toast_panels:
 			if other == panel:
 				break
-			if is_instance_valid(other) and bool((other as Control).get_meta("top_center", false)) == centered:
-				y += (other as Control).size.y + 6.0
-		panel.offset_top = y
+			if is_instance_valid(other) and bool((other as Control).get_meta("top_center", false)) == is_top:
+				y += (other as Control).size.y + 8.0
+		if centered:
+			panel.offset_top = y
+			panel.offset_bottom = y + panel.size.y
+		else:
+			panel.position.y = roundf(y)
 	follow.call()
 	get_tree().process_frame.connect(follow)
 	layer.tree_exiting.connect(func() -> void:
@@ -2531,7 +2437,7 @@ func _show_network_toast(text: String, hold_seconds: float = 2.4, top_center: bo
 		if get_tree().process_frame.is_connected(follow):
 			get_tree().process_frame.disconnect(follow))
 	var tw := create_tween()
-	tw.tween_interval(hold_seconds)
+	tw.tween_interval(maxf(0.5, hold_seconds))
 	tw.tween_property(panel, "modulate:a", 0.0, 0.6)
 	tw.tween_callback(layer.queue_free)
 
@@ -2552,7 +2458,7 @@ func _show_network_toast(text: String, hold_seconds: float = 2.4, top_center: bo
 ## (birebir eşleşiyor) olduğu için o sorunsuz çalışıyordu - "ayrılınca
 ## bildiriliyor ama gelince bildirilmiyor" şikayeti tam olarak buydu.
 func _on_merchant_spawned(pos: Vector2, _stock: Array) -> void:
-	_show_network_toast("Bir seyyar satıcı haritada belirdi! Konumu haritada işaretlendi.")
+	_show_notice("merchant", "Seyyar Satıcı geldi", "Konumu haritada işaretlendi.", 4.0)
 	EventSfx.play(get_tree(), &"merchant_arrive")
 	var minimap: Node = hud.get_node_or_null("MinimapControl")
 	if minimap and minimap.has_method("set_merchant_marker"):
@@ -2567,28 +2473,11 @@ func _on_creature_tier_reached(tier: int) -> void:
 	if tier >= 16:
 		CameraShakeScript.add(0.5) ## Final: tüm bosslar geliyor
 	## 2026-10-05: sadece "KADEME <ROMEN>" + altında zorluğu gösteren 6 kuru kafa (bkz. tier_display.gd); eski "BAŞLADI - güçlendi" yazısı yok.
-	var title: String = TierDisplayScript.title(tier)
-	_show_network_toast(title, 4.0, true, _tier_banner(title, tier))
+	_show_banner_notice("tier", TierDisplayScript.title(tier), "", 4.0, tier)
 	GameManager.run_max_tier = maxi(GameManager.run_max_tier, tier)
 	_note_run_progress()
 
 
-## Kademe bildirimi içeriği: ortalanmış başlık + altında kuru kafa satırı (tier_display.gd set_tier). Telefonda aynı boyut (okunur).
-func _tier_banner(title: String, tier: int) -> Control:
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var lbl := Label.new()
-	lbl.text = title
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	UIKit.style_label(lbl, 36, UIKit.C_TEXT, 0)
-	box.add_child(lbl)
-	var row: Control = Control.new()
-	row.set_script(TierDisplayScript)
-	row.call("set_tier", tier, 3)
-	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	box.add_child(row)
-	return box
 
 
 ## ==============================================================================
@@ -2734,7 +2623,7 @@ func _note_run_progress() -> void:
 
 func _announce_achievements(result: Dictionary) -> void:
 	for id in result.get("achievements", []):
-		_show_network_toast("BAŞARIM: %s" % AchievementsScript.name_of(str(id)), 4.0)
+		_show_notice("ach", "Başarım: %s" % AchievementsScript.name_of(str(id)), String(AchievementsScript.def_of(str(id)).get("desc", "")), 4.0)
 		EventSfx.play(get_tree(), &"mission_success")
 
 
@@ -2795,18 +2684,20 @@ func _on_endless_started() -> void:
 	if _victory_overlay and is_instance_valid(_victory_overlay):
 		_victory_overlay.queue_free()
 		_victory_overlay = null
-	var started_text: String = "SONSUZ MOD BAŞLADI! Her kat yaratıklar güçlenir"
-	started_text += ", 3 katta bir boss dalgası gelir." if GameManager.bosses_enabled else "."
-	_show_network_toast(started_text, 5.0, true)
+	var started_text: String = "Her kat yaratıklar güçlenir"
+	started_text += ", 3 katta bir boss dalgası gelir." if GameManager.endless_has_boss_waves() else "."
+	_show_banner_notice("ok", "SONSUZ MOD BAŞLADI", started_text, 5.0)
 	_update_endless_label()
+	BalanceLogScript.note_layer(1, player) ## balans kaydı: kat 1 başlangıç anlık görüntüsü (madde 269)
 
 
 func _on_endless_layer_reached(layer: int) -> void:
-	var text: String = "SONSUZ KAT %d - yaratıklar güçlendi." % layer
-	if GameManager.bosses_enabled and EndlessMathScript.is_boss_wave_layer(layer):
+	var text: String = "Yaratıklar güçlendi."
+	if GameManager.endless_has_boss_waves() and EndlessMathScript.is_boss_wave_layer(layer):
 		text += " Bu katta BOSS DALGASI var!"
-	_show_network_toast(text, 4.0, true)
+	_show_banner_notice("tier", "SONSUZ KAT %d" % layer, text, 4.0)
 	_update_endless_label()
+	BalanceLogScript.note_layer(layer, player) ## balans kaydı: kat başlangıç anlık görüntüsü (madde 269)
 	_note_run_progress()
 
 
@@ -2831,14 +2722,14 @@ func _update_endless_label() -> void:
 		UIKit.style_label(_endless_label, 32 if MobileUI.enabled else 28, UIKit.C_CREAM, 6)
 		layer.add_child(_endless_label)
 	var text: String = "SONSUZ MOD - KAT %d" % GameManager.endless_layer
-	if GameManager.bosses_enabled and EndlessMathScript.is_boss_wave_layer(GameManager.endless_layer):
+	if GameManager.endless_has_boss_waves() and EndlessMathScript.is_boss_wave_layer(GameManager.endless_layer):
 		text += " - BOSS DALGASI"
 	_endless_label.text = text
 	_endless_label.visible = true
 
 
 func _on_merchant_departed() -> void:
-	_show_network_toast("Seyyar satıcı haritadan ayrıldı.")
+	_show_notice("merchant", "Seyyar Satıcı ayrıldı")
 	EventSfx.play(get_tree(), &"merchant_leave")
 	var minimap: Node = hud.get_node_or_null("MinimapControl")
 	if minimap and minimap.has_method("set_merchant_marker"):
@@ -2865,7 +2756,8 @@ func _on_world_event_announced(mission_id: int, kind: String, pos: Vector2, _rad
 		loc_note = ""
 	elif kind == "collect":
 		loc_note = " Kristaller başlayınca haritaya saçılacak."
-	_show_network_toast(("%s görevi %d saniye sonra başlayacak!" % [label, int(warn_seconds)]) + loc_note, MISSION_TOAST_SECONDS)
+	## başlıkta görevin adı + sağda başlamaya geri sayan "N sn" (debug zorla-başlat uyarısız gelir: sayaç yok)
+	_show_notice("warn", label, "Görev yakında başlıyor." + loc_note, MISSION_TOAST_SECONDS, warn_seconds if warn_seconds > 0.0 else -1.0)
 	if not NO_SINGLE_LOCATION_KINDS.has(kind):
 		var minimap: Node = hud.get_node_or_null("MinimapControl")
 		if minimap and minimap.has_method("set_mission_marker"):
@@ -2895,7 +2787,7 @@ func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radiu
 	var label: String = String(_world_event_label_by_id.get(mission_id, kind))
 	if not quiet:
 		EventSfx.play(get_tree(), &"mission_start")
-		_show_network_toast("%s görevi BAŞLADI!\n%s" % [label, String(MISSION_DESCRIPTIONS.get(kind, ""))], MISSION_TOAST_SECONDS)
+		_show_notice("start", "%s BAŞLADI" % label, String(MISSION_DESCRIPTIONS.get(kind, "")), MISSION_TOAST_SECONDS)
 	if not NO_SINGLE_LOCATION_KINDS.has(kind):
 		var minimap: Node = hud.get_node_or_null("MinimapControl")
 		if minimap and minimap.has_method("set_mission_marker"):
@@ -3024,15 +2916,17 @@ func _on_world_event_completed(mission_id: int, kind: String, success: bool) -> 
 	## hedefi" olacak şekilde TERSİNE çevrilmiş (bkz. o dosyadaki not), yani bu görev türünde
 	## success=false SADECE ağaç öldüğünde olur, süre dolması asla değil - o yüzden burada AYRI,
 	## doğru bir mesaj gösterilebilir (ağ üzerinden yeni bir "sebep" alanı eklemeye gerek yok).
-	var fail_text: String = "%s görevi süresi doldu, iptal edildi." % label
+	var fail_title: String = "%s süresi doldu" % label
+	var fail_body: String = "Görev iptal edildi."
 	if kind == "defend_tree" and not success:
-		fail_text = "%s görevi BAŞARISIZ! Ağaç yok edildi." % label
+		fail_title = "%s BAŞARISIZ" % label
+		fail_body = "Ağaç yok edildi."
 	## Başarı: "Görev Tamamlandı" penceresi (kullanıcı isteği 2026-10-02) - görev altını onun içinden altın paneline uçar
 	## (bkz. mission_complete_window.gd). Başarısızlık eskisi gibi sağ üstte bildirim.
 	if success:
 		MissionCompleteWindowScript.open(self, label)
 	else:
-		_show_network_toast(fail_text, MISSION_TOAST_SECONDS)
+		_show_notice("fail", fail_title, fail_body, MISSION_TOAST_SECONDS)
 	EventSfx.play(get_tree(), &"mission_success" if success else &"mission_fail")
 	_world_event_kind_by_id.erase(mission_id)
 	_world_event_label_by_id.erase(mission_id)
@@ -3160,7 +3054,7 @@ func _on_chat_message_received(peer_id: int, player_name: String, text: String) 
 ## (toast kaybolsa bile ne yapıldığı kalır). Gönderen KENDİMİZ de olsak gelir ("call_local") - ne yaptığını görmek zararsız.
 func _on_debug_action_announced(player_name: String, text: String) -> void:
 	var line: String = "[DEBUG] %s: %s" % [player_name, text]
-	_show_network_toast("DEBUG MODU UYARISI\n" + line, 4.0, true)
+	_show_banner_notice("fail", "DEBUG MODU UYARISI", line, 4.0)
 	EventSfx.play(get_tree(), &"chat")
 	if hud and hud.has_method("append_chat_message"):
 		hud.append_chat_message("DEBUG", "%s: %s" % [player_name, text])

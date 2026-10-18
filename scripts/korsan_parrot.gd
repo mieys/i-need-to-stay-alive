@@ -18,6 +18,7 @@ const ANCHOR_OFFSET := Vector2(0.0, -6.0) ## hücrede ayak noktası (24, 30) -> 
 
 const TerrainCollisionScript := preload("res://scripts/terrain_collision.gd")
 const ParrotTreeLoot := preload("res://scripts/parrot_tree_loot.gd")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 
 const SPEED_MULT := 1.2 ## sahibin (etkin) hareket hızının katı
 const MIN_SPEED := 120.0
@@ -166,6 +167,7 @@ func _find_tree(around: Vector2) -> Variant:
 ## Gagalama bitti: ödül ağaç dibinin hemen önüne düşer (gövde hücresi geçilmez olduğu için biraz güneyde, sahibin alabileceği yerde).
 func _drop_loot() -> void:
 	var pos: Vector2 = _tree_base + Vector2(randf_range(-DROP_SCATTER.x, DROP_SCATTER.x), DROP_SCATTER.y + randf_range(0.0, 6.0))
+	BalanceLogScript.on_pet_drop() ## sahibin ekranında sayılır (kukla buraya gelmez) - evcil yuvası ipucu
 	if not NetworkManager.is_multiplayer_active or NetworkManager.is_host:
 		ParrotTreeLoot.spawn(get_tree(), pos, ParrotTreeLoot.roll())
 	else:

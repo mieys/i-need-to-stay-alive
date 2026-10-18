@@ -17,9 +17,19 @@ extends Node2D
 ## Yazı floating_text.gd ile aynı (font, boyut, 4 yönlü piksel kontür, belirme/sönme zamanlaması, sis görünürlüğü).
 ## 2026-10-01'den beri hareket farklı ve sadece burada: pop + uzun süzülme + push_up yığılması, yaratıklar
 ## spawn_fixed kullanır (takip yok) - bkz. RISE üstündeki not.
+##
+## FPS (2026-10-18, ölçüm: 600 sayıda _process 1,95 ms = sayı başına 3,2 us; bir hasar sayısının doğuşu ~31 us, yarısından fazlası 5 TextLine.draw):
+##  - görünüm/zamanlama AYNI. _process her sayı için _apply + _alpha_of + fog_visibility_of çağrılarını satır içine aldı, sayılar `_list` dizisinde
+##    (sözlük araması yok); ömrü biten sayı swap-remove ile çıkar.
+##  - Süresi biten (ya da erken silinen) sayının ÇİZİLMİŞ canvas item'ı atılmaz, (metin + renk) anahtarıyla havuzlanır; aynı sayı tekrar çıkınca
+##    yeniden çizilmeden kullanılır (hasar değerleri tamsayı ve sınırlı: isabet oranı yüksek). Yeniden kullanılan item canvas_item_set_parent ile
+##    kardeşlerin SONUNA taşınır -> "yeni sayı eskilerin üstünde" sırası eskisi gibi.
+##  - spawn_fixed_capped: yaratık başına sayı sınırı (ölen kimlikleri at, sınıra gelince en eskiyi sil) tek çağrıda.
 
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const VIS_META := VisionFogScript.VIS_META
+const MIN_VISIBILITY := VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY
 
 ## Kullanıcı isteği (2026-10-01): "yukarı çıkmadan direk spawn oluyor... daha güzel bir yukarı çıkış animasyonu" - eski
 ## 6 px yükselme görünmüyordu. Artık: küçük bir pop (POP_SCALE'den 1'e, POP_TIME'da) + ömür boyunca RISE kadar
@@ -41,21 +51,31 @@ const OUTLINE_OFFSETS: Array[Vector2] = [Vector2(0, -1), Vector2(-1, 0), Vector2
 const BOX_POS := Vector2(-80.0, -22.0)
 const BOX_WIDTH := 160.0
 const FONT_SIZE := 16
+## Havuzdaki (boşta, çizilmiş) canvas item üst sınırı; aşan atılır.
+const FREE_MAX := 256
 
 static var _instance: Node2D = null
 
 var _font: Font = null
 var _next_id: int = 1
-## id -> Entry
+## id -> Entry (is_alive / remove / update_text / push_up için)
 var _entries: Dictionary = {}
+## Aynı kayıtlar, her karede gezilen dizi (Entry.slot = buradaki indeks).
+var _list: Array[Entry] = []
 ## Metin -> şekillendirilmiş TextLine. Bir alan hasarında 200 sayının hepsi genelde
 ## AYNI metin ("3" gibi) - şekillendirme (TextServer) her biri için tekrar yapılmasın.
 var _line_cache: Dictionary = {}
 const LINE_CACHE_MAX := 512
+## anahtar (metin + renk) -> Array[RID]: çizilmiş, gizli, boşta canvas item'lar.
+var _free: Dictionary = {}
+var _free_count: int = 0
 
 
 class Entry:
 	var ci: RID
+	var id: int = 0
+	var slot: int = 0
+	var key: String = ""
 	## Takip edilen yaratık; öldüğünde/silindiğinde null'a çekilir ve sayı son
 	## bilinen konumda (origin) sönmeye devam eder.
 	var target = null
@@ -104,9 +124,15 @@ func _init() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
-		for id in _entries:
-			RenderingServer.free_rid((_entries[id] as Entry).ci)
+		for e in _list:
+			RenderingServer.free_rid(e.ci)
+		_list.clear()
 		_entries.clear()
+		for key in _free:
+			for ci: RID in _free[key]:
+				RenderingServer.free_rid(ci)
+		_free.clear()
+		_free_count = 0
 
 
 func spawn(target: Node2D, offset: Vector2, text: String, color: Color) -> int:
@@ -120,19 +146,46 @@ func spawn_fixed(target: Node2D, world_pos: Vector2, text: String, color: Color)
 	return _spawn_entry(target, Vector2.ZERO, world_pos, false, text, color)
 
 
+## Yaratık başına sayı sınırı ile doğurma (enemy.gd _spawn_floating_text): ids = yaratığın canlı sayı kimlikleri (eskiden yeniye), YERİNDE güncellenir.
+## Ölmüş (süresi dolmuş/silinmiş) kimlikler atılır, max_live'a ulaşılmışsa en eskiler silinir, yeni sayı eklenir.
+func spawn_fixed_capped(target: Node2D, world_pos: Vector2, text: String, color: Color, ids: Array[int], max_live: int) -> void:
+	var w: int = 0
+	for i in range(ids.size()):
+		var id: int = ids[i]
+		if _entries.has(id):
+			ids[w] = id
+			w += 1
+	if w != ids.size():
+		ids.resize(w)
+	while not ids.is_empty() and ids.size() >= max_live:
+		remove(ids.pop_front())
+	ids.append(_spawn_entry(target, Vector2.ZERO, world_pos, false, text, color))
+
+
 func _spawn_entry(target: Node2D, offset: Vector2, origin: Vector2, follow: bool, text: String, color: Color) -> int:
 	var id: int = _next_id
 	_next_id += 1
 	var e := Entry.new()
+	e.id = id
 	e.target = target
 	e.offset = offset
 	e.origin = origin
 	e.follow = follow
-	e.ci = RenderingServer.canvas_item_create()
-	RenderingServer.canvas_item_set_parent(e.ci, get_canvas_item())
-	_paint(e.ci, text, color)
+	e.key = text if color == Color.WHITE else "%s|%d" % [text, color.to_rgba32()]
+	var pooled: Variant = _free.get(e.key)
+	if pooled != null and not (pooled as Array).is_empty():
+		e.ci = (pooled as Array).pop_back()
+		_free_count -= 1
+		RenderingServer.canvas_item_set_parent(e.ci, get_canvas_item()) ## kardeşlerin sonuna: yeni sayı eskilerin üstünde
+		RenderingServer.canvas_item_set_visible(e.ci, true)
+	else:
+		e.ci = RenderingServer.canvas_item_create()
+		RenderingServer.canvas_item_set_parent(e.ci, get_canvas_item())
+		_paint(e.ci, text, color)
 	_apply(e)
 	_entries[id] = e
+	e.slot = _list.size()
+	_list.append(e)
 	return id
 
 
@@ -152,8 +205,26 @@ func remove(id: int) -> void:
 	var e: Entry = _entries.get(id)
 	if e == null:
 		return
-	RenderingServer.free_rid(e.ci)
-	_entries.erase(id)
+	_release(e)
+
+
+## Kaydı listeden/sözlükten çıkarır ve canvas item'ı havuza (doluysa serbest) bırakır.
+func _release(e: Entry) -> void:
+	var last: Entry = _list.pop_back()
+	if last != e:
+		_list[e.slot] = last
+		last.slot = e.slot
+	_entries.erase(e.id)
+	if _free_count < FREE_MAX:
+		RenderingServer.canvas_item_set_visible(e.ci, false)
+		var arr: Variant = _free.get(e.key)
+		if arr == null:
+			arr = []
+			_free[e.key] = arr
+		(arr as Array).append(e.ci)
+		_free_count += 1
+	else:
+		RenderingServer.free_rid(e.ci)
 
 
 ## floating_text.gd update_text ile aynı: metin/renk güncellenir, sönme zamanlayıcısı
@@ -164,6 +235,7 @@ func update_text(id: int, text: String, color: Color) -> void:
 		return
 	RenderingServer.canvas_item_clear(e.ci)
 	_paint(e.ci, text, color)
+	e.key = text if color == Color.WHITE else "%s|%d" % [text, color.to_rgba32()]
 	e.fade_from = _alpha_of(e.fade_t, e.fade_from)
 	e.fade_t = 0.0
 
@@ -218,25 +290,54 @@ func _apply(e: Entry) -> void:
 
 
 func _process(delta: float) -> void:
-	if _entries.is_empty():
+	var n: int = _list.size()
+	if n == 0:
 		return
-	var dead: Array[int] = []
-	for id in _entries:
-		var e: Entry = _entries[id]
-		e.fade_t += delta
-		if e.fade_t >= TOTAL_TIME:
-			dead.append(id)
+	var i: int = 0
+	while i < n:
+		var e: Entry = _list[i]
+		var fade_t: float = e.fade_t + delta
+		e.fade_t = fade_t
+		if fade_t >= TOTAL_TIME:
+			_release(e) ## swap-remove: yerine listenin SONU geldi, i'yi ilerletme (o da bu karede işlenmeli)
+			n -= 1
 			continue
-		e.rise_t = minf(e.rise_t + delta, LIFETIME)
+		var rise_t: float = minf(e.rise_t + delta, LIFETIME)
+		e.rise_t = rise_t
 		if e.lift != e.lift_target:
 			e.lift = move_toward(e.lift, e.lift_target, maxf(0.5, absf(e.lift_target - e.lift) * LIFT_SMOOTH * delta))
-		if e.target != null:
-			if not is_instance_valid(e.target):
+		var tgt = e.target
+		if tgt != null:
+			if not is_instance_valid(tgt):
 				e.target = null
+				tgt = null
 			elif e.follow:
 				## Çizilen (interpolasyonlu) konuma yapış, ham fizik konumuna değil - bkz. PhysicsInterp.visual_position.
-				e.origin = PhysicsInterp.visual_position(e.target) + e.offset
-		_apply(e)
-	for id in dead:
-		RenderingServer.free_rid((_entries[id] as Entry).ci)
-		_entries.erase(id)
+				e.origin = PhysicsInterp.visual_position(tgt) + e.offset
+		## ---- _apply(e) satır içi (sonuç birebir aynı): sis görünürlüğü, konum/ölçek, saydamlık
+		var visible_now: bool = tgt == null or float(tgt.get_meta(VIS_META, 1.0)) >= MIN_VISIBILITY
+		if visible_now != e.shown:
+			e.shown = visible_now
+			RenderingServer.canvas_item_set_visible(e.ci, visible_now)
+		if visible_now:
+			var rise: float = RISE * sin((rise_t / LIFETIME) * PI * 0.5)
+			var sc: float = 1.0
+			if rise_t < POP_TIME:
+				var k: float = 1.0 - rise_t / POP_TIME
+				sc = 1.0 + (POP_SCALE - 1.0) * k * k
+			RenderingServer.canvas_item_set_transform(e.ci, Transform2D(0.0, Vector2(sc, sc), 0.0, e.origin - Vector2(0.0, rise + e.lift)))
+			var t: float = fade_t
+			var a: float
+			if t < FADE_IN_DURATION:
+				a = e.fade_from + (1.0 - e.fade_from) * (t / FADE_IN_DURATION)
+			else:
+				t -= FADE_IN_DURATION
+				if t < HOLD:
+					a = 1.0
+				else:
+					t -= HOLD
+					a = cos((t / FADE_OUT) * PI * 0.5) if t < FADE_OUT else 0.0
+			if a != e.alpha:
+				e.alpha = a
+				RenderingServer.canvas_item_set_modulate(e.ci, Color(1, 1, 1, a))
+		i += 1

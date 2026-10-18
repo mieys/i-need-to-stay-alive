@@ -213,6 +213,11 @@ static func _shader() -> Shader:
 	return _form_shader
 
 
+## Oyun açılırken ısıtma (fx_warmup.gd): form shader'ı ilk Kabus formunda derlenip takılmasın.
+static func warm_shader() -> Shader:
+	return _shader()
+
+
 ## Karakter sprite'ına form görünümünü uygular (ikisi de kapalıysa materyali kaldırır - normal çizim, ek maliyet yok).
 ## Materyal düğüm başına bir kez oluşturulup meta'da tutulur.
 static func apply_form(anim: CanvasItem, nightmare: bool, ghost: bool) -> void:

@@ -7,10 +7,12 @@ extends CanvasLayer
 ## satırındaki külçeden release edilir, paralar sol üstteki altın paneline uçar (gold_reward_fx.gd). Bu oyuncu görev
 ## bölgesinde değildiyse altın satırı çıkmaz. Oyunu durdurmaz, tıklamaları yutmaz, kendi kendine kapanır.
 
+## 2026-10-18 (madde 264): görünüş "A Ahşap Levha" - HUD levhası + altın kumaş kurdele + ödül kuyuları (game_notice.gd complete);
+## eski bej PanelContainer + etiketler kalktı. Paralar altın kuyusunun merkezinden uçar.
+
 const UiAnim := preload("res://scripts/ui_anim.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
-const INGOT_ICON := preload("res://assets/ui/newui/icon_gold_coin.png") ## altın simgesi = oyun içi madeni paranın animasyonsuz ilk karesi (2026-10-04)
-const ELITE_CHEST_SHEET := preload("res://assets/sprites/chests/chest_elite.png")
+const GameNotice := preload("res://scripts/game_notice.gd")
 
 const LAYER := 40 ## altın uçuş katmanının (41) hemen altı - paralar pencerenin üstünden çıkar
 const TOP := 128.0
@@ -19,13 +21,11 @@ const POP_TIME := 0.25
 const RELEASE_AT := 0.45
 const HOLD_TIME := 3.6
 const FADE_TIME := 0.35
-const ICON_SIZE := Vector2(40, 40)
 
 static var _open: Array = []
 
 var mission_label: String = ""
-var _panel: PanelContainer = null
-var _gold_icon: TextureRect = null
+var _panel: Control = null
 var _gold: int = 0
 var _t: float = 0.0
 var _released: bool = false
@@ -52,37 +52,26 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	_open.erase(self)
 	## Kapanırken hâlâ bırakılmamış altın varsa (çok kısa ömür) bekletilmesin.
-	if not _released and _gold > 0 and is_instance_valid(_gold_icon):
-		GoldRewardFx.release(&"mission", _gold_icon.get_global_transform_with_canvas() * (_gold_icon.size * 0.5))
+	if not _released and _gold > 0:
+		_release_gold()
+
+
+## Paralar altın kuyusunun ekran merkezinden altın paneline uçar.
+func _release_gold() -> void:
+	if not is_instance_valid(_panel):
+		return
+	var local: Vector2 = _panel.call("coin_center")
+	if local.x < 0.0:
+		local = _panel.size * 0.5
+	GoldRewardFx.release(&"mission", _panel.get_global_transform_with_canvas() * local)
 
 
 func _build() -> void:
-	_panel = PanelContainer.new()
-	_panel.theme = UIKit.theme()
-	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
-	add_child(_panel)
-	var box := VBoxContainer.new()
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 6)
-	_panel.add_child(box)
-	box.add_child(_label("GÖREV TAMAMLANDI!", UIKit.FS_TITLE, UIKit.C_ACCENT))
-	if mission_label != "":
-		box.add_child(_label(mission_label, 24, UIKit.C_TEXT_DIM))
-	var rewards := HBoxContainer.new()
-	rewards.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rewards.alignment = BoxContainer.ALIGNMENT_CENTER
-	rewards.add_theme_constant_override("separation", 28)
-	box.add_child(rewards)
-	if _gold > 0:
-		_gold_icon = _icon(INGOT_ICON)
-		rewards.add_child(_row(_gold_icon, "+%d altın" % _gold, UIKit.C_GOLD))
 	## 2026-10-10: görev ödülü elit sandık yerine silah parçacığı (bkz. world_event_manager.gd MISSION_SHARD_REWARD).
-	var shard_tex: Texture2D = load("res://assets/pickups/weapon_shard/shard_icon.png") as Texture2D
-	rewards.add_child(_row(_icon(shard_tex), "+%d Silah Parçacığı" % int((load("res://scripts/world_event_manager.gd") as GDScript).get_script_constant_map().get("MISSION_SHARD_REWARD", 5)), UIKit.C_TEXT))
+	var shards: int = int((load("res://scripts/world_event_manager.gd") as GDScript).get_script_constant_map().get("MISSION_SHARD_REWARD", 5))
+	_panel = GameNotice.complete(mission_label, _gold, shards, HOLD_TIME)
+	add_child(_panel)
 	## Boyut içerikten - ekranın üst ortasına, açık başka bir pencere varsa onun altına.
-	_panel.reset_size()
 	var view: Vector2 = get_viewport().get_visible_rect().size
 	var y: float = TOP
 	for w in _open:
@@ -97,37 +86,6 @@ func _build() -> void:
 	_panel.modulate.a = 0.0
 
 
-func _label(text: String, fs: int, color: Color) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	UIKit.style_label(l, fs, color, 0)
-	return l
-
-
-func _icon(tex: Texture2D) -> TextureRect:
-	var r := TextureRect.new()
-	r.texture = tex
-	r.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	r.custom_minimum_size = ICON_SIZE
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return r
-
-
-func _row(icon: TextureRect, text: String, color: Color) -> HBoxContainer:
-	var h := HBoxContainer.new()
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_theme_constant_override("separation", 8)
-	h.add_child(icon)
-	var l := _label(text, UIKit.FS_BODY, color)
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	h.add_child(l)
-	return h
-
-
 func _process(delta: float) -> void:
 	_t += delta
 	var pop: float = clampf(_t / POP_TIME, 0.0, 1.0)
@@ -136,8 +94,8 @@ func _process(delta: float) -> void:
 	_panel.modulate.a = pop
 	if not _released and _t >= RELEASE_AT:
 		_released = true
-		if _gold > 0 and is_instance_valid(_gold_icon):
-			GoldRewardFx.release(&"mission", _gold_icon.get_global_transform_with_canvas() * (_gold_icon.size * 0.5))
+		if _gold > 0:
+			_release_gold()
 	if _t > HOLD_TIME:
 		var k: float = clampf((_t - HOLD_TIME) / FADE_TIME, 0.0, 1.0)
 		_panel.modulate.a = 1.0 - k

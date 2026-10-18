@@ -9,7 +9,7 @@ extends RefCounted
 const MM := preload("res://scripts/main_menu.gd")
 const PC := preload("res://scripts/pet_catalog.gd")
 ## Koyu kit panelleri (menu_dark_kit.gd) sahnenin üstünde okunur kalsın diye düz koyu örtü; şömine ışığı yine seçilir.
-const DIM_COLOR := Color(0.02, 0.03, 0.04)
+const DIM_COLOR := Color(0.03, 0.03, 0.06) ## Gece Sıvası paneline uygun mor-lacivert (madde 248)
 const DIM_DESKTOP := 0.3
 
 

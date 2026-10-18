@@ -89,6 +89,7 @@ const ROTATION_CORRECTION := PI / 2.0
 ## alev -> duman izi (pixel spritesheet, bkz. fx_particle_trail.gd "missile"). Patlayınca (_done) iz bırakmayı keser.
 const ParticleTrail := preload("res://scripts/fx_particle_trail.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 
 
 func _ready() -> void:
@@ -199,7 +200,8 @@ func _explode() -> void:
 	## yakma EN FAZLA 1 düşmanda tetiklenebilir (bkz. enemy.gd
 	## try_shaman_weapon_burn() üstündeki kök neden notu).
 	var _shaman_burn_applied: bool = false
-	for e in get_tree().get_nodes_in_group("enemies"):
+	## FPS (2026-10-18): tüm "enemies" grubu yerine patlama merkezinin çevresindeki adaylar (C++ ızgara sorgusu); süzgeç aynen aşağıda (merkez mesafesi <= splash_radius).
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, splash_radius):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if not e.has_method("take_damage"):

@@ -3,6 +3,7 @@ extends Area2D
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const ProjectileRangeScript := preload("res://scripts/projectile_range.gd")
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 
 @export var speed: float = 400.0 ## genel hız ayarı: 500'den %20 düşürüldü
 @export var impact_scene: PackedScene
@@ -390,7 +391,8 @@ func _apply_knockback(target: Node2D) -> void:
 
 
 func _apply_splash_damage(direct_hit: Node) -> void:
-	for e in get_tree().get_nodes_in_group("enemies"):
+	## FPS (2026-10-18): tüm "enemies" grubu yerine patlama merkezinin çevresindeki adaylar (C++ ızgara sorgusu); süzgeç aynen aşağıda (merkez mesafesi <= splash_radius).
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, splash_radius):
 		if e == direct_hit or not is_instance_valid(e):
 			continue
 		if not e.has_method("take_damage"):

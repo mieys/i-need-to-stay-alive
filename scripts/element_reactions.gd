@@ -12,6 +12,10 @@ const EnchantArea := preload("res://scripts/enchant_area.gd")
 
 const COOLDOWN_MSEC := 1000 ## aynı düşmanda aynı tepkime saniyede en fazla 1 kez
 const MARK_AMP_PER_STACK := 0.03 ## İşaret güçlendirmesi (yük başına)
+## Tepkime ADI yaratığın üstünde yazı olarak ÇIKMAZ (kullanıcı 2026-10-18: "tüftüfte bişey olunca zehirli duman yazıyor yazmasın. gereksiz
+## yazıları tespit et" - Tüftüf zehri + Şaman/Ateş Asası yanması her saniye her yaratıkta ad yazısı basıyor, kalabalıkta ekranı dolduruyordu).
+## Tepkimenin KENDİSİ (hasar, bulut, patlama, bayraklar) aynı; ad yazısı geri açılacaksa true (false iken ağa ad RPC'si de gitmez).
+const SHOW_REACTION_NAMES := false
 
 ## Çift anahtarı alfabetik: "a+b".
 const REACTIONS := {
@@ -58,7 +62,8 @@ static func trigger(e: Node, key: String) -> void:
 	var info: Dictionary = REACTIONS[key]
 	var tree: SceneTree = e.get_tree()
 	var pos: Vector2 = e.global_position
-	EnchantFx.play(tree, "text", pos, {"text": str(info["name"]), "color": info["color"]})
+	if SHOW_REACTION_NAMES:
+		EnchantFx.play(tree, "text", pos, {"text": str(info["name"]), "color": info["color"]})
 	## Kaos Büyüsü IV (tepkime başına güçlenme) gibi efsunlar için tetikleyen oyuncuya haber.
 	if e._reaction_peer > 0 or not NetworkManager.is_multiplayer_active:
 		e._notify_enchant_owner(e._reaction_peer, "reaction", {"key": key})

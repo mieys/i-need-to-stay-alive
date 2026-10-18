@@ -1,26 +1,28 @@
 extends RefCounted
 
 ## KOYU MENÜ KİTİ (2026-10-16): kullanıcının seçtiği "SEÇİM D" prototipinin (tools/proto_20261016/menu_proto.gd) görünümü oyunda.
-## Gece ormanı paleti (koyu yeşil-camgöbeği paneller, nane vurgu), m5x7 yazı, 45° pahlı piksel köşe (corner_detail = 1), metin gölgesi.
-## Bej MenuKit'in (menu_kit.gd) yerine geçmez; çok oyunculu karakter seçimi (lobby_select_desktop.gd) ve ana menü (main_menu.gd, kehribar paletiyle) kullanır.
+## "GECE SIVASI" paleti (2026-10-17, madde 248 prototip C; önceki yeşil-camgöbeği + nane vurgu): ana menü odasının mavi-mor sıva duvarı
+## paneller, ana menünün altın + krem yazısı vurgu. m5x7 yazı, 45° pahlı piksel köşe (corner_detail = 1), metin gölgesi.
+## Bej MenuKit'in (menu_kit.gd) yerine geçmez; tek oyunculu / çok oyunculu seçim (lobby_select_desktop.gd), oda listesi (room_browser.gd) panelleri
+## bu renklerle; ana menü, ESC ve ayarlar sadece yardımcılarını + theme()'i (kaydırma çubuğu, ipucu kutusu) kullanır.
 ## Hepsi statik: const DarkKit := preload("res://scripts/menu_dark_kit.gd").
 
 ## Dış paneller hafif saydam (2026-10-16): arkadaki ana menü sahnesi ("Ocak Başı", menu_hearth_bg.gd) seçilsin. İç kutular/karolar opak.
-const C_PANEL := Color("#152220db")
-const C_PANEL2 := Color("#1c2d2a")
-const C_PANEL3 := Color("#264037")
-const C_INSET := Color("#0f1918")
-const C_LINE := Color("#2c443e")
-const C_LINE_HI := Color("#46665c")
-const C_TEXT := Color("#e7efe3")
-const C_DIM := Color("#92aba2")
-const C_ACCENT := Color("#a3dba9")
-const C_ACCENT_DK := Color("#2f5f3e")
-const C_ACCENT_TEXT := Color("#0e2018")
-const C_GOOD := Color("#a3dba9")
+const C_PANEL := Color("#1a1a2ce0")
+const C_PANEL2 := Color("#23233a")
+const C_PANEL3 := Color("#302f4c")
+const C_INSET := Color("#12121f")
+const C_LINE := Color("#3b3a5a")
+const C_LINE_HI := Color("#5f5c86")
+const C_TEXT := Color("#efe6d6")
+const C_DIM := Color("#a7a2c0")
+const C_ACCENT := Color("#f4c56e")
+const C_ACCENT_DK := Color("#6a5226")
+const C_ACCENT_TEXT := Color("#231a0a")
+const C_GOOD := Color("#a8d69a")
 const C_BAD := Color("#e38c7c")
 const C_PRICE := Color("#f0da94")
-const C_SPOT := Color("#5fa08a")
+const C_SPOT := Color("#b98a4a")
 ## Oyuncu renkleri (kart şeridi, karakter kartı köşe işareti, sohbet adı); sıra = peer kimliği sırası.
 const PLAYER_COLORS := [Color("#e8c26a"), Color("#7fd0d8"), Color("#e58f9e"), Color("#a99be6"),
 		Color("#9fd38a"), Color("#f0a46a"), Color("#d9a0e0"), Color("#8fb4f0")]

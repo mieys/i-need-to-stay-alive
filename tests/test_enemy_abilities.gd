@@ -84,3 +84,56 @@ func test_frozen_caster_cancels_telegraphed_spell() -> void:
 	assert(AbilitiesScript.caster_disabled(c, {}))
 	assert(not AbilitiesScript.caster_disabled(null, {"src": 5})) ## tek oyunculu/host'ta kaynak yoksa iptal yok
 	c.free()
+
+
+## FPS (2026-10-18): process_fast, bekleme sayacı sürerken process() ile BİREBİR aynı durum değişimini hedef sorgusu OLMADAN yapar (enemy.gd _ew_tick hızlı yolu).
+class _FakeOwner extends Node2D:
+	var is_ability_invisible: bool = false
+	var is_dead: bool = false
+	func set_ability_invisible(on: bool) -> void:
+		is_ability_invisible = on
+	func _find_closest_target_player() -> Node2D:
+		return null
+
+
+func _cooldown_trace(fam: String, use_fast: bool, steps: int, invisible_start: bool) -> Array:
+	seed(7)
+	var owner := _FakeOwner.new()
+	var ab = AbilitiesScript.new()
+	ab.setup(owner, fam)
+	if invisible_start:
+		owner.is_ability_invisible = true
+		ab._timer = 0.4
+	var trace: Array = []
+	var dt: float = 1.0 / 60.0
+	for i in range(steps):
+		if not (use_fast and ab.process_fast(dt)):
+			ab.process(dt, null, INF)
+		trace.append([ab._cd, ab._timer, ab._pending, ab._vision_check, ab._entry_delay, owner.is_ability_invisible])
+	owner.free()
+	return trace
+
+
+func test_process_fast_is_identical_to_process_for_cooldown_counters() -> void:
+	for fam in ["hayalet", "vampire", "rontgen", "iblis", "agac"]:
+		var plain: Array = _cooldown_trace(fam, false, 1200, false)
+		var fast: Array = _cooldown_trace(fam, true, 1200, false)
+		assert(plain == fast, "%s: process_fast sayaçları process ile aynı olmalı" % fam)
+	## görünmez hayalet: süre sayacı + bitince görünür olma
+	var inv_plain: Array = _cooldown_trace("hayalet", false, 120, true)
+	var inv_fast: Array = _cooldown_trace("hayalet", true, 120, true)
+	assert(inv_plain == inv_fast, "görünmez hayalet: process_fast aynı olmalı")
+	assert(inv_plain[0][5] == true and inv_plain[119][5] == false, "hayalet 0,4 sn sonra yeniden görünür olmalı")
+
+
+func test_process_fast_never_changes_state_when_it_returns_false() -> void:
+	var owner := _FakeOwner.new()
+	var ab = AbilitiesScript.new()
+	ab.setup(owner, "iblis")
+	ab._cd = 0.01 ## bu karede biter -> hızlı yol işi bırakmalı ve hiçbir şeyi DEĞİŞTİRMEMELİ
+	var before: float = ab._cd
+	assert(not ab.process_fast(1.0 / 60.0), "bekleme bu karede bitiyorsa asıl iş var: false")
+	assert(ab._cd == before, "false dönerken sayaç değişmemeli (process kendisi azaltır)")
+	ab._cd = 5.0
+	assert(ab.process_fast(1.0 / 60.0) and is_equal_approx(ab._cd, 5.0 - 1.0 / 60.0), "bekleme sürerken sayaç azalır, true")
+	owner.free()

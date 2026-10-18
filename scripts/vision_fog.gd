@@ -85,7 +85,7 @@ var _prev_zoom: Vector2 = Vector2.ONE
 
 ## Kullanıcı isteği (2026-09-25): "gece olunca görüş açısı %25 azalacak (hava kararmaya doğru kademeli şekilde yavaş
 ## yavaş ... daha dar görüş açısı)". Elips artık sabit VISION_RADIUS değil, bu değer: VISION_RADIUS x atmosferin görüş
-## çarpanı (atmosphere.gd -> atmosphere_math.gd vision_multiplier: gündüz 1.0, gece 0.75, arası kademeli). Saat host'tan
+## çarpanı (atmosphere.gd -> atmosphere_math.gd vision_multiplier: gündüz 1.0, gece NIGHT_VISION_MULT = şu an 1.0, 2026-10-18). Saat host'tan
 ## senkron geldiği için her istemcide aynı. Atmosfer yoksa (ana menü, testler) VISION_RADIUS'ta kalır.
 var _vision_radius: float = VISION_RADIUS
 var _atmosphere: Node = null

@@ -178,3 +178,59 @@ func test_shop_panel_has_no_gold_production_entries() -> void:
 		"Kaldırılan 'mine' anahtarı maliyet hesabında varsayılana düşmüyor")
 	assert(ShopScript._upgrade_cost("gold_collector", 1) > 0,
 		"Kaldırılan 'gold_collector' anahtarı maliyet hesabında varsayılana düşmüyor")
+
+
+## ---- Madde 269 (2026-10-18): sonsuz mod XP kaçağı ----
+
+## Seviye 60'a kadar ESKİ eğri (geç büyüme eklenmeden): tabana + rampaya + sabit artışa bakan birebir kopya.
+func _pre_late_xp_needed(level: int) -> float:
+	var steps: int = maxi(level - 1, 0)
+	var r: int = mini(steps, GameManager.RAMP_STEPS)
+	var ramp: float = r * GameManager.MIN_XP_INCREMENT + GameManager.XP_INCREMENT_GROWTH * (r * (r - 1) / 2.0)
+	var capped: float = maxi(steps - GameManager.RAMP_STEPS, 0) * GameManager.MAX_XP_INCREMENT
+	return round((GameManager.BASE_XP_NEEDED + ramp + capped) * GameManager.XP_NEEDED_MULT)
+
+
+func test_late_curve_leaves_levels_up_to_sixty_untouched() -> void:
+	for lvl in [1, 2, 10, 11, 25, 45, 60]:
+		assert(_new_xp_needed(lvl) == _pre_late_xp_needed(lvl), "L%d eski eğriyle aynı kalmalı: %s vs %s" % [lvl, _new_xp_needed(lvl), _pre_late_xp_needed(lvl)])
+	assert(_new_xp_needed(61) > _pre_late_xp_needed(61), "L61'den itibaren ek büyüme başlar")
+
+
+func test_late_curve_increment_keeps_growing_past_sixty() -> void:
+	## L100: sabit eğri 10240 + 3*40*41/2 = 2460 -> (12700) * 0.9 = 11430
+	assert(_new_xp_needed(100) == 11430.0, "L100 gereksinimi 11430 olmalı: %s" % _new_xp_needed(100))
+	var step_a: float = _new_xp_needed(80) - _new_xp_needed(79)
+	var step_b: float = _new_xp_needed(200) - _new_xp_needed(199)
+	assert(step_b > step_a * 2.0, "geç seviyede seviye başına artış büyümeli: L80 %s, L200 %s" % [step_a, step_b])
+	var prev: float = 0.0
+	for lvl in range(55, 320):
+		var cur: float = _new_xp_needed(lvl)
+		assert(cur > prev, "gereksinim monoton artmalı (L%d)" % lvl)
+		prev = cur
+
+
+func test_total_xp_to_level_three_hundred_is_far_above_the_old_curve() -> void:
+	var total_old: float = 0.0
+	var total_new: float = 0.0
+	for lvl in range(1, 306):
+		total_old += _pre_late_xp_needed(lvl)
+		total_new += _new_xp_needed(lvl)
+	assert(total_new > total_old * 1.8, "306. seviyeye toplam XP en az ~2 kat olmalı: eski %s, yeni %s" % [total_old, total_new])
+
+
+func test_exp_gain_is_capped_for_every_xp_path() -> void:
+	assert(is_equal_approx(GameManager.effective_exp_gain(2.05), GameManager.EXP_GAIN_CAP), "+%205 -> sınır")
+	assert(is_equal_approx(GameManager.effective_exp_gain(0.3), 0.3), "sınırın altı aynen")
+	assert(is_equal_approx(GameManager.effective_exp_gain(-0.5), 0.0), "negatif 0'a kısılır")
+	var orb: GDScript = load("res://scripts/xp_orb.gd")
+	var holder := ExpHolder.new()
+	holder.exp_gain_percent = 2.05
+	assert(is_equal_approx(orb.xp_gain_mult_for(holder), 1.0 + GameManager.EXP_GAIN_CAP), "xp_orb çarpanı sınırlı: %s" % orb.xp_gain_mult_for(holder))
+	holder.exp_gain_percent = 0.4
+	assert(is_equal_approx(orb.xp_gain_mult_for(holder), 1.4), "sınır altında aynen")
+	holder.free()
+
+
+class ExpHolder extends Node:
+	var exp_gain_percent: float = 0.0

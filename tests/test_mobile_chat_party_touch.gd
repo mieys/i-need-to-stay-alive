@@ -187,6 +187,15 @@ func test_scroll_does_not_steal_a_finger_the_joystick_owns() -> void:
 	await _teardown()
 
 
+## Madde 273: sohbet düğmesi önce HIZLI SOHBET penceresini açar; penceredeki "Mesaj yaz" alanı yazma kutusunu (ekran klavyesi)
+## açar. Kutu açıkken sohbet düğmesi / dünya / joystick bölgesi kutuyu kapatır - oyuncu kilitli kalmaz.
+func _open_input(btn_pos: Vector2) -> void:
+	await _tap(btn_pos)
+	var qc: Control = _hud._ph_quick_chat
+	var r: Rect2 = _rect(qc)
+	await _tap(Vector2(r.get_center().x, r.end.y - 47.0))
+
+
 func test_chat_input_cannot_lock_the_player() -> void:
 	await _setup(3, 1)
 	var fake_player := FakePlayer.new()
@@ -197,15 +206,24 @@ func test_chat_input_cannot_lock_the_player() -> void:
 	var btn_pos: Vector2 = _rect(_hud.mobile_chat_button).get_center()
 
 	await _tap(btn_pos)
-	assert(ci.visible and fake_player.is_chat_typing, "sohbet düğmesi kutuyu açmalı")
+	var qc: Control = _hud._ph_quick_chat
+	assert(qc != null and qc.visible and not ci.visible, "sohbet düğmesi hızlı sohbet penceresini açmalı")
 	await _tap(btn_pos)
-	assert(not ci.visible and not fake_player.is_chat_typing, "sohbet düğmesine tekrar dokunmak kutuyu kapatmalı")
+	assert(not qc.visible, "sohbet düğmesine tekrar dokunmak pencereyi kapatmalı")
+	await _tap(btn_pos)
+	await _tap(Vector2(1700.0, 300.0))
+	assert(not qc.visible and not fake_player.is_chat_typing, "dünyaya dokunmak pencereyi kapatmalı")
 
+	await _open_input(btn_pos)
+	assert(not qc.visible and ci.visible and fake_player.is_chat_typing, "Mesaj yaz alanı yazma kutusunu açmalı")
 	await _tap(btn_pos)
+	assert(not ci.visible and not fake_player.is_chat_typing, "sohbet düğmesine dokunmak yazma kutusunu kapatmalı")
+
+	await _open_input(btn_pos)
 	await _tap(Vector2(1700.0, 300.0))
 	assert(not ci.visible and not fake_player.is_chat_typing, "dünyaya dokunmak kutuyu kapatmalı (oyuncu kilitli kalmamalı)")
 
-	await _tap(btn_pos)
+	await _open_input(btn_pos)
 	await _tap(_rect(ci).get_center())
 	assert(ci.visible and fake_player.is_chat_typing, "kutunun kendisine dokunmak kutuyu kapatmamalı")
 	await _tap(Vector2(160.0, 900.0))

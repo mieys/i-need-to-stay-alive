@@ -15,7 +15,7 @@ extends RefCounted
 ## enemy.gd DOT tiki ("dot"). Yetenek (Q/E/R) kırılımı için player.gd'deki take_damage çağrılarına tag(&"s:q") eklenebilir.
 
 const CharactersScript: GDScript = preload("res://scripts/characters.gd")
-const BALANCE_REV := 57 ## 57: Tüftüf Bulaşıcı Salgı patlaması (bulaşma yarıçapı + halka) %50 küçüldü (100 -> 50), zehir hasarı %6 -> %7. 56: Pençe güçlendirme - Kanlı Pençe kanaması saldırı gücünün %7'si -> %20'si/sn (tek yük, birikmez), can emme %4 -> %6 ve artık ilk vuruşta da (eskiden sadece zaten kanayan hedefte; alan payında %33), alan hasarı 60 -> 80 px; pençe hasarı artık atış anında değil temasta (0,145 / 0,235 sn, Kanca Çekiş) (2026-10-17). 55: Topuz silah özelliği Sismik Dalga'nın merkezi karakterden vuruş noktasına (ana hedef) taşındı; topuz hasarı artık atış anında değil başın yere indiği anda (0,27 sn) (2026-10-17). 54: demirci kademesi (efsun kademesi 1-5) silaha stat verir: kademe basina +%10 hasar, -%5 atis araligi (weapon.gd TIER_*). 53: 7 efsanevi esyaya (Sifa Feneri, Tanrinin Eli, Bilgenin Pusulasi, Ruzgar Yuruyen Cizmeleri, Kan Madalyonu, Ahenk Cevheri, Kiyamet Bicagi) alt parca tarifi verildi (artik sahip olunan parcalar tuketilip fiyattan dusulur); fiyat = bilesen toplami: Sifa 2300 -> 2320, Cizmeler 2400 -> 2410, Kiyamet 2600 -> 2520 (2026-10-17). 52: Yaratik tavani -%30 (150 -> 105, ek oyuncu basi +30 -> +21) ve TUM silahlarin saldiri hizi -%30 (GameManager.WEAPON_ATTACK_SPEED_MULT 0.7, weapon.gd _effective_fire_wait) (2026-10-17). 51: Agaci Koru gorevi suresi 50 -> 170 sn, agac can/kalkan ~%25 dusuk (HP_PER_ENEMY_HIT 70 -> 52, SHIELD_PER_ENEMY_HIT 22 -> 16, yedek 3000/800 -> 2250/600) (2026-10-17). 50: Sovalye R kalkan hasar azaltimi %95 -> %92 (PALADIN_ULTI_SHIELD_COST_MULT 0.05 -> 0.08). 49: Balkabagi boss ates topu 20 -> 30 (+%50). 48: Talon E (Silah Salvosu) -%40 hasar cezası kaldırıldı, Ayna Formu kopya başına saldırı gücü cezası %8 -> %4 (2026-10-17); 47: fareler (rat1-3) oyundan kalktı, yerlerine slime1 (Kademe 1-4, 6) + elit slime2; slime gecikmesi kapalı (2026-10-17); 46: Assasin R (Gölge Hücumu) bekleme 90 -> 10 sn, hedefler sadece KENDİ görüş alanında (eski 600 birim yarıçap), ulti başına en fazla 20 çarpış (eskiden 10 sn sınırsız, ~45) (2026-10-16); 45 (+ kayda gold_kill/gold_assist/sup_sent eklendi, rev aynı: sadece yeni alanlar): asist sadece öldürmeden önceki 8 sn içindeki hasar/destekle (eskiden %10+ hasar süresizdi), Şovalye E/R koruması da bitişten sonra 8 sn sayılır (2026-10-15); 44: ASİST sistemi - çok oyunculuda yaratık altını hasar/destek verenlerle paylaşılır (öldüren en az %50; toplam <4 altın bölünmez) (2026-10-15); 43: yaratık altını yere düşmez, öldürene anında verilir ve her ölümde garanti (en az 1; kademeye göre şans x ortalama, boss paylaşımlı, minyon şansa bağlı) (2026-10-15); 42: maden kazma altını 5 kat (bakır 1 -> 5, gri 2 -> 10 / vuruş) (2026-10-15); 41: Talon E Şovalye kubbesinde = kubbe girdabı: halkadaki HERKESİN silahı döner ve dışa ateş eder, +%200 (evrimle +%250) saldırı hızı, -%40 hasar; Koşan Salvo/Keskin Çember yarı (2026-10-15); 40: Şovalye R koruma alanı daire (yarıçap 126) -> 2:1 elips yatay 126, dikey 63 (alan yarıya indi; yaratıklar aşağıdan/yukarıdan çok daha yakına gelir) - izometrik kubbe (2026-10-14); 39: seviye başına can artışı 20/10 -> her seviye +15 (11+ dahil) (2026-10-14); 38: Melek pasifi can yerine mana kalkanı yeniliyor (oran aynı, saldırı gücünün %2'si/sn) (2026-10-14); 37: Kopyanı Öldür kopyası - can/kalkan x30, hız %80 ve kalkan yedeği SİLİNDİ (oyuncunun statları aynen); verdiği/aldığı hasar %50 azalmayla başlar, oyunda geçen her 20 sn'de %1 artar, en çok %95 (2026-10-14); 36: kalp yenilenmesi artık her kalp eksildiğinde işler (2+ kalp 8 dk, 1 kalp 6,5 dk, 0 kalp 5 dk; eskiden sadece 0 kalpte 5 dk) (2026-10-14); 35: kalkan orbu - yaratıklardan yemekle aynı oranda (%0,25, şansla artar) düşen yeni toplanabilir, azami kalkanın %15'i (%70) / %30'u (%30) (2026-10-14); 34: her epik eşyadan en fazla 1 (parçalar serbest), Matthew pasifi Yıldırım Hızı tavanı %30 -> %15 hareket hızı + toplam hareket hızının her %1'i = %0,5 saldırı hızı (eskiden birikimin kendisi = aynı oranda saldırı hızı) (2026-10-14); 33: level atlama Can kartı 15/24/30/38 -> 20/35/50/70 (2026-10-14); 32: kalkan türlerinin kendi yenilenme değeri x1,3 (eşya/yetenek kaynaklı yenilenme hariç) (2026-10-14); 31: sağ alt tehlikeli bölge - bekçi kampları 3 -> 7 (29 -> 106 bekçi), arkadaşlarını çağırmazlar (sadece görenler kovalar), %35-70 oranında 1-2 kademe ilerisinden yaratık (2026-10-14); 30: maden kazma - köşelerdeki madenlerde durunca otomatik kazma, vuruş başına altın (bakır 1, gri 2; yeni altın kaynağı), madenler 1,5 vuruş/karo dayanır (en az 8) ve 120 sn sonra yeniden doğar (2026-10-14); 29: her silahtan en fazla 1 (aynı silah ikinci kez alınamaz), silah hasarı x1,5 -> x1,0 (yakın dövüş ek x1,4 kaldı), Yay Üçlü Ok yan ok hasarı %80 -> %60 (+%20 -> +%15 geliştirme) (2026-10-14); 28: Cadı iksir alanı süresi 4 -> 6 sn, mermi menzili = görüş elipsi (oyuncu + yaratık mermileri), yaratık yakın dövüş menzili 26 -> 12 px + isabet toleransı 40 -> 20 px (2026-10-14); 27: Ruh Mağazası kalıcı geliştirmeleri (20 kalıcı stat; oyuncular artık her koşuya Ruh Kıymığıyla alınmış bonuslarla başlayabilir) (2026-10-13); 26: Elara pasifi saldırı hızı sınırı %50 -> %30 (30. seviyede dolar) (2026-10-13); 25: karakter başına başlangıç statları (Can/Hız/Saldırı Gücü/Saldırı Hızı, Characters.BASE_STATS; eskiden herkes 100/252/10/+0) (2026-10-13); 24: Cadı Q dumanı topuğun hemen arkasına iner (eskiden ~41 birim geride) + yukarı/aşağı yürürken dar-derin bulut 24x22 (yatay 32x17, alan aynı), 0,3 sn'de bir (2026-10-13); 21: eşya kaynaklı bekleme azaltma da %60 üst sınırında (eskiden sadece kartlar) (2026-10-13); 20: yaratık kalkan soğurması normal %30 -> %60 (Kademe 7'de tam), elit %80 (2026-10-13); 19: eşya/ruhani/evcil saldırı hızı havuzu hıza EKLENİR (aralık = 1/(1+toplam)); eskiden 1'den çıkarılıp yüzük yığınında katlanıyordu (2026-10-13); 18: evcil hayvan Kirpi (sana saldıran yaratık azami kalkanının %5'i kadar hasar alır; kalkan varken alınan hasar %5 az) (2026-10-13); 17: evcil hayvan Peri (can eksikken 6 sn'de bir saldırı gücünün %10'u kadar can) (2026-10-12); 16: evcil hayvan Kelebek Ruhu (+%10 saldırı hızı, ilk silah isabetine saldırı gücünün %20'si lazer) (2026-10-12); 15: Savaş Kalkanı savaşta (son 3 sn hasar) yenilenme x0,5 + geliştirme başına yenilenme +2 -> +1,5 (2026-10-12); 14: evcil hayvanlar (köpek: sahibin statlarıyla saldırır; papağan: altın toplar + 10 şans) (2026-10-12); 13: Korsan pasifi Altın Avcısı (öldürme başına 1 altın, 30 altın = +1 saldırı gücü; Papağan kalktı) (2026-10-12); 12: silah parçacığı düşme şansı %1 -> %0,5, eşya satış iadesi %70 -> %50 (2026-10-12); 11: Matthew rework - köpek yok, şimşek kiti (pasif Yıldırım Hızı, E Elektrik Topu, R köpeksiz) (2026-10-12); 10: Ejderha Nefesi menzil x1,5 / açı x1,25 (eskiden x2 / x1,5) (2026-10-12); 9: silah sınırı 3 + silah hasarı x1,5 (yakın dövüş x2,1) deneme (2026-10-12); 8: Şovalye pasifi Dirençli Duruş (%40 altı %20 az hasar; Dikenli Zırh kalktı) (2026-10-12); 7: Elara pasifi gerçek +%50 hız + taşma dışı, Tüfek delme hasarı %70 (2026-10-12); 6: yaratık hasarı x0,8 iptal + Balkabağı güçlendirme (2026-10-11)
+const BALANCE_REV := 63 ## 63: Ruhların Maskesi orb pasifi: orb başına %1 geri döndü (0,5 -> 1) ama her orbun bonusu KENDİ 4 sn'sinde söner, yeni orb eskisini YENİLEMEZ (eskiden her orb tüm yığının süresini baştan başlatıyordu: ortalama bonus ~3,9 x orb/sn %, şimdi ~2 x orb/sn %) (2026-10-18). 62: Ruhların Maskesi (orb başına hız) EPİKTEN EFSANEVİYE: orb başına hız %1 -> %0,5, +%20 EXP (eskiden %10) ve +%5 hareket hızı, tarif = eski + Rüzgar Eldiveni + 2. Tecrübe Kitabı (1790); Ninja El Kitabı / Son Şans / Bilgenin Pusulası tarifleri açık parçalara çevrildi (fiyatlar aynı) (2026-10-18). 61: SONSUZ MOD baskısı + XP kaçağı (madde 269): sonsuzda kat başına bileşik yaratık can +%8 / hasar +%5, yaratık tavanı kat başına +3 (en çok +60), 3 katta bir yeni 6 bossluk dalga (dalga başına boss can/kalkan +%50, hasar +%25); seviye 60'tan sonra XP gereksinimi dikleşti (artış seviye başına +3 daha), toplam XP bonusu en çok +%100 (2026-10-18). 60: Oakley R Koruyucu Büyü -> HAYAT AĞACI (12 sn ağaç: gölgesindekilere sn'de %15 SG + %1 azami can, %8 SG mana kalkanı; 2 sn'de bir en yakın 3 yaratığa kök %40 SG + 4 sn sabitleme; açılışta itme; solunca 3 çiçek; bekleme 60) (2026-10-18). 59: Gece görüş yarıçapı artık daralmıyor (AtmosphereMath.NIGHT_VISION_MULT 0,75 -> 1,0; sis, mermi menzili, Korsan/Kirpi/Matthew menzilleri aynı yarıçapı okur) (2026-10-18). 58: Agaci Koru agaci can/kalkan geri eski (70/22, yedek 3000/800; rev 51 dususu iptal) + yeni SIHIRLI ATIS: 3 sn de bir kristalden sarjli kure, 56 px alan hasari (ort. yaratik cani x0,6) + agactan disa itis 90 px (boss 150 -> C++ x0,4 = 60 px), menzildeki boss oncelikli (2026-10-18). 57: Tüftüf Bulaşıcı Salgı patlaması (bulaşma yarıçapı + halka) %50 küçüldü (100 -> 50), zehir hasarı %6 -> %7. 56: Pençe güçlendirme - Kanlı Pençe kanaması saldırı gücünün %7'si -> %20'si/sn (tek yük, birikmez), can emme %4 -> %6 ve artık ilk vuruşta da (eskiden sadece zaten kanayan hedefte; alan payında %33), alan hasarı 60 -> 80 px; pençe hasarı artık atış anında değil temasta (0,145 / 0,235 sn, Kanca Çekiş) (2026-10-17). 55: Topuz silah özelliği Sismik Dalga'nın merkezi karakterden vuruş noktasına (ana hedef) taşındı; topuz hasarı artık atış anında değil başın yere indiği anda (0,27 sn) (2026-10-17). 54: demirci kademesi (efsun kademesi 1-5) silaha stat verir: kademe basina +%10 hasar, -%5 atis araligi (weapon.gd TIER_*). 53: 7 efsanevi esyaya (Sifa Feneri, Tanrinin Eli, Bilgenin Pusulasi, Ruzgar Yuruyen Cizmeleri, Kan Madalyonu, Ahenk Cevheri, Kiyamet Bicagi) alt parca tarifi verildi (artik sahip olunan parcalar tuketilip fiyattan dusulur); fiyat = bilesen toplami: Sifa 2300 -> 2320, Cizmeler 2400 -> 2410, Kiyamet 2600 -> 2520 (2026-10-17). 52: Yaratik tavani -%30 (150 -> 105, ek oyuncu basi +30 -> +21) ve TUM silahlarin saldiri hizi -%30 (GameManager.WEAPON_ATTACK_SPEED_MULT 0.7, weapon.gd _effective_fire_wait) (2026-10-17). 51: Agaci Koru gorevi suresi 50 -> 170 sn, agac can/kalkan ~%25 dusuk (HP_PER_ENEMY_HIT 70 -> 52, SHIELD_PER_ENEMY_HIT 22 -> 16, yedek 3000/800 -> 2250/600) (2026-10-17). 50: Sovalye R kalkan hasar azaltimi %95 -> %92 (PALADIN_ULTI_SHIELD_COST_MULT 0.05 -> 0.08). 49: Balkabagi boss ates topu 20 -> 30 (+%50). 48: Talon E (Silah Salvosu) -%40 hasar cezası kaldırıldı, Ayna Formu kopya başına saldırı gücü cezası %8 -> %4 (2026-10-17); 47: fareler (rat1-3) oyundan kalktı, yerlerine slime1 (Kademe 1-4, 6) + elit slime2; slime gecikmesi kapalı (2026-10-17); 46: Assasin R (Gölge Hücumu) bekleme 90 -> 10 sn, hedefler sadece KENDİ görüş alanında (eski 600 birim yarıçap), ulti başına en fazla 20 çarpış (eskiden 10 sn sınırsız, ~45) (2026-10-16); 45 (+ kayda gold_kill/gold_assist/sup_sent eklendi, rev aynı: sadece yeni alanlar): asist sadece öldürmeden önceki 8 sn içindeki hasar/destekle (eskiden %10+ hasar süresizdi), Şovalye E/R koruması da bitişten sonra 8 sn sayılır (2026-10-15); 44: ASİST sistemi - çok oyunculuda yaratık altını hasar/destek verenlerle paylaşılır (öldüren en az %50; toplam <4 altın bölünmez) (2026-10-15); 43: yaratık altını yere düşmez, öldürene anında verilir ve her ölümde garanti (en az 1; kademeye göre şans x ortalama, boss paylaşımlı, minyon şansa bağlı) (2026-10-15); 42: maden kazma altını 5 kat (bakır 1 -> 5, gri 2 -> 10 / vuruş) (2026-10-15); 41: Talon E Şovalye kubbesinde = kubbe girdabı: halkadaki HERKESİN silahı döner ve dışa ateş eder, +%200 (evrimle +%250) saldırı hızı, -%40 hasar; Koşan Salvo/Keskin Çember yarı (2026-10-15); 40: Şovalye R koruma alanı daire (yarıçap 126) -> 2:1 elips yatay 126, dikey 63 (alan yarıya indi; yaratıklar aşağıdan/yukarıdan çok daha yakına gelir) - izometrik kubbe (2026-10-14); 39: seviye başına can artışı 20/10 -> her seviye +15 (11+ dahil) (2026-10-14); 38: Melek pasifi can yerine mana kalkanı yeniliyor (oran aynı, saldırı gücünün %2'si/sn) (2026-10-14); 37: Kopyanı Öldür kopyası - can/kalkan x30, hız %80 ve kalkan yedeği SİLİNDİ (oyuncunun statları aynen); verdiği/aldığı hasar %50 azalmayla başlar, oyunda geçen her 20 sn'de %1 artar, en çok %95 (2026-10-14); 36: kalp yenilenmesi artık her kalp eksildiğinde işler (2+ kalp 8 dk, 1 kalp 6,5 dk, 0 kalp 5 dk; eskiden sadece 0 kalpte 5 dk) (2026-10-14); 35: kalkan orbu - yaratıklardan yemekle aynı oranda (%0,25, şansla artar) düşen yeni toplanabilir, azami kalkanın %15'i (%70) / %30'u (%30) (2026-10-14); 34: her epik eşyadan en fazla 1 (parçalar serbest), Matthew pasifi Yıldırım Hızı tavanı %30 -> %15 hareket hızı + toplam hareket hızının her %1'i = %0,5 saldırı hızı (eskiden birikimin kendisi = aynı oranda saldırı hızı) (2026-10-14); 33: level atlama Can kartı 15/24/30/38 -> 20/35/50/70 (2026-10-14); 32: kalkan türlerinin kendi yenilenme değeri x1,3 (eşya/yetenek kaynaklı yenilenme hariç) (2026-10-14); 31: sağ alt tehlikeli bölge - bekçi kampları 3 -> 7 (29 -> 106 bekçi), arkadaşlarını çağırmazlar (sadece görenler kovalar), %35-70 oranında 1-2 kademe ilerisinden yaratık (2026-10-14); 30: maden kazma - köşelerdeki madenlerde durunca otomatik kazma, vuruş başına altın (bakır 1, gri 2; yeni altın kaynağı), madenler 1,5 vuruş/karo dayanır (en az 8) ve 120 sn sonra yeniden doğar (2026-10-14); 29: her silahtan en fazla 1 (aynı silah ikinci kez alınamaz), silah hasarı x1,5 -> x1,0 (yakın dövüş ek x1,4 kaldı), Yay Üçlü Ok yan ok hasarı %80 -> %60 (+%20 -> +%15 geliştirme) (2026-10-14); 28: Cadı iksir alanı süresi 4 -> 6 sn, mermi menzili = görüş elipsi (oyuncu + yaratık mermileri), yaratık yakın dövüş menzili 26 -> 12 px + isabet toleransı 40 -> 20 px (2026-10-14); 27: Ruh Mağazası kalıcı geliştirmeleri (20 kalıcı stat; oyuncular artık her koşuya Ruh Kıymığıyla alınmış bonuslarla başlayabilir) (2026-10-13); 26: Elara pasifi saldırı hızı sınırı %50 -> %30 (30. seviyede dolar) (2026-10-13); 25: karakter başına başlangıç statları (Can/Hız/Saldırı Gücü/Saldırı Hızı, Characters.BASE_STATS; eskiden herkes 100/252/10/+0) (2026-10-13); 24: Cadı Q dumanı topuğun hemen arkasına iner (eskiden ~41 birim geride) + yukarı/aşağı yürürken dar-derin bulut 24x22 (yatay 32x17, alan aynı), 0,3 sn'de bir (2026-10-13); 21: eşya kaynaklı bekleme azaltma da %60 üst sınırında (eskiden sadece kartlar) (2026-10-13); 20: yaratık kalkan soğurması normal %30 -> %60 (Kademe 7'de tam), elit %80 (2026-10-13); 19: eşya/ruhani/evcil saldırı hızı havuzu hıza EKLENİR (aralık = 1/(1+toplam)); eskiden 1'den çıkarılıp yüzük yığınında katlanıyordu (2026-10-13); 18: evcil hayvan Kirpi (sana saldıran yaratık azami kalkanının %5'i kadar hasar alır; kalkan varken alınan hasar %5 az) (2026-10-13); 17: evcil hayvan Peri (can eksikken 6 sn'de bir saldırı gücünün %10'u kadar can) (2026-10-12); 16: evcil hayvan Kelebek Ruhu (+%10 saldırı hızı, ilk silah isabetine saldırı gücünün %20'si lazer) (2026-10-12); 15: Savaş Kalkanı savaşta (son 3 sn hasar) yenilenme x0,5 + geliştirme başına yenilenme +2 -> +1,5 (2026-10-12); 14: evcil hayvanlar (köpek: sahibin statlarıyla saldırır; papağan: altın toplar + 10 şans) (2026-10-12); 13: Korsan pasifi Altın Avcısı (öldürme başına 1 altın, 30 altın = +1 saldırı gücü; Papağan kalktı) (2026-10-12); 12: silah parçacığı düşme şansı %1 -> %0,5, eşya satış iadesi %70 -> %50 (2026-10-12); 11: Matthew rework - köpek yok, şimşek kiti (pasif Yıldırım Hızı, E Elektrik Topu, R köpeksiz) (2026-10-12); 10: Ejderha Nefesi menzil x1,5 / açı x1,25 (eskiden x2 / x1,5) (2026-10-12); 9: silah sınırı 3 + silah hasarı x1,5 (yakın dövüş x2,1) deneme (2026-10-12); 8: Şovalye pasifi Dirençli Duruş (%40 altı %20 az hasar; Dikenli Zırh kalktı) (2026-10-12); 7: Elara pasifi gerçek +%50 hız + taşma dışı, Tüfek delme hasarı %70 (2026-10-12); 6: yaratık hasarı x0,8 iptal + Balkabağı güçlendirme (2026-10-11)
 const SCHEMA := 1
 const DIR_PATH := "user://balans"
 const FILE_NAME := "kosular.jsonl"
@@ -48,6 +48,13 @@ static var _next_sample: float = 0.0
 static var _gold_kill: Array = [0, 0]
 static var _gold_assist: Dictionary = {} ## tür(int) -> [adet, altın]
 static var _sup_sent: int = 0
+static var _gain: Dictionary = {} ## kaynak -> [can, kalkan] (yetenek/pasifin KENDİNE ve arkadaşlara bastığı; oyun sonu + Shift ipucu için)
+static var _prevented: Dictionary = {} ## kaynak -> engellenen hasar (evcil Kirpi'nin %5'i; evcil yuvası ipucu, damage_stats.gd pet_totals)
+static var _pet_drops: int = 0 ## Papağan'ın ağaçtan düşürdüğü eşya sayısı (korsan_parrot.gd _drop_loot)
+## 2026-10-18 (madde 269): sonsuz kat kırılımı. kat -> [koşu sn, öldürme, takım seviyesi, verilen hasar, alınan hasar, saldırı gücü, azami can, saldırı hızı %, eşya sayısı]
+## (katın BAŞLANGICINDAKİ toplamlar; kat başına oranı ardışık satırların farkı verir - bkz. layers alanı, main.gd _on_endless_layer_reached).
+const MAX_LAYER_ROWS := 80
+static var _layers: Dictionary = {}
 
 
 static func reset() -> void:
@@ -69,6 +76,10 @@ static func reset() -> void:
 	_gold_kill = [0, 0]
 	_gold_assist.clear()
 	_sup_sent = 0
+	_gain.clear()
+	_prevented.clear()
+	_pet_drops = 0
+	_layers.clear()
 
 
 ## ---- Etiketleme ----
@@ -121,6 +132,45 @@ static func on_taken(amount: float, source: Node) -> void:
 	var t: int = GameManager.run_max_tier
 	_taken_tier[t] = float(_taken_tier.get(t, 0.0)) + amount
 	_maybe_sample()
+
+
+## player.gd heal()/heal_shield()/_apply_*_to_ally: kaynağı BELİRTİLEN (yetenek/pasif) iyileştirme ve kalkan basmayı toplar.
+## Kaynaksız (yemek, yenilenme, eşya...) çağrılar kaydedilmez - ekran yalnız yeteneklerin payını gösterir.
+static func on_gain(source: String, heal_amount: float, shield_amount: float) -> void:
+	if source == "" or (heal_amount <= 0.0 and shield_amount <= 0.0):
+		return
+	var row: Array = _gain.get(source, [0.0, 0.0])
+	row[0] += maxf(heal_amount, 0.0)
+	row[1] += maxf(shield_amount, 0.0)
+	_gain[source] = row
+
+
+## Bir kaynağın oyuncuya gelmeden engellediği hasar (şimdilik evcil Kirpi: mana kalkanı varken %5 az hasar).
+static func on_prevented(source: String, amount: float) -> void:
+	if source == "" or amount <= 0.0:
+		return
+	_prevented[source] = float(_prevented.get(source, 0.0)) + amount
+
+
+static func on_pet_drop() -> void:
+	_pet_drops += 1
+
+
+## Salt okunur kopyalar (arayüz: damage_stats.gd).
+static func dealt_snapshot() -> Dictionary:
+	return _dealt.duplicate(true)
+
+
+static func gain_snapshot() -> Dictionary:
+	return _gain.duplicate(true)
+
+
+static func prevented_snapshot() -> Dictionary:
+	return _prevented.duplicate()
+
+
+static func pet_drops() -> int:
+	return _pet_drops
 
 
 ## KillGold.show_at çağırır (altını kazanan makinede). assist_kind 0 = kendi öldürmemiz, 1/2/3 = asist türü.
@@ -184,6 +234,97 @@ static func _diff_owned(owned: Array, seen: Dictionary, got: Array, now: float) 
 static func note_tier(tier: int) -> void:
 	if not _tier_time.has(tier):
 		_tier_time[tier] = GameManager.run_elapsed()
+
+
+## Sonsuz modda yeni kata girildi (her peer, main.gd): katın başlangıç anlık görüntüsü. Aynı kat bir kez; sonsuz değilse (kat <= 0) yok sayılır.
+static func note_layer(layer: int, player: Node) -> void:
+	if layer <= 0 or _layers.has(layer) or _layers.size() >= MAX_LAYER_ROWS:
+		return
+	var dealt: float = 0.0
+	var taken: float = 0.0
+	var ap: float = 0.0
+	var hp: float = 0.0
+	var atk: float = 0.0
+	if player != null and is_instance_valid(player):
+		dealt = _pf(player, "match_damage_dealt")
+		taken = _pf(player, "match_damage_taken")
+		ap = _pf(player, "damage_bonus")
+		hp = _pf(player, "max_health")
+		if player.has_method("get_attack_speed_bonus_percent"):
+			atk = float(player.call("get_attack_speed_bonus_percent"))
+	_layers[layer] = [_r1(GameManager.run_elapsed()), GameManager.run_kills, GameManager.team_level, _r1(dealt), _r1(taken), _r1(ap), _r1(hp),
+			_r1(atk), GameManager.owned_items.size()]
+
+
+## Oyuncunun nesne alanını güvenle okur (yoksa 0): testlerde sahte/eksik oyuncu ve eski sürümlerle uyumlu.
+static func _pf(obj: Object, prop: String) -> float:
+	if obj == null or not (prop in obj):
+		return 0.0
+	var v: Variant = obj.get(prop)
+	return float(v) if (v is float or v is int) else 0.0
+
+
+static func _r3(x: float) -> float:
+	return snappedf(x, 0.001)
+
+
+## Koşu sonu istatistik özeti: güç eğrisini (saldırı gücü, hız, kritik, can, yenilenme...) kayda koyar. Eskiden bunlar yoktu ve eşya sayımından tahmin ediliyordu.
+static func player_stats(player: Node) -> Dictionary:
+	if player == null or not is_instance_valid(player):
+		return {}
+	var atk: float = 0.0
+	var atk_over: float = 0.0
+	if player.has_method("get_attack_speed_bonus_percent"):
+		atk = float(player.call("get_attack_speed_bonus_percent"))
+	if player.has_method("get_attack_speed_overflow_percent"):
+		atk_over = float(player.call("get_attack_speed_overflow_percent"))
+	var exp_raw: float = _pf(player, "exp_gain_percent")
+	return {
+		"ap": _r1(_pf(player, "damage_bonus")),
+		"atk": _r1(atk), ## toplam saldırı hızı % (üst sınır 600)
+		"atk_over": _r1(atk_over), ## sınırı aşan % (0,5 saldırı gücüne döner)
+		"crit_c": _r3(_pf(player, "crit_chance_bonus")),
+		"crit_d": _r3(_pf(player, "crit_damage_bonus")),
+		"hp": _r1(_pf(player, "max_health")),
+		"regen": _r1(_pf(player, "heal_regen_card_bonus") + _pf(player, "item_health_regen")),
+		"shield": _r1(_pf(player, "item_shield_max")),
+		"shield_pct": _r3(_pf(player, "shield_max_percent")),
+		"dodge": _r3(_pf(player, "dodge_chance")),
+		"pen": _r3(_pf(player, "shield_pen_percent")),
+		"exp": _r3(exp_raw),
+		"exp_eff": _r3(GameManager.effective_exp_gain(exp_raw)),
+		"luck": _r1(_pf(player, "luck")),
+		"cdr": _r3(_pf(player, "cooldown_reduction_percent")),
+		"ls": _r3(_pf(player, "lifesteal_percent")),
+		"heal_pow": _r3(_pf(player, "heal_shield_power")),
+		"spd": _r3(_pf(player, "speed_card_percent")),
+		"range": _r3(_pf(player, "weapon_range_bonus")),
+	}
+
+
+## Seviye kartı seçimleri: kart kimliği -> [1., 2., 3., 4. kademeden kaç tane]. (player.upgrade_log: [id, kademe])
+static func cards_record(player: Node) -> Dictionary:
+	var out: Dictionary = {}
+	if player == null or not is_instance_valid(player) or not ("upgrade_log" in player):
+		return out
+	for e in (player.get("upgrade_log") as Array):
+		if not (e is Array) or (e as Array).size() < 2:
+			continue
+		var id: String = str(e[0])
+		if not out.has(id) and out.size() >= MAX_KEYS:
+			continue
+		var row: Array = out.get(id, [0, 0, 0, 0])
+		var t: int = clampi(int(e[1]), 1, 4)
+		row[t - 1] = int(row[t - 1]) + 1
+		out[id] = row
+	return out
+
+
+static func _layers_record() -> Dictionary:
+	var out: Dictionary = {}
+	for l in _layers:
+		out[str(l)] = (_layers[l] as Array).duplicate()
+	return out
 
 
 static func _family_of(source: Node) -> String:
@@ -331,6 +472,9 @@ static func build_record(player: Node, summary: Dictionary, kind: String) -> Dic
 		"gold_kill": _gold_kill.duplicate(),
 		"gold_assist": _assist_record(),
 		"sup_sent": _sup_sent,
+		"stats": player_stats(player), ## bitiş statları (madde 269)
+		"cards": cards_record(player), ## seviye kartı seçimleri kart -> [k1,k2,k3,k4]
+		"layers": _layers_record(), ## sonsuz kat başlangıç anlık görüntüleri (bkz. note_layer)
 	}
 
 

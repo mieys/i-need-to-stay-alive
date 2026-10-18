@@ -49,6 +49,7 @@ static func _defaults() -> Dictionary:
 		"best_time": 0.0, "best_tier": 0, "best_kills": 0, "best_layer": 0, "best_victory_time": 0.0,
 		"victories": 0, "runs": 0, "total_kills": 0, "total_time": 0.0,
 		"victory_chars": [], "achievements": {},
+		"rec_run": {}, ## rekor anahtarı -> kırıldığı koşunun sıra no'su (runs + 1); Rekorlar ekranındaki YENİ işareti (last_run_records)
 	}
 
 
@@ -68,6 +69,12 @@ static func load_all() -> Dictionary:
 		for c in raw_chars:
 			chars.append(int(c))
 	data["victory_chars"] = chars
+	var rec_run: Dictionary = {}
+	var raw_rec_run: Variant = cfg.get_value("records", "rec_run", {})
+	if raw_rec_run is Dictionary:
+		for k in raw_rec_run:
+			rec_run[str(k)] = int(raw_rec_run[k])
+	data["rec_run"] = rec_run
 	var ach: Dictionary = {}
 	if cfg.has_section("achievements"):
 		for id: String in cfg.get_section_keys("achievements"):
@@ -101,6 +108,24 @@ static func _ctx(s: Dictionary, data: Dictionary) -> Dictionary:
 	}
 
 
+## Rekoru o an sürmekte olan koşuya yazar (sıra no = biten koşu sayısı + 1; record_run_end sonra runs'ı o sayıya çıkarır).
+static func _stamp(data: Dictionary, keys: Array) -> void:
+	for key: String in keys:
+		(data["rec_run"] as Dictionary)[key] = int(data["runs"]) + 1
+
+
+## SON koşuda (ya da yarıda kalmış, sonu kaydedilmemiş bir sonrakinde) kırılan rekor anahtarları: Rekorlar ekranının YENİ işareti.
+## İlk koşuda kırılanların hepsi "yeni" (rekor yoktu). Koşu sırası zaman damgası değil sayaç - aynı saniyedeki koşular da ayrılır.
+static func last_run_records(data: Dictionary) -> Array:
+	var out: Array = []
+	var runs: int = int(data.get("runs", 0))
+	var rec_run: Dictionary = data.get("rec_run", {})
+	for key: String in RECORD_LABELS.keys():
+		if rec_run.has(key) and int(rec_run[key]) >= maxi(runs, 1):
+			out.append(key)
+	return out
+
+
 ## En iyi değerleri günceller, KIRILAN rekorların anahtarlarını döner (ilk koşuda hepsi "yeni" sayılır).
 static func _apply_bests(data: Dictionary, s: Dictionary) -> Array:
 	var fresh: Array = []
@@ -120,6 +145,7 @@ static func _apply_bests(data: Dictionary, s: Dictionary) -> Array:
 	if layer > int(data["best_layer"]):
 		data["best_layer"] = layer
 		fresh.append("layer")
+	_stamp(data, fresh)
 	return fresh
 
 
@@ -151,6 +177,7 @@ static func record_victory(s: Dictionary) -> Dictionary:
 	if t > 0.0 and (float(data["best_victory_time"]) <= 0.0 or t < float(data["best_victory_time"])):
 		data["best_victory_time"] = t
 		fresh.append("victory_time")
+		_stamp(data, ["victory_time"])
 	var ach: Array = _unlock(data, _ctx(sv, data))
 	_save(data)
 	return {"records": fresh, "achievements": ach}

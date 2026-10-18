@@ -290,6 +290,7 @@ const BY_SCRIPT := {
 	"res://scripts/fx_enchant_sprite.gd": {"cp": "glow_color", "rp": "glow_radius", "rs": 1.0, "c": Color(1.0, 0.8, 0.5), "r": 30.0, "e": 1.0, "f": 0.12},
 	"res://scripts/fx_kalkan_bagi_link.gd": {"c": Color(0.45, 0.8, 1.0), "r": 24.0, "e": 0.4},
 	"res://scripts/mission_tree_bolt.gd": {"c": Color(0.45, 0.85, 1.0), "r": 18.0, "e": 0.5}, ## görev ağacının kristal mermisi (2026-10-10)
+	"res://scripts/mission_tree_blast.gd": {"c": Color(0.45, 0.85, 1.0), "r": 34.0, "e": 0.6}, ## görev ağacının sihirli atışı (2026-10-18)
 	"res://scripts/fx_matthew_dash_lines.gd": {"c": Color(1.0, 0.7, 0.4), "r": 30.0, "e": 0.4, "d": 0.3},
 	"res://scripts/fx_melek_ally_aura.gd": {"c": Color(1.0, 0.9, 0.55), "r": 50.0, "e": 0.45},
 	"res://scripts/fx_oakley_flower_bond.gd": {"c": Color(0.6, 1.0, 0.5), "r": 22.0, "e": 0.45},

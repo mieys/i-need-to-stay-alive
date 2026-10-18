@@ -55,12 +55,17 @@ func refresh(duration: float) -> void:
 		_play(&"grow")
 
 
-## Kök salma bitti ya da yaratık öldü: kopma animasyonu, sonra iki katman da silinir.
+## Kök salma bitti ya da yaratık öldü: sarmaşık toprağa geri çekilir, sonra iki katman da silinir. 2026-10-18 (madde 266, kullanıcı:
+## "solarak yok olmasın azalarak yok olsun"): eskiden "break" (kopup saydamlaşarak düşer) oynuyordu; artık "grow" TERSİNE oynar -
+## dikenler küçülerek toprağa girer. "break" sayfada duruyor, kullanılmıyor.
 func release() -> void:
 	if _releasing:
 		return
 	_releasing = true
-	_play(&"break")
+	if _back != null:
+		_back.play_backwards(&"grow")
+	if is_instance_valid(_front):
+		_front.play_backwards(&"grow")
 
 
 func _make_layer(frames: SpriteFrames, center: Vector2) -> AnimatedSprite2D:
@@ -80,10 +85,10 @@ func _play(anim: StringName) -> void:
 
 
 func _on_anim_finished() -> void:
-	if _back.animation == &"grow":
-		_play(&"loop")
-	elif _back.animation == &"break":
+	if _releasing: ## tersine büyüme (geri çekilme) bitti
 		queue_free()
+	elif _back.animation == &"grow":
+		_play(&"loop")
 
 
 func _exit_tree() -> void:

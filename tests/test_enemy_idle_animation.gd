@@ -188,7 +188,7 @@ func test_chasing_enemy_walks_then_never_walks_in_place_at_the_target() -> void:
 	assert(e.global_position.distance_to(target.global_position) < 80.0, "Yaratık hedefe ulaşmalıydı: %s" % str(e.global_position))
 	var walked_in_place: Array = [0]
 	_step(150, func(i: int) -> bool: ## 5 sn hedefin dibinde
-		if e._state == State.WALK and i > 6:
+		if e._state == State.WALK and i > 36: ## ilk ~1,2 sn: yaratık (yakın dövüş menzili kısalınca, madde 133) hedefin içine doğru yürüyüp yavaşlıyor; takılma kalıcıdır
 			walked_in_place[0] += 1
 		return false)
 	assert(walked_in_place[0] == 0, "Hedefin dibinde duran yaratık yürüme pozunda takılı kalmamalı (%d kare)" % walked_in_place[0])

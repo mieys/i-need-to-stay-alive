@@ -24,6 +24,12 @@ extends Node
 ## oyuncunun önündeki yaratıklar da kümeye girer -> z bileşenleri ayak sırasında hep artan, yaratıkların kendi sırası bozulmaz.
 ## Bilinen bedel: kabuğun önündeki yaratık/oyuncu ağaç ön kopyalarının (z 3) ve z 4-20 arası efektlerin (düşman mermisi z 11) üstüne çizilir.
 ## Duvar geçen (uçan, forest_canopy.gd) oyuncunun z'sine dokunulmaz.
+##
+## FPS (2026-10-18): 200 yaratıkta bu güncelleme çağrı başına 2-5 ms'ydi (2 karede bir -> kare başına 1-2,5 ms). Davranış AYNI, maliyet düştü:
+##  - aday başına dinamik çağrılar (get("is_dead"), has_method + call, 5 meta okuma, 4 elemanlı Array tahsisi) yerine tipli erişim (Enemy) + düğüm başına
+##    önbellek (DepthInfo: ayak görseli, ayağın görsel yereli, yarım genişlik, boy - main.gd _creature_foot_y / _extent'in yazdığı AYNI değerler),
+##  - havuz paralel PackedFloat64Array'lerde (tahsis yok),
+##  - close_over: yükseltilenler ayak sırasında eklendiği için ikili aramayla SADECE "ayak - boy < a.ayak < ayak - 0,5" bandındakiler taranır (eskiden hepsi).
 
 const DepthScript := preload("res://scripts/depth_occluders.gd")
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -42,11 +48,32 @@ const FALLBACK_HALF_WIDTH := 24.0
 const CLOSURE_PAD := 240.0
 ## Konumu karakterin ayağından bu kadar YUKARIDA olan yaratık ne yükselir ne de yükselen birinin önünde olabilir (ayak - konum farkı en çok ~70 px): hiç hesaplanmaz.
 const ABOVE_SKIP := 130.0
+## Düğüm başına önbellek tablosu bu kadar çağrıda bir süpürülür (silinmiş yaratıkların kayıtları atılır).
+const CACHE_SWEEP_EVERY := 300
 
 var _raised: Dictionary = {} ## yaratık düğümü -> yükselmeden önceki z_index
 var _was_front: Dictionary = {} ## son güncellemede oyuncunun önünde yükselen yaratıklar (histerezis)
 var _was_dome: Dictionary = {} ## son güncellemede kubbe kabuğunun önünde yükselen yaratıklar (histerezis)
 var _raised_chars: Dictionary = {} ## kabuğun önüne çıkarılan oyuncu/kukla -> önceki z_index
+
+## Düğüm başına ölçü önbelleği: instance_id -> DepthInfo. Bu değerler zaten düğüm başına BİR KEZ ölçülüp meta'ya yazılıyordu
+## (main.gd _creature_foot_y: _foot_visual/_foot_local, _extent: _depth_extent) - burada sadece okuması hızlandırıldı.
+class DepthInfo:
+	var vis: Node2D ## ayağı ölçülen görsel (Sprite2D / AnimatedSprite2D)
+	var foot_local: float ## ayağın görselin YEREL koordinatındaki y'si (ölçekten önce)
+	var half_w: float
+	var height: float
+
+var _info: Dictionary = {}
+var _calls: int = 0
+
+## Havuz (güncelleme boyunca; çağrılar arasında yeniden kullanılır): paralel diziler + düğüm -> indeks.
+var _p_nodes: Array = []
+var _p_foot := PackedFloat64Array()
+var _p_x := PackedFloat64Array()
+var _p_hw := PackedFloat64Array()
+var _p_h := PackedFloat64Array()
+var _p_idx: Dictionary = {}
 
 
 ## Saf kural (testler için): bu yaratık oyuncunun ÜSTÜNE çizilmeli mi?
@@ -71,49 +98,93 @@ func _process(_delta: float) -> void:
 static func close_over(want: Dictionary, pool: Dictionary) -> int:
 	if want.is_empty() or pool.size() <= want.size():
 		return 0
-	var keys: Array = [] ## Vector2(ayak y, sıra) - Array.sort() yerleşik karşılaştırmayla sıralar
 	var nodes: Array = pool.keys()
-	for i in range(nodes.size()):
-		keys.append(Vector2(float((pool[nodes[i]] as Array)[0]), float(i)))
+	var foot := PackedFloat64Array()
+	var xs := PackedFloat64Array()
+	var hws := PackedFloat64Array()
+	var hs := PackedFloat64Array()
+	for n in nodes:
+		var info: Array = pool[n]
+		foot.append(float(info[0]))
+		xs.append(float(info[1]))
+		hws.append(float(info[2]))
+		hs.append(float(info[3]))
+	return _close_core(want, nodes, foot, xs, hws, hs)
+
+
+## close_over'ın çekirdeği (paralel dizilerle). Kural (eski çift döngüyle birebir): düğümler (ayak, sıra) artan sırada gezilir; yükseltilmemiş bir düğüm, daha önce
+## yükseltilenlerden (a) biri için  a.ayak < ayak - 0,5  VE  |a.x - x| < a.yarım_gen + yarım_gen  VE  ayak - boy < a.ayak  ise yükseltilir ve o da listeye girer.
+## Yükseltilenler artan ayakla eklendiğinden a.ayak ∈ (ayak - boy, ayak - 0,5) penceresi ikili aramayla bulunur; eskiden her düğüm TÜM yükseltilenlerle karşılaştırılıyordu.
+static func _close_core(want: Dictionary, nodes: Array, foot: PackedFloat64Array, xs: PackedFloat64Array, hws: PackedFloat64Array, hs: PackedFloat64Array) -> int:
+	var n_all: int = nodes.size()
+	if want.is_empty() or n_all <= want.size():
+		return 0
+	var keys: Array = [] ## Vector2(ayak y, sıra) - Array.sort() yerleşik karşılaştırmayla sıralar
+	keys.resize(n_all)
+	for i in range(n_all):
+		keys[i] = Vector2(foot[i], float(i))
 	keys.sort()
-	var raised: Array = [] ## yükseltilmiş yaratıkların bilgisi
+	var r_foot := PackedFloat64Array() ## yükseltilmişler, artan ayak sırasında
+	var r_x := PackedFloat64Array()
+	var r_hw := PackedFloat64Array()
 	var added: int = 0
 	for k: Vector2 in keys:
-		var n: Variant = nodes[int(k.y)]
-		var info: Array = pool[n]
-		if want.has(n):
-			raised.append(info)
+		var i: int = int(k.y)
+		var f: float = foot[i]
+		var node: Variant = nodes[i]
+		if want.has(node):
+			r_foot.append(f)
+			r_x.append(xs[i])
+			r_hw.append(hws[i])
 			continue
-		for a: Array in raised:
-			if float(a[0]) < float(info[0]) - 0.5 and absf(float(a[1]) - float(info[1])) < float(a[2]) + float(info[2]) and float(info[0]) - float(info[3]) < float(a[0]):
-				want[n] = true
-				raised.append(info)
-				added += 1
+		var hi: float = f - 0.5
+		var j: int = r_foot.bsearch(f - hs[i], false) ## ilk r_foot > ayak - boy
+		var rn: int = r_foot.size()
+		var joined: bool = false
+		while j < rn and r_foot[j] < hi:
+			if absf(r_x[j] - xs[i]) < r_hw[j] + hws[i]:
+				joined = true
 				break
+			j += 1
+		if joined:
+			want[node] = true
+			r_foot.append(f)
+			r_x.append(xs[i])
+			r_hw.append(hws[i])
+			added += 1
 	return added
 
 
 func update_now() -> void:
 	var tree := get_tree()
 	var want: Dictionary = {}
-	var pool: Dictionary = {} ## düğüm -> [ayak y, x, yarım genişlik, boy] (kapanış için)
+	_pool_clear()
+	_calls += 1
+	if _calls % CACHE_SWEEP_EVERY == 0:
+		_sweep_info()
 	var char_nodes: Array[Node2D] = DepthScript.character_nodes(tree)
 	var chars: Array[Vector4] = DepthScript.collect_characters(tree)
+	var reach: float = SCAN_RADIUS + CLOSURE_PAD
 	for c in chars:
-		for e in EnemyQueryScript.candidates(tree, Vector2(c.x, c.y), SCAN_RADIUS + CLOSURE_PAD):
+		for e in EnemyQueryScript.candidates(tree, Vector2(c.x, c.y), reach):
+			if not is_instance_valid(e):
+				continue
 			var n := e as Node2D
-			if n == null or not is_instance_valid(n) or not n.visible or n.get("is_dead") == true:
+			if n == null or not n.visible:
 				continue
-			var adx: float = absf(n.global_position.x - c.x)
-			var ady: float = absf(n.global_position.y - c.y)
-			if adx > SCAN_RADIUS + CLOSURE_PAD or ady > SCAN_RADIUS + CLOSURE_PAD or n.global_position.y < c.y - ABOVE_SKIP:
+			var en := e as Enemy
+			if (en.is_dead if en != null else n.get("is_dead") == true):
 				continue
-			_pool_add(pool, n)
+			var gp: Vector2 = n.global_position
+			var adx: float = absf(gp.x - c.x)
+			var ady: float = absf(gp.y - c.y)
+			if adx > reach or ady > reach or gp.y < c.y - ABOVE_SKIP:
+				continue
+			var pi: int = _pool_index(n, gp)
 			if adx <= SCAN_RADIUS and ady <= SCAN_RADIUS and not want.has(n):
-				var info: Array = pool[n]
-				if should_cover(float(info[0]), float(info[3]), n.global_position.x - c.x, c.y, _was_front.has(n)):
+				if should_cover(_p_foot[pi], _p_h[pi], gp.x - c.x, c.y, _was_front.has(n)):
 					want[n] = true
-	close_over(want, pool)
+	_close_core(want, _p_nodes, _p_foot, _p_x, _p_hw, _p_h)
 	## Şovalye kubbesi: kabuğun önündeki yaratıklar + oyuncular (bkz. dosya başı).
 	var dome_want: Dictionary = {}
 	var front_chars: Dictionary = {}
@@ -125,9 +196,8 @@ func update_now() -> void:
 				var n := e as Node2D
 				if n == null or not is_instance_valid(n) or not n.visible or n.get("is_dead") == true or n.global_position.y < center.y - ABOVE_SKIP:
 					continue
-				_pool_add(pool, n)
-				var info: Array = pool[n]
-				if not dome_want.has(n) and PaladinDome.in_front_of_shell(center, d.z, float(info[1]), float(info[0]), float(info[2]), float(info[3]),
+				var pi: int = _pool_index(n, n.global_position)
+				if not dome_want.has(n) and PaladinDome.in_front_of_shell(center, d.z, _p_x[pi], _p_foot[pi], _p_hw[pi], _p_h[pi],
 						-HYSTERESIS if _was_dome.has(n) else HYSTERESIS):
 					dome_want[n] = true
 			for i in range(mini(char_nodes.size(), chars.size())):
@@ -139,21 +209,70 @@ func update_now() -> void:
 		## Kabuğun önüne çıkan oyuncunun önündeki yaratık da kabuğun önündedir (yoksa oyuncu [SHELL_Z + 2] onun üstüne çizilirdi).
 		for cn: Node2D in front_chars:
 			var c: Vector4 = front_chars[cn]
-			for n: Node2D in pool:
-				var info: Array = pool[n]
-				if not dome_want.has(n) and should_cover(float(info[0]), float(info[3]), float(info[1]) - c.x, c.y, _was_dome.has(n)):
+			for pi in range(_p_nodes.size()):
+				var n: Node2D = _p_nodes[pi]
+				if not dome_want.has(n) and should_cover(_p_foot[pi], _p_h[pi], _p_x[pi] - c.x, c.y, _was_dome.has(n)):
 					dome_want[n] = true
-		close_over(dome_want, pool)
+		_close_core(dome_want, _p_nodes, _p_foot, _p_x, _p_hw, _p_h)
 	_apply_creature_z(want, dome_want)
 	_apply_char_z(front_chars)
+	_pool_clear() ## düğüm referansları çağrılar arasında tutulmasın
 
 
-## pool'a yaratığın [ayak y, x, yarım genişlik, boy] bilgisini ekler (zaten varsa dokunmaz).
-func _pool_add(pool: Dictionary, n: Node2D) -> void:
-	if pool.has(n):
-		return
+func _pool_clear() -> void:
+	_p_nodes.clear()
+	_p_idx.clear()
+	_p_foot.clear()
+	_p_x.clear()
+	_p_hw.clear()
+	_p_h.clear()
+
+
+## Havuzda düğümün indeksi (yoksa [ayak y, x, yarım genişlik, boy] ile ekler). x: dünya x'i (gp), çağıranın okuduğu konum.
+func _pool_index(n: Node2D, gp: Vector2) -> int:
+	var idx: int = _p_idx.get(n, -1)
+	if idx >= 0:
+		return idx
+	var info: DepthInfo = _info_of(n)
+	idx = _p_nodes.size()
+	_p_idx[n] = idx
+	_p_nodes.append(n)
+	if info.vis == null:
+		_p_foot.append(gp.y) ## ayak görseli yok: kök noktası (main.gd _creature_foot_y ile aynı)
+	else:
+		_p_foot.append(info.vis.global_position.y + info.foot_local * absf(info.vis.global_scale.y))
+	_p_hw.append(info.half_w)
+	_p_h.append(info.height)
+	_p_x.append(gp.x)
+	return idx
+
+
+## Yaratığın ölçü kaydı. İlk karşılaşmada main.gd _creature_foot_y + _extent çalışır (meta'ları yazarlar), sonuç okunup saklanır. Ayak görseli
+## ya da gerçek ölçü yoksa (görsel bulunamadı / doku henüz yok) kayıt SAKLANMAZ ve eski yol gibi her güncellemede yeniden denenir (vis null = kök noktası).
+func _info_of(n: Node2D) -> DepthInfo:
+	var id: int = n.get_instance_id()
+	var cached: DepthInfo = _info.get(id)
+	if cached != null and is_instance_valid(cached.vis):
+		return cached
+	_foot_y(n) ## meta'ları doldurur (_foot_visual / _foot_local)
 	var ext: Vector2 = _extent(n)
-	pool[n] = [_foot_y(n), n.global_position.x, ext.x, ext.y]
+	var rec := DepthInfo.new()
+	rec.half_w = ext.x
+	rec.height = ext.y
+	var vis_v: Variant = n.get_meta("_foot_visual") if n.has_meta("_foot_visual") else null
+	if is_instance_valid(vis_v) and n.has_meta("_foot_local"):
+		rec.vis = vis_v
+		rec.foot_local = float(n.get_meta("_foot_local"))
+		if n.has_meta("_depth_extent"): ## ölçü gerçekten ölçüldüyse (yedek değer değilse) sakla
+			_info[id] = rec
+	return rec
+
+
+func _sweep_info() -> void:
+	for id in _info.keys():
+		var rec: DepthInfo = _info[id]
+		if not is_instance_valid(rec.vis):
+			_info.erase(id)
 
 
 ## Yaratık z'si = (kabuğun önündeyse DOME_FRONT_Z) + (oyuncunun önündeyse FRONT_Z); ikisi de değilse eski z'ye döner.
@@ -245,4 +364,6 @@ func _exit_tree() -> void:
 	_raised.clear()
 	_was_front.clear()
 	_was_dome.clear()
+	_info.clear()
+	_pool_clear()
 	_apply_char_z({})

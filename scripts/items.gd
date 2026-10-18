@@ -113,12 +113,17 @@ const DEFS := {
 	"savasci_bileyi": {"name": "Savaşçı Bileyi", "kademe": 2, "cost": 800, "recipe": [],
 		"stats": {"damage_bonus": 15.0, "item_ap_percent": 0.05},
 		"passive": "Saldırı gücünü %5 arttırır."},
-	"ruhlarin_akisi": {"name": "Ruhların Maskesi", "kademe": 2, "cost": 850,
-		"recipe": ["tecrube_kitabi", "ayakkabi_bagcigi", "ceviklik_yuzugu"],
-		"stats": {"exp_gain_percent": 0.10},
-		"passive": "Topladığın her EXP orbı %1 hareket hızı kazandırır, 4 saniyede azalarak kaybolur. Birikir; her yeni orb süreyi baştan başlatır."},
 
 	## ------------------------------------------------------------------ 3. kademe: Efsanevi eşyalar
+	## 2026-10-18 (kullanıcı: "toplanan exp başına hız veren iteme: %1 -> %0.5, efsaneviye dönüştür, temel statlarını biraz yükselt"): Ruhların Maskesi eskiden EPİKTİ
+	## (Tecrübe Kitabı + Deri Çizmeler + Çeviklik Yüzüğü, +%10 EXP, orb başına %1 hız). Şimdi efsanevi: eski tarif + Rüzgar Eldiveni + 2. Tecrübe Kitabı (fiyat = bileşen toplamı),
+	## +%20 EXP ve +%5 hareket hızı, orb başına %1 hız ama her orbun kendi süresiyle (yeni orb eskisini YENİLEMEZ; player.gd ITEM_FLOW_PER_ORB, _item_flow_tick).
+	## Bileşen olarak kullanan 3 efsanevinin tarifi (Ninja'nın El Kitabı, Son Şans,
+	## Bilgenin Pusulası) açık parçalarına çevrildi - bileşen alt kademe olmak zorunda (test_defs_are_consistent) ve fiyatları DEĞİŞMEDİ.
+	"ruhlarin_akisi": {"name": "Ruhların Maskesi", "kademe": 3, "cost": 1790,
+		"recipe": ["ruzgar_eldiveni", "tecrube_kitabi", "tecrube_kitabi", "ayakkabi_bagcigi", "ceviklik_yuzugu"],
+		"stats": {"exp_gain_percent": 0.20, "item_speed_percent": 0.05},
+		"passive": "Topladığın her EXP orbı %1 hareket hızı kazandırır, 4 saniyede azalarak kaybolur. Birikir; her orbun süresi kendi başına işler (yeni orb öncekini yenilemez)."},
 	"anka_kusunun_kalbi": {"name": "Anka Kuşunun Kalbi", "kademe": 3, "cost": 1850,
 		"recipe": ["yenilenme_ozutu", "yenilenme_ozutu", "yasam_kristali"],
 		"stats": {"max_health": 200.0, "item_health_regen": 15.0}, ## 2026-10-11: x3 (5 -> 15)
@@ -144,7 +149,7 @@ const DEFS := {
 		"stats": {"max_health": 220.0, "damage_bonus": 10.0},
 		"passive": "Çevrende ölen her 40 düşman başına kalıcı olarak 1 can kazanırsın."},
 	"ninjanin_el_kitabi": {"name": "Ninja'nın El Kitabı", "kademe": 3, "cost": 2020,
-		"recipe": ["ruzgar_eldiveni", "ruhlarin_akisi", "ayakkabi_bagcigi", "ayakkabi_bagcigi"],
+		"recipe": ["ruzgar_eldiveni", "tecrube_kitabi", "ayakkabi_bagcigi", "ceviklik_yuzugu", "ayakkabi_bagcigi", "ayakkabi_bagcigi"], ## eski: Rüzgar Eldiveni + Ruhların Maskesi (epikti) + 2 Deri Çizme
 		"stats": {"item_fire_rate_percent": 0.30, "item_speed_percent": 0.10, "dodge_chance": 0.05},
 		"passive": "Yaratıkların içinden geçebilirsin."},
 	"zamanbukenin_eldiveni": {"name": "Zamanbükenin Eldiveni", "kademe": 3, "cost": 2060,
@@ -174,7 +179,7 @@ const DEFS := {
 		"stats": {"max_health": 100.0, "damage_bonus": 20.0},
 		"passive": "Canın %20'nin altına düştüğünde anında saldırı gücünün %250'si kadar mana kalkanı ve 6 saniyede yenilenen %25 can kazanırsın. (120 sn bekleme süresi)"},
 	"son_sans": {"name": "Son Şans", "kademe": 3, "cost": 2130,
-		"recipe": ["ruhlarin_akisi", "savascinin_kilici", "tecrube_kitabi", "tecrube_kitabi"],
+		"recipe": ["tecrube_kitabi", "ayakkabi_bagcigi", "ceviklik_yuzugu", "savascinin_kilici", "tecrube_kitabi", "tecrube_kitabi"], ## eski: Ruhların Maskesi (epikti) + Savaşçının Kılıcı + 2 Tecrübe Kitabı
 		"stats": {"damage_bonus": 25.0, "luck": 10.0},
 		"passive": "Her 1 şans başına 1 saldırı gücü kazanırsın."},
 	"azrailin_gozu": {"name": "Azrail'in Gözü", "kademe": 3, "cost": 2330,
@@ -191,7 +196,7 @@ const DEFS := {
 		"stats": {"damage_bonus": 20.0, "max_health": 100.0},
 		"passive": "Katledildiğinde anında tam can ve mana kalkanıyla yeniden dirilirsin. (180 sn bekleme süresi)"},
 	"bilgenin_pusulasi": {"name": "Bilgenin Pusulası", "kademe": 3, "cost": 2250,
-		"recipe": ["ruhlarin_akisi", "yenilenme_ozutu", "kol_saati", "kanli_yakut"], ## EXP + can + bekleme azaltma
+		"recipe": ["tecrube_kitabi", "ayakkabi_bagcigi", "ceviklik_yuzugu", "yenilenme_ozutu", "kol_saati", "kanli_yakut"], ## EXP + can + bekleme azaltma (eski: Ruhların Maskesi (epikti) + Yenilenme Özütü + Cübbe + Yakut)
 		"stats": {"max_health": 150.0, "cooldown_reduction_percent": 0.10, "exp_gain_percent": 0.20, "item_pickup_range_percent": 1.0},
 		"passive": "Nesne ve eşya toplama menzilini 2 katına çıkarır."},
 	"ruzgar_yuruyen_cizmeleri": {"name": "Rüzgâr Yürüyen Çizmeleri", "kademe": 3, "cost": 2410,
@@ -222,8 +227,8 @@ const KEYS: Array = [
 	"ceviklik_yuzugu", "tornavida", "kanli_yakut", "bile_tasi",
 	"kemik_kolye", "suikastci_kamasi", "ruh_emici", "keskin_goz_hanceri", "ruzgar_eldiveni", "zirh_soken_hancer",
 	"savascinin_kilici", "sarsilmaz_kabuk", "kirilmaz_irade", "aura_kristali", "lutuf_madalyonu", "yenilenme_ozutu",
-	"olum_esigi", "savasci_bileyi", "kizil_hasat", "ruhlarin_akisi",
-	"anka_kusunun_kalbi", "ilidaricin_kilici", "canavarlastirma_ozutu", "son_felaket_pencesi", "kabuk_delen",
+	"olum_esigi", "savasci_bileyi", "kizil_hasat",
+	"ruhlarin_akisi", "anka_kusunun_kalbi", "ilidaricin_kilici", "canavarlastirma_ozutu", "son_felaket_pencesi", "kabuk_delen",
 	"kralin_kadehi", "ninjanin_el_kitabi", "zamanbukenin_eldiveni", "isigin_muhafizi", "zaman_kiran", "astral_zirh_ozu",
 	"kan_aglayan", "gunesin_iradesi", "son_sans", "bilgenin_pusulasi", "sifa_feneri", "azrailin_gozu", "aegisin_muhafizi",
 	"ruzgar_yuruyen_cizmeleri", "kanli_bicer", "ahenk_bastiyonu", "anka_muhru", "kiyamet_bicagi",

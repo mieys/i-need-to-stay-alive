@@ -360,12 +360,12 @@ def simulate(cls):
 
 
 # ------------------------------------------------------------------ çizim
-def blit2(F, Sa, cx, cy, k, rot=0.0, sx=1.0, sy=1.0, alpha=1.0, mul=1.0):
-    """Godot Sprite2D taklidi: merkezli, ölçek sonra dönüş, NEAREST. (cx, cy) ekran; k = ekran px / sanat pikseli."""
+def blit2(F, Sa, cx, cy, k, rot=0.0, sx=1.0, sy=1.0, alpha=1.0, mul=1.0, tint=None):
+    """Godot Sprite2D taklidi: merkezli, ölçek sonra dönüş, NEAREST (sx < 0 = flip_h). (cx, cy) ekran; k = ekran px / sanat pikseli."""
     sh, sw = Sa.shape[:2]
     px, py = sw / 2.0, sh / 2.0
     c, s = math.cos(rot), math.sin(rot)
-    rad = int(math.hypot(sw, sh) / 2.0 * k * max(sx, sy)) + 2
+    rad = int(math.hypot(sw, sh) / 2.0 * k * max(abs(sx), abs(sy))) + 2
     H, W = F.shape[:2]
     x0, x1 = max(0, int(cx) - rad), min(W, int(cx) + rad)
     y0, y1 = max(0, int(cy) - rad), min(H, int(cy) + rad)
@@ -380,7 +380,42 @@ def blit2(F, Sa, cx, cy, k, rot=0.0, sx=1.0, sy=1.0, alpha=1.0, mul=1.0):
     samp = np.zeros((y1 - y0, x1 - x0, 4), np.float32)
     samp[m] = Sa[v[m], u[m]]
     a = samp[..., 3:4] / 255.0 * alpha
-    F[y0:y1, x0:x1] = F[y0:y1, x0:x1] * (1.0 - a) + samp[..., :3] * mul * a
+    col = samp[..., :3] * mul if tint is None else np.array(tint, np.float32)
+    F[y0:y1, x0:x1] = F[y0:y1, x0:x1] * (1.0 - a) + col * a
+
+
+def line_w(F, x0, y0, x1, y1, col, alpha, wpx):
+    """Ekran koordinatında kalın piksel çizgi (kare fırça)."""
+    n = int(max(abs(x1 - x0), abs(y1 - y0))) + 1
+    H, W = F.shape[:2]
+    hw = max(1, int(wpx))
+    for i in range(n):
+        f = i / max(1, n - 1)
+        x, y = int(x0 + (x1 - x0) * f), int(y0 + (y1 - y0) * f)
+        xa, ya = max(0, x - hw // 2), max(0, y - hw // 2)
+        xb, yb = min(W, xa + hw), min(H, ya + hw)
+        if xa < xb and ya < yb:
+            F[ya:yb, xa:xb] = F[ya:yb, xa:xb] * (1.0 - alpha) + np.array(col, np.float32) * alpha
+
+
+def star(F, cx, cy, r, col, alpha, wpx):
+    """4 kollu piksel parıltı: yatay + dikey çizgi, kısa çaprazlar."""
+    line_w(F, cx - r, cy, cx + r, cy, col, alpha, wpx)
+    line_w(F, cx, cy - r, cx, cy + r, col, alpha, wpx)
+    line_w(F, cx - r * 0.35, cy - r * 0.35, cx + r * 0.35, cy + r * 0.35, col, alpha * 0.8, wpx)
+    line_w(F, cx - r * 0.35, cy + r * 0.35, cx + r * 0.35, cy - r * 0.35, col, alpha * 0.8, wpx)
+
+
+_SLIME = {}
+SLIME_K = 0.94905  # topuz_proto ile aynı (slime dünya px / sanat pikseli)
+
+
+def slime_frame(t, seed=0):
+    col = int(t * 8.0 + seed * 3) % 6
+    if col not in _SLIME:
+        _SLIME[col] = np.asarray(asset("visuals/Yaratıklar/Tüm Yaratıklar/Slime 1/PNG/Slime1/With_shadow/Slime1_Idle_with_shadow.png",
+                                       (col * 64, 0, col * 64 + 64, 64)), dtype=np.float32)
+    return _SLIME[col]
 
 
 def ellipse(F, cx, cy, rx, ry, col, alpha):
@@ -449,15 +484,25 @@ def interp_state(rec, t):
     for a, b in zip(rec[i0], rec[i1]):
         w = dict(a)
         w["pos"] = lerp2(a["pos"], b["pos"], f)
-        w["rot"] = a["rot"] + (b["rot"] - a["rot"]) * f
+        ## Dönüş EN KISA yaydan: açı -180/180'de sarınca ya da Tabanca aynalanınca iki kare arası ~360 derece sıçrıyordu, düz ara
+        ## değer silahı tek karede ters/yamuk çiziyordu (savaş setinde "glitch"). Aynalama değişen karede ara değer yok (Godot'da
+        ## _update_aim _process'te, dönüş zaten interpolasyonsuz).
+        if a.get("flip", False) != b.get("flip", False):
+            src = a if f < 0.5 else b
+            w["rot"], w["flip"] = src["rot"], src.get("flip", False)
+        else:
+            d = (b["rot"] - a["rot"] + 180.0) % 360.0 - 180.0
+            w["rot"] = a["rot"] + d * f
         sa, sb = a["sh"], b["sh"]
         w["sh"] = tuple(sa[j] + (sb[j] - sa[j]) * f for j in range(4))
         ws.append(w)
     return P, TRACK[i0], ws
 
 
-def render(rec, t, z, view):
-    """view = (x0, y0, x1, y1) oyuncuya göre dünya penceresi. Kamera oyuncuya kilitli (player.tscn Camera2D, yumuşatma yok)."""
+def render(rec, t, z, view, enemies=None):
+    """view = (x0, y0, x1, y1) oyuncuya göre dünya penceresi. Kamera oyuncuya kilitli (player.tscn Camera2D, yumuşatma yok).
+    enemies: dünya konumları (duran slime'lar). Silah sözlüğü ek alanları: flip (flip_h), flash (0..1 beyaz), fx (silaha göre
+    ("line", dx0, dy0, dx1, dy1, renk, a) / ("star", dx, dy, r, renk, a)), depth (< 0 = karakterin arkasında)."""
     P, st, ws = interp_state(rec, t)
     G = ground(z)
     cx0 = int(round((P[0] + view[0]) * z))
@@ -473,12 +518,9 @@ def render(rec, t, z, view):
         gx, gy, rx, ry = w["sh"]
         sx, sy = S((gx, gy))
         ellipse(F, sx, sy, rx * z, ry * z, (0, 0, 0), 0.32 * 0.4)
-    # karakter gölgesi + karakter
-    sx, sy = S((P[0], P[1] + 12.0))
-    ellipse(F, sx, sy, 9.0 * z, 3.5 * z, (0, 0, 0), 0.32)
-    fr = char_frame(st["moving"], st["face"], st["walk_t"], st["t"])
-    sx, sy = S((P[0], P[1] + CHAR_OFF_Y))
-    blit2(F, fr, sx, sy, CHAR_K * z)
+    for k, e in enumerate(enemies or []):
+        ex, ey = S(e)
+        blit2(F, slime_frame(t, k), ex, ey, SLIME_K * z)
 
     order = sorted(range(len(ws)), key=lambda j: ws[j].get("depth", 0.0))
     back = [j for j in order if ws[j].get("depth", 0.0) < 0.0]
@@ -487,10 +529,20 @@ def render(rec, t, z, view):
     def draw_w(j):
         w = ws[j]
         x, y = S(w["pos"])
-        blit2(F, icon_np(WEAPONS[j][0]), x, y, WPP * z, w["rot"] * D2R, w.get("sx", 1.0), w.get("sy", 1.0), mul=w.get("mul", 1.0))
+        fl = -1.0 if w.get("flip") else 1.0
+        args = (F, icon_np(WEAPONS[j][0]), x, y, WPP * z, w["rot"] * D2R, w.get("sx", 1.0) * fl, w.get("sy", 1.0))
+        blit2(*args, mul=w.get("mul", 1.0))
+        if w.get("flash", 0.0) > 0.0:
+            blit2(*args, alpha=w["flash"], tint=(255, 250, 236))
 
     for j in back:
         draw_w(j)
+    # karakter gölgesi + karakter
+    sx, sy = S((P[0], P[1] + 12.0))
+    ellipse(F, sx, sy, 9.0 * z, 3.5 * z, (0, 0, 0), 0.32)
+    fr = char_frame(st["moving"], st["face"], st["walk_t"], st["t"])
+    sx, sy = S((P[0], P[1] + CHAR_OFF_Y))
+    blit2(F, fr, sx, sy, CHAR_K * z)
     # can + kalkan barı (overhead_bar.gd: 44 x 7 yerel, kalkan 0,72 boy, 2 yerel çerçeve) - dünya = yerel x 0,5
     bx0, bx1 = P[0] - 11.0, P[0] + 11.0
     for (y0, y1, fill, bg) in ((-34.0, -30.5, (77, 209, 61), (31, 10, 10)), (-29.5, -27.0, (89, 184, 255), (10, 20, 36))):
@@ -503,6 +555,16 @@ def render(rec, t, z, view):
         rect(F, a0, b0, a1, b0 + max(1, z // 2), tuple(min(255, c + 50) for c in fill))
     for j in front:
         draw_w(j)
+    for w in ws:
+        for prim in w.get("fx", ()):
+            if prim[0] == "line":
+                _, a0, b0, a1, b1, col, al = prim
+                p0, p1 = S((w["pos"][0] + a0, w["pos"][1] + b0)), S((w["pos"][0] + a1, w["pos"][1] + b1))
+                line_w(F, p0[0], p0[1], p1[0], p1[1], col, al, z)
+            elif prim[0] == "star":
+                _, a0, b0, r, col, al = prim
+                c = S((w["pos"][0] + a0, w["pos"][1] + b0))
+                star(F, c[0], c[1], r * z, col, al, z)
     return Image.fromarray(np.clip(F, 0, 255).astype(np.uint8), "RGB")
 
 
@@ -558,23 +620,24 @@ INFO = [
 ]
 
 
-def build(z, view, name, small, fps):
-    sims = [(cls, simulate(cls)[1]) for cls in DIRS]
+def build(z, view, name, small, fps, dirs=None, enemies=None, title="Silahların takip animasyonu", info=None, info_title="Takip"):
+    sims = [(cls, simulate(cls)[1]) for cls in (dirs or DIRS)]
+    info_lines = info or INFO
     n = int(round(LOOP * fps))
     dt = LOOP / n
     tw, th = int((view[2] - view[0]) * z), int((view[3] - view[1]) * z)
-    hd = header(tw * 2 + 4, "Silahların takip animasyonu  ·  %s" % ("oyun ölçeği (1080p), gerçek hız" if z == 2 else "x2 yakın (kafa üstü), gerçek hız"),
+    hd = header(tw * 2 + 4, title + "  ·  %s" % ("oyun ölçeği (1080p), gerçek hız" if z == 2 else "x2 yakın (kafa üstü), gerçek hız"),
                 "dur · sağ · dur · yukarı · sol + keskin dönüş aşağı · kısa sağ-sol kaçış · dur  (%.1f sn döngü)" % LOOP)
     frames = []
     for k in range(n):
         t = k * dt
         tiles = []
         for cls, rec in sims:
-            im = render(rec, t, z, view)
+            im = render(rec, t, z, view, enemies)
             tile_label(im, cls, small)
             tiles.append(im)
-        lines = [(ln % fps) if "%d" in ln else ln for ln in INFO]
-        info = info_tile(tw, th, lines if not small else lines[:3], "Takip")
+        lines = [(ln % fps) if "%d" in ln else ln for ln in info_lines]
+        info = info_tile(tw, th, lines if not small else lines[:3], info_title)
         d = ImageDraw.Draw(info)
         label(d, 10, th - 22, "%.2f sn · %s" % (t, phase_name(t)), 12, (255, 214, 120))
         tiles.append(info)
@@ -588,15 +651,15 @@ def build(z, view, name, small, fps):
 STRIP_T = [0.45, 0.75, 1.40, 1.58, 1.68, 1.85, 2.40, 3.20, 3.75, 4.20]
 
 
-def build_strip(z=3, view=(-60.0, -82.0, 60.0, 18.0)):
+def build_strip(z=3, view=(-60.0, -82.0, 60.0, 18.0), dirs=None, enemies=None, fname="takip_kareler.png", times=None):
     """Satır = yön, sütun = an (durma/keskin dönüş çevresi)."""
-    sims = [(cls, simulate(cls)[1]) for cls in DIRS]
+    sims = [(cls, simulate(cls)[1]) for cls in (dirs or DIRS)]
     rows = []
     tw = int((view[2] - view[0]) * z)
     for cls, rec in sims:
         cells = []
-        for t in STRIP_T:
-            im = render(rec, t, z, view)
+        for t in (times or STRIP_T):
+            im = render(rec, t, z, view, enemies)
             d = ImageDraw.Draw(im)
             label(d, 4, 2, "%.2f %s" % (t, phase_name(t)), 10)
             cells.append(im)
@@ -606,7 +669,7 @@ def build_strip(z=3, view=(-60.0, -82.0, 60.0, 18.0)):
             row.paste(c, (j * (tw + 2), 18))
         rows.append(row)
     os.makedirs(OUT, exist_ok=True)
-    stack_v(rows).save(os.path.join(OUT, "takip_kareler.png"))
+    stack_v(rows).save(os.path.join(OUT, fname))
 
 
 if __name__ == "__main__":

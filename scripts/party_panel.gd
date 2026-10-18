@@ -56,6 +56,9 @@ const BOX_OUTLINE := HudTheme.OUTLINE
 const BOX_FILL := HudTheme.INSET
 const SHIELD_COLOR := Color(0.35, 0.72, 1.0, 1.0) ## overhead_bar.gd kalkan rengi ile AYNI
 const DAMAGE_BAR_COLOR := Color("#e0aa3e") ## görev çubuğunun altın tonu
+## Hasar Sıralaması "Alınan" sütunu (2026-10-18): HUD'un uyarı kırmızısı; sayı sütunları aynı genişlikte.
+const TAKEN_COLOR := HudTheme.BAD
+const STAT_COL_W := 72.0
 
 ## Kim ne zaman katıldı/ayrıldı diye satırların Node'larını her karede değil,
 ## bu aralıkta bir kontrol ediyoruz (satır içeriği - can/kalkan/isim/durum -
@@ -231,7 +234,7 @@ func _build_stats_popup() -> void:
 
 	_stats_list = VBoxContainer.new()
 	_stats_list.add_theme_constant_override("separation", 6)
-	_stats_list.custom_minimum_size = Vector2(250, 0)
+	_stats_list.custom_minimum_size = Vector2(330, 0)
 	vbox.add_child(_stats_list)
 
 	# _gift_popup ile AYNI sebep: liste akışının DIŞINDA, kök seviyesinde.
@@ -350,6 +353,19 @@ func _apply_list_height() -> void:
 func set_footer_visible(v: bool) -> void:
 	if _stats_button and _stats_button.get_parent() is Control:
 		(_stats_button.get_parent() as Control).visible = v
+
+
+## Telefon (madde 273): alt düğmenin yazısı - "Hasar" yerine "İstatistik" (pencere verilen + alınan hasarı gösteriyor).
+func set_footer_text(t: String) -> void:
+	if _stats_button:
+		_stats_button.text = t
+
+
+## Telefon (madde 273): alt düğme panel genişliğinde (prototipteki tam genişlik ahşap "İstatistik" düğmesi).
+func set_footer_full_width(v: bool) -> void:
+	if _stats_button:
+		_stats_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL if v else Control.SIZE_FILL
+		_stats_button.custom_minimum_size.y = 40.0 if v else 32.0
 
 
 func toggle_stats_popup(anchor: Control) -> void:
@@ -683,9 +699,11 @@ func _gather_live_stats() -> Array:
 			var my_name: String = "Sen"
 			if NetworkManager.is_multiplayer_active and NetworkManager.local_player_name != "":
 				my_name = NetworkManager.local_player_name
-			entries.append({"name": my_name, "dealt": float(local_player.get("match_damage_dealt"))})
+			entries.append({"name": my_name, "dealt": float(local_player.get("match_damage_dealt")),
+					"taken": float(local_player.get("match_damage_taken")) if "match_damage_taken" in local_player else 0.0})
 		for ally in _current_allies():
-			entries.append({"name": str(ally.get("player_name")), "dealt": float(ally.get("match_damage_dealt"))})
+			entries.append({"name": str(ally.get("player_name")), "dealt": float(ally.get("match_damage_dealt")),
+					"taken": float(ally.get("match_damage_taken")) if "match_damage_taken" in ally else 0.0})
 	entries.sort_custom(func(a, b): return float(a["dealt"]) > float(b["dealt"]))
 	return entries
 
@@ -703,6 +721,21 @@ func _refresh_stats_popup() -> void:
 		_stats_list.add_child(empty_lbl)
 		return
 	var top: float = maxf(float(entries[0].get("dealt", 0.0)), 1.0)
+	## Sütun başlıkları: verilen + ALINAN hasar (kullanıcı isteği 2026-10-18: "grup istatistiklerinde alınan hasar da olmalı").
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	_stats_list.add_child(head)
+	var head_pad := Control.new()
+	head_pad.custom_minimum_size = Vector2(30 + 8 + 110, 0)
+	head_pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(head_pad)
+	for title_text: String in ["Verilen", "Alınan"]:
+		var head_lbl := Label.new()
+		head_lbl.text = title_text
+		head_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		head_lbl.custom_minimum_size = Vector2(STAT_COL_W, 0)
+		UIKit.style_label(head_lbl, FS_ROW, HudTheme.DIM, 0)
+		head.add_child(head_lbl)
 	for i in entries.size():
 		var entry: Dictionary = entries[i]
 		var block := VBoxContainer.new()
@@ -731,9 +764,16 @@ func _refresh_stats_popup() -> void:
 		var dmg_lbl := Label.new()
 		dmg_lbl.text = "%d" % int(round(dealt))
 		dmg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		dmg_lbl.custom_minimum_size = Vector2(64, 0)
+		dmg_lbl.custom_minimum_size = Vector2(STAT_COL_W, 0)
 		UIKit.style_label(dmg_lbl, FS_ROW, HudTheme.PRICE, 0)
 		row.add_child(dmg_lbl)
+
+		var taken_lbl := Label.new()
+		taken_lbl.text = "%d" % int(round(float(entry.get("taken", 0.0))))
+		taken_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		taken_lbl.custom_minimum_size = Vector2(STAT_COL_W, 0)
+		UIKit.style_label(taken_lbl, FS_ROW, TAKEN_COLOR, 0)
+		row.add_child(taken_lbl)
 
 		var well := PanelContainer.new()
 		well.add_theme_stylebox_override("panel", UIKit.panel_style("hud_inset_tight"))

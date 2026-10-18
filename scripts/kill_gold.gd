@@ -120,6 +120,8 @@ static func award(tree: SceneTree, amount: int, world_pos: Vector2, killer: Node
 			target = _remote_by_peer(tree, peer)
 		if target != null and not is_instance_valid(target):
 			target = null
+		if peer > 0 and target == null:
+			return ## 0,2 sn içinde oyundan düşen öldüren: altın host'a akmasın (award_now boş alıcıyı host sayar)
 		award_now(tree, amount, world_pos, target, assist))
 
 

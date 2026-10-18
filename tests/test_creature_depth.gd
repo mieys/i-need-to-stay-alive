@@ -202,3 +202,66 @@ func test_creatures_and_players_in_front_of_the_dome_are_drawn_over_its_shell() 
 	cd.free()
 	_spawned.erase(cd)
 	_cleanup()
+
+
+## FPS (2026-10-18): close_over ikili aramalı çekirdeğe geçti. Eski kural ("her düğüm x tüm yükseltilenler" çift döngüsü, burada referans) ile rastgele havuzlarda BİREBİR aynı küme.
+static func _naive_close_over(want: Dictionary, pool: Dictionary) -> int:
+	if want.is_empty() or pool.size() <= want.size():
+		return 0
+	var keys: Array = []
+	var nodes: Array = pool.keys()
+	for i in range(nodes.size()):
+		keys.append(Vector2(float((pool[nodes[i]] as Array)[0]), float(i)))
+	keys.sort()
+	var raised: Array = []
+	var added: int = 0
+	for k: Vector2 in keys:
+		var n: Variant = nodes[int(k.y)]
+		var info: Array = pool[n]
+		if want.has(n):
+			raised.append(info)
+			continue
+		for a: Array in raised:
+			if float(a[0]) < float(info[0]) - 0.5 and absf(float(a[1]) - float(info[1])) < float(a[2]) + float(info[2]) and float(info[0]) - float(info[3]) < float(a[0]):
+				want[n] = true
+				raised.append(info)
+				added += 1
+				break
+	return added
+
+
+func test_close_over_matches_the_naive_rule_on_random_pools() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 424242
+	var mismatches: int = 0
+	var total_added: int = 0
+	for trial in range(80):
+		var nodes: Array = []
+		var pool: Dictionary = {}
+		for i in range(rng.randi_range(2, 90)):
+			var n := Node2D.new()
+			nodes.append(n)
+			## ayak y'leri bilerek yakın kümelenir (0,5 px eşiği ve eşit ayaklar sınanır)
+			var foot: float = float(rng.randi_range(0, 60)) * (0.5 if rng.randf() < 0.4 else 3.0) + (0.25 if rng.randf() < 0.3 else 0.0)
+			pool[n] = [foot, rng.randf_range(-150.0, 150.0), rng.randf_range(8.0, 40.0), rng.randf_range(10.0, 90.0)]
+		var want_a: Dictionary = {}
+		var want_b: Dictionary = {}
+		for n in nodes:
+			if rng.randf() < 0.15:
+				want_a[n] = true
+				want_b[n] = true
+		var add_a: int = _naive_close_over(want_a, pool)
+		var add_b: int = CreatureDepthScript.close_over(want_b, pool)
+		total_added += add_b
+		var same: bool = add_a == add_b and want_a.size() == want_b.size()
+		if same:
+			for n in want_a:
+				if not want_b.has(n):
+					same = false
+					break
+		if not same:
+			mismatches += 1
+		for n in nodes:
+			n.free()
+	assert(mismatches == 0, "close_over eski kuralla %d/80 denemede farklı küme verdi" % mismatches)
+	assert(total_added > 50, "deney anlamlı olsun: kapanışla eklenen yaratık sayısı çok az (%d)" % total_added)

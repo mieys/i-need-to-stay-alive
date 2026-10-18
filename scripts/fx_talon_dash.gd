@@ -30,6 +30,16 @@ var _samples: Array = [] ## [world_pos, age]
 var _ghosts: Array = [] ## [Sprite2D, age]
 var _embers: Array = [] ## [world_pos, velocity, age, size]
 var _shader: Shader = null
+## FPS (2026-10-18): her atılışta YENİ Shader kaynağı yaratmak shader'ı + boru hatlarını her seferinde yeniden kuruyordu (ölçüm: her Talon Q'da ~15-20 ms takılma). Tek paylaşılan Shader.
+static var _shared_shader: Shader = null
+
+
+## Oyun açılırken ısıtma (fx_warmup.gd): hayalet shader'ı ilk atılışta derlenip takılmasın.
+static func warm_shader() -> Shader:
+	if _shared_shader == null:
+		_shared_shader = Shader.new()
+		_shared_shader.code = GHOST_SHADER_CODE
+	return _shared_shader
 
 
 func _ready() -> void:
@@ -38,8 +48,7 @@ func _ready() -> void:
 	## (Gece ışığı: kök (0,0)'da - ışık get_glow_segment() ile Talon'un üstünde, bkz. night_glow.gd.)
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_host = get_parent() as Node2D
-	_shader = Shader.new()
-	_shader.code = GHOST_SHADER_CODE
+	_shader = warm_shader()
 	if _host != null:
 		global_position = Vector2.ZERO
 		_add_sample()

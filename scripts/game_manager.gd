@@ -64,6 +64,13 @@ var victory_reached: bool = false
 ## Anahtar sadece TÜM yeni bosslar + Final hazır olunca true yapılıp BOSS_TIERS/FINAL_CREATURES onlarla doldurulur. Sabit ayar (ağdan
 ## gitmez, her peer'de aynı); testler eski boss akışını sınarken geçici true yapar.
 var bosses_enabled: bool = false
+## Sonsuz modda 3 katta bir boss dalgası (2026-10-18, madde 269): bosses_enabled kapalıyken de yeni 6 bossla (EndlessMath.WAVE_POOL). Kapatılırsa sonsuzda yine boss gelmez.
+var endless_boss_waves: bool = true
+
+
+## Sonsuzda boss dalgası var mı: eski 13'lü sistem (bosses_enabled) ya da yeni havuz (endless_boss_waves).
+func endless_has_boss_waves() -> bool:
+	return bosses_enabled or endless_boss_waves
 var endless_active: bool = false
 var endless_layer: int = 0 ## 0 = sonsuz mod değil; 1.. = şu anki kat
 var run_max_tier: int = 1
@@ -1023,7 +1030,19 @@ const RAMP_STEPS := 10
 ## Kullanıcı isteği (2026-09-30): "level atlamayı %10 kolaylaştırır mısın genel olarak" - her seviyenin gereksinimi x0.9.
 ## Eğrinin 4 sabitine dokunmadan tek çarpan: şekil (rampa, tavan) aynen kalır, her seviye %10 daha az XP ister.
 const XP_NEEDED_MULT := 0.9
+## 2026-10-18 (madde 269, kullanıcı onayı: "1-3-4"): sonsuz mod koşusunda (Elara, 113 dk) seviye 306'ya çıktı - 306. seviye 4,4M XP ister, normal oyunun sonu (seviye ~60) 143k;
+## her seviye +1 saldırı gücü, +15 can, +1 parça yuvası, +1 kart verdiği için güç eğrisi koptu. Seviye 60'tan SONRA her seviye artışı (MAX_XP_INCREMENT) ayrıca
+## XP_LATE_INCREMENT_GROWTH kadar büyür (n. seviyede +3n): normal oyun (seviye <= ~60) etkilenmez, sonsuzda seviye 306 yerine ~190'a iner (aynı XP gelirinde).
+const XP_LATE_FROM_LEVEL := 60
+const XP_LATE_INCREMENT_GROWTH := 3.0
+## Toplam XP bonusu (kart + Tecrübe Kitabı vb.) üst sınırı +%100: 41 Tecrübe Kitabı +%205 XP veriyordu (seviye -> yuva -> kitap -> seviye geri beslemesi).
+const EXP_GAIN_CAP := 1.0
 var team_xp_needed: float = round(BASE_XP_NEEDED * XP_NEEDED_MULT)
+
+
+## Ham XP bonusunu (exp_gain_percent) üst sınırla etkin bonusa çevirir. XP orbu (xp_orb.gd), uzak oyuncu (remote_player.gd) ve stat paneli AYNI işlevi okur.
+func effective_exp_gain(raw: float) -> float:
+	return clampf(raw, 0.0, EXP_GAIN_CAP)
 
 ## Bir SONRAKİ seviye için gereken XP (bkz. yukarıdaki eğri notu). Her
 ## seviye atlayışı bir "adım" sayılır (1'den level-1'e kadar); ilk
@@ -1037,7 +1056,10 @@ func _xp_needed_for_level(level: int) -> float:
 			+ XP_INCREMENT_GROWTH * (ramp_steps_done * (ramp_steps_done - 1) / 2.0)
 	var capped_steps: int = maxi(steps - RAMP_STEPS, 0)
 	var capped_sum: float = capped_steps * MAX_XP_INCREMENT
-	return round((BASE_XP_NEEDED + ramp_sum + capped_sum) * XP_NEEDED_MULT)
+	## Geç oyun eğrisi (XP_LATE_FROM_LEVEL üstü): artış her seviyede XP_LATE_INCREMENT_GROWTH kadar daha büyür -> toplam growth * n(n+1)/2.
+	var late_n: int = maxi(level - XP_LATE_FROM_LEVEL, 0)
+	var late_sum: float = XP_LATE_INCREMENT_GROWTH * float(late_n) * float(late_n + 1) / 2.0
+	return round((BASE_XP_NEEDED + ramp_sum + capped_sum + late_sum) * XP_NEEDED_MULT)
 
 ## #48 DÜZELTME (kullanıcı isteği: "Level kartı reroll'u altınla olsun,
 ## level başına +1 altın"): her takım seviye atlayışında oyuncuya kişisel
@@ -1410,6 +1432,7 @@ func reset() -> void:
 	_terrain_tree_layers.clear()
 	_terrain_layers_searched = false
 	TerrainCollisionScript.reset()
+	preload("res://scripts/assist.gd").reset() ## önceki koşudan kalan destek kayıtları (8 sn'lik asist penceresi) yeni koşuya taşınmasın
 	_map_world_rect = Rect2()
 	_map_world_rect_searched = false
 	game_time = 0.0

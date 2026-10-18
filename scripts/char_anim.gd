@@ -16,7 +16,8 @@ extends RefCounted
 ## klibine geçerse kalkış yarıda kesilirdi.
 ## "golem_slam"/"golem_jump_": Shaman'ın Elemental Golem formundaki darbe (slam + slam2 aynı kareler) ve sıçrayış klipleri
 ## (bkz. shaman_golem_math.gd - player.gd'nin golem dalı bunları zaten korur, liste kural gereği tek yerde dursun diye).
-const ACTION_PREFIXES: Array[String] = ["attack", "spellcast", "shrug_", "hurt_", "eat_", "ghostrise_", "golem_slam", "golem_jump_"]
+## "pickup_": Oakley R Hayat Ağacı'nda yere eğilip tohum ekme (madde 266; 4 kare, 0,4 sn) - bitmeden yürümeye geçmesin.
+const ACTION_PREFIXES: Array[String] = ["attack", "spellcast", "shrug_", "hurt_", "eat_", "ghostrise_", "golem_slam", "golem_jump_", "pickup_"]
 
 ## Yetenek kullanım klibi: yeni sprite setlerinde "shrug_<yön>", eski (LPC) setlerde "spellcast_<yön>".
 ## Öncelik sırası bu; karakterde hangisi varsa o oynar. Odaklanarak kanal yapan yeteneklerde (Büyücü meteor,

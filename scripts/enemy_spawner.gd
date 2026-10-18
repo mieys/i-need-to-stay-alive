@@ -1114,7 +1114,10 @@ func _scaled_enemy_cap() -> int:
 	## BİLEREK atlanıyor, kalıcı davranış DEĞİL.
 	if DEBUG_RAMP_TEST_ENABLED and _debug_ramp_elapsed < DEBUG_RAMP_TEST_SECONDS:
 		return DEBUG_RAMP_TEST_TARGET
-	return max(1, int(round(player_enemy_cap(_player_count()) * _tier_crowding_scale())))
+	var cap: int = max(1, int(round(player_enemy_cap(_player_count()) * _tier_crowding_scale())))
+	if _run_phase == RunPhase.ENDLESS:
+		cap += EndlessMathScript.extra_enemy_cap(_endless_layer) ## sonsuzda kat başına +3 (madde 269)
+	return cap
 
 
 ## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->105, 2->126, 3->147, 4->168, 5->189 (2026-10-17; 2026-10-10'da 150 + 30/oyuncu, ondan önce 250 + 50/oyuncu, bkz.
@@ -1389,7 +1392,7 @@ func _gate_rush_tick() -> void:
 					any_rushed = true
 					## Hızlanmaya rağmen GATE_RESCUE_DELAY_MSEC'tir kapıyı tutuyorsa duvar/su kenarında TAKILMIŞTIR: görüş dışında
 					## doğuş halkasına ışınla (görünür ışınlanma yok), oradan hızlı yaklaşıp ölsün.
-					if now_msec - wait_started >= GATE_RESCUE_DELAY_MSEC and now_msec - int(e.get_meta("gate_rescue_msec", 0)) >= GATE_RESCUE_DELAY_MSEC:
+					if now_msec - wait_started >= GATE_RESCUE_DELAY_MSEC and now_msec - int(e.get_meta("gate_rescue_msec", -GATE_RESCUE_DELAY_MSEC)) >= GATE_RESCUE_DELAY_MSEC: ## varsayılan "hiç ışınlanmadı" = uzun önce (0 olsa oyun açılışından <12 sn sonra ışınlama engellenirdi)
 						e.set_meta("gate_rescue_msec", now_msec)
 						_rescue_stuck_enemy(e, anchors)
 		e.set_gate_rush(want)
@@ -1767,6 +1770,7 @@ func _setup_boss_enemy(enemy: Node, id: String, tier: int, player_count: int = 0
 	_apply_global_buff(enemy, player_count)
 	if not fixed.is_empty():
 		_apply_fixed_boss_stats(enemy, fixed)
+		_apply_endless_boss_wave_mult(enemy, tier) ## sonsuz dalga bossu: dalga başına büyür (host ve istemci aynı `tier`i alır)
 	_attach_boss_bar(enemy)
 
 
@@ -1782,6 +1786,24 @@ func _apply_fixed_boss_stats(enemy: Node, fixed: Dictionary) -> void:
 	enemy.contact_damage = float(fixed["damage"]) * CREATURE_DAMAGE_CUT
 	if enemy.ranged_damage > 0.0:
 		enemy.ranged_damage = float(fixed["damage"]) * CREATURE_DAMAGE_CUT
+	enemy.health_changed.emit(enemy.health, enemy.max_health)
+	enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
+
+
+## Sonsuz boss dalgası çarpanı (madde 269): FIXED_BOSS_STATS sayıları katla büyümez, bu yüzden dalga bossunun can/kalkan/temas ve menzilli hasarı
+## dalga numarasına göre büyür (EndlessMath.boss_health_mult/boss_damage_mult; kademe bossları ve Final için 1,0). Bossun KENDİ özel saldırı sayıları sabittir.
+func _apply_endless_boss_wave_mult(enemy: Node, scale_tier: int) -> void:
+	var hp_mult: float = EndlessMathScript.boss_health_mult(scale_tier)
+	var dmg_mult: float = EndlessMathScript.boss_damage_mult(scale_tier)
+	if hp_mult == 1.0 and dmg_mult == 1.0:
+		return
+	enemy.max_health *= hp_mult
+	enemy.health = enemy.max_health
+	enemy.item_shield_max *= hp_mult
+	enemy.item_shield_hp = enemy.item_shield_max
+	enemy.contact_damage *= dmg_mult
+	if enemy.ranged_damage > 0.0:
+		enemy.ranged_damage *= dmg_mult
 	enemy.health_changed.emit(enemy.health, enemy.max_health)
 	enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
 
@@ -1932,7 +1954,7 @@ func _process_endless() -> void:
 ## Boss katlarında (her 3 katta bir) katın %75'inde Final'in havuzundan rastgele bir alt küme doğar; kademe/ölçek o katınki.
 ## Spawn kapılarının İÇİNDE çağrılır (canlı bir oyuncu dışarıdaysa); doğmadıysa sonraki karede yeniden dener.
 func _check_endless_boss_wave() -> void:
-	if not GameManager.bosses_enabled:
+	if not GameManager.endless_has_boss_waves():
 		return
 	if _run_phase != RunPhase.ENDLESS or _endless_bosses_spawned.has(_endless_layer):
 		return
@@ -1941,7 +1963,12 @@ func _check_endless_boss_wave() -> void:
 	var elapsed: float = GameManager.game_time - _endless_start_time
 	if elapsed < EndlessMathScript.boss_trigger_elapsed(_endless_layer, tier_duration):
 		return
-	var ids: Array = EndlessMathScript.pick_wave_ids(FINAL_CREATURES, EndlessMathScript.boss_wave_size(_endless_layer))
+	## Eski 13'lü sistem (bosses_enabled) FINAL_CREATURES'tan, yeni sistem elle statlı 6 bossluk havuzdan (madde 269) seçer.
+	var ids: Array
+	if GameManager.bosses_enabled:
+		ids = EndlessMathScript.pick_wave_ids(FINAL_CREATURES, EndlessMathScript.boss_wave_size(_endless_layer))
+	else:
+		ids = EndlessMathScript.pick_wave_ids(EndlessMathScript.WAVE_POOL, EndlessMathScript.pool_wave_size(_endless_layer))
 	var spawned: Array = _spawn_boss_group(ids, EndlessMathScript.scale_tier(_endless_layer))
 	if not spawned.is_empty():
 		_endless_bosses_spawned[_endless_layer] = true

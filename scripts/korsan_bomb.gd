@@ -1,5 +1,6 @@
 extends Node2D
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 
 ## Korsan'ın TEMEL yeteneği (Saatli Bomba, skill2 id 17, bkz. player.gd _korsan_try_place_bomb/characters.gd DEFS[9])
 ## ile bırakılan saatli bomba. Kendisi hiçbir çarpışma/Area2D içermez - patlama hasarı doğrudan bir mesafe
@@ -71,7 +72,8 @@ func detonate() -> void:
 	if owner_player and is_instance_valid(owner_player) and owner_player.has_method("_roll_ability_crit"):
 		is_crit = owner_player._roll_ability_crit()
 		dmg = owner_player._apply_ability_crit(dmg, is_crit)
-	for e in get_tree().get_nodes_in_group("enemies"):
+	## FPS (2026-10-18): tüm "enemies" grubu yerine patlama merkezinin çevresindeki adaylar (C++ ızgara sorgusu); süzgeç aynen (merkez mesafesi <= radius).
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, radius):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		if global_position.distance_to(e.global_position) <= radius and e.has_method("take_damage"):

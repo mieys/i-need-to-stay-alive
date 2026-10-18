@@ -43,6 +43,12 @@ func test_tooltip_creation_and_destruction() -> void:
 	var vbox: VBoxContainer = skill_icon.tooltip_panel.get_child(0) as VBoxContainer
 	assert(vbox != null, "Tooltip should have a VBoxContainer")
 	
+	## 2026-10-18 yeni ipucu: tür etikete taşındı, gömülü "(Xsn bekleme)" metinden atıldı (bekleme başlıkta canlı).
+	var parts: Array = skill_icon._split_kind("ULTİ: 10sn boyunca vurur. (20sn bekleme)")
+	assert(parts[0] == "ULTİ", "tür ayrıldı: %s" % str(parts))
+	assert(skill_icon._strip_cooldown_note(str(parts[2])) == "10sn boyunca vurur.", "gömülü bekleme notu atıldı")
+	assert(skill_icon._split_kind("Düz metin: tür yok")[0] == "", "küçük harfli giriş tür sayılmaz")
+
 	# Exit hover event
 	skill_icon._on_mouse_exited()
 	assert(skill_icon.tooltip_panel == null, "Tooltip panel should be cleared and deleted on mouse exited")
@@ -57,8 +63,8 @@ func test_lol_style_bbcode_formatting() -> void:
 	var raw_text: String = "Etrafındaki yaratıkları keser, %120 hasar verir. Bekleme süresi 15 saniye."
 	var formatted: String = skill_icon._format_lol_style(raw_text)
 	
-	## 2026-09-24: ipucu parşömen kit - renkler TEK kaynak UIKit.INK mürekkep tonları (eski neon #ff5555/#ffaa00 değil).
-	var ink: Dictionary = UIKit.INK
+	## 2026-10-18: ipucu koyu HUD levhası - renkler TEK kaynak HudTheme.INK açık mürekkep tonları (bej kit UIKit.INK değil).
+	var ink: Dictionary = preload("res://scripts/hud_theme.gd").INK
 	assert(("[color=%s]hasar[/color]" % ink["damage"]) in formatted, "Should colorize 'hasar'")
 	assert(("[color=%s]%%120[/color]" % ink["value"]) in formatted, "Should colorize '%120'")
 	assert(("[color=%s]15 saniye[/color]" % ink["value"]) in formatted, "Should colorize '15 saniye'")

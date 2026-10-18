@@ -4,6 +4,7 @@ class_name MissionTree
 ## Yaratık aday sorgusu (yeni yolda C++ ızgarası, eski yolda tüm "enemies" grubu; süzgeçler çağıranda aynen kalır).
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const BoltScript := preload("res://scripts/mission_tree_bolt.gd")
+const BlastScript := preload("res://scripts/mission_tree_blast.gd")
 
 ## "Ağacı Koru" görevi (bkz. world_event_manager.gd).
 ##
@@ -38,16 +39,26 @@ const ATTACK_RANGE := 300.0
 const ATTACK_INTERVAL := 0.8
 ## Kademeye göre uyum (2026-10-10, kullanıcı: "canı/kalkanı/hasarı mevcut kademeye uyumlu olmalı, ne çok güçlü ne çok zayıf, biz yetişene kadar başının çaresine
 ## bakabilsin"): görev başında host yaşayan SIRADAN yaratıkların ortalama azami canını ve temas hasarını ölçer.
-##  - can = ort. hasar x HP_PER_ENEMY_HIT, kalkan = ort. hasar x SHIELD_PER_ENEMY_HIT (ölçek x oyuncu çarpanı): ~6 yaratık aynı anda vururken ~7-9 sn dayanır.
+##  - can = ort. hasar x HP_PER_ENEMY_HIT, kalkan = ort. hasar x SHIELD_PER_ENEMY_HIT (ölçek x oyuncu çarpanı): ~6 yaratık aynı anda vururken ~10-12 sn dayanır.
 ##  - kristal vuruşu = ort. yaratık canı x BOLT_HP_RATIO (sıradan bir yaratığı ~3 atışta, 0,8 sn aralıkla ~2,4 sn'de öldürür).
 ## Ölçülecek yaratık yoksa (başta) FALLBACK_* (eski sabitler).
-## 2026-10-17 (kullanıcı: "ağaç çok dayanıklı, biraz hassaslaşsın"): can/kalkan ~%25 düştü (70 -> 52, 22 -> 16, yedek 3000/800 -> 2250/600), görev süresi 50 -> 170 sn.
-const HP_PER_ENEMY_HIT := 52.0
-const SHIELD_PER_ENEMY_HIT := 16.0
+## 2026-10-17'deki ~%25 can/kalkan düşüşü (52/16, 2250/600) 2026-10-18'de GERİ ALINDI (kullanıcı: "dayanıklı olsun"); görev süresi 170 sn kaldı.
+const HP_PER_ENEMY_HIT := 70.0
+const SHIELD_PER_ENEMY_HIT := 22.0
 const BOLT_HP_RATIO := 0.34
-const FALLBACK_MAX_HEALTH := 2250.0
-const FALLBACK_MAX_SHIELD := 600.0
+const FALLBACK_MAX_HEALTH := 3000.0
+const FALLBACK_MAX_SHIELD := 800.0
 const FALLBACK_BOLT_DAMAGE := 35.0
+## SİHİRLİ ATIŞ (2026-10-18, mission_tree_blast.gd): kristal mermilerine EK, BLAST_INTERVAL'da bir şarjlı büyük küre - çarptığı yerde alan hasarı (ort. yaratık
+## canı x BLAST_HP_RATIO) + ağaçtan dışa itiş. Hedef: BOSS_FOCUS_RANGE içinde yaşayan boss varsa en yakın boss ("bosslara focus"), yoksa BLAST_RANGE içindeki
+## en yakın yaratık. Hedef yoksa BLAST_RETRY sonra yeniden bakar (yaklaşan ilk yaratığa hemen atar).
+const BLAST_INTERVAL := 3.0
+const BLAST_FIRST_DELAY := 1.0
+const BLAST_RETRY := 0.3
+const BLAST_RANGE := 380.0
+const BOSS_FOCUS_RANGE := 520.0
+const BLAST_HP_RATIO := 0.6
+const FALLBACK_BLAST_DAMAGE := 60.0
 ## Kullanıcı isteği (2026-09-24): hasar almadığında 7 sn sonra kalkan yavaşça (max'ın %5'i/sn) yenilenir.
 const SHIELD_REGEN_DELAY := 7.0
 const SHIELD_REGEN_RATE_RATIO := 0.05
@@ -57,12 +68,14 @@ var health: float = FALLBACK_MAX_HEALTH
 var max_shield: float = FALLBACK_MAX_SHIELD
 var shield: float = FALLBACK_MAX_SHIELD
 var bolt_damage: float = FALLBACK_BOLT_DAMAGE
+var blast_damage: float = FALLBACK_BLAST_DAMAGE
 var phase: int = 0
 var is_dead: bool = false
 var block_radius: float = TRUNK_RADIUS ## "move_blockers" sözleşmesi (player.gd)
 
 var _phase_timer: float = PHASE_DURATION
 var _attack_timer: float = 0.4
+var _blast_timer: float = BLAST_FIRST_DELAY
 var _no_damage_timer: float = 0.0
 var _is_host_simulated: bool = true
 var _anim: AnimatedSprite2D = null
@@ -77,6 +90,7 @@ func setup(player_count: int, simulated: bool) -> void:
 		max_health = float(cal["dmg"]) * HP_PER_ENEMY_HIT * mult
 		max_shield = float(cal["dmg"]) * SHIELD_PER_ENEMY_HIT * mult
 		bolt_damage = float(cal["hp"]) * BOLT_HP_RATIO
+		blast_damage = float(cal["hp"]) * BLAST_HP_RATIO
 	else:
 		max_health = FALLBACK_MAX_HEALTH * mult
 		max_shield = FALLBACK_MAX_SHIELD * mult
@@ -174,6 +188,9 @@ func _physics_process(delta: float) -> void:
 		if _attack_timer <= 0.0:
 			_attack_timer = ATTACK_INTERVAL
 			_try_fire_at_nearest_enemy()
+		_blast_timer -= delta
+		if _blast_timer <= 0.0:
+			_blast_timer = BLAST_INTERVAL if _try_fire_blast() else BLAST_RETRY
 	if not _is_host_simulated:
 		return
 	if shield < max_shield:
@@ -204,7 +221,7 @@ func _try_fire_at_nearest_enemy() -> void:
 	var best: Node2D = null
 	var best_d: float = ATTACK_RANGE
 	for e: Node in EnemyQueryScript.candidates(get_tree(), global_position, ATTACK_RANGE + 1.0):
-		if not is_instance_valid(e) or e.get("is_dead") == true or e.get("untargetable") == true:
+		if not _targetable(e):
 			continue
 		var d: float = global_position.distance_to((e as Node2D).global_position)
 		if d < best_d:
@@ -216,6 +233,46 @@ func _try_fire_at_nearest_enemy() -> void:
 	bolt.setup(best, bolt_damage if _is_host_simulated else 0.0)
 	get_tree().current_scene.add_child(bolt)
 	bolt.global_position = from
+
+
+## Kristal mermisi / sihirli atış hedefi olabilir mi (ölü, hayalet/görünmez = "untargetable" metası değil).
+static func _targetable(e: Node) -> bool:
+	return is_instance_valid(e) and e is Node2D and e.get("is_dead") != true and e.get("untargetable") != true and not e.has_meta(&"untargetable")
+
+
+## Sihirli atış hedefi: menzilde yaşayan boss varsa en yakın boss, yoksa BLAST_RANGE içindeki en yakın yaratık. Aynı kural her istemcide (kozmetik kopya).
+func pick_blast_target() -> Node2D:
+	var best: Node2D = null
+	var best_d: float = BOSS_FOCUS_RANGE
+	for b: Node in get_tree().get_nodes_in_group("boss"):
+		if not _targetable(b) or float(b.get("max_health") if b.get("max_health") != null else 0.0) <= 0.0:
+			continue
+		var d: float = global_position.distance_to((b as Node2D).global_position)
+		if d < best_d:
+			best_d = d
+			best = b
+	if best != null:
+		return best
+	best_d = BLAST_RANGE
+	for e: Node in EnemyQueryScript.candidates(get_tree(), global_position, BLAST_RANGE + 1.0):
+		if not _targetable(e):
+			continue
+		var d: float = global_position.distance_to((e as Node2D).global_position)
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+
+func _try_fire_blast() -> bool:
+	var t: Node2D = pick_blast_target()
+	if t == null:
+		return false
+	var blast: Node2D = BlastScript.new()
+	blast.setup(t, blast_damage if _is_host_simulated else 0.0, global_position)
+	get_tree().current_scene.add_child(blast)
+	blast.global_position = crystal_position()
+	return true
 
 
 ## Oyuncu take_damage(amount, source) imzasıyla AYNI (yaratıklar ağaca bir oyuncuya saldırdıkları gibi saldırır - GameManager.defend_tree_ref).

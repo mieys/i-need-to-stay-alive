@@ -83,6 +83,31 @@ func test_award_is_delayed_briefly() -> void:
 	GameManager.gold = before
 
 
+func test_gold_of_a_killer_who_left_during_the_delay_is_not_given_to_the_host() -> void:
+	## Öldüren uzak oyuncu 0,2 sn'lik gecikmede oyundan düşerse altın host'a akmamalı (eskiden award_now boş alıcıyı host sayıyordu).
+	var holder: Node2D = _peer_node(4242)
+	add_child(holder)
+	holder.add_to_group("remote_players")
+	var before: int = GameManager.gold
+	KillGold.award(get_tree(), 9, Vector2(10, 10), holder)
+	holder.remove_from_group("remote_players")
+	holder.free() ## gecikme dolmadan kukla gitti
+	await get_tree().create_timer(KillGold.SHOW_DELAY + 0.3).timeout
+	assert(GameManager.gold == before, "ayrılan öldürenin altını host'a eklenmemeli")
+	GameManager.gold = before
+
+
+## peer_id alanı olan sahte uzak oyuncu kuklası.
+func _peer_node(peer: int) -> Node2D:
+	var n := Node2D.new()
+	var src := GDScript.new()
+	src.source_code = "extends Node2D\nvar peer_id: int = 0\n"
+	src.reload()
+	n.set_script(src)
+	n.set("peer_id", peer)
+	return n
+
+
 func test_icon_is_static_and_beside_text() -> void:
 	if get_tree().current_scene == null:
 		return

@@ -33,8 +33,8 @@ func test_defs_reflect_new_kit() -> void:
 	assert(def.get("name", "") == "Oakley", "roster id 2 Oakley olmalı")
 	assert(int(def.get("skill", 0)) == 33,
 		"Oakley'nin Q'su artık Arı Sürüsü (id 33) olmalı, bulunan: %s" % def.get("skill"))
-	assert(int(def.get("skill3", 0)) == 39,
-		"Oakley'nin R'si artık Koruyucu Büyü (id 39) olmalı, bulunan: %s" % def.get("skill3"))
+	assert(int(def.get("skill3", 0)) == 39 and def.get("skill3_name", "") == "Hayat Ağacı",
+		"Oakley'nin R'si Hayat Ağacı (id 39, madde 266) olmalı, bulunan: %s %s" % [def.get("skill3"), def.get("skill3_name")])
 	assert(int(def.get("skill2", 0)) == 10,
 		"Oakley'nin E'si (Sarmaşıklar) değişmemeli, bulunan: %s" % def.get("skill2"))
 	assert(def.get("passive", "").find("çiçek") != -1,
@@ -51,10 +51,7 @@ func test_ultimate_uses_the_old_passive_icon_and_text_matches_the_doubled_ratios
 	assert(ResourceLoader.exists("res://assets/skills/oakley_passive_icon.png"), "İkon dosyası bulunmalı")
 	assert(load("res://assets/skills/oakley_passive_icon.png") is Texture2D, "İkon yüklenebilmeli")
 	assert(def.get("passive_icon", "") == "res://assets/skills/oakley_cicek_icon.png", "Pasif ikonu (Çiçek) değişmemeli")
-	var desc: String = str(def.get("skill3_desc", ""))
-	assert(desc.contains("saldırı gücünün %20'si kadar can, %10'u kadar kalkan"),
-		"Açıklama 2 katına çıkan oranları (%%20 can / %%10 kalkan) yansıtmalı: %s" % desc)
-	assert(desc.contains("%20 hasar azaltma"), "Hasar azaltma (%20) aynı kalmalı")
+	## 2026-10-18: R artık Hayat Ağacı - metin oakley_tree.gd sabitleriyle tutarlı olmalı (bkz. test_tree_description_matches_constants).
 
 
 ## Eski 2-yük/18sn şarj sistemi tamamen kaldırılmış olmalı - Çiçek artık bir
@@ -97,125 +94,183 @@ func test_bee_swarm_function_unchanged_on_q() -> void:
 	player.queue_free()
 
 
-## Kullanıcı isteği: "Yeni R yeteneği ise canı en az olan arkadaşına
-## koruyucu bir büyü yapar... (60 saniye bekleme süresi)"; süre ilk istekte 8 yazılmıştı,
-## düzeltme: "10 saniye sürmesi gerek" (2026-09-20).
-func test_bond_timing_matches_request() -> void:
+## ---------------------------------------------------------------- R: HAYAT AĞACI (madde 266)
+## Kullanıcı: "oakleyin ultisini komple değiştirmeyi düşünüyorum" -> prototip C (madde 265) + "ağaç ve aurası %30 büyüsün".
+## Eski Koruyucu Büyü testleri kaldırıldı (kod duruyor ama R'ye bağlı değil; yaprak bariyeri görseli
+## test_spiritual_skills_and_rewards.gd'de sınanıyor).
+
+## Sahte yaratık: kök/hasar/itme çağrılarını sayar (oakley_tree.gd sadece bu yöntemleri çağırır).
+class FakeEnemy extends Node2D:
+	var is_dead: bool = false
+	var is_boss: bool = false
+	var roots: Array = []
+	var slows: int = 0
+	var damage: float = 0.0
+	var pushes: int = 0
+
+	func apply_root(duration: float, style: int = 0) -> void:
+		roots.append([duration, style])
+
+	func apply_slow(_p: float, _d: float, _b: bool = false) -> void:
+		slows += 1
+
+	func take_damage(amount: float, _c: bool = false, _s: float = 0.0, _a: bool = false) -> void:
+		damage += amount
+
+	func apply_knockback_distance(_dir: Vector2, _dist: float) -> void:
+		pushes += 1
+
+
+func _fake_enemy(pos: Vector2) -> FakeEnemy:
+	var e := FakeEnemy.new()
+	e.add_to_group("enemies")
+	add_child(e)
+	e.global_position = pos
+	e.set_meta(preload("res://scripts/vision_fog.gd").VIS_META, 1.0)
+	return e
+
+
+func test_r_is_life_tree_with_tree_lifetime_and_60s_cooldown() -> void:
 	var player: Node = _make_oakley_player()
-	assert(is_equal_approx(player.OAKLEY_BOND_DURATION, 10.0), "Koruyucu Büyü 10sn sürmeli")
-	assert(is_equal_approx(player.SKILL3_TIMING[39]["duration"], player.OAKLEY_BOND_DURATION),
-		"R ikonunun 'aktif' süresi gerçek buff süresiyle AYNI olmalı (bulunan %s)" % player.SKILL3_TIMING[39]["duration"])
-	assert(is_equal_approx(player.SKILL3_TIMING[39]["cooldown"], 60.0), "Koruyucu Büyü 60sn beklemeli")
-	## Kullanıcı isteği: "oakleyin ultisinin saldırı gücü oranlarını 2 kat arttır" (0.10/0.05 -> 0.20/0.10).
-	assert(is_equal_approx(player.OAKLEY_BOND_HEAL_RATIO, 0.20), "Can yenileme saldırı gücünün %%20'si olmalı")
-	assert(is_equal_approx(player.OAKLEY_BOND_SHIELD_RATIO, 0.10), "Kalkan yenileme saldırı gücünün %%10'u olmalı")
-	assert(is_equal_approx(player.OAKLEY_BOND_DAMAGE_REDUCTION, 0.20), "Hasar azaltma %%20 olmalı")
+	assert(is_equal_approx(player.SKILL3_TIMING[39]["duration"], OakleyTree.DURATION),
+		"R ikonunun 'aktif' süresi ağacın ömrüyle AYNI olmalı (bulunan %s)" % player.SKILL3_TIMING[39]["duration"])
+	assert(is_equal_approx(OakleyTree.DURATION, 12.0), "ağaç 12 sn ayakta kalmalı")
+	assert(is_equal_approx(player.SKILL3_TIMING[39]["cooldown"], 60.0), "bekleme 60 sn")
 	player.queue_free()
 
 
-## Kullanıcı isteği: "Eğer canı en az olan kişi oakleyse bu büyüyü kendisine
-## yapar" - test ortamında get_tree() yeni eklenen node'lar için sınırlı
-## olduğundan (bkz. dosya başı notu, diğer testlerdeki AYNI kısıt) hiçbir
-## dost bulunamaz, bu da "tek başına/en düşük canlı kendisi" durumunu doğal
-## olarak test eder.
-func test_bond_target_defaults_to_self_when_no_allies() -> void:
+## Kullanıcı isteği: "ağaç ve aurası %30 büyüsün" - prototipteki 130x65 elips ve 1:1 ağaç x1,3.
+func test_tree_and_aura_are_30_percent_bigger() -> void:
+	assert(is_equal_approx(OakleyTree.TREE_SCALE, 1.3), "ağaç ölçeği 1,3")
+	assert(is_equal_approx(OakleyTree.ZONE_RX, 130.0 * 1.3) and is_equal_approx(OakleyTree.ZONE_RY, 65.0 * 1.3), "alan 169 x 84,5")
+	var tree := OakleyTree.new()
+	tree.position = Vector2(100.0, 100.0)
+	assert(tree.in_zone(Vector2(100.0 + 168.0, 100.0)) and not tree.in_zone(Vector2(100.0 + 171.0, 100.0)), "yatay kenar 169")
+	assert(tree.in_zone(Vector2(100.0, 100.0 + 84.0)) and not tree.in_zone(Vector2(100.0, 100.0 + 86.0)), "dikey kenar 84,5 (2:1)")
+	tree.free()
+
+
+func test_tree_timeline_grows_in_three_sizes_and_sinks() -> void:
+	assert(int(OakleyTree.tree_state(0.2)[0]) == -1, "tohum anında ağaç yok")
+	var rising: Array = OakleyTree.tree_state(0.55)
+	assert(int(rising[0]) == 0 and float(rising[1]) > 0.0 and not bool(rising[2]), "küçük ağaç topraktan çıkar (gölgesiz)")
+	assert(int(OakleyTree.tree_state(0.9)[0]) == 1, "orta")
+	assert(int(OakleyTree.tree_state(5.0)[0]) == 2, "büyük")
+	assert(int(OakleyTree.tree_state(OakleyTree.DURATION + 0.2)[0]) == 1, "solarken orta")
+	var sinking: Array = OakleyTree.tree_state(OakleyTree.DURATION + 0.45)
+	assert(int(sinking[0]) == 0 and float(sinking[1]) > 0.0, "küçülüp toprağa çekilir")
+	assert(int(OakleyTree.tree_state(OakleyTree.LIFE)[0]) == -1, "sonunda ağaç yok")
+	assert(OakleyTree.zone_alpha(0.5) == 0.0 and is_equal_approx(OakleyTree.zone_alpha(5.0), 1.0), "alan büyüyünce açılır")
+	assert(OakleyTree.zone_alpha(OakleyTree.DURATION + 0.5) == 0.0, "ağaç solarken alan kapanır")
+
+
+func test_tree_description_matches_constants() -> void:
+	var desc: String = str(Characters.get_def(2).get("skill3_desc", ""))
+	for part in [
+		"%dsn ayakta" % int(OakleyTree.DURATION),
+		"saldırı gücünün %%%d'i + azami canın %%%d'i kadar can" % [int(round(OakleyTree.HEAL_AP_RATIO * 100.0)), int(round(OakleyTree.HEAL_MAX_HP_PERCENT * 100.0))],
+		"saldırı gücünün %%%d'i kadar mana kalkanı" % int(round(OakleyTree.SHIELD_AP_RATIO * 100.0)),
+		"Her %dsn'de kökleri en yakın %d yaratığa" % [int(OakleyTree.ROOT_INTERVAL), OakleyTree.ROOT_TARGETS],
+		"saldırı gücünün %%%d'ı kadar hasar verip %dsn yere sabitler" % [int(round(OakleyTree.ROOT_DAMAGE_RATIO * 100.0)), int(OakleyTree.ROOT_DURATION)],
+		"%%%d yavaşlar" % int(round(OakleyTree.BOSS_SLOW_PERCENT * 100.0)),
+		"%d çiçek" % OakleyTree.FLOWER_OFFSETS.size(),
+		"(60sn bekleme)",
+	]:
+		assert(desc.contains(part), "açıklama '%s' içermeli: %s" % [part, desc])
+
+
+## Gerçek akış: R -> önüne ağaç (kaster kopyası), Oakley gölgesinde; meyve düşünce can + mana kalkanı; kök dalgası en yakın 3
+## yaratığa ağaç kökü stiliyle (1) sabitleme + hasar; açılışta alandaki yaratık itilir; solarken 3 çiçek.
+func test_full_cast_plants_tree_that_heals_roots_pushes_and_drops_flowers() -> void:
+	var previous_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self ## ağaç + efektleri current_scene'e ekleniyor
 	var player: Node = _make_oakley_player()
+	player.global_position = Vector2(500.0, 500.0)
 	player.max_health = 200.0
 	player.health = 50.0
-
-	var target: Node = player._oakley_lowest_hp_bond_target(9999.0)
-
-	assert(target == player, "Dost yokken büyü kendisine hedeflenmeli")
-	player.queue_free()
-
-
-## Koruyucu Büyü'nün asıl etkisi: hedef her hasar aldığında can/kalkan
-## yenilemeli VE hasarın %20'si azalmalı - bkz. take_damage() içindeki
-## oakley_bond_active dalı.
-func test_bond_proc_heals_shields_and_reduces_damage_on_hit() -> void:
-	var player: Node = _make_oakley_player()
-	player.max_health = 200.0
-	player.health = 100.0
-	player.item_shield_max = 100.0
-	player.item_shield_hp = 0.0
-	player.oakley_bond_active = true
-	player.oakley_bond_heal_per_hit = 12.0
-	player.oakley_bond_shield_per_hit = 6.0
-	player.oakley_bond_damage_reduction = 0.20
-
-	player.take_damage(50.0)
-
-	## %20 azaltma sonrası ham hasar 40 olmalı, ama can yenilemesi (12) bunu
-	## kısmen telafi ediyor - net can kaybı 40 - 12 = 28.
-	assert(is_equal_approx(player.health, 100.0 - 40.0 + 12.0),
-		"Can hem hasar (azaltılmış) hem proc yenilemesi yansıtmalı, bulunan: %s" % player.health)
-	assert(is_equal_approx(player.item_shield_hp, 6.0),
-		"Kalkan proc'u 6 kalkan vermeli, bulunan: %s" % player.item_shield_hp)
-	player.queue_free()
-
-
-## Süre dolunca (bkz. _process_oakley_bond) tüm alanlar sıfırlanmalı ki
-## diriltme/yeni büyü sonrası eski değerler sızmasın.
-func test_bond_expires_after_duration() -> void:
-	var player: Node = _make_oakley_player()
-	player.oakley_bond_active = true
-	player.oakley_bond_heal_per_hit = 5.0
-	player.oakley_bond_timer = 1.0
-
-	player._process_oakley_bond(1.5)
-
-	assert(not player.oakley_bond_active, "Süre dolunca büyü kapanmalı")
-	assert(is_equal_approx(player.oakley_bond_heal_per_hit, 0.0), "Süre dolunca can miktarı sıfırlanmalı")
-	player.queue_free()
-
-
-## Açıklama metni gerçek süre/oranlarla birebir uyuşmalı ("ulti açıklaması yanlış" bildirimi): süre, iki oran,
-## hasar azaltma ve bekleme süresi metinden okunup koddaki sabitlerle karşılaştırılır.
-func test_bond_description_text_matches_the_real_numbers() -> void:
-	var player: Node = _make_oakley_player()
-	var desc: String = str(Characters.get_def(2).get("skill3_desc", ""))
-	assert(desc.contains("%dsn boyunca" % int(player.OAKLEY_BOND_DURATION)),
-		"Açıklama gerçek buff süresini (%dsn) söylemeli: %s" % [int(player.OAKLEY_BOND_DURATION), desc])
-	assert(not desc.contains("8sn"), "Açıklamada eski 8sn kalmamalı: %s" % desc)
-	assert(desc.contains("%%%d'si kadar can" % int(round(player.OAKLEY_BOND_HEAL_RATIO * 100.0))),
-		"Açıklama can oranını söylemeli: %s" % desc)
-	assert(desc.contains("%%%d'u kadar kalkan" % int(round(player.OAKLEY_BOND_SHIELD_RATIO * 100.0))),
-		"Açıklama kalkan oranını söylemeli: %s" % desc)
-	assert(desc.contains("%%%d hasar azaltma" % int(round(player.OAKLEY_BOND_DAMAGE_REDUCTION * 100.0))),
-		"Açıklama hasar azaltmayı söylemeli: %s" % desc)
-	assert(desc.contains("(%dsn bekleme)" % int(player.SKILL3_TIMING[39]["cooldown"])),
-		"Açıklama bekleme süresini söylemeli: %s" % desc)
-	player.queue_free()
-
-
-## Gerçek akış: R'ye basınca Oakley (kendisi en düşük canlı) büyüyü kendine yapar, buff TAM 10 sn sürer, bu sürede
-## her hasarda can/kalkan proc'u + %20 azaltma işler, süre bitince kapanır. (Önceki testler parçaları ayrı ayrı sınıyordu.)
-func test_full_cast_lasts_ten_seconds_and_applies_effects_each_hit() -> void:
-	var previous_scene: Node = get_tree().current_scene
-	get_tree().current_scene = self ## dalga/patlama efektleri current_scene'e ekleniyor
-	var player: Node = _make_oakley_player()
-	player.max_health = 200.0
-	player.health = 100.0
 	player.item_shield_max = 1000.0 ## ULTİ tarifesi kalkan bedeli ister
 	player.item_shield_hp = 1000.0
 	player.damage_bonus = 50.0
-
-	assert(player.skill3_state == "ready", "test kurulumu: R hazır olmalı")
+	player.facing = "right"
 	player._activate_skill3()
-	assert(player.skill3_state == "active", "R basılınca skill3 aktif olmalı")
-	assert(is_equal_approx(player.skill3_timer, 10.0), "R 'aktif' süresi 10sn olmalı, bulunan: %s" % player.skill3_timer)
-	assert(player.oakley_bond_active, "Büyü hedefte (kendisinde) aktif olmalı")
-	assert(is_equal_approx(player.oakley_bond_timer, 10.0), "Buff süresi 10sn olmalı, bulunan: %s" % player.oakley_bond_timer)
-	assert(is_equal_approx(player.oakley_bond_heal_per_hit, 50.0 * 0.20), "Hasar başı can = saldırı gücü x %20")
-	assert(is_equal_approx(player.oakley_bond_shield_per_hit, 50.0 * 0.10), "Hasar başı kalkan = saldırı gücü x %10")
-	assert(is_equal_approx(player.oakley_bond_damage_reduction, 0.20), "Hasar azaltma %20")
+	assert(player.skill3_state == "active" and is_equal_approx(player.skill3_timer, OakleyTree.DURATION), "R aktif, 12 sn")
+	var tree: OakleyTree = null
+	for n in get_tree().get_nodes_in_group("oakley_trees"):
+		if n.get("caster") == player:
+			tree = n
+	assert(tree != null, "kasterin gerçek ağacı kurulmalı")
+	assert(tree.global_position.x > player.global_position.x, "sağa bakarken ağaç önüne (sağına) ekilir")
+	assert(player in tree._players_in_zone(), "Oakley kendi ağacının gölgesinde olmalı")
 
-	## 9.9 sn sonra hâlâ aktif, 10.1 sn sonra kapalı
-	player._process_oakley_bond(9.9)
-	assert(player.oakley_bond_active, "9.9sn sonra buff hâlâ aktif olmalı (8sn'de bitmemeli)")
-	player._process_oakley_bond(0.2)
-	assert(not player.oakley_bond_active, "10sn dolunca buff kapanmalı")
-	assert(is_equal_approx(player.oakley_bond_heal_per_hit, 0.0) and is_equal_approx(player.oakley_bond_damage_reduction, 0.0),
-		"Kapanınca tüm alanlar sıfırlanmalı")
+	var hp_before: float = player.health
+	tree._heal_target(player)
+	assert(player.health >= hp_before + 50.0 * OakleyTree.HEAL_AP_RATIO + 200.0 * OakleyTree.HEAL_MAX_HP_PERCENT - 0.01,
+		"meyve: saldırı gücü x %%15 + azami can x %%1 can (bulunan +%s)" % (player.health - hp_before))
+
+	var near := _fake_enemy(tree.global_position + Vector2(60.0, 0.0))
+	var far := _fake_enemy(tree.global_position + Vector2(OakleyTree.ROOT_RANGE + 40.0, 0.0))
+	tree._t = OakleyTree.T_LARGE
+	tree._on_open()
+	assert(near.pushes == 1 and far.pushes == 0, "açılış darbesi sadece alandakini iter")
+	tree._root_wave()
+	var trails: Array = get_children().filter(func(c: Node) -> bool: return c is OakleyTree.RootTrail)
+	assert(trails.size() == 1, "menzildeki tek yaratığa bir kök gider (bulunan %d)" % trails.size())
+	(trails[0] as Node)._process(1.0) ## 60 px / 330 px/sn: bir adımda varır
+	assert(near.roots.size() == 1 and int(near.roots[0][1]) == OakleyTree.ROOT_STYLE, "ağaç kökü stiliyle sabitlenmeli")
+	assert(is_equal_approx(float(near.roots[0][0]), OakleyTree.ROOT_DURATION), "4 sn")
+	assert(is_equal_approx(near.damage, 50.0 * OakleyTree.ROOT_DAMAGE_RATIO), "kök hasarı saldırı gücü x %40")
+	tree._root_wave()
+	assert(get_children().filter(func(c: Node) -> bool: return c is OakleyTree.RootTrail).size() == 1,
+		"sabitlenen yaratığa süre bitmeden yeni kök gitmez")
+
+	var flowers_before: int = get_children().filter(func(c: Node) -> bool: return c.get_script() == preload("res://scripts/oakley_flower.gd")).size()
+	tree._t = OakleyTree.DURATION + OakleyTree.FLOWER_DELAY
+	tree._process(0.01)
+	var flowers: int = get_children().filter(func(c: Node) -> bool: return c.get_script() == preload("res://scripts/oakley_flower.gd")).size()
+	assert(flowers - flowers_before == 3, "ağaç solarken 3 çiçek bırakmalı (bulunan %d)" % (flowers - flowers_before))
+	for c in get_children():
+		if c != player:
+			c.queue_free()
 	get_tree().current_scene = previous_scene
 	player.queue_free()
+
+
+## Kozmetik kopya (diğer istemciler): hedef seçmez/iyileştirmez/çiçek bırakmaz - sadece görsel.
+func test_cosmetic_tree_never_applies_effects() -> void:
+	var previous_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	var tree: OakleyTree = OakleyTree.spawn(self, Vector2(300.0, 300.0))
+	assert(tree.is_cosmetic(), "caster yoksa kozmetik")
+	var e := _fake_enemy(Vector2(330.0, 300.0))
+	tree._t = OakleyTree.T_LARGE
+	tree._on_open()
+	tree._t = OakleyTree.DURATION + OakleyTree.FLOWER_DELAY
+	tree._process(0.01)
+	assert(e.pushes == 0 and e.roots.is_empty() and e.damage == 0.0, "kozmetik kopya yaratığa dokunmaz")
+	for c in get_children():
+		c.queue_free()
+	get_tree().current_scene = previous_scene
+
+
+## E (madde 266, kullanıcı: "solarak yok olmasın azalarak yok olsun"): yaratığa sarılan dikenler bırakınca büyümenin TERSİYLE toprağa
+## çekilir (eski "break" saydamlaşıyordu); gövde parçaları saydamlaşmaz, adım adım küçülür.
+func test_vine_entangle_release_retracts_instead_of_fading() -> void:
+	var host := Node2D.new()
+	add_child(host)
+	var fx: Node2D = (load("res://scenes/fx_oakley_entangle.tscn") as PackedScene).instantiate()
+	host.add_child(fx)
+	fx.setup(4.0, 10.0)
+	fx.release()
+	assert(fx._back.animation == &"grow" and fx._back.get_playing_speed() < 0.0, "bırakınca 'grow' TERSİNE oynamalı")
+	host.queue_free()
+
+
+func test_vine_segments_shrink_instead_of_fading() -> void:
+	var src: String = FileAccess.get_file_as_string("res://scripts/oakley_vine_visual.gd")
+	assert(not src.contains("\"modulate:a\""), "gövde parçası saydamlaşarak gitmemeli")
+	var s := Sprite2D.new()
+	add_child(s)
+	s.scale = Vector2.ONE * 1.212
+	preload("res://scripts/oakley_vine_visual.gd").shrink_away(s, 0.0)
+	assert(s.get_tree() != null, "küçülme tween'i kendi düğümünde koşar")
+	s.queue_free()

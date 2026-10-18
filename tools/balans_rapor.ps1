@@ -302,6 +302,64 @@ if ($gRuns.Count -eq 0) { P "(Altın/asist kaydı olan koşu yok.)" } else {
 }
 P ""
 
+# ---- Sonsuz mod katlari (rev 61+: layers; eski kayitlarda alan yok) ----
+# layers[kat] = [kosu sn, oldurme, takim seviyesi, verilen hasar, alinan hasar, saldiri gucu, azami can, saldiri hizi %, esya sayisi] - katin BASINDAKI toplamlar.
+$lRuns = @($runs | Where-Object { $_.layers -and (Props $_.layers).Count -gt 0 })
+P "## Sonsuz mod katları"
+P ""
+if ($lRuns.Count -eq 0) { P "(Kat kırılımı kayıtlı koşu yok: sonsuz moda girilmedi ya da kayıt eski sürümden.)" } else {
+	P "Satır = o katın başındaki toplamlar; oranlar bir sonraki satırla farktan (son kat için koşu sonu toplamı) hesaplanır. Öldürme/sn doğuş hızına (~5/sn) yakınsa fazla hasar boşa gider (overkill)."
+	P ""
+	foreach ($r in $lRuns) {
+		$rows = @(Props $r.layers | Sort-Object { [int]$_.Name })
+		P ("### {0} ({1}) - {2} dk, koşu sonu seviye {3}" -f $r.char_name, $r.player, (F1 ([double]$r.time / 60.0)), $r.level)
+		P ""
+		P "| Kat | Başlangıç (dk) | Hasar/sn | Alınan/sn | Öldürme/sn | Seviye | Saldırı gücü | Azami can | Saldırı hızı % | Eşya |"
+		P "|---|---|---|---|---|---|---|---|---|---|"
+		for ($i = 0; $i -lt $rows.Count; $i++) {
+			$v = $rows[$i].Value
+			if ($i + 1 -lt $rows.Count) { $n = $rows[$i + 1].Value; $tN = [double]$n[0]; $kN = [double]$n[1]; $dN = [double]$n[3]; $aN = [double]$n[4] }
+			else { $tN = [double]$r.time; $kN = [double]$r.kills; $dN = [double]$r.dealt; $aN = [double]$r.taken }
+			$dt = [math]::Max(1.0, $tN - [double]$v[0])
+			P ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} |" -f $rows[$i].Name, (F1 ([double]$v[0] / 60.0)), (F1 (([double]$dN - [double]$v[3]) / $dt)), (F1 (([double]$aN - [double]$v[4]) / $dt)), (F2 (($kN - [double]$v[1]) / $dt)), $v[2], (F1 $v[5]), (F1 $v[6]), (F1 $v[7]), $v[8])
+		}
+		P ""
+	}
+}
+P ""
+
+# ---- Bitis statlari + kart secimleri (rev 61+: stats / cards; eski kayitlarda alan yok) ----
+$sRuns = @($runs | Where-Object { $_.stats -and (Props $_.stats).Count -gt 0 })
+P "## Bitiş statları"
+P ""
+if ($sRuns.Count -eq 0) { P "(Bitiş statı kayıtlı koşu yok.)" } else {
+	P "Kart + eşya + seviye dahil son değerler. Kritik şansı/hasarı yalnız kart payı. XP bonusu: ham → etkin (üst sınır +%100)."
+	P ""
+	P "| Karakter | Süre (dk) | Seviye | Saldırı gücü | Saldırı hızı % (aşan) | Kritik şansı / hasarı | Azami can | Yenilenme | Kalkan | Sıyrılma | XP bonusu ham→etkin | Şans | Eşya |"
+	P "|---|---|---|---|---|---|---|---|---|---|---|---|---|"
+	foreach ($r in ($sRuns | Sort-Object { [double]$_.time } -Descending)) {
+		$s = $r.stats
+		P ("| {0} | {1} | {2} | {3} | {4} ({5}) | {6} / {7} | {8} | {9} | {10} | {11} | {12}→{13} | {14} | {15} |" -f $r.char_name, (F1 ([double]$r.time / 60.0)), $r.level, (F1 $s.ap), (F1 $s.atk), (F1 $s.atk_over), (F2 $s.crit_c), (F2 $s.crit_d), (F1 $s.hp), (F1 $s.regen), (F1 $s.shield), (F2 $s.dodge), (F2 $s.exp), (F2 $s.exp_eff), (F1 $s.luck), @($r.items).Count)
+	}
+}
+P ""
+$cRuns = @($runs | Where-Object { $_.cards -and (Props $_.cards).Count -gt 0 })
+P "## Seviye kartı seçimleri"
+P ""
+if ($cRuns.Count -eq 0) { P "(Kart kaydı olan koşu yok.)" } else {
+	P "Toplam = tüm koşularda seçilen kart sayısı; K1..K4 = kart kademesi dağılımı. Koşu başına = toplam / koşu sayısı."
+	P ""
+	$cAgg = @{}
+	foreach ($r in $cRuns) { foreach ($p in (Props $r.cards)) { if (-not $cAgg.ContainsKey($p.Name)) { $cAgg[$p.Name] = @(0, 0, 0, 0) }; for ($t = 0; $t -lt 4; $t++) { $cAgg[$p.Name][$t] += [int]$p.Value[$t] } } }
+	P "| Kart | Toplam | Koşu başına | K1 | K2 | K3 | K4 |"
+	P "|---|---|---|---|---|---|---|"
+	foreach ($k in ($cAgg.Keys | Sort-Object { ($cAgg[$_] | Measure-Object -Sum).Sum } -Descending)) {
+		$a = $cAgg[$k]; $sum = ($a | Measure-Object -Sum).Sum
+		P ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f $k, $sum, (F1 ($sum / [double]$cRuns.Count)), $a[0], $a[1], $a[2], $a[3])
+	}
+}
+P ""
+
 # ---- Ozet uyarilar ----
 $head = New-Object System.Collections.Generic.List[string]
 $head.Add("## Öne çıkanlar")

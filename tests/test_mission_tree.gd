@@ -7,6 +7,7 @@ extends Node
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn")
 const TreeScript: GDScript = preload("res://scripts/mission_tree.gd")
 const BoltScript: GDScript = preload("res://scripts/mission_tree_bolt.gd")
+const BlastScript: GDScript = preload("res://scripts/mission_tree_blast.gd")
 const VanScript: GDScript = preload("res://scripts/mission_van.gd")
 const WEM: GDScript = preload("res://scripts/world_event_manager.gd")
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
@@ -16,6 +17,19 @@ var _spawned: Array[Node] = []
 
 class FakePlayer extends Node2D:
 	var is_dead: bool = false
+
+
+## Sihirli atış testleri için: hasarı ve itişi kaydeder (gerçek itiş C++ EnemyWorld'de, testte yok).
+class FakeEnemy extends Node2D:
+	var is_dead: bool = false
+	var is_boss: bool = false
+	var max_health: float = 100.0
+	var hits: Array = []
+	var pushes: Array = []
+	func take_damage(amount: float, _crit: bool = false, _pen: float = 0.0, _area: bool = false) -> void:
+		hits.append(amount)
+	func apply_skill_push(dir: Vector2, distance: float) -> void:
+		pushes.append([dir, distance])
 
 
 func _track(n: Node) -> Node:
@@ -38,6 +52,19 @@ func _frames(n: int) -> void:
 func _enemy(pos: Vector2) -> Node2D:
 	var e: Node2D = _track(EnemyScene.instantiate()) as Node2D
 	add_child(e)
+	e.global_position = pos
+	return e
+
+
+func _fake(pos: Vector2, boss: bool = false) -> FakeEnemy:
+	var e := FakeEnemy.new()
+	e.add_to_group("enemies")
+	e.add_to_group("mission_copies") ## C++ köprüsü varken EnemyQuery.candidates sadece kayıtlı yaratıkları + bu grubu döndürür
+	if boss:
+		e.is_boss = true
+		e.add_to_group("boss")
+	add_child(e)
+	_track(e)
 	e.global_position = pos
 	return e
 
@@ -136,4 +163,46 @@ func test_escort_speeds_up_noticeably_with_more_pushers() -> void:
 	var v: Node2D = _track(VanScript.new()) as Node2D
 	add_child(v)
 	assert(v.is_in_group("move_blockers") and v.has_method("block_center"), "konvoy arabası da engel")
+	_cleanup()
+
+
+func _fire_blast(target: Node2D, dmg: float, origin: Vector2) -> void:
+	var b: Node2D = BlastScript.new()
+	b.call("setup", target, dmg, origin)
+	add_child(b)
+	_track(b)
+	b.global_position = target.global_position + Vector2(-100, -10)
+	await get_tree().create_timer(BlastScript.CHARGE_TIME + 0.6).timeout
+
+
+## 2026-10-18: sihirli atış - hedef + BLAST_RADIUS içindekiler hasar alır ve AĞAÇTAN DIŞA itilir; uzaktaki etkilenmez; istemci kopyası (hasar 0) hiçbir şey yapmaz.
+func test_magic_blast_damages_area_and_pushes_away_from_tree() -> void:
+	var tp := Vector2(17000, 17000)
+	var e1: FakeEnemy = _fake(tp + Vector2(200, 0))
+	var e2: FakeEnemy = _fake(tp + Vector2(230, 25))
+	var e3: FakeEnemy = _fake(tp + Vector2(200, 220))
+	await _fire_blast(e1, 40.0, tp)
+	assert(e1.hits == [40.0], "hedef vuruldu: %s" % str(e1.hits))
+	assert(e2.hits.size() == 1 and e2.pushes.size() == 1, "alan içindeki yan yaratık da")
+	assert(e3.hits.is_empty() and e3.pushes.is_empty(), "alan dışı etkilenmez")
+	var p: Array = e1.pushes[0]
+	assert((p[0] as Vector2).x > 0.95 and is_equal_approx(float(p[1]), BlastScript.PUSH_DISTANCE), "ağaçtan dışa itiş: %s" % str(p))
+	var c: FakeEnemy = _fake(tp + Vector2(-300, 0))
+	await _fire_blast(c, 0.0, tp)
+	assert(c.hits.is_empty() and c.pushes.is_empty(), "istemci (kozmetik) kopyası hasar/itiş uygulamaz")
+	_cleanup()
+
+
+func test_magic_blast_focuses_bosses_and_pushes_them() -> void:
+	var t: Node2D = _tree(Vector2(19000, 19000), false) ## kozmetik: kendi atışları sahteleri itmesin
+	var near: FakeEnemy = _fake(t.global_position + Vector2(90, 0))
+	assert(t.call("pick_blast_target") == near, "boss yokken en yakın yaratık")
+	var boss: FakeEnemy = _fake(t.global_position + Vector2(0, 460), true)
+	assert(t.call("pick_blast_target") == boss, "boss varsa (daha uzakta olsa da) boss")
+	boss.set_meta(&"untargetable", true)
+	assert(t.call("pick_blast_target") == near, "vurulamaz boss (Yeraltı havuzu) seçilmez")
+	boss.remove_meta(&"untargetable")
+	await _fire_blast(boss, 40.0, t.global_position)
+	assert(boss.pushes.size() == 1 and is_equal_approx(float(boss.pushes[0][1]), BlastScript.BOSS_PUSH_DISTANCE), "boss da itilir (C++ x0,4 öncesi büyük mesafe)")
+	assert(((boss.pushes[0][0]) as Vector2).y > 0.95, "boss ağaçtan dışa")
 	_cleanup()

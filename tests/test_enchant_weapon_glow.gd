@@ -40,6 +40,8 @@ func test_tier_for_follows_the_enchant_record() -> void:
 
 
 func test_base_tier_has_no_outline_and_upgrades_add_then_remove_it() -> void:
+	if not GlowScript.GLOW_ENABLED:
+		return ## kademe kontürü oyundan kaldırıldı (2026-10-17); kontür kuralları yeniden açılınca sınanır
 	var icon: Sprite2D = _icon()
 	assert(GlowScript.attach(icon, 0) == null and icon.get_node_or_null("EnchantGlow") == null, "efsunsuz: kontür yok")
 	assert(GlowScript.attach(icon, 1) == null and icon.get_node_or_null("EnchantGlow") == null, "Temel (1): kontür yok")
@@ -54,6 +56,8 @@ func test_base_tier_has_no_outline_and_upgrades_add_then_remove_it() -> void:
 
 
 func test_tier_sets_color_and_final_gets_the_second_ring() -> void:
+	if not GlowScript.GLOW_ENABLED:
+		return ## kademe kontürü oyundan kaldırıldı (2026-10-17); kontür kuralları yeniden açılınca sınanır
 	var icon: Sprite2D = _icon()
 	var g: Sprite2D = GlowScript.attach(icon, 3) as Sprite2D
 	var mat: ShaderMaterial = g.material as ShaderMaterial
@@ -68,6 +72,8 @@ func test_tier_sets_color_and_final_gets_the_second_ring() -> void:
 
 
 func test_coverage_texture_pads_keeps_alpha_and_has_mipmaps() -> void:
+	if not GlowScript.GLOW_ENABLED:
+		return ## kademe kontürü oyundan kaldırıldı (2026-10-17); kontür kuralları yeniden açılınca sınanır
 	var icon: Sprite2D = _icon(Vector2i(40, 30), 0.3)
 	var g: Sprite2D = GlowScript.attach(icon, 3) as Sprite2D
 	var tex: Texture2D = g.texture
@@ -88,6 +94,8 @@ func py_center(pad: int, h: int) -> int:
 
 
 func test_outline_node_is_aligned_with_the_icon() -> void:
+	if not GlowScript.GLOW_ENABLED:
+		return ## kademe kontürü oyundan kaldırıldı (2026-10-17); kontür kuralları yeniden açılınca sınanır
 	var icon: Sprite2D = _icon(Vector2i(40, 30), 0.3, true)
 	icon.offset = Vector2(3, -2)
 	var g: Sprite2D = GlowScript.attach(icon, 2) as Sprite2D
@@ -105,6 +113,8 @@ func test_outline_node_is_aligned_with_the_icon() -> void:
 
 
 func test_animated_icon_rebuilds_when_the_frame_changes() -> void:
+	if not GlowScript.GLOW_ENABLED:
+		return ## kademe kontürü oyundan kaldırıldı (2026-10-17); kontür kuralları yeniden açılınca sınanır
 	var frames := SpriteFrames.new()
 	frames.add_animation("a")
 	var f1: ImageTexture = ImageTexture.create_from_image(_solid(30, 20))
@@ -123,6 +133,15 @@ func test_animated_icon_rebuilds_when_the_frame_changes() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	assert(g.texture.get_width() > w1, "kare değişince kontür dokusu yeni karenin boyutuna göre yeniden kurulur: %d -> %d" % [w1, g.texture.get_width()])
+	_cleanup()
+
+
+
+func test_outline_is_off_while_glow_is_disabled() -> void:
+	if GlowScript.GLOW_ENABLED:
+		return
+	var icon: Sprite2D = _icon()
+	assert(GlowScript.attach(icon, 3) == null and icon.get_node_or_null("EnchantGlow") == null, "kontür kapalıyken ikona düğüm eklenmez")
 	_cleanup()
 
 

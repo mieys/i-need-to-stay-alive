@@ -2,6 +2,7 @@ extends Node
 
 ## Mini stat paneli (hud_stat_panel.gd + hud_stat_toggle.gd, 2026-10-14): normalde kapalı, portre altı düğmesiyle açılır, 1-2 sekmeleri
 ## sayfa değiştirir, 16 stat simgesi yüklenir, sayılar sütundan ASLA taşmaz, panel ana panelin soluna yapışık + altı efsanevi panelle hizalı.
+## 2026-10-18: LoL tarzı düz glif simgeler (assets/ui/stat_mini_lol/, 48 px -> 24 px), Nunito yazı, panel ÖLÇEKSİZ.
 
 const StatPanel := preload("res://scripts/hud_stat_panel.gd")
 const StatToggle := preload("res://scripts/hud_stat_toggle.gd")
@@ -59,7 +60,7 @@ func test_sixteen_stats_with_icons_and_tips() -> void:
 		ids[s[0]] = true
 		var tex: Texture2D = load(StatPanel.ICON_DIR + str(s[0]) + ".png") as Texture2D
 		assert(tex != null, "Simge yok: %s" % s[0])
-		assert(tex.get_size() == Vector2(24, 24), "Simge 24x24 olmalı: %s" % s[0])
+		assert(tex.get_size() == Vector2(48, 48), "Simge 48x48 olmalı (24 px çizilir): %s" % s[0])
 	assert(ids.size() == 16, "Aynı stat iki kez")
 	## Kullanıcı: can/kalkan MİKTARI ve toplama mesafesi olmasın.
 	for banned in ["max_health", "shield_max", "pickup_range"]:
@@ -75,7 +76,7 @@ func test_values_never_overflow() -> void:
 	var budget: float = StatPanel.value_w()
 	for t in ["%600", "%250", "9999", "999.9", "x9.99", "%175", "12345", "%12345", "1234.5", "99999999", "x123.45"]:
 		var f: String = StatPanel.fit(t)
-		var w: float = StatPanel.FONT.get_string_size(f, HORIZONTAL_ALIGNMENT_LEFT, -1, StatPanel.FONT_PX).x
+		var w: float = StatPanel.font().get_string_size(f, HORIZONTAL_ALIGNMENT_LEFT, -1, StatPanel.FONT_PX).x
 		assert(w <= budget, "'%s' -> '%s' %d px > %d px" % [t, f, int(w), int(budget)])
 	assert(StatPanel.fit("12345") == "12k", "12345 kısaltması 12k olmalı, %s" % StatPanel.fit("12345"))
 	assert(StatPanel.fit("%45") == "%45", "Sığan değer değişmemeli")
@@ -96,8 +97,12 @@ func test_layout_left_of_dock_bottom_aligned_with_legend() -> void:
 	var panel: Control = hud.get_node("DockStats") as Control
 	var toggle: Control = hud.get_node("DockStatsToggle") as Control
 	var pr: Rect2 = _srect(panel)
-	assert(is_equal_approx(pr.end.x, frame.position.x + StatPanel.OVERLAP * Hud.DOCK_UI_SCALE), "Panelin sağ kenarı ana panelin 12 px altına girmeli: %s / %s" % [pr, frame])
-	assert(is_equal_approx(pr.end.y, legend.end.y), "Panelin altı efsanevi panelin altıyla hizalı olmalı: %s / %s" % [pr, legend])
+	## Panel ölçeksiz + tam piksel konum (yuvarlama: <= 1 px fark); simge/pürüzsüz yazı LINEAR çocukta.
+	assert(panel.scale == Vector2.ONE, "Stat paneli ölçeksiz olmalı (0,92 yazıyı bozuyordu)")
+	assert(is_equal_approx(pr.position.x, roundf(pr.position.x)) and is_equal_approx(pr.position.y, roundf(pr.position.y)), "Panel tam piksele oturmalı: %s" % pr)
+	assert(absf(pr.end.x - (frame.position.x + StatPanel.OVERLAP * Hud.DOCK_UI_SCALE)) <= 1.0, "Panelin sağ kenarı ana panelin 12 px altına girmeli: %s / %s" % [pr, frame])
+	assert(absf(pr.end.y - legend.end.y) <= 1.0, "Panelin altı efsanevi panelin altıyla hizalı olmalı: %s / %s" % [pr, legend])
+	assert((panel.get_node("Content") as CanvasItem).texture_filter == CanvasItem.TEXTURE_FILTER_LINEAR, "Simge/yazı katmanı LINEAR olmalı")
 	assert(panel.get_index() < hud.get_node("DockFrame").get_index(), "Panel ana panelin ARKASINDA çizilmeli")
 	var tr: Rect2 = _srect(toggle)
 	assert(frame.encloses(tr), "Düğme ana panelin içinde (portre altı) olmalı: %s / %s" % [tr, frame])

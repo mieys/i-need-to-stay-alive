@@ -955,7 +955,7 @@ func apply_madness(_duration: float) -> void:
 	pass
 
 
-func apply_root(duration: float) -> void:
+func apply_root(duration: float, _style: int = 0) -> void: ## _style: enemy.gd ile aynı imza (Hayat Ağacı kökü, madde 266)
 	apply_element("slow", {"pct": 0.9, "dur": duration})
 
 

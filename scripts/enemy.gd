@@ -95,6 +95,7 @@ const EnemyProjectileScene := preload("res://scenes/enemy_projectile.tscn")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 const BossBarArtScript: GDScript = preload("res://scripts/boss_bar_art.gd")
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
+const EndlessMathScript: GDScript = preload("res://scripts/endless_math.gd") ## apply_tier_scaling: sonsuz kat bileşik çarpanı
 
 ## Only used for enemies whose visual is a plain Sprite2D with hframes/vframes
 ## set (e.g. the boss and the rat), instead of an AnimatedSprite2D with a
@@ -958,6 +959,7 @@ func _scale_body(scale_mult: float) -> void:
 			var hshape = hit_collision.shape.duplicate()
 			hshape.radius *= scale_mult
 			hit_collision.shape = hshape
+	_ew_hr_wait = 0 ## hit yarıçapı değişti: bir sonraki itişte yeniden oku
 
 
 ## ELİT YARATIK (kullanıcı isteği 2026-10-02: "oyunda elit sandık düşürecek elit düşmanlar ekleyeceğiz"). Kurallar:
@@ -1083,6 +1085,9 @@ func apply_tier_scaling(tier: int) -> void:
 	damage_mult += late_steps * TIER_DAMAGE_RAMP_LATE_LINEAR + late_steps * late_steps * TIER_DAMAGE_RAMP_LATE_QUAD
 	if tier >= TIME_HEALTH_GROWTH_MIN_TIER:
 		health_mult *= 1.0 + TIME_HEALTH_GROWTH_PER_MIN * maxf(0.0, GameManager.game_time - TIME_HEALTH_GROWTH_START) / 60.0
+	## Sonsuz mod baskısı (madde 269): ölçek kademesi 15'i aşınca (kat >= 2) kat başına bileşik can/hasar. Normal oyun kademeleri (<= 15) ve Final (16) x1.
+	health_mult *= EndlessMathScript.creature_health_mult(tier)
+	damage_mult *= EndlessMathScript.creature_damage_mult(tier)
 	max_health *= health_mult
 	health = max_health
 	contact_damage *= damage_mult
@@ -2351,18 +2356,20 @@ func _process_slow(delta: float) -> void:
 var is_rooted: bool = false
 var _root_timer: float = 0.0
 
-func apply_root(duration: float) -> void:
+## style: kökün görseli - 0 = Oakley E sarmaşığı (fx_oakley_entangle.gd), 1 = Oakley R Hayat Ağacı kökleri (fx_oakley_tree_root.gd,
+## madde 266). İstemciden host'a param2 ile gider, root_start yayınında "style".
+func apply_root(duration: float, style: int = 0) -> void:
 	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır (anahtar kapalıyken boş)
 	if is_dead or is_boss:
 		return
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		if net_id > 0:
-			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "root", duration, 0.0, 0.0)
+			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "root", duration, float(style), 0.0)
 		return
 	is_rooted = true
 	_root_timer = max(_root_timer, duration)
-	_set_root_visual(true, _root_timer)
+	_set_root_visual(true, _root_timer, style)
 
 
 ## ---------- Delilik (Cadı R - Delilik İksiri, 2026-10-13) ----------
@@ -2503,29 +2510,34 @@ func _process_root(delta: float) -> void:
 ## 2026-09-25). Korku/kışkırtma göstergeleriyle AYNI yaşam döngüsü: host/tek oyunculu karar verir, broadcast_enemy_vfx
 ## "root_start"/"root_stop" ile yayınlar (bkz. _set_taunt_visual).
 const EntangleFxScene := preload("res://scenes/fx_oakley_entangle.tscn")
+const TreeRootFxScript := preload("res://scripts/fx_oakley_tree_root.gd")
 var _entangle_fx: Node2D = null
 
-func _set_root_visual(on: bool, duration: float = 0.0) -> void:
+func _set_root_visual(on: bool, duration: float = 0.0, style: int = 0) -> void:
 	if on:
-		_spawn_entangle_fx(duration)
+		_spawn_entangle_fx(duration, style)
 	else:
 		_remove_entangle_fx()
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		if net_id > 0:
 			if on:
-				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "root_start", {"duration": duration})
+				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "root_start", {"duration": duration, "style": style})
 			else:
 				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "root_stop")
 
 
-func _spawn_entangle_fx(duration: float) -> void:
+## Zaten bir kök görseli varsa (sarmaşık ya da ağaç kökü) sadece süresi uzar - iki görsel üst üste binmez.
+func _spawn_entangle_fx(duration: float, style: int = 0) -> void:
 	if is_dead:
 		return
 	if _entangle_fx and is_instance_valid(_entangle_fx) and not _entangle_fx.is_queued_for_deletion():
 		_entangle_fx.refresh(duration)
 		return
-	_entangle_fx = EntangleFxScene.instantiate()
+	if style == 1:
+		_entangle_fx = TreeRootFxScript.new()
+	else:
+		_entangle_fx = EntangleFxScene.instantiate()
 	add_child(_entangle_fx)
 	_entangle_fx.setup(duration, _body_radius)
 
@@ -3733,6 +3745,8 @@ var _ew_sent_ranged: Vector3 = Vector3(-1.0, -1.0, -1.0)
 var _ew_sent_walk_mult: float = -1.0
 var _ew_sent_hit_radius: float = -1.0
 var _ew_hit_collision: CollisionShape2D = null
+var _ew_hr_wait: int = 0 ## _ew_push_state: hit yarıçapı okumasına kalan itiş sayısı (0 = bir sonrakinde oku)
+var _ew_hr_cache: float = -1.0
 
 
 ## _ready sonunda: anahtar açık + host/tek oyunculu ise C++'a kaydol ve kendi _physics_process'ini kapat.
@@ -3925,6 +3939,17 @@ func _ew_tick(delta: float) -> void:
 	if _ew_puppet:
 		_ew_tick_puppet(delta)
 		return
+	## HIZLI YOL (2026-10-18, FPS): yeteneği olan ama BAŞKA hiçbir işi olmayan "sessiz" yaratık (tier 6+ kalabalığın çoğu: hayalet / vampir / iblis yalnız bekleme sayacını sayar)
+	## aşağıdaki ~25 koşulu, hedef sorgusunu, durum itmeyi ve uyanıklık hesabını atlar. Koşul listesi aşağıdaki "if"lerin VE _ew_still_active'in birleşimidir
+	## (birini eklersen/değiştirirsen buraya da ekle). process_fast false dönerse (asıl iş var: bekleme bitti vb.) normal yol aynen çalışır.
+	if _abilities != null and not (_flash_time_left > 0.0 or is_frozen or is_feared or is_stunned or ability_move_lock > 0.0 or _state_duration > 0.0 \
+			or _overhead_bar_hide_timer > 0.0 or (item_shield_max > 0.0 and (item_shield_regen_delay > 0.0 or item_shield_hp < item_shield_max)) or burn_time_left > 0.0 or mark_stacks > 0 or bleed_stacks > 0 \
+			or shock_time_left > 0.0 or _sleep_time > 0.0 or chill_stacks > 0 or _boss_chill_stacks > 0 or _slow_timer > 0.0 \
+			or _slow_fx_time_left > 0.0 or _slow_fx_broadcast_cooldown > 0.0 or _root_timer > 0.0 or is_mad \
+			or (_state != State.WALK and _state != State.IDLE) or not _poison_stack_time.is_empty() or not _plague.is_empty() \
+			or not _enchant_flags.is_empty() or not _bee_poison_stacks.is_empty()):
+		if _abilities.process_fast(delta):
+			return
 	if _flash_time_left > 0.0:
 		_tick_hit_flash(delta)
 	if _overhead_bar_hide_timer > 0.0 and _overhead_bar and is_instance_valid(_overhead_bar) and not _overhead_bar_always_visible:
@@ -3939,14 +3964,16 @@ func _ew_tick(delta: float) -> void:
 	if not _abilities_checked:
 		_init_abilities()
 	if _abilities != null:
-		var player: Node2D = null
-		var dist: float = INF
-		var ti: int = _ew_world.get_target(_ew_slot)
-		if ti >= 0:
-			player = _ew_bridge.target_node(ti)
-			dist = _ew_world.get_target_dist(_ew_slot)
 		if not is_frozen and not is_feared and not is_stunned:
-			_abilities.process(delta, player, dist)
+			## Bekleme sayacı sürüyorsa hedef sorgusuna (3 çağrı) gerek yok: process_fast sonucu process ile birebir aynı, değişen tek şey sayaç.
+			if not _abilities.process_fast(delta):
+				var player: Node2D = null
+				var dist: float = INF
+				var ti: int = _ew_world.get_target(_ew_slot)
+				if ti >= 0:
+					player = _ew_bridge.target_node(ti)
+					dist = _ew_world.get_target_dist(_ew_slot)
+				_abilities.process(delta, player, dist)
 		elif is_ability_invisible:
 			_abilities.ghost_reveal(false)
 	if is_dead or _ew_slot < 0:
@@ -4056,7 +4083,12 @@ func _ew_push_state() -> void:
 		_ew_world.set_ranged(_ew_slot, ranged_range, ranged_attack_interval, normal_attack_interval)
 	if _walk_anim_mult != _ew_sent_walk_mult:
 		_ew_anim_state_changed()
-	var hr: float = _ew_hit_radius()
+	## Hit yarıçapı (global ölçek okuması ~1 us) her itişte değil 15 itişte bir (ve _scale_body sonrası hemen) yenilenir; sweep zaten uyuyanlarda ~0,5 sn'de bir okuyordu.
+	_ew_hr_wait -= 1
+	if _ew_hr_wait <= 0:
+		_ew_hr_wait = 15
+		_ew_hr_cache = _ew_hit_radius()
+	var hr: float = _ew_hr_cache
 	if hr != _ew_sent_hit_radius:
 		_ew_sent_hit_radius = hr
 		_ew_world.set_hit_radius(_ew_slot, hr)
@@ -5605,12 +5637,6 @@ func _spawn_floating_text(amount: float, is_crit: bool) -> void:
 	## Artık tüm yaratık hasar sayıları TEK bir DamageNumbers düğümünde kayıt olarak
 	## tutulup tek _draw'da çiziliyor (görünüm floating_text ile aynı). Node
 	## oluşturmadığı için fizik sorgu taşması sırasında da güvenle çağrılabilir.
-	var alive: Array[int] = []
-	for id in _dmg_ids:
-		if dn.is_alive(id):
-			alive.append(id)
-	while alive.size() >= DMG_MAX_LIVE:
-		dn.remove(alive.pop_front())
+	## FPS (2026-10-18): ölü kimlikleri atma + sınır + doğurma tek çağrıda (eskiden 5 is_alive çağrısı + yeni dizi).
 	var jitter := Vector2(randf_range(-DMG_SCATTER.x, DMG_SCATTER.x), randf_range(-DMG_SCATTER.y, DMG_SCATTER.y))
-	alive.append(dn.spawn_fixed(self, PhysicsInterp.visual_position(self) + DMG_SPAWN_OFFSET + jitter, "%d" % amt, color))
-	_dmg_ids = alive
+	dn.spawn_fixed_capped(self, PhysicsInterp.visual_position(self) + DMG_SPAWN_OFFSET + jitter, "%d" % amt, color, _dmg_ids, DMG_MAX_LIVE)

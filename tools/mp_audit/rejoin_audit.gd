@@ -117,7 +117,11 @@ func _run() -> void:
 	var player: Node2D = await _enter_game(true)
 	if player == null:
 		_log("HATA Main yok"); quit(1); return
-	player.call("buy_weapon_copy", "tufek", 2)
+	## Defterli alım (GameManager.owned_weapons): geri katılım anlık görüntüsü silahları defterden geri kurar - buy_weapon_copy doğrudan çağrısı defteri
+	## atlıyor ve geri katılımda "silah kayboldu" gibi görünüyordu (2026-10-18 yanlış alarm).
+	_gm.set("gold", 5000)
+	_gm.call("add_weapon_shards", 40)
+	load("res://scripts/weapon_shop_logic.gd").call("buy_weapon", player, "tufek")
 	await _until(func(): return get_nodes_in_group("remote_players").size() >= 1, 20.0)
 	await _wait(1.0)
 	var spawner: Node = current_scene.get_node_or_null("EnemySpawner")

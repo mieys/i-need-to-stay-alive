@@ -156,6 +156,8 @@ func is_buyucu_airborne() -> bool:
 ## _build_stats_popup bu müttefiğin canlı toplam verdiği hasarını buradan
 ## okuyor, tıpkı health/item_shield_hp gibi.
 var match_damage_dealt: float = 0.0
+## Aynı kanaldan ("dmg_taken"): müttefiğin canlı toplam ALDIĞI hasar (grup paneli Hasar Sıralaması "Alınan" sütunu, 2026-10-18).
+var match_damage_taken: float = 0.0
 var paladin_zone_active: bool = false
 ## Şovalye E (Koruma Bariyeri) açık mı - ağdan "paladin_guard" (asist: host kimin kimi koruduğuna bakar, bkz. assist.gd).
 var paladin_guard_active: bool = false
@@ -537,6 +539,7 @@ func _physics_process(delta: float) -> void:
 		_stop_beam_vfx() ## bkz. BEAM_NET_TIMEOUT_MSEC
 	_update_beam_tremor()
 	if is_dead:
+		_wf_reset_all() ## ölüm düşüşü ikon konumunu kendisi yönetir: pivotlar kimlik, silahlar görünür
 		return
 	# Smoothly interpolate position towards target
 	## bkz. update_position_and_anim_from_net üstündeki dead-reckoning notu -
@@ -571,6 +574,7 @@ func _physics_process(delta: float) -> void:
 		_update_talon_formation(delta)
 	else:
 		_update_local_weapon_aim(delta)
+	_wf_update_all(delta)
 
 
 var _weapon_tiers: Dictionary = {}
@@ -627,6 +631,7 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 	for sh: Node2D in _weapon_shadows:
 		if is_instance_valid(sh):
 			sh.queue_free()
+	_wf_clear() ## hücum takibi pivotları + hayaletler (madde 247)
 	for tw: Variant in _weapon_fire_tweens:
 		if tw and (tw as Tween).is_valid():
 			(tw as Tween).kill()
@@ -745,7 +750,13 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 			move_child(shadow, foot_shadow.get_index() + 1)
 		_weapon_shadows.append(shadow)
 
-		add_child(icon)
+		## Hücum takibi (madde 247): ikon kendi Node2D pivotunun çocuğu - hücum/çıkış/çekilme dönüşümü pivotta, ikonun kendi
+		## konumu eskisi gibi slot tabanlı kalır (ateş/savuruş tween'leri, kubbe, Talon dizilimi, ölüm düşüşü dokunulmadan çalışır).
+		var pivot := Node2D.new()
+		pivot.name = "WeaponPivot_%d" % i
+		add_child(pivot)
+		pivot.add_child(icon)
+		_wf_add_icon(icon, shadow)
 		_weapon_icons.append(icon)
 		_weapon_base_scales.append(icon.scale)
 		_talon_form_scale_applied = 1.0 ## ikonlar yeniden yaratıldı: taban ölçek sıfırlandı, _apply_talon_form_scale yeniden uygular
@@ -844,8 +855,12 @@ func _update_local_weapon_aim(delta: float) -> void:
 	if should_retarget:
 		_aim_retarget_timer = AIM_RETARGET_INTERVAL
 		_cached_aim_targets.resize(_weapon_icons.size())
+	## Hücum takibi (madde 247): hedefsiz silahın ucu gidiş yönüne / görüşteki düşmana - kubbe/Talon dizilimi kendi bakışını yönetir.
+	var follow_facing: bool = _talon_formation == "" and not _dome_rim_owns_icons()
 	for i in range(_weapon_icons.size()):
 		if i < _weapon_melee.size() and _weapon_melee[i]:
+			if follow_facing and is_instance_valid(_weapon_icons[i]):
+				_wf_melee_facing(i, _weapon_icons[i], delta)
 			continue
 		var icon: Node2D = _weapon_icons[i]
 		if not is_instance_valid(icon):
@@ -870,28 +885,210 @@ func _update_local_weapon_aim(delta: float) -> void:
 			var cached_target: Variant = _cached_aim_targets[i] if i < _cached_aim_targets.size() else null
 			target = cached_target if is_instance_valid(cached_target) else null
 		if not target or not is_instance_valid(target):
-			## weapon.gd _update_aim ile birebir aynı davranış: menzilde hedef
-			## yoksa döndürmeyi bırak, son açısında kalsın - rastgele/uzak bir
-			## düşmana asla dönmesin.
+			## Menzilde hedef yok: weapon.gd ile aynı hücum kuralı (yürürken gidiş yönü, dururken görüşteki düşman; ikisi de yoksa
+			## son açısında kalır) - bkz. weapon.gd _wf_update_facing.
+			if follow_facing:
+				var idle_dir: Vector2 = _wf_idle_dir(icon)
+				if idle_dir != Vector2.ZERO:
+					_wf_face(i, icon, idle_dir, clampf(delta * WeaponFollowMath.TURN_RATE, 0.0, 1.0))
 			continue
 		var dir: Vector2 = (target.global_position - icon.global_position).normalized()
-		var forward: float = deg_to_rad(_weapon_forward_angle_deg[i] if i < _weapon_forward_angle_deg.size() else 0.0)
-		var mirror: bool = _weapon_mirror_aim[i] if i < _weapon_mirror_aim.size() else false
-		var t: float = clamp(delta * AIM_EASE_RATE, 0.0, 1.0)
-		if not mirror:
-			icon.rotation = lerp_angle(icon.rotation, dir.angle() - forward, t)
-			continue
-		var flip: bool = dir.x < 0.0
-		var target_rotation: float = (dir.angle() - PI + forward) if flip else (dir.angle() - forward)
-		var was_flipped: bool = _weapon_icon_flipped[i] if i < _weapon_icon_flipped.size() else false
-		if flip != was_flipped:
-			icon.rotation = target_rotation
-			icon.set("flip_h", flip)
-			if i < _weapon_icon_flipped.size():
-				_weapon_icon_flipped[i] = flip
-		else:
-			icon.rotation = lerp_angle(icon.rotation, target_rotation, t)
+		_wf_face(i, icon, dir, clamp(delta * AIM_EASE_RATE, 0.0, 1.0))
 
+
+## İkonun ucunu dünya yönü `dir`'e çevirir (aynalama dahil) - weapon.gd _face_dir ile aynı kural (WeaponFollowMath.face_rotation).
+func _wf_face(i: int, icon: Node2D, dir: Vector2, t: float) -> void:
+	var forward: float = deg_to_rad(_weapon_forward_angle_deg[i] if i < _weapon_forward_angle_deg.size() else 0.0)
+	var mirror: bool = _weapon_mirror_aim[i] if i < _weapon_mirror_aim.size() else false
+	var r: Array = WeaponFollowMath.face_rotation(dir, forward, mirror)
+	if not mirror:
+		icon.rotation = lerp_angle(icon.rotation, float(r[0]), t)
+		return
+	var flip: bool = r[1]
+	var was_flipped: bool = _weapon_icon_flipped[i] if i < _weapon_icon_flipped.size() else false
+	if flip != was_flipped:
+		icon.rotation = float(r[0])
+		icon.set("flip_h", flip)
+		if i < _weapon_icon_flipped.size():
+			_weapon_icon_flipped[i] = flip
+	else:
+		icon.rotation = lerp_angle(icon.rotation, float(r[0]), t)
+
+
+## ---------- HÜCUM takibi (madde 247) - yerel weapon.gd _wf_update ile AYNI kural (WeaponFollowMath / WeaponFollowFx) ----------
+## İkon başına pivot (ikonun ebeveyni): hücum ofseti + çıkış/çekilme dönüşümü + saydamlık pivotta; ikonun kendi konumu slot tabanlı
+## kalır. Kubbe / Talon dizilimi / Vampir çekilmesi / ölüm düşüşü ikonları yönetirken pivot kimliktir.
+var _wf_pivots: Array = []
+var _wf_w: Array = [] ## Vector2 hız yayı
+var _wf_v: Array = []
+var _wf_vis: Array = [] ## Dictionary görünürlük durumu
+var _wf_reveal_glinted: Array = []
+var _wf_glint_cd: Array = []
+var _wf_shadow_base: Array = [] ## gölgenin taban ölçeği (çıkışta küçülür)
+var _wf_bob_phase: Array = []
+var _wf_prev_pos: Vector2 = Vector2.INF
+var _wf_vel: Vector2 = Vector2.ZERO
+var _wf_prev_speed: float = 0.0
+var _wf_bob_t: float = 0.0
+
+
+func _wf_add_icon(icon: Node2D, shadow: Node2D) -> void:
+	_wf_pivots.append(icon.get_parent())
+	_wf_w.append(Vector2.ZERO)
+	_wf_v.append(Vector2.ZERO)
+	_wf_vis.append({})
+	_wf_reveal_glinted.append(false)
+	_wf_glint_cd.append(0.0)
+	_wf_shadow_base.append(shadow.scale if is_instance_valid(shadow) else Vector2.ONE)
+	_wf_bob_phase.append(randf_range(0.0, TAU))
+
+
+func _wf_clear() -> void:
+	for pv in _wf_pivots:
+		if is_instance_valid(pv):
+			(pv as Node).queue_free()
+	_wf_pivots.clear()
+	_wf_w.clear()
+	_wf_v.clear()
+	_wf_vis.clear()
+	_wf_reveal_glinted.clear()
+	_wf_glint_cd.clear()
+	_wf_shadow_base.clear()
+	_wf_bob_phase.clear()
+
+
+## Pivotu kimliğe döndürür, silahı görünür yapar (başka bir sistem ikon konumunu yönetirken).
+func _wf_identity(i: int) -> void:
+	var pv: Node2D = _wf_pivots[i] as Node2D if i < _wf_pivots.size() else null
+	if pv != null and is_instance_valid(pv):
+		pv.transform = Transform2D.IDENTITY
+		pv.modulate = Color.WHITE
+	if i < _weapon_shadows.size() and is_instance_valid(_weapon_shadows[i]):
+		_weapon_shadows[i].modulate.a = 0.4
+		if i < _wf_shadow_base.size():
+			_weapon_shadows[i].scale = _wf_shadow_base[i]
+	if i < _wf_vis.size():
+		(_wf_vis[i] as Dictionary)["s"] = WeaponFollowMath.SHOWN
+
+
+func _wf_reset_all() -> void:
+	_wf_prev_pos = Vector2.INF
+	for i in _wf_pivots.size():
+		_wf_identity(i)
+
+
+func _wf_fire_tween_running(i: int) -> bool:
+	if i >= _weapon_fire_tweens.size() or not (_weapon_fire_tweens[i] is Tween):
+		return false
+	var tw: Tween = _weapon_fire_tweens[i]
+	return tw.is_valid() and tw.is_running()
+
+
+## Hedefsiz silahın bakacağı yön (weapon.gd _wf_update_facing): yürürken gidiş yönü, dururken görüşteki en yakın düşman.
+func _wf_idle_dir(icon: Node2D) -> Vector2:
+	var sc: Dictionary = WeaponFollowMath.scan(self)
+	var focus_dir: Vector2 = ((sc["focus"] as Vector2) - icon.global_position) if sc["seen"] else Vector2.ZERO
+	return WeaponFollowMath.idle_facing_dir(_wf_vel, focus_dir)
+
+
+## Yakın dövüş ikonu: savuruş tween'i sürerken dokunulmaz; menzilde düşman varken dinlenme pozu (savuruş oradan başlar),
+## yoksa hücum kuralı. weapon.gd _wf_update_facing ile aynı.
+func _wf_melee_facing(i: int, icon: Node2D, delta: float) -> void:
+	if _wf_fire_tween_running(i) or not icon.visible:
+		return
+	var t: float = clampf(delta * WeaponFollowMath.TURN_RATE, 0.0, 1.0)
+	var sc: Dictionary = WeaponFollowMath.scan(self)
+	var rng: float = float(_weapon_attack_range[i]) if i < _weapon_attack_range.size() else 0.0
+	if sc["seen"] and rng > 0.0:
+		var origin: Vector2 = WeaponTargetPriorityScript.range_center(global_position, icon.global_position)
+		if origin.distance_to(sc["focus"] as Vector2) <= rng:
+			var rest: float = deg_to_rad(_weapon_rest_rotation_deg[i] if i < _weapon_rest_rotation_deg.size() else 0.0)
+			icon.rotation = lerp_angle(icon.rotation, rest, t)
+			return
+	var dir: Vector2 = _wf_idle_dir(icon)
+	if dir != Vector2.ZERO:
+		_wf_face(i, icon, dir, t)
+
+
+func _wf_update_all(delta: float) -> void:
+	if _weapon_icons.is_empty():
+		return
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var gp: Vector2 = global_position
+	if _wf_prev_pos == Vector2.INF or delta <= 0.0 or gp.distance_to(_wf_prev_pos) > 200.0:
+		_wf_vel = Vector2.ZERO
+	else:
+		_wf_vel = (gp - _wf_prev_pos) / delta
+	_wf_prev_pos = gp
+	_wf_bob_t += delta
+	var speed: float = _wf_vel.length()
+	var owned_elsewhere: bool = _vampir_pull > 0.0 or _dome_rim_owns_icons() or _talon_formation != "" or is_downed
+	var sc: Dictionary = WeaponFollowMath.scan(self)
+	var any_target: bool = false
+	for tg: Variant in _cached_aim_targets:
+		if is_instance_valid(tg):
+			any_target = true
+			break
+	var want: bool = bool(sc["seen"]) or any_target
+	for i in mini(_weapon_icons.size(), _wf_pivots.size()):
+		var icon: Node2D = _weapon_icons[i]
+		var pv: Node2D = _wf_pivots[i] as Node2D
+		if not is_instance_valid(icon) or pv == null or not is_instance_valid(pv):
+			continue
+		var dropping: bool = (i < _weapon_falling.size() and _weapon_falling[i]) or (i < _weapon_grounded.size() and _weapon_grounded[i])
+		dropping = dropping or (i < _weapon_rising.size() and _weapon_rising[i])
+		if owned_elsewhere or dropping:
+			_wf_identity(i)
+			continue
+		var slot: Vector2 = WEAPON_ICON_SLOTS[mini(i, WEAPON_ICON_SLOTS.size() - 1)]
+		var kind: int = WeaponFollowMath.slot_kind(slot)
+		var r: Array = WeaponFollowMath.spring_step(_wf_w[i], _wf_v[i], WeaponFollowMath.move_target(_wf_vel),
+				WeaponFollowMath.spring_w(kind), WeaponFollowMath.SPRING_ZETA, delta)
+		_wf_w[i] = r[0]
+		_wf_v[i] = r[1]
+		var w: Vector2 = r[0]
+		var bob: float = sin(_wf_bob_t * WeaponFollowMath.BOB_SPEED + float(_wf_bob_phase[i])) * WeaponFollowMath.BOB_AMPLITUDE
+		bob *= WeaponFollowMath.bob_scale(w)
+		var home: Vector2 = slot + WeaponFollowMath.charge_offset(kind, w) + Vector2(0.0, bob)
+		var vis: Dictionary = _wf_vis[i]
+		WeaponFollowMath.step_visibility(vis, want, false, now, kind)
+		var p: Dictionary = WeaponFollowMath.pose(vis, now, kind, home)
+		var st: int = int(vis["s"])
+		var u: float = float(p["u"])
+		var sc_pose: float = float(p["scale"])
+		var spin: float = float(p["spin"])
+		## Yakın dövüş savuruşu sürerken pivot dondurulur (savuruş yolu kaymaz; bitince yay kaldığı yerden sürer).
+		var melee_busy: bool = i < _weapon_melee.size() and _weapon_melee[i] and _wf_fire_tween_running(i)
+		if not melee_busy:
+			pv.rotation = spin
+			pv.scale = Vector2(sc_pose, sc_pose)
+			pv.position = (p["pos"] as Vector2) - slot.rotated(spin) * sc_pose
+		var flash: float = 0.0
+		if st == WeaponFollowMath.REVEAL and u >= WeaponFollowMath.GLINT_REVEAL_AT:
+			flash = 0.6 * clampf(1.0 - (u - WeaponFollowMath.GLINT_REVEAL_AT) / 0.12, 0.0, 1.0)
+		var alpha: float = float(p["alpha"])
+		pv.modulate = Color(1.0 + flash, 1.0 + flash, 1.0 + flash, alpha)
+		if i < _weapon_shadows.size() and is_instance_valid(_weapon_shadows[i]):
+			var sh: Node2D = _weapon_shadows[i]
+			var icon_local: Vector2 = pv.transform * icon.position
+			sh.position = icon_local + Vector2(0.0, WeaponOrbitMath.hover_shadow_gap((p["pos"] as Vector2).y - bob))
+			sh.modulate.a = 0.4 * alpha
+			if i < _wf_shadow_base.size():
+				sh.scale = (_wf_shadow_base[i] as Vector2) * sc_pose
+		## En üst kademe uç parıltısı - weapon.gd _wf_update ile aynı.
+		_wf_glint_cd[i] = maxf(0.0, float(_wf_glint_cd[i]) - delta)
+		if WeaponFollowMath.has_glint(int(icon.get_meta("tier_art", 1))):
+			var fwd: float = _weapon_forward_angle_deg[i] if i < _weapon_forward_angle_deg.size() else 0.0
+			if st == WeaponFollowMath.REVEAL and not _wf_reveal_glinted[i] and u >= WeaponFollowMath.GLINT_REVEAL_AT:
+				_wf_reveal_glinted[i] = true
+				_wf_glint_cd[i] = WeaponFollowMath.GLINT_STOP_COOLDOWN
+				WeaponFollowFx.spawn_glint(self, icon, fwd)
+			elif st == WeaponFollowMath.SHOWN and float(_wf_glint_cd[i]) <= 0.0 and WeaponFollowMath.just_stopped(_wf_prev_speed, speed):
+				_wf_glint_cd[i] = WeaponFollowMath.GLINT_STOP_COOLDOWN
+				WeaponFollowFx.spawn_glint(self, icon, fwd)
+		if st != WeaponFollowMath.REVEAL:
+			_wf_reveal_glinted[i] = false
+	_wf_prev_speed = speed
 
 ## ---------- Şovalye kubbesi tacı (KOZMETİK kopya) ----------
 ## Kuklanın kubbenin içindeyken silahlarının kubbe tepesindeki taç dairesine dizilmesi - karar/konum DomeWeaponRing'de
@@ -1505,6 +1702,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	item_extra_gold_chance = float(extra.get("extra_gold", 0.0))
 	exp_gain_percent = float(extra.get("exp_gain", 0.0))
 	match_damage_dealt = extra.get("dmg_dealt", 0.0)
+	match_damage_taken = extra.get("dmg_taken", 0.0)
 	if downed_timer_label:
 		downed_timer_label.set_remaining_seconds(extra.get("downed_remaining", 0.0) if is_downed else 0.0)
 
@@ -2651,7 +2849,7 @@ func _spawn_floating_text(text: String, color: Color, is_heal: bool = false, y_o
 ## Called by XP orbs when a remote player touches them on the host.
 func add_xp(amount: float) -> void:
 	if NetworkManager.is_host:
-		NetworkManager.host_collect_xp(amount * (1.0 + maxf(0.0, exp_gain_percent)))
+		NetworkManager.host_collect_xp(amount * (1.0 + GameManager.effective_exp_gain(exp_gain_percent))) ## üst sınır +%100 (madde 269)
 
 
 ## Called by gold drops when a remote player touches them on the host.

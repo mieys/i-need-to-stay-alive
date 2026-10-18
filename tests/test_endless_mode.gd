@@ -365,3 +365,86 @@ func test_catchup_state_restores_flags_for_a_late_joiner() -> void:
 	assert(GameManager.victory_reached and not GameManager.endless_active and GameManager.endless_layer == 0, "zafer penceresi açıkken girenin durumu")
 	assert(_victory_heard == 1, "zafer penceresi tetiklenmeli")
 	_cleanup()
+
+
+## ---- Sonsuz mod baskısı (2026-10-18, madde 269) ----
+
+const EndlessMathScript: GDScript = preload("res://scripts/endless_math.gd")
+
+
+func test_endless_enemy_cap_grows_with_the_layer() -> void:
+	var sp: Node = _spawner()
+	_start_endless(sp)
+	var base: int = sp._scaled_enemy_cap()
+	sp._endless_layer = 11
+	assert(sp._scaled_enemy_cap() == base + 30, "kat 11: tavan +30 (kat başına 3): %d -> %d" % [base, sp._scaled_enemy_cap()])
+	sp._endless_layer = 500
+	assert(sp._scaled_enemy_cap() == base + EndlessMathScript.CAP_MAX_EXTRA, "ek tavan üst sınırda durur")
+	_cleanup()
+
+
+func test_normal_phase_cap_is_not_touched_by_the_endless_extra() -> void:
+	var sp: Node = _spawner()
+	var before: int = sp._scaled_enemy_cap()
+	sp._endless_layer = 11 ## sonsuz değil (faz NORMAL): bu sayı yok sayılmalı
+	assert(sp._scaled_enemy_cap() == before, "normal fazda ek tavan uygulanmamalı")
+	_cleanup()
+
+
+func test_creature_compound_only_applies_past_layer_one() -> void:
+	var sp: Node = _spawner()
+	var a: Node = sp._spawn_creature("ork1", Vector2.ZERO, 9001)
+	var b: Node = sp._spawn_creature("ork1", Vector2.ZERO, 9002)
+	assert(a != null and b != null, "yaratık doğmalı")
+	a.apply_tier_scaling(16) ## kat 1 = Final'in kademesi: bileşik çarpan yok
+	b.apply_tier_scaling(20) ## kat 5: 1,08^4
+	var steps_a: float = 15.0
+	var steps_b: float = 19.0
+	var ramp_a: float = 1.0 + steps_a * Enemy.TIER_HEALTH_RAMP_LINEAR + steps_a * steps_a * Enemy.TIER_HEALTH_RAMP_QUAD
+	var ramp_b: float = 1.0 + steps_b * Enemy.TIER_HEALTH_RAMP_LINEAR + steps_b * steps_b * Enemy.TIER_HEALTH_RAMP_QUAD
+	var expected: float = ramp_b / ramp_a * pow(1.0 + EndlessMathScript.HEALTH_COMPOUND_PER_LAYER, 4.0)
+	var got: float = b.max_health / a.max_health
+	assert(absf(got - expected) < 0.01 * expected, "kat 5 / kat 1 can oranı %f olmalı, %f geldi" % [expected, got])
+	_cleanup()
+
+
+func test_wave_boss_mult_scales_health_shield_and_damage() -> void:
+	var sp: Node = _spawner()
+	var e: Node = sp._spawn_creature("ork1", Vector2.ZERO, 9003)
+	assert(e != null)
+	e.max_health = 1000.0
+	e.health = 1000.0
+	e.item_shield_max = 2000.0
+	e.item_shield_hp = 2000.0
+	e.contact_damage = 100.0
+	sp._apply_endless_boss_wave_mult(e, EndlessMathScript.scale_tier(3)) ## ilk dalga: x1
+	assert(is_equal_approx(e.max_health, 1000.0) and is_equal_approx(e.contact_damage, 100.0), "ilk dalga değişmemeli")
+	sp._apply_endless_boss_wave_mult(e, EndlessMathScript.scale_tier(21)) ## 7. dalga: can/kalkan x4, hasar x2,5
+	assert(is_equal_approx(e.max_health, 4000.0) and is_equal_approx(e.health, 4000.0), "can x4: %f" % e.max_health)
+	assert(is_equal_approx(e.item_shield_max, 8000.0) and is_equal_approx(e.item_shield_hp, 8000.0), "kalkan x4: %f" % e.item_shield_max)
+	assert(is_equal_approx(e.contact_damage, 250.0), "temas hasarı x2,5: %f" % e.contact_damage)
+	_cleanup()
+
+
+func test_endless_wave_uses_the_new_pool_when_old_bosses_are_off() -> void:
+	var sp: Node = _spawner()
+	GameManager.bosses_enabled = false ## _spawner() eski sistemi açar; bu test yeni havuzu sınar
+	assert(GameManager.endless_boss_waves, "yeni sonsuz dalga varsayılan açık")
+	_player()
+	_start_endless(sp)
+	GameManager.game_time = RUN_START + 280.0 ## kat 3, katın %75'i geçti
+	sp._process_endless()
+	sp._check_endless_boss_wave()
+	var wave: Array[Node] = _real_bosses()
+	assert(wave.size() == 2, "yeni sistemde ilk dalga 2 boss: %d" % wave.size())
+	for b in wave:
+		assert(EndlessMathScript.WAVE_POOL.has(str(b.get_meta("creature_id", ""))), "boss yeni havuzdan: %s" % str(b.get_meta("creature_id", "")))
+		assert(int(b.get("_current_tier")) == 18, "ölçek kademesi kat 3 = 18")
+	GameManager.endless_boss_waves = false
+	sp._endless_bosses_spawned.clear()
+	for b in wave:
+		b.free()
+	sp._check_endless_boss_wave()
+	assert(_real_bosses().is_empty(), "yeni dalga kapalıyken (ve eski sistem de kapalı) sonsuzda boss gelmez")
+	GameManager.endless_boss_waves = true
+	_cleanup()

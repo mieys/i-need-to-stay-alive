@@ -98,6 +98,24 @@ var _enemy_refresh_timer: float = 0.0
 const ENEMY_REFRESH_INTERVAL: float = 0.2
 
 var _alpha: float = 1.0
+## Telefon HUD'u (2026-10-18, madde 273): minimap KARE çizilir - harita kare çokgen, kenara kıstırma kareye göre, halka yerine
+## çerçeveyi HUD çizer (ahşap levha). Masaüstünde false (yuvarlak, halka dokusu).
+var square: bool = false
+
+
+## Merkezden `off` kadar uzaktaki nokta görünüm alanının (kenardan `inset` içeride) dışında mı?
+func _outside(off: Vector2, inset: float) -> bool:
+	if square:
+		return maxf(absf(off.x), absf(off.y)) > RADIUS - inset
+	return off.length() > RADIUS - inset
+
+
+## Görünüm dışındaki noktayı kenara kıstırır (yön korunur): kare kipte kare kenarına, değilse daireye.
+func _clamp_edge(off: Vector2, inset: float) -> Vector2:
+	if square:
+		var m: float = maxf(absf(off.x), absf(off.y))
+		return off * ((RADIUS - inset) / m) if m > 0.001 else off
+	return off.normalized() * (RADIUS - inset)
 
 var _enemy_dots: Array = [] ## {"node": Node2D, "is_boss": bool} - konum çizimde canlı okunur
 var _ew_dots_world: Object = null ## yeni yolda C++ EnemyWorld (kayıtlı yaratık noktaları _draw'da ondan), yoksa / ev içinde null
@@ -252,16 +270,24 @@ func _draw() -> void:
 	var center: Vector2 = Vector2(RADIUS + 2.0, RADIUS + 2.0)
 
 	# --- Zemin: pikselli harita dokusu (yoksa/harita henüz bulunamadıysa düz parşömen) ---
-	draw_circle(center, RADIUS, COLOR_BG)
+	if square:
+		draw_rect(Rect2(center - Vector2(RADIUS, RADIUS), Vector2(RADIUS, RADIUS) * 2.0), COLOR_BG)
+	else:
+		draw_circle(center, RADIUS, COLOR_BG)
 	if _map_texture and _map_world_size != Vector2.ZERO:
 		## Merkez 1 ekran pikseline (VIEW_WORLD_PER_PX) oturtuluyor - texel sınırları hep tam piksele düşer, kayarken
 		## texel genişlikleri 2/3 px arasında titremez.
 		var snapped_center: Vector2 = _map_origin + ((_view_center - _map_origin) / VIEW_WORLD_PER_PX).round() * VIEW_WORLD_PER_PX
 		var pts := PackedVector2Array()
 		var uvs := PackedVector2Array()
-		for i in CIRCLE_SEGMENTS:
-			var a: float = TAU * float(i) / float(CIRCLE_SEGMENTS)
-			var o: Vector2 = Vector2(cos(a), sin(a)) * RADIUS
+		var corners: Array = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]
+		for i in (4 if square else CIRCLE_SEGMENTS):
+			var o: Vector2
+			if square:
+				o = (corners[i] as Vector2) * RADIUS
+			else:
+				var a: float = TAU * float(i) / float(CIRCLE_SEGMENTS)
+				o = Vector2(cos(a), sin(a)) * RADIUS
 			pts.append(center + o)
 			uvs.append((snapped_center + o * VIEW_WORLD_PER_PX - _map_origin) / _map_world_size)
 		draw_polygon(pts, PackedColorArray([Color.WHITE]), uvs, _map_texture)
@@ -269,9 +295,11 @@ func _draw() -> void:
 	# --- Düşman noktaları ---
 	## Yeni yol: kayıtlı sıradan yaratıklar (aşağıdaki döngüyle aynı çizim; ofset C++'ta yuvarlanmış harita pikseli)
 	if _ew_dots_world != null and is_instance_valid(_ew_dots_world):
-		var pts: PackedVector2Array = _ew_dots_world.call("minimap_points", _view_center, VIEW_WORLD_PER_PX, RADIUS - 4.0,
-				VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY)
+		var pts: PackedVector2Array = _ew_dots_world.call("minimap_points", _view_center, VIEW_WORLD_PER_PX,
+				(RADIUS * 1.415 if square else RADIUS) - 4.0, VisionFogScript.SIDE_ELEMENT_MIN_VISIBILITY)
 		for off: Vector2 in pts:
+			if square and _outside(off, 4.0):
+				continue
 			var epos2: Vector2 = center + off
 			draw_rect(Rect2(epos2 - Vector2(3.0, 3.0), Vector2(6.0, 6.0)), Color("#3a2213"))
 			draw_rect(Rect2(epos2 - Vector2(2.0, 2.0), Vector2(4.0, 4.0)), COLOR_ENEMY)
@@ -283,11 +311,11 @@ func _draw() -> void:
 		var is_boss: bool = dot["is_boss"] as bool
 		var epos: Vector2 = _world_to_map(enode.global_position)
 		var offset: Vector2 = epos - center
-		if offset.length() > RADIUS - 4.0:
+		if _outside(offset, 4.0):
 			## Görünüm dışındaki sıradan düşmanlar çizilmez; boss yön göstergesi olarak kenarda kalır.
 			if not is_boss:
 				continue
-			offset = offset.normalized() * (RADIUS - 4.0)
+			offset = _clamp_edge(offset, 4.0)
 			epos = center + offset
 
 		var ecol: Color = COLOR_BOSS if is_boss else COLOR_ENEMY
@@ -300,12 +328,12 @@ func _draw() -> void:
 	for dot: Dictionary in _player_dots:
 		var ppos: Vector2 = _world_to_map(dot["pos"] as Vector2)
 		var offset: Vector2 = ppos - center
-		if offset.length() > RADIUS - 5.0:
-			offset = offset.normalized() * (RADIUS - 5.0)
+		var clamped: bool = _outside(offset, 5.0)
+		if clamped:
+			offset = _clamp_edge(offset, 5.0)
 			ppos = center + offset
 		var is_local: bool = dot["is_local"] as bool
 		var is_dead_dot: bool = bool(dot.get("dead", false))
-		var clamped: bool = (_world_to_map(dot["pos"] as Vector2) - center).length() > RADIUS - 5.0
 		var pcol: Color = COLOR_DEAD if is_dead_dot else (COLOR_PLAYER if is_local else COLOR_ALLY_RING)
 		var psize: float = 5.0 if is_local else 6.0
 		if not is_local and not is_dead_dot and clamped:
@@ -347,8 +375,8 @@ func _draw() -> void:
 	if smith != Vector2.ZERO:
 		var spos: Vector2 = _world_to_map(smith)
 		var soff: Vector2 = spos - center
-		if soff.length() > RADIUS - 7.0:
-			spos = center + soff.normalized() * (RADIUS - 7.0)
+		if _outside(soff, 7.0):
+			spos = center + _clamp_edge(soff, 7.0)
 		spos = spos.round()
 		draw_circle(spos, 7.0, COLOR_OUTLINE)
 		draw_circle(spos, 6.0, Color("#d8c39a"))
@@ -363,8 +391,8 @@ func _draw() -> void:
 	if _merchant_marker_active:
 		var mpos: Vector2 = _world_to_map(_merchant_marker_pos)
 		var moffset: Vector2 = mpos - center
-		if moffset.length() > RADIUS - 5.0:
-			moffset = moffset.normalized() * (RADIUS - 5.0)
+		if _outside(moffset, 5.0):
+			moffset = _clamp_edge(moffset, 5.0)
 			mpos = center + moffset
 		draw_circle(mpos, 6.0, COLOR_MERCHANT)
 		draw_circle(mpos, 6.0, Color(0.1, 0.1, 0.1, 0.6), false, 1.5)
@@ -375,7 +403,7 @@ func _draw() -> void:
 	for mid in _collect_dots.keys():
 		for idx in (_collect_dots[mid] as Dictionary).keys():
 			var cpos: Vector2 = _world_to_map((_collect_dots[mid] as Dictionary)[idx]).round()
-			if cpos.distance_to(center) > RADIUS - 3.0:
+			if _outside(cpos - center, 3.0):
 				continue
 			draw_rect(Rect2(cpos - Vector2(2, 2), Vector2(4, 4)), Color("#3a2213"))
 			draw_rect(Rect2(cpos - Vector2(1, 1), Vector2(2, 2)), COLOR_COLLECT)
@@ -385,16 +413,17 @@ func _draw() -> void:
 		var m: Dictionary = _mission_markers[id]
 		var wpos: Vector2 = _world_to_map(m["pos"])
 		var woffset: Vector2 = wpos - center
-		if woffset.length() > RADIUS - 5.0:
-			woffset = woffset.normalized() * (RADIUS - 5.0)
+		if _outside(woffset, 5.0):
+			woffset = _clamp_edge(woffset, 5.0)
 			wpos = center + woffset
 		draw_circle(wpos, 6.0, m["color"])
 		draw_circle(wpos, 6.0, Color(0.1, 0.1, 0.1, 0.6), false, 1.5)
 		draw_string(ThemeDB.fallback_font, wpos + Vector2(-3.0, 3.0), String(m["symbol"]),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.1, 0.05, 0.0, 1.0))
 
-	# --- Piksel ahşap halka çerçeve (kenarlık) ---
-	draw_texture(RING_TEXTURE, center - Vector2(RING_HALF, RING_HALF))
+	# --- Piksel ahşap halka çerçeve (kenarlık); kare kipte çerçeveyi HUD çizer ---
+	if not square:
+		draw_texture(RING_TEXTURE, center - Vector2(RING_HALF, RING_HALF))
 
 ## Demircinin kapısının önü (dünya; weapon_shop.gd get_exterior_anchor_pos) - sahnede yoksa Vector2.ZERO. Düğüm bir kez aranır.
 var _smith_node: Node = null

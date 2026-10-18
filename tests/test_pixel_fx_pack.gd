@@ -216,7 +216,10 @@ func test_talon_q_is_a_lunge_not_a_teleport_and_hits_when_passing() -> void:
 	await _wait(0.5)
 	assert(is_equal_approx(player.global_position.x - start.x, player.TALON_DASH_DISTANCE), "sonunda tam mesafe: %s" % (player.global_position.x - start.x))
 	assert(not player._talon_dashing, "kilit kalktı")
-	assert(enemy.hits.size() == 1, "yoldaki düşman tam bir kez vurulur: %s" % str(enemy.hits))
+	## Bıçak kopyası da menzildeki düşmana saplar (madde 231: üç saplama) - atılışın vuruşunu hasar miktarından ayır.
+	var dash_dmg: float = float(player.owned_weapon_nodes[0].get("damage")) * player.TALON_DASH_DAMAGE_MULT
+	var dash_hits: Array = enemy.hits.filter(func(h: Variant) -> bool: return is_equal_approx(float(h), dash_dmg))
+	assert(dash_hits.size() == 1, "yoldaki düşman atılıştan tam bir kez vurulur (%s hasar): %s" % [str(dash_dmg), str(enemy.hits)])
 	_cleanup()
 
 

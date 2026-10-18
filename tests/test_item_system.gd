@@ -61,7 +61,7 @@ func test_chest_pool_skips_items_with_capped_stats() -> void:
 
 # ------------------------------------------------------------------ veri
 func test_defs_are_consistent() -> void:
-	assert(Items.KEYS.size() == 50, "11 parça + 16 epik + 23 efsanevi = 50 (2026-10-10: +1 epik, +7 efsanevi tarifsiz), bulunan %d" % Items.KEYS.size())
+	assert(Items.KEYS.size() == 50, "11 parça + 15 epik + 24 efsanevi = 50 (2026-10-10: +1 epik, +7 efsanevi tarifsiz; 2026-10-18: Ruhların Maskesi efsanevi), bulunan %d" % Items.KEYS.size())
 	assert(Items.KEYS.size() == Items.DEFS.size(), "KEYS ile DEFS aynı eşyalar")
 	var counts: Array = [0, 0, 0]
 	var player: Node = _make_player()
@@ -83,7 +83,7 @@ func test_defs_are_consistent() -> void:
 		assert(ResourceLoader.exists(Items.icon_path(k)), "%s: ikon yok" % k)
 		for stat in Items.get_def(k).get("stats", {}):
 			assert(stat in player, "%s: player.gd'de '%s' statı yok" % [k, stat])
-	assert(counts == [11, 16, 23], "kademe sayıları: %s" % str(counts))
+	assert(counts == [11, 15, 24], "kademe sayıları: %s (2026-10-18: Ruhların Maskesi epikten efsaneviye geçti)" % str(counts))
 	_cleanup()
 
 
@@ -270,9 +270,11 @@ func test_flow_speed_stacks_and_son_sans_ap() -> void:
 	var base_speed: float = player.get_effective_move_speed()
 	for i in 5:
 		player._item_on_xp_orb()
-	assert(player.get_effective_move_speed() > base_speed * 1.04, "5 orb ~%%5 hız")
-	player._item_flow_timer = 0.0
-	player._item_flow_stacks = 0.0
+	## 2026-10-18: orb başına %1 (ITEM_FLOW_PER_ORB). 5 orb = %5 hız (eşyanın kendi +%5 hareket hızı base_speed'e dahil, çarpana toplamsal biner: 1,10 / 1,05).
+	var flow_ratio: float = player.get_effective_move_speed() / base_speed
+	assert(flow_ratio > 1.04 and flow_ratio < 1.055, "5 orb ~%%5 hız: oran %f" % flow_ratio)
+	assert(is_equal_approx(player.ITEM_FLOW_PER_ORB, 0.01), "orb başına %1")
+	player._item_flow_orbs.clear()
 	var ap0: float = player.damage_bonus
 	var luck0: float = player.luck
 	player.acquire_item("son_sans", {}, 0)
@@ -298,3 +300,57 @@ func test_chest_gold_share_formula() -> void:
 	assert(ChestDropScript.chest_gold_share(100, 2) == 90, "2 oyuncu %%90")
 	assert(ChestDropScript.chest_gold_share(100, 4) == 70, "4 oyuncu %%70")
 	assert(ChestDropScript.CHEST_GOLD_MIN == 90 and ChestDropScript.CHEST_GOLD_MAX == 150, "90-150 altın")
+
+
+## 2026-10-18 (kullanıcı): Ruhların Maskesi (orb başına hız) epikten EFSANEVİYE geçti: orb başına %0,5 hız, +%20 EXP, +%5 hareket hızı.
+func test_soul_mask_is_legendary_and_dependents_keep_their_price() -> void:
+	_reset()
+	assert(Items.kademe("ruhlarin_akisi") == Items.KADEME_EFSANEVI, "Ruhların Maskesi efsanevi olmalı")
+	var st: Dictionary = Items.get_def("ruhlarin_akisi")["stats"]
+	assert(is_equal_approx(float(st["exp_gain_percent"]), 0.20) and is_equal_approx(float(st["item_speed_percent"]), 0.05), "temel statlar: +%20 EXP, +%5 hız: %s" % str(st))
+	assert(Items.cost("ruhlarin_akisi") == 1790, "fiyat = bileşen toplamı (1790): %d" % Items.cost("ruhlarin_akisi"))
+	var passive_text: String = str(Items.get_def("ruhlarin_akisi")["passive"])
+	assert(passive_text.contains("%1 hareket hızı") and passive_text.contains("yenilemez"), "pasif metni orb başına %1 ve 'yenilemez' demeli: %s" % passive_text)
+	## Eskiden maskeyi bileşen kullanan 3 efsanevinin tarifi açık parçalara çevrildi ve fiyatları aynı (2020 / 2130 / 2250).
+	for pair in [["ninjanin_el_kitabi", 2020], ["son_sans", 2130], ["bilgenin_pusulasi", 2250]]:
+		var key: String = pair[0]
+		assert(not (Items.recipe(key) as Array).has("ruhlarin_akisi"), "%s: efsanevi bileşen (maske) kalmamalı" % key)
+		assert(Items.cost(key) == int(pair[1]), "%s fiyatı değişmemeli: %d" % [key, Items.cost(key)])
+	assert(not (Items.builds_into("ruhlarin_akisi") as Array).has("son_sans"), "maske artık Son Şans'ın bileşeni değil")
+	## Tarif indirimi: sahip olunan Rüzgar Eldiveni + Tecrübe Kitabı fiyattan düşer.
+	var player: Node = _make_player()
+	player.acquire_item("ruzgar_eldiveni", {}, 0)
+	player.acquire_item("tecrube_kitabi", {}, 0)
+	var plan: Dictionary = Items.plan_purchase("ruhlarin_akisi", GameManager.owned_items)
+	assert(int(plan["cost"]) == 1790 - 650 - 290 and (plan["consume"] as Array).size() == 2, "eldiven + kitap tüketilip düşülmeli: %d" % int(plan["cost"]))
+	_cleanup()
+
+
+## 2026-10-18 (kullanıcı: "ilk orbun verdiği hız yenilenmesin, %1 kalabilir"): Ruhların Maskesi'nde her orbun bonusu KENDİ 4 sn'sinde söner; yeni orb eskisini yenilemez.
+func test_soul_mask_orb_speed_decays_per_orb_and_never_refreshes() -> void:
+	_reset()
+	var player: Node = _make_player()
+	player.acquire_item("ruhlarin_akisi", {}, 0)
+	assert(is_equal_approx(player._item_flow_bonus(), 0.0), "orb yokken bonus 0")
+	player._item_on_xp_orb() ## A: %1, 4 sn
+	assert(is_equal_approx(player._item_flow_bonus(), 0.01), "ilk orb 0,01 bonus: %f" % player._item_flow_bonus())
+	player._item_flow_tick(2.0) ## A'nın 2 sn'si kaldı -> %0,5
+	assert(is_equal_approx(player._item_flow_bonus(), 0.005), "2 sn sonra yarısı: %f" % player._item_flow_bonus())
+	player._item_on_xp_orb() ## B: A YENİLENMEZ; A %0,5 + B %1
+	assert(is_equal_approx(player._item_flow_bonus(), 0.015), "ikinci orb ilkini yenilememeli (0,5 + 1,0): %f" % player._item_flow_bonus())
+	player._item_flow_tick(2.0) ## A söndü (süresi doldu), B'nin 2 sn'si kaldı
+	assert(is_equal_approx(player._item_flow_bonus(), 0.005), "A kendi süresinde bitmeli, B yarıda: %f" % player._item_flow_bonus())
+	player._item_flow_tick(2.0)
+	assert(is_equal_approx(player._item_flow_bonus(), 0.0) and player._item_flow_orbs.is_empty(), "hepsi bitince bonus 0 ve liste boş")
+	## Aynı karede gelen orblar (birleşen küre toplaması) tek satırda birleşir ve toplam doğru kalır.
+	for i in 32:
+		player._item_on_xp_orb()
+	assert(player._item_flow_orbs.size() == 1, "aynı karedeki 32 orb tek satır: %d" % player._item_flow_orbs.size())
+	assert(is_equal_approx(player._item_flow_bonus(), 0.32), "32 orb = 0,32 bonus: %f" % player._item_flow_bonus())
+	## Eşya yokken orb bonus vermez.
+	_cleanup()
+	_reset()
+	var bare: Node = _make_player()
+	bare._item_on_xp_orb()
+	assert(bare._item_flow_orbs.is_empty(), "maske yokken orb yığını oluşmaz")
+	_cleanup()

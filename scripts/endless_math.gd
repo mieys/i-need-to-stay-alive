@@ -22,6 +22,25 @@ const WAVE_SIZE_STEP := 2
 const MAX_WAVE_SIZE := 13 ## FINAL_CREATURES'ın tamamı
 const BOSS_TRIGGER_FRACTION := 0.75
 
+## ---- SONSUZ MOD BASKISI (2026-10-18, madde 269; kullanıcı: "çok bozmuş oyunu" - Elara'nın 113 dk'lık sonsuz koşusu, 577M hasar, hiç ölmedi) ----
+## Teşhis (kosular.jsonl): oyuncu gücü seviye/kart/eşya ile sınırsız büyürken sonsuzda yaratık sayısı hep 105, doğuş aralığı zaten alt sınırda, boss yok,
+## yalnız kat başına +1 ölçek kademesi vardı (kademe 15 -> kat 21'de can ~x4, hasar ~x4; oyuncu canı ~100x). Üç ek baskı - HEPSİ sonsuza özel
+## (normal oyun kademeleri etkilenmez: katsayılar `scale_tier` > 15 olduğunda devreye girer) ve ilk tahmindir, balans kaydındaki kat kırılımına göre ayarlanır.
+## 1) Bileşik can/hasar: kat başına `1 + oran` çarpanı, kat 1'de x1 (apply_tier_scaling içinde; istemci aynı ölçek kademesini RPC ile alır).
+const HEALTH_COMPOUND_PER_LAYER := 0.08 ## kat 21: 1,08^20 = x4,7 can/kalkan (kademe ölçeğinin üstüne)
+const DAMAGE_COMPOUND_PER_LAYER := 0.05 ## kat 21: 1,05^20 = x2,65 hasar
+## 2) Kalabalık: yaratık tavanı kat başına +3, en çok +60 (tek oyuncuda 105 -> 165; 4 kişilik tavan 168 ile aynı mertebe, performans sınırı).
+const CAP_PER_LAYER := 3
+const CAP_MAX_EXTRA := 60
+## 3) Boss dalgaları: `GameManager.bosses_enabled` kapalıyken de (yeni sistem) 3 katta bir; havuz = elle statlı yeni 6 boss. Dalga boyutu 2'den başlar, dalga başına +1, en çok 6.
+## Dalgadaki bossun can/kalkan/temas hasarı dalga başına büyür (FIXED_BOSS_STATS sabit sayılar, katla büyümezdi): `boss_health_mult` / `boss_damage_mult`.
+## Not: bossların KENDİ özel saldırı sayıları (ateş topu, çığlık vb.) sabit kalır; sadece temas/menzilli hasar ve can/kalkan büyür.
+const WAVE_POOL := ["minotaur1", "underground1", "balkabagi1", "wendigo1", "banshee1", "ucansetan1"]
+const POOL_FIRST_WAVE_SIZE := 2
+const POOL_WAVE_SIZE_STEP := 1
+const BOSS_HEALTH_PER_WAVE := 0.5 ## dalga n: x(1 + 0,5 (n-1)); kat 21 = 7. dalga = x4
+const BOSS_DAMAGE_PER_WAVE := 0.25 ## dalga 7: x2,5
+
 
 ## Sonsuz mod başladığından beri `elapsed` saniye geçtiyse hangi kattayız (1'den başlar).
 static func layer_for_elapsed(elapsed: float, layer_seconds: float) -> int:
@@ -50,6 +69,46 @@ static func boss_wave_size(layer: int) -> int:
 	if n <= 0:
 		return 0
 	return clampi(FIRST_WAVE_SIZE + (n - 1) * WAVE_SIZE_STEP, FIRST_WAVE_SIZE, MAX_WAVE_SIZE)
+
+
+## Yeni sistem (WAVE_POOL) dalga boyutu: boss katı değilse 0.
+static func pool_wave_size(layer: int) -> int:
+	var n: int = wave_number(layer)
+	if n <= 0:
+		return 0
+	return clampi(POOL_FIRST_WAVE_SIZE + (n - 1) * POOL_WAVE_SIZE_STEP, POOL_FIRST_WAVE_SIZE, WAVE_POOL.size())
+
+
+## Ölçek kademesi -> sonsuz kat (0 = sonsuz değil). scale_tier(kat) = 15 + kat'ın tersi. Kat 1 = kademe 16 = Final'in kademesi.
+static func layer_for_scale_tier(scale_tier: int) -> int:
+	return maxi(scale_tier - BASE_TIER, 0)
+
+
+## Sıradan yaratığın sonsuz kat çarpanları (can+kalkan / hasar). Kat 0-1'de 1,0 (normal oyun ve Final değişmez).
+static func creature_health_mult(scale_tier: int) -> float:
+	var layer: int = layer_for_scale_tier(scale_tier)
+	return 1.0 if layer <= 1 else pow(1.0 + HEALTH_COMPOUND_PER_LAYER, float(layer - 1))
+
+
+static func creature_damage_mult(scale_tier: int) -> float:
+	var layer: int = layer_for_scale_tier(scale_tier)
+	return 1.0 if layer <= 1 else pow(1.0 + DAMAGE_COMPOUND_PER_LAYER, float(layer - 1))
+
+
+## Sonsuzda yaratık tavanına eklenen sayı (kat başına CAP_PER_LAYER, en çok CAP_MAX_EXTRA). Kat 0-1 = 0.
+static func extra_enemy_cap(layer: int) -> int:
+	return 0 if layer <= 1 else mini((layer - 1) * CAP_PER_LAYER, CAP_MAX_EXTRA)
+
+
+## Dalga bossunun çarpanları (ölçek kademesinden dalga numarası çıkarılır). Boss katı olmayan her kademe (kademe bossları, Final) = 1,0.
+static func boss_health_mult(scale_tier: int) -> float:
+	var n: int = wave_number(layer_for_scale_tier(scale_tier))
+	return 1.0 + BOSS_HEALTH_PER_WAVE * float(maxi(n - 1, 0))
+
+
+static func boss_damage_mult(scale_tier: int) -> float:
+	var n: int = wave_number(layer_for_scale_tier(scale_tier))
+	return 1.0 + BOSS_DAMAGE_PER_WAVE * float(maxi(n - 1, 0))
 
 
 ## Katın başlangıcı / boss dalgasının tetik anı (sonsuz mod başından itibaren saniye).

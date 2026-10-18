@@ -72,6 +72,7 @@ func test_every_frame_cell_blocks_and_play_walls_unchanged() -> void:
 	var play := Rect2i(0, 0, 256, 256)
 	var ring_total := 0
 	var ring_blocked := 0
+	var open_cells: Array[Vector2i] = []
 	var rect: Rect2i = forest.get_used_rect()
 	assert(rect.position == Vector2i(-32, -20) and rect.size == Vector2i(320, 296), "orman katmani alani: %s" % str(rect))
 	for y in range(rect.position.y, rect.end.y):
@@ -81,12 +82,19 @@ func test_every_frame_cell_blocks_and_play_walls_unchanged() -> void:
 			ring_total += 1
 			if forest.get_cell_source_id(Vector2i(x, y)) != -1:
 				ring_blocked += 1
-	assert(ring_total == 320 * 296 - 256 * 256 and ring_blocked == ring_total, "halka hucreleri engel degil: %d/%d" % [ring_blocked, ring_total])
+			else:
+				open_cells.append(Vector2i(x, y))
+	## KASITLI açıklık (madde 122, Tiled'da doğu kenarı duvarı silindi): vadi köprüsünün sağ ucu - halkanın ilk sütunu x=256, y=98..114
+	## (17 hücre) boş; ötesi (x >= 257) dolu, yani sadece 1 hücrelik çıkmaz cep. Başka hiçbir halka hücresi boş olmamalı.
+	var known_gap: Array[Vector2i] = []
+	for gy in range(98, 115):
+		known_gap.append(Vector2i(256, gy))
+	assert(ring_total == 320 * 296 - 256 * 256 and open_cells == known_gap, "halka hucreleri engel degil: %d/%d, bos: %s" % [ring_blocked, ring_total, str(open_cells.slice(0, 20))])
 	var in_play := 0
 	for c: Vector2i in forest.get_used_cells():
 		if play.has_point(c):
 			in_play += 1
-	assert(in_play == 5510, "eski oyun alanindaki orman duvari hucre sayisi degismemeli: %d" % in_play)
+	assert(in_play == 5447, "eski oyun alanindaki orman duvari hucre sayisi degismemeli (5510 -> 5447: doğu kenarı açıklığı, madde 122): %d" % in_play)
 	## oyunun kendi sorgusu: halkada engel, haritanin ortasindaki acik cimende degil
 	for p: Vector2 in [Vector2(-300.0, 2000.0), Vector2(4350.0, 2000.0), Vector2(2000.0, -150.0), Vector2(2000.0, 4350.0), Vector2(-100.0, -100.0), Vector2(4200.0, 4300.0)]:
 		assert(GameManager.is_position_blocked_by_walls(p), "halka engel olmali: %s" % str(p))

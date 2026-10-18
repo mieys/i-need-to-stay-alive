@@ -27,3 +27,22 @@ const ACCENT := Color("#f0c070") ## başlık / birinci sıra
 const GOOD := Color("#b5d98a")
 const BAD := Color("#f09a80") ## uyarı / yere düştü (kahve zeminde okunur kırmızı)
 const SHARD := Color("#b8e0f4") ## silah parçacığı sayısı
+
+## Koyu levhada okunan "mürekkep" renkleri (BBCode hex) - UIKit.INK'in (bej zemin) koyu HUD karşılığı, anahtarlar AYNI.
+## Yetenek ipucu (skill_icon.gd _format_lol_style, hud_tooltip.gd) buradan okur.
+const INK := {
+	"health": "#a9dc86",
+	"damage": "#ff9a80",
+	"crit": "#f4a86c",
+	"speed": "#8ccaf0",
+	"attack_speed": "#f0c070",
+	"shield": "#94bef8",
+	"shield_pen": "#e2b468",
+	"exp": "#d0a8f6",
+	"luck": "#e8d070",
+	"range": "#f0a870",
+	"cooldown": "#a9c6ee",
+	"value": "#f6d27e",
+	"passive": "#e6cf72",
+	"text": "#f3e6cc",
+}

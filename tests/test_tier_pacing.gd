@@ -187,8 +187,10 @@ func test_no_cliff_between_tiers_measured_with_the_real_spawn_path() -> void:
 		r[tier] = float(ehp[tier]) / float(sp.call("_current_interval")) ## saniyede öldürülmesi gereken etkin can
 	## Kademe 1-2 BİLEREK kolay kaldı: ölçümdeki değerler (K1 ~5, K2 ~23) değişmedi. 2026-10-10: sıradan yaratık canı/kalkanı x1,5 (CREATURE_STAT_BOOST) -> mutlak değerler x1,5, ORANLAR aynı.
 	var boost: float = SpawnerScript.CREATURE_STAT_BOOST
-	assert(absf(float(ehp[1]) - 5.0 * boost) < 1.5 * boost, "Kademe 1 etkin canı (x1,5) değişmemeli: %.1f" % ehp[1])
-	assert(absf(float(ehp[2]) - 23.0 * boost) < 3.0 * boost, "Kademe 2 etkin canı (x1,5) değişmemeli: %.1f" % ehp[2])
+	## 2026-10-18: Kademe 1 rosteri artık yalnız slime1 (SLIME_START_DELAY 0, eskiden fareler) ve Kademe 2 slime1 + iskelet1 -> mutlak değerler
+	## ölçümle yenilendi (K1 slime1 10,64 can x ~2,6 çarpan = ~28; K2 ~48). Oranlar/adımlar aşağıdaki sınırlarla korunur.
+	assert(absf(float(ehp[1]) - 28.0) < 3.0, "Kademe 1 (yalnız slime1) etkin canı değişmemeli: %.1f" % ehp[1])
+	assert(absf(float(ehp[2]) - 48.0) < 5.0, "Kademe 2 (slime1 + iskelet1) etkin canı değişmemeli: %.1f" % ehp[2])
 	## Kademe 2 -> 3 sıçraması: eskiden R x5.3 (46 -> 242), şimdi ~x3.
 	assert(float(r[3]) / float(r[2]) < 3.6, "K2 -> K3 sıçraması x3.6'yı aşmamalı: x%.2f" % (float(r[3]) / float(r[2])))
 	assert(float(r[3]) < 170.0 * boost, "Kademe 3 R'si eskiden 242'ydi, ~130 x1,5 olmalı: %.0f" % r[3])

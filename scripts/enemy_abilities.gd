@@ -190,6 +190,39 @@ func process(delta: float, player: Node2D, dist: float) -> void:
 			_boss_kit.process(delta, player, dist)
 
 
+## Hızlı yol (2026-10-18, FPS): enemy.gd _ew_tick yaratık "sessizken" (durum etkisi / vuruş parlaması / donma / saldırı yok) önce bunu dener. Bekleme sayacı sürerken yeteneğin o
+## karede yapacağı TEK şey sayacı azaltmaktır; bu yüzden hedef sorgusuna (3 çağrı) gerek yok. true = kare işlendi; false = asıl iş var (bekleme bitti, görünmezlik sona eriyor, boss kiti...):
+## false dönerken HİÇBİR durum DEĞİŞMEZ, çağıran hedefi alıp process()'i çağırır. Sonuç process() ile birebir aynı (sayaç `x - delta > 0` iken `x -= delta`; vampirde `_cd > 0` iken ya da görüş kontrolü/ışınlanma gecikmesi sürerken).
+func process_fast(delta: float) -> bool:
+	match family:
+		"hayalet":
+			if e.get("is_ability_invisible") == true:
+				if _timer - delta > 0.0:
+					_timer -= delta
+					return true
+				return false
+			if _cd - delta > 0.0:
+				_cd -= delta
+				return true
+		"vampire":
+			if _cd > 0.0:
+				_cd -= delta
+				return true
+			if _pending < 0.0:
+				if _vision_check - delta > 0.0:
+					_vision_check -= delta
+					return true
+				return false
+			if _pending - delta > 0.0:
+				_pending -= delta
+				return true
+		"rontgen", "iblis", "agac":
+			if _cd - delta > 0.0:
+				_cd -= delta
+				return true
+	return false
+
+
 func _valid_target(player: Node2D) -> bool:
 	return player != null and is_instance_valid(player) and player.get("is_dead") != true
 

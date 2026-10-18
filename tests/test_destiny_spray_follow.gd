@@ -151,7 +151,7 @@ func test_remote_flame_follows_puppet_staff_aim() -> void:
 	puppet.peer_id = FAKE_PEER_ID
 	fake_main.add_child(puppet)
 	fake_main.puppet = puppet
-	puppet.global_position = Vector2(500.0, 400.0)
+	puppet.snap_to_network_position(Vector2(500.0, 400.0)) ## ağ hedefi de burası: yoksa kukla (0,0)'a kayar, hücum takibinde (madde 247) hedefsiz asa gidiş yönüne döner
 	puppet.update_weapon_visuals(["dagger", "fire_staff"])
 	var info: Array = puppet.get_weapon_icon_info(1)
 	var icon: Sprite2D = info[0]
@@ -163,7 +163,8 @@ func test_remote_flame_follows_puppet_staff_aim() -> void:
 	var n: Node2D = SpriteFx.spawn(get_tree(), Vector2.ZERO, {"sheet": "flame_fire", "follow_slot": 1, "follow_peer": FAKE_PEER_ID,
 		"rot": 0.3, "follow_aim": true, "rot_offset": 0.2, "offset": Vector2(25.5, -1.1), "key": "test:aimflame", "loop_time": 2.0, "z": 9})
 	NetworkManager.is_multiplayer_active = was_mp
-	assert(n != null and n.get_parent() == puppet, "uzak alev kuklanın asasına bağlanmalı")
+	## Hücum takibi (madde 247): kukla ikonu kendi pivotunun çocuğu - alev ikonun kardeşi olur (pivot dönüşümünü izler).
+	assert(n != null and n.get_parent() == icon.get_parent() and icon.get_parent().get_parent() == puppet, "uzak alev kuklanın asasına bağlanmalı")
 	var want: float = icon.global_rotation + deg_to_rad(fwd) + 0.2
 	assert(absf(angle_difference(n.global_rotation, want)) < 0.01, "alev yönü = kukla asasının bakışı + açı farkı: %.3f / %.3f" % [n.global_rotation, want])
 	assert(absf(angle_difference(n.global_rotation, 0.3)) > 0.3, "yayınlanan mutlak açı yok sayılmalı")
@@ -208,7 +209,8 @@ func test_remote_copy_attaches_to_puppet_staff() -> void:
 	var n: Node2D = SpriteFx.spawn(get_tree(), Vector2(9999.0, 9999.0), {"sheet": "spray_fire", "follow_slot": 1,
 		"follow_peer": FAKE_PEER_ID, "rot": 0.3, "offset": Vector2(44.0, 0.0), "z": 9})
 	NetworkManager.is_multiplayer_active = was_mp
-	assert(n != null and n.get_parent() == puppet, "uzak kopya kuklaya bağlanmalı, ebeveyn: %s" % (n.get_parent() if n else null))
+	assert(n != null and n.get_parent() == icon.get_parent() and icon.get_parent().get_parent() == puppet,
+			"uzak kopya kuklaya (ikonun pivotuna, madde 247) bağlanmalı, ebeveyn: %s" % (n.get_parent() if n else null))
 	var tip: Vector2 = WeaponTip.tip_global(icon, float(info[1]))
 	assert(n.global_position.distance_to(tip) < 1.0, "uzak kopya asa ucunda olmalı: %s / %s" % [n.global_position, tip])
 	assert(absf(angle_difference(n.global_rotation, 0.3)) < 0.01, "yön yayınlanan açı olmalı: %.3f" % n.global_rotation)

@@ -344,4 +344,4 @@ func _on_body_entered(body: Node) -> void:
 static func xp_gain_mult_for(collector: Node) -> float:
 	if collector == null or not is_instance_valid(collector) or not ("exp_gain_percent" in collector):
 		return 1.0
-	return 1.0 + maxf(0.0, float(collector.get("exp_gain_percent")))
+	return 1.0 + GameManager.effective_exp_gain(float(collector.get("exp_gain_percent"))) ## üst sınır +%100 (madde 269)

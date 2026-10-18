@@ -145,6 +145,26 @@ func test_wrong_typed_values_do_not_crash() -> void:
 	_end()
 
 
+## Madde 250: Rekorlar ekranının YENİ işareti - sadece son koşuda kırılanlar (sayaçla; aynı saniyedeki koşular da ayrılır).
+func test_last_run_records_marks_only_latest_run() -> void:
+	_begin()
+	assert(RunRecordsScript.last_run_records(RunRecordsScript.load_all()).is_empty(), "hiç koşu yok: yeni rekor yok")
+	RunRecordsScript.record_run_end(_run(600.0, 5, 300))
+	var first: Array = RunRecordsScript.last_run_records(RunRecordsScript.load_all())
+	assert(first == ["time", "tier", "kills"], "ilk koşuda kırılanların hepsi yeni: %s" % str(first))
+	RunRecordsScript.note_progress(_run(200.0, 4, 450)) ## koşu sürerken kırılan da o koşuya yazılır
+	RunRecordsScript.record_run_end(_run(400.0, 4, 450))
+	var second: Array = RunRecordsScript.last_run_records(RunRecordsScript.load_all())
+	assert(second == ["kills"], "ikinci koşu sadece öldürmeyi kırdı: %s" % str(second))
+	RunRecordsScript.record_run_end(_run(100.0, 2, 10))
+	assert(RunRecordsScript.last_run_records(RunRecordsScript.load_all()).is_empty(), "rekorsuz koşudan sonra yeni yok")
+	RunRecordsScript.record_victory({"time": 1500.0, "tier": 16, "kills": 50, "solo": true, "char_id": 2})
+	RunRecordsScript.record_run_end({"time": 1500.0, "tier": 16, "kills": 50, "victory": true, "solo": true})
+	var won: Array = RunRecordsScript.last_run_records(RunRecordsScript.load_all())
+	assert(won.has("victory_time") and won.has("tier") and won.has("time") and not won.has("kills"), "zafer koşusu: %s" % str(won))
+	_end()
+
+
 func test_merge_results_dedupes() -> void:
 	var into := {"records": ["time"], "achievements": ["tier_5"]}
 	RunRecordsScript.merge_results(into, {"records": ["time", "tier"], "achievements": ["tier_5", "victory"]})

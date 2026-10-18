@@ -17,6 +17,8 @@ const RunSummaryUI := preload("res://scripts/run_summary_ui.gd")
 const RunRecords := preload("res://scripts/run_records.gd")
 const Achievements := preload("res://scripts/achievements.gd")
 const MetaProgress := preload("res://scripts/meta_progress.gd")
+const DamageStats := preload("res://scripts/damage_stats.gd")
+const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
 const FONT := preload("res://assets/fonts/m5x7.ttf")
 const ICON_DMG := preload("res://assets/ui/stat_mini/damage.png")
 const ICON_SHIELD := preload("res://assets/ui/stat_mini/shield_amount.png")
@@ -24,6 +26,9 @@ const ICON_SHIELD := preload("res://assets/ui/stat_mini/shield_amount.png")
 const W := 1120.0 ## gövde genişliği (pencere 1200 = W + 2 x 40 pay)
 const TILE_H := 112.0
 const ROW_GAP := 6.0
+const MAX_OWN_WEAPONS := 5
+const OWN_HEAD_H := 44.0
+const OWN_GAP := 16.0 ## silah / yetenek kutuları arası
 const COMPACT_FROM := 5 ## bu kadar ve fazla oyuncuda satırlar alçalır (8 oyuncu ekrana sığsın)
 
 ## Renkler Seyyar Satıcı "Klasik Pazar" kitiyle aynı (kullanıcı 2026-10-17: "renk olarak seyyar satıcıya benzesin", ilk sürümün
@@ -131,6 +136,10 @@ var _results: Dictionary = {}
 ## [{name, cname, tex (Texture2D | null), dealt, taken, kills, me}] - en çok hasar veren üstte
 var _team: Array = []
 var _tex_cache: Dictionary = {}
+## Yerel oyuncunun silah / yetenek hasarı (kullanıcı isteği 2026-10-17; veri: DamageStats = balans telemetrisi sayaçları).
+## Silah satırı {key, name, dmg, hits, crit, share}; yetenek satırı {slot, label, name, dmg, heal, shield, crit_pct, share}.
+var _own_weapons: Array = []
+var _own_skills: Array = []
 
 
 func _ready() -> void:
@@ -143,6 +152,7 @@ func _ready() -> void:
 func set_summary(summary: Dictionary, results: Dictionary) -> void:
 	_summary = summary.duplicate()
 	_results = results.duplicate(true)
+	_refresh_own()
 	_update_min_size()
 	queue_redraw()
 
@@ -160,6 +170,17 @@ func set_team(stats_by_peer: Dictionary, char_by_peer: Dictionary, my_peer: int)
 	_team.sort_custom(func(a, b): return float(a["dealt"]) > float(b["dealt"]))
 	_update_min_size()
 	queue_redraw()
+
+
+## Silah ve yetenek satırlarını sayaçlardan yeniden kurar (en çok 5 silah; satılan silahlar da görünür).
+func _refresh_own() -> void:
+	_own_weapons = DamageStats.weapon_rows().slice(0, MAX_OWN_WEAPONS)
+	for w: Dictionary in _own_weapons:
+		w["tex"] = WeaponCatalogScript.icon(str(w["key"])) ## _draw içinde İLK yükleme beyaz çıkar (madde 156) - burada yüklenir
+	_own_skills = DamageStats.skill_rows(GameManager.selected_char_id)
+	for sk: Dictionary in _own_skills: ## yetenek simgeleri de burada yüklenir (aynı beyaz-ikon tuzağı)
+		var ip: String = str(sk.get("icon", ""))
+		sk["tex"] = load(ip) as Texture2D if ip != "" and ResourceLoader.exists(ip) else null
 
 
 func _portrait(path: String) -> Texture2D:
@@ -214,8 +235,31 @@ func _rows_end() -> float:
 	return _table_top() + 36.0 + n * (_row_h() + ROW_GAP)
 
 
+## Silah / yetenek hasarı bölümü (tablonun altı, kazanımların üstü). Hiçbiri yoksa 0.
+func _own_row_h() -> float:
+	return 42.0 if _compact() else 50.0
+
+
+func _own_h() -> float:
+	if _own_weapons.is_empty() and _own_skills.is_empty():
+		return 0.0
+	return OWN_HEAD_H + maxi(_own_weapons.size(), _own_skills.size()) * _own_row_h() + 12.0
+
+
+func _own_top() -> float:
+	return _rows_end() + 8.0
+
+
+func _rewards_top() -> float:
+	var oh := _own_h()
+	return _rows_end() + 8.0 + (oh + 8.0 if oh > 0.0 else 0.0)
+
+
 func _update_min_size() -> void:
 	var h := _rows_end()
+	var oh := _own_h()
+	if oh > 0.0:
+		h += 8.0 + oh
 	var rh := _rewards_h()
 	if rh > 0.0:
 		h += 8.0 + rh
@@ -381,9 +425,11 @@ func _draw() -> void:
 	_divider(40, W - 40, 8)
 	_draw_tiles(32.0)
 	_draw_table(_table_top())
+	if _own_h() > 0.0:
+		_draw_own(_own_top())
 	var rh := _rewards_h()
 	if rh > 0.0:
-		_draw_rewards(Rect2(0, _rows_end() + 8.0, W, rh))
+		_draw_rewards(Rect2(0, _rewards_top(), W, rh))
 
 
 func _tiles() -> Array:
@@ -485,6 +531,85 @@ func _draw_table(y: float) -> void:
 		_txt(ks, Vector2(right - 160, ky), 32, HT.TEXT, HORIZONTAL_ALIGNMENT_RIGHT, 160)
 		_glyph("skull", Vector2(right - _tw(ks, 32) - 26, _mid_y(ky, 32)), 3.0)
 		ry += rh + ROW_GAP
+
+
+## İki kuyu: SİLAH HASARIN (simge + ad + hasar + pay) | YETENEK HASARIN (tuş + yetenek adı + hasar; can/kalkan varsa çubuğun yanında).
+func _draw_own(y: float) -> void:
+	var cw := floorf((W - OWN_GAP) * 0.5)
+	var h := _own_h()
+	_draw_own_col(Rect2(0, y, cw, h), "SİLAH HASARIN", _own_weapons, true)
+	_draw_own_col(Rect2(cw + OWN_GAP, y, cw, h), "YETENEK HASARIN", _own_skills, false)
+
+
+func _draw_own_col(rc: Rect2, title: String, rows: Array, weapons: bool) -> void:
+	_well(rc)
+	_txt(title, Vector2(rc.position.x + 20, rc.position.y + 10), 24, HT.DIM)
+	if rows.is_empty():
+		_txt("Bu oyunda hasar yok", Vector2(rc.position.x + 20, rc.position.y + OWN_HEAD_H + 6), 24, HT.DIM)
+		return
+	var rh := _own_row_h()
+	var top_dmg := 1.0
+	for r in rows:
+		top_dmg = maxf(top_dmg, float(r["dmg"]))
+	var x := rc.position.x
+	var ry := rc.position.y + OWN_HEAD_H
+	for r: Dictionary in rows:
+		var icon_sz := rh - 8.0
+		var ix := x + 18.0
+		if weapons:
+			var tex: Texture2D = r.get("tex")
+			if tex:
+				draw_texture_rect(tex, Rect2(ix, ry + 2.0, icon_sz, icon_sz), false)
+			_txt(str(r["name"]), Vector2(ix + icon_sz + 10, ry + 1), 24, HT.TEXT)
+		else:
+			var chip := Rect2(ix, ry + 2.0, icon_sz, icon_sz)
+			_frame(chip, HT.STRIPE, HT.ACCENT, 3.0)
+			var stex: Texture2D = r.get("tex")
+			if stex:
+				draw_texture_rect(stex, chip.grow(-3.0), false)
+			else:
+				_txt(str(r["label"]), Vector2(ix, ry + 2.0 + roundf((icon_sz - 24.0) * 0.5)), 24, HT.ACCENT, HORIZONTAL_ALIGNMENT_CENTER, icon_sz)
+			## tuş harfi adın önünde (simge varken rozet yerine yazı)
+			var key_w := 0.0
+			if stex:
+				var kt := str(r["label"])
+				_txt(kt, Vector2(ix + icon_sz + 14, ry + 1), 24, HT.ACCENT)
+				key_w = _tw(kt, 24) + 10.0
+			_txt(str(r["name"]).replace(" (Set 1/2)", ""), Vector2(ix + icon_sz + 14 + key_w, ry + 1), 24, HT.TEXT)
+		var tx := ix + icon_sz + (10.0 if weapons else 14.0)
+		var right := rc.end.x - 18.0
+		var dmg := float(r["dmg"])
+		if dmg > 0.0:
+			var vs := DamageStats.fmt(dmg)
+			_txt(vs, Vector2(right - 200.0, ry - 2), 32, DMG, HORIZONTAL_ALIGNMENT_RIGHT, 200)
+			var pct := "%%%d" % int(round(float(r["share"]) * 100.0))
+			var nm_w := _tw(str(r["name"]).replace(" (Set 1/2)", ""), 24)
+			if not weapons:
+				nm_w += _tw(str(r["label"]), 24) + 10.0 if r.get("tex") != null else 0.0
+			var px := tx + nm_w + 12.0
+			if weapons and int(r.get("tier", 0)) > 0: ## silah seviyesi: romen rakamı, kontür renginde (yeşil/mavi/mor/mor/kırmızı)
+				var t := int(r["tier"])
+				var tcol: Color = DarkKit.ENCH_COL[t] if t >= 2 else HT.DIM
+				var rs: String = DarkKit.ROMAN[t - 1]
+				_txt(rs, Vector2(px, ry + 1), 24, tcol)
+				px += _tw(rs, 24) + 12.0
+			_txt(pct, Vector2(px, ry + 1), 24, HT.DIM)
+		var heal := float(r.get("heal", 0.0))
+		var shield := float(r.get("shield", 0.0))
+		var has_gain := heal > 0.0 or shield > 0.0
+		var by := ry + rh - 18.0
+		var bw := right - tx - (230.0 if has_gain else 0.0)
+		if dmg > 0.0:
+			_bar(Rect2(tx, by, maxf(bw, 40.0), 12), dmg / top_dmg, DMG)
+		if has_gain:
+			var gx := tx + (bw + 12.0 if dmg > 0.0 else 0.0)
+			if heal > 0.0:
+				var hs := "+%s can" % DamageStats.fmt(heal)
+				_txt(hs, Vector2(gx, by - 8.0), 24, HT.GOOD)
+				gx += _tw(hs, 24) + 14.0
+			if shield > 0.0:
+				_txt("+%s kalkan" % DamageStats.fmt(shield), Vector2(gx, by - 8.0), 24, TANK)
+		ry += rh
 
 
 func _draw_rewards(rw: Rect2) -> void:

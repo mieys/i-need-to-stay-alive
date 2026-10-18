@@ -106,6 +106,7 @@ const TAGGED_SCRIPTS: Array = [
 	"res://scripts/skeleton_pet.gd", "res://scripts/necro_skull.gd", "res://scripts/korsan_bomb.gd", "res://scripts/fx_buyucu_tornado.gd",
 	"res://scripts/fx_papagan_feather_storm.gd", "res://scripts/totem_attack.gd", "res://scripts/totem_base.gd", "res://scripts/oakley_vine.gd",
 	"res://scripts/enchant_area.gd", "res://scripts/enchant_behavior.gd", "res://scripts/enchants/hunters_eye.gd",
+	"res://scripts/oakley_tree.gd",
 ]
 
 
@@ -287,3 +288,92 @@ func test_host_flushes_own_record_while_room_still_open() -> void:
 	assert(active_at_call, "kayıt oda HÂLÂ açıkken (is_multiplayer_active true) alınmalı")
 	assert(inactive_calls == 1, "çok oyunculu değilse host yolu dokunmaz (%d)" % inactive_calls)
 	assert(client_calls == 1, "istemci bu yoldan host kaydı yazmaz (%d)" % client_calls)
+
+
+## ---- Madde 269 (2026-10-18): sonsuz kat kırılımı, bitiş statları, kart seçimleri ----
+
+## Kayıtta okunan alanları taşıyan sahte oyuncu (gerçek player.gd'yi yüklemeden).
+class StatsPlayer extends Node:
+	var match_damage_dealt: float = 1000.0
+	var match_damage_taken: float = 250.0
+	var damage_bonus: float = 321.0
+	var max_health: float = 9280.0
+	var crit_chance_bonus: float = 0.35
+	var crit_damage_bonus: float = 0.6
+	var exp_gain_percent: float = 2.05
+	var luck: float = 41.0
+	var heal_regen_card_bonus: float = 10.0
+	var item_health_regen: float = 81.0
+	var upgrade_log: Array = [["damage", 1], ["damage", 3], ["damage", 3], ["max_health", 2], ["luck", 9]]
+
+	func get_attack_speed_bonus_percent() -> float:
+		return 600.0
+
+	func get_attack_speed_overflow_percent() -> float:
+		return 42.0
+
+
+func test_note_layer_records_once_per_layer_and_ignores_non_endless() -> void:
+	_begin()
+	var p := StatsPlayer.new()
+	add_child(p)
+	BalanceLogScript.note_layer(0, p) ## sonsuz değil: yok sayılır
+	BalanceLogScript.note_layer(-3, p)
+	BalanceLogScript.note_layer(2, p)
+	p.damage_bonus = 999.0
+	BalanceLogScript.note_layer(2, p) ## aynı kat ikinci kez: ilk anlık görüntü korunur
+	var rec: Dictionary = BalanceLogScript.build_record(p, _summary(), "end")
+	var layers: Dictionary = rec["layers"]
+	assert(layers.keys() == ["2"], "yalnız kat 2 kaydı beklenir: %s" % str(layers.keys()))
+	var row: Array = layers["2"]
+	assert(row.size() == 9, "satır 9 alan: %d" % row.size())
+	assert(is_equal_approx(float(row[5]), 321.0), "ilk anlık görüntüdeki saldırı gücü korunmalı: %s" % str(row[5]))
+	assert(is_equal_approx(float(row[6]), 9280.0) and is_equal_approx(float(row[7]), 600.0), "can ve saldırı hızı: %s" % str(row))
+	p.free()
+	_end()
+
+
+func test_layers_are_cleared_by_reset_and_survive_json() -> void:
+	_begin()
+	BalanceLogScript.note_layer(1, null)
+	var rec: Dictionary = BalanceLogScript.build_record(null, _summary(), "end")
+	assert((rec["layers"] as Dictionary).has("1"), "oyuncusuz da kat satırı yazılır")
+	var back: Variant = JSON.parse_string(JSON.stringify(rec))
+	assert(back is Dictionary and (back["layers"] as Dictionary).has("1"), "JSON gidiş-dönüşünde kat korunmalı")
+	BalanceLogScript.reset()
+	assert((BalanceLogScript.build_record(null, _summary(), "end")["layers"] as Dictionary).is_empty(), "reset katları temizler")
+	_end()
+
+
+func test_player_stats_and_cards_in_record() -> void:
+	_begin()
+	var p := StatsPlayer.new()
+	add_child(p)
+	var rec: Dictionary = BalanceLogScript.build_record(p, _summary(), "end")
+	var st: Dictionary = rec["stats"]
+	assert(is_equal_approx(float(st["ap"]), 321.0) and is_equal_approx(float(st["hp"]), 9280.0), "ap/hp: %s" % str(st))
+	assert(is_equal_approx(float(st["atk"]), 600.0) and is_equal_approx(float(st["atk_over"]), 42.0), "saldırı hızı: %s" % str(st))
+	assert(is_equal_approx(float(st["regen"]), 91.0), "yenilenme = kart + eşya: %s" % str(st["regen"]))
+	assert(is_equal_approx(float(st["exp"]), 2.05) and is_equal_approx(float(st["exp_eff"]), GameManager.EXP_GAIN_CAP), "ham ve etkin XP bonusu ayrı: %s" % str(st))
+	assert(is_equal_approx(float(st["dodge"]), 0.0), "oyuncuda olmayan alan 0")
+	var cards: Dictionary = rec["cards"]
+	assert(cards["damage"] == [1, 0, 2, 0], "damage kartları kademe sayımı: %s" % str(cards["damage"]))
+	assert(cards["max_health"] == [0, 1, 0, 0] and cards["luck"] == [0, 0, 0, 1], "diğer kartlar (kademe 1-4 dışı 4'e kısılır): %s" % str(cards))
+	assert((BalanceLogScript.build_record(null, _summary(), "end")["stats"] as Dictionary).is_empty(), "oyuncusuz stats boş")
+	assert((BalanceLogScript.build_record(null, _summary(), "end")["cards"] as Dictionary).is_empty(), "oyuncusuz cards boş")
+	p.free()
+	_end()
+
+
+func test_record_with_new_fields_stays_under_the_host_size_limit() -> void:
+	_begin()
+	var p := StatsPlayer.new()
+	for i in 200:
+		p.upgrade_log.append(["card_%d" % (i % 30), 1 + (i % 4)])
+	add_child(p)
+	for layer in range(1, 41):
+		BalanceLogScript.note_layer(layer, p)
+	var json: String = JSON.stringify(BalanceLogScript.build_record(p, _summary(), "end"))
+	assert(json.length() < BalanceLogScript.MAX_RECORD_CHARS - 6000, "40 katlı kayıt (eşyasız) host sınırına yakın olmamalı: %d" % json.length())
+	p.free()
+	_end()
