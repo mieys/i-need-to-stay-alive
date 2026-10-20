@@ -20,6 +20,8 @@ extends RefCounted
 ##                                1 Delilik: değen yaratık 4 sn delirir, en yakın yaratığa saldırır (boss + elit hariç)
 ##                                2 Don: 2 sn dondurur + %100 hasar          3 Patlama: alan açmaz, %200 hasar
 ##                                4 Şifa: üstündeki müttefikler saniyede %20  5 Korku: 2 sn korkutur + %100 hasar
+##                                6 Kalkan: üstündeki müttefikler saniyede saldırı gücünün %25'i kadar KALKAN yeniler
+##                                          (Şifa'nın aynı mantığı, kalkan için; 2026-10-20 kullanıcı isteği)
 ##                              Kalkan bedeli: ulti tarifesinin 1/5'i ATIŞ BAŞINA (5 atış = bir ulti; metinde yoktu).
 ## Evrim kartları scripts/skill_evolutions.gd DEFS[15]; etkileri player.gd'de has_evo("cadi_*") - sayılar aşağıdaki EVO_* sabitleri.
 
@@ -49,23 +51,28 @@ const Q_DAMAGE_RATIO := 1.2
 const Q_HIT_INTERVAL := 1.0
 const Q_SCAN_INTERVAL := 0.25
 const SMOKE_LIFE := 6.0 ## 2026-10-13 kullanıcı: 3 -> 6 sn
-## Yürürken bu aralıkla yeni bulut; yerinde dururken (son buluttan SMOKE_MIN_STEP'ten az uzaklaşmışken) SMOKE_IDLE_INTERVAL.
-const SMOKE_DROP_INTERVAL := 0.4
+## Yerinde dururken (son buluttan SMOKE_MIN_STEP'ten az uzaklaşmışken) bu aralıkla; yürürken SMOKE_V_DROP_INTERVAL.
 const SMOKE_IDLE_INTERVAL := 1.2
 const SMOKE_MIN_STEP := 14.0
 ## Bulutun zemindeki izi (dünya birimi; sayfadaki kütlenin tabanı) - hasar/yavaşlatma bu elipsin içinde.
 const SMOKE_RX := 32.0
 const SMOKE_RY := 17.0
-## Cadı yukarı/aşağı yürürken bırakılan DİKEY bulut (kullanıcı 2026-10-13: "yukarı ve aşağı pozisyonda kötü oluyor, ona
-## göre bir uyumu yok"): yatay bulut 64 geniş x 34 derin - yan yana kesintisiz şerit olur ama alt alta (33 birim arayla)
-## dizilince geniş kaburgalar gibi durur, izler de ancak birbirine değer. Dikey bulut dar + derin: sütun kesintisiz.
-## Alan neredeyse aynı (pi x 24 x 22 = 1659, yatay 1709). Ayrı klipler (intro_v/loop_v/outro_v) ve orijin (52, 46).
+## DİKEY bulut (kullanıcı 2026-10-13: "yukarı ve aşağı pozisyonda kötü oluyor, ona göre bir uyumu yok"; 2026-10-20: "yukarı
+## aşağı giderkenki gaz çok daha iyi, o olsun hep" -> artık HER yönde bu bulut, bkz. smoke_is_vertical): eski yatay bulut
+## 64 geniş x 34 derin - yan yana şerit olurdu ama hızlanınca aralarda boşluk kalıyor, alt alta geniş kaburgalar gibi duruyordu.
+## Dikey bulut dar + derin: hem sütun hem şerit kesintisiz. Alan neredeyse aynı (pi x 24 x 22 = 1659, yatay 1709).
+## Ayrı klipler (intro_v/loop_v/outro_v) ve orijin (52, 46).
 const SMOKE_V_RX := 24.0
 const SMOKE_V_RY := 22.0
 const SMOKE_V_CENTER_ART := Vector2(0, 8)
-## Dikey yürüyüşte bulutlar daha sık bırakılır (25 birimde bir; yatayda 33): gerçek çizicide 0,4 sn'de cadıyla sütun
-## arasında boşluk kalıyor, bulutlar tek tek seçiliyordu. Hasar bulut sayısından bağımsız (saniyede BİR), bedel aynı.
+## Yürürken bulutlar 0,3 sn'de bir (25 birimde bir): gerçek çizicide 0,4 sn'de cadıyla sütun arasında boşluk kalıyor,
+## bulutlar tek tek seçiliyordu. Hasar bulut sayısından bağımsız (saniyede BİR), bedel aynı.
 const SMOKE_V_DROP_INTERVAL := 0.3
+## Hızlanınca (hareket hızı kartı/eşyası) 0,3 sn'de gidilen yol bulut genişliğini (48) aşıp boşluk bırakıyordu: son buluttan
+## bu kadar uzaklaşılınca süre beklenmeden yeni bulut (normal hızda 0,3 sn'de zaten ~25 birim gidilir -> görünüş aynı).
+## Çok hızlı koşuda bulut sıklığı SMOKE_MIN_DROP_TIME ile sınırlı (ağ mesajı + ekstra düğüm yağmuru olmasın).
+const SMOKE_MAX_GAP := 26.0
+const SMOKE_MIN_DROP_TIME := 0.1
 ## Dikey bulutların her biri bu kadar sağa/sola kayık çizilir (sadece görsel; sütun ip gibi dizilmesin).
 const SMOKE_V_JITTER_ART := 4.0
 ## 2026-10-13 kullanıcı: duman yaratıkların (ve oyuncuların) ÜSTÜNDE, her bulut ayrı %50 saydam (eskiden zeminde, %80).
@@ -159,14 +166,16 @@ const POTION_ICE := 1
 const POTION_BOOM := 2
 const POTION_HEAL := 3
 const POTION_FEAR := 4
-const POTION_COUNT := 5
-const POTION_NAMES := ["Delilik İksiri", "Don İksiri", "Patlama İksiri", "Şifa İksiri", "Korku İksiri"]
+const POTION_SHIELD := 5
+const POTION_COUNT := 6
+const POTION_NAMES := ["Delilik İksiri", "Don İksiri", "Patlama İksiri", "Şifa İksiri", "Korku İksiri", "Kalkan İksiri"]
 const POTION_DESCS := [
 	"Değen yaratıklar 4 saniye delirir ve en yakınındaki yaratığa saldırır (boss ve elitler etkilenmez).",
 	"Değen yaratıkları 2 saniye dondurur ve saldırı gücünün %100'ü kadar hasar verir.",
 	"Patlayarak yok olur ve çevresine saldırı gücünün %200'ü kadar hasar verir.",
 	"Üstünde duran müttefikler her saniye saldırı gücünün %20'si kadar can yeniler.",
 	"Değen yaratıkları 2 saniye korkutur ve saldırı gücünün %100'ü kadar hasar verir.",
+	"Üstünde duran müttefikler her saniye saldırı gücünün %25'i kadar mana kalkanı yeniler.",
 ]
 const ZONE_DURATION := 6.0 ## 4 -> 6 sn (kullanıcı isteği 2026-10-14: "iksirler 2 saniye daha uzun sürsün")
 ## Alanın zemindeki izi (dünya birimi): sayfadaki 58x30 px elips.
@@ -175,8 +184,8 @@ const ZONE_RY := 30.0 * WORLD_TEXEL
 const ZONE_SCAN_INTERVAL := 0.2
 ## Sayfa karesinde alan merkezi karenin ortasına göre (sanat pikseli): 160x108, merkez (80, 70).
 const ZONE_CENTER_ART := Vector2(0, 16)
-const ZONE_SHEETS := {POTION_MAD: "zone_mad", POTION_ICE: "zone_ice", POTION_HEAL: "zone_heal", POTION_FEAR: "zone_fear"}
-const ZONE_ALPHA := [0.9, 0.9, 1.0, 1.0, 0.88]
+const ZONE_SHEETS := {POTION_MAD: "zone_mad", POTION_ICE: "zone_ice", POTION_HEAL: "zone_heal", POTION_FEAR: "zone_fear", POTION_SHIELD: "zone_shield"}
+const ZONE_ALPHA := [0.9, 0.9, 1.0, 1.0, 0.88, 1.0]
 const ZONE_INTRO_TIME := 0.5
 const ZONE_OUTRO_TIME := 0.6
 const MAD_DURATION := 4.0
@@ -190,6 +199,7 @@ const BOOM_RADIUS := 60.0
 const BOOM_CENTER_ART := Vector2(0, 6)
 const HEAL_RATIO := 0.2
 const HEAL_TICK := 1.0
+const SHIELD_RATIO := 0.25 ## Kalkan İksiri: saniyede saldırı gücünün %25'i kadar kalkan (HEAL_TICK ile aynı saniyelik tik)
 const FEAR_TIME := 2.0
 const FEAR_DAMAGE_RATIO := 1.0
 const EVO_ZONE_DURATION_BONUS := 1.5
@@ -200,7 +210,7 @@ const EVO_ZONE_SIZE_MULT := 1.4
 const FX_DIR := "res://assets/fx/cadi/"
 const R_ICONS := [
 	"res://assets/skills/cadi_iksir_1_icon.png", "res://assets/skills/cadi_iksir_2_icon.png", "res://assets/skills/cadi_iksir_3_icon.png",
-	"res://assets/skills/cadi_iksir_4_icon.png", "res://assets/skills/cadi_iksir_5_icon.png",
+	"res://assets/skills/cadi_iksir_4_icon.png", "res://assets/skills/cadi_iksir_5_icon.png", "res://assets/skills/cadi_iksir_6_icon.png",
 ]
 const SmokeScript := "res://scripts/cadi_smoke.gd"
 const ZoneScript := "res://scripts/cadi_zone.gd"
@@ -314,9 +324,10 @@ static func potion_drop_art(facing: String) -> Vector2:
 	return POTION_DROP_DOWN_ART
 
 
-## Bu bakışta bırakılan bulut dikey mi (dar + derin) - bkz. SMOKE_V_RX.
-static func smoke_is_vertical(facing: String) -> bool:
-	return facing == "up" or facing == "down"
+## Bırakılan bulut dikey mi (dar + derin) - bkz. SMOKE_V_RX. 2026-10-20'den beri HER bakışta (yan yürüyüşte yatay bulut
+## hızlanınca boşluk bırakıyordu); yatay klipler/sabitler yalnız `vert` bayrağı yanlış gelen eski paketler için duruyor.
+static func smoke_is_vertical(_facing: String) -> bool:
+	return true
 
 
 static func _feet_world() -> Vector2:

@@ -139,6 +139,7 @@ var _home_position: Vector2 = Vector2.ZERO
 var _interact_area: Area2D = null
 var _prompt_layer: CanvasLayer = null
 var _prompt_label: Label = null
+var _prompt_text: String = ""
 var _player_near: bool = false
 var _shop_screen: CanvasLayer = null
 
@@ -561,7 +562,8 @@ func _create_interaction(pos: Vector2) -> void:
 	_prompt_layer.name = "MerchantPromptLayer"
 	_prompt_layer.layer = 50
 	_prompt_label = Label.new()
-	_prompt_label.text = "Seyyar Satıcı ile konuşmak için %s tuşuna bas" % GameManager.get_action_key_label("interact")
+	_prompt_text = "Seyyar Satıcı ile konuşmak için %s tuşuna bas" % GameManager.get_action_key_label("interact")
+	_prompt_label.text = _prompt_text
 	_prompt_label.add_to_group(&"interact_prompt") ## telefonda ETKİLEŞİM düğmesi bu uyarı görünürken çıkar (touch_controls.gd)
 	_prompt_label.add_theme_font_size_override("font_size", 24)
 	_prompt_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
@@ -620,6 +622,7 @@ func _process_interaction() -> void:
 	if _shop_screen and is_instance_valid(_shop_screen):
 		_hide_prompt()
 		return
+	_prompt_label.text = _prompt_text
 	_prompt_label.visible = true
 	var f_just_pressed: bool = Input.is_action_just_pressed("interact") and not bool(player.get("is_chat_typing"))
 	if f_just_pressed:

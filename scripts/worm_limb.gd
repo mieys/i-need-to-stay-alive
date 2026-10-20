@@ -36,7 +36,8 @@ var _aim: Vector2 = Vector2.DOWN
 var _warn_t: float = 0.0 ## >0: savurma uyarısı (kırmızı parlama) sürüyor
 var _base_tint: Color = Color.WHITE
 var _retreating_visual: bool = false
-var _dormant_set: bool = false ## C++ yapay zekâsı kapatıldı mı (bkz. WormBossMath FACE_HOLD notu)
+var _face_lock_api: int = -1 ## C++ kütüphanesi set_face_lock biliyor mu (-1 henüz bakılmadı; eski kütüphane = 0)
+var _face_dir: Vector2 = Vector2.DOWN ## son uygulanan bakış yönü (geç katılana gider)
 var _face_row: int = -1 ## son uygulanan bakış satırı (-1 = henüz yok)
 var _face_cd: float = 0.0 ## >0: yeni bakış yönü kabul edilmez
 
@@ -60,6 +61,8 @@ func send_catchup_to_peer(peer_id: int) -> void:
 	if net_id <= 0 or is_dead:
 		return
 	NetworkManager.broadcast_enemy_vfx.rpc_id(peer_id, net_id, "worm_setup", {"kind": kind})
+	if _face_row != -1:
+		NetworkManager.broadcast_enemy_vfx.rpc_id(peer_id, net_id, "worm_face", {"dir": _face_dir}) ## yön artık yalnız betikten: geç katılan bir sonraki değişimi beklemesin
 	if _pose_override != MathScript.POSE_NONE:
 		NetworkManager.broadcast_enemy_vfx.rpc_id(peer_id, net_id, "worm_pose", {"pose": _pose_override})
 
@@ -103,12 +106,18 @@ func _ew_tick(delta: float) -> void:
 	super._ew_tick(delta)
 
 
-## Uzvun bakışını SADECE bu betik belirler: C++ yapay zekâsı uykuya alınır (hedef seçmez, yön yazmaz). Slot yoksa (test/istemci kukla) sessizce geçer.
+## Uzvun bakışını SADECE bu betik belirler: C++ yapay zekâsı uykuya alınır (hedef seçmez) VE yön KİLİTLENİR (yapay zekâ yön yazamaz). Uyku tek başına yetmiyordu (2026-10-20): C++
+## `apply_overrides` uykudaki yuvaya da "Ağacı Koru" ağacını / kışkırtanı veriyor, korku yönü her karede yazıyor -> uzuv bir an oyuncuya (betik) bir an ağaca (C++) dönüp titriyordu.
+## Her tikte DURUM kontrol edilir (bir kez yazıp bırakmak yeniden kayıt / dışarıdan uyandırmada kilidi kaybediyordu). Slot yoksa (test/istemci kukla) sessizce geçer.
 func _sleep_cpp_ai() -> void:
-	if _dormant_set or _ew_slot < 0 or _ew_world == null:
+	if _ew_slot < 0 or _ew_world == null:
 		return
-	_dormant_set = true
-	_ew_world.set_dormant(_ew_slot, true)
+	if not _ew_world.is_dormant(_ew_slot):
+		_ew_world.set_dormant(_ew_slot, true)
+	if _face_lock_api < 0:
+		_face_lock_api = 1 if _ew_world.has_method("set_face_lock") else 0
+	if _face_lock_api == 1 and not _ew_world.is_face_locked(_ew_slot):
+		_ew_world.set_face_lock(_ew_slot, true)
 
 
 ## Bakış yönü: satır değişimi FACE_HOLD ile seyreltilir + eksen histerezisi (face_row); `force` = saldırı nişanı (hemen). Satır değişince istemcilere de "worm_face" gider.
@@ -121,9 +130,10 @@ func _face_toward(dir: Vector2, force: bool = false) -> void:
 	if _face_cd > 0.0 and _face_row != -1 and not force:
 		return
 	_face_row = row
+	_face_dir = MathScript.row_dir(row) ## kanonik yön: C++ histerezissiz hesabı betiğin seçtiği satırdan ayrılmasın (köşegen bandı)
 	_face_cd = MathScript.FACE_HOLD
-	_update_facing(dir)
-	emit_ability_vfx("worm_face", {"dir": dir})
+	_update_facing(_face_dir)
+	emit_ability_vfx("worm_face", {"dir": _face_dir})
 
 
 func _limb_tick(delta: float) -> void:

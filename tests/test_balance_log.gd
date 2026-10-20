@@ -176,6 +176,8 @@ func test_gold_and_assist_recorded() -> void:
 	BalanceLogScript.on_kill_gold(2, 2) ## destek asisti
 	BalanceLogScript.on_kill_gold(2, 2)
 	BalanceLogScript.on_kill_gold(1, 3) ## ikisi
+	BalanceLogScript.on_kill_gold(3, 4) ## takım payı (madde 308)
+	BalanceLogScript.on_kill_gold(2, 4)
 	BalanceLogScript.on_kill_gold(0, 1) ## 0 altın sayılmaz
 	BalanceLogScript.note_support_sent()
 	BalanceLogScript.note_support_sent()
@@ -183,6 +185,7 @@ func test_gold_and_assist_recorded() -> void:
 	assert(rec["gold_kill"] == [2, 8], "öldürme altını [adet, altın]: %s" % str(rec["gold_kill"]))
 	var ga: Dictionary = rec["gold_assist"]
 	assert(ga["dmg"] == [1, 4] and ga["sup"] == [2, 4] and ga["both"] == [1, 1], "asist türleri: %s" % str(ga))
+	assert(ga["team"] == [2, 5], "takım payı [adet, altın]: %s" % str(ga))
 	assert(int(rec["sup_sent"]) == 2, "destek sayısı")
 	BalanceLogScript.reset()
 	var rec2: Dictionary = BalanceLogScript.build_record(null, _summary(), "end")

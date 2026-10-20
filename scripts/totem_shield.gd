@@ -50,6 +50,7 @@ func _init() -> void:
 ## slow/push enemy.gd'nin host-yönlendirmeli çağrılarıdır (istemci kasterden de çalışır).
 func _on_area_enemy_tick(enemy: Node2D) -> void:
 	if _caster_has_evo("shaman_e3") and enemy.has_method("apply_slow"):
+		BalanceLogScript.on_cc("s:shaman_kalkan_alan", "slow", enemy, EVO_SLOW_TIME)
 		enemy.call("apply_slow", EVO_SLOW_PERCENT, EVO_SLOW_TIME)
 	if _caster_has_evo("shaman_ef") and enemy.has_method("apply_skill_push"):
 		var away: Vector2 = enemy.global_position - global_position
@@ -126,7 +127,7 @@ func _tick() -> void:
 	if "item_shield_max" in caster and "item_shield_hp" in caster:
 		var self_amount: float = (float(caster.item_shield_max) * SELF_PERCENT + flat_bonus) * evo_shield_mult
 		if caster.has_method("heal_shield"):
-			caster.heal_shield(self_amount)
+			caster.heal_shield(self_amount, true, true, &"s:shaman_kalkan_totemi")
 
 	## Etraftaki müttefikler - Oakley'nin pasif can yenileme döngüsüyle
 	## (player.gd _process_healer_shield_tick benzeri) AYNI "player_ally"
@@ -142,4 +143,8 @@ func _tick() -> void:
 			continue
 		var ally_amount: float = (float(ally.item_shield_max) * SELF_PERCENT + flat_bonus) * evo_shield_mult
 		if caster.has_method("_apply_shield_heal_to_ally"):
-			caster._apply_shield_heal_to_ally(ally, ally_amount)
+			caster._apply_shield_heal_to_ally(ally, ally_amount, &"s:shaman_kalkan_totemi")
+
+
+func _area_balance_tag() -> StringName:
+	return &"s:shaman_kalkan_alan"

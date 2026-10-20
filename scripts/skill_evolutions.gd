@@ -118,6 +118,30 @@ const DEFS := {
 			{"id": "melek_rf", "name": "Yeniden Doğuş", "desc": "Kutsal Korku'yu kullandığında diğer yeteneklerinin (Can Basma ve Kalkan Yenileme) bekleme süresi anında sıfırlanır.", "final": true},
 		],
 	},
+	## ---------------------------------------------------------------- Oakley (2026-10-21, madde 348)
+	## Q = Arı Sürüsü (33), E = Sarmaşıklar (10, roster 2'ye özel), R = Hayat Ağacı (39). Etkiler player.gd EVO_OAKLEY_* sabitleri +
+	## fx_oakley_bee_guard.gd / oakley_vine.gd / oakley_tree.gd / enemy.gd (Salgın Zehir). "oakley_*" kimlikleri Melek'inkilerle ("melek_*") karışmaz.
+	2: {
+		"skill": [
+			{"id": "oakley_q1", "name": "Çabuk Kovan", "desc": "Arı Sürüsü'nün bekleme süresi %25 azalır."},
+			{"id": "oakley_q2", "name": "Öfkeli Sürü", "desc": "Arılar aynı yaratığı 1 saniye yerine 0,7 saniyede bir etkiler; zehir yükleri ve geri itmeler sıklaşır."},
+			{"id": "oakley_q3", "name": "Geniş Halka", "desc": "Arı halkasının yarıçapı %30 büyür ve sürü 3 saniye daha uzun kalır."},
+			{"id": "oakley_q4", "name": "Çiçek Tozu", "desc": "Arı zehri taşıyan bir yaratık ölürse %10 ihtimalle yerine bir çiçek düşer (her sürü için en fazla 3 çiçek)."},
+			{"id": "oakley_qf", "name": "Salgın Zehir", "desc": "Arı zehri taşıyan bir yaratık ölünce taşıdığı tüm zehir yükleri 150 birim çevresindeki yaratıklara geçer.", "final": true},
+		],
+		"skill2": [
+			{"id": "oakley_e1", "name": "Çabuk Filiz", "desc": "Sarmaşıklar'ın bekleme süresi %25 azalır."},
+			{"id": "oakley_e2", "name": "Dikenli Sarmaşık", "desc": "Sarmaşıkların isabet hasarı saldırı gücünün %60'ından %90'ına çıkar."},
+			{"id": "oakley_e3", "name": "Çok Filiz", "desc": "Sarmaşık sayısı 3'ten 5'e çıkar."},
+			{"id": "oakley_e4", "name": "Sıkı Dolanma", "desc": "Sarmaşıkların yere sabitleme süresi 4 saniyeden 6 saniyeye çıkar; bosslardaki yavaşlatma %30'dan %50'ye çıkar."},
+			{"id": "oakley_ef", "name": "Kök Hapishanesi", "desc": "Sarmaşıklarla sabitlenen (bosslarda yavaşlatılan) yaratıklar bu süre boyunca tüm kaynaklardan %25 fazla hasar alır.", "final": true},
+		],
+		"skill3": [
+			{"id": "oakley_r1", "name": "Kadim Gövde", "desc": "Hayat Ağacı 12 yerine 16 saniye ayakta kalır ve gölge alanı %25 büyür."},
+			{"id": "oakley_r2", "name": "Bereketli Meyve", "desc": "Ağacın meyvelerinin verdiği can ve mana kalkanı %40 artar; ağaç solarken 3 yerine 6 çiçek bırakır."},
+			{"id": "oakley_rf", "name": "Kadim Diriliş", "desc": "Ağacın gölgesinde yere düşen bir dost anında %50 canla ayağa kalkar (her ağaçta bir kez).", "final": true},
+		],
+	},
 	## ---------------------------------------------------------------- Talon
 	1: {
 		"skill": [
@@ -145,7 +169,7 @@ const DEFS := {
 		"skill": [
 			{"id": "elara_q1", "name": "Rüzgar Adımı", "desc": "Sıvışma aktifken %50 sıvışma kazanırsın (sıvışma sınırını aşabilir)."},
 			{"id": "elara_q2", "name": "Rüzgar Koşusu", "desc": "Sıvışma'nın hareket hızı bonusu %60'a çıkar."},
-			{"id": "elara_q3", "name": "Akışta Kal", "desc": "Bir yaratığa her hasar verdiğinde Sıvışma'nın kalan bekleme süresi %2 azalır."},
+			{"id": "elara_q3", "name": "Akışta Kal", "desc": "Bir yaratığa hasar verdiğinde (saniyede en çok 4 kez) Sıvışma'nın kalan bekleme süresi %2 azalır."},
 			{"id": "elara_q4", "name": "Atılım", "desc": "Sıvışma'yı kullandığında kısa bir mesafe ileri atılırsın."},
 			{"id": "elara_qf", "name": "Kaybolan Gölge", "desc": "Sıvışma'yı her kullandığında 1,5 saniyeliğine görünmez olursun.", "final": true},
 		],

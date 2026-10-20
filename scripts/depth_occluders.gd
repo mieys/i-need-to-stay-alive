@@ -96,6 +96,8 @@ var _tree_pairs: Array = [] ## [asıl materyal, kopya materyal]
 var _image_cache: Dictionary = {}
 var _rows_cache: Dictionary = {}
 var _last_chars: Array[Vector4] = []
+var _last_front: Array[Vector4] = []
+var _last_below := PackedFloat32Array()
 var _main: Node = null ## harita kökünün ebeveyni (Main): yaratık ayağı için _creature_foot_y
 var _coarse: Dictionary = {} ## Vector2i(kaba hücre) -> o hücreye değen nesne hücrelerinin EN BÜYÜK kök y'si (sadece setup(); iç mekanda yok)
 var _near: Dictionary = {} ## Vector2i(kaba hücre) -> true: bir nesne hücresine NEAR_CELLS kaba hücre içinde olan her hücre (ucuz ön eleme: açık arazideki yaratık tek sorguda elenir)
@@ -133,7 +135,11 @@ func setup(harita: Node) -> void:
 ## İç mekanlar (demirci, ev içi, seyyar satıcı arabası): kökün altındaki adı verilen mobilya/nesne katmanları atlas komşuluğuyla nesne sayılır (maden/çalı
 ## ile aynı kural), kopyalar iç mekan kökünün altına konur (kök gizlenirse kopyalar da gizlenir). Kök KONUMLANDIKTAN SONRA çağrılmalı (kökler dünya
 ## koordinatıyla hesaplanır). Zemin/duvar katmanlarını vermeyin.
-func setup_interior(interior_root: Node, layer_names: Array) -> void:
+##
+## masked_tile_sets (katman adı -> TileSet): o katmanın ön kopyası asıl karolarla DEĞİL bu TileSet'le çizilir (aynı kaynak/atlas koordinatları, yalnız
+## bazı pikseller saydam). Kökler asıl katmandan hesaplanır. Madde 327: açılıp kapanan kapının SABİT çerçevesi (üst kiriş + yan sütunlar) karakteri örter,
+## açılan aralık (kanat + arkasındaki zemin pikseli) örtmez - kapı karesi tamamen opak olduğundan karolarıyla öne alınsa aralıktaki karakter de gizlenirdi.
+func setup_interior(interior_root: Node, layer_names: Array, masked_tile_sets: Dictionary = {}) -> void:
 	if interior_root == null:
 		return
 	_begin(interior_root)
@@ -141,6 +147,73 @@ func setup_interior(interior_root: Node, layer_names: Array) -> void:
 		var layer := interior_root.get_node_or_null(layer_name) as TileMapLayer
 		if layer != null and layer.tile_set != null and not layer.get_used_cells().is_empty():
 			_setup_object_layer(layer)
+			if not fronts.is_empty() and fronts[-1]["layer"] == layer:
+				_split_material_tiles(fronts[-1])
+	for layer_name: String in masked_tile_sets:
+		var layer := interior_root.get_node_or_null(layer_name) as TileMapLayer
+		if layer != null and layer.tile_set != null and not layer.get_used_cells().is_empty():
+			_setup_object_layer(layer)
+			if not fronts.is_empty() and fronts[-1]["layer"] == layer:
+				(fronts[-1]["front"] as TileMapLayer).tile_set = masked_tile_sets[layer_name]
+
+
+## Karo malzemesi (TileData.material) katmanın malzemesini EZER: cozy_ev_light.gd'nin ışıksız eşyaları (kazan, mum, fener, lamba, şömine,
+## gündüz camı) ön kopyada derinlik shader'ı olmadan HER ZAMAN karakterlerin üstüne çiziliyordu (2026-10-19, kullanıcı: "kazan büyükannenin
+## üstünde duruyor"). Bu hücreler ön kopyadan silinip ayrı bir kopyaya taşınır: kendi TileSet'i (karo malzemeleri silinmiş derin kopya) +
+## aynı derinlik malzemesinin ışıksız (render_mode unshaded) sürümü - asıl karo gibi ışıksız, ama yalnız arkasındaki karakteri örter.
+func _split_material_tiles(f: Dictionary) -> void:
+	var front: TileMapLayer = f["front"]
+	var cells: Dictionary = {}
+	for cell: Vector2i in front.get_used_cells():
+		var td: TileData = front.get_cell_tile_data(cell)
+		if td != null and td.material != null:
+			cells[cell] = true
+	if cells.is_empty():
+		return
+	var src_mat := front.material as ShaderMaterial
+	var mat := ShaderMaterial.new()
+	mat.shader = _unshaded_variant(src_mat.shader)
+	for u: Dictionary in src_mat.shader.get_shader_uniform_list():
+		var v: Variant = src_mat.get_shader_parameter(u["name"])
+		if v != null:
+			mat.set_shader_parameter(u["name"], v)
+	var ts: TileSet = front.tile_set.duplicate(true)
+	for i in ts.get_source_count():
+		var src := ts.get_source(ts.get_source_id(i)) as TileSetAtlasSource
+		if src == null:
+			continue
+		for t in src.get_tiles_count():
+			var coords: Vector2i = src.get_tile_id(t)
+			for k in src.get_alternative_tiles_count(coords):
+				var td: TileData = src.get_tile_data(coords, src.get_alternative_tile_id(coords, k))
+				if td != null:
+					td.material = null
+	var unlit: TileMapLayer = _make_front(f["layer"], mat)
+	unlit.name = String(front.name) + " ışıksız"
+	unlit.tile_set = ts
+	for cell: Vector2i in unlit.get_used_cells():
+		if not cells.has(cell):
+			unlit.erase_cell(cell)
+	for cell: Vector2i in cells:
+		front.erase_cell(cell)
+	_front_materials.append(mat)
+	f["front_unlit"] = unlit
+
+
+static var _unshaded_shaders: Dictionary = {}
+
+static func _unshaded_variant(src: Shader) -> Shader:
+	if _unshaded_shaders.has(src):
+		return _unshaded_shaders[src]
+	const HEAD := "shader_type canvas_item;"
+	var sh: Shader = src
+	if src.code.contains(HEAD) and not src.code.contains("render_mode"):
+		sh = Shader.new()
+		sh.code = src.code.replace(HEAD, HEAD + "\nrender_mode unshaded;")
+	else:
+		push_warning("depth_occluders: ışıksız ön kopya shader'ı türetilemedi, ışıklı kalır")
+	_unshaded_shaders[src] = sh
+	return sh
 
 
 func _begin(root: Node) -> void:
@@ -560,6 +633,24 @@ static func character_extent(n: Node2D) -> Vector2:
 	return Vector2(minf(half_w, BODY_HALF_WIDTH * 1.6), clampf(feet_y - top_y + 2.0, BODY_HEIGHT, BODY_HEIGHT * 2.2))
 
 
+## Gövdeden TAŞAN, karakterle birlikte örtülmesi gereken görünür eklenti (2026-10-19, kullanıcı: "başka Y ekseni sorunları da var bu şekilde tuhaf
+## tuhaf" - ağacın arkasındaki oyuncunun gövdesi örtülüyor ama kalkan baloncuğunun ~52 px'lik kalanı ağacın üstünde düz kesik kenarlarla kalıyordu).
+## Şimdilik kalkan baloncuğu (ShieldVisual/BubbleSprite, oyuncu + kukla). Döner (yarım genişlik, ayaktan yukarı boy, ayaktan aşağı taşma); yoksa sıfır.
+## Silahlar / can barı / ad BİLEREK dışarıda: savaşta görünür kalmaları gerekiyor.
+static func attachment_extent(n: Node2D) -> Vector3:
+	var a: AnimatedSprite2D = n.get_node_or_null("ShieldVisual/BubbleSprite") as AnimatedSprite2D
+	if a == null or not a.is_visible_in_tree() or a.sprite_frames == null or not a.sprite_frames.has_animation(a.animation):
+		return Vector3.ZERO
+	var tex: Texture2D = a.sprite_frames.get_frame_texture(a.animation, a.frame)
+	if tex == null:
+		return Vector3.ZERO
+	var sc: Vector2 = a.global_scale.abs()
+	var half: Vector2 = tex.get_size() * 0.5 * sc
+	var center: Vector2 = a.global_position + a.offset * sc + (Vector2.ZERO if a.centered else half)
+	var feet_y: float = n.global_position.y + FEET_OFFSET
+	return Vector3(absf(center.x - n.global_position.x) + half.x, feet_y - (center.y - half.y), maxf(0.0, center.y + half.y - feet_y))
+
+
 ## collect_characters'ın düğümleri (aynı süzgeç, aynı sıra): köprü katı durumu karakter başına tutulur.
 static func character_nodes(tree: SceneTree) -> Array[Node2D]:
 	var nodes: Array[Node2D] = []
@@ -657,15 +748,29 @@ func _process(_delta: float) -> void:
 		var strength: Variant = (pair[0] as ShaderMaterial).get_shader_parameter("strength")
 		if strength != null and strength != (pair[1] as ShaderMaterial).get_shader_parameter("strength"):
 			(pair[1] as ShaderMaterial).set_shader_parameter("strength", strength)
-	var chars: Array[Vector4] = collect_characters(get_tree())
+	var chars: Array[Vector4] = []
+	var front: Array[Vector4] = [] ## kopyalara giden dikdörtgen: gövde + görünür eklenti (attachment_extent)
+	var below := PackedFloat32Array()
+	for n: Node2D in character_nodes(get_tree()):
+		var feet: Vector2 = n.global_position + Vector2(0.0, FEET_OFFSET)
+		var hb: Vector2 = character_extent(n)
+		chars.append(Vector4(feet.x, feet.y, hb.x, hb.y))
+		var ex: Vector3 = attachment_extent(n)
+		front.append(Vector4(feet.x, feet.y, maxf(hb.x, ex.x), maxf(hb.y, ex.y)))
+		below.append(maxf(1.0, ex.z))
 	if chars != _last_chars:
 		_last_chars = chars.duplicate()
-		var count: int = chars.size()
-		while chars.size() < MAX_CHARACTERS:
-			chars.append(Vector4.ZERO)
+	if front != _last_front or below != _last_below:
+		_last_front = front.duplicate()
+		_last_below = below.duplicate()
+		var count: int = front.size()
+		while front.size() < MAX_CHARACTERS:
+			front.append(Vector4.ZERO)
+			below.append(0.0)
 		for m in _front_materials:
 			m.set_shader_parameter("karakter_sayisi", count)
-			m.set_shader_parameter("karakterler", chars)
+			m.set_shader_parameter("karakterler", front)
+			m.set_shader_parameter("karakter_alt", below)
 	if not _brush_materials.is_empty():
 		_update_brush_alpha(_last_chars)
 	if _creatures_on:
@@ -756,7 +861,7 @@ func update_creatures() -> void:
 		var found: Array = []
 		var seen: Dictionary = {}
 		var cand: Array = EnemyQueryScript.candidates(get_tree(), center, view.z)
-		for group_name in ["player_ally", "player_allies"]:
+		for group_name in ["player_ally", "player_allies", "depth_props"]: ## depth_props: Oakley çiçeği + zemin efekti (oakley_flower.gd DERİNLİK notu)
 			cand = cand + get_tree().get_nodes_in_group(group_name)
 		var half: Vector2 = Vector2(view.z, view.z)
 		var cam: Camera2D = get_viewport().get_camera_2d()

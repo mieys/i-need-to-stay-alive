@@ -51,12 +51,9 @@ var _picked: bool = false
 
 var _sprite: AnimatedSprite2D = null
 
-## NOT: eskiden burada _draw() ile çizilen yumuşak (vektör) bir yeşil halka +
-## dönen kıvılcımlar vardı ("çiçeklerin üstüne sihirli yeşil bir efekt koy,
-## haritadaki diğer çiçeklerden farkı belli olsun" isteği). Yerine pixel-art
-## Life Recovery çemberi geçti (bkz. _ready() ve FlowerRecoveryFxScene) - aynı
-## amacı (çiçeği sıradan dekordan ayırmak) görüntü diliyle uyumlu şekilde
-## karşılıyor, ikisi üst üste binince yumuşak halka piksel efektle çelişiyordu.
+## NOT: çiçeği sıradan dekordan ayıran büyü efekti ("çiçeklerin üstüne sihirli yeşil bir efekt koy, haritadaki diğer çiçeklerden farkı belli
+## olsun"): önce yumuşak vektör halka, sonra CraftPix Life Recovery çemberi, 2026-10-19'dan beri "YAPRAK HALKASI" (madde 285 prototip C,
+## scripts/oakley_flower_fx.gd): yerde ışık havuzu + çiçeğin çevresinde dönen yapraklar, aşamayla büyüyüp gelişir (2/4/6 yaprak).
 
 ## DÜZELTME (kullanıcı isteği: "efekt sistemi" - Oakley'nin çiçek yeteneğinin
 ## 3 dönüşümü için gerçek bir sprite eklendi) - eskiden burada gerçek sanat
@@ -66,24 +63,113 @@ var _sprite: AnimatedSprite2D = null
 ## karenin gösterileceğini doğrudan belirliyor, "stage%d" adlandırması bunun
 ## için seçildi.
 const FlowerStagesFrames := preload("res://assets/generated/fx_oakley_flower_stages_frames.tres")
-## bkz. _ready() - çiçeğin altında sürekli dönen Life Recovery büyü çemberi.
-const FlowerRecoveryFxScene := preload("res://scenes/fx_recovery_life_flower.tscn")
+## Yaprak Halkası: tek materyal (_fx_mat) + üç dörtgen - zemin (_spawn_ground_fx), arka (sprite'tan önce), ön (sprite'tan sonra); durum fx_state().
+const FlowerFx := preload("res://scripts/oakley_flower_fx.gd")
+const DepthScript := preload("res://scripts/depth_occluders.gd")
+const EnemyAbilities := preload("res://scripts/enemy_abilities.gd")
+const BalanceLogScript := preload("res://scripts/balance_log.gd")
+
+## DERİNLİK (2026-10-19, kullanıcı: "çiçek Y eksenine tabi değil bazı şeylerin üstünde duruyor"): eskiden çiçek z 5'teydi - oyuncuların (z 1),
+## yaratıkların (z 0/2) ve ağaç/ev ön kopyalarının (z 3) HEPSİNİN üstünde çiziliyordu; çember de çocuğu olduğu için (z -1 göreli = 4) oyuncunun
+## ayağının üstündeydi. Artık:
+##  - çiçek z 0 + YSORT_GROUP: main.gd yaratık/evcil sıralamasına (ayak hizası) katılır -> önündeki yaratık üstte, arkasındaki altta;
+##  - arkasında duran (ayağı çiçeğin kökünün üstünde, gövdesi çiçekle örtüşen) oyuncu/kukla varsa z 2 (oyuncu z 1'in üstü, ağaç kopyası z 3'ün altı);
+##  - DEPTH_GROUP: depth_occluders.gd ağaç/ev/maden ön kopyaları önündeki çiçeği (ve zemin efektini) örter;
+##  - büyü efekti AYRI zemin düğümü (EnemyAbilities.place_on_ground: haritanın hemen üstü, yaratık/oyuncuların altı), çiçekle birlikte silinir.
+## Tamamen yerel/kozmetik (her istemci kendi kopyasında), ağ yok.
+const YSORT_GROUP := "ysort_props" ## main.gd CREATURE_SORT_GROUPS
+const DEPTH_GROUP := "depth_props" ## depth_occluders.gd update_creatures
+const FLOWER_Z := 0
+const FLOWER_FRONT_Z := 2
+const FOOT_Y := 20.0 ## 31x42 ortalı karenin en alt opak satırı (41) -> kökün 20 px altı = yere değdiği çizgi
+## Aşama başına örtü alanı: çiçek (fx_oakley_flower_stages.png opak alanı 9/15/16 x 14/20/34) VE dönen yapraklar (yörünge R + yaprak yarısı,
+## yerden H + R x 0,45 + yaprak + sallanma) - hangisi büyükse. Merkezden en uzak kenar (yarım genişlik) ve ayaktan tepeye boy.
+const STAGE_HALF_W: Array[float] = [14.0, 18.0, 23.0]
+const STAGE_HEIGHT: Array[float] = [16.0, 21.0, 34.0]
+const DEPTH_EVERY := 3 ## kare - oyuncu çiçeğin arkasına 3 karede geçemez
+## Efekt yalnız ekrandayken güncellenir (yaprak konumları her karede materyale yazılır); dikdörtgen üç dörtgeni (oakley_flower_fx.gd QUAD_*) kapsar.
+const FX_VIS_RECT := Rect2(-32.0, -36.0, 64.0, 72.0)
+
+var _ground_fx: Node2D = null
+var _fx_mat: ShaderMaterial = null ## Yaprak Halkası boyaması GPU'da (oakley_flower_fx.gd FPS notu); üç dörtgen paylaşır
+var _fx_age: float = 0.0
+var _orbit_phase: float = 0.0
+var _grow_from: int = 0 ## son büyümeden önceki aşama (geçiş animasyonu)
+var _grow_age: float = 99.0 ## son büyümeden beri geçen sn
+var _fx_on_screen: bool = true
 
 
 func _ready() -> void:
 	add_to_group("oakley_flowers")
-	z_index = 5
-	## Kullanıcı isteği (CraftPix Life Recovery): "oakleyin bitkisinin üstünde de
-	## sürekli aktif olacak bu efekt alınana kadar" - çiçeğin ÇOCUĞU olduğu için
-	## çiçek alınınca (_pick_up/remove_remotely -> queue_free) ya da ömrü dolunca
-	## kendiliğinden yok olur, ayrıca stop çağırmaya gerek yok. Bu node her
-	## istemcide kendi _ready()'sini çalıştırdığı için (bkz. dosya başı AĞ DESENİ)
-	## efekt diğer oyuncularda da otomatik görünür, ayrı RPC gerekmez.
-	add_child(FlowerRecoveryFxScene.instantiate())
+	add_to_group(YSORT_GROUP)
+	add_to_group(DEPTH_GROUP)
+	z_index = FLOWER_Z
+	## Arka yarı yapraklar sprite'tan ÖNCE (çiçeğin arkasında), ön yarı SONRA (önünde) - aynı materyal, katman dörtgenin dokusunda.
+	_fx_mat = FlowerFx.make_material()
+	FlowerFx.update_material(_fx_mat, fx_state())
+	add_child(FlowerFx.make_quad(_fx_mat, FlowerFx.LAYER_BACK))
 	_sprite = AnimatedSprite2D.new()
+	_sprite.name = "AnimatedSprite2D" ## main.gd _find_creature_visual / depth_occluders.creature_body adıyla bulur (ayak + gövde ölçüsü)
 	_sprite.sprite_frames = FlowerStagesFrames
 	_sprite.play("stage0")
 	add_child(_sprite)
+	add_child(FlowerFx.make_quad(_fx_mat, FlowerFx.LAYER_FRONT))
+	var vis := VisibleOnScreenNotifier2D.new()
+	vis.rect = FX_VIS_RECT
+	vis.screen_entered.connect(func() -> void: _fx_on_screen = true)
+	vis.screen_exited.connect(func() -> void: _fx_on_screen = false)
+	add_child(vis)
+	_update_depth_body()
+	## "oakleyin bitkisinin üstünde de sürekli aktif olacak bu efekt alınana kadar" - çağıran konumu add_child'dan SONRA veriyor -> zemin
+	## düğümü kare sonunda kurulur. Her istemci kendi çiçeğini kurduğu için ayrı RPC gerekmez.
+	_spawn_ground_fx.call_deferred()
+
+
+func _spawn_ground_fx() -> void:
+	var parent: Node = get_parent()
+	if _picked or not is_inside_tree() or parent == null:
+		return
+	_ground_fx = Node2D.new()
+	_ground_fx.set_script(FlowerFx)
+	_ground_fx.set("flower", self)
+	_ground_fx.z_index = FLOWER_Z
+	_ground_fx.add_child(FlowerFx.make_quad(_fx_mat, FlowerFx.LAYER_GROUND))
+	parent.add_child(_ground_fx)
+	_ground_fx.global_position = global_position ## çizim çiçeğin yerel koordinatında (kök = çiçek merkezi)
+	EnemyAbilities.place_on_ground(get_tree(), _ground_fx)
+	_ground_fx.set_meta("_depth_body", Vector2(FlowerFx.GROUND_HALF_W, FlowerFx.GROUND_HEIGHT))
+	_ground_fx.set_meta("_foot_visual", _ground_fx)
+	_ground_fx.set_meta("_foot_local", FlowerFx.GROUND_FOOT)
+	_ground_fx.add_to_group(DEPTH_GROUP)
+
+
+## Yaprak Halkası durumu (oakley_flower_fx.gd state): yaş, yörünge fazı, geçiş.
+func fx_state() -> Array:
+	return FlowerFx.state(_fx_age, _orbit_phase, _grow_from, _growth_stage, _grow_age)
+
+
+func _exit_tree() -> void:
+	if is_instance_valid(_ground_fx):
+		_ground_fx.queue_free()
+	_ground_fx = null
+
+
+## depth_occluders.creature_body düğüm başına bir kez ölçüp meta'ya yazıyor (ilk kare = filiz) - büyüdükçe biz güncelliyoruz.
+func _update_depth_body() -> void:
+	set_meta("_depth_body", Vector2(STAGE_HALF_W[_growth_stage], STAGE_HEIGHT[_growth_stage] + 2.0))
+
+
+## Arkasında (ayağı kökün üstünde, tepesinin altında) ve yatayda örtüşen bir karakter varsa çiçek onun üstüne çıkar.
+func _update_depth() -> void:
+	var base_y: float = global_position.y + FOOT_Y
+	var top_y: float = base_y - STAGE_HEIGHT[_growth_stage]
+	var half_w: float = STAGE_HALF_W[_growth_stage]
+	var behind: bool = false
+	for c: Vector4 in DepthScript.collect_characters(get_tree()):
+		if c.y < base_y and c.y > top_y and absf(c.x - global_position.x) < half_w + c.z:
+			behind = true
+			break
+	z_index = FLOWER_FRONT_Z if behind else FLOWER_Z
 
 
 ## player.gd tarafından spawn anında, network_manager.gd tarafından da
@@ -112,12 +198,28 @@ func _process(delta: float) -> void:
 		return
 	_growth_timer -= delta
 	if _growth_timer <= 0.0 and _growth_stage < 2:
+		_grow_from = _growth_stage
+		_grow_age = 0.0
 		_growth_stage += 1
 		_growth_timer = GROWTH_INTERVAL
+		_update_depth_body()
 		if _sprite:
 			## Büyüme geri bildirimi: 3 dönüşümün kendi karesine geçiliyor
 			## (bkz. FlowerStagesFrames üstündeki DÜZELTME notu).
 			_sprite.play("stage%d" % _growth_stage)
+	if (Engine.get_process_frames() + get_instance_id()) % DEPTH_EVERY == 0:
+		_update_depth()
+	_process_fx(delta)
+
+
+## Yaprak Halkası saati: faz BİRİKİR (hız aşamayla artınca yapraklar sıçramasın), geçişte hız da yumuşak kayar.
+func _process_fx(delta: float) -> void:
+	_fx_age += delta
+	_grow_age += delta
+	var k: float = clampf(_grow_age / FlowerFx.TRANS, 0.0, 1.0)
+	_orbit_phase = fmod(_orbit_phase + lerpf(FlowerFx.SPEED[_grow_from], FlowerFx.SPEED[_growth_stage], k) * delta, TAU * 64.0)
+	if _fx_on_screen and _fx_mat:
+		FlowerFx.update_material(_fx_mat, fx_state())
 
 
 func _current_heal_amount() -> float:
@@ -133,10 +235,21 @@ func _current_shield_amount(body: Node) -> float:
 			* (1.0 + GROWTH_STAGE_BONUS * _growth_stage)
 
 
+## Bu istemcinin Oakley'sinin çiçeği mi (flower_id = "<peer>_<sayaç>", player.gd _try_oakley_flower)? Shift ipucu "BU OYUNDA" için.
+func _is_own_flower() -> bool:
+	var me: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	return flower_id.begins_with("%d_" % me) or (not NetworkManager.is_multiplayer_active and flower_id.begins_with("0_"))
+
+
 func _pick_up(body: Node) -> void:
 	_picked = true
 	var heal_amount: float = _current_heal_amount()
+	var own: bool = _is_own_flower()
+	if own:
+		BalanceLogScript.on_util("s:oakley_cicek", "flower", 1.0)
 	if "health" in body and "max_health" in body:
+		if own:
+			BalanceLogScript.on_gain("s:oakley_cicek", minf(heal_amount, float(body.max_health) - float(body.health)), 0.0)
 		body.health = min(body.max_health, body.health + heal_amount)
 		if body.has_signal("health_changed"):
 			body.health_changed.emit(body.health, body.max_health)
@@ -144,6 +257,8 @@ func _pick_up(body: Node) -> void:
 	## kalkan yenilemeli") - can ile AYNI anda, ayrı bir kalkan miktarı.
 	if "item_shield_hp" in body and "item_shield_max" in body and float(body.item_shield_max) > 0.0:
 		var shield_amount: float = _current_shield_amount(body)
+		if own:
+			BalanceLogScript.on_gain("s:oakley_cicek", 0.0, minf(shield_amount, float(body.item_shield_max) - float(body.item_shield_hp)))
 		body.item_shield_hp = min(body.item_shield_max, body.item_shield_hp + shield_amount)
 		if body.has_signal("item_shield_changed"):
 			body.item_shield_changed.emit(body.item_shield_hp, body.item_shield_max)
@@ -162,4 +277,6 @@ func remove_remotely() -> void:
 	if _picked:
 		return
 	_picked = true
+	if _is_own_flower(): ## Oakley'nin çiçeğini bir dost aldı (Shift ipucu "BU OYUNDA")
+		BalanceLogScript.on_util("s:oakley_cicek", "flower", 1.0)
 	queue_free()

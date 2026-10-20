@@ -130,10 +130,10 @@ func test_summons_use_tier_scaling_hp_ratio_speed_bonus_and_do_not_fill_the_spaw
 	var k: Node = sp.spawn_summon("kabak1", Vector2(600, 500), boss)
 	var y: Node = sp.spawn_summon("yarasa1", Vector2(620, 500), boss)
 	assert(k != null and y != null, "minyonlar doğdu")
-	assert(is_equal_approx(k.max_health, ref.max_health * 0.7), "kabak canı = kademe yaratığının yüzde 70'i: %.1f / %.1f" % [k.max_health, ref.max_health])
-	assert(is_equal_approx(y.max_health, ref.max_health * 0.3), "yarasa canı yüzde 30: %.1f" % y.max_health)
+	assert(is_equal_approx(k.max_health, ref.max_health * 1.4), "kabak canı = kademe yaratığının yüzde 140'ı: %.1f / %.1f" % [k.max_health, ref.max_health])
+	assert(is_equal_approx(y.max_health, ref.max_health * 0.6), "yarasa canı yüzde 60: %.1f" % y.max_health)
 	assert(is_equal_approx(k.speed, ref.speed * 1.2) and is_equal_approx(y.speed, ref.speed * 1.3), "hız +yüzde 20 / +yüzde 30: %.1f %.1f / %.1f" % [k.speed, y.speed, ref.speed])
-	assert(is_equal_approx(k.item_shield_max, ref.item_shield_max * 0.7), "kalkan da orantılı")
+	assert(is_equal_approx(k.item_shield_max, ref.item_shield_max * 1.4), "kalkan da orantılı")
 	assert(k.is_in_group("summons") and k.get_meta("summoner") == boss and not k.has_meta("spawn_tier"), "summons grubu, sahibi var, kademe kapısını tutmaz")
 	var before: int = sp._regular_enemy_count()
 	sp.spawn_summon("kabak1", Vector2(640, 500), boss)
@@ -156,7 +156,7 @@ func test_pumpkin_explodes_for_40_area_damage_and_dissolves_without_reward() -> 
 	kit.process(0.2, player, 30.0)
 	assert(player.hits.is_empty(), "fitil bitmeden hasar yok")
 	kit.process(0.4, player, 30.0)
-	assert(player.hits.size() == 1 and player.hits[0][0] == MinionsScript.BLAST_DAMAGE and player.hits[0][1] == "blast", "patlama BLAST_DAMAGE (40) alan hasarı: %s" % str(player.hits))
+	assert(player.hits.size() == 1 and player.hits[0][0] == MinionsScript.BLAST_DAMAGE and player.hits[0][1] == "blast", "patlama BLAST_DAMAGE (80) alan hasarı: %s" % str(player.hits))
 	assert(far.hits.is_empty(), "yarıçap dışındaki oyuncu etkilenmez")
 	assert(k.is_dead, "kabak ödülsüz dağıldı")
 	_cleanup()
@@ -267,9 +267,9 @@ func test_boss_spell_hits_a_player_once_for_10_and_stops_at_walls() -> void:
 
 ## 2026-10-10 (kullanıcı: "balkabağı bossunun boyutunu %30 küçült ve daha güçlü olması gerekiyor, yeteri kadar yetenek ve yaratık spamlamıyor, hasarını 2 kat arttır").
 func test_damage_numbers_are_doubled_and_the_kit_is_much_busier() -> void:
-	assert(BossKitScript.FIREBALL_DAMAGE == 30.0 and MinionsScript.BLAST_DAMAGE == 40.0, "ateş topu 30, kabak patlaması 40 (x0,8 iptal 2026-10-11)")
+	assert(BossKitScript.FIREBALL_DAMAGE == 30.0 and MinionsScript.BLAST_DAMAGE == 80.0, "ateş topu 30, kabak patlaması 80 (2026-10-19: 40 -> 80)")
 	assert(float(SpawnerScript.FIXED_BOSS_STATS["balkabagi1"]["damage"]) == 40.0, "normal saldırı 40")
-	assert(float(SpawnerScript.SUMMON_STATS["yarasa1"]["damage"]) == 2.0, "yarasa ısırığı x2")
+	assert(float(SpawnerScript.SUMMON_STATS["yarasa1"]["damage"]) == 4.0, "yarasa ısırığı x4 (2026-10-19)")
 	## eskiden: salvo 3,2-4,8 sn / 5 top, kabak 11-14 sn x6 (en çok 20), yarasa 15-19 sn x4 (en çok 12)
 	assert(BossKitScript.SALVO_COOLDOWN_MAX <= 3.0 and BossKitScript.SALVO_SHOTS >= 7, "salvo daha sık ve büyük")
 	assert(BossKitScript.PUMPKIN_CD_MAX <= 8.0 and BossKitScript.PUMPKIN_COUNT >= 9 and BossKitScript.PUMPKIN_MAX_ALIVE >= 30, "kabak dalgası daha sık/büyük")
@@ -282,7 +282,7 @@ func test_damage_numbers_are_doubled_and_the_kit_is_much_busier() -> void:
 	sp._enable_regular_shield(ref, 8)
 	sp._apply_global_buff(ref)
 	var y: Node = sp.spawn_summon("yarasa1", Vector2(620, 500), boss)
-	assert(is_equal_approx(y.contact_damage, ref.contact_damage * 2.0), "yarasa ısırık hasarı sıradan yaratığın 2 katı: %.2f / %.2f" % [y.contact_damage, ref.contact_damage])
+	assert(is_equal_approx(y.contact_damage, ref.contact_damage * 4.0), "yarasa ısırık hasarı sıradan yaratığın 4 katı: %.2f / %.2f" % [y.contact_damage, ref.contact_damage])
 	_cleanup()
 
 

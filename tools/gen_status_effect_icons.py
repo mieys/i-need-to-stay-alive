@@ -8,6 +8,7 @@ görünsün" - eski tek harfli (G/H/İ/Y/K) kısaltmalar kaldırıldı, her efek
   shield_slow (Kalkan Yavaş) -> ÇATLAK KALKAN + aşağı ok (kırmızı, debuff)
   burn (Yanma)               -> ALEV (İblis ateş topu, debuff)
   bleed (Kanama)             -> KAN DAMLASI (Balkabağı Kafa'nın yarasaları, debuff)
+  time_frozen (Zaman Durdu)  -> KUM SAATİ (güvenli alan: yenilenme/bekleme/pasif/evcil durur, madde 327)
 48x48 sanat ızgarası (bkz. hafıza "Pixel density 48x48"), gen_shield_icons.py'daki AYNI küçük
 yardımcı (Icon/poly/circle/rect/outline/dilate) deseni - o dosyaya bağımlı değil, kendi küçük kopyası.
 
@@ -196,6 +197,30 @@ def blood_drop():
     return ic
 
 
+def hourglass():
+    """Zaman Durdu (güvenli alan, madde 327): buz çeliği çerçeveli kum saati, altın kum - bar üstü küçük simgeyle (time_frozen_status_icon.gd) aynı dil."""
+    ic = Icon()
+    body = poly([(13, 9), (35, 9), (35, 14), (27, 22), (27, 26), (35, 34), (35, 38), (13, 38), (13, 34), (21, 26), (21, 22), (13, 14)])
+    top_cap = rect(9, 4, 38, 8)
+    bot_cap = rect(9, 39, 38, 43)
+    ic.outline(body | top_cap | bot_cap)
+    ic.fill(body, hexc('#c4e4f8'))
+    ic.fill(poly([(14, 10), (18, 10), (14, 15)]), hexc('#ffffff'))  # cam parıltısı
+    upper_sand = poly([(16, 17), (32, 17), (27, 22), (21, 22)]) & body
+    ic.fill(upper_sand, hexc('#f4ce60'))
+    ic.fill(rect(23, 22, 24, 32), hexc('#f4ce60'))  # akan kum
+    lower_sand = poly([(14, 37), (34, 37), (31, 33), (27, 30), (21, 30), (17, 33)]) & body
+    ic.fill(lower_sand, hexc('#f4ce60'))
+    ic.fill(rect(15, 36, 33, 37) & body, hexc('#d9a93a'))  # kum yığınının tabanı biraz koyu
+    for cap in (top_cap, bot_cap):
+        ic.fill(cap, hexc('#96b0c8'))
+    ic.fill(rect(10, 5, 37, 5), hexc('#d4e6f4'))  # üst kapağın parlak kenarı
+    ic.fill(rect(10, 40, 37, 40), hexc('#d4e6f4'))
+    ic.fill(rect(10, 8, 37, 8), hexc('#6a86a2'))  # üst kapağın alt gölgesi
+    ic.fill(rect(10, 43, 37, 43), hexc('#6a86a2'))
+    return ic
+
+
 def build():
     os.makedirs(OUTDIR, exist_ok=True)
     icons = {
@@ -206,6 +231,7 @@ def build():
         'shield_slow': cracked_shield(),
         'burn': flame(),
         'bleed': blood_drop(),
+        'time_frozen': hourglass(),
     }
     for k, ic in icons.items():
         ic.image().save(os.path.join(OUTDIR, '%s.png' % k))

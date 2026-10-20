@@ -177,7 +177,8 @@ const NIGHT_BOSS_TIERS := [15]
 ## (EXTRA_PLAYER_DEFENSE_MULT); hasar büyümez. reward_ref: altın/XP ödülü bu kimlikli referans bossun (aynı Kademe) ödülüne EŞİT kalır -
 ## ödüller can sayısına bağlanmaz ("ödüller değişmez" ilkesi, bkz. _apply_global_buff).
 const FIXED_BOSS_STATS := {
-	"minotaur1": {"health": 32000.0, "shield": 36000.0, "protection": 0.8, "damage": 100.0, "reward_ref": "iskelet3"},
+	"minotaur1": {"health": 22400.0, "shield": 25200.0, ## 2026-10-19: can/kalkan -%30 (32.000/36.000 -> 22.400/25.200)
+	 "protection": 0.8, "damage": 100.0, "reward_ref": "iskelet3"},
 	## Yeraltı Canavarı (2026-10-09, "Bossun canı 50.000 Kalkanı 60.000"; kalkan soğurması verilmedi -> standart boss %90; hasarlar uzuvlarda: asit 110, savurma 130, bkz. worm_boss_math.gd).
 	## Bu havuz SADECE uzuvlar üzerinden azalır: toplam ~110.000 hasar (can + kalkan) = ~55 uzuv (worm_boss_math.gd LIMB_THRESHOLD 2.000).
 	"underground1": {"health": 50000.0, "shield": 60000.0, "protection": 0.9, "damage": 0.0, "reward_ref": "iskelet3"},
@@ -191,14 +192,16 @@ const FIXED_BOSS_STATS := {
 	## Uçan Şeytan (2026-10-09, FİNAL, belgeden AYNEN): Can 1.000.000 Kalkan 1.200.000 Soğurma %90; normal saldırı 150 (ateş topu 200 + yanma 50/sn, kozmik ışın 100/0,5 sn demon_boss.gd'de); "4 kat büyük" -> scale 4.0.
 	"ucansetan1": {"health": 1000000.0, "shield": 1200000.0, "protection": 0.9, "damage": 150.0, "reward_ref": "rontgen3", "scale": 4.0},
 	## 2026-10-10 (kullanıcı: "banshee çok güçsüzdü, boyutunu %30 küçültüp daha agresif daha hızlı olmalı, hasarını 2 kat arttır"): scale 3.0 -> 2.1, atılış 120 -> 240 (çığlık 130 -> 260 banshee_boss.gd).
-	"banshee1": {"health": 300000.0, "shield": 480000.0, "protection": 0.9, "damage": 240.0, "reward_ref": "rontgen3", "scale": 2.1},
+	## 2026-10-19 (kullanıcı: "bansheenin boyutunu %30 küçültüp hasarını %40 arttır"): scale 2.1 -> 1.47, atılış 240 -> 336 (çığlık 260 -> 364).
+	"banshee1": {"health": 300000.0, "shield": 480000.0, "protection": 0.9, "damage": 336.0, "reward_ref": "rontgen3", "scale": 1.47},
 }
 
 ## BOSS MİNYONLARI (kullanıcı isteği 2026-10-09, Balkabağı Kafa): stat çarpanları - can/kalkan = o kademedeki sıradan yaratığın ("hp" oranı), hız = sıradan yaratığa göre ("speed" çarpanı).
 ## Doğuş spawn_summon'da: sıradan yaratık gibi kademe ölçeği + kalkan + global çarpan, sonra bu oranlar; ödüller küçültülür ("reward").
 const SUMMON_STATS := {
-	"kabak1": {"hp": 0.7, "speed": 1.2, "reward": 0.3},
-	"yarasa1": {"hp": 0.3, "speed": 1.3, "reward": 0.3, "damage": 2.0}, ## damage: ısırık hasarı çarpanı (2026-10-10: Balkabağı hasarı x2)
+	## 2026-10-19 (kullanıcı: "balkabağı kafanın balkabakları ve yarasaları tek yiyor, güçlerini 2 katına çıkar"): hp 0.7 -> 1.4 (kabak), 0.3 -> 0.6 (yarasa); kalkan da aynı oranda. Hasar/hız/ödül AYNI.
+	"kabak1": {"hp": 1.4, "speed": 1.2, "reward": 0.3},
+	"yarasa1": {"hp": 0.6, "speed": 1.3, "reward": 0.3, "damage": 4.0}, ## damage: ısırık hasarı çarpanı (2026-10-10: Balkabağı hasarı x2; 2026-10-19: x4 = bir kat daha, kanama 10/sn aynı)
 }
 
 ## Boss havuzuna bağlı solucan UZUVLARI: sıradan yaratık değil - tier ölçeği / kalkan / global çarpan / ödül YOK (kendi eşiği sahnede, hasarı bossa gider; bkz. worm_limb.gd).
@@ -312,7 +315,7 @@ const FINAL_CREATURES := [
 ## "maksimum yaratık sayısı 5 oyuncu varken olsun; 4 oyuncuda 180, 3'te 160, 2'de 140, tek oyunculuda 120" -
 ## max_concurrent_enemies (200) artık 5 oyuncunun tavanı, her eksik oyuncu için ENEMY_CAP_STEP_PER_MISSING_PLAYER düşer.
 ## 2026-09-27: yeni kural - tek oyuncu max_concurrent_enemies (100), her ek oyuncu +20 (2 -> 120, 3 -> 140, 4 -> 160...).
-const ENEMY_CAP_PER_EXTRA_PLAYER := 21 ## 2026-10-10: 50 -> 20 -> 30; 2026-10-17: 30 -> 21 (-%30)
+const ENEMY_CAP_PER_EXTRA_PLAYER := 50 ## 2026-10-19: 21 -> 50 (kullanıcı: "oyuncu başına yaratık artışını 50ye yükselt"); 2026-10-10: 50 -> 20 -> 30; 2026-10-17: 30 -> 21 (-%30)
 ## Kullanıcı isteği (2026-09-24 denge turu: "her kademe için oyuncu başına %30 spawn ve %50 can") - 0.25 -> 0.30.
 const EXTRA_PLAYER_SPAWN_RATE := 0.30
 @export var min_spawn_distance: float = 480.0
@@ -845,6 +848,9 @@ func _process(delta: float) -> void:
 
 	if GameManager.is_game_over:
 		return
+	## Açılış (madde 313, house_intro.gd): yaratıklar adaya henüz varmadı - doğuş ve "KADEME I" duyurusu geri sayım bitince.
+	if GameManager.invasion_pending:
+		return
 
 	## Kademe bildirimi: spawn kapılarından (içerideyken spawn durur) ÖNCE - Kademe saati oyuncular evdeyken de akar.
 	if not NetworkManager.is_multiplayer_active or NetworkManager.is_host:
@@ -957,7 +963,7 @@ func _broadcast_enemy_states_with_interest_management() -> void:
 				enemy.global_position,
 				is_dead_now,
 				enemy.get("health"),
-				enemy.get("item_shield_hp"),
+				enemy.shield_now() if enemy.has_method("shield_now") else enemy.get("item_shield_hp"), ## uyuyan (bkz. enemy.gd UYKU) yaratığın kalkan yenilenmesi işlenmiş değer
 				enemy.get("is_raging") == true,
 				int(enemy.get("chill_stacks") if "chill_stacks" in enemy else 0),
 				## Korsan'ın öldürme-özel altın pasifi (bkz. enemy.gd
@@ -2068,6 +2074,35 @@ func spawn_guard(pos: Vector2, tiers_ahead: int = 0) -> Node:
 	enemy.set_meta("guard", true)
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 		_announce_spawn(enemy, id, pos, scale_tier, false, network_id, false, false)
+	return enemy
+
+
+## EV KUŞATMACISI (madde 313, house_siege.gd): o anki kademenin normal yaratığı, verilen noktada (evin çevresi). Normal doğuş gibi kademe
+## kapısını tutar (spawn_tier) ve istemcilere duyurulur; "besiegers" grubunda (davranışı house_siege.gd: oyuncular içerideyken uykuda
+## duvar dibinde dolanır, dışarıda oyuncu görünce normal yaratık). Yalnız host/tekli oyun.
+func spawn_besieger(pos: Vector2) -> Node:
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		return null
+	var tier: int = _resolve_spawn_tier()
+	if tier <= 0:
+		tier = _current_tier()
+	var roster: Array = _spawnable_roster(tier)
+	if roster.is_empty():
+		return null
+	var id: String = roster[randi() % roster.size()]
+	var network_id: int = _next_network_enemy_id
+	_next_network_enemy_id += 1
+	var enemy = _spawn_creature(id, pos, network_id)
+	if not enemy:
+		return null
+	enemy.set_meta("spawn_tier", tier)
+	if enemy.has_method("apply_tier_scaling"):
+		enemy.apply_tier_scaling(tier)
+	_enable_regular_shield(enemy, tier)
+	_apply_global_buff(enemy)
+	enemy.add_to_group("besiegers")
+	if NetworkManager.is_multiplayer_active:
+		_announce_spawn(enemy, id, pos, tier, false, network_id, false, false)
 	return enemy
 
 

@@ -117,6 +117,26 @@ func test_recursive_components_for_legendary() -> void:
 	_cleanup()
 
 
+## 2026-10-19 (maç analizi): aynı 1. kademe parçanın her sahip olunan kopyası fiyatı +%10 artırır, en çok x2; tarifli alım etkilenmez.
+func test_repeated_part_price_rises() -> void:
+	var owned: Array = []
+	assert(int(Items.plan_purchase("tornavida", owned)["cost"]) == 320, "ilk kopya taban fiyat")
+	for i in range(3):
+		owned.append({"key": "tornavida"})
+	assert(int(Items.plan_purchase("tornavida", owned)["cost"]) == 416, "3 kopya: 320 x 1,3 = 416")
+	for i in range(12):
+		owned.append({"key": "tornavida"})
+	assert(int(Items.plan_purchase("tornavida", owned)["cost"]) == 640, "15 kopya: tavan x2 = 640")
+	assert(int(Items.plan_purchase("bile_tasi", owned)["cost"]) == 350, "başka parça etkilenmez")
+	assert(Items.repeat_mult("kemik_kolye", owned) == 1.0 and Items.part_copies("kemik_kolye", owned) == 0, "epik/efsanevide çarpan yok")
+	## Tarifte eksik parça, başka parçanın kopyalarından etkilenmez: 4 Yaşam Kristali var, Kemik Kolye = Kanlı Yakut + Yaşam Kristali.
+	var owned2: Array = []
+	for i in range(4):
+		owned2.append({"key": "yasam_kristali"})
+	var plan: Dictionary = Items.plan_purchase("kemik_kolye", owned2)
+	assert(int(plan["cost"]) == 330 and (plan["consume"] as Array).size() == 1, "tarifte yakut taban fiyat, kristal tüketilir: %s" % str(plan))
+
+
 ## 2026-10-17 (kullanıcı: "bazı efsanevi eşyaların alt parçaları yok, özelliklerine göre ata"): artık HİÇBİR efsanevi eşya tarifsiz değil;
 ## yeni tarifler de sahip olunan parçaları tüketip fiyattan düşer (fiyat = bileşen toplamı kuralı test_defs_is_consistent'te).
 func test_every_legendary_has_a_recipe_and_new_recipes_discount() -> void:

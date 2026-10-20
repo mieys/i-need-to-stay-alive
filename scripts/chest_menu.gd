@@ -105,12 +105,12 @@ func _mobile() -> bool:
 ## bir class_name TANIMLAMADIĞI için oradaki const'lara güvenli/açık bir
 ## şekilde erişmenin en basit yolu bu (diğer script'lerdeki paralel
 ## const kopyalama deseniyle tutarlı).
-const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic"]
+const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "kalkan", "yinyang"]
 const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Tüftüf", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç",
+	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı",
 }
 const WEAPON_ICON_TEXTURES := {
 	"dagger": "res://assets/weapons/base_knife/icon_v2.png",
@@ -128,10 +128,15 @@ const WEAPON_ICON_TEXTURES := {
 	"pence": "res://assets/weapons/pence/icon.png",
 	"topuz": "res://assets/weapons/topuz/icon.png",
 	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
+	"gokkusagi": "res://assets/weapons/zanaat/gokkusagi_L1.png",
+	"mizrak": "res://assets/weapons/zanaat/mizrak_L1.png",
+	"kalkan": "res://assets/weapons/zanaat/kalkan_L1.png",
+	"yinyang": "res://assets/weapons/zanaat/yinyang_L1.png",
 }
 const WEAPON_COST_BASE := {
 	"dagger": 60, "fire_staff": 80, "lightning_staff": 120, "tabanca": 100, "tuftuf": 90, "tufek": 100, "arcane": 110, "yay": 100,
-	"crossbow": 100, "boomerang": 110, "buz_asasi": 95, "fisek": 120, "pence": 90, "topuz": 105, "uzunkilic": 100,
+	"crossbow": 100, "boomerang": 110, "buz_asasi": 95, "fisek": 120, "pence": 90, "topuz": 105, "uzunkilic": 100, "gokkusagi": 120, "mizrak": 100,
+	"kalkan": 100, "yinyang": 110,
 }
 
 func _get_game_manager() -> Node:
@@ -409,6 +414,9 @@ func _reveal_reward_card(candidate: Dictionary) -> void:
 	## animasyonu bitene kadar BAĞLANMIYOR ki 25sn süresi tam o birkaç
 	## onda saniyelik pencerede dolarsa henüz var olmayan bir karta
 	## otomatik basmaya çalışılmasın (bkz. _on_countdown_tick).
+	## Ayarlar > Otomatik Kart Seçimi (auto_pick.gd): kart indikten sonra AL (slot varsa) / SAT kendiliğinden basılır.
+	if AutoPickScript.enabled():
+		get_tree().create_timer(AutoPickScript.DELAY, true).timeout.connect(_auto_pick_best_card)
 	if NetworkManager.is_multiplayer_active:
 		NetworkManager.chest_countdown_tick.connect(_on_countdown_tick)
 		if countdown_panel:
@@ -561,6 +569,28 @@ func _on_countdown_tick(remaining: float) -> void:
 ## uygun (slotu dolu olmayan) kartlardan rastgele biri "AL" tıklanmış gibi
 ## seçilir - hiçbiri uygun değilse (tüm slotlar doluysa) sandık ödülü boşa
 ## harcanıp menü kapatılır, herkes sonsuza kadar bu karara takılı kalmaz.
+const AutoPickScript := preload("res://scripts/auto_pick.gd")
+
+
+## Otomatik seçim: tek kart - AL basılabiliyorsa AL (eşya/silah almak satmaktan hep değerli), slotlar doluysa SAT (ödül boşa gitmesin).
+func _auto_pick_best_card() -> void:
+	if not is_instance_valid(self) or _has_chosen or not cards_container:
+		return
+	for card in cards_container.get_children():
+		if card.has_meta("al_button"):
+			var al: Button = card.get_meta("al_button")
+			if is_instance_valid(al) and not al.disabled:
+				al.pressed.emit()
+				return
+	for card in cards_container.get_children():
+		if card.has_meta("sat_button"):
+			var sat: Button = card.get_meta("sat_button")
+			if is_instance_valid(sat) and not sat.disabled:
+				sat.pressed.emit()
+				return
+	_auto_pick_random_card()
+
+
 func _auto_pick_random_card() -> void:
 	if _has_chosen or not cards_container:
 		return

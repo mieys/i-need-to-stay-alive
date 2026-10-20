@@ -139,7 +139,7 @@ func test_settings_phone_tabs_and_touch_rows() -> void:
 	s.queue_free()
 	_phone(false)
 	await get_tree().process_frame
-	assert(genel == ["shake", "ui_anim", "fps"], "telefon GENEL: %s" % str(genel))
+	assert(genel == ["shake", "ui_anim", "fps", "auto_pick"], "telefon GENEL: %s" % str(genel))
 	assert(touch == ["joystick", "button_size", "ui_opacity", "vibration"], "DOKUNMATİK: %s" % str(touch))
 	assert(absf(row_r.size.y - 120.0) < 1.0, "satır 120 px: %s" % row_r)
 	assert(absf(tab_r.end.y - 1052.0) < 1.0 and tab_r.size.y > 130.0, "sekmeler altta 136 px: %s" % tab_r)

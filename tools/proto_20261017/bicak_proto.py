@@ -440,6 +440,9 @@ def _tip(p, q, k=9.0):
     return (q[0] + dx / ln * k, q[1] + dy / ln * k)
 
 
+B_SIDE_LINES = True  # 2026-10-19 (madde 299): oyundaki sayfa yan çizgisiz (kullanıcı: "pençe gibi 3 çizik değil 1 çizik") - gen_dagger_stab_fx.py False yapar
+
+
 def B_fx(L, t):
     for i, (back, inn, t0, tc, r) in enumerate(B_STABS):
         tip0, tip1 = _tip(back, back), _tip(back, inn)
@@ -451,7 +454,8 @@ def B_fx(L, t):
             ln = math.hypot(dx, dy) or 1.0
             nx, ny = -dy / ln, dx / ln
             b0 = (tip0[0] - dx / ln * 6.0, tip0[1] - dy / ln * 6.0)
-            for off, w, cc in ((0.0, 2.6 if big else 2.0, CREAM_L), (2.6, 1.3, CREAM_L[1:]), (-2.6, 1.3, CREAM_L[1:])):
+            lines = ((0.0, 2.6 if big else 2.0, CREAM_L), (2.6, 1.3, CREAM_L[1:]), (-2.6, 1.3, CREAM_L[1:]))
+            for off, w, cc in (lines if B_SIDE_LINES else lines[:1]):
                 o = (nx * off, ny * off)
                 line_band(L, (b0[0] + o[0], b0[1] + o[1]), (tip1[0] - dx / ln * 3.0 + o[0], tip1[1] - dy / ln * 3.0 + o[1]),
                           w, cc, h, tl, th)

@@ -111,6 +111,9 @@ func _update_visual() -> void:
 		_fx.texture = _sparkle_sheet(tier)
 
 
+var _zone_blocked_body: Node = null ## güvenli bölgedeyken dokunan oyuncu (madde 325): bölgeden çıkınca yeniden denenir
+
+
 func _process(delta: float) -> void:
 	bob_time += delta
 	var bob_offset: float = sin(bob_time * 4.0) * 3.0
@@ -120,6 +123,13 @@ func _process(delta: float) -> void:
 	if step != _fx_step and _fx != null:
 		_fx_step = step
 		_fx.frame = step % SPARKLE_FRAMES
+	if _zone_blocked_body != null:
+		var b: Node = _zone_blocked_body
+		if not is_instance_valid(b) or not overlaps_body(b as PhysicsBody2D):
+			_zone_blocked_body = null
+		elif b.get("is_in_merchant_zone") != true:
+			_zone_blocked_body = null
+			_on_body_entered(b)
 
 
 ## bkz. _update_visual: .import henüz yoksa ham dosyadan yüklenir.
@@ -139,6 +149,10 @@ static func _sparkle_sheet(t: int) -> Texture2D:
 
 func _on_body_entered(body: Node) -> void:
 	if not is_instance_valid(body):
+		return
+	## Satıcının güvenli bölgesinde kalkan basılmaz (madde 325): orb yerde kalsın, oyuncu bölgeden çıkınca alır (boşa gitmesin).
+	if body.get("is_in_merchant_zone") == true:
+		_zone_blocked_body = body
 		return
 
 	## İstemcideki GÖRSEL KOPYA: sadece bu istemcinin KENDİ oyuncusu tetikler, kalkanı host dağıtır (bkz. food_drop.gd aynı not).

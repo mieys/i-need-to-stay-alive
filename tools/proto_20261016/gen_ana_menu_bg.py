@@ -64,6 +64,26 @@ def lit_pass(base, lights, ambient, vig=0.35):
     return out
 
 
+def strip_glow(spr):
+    """Sprite'ın kendi basamaklı ışık halesini (dışarıdan erişilen yarı saydam SICAK pikseller: r 255) siler; gövde içinde kalanlar ve
+    yarı saydam gölge (koyu) durur. Ana menü lambası: hale artık shaders/ocak_basi_isik.gdshader'da yumuşak (2026-10-20)."""
+    out = spr.copy()
+    px = out.load()
+    w, h = out.size
+    seen = set()
+    todo = [(x, y) for x in range(w) for y in (0, h - 1)] + [(x, y) for y in range(h) for x in (0, w - 1)]
+    while todo:
+        x, y = todo.pop()
+        if (x, y) in seen or not (0 <= x < w and 0 <= y < h) or px[x, y][3] == 255:
+            continue
+        seen.add((x, y))
+        r, g, b, a = px[x, y]
+        if 0 < a < 255 and r == 255:
+            px[x, y] = (0, 0, 0, 0)
+        todo += [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+    return out
+
+
 def shadow(img, cx, cy, rx, ry, k=0.62):
     """Nesne altı gölge elipsi: 2 basamak (iç koyu, dış dama), yönsüz."""
     px = img.load()
@@ -199,7 +219,7 @@ def bg_b(kit):
     return lit_pass(img, lights, ambient=(0.42, 0.46, 0.64)), wins
 
 
-def bg_c(kit, with_fire=True):
+def bg_c(kit, with_fire=True, unlit=False):
     """Ocak Başı: ahşap kirişli mavi sıva duvar + tahta zemin, ortada yanan şömine (ışık TAM alevde), önünde kırmızı oval halı,
     yanda kitaplık + silah rafı + sarkan otlar, sağda ayaklı lamba (ikinci ışık, lamba başında), saksı. Parti halıda ateşe dönük oturur."""
     wf = sheet(os.path.join(EV, "Interior_walls_floor.png"))
@@ -227,10 +247,10 @@ def bg_c(kit, with_fire=True):
     for y in range(WALL_Y):
         for x in range(W):
             scene.putpixel((x, y), (38, 26, 24, 255) if y < WALL_Y - 1 else (60, 40, 30, 255))
-    for y in range(base_y, base_y + 4):        # duvar dibi gölgesi (2 basamak)
+    for y in range(base_y, base_y + 4):        # duvar dibi gölgesi: düz kararan 4 satır (2026-10-20: eski dama deseni "pixel pixel" kalktı)
         for x in range(W):
             r, g, b, a = scene.getpixel((x, y))
-            k = 0.6 if y < base_y + 2 else (0.78 if (x + y) % 2 else 0.9)
+            k = (0.6, 0.66, 0.76, 0.88)[y - base_y]
             scene.putpixel((x, y), (int(r * k), int(g * k), int(b * k), 255))
     props = Image.new("RGBA", (W, H), (0, 0, 0, 0))
 
@@ -260,14 +280,22 @@ def bg_c(kit, with_fire=True):
     put(inter, (61, 159, 72, 184), 373, 164 - 25)
     LAMP_X, LAMP_Y = 192, base_y + 40                                 # ayaklı lamba sol üstü (Interior_objects 27x43)
     LAMP_HEAD = (LAMP_X + 10, LAMP_Y + 11)
+    # Işıklar shaders/ocak_basi_isik.gdshader ile AYNI (oyunda ışık orada, ekran pikselinde sürekli hesaplanır).
     lights = [(FLAME[0], FLAME[1], 190, (1.0, 0.66, 0.36), 1.15, 0.72),
               (LAMP_HEAD[0], LAMP_HEAD[1], 70, (1.0, 0.72, 0.42), 0.9, 0.85)]
+    lamp = iobj.crop((92, 69, 119, 112))
+    if unlit:  # oyun: ışıksız taban + ayrı lamba katmanı (lamba ışıktan etkilenmez, shader en üste koyar)
+        base = scene.copy()
+        base.alpha_composite(props)
+        lamp_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        lamp_layer.alpha_composite(strip_glow(lamp), (LAMP_X, LAMP_Y))
+        return base, lamp_layer
     amb = (0.30, 0.27, 0.36)
     lit = lit_pass(scene, lights, ambient=amb)
     lit.alpha_composite(lit_pass(props, lights, ambient=amb))
     if with_fire:  # oyunda ateş CANLI oynar (main_menu.gd): arka plana basılmaz, 6 kare ayrı dosyada
         lit.alpha_composite(fire.crop((96, 0, 144, 64)), (FIRE_X, FIRE_Y))  # şömine kendi alevli karesi (ışıksız)
-    lit.alpha_composite(iobj.crop((92, 69, 119, 112)), (LAMP_X, LAMP_Y))
+    lit.alpha_composite(lamp, (LAMP_X, LAMP_Y))
     return lit
 
 
@@ -301,18 +329,20 @@ GAME_OUT = os.path.join(ROOT, "assets", "ui", "ana_menu")
 def export_game(kit):
     """Kullanıcı C'yi (Ocak Başı) seçti (2026-10-16): oyunun kullandığı dosyalar. main_menu.gd ateşi FIRE_POS'ta (tuval px) 6 kareyle oynatır."""
     os.makedirs(GAME_OUT, exist_ok=True)
-    bg_c(kit, with_fire=False).convert("RGB").save(os.path.join(GAME_OUT, "ocak_basi.png"))
+    # 2026-10-20 (kullanıcı: "ana menüdeki ışıklandırmanın pixel pixel olmasını istemiyorum"): ışık artık PİŞİRİLMEZ. ocak_basi.png = IŞIKSIZ
+    # taban, ocak_lamba.png = lamba katmanı; ışık + kenar karartması shaders/ocak_basi_isik.gdshader'da ekran pikselinde, basamaksız/titreşimsiz.
+    base, lamp_layer = bg_c(kit, with_fire=False, unlit=True)
+    base.convert("RGB").save(os.path.join(GAME_OUT, "ocak_basi.png"))
+    lamp_layer.save(os.path.join(GAME_OUT, "ocak_lamba.png"))
     sheet(os.path.join(EV, "Fireplace.png")).save(os.path.join(GAME_OUT, "ocak_ates.png"))  # 288x64 = 6 kare x 48x64
-    # Sol menü D "Panelsiz Ateş Işığı" (kullanıcı seçti): sol taraf basamaklı karartma (okunurluk; ışık değil) + zikzak kiriş süsü ayracı.
-    shade = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    # Sol menü D "Panelsiz Ateş Işığı" (kullanıcı seçti): sol taraf karartma (okunurluk; ışık değil) + zikzak kiriş süsü ayracı.
+    # 2026-10-20: basamak + Bayer titreşimi kalktı -> yumuşak geçiş (smoothstep kuyruk), oyunda DOĞRUSAL süzgeçle gerilir (480x1 yeter).
+    shade = Image.new("RGBA", (W, 1), (0, 0, 0, 0))
     sp = shade.load()
-    for y in range(H):
-        for x in range(W):
-            b = (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16.0 - 0.5
-            t = max(0.0, min(1.0, 1.0 - x / 250.0))
-            a = max(0.0, min(0.92, int(t * 1.05 * 6.0 + b + 0.5) / 6.0))
-            sp[x, y] = (15, 10, 8, int(a * 255))
-    shade.save(os.path.join(GAME_OUT, "sol_golge.png"))  # 480x270, oyunda sahneyle birlikte x4
+    for x in range(W):
+        s = max(0.0, min(1.0, (1.0 - (x + 0.5) / 250.0) * 1.05 / 0.92))
+        sp[x, 0] = (15, 10, 8, int(round(0.92 * s * s * (3.0 - 2.0 * s) * 255)))
+    shade.save(os.path.join(GAME_OUT, "sol_golge.png"))  # 480x1, oyunda tam ekrana LINEAR gerilir
     trim = sheet(os.path.join(EV, "Interior_walls_floor.png")).crop((0, 80, 64, 96))  # oda duvarının kiriş şeridi
     tp = trim.load()
     for y in range(trim.height):

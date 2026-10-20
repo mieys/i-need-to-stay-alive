@@ -14,6 +14,7 @@ extends RefCounted
 ## kullanır (CLAUDE.md "iki ayrı yer" hata sınıfı).
 
 const FxScene: PackedScene = preload("res://scenes/fx_dagger_stab.tscn")
+const MeleeChainMath := preload("res://scripts/melee_chain_math.gd") ## vuruş sonrası bekleme (madde 347 zincir)
 
 const STRIKE_BACK := 8.0 ## = Characters.MAIN_WEAPON slash_fx_offset (vuruş merkezi hedefin bu kadar önünde)
 const REF_OWNER_SCALE := 0.5
@@ -74,9 +75,11 @@ static func busy_duration(speed: float) -> float:
 
 ## İkonu plana göre oynatır + efekti başlatır. host: tween'in bağlanacağı düğüm (silah / kukla). rest_pos/rest_rot: ikonun
 ## YEREL dinlenme konumu/rotasyonu. base_scale: ikonun SABİT taban ölçeği (darbe buna döner). fx_parent: efektin ekleneceği
-## düğüm (dünyada sabit kalsın diye sahne kökü). Dönen tween'i çağıran saklayıp bir sonraki vuruşta kesebilir.
+## düğüm (dünyada sabit kalsın diye sahne kökü). hold: dönüşten önce son pozda bekleme (MeleeChainMath.hold_time; 0 = hemen döner) -
+## sonraki vuruş beklemede gelirse ilk adım (hazırlık) saplı bıçağı oradan geri çeker. Dönen tween'i çağıran saklayıp bir sonraki vuruşta
+## kesebilir.
 static func play(host: Node, icon: Node2D, plan: Dictionary, forward: float, rest_pos: Vector2, rest_rot: float,
-		base_scale: Vector2, speed: float, crit: bool, fx_parent: Node) -> Tween:
+		base_scale: Vector2, speed: float, crit: bool, fx_parent: Node, hold: float = 0.0) -> Tween:
 	var sp: float = maxf(0.01, speed)
 	var target: Vector2 = plan["target"]
 	spawn_fx(fx_parent, plan, sp)
@@ -117,6 +120,7 @@ static func play(host: Node, icon: Node2D, plan: Dictionary, forward: float, res
 			tw.parallel().tween_property(icon, "scale", base_scale * (1.0 + amp), PULSE_IN / sp).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		prev = b
 		first = false
+	MeleeChainMath.append_drift_hold(tw, icon, hold, rest_pos, rest_rot) ## yalnız bıçak beklerken yavaşça geri kayar (madde 347)
 	tw.tween_property(icon, "position", rest_pos, RETURN / sp).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.parallel().tween_property(icon, "rotation", rest_rot, RETURN / sp).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.parallel().tween_property(icon, "scale", base_scale, RETURN / sp)

@@ -1,7 +1,9 @@
 ﻿# SUREC DUZEYI A/B: iki ayri oyun surecini ortam degiskeniyle (oyundaki bir olcum anahtari) ardisik kosturur, "phases" pencerelerinin kare / p95 / render-CPU ortalamasini yazar.
 #   powershell -ExecutionPolicy Bypass -File tools/fps_micro/proc_ab.ps1 -EnvA "MAP_QUAD_OFF=1" -EnvB "MAP_QUAD_OFF=0" -Rounds 4
 # Neden: tek surecte "kopya katman" / kare-kare A/B yanilttirabiliyor (madde 272); oyuna giren bir degisikligin tek guvenilir hakemi budur. A = eski (anahtar kapali), B = yeni.
-# Oyun kodunda anahtar OS.get_environment("...") ile okunmali (ornek: fx_warmup.gd FXW_COLLECT). Varsayilan gorunmez masaustu (gorunur pencere acmaz).
+# Oyun kodunda anahtar OS.get_environment("...") ile okunmali (ornek: fx_warmup.gd FXW_COLLECT, enemy.gd EW_DORMANT). Varsayilan gorunmez masaustu (gorunur pencere acmaz).
+# Cikti (FPS turu 4'ten beri): kare / p95 / render-CPU + kare fazlari (surec = process_frame -> cizim oncesi, cizim, kuyruk = cizim sonrasi -> sonraki kare: fizik adimlari dahil)
+# (Performance.TIME_PROCESS / TIME_PHYSICS_PROCESS bu is icin KULLANILMAZ: ortalama degil, pencere-maksimumu gibi davraniyor - kare ortalamasini yansitmadi.)
 param(
 	[string]$EnvA = "",
 	[string]$EnvB = "",
@@ -23,7 +25,10 @@ for ($i = 1; $i -le $Rounds; $i++) {
 		foreach ($l in $lines) {
 			if ($l.Line -match "frame=([\d.]+) p95=([\d.]+) rcpu=([\d.]+)") {
 				$w++
-				if ($w -gt 1) { $rows += [pscustomobject]@{ side = $side; round = $i; frame = [double]$Matches[1]; p95 = [double]$Matches[2]; rcpu = [double]$Matches[3] } } # ilk pencere isinma
+				$fr = [double]$Matches[1]; $p95 = [double]$Matches[2]; $rc = [double]$Matches[3]
+				$lg = 0.0; $dr = 0.0; $tl = 0.0
+				if ($l.Line -match "logic=([\d.]+) draw=([\d.]+) tail=([\d.]+)") { $lg = [double]$Matches[1]; $dr = [double]$Matches[2]; $tl = [double]$Matches[3] }
+				if ($w -gt 1) { $rows += [pscustomobject]@{ side = $side; round = $i; frame = $fr; p95 = $p95; rcpu = $rc; logic = $lg; draw = $dr; tail = $tl } } # ilk pencere isinma
 			}
 		}
 		Write-Host "tamam: tur $i $side ($e)"
@@ -33,6 +38,7 @@ foreach ($side in @("A", "B")) {
 	$g = @($rows | Where-Object { $_.side -eq $side })
 	if ($g.Count -eq 0) { Write-Host "$side : veri yok"; continue }
 	"{0}: kare={1:N2} ms  p95={2:N2}  render-CPU={3:N2} ms  (pencere n={4})" -f $side, ($g | Measure-Object frame -Average).Average, ($g | Measure-Object p95 -Average).Average, ($g | Measure-Object rcpu -Average).Average, $g.Count
+	"   fazlar: surec(process_frame -> cizim oncesi)={0:N2}  cizim={1:N2}  kuyruk(cizim sonrasi -> sonraki kare, fizik adimlari dahil)={2:N2} ms" -f ($g | Measure-Object logic -Average).Average, ($g | Measure-Object draw -Average).Average, ($g | Measure-Object tail -Average).Average
 }
 for ($i = 1; $i -le $Rounds; $i++) {
 	$a = @($rows | Where-Object { $_.side -eq "A" -and $_.round -eq $i }); $b = @($rows | Where-Object { $_.side -eq "B" -and $_.round -eq $i })

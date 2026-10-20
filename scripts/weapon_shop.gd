@@ -459,7 +459,7 @@ func _hide_prompt() -> void:
 
 # ------------------------------------------------------------------ her kare
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player")
 		if not is_instance_valid(_player):

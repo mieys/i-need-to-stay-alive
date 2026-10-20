@@ -8,7 +8,7 @@ extends SceneTree
 ## Ortam: FXW_CHARS=1,2,... (varsayılan hepsi), FXW_WEAPONS=a,b (varsayılan hepsi).
 
 const ALL_CHARS: Array = [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-const ALL_WEAPONS: Array = ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic"]
+const ALL_WEAPONS: Array = ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "yinyang"]
 const DUMMY_ROSTER: Array = ["slime1", "zombie1", "zombie2", "iskelet2", "ork1"]
 
 var _gm: Node = null

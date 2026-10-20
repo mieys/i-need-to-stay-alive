@@ -151,19 +151,111 @@ func test_entering_unseen_hides_and_enemies_lose_the_player() -> void:
 	_cleanup()
 
 
-func test_spotters_follow_into_the_brush() -> void:
+## madde 283: kovalayan yaratık artık içeri kadar KOVALAMAZ - oyuncu saklı girer, öndeki kovalayan uyutulup arar ("?"), süre dolunca bırakılır.
+func _world() -> Object:
+	return EnemyWorldBridgeScript.fog_world(get_tree())
+
+
+func _chasing(enemy: Node2D, player: Node2D) -> bool:
+	var ti: int = int(_world().get_target(int(enemy.get("_ew_slot"))))
+	return ti >= 0 and EnemyWorldBridgeScript._instance.target_node(ti) == player
+
+
+func _searching(enemy: Node2D) -> bool:
+	return bool(_world().is_dormant(int(enemy.get("_ew_slot")))) and enemy.get("_brush_search_fx") != null
+
+
+func _has_alert(enemy: Node2D) -> bool:
+	for c: Node in enemy.get_children():
+		if c.get_script() == load("res://scripts/fx_brush_search_status.gd") and int(c.get("kind")) == 1:
+			return true
+	return false
+
+
+func test_chasers_stop_and_search_instead_of_following() -> void:
 	_setup_brush()
-	var player: FakePlayer = _make_player(_cc(Vector2i(14, 22)))
-	var enemy: Node2D = _make_enemy(player.global_position + Vector2(-200.0, 0.0)) ## SPOT_RADIUS (340) içinde (0,5 sn yürüyünce ~150 px): GÖRÜYOR
+	var player: FakePlayer = _make_player(_cc(Vector2i(17, 22)))
+	var enemy: Node2D = _make_enemy(player.global_position + Vector2(-150.0, 0.0))
 	await get_tree().process_frame
 	var mgr: Node = _make_manager()
 	mgr.tick()
 	_step_world(0.5)
-	player.global_position = _inside_pos() ## çalıya gir
+	assert(_chasing(enemy, player), "kontrol: yaratık oyuncuyu kovalıyor")
+	player.global_position = _inside_pos() ## kovalanırken çalıya gir
 	mgr.tick()
-	assert(player.brush_state == HideBrushScript.STATE_SPOTTED, "Yaratık görürken girince 'görülmüş' olmalı: %d" % player.brush_state)
-	_step_world(10.0)
-	assert(enemy.global_position.distance_to(player.global_position) < 90.0, "Gören yaratık çalıya girip oyuncuya ulaşmalı: %.0f" % enemy.global_position.distance_to(player.global_position))
+	assert(player.brush_state == HideBrushScript.STATE_HIDDEN, "kovalanırken girse bile SAKLI olmalı: %d" % player.brush_state)
+	assert(_searching(enemy), "öndeki kovalayan uyutulup arar ve başında '?' olur")
+	## süre dolunca bırakılır (saklı oyuncuyu yine hedefleyemez)
+	mgr.tick(ManagerScript.SEARCH_TIME_MAX + 0.5)
+	assert(not bool(_world().is_dormant(int(enemy.get("_ew_slot")))), "arama süresi dolunca yaratık bırakılır")
+	assert(enemy.get("_brush_search_fx") == null, "bırakılınca '?' kalkar")
+	assert(player.brush_state == HideBrushScript.STATE_HIDDEN, "bırakılan yaratık saklı oyuncuyu göremez")
+	_cleanup()
+
+
+func test_ring_detection_alarms_searchers_and_neighbours() -> void:
+	_setup_brush()
+	var player: FakePlayer = _make_player(_cc(Vector2i(17, 22)))
+	var a: Node2D = _make_enemy(player.global_position + Vector2(-150.0, 0.0))
+	var b: Node2D = _make_enemy(player.global_position + Vector2(-150.0, 40.0))
+	await get_tree().process_frame
+	var mgr: Node = _make_manager()
+	mgr.tick()
+	_step_world(0.5)
+	player.global_position = _inside_pos()
+	mgr.tick()
+	assert(player.brush_state == HideBrushScript.STATE_HIDDEN)
+	assert(_searching(a) and _searching(b), "iki kovalayan da arıyor")
+	var c: Node2D = _make_enemy(_inside_pos() + Vector2(300.0, 0.0)) ## kovalamayan ama görenin ALARM_RADIUS (420) içinde
+	await get_tree().process_frame
+	a.global_position = player.global_position + Vector2(25.0, 0.0) ## halkaya (RING_RADIUS 36) girdi
+	_step_world(DT)
+	mgr.tick()
+	assert(player.brush_state == HideBrushScript.STATE_SPOTTED, "halkaya giren görür: %d" % player.brush_state)
+	var spotters: Dictionary = mgr._entries[0]["spotters"]
+	for e: Node2D in [a, b, c]:
+		assert(spotters.has(e.get_instance_id()), "alarm: gören + arayanlar + yakındakiler saldırır")
+	assert(not bool(_world().is_dormant(int(a.get("_ew_slot")))) and not bool(_world().is_dormant(int(b.get("_ew_slot")))), "alarmda arama biter")
+	assert(_has_alert(a), "görenin başında '!'")
+	_step_world(3.0)
+	assert(b.global_position.distance_to(player.global_position) < 120.0, "alarmla arayan da oyuncuya saldırır: %.0f" % b.global_position.distance_to(player.global_position))
+	_cleanup()
+
+
+func test_damaging_skill_reveals_the_hidden_player() -> void:
+	_setup_brush()
+	var player: FakePlayer = _make_player(_inside_pos())
+	var enemy: Node2D = _make_enemy(player.global_position + Vector2(150.0, 0.0)) ## SPOT_RADIUS (340) içinde, görüş açık
+	await get_tree().process_frame
+	var mgr: Node = _make_manager()
+	mgr.tick()
+	assert(player.brush_state == HideBrushScript.STATE_HIDDEN)
+	HideBrushScript.note_skill_hit(get_tree(), "w:tabanca") ## silah isabeti bozmaz
+	HideBrushScript.note_skill_hit(get_tree(), "s:diger_bir_sey") ## yuvası olmayan (pasif/evcil/eşya) bozmaz
+	mgr.tick()
+	assert(player.brush_state == HideBrushScript.STATE_HIDDEN, "silah/pasif isabeti saklılığı bozmaz")
+	HideBrushScript.note_skill_hit(get_tree(), "s:talon_dash") ## Talon Q
+	mgr.tick()
+	assert(player.brush_state == HideBrushScript.STATE_SPOTTED, "hasar veren yetenek açığa çıkarır: %d" % player.brush_state)
+	assert((mgr._entries[0]["spotters"] as Dictionary).has(enemy.get_instance_id()), "görüşteki yaratık saldırır")
+	_cleanup()
+
+
+func test_guards_and_bosses_do_not_search() -> void:
+	_setup_brush()
+	var player: FakePlayer = _make_player(_cc(Vector2i(17, 22)))
+	var guard: Node2D = _make_enemy(player.global_position + Vector2(-150.0, 0.0))
+	guard.add_to_group("guards")
+	var boss: Node2D = _make_enemy(player.global_position + Vector2(-150.0, 40.0))
+	boss.set("is_boss", true)
+	await get_tree().process_frame
+	var mgr: Node = _make_manager()
+	mgr.tick()
+	_step_world(0.5)
+	player.global_position = _inside_pos()
+	mgr.tick()
+	assert(player.brush_state == HideBrushScript.STATE_HIDDEN)
+	assert(not _searching(guard) and not _searching(boss), "bekçi (kendi araması var) ve boss aramaz")
 	_cleanup()
 
 

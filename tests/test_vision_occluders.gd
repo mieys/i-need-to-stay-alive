@@ -271,3 +271,56 @@ func test_cliff_wall_rule_unchanged_for_sources_outside() -> void:
 	assert(not occ.is_ray_blocked(source, _world(forest, Vector2(10.5, 10.5))), "Kalın duvarın yüzü engellendi")
 	assert(occ.is_ray_blocked(source, _world(forest, Vector2(10.5, 8.5))), "Kalın duvarın ardı görünür kaldı")
 	_cleanup()
+
+
+## FPS turu 4 (madde 278): HIZLI RET (ışının sınır kutusunda engel karosu yoksa DDA'ya girmeden false) eski DDA ile BİREBİR aynı sonucu vermeli.
+## Rastgele duvar / dağınık karo ızgaralarında binlerce rastgele ışın (kısa, uzun, duvar içinden başlayan, duvar yüzüne biten) iki yolla karşılaştırılır; ayrıca hızlı
+## retin gerçekten devreye girdiği (boş bölgelerdeki ışınlar) doğrulanır.
+func test_raybox_shortcut_matches_the_full_dda_exactly() -> void:
+	seed(20261019)
+	var cells: Array[Vector2i] = []
+	for _i in range(14): ## kalınlığı 1-6 karo olan rastgele duvarlar
+		var x: int = randi_range(-60, 60)
+		var y: int = randi_range(-45, 45)
+		var w: int = randi_range(1, 14) if randf() < 0.5 else randi_range(1, 4)
+		var h: int = randi_range(1, 4) if w > 4 else randi_range(1, 14)
+		cells.append_array(WallLayerFactory.rect_cells(x, y, x + w, y + h))
+	for _i in range(120): ## dağınık tek karolar (taş / mantar / çalı)
+		cells.append(Vector2i(randi_range(-70, 70), randi_range(-55, 55)))
+	var layer: TileMapLayer = _layer(cells, Vector2(-32.0, 336.0)) ## ana harita gibi kaydırılmış
+	var occ: RefCounted = _occluders(layer)
+	var skipped: int = 0
+	var blocked_count: int = 0
+	var pairs: int = 6000
+	for i in range(pairs):
+		var span: float = 40.0 if i % 3 == 0 else (200.0 if i % 3 == 1 else 700.0)
+		var from: Vector2 = layer.to_global(Vector2(randf_range(-75.0, 75.0), randf_range(-60.0, 60.0)) * CELL)
+		var to: Vector2 = from + Vector2(randf_range(-span, span), randf_range(-span, span))
+		VisionOccludersScript.set_raybox(true)
+		var fast: bool = occ.is_ray_blocked(from, to)
+		VisionOccludersScript.set_raybox(false)
+		var full: bool = occ.is_ray_blocked(from, to)
+		VisionOccludersScript.set_raybox(true)
+		assert(fast == full, "ışın %s -> %s: hızlı ret %s / tam DDA %s" % [str(from), str(to), str(fast), str(full)])
+		if full:
+			blocked_count += 1
+		if occ._box_is_clear(occ.world_to_cell_f(from), occ.world_to_cell_f(to)):
+			skipped += 1
+	assert(blocked_count > 100, "denemede engellenen ışın da olmalı (%d)" % blocked_count)
+	assert(skipped > 500, "hızlı ret boş bölgelerde devreye girmeli (%d / %d)" % [skipped, pairs])
+	VisionOccludersScript.set_raybox(true)
+	_cleanup()
+
+
+func test_raybox_table_is_reset_by_rebuild_and_unused_for_hand_filled_grids() -> void:
+	var layer: TileMapLayer = _layer(WallLayerFactory.rect_cells(10, 10, 12, 30))
+	var occ: RefCounted = _occluders(layer)
+	var a: Vector2 = _world(layer, Vector2(5.5, 20.5))
+	var b: Vector2 = _world(layer, Vector2(20.5, 20.5))
+	assert(occ.is_ray_blocked(a, b), "duvarın arkası engelli olmalı")
+	occ.build(null)
+	assert(occ.is_empty() and occ._macro_w == 0 and not occ.is_ray_blocked(a, b), "yeniden kurulan boş ızgarada eski tablo kalmamalı")
+	var hand: RefCounted = VisionOccludersScript.new()
+	hand._cells = PackedByteArray([0, 0, 0, 0])
+	assert(hand._macro_w == 0 and not hand.is_ray_blocked(Vector2.ZERO, Vector2(10.0, 10.0)), "elle verilen ızgara eski yolu kullanır")
+	_cleanup()

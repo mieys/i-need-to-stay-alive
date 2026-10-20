@@ -42,6 +42,10 @@ uniform vec2 hucre_ofset = vec2(0.0);                       // hücre (0,0)'ın 
 uniform bool on_katman = false;
 uniform int karakter_sayisi = 0;
 uniform vec4 karakterler[8];
+// AYAK ALTI PAYI (2026-10-19, kullanıcı: ağacın arkasındaki oyuncunun kalkan baloncuğu ağacın üstünde parça parça kalıyordu): karakterin gövdeden
+// taşan görünür eklentisi (baloncuk) ayağın altına iner - dikdörtgenin alt kenarı ayak + karakter_alt[i] (en az 1; 0 = eski davranış).
+// Önde/arkada kararı yine AYAĞA göre. depth_occluders.gd attachment_extent yazar.
+uniform float karakter_alt[8];
 uniform int yaratik_sayisi = 0;                              // YARATIKLAR (2026-10-09): derinlik_on_katman.gdshader ile AYNI kural/biçim
 uniform vec4 yaratiklar[32];
 
@@ -99,7 +103,7 @@ bool orter(vec2 p, float kok_y) {
 	for (int i = 0; i < 8; i++) {
 		if (i >= karakter_sayisi) { break; }
 		vec4 c = karakterler[i];
-		if (abs(p.x - c.x) <= c.z && p.y >= c.y - c.w && p.y <= c.y + 1.0) {
+		if (abs(p.x - c.x) <= c.z && p.y >= c.y - c.w && p.y <= c.y + max(1.0, karakter_alt[i])) {
 			if (kok_y > c.y) { arkada = true; } else { return false; }
 		}
 	}

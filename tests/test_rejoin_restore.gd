@@ -128,6 +128,48 @@ func test_run_kills_survive_the_rejoin_snapshot() -> void:
 	GameManager.reset()
 
 
+## 2026-10-20: host çıkınca hasar sıralaması sıfırlanıyordu - yeni Player match_damage_* sıfırdan başlıyordu (anlık görüntüde yoktu).
+func test_match_damage_survives_the_rejoin_snapshot() -> void:
+	var p: Node = _make_player(4)
+	p.match_damage_dealt = 12345.0
+	p.match_damage_taken = 678.0
+	var snap: Dictionary = p.get_rejoin_snapshot()
+	assert(float(snap["dmg_dealt"]) == 12345.0 and float(snap["dmg_taken"]) == 678.0, "anlık görüntü hasar toplamlarını taşır")
+	p.free()
+	_spawned.clear()
+	GameManager.reset()
+	var q: Node = _make_player(4)
+	assert(float(q.match_damage_dealt) == 0.0, "yeni Player sıfırdan başlar")
+	q.restore_from_rejoin_snapshot(snap, 3)
+	assert(float(q.match_damage_dealt) == 12345.0, "verilen hasar geri geldi: %f" % float(q.match_damage_dealt))
+	assert(float(q.match_damage_taken) == 678.0, "alınan hasar geri geldi: %f" % float(q.match_damage_taken))
+	_cleanup()
+
+
+func test_match_damage_does_not_change_the_snapshot_signature() -> void:
+	var base := {"gm": {"gold": 1}, "level": 5, "upgrades": [], "evos": [], "hp": 1.0, "max_hp": 2.0, "shield": 0.0,
+		"pos": Vector2.ZERO, "indoors": false, "char": 4, "dmg_dealt": 10.0, "dmg_taken": 1.0}
+	var sig0: int = NetworkManager.rejoin_snapshot_signature(base)
+	var hit: Dictionary = base.duplicate(true)
+	hit["dmg_dealt"] = 99999.0
+	hit["dmg_taken"] = 5000.0
+	assert(NetworkManager.rejoin_snapshot_signature(hit) == sig0, "hasar toplamı her vuruşta değişir: imzayı değiştirmemeli (RPC her 6 sn'de gitmesin)")
+
+
+## Host devri: Ruh Kıymığı banka sayacı reset()'ten sağ çıkmalı (yoksa koşu devirden sonra ikinci kez bankalanır).
+func test_migration_resume_keeps_shard_bank_counters() -> void:
+	GameManager.reset()
+	GameManager.run_shards_banked = 37
+	GameManager.run_victory_shards_given = true
+	NetworkManager._capture_migration_resume()
+	GameManager.reset()
+	assert(GameManager.run_shards_banked == 0 and not GameManager.run_victory_shards_given, "reset sıfırlar")
+	NetworkManager._apply_migration_resume_gm()
+	assert(GameManager.run_shards_banked == 37, "banka sayacı geri geldi: %d" % GameManager.run_shards_banked)
+	assert(GameManager.run_victory_shards_given, "zafer ödülü işareti geri geldi")
+	GameManager.reset()
+
+
 func test_reset_announces_before_wiping_run_state() -> void:
 	GameManager.reset()
 	GameManager.run_kills = 40

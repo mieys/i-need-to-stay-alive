@@ -1,0 +1,15 @@
+Yıldırım Asası DÖNGÜ prototipleri - ölçüm
+
+şimdiki (electric_loop)    süre  3.01 sn | tepe 0.39 | anlık K  -20.3 dB | tepeden -20 dB'e 3.01 sn | bant% <150:26.8 150-500: 8.0 500-2k: 1.5 2k-5k: 8.1 5k+:55.5 | son 10 ms  -35.5 dB | maks sıçrama 0.50 | ortalama K -21.8
+L1 - Derin Uğultu          süre  6.00 sn | tepe 0.46 | anlık K  -19.6 dB | tepeden -20 dB'e 6.00 sn | bant% <150:22.2 150-500:52.4 500-2k:18.8 2k-5k: 4.5 5k+: 2.0 | son 10 ms  -19.2 dB | maks sıçrama 0.30 | ortalama K -21.8
+    dikiş sıçraması 0.0661 (fark p99 0.0591, en büyük 0.3011) | ilk/son 20 ms -18.8/-19.3 dB
+L2 - Cızırdayan Ark        süre  6.00 sn | tepe 0.65 | anlık K  -20.7 dB | tepeden -20 dB'e 6.00 sn | bant% <150:23.2 150-500:15.7 500-2k:13.9 2k-5k:25.1 5k+:22.1 | son 10 ms  -22.1 dB | maks sıçrama 0.59 | ortalama K -21.8
+    dikiş sıçraması 0.0712 (fark p99 0.1476, en büyük 0.5854) | ilk/son 20 ms -20.9/-21.8 dB
+L3 - Akan Enerji           süre  6.00 sn | tepe 0.39 | anlık K  -19.1 dB | tepeden -20 dB'e 6.00 sn | bant% <150:14.8 150-500:27.1 500-2k:46.6 2k-5k:10.5 5k+: 0.9 | son 10 ms  -22.9 dB | maks sıçrama 0.23 | ortalama K -21.8
+    dikiş sıçraması 0.0029 (fark p99 0.0496, en büyük 0.2288) | ilk/son 20 ms -21.3/-21.5 dB
+
+Videolar ortak kazanç +3.4 dB (yatak = oyunun kendi sesi: A vuruşları + ilk çakış, uğultu susturulmuş)
+  dongu_simdiki.mp4 12.4 sn, tepe 0.89, anlık K maks -21.9
+  dongu_L1.mp4 12.4 sn, tepe 0.89, anlık K maks -21.5
+  dongu_L2.mp4 12.4 sn, tepe 0.87, anlık K maks -21.9
+  dongu_L3.mp4 12.4 sn, tepe 0.88, anlık K maks -21.7

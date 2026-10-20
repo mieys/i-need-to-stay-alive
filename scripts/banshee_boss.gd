@@ -18,8 +18,8 @@ enum S { APPEAR, APPROACH, WINDUP, DASH, SLOW, PAUSE, RETREAT, SCREAM }
 ## ofseti BODY_SCALE_REL ile), hasar x2 (atılış 120 -> 240, çığlık 130 -> 260), yaklaşma/atılış/yavaşlama çok daha hızlı, bekleme ve nişan süreleri kısa (atılış döngüsü ~3 sn -> ~1,4 sn),
 ## çığlık her 2 atılışta bir (eskiden 3), 5 şeritli (eskiden 3), daha kalın ve daha kısa uyarılı; yavaş geri çekilme de hızlandı. Eski değerler: APPROACH 190, ENGAGE 250, WINDUP 0,55, DASH 580/780,
 ## SLOW 820, PAUSE 0,3, OVERSHOOT 260, SCREAM_EVERY 3, RETREAT 120/3,5 sn, LANE_WARN 1,0, LANE_WIDTH 44, 3 şerit, 3 oyuncu.
-const SCREAM_DAMAGE := 260.0 ## 2026-10-11: x0,8 kesintisi iptal edildi (208 -> 260). ## 2026-10-11: x0,8 (kullanıcı: "tüm yaratıkların hasarını %20 azalt"), 260 -> 208
-const BODY_SCALE_REL := 0.7       ## boss eskisinden %30 küçük
+const SCREAM_DAMAGE := 364.0 ## 2026-10-19: +%40 (260 -> 364). ## 2026-10-11: x0,8 kesintisi iptal edildi (208 -> 260). ## 2026-10-11: x0,8 (kullanıcı: "tüm yaratıkların hasarını %20 azalt"), 260 -> 208
+const BODY_SCALE_REL := 0.49      ## ilk boydan (3,0) x0,7 x0,7 (2026-10-10 ve 2026-10-19 %30 küçültmeleri)
 const APPEAR_TIME := 1.0
 const APPROACH_SPEED := 340.0
 const ENGAGE_DIST := 380.0
@@ -281,6 +281,8 @@ func _spawn_lanes() -> void:
 			var a: float = (float(lane) - float(LANE_COUNT - 1) * 0.5) * LANE_FAN ## 5 şeritte -2,-1,0,1,2 x LANE_FAN
 			var dir: Vector2 = base.rotated(a)
 			var length: float = AbilitiesScript.clip_ray_to_domes(e.get_tree(), origin, dir, AbilitiesScript.clip_ray_to_walls(origin, dir, LANE_LENGTH)) ## duvarda VE Şovalye baloncuğunda biter
-			var data: Dictionary = {"dir": dir, "length": length, "width": LANE_WIDTH, "warn": LANE_WARN, "fire": LANE_FIRE}
+			## burst: ağız halka patlaması çığlık başına TEK kez (ilk hedefin orta şeridi; banshee_wave.gd).
+			var data: Dictionary = {"dir": dir, "length": length, "width": LANE_WIDTH, "warn": LANE_WARN, "fire": LANE_FIRE,
+					"burst": count == 1 and lane * 2 == LANE_COUNT - 1}
 			AbilitiesScript.spawn_world_fx(e.get_tree(), "banshee_wave", origin, data, true, e, SCREAM_DAMAGE)
 			AbilitiesScript._broadcast_world_fx("banshee_wave", origin, data)

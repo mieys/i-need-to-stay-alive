@@ -22,6 +22,10 @@ uniform vec2 veri_boyut = vec2(1.0);
 uniform vec2 hucre_ofset = vec2(0.0);      // hücre (0,0)'ın dünyadaki sol-üstü
 uniform int karakter_sayisi = 0;
 uniform vec4 karakterler[8];               // (ayak x, ayak y, yarım genişlik, boy) - dünya px (grass_sway.gd ile AYNI)
+// AYAK ALTI PAYI (2026-10-19, kullanıcı: ağacın arkasındaki oyuncunun kalkan baloncuğu ağacın üstünde parça parça kalıyordu): karakterin gövdeden
+// taşan görünür eklentisi (baloncuk) ayağın altına iner - dikdörtgenin alt kenarı ayak + karakter_alt[i] (en az 1; 0 = eski davranış).
+// Önde/arkada kararı yine AYAĞA göre. depth_occluders.gd attachment_extent yazar.
+uniform float karakter_alt[8];
 // YARATIKLAR (2026-10-09, kullanıcı: "yaratıklar ağaçların ve evlerin üstünde yürüyor"): depth_occluders.gd, bir nesne kümesine değen
 // (nesnenin kökü ayağından aşağıda ya da hemen yakınında olan) görünür yaratıkların gövde dikdörtgenlerini de yazar - aynı biçim.
 uniform int yaratik_sayisi = 0;
@@ -41,7 +45,7 @@ bool orter(vec2 p, float kok_y) {
 	for (int i = 0; i < 8; i++) {
 		if (i >= karakter_sayisi) { break; }
 		vec4 c = karakterler[i];
-		if (abs(p.x - c.x) <= c.z && p.y >= c.y - c.w && p.y <= c.y + 1.0) {
+		if (abs(p.x - c.x) <= c.z && p.y >= c.y - c.w && p.y <= c.y + max(1.0, karakter_alt[i])) {
 			if (kok_y > c.y) { arkada = true; } else { return false; }
 		}
 	}

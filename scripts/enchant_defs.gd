@@ -57,7 +57,7 @@ const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Tüftüf", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay", "crossbow": "Arbalet",
 	"boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek", "pence": "Pençe", "topuz": "Topuz",
-	"uzunkilic": "Uzunkılıç",
+	"uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı",
 }
 
 const DEFS := {
@@ -328,7 +328,7 @@ const DEFS := {
 	"sismik_dalga": {
 		"weapons": ["topuz"], "name": "Sismik Dalga", "element": "fiziksel",
 		"desc": "Topuz yere vurduğunda şansa bağlı olarak vuruş noktasından yayılan, düşmanları sarsan bir şok dalgası çıkar.",
-		"base": {"text": "Her vuruş %40 ihtimalle vuruş noktasından yayılan bir dalga çıkarır (4 vuruş üst üste çıkmazsa sonraki kesin çıkar): 110 birim içindekilere saldırı gücünün %70'i kadar hasar verir ve onları 20 birim sarsar (topuzun menzilinden atmaz).",
+		"base": {"text": "Her vuruş %40 ihtimalle vuruş noktasından yayılan bir dalga çıkarır (4 vuruş üst üste çıkmazsa sonraki kesin çıkar): 110 birim içindeki en yakın 8 düşmana saldırı gücünün %70'i kadar hasar verir (kalabalıkta fazlası %35'ini alır) ve hepsini 20 birim sarsar (topuzun menzilinden atmaz).",
 			"set": {"seis_chance": 0.40, "seis_pity": 4, "seis_radius": 110.0, "seis_ap": 0.7, "seis_push": 20.0, "seis_pulses": 1}},
 		"upgrades": [
 			{"name": "Halka Yankısı", "text": "Dalga ihtimali: %40 → %50.", "add": {"seis_chance": 0.10}},
@@ -515,6 +515,11 @@ static func upgrades_taken(ench: Dictionary) -> Array:
 
 static func is_complete(ench: Dictionary) -> bool:
 	return bool(ench.get("final", false))
+
+
+## Final sonrası SINIRSIZ güçlendirme sayısı (kayıtta "plus", 2026-10-19): her biri yalnız stat verir (weapon.gd tier_*), özellik/kademe sanatı 5'te kalır.
+static func plus_count(ench: Dictionary) -> int:
+	return maxi(0, int(ench.get("plus", 0))) if is_complete(ench) else 0
 
 
 ## Kaydı davranış scriptinin okuyacağı düz istatistik sözlüğüne çevirir: base.set -> alınan geliştirmeler (indeks sırasıyla;

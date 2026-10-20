@@ -103,7 +103,7 @@ func _frames(n: int) -> void:
 func test_all_fifteen_weapons_are_sold_at_the_old_prices() -> void:
 	_save_state()
 	var keys: Array = Logic.weapon_keys() ## _save_state kilitleri açar
-	assert(keys.size() == 15, "kilitler açıkken 15 silahın hepsi satılmalı, bulunan: %d" % keys.size())
+	assert(keys.size() == Logic.WeaponCatalogScript.KEYS.size(), "kilitler açıkken katalogdaki silahların hepsi satılmalı, bulunan: %d" % keys.size())
 	assert(Logic.weapon_price(0) == ShopPanel.SECOND_WEAPON_COST and Logic.weapon_price(1) == ShopPanel.SECOND_WEAPON_COST,
 		"ilk iki alım eski 'ikinci silah' fiyatı (30): %d / %d" % [Logic.weapon_price(0), Logic.weapon_price(1)])
 	for n in range(2, 5):
@@ -198,8 +198,9 @@ func test_selling_a_weapon_refunds_seventy_percent_of_the_shards_spent() -> void
 	add_child(panel)
 	var shards: int = GameManager.weapon_shards
 	var gold: int = GameManager.gold
-	panel._on_sell_weapon_equip(1) ## onay penceresi metni parçacığı da söyler
-	assert("7 Silah Parçacığı" in panel._sell_confirm_dialog.dialog_text, "onay metni: %s" % panel._sell_confirm_dialog.dialog_text)
+	panel._on_sell_weapon_equip(1) ## masaüstü: tıklama silahı seçer, kartın iade metni parçacığı da söyler (madde 341, onay penceresi yok)
+	assert("7 Silah Parçacığı" in panel._ch_sell_note, "iade metni: %s" % panel._ch_sell_note)
+	assert(GameManager.owned_weapons.size() == 2, "seçmek satmaz")
 	panel._do_sell_weapon_equip(1)
 	assert(GameManager.owned_weapons.size() == 1, "silah satıldı")
 	assert(GameManager.weapon_shards == shards + 7, "envanterden satış 7 parçacık geri verir: %d -> %d" % [shards, GameManager.weapon_shards])
@@ -356,13 +357,13 @@ func test_screen_lists_every_weapon_and_buys_through_the_rules() -> void:
 	var p := FakePlayer.new()
 	add_child(p)
 	var screen: CanvasLayer = await _open_screen(p)
-	assert(screen._rows.size() == 15, "15 silah plakası, bulunan: %d" % screen._rows.size())
+	assert(screen._rows.size() == Logic.WeaponCatalogScript.KEYS.size(), "her silaha bir plaka, bulunan: %d" % screen._rows.size())
 	var seen: Dictionary = {}
 	for r in screen._rows:
 		seen[str(r["entry"]["key"])] = true
 		assert(screen._entry_can_buy(r["entry"]), "altın varken alınabilir: %s" % r["entry"]["key"])
 		assert(str(r["price"].text) == "30", "ilk silah fiyatı 30: %s" % r["price"].text)
-	assert(seen.size() == 15, "plakalar 15 FARKLI silah olmalı")
+	assert(seen.size() == Logic.WeaponCatalogScript.KEYS.size(), "plakalar hepsi FARKLI silah olmalı")
 	assert(screen._status_label.text == "Silah yuvası 0/5", "durum: %s" % screen._status_label.text)
 	var first: Dictionary = screen._rows[0]["entry"]
 	screen._on_buy_pressed(first)

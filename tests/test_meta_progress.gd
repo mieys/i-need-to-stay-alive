@@ -144,7 +144,8 @@ func test_corrupt_file_does_not_crash() -> void:
 
 func test_locked_items_listing_is_sorted_by_cost() -> void:
 	var items: Array = MetaProgressScript.locked_items()
-	assert(items.size() == 10 + 11 + 4 + 4, "kilitli toplam: %d" % items.size())
+	## silah sayısı katalogla büyür (Gökkuşağı/Mızrak 2026-10-19) - kilitli silah adedi COSTS tablosundan
+	assert(items.size() == 10 + (MetaProgressScript.COSTS[MetaProgressScript.WEAPON] as Dictionary).size() + 4 + 4, "kilitli toplam: %d" % items.size())
 	var last_by_kind: Dictionary = {}
 	for it: Dictionary in items:
 		var k: String = str(it["kind"])

@@ -337,7 +337,7 @@ func _on_mouse_entered() -> void:
 		stats_well.add_child(lbl_detail)
 	else:
 		var lbl_hint: RichTextLabel = HudTooltip.make_rich(MenuKit.FS_SMALL, HudTheme.DIM)
-		lbl_hint.text = "[color=#%s]Shift[/color] basılı tut: bu oyundaki hasar" % HudTheme.TEXT.to_html(false)
+		lbl_hint.text = "[color=#%s]Shift[/color] basılı tut: bu oyundaki etkisi" % HudTheme.TEXT.to_html(false)
 		vbox.add_child(lbl_hint)
 
 	hud_layer.add_child(tooltip_panel)

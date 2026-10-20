@@ -167,7 +167,7 @@ const MAX_PLAYERS := 8
 ## Host devri: kabul edilen herkes şifreyi bilir (room_password = girdiği şifre) - yeni host aynı ayarlarla kurar, diğerleri aynı
 ## şifreyle otomatik doğrulanır.
 const ROOM_MIN_PLAYERS := 2
-const LOBBY_PROTOCOL := "lobi-8" ## (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
+const LOBBY_PROTOCOL := "lobi-14" ## (2026-10-21: lobi-13 -> lobi-14, Oakley yetenek evrimleri: "oakley_revive" oyuncu efekti + "oakley_tree" süre/alan verisi + bee_poison RPC param2 (Salgın Zehir) - eski exe tanımaz, madde 348); (2026-10-20: lobi-12 -> lobi-13, yeni silah Kalkan "kalkan" + "kalkan_*" darbe verisi - eski exe silahı tanımaz, madde 338); (2026-10-19: lobi-11 -> lobi-12, yeni silah Gökkuşağı Asası "gokkusagi" + "rbeam_*" oyuncu efektleri - eski exe silahı/ışını tanımaz, madde 306); (lobi-10 -> lobi-11, Yıldırım Asası vuruş sesi: "beam_hit" oyuncu efekti - eski exe tanımaz, tikleri sessiz duyar, madde 294); lobi-10: (2026-10-19: lobi-9 -> lobi-10, saklanma çalılığı: request_brush_reveal RPC'si + "brush_search_*"/"brush_alert" yaratık efektleri, madde 283); lobi-9: (2026-10-19: lobi-8 -> lobi-9, broadcast_enemy_projectile'a mermi stili argümanı - lich Ruh Alevi, madde 280); lobi-8: (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
 const AUTH_TIMEOUT_MS := 10000 ## host: bu sürede doğrulanmayanı atar; istemci: bu sürede kabul gelmezse vazgeçer
 const PHASE_ROOM := "room"
 const PHASE_SELECT := "select"
@@ -927,6 +927,8 @@ func _clear_peer_state() -> void:
 	_chest_turn_last_peer = 0 ## yeni odada normal sandık sırası baştan başlar
 	level_up_busy_peers.clear()
 	level_up_timer_active = false
+	chest_countdown_active = false
+	_flow_clock_carry = false
 	## bkz. _is_game_in_progress/_is_rejoining_midgame üstündeki DÜZELTME
 	## notu - eski odadan kalan bu bayraklarla yeni bir odaya girilmesin.
 	_is_game_in_progress = false
@@ -1281,6 +1283,7 @@ func _reset_for_restart_lobby() -> void:
 	chest_busy_peers.clear()
 	_chest_turn_last_peer = 0
 	chest_countdown_active = false
+	_flow_clock_carry = false
 	level_up_busy_peers.clear()
 	level_up_timer_active = false
 	mini_shop_pending_peers.clear()
@@ -1549,12 +1552,17 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	## kalırdı - chest_busy_peers ile AYNI düzeltme.
 	if level_up_busy_peers.has(peer_id):
 		level_up_busy_peers.erase(peer_id)
+		if level_up_busy_peers.is_empty():
+			level_up_timer_active = false ## bkz. _begin_shared_wait_clock
 		level_up_busy_state_changed.emit()
 	## #58 DÜZELTME: ayrılan peer sandık seçerken kopmuşsa (chest_busy_peers'ta
 	## kalmış olabilir) TEMİZLENMEZSE geri kalan herkes SONSUZA KADAR "bir
 	## oyuncu sandık açıyor" bekleme ekranında donup kalırdı.
 	if chest_busy_peers.has(peer_id):
 		chest_busy_peers.erase(peer_id)
+		if chest_busy_peers.is_empty():
+			chest_countdown_active = false
+			_flow_clock_carry = false
 		chest_busy_state_changed.emit()
 	## BUG DÜZELTMESİ (kullanıcı bildirimi: "bazen bir anda tüm yaratıklar
 	## donuyor") - level_up_pending_peers/chest_busy_peers'la AYNI temizlik,
@@ -1629,10 +1637,9 @@ func _rpc_sync_player_info(p_name: String, p_char_id: int, p_is_host: bool) -> v
 ## ağdan bağımsız olarak bitirir (main.gd _advance_level_up_queue artık
 ## ağı hiç beklemeden bir sonraki kartı hemen açıyor); sadece kuyruğu
 ## TÜKENİNCE "meşgul değilim" diye bildirir - oyun, EN SON biten oyuncu da
-## bitirene kadar devam etmez. Geri sayım (level_up_countdown) sandığınkiyle
-## AYNI şekilde HER yeni kart/silah/kalkan ekranı açıldığında 25sn'ye
-## resetlenir - biri hâlâ (kendi kuyruğundaki bir sonraki) kartı seçtiği
-## sürece kimse zaman aşımına uğramaz.
+## bitirene kadar devam etmez. Geri sayım (level_up_countdown) artık HER yeni
+## ekranda sıfırlanmaz: kart + sandık akışı için TEK ortak 25 sn (bkz.
+## _begin_shared_wait_clock).
 var level_up_busy_peers: Dictionary = {} ## peer_id -> true (kuyruğu hâlâ dolu)
 var level_up_timer_active: bool = false
 var level_up_countdown: float = 25.0
@@ -1657,6 +1664,8 @@ func _rpc_set_level_up_busy(peer_id: int, busy: bool) -> void:
 		level_up_busy_peers[peer_id] = true
 	else:
 		level_up_busy_peers.erase(peer_id)
+		if level_up_busy_peers.is_empty():
+			level_up_timer_active = false ## akış bitti (bkz. _begin_shared_wait_clock)
 	level_up_busy_state_changed.emit()
 
 
@@ -1674,14 +1683,36 @@ func start_level_up_countdown() -> void:
 	if is_multiplayer_active:
 		_rpc_start_level_up_countdown.rpc()
 	else:
-		level_up_timer_active = true
-		level_up_countdown = 25.0
+		_begin_shared_wait_clock()
+
+
+## ORTAK BEKLEME SAYACI (kullanıcı bildirimi: "kart seçim ekranından sandık
+## ekranına geçince 25 saniyelik bekleme süresi sıfırlanıyor, her sandık
+## açışında bidaha sıfırlanıyor, bu süre hepsi için ortak olmalıydı"): 25 sn
+## kart akışı BAŞLARKEN bir kez kurulur (ilk kart ekranı açan oyuncu) ve
+## akış bitene kadar (kart + sandık kuyrukları, EN SON oyuncu da bitirene dek)
+## SIFIRLANMAZ - sonraki kart ekranı, kart -> sandık geçişi ve her yeni sandık
+## başlatma çağrısı sadece "akış sürüyor" diye yutulur. Süre dolunca
+## seçimini yapmamış herkes için otomatik seçim zaten devrede; sonradan açılan
+## ekranlar da ilk karede otomatik seçilir. "Akış sürüyor" = sayaç açık VE en az
+## bir oyuncu meşgul (meşgul kümesi boşalınca sayaç da kapanır, bkz.
+## _rpc_set_level_up_busy/_rpc_set_chest_busy) - ayrılan oyuncu yüzünden
+## kapanmadan kalmış eski bir sayaç yeni akışı bozmaz.
+const SHARED_WAIT_SECONDS: float = 25.0
+var _flow_clock_carry: bool = false ## kart akışının sayacı sandık aşamasına devredilebilir
+
+
+func _begin_shared_wait_clock() -> void:
+	level_up_timer_active = true
+	level_up_countdown = SHARED_WAIT_SECONDS
+	_flow_clock_carry = true
 
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_start_level_up_countdown() -> void:
-	level_up_timer_active = true
-	level_up_countdown = 25.0
+	if level_up_timer_active and not level_up_busy_peers.is_empty():
+		return
+	_begin_shared_wait_clock()
 
 
 func stop_level_up_countdown() -> void:
@@ -1964,6 +1995,9 @@ func _rpc_set_chest_busy(peer_id: int, busy: bool) -> void:
 		chest_busy_peers[peer_id] = true
 	else:
 		chest_busy_peers.erase(peer_id)
+		if chest_busy_peers.is_empty():
+			chest_countdown_active = false ## akış bitti (bkz. _begin_shared_wait_clock)
+			_flow_clock_carry = false
 	chest_busy_state_changed.emit()
 
 
@@ -1982,11 +2016,11 @@ func is_any_chest_busy() -> bool:
 ## _process()'inde BAĞIMSIZ tikler (sürekli RPC trafiği gerekmez). Sandık
 ## kuyrukları her oyuncuda AYRI/YEREL işlediği (bkz. chest_busy_peers notu)
 ## için start_chest_countdown() her YENİ sandık menüsü açıldığında (bkz.
-## main.gd _try_open_next_pending_chest) tekrar çağrılıp süreyi 25sn'ye
-## resetler - biri hâlâ (kendi kuyruğundaki bir sonraki) sandığı açtığı
-## sürece kimse zaman aşımına uğramaz, sadece TEK bir karar 25sn'den uzun
-## sürerse o kararı veren için otomatik seçim tetiklenir (bkz. chest_menu.gd
-## _on_countdown_tick).
+## main.gd _try_open_next_pending_chest) çağrılır, ama (kullanıcı bildirimi:
+## "her sandık açışında sıfırlanıyor, ortak olmalıydı") sayacı SIFIRLAMAZ:
+## sandık akışının ilk çağrısı kart akışından kalan süreyi devralır, sonrakiler
+## yutulur (bkz. _begin_shared_wait_clock). Süre dolunca seçimini yapmamış
+## herkes için otomatik seçim tetiklenir (bkz. chest_menu.gd _on_countdown_tick).
 var chest_countdown_active: bool = false
 var chest_countdown: float = 25.0
 
@@ -1997,14 +2031,22 @@ func start_chest_countdown() -> void:
 	if is_multiplayer_active:
 		_rpc_start_chest_countdown.rpc()
 	else:
-		chest_countdown_active = true
-		chest_countdown = 25.0
+		_begin_chest_phase_clock()
+
+
+## Sandık aşaması ORTAK sayaca bağlanır (bkz. _begin_shared_wait_clock): kart
+## akışından geliniyorsa kalan süre DEVRALINIR (25'e dönmez), sonraki her sandık
+## açışı sayacı sıfırlamaz.
+func _begin_chest_phase_clock() -> void:
+	chest_countdown_active = true
+	chest_countdown = clampf(level_up_countdown, 0.0, SHARED_WAIT_SECONDS) if _flow_clock_carry else SHARED_WAIT_SECONDS
 
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_start_chest_countdown() -> void:
-	chest_countdown_active = true
-	chest_countdown = 25.0
+	if chest_countdown_active and not chest_busy_peers.is_empty():
+		return
+	_begin_chest_phase_clock()
 
 
 func stop_chest_countdown() -> void:
@@ -2882,7 +2924,7 @@ func request_enemy_skill_push(network_id: int, dir: Vector2, distance: float) ->
 		return
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("apply_skill_push"):
-		target_enemy.apply_skill_push(dir, clampf(distance, 0.0, 400.0))
+		target_enemy.apply_skill_push(dir, clampf(distance, 0.0, 400.0), true) ## istemci ulti dışı boss itmesini zaten göndermez (enemy.gd)
 
 
 ## DÜZELTME (KRİTİK - multiplayer öldürme-bazlı pasifler): host, enemy.gd
@@ -2987,7 +3029,7 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 		## Oakley'in Arı Sürüsü yeteneği - bkz. enemy.gd apply_bee_poison.
 		"bee_poison":
 			if target_enemy.has_method("apply_bee_poison"):
-				target_enemy.apply_bee_poison(param1)
+				target_enemy.apply_bee_poison(param1, param2 > 0.5) ## param2: Salgın Zehir bayrağı (Oakley evrimi, madde 348)
 		"stun":
 			if target_enemy.has_method("apply_stun"):
 				target_enemy.apply_stun(param1)
@@ -3047,7 +3089,8 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## Kışkırtma'sının öfke damarı göstergesi), root_start (extra_data: duration)/root_stop (Oakley Sarmaşıklar'ın bacaklara
 ## sarılan dikenleri, bkz. fx_oakley_entangle.gd), shock_start/shock_stop (efsun Şok durumu, bkz. enemy.gd
 ## _apply_shock_host/_clear_shock - istemcideki is_shocked() bu görselin varlığından okunur), frost_slow_start (extra_data:
-## duration - Büyücü Kız Don Nova'nın buz yavaşlatması: mavimsi ton + buz kristalleri, bkz. enemy.gd _spawn_frost_chill_fx) - yeni
+## duration - Büyücü Kız Don Nova'nın buz yavaşlatması: mavimsi ton + buz kristalleri, bkz. enemy.gd _spawn_frost_chill_fx),
+## brush_search_start/brush_search_stop/brush_alert (saklanma çalılığında arayan yaratığın "?"si / halkada görenin "!"si, madde 283) - yeni
 ## bir dal eklersen buraya da yaz.
 @rpc("any_peer", "call_remote", "reliable")
 func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictionary = {}) -> void:
@@ -3106,6 +3149,16 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		"taunt_stop":
 			if target_enemy.has_method("_remove_taunt_status_fx"):
 				target_enemy._remove_taunt_status_fx()
+		## Saklanma çalılığı (madde 283): saklı oyuncuyu arayan yaratığın "?" göstergesi + halkada görenin "!" (bkz. enemy.gd set_brush_search_visual / show_brush_alert).
+		"brush_search_start":
+			if target_enemy.has_method("_spawn_brush_search_fx"):
+				target_enemy._spawn_brush_search_fx()
+		"brush_search_stop":
+			if target_enemy.has_method("_remove_brush_search_fx"):
+				target_enemy._remove_brush_search_fx()
+		"brush_alert":
+			if target_enemy.has_method("_spawn_brush_alert_fx"):
+				target_enemy._spawn_brush_alert_fx()
 		## Oakley Sarmaşıklar - kök salan yaratığın bacaklarına sarılan dikenler (bkz. enemy.gd _set_root_visual).
 		"root_start":
 			if target_enemy.has_method("_spawn_entangle_fx"):
@@ -3356,14 +3409,17 @@ var _necro_skull_visuals: Dictionary = {}
 const RELIABLE_PLAYER_VFX := {
 	"skill_scene": true, "skill_ring": true, "skill_burst": true, "teleport_snap": true, "speed_line": true,
 	"beam_start": true, "beam_stop": true, "weapon_icon_visibility": true, "necro_skull": true,
+	"rbeam_start": true, "rbeam_stop": true, ## Gökkuşağı Asası ışını (madde 306) - başlangıç/bitiş kaybolursa ışın görünmez / asılı kalır
 	"oakley_flower_spawn": true, "oakley_flower_bond": true, "spirit_blink": true, "spirit_cancel": true,
 	"weapon_surge": true, ## Büyücü pasifi - yetenek başına bir kez, kaybolması pasifin görünmemesi demek
+	"weapon_reload": true, ## Tabanca/Tüfek şarjör doldurma (madde 296) - silah başına ~5-10 sn'de bir; kaybolursa doldurma diğer ekranda hiç görünmez
 	"cadi_fx": true, ## Cadı Q bulutu + biniş dumanı - kaybolursa diğer ekranda bulut eksik/erken söner (0,3-1,2 sn'de bir, trafik önemsiz)
 	"cadi_throw": true, ## Cadı R şişesi - kaybolursa alan/patlama diğer oyuncularda hiç görünmez (8 sn'de bir, trafik önemsiz)
 	"assasin_blink": true, ## Assasin R cast/dönüş patlaması - ulti başına 2 (sıçrayış/kesik "assasin_fx" saniyede ~9, güvenilmez kalır)
 	"assasin_passive": true, ## Assasin pasifi (Bıçak Uzmanlığı) tetiklenmesi - yetenek başına bir kez; kaybolursa 3 sn'lik dış hat hiç görünmez
 	"oakley_tree": true, ## Oakley R Hayat Ağacı dikimi - ulti başına bir kez; kaybolursa ağaç diğer oyuncularda hiç çıkmaz
 	"oakley_tree_root": true, ## Hayat Ağacı kök dalgası (2 sn'de bir, 3 hedef) - kaybolursa yer altı izi eksik kalır
+	"oakley_revive": true, ## Kadim Diriliş (Oakley R finali, madde 348) - ağaç başına bir kez; kaybolursa dost ayağa kalkmaz
 }
 ## "melek_sparkle" (2026-10-10): Melek pasifinin iyileştirme işareti - extra "peers" = işaretin çıkacağı oyuncular (Melek dahil); her istemci kendi
 ## yerel oyuncusu ya da ilgili kukla altında fx_melek_heal_sparkle.gd kurar. Güvenilmez (kaybolursa bir sonraki 3 sn'de yine gelir).
@@ -3451,6 +3507,11 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			rp.add_child(skill_fx)
 			if "position" in extra_data:
 				skill_fx.set("position", Vector2(extra_data["position"]))
+		"yinyang_idle":
+			## Yin Yang Kitabı (madde 334): saldıracak düşman yokken yalnız ak küre (kalkan) - kaster YinYangBook.idle_shot; alıcı bu makinenin
+			## oyuncusu ya da bir kukla (kalkanın kendisi kasterden _apply_shield_heal_to_ally RPC'siyle gelir, burası salt görsel).
+			var yy: GDScript = preload("res://scripts/yinyang_book.gd")
+			yy.spawn_idle_light(get_tree(), pos, yy.node_for_peer(get_tree(), int(extra_data.get("rcp", 0))), rp)
 		"hitscan_impact":
 			var scene_path: String = str(extra_data.get("scene_path", ""))
 			if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
@@ -3609,7 +3670,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 					hit_asp.pitch_scale = float(extra_data.get("pitch", 1.0))
 					## bkz. "weapon_sound" case'indeki aynı düzeltme - eskiden 0dB
 					## (tam ses) çalıyordu, mesafeyle de yeterince azalmıyordu.
-					hit_asp.volume_db = float(extra_data.get("volume_db", -10.0))
+					hit_asp.volume_db = float(extra_data.get("volume_db", -10.0)) + AudioBuses.remote_weapon_db() ## başkasının silahı %15 kısık (2026-10-19)
 					hit_asp.max_distance = 900.0
 					hit_asp.attenuation = 1.6
 					hit_asp.finished.connect(hit_asp.queue_free)
@@ -3620,10 +3681,23 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		"beam_stop":
 			if rp.has_method("_stop_beam_vfx"):
 				rp._stop_beam_vfx()
+		"beam_hit":
+			## Yıldırım Asası vuruş tiki sesi (madde 294): extra_data = {crit, i (ses dosyası), p (perde), r (sıklık kısması dB)}.
+			if rp.has_method("_beam_hit_sfx"):
+				rp._beam_hit_sfx(pos, extra_data)
 		"beam_update":
 			if rp.has_method("_update_beam_vfx"):
 				var origin_pos: Vector2 = Vector2(extra_data.get("from_pos", Vector2.ZERO))
 				rp._update_beam_vfx(pos, origin_pos)
+		## Gökkuşağı Asası ışını (madde 306; weapon.gd beam_net_kind "rbeam", remote_player.gd _start_rbeam_vfx...).
+		"rbeam_start":
+			rp._start_rbeam_vfx(pos, extra_data)
+		"rbeam_update":
+			rp._update_rbeam_vfx(pos, extra_data)
+		"rbeam_hit":
+			rp._rbeam_hit(extra_data)
+		"rbeam_stop":
+			rp._stop_rbeam_vfx()
 		"weapon_sound":
 			var snd_path: String = str(extra_data.get("sound_path", ""))
 			if not snd_path.is_empty() and ResourceLoader.exists(snd_path):
@@ -3642,7 +3716,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 					## volume_db'si taşınıyor (yoksa -10dB'ye düşülüyor). Ayrıca
 					## max_distance düşürüldü ve "attenuation" üsteli artırıldı ki
 					## ses mesafeyle daha belirgin ve daha erken azalsın.
-					asp.volume_db = float(extra_data.get("volume_db", -10.0))
+					asp.volume_db = float(extra_data.get("volume_db", -10.0)) + AudioBuses.remote_weapon_db() ## başkasının silahı %15 kısık (2026-10-19)
 					asp.max_distance = 900.0
 					asp.attenuation = 1.6
 					asp.pitch_scale = float(extra_data.get("pitch", 1.0))
@@ -3666,6 +3740,10 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		"weapon_icon_visibility":
 			if rp.has_method("_set_weapon_icon_visible"):
 				rp._set_weapon_icon_visible(int(extra_data.get("slot_index", -1)), bool(extra_data.get("visible", true)))
+		## Tabanca/Tüfek şarjör doldurma (madde 296, weapon.gd _broadcast_reload): d = süre (0 = iptal).
+		"weapon_reload":
+			if rp.has_method("_start_weapon_reload"):
+				rp._start_weapon_reload(int(extra_data.get("slot_index", -1)), float(extra_data.get("d", 0.0)))
 		## Büyücü Kız pasifi "Büyü Dalgası": atışsız yetenek kullanımında silah ikonu ileri fırlar (bkz. weapon.gd _surge_visual).
 		"weapon_surge":
 			if rp.has_method("_animate_weapon_surge"):
@@ -3762,7 +3840,17 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		## Oakley R Hayat Ağacı (madde 266, oakley_tree.gd): kaster gerçek kopyayı kurar; burada KOZMETİK kopya (caster yok - iyileştirme,
 		## sabitleme, çiçek sadece kasterde). "oakley_tree_root": kök dalgasının yer altı izleri (pos = ağaç, to = hedef konumları).
 		"oakley_tree":
-			OakleyTree.spawn(get_tree().current_scene, pos)
+			## Süre + alan (görsel) Oakley'nin evrimlerinden gelir (madde 348); eski paket/evrimsiz: 12 sn, x1.
+			OakleyTree.spawn(get_tree().current_scene, pos, null, {
+				"dur": float(extra_data.get("dur", OakleyTree.DURATION)),
+				"zone": float(extra_data.get("zone", 1.0)),
+			})
+		## Kadim Diriliş (madde 348): Oakley'nin ağacı yere düşmüş bu makinenin oyuncusunu kaldırır (hedef peer = extra "target").
+		"oakley_revive":
+			if int(extra_data.get("target", 0)) == multiplayer.get_unique_id():
+				var revive_me: Node = get_tree().get_first_node_in_group("player")
+				if revive_me != null and revive_me.has_method("receive_oakley_revive"):
+					revive_me.call("receive_oakley_revive")
 		"oakley_tree_root":
 			OakleyTree.spawn_root_visuals(get_tree().current_scene, pos, PackedVector2Array(extra_data.get("to", PackedVector2Array())))
 		"cadi_throw":
@@ -4744,6 +4832,20 @@ func sync_brush_state(peer_key: int, state: int) -> void:
 	brush_state_received.emit(peer_key, state)
 
 
+## Saklı istemci hasar veren bir yetenekle vurdu (madde 283, hide_brush.gd note_skill_hit): host'a bildirir, host'ta hide_brush_manager.gd request_reveal(gönderen peer)
+## saklılığı bozar. Anahtar HER ZAMAN gönderen peer (başkası adına açığa çıkarılamaz); host kendi oyuncusu için doğrudan yöneticiyi çağırır.
+signal brush_reveal_requested(peer_key: int)
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_brush_reveal() -> void:
+	if not is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender <= 0:
+		return
+	brush_reveal_requested.emit(sender)
+
+
 ## MADEN DAYANIKLILIĞI (bkz. mine_world.gd / mine_sites.gd): karar host'ta. İstemci kazma vuruşunu host'a bildirir (`request_mine_hit`), host dayanıklılığı düşürür;
 ## kırık maden listesi (indeksler) değişince ve 5 sn'de bir TÜM istemcilere gider (`sync_mine_state`) - geç katılan/kaçırılan güncelleme de böylece düzelir.
 signal mine_state_received(broken: Array)
@@ -5354,7 +5456,9 @@ func _capture_migration_resume() -> void:
 		snap = pl.call("get_rejoin_snapshot")
 	_pending_rejoin = {"snap": snap, "team_level": GameManager.team_level, "team_xp": GameManager.team_xp, "team_xp_needed": GameManager.team_xp_needed}
 	_migration_resume_gm = {"game_time": GameManager.game_time, "victory": GameManager.victory_reached, "endless": GameManager.endless_active,
-		"layer": GameManager.endless_layer, "max_tier": GameManager.run_max_tier}
+		"layer": GameManager.endless_layer, "max_tier": GameManager.run_max_tier,
+		## Ruh Kıymığı banka sayacı: reset() sıfırlıyordu, devirden sonra tüm koşu ikinci kez bankalanıyordu (bkz. main.gd _bank_meta).
+		"banked": GameManager.run_shards_banked, "victory_given": GameManager.run_victory_shards_given}
 
 
 func _apply_migration_resume_gm() -> void:
@@ -5365,6 +5469,8 @@ func _apply_migration_resume_gm() -> void:
 	GameManager.endless_active = bool(_migration_resume_gm.get("endless", false))
 	GameManager.endless_layer = int(_migration_resume_gm.get("layer", 0))
 	GameManager.run_max_tier = maxi(GameManager.run_max_tier, int(_migration_resume_gm.get("max_tier", 1)))
+	GameManager.run_shards_banked = maxi(GameManager.run_shards_banked, int(_migration_resume_gm.get("banked", 0)))
+	GameManager.run_victory_shards_given = GameManager.run_victory_shards_given or bool(_migration_resume_gm.get("victory_given", false))
 	_migration_resume_gm = {}
 
 
@@ -5678,7 +5784,7 @@ func report_rejoin_snapshot(snapshot: Dictionary) -> void:
 ## bu süre dolunca (konum/can/altın bayatlamasın). 2026-10-05: eskiden hash tüm sözlüğü kapsıyordu; konum/can/altın/öldürme her
 ## saniye değiştiği için "değişmedi" kuralı hiç işlemiyor, ~4 KB'lık güvenilir RPC (Epic'te ~4 paket) her 6 sn'de gidiyordu.
 const REJOIN_REPORT_REFRESH_MSEC := 30000
-const REJOIN_VOLATILE_KEYS: Array[String] = ["pos", "hp", "shield", "indoors"]
+const REJOIN_VOLATILE_KEYS: Array[String] = ["pos", "hp", "shield", "indoors", "dmg_dealt", "dmg_taken"]
 const REJOIN_VOLATILE_GM_KEYS: Array[String] = ["gold", "run_kills"]
 
 
@@ -5882,23 +5988,29 @@ func _rpc_drop_catchup(entries: Array) -> void:
 ## Düşman mermi broadcast: host bir düşman mermi spawn ettiğinde client'lara
 ## görsel kopya gönderir (hasarsız). Client'lar böylece düşman ateşini görür.
 @rpc("any_peer", "call_remote", "unreliable")
-func broadcast_enemy_projectile(spawn_pos: Vector2, direction: Vector2, is_homing: bool, proj_tint: Color, enemy_net_id: int) -> void:
+## style = mermi görseli (lich_soul_flame.gd STYLE_*: 0 küre, 1/2 lich Ruh Alevi büyü/normal; madde 280, lobi-9).
+## DÜZELTME (madde 280): kopya eskiden ÖNCE sahneye ekleniyor, yön/renk SONRA atanıyordu - _ready görseli varsayılan turuncu + sağa
+## dönük izle kuruyordu (diğer oyuncuda Lich/Röntgen/Demon mermileri hep turuncu görünüyordu). Artık her alan add_child'dan ÖNCE.
+func broadcast_enemy_projectile(spawn_pos: Vector2, direction: Vector2, is_homing: bool, proj_tint: Color, enemy_net_id: int, style: int = 0) -> void:
 	if not _from_host():
 		return
 	var proj_scene: PackedScene = load("res://scenes/enemy_projectile.tscn") as PackedScene
-	if not proj_scene:
+	if not proj_scene or get_tree().current_scene == null:
 		return
 	var proj: Node2D = proj_scene.instantiate() as Node2D
-	get_tree().current_scene.add_child(proj)
-	proj.global_position = spawn_pos
 	if "direction" in proj:
 		proj.direction = direction
 	if "homing" in proj:
 		proj.homing = is_homing
 	if "tint" in proj:
 		proj.tint = proj_tint
+	if "style" in proj:
+		proj.style = style
 	# Görsel kopya — hasar vermez
 	proj.set_meta("network_spawned", true)
+	proj.position = spawn_pos ## sahneye girmeden (fizik interpolasyonu orijinden kaymasın); kök dünya orijininde değilse aşağıda düzelir
+	get_tree().current_scene.add_child(proj)
+	proj.global_position = spawn_pos
 	# Kaynak düşmanı bulup bağla (görsel amaçlı)
 	if enemy_net_id > 0 and "source" in proj:
 		var src: Node = find_enemy_by_net_id(enemy_net_id)

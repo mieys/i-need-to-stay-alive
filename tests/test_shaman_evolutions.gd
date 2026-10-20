@@ -40,7 +40,7 @@ class FakeEnemy extends Node2D:
 	func apply_slow(percent: float, duration: float, _allow_boss: bool = false) -> void:
 		slows.append([percent, duration])
 
-	func apply_skill_push(dir: Vector2, distance: float) -> void:
+	func apply_skill_push(dir: Vector2, distance: float, _ult: bool = false) -> void:
 		pushes.append([dir, distance])
 
 	func apply_stun(_duration: float) -> void:

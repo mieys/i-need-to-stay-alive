@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/weapons/zanaat/kalkan_L1.png" id="2"]
+[ext_resource type="AudioStream" path="res://assets/audio/sovalye_hit.mp3" id="3"]
+
+[node name="WeaponKalkan" type="Node2D"]
+script = ExtResource("1")
+fire_rate = 1.1111
+damage = 0.0
+crit_chance = 0.05
+crit_damage = 1.5
+card_damage_bonus_ratio = 1.25
+sprite_forward_angle_deg = 0.0
+melee_icon_rest_rotation_deg = 0.0
+
+[node name="FireTimer" type="Timer" parent="."]
+autostart = true
+
+[node name="Icon" type="Sprite2D" parent="."]
+texture_filter = 1
+scale = Vector2(0.32077, 0.32077)
+texture = ExtResource("2")
+
+[node name="AttackSound" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("3")
+volume_db = -8.0
+max_distance = 1500.0

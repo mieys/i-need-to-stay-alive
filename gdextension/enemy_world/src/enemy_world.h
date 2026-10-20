@@ -17,6 +17,7 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
+#include <godot_cpp/variant/packed_float64_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/packed_int64_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
@@ -75,6 +76,7 @@ public:
 		A_WALK = 0,
 		A_IDLE = 1,
 		A_OTHER = 2,
+		A_HOLD = 3, // tek seferlik saldırı sayfası: kare = min(int(süre x fps), cols - 1), süreyi ve kareyi C++ yazar (madde 286); sadece boss / elit / kukla OLMAYAN yaratıklar
 	};
 
 private:
@@ -99,6 +101,9 @@ private:
 	std::vector<int32_t> facing_row;
 	std::vector<uint8_t> face_left; // AnimatedSprite2D (ork) sayfaları için flip_h
 	std::vector<float> anim_t, anim_fps, walk_anim_mult;
+	std::vector<double> anim_td, anim_fps_d; // A_HOLD: enemy.gd _frame_time ile aynı çift duyarlıklı birikim (kare sınırlarında 1 kare sapma olmasın)
+	double step_dd = 0.0; // son step'in delta'sı (çift duyarlıklı)
+	bool tick_open = false; // step bitti, köprünün olay + tik aşaması sürüyor (end_tick'e kadar): bu aşamadaki durum / bakış değişimleri kareyi hemen yazar
 	std::vector<int32_t> anim_cols, anim_state;
 	std::vector<uint8_t> anim_walking; // 1 = yürüme/bekleme karesini C++ ilerletir (Sprite2D varsa)
 	std::vector<uint8_t> anim_idle_tex; // bekleme sayfası var mı (yoksa IDLE'da 0. karede durur)
@@ -128,6 +133,9 @@ private:
 	std::vector<uint8_t> wander_moving;
 	// KENAR BEKÇİLERİ (2026-10-09): uykudaki (dormant) yaratık hiçbir oyuncuyu hedeflemez; GDScript (guard_camps.gd) verdiği hedef noktaya (goal) yürür, yoksa durur.
 	std::vector<uint8_t> dormant, goal_on;
+	// YÖN KİLİDİ (2026-10-20, Yeraltı Canavarı uzvu): kilitli yuvanın bakış satırını/yönünü YAPAY ZEKÂ yazmaz (tahrik / korku / ağaç görevi / hedef / dolaşma / kukla adımı); yalnız GDScript'in set_face'i yazar.
+	// Uykuya almak (dormant) yetmiyordu: apply_overrides uykudaki yuvaya da ağacı / kışkırtanı veriyor, korku yönü her karede yazıyor -> iki yazıcı, satır kare kare titriyordu.
+	std::vector<uint8_t> face_lock;
 	std::vector<float> goal_x, goal_y, goal_mult;
 	// geri itme (mesafe) tekrar penceresi
 	std::vector<int64_t> last_kb_msec;
@@ -150,6 +158,13 @@ private:
 	std::vector<uint64_t> foot_vis_id;
 	std::vector<float> foot_local;
 	std::vector<uint8_t> foot_known;
+	// yaratık-oyuncu y-sıralaması (creature_depth.gd depth_scan): düğüm başına ölçü kaydı GDScript'ten bir kez gelir (depth_set)
+	std::vector<uint64_t> dp_vis_id;
+	std::vector<double> dp_foot_local, dp_half_w, dp_height;
+	std::vector<uint8_t> dp_state; // 0 = yok, 1 = ölçüldü (görsel yaşıyorsa geçerli), 2 = ölçülemedi (her güncellemede yeniden denenir)
+	std::vector<uint64_t> dp_prev; // son depth_scan'in yükseltilen düğümleri (sıralı kimlikler): titreme koruması
+	std::vector<int32_t> dp_pool_of; // slot -> havuz indeksi (-1 = yok), her taramada sıfırlanır
+	std::vector<int32_t> dp_pending; // son taramada ölçü kaydı eksik çıkan slotlar
 	// son verilen draw index ve o andaki ağaç indeksi: ikisi de aynıysa RenderingServer çağrısı atlanır (motor draw index'i
 	// sadece ağaç indeksi değişince - NOTIFICATION_MOVED_IN_PARENT - sıfırlar)
 	std::vector<int32_t> draw_given, draw_tree;
@@ -251,7 +266,8 @@ private:
 	void steer(int32_t i, float &dx, float &dy) const;
 	void wander_velocity(int32_t i, float delta, float &vx, float &vy);
 	void process_ranged(int32_t i, int32_t t, float dist, float delta);
-	void face(int32_t i, float dx, float dy);
+	void face(int32_t i, float dx, float dy); // yapay zekâ yazıcısı (face_lock'ta etkisiz)
+	void face_apply(int32_t i, float dx, float dy); // kilitten bağımsız asıl yazım (set_face + face)
 	void push_event(int32_t type, int32_t slot, int32_t t);
 	inline float randf();
 	inline float randf_range(float a, float b) { return a + (b - a) * randf(); }
@@ -259,6 +275,7 @@ private:
 	void step_puppet(int32_t i, float delta);
 	void push_out_of_zones(int32_t i, int32_t skip_ghost_target);
 	void step_loco_anim(int32_t i, float delta);
+	void write_hold_frame(int32_t i);
 	void sync_external_moves();
 	void collect_candidates(float minx, float miny, float maxx, float maxy);
 	bool fog_ray_blocked(float ax, float ay, float bx, float by) const;
@@ -272,6 +289,8 @@ public:
 	void set_grid(const PackedByteArray &p_blocked, const Vector2i &p_origin, const Vector2i &p_size, float p_cell,
 			const Vector2 &p_layer_origin, const PackedByteArray &p_fog_blocked = PackedByteArray());
 	void set_dormant(int32_t s, bool on);
+	void set_face_lock(int32_t s, bool on);
+	bool is_face_locked(int32_t s) const;
 	void set_goal(int32_t s, float x, float y, float mult);
 	bool is_dormant(int32_t s) const;
 	void set_stealth(const PackedInt64Array &p_target_ids, const Array &p_reveals);
@@ -304,7 +323,7 @@ public:
 	void set_knockback(int32_t p_slot, const Vector2 &p_vel);
 	Vector2 get_knockback(int32_t p_slot) const;
 	void set_anim(int32_t p_slot, int32_t p_cols, float p_fps, bool p_walking, float p_walk_mult);
-	void set_anim_state(int32_t p_slot, int32_t p_state, int32_t p_cols, float p_fps, float p_walk_mult, bool p_idle_tex);
+	void set_anim_state(int32_t p_slot, int32_t p_state, int32_t p_cols, double p_fps, float p_walk_mult, bool p_idle_tex);
 	void set_contact(int32_t p_slot, float p_interval, float p_timer);
 	void set_ranged(int32_t p_slot, float p_range, float p_interval, float p_homing_interval);
 	void set_fear_source(int32_t p_slot, const Vector2 &p_pos);
@@ -371,12 +390,23 @@ public:
 	void set_foot(int32_t p_slot, Object *p_visual, float p_local);
 	void draw_order(Object *p_parent, const Array &p_extras, const PackedFloat32Array &p_extras_foot);
 	Array get_last_draw_order() const; // test: [düğüm, draw_index] çiftleri, ayak sırasıyla
+	// creature_depth.gd update_now çekirdeği (should_cover + _close_core, kural BİREBİR). chars: [ayak x, ayak y] * karakter;
+	// ex_*: kayıtsız adaylar (görev kopyaları; GDScript ölçü + ilk yükseltmeyi hesaplamış: ex_data = [x, ayak, yarım gen., boy] * n,
+	// ex_want = 1 yükseltilmiş); params = [SCAN_RADIUS, CLOSURE_PAD, ABOVE_SKIP, HYSTERESIS, BODY_HALF_WIDTH, MOVE_SLACK].
+	// Döner: yükseltilecek düğümler (kapanış dahil). Ölçü kaydı eksik slot varsa (depth_pending) bir şey döndürmez: GDScript
+	// depth_set ile doldurup second_pass=true ile yeniden çağırır.
+	Array depth_scan(const PackedFloat64Array &p_chars, const Array &p_ex_nodes, const PackedFloat64Array &p_ex_data,
+			const PackedByteArray &p_ex_want, const PackedFloat64Array &p_params, bool p_second_pass);
+	Array depth_pending() const;
+	void depth_set(int32_t p_slot, Object *p_visual, double p_foot_local, double p_half_w, double p_height, bool p_measured);
+	void depth_seed(const PackedInt64Array &p_ids);
 	// minimap.gd düşman noktaları (kayıtlı, boss OLMAYAN, untargetable olmayan, sis görünürlüğü >= p_min_vis; meta yoksa
 	// 1): görünüm merkezine göre harita pikseli ofseti (yuvarlanmış, aynı piksele düşenler tekilleştirilmiş), |ofset| <= p_max_r.
 	PackedVector2Array minimap_points(const Vector2 &p_center, float p_world_per_px, float p_max_r, float p_min_vis);
 
 	// Adım
-	void step(float p_delta);
+	void step(double p_delta);
+	void end_tick(); // köprü: olay + tik aşaması bitti
 	PackedInt32Array pop_events();
 	double get_last_step_ms() const { return last_step_ms; }
 	double get_last_view_ms() const { return last_view_ms; }

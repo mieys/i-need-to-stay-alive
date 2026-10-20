@@ -32,4 +32,4 @@ texture = ExtResource("2")
 [node name="AttackSound" type="Node2D" parent="."]
 script = ExtResource("3")
 streams = Array[AudioStream]([ExtResource("4"), ExtResource("5"), ExtResource("6")])
-volume_db = -9.0
+volume_db = -7.0

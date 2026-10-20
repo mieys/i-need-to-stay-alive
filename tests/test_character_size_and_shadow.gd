@@ -128,6 +128,25 @@ func test_matthew_growth_kept_feet_on_ground_and_scaled_shadow() -> void:
 		"Matthew gölge konumu ölçekle orantılı büyümemiş: %s (beklenen %s)" % [def["ground_shadow_y"], expected_shadow_y])
 
 
+## Kullanıcı isteği (2026-10-20): "şovalye adamın boyutunu %10 arttır" - scale 2.2368375 x1.1, gölge (ekran pikseli) AYNI oranda.
+func test_sovalye_growth_scaled_body_and_shadow() -> void:
+	var def: Dictionary = Characters.get_def(7)
+	assert(str(def["name"]) == "Şovalye Adam", "id 7 Şovalye Adam olmalı, bulunan: %s" % str(def["name"]))
+	var expected_scale: float = 2.2368375 * 1.1
+	assert(absf(float(def["scale"].x) - expected_scale) < 0.001,
+		"Şovalye ölçeği %%10 büyümemiş: %s (beklenen %s)" % [def["scale"].x, expected_scale])
+	assert(absf(float(def["scale"].y) - float(def["scale"].x)) < 0.001, "Şovalye ölçeği kare olmalı (x = y)")
+	assert(absf(float(def["ground_shadow"].x) - 17.5 * 1.1) < 0.01,
+		"Şovalye gölge genişliği orantılı büyümemiş: %s" % def["ground_shadow"].x)
+	assert(absf(float(def["ground_shadow"].y) - 6.25 * 1.1) < 0.01,
+		"Şovalye gölge yüksekliği orantılı büyümemiş: %s" % def["ground_shadow"].y)
+	assert(absf(float(def["ground_shadow_y"]) - 32.5 * 1.1) < 0.01,
+		"Şovalye gölge konumu orantılı büyümemiş: %s" % def["ground_shadow_y"])
+	## Gölge ayak çizgisine oturmalı (aynı kural: ayak = (41 - 24 + offset.y) x scale x LEGACY_SIZE).
+	assert(absf(_feet_px(def) - float(def["ground_shadow_y"])) < 2.0,
+		"Şovalye: ayaklar %s px'de ama gölge %s px'de" % [_feet_px(def), def["ground_shadow_y"]])
+
+
 ## DEFS değerleri TEK BAŞINA yeterli değil - player.gd bunları sprite'a
 ## (anim.scale/anim.offset) ve gölge düğümüne (ground_shadow.gd) gerçekten
 ## uyguluyor mu? Bu test gerçek bir oyuncu sahnesi kurup bakıyor.

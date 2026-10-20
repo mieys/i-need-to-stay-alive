@@ -493,10 +493,10 @@ func test_attack_speed_follows_total_move_speed_from_any_source() -> void:
 	assert(int(player._matthew_move_percent) == 60, "toplam %%60: %d" % player._matthew_move_percent)
 	assert(is_equal_approx(player.get_attack_interval_mult(), iv0 / 1.30), "%%60 hareket hızı -> %%30 saldırı hızı: %s" % (iv0 / player.get_attack_interval_mult()))
 	assert(is_equal_approx(player.get_attack_speed_overflow_percent(), over0), "pasifin saldırı hızı taşma->saldırı gücü dönüşümüne girmez")
-	## Çok büyük hız: saldırı hızı genel sınırda (%600) durur.
+	## Çok büyük hız: saldırı hızı genel sınırda (%450) durur.
 	player.speed_card_percent = 20.0
 	player._matthew_refresh_move_percent()
-	assert(is_equal_approx(1.0 / player.get_attack_interval_mult() - 1.0, GameManager.ATTACK_SPEED_CAP_PERCENT / 100.0), "toplam saldırı hızı %%600'ü aşmaz")
+	assert(is_equal_approx(1.0 / player.get_attack_interval_mult() - 1.0, GameManager.ATTACK_SPEED_CAP_PERCENT / 100.0), "toplam saldırı hızı %%450'yi aşmaz")
 	player.speed_card_percent = 0.0
 	player.item_speed_percent = 0.0
 	player._matthew_refresh_move_percent()

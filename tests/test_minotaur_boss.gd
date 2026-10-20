@@ -448,8 +448,8 @@ func test_boss_has_exactly_the_requested_stats_in_single_player_and_scales_with_
 	assert(spawned.size() == 1, "boss doğdu")
 	var b: Node = spawned[0]
 	assert(b.is_boss and b.is_in_group("boss"), "boss grubunda")
-	assert(b.max_health == 32000.0 and b.health == 32000.0, "can 32.000: %.1f" % b.max_health)
-	assert(b.item_shield_max == 36000.0 and b.item_shield_hp == 36000.0, "kalkan 36.000: %.1f" % b.item_shield_max)
+	assert(b.max_health == 22400.0 and b.health == 22400.0, "can 22.400: %.1f" % b.max_health)
+	assert(b.item_shield_max == 25200.0 and b.item_shield_hp == 25200.0, "kalkan 25.200: %.1f" % b.item_shield_max)
 	assert(is_equal_approx(b.shield_protection, 0.8), "kalkan soğurması yüzde 80: %.2f" % b.shield_protection)
 	assert(is_equal_approx(b.contact_damage, 100.0 * SpawnerScript.CREATURE_DAMAGE_CUT), "hasar 100 x0,8 = 80 (2026-10-11): %.1f" % b.contact_damage)
 	assert(b._current_tier == 3, "Kademe 3 bossu")
@@ -459,7 +459,7 @@ func test_boss_has_exactly_the_requested_stats_in_single_player_and_scales_with_
 	var c: Node = sp._spawn_creature("minotaur1", Vector2(900, 900), 999002)
 	c.add_to_group("boss")
 	sp._setup_boss_enemy(c, "minotaur1", 3, 3)
-	assert(absf(c.max_health - 64000.0) < 0.5 and absf(c.item_shield_max - 72000.0) < 0.5, "3 oyuncuda can/kalkan x2: %.0f / %.0f" % [c.max_health, c.item_shield_max])
+	assert(absf(c.max_health - 44800.0) < 0.5 and absf(c.item_shield_max - 50400.0) < 0.5, "3 oyuncuda can/kalkan x2: %.0f / %.0f" % [c.max_health, c.item_shield_max])
 	assert(is_equal_approx(c.contact_damage, 100.0 * SpawnerScript.CREATURE_DAMAGE_CUT) and is_equal_approx(c.shield_protection, 0.8), "hasar ve soğurma oyuncu sayısıyla değişmez")
 	## Ödül, Kademe 3'ün referans bossuyla (iskelet3) aynı - boss canına göre şişmez.
 	var ref: Node = sp._spawn_creature("iskelet3", Vector2(1000, 1000), 999003)
@@ -474,8 +474,8 @@ func test_shield_absorbs_80_percent_of_every_hit_until_it_breaks() -> void:
 	var sp: Node = _spawner()
 	var b: Node = sp._spawn_boss_group(["minotaur1"], 3)[0]
 	b._apply_damage(1000.0, false, 0.0)
-	assert(absf(b.item_shield_hp - (36000.0 - 800.0)) < 0.5, "vuruşun yüzde 80'i kalkana: %.1f" % b.item_shield_hp)
-	assert(absf(b.health - (32000.0 - 200.0)) < 0.5, "yüzde 20'si cana: %.1f" % b.health)
+	assert(absf(b.item_shield_hp - (25200.0 - 800.0)) < 0.5, "vuruşun yüzde 80'i kalkana: %.1f" % b.item_shield_hp)
+	assert(absf(b.health - (22400.0 - 200.0)) < 0.5, "yüzde 20'si cana: %.1f" % b.health)
 	## Kalkan bitince tüm hasar cana gider.
 	b.item_shield_hp = 0.0
 	var before: float = b.health
@@ -523,7 +523,7 @@ func test_debug_menu_spawns_the_minotaur_as_a_real_boss() -> void:
 	assert(sp.get_debug_creature_ids().has("minotaur1"), "debug yaratık listesinde")
 	assert(sp.debug_spawn_creature("minotaur1", 3, 1, Vector2(500.0, 500.0)) == 1, "debug doğuşu")
 	var bosses: Array = _boss_nodes()
-	assert(bosses.size() == 1 and bosses[0].is_boss and bosses[0].max_health == 32000.0 and bosses[0].item_shield_max == 36000.0, "gerçek boss statlarıyla doğar: %s" % str(bosses))
+	assert(bosses.size() == 1 and bosses[0].is_boss and bosses[0].max_health == 22400.0 and bosses[0].item_shield_max == 25200.0, "gerçek boss statlarıyla doğar: %s" % str(bosses))
 	assert(bosses[0].get_node_or_null("EliteBar") == null, "elit değil")
 	_cleanup()
 
@@ -719,6 +719,38 @@ func test_real_player_is_flung_only_when_the_hit_actually_landed() -> void:
 		await get_tree().physics_frame
 	var moved: Vector2 = p.global_position - start
 	assert(moved.length() > 120.0 and moved.length() < 215.0 and moved.normalized().dot(dir) > 0.98, "oyuncu savruldu: %s (%.1f px)" % [str(moved), moved.length()])
+	p.free()
+	_made.erase(p)
+	_restore_player_env()
+	_cleanup()
+
+
+## 2026-10-19: savrulma = hurt pozu, yere inince 1 sn sersemlik (downed pozu, yürüme/yetenek/silah yok), sonra normal.
+func test_flung_player_shows_hurt_then_is_stunned_one_second_in_the_downed_pose() -> void:
+	var p: Node = _make_player()
+	var dir: Vector2 = Vector2.RIGHT
+	p.take_special_damage(100.0, null, "minotaur")
+	p.apply_boss_fling(dir, 190.0)
+	assert(p.is_stunned and p._cc_flung, "savrulan oyuncu sersem + KK itişinde")
+	assert(p._skill_keys_blocked(), "sersemken yetenek tuşları kilitli")
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert(String(p.anim.animation).begins_with("hurt_"), "havadayken hurt pozu: %s" % p.anim.animation)
+	var t0: int = Time.get_ticks_msec()
+	while p._cc_flung and Time.get_ticks_msec() - t0 < 2000:
+		await get_tree().physics_frame
+	assert(not p._cc_flung and p.is_stunned, "yere indi, sersemlik sürüyor")
+	assert(absf(p._stun_left - MathScript.FLING_STUN_TIME) < 0.1, "sersemlik inişte başlar: %.2f" % p._stun_left)
+	await get_tree().physics_frame
+	assert(String(p.anim.animation).begins_with("downed_"), "sersemken downed pozu: %s" % p.anim.animation)
+	var land: int = Time.get_ticks_msec()
+	while p.is_stunned and Time.get_ticks_msec() - land < 3000:
+		await get_tree().physics_frame
+	var stun_ms: int = Time.get_ticks_msec() - land
+	assert(not p.is_stunned and stun_ms > 800 and stun_ms < 1400, "sersemlik ~1 sn: %d ms" % stun_ms)
+	assert(not p._skill_keys_blocked(), "sersemlik bitince yetenekler açık")
+	await get_tree().physics_frame
+	assert(not String(p.anim.animation).begins_with("downed_"), "poz normale döner: %s" % p.anim.animation)
 	p.free()
 	_made.erase(p)
 	_restore_player_env()

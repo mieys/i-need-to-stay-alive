@@ -1,0 +1,31 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/weapons/zanaat/gokkusagi_L1.png" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/fx_rainbow_beam.tscn" id="3"]
+
+[node name="WeaponGokkusagi" type="Node2D"]
+script = ExtResource("1")
+fire_rate = 1.4444
+damage = 0.0
+crit_chance = 0.05
+crit_damage = 1.5
+attack_range = 185.0
+sprite_forward_angle_deg = -45.0
+card_damage_bonus_ratio = 1.1
+continuous_beam = true
+beam_scene = ExtResource("3")
+beam_tick_interval = 0.35
+beam_tick_ratio = 1.0
+beam_net_kind = "rbeam"
+beam_tremor = false
+
+[node name="FireTimer" type="Timer" parent="."]
+autostart = true
+
+[node name="Icon" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("2")
+
+[node name="Muzzle" type="Marker2D" parent="Icon"]
+position = Vector2(14, -14)

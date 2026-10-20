@@ -7,9 +7,10 @@ gerekiyor, eklemeden önce bana göster". Tasarımlar prototip turlarında onayl
                      soluk dither bulut "pek duman gibi değil" bulundu -> TEMİZ, mor gölgeli "Kabaran Duman" (bkz. Q bölümü).
   E  Süpürge         broom_side (sola bakan, satır = yolcu sayısı 0..7; sağ = aynalanır), broom_vert (aşağı: öne uzanan
                      sap / yukarı: sarkan saman - DÜZ; çapraz hali "yamuk" bulundu), poof (biniş dumanı), spark (iz parıltısı)
-  R  İksirler        bottles (5 şişe x 4 takla karesi), shatter (kırılma sıçraması), boom (3. iksir patlaması) ve 4 alan
+  R  İksirler        bottles (6 şişe x 4 takla karesi), shatter (kırılma sıçraması), boom (3. iksir patlaması) ve 5 alan
                      (intro / loop / outro): zone_mad (dönen pembe sis + hipnoz sarmalları), zone_ice (kırağılı zemin +
-                     dönen buz sisi), zone_heal (ışık çemberi), zone_fear (kara-mor sis + kuru kafalar). Delilik/Don/Şifa
+                     dönen buz sisi), zone_heal (ışık çemberi), zone_fear (kara-mor sis + kuru kafalar), zone_shield (Şifa ile aynı
+                     ışık çemberi, indigo-mavi + yükselen küçük kalkanlar; 6. iksir Kalkan, 2026-10-20). Delilik/Don/Şifa
                      için düz zemin şekilleri (buz yaması, girdap, birikinti, halka) İKİ KEZ reddedildi; onaylanan dil
                      Korku sisiyle aynı: kontursuz, dither kenarlı HACİMLİ kütle + belirgin simgeler.
                      mad_status: delirmiş yaratığın baş üstü göstergesi (enemy.gd apply_madness)
@@ -56,7 +57,8 @@ ICE = fx.ICE
 FIRE = fx.FIRE
 HEAL = fx.HEAL
 FEAR = [(14, 6, 24), (44, 20, 72), (84, 44, 134), (140, 96, 200), (206, 180, 246)]
-MAGIC = [(40, 20, 70), (96, 58, 150), (150, 104, 210), (204, 170, 246), (244, 232, 255)]
+SHIELD = [(14, 20, 70), (40, 58, 168), (84, 112, 236), (158, 184, 255), (232, 240, 255)]  # Kalkan İksiri: mana kalkanının indigo-mavisi (Don'un camgöbeği buzundan ayrı)
+MAGIC =[(40, 20, 70), (96, 58, 150), (150, 104, 210), (204, 170, 246), (244, 232, 255)]
 MAGIC_SOFT = [(58, 40, 86), (120, 92, 160), (168, 142, 206), (212, 194, 238), (244, 236, 255)]
 GOLD = [(96, 58, 10), (204, 140, 24), (250, 208, 60), (255, 240, 150), (255, 255, 230)]
 WOODP = [(36, 20, 12), (96, 58, 32), (146, 96, 54), (192, 140, 84), (226, 184, 120)]
@@ -67,7 +69,7 @@ CORK = (184, 132, 80)
 CORK_D = (128, 84, 48)
 BONE = (226, 214, 246)
 
-POTIONS = [('round', MAD, 'Delilik'), ('vial', ICE, 'Don'), ('bomb', fx.EMBER, 'Patlama'), ('heart', HEAL, 'Şifa'), ('cone', FEAR, 'Korku')]
+POTIONS = [('round', MAD, 'Delilik'), ('vial', ICE, 'Don'), ('bomb', fx.EMBER, 'Patlama'), ('heart', HEAL, 'Şifa'), ('cone', FEAR, 'Korku'), ('shield', SHIELD, 'Kalkan')]
 
 
 def font(sz):
@@ -538,13 +540,19 @@ def draw_bottle(cv, kind, pal, cx, cy, s=1.0):
         body = (hu * hu + hv * hv - 1.0) ** 3 - hu * hu * hv ** 3 <= 0.0
         neck = (np.abs(u) <= nw) & (v >= -4.5) & (v <= -1.2)
         mid = 2.0
+    elif kind == 'shield':
+        # kalkan biçimli şişe: düz üst, yanlar aşağı doğru daralıp sivri uca iner (şifa iksirinin kalbi gibi biçimi ele veren siluet)
+        half_w = 4.7 * (1.0 - np.clip((v - 1.5) / 5.3, 0.0, 1.0) ** 1.5)
+        body = (v >= -2.0) & (v <= 6.8) & (np.abs(u) <= half_w) & ~((v < -1.0) & (np.abs(u) > 3.9))
+        neck = (np.abs(u) <= nw) & (v >= -4.5) & (v <= -1.2)
+        mid = 2.0
     else:  # cone
         body = (v >= -2.0) & (v <= 6.2) & (np.abs(u) <= 1.2 + (v + 2.0) * 0.62) & ~((v > 5.4) & (np.abs(u) > 5.2))
         neck = (np.abs(u) <= nw) & (v >= -4.5) & (v <= -2.0)
         mid = 3.0
     glass = body | neck
     cv.put(glass, GLASS_FILL)
-    level = {'round': -1.6, 'vial': -1.4, 'bomb': -2.4, 'heart': -1.8, 'cone': -1.2}[kind]
+    level = {'round': -1.6, 'vial': -1.4, 'bomb': -2.4, 'heart': -1.8, 'cone': -1.2, 'shield': -1.0}[kind]
     liq = body & (v >= level)
     cv.put(liq, pal[2])
     cv.put(liq & (u < -1.2) & (v < mid + 1.5), pal[3])
@@ -567,6 +575,12 @@ def draw_bottle(cv, kind, pal, cx, cy, s=1.0):
         for d in range(-a, a + 1):
             ppx(cv, cx + d, cy + 2.6 * s, WHITE)
             ppx(cv, cx, cy + 2.6 * s + d, WHITE)
+    elif kind == 'shield':
+        if s >= 1.8:
+            star(cv, int(cx), int(cy + 2.4 * s), 2, core=WHITE, arm=pal[4], diag=True)
+        else:  # küçük elmas: kalkanın göbeği
+            for (du, dv) in ((0.5, 1.0), (-0.5, 2.0), (1.5, 2.0), (0.5, 3.0)):
+                ppx(cv, cx + du, cy + dv, pal[4])
     elif kind == 'cone':
         for sx in (-1.9, 1.9):
             for k in range(max(1, int(s))):
@@ -632,7 +646,7 @@ ZW, ZH = 160, 108
 ZCX, ZCY = 80.0, 70.0
 RX, RY = 58.0, 30.0
 Z_IN, Z_LOOP, Z_OUT = 5, 8, 6
-ZONE_ALPHA = [0.9, 0.9, 1.0, 1.0, 0.88]  # iksir sırasıyla (3 = patlama, alan yok); oyunda da aynı saydamlık
+ZONE_ALPHA = [0.9, 0.9, 1.0, 1.0, 0.88, 1.0]  # iksir sırasıyla (2 = patlama, alan yok); oyunda da aynı saydamlık
 
 
 def zparams(state, i):
@@ -842,9 +856,10 @@ def zone_ice(state, i):
     return cv.rgba.copy()
 
 
-def zone_heal(state, i):
-    """Şifa: ışık çemberi. Alanın kenarından yukarı dalgalanarak yükselen ışık ışınları (arka yarı soluk, ön yarı
-    parlak - alan bir ışık silindiri gibi durur), içi neredeyse boş (zemin görünür), yükselen artılar + altın zerreler."""
+def _zone_light(state, i, pal, glyph, mote):
+    """Şifa / Kalkan alanı: ışık çemberi. Alanın kenarından yukarı dalgalanarak yükselen ışık ışınları (arka yarı soluk, ön yarı
+    parlak - alan bir ışık silindiri gibi durur), içi neredeyse boş (zemin görünür), yükselen simgeler (glyph) + zerreler (mote).
+    Şifa ve Kalkan aynı düzeni paylaşır: yalnız palet ve simge farklı."""
     g, t, e = zparams(state, i)
     cv = Canvas(ZW, ZH)
     X, Y = cv.grid()
@@ -853,8 +868,8 @@ def zone_heal(state, i):
     rx, ry = RX * g, RY * g
     d = np.sqrt(((X - ZCX) / rx) ** 2 + ((Y - ZCY) / ry) ** 2)
     fade = (1.0 - e) ** 1.3
-    cv.put((d < 0.96) & (by < 0.13 * fade), HEAL[2])
-    cv.put((d < 0.96) & (np.abs(d - t) < 0.05) & ((Xi + Yi) % 2 == 0) & (e < 0.01), HEAL[3])
+    cv.put((d < 0.96) & (by < 0.13 * fade), pal[2])
+    cv.put((d < 0.96) & (np.abs(d - t) < 0.05) & ((Xi + Yi) % 2 == 0) & (e < 0.01), pal[3])
 
     def rays(front):
         for xi in range(int(ZCX - rx) + 1, int(ZCX + rx)):
@@ -871,26 +886,61 @@ def zone_heal(state, i):
                 if a > 0.7 and q % 2:
                     continue
                 if front:
-                    col = HEAL[4] if a < 0.3 else (HEAL[3] if a < 0.65 else HEAL[2])
+                    col = pal[4] if a < 0.3 else (pal[3] if a < 0.65 else pal[2])
                 else:
-                    col = HEAL[3] if a < 0.3 else HEAL[2]
+                    col = pal[3] if a < 0.3 else pal[2]
                 iy, ix = cv.idx(xi, yr - q)
                 if 0 <= ix < cv.w and 0 <= iy < cv.h:
                     cv.rgba[iy, ix] = (*col, 255)
 
     rays(False)
-    cv.put((np.abs(d - 1.0) < 0.022) & (by < 0.9 * fade), HEAL[3])
+    cv.put((np.abs(d - 1.0) < 0.022) & (by < 0.9 * fade), pal[3])
     rays(True)
     if g > 0.75 and e < 0.45:
         for k, (px_, py_) in enumerate(_HEAL_PLUS):
             pq = (t + (k * 3 % 7) / 7.0) % 1.0
-            arm = 3 if pq < 0.45 else (2 if pq < 0.75 else (1 if pq < 0.92 else 0))
-            _plus(cv, ZCX + px_, ZCY + py_ - 6 - pq * 28, arm)
+            glyph(cv, ZCX + px_, ZCY + py_ - 6 - pq * 28, pq)
         for k in range(6):
             pq = (t + k / 6.0) % 1.0
             ang = TAU * (pq + k / 6.0)
-            star(cv, int(ZCX + math.cos(ang) * RX * 0.6), int(ZCY + math.sin(ang) * RY * 0.6 - 6 - pq * 24), 1 if pq < 0.7 else 0, core=WHITE, arm=GOLD[3])
+            star(cv, int(ZCX + math.cos(ang) * RX * 0.6), int(ZCY + math.sin(ang) * RY * 0.6 - 6 - pq * 24), 1 if pq < 0.7 else 0, core=WHITE, arm=mote)
     return cv.rgba.copy()
+
+
+def _glyph_plus(cv, x, y, pq):
+    _plus(cv, x, y, 3 if pq < 0.45 else (2 if pq < 0.75 else (1 if pq < 0.92 else 0)))
+
+
+def zone_heal(state, i):
+    return _zone_light(state, i, HEAL, _glyph_plus, GOLD[3])
+
+
+_SHIELD_BIG = ["#######", "#######", "#######", "#######", ".#####.", ".#####.", "..###..", "...#..."]
+_SHIELD_MID = ["#####", "#####", "#####", ".###.", "..#.."]
+_SHIELD_MINI = ["###", "###", ".#."]
+
+
+def _glyph_shield(cv, x, y, pq):
+    """Yükselen küçük kalkan simgesi: önce iri, yükseldikçe küçülüp tek pırıltıya iner (Şifa'nın artıları gibi)."""
+    x, y = int(x), int(y)
+    if pq < 0.45:
+        rows = _SHIELD_BIG
+    elif pq < 0.75:
+        rows = _SHIELD_MID
+    elif pq < 0.92:
+        rows = _SHIELD_MINI
+    else:
+        return
+    _stamp(cv, x, y, rows, SHIELD[3], SHIELD[0])
+    if pq < 0.45:  # göbek pırıltısı
+        for (du, dv) in ((0, -1), (-1, 0), (0, 0), (1, 0), (0, 1)):
+            if 0 <= x + du < cv.w and 0 <= y + dv < cv.h:
+                cv.rgba[y + dv, x + du] = (*SHIELD[4], 255)
+        cv.rgba[y, x] = (*WHITE, 255)
+
+
+def zone_shield(state, i):
+    return _zone_light(state, i, SHIELD, _glyph_shield, GOLD[3])
 
 
 def mad_status_frames():
@@ -1387,7 +1437,7 @@ def build():
     b['spark_g'], b['spark_m'] = spark_frames(GOLD[2]), spark_frames(MAGIC[3])
     b['bottles'] = [bottle_frames(k, p) for (k, p, _n) in POTIONS]
     b['shatters'] = [shatter_frames(FIRE if k == 'bomb' else p, 50 + i) for i, (k, p, _n) in enumerate(POTIONS)]
-    b['zones'] = {0: zone_frames(zone_mad), 1: zone_frames(zone_ice), 3: zone_frames(zone_heal), 4: zone_frames(zone_fear)}
+    b['zones'] = {0: zone_frames(zone_mad), 1: zone_frames(zone_ice), 3: zone_frames(zone_heal), 4: zone_frames(zone_fear), 5: zone_frames(zone_shield)}
     b['boom'] = boom_frames()
     return b
 
@@ -1407,15 +1457,15 @@ def write_assets(b):
     _grid('broom_side', side, [('side_%d' % n, True, 8.0) for n in range(MAX_PASS + 1)])
     vert = [[broom_down(f)[1][BROOM_Y0:BROOM_Y0 + BROOM_H, AX:AX + 48] for f in range(4)], [broom_up(f)[1][BROOM_Y0:BROOM_Y0 + BROOM_H, AX:AX + 48] for f in range(4)]]
     _grid('broom_vert', vert, [('down', True, 8.0), ('up', True, 8.0)])
-    _grid('bottles', b['bottles'], [('b%d' % (i + 1), True, 14.0) for i in range(5)])
-    _grid('shatter', b['shatters'], [('s%d' % (i + 1), False, 12.0) for i in range(5)])
-    for i, nm in ((0, 'zone_mad'), (1, 'zone_ice'), (3, 'zone_heal'), (4, 'zone_fear')):
+    _grid('bottles', b['bottles'], [('b%d' % (i + 1), True, 14.0) for i in range(len(POTIONS))])
+    _grid('shatter', b['shatters'], [('s%d' % (i + 1), False, 12.0) for i in range(len(POTIONS))])
+    for i, nm in ((0, 'zone_mad'), (1, 'zone_ice'), (3, 'zone_heal'), (4, 'zone_fear'), (5, 'zone_shield')):
         z = b['zones'][i]
         _grid(nm, [z['in'], z['loop'], z['out']], [('intro', False, 10.0), ('loop', True, 10.0), ('outro', False, 10.0)])
     _grid('boom', [b['boom']], [('default', False, 15.0)])
     _grid('mad_status', [mad_status_frames()], [('loop', True, 10.0)])
     icons = [('cadi_passive_icon', icon_passive()), ('cadi_zehirli_duman_icon', icon_q()), ('cadi_supurge_icon', icon_e()), ('cadi_iksir_icon', icon_r())]
-    icons += [('cadi_iksir_%d_icon' % (i + 1), icon_r(i)) for i in range(5)]
+    icons += [('cadi_iksir_%d_icon' % (i + 1), icon_r(i)) for i in range(len(POTIONS))]
     for nm, ic in icons:
         ic.resize((144, 144), Image.NEAREST).save(os.path.join(ICON_DIR, nm + '.png'))
     print('   ikonlar:', ', '.join(nm for nm, _ic in icons))
@@ -1439,8 +1489,8 @@ def write_previews(b):
     scene_q(walk, b['potion']['side'], b['stream']['side'], b['smoke'])
     scene_e(sit, idle, pass1, pass2, b['poof'], b['spark_g'], b['spark_m'])
     scene_r(idle, shrug, b['bottles'], b['shatters'], b['zones'], b['boom'])
-    icons = [icon_passive(), icon_q(), icon_e(), icon_r()] + [icon_r(i) for i in range(5)]
-    names = ['Pasif', 'Q', 'E', 'R', 'R1', 'R2', 'R3', 'R4', 'R5']
+    icons = [icon_passive(), icon_q(), icon_e(), icon_r()] + [icon_r(i) for i in range(len(POTIONS))]
+    names = ['Pasif', 'Q', 'E', 'R', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6']
     sheet = Image.new('RGB', (len(icons) * 156 + 12, 250), (38, 34, 46))
     d = ImageDraw.Draw(sheet)
     for i, ic in enumerate(icons):

@@ -515,7 +515,7 @@ func _update_focus_target(delta: float) -> void:
 		_focus_target = null
 	if not _owner_ok():
 		return
-	if owner_player.get("is_in_merchant_zone") == true:
+	if _owner_in_safe_zone():
 		_end_sortie(0.0) ## güvenli bölgede kovalamaz
 		return
 	if _sortie_active:
@@ -818,7 +818,7 @@ func _process_attack(delta: float) -> void:
 		return
 	## DÜZELTME (kullanıcı bildirimi: "Shopta kalkan baloncuğunun içinde silahlar ateş etmesin") - pet seyyar satıcının güvenli
 	## bölgesindeki sahibini korurken saldırmaz (totem_base.gd _process()'teki AYNI kontrol).
-	if _owner_ok() and owner_player.get("is_in_merchant_zone") == true:
+	if _owner_in_safe_zone():
 		return
 	if not _focus_target_ok():
 		return
@@ -991,6 +991,16 @@ func _get_speed_mult() -> float:
 ## ---- Matthew'den okunan saldırı statları (bkz. FOX_STAT_RATIO notu). Sahip yoksa tilki eski yedek değerleri kullanır.
 func _owner_ok() -> bool:
 	return owner_player != null and is_instance_valid(owner_player)
+
+
+## Sahip güvenli alanda mı: seyyar satıcı koruma bölgesi VEYA demirci iç mekanı (player.gd is_safe_zone_frozen, madde 325/327) - köpek orada
+## ne kovalar ne saldırır (eskiden sadece satıcı bölgesine bakıyordu, demircide saldırıyordu).
+func _owner_in_safe_zone() -> bool:
+	if not _owner_ok():
+		return false
+	if owner_player.has_method("is_safe_zone_frozen"):
+		return owner_player.is_safe_zone_frozen()
+	return owner_player.get("is_in_merchant_zone") == true
 
 
 func _owner_attack_power() -> float:

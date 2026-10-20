@@ -59,6 +59,44 @@ static func contains(tree: SceneTree, feet_world: Vector2) -> bool:
 	return l.get_cell_source_id(l.local_to_map(l.to_local(feet_world))) != -1
 
 
+## ALGI HALKASI (madde 283, 2026-10-19; kullanıcı: "karakterin etrafında yuvarlak bir sınır (LoL Twitch Q gibi); dışındaki yaratıklar onu görmeyecek, içine
+## girenler görüp saldırabilir"): saklı oyuncunun AYAK noktasından bu yarıçap (dünya px) içine giren yaratık onu görür (hide_brush_manager.gd _detect).
+## Kullanıcı seçimi "biraz geniş (~36 px)" = görünen gövde genişliğinin (~8-9 px) yaklaşık 4 katı. Halka çizimi: brush_ring_fx.gd (sadece sahibinin ekranında).
+const RING_RADIUS := 36.0
+
+const DamageStatsScript := preload("res://scripts/damage_stats.gd")
+static var _reveal_sent_ms: int = -100000
+
+
+## Saklı mı (durum 1): silahlar içe çekilir ve hedef almaz (weapon.gd _can_target / _wf_update, remote_player.gd), halka çizilir.
+static func is_hidden(n: Object) -> bool:
+	if n == null or not is_instance_valid(n):
+		return false
+	var v: Variant = n.get("brush_state")
+	return v != null and int(v) == STATE_HIDDEN
+
+
+## Saklıyken HASAR VEREN YETENEK açığa çıkarır (madde 283, kullanıcı seçimi; LoL Twitch gibi). enemy.gd take_damage vuranın makinesinde (BalanceLog.on_hit ile
+## aynı yerde) çağırır: kaynak "s:" + Q/E/R/F yuvası (pasif/evcil/eşya/süregelen "dot:" bozmaz). Karar host'ta: host kendi oyuncusu için yöneticiye, istemci RPC ile host'a.
+static func note_skill_hit(tree: SceneTree, src: String) -> void:
+	if tree == null or not src.begins_with("s:"):
+		return
+	if not (DamageStatsScript.slot_of(src) in ["q", "e", "r", "f"]):
+		return
+	if not is_hidden(tree.get_first_node_in_group("player")):
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - _reveal_sent_ms < 300:
+		return
+	_reveal_sent_ms = now
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		NetworkManager.request_brush_reveal.rpc_id(1)
+		return
+	var m: Node = tree.get_first_node_in_group("hide_brush_manager")
+	if m != null and m.has_method("request_reveal_local"):
+		m.request_reveal_local()
+
+
 ## Durum -> karakter sprite'ının saydamlığı (kendi ekranında ve başkalarının ekranında AYNI). Saklı: hafif soluk; görülmüş: daha az soluk (görüldüğünü hissettirir). 2026-10-10: 0,5/0,82 çalının yaprakları da bindirince karakter "görünmüyor" gibiydi -> 0,7/0,9.
 static func alpha_for(state: int) -> float:
 	match state:

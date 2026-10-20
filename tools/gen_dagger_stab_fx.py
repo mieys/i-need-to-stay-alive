@@ -23,6 +23,11 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import bicak_proto as BP  # noqa: E402
 from gen_perf_sprite_fx_tres import write_sprite_frames  # noqa: E402
 
+## 2026-10-19 (madde 299, kullanıcı: "bıçağın şuanki efekti saplanınca pençe gibi 3 çizik izi değil 1 çizik izi bırakmalı"):
+## saplama başına TEK hız çizgisi (prototipteki ±2,6 px yan çizgiler kapalı). Kare boyu eski 80x50'de tutulur (tres / ölçek aynı kalsın).
+BP.B_SIDE_LINES = False
+MIN_HALF = (40, 25)
+
 OUT = os.path.join(ROOT, "assets", "fx", "dagger_stab")
 FPS = BP.FXFPS  # 30
 CHIP_COLS = BP.cl("#fff2c4 #fbd27a #ee9c42")
@@ -76,7 +81,7 @@ def main():
         if bb:
             hx = max(hx, cx - bb[0], bb[2] - cx)
             hy = max(hy, cy - bb[1], bb[3] - cy)
-    hx, hy = hx + 1, hy + 1
+    hx, hy = max(hx + 1, MIN_HALF[0]), max(hy + 1, MIN_HALF[1])
     frames = [im.crop((cx - hx, cy - hy, cx + hx, cy + hy)) for im in frames]
     w, h = frames[0].size
     sheet = Image.new("RGBA", (w * len(frames), h), (0, 0, 0, 0))

@@ -110,15 +110,29 @@ func _update_visual() -> void:
 			s.scale = Vector2.ONE * (TARGET_PIXEL_SIZE / longest)
 
 
+var _zone_blocked_body: Node = null ## güvenli bölgedeyken dokunan oyuncu (madde 325): bölgeden çıkınca yeniden denenir
+
+
 func _process(delta: float) -> void:
 	bob_time += delta
 	var bob_offset: float = sin(bob_time * 4.0) * 3.0
 	position.y += bob_offset - _last_bob_offset
 	_last_bob_offset = bob_offset
+	if _zone_blocked_body != null:
+		var b: Node = _zone_blocked_body
+		if not is_instance_valid(b) or not overlaps_body(b as PhysicsBody2D):
+			_zone_blocked_body = null
+		elif b.get("is_in_merchant_zone") != true:
+			_zone_blocked_body = null
+			_on_body_entered(b)
 
 
 func _on_body_entered(body: Node) -> void:
 	if not is_instance_valid(body):
+		return
+	## Satıcının güvenli bölgesinde can basılmaz (madde 325): yemek yerde kalsın, oyuncu bölgeden çıkınca alır (boşa yenmesin).
+	if body.get("is_in_merchant_zone") == true:
+		_zone_blocked_body = body
 		return
 
 	## Multiplayer: client tarafındaki görsel kopya → host'a toplama isteği gönder

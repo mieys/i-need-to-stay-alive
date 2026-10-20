@@ -100,7 +100,7 @@ func test_sheets_scene_tables_stats_and_size() -> void:
 	var sp: Node = _spawner()
 	var b: Node = _boss(sp, Vector2(500, 500))
 	assert(b.max_health == 300000.0 and b.item_shield_max == 480000.0, "can/kalkan: %.0f / %.0f" % [b.max_health, b.item_shield_max])
-	assert(absf(b.frame_sprite.scale.x - 1.6 * EntityScale.SIZE * EntityScale.BOSS_EXTRA * 2.1) < 0.001, "2,1x boyut (2026-10-10: eskiden 3x, %30 küçüldü)")
+	assert(absf(b.frame_sprite.scale.x - 1.6 * EntityScale.SIZE * EntityScale.BOSS_EXTRA * 1.47) < 0.001, "1,47x boyut (3x -> 2,1x 2026-10-10 -> 1,47x 2026-10-19, ikisi de %30 küçültme)")
 	assert(b.special_textures.has("dash") and b.special_textures.has("scream") and b.special_textures.has("appear"), "özel dokular")
 	_cleanup()
 
@@ -183,7 +183,7 @@ func test_dash_flies_through_the_player_hits_once_and_slows_down() -> void:
 	assert(passed, "boss oyuncunun İÇİNDEN geçip öbür tarafa çıktı: max x %.0f" % max_x)
 	var banshee_hits: int = 0
 	for h: Array in player.hits:
-		if h[1] == "banshee" and is_equal_approx(h[0], 240.0 * SpawnerScript.CREATURE_DAMAGE_CUT):
+		if h[1] == "banshee" and is_equal_approx(h[0], 336.0 * SpawnerScript.CREATURE_DAMAGE_CUT):
 			banshee_hits += 1
 	assert(banshee_hits == 1, "atılış başına TEK isabet 240 x0,8 = 192 (2026-10-11): %s" % str(player.hits))
 	assert(kit._dash_count == 1 and kit._v.length() < 30.0, "atılıştan sonra yavaşladı")
@@ -243,7 +243,7 @@ func test_wave_lane_geometry_is_a_thick_straight_strip() -> void:
 
 ## 2026-10-10 (kullanıcı: "banshee çok güçsüzdü, boyutunu %30 küçültüp daha agresif daha hızlı olmalı, hasarını 2 kat arttır").
 func test_hits_are_doubled_and_the_boss_is_far_more_aggressive_than_before() -> void:
-	assert(float(SpawnerScript.FIXED_BOSS_STATS["banshee1"]["damage"]) == 240.0 and KitScript.SCREAM_DAMAGE == 260.0, "atılış 240, çığlık 260 (x0,8 iptal 2026-10-11)")
+	assert(float(SpawnerScript.FIXED_BOSS_STATS["banshee1"]["damage"]) == 336.0 and KitScript.SCREAM_DAMAGE == 364.0, "atılış 336, çığlık 364 (x0,8 iptal 2026-10-11)")
 	assert(is_equal_approx(float(SpawnerScript.FIXED_BOSS_STATS["banshee1"]["scale"]), 3.0 * KitScript.BODY_SCALE_REL), "boyut x0,7: tablo ve kit aynı oran")
 	## eskiden: yaklaşma 190, atılış 580, nişan 0,55, bekleme 0,3, çığlık her 3 atılışta
 	assert(KitScript.APPROACH_SPEED >= 300.0 and KitScript.DASH_MAX_SPEED >= 800.0 and KitScript.WINDUP_TIME <= 0.35 and KitScript.PAUSE_TIME <= 0.15, "daha hızlı")

@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx_animation.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://assets/fx/yinyang/hit_frames.tres" id="2"]
+
+[node name="FxYinYangHit" type="AnimatedSprite2D"]
+texture_filter = 1
+scale = Vector2(0.575, 0.575)
+z_index = 150
+sprite_frames = ExtResource("2")
+animation = &"play"
+script = ExtResource("1")

@@ -30,11 +30,18 @@ extends Node
 ##    önbellek (DepthInfo: ayak görseli, ayağın görsel yereli, yarım genişlik, boy - main.gd _creature_foot_y / _extent'in yazdığı AYNI değerler),
 ##  - havuz paralel PackedFloat64Array'lerde (tahsis yok),
 ##  - close_over: yükseltilenler ayak sırasında eklendiği için ikili aramayla SADECE "ayak - boy < a.ayak < ayak - 0,5" bandındakiler taranır (eskiden hepsi).
+##
+## C++ (2026-10-19, madde 286): kayıtlı yaratıkların taraması (ayak, should_cover, kapanış) EnemyWorld.depth_scan'e taşındı (aday başına ~7 us GDScript -> ~0,1 us).
+## Kural BİREBİR aynı (yukarıdaki should_cover / _close_core; ikisi de testler ve kubbeli yol için burada duruyor). C++ yolu: kayıtlı yaratıklar C++'ta taranır,
+## kayıtsızlar (görev kopyaları) burada ölçülüp havuza verilir; düğüm başına ölçü kaydı (DepthInfo) eksik slotlar için GDScript doldurur (depth_pending / depth_set).
+## Şovalye kubbesi AKTİFKEN eski GDScript yolu çalışır (kubbe kuralı havuzu karakter + kubbe adaylarıyla birlikte kullanıyor; nadir). ENEMY_CPP_DEPTH=0 ortam
+## değişkeni her zaman eski yolu açar (süreç düzeyi A/B hakemi: tools/fps_micro/proc_ab.ps1).
 
 const DepthScript := preload("res://scripts/depth_occluders.gd")
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const PaladinDome := preload("res://scripts/paladin_dome.gd")
 const ForestCanopyScript := preload("res://scripts/forest_canopy.gd")
+const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 
 const FRONT_Z := 2
 const DOME_FRONT_Z := PaladinDome.SHELL_Z + 1 ## kabuğun önündeki yaratık (oyuncunun da önündeyse + FRONT_Z)
@@ -50,6 +57,8 @@ const CLOSURE_PAD := 240.0
 const ABOVE_SKIP := 130.0
 ## Düğüm başına önbellek tablosu bu kadar çağrıda bir süpürülür (silinmiş yaratıkların kayıtları atılır).
 const CACHE_SWEEP_EVERY := 300
+
+static var _cpp_on: bool = OS.get_environment("ENEMY_CPP_DEPTH") != "0"
 
 var _raised: Dictionary = {} ## yaratık düğümü -> yükselmeden önceki z_index
 var _was_front: Dictionary = {} ## son güncellemede oyuncunun önünde yükselen yaratıklar (histerezis)
@@ -157,6 +166,98 @@ static func _close_core(want: Dictionary, nodes: Array, foot: PackedFloat64Array
 
 func update_now() -> void:
 	var tree := get_tree()
+	var ew: Object = EnemyWorldBridgeScript.fog_world(tree) if _cpp_on else null
+	if ew != null:
+		if PaladinDome.active_domes(tree).is_empty():
+			_update_cpp(tree, ew)
+			return
+		_update_legacy(tree)
+		var ids := PackedInt64Array() ## C++ titreme belleği: son yükseltilenler (bu güncellemede C++ çalışmadı)
+		for n in _was_front:
+			ids.append((n as Node2D).get_instance_id())
+		ew.call("depth_seed", ids)
+		return
+	_update_legacy(tree)
+
+
+## C++ yolu (bkz. dosya başı). Kayıtlı yaratıklar C++'ta; kayıtsız adaylar (görev kopyaları, nadiren boş değil) burada.
+func _update_cpp(tree: SceneTree, ew: Object) -> void:
+	_calls += 1
+	if _calls % CACHE_SWEEP_EVERY == 0:
+		_sweep_info()
+	var chars: Array[Vector4] = DepthScript.collect_characters(tree)
+	var cxy := PackedFloat64Array()
+	for c in chars:
+		cxy.append(c.x)
+		cxy.append(c.y)
+	var ex_nodes: Array = []
+	var ex_data := PackedFloat64Array()
+	var ex_want := PackedByteArray()
+	var copies: Array[Node] = tree.get_nodes_in_group("mission_copies")
+	if not copies.is_empty() and not chars.is_empty():
+		_collect_extras(copies, chars, ex_nodes, ex_data, ex_want)
+	var params := PackedFloat64Array([SCAN_RADIUS, CLOSURE_PAD, ABOVE_SKIP, HYSTERESIS, DepthScript.BODY_HALF_WIDTH, EnemyQueryScript.MOVE_SLACK])
+	var res: Array = ew.call("depth_scan", cxy, ex_nodes, ex_data, ex_want, params, false)
+	var need: Array = ew.call("depth_pending")
+	if not need.is_empty():
+		for e in need: ## ölçü kaydı eksik slotlar: eski _info_of (main.gd _creature_foot_y + _extent) ile bir kez ölçülüp C++'a verilir
+			var n := e as Enemy
+			if n == null:
+				continue
+			var rec: DepthInfo = _info_of(n)
+			ew.call("depth_set", n._ew_slot, rec.vis, rec.foot_local, rec.half_w, rec.height, _info.has(n.get_instance_id()))
+		res = ew.call("depth_scan", cxy, ex_nodes, ex_data, ex_want, params, true)
+	var want: Dictionary = {}
+	for n in res:
+		want[n] = true
+	_apply_creature_z(want, {})
+	_apply_char_z({})
+
+
+## Kayıtsız adaylar (EnemyQuery.candidates'in görev kopyaları kolu): eski update_now süzgeçleriyle AYNI; havuza girenler + ilk yükseltme kararı C++'a verilir.
+func _collect_extras(copies: Array[Node], chars: Array[Vector4], ex_nodes: Array, ex_data: PackedFloat64Array, ex_want: PackedByteArray) -> void:
+	var reach: float = SCAN_RADIUS + CLOSURE_PAD
+	var r2: float = (reach + EnemyQueryScript.MOVE_SLACK) * (reach + EnemyQueryScript.MOVE_SLACK)
+	var index: Dictionary = {}
+	var foots := PackedFloat64Array()
+	var heights := PackedFloat64Array()
+	for c in chars:
+		var cpos := Vector2(c.x, c.y)
+		for e in copies:
+			if not is_instance_valid(e) or not e.is_in_group("enemies") or e.get("is_dead") == true 					or cpos.distance_squared_to((e as Node2D).global_position) > r2:
+				continue
+			var n := e as Node2D
+			if n == null or not n.visible:
+				continue
+			var en := e as Enemy
+			if (en.is_dead if en != null else n.get("is_dead") == true):
+				continue
+			var gp: Vector2 = n.global_position
+			var adx: float = absf(gp.x - c.x)
+			var ady: float = absf(gp.y - c.y)
+			if adx > reach or ady > reach or gp.y < c.y - ABOVE_SKIP:
+				continue
+			var pi: int = index.get(n, -1)
+			if pi < 0:
+				var info: DepthInfo = _info_of(n)
+				pi = ex_nodes.size()
+				index[n] = pi
+				ex_nodes.append(n)
+				var foot: float = gp.y if info.vis == null else info.vis.global_position.y + info.foot_local * absf(info.vis.global_scale.y)
+				ex_data.append(gp.x)
+				ex_data.append(foot)
+				ex_data.append(info.half_w)
+				ex_data.append(info.height)
+				ex_want.append(0)
+				foots.append(foot)
+				heights.append(info.height)
+			if adx <= SCAN_RADIUS and ady <= SCAN_RADIUS and ex_want[pi] == 0:
+				if should_cover(foots[pi], heights[pi], gp.x - c.x, c.y, _was_front.has(n)):
+					ex_want[pi] = 1
+
+
+## Eski (tam GDScript) yol: kubbe aktifken ve ENEMY_CPP_DEPTH=0 / C++ dünyası yokken.
+func _update_legacy(tree: SceneTree) -> void:
 	var want: Dictionary = {}
 	_pool_clear()
 	_calls += 1

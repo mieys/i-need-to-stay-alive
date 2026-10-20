@@ -92,6 +92,9 @@ var _ranged_timer: float = 0.0:
 		if _ew_slot >= 0:
 			_ew_world.set_ranged_timer(_ew_slot, v)
 const EnemyProjectileScene := preload("res://scenes/enemy_projectile.tscn")
+## Lich "Ruh Alevi" (madde 280): mermi stili/rengi, asa ucu, saldırı klibinin parlama karesi - kuralları lich_soul_flame.gd'de.
+const LichFlame := preload("res://scripts/lich_soul_flame.gd")
+var _is_lich: bool = false
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 const BossBarArtScript: GDScript = preload("res://scripts/boss_bar_art.gd")
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
@@ -798,6 +801,53 @@ func _remove_taunt_status_fx() -> void:
 	if _taunt_status_fx and is_instance_valid(_taunt_status_fx):
 		_taunt_status_fx.queue_free()
 	_taunt_status_fx = null
+
+
+## SAKLANMA ÇALILIĞI (madde 283): saklı oyuncuyu ARAYAN yaratığın başında "?", halkada GÖRENİN başında kısa "!" (fx_brush_search_status.gd). Karar host'ta
+## (hide_brush_manager.gd), istemcilere broadcast_enemy_vfx "brush_search_start/stop" / "brush_alert".
+const BrushSearchFxScript := preload("res://scripts/fx_brush_search_status.gd")
+const HideBrushScript := preload("res://scripts/hide_brush.gd")
+var _brush_search_fx: Node2D = null
+
+
+func set_brush_search_visual(on: bool) -> void:
+	if on:
+		_spawn_brush_search_fx()
+	else:
+		_remove_brush_search_fx()
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.broadcast_enemy_vfx.rpc(net_id, "brush_search_start" if on else "brush_search_stop")
+
+
+func show_brush_alert() -> void:
+	_spawn_brush_alert_fx()
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.broadcast_enemy_vfx.rpc(net_id, "brush_alert")
+
+
+func _spawn_brush_search_fx() -> void:
+	if _brush_search_fx == null or not is_instance_valid(_brush_search_fx):
+		var fx: Sprite2D = BrushSearchFxScript.new()
+		fx.setup(BrushSearchFxScript.KIND_SEARCH)
+		add_child(fx)
+		_brush_search_fx = fx
+
+
+func _remove_brush_search_fx() -> void:
+	if _brush_search_fx != null and is_instance_valid(_brush_search_fx):
+		_brush_search_fx.queue_free()
+	_brush_search_fx = null
+
+
+func _spawn_brush_alert_fx() -> void:
+	_remove_brush_search_fx()
+	var fx: Sprite2D = BrushSearchFxScript.new()
+	fx.setup(BrushSearchFxScript.KIND_ALERT)
+	add_child(fx)
 
 
 ## Kullanıcı isteği: yakın dövüşçülerin hasarı artık menzile girer girmez
@@ -1523,6 +1573,9 @@ var _vuln_pct: float = 0.0 ## Harpun / Sersemletici Bomba: süreli "tüm hasarda
 var _shield_break_pct: float = 0.0 ## Arrow Rain Finali: süreli kalkan koruması düşüşü (bkz. "shield_break")
 var _shield_break_until_msec: int = 0
 var _vuln_until_msec: int = 0
+## Gökkuşağı Asası (madde 306): kamaşmayan boss/elit süreli olarak daha AZ hasar verir (outgoing_damage_mult; oyuncu hasar girişleri okur).
+var _weaken_pct: float = 0.0
+var _weaken_until_msec: int = 0
 var _contagious_timer: float = 0.0
 var _linger_slow: float = 0.0 ## Ebedi Kış: donma bitince yavaşlama
 
@@ -1621,6 +1674,9 @@ func apply_element_host(kind: String, p: Dictionary, attacker_peer: int) -> void
 		"vuln":
 			_vuln_pct = maxf(_vuln_pct if Time.get_ticks_msec() < _vuln_until_msec else 0.0, float(p.get("pct", 0.2)))
 			_vuln_until_msec = Time.get_ticks_msec() + int(float(p.get("dur", 2.0)) * 1000.0)
+		"weaken":
+			_weaken_pct = maxf(_weaken_pct if Time.get_ticks_msec() < _weaken_until_msec else 0.0, clampf(float(p.get("pct", 0.2)), 0.0, 0.9))
+			_weaken_until_msec = Time.get_ticks_msec() + int(float(p.get("dur", 3.0)) * 1000.0)
 		## Efsun Arrow Rain Finali (2026-09-30, "zırhı %30 kırılır" = kalkan): süreli olarak TÜM kaynaklardan gelen isabetlerde
 		## kalkan koruması bu oran kadar düşer (bkz. _apply_damage effective_protection).
 		"shield_break":
@@ -1945,6 +2001,22 @@ func _on_sleep_end() -> void:
 	_sleep_vuln = 0.0
 	_sleep_wake_slow = 0.0
 	_sleep_break = true
+
+
+## Bu yaratığın VERDİĞİ hasarın çarpanı (Gökkuşağı Asası "weaken", madde 306). Durum yalnız host'taki gerçek yaratıkta tutulur: host hasarı
+## player.gd / remote_player.gd hasar girişlerinde (kaynak = yaratık) çarpar; istemcideki kukla 1,0 döner (çift uygulama yok).
+func outgoing_damage_mult() -> float:
+	if _weaken_pct > 0.0 and Time.get_ticks_msec() < _weaken_until_msec:
+		return 1.0 - _weaken_pct
+	return 1.0
+
+
+## Saldıranın hasar çarpanı: player.gd take_damage / take_paladin_barrier_damage (yerel oyuncu) ve remote_player.gd hasar iletimi (host -> uzak
+## oyuncu) AYNI fonksiyonu çağırır. Kaynak yaratık değilse (mermi sahipsiz, tuzak...) 1,0.
+static func damage_mult_of(source: Node) -> float:
+	if source != null and is_instance_valid(source) and source.has_method("outgoing_damage_mult"):
+		return float(source.call("outgoing_damage_mult"))
+	return 1.0
 
 
 ## Çatlak + Derin Uyku: alınan TÜM hasarın çarpanı (bkz. _apply_damage).
@@ -2561,18 +2633,62 @@ var _bee_poison_stacks: Array = [] ## her eleman: o yükün kalan ömrü (sn)
 var _bee_poison_per_tick_damage: float = 0.0
 var _bee_poison_tick_timer: float = 0.0
 
-func apply_bee_poison(tick_damage_per_stack: float) -> void:
+## plague: Oakley evrimi "Salgın Zehir" (madde 348) - bu zehri taşıyan yaratık ölünce yükleri yakındakilere geçer (_spread_bee_plague).
+## İstemciden host'a RPC'nin param2'si ile gider.
+func apply_bee_poison(tick_damage_per_stack: float, plague: bool = false) -> void:
 	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır (anahtar kapalıyken boş)
 	if is_dead:
 		return
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		if net_id > 0:
-			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "bee_poison", tick_damage_per_stack, 0.0, 0.0)
+			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "bee_poison", tick_damage_per_stack, 1.0 if plague else 0.0, 0.0)
 		return
 	_bee_poison_per_tick_damage = tick_damage_per_stack
+	if plague:
+		_bee_plague = true
 	if _bee_poison_stacks.size() < BEE_POISON_MAX_STACKS:
 		_bee_poison_stacks.append(BEE_POISON_STACK_DURATION)
+
+
+## Salgın Zehir (Oakley Q finali, madde 348): taşıyıcı ölünce kalan tüm yükler (kalan ömürleriyle) en yakın BEE_PLAGUE_MAX_TARGETS
+## yaratığa geçer; geçen yükler de salgın bayrağı taşır (zincirleme). Sadece host / tek oyunculu (zehir durumu orada tutulur).
+## die() ölümde bir kez çağırır; ayrı bir zamanlayıcı yok -> uyku kuralına (_ew_hard_active) dokunmaz.
+const BEE_PLAGUE_RADIUS := 150.0
+const BEE_PLAGUE_MAX_TARGETS := 6
+const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+var _bee_plague: bool = false
+
+
+func _spread_bee_plague() -> void:
+	if not is_inside_tree() or _bee_poison_stacks.is_empty():
+		return
+	var stacks: Array = _bee_poison_stacks.duplicate()
+	var cand: Array = []
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, BEE_PLAGUE_RADIUS + 1.0):
+		if e == self or not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true:
+			continue
+		if not e.has_method("receive_bee_plague"):
+			continue
+		var d: float = global_position.distance_to((e as Node2D).global_position)
+		if d <= BEE_PLAGUE_RADIUS:
+			cand.append([d, e])
+	cand.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	for i in range(mini(BEE_PLAGUE_MAX_TARGETS, cand.size())):
+		(cand[i][1] as Node).call("receive_bee_plague", stacks, _bee_poison_per_tick_damage)
+
+
+## Salgın Zehir'den gelen yükler (host): kendi yüklerinin üstüne (en fazla BEE_POISON_MAX_STACKS) eklenir, salgın bayrağı geçer.
+func receive_bee_plague(stacks: Array, tick_damage_per_stack: float) -> void:
+	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır
+	if is_dead:
+		return
+	_bee_plague = true
+	_bee_poison_per_tick_damage = maxf(_bee_poison_per_tick_damage, tick_damage_per_stack)
+	for life in stacks:
+		if _bee_poison_stacks.size() >= BEE_POISON_MAX_STACKS:
+			break
+		_bee_poison_stacks.append(float(life))
 
 
 func _process_bee_poison(delta: float) -> void:
@@ -2583,6 +2699,7 @@ func _process_bee_poison(delta: float) -> void:
 		if _bee_poison_stacks[i] <= 0.0:
 			_bee_poison_stacks.remove_at(i)
 	if _bee_poison_stacks.is_empty():
+		_bee_plague = false ## Salgın Zehir bayrağı yükle birlikte biter
 		return
 	_bee_poison_tick_timer -= delta
 	if _bee_poison_tick_timer <= 0.0:
@@ -3276,10 +3393,15 @@ func apply_knockback_force(dir: Vector2, force: float) -> void:
 ## kat edecek başlangıç hızı hesaplanır, tek bir güçlü yetenek itişi tavanı aşabilir (silah/gövde itmeleri değişmedi).
 ## Bosslar SKILL_PUSH_BOSS_MULT kadar. Çok oyunculuda istemci -> host'taki gerçek yaratık (NetworkManager.request_enemy_skill_push).
 const SKILL_PUSH_BOSS_MULT := 0.4
-
-func apply_skill_push(dir: Vector2, distance: float) -> void:
+## 2026-10-19 (kullanıcı: "ultiler haricindeki hiçbir yetenekten gelen itme özellikleri bossları itememeli"): `ult` false (Q/E, evrimleri,
+## evcil/totem/golem) iken BOSS hiç itilmez - kontrol istemcide de (kuklada is_boss apply_boss_stats'tan gelir) RPC'den ÖNCE yapılır, bu
+## yüzden host'a ulaşan boss itmesi zaten ultidir (network_manager.gd request_enemy_skill_push ult=true geçer). Ultiler (Melek R, Şovalye R
+## kırılması, Shaman golem formu) ve görev ağacı atışı ult=true: eskisi gibi x0,4.
+func apply_skill_push(dir: Vector2, distance: float, ult: bool = false) -> void:
 	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır (anahtar kapalıyken boş)
 	if distance <= 0.0 or is_dead:
+		return
+	if is_boss and not ult:
 		return
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
@@ -3600,6 +3722,7 @@ func _ready() -> void:
 	## Fizik interpolasyonu (bkz. physics_interp.gd): _physics_process'te hareket ediyor.
 	PhysicsInterp.opt_in(self)
 	add_to_group("enemies")
+	_is_lich = LichFlame.is_lich(self) ## ilk _enter_state / _ew_hold_ok'tan ÖNCE
 	## Kullanıcı isteği: "tüm ... yaratıkları v.s %5 küçültüp hareket hızlarını
 	## %10 azaltmanı istiyorum" - EntityScale.SPEED buradaki zaten var olan
 	## global çarpana EK olarak uygulanıyor (0.48 x 0.9 = 0.432); sahne
@@ -3726,8 +3849,13 @@ const EW_E_LOCO := 6
 const EW_A_WALK := 0
 const EW_A_IDLE := 1
 const EW_A_OTHER := 2
+const EW_A_HOLD := 3 ## tek seferlik saldırı sayfası: kare süresini ve kareyi C++ yazar (madde 286); yalnız boss / pozlu / özel animasyonlu / kukla OLMAYAN yaratık
+## EW_HOLD=0 ortam değişkeni saldırı karesini eski yola (GDScript _advance_frame_sprite) döndürür (süreç düzeyi A/B hakemi: tools/fps_micro/proc_ab.ps1).
+static var _ew_hold_on: bool = OS.get_environment("EW_HOLD") != "0"
 
 var _ew_slot: int = -1
+## Saldırı karesini C++ yazıyor (EW_A_HOLD): _ew_tick kare ilerletmez, saldırı durumu + süre yaratığı uyanık TUTMAZ (süre dolunca köprü uyandırır, bkz. _ew_try_dormant).
+var _ew_hold: bool = false
 ## İstemci (host olmayan) kuklası olarak kayıtlı: C++ sadece ağ konumunu izler (step_puppet), tik = _ew_tick_puppet.
 var _ew_puppet: bool = false
 var _ew_bridge: Node = null
@@ -3747,6 +3875,14 @@ var _ew_sent_hit_radius: float = -1.0
 var _ew_hit_collision: CollisionShape2D = null
 var _ew_hr_wait: int = 0 ## _ew_push_state: hit yarıçapı okumasına kalan itiş sayısı (0 = bir sonrakinde oku)
 var _ew_hr_cache: float = -1.0
+## UYKU (2026-10-19, FPS turu 4): uyanık ama "sessiz" yaratık (yalnız yetenek bekleme sayacı + kalkan yenilenmesi sürüyor) köprünün uyku listesine alınır, her karede tiklenmez
+## (bkz. enemy_world_bridge.gd _clock / dormant_add). Atlanan sürenin etkisi uyanınca _ew_dorm_sync ile işlenir. EW_DORMANT=0 ortam değişkeni eski yolu açar (süreç düzeyi A/B hakemi).
+static var _ew_dormancy_on: bool = OS.get_environment("EW_DORMANT") != "0"
+const EW_DORM_MIN_TICKS := 4 ## bundan kısa bekleme için uyutma (uyutma / uyandırma bedeli kazancı aşar)
+const EW_DORM_MARGIN_TICKS := 2 ## sayaç eşiğe varmadan bu kadar kare ÖNCE uyandır: son kareler eski yolla (kare kare) işler, uyutmanın kaydırma olasılığı kalmaz
+var _ew_dormant: bool = false
+var _ew_dorm_t0: float = 0.0 ## uykunun işlenmiş olduğu son köprü saati
+var _ew_dorm_idx: int = -1 ## köprünün uyku listesindeki yeri
 
 
 ## _ready sonunda: anahtar açık + host/tek oyunculu ise C++'a kaydol ve kendi _physics_process'ini kapat.
@@ -3821,7 +3957,11 @@ func _ew_unregister() -> void:
 	_flip_h = _ew_world.get_face_left(_ew_slot)
 	_interp_prev_pos = global_position
 	if _ew_bridge != null and is_instance_valid(_ew_bridge):
+		if _ew_dormant:
+			_ew_dorm_resume() ## uyku listesinden çık (sayaçlar işlenir: kayıt silinse de yaratık eski yolda yaşıyor olabilir)
 		_ew_bridge.unregister(_ew_slot)
+	_ew_dormant = false
+	_ew_hold = false
 	_ew_slot = -1
 	_ew_world = null
 	_ew_awake = false
@@ -3839,23 +3979,104 @@ func _exit_tree() -> void:
 ## Bu yaratığın GDScript tikine ihtiyacı var (durum etkisi başladı, hasar aldı, saldırıya geçti...).
 func _ew_wake() -> void:
 	if _ew_slot >= 0 and not _ew_awake:
+		if _ew_dormant:
+			_ew_dorm_resume() ## uykuda atlanan sürenin etkisi sayaçlara işlenir
 		_ew_awake = true
 		_ew_bridge.wake(self)
 
 
-## Uyanık kalması gerekiyor mu? _ew_tick'teki her "aktifse çağır" koşulunun VEYA'sı - birini değiştirirsen burayı da.
+## Uyanık kalması gerekiyor mu? _ew_tick'teki her "aktifse çağır" koşulunun VEYA'sı - birini değiştirirsen burayı da (ve _ew_hard_active'i).
+## UYKUDAki yaratık için yetenek bekleme sayacı ve kalkan yenilenmesi "iş" sayılmaz (süresi dolunca köprü uyandırır, kalkan uyanınca işlenir).
 func _ew_still_active() -> bool:
 	if _ew_puppet:
 		return _flash_time_left > 0.0 or mark_stacks > 0 or _state_duration > 0.0 or (_state != State.WALK and _state != State.IDLE)
-	return _flash_time_left > 0.0 or is_frozen or is_feared or _abilities != null or not _abilities_checked \
-			or ability_move_lock > 0.0 or _state_duration > 0.0 or (_state != State.WALK and _state != State.IDLE) \
+	if _ew_hard_active():
+		return true
+	return not _ew_dormant and (_abilities != null or (_ew_hold and _state_duration > 0.0) or (item_shield_max > 0.0 and (item_shield_regen_delay > 0.0 or item_shield_hp < item_shield_max)))
+
+
+## _ew_still_active'in yetenek / kalkan DIŞINDaki koşulları: bunlardan biri sürüyorsa yaratık kesinlikle her karede tiklenmeli (uyutulamaz).
+## İSTİSNA (madde 286): saldırı karesini C++ yazıyorsa (_ew_hold) saldırı durumu ve süresi "iş" sayılmaz - süre dolmadan 2 kare önce köprü uyandırır (_ew_try_dormant).
+func _ew_hard_active() -> bool:
+	return _flash_time_left > 0.0 or is_frozen or is_feared or is_stunned or not _abilities_checked \
+			or ability_move_lock > 0.0 or (not _ew_hold and (_state_duration > 0.0 or (_state != State.WALK and _state != State.IDLE))) \
 			or (_overhead_bar_hide_timer > 0.0 and _overhead_bar != null and not _overhead_bar_always_visible) \
-			or (item_shield_max > 0.0 and (item_shield_regen_delay > 0.0 or item_shield_hp < item_shield_max)) \
 			or not _poison_stack_time.is_empty() or burn_time_left > 0.0 or mark_stacks > 0 or bleed_stacks > 0 \
 			or shock_time_left > 0.0 or _sleep_time > 0.0 or not _plague.is_empty() or not _enchant_flags.is_empty() \
 			or chill_stacks > 0 or _boss_chill_stacks > 0 \
 			or _slow_timer > 0.0 or _slow_fx_time_left > 0.0 or _slow_fx_broadcast_cooldown > 0.0 \
 			or _root_timer > 0.0 or not _bee_poison_stacks.is_empty() or is_mad
+
+
+## Sessiz yaratığı köprünün uyku listesine koyar (bkz. dosya içi UYKU notu). Çağıran: bu karenin tiki bitti, _ew_hard_active() false, yetenek ya da kalkan beklemede.
+## true = uyutuldu (çağıran _ew_awake'i false yapar). Bossta / elitte (sayaç ve kalkan her kare okunuyor: boss barı, elit barı) ve hızlı yolu olmayan yetenekte (boss kiti, Minotaur) uyutulmaz.
+func _ew_try_dormant(delta: float) -> bool:
+	if not _ew_dormancy_on or is_boss or is_elite or _ew_puppet or _ew_bridge == null or delta <= 0.0:
+		return false
+	var until: float = INF
+	if _abilities != null:
+		var rem: float = _abilities.quiet_remaining()
+		if rem < 0.0:
+			return false
+		rem -= EW_DORM_MARGIN_TICKS * delta
+		if rem < EW_DORM_MIN_TICKS * delta:
+			return false
+		until = _ew_bridge._clock + rem
+	if _state_duration > 0.0: ## yalnız _ew_hold'da buraya gelinir (_ew_hard_active): saldırı süresi dolmadan 2 kare önce uyan, bitişi eski yolla (kare kare) işlensin
+		var state_rem: float = _state_duration - EW_DORM_MARGIN_TICKS * delta
+		if state_rem < EW_DORM_MIN_TICKS * delta:
+			return false
+		until = minf(until, _ew_bridge._clock + state_rem)
+	_ew_dorm_t0 = _ew_bridge._clock
+	_ew_dorm_idx = _ew_bridge.dormant_add(self, until)
+	_ew_dormant = true
+	return true
+
+
+## Uykuda geçen süreyi (_ew_dorm_t0 -> to, köprü saati) sayaçlara işler: yetenek bekleme sayacı ve kalkan gecikmesi / yenilenmesi, eski yolun kare kare yaptığının toplamı.
+## Kalkan: gecikme sayacı önce biter (eski yol bu karelerde yenilemez), kalan süre kadar `ITEM_SHIELD_REGEN_RATE` x azami kalkan yenilenir (kare sınırına yuvarlama farkı < 1 kare).
+func _ew_dorm_sync(to: float) -> void:
+	var dt: float = to - _ew_dorm_t0
+	if dt <= 0.0:
+		return
+	_ew_dorm_t0 = to
+	if _state_duration > 0.0:
+		_state_duration -= dt ## saldırı süresi (uykuya girerken >= EW_DORM_MARGIN_TICKS kare bırakılır; _enter_state uyuyanı uyandırır ve süreyi sıfırlar)
+	if _abilities != null:
+		_abilities.fast_forward(dt)
+	if item_shield_max > 0.0:
+		var regen_time: float = dt
+		if item_shield_regen_delay > 0.0:
+			regen_time = maxf(0.0, dt - item_shield_regen_delay)
+			item_shield_regen_delay -= dt
+		if regen_time > 0.0 and item_shield_hp < item_shield_max:
+			item_shield_hp = minf(item_shield_max, item_shield_hp + item_shield_max * ITEM_SHIELD_REGEN_RATE * regen_time)
+			item_shield_changed.emit(item_shield_hp, item_shield_max)
+
+
+## Uykudan çık (dışarıdan uyandırma / kayıt silme): sayaçlar şu ana kadar işlenir, uyku listesinden çıkar. Çağıran uyanık işaretini ve etkin listeye eklemeyi kendisi yapar.
+func _ew_dorm_resume() -> void:
+	_ew_dorm_sync(_ew_bridge._sync_clock)
+	_ew_bridge.dormant_remove(_ew_dorm_idx)
+	_ew_dorm_idx = -1
+	_ew_dormant = false
+
+
+## Köprü: uyanma saati geldi (kayıt listeden zaten çıkarıldı). Sayaçlar ÖNCEKİ geçişin sonuna kadar işlenir; bu karenin delta'sını yaratığın kendi tiki işler.
+func _ew_dorm_due(prev_clock: float) -> void:
+	_ew_dorm_sync(prev_clock)
+	_ew_dorm_idx = -1
+	_ew_dormant = false
+	if _ew_slot >= 0 and not _ew_awake:
+		_ew_awake = true
+		_ew_bridge.wake(self)
+
+
+## Uykudaki yaratığın kalkanının şu anki değeri (dışarıdan okuyanlar için: ağ durum yayını). Uyku bozulmaz.
+func shield_now() -> float:
+	if _ew_dormant:
+		_ew_dorm_sync(_ew_bridge._sync_clock)
+	return item_shield_hp
 
 
 ## Oyuncu hedefine gövde temasından MELEE_REACH_EXTRA'dan uzak mı (bkz. MELEE_REACH_EXTRA). Oyuncu olmayan hedeflerde (ağaç, müttefik) süzme yok.
@@ -3907,7 +4128,7 @@ func _ew_on_event(type: int, target: Node2D) -> void:
 		EW_E_RANGED_FIRE:
 			if target != null:
 				var to_t: Vector2 = target.global_position - global_position
-				_fire_ranged_attack(to_t.normalized() if to_t.length() > 0.1 else Vector2.ZERO)
+				_fire_ranged_attack(to_t.normalized() if to_t.length() > 0.1 else Vector2.ZERO, target)
 		EW_E_HOMING_FIRE:
 			_fire_homing_attack()
 		EW_E_TAUNT_LOST:
@@ -3925,11 +4146,21 @@ func _ew_on_loco(new_anim_state: int) -> void:
 ## _enter_state'ten: C++'a yeni animasyon durumunu ve doku ızgarasını bildir (WALK/IDLE karesini C++ yazar).
 func _ew_anim_state_changed() -> void:
 	var s: int = EW_A_WALK if _state == State.WALK else (EW_A_IDLE if _state == State.IDLE else EW_A_OTHER)
+	if s == EW_A_OTHER and _ew_hold_ok():
+		s = EW_A_HOLD
+	_ew_hold = s == EW_A_HOLD
 	_ew_world.set_anim_state(_ew_slot, s, frame_sprite.hframes if frame_sprite else 1, sprite_fps, _walk_anim_mult,
 			idle_texture != null)
 	_ew_sent_walk_mult = _walk_anim_mult
-	if s == EW_A_OTHER:
+	if s == EW_A_OTHER or s == EW_A_HOLD:
 		_ew_wake()
+
+
+## Saldırı karesini C++ yazabilir mi (EW_A_HOLD): enemy.gd _advance_frame_sprite'ın normal saldırı dalı (min(int(süre x fps), cols - 1)) geçerli olmalı.
+## Minotaur / Yeraltı Canavarı pozları, boss özel animasyonları, boss, kukla ve diğer durumlar (ölüm...) GDScript'te kalır.
+func _ew_hold_ok() -> bool:
+	return _ew_hold_on and _state == State.ATTACK and not _ew_puppet and not is_boss and _pose_override == 0 and _special_tex == null and special_textures.is_empty() \
+			and not _is_lich ## lich klibi parlama karesinden başlar (bkz. _enter_state)
 
 
 ## Uyanık yaratıkta her fizik karesi (köprü, C++ adımından SONRA): _physics_process'in hareket/AI/yürüme animasyonu
@@ -3939,6 +4170,8 @@ func _ew_tick(delta: float) -> void:
 	if _ew_puppet:
 		_ew_tick_puppet(delta)
 		return
+	if _ew_dormant:
+		_ew_dorm_resume() ## köprü uyuyanı tiklemez; elle (test) çağrılırsa uykudan çık
 	## HIZLI YOL (2026-10-18, FPS): yeteneği olan ama BAŞKA hiçbir işi olmayan "sessiz" yaratık (tier 6+ kalabalığın çoğu: hayalet / vampir / iblis yalnız bekleme sayacını sayar)
 	## aşağıdaki ~25 koşulu, hedef sorgusunu, durum itmeyi ve uyanıklık hesabını atlar. Koşul listesi aşağıdaki "if"lerin VE _ew_still_active'in birleşimidir
 	## (birini eklersen/değiştirirsen buraya da ekle). process_fast false dönerse (asıl iş var: bekleme bitti vb.) normal yol aynen çalışır.
@@ -3949,6 +4182,8 @@ func _ew_tick(delta: float) -> void:
 			or (_state != State.WALK and _state != State.IDLE) or not _poison_stack_time.is_empty() or not _plague.is_empty() \
 			or not _enchant_flags.is_empty() or not _bee_poison_stacks.is_empty()):
 		if _abilities.process_fast(delta):
+			if _ew_try_dormant(delta): ## sessiz bekleme uzun sürecekse uyut (yalnız sayaç azalıyor)
+				_ew_awake = false
 			return
 	if _flash_time_left > 0.0:
 		_tick_hit_flash(delta)
@@ -4009,12 +4244,18 @@ func _ew_tick(delta: float) -> void:
 	if _state_duration > 0.0:
 		_update_state_timer(delta)
 	## Saldırı/hasar karesi GDScript'te (WALK/IDLE'ı C++ yazar); yön C++'ın kararı.
-	if frame_sprite and _state != State.WALK and _state != State.IDLE:
+	if frame_sprite and _state != State.WALK and _state != State.IDLE and not _ew_hold:
 		_sprite_row = _ew_world.get_facing_row(_ew_slot)
 		_advance_frame_sprite(delta)
 	## EN SONDA: bu tikte biten saldırı/donma/korku/kilit, uykuya geçmeden önce C++'a yazılsın
 	_ew_push_state()
-	_ew_awake = _ew_still_active()
+	## = eski `_ew_awake = _ew_still_active()`; yalnız yetenek bekleme sayacı / kalkan yenilenmesi kalmışsa köprünün uyku listesine alınır (bkz. _ew_try_dormant).
+	if _ew_hard_active():
+		_ew_awake = true
+	elif _abilities == null and not (_ew_hold and _state_duration > 0.0) and not (item_shield_max > 0.0 and (item_shield_regen_delay > 0.0 or item_shield_hp < item_shield_max)):
+		_ew_awake = false
+	else:
+		_ew_awake = not _ew_try_dormant(delta)
 
 
 ## İstemci kuklasının uyanık tiki: eski _physics_process istemci dalının konum/yön/yürüme DIŞINDA kalan işleri (onları
@@ -4082,7 +4323,10 @@ func _ew_push_state() -> void:
 		_ew_sent_ranged = rv
 		_ew_world.set_ranged(_ew_slot, ranged_range, ranged_attack_interval, normal_attack_interval)
 	if _walk_anim_mult != _ew_sent_walk_mult:
-		_ew_anim_state_changed()
+		if _ew_hold:
+			_ew_sent_walk_mult = _walk_anim_mult ## saldırı karesi çarpandan etkilenmez; yeniden göndermek saldırı animasyonunu başa sarardı (sonraki WALK girişi zaten yeni çarpanı yollar)
+		else:
+			_ew_anim_state_changed()
 	## Hit yarıçapı (global ölçek okuması ~1 us) her itişte değil 15 itişte bir (ve _scale_body sonrası hemen) yenilenir; sweep zaten uyuyanlarda ~0,5 sn'de bir okuyordu.
 	_ew_hr_wait -= 1
 	if _ew_hr_wait <= 0:
@@ -4229,19 +4473,36 @@ func _physics_process(delta: float) -> void:
 		_advance_frame_sprite(delta)
 
 
-func _fire_ranged_attack(dir: Vector2) -> void:
+## Merminin çıkış noktası: yaratığın merkezi; lich'te asa ucu (klibin parlama karesindeki haç, o anki bakış satırına göre).
+func _shot_origin() -> Vector2:
+	if not _is_lich or frame_sprite == null:
+		return global_position
+	var row: int = _ew_world.get_facing_row(_ew_slot) if (_ew_slot >= 0 and _ew_world != null) else _sprite_row
+	return LichFlame.staff_tip_global(frame_sprite, row)
+
+
+func _fire_ranged_attack(dir: Vector2, target: Node = null) -> void:
 	var dur: float = _anim_length_for(State.ATTACK)
 	var attack_dur: float = dur if dur > 0.0 else 0.4
 	_enter_state(State.ATTACK, attack_dur)
 	_broadcast_attack_state()
+	var origin: Vector2 = _shot_origin()
+	## Asa ucu merkezden ~20 px kayık: nişan uçtan yeniden alınır (merkezden alınan yönle paralel uçup hedefin yanından geçerdi).
+	if origin != global_position and target is Node2D and is_instance_valid(target):
+		var to_t: Vector2 = (target as Node2D).global_position - origin
+		if to_t.length() > 0.1:
+			dir = to_t.normalized()
+	var style: int = LichFlame.STYLE_SPELL if _is_lich else LichFlame.STYLE_ORB
+	var tint: Color = LichFlame.TINT if _is_lich else projectile_tint
 	var proj = EnemyProjectileScene.instantiate()
-	proj.global_position = global_position
+	proj.global_position = origin
 	proj.direction = dir
+	proj.style = style
 	## Kullanıcı isteği: büyü hasarı %60 azaltıldı (normal atış AYRI, bkz.
 	## _fire_homing_attack) - RANGED_SPELL_DAMAGE_MULT = 0.4.
 	proj.damage = (ranged_damage if ranged_damage > 0.0 else contact_damage) * RANGED_SPELL_DAMAGE_MULT
 	proj.source = self
-	proj.tint = projectile_tint
+	proj.tint = tint
 	## call_deferred: EnemyProjectile eskiden (XpOrb/GoldDrop gibi) Area2D idi ve _physics_process içinden
 	## eklenmesi fizik sorgu taşması riski taşıyordu. Artık fizik nesnesi olmayan düz bir Node2D (bkz.
 	## enemy_projectile.gd PERF notu) - erteleme zararsız olduğu için savunma amaçlı korunuyor.
@@ -4250,7 +4511,7 @@ func _fire_ranged_attack(dir: Vector2) -> void:
 	## Multiplayer: düşman mermisini client'lara broadcast et (görsel kopya)
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
-		NetworkManager.broadcast_enemy_projectile.rpc(global_position, dir, false, projectile_tint, net_id)
+		NetworkManager.broadcast_enemy_projectile.rpc(origin, dir, false, tint, net_id, style)
 
 
 ## İKİNCİ, daha zayıf, GARANTİ İSABETLİ atış - büyüden farklı hasar/görsel
@@ -4273,13 +4534,15 @@ func _fire_homing_attack() -> void:
 		return
 	if not _has_line_of_sight(player): ## en yakın oyuncu çağıranın hedefinden farklı olabilir - onu da görmeli
 		return
+	var origin: Vector2 = _shot_origin()
 	var proj = EnemyProjectileScene.instantiate()
-	proj.global_position = global_position
-	proj.direction = (player.global_position - global_position).normalized()
+	proj.global_position = origin
+	proj.direction = (player.global_position - origin).normalized()
 	proj.damage = (ranged_damage if ranged_damage > 0.0 else contact_damage) * normal_attack_damage_mult
 	proj.source = self
-	## Büyüden görsel olarak ayırt edilsin diye biraz soluk/açık tonu.
-	proj.tint = projectile_tint.lightened(0.35)
+	## Büyüden görsel olarak ayırt edilsin diye biraz soluk/açık tonu (lich: aynı alevin küçük hâli).
+	proj.style = LichFlame.STYLE_SMALL if _is_lich else LichFlame.STYLE_ORB
+	proj.tint = (LichFlame.TINT if _is_lich else projectile_tint).lightened(0.35)
 	get_tree().current_scene.call_deferred("add_child", proj)
 	
 	## Multiplayer: mermiyi client'lara broadcast et (görsel kopya) - artık
@@ -4288,7 +4551,7 @@ func _fire_homing_attack() -> void:
 	## yanlışlıkla dönmesin.
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
-		NetworkManager.broadcast_enemy_projectile.rpc(global_position, proj.direction, false, proj.tint, net_id)
+		NetworkManager.broadcast_enemy_projectile.rpc(origin, proj.direction, false, proj.tint, net_id, proj.style)
 
 
 ## walk_texture'ın yolundan ("..._Walk_..." -> "..._Idle_...") aynı klasördeki Idle sayfasını
@@ -4372,6 +4635,8 @@ func _update_facing(dir: Vector2) -> void:
 func _enter_state(new_state: int, duration: float = 0.0) -> void:
 	if _state == State.DEATH:
 		return
+	if _ew_dormant:
+		_ew_dorm_sync(_ew_bridge._sync_clock) ## uyurken geçen süre ESKİ durumun süresine işlensin (aşağıda yenisi yazılıyor, sonraki uyanış onu kısaltmasın; uykudan çıkmaz)
 	## PERF: zaten bu durumdaysa (ör. alan hasarında art arda "hurt") sadece
 	## süreyi/kareyi yeniden başlat - doku/kare ızgarası/animasyon zaten doğru.
 	var same_state: bool = _state == new_state
@@ -4382,6 +4647,11 @@ func _enter_state(new_state: int, duration: float = 0.0) -> void:
 	_state = new_state
 	_state_duration = duration
 	_frame_time = 0.0
+	## Lich: saldırı klibi asa parlaması karesinden başlar (mermi o anda asa ucundan çıkar; süre/hareket kilidi aynı, klip son karede
+	## bekler). İstemci kuklası da _enter_state_networked -> burası: iki tarafta aynı kare. C++ saldırı karesini 0'dan sayardı -> lich'te
+	## EW_A_HOLD kapalı (_ew_hold_ok), kareyi _advance_frame_sprite yazar.
+	if _is_lich and new_state == State.ATTACK and _special_tex == null and _pose_override == 0:
+		_frame_time = float(LichFlame.FLASH_FRAME)
 	if same_state:
 		if _ew_slot >= 0:
 			_ew_anim_state_changed()
@@ -4670,6 +4940,7 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 	if amount > 0.0 and _dealer and "match_damage_dealt" in _dealer:
 		_dealer.match_damage_dealt += amount
 		BalanceLogScript.on_hit(_bl_src, amount, is_crit)
+		HideBrushScript.note_skill_hit(get_tree(), _bl_src) ## saklıyken hasar veren yetenek açığa çıkarır (madde 283)
 	## Vampir Çocuk'un pasif can emmesi (verilen hasarın %4'ü) - bkz. player.gd on_dealer_hit. Genel
 	## on_damage_dealt (aşağıdaki _apply_damage) SADECE host'ta çalıştığı için istemci Vampir'i
 	## iyileştiremezdi; burası tam vuran istemcide çalışıyor.
@@ -4909,6 +5180,8 @@ func die() -> void:
 	if _abilities != null:
 		_abilities.on_owner_died() ## bossa özel kapanış (Banshee: gece kilidi açılır)
 	_ew_unregister() ## EnemyWorld yolu: C++ kaydı silinir, ölüm animasyonu eski _physics_process'ten
+	if _bee_plague and not _bee_poison_stacks.is_empty() and (not NetworkManager.is_multiplayer_active or NetworkManager.is_host):
+		_spread_bee_plague() ## Oakley Q finali Salgın Zehir (madde 348)
 	velocity = Vector2.ZERO
 	## Yaratık yetenekleri (2026-09-24): görünmez ölen hayalet ölüm animasyonunu görünür oynatsın; zombi ölünce
 	## patlayıp yere 4 sn zehirli asit bırakır (sadece host/tek oyunculu yetkili örnek doğurur ve yayınlar - istemcide
@@ -5334,23 +5607,34 @@ func _drop_gold() -> void:
 
 ## Normal yaratık altını: tek oyunculuda/tek katılımcıda öldürene; çok oyunculuda ASİST payı (bkz. assist.gd) - hasar veren / destek
 ## sağlayan (can-kalkan-buff, Şovalye E/R) oyuncular da pay alır. Asist alan kendi ekranında soluk "ASİST +N" görür.
+## 2026-10-19 (madde 308): altının %20'si önce yakındaki canlı oyunculara EŞİT ayrılır (takım payı, "TAKIM +N"), kalanı hasar/asist kuralıyla bölünür.
 func _award_with_assists(amount: int, pos: Vector2) -> void:
 	var killer: Node = _killer_node()
-	if not NetworkManager.is_multiplayer_active or _assist_damage.is_empty():
+	if not NetworkManager.is_multiplayer_active:
 		KillGold.award(get_tree(), amount, pos, killer)
 		return
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
 	var killer_id: int = local_id
 	if killer != null and not killer.is_in_group("player") and "peer_id" in killer:
 		killer_id = int(killer.peer_id)
-	var support: Dictionary = AssistScript.active_support()
-	var paladin: Dictionary = AssistScript.paladin_support(get_tree())
-	for sup in paladin.keys():
-		var list: Array = support.get(sup, [])
-		list.append_array(paladin[sup])
-		support[sup] = list
+	var team: Dictionary = AssistScript.team_share(amount, killer_id, AssistScript.nearby_mates(_team_candidates(), pos), AssistScript.carry)
+	var rest: int = amount
+	for tpid in team.keys():
+		rest -= int(team[tpid])
 	var kinds: Dictionary = {}
-	var shares: Dictionary = AssistScript.compute(amount, killer_id, _assist_damage, support, -1, kinds)
+	var shares: Dictionary = {killer_id: rest}
+	if not _assist_damage.is_empty():
+		var support: Dictionary = AssistScript.active_support()
+		var paladin: Dictionary = AssistScript.paladin_support(get_tree())
+		for sup in paladin.keys():
+			var list: Array = support.get(sup, [])
+			list.append_array(paladin[sup])
+			support[sup] = list
+		shares = AssistScript.compute(rest, killer_id, _assist_damage, support, -1, kinds, AssistScript.carry)
+	for tpid in team.keys():
+		shares[tpid] = int(shares.get(tpid, 0)) + int(team[tpid])
+		if not kinds.has(tpid):
+			kinds[tpid] = AssistScript.KIND_TEAM
 	var lost: int = 0 ## ayrılan (kuklası kalmayan) asistçinin payı öldürene döner
 	for pid in shares.keys():
 		var share: int = int(shares[pid])
@@ -5364,6 +5648,17 @@ func _award_with_assists(amount: int, pos: Vector2) -> void:
 	var killer_share: int = int(shares.get(killer_id, amount)) + lost
 	if killer_share > 0:
 		KillGold.award(get_tree(), killer_share, pos, killer)
+
+
+## Takım payı adayları (host): ölü olmayan oyuncular (NetworkManager.get_reward_participants) + konumları + düşmüş mü (assist.gd nearby_mates).
+func _team_candidates() -> Array:
+	var out: Array = []
+	for part: Dictionary in NetworkManager.get_reward_participants():
+		var n: Node = part.get("node") as Node
+		if n == null or not is_instance_valid(n) or not (n is Node2D):
+			continue
+		out.append({"peer_id": int(part["peer_id"]), "pos": (n as Node2D).global_position, "down": n.get("is_downed") == true})
+	return out
 
 
 func _node_for_peer(pid: int, local_id: int) -> Node:

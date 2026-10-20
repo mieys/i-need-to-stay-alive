@@ -7,7 +7,9 @@ extends SceneTree
 
 ## Kullanıcı isteği: ev içi haritası artık "harita/ev içi.tmx" dosyasından güncelleniyor
 ## (eskiden "harita/Ev içi/ev denemesi.tmx"). Tileset'ler "Ev içi/" klasöründe kalıyor.
-const TMX_PATH := "res://harita/ev içi.tmx"
+## 2026-10-19 (madde 302/310): COZY EV oyuna alındı - kaynak artık "harita/cozy_ev.tmx" (üreticisi
+## tools/proto_20261019/cozy_ev/gen_cozy_ev.py; Tiled'da da düzenlenebilir). Eski "ev içi.tmx" dosyası duruyor, bake edilmiyor.
+const TMX_PATH := "res://harita/cozy_ev.tmx"
 
 
 func _init() -> void:

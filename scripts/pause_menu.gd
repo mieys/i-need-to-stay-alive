@@ -1,7 +1,7 @@
 extends CanvasLayer
 
 ## DURAKLATMA (ESC) MENÜSÜ - "B - Ateş Işığı" (2026-10-17, madde 234; prototip madde 229, kullanıcı "B" seçti).
-## Ana menünün D dili (madde 192): kutu yok, oyun dünyası hafif kararır + sol basamaklı gölge, büyük altın başlık + koşu satırı
+## Ana menünün D dili (madde 192): kutu yok, oyun dünyası hafif kararır + sol yumuşak gölge, büyük altın başlık + koşu satırı
 ## (kademe / süre / takım seviyesi) + kiriş süsü, öğeler mum + ikon + başlık + alt yazı. "Ayarlar" aynı katmanda ortak
 ## settings_screen.gd'yi açar (sol sütun kategorilere döner) - eski bej pencere + ayrı Grafik / Tuş Atamaları pencereleri kalktı.
 ## Sahne (pause_menu.tscn) sadece kök + betik; arayüz kodla kurulur. Yeniden başlatma / ana menü / çok oyunculu davranışı aynı.

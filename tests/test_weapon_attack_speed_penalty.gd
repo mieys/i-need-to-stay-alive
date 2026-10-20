@@ -67,7 +67,7 @@ func test_card_speedup_and_cap_scale_with_the_penalty() -> void:
 	assert(absf(float(w.call("_effective_fire_wait")) - slow * 0.5) < 0.0005, "x2 saldırı hızı aralığı yarıya indirmeli")
 	var base: float = float(w.get("_base_fire_rate"))
 	w.call("set_fire_rate_mult", 1.0 / 20.0) ## sınırın çok ötesi
-	assert(absf(float(w.call("_effective_fire_wait")) - base / 7.0 / 0.7) < 0.0005, "sınır: taban/7, sonra genel -%30: %f" % float(w.call("_effective_fire_wait")))
+	assert(absf(float(w.call("_effective_fire_wait")) - base / (1.0 + GameManager.ATTACK_SPEED_CAP_PERCENT / 100.0) / 0.7) < 0.0005, "sınır: taban/5,5 (tavan %%450), sonra genel -%%30: %f" % float(w.call("_effective_fire_wait")))
 	_cleanup()
 
 

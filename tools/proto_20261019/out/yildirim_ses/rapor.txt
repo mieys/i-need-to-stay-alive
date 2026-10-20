@@ -1,0 +1,34 @@
+Yıldırım Asası vuruş sesi prototipleri - ölçüm (K = K-ağırlıklı anlık ses, 400 ms pencere)
+
+uğultu (electric_loop)     süre  1.50 sn | tepe 0.39 | anlık K  -20.3 dB | tepeden -20 dB'e 1.50 sn | bant% <150:26.8 150-500: 8.0 500-2k: 1.5 2k-5k: 8.1 5k+:55.5 | son 10 ms  -35.5 dB | maks sıçrama 0.50 | oyunda K  -24.8
+tik şimdi (fire.mp3)       süre  0.47 sn | tepe 0.31 | anlık K  -27.7 dB | tepeden -20 dB'e 0.18 sn | bant% <150: 2.2 150-500:22.1 500-2k:66.1 2k-5k: 7.3 5k+: 2.3 | son 10 ms -180.0 dB | maks sıçrama 0.12 | oyunda K  -37.7
+
+A - Çatırtı + Küt Darbe (seçilen tohumlar [3, 6, 7, 8])
+  A_tik_1                    süre  0.16 sn | tepe 0.89 | anlık K  -24.9 dB | tepeden -20 dB'e 0.06 sn | bant% <150: 5.4 150-500:62.8 500-2k: 7.1 2k-5k:10.2 5k+:14.5 | son 10 ms  -71.8 dB | maks sıçrama 0.75 | oyun volume_db +1.4 (tepe sınırı: hedefin -10.9 dB altında kaldı)
+  A_tik_2                    süre  0.16 sn | tepe 0.89 | anlık K  -26.5 dB | tepeden -20 dB'e 0.06 sn | bant% <150: 4.7 150-500:63.8 500-2k: 3.8 2k-5k:11.6 5k+:16.1 | son 10 ms  -72.9 dB | maks sıçrama 0.69 | oyun volume_db +3.0 (tepe sınırı: hedefin -12.5 dB altında kaldı)
+  A_tik_3                    süre  0.16 sn | tepe 0.89 | anlık K  -25.5 dB | tepeden -20 dB'e 0.06 sn | bant% <150: 5.5 150-500:63.4 500-2k: 5.6 2k-5k: 8.8 5k+:16.7 | son 10 ms  -72.5 dB | maks sıçrama 0.89 | oyun volume_db +2.0 (tepe sınırı: hedefin -11.5 dB altında kaldı)
+  A_tik_4                    süre  0.17 sn | tepe 0.89 | anlık K  -25.6 dB | tepeden -20 dB'e 0.06 sn | bant% <150: 5.4 150-500:63.2 500-2k: 8.0 2k-5k:12.0 5k+:11.4 | son 10 ms  -75.1 dB | maks sıçrama 0.65 | oyun volume_db +2.1 (tepe sınırı: hedefin -11.6 dB altında kaldı)
+  A_kritik                   süre  0.25 sn | tepe 0.89 | anlık K  -22.7 dB | tepeden -20 dB'e 0.08 sn | bant% <150:32.4 150-500:47.7 500-2k: 2.6 2k-5k: 7.8 5k+: 9.4 | son 10 ms  -71.3 dB | maks sıçrama 0.51 | oyun volume_db +1.7 (tepe sınırı: hedefin -8.7 dB altında kaldı)
+  A_kilit                    süre  0.36 sn | tepe 0.89 | anlık K  -21.3 dB | tepeden -20 dB'e 0.10 sn | bant% <150:19.6 150-500:61.3 500-2k: 3.3 2k-5k: 7.8 5k+: 7.9 | son 10 ms  -80.8 dB | maks sıçrama 0.45 | oyun volume_db +0.3 (tepe sınırı: hedefin -7.3 dB altında kaldı)
+
+B - Tesla Zap (seçilen tohumlar [2, 3, 5, 7])
+  B_tik_1                    süre  0.16 sn | tepe 0.89 | anlık K  -23.7 dB | tepeden -20 dB'e 0.06 sn | bant% <150: 5.3 150-500:53.0 500-2k:25.5 2k-5k: 7.2 5k+: 8.9 | son 10 ms  -73.8 dB | maks sıçrama 0.73 | oyun volume_db +0.2 (tepe sınırı: hedefin -9.7 dB altında kaldı)
+  B_tik_2                    süre  0.14 sn | tepe 0.89 | anlık K  -25.0 dB | tepeden -20 dB'e 0.06 sn | bant% <150: 5.8 150-500:39.6 500-2k:35.9 2k-5k:12.2 5k+: 6.4 | son 10 ms  -71.0 dB | maks sıçrama 0.64 | oyun volume_db +1.5 (tepe sınırı: hedefin -11.0 dB altında kaldı)
+  B_tik_3                    süre  0.15 sn | tepe 0.89 | anlık K  -24.8 dB | tepeden -20 dB'e 0.06 sn | bant% <150: 3.8 150-500:44.9 500-2k:32.3 2k-5k:11.1 5k+: 7.9 | son 10 ms  -70.7 dB | maks sıçrama 0.75 | oyun volume_db +1.3 (tepe sınırı: hedefin -10.8 dB altında kaldı)
+  B_tik_4                    süre  0.15 sn | tepe 0.89 | anlık K  -25.5 dB | tepeden -20 dB'e 0.06 sn | bant% <150: 2.9 150-500:45.6 500-2k:34.1 2k-5k:10.5 5k+: 6.8 | son 10 ms  -71.2 dB | maks sıçrama 0.63 | oyun volume_db +2.0 (tepe sınırı: hedefin -11.5 dB altında kaldı)
+  B_kritik                   süre  0.31 sn | tepe 0.89 | anlık K  -22.3 dB | tepeden -20 dB'e 0.08 sn | bant% <150: 9.0 150-500:58.9 500-2k:23.2 2k-5k: 5.4 5k+: 3.5 | son 10 ms  -75.7 dB | maks sıçrama 0.51 | oyun volume_db +1.3 (tepe sınırı: hedefin -8.3 dB altında kaldı)
+  B_kilit                    süre  0.19 sn | tepe 0.89 | anlık K  -20.3 dB | tepeden -20 dB'e 0.08 sn | bant% <150: 8.4 150-500:45.1 500-2k:27.3 2k-5k:15.1 5k+: 4.1 | son 10 ms  -71.0 dB | maks sıçrama 0.39 | oyun volume_db -5.7 (tepe sınırı: hedefin -6.3 dB altında kaldı)
+
+C - Gök Gürültüsü (seçilen tohumlar [2, 6, 7, 8])
+  C_tik_1                    süre  0.25 sn | tepe 0.89 | anlık K  -23.0 dB | tepeden -20 dB'e 0.08 sn | bant% <150:33.2 150-500:56.9 500-2k: 1.6 2k-5k: 2.4 5k+: 5.9 | son 10 ms  -74.2 dB | maks sıçrama 0.80 | oyun volume_db -0.5 (tepe sınırı: hedefin -9.0 dB altında kaldı)
+  C_tik_2                    süre  0.25 sn | tepe 0.89 | anlık K  -23.0 dB | tepeden -20 dB'e 0.10 sn | bant% <150:33.1 150-500:57.2 500-2k: 0.9 2k-5k: 3.6 5k+: 5.1 | son 10 ms  -73.0 dB | maks sıçrama 0.91 | oyun volume_db -0.5 (tepe sınırı: hedefin -9.0 dB altında kaldı)
+  C_tik_3                    süre  0.25 sn | tepe 0.89 | anlık K  -23.3 dB | tepeden -20 dB'e 0.08 sn | bant% <150:33.0 150-500:55.2 500-2k: 1.7 2k-5k: 5.6 5k+: 4.5 | son 10 ms  -74.1 dB | maks sıçrama 0.46 | oyun volume_db -0.2 (tepe sınırı: hedefin -9.3 dB altında kaldı)
+  C_tik_4                    süre  0.25 sn | tepe 0.89 | anlık K  -21.6 dB | tepeden -20 dB'e 0.08 sn | bant% <150:34.9 150-500:54.8 500-2k: 1.2 2k-5k: 4.2 5k+: 5.0 | son 10 ms  -71.7 dB | maks sıçrama 0.95 | oyun volume_db -1.9 (tepe sınırı: hedefin -7.6 dB altında kaldı)
+  C_kritik                   süre  0.38 sn | tepe 0.89 | anlık K  -21.3 dB | tepeden -20 dB'e 0.12 sn | bant% <150:59.5 150-500:28.7 500-2k: 1.2 2k-5k: 4.6 5k+: 6.0 | son 10 ms  -71.7 dB | maks sıçrama 0.63 | oyun volume_db +0.3 (tepe sınırı: hedefin -7.3 dB altında kaldı)
+  C_kilit                    süre  0.20 sn | tepe 0.89 | anlık K  -22.9 dB | tepeden -20 dB'e 0.08 sn | bant% <150: 0.3 150-500: 1.9 500-2k:21.9 2k-5k:61.5 5k+:14.4 | son 10 ms  -66.8 dB | maks sıçrama 0.70 | oyun volume_db -3.1 (tepe sınırı: hedefin -8.9 dB altında kaldı)
+
+Demolar ortak kazanç -2.9 dB (en yüksek tepe 0,89; sınırlayıcı yok)
+  A_demo.wav         anlık K maks  -21.6 dB, tepe 0.89
+  B_demo.wav         anlık K maks  -21.8 dB, tepe 0.81
+  C_demo.wav         anlık K maks  -21.9 dB, tepe 0.67
+  simdiki_demo.wav   anlık K maks  -27.1 dB, tepe 0.20

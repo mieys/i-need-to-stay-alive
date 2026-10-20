@@ -24,8 +24,6 @@ const MID_X := RAIL_W + 24.0
 const COIN_PATH := "res://assets/ui/newui/icon_gold_coin.png"
 const DMG_COL := Color("#e8885a") ## game_over_board.gd DMG / TANK ile aynı
 const TANK_COL := Color("#8cc0e6")
-const G_SOUL := ["...O...", "..OLO..", ".OLLMO.", ".OLMMO.", "OLLMMDO", "OLMMMDO", "OLMMDDO", ".OMMDO.", ".OMDDO.", "..ODO..", "...O..."]
-const SOUL_COLS := {"O": Color("#0b0e15"), "L": Color("#e6dcff"), "M": Color("#b49cf0"), "D": Color("#6f52bc")}
 enum Tab { OZET, HASAR, ODUL }
 
 ## main.gd'nin masaüstü ölüm penceresi (gizli): VBox/{Title, Subtitle, SpectateRow, StatsBox/Board, DeathButtonRow}.
@@ -45,30 +43,6 @@ var _menu: Button = null
 var _spec_title: Label = null
 var _spec_sub: Label = null
 var _spec_name: Label = null
-
-
-## Çok renkli piksel sprite (ör. Ruh Kıymığı): desen + harf -> renk.
-class ColorSprite extends Control:
-	var rows: Array = []
-	var cols: Dictionary = {}
-	var px: float = 6.0
-
-	func _init(r: Array, c: Dictionary, p: float) -> void:
-		rows = r
-		cols = c
-		px = p
-		custom_minimum_size = Vector2(str(rows[0]).length(), rows.size()) * px
-		size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		var off := ((size - custom_minimum_size) * 0.5).floor()
-		for j in rows.size():
-			var row: String = rows[j]
-			for i in row.length():
-				if cols.has(row[i]):
-					draw_rect(Rect2(off + Vector2(i, j) * px, Vector2(px, px)), cols[row[i]])
 
 
 ## Düz çubuk (koyu kuyu + dolgu).
@@ -280,7 +254,7 @@ func _rail_tab(caption: String, pat: Array) -> Button:
 	var box := DK.v(10)
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var ic: Control = PK.glyph(pat, DK.C_TEXT, 7) if not pat.is_empty() else ColorSprite.new(G_SOUL, SOUL_COLS, 6.0)
+	var ic: Control = PK.glyph(pat, DK.C_TEXT, 7) if not pat.is_empty() else DK.ShardIcon.new(66.0)
 	ic.name = "Icon"
 	var icw := CenterContainer.new()
 	icw.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -429,9 +403,9 @@ func _page_summary(summary: Dictionary, b: Control) -> Control:
 		var tile := PK.stat_tile(str(t[0]), str(t[1]), t[2], PK.C_SOUL if soul else DK.C_TEXT, t[3], vfs, PK.FS_SMALL)
 		tile.custom_minimum_size = Vector2(0, 200)
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		if soul: ## Ruh Kıymığı simgesi (game_over_board.gd SOUL deseni)
+		if soul: ## Ruh Kıymığı simgesi (her ekranda aynı mor kristal, DK.ShardIcon)
 			var row: HBoxContainer = tile.get_child(0).get_child(0)
-			row.add_child(ColorSprite.new(G_SOUL, SOUL_COLS, 6.0))
+			row.add_child(DK.ShardIcon.new(66.0))
 			row.move_child(row.get_child(row.get_child_count() - 1), 0)
 		grid.add_child(tile)
 	v.add_child(grid)
@@ -501,7 +475,7 @@ func _page_rewards(b: Control) -> Control:
 	var v := DK.v(12)
 	var shards: int = int(b.call("_shards")) if b and b.has_method("_shards") else 0
 	var top := DK.h(24)
-	top.add_child(ColorSprite.new(G_SOUL, SOUL_COLS, 12.0))
+	top.add_child(DK.ShardIcon.new(132.0))
 	var tv := DK.v(0)
 	tv.add_child(PK.lbl("+%d" % shards, PK.FS_HERO, PK.C_SOUL))
 	tv.add_child(PK.lbl("Ruh Kıymığı - Ruh Mağazası'nda kilit açar, kalıcı geliştirir", PK.FS_SMALL, DK.C_DIM))

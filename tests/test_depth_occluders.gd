@@ -175,6 +175,29 @@ func test_characters_are_pushed_to_every_front_material() -> void:
 	dep._process(0.016)
 	var arr2: Array = ((dep.fronts[0]["front"] as TileMapLayer).material as ShaderMaterial).get_shader_parameter("karakterler")
 	assert(arr2[0].x == 150.0 and arr2[0].y == 260.0 + DepthScript.FEET_OFFSET, "oyuncu hareket edince güncellenir")
+	## 2026-10-19: görünür kalkan baloncuğu (gövdeden taşar, ayağın altına iner) dikdörtgeni büyütür + karakter_alt; gizliyken eski ölçü.
+	var sv := Node2D.new()
+	sv.name = "ShieldVisual"
+	player.add_child(sv)
+	var bub := AnimatedSprite2D.new()
+	bub.name = "BubbleSprite"
+	bub.sprite_frames = load("res://assets/fx/shield_bubble/bubble_frames.tres")
+	bub.animation = &"loop"
+	bub.scale = Vector2(2.2, 2.2) ## 24 px kare -> 52,8 px (oyundaki 4,37 x 0,5 kök)
+	sv.add_child(bub)
+	dep._process(0.016)
+	var mat0 := (dep.fronts[0]["front"] as TileMapLayer).material as ShaderMaterial
+	var big: Vector4 = (mat0.get_shader_parameter("karakterler") as Array)[0]
+	var alt: PackedFloat32Array = mat0.get_shader_parameter("karakter_alt")
+	assert(big.z >= 26.0 and big.w >= 26.0 + DepthScript.FEET_OFFSET - 0.5, "baloncuk dikdörtgeni büyütmeli: %s" % str(big))
+	assert(is_equal_approx(alt[0], 26.4 - DepthScript.FEET_OFFSET), "ayak altına taşma: %s" % str(alt[0]))
+	assert(alt[1] == 1.0, "baloncuksuz kukla eski alt kenar (ayak + 1)")
+	sv.visible = false
+	dep._process(0.016)
+	var small: Vector4 = (mat0.get_shader_parameter("karakterler") as Array)[0]
+	assert(is_equal_approx(small.z, DepthScript.BODY_HALF_WIDTH) and (mat0.get_shader_parameter("karakter_alt") as PackedFloat32Array)[0] == 1.0, "gizli baloncuk sayılmaz")
+	for path in ["res://scenes/derinlik_on_katman.gdshader", "res://scenes/sallanan ağaç.gdshader"]:
+		assert(FileAccess.get_file_as_string(path).contains("max(1.0, karakter_alt[i])"), "%s ayak altı payını kullanmalı" % path)
 	dep.free()
 	_cleanup()
 

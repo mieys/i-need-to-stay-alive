@@ -5,6 +5,8 @@ extends Node
 ## sırayla dizilip ateş edecek. silahlar artık dışardan ateşleneceği için sesleri de dışardaki sesler gibi boğuk gelecek" -> önce
 ## kubbenin zemin elipsinin dış kenarına dizilmişti; 2026-10-17: "silahların kenarlara değil kubbenin üstünde daire şeklinde
 ## toplanmalarını istiyorum eşit olacak biçimde" -> TAÇ: kubbe tepesinin üstünde, silah sayısına göre büyüyen EKRAN dairesi.
+## 2026-10-19 (kullanıcı: "müttefiklerin silahları eskisi gibi kalkanın kenarlarında görünsün üstünde görünmek yerine"): görünür konum yine
+## KENAR halkası (rim_point = aim_point); arka yarıdaki silah kabuğun arkasında çizilir (rim_in_front). Aşağıdaki "taç" notları tarihçe.
 ##
 ## NASIL: her fizik karesinde (her istemcide AYRI, ağdan veri gitmez - kubbe durumu `paladin_zone_active` zaten herkese gidiyor)
 ## kubbeler (yerel Şovalye + uzak kuklalar) bulunur, içindeki oyuncular (yerel + kuklalar) kubbeye atanır; kubbedeki TÜM silahlar
@@ -58,13 +60,17 @@ static func crown_center(center: Vector2, radius: float, count: int) -> Vector2:
 	return center + Vector2(0.0, -(radius + CROWN_GAP + crown_radius(count)))
 
 
-## Taçtaki `index`. silahın dünya konumu (toplam `count`): tepeden başlar, saat yönünde eşit açılı; tek silah dairenin ortasında.
-## radius = kubbe yarıçapı (paladin_zone_radius). angle_offset: kubbe girdabında dairenin dönüş açısı.
+## Silahın GÖRÜNÜR konumu. 2026-10-19 (kullanıcı: "şovalye adamın R sine giren müttefiklerin silahları eskisi gibi kalkanın kenarlarında görünsün
+## üstünde görünmek yerine"): taçtan (crown_*, madde 218) eski KENAR halkasına dönüldü = aim_point (zemin elipsi + RIM_GAP, RIM_LIFT yukarıda;
+## tepeden saat yönünde eşit açılı). Arka yarıdaki silah kubbenin arkasında çizilir (rim_in_front). crown_* yardımcıları geri dönmek için duruyor.
+## radius = kubbe yarıçapı (paladin_zone_radius). angle_offset: kubbe girdabında halkanın dönüş açısı.
 static func rim_point(center: Vector2, radius: float, index: int, count: int, angle_offset: float = 0.0) -> Vector2:
-	var c: Vector2 = crown_center(center, radius, count)
-	if count <= 1:
-		return c
-	return c + Vector2.from_angle(_slot_angle(index, count, angle_offset)) * crown_radius(count)
+	return aim_point(center, radius, index, count, angle_offset)
+
+
+## Halka noktası kubbenin ÖN yarısında mı (merkezin güneyi): önde = ön kabuğun üstünde (z 21), arkada = kabuğun altında (z 19).
+static func rim_in_front(center: Vector2, pos: Vector2) -> bool:
+	return pos.y >= center.y - RIM_LIFT
 
 
 ## Silahın HEDEF ARAMA merkezi (bkz. dosya başı): eski kenar halkasındaki `index`. nokta - elipsin yarıçapları + RIM_GAP, RIM_LIFT yukarıda.
@@ -74,9 +80,11 @@ static func aim_point(center: Vector2, radius: float, index: int, count: int, an
 	return center + Vector2(cos(a) * r.x, sin(a) * r.y - RIM_LIFT)
 
 
-## Taç noktasının daire merkezinden DIŞA bakan açısı (girdapta silah bu yöne bakıp ateş eder). Daire olduğu için = yuva açısı.
-static func rim_outward_angle(_radius: float, index: int, count: int, angle_offset: float = 0.0) -> float:
-	return wrapf(_slot_angle(index, count, angle_offset), -PI, PI)
+## Halka noktasının elipsten DIŞA bakan açısı (girdapta silah bu yöne bakıp ateş eder): elips normali (ry cos a, rx sin a).
+static func rim_outward_angle(radius: float, index: int, count: int, angle_offset: float = 0.0) -> float:
+	var a: float = _slot_angle(index, count, angle_offset)
+	var r: Vector2 = PaladinDome.radii(radius) + Vector2(RIM_GAP, RIM_GAP)
+	return wrapf(Vector2(r.y * cos(a), r.x * sin(a)).angle(), -PI, PI)
 
 
 func _physics_process(delta: float) -> void:
@@ -118,8 +126,10 @@ func _physics_process(delta: float) -> void:
 				var positions: Array = []
 				var aims: Array = []
 				var angles: Array = []
+				var fronts: Array = []
 				for _w in (m["weapons"] as Array):
 					positions.append(rim_point(dome["center"], dome["radius"], idx, total, offset))
+					fronts.append(rim_in_front(dome["center"], positions[positions.size() - 1]))
 					aims.append(aim_point(dome["center"], dome["radius"], idx, total, offset))
 					angles.append(rim_outward_angle(dome["radius"], idx, total, offset) if not spin.is_empty() else null)
 					idx += 1
@@ -128,7 +138,7 @@ func _physics_process(delta: float) -> void:
 				if not spin.is_empty() and m["node"] != spinner:
 					member_spin = spin.duplicate()
 					member_spin["penalty"] = 0.0
-				_apply(m, positions, angles, member_spin, aims)
+				_apply(m, positions, angles, member_spin, aims, fronts)
 				new_rimmed.append(m["node"])
 	for oid in _spin_angle.keys():
 		if not spinning_ids.has(oid):
@@ -220,12 +230,14 @@ func _assign_members(domes: Array, members: Array) -> void:
 
 
 ## angles/spin: kubbe girdabında ikon başına dışa bakış açısı + {"fire_mult", "penalty"} (boşsa girdap yok). aims: ikon başına hedef arama merkezi.
-func _apply(member: Dictionary, positions: Variant, angles: Array = [], spin: Dictionary = {}, aims: Array = []) -> void:
+## fronts: ikon başına halka noktası kubbenin ön yarısında mı (rim_in_front - çizim katmanı).
+func _apply(member: Dictionary, positions: Variant, angles: Array = [], spin: Dictionary = {}, aims: Array = [], fronts: Array = []) -> void:
 	var node: Node = member["node"]
 	if not is_instance_valid(node):
 		return
 	if bool(member["remote"]):
-		node.call("set_dome_rim_targets", positions if positions != null else [], angles if not spin.is_empty() else [], aims if positions != null else [])
+		node.call("set_dome_rim_targets", positions if positions != null else [], angles if not spin.is_empty() else [], aims if positions != null else [],
+				fronts if positions != null else [])
 		return
 	var ws: Array = member["weapons"]
 	if positions == null:
@@ -236,7 +248,7 @@ func _apply(member: Dictionary, positions: Variant, angles: Array = [], spin: Di
 		return
 	for i in range(ws.size()):
 		if is_instance_valid(ws[i]):
-			ws[i].set_rim_target(positions[i], aims[i] if i < aims.size() else null)
+			ws[i].set_rim_target(positions[i], aims[i] if i < aims.size() else null, bool(fronts[i]) if i < fronts.size() else true)
 			if spin.is_empty():
 				ws[i].set_rim_spin(null)
 			else:

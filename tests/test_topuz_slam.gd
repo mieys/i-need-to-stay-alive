@@ -222,3 +222,52 @@ func test_seismic_wave_opens_on_the_strike_point() -> void:
 			n.free()
 	GameManager.owned_weapons = saved
 	get_tree().current_scene = prev_scene
+
+
+## 2026-10-19 (maç analizi): dalga hedef sınırı - merkeze en yakın 8 düşman tam hasar, sonrakiler %35. Sarsma herkese uygulanır.
+func test_seismic_wave_caps_full_damage_targets() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	NetworkManager.is_multiplayer_active = false
+	GameManager.selected_char_id = 1
+	GameManager.selected_character = int(Characters.DEFS[1]["skill"])
+	var saved: Array = GameManager.owned_weapons.duplicate(true)
+	GameManager.owned_weapons = [EnchantDefs.new_weapon_entry("topuz", 1, 0)]
+	var p: Node2D = (load("res://scenes/player.tscn") as PackedScene).instantiate()
+	add_child(p)
+	for w in p.owned_weapon_nodes.duplicate():
+		if is_instance_valid(w):
+			w.queue_free()
+	p.owned_weapon_nodes.clear()
+	p.global_position = Vector2(3000.0, 3000.0)
+	p.max_health = 100000.0
+	p.health = 100000.0
+	p.damage_bonus = 1000.0
+	assert(p.buy_weapon_copy("topuz", 1))
+	var beh: Node = p.owned_weapon_nodes[0].get("enchant_behavior")
+	(beh.get("stats") as Dictionary)["seis_chance"] = 1.0
+	var foes: Array = []
+	for i in range(12): ## hepsi 110 birimlik yarıçap içinde; i büyüdükçe merkezden uzaklaşır
+		var e: Node2D = EnemyScene.instantiate()
+		add_child(e)
+		e.global_position = Vector2(3110.0 + 6.0 * float(i), 3000.0)
+		e.set("speed", 0.0)
+		e.max_health = 600000.0
+		e.health = 600000.0
+		foes.append(e)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	beh.call("hit_extra", foes[0], 10.0, true, null)
+	await get_tree().physics_frame
+	var full_loss: float = 600000.0 - float(foes[0].health)
+	assert(full_loss > 100.0, "ana hedef dalgayla vurulur: %s" % full_loss)
+	for i in range(8):
+		assert(is_equal_approx(600000.0 - float(foes[i].health), full_loss), "ilk 8 düşman tam hasar alır (#%d): %s" % [i, 600000.0 - float(foes[i].health)])
+	for i in range(8, 12):
+		var loss: float = 600000.0 - float(foes[i].health)
+		assert(loss > 0.0 and absf(loss - full_loss * 0.35) < full_loss * 0.01, "9. ve sonrası %%35 hasar alır (#%d): %s / %s" % [i, loss, full_loss])
+	for n in foes + [p]:
+		if is_instance_valid(n):
+			n.free()
+	GameManager.owned_weapons = saved
+	get_tree().current_scene = prev_scene

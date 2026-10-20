@@ -12,10 +12,14 @@ extends CanvasLayer
 ##   KATEGORİ SAYFASI ("kahraman seçimi"): üstte büyük sahne (spot ışığı + halkalı zemin) + bilgi paneli, altta çerçeveli kart dizisi.
 ##   GELİŞTİRMELER: iki sütun satır (ikon, şu an -> sonraki, seviye çubuğu, fiyat düğmesi), başlıkta toplam + HEPSİNİ SIFIRLA (iki adımlı).
 ## Yetenek önizlemeleri (karaktere basınca Q/E/R oynar) SONRAYA bırakıldı: canlı değil, oyunun motorunda kayıt olacak (madde 173 sonu).
+## ANİMASYON (2026-10-19, madde 323; madde 200 ilkeleri: kısa, tek seferlik, sonunda TAM eski hâl): sayfa girişi sıralı belirme, kutu/kart üstüne
+## gelince nefes, seçim değişince figür yandan kayar + kart yükselir, satın almada parlama + bakiye sayacı + kristal sesi. Sayfa her değişimde baştan
+## kurulduğu için ne olduğu `_anim_*` bayraklarında tutulur, kurulum sonunda `_play_anims` oynatır.
 
 signal closed
 
 const UiAnim := preload("res://scripts/ui_anim.gd")
+const EventSfx := preload("res://scripts/event_sfx.gd")
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 const WeaponCatalog := preload("res://scripts/weapon_catalog.gd")
@@ -75,36 +79,22 @@ var _page: String = PAGE_HOME
 var _sel: Dictionary = {} ## tür -> seçili anahtar (kategori sayfası)
 var _body_cache: Dictionary = {}
 
+const ANIM_IN_TIME := 0.18 ## sayfa girişinde öğe belirmesi
+const ANIM_IN_SPAN := 0.3 ## uzun listede (17 silah, 20 geliştirme) son öğenin en geç başlaması
+const ANIM_SLIDE_PX := 36.0 ## seçim değişince figürün geldiği yan uzaklık
+const ANIM_SLIDE_TIME := 0.2
+const ANIM_LIFT_TIME := 0.14 ## seçilen kartın 14 px yükselmesi
+const ANIM_FLASH_TIME := 0.34 ## satın almada parlama sönmesi
+const ANIM_COUNT_TIME := 0.45 ## bakiye sayacı
+var _anim_page_in: bool = true ## sonraki kurulum bir sayfa girişi mi (açılış / sayfa değişimi); seçim ve satın almada false
+var _anim_prev_sel: String = "" ## seçim değişti: önceki seçilinin id'si
+var _anim_dir: int = 0 ## seçim yönü (-1 sol / 1 sağ): figür o yandan gelir
+var _anim_bought: String = "" ## az önce alınan: "<tür>:<anahtar>", "up:<id>" ya da "reset"
+var _anim_shards_from: int = -1 ## alımdan önceki bakiye (sayaç eskisinden yeniye akar)
+var _anim_nodes: Dictionary = {} ## kurulumda işaretlenen düğümler (bkz. _play_anims)
+
 
 ## ---------------------------------------------------------------- çizim sınıfları (sanat dosyası yok)
-## Pikselli "Ruh Kıymığı" kristali.
-class ShardIcon extends Control:
-	var dim: bool = false
-
-	func _init(px: float = 24.0, dimmed: bool = false) -> void:
-		custom_minimum_size = Vector2(px, px)
-		size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		dim = dimmed
-
-	func _draw() -> void:
-		var s: float = size.x
-		var c: float = s * 0.5
-		var top := Vector2(c, s * 0.04)
-		var mid_y: float = s * 0.38
-		var l := Vector2(s * 0.12, mid_y)
-		var r := Vector2(s * 0.88, mid_y)
-		var bot := Vector2(c, s * 0.96)
-		var m := Vector2(c, mid_y)
-		var k: float = 0.5 if dim else 1.0
-		var t := Color(k, k, k, 1)
-		draw_colored_polygon(PackedVector2Array([top, m, l]), Color("#b4f1f5") * t)
-		draw_colored_polygon(PackedVector2Array([top, r, m]), Color("#73d2dc") * t)
-		draw_colored_polygon(PackedVector2Array([l, m, bot]), Color("#3f9fb0") * t)
-		draw_colored_polygon(PackedVector2Array([m, r, bot]), Color("#27707f") * t)
-		draw_polyline(PackedVector2Array([top, r, bot, l, top]), Color("#0b1418"), maxf(2.0, roundf(s / 12.0)))
-
-
 ## Satır desenli küçük piksel simge ("#" dolu).
 class Glyph extends Control:
 	var rows: Array = []
@@ -268,6 +258,7 @@ func _ready() -> void:
 	if _close_btn:
 		_close_btn.grab_focus()
 	UiAnim.window_in(self)
+	EventSfx.play(get_tree(), &"shop_open")
 
 
 func _build_ui() -> void:
@@ -327,6 +318,7 @@ func _rebuild_list(reset_scroll: bool = false) -> void:
 		_:
 			_build_kind_page(_page)
 	UISound.connect_all_buttons(self)
+	_play_anims()
 	_restore_view.call_deferred(keep, focus_sid)
 
 
@@ -349,6 +341,7 @@ func _on_tab_pressed(tab: String) -> void:
 		return
 	_page = page
 	_confirm_id = ""
+	_anim_page_in = true
 	_rebuild_list(true)
 
 
@@ -476,22 +469,35 @@ func _selected(items: Array, kind: String) -> Dictionary:
 	return list[0]
 
 
-func _select(it: Dictionary) -> void:
-	_sel[str(it["kind"])] = it["key"]
+## `dir` (oklar): figürün geleceği yan; 0 = kart sırasından bulunur.
+func _select(it: Dictionary, dir: int = 0) -> void:
+	var kind: String = str(it["kind"])
+	var items: Array = _items()
+	var prev: Dictionary = _selected(items, kind)
+	if not prev.is_empty() and _id(prev) != _id(it):
+		_anim_prev_sel = _id(prev)
+		if dir == 0:
+			var list: Array = _of_kind(items, kind)
+			dir = 1 if _index_of(list, it) > _index_of(list, prev) else -1
+		_anim_dir = dir
+	_sel[kind] = it["key"]
 	_confirm_id = ""
 	_rebuild_list()
+
+
+func _index_of(list: Array, it: Dictionary) -> int:
+	for i in list.size():
+		if _id(list[i]) == _id(it):
+			return i
+	return -1
 
 
 func _step_selection(kind: String, dir: int) -> void:
 	var list: Array = _of_kind(_items(), kind)
 	if list.is_empty():
 		return
-	var cur: Dictionary = _selected(_items(), kind)
-	var idx: int = 0
-	for i in list.size():
-		if str(list[i]["key"]) == str(cur.get("key", "")):
-			idx = i
-	_select(list[posmod(idx + dir, list.size())])
+	var idx: int = maxi(0, _index_of(list, _selected(_items(), kind)))
+	_select(list[posmod(idx + dir, list.size())], dir)
 
 
 func _on_buy_pressed(kind: String, key: Variant) -> void:
@@ -501,13 +507,17 @@ func _on_buy_pressed(kind: String, key: Variant) -> void:
 		_rebuild_list()
 		return
 	_confirm_id = ""
-	MetaProgressScript.buy(kind, key)
+	var before: int = MetaProgressScript.shards()
+	if MetaProgressScript.buy(kind, key):
+		_mark_bought(id, before)
 	_rebuild_list()
 
 
 func _on_upgrade_pressed(id: String) -> void:
 	_confirm_id = ""
-	MetaUpgradesScript.buy(id)
+	var before: int = MetaProgressScript.shards()
+	if MetaUpgradesScript.buy(id):
+		_mark_bought("up:" + id, before)
 	_rebuild_list()
 
 
@@ -517,8 +527,188 @@ func _on_reset_pressed() -> void:
 		_rebuild_list()
 		return
 	_confirm_id = ""
-	MetaUpgradesScript.reset_all()
+	var before: int = MetaProgressScript.shards()
+	if MetaUpgradesScript.reset_all() >= 0:
+		_mark_bought("reset", before)
 	_rebuild_list()
+
+
+func _mark_bought(id: String, shards_before: int) -> void:
+	_anim_bought = id
+	_anim_shards_from = shards_before
+	EventSfx.play(get_tree(), &"crystal_collect")
+
+
+## ---------------------------------------------------------------- ANİMASYON (madde 323)
+func _anim_list(key: String) -> Array:
+	if not _anim_nodes.has(key):
+		_anim_nodes[key] = []
+	return _anim_nodes[key]
+
+
+## Kurulum sonunda bayraklara göre BİR kez oynar ve bayrakları sıfırlar. Arayüz animasyonları kapalıysa (Grafik) her şey anında.
+func _play_anims() -> void:
+	var n: Dictionary = _anim_nodes
+	var page_in: bool = _anim_page_in
+	var prev_sel: String = _anim_prev_sel
+	var dir: int = _anim_dir
+	var bought: String = _anim_bought
+	var from: int = _anim_shards_from
+	_anim_nodes = {}
+	_anim_page_in = false
+	_anim_prev_sel = ""
+	_anim_dir = 0
+	_anim_bought = ""
+	_anim_shards_from = -1
+	if not is_inside_tree() or not UiAnim.is_enabled():
+		return
+	if page_in:
+		_anim_page_enter(n)
+		return
+	if prev_sel != "":
+		_anim_selection(n, prev_sel, dir)
+	if bought != "":
+		_anim_purchase(n, bought, from)
+
+
+## Sayfa girişi: üst şerit, ana bloklar, sonra kutular/kartlar/satırlar sırayla belirir (uzun listede toplam ANIM_IN_SPAN'a sıkışır).
+func _anim_page_enter(n: Dictionary) -> void:
+	var t: float = 0.0
+	for k: String in ["topbar", "featured", "stage", "info", "center"]:
+		if n.get(k) is CanvasItem:
+			UiAnim.reveal(n[k], 0.0, ANIM_IN_TIME, t)
+			t += 0.04
+	if _phone and is_instance_valid(_ph.get("det")):
+		UiAnim.reveal(_ph["det"], 0.0, ANIM_IN_TIME, 0.06)
+	var list: Array = []
+	for k: String in ["tiles", "cards", "rows"]:
+		list.append_array(n.get(k, []))
+	if n.get("ph_grid") is Node:
+		list.append_array((n["ph_grid"] as Node).get_children())
+	var step: float = minf(0.05, ANIM_IN_SPAN / maxf(1.0, float(list.size())))
+	for i in list.size():
+		UiAnim.reveal(list[i], 0.0, ANIM_IN_TIME, t + step * i)
+
+
+## Seçim değişti: figür seçim yönünden kayarak gelir, rozet + bilgi paneli belirir, yeni kart yükselir / eskisi iner.
+func _anim_selection(n: Dictionary, prev_sel: String, dir: int) -> void:
+	if _phone:
+		if is_instance_valid(_ph.get("det")):
+			UiAnim.reveal(_ph["det"], 0.3, 0.16)
+		return
+	var fig := n.get("figure") as TextureRect
+	if fig:
+		_anim_slide_in(fig, float(dir) * ANIM_SLIDE_PX)
+	if n.get("badge") is CanvasItem:
+		UiAnim.reveal(n["badge"], 0.0, 0.16, 0.06)
+	if n.get("info") is CanvasItem:
+		UiAnim.reveal(n["info"], 0.3, 0.16)
+	if n.get("sel_wrap") is MarginContainer:
+		_anim_lift(n["sel_wrap"], 14.0, 0.0)
+	if n.get("wrap:" + prev_sel) is MarginContainer:
+		_anim_lift(n["wrap:" + prev_sel], 0.0, 14.0)
+
+
+## Satın alma / sıfırlama: bakiye eskisinden yeniye sayar + kıymık çipi nefes alır; alınan şey parlar (figür ayrıca hafif zıplar).
+func _anim_purchase(n: Dictionary, bought: String, from: int) -> void:
+	if is_instance_valid(_balance_label) and from >= 0:
+		_anim_count(_balance_label, from, MetaProgressScript.shards())
+	if n.get("chip") is Control:
+		_pop_later(n["chip"])
+	if _phone:
+		if is_instance_valid(_ph.get("det")):
+			_anim_flash(_ph["det"])
+		return
+	if bought == "reset":
+		var rows: Array = n.get("rows", [])
+		for i in rows.size():
+			UiAnim.reveal(rows[i], 0.4, 0.16, minf(0.015 * i, 0.3))
+		return
+	for k: String in ["row:" + bought, "card:" + bought, "figure"]:
+		if n.get(k) is CanvasItem:
+			_anim_flash(n[k])
+	var fig := n.get("figure") as TextureRect
+	if fig:
+		_anim_bounce(fig)
+	if n.get("badge") is Control:
+		_pop_later(n["badge"])
+	if n.get("featured") is CanvasItem: ## ana sayfa: kart sıradaki öğeye geçti
+		UiAnim.reveal(n["featured"], 0.25, 0.2)
+
+
+func _anim_tween(node: Node) -> Tween:
+	var tw: Tween = node.create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tw.set_ignore_time_scale(true)
+	return tw
+
+
+## Yeni kurulan düğümün boyutu yerleşimden sonra belli olur: nefes birkaç kare sonra (UiAnim.pop pivotu/genliği boyuttan alır).
+func _pop_later(c: Control) -> void:
+	_anim_tween(self).tween_callback(_pop_now.bind(c)).set_delay(0.05)
+
+
+func _pop_now(c: Variant) -> void:
+	if is_instance_valid(c):
+		UiAnim.pop(c)
+
+
+## Figür ofsetle kayar (çapa sabit, ebeveyn boyutundan bağımsız); tam piksel adımlar, sonunda tam eski ofset.
+func _anim_slide_in(c: Control, dx: float) -> void:
+	var l0: float = c.offset_left
+	var r0: float = c.offset_right
+	var a0: float = c.modulate.a
+	_set_shift(dx, c, l0, r0)
+	c.modulate.a = 0.0
+	var tw := _anim_tween(c)
+	tw.tween_method(_set_shift.bind(c, l0, r0), dx, 0.0, ANIM_SLIDE_TIME).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(c, "modulate:a", a0, ANIM_SLIDE_TIME * 0.75)
+
+
+func _set_shift(x: float, c: Variant, l0: float, r0: float) -> void:
+	if is_instance_valid(c):
+		var o: float = roundf(x)
+		(c as Control).offset_left = l0 + o
+		(c as Control).offset_right = r0 + o
+
+
+## Kart sarmalayıcısının üst/alt payı (seçili 0/14, diğerleri 14/0) arasında kayar.
+func _anim_lift(w: MarginContainer, from_top: float, to_top: float) -> void:
+	_set_lift(from_top, w)
+	_anim_tween(w).tween_method(_set_lift.bind(w), from_top, to_top, ANIM_LIFT_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+
+func _set_lift(top: float, w: Variant) -> void:
+	if is_instance_valid(w):
+		var t: int = roundi(top)
+		(w as MarginContainer).add_theme_constant_override("margin_top", t)
+		(w as MarginContainer).add_theme_constant_override("margin_bottom", 14 - t)
+
+
+func _anim_flash(ci: CanvasItem) -> void:
+	var base: Color = ci.modulate
+	ci.modulate = Color(base.r * 1.7, base.g * 1.55, base.b * 1.3, base.a)
+	_anim_tween(ci).tween_property(ci, "modulate", base, ANIM_FLASH_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
+## Ayak noktası etrafında küçük zıplama (pivot ayakta; sonunda ölçek tam 1).
+func _anim_bounce(c: Control) -> void:
+	c.pivot_offset = Vector2(c.size.x * 0.5, c.size.y)
+	var tw := _anim_tween(c)
+	tw.tween_property(c, "scale", Vector2(1.04, 1.07), 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+func _anim_count(l: Label, from: int, to: int) -> void:
+	if from == to:
+		return
+	_set_count(float(from), l)
+	_anim_tween(l).tween_method(_set_count.bind(l), float(from), float(to), ANIM_COUNT_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+
+func _set_count(v: float, l: Variant) -> void:
+	if is_instance_valid(l):
+		(l as Label).text = str(roundi(v))
 
 
 func _char_def(it: Dictionary) -> Dictionary:
@@ -703,10 +893,10 @@ func _price(it: Dictionary, fs: int = 32) -> HBoxContainer:
 			h.add_child(Glyph.new(G_CHECK, C_GOOD, 3 if fs < 32 else 4))
 			h.add_child(_lbl("AÇIK", fs, C_GOOD))
 		"can":
-			h.add_child(ShardIcon.new(fs * 0.75))
+			h.add_child(DK.ShardIcon.new(fs * 0.75))
 			h.add_child(_lbl(str(it["cost"]), fs, C_PRICE))
 		_:
-			h.add_child(ShardIcon.new(fs * 0.75, true))
+			h.add_child(DK.ShardIcon.new(fs * 0.75, true))
 			h.add_child(_lbl(str(it["cost"]), fs, C_BAD))
 	return h
 
@@ -764,7 +954,7 @@ func _price_btn(prefix: String, cost: int, kind: String = "primary", fs: int = 3
 		var pl := _lbl(prefix, fs, C_DIM if kind == "off" else C_ACCENT_TEXT)
 		pl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, shadow))
 		row.add_child(pl)
-	row.add_child(ShardIcon.new(fs * 0.75, kind == "off"))
+	row.add_child(DK.ShardIcon.new(fs * 0.75, kind == "off"))
 	var cl := _lbl(str(cost), fs, tc)
 	cl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, shadow))
 	row.add_child(cl)
@@ -806,6 +996,11 @@ func _clickable(p: Control, cb: Callable, sid: String) -> Button:
 	b.add_theme_stylebox_override("focus", _sb(Color(0, 0, 0, 0), C_TEXT, 3, 6))
 	b.pressed.connect(cb)
 	_tag_sid(b, sid)
+	## Nefesi şeffaf katman değil altındaki kutu alır (katmanın kendi otomatik animasyonu görünmezdi). Yeniden kurulumda odak
+	## yerleşimden önce gelebilir -> _pop_later.
+	UiAnim.skip(b)
+	b.mouse_entered.connect(_pop_later.bind(p))
+	b.focus_entered.connect(_pop_later.bind(p))
 	p.add_child(b)
 	return b
 
@@ -813,10 +1008,11 @@ func _clickable(p: Control, cb: Callable, sid: String) -> Button:
 func _balance_chip() -> PanelContainer:
 	var p := _box(C_INSET, C_LINE_HI, 12)
 	var h := _h(12)
-	h.add_child(ShardIcon.new(32))
+	h.add_child(DK.ShardIcon.new(32))
 	var v := _v(-6)
 	v.add_child(_lbl("Ruh Kıymığı", 24, C_DIM))
 	_balance_label = _lbl(str(MetaProgressScript.shards()), 32, C_PRICE)
+	_anim_nodes["chip"] = p
 	v.add_child(_balance_label)
 	h.add_child(v)
 	h.add_child(_sp(8))
@@ -861,6 +1057,7 @@ func _topbar(back_text: String, back_cb: Callable, title_icon: Control, title: S
 	r.alignment = BoxContainer.ALIGNMENT_END
 	r.add_child(_balance_chip())
 	h.add_child(r)
+	_anim_nodes["topbar"] = h
 	return h
 
 
@@ -937,7 +1134,7 @@ func _goal_box(goal: Dictionary) -> PanelContainer:
 	tv.add_child(_lbl(str(goal["name"]), 32))
 	tv.add_child(_expand(Bar.new(float(MetaProgressScript.shards()) / float(maxi(1, int(goal["cost"]))), C_ACCENT, C_PANEL3, 14.0)))
 	var hh := _h(6)
-	hh.add_child(ShardIcon.new(16))
+	hh.add_child(DK.ShardIcon.new(16))
 	hh.add_child(_lbl("%d / %d" % [MetaProgressScript.shards(), int(goal["cost"])], 24, C_DIM))
 	hh.add_child(_sp(0, 0, true))
 	hh.add_child(_lbl("%d kaldı" % _need(goal), 24, C_PRICE))
@@ -949,11 +1146,11 @@ func _goal_box(goal: Dictionary) -> PanelContainer:
 
 
 ## Sahne/vitrin içine figür: karakterde tam boy kare (ayağı zemin halkasına basar), diğerlerinde ikon (halkanın biraz üstünde süzülür).
-func _stage_figure(hold: Control, it: Dictionary, max_h: float, floor_off: float) -> void:
+func _stage_figure(hold: Control, it: Dictionary, max_h: float, floor_off: float) -> TextureRect:
 	var is_char: bool = it["kind"] == MetaProgressScript.CHAR
 	var tex: Texture2D = _char_body(it) if is_char else it["icon"]
 	if tex == null:
-		return
+		return null
 	var ts: Vector2 = tex.get_size()
 	var k: float = maxf(1.0, floorf(max_h / maxf(ts.x, ts.y) if not is_char else max_h / ts.y))
 	var spr := TextureRect.new()
@@ -976,11 +1173,12 @@ func _stage_figure(hold: Control, it: Dictionary, max_h: float, floor_off: float
 	spr.offset_top = -lift - shh
 	spr.offset_bottom = -lift
 	hold.add_child(spr)
+	return spr
 
 
 ## ---------------------------------------------------------------- ANA SAYFA
 func _build_home() -> void:
-	_page_box.add_child(_topbar("GERİ", _on_close_pressed, ShardIcon.new(38), "RUH MAĞAZASI"))
+	_page_box.add_child(_topbar("GERİ", _on_close_pressed, DK.ShardIcon.new(38), "RUH MAĞAZASI"))
 	var items: Array = _items()
 	var body := _h(20)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1003,6 +1201,7 @@ func _build_home() -> void:
 func _home_featured(items: Array) -> Control:
 	var p := _box(C_PANEL, C_LINE_HI, 22, 3, 8)
 	p.custom_minimum_size.x = 560
+	_anim_nodes["featured"] = p
 	var v := _v(12)
 	p.add_child(v)
 	var it: Dictionary = _featured(items)
@@ -1075,7 +1274,7 @@ func _home_tile(items: Array, kind: String) -> Control:
 	v.add_child(_sp(0, 0, false, true))
 	var f := _h(8)
 	if can_n > 0:
-		f.add_child(ShardIcon.new(20))
+		f.add_child(DK.ShardIcon.new(20))
 		f.add_child(_lbl("%d tanesini şimdi alabilirsin" % can_n, 24, C_GOOD))
 	elif _open_count(list) == list.size():
 		f.add_child(Glyph.new(G_CHECK, C_GOOD, 3))
@@ -1091,6 +1290,7 @@ func _home_tile(items: Array, kind: String) -> Control:
 	v.add_child(f)
 	p.add_child(v)
 	_clickable(p, _on_tab_pressed.bind(kind), "tile:" + kind)
+	_anim_list("tiles").append(p)
 	return p
 
 
@@ -1121,7 +1321,7 @@ func _home_upgrades_tile() -> Control:
 	v.add_child(row)
 	var f := _h(8)
 	if can_n > 0:
-		f.add_child(ShardIcon.new(20))
+		f.add_child(DK.ShardIcon.new(20))
 		f.add_child(_lbl("%d geliştirmeyi şimdi yükseltebilirsin" % can_n, 24, C_GOOD))
 	else:
 		f.add_child(_lbl("Kıymık biriktir", 24, C_DIM))
@@ -1131,6 +1331,7 @@ func _home_upgrades_tile() -> Control:
 	v.add_child(f)
 	p.add_child(v)
 	_clickable(p, _on_tab_pressed.bind(PAGE_UPGRADES), "tile:upgrades")
+	_anim_list("tiles").append(p)
 	return p
 
 
@@ -1180,7 +1381,7 @@ func _status_badge(it: Dictionary) -> PanelContainer:
 	elif st == "open":
 		h.add_child(Glyph.new(G_CHECK, tc, 3))
 	else:
-		h.add_child(ShardIcon.new(20))
+		h.add_child(DK.ShardIcon.new(20))
 	h.add_child(_lbl(txt, 24, tc))
 	p.add_child(h)
 	return p
@@ -1196,10 +1397,12 @@ func _kind_stage(it: Dictionary, arrows: bool) -> Control:
 	var hold := Control.new()
 	hold.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	p.add_child(hold)
-	_stage_figure(hold, it, 430.0 if it["kind"] == MetaProgressScript.CHAR else 288.0, STAGE_FLOOR)
+	_anim_nodes["stage"] = p
+	_anim_nodes["figure"] = _stage_figure(hold, it, 430.0 if it["kind"] == MetaProgressScript.CHAR else 288.0, STAGE_FLOOR)
 	var badge := _status_badge(it)
 	badge.position = Vector2(26, 26)
 	hold.add_child(badge)
+	_anim_nodes["badge"] = badge
 	if arrows:
 		var kind: String = str(it["kind"])
 		for side: Array in [[G_LEFT, 0.0, 26.0, -1], [G_RIGHT, 1.0, -98.0, 1]]:
@@ -1227,6 +1430,7 @@ func _kind_stage(it: Dictionary, arrows: bool) -> Control:
 func _kind_info(it: Dictionary) -> Control:
 	var p := _box(C_PANEL, C_LINE_HI, 24, 3, 8)
 	p.custom_minimum_size.x = 660
+	_anim_nodes["info"] = p
 	var v := _v(10)
 	v.add_child(_lbl(str(it["name"]), 64))
 	v.add_child(_hline())
@@ -1256,13 +1460,13 @@ func _kind_info(it: Dictionary) -> Control:
 		"can":
 			kv.add_child(_lbl("Alınca kalan", 24, C_DIM))
 			var kh := _h(6)
-			kh.add_child(ShardIcon.new(20))
+			kh.add_child(DK.ShardIcon.new(20))
 			kh.add_child(_lbl(str(MetaProgressScript.shards() - int(it["cost"])), 32))
 			kv.add_child(kh)
 		"no":
 			kv.add_child(_lbl("Eksik", 24, C_DIM))
 			var kh := _h(6)
-			kh.add_child(ShardIcon.new(20, true))
+			kh.add_child(DK.ShardIcon.new(20, true))
 			kh.add_child(_lbl(str(_need(it)), 32, C_BAD))
 			kv.add_child(kh)
 		_:
@@ -1319,6 +1523,11 @@ func _kind_roster(list: Array, sel: Dictionary) -> Control:
 		_clickable(card, _select.bind(it), "card:" + _id(it))
 		wrap.add_child(card)
 		row.add_child(wrap)
+		_anim_list("cards").append(wrap)
+		_anim_nodes["wrap:" + _id(it)] = wrap
+		_anim_nodes["card:" + _id(it)] = card
+		if on:
+			_anim_nodes["sel_wrap"] = wrap
 	sc.add_child(row)
 	return sc
 
@@ -1330,6 +1539,7 @@ func _build_upgrades() -> void:
 	var center := _box(C_PANEL, C_LINE_HI, 18, 3, 8)
 	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_page_box.add_child(center)
+	_anim_nodes["center"] = center
 	var cv := _v(12)
 	center.add_child(cv)
 	var hdr := _h(14)
@@ -1402,6 +1612,8 @@ func _upgrade_row(d: Dictionary) -> Control:
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(b)
 	p.add_child(h)
+	_anim_list("rows").append(p)
+	_anim_nodes["row:up:" + id] = p
 	return p
 
 
@@ -1477,6 +1689,7 @@ func _ph_rebuild() -> void:
 		PK.set_page(_ph["mid"], _ph_kind_page(items, _page))
 		_ph_kind_detail(det, _selected(items, _page))
 	UISound.connect_all_buttons(self)
+	_play_anims()
 
 
 func _ph_shard_chip() -> PanelContainer:
@@ -1486,7 +1699,10 @@ func _ph_shard_chip() -> PanelContainer:
 	st.content_margin_right = 20
 	var h := DK.h(12)
 	h.add_child(DK.ShardIcon.new(32.0))
-	h.add_child(PK.lbl(str(MetaProgressScript.shards()), PK.FS_BODY, PK.C_SOUL))
+	var sl := PK.lbl(str(MetaProgressScript.shards()), PK.FS_BODY, PK.C_SOUL)
+	h.add_child(sl)
+	_balance_label = sl
+	_anim_nodes["chip"] = chip
 	chip.add_child(h)
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return chip
@@ -1512,6 +1728,7 @@ func _ph_kind_page(items: Array, kind: String) -> Control:
 	grid.add_theme_constant_override("v_separation", 16)
 	for it: Dictionary in list:
 		grid.add_child(_ph_tile(it, str(it["key"]) == str(sel.get("key", ""))))
+	_anim_nodes["ph_grid"] = grid
 	if list.is_empty():
 		v.add_child(PK.lbl("Bu bölümde açılacak bir şey yok.", PK.FS_BODY, DK.C_DIM, HORIZONTAL_ALIGNMENT_CENTER))
 	(lst[1] as VBoxContainer).add_child(grid)
@@ -1642,6 +1859,7 @@ func _ph_upgrades_page() -> Control:
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for d: Dictionary in MetaUpgradesScript.LIST:
 		grid.add_child(_ph_upgrade_row(d))
+	_anim_nodes["ph_grid"] = grid
 	(lst[1] as VBoxContainer).add_child(grid)
 	return v
 

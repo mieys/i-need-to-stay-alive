@@ -288,7 +288,7 @@ static func values_for(p: Node) -> Dictionary:
 		"lifesteal": StatsPanelScript.format_percent(float(p.call("get_total_lifesteal"))) if p.has_method("get_total_lifesteal") else "-",
 		"dodge": _pct(float(p.get("dodge_chance"))) if "dodge_chance" in p else "-",
 		"speed": str(int(round(float(p.call("get_base_move_speed"))))) if p.has_method("get_base_move_speed") else "-",
-		"shield_pen_percent": _pct(float(p.get("shield_pen_percent"))) if "shield_pen_percent" in p else "-",
+		"shield_pen_percent": _pct(StatsPanelScript.effective_shield_pen(float(p.get("shield_pen_percent")))) if "shield_pen_percent" in p else "-",
 		"range": _pct(float(p.get("weapon_range_bonus"))) if "weapon_range_bonus" in p else "-",
 		"shield_protection": _pct(float(p.get("shield_protection"))) if "shield_protection" in p else "-",
 		"shield_amount": _pct(float(p.get("shield_max_percent"))) if "shield_max_percent" in p else "-",

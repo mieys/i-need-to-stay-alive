@@ -8,8 +8,9 @@ extends Node2D
 ## uygular. İstemcide apply_skill_push host'a RPC atardı (çift itiş), bu yüzden istemci kopyası hiç çağırmaz; itilen konum host'un konum yayınıyla gelir.
 
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+const Fx := preload("res://scripts/mission_tree_fx_draw.gd")
 
-const CHARGE_TIME := 0.45
+const CHARGE_TIME := 0.35 ## 2026-10-19: 0,45 -> 0,35 (daha seri atış); kristal bu sürede ağaçta da parlar (mission_tree_crystal_glow.gd charge)
 const SPEED := 360.0
 const MAX_FLY := 2.0
 const HIT_RADIUS := 12.0
@@ -18,13 +19,12 @@ const BOSS_HIT_SLACK := 24.0 ## boss gövdesi büyük: merkezine bu kadar fazla 
 const PUSH_DISTANCE := 90.0
 const BOSS_PUSH_DISTANCE := 150.0 ## C++ SKILL_PUSH_BOSS_MULT 0,4 -> ~60 px
 const BURST_TIME := 0.4
-const TRAIL_LEN := 8
+const TRAIL_PX := 64.0 ## iz boyu (dünya px)
 const AIM_UP := Vector2(0.0, -10.0) ## gövde ortası (kristal mermisiyle aynı)
 
-const CORE := Color(0.82, 0.98, 1.0)
-const MID := Color(0.45, 0.85, 1.0)
-const EDGE := Color(0.22, 0.55, 0.9)
-const GLOW := Color(0.45, 0.8, 1.0, 0.22)
+## 2026-10-19 (kullanıcı: "atışlar çok ufak ve görünmüyor"; madde 317): küre yarıçapı 5 -> 10 dünya px, toplamsal hale 22 px, kalın iz + kıvılcım, büyük patlama.
+const SPARK_EVERY := 0.03
+const SPARK_LIFE := 0.35
 
 enum Phase { CHARGE, FLY, BURST }
 
@@ -36,6 +36,9 @@ var _t: float = 0.0
 var _dir: Vector2 = Vector2.RIGHT
 var _aim: Vector2 = Vector2.ZERO
 var _trail: PackedVector2Array = PackedVector2Array()
+var _sparks: Array = [] ## [dünya konumu, yaş]
+var _spark_acc: float = 0.0
+var _glow: Node2D = null
 
 
 func setup(p_target: Node2D, p_damage: float, p_push_origin: Vector2) -> void:
@@ -49,14 +52,25 @@ func setup(p_target: Node2D, p_damage: float, p_push_origin: Vector2) -> void:
 func _ready() -> void:
 	z_index = 6
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_glow = Fx.make_glow_child(self, _draw_glow)
 
 
 func _target_alive() -> bool:
 	return target != null and is_instance_valid(target) and target.get("is_dead") != true
 
 
+func _redraw() -> void:
+	queue_redraw()
+	if _glow:
+		_glow.queue_redraw()
+
+
 func _process(delta: float) -> void:
 	_t += delta
+	for sp: Array in _sparks:
+		sp[1] = float(sp[1]) + delta
+	while not _sparks.is_empty() and float(_sparks[0][1]) >= SPARK_LIFE:
+		_sparks.remove_at(0)
 	match _phase:
 		Phase.CHARGE:
 			if _target_alive():
@@ -72,15 +86,17 @@ func _process(delta: float) -> void:
 				_explode()
 				return
 			_dir = to.normalized()
-			_trail.append(global_position)
-			if _trail.size() > TRAIL_LEN:
-				_trail.remove_at(0)
+			_trail = Fx.push_trail(_trail, global_position, 4.0, TRAIL_PX)
 			global_position += _dir * SPEED * delta
+			_spark_acc += delta
+			if _spark_acc >= SPARK_EVERY:
+				_spark_acc = 0.0
+				_sparks.append([global_position - _dir * 8.0 + Vector2(randf_range(-4.0, 4.0), randf_range(-4.0, 4.0)), 0.0])
 		Phase.BURST:
 			if _t >= BURST_TIME:
 				queue_free()
 				return
-	queue_redraw()
+	_redraw()
 
 
 func _explode() -> void:
@@ -89,7 +105,7 @@ func _explode() -> void:
 	_trail.clear()
 	if damage > 0.0 and is_inside_tree():
 		_apply_hits()
-	queue_redraw()
+	_redraw()
 
 
 ## Alan hasarı + ağaçtan dışa itiş (sadece host / tek oyunculu kopya).
@@ -109,66 +125,58 @@ func _apply_hits() -> void:
 			e.call("take_damage", damage, false, 0.0, true)
 		if e.has_method("apply_skill_push"):
 			var away: Vector2 = pos - push_origin
-			e.call("apply_skill_push", away.normalized() if away.length() > 0.5 else _dir, BOSS_PUSH_DISTANCE if is_boss else PUSH_DISTANCE)
+			e.call("apply_skill_push", away.normalized() if away.length() > 0.5 else _dir, BOSS_PUSH_DISTANCE if is_boss else PUSH_DISTANCE, true) ## görev atışı oyuncu yeteneği değil: bossu iter
 
 
-## --- çizim (dünya pikseli ızgarasında; yuvarlak hatlar satır satır dikdörtgen) ---
-
-func _disc(c: Vector2, r: float, col: Color) -> void:
-	if r <= 0.0:
-		return
-	var ri: int = int(ceil(r))
-	var cx: float = roundf(c.x)
-	var cy: float = roundf(c.y)
-	for y in range(-ri, ri + 1):
-		var w: int = int(roundf(sqrt(maxf(r * r - float(y * y), 0.0))))
-		if w <= 0 and absi(y) == ri:
-			continue
-		draw_rect(Rect2(cx - w, cy + y, w * 2 + 1, 1), col)
-
-
-func _ring(c: Vector2, r: float, col: Color, px: float) -> void:
-	var n: int = maxi(8, int(TAU * r / 2.0))
-	for i in range(n):
-		var p: Vector2 = (c + Vector2.from_angle(TAU * float(i) / float(n)) * r).round()
-		draw_rect(Rect2(p - Vector2(px, px) * 0.5, Vector2(px, px)), col)
-
-
-func _crystal(c: Vector2, s: float) -> void:
-	## dikey eşkenar dörtgen kristal (kristal mermisinin büyük hâli)
-	draw_colored_polygon(PackedVector2Array([c + Vector2(0, -6) * s, c + Vector2(4, 0) * s, c + Vector2(0, 6) * s, c + Vector2(-4, 0) * s]), EDGE)
-	draw_colored_polygon(PackedVector2Array([c + Vector2(0, -4) * s, c + Vector2(2, 0) * s, c + Vector2(0, 4) * s, c + Vector2(-2, 0) * s]), MID)
-	draw_rect(Rect2((c + Vector2(-1, -2) * s).round(), Vector2(1, 2) * maxf(s, 1.0)), CORE)
-
+## --- çizim: gövde normal karışımda (_draw), hale/iz/kıvılcım/patlama toplamsal çocukta (_draw_glow) ---
 
 func _draw() -> void:
 	match _phase:
 		Phase.CHARGE:
 			var k: float = clampf(_t / CHARGE_TIME, 0.0, 1.0)
-			_disc(Vector2.ZERO, 3.0 + 9.0 * k, Color(GLOW.r, GLOW.g, GLOW.b, GLOW.a * (0.5 + k)))
-			## içe çekilen 4 zerre
-			for i in range(4):
-				var a: float = TAU * float(i) / 4.0 + k * 2.2
-				var p: Vector2 = (Vector2.from_angle(a) * (16.0 * (1.0 - k) + 4.0)).round()
-				draw_rect(Rect2(p - Vector2(1, 1), Vector2(2, 2)), Color(CORE.r, CORE.g, CORE.b, 0.5 + 0.5 * k))
-			_crystal(Vector2.ZERO, 0.5 + 0.6 * k)
+			Fx.disc(self, Vector2.ZERO, 2.0 + 6.0 * k, Fx.EDGE)
+			Fx.disc(self, Vector2.ZERO, 1.0 + 4.5 * k, Fx.MID)
+			Fx.disc(self, Vector2(-1, -1), 0.5 + 2.0 * k, Fx.CORE)
 		Phase.FLY:
-			for i in range(_trail.size()):
-				var lp: Vector2 = to_local(_trail[i])
-				var a: float = float(i + 1) / float(_trail.size() + 1)
-				_disc(lp, 1.0 + 3.0 * a, Color(MID.r, MID.g, MID.b, 0.45 * a))
-			_disc(Vector2.ZERO, 9.0, GLOW)
-			_disc(Vector2.ZERO, 5.0, EDGE)
-			_disc(Vector2.ZERO, 3.0, MID)
-			_disc(Vector2(-1, -1), 1.0, CORE)
+			Fx.disc(self, Vector2.ZERO, 10.0, Fx.EDGE)
+			Fx.disc(self, Vector2.ZERO, 7.5, Fx.MID)
+			Fx.disc(self, Vector2(-1, -1), 4.5, Fx.CORE)
+			Fx.disc(self, Vector2(-3, -3), 1.5, Color(1, 1, 1))
+
+
+func _draw_glow(ci: Node2D) -> void:
+	for s: Array in _sparks:
+		var sk: float = 1.0 - float(s[1]) / SPARK_LIFE
+		var px: float = 2.0 if sk > 0.5 else 1.0
+		ci.draw_rect(Rect2(ci.to_local(s[0]).round(), Vector2(px, px)), Color(Fx.CORE.r, Fx.CORE.g, Fx.CORE.b, 0.9 * sk))
+	match _phase:
+		Phase.CHARGE:
+			var k: float = clampf(_t / CHARGE_TIME, 0.0, 1.0)
+			Fx.disc(ci, Vector2.ZERO, 4.0 + 14.0 * k, Color(Fx.MID.r, Fx.MID.g, Fx.MID.b, 0.12 + 0.12 * k))
+			## içe çekilen 6 zerre
+			for i in range(6):
+				var a: float = TAU * float(i) / 6.0 + k * 2.6
+				var p: Vector2 = (Vector2.from_angle(a) * (28.0 * (1.0 - k) + 6.0)).round()
+				ci.draw_rect(Rect2(p - Vector2(1, 1), Vector2(2, 2)), Color(Fx.CORE.r, Fx.CORE.g, Fx.CORE.b, 0.5 + 0.5 * k))
+		Phase.FLY:
+			Fx.draw_trail(ci, _trail, 2.0, 14.0, Color(Fx.MID.r, Fx.MID.g, Fx.MID.b, 0.5), Color(Fx.CORE.r, Fx.CORE.g, Fx.CORE.b, 0.6))
+			Fx.disc(ci, Vector2.ZERO, 22.0, Color(Fx.MID.r, Fx.MID.g, Fx.MID.b, 0.10))
+			Fx.disc(ci, Vector2.ZERO, 15.0, Color(Fx.MID.r, Fx.MID.g, Fx.MID.b, 0.16))
+			## kürenin çevresinde dönen 3 kıvılcım
+			for i in range(3):
+				var p: Vector2 = (Vector2.from_angle(_t * 9.0 + TAU * float(i) / 3.0) * 14.0).round()
+				ci.draw_rect(Rect2(p - Vector2(1, 1), Vector2(2, 2)), Fx.CORE)
 		Phase.BURST:
 			var k: float = clampf(_t / BURST_TIME, 0.0, 1.0)
 			var ease_k: float = 1.0 - pow(1.0 - k, 3.0)
 			var fade: float = 1.0 - k
-			if k < 0.35:
-				_disc(Vector2.ZERO, 6.0 + 10.0 * (k / 0.35), Color(CORE.r, CORE.g, CORE.b, 0.55 * (1.0 - k / 0.35)))
-			_ring(Vector2.ZERO, 6.0 + (BLAST_RADIUS - 6.0) * ease_k, Color(MID.r, MID.g, MID.b, 0.9 * fade), 2.0)
-			_ring(Vector2.ZERO, (BLAST_RADIUS - 10.0) * ease_k, Color(EDGE.r, EDGE.g, EDGE.b, 0.5 * fade), 1.0)
-			for i in range(8):
-				var p: Vector2 = (Vector2.from_angle(TAU * float(i) / 8.0 + 0.4) * (4.0 + (BLAST_RADIUS + 8.0) * ease_k)).round()
-				draw_rect(Rect2(p - Vector2(1, 1), Vector2(2, 2)), Color(CORE.r, CORE.g, CORE.b, fade))
+			if k < 0.4:
+				var fk: float = k / 0.4
+				Fx.disc(ci, Vector2.ZERO, 10.0 + 18.0 * fk, Color(Fx.CORE.r, Fx.CORE.g, Fx.CORE.b, 0.6 * (1.0 - fk)))
+			Fx.disc(ci, Vector2.ZERO, BLAST_RADIUS * ease_k, Color(Fx.MID.r, Fx.MID.g, Fx.MID.b, 0.10 * fade))
+			Fx.ring(ci, Vector2.ZERO, 8.0 + (BLAST_RADIUS - 8.0) * ease_k, Color(Fx.MID.r, Fx.MID.g, Fx.MID.b, 0.95 * fade), 3.0)
+			Fx.ring(ci, Vector2.ZERO, (BLAST_RADIUS - 12.0) * ease_k, Color(Fx.CORE.r, Fx.CORE.g, Fx.CORE.b, 0.5 * fade), 1.0)
+			for i in range(12):
+				var p: Vector2 = (Vector2.from_angle(TAU * float(i) / 12.0 + 0.4) * (6.0 + (BLAST_RADIUS + 12.0) * ease_k)).round()
+				var px: float = 3.0 if k < 0.5 else 2.0
+				ci.draw_rect(Rect2(p - Vector2(px, px) * 0.5, Vector2(px, px)), Color(Fx.CORE.r, Fx.CORE.g, Fx.CORE.b, fade))

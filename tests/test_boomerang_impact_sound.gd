@@ -123,8 +123,8 @@ func test_spin_sound_increased_by_50_percent() -> void:
 	assert(sound != null, "Spin ses çalıcısı (Sound) bulunamadı")
 	assert(sound.stream != null and sound.stream.resource_path.ends_with("boomerang_spin.mp3"),
 		"Sound node'u spin sesini değil başka bir sesi çalıyor")
-	## %50 artış = genlik x1.5 = +20*log10(1.5) = +3.52 dB
-	var expected: float = SPIN_VOLUME_BEFORE_DB + linear_to_db(1.5)
+	## %50 artış = genlik x1.5 = +20*log10(1.5) = +3.52 dB (-10.48); 2026-10-19 "sesi düşük silahlar" turunda -6.5 (ölçüm: etkin -32,3 -> -28,3 dB)
+	var expected: float = -6.5
 	assert(absf(sound.volume_db - expected) < 0.02,
 		"Spin sesi %%50 artmamış: %s dB (beklenen ~%s)" % [sound.volume_db, expected])
 	assert(sound.volume_db > SPIN_VOLUME_BEFORE_DB,

@@ -5,6 +5,7 @@ class_name MissionTree
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const BoltScript := preload("res://scripts/mission_tree_bolt.gd")
 const BlastScript := preload("res://scripts/mission_tree_blast.gd")
+const CrystalGlowScript := preload("res://scripts/mission_tree_crystal_glow.gd")
 
 ## "Ağacı Koru" görevi (bkz. world_event_manager.gd).
 ##
@@ -30,17 +31,18 @@ const GROW_FPS := 2.5 ## 3 kare ~1,2 sn
 const SHEET_BASE := Vector2(87.0, 153.0) ## gövde dibi (kare içinde) - tools/import_mission_tree.py çıktısı
 const TREE_SCALE := 0.7 ## 160 px'lik sanat -> ~105 dünya px boy (oyuncu ~40)
 const CRYSTAL_LOCAL := Vector2(-7.0, -115.0) ## kristalin ortası, gövde dibine göre (sanat px; ölçekten önce)
+const CRYSTAL_GLOW_LOCAL := Vector2(-4.5, -111.0) ## taşın gerçek ortası (sayfada x 72-94, y 13-71) - parlama halesi buraya (sanat px)
 const TRUNK_RADIUS := 15.0 ## çarpışma çemberi (dünya px, gövde dibinin biraz üstü)
 const TRUNK_CENTER_UP := 6.0
 const DEPTH_HALF_WIDTH := 48.0 ## derinlik: oyuncu bu yatay aralıkta + kökün arkasındaysa ağaç üstte çizilir
 const DEPTH_HEIGHT := 110.0
 
 const ATTACK_RANGE := 300.0
-const ATTACK_INTERVAL := 0.8
+const ATTACK_INTERVAL := 0.45 ## 2026-10-19: 0,8 -> 0,45 (kullanıcı: "daha hızlı atış yapmalı"; vuruş başı hasar aynı)
 ## Kademeye göre uyum (2026-10-10, kullanıcı: "canı/kalkanı/hasarı mevcut kademeye uyumlu olmalı, ne çok güçlü ne çok zayıf, biz yetişene kadar başının çaresine
 ## bakabilsin"): görev başında host yaşayan SIRADAN yaratıkların ortalama azami canını ve temas hasarını ölçer.
 ##  - can = ort. hasar x HP_PER_ENEMY_HIT, kalkan = ort. hasar x SHIELD_PER_ENEMY_HIT (ölçek x oyuncu çarpanı): ~6 yaratık aynı anda vururken ~10-12 sn dayanır.
-##  - kristal vuruşu = ort. yaratık canı x BOLT_HP_RATIO (sıradan bir yaratığı ~3 atışta, 0,8 sn aralıkla ~2,4 sn'de öldürür).
+##  - kristal vuruşu = ort. yaratık canı x BOLT_HP_RATIO (sıradan bir yaratığı ~3 atışta, 0,45 sn aralıkla ~1,35 sn'de öldürür).
 ## Ölçülecek yaratık yoksa (başta) FALLBACK_* (eski sabitler).
 ## 2026-10-17'deki ~%25 can/kalkan düşüşü (52/16, 2250/600) 2026-10-18'de GERİ ALINDI (kullanıcı: "dayanıklı olsun"); görev süresi 170 sn kaldı.
 const HP_PER_ENEMY_HIT := 70.0
@@ -52,7 +54,7 @@ const FALLBACK_BOLT_DAMAGE := 35.0
 ## SİHİRLİ ATIŞ (2026-10-18, mission_tree_blast.gd): kristal mermilerine EK, BLAST_INTERVAL'da bir şarjlı büyük küre - çarptığı yerde alan hasarı (ort. yaratık
 ## canı x BLAST_HP_RATIO) + ağaçtan dışa itiş. Hedef: BOSS_FOCUS_RANGE içinde yaşayan boss varsa en yakın boss ("bosslara focus"), yoksa BLAST_RANGE içindeki
 ## en yakın yaratık. Hedef yoksa BLAST_RETRY sonra yeniden bakar (yaklaşan ilk yaratığa hemen atar).
-const BLAST_INTERVAL := 3.0
+const BLAST_INTERVAL := 1.8 ## 2026-10-19: 3 -> 1,8 (aynı istek)
 const BLAST_FIRST_DELAY := 1.0
 const BLAST_RETRY := 0.3
 const BLAST_RANGE := 380.0
@@ -80,6 +82,7 @@ var _no_damage_timer: float = 0.0
 var _is_host_simulated: bool = true
 var _anim: AnimatedSprite2D = null
 var _overhead_bar: Node2D = null
+var _glow: Node2D = null ## kristal parlaması (mission_tree_crystal_glow.gd)
 
 
 func setup(player_count: int, simulated: bool) -> void:
@@ -135,6 +138,10 @@ func _ready() -> void:
 	## Gövde dibi (SHEET_BASE) bu düğümün konumuna (zemin noktası) denk gelsin.
 	_anim.position = (Vector2(FRAME, FRAME) * 0.5 - SHEET_BASE) * TREE_SCALE
 	add_child(_anim)
+	_glow = CrystalGlowScript.new()
+	add_child(_glow)
+	_glow.position = CRYSTAL_GLOW_LOCAL * TREE_SCALE
+	_glow.call("setup", _anim, ACTIVE_SHEET, ACTIVE_FRAMES, FRAME)
 	_anim.play(&"grow")
 	_anim.animation_finished.connect(func() -> void:
 		if _anim.animation == &"grow":
@@ -214,6 +221,8 @@ func _update_depth() -> void:
 			if feet.y < global_position.y and feet.y > global_position.y - DEPTH_HEIGHT and absf(feet.x - global_position.x) < DEPTH_HALF_WIDTH:
 				behind = true
 	_anim.z_index = 2 if behind else 0
+	if _glow:
+		_glow.z_index = _anim.z_index + 1
 
 
 func _try_fire_at_nearest_enemy() -> void:
@@ -233,6 +242,8 @@ func _try_fire_at_nearest_enemy() -> void:
 	bolt.setup(best, bolt_damage if _is_host_simulated else 0.0)
 	get_tree().current_scene.add_child(bolt)
 	bolt.global_position = from
+	if _glow:
+		_glow.call("pulse", 0.6, 0.3)
 
 
 ## Kristal mermisi / sihirli atış hedefi olabilir mi (ölü, hayalet/görünmez = "untargetable" metası değil).
@@ -272,6 +283,8 @@ func _try_fire_blast() -> bool:
 	blast.setup(t, blast_damage if _is_host_simulated else 0.0, global_position)
 	get_tree().current_scene.add_child(blast)
 	blast.global_position = crystal_position()
+	if _glow:
+		_glow.call("charge", BlastScript.CHARGE_TIME)
 	return true
 
 

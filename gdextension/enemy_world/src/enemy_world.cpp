@@ -88,6 +88,8 @@ void EnemyWorld::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_dormant", "slot", "on"), &EnemyWorld::set_dormant);
 	ClassDB::bind_method(D_METHOD("set_goal", "slot", "x", "y", "mult"), &EnemyWorld::set_goal);
 	ClassDB::bind_method(D_METHOD("is_dormant", "slot"), &EnemyWorld::is_dormant);
+	ClassDB::bind_method(D_METHOD("set_face_lock", "slot", "on"), &EnemyWorld::set_face_lock);
+	ClassDB::bind_method(D_METHOD("is_face_locked", "slot"), &EnemyWorld::is_face_locked);
 	ClassDB::bind_method(D_METHOD("set_stealth", "target_ids", "reveals"), &EnemyWorld::set_stealth);
 	ClassDB::bind_method(D_METHOD("set_targets", "pos", "kind", "targetable", "ghost", "body", "zone", "ids"), &EnemyWorld::set_targets);
 	ClassDB::bind_method(D_METHOD("set_merchant_zone", "active", "pos", "radius"), &EnemyWorld::set_merchant_zone);
@@ -148,8 +150,13 @@ void EnemyWorld::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_foot", "slot", "visual", "local"), &EnemyWorld::set_foot);
 	ClassDB::bind_method(D_METHOD("draw_order", "parent", "extras", "extras_foot"), &EnemyWorld::draw_order);
 	ClassDB::bind_method(D_METHOD("get_last_draw_order"), &EnemyWorld::get_last_draw_order);
+	ClassDB::bind_method(D_METHOD("depth_scan", "chars", "ex_nodes", "ex_data", "ex_want", "params", "second_pass"), &EnemyWorld::depth_scan);
+	ClassDB::bind_method(D_METHOD("depth_pending"), &EnemyWorld::depth_pending);
+	ClassDB::bind_method(D_METHOD("depth_set", "slot", "visual", "foot_local", "half_w", "height", "measured"), &EnemyWorld::depth_set);
+	ClassDB::bind_method(D_METHOD("depth_seed", "ids"), &EnemyWorld::depth_seed);
 	ClassDB::bind_method(D_METHOD("minimap_points", "center", "world_per_px", "max_r", "min_vis"), &EnemyWorld::minimap_points);
 	ClassDB::bind_method(D_METHOD("step", "delta"), &EnemyWorld::step);
+	ClassDB::bind_method(D_METHOD("end_tick"), &EnemyWorld::end_tick);
 	ClassDB::bind_method(D_METHOD("pop_events"), &EnemyWorld::pop_events);
 	ClassDB::bind_method(D_METHOD("get_last_step_ms"), &EnemyWorld::get_last_step_ms);
 	ClassDB::bind_method(D_METHOD("get_last_view_ms"), &EnemyWorld::get_last_view_ms);
@@ -182,6 +189,7 @@ void EnemyWorld::_bind_methods() {
 	BIND_ENUM_CONSTANT(A_WALK);
 	BIND_ENUM_CONSTANT(A_IDLE);
 	BIND_ENUM_CONSTANT(A_OTHER);
+	BIND_ENUM_CONSTANT(A_HOLD);
 }
 
 // ===================================================================================================== kurulum
@@ -324,6 +332,8 @@ void EnemyWorld::ensure_capacity(int32_t n) {
 	anim_fps.resize(s, 8.0f);
 	walk_anim_mult.resize(s, 1.0f);
 	anim_cols.resize(s, 1);
+	anim_td.resize(s, 0.0);
+	anim_fps_d.resize(s, 8.0);
 	anim_walking.resize(s, 1);
 	anim_state.resize(s, A_WALK);
 	anim_idle_tex.resize(s, 0);
@@ -363,6 +373,7 @@ void EnemyWorld::ensure_capacity(int32_t n) {
 	wander_timer.resize(s, 0.0f);
 	wander_moving.resize(s, 0);
 	dormant.resize(s, 0);
+	face_lock.resize(s, 0);
 	goal_on.resize(s, 0);
 	goal_x.resize(s, 0.0f);
 	goal_y.resize(s, 0.0f);
@@ -381,6 +392,11 @@ void EnemyWorld::ensure_capacity(int32_t n) {
 	foot_vis_id.resize(s, 0);
 	foot_local.resize(s, 0.0f);
 	foot_known.resize(s, 0);
+	dp_vis_id.resize(s, 0);
+	dp_foot_local.resize(s, 0.0);
+	dp_half_w.resize(s, 0.0);
+	dp_height.resize(s, 0.0);
+	dp_state.resize(s, 0);
 	draw_given.resize(s, -1);
 	draw_tree.resize(s, -1);
 	bucket_next.resize(s, -1);
@@ -425,6 +441,8 @@ int32_t EnemyWorld::add_enemy(Object *p_node, Object *p_sprite, const Vector2 &p
 	face_left[i] = 0;
 	anim_t[i] = 0.0f;
 	anim_fps[i] = (float)p_params.get("fps", 8.0);
+	anim_fps_d[i] = (double)p_params.get("fps", 8.0);
+	anim_td[i] = 0.0;
 	anim_cols[i] = std::max(1, (int)p_params.get("cols", 1));
 	walk_anim_mult[i] = 1.0f;
 	anim_walking[i] = (bool)p_params.get("walking", true) ? 1 : 0;
@@ -460,6 +478,7 @@ int32_t EnemyWorld::add_enemy(Object *p_node, Object *p_sprite, const Vector2 &p
 	wander_x[i] = wander_y[i] = wander_timer[i] = 0.0f;
 	wander_moving[i] = 0;
 	dormant[i] = goal_on[i] = 0;
+	face_lock[i] = 0;
 	goal_x[i] = goal_y[i] = 0.0f;
 	goal_mult[i] = 1.0f;
 	last_kb_msec[i] = -100000;
@@ -472,6 +491,9 @@ int32_t EnemyWorld::add_enemy(Object *p_node, Object *p_sprite, const Vector2 &p
 	foot_vis_id[i] = 0;
 	foot_local[i] = 0.0f;
 	foot_known[i] = 0;
+	dp_vis_id[i] = 0;
+	dp_foot_local[i] = dp_half_w[i] = dp_height[i] = 0.0;
+	dp_state[i] = 0;
 	draw_given[i] = -1;
 	draw_tree[i] = -1;
 	live_count++;
@@ -552,16 +574,39 @@ void EnemyWorld::set_anim(int32_t s, int32_t cols, float fps, bool walking, floa
 	}
 }
 // enemy.gd _enter_state çağırır: WALK/IDLE'da kareyi C++ yazar (kare süresi sıfırlanır), OTHER'da GDScript.
-void EnemyWorld::set_anim_state(int32_t s, int32_t state, int32_t cols, float fps, float walk_mult, bool idle_tex) {
+void EnemyWorld::set_anim_state(int32_t s, int32_t state, int32_t cols, double fps, float walk_mult, bool idle_tex) {
 	if (SLOT_OK(s)) {
 		anim_state[s] = state;
 		anim_cols[s] = std::max(1, cols);
-		anim_fps[s] = fps;
+		anim_fps[s] = (float)fps;
+		anim_fps_d[s] = fps;
 		walk_anim_mult[s] = walk_mult;
 		anim_idle_tex[s] = idle_tex ? 1 : 0;
 		anim_t[s] = 0.0f;
+		anim_td[s] = 0.0;
 		anim_pending[s] = 0;
 		view_frame[s] = -1;
+		if (state == A_HOLD && tick_open && anim_walking[s]) {
+			// enemy.gd eski yol: durum bu karenin olay / tik aşamasında girildiyse AYNI karenin tiki kare süresine bir delta ekleyip kareyi yazardı
+			anim_td[s] += step_dd * fps;
+			write_hold_frame(s);
+		}
+	}
+}
+void EnemyWorld::end_tick() { tick_open = false; }
+// A_HOLD karesini şimdi yaz (bakış satırı + kare süresi); write_views ile aynı hesap.
+void EnemyWorld::write_hold_frame(int32_t i) {
+	if (sprite_id[i] == 0 || anim_pending[i]) {
+		return;
+	}
+	const int cols = anim_cols[i];
+	const int fr = facing_row[i] * cols + std::min((int)anim_td[i], cols - 1);
+	if (fr != view_frame[i]) {
+		Sprite2D *sp = Object::cast_to<Sprite2D>(ObjectDB::get_instance(sprite_id[i]));
+		if (sp != nullptr) {
+			sp->set_frame(fr);
+			view_frame[i] = fr;
+		}
 	}
 }
 void EnemyWorld::set_contact(int32_t s, float interval, float timer) {
@@ -612,7 +657,10 @@ void EnemyWorld::force_think(int32_t s) {
 }
 void EnemyWorld::set_face(int32_t s, const Vector2 &d) {
 	if (SLOT_OK(s)) {
-		face(s, d.x, d.y);
+		face_apply(s, d.x, d.y); // GDScript yazıcısı: kilitten etkilenmez
+		if (tick_open && anim_state[s] == A_HOLD && anim_walking[s]) {
+			write_hold_frame(s); // bakış satırı geç gelmesin: eski yolda kare tik SONUNDA güncel satırla yazılırdı
+		}
 	}
 }
 void EnemyWorld::set_net_target(int32_t s, const Vector2 &p, const Vector2 &v) {
@@ -665,6 +713,14 @@ void EnemyWorld::set_goal(int32_t s, float x, float y, float mult) {
 }
 
 bool EnemyWorld::is_dormant(int32_t s) const { return SLOT_OK(s) && dormant[s]; }
+
+void EnemyWorld::set_face_lock(int32_t s, bool on) {
+	if (SLOT_OK(s)) {
+		face_lock[s] = on ? 1 : 0;
+	}
+}
+
+bool EnemyWorld::is_face_locked(int32_t s) const { return SLOT_OK(s) && face_lock[s]; }
 
 
 // ===================================================================================================== itme formülleri
@@ -1547,6 +1603,191 @@ Array EnemyWorld::get_last_draw_order() const {
 	return out;
 }
 
+// ===================================================================================================== yaratık-oyuncu y-sıralaması
+// creature_depth.gd update_now çekirdeği. Kural creature_depth.gd should_cover + _close_core ile BİREBİR (çift duyarlıklı, aynı
+// eşikler); kaynak veri: slotun ölçü kaydı (depth_set, GDScript'in eski DepthInfo'su) + düğümün KENDİ global konumu.
+
+void EnemyWorld::depth_set(int32_t s, Object *p_visual, double p_foot_local, double p_half_w, double p_height, bool p_measured) {
+	if (SLOT_OK(s)) {
+		dp_vis_id[s] = p_visual ? p_visual->get_instance_id() : 0;
+		dp_foot_local[s] = p_foot_local;
+		dp_half_w[s] = p_half_w;
+		dp_height[s] = p_height;
+		dp_state[s] = p_measured ? 1 : 2;
+	}
+}
+
+void EnemyWorld::depth_seed(const PackedInt64Array &p_ids) {
+	dp_prev.clear();
+	for (int64_t k = 0; k < p_ids.size(); k++) {
+		dp_prev.push_back((uint64_t)p_ids[k]);
+	}
+	std::sort(dp_prev.begin(), dp_prev.end());
+}
+
+Array EnemyWorld::depth_pending() const {
+	Array out;
+	for (int32_t s : dp_pending) {
+		if (node_id[s] == 0) {
+			continue;
+		}
+		Object *o = ObjectDB::get_instance(node_id[s]);
+		if (o != nullptr) {
+			out.push_back(o);
+		}
+	}
+	return out;
+}
+
+Array EnemyWorld::depth_scan(const PackedFloat64Array &p_chars, const Array &p_ex_nodes, const PackedFloat64Array &p_ex_data,
+		const PackedByteArray &p_ex_want, const PackedFloat64Array &p_params, bool p_second_pass) {
+	Array out;
+	dp_pending.clear();
+	if (p_params.size() < 6) {
+		return out;
+	}
+	const double scan = p_params[0], pad = p_params[1], above = p_params[2], hyst = p_params[3], body_hw = p_params[4], slack = p_params[5];
+	const double reach = scan + pad;
+	const float q_r = (float)(reach + slack); // EnemyQuery.candidates: radius + MOVE_SLACK (query_points: float2 mesafe <= r^2)
+	const float q_r2 = q_r * q_r;
+	struct P {
+		uint64_t id;
+		double foot, x, hw, h;
+	};
+	std::vector<P> pool;
+	std::vector<uint8_t> want;
+	pool.reserve(256);
+	want.reserve(256);
+	dp_pool_of.assign((size_t)slot_count, -1);
+	const auto was_front = [&](uint64_t id) { return std::binary_search(dp_prev.begin(), dp_prev.end(), id); };
+	const auto cover = [&](double foot, double height, double dx, double feet_y, bool raised) {
+		const double margin = raised ? -hyst : hyst;
+		if (foot <= feet_y + margin) {
+			return false; // ayağı oyuncununkinden yukarıda / aynı hizada: oyuncunun ARKASINDA
+		}
+		if (foot - height >= feet_y) {
+			return false; // görselin tamamı oyuncunun ayağından aşağıda: örtüşme yok
+		}
+		return std::fabs(dx) <= body_hw + std::max(height * 0.5, 20.0);
+	};
+	// kayıtsız adaylar (GDScript süzdü: geçerli / görünür / ölü değil / tarama kutusunda; havuza girenler)
+	const int nex = (int)p_ex_nodes.size();
+	for (int k = 0; k < nex && (k * 4 + 3) < p_ex_data.size(); k++) {
+		Object *o = (Object *)p_ex_nodes[k];
+		if (o == nullptr) {
+			continue;
+		}
+		pool.push_back({ (uint64_t)o->get_instance_id(), p_ex_data[k * 4 + 1], p_ex_data[k * 4], p_ex_data[k * 4 + 2], p_ex_data[k * 4 + 3] });
+		want.push_back(k < p_ex_want.size() ? p_ex_want[k] : 0);
+	}
+	const int nch = (int)(p_chars.size() / 2);
+	for (int ch = 0; ch < nch; ch++) {
+		const double cx = p_chars[ch * 2], cy = p_chars[ch * 2 + 1];
+		const float fcx = (float)cx, fcy = (float)cy;
+		for (int32_t i = 0; i < slot_count; i++) {
+			if (!alive[i] || (flags[i] & (F_DEAD | F_NO_SIM)) || node_id[i] == 0) {
+				continue;
+			}
+			if (len2(px[i] - fcx, py[i] - fcy) > q_r2) {
+				continue;
+			}
+			int32_t pi = dp_pool_of[i];
+			if (pi == -2) {
+				continue; // ölçü kaydı bekleniyor
+			}
+			Node2D *n = Object::cast_to<Node2D>(ObjectDB::get_instance(node_id[i]));
+			if (n == nullptr || !n->is_visible()) {
+				continue;
+			}
+			const Vector2 gp = n->get_global_position();
+			const double adx = std::fabs((double)gp.x - cx), ady = std::fabs((double)gp.y - cy);
+			if (adx > reach || ady > reach || (double)gp.y < cy - above) {
+				continue;
+			}
+			if (pi < 0) {
+				const uint8_t st = dp_state[i];
+				Node2D *v = dp_vis_id[i] != 0 ? Object::cast_to<Node2D>(ObjectDB::get_instance(dp_vis_id[i])) : nullptr;
+				if (st == 0 || (st == 1 && v == nullptr) || (st == 2 && !p_second_pass)) {
+					dp_pool_of[i] = -2;
+					dp_pending.push_back(i);
+					continue;
+				}
+				const double foot = v != nullptr ? (double)v->get_global_position().y + dp_foot_local[i] * std::fabs((double)v->get_global_scale().y)
+												 : (double)gp.y; // görsel yok: kök noktası
+				pi = (int32_t)pool.size();
+				dp_pool_of[i] = pi;
+				pool.push_back({ (uint64_t)node_id[i], foot, (double)gp.x, dp_half_w[i], dp_height[i] });
+				want.push_back(0);
+			}
+			if (adx <= scan && ady <= scan && !want[pi]) {
+				if (cover(pool[pi].foot, pool[pi].h, (double)gp.x - cx, cy, was_front(pool[pi].id))) {
+					want[pi] = 1;
+				}
+			}
+		}
+	}
+	if (!dp_pending.empty()) {
+		return out;
+	}
+	// KAPANIŞ (creature_depth.gd _close_core): ayak sırasında aşağıya doğru kapat
+	const size_t n_all = pool.size();
+	size_t want_n = 0;
+	for (uint8_t w : want) {
+		want_n += w ? 1 : 0;
+	}
+	if (want_n > 0 && n_all > want_n) {
+		std::vector<int32_t> order(n_all);
+		for (size_t k = 0; k < n_all; k++) {
+			order[k] = (int32_t)k;
+		}
+		std::sort(order.begin(), order.end(), [&](int32_t a, int32_t b) {
+			return pool[a].foot < pool[b].foot || (pool[a].foot == pool[b].foot && a < b);
+		});
+		std::vector<double> r_foot, r_x, r_hw;
+		r_foot.reserve(want_n * 2);
+		r_x.reserve(want_n * 2);
+		r_hw.reserve(want_n * 2);
+		for (int32_t i : order) {
+			const P &p = pool[i];
+			if (want[i]) {
+				r_foot.push_back(p.foot);
+				r_x.push_back(p.x);
+				r_hw.push_back(p.hw);
+				continue;
+			}
+			const double hi = p.foot - 0.5;
+			size_t j = (size_t)(std::upper_bound(r_foot.begin(), r_foot.end(), p.foot - p.h) - r_foot.begin());
+			const size_t rn = r_foot.size();
+			bool joined = false;
+			while (j < rn && r_foot[j] < hi) {
+				if (std::fabs(r_x[j] - p.x) < r_hw[j] + p.hw) {
+					joined = true;
+					break;
+				}
+				j++;
+			}
+			if (joined) {
+				want[i] = 1;
+				r_foot.push_back(p.foot);
+				r_x.push_back(p.x);
+				r_hw.push_back(p.hw);
+			}
+		}
+	}
+	dp_prev.clear();
+	for (size_t k = 0; k < n_all; k++) {
+		if (want[k]) {
+			dp_prev.push_back(pool[k].id);
+			Object *o = ObjectDB::get_instance(pool[k].id);
+			if (o != nullptr) {
+				out.push_back(o);
+			}
+		}
+	}
+	std::sort(dp_prev.begin(), dp_prev.end());
+	return out;
+}
+
 PackedVector2Array EnemyWorld::minimap_points(const Vector2 &p_center, float p_world_per_px, float p_max_r, float p_min_vis) {
 	PackedVector2Array out;
 	const int R = (int)std::ceil(std::max(p_max_r, 0.0f)) + 1;
@@ -1594,6 +1835,13 @@ void EnemyWorld::push_event(int32_t type, int32_t slot, int32_t t) {
 
 // enemy.gd _update_facing: 0,1'den kısa yönde değişmez; satır baskın eksene göre, flip_h |x| >= 0,15'te.
 void EnemyWorld::face(int32_t i, float dx, float dy) {
+	if (face_lock[i]) {
+		return; // yönü yalnız GDScript (set_face) yazar - bkz. face_lock
+	}
+	face_apply(i, dx, dy);
+}
+
+void EnemyWorld::face_apply(int32_t i, float dx, float dy) {
 	if (dx * dx + dy * dy < 0.01f) {
 		return;
 	}
@@ -1722,7 +1970,10 @@ void EnemyWorld::process_ranged(int32_t i, int32_t t, float dist, float delta) {
 
 // ===================================================================================================== adım
 
-void EnemyWorld::step(float delta) {
+void EnemyWorld::step(double p_delta) {
+	const float delta = (float)p_delta;
+	step_dd = p_delta;
+	tick_open = false;
 	const uint64_t t0 = Time::get_singleton()->get_ticks_usec();
 	frame++;
 	world_time += delta;
@@ -2041,6 +2292,7 @@ void EnemyWorld::step(float delta) {
 	const uint64_t t2 = Time::get_singleton()->get_ticks_usec();
 	last_view_ms = (double)(t2 - t1) / 1000.0;
 	last_step_ms = (double)(t2 - t0) / 1000.0;
+	tick_open = true;
 }
 
 // Yürüme/bekleme + yürüme karesi süresi (host yaratığı ve istemci kuklası ortak).
@@ -2075,6 +2327,9 @@ void EnemyWorld::step_loco_anim(int32_t i, float delta) {
 	// ---- kare süresi (enemy.gd _advance_frame_sprite: yürürken x walk_anim_mult)
 	if (anim_walking[i] && anim_state[i] != A_OTHER) {
 		anim_t[i] += delta * anim_fps[i] * (anim_state[i] == A_WALK ? walk_anim_mult[i] : 1.0f);
+		if (anim_state[i] == A_HOLD) {
+			anim_td[i] += step_dd * anim_fps_d[i];
+		}
 	}
 }
 
@@ -2196,7 +2451,8 @@ void EnemyWorld::write_views() {
 		}
 		if (anim_walking[i] && sprite_id[i] != 0 && anim_state[i] != A_OTHER && !anim_pending[i]) {
 			const int cols = anim_cols[i];
-			const int col = (anim_state[i] == A_IDLE && !anim_idle_tex[i]) ? 0 : ((int)anim_t[i]) % cols;
+			const int col = anim_state[i] == A_HOLD ? std::min((int)anim_td[i], cols - 1)
+					: ((anim_state[i] == A_IDLE && !anim_idle_tex[i]) ? 0 : ((int)anim_t[i]) % cols);
 			const int fr = facing_row[i] * cols + col;
 			if (fr != view_frame[i]) {
 				Sprite2D *s = Object::cast_to<Sprite2D>(ObjectDB::get_instance(sprite_id[i]));

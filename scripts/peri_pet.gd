@@ -170,6 +170,8 @@ func _owner_art_local(art_y: float) -> Vector2:
 
 ## Her karede (testler doğrudan çağırır): bekleme dolduysa ve sahibin canı eksikse can basar.
 func process_heal(delta: float) -> void:
+	if owner_frozen(): ## güvenli alanda (satıcı koruması / demirci) zaman donar: sayaç ilerlemez, büyü yapılmaz (madde 327)
+		return
 	_cooldown = maxf(0.0, _cooldown - delta)
 	if _cooldown > 0.0 or is_puppet or not owner_needs_heal():
 		return
@@ -177,6 +179,11 @@ func process_heal(delta: float) -> void:
 	owner_body.heal(heal_amount(), true, &"s:evcil_peri") ## kaynaklı: gerçekten basılan can evcil yuvası ipucunda (damage_stats.gd)
 	_play_cast()
 	_broadcast(true)
+
+
+## Sahip güvenli alanda mı (player.gd is_safe_zone_frozen): evcil hayvanlar orada çalışmaz.
+func owner_frozen() -> bool:
+	return is_instance_valid(owner_body) and owner_body.has_method("is_safe_zone_frozen") and owner_body.is_safe_zone_frozen()
 
 
 func owner_needs_heal() -> bool:

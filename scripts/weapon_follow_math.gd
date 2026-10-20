@@ -153,8 +153,9 @@ static func retract_stagger(kind: int) -> float:
 
 
 ## st: {"s": durum, "t": durumun başladığı an (sn), "seen_t": son görüldüğü an}. want = görüşte düşman (ya da silahın hedefi) var.
-## force = başka bir sistem silahı yönetiyor (kubbe, Talon dizilimi, ölüm düşüşü): doğrudan SHOWN.
-static func step_visibility(st: Dictionary, want: bool, force: bool, now: float, kind: int) -> void:
+## force = başka bir sistem silahı yönetiyor (kubbe, Talon dizilimi): doğrudan SHOWN.
+## instant = bekleme payı olmadan hemen çekil (sahibi öldü/yere düştü: silahlar çalıdaki gibi göğse girip kaybolur); want false olmalı.
+static func step_visibility(st: Dictionary, want: bool, force: bool, now: float, kind: int, instant: bool = false) -> void:
 	if not st.has("s"):
 		st["s"] = HIDDEN
 		st["t"] = now
@@ -172,11 +173,14 @@ static func step_visibility(st: Dictionary, want: bool, force: bool, now: float,
 				st["s"] = REVEAL
 				st["t"] = now
 		REVEAL:
-			if now - t0 >= reveal_stagger(kind) + REVEAL_T:
+			if instant and not want:
+				st["s"] = RETRACT ## çıkış yarıda kesilir, hemen içe
+				st["t"] = now
+			elif now - t0 >= reveal_stagger(kind) + REVEAL_T:
 				st["s"] = SHOWN
 				st["t"] = now
 		SHOWN:
-			if not want and now - float(st.get("seen_t", now)) >= HIDE_GRACE:
+			if not want and (instant or now - float(st.get("seen_t", now)) >= HIDE_GRACE):
 				st["s"] = RETRACT
 				st["t"] = now
 		RETRACT:

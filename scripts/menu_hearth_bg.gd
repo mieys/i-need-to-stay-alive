@@ -26,15 +26,7 @@ static func add_to(root: Control, dim: float = 0.0) -> Control:
 	stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(stage)
 	stage.size = MM.SCREEN
-	var bg := TextureRect.new()
-	bg.texture = load("res://assets/ui/ana_menu/ocak_basi.png")
-	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_SCALE
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stage.add_child(bg)
-	bg.position = Vector2.ZERO
-	bg.size = MM.SCREEN
+	stage.add_child(MM.scene_background()) ## ışıksız taban + yumuşak ışık shader'ı (ana menüyle aynı)
 	var fire = MM.SheetAnim.new(load("res://assets/ui/ana_menu/ocak_ates.png"), MM.FIRE_FRAME, MM.FIRE_FRAMES, MM.FIRE_FPS, MM.ART_K)
 	stage.add_child(fire)
 	fire.position = MM.FIRE_POS * MM.ART_K

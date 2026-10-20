@@ -97,6 +97,8 @@ func _process(delta: float) -> void:
 func _process_local(delta: float) -> void:
 	_speed = maxf(MIN_SPEED, SPEED_MULT * (float(owner_body.get_effective_move_speed()) if owner_body.has_method("get_effective_move_speed") else 200.0))
 	var busy: bool = owner_body.get("is_dead") == true or owner_body.get("is_downed") == true or owner_body.get("is_indoors") == true
+	## güvenli alanda (satıcı koruması / demirci) evcil hayvan çalışmaz: sayaçlar donar, gagalayan omuza döner (madde 327)
+	busy = busy or (owner_body.has_method("is_safe_zone_frozen") and owner_body.is_safe_zone_frozen())
 	_net_idle += delta
 	match state:
 		State.PERCH:

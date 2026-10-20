@@ -9,7 +9,7 @@ hover_offset = Vector2(0, -100)
 fan_radius = 46.0
 fire_rate = 1.1111
 damage = 0.0
-card_damage_bonus_ratio = 0.88
+card_damage_bonus_ratio = 1.1
 sprite_forward_angle_deg = -45.25296969572483
 
 [node name="FireTimer" type="Timer" parent="."]

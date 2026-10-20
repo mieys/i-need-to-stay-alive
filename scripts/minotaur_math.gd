@@ -72,6 +72,9 @@ const FEET_OFFSET := 15.0 * EntityScale.BODY_REL ## oyuncu kökünden ayağa (En
 ## Boynuz hücumu (boynuz hücumu + boğa koşusu) isabet hasarı = temas hasarı x bu (kullanıcı 2026-10-10: "hasarını %30 arttır"; normal temas vuruşu aynı).
 const HORN_DAMAGE_MULT := 1.3
 const FLING_DISTANCE := 190.0 ## savrulma mesafesi (px); player.gd BOSS_FLING_MAX_SPEED ile ~196 px'e kadar çıkabilir
+## 2026-10-19 (kullanıcı: "minatour oyunculara çarpıp savurduğunda sersemletsin, 1 saniye boyunca"): savrulma BİTİNCE (yere inince) sayılır,
+## bu sürede oyuncu yürüyemez / yetenek basamaz / silahları ateş etmez; poz downed_<yön> (player.gd apply_stun, _play_cc_anim).
+const FLING_STUN_TIME := 1.0
 const FLING_SIDE_BIAS := 0.9 ## savrulma yönü = hücum yönü + yan bileşen (şeridin hangi tarafındaysa o yana)
 const WALL_MARGIN := 22.0 ## boss merkezi duvar karosuna bu kadar yaklaşmadan durur (gövde yarıçapı ~32)
 const FLING_WALL_MARGIN := 12.0 ## oyuncu merkezi duvardan bu kadar önce durur

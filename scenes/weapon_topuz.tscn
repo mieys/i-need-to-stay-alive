@@ -28,5 +28,5 @@ texture = ExtResource("2")
 
 [node name="AttackSound" type="AudioStreamPlayer2D" parent="."]
 stream = ExtResource("3")
-volume_db = -9.0
+volume_db = -7.0
 max_distance = 1500.0

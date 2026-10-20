@@ -1,5 +1,7 @@
 extends Control
 
+const WeaponScript := preload("res://scripts/weapon.gd")
+
 @onready var speed_value: Label = $Frame/Margin/VBox/GridScroll/Grid/SpeedValue
 @onready var damage_value: Label = $Frame/Margin/VBox/GridScroll/Grid/DamageValue
 @onready var fire_rate_value: Label = $Frame/Margin/VBox/GridScroll/Grid/FireRateValue
@@ -230,7 +232,7 @@ func _refresh() -> void:
 		crit_value.text = "-"
 	shield_protection_value.text = "%%%d" % int(round(player.shield_protection * 100))
 
-	shield_pen_percent_value.text = "%%%d" % int(round(player.shield_pen_percent * 100))
+	shield_pen_percent_value.text = "%%%d" % int(round(effective_shield_pen(player.shield_pen_percent) * 100))
 	exp_gain_value.text = "%%%d" % int(round(GameManager.effective_exp_gain(player.exp_gain_percent) * 100)) ## etkin değer (üst sınır +%100, madde 269)
 	luck_value.text = format_luck(player.luck)
 	range_value.text = "+%%%d" % int(round(player.weapon_range_bonus * 100.0))
@@ -259,6 +261,11 @@ func _refresh_extra_rows() -> void:
 
 
 ## Kesir -> "%X" (küçük değerlerde bir ondalık: %2,5).
+## Kalkan delmenin ETKİN değeri: bir isabette toplam delme weapon.gd SHIELD_PEN_CAP'te (%40) kırpılır; ham stat daha yüksek görünüp yanıltmasın (2026-10-20: ham %96 gösteriliyordu).
+static func effective_shield_pen(raw: float) -> float:
+	return WeaponScript.cap_shield_pen(raw)
+
+
 static func format_percent(v: float) -> String:
 	var pct: float = v * 100.0
 	return ("%%%d" % int(round(pct))) if is_equal_approx(pct, round(pct)) else ("%%%.1f" % pct)
@@ -388,7 +395,7 @@ static func format_luck(points: float) -> String:
 const STAT_TIPS: Dictionary = {
 	"speed": "Hız: Karakterin hareket hızını arttırır.",
 	"damage": "Saldırı Gücü: Tüm silahların verdiği hasarı arttırır.",
-	"fire_rate": "Saldırı Hızı: Tüm silahların saldırı sıklığını arttırır. Seviye kartları, eşyalar ve pasiflerden gelen toplam bonus. En çok %600; aşan her %1, anlık olarak 0.5 saldırı gücü verir.",
+	"fire_rate": "Saldırı Hızı: Tüm silahların saldırı sıklığını arttırır. Seviye kartları, eşyalar ve pasiflerden gelen toplam bonus. En çok %450; aşan her %1, anlık olarak 0.5 saldırı gücü verir.",
 	"shield_protection": "Mana Kalkanı Soğurma: Mana kalkanının hasar emme oranını arttırır.",
 	"crit_chance": "Kritik Oran/Hasar: Kritik vuruş yapma şansını ve kritik hasar çarpanını arttırır.",
 	"shield_pen_percent": "Kalkan Delme: Düşmanların kalkan soğurmasını yüzde olarak yok sayar.",

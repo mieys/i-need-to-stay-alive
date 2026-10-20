@@ -23,9 +23,11 @@ const WarmListScript := preload("res://scripts/fx_warmup_list.gd")
 const ElaraFxScript := preload("res://scripts/elara_fx.gd")
 const HadimeMathScript := preload("res://scripts/hadime_math.gd")
 const TalonDashScript := preload("res://scripts/fx_talon_dash.gd")
+const TreeCrystalGlowScript := preload("res://scripts/mission_tree_crystal_glow.gd") ## görev ağacı kristal maskesi (~7 ms piksel döngüsü, kare başına 1/6'sı)
 
 ## Yeteneklerin ilk kullanımında yeni canvas shader'ı olarak derlenen shader dosyaları (yoksa atlanır).
 const EXTRA_SHADERS: Array[String] = [
+	"res://shaders/oakley_yaprak_halkasi.gdshader", ## Oakley çiçeği Yaprak Halkası (madde 316) - ilk çiçekte derleme takılmasın
 	"res://shaders/talon_form.gdshader",
 	"res://shaders/talon_form_weapon.gdshader",
 	"res://shaders/assasin_ghost.gdshader",
@@ -39,6 +41,7 @@ const EXTRA_SHADERS: Array[String] = [
 	"res://shaders/shield_dome.gdshader",
 	"res://shaders/hit_flash.gdshader",
 	"res://shaders/blood_tint.gdshader",
+	"res://shaders/gokkusagi_isin.gdshader", ## Gökkuşağı Asası ışını: shader ilk ÇİZİMDE derlenir (~20 ms), kaynak listesi bunu ısıtamaz (madde 312)
 ]
 ## Kare başına kaynak yüklemeye ayrılan en çok süre (µs). Bir kaynak ~0,5-6 ms (ses örneği / doku sayfası / FX sahnesi): kare başına 1-2 kaynak, ~2 sn'de biter.
 const LOAD_BUDGET_US := 3000
@@ -52,6 +55,7 @@ static var _next_shader: int = 0
 static var _shader_sources: Array = [] ## ısıtılacak Shader'lar (ilk kare doldurulur)
 static var _stepper: Callable = Callable()
 static var _layer: CanvasLayer = null
+static var _crystal_done: bool = false ## görev ağacı kristal maskeleri hazır (TreeCrystalGlowScript.warm_step)
 
 
 static func run(host: Node) -> void:
@@ -114,7 +118,7 @@ static func _start_background_warmup(tree: SceneTree) -> void:
 				var sh: Shader = load(path) as Shader
 				if sh != null:
 					_shader_sources.append(sh)
-	if _next_shader >= _shader_sources.size() and _next_path >= WarmListScript.PATHS.size():
+	if _next_shader >= _shader_sources.size() and _next_path >= WarmListScript.PATHS.size() and _crystal_done:
 		return
 	_stepper = _step.bind(tree)
 	tree.process_frame.connect(_stepper)
@@ -134,7 +138,9 @@ static func _step(tree: SceneTree) -> void:
 			var r: Resource = load(p)
 			if r != null:
 				_held.append(r)
-	if _next_shader >= _shader_sources.size() and _next_path >= paths.size():
+	if _next_path >= paths.size() and not _crystal_done:
+		_crystal_done = TreeCrystalGlowScript.warm_step()
+	if _next_shader >= _shader_sources.size() and _next_path >= paths.size() and _crystal_done:
 		tree.process_frame.disconnect(_stepper)
 		_stepper = Callable()
 		_shader_sources.clear() ## Shader'lar zaten ilgili sınıflarda/önbellekte tutuluyor

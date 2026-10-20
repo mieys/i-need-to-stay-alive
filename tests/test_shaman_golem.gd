@@ -128,9 +128,9 @@ func test_player_wiring() -> void:
 	assert(src.contains("_shaman_golem_on_go_down()"), "yere düşünce form biter")
 	assert(src.contains("or _shaman_golem_active"), "silahlar golem formunda da çekilir (_vampir_weapons_absorbed)")
 	## (2026-10-11 Melek ulti rework'ü aynı koşula "or _melek_ascending()" ekledi - satır artık ":" ile bitmiyor.)
-	assert(src.contains("or _shaman_golem_jumping or _melek_ascending():") or src.contains("or _shaman_golem_jumping:"), "sıçrayışta hareket kilitli")
+	assert(src.contains("or _shaman_golem_jumping or _melek_ascending()") or src.contains("or _shaman_golem_jumping:"), "sıçrayışta hareket kilitli") ## 2026-10-19: koşula "or is_stunned" eklendi
 	assert(src.contains("func get_hud_skill_override("), "HUD form hâli")
-	assert(src.contains("e.apply_stun(stun)") and src.contains("e.apply_skill_push(center - epos, d - pull_keep)"))
+	assert(src.contains("e.apply_stun(stun)") and src.contains("e.apply_skill_push(center - epos, d - pull_keep, true)")) ## ult=true: golem formu ulti, bossu da çeker (2026-10-19)
 	assert(src.contains("_roll_ability_crit()"), "darbeler kritik vurabilir")
 
 
@@ -178,7 +178,7 @@ class FakeEnemy extends Node2D:
 	func apply_stun(duration: float) -> void:
 		stuns.append(duration)
 
-	func apply_skill_push(dir: Vector2, distance: float) -> void:
+	func apply_skill_push(dir: Vector2, distance: float, _ult: bool = false) -> void:
 		pushes.append([dir, distance])
 
 

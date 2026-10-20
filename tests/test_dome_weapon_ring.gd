@@ -48,7 +48,7 @@ class FakeRemote extends Node2D:
 	func dome_rim_blocked() -> bool:
 		return is_dead
 
-	func set_dome_rim_targets(targets: Array, spin_angles: Array = [], aims: Array = []) -> void:
+	func set_dome_rim_targets(targets: Array, spin_angles: Array = [], aims: Array = [], _fronts: Array = []) -> void:
 		got = targets
 		got_spin = spin_angles
 		got_aims = aims
@@ -72,26 +72,19 @@ func _make_local(pos: Vector2) -> FakeLocal:
 	return p
 
 
-func test_crown_points_are_evenly_spaced_on_a_circle_above_the_dome() -> void:
+## 2026-10-19: taç (madde 218) yerine yine kubbe KENARI - görünür nokta = hedef arama noktası (aim_point), arka yarı kabuğun arkasında.
+func test_rim_points_sit_on_the_dome_edge_like_before() -> void:
 	var c := Vector2(100.0, 50.0)
 	var r: float = 126.0
-	for count: int in [3, 6, 9, 12]:
-		var cc: Vector2 = RingScript.crown_center(c, r, count)
-		var cr: float = RingScript.crown_radius(count)
-		var step: float = 2.0 * cr * sin(PI / float(count)) ## komşu iki nokta arası kiriş
+	for count: int in [1, 3, 6, 12]:
 		for i in range(count):
 			var p: Vector2 = RingScript.rim_point(c, r, i, count)
-			var q: Vector2 = RingScript.rim_point(c, r, (i + 1) % count, count)
-			assert(is_equal_approx(p.distance_to(cc), cr), "nokta taç dairesinde (%d/%d): %s" % [i, count, str(p)])
-			assert(is_equal_approx(p.distance_to(q), step), "komşular EŞİT aralıklı (%d/%d)" % [i, count])
-			assert(p.y < c.y - r, "nokta kubbe tepesinin (merkez - r) üstünde: %s" % str(p))
+			assert(p.is_equal_approx(RingScript.aim_point(c, r, i, count)), "görünür nokta = kenar halkası (%d/%d)" % [i, count])
 			assert(not DomeScript.contains(c, r, p), "zemin elipsinin dışında (boğuk ses yolu): %s" % str(p))
-		assert(cr * TAU / float(count) >= RingScript.CROWN_SPACING - 0.01, "silahlar üst üste binmez (%d)" % count)
-	assert(RingScript.rim_point(c, r, 0, 4).is_equal_approx(RingScript.crown_center(c, r, 4) + Vector2(0.0, -RingScript.crown_radius(4))), "ilk nokta dairenin tepesinde")
+	assert(RingScript.rim_point(c, r, 0, 4).y < c.y and not RingScript.rim_in_front(c, RingScript.rim_point(c, r, 0, 4)), "ilk nokta kuzeyde, kabuğun arkasında")
+	assert(RingScript.rim_in_front(c, RingScript.rim_point(c, r, 2, 4)), "güneydeki nokta kabuğun önünde")
 	var right: Vector2 = RingScript.rim_point(c, r, 1, 4)
-	assert(right.x > c.x and is_equal_approx(right.y, RingScript.crown_center(c, r, 4).y), "saat yönünde ikinci nokta sağda: %s" % str(right))
-	assert(RingScript.rim_point(c, r, 0, 1).is_equal_approx(RingScript.crown_center(c, r, 1)), "tek silah dairenin ortasında")
-	assert(RingScript.crown_radius(12) > RingScript.crown_radius(3), "daire silah sayısıyla büyür")
+	assert(right.x > c.x, "saat yönünde ikinci nokta sağda: %s" % str(right))
 	## Hedef arama noktası eski kenar halkası: kubbe elipsi + RIM_GAP, RIM_LIFT yukarıda.
 	var rr: Vector2 = DomeScript.radii(r) + Vector2(RingScript.RIM_GAP, RingScript.RIM_GAP)
 	for i in range(8):
@@ -113,9 +106,10 @@ func test_weapon_glides_to_the_rim_fires_from_there_and_returns() -> void:
 	assert(w.global_position.distance_to(rim) < 6.0, "silah halka noktasına indi: %s" % str(w.global_position))
 	assert(w.call("is_on_dome_rim"), "halkada")
 	assert((w.call("_attack_origin") as Vector2).is_equal_approx(aim), "taçtaki silah hedefi kenar halkasındaki noktasından arar")
-	assert(not w.z_as_relative and w.z_index == int(w.get("RIM_Z_INDEX")), "taçtaki silah kubbenin ön kabuğunun üstünde çizilir")
-	var sh: Node = w.get("shadow_sprite")
-	assert(sh == null or not (sh as CanvasItem).visible, "taçta yerdeki gölge yok")
+	assert(not w.z_as_relative and w.z_index == int(w.get("RIM_Z_INDEX")), "ön yarıdaki silah kubbenin ön kabuğunun üstünde çizilir")
+	w.call("set_rim_target", rim, aim, false)
+	await get_tree().physics_frame
+	assert(not w.z_as_relative and w.z_index == int(w.get("RIM_BACK_Z_INDEX")), "arka yarıdaki silah kabuğun altında")
 	w.call("set_rim_target", rim)
 	await get_tree().physics_frame
 	assert((w.call("_attack_origin") as Vector2).is_equal_approx(w.global_position), "hedef noktası verilmezse kendi konumu")
@@ -252,4 +246,5 @@ func test_outward_angle_points_away_from_the_dome_center() -> void:
 	for i in range(6):
 		var p: Vector2 = RingScript.rim_point(c, 126.0, i, 6, 0.4)
 		var a: float = RingScript.rim_outward_angle(126.0, i, 6, 0.4)
-		assert(is_equal_approx(angle_difference((p - RingScript.crown_center(c, 126.0, 6)).angle(), a), 0.0), "açı noktanın taç merkezinden yönü: %d" % i)
+		var q: Vector2 = p - c + Vector2(0.0, RingScript.RIM_LIFT)
+		assert(q.dot(Vector2.from_angle(a)) > 0.0, "açı merkezden dışa: %d" % i)

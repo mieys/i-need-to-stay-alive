@@ -139,6 +139,9 @@ var _has_chosen: bool = false
 
 ## Her kartın o anki tier'ı (hover halesi rengi + seçim kutlaması için) ve boşta parlama tween'leri (reroll'da öldürülür).
 var _card_tiers: Array = [1, 1, 1]
+## Kartlardaki yükseltme kimlikleri (otomatik seçim puanı için, auto_pick.gd); evrim modunda boş kalır.
+var _card_ids: Array = ["", "", ""]
+const AutoPick := preload("res://scripts/auto_pick.gd")
 var _shine_tweens: Array = [null, null, null]
 ## Seçim kıvılcımlarının çizildiği, tüm ekranı kaplayan en üst katman (bkz. _ensure_fx_layer).
 var _fx_layer: Control = null
@@ -183,6 +186,9 @@ func _ready() -> void:
 	level_up_sound.pitch_scale = randf_range(0.94, 1.06)
 	level_up_sound.play()
 	_animate_cards_in()
+	## Ayarlar > Otomatik Kart Seçimi: kartlar belirdikten sonra en uygununu kendisi seçer (elle seçim önce gelirse iş yapmaz).
+	if AutoPick.enabled():
+		get_tree().create_timer(AutoPick.DELAY, true).timeout.connect(_auto_pick_best_card)
 	
 	if NetworkManager.is_multiplayer_active:
 		NetworkManager.multiplayer_level_up_timer_tick.connect(_on_level_up_timer_tick)
@@ -297,6 +303,22 @@ func _on_level_up_timer_tick(remaining: float) -> void:
 ## "tıklanmış" gibi davranır - _on_card_pressed ile TAMAMEN aynı akıştan
 ## geçer (upgrade_chosen sinyali, player.apply_upgrade, mark_local_upgrade_
 ## chosen, bekleme durumuna geçiş), tekrar kod yazmaya gerek yok.
+## Otomatik seçim (auto_pick.gd): stat kartında kademe x durum puanı en yüksek kart, evrimde FİNAL önce. Aynı tıklama yolu.
+func _auto_pick_best_card() -> void:
+	if not is_instance_valid(self) or _has_chosen or cards.is_empty():
+		return
+	var pickable: Array = cards.map(func(c): return is_instance_valid(c) and c.visible and not c.disabled)
+	var idx: int
+	if _evo_mode:
+		idx = AutoPick.best_tier_index(_card_tiers, pickable)
+	else:
+		idx = AutoPick.best_upgrade_index(_card_ids, _card_tiers, pickable, get_tree().get_first_node_in_group("player"))
+	if idx < 0:
+		_auto_pick_random_card()
+		return
+	(cards[idx] as Button).pressed.emit()
+
+
 func _auto_pick_random_card() -> void:
 	if _has_chosen or cards.is_empty():
 		return
@@ -449,6 +471,7 @@ func _populate_cards() -> void:
 		UIKit.style_label(title_label, CARD_TIER_FONT_SIZE, UIKit.C_CREAM, 4)
 
 		_card_tiers[i] = tier
+		_card_ids[i] = str(upgrade["id"])
 		_apply_card_tier_frame(card, tier)
 		if _shine_tweens[i] and _shine_tweens[i].is_valid():
 			_shine_tweens[i].kill()
@@ -1039,6 +1062,13 @@ func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
 ## Her seviye atlayışında ekran yeniden oluşturulduğu için sayaç kendiliğinden sıfırlanır.
 const MerchantShopScript := preload("res://scripts/merchant_shop_screen.gd")
 var _rerolls_this_screen: int = 0
+## Kalıcı "Ücretsiz Karıştırma" geliştirmesi KART BAŞINA geçerli: bu ekranda harcanan bedava karıştırma. Ekran her level atlamada
+## yeniden oluşturulduğu için sayaç her kartta sıfırdan başlar (eskiden hak koşu boyunca tek seferdi, GameManager.free_rerolls_left).
+var _free_rerolls_used: int = 0
+
+
+func _free_rerolls_left() -> int:
+	return maxi(GameManager.free_rerolls_per_card - _free_rerolls_used, 0)
 
 
 func _reroll_cost() -> int:
@@ -1153,8 +1183,8 @@ func _apply_kit_style() -> void:
 
 
 func _refresh_reroll_button() -> void:
-	## Kalıcı "Ücretsiz Karıştırma" geliştirmesi (Ruh Mağazası): koşuda bir kez bedava.
-	if GameManager.free_rerolls_left > 0:
+	## Kalıcı "Ücretsiz Karıştırma" geliştirmesi (Ruh Mağazası): her level atlama kartında bir kez bedava.
+	if _free_rerolls_left() > 0:
 		reroll_button.text = "Karıştır\nÜCRETSİZ" if MobileUIScript.enabled else "Yeniden Karıştır (ÜCRETSİZ)"
 		reroll_button.disabled = false
 		return
@@ -1164,7 +1194,9 @@ func _refresh_reroll_button() -> void:
 
 
 func _on_reroll_pressed() -> void:
-	if not GameManager.try_use_free_reroll():
+	if _free_rerolls_left() > 0:
+		_free_rerolls_used += 1
+	else:
 		var cost: int = _reroll_cost()
 		if GameManager.gold < cost:
 			return

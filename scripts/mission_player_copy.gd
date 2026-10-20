@@ -55,6 +55,7 @@ const SHIELD_REGEN_PER_SEC := 0.05
 ## kopya oyuncuyla birlikte güçlenir).
 const MELEE_REACH := 62.0
 const UZUNKILIC_REACH := 115.0 ## weapon.gd _ready: uzunkılıç attack_range = 115
+const MIZRAK_REACH := 150.0 ## weapon.gd MIZRAK_RANGE (madde 305)
 const DEFAULT_RANGED_RANGE := 260.0 ## sahnede attack_range = 0 (sınırsız) olan menzilli silahlar için
 const BOLT_SPEED := 340.0 ## mission_copy_bolt.gd SPEED ile aynı
 const AIM_LEAD := 0.6 ## hedefin hızına göre önden nişan oranı (1 = kusursuz; <1 = kaçılabilir)
@@ -103,7 +104,7 @@ const BalanceLogScript := preload("res://scripts/balance_log.gd")
 const DamageNumbersScript := preload("res://scripts/damage_numbers.gd")
 const WeaponTierArtScript := preload("res://scripts/weapon_tier_art.gd")
 const WAND_SCALE_MULT := 0.3 ## remote_player.gd REMOTE_WAND_SCALE_MULT ile aynı
-const MELEE_KEYS := ["dagger", "pence", "topuz", "uzunkilic"]
+const MELEE_KEYS := ["dagger", "pence", "topuz", "uzunkilic", "mizrak", "kalkan"]
 const AIM_EASE_RATE := 10.0
 const RECOIL_DISTANCE := 10.0
 const HOVER_BOB := 3.0
@@ -272,6 +273,8 @@ func set_weapon_keys(keys: Array) -> void:
 		var reach: float = MELEE_REACH
 		if key == "uzunkilic":
 			reach = UZUNKILIC_REACH
+		elif key == "mizrak":
+			reach = MIZRAK_REACH
 		elif not is_melee:
 			var ar: float = float(root.get("attack_range")) if "attack_range" in root else 0.0
 			reach = ar * 0.9 if ar > 0.0 else DEFAULT_RANGED_RANGE
@@ -959,7 +962,7 @@ func apply_root(duration: float, _style: int = 0) -> void: ## _style: enemy.gd i
 	apply_element("slow", {"pct": 0.9, "dur": duration})
 
 
-func apply_skill_push(dir: Vector2, distance: float) -> void:
+func apply_skill_push(dir: Vector2, distance: float, _ult: bool = false) -> void:
 	apply_knockback_distance(dir, distance)
 
 

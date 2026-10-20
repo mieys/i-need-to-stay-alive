@@ -125,13 +125,14 @@ func test_inventory_utility_slots_capped_at_two() -> void:
 		"En az bir islevsellik anahtari (spray) tanimli olmali")
 
 
+## 2026-10-20 (madde 341): masaüstü "Kahraman Çantası"nda İşlevsellik yuvaları yok (Sprey hiçbir dükkanda satılmıyor) - donanım
+## = Mana Kalkanı + evcil hayvan yuvası (her biri düğme + 2 yazı). Telefon (eski yuva düzeni) hâlâ 1 kalkan + 2 işlevsellik.
 func test_inventory_panel_creates_two_utility_buttons() -> void:
 	var panel: Control = InventoryPanelScene.instantiate()
 	add_child(panel)
 	panel._ready() ## bkz. yukarıdaki "Force ready" notu - equip_grid/main_layout _ready() içinde oluşuyor.
 	panel._refresh_equipments()
 	assert(panel.equip_grid != null, "equip_grid olusmamis")
-	## 1 kalkan + 2 islevsellik = 3 buton
-	assert(panel.equip_grid.get_child_count() == 3,
-		"equip_grid 3 slot (1 kalkan + 2 islevsellik) icermeli, bulunan: %s" % panel.equip_grid.get_child_count())
+	var slots: Array = panel.equip_grid.get_children().filter(func(c: Node) -> bool: return c is Button)
+	assert(slots.size() == 2, "donanım 2 yuva (kalkan + evcil) olmalı, bulunan: %s" % slots.size())
 	panel.queue_free()

@@ -78,6 +78,11 @@ const RETARGET_SEARCH_RADIUS := 280.0
 const TARGET_HIT_COOLDOWN := 1.5
 
 var _damage_bonus: float = 0.0
+## Yetenek evrimleri (madde 348, player.gd _skill_oakley_vines): evrimsiz oyuncuda hepsi eski sabit.
+var _damage_ratio: float = DAMAGE_RATIO ## Dikenli Sarmaşık
+var _root_duration: float = ROOT_DURATION ## Sıkı Dolanma
+var _boss_slow: float = BOSS_SLOW_PERCENT ## Sıkı Dolanma
+var _vuln: float = 0.0 ## Kök Hapishanesi: sabitlenen / yavaşlatılan hedefin alacağı ek hasar oranı (0 = yok)
 var _lifetime_remaining: float = LIFETIME
 var _target: Node2D = null
 ## Pixel tarzı dikenli sarmaşık görseli (bkz. oakley_vine_visual.gd) - eskiden Line2D'ydi; `points` arayüzü aynı kaldı.
@@ -87,8 +92,12 @@ var _wander_point: Vector2 = Vector2.ZERO
 var _has_wander_point: bool = false
 
 
-func setup(caster_damage_bonus: float) -> void:
+func setup(caster_damage_bonus: float, evo: Dictionary = {}) -> void:
 	_damage_bonus = caster_damage_bonus
+	_damage_ratio = float(evo.get("damage_ratio", DAMAGE_RATIO))
+	_root_duration = float(evo.get("root_duration", ROOT_DURATION))
+	_boss_slow = float(evo.get("boss_slow", BOSS_SLOW_PERCENT))
+	_vuln = float(evo.get("vuln", 0.0))
 
 
 func _ready() -> void:
@@ -244,7 +253,7 @@ func _on_hit() -> void:
 	if is_instance_valid(_target) and not bool(_target.get("is_dead")):
 		if _target.has_method("take_damage"):
 			BalanceLogScript.tag(&"s:oakley_sarmasik")
-			_target.call("take_damage", _damage_bonus * DAMAGE_RATIO)
+			_target.call("take_damage", _damage_bonus * _damage_ratio)
 		var is_boss: bool = bool(_target.get("is_boss"))
 		if is_boss:
 			if _target.has_method("apply_slow"):
@@ -253,10 +262,15 @@ func _on_hit() -> void:
 				## "if is_dead or (is_boss and not allow_boss): return" kontrolü
 				## bossu SESSİZCE yavaşlatmıyordu, "bossları sabitleyemez ama
 				## %30 yavaşlatır" isteği hiç çalışmıyordu.
-				_target.call("apply_slow", BOSS_SLOW_PERCENT, ROOT_DURATION, true)
+				BalanceLogScript.on_cc("s:oakley_sarmasik", "slow", _target, _root_duration)
+				_target.call("apply_slow", _boss_slow, _root_duration, true)
 		else:
 			if _target.has_method("apply_root"):
-				_target.call("apply_root", ROOT_DURATION)
+				BalanceLogScript.on_cc("s:oakley_sarmasik", "root", _target, _root_duration)
+				_target.call("apply_root", _root_duration)
+		## Kök Hapishanesi: sabitliyken / yavaşken tüm kaynaklardan ek hasar (enemy.gd "vuln", çok oyunculuda host'a gider).
+		if _vuln > 0.0 and _target.has_method("apply_element"):
+			_target.call("apply_element", "vuln", {"pct": _vuln, "dur": _root_duration})
 		_recent_hits[_target.get_instance_id()] = TARGET_HIT_COOLDOWN
 	## DÜZELTME (kök neden): eskiden burada queue_free() vardı - sarmaşık
 	## isabetten SONRA artık ölmüyor, hemen yeni bir hedef arıyor (bkz.

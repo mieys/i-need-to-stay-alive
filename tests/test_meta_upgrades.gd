@@ -156,18 +156,55 @@ func test_free_reroll_and_revive_are_applied_on_run_reset() -> void:
 	_begin(100000)
 	var saved_revives: int = GameManager.max_revives
 	GameManager.reset()
-	assert(GameManager.max_revives == 3 and GameManager.free_rerolls_left == 0 and GameManager.revives_remaining == 3)
-	assert(not GameManager.try_use_free_reroll())
+	assert(GameManager.max_revives == 3 and GameManager.free_rerolls_per_card == 0 and GameManager.revives_remaining == 3)
 	assert(MetaUpgradesScript.buy("free_reroll") and MetaUpgradesScript.buy("revive"))
 	GameManager.reset()
 	assert(GameManager.max_revives == 4 and GameManager.revives_remaining == 4, "dirilme hakkı +1")
-	assert(GameManager.free_rerolls_left == 1)
-	assert(GameManager.try_use_free_reroll() and not GameManager.try_use_free_reroll(), "bedava karıştırma koşuda tek kez")
+	assert(GameManager.free_rerolls_per_card == 1, "geliştirme kart başına 1 bedava karıştırma verir")
 	assert(GameManager.get_peer_revives(12345) == 3, "bildirilmemiş başka oyuncunun hakkı taban 3")
 	MetaUpgradesScript.reset_all()
 	GameManager.reset()
 	GameManager.max_revives = saved_revives
 	_end()
+
+
+class FakeLevelPlayer extends Node2D:
+	var level: int = 12
+	var luck: float = 0.0
+	var max_health: float = 520.0
+
+	func get_upgrade_count(_id: String) -> int:
+		return 0
+
+
+## Ücretsiz Karıştırma KART BAŞINA: her level atlama ekranında ilk karıştırma bedava, ikincisi altınla; yeni kartta hak yenilenir.
+func test_free_reroll_is_once_per_level_up_card() -> void:
+	var saved_free: int = GameManager.free_rerolls_per_card
+	var saved_gold: int = GameManager.gold
+	var fake := FakeLevelPlayer.new()
+	fake.add_to_group("player")
+	add_child(fake)
+	GameManager.free_rerolls_per_card = 1
+	GameManager.gold = 1000
+	var scene: PackedScene = load("res://scenes/level_up_screen.tscn") as PackedScene
+	var first: CanvasLayer = scene.instantiate()
+	add_child(first)
+	assert(first._free_rerolls_left() == 1, "yeni kartta 1 bedava hak")
+	first._on_reroll_pressed()
+	assert(GameManager.gold == 1000 and first._free_rerolls_left() == 0, "ilk karıştırma bedava ve hak bitti")
+	first._on_reroll_pressed()
+	assert(GameManager.gold < 1000 and first._free_rerolls_left() == 0, "aynı kartta ikinci karıştırma altın harcar")
+	var second: CanvasLayer = scene.instantiate()
+	add_child(second)
+	assert(second._free_rerolls_left() == 1, "bir sonraki level atlama kartında hak yeniden 1")
+	var gold_before: int = GameManager.gold
+	second._on_reroll_pressed()
+	assert(GameManager.gold == gold_before, "yeni kartta ilk karıştırma yine bedava")
+	first.free()
+	second.free()
+	fake.free()
+	GameManager.free_rerolls_per_card = saved_free
+	GameManager.gold = saved_gold
 
 
 func test_player_gets_every_stat_bonus() -> void:

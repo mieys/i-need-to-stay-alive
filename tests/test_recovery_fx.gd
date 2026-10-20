@@ -10,7 +10,6 @@ extends Node
 
 const LIFE_SCENE := "res://scenes/fx_recovery_life.tscn"
 const MANA_SCENE := "res://scenes/fx_recovery_mana.tscn"
-const FLOWER_SCENE := "res://scenes/fx_recovery_life_flower.tscn"
 const RemotePlayerScene: PackedScene = preload("res://scenes/remote_player.tscn")
 
 
@@ -38,7 +37,7 @@ func _make(path: String) -> AnimatedSprite2D:
 
 
 func test_scenes_are_pixel_art_looping_sprites() -> void:
-	for path: String in [LIFE_SCENE, MANA_SCENE, FLOWER_SCENE]:
+	for path: String in [LIFE_SCENE, MANA_SCENE]:
 		var spr: AnimatedSprite2D = _make(path)
 		assert(spr.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST,
 			"%s pixel-art olmalı (NEAREST), bulunan: %s" % [path, spr.texture_filter])
@@ -120,22 +119,34 @@ func test_remote_self_cast_copy_can_be_stopped_by_stop_ally_aura_fx() -> void:
 	rp.queue_free()
 
 
-func test_flower_carries_looping_recovery_fx_until_picked() -> void:
+## 2026-10-19: çiçeğin efekti artık "Yaprak Halkası" (madde 285, oakley_flower_fx.gd): zemin parçası çiçeğin KARDEŞİ (yaratık/oyuncuların altı,
+## madde 284), yapraklar çiçeğin kendisinde (arka yarı _draw, ön yarı FxFront çocuğu); çiçek silinince zemin parçası da gider.
+func test_flower_carries_leaf_halo_until_picked() -> void:
+	var holder := Node2D.new()
+	add_child(holder)
 	var flower := Node2D.new()
 	flower.set_script(load("res://scripts/oakley_flower.gd"))
-	add_child(flower)
+	holder.add_child(flower)
+	flower.global_position = Vector2(100.0, 200.0)
 	flower.call("setup", 50.0, "test_1")
-	var found: AnimatedSprite2D = null
-	for c: Node in flower.get_children():
-		if c is AnimatedSprite2D and c.get_script() == load("res://scripts/fx_recovery_aura.gd"):
-			found = c
-	assert(found != null, "çiçek fx_recovery_aura taşımalı")
-	assert(found.max_lifetime == 0.0, "çiçekteki efekt sınırsız süreli olmalı (alınana kadar)")
-	for i in 100:  ## 10 sn - Melek'in güvenlik süresini aşsa da çiçekteki efekt gitmemeli
-		found._process(0.1)
-	assert(not found.is_queued_for_deletion(), "çiçek alınana kadar efekt kalmalı")
-	flower.call("remove_remotely")  ## alınınca çiçek queue_free olur, çocuğu da onunla gider
-	assert(flower.is_queued_for_deletion(), "çiçek alınınca silinmeli (efekt de onunla gider)")
+	await get_tree().process_frame  ## zemin parçası kare sonunda (call_deferred) kurulur - konum add_child'dan sonra veriliyor
+	var ground: Node2D = flower.get("_ground_fx") as Node2D
+	assert(ground != null and ground.get_script() == load("res://scripts/oakley_flower_fx.gd"), "çiçek zemine Yaprak Halkası havuzu kurmalı")
+	assert(ground.get_parent() == holder, "zemin parçası çiçeğin kardeşi olmalı (çocuğuyken çiçeğin z'siyle oyuncunun üstüne çıkıyordu)")
+	assert(ground.global_position.is_equal_approx(Vector2(100.0, 200.0)), "zemin parçası çiçeğin yerel koordinatında çizer (kök aynı)")
+	assert(ground.z_index == 0, "Main'de z -1 zeminin altına düşer")
+	var front: Node = flower.get_node_or_null("FxFront")
+	assert(front != null and front.get_index() > flower.get_node("AnimatedSprite2D").get_index(), "ön yarı yapraklar sprite'tan sonra çizilmeli")
+	assert(not FileAccess.file_exists("res://scenes/fx_recovery_life_flower.tscn"), "eski Life Recovery çiçek sahnesi kalktı")
+	for i in 100:  ## 10 sn - efekt çiçek alınana kadar kalır
+		flower.call("_process_fx", 0.1)
+	assert(is_instance_valid(ground) and not ground.is_queued_for_deletion(), "çiçek alınana kadar efekt kalmalı")
+	flower.call("remove_remotely")
+	assert(flower.is_queued_for_deletion(), "çiçek alınınca silinmeli")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert(not is_instance_valid(ground), "çiçek silinince zemin parçası da gitmeli")
+	holder.queue_free()
 	var src: String = _strip_comments(_read("res://scripts/oakley_flower.gd"))
 	assert(not src.contains("draw_circle") and not src.contains("draw_arc"),
 		"eski yumuşak vektör halka çiçekten kaldırılmış olmalı (pixel efektle çelişiyordu)")

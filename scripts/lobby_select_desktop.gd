@@ -79,7 +79,7 @@ var _tile: Vector2 = TILE
 var _fs_lab: int = DK.FS_LABEL
 var _fs_small: int = DK.FS_SMALL
 var _prev_k: int = 3
-var _prev_ground: float = 172.0
+var _prev_ground: float = 158.0
 
 
 func build() -> void:
@@ -722,14 +722,16 @@ func _skill_row(tex: Texture2D, key: String, nm: String, desc: String, unlock_lv
 
 ## ------------------------------------------------------------------ sağ: vitrin + sekmeli yükleme
 func _build_right() -> void:
-	var right := DK.box(DK.C_PANEL, DK.C_LINE, 16)
-	var xv := DK.v(12)
+	## 2026-10-19: 17 silahla ızgara 4 satır (124 px karo) -> panel OYUNU BAŞLAT'ın altına taşıyordu; boşluklar sıkıştı
+	## (dolgu 12, aralık 6, vitrin 184, sekme 44, ızgara 6, açıklama 3 satır). Sığma testi: test_start_weapon_pick.gd.
+	var right := DK.box(DK.C_PANEL, DK.C_LINE, 12)
+	var xv := DK.v(6)
 	var hv := DK.h(16)
 	var sc := DK.box(DK.C_INSET, DK.C_LINE, 0)
-	sc.custom_minimum_size = Vector2(200, 200)
+	sc.custom_minimum_size = Vector2(184, 184)
 	sc.add_child(DK.Spot.new(DK.C_SPOT, 0.86))
 	_preview = PreviewScript.new()
-	_preview.custom_minimum_size = Vector2(200, 200)
+	_preview.custom_minimum_size = Vector2(184, 184)
 	sc.add_child(_preview)
 	_preview.set("playing", true)
 	hv.add_child(sc)
@@ -746,7 +748,7 @@ func _build_right() -> void:
 	xv.add_child(hv)
 	var tabs := DK.h(8)
 	for t: Array in [["weapon", "SİLAH"], ["pet", "EVCİL"], ["spirit", "RUHANİ"]]:
-		var tb := DK.btn(t[1], "ghost", DK.FS_BODY, 52, 0)
+		var tb := DK.btn(t[1], "ghost", DK.FS_BODY, 44, 0)
 		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var key: String = t[0]
 		tb.pressed.connect(func() -> void: _set_tab(key))
@@ -756,10 +758,10 @@ func _build_right() -> void:
 	_tab_grid = GridContainer.new()
 	_tab_grid.columns = 5
 	_tab_grid.add_theme_constant_override("h_separation", 10)
-	_tab_grid.add_theme_constant_override("v_separation", 10)
+	_tab_grid.add_theme_constant_override("v_separation", 6)
 	xv.add_child(_tab_grid)
 	xv.add_child(DK.sp(0, 0, false, true))
-	var wd := DK.box(DK.C_INSET, DK.C_LINE, 14)
+	var wd := DK.box(DK.C_INSET, DK.C_LINE, 10)
 	var wdv := DK.v(4)
 	var wh := DK.h(10)
 	_detail_name = DK.lbl("", DK.FS_BODY, DK.C_ACCENT)
@@ -767,8 +769,8 @@ func _build_right() -> void:
 	_detail_cat = DK.lbl("", DK.FS_LABEL, DK.C_DIM)
 	wh.add_child(_detail_cat)
 	wdv.add_child(wh)
-	_detail_desc = DK.wrap("", DK.FS_LABEL, DK.C_DIM, RIGHT.size.x - 32 - 28, 4)
-	_detail_desc.custom_minimum_size.y = 4 * 26
+	_detail_desc = DK.wrap("", DK.FS_LABEL, DK.C_DIM, RIGHT.size.x - 24 - 20, 3)
+	_detail_desc.custom_minimum_size.y = 3 * 26
 	wdv.add_child(_detail_desc)
 	wd.add_child(wdv)
 	xv.add_child(wd)
@@ -825,6 +827,24 @@ func _opt_name(kind: String, key: String) -> String:
 	return SS.skill_name(key)
 
 
+## Seçenek karosu / başlık yuvası ipucundaki fayda metni (ayrıntı sütunuyla aynı kaynak).
+func _opt_desc(kind: String, key: String) -> String:
+	match kind:
+		"weapon":
+			return WC.trait_text(key)
+		"pet":
+			return PC.description(key)
+	return str(SS.get_def(key).get("desc", ""))
+
+
+func _opt_tip(kind: String, key: String) -> String:
+	var tip: String = _opt_name(kind, key)
+	var desc: String = _opt_desc(kind, key)
+	if desc != "":
+		tip += "\n" + desc
+	return tip
+
+
 func _fill_tab() -> void:
 	for c in _tab_grid.get_children():
 		_tab_grid.remove_child(c)
@@ -836,7 +856,7 @@ func _fill_tab() -> void:
 		var b := Button.new()
 		b.custom_minimum_size = _tile
 		DK.style_button(b, "tile_on" if on else ("tile_locked" if lk else "tile"), 4, 4.0)
-		b.tooltip_text = _opt_name(_tab, key) + ("\n" + MP.lock_text(_meta_kind(_tab), key) if lk else "")
+		b.tooltip_text = _opt_tip(_tab, key) + ("\n" + MP.lock_text(_meta_kind(_tab), key) if lk else "")
 		var v := DK.v(2)
 		v.set_anchors_preset(Control.PRESET_FULL_RECT)
 		v.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -911,7 +931,7 @@ func _refresh_loadout_header() -> void:
 		c.queue_free()
 	for kind: String in ["weapon", "pet", "spirit"]:
 		var key: String = _current(kind)
-		_load_icons.add_child(DK.slot(_opt_icon(kind, key), 48, _opt_name(kind, key)))
+		_load_icons.add_child(DK.slot(_opt_icon(kind, key), 48, _opt_tip(kind, key)))
 
 
 ## ------------------------------------------------------------------ başlat / hazır + kilit

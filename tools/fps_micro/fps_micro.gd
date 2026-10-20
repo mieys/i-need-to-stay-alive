@@ -6,9 +6,10 @@ extends SceneTree
 ## Çalıştırma (GERÇEK PENCERE açar, kullanıcının ekranında öne çıkar: önce kullanıcıdan izin al, -AllowWindow şart): powershell -ExecutionPolicy Bypass -File tools/fps_micro/run.ps1 -Mode micro_crowd -AllowWindow -Env "PG_N=200;PG_FIGHT=1"
 ##   (run.ps1 kullanıcı verisini YALITIR: APPDATA geçici klasöre çevrilir; gerçek meta.cfg / records.cfg / kayıtlar bozulmaz. Oyun açıkken ölçme.)
 ## Kipler (PG_MODE): micro_crowd (kalabalık: köprü alanları, derinlik, itme/tik geçişleri, sis, hasar sayıları; PG_FIGHT=1 silahlı savaş, PG_N yaratık),
-##   micro_hit / prof_hit (take_damage parçaları), prof_tick (_ew_tick parçaları + durum dağılımı), prof_depth, micro_lb (betik başına _process/_physics_process
+##   micro_hit / prof_hit (take_damage parçaları), prof_tick (_ew_tick parçaları + durum dağılımı), prof_depth, prof_depth_cpp (madde 286: creature_depth C++ yolu parça parça + C++ <-> eski yol toplamı), micro_lb (betik başına _process/_physics_process
 ##   liderlik tablosu), diff_depth / diff_dn (ESKİ sürüm <-> yeni: eşdeğerlik + süre; eski kopya `git show HEAD:scripts/x.gd > scripts/_old_x.gd` ile GEÇİCİ konur,
 ##   commit etme), ab_weapons / ab_rain (açık/kapalı ardışık A/B), rain_shot (yağmur açık/kapalı görüntü farkı), firstuse (her yeteneğin 1. / 2. basışı kare ms),
+##   prof_fight (FPS turu 4: savaşta uyanık yaratık sınıfları, köprü fazları, uyku geçişleri, olay sayıları, sis öğe maliyeti, hasar sayısı gerçek maliyeti), prof_player (oyuncu _physics_process yardımcıları),
 ##   firstweapon, prof_fog (sis CPU parçaları), warm_vis (ısınma dörtgenlerinin görünür kalıntısı: katman 100 / -100), micro_splash (alan hasarı aday taraması), scale / scale2 / bisect / hitstorm / weapons / chars / status / uiopen / drift (önceki oturumun kipleri). Ortam: PG_TIER, PG_N, PG_HOUR,
 ##   PG_WEATHER (0 açık 1 rüzgarlı 2 yağmur 3 sağanak), PG_NLIST, PG_CHARS, PG_PRELOAD_FILE, PG_POTION (firstuse: Cadı R iksirini 0-4 zorla), PG_CYCLES ... (bkz. kodda _env_int / OS.get_environment).
 ## Sonuç satırları "PG ..." ile başlar (stdout dosyası). Gürültü: aynı koşu içinde karşılaştır; mikro ölçümler ~%2 oynar.
@@ -189,7 +190,7 @@ func _boot(char_id: int, start_weapon: String) -> bool:
 	OS.low_processor_usage_mode_sleep_usec = 0
 	await _wait(2.5)
 	var house: Node = _main.get_node_or_null("HouseInterior")
-	if house and house.has_method("_do_exit_house"):
+	if house and house.has_method("_do_exit_house") and OS.get_environment("PG_INDOOR") != "1": ## PG_INDOOR=1: evin içinde kal (ev içi ışığı, madde 311)
 		house.call("_do_exit_house")
 	await _wait(2.0)
 	_player = _main.get_node_or_null("Player") as Node2D
@@ -294,8 +295,14 @@ func _run() -> void:
 			await _diff_depth()
 		"prof_depth":
 			await _prof_depth()
+		"prof_depth_cpp":
+			await _prof_depth_cpp()
 		"prof_tick":
 			await _prof_tick()
+		"prof_fight":
+			await _prof_fight()
+		"prof_player":
+			await _prof_player()
 		"diff_dn":
 			await _diff_dn()
 		"firstuse":
@@ -1200,6 +1207,57 @@ func _prof_depth() -> void:
 	print("PG PROF depth (us/call, n=%d): chars=%.0f query=%.0f cand_loop=%.0f close_core=%.0f dome=%.0f apply=%.0f | want_avg=%.1f" % [n, t[0] / n, t[1] / n, t[2] / n, t[3] / n, t[4] / n, t[5] / n, t[6] / n])
 
 
+## creature_depth.gd C++ yolunun (madde 280) parça parça maliyeti: karakter toplama / kubbe sorgusu / C++ tarama / uygulama; toplam update_now (C++ yol <-> eski yol).
+func _prof_depth_cpp() -> void:
+	if not await _boot(_char, _loadout[0]):
+		print("PG BOOTFAIL")
+		return
+	await _prepare(false, false)
+	_enemy_target = 0
+	_walk = false
+	await _clear_weapons()
+	var game_cd: Node = _main.get_node("CreatureDepth")
+	game_cd.set_process(false)
+	_spawn_crowd(_n)
+	await _wait(float(_env_int("PG_SETTLE", 14)))
+	var DepthScript: GDScript = load("res://scripts/depth_occluders.gd")
+	var PaladinDome: GDScript = load("res://scripts/paladin_dome.gd")
+	var ew: Object = _main.get_node("EnemyWorldBridge").get("world")
+	var tree: SceneTree = self
+	var cd_script: GDScript = load("res://scripts/creature_depth.gd")
+	var cd: Node = Node.new()
+	cd.set_script(cd_script)
+	_main.add_child(cd)
+	cd.set_process(false)
+	for i in range(30):
+		await physics_frame
+		cd.call("update_now")
+	var t_chars: Array = _t_us(func() -> void: DepthScript.collect_characters(tree), 60)
+	var t_doms: Array = _t_us(func() -> void: PaladinDome.active_domes(tree), 60)
+	var chars: Array[Vector4] = DepthScript.collect_characters(tree)
+	var cxy := PackedFloat64Array()
+	for c in chars:
+		cxy.append(c.x)
+		cxy.append(c.y)
+	var params := PackedFloat64Array([cd_script.SCAN_RADIUS, cd_script.CLOSURE_PAD, cd_script.ABOVE_SKIP, cd_script.HYSTERESIS, DepthScript.BODY_HALF_WIDTH, 24.0])
+	var t_scan: Array = _t_us(func() -> void: ew.call("depth_scan", cxy, [], PackedFloat64Array(), PackedByteArray(), params, false), 60)
+	var res: Array = ew.call("depth_scan", cxy, [], PackedFloat64Array(), PackedByteArray(), params, false)
+	var t_dict: Array = _t_us(func() -> void:
+		var w: Dictionary = {}
+		for n in res:
+			w[n] = true, 60)
+	var t_all: Array = _t_us(func() -> void: cd.call("update_now"), 60)
+	_pr("collect_characters", t_chars)
+	_pr("active_domes", t_doms)
+	_pr("depth_scan (C++, %d istenen)" % res.size(), t_scan)
+	_pr("istenen -> sozluk", t_dict)
+	_pr("update_now TOPLAM (C++ yol, n=%d)" % get_nodes_in_group("enemies").size(), t_all)
+	cd_script.set("_cpp_on", false)
+	var t_old: Array = _t_us(func() -> void: cd.call("update_now"), 60)
+	_pr("update_now TOPLAM (eski GDScript yol)", t_old)
+	cd_script.set("_cpp_on", true)
+
+
 func _prof_tick() -> void:
 	if not await _boot(_char, _loadout[0]):
 		print("PG BOOTFAIL")
@@ -1278,6 +1336,229 @@ func _prof_tick() -> void:
 			if e.is_frozen: pass
 			if e.is_feared: pass
 			if e._abilities_checked: pass, 40), valid.size())
+
+
+## Oyuncunun _physics_process'indeki her yardımcı çağrının savaştaki süresi (medyan us; durumu değiştirmeden dt=0 ile) - FPS turu 4.
+func _prof_player() -> void:
+	if not await _boot(_char, _loadout[0]):
+		print("PG BOOTFAIL")
+		return
+	await _prepare(true)
+	_enemy_target = _n
+	_walk = true
+	await _wait(float(_env_int("PG_SETTLE", 25)))
+	var names: Array = ["_refresh_ui_skill_block", "_refresh_korsan_gold_ap", "_refresh_item_ap_percent", "_update_death_status_fx", "_update_revive_rewind_fx", "_process_vampir", "_process_hadime_visuals", "_process_cadi_visuals", "_process_paladin_levitate", "_process_shaman_golem", "_process_matthew_form", "_process_spirit", "_clamp_to_map_bounds", "_process_mining", "_process_regen", "_process_enemy_burn", "_process_enemy_bleed", "_process_skill", "_process_skill2", "_process_item_shield", "_process_item_passives", "_process_kalkan_yenileme", "_process_healer_heal_tick", "_process_temp_speed_boost", "_process_shield_regen_tick", "_process_paladin_ulti", "_process_elara_evasion", "_update_shield_bubble", "_process_spray", "_process_xp_streak", "_process_character_passive", "_process_korsan_bombs", "_process_pet", "_process_korsan_bombardment", "_process_talon_weapon_salvo", "_process_talon_mirror_form", "_process_assasin_dash2_charges", "_process_shaman_q_charges", "_process_necro_skeleton_cooldown", "_process_necro", "_process_matthew_speed_lines", "_process_buyucu", "_process_hadime", "_process_cadi", "_process_evo", "_process_skill3", "_process_oakley_bond", "_process_damage_redirect_range_check", "_process_paladin_barrier_roster", "_refresh_local_barrier_link_visual", "_process_merchant_zone_state", "_block_movement_into_enemies", "_block_movement_into_blockers", "_block_movement_into_players", "_block_movement_into_terrain", "get_effective_move_speed", "move_and_slide"]
+	var rows: Array = []
+	for nm in names:
+		if not _player.has_method(nm):
+			continue
+		var takes: int = 0
+		for m in _player.get_method_list():
+			if m["name"] == nm:
+				takes = (m["args"] as Array).size()
+				break
+		var r: Array = _t_us(func() -> void:
+			if takes == 1:
+				_player.call(nm, 0.0)
+			else:
+				_player.call(nm), 60)
+		rows.append([r[0], nm, r[1]])
+	var tw: Array = []
+	for i in range(3):
+		tw.append(_t_us(func() -> void: _player.call("_update_walk_sound", true, 0.0), 60))
+	rows.append([tw[1][0], "_update_walk_sound(true,0)", tw[1][1]])
+	rows.append([_t_us(func() -> void: _player.call("_update_facing", Vector2(1, 0)), 60)[0], "_update_facing", 0.0])
+	rows.append([_t_us(func() -> void: _player.call("_update_animation", true), 60)[0], "_update_animation(true)", 0.0])
+	rows.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	var total: float = 0.0
+	for r in rows:
+		total += float(r[0])
+	print("PG PLAYER toplam=%.0f us (%d çağrı, dt=0 medyanları)" % [total, rows.size()])
+	for i in range(mini(24, rows.size())):
+		print("PG PLAYER   %-40s median=%7.1f us  mean=%7.1f" % [rows[i][1], rows[i][0], rows[i][2]])
+
+
+## SAVAŞTA (silahlı oyuncu, PG_N yaratık) uyanık yaratıkların sınıfları: aile + durum başına _ew_tick(0) / _ew_push_state maliyeti (FPS turu 4).
+func _prof_fight() -> void:
+	if not await _boot(_char, _loadout[0]):
+		print("PG BOOTFAIL")
+		return
+	await _prepare(true)
+	_enemy_target = _n
+	_walk = true
+	await _wait(float(_env_int("PG_SETTLE", 25)))
+	var bridge: Node = _main.get_node("EnemyWorldBridge")
+	var groups: Dictionary = {}
+	var total: int = 0
+	for e in (bridge.get("_active") as Array):
+		if not is_instance_valid(e) or e._ew_slot < 0:
+			continue
+		total += 1
+		var fam: String = ("ab:" + str(e._abilities.family)) if e._abilities != null else ("plain:" + str(e.call("creature_family")))
+		var key: String = "%s st%d" % [fam, int(e._state)]
+		if not groups.has(key):
+			groups[key] = []
+		(groups[key] as Array).append(e)
+	print("PG FIGHT awake=%d registered=%d" % [total, int(bridge.get("world").call("get_count"))])
+	var keys: Array = groups.keys()
+	keys.sort()
+	var sum_tick: float = 0.0
+	var sum_push: float = 0.0
+	for key in keys:
+		var arr: Array = groups[key]
+		var r_tick: Array = _t_us(func() -> void:
+			for e in arr:
+				e._ew_tick(0.0), 40)
+		var r_push: Array = _t_us(func() -> void:
+			for e in arr:
+				e._ew_push_state(), 40)
+		sum_tick += r_tick[0]
+		sum_push += r_push[0]
+		print("PG FIGHT %-26s n=%3d  tick(0)=%6.2f us/e  push=%5.2f us/e  (tick sum %6.0f us)" % [key, arr.size(), r_tick[0] / float(arr.size()), r_push[0] / float(arr.size()), r_tick[0]])
+	print("PG FIGHT total tick(0) sum=%.0f us  push sum=%.0f us" % [sum_tick, sum_push])
+	var world: Object = bridge.get("world")
+	var sums: Array = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+	var fr: int = 0
+	var ev0: PackedInt32Array = (bridge.get("event_counts") as PackedInt32Array).duplicate()
+	var st0: Array = [int(bridge.get("stat_sleeps")), int(bridge.get("stat_wakes_ext")), int(bridge.get("stat_wakes_due"))]
+	var dorm_sum: float = 0.0
+	var act_sum: float = 0.0
+	var t_end: int = Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < t_end:
+		await physics_frame
+		sums[0] += float(bridge.get("last_bridge_ms"))
+		sums[1] += float(bridge.get("last_step_ms"))
+		sums[2] += float(bridge.get("last_view_ms"))
+		sums[3] += float(bridge.get("last_tick_ms"))
+		sums[4] += float(bridge.get("last_pre_ms"))
+		sums[5] += float(bridge.get("last_events_ms"))
+		sums[6] += float(bridge.get("last_loop_ms"))
+		dorm_sum += float(bridge.get("dormant_count"))
+		act_sum += float((bridge.get("_active") as Array).size())
+		fr += 1
+	print("PG FIGHT bridge/frame ms: total=%.2f cpp_step=%.2f (view %.2f) gd_events+ticks=%.2f frames=%d" % [sums[0] / fr, sums[1] / fr, sums[2] / fr, sums[3] / fr, fr])
+	print("PG FIGHT dormancy transitions per tick: sleeps=%.2f wakes_external=%.2f wakes_due=%.2f" % [float(int(bridge.get("stat_sleeps")) - st0[0]) / fr, float(int(bridge.get("stat_wakes_ext")) - st0[1]) / fr, float(int(bridge.get("stat_wakes_due")) - st0[2]) / fr])
+	print("PG FIGHT bridge phases ms: pre(grid+targets+extra+push)=%.2f step=%.2f events+sweep+wake=%.2f tick-loop=%.2f" % [sums[4] / fr, sums[1] / fr, sums[5] / fr, sums[6] / fr])
+	var ev1: PackedInt32Array = bridge.get("event_counts")
+	var evs: Array = []
+	for i in range(ev1.size()):
+		evs.append("%d:%.1f/tik" % [i, float(ev1[i] - ev0[i]) / float(fr)])
+	print("PG FIGHT events per tick (0 melee 1 barrier 2 ghost 3 ranged 4 homing 5 taunt 6 loco): %s ; dormant avg=%.0f active avg=%.0f" % [", ".join(evs), dorm_sum / fr, act_sum / fr])
+	## Yetenekli yaratıkların "sessiz bekleme" payı: kalan sessiz süre (sn) dağılımı, 12 örnek x 1 sn
+	var buckets: Dictionary = {}
+	var samples: int = 0
+	for s in range(12):
+		await _wait(1.0)
+		for e in (bridge.get("_active") as Array):
+			if not is_instance_valid(e) or e._ew_slot < 0 or e._abilities == null:
+				continue
+			var ab: RefCounted = e._abilities
+			var fam: String = ab.family
+			var rem: float = 0.0
+			var busy: bool = e._flash_time_left > 0.0 or e.is_frozen or e.is_feared or e.is_stunned or e.ability_move_lock > 0.0 or e._state_duration > 0.0 \
+					or e._overhead_bar_hide_timer > 0.0 or e.burn_time_left > 0.0 or e.mark_stacks > 0 or e.bleed_stacks > 0 or e.shock_time_left > 0.0 \
+					or e._sleep_time > 0.0 or e.chill_stacks > 0 or e._boss_chill_stacks > 0 or e._slow_timer > 0.0 or e._slow_fx_time_left > 0.0 \
+					or e._slow_fx_broadcast_cooldown > 0.0 or e._root_timer > 0.0 or e.is_mad or (e._state != 0 and e._state != 4) \
+					or not e._poison_stack_time.is_empty() or not e._plague.is_empty() or not e._enchant_flags.is_empty() or not e._bee_poison_stacks.is_empty() \
+					or (e.item_shield_max > 0.0 and (e.item_shield_regen_delay > 0.0 or e.item_shield_hp < e.item_shield_max))
+			if fam == "hayalet":
+				rem = ab._timer if e.is_ability_invisible else ab._cd
+			elif fam == "vampire":
+				rem = ab._cd if ab._cd > 0.0 else (ab._vision_check if ab._pending < 0.0 else ab._pending)
+			elif fam in ["rontgen", "iblis", "agac"]:
+				rem = ab._cd
+			else:
+				rem = -1.0 ## boss / minotaur: hızlı yol yok
+			var bk: String = "%s %s %s" % [fam, "BUSY" if busy else "quiet", ("rem<=0" if rem <= 0.0 else ("rem<0.1" if rem < 0.1 else ("rem<0.5" if rem < 0.5 else ("rem<2" if rem < 2.0 else "rem>=2"))))]
+			buckets[bk] = int(buckets.get(bk, 0)) + 1
+			samples += 1
+	## Hangi "meşgul" koşul kaç yetenekli yaratıkta doğru (anlık)
+	var cond: Dictionary = {}
+	var n_ab: int = 0
+	for e in (bridge.get("_active") as Array):
+		if not is_instance_valid(e) or e._ew_slot < 0 or e._abilities == null:
+			continue
+		n_ab += 1
+		var tests: Dictionary = {
+			"flash": e._flash_time_left > 0.0, "frozen": e.is_frozen, "feared": e.is_feared, "stunned": e.is_stunned, "move_lock": e.ability_move_lock > 0.0,
+			"state_duration": e._state_duration > 0.0, "overhead_timer": e._overhead_bar_hide_timer > 0.0,
+			"item_shield": e.item_shield_max > 0.0 and (e.item_shield_regen_delay > 0.0 or e.item_shield_hp < e.item_shield_max), "burn": e.burn_time_left > 0.0,
+			"mark": e.mark_stacks > 0, "bleed": e.bleed_stacks > 0, "shock": e.shock_time_left > 0.0, "sleep": e._sleep_time > 0.0, "chill": e.chill_stacks > 0,
+			"boss_chill": e._boss_chill_stacks > 0, "slow_timer": e._slow_timer > 0.0, "slow_fx": e._slow_fx_time_left > 0.0, "slow_bc": e._slow_fx_broadcast_cooldown > 0.0,
+			"root": e._root_timer > 0.0, "mad": e.is_mad, "state_not_walk_idle": e._state != 0 and e._state != 4, "poison": not e._poison_stack_time.is_empty(),
+			"plague": not e._plague.is_empty(), "enchant": not e._enchant_flags.is_empty(), "bee": not e._bee_poison_stacks.is_empty(),
+		}
+		for k in tests:
+			if tests[k]:
+				cond[k] = int(cond.get(k, 0)) + 1
+	print("PG FIGHT busy-cond (of %d ability creatures now): %s" % [n_ab, str(cond)])
+	var bk_keys: Array = buckets.keys()
+	bk_keys.sort()
+	for k in bk_keys:
+		print("PG FIGHT quiet-dist %-30s %5.1f%%  (avg %.1f creatures)" % [k, 100.0 * float(buckets[k]) / float(samples), float(buckets[k]) / 12.0])
+	## Sisin her karede dolaştığı grupların boyutları (vision_fog.gd HIDEABLE_GROUPS) ve toplam düğüm sayısı
+	var gsz: Array = []
+	for g in ["enemies", "enemy_projectiles", "xp_orbs", "gold_drops", "food_drops", "chest_drops", "magnet_drops", "shield_orb_drops"]:
+		gsz.append("%s=%d" % [g, get_nodes_in_group(g).size()])
+	print("PG FIGHT fog groups: %s ; nodes total=%d" % [", ".join(gsz), int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))])
+	## Sis: yerdeki / mermi öğeleri için GDScript yönetimi (_manage_item) - öğe sayısı, elips içindekiler ve tüm öğeler için tek geçiş süresi
+	var fog: Node = get_first_node_in_group("vision_fog")
+	if fog != null:
+		var items: Array = []
+		for g in ["enemy_projectiles", "xp_orbs", "gold_drops", "food_drops", "chest_drops", "magnet_drops", "shield_orb_drops"]:
+			for it in get_nodes_in_group(g):
+				if it is Node2D:
+					items.append(it)
+		var inside: int = 0
+		for it in items:
+			if float((it as Node).get_meta("vision_fog_vis", 0.0)) > 0.0:
+				inside += 1
+		var r_all: Array = _t_us(func() -> void:
+			for it in items:
+				fog.call("_manage_item", it, 0.016), 30)
+		var r_upd: Array = _t_us(func() -> void: fog.call("update_fog", 0.016), 30)
+		## Işın hızlı retinin (vision_occluders.gd _box_is_clear) gerçek haritada tutma oranı: ızgaranın ortasındaki yarı bölgede rastgele kaynak, <= 400 px rastgele ışın
+		var occ: Variant = fog.get("_occluders")
+		if occ != null and not (occ as RefCounted).call("is_empty"):
+			var go: Vector2i = occ.call("get_grid_origin")
+			var gs: Vector2i = occ.call("get_grid_size")
+			var cs: float = float(occ.call("get_cell_size"))
+			var wo: Vector2 = occ.call("get_world_origin")
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 99
+			var clear_n: int = 0
+			var tot: int = 3000
+			for k in range(tot):
+				var cx: float = float(go.x) + float(gs.x) * rng.randf_range(0.25, 0.75)
+				var cy: float = float(go.y) + float(gs.y) * rng.randf_range(0.25, 0.75)
+				var src: Vector2 = wo + Vector2(cx, cy) * cs
+				var dst: Vector2 = src + Vector2(rng.randf_range(-360.0, 360.0), rng.randf_range(-260.0, 260.0))
+				if occ.call("_box_is_clear", occ.call("world_to_cell_f", src), occ.call("world_to_cell_f", dst)):
+					clear_n += 1
+			print("PG FIGHT raybox hit rate (grid center half, rays <= 360x260 px): %.1f%% of %d" % [100.0 * float(clear_n) / float(tot), tot])
+		print("PG FIGHT fog items: n=%d inside_ellipse=%d ; _manage_item pass (all) median=%.0f us (%.2f us/item) ; update_fog median=%.0f us" % [items.size(), inside, r_all[0], r_all[0] / float(maxi(1, items.size())), r_upd[0]])
+	## Hasar sayıları: savaşta gerçek kayıt sayısı + _process(0) süresi (dt=0: durum değişmez), 240 kare örneği
+	var dnmod: GDScript = load("res://scripts/damage_numbers.gd")
+	var dn: Node2D = dnmod.call("get_instance", self)
+	if dn != null:
+		var ts: Array = []
+		var ns: Array = []
+		for k in range(240):
+			await process_frame
+			var cnt: int = (dn.get("_entries") as Dictionary).size()
+			var t0: int = Time.get_ticks_usec()
+			dn.call("_process", 0.0)
+			ts.append(float(Time.get_ticks_usec() - t0))
+			ns.append(float(cnt))
+		var st: float = 0.0
+		var sn: float = 0.0
+		for k in range(ts.size()):
+			st += ts[k]
+			sn += ns[k]
+		var ts_sorted: Array = ts.duplicate()
+		ts_sorted.sort()
+		print("PG FIGHT damage_numbers._process(0): mean=%.0f us median=%.0f us p90=%.0f us  entries mean=%.0f  (us/entry %.2f)" % [st / ts.size(), ts_sorted[ts.size() / 2], ts_sorted[int(ts.size() * 0.9)], sn / ts.size(), st / maxf(1.0, sn)])
+	print("PG FIGHT world=%s" % str(world))
 
 
 ## ---------------------------------------------------------------- DamageNumbers ESKİ (_old_damage_numbers.gd) <-> YENİ: iki SubViewport'ta aynı olaylar, piksel piksel karşılaştırma
@@ -1852,8 +2133,9 @@ func _draw_sweep() -> void:
 		print("PG BOOTFAIL")
 		return
 	await _prepare(true)
-	_enemy_target = _n
-	_walk = true
+	if OS.get_environment("PG_INDOOR") != "1":
+		_enemy_target = _n
+		_walk = true
 	await _wait(float(_env_int("PG_SETTLE", 25)))
 	var sweep = load("res://tools/fps_micro/draw_sweep.gd").new()
 	await sweep.run(self)

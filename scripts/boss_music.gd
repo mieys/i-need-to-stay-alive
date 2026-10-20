@@ -5,7 +5,8 @@ extends AudioStreamPlayer
 
 ## WAV (kırpılmış, başı/sonu sessizliksiz, içe aktarımda ileri döngü): MP3 kodlayıcı dolgusu döngü başında/sonunda ~0,45 sn boşluk bırakıyordu.
 const MUSIC_PATH := "res://assets/audio/boss_music_haunted_woods.wav"
-const PLAY_DB := -8.0
+## 2026-10-19 (kullanıcı: "boss müziğinin sesini %20 azalt"): eski -8,0 dB x 0,8 genlik (-1,94 dB). Ayarlar'daki Müzik Sesi ayrıca bus'ta uygulanır.
+const PLAY_DB := -9.94
 const SILENT_DB := -60.0
 const FADE_IN_SEC := 1.5
 const FADE_OUT_SEC := 3.0
@@ -21,6 +22,7 @@ func _ready() -> void:
 	if stream_res:
 		stream = stream_res
 	volume_db = SILENT_DB
+	bus = preload("res://scripts/audio_buses.gd").music_bus() ## Ayarlar > Müzik Sesi bu yoldan
 
 
 func _process(delta: float) -> void:

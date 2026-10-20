@@ -16,16 +16,18 @@ const OWNER_ROOT_SCALE := 0.5
 const PUPPET_ICON_SCALE := WORLD_PX / OWNER_ROOT_SCALE
 
 ## Yeni sanatın duruşu (Vector2.angle ölçüsüyle ucun baktığı açı): çapraz çizilenler sol-alt -> sağ-üst (-45), tabanca/tüfek
-## yatay (0), yay dikey kiriş solda (0, ok sağa), bumerang V tepesi yukarıda (-90). Eski sanatın sahne değerleri (Uzunkılıç/Topuz
+## yatay (0), yay dikey kiriş solda (0, ok sağa), bumerang V tepesi yukarıda (-90), kalkan önden dik (0; dönmez, yönlü
+## görünüşü scripts/kalkan_bash_math.gd seçer). Eski sanatın sahne değerleri (Uzunkılıç/Topuz
 ## yatay 0 + dinlenme -90, Tüftüf 134, Fişek -92) bu sanatla geçersiz.
 const FORWARD := {
-	"dagger": -45.0, "uzunkilic": -45.0, "topuz": -45.0, "pence": -45.0,
-	"fire_staff": -45.0, "lightning_staff": -45.0, "arcane": -45.0, "buz_asasi": -45.0,
+	"dagger": -45.0, "uzunkilic": -45.0, "topuz": -45.0, "pence": -45.0, "mizrak": -45.0, "kalkan": 0.0,
+	"fire_staff": -45.0, "lightning_staff": -45.0, "arcane": -45.0, "buz_asasi": -45.0, "gokkusagi": -45.0,
 	"tuftuf": -45.0, "crossbow": -45.0, "fisek": -45.0,
 	"tabanca": 0.0, "tufek": 0.0, "boomerang": -90.0, "yay": 0.0,
+	"yinyang": 0.0, ## açık kitap önden, dik (dönmez - weapon.gd _face_dir)
 }
 ## Dinlenme pozunda ucu yukarı baksın (melee_icon_rest_rotation_deg): çapraz sanat -45 döner.
-const REST := {"uzunkilic": -45.0, "topuz": -45.0}
+const REST := {"uzunkilic": -45.0, "topuz": -45.0, "mizrak": -45.0}
 
 static var _tex_cache: Dictionary = {}
 static var _frames_cache: Dictionary = {}
@@ -34,9 +36,11 @@ static var _frames_cache: Dictionary = {}
 ## Sahne dosyası -> mağaza anahtarı (weapon.gd _ready'de shop_key meta'sı henüz yok: player.gd add_child'dan SONRA atıyor).
 const SCENE_KEYS := {
 	"weapon_dagger": "dagger", "weapon_uzunkilic": "uzunkilic", "weapon_topuz": "topuz", "weapon_pence": "pence",
+	"weapon_mizrak": "mizrak", "weapon_kalkan": "kalkan",
 	"weapon_fire": "fire_staff", "weapon_lightning": "lightning_staff", "weapon_arcane": "arcane", "weapon_buz_asasi": "buz_asasi",
 	"weapon_tabanca": "tabanca", "weapon_tufek": "tufek", "weapon_tuftuf": "tuftuf", "weapon_yay": "yay",
 	"weapon_crossbow": "crossbow", "weapon_boomerang": "boomerang", "weapon_fisek": "fisek",
+	"weapon_gokkusagi": "gokkusagi", "weapon_yinyang": "yinyang",
 }
 
 

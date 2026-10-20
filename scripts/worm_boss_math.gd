@@ -95,6 +95,9 @@ const ACID_HIT_RADIUS := 11.0 ## + oyuncu gövdesi (2026-10-11: 16 -> 11, damla 
 ## KÖK NEDEN: uzuv C++ EnemyWorld'de normal yaratık olarak kayıtlıydı; C++ yapay zekâsı her düşünmede KENDİ hedefine (müttefik/köpek/kışkırtan/baloncuk sahibi dahil) çeviriyor,
 ## worm_limb.gd ise her karede en yakın OYUNCUYA çeviriyordu: iki yazıcı farklı yönler yazınca satır (sağ/sol/üst/alt) kare kare titriyordu. Düzeltme: uzuv C++'ta UYKUYA alınır (set_dormant: hedef/
 ## yön yok), yön SADECE worm_limb.gd'den gelir, tutma süresi + eksen histerezisi ile ve her satır değişimi "worm_face" ile istemcilere de gider.
+## 2026-10-20 ("yeraltı canavarı hala sağa sola döner gibi glitchleniyor"): uyku TEK BAŞINA yetmiyordu - C++ apply_overrides uykudaki yuvaya da "Ağacı Koru" ağacını / kışkırtanı verir, korku yönü
+## her karede yazar, istemci kuklası (step_puppet) ağaca bakar: betik oyuncuya, C++ ağaca çevirip titretiyordu. Düzeltme: C++ `set_face_lock` (yapay zekâ yön yazamaz, yalnız set_face yazar),
+## worm_limb.gd her tikte uyku + kilidi doğrular (yeniden kayıt / dışarıdan uyandırma kilidi bozmasın), geç katılana son yön de gider.
 const FACE_HOLD := 0.35 ## bir yön değişiminden sonra bu kadar süre yeni yön kabul edilmez (saldırı nişanı hariç)
 const FACE_AXIS_HYSTERESIS := 1.35 ## yatay <-> dikey satır değişimi için yeni eksenin baskınlık payı
 const ROW_DOWN := 0 ## enemy.gd ROW_* ile AYNI (aşağı/yukarı/sol/sağ ızgara düzeni)
@@ -136,6 +139,19 @@ static func face_row(dir: Vector2, current_row: int) -> int:
 	if horizontal:
 		return ROW_RIGHT if dir.x > 0.0 else ROW_LEFT
 	return ROW_DOWN if dir.y > 0.0 else ROW_UP
+
+
+## Satırın kendi birim yönü: C++ `set_face` yönden satırı HİSTEREZİSSİZ (|x| > |y|) yeniden hesaplar; histerezisli seçilen satırla köşegen bandında ayrışırdı (ekrandaki satır != betiğin satırı).
+## Bakış her zaman bu kanonik yönle yazılır / istemcilere gider: iki taraf da AYNI satırı gösterir.
+static func row_dir(row: int) -> Vector2:
+	match row:
+		ROW_UP:
+			return Vector2.UP
+		ROW_LEFT:
+			return Vector2.LEFT
+		ROW_RIGHT:
+			return Vector2.RIGHT
+	return Vector2.DOWN
 
 
 ## Uzvun türü: roll 0..1 (asit atan olma şansı SPITTER_CHANCE).

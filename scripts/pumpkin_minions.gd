@@ -10,7 +10,7 @@ extends RefCounted
 
 const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
 
-const BLAST_DAMAGE := 40.0 ## x0,8 kesintisi iptal edildi (32 -> 40). ## 2026-10-11: x0,8 (kullanıcı: "tüm yaratıkların hasarını %20 azalt"), 40 -> 32. 2026-10-10: 20 -> 40 (kullanıcı: "balkabağı bossunun hasarını 2 kat arttır")
+const BLAST_DAMAGE := 80.0 ## 2026-10-19 (kullanıcı: "balkabağı patlaması ve yarasa ısırığı hasarı 2 kat"): 40 -> 80. Eski: x0,8 kesintisi iptal edildi (32 -> 40). ## 2026-10-11: x0,8 (kullanıcı: "tüm yaratıkların hasarını %20 azalt"), 40 -> 32. 2026-10-10: 20 -> 40 (kullanıcı: "balkabağı bossunun hasarını 2 kat arttır")
 const BLAST_RADIUS := 58.0
 const EXPLODE_RANGE := 46.0
 const FUSE := 0.5

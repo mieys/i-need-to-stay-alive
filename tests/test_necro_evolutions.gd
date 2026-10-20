@@ -22,7 +22,7 @@ class FakeEnemy extends Node2D:
 	func take_damage(amount: float, _is_crit: bool = false, _pen: float = 0.0, _area: bool = false) -> void:
 		hits.append(amount)
 
-	func apply_skill_push(dir: Vector2, dist: float) -> void:
+	func apply_skill_push(dir: Vector2, dist: float, _ult: bool = false) -> void:
 		pushes.append([dir, dist])
 
 	func apply_taunt(duration: float, taunter: Node2D = null) -> void:

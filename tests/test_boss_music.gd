@@ -42,6 +42,14 @@ func test_music_file_loads_and_loops() -> void:
 	_cleanup()
 
 
+## 2026-10-19: boss müziği %20 kısıldı (genlik x0,8) ve Ayarlar > Müzik Sesi'nin "Music" bus'ından çalar.
+func test_boss_music_is_20_percent_quieter_and_on_music_bus() -> void:
+	var m := _music()
+	assert(absf(MusicScript.PLAY_DB - (-8.0 + linear_to_db(0.8))) < 0.01, "PLAY_DB: %s" % str(MusicScript.PLAY_DB))
+	assert(m.bus == &"Music", "müzik bus'ı: %s" % str(m.bus))
+	_cleanup()
+
+
 func test_plays_only_while_a_boss_is_alive() -> void:
 	var m := _music()
 	m._process(1.0)

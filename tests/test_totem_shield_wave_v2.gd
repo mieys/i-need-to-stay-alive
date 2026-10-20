@@ -36,8 +36,8 @@ func test_shield_logic_untouched() -> void:
 	# Kalkan hesabı AYNEN duruyor mu? (SELF_PERCENT %0.5 + ATTACK_POWER_RATIO %10)
 	assert(src.contains("const SELF_PERCENT := 0.005"), "SELF_PERCENT değişmemeli")
 	assert(src.contains("const ATTACK_POWER_RATIO := 0.07"), "ATTACK_POWER_RATIO (2026-10-10: %12 -> %7) değişmemeli")
-	assert(src.contains("caster.heal_shield(self_amount)"), "kendi kalkanı heal_shield üzerinden verilmeli")
-	assert(src.contains("caster._apply_shield_heal_to_ally(ally, ally_amount)"), "ally kalkanı _apply_shield_heal_to_ally üzerinden verilmeli")
+	assert(src.contains("caster.heal_shield(self_amount"), "kendi kalkanı heal_shield üzerinden verilmeli (madde 287: kaynak etiketiyle)")
+	assert(src.contains("caster._apply_shield_heal_to_ally(ally, ally_amount"), "ally kalkanı _apply_shield_heal_to_ally üzerinden verilmeli")
 	assert(src.contains("super(delta)"), "TotemBase._process'e super edilmeli (tick döngüsü korunmalı)")
 	# Dalga bölümü _tick İÇİNDE değil, ayrı bir kozmetik fonksiyonda mı?
 	var tick_start: int = src.find("func _tick()")

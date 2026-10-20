@@ -387,10 +387,12 @@ const DEFS := {
 		"portrait": "res://assets/characters/sovalye_portrait.png",
 		## Kullanıcı isteği (2026-09-23, new characters.zip #2) - bkz. Matthew DEFS'indeki
 		## AYNI notun üstündeki gerekçe (ölçüm: OLCU idle_down govde 16x33, ayak satiri 40).
-		"scale": Vector2(2.2368375, 2.2368375),
+		## Kullanıcı isteği (2026-10-20): "şovalye adamın boyutunu %10 arttır" - scale x1.1 (2.2368375 -> 2.46052125); Matthew'in %10
+		## büyütmesindeki gerekçeyle gölge (ground_shadow/ground_shadow_y, ekran pikseli) de AYNI x1.1 ile büyüdü (ayak çizgisi 1.1 kat aşağı iner).
+		"scale": Vector2(2.46052125, 2.46052125),
 		"offset": Vector2(0, -1.8),
-		"ground_shadow": Vector2(17.5, 6.25),
-		"ground_shadow_y": 32.5,
+		"ground_shadow": Vector2(19.25, 6.875),
+		"ground_shadow_y": 35.75,
 		"run_speed_ratio": 1.15,
 	},
 	8: {
@@ -798,7 +800,7 @@ const DEFS := {
 		"skill2_icon": "res://assets/skills/cadi_supurge_icon.png",
 		"skill3": 53,
 		"skill3_name": "İksir Çantası",
-		"skill3_desc": "ULTİ: 5 yükü vardır (yük başına 8sn bekleme). Her yük rastgele bir iksir fırlatır - sıradaki iksir ikonda görünür. Şişe kırıldığı yerde 6 saniyelik bir alan açar: Delilik (yaratıklar 4sn birbirine saldırır), Don (2sn dondurur, %100 saldırı gücü hasar), Patlama (alan açmaz, %200 hasar), Şifa (üstündeki müttefikler saniyede %20 can yeniler), Korku (2sn korkutur, %100 hasar). Saldırı iksirleri en kalabalık yaratık kümesine, şifa canı en az müttefike atılır.",
+		"skill3_desc": "ULTİ: 5 yükü vardır (yük başına 8sn bekleme). Her yük rastgele bir iksir fırlatır - sıradaki iksir ikonda görünür. Şişe kırıldığı yerde 6 saniyelik bir alan açar: Delilik (yaratıklar 4sn birbirine saldırır), Don (2sn dondurur, %100 saldırı gücü hasar), Patlama (alan açmaz, %200 hasar), Şifa (üstündeki müttefikler saniyede %20 can yeniler), Korku (2sn korkutur, %100 hasar), Kalkan (üstündeki müttefikler saniyede %25 mana kalkanı yeniler). Saldırı iksirleri en kalabalık yaratık kümesine, şifa canı, kalkan iksiri mana kalkanı en az müttefike atılır.",
 		"skill3_icon": "res://assets/skills/cadi_iksir_icon.png",
 		"passive": "Şans Tılsımı: Eksik her %5 canı için 1 şans kazanır.",
 		"passive_icon": "res://assets/skills/cadi_passive_icon.png",
@@ -832,6 +834,8 @@ const MAIN_WEAPON := {
 		"res://assets/audio/assasin_swing2.mp3",
 		"res://assets/audio/assasin_swing3.mp3",
 	],
+	## 2026-10-19 ("sesi düşük olan silahların sesini arttır"): -12 (varsayılan) -> -9 dB; ölçüm: etkin kısa süreli RMS -26,5 -> -23,5 (3 ses zincir).
+	"attack_sound_volume_db": -9.0,
 	## 2026-10-17 (madde 231): bıçak artık bu efekti KULLANMIYOR - weapon.gd _start_dagger_stab kendi saplama efektini
 	## (scenes/fx_dagger_stab.tscn, dagger_stab_math.gd) çıkarır; değer configure_melee imzası için duruyor.
 	"slash_fx": "res://scenes/fx_assasin_slash.tscn",

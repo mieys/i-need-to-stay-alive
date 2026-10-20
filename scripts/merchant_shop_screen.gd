@@ -794,6 +794,10 @@ func _refresh_details() -> void:
 			if int(idx) >= 0 and int(idx) < GameManager.owned_items.size():
 				consumed.append(Items.item_name(str((GameManager.owned_items[int(idx)] as Dictionary).get("key", ""))))
 		note = ("Tüketilir: " + ", ".join(consumed)) if not consumed.is_empty() else "Ziyaret başına her eşyadan 1 tane alınır."
+		## Aynı parçanın her kopyası fiyatı artırır (Items.repeat_mult): sebebini söyle ki fiyat sıçraması şaşırtmasın.
+		var copies: int = Items.part_copies(key, GameManager.owned_items)
+		if copies > 0 and consumed.is_empty():
+			note = "Çantanda %d tane var: fiyat +%%%d. " % [copies, int(round((Items.repeat_mult(key, GameManager.owned_items) - 1.0) * 100.0))] + note
 		_set_action_button("SATILDI" if sold else "SATIN AL", "" if sold else str(cost), "primary", _entry_can_buy(entry, _selected_index))
 	## Alınamıyorsa sebep (kırmızı) not yerine yazılır.
 	_details_note.text = block if block != "" else note

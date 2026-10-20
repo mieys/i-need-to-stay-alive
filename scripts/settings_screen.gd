@@ -423,6 +423,7 @@ func _reset_category() -> void:
 			UISound.set_camera_shake_percent(100.0)
 			UISound.set_ui_anim_enabled(true)
 			UISound.set_show_fps(false)
+			UISound.set_auto_pick_cards(false)
 		Cat.GRAFIK:
 			UISound.set_gfx_preset(UISound.GfxPreset.HIGH)
 			UISound.set_fps_limit(UISound._default_fps_limit())
@@ -433,6 +434,7 @@ func _reset_category() -> void:
 			UISound.set_touch_vibration(true)
 		Cat.SES:
 			UISound.set_master_volume_percent(100.0)
+			UISound.set_music_volume_percent(100.0)
 	_sync_all()
 	UISound.play_click()
 
@@ -587,10 +589,14 @@ func _build_genel() -> void:
 		_toggle_row("ui_anim", "Arayüz Animasyonları", func() -> bool: return UISound.ui_anim_enabled,
 				func(on: bool) -> void: UISound.set_ui_anim_enabled(on))
 		_toggle_row("fps", "FPS Göstergesi", func() -> bool: return UISound.show_fps, func(on: bool) -> void: UISound.set_show_fps(on))
+		_toggle_row("auto_pick", "Otomatik Kart Seçimi", func() -> bool: return UISound.auto_pick_cards,
+				func(on: bool) -> void: UISound.set_auto_pick_cards(on))
 		return
 	_section("SES")
 	_slider_row("volume", "Oyun Sesi", 0.0, 100.0, 5.0, func() -> float: return UISound.master_volume_percent,
 			func(v: float) -> void: UISound.set_master_volume_percent(v), _pct, 1.0)
+	_slider_row("music", "Müzik Sesi", 0.0, 100.0, 5.0, func() -> float: return UISound.music_volume_percent,
+			func(v: float) -> void: UISound.set_music_volume_percent(v), _pct, 1.0)
 	_section("EKRAN")
 	_toggle_row("fullscreen", "Tam Ekran", func() -> bool: return UISound.is_fullscreen,
 			func(on: bool) -> void: UISound.set_fullscreen(on))
@@ -605,6 +611,10 @@ func _build_genel() -> void:
 			func(v: float) -> String: return "Kapalı" if roundi(v) == 0 else _pct(v))
 	_toggle_row("ui_anim", "Arayüz Animasyonları", func() -> bool: return UISound.ui_anim_enabled,
 			func(on: bool) -> void: UISound.set_ui_anim_enabled(on))
+	## Level atlama / sandık kartını kendiliğinden seçer (afk oyuncu arkadaşlarını bekletmesin; auto_pick.gd).
+	_section("OYUN")
+	_toggle_row("auto_pick", "Otomatik Kart Seçimi", func() -> bool: return UISound.auto_pick_cards,
+			func(on: bool) -> void: UISound.set_auto_pick_cards(on))
 
 
 func _build_grafik() -> void:
@@ -660,6 +670,8 @@ func _build_dokunmatik() -> void:
 func _build_ses() -> void:
 	_slider_row("volume", "Oyun Sesi", 0.0, 100.0, 5.0, func() -> float: return UISound.master_volume_percent,
 			func(v: float) -> void: UISound.set_master_volume_percent(v), _pct, 1.0)
+	_slider_row("music", "Müzik Sesi", 0.0, 100.0, 5.0, func() -> float: return UISound.music_volume_percent,
+			func(v: float) -> void: UISound.set_music_volume_percent(v), _pct, 1.0)
 
 
 func _build_tuslar() -> void:

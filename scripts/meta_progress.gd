@@ -58,7 +58,7 @@ const STARTERS := {
 const COSTS := {
 	CHAR: {3: 250, 5: 250, 8: 300, 9: 300, 10: 350, 11: 350, 12: 350, 13: 400, 14: 400, 15: 450},
 	WEAPON: {"fire_staff": 120, "lightning_staff": 120, "tuftuf": 140, "tufek": 140, "arcane": 160, "crossbow": 160,
-		"boomerang": 120, "buz_asasi": 180, "fisek": 180, "pence": 100, "topuz": 140},
+		"boomerang": 120, "buz_asasi": 180, "fisek": 180, "pence": 100, "topuz": 140, "gokkusagi": 180, "mizrak": 160, "kalkan": 160, "yinyang": 180},
 	PET: {"papagan": 120, "kelebek": 150, "peri": 180, "kirpi": 150},
 	SPIRIT: {"taktik": 150, "dukkan": 150, "savas_sevki": 200, "kalkan_bagi": 200},
 }

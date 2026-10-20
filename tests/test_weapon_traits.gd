@@ -18,9 +18,13 @@ const EXPECTED := {
 	"fire_staff": "ates_nefesi", "lightning_staff": "zincir_yildirim", "tabanca": "seri_parmak", "tuftuf": "bulasici_salgi",
 	"tufek": "delici_mermi", "arcane": "yankilanan_buyu", "yay": "uclu_ok", "crossbow": "zincir_civata",
 	"boomerang": "cifte_donus", "buz_asasi": "kirik_buz", "fisek": "kivilcim_yagmuru",
+	"mizrak": "cirit", ## madde 305 (öneri kullanıcıya sunuldu, onaylandı)
+	"gokkusagi": "goz_kamastiran", ## madde 306 (Gökkuşağı Asası, öneri onaylandı)
+	"kalkan": "siper", ## madde 338 (Kalkan, öneri kişisel + sabit kalkanla onaylandı)
+	"yinyang": "denge", ## madde 334 (Yin Yang Kitabı, öneri menzilsiz kalkanla onaylandı)
 }
 const NEW_IDS := ["kanayan_kesikler", "kanli_pence", "zincir_yildirim", "seri_parmak", "bulasici_salgi", "delici_mermi", "yankilanan_buyu",
-	"uclu_ok", "zincir_civata", "cifte_donus", "kirik_buz", "kivilcim_yagmuru"]
+	"uclu_ok", "zincir_civata", "cifte_donus", "kirik_buz", "kivilcim_yagmuru", "cirit", "siper", "denge"]
 const RUN_TIME := 4.0
 const ENEMY_HP := 60000.0
 
@@ -121,6 +125,18 @@ func test_blacksmith_upgrade_rules_prices_and_final_gate() -> void:
 	assert(Logic.buy_wupgrade(null, 0, 4) and EnchantDefs.is_complete(Logic.slot_enchant(0)), "final alınır")
 	assert(GameManager.gold == 5000 - 100 - 130 - 160 - 190 - 400 and GameManager.weapon_shards == 100 - 5 * 4 - 10, "toplam maliyet: %d / %d" % [GameManager.gold, GameManager.weapon_shards])
 	assert(not Logic.buy_wupgrade(null, 0, 4), "final bir kez")
+	## Final sonrası güçlendirme (madde 297): sınırsız, fiyat 150 + 50 x alınan, 3 parçacık, parçacık defterine yazılır.
+	var g0: int = GameManager.gold
+	var s0: int = GameManager.weapon_shards
+	var spent0: int = int(GameManager.owned_weapons[0].get("shards_spent", 0))
+	for i in range(6):
+		assert(Logic.wplus_price(0) == 150 + 50 * i, "güçlendirme %d fiyatı %d" % [i, Logic.wplus_price(0)])
+		assert(Logic.buy_wplus(null, 0), "güçlendirme %d alınır (sınır yok)" % i)
+	assert(Logic.wplus_count(0) == 6 and EnchantDefs.plus_count(Logic.slot_enchant(0)) == 6, "6 güçlendirme kayıtta")
+	assert(GameManager.gold == g0 - (150 + 200 + 250 + 300 + 350 + 400) and GameManager.weapon_shards == s0 - 18, "güçlendirme maliyeti: %d / %d" % [GameManager.gold, GameManager.weapon_shards])
+	assert(int(GameManager.owned_weapons[0]["shards_spent"]) == spent0 + 18, "parçacık defteri (satış iadesi)")
+	GameManager.owned_weapons.append(EnchantDefs.new_weapon_entry("tabanca", 1, 0))
+	assert(Logic.wplus_block_reason(1).begins_with("Önce") and not Logic.buy_wplus(null, 1), "final alınmadan güçlendirme yok")
 	## Çözülen istatistikler gerçekten yükseldi (dört geliştirme + final).
 	var st: Dictionary = EnchantDefs.resolve(Logic.slot_enchant(0), "dagger")
 	assert(is_equal_approx(float(st["kb_ap"]), 0.08) and int(st["kb_cap"]) == 8 and int(st["kb_combo"]) == 2 and bool(st["kb_spread"]), "geliştirmeler + final uygulandı: %s" % str(st))
@@ -226,6 +242,8 @@ func _run_trait(key: String) -> Dictionary:
 			st[k] = 1.0
 	if st.has("echo_pity"):
 		st["echo_pity"] = 1
+	if st.has("cirit_every"):
+		st["cirit_every"] = 1 ## her saplama cirit (4 sn içinde ~3 saldırı)
 	var hp_each: float = 1.0 if id == "seri_parmak" else ENEMY_HP
 	var enemies: Array = []
 	var line_mode: bool = key in ["crossbow", "tufek", "tabanca", "yay"]
@@ -306,6 +324,18 @@ func _run_trait(key: String) -> Dictionary:
 		"kivilcim_yagmuru":
 			if _trace_nodes <= 0:
 				fails.append("kıvılcım yağmuru izi yok")
+		"cirit":
+			notes += " cirit=%d" % int(beh.get("throws"))
+			if attacks >= 1 and int(beh.get("throws")) < 1:
+				fails.append("cirit hiç fırlatılmadı (%d saldırı)" % attacks)
+		"siper":
+			notes += " darbe=%d kalkan=%.0f" % [int(beh.get("bashes")), float(beh.get("gained"))]
+			if attacks >= 1 and int(beh.get("bashes")) < 1:
+				fails.append("kalkan darbesi Siper'e hiç ulaşmadı (%d saldırı)" % attacks)
+		"denge":
+			notes += " isabet=%d" % int(beh.get("_hits"))
+			if attacks >= 1 and int(beh.get("_hits")) < 1:
+				fails.append("kara küre isabeti Denge'ye hiç ulaşmadı (%d saldırı)" % attacks)
 		"ates_nefesi", "sismik_dalga", "wind_sword":
 			pass ## kart döneminden kalan davranışlar (test_new_enchants duman testi ayrıntılı)
 	## Temizlik.
@@ -421,15 +451,83 @@ func test_kanli_pence_heals_on_first_hit_and_bleed_does_not_stack() -> void:
 	p.max_health = 5000.0
 	p.health = 1000.0
 	beh.call("on_hit", e, 100.0, true, null)
-	assert(absf(float(p.health) - 1000.0 - 6.0 * mult) < 0.01, "yeni hedefe ilk vuruşta %%6 can: %.2f" % (float(p.health) - 1000.0))
+	assert(absf(float(p.health) - 1000.0 - 1.0 * mult) < 0.01, "yeni hedefe ilk vuruşta %%1 can (2026-10-19): %.2f" % (float(p.health) - 1000.0))
 	beh.call("on_hit", e, 100.0, true, null)
 	assert(int(beh.call("dot_stacks", e)) == 1, "kanama birikmez (tek yük)")
 	var rec: Dictionary = (beh.get("_dots") as Dictionary)[e.get_instance_id()]
-	assert(is_equal_approx(float(rec["dps"]), float(beh.call("ap")) * 0.20), "kanama saldırı gücünün %%20'si/sn: %.2f" % float(rec["dps"]))
+	assert(is_equal_approx(float(rec["dps"]), float(beh.call("ap")) * 0.30), "kanama saldırı gücünün %%30'u/sn: %.2f" % float(rec["dps"]))
 	var h0: float = float(p.health)
 	beh.call("on_hit", other, 100.0, false, null)
-	assert(absf(float(p.health) - h0 - 6.0 * GameManager.LIFESTEAL_EFFECTIVENESS * mult) < 0.01, "alan payında can emme %%33")
+	assert(absf(float(p.health) - h0) < 0.01, "alan payı vuruşunda Kanlı Pençe can emmesi yok (2026-10-19)")
 	for n in [p, e, other]:
+		if is_instance_valid(n):
+			n.free()
+	GameManager.owned_weapons = _saved_weapons
+	if prev_scene != null and is_instance_valid(prev_scene) and prev_scene.get_parent() == get_tree().root:
+		get_tree().current_scene = prev_scene
+
+
+## 2026-10-19 (kullanıcı: "pençe hala çok can çalıyor" -> "sınırları kaldırıp oranları düşür"): can emme %3 -> %1, saniyelik sınır YOK (art arda
+## vuruşlar hep can basar). Kanama tikleri genel can çalma zarı atmaz (kanayan her yaratık 0,5 sn'de bir zar atıyordu). Final: azami canın %0,5'i, sınırsız
+## ama kurban başına tek ödül (kp_kill olayı + kanama tikinin ölü kurbanı bulması aynı ölümdür).
+func test_kanli_pence_leech_has_no_cap_and_bleed_ticks_roll_no_lifesteal() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	NetworkManager.is_multiplayer_active = false
+	GameManager.selected_char_id = 1
+	GameManager.selected_character = int(Characters.DEFS[1]["skill"])
+	_saved_weapons = GameManager.owned_weapons.duplicate(true)
+	GameManager.owned_weapons = [EnchantDefs.new_weapon_entry("pence", 1, 0)]
+	var p: Node2D = PlayerScene.instantiate()
+	add_child(p)
+	for w in p.owned_weapon_nodes.duplicate():
+		if is_instance_valid(w):
+			w.queue_free()
+	p.owned_weapon_nodes.clear()
+	p.global_position = Vector2(3000.0, 3000.0)
+	assert(p.buy_weapon_copy("pence", 1))
+	var beh: Node = p.owned_weapon_nodes[0].get("enchant_behavior")
+	var e: Node2D = _make_enemy(Vector2(3060.0, 3000.0), ENEMY_HP)
+	await get_tree().physics_frame
+	var mult: float = float(p.call("heal_power_mult"))
+	p.max_health = 1000.0
+	p.health = 100.0
+	beh.call("on_hit", e, 100000.0, true, null) ## %1 = 1000 can: sınır yok, azami canı (1000) aşmayana dek tamamı basılır
+	var gained: float = float(p.health) - 100.0
+	assert(gained > 15.0 * mult * 10.0, "saniyelik sınır yok: %.2f" % gained)
+	p.health = 100.0
+	beh.call("on_hit", e, 2000.0, true, null)
+	beh.call("on_hit", e, 2000.0, true, null)
+	assert(absf(float(p.health) - 100.0 - 2.0 * 20.0 * mult) < 0.01, "art arda iki vuruş da %%1 can basar: %.2f" % (float(p.health) - 100.0))
+	## Final: azami canın %0,5'i. Aynı ölüm olay + tik yolundan gelse de tek ödül; işaretsiz ölü kurban ayrı ödül; art arda ölümler sınırsız.
+	var stats: Dictionary = beh.get("stats")
+	stats["kp_kill_heal"] = 0.005
+	stats["kp_kill_haste"] = 0.0
+	p.health = 100.0
+	beh.call("dot_add", e, 50.0, 3.0, 1)
+	beh.call("damage_extra", 100.0, e) ## kanayan kurban işaretlenir (kp_kill olayı beklenir)
+	beh.call("on_event", "kp_kill", {})
+	assert(absf(float(p.health) - 100.0 - 5.0 * mult) < 0.01, "olayla final ödülü azami canın %%0,5'i: %.2f" % (float(p.health) - 100.0))
+	beh.call("on_dot_victim_died", {"node": e, "left": [1.0], "pos": e.global_position})
+	assert(absf(float(p.health) - 100.0 - 5.0 * mult) < 0.01, "aynı ölümün tik yolu ikinci ödül vermez: %.2f" % (float(p.health) - 100.0))
+	beh.call("on_dot_victim_died", {"node": e, "left": [1.0], "pos": e.global_position})
+	assert(absf(float(p.health) - 100.0 - 10.0 * mult) < 0.01, "başka (işaretsiz) kanayan kurban ayrıca ödül verir, sınır yok: %.2f" % (float(p.health) - 100.0))
+	stats["kp_kill_heal"] = 0.0
+	## Kanama tiki: genel can çalma (isabet başına zar) atılmaz; aynı çağrı hit() ile yapılınca zar atılır (yüzde 500 = kesin).
+	p.lifesteal_percent = 5.0
+	p.health = 100.0
+	beh.call("hit", e, 1.0)
+	assert(float(p.health) > 100.0, "kontrol: normal isabet can çalma zarı atar (alan %33 x %500 = kesin)")
+	p.health = 100.0
+	beh.call("dot_add", e, 50.0, 3.0, 1)
+	var rec: Dictionary = (beh.get("_dots") as Dictionary)[e.get_instance_id()]
+	rec["next"] = 0
+	var e_hp: float = float(e.health)
+	beh.call("_tick_dots")
+	assert(float(e.health) < e_hp, "kanama tiki hasar verir")
+	assert(absf(float(p.health) - 100.0) < 0.01, "kanama tiki genel can çalma zarı atmaz: %.2f" % (float(p.health) - 100.0))
+	assert(p.lifesteal_blocked == false, "bayrak tik sonrası kapanır")
+	for n in [p, e]:
 		if is_instance_valid(n):
 			n.free()
 	GameManager.owned_weapons = _saved_weapons
@@ -470,11 +568,13 @@ func test_screen_enchants_tab_lists_rows_and_buys_per_copy() -> void:
 	await _frames(6)
 	screen._show_tab(screen.Tab.ENCHANTS)
 	await _frames(2)
-	assert(screen._rows.size() == 5, "4 geliştirme + final plakası: %d" % screen._rows.size())
+	assert(screen._rows.size() == 6, "4 geliştirme + final + güçlendirme plakası: %d" % screen._rows.size())
 	assert(str(screen._rows[0]["entry"]["type"]) == "wupgrade" and str(screen._rows[0]["entry"]["key"]) == "dagger", "ilk silah (Bıçak) satırları")
 	assert(str(screen._rows[0]["price"].text) == "100" and str(screen._rows[0]["shard_cost"].text) == "5", "geliştirme: 100 altın + 5 parçacık")
 	assert(str(screen._rows[4]["price"].text) == "400" and str(screen._rows[4]["shard_cost"].text) == "10", "final: 400 altın + 10 parçacık")
 	assert(not screen._entry_can_buy(screen._rows[4]["entry"]), "final 4 geliştirme bitmeden kapalı")
+	assert(str(screen._rows[5]["entry"]["type"]) == "wplus" and str(screen._rows[5]["price"].text) == "150" and str(screen._rows[5]["shard_cost"].text) == "3", "güçlendirme: 150 altın + 3 parçacık")
+	assert(not screen._entry_can_buy(screen._rows[5]["entry"]), "güçlendirme final alınmadan kapalı")
 	screen._select(screen._rows[4]["entry"])
 	assert(str(screen._details_block.text).begins_with("Önce"), "final ayrıntısında sebep: %s" % screen._details_block.text)
 	assert("Kanayan Kesikler" in screen._details_trait.text and screen._details_desc.text != "", "vitrinde efsunun adı + temel metni: %s / %s" % [screen._details_trait.text, screen._details_desc.text])
@@ -483,11 +583,27 @@ func test_screen_enchants_tab_lists_rows_and_buys_per_copy() -> void:
 	assert(GameManager.gold == 2900 and GameManager.weapon_shards == 45, "100 altın + 5 parçacık düştü")
 	assert(str(screen._rows[0]["price"].text) == "ALINDI" and not screen._entry_can_buy(screen._rows[0]["entry"]), "alınan plaka ALINDI + kapalı")
 	assert(str(screen._rows[1]["price"].text) == "130", "sonraki geliştirme 130: %s" % screen._rows[1]["price"].text)
+	## Final sonrası güçlendirme (madde 297): sınırsız, satır seçili kalır, ad sayıyla güncellenir.
+	GameManager.owned_weapons[0]["enchant"]["ups"] = [0, 1, 2, 3]
+	GameManager.owned_weapons[0]["enchant"]["final"] = true
+	screen._show_tab(screen.Tab.ENCHANTS)
+	await _frames(2)
+	var plus_entry: Dictionary = screen._rows[5]["entry"]
+	screen._select(plus_entry)
+	assert(screen._entry_can_buy(plus_entry), "final sonrası güçlendirme açık: %s" % screen._details_block.text)
+	screen._on_buy_pressed(plus_entry)
+	screen._on_buy_pressed(plus_entry)
+	assert(int(GameManager.owned_weapons[0]["enchant"]["plus"]) == 2, "iki güçlendirme kayıtta")
+	assert(GameManager.gold == 2900 - 150 - 200 and GameManager.weapon_shards == 45 - 6, "150 + 200 altın, 6 parçacık: %d / %d" % [GameManager.gold, GameManager.weapon_shards])
+	assert(screen._selected == plus_entry and screen._entry_can_buy(plus_entry), "seçim güçlendirmede kalır, hâlâ alınabilir")
+	assert(str(screen._rows[5]["name"].text) == "Güçlendirme +3" and str(screen._rows[5]["price"].text) == "250", "sıradaki: +3, 250 altın: %s / %s" % [screen._rows[5]["name"].text, screen._rows[5]["price"].text])
+	assert(screen._list_sub.text == "TAMAM · güçlendirme +2", "liste alt yazısı: %s" % screen._list_sub.text)
+	assert(screen._tier_row.get_child_count() > 0, "ayrıntıda stat artışı satırı")
 	## İkinci silaha geç: onun satırları sıfırdan (kopya başına).
 	screen._trait_slot = 1
 	screen._show_tab(screen.Tab.ENCHANTS)
 	await _frames(2)
-	assert(screen._rows.size() == 5 and str(screen._rows[0]["entry"]["key"]) == "tabanca" and int(screen._rows[0]["entry"]["slot"]) == 1, "Tabanca'nın satırları")
+	assert(screen._rows.size() == 6 and str(screen._rows[0]["entry"]["key"]) == "tabanca" and int(screen._rows[0]["entry"]["slot"]) == 1, "Tabanca'nın satırları")
 	assert(str(screen._rows[0]["price"].text) == "100" and str(screen._rows[0]["price"].text) != "ALINDI", "ikinci kopya sıfırdan başlar")
 	assert(screen._status_label.text == "Silah yuvası 2/5", "durum: %s" % screen._status_label.text)
 	screen._on_close_pressed()
@@ -499,7 +615,9 @@ func test_screen_enchants_tab_lists_rows_and_buys_per_copy() -> void:
 func test_fire_staff_spray_buff_numbers_and_catalog_text_agree() -> void:
 	var base: Dictionary = (EnchantDefs.get_def("ates_nefesi") as Dictionary)["base"]["set"]
 	var per_sec: float = float(base["spray_ap"]) / float(base["spray_tick"])
-	assert(absf(per_sec - 1.08) < 0.001, "püskürtme saniyede %%108 saldırı gücü: %.3f" % per_sec)
+	assert(absf(per_sec - 1.08) < 0.001, "püskürtme tabanı 0,27 / 0,25 sn = 1,08: %.3f" % per_sec)
+	## 2026-10-20: tik aralığı `_effective_fire_wait` ile ölçeklenir (ates_nefesi.gd _interval), o da WEAPON_ATTACK_SPEED_MULT'a (0,7) bölünür -> gerçek saniyelik oran 1,08 x 0,7 = %76.
+	assert(absf(per_sec * GameManager.WEAPON_ATTACK_SPEED_MULT - 0.756) < 0.001, "gerçek püskürtme saniyede %%76")
 	assert(float(base["spray_range"]) == 140.0 and float(base["elem_ap"]) == 0.14, "menzil 140, yanma %14")
 	var text: String = str(WeaponCatalogScript.DESCRIPTIONS["fire_staff"])
-	assert(text.contains("%108") and text.contains("140"), "katalog metni sayılarla aynı (%108; 2026-10-14'te silah hasarı çarpanı x1,5 -> x1,0): " + text)
+	assert(text.contains("%76") and text.contains("140"), "katalog metni sayılarla aynı (%76 = 1,08 x 0,7; 2026-10-20'de %108 bayattı): " + text)

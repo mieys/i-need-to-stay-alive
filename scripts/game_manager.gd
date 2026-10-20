@@ -38,9 +38,9 @@ const LIFESTEAL_EFFECTIVENESS := 0.33
 ## Can çalma tetiklenince yenilenen can (isabet başına %X ihtimalle). 2026-10-11 (kullanıcı: "can çalma bundan sonra 1 can yerine 2 can
 ## versin"): 1 -> 2. player.gd on_damage_dealt (+ Kan Ağlayan'ın kalkana yazdığı) bunu okur.
 const LIFESTEAL_HEAL := 1.0 ## 2026-10-11 (sonra): 2 çok güçlü bulundu, 1'e döndü (kullanıcı: "1 can vermeye devam etsin")
-## SALDIRI HIZI ÜST SINIRI + TAŞMA (kullanıcı isteği 2026-10-11): toplam saldırı hızı bonusu en çok %600 (aralık çarpanı >= 1/7); sınırı aşan her 1
+## SALDIRI HIZI ÜST SINIRI + TAŞMA (kullanıcı isteği 2026-10-11): toplam saldırı hızı bonusu en çok %450 (2026-10-20 denge turu, BALANCE_REV 95: %600 -> %450; kayıtlarda Elara %498, Matthew %413; aralık çarpanı >= 1/5,5); sınırı aşan her 1
 ## puan canlı olarak 0.5 saldırı gücüne dönüşür (kalıcı değil - bkz. player.gd _sync_attack_speed_overflow_ap). player.gd + weapon.gd okur (TEK kaynak).
-const ATTACK_SPEED_CAP_PERCENT := 600.0
+const ATTACK_SPEED_CAP_PERCENT := 450.0
 const ATTACK_SPEED_OVERFLOW_AP_PER_PERCENT := 0.5
 ## TÜM SİLAHLARIN saldırı hızı çarpanı (kullanıcı isteği 2026-10-17: "tüm silahların saldırı hızını %30 azalt"): atış aralığı / 0.7 (= her silah %30 yavaş).
 ## weapon.gd _effective_fire_wait en SON adımda uygular (kart/eşya/pasif/üst sınır sonrası, yani gösterilen "Saldırı Hızı %" değişmez, silahlar o orana göre yavaş vurur).
@@ -711,7 +711,8 @@ func _process(delta: float) -> void:
 	## yaratıklar donduğu andaki güçlerinde kalır, yeni bir Kademe'ye
 	## geçilmez. is_game_over ile AYNI basit koruma deseni.
 	if not is_game_over:
-		if not all_living_players_in_merchant_zone():
+		## Açılış (madde 313): yaratıklar daha adaya varmadı - saat geri sayım bitince başlar.
+		if not all_living_players_in_merchant_zone() and not invasion_pending:
 			game_time += delta
 		if _mini_shop_cooldown_remaining > 0.0:
 			_mini_shop_cooldown_remaining -= delta
@@ -721,8 +722,9 @@ func _process(delta: float) -> void:
 
 
 var max_revives: int = 3 ## bu makinenin oyuncusunun başlangıç hakkı: 3 + kalıcı "Dirilme Hakkı" geliştirmesi (bkz. reset)
-## Kalıcı "Ücretsiz Karıştırma" geliştirmesi: bu koşuda kalan bedava level kartı karıştırması (bkz. try_use_free_reroll).
-var free_rerolls_left: int = 0
+## Kalıcı "Ücretsiz Karıştırma" geliştirmesi: HER level atlama kartında (her level_up_screen açılışında) bedava karıştırma hakkı.
+## Hak koşu başına değil kart başına: kullanılan sayısı ekranın kendisinde tutulur (level_up_screen.gd _free_rerolls_used).
+var free_rerolls_per_card: int = 0
 ## Tek oyunculu (ve multiplayer'da eski/yedek yol) için - tek oyuncu olduğu
 ## için zaten "kişisel" sayılır, dokunulmadı.
 var revives_remaining: int = 3
@@ -746,13 +748,6 @@ func get_peer_revives(peer_id: int) -> int:
 	var fallback: int = max_revives if peer_id == local_id or local_id == 0 else MetaUpgradesScript.BASE_REVIVES
 	return int(peer_revives.get(peer_id, fallback))
 
-
-## Level kartı karıştırması bedavaysa hakkı harcar ve true döner (çağıran altın düşmez).
-func try_use_free_reroll() -> bool:
-	if free_rerolls_left <= 0:
-		return false
-	free_rerolls_left -= 1
-	return true
 
 signal revives_updated(remaining: int)
 
@@ -1085,6 +1080,15 @@ signal enemy_died(death_pos: Vector2)
 ## çalıştığı için bu değer client'larda hiç okunmaz/önemli değildir.
 var defend_tree_active: bool = false
 var defend_tree_ref: Node2D = null
+## EV KUŞATMASI + AÇILIŞ (madde 313, house_intro.gd / house_siege.gd): açılış (huzur -> deprem -> 30 sn geri sayım) sürerken
+## true - yaratık doğmaz, oyun saati (game_time) işlemez; geri sayım bitince host false yapar (herkese eşitlenir). Varsayılan
+## false: açılışı yalnız gerçek oyun başı (house_interior.gd) açar, testler/yeniden katılım etkilenmez.
+var invasion_pending: bool = false
+## Ev yıkılınca dışarı atılan BABAANNE (savaşamaz, can 100): yaratıklar ona da saldırır (enemy_world_bridge.gd hedef listesi,
+## enemy_projectile.gd isabet). Dışarıda ve canlıyken dolu, yoksa null.
+var babaanne_target: Node2D = null
+## Babaanne öldü: bu koşuda bir daha dirilmez (evde de görünmez).
+var babaanne_dead: bool = false
 
 func add_team_xp(amount: float) -> void:
 	if amount <= 0.0 or is_game_over:
@@ -1436,6 +1440,9 @@ func reset() -> void:
 	_map_world_rect = Rect2()
 	_map_world_rect_searched = false
 	game_time = 0.0
+	invasion_pending = false
+	babaanne_target = null
+	babaanne_dead = false
 	is_game_over = false
 	victory_reached = false
 	endless_active = false
@@ -1454,7 +1461,7 @@ func reset() -> void:
 	team_xp_needed = _xp_needed_for_level(1)
 	team_xp_changed.emit(team_xp, team_xp_needed)
 	max_revives = MetaUpgradesScript.BASE_REVIVES + int(MetaUpgradesScript.bonus("revive"))
-	free_rerolls_left = int(MetaUpgradesScript.bonus("free_reroll"))
+	free_rerolls_per_card = int(MetaUpgradesScript.bonus("free_reroll"))
 	revives_remaining = max_revives
 	peer_revives.clear()
 	_revive_regen_left.clear()

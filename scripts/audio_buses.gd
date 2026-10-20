@@ -11,6 +11,9 @@ extends RefCounted
 
 const AMBIENT_BUS := &"Ambient"
 const MUFFLE_BUS := &"BarrierMuffle"
+## MÜZİK (2026-10-19, kullanıcı: "ayarlara müzik sesi kısma ayarı ekle"): boss müziği (boss_music.gd) bu yola çalar; Ayarlar'daki "Müzik Sesi"
+## kaydırıcısı (ui_sound.gd set_music_volume_percent) bus'ın ses seviyesini ayarlar. Efektsiz, Master'a gider -> "Oyun Sesi" de geçerli.
+const MUSIC_BUS := &"Music"
 ## Kullanıcı bildirimi (2026-09-26): "kalkanın içindeyken dışardan içeri hiç ses çıkmıyor, yağmur boğuk gelmiyor" - eski
 ## 500 Hz + -6 dB, kulağın en duyarlı olduğu 2-5 kHz'i silip sesi neredeyse YOK ediyordu. Ölçüm (ses dosyalarının kendisi,
 ## Godot'nun biquad alçak geçireni rezonans 0.5, A-ağırlıklı = algılanan): yağmur -19.6 dB, fırtına rüzgarı -16.2, rüzgar
@@ -34,6 +37,16 @@ const MUFFLE_REVERB := [0.65, 0.55, 55.0, 0.3, 0.9, 0.15, 0.9, 0.35]
 const RIM_WEAPON_REVERB := [0.7, 0.4, 85.0, 0.45, 0.8, 0.1, 0.9, 0.5]
 
 
+## BAŞKA OYUNCULARIN SİLAH SESLERİ (2026-10-19, kullanıcı: "oyuncular diğer oyuncuların silahlarının sesini %15 daha az duysun. öncelik kendi
+## silahlarımızda olmalı"): uzak atış sesi ("weapon_sound"), uzak mermi isabet sesi ("hit" sound_path) ve uzak Şimşek Asası ışını kaynağın
+## volume_db'sine bu kadar ekler. Genlik x0,85 (-1,4 dB); kendi silahlarımız aynen çalar.
+const REMOTE_WEAPON_VOLUME_MULT := 0.85
+
+
+static func remote_weapon_db() -> float:
+	return linear_to_db(REMOTE_WEAPON_VOLUME_MULT)
+
+
 ## Yerel oyuncu şu an bir kubbenin (Şovalye R / satıcı baloncuğu) içinde mi - set_ambient_muffled günceller.
 static var in_dome: bool = false
 
@@ -46,6 +59,8 @@ static func _ensure(bus_name: StringName) -> int:
 	idx = AudioServer.bus_count - 1
 	AudioServer.set_bus_name(idx, bus_name)
 	AudioServer.set_bus_send(idx, &"Master")
+	if bus_name == MUSIC_BUS: ## efektsiz; ses seviyesini UISound yönetir
+		return idx
 	var rim: bool = bus_name == RIM_WEAPON_BUS
 	var lp := AudioEffectLowPassFilter.new()
 	lp.cutoff_hz = RIM_WEAPON_CUTOFF_HZ if rim else MUFFLE_CUTOFF_HZ
@@ -96,6 +111,11 @@ static func route_rim_sound(p: AudioStreamPlayer2D, on: bool) -> void:
 static func ambient_bus() -> StringName:
 	_ensure(AMBIENT_BUS)
 	return AMBIENT_BUS
+
+
+static func music_bus() -> StringName:
+	_ensure(MUSIC_BUS)
+	return MUSIC_BUS
 
 
 static func muffle_bus() -> StringName:

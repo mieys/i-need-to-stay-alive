@@ -11,7 +11,7 @@
 script = ExtResource("1")
 impact_scene = ExtResource("4")
 impact_sounds = Array[AudioStream]([ExtResource("6")])
-impact_sound_volume_db = -6.79
+impact_sound_volume_db = -3.0
 
 [node name="Icon" type="Sprite2D" parent="."]
 texture_filter = 1
@@ -26,5 +26,5 @@ sprite_frames = ExtResource("3")
 
 [node name="LaunchSound" type="AudioStreamPlayer2D" parent="."]
 stream = ExtResource("5")
-volume_db = -8.0
+volume_db = 4.0
 max_distance = 1500.0

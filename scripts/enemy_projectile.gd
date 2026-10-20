@@ -26,6 +26,13 @@ const TARGET_LAYER_MASK := 2 ## eski Area2D collision_mask (main.tscn Player / r
 const ProjectileRangeScript := preload("res://scripts/projectile_range.gd") ## menzil = görüş elipsi (bkz. projectile_range.gd)
 const LIFETIME := 3.0
 const ImpactScript: GDScript = preload("res://scripts/fx_enemy_bolt_impact.gd")
+## Lich "Ruh Alevi" (madde 280): stil > 0 iken küre yerine pişmiş alev sprite'ı + kor katmanı + kendi isabeti.
+const LichFlame := preload("res://scripts/lich_soul_flame.gd")
+const LichImpactScript: GDScript = preload("res://scripts/fx_lich_flame_impact.gd")
+const LichEmberLayerScript: GDScript = preload("res://scripts/lich_ember_layer.gd")
+## Kor aralığı (dünya px, uçulan yol; her seferinde x0,6-1,4 düzensiz - düzenli aralık yolda noktalı çizgi bırakıyordu, madde 199).
+const EMBER_EVERY := 13.0
+const EMBER_EVERY_SMALL := 30.0
 ## Kullanıcı bildirimi (2026-09-24): yaratıklar duvar arkasından ateş edebiliyordu - ateş etme artık görüş hattına bağlı
 ## (bkz. enemy.gd _has_line_of_sight), ayrıca mermi uçarken orman/uçurum duvarına çarparsa orada söner (hedef duvarın
 ## arkasına kaçınca mermi duvardan geçmesin). İlk WALL_IGNORE_TIME saniye duvar sayılmaz: duvara yaslanmış yaratığın
@@ -46,7 +53,13 @@ var tint: Color = Color(1.0, 0.55, 0.15, 1.0)
 ## normal bir isabet gibi). false iken (büyü/spell) davranış eskisi gibi
 ## sabit yönlü düz bir mermi.
 var homing: bool = false
+## Görsel stili (LichFlame.STYLE_*): 0 = aile renginde küre, 1 / 2 = lich büyüsü / normal atışı. add_child'DAN ÖNCE atanmalı (_ready seçer).
+var style: int = 0
 var _life: float = 0.0
+var _flame: Sprite2D = null
+var _ember_acc: float = 0.0
+var _ember_every: float = EMBER_EVERY
+static var _ember_layer: Node2D = null
 
 @onready var visual = $Visual
 
@@ -68,7 +81,16 @@ func _ready() -> void:
 	## kalan düşman mermileri de düşmanlar gibi gizlenir, karanlıktan gelen
 	## ateş top yalnızca görüş alanına girince belirir.
 	add_to_group("enemy_projectiles")
-	if visual:
+	if style != LichFlame.STYLE_ORB:
+		if visual:
+			remove_child(visual)
+			visual.free()
+			visual = null
+		_flame = LichFlame.new()
+		add_child(_flame)
+		_flame.setup(direction, style == LichFlame.STYLE_SMALL)
+		_ember_every = (EMBER_EVERY_SMALL if style == LichFlame.STYLE_SMALL else EMBER_EVERY) * randf_range(0.6, 1.4)
+	elif visual:
 		visual.glow_color = tint
 		visual.direction = direction
 		visual.queue_redraw()
@@ -91,6 +113,10 @@ static func _refresh_cache(tree: SceneTree) -> void:
 		bodies.append(local_p)
 	bodies.append_array(tree.get_nodes_in_group("remote_players"))
 	bodies.append_array(tree.get_nodes_in_group("player_allies"))
+	## Dışarı atılan BABAANNE (madde 313): fizik gövdesi yok - ayak üstü gövde dairesiyle hedef listesine.
+	var granny: Node2D = GameManager.babaanne_target
+	if is_instance_valid(granny) and granny.is_inside_tree() and granny.get("is_dead") != true:
+		_targets.append([granny, granny.global_position, 10.0])
 	for b in bodies:
 		if not is_instance_valid(b):
 			continue
@@ -129,7 +155,12 @@ func _physics_process(delta: float) -> void:
 		var player := get_tree().get_first_node_in_group("player")
 		if player and is_instance_valid(player):
 			direction = (player.global_position - global_position).normalized()
+			if _flame != null:
+				_flame.set_direction(direction)
 	position += direction * speed * delta
+	if _flame != null:
+		_flame.advance(delta)
+		_tick_embers(delta)
 	_refresh_cache(get_tree())
 	if _life >= WALL_IGNORE_TIME and _forest_layer != null and is_instance_valid(_forest_layer) 			and _forest_layer.get_cell_source_id(_forest_layer.local_to_map(_forest_inv * global_position)) != -1:
 		_spawn_impact()
@@ -179,7 +210,8 @@ func _on_body_hit(body: Node) -> bool:
 	## "remote_players" grubunda - onu da tanımazsak host'ta uzak oyuncular menzilli mermilere fiilen bağışık olurdu
 	## (eski DÜZELTME: "bazen bir oyuncu hasar alınca diğer oyuncu da hasar alıyor"). Necromancer yaratıkları
 	## ("player_allies" - ÇOĞUL) hasar alabilir ve mermileri engelleyebilir.
-	var is_target: bool = body.is_in_group("player") or body.is_in_group("player_allies") or body.is_in_group("remote_players")
+	var is_target: bool = body.is_in_group("player") or body.is_in_group("player_allies") or body.is_in_group("remote_players") \
+			or body == GameManager.babaanne_target
 	if is_target and body.has_method("take_damage"):
 		## Mermiyi atan yaratık mermi uçarken ölüp silinmiş olabilir - silinmiş nesneyi take_damage'in TİPLİ (Node2D)
 		## source parametresine geçirmek oyunu çökertiyordu (bkz. enemy_abilities.gd deal_special_damage ÇÖKME notu).
@@ -190,12 +222,47 @@ func _on_body_hit(body: Node) -> bool:
 	return false
 
 
+## Ruh Alevi'nin arkasından yükselen kor (madde 280): uçulan yol EMBER_EVERY'yi geçince tek piksel, paylaşılan katmana.
+func _tick_embers(delta: float) -> void:
+	_ember_acc += speed * delta
+	if _ember_acc < _ember_every:
+		return
+	_ember_acc = 0.0
+	var small: bool = style == LichFlame.STYLE_SMALL
+	_ember_every = (EMBER_EVERY_SMALL if small else EMBER_EVERY) * randf_range(0.6, 1.4)
+	if not is_visible_in_tree(): ## sisin içinde (vision_fog gizledi): kor gizli merminin yerini ele vermesin
+		return
+	var layer: Node2D = _get_ember_layer(get_tree())
+	if layer == null:
+		return
+	var back: Vector2 = -direction * (4.0 if small else 7.0)
+	layer.add(global_position + back + Vector2(randf_range(-2.0, 2.0), randf_range(-2.5, 2.5)),
+			Vector2(randf_range(-3.0, 3.0), randf_range(-17.0, -9.0)), randf_range(0.35, 0.6))
+
+
+static func _get_ember_layer(tree: SceneTree) -> Node2D:
+	if _ember_layer != null and is_instance_valid(_ember_layer) and _ember_layer.is_inside_tree():
+		return _ember_layer
+	var scene: Node = tree.current_scene
+	if scene == null:
+		return null
+	_ember_layer = LichEmberLayerScript.new()
+	scene.add_child(_ember_layer)
+	return _ember_layer
+
+
 func _spawn_impact() -> void:
 	if get_tree().current_scene == null:
 		return
-	var fx := Node2D.new()
-	fx.set_script(ImpactScript)
-	fx.set("color", tint)
+	var fx: Node2D
+	if style != LichFlame.STYLE_ORB:
+		fx = LichImpactScript.new()
+		fx.set("small", style == LichFlame.STYLE_SMALL)
+		fx.set("color", tint)
+	else:
+		fx = Node2D.new()
+		fx.set_script(ImpactScript)
+		fx.set("color", tint)
 	get_tree().current_scene.add_child(fx)
 	fx.global_position = global_position
 

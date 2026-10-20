@@ -360,6 +360,23 @@ func heal_owner(amount: float) -> void:
 		p.heal(amount)
 
 
+## Süreli hasar tiki (kanama...) "isabet" sayılmasın (2026-10-19): genel can çalma (player.gd on_damage_dealt, isabet başına şans) tikte
+## atılmaz. Yoksa her 0,5 sn'de kanayan HER yaratık için ayrı zar atılıyordu (kalabalıkta saniyede onlarca zar; Pençe her hedefi kanatır).
+func hit_no_lifesteal(t: Node, amount: float) -> void:
+	var p: Node = owner_player()
+	var gated: bool = p != null and "lifesteal_blocked" in p
+	if gated:
+		p.lifesteal_blocked = true
+	hit(t, amount)
+	if gated:
+		p.lifesteal_blocked = false
+
+
+## Bu davranışın kanama/süreli hasar tikleri genel can çalma zarı atar mı (varsayılan evet; Kanlı Pençe hayır).
+func dot_rolls_lifesteal() -> bool:
+	return true
+
+
 ## Kısa süreli ek saldırı hızı (bu silah için).
 func haste(pct: float, dur: float) -> void:
 	_haste = maxf(_haste if Time.get_ticks_msec() < _haste_until_msec else 0.0, pct)
@@ -746,6 +763,12 @@ func on_beam_tick(target: Node, dmg: float) -> void:
 	on_hit(target, dmg, true, null)
 
 
+## Sürekli ışının parlaklığı (weapon.gd _update_beam_reach -> ışın efekti set_glow): 0..1 = hedefte tutma oranı, >= 2 = hedef kamaştı.
+## Yalnız Göz Kamaştıran Işık (Gökkuşağı Asası) doldurur.
+func beam_glow(_t: Node) -> float:
+	return 0.0
+
+
 ## Uzunkılıç: her savuruşun temas anında (weapon.gd _sword_contact) - "her N savuruşta" sayacı. (Ad eski dönen kılıçtan kaldı.)
 func on_revolution(pos: Vector2) -> void:
 	attacks += 1
@@ -946,5 +969,9 @@ func _tick_dots() -> void:
 		rec["pos"] = (t as Node2D).global_position
 		if now >= int(rec["next"]):
 			rec["next"] = now + DOT_TICK_MSEC
-			hit(t, float(rec["dps"]) * float(live) * float(DOT_TICK_MSEC) / 1000.0)
+			var tick_dmg: float = float(rec["dps"]) * float(live) * float(DOT_TICK_MSEC) / 1000.0
+			if dot_rolls_lifesteal():
+				hit(t, tick_dmg)
+			else:
+				hit_no_lifesteal(t, tick_dmg)
 			dot_tick_fx(t, live)

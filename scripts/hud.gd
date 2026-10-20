@@ -2528,7 +2528,8 @@ func _on_gold_indicator_mouse_exited() -> void:
 func _on_envanter_toggle() -> void:
 	var now_visible: bool = not inventory_panel_instance.visible
 	inventory_panel_instance.visible = now_visible
-	stats_panel_instance.visible = now_visible
+	## Masaüstünde özellikler "Kahraman Çantası"nın içinde (madde 341); telefonda ayrı panel (rayın ÖZELLİK sekmesi).
+	stats_panel_instance.visible = now_visible and MobileUIScript.enabled
 	if _mobile_inv_dim:
 		_mobile_inv_dim.visible = now_visible
 	if is_instance_valid(_ph_inv_rail): ## telefon: ray + sekme (ÇANTA'dan açılır)

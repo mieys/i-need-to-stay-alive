@@ -241,7 +241,7 @@ func _process(delta: float) -> void:
 	## silahların/necro yaratıklarının aksine, sahibi seyyar satıcının güvenli
 	## bölgesine girse BİLE tik atıp hasar vermeye devam ediyorlardı. Silahlar
 	## için weapon.gd _process()'teki AYNI kontrol.
-	if caster.get("is_in_merchant_zone") == true:
+	if _caster_in_safe_zone():
 		return
 	_tick_timer -= delta
 	if _tick_timer > 0.0:
@@ -402,12 +402,20 @@ func _process_area_visuals(delta: float) -> void:
 				_spawn_void_wisp((e as Node2D).global_position)
 
 
+## Sahibi güvenli alanda mı: seyyar satıcı koruma bölgesi VEYA demirci iç mekanı (player.gd is_safe_zone_frozen, madde 325/327) - totem orada çalışmaz
+## (eskiden sadece satıcı bölgesine bakıyordu, sahibi demircideyken totemler hâlâ tik atıyordu).
+func _caster_in_safe_zone() -> bool:
+	if caster.has_method("is_safe_zone_frozen"):
+		return caster.is_safe_zone_frozen()
+	return caster.get("is_in_merchant_zone") == true
+
+
 ## Alan hasarı - SADECE dikenin client'ında (ateş _tick'iyle aynı korumalar: ağ kopyası değil, caster geçerli, satıcı bölgesinde
 ## değil - bkz. TotemBase._process). Alan hasarı hedef SEÇMEDİĞİ için görünürlük (can_target) şartı yok (bkz. vision_fog.gd).
 func _process_area_damage(delta: float) -> void:
 	if _is_network_visual or not is_instance_valid(caster):
 		return
-	if caster.get("is_in_merchant_zone") == true:
+	if _caster_in_safe_zone():
 		return
 	_area_damage_timer -= delta
 	if _area_damage_timer > 0.0:
@@ -434,9 +442,14 @@ func _process_area_damage(delta: float) -> void:
 		var hit_dmg: float = dmg
 		if caster.has_method("_apply_ability_crit"):
 			hit_dmg = caster._apply_ability_crit(dmg, is_crit)
-		BalanceLogScript.tag(&"s:shaman_totem_alan")
+		BalanceLogScript.tag(_area_balance_tag())
 		e.call("take_damage", hit_dmg, is_crit)
 		_spawn_void_wisp((e as Node2D).global_position)
+
+
+## Alan hasarının balans/Shift ipucu etiketi (Saldırı Totemi = Q; Kalkan Totemi bunu "s:shaman_kalkan_alan" = E ile ezer).
+func _area_balance_tag() -> StringName:
+	return &"s:shaman_totem_alan"
 
 
 ## Alan hasar tikinde alandaki HER yaratık için bir kez çağrılır (hasardan önce) - SADECE dikenin client'ında. Varsayılan: hiçbir şey

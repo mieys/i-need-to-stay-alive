@@ -28,6 +28,10 @@ const WEAPON_ICONS := {
 	"pence": "res://assets/weapons/pence/icon.png",
 	"topuz": "res://assets/weapons/topuz/icon.png",
 	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
+	"gokkusagi": "res://assets/weapons/zanaat/gokkusagi_L1.png",
+	"mizrak": "res://assets/weapons/zanaat/mizrak_L1.png",
+	"kalkan": "res://assets/weapons/zanaat/kalkan_L1.png",
+	"yinyang": "res://assets/weapons/zanaat/yinyang_L1.png",
 }
 const GOLD_CARD_AMOUNT := 15
 

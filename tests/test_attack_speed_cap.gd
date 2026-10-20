@@ -1,6 +1,6 @@
 extends Node
 
-## Saldırı hızı üst sınırı %600 + taşmanın CANLI saldırı gücüne dönüşmesi (kullanıcı isteği 2026-10-11; player.gd get_attack_speed_bonus_percent /
+## Saldırı hızı üst sınırı (2026-10-20: %600 -> %450, GameManager.ATTACK_SPEED_CAP_PERCENT) + taşmanın CANLI saldırı gücüne dönüşmesi (kullanıcı isteği 2026-10-11; player.gd get_attack_speed_bonus_percent /
 ## _sync_attack_speed_overflow_ap). Buff kaynaklı taşma kalıcı OLMAMALI.
 
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
@@ -41,18 +41,20 @@ func test_below_cap_untouched_and_no_overflow() -> void:
 	_cleanup()
 
 
-func test_cap_is_600_and_interval_floor() -> void:
+func test_cap_is_450_and_interval_floor() -> void:
 	var p: Node = _make_player()
+	var cap: float = GameManager.ATTACK_SPEED_CAP_PERCENT
+	assert(is_equal_approx(cap, 450.0), "tavan %450 (2026-10-20 denge turu)")
 	_set_total_bonus(p, 900.0)
-	assert(absf(p.get_attack_speed_bonus_percent() - 600.0) < 0.01, "gösterilen bonus 600'de durmalı")
-	assert(absf(p.get_attack_interval_mult() - 1.0 / 7.0) < 0.0001, "aralık çarpanı 1/7'den küçük olamaz")
+	assert(absf(p.get_attack_speed_bonus_percent() - cap) < 0.01, "gösterilen bonus tavanda durmalı")
+	assert(absf(p.get_attack_interval_mult() - 1.0 / (1.0 + cap / 100.0)) < 0.0001, "aralık çarpanı 1/5,5'ten küçük olamaz")
 	_cleanup()
 
 
 func test_overflow_gives_half_ap_per_percent() -> void:
 	var p: Node = _make_player()
 	var ap0: float = p.damage_bonus
-	_set_total_bonus(p, 700.0) ## 100 puan taşma -> 50 saldırı gücü
+	_set_total_bonus(p, GameManager.ATTACK_SPEED_CAP_PERCENT + 100.0) ## 100 puan taşma -> 50 saldırı gücü
 	p._sync_attack_speed_overflow_ap()
 	assert(absf(p.get_attack_speed_overflow_percent() - 100.0) < 0.01)
 	assert(absf(p.damage_bonus - (ap0 + 50.0)) < 0.01, "100 puan taşma = +50 saldırı gücü: %f" % (p.damage_bonus - ap0))
@@ -65,8 +67,8 @@ func test_overflow_gives_half_ap_per_percent() -> void:
 func test_temporary_buff_overflow_is_not_permanent() -> void:
 	var p: Node = _make_player()
 	var ap0: float = p.damage_bonus
-	## Taban 600'e yakın (kart/eşya), geçici ruhani "Adc" (+%30 additive) sınırı aştırıyor.
-	p.fire_rate_mult = 1.0 / 7.0 * 1.0
+	## Taban tavana yakın (kart/eşya), geçici ruhani "Adc" (+%30 additive) sınırı aştırıyor.
+	p.fire_rate_mult = 1.0 / (1.0 + GameManager.ATTACK_SPEED_CAP_PERCENT / 100.0)
 	p.spirit_attack_speed = 0.0
 	p._sync_attack_speed_overflow_ap()
 	assert(is_equal_approx(p.damage_bonus, ap0), "buff yokken taşma yok")
@@ -83,7 +85,7 @@ func test_temporary_buff_overflow_is_not_permanent() -> void:
 
 func test_other_ap_changes_are_preserved_when_overflow_ends() -> void:
 	var p: Node = _make_player()
-	_set_total_bonus(p, 800.0)
+	_set_total_bonus(p, GameManager.ATTACK_SPEED_CAP_PERCENT + 200.0)
 	p._sync_attack_speed_overflow_ap()
 	p.damage_bonus += 12.0 ## taşma sürerken kazanılan kalıcı güç (ör. seviye kartı)
 	_set_total_bonus(p, 100.0)
@@ -104,14 +106,14 @@ func test_elara_passive_is_true_fifty_percent_and_not_in_overflow() -> void:
 	assert(absf(p._elara_passive_fire_rate_mult() - 1.0 / 1.3) < 0.0001, "30. seviyede sınıra dayanır")
 	p.level = 20
 	assert(absf(p._elara_passive_fire_rate_mult() - 1.0 / 1.2) < 0.0001, "20. seviyede +%20")
-	## Kartlar toplam +%500 verir, pasif (+%30) sınırı aşırır: gösterilen hız 600'de durur ama taşma (kart/eşya kaynaklı) 0 kalır.
+	## Kartlar tavanın 20 puan altında, pasif (+%30) sınırı aşırır: gösterilen hız tavanda durur ama taşma (kart/eşya kaynaklı) 0 kalır.
 	p.level = 50
-	_set_total_bonus(p, 500.0)
+	_set_total_bonus(p, GameManager.ATTACK_SPEED_CAP_PERCENT - 20.0)
 	p._sync_attack_speed_overflow_ap()
-	assert(absf(p.get_attack_speed_bonus_percent() - 600.0) < 0.01, "pasifle toplam sınıra dayanır")
+	assert(absf(p.get_attack_speed_bonus_percent() - GameManager.ATTACK_SPEED_CAP_PERCENT) < 0.01, "pasifle toplam sınıra dayanır")
 	assert(is_zero_approx(p.get_attack_speed_overflow_percent()), "pasif taşma->saldırı gücüne girmemeli: %f" % p.get_attack_speed_overflow_percent())
-	## Kartlar tek başına 700 ise taşma 100 (pasiften bağımsız).
-	_set_total_bonus(p, 700.0)
+	## Kartlar tek başına tavan + 100 ise taşma 100 (pasiften bağımsız).
+	_set_total_bonus(p, GameManager.ATTACK_SPEED_CAP_PERCENT + 100.0)
 	assert(absf(p.get_attack_speed_overflow_percent() - 100.0) < 0.01, "kart kaynaklı taşma aynen sayılır: %f" % p.get_attack_speed_overflow_percent())
 	GameManager.selected_character = saved
 	_cleanup()

@@ -240,6 +240,8 @@ func _update_draw_order() -> void:
 
 ## Her karede (testler doğrudan çağırır): tarama aralığında düşman var mı bakar; varsa hemen açar, yoksa CLOSE_DELAY sonra kapatır.
 func process_spikes(delta: float) -> void:
+	if owner_frozen(): ## güvenli alanda (satıcı koruması / demirci) zaman donar: tarama durur, diken durumu olduğu gibi kalır (madde 327)
+		return
 	_net_idle += delta
 	_scan_cd -= delta
 	if _scan_cd <= 0.0:
@@ -256,6 +258,11 @@ func process_spikes(delta: float) -> void:
 				_broadcast()
 	if _net_idle >= NET_HEARTBEAT:
 		_broadcast()
+
+
+## Sahip güvenli alanda mı (player.gd is_safe_zone_frozen): evcil hayvanlar orada çalışmaz.
+func owner_frozen() -> bool:
+	return is_instance_valid(owner_body) and owner_body.has_method("is_safe_zone_frozen") and owner_body.is_safe_zone_frozen()
 
 
 ## Sahibin KENDİ görüşünde canlı bir yaratık var mı (takım görüşü sayılmaz).

@@ -52,7 +52,7 @@ func _push_key(code: Key) -> void:
 
 func test_categories_build_all_current_settings() -> void:
 	var s := await _open()
-	assert(_row_ids(s) == ["volume", "fullscreen", "resolution", "fps", "ui_opacity", "shake", "ui_anim"], "GENEL: %s" % str(_row_ids(s)))
+	assert(_row_ids(s) == ["volume", "music", "fullscreen", "resolution", "fps", "ui_opacity", "shake", "ui_anim", "auto_pick"], "GENEL: %s" % str(_row_ids(s)))
 	_push_key(KEY_E)
 	assert(int(s.get("_cat")) == 1, "E -> GRAFİK")
 	assert(_row_ids(s) == ["preset", "sun", "ground", "render_scale", "fps_limit"], "GRAFİK: %s" % str(_row_ids(s)))
@@ -74,6 +74,26 @@ func test_rows_reflect_current_values() -> void:
 	var shake_lbl: Label = s.find_child("ShakeValue", true, false)
 	var want: String = "Kapalı" if roundi(UISound.camera_shake_percent) == 0 else "%%%d" % roundi(UISound.camera_shake_percent)
 	assert(shake_lbl != null and shake_lbl.text == want, "sarsıntı değeri: %s" % (shake_lbl.text if shake_lbl else "yok"))
+	_cleanup()
+
+
+## Müzik Sesi kaydırıcısı (2026-10-19): kayıtlı değeri gösterir, değişince "Music" bus'ını ayarlar, Oyun Sesi'ne dokunmaz.
+func test_music_slider_sets_music_bus_only() -> void:
+	var original_music: float = UISound.music_volume_percent
+	var original_master: float = UISound.master_volume_percent
+	var s := await _open()
+	var mus: Range = s.find_child("MusicSlider", true, false)
+	assert(mus != null and is_equal_approx(mus.value, UISound.music_volume_percent), "müzik kaydırıcısı kayıtlı değeri gösterir")
+	mus.value = 40.0
+	var bus_idx: int = AudioServer.get_bus_index("Music")
+	var db: float = AudioServer.get_bus_volume_db(bus_idx) if bus_idx >= 0 else 99.0
+	var music_now: float = UISound.music_volume_percent
+	var master_now: float = UISound.master_volume_percent
+	UISound.set_music_volume_percent(original_music)
+	assert(bus_idx >= 0, "Music bus'ı kurulmuş olmalı")
+	assert(is_equal_approx(music_now, 40.0), "müzik yüzdesi: %s" % str(music_now))
+	assert(absf(db - linear_to_db(0.4)) < 0.01, "bus dB: %s" % str(db))
+	assert(is_equal_approx(master_now, original_master), "Oyun Sesi değişmemeli")
 	_cleanup()
 
 

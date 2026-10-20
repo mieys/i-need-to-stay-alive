@@ -11,7 +11,8 @@ extends RefCounted
 ##      bıçak her an pivottan dışarı bakar, ucu hedefin tam üstünden geçer. Yay yönü her savuruşta değişir (sağ/sol).
 ##      Süpürme başlarken bıçak ucunun izlediği yayda pixel-art hilal (assets/fx/sword_sweep, tools/gen_weapon_fx_sprites.py
 ##      gen_sword_sweep) oynar.
-##   3. Takip (FOLLOW) + dönüş (RETURN): kısa bir duruştan sonra yumuşakça dinlenme yerine döner.
+##   3. Takip (FOLLOW) + bekleme (hold, madde 347 zincir) + dönüş (RETURN): sonraki savuruş beklemede gelirse oradan ters yöne süpürür
+##      (yay yönü değiştiği için bir önceki yayın sonu = yeni yayın başı), gelmezse yumuşakça dinlenme yerine döner.
 ## Hasar, bıçak hedefin üstünden geçtiği AN (contact_delay) uygulanır - efekt/sayı/vuruş aynı anda görünür.
 ##
 ## Yeni bir savuruş ayarı değiştirirsen SADECE burayı değiştir; iki çağıran dosya aynı fonksiyonları kullanır (CLAUDE.md
@@ -30,6 +31,7 @@ const ICON_RADIUS := 17.0
 const TIP_RADIUS := 34.0
 const REF_OWNER_SCALE := 0.5
 
+const MeleeChainMath := preload("res://scripts/melee_chain_math.gd")
 const SWEEP_FRAMES: SpriteFrames = preload("res://assets/fx/sword_sweep/sweep_frames.tres")
 const SWEEP_BAKED_RADIUS := 32.0 ## gen_sword_sweep R (sanat pikseli)
 const SWEEP_Z_INDEX := 5 ## yaratıkların (0) ve oyuncuların (1) üstünde
@@ -70,9 +72,10 @@ static func busy_duration(speed: float) -> float:
 
 ## İkonu plana göre oynatır. host: tween'in bağlanacağı düğüm (silah / kukla). rest_pos/rest_rot: ikonun YEREL dinlenme
 ## konumu/rotasyonu (dönüş canlı hesaplanır - karakter yürürken ikon doğru yere döner). fx_parent: hilalin ekleneceği
-## düğüm (dünyada sabit kalsın diye sahne kökü). Dönen tween'i çağıran saklayıp bir sonraki savuruşta kesebilir.
+## düğüm (dünyada sabit kalsın diye sahne kökü). hold: dönüşten önce son pozda bekleme (MeleeChainMath.hold_time; 0 = hemen döner).
+## Dönen tween'i çağıran saklayıp bir sonraki savuruşta kesebilir.
 static func play(host: Node, icon: Node2D, plan: Dictionary, forward: float, rest_pos: Vector2, rest_rot: float,
-		speed: float, fx_parent: Node) -> Tween:
+		speed: float, fx_parent: Node, hold: float = 0.0) -> Tween:
 	var sp: float = maxf(0.01, speed)
 	var start_pos: Vector2 = icon.global_position
 	var start_rot: float = icon.global_rotation
@@ -94,6 +97,7 @@ static func play(host: Node, icon: Node2D, plan: Dictionary, forward: float, res
 	tw.tween_callback(start_fx)
 	tw.tween_method(sweep_step, a0, a1, SWEEP / sp).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_interval(FOLLOW / sp)
+	MeleeChainMath.append_hold(tw, icon, hold)
 	tw.tween_property(icon, "position", rest_pos, RETURN).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.parallel().tween_property(icon, "rotation", rest_rot, RETURN).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	return tw
@@ -124,7 +128,7 @@ static func make_stab_plan(dir: Vector2, target: Vector2, size: float, owner_sca
 
 
 static func play_stab(host: Node, icon: Node2D, plan: Dictionary, forward: float, rest_pos: Vector2, rest_rot: float,
-		speed: float) -> Tween:
+		speed: float, hold: float = 0.0) -> Tween:
 	var sp: float = maxf(0.01, speed)
 	var start_pos: Vector2 = icon.global_position
 	var start_rot: float = icon.global_rotation
@@ -156,6 +160,7 @@ static func play_stab(host: Node, icon: Node2D, plan: Dictionary, forward: float
 	tw.tween_method(lunge_step, 0.0, 1.0, SWEEP * 0.5 / sp).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
 	tw.tween_method(stuck_step, 0.0, 1.0, (SWEEP * 0.5 + FOLLOW) / sp)
 	tw.tween_method(pull_step, 0.0, 1.0, 0.07 / sp).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	MeleeChainMath.append_hold(tw, icon, hold)
 	tw.tween_property(icon, "position", rest_pos, RETURN).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.parallel().tween_property(icon, "rotation", rest_rot, RETURN).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	return tw

@@ -19,8 +19,88 @@ func _sum(m: Dictionary) -> int:
 
 
 func test_small_gold_not_split() -> void:
-	var r: Dictionary = AssistScript.compute(3, 1, {1: _dmg(50.0), 2: _dmg(50.0)}, {}, T0)
-	assert(r == {1: 3}, "3 altın bölünmez: %s" % [r])
+	## 2026-10-19: eşik 4 -> 2 (ortalama öldürme altını 2-3; eşik 4'ken asist payı hep sıfırdı).
+	var r: Dictionary = AssistScript.compute(1, 1, {1: _dmg(50.0), 2: _dmg(50.0)}, {}, T0)
+	assert(r == {1: 1}, "1 altın bölünmez: %s" % [r])
+	var r3: Dictionary = AssistScript.compute(3, 1, {1: _dmg(50.0), 2: _dmg(50.0)}, {}, T0)
+	assert(r3 == {1: 2, 2: 1}, "3 altın artık bölünür (öldüren 2, asist 1): %s" % [r3])
+	var r2: Dictionary = AssistScript.compute(2, 1, {1: _dmg(50.0), 2: _dmg(50.0)}, {}, T0)
+	assert(r2 == {1: 1, 2: 1}, "2 altın bölünür: %s" % [r2])
+
+
+func test_fractional_assist_gold_carries_over() -> void:
+	## %5 hasar veren asistçinin payı 10 altında 0,5: tek öldürmede 0, ama birikir - 2. öldürmede 1 altın alır.
+	var carry: Dictionary = {}
+	var d: Dictionary = {1: _dmg(95.0), 2: _dmg(5.0)}
+	var a: Dictionary = AssistScript.compute(10, 1, d, {}, T0, {}, carry)
+	assert(a == {1: 10}, "1. öldürmede pay kesir: %s" % [a])
+	var b: Dictionary = AssistScript.compute(10, 1, d, {}, T0, {}, carry)
+	assert(b == {1: 9, 2: 1}, "2. öldürmede birikmiş 1 altın ödenir: %s" % [b])
+	assert(float(carry.get(2, 0.0)) < 0.01, "ödenince kesir sıfırlanır: %s" % [carry])
+	## Birikim olmadan (varsayılan boş sözlük) eski saf bölüşüm.
+	var c: Dictionary = AssistScript.compute(10, 1, d, {}, T0)
+	assert(c == {1: 10}, "carry verilmezse birikim yok: %s" % [c])
+
+
+func test_carry_never_takes_killers_minimum() -> void:
+	## Birikmiş kesirler toplansa bile öldüren en az %40'ının yukarı yuvarlanmışını tutar (2 altında en az 1).
+	var carry: Dictionary = {2: 0.99}
+	var r: Dictionary = AssistScript.compute(2, 1, {1: _dmg(10.0), 2: _dmg(90.0)}, {}, T0, {}, carry)
+	assert(_sum(r) == 2 and int(r[1]) >= 1, "2 altında öldüren >=1: %s" % [r])
+	var r5: Dictionary = AssistScript.compute(5, 1, {1: _dmg(10.0), 2: _dmg(90.0)}, {}, T0, {}, {2: 0.99})
+	assert(_sum(r5) == 5 and int(r5[1]) >= 2, "5 altında öldüren >=2 (%%40 yukarı yuvarlı): %s" % [r5])
+
+
+## TAKIM PAYI (2026-10-19, madde 308): altının %20'si yakındaki canlı oyunculara eşit, hasar/asist kuralından bağımsız.
+func test_nearby_mates_filters_range_and_downed() -> void:
+	var at := Vector2(1000.0, 1000.0)
+	var cands: Array = [
+		{"peer_id": 1, "pos": at + Vector2(100.0, 0.0), "down": false},
+		{"peer_id": 2, "pos": at + Vector2(AssistScript.TEAM_SHARE_RANGE + 1.0, 0.0), "down": false},
+		{"peer_id": 3, "pos": at + Vector2(0.0, 300.0), "down": true},
+		{"peer_id": 4, "pos": at + Vector2(0.0, -AssistScript.TEAM_SHARE_RANGE), "down": false},
+		{"peer_id": 4, "pos": at, "down": false},
+		{"peer_id": 0, "pos": at, "down": false},
+	]
+	var m: Array = AssistScript.nearby_mates(cands, at)
+	assert(m == [1, 4], "menzil içi + düşmemiş + tekil + geçerli id: %s" % [m])
+
+
+func test_team_share_equal_split_excludes_killer() -> void:
+	assert(AssistScript.team_share(20, 1, [1, 2]) == {2: 2}, "20 altın 2 kişi: havuz 4, kişi başı 2")
+	assert(AssistScript.team_share(40, 1, [1, 2, 3, 4]) == {2: 2, 3: 2, 4: 2}, "40 altın 4 kişi: kişi başı 2")
+	assert(AssistScript.team_share(20, 1, [2]) == {2: 2}, "öldüren listede olmasa da gruba sayılır")
+	assert(AssistScript.team_share(20, 1, [1]).is_empty() and AssistScript.team_share(20, 1, []).is_empty(), "tek kişi: takım payı yok")
+	assert(AssistScript.team_share(0, 1, [1, 2]).is_empty() and AssistScript.team_share(20, 0, [1, 2]).is_empty(), "altın/öldüren yoksa boş")
+
+
+func test_team_share_carry_accumulates_and_is_capped() -> void:
+	var carry: Dictionary = {}
+	var a: Dictionary = AssistScript.team_share(10, 1, [1, 2, 3, 4], carry)
+	assert(a.is_empty(), "kişi başı 0,5: ilk öldürmede 0: %s" % [a])
+	var b: Dictionary = AssistScript.team_share(10, 1, [1, 2, 3, 4], carry)
+	assert(b == {2: 1, 3: 1, 4: 1}, "ikinci öldürmede birikmiş kesirle 1 altın: %s" % [b])
+	assert(AssistScript.team_share(1, 1, [1, 2], {2: 0.99}).is_empty(), "1 altınlık öldürmede hiçbir şey gitmez (tavan 0)")
+	var d: Dictionary = AssistScript.team_share(4, 1, [1, 2, 3, 4, 5], {2: 0.99, 3: 0.99, 4: 0.99, 5: 0.99})
+	assert(d == {2: 1, 3: 1}, "tavan floor(4 x 0,5) = 2: birikmiş kesirler öldüreni soyamaz: %s" % [d])
+
+
+func test_team_share_plus_assist_keeps_total() -> void:
+	var carry: Dictionary = {}
+	for i in range(5):
+		var team: Dictionary = AssistScript.team_share(20, 1, [1, 2, 3, 4], carry)
+		var rest: int = 20 - _sum(team)
+		var all: Dictionary = AssistScript.compute(rest, 1, {1: _dmg(70.0), 2: _dmg(30.0)}, {}, T0, {}, carry)
+		for p in team.keys():
+			all[p] = int(all.get(p, 0)) + int(team[p])
+		assert(_sum(all) == 20 and int(all[1]) >= 6, "takım + asist toplamı korunur, öldüren >= 6: %s" % [all])
+		assert(all.has(3) and all.has(4), "hasar vermeyen yakın oyuncular da takım payı alır: %s" % [all])
+
+
+func test_reset_clears_carry() -> void:
+	AssistScript.carry[7] = 0.5
+	AssistScript.reset()
+	assert(AssistScript.carry.is_empty(), "reset birikimi temizler")
 
 
 func test_damage_assist_split() -> void:
@@ -28,9 +108,10 @@ func test_damage_assist_split() -> void:
 	assert(int(r[1]) == 7 and int(r[2]) == 3 and _sum(r) == 10, "70/30 -> 7/3: %s" % [r])
 
 
-func test_killer_keeps_at_least_half() -> void:
+func test_killer_keeps_at_least_forty_percent() -> void:
+	## KILLER_MIN_FRAC 0,5 -> 0,4 (2026-10-19).
 	var r: Dictionary = AssistScript.compute(10, 1, {1: _dmg(10.0), 2: _dmg(90.0)}, {}, T0)
-	assert(int(r[1]) == 5 and int(r[2]) == 5, "öldüren en az yarı: %s" % [r])
+	assert(int(r[1]) == 4 and int(r[2]) == 6, "öldüren en az %%40: %s" % [r])
 
 
 func test_tiny_old_hit_is_not_assist() -> void:
@@ -47,7 +128,7 @@ func test_old_big_hit_is_not_assist() -> void:
 	var r: Dictionary = AssistScript.compute(10, 1, {1: _dmg(40.0), 2: _dmg(60.0, T0 - 9000)}, {}, T0)
 	assert(r == {1: 10}, "8 sn'den eski hasar asist değil: %s" % [r])
 	var r2: Dictionary = AssistScript.compute(10, 1, {1: _dmg(40.0), 2: _dmg(60.0, T0 - 7000)}, {}, T0)
-	assert(r2.has(2) and int(r2[2]) == 5, "8 sn içindeki hasar asist: %s" % [r2])
+	assert(r2.has(2) and int(r2[2]) == 6, "8 sn içindeki hasar asist (öldüren %%40 payı alır): %s" % [r2])
 
 
 func test_support_assist_needs_participant_target() -> void:
@@ -56,7 +137,7 @@ func test_support_assist_needs_participant_target() -> void:
 	var r: Dictionary = AssistScript.compute(20, 1, {1: _dmg(60.0), 2: _dmg(40.0)}, support, T0)
 	assert(r.has(3) and int(r[3]) >= 1, "destek asisti pay almalı: %s" % [r])
 	assert(not r.has(4), "katılmayana destek asist değil: %s" % [r])
-	assert(_sum(r) == 20 and int(r[1]) >= 10, "toplam 20, öldüren >=10: %s" % [r])
+	assert(_sum(r) == 20 and int(r[1]) >= 8, "toplam 20, öldüren >=8 (%%40): %s" % [r])
 
 
 func test_support_for_killer_counts() -> void:

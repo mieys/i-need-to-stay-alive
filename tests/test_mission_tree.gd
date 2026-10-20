@@ -28,7 +28,7 @@ class FakeEnemy extends Node2D:
 	var pushes: Array = []
 	func take_damage(amount: float, _crit: bool = false, _pen: float = 0.0, _area: bool = false) -> void:
 		hits.append(amount)
-	func apply_skill_push(dir: Vector2, distance: float) -> void:
+	func apply_skill_push(dir: Vector2, distance: float, _ult: bool = false) -> void:
 		pushes.append([dir, distance])
 
 
@@ -205,4 +205,34 @@ func test_magic_blast_focuses_bosses_and_pushes_them() -> void:
 	await _fire_blast(boss, 40.0, t.global_position)
 	assert(boss.pushes.size() == 1 and is_equal_approx(float(boss.pushes[0][1]), BlastScript.BOSS_PUSH_DISTANCE), "boss da itilir (C++ x0,4 öncesi büyük mesafe)")
 	assert(((boss.pushes[0][0]) as Vector2).y > 0.95, "boss ağaçtan dışa")
+	_cleanup()
+
+
+## 2026-10-19 (madde 316): kristal atışta parlar - taş maskesi sayfadan çıkar, kristal mermisi atınca pulse, sihirli atışta şarj sonunda tam parlama.
+func test_crystal_glows_when_the_tree_fires() -> void:
+	var t: Node2D = _tree(Vector2(21000, 21000), false)
+	var glow: Node2D = t.get("_glow")
+	var masks: Array = glow.get("_masks")
+	assert(masks.size() == TreeScript.ACTIVE_FRAMES, "her aktif kare için taş maskesi")
+	var img: Image = (masks[0] as Texture2D).get_image()
+	var lit: int = 0
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			if img.get_pixel(x, y).a > 0.5:
+				lit += 1
+	assert(lit > 400 and lit < 1300, "maske sadece kristal taşı (~700 px): %d" % lit)
+	await get_tree().create_timer(1.6).timeout
+	assert(float(glow.get("intensity")) < 0.2, "atış yokken sadece hafif nefes")
+	var e: FakeEnemy = _fake(t.global_position + Vector2(120, 0))
+	t.call("_try_fire_at_nearest_enemy")
+	await _frames(2)
+	assert(float(glow.get("intensity")) > 0.45, "kristal mermisi atınca parlar: %.2f" % float(glow.get("intensity")))
+	assert(bool(t.call("_try_fire_blast")), "sihirli atış hedef buldu")
+	var peak: float = 0.0
+	var t0: int = Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 1000:
+		await get_tree().process_frame
+		peak = maxf(peak, float(glow.get("intensity")))
+	assert(peak > 0.9, "şarj sonunda tam parlama: %.2f" % peak)
+	e.is_dead = true
 	_cleanup()

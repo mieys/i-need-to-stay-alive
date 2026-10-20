@@ -6,7 +6,7 @@ extends Control
 ##   dizilmiş oda, ışık sadece şömine + ayaklı lambada), üstünde CANLI şömine ateşi (ocak_ates.png 6 kare) + şömineye dönük oturan parti
 ##   (gerçek sprite'lar, sit_ klipleri) + lambanın yanında uyuyan köpek; hepsi x4 tam kat.
 ##   sol: "D - Panelsiz Ateş Işığı" (2026-10-16, ilk düz koyu panel "ruhsuz ve sıradan" bulundu; 4 prototipten D seçildi): kutu yok,
-##   sol taraf basamaklı kararır (sol_golge.png), büyük başlık + kiriş süsü, öğeler ikon + başlık + alt yazı, seçilide yanan mum.
+##   sol taraf yumuşak kararır (sol_golge.png), büyük başlık + kiriş süsü, öğeler ikon + başlık + alt yazı, seçilide yanan mum.
 ## AYARLAR: ortak settings_screen.gd (duraklatma menüsüyle aynı "Ateş Işığı" ekranı, madde 234) - açıkken tabela + menü gizlenir. Davranış (sahne geçişleri, ayarlar, debug modu) eskisiyle AYNI.
 ## Telefon: mobile_menu_fit.gd "TitleSign" + "MenuPanel" adlı düğümleri ekrana sığdırır (adlar korunur).
 
@@ -161,18 +161,10 @@ func _build_scene() -> void:
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_stage)
 	_stage.size = SCREEN
-	var bg := TextureRect.new()
-	bg.texture = load("res://assets/ui/ana_menu/ocak_basi.png")
-	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_SCALE
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stage.add_child(bg)
-	bg.position = Vector2.ZERO
-	bg.size = SCREEN
-	var shade := TextureRect.new() ## sol menünün okunurluğu: basamaklı karartma (ışık değil), sahneyle birlikte ölçeklenir
-	shade.texture = load("res://assets/ui/ana_menu/sol_golge.png")
-	shade.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_stage.add_child(scene_background())
+	var shade := TextureRect.new() ## sol menünün okunurluğu: yumuşak karartma (ışık değil), sahneyle birlikte ölçeklenir
+	shade.texture = load(FM.SHADE_PATH)
+	shade.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	shade.stretch_mode = TextureRect.STRETCH_SCALE
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -194,6 +186,26 @@ func _build_scene() -> void:
 	_fit_stage(layer)
 
 
+## Sahnenin arka plan resmi (SCREEN boyutunda, sahne katmanının ilk çocuğu). Doku IŞIKSIZ taban; şömine + lamba ışığı ve kenar karartması
+## ocak_basi_isik.gdshader'da ekran pikselinde yumuşak hesaplanır (2026-10-20: pişmiş Bayer basamakları "pixel pixel" bulundu).
+## menu_hearth_bg.gd de bunu kullanır.
+static func scene_background() -> TextureRect:
+	var bg := TextureRect.new()
+	bg.name = "SceneBg"
+	bg.texture = load("res://assets/ui/ana_menu/ocak_basi.png")
+	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/ocak_basi_isik.gdshader")
+	mat.set_shader_parameter("lamp_tex", load("res://assets/ui/ana_menu/ocak_lamba.png"))
+	bg.material = mat
+	bg.position = Vector2.ZERO
+	bg.size = SCREEN
+	return bg
+
+
 func _add_scene_sprite(sf: SpriteFrames, clip: String, foot: Vector2) -> void:
 	if sf == null:
 		return
@@ -212,7 +224,7 @@ func _fit_stage(layer: Control) -> void:
 
 
 ## ------------------------------------------------------------------ sol menü: "D - Panelsiz Ateş Işığı" (2026-10-16, kullanıcı seçti)
-## Kutu yok: sahnenin sol tarafı basamaklı kararır (sol_golge.png, sahne katmanında), üstte büyük başlık + kiriş süsü ayracı, öğeler
+## Kutu yok: sahnenin sol tarafı yumuşak kararır (sol_golge.png, sahne katmanında), üstte büyük başlık + kiriş süsü ayracı, öğeler
 ## ikon + 48 punto başlık + alt yazı. Seçili öğe (fare üstünde = odak; kumanda/klavye de odakla gezer) altın yazı + yanında YANAN MUM.
 const ITEM_ICON := 48.0
 const ITEM_H := 92.0
@@ -415,7 +427,7 @@ func _refresh_shards() -> void:
 
 ## ------------------------------------------------------------------ telefon
 ## TELEFON (2026-10-19; kullanıcı seçimi prototip S: ana menü = A düzeni + B "Gece Sıvası" renkleri, mobil_proto.gd A_ana_menu): sahne
-## (şömine, parti, köpek) aynı; solda basamaklı lacivert gölge + başlık + 5 iri öğe (seçili = altın zemin + sol şerit + yanan mum,
+## (şömine, parti, köpek) aynı; solda yumuşak lacivert gölge + başlık + 5 iri öğe (seçili = altın zemin + sol şerit + yanan mum,
 ## diğerleri soluk elmas), sağ üstte Ruh Kıymığı, sağ altta "Son seçim" kartı + HIZLI BAŞLA (son tek oyunculu seçimle doğrudan
 ## oyuna, last_loadout.gd). ÇIKIŞ telefonda yok (sistem geri / ana ekran). MenuFitter bu sahneyi artık büyütmez (PK.fit).
 const PH_ITEM_W := 900.0

@@ -13,6 +13,7 @@ const SOUND: AudioStream = preload("res://assets/audio/gold_pickup.mp3")
 const SOUND_DB := -4.0 ## yerden toplama sesi (gold_drop.tscn) -10 dB; yaratık altını kullanıcı isteğiyle +6 dB yükseltildi (2026-10-15)
 const TEXT_COLOR := Color(1.0, 0.85, 0.25)
 const ASSIST_COLOR := Color(0.65, 0.9, 1.0) ## asist payı daha soluk/mavimsi (bkz. assist.gd)
+const TEAM_KIND := 4 ## assist.gd KIND_TEAM: yakındaki canlı takım arkadaşı payı ("TAKIM +N"; assist.gd'yi önyüklememek için kopya)
 const TEXT_OFFSET := Vector2(0.0, -26.0)
 ## 2026-10-15 (kullanıcı: önce "1 sn sonra", sonra "0,2 saniye olsun"): altın, yazı ve ses ölümden bu kadar sonra gelir; konum ÖLÜM
 ## anında alınır (yaratık silinse de yazı olduğu yerde çıkar).
@@ -62,7 +63,7 @@ static func show_at(tree: SceneTree, amount: int, world_pos: Vector2, assist: in
 	var ft: Node = FloatingText.instantiate()
 	tree.current_scene.add_child(ft)
 	ft.global_position = world_pos + TEXT_OFFSET
-	var text: String = ("ASİST +%d" if assist > 0 else "+%d") % amount
+	var text: String = ("TAKIM +%d" if assist == TEAM_KIND else ("ASİST +%d" if assist > 0 else "+%d")) % amount
 	if ft.has_method("setup"):
 		ft.setup(text, ASSIST_COLOR if assist > 0 else TEXT_COLOR)
 	_add_coin_icon(ft, text)

@@ -40,6 +40,21 @@ const MAX_RAY_STEPS := 96
 ## vision_fog_mask.gdshader'a uniform olarak verilir - TEK kaynak burası.
 const MIN_WALL_CROSSING := 0.75
 
+## HIZLI RET (2026-10-19, FPS turu 4; madde 278): ışının sınır kutusunda (1 karo payla) HİÇ engel karosu yoksa DDA hiçbir engele giremez -> sonuç false, BİREBİR aynı.
+## Engel sayıları 4x4 karelik makro hücrelerde toplam-tablosu (summed-area table) olarak tutulur, kutu sorgusu O(1). Yalnız build() kurar (elle _cells verilen ızgarada
+## tablo boş kalır -> eski yol). Düşman / mermi / yerdeki öğe başına görüş yönetimi (vision_fog.gd _manage_item) elips içindeki her öğe için bu ışını atıyordu (~15-20 us).
+## VF_RAYBOX=0 ortam değişkeni kapatır (süreç düzeyi A/B hakemi: tools/fps_micro/proc_ab.ps1).
+static var _raybox_on: bool = OS.get_environment("VF_RAYBOX") != "0"
+
+
+## Hızlı reti açar / kapatır (testler: aynı ışının hızlı ret ve tam DDA sonuçları karşılaştırılır).
+static func set_raybox(on: bool) -> void:
+	_raybox_on = on
+
+const MACRO_SHIFT := 2
+var _macro_w: int = 0 ## makro ızgara genişliği (hücre); 0 = tablo yok
+var _macro_sat: PackedInt32Array = PackedInt32Array() ## (genişlik+1) x (yükseklik+1) toplam tablosu
+
 var _cells: PackedByteArray = PackedByteArray()
 var _grid_origin: Vector2i = Vector2i.ZERO
 var _grid_size: Vector2i = Vector2i.ONE
@@ -56,6 +71,8 @@ var _texture: ImageTexture = null
 ## ızgara boş kalır. `extra_layers` (ağaç katmanları): hücreleri aynı ızgaraya eklenir; hepsi `layer` ile AYNI dönüşümde (kardeş katmanlar) olmalı.
 func build(layer: TileMapLayer, extra_layers: Array = []) -> void:
 	_cells = PackedByteArray()
+	_macro_w = 0
+	_macro_sat = PackedInt32Array()
 	_texture = null
 	if layer == null or layer.tile_set == null:
 		return
@@ -74,9 +91,22 @@ func build(layer: TileMapLayer, extra_layers: Array = []) -> void:
 	_world_origin = layer.to_global(Vector2.ZERO)
 	_cell_size = layer.to_global(Vector2(layer.tile_set.tile_size.x, 0.0)).x - _world_origin.x
 	_cells.resize(_grid_size.x * _grid_size.y)
+	var mw: int = (_grid_size.x >> MACRO_SHIFT) + 1
+	var mh: int = (_grid_size.y >> MACRO_SHIFT) + 1
+	var counts := PackedInt32Array()
+	counts.resize(mw * mh)
 	for cell: Vector2i in used:
 		var rel: Vector2i = cell - _grid_origin
 		_cells[rel.y * _grid_size.x + rel.x] = 255
+		counts[(rel.y >> MACRO_SHIFT) * mw + (rel.x >> MACRO_SHIFT)] += 1
+	var sw: int = mw + 1
+	_macro_sat.resize(sw * (mh + 1))
+	for my: int in range(mh):
+		var row: int = 0
+		for mx: int in range(mw):
+			row += counts[my * mw + mx]
+			_macro_sat[(my + 1) * sw + (mx + 1)] = _macro_sat[my * sw + (mx + 1)] + row
+	_macro_w = mw
 
 
 func is_empty() -> bool:
@@ -123,6 +153,26 @@ func make_texture() -> ImageTexture:
 	return _texture
 
 
+## a-b (hücre koordinatı) ışınının sınır kutusu, 1 karo payla, hiç engel karosu içermiyor mu? (Hızlı ret, bkz. dosya başı HIZLI RET notu; DDA kutunun dışına çıkmaz.)
+func _box_is_clear(a: Vector2, b: Vector2) -> bool:
+	var x0: int = int(floorf(minf(a.x, b.x))) - 1 - _grid_origin.x
+	var x1: int = int(floorf(maxf(a.x, b.x))) + 1 - _grid_origin.x
+	var y0: int = int(floorf(minf(a.y, b.y))) - 1 - _grid_origin.y
+	var y1: int = int(floorf(maxf(a.y, b.y))) + 1 - _grid_origin.y
+	if x1 < 0 or y1 < 0 or x0 >= _grid_size.x or y0 >= _grid_size.y:
+		return true ## kutu ızgaranın tamamen dışında: dışarısı engelsiz (blocks_cell false)
+	x0 = maxi(x0, 0)
+	y0 = maxi(y0, 0)
+	x1 = mini(x1, _grid_size.x - 1)
+	y1 = mini(y1, _grid_size.y - 1)
+	var mx0: int = x0 >> MACRO_SHIFT
+	var my0: int = y0 >> MACRO_SHIFT
+	var mx1: int = x1 >> MACRO_SHIFT
+	var my1: int = y1 >> MACRO_SHIFT
+	var sw: int = _macro_w + 1
+	return _macro_sat[(my1 + 1) * sw + (mx1 + 1)] - _macro_sat[my0 * sw + (mx1 + 1)] - _macro_sat[(my1 + 1) * sw + mx0] + _macro_sat[my0 * sw + mx0] == 0
+
+
 ## `from_world`'den `to_world`'e görüş, bir duvarın ARKASINDAN geçiyorsa true (kural
 ## için dosya başındaki nota bak).
 func is_ray_blocked(from_world: Vector2, to_world: Vector2) -> bool:
@@ -130,6 +180,8 @@ func is_ray_blocked(from_world: Vector2, to_world: Vector2) -> bool:
 		return false
 	var a: Vector2 = world_to_cell_f(from_world)
 	var b: Vector2 = world_to_cell_f(to_world)
+	if _raybox_on and _macro_w > 0 and _box_is_clear(a, b):
+		return false
 	var d: Vector2 = b - a
 	var cell := Vector2i(a.floor())
 	var end_cell := Vector2i(b.floor())

@@ -265,3 +265,92 @@ func test_close_over_matches_the_naive_rule_on_random_pools() -> void:
 			n.free()
 	assert(mismatches == 0, "close_over eski kuralla %d/80 denemede farklı küme verdi" % mismatches)
 	assert(total_added > 50, "deney anlamlı olsun: kapanışla eklenen yaratık sayısı çok az (%d)" % total_added)
+
+
+## --- C++ yolu (madde 286): EnemyWorld.depth_scan, eski GDScript yolla (CreatureDepth._cpp_on = false) AYNI z'leri vermeli --------------------------------------------------------
+class _DepthChar extends Node2D:
+	var is_dead: bool = false
+	var paladin_zone_active: bool = false
+	var paladin_zone_radius: float = 110.0
+
+
+func _depth_zs(nodes: Array, chars: Array) -> PackedInt32Array:
+	var zs := PackedInt32Array()
+	for n in nodes:
+		zs.append((n as Node2D).z_index if is_instance_valid(n) else -999)
+	for c in chars:
+		zs.append((c as Node2D).z_index)
+	return zs
+
+
+func test_cpp_scan_matches_the_gdscript_scan_on_a_real_crowd() -> void:
+	var BridgeScript: GDScript = preload("res://scripts/enemy_world/enemy_world_bridge.gd")
+	var depth_script: GDScript = CreatureDepthScript
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 90210
+	var player := _DepthChar.new()
+	player.add_to_group("player")
+	_track(player)
+	add_child(player)
+	player.global_position = Vector2(400, 400)
+	var crowd: Array = []
+	var ids: Array = ["golem1", "iskelet1", "mantar1", "demon1", "lich1", "hayalet1", "vampire1", "iblis1"]
+	for i in range(70):
+		var packed: PackedScene = load("res://scenes/creatures/enemy_%s.tscn" % ids[i % ids.size()])
+		var e: Node2D = packed.instantiate()
+		e.set_meta("creature_id", ids[i % ids.size()])
+		e.speed = 0.0
+		_track(e)
+		add_child(e)
+		e.global_position = player.global_position + Vector2(rng.randf_range(-320, 320), rng.randf_range(-260, 360))
+		crowd.append(e)
+	## görev kopyası tarzı kayıtsız adaylar (is_dead alanlı)
+	var copies: Array = []
+	for i in range(6):
+		var c: Node2D = _creature(player.global_position + Vector2(rng.randf_range(-250, 250), rng.randf_range(-200, 300)))
+		c.add_to_group("mission_copies")
+		copies.append(c)
+	await get_tree().process_frame
+	var b: Node = BridgeScript._instance
+	assert(b != null, "köprü kurulmalı")
+	b.set_physics_process(false)
+	var cd: Node = CreatureDepthScript.new()
+	_track(cd)
+	add_child(cd)
+	var checks: int = 0
+	var mism: int = 0
+	var raised_total: int = 0
+	var all_nodes: Array = crowd + copies
+	for t in range(40):
+		for e in crowd:
+			e.global_position += Vector2(rng.randf_range(-6, 6), rng.randf_range(-6, 6))
+			if rng.randf() < 0.05:
+				e.visible = not e.visible
+		player.global_position += Vector2(rng.randf_range(-7, 7), rng.randf_range(-7, 7))
+		b._physics_process(1.0 / 60.0) ## C++ konumları yenilenir (sync_external_moves)
+		player.paladin_zone_active = t >= 25 and t < 33 ## kubbe aktifken eski yola düşer, kapanınca C++ yoluna dönerken titreme belleği doğru kalmalı
+		depth_script.set("_cpp_on", false)
+		for e in all_nodes:
+			e.z_index = 0
+		cd.call("update_now")
+		var za: PackedInt32Array = _depth_zs(all_nodes, [player])
+		depth_script.set("_cpp_on", true)
+		for e in all_nodes:
+			e.z_index = 0
+		cd.call("update_now")
+		var zb: PackedInt32Array = _depth_zs(all_nodes, [player])
+		for k in range(za.size()):
+			checks += 1
+			if za[k] != zb[k]:
+				mism += 1
+			if zb[k] >= CreatureDepthScript.FRONT_Z:
+				raised_total += 1
+	depth_script.set("_cpp_on", true)
+	assert(mism == 0, "C++ taraması eski GDScript taramasıyla %d/%d z değerinde farklı" % [mism, checks])
+	assert(raised_total > 100, "deney anlamlı olsun: yükseltilen yaratık sayısı çok az (%d)" % raised_total)
+	for e in all_nodes:
+		e.z_index = 0
+	_cleanup()
+	if is_instance_valid(b):
+		b.free()
+	BridgeScript.set("_instance", null)

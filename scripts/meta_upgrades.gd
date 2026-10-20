@@ -57,7 +57,7 @@ const LIST: Array = [
 		"max": 5, "per": 0.02, "unit": PCT, "first": 40, "step": 30},
 	{"id": "shield_protection", "name": "Kalkan Soğurma", "desc": "Mana kalkanın hasarın daha büyük kısmını emer.", "icon": "shield_protection",
 		"max": 5, "per": 0.02, "unit": PCT, "first": 45, "step": 35},
-	{"id": "free_reroll", "name": "Ücretsiz Karıştırma", "desc": "Her koşuda level kartı karıştırmanın ilki bedava.", "icon": "",
+	{"id": "free_reroll", "name": "Ücretsiz Karıştırma", "desc": "Her level atlama kartında karıştırmanın ilki bedava.", "icon": "",
 		"max": 1, "per": 1.0, "unit": COUNT, "first": 300, "step": 0},
 	{"id": "revive", "name": "Dirilme Hakkı", "desc": "Her koşuya +1 dirilme hakkıyla başlarsın.", "icon": "",
 		"max": 1, "per": 1.0, "unit": COUNT, "first": 600, "step": 0},

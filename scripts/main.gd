@@ -90,6 +90,7 @@ const CloudShadowMaterial := preload("res://shaders/cloud_shadows_material.tres"
 ## çalışma zamanında burada atanıyor.
 const MAP_ROOT_PATH := "Harita"
 const CameraMapLimitsScript: GDScript = preload("res://scripts/camera_map_limits.gd")
+const DownedSpectateScript: GDScript = preload("res://scripts/downed_spectate.gd") ## yerdeki oyuncunun arkadaş izleme şeridi
 
 ## ÖNEMLİ: TileMapLayer haritayı "rendering quadrant"lara böler ve HER
 ## quadrant AYRI bir CanvasItem olarak çizilir. Shader dünya konumunu
@@ -338,6 +339,12 @@ func _ready() -> void:
 	var camera_limits: Node = CameraMapLimitsScript.new()
 	camera_limits.name = "CameraMapLimits"
 	add_child(camera_limits)
+
+	## Yere düşen oyuncu da arkadaşlarını izleyebilsin (bkz. downed_spectate.gd; ölüm ekranı izleyicisi _begin_spectate_mode ayrı).
+	if NetworkManager.is_multiplayer_active:
+		var downed_spectate: CanvasLayer = DownedSpectateScript.new()
+		downed_spectate.name = "DownedSpectate"
+		add_child(downed_spectate)
 
 	## Görüş alanı sisi: dünyanın üstünde, HUD'un ALTINDA. VignetteOverlay ve HUD
 	## aynı CanvasLayer katmanında (1) olduğu için çizim sırasını ağaç sırası
@@ -660,7 +667,8 @@ func _update_character_draw_order() -> void:
 ## Anahtar düğümün kök noktası DEĞİL AYAK hizası: kök gövde ortasında ve yaratık boyları çok farklı (boss, sıçan, golem) -
 ## merkeze göre sıralanınca büyük bir yaratığın ayağının hemen üstündeki küçük yaratık yine onun üstüne çiziliyordu.
 ## Ayak = sprite karesindeki en alt dolu piksel satırı (gölgeli sayfalarda gölgenin altı), doku başına bir kez ölçülür.
-const CREATURE_SORT_GROUPS: Array[String] = ["enemies", "player_ally", "player_allies"]
+## "ysort_props": yerde duran küçük nesneler (Oakley çiçeği, 2026-10-19) yaratıklarla aynı ayak sırasına girer (oakley_flower.gd DERİNLİK notu).
+const CREATURE_SORT_GROUPS: Array[String] = ["enemies", "player_ally", "player_allies", "ysort_props"]
 static var _foot_row_cache: Dictionary = {} ## "doku yolu|hframes|vframes" -> kare üstünden ayak satırına px (kare boyu ile)
 
 
@@ -2075,8 +2083,9 @@ func _try_open_next_pending_chest() -> void:
 		## Kullanıcı isteği: "sandık seçerken diğer oyuncularda ve sandık
 		## seçen kişide 25 saniyelik bekleme süresi olmuyor, onun da bekleme
 		## süresi olması gerekiyor, tıpkı level kartı seçme ekranı gibi" -
-		## her yeni sandık menüsü açıldığında geri sayım (yeniden) 25sn'ye
-		## başlar (bkz. chest_menu.gd _on_countdown_tick).
+		## sandık akışının ilk menüsünde kart akışından kalan ORTAK süre devralınır,
+		## sonraki sandıklar sayacı sıfırlamaz (bkz. NetworkManager.
+		## _begin_shared_wait_clock, chest_menu.gd _on_countdown_tick).
 		NetworkManager.start_chest_countdown()
 	_hide_chest_wait_overlay()
 	## Önce normal sandıklar (parça kartı), sonra elit sandıklar (elit açılış animasyonu + epik eşya kartı, bkz.
@@ -2994,8 +3003,11 @@ func _on_player_died() -> void:
 	## yayınını da (bkz. _broadcast_local_match_stats) artık üstlendiği için
 	## burada ayrıca çağırmaya gerek yok.
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.report_self_permanently_dead()
+		## 2026-10-19 (kullanıcı: "bazen bir oyuncu ölünce onda oyun sonucu ekranı açılmıyor"): ÖNCE izleyici ekranı, SONRA host'a
+		## bildirim. Son ölen HOST ise report_self_permanently_dead() oyunu SENKRON bitirir (game_over_synced -> "OYUN BİTTİ");
+		## izleyici ekranı bundan sonra çizilirse onu ezip "SEN ÖLDÜN / izleyicisin"e çevirir, istatistik kutusu da gizli kalırdı.
 		_show_death_overlay(false)
+		NetworkManager.report_self_permanently_dead()
 		return
 	GameManager.is_game_over = true
 	_record_local_match_stats()
@@ -3156,6 +3168,9 @@ func _on_game_over_synced() -> void:
 ## is_final=true: oyun gerçekten bitti (tek oyunculu HER ZAMAN, çok
 ## oyunculuda herkes öldüğünde).
 func _show_death_overlay(is_final: bool) -> void:
+	## Oyun bittikten sonra izleyici ekranına geri dönülmez (geç/sırası bozuk bir çağrı "OYUN BİTTİ"yi ezmesin).
+	if GameManager.is_game_over:
+		is_final = true
 	if is_final and not _game_over_sfx_played:
 		_game_over_sfx_played = true
 		EventSfx.play(get_tree(), &"game_over")

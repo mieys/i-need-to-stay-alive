@@ -55,6 +55,7 @@ const GLOW := {
 	"execute_mark": [Color(1.0, 0.35, 0.3), 0.7, 1.5], "bounce_spark": [Color(1.0, 0.9, 0.5), 0.65, 2.5],
 	"shade_slash": [Color(0.7, 0.45, 1.0), 0.6, 1.4], "spin_slash": [Color(0.95, 0.95, 1.0), 0.35, 0.9],
 	"vortex": [Color(0.9, 0.95, 1.0), 0.4, 1.0],
+	"rainbow_dazzle": [Color(1.0, 0.95, 0.85), 0.8, 0.8], ## Gökkuşağı Asası kamaşma anı (madde 306)
 }
 
 var sheet: String = ""

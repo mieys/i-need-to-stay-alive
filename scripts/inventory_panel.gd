@@ -1,11 +1,12 @@
 extends Control
 
-## Yeni "Envanter" paneli: sahip olunan silahları küçük ikonlarla (üst sıra,
-## en fazla 3 (2026-10-12 deneme; eskiden 5) - bkz. GameManager.owned_weapons/player.gd MAX_OWNED_WEAPONS)
-## ve altın/tecrübe miktarını gösterir. HUD'daki tek bir "ENVANTER" butonu
-## bu paneli VE stats_panel.tscn'i (istatistikler) birlikte açıp kapatıyor
-## (bkz. hud.gd _on_envanter_toggle) - referans görselde ikisi yan yana
-## gösterildiği için.
+## ENVANTER. İki ayrı görünüş, satış kuralları ortak (_do_sell_item / _do_sell_weapon_equip):
+##  - MASAÜSTÜ "KAHRAMAN ÇANTASI" (madde 341, 2026-10-20; kullanıcı madde 336 prototiplerinden B'yi seçti): tek ekran - solda gruplu
+##    özellikler, ortada ışık havuzunda karakter + çevresinde 3 silah yuvası (Zanaatkâr sanatı + efsun kontürü) + Mana Kalkanı / evcil,
+##    sağda HEYBE (kademe satırları) + seçili şeyin kartı (statlar, pasif, tarif, SATARSAN, SAT). Satış = seç -> SAT (onay penceresi yok).
+##    Özellikler paneli (stats_panel) masaüstünde artık ayrıca açılmaz (hud.gd _on_envanter_toggle). Kod: dosyanın sonundaki "_ch_" bölümü.
+##  - TELEFON (MobileUI.enabled): eski yuva düzeni + Gece Sıvası (madde 276), hud.gd apply_mobile_layout'u çağırır; özellikler paneli
+##    rayın ÖZELLİK sekmesinde. Bu yol eski kurulumu (_build_legacy) kullanır.
 
 const WEAPON_ICON_TEXTURES := {
 	"dagger": preload("res://assets/weapons/base_knife/icon_v2.png"),
@@ -23,12 +24,16 @@ const WEAPON_ICON_TEXTURES := {
 	"pence": preload("res://assets/weapons/pence/icon.png"),
 	"topuz": preload("res://assets/weapons/topuz/icon.png"),
 	"uzunkilic": preload("res://assets/weapons/uzunkilic/icon.png"),
+	"gokkusagi": preload("res://assets/weapons/zanaat/gokkusagi_L1.png"),
+	"mizrak": preload("res://assets/weapons/zanaat/mizrak_L1.png"),
+	"kalkan": preload("res://assets/weapons/zanaat/kalkan_L1.png"),
+	"yinyang": preload("res://assets/weapons/zanaat/yinyang_L1.png"),
 }
 const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Tüftüf", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç",
+	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı",
 }
 
 ## Eşyalar (bkz. scripts/items.gd) - dükkandaki ItemsPage satırlarıyla BİREBİR
@@ -133,6 +138,8 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED and visible:
 		_play_open_animation()
 		_clear_detail()
+		if _chest != null:
+			_ch_on_open()
 
 
 ## Kısa, tek seferlik bir ease-out büyüme+belirme - zıplama/elastik yok,
@@ -141,6 +148,7 @@ func _play_open_animation() -> void:
 	if _open_tween and _open_tween.is_valid():
 		_open_tween.kill()
 	modulate.a = 0.0
+	pivot_offset = size * 0.5
 	scale = Vector2(OPEN_ANIM_START_SCALE, OPEN_ANIM_START_SCALE)
 	_open_tween = create_tween()
 	_open_tween.set_parallel(true)
@@ -151,8 +159,9 @@ func _play_open_animation() -> void:
 
 
 var main_layout: VBoxContainer = null
-var weapons_grid: HBoxContainer = null
-var equip_grid: HBoxContainer = null
+## Masaüstünde (Kahraman Çantası): weapons_grid = sahnedeki silah yuvaları, equip_grid = kalkan + evcil yuvaları, items_grid_box = HEYBE.
+var weapons_grid: Control = null
+var equip_grid: Control = null
 var items_grid_box: VBoxContainer = null ## 2026-10-02: kademe bölümleri (bkz. _refresh_items_grid)
 
 var _last_weapons_signature: String = ""
@@ -166,42 +175,13 @@ var _last_equip_signature: String = ""
 ## bunu "para vermiyor" (0 altın iade - aslında doğru davranış, çünkü bedava
 ## verilmişti) sanıp karıştırıyordu. Artık HER satış tek bir paylaşılan
 ## ConfirmationDialog üzerinden onay istiyor, gerçek satış mantığı SADECE
-## kullanıcı "Evet" dediğinde çalışıyor.
-var _sell_confirm_dialog: ConfirmationDialog = null
-var _pending_sell_action: Callable = Callable()
-
-
-func _ensure_sell_confirm_dialog() -> ConfirmationDialog:
-	if _sell_confirm_dialog and is_instance_valid(_sell_confirm_dialog):
-		return _sell_confirm_dialog
-	_sell_confirm_dialog = ConfirmationDialog.new()
-	_sell_confirm_dialog.title = "Satışı Onayla"
-	_sell_confirm_dialog.ok_button_text = "Sat"
-	_sell_confirm_dialog.cancel_button_text = "Vazgeç"
-	_sell_confirm_dialog.confirmed.connect(_on_sell_confirmed)
-	add_child(_sell_confirm_dialog)
-	return _sell_confirm_dialog
-
-
+## kullanıcı "Evet" dediğinde çalışıyor. 2026-10-20 (madde 341): onay penceresi kalktı - masaüstünde tıklamak SEÇER, satış kartın SAT
+## düğmesiyle (iki adım); telefonda alttaki bilgi şeridi + SAT (madde 276).
 func _request_sell_confirmation(item_label: String, refund: int, action: Callable, desc: String = "", shard_refund: int = 0) -> void:
-	if _mobile:
-		## Telefon: onay penceresi yerine alttaki bilgi şeridi (ad + açıklama + büyük SAT) - dokunmak önce bilgiyi gösterir.
-		if shard_refund > 0:
-			desc += "\n+%d Silah Parçacığı geri alırsın." % shard_refund
-		_show_detail(item_label, desc, refund, action)
-		return
-	var dialog: ConfirmationDialog = _ensure_sell_confirm_dialog()
-	dialog.dialog_text = "%s eşyasını satmak istediğine emin misin?\n\n+%d Altın kazanacaksın." % [item_label, refund]
+	## Telefon: alttaki bilgi şeridi (ad + açıklama + büyük SAT) - dokunmak önce bilgiyi gösterir.
 	if shard_refund > 0:
-		dialog.dialog_text += "\n+%d Silah Parçacığı geri alacaksın." % shard_refund
-	_pending_sell_action = action
-	dialog.popup_centered()
-
-
-func _on_sell_confirmed() -> void:
-	if _pending_sell_action.is_valid():
-		_pending_sell_action.call()
-	_pending_sell_action = Callable()
+		desc += "\n+%d Silah Parçacığı geri alırsın." % shard_refund
+	_show_detail(item_label, desc, refund, action)
 
 ## Kalkan adları shield_enchant_defs.gd'den (ShieldEnchantDefs.type_name) gelir.
 const EQUIP_NAMES: Dictionary = {
@@ -225,6 +205,19 @@ func _ready() -> void:
 	if _ready_done:
 		return
 	_ready_done = true
+	if not MobileUIScript.enabled:
+		if is_inside_tree() and get_tree() != null:
+			player = get_tree().get_first_node_in_group("player")
+		_build_chest()
+		_refresh()
+		return
+	_build_legacy()
+
+
+## Eski (telefon) kurulumu: bej sahne düğümleri + kaydırmalı yuva düzeni; apply_mobile_layout bunu Gece Sıvası'na çevirir.
+func _build_legacy() -> void:
+	if main_layout != null:
+		return
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
 	## DÜZELTME (bkz. hud.gd ShieldModeSlot ile AYNI kök neden) - CloseButton
@@ -375,6 +368,9 @@ func _process(_delta: float) -> void:
 
 
 func _refresh() -> void:
+	if _chest != null:
+		_ch_refresh()
+		return
 	gold_label.text = str(GameManager.gold)
 	if player and is_instance_valid(player):
 		xp_label.text = str(int(player.xp))
@@ -386,6 +382,9 @@ func _refresh() -> void:
 
 
 func _refresh_weapons() -> void:
+	if _chest != null:
+		_ch_build_weapons()
+		return
 	if not main_layout or not is_instance_valid(main_layout):
 		return
 		
@@ -476,6 +475,9 @@ func _refresh_weapons() -> void:
 func _on_sell_weapon_equip(index: int) -> void:
 	if index < 0 or index >= GameManager.owned_weapons.size():
 		return
+	if _chest != null: ## masaüstü: tıklama seçer, satış kartın SAT düğmesiyle
+		_ch_select("weapon", index)
+		return
 	if GameManager.owned_weapons.size() <= 1:
 		if _mobile: ## telefonda bilgi yine görünür, son silah satılamaz (SAT yok)
 			var only: Dictionary = GameManager.owned_weapons[index]
@@ -498,6 +500,8 @@ func _do_sell_weapon_equip(index: int) -> void:
 	var entry: Dictionary = GameManager.owned_weapons[index]
 	var refund: int = EnchantDefs.sell_refund_gold(entry)
 	var shard_refund: int = EnchantDefs.sell_refund_shards(entry)
+	## Masaüstü: eşya satışı gibi silah ikonu da parçalanıp altına döner (yuva ikonu = kaynak).
+	var shatter: Array = _ch_icon_rect(_ch_weapon_icons.get(index) as TextureRect)
 
 	if player and is_instance_valid(player) and player.has_method("remove_owned_weapon"):
 		player.remove_owned_weapon(index)
@@ -505,6 +509,8 @@ func _do_sell_weapon_equip(index: int) -> void:
 	GameManager.owned_weapons.remove_at(index)
 	GameManager.gold += refund
 	GameManager.add_weapon_shards(shard_refund)
+	if not shatter.is_empty() and refund > 0:
+		GoldRewardFx.show_shatter(get_tree(), refund, shatter[0], shatter[1], shatter[2])
 	_last_weapons_signature = ""
 	_refresh()
 
@@ -521,6 +527,9 @@ func _get_upgrade_cost(item: String, next_level: int) -> int:
 
 
 func _refresh_equipments() -> void:
+	if _chest != null:
+		_ch_build_equip()
+		return
 	if not main_layout or not is_instance_valid(main_layout):
 		return
 		
@@ -672,6 +681,9 @@ func _do_sell_utility_equip(key: String) -> void:
 
 
 func _refresh_items_grid() -> void:
+	if _chest != null:
+		_ch_build_bag()
+		return
 	var sig: String = str(player.get_max_item_slots() if player and is_instance_valid(player) and player.has_method("get_max_item_slots") else 1) + "|"
 	for entry: Dictionary in GameManager.owned_items:
 		sig += str(entry.get("key", "")) + ","
@@ -742,6 +754,9 @@ Satmak için tıkla (+%d altın)" % [Items.item_name(key), Items.describe(key), 
 func _on_sell_item(index: int) -> void:
 	if index < 0 or index >= GameManager.owned_items.size():
 		return
+	if _chest != null:
+		_ch_select("item", index)
+		return
 	var key: String = str((GameManager.owned_items[index] as Dictionary).get("key", ""))
 	_request_sell_confirmation(Items.item_name(key), Items.sell_refund(key), _do_sell_item.bind(index),
 			Items.KADEME_NAMES[Items.kademe(key) - 1] + "  ·  " + Items.describe(key))
@@ -779,6 +794,11 @@ func _do_sell_item(index: int) -> void:
 ## ---------------------------------------------------------------- TELEFON YERLEŞİMİ (bkz. dosya başındaki _mobile notu)
 ## rect: tuval px (hud.gd verir). Başlık levhası + altın/tecrübe üstte, X sağ üstte, yuvalar kaydırmalı alanda, altta bilgi şeridi.
 func apply_mobile_layout(rect: Rect2) -> void:
+	if _chest != null: ## masaüstü görünüşü kurulmuşken telefon yerleşimi istendi: eski (telefon) kuruluma dön
+		_chest.queue_free()
+		_chest = null
+		($Frame as Control).visible = true
+		_build_legacy()
 	_mobile = true
 	_slot = 136.0
 	_icon_px = 96.0
@@ -959,3 +979,908 @@ func _apply_night_style() -> void:
 		for fc: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 			_detail_sell.add_theme_color_override(fc, PH_TEXT)
 
+
+
+## ================================================================ MASAÜSTÜ: "KAHRAMAN ÇANTASI" (madde 341)
+## Prototip: tools/proto_20261020/envanter_proto.gd _build_b (madde 336). Görünüş ShopDarkKit PAL_WOOD (demirci "Örs Vitrini") + HUD Kısık Ahşap
+## kenarı; simgeler: silah = Zanaatkâr kademe sanatı + efsun kontürü (WeaponTierArt + DarkKit.wicon), stat = stat_mini_lol (HUD mini paneli),
+## eşya = kademe renkli yuva (satıcıdaki tile). Pencere dükkanlar gibi grup panelinin solundaki güvenli alanda ortalanır, sığmazsa küçülür.
+## Oyunu durdurmaz; arkadaki karartmaya tıklamak kapatır. Kurallar (satış iadesi, son silah, kalkan satılmaz) bu dosyanın üst kısmıyla aynı.
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const DarkKit := preload("res://scripts/shop_dark_kit.gd")
+const HudTheme := preload("res://scripts/hud_theme.gd")
+const HudStatPanel := preload("res://scripts/hud_stat_panel.gd")
+const StatsPanelScript := preload("res://scripts/stats_panel.gd")
+const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
+const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
+const PetCatalog := preload("res://scripts/pet_catalog.gd")
+const ModalSafeArea := preload("res://scripts/modal_safe_area.gd")
+
+const CH_SIZE := Vector2(1600, 1000)
+const CH_LEFT_W := 360.0
+const CH_STAGE := Vector2(520, 860)
+const CH_TILE := 72.0 ## 32 px eşya ikonu 2x (yuva kenarıyla >= 72 olmalı, yoksa 1x kalır)
+const CH_COLS := 7
+const CH_BAG_H := 332.0 ## 3 kademe satırı; fazlası kayar
+const CH_WSLOT := 112.0
+const CH_WSLOT_SMALL := 88.0 ## 4+ silah (Talon Ayna Formu): küçük yuva, ad yazısı yok
+const CH_EQ_SLOT := 96.0
+const CH_REFRESH_MS := 250
+## Silah yayı: karakterin çevresinde 210° -> 330° (üst yarı), merkez/yarıçaplar sahne px.
+const CH_ARC_CENTER := Vector2(260, 408)
+const CH_ARC_RADIUS := Vector2(208, 312)
+const CH_CHEST := Vector2(260, 370) ## bağ çizgilerinin hedefi (karakterin göğsü)
+const CH_XP := Color("#c9a2f0")
+const CH_XP_TEXT := Color("#d0a8f6")
+const CH_HEART := Color("#e8735e")
+const CH_GROUPS := [
+	["SALDIRI", ["damage", "fire_rate", "crit_chance", "crit_damage", "shield_pen_percent", "range"]],
+	["SAVUNMA", ["shield_protection", "shield_amount", "shield_regen", "health_regen", "lifesteal", "dodge"]],
+	["DESTEK", ["cooldown_reduction", "heal_power", "speed", "luck"]],
+]
+## Eşya stat anahtarı -> stat_mini_lol simgesi ("heart" / "xp" = kendi glifi/dokusu).
+const CH_STAT_ICON := {
+	"damage_bonus": "damage", "item_flat_hit_damage": "damage", "item_damage_mult_bonus": "damage", "item_ap_percent": "damage",
+	"item_fire_rate_percent": "fire_rate", "crit_chance_bonus": "crit_chance", "item_crit_damage_bonus": "crit_damage",
+	"cooldown_reduction_percent": "cooldown_reduction", "lifesteal_percent": "lifesteal", "item_extra_lifesteal": "lifesteal",
+	"dodge_chance": "dodge", "item_speed_percent": "speed", "shield_pen_percent": "shield_pen_percent",
+	"item_pickup_range_percent": "range", "shield_protection_bonus": "shield_protection", "item_shield_power_flat": "shield_amount",
+	"item_shield_regen_flat": "shield_regen", "item_shield_regen_percent": "shield_regen", "item_shield_delay_reduction": "shield_regen",
+	"item_health_regen": "health_regen", "item_vitamin_regen_bonus": "health_regen", "heal_shield_power": "heal_power", "luck": "luck",
+	"max_health": "heart", "exp_gain_percent": "xp",
+}
+const CH_G_HEART := [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."]
+const CH_XP_GEM := "res://assets/ui/newui/icon_xp_gem.png"
+
+var _k = null ## DarkKit örneği (PAL_WOOD)
+var _chest: Control = null ## tam ekran kök: karartma + pencere
+var _ch_win: Control = null
+var _ch_gold: Label = null
+var _ch_shard: Label = null
+var _ch_stat_vals: Dictionary = {} ## stat id -> değer Label'ı
+var _ch_tips: Dictionary = {}
+var _ch_stage: Control = null
+var _ch_lines = null ## DarkKit.Lines - silah yuvası -> göğüs bağları
+var _ch_sprite: AnimatedSprite2D = null
+var _ch_name: Label = null
+var _ch_level: Label = null
+var _ch_xp_bar = null ## DarkKit.Bar
+var _ch_xp_text: Label = null
+var _ch_bag_count: Label = null
+var _ch_detail: PanelContainer = null
+var _ch_detail_box: VBoxContainer = null
+var _ch_sell_btn: Button = null
+var _ch_sell_note: String = "" ## seçili şeyin iade metni (testler okur)
+var _ch_sel: Dictionary = {} ## {"kind": "item" | "weapon" | "shield" | "pet", "index": int}
+var _ch_rings: Array = [] ## [tür, dizin, seçim halkası]
+var _ch_weapon_icons: Dictionary = {} ## silah dizini -> ikon TextureRect (satışta parçalanma kaynağı)
+var _ch_last_stats_ms: int = -100000
+var _ch_reserved: float = -1.0
+
+
+func _build_chest() -> void:
+	for c in get_children():
+		if c is CanvasItem:
+			(c as CanvasItem).visible = false
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	offset_left = 0.0
+	offset_top = 0.0
+	offset_right = 0.0
+	offset_bottom = 0.0
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_k = DarkKit.new(DarkKit.PAL_WOOD)
+	_chest = Control.new()
+	_chest.name = "HeroChest"
+	_chest.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_chest.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_chest)
+	var dim := ColorRect.new()
+	dim.name = "Dim"
+	dim.color = Color(0.02, 0.02, 0.04, 0.45)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(_ch_on_dim_input)
+	_chest.add_child(dim)
+	## ahşap kenar (HUD Kısık Ahşap) + iç panel (demirci ahşabı)
+	var rim: PanelContainer = _k.box(HudTheme.RIM, HudTheme.OUTLINE, 8, 4, 6)
+	rim.name = "Window"
+	rim.mouse_filter = Control.MOUSE_FILTER_STOP ## pencereye tıklama arkadaki karartmaya (kapat) düşmesin
+	rim.custom_minimum_size = CH_SIZE
+	_chest.add_child(rim)
+	_ch_win = rim
+	var win: PanelContainer = _k.box(_k.c("panel"), HudTheme.RIM_LO, 18, 3, 4)
+	win.theme = _k.theme()
+	rim.add_child(win)
+	var col: VBoxContainer = _k.v(12)
+	win.add_child(col)
+	col.add_child(_ch_header())
+	var body: HBoxContainer = _k.h(16)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(body)
+	body.add_child(_ch_stats_column())
+	body.add_child(_ch_build_stage())
+	var right: VBoxContainer = _k.v(12)
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(right)
+	right.add_child(_ch_bag_box())
+	_ch_detail = _k.box(_k.c("panel2"), _k.c("line_hi"), 16, 3, 6)
+	_ch_detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_ch_detail.mouse_filter = Control.MOUSE_FILTER_PASS
+	_ch_detail_box = _k.v(10)
+	_ch_detail.add_child(_ch_detail_box)
+	right.add_child(_ch_detail)
+	UISound.connect_all_buttons(_chest)
+
+
+func _ch_header() -> HBoxContainer:
+	var head: HBoxContainer = _k.h(16)
+	var plaque: PanelContainer = _k.box(HudTheme.INSET, HudTheme.RIM_HI, 10, 3, 4)
+	var pr: HBoxContainer = _k.h(12)
+	pr.add_child(_k.sp(6))
+	pr.add_child(_k.glyph(DarkKit.G_BAG, HudTheme.ACCENT, 4))
+	pr.add_child(_k.lbl("KAHRAMAN ÇANTASI", 40, HudTheme.ACCENT))
+	pr.add_child(_k.sp(6))
+	plaque.add_child(pr)
+	head.add_child(plaque)
+	head.add_child(_k.sp(0, 0, true))
+	var g: HBoxContainer = _k.amt(GameManager.gold, 32, _k.c("price"))
+	_ch_gold = g.get_meta("label") as Label
+	head.add_child(g)
+	head.add_child(_k.sp(10))
+	var s: HBoxContainer = _k.amt(GameManager.weapon_shards, 32, DarkKit.SHARD_TEXT, "shard")
+	_ch_shard = s.get_meta("label") as Label
+	head.add_child(s)
+	head.add_child(_k.sp(10))
+	var x: Button = _k.btn("", "ghost", 32, 56, 56)
+	x.name = "CloseX"
+	x.tooltip_text = "Kapat (ESC)"
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cc.add_child(_k.glyph(DarkKit.G_X, _k.c("text"), 4))
+	x.add_child(cc)
+	x.pressed.connect(_on_close_pressed)
+	head.add_child(x)
+	return head
+
+
+func _ch_on_dim_input(e: InputEvent) -> void:
+	if e is InputEventMouseButton and (e as InputEventMouseButton).pressed and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		_on_close_pressed()
+
+
+## Pencere grup panelinin solundaki güvenli alanda ortalanır (dükkanlarla aynı kural, madde 36), sığmazsa küçülür.
+func _ch_fit() -> void:
+	if _ch_win == null or not is_inside_tree():
+		return
+	var view: Vector2 = get_viewport_rect().size
+	_ch_reserved = ModalSafeArea.reserved_right(get_tree(), view)
+	var safe: Rect2 = ModalSafeArea.rect(get_tree(), view)
+	var sz: Vector2 = _ch_win.get_combined_minimum_size().max(CH_SIZE)
+	var fit: float = minf(1.0, minf(safe.size.x * 0.97 / sz.x, safe.size.y * 0.97 / sz.y))
+	_ch_win.scale = Vector2.ONE * fit
+	_ch_win.position = (safe.get_center() - sz * fit * 0.5).round()
+
+
+func _ch_on_open() -> void:
+	## Grup paneli (aynı katman) pencerenin ÜSTÜNDE kalsın: envanter açıkken de arkadaşa altın gönderilebilsin (hud.gd PartyPanelLayer notu).
+	var layer: Node = get_parent()
+	if layer is CanvasLayer and get_index() != 0:
+		layer.move_child.call_deferred(self, 0)
+	_ch_sync_sprite()
+	_ch_fit()
+	## Her açılış ilk eşyadan başlar (panel oyun başında, çanta boşken kurulur; eski seçim evcilde kalıyordu).
+	_ch_sel = _ch_default_sel()
+	_ch_last_stats_ms = -100000
+	_ch_refresh()
+	_ch_update_rings()
+	_ch_build_detail()
+
+
+func _ch_refresh() -> void:
+	var a: bool = _ch_build_weapons()
+	var b: bool = _ch_build_equip()
+	var c: bool = _ch_build_bag()
+	if a or b or c:
+		if not _ch_sel_valid():
+			_ch_sel = _ch_default_sel()
+		_ch_update_rings()
+		_ch_build_detail()
+	if _ch_gold:
+		_ch_gold.text = str(GameManager.gold)
+		_ch_shard.text = str(GameManager.weapon_shards)
+	var now: int = Time.get_ticks_msec()
+	if now - _ch_last_stats_ms < CH_REFRESH_MS:
+		return
+	_ch_last_stats_ms = now
+	_ch_refresh_stats()
+	if is_inside_tree() and visible and not is_equal_approx(_ch_reserved, ModalSafeArea.reserved_right(get_tree(), get_viewport_rect().size)):
+		_ch_fit()
+
+
+func _ch_clear(n: Node) -> void:
+	if n == null:
+		return
+	for c in n.get_children():
+		n.remove_child(c)
+		c.queue_free()
+
+
+func _ch_has_player() -> bool:
+	return player != null and is_instance_valid(player)
+
+
+## ---------------------------------------------------------------- sol: gruplu özellikler
+func _ch_stats_column() -> Control:
+	_ch_build_tips()
+	var box: PanelContainer = _k.box(_k.c("inset"), _k.c("line"), 14)
+	box.custom_minimum_size.x = CH_LEFT_W
+	var v: VBoxContainer = _k.v(4)
+	box.add_child(v)
+	for g: Array in CH_GROUPS:
+		var gh: HBoxContainer = _k.h(10)
+		gh.add_child(_k.lbl(str(g[0]), 24, _k.c("accent")))
+		var ln: ColorRect = _k.hline(_k.c("line"), 3)
+		ln.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ln.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		gh.add_child(ln)
+		v.add_child(gh)
+		var i: int = 0
+		for id: String in g[1]:
+			v.add_child(_ch_stat_row(id, i % 2 == 0))
+			i += 1
+		v.add_child(_k.sp(0, 8))
+	return box
+
+
+func _ch_stat_row(id: String, stripe: bool) -> Control:
+	var p: PanelContainer = _k.box(Color(_k.c("panel3"), 0.45) if stripe else Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0, 2)
+	var sb: StyleBoxFlat = p.get_theme_stylebox("panel") as StyleBoxFlat
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	p.mouse_filter = Control.MOUSE_FILTER_STOP ## ipucu (stat açıklaması)
+	p.tooltip_text = str(_ch_tips.get(id, ""))
+	var r: HBoxContainer = _k.h(10)
+	r.custom_minimum_size.y = 30
+	r.add_child(_k.icon(DarkKit.tex(HudStatPanel.ICON_DIR + id + ".png"), 24))
+	r.add_child(_k.expand(_k.lbl(_ch_stat_name(id), 24, _k.c("text"))))
+	var val: Label = _k.lbl("-", 24, _k.c("price"), HORIZONTAL_ALIGNMENT_RIGHT)
+	_ch_stat_vals[id] = val
+	r.add_child(val)
+	p.add_child(r)
+	return p
+
+
+func _ch_stat_name(id: String) -> String:
+	for s: Array in HudStatPanel.STATS:
+		if s[0] == id:
+			return str(s[1])
+	return id
+
+
+## İpuçları HUD mini stat paneliyle aynı kaynaktan (hud_stat_panel.gd _build_tips).
+func _ch_build_tips() -> void:
+	var extra: Dictionary = {}
+	for row in StatsPanelScript.EXTRA_ROWS:
+		extra[row[0]] = str(row[2])
+	for s: Array in HudStatPanel.STATS:
+		var tip: String = str(s[2])
+		if tip.begins_with("@"):
+			var key: String = tip.substr(1)
+			tip = str(StatsPanelScript.STAT_TIPS.get(key, extra.get(key, s[1])))
+		_ch_tips[s[0]] = tip
+
+
+func _ch_refresh_stats() -> void:
+	if not _ch_has_player():
+		return
+	var vals: Dictionary = HudStatPanel.values_for(player)
+	for id in _ch_stat_vals:
+		var l: Label = _ch_stat_vals[id]
+		var t: String = str(vals.get(id, "-"))
+		if l.text != t:
+			l.text = t
+	if "level" in player and _ch_level:
+		_ch_level.text = " Sv %d " % int(player.get("level"))
+		var need: float = maxf(1.0, float(player.get("xp_to_next_level")))
+		var have: float = float(player.get("xp"))
+		_ch_xp_bar.set_frac(have / need)
+		_ch_xp_text.text = "%d / %d XP" % [int(have), int(need)]
+
+
+## ---------------------------------------------------------------- orta: sahne (karakter + silah yayı + kalkan/evcil)
+func _ch_build_stage() -> Control:
+	_ch_stage = Control.new()
+	_ch_stage.name = "Stage"
+	_ch_stage.custom_minimum_size = CH_STAGE
+	_ch_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var spot = DarkKit.Spot.new(_k.c("spot"), 0.72)
+	spot.position = Vector2(0, 40)
+	spot.size = Vector2(CH_STAGE.x, 640)
+	_ch_stage.add_child(spot)
+	_ch_lines = DarkKit.Lines.new()
+	_ch_lines.size = CH_STAGE
+	_ch_stage.add_child(_ch_lines)
+	_ch_sprite = AnimatedSprite2D.new()
+	_ch_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_ch_stage.add_child(_ch_sprite)
+	weapons_grid = Control.new()
+	weapons_grid.name = "WeaponSlots"
+	weapons_grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	weapons_grid.size = CH_STAGE
+	_ch_stage.add_child(weapons_grid)
+	equip_grid = Control.new()
+	equip_grid.name = "EquipSlots"
+	equip_grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	equip_grid.size = CH_STAGE
+	_ch_stage.add_child(equip_grid)
+	## ad + seviye + XP
+	var nv: VBoxContainer = _k.v(4)
+	var nr: HBoxContainer = _k.h(12)
+	nr.alignment = BoxContainer.ALIGNMENT_CENTER
+	_ch_name = _k.lbl(str(Characters.get_def(GameManager.selected_char_id).get("name", "")), 40, _k.c("text"))
+	nr.add_child(_ch_name)
+	var lvp: PanelContainer = _k.box(HudTheme.INSET, HudTheme.ACCENT, 2, 2, 3)
+	_ch_level = _k.lbl(" Sv 1 ", 24, HudTheme.ACCENT)
+	lvp.add_child(_ch_level)
+	nr.add_child(lvp)
+	nv.add_child(nr)
+	_ch_xp_bar = DarkKit.Bar.new(0.0, CH_XP, _k.c("inset"), 16, 360)
+	nv.add_child(_k.center(_ch_xp_bar))
+	_ch_xp_text = _k.lbl("", 24, CH_XP_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	nv.add_child(_ch_xp_text)
+	nv.position = Vector2(40, 750)
+	nv.size = Vector2(440, 100)
+	_ch_stage.add_child(nv)
+	_ch_sync_sprite()
+	return _ch_stage
+
+
+## Oyuncunun GERÇEK kareleri (form/görünüm değişse de doğru), yoksa karakter tanımı; idle_down döngüde.
+func _ch_sync_sprite() -> void:
+	if _ch_sprite == null:
+		return
+	var fr: SpriteFrames = null
+	if _ch_has_player() and "anim" in player and player.get("anim") is AnimatedSprite2D:
+		fr = (player.get("anim") as AnimatedSprite2D).sprite_frames
+	if fr == null:
+		var p: String = str(Characters.get_def(GameManager.selected_char_id).get("frames", ""))
+		fr = load(p) as SpriteFrames if p != "" and ResourceLoader.exists(p) else null
+	if fr == null or fr.get_animation_names().is_empty():
+		_ch_sprite.visible = false
+		return
+	var anim: String = "idle_down" if fr.has_animation("idle_down") else String(fr.get_animation_names()[0])
+	if _ch_sprite.sprite_frames != fr:
+		_ch_sprite.sprite_frames = fr
+	var tex: Texture2D = fr.get_frame_texture(anim, 0)
+	var h: float = tex.get_size().y if tex else 48.0
+	var sc: float = maxf(1.0, floorf(300.0 / h))
+	_ch_sprite.scale = Vector2.ONE * sc
+	_ch_sprite.position = Vector2(CH_STAGE.x * 0.5, roundf(440.0 - 0.12 * h * sc))
+	_ch_sprite.visible = true
+	if _ch_sprite.animation != StringName(anim) or not _ch_sprite.is_playing():
+		_ch_sprite.play(anim)
+
+
+func _ch_weapon_tier(entry: Dictionary) -> int:
+	var ench: Dictionary = entry.get("enchant", {})
+	if ench.is_empty():
+		return 1
+	if bool(ench.get("final", false)):
+		return 5
+	return mini(4, 1 + (ench.get("ups", []) as Array).size())
+
+
+func _ch_roman(entry: Dictionary) -> String:
+	var plus: int = EnchantDefs.plus_count(entry.get("enchant", {}))
+	return DarkKit.ROMAN[_ch_weapon_tier(entry) - 1] + ((" +%d" % plus) if plus > 0 else "")
+
+
+func _ch_tier_col(t: int) -> Color:
+	return DarkKit.ENCH_COL[t] if t >= 2 else _k.c("dim")
+
+
+func _ch_weapon_tex(key: String, tier: int) -> Texture2D:
+	var t: Texture2D = WeaponTierArt.texture(key, tier)
+	return t if t != null else WEAPON_ICON_TEXTURES.get(key)
+
+
+func _ch_weapon_name(key: String) -> String:
+	return str(WEAPON_NAMES.get(key, WeaponCatalogScript.display_name(key)))
+
+
+func _ch_pips(entry: Dictionary, w: float, h: float = 10.0) -> Control:
+	var ench: Dictionary = entry.get("enchant", {})
+	var n: int = (ench.get("ups", []) as Array).size() + (1 if bool(ench.get("final", false)) else 0)
+	var cols: Array = [DarkKit.ENCH_COL[2], DarkKit.ENCH_COL[3], DarkKit.ENCH_COL[4], DarkKit.ENCH_COL[4], DarkKit.ENCH_COL[5]]
+	return DarkKit.TierPips.new(cols, n, _k.c("inset"), w, h)
+
+
+## Yuva düğmesi: görünmez Button + içerik (çocuk) + seçim halkası. Halka _ch_rings'e kaydedilir.
+func _ch_slot_button(kind: String, index: int, s: float, content: Control, tip: String) -> Button:
+	var b := Button.new()
+	b.flat = true
+	b.custom_minimum_size = Vector2(s, s)
+	b.size = b.custom_minimum_size
+	for st: String in ["normal", "hover", "pressed", "disabled"]:
+		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("focus", _k.sb(Color(0, 0, 0, 0), _k.c("accent").lightened(0.3), 3, 6))
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.tooltip_text = tip
+	var ring: Control = content.get_node_or_null("SelRing") as Control
+	if ring == null:
+		ring = Panel.new()
+		ring.name = "SelRing"
+		ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		(ring as Panel).add_theme_stylebox_override("panel", _k.sb(Color(0, 0, 0, 0), _k.c("accent"), 3, 8))
+		ring.position = Vector2(-6, -6)
+		ring.size = Vector2(s + 12, s + 12)
+		b.add_child(ring)
+	ring.visible = false
+	b.add_child(content)
+	_ch_rings.append([kind, index, ring])
+	b.pressed.connect(_ch_select.bind(kind, index))
+	return b
+
+
+func _ch_forget_rings(kind: String) -> void:
+	_ch_rings = _ch_rings.filter(func(r: Array) -> bool: return r[0] != kind and is_instance_valid(r[2]))
+
+
+func _ch_weapon_spot(i: int, n: int) -> Vector2:
+	var t: float = 0.5 if n <= 1 else float(i) / float(n - 1)
+	var ang: float = deg_to_rad(lerpf(210.0, 330.0, t))
+	return CH_ARC_CENTER + Vector2(cos(ang) * CH_ARC_RADIUS.x, sin(ang) * CH_ARC_RADIUS.y)
+
+
+func _ch_build_weapons() -> bool:
+	if weapons_grid == null:
+		return false
+	var maxw: int = int(player.get_max_owned_weapons()) if _ch_has_player() and player.has_method("get_max_owned_weapons") else 3
+	var sig: String = str(maxw) + "|"
+	for entry: Dictionary in GameManager.owned_weapons:
+		var ench: Dictionary = entry.get("enchant", {})
+		sig += "%s:%d:%d:%d:%s:%d," % [str(entry.get("key", "")), int(entry.get("level", 1)), int(entry.get("shards_spent", 0)),
+				(ench.get("ups", []) as Array).size(), str(ench.get("final", false)), int(ench.get("plus", 0))]
+	if sig == _last_weapons_signature:
+		return false
+	_last_weapons_signature = sig
+	_ch_clear(weapons_grid)
+	_ch_forget_rings("weapon")
+	_ch_weapon_icons.clear()
+	_ch_lines.segs.clear()
+	var n: int = maxi(maxw, GameManager.owned_weapons.size())
+	var s: float = CH_WSLOT if n <= 3 else CH_WSLOT_SMALL
+	for i in n:
+		var c: Vector2 = _ch_weapon_spot(i, n)
+		var pos: Vector2 = (c - Vector2(s, s) * 0.5).round()
+		_ch_lines.segs.append([PackedVector2Array([c, c.lerp(CH_CHEST, 0.42)]), Color(_k.c("line_hi"), 0.7), 3.0])
+		if i >= GameManager.owned_weapons.size():
+			var e: Panel = _k.empty_slot(s)
+			e.position = pos
+			e.size = Vector2(s, s)
+			e.tooltip_text = "Boş silah yuvası (demirciden silah alınır)"
+			e.mouse_filter = Control.MOUSE_FILTER_STOP
+			weapons_grid.add_child(e)
+			continue
+		var entry: Dictionary = GameManager.owned_weapons[i]
+		var key: String = str(entry.get("key", ""))
+		var tier: int = _ch_weapon_tier(entry)
+		var tc: Color = _ch_tier_col(tier)
+		var bg: PanelContainer = _k.box(_k.c("inset"), tc.darkened(0.15), 0, 3, 6)
+		bg.custom_minimum_size = Vector2(s, s)
+		bg.size = bg.custom_minimum_size
+		var ic: Control = _k.wicon(_ch_weapon_tex(key, tier), s - 8.0, tier)
+		bg.add_child(_k.center(ic))
+		_ch_weapon_icons[i] = ic.get_child(ic.get_child_count() - 1) as TextureRect
+		var btn: Button = _ch_slot_button("weapon", i, s, bg, _ch_weapon_name(key))
+		btn.position = pos
+		weapons_grid.add_child(btn)
+		var badge: PanelContainer = _k.box(HudTheme.OUTLINE, tc, 2, 2, 3)
+		badge.add_child(_k.lbl(" " + _ch_roman(entry) + " ", 24, tc))
+		badge.position = pos + Vector2(s - 36, -14)
+		weapons_grid.add_child(badge)
+		if n <= 3:
+			for k2 in 2:
+				var t: String = _ch_weapon_name(key) if k2 == 0 else _ch_trait_name(entry)
+				var l: Label = _k.lbl(t, 24, _k.c("text") if k2 == 0 else _k.c("dim"), HORIZONTAL_ALIGNMENT_CENTER)
+				_ch_put_label(weapons_grid, l, Vector2(c.x - 90, pos.y + s + 4 + 24 * k2), Vector2(180, 26))
+	_ch_lines.queue_redraw()
+	UISound.connect_all_buttons(weapons_grid)
+	return true
+
+
+## Serbest yerleşen yazı: boyut AĞACA EKLENDİKTEN sonra verilir - ağaç dışında Label'ın en küçük boyutu yedek yazı tipiyle ölçülüp
+## kutuyu büyütüyordu (180x26 -> 237x70; yazılar kayıp üst üste biniyordu, bkz. ShopDarkKit.est_w notu).
+func _ch_put_label(parent: Control, l: Label, pos: Vector2, sz: Vector2) -> void:
+	parent.add_child(l)
+	l.size = sz
+	l.position = pos
+
+
+func _ch_trait_name(entry: Dictionary) -> String:
+	var d: Dictionary = EnchantDefs.get_def(str((entry.get("enchant", {}) as Dictionary).get("id", "")))
+	return str(d.get("name", ""))
+
+
+func _ch_build_equip() -> bool:
+	if equip_grid == null:
+		return false
+	var shield_key: String = _owned_shield_type()
+	var pet: String = PetCatalog.selected()
+	var sig: String = "%s:%s:%s" % [shield_key, str(GameManager.shield_enchant_ups), pet]
+	if sig == _last_equip_signature:
+		return false
+	_last_equip_signature = sig
+	_ch_clear(equip_grid)
+	_ch_forget_rings("shield")
+	_ch_forget_rings("pet")
+	var specs: Array = [
+		["shield", DarkKit.tex(str(ShieldEnchantDefs.ICONS.get(shield_key, ""))) if shield_key != "" else null,
+			"MANA KALKANI", ShieldEnchantDefs.type_name(shield_key) if shield_key != "" else "Yok", Vector2(70, 580)],
+		["pet", PetCatalog.icon(pet), "EVCİL", PetCatalog.display_name(pet), Vector2(354, 580)],
+	]
+	for sp: Array in specs:
+		var pos: Vector2 = sp[4]
+		var bg: PanelContainer = _k.box(_k.c("inset"), HudTheme.RIM_HI, 0, 3, 6)
+		bg.custom_minimum_size = Vector2(CH_EQ_SLOT, CH_EQ_SLOT)
+		bg.size = bg.custom_minimum_size
+		if sp[1] != null:
+			bg.add_child(_k.icon(sp[1], 72))
+		var btn: Button = _ch_slot_button(str(sp[0]), 0, CH_EQ_SLOT, bg, str(sp[3]))
+		btn.position = pos
+		equip_grid.add_child(btn)
+		for k2 in 2:
+			var l: Label = _k.lbl(str(sp[2]) if k2 == 0 else str(sp[3]), 24, _k.c("accent") if k2 == 0 else _k.c("text"), HORIZONTAL_ALIGNMENT_CENTER)
+			l.clip_text = true
+			_ch_put_label(equip_grid, l, Vector2(pos.x + CH_EQ_SLOT * 0.5 - 130, pos.y + CH_EQ_SLOT + 4 + 24 * k2), Vector2(260, 26))
+	UISound.connect_all_buttons(equip_grid)
+	return true
+
+
+## ---------------------------------------------------------------- sağ: heybe (kademe satırları)
+func _ch_bag_box() -> Control:
+	var box: PanelContainer = _k.box(_k.c("inset"), _k.c("line"), 14)
+	box.mouse_filter = Control.MOUSE_FILTER_PASS
+	var v: VBoxContainer = _k.v(10)
+	box.add_child(v)
+	var hr: HBoxContainer = _k.h(12)
+	hr.add_child(_k.glyph(DarkKit.G_BAG, _k.c("accent"), 3))
+	hr.add_child(_k.lbl("HEYBE", 32, _k.c("accent")))
+	hr.add_child(_k.sp(0, 0, true))
+	_ch_bag_count = _k.lbl("", 24, _k.c("dim"))
+	hr.add_child(_ch_bag_count)
+	v.add_child(hr)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size.y = CH_BAG_H
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.mouse_filter = Control.MOUSE_FILTER_PASS
+	v.add_child(scroll)
+	items_grid_box = _k.v(10)
+	items_grid_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(items_grid_box)
+	return box
+
+
+func _ch_build_bag() -> bool:
+	if items_grid_box == null:
+		return false
+	var part_slots: int = int(player.get_max_item_slots()) if _ch_has_player() and player.has_method("get_max_item_slots") else 1
+	var sig: String = str(part_slots) + "|"
+	for entry: Dictionary in GameManager.owned_items:
+		sig += str(entry.get("key", "")) + ","
+	if sig == _last_items_signature:
+		return false
+	_last_items_signature = sig
+	_ch_clear(items_grid_box)
+	_ch_forget_rings("item")
+	_item_slot_icons.clear()
+	var total: int = 0
+	for kd in [Items.KADEME_EFSANEVI, Items.KADEME_EPIK, Items.KADEME_PARCA]:
+		total += Items.slot_limit(kd, part_slots)
+	_ch_bag_count.text = "%d / %d yuva" % [GameManager.owned_items.size(), total]
+	for kd in [Items.KADEME_EFSANEVI, Items.KADEME_EPIK, Items.KADEME_PARCA]:
+		var lim: int = Items.slot_limit(kd, part_slots)
+		var idx: Array = []
+		for i: int in GameManager.owned_items.size():
+			if Items.kademe(str((GameManager.owned_items[i] as Dictionary).get("key", ""))) == kd:
+				idx.append(i)
+		var tv: VBoxContainer = _k.v(6)
+		var head: HBoxContainer = _k.h(8)
+		head.add_child(_k.lbl(DarkKit.TIER_NAME[kd - 1], 24, DarkKit.TIER_COL[kd - 1]))
+		head.add_child(_k.lbl("%d/%d" % [idx.size(), lim], 24, _k.c("dim")))
+		tv.add_child(head)
+		var grid := GridContainer.new()
+		grid.columns = CH_COLS
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		## En az bir sıra; sınır küçükse (efsanevi 5) hepsi, büyükse sahip olunanları kapsayan sıralar.
+		var shown: int = mini(lim, maxi(CH_COLS, CH_COLS * int(ceil(float(idx.size()) / float(CH_COLS)))))
+		for n in maxi(shown, idx.size()):
+			if n >= idx.size():
+				grid.add_child(_k.empty_slot(CH_TILE))
+				continue
+			var i: int = idx[n]
+			var key: String = str((GameManager.owned_items[i] as Dictionary).get("key", ""))
+			var tile: Control = _k.tile(Items.icon(key), CH_TILE, DarkKit.TIER_COL[kd - 1])
+			for ch in tile.get_children():
+				if ch is TextureRect:
+					_item_slot_icons[i] = ch
+			grid.add_child(_ch_slot_button("item", i, CH_TILE, tile, Items.item_name(key)))
+		tv.add_child(grid)
+		items_grid_box.add_child(tv)
+	UISound.connect_all_buttons(items_grid_box)
+	return true
+
+
+## ---------------------------------------------------------------- seçim + kart
+func _ch_default_sel() -> Dictionary:
+	if not GameManager.owned_items.is_empty():
+		return {"kind": "item", "index": 0}
+	if not GameManager.owned_weapons.is_empty():
+		return {"kind": "weapon", "index": 0}
+	return {"kind": "shield", "index": 0} if _owned_shield_type() != "" else {"kind": "pet", "index": 0}
+
+
+func _ch_sel_valid() -> bool:
+	var i: int = int(_ch_sel.get("index", -1))
+	match str(_ch_sel.get("kind", "")):
+		"item":
+			return i >= 0 and i < GameManager.owned_items.size()
+		"weapon":
+			return i >= 0 and i < GameManager.owned_weapons.size()
+		"shield":
+			return _owned_shield_type() != ""
+		"pet":
+			return true
+	return false
+
+
+func _ch_select(kind: String, index: int) -> void:
+	_ch_sel = {"kind": kind, "index": index}
+	_ch_update_rings()
+	_ch_build_detail()
+
+
+func _ch_update_rings() -> void:
+	for r: Array in _ch_rings:
+		if is_instance_valid(r[2]):
+			(r[2] as Control).visible = r[0] == _ch_sel.get("kind", "") and int(r[1]) == int(_ch_sel.get("index", -1))
+
+
+func _ch_build_detail() -> void:
+	if _ch_detail_box == null:
+		return
+	_ch_clear(_ch_detail_box)
+	_ch_sell_btn = null
+	_ch_sell_note = ""
+	if not _ch_sel_valid():
+		return
+	var i: int = int(_ch_sel["index"])
+	match str(_ch_sel["kind"]):
+		"item":
+			_ch_detail_item(str((GameManager.owned_items[i] as Dictionary).get("key", "")))
+		"weapon":
+			_ch_detail_weapon(i)
+		"shield":
+			_ch_detail_shield()
+		"pet":
+			_ch_detail_pet()
+	UISound.connect_all_buttons(_ch_detail_box)
+
+
+## Kartın iskeleti: üst satır (ikon + ad + alt satır + sağ ek), kayan gövde, alt satır (not + SAT). Gövde VBox'ını döndürür.
+func _ch_card(icon: Control, title: String, sub: Control, border: Color, right: Control, note: String, sell_text: String, can_sell: bool) -> VBoxContainer:
+	(_ch_detail.get_theme_stylebox("panel") as StyleBoxFlat).border_color = border
+	var top: HBoxContainer = _k.h(14)
+	top.add_child(icon)
+	var tv: VBoxContainer = _k.v(2)
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tv.alignment = BoxContainer.ALIGNMENT_CENTER
+	tv.add_child(_k.clip(title, 32, _k.c("text"), 280))
+	tv.add_child(sub)
+	top.add_child(tv)
+	if right:
+		top.add_child(right)
+	_ch_detail_box.add_child(top)
+	_ch_detail_box.add_child(_k.hline())
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var body: VBoxContainer = _k.v(8)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(body)
+	_ch_detail_box.add_child(scroll)
+	var bottom: HBoxContainer = _k.h(12)
+	bottom.add_child(_k.expand(_k.wrap(note, 24, _k.c("dim"), 300)))
+	if sell_text != "":
+		var r: HBoxContainer = _k.h(10)
+		r.add_child(_k.lbl(sell_text, 32, _k.c("accent_text") if can_sell else _k.c("dim")))
+		if can_sell:
+			r.add_child(_k.coin(32))
+			r.add_child(_k.lbl("+%d" % _ch_sel_refund(), 32, _k.c("accent_text")))
+		_ch_sell_btn = _k.row_btn(r, "primary", 60, 240)
+		_ch_sell_btn.name = "SellButton"
+		_ch_sell_btn.disabled = not can_sell
+		_ch_sell_btn.size_flags_vertical = Control.SIZE_SHRINK_END
+		_ch_sell_btn.pressed.connect(_ch_sell)
+		bottom.add_child(_ch_sell_btn)
+	_ch_detail_box.add_child(bottom)
+	return body
+
+
+func _ch_sel_refund() -> int:
+	var i: int = int(_ch_sel.get("index", -1))
+	match str(_ch_sel.get("kind", "")):
+		"item":
+			return Items.sell_refund(str((GameManager.owned_items[i] as Dictionary).get("key", "")))
+		"weapon":
+			return EnchantDefs.sell_refund_gold(GameManager.owned_weapons[i])
+	return 0
+
+
+func _ch_icon_box(c: Control, s: float, border: Color) -> PanelContainer:
+	var p: PanelContainer = _k.box(_k.c("inset"), border, 0, 3, 4)
+	p.custom_minimum_size = Vector2(s, s)
+	p.add_child(_k.center(c))
+	return p
+
+
+## Eşyanın stat satırları ([simge anahtarı, metin]) - Items.describe ile aynı sıra/biçim.
+func _ch_item_lines(key: String) -> Array:
+	var stats: Dictionary = Items.get_def(key).get("stats", {})
+	var keys: Array = []
+	for s in stats:
+		if Items.STAT_LABELS.has(s):
+			keys.append(str(s))
+	var out: Array = []
+	if keys.is_empty():
+		return out
+	var lines: PackedStringArray = Items.describe(key).split("\n\n")[0].split("\n")
+	for n in mini(keys.size(), lines.size()):
+		out.append([str(CH_STAT_ICON.get(keys[n], "damage")), lines[n]])
+	return out
+
+
+func _ch_line(icon_id: String, text: String, col: Color) -> HBoxContainer:
+	var r: HBoxContainer = _k.h(10)
+	if icon_id == "heart":
+		r.add_child(_k.center(_k.glyph(CH_G_HEART, CH_HEART, 3)))
+	elif icon_id == "xp":
+		r.add_child(_k.icon(DarkKit.tex(CH_XP_GEM), 24))
+	else:
+		r.add_child(_k.icon(DarkKit.tex(HudStatPanel.ICON_DIR + icon_id + ".png"), 24))
+	r.add_child(_k.expand(_k.wrap(text, 24, col, 520)))
+	return r
+
+
+func _ch_mini_tiles(title: String, keys: Array) -> VBoxContainer:
+	var v: VBoxContainer = _k.v(4)
+	v.add_child(_k.lbl(title, 24, _k.c("dim")))
+	var r: HBoxContainer = _k.h(6)
+	for k in keys.slice(0, 5):
+		var tile: Control = _k.tile(Items.icon(str(k)), 48, DarkKit.TIER_COL[Items.kademe(str(k)) - 1])
+		tile.tooltip_text = Items.item_name(str(k))
+		tile.mouse_filter = Control.MOUSE_FILTER_STOP
+		r.add_child(tile)
+	v.add_child(r)
+	return v
+
+
+func _ch_detail_item(key: String) -> void:
+	var kd: int = Items.kademe(key)
+	var tc: Color = DarkKit.TIER_COL[kd - 1]
+	var sub: HBoxContainer = _k.h(14)
+	sub.add_child(_k.lbl(DarkKit.TIER_NAME[kd - 1], 24, tc))
+	sub.add_child(_k.amt(Items.cost(key), 24, _k.c("dim")))
+	var rec: Array = Items.recipe(key)
+	var refund: int = Items.sell_refund(key)
+	_ch_sell_note = "+%d altın geri alırsın." % refund
+	var body: VBoxContainer = _ch_card(_k.tile(Items.icon(key), 80, tc), Items.item_name(key), sub, tc.darkened(0.2),
+			_ch_mini_tiles("TARİF", rec) if not rec.is_empty() else null,
+			"Satış fiyatı tam fiyatın yarısı. " + _ch_sell_note, "SAT", true)
+	var lines: Array = _ch_item_lines(key)
+	for ln: Array in lines:
+		body.add_child(_ch_line(str(ln[0]), str(ln[1]), _k.c("good")))
+	var pas: String = str(Items.get_def(key).get("passive", ""))
+	if pas != "":
+		var pb: PanelContainer = _k.box(_k.c("inset"), _k.c("line"), 12, 2, 4)
+		var pv: VBoxContainer = _k.v(4)
+		pv.add_child(_k.lbl("PASİF", 24, tc))
+		pv.add_child(_k.wrap(pas, 24, _k.c("text"), 540))
+		pb.add_child(pv)
+		body.add_child(pb)
+	var up: Array = Items.builds_into(key)
+	if not up.is_empty():
+		body.add_child(_ch_mini_tiles("ŞUNA DÖNÜŞÜR", up))
+	if not lines.is_empty() or pas != "":
+		body.add_child(_k.lbl("SATARSAN", 24, _k.c("dim")))
+		for ln: Array in lines:
+			body.add_child(_ch_line(str(ln[0]), str(ln[1]).replace("+", "-"), _k.c("bad")))
+		if pas != "":
+			body.add_child(_k.wrap("Pasifi de gider.", 24, _k.c("bad"), 540))
+
+
+func _ch_detail_weapon(i: int) -> void:
+	var entry: Dictionary = GameManager.owned_weapons[i]
+	var key: String = str(entry.get("key", ""))
+	var tier: int = _ch_weapon_tier(entry)
+	var tc: Color = _ch_tier_col(tier)
+	var sub: HBoxContainer = _k.h(14)
+	sub.add_child(_k.lbl("KADEME " + _ch_roman(entry), 24, tc))
+	sub.add_child(_k.lbl(WeaponCatalogScript.category_label(key), 24, _k.c("dim")))
+	var pv: VBoxContainer = _k.v(6)
+	pv.alignment = BoxContainer.ALIGNMENT_CENTER
+	var ench: Dictionary = entry.get("enchant", {})
+	var done: int = (ench.get("ups", []) as Array).size() + (1 if bool(ench.get("final", false)) else 0)
+	pv.add_child(_k.lbl("USTALIK %d/5" % done, 24, _k.c("dim")))
+	pv.add_child(_ch_pips(entry, 150, 10))
+	var last: bool = GameManager.owned_weapons.size() <= 1
+	var refund: int = EnchantDefs.sell_refund_gold(entry)
+	var shards: int = EnchantDefs.sell_refund_shards(entry)
+	_ch_sell_note = ("+%d altın ve +%d Silah Parçacığı geri alırsın." % [refund, shards]) if shards > 0 else ("+%d altın geri alırsın." % refund)
+	var note: String = "Son silah satılamaz." if last else _ch_sell_note + " Geliştirmeler silahla gider."
+	var body: VBoxContainer = _ch_card(_ch_icon_box(_k.wicon(_ch_weapon_tex(key, tier), 72, tier), 80, tc), _ch_weapon_name(key), sub,
+			tc.darkened(0.15), pv, note, "SON SİLAH" if last else "SAT", not last)
+	var tname: String = _ch_trait_name(entry)
+	if tname != "":
+		body.add_child(_k.lbl("ÖZELLİK: " + tname, 24, _k.c("accent")))
+		body.add_child(_k.wrap(str(EnchantDefs.get_def(str(ench.get("id", ""))).get("desc", "")), 24, _k.c("text"), 540))
+	var d: String = str(WeaponCatalogScript.DESCRIPTIONS.get(key, ""))
+	if d != "":
+		body.add_child(_k.wrap(d, 24, _k.c("dim"), 540))
+	body.add_child(_k.wrap("Kademesini ve geliştirmelerini demirciden alırsın.", 24, _k.c("dim"), 540))
+
+
+func _ch_detail_shield() -> void:
+	var key: String = _owned_shield_type()
+	var st: Dictionary = ShieldEnchantDefs.stats()
+	var sub: HBoxContainer = _k.h(14)
+	sub.add_child(_k.lbl("MANA KALKANI", 24, _k.c("accent")))
+	var body: VBoxContainer = _ch_card(_ch_icon_box(_k.icon(DarkKit.tex(str(ShieldEnchantDefs.ICONS.get(key, ""))), 72), 80, HudTheme.RIM_HI),
+			ShieldEnchantDefs.type_name(key), sub, HudTheme.RIM_HI, null,
+			"Mana kalkanı satılmaz; türünü ve geliştirmelerini demirciden alırsın.", "", false)
+	if not st.is_empty():
+		body.add_child(_ch_line("shield_amount", "%d Güç" % int(st["power"]), _k.c("text")))
+		body.add_child(_ch_line("shield_protection", "%%%d Soğurma" % int(round(float(st["absorption"]) * 100.0)), _k.c("text")))
+		body.add_child(_ch_line("shield_regen", "%s / sn Yenilenme" % HudStatPanel._num(float(st["regen"])), _k.c("text")))
+		var delay: float = float(st["delay"])
+		body.add_child(_ch_line("cooldown_reduction", ("Hasardan sonra %s sn bekler" % HudStatPanel._num(delay)) if delay > 0.0 else "Hasar alınca beklemez",
+				_k.c("text")))
+	var desc: String = str((ShieldEnchantDefs.TYPES.get(key, {}) as Dictionary).get("desc", ""))
+	if desc != "":
+		body.add_child(_k.wrap(desc, 24, _k.c("dim"), 540))
+
+
+func _ch_detail_pet() -> void:
+	var pet: String = PetCatalog.selected()
+	var sub: HBoxContainer = _k.h(14)
+	sub.add_child(_k.lbl("EVCİL HAYVAN", 24, _k.c("accent")))
+	var body: VBoxContainer = _ch_card(_ch_icon_box(_k.icon(PetCatalog.icon(pet), 72), 80, HudTheme.RIM_HI), PetCatalog.display_name(pet), sub,
+			HudTheme.RIM_HI, null, "Evcil hayvan oyun başında seçilir.", "", false)
+	body.add_child(_k.wrap(PetCatalog.description(pet), 24, _k.c("text"), 540))
+
+
+func _ch_sell() -> void:
+	var kind: String = str(_ch_sel.get("kind", ""))
+	var i: int = int(_ch_sel.get("index", -1))
+	_ch_sel = {} ## satıştan sonra yeniden kurulumda varsayılan seçime düşer
+	match kind:
+		"item":
+			_do_sell_item(i)
+		"weapon":
+			_do_sell_weapon_equip(i)
+	if not _ch_sel_valid():
+		_ch_sel = _ch_default_sel()
+		_ch_update_rings()
+		_ch_build_detail()
+
+
+## Satışta parçalanma kaynağı: [merkez (tuval), doku, boyut]; ikon yoksa [].
+func _ch_icon_rect(tr: TextureRect) -> Array:
+	if tr == null or not is_instance_valid(tr) or not tr.is_inside_tree() or tr.texture == null:
+		return []
+	var xf: Transform2D = tr.get_global_transform_with_canvas()
+	var a: Vector2 = xf * Vector2.ZERO
+	var b: Vector2 = xf * tr.size
+	return [(a + b) * 0.5, tr.texture, (b - a).abs()]

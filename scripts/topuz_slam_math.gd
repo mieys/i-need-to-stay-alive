@@ -18,6 +18,7 @@ extends RefCounted
 const GroundFxScene: PackedScene = preload("res://scenes/fx_topuz_slam_ground.tscn") ## çukur + çatlak + toz dalgası, z -1 (yaratıkların altı) + darbe sesi
 const TopFxScene: PackedScene = preload("res://scenes/fx_topuz_slam_top.tscn") ## yıldız + toz bulutu + taş kırıntısı, z 60
 const SmearFxScene: PackedScene = preload("res://scenes/fx_topuz_slam_smear.tscn") ## iniş izi, z 0 (topuzun altı)
+const MeleeChainMath := preload("res://scripts/melee_chain_math.gd") ## vuruş sonrası bekleme (madde 347 zincir)
 
 const REF_OWNER_SCALE := 0.5
 const FX_WORLD_PX := 0.575 ## pişmiş efektin 1 sanat pikseli (dünya px, k = 1) = Zanaatkâr silahlarıyla aynı yoğunluk
@@ -104,8 +105,10 @@ static func grip_of(icon: Node2D, off: Vector2) -> Vector2:
 ## İkonu plana göre oynatır, izi ve temasta yer + üst efekti çıkarır. host: tween'in bağlanacağı düğüm (silah / kukla).
 ## forward: sanatın ucunun baktığı açı (sprite_forward_angle_deg). rest_pos/rest_rot: ikonun YEREL dinlenme konumu/rotasyonu.
 ## base_scale: ikonun SABİT taban ölçeği. fx_parent: efektlerin ekleneceği düğüm (dünyada sabit kalsın diye sahne kökü).
+## hold: dönüşten önce son pozda bekleme (MeleeChainMath.hold_time; 0 = hemen döner) - sonraki vuruş beklemede gelirse topuz sekme
+## pozundan yeniden kalkar.
 static func play(host: Node, icon: Node2D, plan: Dictionary, forward: float, rest_pos: Vector2, rest_rot: float,
-		base_scale: Vector2, speed: float, crit: bool, fx_parent: Node) -> Tween:
+		base_scale: Vector2, speed: float, crit: bool, fx_parent: Node, hold: float = 0.0) -> Tween:
 	var sp: float = maxf(0.01, speed)
 	var parent_scale: float = absf((icon.get_parent() as Node2D).global_scale.x) if icon.get_parent() is Node2D else 1.0
 	var art: float = 1.0
@@ -157,6 +160,7 @@ static func play(host: Node, icon: Node2D, plan: Dictionary, forward: float, res
 		prev_a = a1
 		prev_sl = sl
 		prev_sw = sw
+	MeleeChainMath.append_hold(tw, icon, hold)
 	tw.tween_property(icon, "position", rest_pos, RETURN / sp).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.parallel().tween_property(icon, "rotation", rest_rot, RETURN / sp).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.parallel().tween_property(icon, "scale", base_scale, RETURN / sp)

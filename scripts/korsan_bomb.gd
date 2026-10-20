@@ -82,6 +82,7 @@ func detonate() -> void:
 			BalanceLogScript.tag(&"s:korsan_bomba")
 			e.take_damage(dmg, is_crit, 0.0, true)
 			if stun_time > 0.0 and e.has_method("apply_stun"):
+				BalanceLogScript.on_cc("s:korsan_bomba", "stun", e, stun_time)
 				e.apply_stun(stun_time)
 	_spawn_explosion_fx()
 	queue_free()

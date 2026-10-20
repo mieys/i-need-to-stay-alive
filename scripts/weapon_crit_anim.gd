@@ -30,7 +30,9 @@ const STYLES := {
 	"tuftuf": {"kind": "puff", "kick": 1.8, "rot": 0.0, "back": 0.22},
 	"buz_asasi": {"kind": "freeze", "kick": 1.7, "rot": 0.15, "back": 0.26},
 	"arcane": {"kind": "surge", "kick": 1.6, "rot": 0.0, "back": 0.26},
+	"yinyang": {"kind": "surge", "kick": 1.4, "rot": 0.0, "back": 0.24}, ## Yin Yang Kitabı (madde 334): dönmeden kabarır
 	"lightning_staff": {"kind": "jitter"},
+	"gokkusagi": {"kind": "jitter"}, ## Gökkuşağı Asası ışını (madde 306)
 	"boomerang": {"kind": "throw"},
 	"fisek": {"kind": "throw"},
 	"dagger": {"kind": "thrust"},

@@ -8,6 +8,11 @@ extends "res://scripts/enchant_behavior.gd"
 
 const PULSE_GAP := 0.25
 const COLLIDE_DIST := 26.0
+## Hedef sınırı (2026-10-19 maç analizi: dalga yarıçaptaki HER düşmana saldırı gücünün %70-90'ını vuruyordu, hasar düşman sayısıyla doğrusal
+## büyüyordu - 100+ yaratıklı kademelerde tek topuz takım hasarının %36'sıydı): merkeze en yakın FULL_TARGETS düşman tam hasar alır, sonrakiler
+## EXTRA_DAMAGE_MULT katı. Sarsma / sersemletme herkese uygulanır; çarpışma hasarı yalnız tam hasar alan düşmanlar arasında.
+const FULL_TARGETS := 8
+const EXTRA_DAMAGE_MULT := 0.35
 
 
 func hit_extra(t: Node, _dmg: float, is_primary: bool, proj: Node2D) -> void:
@@ -32,14 +37,20 @@ func _pulse(at: Vector2) -> void:
 	var push: float = f("seis_push", 20.0)
 	sprite("seismic_ring", at, {"scale": r / (91.0 * 1.212), "z": 3})
 	var victims: Array = enemies_near(at, r)
+	victims.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		return a.global_position.distance_squared_to(at) < b.global_position.distance_squared_to(at))
 	var landing: Dictionary = {}
+	var rank: int = 0
 	for e in victims:
-		hit(e, ap() * f("seis_ap"))
+		var full: bool = rank < FULL_TARGETS
+		rank += 1
+		hit(e, ap() * f("seis_ap") * (1.0 if full else EXTRA_DAMAGE_MULT))
 		var away: Vector2 = e.global_position - at
 		var d: Vector2 = away.normalized() if away.length() > 1.0 else Vector2.RIGHT.rotated(randf() * TAU)
 		if not status(e, "boss"):
 			el(e, "knock", {"dir": d, "dist": push, "quiet": true})
-			landing[e.get_instance_id()] = [e, e.global_position + d * push]
+			if full:
+				landing[e.get_instance_id()] = [e, e.global_position + d * push]
 		if f("seis_knockdown") > 0.0:
 			el(e, "stun", {"dur": f("seis_knockdown")})
 	if f("seis_collide") <= 0.0:

@@ -58,6 +58,8 @@ func _cleanup() -> void:
 			fx.free() ## zemin çatlak efekti (2026-10-10) bir sonraki teste sızmasın
 	GameManager.bosses_enabled = false
 	GameManager.game_time = 0.0
+	GameManager.defend_tree_active = false
+	GameManager.defend_tree_ref = null
 	NetworkManager.is_multiplayer_active = false
 	if GameManager.enemy_died.is_connected(_on_enemy_died):
 		GameManager.enemy_died.disconnect(_on_enemy_died)
@@ -670,6 +672,101 @@ func test_limb_puts_the_cpp_ai_to_sleep_so_only_the_worm_script_writes_its_facin
 	## uykuda olsa da silahlar uzvu hedefleyebilir/vurabilir: kayıt silinmedi
 	assert(int(limb._ew_slot) >= 0 and limb.get("is_dead") != true)
 	_cleanup()
+
+
+## Kullanıcı (2026-10-20): "yeraltı canavarı hala sağa sola döner gibi glitchleniyor". Uyku (set_dormant) yetmiyordu: C++ apply_overrides uykudaki yuvaya da "Ağacı Koru" ağacını verir ve yönü her
+## düşünmede ağaca yazardı -> uzvun satırı betik (oyuncu) ile C++ (ağaç) arasında titrerdi. Yön kilidi (set_face_lock): yapay zekâ yön yazamaz, yalnız betik yazar.
+func test_defend_tree_mission_cannot_make_the_cpp_ai_overwrite_the_worm_facing() -> void:
+	var r: Array = _rig([Vector2(1000, 1000)])
+	var boss: Node = r[1]
+	var tree_stub := Node2D.new()
+	_add(tree_stub)
+	tree_stub.global_position = Vector2(1400, 900) ## uzvun tam ÜSTÜNDE (C++ yönü hep "yukarı" yazardı)
+	GameManager.defend_tree_ref = tree_stub
+	GameManager.defend_tree_active = true
+	var limb: Node = _limb_at(boss, Vector2(1400, 1400), MathScript.KIND_LASHER, MathScript.FATE_BURST)
+	await get_tree().physics_frame
+	await get_tree().physics_frame ## kilit ilk TİK'te (adımdan sonra) takılır; o ana kadarki tek C++ yazımı gerçek oyunda betiğin ilk bakışıyla (aynı tik) ezilir
+	var world: Object = EnemyWorldBridgeScript.fog_world(get_tree())
+	assert(world != null and int(limb._ew_slot) >= 0, "uzuv C++ dünyada kayıtlı")
+	var slot: int = int(limb._ew_slot)
+	assert(world.is_face_locked(slot) and int(world.get_facing_row(slot)) == int(limb._face_row), "ilk tikten sonra yön kilitli ve satırlar aynı")
+	var dirs: Array[Vector2] = [Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0), Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1)]
+	var mismatches: int = 0
+	var detail: String = ""
+	for d: Vector2 in dirs:
+		limb._face_cd = 0.0
+		limb._face_toward(d, true)
+		for i in range(24): ## C++ düşünme aralığından çok daha uzun
+			await get_tree().physics_frame
+			if int(world.get_facing_row(slot)) != int(limb._face_row):
+				mismatches += 1
+				if detail.length() < 600:
+					detail += " [%s f%d cpp=%d script=%d locked=%s dorm=%s]" % [str(d), i, int(world.get_facing_row(slot)), int(limb._face_row), str(world.is_face_locked(slot)), str(world.is_dormant(slot))]
+	GameManager.defend_tree_active = false
+	GameManager.defend_tree_ref = null
+	assert(world.is_face_locked(slot), "yön kilidi açık")
+	assert(mismatches == 0, "Ağacı Koru sırasında C++ uzvun yönünü %d karede ağaca çevirdi:%s" % [mismatches, detail])
+	_cleanup()
+
+
+func test_row_dir_is_the_canonical_direction_of_each_row_so_cpp_and_script_never_disagree() -> void:
+	for row: int in [MathScript.ROW_DOWN, MathScript.ROW_UP, MathScript.ROW_LEFT, MathScript.ROW_RIGHT]:
+		assert(MathScript.face_row(MathScript.row_dir(row), -1) == row, "row_dir(%d) kendi satırına döner" % row)
+		for cur: int in [MathScript.ROW_DOWN, MathScript.ROW_UP, MathScript.ROW_LEFT, MathScript.ROW_RIGHT]:
+			assert(MathScript.face_row(MathScript.row_dir(row), cur) == row, "histerezis kanonik yönü bozmaz (%d -> %d)" % [cur, row])
+
+
+## Kilit uzvu yeniden kayıt / dışarıdan uyandırma sonrasında da geri alınmalı (bir kez yazıp bırakmak yetmiyordu).
+func test_worm_limb_relocks_its_cpp_slot_if_something_wakes_it_up() -> void:
+	var r: Array = _rig([Vector2(1000, 1000)])
+	var boss: Node = r[1]
+	var limb: Node = _limb_at(boss, Vector2(1400, 1400), MathScript.KIND_LASHER, MathScript.FATE_BURST)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var world: Object = EnemyWorldBridgeScript.fog_world(get_tree())
+	var slot: int = int(limb._ew_slot)
+	assert(world.is_dormant(slot) and world.is_face_locked(slot), "uykuda + yön kilitli")
+	world.set_dormant(slot, false)
+	world.set_face_lock(slot, false)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert(world.is_dormant(slot) and world.is_face_locked(slot), "dışarıdan açılan uyku/kilit bir sonraki tikte geri alındı")
+	_cleanup()
+
+
+func test_client_puppet_limb_keeps_the_hosts_facing_during_a_defend_tree_mission() -> void:
+	NetworkManager.is_multiplayer_active = true
+	NetworkManager.is_host = false
+	var tree_stub := Node2D.new()
+	add_child(tree_stub)
+	tree_stub.global_position = Vector2(1400, 900)
+	GameManager.defend_tree_ref = tree_stub ## istemcide kozmetik ağaç referansı yeterli (bkz. enemy_world_bridge.gd)
+	var limb: Node = LimbScene.instantiate()
+	add_child(limb)
+	limb.global_position = Vector2(1400, 1400)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var world: Object = EnemyWorldBridgeScript.fog_world(get_tree())
+	var slot: int = int(limb._ew_slot)
+	var ok: bool = world != null and slot >= 0 and bool(limb._ew_puppet)
+	var mismatches: int = 0
+	if ok:
+		for d: Vector2 in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, 1)]:
+			limb.on_ability_vfx("worm_face", {"dir": d}) ## host'un seçtiği bakış
+			var want: int = MathScript.face_row(d, -1)
+			for _i in range(24):
+				await get_tree().physics_frame
+				if int(world.get_facing_row(slot)) != want:
+					mismatches += 1
+	GameManager.defend_tree_ref = null
+	NetworkManager.is_multiplayer_active = false
+	NetworkManager.is_host = false
+	if is_instance_valid(limb):
+		limb.free()
+	tree_stub.free()
+	assert(ok, "istemci uzvu C++ kukla olarak kayıtlı")
+	assert(mismatches == 0, "istemcide C++ kukla adımı uzvun yönünü %d karede ağaca çevirdi" % mismatches)
 
 
 func test_worm_face_message_turns_the_client_puppet() -> void:

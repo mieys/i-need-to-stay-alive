@@ -45,6 +45,24 @@ var last_step_ms: float = 0.0
 var last_view_ms: float = 0.0 ## last_step_ms'nin konum/kare yazma kısmı
 var event_counts: PackedInt32Array = PackedInt32Array([0, 0, 0, 0, 0, 0, 0]) ## olay türü başına toplam (testler)
 var last_tick_ms: float = 0.0
+var last_pre_ms: float = 0.0 ## adım öncesi: ızgara + hedefler + dış gövdeler + uyanıkların durum itmesi
+var last_events_ms: float = 0.0 ## adım sonrası: olaylar + seyrek tarama + uyku uyandırma
+var last_loop_ms: float = 0.0 ## uyanıkların _ew_tick döngüsü
+
+## UYKU (2026-10-19, FPS turu 4): "sessiz" yaratık (uyanık ama tek işi yetenek bekleme sayacı + kalkan yenilenmesi) her fizik karesi tiklenmek yerine buraya konur:
+## ne köprü onu tikler ne de adım öncesi durum itmesi yapılır; atlanan sürenin etkisi (sayaç azalması, kalkan yenilenmesi) yaratık UYANINCA tek seferde işlenir
+## (enemy.gd _ew_dorm_sync). Saat = köprünün biriktirdiği fizik delta'ları (zaman ölçeği / duraklama doğru işler). Uyandırma: (a) süre dolunca _wake_due,
+## (b) yaratığa dokunan her giriş noktası _ew_wake() (hasar, durum etkisi, saldırı...) - uyuyan yaratık için zaten kullanılan sözleşme.
+var _clock: float = 0.0 ## bu geçiş DAHİL toplanan delta'lar
+var _prev_clock: float = 0.0 ## bu geçişten ÖNCEKİ toplam
+var _sync_clock: float = 0.0 ## uyuyanın sayaçlarının işlenebileceği son saat: geçiş SIRASINDA _prev_clock (uyanan yaratığın bu geçişteki tiki bu delta'yı kendisi işler; _clock'a işlemek 1 kare fazla sayardı), geçişler arasında _clock
+var _dorm_nodes: Array = [] ## uyuyan yaratıklar (paralel diziler; yaratığın _ew_dorm_idx'i buradaki yeri)
+var _dorm_until := PackedFloat64Array() ## uyanma saati (INF = sadece dışarıdan uyanır)
+var _dorm_next: float = INF ## en küçük uyanma saati (altındaysa tarama yok)
+var dormant_count: int = 0 ## ölçüm / testler
+var stat_sleeps: int = 0 ## ölçüm: uykuya alınan / dışarıdan uyandırılan / süresi dolup uyanan toplamları
+var stat_wakes_ext: int = 0
+var stat_wakes_due: int = 0
 
 
 ## Bu sahnenin köprüsü (yoksa kurar). Yaratığın _ready'sinden çağrılır: o an current_scene "çocuk ekliyor" kilidinde
@@ -146,6 +164,9 @@ func target_node(index: int) -> Node2D:
 func _physics_process(delta: float) -> void:
 	if int(world.call("get_count")) == 0:
 		return
+	_prev_clock = _clock
+	_clock += delta
+	_sync_clock = _prev_clock
 	var t0: int = Time.get_ticks_usec()
 	_refresh_grid()
 	_build_targets()
@@ -155,6 +176,7 @@ func _physics_process(delta: float) -> void:
 	for e in _active:
 		if e != null and is_instance_valid(e) and e._ew_slot >= 0:
 			e._ew_push_state()
+	var t_pre: int = Time.get_ticks_usec()
 	world.call("step", delta)
 	var t1: int = Time.get_ticks_usec()
 	var ev: PackedInt32Array = world.call("pop_events")
@@ -180,7 +202,11 @@ func _physics_process(delta: float) -> void:
 				e._ew_wake()
 		s += SWEEP_EVERY
 	_sweep_phase = (_sweep_phase + 1) % SWEEP_EVERY
+	## süresi dolan uyuyanlar bu karenin tikine katılır (bkz. _wake_due)
+	if _clock >= _dorm_next:
+		_wake_due()
 	## uyanık yaratıkların tiki (tik sırasında uyanan da aynı karede işlenir)
+	var t_loop: int = Time.get_ticks_usec()
 	var i: int = 0
 	var keep: Array = []
 	## Köprünün KENDİ adım sayacı (oyunda fizik karesi başına bir adım = Engine.get_physics_frames() ile aynı anlam): testler köprüyü
@@ -202,11 +228,74 @@ func _physics_process(delta: float) -> void:
 		if e._ew_awake and e._ew_slot >= 0:
 			keep.append(e)
 	_active = keep
+	_sync_clock = _clock
+	world.call("end_tick") ## olay + tik aşaması bitti: sonraki durum değişimleri bir sonraki adımın kare hesabına girer (A_HOLD, bkz. enemy_world.h)
 	var t2: int = Time.get_ticks_usec()
 	last_step_ms = float(world.call("get_last_step_ms"))
 	last_view_ms = float(world.call("get_last_view_ms"))
 	last_tick_ms = float(t2 - t1) / 1000.0
 	last_bridge_ms = float(t2 - t0) / 1000.0
+	last_pre_ms = float(t_pre - t0) / 1000.0
+	last_events_ms = float(t_loop - t1) / 1000.0
+	last_loop_ms = float(t2 - t_loop) / 1000.0
+
+
+## Yaratığı uyku listesine koyar (enemy.gd _ew_try_dormant). until: köprü saati cinsinden uyanma zamanı (INF = süre yok). Döner: listedeki yeri.
+func dormant_add(e: Node, until: float) -> int:
+	_dorm_nodes.append(e)
+	_dorm_until.append(until)
+	if until < _dorm_next:
+		_dorm_next = until
+	dormant_count = _dorm_nodes.size()
+	stat_sleeps += 1
+	return dormant_count - 1
+
+
+## Uyku listesinden çıkarır (dışarıdan uyanma / kayıt silme). Son elemanla yer değiştirir (O(1)), taşınan yaratığın _ew_dorm_idx'i güncellenir.
+func dormant_remove(idx: int) -> void:
+	var last: int = _dorm_nodes.size() - 1
+	if idx < 0 or idx > last:
+		return
+	stat_wakes_ext += 1
+	if idx < last:
+		var moved = _dorm_nodes[last]
+		_dorm_nodes[idx] = moved
+		_dorm_until[idx] = _dorm_until[last]
+		if moved != null and is_instance_valid(moved):
+			moved._ew_dorm_idx = idx
+	_dorm_nodes.resize(last)
+	_dorm_until.resize(last)
+	dormant_count = last
+
+
+## Uyanma saati gelen uyuyanları uyandırır: sayaçlar ÖNCEKİ geçişin sonuna kadar işlenir (bu geçişin delta'sını yaratığın kendi tiki işler - süresi bu karede biten bekleme
+## sayacı eski yolda da bu karenin tikinde `process_fast` false dönerek biterdi), sonra yaratık bu karenin tik döngüsüne katılır.
+func _wake_due() -> void:
+	var nxt: float = INF
+	var n: int = _dorm_nodes.size()
+	var i: int = 0
+	while i < n:
+		var u: float = _dorm_until[i]
+		if u <= _clock:
+			var e = _dorm_nodes[i]
+			n -= 1
+			if i < n:
+				var moved = _dorm_nodes[n]
+				_dorm_nodes[i] = moved
+				_dorm_until[i] = _dorm_until[n]
+				if moved != null and is_instance_valid(moved):
+					moved._ew_dorm_idx = i
+			_dorm_nodes.resize(n)
+			_dorm_until.resize(n)
+			stat_wakes_due += 1
+			if e != null and is_instance_valid(e):
+				e._ew_dorm_due(_prev_clock)
+			continue
+		if u < nxt:
+			nxt = u
+		i += 1
+	_dorm_next = nxt
+	dormant_count = n
 
 
 ## Izgara içeriği değişti (maden kırıldı/doğdu, bkz. mine_world.gd EnemyPathing.sync_cells): C++ tarafına yeniden yaz.
@@ -280,6 +369,10 @@ func _build_targets() -> void:
 		if not is_instance_valid(ally):
 			continue
 		_add_target(ally, T_ALLY, not (ally.get("is_dead") == true), pos, kind, targetable, ghost, body, zone, ids)
+	## 3b. Ev yıkılınca dışarı atılan BABAANNE (madde 313): oyuncu gibi kovalanır ve vurulur (take_damage; savaşamaz).
+	var granny: Node2D = GameManager.babaanne_target
+	if is_instance_valid(granny) and granny.is_inside_tree():
+		_add_target(granny, T_REMOTE, not (granny.get("is_dead") == true), pos, kind, targetable, ghost, body, zone, ids)
 	## 4. "Ağacı Koru" - doluysa her şeyin önünde (C++ geçersiz kılma)
 	## İstemcide defend_tree_active hep false (sadece host); kuklaların yönü için kozmetik ağaç referansı yeterli (enemy.gd
 	## eski istemci dalı da GameManager.defend_tree_ref geçerliyse ağaca baktırıyordu).

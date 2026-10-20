@@ -43,6 +43,13 @@ const WUPGRADE_PRICE_STEP := 30
 const WFINAL_PRICE := 400
 const SHARD_COST_WUPGRADE := 5
 const SHARD_COST_WFINAL := 10
+## FİNAL SONRASI GÜÇLENDİRME (kullanıcı isteği 2026-10-19: "silahlar tıpkı kalkanlar gibi sınırsız olarak geliştirilebilsin fakat sadece
+## 5 levele kadar özel geliştirme verecek ... sonrasında sadece stat artışı olacak"): final alınınca açılır, sınırsız; her biri yalnız
+## kademe statı (+%10 taban hasar, +%5 saldırı hızı, weapon.gd tier_*). Fiyatlar kullanıcı vermedi - benim seçimim, kalkan geliştirmesi
+## deseni: 150 + 50 x (o kopyada alınan güçlendirme) altın + 3 parçacık.
+const WPLUS_BASE_PRICE := 150
+const WPLUS_PRICE_STEP := 50
+const SHARD_COST_WPLUS := 3
 
 
 # ------------------------------------------------------------------ silah
@@ -93,6 +100,8 @@ static func entry_shard_cost(kind: String) -> int:
 			return SHARD_COST_WUPGRADE
 		"wfinal":
 			return SHARD_COST_WFINAL
+		"wplus":
+			return SHARD_COST_WPLUS
 	return 0
 
 
@@ -229,6 +238,45 @@ static func buy_wupgrade(player: Node, slot: int, index: int) -> bool:
 			var ups: Array = ench.get("ups", [])
 			ups.append(index)
 			ench["ups"] = ups
+	return true
+
+
+# ------------------------------------------------------------------ final sonrası güçlendirme (sınırsız, yalnız stat)
+
+static func wplus_count(slot: int) -> int:
+	return EnchantDefs.plus_count(slot_enchant(slot))
+
+
+static func wplus_price(slot: int) -> int:
+	return GameManager.apply_shop_discount(WPLUS_BASE_PRICE + WPLUS_PRICE_STEP * wplus_count(slot))
+
+
+static func wplus_block_reason(slot: int) -> String:
+	var ench: Dictionary = slot_enchant(slot)
+	if ench.is_empty():
+		return "Bu silahın geliştirmesi yok"
+	if not EnchantDefs.is_complete(ench):
+		return "Önce 5. kademeyi (final) tamamla"
+	return shard_shortfall_reason(SHARD_COST_WPLUS)
+
+
+static func can_buy_wplus(slot: int) -> bool:
+	return wplus_block_reason(slot) == "" and GameManager.gold >= wplus_price(slot)
+
+
+## Satın alır: parçacığı + altını düşer, kayıtta "plus" +1 (player.apply_enchant_choice "plus": silahı yeniden kurar + halka efekti;
+## oyuncu yoksa - test - kayda doğrudan yazılır).
+static func buy_wplus(player: Node, slot: int) -> bool:
+	if not can_buy_wplus(slot):
+		return false
+	GameManager.gold -= wplus_price(slot)
+	GameManager.add_weapon_shards(-SHARD_COST_WPLUS)
+	EnchantDefs.record_shards_spent(GameManager.owned_weapons[slot], SHARD_COST_WPLUS) ## satışta iade defteri
+	if player != null and is_instance_valid(player) and player.has_method("apply_enchant_choice"):
+		player.apply_enchant_choice({"type": "plus", "slot": slot})
+	else:
+		var ench: Dictionary = slot_enchant(slot)
+		ench["plus"] = EnchantDefs.plus_count(ench) + 1
 	return true
 
 

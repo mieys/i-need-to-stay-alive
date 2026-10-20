@@ -5,7 +5,7 @@ extends RefCounted
 ## oyuncuya yaklaşırsa normal saldırı (20 hasar)". Normal saldırı = C++ temas saldırısı (sahnede contact_damage; FIXED_BOSS_STATS "damage" 20). Burada:
 ##   - ATEŞ TOPU SALVOSU: cast animasyonu (yerde durur), SALVO_SHOTS top yelpaze halinde, SHOT_GAP aralıkla; her biri 10 hasar (boss_spell.gd, kind "bossfire").
 ##   - KABAK DALGASI / YARASA DALGASI: ayrı zamanlayıcılar (PUMPKIN_*/BAT_*), summon animasyonu, halka şeklinde doğuş. Minyonlar enemy_spawner.gd spawn_summon ile
-##     kademe ölçekli ama canları kabak %70 / yarasa %30 (pumpkin_minions.gd davranışları: kabak yaklaşınca patlar 20, yarasa ısırıp kanatır 5/sn).
+##     kademe ölçekli ama canları kabak %140 / yarasa %60 (2026-10-19: x2; pumpkin_minions.gd davranışları: kabak yaklaşınca patlar 20, yarasa ısırıp kanatır 5/sn).
 ## Sayılar tek yerde (aşağıdaki sabitler). Boss ölünce minyonlar kendiliğinden dağılır (pumpkin_minions.gd).
 ##
 ## ÇOK OYUNCULU: karar/hasar/doğuş host'ta. İstemciler: animasyon (emit_ability_vfx "boss_event" anim), ateş topu/patlama (broadcast world fx), minyonlar (normal yaratık RPC'si).

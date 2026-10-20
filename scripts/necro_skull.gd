@@ -158,7 +158,9 @@ func _owner_node() -> Node2D:
 func _suspended(own: Node2D) -> bool:
 	if own == null:
 		return false
-	return own.get("is_dead") == true or own.get("is_downed") == true or own.get("is_indoors") == true
+	## Güvenli alandaki (satıcı koruması / demirci) sahibin kafatası da durur ve gizlenir (madde 327, "pasifler çalışmamalı"); kukla sahibi de aynı soruya cevap verir.
+	return own.get("is_dead") == true or own.get("is_downed") == true or own.get("is_indoors") == true \
+			or (own.has_method("is_safe_zone_frozen") and own.is_safe_zone_frozen())
 
 
 func _ready() -> void:
@@ -305,6 +307,7 @@ func _impact(pos: Vector2) -> void:
 		if not is_instance_valid(e):
 			continue
 		if fear and e.has_method("apply_fear_wander"):
+			BalanceLogScript.on_cc("s:necro_kafatasi", "fear", e, EVO_FEAR_DURATION)
 			e.apply_fear_wander(EVO_FEAR_DURATION, FEAR_AFFECTS_BOSSES)
 		if curse and e.get("is_dead") != true:
 			if e.has_method("apply_element"):

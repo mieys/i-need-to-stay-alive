@@ -25,7 +25,7 @@ const DIMBG := Color(0.03, 0.03, 0.06)
 const C_PANEL := Color("#1a1a2c")
 const C_DANGER_FILL := Color("#4e2018")
 const C_DANGER_TEXT := Color("#ffd8c8")
-const C_SOUL := Color("#8fe0f0")
+const C_SOUL := Color("#e6dcff") ## Ruh Kıymığı sayısı = mor kristalin açık tonu (madde 343)
 
 ## Tasarım genişliği (20:9 telefon). Tuval daha darsa kök orantılı küçülür (bkz. fit).
 const DESIGN_W := 2400.0

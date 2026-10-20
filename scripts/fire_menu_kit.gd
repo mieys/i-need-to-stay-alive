@@ -1,7 +1,7 @@
 extends RefCounted
 
 ## "ATEŞ IŞIĞI" menü dili - duraklatma (ESC) menüsü + ayarlar ekranının ortak parçaları (2026-10-17, madde 234; prototip B,
-## madde 229). Kaynak dil ana menünün D sol menüsü (madde 192): kutu yok, sol taraf basamaklı kararır (sol_golge.png), büyük
+## madde 229). Kaynak dil ana menünün D sol menüsü (madde 192): kutu yok, sol taraf yumuşak kararır (sol_golge.png), büyük
 ## altın başlık + kiriş süsü, öğeler = mum yuvası + ikon + başlık + alt yazı, seçilide yanan mum + altın yazı.
 ## Renkler/ölçüler main_menu.gd ile AYNI değerler (orada kendi kopyası var; birini değiştirirsen ötekini de).
 
@@ -73,8 +73,10 @@ class Candle extends Control:
 		draw_texture_rect_region(tex, Rect2(Vector2.ZERO, Vector2(64, 64)), Rect2(Vector2(COL * 32, row * 32), Vector2(32, 32)))
 
 
-## Kademeli (basamaklı) karartma bandı: x0'a kadar tam, sonra adım adım söner (ayar satırlarının okunurluğu).
+## Karartma bandı: x0'a kadar tam, sonra steps * step_w genişliğinde YUMUŞAK söner (ayar satırlarının okunurluğu). Ad eski:
+## 2026-10-20'ye kadar step_w'lik basamaklarla sönüyordu ("pixel pixel" bulundu); şimdi köşe renkli dilimlerle smoothstep geçişi.
 class StepShade extends Control:
+	const FADE_SLICES := 16
 	var col: Color = Color(0.05, 0.035, 0.025, 0.8)
 	var x0: float = 1520.0
 	var step_w: float = 48.0
@@ -86,9 +88,17 @@ class StepShade extends Control:
 
 	func _draw() -> void:
 		draw_rect(Rect2(0, 0, x0, size.y), col)
-		for i in steps:
-			var a: float = col.a * (1.0 - float(i + 1) / float(steps + 1))
-			draw_rect(Rect2(x0 + i * step_w, 0, step_w, size.y), Color(col, a))
+		var fade_w: float = step_w * steps
+		for i in FADE_SLICES:
+			var xa: float = x0 + fade_w * float(i) / FADE_SLICES
+			var xb: float = x0 + fade_w * float(i + 1) / FADE_SLICES
+			var ca := Color(col, col.a * _ease(float(i) / FADE_SLICES))
+			var cb := Color(col, col.a * _ease(float(i + 1) / FADE_SLICES))
+			draw_polygon(PackedVector2Array([Vector2(xa, 0), Vector2(xb, 0), Vector2(xb, size.y), Vector2(xa, size.y)]),
+				PackedColorArray([ca, cb, cb, ca]))
+
+	static func _ease(t: float) -> float: ## 0 -> 1 (tam), 1 -> 0
+		return 1.0 - smoothstep(0.0, 1.0, t)
 
 
 static func lbl(t: String, fs: int, c: Color) -> Label:
@@ -102,11 +112,12 @@ static func tex_icon(tex: Texture2D, s: float = ITEM_ICON) -> Control:
 	return DK.icon(tex, s)
 
 
-## Sol basamaklı karartma (ana menü sahnesindeki ile aynı doku), tam ekran.
+## Sol yumuşak karartma (ana menü sahnesindeki ile aynı doku, 480x1, DOĞRUSAL gerilir), tam ekran. 2026-10-20'ye kadar doku Bayer
+## titreşimli basamaklıydı ve en yakın komşuyla gerildiği için ESC menüsünde soldan 4 px'lik dama deseni görünüyordu.
 static func left_shade() -> TextureRect:
 	var shade := TextureRect.new()
 	shade.texture = load(SHADE_PATH)
-	shade.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	shade.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	shade.stretch_mode = TextureRect.STRETCH_SCALE
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE

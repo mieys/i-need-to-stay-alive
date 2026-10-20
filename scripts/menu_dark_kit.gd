@@ -90,32 +90,40 @@ class Spot extends Control:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-## Ruh Kıymığı kristali (fiyat yanında; Ruh Mağazası'ndakiyle aynı çizim).
+## Ruh Kıymığı kristali: Oyun Bitti'deki mor 7x11 piksel kristal, HER ekranda bu (madde 343; eski camgöbeği elmas kalktı).
 class ShardIcon extends Control:
+	const ROWS := ["...O...", "..OLO..", ".OLLMO.", ".OLMMO.", "OLLMMDO", "OLMMMDO", "OLMMDDO", ".OMMDO.", ".OMDDO.", "..ODO..", "...O..."]
+	const COLS := {"O": Color("#20150d"), "L": Color("#e6dcff"), "M": Color("#b49cf0"), "D": Color("#6f52bc")}
 	var dim: bool = false
 
+	## px = yükseklik; genişlik kristalin oranında (7/11), sayının yanında boşluk kalmasın.
 	func _init(px: float = 24.0, dimmed: bool = false) -> void:
-		custom_minimum_size = Vector2(px, px)
+		custom_minimum_size = Vector2(ceilf(px * 7.0 / 11.0), px)
 		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		dim = dimmed
 
 	func _draw() -> void:
-		var s: float = size.x
-		var c: float = s * 0.5
-		var top := Vector2(c, s * 0.04)
-		var mid_y: float = s * 0.38
-		var l := Vector2(s * 0.12, mid_y)
-		var r := Vector2(s * 0.88, mid_y)
-		var bot := Vector2(c, s * 0.96)
-		var m := Vector2(c, mid_y)
-		var k: float = 0.5 if dim else 1.0
+		var h: float = minf(size.y, size.x * 11.0 / 7.0)
+		paint(self, ((size - Vector2(h * 7.0 / 11.0, h)) * 0.5).floor(), h, dim)
+
+	## Tek kaynak (Oyun Bitti panosu da bunu çağırır): o = sol üst, h = yükseklik (11 hücre). Hücre kenarları tam piksele
+	## yuvarlanır - kesirli boyda da boşluksuz, en fazla 1 px fark.
+	static func paint(ci: CanvasItem, o: Vector2, h: float, dimmed: bool = false) -> void:
+		var c: float = h / 11.0
+		var k: float = 0.5 if dimmed else 1.0
 		var t := Color(k, k, k, 1)
-		draw_colored_polygon(PackedVector2Array([top, m, l]), Color("#b4f1f5") * t)
-		draw_colored_polygon(PackedVector2Array([top, r, m]), Color("#73d2dc") * t)
-		draw_colored_polygon(PackedVector2Array([l, m, bot]), Color("#3f9fb0") * t)
-		draw_colored_polygon(PackedVector2Array([m, r, bot]), Color("#27707f") * t)
-		draw_polyline(PackedVector2Array([top, r, bot, l, top]), Color("#0b1418"), maxf(2.0, roundf(s / 12.0)))
+		for j in ROWS.size():
+			var row: String = ROWS[j]
+			var y0: float = roundf(o.y + j * c)
+			var y1: float = roundf(o.y + (j + 1) * c)
+			for i in row.length():
+				var ch: String = row[i]
+				if not COLS.has(ch):
+					continue
+				var x0: float = roundf(o.x + i * c)
+				var x1: float = roundf(o.x + (i + 1) * c)
+				ci.draw_rect(Rect2(x0, y0, x1 - x0, y1 - y0), COLS[ch] * t)
 
 
 ## İnce ilerleme / bekleme çizgisi.

@@ -39,7 +39,7 @@ class FakeEnemy extends Node2D:
 	func apply_freeze_full(duration: float, _allow_boss: bool = false) -> void:
 		freezes.append(duration)
 
-	func apply_skill_push(dir: Vector2, distance: float) -> void:
+	func apply_skill_push(dir: Vector2, distance: float, _ult: bool = false) -> void:
 		pushes.append([dir, distance])
 
 	func apply_stun(duration: float) -> void:

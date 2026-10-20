@@ -19,8 +19,11 @@ const CLICK_SOUND := preload("res://assets/audio/ui_click.wav")
 const SETTINGS_PATH := "user://audio_settings.cfg"
 const MASTER_BUS_NAME := "Master"
 
+const AudioBuses := preload("res://scripts/audio_buses.gd")
+
 var _player: AudioStreamPlayer
 var master_volume_percent: float = 100.0
+var music_volume_percent: float = 100.0
 
 ## Kullanıcı isteği: "oyunumun ayarlarına çözünürlük ve tam ekran özelliği
 ## ekle. çözünürlük ve tam ekran değiştirilebilsin. exclusive olmasın tam
@@ -140,8 +143,23 @@ func set_master_volume_percent(percent: float) -> void:
 	var linear_volume: float = master_volume_percent / 100.0
 	var volume_db: float = -80.0 if linear_volume <= 0.0 else linear_to_db(linear_volume)
 	AudioServer.set_bus_volume_db(bus_index, volume_db)
+	_save_audio_settings()
+
+
+## MÜZİK SESİ (2026-10-19): "Music" bus'ının seviyesi (boss müziği o yoldan çalar, bkz. AudioBuses.MUSIC_BUS). Master'dan ayrı, onunla çarpılır.
+func set_music_volume_percent(percent: float) -> void:
+	music_volume_percent = clamp(percent, 0.0, 100.0)
+	var bus_index: int = AudioServer.get_bus_index(AudioBuses.music_bus())
+	if bus_index >= 0:
+		var linear_volume: float = music_volume_percent / 100.0
+		AudioServer.set_bus_volume_db(bus_index, -80.0 if linear_volume <= 0.0 else linear_to_db(linear_volume))
+	_save_audio_settings()
+
+
+func _save_audio_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()
 	config.set_value("audio", "master_volume_percent", master_volume_percent)
+	config.set_value("audio", "music_volume_percent", music_volume_percent)
 	config.save(SETTINGS_PATH)
 
 
@@ -149,7 +167,9 @@ func _load_audio_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()
 	if config.load(SETTINGS_PATH) == OK:
 		master_volume_percent = float(config.get_value("audio", "master_volume_percent", 100.0))
+		music_volume_percent = float(config.get_value("audio", "music_volume_percent", 100.0))
 	set_master_volume_percent(master_volume_percent)
+	set_music_volume_percent(music_volume_percent)
 
 
 func connect_all_buttons(root: Node) -> void:
@@ -222,6 +242,15 @@ func set_resolution(index: int) -> void:
 
 func set_show_fps(enabled: bool) -> void:
 	show_fps = enabled
+	_save_display_settings()
+
+
+## OTOMATİK KART SEÇİMİ (2026-10-19, bkz. auto_pick.gd): level atlama / sandık kartı kendiliğinden en uygun kartı seçer. Aynı "display" bölümü.
+var auto_pick_cards: bool = false
+
+
+func set_auto_pick_cards(enabled: bool) -> void:
+	auto_pick_cards = enabled
 	_save_display_settings()
 
 
@@ -348,6 +377,7 @@ func _save_display_settings() -> void:
 	config.set_value("display", "touch_joystick_fixed", touch_joystick_fixed)
 	config.set_value("display", "touch_button_scale_percent", touch_button_scale_percent)
 	config.set_value("display", "touch_vibration", touch_vibration)
+	config.set_value("display", "auto_pick_cards", auto_pick_cards)
 	config.save(DISPLAY_SETTINGS_PATH)
 
 
@@ -367,6 +397,7 @@ func _load_display_settings() -> void:
 		touch_joystick_fixed = bool(config.get_value("display", "touch_joystick_fixed", false))
 		touch_button_scale_percent = clampf(float(config.get_value("display", "touch_button_scale_percent", 100.0)), TOUCH_BUTTON_SCALE_MIN, TOUCH_BUTTON_SCALE_MAX)
 		touch_vibration = bool(config.get_value("display", "touch_vibration", true))
+		auto_pick_cards = bool(config.get_value("display", "auto_pick_cards", false))
 	else:
 		fps_limit = _default_fps_limit()
 	if not FPS_LIMITS.has(fps_limit):

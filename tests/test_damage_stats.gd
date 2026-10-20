@@ -161,6 +161,78 @@ func test_pet_slot_tooltip_shows_live_stats() -> void:
 	_end()
 
 
+## Madde 287: hasar dışı fayda - engellenen hasar, dosttan üstlenilen hasar, kontrol sayısı, etki penceresi, sayılar.
+func test_utility_metrics_in_slot_and_tooltip() -> void:
+	_begin()
+	var ink: Dictionary = UIKit.INK
+	BalanceLogScript.on_prevented("s:sovalye_pasif", 120.0)
+	BalanceLogScript.on_util("s:sovalye_bariyer", "ally", 300.0)
+	BalanceLogScript.on_prevented("s:sovalye_kubbe", 950.0)
+	BalanceLogScript.on_gain("s:sovalye_kiskirtma", 0.0, 40.0)
+	assert(absf(float(DamageStats.slot_totals("p")["prevented"]) - 120.0) < 0.01, "Şovalye pasifi P slotunda")
+	assert(absf(float((DamageStats.slot_totals("e")["util"] as Dictionary).get("ally", 0.0)) - 300.0) < 0.01, "Şovalye E dosttan üstlenilen")
+	var te: String = DamageStats.tooltip_bbcode("e", ink)
+	assert(te.contains("Dostlardan üstlenilen hasar") and te.contains("300"), te)
+	var tr: String = DamageStats.tooltip_bbcode("r", ink)
+	assert(tr.contains("Engellenen hasar") and tr.contains("950"), tr)
+	assert(DamageStats.tooltip_bbcode("q", ink).contains("40"), "Şovalye Q temel yenilemesi kalkan sayılır")
+	_end()
+
+
+func test_cc_counted_once_per_application_and_not_on_boss() -> void:
+	_begin()
+	var e := Node2D.new()
+	e.set_meta("x", 1)
+	add_child(e)
+	BalanceLogScript.on_cc("s:oakley_sarmasik", "root", e, 4.0)
+	BalanceLogScript.on_cc("s:oakley_sarmasik", "root", e, 4.0) ## süre dolmadan tazeleme: sayılmaz
+	var util: Dictionary = DamageStats.slot_totals("e")["util"]
+	assert(int(util.get("root", 0.0)) == 1, "aynı yaratığa tazeleme bir kez: %s" % str(util))
+	var boss_script := GDScript.new()
+	boss_script.source_code = "extends Node2D\nvar is_boss: bool = true\n"
+	boss_script.reload()
+	var boss := Node2D.new()
+	boss.set_script(boss_script)
+	add_child(boss)
+	assert(boss.get("is_boss") == true)
+	BalanceLogScript.on_cc("s:melek_korku", "fear", boss, 5.0)
+	assert(not (DamageStats.slot_totals("r")["util"] as Dictionary).has("fear"), "boss korkmaz -> sayılmaz")
+	BalanceLogScript.on_cc("s:melek_korku", "slow", boss, 5.0)
+	assert(int((DamageStats.slot_totals("r")["util"] as Dictionary).get("slow", 0.0)) == 1, "boss yavaşlaması sayılır")
+	assert(DamageStats.tooltip_bbcode("e", UIKit.INK).contains("Sabitlenen yaratık"))
+	e.queue_free()
+	boss.queue_free()
+	_end()
+
+
+func test_buff_window_counts_weapon_damage_only_while_open() -> void:
+	_begin()
+	BalanceLogScript.on_hit("w:yay", 100.0, false) ## pencere kapalı
+	BalanceLogScript.set_window("s:elara_gercek_hasar", true, true)
+	BalanceLogScript.on_hit("w:yay", 250.0, false)
+	BalanceLogScript.on_hit("s:talon_dash", 999.0, false) ## silah değil: sadece-silah penceresine girmez
+	BalanceLogScript.set_window("s:elara_gercek_hasar", false, true)
+	BalanceLogScript.on_hit("w:yay", 70.0, false)
+	var util: Dictionary = DamageStats.slot_totals("e")["util"]
+	assert(absf(float(util.get("during_w", 0.0)) - 250.0) < 0.01, "pencere açıkken silah hasarı: %s" % str(util))
+	BalanceLogScript.set_window("s:assasin_pasif", true, false)
+	BalanceLogScript.on_hit("s:assasin_dash2", 40.0, true)
+	BalanceLogScript.set_window("s:assasin_pasif", false, false)
+	assert(absf(float((DamageStats.slot_totals("p")["util"] as Dictionary).get("during", 0.0)) - 40.0) < 0.01, "Assasin pasifi tüm isabetler")
+	BalanceLogScript.reset()
+	assert(BalanceLogScript.util_snapshot().is_empty(), "reset ölçüleri siler")
+	_end()
+
+
+func test_assasin_slots_match_keys() -> void:
+	## Q = Şahin Hamlesi (dash2), E = Gölge Adımı (görünmezlik), R = Gölge Hücumu (dash) - eskiden R hasarı Q'ya yazılıyordu.
+	assert(DamageStats.slot_of("s:assasin_dash2") == "q")
+	assert(DamageStats.slot_of("s:assasin_gorunmez") == "e")
+	assert(DamageStats.slot_of("s:assasin_dash") == "r")
+	assert(DamageStats.slot_of("s:oakley_agac") == "r", "Hayat Ağacı R (eskiden Diğer'e düşüyordu)")
+	assert(DamageStats.slot_of("s:shaman_kalkan_totemi") == "e" and DamageStats.slot_of("s:shaman_kalkan_alan") == "e")
+
+
 func test_fmt() -> void:
 	assert(DamageStats.fmt(0.0) == "0" and DamageStats.fmt(999.4) == "999" and DamageStats.fmt(12345.0) == "12.345")
 	assert(DamageStats.fmt(25_000_000.0) == "25.0 Mn")

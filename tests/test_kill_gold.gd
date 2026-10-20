@@ -122,3 +122,41 @@ func test_icon_is_static_and_beside_text() -> void:
 	assert(icon != null, "yazının yanında sabit altın simgesi olmalı")
 	## Simge yazının solunda ve metnin dikey ortasında (Label üst hizalı: -22 ... -22+yükseklik).
 	assert(icon.position.x < 0.0 and icon.position.y > -22.0 and icon.position.y < 8.0, "simge yazıya bitişik: %s" % [icon.position])
+
+
+## 2026-10-19 (madde 308): takım payı "TAKIM +N", asist "ASİST +N", kendi öldürme "+N".
+func test_team_share_text_is_labelled() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	KillGold.show_at(get_tree(), 3, Vector2(0, 0), KillGold.TEAM_KIND)
+	KillGold.show_at(get_tree(), 5, Vector2(0, 0), 1)
+	KillGold.show_at(get_tree(), 7, Vector2(0, 0))
+	var texts: Array = []
+	for n in get_children():
+		if "label" in n and n.get("label") is Label:
+			texts.append((n.get("label") as Label).text)
+	assert(texts.has("TAKIM +3") and texts.has("ASİST +5") and texts.has("+7"), "yazı türleri: %s" % [texts])
+	get_tree().current_scene = prev_scene
+
+
+## Çok oyunculu bayrak açık + yalnız yerel oyuncu: takım payı çalışmaz (grup tek kişi), altının tamamı öldürene (yerel) gider; yeni kod yolu hatasız koşar.
+func test_enemy_award_with_assists_alone_in_multiplayer_flag() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	var was_active: bool = NetworkManager.is_multiplayer_active
+	NetworkManager.is_multiplayer_active = true
+	var p := Node2D.new()
+	p.add_to_group("player")
+	add_child(p)
+	var e: Node2D = (load("res://scenes/creatures/enemy_agac1.tscn") as PackedScene).instantiate()
+	add_child(e)
+	var before: int = GameManager.gold
+	e.call("_award_with_assists", 10, Vector2.ZERO)
+	await get_tree().create_timer(KillGold.SHOW_DELAY + 0.15).timeout
+	assert(GameManager.gold == before + 10, "tek başına: 10 altının tamamı yerel öldürene: %d" % (GameManager.gold - before))
+	GameManager.gold = before
+	NetworkManager.is_multiplayer_active = was_active
+	p.remove_from_group("player")
+	p.free()
+	e.free()
+	get_tree().current_scene = prev_scene

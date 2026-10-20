@@ -17,6 +17,7 @@ const RunSummaryUI := preload("res://scripts/run_summary_ui.gd")
 const RunRecords := preload("res://scripts/run_records.gd")
 const Achievements := preload("res://scripts/achievements.gd")
 const MetaProgress := preload("res://scripts/meta_progress.gd")
+const DK := preload("res://scripts/menu_dark_kit.gd")
 const DamageStats := preload("res://scripts/damage_stats.gd")
 const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
 const FONT := preload("res://assets/fonts/m5x7.ttf")
@@ -51,9 +52,7 @@ class HT:
 const BONE := Color("#e9dcc0")
 const DMG := Color("#e8885a") ## verilen hasar
 const TANK := Color("#8cc0e6") ## tanklanan hasar (kalkan mavisi)
-const SOUL_L := Color("#e6dcff")
-const SOUL_M := Color("#b49cf0")
-const SOUL_D := Color("#6f52bc")
+const SOUL_L := Color("#e6dcff") ## Ruh Kıymığı sayısı (kristalin açık tonu)
 const DEAD_MOD := Color(0.58, 0.56, 0.54) ## portreler solgun (herkes öldü)
 
 const HOURGLASS := [
@@ -85,19 +84,6 @@ const CROWN := [
 	"OYYYYYYYYYO",
 	"OHHHHHHHHHO",
 	"OOOOOOOOOOO",
-]
-const SOUL := [ ## Ruh Kıymığı
-	"...O...",
-	"..OLO..",
-	".OLLMO.",
-	".OLMMO.",
-	"OLLMMDO",
-	"OLMMMDO",
-	"OLMMDDO",
-	".OMMDO.",
-	".OMDDO.",
-	"..ODO..",
-	"...O...",
 ]
 const STAR := [
 	"....O....",
@@ -373,7 +359,7 @@ func _glyph(key: String, c: Vector2, s: float) -> void:
 		"crown":
 			_sprite(CROWN, p, s, {"O": HT.OUTLINE, "Y": HT.PRICE, "H": Color("#c48a3a"), "R": Color("#d9574a")})
 		"soul":
-			_sprite(SOUL, p, s, {"O": HT.OUTLINE, "L": SOUL_L, "M": SOUL_M, "D": SOUL_D})
+			DK.ShardIcon.paint(self, p, sz.y) ## her ekrandaki Ruh Kıymığı kristali (tek kaynak)
 		"dmg":
 			draw_texture_rect(ICON_DMG, Rect2(p, sz), false)
 		"shield":

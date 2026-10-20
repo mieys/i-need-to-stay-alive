@@ -42,6 +42,7 @@ const INFO := {
 	"bleed": ["Kanama", "Bir yarasa seni ısırdı - 4 saniye boyunca saniyede 5 hasar alırsın."],
 	"savas_sevki": ["Savaş Şevki", "Öldürdükçe yığılan savaş şevki - 50'de kalıcı +1 saldırı gücüne dönüşür."],
 	"golem": ["Elemental Golem", "Golem formundasın: aldığın hasar %40 azalır ve yeteneklerin mana kalkanı harcamaz."],
+	"time_frozen": ["Zaman Durdu", "Güvenli alandasın (demirci veya seyyar satıcının koruması): can ve mana kalkanı yenilenmez; yetenek, ruhani yetenek ve eşya bekleme süreleri ilerlemez; pasif yetenekler, evcil hayvanın ve totemler çalışmaz. Alandan çıkınca her şey kaldığı yerden devam eder."],
 	"kalkan_bagi": ["Kalkan Bağı", "Arkadaşınla mana kalkanınız birbirine bağlı - hasar/bedel/artış %50-%50 paylaşılıyor, ikinizin de mana kalkanı daha hızlı yenileniyor."],
 }
 

@@ -9,6 +9,7 @@ const EventSfx := preload("res://scripts/event_sfx.gd")
 const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
 const ManaShieldFxScript := preload("res://scripts/mana_shield_fx.gd")
 const KelebekRuhuScript := preload("res://scripts/kelebek_ruhu.gd")
+const LightningBeamFxScript := preload("res://scripts/fx_lightning_beam.gd") ## Yıldırım Asası vuruş sesi (_beam_hit_sfx)
 const PeriPetScript := preload("res://scripts/peri_pet.gd")
 const KirpiPetScript := preload("res://scripts/kirpi_pet.gd")
 const KORSAN_CHAR_ID := 9 ## Characters.DEFS roster id'si (player.gd ile aynı)
@@ -300,6 +301,12 @@ const SwordSwingMath := preload("res://scripts/sword_swing_math.gd")
 const DaggerStabMath := preload("res://scripts/dagger_stab_math.gd")
 const TopuzSlamMath := preload("res://scripts/topuz_slam_math.gd")
 const PenceHookMath := preload("res://scripts/pence_hook_math.gd")
+const MizrakThrustMath := preload("res://scripts/mizrak_thrust_math.gd") ## madde 305
+const KalkanBashMath := preload("res://scripts/kalkan_bash_math.gd") ## madde 338
+## Tabanca/Tüfek şarjörü (madde 296): kasterle AYNI doldurma sürücüsü + kovan (weapon.gd _start_reload / _fire_at).
+const GunReloadFx := preload("res://scripts/gun_reload_fx.gd")
+const ShellCasingFx := preload("res://scripts/shell_casing_fx.gd")
+const GunMagMath := preload("res://scripts/gun_mag_math.gd")
 
 ## DÜZELTME (mimari sadeleştirme - kullanıcı isteği: "singleplayerda zaten
 ## kayıtlı animasyon/efekt bilgilerinin multiplayerdan gereksiz yere
@@ -315,30 +322,6 @@ var _weapon_slash_fx_offset: Array = []
 var _weapon_slash_fx_above_offset: Array = []
 var _weapon_recoil_distance: Array = []
 var _weapon_hit_segments: Array = []
-
-## Kullanıcı isteği: "Ölünce silahlar yere düşsün ... dirilince ease ease
-## normal yerlerine geri dönsün" - weapon.gd'deki AYNI düşme/dönüş efektinin
-## bu KOZMETİK kopyası (bkz. CLAUDE.md "kaster görür diğerleri görmez" hata
-## sınıfı - orada sadece LOKAL weapon.gd'ye eklense diğer oyuncular ölen
-## oyuncunun silahlarının havada asılı kaldığını görürdü). İkonlar burada
-## top_level DEĞİL (RemotePlayer'ın normal çocukları), yani konum/rotasyon
-## YEREL uzayda - weapon.gd'nin dünya-uzayı fiziğiyle AYNI formülü
-## (WeaponDeathDropMath, bkz. o dosyanın kök neden notu) kullanır ama
-## icon.position/rotation üzerinde, parent ölçeğini elle çarpmaya gerek
-## kalmadan (normal Godot parent-child kalıtımı zaten hallediyor).
-var _weapon_grounded: Array[bool] = []
-var _weapon_falling: Array[bool] = []
-var _weapon_rising: Array[bool] = []
-var _weapon_pre_drop_rotation: Array[float] = []
-var _weapon_drop_height: Array[float] = []
-var _weapon_drop_v_speed: Array[float] = []
-var _weapon_drop_spin_speed: Array[float] = []
-var _weapon_drop_elapsed: Array[float] = []
-var _weapon_drop_start_pos: Array[Vector2] = []
-var _weapon_drop_ground_pos: Array[Vector2] = []
-var _weapon_rise_start_pos: Array[Vector2] = []
-var _weapon_rise_elapsed: Array[float] = []
-var _was_incapacitated_for_weapons: bool = false
 
 const WEAPON_ICON_SLOTS: Array[Vector2] = [
 	Vector2(0, -125), Vector2(62, -70), Vector2(-62, -70),
@@ -371,6 +354,10 @@ const WEAPON_SCENES := {
 	"pence": preload("res://scenes/weapon_pence.tscn"),
 	"topuz": preload("res://scenes/weapon_topuz.tscn"),
 	"uzunkilic": preload("res://scenes/weapon_uzunkilic.tscn"),
+	"mizrak": preload("res://scenes/weapon_mizrak.tscn"),
+	"kalkan": preload("res://scenes/weapon_kalkan.tscn"),
+	"yinyang": preload("res://scenes/weapon_yinyang.tscn"), ## madde 334
+	"gokkusagi": preload("res://scenes/weapon_gokkusagi.tscn"),
 }
 
 
@@ -521,15 +508,29 @@ var _interp_prev_pos: Vector2 = Vector2.ZERO
 var _interp_prev_frame: int = -1
 
 
+## Bu oyuncu güvenli alanda mı (player.gd is_safe_zone_frozen ile AYNI tanım: satıcı koruma bölgesi - anlık görüntüde gelir - VEYA demirci iç mekanı - konumdan).
+## Kuklaya bağlı evcil hayvan / Necro kafatası / totem bunu sorar; bar üstü kum saati de buna göre (madde 327).
+func is_safe_zone_frozen() -> bool:
+	return is_in_merchant_zone or HouseSiege.in_smithy(self)
+
+
+var _safe_zone_icon_on: bool = false
+
+
+func _sync_safe_zone_icon() -> void:
+	var frozen: bool = is_safe_zone_frozen()
+	if frozen == _safe_zone_icon_on:
+		return
+	_safe_zone_icon_on = frozen
+	if overhead_bar != null:
+		overhead_bar.set_time_frozen(frozen)
+
+
 func _physics_process(delta: float) -> void:
 	_interp_prev_pos = global_position ## bkz. PhysicsInterp.visual_position
 	_interp_prev_frame = Engine.get_physics_frames()
-	## Kullanıcı isteği: "Ölünce silahlar yere düşsün ... dirilince ease ease
-	## normal yerlerine geri dönsün" - bkz. _process_weapon_death_drop_
-	## transition üstündeki not. Düşme/yerde durma fazları TAM is_dead=true
-	## iken gerçekleştiği için bu çağrı aşağıdaki "if is_dead: return"
-	## erken dönüşünden ÖNCE yapılıyor, yoksa hiç çalışmazdı.
-	_process_weapon_drop_physics_all(delta)
+	_sync_safe_zone_icon()
+	_refresh_remote_weapon_shadows()
 	_process_vampir_remote(delta)
 	_process_hadime_remote(delta)
 	_process_matthew_remote(delta)
@@ -537,9 +538,11 @@ func _physics_process(delta: float) -> void:
 	_process_paladin_levitate_remote(delta)
 	if _beam_fx and is_instance_valid(_beam_fx) and (is_dead or Time.get_ticks_msec() - _beam_last_net_msec > BEAM_NET_TIMEOUT_MSEC):
 		_stop_beam_vfx() ## bkz. BEAM_NET_TIMEOUT_MSEC
+	if _rbeam_fx and is_instance_valid(_rbeam_fx) and (is_dead or Time.get_ticks_msec() - _rbeam_last_net_msec > BEAM_NET_TIMEOUT_MSEC):
+		_stop_rbeam_vfx()
 	_update_beam_tremor()
 	if is_dead:
-		_wf_reset_all() ## ölüm düşüşü ikon konumunu kendisi yönetir: pivotlar kimlik, silahlar görünür
+		_wf_update_all(delta) ## ölünce silahlar göğse çekilip kaybolur (weapon.gd _owner_gone ile aynı kural)
 		return
 	# Smoothly interpolate position towards target
 	## bkz. update_position_and_anim_from_net üstündeki dead-reckoning notu -
@@ -651,19 +654,6 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 	_weapon_slash_fx_above_offset.clear()
 	_weapon_recoil_distance.clear()
 	_weapon_hit_segments.clear()
-	_weapon_grounded.clear()
-	_weapon_falling.clear()
-	_weapon_rising.clear()
-	_weapon_pre_drop_rotation.clear()
-	_weapon_drop_height.clear()
-	_weapon_drop_v_speed.clear()
-	_weapon_drop_spin_speed.clear()
-	_weapon_drop_elapsed.clear()
-	_weapon_drop_start_pos.clear()
-	_weapon_drop_ground_pos.clear()
-	_weapon_rise_start_pos.clear()
-	_weapon_rise_elapsed.clear()
-	_was_incapacitated_for_weapons = false
 	_weapon_is_sword.clear()
 	for i in range(min(_weapon_keys.size(), MAX_WEAPON_ICONS)):
 		var key: String = str(_weapon_keys[i])
@@ -728,6 +718,10 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 		if WeaponTierArt.has_art(key) and WeaponTierArt.set_art(icon, key, 1):
 			icon.scale = Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE
 			icon.set_meta("tier_art", 1)
+		if key == "kalkan":
+			icon.set_meta("kalkan", true) ## dönmez, yönlü görünüş (KalkanBashMath.face) - bkz. _wf_face
+		elif key == "yinyang":
+			icon.set_meta("upright", true) ## Yin Yang Kitabı (madde 334) nişanla dönmez, dik durur - weapon.gd _face_dir ile aynı
 		# Silah gölgesi (bkz. weapon.gd shadow_sprite) - o script sadece
 		# LOKAL (gerçek) oyuncunun kendi weapon.gd node'unda çalışır; burada
 		# uzak oyuncu kuklası için icon'la eşleşen basit, sabit bir gölge
@@ -759,20 +753,11 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 		_wf_add_icon(icon, shadow)
 		_weapon_icons.append(icon)
 		_weapon_base_scales.append(icon.scale)
+		## Asa ucu partikülleri (madde 299): yerel weapon.gd ile aynı yayıcı, kuklanın kendi ikonunun ucundan (ağ verisi yok).
+		if icon is Sprite2D:
+			StaffTipFxScript.attach(icon as Sprite2D, String(key))
 		_talon_form_scale_applied = 1.0 ## ikonlar yeniden yaratıldı: taban ölçek sıfırlandı, _apply_talon_form_scale yeniden uygular
 		_weapon_fire_tweens.append(null)
-		_weapon_grounded.append(false)
-		_weapon_falling.append(false)
-		_weapon_rising.append(false)
-		_weapon_pre_drop_rotation.append(0.0)
-		_weapon_drop_height.append(0.0)
-		_weapon_drop_v_speed.append(0.0)
-		_weapon_drop_spin_speed.append(0.0)
-		_weapon_drop_elapsed.append(0.0)
-		_weapon_drop_start_pos.append(Vector2.ZERO)
-		_weapon_drop_ground_pos.append(Vector2.ZERO)
-		_weapon_rise_start_pos.append(Vector2.ZERO)
-		_weapon_rise_elapsed.append(0.0)
 		## weapon_root silinmeden ÖNCE kendi nişan açısı ayarlarını yakala -
 		## bkz. _update_local_weapon_aim (artık ağdan gelmiyor, her silahın
 		## KENDİ sprite_forward_angle_deg/mirror_icon_when_aiming_left'i
@@ -865,6 +850,8 @@ func _update_local_weapon_aim(delta: float) -> void:
 		var icon: Node2D = _weapon_icons[i]
 		if not is_instance_valid(icon):
 			continue
+		if icon.has_meta(GunReloadFx.META):
+			continue ## şarjör dolduruluyor (madde 296): pozu GunReloadFx sürüyor - kasterde de nişan durur
 		## Her silah KENDİ yatay konumundan, karakterin ORTASI hizasından hedef arar (bkz. weapon.gd _attack_origin /
 		## WeaponTargetPriority.range_center) - gerçek silahla aynı merkez, kozmetik nişan kasterinkiyle aynı yöne döner.
 		var target: Node2D
@@ -898,6 +885,12 @@ func _update_local_weapon_aim(delta: float) -> void:
 
 ## İkonun ucunu dünya yönü `dir`'e çevirir (aynalama dahil) - weapon.gd _face_dir ile aynı kural (WeaponFollowMath.face_rotation).
 func _wf_face(i: int, icon: Node2D, dir: Vector2, t: float) -> void:
+	if icon.has_meta("upright"): ## Yin Yang Kitabı (madde 334): dik durur
+		return
+	if icon.has_meta("kalkan"): ## Kalkan (madde 338): dönmek yerine yüzü dir'e bakan görünüş - weapon.gd _kalkan_face ile aynı
+		if not _wf_fire_tween_running(i):
+			KalkanBashMath.face(icon, int(icon.get_meta("tier_art", 1)), dir)
+		return
 	var forward: float = deg_to_rad(_weapon_forward_angle_deg[i] if i < _weapon_forward_angle_deg.size() else 0.0)
 	var mirror: bool = _weapon_mirror_aim[i] if i < _weapon_mirror_aim.size() else false
 	var r: Array = WeaponFollowMath.face_rotation(dir, forward, mirror)
@@ -971,12 +964,6 @@ func _wf_identity(i: int) -> void:
 		(_wf_vis[i] as Dictionary)["s"] = WeaponFollowMath.SHOWN
 
 
-func _wf_reset_all() -> void:
-	_wf_prev_pos = Vector2.INF
-	for i in _wf_pivots.size():
-		_wf_identity(i)
-
-
 func _wf_fire_tween_running(i: int) -> bool:
 	if i >= _weapon_fire_tweens.size() or not (_weapon_fire_tweens[i] is Tween):
 		return false
@@ -1002,6 +989,9 @@ func _wf_melee_facing(i: int, icon: Node2D, delta: float) -> void:
 	if sc["seen"] and rng > 0.0:
 		var origin: Vector2 = WeaponTargetPriorityScript.range_center(global_position, icon.global_position)
 		if origin.distance_to(sc["focus"] as Vector2) <= rng:
+			if icon.has_meta("kalkan"):
+				_wf_face(i, icon, (sc["focus"] as Vector2) - icon.global_position, t) ## kalkan yüzünü düşmana çevirir
+				return
 			var rest: float = deg_to_rad(_weapon_rest_rotation_deg[i] if i < _weapon_rest_rotation_deg.size() else 0.0)
 			icon.rotation = lerp_angle(icon.rotation, rest, t)
 			return
@@ -1022,22 +1012,21 @@ func _wf_update_all(delta: float) -> void:
 	_wf_prev_pos = gp
 	_wf_bob_t += delta
 	var speed: float = _wf_vel.length()
-	var owned_elsewhere: bool = _vampir_pull > 0.0 or _dome_rim_owns_icons() or _talon_formation != "" or is_downed
+	var gone: bool = is_dead or is_downed ## ölü/yerde: silahlar yere düşmez, çalıdaki gibi göğse çekilip kaybolur (bekleme payı yok)
+	var owned_elsewhere: bool = not gone and (_vampir_pull > 0.0 or _dome_rim_owns_icons() or _talon_formation != "")
 	var sc: Dictionary = WeaponFollowMath.scan(self)
 	var any_target: bool = false
 	for tg: Variant in _cached_aim_targets:
 		if is_instance_valid(tg):
 			any_target = true
 			break
-	var want: bool = bool(sc["seen"]) or any_target
+	var want: bool = (bool(sc["seen"]) or any_target) and not gone and brush_state != HideBrushScript.STATE_HIDDEN ## saklıyken içe çekili (madde 283)
 	for i in mini(_weapon_icons.size(), _wf_pivots.size()):
 		var icon: Node2D = _weapon_icons[i]
 		var pv: Node2D = _wf_pivots[i] as Node2D
 		if not is_instance_valid(icon) or pv == null or not is_instance_valid(pv):
 			continue
-		var dropping: bool = (i < _weapon_falling.size() and _weapon_falling[i]) or (i < _weapon_grounded.size() and _weapon_grounded[i])
-		dropping = dropping or (i < _weapon_rising.size() and _weapon_rising[i])
-		if owned_elsewhere or dropping:
+		if owned_elsewhere:
 			_wf_identity(i)
 			continue
 		var slot: Vector2 = WEAPON_ICON_SLOTS[mini(i, WEAPON_ICON_SLOTS.size() - 1)]
@@ -1051,7 +1040,7 @@ func _wf_update_all(delta: float) -> void:
 		bob *= WeaponFollowMath.bob_scale(w)
 		var home: Vector2 = slot + WeaponFollowMath.charge_offset(kind, w) + Vector2(0.0, bob)
 		var vis: Dictionary = _wf_vis[i]
-		WeaponFollowMath.step_visibility(vis, want, false, now, kind)
+		WeaponFollowMath.step_visibility(vis, want, false, now, kind, gone)
 		var p: Dictionary = WeaponFollowMath.pose(vis, now, kind, home)
 		var st: int = int(vis["s"])
 		var u: float = float(p["u"])
@@ -1101,16 +1090,19 @@ var _dome_rim_spin: Array = []
 var _dome_rim_aim: Array = []
 var _dome_rim_world: Array = [] ## ikon başına SON halka konumu (geri dönüş geçişinde de kullanılır)
 var _dome_rim_blend: Array = [] ## ikon başına 0..1 geçiş
-var _dome_rim_z_on: Array = [] ## ikon başına: kubbenin ön kabuğunun üstünde mi çiziliyor (weapon.gd RIM_Z_INDEX)
+var _dome_rim_z_on: Array = [] ## ikon başına: şu an yazılı halka z'si (0 = halkada değil; weapon.gd RIM_Z_INDEX / RIM_BACK_Z_INDEX)
 const DOME_RIM_Z_INDEX := 21
+const DOME_RIM_BACK_Z_INDEX := 19
+var _dome_rim_front: Array = [] ## ikon başına: halka noktası kubbenin ön yarısında mı (dome_weapon_ring.gd rim_in_front)
 
 
-func set_dome_rim_targets(targets: Array, spin_angles: Array = [], aims: Array = []) -> void:
+func set_dome_rim_targets(targets: Array, spin_angles: Array = [], aims: Array = [], fronts: Array = []) -> void:
 	_dome_rim_targets = targets
 	_dome_rim_spin = spin_angles
 	_dome_rim_aim = aims
+	_dome_rim_front = fronts
 	if targets.is_empty() and (is_dead or is_downed):
-		_dome_rim_blend.clear() ## ölü kukla: düşme animasyonu konumu yönetir, geçiş sıfırlanır
+		_dome_rim_blend.clear() ## ölü kukla: halka bırakılır (silahlar göğse çekilir), geçiş sıfırlanır
 
 
 ## Kubbe halkası ikon konumlarını yönetiyor mu (ya da halkadan slota dönüş geçişi sürüyor mu).
@@ -1132,12 +1124,14 @@ func _dome_rim_icon_on_rim(i: int) -> bool:
 
 
 func _set_dome_rim_icon_z(i: int, on: bool) -> void:
-	if i >= _dome_rim_z_on.size() or bool(_dome_rim_z_on[i]) == on or not is_instance_valid(_weapon_icons[i]):
+	var front: bool = bool(_dome_rim_front[i]) if i < _dome_rim_front.size() else true
+	var z: int = (DOME_RIM_Z_INDEX if front else DOME_RIM_BACK_Z_INDEX) if on else 0
+	if i >= _dome_rim_z_on.size() or int(_dome_rim_z_on[i]) == z or not is_instance_valid(_weapon_icons[i]):
 		return
-	_dome_rim_z_on[i] = on
+	_dome_rim_z_on[i] = z
 	var icon: Node2D = _weapon_icons[i]
 	icon.z_as_relative = not on
-	icon.z_index = DOME_RIM_Z_INDEX if on else 0
+	icon.z_index = z
 
 
 func _update_dome_rim(delta: float) -> void:
@@ -1147,7 +1141,7 @@ func _update_dome_rim(delta: float) -> void:
 	while _dome_rim_world.size() < count:
 		_dome_rim_world.append(Vector2.ZERO)
 	while _dome_rim_z_on.size() < count:
-		_dome_rim_z_on.append(false)
+		_dome_rim_z_on.append(0)
 	## İkon sayısı azaldıysa (Ayna Formu kopyaları bitti / silah gitti) artan geçişler takılı kalmasın (bkz. _dome_rim_owns_icons).
 	_dome_rim_blend.resize(count)
 	_dome_rim_world.resize(count)
@@ -1156,8 +1150,8 @@ func _update_dome_rim(delta: float) -> void:
 		if not is_instance_valid(icon):
 			_dome_rim_blend[i] = 0.0
 			continue
-		if _weapon_falling[i] or _weapon_grounded[i] or _weapon_rising[i]:
-			_dome_rim_blend[i] = 0.0 ## ölüm/diriliş animasyonu konumu yönetir
+		if is_dead or is_downed:
+			_dome_rim_blend[i] = 0.0 ## ölü/yerde: halka bırakılır, silahlar göğse çekilir
 			_set_dome_rim_icon_z(i, false)
 			continue
 		var active: bool = i < _dome_rim_targets.size()
@@ -1167,10 +1161,10 @@ func _update_dome_rim(delta: float) -> void:
 		_dome_rim_blend[i] = blend
 		var slot: Vector2 = WEAPON_ICON_SLOTS[mini(i, WEAPON_ICON_SLOTS.size() - 1)]
 		icon.position = slot.lerp(to_local(_dome_rim_world[i]), smoothstep(0.0, 1.0, blend)) + _formation_kick_offset(i)
-		## Taçta: kubbenin ön kabuğunun üstünde çizilir, yerdeki gölgesi söner (weapon.gd ile aynı eşik/kural).
+		## Halkada: ön yarıda kabuğun üstünde, arka yarıda altında çizilir; yerdeki gölge durur (weapon.gd ile aynı eşik/kural).
 		_set_dome_rim_icon_z(i, blend >= 0.5)
 		if i < _weapon_shadows.size() and is_instance_valid(_weapon_shadows[i]):
-			_weapon_shadows[i].modulate.a = 0.4 * (1.0 - smoothstep(0.0, 1.0, blend))
+			_weapon_shadows[i].modulate.a = 0.4
 	_update_local_weapon_aim(delta)
 	## Kubbe girdabı: halkadaki ikon dışa bakar (gerçek silahın weapon.gd set_rim_spin pozuyla AYNI formül) - nişanın üstüne yazar.
 	for i in range(mini(count, _dome_rim_spin.size())):
@@ -1577,6 +1571,8 @@ func set_brush_state(state: int) -> void:
 	brush_state = state
 	if anim != null:
 		anim.self_modulate.a = HideBrushScript.alpha_for(state)
+	if overhead_bar != null:
+		overhead_bar.set_brush_state(state) ## can barının üstünde saklı/görüldü simgesi (madde 275)
 
 
 ## Vampir Çocuk yarasa formundayken (anim adı bat_*) yaratıklar bu kuklanın içinden geçilebilir sayar - player.gd is_ghost_now ile aynı
@@ -1615,6 +1611,7 @@ func get_effective_move_speed() -> float:
 ## kademesi; ikon adı "RemoteWeaponIcon_<i>" anahtar sırasını taşır (sahnesi/ikonu olmayan anahtar atlanınca kaymasın).
 const EnchantGlowScript := preload("res://scripts/enchant_weapon_glow.gd")
 const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
+const StaffTipFxScript := preload("res://scripts/staff_tip_fx.gd") ## asa ucu partikülleri (madde 299)
 
 
 func _apply_enchant_glows(tiers: Array) -> void:
@@ -1684,7 +1681,6 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	_apply_hadime_net_state(extra.get("hadime", {}))
 	_update_death_status_fx()
 	_update_revive_rewind_fx()
-	_process_weapon_death_drop_transition()
 	is_indoors = extra.get("is_indoors", false)
 	is_in_merchant_zone = extra.get("is_in_merchant_zone", false)
 	## Büyücü "Yükseliş" (R1): Meteor kanalında havada - host'un yaratıkları hedef almasın (köprü/enemy.gd is_invisible okur) ve
@@ -2042,6 +2038,39 @@ func _spawn_ring_vfx(radius: float, col: Color) -> void:
 
 ## Lightning beam VFX — managed on remote player by broadcast_player_vfx.
 var _beam_fx: Node2D = null
+## Gökkuşağı Asası ışını (madde 306): Yıldırım ışınından AYRI kanal ("rbeam_*") - aynı oyuncuda iki ışın aynı anda açık olabilir.
+## Kaster weapon.gd (beam_net_kind "rbeam"): start/stop güvenilir, update 0,05 sn'de bir (uç, namlu, pi = final delme, h = tutma/kamaşma),
+## hit = vuruş tiki (ps = vurulan konumlar). Görsel fx_rainbow_beam.gd (kasterle AYNI sahne).
+const RainbowBeamScene: PackedScene = preload("res://scenes/fx_rainbow_beam.tscn")
+var _rbeam_fx: Node2D = null
+var _rbeam_last_net_msec: int = 0
+
+
+func _start_rbeam_vfx(end_pos: Vector2, extra: Dictionary) -> void:
+	_stop_rbeam_vfx()
+	_rbeam_fx = RainbowBeamScene.instantiate() as Node2D
+	add_child(_rbeam_fx)
+	_rbeam_last_net_msec = Time.get_ticks_msec()
+	_rbeam_fx.setup_network(end_pos, extra)
+
+
+func _update_rbeam_vfx(end_pos: Vector2, extra: Dictionary) -> void:
+	_rbeam_last_net_msec = Time.get_ticks_msec()
+	if _rbeam_fx and is_instance_valid(_rbeam_fx):
+		_rbeam_fx.update_target(end_pos, Vector2(extra.get("from_pos", Vector2.ZERO)), extra)
+
+
+func _rbeam_hit(extra: Dictionary) -> void:
+	if _rbeam_fx and is_instance_valid(_rbeam_fx):
+		_rbeam_fx.play_tick(extra.get("ps", []) as Array)
+
+
+func _stop_rbeam_vfx() -> void:
+	if _rbeam_fx and is_instance_valid(_rbeam_fx):
+		_rbeam_fx.queue_free()
+	_rbeam_fx = null
+
+
 ## BUG DÜZELTMESİ (çok oyunculu senkron denetimi 2026-09-25): "beam_stop" unreliable kanaldan geliyor - kaybolursa ışın
 ## (ve sesi) bir sonraki "beam_start"a kadar bu kuklada asılı kalıyordu (hafızada da not vardı). Işın açıkken sahibi
 ## 0.05 sn'de bir "beam_update" yollar (weapon.gd); BEAM_NET_TIMEOUT_MSEC boyunca hiç güncelleme gelmezse kendiliğinden kapanır.
@@ -2059,6 +2088,17 @@ func _start_beam_vfx(_beam_type: String, target_pos: Vector2, extra_data: Dictio
 		_beam_last_net_msec = Time.get_ticks_msec()
 		if _beam_fx.has_method("setup_network"):
 			_beam_fx.setup_network(target_pos, extra_data)
+		## İlk çakış sesi (madde 294) - kasterde weapon.gd yeni hedefte çalar; setup_network'ten SONRA (uzak kısma + mesafe kuralı).
+		if _beam_fx.has_method("play_strike_sfx"):
+			_beam_fx.play_strike_sfx(target_pos, get_instance_id())
+
+
+## Yıldırım Asası vuruş tiki (network_manager.gd "beam_hit", madde 294): kasterin seçtiği ses + perde hedef konumunda (ışın o an silinmiş
+## olabilir - ses ışına bağlı değil), uzak ışının uğultusu çöker. Kural tek yerde: fx_lightning_beam.gd play_hit_at.
+func _beam_hit_sfx(pos: Vector2, data: Dictionary) -> void:
+	LightningBeamFxScript.play_hit_at(get_tree(), pos, data, LightningBeamFxScript.AudioBusesScript.remote_weapon_db(), true)
+	if _beam_fx and is_instance_valid(_beam_fx) and _beam_fx.has_method("duck"):
+		_beam_fx.duck()
 
 ## Yıldırım asası aktifken (ışın açık) ikon hafifçe titrer (kullanıcı isteği 2026-10-04) - kasterde weapon.gd _apply_beam_tremor,
 ## AYNI WeaponJuice.tremor_offset. Konum dinlenme yuvasına (WEAPON_ICON_SLOTS) göre; yuvanın konumunu başka bir sistem yönetirken
@@ -2092,7 +2132,7 @@ func _update_beam_tremor() -> void:
 		var idx: int = _weapon_icons.find(icon)
 		if idx < 0 or idx >= WEAPON_ICON_SLOTS.size():
 			continue
-		if (idx < _weapon_grounded.size() and _weapon_grounded[idx]) or (idx < _weapon_falling.size() and _weapon_falling[idx]) 				or (idx < _weapon_rising.size() and _weapon_rising[idx]):
+		if is_dead or is_downed:
 			continue
 		if idx < _weapon_fire_tweens.size() and _weapon_fire_tweens[idx] is Tween and (_weapon_fire_tweens[idx] as Tween).is_valid():
 			continue ## kritik tikinin "jitter" tween'i sürerken ona karışılmaz (kasterde weapon.gd _apply_beam_tremor aynısı)
@@ -2326,131 +2366,18 @@ func _update_vine_visual_state(instance_id: String, pos: Vector2, target_pos: Ve
 	v.update_network_vine_state(pos, target_pos, has_target)
 
 
-## Kullanıcı isteği: "Ölünce silahlar yere düşsün ... dirilince ease ease
-## normal yerlerine geri dönsün", sonra bildirim: "düşme animasyonu doğal
-## değil, Minecraft'ta itemlerin düşmesi gibi olmalı, gölgeler görünmüyor,
-## ruhsuz" - weapon.gd'deki AYNI WeaponDeathDropMath fiziğinin (bkz. o
-## dosyanın ve weapon.gd'nin kök neden notları) bu KOZMETİK/YEREL-uzay
-## kopyası. update_extra_state_from_net'ten (is_dead/is_downed GEÇİŞİNDE,
-## reaktif - _update_death_status_fx ile AYNI çağrı yeri) tetiklenir, her
-## karede _physics_process'teki _process_weapon_drop_physics_all ile
-## ilerletilir (is_dead iken bile - bkz. _physics_process'teki sıralama notu).
-func _process_weapon_death_drop_transition() -> void:
-	var incapacitated: bool = is_dead or is_downed
-	if incapacitated == _was_incapacitated_for_weapons:
-		return
+## Gölgeyi ikonun konumuna bağlar (pivot dönüşümünü uygulayan _wf_update_all bunu ezer; ikon başka bir sistemin elindeyken
+## ya da pivot kimlikteyken geçerli olan budur). Ölü/yerdeki kuklada silahlar yere düşmez, göğse çekilir (_wf_update_all).
+func _refresh_remote_weapon_shadows() -> void:
 	for i in range(_weapon_icons.size()):
-		if not is_instance_valid(_weapon_icons[i]):
-			continue
-		if incapacitated:
-			_start_remote_weapon_drop(i)
-		else:
-			_start_remote_weapon_rise(i)
-	_was_incapacitated_for_weapons = incapacitated
+		if is_instance_valid(_weapon_icons[i]):
+			_refresh_remote_weapon_shadow(i)
 
 
-func _start_remote_weapon_drop(i: int) -> void:
-	var icon: Node2D = _weapon_icons[i]
-	_weapon_falling[i] = true
-	_weapon_rising[i] = false
-	_weapon_grounded[i] = false
-	_weapon_drop_elapsed[i] = 0.0
-	_weapon_drop_start_pos[i] = icon.position
-	_weapon_drop_height[i] = 0.0
-	_weapon_drop_v_speed[i] = randf_range(WeaponDeathDropMath.INITIAL_UP_SPEED_MIN, WeaponDeathDropMath.INITIAL_UP_SPEED_MAX)
-	_weapon_drop_spin_speed[i] = randf_range(WeaponDeathDropMath.SPIN_SPEED_MIN, WeaponDeathDropMath.SPIN_SPEED_MAX) * (1.0 if randf() < 0.5 else -1.0)
-	_weapon_pre_drop_rotation[i] = icon.rotation
-	var angle: float = randf_range(0.0, TAU)
-	var radius: float = randf_range(WeaponDeathDropMath.SCATTER_RADIUS_MIN, WeaponDeathDropMath.SCATTER_RADIUS_MAX)
-	var rest_pos: Vector2 = WEAPON_ICON_SLOTS[min(i, WEAPON_ICON_SLOTS.size() - 1)]
-	_weapon_drop_ground_pos[i] = rest_pos + Vector2(cos(angle), sin(angle)) * radius
-
-
-func _start_remote_weapon_rise(i: int) -> void:
-	var icon: Node2D = _weapon_icons[i]
-	_weapon_falling[i] = false
-	_weapon_rising[i] = true
-	_weapon_grounded[i] = false
-	_weapon_rise_elapsed[i] = 0.0
-	_weapon_rise_start_pos[i] = icon.position
-
-
-## bkz. weapon.gd _physics_process'teki AYNI çağrı deseni - is_dead sırasında
-## bile (falling/grounded fazları TAM burada olur) çalışması gerektiği için
-## RemotePlayer._physics_process'in "if is_dead: return" erken dönüşünden
-## ÖNCE çağrılır (bkz. o fonksiyondaki sıralama).
-func _process_weapon_drop_physics_all(delta: float) -> void:
-	for i in range(_weapon_icons.size()):
-		if not is_instance_valid(_weapon_icons[i]):
-			continue
-		if _weapon_falling[i]:
-			_process_remote_weapon_fall(i, delta)
-		elif _weapon_rising[i]:
-			_process_remote_weapon_rise(i, delta)
-		_refresh_remote_weapon_shadow(i)
-
-
-## Yatayda (icon.position, YEREL uzay) hedef "yere saçılmış" noktaya ease-out
-## ile süzülür, dikeyde (WeaponDeathDropMath.step_bounce) gerçek bir
-## yerçekimi/sekme simülasyonu yaşar - weapon.gd _process_weapon_fall_physics
-## ile BİREBİR aynı formül, sadece world-space yerine local position üzerinde.
-func _process_remote_weapon_fall(i: int, delta: float) -> void:
-	var icon: Node2D = _weapon_icons[i]
-	_weapon_drop_elapsed[i] += delta
-	var bounce: Dictionary = WeaponDeathDropMath.step_bounce(_weapon_drop_height[i], _weapon_drop_v_speed[i], delta, false)
-	_weapon_drop_height[i] = bounce["height"]
-	_weapon_drop_v_speed[i] = bounce["v_speed"]
-	var xy_t: float = WeaponDeathDropMath.ease_out_cubic(_weapon_drop_elapsed[i] / WeaponDeathDropMath.XY_DURATION)
-	var xy_pos: Vector2 = _weapon_drop_start_pos[i].lerp(_weapon_drop_ground_pos[i], xy_t)
-	icon.position = xy_pos + Vector2(0.0, -_weapon_drop_height[i])
-	_set_remote_weapon_death_alpha(i, WeaponDeathDropMath.fall_alpha(_weapon_drop_elapsed[i]))
-	icon.rotation += _weapon_drop_spin_speed[i] * delta
-	if bounce["settled"] and xy_t >= 1.0:
-		_weapon_falling[i] = false
-		_weapon_grounded[i] = true
-		icon.rotation = wrapf(icon.rotation, -PI, PI)
-
-
-## bkz. weapon.gd _process_weapon_rise_physics ile BİREBİR aynı mantık.
-func _process_remote_weapon_rise(i: int, delta: float) -> void:
-	var icon: Node2D = _weapon_icons[i]
-	_weapon_rise_elapsed[i] += delta
-	## bkz. weapon.gd _process_weapon_rise_physics - AYNI ease-in-out eğrisi ve opaklık dönüşü.
-	var t: float = WeaponDeathDropMath.ease_in_out_cubic(_weapon_rise_elapsed[i] / WeaponDeathDropMath.RISE_DURATION)
-	_set_remote_weapon_death_alpha(i, lerpf(WeaponDeathDropMath.GROUND_ALPHA, 1.0, t))
-	var rest_pos: Vector2 = WEAPON_ICON_SLOTS[min(i, WEAPON_ICON_SLOTS.size() - 1)]
-	icon.position = _weapon_rise_start_pos[i].lerp(rest_pos, t)
-	## Rotasyon: menzilli silahlarda _update_local_weapon_aim (is_dead kalkınca
-	## otomatik devreye girer) zaten kendi lerp'iyle aynı işi yapıyor; ikisi
-	## birden dönerse rotasyon titreşir. SADECE o fonksiyonun atladığı yakın
-	## dövüş silahları (_weapon_melee) için burada eski rotasyona dönülüyor.
-	if i < _weapon_melee.size() and _weapon_melee[i]:
-		icon.rotation = lerp_angle(icon.rotation, _weapon_pre_drop_rotation[i], clampf(delta * 10.0, 0.0, 1.0))
-	_weapon_drop_height[i] = lerpf(_weapon_drop_height[i], 0.0, clampf(delta * 10.0, 0.0, 1.0))
-	if t >= 1.0:
-		_weapon_rising[i] = false
-		_weapon_drop_height[i] = 0.0
-		_set_remote_weapon_death_alpha(i, 1.0)
-
-
-## bkz. weapon.gd _set_death_alpha - self_modulate (Vampir yarasa formunun modulate'ıyla çarpılarak birleşir).
-func _set_remote_weapon_death_alpha(i: int, a: float) -> void:
-	if is_instance_valid(_weapon_icons[i]):
-		_weapon_icons[i].self_modulate.a = a
-	if i < _weapon_shadows.size() and is_instance_valid(_weapon_shadows[i]):
-		_weapon_shadows[i].self_modulate.a = a
-
-
-## bkz. weapon.gd _update_icon_shadow'daki AYNI kök neden notu - gölge
-## DOĞRUDAN simüle edilen sekme yüksekliğini okur, kullanıcı bildirimi
-## "gölgeler görünmüyor" ayrı/kopuk bir "progress" değişkeninden kaynaklanan
-## senkron sorunuydu.
 func _refresh_remote_weapon_shadow(i: int) -> void:
 	if i >= _weapon_shadows.size() or not is_instance_valid(_weapon_shadows[i]):
 		return
 	var gap: float = WeaponOrbitMath.hover_shadow_gap(_weapon_icons[i].position.y)
-	if _weapon_falling[i] or _weapon_grounded[i] or _weapon_rising[i]:
-		gap = _weapon_drop_height[i]
 	_weapon_shadows[i].position = _weapon_icons[i].position + Vector2(0, gap)
 
 
@@ -2471,6 +2398,37 @@ func _set_weapon_icon_visible(slot_index: int, is_visible: bool) -> void:
 		var shadow: Node2D = _weapon_shadows[slot_index]
 		if is_instance_valid(shadow):
 			shadow.visible = is_visible
+
+
+## Tabanca/Tüfek şarjör doldurma (madde 296, "weapon_reload" yayını): kasterle AYNI GunReloadFx (poz + düşen şarjör + sesler
+## + parıltı), kendi saatiyle `dur` sn. dur <= 0 = iptal (sahip öldü). İkon konumunu başka bir sistem yönetirken
+## (Talon dizilimi / Vampir çekilmesi / kubbe halkası) kasterdeki gibi poz yok.
+func _start_weapon_reload(slot_index: int, dur: float) -> void:
+	if slot_index < 0 or slot_index >= _weapon_icons.size():
+		return
+	var icon: Node2D = _weapon_icons[slot_index]
+	if not is_instance_valid(icon):
+		return
+	if dur <= 0.0:
+		var cur: Variant = icon.get_meta(GunReloadFx.META) if icon.has_meta(GunReloadFx.META) else null
+		if cur is Node and is_instance_valid(cur):
+			(cur as Node).call("abort")
+		return
+	var wkey: String = str(_weapon_keys[slot_index]) if slot_index < _weapon_keys.size() else ""
+	if not GunMagMath.has_mag(wkey) or _talon_formation != "" or _vampir_pull > 0.0 or _dome_rim_owns_icons():
+		return
+	var base_pos: Vector2 = WEAPON_ICON_SLOTS[slot_index] if slot_index < WEAPON_ICON_SLOTS.size() else icon.position
+	var base_scale: Vector2 = _weapon_base_scales[slot_index] if slot_index < _weapon_base_scales.size() else icon.scale
+	var fwd: float = float(_weapon_forward_angle_deg[slot_index]) if slot_index < _weapon_forward_angle_deg.size() else 0.0
+	var kill := func() -> void:
+		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] is Tween and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
+			(_weapon_fire_tweens[slot_index] as Tween).kill()
+		if is_instance_valid(icon) and icon.has_meta("punch_tween"):
+			var pt: Variant = icon.get_meta("punch_tween")
+			if pt is Tween and (pt as Tween).is_valid():
+				(pt as Tween).kill()
+	GunReloadFx.begin(self, icon, wkey, dur, self, {"base_pos": base_pos, "base_scale": base_scale, "forward_deg": fwd,
+		"external": false, "kill_tweens": kill})
 
 
 ## KULLANICI BİLDİRİMİ: "Talon'un ultisi açıkken silahlarının yarattığı geri tepme diğer oyunculara çok daha yoğun
@@ -2611,14 +2569,15 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
 			(_weapon_fire_tweens[slot_index] as Tween).kill()
 		var s_tw: Tween
+		var s_hold: float = float(data.get("chain_hold", 0.0)) ## madde 347 zincir: kasterle aynı bekleme (eski sürüm göndermez -> hemen döner)
 		if is_crit:
 			var stab: Dictionary = SwordSwingMath.make_stab_plan(dir, s_target, float(data.get("sword_size", 1.0)), scale.x)
-			s_tw = SwordSwingMath.play_stab(self, icon, stab, s_forward, base_pos, s_rest_rot, float(data.get("sword_speed", 1.0)))
+			s_tw = SwordSwingMath.play_stab(self, icon, stab, s_forward, base_pos, s_rest_rot, float(data.get("sword_speed", 1.0)), s_hold)
 		else:
 			var s_plan: Dictionary = SwordSwingMath.make_plan(dir, s_target, float(data.get("sword_side", 1.0)),
 				float(data.get("sword_size", 1.0)), scale.x)
 			s_tw = SwordSwingMath.play(self, icon, s_plan, s_forward, base_pos, s_rest_rot,
-				float(data.get("sword_speed", 1.0)), get_tree().current_scene)
+				float(data.get("sword_speed", 1.0)), get_tree().current_scene, s_hold)
 		if slot_index < _weapon_fire_tweens.size():
 			_weapon_fire_tweens[slot_index] = s_tw
 	elif is_melee and wkey == "dagger" and data.has("dagger_speed"):
@@ -2631,7 +2590,7 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 			(_weapon_fire_tweens[slot_index] as Tween).kill()
 		var d_plan: Dictionary = DaggerStabMath.make_plan(dir, d_target, float(data.get("dagger_size", 1.0)), scale.x)
 		var d_tw: Tween = DaggerStabMath.play(self, icon, d_plan, d_forward, base_pos, d_rest_rot, base_scale_all,
-			float(data.get("dagger_speed", 1.0)), is_crit, get_tree().current_scene)
+			float(data.get("dagger_speed", 1.0)), is_crit, get_tree().current_scene, float(data.get("chain_hold", 0.0)))
 		if slot_index < _weapon_fire_tweens.size():
 			_weapon_fire_tweens[slot_index] = d_tw
 	elif is_melee and wkey == "topuz" and data.has("topuz_speed"):
@@ -2644,7 +2603,7 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 			(_weapon_fire_tweens[slot_index] as Tween).kill()
 		var t_plan: Dictionary = TopuzSlamMath.make_plan(dir, t_target, float(data.get("topuz_size", 1.0)), scale.x)
 		var t_tw: Tween = TopuzSlamMath.play(self, icon, t_plan, t_forward, base_pos, t_rest_rot, base_scale_all,
-			float(data.get("topuz_speed", 1.0)), is_crit, get_tree().current_scene)
+			float(data.get("topuz_speed", 1.0)), is_crit, get_tree().current_scene, float(data.get("chain_hold", 0.0)))
 		if slot_index < _weapon_fire_tweens.size():
 			_weapon_fire_tweens[slot_index] = t_tw
 	elif is_melee and wkey == "pence" and data.has("pence_speed"):
@@ -2655,11 +2614,58 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		var p_rest_rot: float = deg_to_rad(_weapon_rest_rotation_deg[slot_index] if slot_index < _weapon_rest_rotation_deg.size() else 0.0)
 		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
 			(_weapon_fire_tweens[slot_index] as Tween).kill()
-		var p_plan: Dictionary = PenceHookMath.make_plan(dir, p_target, float(data.get("pence_size", 1.0)), scale.x)
+		var p_plan: Dictionary = PenceHookMath.make_plan(dir, p_target, float(data.get("pence_size", 1.0)), scale.x,
+			float(data.get("pence_tilt", 0.0))) ## kasterin seçtiği geliş açısı (eski sürüm göndermez -> düz)
 		var p_tw: Tween = PenceHookMath.play(self, icon, p_plan, p_forward, base_pos, p_rest_rot, base_scale_all,
-			float(data.get("pence_speed", 1.0)), is_crit, get_tree().current_scene)
+			float(data.get("pence_speed", 1.0)), is_crit, get_tree().current_scene, float(data.get("chain_hold", 0.0)))
 		if slot_index < _weapon_fire_tweens.size():
 			_weapon_fire_tweens[slot_index] = p_tw
+	elif is_melee and wkey == "mizrak" and data.has("mizrak_speed"):
+		## Mızrak "Işık Hattı" + cirit (madde 305): kasterle AYNI süzül-geri çek-sapla / fırlat planı + efektler (bkz. weapon.gd
+		## _start_mizrak_thrust) - plan kuklanın kendi kök ölçeğiyle; ciritin uçuş boyu/hızı kasterden gelir. Delinen yaratık
+		## yıldızları kuklanın kendi yaratık kuklalarıyla aynı hat sorgusundan (kozmetik).
+		var m_target := Vector2(float(data.get("target_pos_x", 0.0)), float(data.get("target_pos_y", 0.0)))
+		var m_forward: float = deg_to_rad(_weapon_forward_angle_deg[slot_index] if slot_index < _weapon_forward_angle_deg.size() else 0.0)
+		var m_rest_rot: float = deg_to_rad(_weapon_rest_rotation_deg[slot_index] if slot_index < _weapon_rest_rotation_deg.size() else 0.0)
+		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
+			(_weapon_fire_tweens[slot_index] as Tween).kill()
+		var m_speed: float = float(data.get("mizrak_speed", 1.0))
+		var m_throw: Dictionary = {}
+		if data.has("mizrak_travel"):
+			m_throw = {"speed": float(data.get("mizrak_fly", MizrakThrustMath.CIRIT_SPEED))}
+		var m_plan: Dictionary = MizrakThrustMath.make_plan(dir, m_target, float(data.get("mizrak_size", 1.0)), scale.x, m_throw)
+		var m_scene: Node = get_tree().current_scene
+		var m_release: Callable = Callable()
+		if bool(m_plan["throw"]):
+			m_plan["travel"] = float(data.get("mizrak_travel", 0.0))
+			m_release = func() -> void:
+				MizrakThrustMath.schedule_hit_stars(self, m_plan, MizrakThrustMath.throw_victims(get_tree(), m_plan), 0.0, m_scene, 1.0)
+		else:
+			get_tree().create_timer(MizrakThrustMath.contact_delay(m_speed), false).timeout.connect(func() -> void:
+				if is_inside_tree():
+					MizrakThrustMath.schedule_hit_stars(self, m_plan, MizrakThrustMath.line_victims(get_tree(), m_plan), 0.0, m_scene, m_speed))
+		var m_tw: Tween = MizrakThrustMath.play(self, icon, m_plan, m_forward, base_pos, m_rest_rot, base_scale_all, m_speed, is_crit,
+			m_scene, m_release, float(data.get("chain_hold", 0.0)))
+		if slot_index < _weapon_fire_tweens.size():
+			_weapon_fire_tweens[slot_index] = m_tw
+	elif is_melee and wkey == "kalkan" and data.has("kalkan_speed"):
+		## Kalkan "Hayalet Kalkan" (madde 338): kasterle AYNI darbe planı + hayalet (bkz. weapon.gd _start_kalkan_bash) - plan kuklanın
+		## kendi kök ölçeğiyle; kademe ve Final kasterden. Ayaktaki halkalar kuklanın kendi yaratık kuklalarıyla aynı sorgudan (kozmetik).
+		var k_target := Vector2(float(data.get("target_pos_x", 0.0)), float(data.get("target_pos_y", 0.0)))
+		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
+			(_weapon_fire_tweens[slot_index] as Tween).kill()
+		var k_speed: float = float(data.get("kalkan_speed", 1.0))
+		var k_plan: Dictionary = KalkanBashMath.make_plan(dir, k_target, float(data.get("kalkan_size", 1.0)), scale.x,
+			bool(data.get("kalkan_wall", false)), global_position)
+		var k_scene: Node = get_tree().current_scene
+		get_tree().create_timer(KalkanBashMath.contact_delay(k_speed), false).timeout.connect(func() -> void:
+			if is_inside_tree():
+				k_plan["owner"] = global_position
+				KalkanBashMath.spawn_rings(k_scene, KalkanBashMath.victims(get_tree(), k_plan), k_plan))
+		var k_tw: Tween = KalkanBashMath.play(self, icon, k_plan, int(data.get("kalkan_tier", icon.get_meta("tier_art", 1))), base_pos,
+			base_scale_all, k_speed, is_crit, k_scene, float(data.get("chain_hold", 0.0)))
+		if slot_index < _weapon_fire_tweens.size():
+			_weapon_fire_tweens[slot_index] = k_tw
 	elif is_melee:
 		var target_pos := Vector2(float(data.get("target_pos_x", 0.0)), float(data.get("target_pos_y", 0.0)))
 		var reps: int = _weapon_hit_segments[slot_index] if slot_index < _weapon_hit_segments.size() else 3
@@ -2702,6 +2708,8 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		tw.tween_property(icon, "position", base_pos, 0.26).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		tw.parallel().tween_property(icon, "rotation", rest_rot, 0.26).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	else:
+		if GunMagMath.has_mag(wkey):
+			ShellCasingFx.eject(icon, wkey, dir, self) ## boş kovan (madde 296) - kasterde weapon.gd _fire_at
 		var recoil_dist: float = _weapon_recoil_distance[slot_index] if slot_index < _weapon_recoil_distance.size() else 8.0
 		var kick: Vector2 = -dir * recoil_dist
 		## SABİT taban ölçek (bkz. _weapon_base_scales üzerindeki yorum) -
@@ -2795,7 +2803,7 @@ func _animate_weapon_fire(slot_index: int, fire_direction: Vector2, is_melee: bo
 ## ekranında, onun açıkça çağırdığı show_support_number() ile çıkar (bkz. player.gd _apply_heal_to_ally); hedef
 ## kendi ekranında kendi Player'ında görür (network_manager.gd sync_ally_heal/sync_ally_shield_heal).
 func heal(amount: float) -> void:
-	if is_dead or amount <= 0.0:
+	if is_dead or is_downed or amount <= 0.0: ## yere düşen kukla is_dead false gelir (main.gd send_dead) - is_downed da sayılır
 		return
 	health = min(max_health, health + amount)
 	if overhead_bar:
@@ -2803,7 +2811,7 @@ func heal(amount: float) -> void:
 
 
 func heal_shield(amount: float) -> void:
-	if is_dead or amount <= 0.0 or item_shield_max <= 0.0:
+	if is_dead or is_downed or amount <= 0.0 or item_shield_max <= 0.0:
 		return
 	item_shield_hp = min(item_shield_max, item_shield_hp + amount)
 	if overhead_bar:
@@ -2815,7 +2823,7 @@ func heal_shield(amount: float) -> void:
 var _shield_display_accum: float = 0.0
 
 func show_support_number(amount: float, is_shield: bool) -> void:
-	if is_dead or amount <= 0.0:
+	if is_dead or is_downed or amount <= 0.0:
 		return
 	if is_shield:
 		if item_shield_max <= 0.0 or item_shield_hp >= item_shield_max:
@@ -2884,7 +2892,7 @@ func take_special_damage(amount: float, source: Node2D, kind: String) -> void:
 	var enemy_net_id: int = 0
 	if source and is_instance_valid(source):
 		enemy_net_id = int(source.get_meta("network_enemy_id", 0))
-	NetworkManager.forward_special_damage_to_peer.rpc_id(peer_id, amount, enemy_net_id, kind)
+	NetworkManager.forward_special_damage_to_peer.rpc_id(peer_id, amount * Enemy.damage_mult_of(source), enemy_net_id, kind)
 
 
 func take_damage(amount: float, source: Node2D = null) -> void:
@@ -2893,7 +2901,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 	var enemy_net_id: int = 0
 	if source and is_instance_valid(source):
 		enemy_net_id = int(source.get_meta("network_enemy_id", 0))
-	NetworkManager.forward_damage_to_peer.rpc_id(peer_id, amount, enemy_net_id, false)
+	NetworkManager.forward_damage_to_peer.rpc_id(peer_id, amount * Enemy.damage_mult_of(source), enemy_net_id, false)
 
 
 ## Şovalye ultisi (Koruma Baloncuğu) aktifken kalkana giren hasar için
@@ -2906,7 +2914,7 @@ func take_paladin_barrier_damage(amount: float, attacker: Node2D = null) -> void
 	var enemy_net_id: int = 0
 	if attacker and is_instance_valid(attacker):
 		enemy_net_id = int(attacker.get_meta("network_enemy_id", 0))
-	NetworkManager.forward_damage_to_peer.rpc_id(peer_id, amount, enemy_net_id, true)
+	NetworkManager.forward_damage_to_peer.rpc_id(peer_id, amount * Enemy.damage_mult_of(attacker), enemy_net_id, true)
 
 
 ## ================= Cadı (kozmetik kopya) + süpürge yolculuğu (HER karakter) =================

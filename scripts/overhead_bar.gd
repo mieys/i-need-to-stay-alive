@@ -63,7 +63,51 @@ var show_shield: bool = false
 
 func set_offset(offset: float) -> void:
 	y_offset = offset
+	if _brush_icon != null:
+		_brush_icon.set_bar_top(y_offset)
+	if _time_icon != null:
+		_time_icon.set_bar_top(y_offset, _time_icon_lift())
 	queue_redraw()
+
+
+## SAKLANMA GÖSTERGESİ (madde 275): çalıdaki oyuncunun can barının üstünde göz simgesi (1 saklı / 2 görüldü / 0 yok); bkz. brush_status_icon.gd.
+## player.gd + remote_player.gd set_brush_state çağırır. İlk kez saklanınca kurulur (yaratık/boss barlarında hiç oluşmaz).
+const BrushStatusIconScript := preload("res://scripts/brush_status_icon.gd")
+var _brush_icon: Sprite2D = null
+
+
+func set_brush_state(state: int) -> void:
+	if _brush_icon == null:
+		if state == 0:
+			return
+		_brush_icon = BrushStatusIconScript.new()
+		add_child(_brush_icon)
+	_brush_icon.show_state(state, y_offset)
+	if _time_icon != null:
+		_time_icon.set_bar_top(y_offset, _time_icon_lift())
+
+
+## ZAMAN DONDU GÖSTERGESİ (madde 327): güvenli alandaki (satıcı koruması / demirci) oyuncunun can barının üstünde kum saati; bkz. time_frozen_status_icon.gd.
+## player.gd + remote_player.gd set_time_frozen çağırır (durum değişince). İlk kez donunca kurulur (yaratık/boss barlarında hiç oluşmaz).
+## Aynı anda saklanma simgesi de varsa (çalı güvenli alanın içine denk gelirse) onun üstüne dizilir.
+const TimeFrozenIconScript := preload("res://scripts/time_frozen_status_icon.gd")
+var _time_icon: Sprite2D = null
+
+
+func set_time_frozen(on: bool) -> void:
+	if _time_icon == null:
+		if not on:
+			return
+		_time_icon = TimeFrozenIconScript.new()
+		add_child(_time_icon)
+	_time_icon.show_state(on, y_offset, _time_icon_lift())
+
+
+## Saklanma simgesi görünürken kum saati onun yüksekliği kadar yukarı kayar (iki simge üst üste binmesin).
+func _time_icon_lift() -> float:
+	if _brush_icon != null and _brush_icon.visible and int(_brush_icon.get("state")) != 0:
+		return float(BrushStatusIconScript.EYE.size() + 2)
+	return 0.0
 
 
 func set_health(current: float, max_value: float) -> void:

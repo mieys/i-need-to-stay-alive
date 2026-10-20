@@ -99,9 +99,10 @@ static func cascade(container: Node, step: float = CASCADE_STEP, max_items: int 
 
 
 ## Tek bir öğe `from_alpha`dan asıl saydamlığına yumuşakça gelir (seçim değişince ayrıntı paneli, seçim halkası).
-static func reveal(ci: CanvasItem, from_alpha: float = 0.35, dur: float = 0.16) -> void:
+## `delay`: farklı container'lardaki öğeleri tek bir sıraya dizmek için (Ruh Mağazası sayfa girişi).
+static func reveal(ci: CanvasItem, from_alpha: float = 0.35, dur: float = 0.16, delay: float = 0.0) -> void:
 	if _inst and is_instance_valid(ci) and is_enabled() and ci.is_visible_in_tree():
-		_inst._fade_in(ci, 0.0, dur, from_alpha)
+		_inst._fade_in(ci, delay, dur, from_alpha)
 
 
 ## Düğme olmayan tıklanabilir bir Control için fare üstü "nefes" (örn. karakter kartı).

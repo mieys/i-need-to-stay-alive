@@ -166,15 +166,14 @@ class Bar extends Control:
 			draw_rect(Rect2(2, 2, fw, 2), FM.C_GOLD.lightened(0.35))
 
 
-## Listenin altında, aşağıda daha satır varken görünen basamaklı karartma.
+## Listenin altında, aşağıda daha satır varken görünen yumuşak karartma (2026-10-20'ye kadar 6 basamaklıydı).
 class Fade extends Control:
 	var col := Color.BLACK
-	const STEPS := 6
 
 	func _draw() -> void:
-		var sh: float = ceilf(size.y / STEPS)
-		for i in STEPS:
-			draw_rect(Rect2(0, i * sh, size.x, sh), Color(col, col.a * float(i + 1) / STEPS))
+		var top := Color(col, 0.0)
+		draw_polygon(PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), size, Vector2(0, size.y)]),
+			PackedColorArray([top, top, col, col]))
 
 
 var back_sub: String = "Ana menüye dön"

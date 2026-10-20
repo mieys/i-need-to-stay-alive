@@ -112,7 +112,21 @@ func test_visibility_reveals_waits_out_the_grace_then_retracts() -> void:
 	WeaponFollowMath.step_visibility(st, false, false, t_ret + WeaponFollowMath.RETRACT_T + 0.2, 1)
 	assert(st["s"] == WeaponFollowMath.HIDDEN, "çekilme bitti")
 	WeaponFollowMath.step_visibility(st, false, true, t_ret + 2.0, 1)
-	assert(st["s"] == WeaponFollowMath.SHOWN, "başka sistem yönetiyorsa (kubbe/ölüm) doğrudan görünür")
+	assert(st["s"] == WeaponFollowMath.SHOWN, "başka sistem yönetiyorsa (kubbe/Talon dizilimi) doğrudan görünür")
+	## sahibi ölünce/yere düşünce (instant): bekleme payı YOK, görünürken ya da çıkış yarıdayken hemen çekilir
+	var dead: Dictionary = {}
+	WeaponFollowMath.step_visibility(dead, true, false, 10.0, 1)
+	WeaponFollowMath.step_visibility(dead, false, false, 10.1, 1, true)
+	assert(dead["s"] == WeaponFollowMath.RETRACT, "çıkış yarıdayken ölüm: hemen içe çekilir")
+	WeaponFollowMath.step_visibility(dead, false, false, 12.0, 1, true)
+	assert(dead["s"] == WeaponFollowMath.HIDDEN, "çekilme bitince gizli")
+	WeaponFollowMath.step_visibility(dead, true, false, 12.1, 1)
+	assert(dead["s"] == WeaponFollowMath.REVEAL, "dirilip düşman görünce yeniden çıkış")
+	var shown: Dictionary = {"s": WeaponFollowMath.SHOWN, "t": 20.0, "seen_t": 20.0}
+	WeaponFollowMath.step_visibility(shown, false, false, 20.05, 1)
+	assert(shown["s"] == WeaponFollowMath.SHOWN, "normalde bekleme payı var")
+	WeaponFollowMath.step_visibility(shown, false, false, 20.05, 1, true)
+	assert(shown["s"] == WeaponFollowMath.RETRACT, "ölünce bekleme payı olmadan çekilir")
 
 
 func test_reveal_and_retract_poses_start_and_end_in_the_right_place() -> void:
@@ -198,6 +212,30 @@ func test_local_weapon_hides_without_enemies_and_bursts_out_when_one_is_seen() -
 	_cleanup()
 
 
+## Sahibi ölünce silah yere düşmez, çalıdaki gibi göğse çekilip kaybolur (kullanıcı 2026-10-19: "ölünce silahlar saydam görünüyor,
+## direk karakterin içine girip kaybolsunlar"); dirilince görüşte düşman varsa yeniden çıkar.
+func test_local_weapon_retracts_into_the_body_when_the_owner_dies() -> void:
+	var o: FakeOwner = _make_owner(Vector2(6400.0, 6400.0))
+	var w: Node2D = TabancaScene.instantiate()
+	o.add_child(w)
+	_make_enemy(o.global_position + Vector2(300.0, 0.0))
+	await _wait(1.0)
+	assert(w.modulate.a > 0.99, "ölmeden önce görünür: %f" % w.modulate.a)
+	o.is_dead = true
+	await _wait(0.1)
+	assert(int((w.get("_wf_vis") as Dictionary)["s"]) == WeaponFollowMath.RETRACT, "ölünce bekleme payı olmadan içe çekilmeye başladı")
+	await _wait(0.5)
+	assert(w.modulate.a < 0.01, "çekilince tamamen görünmez (yerde saydam kalmaz): %f" % w.modulate.a)
+	var sh: CanvasItem = w.get("shadow_sprite")
+	assert(sh == null or sh.modulate.a < 0.01, "gölgesi de")
+	var home: Vector2 = o.global_position + (w.get("_target_local_offset") as Vector2) * 0.5
+	assert(w.global_position.distance_to(home) < 3.0, "yere saçılmadı, slotunda (görünmez): %s / %s" % [w.global_position, home])
+	o.is_dead = false
+	await _wait(0.9)
+	assert(w.modulate.a > 0.99, "dirilince görüşte düşman var -> yeniden çıktı: %f" % w.modulate.a)
+	_cleanup()
+
+
 ## Silahların arkasında iz / ardıl görüntü YOK (kullanıcı 2026-10-18: "silahların arkasından gelen izi kaldır", madde 255): yürürken
 ## ve çok hızlı koşarken bile silah kökünde ikon + gölge dışında görünür sprite olmaz.
 func test_fast_running_leaves_no_trail_behind_weapons() -> void:
@@ -272,6 +310,10 @@ func test_puppet_icons_ride_pivots_and_hide_without_enemies() -> void:
 	var expect: Vector2 = puppet.to_global(slot)
 	assert((icons[0] as Node2D).global_position.distance_to(expect) < 3.0, "dururken slotunda: %s / %s" % [(icons[0] as Node2D).global_position, expect])
 	puppet.set("is_dead", true)
-	await _frames(2)
-	assert((pivots[0] as Node2D).transform.is_equal_approx(Transform2D.IDENTITY), "ölünce pivot kimlik (ölüm düşüşü ikonu yönetir)")
+	await _wait(0.7)
+	assert((pivots[0] as CanvasItem).modulate.a < 0.01 and (pivots[1] as CanvasItem).modulate.a < 0.01, "ölünce kuklada da silahlar göğse çekilip kaybolur (yerde saydam kalmaz)")
+	assert((icons[0] as Node2D).position.is_equal_approx(puppet.WEAPON_ICON_SLOTS[0]), "ikon yere saçılmadı, slotunda")
+	puppet.set("is_dead", false)
+	await _wait(0.9)
+	assert((pivots[0] as CanvasItem).modulate.a > 0.99, "dirilince düşman görüşte -> yeniden çıktı")
 	_cleanup()

@@ -82,6 +82,8 @@ const OPEN_PUSH_RADIUS := 234.0 ## 2:1 ölçüde (alanın 1,4 katı)
 ## Oyuncu kökü gövde ortası; ayak hizası (alan içi sayılırken) - mission_tree.gd _update_depth ile aynı ofset.
 const PLAYER_FEET_OFFSET := 12.75
 const FLOWER_OFFSETS: Array[Vector2] = [Vector2(-57.0, 18.0), Vector2(60.0, 10.0), Vector2(5.0, 44.0)]
+## Bereketli Meyve evrimi (madde 348): 6 çiçek - ilk 3 yukarıdakiler, sonraki 3 ağacın etrafında biraz daha açıkta.
+const FLOWER_OFFSETS_EXTRA: Array[Vector2] = [Vector2(-92.0, 40.0), Vector2(94.0, 34.0), Vector2(-40.0, 62.0)]
 
 ## ---- sayfa geometrisi (gen_hayat_agaci_fx.py) ----
 const RAY_FRAMES := 14
@@ -93,6 +95,13 @@ const RING_FPS := 14.0
 const BOSS_GROUP := &"bosses"
 
 var caster: Node = null ## null = kozmetik kopya
+## ---- Yetenek evrimleri (madde 348) - spawn(params) add_child'dan ÖNCE atar; boşsa eski değerler ----
+var _duration: float = DURATION ## Kadim Gövde: 16 sn (kozmetik kopya da aynı süreyi görsün diye yayınla gelir)
+var _zone_mult: float = 1.0 ## Kadim Gövde: gölge alanı x1,25 (görsel + in_zone + açılış darbesi)
+var _fruit_mult: float = 1.0 ## Bereketli Meyve: meyvenin can + kalkan miktarı x1,4
+var _flower_count: int = 3 ## Bereketli Meyve: 6
+var _revive_enabled: bool = false ## Kadim Diriliş: gölgede yere düşen dostu kaldırır
+var _revive_used: bool = false ## ... ağaç başına bir kez
 var _t: float = 0.0
 var _tree: Sprite2D = null
 var _seed: Sprite2D = null
@@ -111,9 +120,15 @@ var _recent_roots: Dictionary = {} ## instance_id -> sabitlemenin biteceği _t (
 
 
 ## Kaster: spawn(sahne, nokta, kendisi); diğer istemciler: spawn(sahne, nokta) (network_manager.gd "oakley_tree").
-static func spawn(parent: Node, at: Vector2, p_caster: Node = null) -> OakleyTree:
+## params: "dur", "zone" (kaster + kozmetik kopya), "fruit", "flowers", "revive" (sadece kaster) - player.gd _skill_oakley_tree.
+static func spawn(parent: Node, at: Vector2, p_caster: Node = null, params: Dictionary = {}) -> OakleyTree:
 	var t := OakleyTree.new()
 	t.caster = p_caster
+	t._duration = maxf(1.0, float(params.get("dur", DURATION)))
+	t._zone_mult = maxf(0.5, float(params.get("zone", 1.0)))
+	t._fruit_mult = float(params.get("fruit", 1.0))
+	t._flower_count = int(params.get("flowers", 3))
+	t._revive_enabled = bool(params.get("revive", false)) and p_caster != null
 	## Konum add_child'dan ÖNCE: _ready alanı/ışıkları/tohumu o anki konuma kurar (sonra atanınca hepsi dünya merkezinde kalıyordu).
 	t.position = (parent as Node2D).to_local(at) if parent is Node2D else at
 	parent.add_child(t)
@@ -145,14 +160,17 @@ func _ready() -> void:
 	_seed_spark = _top_sprite(root, TEX_SPARK[0], 3)
 	_seed_spark.visible = false
 	_zone = _ground_sprite(root, TEX_ZONE, 1)
+	_zone.scale = Vector2.ONE * _zone_mult
 	_zone.modulate.a = 0.0
 	_rays_back = _top_sprite(root, TEX_RAYS_BACK, 0, RAY_FRAMES)
 	_rays_back.centered = false
 	_rays_back.offset = -Vector2(RAY_W * 0.5, RAY_TOP_PAD + ZONE_RY)
+	_rays_back.scale = Vector2.ONE * _zone_mult
 	_rays_back.modulate.a = 0.0
 	_rays_front = _top_sprite(root, TEX_RAYS_FRONT, 2, RAY_FRAMES)
 	_rays_front.centered = false
 	_rays_front.offset = -Vector2(RAY_W * 0.5, RAY_TOP_PAD)
+	_rays_front.scale = Vector2.ONE * _zone_mult
 	_rays_front.modulate.a = 0.0
 	_update_visuals()
 
@@ -194,23 +212,25 @@ func _process(delta: float) -> void:
 	if not _opened and _t >= T_LARGE:
 		_opened = true
 		_on_open()
-	if _t < DURATION:
-		while _t >= _next_heal and _next_heal < DURATION:
+	if _t < _duration:
+		while _t >= _next_heal and _next_heal < _duration:
 			_heal_tick()
 			_next_heal += HEAL_INTERVAL
 		if not is_cosmetic():
-			while _t >= _next_wave and _next_wave < DURATION - 0.5:
+			while _t >= _next_wave and _next_wave < _duration - 0.5:
 				_root_wave()
 				_next_wave += ROOT_INTERVAL
-	if not _flowers_done and _t >= DURATION + FLOWER_DELAY:
+			if _revive_enabled and not _revive_used and _opened:
+				_try_revive()
+	if not _flowers_done and _t >= _duration + FLOWER_DELAY:
 		_flowers_done = true
 		_drop_flowers()
-	if _t >= LIFE:
+	if _t >= _duration + END_SMALL + END_SINK + 0.1: ## = LIFE (varsayılan süre için)
 		queue_free()
 
 
 ## (boy 0/1/2 ya da -1, gömülme 0..1, gölgeli doku mu) - testler de kullanır.
-static func tree_state(t: float) -> Array:
+static func tree_state(t: float, dur: float = DURATION) -> Array:
 	if t < T_SMALL:
 		return [-1, 0.0, false]
 	if t < T_SMALL + RISE:
@@ -219,21 +239,21 @@ static func tree_state(t: float) -> Array:
 		return [0, 0.0, true]
 	if t < T_LARGE:
 		return [1, 0.0, true]
-	if t < DURATION + END_MED:
+	if t < dur + END_MED:
 		return [2, 0.0, true]
-	if t < DURATION + END_SMALL:
+	if t < dur + END_SMALL:
 		return [1, 0.0, true]
-	if t < DURATION + END_SMALL + END_SINK:
-		return [0, _ease_out((t - DURATION - END_SMALL) / END_SINK), false]
+	if t < dur + END_SMALL + END_SINK:
+		return [0, _ease_out((t - dur - END_SMALL) / END_SINK), false]
 	return [-1, 0.0, false]
 
 
-static func zone_alpha(t: float) -> float:
+static func zone_alpha(t: float, dur: float = DURATION) -> float:
 	if t < T_LARGE:
 		return 0.0
-	if t < DURATION:
+	if t < dur:
 		return _ease_out((t - T_LARGE) / 0.3)
-	return maxf(0.0, 1.0 - (t - DURATION) / 0.4)
+	return maxf(0.0, 1.0 - (t - dur) / 0.4)
 
 
 static func _ease_out(x: float) -> float:
@@ -248,11 +268,13 @@ static func band(a: float, n: int) -> float:
 ## 2:1 alan içinde mi (ayak noktası).
 func in_zone(feet: Vector2) -> bool:
 	var d: Vector2 = feet - global_position
-	return (d.x / ZONE_RX) * (d.x / ZONE_RX) + (d.y / ZONE_RY) * (d.y / ZONE_RY) <= 1.0
+	var rx: float = ZONE_RX * _zone_mult
+	var ry: float = ZONE_RY * _zone_mult
+	return (d.x / rx) * (d.x / rx) + (d.y / ry) * (d.y / ry) <= 1.0
 
 
 func _update_visuals() -> void:
-	var st: Array = tree_state(_t)
+	var st: Array = tree_state(_t, _duration)
 	var size: int = int(st[0])
 	if size < 0:
 		_tree.visible = false
@@ -273,7 +295,7 @@ func _update_visuals() -> void:
 			_tree.offset = -base
 		if size != _last_size:
 			if _last_size >= 0 or size > 0:
-				_spark_burst(size == 2 and _t < DURATION)
+				_spark_burst(size == 2 and _t < _duration)
 			_last_size = size
 		_tree.z_index = 2 if _player_behind(size) else 0
 	## tohum: toprak tümseği + parlayan tane, küçük ağaç çıkana kadar
@@ -287,7 +309,7 @@ func _update_visuals() -> void:
 		_seed_spark.texture = TEX_SPARK[clampi(int(q * 3.0), 0, 2)]
 		_seed_spark.global_position = global_position + Vector2(0.0, -6.0 - 3.0 * q)
 	## alan + kenar ışıkları
-	var za: float = zone_alpha(_t)
+	var za: float = zone_alpha(_t, _duration)
 	_zone.modulate.a = za
 	_rays_back.modulate.a = za
 	_rays_front.modulate.a = za
@@ -334,14 +356,16 @@ func _spark_burst(big: bool) -> void:
 
 func _on_open() -> void:
 	_ring = _ground_sprite(get_tree().current_scene, TEX_RING, RING_FRAMES)
+	_ring.scale = Vector2.ONE * _zone_mult
 	if is_cosmetic():
 		return
 	## Açılış darbesi: alandaki (2:1 ölçüde OPEN_PUSH_RADIUS) yaratıklar ağaçtan dışarı itilir (host'a apply_knockback_distance yolu).
-	for e in EnemyQueryScript.candidates(get_tree(), global_position, OPEN_PUSH_RADIUS + 1.0):
+	var push_radius: float = OPEN_PUSH_RADIUS * _zone_mult
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, push_radius + 1.0):
 		if not _targetable(e):
 			continue
 		var v: Vector2 = (e as Node2D).global_position - global_position
-		if Vector2(v.x, v.y * 2.0).length() > OPEN_PUSH_RADIUS:
+		if Vector2(v.x, v.y * 2.0).length() > push_radius:
 			continue
 		if e.has_method("apply_knockback_distance"):
 			e.call("apply_knockback_distance", v if v.length() > 0.5 else Vector2.RIGHT, OPEN_PUSH_DISTANCE)
@@ -387,8 +411,8 @@ func _heal_target(target: Node2D) -> void:
 		return
 	var ap: float = float(caster.get("damage_bonus"))
 	var crit: bool = bool(caster.call("_roll_ability_crit")) if caster.has_method("_roll_ability_crit") else false
-	var heal: float = ap * HEAL_AP_RATIO + float(target.get("max_health")) * HEAL_MAX_HP_PERCENT
-	var shield: float = ap * SHIELD_AP_RATIO
+	var heal: float = (ap * HEAL_AP_RATIO + float(target.get("max_health")) * HEAL_MAX_HP_PERCENT) * _fruit_mult
+	var shield: float = ap * SHIELD_AP_RATIO * _fruit_mult
 	if caster.has_method("_apply_ability_crit"):
 		heal = float(caster.call("_apply_ability_crit", heal, crit))
 		shield = float(caster.call("_apply_ability_crit", shield, crit))
@@ -458,15 +482,35 @@ func _on_root_arrive(e: Node2D) -> void:
 		return
 	if bool(e.get("is_boss")):
 		if e.has_method("apply_slow"):
+			BalanceLogScript.on_cc("s:oakley_agac", "slow", e, ROOT_DURATION)
 			e.call("apply_slow", BOSS_SLOW_PERCENT, ROOT_DURATION, true)
 	elif e.has_method("apply_root"):
+		BalanceLogScript.on_cc("s:oakley_agac", "root", e, ROOT_DURATION)
 		e.call("apply_root", ROOT_DURATION, ROOT_STYLE)
+
+
+## Kadim Diriliş (madde 348, sadece gerçek kopya): gölge alanında yerde yatan (is_downed) ilk dost kaldırılır, ağaç başına bir kez.
+## Oakley'nin kendisi kaldırılmaz (kendini diriltme yok). Yayın player.gd oakley_tree_revive_ally.
+func _try_revive() -> void:
+	if not is_instance_valid(caster) or not caster.has_method("oakley_tree_revive_ally"):
+		return
+	for p: Node in get_tree().get_nodes_in_group("remote_players"):
+		if not (p is Node2D) or not is_instance_valid(p) or p.get("is_downed") != true:
+			continue
+		if not in_zone((p as Node2D).global_position + Vector2(0.0, PLAYER_FEET_OFFSET)):
+			continue
+		if bool(caster.call("oakley_tree_revive_ally", p)):
+			_revive_used = true
+			return
 
 
 func _drop_flowers() -> void:
 	if is_cosmetic() or not is_instance_valid(caster) or not caster.has_method("_spawn_oakley_flower_at"):
 		return
-	for off in FLOWER_OFFSETS:
+	var offsets: Array[Vector2] = FLOWER_OFFSETS.duplicate()
+	if _flower_count > offsets.size():
+		offsets.append_array(FLOWER_OFFSETS_EXTRA)
+	for off in offsets.slice(0, maxi(0, _flower_count)):
 		var p: Vector2 = global_position + off
 		if GameManager.is_position_blocked_by_walls(p):
 			p = global_position + off * 0.4

@@ -53,6 +53,11 @@ const NO_GLOW_SCENES := [
 	"res://scenes/fx_pence_hook_top.tscn", ## pençe Kanca Çekiş (madde 237) - krem yırtık/kıvılcım küçük, toz ışık değil
 	"res://scenes/fx_pence_hook_ground.tscn",
 	"res://scenes/fx_pence_hook_smear.tscn",
+	"res://scenes/fx_mizrak_line.tscn", ## mızrak Işık Hattı (madde 305) - ince krem çizgi, ışık saçmaz
+	"res://scenes/fx_mizrak_hit.tscn",
+	"res://scenes/fx_mizrak_end.tscn",
+	"res://scenes/fx_kalkan_ring.tscn", ## kalkan Hayalet Kalkan (madde 338) - yerde kırık halka, ışık saçmaz
+	"res://scenes/fx_kalkan_wall.tscn",
 	"res://scenes/fx_uzunkilic_slash.tscn",
 	## Uzunkılıç (2026-09-26 savrulan kılıç) isabeti - çelik kesik parlaması. Savuruş hilali sahnesiz (sword_swing_math.gd), zaten parlamaz.
 	"res://scenes/fx_sword_hit.tscn",
@@ -149,6 +154,7 @@ const BY_SCENE := {
 	"res://scenes/fx_storm_strike.tscn": {"c": Color(0.75, 0.85, 1.0), "r": 120.0, "e": 1.0},
 	## --- Şimşek: nokta yerine ışın/zincir boyunca (sahibin get_glow_segment() kancası) ---
 	"res://scenes/fx_lightning_beam.tscn": {"c": Color(1.0, 0.9, 0.45), "r": 34.0, "e": 0.9, "f": 0.35},
+	"res://scenes/fx_rainbow_beam.tscn": {"c": Color(1.0, 0.96, 0.88), "r": 34.0, "e": 0.9, "f": 0.3}, ## Gökkuşağı Asası (madde 306)
 	"res://scenes/fx_lightning_chain.tscn": {"c": Color(1.0, 0.9, 0.45), "r": 30.0, "e": 0.85, "f": 0.35},
 	## --- Karakter yetenekleri ---
 	"res://scenes/fx_arcane_skull_bounce.tscn": {"c": Color(0.7, 0.35, 1.0), "r": 40.0, "e": 0.8},
@@ -177,7 +183,6 @@ const BY_SCENE := {
 	"res://scenes/fx_melek_shield_aura.tscn": {"c": Color(0.4, 0.6, 1.0), "r": 55.0, "e": 0.5},
 	"res://scenes/fx_oyku_heal.tscn": {"c": Color(0.45, 1.0, 0.55), "r": 55.0, "e": 0.6},
 	"res://scenes/fx_recovery_life.tscn": {"c": Color(0.45, 1.0, 0.6), "r": 50.0, "e": 0.55},
-	"res://scenes/fx_recovery_life_flower.tscn": {"c": Color(0.45, 1.0, 0.6), "r": 50.0, "e": 0.55},
 	"res://scenes/fx_recovery_mana.tscn": {"c": Color(0.35, 0.95, 1.0), "r": 50.0, "e": 0.55},
 	"res://scenes/fx_revive_heart.tscn": {"c": Color(1.0, 0.4, 0.55), "r": 50.0, "e": 0.65},
 	"res://scenes/fx_revive_rewind.tscn": {"c": Color(0.85, 0.95, 0.5), "r": 60.0, "e": 0.65},
@@ -289,8 +294,8 @@ const BY_SCRIPT := {
 	## görselin merkezinde / koni boyunca (get_glow_segment) - bkz. fx_enchant_sprite.gd GLOW notu.
 	"res://scripts/fx_enchant_sprite.gd": {"cp": "glow_color", "rp": "glow_radius", "rs": 1.0, "c": Color(1.0, 0.8, 0.5), "r": 30.0, "e": 1.0, "f": 0.12},
 	"res://scripts/fx_kalkan_bagi_link.gd": {"c": Color(0.45, 0.8, 1.0), "r": 24.0, "e": 0.4},
-	"res://scripts/mission_tree_bolt.gd": {"c": Color(0.45, 0.85, 1.0), "r": 18.0, "e": 0.5}, ## görev ağacının kristal mermisi (2026-10-10)
-	"res://scripts/mission_tree_blast.gd": {"c": Color(0.45, 0.85, 1.0), "r": 34.0, "e": 0.6}, ## görev ağacının sihirli atışı (2026-10-18)
+	"res://scripts/mission_tree_bolt.gd": {"c": Color(0.45, 0.85, 1.0), "r": 26.0, "e": 0.6}, ## görev ağacının kristal mermisi (2026-10-10; 2026-10-19 büyüdü 18 -> 26)
+	"res://scripts/mission_tree_blast.gd": {"c": Color(0.45, 0.85, 1.0), "r": 46.0, "e": 0.7}, ## görev ağacının sihirli atışı (2026-10-18)
 	"res://scripts/fx_matthew_dash_lines.gd": {"c": Color(1.0, 0.7, 0.4), "r": 30.0, "e": 0.4, "d": 0.3},
 	"res://scripts/fx_melek_ally_aura.gd": {"c": Color(1.0, 0.9, 0.55), "r": 50.0, "e": 0.45},
 	"res://scripts/fx_oakley_flower_bond.gd": {"c": Color(0.6, 1.0, 0.5), "r": 22.0, "e": 0.45},
@@ -321,6 +326,8 @@ const BY_SCRIPT := {
 	## (Vampir'in yarasa sürüsü ve kan efektleri (vampir_bat_swarm.gd / vampir_fx.gd) BİLEREK yok: kan/yarasa ışık
 	## saçmaz - kan sıçramalarıyla aynı kural, bkz. NO_GLOW_SCENES.)
 	"res://scripts/oakley_flower.gd": {"c": Color(1.0, 0.7, 0.85), "r": 30.0, "e": 0.35},
+	## Çiçeğin Yaprak Halkası zemin havuzu (madde 285; eski Life Recovery çemberinin yeşil ışığının yerine) - krem-yeşil, sakin.
+	"res://scripts/oakley_flower_fx.gd": {"c": Color(0.9, 0.97, 0.62), "r": 34.0, "e": 0.35},
 	"res://scripts/wraith_pet.gd": {"c": Color(0.6, 0.9, 1.0), "r": 36.0, "e": 0.35},
 	## Evcil hayvanlar (2026-10-13, kullanıcı: "kelebek ruhu ve peri karanlıktayken parıldamalı"): kukla kopyaları aynı betikten kurulur.
 	## Kelebek Ruhu pembe ışık küresi (atışları da pembe), Peri soğuk mavi-beyaz; ikisi de hafif titrek.
@@ -347,6 +354,7 @@ const BY_SCRIPT := {
 	"res://scripts/enemy_acid_pool.gd": {"c": Color(0.5, 0.9, 0.25), "r": 40.0, "e": 0.25, "fog": true},
 	"res://scripts/mission_copy_bolt.gd": {"c": Color(0.8, 0.35, 0.95), "r": 24.0, "e": 0.44, "fog": true},
 	"res://scripts/fx_enemy_bolt_impact.gd": {"cp": "color", "c": Color(1.0, 0.55, 0.15), "r": 32.0, "e": 0.44, "d": 0.35, "fog": true},
+	"res://scripts/fx_lich_flame_impact.gd": {"cp": "color", "c": Color(0.24, 0.94, 0.8), "r": 32.0, "e": 0.44, "d": 0.36, "fog": true}, ## madde 280 Ruh Alevi isabeti
 	## Yaratık yeteneklerinin ortak sprite oynatıcısı - neyin oynadığına göre (hayalet/vampir sisi parlamaz).
 	"res://scripts/fx_enemy_ability.gd": {"frames": {
 		"laser_flash": {"c": Color(0.95, 0.6, 1.0), "r": 35.2, "e": 0.5, "d": 0.3, "fog": true},
@@ -368,6 +376,7 @@ const WEAPON_TIPS := {
 	"res://scenes/weapon_fire.tscn": {"c": Color(1.0, 0.55, 0.18), "r": 30.0, "e": 0.7, "f": 0.35, "o": Vector2(47.0, -50.0)},
 	"res://scenes/weapon_buz_asasi.tscn": {"c": Color(0.55, 0.88, 1.0), "r": 28.0, "e": 0.6, "o": Vector2(58.0, -62.0)},
 	"res://scenes/weapon_lightning.tscn": {"c": Color(1.0, 0.92, 0.45), "r": 28.0, "e": 0.65, "f": 0.3, "o": Vector2(51.0, -55.0)},
+	"res://scenes/weapon_gokkusagi.tscn": {"c": Color(1.0, 0.96, 0.88), "r": 26.0, "e": 0.6, "f": 0.25, "o": Vector2(10.0, -10.0)}, ## prizma (zanaat 48x48 doku merkezinden, madde 306)
 	"res://scenes/weapon_arcane.tscn": {"c": Color(0.8, 0.6, 1.0), "r": 32.0, "e": 0.85, "f": 0.15, "o": Vector2(63.0, -66.0)},
 	"res://scenes/weapon_fisek.tscn": {"c": Color(1.0, 0.65, 0.3), "r": 18.0, "e": 0.5, "f": 0.6, "o": Vector2(5.0, 60.0)},
 }

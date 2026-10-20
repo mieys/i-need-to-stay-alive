@@ -67,3 +67,71 @@ func test_weapon_in_brush_only_targets_creatures_in_brush() -> void:
 	owner_char.global_position = Vector2(1300, 1300)
 	assert(w.call("_can_target", outside), "çalı dışında her şey hedeflenebilir")
 	_cleanup()
+
+
+class HidingOwner extends Node2D:
+	var brush_state: int = 0
+
+
+## madde 283: SAKLI (durum 1) sahibin silahı hiçbir yaratığı hedef almaz (silahlar içe çekili); görülünce (durum 2) çalı kuralı geri gelir.
+func test_hidden_owner_targets_nothing_until_spotted() -> void:
+	var cells: Array = []
+	for x in range(62, 72):
+		for y in range(62, 72):
+			cells.append(Vector2i(x, y))
+	_brush_layer(cells)
+	var owner_char := HidingOwner.new()
+	add_child(owner_char)
+	_track(owner_char)
+	owner_char.global_position = Vector2(1080, 1070)
+	var w: Node2D = WeaponScene.instantiate()
+	owner_char.add_child(w)
+	var inside: Node2D = _track(EnemyScene.instantiate()) as Node2D
+	add_child(inside)
+	inside.global_position = Vector2(1010, 1010)
+	for i in range(3):
+		await get_tree().physics_frame
+	owner_char.brush_state = HideBrushScript.STATE_HIDDEN
+	assert(not w.call("_can_target", inside), "saklıyken çalıdaki yaratık bile hedeflenmez")
+	owner_char.brush_state = HideBrushScript.STATE_SPOTTED
+	assert(w.call("_can_target", inside), "görülünce çalıdaki yaratık yine hedeflenir")
+	_cleanup()
+
+
+## madde 283 düzeltmesi (kullanıcı: "silahlar görünmüyor ancak hâlâ ateş edebiliyorlar"): saklıyken HİÇBİR ateş yolu çalışmaz - zamanlayıcı, baktığı yöne ateş
+## (fire_in_facing_direction), doğrudan _fire_at (gecikmeli/yankı/salvo). Atış = silahın "fired" sinyali.
+func test_hidden_owner_cannot_fire_by_any_path() -> void:
+	var cells: Array = []
+	for x in range(62, 72):
+		for y in range(62, 72):
+			cells.append(Vector2i(x, y))
+	_brush_layer(cells)
+	var owner_char := HidingOwner.new()
+	add_child(owner_char)
+	_track(owner_char)
+	owner_char.global_position = Vector2(1080, 1070)
+	var w: Node2D = WeaponScene.instantiate()
+	owner_char.add_child(w)
+	var inside: Node2D = _track(EnemyScene.instantiate()) as Node2D
+	add_child(inside)
+	inside.global_position = Vector2(1040, 1060)
+	for i in range(3):
+		await get_tree().physics_frame
+	var shots: Array = [0]
+	w.connect("fired", func(_d: Vector2) -> void: shots[0] += 1)
+	owner_char.brush_state = HideBrushScript.STATE_HIDDEN
+	w.call("_on_fire_timer_timeout")
+	w.call("_fire_at", inside)
+	w.set("fire_in_facing_direction", true)
+	w.call("_on_fire_timer_timeout")
+	for i in range(10):
+		await get_tree().process_frame
+	assert(shots[0] == 0, "saklıyken hiç atış olmamalı: %d" % shots[0])
+	## kontrol: görülünce (durum 2) ateş eder
+	owner_char.brush_state = HideBrushScript.STATE_SPOTTED
+	w.set("fire_in_facing_direction", false)
+	w.call("_fire_at", inside)
+	for i in range(3):
+		await get_tree().process_frame
+	assert(shots[0] >= 1, "görülünce ateş edebilmeli")
+	_cleanup()

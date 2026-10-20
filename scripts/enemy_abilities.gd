@@ -223,6 +223,42 @@ func process_fast(delta: float) -> bool:
 	return false
 
 
+## UYKU (2026-10-19, FPS turu 4; bkz. enemy.gd _ew_try_dormant): köprü sessiz yaratığı her fizik karesi tiklemek yerine uyutur, sayaçları UYANINCA tek seferde işler.
+## quiet_remaining: process_fast'in hangi sayacı azalttığını ve o sayacın şu anki değerini (sn) verir - sayaç bu süre dolana kadar her karede `delta` kadar azalır ve BAŞKA HİÇBİR ŞEY olmaz.
+## -1: hızlı yolu olmayan yetenek (boss kiti, Minotaur...) -> uyutulmaz. Dal seçimi process_fast ile AYNI koşullara bakar (hayalet: görünmezlik; vampir: _cd / _pending).
+func quiet_remaining() -> float:
+	match family:
+		"hayalet":
+			return _timer if e.get("is_ability_invisible") == true else _cd
+		"vampire":
+			if _cd > 0.0:
+				return _cd
+			return _vision_check if _pending < 0.0 else _pending
+		"rontgen", "iblis", "agac":
+			return _cd
+	return -1.0
+
+
+## Uykuda atlanan `dt` saniyenin etkisi: quiet_remaining'in sayacı, atlanan karelerin delta toplamı kadar azalır (process_fast'in kare kare yaptığıyla aynı, tek çıkarma).
+## Uyku sırasında dal değişmez (sayaç eşiğe varmadan uyandırılır - bkz. enemy.gd EW_DORM_MARGIN_TICKS), bu yüzden dal seçimi quiet_remaining ile aynıdır.
+func fast_forward(dt: float) -> void:
+	match family:
+		"hayalet":
+			if e.get("is_ability_invisible") == true:
+				_timer -= dt
+			else:
+				_cd -= dt
+		"vampire":
+			if _cd > 0.0:
+				_cd -= dt
+			elif _pending < 0.0:
+				_vision_check -= dt
+			else:
+				_pending -= dt
+		"rontgen", "iblis", "agac":
+			_cd -= dt
+
+
 func _valid_target(player: Node2D) -> bool:
 	return player != null and is_instance_valid(player) and player.get("is_dead") != true
 

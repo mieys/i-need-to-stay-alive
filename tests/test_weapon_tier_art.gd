@@ -110,4 +110,21 @@ func test_tier_gives_damage_and_fire_rate() -> void:
 	assert(is_equal_approx(float(w.get("fire_rate")), base_rate * 0.85), "kademe 4 atış aralığı x0,85")
 	w.call("set_enchant", {})
 	assert(is_equal_approx(float(w.get("damage")), base_dmg) and is_equal_approx(float(w.get("fire_rate")), base_rate), "efsun kalkınca eski stat")
+	## Final sonrası güçlendirme (madde 297): sanat kademesi 5'te kalır, stat sürer (+%10 taban hasar, kademe V hızının +%5'i).
+	w.call("set_enchant", {"id": "ates_nefesi", "ups": [0, 1, 2, 3], "final": true, "plus": 3})
+	assert(int(w.get("enchant_glow_tier")) == 5, "güçlendirme kademe sanatını 5'in üstüne taşımaz")
+	assert(is_equal_approx(float(w.get("damage")), base_dmg * 1.7), "V +3 hasar x1,7, bulunan %f / %f" % [float(w.get("damage")), base_dmg])
+	assert(is_equal_approx(float(w.get("fire_rate")), base_rate * 0.8 / 1.15), "V +3 atış aralığı x0,8 / 1,15")
+	w.call("set_enchant", {"id": "ates_nefesi", "ups": [0, 1], "final": false, "plus": 3})
+	assert(is_equal_approx(float(w.get("damage")), base_dmg * 1.2), "final alınmadan 'plus' sayılmaz")
 	w.get_parent().queue_free()
+
+
+func test_tier_stat_curve_never_reaches_zero_fire_wait() -> void:
+	const W := preload("res://scripts/weapon.gd")
+	assert(is_equal_approx(W.tier_fire_rate_mult(5), 0.8) and is_equal_approx(W.tier_fire_rate_mult(1), 1.0), "1-5 eski doğrusal eğri")
+	var prev: float = W.tier_fire_rate_mult(5)
+	for t in range(6, 60):
+		var m: float = W.tier_fire_rate_mult(t)
+		assert(m > 0.0 and m < prev, "kademe %d atış aralığı pozitif ve azalıyor (%f)" % [t, m])
+		prev = m

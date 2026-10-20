@@ -117,6 +117,8 @@ func muzzle() -> Vector2:
 func fire_at(target: Node2D) -> void:
 	if is_puppet or not is_instance_valid(target):
 		return
+	if is_instance_valid(owner_body) and owner_body.has_method("is_safe_zone_frozen") and owner_body.is_safe_zone_frozen():
+		return ## güvenli alanda (satıcı koruması / demirci) evcil hayvan çalışmaz (madde 327)
 	if _bolts >= MAX_BOLTS:
 		_deal(target)
 		return

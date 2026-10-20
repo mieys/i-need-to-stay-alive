@@ -29,60 +29,62 @@ const SLOT_ORDER := ["q", "e", "r", "p", "f"]
 ## kaynak etiketi -> slot. Ayrıntı satırı adları NAMES'te.
 const SLOT := {
 	## Talon
-	"s:talon_dash": "q", "s:talon_spin": "e",
+	"s:talon_dash": "q", "s:talon_spin": "e", "s:talon_ayna": "r", "s:talon_pasif": "p",
 	## Oakley
-	"dot:ari_zehri": "q", "s:oakley_sarmasik": "e",
+	"dot:ari_zehri": "q", "s:oakley_sarmasik": "e", "s:oakley_agac": "r", "s:oakley_cicek": "p",
 	## Matthew
 	"s:matthew_tilki_hucumu": "q", "s:matthew_simsek_hucumu": "q", "s:matthew_elektrik_topu": "e", "s:matthew_kubbe": "r",
 	"s:matthew_yildirim_izi": "p", ## "s:matthew_kopek" artık herkesin EVCİL köpeği (madde 98/103) -> "diger" + PET_SOURCES
 	## Büyücü Kız (Q = set değiştirir; E = Arcane Lanet / Hortum; R = Don Nova / Meteor)
 	"s:buyucu_sekme": "e", "s:buyucu_arcane_patlama": "e", "s:buyucu_kasirga": "e", "s:buyucu_buz_nova": "r", "s:buyucu_meteor": "r",
-	"s:buyucu_degisim": "q",
+	"s:buyucu_degisim": "q", "s:buyucu_pasif": "p",
 	## Assasin
-	"s:assasin_dash": "q", "s:assasin_dash2": "e",
+	"s:assasin_dash2": "q", "s:assasin_gorunmez": "e", "s:assasin_dash": "r", "s:assasin_pasif": "p",
 	## Şovalye
 	"s:sovalye_kiskirtma": "q", "s:sovalye_yansitma": "e", "s:sovalye_misilleme": "r",
+	"s:sovalye_bariyer": "e", "s:sovalye_kubbe": "r", "s:sovalye_pasif": "p",
 	## Elara
-	"s:elara_gercek_hasar": "e", "s:elara_cift_tetik": "r",
+	"s:elara_sivisma": "q", "s:elara_gercek_hasar": "e", "s:elara_cift_tetik": "r",
 	## Korsan
-	"s:korsan_bomba": "e", "s:korsan_bombardiman": "r",
+	"s:korsan_patlat": "q", "s:korsan_bomba": "e", "s:korsan_bombardiman": "r", "s:korsan_pasif": "p",
 	## Melek (hasarı yok; can/kalkan)
 	"s:melek_can": "q", "s:melek_kalkan": "e", "s:melek_korku": "r", "s:melek_pasif": "p",
 	## Necromancer
-	"s:necro_iskelet": "q", "s:necro_golem": "e", "s:necro_kafatasi": "r", "s:necro_kemik": "q",
+	"s:necro_iskelet": "q", "s:necro_golem": "e", "s:necro_kafatasi": "r", "s:necro_kemik": "q", "s:necro_ruh": "p",
 	## Shaman
-	"s:shaman_totem": "q", "s:shaman_totem_alan": "q", "s:shaman_golem_alan": "r",
+	"s:shaman_totem": "q", "s:shaman_totem_alan": "q", "s:shaman_kalkan_totemi": "e", "s:shaman_kalkan_alan": "e", "s:shaman_golem_alan": "r",
 	## Vampir
 	"s:vampir_kan_emme": "q", "s:vampir_yarasa_temas": "e", "s:vampir_yarasa_r": "r", "s:vampir_r_patlama": "r", "s:vampir_pasif": "p",
 	## Suriyeli Hadime
 	"s:hadime_lanet": "q", "s:hadime_lanet_patlama": "q", "s:hadime_kuyu": "e", "s:hadime_kabus": "r",
 	## Cadı
 	"s:cadi_duman": "q", "s:cadi_supurge_temas": "e", "s:cadi_supurge": "e", "s:cadi_patlama": "r", "s:cadi_don": "r", "s:cadi_korku": "r",
-	"s:cadi_iksir": "r",
+	"s:cadi_iksir": "r", "s:cadi_kalkan": "r",
 	## Ruhani yetenekler (4. yuva)
 	"s:ruhani_tank": "f", "s:ruhani_can": "f", "s:ruhani_kalkan_bagi": "f",
 }
 
 ## Ayrıntı satırlarında görünen kısa ad (slotun kendi adı zaten başlıkta; birden çok kaynak varsa hangisi ne kadar).
 const NAMES := {
-	"s:talon_dash": "Atılış", "s:talon_spin": "Dönen silahlar",
+	"s:talon_dash": "Atılış", "s:talon_spin": "Dönen silahlar", "s:talon_ayna": "Ayna formu", "s:talon_pasif": "Güç yükleri",
 	"dot:ari_zehri": "Arı zehri", "s:oakley_sarmasik": "Sarmaşık",
 	"s:matthew_tilki_hucumu": "Tilki hücumu", "s:matthew_simsek_hucumu": "Şimşek", "s:matthew_elektrik_topu": "Elektrik topu",
 	"s:matthew_kubbe": "Kalkan patlaması", "s:matthew_kopek": "Köpek", "s:matthew_yildirim_izi": "Yıldırım izi",
 	"s:kelebek_ruhu": "Kelebek lazeri", "s:evcil_kirpi": "Kirpi dikenleri", "s:evcil_peri": "Peri",
 	"s:buyucu_sekme": "Sekme", "s:buyucu_arcane_patlama": "Arcane patlama", "s:buyucu_kasirga": "Hortum", "s:buyucu_buz_nova": "Don Nova",
 	"s:buyucu_meteor": "Meteor", "s:buyucu_degisim": "Set değişimi",
-	"s:assasin_dash": "Şahin hamlesi", "s:assasin_dash2": "Gölge adımı",
+	"s:assasin_dash2": "Şahin hamlesi", "s:assasin_gorunmez": "Gölge adımı", "s:assasin_dash": "Gölge hücumu", "s:assasin_pasif": "Bıçak uzmanlığı",
 	"s:sovalye_kiskirtma": "Kışkırtma", "s:sovalye_yansitma": "Yansıtma", "s:sovalye_misilleme": "Misilleme",
-	"s:elara_gercek_hasar": "Gerçek hasar", "s:elara_cift_tetik": "Çift tetik",
+	"s:sovalye_bariyer": "Koruma bariyeri", "s:sovalye_kubbe": "Koruma baloncuğu", "s:sovalye_pasif": "Dirençli duruş", "s:oakley_agac": "Hayat ağacı", "s:oakley_cicek": "Çiçek",
+	"s:elara_sivisma": "Sıvışma", "s:elara_gercek_hasar": "Gerçek hasar", "s:elara_cift_tetik": "Çift tetik",
 	"s:korsan_bomba": "Bomba", "s:korsan_bombardiman": "Bombardıman",
 	"s:melek_can": "Can basma", "s:melek_kalkan": "Kalkan yenileme", "s:melek_korku": "Kutsal korku", "s:melek_pasif": "Pasif",
 	"s:necro_iskelet": "İskelet", "s:necro_golem": "Golem", "s:necro_kafatasi": "Kafatası", "s:necro_kemik": "Kemik fedası",
-	"s:shaman_totem": "Totem atışı", "s:shaman_totem_alan": "Totem alanı", "s:shaman_golem_alan": "Golem alanı",
+	"s:shaman_totem": "Totem atışı", "s:shaman_totem_alan": "Totem alanı", "s:shaman_kalkan_totemi": "Kalkan totemi", "s:shaman_kalkan_alan": "Totem alanı", "s:shaman_golem_alan": "Golem alanı",
 	"s:vampir_kan_emme": "Kan emme", "s:vampir_yarasa_temas": "Yarasa teması", "s:vampir_yarasa_r": "Yarasalar", "s:vampir_r_patlama": "Patlama", "s:vampir_pasif": "Can emme",
 	"s:hadime_lanet": "Lanet", "s:hadime_lanet_patlama": "Lanet patlaması", "s:hadime_kuyu": "Kara delik", "s:hadime_kabus": "Karabasan",
 	"s:cadi_duman": "Zehirli duman", "s:cadi_supurge_temas": "Süpürge teması", "s:cadi_supurge": "Süpürge", "s:cadi_patlama": "İksir patlaması",
-	"s:cadi_don": "Don iksiri", "s:cadi_korku": "Korku iksiri", "s:cadi_iksir": "İksir",
+	"s:cadi_don": "Don iksiri", "s:cadi_korku": "Korku iksiri", "s:cadi_iksir": "İksir", "s:cadi_kalkan": "Kalkan iksiri",
 	"s:ruhani_tank": "Tank", "s:ruhani_can": "Can", "s:ruhani_kalkan_bagi": "Kalkan bağı",
 }
 
@@ -203,7 +205,37 @@ static func slot_totals(slot: String, dealt: Dictionary = {}, gain: Dictionary =
 	var list: Array = parts.values()
 	list.sort_custom(func(a, b): return float(a["dmg"]) + float(a["heal"]) + float(a["shield"]) > float(b["dmg"]) + float(b["heal"]) + float(b["shield"]))
 	out["parts"] = list
+	## Hasar/can/kalkan dışı fayda: engellenen hasar (BalanceLog._prevented) + ölçüler (BalanceLog._util, UTIL_LABELS).
+	var prev: Dictionary = BalanceLogScript.prevented_snapshot()
+	out["prevented"] = 0.0
+	for src3 in prev.keys():
+		if slot_of(str(src3)) == slot:
+			out["prevented"] += float(prev[src3])
+	var util_out: Dictionary = {}
+	var util: Dictionary = BalanceLogScript.util_snapshot()
+	for src4 in util.keys():
+		if slot_of(str(src4)) != slot:
+			continue
+		var row: Dictionary = util[src4]
+		for m in row.keys():
+			util_out[m] = float(util_out.get(m, 0.0)) + float(row[m])
+	out["util"] = util_out
 	return out
+
+
+## Yeteneğin hasar/can/kalkan dışı fayda ölçüleri (BalanceLog.on_util / on_cc / set_window) -> ipucundaki satır adı (sıra = ipucu sırası).
+## Kontrol türleri (root/slow/fear/freeze/stun/mad) yaratık başına uygulama sayısıdır (süre dolmadan tazelenen sayılmaz).
+const UTIL_LABELS := {
+	"ally": "Dostlardan üstlenilen hasar",
+	"during_w": "Etki sürerken silah hasarı",
+	"during": "Etki sürerken verilen hasar",
+	"root": "Sabitlenen yaratık", "slow": "Yavaşlatılan yaratık", "fear": "Korkutulan yaratık", "freeze": "Dondurulan yaratık",
+	"stun": "Sersemletilen yaratık", "mad": "Çıldırtılan yaratık",
+	"surge": "Güçlendirilmiş atış", "bombs": "Patlatılan bomba", "gold": "Kazanılan altın", "souls": "Toplanan ruh",
+	"summon": "Çağrılan", "passenger": "Süpürgeye binen arkadaş", "flower": "Alınan çiçek",
+}
+## Hasar türü ölçüler (hasar renginde yazılır); gerisi sayı/fayda (kalkan renginde).
+const UTIL_DAMAGE := ["during_w", "during"]
 
 
 ## Oyun sonu tablosu için yetenek satırları: Q/E/R/pasif/ruhani + "Diğer"; yalnız bir şey yapmış olanlar.
@@ -267,8 +299,21 @@ static func tooltip_bbcode(slot: String, ink: Dictionary) -> String:
 		lines.append("• Can: [color=%s][b]%s[/b][/color]" % [c_hp, fmt(float(t["heal"]))])
 	if float(t["shield"]) > 0.0:
 		lines.append("• Kalkan: [color=%s][b]%s[/b][/color]" % [c_sh, fmt(float(t["shield"]))])
+	if float(t.get("prevented", 0.0)) > 0.0:
+		lines.append("• Engellenen hasar: [color=%s][b]%s[/b][/color]" % [c_sh, fmt(float(t["prevented"]))])
+	var util: Dictionary = t.get("util", {})
+	var metrics: Array = UTIL_LABELS.keys()
+	for m in util.keys():
+		if not metrics.has(m):
+			metrics.append(m)
+	for m in metrics:
+		if float(util.get(m, 0.0)) > 0.0:
+			lines.append("• %s: [color=%s][b]%s[/b][/color]" % [str(UTIL_LABELS.get(m, m)), c_dmg if UTIL_DAMAGE.has(m) else c_sh, fmt(float(util[m]))])
+	var live: PackedStringArray = live_lines(slot, ink)
 	if lines.is_empty():
-		return "[color=%s]Bu oyunda henüz hasar, can ya da kalkan vermedi.[/color]" % c_dim
+		if not live.is_empty():
+			return "\n".join(live)
+		return "[color=%s]Bu oyunda henüz bir etkisi olmadı.[/color]" % c_dim
 	## Birden çok kaynak varsa (ör. Büyücü Hortum + Arcane) hangisi ne kadar.
 	var parts: Array = t["parts"]
 	if parts.size() > 1:
@@ -282,7 +327,36 @@ static func tooltip_bbcode(slot: String, ink: Dictionary) -> String:
 				bits.append("%s kalkan" % fmt(float(p["shield"])))
 			if not bits.is_empty():
 				lines.append("[color=%s]   %s: %s[/color]" % [c_dim, str(p["name"]), ", ".join(bits)])
+	lines.append_array(live)
 	return "\n".join(lines)
+
+
+## Pasifin ŞU ANKİ etkisi (sayaç değil, yerel oyuncunun canlı değeri): Elara saldırı hızı, Matthew hız, Talon yük, Korsan saldırı gücü,
+## Cadı şans. Karakter "skill" id'siyle seçilir (characters.gd: Talon 38, Matthew 43, Elara 12, Korsan 18, Cadı 51).
+static func live_lines(slot: String, ink: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = []
+	if slot != SLOT_P:
+		return out
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	var p: Node = tree.get_first_node_in_group("player") if tree != null else null
+	if p == null:
+		return out
+	var c_val: String = str(ink.get("value", "#9a6a10"))
+	var lbl := func(label: String, value: String) -> String:
+		return "• Şu an: [color=%s][b]%s[/b][/color] %s" % [c_val, value, label]
+	match int(Characters.get_def(GameManager.selected_char_id).get("skill", -1)):
+		12: ## Elara: seviye başına %1 saldırı hızı (en fazla %30; player.gd ELARA_PASSIVE_*)
+			out.append(lbl.call("saldırı hızı", "+%%%d" % int(round(100.0 * minf(float(p.get("level")) * 0.01, 0.3)))))
+		43: ## Matthew: toplam hareket hızı bonusu, her %1'i = %0,5 saldırı hızı
+			var mv: int = int(p.get("_matthew_move_percent"))
+			out.append(lbl.call("hareket hızı (+%%%s saldırı hızı)" % str(snappedf(mv * 0.5, 0.5)), "+%%%d" % mv))
+		38: ## Talon: güç yükleri
+			out.append(lbl.call("güç yükü", str(int(p.get("_talon_passive_stacks")))))
+		18: ## Korsan: cüzdandaki her 30 altın = +1 saldırı gücü
+			out.append(lbl.call("saldırı gücü (altından)", "+%d" % int(p.get("_korsan_gold_ap_applied"))))
+		51: ## Cadı: eksik her %5 can = 1 şans
+			out.append(lbl.call("şans", "+%d" % int(round(float(p.get("_cadi_passive_luck"))))))
+	return out
 
 
 ## ---------------------------------------------------------------- EVCİL HAYVAN (kullanıcı isteği 2026-10-18: "skill barında sahip

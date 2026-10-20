@@ -4,7 +4,7 @@ extends RefCounted
 ## artık bunlar silahın bir parçası, o yüzden silahın kodlarıyla aynı yerde olmalılar"). Eskiden tablo + tanımlar enchant_defs.gd'deki
 ## kapalı efsun kartlarının arasında, davranışlar scripts/enchants/'taydı. Artık:
 ##   - TRAITS: silah anahtarı -> o silahın doğuştan özelliği (tek tablo; weapon_catalog.gd trait_text + EnchantDefs.trait_of buradan okur)
-##   - DEFS: 15 özelliğin tanımı (desc, base, 4 geliştirme, final) - demirci "EFSUNLAR" sekmesi + envanter ipucu bu metinleri gösterir
+##   - DEFS: 18 özelliğin tanımı (desc, base, 4 geliştirme, final) - demirci "EFSUNLAR" sekmesi + envanter ipucu bu metinleri gösterir
 ##   - davranışlar: scripts/weapon_traits/<id>.gd (temel sınıf enchant_behavior.gd; weapon.gd önce bu klasörden yükler)
 ## Tanım biçimi EnchantDefs ile AYNI (resolve/upgrade_rows aynen çalışır: EnchantDefs.get_def önce buraya bakar). Sismik Dalga ve
 ## Rüzgâr Kılıcı eski efsun kartlarında da var (o kopyalar kapalı kart sistemine ait, bu tanımlar özelliğe).
@@ -15,7 +15,8 @@ const TRAITS := {
 	"dagger": "kanayan_kesikler", "pence": "kanli_pence", "topuz": "sismik_dalga", "uzunkilic": "wind_sword",
 	"fire_staff": "ates_nefesi", "lightning_staff": "zincir_yildirim", "tabanca": "seri_parmak", "tuftuf": "bulasici_salgi",
 	"tufek": "delici_mermi", "arcane": "yankilanan_buyu", "yay": "uclu_ok", "crossbow": "zincir_civata",
-	"boomerang": "cifte_donus", "buz_asasi": "kirik_buz", "fisek": "kivilcim_yagmuru",
+	"boomerang": "cifte_donus", "buz_asasi": "kirik_buz", "fisek": "kivilcim_yagmuru", "gokkusagi": "goz_kamastiran",
+	"mizrak": "cirit", "kalkan": "siper", "yinyang": "denge",
 }
 
 ## Davranış scriptlerinin klasörü (delici_mermi scriptsizdir: sadece ortak anahtarlar).
@@ -40,13 +41,13 @@ const DEFS := {
 	"ates_nefesi": {
 		"weapons": ["fire_staff"], "name": "Ateş Nefesi", "element": "yanma",
 		"desc": "Asa mermi atmaz; en yakın düşmana doğru sürekli bir alev konisi püskürtür ve konideki herkesi yakar.",
-		"base": {"text": "60°'lik, 140 birim menzilli bir alev konisi püskürtürsün. Koninin içindeki herkes 0,25 saniyede bir saldırı gücünün %27'si kadar hasar alır (saniyede %108) ve 3 saniye yanar (saniyede saldırı gücünün %14'ü). Püskürtme saldırı hızınla hızlanır.",
+		"base": {"text": "60°'lik, 140 birim menzilli bir alev konisi püskürtürsün. Koninin içindeki herkes 0,36 saniyede bir saldırı gücünün %27'si kadar hasar alır (saniyede %76) ve 3 saniye yanar (saniyede saldırı gücünün %14'ü). Püskürtme saldırı hızınla hızlanır.",
 			"set": {"spray_angle": 60.0, "spray_range": 140.0, "spray_tick": 0.25, "spray_ap": 0.27, "spray_rate": 0.0,
 				"elem_ap": 0.14, "elem_dur": 3.0, "elem_dur_mult": 1.0, "spray_push": 0.0}},
 		"upgrades": [
 			{"name": "Genişleyen Boğaz", "text": "Püskürtme açısı 60° → 72°, menzili 140 → 161 birim.",
 				"add": {"spray_angle": 12.0, "spray_range": 21.0}},
-			{"name": "Yoğun Alev", "text": "Püskürtme %20 daha sık hasar verir (0,25 → 0,21 saniyede bir).", "add": {"spray_rate": 0.2}},
+			{"name": "Yoğun Alev", "text": "Püskürtme %20 daha sık hasar verir (0,36 → 0,30 saniyede bir).", "add": {"spray_rate": 0.2}},
 			{"name": "Kalıcı Yanık", "text": "Yanma süresi %30 uzar (3 → 3,9 saniye).", "add": {"elem_dur_mult": 0.3}},
 			{"name": "Nefes Basıncı", "text": "Alev konisi değdiği düşmanları hafifçe geri iterek yaklaşmalarını engeller (bosslar hariç).", "set": {"spray_push": 14.0}},
 		],
@@ -72,7 +73,7 @@ const DEFS := {
 	"sismik_dalga": {
 		"weapons": ["topuz"], "name": "Sismik Dalga", "element": "fiziksel",
 		"desc": "Topuz yere vurduğunda şansa bağlı olarak vuruş noktasından yayılan, düşmanları sarsan bir şok dalgası çıkar.",
-		"base": {"text": "Her vuruş %40 ihtimalle vuruş noktasından yayılan bir dalga çıkarır (4 vuruş üst üste çıkmazsa sonraki kesin çıkar): 110 birim içindekilere saldırı gücünün %70'i kadar hasar verir ve onları 20 birim sarsar (topuzun menzilinden atmaz).",
+		"base": {"text": "Her vuruş %40 ihtimalle vuruş noktasından yayılan bir dalga çıkarır (4 vuruş üst üste çıkmazsa sonraki kesin çıkar): 110 birim içindeki en yakın 8 düşmana saldırı gücünün %70'i kadar hasar verir (kalabalıkta fazlası %35'ini alır) ve hepsini 20 birim sarsar (topuzun menzilinden atmaz).",
 			"set": {"seis_chance": 0.40, "seis_pity": 4, "seis_radius": 110.0, "seis_ap": 0.7, "seis_push": 20.0, "seis_pulses": 1}},
 		"upgrades": [
 			{"name": "Halka Yankısı", "text": "Dalga ihtimali: %40 → %50.", "add": {"seis_chance": 0.10}},
@@ -102,16 +103,23 @@ const DEFS := {
 		"desc": "Pençe darbeleri kanama bırakır; her pençe darbesinde can kazanırsın.",
 		## 2026-10-17 (kullanıcı: "pençe çok güçsüz ve az can basıyor" -> "kanama %20 sg olsun kanama birikmesin"): kanama %7 -> %20 (tek
 		## yük, birikmez), can emme %4 -> %6 ve artık İLK vuruşta da (eskiden sadece zaten kanayan hedefte: yeni hedefe ilk vuruş 0 can).
-		"base": {"text": "Her pençe 3 saniyelik kanama bırakır (saniyede saldırı gücünün %20'si; birikmez, her vuruş süreyi yeniler). Her pençe darbesinde verdiğin hasarın %6'sı kadar can kazanırsın (alandaki diğer yaratıklara verilen hasardan üçte biri).",
-			"set": {"kp_ap": 0.20, "kp_dur": 3.0, "kp_leech": 0.06, "bleeding_bonus": 0.0, "kp_kill_haste": 0.0, "kp_kill_heal": 0.0}},
+		## 2026-10-19 (kullanıcı: "pençe aşırı güçlü olmuş hem çok can çalıyor hem de çok vuruyor" -> "kanama her hedefe uygulansın ama can emmesi %3'e düşsün
+		## diğerlerini de aynen yap"): can emme %6 -> %3 ve SADECE ana hedef (alan payı vuruşlarından can yok), final %3 -> %1 azami can (saniyede en fazla
+		## bir kez) + saldırı hızı %30 -> %20. Kanama (her hedefe %20 SG/sn) ve taban hasar aynı. Kayıt rev 63: Pençe toplam hasarın %43'ü.
+		## 2026-10-19 (kullanıcı: "pençe hala çok can çalıyor" -> "sınırları kaldırıp oranları düşür"): can emme %3 -> %1 (Kan Emici %5 -> %2), final %1 ->
+		## %0,5 azami can; saniyelik üst sınır YOK (ara sürümdeki kp_leech_cap ve "saniyede en fazla bir kez" kalktı). Kanama tikleri genel can çalma zarı atmaz.
+		## 2026-10-19 (kullanıcı: "pençe çok az vuruyor buffla"): doğrudan hasar sahne oranı 1,035 -> 1,35 (+%30, %145 -> %189) ve kanama %20 -> %30 SG/sn (can emme aynı). BALANCE_REV 80.
+		## Neden düşük oran: can emme hasarın yüzdesi ve saldırı gücü can sayısından çok hızlı büyür (kayıt rev 63: saldırı gücü 416 / can 655). BALANCE_REV 72 (madde 304).
+		"base": {"text": "Her pençe 3 saniyelik kanama bırakır (ana hedefte saniyede saldırı gücünün %30'u, alandaki diğer yaratıklarda %20'si; birikmez, her vuruş süreyi yeniler). Ana hedefe her pençe darbesinde verdiğin hasarın %1'i kadar can kazanırsın (alandaki diğer yaratıklardan ve kanama hasarından can gelmez).",
+			"set": {"kp_ap": 0.30, "kp_area": 0.6667, "kp_dur": 3.0, "kp_leech": 0.01, "bleeding_bonus": 0.0, "kp_kill_haste": 0.0, "kp_kill_heal": 0.0}},
 		"upgrades": [
-			{"name": "Derin Pençe", "text": "Kanama hasarı: saniyede saldırı gücünün %20'si → %25'i.", "add": {"kp_ap": 0.05}},
+			{"name": "Derin Pençe", "text": "Kanama hasarı: saniyede saldırı gücünün %30'u → %35'i (alandaki diğerlerinde %20 → %23).", "add": {"kp_ap": 0.05}},
 			{"name": "Uzun Kanama", "text": "Kanama 1,5 saniye daha uzun sürer (3 → 4,5 sn).", "add": {"kp_dur": 1.5}},
-			{"name": "Kan Emici", "text": "Can emme oranı: %6 → %8.", "add": {"kp_leech": 0.02}},
+			{"name": "Kan Emici", "text": "Can emme oranı: %1 → %2.", "add": {"kp_leech": 0.01}},
 			{"name": "Yırtıcı Darbe", "text": "Kanayan düşmana verdiğin hasar %15 artar.", "set": {"bleeding_bonus": 0.15}},
 		],
-		"final": {"name": "Kan Susuzluğu", "text": "Kanayan bir düşmanı öldürdüğünde 3 saniye boyunca saldırı hızın %30 artar ve maksimum canının %3'ü kadar iyileşirsin.",
-			"set": {"kp_kill_haste": 0.3, "kp_kill_heal": 0.03}},
+		"final": {"name": "Kan Susuzluğu", "text": "Kanayan bir düşmanı öldürdüğünde 3 saniye boyunca saldırı hızın %20 artar ve maksimum canının %0,5'i kadar iyileşirsin.",
+			"set": {"kp_kill_haste": 0.2, "kp_kill_heal": 0.005}},
 	},
 	"zincir_yildirim": {
 		"weapons": ["lightning_staff"], "name": "Zincir Yıldırım", "element": "sok",
@@ -183,6 +191,22 @@ const DEFS := {
 		"final": {"name": "Çınlayan Boşluk", "text": "Yankı ihtimali %60'a çıkar ve patlamaya yakalananlar 0,5 saniye sersemler.",
 			"set": {"echo_chance": 0.6, "echo_stun": 0.5}},
 	},
+	## Mızrak (madde 305; öneri kullanıcıya sunuldu, "güzel"): her N. saplamada fırlatılan cirit. Görünüş/zaman scripts/mizrak_thrust_math.gd,
+	## hasar scripts/weapon_traits/cirit.gd (karede ilerleyen uç). cirit_every n() ile okunur (geliştirme -1 ekler).
+	"cirit": {
+		"weapons": ["mizrak"], "name": "Cirit", "element": "fiziksel",
+		"desc": "Birkaç saplamada bir mızrağını düz bir hatta fırlatırsın; cirit yolundaki herkesi delip geçer.",
+		"base": {"text": "Her 4. saplamada mızrağı hedefe doğru fırlatırsın: cirit senden 280 birim uzağa kadar düz bir hatta uçar ve yolundaki tüm düşmanlara saldırı gücünün %90'ı kadar hasar verir (saplamanın kendi hasarı da hedefe ve arkasındakilere işler). Mızrak 0,4 saniye sonra elinde yeniden belirir.",
+			"set": {"cirit_every": 4, "cirit_range": 280.0, "cirit_speed": 1.0, "cirit_ap": 0.9, "cirit_vuln": 0.0, "cirit_skewer": 0}},
+		"upgrades": [
+			{"name": "Hafif Cirit", "text": "Cirit her 4. saplama yerine her 3. saplamada fırlatılır.", "add": {"cirit_every": -1}},
+			{"name": "Uzun Atış", "text": "Ciritin menzili 280 → 360 birim, cirit %25 daha hızlı uçar.", "add": {"cirit_range": 80.0, "cirit_speed": 0.25}},
+			{"name": "Ağır Uç", "text": "Ciritin hasarı: saldırı gücünün %90'ı → %120'si.", "add": {"cirit_ap": 0.3}},
+			{"name": "Yarık Zırh", "text": "Ciritin vurduğu düşmanlar 3 saniye boyunca mızrağından %15 fazla hasar alır.", "set": {"cirit_vuln": 0.15}},
+		],
+		"final": {"name": "Şişleyen Cirit", "text": "Cirit vurduğu ilk 3 düşmanı ucuna geçirip yolun sonuna kadar sürükler ve orada yere çakılır: şişlenen düşmanlar 1 saniye sersemler ve saldırı gücünün %100'ü kadar ek hasar alır, çakıldığı yerin 70 birim çevresindekiler saldırı gücünün %50'si kadar hasar alır. Bosslar sürüklenmez, sadece hasar alır.",
+			"set": {"cirit_skewer": 3}},
+	},
 	"uclu_ok": {
 		"weapons": ["yay"], "name": "Üçlü Ok", "element": "fiziksel",
 		"desc": "Belirli aralıklarla ana okun yanında yelpaze halinde ek oklar çıkar.",
@@ -208,7 +232,7 @@ const DEFS := {
 			{"name": "Ağır Cıvata", "text": "Sersemleyen düşman 1,5 saniye %25 yavaşlar.", "set": {"cv_slow": 0.25}},
 			{"name": "Şok Dalgası", "text": "Sersemleyen düşmanın 60 birim çevresindekilere cıvata hasarının %50'si kadar vurur.", "set": {"cv_splash": 0.5}},
 		],
-		"final": {"name": "Zincir Kırıcı", "text": "Cıvata 2 düşman daha deler ve vurduğu HER düşmanı 1 saniye sersemletir.",
+		"final": {"name": "Zincir Kırıcı", "text": "Cıvata 2 düşman daha deler ve vurduğu HER düşmanı 1 saniye sersemletir (aynı düşman sersemliği bitince 1 saniye yeniden sersemletilemez).",
 			"add": {"pierce": 2}, "set": {"cv_stun": 1.0, "cv_all_stun": true}},
 	},
 	"cifte_donus": {
@@ -254,5 +278,57 @@ const DEFS := {
 		],
 		"final": {"name": "Kıvılcım Fırtınası", "text": "Her seferinde 2 kıvılcım patlar ve kıvılcım hasarları %50 artar.",
 			"set": {"spark_count": 2, "spark_mult": 1.5}},
+	},
+	## Gökkuşağı Asası (2026-10-19, madde 306): kullanıcı onaylı öneri - ışın aynı düşmanda kesintisiz kalınca göz kamaşır, final delen ışın.
+	## Sayaç/kamaşma scripts/weapon_traits/goz_kamastiran.gd, delme weapon.gd _update_beam_reach ("beam_pierce").
+	"goz_kamastiran": {
+		"weapons": ["gokkusagi"], "name": "Göz Kamaştıran Işık", "element": "kutsal",
+		"desc": "Işını aynı düşmanda kesintisiz tutarsan gözü kamaşır: kısa süre saldıramaz, yetenek kullanamaz ve yalpalar.",
+		"base": {"text": "Işını aynı düşmanda 3 saniye kesintisiz tutunca gözü 1,5 saniye kamaşır: saldıramaz, yetenek kullanamaz, yerinde yalpalar. Bosslar ve elitler kamaşmaz; onun yerine 3 saniye boyunca %20 az hasar verir. Işın başka hedefe geçerse ya da kesilirse süre sıfırlanır; ışın tuttukça kalınlaşıp parlar.",
+			"set": {"dz_need": 3.0, "dz_dur": 1.5, "dz_boss": 3.0, "dz_vuln": 0.0, "dz_burst": 0.0, "dz_burst_r": 70.0, "dz_burst_stun": 0.75}},
+		"upgrades": [
+			{"name": "Hızlı Kamaşma", "text": "Kamaşma için gereken süre 3 → 2 saniye.", "add": {"dz_need": -1.0}},
+			{"name": "Uzun Kamaşma", "text": "Kamaşma 1,5 → 2,25 saniye sürer; bosslardaki zayıflatma 3 → 4,5 saniye.", "add": {"dz_dur": 0.75, "dz_boss": 1.5}},
+			{"name": "Kör Nokta", "text": "Gözü kamaşmış düşman herkesten %20 fazla hasar alır.", "set": {"dz_vuln": 0.2}},
+			{"name": "Işık Saçılması", "text": "Kamaşma anında 70 birim içindeki düşmanlar saldırı gücünün %60'ı kadar hasar alır ve 0,75 saniye kamaşır.",
+				"set": {"dz_burst": 0.6}},
+		],
+		"final": {"name": "Gökkuşağı Mızrağı", "text": "Işın artık ilk düşmanda durmaz: menzilinin sonuna kadar yolundaki her düşmanı delip geçer ve hepsine tam hasar verir. Delinen her düşmanın kamaşma süresi aynı anda işler.",
+			"set": {"beam_pierce": true}},
+	},
+	## Kalkan (madde 338): kişisel, SABİT kalkan doldurma (kullanıcı: "dosta vermesin, kalkan kişisel olsun" + "% lik kalkan yenilemesi
+	## çok op, çok olmasın" - yüzde değil sabit sayı). Davranış scripts/weapon_traits/siper.gd, darbe scripts/kalkan_bash_math.gd.
+	"siper": {
+		"weapons": ["kalkan"], "name": "Siper", "element": "fiziksel",
+		"desc": "Kalkan darbesi vurduğu her düşmandan yalnız sana mana kalkanı toplar; kalabalığın ortasında ne kadar çok düşmana vurursan o kadar sağlam durursun.",
+		"base": {"text": "Her darbe vurduğu düşman başına 1 mana kalkanı doldurur (darbe başına en fazla 3; elitler ve bosslar 2 sayılır). Kalkan yalnız sana gelir, dostlarla paylaşılmaz.",
+			"set": {"siper_per": 1.0, "siper_cap": 3.0, "siper_surplus": 0.0, "siper_heavy": 0.0, "siper_slow": 0.0, "siper_wall": 0}},
+		"upgrades": [
+			{"name": "Kalın Siper", "text": "Düşman başına doldurulan kalkan 1 → 2, darbe başına üst sınır 3 → 5.", "add": {"siper_per": 1.0, "siper_cap": 2.0}},
+			{"name": "Taşan Siper", "text": "Mana kalkanın doluyken darbelerin dolduramadığı kalkan boşa gitmez: en fazla 15 geçici ek kalkan olarak birikir ve sana gelen hasarı önce o karşılar. 4 saniye hiç darbe vurmazsan söner.",
+				"set": {"siper_surplus": 15.0}},
+			{"name": "Ağır Kenar", "text": "Mana kalkanın %50'nin üstündeyken darbe hasarı %30 artar (saldırı gücünün %125'i → %163'ü).", "set": {"siper_heavy": 0.3}},
+			{"name": "Sarsıcı Darbe", "text": "Darbenin vurduğu düşmanlar 1,5 saniye %25 yavaşlar.", "set": {"siper_slow": 0.25}},
+		],
+		"final": {"name": "Yıkılmaz Duvar", "text": "Her 5. darbe çevrendeki 140 birim içindeki herkese vurur: saldırı gücünün %150'si kadar hasar, 1 saniye sersemletme ve iki kat itme (90 birim; bosslar itilmez). Bu darbenin doldurduğu kalkan ve üst sınırı iki katıdır.",
+			"set": {"siper_wall": 5}},
+	},
+	## Yin Yang Kitabı (madde 334): kitabın kendi kuralı (isabet başına %10 SG kalkan, MENZİLSİZ en boş oyuncuya - kullanıcı: "kalkan menzili olmasın,
+	## tek kişilikte de uyumlu olmalı") scripts/yinyang_book.gd; Denge = kalkan boşa gitmez (Yin) / zor durumdakine fazla gider (Yang).
+	## Davranış scripts/weapon_traits/denge.gd (Kara Mühür, Tai Chi Mührü). Kalkan sayıları SG'ye bağlı (azami kalkan yüzdesi değil).
+	"denge": {
+		"weapons": ["yinyang"], "name": "Denge", "element": "kutsal",
+		"desc": "Kitap her vuruşta ihtiyaca göre bir yana eğilir: korunacak kimse yoksa kalkan hasara döner, zor durumdakine daha çok kalkan gider.",
+		"base": {"text": "Yin: kalkan alabilecek herkesin mana kalkanı doluysa vuruşun kalkanı boşa gitmez, hasara döner - hedef ayrıca saldırı gücünün %20'si kadar hasar alır. Yang: mana kalkanı %30'un altındaki birine giden kalkan 1,5 katına çıkar (saldırı gücünün %15'i).",
+			"set": {"ys_shield": 0.1, "yin_ap": 0.2, "yang_th": 0.3, "yang_mult": 1.5, "km_pct": 0.0, "km_dur": 2.0,
+				"tc_every": 0, "tc_r": 90.0, "tc_dur": 3.0, "tc_ap": 0.35, "tc_shield": 0.05, "tc_yin": 0.1}},
+		"upgrades": [
+			{"name": "Kalın Sayfa", "text": "Vuruş başına kalkan: saldırı gücünün %10'u → %13'ü.", "add": {"ys_shield": 0.03}},
+			{"name": "Ağır Yin", "text": "Hasara dönen kalkan: saldırı gücünün %20'si → %35'i.", "add": {"yin_ap": 0.15}},
+			{"name": "Sıcak Yang", "text": "Yang eşiği %30 → %40, kalkan 1,5 kat → 2 kat.", "set": {"yang_th": 0.4, "yang_mult": 2.0}},
+			{"name": "Kara Mühür", "text": "Kitabın vurduğu düşman 2 saniye boyunca %10 az hasar verir (bosslar dahil).", "set": {"km_pct": 0.1}},
+		],
+		"final": {"name": "Tai Chi Mührü", "text": "Her 6. vuruşta hedefin altında 90 birimlik dönen bir mühür açılır ve 3 saniye kalır: içindeki düşmanlar saniyede saldırı gücünün %35'i kadar hasar alır, mühür her saniye kalkanı en boş oyuncuya saldırı gücünün %5'i kadar mana kalkanı gönderir (kimse alamıyorsa mühürdeki düşmanlara saldırı gücünün %10'u kadar ek hasar olur).",
+			"set": {"tc_every": 6}},
 	},
 }

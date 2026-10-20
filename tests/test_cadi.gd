@@ -98,7 +98,9 @@ func test_definitions_and_evolution_cards() -> void:
 		assert(ResourceLoader.exists(str(def[key])), "kaynak var: %s" % str(def[key]))
 	for path: String in CM.R_ICONS:
 		assert(ResourceLoader.exists(path), "sıradaki iksir ikonu var: %s" % path)
-	assert(CM.R_ICONS.size() == CM.POTION_COUNT and CM.POTION_NAMES.size() == CM.POTION_COUNT and CM.POTION_DESCS.size() == CM.POTION_COUNT, "5 iksir: ikon + ad + açıklama")
+	assert(CM.R_ICONS.size() == CM.POTION_COUNT and CM.POTION_NAMES.size() == CM.POTION_COUNT and CM.POTION_DESCS.size() == CM.POTION_COUNT, "6 iksir: ikon + ad + açıklama")
+	assert(CM.POTION_COUNT == 6 and str(CM.POTION_NAMES[CM.POTION_SHIELD]) == "Kalkan İksiri" and CM.POTION_SHIELD == 5, "Kalkan İksiri 6. iksir (indeks 5)")
+	assert(is_equal_approx(CM.SHIELD_RATIO, 0.25) and is_equal_approx(CM.HEAL_TICK, 1.0), "kalkan %25 AP, saniyede bir")
 	## Evrim kartları: Q 5, E 5, R 3 - final her zaman sonda; her kartın etkisi player.gd'de okunuyor.
 	var want: Dictionary = {"skill": 5, "skill2": 5, "skill3": 3}
 	var src: String = FileAccess.get_file_as_string("res://scripts/player.gd")
@@ -115,6 +117,7 @@ func test_sheets_match_the_contract() -> void:
 		"potion": ["loop", "down"], "stream": ["loop", "down"], "smoke": ["intro", "loop", "outro", "intro_v", "loop_v", "outro_v"], "poof": ["default"], "spark": ["gold", "lilac"],
 		"broom_vert": ["down", "up"], "boom": ["default"], "mad_status": ["loop"],
 		"zone_mad": ["intro", "loop", "outro"], "zone_ice": ["intro", "loop", "outro"], "zone_heal": ["intro", "loop", "outro"], "zone_fear": ["intro", "loop", "outro"],
+		"zone_shield": ["intro", "loop", "outro"],
 	}
 	for sheet: String in table:
 		var fr: SpriteFrames = CM.frames(sheet)
@@ -157,8 +160,11 @@ func test_shared_formulas() -> void:
 	assert(CM.potion_body_art("right", 2).x < CM.potion_body_art("right", 0).x and CM.potion_body_art("left", 2).x > CM.potion_body_art("left", 0).x, "yolcu arttıkça şişe arkaya kayar")
 	for f: String in ["left", "right", "up"]:
 		assert(is_equal_approx(CM.potion_drop_art(f).y, 26.0), "şişe inişin 26 px üstünde süzülür: %s" % f)
-	assert(CM.smoke_is_vertical("up") and CM.smoke_is_vertical("down") and not CM.smoke_is_vertical("left") and not CM.smoke_is_vertical("right"), "yukarı/aşağı yürürken dikey bulut")
-	assert(CM.SMOKE_V_RX < CM.SMOKE_RX and CM.SMOKE_V_RY > CM.SMOKE_RY and CM.SMOKE_V_RY * 2.0 > 82.0 * CM.SMOKE_DROP_INTERVAL, "dikey bulut dar + derin: izler yürüme yönünde üst üste biner")
+	for f: String in ["up", "down", "left", "right"]:
+		assert(CM.smoke_is_vertical(f), "her yöne yürürken dikey bulut: %s" % f)
+	assert(CM.SMOKE_V_RX < CM.SMOKE_RX and CM.SMOKE_V_RY > CM.SMOKE_RY and CM.SMOKE_V_RY * 2.0 > 82.0 * CM.SMOKE_V_DROP_INTERVAL, "dikey bulut dar + derin: izler yürüme yönünde üst üste biner")
+	assert(CM.SMOKE_MAX_GAP < CM.SMOKE_V_RX * 2.0 and CM.SMOKE_MAX_GAP < CM.SMOKE_V_RY * 2.0, "iki bulut arası en çok SMOKE_MAX_GAP: bulut genişliğinden/derinliğinden az, boşluk kalmaz")
+	assert(82.0 * CM.SMOKE_V_DROP_INTERVAL <= CM.SMOKE_MAX_GAP, "normal hızda boşluk kuralı devreye girmez (görünüş aynı)")
 	assert(absf(CM.SMOKE_V_RX * CM.SMOKE_V_RY - CM.SMOKE_RX * CM.SMOKE_RY) < 0.05 * CM.SMOKE_RX * CM.SMOKE_RY, "dikey bulutun alanı yatayla aynı (%5 içinde)")
 	assert(CM.seat_offset(0, "left") == Vector2.ZERO, "cadı koltuk 0")
 	assert(CM.seat_offset(2, "left").x > 0.0 and CM.seat_offset(2, "right").x < 0.0, "yan görünümde yolcular cadının ARKASINDA")
@@ -219,28 +225,34 @@ func test_q_toggles_drops_smoke_and_pays_per_second() -> void:
 	assert(smoke.z_index == CM.SMOKE_Z and CM.SMOKE_Z == 1, "bulut z 1: yaratıkların üstünde (main.tscn'de Player da z 1)")
 	assert(smoke.get_parent() != player.get_parent() or smoke.get_index() < player.get_index(), "bulut ağaçta oyuncudan önce: oyuncu dumanın üstünde çizilir")
 	## Yerinde dururken bulut yığılmaz: bir sonraki SMOKE_IDLE_INTERVAL sonra...
-	player._process_cadi_q(CM.SMOKE_DROP_INTERVAL + 0.05)
+	player._process_cadi_q(CM.SMOKE_V_DROP_INTERVAL + 0.05)
 	assert(_group_count("cadi_smokes") == 1, "dururken sık bulut yok")
 	## ...ve o zaman da yeni bulut açılmaz, aynı bulutun ömrü baştan başlar (%50 saydam bulutlar üst üste yığılmasın).
 	smoke._t = 3.0
 	player._process_cadi_q(CM.SMOKE_IDLE_INTERVAL)
 	assert(_group_count("cadi_smokes") == 1 and smoke._t < 0.5, "dururken aynı bulut yenilenir: %d bulut, t=%s" % [_group_count("cadi_smokes"), smoke._t])
-	## Yürürken SMOKE_DROP_INTERVAL'de bir.
+	## Yürürken SMOKE_V_DROP_INTERVAL'de bir; yan yürüyüşte de DİKEY bulut (dar + derin iz, kendi klipleri).
 	player.global_position.x += 60.0
-	player._process_cadi_q(CM.SMOKE_DROP_INTERVAL + 0.05)
+	player._process_cadi_q(CM.SMOKE_V_DROP_INTERVAL + 0.05)
 	assert(_group_count("cadi_smokes") == 2, "yürürken yeni bulut: %d" % _group_count("cadi_smokes"))
-	assert(not smoke.vert and smoke.contains(smoke.global_position + Vector2(CM.SMOKE_RX - 1.0, 0)), "yatay yürürken geniş bulut")
-	## Yukarı/aşağı yürürken DİKEY bulut: dar + derin iz, kendi klipleri.
-	player.facing = "up"
-	player.global_position.y -= 60.0
-	player._process_cadi_q(CM.SMOKE_DROP_INTERVAL + 0.05)
-	assert(_group_count("cadi_smokes") == 3, "yukarı yürürken yeni bulut: %d" % _group_count("cadi_smokes"))
 	var vsmoke: Node2D = null
 	for n: Node in get_tree().get_nodes_in_group("cadi_smokes"):
-		if n.vert:
+		if n != smoke:
 			vsmoke = n
-	assert(vsmoke != null and vsmoke._sprite.animation == &"intro_v", "dikey bulut kendi klibiyle açılır")
+	assert(vsmoke != null and vsmoke.vert and vsmoke._sprite.animation == &"intro_v", "yan yürürken de dikey bulut kendi klibiyle açılır")
 	assert(vsmoke.contains(vsmoke.global_position + Vector2(0, CM.SMOKE_V_RY - 1.0)) and not vsmoke.contains(vsmoke.global_position + Vector2(CM.SMOKE_V_RX + 1.0, 0)), "dikey iz dar + derin")
+	## Hızlanınca süre beklenmez: son buluttan SMOKE_MAX_GAP uzaklaşıldı + SMOKE_MIN_DROP_TIME geçti -> yeni bulut (boşluk kalmaz).
+	player.global_position.x += CM.SMOKE_MAX_GAP + 2.0
+	player._process_cadi_q(CM.SMOKE_MIN_DROP_TIME + 0.01)
+	assert(_group_count("cadi_smokes") == 3, "hızlı koşuda süre dolmadan yeni bulut: %d" % _group_count("cadi_smokes"))
+	## ...ama çok kısa sürede (SMOKE_MIN_DROP_TIME'dan az) ışınlansa bile bulut yağmuru olmaz.
+	player.global_position.x += CM.SMOKE_MAX_GAP * 3.0
+	player._process_cadi_q(CM.SMOKE_MIN_DROP_TIME * 0.5)
+	assert(_group_count("cadi_smokes") == 3, "bulut sıklığı SMOKE_MIN_DROP_TIME ile sınırlı: %d" % _group_count("cadi_smokes"))
+	player.facing = "up"
+	player.global_position.y -= 60.0
+	player._process_cadi_q(CM.SMOKE_V_DROP_INTERVAL + 0.05)
+	assert(_group_count("cadi_smokes") == 4, "yukarı yürürken yeni bulut: %d" % _group_count("cadi_smokes"))
 	player.facing = "down"
 	## Saniyelik bedel.
 	var before: float = player.item_shield_hp
@@ -504,6 +516,13 @@ func test_r_targets_the_densest_cluster_and_the_weakest_ally() -> void:
 	assert(player._cadi_pick_throw_target(CM.POTION_HEAL, 1.0).distance_to(player._cadi_feet()) < 0.5, "herkes tamken kendine")
 	ally.health = 50.0
 	assert(player._cadi_pick_throw_target(CM.POTION_HEAL, 1.0).distance_to(ally.global_position) < 20.0, "canı az müttefike")
+	## Kalkan: mana kalkanı oranı en az müttefike; kalkanı olmayan aday değil, herkes tamsa cadının kendisine.
+	assert(player._cadi_pick_throw_target(CM.POTION_SHIELD, 1.0).distance_to(player._cadi_feet()) < 0.5, "kalkanı olmayan müttefik aday değil -> kendine")
+	ally.item_shield_max = 200.0
+	ally.item_shield_hp = 200.0
+	assert(player._cadi_pick_throw_target(CM.POTION_SHIELD, 1.0).distance_to(player._cadi_feet()) < 0.5, "herkesin kalkanı tamken kendine")
+	ally.item_shield_hp = 40.0
+	assert(player._cadi_pick_throw_target(CM.POTION_SHIELD, 1.0).distance_to(ally.global_position) < 20.0, "kalkanı en az müttefike")
 	_cleanup()
 
 
@@ -563,6 +582,36 @@ func test_potions_apply_their_effects() -> void:
 	zone.heal_timer = 0.0
 	player._on_cadi_zone_scan(zone, CM.ZONE_SCAN_INTERVAL)
 	assert(is_equal_approx(player.health, 100.0 + 20.0 * mult), "alanın dışındayken şifa yok")
+	zone.free()
+	## 6 Kalkan: şifa ile aynı mantık - üstündeki cadı + müttefik saniyede saldırı gücünün %25'i kadar mana kalkanı (can DEĞİL).
+	player.global_position = Vector2(3000.0, 3000.0)
+	player.health = 500.0
+	player.max_health = 1000.0
+	player.item_shield_max = 1000.0
+	player.item_shield_hp = 100.0
+	var ally_s: Node = _remote(91, 14, player.global_position + Vector2(20, -10))
+	ally_s.item_shield_max = 400.0
+	ally_s.item_shield_hp = 0.0
+	var ally_none: Node = _remote(92, 14, player.global_position + Vector2(-20, -10)) ## kalkanı yok: dokunulmaz
+	var none_hp: float = float(ally_none.health)
+	player._on_cadi_bottle_land(CM.POTION_SHIELD, player._cadi_feet(), opts)
+	zone = get_tree().get_nodes_in_group("cadi_zones")[0]
+	assert(int(zone.potion) == CM.POTION_SHIELD and bool(zone.authoritative), "kalkan alanı açıldı")
+	var mult_s: float = player.heal_power_mult()
+	player._on_cadi_zone_scan(zone, CM.ZONE_SCAN_INTERVAL)
+	assert(is_equal_approx(player.item_shield_hp, 100.0 + 25.0 * mult_s), "kalkan iksiri cadıya %%25 AP kalkan: %s" % player.item_shield_hp)
+	assert(is_equal_approx(player.health, 500.0), "kalkan iksiri can basmaz")
+	assert(is_equal_approx(float(ally_s.item_shield_hp), 25.0 * mult_s), "müttefike %%25 AP kalkan: %s" % ally_s.item_shield_hp)
+	assert(is_zero_approx(float(ally_none.item_shield_hp)) and is_equal_approx(float(ally_none.health), none_hp), "kalkanı olmayan müttefik etkilenmez")
+	player._on_cadi_zone_scan(zone, CM.ZONE_SCAN_INTERVAL)
+	assert(is_equal_approx(player.item_shield_hp, 100.0 + 25.0 * mult_s), "saniyede bir (0,2 sn sonra tekrar yok)")
+	zone.heal_timer = 0.0
+	player._on_cadi_zone_scan(zone, CM.ZONE_SCAN_INTERVAL)
+	assert(is_equal_approx(player.item_shield_hp, 100.0 + 50.0 * mult_s), "ikinci saniye ikinci tik")
+	player.global_position += Vector2(300, 0)
+	zone.heal_timer = 0.0
+	player._on_cadi_zone_scan(zone, CM.ZONE_SCAN_INTERVAL)
+	assert(is_equal_approx(player.item_shield_hp, 100.0 + 50.0 * mult_s), "alanın dışındayken kalkan yok")
 	_cleanup()
 
 

@@ -135,7 +135,7 @@ const DEFS := {
 	"canavarlastirma_ozutu": {"name": "Canavarlaştırma Özütü", "kademe": 3, "cost": 1970,
 		"recipe": ["ruzgar_eldiveni", "savascinin_kilici", "ceviklik_yuzugu", "tornavida"],
 		"stats": {"damage_bonus": 10.0, "item_fire_rate_percent": 0.15},
-		"passive": "Saldırıların hedefin mevcut canının %2'si kadar fazladan hasar verir (bosslara en fazla 40)."},
+		"passive": "Saldırıların hedefin mevcut canının %2'si kadar fazladan hasar verir (elitlere ve bosslara en fazla 40)."},
 	"son_felaket_pencesi": {"name": "Son Felaket Pençesi", "kademe": 3, "cost": 2000,
 		"recipe": ["keskin_goz_hanceri", "keskin_goz_hanceri", "savascinin_kilici"],
 		"stats": {"damage_bonus": 35.0, "crit_chance_bonus": 0.20, "item_crit_damage_bonus": 0.5},
@@ -155,7 +155,7 @@ const DEFS := {
 	"zamanbukenin_eldiveni": {"name": "Zamanbükenin Eldiveni", "kademe": 3, "cost": 2060,
 		"recipe": ["ruzgar_eldiveni", "suikastci_kamasi", "lutuf_madalyonu"],
 		"stats": {"damage_bonus": 10.0, "item_fire_rate_percent": 0.15, "cooldown_reduction_percent": 0.10},
-		"passive": "Her saldırı temel yeteneklerinin (Q, E) kalan bekleme süresini %3 azaltır."},
+		"passive": "Saldırıların temel yeteneklerinin (Q, E) kalan bekleme süresini %3 azaltır (saniyede en çok 4 kez)."},
 	"isigin_muhafizi": {"name": "Işığın Muhafızı Parşomeni", "kademe": 3, "cost": 2060,
 		"recipe": ["lutuf_madalyonu", "savascinin_kilici", "kutsal_tilsim", "kanli_yakut"],
 		"stats": {"damage_bonus": 15.0, "heal_shield_power": 0.10},
@@ -218,7 +218,7 @@ const DEFS := {
 	"aegisin_muhafizi": {"name": "Aegis'in Sonsuz Muhafızı", "kademe": 3, "cost": 2360,
 		"recipe": ["sarsilmaz_kabuk", "olum_esigi", "aura_kristali"],
 		"stats": {"item_shield_power_flat": 250.0, "item_shield_regen_flat": 1.5},
-		"passive": "Mana kalkanın %40'ın altına düştüğünde (savaştayken de) her saniye maksimum mana kalkanının %0.5'ini kazanırsın."},
+		"passive": "Mana kalkanın %40'ın altına düştüğünde (savaştayken de) her saniye maksimum mana kalkanının %1'ini kazanırsın."},
 }
 
 ## Dükkanda/envanterde sabit sıra: kademe, sonra fiyat.
@@ -260,6 +260,37 @@ static func kademe(key: String) -> int:
 
 static func cost(key: String) -> int:
 	return int(get_def(key).get("cost", 0))
+
+
+## Aynı 1. kademe PARÇANIN sahip olunan her kopyası bir sonrakinin fiyatını +%10 artırır, en çok x2 (2026-10-19 maç analizi: tek oyuncu
+## altını toplayıp 14 Tornavida + 9 Bile Taşı gibi aynı ucuz parçayı sabit fiyattan sınırsız yığıp doğrusal güce çeviriyordu).
+## Epik/efsanevi eşyalar zaten tekil, tarifli alımlarda sahip olunan parça tüketildiği için bu çarpan yalnızca doğrudan parça alımında geçerli.
+const PART_REPEAT_STEP := 0.10
+const PART_REPEAT_MAX := 1.0
+## 2026-10-20 denge turu (BALANCE_REV 95): aynı parçadan en fazla bu kadar kopya (fiyat tavanı x2 tek başına yetmedi: 49 dk'lık koşuda tek oyuncu 44 bin altın toplayıp
+## 12 Tornavida + 8 Çeviklik + 8 Bile Taşı + 8 Çizme yığdı; slot sayısı = seviye, yani 64 parça). Sandık ödülü de bu kapıdan geçer (chest_menu has_slots).
+const PART_MAX_COPIES := 6
+
+
+## Bu parçadan `owned` içinde kaç kopya var (1. kademe, tarifsiz değilse 0).
+static func part_copies(key: String, owned: Array) -> int:
+	if kademe(key) != 1 or not recipe(key).is_empty():
+		return 0
+	var n: int = 0
+	for e in owned:
+		if str((e as Dictionary).get("key", "")) == key:
+			n += 1
+	return n
+
+
+## Fiyat çarpanı (1.0 = artış yok).
+static func repeat_mult(key: String, owned: Array) -> float:
+	return 1.0 + minf(PART_REPEAT_MAX, PART_REPEAT_STEP * float(part_copies(key, owned)))
+
+
+## Parçanın şu anki (artışlı) fiyatı; indirim (apply_shop_discount) bunun ÜSTÜNE uygulanır.
+static func part_cost(key: String, owned: Array) -> int:
+	return int(round(float(cost(key)) * repeat_mult(key, owned)))
 
 
 static func recipe(key: String) -> Array:
@@ -331,7 +362,7 @@ static func plan_purchase(key: String, owned: Array) -> Dictionary:
 	var paid: int = 0
 	var rec: Array = recipe(key)
 	if rec.is_empty():
-		paid = cost(key)
+		paid = part_cost(key, owned)
 	else:
 		for comp in rec:
 			paid += _obtain(str(comp), owned, avail, consume)
@@ -389,6 +420,8 @@ static func purchase_block_reason(key: String, owned: Array, part_slots: int, pl
 	var k: int = kademe(key)
 	if (k == KADEME_EFSANEVI or k == KADEME_EPIK) and owns(owned, key):
 		return "Zaten sende var"
+	if k == KADEME_PARCA and part_copies(key, owned) >= PART_MAX_COPIES:
+		return "Bu parçadan en fazla %d tane" % PART_MAX_COPIES
 	var have: int = count_kademe(owned, k, plan.get("consume", []))
 	if have >= slot_limit(k, part_slots):
 		return "%s slotları dolu" % KADEME_NAMES[k - 1]

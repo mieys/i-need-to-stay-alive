@@ -60,6 +60,23 @@ var _bees: Array = [] ## Dictionary: node, phase, speed, radius, wob
 var _recent: Dictionary = {} ## yaratık instance_id -> kalan bekleme
 var _sfx: AudioStreamPlayer2D = null
 
+## ---- Yetenek evrimleri (madde 348) ----
+## player.gd _skill_oakley_bee_swarm bunları _play_and_broadcast_skill_fx(props) ile add_child'dan ÖNCE atar (uzak kopya da aynı props'u
+## alır: halka/süre görseli tutarlı kalsın). Evrimsiz oyuncuda props boş -> aşağıdaki varsayılanlar = eski sabitler.
+var duration: float = DURATION ## Geniş Halka: +3 sn (SKILL_TIMING[33] ile aynı değer)
+var range_mult: float = 1.0 ## Geniş Halka: etki yarıçapı + arı yörüngesi x1,3
+var sting_interval: float = STING_INTERVAL ## Öfkeli Sürü: 0,7 sn
+var flower_dust: bool = false ## Çiçek Tozu (sadece kasterde işler)
+var plague: bool = false ## Salgın Zehir (sadece kasterde işler; zehir yüküne bayrak ekler)
+## Çiçek Tozu: zehir taşıyan yaratık ölünce %10 çiçek, sürü başına en fazla 3.
+const FLOWER_DUST_CHANCE := 0.10
+const FLOWER_DUST_MAX := 3
+const FLOWER_DUST_POLL := 0.1
+var dust_chance: float = FLOWER_DUST_CHANCE ## (test kancası: 1,0 yapılınca her ölüm çiçek bırakır)
+var _stung: Dictionary = {} ## yaratık instance_id -> {"node", "pos", "until"} (zehri hâlâ taşıyan, ölümü izlenenler)
+var _dust_poll: float = 0.0
+var _flowers_dropped: int = 0
+
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -91,7 +108,7 @@ func _ready() -> void:
 			"node": node,
 			"phase": TAU * float(i) / float(BEE_COUNT),
 			"speed": (0.9 + 0.35 * float((i * 7) % 5) / 4.0) * (1.0 if i % 2 == 0 else -1.0),
-			"radius": lerpf(ORBIT_RX_MIN, ORBIT_RX_MAX, layer),
+			"radius": lerpf(ORBIT_RX_MIN, ORBIT_RX_MAX, layer) * range_mult,
 			"wob": 0.6 + 0.15 * float(i % 4),
 		})
 		node.position = ORBIT_CENTER
@@ -124,7 +141,7 @@ func _orbit_pos(b: Dictionary) -> Vector2:
 func _process(delta: float) -> void:
 	_t += delta
 	var host_down: bool = _host == null or not is_instance_valid(_host) or _host.get("is_dead") == true
-	if _leave_t < 0.0 and (_t >= DURATION or host_down):
+	if _leave_t < 0.0 and (_t >= duration or host_down):
 		_leave_t = 0.0
 		if _sfx != null:
 			_sfx.stop()
@@ -133,6 +150,8 @@ func _process(delta: float) -> void:
 		return
 	if _authority:
 		_authority_area(delta)
+		if flower_dust:
+			_poll_poisoned_deaths(delta)
 	for b in _bees:
 		var node: AnimatedSprite2D = b["node"]
 		var prev: Vector2 = node.position
@@ -149,26 +168,62 @@ func _authority_area(delta: float) -> void:
 		if float(_recent[id]) <= 0.0:
 			_recent.erase(id)
 	var feet: Vector2 = global_position + FEET
-	for e in EnemyQueryScript.candidates(get_tree(), feet, GUARD_RADIUS + 1.0):
+	var radius: float = GUARD_RADIUS * range_mult
+	for e in EnemyQueryScript.candidates(get_tree(), feet, radius + 1.0):
 		if not is_instance_valid(e) or e.get("is_dead") == true or not (e is Node2D):
 			continue
 		var id: int = e.get_instance_id()
 		if _recent.has(id):
 			continue
 		var epos: Vector2 = (e as Node2D).global_position
-		if epos.distance_to(feet) > GUARD_RADIUS:
+		if epos.distance_to(feet) > radius:
 			continue
 		if not VisionFogScript.can_target(e):
 			continue
-		_recent[id] = STING_INTERVAL
+		_recent[id] = sting_interval
 		if e.has_method("apply_bee_poison"):
-			e.call("apply_bee_poison", (_damage_bonus * DAMAGE_RATIO_PER_STACK) / 4.0)
-		if e.has_method("apply_knockback_distance"):
+			e.call("apply_bee_poison", (_damage_bonus * DAMAGE_RATIO_PER_STACK) / 4.0, plague)
+			if flower_dust:
+				## Zehir yükü 4 sn yaşar (enemy.gd BEE_POISON_STACK_DURATION): bu süre içinde ölürse Çiçek Tozu şansı.
+				_stung[id] = {"node": e, "pos": epos, "until": _t + 4.0}
+		if e.has_method("apply_knockback_distance") and e.get("is_boss") != true: ## ulti dışı yetenek bossu itmez (2026-10-19, enemy.gd apply_skill_push)
 			var away: Vector2 = epos - feet
 			e.call("apply_knockback_distance", away if away.length() > 0.01 else Vector2.RIGHT, KNOCKBACK_DISTANCE)
 		_spawn_sting_fx(epos)
 		if NetworkManager.is_multiplayer_active:
 			NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "oakley_bee_sting", epos, {})
+
+
+## Çiçek Tozu (Oakley evrimi, madde 348): sokulan yaratıkların ölümünü izler. Zehir ve ölüm host'ta yaşar ama kasterin kopyasında da
+## yaratık düğümü ölür/silinir (is_dead ya da freed) - ölüm kancası enemy.gd'ye yazılmadı, çiçek zaten kasterin istemcisinde doğar
+## (player.gd _spawn_oakley_flower_at ağ yayınıyla). 0,1 sn aralıkla yoklanır; son görülen konum çiçeğin düştüğü yerdir.
+func _poll_poisoned_deaths(delta: float) -> void:
+	_dust_poll -= delta
+	if _dust_poll > 0.0 or _stung.is_empty():
+		return
+	_dust_poll = FLOWER_DUST_POLL
+	for id in _stung.keys():
+		var rec: Dictionary = _stung[id]
+		var n: Variant = rec["node"]
+		if is_instance_valid(n) and (n as Node).get("is_dead") != true:
+			rec["pos"] = (n as Node2D).global_position
+			if _t >= float(rec["until"]):
+				_stung.erase(id) ## zehir bitti, ölürse artık zehirli sayılmaz
+			continue
+		_stung.erase(id)
+		if _t <= float(rec["until"]) + FLOWER_DUST_POLL:
+			_on_poisoned_death(Vector2(rec["pos"]))
+
+
+func _on_poisoned_death(at: Vector2) -> void:
+	if _flowers_dropped >= FLOWER_DUST_MAX or randf() > dust_chance:
+		return
+	if not is_instance_valid(_host) or _host.get("is_dead") == true or not _host.has_method("_spawn_oakley_flower_at"):
+		return
+	if GameManager.is_position_blocked_by_walls(at):
+		return
+	_flowers_dropped += 1
+	_host.call("_spawn_oakley_flower_at", at, _host.global_position)
 
 
 ## Uzak kopya: kasterin sürüsü bu noktadaki yaratığı etkiledi - aynı noktada sokma efekti (sadece görsel).
@@ -197,11 +252,16 @@ func _spawn_sting_fx(world_pos: Vector2) -> void:
 func _process_leave(delta: float) -> void:
 	_leave_t += delta
 	var k: float = clampf(_leave_t / LEAVE_TIME, 0.0, 1.0)
-	for b in _bees:
-		var node: Node2D = b["node"]
-		var dir: Vector2 = (node.position - ORBIT_CENTER)
-		dir = dir.normalized() if dir.length() > 0.5 else Vector2.RIGHT.rotated(float(b["phase"]))
-		node.position += (dir * 90.0 + Vector2(0.0, -40.0)) * delta
+	if _authority and flower_dust:
+		_poll_poisoned_deaths(delta) ## sürü çekildikten sonra da son sokulanların (4 sn zehir) ölümü izlenir
+	if k < 1.0:
+		for b in _bees:
+			var node: Node2D = b["node"]
+			var dir: Vector2 = (node.position - ORBIT_CENTER)
+			dir = dir.normalized() if dir.length() > 0.5 else Vector2.RIGHT.rotated(float(b["phase"]))
+			node.position += (dir * 90.0 + Vector2(0.0, -40.0)) * delta
 	modulate.a = 1.0 - k
 	if k >= 1.0:
+		if _authority and flower_dust and not _stung.is_empty() and _leave_t < LEAVE_TIME + 4.5:
+			return ## görünmez bekle: izlenen zehirli yaratık kalmayınca (en geç ~4,5 sn) silinir
 		queue_free()
