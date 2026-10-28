@@ -56,7 +56,7 @@ WARNING: res://scenes/fx_matthew_explosion.tscn:3 - ext_resource, invalid UID: u
 WARNING: Camera2D overridden to physics process mode due to use of physics interpolation.
    at: _update_process_callback (scene/2d/camera_2d.cpp:88)
    GDScript backtrace (most recent call first):
-       [0] _run (res://tools/bake_minimap.gd:49)
+       [0] _run (res://tools/bake_minimap.gd:51)
 MAP_RECT [P: (-2.0, 21.0), S: (4096.0, 4096.0)]
 RENDERED (1024, 1024) chunk_world=4096.0
 SAVED res://assets/ui/minimap_map.png size=(192, 192) err=0

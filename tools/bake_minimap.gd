@@ -43,6 +43,8 @@ func _run() -> void:
 		n.owner = null
 		vp.add_child(n)
 	main.free()
+	## Demirci binası geçici kapalıysa (scripts/shops_flag.gd) minimapte de olmasın; bayrağı değiştirince bu aracı yeniden koş.
+	preload("res://scripts/shops_flag.gd").strip_building(vp.get_node_or_null("Harita"))
 	var cam := Camera2D.new()
 	cam.anchor_mode = Camera2D.ANCHOR_MODE_FIXED_TOP_LEFT
 	cam.zoom = Vector2.ONE / RENDER_WORLD_PER_PX

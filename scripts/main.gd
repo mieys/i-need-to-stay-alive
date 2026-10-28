@@ -69,6 +69,7 @@ const HideBrushManagerScript := preload("res://scripts/hide_brush_manager.gd")
 const MineWorldScript := preload("res://scripts/mine_world.gd")
 const GuardCampsScript := preload("res://scripts/guard_camps.gd")
 const MapShadowsScript := preload("res://scripts/map_shadows.gd")
+const ShopsFlag := preload("res://scripts/shops_flag.gd")
 const GroundTexelPassScript := preload("res://scripts/ground_texel_pass.gd")
 const MapColorGradeScript := preload("res://scripts/map_color_grade.gd")
 const WaterFxScript := preload("res://scripts/water_fx.gd")
@@ -187,6 +188,12 @@ var _last_sent_extra_state: Dictionary = {}
 ## bir bağlantı anında kalıcı yanlış görünüme yol açabilirdi).
 var _extra_state_tick: int = 0
 const EXTRA_STATE_HEARTBEAT_TICKS := 40 ## 40 * 0.05sn = ~2 saniyede bir
+
+
+## Seyyar satıcı + demirci (binası dahil) geçici kapalı (bkz. shops_flag.gd): hiçbir çocuğun _ready'si (oyuncu, yaratık, terrain collision
+## aramaları) o düğümleri/katmanları görmeden ÖNCE silinmeli, bu yüzden _ready değil _enter_tree.
+func _enter_tree() -> void:
+	ShopsFlag.strip_shops(self)
 
 
 func _ready() -> void:

@@ -67,6 +67,8 @@ func _run() -> void:
 	vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	root.add_child(vp)
 	var harita: Node2D = (load("res://scenes/harita_baked.tscn") as PackedScene).instantiate()
+	## Demirci binası geçici kapalıysa (scripts/shops_flag.gd) gölge dokusuna da girmesin; bayrağı değiştirince bu aracı yeniden koş.
+	preload("res://scripts/shops_flag.gd").strip_building(harita)
 	vp.add_child(harita)
 	await process_frame
 

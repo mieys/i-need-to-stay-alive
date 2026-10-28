@@ -6,25 +6,37 @@ SAVED tree1.png
 SAVED tree2.png
 SAVED tree3.png
 SAVED bush.png
+WARNING: Katman yok: ev/Blacksmith
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _capture (res://tools/bake_map_shadows.gd:104)
+       [1] _run (res://tools/bake_map_shadows.gd:90)
+       [2] _capture (res://tools/bake_map_shadows.gd:115)
+WARNING: Katman yok: ev/blacksmith kapı
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _capture (res://tools/bake_map_shadows.gd:104)
+       [1] _run (res://tools/bake_map_shadows.gd:90)
+       [2] _capture (res://tools/bake_map_shadows.gd:115)
 SAVED house.png
 WARNING: Katman yok: tarla/tarla 1
    at: push_warning (core/variant/variant_utility.cpp:1033)
    GDScript backtrace (most recent call first):
-       [0] _capture (res://tools/bake_map_shadows.gd:102)
-       [1] _run (res://tools/bake_map_shadows.gd:88)
-       [2] _capture (res://tools/bake_map_shadows.gd:113)
+       [0] _capture (res://tools/bake_map_shadows.gd:104)
+       [1] _run (res://tools/bake_map_shadows.gd:90)
+       [2] _capture (res://tools/bake_map_shadows.gd:115)
 WARNING: Katman yok: tarla/tarla 1_5
    at: push_warning (core/variant/variant_utility.cpp:1033)
    GDScript backtrace (most recent call first):
-       [0] _capture (res://tools/bake_map_shadows.gd:102)
-       [1] _run (res://tools/bake_map_shadows.gd:88)
-       [2] _capture (res://tools/bake_map_shadows.gd:113)
+       [0] _capture (res://tools/bake_map_shadows.gd:104)
+       [1] _run (res://tools/bake_map_shadows.gd:90)
+       [2] _capture (res://tools/bake_map_shadows.gd:115)
 WARNING: Katman yok: tarla/tarla 2
    at: push_warning (core/variant/variant_utility.cpp:1033)
    GDScript backtrace (most recent call first):
-       [0] _capture (res://tools/bake_map_shadows.gd:102)
-       [1] _run (res://tools/bake_map_shadows.gd:88)
-       [2] _capture (res://tools/bake_map_shadows.gd:113)
+       [0] _capture (res://tools/bake_map_shadows.gd:104)
+       [1] _run (res://tools/bake_map_shadows.gd:90)
+       [2] _capture (res://tools/bake_map_shadows.gd:115)
 SAVED farm.png
 SAVED rock.png
 SAVED cliff.png
