@@ -220,7 +220,7 @@ const BY_SCENE := {
 	"res://scenes/fx_matthew_spark_ring.tscn": {"c": Color(1.0, 0.88, 0.35), "r": 50.0, "e": 0.85, "d": 0.3},
 	"res://scenes/fx_matthew_form_burst.tscn": {"c": Color(1.0, 0.9, 0.45), "r": 60.0, "e": 0.85, "d": 0.3},
 	"res://scenes/fx_matthew_shield_cast.tscn": {"c": Color(1.0, 0.9, 0.45), "r": 70.0, "e": 0.9, "d": 0.4},
-	"res://scenes/fx_matthew_nova.tscn": {"c": Color(1.0, 0.86, 0.3), "r": 95.0, "e": 0.95, "d": 0.7},
+	"res://scenes/fx_matthew_nova.tscn": {"c": Color(1.0, 0.86, 0.3), "r": 160.0, "e": 1.1, "d": 0.8}, ## madde 356: 220 birimlik çıldırış patlaması
 	"res://scenes/fx_matthew_ball.tscn": {"c": Color(1.0, 0.88, 0.35), "r": 56.0, "e": 0.7, "f": 0.2},
 	"res://scenes/fx_matthew_lightning_shield.tscn": {"c": Color(1.0, 0.86, 0.3), "r": 52.0, "e": 0.6, "f": 0.15},
 	"res://scenes/fx_wave_beam.tscn": {"c": Color(0.5, 1.0, 0.6), "r": 30.0, "e": 0.7},

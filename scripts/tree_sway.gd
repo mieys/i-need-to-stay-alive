@@ -18,6 +18,9 @@ const MIN_SWAY_ROWS := 2
 const DRY_TREE_GREEN_RATIO := 0.4 ## yeşil piksel oranı bunun altındaysa kuru ağaç
 const DRY_TREE_AMPLITUDE := 0.5
 const WAVE_SCALE := 0.004 ## ortak esinti dalgası: kökün dünya x'i x bu = faz (radyan)
+## Derin orman bölgelerinde yaprak boyası (sallanan ağaç.gdshader bolge_boya, madde 365) KAPALI katmanlar: paketten gelen bölge ağaçları zaten
+## bölgenin kendi sanatı (haritanın yeşil ağaçları Ağaç 0/1/2'de boyanır). Derinlik ön kopyası materyali uniform uniform kopyalar.
+const ZONE_TINT_OFF: Array[String] = ["Ağaç ölü"]
 
 var _materials: Array[ShaderMaterial] = []
 var _base_strength: float = 1.4
@@ -48,6 +51,7 @@ func setup(harita: Node) -> void:
 				var v: Variant = cur.get_shader_parameter(u["name"])
 				if v != null:
 					mat.set_shader_parameter(u["name"], v)
+		mat.set_shader_parameter("bolge_boya", 0.0 if String(layer.name) in ZONE_TINT_OFF else 1.0)
 		layer.material = mat
 		layer.use_parent_material = false
 		if _materials.is_empty():

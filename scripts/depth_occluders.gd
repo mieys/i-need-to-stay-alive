@@ -62,6 +62,7 @@ const BUILDING_GROUPS: Array = [
 ## Tek tek nesne katmanları (atlas komşuluğu = aynı nesne).
 const OBJECT_LAYERS: Array = [
 	"Etkileşimler/Maden", "Etkileşimler/Maden 1", "Shader Eklenecek/Animasyonsuz çalılar", "Düşman Üssü/Düşman üssü", "Düşman Üssü/Özel maden",
+	"Shader Eklenecek/Derin orman nesneleri", ## madde 359: kemik taht, dev iskelet, harabe... (ölü ağaçlar Ağaç önekiyle ağaç kuralında)
 ]
 
 ## KÖPRÜLER (2026-10-09, kullanıcı: "buranın altından geçen insanların üstünde köprü görünmeli"): alt + üst katman TEK yapı (bina gibi tek kök). Fark: kopya
@@ -95,6 +96,11 @@ var _last_bridge_chars: Array[Vector4] = []
 var _tree_pairs: Array = [] ## [asıl materyal, kopya materyal]
 var _image_cache: Dictionary = {}
 var _rows_cache: Dictionary = {}
+## Madde 366 (harita yükleme süresi): collision kurulumu aynı karoyu her katmanda / her hücrede yeniden tarıyordu -> karo başına sonuç önbelleği (sonuçlar AYNI).
+var _opaque_cache: Dictionary = {} ## Vector4i(kaynak, atlas x, atlas y, çevirme + satır aralığı) -> opak piksel listesi (SALT OKUNUR, çağıranlar yalnız gezer)
+var _alpha_bytes: Dictionary = {} ## Image -> RGBA8 ham baytları (RGBA8 değilse boş: eski yavaş yol)
+var _alpha_ok := PackedByteArray() ## alfa baytı -> "a > OPAQUE_ALPHA" (Image.get_pixel(...).a ile birebir aynı eşik, tablo get_pixel'dan kurulur)
+var tile_bounds_cache: Dictionary = {} ## terrain_collision.object_groups: karo -> [sayı, min x, min y, max x, max y]
 var _last_chars: Array[Vector4] = []
 var _last_front: Array[Vector4] = []
 var _last_below := PackedFloat32Array()
@@ -343,11 +349,11 @@ func _setup_object_layer(layer: TileMapLayer) -> void:
 ## en alt opak satırı. Saf hesap (sahneye dokunmaz; collision de kullanır).
 func object_bases(layer: TileMapLayer) -> Dictionary:
 	var cells: Array[Vector2i] = layer.get_used_cells()
-	var info: Dictionary = {} ## hücre -> [kaynak, atlas koordinatı, yatay çevrik mi]
+	var info: Dictionary = {} ## hücre -> [kaynak, atlas koordinatı, yatay çevrik mi, dikey çevrik mi, dönmüş mü]
 	for cell in cells:
 		var sid: int = layer.get_cell_source_id(cell)
 		var td: TileData = layer.get_cell_tile_data(cell)
-		info[cell] = [sid, layer.get_cell_atlas_coords(cell), td != null and td.flip_h]
+		info[cell] = [sid, layer.get_cell_atlas_coords(cell), td != null and td.flip_h, td != null and td.flip_v, td != null and td.transpose]
 	var parent: Dictionary = {}
 	for cell in info:
 		parent[cell] = cell
@@ -366,8 +372,11 @@ func object_bases(layer: TileMapLayer) -> Dictionary:
 				_union(parent, cell, down)
 	var ofset: Vector2 = _cell_origin(layer)
 	var group_base: Dictionary = {}
+	var rows_of: Dictionary = {} ## hücre -> karonun (ilk opak satır, son opak satır); her hücre için TEK kez (eskiden iki kez API'den okunuyordu)
 	for cell: Vector2i in info:
-		var rows: Vector2i = _tile_rows(layer, cell)
+		var inf: Array = info[cell]
+		var rows: Vector2i = _tile_rows_of(layer, inf[0], inf[1], inf[3], inf[4])
+		rows_of[cell] = rows
 		if rows.y < 0:
 			continue
 		var root: Vector2i = _find(parent, cell)
@@ -376,7 +385,7 @@ func object_bases(layer: TileMapLayer) -> Dictionary:
 	var cell_bases: Dictionary = {}
 	for cell: Vector2i in info:
 		var root: Vector2i = _find(parent, cell)
-		if group_base.has(root) and _tile_rows(layer, cell).y >= 0:
+		if group_base.has(root) and (rows_of[cell] as Vector2i).y >= 0:
 			cell_bases[cell] = group_base[root]
 	return cell_bases
 
@@ -504,41 +513,147 @@ func opaque_pixels(layer: TileMapLayer, cell: Vector2i, r0: int, r1: int) -> Arr
 	var coords: Vector2i = layer.get_cell_atlas_coords(cell)
 	if not src.has_tile(coords):
 		return out
-	var img: Image = _image_of(src.texture)
-	if img == null:
-		return out
 	var td: TileData = layer.get_cell_tile_data(cell)
 	var flip_h: bool = td != null and td.flip_h
 	var flip_v: bool = td != null and td.flip_v
 	var transpose: bool = td != null and td.transpose
-	var region: Rect2i = src.get_tile_texture_region(coords)
 	var last: int = int(CELL) - 1
-	for y in range(maxi(r0, 0), mini(r1, last) + 1):
-		for x in range(int(CELL)):
-			if transpose:
-				out.append(Vector2i(x, y))
-				continue
-			var ax: int = last - x if flip_h else x
-			var ay: int = last - y if flip_v else y
-			if ax < region.size.x and ay < region.size.y and img.get_pixel(region.position.x + ax, region.position.y + ay).a > OPAQUE_ALPHA:
-				out.append(Vector2i(x, y))
+	var ya: int = maxi(r0, 0)
+	var yb: int = mini(r1, last)
+	var ckey := Vector4i(sid, coords.x, coords.y, (1 if flip_h else 0) | (2 if flip_v else 0) | (4 if transpose else 0) | (clampi(ya, 0, 16) << 3) | ((clampi(yb, -1, 15) + 1) << 8))
+	if _opaque_cache.has(ckey):
+		return _opaque_cache[ckey]
+	var img: Image = _image_of(src.texture)
+	if img == null:
+		return out
+	var region: Rect2i = src.get_tile_texture_region(coords)
+	var bytes: PackedByteArray = _bytes_of(img)
+	if not bytes.is_empty():
+		var ok: PackedByteArray = _alpha_ok_table()
+		var w: int = img.get_width()
+		for y in range(ya, yb + 1):
+			for x in range(int(CELL)):
+				if transpose:
+					out.append(Vector2i(x, y))
+					continue
+				var ax: int = last - x if flip_h else x
+				var ay: int = last - y if flip_v else y
+				if ax < region.size.x and ay < region.size.y and ok[bytes[((region.position.y + ay) * w + region.position.x + ax) * 4 + 3]] != 0:
+					out.append(Vector2i(x, y))
+	else:
+		for y in range(ya, yb + 1):
+			for x in range(int(CELL)):
+				if transpose:
+					out.append(Vector2i(x, y))
+					continue
+				var ax: int = last - x if flip_h else x
+				var ay: int = last - y if flip_v else y
+				if ax < region.size.x and ay < region.size.y and img.get_pixel(region.position.x + ax, region.position.y + ay).a > OPAQUE_ALPHA:
+					out.append(Vector2i(x, y))
+	_opaque_cache[ckey] = out
 	return out
 
-## (ilk opak satır, son opak satır) karonun kendi içinde (0..15); boşsa (-1, -1). Dikey çevirme dikkate alınır, dönmüş (transpose) karo tam hücre sayılır.
-func _tile_rows(layer: TileMapLayer, cell: Vector2i) -> Vector2i:
+
+## Karonun TÜM opak piksellerinin (sayı, min x, min y, max x, max y) özeti - opaque_pixels(layer, cell, 0, 15) listesini gezip toplamakla AYNI sonuç, liste kurmadan
+## (terrain_collision.object_groups karo başına bunu soruyor, madde 372). Opak yoksa / karo yoksa [0, 99, 99, -1, -1].
+func opaque_bounds(layer: TileMapLayer, cell: Vector2i) -> Array:
+	var none: Array = [0, 99, 99, -1, -1]
 	var sid: int = layer.get_cell_source_id(cell)
 	var src := layer.tile_set.get_source(sid) as TileSetAtlasSource
 	if src == null or src.texture == null:
-		return Vector2i(-1, -1)
+		return none
 	var coords: Vector2i = layer.get_cell_atlas_coords(cell)
 	if not src.has_tile(coords):
-		return Vector2i(-1, -1)
+		return none
 	var td: TileData = layer.get_cell_tile_data(cell)
+	var flip_h: bool = td != null and td.flip_h
 	var flip_v: bool = td != null and td.flip_v
 	var transpose: bool = td != null and td.transpose
+	var key := Vector4i(sid, coords.x, coords.y, (1 if flip_h else 0) | (2 if flip_v else 0) | (4 if transpose else 0))
+	if tile_bounds_cache.has(key):
+		return tile_bounds_cache[key]
+	var img: Image = _image_of(src.texture)
+	var res: Array = none
+	if img != null:
+		var bytes: PackedByteArray = _bytes_of(img)
+		if transpose:
+			res = [256, 0, 0, 15, 15]
+		elif not bytes.is_empty():
+			var ok: PackedByteArray = _alpha_ok_table()
+			var w: int = img.get_width()
+			var region: Rect2i = src.get_tile_texture_region(coords)
+			var last: int = int(CELL) - 1
+			var n: int = 0
+			var x0: int = 99
+			var y0: int = 99
+			var x1: int = -1
+			var y1: int = -1
+			for y in range(int(CELL)):
+				var ay: int = last - y if flip_v else y
+				if ay >= region.size.y:
+					continue
+				var row: int = ((region.position.y + ay) * w + region.position.x) * 4 + 3
+				for x in range(int(CELL)):
+					var ax: int = last - x if flip_h else x
+					if ax < region.size.x and ok[bytes[row + ax * 4]] != 0:
+						n += 1
+						x0 = mini(x0, x)
+						y0 = mini(y0, y)
+						x1 = maxi(x1, x)
+						y1 = maxi(y1, y)
+			res = [n, x0, y0, x1, y1]
+		else:
+			var bn: int = 0
+			var bx0: int = 99
+			var by0: int = 99
+			var bx1: int = -1
+			var by1: int = -1
+			for p: Vector2i in opaque_pixels(layer, cell, 0, 15):
+				bn += 1
+				bx0 = mini(bx0, p.x)
+				by0 = mini(by0, p.y)
+				bx1 = maxi(bx1, p.x)
+				by1 = maxi(by1, p.y)
+			res = [bn, bx0, by0, bx1, by1]
+	tile_bounds_cache[key] = res
+	return res
+
+
+func _bytes_of(img: Image) -> PackedByteArray:
+	if not _alpha_bytes.has(img):
+		_alpha_bytes[img] = img.get_data() if img.get_format() == Image.FORMAT_RGBA8 else PackedByteArray()
+	return _alpha_bytes[img]
+
+
+func _alpha_ok_table() -> PackedByteArray:
+	if _alpha_ok.is_empty():
+		var raw := PackedByteArray()
+		raw.resize(256 * 4)
+		for b in range(256):
+			raw[b * 4 + 3] = b
+		var probe: Image = Image.create_from_data(256, 1, false, Image.FORMAT_RGBA8, raw)
+		_alpha_ok.resize(256)
+		for b in range(256):
+			_alpha_ok[b] = 1 if probe.get_pixel(b, 0).a > OPAQUE_ALPHA else 0
+	return _alpha_ok
+
+## (ilk opak satır, son opak satır) karonun kendi içinde (0..15); boşsa (-1, -1). Dikey çevirme dikkate alınır, dönmüş (transpose) karo tam hücre sayılır.
+func _tile_rows(layer: TileMapLayer, cell: Vector2i) -> Vector2i:
+	var coords: Vector2i = layer.get_cell_atlas_coords(cell)
+	var td: TileData = layer.get_cell_tile_data(cell)
+	return _tile_rows_of(layer, layer.get_cell_source_id(cell), coords, td != null and td.flip_v, td != null and td.transpose)
+
+
+## _tile_rows'un hücre sorgusuz hâli (object_bases hücre bilgisini zaten okudu): önce önbellek, sonra kaynak/karo denetimi - sonuç AYNI.
+func _tile_rows_of(layer: TileMapLayer, sid: int, coords: Vector2i, flip_v: bool, transpose: bool) -> Vector2i:
 	var key := Vector4i(sid, coords.x, coords.y, (1 if flip_v else 0) + (2 if transpose else 0))
 	if _rows_cache.has(key):
 		return _rows_cache[key]
+	var src := layer.tile_set.get_source(sid) as TileSetAtlasSource
+	if src == null or src.texture == null:
+		return Vector2i(-1, -1)
+	if not src.has_tile(coords):
+		return Vector2i(-1, -1)
 	var rows := Vector2i(-1, -1)
 	var img: Image = _image_of(src.texture)
 	if img != null:
@@ -565,6 +680,20 @@ func _image_of(tex: Texture2D) -> Image:
 func _opaque_rows(img: Image, r: Rect2i) -> Vector2i:
 	var first: int = -1
 	var last: int = -1
+	var bytes: PackedByteArray = _bytes_of(img)
+	if not bytes.is_empty():
+		## RGBA8: ham baytlardan (get_pixel'dan çok daha hızlı; eşik tablosu get_pixel'dan kurulu -> sonuç aynı, madde 372)
+		var ok: PackedByteArray = _alpha_ok_table()
+		var w: int = img.get_width()
+		for y in range(r.size.y):
+			var row: int = ((r.position.y + y) * w + r.position.x) * 4 + 3
+			for x in range(r.size.x):
+				if ok[bytes[row + x * 4]] != 0:
+					if first < 0:
+						first = y
+					last = y
+					break
+		return Vector2i(first, last)
 	for y in range(r.size.y):
 		for x in range(r.size.x):
 			if img.get_pixel(r.position.x + x, r.position.y + y).a > OPAQUE_ALPHA:

@@ -23,7 +23,11 @@ const NO_LIMIT := 10000000
 
 var _last_camera_id: int = 0
 var _last_limited: bool = false
+var _last_rect: Rect2 = Rect2()
 var _has_state: bool = false
+
+## ZİNDANLAR (madde 373): kamera bir zindanın dikdörtgenindeyse sınır o zindanın kendisi (zindanlar ana haritanın doğusunda, OUTSIDE_MARGIN içinde).
+const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd")
 
 
 func _process(_delta: float) -> void:
@@ -34,12 +38,17 @@ func _process(_delta: float) -> void:
 	if rect.size == Vector2.ZERO:
 		return
 	var limited: bool = rect.grow(OUTSIDE_MARGIN).has_point(cam.global_position)
+	var did: String = DungeonWorldScript.dungeon_at(cam.global_position)
+	if did != "":
+		rect = DungeonWorldScript.rect_of(did)
+		limited = true
 	var cam_id: int = cam.get_instance_id()
-	if _has_state and cam_id == _last_camera_id and limited == _last_limited:
+	if _has_state and cam_id == _last_camera_id and limited == _last_limited and rect == _last_rect:
 		return
 	_has_state = true
 	_last_camera_id = cam_id
 	_last_limited = limited
+	_last_rect = rect
 	apply_limits(cam, rect if limited else Rect2())
 
 

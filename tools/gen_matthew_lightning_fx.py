@@ -129,7 +129,10 @@ def main():
     g.DOME_R = float(DOME_R)
     save_sheet('shield_loop', [g.shield_loop(i, size=96) for i in range(24)], cols=6)
     save_sheet('shield_pop', [g.shield_pop(f, size=196) for f in range(8)])
-    save_sheet('nova', [g.shield_explosion(f) for f in range(10)])
+    ## Madde 356: kalkan patlaması yeni sayfa (çıldırış: kalın ışınsal şimşekler + dolu şok dalgası) - eski g.shield_explosion yerine.
+    sys.path.insert(0, os.path.join(ROOT, 'tools'))  ## python -I betik klasörünü yola koymaz
+    import gen_matthew_ult_burst as ub
+    save_sheet('nova', ub.frames(), cols=ub.COLS)
     save_sheet('cast', cast_frames())
     print('İkonlar:')
     for name, fn in (('matthew_simsek_hucumu_icon', g.icon_q), ('matthew_elektrik_topu_icon', g.icon_e), ('matthew_yildirim_kalkani_icon', g.icon_r), ('matthew_yildirim_hizi_icon', g.icon_pasif)):

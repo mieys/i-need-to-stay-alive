@@ -93,6 +93,8 @@ void EnemyWorld::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_stealth", "target_ids", "reveals"), &EnemyWorld::set_stealth);
 	ClassDB::bind_method(D_METHOD("set_targets", "pos", "kind", "targetable", "ghost", "body", "zone", "ids"), &EnemyWorld::set_targets);
 	ClassDB::bind_method(D_METHOD("set_merchant_zone", "active", "pos", "radius"), &EnemyWorld::set_merchant_zone);
+	ClassDB::bind_method(D_METHOD("set_region_rects", "rects"), &EnemyWorld::set_region_rects);
+	ClassDB::bind_method(D_METHOD("get_region_of", "pos"), &EnemyWorld::get_region_of);
 	ClassDB::bind_method(D_METHOD("set_body_block_scale", "scale"), &EnemyWorld::set_body_block_scale);
 	ClassDB::bind_method(D_METHOD("set_extra_bodies", "pos", "radius"), &EnemyWorld::set_extra_bodies);
 	ClassDB::bind_method(D_METHOD("set_hit_probe", "center", "radius"), &EnemyWorld::set_hit_probe);
@@ -262,6 +264,10 @@ void EnemyWorld::set_targets(const PackedVector2Array &p_pos, const PackedInt32A
 			tree_index = i;
 		}
 	}
+	t_region.resize(n);
+	for (int i = 0; i < n; i++) {
+		t_region[i] = region_of(tx[i], ty[i]);
+	}
 	if ((int)flows.size() < n) {
 		flows.resize(n);
 	}
@@ -284,6 +290,17 @@ void EnemyWorld::set_merchant_zone(bool p_active, const Vector2 &p_pos, float p_
 	merchant_x = p_pos.x;
 	merchant_y = p_pos.y;
 	merchant_r = p_radius;
+}
+
+void EnemyWorld::set_region_rects(const PackedFloat32Array &p_rects) {
+	region_rects.assign(p_rects.size(), 0.0f);
+	for (int k = 0; k < p_rects.size(); k++) {
+		region_rects[k] = p_rects[k];
+	}
+	t_region.resize(tx.size());
+	for (size_t i = 0; i < tx.size(); i++) {
+		t_region[i] = region_of(tx[i], ty[i]);
+	}
 }
 
 // ===================================================================================================== yaşam döngüsü
@@ -1009,7 +1026,7 @@ int32_t EnemyWorld::find_closest(int32_t i) const {
 // enemy.gd _apply_aggro_overrides: ağaç > tahrik (kışkırtan hedeflenemiyorsa tahrik biter + E_TAUNT_LOST) > Şovalye
 // baloncuğu odağı (hedef bir baloncuğun +ZONE_FOCUS_MARGIN içindeyse sahibi; birden çok baloncukta yaratığa en yakını).
 int32_t EnemyWorld::apply_overrides(int32_t i, int32_t t) {
-	if (tree_index >= 0) {
+	if (tree_index >= 0 && !concealed_from(i, tree_index)) {
 		return tree_index;
 	}
 	if (taunt_t[i] > 0.0f && taunt_id[i] != 0) {
@@ -1033,7 +1050,7 @@ int32_t EnemyWorld::apply_overrides(int32_t i, int32_t t) {
 	int32_t focus = -1;
 	float fd = INFINITY;
 	for (int z = 0; z < (int)tx.size(); z++) {
-		if (t_zone[z] <= 0.0f) {
+		if (t_zone[z] <= 0.0f || concealed_from(i, z)) {
 			continue;
 		}
 		if (z == t) {
@@ -2350,7 +2367,7 @@ void EnemyWorld::step_puppet(int32_t i, float delta) {
 	if (std::sqrt(len2(net_vx[i], net_vy[i])) > 15.0f && to_len > 2.0f) {
 		face(i, tox / to_len, toy / to_len);
 	} else if ((frame % AI_THINK_INTERVAL_FRAMES) == (uint64_t)(i % AI_THINK_INTERVAL_FRAMES)) {
-		const int32_t ft = tree_index >= 0 ? tree_index : find_closest(i);
+		const int32_t ft = (tree_index >= 0 && !concealed_from(i, tree_index)) ? tree_index : find_closest(i);
 		if (ft >= 0) {
 			const float fx = tx[ft] - px[i], fy = ty[ft] - py[i];
 			const float fl = std::sqrt(fx * fx + fy * fy);

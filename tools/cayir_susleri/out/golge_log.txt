@@ -1,0 +1,33 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
+
+SAVED tree0.png
+SAVED tree1.png
+SAVED tree2.png
+SAVED tree3.png
+SAVED bush.png
+SAVED house.png
+WARNING: Katman yok: tarla/tarla 1
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _capture (res://tools/bake_map_shadows.gd:102)
+       [1] _run (res://tools/bake_map_shadows.gd:88)
+       [2] _capture (res://tools/bake_map_shadows.gd:113)
+WARNING: Katman yok: tarla/tarla 1_5
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _capture (res://tools/bake_map_shadows.gd:102)
+       [1] _run (res://tools/bake_map_shadows.gd:88)
+       [2] _capture (res://tools/bake_map_shadows.gd:113)
+WARNING: Katman yok: tarla/tarla 2
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _capture (res://tools/bake_map_shadows.gd:102)
+       [1] _run (res://tools/bake_map_shadows.gd:88)
+       [2] _capture (res://tools/bake_map_shadows.gd:113)
+SAVED farm.png
+SAVED rock.png
+SAVED cliff.png
+SAVED rock_color.png
+SAVED cliff_color.png
+SHADOW_BAKE_DIR=C:/Users/perva/AppData/Roaming/Godot/app_userdata/Temiz Sürüm/shadow_bake

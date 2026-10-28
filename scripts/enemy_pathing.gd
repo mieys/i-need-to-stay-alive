@@ -56,6 +56,7 @@ static var enabled: bool = true
 
 const TerrainCollisionScript := preload("res://scripts/terrain_collision.gd")
 const MapFrameScript := preload("res://scripts/map_frame.gd")
+const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd") ## ZİNDANLAR (madde 373)
 
 
 static func set_enabled(value: bool) -> void:
@@ -186,9 +187,12 @@ static func _build(layer: TileMapLayer) -> void:
 	if forest_cells.is_empty():
 		_size = Vector2i.ONE ## "boş katman" işareti (bkz. _ensure_grid)
 		return
+	## ZİNDAN duvarları (madde 373): orman duvarı gibi hareket + görüş (sis) keser; zindanlar ana haritanın doğusunda aynı ızgarada.
+	forest_cells.append_array(DungeonWorldScript.wall_cells())
 	## Orman duvarı + haritadaki nesnelerin engel hücreleri (su, bina tabanı, ağaç gövdesi, maden...) - bkz. terrain_collision.gd.
 	var used: Array[Vector2i] = forest_cells.duplicate()
 	used.append_array(TerrainCollisionScript.ensure(layer).keys())
+	used.append_array(DungeonWorldScript.solid_cells()) ## zindan nesneleri + kapalı kapılar: yalnız hareket
 	## Ağaç katmanlarının hücreleri SADECE görüşü (sis) keser, hareketi/yol bulmayı etkilemez (gövde çarpışması terrain_collision.gd'den) - vision_occluders.gd AĞAÇLAR notu.
 	var tree_cells: Array[Vector2i] = []
 	for tree_layer: TileMapLayer in GameManager.get_vision_tree_layers():
@@ -249,7 +253,7 @@ static func sync_cells(cells: Array) -> void:
 	for cell: Vector2i in cells:
 		if not _in_bounds(cell):
 			continue
-		var solid: bool = TerrainCollisionScript._cells.has(cell) or _layer.get_cell_source_id(cell) != -1
+		var solid: bool = TerrainCollisionScript._cells.has(cell) or _layer.get_cell_source_id(cell) != -1 				or DungeonWorldScript.is_move_blocked_cell(cell)
 		_astar.set_point_solid(cell, solid)
 		_blocked[(cell.y - _origin.y) * _size.x + (cell.x - _origin.x)] = 1 if solid else 0
 

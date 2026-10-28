@@ -93,6 +93,13 @@ float fbm(vec2 p) {
 void fragment() {
     vec4 texture_color = texture(TEXTURE, UV);
     vec3 current_rgb = texture_color.rgb;
+    // Derin orman bölge zemini pişmiş plato pikseli (madde 363, tools/derin_orman/zemin_karolari.py PISMIS_ALFA = 254): öbek/çizgi/nokta/gürültü
+    // aşamaları uygulanmaz (eskiden bölge zemini bunların üstüne yazılıyordu), alfa tam opak.
+    bool do_pismis = texture_color.a > 0.993 && texture_color.a < 0.998;
+    if (do_pismis) {
+        COLOR = vec4(current_rgb, 1.0);
+        COLOR.rgb = harita_renk_d(COLOR.rgb, world_pos);
+    } else {
 
     vec2 crisp_world_pos = floor(world_pos) + 0.5;
     float g_size = max(1.0, floor(grass_pixel_size));
@@ -169,5 +176,6 @@ void fragment() {
         current_rgb = mix(current_rgb, cimen_desen(texture_color.rgb, floor(world_pos)), plato_maske);
     }
     COLOR = vec4(current_rgb, texture_color.a);
-    COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
+    if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_d(COLOR.rgb, world_pos); } // harita + derin orman bölge renk ayarı (madde 181/359) - fragment()'in EN SONUNDA kalmalı
+    }
 }

@@ -363,7 +363,7 @@ func _init_abilities() -> void:
 		_abilities_checked = false ## meta henüz atanmadı (spawn'ın ilk karesi) - bir sonraki karede tekrar dene
 		return
 	var fam: String = creature_family()
-	if EnemyAbilitiesScript.family_has_ability(fam):
+	if EnemyAbilitiesScript.family_has_ability(fam) and not EnemyAbilitiesScript.id_is_without_ability(str(get_meta("creature_id"))):
 		_abilities = EnemyAbilitiesScript.new()
 		_abilities.setup(self, fam)
 
@@ -643,6 +643,7 @@ const KillGold := preload("res://scripts/kill_gold.gd")
 const AssistScript := preload("res://scripts/assist.gd")
 const DropMerge := preload("res://scripts/drop_merge.gd") ## yerdeki XP/altın birleştirme + üst sınır (kullanıcı isteği 2026-10-12)
 const FoodDrop := preload("res://scenes/food_drop.tscn")
+const GoldDrop := preload("res://scenes/gold_drop.tscn") ## yaratık altını yine yere düşer (2026-10-24, kill_gold.gd GROUND_DROPS)
 const ShieldOrbDrop := preload("res://scenes/shield_orb_drop.tscn")
 const ShieldOrbDropScript := preload("res://scripts/shield_orb_drop.gd")
 const ChestDropScene := preload("res://scenes/chest_drop.tscn")
@@ -5574,35 +5575,66 @@ func _luck_mult(per_point: float) -> float:
 func _drop_gold() -> void:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		return
-	## 2026-10-15 (kullanıcı: "yaratıklar ölünce yere altın düşürmeyecek... üstünde +altın miktarı yazacak ve altın sesi
-	## çıkacak. yaratıklar kademelerine göre altın verecek"): altın artık yere düşmez, öldürene HEMEN verilir (bkz. kill_gold.gd).
-	## Minyonlar (boss çağrıları) garanti vermez - eskisi gibi şansa bağlı (yoksa boss başında sınırsız altın kasılırdı).
+	## Miktar (kademeye göre garanti, 2026-10-15): gelir bu hesaptan, düşme biçiminden bağımsız. Minyonlar (boss çağrıları) garanti vermez -
+	## eskisi gibi şansa bağlı (yoksa boss başında sınırsız altın kasılırdı).
 	var chance: float = minf(gold_chance * _luck_mult(LUCK_GOLD_MULT_PER_POINT), 1.0)
 	var amount: int = KillGold.amount_for(gold_min, gold_max, chance, is_in_group("summons"))
 	if amount > 0:
-		var pos: Vector2 = global_position
-		if is_boss and NetworkManager.is_multiplayer_active:
-			## Boss altını tüm canlı katılımcılar arasında eşit bölünür (eski yerden toplama paylaşımıyla aynı kural).
-			var peers: Array = []
-			for part: Dictionary in NetworkManager.get_reward_participants():
-				peers.append(int(part["peer_id"]))
-			var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
-			var killer: Node = _killer_node()
-			var killer_id: int = int(killer.peer_id) if killer != null and "peer_id" in killer and not killer.is_in_group("player") else local_id
-			if peers.size() > 1:
-				var shares: Dictionary = NetworkManager.compute_gold_shares(amount, peers, killer_id)
-				for pid in shares.keys():
-					var share: int = int(shares[pid])
-					if share <= 0:
-						continue
-					if int(pid) == local_id:
-						KillGold.award(get_tree(), share, pos, get_tree().get_first_node_in_group("player"))
-					else:
-						NetworkManager.grant_kill_gold.rpc_id(int(pid), share, pos)
-				amount = 0
-		if amount > 0:
-			_award_with_assists(amount, pos)
+		if KillGold.GROUND_DROPS:
+			_spawn_gold_drop(amount) ## 2026-10-24: altın yine yere düşer, oyuncu toplama mesafesiyle (XP gibi) toplar
+		else:
+			_award_gold_directly(amount)
 	_roll_extra_item_gold()
+
+
+## Altın yerde bir GoldDrop olarak kalır (kullanıcı 2026-10-24: "yaratıklar ölünce altını karaktere otomatik göndermesin, eskisi gibi rastgele
+## düşsün, toplama mesafesine bağlı XP gibi toplansın"). Yakındaki altına birleşir / sınır doluysa en yakın oyuncuya yazılır (drop_merge.gd);
+## boss altını birleşmez ve toplayınca katılımcılar arasında eşit paylaşılır (gold_drop.gd is_boss_gold). Çok oyunculuda host düşürür + yayınlar.
+func _spawn_gold_drop(amount: int) -> void:
+	var drop_pos: Vector2 = global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-10.0, 10.0))
+	var scene_root: Node = get_tree().current_scene
+	_queue_drop_spawn(func() -> void:
+		if not is_boss:
+			if DropMerge.absorb_gold(drop_pos, amount):
+				return
+			if DropMerge.gold_over_cap() and DropMerge.credit_gold(scene_root.get_tree(), drop_pos, amount):
+				return
+		var drop = GoldDrop.instantiate()
+		drop.amount = amount
+		drop.is_boss_gold = is_boss
+		drop.global_position = drop_pos
+		if NetworkManager.is_multiplayer_active:
+			var drop_id: int = NetworkManager._gen_drop_id()
+			drop.set_meta("drop_network_id", drop_id)
+			NetworkManager.broadcast_drop.rpc("gold", drop.global_position, drop.amount, drop_id)
+		scene_root.call_deferred("add_child", drop)
+	)
+
+
+## KillGold.GROUND_DROPS = false yolu (2026-10-15/21 sistemi): altın yere düşmeden öldürene / asistçilere dönen para olarak gider.
+func _award_gold_directly(amount: int) -> void:
+	var pos: Vector2 = global_position
+	if is_boss and NetworkManager.is_multiplayer_active:
+		## Boss altını tüm canlı katılımcılar arasında eşit bölünür (eski yerden toplama paylaşımıyla aynı kural).
+		var peers: Array = []
+		for part: Dictionary in NetworkManager.get_reward_participants():
+			peers.append(int(part["peer_id"]))
+		var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+		var killer: Node = _killer_node()
+		var killer_id: int = int(killer.peer_id) if killer != null and "peer_id" in killer and not killer.is_in_group("player") else local_id
+		if peers.size() > 1:
+			var shares: Dictionary = NetworkManager.compute_gold_shares(amount, peers, killer_id)
+			for pid in shares.keys():
+				var share: int = int(shares[pid])
+				if share <= 0:
+					continue
+				if int(pid) == local_id:
+					KillGold.award(get_tree(), share, pos, get_tree().get_first_node_in_group("player"))
+				else:
+					NetworkManager.grant_kill_gold.rpc_id(int(pid), share, pos)
+			amount = 0
+	if amount > 0:
+		_award_with_assists(amount, pos)
 
 
 ## Normal yaratık altını: tek oyunculuda/tek katılımcıda öldürene; çok oyunculuda ASİST payı (bkz. assist.gd) - hasar veren / destek
@@ -5679,6 +5711,9 @@ func _node_for_peer(pid: int, local_id: int) -> Node:
 func _roll_extra_item_gold() -> void:
 	var extra_chance: float = _killer_stat("item_extra_gold_chance")
 	if extra_chance <= 0.0 or randf() > extra_chance:
+		return
+	if KillGold.GROUND_DROPS:
+		_spawn_gold_drop(1)
 		return
 	KillGold.award(get_tree(), 1, global_position, _killer_node())
 

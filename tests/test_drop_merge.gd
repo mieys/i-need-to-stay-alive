@@ -116,12 +116,14 @@ func test_sleeping_drop_pauses_visuals_and_wakes() -> void:
 	_begin()
 	var o: Node2D = _orb(Vector2(0, 0))
 	var spr: AnimatedSprite2D = o.get_node("AnimatedSprite2D")
-	assert(o.is_processing() and spr.is_playing())
+	## 2026-10-21 sade kristal: XP küresinin _process'i yok (nefes ölçeği kalktı) - uyanıklık = animasyon + bayrak.
+	assert(not o.is_processing(), "sade kristal _process çalıştırmamalı")
+	assert(spr.is_playing())
 	DropAttraction.set_visual_awake(o, false)
 	assert(not o.is_processing(), "uyuyan küre _process çalıştırmamalı")
 	assert(not spr.is_playing(), "uyuyan küre animasyonu durmalı")
 	DropAttraction.wake(o)
-	assert(o.is_processing() and spr.is_playing() and not bool(o.get("visual_asleep")), "uyanınca görseller geri gelmeli")
+	assert(spr.is_playing() and not bool(o.get("visual_asleep")), "uyanınca görseller geri gelmeli")
 	o.queue_free()
 	DropMerge.reset()
 

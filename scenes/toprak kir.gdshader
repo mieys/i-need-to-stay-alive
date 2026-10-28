@@ -159,5 +159,5 @@ void fragment() {
 	}
 
 	COLOR = vec4(mix(tex.rgb, c, toprak_maske * toprak_efekt), tex.a);
-	COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
+	if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_d(COLOR.rgb, world_pos); } // harita + derin orman bölge renk ayarı (madde 181/359) - fragment()'in EN SONUNDA kalmalı
 }

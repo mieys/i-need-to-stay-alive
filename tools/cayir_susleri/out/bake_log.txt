@@ -1,0 +1,12 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[93m -- Animated tile 39: Succession of tiles not supported in Godot 4. -> Skipped[39m[0m
+[93m -- Animated tile 40: Succession of tiles not supported in Godot 4. -> Skipped[39m[0m
+[93m -- Animated tile 137: Succession of tiles not supported in Godot 4. -> Skipped[39m[0m
+ERROR: Tileset file 'Yeni klasör-default.tsx' not found. -> Continuing but result may be unusable
+Harita bake tamamlandı: res://scenes/harita_baked_new.tscn (korunan materyal: 13, korunan ekstra node: 0, korunan görünüm özelliği: 3, sıkıştırılan gömülü texture: 9)
+HATIRLATMA: obje (ağaç/çalı/ev/kaya...) değiştiyse gölgeleri yeniden pişir: tools/bake_map_shadows.gd (--windowed) + tools/bake_map_shadows.py
+WARNING: 1 RID of type "Canvas" was leaked.
+   at: _free_rids (servers/rendering/renderer_canvas_cull.cpp:2733)
+WARNING: 1 ObjectDB instance was leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)

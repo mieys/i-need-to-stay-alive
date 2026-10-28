@@ -72,3 +72,10 @@ common/physics_interpolation=true
 rendering_device/pipeline_cache/save_chunk_size_mb=5.078001
 textures/canvas_textures/default_texture_filter=0
 textures/vram_compression/import_etc2_astc=true
+
+[shader_globals]
+
+derin_orman_maske={
+"type": "sampler2D",
+"value": "res://assets/map/derin_orman_bolge.png"
+}

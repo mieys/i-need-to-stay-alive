@@ -23,6 +23,9 @@ uniform float strength : hint_range(0.0, 6.0) = 1.4;       // ağacın tepesinin
 uniform float salinim_hizi : hint_range(0.0, 4.0) = 0.9;
 uniform float egri_ussu : hint_range(0.5, 4.0) = 1.8;      // büyük = gövde daha sabit, sadece taç sallanır
 uniform float esinti_gucu : hint_range(0.0, 1.0) = 0.35;   // haritada yavaşça gezen ortak esinti dalgası (ağaçlar birlikte eğilir)
+// Derin orman bölgesinde yaprakların bölgenin ağaç paletine boyanma payı (madde 365, harita_renk.gdshaderinc DOA_*): 1 = haritanın kendi ağaçları,
+// 0 = paketten gelen bölge ağaçları ("Ağaç ölü", tree_sway.gd ZONE_TINT_OFF) kendi renginde.
+uniform float bolge_boya : hint_range(0.0, 1.0) = 1.0;
 
 // ---------------- DOLGU: TileSet "use_texture_padding" (varsayılan açık) - shader dolgulu çalışma anı dokusunu görür, karolar
 // 18'lik hücrelerde, 1 px içeride (bkz. sallanan ot.gdshader aynı not). tree_sway.gd yazar.
@@ -127,5 +130,5 @@ void fragment() {
 		}
 		if (!onde) { discard; }
 	}
-	COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
+	if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_agac_d(COLOR.rgb, world_orijin, bolge_boya); } // bölge ağaç paleti (madde 365) + harita + derin orman bölge renk ayarı (madde 181/359) - fragment()'in EN SONUNDA kalmalı
 }

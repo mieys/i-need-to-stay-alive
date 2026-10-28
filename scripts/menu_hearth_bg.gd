@@ -4,7 +4,7 @@ extends RefCounted
 ## olsun"): ocak_basi.png + canlı şömine ateşi + şömineye dönük oturan parti + uyuyan köpek - ana menünün sahnesi (main_menu.gd _build_scene).
 ## Ölçü/konum/ton sabitleri ve SheetAnim/SceneSprite TEK yerde, main_menu.gd'de: burası onları kullanır, kopyalamaz (sahne değişirse bu
 ## ekranlar da değişir). main_menu.gd bu dosyayı preload ETMESİN (döngü); ana menü kendi sahnesini sol menü gölgesiyle kurar.
-## Kullanan: character_select.gd, room_browser.gd, lobby_menu.gd. Hepsi statik: const HearthBg := preload("res://scripts/menu_hearth_bg.gd").
+## Kullanan: character_select.gd, room_browser.gd, lobby_menu.gd, soul_shop_screen.gd (masaüstü, load() ile - preload döngüsü olmasın). Hepsi statik: const HearthBg := preload("res://scripts/menu_hearth_bg.gd").
 
 const MM := preload("res://scripts/main_menu.gd")
 const PC := preload("res://scripts/pet_catalog.gd")

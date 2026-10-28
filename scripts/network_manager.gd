@@ -167,7 +167,7 @@ const MAX_PLAYERS := 8
 ## Host devri: kabul edilen herkes şifreyi bilir (room_password = girdiği şifre) - yeni host aynı ayarlarla kurar, diğerleri aynı
 ## şifreyle otomatik doğrulanır.
 const ROOM_MIN_PLAYERS := 2
-const LOBBY_PROTOCOL := "lobi-14" ## (2026-10-21: lobi-13 -> lobi-14, Oakley yetenek evrimleri: "oakley_revive" oyuncu efekti + "oakley_tree" süre/alan verisi + bee_poison RPC param2 (Salgın Zehir) - eski exe tanımaz, madde 348); (2026-10-20: lobi-12 -> lobi-13, yeni silah Kalkan "kalkan" + "kalkan_*" darbe verisi - eski exe silahı tanımaz, madde 338); (2026-10-19: lobi-11 -> lobi-12, yeni silah Gökkuşağı Asası "gokkusagi" + "rbeam_*" oyuncu efektleri - eski exe silahı/ışını tanımaz, madde 306); (lobi-10 -> lobi-11, Yıldırım Asası vuruş sesi: "beam_hit" oyuncu efekti - eski exe tanımaz, tikleri sessiz duyar, madde 294); lobi-10: (2026-10-19: lobi-9 -> lobi-10, saklanma çalılığı: request_brush_reveal RPC'si + "brush_search_*"/"brush_alert" yaratık efektleri, madde 283); lobi-9: (2026-10-19: lobi-8 -> lobi-9, broadcast_enemy_projectile'a mermi stili argümanı - lich Ruh Alevi, madde 280); lobi-8: (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
+const LOBBY_PROTOCOL := "lobi-15" ## (2026-10-23: lobi-14 -> lobi-15, yaratık yeteneği "bone" (İskelet Kemik Atışı) dünya efekti - eski exe tanımaz, görünmez kemikten hasar alırdı, madde 368); (2026-10-21: lobi-13 -> lobi-14, Oakley yetenek evrimleri: "oakley_revive" oyuncu efekti + "oakley_tree" süre/alan verisi + bee_poison RPC param2 (Salgın Zehir) - eski exe tanımaz, madde 348); (2026-10-20: lobi-12 -> lobi-13, yeni silah Kalkan "kalkan" + "kalkan_*" darbe verisi - eski exe silahı tanımaz, madde 338); (2026-10-19: lobi-11 -> lobi-12, yeni silah Gökkuşağı Asası "gokkusagi" + "rbeam_*" oyuncu efektleri - eski exe silahı/ışını tanımaz, madde 306); (lobi-10 -> lobi-11, Yıldırım Asası vuruş sesi: "beam_hit" oyuncu efekti - eski exe tanımaz, tikleri sessiz duyar, madde 294); lobi-10: (2026-10-19: lobi-9 -> lobi-10, saklanma çalılığı: request_brush_reveal RPC'si + "brush_search_*"/"brush_alert" yaratık efektleri, madde 283); lobi-9: (2026-10-19: lobi-8 -> lobi-9, broadcast_enemy_projectile'a mermi stili argümanı - lich Ruh Alevi, madde 280); lobi-8: (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
 const AUTH_TIMEOUT_MS := 10000 ## host: bu sürede doğrulanmayanı atar; istemci: bu sürede kabul gelmezse vazgeçer
 const PHASE_ROOM := "room"
 const PHASE_SELECT := "select"
@@ -4477,26 +4477,22 @@ func grant_personal_gold(amount: int) -> void:
 		return
 	if amount <= 0:
 		return
-	GameManager.gold += amount
+	## 2026-10-24: yerden toplanan altın (host'un yakaladığı uzak oyuncu payı, boss payı) yerel toplamayla AYNI görünür: karakterin üstünde
+	## simgeli "+N" + altın sesi (KillGold.credit). Oyuncu sahnede yoksa yalnız altın eklenir.
 	var local_player: Node = get_tree().get_first_node_in_group("player")
-	if local_player and is_instance_valid(local_player):
-		var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
-		if ft_scene:
-			var ft = ft_scene.instantiate()
-			get_tree().current_scene.add_child(ft)
-			ft.global_position = local_player.global_position + Vector2(14, -34)
-			if ft.has_method("setup"):
-				ft.setup("+%d altın" % amount, Color(1.0, 0.85, 0.25))
+	if local_player and is_instance_valid(local_player) and local_player is Node2D:
+		KillGold.credit(get_tree(), amount, (local_player as Node2D).global_position)
+	else:
+		GameManager.gold += amount
 
 
-## Yaratık öldürme altını (2026-10-15, bkz. kill_gold.gd): öldüren uzak oyuncunun kişisel altınına eklenir; yazı + ses yaratığın
-## öldüğü yerde (world_pos) SADECE onun ekranında çıkar. Sadece host'tan gelir.
+## Yaratık öldürme altını (2026-10-15, bkz. kill_gold.gd): öldüren uzak oyuncunun kişisel altınına eklenir; yaratığın öldüğü yerde (world_pos)
+## dönen para SADECE onun ekranında belirir, ona uçar, varınca altın + yazı + ses. Sadece host'tan gelir.
 @rpc("any_peer", "call_remote", "reliable")
 func grant_kill_gold(amount: int, world_pos: Vector2, assist: int = 0) -> void:
 	if not _from_host() or amount <= 0:
 		return
-	GameManager.gold += amount
-	KillGold.show_at(get_tree(), amount, world_pos, assist)
+	KillGold.drop_coin(get_tree(), amount, world_pos, assist) ## 2026-10-21: yerde dönen para, 0,5 sn sonra bana uçar ve varınca altın eklenir
 
 
 ## ASİST (2026-10-15, bkz. assist.gd): can/kalkan basan, buff veren, bağ kuran oyuncu hedefi bildirir. Host'ta doğrudan kayda geçer,

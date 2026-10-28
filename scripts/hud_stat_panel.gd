@@ -179,7 +179,7 @@ func _redraw() -> void:
 func _build_tips() -> void:
 	var extra: Dictionary = {}
 	for row in StatsPanelScript.EXTRA_ROWS:
-		extra[row[0]] = str(row[2])
+		extra[row[0]] = StatsPanelScript.row_tip(row)
 	for s in STATS:
 		var tip: String = str(s[2])
 		if tip.begins_with("@"):

@@ -93,6 +93,16 @@ const EVO_BALL_SPEED_PER_PERCENT := 10.0 ## 1. geliştirme: her 10 hareket hız�
 
 # ---------------------------------------------------------------- R: Yıldırım Kalkanı
 const DOME_GLOW_START := 0.02 ## kalkan bu kadar yıprandıktan sonra parıltı başlar
+## PATLAMA (madde 356, kullanıcı: "ultisi patlamıyor gibi ... yaratıklara hasar vermiyor pek ... pikachunun çıldırışı gibi"): eskiden
+## sabit 60 hasardı (saldırı gücüyle büyümüyordu) ve yalnız kalkan hasarla KIRILIRSA patlıyordu - %1000 SG kapasiteli kalkan çoğu
+## zaman 15 sn'yi doldurup sessizce kapanıyordu. Artık süre dolunca da patlar; hasar = SG x BURST_AP_RATIO + kalkanın EMDİĞİ hasar x
+## BURST_ABSORB_RATIO (emilen en çok kalkan kapasitesi kadar sayılır - "yüklenip boşalma").
+const BURST_AP_RATIO := 4.0 ## %400 saldırı gücü
+const BURST_ABSORB_RATIO := 0.5 ## emilen hasarın %50'si
+const BURST_RADIUS := 220.0 ## dünya birimi - nova sayfasının R'si (182 sanat px x TEXEL)
+const BURST_KNOCKBACK := 260.0
+const BURST_MAX_BOLTS := 6 ## Matthew'dan en yakın yaratıklara çakan Q şimşeği (ağda tek tek gider - sınırlı)
+const BURST_GLOW_TIME := 0.8 ## patlamada Matthew tam parlar, bu sürede söner (ağda parıltı basamağıyla gider)
 const GLOW_SHADER_PATH := "res://shaders/matthew_glow.gdshader"
 
 const SHEET_DIR := "res://assets/fx/matthew_lightning/"
@@ -105,7 +115,7 @@ const SHEETS := {
 	"form_burst": {"fw": 74, "fh": 74, "n": 4, "fps": 16.0},
 	"shield_loop": {"fw": 96, "fh": 96, "n": 24, "cols": 6, "fps": 12.0, "loop": true},
 	"shield_pop": {"fw": 196, "fh": 196, "n": 8, "fps": 14.0},
-	"nova": {"fw": 380, "fh": 380, "n": 10, "fps": 14.0},
+	"nova": {"fw": 440, "fh": 440, "n": 14, "cols": 5, "fps": 18.0}, ## tools/gen_matthew_ult_burst.py (madde 356)
 	"cast": {"fw": 64, "fh": 110, "n": 5, "fps": 14.0},
 }
 const CAST_TARGET_FROM_CENTER := Vector2(0.0, 31.0) ## cast karesinde şimşeğin indiği nokta (32, 86) - kare ortasına göre, sanat pikseli
@@ -234,6 +244,16 @@ static func glow_level(dome_hp: float, dome_max: float) -> float:
 	if dome_max <= 0.0:
 		return 0.0
 	return clampf(1.0 - dome_hp / dome_max, 0.0, 1.0)
+
+
+## Kalkan patlamasının hasarı (kritik hariç): SG x %400 + emilen hasarın %50'si.
+static func burst_damage(attack_power: float, absorbed: float) -> float:
+	return maxf(0.0, attack_power) * BURST_AP_RATIO + maxf(0.0, absorbed) * BURST_ABSORB_RATIO
+
+
+## Patlama parıltısı (0..1): patlamadan bu yana geçen süreye göre tamdan sıfıra.
+static func burst_glow_level(msec_left: int) -> float:
+	return clampf(float(msec_left) / (BURST_GLOW_TIME * 1000.0), 0.0, 1.0)
 
 
 ## Ağ için 0..10 basamak (extra durumu her küçük değişimde yeniden gönderilmesin).

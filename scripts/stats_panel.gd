@@ -151,11 +151,18 @@ func _apply_text_colors() -> void:
 			val_lbl.add_theme_stylebox_override("normal", sb)
 
 
+## İpucundaki {HEAL} = GameManager.LIFESTEAL_HEAL (tek kaynak; eskiden metin "2 can" diyordu, gerçek değer 1'di - madde 369). Üç tüketici de bunu kullanır.
+static func row_tip(row: Array) -> String:
+	var heal: float = GameManager.LIFESTEAL_HEAL
+	var heal_text: String = str(int(heal)) if is_equal_approx(heal, round(heal)) else ("%.1f" % heal).replace(".", ",")
+	return str(row[2]).replace("{HEAL}", heal_text)
+
+
 ## Sahnede olmayan, kodla eklenen satırlar: [id (ikon = stat_icon.gd), ad, ipucu].
 const EXTRA_ROWS := [
 	["max_health", "Can", "Can: şimdiki / en fazla can."],
 	["shield_max", "Mana Kalkanı", "Mana Kalkanı: şimdiki / en fazla mana kalkanı (eşyalardan)."],
-	["lifesteal", "Can Çalma", "Can Çalma: her isabette bu ihtimalle 2 can yenilersin (alan hasarında etkisi %33)."],
+	["lifesteal", "Can Çalma", "Can Çalma: her isabette bu ihtimalle {HEAL} can yenilersin (alan hasarında etkisi %33)."],
 	["health_regen", "Can Yenilenmesi", "Can Yenilenmesi: 5 saniyede bir yenilenen can (kartlar ve eşyalardan; İyileştirme Gücü ile büyür)."],
 	["shield_regen", "Mana Kalkanı Yenilenmesi", "Mana Kalkanı Yenilenmesi: saniyede yenilenen mana kalkanı (eşyalardan)."],
 	["heal_power", "İyileştirme Gücü", "İyileştirme ve Mana Kalkanı Gücü: yaptığın bütün iyileştirmeleri, can yenilenmesini, can çalmayı ve mana kalkanı doldurmayı yüzde olarak arttırır."],
@@ -182,7 +189,7 @@ func _add_runtime_rows() -> void:
 		for n in [icon_node, name_lbl, val_lbl]:
 			grid.add_child(n)
 		_icon_nodes[row[0]] = icon_node
-		name_lbl.tooltip_text = str(row[2])
+		name_lbl.tooltip_text = row_tip(row)
 		if row[0] == "health_regen":
 			regen_value = val_lbl
 		elif row[0] == "heal_power":

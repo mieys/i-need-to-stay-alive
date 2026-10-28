@@ -169,7 +169,7 @@ func test_player_stops_at_the_water_and_bridge_decks_stay_open() -> void:
 ## Yaratık spawnı, ışınlanma vb. is_position_blocked_by_terrain ile bu nesnelerin üstüne düşmez; mermi/görüş sorgusu (orman) bunlardan etkilenmez.
 func test_terrain_query_includes_objects_but_forest_query_does_not() -> void:
 	_load_map()
-	for cat in ["water", "houses", "trees", "mines", "enemy_base"]:
+	for cat in ["water", "houses", "trees", "mines", "enemy_base", "deep_forest", "props"]: ## props/deep_forest: madde 364
 		var list: Array = TerrainCollisionScript.by_category.get(cat, [])
 		assert(not list.is_empty(), "%s boş" % cat)
 		var c: Vector2i = list[0]
@@ -194,7 +194,9 @@ func test_pathing_grid_has_objects_but_the_fog_grid_is_forest_only() -> void:
 	for fc: Vector2i in _forest.get_used_cells():
 		if MapFrameScript.in_path_grid(fc):
 			expected += 1
-	assert(fog == expected, "fog ızgarası tam orman hücreleri olmalı: %d / %d" % [fog, expected])
+	## + ZİNDAN duvarları (madde 373): ana haritanın doğusunda aynı ızgarada, orman duvarı gibi görüşü keser
+	expected += preload("res://scripts/dungeon/dungeon_world.gd").wall_cells().size()
+	assert(fog == expected, "fog ızgarası tam orman + zindan duvarı hücreleri olmalı: %d / %d" % [fog, expected])
 	assert(blocked > fog + 3000, "hareket ızgarası orman + su/bina/ağaç/maden içermeli: %d / %d" % [blocked, fog])
 	var w: Vector2i = TerrainCollisionScript.by_category["water"][0]
 	assert(EnemyPathingScript._is_solid(w), "su hücresi yol bulma ızgarasında engel olmalı")

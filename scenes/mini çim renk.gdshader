@@ -12,6 +12,7 @@ uniform float val_shift_amount : hint_range(0.0, 0.5) = 0.08;
 
 // Çizgilenmeyi önlemek için her bitkiye tek bir renk ID'si taşıyoruz
 varying float v_plant_color_id;
+varying vec2 hr_dunya; // derin orman bölge renk ayarı için dünya konumu (madde 359)
 
 // Rastgelelik (Hash) Fonksiyonu
 float hash(vec2 p) {
@@ -40,6 +41,7 @@ void vertex() {
     
     // Dünya konumuna göre bitki hücresini buluyoruz
     vec2 actual_world_pos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
+    hr_dunya = actual_world_pos;
     vec2 plant_cell = floor(actual_world_pos / plant_grid_size);
     
     // Bu bitkiye dünya konumuna bağlı TEK bir rastgele ID veriyoruz (Çizgileri önler)
@@ -68,5 +70,5 @@ void fragment() {
     }
     
     COLOR = tex_color;
-    COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
+    if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_bitki_d(COLOR.rgb, hr_dunya); } // bölge bitki rengi (madde 361) + harita + derin orman bölge renk ayarı (madde 181/359) - fragment()'in EN SONUNDA kalmalı
 }

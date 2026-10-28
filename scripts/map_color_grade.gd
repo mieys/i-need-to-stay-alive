@@ -41,7 +41,7 @@ const CALM_PARAMS := {
 ## HEPSİ uçuruma bağlı plato tepesi - GİZLENMEZ (altında toprak/kenar olan ~200 karo ve kenar karoları da var); zemin desenini o katmanın
 ## kendi shader'ı çizer (madde 186, orman_parcalari_doku.gdshader).
 const GROUND_LAYER := "Yer/Zemin Çimen"
-const STRAY_SKIP_LAYERS: Array[String] = ["Yer/Zemin Toprak", "Yer/Çimen gölge", "Yer/Zemin Çimen", "Orman parçaları/Orman parçaları 2"]
+const STRAY_SKIP_LAYERS: Array[String] = ["Yer/Zemin Toprak", "Yer/Çimen gölge", "Yer/Zemin Çimen", "Yer/Derin orman zemini", "Orman parçaları/Orman parçaları 2"]
 ## Düz çimen karosu ADAYLARI (kaynak, atlas x, atlas y) - 2026-10-16 harita_baked.tscn analizinden. Kullanılmadan önce PİKSELLERİ doğrulanır
 ## (_is_flat_grass): yeniden bake'te kaynak numaraları kayarsa yanlış karo gizlenmez, sadece o karo atlanır (dikdörtgen geri gelir).
 const FLAT_GRASS_CANDIDATES: Array[Vector3i] = [Vector3i(0, 1, 7), Vector3i(2, 1, 6), Vector3i(0, 1, 1), Vector3i(16, 1, 5)]
@@ -59,6 +59,10 @@ const BRIDGE_PLANT_LAYERS: Array[String] = [
 const STRAY_UNDER_Z := -50
 
 static var _plain: ShaderMaterial = null
+static var _outer_forest: ShaderMaterial = null
+## Dış çerçeve ormanı katmanları (Dış orman 1-4): outer_forest_material (Batı'da kızıl yaprak, madde 362). Derin orman bölge ZEMİNİ shader'da
+## değil, Harita.tmx'te gerçek karolar (madde 363: "Yer/Derin orman zemini" + yerinde değişen kıyı/plato/uçurum karoları).
+const OUTER_FOREST_PREFIX := "Dış orman"
 
 
 static func plain_material() -> ShaderMaterial:
@@ -66,6 +70,15 @@ static func plain_material() -> ShaderMaterial:
 		_plain = ShaderMaterial.new()
 		_plain.shader = load(PLAIN_SHADER_PATH)
 	return _plain
+
+
+## Dış çerçeve ormanının düz materyali: renk ayarı + Batı'da kızıl yaprak (harita_renk_duz.gdshader do_dis_orman).
+static func outer_forest_material() -> ShaderMaterial:
+	if _outer_forest == null:
+		_outer_forest = ShaderMaterial.new()
+		_outer_forest.shader = load(PLAIN_SHADER_PATH)
+		_outer_forest.set_shader_parameter("do_dis_orman", 1.0)
+	return _outer_forest
 
 
 ## Materyalin shader'ı CALM_PARAMS'ta varsa değerleri yazar (birden çok kez çağrılabilir). ground_texel_pass.gd ayrıntı materyallerini
@@ -92,7 +105,10 @@ static func attach(harita: Node, calm: bool = true, hide_strays: bool = true) ->
 		var layer := n as TileMapLayer
 		var sm := layer.material as ShaderMaterial
 		if layer.material == null or (sm != null and sm.shader == null):
-			layer.material = plain_material()
+			if String(layer.name).begins_with(OUTER_FOREST_PREFIX):
+				layer.material = outer_forest_material()
+			else:
+				layer.material = plain_material()
 			layer.use_parent_material = false
 		elif sm != null and sm.shader.resource_path != FOREST_SHADER_PATH and sm.shader.code.contains(FOREST_SHADER_MARK):
 			if forest_shader == null:

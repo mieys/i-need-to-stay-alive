@@ -448,7 +448,10 @@ func _physics_process(delta: float) -> void:
 		_expire()
 		return
 	_process_shield_regen(delta)
-	if not _target or not is_instance_valid(_target) or _target.get("is_dead") == true or _target.get("is_downed") == true:
+	## Seyyar satıcının koruma bölgesine giren oyuncu hedef olmaz (yaratıklarla aynı kural, bkz. enemy.gd) - kopya içeri girip
+	## vuruş/mermi göstermesin; başka hedef yoksa durur.
+	if not _target or not is_instance_valid(_target) or _target.get("is_dead") == true or _target.get("is_downed") == true \
+			or GameManager.is_position_in_merchant_zone(_target.global_position):
 		_target = _find_nearest_player()
 		_has_perception = false
 	## Kullanıcı isteği (2026-09-24): "hareket hızı kopyaladığı kişinin hızından %20 daha az olmalı" - kalıcı hız (taban +
@@ -471,6 +474,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	velocity = walk_velocity
 	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, Enemy.KNOCKBACK_DECAY * delta)
+	_keep_out_of_merchant_zone()
 	_clamp_to_map()
 	var look: Vector2 = Vector2.ZERO
 	if _target:
@@ -593,6 +597,20 @@ func _block_walls() -> void:
 	if velocity.y != 0.0 and GameManager.is_position_blocked_by_walls(global_position + Vector2(0.0, signf(velocity.y) * probe)):
 		velocity.y = 0.0
 		_strafe_sign = -_strafe_sign
+
+
+## Seyyar satıcının koruma bölgesine GİREMEZ: içeri düşen (yürüyerek, savrularak ya da bölge üstüne kurulunca) kopya merkezden
+## kenara doğru bölgenin hemen dışına alınır - yaratıkların aynı kuralı (enemy_world.cpp merchant_active). Kenara sürtünce
+## teğet kayar (konum her karede dairenin dışına yapıştırılır), içeri doğru itilmez.
+func _keep_out_of_merchant_zone() -> void:
+	if not GameManager.merchant_zone_active:
+		return
+	var from_center: Vector2 = global_position - GameManager.merchant_zone_pos
+	var dist: float = from_center.length()
+	if dist >= GameManager.MERCHANT_ZONE_RADIUS:
+		return
+	var out_dir: Vector2 = from_center / dist if dist > 0.5 else Vector2.RIGHT
+	global_position = GameManager.merchant_zone_pos + out_dir * (GameManager.MERCHANT_ZONE_RADIUS + 1.0) ## +1: `is_position_in_merchant_zone` (<=) içinde sayılmasın
 
 
 func _clamp_to_map() -> void:
@@ -738,6 +756,8 @@ func _find_nearest_player() -> Node2D:
 	for group_name in ["player", "remote_players"]:
 		for p: Node in get_tree().get_nodes_in_group(group_name):
 			if not is_instance_valid(p) or p.get("is_dead") == true or p.get("is_downed") == true:
+				continue
+			if GameManager.is_position_in_merchant_zone((p as Node2D).global_position): ## koruma bölgesindeki oyuncu hedef olmaz
 				continue
 			var d: float = global_position.distance_to((p as Node2D).global_position)
 			if d < best_d:

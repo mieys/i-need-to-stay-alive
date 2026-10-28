@@ -165,7 +165,7 @@ void fragment() {
 	if (!mavi_mi(tex.rgb)) {
 		// Su katmanına boyanmış çimen karosu (madde 85): eski shader'daki gibi hafif renk + saydamlık.
 		COLOR = vec4(mix(tex.rgb, vec3(0.18, 0.48, 0.68), 0.12), tex.a * 0.73);
-		COLOR.rgb = harita_renk(COLOR.rgb);
+		if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_d(COLOR.rgb, world_pos); }
 	} else {
 		vec2 px = floor(world_pos);
 		float t = TIME;
@@ -203,6 +203,6 @@ void fragment() {
 			a = max(a, 0.88);
 		}
 		COLOR = vec4(col, tex.a * a);
-		COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
+		if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_d(COLOR.rgb, world_pos); } // harita + derin orman bölge renk ayarı (madde 181/359) - fragment()'in EN SONUNDA kalmalı
 	}
 }

@@ -18,6 +18,7 @@ extends Node
 
 const NODE_NAME := "EnemyWorldBridge"
 const EnemyPathingScript := preload("res://scripts/enemy_pathing.gd")
+const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd")
 const PLAYER_BODY_RADIUS := 11.4 ## enemy.gd PLAYER_BODY_RADIUS - TÜM adaylar için aynı (enemy.gd de öyle kullanıyor)
 
 const T_PLAYER := 0
@@ -325,6 +326,9 @@ func _refresh_grid() -> void:
 	var cw: float = float(layer.tile_set.tile_size.x) * layer.global_scale.x
 	## Görüş (sis) ızgarası = orman duvarı + ağaç katmanları (2026-10-09): su/bina/maden hareketi engeller ama görüşü kesmez (bkz. terrain_collision.gd).
 	world.call("set_grid", blocked, EnemyPathingScript._origin, size, cw, layer.global_position, EnemyPathingScript._fog_blocked)
+	## ZİNDAN BÖLGELERİ (madde 373): yaratık yalnız kendi bölgesindeki (ana harita / aynı zindan) hedefi seçer.
+	if world.has_method("set_region_rects"):
+		world.call("set_region_rects", DungeonWorldScript.region_rects())
 
 
 func _build_targets() -> void:

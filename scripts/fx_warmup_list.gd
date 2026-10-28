@@ -127,6 +127,7 @@ const PATHS: Array[String] = [
 	"res://assets/fx/matthew_lightning/cast.png",
 	"res://assets/fx/matthew_lightning/form_burst.png",
 	"res://assets/fx/matthew_lightning/impact.png",
+	"res://assets/fx/matthew_lightning/nova.png", ## elle (madde 356): toplayıcı R patlamasını yakalamaz (kırılma ya da 15 sn)
 	"res://assets/fx/matthew_lightning/shield_loop.png",
 	"res://assets/fx/paladin_dome/flash_gold_frames.tres",
 	"res://assets/fx/paladin_dome/flash_gold_sheet.png",
@@ -149,6 +150,7 @@ const PATHS: Array[String] = [
 	"res://assets/skills/buyucu_skill_meteor_icon.png",
 	"res://assets/skills/cadi_iksir_1_icon.png",
 	"res://assets/skills/cadi_iksir_2_icon.png",
+	"res://assets/skills/cadi_iksir_3_icon.png",
 	"res://assets/skills/cadi_iksir_4_icon.png",
 	"res://assets/skills/cadi_iksir_5_icon.png",
 	"res://assets/skills/cadi_iksir_6_icon.png",

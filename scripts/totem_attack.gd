@@ -8,8 +8,8 @@ class_name TotemAttack
 ## Kullanıcı isteği (2026-09-29): "E ve R'nin etkileri artık birleştiriliyor ve tek yetenek haline geliyor fakat yavaşlatma
 ## etkisi kaldırılıyor. E ve R artık yeni Q yeteneği oluyor" - eski Alan Saldırı Totemi'nin (R, id 28, totem_area.gd -
 ## SİLİNDİ) alan hasarı + mor alan görselleri bu totemin içine taşındı; yavaşlatma YOK. 2026-09-30: alan hasarı Kalkan
-## Totemi'ne de eklendi (kullanıcı isteği) - kod artık totem_base.gd "ALAN HASARI" bloğunda (area_damage_enabled, iki totem
-## aynı kodu kullanır). Ateş menzili (totem_radius 260) ile alan yarıçapı (AREA_RADIUS 180) ayrı.
+## Totemi'ne de eklendi (kullanıcı isteği) - kod artık totem_base.gd "ALAN HASARI" bloğunda (area_damage_enabled).
+## 2026-10-21: alan hasarı bu totemden KALDIRILDI (bug: Q'nun öyle bir gücü yok) - Q yalnız tek hedefe ateş eder (+ evrimleri).
 ##
 ## Hasar doğrudan enemy.take_damage() üzerinden - bu fonksiyon zaten host/
 ## client farkını kendi içinde çözüyor (bkz. enemy.gd take_damage), çağıran
@@ -55,8 +55,8 @@ func _init() -> void:
 	totem_kind = "attack"
 	totem_color = Color(1.0, 0.55, 0.25)
 	totem_radius = 260.0
-	area_damage_enabled = true ## bkz. totem_base.gd "ALAN HASARI" bloğu
-	show_area_aura = false ## mor sınır çemberi kaldırıldı (kullanıcı isteği 2026-10-04); alan hasarı değişmedi
+	## Alan hasarı (totem_base.gd "ALAN HASARI") bu totemde KAPALI (kullanıcı isteği 2026-10-21: "Q etrafına E'deki gibi alan hasarı
+	## veriyor, bu bug, onun öyle bir gücü yok") - sadece Kalkan Totemi (E) açar; alan nabzı/ruh efektleri de onunla birlikte gider.
 
 
 func _process(delta: float) -> void:

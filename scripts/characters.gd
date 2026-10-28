@@ -179,7 +179,7 @@ const DEFS := {
 		"skill2_icon": "res://assets/skills/matthew_elektrik_topu_icon.png",
 		"skill3": 9,
 		"skill3_name": "Yıldırım Kalkanı",
-		"skill3_desc": "ULTİ: 15sn süren yıldırımdan bir mana kalkanı çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer; hasarla kırılırsa çevresindeki yaratıklara hasar verip onları iter. Kalkan açıkken Şimşek Hücumu ve pasifin çalışmaya devam eder. (120sn bekleme)",
+		"skill3_desc": "ULTİ: 15sn süren yıldırımdan bir mana kalkanı çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer. Kırılınca ya da süre dolunca patlar: çevresindeki yaratıklara saldırı gücünün %400'ü + kalkanın emdiği hasarın %50'si kadar hasar verip onları iter. Kalkan açıkken Şimşek Hücumu ve pasifin çalışmaya devam eder. (120sn bekleme)",
 		"skill3_icon": "res://assets/skills/matthew_yildirim_kalkani_icon.png",
 		"passive": "Yıldırım Hızı: hareket ettiğin her saniye %1 hareket hızı kazanırsın (en fazla %15); durunca bonus 5 saniyede söner. Her kaynaktan kazandığın toplam hareket hızının her %1'i sana %0,5 saldırı hızı verir (toplam saldırı hızı sınırı %600). Arkanda 1 saniye süren bir yıldırım izi bırakırsın. Tam hızda iz güçlenir: değdiği yaratığı 1 saniye sersemletir ve saldırı gücünün %80'i kadar hasar verir.",
 		"passive_icon": "res://assets/skills/matthew_yildirim_hizi_icon.png",
@@ -662,13 +662,14 @@ const DEFS := {
 		## yeteneğini sonra yazacağım" - Q = Saldırı Totemi (27, eski E'nin ateşi + eski R'nin alan hasarı, yavaşlatma YOK,
 		## bkz. totem_attack.gd), E = Kalkan Totemi (26, eski Q, sayılar aynı), R = 2026-09-30'dan beri Elemental Golem (49,
 		## aşağıda). Eski Alan Saldırı Totemi (28) ve totem_area.gd/tscn silindi.
-		## Bekleme süreleri player.gd SKILL_TIMING[27]/SKILL2_TIMING[26]: 45sn (açıklamalardaki eski "60sn" metni 45'e düzeltildi).
+		## Bekleme süreleri player.gd SKILL_TIMING[27] (Q, 2026-10-21'den beri 20sn, yük başına) / SKILL2_TIMING[26] (E, 45sn).
+		## 2026-10-21: Q'nun alan hasarı KALDIRILDI (bug - kullanıcı: "onun öyle bir gücü yok"); alan hasarı sadece Kalkan Totemi'nde.
 		## Kullanıcı isteği (2026-09-30): "Q yeteneğinin alan hasarı özelliğini E yeteneğine eklemeni istiyorum ve Q yeteneği artık
 		## 2 stack birikebilsin" - Kalkan Totemi'nde de alan hasarı (kod totem_base.gd "ALAN HASARI", Q'da da duruyor), Q 2 yüklü
 		## (player.gd SHAMAN_ATTACK_TOTEM_MAX_CHARGES, _skill_shaman_attack_totem).
 		"skill": 27,
 		"skill_name": "Saldırı Totemi",
-		"skill_desc": "YETENEK: Bulunduğun konuma bir totem diker. Totem 30sn boyunca düzenli olarak en yakın düşmana ateş eder (saldırı gücü ve saldırı hızı senin statlarının %150'si kadardır) ve etrafına bir alan açar - alanda duran düşmanlar her saniye saldırı gücünün %20'si kadar hasar alır. 2 yük birikebilir, her yük ayrı ayrı yenilenir. (yük başına 45sn bekleme)",
+		"skill_desc": "YETENEK: Bulunduğun konuma bir totem diker. Totem 30sn boyunca düzenli olarak en yakın düşmana ateş eder (saldırı gücü ve saldırı hızı senin statlarının %150'si kadardır). 2 yük birikebilir, her yük ayrı ayrı yenilenir. (yük başına 20sn bekleme)",
 		"skill_icon": "res://assets/skills/shaman_saldiri_totemi_icon.png",
 		"skill2": 26,
 		"skill2_name": "Kalkan Totemi",

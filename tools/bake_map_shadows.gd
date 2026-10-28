@@ -19,13 +19,16 @@ const CATS := {
 	"tree0": ["Shader Eklenecek/Ağaç 0"],
 	"tree1": ["Shader Eklenecek/Ağaç 1"],
 	"tree2": ["Shader Eklenecek/Ağaç 2"],
+	## 2026-10-21 (madde 359): derin orman ölü ağaçları ayrı katmanda - kendi gölgesi.
+	"tree3": ["Shader Eklenecek/Ağaç ölü"],
 	## (OtOnKatman/"Çalılar ön" katmanları oyun açılırken bu katmanlardan ayrılıyor - sahne dosyasında çalının tamamı burada.)
 	"bush": ["Shader Eklenecek/Çalılar", "Shader Eklenecek/Çalılar1", "Shader Eklenecek/Animasyonsuz çalılar",
-		"Shader Eklenecek/Çiçekler 1"],
+		"Shader Eklenecek/Çiçekler 1", "Shader Eklenecek/Derin orman süsleri"],
 	## 2026-10-07: demirci binası (Blacksmith + kapısı) eklendi; "baca duman" duman animasyonu olduğu için gölge almaz.
 	"house": ["ev/Blacksmith", "ev/blacksmith kapı", "ev/Ev ayrıntı", "ev/Ev", "ev/ev kapı", "ev/Ev Çatı 1"],
 	"farm": ["tarla/tarla 1", "tarla/tarla 1_5", "tarla/tarla 2"],
-	"rock": ["Etkileşimler/Maden", "Etkileşimler/Maden 1", "Düşman Üssü/Özel maden", "Düşman Üssü/Düşman üssü"],
+	"rock": ["Etkileşimler/Maden", "Etkileşimler/Maden 1", "Düşman Üssü/Özel maden", "Düşman Üssü/Düşman üssü",
+		"Shader Eklenecek/Derin orman nesneleri"],
 	"cliff": ["Orman parçaları/orman parçaları -1", "Orman parçaları/Orman parçaları", "Orman parçaları/Orman parçaları 2",
 		"Orman parçaları/Orman parçaları 3", "Orman parçaları/Orman parçaları 4"],
 }

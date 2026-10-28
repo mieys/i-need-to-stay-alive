@@ -78,16 +78,10 @@ const TIERS := {
 	5: {"anim": "red", "scale": ORB_TEXEL, "collision_radius": 3.74},
 }
 
-## Kullanıcı isteği: "azıcık smooth büyüyüp küçülme animasyonu ekle" - sprite
-## sheet'in kendi kare animasyonuna (yukarıdaki TIERS/xp_orb_frames.tres) EK
-## olarak, saf sinüs tabanlı yumuşak bir "nefes alma" scale pulse'ı -
-## fx_arcane_skull_bounce.gd'deki AYNI pulse deseni (1.0 + sin(t*hız)*genlik),
-## ama "azıcık" istendiği için çok daha küçük genlik ve daha yavaş hız.
-const PULSE_SPEED := 3.0
-const PULSE_AMPLITUDE := 0.08
-
-var _base_scale: float = 1.0
-var _pulse_time: float = 0.0
+## 2026-10-21 SADE KRİSTAL (kullanıcı: "exp orblarının parıldamasını istemiyorum daha sade görünmelerini istiyorum şekillerinin
+## korunarak", prototip "A Sakin Kristal", madde 357): tek karelik durağan elmas (gen_xp_orb_sprites.py SHAPE "calm"); eski
+## "nefes" ölçeği (1,0-1,16 sinüs, PULSE_SPEED/PULSE_AMPLITUDE) ve _process kaldırıldı.
+var _base_scale: float = 1.0 ## drop_shadow.gd okur
 
 @onready var collision: CollisionShape2D = $CollisionShape2D
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
@@ -141,10 +135,6 @@ func _grant_extra_pickups(collector: Node) -> void:
 func _ready() -> void:
 	add_to_group("xp_orbs")
 	body_entered.connect(_on_body_entered)
-	## Aynı anda düşen orb'ların (bkz. enemy.gd orb_count) hepsi AYNI fazda
-	## nabız atıp mekanik görünmesin diye her orb rastgele bir başlangıç
-	## fazıyla başlıyor.
-	_pulse_time = randf() * TAU
 	_setup_visual()
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
 	_place_on_ground.call_deferred()
@@ -170,20 +160,12 @@ func _on_expire() -> void:
 	queue_free()
 
 
-func _process(delta: float) -> void:
-	_pulse_time += delta
-	## Sadece BÜYÜR (1.0 .. 1.0 + 2*genlik): orb 1 ekran pikseli = 1 sanat pikseli ölçeğinde; 1'in altına inince tek
-	## piksellik parıltı/yıldız ekrandan düşüyordu (kullanıcı 2026-10-01: "oyunda hiç parıltılı görünmüyor").
-	var pulse: float = 1.0 + (sin(_pulse_time * PULSE_SPEED) * 0.5 + 0.5) * 2.0 * PULSE_AMPLITUDE
-	sprite.scale = Vector2(_base_scale, _base_scale) * pulse
-
-
 func _setup_visual() -> void:
 	var tier: Dictionary = TIERS.get(xp_tier, TIERS[1])
 
 	## Tamamen opak (kullanıcı isteği 2026-09-25) - sahnede kalmış eski %70 saydamlık ne olursa olsun ezilir.
 	sprite.modulate = Color.WHITE
-	## Hepsi aynı fazda parıldamasın.
+	## Sayfa çok kareliyse (SHAPE "diamond") hepsi aynı fazda parıldamasın; "calm" tek kare.
 	sprite.play(tier["anim"])
 	sprite.frame = randi() % maxi(1, sprite.sprite_frames.get_frame_count(tier["anim"]))
 	_base_scale = tier["scale"]

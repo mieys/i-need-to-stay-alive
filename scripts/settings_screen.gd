@@ -629,6 +629,8 @@ func _build_grafik() -> void:
 			func(on: bool) -> void: UISound.set_gfx_option("sun_clouds", on))
 	_toggle_row("ground", "Zemin Ayrıntısı", func() -> bool: return UISound.gfx_ground_detail,
 			func(on: bool) -> void: UISound.set_gfx_option("ground_detail", on))
+	_toggle_row("wind_fx", "Rüzgar Efekti", func() -> bool: return UISound.gfx_wind_fx,
+			func(on: bool) -> void: UISound.set_gfx_option("wind_fx", on))
 	var scales: Array = []
 	for s: float in UISound.RENDER_SCALES:
 		scales.append(_pct(s * 100.0))

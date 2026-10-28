@@ -1224,8 +1224,18 @@ func damage_stat_mult() -> float:
 	return WEAPON_DAMAGE_MULT
 
 
+## Silah TÜRÜ level kartı (madde 367: Yakın Dövüş Ustalığı / Nişancılık): sahibin kartlardan topladığı yüzde, bu silahın türüne (melee ya da menzilli)
+## göre player.gd _apply_weapon_bonuses_to'dan 1 + yüzde olarak gelir. 1.0 = bonus yok.
+var _class_card_mult: float = 1.0
+
+
+func set_class_card_mult(mult: float) -> void:
+	_class_card_mult = mult
+	_recompute_damage()
+
+
 func _recompute_damage() -> void:
-	damage = (_base_damage + _card_damage_bonus + _shop_damage_bonus) * _tier_damage_mult * damage_stat_mult()
+	damage = (_base_damage + _card_damage_bonus + _shop_damage_bonus) * _tier_damage_mult * damage_stat_mult() * _class_card_mult
 
 
 func set_shop_fire_rate_mult(mult: float) -> void:

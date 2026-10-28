@@ -219,7 +219,8 @@ func test_real_map_front_layers_roots_and_tree_sway_sync() -> void:
 	var modes: Dictionary = {}
 	for f: Dictionary in dep.fronts:
 		modes[f["mode"]] = int(modes.get(f["mode"], 0)) + 1
-	assert(int(modes.get("tree", 0)) == 3, "Ağaç 0/1/2 kopyaları: %s" % str(modes))
+	## Ağaç 0/1/2 + "Ağaç ölü" (derin orman ölü ağaçları, madde 359)
+	assert(int(modes.get("tree", 0)) == 4, "Ağaç 0/1/2/ölü kopyaları: %s" % str(modes))
 	assert(int(modes.get("building", 0)) == 6, "bina katmanları (Blacksmith, kapı, ayrıntı, Ev, ev kapı, çatı): %s" % str(modes))
 	assert(int(modes.get("object", 0)) >= 3, "maden/çalı/üs nesne katmanları: %s" % str(modes))
 	## Blacksmith: çatı ve duvar hücrelerinin tümü TEK kök (iki bina var: Blacksmith + ev; çatı katmanında iki farklı değer olabilir ama duvarlarla eşleşmeli).

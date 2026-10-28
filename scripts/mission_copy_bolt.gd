@@ -101,6 +101,10 @@ func _physics_process(delta: float) -> void:
 	position += _dir * step
 	if _impacting:
 		return
+	## Seyyar satıcının koruma bölgesine giren mermi sessizce söner (enemy_projectile.gd ile aynı kural).
+	if GameManager.is_position_in_merchant_zone(global_position):
+		queue_free()
+		return
 	var victim: Node = _touching_player()
 	if victim:
 		if not _cosmetic and victim.has_method("take_damage"):
@@ -115,6 +119,8 @@ func _touching_player() -> Node:
 	for group_name in ["player", "remote_players"]:
 		for p: Node in get_tree().get_nodes_in_group(group_name):
 			if not is_instance_valid(p) or p.get("is_dead") == true or p.get("is_downed") == true:
+				continue
+			if GameManager.is_position_in_merchant_zone((p as Node2D).global_position): ## koruma bölgesindeki oyuncuya isabet etmez
 				continue
 			if (p as Node2D).global_position.distance_to(global_position) <= HIT_RADIUS:
 				return p

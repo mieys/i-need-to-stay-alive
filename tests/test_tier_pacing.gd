@@ -189,7 +189,8 @@ func test_no_cliff_between_tiers_measured_with_the_real_spawn_path() -> void:
 	var boost: float = SpawnerScript.CREATURE_STAT_BOOST
 	## 2026-10-18: Kademe 1 rosteri artık yalnız slime1 (SLIME_START_DELAY 0, eskiden fareler) ve Kademe 2 slime1 + iskelet1 -> mutlak değerler
 	## ölçümle yenilendi (K1 slime1 10,64 can x ~2,6 çarpan = ~28; K2 ~48). Oranlar/adımlar aşağıdaki sınırlarla korunur.
-	assert(absf(float(ehp[1]) - 28.0) < 3.0, "Kademe 1 (yalnız slime1) etkin canı değişmemeli: %.1f" % ehp[1])
+	## 2026-10-23 (madde 368): Kademe 1 rosteri slime1 x2 + iskelet1 (kemik atan iskelet) oldu -> ölçülen ortalama ~38 (slime1 ~28, iskelet1 ~59).
+	assert(absf(float(ehp[1]) - 38.0) < 4.0, "Kademe 1 (slime1 x2 + iskelet1) etkin canı değişmemeli: %.1f" % ehp[1])
 	assert(absf(float(ehp[2]) - 48.0) < 5.0, "Kademe 2 (slime1 + iskelet1) etkin canı değişmemeli: %.1f" % ehp[2])
 	## Kademe 2 -> 3 sıçraması: eskiden R x5.3 (46 -> 242), şimdi ~x3.
 	assert(float(r[3]) / float(r[2]) < 3.6, "K2 -> K3 sıçraması x3.6'yı aşmamalı: x%.2f" % (float(r[3]) / float(r[2])))

@@ -85,6 +85,24 @@ const REGEN_CARD_BY_TIER := [2.0, 4.0, 6.0, 8.0]
 static func regen_card_for_tier(tier: int) -> float:
 	return REGEN_CARD_BY_TIER[clampi(tier, 1, REGEN_CARD_BY_TIER.size()) - 1]
 
+
+## Kalkan Yenilenmesi kartı (madde 380): saniyede yenilenen mana kalkanı, kademe 1..4 = 0,8 / 1,2 / 1,6 / 2,0 (Ruh Mağazası geliştirmesi seviye başına 0,4;
+## eşyalar 0,5-2). Tek ondalık merdiven: kartta yazan = uygulanan. player.gd apply_upgrade "shield_regen" ve level_up_screen.gd buradan okur.
+const SHIELD_REGEN_CARD_BY_TIER := [0.8, 1.2, 1.6, 2.0]
+
+
+static func shield_regen_card_for_tier(tier: int) -> float:
+	return SHIELD_REGEN_CARD_BY_TIER[clampi(tier, 1, SHIELD_REGEN_CARD_BY_TIER.size()) - 1]
+
+
+## İyileştirme Gücü kartı (madde 380): oyuncunun sağladığı TÜM can/kalkanı büyütür (heal_shield_power), kademe 1..4 = %2 / %3 / %4 / %5
+## (Ruh Mağazası seviye başına %2,5; eşyalar %5-10). Tam yüzdeler: kartta yazan = uygulanan.
+const HEAL_POWER_CARD_BY_TIER := [0.02, 0.03, 0.04, 0.05]
+
+
+static func heal_power_card_for_tier(tier: int) -> float:
+	return HEAL_POWER_CARD_BY_TIER[clampi(tier, 1, HEAL_POWER_CARD_BY_TIER.size()) - 1]
+
 ## Kart arkaplanı: level atlama kartlarının çizilmiş 4 tier çerçevesi
 ## (eskiden SADECE level_up_screen.gd'nin kendi TIER_FRAME_TEXTURES'ıydı).
 ## Kullanıcı isteği: "seyyar satıcı eşyalarının / sandık ödülü kartının

@@ -148,5 +148,5 @@ void fragment() {
 	if (col.a < 0.01) { discard; }
 	col.a *= opak;
 	COLOR = col;
-	COLOR.rgb = harita_renk(COLOR.rgb); // harita renk ayarı (madde 181) - fragment()'in EN SONUNDA kalmalı
+	if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_bitki_d(COLOR.rgb, world_pos); } // bölge bitki rengi (madde 361) + harita + derin orman bölge renk ayarı (madde 181/359) - fragment()'in EN SONUNDA kalmalı
 }

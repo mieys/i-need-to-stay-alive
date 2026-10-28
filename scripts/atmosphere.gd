@@ -309,7 +309,8 @@ func _on_state_received(state: Dictionary) -> void:
 
 func _local_player_indoors() -> bool:
 	var p: Node = get_tree().get_first_node_in_group("player")
-	return p != null and p.has_method("is_indoors_now") and bool(p.call("is_indoors_now"))
+	return p != null and ((p.has_method("is_indoors_now") and bool(p.call("is_indoors_now")))
+			or (p.has_method("is_underground_now") and bool(p.call("is_underground_now")))) ## zindan (madde 373): dış gün-gece/yağmur yok
 
 
 ## ------------------------------------------------------------------ Debug (bkz. debug_menu.gd "Atmosfer")

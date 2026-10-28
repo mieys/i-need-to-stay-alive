@@ -1,6 +1,7 @@
 extends SceneTree
 
-## GERÇEK soul_shop_screen.gd (tasarım F, 2026-10-16) sayfalarını gerçek çizicide yakalar: ana sayfa, 4 kategori, onay adımı, geliştirmeler.
+## GERÇEK soul_shop_screen.gd sayfalarını gerçek çizicide yakalar (2026-10-24'ten beri tasarım C "Ocak Başı Defteri", madde 383; ana sayfa yok):
+## 4 bölüm, onay adımı, kilitli öğe, geliştirmeler (+ sıfırlama onayı). Çıktı adı: gercek_c_<sayfa>.png. Gizli masaüstünde: tools/proto_20261024/ruh_c_gercek_run.ps1
 ## Sahte bakiye + sahte açılmış öğeler + sahte geliştirme seviyeleri, geçici kayıt (user://meta.cfg'ye DOKUNMAZ).
 ## Kullanım: Godot --path . --windowed --resolution 1920x1080 -s tools/proto_20261016/soul_shop_real_capture.gd   (SHOP_CAP_DIR = çıktı klasörü)
 
@@ -53,19 +54,24 @@ func _run() -> void:
 	var shop: CanvasLayer = (load("res://scripts/soul_shop_screen.gd") as GDScript).new()
 	root.add_child(shop)
 	await _wait(0.5)
-	await _shot("gercek_f_ana")
-	for kind: String in ["char", "weapon", "pet", "spirit"]:
+	await _shot("gercek_c_char")
+	for kind: String in ["weapon", "pet", "spirit"]:
 		shop.call("_on_tab_pressed", kind)
-		await _shot("gercek_f_" + kind)
+		await _shot("gercek_c_" + kind)
 	shop.call("_on_tab_pressed", "char")
 	var items: Array = shop.call("_items")
 	for it: Dictionary in items:
 		if str(it["kind"]) == "char" and int(it["key"]) == 5:
 			shop.call("_on_buy_pressed", "char", it["key"]) ## ilk basış: ONAYLA?
-	await _shot("gercek_f_char_onay")
-	shop.call("_step_selection", "char", 3) ## kilitli bir karaktere geç (eksik kıymık görünümü)
-	await _shot("gercek_f_char_kilitli")
+	await _shot("gercek_c_char_onay")
+	for it: Dictionary in items:
+		if str(it["kind"]) == "char" and not bool(it["can"]) and not bool(it["open"]):
+			shop.call("_select", it) ## kilitli (kıymık yetmeyen) bir karakter
+			break
+	await _shot("gercek_c_char_kilitli")
 	shop.call("_on_tab_pressed", "upgrades")
-	await _shot("gercek_f_gelistirme")
+	await _shot("gercek_c_gelistirme")
+	shop.call("_on_reset_pressed") ## ilk basış: sıfırlama onayı
+	await _shot("gercek_c_gelistirme_sifirla")
 	DirAccess.remove_absolute(tmp)
 	quit()

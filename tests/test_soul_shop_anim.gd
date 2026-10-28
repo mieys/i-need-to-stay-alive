@@ -1,12 +1,12 @@
 extends Node
 
-## madde 323: Ruh Mağazası animasyonları (soul_shop_screen.gd _play_anims). Sayfa girişi / seçim / satın alma animasyonu oynar ve
-## bitince her şey TAM eski hâlinde (alfa 1, ölçek 1, parlama sönmüş, figür ofseti ve kart payları son değerinde); ayar kapalıyken anında.
+## madde 323: Ruh Mağazası animasyonları (soul_shop_screen.gd _play_anims; tasarım C, madde 383). Sayfa girişi / seçim / satın alma animasyonu
+## oynar ve bitince her şey TAM eski hâlinde (alfa 1, ölçek 1, parlama sönmüş, figür ofseti son değerinde); ayar kapalıyken anında.
 ## Kıymıklar GEÇİCİ dosyada (path_override) - gerçek user://meta.cfg'ye dokunmaz. Başlangıç evcili (köpek) mağaza listesinde yok.
 
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 const SoulShopScript: GDScript = preload("res://scripts/soul_shop_screen.gd")
-const SETTLE := 1.0 ## en uzun animasyon ~0,6 sn; ekransız koşuda ilk kareler yavaş olabiliyor
+const SETTLE := 1.6 ## en uzun animasyon ~0,6 sn; ekransız koşuda ilk kareler yavaş (ana menü sahnesi arka planı da kuruluyor)
 
 var _tmp: String = ""
 var _prev_enabled: bool = true
@@ -34,21 +34,38 @@ func _wait(sec: float) -> void:
 	await get_tree().create_timer(sec, true, false, true).timeout
 
 
-## Animasyon bitince hiçbir öğe saydam / ölçekli / parlak kalmamalı.
+## Animasyon bitince hiçbir öğe saydam / ölçekli / parlak kalmamalı (ana menü sahnesi arka planı hariç: ekrana göre ölçeklenir, tonludur).
 func _assert_settled(shop: Node, what: String) -> void:
 	for c: Node in shop.find_children("*", "Control", true, false):
+		if _in_background(c, shop):
+			continue
 		var ctl := c as Control
 		assert(is_equal_approx(ctl.modulate.a, 1.0), "%s: saydam kaldı %s (%s)" % [what, ctl, ctl.modulate])
 		assert(ctl.modulate.r <= 1.001 and ctl.modulate.g <= 1.001, "%s: parlama sönmedi %s" % [what, ctl.modulate])
 		assert(ctl.scale.is_equal_approx(Vector2.ONE), "%s: ölçek kaldı %s (%s)" % [what, ctl, ctl.scale])
 
 
-## Kart sarmalayıcısı = şeffaf katman ("card:<id>") -> kart -> sarmalayıcı.
-func _wrap(shop: Node, id: String) -> MarginContainer:
+func _in_background(n: Node, shop: Node) -> bool:
+	var p: Node = n
+	while p != null and p != shop:
+		if p.name == "BackgroundImage":
+			return true
+		p = p.get_parent()
+	return false
+
+
+## Liste satırı = şeffaf katman ("row:<id>") -> satır kutusu.
+func _row(shop: Node, id: String) -> PanelContainer:
 	for b: Node in shop.find_children("*", "Button", true, false):
-		if b.has_meta("sid") and str(b.get_meta("sid")) == "card:" + id:
-			return b.get_parent().get_parent() as MarginContainer
+		if b.has_meta("sid") and str(b.get_meta("sid")) == "row:" + id:
+			return b.get_parent() as PanelContainer
 	return null
+
+
+## Seçili satırın zemini vurgulu.
+func _row_on(shop: Node, id: String) -> bool:
+	var r := _row(shop, id)
+	return r != null and (r.get_theme_stylebox("panel") as StyleBoxFlat).bg_color.a > 0.05
 
 
 ## Sahne figürü: alttan + ortadan çapalı TextureRect.
@@ -77,33 +94,28 @@ func test_page_in_selection_purchase_restore() -> void:
 	await _wait(SETTLE)
 	_assert_settled(shop, "açılış")
 
-	## Sayfa değişimi: kartlar sırayla belirir.
+	## Sayfa değişimi: satırlar sırayla belirir.
 	shop.call("_on_tab_pressed", "pet")
 	var a: String = "pet:papagan"
 	var b: String = "pet:kelebek"
-	assert(_wrap(shop, a) != null and _wrap(shop, b) != null, "evcil kartları kuruldu")
-	assert(_wrap(shop, b).modulate.a < 0.5, "sayfa girişinde kartlar saydamdan başlamalı")
+	assert(_row(shop, a) != null and _row(shop, b) != null, "evcil satırları kuruldu")
+	assert(_row(shop, b).modulate.a < 0.5, "sayfa girişinde satırlar saydamdan başlamalı")
 	await _wait(SETTLE)
 	_assert_settled(shop, "evcil sayfası")
-	if _wrap(shop, a).get_theme_constant("margin_top") != 0: ## ilk seçili papağan değilse önce onu seç
+	if not _row_on(shop, a): ## ilk seçili papağan değilse önce onu seç
 		shop.call("_select", _find(shop, a))
 		await _wait(SETTLE)
 
-	## Seçim: figür yandan kayar, yeni kart yükselir, eskisi iner.
+	## Seçim: figür yandan kayar, ayrıntı belirir, vurgu yeni satıra geçer.
 	shop.call("_select", _find(shop, b))
 	var fig := _figure(shop)
 	assert(fig != null, "sahne figürü var")
 	assert(not is_zero_approx(fig.offset_left + fig.offset_right), "figür yandan kayarak başlamalı")
 	assert(fig.modulate.a < 0.5, "figür saydamdan başlamalı")
-	assert(_wrap(shop, b).get_theme_constant("margin_top") == 14, "yeni seçili kart aşağıdan başlamalı")
-	assert(_wrap(shop, a).get_theme_constant("margin_top") == 0, "eski seçili kart yukarıdan başlamalı")
+	assert(_row_on(shop, b) and not _row_on(shop, a), "vurgu yeni seçili satırda")
 	await _wait(SETTLE)
 	_assert_settled(shop, "seçim")
 	assert(is_zero_approx(fig.offset_left + fig.offset_right), "figür ortaya oturmalı: %s %s" % [fig.offset_left, fig.offset_right])
-	var ws := _wrap(shop, b)
-	var wp := _wrap(shop, a)
-	assert(ws.get_theme_constant("margin_top") == 0 and ws.get_theme_constant("margin_bottom") == 14, "seçili kart yukarıda")
-	assert(wp.get_theme_constant("margin_top") == 14 and wp.get_theme_constant("margin_bottom") == 0, "eski kart aşağıda")
 
 	## Satın alma (papağan 120): bakiye eskisinden sayar, figür parlar.
 	shop.call("_select", _find(shop, a))
@@ -114,6 +126,7 @@ func test_page_in_selection_purchase_restore() -> void:
 	var bal: Label = shop.get("_balance_label")
 	assert(bal.text == "150", "sayaç eski bakiyeden başlamalı: %s" % bal.text)
 	assert(_figure(shop).modulate.r > 1.0, "alınan figür parlamalı: %s" % _figure(shop).modulate)
+	assert(_row(shop, a).modulate.r > 1.0, "alınan satır parlamalı: %s" % _row(shop, a).modulate)
 	await _wait(SETTLE)
 	assert(bal.text == str(MetaProgressScript.shards()) and bal.text == "30", "sayaç yeni bakiyede durmalı: %s" % bal.text)
 	_assert_settled(shop, "satın alma")
@@ -133,7 +146,7 @@ func test_disabled_setting_is_instant() -> void:
 		shop.call("_select", _find(shop, id))
 		var fig := _figure(shop)
 		assert(is_zero_approx(fig.offset_left + fig.offset_right), "kapalıyken figür anında yerinde")
-		assert(_wrap(shop, id).get_theme_constant("margin_top") == 0, "kapalıyken kart anında yukarıda")
+		assert(_row_on(shop, id), "kapalıyken vurgu anında seçili satırda")
 	shop.call("_on_buy_pressed", "pet", "papagan")
 	shop.call("_on_buy_pressed", "pet", "papagan")
 	assert((shop.get("_balance_label") as Label).text == "30", "kapalıyken bakiye anında")

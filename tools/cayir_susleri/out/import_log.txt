@@ -1,0 +1,193 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[   0% ] [90m[1mfirst_scan_filesystem[22m | Started Project initialization (5 steps)[39m[0m
+[   0% ] [90m[1mfirst_scan_filesystem[22m | Scanning file structure...[39m[0m
+[  16% ] [90m[1mfirst_scan_filesystem[22m | Loading global class names...[39m[0m
+[  33% ] [90m[1mfirst_scan_filesystem[22m | Verifying GDExtensions...[39m[0m
+[  50% ] [90m[1mfirst_scan_filesystem[22m | Creating autoload scripts...[39m[0m
+[  66% ] [90m[1mfirst_scan_filesystem[22m | Initializing plugins...[39m[0m
+[  83% ] [90m[1mfirst_scan_filesystem[22m | Starting file scan...[39m[0m
+[92m[ DONE ][39m [1mfirst_scan_filesystem[22m
+[0m
+[   0% ] [90m[1mupdate_scripts_classes[22m | Started Registering global classes... (2 steps)[39m[0m
+[   0% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  33% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[92m[ DONE ][39m [1mupdate_scripts_classes[22m
+[0m
+[   0% ] [90m[1m_update_scan_actions[22m | Started Scanning actions... (23 steps)[39m[0m
+[   0% ] [90m[1m_update_scan_actions[22m | harita_golgeleri.png[39m[0m
+[   4% ] [90m[1m_update_scan_actions[22m | minimap_map.png[39m[0m
+[   8% ] [90m[1m_update_scan_actions[22m | Harita.tmx[39m[0m
+[  12% ] [90m[1m_update_scan_actions[22m | avci_kampi.png[39m[0m
+[  16% ] [90m[1m_update_scan_actions[22m | ev_cikisi.png[39m[0m
+[  20% ] [90m[1m_update_scan_actions[22m | guneybati.png[39m[0m
+[  25% ] [90m[1m_update_scan_actions[22m | guneydogu_cayir.png[39m[0m
+[  29% ] [90m[1m_update_scan_actions[22m | kavsak_nehir.png[39m[0m
+[  33% ] [90m[1m_update_scan_actions[22m | sonra.png[39m[0m
+[  37% ] [90m[1m_update_scan_actions[22m | yakin_ev.png[39m[0m
+[  41% ] [90m[1m_update_scan_actions[22m | yakin_ev_once.png[39m[0m
+[  45% ] [90m[1m_update_scan_actions[22m | yakin_guneybati.png[39m[0m
+[  50% ] [90m[1m_update_scan_actions[22m | yakin_guneybati_once.png[39m[0m
+[  54% ] [90m[1m_update_scan_actions[22m | yakin_guneydogu.png[39m[0m
+[  58% ] [90m[1m_update_scan_actions[22m | yakin_guneydogu_once.png[39m[0m
+[  62% ] [90m[1m_update_scan_actions[22m | once.png[39m[0m
+[  66% ] [90m[1m_update_scan_actions[22m | sonra.png[39m[0m
+[  70% ] [90m[1m_update_scan_actions[22m | yakin_ev.png[39m[0m
+[  75% ] [90m[1m_update_scan_actions[22m | yakin_ev_once.png[39m[0m
+[  79% ] [90m[1m_update_scan_actions[22m | yakin_guneybati.png[39m[0m
+[  83% ] [90m[1m_update_scan_actions[22m | yakin_guneybati_once.png[39m[0m
+[  87% ] [90m[1m_update_scan_actions[22m | yakin_guneydogu.png[39m[0m
+[  91% ] [90m[1m_update_scan_actions[22m | yakin_guneydogu_once.png[39m[0m
+[92m[ DONE ][39m [1m_update_scan_actions[22m
+[0m
+[   0% ] [90m[1mreimport[22m | Started (Re)Importing Assets (61 steps)[39m[0m
+[   0% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[   1% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[   3% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[   4% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[   6% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[   8% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[   9% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  11% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  12% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  14% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  16% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  17% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  19% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  20% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  22% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  24% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  25% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  27% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  29% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  30% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  32% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  33% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  35% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  37% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  38% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  40% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  41% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  43% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  45% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  46% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  48% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  50% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  51% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  53% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  54% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  56% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  58% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  59% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  61% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  62% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  64% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  66% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  67% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  69% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  70% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  72% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  74% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  75% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  77% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  79% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  80% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  82% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  83% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  85% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  87% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  88% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  90% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  91% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  93% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  95% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[  96% ] [90m[1mreimport[22m | Preparing files to reimport...[39m[0m
+[   0% ] [90m[1mreimport[22m | Executing pre-reimport operations...[39m[0m
+[   0% ] [90m[1mpreload_reimporting_scene[22m | Started Preparing scenes for reload (1 steps)[39m[0m
+[   0% ] [90m[1mpreload_reimporting_scene[22m | Analyzing scene [empty][39m[0m
+[  50% ] [90m[1mpreload_reimporting_scene[22m | Preparation done.[39m[0m
+[92m[ DONE ][39m [1mpreload_reimporting_scene[22m
+[0m
+[   0% ] [90m[1mreimport[22m | derin_orman_zemin_12.png[39m[0m
+[   1% ] [90m[1mreimport[22m | derin_orman_zemin_13.png[39m[0m
+[   3% ] [90m[1mreimport[22m | derin_orman_zemin_14.png[39m[0m
+[   4% ] [90m[1mreimport[22m | derin_orman_zemin_15.png[39m[0m
+[   6% ] [90m[1mreimport[22m | derin_orman_zemin_16.png[39m[0m
+[   8% ] [90m[1mreimport[22m | derin_orman_zemin_17.png[39m[0m
+[   9% ] [90m[1mreimport[22m | derin_orman_zemin_18.png[39m[0m
+[  11% ] [90m[1mreimport[22m | derin_orman_zemin_19.png[39m[0m
+[  12% ] [90m[1mreimport[22m | water_detilazation_v2.png[39m[0m
+[  14% ] [90m[1mreimport[22m | derin_orman_zemin_20.png[39m[0m
+[  16% ] [90m[1mreimport[22m | Objects.png[39m[0m
+[  17% ] [90m[1mreimport[22m | water_lilis.png[39m[0m
+[  19% ] [90m[1mreimport[22m | Exterior_house.png[39m[0m
+[  20% ] [90m[1mreimport[22m | Flowers.png[39m[0m
+[  22% ] [90m[1mreimport[22m | avci_kampi.png[39m[0m
+[  24% ] [90m[1mreimport[22m | ev_cikisi.png[39m[0m
+[  25% ] [90m[1mreimport[22m | guneybati.png[39m[0m
+[  27% ] [90m[1mreimport[22m | guneydogu_cayir.png[39m[0m
+[  29% ] [90m[1mreimport[22m | kavsak_nehir.png[39m[0m
+[  30% ] [90m[1mreimport[22m | sonra.png[39m[0m
+[  32% ] [90m[1mreimport[22m | yakin_ev.png[39m[0m
+[  33% ] [90m[1mreimport[22m | yakin_ev_once.png[39m[0m
+[  35% ] [90m[1mreimport[22m | yakin_guneybati.png[39m[0m
+[  37% ] [90m[1mreimport[22m | yakin_guneybati_once.png[39m[0m
+[  38% ] [90m[1mreimport[22m | yakin_guneydogu.png[39m[0m
+[  40% ] [90m[1mreimport[22m | yakin_guneydogu_once.png[39m[0m
+[  41% ] [90m[1mreimport[22m | sonra.png[39m[0m
+[  43% ] [90m[1mreimport[22m | yakin_ev.png[39m[0m
+[  45% ] [90m[1mreimport[22m | yakin_guneybati.png[39m[0m
+[  46% ] [90m[1mreimport[22m | yakin_guneydogu.png[39m[0m
+[  48% ] [90m[1mreimport[22m | harita_golgeleri.png[39m[0m
+[  50% ] [90m[1mreimport[22m | minimap_map.png[39m[0m
+[  51% ] [90m[1mreimport[22m | Ground_grass.png[39m[0m
+[  53% ] [90m[1mreimport[22m | exterior.png[39m[0m
+[  54% ] [90m[1mreimport[22m | sade ağaç ve taş.png[39m[0m
+[  56% ] [90m[1mreimport[22m | Exterior_objects.png[39m[0m
+[  58% ] [90m[1mreimport[22m | ground_grass_bricks.png[39m[0m
+[  59% ] [90m[1mreimport[22m | Plants.png[39m[0m
+[  61% ] [90m[1mreimport[22m | Interior_objects.png[39m[0m
+[  62% ] [90m[1mreimport[22m | Interior.png[39m[0m
+[  64% ] [90m[1mreimport[22m | Exterior_tiles.png[39m[0m
+[  66% ] [90m[1mreimport[22m | Exterior_objetcs.png[39m[0m
+[  67% ] [90m[1mreimport[22m | Water_coasts.png[39m[0m
+[  69% ] [90m[1mreimport[22m | Candles.png[39m[0m
+[  70% ] [90m[1mreimport[22m | Interior_objects.png[39m[0m
+[  72% ] [90m[1mreimport[22m | saklanma_calilik.png[39m[0m
+[  74% ] [90m[1mreimport[22m | water.png[39m[0m
+[  75% ] [90m[1mreimport[22m | derin_orman.png[39m[0m
+[  77% ] [90m[1mreimport[22m | derin_orman_zemin_01.png[39m[0m
+[  79% ] [90m[1mreimport[22m | derin_orman_zemin_02.png[39m[0m
+[  80% ] [90m[1mreimport[22m | derin_orman_zemin_03.png[39m[0m
+[  82% ] [90m[1mreimport[22m | derin_orman_zemin_04.png[39m[0m
+[  83% ] [90m[1mreimport[22m | derin_orman_zemin_05.png[39m[0m
+[  85% ] [90m[1mreimport[22m | derin_orman_zemin_06.png[39m[0m
+[  87% ] [90m[1mreimport[22m | derin_orman_zemin_07.png[39m[0m
+[  88% ] [90m[1mreimport[22m | derin_orman_zemin_08.png[39m[0m
+[  90% ] [90m[1mreimport[22m | derin_orman_zemin_09.png[39m[0m
+[  91% ] [90m[1mreimport[22m | spots_lianas.png[39m[0m
+[  93% ] [90m[1mreimport[22m | derin_orman_zemin_10.png[39m[0m
+[  95% ] [90m[1mreimport[22m | derin_orman_zemin_11.png[39m[0m
+[  96% ] [90m[1mreimport[22m | Harita.tmx[39m[0m
+Import file 'res://harita/Harita.tmx'
+[93m -- Animated tile 39: Succession of tiles not supported in Godot 4. -> Skipped[39m[0m
+[93m -- Animated tile 40: Succession of tiles not supported in Godot 4. -> Skipped[39m[0m
+[93m -- Animated tile 137: Succession of tiles not supported in Godot 4. -> Skipped[39m[0m
+Import finished with 1 error and 3 warnings.
+[  98% ] [90m[1mreimport[22m | Finalizing Asset Import...[39m[0m
+[92m[ DONE ][39m [1mreimport[22m
+[0m
+[   0% ] [90m[1mreimport[22m | Started (Re)Importing Assets (61 steps)[39m[0m
+[   0% ] [90m[1mreimport[22m | Executing post-reimport operations...[39m[0m
+[92m[ DONE ][39m [1mreimport[22m
+[0m
+[   0% ] [90m[1mloading_editor_layout[22m | Started Loading editor (5 steps)[39m[0m
+[   0% ] [90m[1mloading_editor_layout[22m | Loading editor layout...[39m[0m
+[  16% ] [90m[1mloading_editor_layout[22m | Loading docks...[39m[0m
+[  33% ] [90m[1mloading_editor_layout[22m | Reopening scenes...[39m[0m
+[  50% ] [90m[1mloading_editor_layout[22m | Loading central editor layout...[39m[0m
+[  66% ] [90m[1mloading_editor_layout[22m | Loading plugin window layout...[39m[0m
+[  83% ] [90m[1mloading_editor_layout[22m | Editor layout ready.[39m[0m
+[92m[ DONE ][39m [1mloading_editor_layout[22m
+[0m
+ERROR: 102 RID allocations of type 'PN13RendererDummy14TextureStorage12DummyTextureE' were leaked at exit.

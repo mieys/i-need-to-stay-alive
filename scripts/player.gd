@@ -6,6 +6,8 @@ const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye R: elips alan + havada süzülme
 const WallSlideScript := preload("res://scripts/wall_slide.gd")
 const HideBrushScript := preload("res://scripts/hide_brush.gd")
+const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd")
+const LevelSpecialCardsScript := preload("res://scripts/level_special_cards.gd") ## madde 367: takas + silah türü level kartları
 const DepthOccludersFeet := preload("res://scripts/depth_occluders.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const ManaShieldFxScript := preload("res://scripts/mana_shield_fx.gd")
@@ -138,7 +140,7 @@ const SKILL_TIMING := {
 	## bırakıldı. Bekleme süresi de 60 -> 45sn (kullanıcı isteği).
 	## Kullanıcı isteği (2026-09-29): "E ve R artık yeni Q yeteneği oluyor, Q yeteneği artık E yeteneği olacak" - Kalkan
 	## Totemi (26) SKILL2_TIMING'e taşındı; Q artık Saldırı Totemi (27, eski E + eski R'nin alan hasarı, yavaşlatmasız).
-	27: {"duration": 0.0, "cooldown": 45.0},
+	27: {"duration": 0.0, "cooldown": 20.0}, ## 2026-10-21: 45 -> 20 sn (kullanıcı isteği; yük başına, bkz. _shaman_q_recharge_time)
 	## DÜZELTME (kullanıcı isteği: "Oakleyin R yeteneği artık boşta kalan Q
 	## yeteneği olacak") - Arı Sürüsü (skill id 33): eskiden SKILL3_TIMING[33]
 	## idi (R iken), "Bulunduğu konuma 10sn süren bir arı sürüsü salar", 20sn
@@ -377,6 +379,23 @@ func show_chat_bubble(text: String) -> void:
 ## da bu bayrak açıkken yeni yaratık üretmeyi durduruyor - bkz.
 ## house_interior.gd (giriş/çıkış tetikleyicisi).
 var is_indoors: bool = false
+
+## ---------- Zindan (madde 373, scripts/dungeon/) ----------
+## Oyuncu bir zindanın içindeyse zindan kimliği (dungeon_defs.gd), değilse "". is_indoors'tan FARKLI: zindandaki oyuncu yaratıkların hedefidir
+## (yalnız AYNI zindandakilerin - C++ EnemyWorld bölge kuralı); dış dünya görselleri/sesleri (gün-gece katmanı, bulut, yağmur/şimşek, akarsu) susar.
+## Ağa main.gd durum anlık görüntüsü "in_dungeon" ile gider (remote_player.gd). Giriş/çıkış: dungeon_manager.gd.
+var in_dungeon: String = ""
+
+
+func is_underground_now() -> bool:
+	return in_dungeon != ""
+
+
+## Hareket/ışınlanma sınırı: zindandaysa zindanın dikdörtgeni, değilse oyun alanı (GameManager.get_map_world_rect).
+func play_bounds() -> Rect2:
+	if in_dungeon != "":
+		return DungeonWorldScript.rect_of(in_dungeon)
+	return GameManager.get_map_world_rect()
 ## Açılış (madde 313, house_interior.gd place_player_for_intro): evde koltukta OTURARAK başla - doluyken ride_<yön> (oturuşun son
 ## karesi, cadı süpürgesiyle ortak klip; ağdan klip adıyla gider) oynar; ilk hareket boşaltır (kalkar).
 var intro_seat_face: String = ""
@@ -619,6 +638,10 @@ var item_speed_percent: float = 0.0
 ## (additive, (1.0 + toplam) çarpanı) ama ayrı bir biriktiricide tutuluyor ki
 ## eşya statlarıyla karışmasın.
 var speed_card_percent: float = 0.0
+## Silah TÜRÜ level kartları (madde 367, level_special_cards.gd): yakın dövüş / menzilli silahların hasarına eklenen KESİR (0.15 = +%15);
+## silaha _apply_weapon_bonuses_to içinden 1 + bu olarak gider (weapon.gd set_class_card_mult).
+var melee_card_percent: float = 0.0
+var ranged_card_percent: float = 0.0
 ## Hasat Çantası - get_pickup_range()'te çarpan olarak uygulanıyor.
 var item_pickup_range_percent: float = 0.0
 ## "Toplama Mesafesi" kartı: taban toplama mesafesine +%X (KESİR, 0.30 = +%30) - bkz. get_pickup_range().
@@ -1767,6 +1790,9 @@ func _apply_weapon_bonuses_to(w) -> void:
 		w.set_range_bonus(weapon_range_bonus)
 	if w.has_method("set_damage_bonus"):
 		w.set_damage_bonus(damage_bonus)
+	if w.has_method("set_class_card_mult"):
+		## Silah TÜRÜ kartları (madde 367): yakın dövüş silahı melee_card_percent, diğerleri ranged_card_percent alır.
+		w.set_class_card_mult(1.0 + (melee_card_percent if bool(w.get("melee")) else ranged_card_percent))
 	if w.has_method("set_fire_rate_mult"):
 		## Eldiven/Kaos Kitabı: item_fire_rate_percent (additive %saldırı hızı
 		## havuzu) - Elara pasifi gibi mult'u düşürerek uygulanıyor (düşük
@@ -2613,6 +2639,8 @@ func _block_movement_into_players() -> void:
 ## (orman/uçurum/su karoları) üstünden uçar. Orman üst katmanı da buna bakar (forest_canopy.gd): uçan karakter orman parçaları 2'nin üstünde çizilir.
 ## remote_player.gd passes_walls() ile AYNI kural.
 func passes_walls() -> bool:
+	if in_dungeon != "":
+		return false ## zindanda duvardan geçen uçuş yok (dışı boşluk)
 	return (_vampir_bat_form_active and has_evo("vampir_e2")) or (_cadi_broom_active and has_evo("cadi_e1"))
 
 
@@ -6101,6 +6129,7 @@ func take_damage(amount: float, source: Node2D = null) -> void:
 		# Feda Kalkanı: fully blocks the hit either way - it just eats the
 		# dome's own HP pool instead of health, and pops (with an explosion)
 		# if that pool runs out before the 15s window does.
+		_matthew_dome_absorbed += clampf(amount, 0.0, maxf(matthew_dome_hp, 0.0)) ## patlama payı (madde 356): taşan kısım sayılmaz
 		matthew_dome_hp -= amount
 		BalanceLogScript.on_prevented("s:matthew_kubbe", amount) ## kubbe isabeti her durumda tamamen yutar
 		_spawn_floating_text("%d" % int(round(amount)), Color(1.0, 1.0, 1.0))
@@ -7255,6 +7284,12 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 		"shield_amount":
 			shield_max_percent += _nice_up(0.05 * 1.3, 0.005) * tier_mult ## eskiden 0.05 (ondan önce 0.10), +%30 -> 0.065
 			refresh_shield_stats()
+		"shield_regen":
+			## Madde 380: saniyede yenilenen mana kalkanı (eşya/Ruh Mağazası ile AYNI birikim, bkz. _process_item_shield flat_regen); merdiven TierSystem'de.
+			item_shield_regen_flat += TierSystem.shield_regen_card_for_tier(tier)
+		"heal_power":
+			## Madde 380: sağladığın TÜM can/kalkan büyür (eşya/Ruh Mağazası ile AYNI birikim, bkz. heal_power_mult); merdiven TierSystem'de.
+			heal_shield_power += TierSystem.heal_power_card_for_tier(tier)
 		"cooldown_reduction":
 			## Yeni stat: "Bekleme Süresi Azaltma" - kart başına +%4, üst
 			## sınır %60 (bkz. COOLDOWN_REDUCTION_CAP, _activate_skill/
@@ -7285,7 +7320,55 @@ func apply_upgrade(id: String, tier: int = 1) -> void:
 				if _skill2_cooldown > 0.0:
 					skill2_timer *= new_cd2 / _skill2_cooldown
 				_skill2_cooldown = new_cd2
+		"class_melee":
+			## Madde 367: yalnız yakın dövüş silahlarının hasarı (level_special_cards.gd - kartta yazan = uygulanan).
+			melee_card_percent += LevelSpecialCardsScript.gain_value(id, tier)
+			_apply_weapon_bonuses()
+		"class_ranged":
+			ranged_card_percent += LevelSpecialCardsScript.gain_value(id, tier)
+			_apply_weapon_bonuses()
+		_:
+			if LevelSpecialCardsScript.is_trade(id):
+				_apply_trade_card(id, tier)
+	## Madde 379: düz stat kartları + silah türü kartları da bir BEDEL öder (takaslar kendi yolunda ödedi); aynı zemin kuralı (_trade_apply_stat).
+	if LevelSpecialCardsScript.has_cost(id) and not LevelSpecialCardsScript.is_trade(id):
+		_trade_apply_stat(LevelSpecialCardsScript.cost_stat(id), LevelSpecialCardsScript.cost_value(id, tier), false)
+		_apply_weapon_bonuses() ## saldırı hızı bedeli silahların bekleme süresini etkiler
 	stats_changed.emit()
+
+
+## TAKAS kartı (madde 367): kazanç + bedel TEK yerden (level_special_cards.gd DEFS) okunur. Bedel zeminlere (MIN_*) saygı duyar; zemindeki
+## stat için bedelli takas zaten teklif edilmez (LevelSpecialCards.can_pay), bu yalnız kademe 4 bedelinin son adımını yutar.
+func _apply_trade_card(id: String, tier: int) -> void:
+	_trade_apply_stat(LevelSpecialCardsScript.gain_stat(id), LevelSpecialCardsScript.gain_value(id, tier), true)
+	_trade_apply_stat(LevelSpecialCardsScript.cost_stat(id), LevelSpecialCardsScript.cost_value(id, tier), false)
+	_apply_weapon_bonuses()
+
+
+func _trade_apply_stat(stat: String, amount: float, gain: bool) -> void:
+	if stat == "" or amount <= 0.0:
+		return
+	match stat:
+		"damage":
+			damage_bonus = maxf(0.0, damage_bonus + (amount if gain else -amount))
+		"max_health":
+			var new_max: float = max_health + amount if gain else maxf(LevelSpecialCardsScript.MIN_MAX_HEALTH, max_health - amount)
+			var applied: float = new_max - max_health
+			max_health = new_max
+			## Kazançta düz Can kartı gibi mevcut cana da eklenir; bedelde mevcut can yeni tavana çekilir.
+			health = clampf(health + maxf(applied, 0.0), 1.0, max_health)
+			health_changed.emit(health, max_health)
+		"speed":
+			speed_card_percent = speed_card_percent + amount if gain else maxf(LevelSpecialCardsScript.MIN_SPEED_CARD, speed_card_percent - amount)
+		"fire_rate":
+			## Düz kartla aynı: kazanç aralık çarpanını düşürür; bedel tersine 1/(1-x) ile uzatır (yüzde tam -%x saldırı hızı olur).
+			var f: float = maxf(0.2, 1.0 - amount)
+			fire_rate_mult = fire_rate_mult * f if gain else minf(LevelSpecialCardsScript.MAX_INTERVAL_MULT, fire_rate_mult / f)
+		"lifesteal":
+			lifesteal_percent = maxf(0.0, lifesteal_percent + (amount if gain else -amount))
+		"shield":
+			shield_max_percent = shield_max_percent + amount if gain else maxf(LevelSpecialCardsScript.MIN_SHIELD_PERCENT, shield_max_percent - amount)
+			refresh_shield_stats()
 
 
 # ---------- Skills ----------
@@ -7692,10 +7775,11 @@ func _end_skill3_effects() -> void:
 				_end_talon_mirror_form()
 		## DÜZELTME (kullanıcı isteği 2026-09-22: "Matthew'in yeni skili... kalkan yeteneğini R'ye yerleştir") -
 		## Feda Kalkanı'nın (dome) temizliği eskiden _end_skill_effects()'teydi (Q/skill_state), artık burada:
-		## 15sn kendiliğinden dolarsa (oyuncu patlatmadan) kalkan sessizce (patlamasız) kapanır.
+		## Madde 356: 15 sn kendiliğinden dolunca da PATLAR (eskiden sessizce kapanıyordu - kullanıcı: "ultisi patlamıyor gibi").
+		## Ölü/yerdeyken patlamaz.
 		9:
 			if matthew_dome_active:
-				_pop_matthew_dome(false)
+				_pop_matthew_dome(not is_dead and not is_downed, true)
 		## Suriyeli Hadime Karabasan (id 48) 15 sn dolunca / erken iptalde normal forma döner.
 		48:
 			if _hadime_nightmare_active:
@@ -10982,6 +11066,8 @@ var _matthew_ball_fx: Node2D = null
 var _matthew_ball_cooldowns: Dictionary = {} ## yaratık instance_id -> yeniden vurulabilmesine kalan sn
 var _matthew_hit_sfx_msec: int = 0
 var matthew_dome_max: float = 0.0 ## kalkanın açılıştaki kapasitesi (parıltı oranı için)
+var _matthew_dome_absorbed: float = 0.0 ## kalkanın bu açılışta emdiği hasar (en çok kapasite) - patlamayı büyütür (madde 356)
+var _matthew_burst_until_msec: int = 0 ## patlama parıltısının bittiği an (Time.get_ticks_msec)
 
 
 func _is_matthew() -> bool:
@@ -11263,8 +11349,19 @@ func _matthew_ball_chain_hit(victim: Node2D, dir: Vector2, delay: float) -> void
 
 ## ---------- R: Yıldırım Kalkanı (id 9) - kalkan kırılmaya yaklaştıkça sarı parıltı ----------
 func _matthew_update_glow() -> void:
+	MatthewLightning.apply_glow(anim, _matthew_glow_level())
+
+
+## Kalkan yıpranması ya da patlama sonrası "aşırı yük" parıltısı (madde 356) - hangisi büyükse.
+func _matthew_glow_level() -> float:
 	var level: float = MatthewLightning.glow_level(matthew_dome_hp, matthew_dome_max) if matthew_dome_active else 0.0
-	MatthewLightning.apply_glow(anim, level)
+	if _matthew_burst_until_msec > 0:
+		var left: int = _matthew_burst_until_msec - Time.get_ticks_msec()
+		if left <= 0:
+			_matthew_burst_until_msec = 0
+		else:
+			level = maxf(level, MatthewLightning.burst_glow_level(left))
+	return level
 
 
 ## main.gd extra["mt"]: diğer oyunculardaki kuklanın kuracağı sürekli durumlar (bkz. matthew_lightning.gd pack_state).
@@ -11272,7 +11369,7 @@ func matthew_net_state() -> Array:
 	var ball: int = 0
 	if _matthew_ball_active:
 		ball = 2 if has_evo("matthew_ef") else 1
-	var glow: int = MatthewLightning.glow_step(MatthewLightning.glow_level(matthew_dome_hp, matthew_dome_max)) if matthew_dome_active else 0
+	var glow: int = MatthewLightning.glow_step(_matthew_glow_level())
 	return MatthewLightning.pack_state(ball, MatthewLightning.is_empowered(_matthew_momentum) and not is_dead and not is_downed and not is_safe_zone_frozen(), glow)
 
 
@@ -11914,6 +12011,7 @@ func _skill_shield_dome() -> void:
 	## Kullanıcı isteği (2026-09-28): kapasite = saldırı gücü x MATTHEW_DOME_AP_RATIO (%1000). Evrim r1: %50 fazla (%1500).
 	matthew_dome_hp = _apply_ability_crit(damage_bonus * MATTHEW_DOME_AP_RATIO * (EVO_MATTHEW_DOME_MULT if has_evo("matthew_r1") else 1.0), _roll_ability_crit())
 	matthew_dome_max = matthew_dome_hp ## parıltı oranı (bkz. _matthew_update_glow): kalkan yıprandıkça Matthew sarı parıldar
+	_matthew_dome_absorbed = 0.0
 	matthew_dome_active = true
 	## Gökten Matthew'in başına inen çağırma şimşeği (karaktere bağlı, tek seferlik - diğer oyunculara da gider).
 	_play_and_broadcast_skill_fx(FxMatthewShieldCastScene, {"position": MatthewLightning.HEAD_TOP})
@@ -11924,7 +12022,8 @@ func _skill_shield_dome() -> void:
 	add_child(_matthew_fox_shield_fx)
 
 
-func _pop_matthew_dome(exploded: bool) -> void:
+## from_skill_end: _end_skill3_effects'ten (süre doldu) - R zaten bekleme süresine geçiyor, erken iptal çağrılmaz.
+func _pop_matthew_dome(exploded: bool, from_skill_end: bool = false) -> void:
 	matthew_dome_active = false
 	matthew_dome_hp = 0.0
 	if _matthew_fox_shield_fx and is_instance_valid(_matthew_fox_shield_fx):
@@ -11939,37 +12038,54 @@ func _pop_matthew_dome(exploded: bool) -> void:
 		## Kullanıcı isteği (2026-09-28): "R nin sağladığı koruma kalkanı patlayınca yetenek bitmiş oluyor yani bekleme
 		## süresine girmeli o esnada" - eskiden kalkan kırılsa da R 15 sn "aktif" sayılıp bekleme süresi ancak sonra
 		## başlıyordu. Artık kırıldığı an bekleme süresi başlar (süre dolunca kapanma yolu değişmedi).
-		if get_skill3_id() == 9:
+		if not from_skill_end and get_skill3_id() == 9:
 			_cancel_active_skill3_early()
+	_matthew_dome_absorbed = 0.0
 
 
 ## Same shape as _do_repel() - area damage + knockback around the player.
+## Madde 356 ("pikachunun çıldırışı gibi"): hasar SG x %400 + emilen hasarın %50'si (eskiden sabit 60), en yakın BURST_MAX_BOLTS
+## yaratığa Matthew'dan Q şimşeği çakar, Matthew BURST_GLOW_TIME boyunca tam parlar (ağda parıltı basamağıyla), patlama sayfası
+## yeni (tools/gen_matthew_ult_burst.py) + güçlü sarsıntı / çift ses (scenes/fx_matthew_nova.tscn).
 func _matthew_dome_explosion() -> void:
-	const RADIUS := 220.0
-	const DAMAGE := 60.0
-	const KNOCKBACK := 260.0
 	## Kullanıcı isteği: "bütün yetenekler kritik vuruş yapabilir".
 	var is_crit: bool = _roll_ability_crit()
-	var dmg: float = _apply_ability_crit(DAMAGE, is_crit)
-	for e in get_tree().get_nodes_in_group("enemies"):
+	var dmg: float = _apply_ability_crit(MatthewLightning.burst_damage(damage_bonus, _matthew_dome_absorbed), is_crit)
+	_matthew_dome_absorbed = 0.0
+	var body: Vector2 = _matthew_body_center()
+	var struck: Array = [] ## [mesafe, yaratık] - şimşek hedefleri
+	for e in EnemyQueryScript.candidates(get_tree(), global_position, MatthewLightning.BURST_RADIUS):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue
 		var d: float = global_position.distance_to(e.global_position)
-		if d > RADIUS:
+		if d > MatthewLightning.BURST_RADIUS:
 			continue
 		if e.has_method("take_damage"):
 			BalanceLogScript.tag(&"s:matthew_kubbe")
 			e.take_damage(dmg, is_crit, 0.0, true)
+		struck.append([d, e])
 		if d > 0.1:
 			var dir: Vector2 = (e.global_position - global_position).normalized()
 			if e.has_method("apply_knockback_force"):
-				e.apply_knockback_force(dir, KNOCKBACK)
+				e.apply_knockback_force(dir, MatthewLightning.BURST_KNOCKBACK)
 			else:
-				e.global_position += dir * KNOCKBACK
-	## 2026-10-12 rework: yıldırım patlaması (ışınsal şimşekler + zikzak şok dalgası, yarıçap 220 = hasar yarıçapı) - eski
-	## tilki ateşi patlaması (fx_matthew_explosion.tscn) ve pürüzsüz _spawn_burst halkası yerine. Dünyada kalır, diğer
-	## oyunculara aynı sahne gider.
-	_evo_world_fx(FxMatthewNovaScene, _matthew_body_center())
+				e.global_position += dir * MatthewLightning.BURST_KNOCKBACK
+	## Dünyada kalan patlama (yarıçap = hasar yarıçapı); diğer oyunculara aynı sahne gider ("hitscan_impact").
+	_evo_world_fx(FxMatthewNovaScene, body)
+	## En yakın yaratıklara Matthew'dan şimşek (Q'nun sahnesi; itmeden önceki konuma çakar - aynı karede).
+	struck.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	for i in range(mini(struck.size(), MatthewLightning.BURST_MAX_BOLTS)):
+		var t: Node2D = struck[i][1] as Node2D
+		if not is_instance_valid(t):
+			continue
+		var target_pos: Vector2 = t.global_position + Vector2(0.0, -8.0)
+		var from: Vector2 = body + (target_pos - body).limit_length(5.0)
+		var span: Vector2 = target_pos - from
+		if span.length() < 12.0:
+			continue
+		_evo_world_fx(FxMatthewBoltScene, from, span.length(), span.angle())
+	_matthew_burst_until_msec = Time.get_ticks_msec() + int(MatthewLightning.BURST_GLOW_TIME * 1000.0)
+	_matthew_update_glow()
 
 
 ## Helper: broadcast a skill overlay scene to remote players.
@@ -12918,7 +13034,7 @@ func _spirit_cast_taktik() -> void:
 ## UZAĞINDAN geriye doğru taranır, duvarın ötesindeki ilk açık (engelsiz + harita içi) nokta hedef olur. Menzilde hiç açık
 ## nokta yoksa başlangıç döner (çağıran "YOL KAPALI" der).
 func _spirit_blink_through(from: Vector2, dir: Vector2, dist: float) -> Vector2:
-	var map_rect: Rect2 = GameManager.get_map_world_rect()
+	var map_rect: Rect2 = play_bounds()
 	var step: float = 8.0
 	var walked: float = dist
 	while walked >= step:
@@ -12940,7 +13056,7 @@ func _blink_spot_has_room(p: Vector2) -> bool:
 
 ## from'dan dir yönünde en fazla dist kadar, orman/uçurum duvarına ve harita sınırına çarpmadan ulaşılabilen son nokta.
 func _spirit_walk_clear(from: Vector2, dir: Vector2, dist: float) -> Vector2:
-	var map_rect: Rect2 = GameManager.get_map_world_rect()
+	var map_rect: Rect2 = play_bounds()
 	var best: Vector2 = from
 	var step: float = 8.0
 	var walked: float = step
@@ -13055,7 +13171,7 @@ func get_effective_move_speed() -> float:
 func _clamp_to_map_bounds() -> void:
 	if is_indoors:
 		return
-	var map_rect: Rect2 = GameManager.get_map_world_rect()
+	var map_rect: Rect2 = play_bounds()
 	if map_rect.size == Vector2.ZERO:
 		return
 	var inner: Rect2 = map_rect.grow(-MAP_EDGE_INSET)

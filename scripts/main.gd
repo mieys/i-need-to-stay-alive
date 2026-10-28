@@ -3,6 +3,7 @@ extends Node2D
 const LevelUpScreenScene = preload("res://scenes/level_up_screen.tscn")
 ## Yetenek evrimleri (2026-09-28): evrim kartı seçimi "evo:<id>" olarak gelir (bkz. _on_upgrade_chosen).
 const SkillEvolutionsScript := preload("res://scripts/skill_evolutions.gd")
+const DungeonDefsScript := preload("res://scripts/dungeon/dungeon_defs.gd") ## ZİNDANLAR (madde 373)
 const MissionCompleteWindowScript := preload("res://scripts/mission_complete_window.gd")
 const GameNoticeScript := preload("res://scripts/game_notice.gd") ## bildirim levhaları (madde 264)
 const WaitOverlayScript := preload("res://scripts/wait_overlay.gd") ## oyuncular bekleniyor ekranı (madde 264)
@@ -71,6 +72,7 @@ const MapShadowsScript := preload("res://scripts/map_shadows.gd")
 const GroundTexelPassScript := preload("res://scripts/ground_texel_pass.gd")
 const MapColorGradeScript := preload("res://scripts/map_color_grade.gd")
 const WaterFxScript := preload("res://scripts/water_fx.gd")
+const DeepForestFxScript := preload("res://scripts/deep_forest_fx.gd")
 const FxWarmupScript := preload("res://scripts/fx_warmup.gd")
 const WorldRenderScaleScript := preload("res://scripts/world_render_scale.gd")
 const MobileUI := preload("res://scripts/mobile_ui.gd")
@@ -402,6 +404,8 @@ func _ready() -> void:
 		## Su (madde 214): akıntılı dalgacık shader'ına kıyı uzaklığı + akış dokuları, çarpışmasız su da aynı materyal (bkz. water_fx.gd).
 		WaterFxScript.attach(harita_node)
 		GroundTexelPassScript.attach(harita_node)
+		## Derin orman (madde 359): tepe arkası bölgesinde havada süzülen ruh ışıkları - sadece görsel, yerel (bkz. deep_forest_fx.gd).
+		DeepForestFxScript.attach(harita_node)
 	## Yaratık-oyuncu derinliği: oyuncunun önünde duran yaratık oyuncunun üstüne çizilir (bkz. creature_depth.gd).
 	var creature_depth: Node = CreatureDepthScript.new()
 	creature_depth.name = "CreatureDepth"
@@ -418,6 +422,11 @@ func _ready() -> void:
 	var guard_camps: Node = GuardCampsScript.new()
 	guard_camps.name = "GuardCamps"
 	add_child(guard_camps)
+	## ZİNDANLAR (madde 373): derin orman kapılarından inilen zindanlar (bkz. scripts/dungeon/dungeon_manager.gd) - giriş/çıkış yerel,
+	## etkileşim durumu host'ta. Yol adı herkeste aynı olmalı (RPC): Main/DungeonManager.
+	var dungeons: Node = preload("res://scripts/dungeon/dungeon_manager.gd").new()
+	dungeons.name = "DungeonManager"
+	add_child(dungeons)
 	_install_draw_order_guard()
 	## Grafik ayarı "Çözünürlük ölçeği" (bkz. world_render_scale.gd; %100'de hiçbir şey kurmaz).
 	WorldRenderScaleScript.attach(self)
@@ -964,6 +973,8 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## Seyyar satıcının güvenli bölgesi - is_indoors ile AYNI amaç/desen
 			## (bkz. player.gd is_in_merchant_zone üstündeki yorum).
 			"is_in_merchant_zone": player.is_in_merchant_zone if "is_in_merchant_zone" in player else false,
+			## ZİNDAN (madde 373): 0 = ana harita, 1.. = DungeonDefs.DUNGEONS dizini + 1 (remote_player.gd in_dungeon).
+			"dng": DungeonDefsScript.index_of(str(player.get("in_dungeon"))) + 1 if str(player.get("in_dungeon")) != "" else 0,
 			"weapon_tiers": weapon_tiers,
 			## Gerçek yürüme hızı (bkz. player.gd get_effective_move_speed) - host'taki "Kopyanı Öldür" kopyası bu
 			## oyuncuyu kopyalıyorsa hızını buradan alır (RemotePlayer'ın kendi hız bilgisi yok).

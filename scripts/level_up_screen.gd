@@ -96,6 +96,10 @@ const UPGRADES = [
 	## dallar duruyor (bu havuzdan artık hiç seçilmiyor).
 	## Kullanıcı isteği: "Can çalma veren tüm statları %70 azalt" - +%1 -> +%0.3.
 	{"id": "lifesteal", "title": "Can Çalma", "desc": "+%1", "cat": "Saldırı", "color": CAT_ATTACK},
+	## Madde 380 (kullanıcı: yeni stat kartları): ikisinin de statı zaten vardı (eşya + Ruh Mağazası + stat paneli), kartı yoktu. Kazanç kademe tablosu
+	## TierSystem'de (desc yalnız kademe 1 yazısı), bedel level_special_cards.gd PLAIN_COSTS.
+	{"id": "shield_regen", "title": "Kalkan Yenilenmesi", "desc": "+0.8/sn", "cat": "Savunma", "color": CAT_DEFENSE},
+	{"id": "heal_power", "title": "İyileştirme Gücü", "desc": "+%2", "cat": "Yardımcı", "color": CAT_UTILITY},
 ]
 ## Kullanıcı isteği (1. tur): "kalkan emilimini ve geri tepmeyi kaldır, can
 ## yenilenmesini ekle" - "shield_protection" (o zamanki adıyla "Kalkan
@@ -163,6 +167,10 @@ func _ready() -> void:
 	_apply_reroll_button_style()
 	_apply_kit_style()
 	_layout_rows()
+	## Pazar (madde 388) satır düğümlerini de kurar ama kartları kendi sütununa alır; satır yazıları (RowValue/RowVerb...)
+	## gizli kartta dolmaya devam eder (testler ve _fill_row ortak).
+	if not _evo_mode and not MobileUIScript.enabled:
+		_build_market()
 	_apply_mobile_layout()
 	if _evo_mode:
 		_populate_evolution_rows()
@@ -201,9 +209,11 @@ func _ready() -> void:
 		if waiting_label:
 			waiting_label.text = "Süre dolarsa otomatik seçilir"
 		if countdown_panel:
-			countdown_panel.visible = NetworkManager.level_up_timer_active
+			countdown_panel.visible = NetworkManager.level_up_timer_active and _market_view == null
 			if countdown_panel.visible and countdown_label:
 				countdown_label.text = "%ds" % int(ceil(NetworkManager.level_up_countdown))
+		if _market_view and NetworkManager.level_up_timer_active:
+			_market_view.set_countdown(NetworkManager.level_up_countdown)
 
 
 ## Kartların arka planı artık saydam olduğu için (görünen çerçeve "Frame"
@@ -258,6 +268,14 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Karıştır butonuna basmakla BİREBİR aynı (altın bedeli/yetersiz altında kapalı buton kuralları aynen). GUI'den ÖNCE
 ## (_input) yakalanır: Space varsayılan "ui_accept" olduğu için yoksa klavye odağındaki KART seçilirdi.
 func _input(event: InputEvent) -> void:
+	## Pazar (madde 388): kart seçildiyse Enter = DEVAM ET (odaktaki düğmeye "ui_accept" gitmeden önce).
+	if _market_view and _has_chosen and event is InputEventKey and event.pressed and not event.echo \
+			and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
+		var p := get_tree().get_first_node_in_group("player")
+		if not (p and bool(p.get("is_chat_typing"))):
+			get_viewport().set_input_as_handled()
+			_market_continue()
+		return
 	if _has_chosen or not (event is InputEventKey) or not event.pressed or event.echo or event.keycode != KEY_SPACE:
 		return
 	var player := get_tree().get_first_node_in_group("player")
@@ -286,6 +304,14 @@ func _on_card_press(card: Button, is_down: bool) -> void:
 
 
 func _on_level_up_timer_tick(remaining: float) -> void:
+	if _market_view:
+		_market_view.set_countdown(remaining)
+		## Süre doldu: seçilmemişse kart otomatik seçilir, pazar beklemeden ekran kapanır.
+		if remaining <= 0.0:
+			if not _has_chosen:
+				_auto_pick_random_card()
+			_market_continue()
+		return
 	if countdown_panel:
 		countdown_panel.visible = true
 	if countdown_label:
@@ -413,15 +439,33 @@ func _weighted_sample(pool: Array, count: int) -> Array:
 ## son çare olarak sıfırlanır - sonsuza dek tekrarsız kalmak mümkün değil.
 var _shown_upgrade_ids: Array = []
 
+## Madde 367: 3 kartın 1'i ÖZEL havuzdan (takas / silah türü - level_special_cards.gd), 2'si düz stat kartı. Özel havuz boşsa (oyuncuda hiç
+## uygun kart yok) eski gibi 3 düz kart. Reroll'da özel kart da tekrarlanmaz (_shown_upgrade_ids).
+const LevelSpecialCardsScript := preload("res://scripts/level_special_cards.gd")
+const ROW_COST_COLOR := Color("#ff9a86") ## takas kartında bedel satırı
+
 func _populate_cards() -> void:
-	var available: Array = UPGRADES.filter(func(u): return not _shown_upgrade_ids.has(u["id"]))
-	if available.size() < 3:
+	var player := get_tree().get_first_node_in_group("player")
+	var special_ids: Array = LevelSpecialCardsScript.available_ids(player)
+	var stat_need: int = 2 if not special_ids.is_empty() else 3
+	## Madde 379: düz kartların da bedeli var - bedel statı zeminde olan oyuncuya o kart çıkmaz (LevelSpecialCards.can_pay).
+	var payable: Callable = func(u): return LevelSpecialCardsScript.can_pay(str(u["id"]), player)
+	var available: Array = UPGRADES.filter(func(u): return not _shown_upgrade_ids.has(u["id"]) and payable.call(u))
+	var special_avail: Array = special_ids.filter(func(id): return not _shown_upgrade_ids.has(id))
+	if available.size() < stat_need or (not special_ids.is_empty() and special_avail.is_empty()):
 		_shown_upgrade_ids.clear()
-		available = UPGRADES.duplicate()
-	var pool: Array = _weighted_sample(available, 3)
+		available = UPGRADES.filter(payable)
+		if available.size() < stat_need:
+			available = UPGRADES.duplicate() ## neredeyse hiçbir bedel ödenemiyor: kart yine çıkar, bedel zeminde yutulur (_trade_apply_stat)
+		special_avail = special_ids.duplicate()
+	var pool: Array = _weighted_sample(available, stat_need)
+	if not special_avail.is_empty():
+		var sc: Dictionary = LevelSpecialCardsScript.as_card(str(special_avail[randi() % special_avail.size()]))
+		sc["color"] = CAT_ATTACK if str(sc["kind"]) == "class" else CAT_UTILITY
+		pool.append(sc)
+		pool.shuffle() ## özel kart hep aynı sırada olmasın
 	for u in pool:
 		_shown_upgrade_ids.append(u["id"])
-	var player := get_tree().get_first_node_in_group("player")
 
 	for i in range(3):
 		var upgrade = pool[i]
@@ -462,7 +506,7 @@ func _populate_cards() -> void:
 		category_label.modulate = Color(1, 1, 1, 1)
 		UIKit.style_label(category_label, CARD_CATEGORY_FONT_SIZE, UIKit.C_CREAM, 4)
 
-		content.get_node("Icon").setup(upgrade["id"], upgrade["color"])
+		content.get_node("Icon").setup(str(upgrade.get("icon", upgrade["id"])), upgrade["color"]) ## özel kartlar (madde 367) kendi simgesini taşır
 
 		## Title etiketi = tier adı (Sıradan/Nadir/Epik/Efsanevi) - artık kartın tier renkli kurdelesinin üstünde, krem yazı.
 		var title_label: Label = content.get_node("Title") as Label
@@ -485,6 +529,8 @@ func _populate_cards() -> void:
 		count_label.add_theme_font_size_override("font_size", CARD_COUNT_FONT_SIZE)
 		count_label.text = ("%dx alındı" % count) if count > 0 else ""
 		_fill_row(card, upgrade, tier, count)
+		if _market_view:
+			_market_view.fill_card(card, _market_card_data(upgrade, tier, count))
 	_fit_plaque_desc.call_deferred()
 
 
@@ -856,11 +902,15 @@ func _fill_phone_card(card: Button, upgrade: Dictionary, tier: int, count: int) 
 			now = str(int(round(float(player.get("max_health")))))
 		else:
 			now = str(HudStatPanelScript.values_for(player).get(id, ""))
+	## Telefonda RowVerb gizli: bedel "Şu an" kutusunda (madde 367 özel kartlar, madde 379 düz kartlar da).
+	var shows_cost: bool = LevelSpecialCardsScript.has_cost(str(upgrade["id"]))
+	if shows_cost:
+		now = LevelSpecialCardsScript.cost_text(str(upgrade["id"]), tier)
 	var has_now: bool = now != "" and now != "-"
 	(card.get_node("PhNowBox") as CanvasItem).visible = has_now
 	var now_lbl: Label = card.get_node("PhNow") as Label
 	now_lbl.visible = has_now
-	now_lbl.text = "Şu an  " + now
+	now_lbl.text = now if shows_cost else "Şu an  " + now
 
 
 ## PC'de level atlama satırları ve evrim kartları %15 küçük - kullanıcı isteği (2026-10-03): "pcde level atlama kartlarını
@@ -907,17 +957,37 @@ func _fill_row(card: Button, upgrade: Dictionary, tier: int, count: int) -> void
 	if old_title:
 		old_title.visible = false
 	name_lbl.text = upgrade["title"]
+	var is_special: bool = bool(upgrade.get("special", false))
 	var sub_text: String = "[color=#%s]%s  ·  %s[/color]" % [ROW_TIER_TEXT[clampi(tier, 1, 4) - 1].to_html(false),
 		TierSystem.NAMES[tier - 1], upgrade["cat"]]
+	if is_special and str(upgrade.get("gain_label", "")) != "":
+		sub_text += "[color=#%s]  ·  %s[/color]" % [ROW_DIM_COLOR.to_html(false), upgrade.get("gain_label", "")]
 	if count > 0:
 		sub_text += "[color=#%s]  ·  %dx alındı[/color]" % [ROW_DIM_COLOR.to_html(false), count]
 	(card.get_node("RowSub") as RichTextLabel).text = sub_text
-	var is_cdr: bool = upgrade["id"] == "cooldown_reduction"
-	var clean_val: String = _scaled_desc_value(upgrade["desc"] as String, tier, str(upgrade["id"])).replace("+", "").replace("-", "")
-	(card.get_node("RowValue") as Label).text = ("-" if is_cdr else "+") + clean_val
-	(card.get_node("RowVerb") as Label).text = "azalır" if is_cdr else "artar"
+	var verb_lbl: Label = card.get_node("RowVerb") as Label
+	var vt: Array = _card_value_texts(upgrade, tier)
+	(card.get_node("RowValue") as Label).text = vt[0]
+	verb_lbl.text = vt[1]
+	## özel karttan kalan kırmızı reroll'da sıfırlanır
+	verb_lbl.add_theme_color_override("font_color", ROW_COST_COLOR if bool(vt[2]) else ROW_DIM_COLOR)
 	if _phone_cards:
 		_fill_phone_card(card, upgrade, tier, count)
+
+
+## Kartın büyük sayısı + alt satırı: [değer, alt satır, alt satır bedel mi (kırmızımsı)]. Satır, telefon ve pazar yerleşimi ortak.
+## Madde 367: özel kartta büyük sayı = kazanç, alt satır = bedel (takas) ya da kısıt (silah türü). Madde 379: düz kartın alt satırı
+## da bedel; bedeli olmayan kart ("artar/azalır", havuzda yok) eski gibi.
+func _card_value_texts(upgrade: Dictionary, tier: int) -> Array:
+	var id: String = str(upgrade["id"])
+	if bool(upgrade.get("special", false)):
+		return [LevelSpecialCardsScript.gain_text(id, tier), LevelSpecialCardsScript.verb_text(id, tier), LevelSpecialCardsScript.has_cost(id)]
+	var is_cdr: bool = id == "cooldown_reduction"
+	var clean_val: String = _scaled_desc_value(upgrade["desc"] as String, tier, id).replace("+", "").replace("-", "")
+	var value: String = ("-" if is_cdr else "+") + clean_val
+	if LevelSpecialCardsScript.has_cost(id):
+		return [value, LevelSpecialCardsScript.cost_text(id, tier), true]
+	return [value, "azalır" if is_cdr else "artar", false]
 
 
 func _card_desc(card: Node) -> RichTextLabel:
@@ -986,6 +1056,8 @@ const STAT_TITLE_COLORS := {
 	"shield_amount": UIKit.INK["shield"],
 	"cooldown_reduction": UIKit.INK["cooldown"],
 	"shield_protection": UIKit.INK["shield"],
+	"shield_regen": UIKit.INK["shield"],
+	"heal_power": UIKit.INK["health"],
 }
 
 ## Kartta gösterilen sayı, upgrade["desc"]'teki (tier 1) ham sayının tier
@@ -1024,6 +1096,10 @@ func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 		scaled = TierSystem.health_card_for_tier(tier) ## 20/35/50/70 - bkz. TierSystem (player.gd ile tek kaynak)
 	elif id == "health_regen":
 		scaled = TierSystem.regen_card_for_tier(tier) ## 2/4/6/8 - bkz. TierSystem
+	elif id == "shield_regen":
+		scaled = TierSystem.shield_regen_card_for_tier(tier) ## 0,8/1,2/1,6/2,0 (madde 380)
+	elif id == "heal_power":
+		scaled = TierSystem.heal_power_card_for_tier(tier) * 100.0 ## %2/3/4/5 (madde 380)
 	else:
 		scaled = rest.to_float() * (1.0 + float(tier - 1) * 0.3)
 	var formatted: String
@@ -1031,10 +1107,18 @@ func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 		formatted = str(int(round(scaled)))
 	else:
 		formatted = "%.1f" % scaled
-	return "%s%s%s" % [sign_str, ("%" if is_percent else ""), formatted]
+	return "%s%s%s%s" % [sign_str, ("%" if is_percent else ""), formatted, "/sn" if id == "shield_regen" else ""]
 
 
 func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
+	if bool(upgrade.get("special", false)):
+		## Madde 367 (özel kart): ad / büyük kazanç / altta kazanılan stat + bedel (eski plaka düzeni; satır düzeninde RowValue/RowVerb kullanılır).
+		var sid: String = str(upgrade["id"])
+		var cost_line: String = LevelSpecialCardsScript.verb_text(sid, tier)
+		var cost_col: String = UIKit.INK["damage"] if LevelSpecialCardsScript.has_cost(sid) else UIKit.C_TEXT_DIM.to_html(false)
+		return "[color=%s][b]%s[/b][/color]\n[font_size=%d][color=%s]%s[/color][/font_size]\n[font_size=%d][color=%s]%s[/color]\n[color=%s]%s[/color][/font_size]" % [
+			UIKit.INK["text"], upgrade["title"], CARD_VALUE_FONT_SIZE, UIKit.INK["value"], LevelSpecialCardsScript.gain_text(sid, tier),
+			CARD_COUNT_FONT_SIZE * 2, UIKit.C_TEXT_DIM.to_html(false), upgrade.get("gain_label", ""), cost_col, cost_line]
 	var value: String = _scaled_desc_value(upgrade["desc"] as String, tier, str(upgrade["id"]))
 	var clean_val: String = value.replace("+", "").replace("-", "")
 	var title_name: String = upgrade["title"] as String
@@ -1045,8 +1129,14 @@ func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
 	var colored_val: String = "[font_size=%d][color=%s]%s%s[/color][/font_size]" % [CARD_VALUE_FONT_SIZE, UIKit.INK["value"],
 		"-" if upgrade["id"] == "cooldown_reduction" else "+", clean_val]
 	var verb: String = "azalır" if upgrade["id"] == "cooldown_reduction" else "artar"
+	var verb_color: String = UIKit.C_TEXT_DIM.to_html(false)
+	var plain_id: String = str(upgrade["id"])
+	if LevelSpecialCardsScript.has_cost(plain_id):
+		## Madde 379: düz kartta "artar" yerine BEDEL satırı (özel kartlarla aynı koyu kırmızı).
+		verb = LevelSpecialCardsScript.cost_text(plain_id, tier)
+		verb_color = UIKit.INK["damage"]
 	return "%s\n%s\n[font_size=%d][color=%s]%s[/color][/font_size]" % [colored_title, colored_val, CARD_COUNT_FONT_SIZE * 2,
-		UIKit.C_TEXT_DIM.to_html(false), verb]
+		verb_color, verb]
 
 
 ## #48 DÜZELTME (kullanıcı isteği: "Level kartı reroll'u altınla olsun,
@@ -1185,12 +1275,15 @@ func _apply_kit_style() -> void:
 func _refresh_reroll_button() -> void:
 	## Kalıcı "Ücretsiz Karıştırma" geliştirmesi (Ruh Mağazası): her level atlama kartında bir kez bedava.
 	if _free_rerolls_left() > 0:
-		reroll_button.text = "Karıştır\nÜCRETSİZ" if MobileUIScript.enabled else "Yeniden Karıştır (ÜCRETSİZ)"
-		reroll_button.disabled = false
+		reroll_button.text = "KARIŞTIR · ÜCRETSİZ" if _market_view else ("Karıştır\nÜCRETSİZ" if MobileUIScript.enabled else "Yeniden Karıştır (ÜCRETSİZ)")
+		reroll_button.disabled = _has_chosen
 		return
 	var cost: int = _reroll_cost()
-	reroll_button.text = ("Karıştır\n%d altın" if MobileUIScript.enabled else "Yeniden Karıştır (%d altın)") % cost
-	reroll_button.disabled = GameManager.gold < cost
+	if _market_view:
+		reroll_button.text = "KARIŞTIR · %d altın" % cost
+	else:
+		reroll_button.text = ("Karıştır\n%d altın" if MobileUIScript.enabled else "Yeniden Karıştır (%d altın)") % cost
+	reroll_button.disabled = GameManager.gold < cost or _has_chosen
 
 
 func _on_reroll_pressed() -> void:
@@ -1205,6 +1298,8 @@ func _on_reroll_pressed() -> void:
 	_populate_cards()
 	_refresh_reroll_button()
 	_animate_cards_in()
+	if _market_view:
+		_market_view.refresh() ## harcanan altın pazarın fiyat/engel durumunu değiştirir
 
 
 ## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini beklemeden
@@ -1227,6 +1322,9 @@ func _on_reroll_pressed() -> void:
 ## sinyal hiç yayılmaz, eski/yarım bir seçim uygulanmaz.
 func _on_card_pressed(id: String, tier: int, card: Button) -> void:
 	if _has_chosen:
+		return
+	if _market_view:
+		_market_pick(id, tier, card)
 		return
 	_has_chosen = true
 	if is_instance_valid(reroll_button):
@@ -1263,6 +1361,83 @@ func _on_card_pressed(id: String, tier: int, card: Button) -> void:
 ## yani bu sahneyi - queue_free() ediyor).
 func _finish_pick(id: String, tier: int) -> void:
 	upgrade_chosen.emit(id, tier)
+
+
+## ================================================================ LEVEL ATLAMA PAZARI (2026-10-28, madde 388)
+## Kullanıcı: "her level atlandığında solda 3 level atlama kartı seçeneği ve sağında da 6 adet silah alma-silah geliştirme-kalkan
+## alma-kalkan geliştirme-dükkandaki tüm eşyaları kapsayacak şekilde rasgele 6 adet seçenek ... 1 level atlama kartı ücretsiz
+## seçilebilecek, diğer seçenekler tıpkı mevcut fiyatlarındaki bedellerindeki gibi ... level atlama kartının kendine özel rerollu
+## ... diğer 6 eşyanın da kendine özel rerollu" -> madde 386 prototipi "D - Gece Sıvası Yuvalar". Masaüstünde normal level
+## atlamada (evrim seviyeleri + telefon eski ekranında): kart seçimi ekranı KAPATMAZ (kutlama oynar, kart "SEÇİLDİ" kalır, kart
+## karıştırma kapanır); seçim DEVAM ET / Enter ile ya da çok oyunculu sayaç dolunca (seçilmemişse kart otomatik seçilir)
+## upgrade_chosen olarak gider - main.gd akışı aynı. Pazar kuralları level_market.gd, görünüş level_market_view.gd.
+const LevelMarketView := preload("res://scripts/level_market_view.gd")
+var _market_view: Control = null
+var _chosen_id: String = ""
+var _chosen_tier: int = 1
+var _market_closing: bool = false
+
+
+func _build_market() -> void:
+	var dim: ColorRect = get_node_or_null("Dim") as ColorRect
+	if dim:
+		dim.color = Color(0.02, 0.02, 0.04, 0.55)
+	var title_lbl: CanvasItem = get_node_or_null("Title") as CanvasItem
+	if title_lbl:
+		title_lbl.visible = false ## görünümün kendi "SEVİYE N" başlığı var
+	if countdown_panel:
+		countdown_panel.visible = false
+	var old: CanvasItem = get_node_or_null("Rows") as CanvasItem
+	_market_view = LevelMarketView.new()
+	_market_view.name = "LevelMarket"
+	add_child(_market_view)
+	var lvl: int = screen_level if screen_level > 0 else GameManager.team_level
+	_market_view.setup(get_tree().get_first_node_in_group("player"), lvl, cards, reroll_button)
+	if old:
+		old.visible = false
+	_market_view.continue_pressed.connect(_market_continue)
+	_market_view.market_changed.connect(_refresh_reroll_button)
+
+
+## Pazar sütunundaki kart yüzünün verisi (level_market_view.gd fill_card).
+func _market_card_data(upgrade: Dictionary, tier: int, count: int) -> Dictionary:
+	var vt: Array = _card_value_texts(upgrade, tier)
+	return {"title": upgrade["title"], "cat": upgrade["cat"], "tier": tier, "value": vt[0], "cost": vt[1], "cost_red": vt[2],
+		"label": upgrade.get("gain_label", "") if bool(upgrade.get("special", false)) else "", "count": count,
+		"icon": str(upgrade.get("icon", upgrade["id"]))}
+
+
+func _market_pick(id: String, tier: int, card: Button) -> void:
+	_has_chosen = true
+	_chosen_id = id
+	_chosen_tier = tier
+	if is_instance_valid(reroll_button):
+		reroll_button.disabled = true
+	for i in range(cards.size()):
+		if _shine_tweens[i] and _shine_tweens[i].is_valid():
+			_shine_tweens[i].kill()
+		if _card_tweens[i] and _card_tweens[i].is_valid():
+			_card_tweens[i].kill()
+		var other: Button = cards[i]
+		if not is_instance_valid(other):
+			continue
+		other.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if other != card:
+			TierCardFx.set_hover_glow(other, int(_card_tiers[i]), false)
+	card.modulate = Color(1, 1, 1, 1)
+	var container: Container = card.get_parent() as Container
+	if container:
+		container.queue_sort()
+	_market_view.set_chosen(cards.find(card))
+	var tw: Tween = TierCardFx.celebrate(self, card, card.get_node_or_null("Frame") as TextureRect, tier, _ensure_fx_layer())
+	tw.chain().tween_property(card, "scale", Vector2.ONE, 0.2) ## kutlamanın büyütmesi sütunda kalıcı kalmasın
+
+
+func _market_continue() -> void:
+	if not _has_chosen or _market_closing:
+		return
+	_market_closing = true
+	_finish_pick(_chosen_id, _chosen_tier)
 
 
 ## ================================================================ YETENEK EVRİMİ (2026-09-28)

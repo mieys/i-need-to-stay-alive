@@ -52,7 +52,8 @@ func test_hiding_stray_grass_changes_only_the_alternative_tile_and_keeps_collisi
 
 	var h: Node = _load()
 	var hidden: int = MapColorGradeScript.attach(h)
-	assert(hidden > 200, "başıboş düz çimen gizlenmedi: %d" % hidden)
+	## madde 361: derin orman bölgelerinde "Çimler" karoları haritadan silindi (başıboş çimenlerin bir kısmı dahil) -> eşik 200 -> 150
+	assert(hidden > 150, "başıboş düz çimen gizlenmedi: %d" % hidden)
 	var after: Dictionary = _snapshot(h)
 	var changed := 0
 	for path: String in before:

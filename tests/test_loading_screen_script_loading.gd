@@ -106,10 +106,28 @@ func test_backdrop_is_built_on_the_scene_canvas() -> void:
 	var sheets: int = 0
 	for c: Node in s._scene.get_children():
 		if c is TextureRect:
-			assert((c as TextureRect).texture.resource_path.ends_with("yukleme_bg.png"), "arka plan yeni sahne olmalı")
+			var path: String = (c as TextureRect).texture.resource_path
+			assert(path.ends_with("yukleme_bg.png") or path.ends_with(SceneParts.LIGHT), "arka plan / kapı ışığı olmalı: %s" % path)
 		elif c.get_class() == "Control" and c.get("frame_size") != null:
 			sheets += 1
 	assert(sheets == SceneParts.PARTS.size(), "her canlı parça bir LiveSheet: %d" % sheets)
+	s.free()
+
+
+## Mühürlü Kapı (madde 370): kapının ışığı ve halesi ilerlemeyle güçlenir; ışık toplamalı; başlık oyundaki kapı sezdirmesi.
+func test_gate_glow_follows_progress() -> void:
+	var s: Control = _screen()
+	assert(is_instance_valid(s._gate_light) and is_instance_valid(s._gate_fx), "kapı ışığı + halesi kurulmalı")
+	assert((s._gate_light.material as CanvasItemMaterial).blend_mode == CanvasItemMaterial.BLEND_MODE_ADD, "ışık toplamalı")
+	assert(s._gate_light.texture.get_size() == SceneParts.CANVAS, "ışık katmanı tuval boyunda")
+	s._update_gate_glow(0.0)
+	var a0: float = s._gate_light.self_modulate.a
+	assert(is_equal_approx(a0, s.LIGHT_MIN) and s._gate_fx.boost == 0.0, "başta sönük: %f" % a0)
+	s._update_gate_glow(1.0)
+	assert(is_equal_approx(s._gate_light.self_modulate.a, 1.0) and s._gate_fx.boost == 1.0, "sonda tam")
+	assert(Rect2(Vector2.ZERO, SceneParts.CANVAS).has_point(SceneParts.GATE_MOUTH), "kapı ağzı tuvalde")
+	var title: Label = s.find_child("GateTitle", true, false) as Label
+	assert(title != null and title.text == "KEMİK MAHZENİ", "başlık kapının adı")
 	s.free()
 
 

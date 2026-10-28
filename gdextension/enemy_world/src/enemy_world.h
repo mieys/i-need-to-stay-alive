@@ -251,7 +251,22 @@ private:
 	int32_t find_closest(int32_t i) const;
 	// SAKLANMA ÇALILIĞI (2026-10-09): çalıdaki oyuncu (hedef düğüm kimliği) `stealth`te kayıtlıysa SADECE listedeki yaratık düğümleri (girişte onu gören / yanından geçen) hedefleyebilir.
 	std::unordered_map<uint64_t, std::vector<uint64_t>> stealth;
+	// ZİNDAN BÖLGELERİ (madde 371): dünya px dikdörtgenleri [x, y, w, h]*n; bölge = içinde olunan dikdörtgen + 1, hiçbiri = 0 (ana harita).
+	// Yaratık yalnız KENDİ bölgesindeki hedefi seçer (zindandaki oyuncuyu dışarıdakiler, dışarıdakini zindandakiler hedeflemez).
+	std::vector<float> region_rects;
+	std::vector<uint8_t> t_region; // hedef bölgesi (set_targets / set_region_rects hesaplar)
+	inline uint8_t region_of(float x, float y) const {
+		for (size_t k = 0; k + 3 < region_rects.size(); k += 4) {
+			if (x >= region_rects[k] && y >= region_rects[k + 1] && x < region_rects[k] + region_rects[k + 2] && y < region_rects[k + 1] + region_rects[k + 3]) {
+				return (uint8_t)(k / 4 + 1);
+			}
+		}
+		return 0;
+	}
 	inline bool concealed_from(int32_t i, int32_t t) const {
+		if (!region_rects.empty() && t >= 0 && t < (int32_t)t_region.size() && region_of(px[i], py[i]) != t_region[t]) {
+			return true;
+		}
 		if (stealth.empty()) {
 			return false;
 		}
@@ -298,6 +313,8 @@ public:
 			const PackedByteArray &p_ghost, const PackedFloat32Array &p_body, const PackedFloat32Array &p_zone,
 			const PackedInt64Array &p_ids);
 	void set_merchant_zone(bool p_active, const Vector2 &p_pos, float p_radius);
+	void set_region_rects(const PackedFloat32Array &p_rects);
+	int32_t get_region_of(const Vector2 &p_pos) const { return region_of(p_pos.x, p_pos.y); }
 	void set_body_block_scale(float p_scale) { body_block_scale = p_scale; }
 	void set_extra_bodies(const PackedVector2Array &p_pos, const PackedFloat32Array &p_radius);
 	void set_hit_probe(const Vector2 &p_center, float p_radius) {

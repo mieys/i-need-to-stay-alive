@@ -197,14 +197,14 @@ func test_shaman_kit_after_merge() -> void:
 	assert(not ResourceLoader.exists("res://scenes/totem_area.tscn"), "eski Alan Totemi sahnesi silinmiş olmalı")
 
 
-## 2026-09-30: alan hasarı Kalkan Totemi'ne de eklendi - kod tek yerde (totem_base.gd "ALAN HASARI"), iki totem açar.
-func test_attack_totem_has_area_damage_without_slow() -> void:
+## Alan hasarı kodu tek yerde (totem_base.gd "ALAN HASARI"); 2026-10-21'den beri YALNIZ Kalkan Totemi açar (Saldırı Totemi'nden bug olarak kaldırıldı).
+func test_only_shield_totem_has_area_damage_without_slow() -> void:
 	var base_src: String = _strip_comments(_read(TOTEM_BASE_PATH))
 	assert(base_src.contains("AREA_DAMAGE_ATTACK_POWER_RATIO := 0.20"), "alan hasarı (saldırı gücünün %20'si/sn) totem tabanında olmalı")
 	assert(base_src.contains("func _process_area_damage("), "alan hasar tiki olmalı")
 	for path in ["res://scripts/totem_attack.gd", "res://scripts/totem_shield.gd"]:
 		var src: String = _strip_comments(_read(path))
-		assert(src.contains("area_damage_enabled = true"), "%s alan hasarını açmalı" % path)
+		assert(src.contains("area_damage_enabled = true") == path.ends_with("totem_shield.gd"), "%s: alan hasarı sadece Kalkan Totemi'nde açık olmalı" % path)
 		assert(not src.contains("func _process_area_damage("), "%s: kopya kod yok" % path)
 		## Temel yavaşlatma yok; yalnızca Kalkan Totemi'nin "Yapışkan Zemin" evrimi (shaman_e3, 2026-10-04) yavaşlatabilir.
 		assert(not src.contains("apply_slow") or (path.ends_with("totem_shield.gd") and src.contains('"shaman_e3"')), "%s: yavaşlatma yok (evrim hariç)" % path)

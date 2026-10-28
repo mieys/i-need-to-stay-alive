@@ -6,6 +6,7 @@ extends RefCounted
 ## Kural/yönetim: hide_brush_manager.gd. Buradaki işlevler saf okuma: katmanı bul, ayak noktası alanın içinde mi, durum -> saydamlık.
 
 const LAYER_NAME := "Saklanma Çalılığı"
+const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd")
 ## Oyuncu kökünden ayak noktasına uzaklık (dünya px; depth_occluders FEET_OFFSET ile aynı mantık: 15 x BODY_REL).
 const FEET_OFFSET := 15.0 * EntityScale.BODY_REL
 
@@ -56,6 +57,8 @@ static func contains(tree: SceneTree, feet_world: Vector2) -> bool:
 	var l: TileMapLayer = layer(tree)
 	if l == null:
 		return false
+	if DungeonWorldScript.is_hide_world(feet_world):
+		return true ## zindan saklanma yerleri (açık lahit, gölge nişi...; madde 373) çalılıkla aynı kural
 	return l.get_cell_source_id(l.local_to_map(l.to_local(feet_world))) != -1
 
 

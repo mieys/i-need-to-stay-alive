@@ -28,7 +28,8 @@ const LAYER_BIT := 1 << 19
 const NODE_NAME := "ZeminDunyaPikseli"
 const PARENT_NAME := "Yer"
 ## "Yer" altındaki, ÇİZİM SIRASIYLA ardışık katmanlar. "Çimler" (sallanan mini çim) bilerek dışarıda: onların üstünde kalır.
-const ZEMIN_KATMANLARI: Array[String] = ["Zemin Toprak", "Çimen gölge", "Zemin Çimen"]
+## "Derin orman zemini" (madde 363): bölge zemininin pişmiş karoları, Zemin Çimen'in hemen üstünde (Harita.tmx'te de bu sırada).
+const ZEMIN_KATMANLARI: Array[String] = ["Zemin Toprak", "Çimen gölge", "Zemin Çimen", "Derin orman zemini"]
 ## Kamera bu karede kıpırdarsa kenarda boşluk kalmasın diye görünümün her yanına eklenen pay (dünya px).
 const MARGIN := 8
 ## Dünya görünümü (alt-piksel sayısı) ekran pikselinin bu oranından büyükse geçiş kapanır (kazanç yok).

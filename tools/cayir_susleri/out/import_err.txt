@@ -1,0 +1,95 @@
+WARNING: UID duplicate detected between res://harita/Ground_grass.png and res://harita/orman tileset/Tiled_files/Ground_grass.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://tools/cayir_susleri/out/v1_yogun/gercek/avci_kampi.png and res://tools/cayir_susleri/out/gercek/avci_kampi.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://tools/cayir_susleri/out/v1_yogun/gercek/ev_cikisi.png and res://tools/cayir_susleri/out/gercek/ev_cikisi.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://tools/cayir_susleri/out/v1_yogun/gercek/guneybati.png and res://tools/cayir_susleri/out/gercek/guneybati.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://tools/cayir_susleri/out/v1_yogun/gercek/guneydogu_cayir.png and res://tools/cayir_susleri/out/gercek/guneydogu_cayir.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://tools/cayir_susleri/out/v1_yogun/gercek/kavsak_nehir.png and res://tools/cayir_susleri/out/gercek/kavsak_nehir.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/bird_fly_animation.png and res://harita/Ev/PNG/bird_fly_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/bird_jump_animation.png and res://harita/Ev/PNG/bird_jump_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/cat_animation.png and res://harita/Ev/PNG/cat_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/exterior.png and res://harita/Ev/PNG/exterior.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/ground_grass_details.png and res://harita/Ev/PNG/ground_grass_details.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/house_details.png and res://harita/Ev/PNG/house_details.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/Interior.png and res://harita/Ev/PNG/Interior.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/Smoke_animation.png and res://harita/Ev/PNG/Smoke_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/Trees_animation.png and res://harita/Ev/PNG/Trees_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/PNG/walls_floor.png and res://harita/Ev/PNG/walls_floor.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/bird_fly_animation.png and res://harita/Ev/Tiled_files/bird_fly_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/bird_jump_animation.png and res://harita/Ev/Tiled_files/bird_jump_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/cat_animation.png and res://harita/Ev/Tiled_files/cat_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/Doors_windows_animation.png and res://harita/Ev/Tiled_files/Doors_windows_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/Exterior — копия.tmx and res://harita/Ev/Tiled_files/Exterior — копия.tmx.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/Exterior.tmx and res://harita/Ev/Tiled_files/Exterior.tmx.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/ground_grass_details.png and res://harita/Ev/Tiled_files/ground_grass_details.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/house_details.png and res://harita/Ev/Tiled_files/house_details.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/Interior1.tmx and res://harita/Ev/Tiled_files/Interior1.tmx.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/Interior.png and res://harita/Ev/Tiled_files/Interior.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/Smoke_animation.png and res://harita/Ev/Tiled_files/Smoke_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/Trees_animation.png and res://harita/Ev/Tiled_files/Trees_animation.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/Tiled_files/walls_floor.png and res://harita/Ev/Tiled_files/walls_floor.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+WARNING: UID duplicate detected between res://visuals/Ev/COUPON.png and res://harita/Ev/COUPON.png.
+   at: _process_file_system (editor/file_system/editor_file_system.cpp:1405)
+ERROR: Tileset file 'Yeni klasör-default.tsx' not found. -> Continuing but result may be unusable
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://shaders/cloud_shadows_material.tres:3 - ext_resource, invalid UID: uid://fcyufq7kts1o - using text path instead: res://shaders/cloud_shadows.gdshader
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/fx_oyku_heal.tscn:3 - ext_resource, invalid UID: uid://dh4h1d77x2n3p - using text path instead: res://scripts/fx_oyku_heal.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/fx_buyucu_fastfire.tscn:3 - ext_resource, invalid UID: uid://cd84h1d77x2n5 - using text path instead: res://scripts/fx_buyucu_fastfire.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/fx_shield_active.tscn:3 - ext_resource, invalid UID: uid://cd100h1d77x2n - using text path instead: res://scripts/fx_shield_active.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/fx_paladin_cast.tscn:3 - ext_resource, invalid UID: uid://cd99h1d77x2n2 - using text path instead: res://scripts/fx_paladin_cast.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/fx_assasin_stealth.tscn:3 - ext_resource, invalid UID: uid://cd94h1d77x2n6 - using text path instead: res://scripts/fx_assasin_stealth.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/fx_talha_rage.tscn:3 - ext_resource, invalid UID: uid://d74h1d77x2n4q - using text path instead: res://scripts/fx_talha_rage.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/fx_matthew_sacrifice.tscn:3 - ext_resource, invalid UID: uid://cd95h1d77x2n7 - using text path instead: res://scripts/fx_matthew_sacrifice.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: res://scenes/fx_matthew_explosion.tscn:3 - ext_resource, invalid UID: uid://cd96h1d77x2n8 - using text path instead: res://scripts/fx_matthew_explosion.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+WARNING: 1 RID of type "Canvas" was leaked.
+   at: _free_rids (servers/rendering/renderer_canvas_cull.cpp:2733)
+WARNING: 54 RIDs of type "CanvasItem" were leaked.
+   at: _free_rids (servers/rendering/renderer_canvas_cull.cpp:2735)
+WARNING: 21182 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 42 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

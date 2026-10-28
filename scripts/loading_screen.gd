@@ -13,7 +13,7 @@ extends Control
 ##   görevlerinde; bu yüzden: bağımlılık ağacı taraması + her bağımlılığın sırayla yüklenmesi + main.tscn tek bir Thread'de
 ##   (_load_worker). Ana iş parçacığı sadece çizer ve ilerlemeyi okur (_mutex). load_threaded_request KULLANMA.
 ## Sahne kurulumu (Main._ready + ilk kare) zorunlu ana iş parçacığı işidir (~1-3 sn) ve donar: o ana kadar kahraman yolun sonundaki
-## kulübenin kapısına varır, içeri girer, sahne kararır (_arrive) - donma karanlık "OYUN BAŞLIYOR" karesinde geçer, canlı bir
+## Kemik Mahzeni'nin kapısına varır, içeri girer, kapı parlar, sahne kararır (_arrive) - donma karanlık "OYUN BAŞLIYOR" karesinde geçer, canlı bir
 ## animasyonun ortasında değil. Görsel en üst katmanıyla (loading_overlay.gd) köke taşınır, oyunun ilk karesi hazır olunca bar %100
 ## olur ve katman solarak kaybolur.
 ## İlerleme DOSYA SAYISINA göre değil yaklaşık maliyete göre (türe göre ağırlık x boyut, bkz. LOAD_WEIGHT_PER_KB); uzun bir adım
@@ -70,13 +70,15 @@ var _loaded_refs: Array = []
 var autostart_loader: bool = true
 var main_scene_path: String = MAIN_SCENE_PATH
 
-## ---------------------------------------------------------------- EVE DÖNÜŞ SAHNESİ
+## ---------------------------------------------------------------- MÜHÜRLÜ KAPI SAHNESİ
 ## Kullanıcı isteği (2026-09-27): oyunun içeriğiyle, yapay zekâ görseli olmadan - "C - Kaçış" kovalamacası seçildi: doluluk çubuğu bir
-## yol, seçili karakter doluluğun ucunda koşar, Kademe yaratıkları peşinden gelir. 2026-10-17 ("yükleme ekranının arkaplanı için daha iyi
-## bir sahne hazırla"): arka plan artık bu kovalamacanın YERİ - karanlık ormandan çıkan toprak yol, yolun sonunda pencereleri yanan kütük
-## kulübe (bar dolunca kahraman kapıya varır). Sanat SADECE harita tileset'lerinden, üretici tools/gen_yukleme_bg.py (640x360 tuval, x3;
-## kahraman/yaratıklar da sanat pikseli başına 3 ekran pikseli). Canlı parçalar (rüzgârda sallanan ağaçlar + baca dumanı) kare şeritleri,
-## yerleşimleri scripts/loading_scene_parts.gd'de (üretici yazar).
+## yol, seçili karakter doluluğun ucunda koşar, yaratıklar peşinden gelir. 2026-10-17: arka plan bu kovalamacanın YERİ oldu ("Eve Dönüş"
+## kulübesi, madde 233). 2026-10-23 (madde 366 prototip A -> madde 370, "A - Mühürlü Kapı'yı oyuna al"): yer artık derin orman Kuzey'deki
+## KEMİK MAHZENİ, gece. Arka plan haritanın GERÇEK çizicisinden oyuncusuz çekim (tools/yukleme/yukleme_capture.ps1) + gece tonu
+## (tools/gen_yukleme_bg.py, 640x360 tuval, x3; kahraman/yaratıklar da sanat pikseli başına 3 ekran pikseli). Kovalayanlar ölü yaratıklar.
+## Canlı parçalar: kapı alevi kare şeridi (yerleşim scripts/loading_scene_parts.gd, üretici yazar) + kapının yeşil ışığı (toplamalı
+## katman) + zindan kapısı halesi + ruh ışıkları (_GateFx; doku ve renkler deep_forest_fx.gd'den) - üçü ilerlemeyle güçlenir, varışta
+## kapı parlar.
 ## Ayak hizası: her sprite'ın dokusundaki en alt dolu satır (gölgesiyle birlikte) patikanın üst kenarına oturur (bkz. _foot_offset).
 const SCENE_DIR := "res://assets/ui/yukleme/"
 ## Ekran ortasına göre (1920x1080 taban): patika = doluluk çubuğu = sahnedeki yolun ortası (tuval y 213..227).
@@ -85,7 +87,7 @@ const PATH_INSET := 6.0 ## çubuk dolgusu çukurun içinde başlar (panel_style 
 const HERO_SCALE := 3.0 ## 2.2368 taban karakter ölçeğinde (bkz. characters.gd "scale"); diğerleri oranlanır
 const CHAR_BASE_SCALE := 2.2368375
 const CREATURE_SCALE := 3.6 ## yaratığın kendi Sprite2D ölçeği x bu
-const CHASERS: Array[String] = ["slime1", "slime2", "iskelet1", "zombie1", "slime3"]
+const CHASERS: Array[String] = ["iskelet1", "zombie1", "iskelet2", "zombie2"]
 const CHASER_GAP := 130.0
 const CHASER_START_GAP := 170.0
 const FOOT_SINK := 4.0 ## gölge patikanın üst kenarına biraz binsin (üstünde duruyor gibi)
@@ -95,8 +97,25 @@ const ARRIVE_RUN_TIME := 0.35
 const ARRIVE_FADE_TIME := 0.4
 const ARRIVE_DIM := Color(0.2, 0.2, 0.27)
 const MOON_TINT := Color(0.9, 0.92, 1.0) ## karakterler gece sahnesine otursun (hafif ay ışığı), okunurluk kalsın
-const TROUGH_COLOR := Color(0.17, 0.13, 0.1, 0.85)
-const TROUGH_BORDER := Color(0.35, 0.27, 0.2)
+## Patika: kül rengi kazılmış yol + kapının yeşiliyle dolar (eski adaçayı/kahve "Eve Dönüş" yoluna aitti).
+const TROUGH_COLOR := Color8(24, 30, 29, 220)
+const TROUGH_BORDER := Color8(78, 92, 86)
+const FILL_COLOR := Color8(96, 176, 130)
+const FILL_BORDER := Color8(40, 92, 68)
+## Yazılar oyunun m5x7'sinin TAM KATLARINDA (doğal boyu 16; 36/24 = x2,25/x1,5 bulanık ölçekti).
+const STATUS_FONT := 48
+const TIP_FONT := 32
+const TITLE_FONT := 64
+const TITLE_COLOR := Color8(176, 232, 196)
+const TITLE_SUB_COLOR := Color8(196, 210, 200)
+const TITLE_OUTLINE := Color8(12, 26, 20)
+const DeepForestFx := preload("res://scripts/deep_forest_fx.gd")
+const DeepForestLore := preload("res://scripts/deep_forest_lore.gd")
+const GATE_NAME := "Kemik Mahzeni"
+## Kapının yeşil ışığı (toplamalı katman, üretici %100 gücünde pişirir): %0'da bu oranda, ilerlemeyle 1'e çıkar; varışta parlar.
+const LIGHT_MIN := 0.26
+const ARRIVE_FLARE := 2.2
+const ARRIVE_FLARE_TIME := 0.14
 const TIPS: Array[String] = [
 	"Satıcının güvenli bölgesinde zaman durur - yaratıklar güçlenmez.",
 	"F tuşu ruhani yeteneğini kullanır.",
@@ -118,6 +137,9 @@ var _hero_foot: float = 0.0
 var _chasers: Array = []
 var _anim_time: float = 0.0
 var _chasers_running: bool = true
+var _gate_light: TextureRect = null ## kapının yeşil ışığı (toplamalı)
+var _gate_fx: _GateFx = null ## kapı halesi + ruh ışıkları
+var _titles: Array[Label] = [] ## kapı adı + sezdirme (varışta sahneyle kararır)
 
 
 ## Kare şeridinden oynayan sahne parçası (sallanan ağaç, baca dumanı); sadece kare değişince yeniden çizer.
@@ -148,6 +170,75 @@ class LiveSheet extends Control:
 	func _draw() -> void:
 		if tex:
 			draw_texture_rect_region(tex, Rect2(Vector2.ZERO, frame_size), Rect2(Vector2(maxi(_frame, 0) * frame_size.x, 0.0), frame_size))
+
+
+## Zindan kapısı halesi + yükselen ruh ışıkları (tuval koordinatında, toplamalı). Oyundaki deep_forest_fx.gd'nin kapı/ışık çiziminin
+## yükleme ekranı kopyası: aynı dokular ve renk, hale iki katman nefes alır; boost (= ilerleme) haleyi büyütür ve kapıdan çıkan ışıkları
+## sıklaştırır. Sahnede ayrıca seyrek ruh ışıkları dolaşır.
+class _GateFx extends Control:
+	const AMBIENT_MOTES := 14
+	const GATE_RATE := 2.2 ## deep_forest_fx GATE_MOTE_PER_SEC
+	var boost: float = 0.0
+	var mouth: Vector2 = Vector2.ZERO
+	var _gate_tex: Texture2D = null
+	var _mote_tex: Texture2D = null
+	var _color: Color = Color.WHITE
+	var _motes: Array[Dictionary] = []
+	var _time: float = 0.0
+	var _rng := RandomNumberGenerator.new()
+
+	func _init(gate_mouth: Vector2, canvas: Vector2) -> void:
+		mouth = gate_mouth
+		size = canvas
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		material = mat
+		_gate_tex = load(DeepForestFx.GATE_TEX) as Texture2D
+		_mote_tex = load(str(DeepForestFx.KINDS[0]["tex"])) as Texture2D
+		_color = DeepForestFx.GATE_COLOR[0]
+		_rng.randomize()
+		for i in range(AMBIENT_MOTES):
+			_spawn(Vector2(_rng.randf_range(0.0, size.x), _rng.randf_range(0.0, size.y)), 1.0, _rng.randf())
+
+	func _spawn(p: Vector2, vel_scale: float, start_age: float = 0.0) -> void:
+		var ang: float = _rng.randf_range(-PI, 0.0) ## hep biraz yukarı süzülür
+		var life: float = _rng.randf_range(4.0, 8.0)
+		_motes.append({"pos": p, "vel": Vector2(cos(ang), sin(ang)) * _rng.randf_range(3.0, 9.0) * vel_scale,
+			"age": start_age * life, "life": life, "phase": _rng.randf_range(0.0, TAU), "gate": vel_scale > 1.0})
+
+	func _process(delta: float) -> void:
+		_time += delta
+		var ambient: int = 0
+		for k in range(_motes.size() - 1, -1, -1):
+			var m: Dictionary = _motes[k]
+			m["age"] = float(m["age"]) + delta
+			m["pos"] = (m["pos"] as Vector2) + (m["vel"] as Vector2) * delta
+			if float(m["age"]) >= float(m["life"]):
+				_motes.remove_at(k)
+			elif not m["gate"]:
+				ambient += 1
+		while ambient < AMBIENT_MOTES:
+			_spawn(Vector2(_rng.randf_range(0.0, size.x), _rng.randf_range(0.0, size.y)), 1.0)
+			ambient += 1
+		if _rng.randf() < GATE_RATE * (1.0 + 2.5 * boost) * delta:
+			_spawn(mouth + Vector2(_rng.randf_range(-12.0, 12.0), _rng.randf_range(-4.0, 6.0)), 1.6)
+		queue_redraw()
+
+	func _draw() -> void:
+		var breath: float = 0.5 + 0.5 * sin(_time * 2.4)
+		for layer in range(2):
+			var sz: float = (2.0 if layer == 0 else 1.0) * (1.0 + 0.12 * breath + 0.35 * boost)
+			var a: float = (0.35 if layer == 0 else 0.6) * (0.55 + 0.45 * breath) * (1.0 + 0.8 * boost)
+			var ts: Vector2 = _gate_tex.get_size() * round(sz * 2.0) * 0.5
+			draw_texture_rect(_gate_tex, Rect2((mouth - ts * 0.5).round(), ts), false, Color(_color.r, _color.g, _color.b, minf(a, 1.0)))
+		for m: Dictionary in _motes:
+			var age: float = float(m["age"])
+			var t: float = age / float(m["life"])
+			var a: float = smoothstep(0.0, 0.2, t) * (1.0 - smoothstep(0.7, 1.0, t)) * (0.75 + 0.25 * sin(age * 3.1 + float(m["phase"])))
+			var p: Vector2 = (m["pos"] as Vector2) + Vector2(sin(age * 0.9 + float(m["phase"])) * 6.0, 0.0)
+			draw_texture(_mote_tex, (p - _mote_tex.get_size() * 0.5).round(), Color(1, 1, 1, a))
 
 
 func _ready() -> void:
@@ -202,8 +293,8 @@ func _build_chase_scene() -> void:
 	_stage.modulate = MOON_TINT
 	holder.add_child(_stage)
 
-	## Patika = doluluk çubuğu: adaçayı dolgu (eski yükleme çubuğunun rengi) + yolda kazılmış koyu çukur (2026-10-17: eski bej çukur
-	## [UIKit inset] gece sahnesinde parlak bir şerit gibi duruyordu).
+	## Patika = doluluk çubuğu: kapının yeşiliyle dolan kazılmış kül yolu (2026-10-17: eski bej çukur [UIKit inset] gece sahnesinde
+	## parlak bir şerit gibi duruyordu).
 	var trough := StyleBoxFlat.new()
 	trough.bg_color = TROUGH_COLOR
 	trough.border_color = TROUGH_BORDER
@@ -211,8 +302,8 @@ func _build_chase_scene() -> void:
 	trough.set_corner_radius_all(3)
 	trough.anti_aliasing = false
 	var fill := StyleBoxFlat.new()
-	fill.bg_color = Color("#88a24f")
-	fill.border_color = Color("#4f652d")
+	fill.bg_color = FILL_COLOR
+	fill.border_color = FILL_BORDER
 	fill.set_border_width_all(3)
 	fill.set_corner_radius_all(3)
 	fill.anti_aliasing = false
@@ -220,16 +311,17 @@ func _build_chase_scene() -> void:
 	progress_bar.add_theme_stylebox_override("fill", fill)
 	_center_anchor(progress_bar, PATH_RECT)
 
-	UIKit.style_label(status_label, 36, UIKit.C_CREAM, 8)
-	_center_anchor(status_label, Rect2(PATH_RECT.position.x, PATH_RECT.end.y + 26.0, PATH_RECT.size.x, 44.0))
-	var tip := Label.new()
-	tip.name = "TipLabel"
-	tip.text = "İpucu: " + TIPS[randi() % TIPS.size()]
-	tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	UIKit.style_label(tip, 24, Color("#e8d4b0"), 6)
-	holder.add_child(tip)
-	_center_anchor(tip, Rect2(PATH_RECT.position.x, PATH_RECT.end.y + 76.0, PATH_RECT.size.x, 32.0))
+	UIKit.style_label(status_label, STATUS_FONT, UIKit.C_CREAM, 10)
+	_center_anchor(status_label, Rect2(PATH_RECT.position.x, PATH_RECT.end.y + 20.0, PATH_RECT.size.x, 56.0))
+	var tip := _label(holder, "TipLabel", "İpucu: " + TIPS[randi() % TIPS.size()], TIP_FONT, Color("#e8d4b0"), 7)
+	_center_anchor(tip, Rect2(PATH_RECT.position.x, PATH_RECT.end.y + 80.0, PATH_RECT.size.x, 40.0))
+	## Üstte zindan kapısının adı + oyundaki kapı sezdirmesi (deep_forest_lore.gd GATE_TEXT, tek kaynak).
+	var gate_text: Array = DeepForestLore.GATE_TEXT.get(GATE_NAME, [GATE_NAME.to_upper(), ""])
+	var title := _label(holder, "GateTitle", str(gate_text[0]), TITLE_FONT, TITLE_COLOR, 12, TITLE_OUTLINE)
+	_center_anchor(title, Rect2(PATH_RECT.position.x, -492.0, PATH_RECT.size.x, 72.0))
+	var sub := _label(holder, "GateLore", str(gate_text[1]), TIP_FONT, TITLE_SUB_COLOR, 7, TITLE_OUTLINE)
+	_center_anchor(sub, Rect2(PATH_RECT.position.x, -420.0, PATH_RECT.size.x, 40.0))
+	_titles = [title, sub]
 
 	## Karakterler çubuğun ÜSTÜNDE çizilsin.
 	holder.move_child(_stage, holder.get_child_count() - 1)
@@ -257,6 +349,19 @@ func _build_backdrop(holder: Control) -> void:
 		bg.stretch_mode = TextureRect.STRETCH_SCALE
 		bg.position = Vector2.ZERO
 		bg.size = SceneParts.CANVAS
+	var light_tex: Texture2D = load(SCENE_DIR + SceneParts.LIGHT) as Texture2D
+	if light_tex:
+		_gate_light = TextureRect.new()
+		_gate_light.name = "GateLight"
+		_gate_light.texture = light_tex
+		_gate_light.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_gate_light.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_gate_light.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_gate_light.size = SceneParts.CANVAS
+		var add := CanvasItemMaterial.new()
+		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		_gate_light.material = add
+		_scene.add_child(_gate_light)
 	for p: Array in SceneParts.PARTS:
 		var tex: Texture2D = load(SCENE_DIR + str(p[0])) as Texture2D
 		if tex == null:
@@ -264,8 +369,34 @@ func _build_backdrop(holder: Control) -> void:
 		var s := LiveSheet.new(tex, p[2], int(p[3]), float(p[4]))
 		_scene.add_child(s)
 		s.position = p[1]
+	_gate_fx = _GateFx.new(SceneParts.GATE_MOUTH, SceneParts.CANVAS)
+	_gate_fx.name = "GateFx"
+	_scene.add_child(_gate_fx)
+	_update_gate_glow(0.0)
 	holder.resized.connect(_fit_scene.bind(holder))
 	_fit_scene(holder)
+
+
+## Kapının ışığı ve halesi yükleme ilerledikçe güçlenir (ratio 0..1).
+func _update_gate_glow(ratio: float) -> void:
+	ratio = clampf(ratio, 0.0, 1.0)
+	if is_instance_valid(_gate_light):
+		_gate_light.self_modulate.a = lerpf(LIGHT_MIN, 1.0, ratio)
+	if is_instance_valid(_gate_fx):
+		_gate_fx.boost = ratio
+
+
+func _label(holder: Control, n: String, text: String, font_size: int, color: Color, outline: int, outline_color: Color = UIKit.C_OUTLINE) -> Label:
+	var l := Label.new()
+	l.name = n
+	l.text = text
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UIKit.style_label(l, font_size, color, outline)
+	l.add_theme_color_override("font_outline_color", outline_color)
+	l.add_theme_constant_override("outline_size", outline)
+	holder.add_child(l)
+	return l
 
 
 func _fit_scene(holder: Control) -> void:
@@ -374,6 +505,8 @@ func _animate_chasers(delta: float) -> void:
 func _process(delta: float) -> void:
 	_animate_chasers(delta)
 	_layout_chase(progress_bar.value / 100.0)
+	if not _proceeded:
+		_update_gate_glow(progress_bar.value / HANDOFF_VALUE)
 	if _proceeded or _disconnected:
 		return
 
@@ -593,21 +726,26 @@ func _proceed() -> void:
 		get_tree().change_scene_to_file(main_scene_path)
 
 
-## Kahraman yolun sonundaki kulübenin kapısına koşar (bar -> HANDOFF_VALUE), kapıda kaybolur, yaratıklar durur, sahne kararır.
-## Ana iş parçacığı bu sırada serbest - animasyonlar akar; ardından gelen sahne kurulumu donması karanlık karede geçer.
+## Kahraman yolun sonundaki Kemik Mahzeni'nin kapısına koşar (bar -> HANDOFF_VALUE), kapıda kaybolur, kapı yeşil parlar, yaratıklar
+## durur, sahne kararır. Ana iş parçacığı bu sırada serbest - animasyonlar akar; ardından gelen sahne kurulumu donması karanlık karede geçer.
 func _arrive() -> void:
-	var tw := create_tween()
+	var tw := create_tween().set_parallel(true)
 	tw.tween_property(progress_bar, "value", HANDOFF_VALUE, ARRIVE_RUN_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_method(_update_gate_glow, progress_bar.value / HANDOFF_VALUE, 1.0, ARRIVE_RUN_TIME)
 	await tw.finished
 	if not is_inside_tree():
 		return
 	_chasers_running = false
 	for c: Array in _chasers:
 		(c[0] as Sprite2D).frame = CREATURE_ROW_RIGHT * int(c[1])
+	if is_instance_valid(_gate_light):
+		var flare := create_tween()
+		flare.tween_property(_gate_light, "modulate", Color(ARRIVE_FLARE, ARRIVE_FLARE, ARRIVE_FLARE), ARRIVE_FLARE_TIME)
+		flare.tween_property(_gate_light, "modulate", Color.WHITE, ARRIVE_FADE_TIME)
 	var fade := create_tween().set_parallel(true)
 	if _hero:
 		fade.tween_property(_hero, "modulate:a", 0.0, ARRIVE_FADE_TIME * 0.6)
-	for n: CanvasItem in [_scene, _stage]:
+	for n: CanvasItem in [_scene, _stage] + _titles:
 		if is_instance_valid(n):
 			fade.tween_property(n, "modulate", ARRIVE_DIM, ARRIVE_FADE_TIME)
 	await fade.finished

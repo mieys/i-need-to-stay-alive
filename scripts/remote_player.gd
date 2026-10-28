@@ -133,6 +133,9 @@ var is_indoors: bool = false
 ## güvenli bölgesi, is_indoors ile AYNI amaç/desen (kullanıcı isteği:
 ## "oyuncular o bölgeye girince yaratıklar tarafından görünmez olurlar").
 var is_in_merchant_zone: bool = false
+## ZİNDAN (madde 373): bu oyuncu hangi zindanda ("" = ana harita) - main.gd state_snapshot "dng".
+var in_dungeon: String = ""
+const DungeonDefsScript := preload("res://scripts/dungeon/dungeon_defs.gd")
 ## DÜZELTME (kullanıcı bildirimi: "assasin çocuk görünmezken hala
 ## görebiliyorlar vuramıyorlar ama görebiliyorlar") - kök neden: bu alan
 ## HİÇ YOKTU, update_position_and_anim_from_net() extra["is_invisible"]'ı
@@ -1683,6 +1686,8 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	_update_revive_rewind_fx()
 	is_indoors = extra.get("is_indoors", false)
 	is_in_merchant_zone = extra.get("is_in_merchant_zone", false)
+	var dng: int = int(extra.get("dng", 0))
+	in_dungeon = str(DungeonDefsScript.DUNGEONS[dng - 1]["id"]) if dng >= 1 and dng <= DungeonDefsScript.DUNGEONS.size() else ""
 	## Büyücü "Yükseliş" (R1): Meteor kanalında havada - host'un yaratıkları hedef almasın (köprü/enemy.gd is_invisible okur) ve
 	## kukla kasterle aynı şekilde yükselsin (buyucu_levitate.gd is_buyucu_airborne'u her karede sorar, inince kendini siler).
 	buyucu_airborne = bool(extra.get("byc_fly", false))

@@ -179,6 +179,7 @@ func _boot(char_id: int, start_weapon: String) -> bool:
 		await process_frame
 	if current_scene == null or current_scene.name != "Main":
 		return false
+	print("PG BOOT main_ms=%d" % (Time.get_ticks_msec() - t0)) ## sahne değiştirme -> Main hazır (harita yükleme maliyeti, madde 371)
 	_main = current_scene
 	_main.set("_run_end_recorded", true)
 	_gm.set("run_record_suppressed", true)
@@ -2133,9 +2134,30 @@ func _draw_sweep() -> void:
 		print("PG BOOTFAIL")
 		return
 	await _prepare(true)
+	## PG_POS="x,y" (madde 371): oyuncuyu haritanın o HÜCRESİNE ışınla (bölge karşılaştırması: orta bölge / Kuzey / Batı / Doğu / Güney). Harita kökü (-2, 21).
+	var pos_env: String = OS.get_environment("PG_POS")
+	if pos_env != "":
+		var pp: PackedStringArray = pos_env.split(",")
+		_player.global_position = Vector2(-2.0, 21.0) + (Vector2(float(pp[0]), float(pp[1])) + Vector2(0.5, 0.5)) * 16.0
+	## PG_MASK_OFF=1: bölge maskesi (derin_orman_maske) boş dokuyla değiştirilir -> shader'daki bölge renk ayarı erken çıkışa düşer (hesap maliyeti ayrıştırma)
+	if OS.get_environment("PG_MASK_OFF") == "1":
+		RenderingServer.global_shader_parameter_set("derin_orman_maske", ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGBA8)))
+	## PG_NO_DFX=1: derin orman ruh ışıkları + duyurular kapatılır (DeepForestFx / DeepForestLore); PG_HIDE=zemin,olu,nesne,suslu: bölge katmanları görünmez (madde 371, ayrıştırma A/B)
+	if OS.get_environment("PG_NO_DFX") == "1":
+		for nm in ["DeepForestFx", "DeepForestLore"]:
+			var nd: Node = _main.find_child(nm, true, false)
+			if nd:
+				nd.queue_free()
+	var hide_alias: Dictionary = {"zemin": ["Derin orman zemini"], "olu": ["Ağaç ölü", "Ağaç ölü ön"], "nesne": ["Derin orman nesneleri", "Derin orman nesneleri ön"], "suslu": ["Derin orman süsleri"]}
+	for tok in OS.get_environment("PG_HIDE").split(",", false):
+		for lname: String in hide_alias.get(tok, []):
+			for nd in _main.find_children(lname, "TileMapLayer", true, false):
+				(nd as CanvasItem).visible = false
 	if OS.get_environment("PG_INDOOR") != "1":
 		_enemy_target = _n
 		_walk = true
 	await _wait(float(_env_int("PG_SETTLE", 25)))
+	print("PG MEM static=%.0f MB tex=%.0f MB video=%.0f MB nodes=%d objects=%d" % [Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0, Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0,
+		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0, int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)), int(Performance.get_monitor(Performance.OBJECT_COUNT))])
 	var sweep = load("res://tools/fps_micro/draw_sweep.gd").new()
 	await sweep.run(self)

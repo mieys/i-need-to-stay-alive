@@ -206,7 +206,7 @@ def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, "assets", "map", "harita_golgeleri.png")
     masks = {}
-    for cat in ["tree0", "tree1", "tree2", "bush", "house", "farm", "rock", "cliff"]:
+    for cat in ["tree0", "tree1", "tree2", "tree3", "bush", "house", "farm", "rock", "cliff"]:
         masks[cat] = load_mask(os.path.join(src, cat + ".png"))
     colors = {}
     for cat in ["rock", "cliff"]:

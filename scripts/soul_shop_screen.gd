@@ -4,16 +4,14 @@ extends CanvasLayer
 ## evcil hayvan / ruhani yetenek açılır + kalıcı GELİŞTİRMELER (meta_upgrades.gd). Ana menüdeki "RUH MAĞAZASI" düğmesi açar.
 ## Yanlışlıkla harcamaya karşı iki adım: ilk basış "ONAYLA?" yapar, ikinci basış satın alır (başka bir şeye basınca ilk adım geri alınır).
 ##
-## TASARIM "F" (2026-10-16, prototip tools/proto_20261016/ruh_magaza_proto.gd, not madde 173): herkes AYNI yerleşimi görür (eski 4 yerleşim +
-## "Görünüm" çipleri kalktı, eski dosya tools/proto_20261016/yedek/). Tam ekran, koyu ahşap/kehribar palet, arka plan oyunun iç mekan sanatından
-## kurulmuş gece dükkanı (assets/ui/ruh_magaza/bg_ruh_magaza.png, üretici tools/gen_ruh_magaza_bg.py - meşaleler başlığın iki yanındaki boşluklara
-## göre konumlu: üst şerit yerleşimi değişirse arka plan da yeniden üretilmeli).
-##   ANA SAYFA: solda "ŞİMDİ ALABİLİRSİN" kartı (+ sıradaki hedef), sağda 4 kategori kutusu + geniş Geliştirmeler kutusu; kutuya basınca sayfası açılır.
-##   KATEGORİ SAYFASI ("kahraman seçimi"): üstte büyük sahne (spot ışığı + halkalı zemin) + bilgi paneli, altta çerçeveli kart dizisi.
-##   GELİŞTİRMELER: iki sütun satır (ikon, şu an -> sonraki, seviye çubuğu, fiyat düğmesi), başlıkta toplam + HEPSİNİ SIFIRLA (iki adımlı).
-## Yetenek önizlemeleri (karaktere basınca Q/E/R oynar) SONRAYA bırakıldı: canlı değil, oyunun motorunda kayıt olacak (madde 173 sonu).
-## ANİMASYON (2026-10-19, madde 323; madde 200 ilkeleri: kısa, tek seferlik, sonunda TAM eski hâl): sayfa girişi sıralı belirme, kutu/kart üstüne
-## gelince nefes, seçim değişince figür yandan kayar + kart yükselir, satın almada parlama + bakiye sayacı + kristal sesi. Sayfa her değişimde baştan
+## MASAÜSTÜ TASARIM "C - Ocak Başı Defteri" (2026-10-24, madde 383; prototip tools/proto_20261024/ruh_komple/, madde 382): ana menü / ayarlar /
+## rekorlar ekranlarının "Ateş Işığı" dili (fire_menu_kit.gd) ana menünün Ocak Başı sahnesinin (menu_hearth_bg.gd) üstünde. ANA SAYFA YOK: açılınca
+## Karakterler. Solda bölümler (ana menü öğeleri gibi: mum + ikon + başlık + "x/y açık, N alınabilir"; en altta Geri), ortada sade yazı listesi
+## (ikon + ad + fiyat, fiyat sırasında - alınca yer değiştirmez), sağda seçilenin ayrıntısı (spot sahne + altın ad + yetenekler/açıklama + büyük AÇ).
+## Geliştirmeler aynı kalıp: liste satırında seviye pipsi, ayrıntıda "Şu an -> Sonraki" + YÜKSELT + küçük "Hepsini sıfırla" (iki adımlı).
+## Önceki tasarım F (madde 173: ana sayfa + kahraman seçimi sahnesi + kart dizisi) bu dosyanın git geçmişinde. Telefon (_ph_*, madde 279) AYRI, değişmedi.
+## ANİMASYON (2026-10-19, madde 323; madde 200 ilkeleri: kısa, tek seferlik, sonunda TAM eski hâl): sayfa girişi sıralı belirme, satır üstüne
+## gelince nefes, seçim değişince figür yandan kayar + ayrıntı belirir, satın almada parlama + bakiye sayacı + kristal sesi. Sayfa her değişimde baştan
 ## kurulduğu için ne olduğu `_anim_*` bayraklarında tutulur, kurulum sonunda `_play_anims` oynatır.
 
 signal closed
@@ -30,60 +28,68 @@ const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const PK := preload("res://scripts/phone_menu_kit.gd")
 const DK := preload("res://scripts/menu_dark_kit.gd")
 const StatIconScript: GDScript = preload("res://scripts/stat_icon.gd")
-const BG_TEXTURE := "res://assets/ui/ruh_magaza/bg_ruh_magaza.png"
+const FM := preload("res://scripts/fire_menu_kit.gd")
+## menu_hearth_bg.gd main_menu.gd'yi preload eder, main_menu.gd de bu dosyayı -> döngü olmasın diye çalışma anında yüklenir.
+const HEARTH_BG := "res://scripts/menu_hearth_bg.gd"
+const BG_TEXTURE := "res://assets/ui/ruh_magaza/bg_ruh_magaza.png" ## telefonun arka planı (gece dükkanı)
 
-const PAGE_HOME := "home"
 const PAGE_UPGRADES := "upgrades"
-const TAB_UNLOCKS := "unlocks" ## eski API (testler/çağıranlar): ana sayfa demek
+const TAB_UNLOCKS := "unlocks" ## eski API (testler/çağıranlar): eskiden ana sayfa, şimdi Karakterler
 const TAB_UPGRADES := "upgrades"
 
-## Koyu ahşap + fener: göz yormayan koyu kahve zemin, kehribar vurgu, krem yazı.
-const C_PANEL := Color("#241c16")
-const C_PANEL2 := Color("#2e251d")
-const C_PANEL3 := Color("#3b2f24")
-const C_INSET := Color("#1a140f")
-const C_LINE := Color("#45372a")
-const C_LINE_HI := Color("#6a5440")
+## "Ateş Işığı" paleti (fire_menu_kit.gd masaüstü değerleriyle aynı tonlar).
+const C_PANEL := Color(0.06, 0.04, 0.03, 0.82) ## ayrıntı zemini (sahne arkadan sezilir)
+const C_PANEL2 := Color("#2a1d12")
+const C_PANEL3 := Color("#3a2a1a")
+const C_INSET := Color("#140e09")
+const C_LINE := Color("#3b2a1a")
+const C_LINE_HI := Color("#5a4128")
 const C_TEXT := Color("#efe2c6")
-const C_DIM := Color("#ad9b80")
-const C_ACCENT := Color("#e2a64e")
+const C_DIM := Color("#b09878")
+const C_ACCENT := Color("#f4c56e")
 const C_ACCENT_DK := Color("#6a4416")
 const C_ACCENT_TEXT := Color("#24160a")
 const C_GOOD := Color("#a9c96e")
 const C_BAD := Color("#dc7f60")
 const C_PRICE := Color("#f2c674")
 const C_SPOT := Color("#c0803a")
+const SHADE_COLOR := Color(0.05, 0.035, 0.025, 0.88) ## sol karartma (liste sütunlarının okunurluğu)
+const SHADE_X0 := 1220.0
 
 const G_CHECK := ["......#", ".....##", "#...##.", "##.##..", ".###...", "..#...."]
-const G_LOCK := ["..###..", ".#...#.", ".#...#.", "#######", "###.###", "###.###", "#######"]
 const G_HEART := [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."]
 const G_PCT := ["##...#", "##..#.", "...#..", "..#...", ".#..##", "#...##"]
 const G_REROLL := ["..####.#", ".#....##", "#....###", "#.......", ".......#", "###....#", "##....#.", "#.####.."]
-const G_ARROW := ["..#..", "...#.", "#####", "...#.", "..#.."]
 const G_LEFT := ["..#", ".##", "###", ".##", "..#"]
 const G_RIGHT := ["#..", "##.", "###", "##.", "#.."]
 
 const KIND_NAMES := {"char": "KARAKTERLER", "weapon": "SİLAHLAR", "pet": "EVCİL HAYVANLAR", "spirit": "RUHANİ YETENEKLER"}
 const KIND_TILE := {"char": "Karakterler", "weapon": "Silahlar", "pet": "Evcil Hayvanlar", "spirit": "Ruhani Yetenekler"}
 const KIND_ONE := {"char": "KARAKTER", "weapon": "BAŞLANGIÇ SİLAHI", "pet": "EVCİL HAYVAN", "spirit": "RUHANİ YETENEK"}
+const KIND_LOWER := {"char": "Karakter", "weapon": "Başlangıç silahı", "pet": "Evcil hayvan", "spirit": "Ruhani yetenek"}
+const SECTIONS := ["char", "weapon", "pet", "spirit", "upgrades"] ## soldaki bölüm sütunu (geliştirmeler dahil)
 
-const STAGE_FLOOR := 92.0 ## sahne zemin halkasının alttan uzaklığı (figürün ayağı buraya basar)
+const COL_LIST_W := 600.0 ## orta sütun (yazı listesi)
+const DETAIL_TEXT_W := 470.0 ## ayrıntıdaki açıklama genişliği
+const STAGE_H := 280.0 ## ayrıntının spot sahnesi
+const STAGE_FLOOR := 50.0 ## sahne zemin halkasının alttan uzaklığı (figürün ayağı buraya basar)
 
 var _close_btn: Button = null
 var _balance_label: Label = null
-var _list: Container = null ## sadece GELİŞTİRMELER sayfasında dolu (20 satır)
+var _list: Container = null ## orta sütunun satırları (geliştirmelerde 20 satır - test sayar)
 var _scroll: ScrollContainer = null
 var _page_box: VBoxContainer = null
 var _confirm_id: String = "" ## "<tür>:<anahtar>" - onay bekleyen alım ("reset" = geliştirmeleri sıfırla)
-var _page: String = PAGE_HOME
-var _sel: Dictionary = {} ## tür -> seçili anahtar (kategori sayfası)
+var _page: String = "char" ## ana sayfa yok: "char" / "weapon" / "pet" / "spirit" / "upgrades"
+var _sel: Dictionary = {} ## tür -> seçili anahtar
+var _sel_upg: String = "" ## seçili geliştirme (boşsa alınabilir en ucuzu)
 var _body_cache: Dictionary = {}
+var _crop_cache: Dictionary = {} ## silah ikonu -> boş kenarı kırpılmış doku
 
 const ANIM_IN_TIME := 0.18 ## sayfa girişinde öğe belirmesi
 const ANIM_IN_SPAN := 0.3 ## uzun listede (17 silah, 20 geliştirme) son öğenin en geç başlaması
 const ANIM_SLIDE_PX := 36.0 ## seçim değişince figürün geldiği yan uzaklık
 const ANIM_SLIDE_TIME := 0.2
-const ANIM_LIFT_TIME := 0.14 ## seçilen kartın 14 px yükselmesi
 const ANIM_FLASH_TIME := 0.34 ## satın almada parlama sönmesi
 const ANIM_COUNT_TIME := 0.45 ## bakiye sayacı
 var _anim_page_in: bool = true ## sonraki kurulum bir sayfa girişi mi (açılış / sayfa değişimi); seçim ve satın almada false
@@ -199,56 +205,6 @@ class StageBg extends Control:
 		draw_polyline(ring_pts, Color(ring, 0.55), 3.0)
 
 
-## Pikselli köşe süsü (L köşeler + üst ortada küçük elmas).
-class CornerFrame extends Control:
-	var col: Color = Color.WHITE
-	var ln: float = 22.0
-	var ins: float = 8.0
-	var gem: bool = true
-
-	func _init(c: Color, length: float = 22.0, inset: float = 8.0, with_gem: bool = true) -> void:
-		col = c
-		ln = length
-		ins = inset
-		gem = with_gem
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		var w: float = size.x
-		var h: float = size.y
-		var i: float = ins
-		var t: float = 3.0
-		for c: Vector2 in [Vector2(i, i), Vector2(w - i - ln, i), Vector2(i, h - i - t), Vector2(w - i - ln, h - i - t)]:
-			draw_rect(Rect2(c, Vector2(ln, t)), col)
-		for c: Vector2 in [Vector2(i, i), Vector2(w - i - t, i), Vector2(i, h - i - ln), Vector2(w - i - t, h - i - ln)]:
-			draw_rect(Rect2(c, Vector2(t, ln)), col)
-		if gem:
-			var g := Vector2(floorf(w * 0.5), i + 1.0)
-			draw_colored_polygon(PackedVector2Array([g + Vector2(0, -6), g + Vector2(6, 0), g + Vector2(0, 6), g + Vector2(-6, 0)]), col)
-
-
-## Kart zemini: yukarıdan aşağı basamaklı koyulaşan dolgu + ikon arkasında ışık lekesi.
-class CardBg extends Control:
-	var top: Color = Color.WHITE
-	var bottom: Color = Color.BLACK
-	var glow: Color = Color.WHITE
-
-	func _init(t: Color, b: Color, g: Color) -> void:
-		top = t
-		bottom = b
-		glow = g
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		var n: int = 6
-		var bh: float = ceilf(size.y / n)
-		for i in n:
-			draw_rect(Rect2(0, i * bh, size.x, bh), top.lerp(bottom, float(i) / float(n - 1)))
-		var c := Vector2(floorf(size.x * 0.5), floorf(size.y * 0.38))
-		for i in 3:
-			draw_circle(c, floorf(size.x * (0.42 - i * 0.1)), Color(glow, 0.07 + i * 0.04))
-
-
 ## ---------------------------------------------------------------- yaşam döngüsü
 func _ready() -> void:
 	add_to_group(&"gamepad_modal")
@@ -270,19 +226,13 @@ func _build_ui() -> void:
 	root.theme = _theme()
 	root.mouse_filter = Control.MOUSE_FILTER_STOP ## alttaki ana menüye tıklama geçmesin
 	add_child(root)
-	var bg := TextureRect.new()
-	bg.texture = load(BG_TEXTURE) as Texture2D if ResourceLoader.exists(BG_TEXTURE) else null
-	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_SCALE
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(bg)
-	if bg.texture == null:
-		var fallback := ColorRect.new()
-		fallback.color = Color("#1a140f")
-		fallback.set_anchors_preset(Control.PRESET_FULL_RECT)
-		root.add_child(fallback)
+	(load(HEARTH_BG) as GDScript).call("add_to", root, 0.0) ## ana menünün Ocak Başı sahnesi (ayarlar / rekorlar ekranlarıyla aynı)
+	var shade := FM.StepShade.new()
+	shade.col = SHADE_COLOR
+	shade.x0 = SHADE_X0
+	shade.step_w = 40.0
+	shade.steps = 6
+	root.add_child(shade)
 	var m := MarginContainer.new()
 	m.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for side: Array in [["margin_left", 32], ["margin_top", 20], ["margin_right", 32], ["margin_bottom", 28]]:
@@ -310,13 +260,7 @@ func _rebuild_list(reset_scroll: bool = false) -> void:
 	for c in _page_box.get_children():
 		_page_box.remove_child(c)
 		c.queue_free()
-	match _page:
-		PAGE_HOME:
-			_build_home()
-		PAGE_UPGRADES:
-			_build_upgrades()
-		_:
-			_build_kind_page(_page)
+	_build_page()
 	UISound.connect_all_buttons(self)
 	_play_anims()
 	_restore_view.call_deferred(keep, focus_sid)
@@ -334,9 +278,9 @@ func _restore_view(scroll_v: int, focus_sid: String) -> void:
 		_close_btn.grab_focus()
 
 
-## Eski API: "unlocks"/"home" = ana sayfa, "upgrades" = geliştirmeler, tür adı ("char"/"weapon"/"pet"/"spirit") = o kategori.
+## Eski API: "unlocks"/"home" = Karakterler (ana sayfa yok), "upgrades" = geliştirmeler, tür adı ("char"/"weapon"/"pet"/"spirit") = o bölüm.
 func _on_tab_pressed(tab: String) -> void:
-	var page: String = PAGE_HOME if tab == TAB_UNLOCKS else tab
+	var page: String = MetaProgressScript.CHAR if tab == TAB_UNLOCKS or tab == "home" else tab
 	if page == _page:
 		return
 	_page = page
@@ -345,18 +289,9 @@ func _on_tab_pressed(tab: String) -> void:
 	_rebuild_list(true)
 
 
-func _go_home() -> void:
-	_on_tab_pressed(PAGE_HOME)
-
-
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
-		if _phone: ## telefonda ana sayfa yok: geri = kapat
-			_on_close_pressed()
-		elif _page != PAGE_HOME:
-			_go_home()
-		else:
-			_on_close_pressed()
+	if event.is_action_pressed("ui_cancel"): ## ana sayfa yok: geri = kapat (telefonda da)
+		_on_close_pressed()
 		get_viewport().set_input_as_handled()
 
 
@@ -440,24 +375,6 @@ func _open_count(items: Array) -> int:
 	return n
 
 
-## Satın alınamayan en ucuz öğe (biriktirme hedefi).
-func _goal(items: Array) -> Dictionary:
-	var best: Dictionary = {}
-	for i: Dictionary in items:
-		if _state(i) == "no" and (best.is_empty() or int(i["cost"]) < int(best["cost"])):
-			best = i
-	return best
-
-
-## Ana sayfanın önerisi: alınabilir en ucuz karakter, yoksa alınabilir en ucuz herhangi bir öğe.
-func _featured(items: Array) -> Dictionary:
-	for kind: String in MetaProgressScript.KINDS:
-		for i: Dictionary in _of_kind(items, kind):
-			if _state(i) == "can":
-				return i
-	return {}
-
-
 func _selected(items: Array, kind: String) -> Dictionary:
 	var list: Array = _of_kind(items, kind)
 	if list.is_empty():
@@ -490,14 +407,6 @@ func _index_of(list: Array, it: Dictionary) -> int:
 		if _id(list[i]) == _id(it):
 			return i
 	return -1
-
-
-func _step_selection(kind: String, dir: int) -> void:
-	var list: Array = _of_kind(_items(), kind)
-	if list.is_empty():
-		return
-	var idx: int = maxi(0, _index_of(list, _selected(_items(), kind)))
-	_select(list[posmod(idx + dir, list.size())], dir)
 
 
 func _on_buy_pressed(kind: String, key: Variant) -> void:
@@ -574,7 +483,7 @@ func _play_anims() -> void:
 ## Sayfa girişi: üst şerit, ana bloklar, sonra kutular/kartlar/satırlar sırayla belirir (uzun listede toplam ANIM_IN_SPAN'a sıkışır).
 func _anim_page_enter(n: Dictionary) -> void:
 	var t: float = 0.0
-	for k: String in ["topbar", "featured", "stage", "info", "center"]:
+	for k: String in ["topbar", "stage", "info", "center"]:
 		if n.get(k) is CanvasItem:
 			UiAnim.reveal(n[k], 0.0, ANIM_IN_TIME, t)
 			t += 0.04
@@ -590,7 +499,7 @@ func _anim_page_enter(n: Dictionary) -> void:
 		UiAnim.reveal(list[i], 0.0, ANIM_IN_TIME, t + step * i)
 
 
-## Seçim değişti: figür seçim yönünden kayarak gelir, rozet + bilgi paneli belirir, yeni kart yükselir / eskisi iner.
+## Seçim değişti: figür seçim yönünden kayarak gelir, ayrıntı belirir.
 func _anim_selection(n: Dictionary, prev_sel: String, dir: int) -> void:
 	if _phone:
 		if is_instance_valid(_ph.get("det")):
@@ -599,14 +508,8 @@ func _anim_selection(n: Dictionary, prev_sel: String, dir: int) -> void:
 	var fig := n.get("figure") as TextureRect
 	if fig:
 		_anim_slide_in(fig, float(dir) * ANIM_SLIDE_PX)
-	if n.get("badge") is CanvasItem:
-		UiAnim.reveal(n["badge"], 0.0, 0.16, 0.06)
 	if n.get("info") is CanvasItem:
 		UiAnim.reveal(n["info"], 0.3, 0.16)
-	if n.get("sel_wrap") is MarginContainer:
-		_anim_lift(n["sel_wrap"], 14.0, 0.0)
-	if n.get("wrap:" + prev_sel) is MarginContainer:
-		_anim_lift(n["wrap:" + prev_sel], 0.0, 14.0)
 
 
 ## Satın alma / sıfırlama: bakiye eskisinden yeniye sayar + kıymık çipi nefes alır; alınan şey parlar (figür ayrıca hafif zıplar).
@@ -624,16 +527,12 @@ func _anim_purchase(n: Dictionary, bought: String, from: int) -> void:
 		for i in rows.size():
 			UiAnim.reveal(rows[i], 0.4, 0.16, minf(0.015 * i, 0.3))
 		return
-	for k: String in ["row:" + bought, "card:" + bought, "figure"]:
+	for k: String in ["row:" + bought, "figure"]:
 		if n.get(k) is CanvasItem:
 			_anim_flash(n[k])
 	var fig := n.get("figure") as TextureRect
 	if fig:
 		_anim_bounce(fig)
-	if n.get("badge") is Control:
-		_pop_later(n["badge"])
-	if n.get("featured") is CanvasItem: ## ana sayfa: kart sıradaki öğeye geçti
-		UiAnim.reveal(n["featured"], 0.25, 0.2)
 
 
 func _anim_tween(node: Node) -> Tween:
@@ -670,19 +569,6 @@ func _set_shift(x: float, c: Variant, l0: float, r0: float) -> void:
 		var o: float = roundf(x)
 		(c as Control).offset_left = l0 + o
 		(c as Control).offset_right = r0 + o
-
-
-## Kart sarmalayıcısının üst/alt payı (seçili 0/14, diğerleri 14/0) arasında kayar.
-func _anim_lift(w: MarginContainer, from_top: float, to_top: float) -> void:
-	_set_lift(from_top, w)
-	_anim_tween(w).tween_method(_set_lift.bind(w), from_top, to_top, ANIM_LIFT_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-
-func _set_lift(top: float, w: Variant) -> void:
-	if is_instance_valid(w):
-		var t: int = roundi(top)
-		(w as MarginContainer).add_theme_constant_override("margin_top", t)
-		(w as MarginContainer).add_theme_constant_override("margin_bottom", 14 - t)
 
 
 func _anim_flash(ci: CanvasItem) -> void:
@@ -829,19 +715,6 @@ func _sp(w: float = 0.0, h: float = 0.0, ex: bool = false, ey: bool = false) -> 
 	return c
 
 
-func _hline() -> ColorRect:
-	var r := ColorRect.new()
-	r.color = C_LINE
-	r.custom_minimum_size = Vector2(0, 3)
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return r
-
-
-func _expand(c: Control) -> Control:
-	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	return c
-
-
 func _tag_sid(b: Control, sid: String) -> void:
 	b.set_meta("sid", sid)
 
@@ -884,14 +757,15 @@ func _upg_icon(d: Dictionary, box: float) -> Control:
 	return cc
 
 
-## Fiyat / durum satırı: kristal + sayı (yetmiyorsa kırmızımsı), ya da onay + AÇIK.
-func _price(it: Dictionary, fs: int = 32) -> HBoxContainer:
+## Fiyat / durum satırı: kristal + sayı (yetmiyorsa kırmızımsı), ya da onay + SENDE.
+func _price(it: Dictionary, fs: int = 32, center: bool = true) -> HBoxContainer:
 	var h := _h(8)
-	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	if center:
+		h.alignment = BoxContainer.ALIGNMENT_CENTER
 	match _state(it):
 		"open":
 			h.add_child(Glyph.new(G_CHECK, C_GOOD, 3 if fs < 32 else 4))
-			h.add_child(_lbl("AÇIK", fs, C_GOOD))
+			h.add_child(_lbl("SENDE", fs, C_GOOD))
 		"can":
 			h.add_child(DK.ShardIcon.new(fs * 0.75))
 			h.add_child(_lbl(str(it["cost"]), fs, C_PRICE))
@@ -1005,111 +879,47 @@ func _clickable(p: Control, cb: Callable, sid: String) -> Button:
 	return b
 
 
-func _balance_chip() -> PanelContainer:
-	var p := _box(C_INSET, C_LINE_HI, 12)
-	var h := _h(12)
-	h.add_child(DK.ShardIcon.new(32))
-	var v := _v(-6)
-	v.add_child(_lbl("Ruh Kıymığı", 24, C_DIM))
-	_balance_label = _lbl(str(MetaProgressScript.shards()), 32, C_PRICE)
-	_anim_nodes["chip"] = p
-	v.add_child(_balance_label)
-	h.add_child(v)
-	h.add_child(_sp(8))
-	p.add_child(h)
-	return p
-
-
-## Üst şerit: [GERİ / ANA SAYFA] ..... [başlık levhası] ..... [bakiye]; iki yan eşit genişlikte (başlık tam ortada).
-func _topbar(back_text: String, back_cb: Callable, title_icon: Control, title: String, count: String = "") -> Control:
-	var h := _h(0)
-	h.custom_minimum_size.y = 72
-	var l := _h(0)
-	l.custom_minimum_size.x = 300
-	var bb := _btn("", "ghost", 32, 56, 200)
-	bb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var cc := CenterContainer.new()
-	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var row := _h(12)
-	row.add_child(Glyph.new(G_LEFT, C_TEXT, 4))
-	row.add_child(_lbl(back_text, 32))
-	cc.add_child(row)
-	bb.add_child(cc)
-	bb.pressed.connect(back_cb)
-	_tag_sid(bb, "back")
-	_close_btn = bb
-	l.add_child(bb)
-	h.add_child(l)
-	var mid := CenterContainer.new()
-	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var plaque := _box(C_PANEL2, C_LINE_HI, 12, 3, 8)
-	var ph := _h(14)
-	ph.add_child(title_icon)
-	ph.add_child(_lbl(title, 48, C_ACCENT))
-	if count != "":
-		ph.add_child(_lbl(count, 32, C_DIM))
-	plaque.add_child(ph)
-	mid.add_child(plaque)
-	h.add_child(mid)
-	var r := _h(0)
-	r.custom_minimum_size.x = 300
-	r.alignment = BoxContainer.ALIGNMENT_END
-	r.add_child(_balance_chip())
-	h.add_child(r)
-	_anim_nodes["topbar"] = h
-	return h
-
-
-func _key_badge(k: String, fs: int = 24) -> PanelContainer:
-	var p := _box(C_INSET, C_LINE_HI, 2, 3, 4)
-	p.custom_minimum_size = Vector2(fs * 1.5, fs * 1.5)
-	p.add_child(_lbl(k, fs, C_ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
-	return p
-
-
-## Yetenek satırları: kendi ikonu + köşesinde tuş harfi (ikonu olmayan yetenekte sadece büyük harf), isteğe bağlı 2 satır açıklama.
-func _skill_rows(it: Dictionary, fs: int = 32, desc_w: float = 0.0) -> VBoxContainer:
+## Yetenek satırları: kendi ikonu + köşesinde tuş harfi (ikonu olmayan yetenekte sadece büyük harf), desc_w > 0 ise altında açıklama.
+func _skill_rows(it: Dictionary, fs: int = 32, desc_w: float = 0.0, box: float = 48.0, desc_lines: int = 2) -> VBoxContainer:
 	var d: Dictionary = _char_def(it)
 	var v := _v(10)
 	for trio: Array in [["Q", "skill_name", "skill_icon", "skill_desc"], ["E", "skill2_name", "skill2_icon", "skill2_desc"],
 			["R", "skill3_name", "skill3_icon", "skill3_desc"]]:
-		var h := _h(12)
+		var h := _h(14)
 		var ip: String = str(d.get(trio[2], ""))
 		var slot := _box(C_INSET, C_LINE_HI, 0, 3, 4)
-		var has_icon: bool = ip != "" and ResourceLoader.exists(ip)
-		if has_icon:
-			slot.add_child(_icon(load(ip) as Texture2D, 48))
-		var key := _lbl(trio[0], 24 if has_icon else 32, C_ACCENT, HORIZONTAL_ALIGNMENT_CENTER)
-		if has_icon:
+		slot.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		if ip != "" and ResourceLoader.exists(ip):
+			slot.add_child(_icon(load(ip) as Texture2D, box))
+			var key := _lbl(trio[0], 24, C_ACCENT, HORIZONTAL_ALIGNMENT_CENTER)
 			key.size_flags_horizontal = Control.SIZE_SHRINK_END
 			key.size_flags_vertical = Control.SIZE_SHRINK_END
 			key.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+			slot.add_child(key)
 		else:
-			key.custom_minimum_size = Vector2(48, 48)
-		slot.add_child(key)
+			var key2 := _lbl(trio[0], 32, C_ACCENT, HORIZONTAL_ALIGNMENT_CENTER)
+			key2.custom_minimum_size = Vector2(box, box)
+			slot.add_child(key2)
 		h.add_child(slot)
+		var tv := _v(0)
+		tv.alignment = BoxContainer.ALIGNMENT_CENTER
+		tv.add_child(_lbl(str(d.get(trio[1], "")), fs))
 		if desc_w > 0.0:
-			slot.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-			var tv := _v(0)
-			tv.add_child(_lbl(str(d.get(trio[1], "")), fs))
 			var ds: String = str(d.get(trio[3], ""))
 			for pre: String in ["YETENEK: ", "TEMEL: ", "ULTİ: ", "ULTI: "]:
 				ds = ds.trim_prefix(pre)
-			tv.add_child(_wrap(ds, 24, C_DIM, desc_w, 2))
-			h.add_child(tv)
-		else:
-			h.add_child(_lbl(str(d.get(trio[1], "")), fs))
+			tv.add_child(_wrap(ds, 24, C_DIM, desc_w, desc_lines))
+		h.add_child(tv)
 		v.add_child(h)
 	return v
 
 
-func _stat_rows(it: Dictionary, fs: int = 24) -> GridContainer:
+func _stat_rows(it: Dictionary, fs: int = 24, cols: int = 2) -> GridContainer:
 	var bs: Dictionary = Characters.get_base_stats(int(it["key"]))
 	var g := GridContainer.new()
-	g.columns = 2
-	g.add_theme_constant_override("h_separation", 18)
-	g.add_theme_constant_override("v_separation", 4)
+	g.columns = cols
+	g.add_theme_constant_override("h_separation", 26)
+	g.add_theme_constant_override("v_separation", 6)
 	var atk: int = int(bs.get("atk", 0))
 	for row: Array in [["max_health", "Can", str(int(bs.get("hp", 100)))], ["speed", "Hız", str(int(bs.get("speed", 252)))],
 			["damage", "Saldırı Gücü", str(int(bs.get("ap", 10)))], ["fire_rate", "Saldırı Hızı", ("%+d%%" % atk) if atk != 0 else "0"]]:
@@ -1119,30 +929,6 @@ func _stat_rows(it: Dictionary, fs: int = 24) -> GridContainer:
 		h.add_child(_lbl(row[2], fs))
 		g.add_child(h)
 	return g
-
-
-func _goal_box(goal: Dictionary) -> PanelContainer:
-	var p := _box(C_INSET, C_LINE, 14)
-	var v := _v(8)
-	v.add_child(_lbl("SIRADAKİ HEDEF", 24, C_ACCENT))
-	var h := _h(12)
-	var slot := _box(C_PANEL2, C_LINE, 4)
-	slot.add_child(_icon(goal["icon"], 72))
-	h.add_child(slot)
-	var tv := _v(4)
-	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tv.add_child(_lbl(str(goal["name"]), 32))
-	tv.add_child(_expand(Bar.new(float(MetaProgressScript.shards()) / float(maxi(1, int(goal["cost"]))), C_ACCENT, C_PANEL3, 14.0)))
-	var hh := _h(6)
-	hh.add_child(DK.ShardIcon.new(16))
-	hh.add_child(_lbl("%d / %d" % [MetaProgressScript.shards(), int(goal["cost"])], 24, C_DIM))
-	hh.add_child(_sp(0, 0, true))
-	hh.add_child(_lbl("%d kaldı" % _need(goal), 24, C_PRICE))
-	tv.add_child(hh)
-	h.add_child(tv)
-	v.add_child(h)
-	p.add_child(v)
-	return p
 
 
 ## Sahne/vitrin içine figür: karakterde tam boy kare (ayağı zemin halkasına basar), diğerlerinde ikon (halkanın biraz üstünde süzülür).
@@ -1176,163 +962,333 @@ func _stage_figure(hold: Control, it: Dictionary, max_h: float, floor_off: float
 	return spr
 
 
-## ---------------------------------------------------------------- ANA SAYFA
-func _build_home() -> void:
-	_page_box.add_child(_topbar("GERİ", _on_close_pressed, DK.ShardIcon.new(38), "RUH MAĞAZASI"))
+## ---------------------------------------------------------------- SAYFA (tasarım C "Ocak Başı Defteri")
+## Tek sayfa: başlık + bakiye; solda bölümler, ortada liste, sağda ayrıntı. Her bölüm (geliştirmeler dahil) aynı kalıp.
+func _build_page() -> void:
 	var items: Array = _items()
-	var body := _h(20)
+	_page_box.add_child(_header())
+	var body := _h(28)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_page_box.add_child(body)
-	body.add_child(_home_featured(items))
-	var right := _v(20)
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(right)
-	var g := GridContainer.new()
-	g.columns = 2
-	g.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	g.add_theme_constant_override("h_separation", 20)
-	g.add_theme_constant_override("v_separation", 20)
-	for kind: String in MetaProgressScript.KINDS:
-		g.add_child(_home_tile(items, kind))
-	right.add_child(g)
-	right.add_child(_home_upgrades_tile())
+	body.add_child(_section_column(items))
+	body.add_child(_list_column(items))
+	var det := _box(C_PANEL, Color(0, 0, 0, 0), 32, 0, 10)
+	det.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_anim_nodes["info"] = det
+	det.add_child(_upg_detail(_upg_selected()) if _page == PAGE_UPGRADES else _detail(_selected(items, _page)))
+	body.add_child(det)
 
 
-func _home_featured(items: Array) -> Control:
-	var p := _box(C_PANEL, C_LINE_HI, 22, 3, 8)
-	p.custom_minimum_size.x = 560
-	_anim_nodes["featured"] = p
-	var v := _v(12)
-	p.add_child(v)
-	var it: Dictionary = _featured(items)
-	var goal: Dictionary = _goal(items)
-	var title: String = "ŞİMDİ ALABİLİRSİN"
+func _header() -> Control:
+	var hd := _h(16)
+	hd.custom_minimum_size.y = 96
+	hd.add_child(_sp(16))
+	var t := _lbl("RUH MAĞAZASI", 64, C_ACCENT)
+	t.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 1))
+	t.add_theme_constant_override("outline_size", 10)
+	t.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	t.add_theme_constant_override("shadow_offset_y", 5)
+	hd.add_child(t)
+	hd.add_child(_sp(0, 0, true))
+	var bal := _h(12)
+	bal.add_child(DK.ShardIcon.new(44))
+	_balance_label = FM.lbl(str(MetaProgressScript.shards()), 56, C_PRICE)
+	bal.add_child(_balance_label)
+	_anim_nodes["chip"] = bal
+	hd.add_child(bal)
+	hd.add_child(_sp(16))
+	_anim_nodes["topbar"] = hd
+	return hd
+
+
+## Sol sütun: bölümler ana menü öğeleri gibi (FM.item: mum + ikon + başlık + alt yazı), seçili = altın + yanan mum; en altta Geri.
+func _section_column(items: Array) -> Control:
+	var c := _v(0)
+	c.custom_minimum_size.x = FM.COL_W
+	for k: String in SECTIONS:
+		var n: Vector2i = _counts(items, k)
+		var can: int = _can_n(items, k)
+		var sub: String = ("%d/%d seviye" if k == PAGE_UPGRADES else "%d/%d açık") % [n.x, n.y]
+		if can > 0:
+			sub += ", %d %s" % [can, "yükseltilebilir" if k == PAGE_UPGRADES else "alınabilir"]
+		var b: Button = FM.item(_sec_name(k), sub, _section_icon(items, k, 48), false, false)
+		_fm_focus_frame(b)
+		FM.set_selected(b, k == _page) ## ağaca girmeden: kayma animasyonu her yeniden kurulumda oynamasın
+		b.pressed.connect(_on_tab_pressed.bind(k))
+		_tag_sid(b, "tab:" + k)
+		c.add_child(b)
+	c.add_child(_sp(0, 0, false, true))
+	var back: Button = FM.item("Geri", "Ana menüye dön", Glyph.new(G_LEFT, C_DIM, 5), false, false)
+	_fm_focus_frame(back)
+	back.pressed.connect(_on_close_pressed)
+	_tag_sid(back, "back")
+	_close_btn = back
+	c.add_child(back)
+	return c
+
+
+## FM.item'in odak çerçevesi boş (seçili görünüm elle verilir) -> gamepad için ince çerçeve.
+func _fm_focus_frame(b: Button) -> void:
+	b.add_theme_stylebox_override("focus", _sb(Color(0, 0, 0, 0), C_LINE_HI, 3, 6))
+
+
+## Orta sütun: başlık + sayaç, altında satırlar (öğeler fiyat sırasında; uzun listede kayar).
+func _list_column(items: Array) -> Control:
+	var c := _v(6)
+	c.custom_minimum_size.x = COL_LIST_W
+	_anim_nodes["center"] = c
+	var th := _h(12)
+	th.add_child(FM.lbl(_sec_title(_page), 40, C_TEXT))
+	th.add_child(_sp(0, 0, true))
+	var n: Vector2i = _counts(items, _page)
+	th.add_child(_lbl(("%d / %d seviye" if _page == PAGE_UPGRADES else "%d / %d açık") % [n.x, n.y], 24, C_DIM))
+	c.add_child(th)
+	var ln := ColorRect.new()
+	ln.color = C_LINE_HI
+	ln.custom_minimum_size.y = 3
+	ln.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(ln)
+	c.add_child(_sp(0, 4))
+	var rows := _v(6)
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_list = rows
+	if _page == PAGE_UPGRADES:
+		var sel: String = str(_upg_selected()["id"])
+		for d: Dictionary in MetaUpgradesScript.LIST:
+			rows.add_child(_upg_row(d, str(d["id"]) == sel))
+	else:
+		var sel_it: Dictionary = _selected(items, _page)
+		var list: Array = _by_cost(items, _page)
+		if list.is_empty():
+			rows.add_child(_lbl("Bu bölümde açılacak bir şey yok.", 32, C_DIM))
+		var row_h: float = clampf(floorf(800.0 / maxf(1.0, float(list.size()))) - 6.0, 44.0, 72.0)
+		for it: Dictionary in list:
+			rows.add_child(_row(it, _id(it) == _id(sel_it), row_h))
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.add_child(rows)
+	_scroll = sc
+	c.add_child(sc)
+	return c
+
+
+func _row_box(on: bool, h: float) -> PanelContainer:
+	var p := _box(Color(C_ACCENT, 0.10) if on else Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0, 4)
+	p.custom_minimum_size.y = h
+	return p
+
+
+## Seçili satırın solundaki altın şerit.
+func _marker(on: bool) -> ColorRect:
+	var mk := ColorRect.new()
+	mk.color = C_ACCENT if on else Color(0, 0, 0, 0)
+	mk.custom_minimum_size.x = 5
+	mk.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return mk
+
+
+func _row(it: Dictionary, on: bool, row_h: float) -> Control:
+	var st: String = _state(it)
+	var p := _row_box(on, row_h)
+	var h := _h(14)
+	h.add_child(_marker(on))
+	h.add_child(_icon(_small_tex(it), minf(48.0, row_h - 8.0), st == "no"))
+	var nl := FM.lbl(str(it["name"]), 32, C_ACCENT if on else (C_DIM if st == "no" else C_TEXT))
+	nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(nl)
+	h.add_child(_price(it, 32, false))
+	h.add_child(_sp(10))
+	p.add_child(h)
+	_clickable(p, _select.bind(it), "row:" + _id(it))
+	_anim_list("rows").append(p)
+	_anim_nodes["row:" + _id(it)] = p
+	return p
+
+
+func _upg_row(d: Dictionary, on: bool) -> Control:
+	var id: String = str(d["id"])
+	var lv: int = MetaUpgradesScript.level(id)
+	var mx: int = MetaUpgradesScript.max_level(id)
+	var p := _row_box(on, 34)
+	var h := _h(12)
+	h.add_child(_marker(on))
+	h.add_child(_upg_icon(d, 32))
+	var nl := FM.lbl(str(d["name"]), 24, C_ACCENT if on else C_TEXT)
+	nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(nl)
+	var pp := Pips.new(mx, lv, C_ACCENT if lv < mx else C_GOOD, C_INSET, 8.0)
+	pp.custom_minimum_size.x = 150
+	pp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(pp)
+	var lvl := _lbl("%d/%d" % [lv, mx], 24, C_GOOD if lv >= mx else C_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
+	lvl.custom_minimum_size.x = 60
+	h.add_child(lvl)
+	h.add_child(_sp(8))
+	p.add_child(h)
+	_clickable(p, _select_upg.bind(id), "row:up:" + id)
+	_anim_list("rows").append(p)
+	_anim_nodes["row:up:" + id] = p
+	return p
+
+
+## Sağ: seçilenin ayrıntısı (spot sahne + altın ad + yetenekler/açıklama + büyük AÇ).
+func _detail(it: Dictionary) -> Control:
+	var v := _v(14)
 	if it.is_empty():
-		it = goal
-		title = "SIRADAKİ HEDEF"
-	if it.is_empty():
-		v.add_child(_lbl("HER ŞEY AÇIK", 48, C_GOOD, HORIZONTAL_ALIGNMENT_CENTER))
-		v.add_child(_wrap("Tüm karakterler, silahlar, evcil hayvanlar ve ruhani yetenekler sende. Kıymıklarını Geliştirmeler'de kullanabilirsin.",
-				32, C_DIM, 500))
-		return p
-	var hh := _h(10)
-	hh.add_child(_lbl(title, 24, C_ACCENT))
-	hh.add_child(_sp(0, 0, true))
-	hh.add_child(_lbl(str(KIND_ONE.get(it["kind"], "")), 24, C_DIM))
-	v.add_child(hh)
-	var sc := _box(C_INSET, C_LINE, 0)
-	sc.custom_minimum_size = Vector2(512, 300)
-	sc.add_child(StageBg.new(C_SPOT, C_ACCENT, 56.0))
+		return v
+	v.add_child(_detail_stage(it))
+	v.add_child(_gold_title(str(it["name"])))
+	v.add_child(_lbl(str(KIND_LOWER.get(it["kind"], "")), 24, C_DIM))
+	if it["kind"] == MetaProgressScript.CHAR:
+		v.add_child(_skill_rows(it, 32, DETAIL_TEXT_W))
+		v.add_child(_stat_rows(it, 24, 2))
+	else:
+		v.add_child(_wrap(str(it["desc"]), 32, C_DIM, DETAIL_TEXT_W, 5))
+	v.add_child(_sp(0, 0, false, true))
+	v.add_child(_buy_btn(it, 40, 76))
+	return v
+
+
+func _upg_detail(d: Dictionary) -> Control:
+	var id: String = str(d["id"])
+	var lv: int = MetaUpgradesScript.level(id)
+	var mx: int = MetaUpgradesScript.max_level(id)
+	var v := _v(16)
+	v.add_child(_detail_stage(d))
+	v.add_child(_gold_title(str(d["name"])))
+	v.add_child(_wrap(str(d["desc"]), 32, C_DIM, DETAIL_TEXT_W, 3))
+	var lh := _h(12)
+	lh.add_child(_lbl("SEVİYE", 24, C_DIM))
+	lh.add_child(_sp(0, 0, true))
+	lh.add_child(_lbl("%d / %d" % [lv, mx], 32, C_ACCENT))
+	v.add_child(lh)
+	v.add_child(Pips.new(mx, lv, C_ACCENT, C_INSET, 14.0))
+	v.add_child(_upg_values(d))
+	v.add_child(_sp(0, 0, false, true))
+	v.add_child(_upgrade_btn(id, 40, 76))
+	var asking: bool = _confirm_id == "reset"
+	if asking:
+		v.add_child(_wrap("Harcanan %d kıymıktan %d ücret kesilir, %d geri gelir." % [
+				MetaUpgradesScript.total_spent(), MetaUpgradesScript.reset_fee(), MetaUpgradesScript.reset_refund()], 24, C_DIM, DETAIL_TEXT_W, 2))
+	var can_reset: bool = MetaUpgradesScript.can_reset()
+	var rb: Button = _btn("ONAYLA?" if asking else "Hepsini sıfırla", "danger" if asking else ("ghost" if can_reset else "off"), 24, 44)
+	rb.disabled = not can_reset
+	rb.pressed.connect(_on_reset_pressed)
+	_tag_sid(rb, "reset")
+	v.add_child(rb)
+	return v
+
+
+## "Şu an +%24  >  Sonraki +%32"
+func _upg_values(d: Dictionary) -> HBoxContainer:
+	var id: String = str(d["id"])
+	var lv: int = MetaUpgradesScript.level(id)
+	var mx: int = MetaUpgradesScript.max_level(id)
+	var per: float = float(d.get("per", 0.0))
+	var h := _h(12)
+	h.add_child(_lbl("Şu an", 24, C_DIM))
+	h.add_child(_lbl(MetaUpgradesScript.format_value(id, per * lv) if lv > 0 else "-", 32))
+	if lv < mx:
+		h.add_child(_sp(10))
+		h.add_child(Glyph.new(G_RIGHT, C_ACCENT, 4))
+		h.add_child(_sp(10))
+		h.add_child(_lbl("Sonraki", 24, C_DIM))
+		h.add_child(_lbl(MetaUpgradesScript.format_value(id, per * (lv + 1)), 32, C_GOOD))
+	return h
+
+
+## Geliştirme düğmesi: YÜKSELT <fiyat> (tek basış), yetmiyor = pasif kırmızı fiyat, en üstte = pasif.
+func _upgrade_btn(id: String, fs: int = 40, h: float = 76.0) -> Button:
+	var b: Button
+	if MetaUpgradesScript.level(id) >= MetaUpgradesScript.max_level(id):
+		b = _btn("EN ÜST SEVİYE", "off", fs, h)
+		b.disabled = true
+	elif MetaUpgradesScript.can_buy(id):
+		b = _price_btn("YÜKSELT", MetaUpgradesScript.next_cost(id), "primary", fs, h)
+		b.pressed.connect(_on_upgrade_pressed.bind(id))
+	else:
+		b = _price_btn("YÜKSELT", MetaUpgradesScript.next_cost(id), "off", fs, h)
+		b.disabled = true
+	_tag_sid(b, "upg_buy")
+	return b
+
+
+func _gold_title(t: String) -> Label:
+	var nl := FM.lbl(t, 56, C_ACCENT)
+	nl.add_theme_color_override("font_outline_color", Color(0.35, 0.16, 0.04, 1))
+	nl.add_theme_constant_override("outline_size", 6)
+	return nl
+
+
+## Ayrıntının spot sahnesi: karakter tam boy, diğerleri büyük ikon; geliştirme tanımı ("max" anahtarı) gelirse ikonu.
+func _detail_stage(it: Dictionary) -> Control:
+	var st := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0, 8)
+	st.custom_minimum_size.y = STAGE_H
+	st.clip_contents = true
+	st.add_child(StageBg.new(C_SPOT, C_ACCENT, STAGE_FLOOR))
 	var hold := Control.new()
 	hold.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sc.add_child(hold)
-	_stage_figure(hold, it, 220.0, 56.0)
-	v.add_child(sc)
-	v.add_child(_lbl(str(it["name"]), 48, C_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
-	if it["kind"] == MetaProgressScript.CHAR:
-		v.add_child(_skill_rows(it, 32))
-		v.add_child(_hline())
-		v.add_child(_stat_rows(it, 24))
+	st.add_child(hold)
+	_anim_nodes["stage"] = st
+	if it.has("max"):
+		_stage_upgrade(hold, it, 160.0)
 	else:
-		v.add_child(_wrap(str(it["desc"]), 24, C_DIM, 512, 4))
-	v.add_child(_sp(0, 4))
-	v.add_child(_buy_btn(it, 32, 68, "feat_buy"))
-	v.add_child(_sp(0, 0, false, true))
-	if title != "SIRADAKİ HEDEF" and not goal.is_empty():
-		v.add_child(_goal_box(goal))
-	return p
+		var spr: TextureRect = _stage_figure(hold, _with_tex(it), 250.0 if it["kind"] == MetaProgressScript.CHAR else 137.0, STAGE_FLOOR)
+		if spr != null:
+			_anim_nodes["figure"] = spr
+	return st
 
 
-func _home_tile(items: Array, kind: String) -> Control:
+func _stage_upgrade(hold: Control, d: Dictionary, box: float) -> void:
+	var ic: Control = _upg_icon(d, box)
+	ic.anchor_left = 0.5
+	ic.anchor_right = 0.5
+	ic.anchor_top = 1.0
+	ic.anchor_bottom = 1.0
+	ic.offset_left = -floorf(box * 0.5)
+	ic.offset_right = floorf(box * 0.5)
+	ic.offset_top = -STAGE_FLOOR - 24.0 - box
+	ic.offset_bottom = -STAGE_FLOOR - 24.0
+	hold.add_child(ic)
+
+
+## ---------------------------------------------------------------- sayfa verisi
+func _sec_name(kind: String) -> String:
+	return "Geliştirmeler" if kind == PAGE_UPGRADES else str(KIND_TILE.get(kind, kind))
+
+
+func _sec_title(kind: String) -> String:
+	return "GELİŞTİRMELER" if kind == PAGE_UPGRADES else str(KIND_NAMES.get(kind, kind))
+
+
+## Bir türün öğeleri DURUMDAN BAĞIMSIZ fiyat sırasında (liste satın alınca yer değiştirmesin).
+func _by_cost(items: Array, kind: String) -> Array:
+	var a: Array = items.filter(func(i: Dictionary) -> bool: return i["kind"] == kind)
+	a.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return int(x["cost"]) < int(y["cost"]))
+	return a
+
+
+## (açık, toplam) - geliştirmelerde (seviye, azami seviye).
+func _counts(items: Array, kind: String) -> Vector2i:
+	if kind == PAGE_UPGRADES:
+		return _upg_levels()
 	var list: Array = _of_kind(items, kind)
-	var p := _box(C_PANEL, C_LINE_HI, 18, 3, 8)
-	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var v := _v(12)
-	var h := _h(12)
-	h.add_child(_icon(list[0]["icon"] if not list.is_empty() else null, 48))
-	h.add_child(_lbl(str(KIND_TILE.get(kind, kind)), 40))
-	h.add_child(_sp(0, 0, true))
-	h.add_child(_lbl("%d/%d" % [_open_count(list), list.size()], 32, C_ACCENT))
-	v.add_child(h)
-	v.add_child(_expand(Bar.new(float(_open_count(list)) / float(maxi(1, list.size())), C_ACCENT, C_INSET, 12.0)))
-	var prev := GridContainer.new()
-	prev.columns = 5
-	prev.add_theme_constant_override("h_separation", 8)
-	prev.add_theme_constant_override("v_separation", 8)
-	var can_n: int = 0
-	for it: Dictionary in list:
+	return Vector2i(_open_count(list), list.size())
+
+
+## Şimdi alınabilecek / yükseltilebilecek sayısı.
+func _can_n(items: Array, kind: String) -> int:
+	var n: int = 0
+	if kind == PAGE_UPGRADES:
+		for d: Dictionary in MetaUpgradesScript.LIST:
+			if MetaUpgradesScript.can_buy(str(d["id"])):
+				n += 1
+		return n
+	for it: Dictionary in _of_kind(items, kind):
 		if _state(it) == "can":
-			can_n += 1
-	for i in mini(10, list.size()):
-		var it: Dictionary = list[i]
-		var st: String = _state(it)
-		var s := _box(C_INSET, C_GOOD if st == "open" else C_LINE, 3, 3, 4)
-		s.add_child(_icon(it["icon"], 96, st == "no"))
-		prev.add_child(s)
-	v.add_child(prev)
-	v.add_child(_sp(0, 0, false, true))
-	var f := _h(8)
-	if can_n > 0:
-		f.add_child(DK.ShardIcon.new(20))
-		f.add_child(_lbl("%d tanesini şimdi alabilirsin" % can_n, 24, C_GOOD))
-	elif _open_count(list) == list.size():
-		f.add_child(Glyph.new(G_CHECK, C_GOOD, 3))
-		f.add_child(_lbl("Hepsi açık", 24, C_GOOD))
-	else:
-		f.add_child(_lbl("Kıymık biriktir", 24, C_DIM))
-	f.add_child(_sp(0, 0, true))
-	if list.size() > 10:
-		f.add_child(_lbl("+%d daha" % (list.size() - 10), 24, C_DIM))
-		f.add_child(_sp(12))
-	f.add_child(_lbl("AÇ", 24, C_ACCENT))
-	f.add_child(Glyph.new(G_RIGHT, C_ACCENT, 3))
-	v.add_child(f)
-	p.add_child(v)
-	_clickable(p, _on_tab_pressed.bind(kind), "tile:" + kind)
-	_anim_list("tiles").append(p)
-	return p
-
-
-func _home_upgrades_tile() -> Control:
-	var p := _box(C_PANEL, C_LINE_HI, 18, 3, 8)
-	var v := _v(12)
-	var lv: Vector2i = _upg_levels()
-	var h := _h(12)
-	h.add_child(_icon(_stat_tex("damage"), 48))
-	h.add_child(_lbl("Geliştirmeler", 40))
-	h.add_child(_lbl("Kalıcı güçlendirmeler, her koşuda geçerli", 24, C_DIM))
-	h.add_child(_sp(0, 0, true))
-	h.add_child(_lbl("%d/%d seviye" % [lv.x, lv.y], 32, C_ACCENT))
-	v.add_child(h)
-	v.add_child(_expand(Bar.new(float(lv.x) / float(maxi(1, lv.y)), C_ACCENT, C_INSET, 12.0)))
-	var row := _h(10)
-	var can_n: int = 0
-	for d: Dictionary in MetaUpgradesScript.LIST:
-		if MetaUpgradesScript.can_buy(str(d["id"])):
-			can_n += 1
-	var shown: int = mini(12, MetaUpgradesScript.LIST.size())
-	for i in shown:
-		var s := _box(C_INSET, C_LINE, 4, 3, 4)
-		s.add_child(_upg_icon(MetaUpgradesScript.LIST[i], 56))
-		row.add_child(s)
-	if MetaUpgradesScript.LIST.size() > shown:
-		row.add_child(_lbl("+%d" % (MetaUpgradesScript.LIST.size() - shown), 32, C_DIM))
-	v.add_child(row)
-	var f := _h(8)
-	if can_n > 0:
-		f.add_child(DK.ShardIcon.new(20))
-		f.add_child(_lbl("%d geliştirmeyi şimdi yükseltebilirsin" % can_n, 24, C_GOOD))
-	else:
-		f.add_child(_lbl("Kıymık biriktir", 24, C_DIM))
-	f.add_child(_sp(0, 0, true))
-	f.add_child(_lbl("AÇ", 24, C_ACCENT))
-	f.add_child(Glyph.new(G_RIGHT, C_ACCENT, 3))
-	v.add_child(f)
-	p.add_child(v)
-	_clickable(p, _on_tab_pressed.bind(PAGE_UPGRADES), "tile:upgrades")
-	_anim_list("tiles").append(p)
-	return p
+			n += 1
+	return n
 
 
 func _upg_levels() -> Vector2i:
@@ -1344,294 +1300,66 @@ func _upg_levels() -> Vector2i:
 	return Vector2i(a, b)
 
 
-## ---------------------------------------------------------------- KATEGORİ SAYFASI ("kahraman seçimi")
-func _build_kind_page(kind: String) -> void:
-	var items: Array = _items()
-	var list: Array = _of_kind(items, kind)
-	_page_box.add_child(_topbar("ANA SAYFA", _go_home, _icon(list[0]["icon"] if not list.is_empty() else null, 48),
-			str(KIND_NAMES.get(kind, kind)), "%d/%d" % [_open_count(list), list.size()]))
-	if list.is_empty():
-		return
-	var sel: Dictionary = _selected(items, kind)
-	var body := _h(20)
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_page_box.add_child(body)
-	body.add_child(_kind_stage(sel, list.size() > 1))
-	body.add_child(_kind_info(sel))
-	_page_box.add_child(_kind_roster(list, sel))
-
-
-func _status_badge(it: Dictionary) -> PanelContainer:
-	var st: String = _state(it)
-	var bd: Color = C_LINE_HI
-	var txt: String = "%d KIYMIK EKSİK" % _need(it)
-	var tc: Color = C_DIM
-	if st == "can":
-		bd = C_GOOD
-		txt = "ŞİMDİ ALABİLİRSİN"
-		tc = C_GOOD
-	elif st == "open":
-		bd = C_GOOD
-		txt = "SENDE"
-		tc = C_GOOD
-	var p := _box(C_INSET, bd, 8, 3, 6)
-	var h := _h(8)
-	if st == "no":
-		h.add_child(Glyph.new(G_LOCK, tc, 3))
-	elif st == "open":
-		h.add_child(Glyph.new(G_CHECK, tc, 3))
-	else:
-		h.add_child(DK.ShardIcon.new(20))
-	h.add_child(_lbl(txt, 24, tc))
-	p.add_child(h)
-	return p
-
-
-## Büyük sahne: spot ışığının altında halkalı zemin + figür, sol üstte durum rozeti, yanlarda gezinme okları.
-func _kind_stage(it: Dictionary, arrows: bool) -> Control:
-	var p := _box(C_INSET, C_LINE_HI, 0, 3, 8)
-	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	p.add_child(StageBg.new(C_SPOT, C_ACCENT, STAGE_FLOOR))
-	p.add_child(CornerFrame.new(C_ACCENT, 26.0, 10.0))
-	var hold := Control.new()
-	hold.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(hold)
-	_anim_nodes["stage"] = p
-	_anim_nodes["figure"] = _stage_figure(hold, it, 430.0 if it["kind"] == MetaProgressScript.CHAR else 288.0, STAGE_FLOOR)
-	var badge := _status_badge(it)
-	badge.position = Vector2(26, 26)
-	hold.add_child(badge)
-	_anim_nodes["badge"] = badge
-	if arrows:
-		var kind: String = str(it["kind"])
-		for side: Array in [[G_LEFT, 0.0, 26.0, -1], [G_RIGHT, 1.0, -98.0, 1]]:
-			var ab := _btn("", "ghost", 32, 72, 72)
-			var cc := CenterContainer.new()
-			cc.set_anchors_preset(Control.PRESET_FULL_RECT)
-			cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			cc.add_child(Glyph.new(side[0], C_TEXT, 5))
-			ab.add_child(cc)
-			ab.anchor_left = float(side[1])
-			ab.anchor_right = float(side[1])
-			ab.anchor_top = 0.5
-			ab.anchor_bottom = 0.5
-			ab.offset_left = float(side[2])
-			ab.offset_right = float(side[2]) + 72.0
-			ab.offset_top = -36.0
-			ab.offset_bottom = 36.0
-			ab.pressed.connect(_step_selection.bind(kind, int(side[3])))
-			_tag_sid(ab, "arrow:%d" % int(side[3]))
-			hold.add_child(ab)
-	return p
-
-
-## Sağ bilgi paneli: ad, (karakterde) yetenekler + pasif + statlar / (diğerlerinde) açıklama; altta durum + satın alma.
-func _kind_info(it: Dictionary) -> Control:
-	var p := _box(C_PANEL, C_LINE_HI, 24, 3, 8)
-	p.custom_minimum_size.x = 660
-	_anim_nodes["info"] = p
-	var v := _v(10)
-	v.add_child(_lbl(str(it["name"]), 64))
-	v.add_child(_hline())
-	if it["kind"] == MetaProgressScript.CHAR:
-		var d: Dictionary = _char_def(it)
-		v.add_child(_lbl("YETENEKLER", 24, C_ACCENT))
-		v.add_child(_skill_rows(it, 32, 536.0))
-		var pas := _v(4)
-		pas.add_child(_lbl("PASİF", 24, C_ACCENT))
-		pas.add_child(_wrap(str(d.get("passive", "")), 24, C_DIM, 608, 3))
-		v.add_child(pas)
-		v.add_child(_hline())
-		v.add_child(_stat_rows(it, 24))
-	else:
-		var sub: String = str(KIND_ONE.get(it["kind"], ""))
-		var desc: String = str(it["desc"])
-		if it["kind"] == MetaProgressScript.WEAPON:
-			sub = "%s  -  %s" % [sub, WeaponCatalog.category_label(str(it["key"]))]
-			desc = WeaponCatalog.trait_text(str(it["key"]))
-		v.add_child(_lbl(sub, 24, C_ACCENT))
-		v.add_child(_wrap(desc, 32, C_TEXT, 608, 9))
-	v.add_child(_sp(0, 0, false, true))
-	var br := _h(16)
-	var kv := _v(-4)
-	kv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	match _state(it):
-		"can":
-			kv.add_child(_lbl("Alınca kalan", 24, C_DIM))
-			var kh := _h(6)
-			kh.add_child(DK.ShardIcon.new(20))
-			kh.add_child(_lbl(str(MetaProgressScript.shards() - int(it["cost"])), 32))
-			kv.add_child(kh)
-		"no":
-			kv.add_child(_lbl("Eksik", 24, C_DIM))
-			var kh := _h(6)
-			kh.add_child(DK.ShardIcon.new(20, true))
-			kh.add_child(_lbl(str(_need(it)), 32, C_BAD))
-			kv.add_child(kh)
-		_:
-			kv.add_child(_lbl("Seçim ekranında", 24, C_DIM))
-			kv.add_child(_lbl("kullanabilirsin", 24, C_DIM))
-	br.add_child(kv)
-	br.add_child(_expand(_buy_btn(it, 40, 80, "buy")))
-	v.add_child(br)
-	p.add_child(v)
-	return p
-
-
-## Alt sıra: çerçeveli kartlar (ikon x3, ad levhası, fiyat). Seçili kart 14 px yukarıda + vurgu kenarı + köşe süsü. Basınca seçilir.
-func _kind_roster(list: Array, sel: Dictionary) -> Control:
-	var sc := ScrollContainer.new()
-	sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sc.custom_minimum_size.y = 232
-	var row := _h(12)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var wide: bool = list.size() >= 8
-	for it: Dictionary in list:
-		var on: bool = _id(it) == _id(sel)
-		var st: String = _state(it)
-		var wrap := MarginContainer.new()
-		wrap.add_theme_constant_override("margin_top", 0 if on else 14)
-		wrap.add_theme_constant_override("margin_bottom", 14 if on else 0)
-		if wide:
-			wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var card := _box(C_PANEL, C_ACCENT if on else (C_LINE_HI if st == "can" else C_LINE), 3, 3, 6)
-		card.custom_minimum_size = Vector2(150 if wide else 170, 214)
-		card.add_child(CardBg.new(C_PANEL3 if on else C_PANEL2, C_INSET, C_SPOT if st != "no" else C_LINE))
-		var v := _v(2)
-		v.add_child(_sp(0, 4))
-		v.add_child(_icon(it["icon"], 144, st == "no"))
-		var plate := _box(Color(0, 0, 0, 0.35), Color(0, 0, 0, 0), 2, 0, 0)
-		var nm := _lbl(str(it["name"]), 24, C_ACCENT if on else (C_DIM if st == "open" else C_TEXT), HORIZONTAL_ALIGNMENT_CENTER)
-		nm.clip_text = true
-		plate.add_child(nm)
-		v.add_child(plate)
-		v.add_child(_price(it, 32))
-		card.add_child(v)
-		if on:
-			card.add_child(CornerFrame.new(C_ACCENT, 16.0, 5.0))
-		if st == "no":
-			var gm := MarginContainer.new()
-			gm.add_theme_constant_override("margin_right", 10)
-			gm.add_theme_constant_override("margin_top", 10)
-			gm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			gm.size_flags_horizontal = Control.SIZE_SHRINK_END
-			gm.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-			gm.add_child(Glyph.new(G_LOCK, C_DIM, 3))
-			card.add_child(gm)
-		_clickable(card, _select.bind(it), "card:" + _id(it))
-		wrap.add_child(card)
-		row.add_child(wrap)
-		_anim_list("cards").append(wrap)
-		_anim_nodes["wrap:" + _id(it)] = wrap
-		_anim_nodes["card:" + _id(it)] = card
-		if on:
-			_anim_nodes["sel_wrap"] = wrap
-	sc.add_child(row)
-	return sc
-
-
-## ---------------------------------------------------------------- GELİŞTİRMELER
-func _build_upgrades() -> void:
-	var lv: Vector2i = _upg_levels()
-	_page_box.add_child(_topbar("ANA SAYFA", _go_home, _icon(_stat_tex("damage"), 40), "GELİŞTİRMELER", "%d/%d" % [lv.x, lv.y]))
-	var center := _box(C_PANEL, C_LINE_HI, 18, 3, 8)
-	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_page_box.add_child(center)
-	_anim_nodes["center"] = center
-	var cv := _v(12)
-	center.add_child(cv)
-	var hdr := _h(14)
-	hdr.add_child(_lbl("Kalıcı güçlendirmeler her koşuda otomatik uygulanır. Seviye atladıkça fiyat artar.", 24, C_DIM))
-	hdr.add_child(_sp(0, 0, true))
-	hdr.add_child(_lbl("Toplam seviye %d / %d" % [lv.x, lv.y], 24, C_DIM))
-	var bar := Bar.new(float(lv.x) / float(maxi(1, lv.y)), C_ACCENT, C_INSET, 14.0, 220.0)
-	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	hdr.add_child(bar)
-	cv.add_child(hdr)
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 16)
-	grid.add_theme_constant_override("v_separation", 14)
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list = grid
+## Seçili geliştirme; seçilmemişse alınabilir en ucuzu (yoksa ilki).
+func _upg_selected() -> Dictionary:
+	if _sel_upg != "":
+		return MetaUpgradesScript.def(_sel_upg)
+	var best: Dictionary = {}
 	for d: Dictionary in MetaUpgradesScript.LIST:
-		grid.add_child(_upgrade_row(d))
-	var sc := ScrollContainer.new()
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sc.add_child(grid)
-	_scroll = sc
-	cv.add_child(sc)
-	cv.add_child(_reset_row())
+		var id: String = str(d["id"])
+		if MetaUpgradesScript.can_buy(id) and (best.is_empty() or MetaUpgradesScript.next_cost(id) < MetaUpgradesScript.next_cost(str(best["id"]))):
+			best = d
+	return best if not best.is_empty() else MetaUpgradesScript.LIST[0]
 
 
-func _upgrade_row(d: Dictionary) -> Control:
-	var id: String = str(d["id"])
-	var lv: int = MetaUpgradesScript.level(id)
-	var mx: int = int(d["max"])
-	var maxed: bool = lv >= mx
-	var per: float = float(d["per"])
-	var p := _box(C_PANEL2, C_LINE, 6)
-	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var h := _h(12)
-	var slot := _box(C_INSET, C_LINE, 2, 3, 4)
-	slot.add_child(_upg_icon(d, 48))
-	h.add_child(slot)
-	var tv := _v(4)
-	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tv.tooltip_text = str(d["desc"])
-	tv.mouse_filter = Control.MOUSE_FILTER_PASS
-	var l1 := _h(8)
-	l1.add_child(_lbl(str(d["name"]), 24))
-	l1.add_child(_sp(0, 0, true))
-	if maxed:
-		l1.add_child(_lbl(MetaUpgradesScript.format_value(id, per * float(lv)), 24, C_GOOD))
-	else:
-		l1.add_child(_lbl(MetaUpgradesScript.format_value(id, per * float(lv)), 24, C_DIM))
-		l1.add_child(Glyph.new(G_ARROW, C_DIM, 3))
-		l1.add_child(_lbl(MetaUpgradesScript.format_value(id, per * float(lv + 1)), 24, C_GOOD))
-	tv.add_child(l1)
-	var l2 := _h(10)
-	l2.add_child(_expand(Pips.new(mx, lv, C_ACCENT, C_INSET, 10.0)))
-	l2.add_child(_lbl("%d/%d" % [lv, mx], 24, C_DIM))
-	tv.add_child(l2)
-	h.add_child(tv)
-	var b: Control
-	if maxed:
-		b = _lbl("MAKS", 32, C_GOOD, HORIZONTAL_ALIGNMENT_CENTER)
-		b.custom_minimum_size.x = 150
-	else:
-		var can: bool = MetaUpgradesScript.can_buy(id)
-		var pb := _price_btn("", MetaUpgradesScript.next_cost(id), "primary" if can else "off", 32, 56, 150)
-		pb.disabled = not can
-		pb.pressed.connect(_on_upgrade_pressed.bind(id))
-		_tag_sid(pb, "up:" + id)
-		b = pb
-	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(b)
-	p.add_child(h)
-	_anim_list("rows").append(p)
-	_anim_nodes["row:up:" + id] = p
-	return p
+func _select_upg(id: String) -> void:
+	var prev: String = str(_upg_selected()["id"])
+	if prev != id:
+		_anim_prev_sel = "up:" + prev
+		_anim_dir = 0
+	_sel_upg = id
+	_confirm_id = ""
+	_rebuild_list()
 
 
-func _reset_row() -> Control:
-	var row := _h(12)
-	var info: String = "Sıfırlanacak geliştirme yok."
-	if MetaUpgradesScript.can_reset():
-		info = "Sıfırlarsan harcanan %d kıymıktan %d ücret kesilir, %d geri gelir." % [
-				MetaUpgradesScript.total_spent(), MetaUpgradesScript.reset_fee(), MetaUpgradesScript.reset_refund()]
-	row.add_child(_sp(0, 0, true))
-	row.add_child(_lbl(info, 24, C_DIM))
-	var asking: bool = _confirm_id == "reset"
-	var btn: Button = _btn("ONAYLA?" if asking else "HEPSİNİ SIFIRLA", "danger" if asking else "ghost", 24, 48, 230)
-	btn.disabled = not MetaUpgradesScript.can_reset()
-	btn.pressed.connect(_on_reset_pressed)
-	_tag_sid(btn, "reset")
-	row.add_child(btn)
-	return row
+## Ayrıntıdaki büyük görsel: karakterde tam boy kare, silahta boş kenarı kırpılmış ikon (silah ikonları tuvalin ortasında küçük çizili).
+func _tex_of(it: Dictionary) -> Texture2D:
+	if it["kind"] == MetaProgressScript.CHAR:
+		return _char_body(it)
+	var tex: Texture2D = it.get("icon", null)
+	if tex == null or it["kind"] != MetaProgressScript.WEAPON:
+		return tex
+	if _crop_cache.has(tex):
+		return _crop_cache[tex]
+	var out: Texture2D = tex
+	var img: Image = tex.get_image()
+	if img != null:
+		if img.is_compressed():
+			img.decompress()
+		var used: Rect2i = img.get_used_rect()
+		if used.size.x > 0:
+			out = ImageTexture.create_from_image(img.get_region(used))
+	_crop_cache[tex] = out
+	return out
+
+
+## Liste ikonu: karakterde yüz portresi, silahta kırpılmış ikon.
+func _small_tex(it: Dictionary) -> Texture2D:
+	return _tex_of(it) if it["kind"] == MetaProgressScript.WEAPON else it.get("icon", null)
+
+
+func _with_tex(it: Dictionary) -> Dictionary:
+	var d: Dictionary = it.duplicate()
+	d["icon"] = _tex_of(it)
+	return d
+
+
+## Bölüm simgesi: bölümün en ucuz öğesi (geliştirmelerde saldırı gücü simgesi).
+func _section_icon(items: Array, kind: String, box: float) -> Control:
+	if kind == PAGE_UPGRADES:
+		return _icon(_stat_tex("damage"), box)
+	var list: Array = _by_cost(items, kind)
+	return _icon(_small_tex(list[0]) if not list.is_empty() else null, box)
 
 
 ## ---------------------------------------------------------------- TELEFON

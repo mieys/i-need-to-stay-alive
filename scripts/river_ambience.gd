@@ -93,7 +93,7 @@ func _process(delta: float) -> void:
 
 func _refresh_target() -> void:
 	var p: Node2D = get_tree().get_first_node_in_group("player") as Node2D
-	if p == null or p.get("is_indoors") == true:
+	if p == null or p.get("is_indoors") == true or str(p.get("in_dungeon") if p.get("in_dungeon") != null else "") != "":
 		_has_target = false
 		return
 	var pos: Vector2 = p.global_position

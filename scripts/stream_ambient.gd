@@ -13,7 +13,7 @@ extends AudioStreamPlayer
 const STREAM_PATH := "res://assets/audio/stream_loop.ogg"
 const FULL_DISTANCE := 48.0 ## px: kıyıya bu kadar yakında tam seviye (bir karo = 16 px)
 const MAX_DISTANCE := 320.0 ## px: bundan uzakta duyulmaz
-const MAX_DB := -7.0 ## kıyıdaki en yüksek seviye (normalize kaynak -26 dBFS RMS: yağmurdan kısık)
+const MAX_DB := -17.0 ## kıyıdaki en yüksek seviye (normalize kaynak -26 dBFS RMS; 2026-10-21 kullanıcı "çok yüksek, rahatsız edici": -7 -> -17)
 const SMOOTH_RATE := 3.0 ## 1/sn: hedef seviyeye yaklaşma hızı
 const QUERY_INTERVAL := 0.2
 const STOP_BELOW := 0.012 ## doğrusal genlik (~-38 dB)
@@ -59,7 +59,7 @@ func _target_amount() -> float:
 	var player: Node2D = get_tree().get_first_node_in_group("player") as Node2D
 	if player == null or not is_instance_valid(player):
 		return 0.0
-	if player.get("is_indoors") == true:
+	if player.get("is_indoors") == true or str(player.get("in_dungeon") if player.get("in_dungeon") != null else "") != "":
 		return 0.0
 	if not _water_ready and not _load_water():
 		return 0.0

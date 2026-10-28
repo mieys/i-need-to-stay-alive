@@ -2,7 +2,8 @@ extends Node
 
 ## Shaman totemleri (kullanıcı isteği 2026-09-30): "Q yeteneğinin alan hasarı özelliğini E yeteneğine eklemeni istiyorum ve Q
 ## yeteneği artık 2 stack birikebilsin." - Kalkan Totemi (E) de alanındaki düşmanlara saniyede %20 AP vurur (kod totem_base.gd
-## "ALAN HASARI", Saldırı Totemi'yle ortak), Saldırı Totemi (Q) 2 yüklü, her yük ayrı ayrı 45 sn'de yenilenir.
+## "ALAN HASARI"), Saldırı Totemi (Q) 2 yüklü, her yük ayrı ayrı yenilenir (2026-10-21: 45 -> 20 sn; Q'nun alan hasarı kaldırıldı,
+## alan hasarı yalnız Kalkan Totemi'nde).
 
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const ShieldTotemScene: PackedScene = preload("res://scenes/totem_shield.tscn")
@@ -69,30 +70,40 @@ func _totem_count(kind: String) -> int:
 	return n
 
 
-func test_shield_totem_now_deals_area_damage_like_attack_totem() -> void:
+func test_only_shield_totem_deals_area_damage() -> void:
 	var p: Node = _make_player()
 	var inside: FakeEnemy = _make_enemy(Vector2(1000.0 + 150.0, 1000.0))
 	var outside: FakeEnemy = _make_enemy(Vector2(1000.0 + 230.0, 1000.0))
-	for scene: PackedScene in [ShieldTotemScene, AttackTotemScene]:
-		var totem: Node2D = scene.instantiate()
-		add_child(totem)
-		_spawned.append(totem)
-		totem.setup_from_player(p)
-		assert(bool(totem.get("area_damage_enabled")), "%s alan hasarı açık" % totem.name)
-		## 2026-10-04: Saldırı Totemi'nin mor sınır çemberi kaldırıldı (kullanıcı isteği) - Kalkan Totemi'nde duruyor.
-		assert((totem.get_node_or_null("AreaAura") != null) == (str(totem.get("totem_kind")) == "shield"), "%s mor alan aurası sadece Kalkan Totemi'nde" % totem.name)
-		inside.hits.clear()
-		totem._process_area_damage(0.02) ## ilk hasar dikildiği anda
-		assert(inside.hits.size() == 1 and is_equal_approx(float(inside.hits[0]), 20.0), "%s alanda saniyede %%20 AP: %s" % [totem.name, str(inside.hits)])
-		for i in range(40):
-			totem._process_area_damage(0.02) ## 0.8 sn - henüz ikinci tik yok
-		assert(inside.hits.size() == 1, "tik saniyede bir")
-		for i in range(15):
-			totem._process_area_damage(0.02)
-		assert(inside.hits.size() == 2, "1 sn sonra ikinci tik")
-		assert(outside.hits.is_empty(), "alan dışı (180) hasar almaz")
-		totem.free()
-		_spawned.erase(totem)
+	var totem: Node2D = ShieldTotemScene.instantiate()
+	add_child(totem) ## "shaman_totems" grubunda - _cleanup() onu serbest bırakır (_spawned'a ekleme: çift serbest bırakma)
+	totem.setup_from_player(p)
+	assert(bool(totem.get("area_damage_enabled")), "Kalkan Totemi alan hasarı açık")
+	assert(totem.get_node_or_null("AreaAura") != null, "mor alan aurası Kalkan Totemi'nde")
+	totem._process_area_damage(0.02) ## ilk hasar dikildiği anda
+	assert(inside.hits.size() == 1 and is_equal_approx(float(inside.hits[0]), 20.0), "alanda saniyede %%20 AP: %s" % str(inside.hits))
+	for i in range(40):
+		totem._process_area_damage(0.02) ## 0.8 sn - henüz ikinci tik yok
+	assert(inside.hits.size() == 1, "tik saniyede bir")
+	for i in range(15):
+		totem._process_area_damage(0.02)
+	assert(inside.hits.size() == 2, "1 sn sonra ikinci tik")
+	assert(outside.hits.is_empty(), "alan dışı (180) hasar almaz")
+	_cleanup()
+
+
+## 2026-10-21 (kullanıcı: "Q etrafına E'deki gibi alan hasarı veriyor, bu bug, onun öyle bir gücü yok"): Saldırı Totemi'nde alan hasarı yok.
+func test_attack_totem_has_no_area_damage() -> void:
+	var p: Node = _make_player()
+	var near: FakeEnemy = _make_enemy(Vector2(1000.0 + 150.0, 1000.0))
+	var totem: Node2D = AttackTotemScene.instantiate()
+	add_child(totem) ## "shaman_totems" grubunda - _cleanup() onu serbest bırakır (_spawned'a ekleme: çift serbest bırakma)
+	totem.setup_from_player(p)
+	assert(not bool(totem.get("area_damage_enabled")), "Saldırı Totemi alan hasarı kapalı")
+	assert(totem.get_node_or_null("AreaAura") == null, "alan aurası yok")
+	## 3 sn boyunca normal _process: ateş atışları (150) olabilir ama saniyelik %20 SG alan tiki (20) ASLA.
+	for i in range(150):
+		totem._process(0.02)
+	assert(not near.hits.has(20.0), "alan tiki gelmemeli: %s" % str(near.hits))
 	_cleanup()
 
 
@@ -108,13 +119,13 @@ func test_attack_totem_has_two_charges_that_recharge_one_by_one() -> void:
 	p._shaman_try_attack_totem()
 	assert(_totem_count("attack") == 2, "yük yokken totem dikilmez")
 	st = p.get_shaman_q_charge_state()
-	assert(float(st["remaining"]) > 44.0 and float(st["fraction"]) < 0.05, "sıradaki yük dolmaya başladı: " + str(st))
-	for i in range(int(46.0 / 0.5)):
+	assert(float(st["remaining"]) > 19.0 and float(st["fraction"]) < 0.05, "sıradaki yük dolmaya başladı: " + str(st))
+	for i in range(int(21.0 / 0.5)):
 		p._process_shaman_q_charges(0.5)
-	assert(p.shaman_q_charges == 1, "45 sn sonra 1 yük (sırayla): %d" % p.shaman_q_charges)
-	for i in range(int(46.0 / 0.5)):
+	assert(p.shaman_q_charges == 1, "20 sn sonra 1 yük (sırayla): %d" % p.shaman_q_charges)
+	for i in range(int(21.0 / 0.5)):
 		p._process_shaman_q_charges(0.5)
-	assert(p.shaman_q_charges == 2, "bir 45 sn daha -> 2")
+	assert(p.shaman_q_charges == 2, "bir 20 sn daha -> 2")
 	st = p.get_shaman_q_charge_state()
 	assert(float(st["remaining"]) == 0.0 and float(st["fraction"]) == 1.0, "dolu: " + str(st))
 	_cleanup()
@@ -133,5 +144,5 @@ func test_cooldown_reduction_shortens_recharge() -> void:
 	var p: Node = _make_player()
 	p.cooldown_reduction_percent = 0.2
 	p._shaman_try_attack_totem()
-	assert(absf(float(p.get_shaman_q_charge_state()["remaining"]) - 45.0 * 0.8) < 0.01, "bekleme süresi azaltma yük süresine uygulanır")
+	assert(absf(float(p.get_shaman_q_charge_state()["remaining"]) - 20.0 * 0.8) < 0.01, "bekleme süresi azaltma yük süresine uygulanır")
 	_cleanup()

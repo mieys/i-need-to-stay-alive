@@ -27,7 +27,12 @@ buyutulunce cimenin ustunde daginik piksel kirintisi gibi gorunuyordu (ayni ders
 Artik halkalar DOLU ve disa dogru daha saydam (ic ~1.0 -> orta ~0.35 -> dis ~0.15 opaklik, nabizla) - yumusak sonen isik,
 nokta yok. Renkler/boylar/animasyon ayni.
 
-Cikti: assets/pickups/xp_orb/xp_orb_<renk>.png (8 kare x 24x24) + xp_orb_frames.tres (ayni uid'lerle yeniden yazilir).
+SADE KRISTAL (kullanici 2026-10-21: "exp orblarinin parildamasini istemiyorum daha sade gorunmelerini istiyorum sekillerinin
+korunarak" -> 4 prototipten "A Sakin Kristal" secildi, madde 354/357): SHAPE = "calm" - elmasla AYNI maske/boy/palet/4 yuz
+golgelendirme + sirt, ama hale (3 nabizli halka), yildiz cakmasi, kayan isik cizgisi ve suzulme YOK; tek kare, tamamen duragan.
+xp_orb.gd'deki "nefes" olcegi de kaldirildi. Parlak elmasa donmek icin SHAPE = "diamond".
+
+Cikti: assets/pickups/xp_orb/xp_orb_<renk>.png (FRAMES kare x CELL) + xp_orb_frames.tres (ayni uid'lerle yeniden yazilir).
 Calistir: python tools/gen_xp_orb_sprites.py   (sonra Godot editoru PNG'leri yeniden import eder)
 """
 
@@ -47,11 +52,15 @@ FRAMES = 8
 FPS = 8.0
 ## Kullanici istegi (2026-10-02): "simdiki renk ayarlariyla elmas kristal versiyonunu ekler misin oyuna deneyecegim" - sekil
 ## prototiplerinden (A Elmas Kristal) secildi. SHAPE = "round" yazip calistirmak eski yuvarlak orbu geri uretir (ayni renkler).
-SHAPE = "diamond"
+SHAPE = "calm"
 if SHAPE == "diamond":
     CELL = 32  # suzulme + 3 halkali hale + yildiz sigsin, kenara degmesin (2026-10-02 %15 buyutme: 28 -> 32)
     FRAMES = 12
     FPS = 10.0
+elif SHAPE == "calm":
+    CELL = 32  # elmasla ayni kare: sprite merkezi/konumu degismez
+    FRAMES = 1
+    FPS = 1.0
 
 
 # Hale orta/dis halka opakligi (0..255): taban + nabiz payi (bkz. NOKTALI HALE DUZELTMESI).
@@ -279,8 +288,35 @@ def draw_diamond(tier_index, size, pal, frame):
     return img
 
 
+def draw_calm(tier_index, size, pal, frame):
+    """Sade kristal (SHAPE "calm"): draw_diamond'un govdesi - ayni maske ve 4 yuz + ust sirt (ucu parlama tonu), dis hat;
+    hale/yildiz/isik cizgisi/suzulme yok, tek kare."""
+    img = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    outline, dark, mid, light, hi = [hexc(c) for c in pal]
+    cx = cy = CELL / 2.0
+    w, h = size * 0.42, size * 0.66
+    mask = [[abs(x + 0.5 - cx) / w + abs(y + 0.5 - cy) / h <= 1.0 for x in range(CELL)] for y in range(CELL)]
+    for y in range(CELL):
+        for x in range(CELL):
+            if not mask[y][x]:
+                continue
+            if any(not (0 <= y + oy < CELL and 0 <= x + ox < CELL and mask[y + oy][x + ox])
+                   for ox, oy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                img.putpixel((x, y), outline)
+                continue
+            dx, dy = x + 0.5 - cx, y + 0.5 - cy
+            if abs(dx) < 0.6 and dy < 0:
+                col = hi if dy < -h * 0.35 else light  # ust sirt cizgisi
+            elif dy < 0:
+                col = light if dx < 0 else mid
+            else:
+                col = mid if dx < 0 else dark
+            img.putpixel((x, y), col)
+    return img
+
+
 def main():
-    draw = draw_diamond if SHAPE == "diamond" else draw_orb
+    draw = {"diamond": draw_diamond, "calm": draw_calm}.get(SHAPE, draw_orb)
     for i, (name, diameter, pal) in enumerate(TIERS):
         sheet = Image.new("RGBA", (CELL * FRAMES, CELL), (0, 0, 0, 0))
         for f in range(FRAMES):
@@ -292,7 +328,7 @@ def main():
 
 
 def write_tres():
-    """xp_orb_frames.tres'i yeni 16x16 x 8 kare duzenine gore yeniden yazar - resource/ext_resource uid'leri korunur."""
+    """xp_orb_frames.tres'i CELL x FRAMES duzenine gore yeniden yazar - resource/ext_resource uid'leri korunur."""
     path = os.path.join(OUT_DIR, "xp_orb_frames.tres")
     old = open(path, encoding="utf-8").read()
     res_uid = re.search(r'\[gd_resource[^\]]*uid="([^"]+)"', old).group(1)

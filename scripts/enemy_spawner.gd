@@ -111,7 +111,8 @@ const ID_FAMILY := {
 ## swarm, Kademe 10-12 is forest monsters, Kademe 13-15 is the undead/demon
 ## chapter, etc). Tier 1 = starting enemies, tier 15 = hardest regular tier.
 const TIER_ROSTER := {
-	1: ["slime1"],
+	## Madde 368 (kullanıcı: "K1-K2'ye ikinci bir yaratık türü"): K1'e kemik atan İskelet eklendi; seçim eşit olasılıklı olduğundan slime iki kez yazıldı (~%67 slime / %33 iskelet).
+	1: ["slime1", "slime1", "iskelet1"],
 	2: ["slime1", "iskelet1"],
 	3: ["slime1", "zombie1", "iskelet1", "iskelet2"],
 	4: ["slime1", "zombie1", "zombie2", "iskelet2"],
@@ -1171,7 +1172,7 @@ func _any_living_player_outdoors() -> bool:
 	if local_p and is_instance_valid(local_p) and local_p.get("is_dead") != true:
 		var local_indoors: bool = local_p.has_method("is_indoors_now") and local_p.is_indoors_now()
 		var local_in_merchant_zone: bool = local_p.has_method("is_in_merchant_zone_now") and local_p.is_in_merchant_zone_now()
-		if not local_indoors and not local_in_merchant_zone:
+		if not local_indoors and not local_in_merchant_zone and not _underground(local_p):
 			return true
 	if NetworkManager.is_multiplayer_active:
 		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
@@ -1182,7 +1183,7 @@ func _any_living_player_outdoors() -> bool:
 				continue
 			var rp_indoors: bool = rp.get("is_indoors") if "is_indoors" in rp else false
 			var rp_in_merchant_zone: bool = rp.get("is_in_merchant_zone") if "is_in_merchant_zone" in rp else false
-			if not rp_indoors and not rp_in_merchant_zone:
+			if not rp_indoors and not rp_in_merchant_zone and not _underground(rp):
 				return true
 	return false
 
@@ -1213,7 +1214,7 @@ func _find_any_living_player_anchor() -> Node:
 	var local_alive: bool = local_p and is_instance_valid(local_p) and local_p.get("is_dead") != true
 	var local_indoors: bool = local_alive and local_p.has_method("is_indoors_now") and local_p.is_indoors_now()
 	var local_in_merchant_zone: bool = local_alive and local_p.has_method("is_in_merchant_zone_now") and local_p.is_in_merchant_zone_now()
-	if local_alive and not local_indoors and not local_in_merchant_zone:
+	if local_alive and not local_indoors and not local_in_merchant_zone and not _underground(local_p):
 		return local_p
 	var fallback: Node = null
 	if NetworkManager.is_multiplayer_active:
@@ -1225,7 +1226,7 @@ func _find_any_living_player_anchor() -> Node:
 				continue
 			var rp_indoors: bool = rp.get("is_indoors") if "is_indoors" in rp else false
 			var rp_in_merchant_zone: bool = rp.get("is_in_merchant_zone") if "is_in_merchant_zone" in rp else false
-			if not rp_indoors and not rp_in_merchant_zone:
+			if not rp_indoors and not rp_in_merchant_zone and not _underground(rp):
 				return rp
 			if fallback == null:
 				fallback = rp
@@ -1515,7 +1516,7 @@ func _outdoor_living_players() -> Array[Node]:
 	if local_p and is_instance_valid(local_p) and local_p.get("is_dead") != true:
 		var indoors: bool = local_p.has_method("is_indoors_now") and local_p.is_indoors_now()
 		var in_zone: bool = local_p.has_method("is_in_merchant_zone_now") and local_p.is_in_merchant_zone_now()
-		if not indoors and not in_zone:
+		if not indoors and not in_zone and not _underground(local_p):
 			out.append(local_p)
 	if NetworkManager.is_multiplayer_active:
 		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
@@ -1526,9 +1527,15 @@ func _outdoor_living_players() -> Array[Node]:
 				continue
 			var rp_indoors: bool = rp.get("is_indoors") if "is_indoors" in rp else false
 			var rp_zone: bool = rp.get("is_in_merchant_zone") if "is_in_merchant_zone" in rp else false
-			if not rp_indoors and not rp_zone:
+			if not rp_indoors and not rp_zone and not _underground(rp):
 				out.append(rp)
 	return out
+
+
+## ZİNDAN (madde 373): zindandaki oyuncu ana haritanın doğuş çapası olmaz (zindanın kendi sakinleri var, guard_camps.gd zindan kampları).
+static func _underground(n: Node) -> bool:
+	var v: Variant = n.get("in_dungeon")
+	return v != null and str(v) != ""
 
 
 ## Kullanıcı isteği: "önünü kesmeye çalışsınlar oyuncuların" (çoğul) - birden fazla dışarıdaki oyuncu varsa
@@ -2074,6 +2081,37 @@ func spawn_guard(pos: Vector2, tiers_ahead: int = 0) -> Node:
 	enemy.set_meta("guard", true)
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 		_announce_spawn(enemy, id, pos, scale_tier, false, network_id, false, false)
+	return enemy
+
+
+## ZİNDAN SAKİNİ (madde 373, guard_camps.gd zindan kampları): verilen türden yaratık, o anki kademenin (+ tiers_ahead) ölçeğinde. Bekçi gibi
+## "guards" grubunda (doğuş tavanını doldurmaz, kademe kapısını tutmaz) + "dungeon" metası. elite: avcı (zindanın kovalayan bekçisi).
+func spawn_dungeon_creature(id: String, pos: Vector2, tiers_ahead: int = 0, elite: bool = false, dungeon_id: String = "") -> Node:
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		return null
+	if not SCENES.has(id):
+		return null
+	var tier: int = _resolve_spawn_tier()
+	if tier <= 0:
+		tier = _current_tier()
+	tier = mini(tier + maxi(tiers_ahead, 0), 15)
+	var scale_tier: int = _scale_tier_for(tier)
+	var network_id: int = _next_network_enemy_id
+	_next_network_enemy_id += 1
+	var enemy = _spawn_creature(id, pos, network_id)
+	if not enemy:
+		return null
+	if enemy.has_method("apply_tier_scaling"):
+		enemy.apply_tier_scaling(scale_tier)
+	_enable_regular_shield(enemy, tier)
+	_apply_global_buff(enemy)
+	if elite:
+		_apply_elite(enemy)
+	enemy.add_to_group("guards")
+	enemy.set_meta("guard", true)
+	enemy.set_meta("dungeon", dungeon_id)
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		_announce_spawn(enemy, id, pos, scale_tier, false, network_id, false, elite)
 	return enemy
 
 

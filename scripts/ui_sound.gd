@@ -107,6 +107,9 @@ const FPS_LIMITS: Array[int] = [30, 60, 120, 0] ## 0 = sınırsız
 var gfx_preset: int = GfxPreset.HIGH
 var gfx_sun_clouds: bool = true
 var gfx_ground_detail: bool = true
+## Rüzgar efekti (weather_wind.gd: hava akıntıları + savrulan yapraklar). Kalite seviyelerinden BAĞIMSIZ (seviyeyi "Özel"e çevirmez);
+## kapalıyken weather_wind.gd hiç çizilmez/hesaplanmaz. Bitkilerin sallanması ve rüzgar sesi etkilenmez.
+var gfx_wind_fx: bool = true
 var gfx_render_scale: float = 1.0
 var fps_limit: int = 0
 
@@ -310,6 +313,7 @@ func set_gfx_option(key: String, value: Variant) -> void:
 	match key:
 		"sun_clouds": gfx_sun_clouds = bool(value)
 		"ground_detail": gfx_ground_detail = bool(value)
+		"wind_fx": gfx_wind_fx = bool(value)
 		"render_scale": gfx_render_scale = _nearest_render_scale(float(value))
 		_: return
 	gfx_preset = _matching_preset()
@@ -372,6 +376,7 @@ func _save_display_settings() -> void:
 	config.set_value("display", "ui_anim_enabled", ui_anim_enabled)
 	config.set_value("display", "gfx_sun_clouds", gfx_sun_clouds)
 	config.set_value("display", "gfx_ground_detail", gfx_ground_detail)
+	config.set_value("display", "gfx_wind_fx", gfx_wind_fx)
 	config.set_value("display", "gfx_render_scale", gfx_render_scale)
 	config.set_value("display", "fps_limit", fps_limit)
 	config.set_value("display", "touch_joystick_fixed", touch_joystick_fixed)
@@ -392,6 +397,7 @@ func _load_display_settings() -> void:
 		ui_anim_enabled = bool(config.get_value("display", "ui_anim_enabled", true))
 		gfx_sun_clouds = bool(config.get_value("display", "gfx_sun_clouds", true))
 		gfx_ground_detail = bool(config.get_value("display", "gfx_ground_detail", true))
+		gfx_wind_fx = bool(config.get_value("display", "gfx_wind_fx", true))
 		gfx_render_scale = _nearest_render_scale(float(config.get_value("display", "gfx_render_scale", 1.0)))
 		fps_limit = int(config.get_value("display", "fps_limit", _default_fps_limit()))
 		touch_joystick_fixed = bool(config.get_value("display", "touch_joystick_fixed", false))

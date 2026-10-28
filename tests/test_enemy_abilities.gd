@@ -17,9 +17,10 @@ func test_family_parsing() -> void:
 
 
 func test_which_families_have_active_abilities() -> void:
-	for fam in ["hayalet", "vampire", "rontgen", "iblis", "agac"]:
+	## Madde 368: iskelet (kemik atışı), zombi (atılış), slime (sıçrama) da yetenekli (testi: test_early_abilities.gd).
+	for fam in ["hayalet", "vampire", "rontgen", "iblis", "agac", "iskelet", "zombie", "slime"]:
 		assert(AbilitiesScript.family_has_ability(fam), "%s yetenekli olmalı" % fam)
-	for fam in ["golem", "zombie", "ork", "rat", "slime"]:
+	for fam in ["golem", "ork", "rat"]:
 		assert(not AbilitiesScript.family_has_ability(fam), "%s aktif yetenek nesnesi oluşturmamalı" % fam)
 
 

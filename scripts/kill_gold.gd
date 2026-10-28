@@ -15,9 +15,15 @@ const TEXT_COLOR := Color(1.0, 0.85, 0.25)
 const ASSIST_COLOR := Color(0.65, 0.9, 1.0) ## asist payı daha soluk/mavimsi (bkz. assist.gd)
 const TEAM_KIND := 4 ## assist.gd KIND_TEAM: yakındaki canlı takım arkadaşı payı ("TAKIM +N"; assist.gd'yi önyüklememek için kopya)
 const TEXT_OFFSET := Vector2(0.0, -26.0)
-## 2026-10-15 (kullanıcı: önce "1 sn sonra", sonra "0,2 saniye olsun"): altın, yazı ve ses ölümden bu kadar sonra gelir; konum ÖLÜM
-## anında alınır (yaratık silinse de yazı olduğu yerde çıkar).
-const SHOW_DELAY := 0.2
+## 2026-10-21: altın yerde dönen para olarak düşer, HOVER_TIME (kill_gold_coin.gd) sonra alıcıya uçup varınca verilir. Aynı anda en çok
+## MAX_ACTIVE_COINS para uçar/bekler; fazlası eski gibi anında verilir (kalabalık ölümlerinde düğüm sayısı patlamasın).
+const COIN_SCRIPT := preload("res://scripts/kill_gold_coin.gd")
+const MAX_ACTIVE_COINS := 60
+## 2026-10-24 (kullanıcı: "yaratıklar ölünce altını karaktere otomatik göndermesin; eskisi gibi rastgele yere düşsün, toplama mesafesine bağlı
+## XP gibi toplansın, toplanınca karakterin üstünde +altın + ses"): true = altın yerde GoldDrop (gold_drop.gd) olarak kalır, toplayan oyuncu
+## credit() ile alır (miktar hesabı amount_for aynı, gelir değişmez). false = eski doğrudan teslim (dönen para + asist/takım payı bölüşümü,
+## enemy.gd _award_gold_directly): yerden toplamada altın toplayana gittiği için asist/takım payı yalnız bu modda çalışır.
+const GROUND_DROPS := true
 const COIN_FRAMES := preload("res://assets/pickups/gold/gold_coin_frames.tres")
 const ICON_SCALE := 0.8 ## 16 px para -> ~13 px (yazı 16 pt piksel fontu)
 const ICON_GAP := 3.0
@@ -25,6 +31,7 @@ const ICON_GAP := 3.0
 const MIN_SOUND_GAP_MSEC := 55
 
 static var _last_sound_msec: int = -100000
+static var active_coins: int = 0
 
 
 ## Bir yaratığın vereceği altın. gold_chance 1 (boss) ise [min,max] arası rastgele; aksi halde beklenen değer
@@ -106,41 +113,53 @@ static func _play_sound(tree: SceneTree, world_pos: Vector2) -> void:
 	s.play()
 
 
-## Host/tek oyunculu: altını öldürene ver (+ yazı/ses onun ekranında). killer = enemy._killer_node() sonucu.
+## Host/tek oyunculu: altını öldürene ver. killer = enemy._killer_node() sonucu.
+## 2026-10-21 (kullanıcı: "altını yere düşürüp 0.5 saniye sonra vermesi gereken kişiye doğru uçarak versin"): yerel alıcı için ölüm
+## noktasında dönen para belirir (drop_coin), 0,5 sn sonra ona uçar ve varınca altın eklenir. Uzak alıcıya host HEMEN RPC atar; para o
+## makinede aynı şekilde düşer (NetworkManager.grant_kill_gold -> drop_coin).
 static func award(tree: SceneTree, amount: int, world_pos: Vector2, killer: Node, assist: int = 0) -> void:
 	if amount <= 0:
 		return
-	if tree == null or SHOW_DELAY <= 0.0:
-		award_now(tree, amount, world_pos, killer, assist)
+	if _send_to_remote(amount, world_pos, killer, assist):
 		return
-	## Alıcı (RemotePlayer kuklası) o arada silinebilir - peer id yakalanır, düğüm değil.
-	var peer: int = int(killer.get("peer_id")) if killer != null and is_instance_valid(killer) and "peer_id" in killer and not killer.is_in_group("player") else 0
-	tree.create_timer(SHOW_DELAY, false).timeout.connect(func() -> void:
-		var target: Node = killer
-		if peer > 0 and (target == null or not is_instance_valid(target)):
-			target = _remote_by_peer(tree, peer)
-		if target != null and not is_instance_valid(target):
-			target = null
-		if peer > 0 and target == null:
-			return ## 0,2 sn içinde oyundan düşen öldüren: altın host'a akmasın (award_now boş alıcıyı host sayar)
-		award_now(tree, amount, world_pos, target, assist))
+	drop_coin(tree, amount, world_pos, assist)
 
 
-static func _remote_by_peer(tree: SceneTree, peer: int) -> Node:
-	for rp in tree.get_nodes_in_group("remote_players"):
-		if is_instance_valid(rp) and "peer_id" in rp and int(rp.peer_id) == peer:
-			return rp
-	return null
-
-
-## Gecikmesiz hali (testler, zaten gecikmiş çağrılar).
-static func award_now(tree: SceneTree, amount: int, world_pos: Vector2, killer: Node, assist: int = 0) -> void:
+## Yerel alıcı için yerde dönen para. Para görünmeyecekse (sahne/oyuncu yok, doğuş noktası görüş dışı, çok para var) eski gibi anında verilir.
+static func drop_coin(tree: SceneTree, amount: int, world_pos: Vector2, assist: int = 0) -> void:
 	if amount <= 0:
 		return
-	if killer != null and is_instance_valid(killer) and not killer.is_in_group("player") \
-			and killer.is_in_group("remote_players") and "peer_id" in killer and int(killer.peer_id) > 0 \
-			and NetworkManager.is_multiplayer_active:
+	var p: Node = tree.get_first_node_in_group("player") if tree else null
+	if tree == null or tree.current_scene == null or p == null or not is_instance_valid(p) or not (p is Node2D) 			or active_coins >= MAX_ACTIVE_COINS or not VisionFogScript.own_vision_contains(tree, (p as Node2D).global_position, world_pos):
+		credit(tree, amount, world_pos, assist)
+		return
+	var coin: Node2D = COIN_SCRIPT.new()
+	coin.call("setup", amount, assist, p as Node2D, func(a: int, pos: Vector2, kind: int) -> void: credit(tree, a, pos, kind))
+	coin.position = world_pos + Vector2(randf_range(-7.0, 7.0), randf_range(-4.0, 4.0)) ## aynı noktada birikenler üst üste yığılmasın
+	active_coins += 1
+	coin.tree_exited.connect(func() -> void: active_coins = maxi(0, active_coins - 1))
+	tree.current_scene.add_child.call_deferred(coin) ## fizik sorgusu akışından (öldürme) çağrılabilir
+
+
+static func _send_to_remote(amount: int, world_pos: Vector2, killer: Node, assist: int) -> bool:
+	if killer != null and is_instance_valid(killer) and not killer.is_in_group("player") 			and killer.is_in_group("remote_players") and "peer_id" in killer and int(killer.peer_id) > 0 			and NetworkManager.is_multiplayer_active:
 		NetworkManager.grant_kill_gold.rpc_id(int(killer.peer_id), amount, world_pos, assist)
+		return true
+	return false
+
+
+## Altını gerçekten ekler + "+N" yazısı/ses (para varınca, ya da para gösterilemiyorsa hemen).
+static func credit(tree: SceneTree, amount: int, world_pos: Vector2, assist: int = 0) -> void:
+	if amount <= 0:
 		return
 	GameManager.gold += amount
 	show_at(tree, amount, world_pos, assist)
+
+
+## Gecikmesiz hali (testler, para animasyonu istenmeyen çağrılar).
+static func award_now(tree: SceneTree, amount: int, world_pos: Vector2, killer: Node, assist: int = 0) -> void:
+	if amount <= 0:
+		return
+	if _send_to_remote(amount, world_pos, killer, assist):
+		return
+	credit(tree, amount, world_pos, assist)

@@ -414,6 +414,45 @@ func test_shield_needs_no_pet_and_glows_as_it_wears() -> void:
 	_cleanup()
 
 
+## Madde 356: patlama SG x %400 + emilen hasarın %50'si (emilen en çok kapasite), süre dolunca da patlar, yakındakilere şimşek
+## çakar, Matthew tam parlar (ağ basamağı 10).
+func test_shield_burst_scales_and_also_fires_when_time_runs_out() -> void:
+	assert(is_equal_approx(ML.burst_damage(100.0, 600.0), 700.0) and is_equal_approx(ML.burst_damage(50.0, 0.0), 200.0), "formül")
+	var player: Node = _make_player()
+	await _phys(2)
+	var near: Node2D = _enemy(player.global_position + Vector2(100.0, 0.0))
+	var far: Node2D = _enemy(player.global_position + Vector2(ML.BURST_RADIUS + 60.0, 0.0))
+	## 1) Hasarla kırılma: 1000 kapasiteye 1500 hasar -> emilen 1000 sayılır (taşan 500 değil).
+	player._skill_shield_dome()
+	player.take_damage(1500.0)
+	assert(not bool(player.matthew_dome_active), "kapasiteyi aşan hasar kalkanı kırar")
+	assert(is_equal_approx(_lost(near), 400.0 + 500.0), "kırılma patlaması %%400 SG + emilenin yarısı: %s" % _lost(near))
+	assert(is_zero_approx(_lost(far)), "yarıçap dışı vurulmaz: %s" % _lost(far))
+	var bolts: int = 0
+	var novas: int = 0
+	for n: Node in get_tree().current_scene.get_children():
+		if n.scene_file_path == BoltScene.resource_path:
+			bolts += 1
+		elif n.scene_file_path == "res://scenes/fx_matthew_nova.tscn":
+			novas += 1
+	assert(bolts == 1 and novas == 1, "patlama sayfası + yarıçaptaki yaratığa şimşek: %d / %d" % [bolts, novas])
+	assert(int(player.matthew_net_state()[2]) == 10 and player.anim.material != null, "patlamada Matthew tam parlar (ağda da)")
+	assert(player.skill3_state != "active", "kırılınca R beklemeye girer")
+	## 2) Süre dolunca: hiç hasar almasa da patlar (yalnız %400 SG).
+	player.skill3_state = "ready"
+	player.item_shield_max = 1000.0
+	player.item_shield_hp = 1000.0
+	var before: float = _lost(near)
+	near.global_position = player.global_position + Vector2(100.0, 0.0) ## itmeden geri
+	player._activate_skill3()
+	assert(player.skill3_state == "active" and bool(player.matthew_dome_active), "R yeniden açıldı: %s" % player.skill3_state)
+	player._process_skill3(15.1)
+	assert(not bool(player.matthew_dome_active) and player.skill3_state == "cooldown", "süre dolunca kapanır, bekleme başlar")
+	assert(is_equal_approx(_lost(near) - before, 400.0), "süre dolunca da patlar: %s" % (_lost(near) - before))
+	await get_tree().create_timer(0.3).timeout
+	_cleanup()
+
+
 ## Tuş akışı: yetenekler standart skill/skill2/skill3 makinelerinden geçer (bedel, süre, bekleme, bitiş temizliği).
 func test_skills_run_through_the_standard_state_machines() -> void:
 	var player: Node = _make_player()

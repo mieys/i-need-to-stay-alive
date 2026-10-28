@@ -90,6 +90,26 @@ const ACID_DURATION := 4.0
 ## Kullanıcı isteği (2026-09-24): "zombinin zehrinin hasarını %50 azalt" - tik başına hasar = temas hasarı x bu çarpan.
 const ACID_DAMAGE_MULT := 0.5
 
+## --- Erken oyun yetenekleri (madde 368, kullanıcı: "K1-K2'ye ikinci bir yaratık türü ve küçük bir yetenek (kemik atan iskelet)" + "K3-K9 temel ailelere
+## birer küçük davranış (zıplayan slime, ileri atılan zombi)"). Hepsi basit bekleme sayacı deseni (iblis/röntgen gibi: process_fast/quiet_remaining/fast_forward).
+## İskelet "Kemik Atışı": menzildeki oyuncuya düz çizgide dönen bir kemik fırlatır (iskeletin temas hasarının BONE_DAMAGE_MULT'u; yanma vb. yok).
+const BONE_COOLDOWN_MIN := 5.0
+const BONE_COOLDOWN_MAX := 8.0
+const BONE_RANGE := 300.0
+const BONE_MIN_RANGE := 70.0 ## bu kadar yakınken fırlatmaz (zaten yakın dövüşte)
+const BONE_SPEED := 190.0
+const BONE_DAMAGE_MULT := 0.6
+const BONE_LOCK := 0.3 ## atış sırasında kısa duraklama
+## Zombi "Atılış" ve Slime "Sıçrama": kısa bir uyarı duraklaması, sonra oyuncuya doğru (yön duraklama başında kilitlenir) bir itki -
+## aradaki mesafeyi hızla kapatır, yana adımla kaçılabilir. Güç apply_knockback_force ile; C++ geri itme hızı 400 px/sn'de KIRPILIR
+## (enemy_world.cpp KNOCKBACK_MAX_SPEED) ve 1400 px/sn² ile söner (tek itki ~57 px), bu yüzden mesafe "thrust" süresi boyunca her karede
+## itki vererek uzatılır: yol ~ 400 x thrust + 57 px.
+const ZOMBIE_LUNGE := {"cd_min": 8.0, "cd_max": 11.0, "range_min": 70.0, "range_max": 260.0, "windup": 0.5, "force": 400.0, "thrust": 0.16, "alert": true}
+const SLIME_HOP := {"cd_min": 3.5, "cd_max": 6.0, "range_min": 40.0, "range_max": 220.0, "windup": 0.28, "force": 400.0, "thrust": 0.06, "alert": false}
+## 2026-10-24 (kullanıcı: "1. seviye slimeların zıplama özelliği olmasın, 1. seviye iskeletlerin kemik fırlatma özelliği olmasın"): bu iki yaratık
+## (creature_id) yeteneksiz kalır; aynı ailenin üst seviyeleri (slime2.., iskelet2..) yeteneklerini korur.
+const NO_ABILITY_IDS := ["slime1", "iskelet1"]
+
 ## --- Minotaur (Kademe 3 bossu, kullanıcı isteği 2026-10-08): boynuz hücumu + boğa koşusu - tüm mantık minotaur_charge.gd, sayılar minotaur_math.gd.
 
 ## Oyuncu gövde yarıçapı (enemy.gd PLAYER_BODY_RADIUS ile aynı mertebe) - alan/çizgi isabet toleransı.
@@ -103,6 +123,8 @@ var _cd: float = 0.0
 var _timer: float = 0.0
 var _pending: float = -1.0
 var _vision_check: float = 0.0
+var _lunge_dir: Vector2 = Vector2.RIGHT ## zombi atılışı / slime sıçraması: duraklama başında kilitlenen yön (_pending = duraklamanın kalanı)
+var _thrust_left: float = -1.0 ## itki evresinin kalan süresi (> 0 iken her karede itki verilir)
 var _entry_delay: float = -1.0 ## menzile girince/bekleme bitince yeteneği hemen atmayıp rastgele bekleme (toplu yığılma olmasın)
 var _minotaur = null ## MinotaurCharge (RefCounted) - sadece "minotaur" ailesinde
 var _boss_kit = null ## PumpkinBoss / PumpkinMinions (RefCounted) - "balkabagi" / "kabak" / "yarasa" ailelerinde (2026-10-09)
@@ -122,6 +144,12 @@ func setup(owner_enemy: Node2D, fam: String) -> void:
 			_cd = randf_range(2.0, 5.0)
 		"agac":
 			_cd = randf_range(3.0, 8.0)
+		"iskelet":
+			_cd = randf_range(2.0, BONE_COOLDOWN_MAX)
+		"zombie":
+			_cd = randf_range(3.0, float(ZOMBIE_LUNGE["cd_max"]))
+		"slime":
+			_cd = randf_range(1.5, float(SLIME_HOP["cd_max"]))
 		"minotaur":
 			_minotaur = MinotaurChargeScript.new()
 			_minotaur.setup(e)
@@ -142,8 +170,13 @@ func setup(owner_enemy: Node2D, fam: String) -> void:
 			_boss_kit.setup(e, family)
 
 
+## Bu yaratık seviyesi (creature_id, ör. "slime1") yetenekten çıkarılmış mı? (aile yeteneği ayrıca family_has_ability)
+static func id_is_without_ability(creature_id: String) -> bool:
+	return NO_ABILITY_IDS.has(creature_id)
+
+
 static func family_has_ability(fam: String) -> bool:
-	return fam in ["hayalet", "vampire", "rontgen", "iblis", "agac", "minotaur", "balkabagi", "kabak", "yarasa", "wendigo", "banshee", "ucansetan"]
+	return fam in ["hayalet", "vampire", "rontgen", "iblis", "agac", "iskelet", "zombie", "slime", "minotaur", "balkabagi", "kabak", "yarasa", "wendigo", "banshee", "ucansetan"]
 
 
 ## Yetenek şu an yaratığın yakın dövüş (temas) vuruşunu bastırıyor mu? (Minotaur hücum/toparlanma sırasında - bkz. enemy.gd _ew_on_event)
@@ -184,6 +217,12 @@ func process(delta: float, player: Node2D, dist: float) -> void:
 			_process_fireball(delta, player, dist)
 		"agac":
 			_process_thorns(delta, player, dist)
+		"iskelet":
+			_process_bone(delta, player, dist)
+		"zombie":
+			_process_lunge(delta, player, dist, ZOMBIE_LUNGE)
+		"slime":
+			_process_lunge(delta, player, dist, SLIME_HOP)
 		"minotaur":
 			_minotaur.process(delta, player, dist)
 		"balkabagi", "kabak", "yarasa", "wendigo", "banshee", "ucansetan":
@@ -216,7 +255,13 @@ func process_fast(delta: float) -> bool:
 			if _pending - delta > 0.0:
 				_pending -= delta
 				return true
-		"rontgen", "iblis", "agac":
+		"rontgen", "iblis", "agac", "iskelet":
+			if _cd - delta > 0.0:
+				_cd -= delta
+				return true
+		"zombie", "slime":
+			if _pending >= 0.0 or _thrust_left > 0.0:
+				return false ## uyarı duraklaması / itki evresi sürüyor: asıl işi process yapar
 			if _cd - delta > 0.0:
 				_cd -= delta
 				return true
@@ -234,8 +279,10 @@ func quiet_remaining() -> float:
 			if _cd > 0.0:
 				return _cd
 			return _vision_check if _pending < 0.0 else _pending
-		"rontgen", "iblis", "agac":
+		"rontgen", "iblis", "agac", "iskelet":
 			return _cd
+		"zombie", "slime":
+			return -1.0 if (_pending >= 0.0 or _thrust_left > 0.0) else _cd
 	return -1.0
 
 
@@ -255,7 +302,7 @@ func fast_forward(dt: float) -> void:
 				_vision_check -= dt
 			else:
 				_pending -= dt
-		"rontgen", "iblis", "agac":
+		"rontgen", "iblis", "agac", "iskelet", "zombie", "slime":
 			_cd -= dt
 
 
@@ -428,6 +475,78 @@ func _process_thorns(delta: float, player: Node2D, dist: float) -> void:
 	_entry_delay = -1.0
 
 
+# ---------------------------------------------------------------------------------------------------- iskelet (madde 368)
+func _process_bone(delta: float, player: Node2D, dist: float) -> void:
+	_cd -= delta
+	if _cd > 0.0:
+		return
+	if not _valid_target(player) or dist > BONE_RANGE or dist < BONE_MIN_RANGE:
+		_entry_delay = -1.0
+		_cd = 0.3 ## menzil dışında her karede hedef sorgusu yapma - saniyede ~3 kez bak
+		return
+	if not _entry_gate(delta):
+		return
+	if not bool(e.call("_has_line_of_sight", player)):
+		_cd = 0.5
+		return
+	var to_p: Vector2 = player.global_position - e.global_position
+	var dir: Vector2 = to_p.normalized() if to_p.length() > 0.1 else Vector2.RIGHT
+	var dmg: float = float(e.get("contact_damage")) * BONE_DAMAGE_MULT
+	e.set("ability_move_lock", BONE_LOCK)
+	e.call("_update_facing", dir)
+	e.call("_play_ability_attack_anim")
+	var pos: Vector2 = e.global_position + dir * 12.0
+	var data: Dictionary = {"dir": dir, "speed": BONE_SPEED}
+	spawn_world_fx(e.get_tree(), "bone", pos, data, true, e, dmg)
+	_broadcast_world_fx("bone", pos, data)
+	_cd = randf_range(BONE_COOLDOWN_MIN, BONE_COOLDOWN_MAX)
+	_entry_delay = -1.0
+
+
+# ---------------------------------------------------------------------------------------------------- zombi atılışı / slime sıçraması (madde 368)
+## params: ZOMBIE_LUNGE / SLIME_HOP. Evre 1 (hazır + hedef menzilde + görüş açık): yön kilitlenir, yaratık `windup` sn durur (hareket kilidi), zombide
+## başının üstünde "!" belirir. Evre 2 (_pending bitince): hareket kilidi kalkar ve o yöne bir itki verilir. Duraklama sırasında donar/sersemlerse
+## itki verilmez (süreç o kareler çağrılmaz; dönüşte _lunge_fire donma/ölüm kontrolü yapar).
+func _process_lunge(delta: float, player: Node2D, dist: float, params: Dictionary) -> void:
+	if _thrust_left > 0.0: ## itki evresi: yön kilitli, her karede itki (toplam hız 400'de kırpılır)
+		_thrust_left -= delta
+		e.call("apply_knockback_force", _lunge_dir, float(params["force"]))
+		return
+	if _pending >= 0.0:
+		_pending -= delta
+		if _pending <= 0.0:
+			_pending = -1.0
+			_lunge_fire(params)
+		return
+	_cd -= delta
+	if _cd > 0.0:
+		return
+	if not _valid_target(player) or dist > float(params["range_max"]) or dist < float(params["range_min"]):
+		_cd = 0.3 ## menzil dışında her karede hedef sorgusu yapma - saniyede ~3 kez bak
+		return
+	if not bool(e.call("_has_line_of_sight", player)):
+		_cd = 0.5
+		return
+	var to_p: Vector2 = player.global_position - e.global_position
+	_lunge_dir = to_p.normalized() if to_p.length() > 0.1 else Vector2.RIGHT
+	_pending = float(params["windup"])
+	e.set("ability_move_lock", _pending - 0.02) ## itkiden hemen önce biter (itki kilitli karede yutulmasın)
+	e.call("_update_facing", _lunge_dir)
+	if bool(params["alert"]):
+		e.call("show_brush_alert") ## kırmızı "!" - host + istemciler (mevcut saklanma çalılığı göstergesi)
+
+
+func _lunge_fire(params: Dictionary) -> void:
+	_cd = randf_range(float(params["cd_min"]), float(params["cd_max"]))
+	if e == null or not is_instance_valid(e) or e.get("is_dead") == true:
+		return
+	if e.has_method("is_incapacitated_now") and bool(e.call("is_incapacitated_now")):
+		return
+	e.set("ability_move_lock", 0.0)
+	e.call("apply_knockback_force", _lunge_dir, float(params["force"]))
+	_thrust_left = float(params["thrust"])
+
+
 # ---------------------------------------------------------------------------------------------------- ortak
 ## Bekleme bitmiş + hedef menzilde: ilk kez hazır olunca rastgele bir gecikme çekilir, dolunca true döner. Menzilden çıkınca
 ## çağıran _entry_delay'i -1'e sıfırlar. Böylece aynı anda menzile giren yaratıklar yeteneği aynı karede atmaz.
@@ -499,6 +618,8 @@ static func spawn_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Di
 			script_path = "res://scripts/enemy_acid_pool.gd"
 		"fireball":
 			script_path = "res://scripts/enemy_fireball.gd"
+		"bone":
+			script_path = "res://scripts/enemy_bone.gd"
 		"charge_lane":
 			script_path = "res://scripts/enemy_charge_lane.gd"
 		"worm_acid":

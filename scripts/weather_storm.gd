@@ -123,6 +123,8 @@ func _pick_strike_position() -> Variant:
 			continue
 		if p.get("is_indoors") == true:
 			continue
+		if str(p.get("in_dungeon") if p.get("in_dungeon") != null else "") != "":
+			continue ## zindandaki oyuncuya şimşek düşmez (madde 373)
 		anchors.append(p)
 	if anchors.is_empty():
 		return null

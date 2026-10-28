@@ -1262,7 +1262,7 @@ func _ch_stat_name(id: String) -> String:
 func _ch_build_tips() -> void:
 	var extra: Dictionary = {}
 	for row in StatsPanelScript.EXTRA_ROWS:
-		extra[row[0]] = str(row[2])
+		extra[row[0]] = StatsPanelScript.row_tip(row)
 	for s: Array in HudStatPanel.STATS:
 		var tip: String = str(s[2])
 		if tip.begins_with("@"):

@@ -24,6 +24,8 @@ const ENABLE_HOUSES := true
 const ENABLE_TREES := true
 const ENABLE_MINES := true
 const ENABLE_ENEMY_BASE := true
+const ENABLE_DEEP_FOREST := true
+const ENABLE_PROPS := true
 
 const FEET_SHIFT := 15.0
 const MIN_PIXELS := 20
@@ -31,6 +33,11 @@ const TREE_BAND := 9.0
 const HOUSE_BAND := 28.0
 const MINE_BAND := 14.0
 const BASE_BAND := 12.0
+## Derin orman set parçaları (kemik taht, dev iskelet, harabe, kafa yığını, kök tümseği...; madde 359/364): bant nesnenin boyuyla orantılı
+## (boy x DEEP_FOREST_BAND_RATIO, en az / en çok) - eskiden sabit 12 px'ti, büyük kayaların/heykelin gövdesine yürünüyordu.
+const DEEP_FOREST_BAND := 12.0
+const DEEP_FOREST_BAND_RATIO := 0.4
+const DEEP_FOREST_BAND_MAX := 36.0
 
 const WATER_LAYER := "Su/Su"
 ## 2026-10-11 (collision analizi, madde 85): Su katmanı düz mavi + hücre bazlı; kıyıyı bu "ayrıntı" katmanları çimenle örtüyor ve Su katmanına
@@ -45,6 +52,35 @@ const TREE_PARENT := "Shader Eklenecek"
 const TREE_PREFIX := "Ağaç"
 const MINE_LAYERS: Array = ["Etkileşimler/Maden", "Etkileşimler/Maden 1"]
 const BASE_LAYERS: Array = ["Düşman Üssü/Düşman üssü", "Düşman Üssü/Özel maden"]
+## Derin orman: ölü ağaçlar "Ağaç ölü" (Ağaç önekli -> ağaç gövdesi kuralı), set parçaları burada; düz süsler ("Derin orman süsleri") sahne
+## nesnesi kuralıyla (PROP_LAYERS, madde 364): katı görünenler engel, ot/kemik kırıntısı/kristal sapı değil.
+const DEEP_FOREST_LAYERS: Array = ["Shader Eklenecek/Derin orman nesneleri"]
+## Zemine gömülü derin orman parçaları (madde 361: Batı zindan girişi "Et Kuyusu", dişli çukur) - karakterin altında çizilir, ayak izinin TAMAMI
+## engel (çukurun üstünden yürünmesin): bant parçanın boyundan uzun.
+const DEEP_FOREST_PIT_LAYERS: Array = ["Shader Eklenecek/Derin orman çukurları"]
+const DEEP_FOREST_PIT_BAND := 96.0
+## SAHNE NESNELERİ (madde 364, kullanıcı: "engeller var kaya obje v.b ama engel oluşturmuyorlar üstlerine gidebiliyoruz"): bu katmanlardaki kaya,
+## kütük, devrik ağaç, kemik yığını gibi KATI görünen nesneler engel olur; mantar, ot, çiçek, sarmaşık, çakıl, çalı (yeşil) olmaz. Sınıflama
+## nesne başına (atlasta komşu karolar = bir nesne, depth_occluders kuralı), karolardan oyun başında: opak alanın sınırı en az PROP_MIN_W x
+## PROP_MIN_H px, en az PROP_MIN_PIXELS opak piksel, sınır kutusu doluluğu >= PROP_MIN_DENSITY, yeşil (yaprak) piksel payı < PROP_MAX_GREEN.
+## Zemin/leke karoları (PROP_SKIP_TEXTURES dokularından) hiç sayılmaz (uçurum katmanlarında zemin şeritleri de var).
+## Ayak izi: y-sıralı katmanda (depth_occluders OBJECT_LAYERS - karakter nesnenin arkasına geçebilir) boyun PROP_DEPTH_RATIO'su, diğerlerinde
+## (nesne hep karakterin altında çizilir) nesnenin TAMAMI (en çok PROP_FULL_MAX) - yoksa karakter kayanın üstünde duruyormuş gibi görünür.
+const PROP_LAYERS: Array = ["Shader Eklenecek/Animasyonsuz çalılar", "Orman parçaları/Orman parçaları 3", "Orman parçaları/Orman parçaları 4",
+	"Orman parçaları/orman parçaları -1", "Shader Eklenecek/Derin orman süsleri"]
+const PROP_SKIP_TEXTURES: Array[String] = ["Ground_grass", "derin_orman_zemin", "spots_lianas", "Flowers", "Yol par", "Water"]
+const PROP_MIN_W := 18
+const PROP_MIN_H := 14
+const PROP_MIN_PIXELS := 220
+const PROP_MIN_DENSITY := 0.35
+const PROP_MAX_GREEN := 0.4
+## Küçük nesnede (sınır kutusu <= PROP_SMALL_AREA px²) yaprak + kırmızı mantar şapkası payı bunu geçerse engel değil (mantar öbekleri).
+const PROP_SMALL_AREA := 700.0
+const PROP_SMALL_MAX_SOFT := 0.15
+const PROP_DEPTH_RATIO := 0.5
+const PROP_DEPTH_MAX := 24.0
+const PROP_FULL_MAX := 48.0
+const PROP_MIN_BAND := 8.0
 
 static var _cells: Dictionary = {} ## orman katmanı hücre koordinatı (Vector2i) -> true
 static var _layer_id: int = 0
@@ -136,15 +172,167 @@ static func _build(forest: TileMapLayer) -> void:
 		_add_object_layers(helper, harita, MINE_LAYERS, MINE_BAND, g0, "mines")
 	if ENABLE_ENEMY_BASE:
 		_add_object_layers(helper, harita, BASE_LAYERS, BASE_BAND, g0, "enemy_base")
+	if ENABLE_DEEP_FOREST:
+		var counts_d: Dictionary = {}
+		for path: String in DEEP_FOREST_LAYERS:
+			var l := harita.get_node_or_null(path) as TileMapLayer
+			if l != null and l.tile_set != null:
+				for grp: Dictionary in object_groups(helper, l, false):
+					var band: float = clampf(float(grp["h"]) * DEEP_FOREST_BAND_RATIO, DEEP_FOREST_BAND, DEEP_FOREST_BAND_MAX)
+					_add_band(helper, l, grp["bases"], band, g0, counts_d)
+		for path: String in DEEP_FOREST_PIT_LAYERS:
+			var l := harita.get_node_or_null(path) as TileMapLayer
+			if l != null and l.tile_set != null and not l.get_used_cells().is_empty():
+				_add_band(helper, l, helper.object_bases(l), DEEP_FOREST_PIT_BAND, g0, counts_d)
+		_commit("deep_forest", counts_d)
+	if ENABLE_PROPS:
+		var counts_p: Dictionary = {}
+		var solid: int = 0
+		for path: String in PROP_LAYERS:
+			var l := harita.get_node_or_null(path) as TileMapLayer
+			if l == null or l.tile_set == null:
+				continue
+			var depth_sorted: bool = DepthScript.OBJECT_LAYERS.has(path)
+			for grp: Dictionary in object_groups(helper, l):
+				if not is_solid_prop(grp):
+					continue
+				solid += 1
+				var h: float = float(grp["h"])
+				var band: float = clampf(h * PROP_DEPTH_RATIO, PROP_MIN_BAND, PROP_DEPTH_MAX) if depth_sorted else clampf(h, PROP_MIN_BAND, PROP_FULL_MAX)
+				_add_band(helper, l, grp["bases"], band, g0, counts_p)
+		_commit("props", counts_p)
+		stats["props_objects"] = solid
 	helper.free()
 
 
-static func _add_object_layers(helper: Node, harita: Node, paths: Array, band: float, g0: Vector2, category: String) -> void:
+## Katmanın nesneleri (depth_occluders.object_bases ile AYNI birleştirme: atlasta sağ/alt komşu karo = aynı nesne). Her biri:
+## {"bases": hücre -> kök y, "w"/"h": opak sınır kutusu (px), "px": opak piksel, "green": yaprak / "red": kırmızı mantar şapkası piksel payı,
+## "skip": zemin/leke dokusu}.
+static func object_groups(helper: Node, layer: TileMapLayer, with_colors: bool = true) -> Array:
+	var bases: Dictionary = helper.object_bases(layer)
+	var by_base: Dictionary = {} ## kök y + bağlantı -> hücreler (aynı kökü paylaşan bitişik hücreler)
+	var parent: Dictionary = {}
+	for c: Vector2i in bases:
+		parent[c] = c
+	for c: Vector2i in bases:
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(0, 1)]:
+			var n: Vector2i = c + d
+			if bases.has(n) and is_equal_approx(float(bases[n]), float(bases[c])):
+				helper._union(parent, c, n)
+	for c: Vector2i in bases:
+		var r: Vector2i = helper._find(parent, c)
+		if not by_base.has(r):
+			by_base[r] = []
+		(by_base[r] as Array).append(c)
+	var ofs: Vector2 = helper.cell_origin(layer)
+	var color_cache: Dictionary = {}
+	var skip_by_sid: Dictionary = {} ## kaynak -> "zemin/leke dokusu mu" (karo başına altı metin aramasından kurtarır)
+	var out: Array = []
+	for r: Vector2i in by_base:
+		var cells: Array = by_base[r]
+		var sub: Dictionary = {}
+		var x0: float = 1.0e9
+		var y0: float = 1.0e9
+		var x1: float = -1.0e9
+		var y1: float = -1.0e9
+		var px: int = 0
+		var skip: bool = false
+		for c: Vector2i in cells:
+			sub[c] = bases[c]
+			var sid: int = layer.get_cell_source_id(c)
+			var src := layer.tile_set.get_source(sid) as TileSetAtlasSource
+			if src == null or src.texture == null:
+				continue
+			if not skip_by_sid.has(sid):
+				var tex_path: String = src.texture.resource_path
+				var sk: bool = false
+				for k: String in PROP_SKIP_TEXTURES:
+					if tex_path.contains(k):
+						sk = true
+				skip_by_sid[sid] = sk
+			if skip_by_sid[sid]:
+				skip = true
+			## karo başına opak sınır (çevirme dahil) önbellekte: (sayı, min x, min y, max x, max y)
+			var tb: Array = helper.opaque_bounds(layer, c) ## karo başına (sayı, min x, min y, max x, max y), helper'da önbellekli
+			if int(tb[0]) > 0:
+				var cx0: float = ofs.x + float(c.x) * 16.0
+				var cy0: float = ofs.y + float(c.y) * 16.0
+				x0 = minf(x0, cx0 + float(tb[1]))
+				y0 = minf(y0, cy0 + float(tb[2]))
+				x1 = maxf(x1, cx0 + float(tb[3]))
+				y1 = maxf(y1, cy0 + float(tb[4]))
+				px += int(tb[0])
+		var w: float = x1 - x0 + 1.0 if px > 0 else 0.0
+		var h: float = y1 - y0 + 1.0 if px > 0 else 0.0
+		var grp := {"bases": sub, "w": w, "h": h, "px": px, "green": 0.0, "red": 0.0, "skip": skip}
+		## renk payı yalnız boyut eşiklerini geçen nesnede (yükleme süresi; çoğu ot/çakıl burada elenir)
+		if with_colors and _passes_size(grp):
+			var green: int = 0
+			var red: int = 0
+			for c: Vector2i in cells:
+				var sid: int = layer.get_cell_source_id(c)
+				var src := layer.tile_set.get_source(sid) as TileSetAtlasSource
+				if src == null or src.texture == null:
+					continue
+				var region: Rect2i = src.get_tile_texture_region(layer.get_cell_atlas_coords(c))
+				var key := Vector3i(sid, region.position.x, region.position.y)
+				if not color_cache.has(key):
+					color_cache[key] = _tile_colors(helper._image_of(src.texture), region)
+				green += (color_cache[key] as Vector2i).x
+				red += (color_cache[key] as Vector2i).y
+			grp["green"] = float(green) / maxf(float(px), 1.0)
+			grp["red"] = float(red) / maxf(float(px), 1.0)
+		out.append(grp)
+	return out
+
+
+## Karonun (yaprak, kırmızı mantar şapkası) piksel sayısı - çevirmeden bağımsız.
+static func _tile_colors(img: Image, region: Rect2i) -> Vector2i:
+	var g := Vector2i.ZERO
+	if img == null:
+		return g
+	for yy in range(region.size.y):
+		for xx in range(region.size.x):
+			var col: Color = img.get_pixel(region.position.x + xx, region.position.y + yy)
+			if col.a <= 0.5:
+				continue
+			if col.g > col.r + 0.05 and col.g > col.b + 0.05:
+				g.x += 1
+			elif col.r > 0.55 and col.r > col.g + 0.3 and col.r > col.b + 0.3:
+				g.y += 1
+	return g
+
+
+static func _passes_size(grp: Dictionary) -> bool:
+	if bool(grp["skip"]):
+		return false
+	var w: float = float(grp["w"])
+	var h: float = float(grp["h"])
+	if w < PROP_MIN_W or h < PROP_MIN_H or int(grp["px"]) < PROP_MIN_PIXELS:
+		return false
+	return float(grp["px"]) / maxf(w * h, 1.0) >= PROP_MIN_DENSITY
+
+
+## Nesne katı mı (kaya, kütük, devrik ağaç, kemik yığını...) - mantar, ot, çiçek, sarmaşık, çakıl, yeşil çalı, zemin şeridi DEĞİL.
+static func is_solid_prop(grp: Dictionary) -> bool:
+	if not _passes_size(grp):
+		return false
+	var w: float = float(grp["w"])
+	var h: float = float(grp["h"])
+	if w * h <= PROP_SMALL_AREA and float(grp["green"]) + float(grp.get("red", 0.0)) >= PROP_SMALL_MAX_SOFT:
+		return false
+	return float(grp["green"]) < PROP_MAX_GREEN
+
+
+## extra: [[yollar, bant], ...] aynı kategoriye farklı bantla eklenen katmanlar (tek _commit).
+static func _add_object_layers(helper: Node, harita: Node, paths: Array, band: float, g0: Vector2, category: String, extra: Array = []) -> void:
 	var counts: Dictionary = {}
-	for path: String in paths:
-		var l := harita.get_node_or_null(path) as TileMapLayer
-		if l != null and l.tile_set != null and not l.get_used_cells().is_empty():
-			_add_band(helper, l, helper.object_bases(l), band, g0, counts)
+	var groups: Array = [[paths, band]] + extra
+	for grp: Array in groups:
+		for path: String in grp[0]:
+			var l := harita.get_node_or_null(path) as TileMapLayer
+			if l != null and l.tile_set != null and not l.get_used_cells().is_empty():
+				_add_band(helper, l, helper.object_bases(l), float(grp[1]), g0, counts)
 	_commit(category, counts)
 
 
@@ -183,6 +371,9 @@ static func _add_water(helper: Node, harita: Node, g0: Vector2) -> void:
 ## bases: katmandaki hücre -> nesne kökü (dünya y). Her hücrenin köke yakın BAND px'lik bandındaki opak pikselleri ayak izine (kaydırılmış) sayar.
 static func _add_band(helper: Node, layer: TileMapLayer, bases: Dictionary, band: float, g0: Vector2, counts: Dictionary) -> void:
 	var ofs: Vector2 = helper.cell_origin(layer)
+	## Hücre piksel (x, y) -> ayak izi hücresi: aynı ifade (aynı kayan nokta sırası) sütun / satır başına BİR kez hesaplanıp tabloda tutulur (eskiden her pikselde, madde 372)
+	var xtab: Dictionary = {} ## hücrenin sol x'i -> 16 sütunun ayak izi hücre x'i
+	var ytab: Dictionary = {} ## hücrenin üst y'si -> 16 satırın ayak izi hücre y'si
 	for cell: Vector2i in bases:
 		var base: float = float(bases[cell])
 		var top: float = ofs.y + float(cell.y) * 16.0
@@ -191,10 +382,22 @@ static func _add_band(helper: Node, layer: TileMapLayer, bases: Dictionary, band
 		var r1: int = mini(15, ceili(base - top) - 1)
 		if r1 < r0:
 			continue
+		if not xtab.has(left):
+			var xt := PackedInt32Array()
+			for i in range(16):
+				var wx: float = left + float(i) + 0.5
+				xt.append(floori((wx - g0.x) / 16.0))
+			xtab[left] = xt
+		if not ytab.has(top):
+			var yt := PackedInt32Array()
+			for i in range(16):
+				var wy: float = top + float(i) + 0.5 - FEET_SHIFT
+				yt.append(floori((wy - g0.y) / 16.0))
+			ytab[top] = yt
+		var gxs: PackedInt32Array = xtab[left]
+		var gys: PackedInt32Array = ytab[top]
 		for px: Vector2i in helper.opaque_pixels(layer, cell, r0, r1):
-			var wx: float = left + float(px.x) + 0.5
-			var wy: float = top + float(px.y) + 0.5 - FEET_SHIFT
-			var gc := Vector2i(floori((wx - g0.x) / 16.0), floori((wy - g0.y) / 16.0))
+			var gc := Vector2i(gxs[px.x], gys[px.y])
 			counts[gc] = int(counts.get(gc, 0)) + 1
 
 

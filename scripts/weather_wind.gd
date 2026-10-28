@@ -83,6 +83,13 @@ func set_wind(value: float, angle: float, p_breeze: float = 0.0, p_storm: float 
 
 
 func _process(delta: float) -> void:
+	## Grafik ayarı (UISound.gfx_wind_fx, kalite seviyesinden bağımsız): kapalıyken akıntı/yaprak ANINDA temizlenir, hiç hesaplanmaz/çizilmez.
+	if not UISound.gfx_wind_fx:
+		if visible or not _gusts.is_empty() or not _leaves.is_empty():
+			_gusts.clear()
+			_leaves.clear()
+			visible = false
+		return
 	if intensity <= 0.001 and breeze <= 0.001 and _gusts.is_empty() and _leaves.is_empty():
 		if visible:
 			visible = false

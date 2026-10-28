@@ -109,3 +109,18 @@ func test_layout_left_of_dock_bottom_aligned_with_legend() -> void:
 	var badge: Control = hud.get_node("CharacterCluster/LevelBadge") as Control
 	assert(tr.position.y >= badge.get_global_rect().end.y, "Düğme seviye rozetinin ALTINDA olmalı")
 	hud.queue_free()
+
+
+## Madde 369: Can Çalma ipucundaki iyileşme miktarı GameManager.LIFESTEAL_HEAL'den okunur (eskiden metin "2 can" diyordu, gerçek değer 1'di).
+func test_lifesteal_tip_reads_the_real_heal_amount() -> void:
+	var StatsPanel := preload("res://scripts/stats_panel.gd")
+	var row: Array = []
+	for r in StatsPanel.EXTRA_ROWS:
+		if r[0] == "lifesteal":
+			row = r
+	assert(not row.is_empty(), "lifesteal satırı olmalı")
+	var tip: String = StatsPanel.row_tip(row)
+	assert(not tip.contains("{HEAL}"), "yer tutucu doldurulmalı: %s" % tip)
+	var heal: float = GameManager.LIFESTEAL_HEAL
+	var want: String = str(int(heal)) if is_equal_approx(heal, round(heal)) else ("%.1f" % heal).replace(".", ",")
+	assert(tip.contains("%s can" % want), "ipucu gerçek iyileşmeyi (%s can) yazmalı: %s" % [want, tip])

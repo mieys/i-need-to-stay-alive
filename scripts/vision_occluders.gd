@@ -69,7 +69,8 @@ var _texture: ImageTexture = null
 ## görüşü engellesin" - eskiden burada bitişik hücre kümelerinden küçük olanlar (taş,
 ## mantar, çalı gibi dağınık dekorlar) eleniyordu; o filtre kaldırıldı. Boş/null katmanda
 ## ızgara boş kalır. `extra_layers` (ağaç katmanları): hücreleri aynı ızgaraya eklenir; hepsi `layer` ile AYNI dönüşümde (kardeş katmanlar) olmalı.
-func build(layer: TileMapLayer, extra_layers: Array = []) -> void:
+## `extra_cells`: aynı ızgarada ek engel hücreleri (ZİNDAN duvarları, madde 373 - DungeonWorld.wall_cells).
+func build(layer: TileMapLayer, extra_layers: Array = [], extra_cells: Array = []) -> void:
 	_cells = PackedByteArray()
 	_macro_w = 0
 	_macro_sat = PackedInt32Array()
@@ -80,6 +81,7 @@ func build(layer: TileMapLayer, extra_layers: Array = []) -> void:
 	for extra: Variant in extra_layers:
 		if extra is TileMapLayer and is_instance_valid(extra):
 			used.append_array((extra as TileMapLayer).get_used_cells())
+	used.append_array(extra_cells)
 	if used.is_empty():
 		return
 	var rect := Rect2i(used[0], Vector2i.ONE)

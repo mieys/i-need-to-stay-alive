@@ -153,10 +153,45 @@ func _ensure_map_mapping() -> void:
 	_map_origin = rect.position - Vector2(pad, pad)
 	_map_world_size = Vector2(_map_texture.get_size()) * MAP_TEXEL_WORLD
 
+## ZİNDAN (madde 373): oyuncu zindandayken harita dokusu zindanın KEŞİF dokusu (DungeonManager.minimap_info: gezilen yer açılır, çıkışlar
+## hep yeşil işaret). Çıkınca ana harita dokusu geri gelir.
+var _ow_texture: Texture2D = null
+var _ow_origin: Vector2 = Vector2.ZERO
+var _ow_size: Vector2 = Vector2.ZERO
+var _dungeon_map: String = ""
+
+
+func _sync_dungeon_map() -> void:
+	var v: Variant = _player.get("in_dungeon") if _player != null and is_instance_valid(_player) else null
+	var did: String = str(v) if v != null else ""
+	if did == _dungeon_map:
+		return
+	var dm: Node = get_tree().get_first_node_in_group(&"dungeon_manager")
+	if did != "" and (dm == null or not dm.has_method("minimap_info")):
+		return
+	if _dungeon_map == "":
+		_ow_texture = _map_texture
+		_ow_origin = _map_origin
+		_ow_size = _map_world_size
+	_dungeon_map = did
+	if did == "":
+		_map_texture = _ow_texture
+		_map_origin = _ow_origin
+		_map_world_size = _ow_size
+		return
+	var info: Dictionary = dm.call("minimap_info", did)
+	if info.is_empty():
+		return
+	_map_texture = info["texture"]
+	_map_origin = info["origin"]
+	_map_world_size = info["size"]
+
+
 func _process(delta: float) -> void:
 	if not _player or not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player")
 	_ensure_map_mapping()
+	_sync_dungeon_map()
 	if _player and is_instance_valid(_player) and not (_player.has_method("is_indoors_now") and _player.is_indoors_now()):
 		_view_center = (_player as Node2D).global_position
 	## Harita her karede kaymalı (5 Hz'de kayınca takılır) - çizim artık ucuz: tek dokulu çokgen + SADECE görünüm içindeki

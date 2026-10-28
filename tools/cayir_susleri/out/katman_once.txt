@@ -1,0 +1,45 @@
+KATMAN Yer/Zemin Toprak|94694
+KATMAN Yer/Çimen gölge|0
+KATMAN Yer/Zemin Çimen|71208
+KATMAN Yer/Derin orman zemini|49014
+KATMAN Yer/Çimler|8356
+KATMAN Su/Su altı|760
+KATMAN Su/Su collisionsuz|108
+KATMAN Su/Su|10149
+KATMAN Su/Su ayrıntılar 2|2286
+KATMAN Su/Su ayrıntılar 3|113
+KATMAN Su/Su ayrıntıları 4|0
+KATMAN Orman parçaları/Saklanma Çalılığı|2350
+KATMAN Orman parçaları/orman parçaları -1|29
+KATMAN Orman parçaları/Orman parçaları|34614
+KATMAN Orman parçaları/Orman parçaları 2|6851
+KATMAN Orman parçaları/Orman parçaları 3|821
+KATMAN Orman parçaları/Orman parçaları 4|275
+KATMAN Orman parçaları/Dış orman 1|6673
+KATMAN Orman parçaları/Dış orman 2|5720
+KATMAN Orman parçaları/Dış orman 3|4631
+KATMAN Orman parçaları/Dış orman 4|2878
+KATMAN ev/Blacksmith|39
+KATMAN ev/blacksmith kapı|4
+KATMAN ev/Ev ayrıntı|45
+KATMAN ev/Ev|65
+KATMAN ev/ev kapı|9
+KATMAN ev/Ev Çatı 1|104
+KATMAN ev/baca duman|1
+KATMAN Köprü/Köprü alt|84
+KATMAN Köprü/Köprü üst|37
+KATMAN Etkileşimler/Maden|51
+KATMAN Etkileşimler/Maden 1|27
+KATMAN Shader Eklenecek/Çiçekler 1|346
+KATMAN Shader Eklenecek/Çalılar|1234
+KATMAN Shader Eklenecek/Çalılar1|911
+KATMAN Shader Eklenecek/Animasyonsuz çalılar|683
+KATMAN Shader Eklenecek/Derin orman süsleri|523
+KATMAN Shader Eklenecek/Derin orman çukurları|18
+KATMAN Shader Eklenecek/Ağaç 0|3276
+KATMAN Shader Eklenecek/Ağaç 1|211
+KATMAN Shader Eklenecek/Ağaç 2|226
+KATMAN Shader Eklenecek/Ağaç ölü|1811
+KATMAN Shader Eklenecek/Derin orman nesneleri|1624
+KATMAN Düşman Üssü/Özel maden|0
+KATMAN Düşman Üssü/Düşman üssü|255

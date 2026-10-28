@@ -37,7 +37,7 @@ const BODY_BLOCK_SCALE := 0.36
 const LIFESTEAL_EFFECTIVENESS := 0.33
 ## Can çalma tetiklenince yenilenen can (isabet başına %X ihtimalle). 2026-10-11 (kullanıcı: "can çalma bundan sonra 1 can yerine 2 can
 ## versin"): 1 -> 2. player.gd on_damage_dealt (+ Kan Ağlayan'ın kalkana yazdığı) bunu okur.
-const LIFESTEAL_HEAL := 1.0 ## 2026-10-11 (sonra): 2 çok güçlü bulundu, 1'e döndü (kullanıcı: "1 can vermeye devam etsin")
+const LIFESTEAL_HEAL := 1.0 ## 2026-10-11 (sonra): 2 çok güçlü bulundu, 1'e döndü (kullanıcı: "1 can vermeye devam etsin"). 2026-10-23: yanlış anlaşılma yüzünden 1,5 denendi, kullanıcı istemedi -> 1'e geri alındı.
 ## SALDIRI HIZI ÜST SINIRI + TAŞMA (kullanıcı isteği 2026-10-11): toplam saldırı hızı bonusu en çok %450 (2026-10-20 denge turu, BALANCE_REV 95: %600 -> %450; kayıtlarda Elara %498, Matthew %413; aralık çarpanı >= 1/5,5); sınırı aşan her 1
 ## puan canlı olarak 0.5 saldırı gücüne dönüşür (kalıcı değil - bkz. player.gd _sync_attack_speed_overflow_ap). player.gd + weapon.gd okur (TEK kaynak).
 const ATTACK_SPEED_CAP_PERCENT := 450.0
@@ -161,6 +161,23 @@ func add_weapon_shards(amount: int) -> void:
 		return
 	weapon_shards = maxi(0, weapon_shards + amount)
 	weapon_shards_changed.emit(weapon_shards)
+
+
+## ZİNDAN KAYNAKLARI (madde 373): Ruh Közü / Kan Kehribarı / Işık Kristali (dungeon_defs.gd RESOURCES). Altın gibi KİŞİSEL koşu sayacı:
+## zindandaki düğümden toplayana host verir (DungeonManager), zindanın sunağında / simyacısında harcanır (yerel).
+signal dungeon_resources_changed(res: String, total: int)
+var dungeon_resources: Dictionary = {}
+
+
+func get_dungeon_resource(res: String) -> int:
+	return int(dungeon_resources.get(res, 0))
+
+
+func add_dungeon_resource(res: String, amount: int) -> void:
+	if amount == 0 or res == "":
+		return
+	dungeon_resources[res] = maxi(0, get_dungeon_resource(res) + amount)
+	dungeon_resources_changed.emit(res, int(dungeon_resources[res]))
 ## Kullanıcı isteği: "altın toplayıcı ve madeni oyundan tamamen kaldır ve
 ## ekranın sağındaki arayüzlerini de sil" - eskiden burada mine_level/
 ## gold_collector_level ve ikisinin pasif altın üretimi duruyordu
@@ -1139,6 +1156,7 @@ func set_team_xp_state(new_xp: float, new_needed: float, new_level: int) -> void
 ## bir post-bake düzeltmesi gerekmez, animation_columns/ekstra 2 gibi).
 const TerrainCollisionScript := preload("res://scripts/terrain_collision.gd")
 const VisionOccludersScript := preload("res://scripts/vision_occluders.gd")
+const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd") ## ZİNDANLAR (madde 373): duvar/engel hücreleri orman ızgarasında
 var _terrain_su_layer: TileMapLayer = null
 var _terrain_ev_layer: TileMapLayer = null
 var _terrain_forest_layer: TileMapLayer = null
@@ -1306,7 +1324,7 @@ func is_position_blocked_by_forest(world_pos: Vector2) -> bool:
 	if forest == null:
 		return false
 	var cell: Vector2i = forest.local_to_map(forest.to_local(world_pos))
-	return forest.get_cell_source_id(cell) != -1
+	return forest.get_cell_source_id(cell) != -1 or DungeonWorldScript.has_wall_cell(cell)
 
 
 ## HAREKET engeli (kullanıcı isteği 2026-10-08, "collision herşey için"): orman duvarı VEYA terrain_collision.gd'nin hesapladığı su / bina tabanı / ağaç
@@ -1317,7 +1335,9 @@ func is_position_blocked_by_walls(world_pos: Vector2) -> bool:
 	if is_position_blocked_by_forest(world_pos):
 		return true
 	var forest: TileMapLayer = get_forest_layer()
-	return forest != null and TerrainCollisionScript.is_blocked(forest, world_pos)
+	if forest == null:
+		return false
+	return TerrainCollisionScript.is_blocked(forest, world_pos) or DungeonWorldScript.is_move_blocked_cell(forest.local_to_map(forest.to_local(world_pos)))
 
 
 ## world_pos'ta (Harita/Su/Su, Harita/ev/Ev ya da orman katmanında) bir karo
@@ -1395,6 +1415,7 @@ func is_any_blocking_panel_open() -> bool:
 func capture_run_state() -> Dictionary:
 	return {
 		"gold": gold, "weapon_shards": weapon_shards, "spray_level": spray_level, "shield_standart_level": shield_standart_level,
+		"dungeon_resources": dungeon_resources.duplicate(),
 		"shield_enchant": shield_enchant, "shield_enchant_ups": shield_enchant_ups.duplicate(true),
 		"owned_weapons": owned_weapons.duplicate(true), "owned_items": owned_items.duplicate(true),
 		"enchant_banish_left": enchant_banish_left, "enchant_banished": enchant_banished.duplicate(true),
@@ -1408,6 +1429,7 @@ func restore_run_state(state: Dictionary) -> void:
 		return
 	gold = int(state.get("gold", gold))
 	weapon_shards = int(state.get("weapon_shards", weapon_shards))
+	dungeon_resources = (state.get("dungeon_resources", dungeon_resources) as Dictionary).duplicate()
 	spray_level = int(state.get("spray_level", spray_level))
 	shield_standart_level = int(state.get("shield_standart_level", shield_standart_level))
 	shield_enchant = str(state.get("shield_enchant", shield_enchant))
@@ -1436,6 +1458,7 @@ func reset() -> void:
 	_terrain_tree_layers.clear()
 	_terrain_layers_searched = false
 	TerrainCollisionScript.reset()
+	DungeonWorldScript.reset() ## zindan kapıları yeni koşuda açık (madde 373)
 	preload("res://scripts/assist.gd").reset() ## önceki koşudan kalan destek kayıtları (8 sn'lik asist penceresi) yeni koşuya taşınmasın
 	_map_world_rect = Rect2()
 	_map_world_rect_searched = false
@@ -1475,6 +1498,7 @@ func reset() -> void:
 	revives_updated.emit(revives_remaining)
 	gold = 0
 	weapon_shards = 0
+	dungeon_resources = {}
 	spray_level = 0
 	## Kullanıcı isteği: "kimsenin başlangıç kalkanı yok" - bkz. yukarıdaki
 	## var bildirimi üzerindeki AYNI yorum.

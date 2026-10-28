@@ -4,7 +4,7 @@ const DropAttraction := preload("res://scripts/drop_attraction.gd")
 const DropMerge := preload("res://scripts/drop_merge.gd")
 const DropShadowScript := preload("res://scripts/drop_shadow.gd")
 
-const FloatingText := preload("res://scenes/floating_text.tscn")
+const KillGold := preload("res://scripts/kill_gold.gd")
 
 const ATTRACT_ACCEL := 720.0 ## genel hız ayarı: %20 düşürüldü
 const MAX_ATTRACT_SPEED := 496.0
@@ -176,22 +176,22 @@ func _on_body_entered(body: Node) -> void:
 	## yayınlıyordu (ortak/paylaşımlı para), bu artık kaldırıldı.
 	## Boss altını: çok oyunculuda tüm katılımcılar arasında eşit bölünür, her pay sahibine doğru uçar.
 	var shared: bool = is_boss_gold and NetworkManager.is_multiplayer_active and NetworkManager.host_share_boss_gold(amount, global_position, body)
+	var played_sound: bool = false
 	if shared:
 		pass
 	elif body.is_in_group("player"):
-		GameManager.gold += amount
-		var ft = FloatingText.instantiate()
-		get_tree().current_scene.add_child(ft)
-		ft.global_position = body.global_position + Vector2(14, -34)
-		ft.setup("+%d altın" % amount, Color(1.0, 0.85, 0.25))
+		## 2026-10-24: toplanınca karakterin üstünde simgeli "+N" + altın sesi (KillGold.credit; ses orada çalar, ayrıca PickupSound yok).
+		KillGold.credit(get_tree(), amount, body.global_position)
+		played_sound = true
 	elif body.has_method("collect_gold"):
 		body.collect_gold(amount)
-	
+
 	if NetworkManager.is_multiplayer_active:
 		var drop_id: int = int(get_meta("drop_network_id", 0))
 		if drop_id > 0:
 			NetworkManager.queue_remove_drop(drop_id)
-	_play_pickup_sound()
+	if not played_sound:
+		_play_pickup_sound()
 	queue_free()
 
 

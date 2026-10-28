@@ -22,6 +22,15 @@ const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 ## Kamera sarsıntısı (0 = yok) - kalkan patlaması eski tilki patlamasıyla aynı değerleri kullanır (camera_shake.gd add_at).
 @export var shake_trauma: float = 0.0
 @export var shake_radius: float = 1100.0
+## Ardışık sarsıntı darbeleri (kalkan patlaması "çıldırış" titremesi, madde 356): ilk sarsıntıdan sonra shake_pulse_gap arayla
+## shake_pulses kez shake_pulse_trauma eklenir.
+@export var shake_pulses: int = 0
+@export var shake_pulse_trauma: float = 0.3
+@export var shake_pulse_gap: float = 0.14
+## İkinci ses katmanı (isteğe bağlı; ör. patlamada gök gürültüsü + elektrik çatırtısı).
+@export var sound2_path: String = ""
+@export var sound2_db: float = -6.0
+@export var sound2_pitch: float = 1.0
 
 
 func _ready() -> void:
@@ -40,18 +49,34 @@ func _ready() -> void:
 	spr.animation_finished.connect(queue_free)
 	spr.play(&"fx")
 	if sound_path != "" and ResourceLoader.exists(sound_path):
-		var asp := AudioStreamPlayer2D.new()
-		asp.stream = load(sound_path) as AudioStream
-		asp.volume_db = sound_db
-		asp.pitch_scale = sound_pitch * randf_range(0.95, 1.05)
-		asp.max_distance = 1500.0
-		add_child(asp)
-		asp.play()
+		var asp: AudioStreamPlayer2D = _play_sound(sound_path, sound_db, sound_pitch)
 		## Ses kareden uzunsa düğüm ses bitene kadar yaşar (görsel çoktan bitmiş, sprite son karede saydam).
 		spr.animation_finished.disconnect(queue_free)
 		spr.animation_finished.connect(spr.hide)
 		asp.finished.connect(queue_free)
+		if sound2_path != "" and ResourceLoader.exists(sound2_path):
+			_play_sound(sound2_path, sound2_db, sound2_pitch) ## düğüm ilk sesle yaşar (ikinci katman kısa olmalı)
+
+
+func _play_sound(path: String, db: float, pitch: float) -> AudioStreamPlayer2D:
+	var asp := AudioStreamPlayer2D.new()
+	asp.stream = load(path) as AudioStream
+	asp.volume_db = db
+	asp.pitch_scale = pitch * randf_range(0.95, 1.05)
+	asp.max_distance = 1500.0
+	add_child(asp)
+	asp.play()
+	return asp
 
 
 func _shake() -> void:
-	CameraShakeScript.add_at(global_position, shake_trauma, shake_radius)
+	var at: Vector2 = global_position
+	CameraShakeScript.add_at(at, shake_trauma, shake_radius)
+	if shake_pulses <= 0 or not is_inside_tree():
+		return
+	var amount: float = shake_pulse_trauma
+	var radius: float = shake_radius
+	for i in range(shake_pulses):
+		## Zamanlayıcı ağaçta yaşar: düğüm sayfa bitince silinse de darbeler sürer (lambda düğümü değil değerleri tutar).
+		get_tree().create_timer(shake_pulse_gap * float(i + 1)).timeout.connect(
+			func() -> void: CameraShakeScript.add_at(at, amount, radius))

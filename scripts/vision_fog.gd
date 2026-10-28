@@ -60,6 +60,7 @@ const FogShader: Shader = preload("res://shaders/vision_fog.gdshader")
 const MaskShader: Shader = preload("res://shaders/vision_fog_mask.gdshader")
 const VisionOccludersScript: GDScript = preload("res://scripts/vision_occluders.gd")
 const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
+const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd")
 
 ## Görüşü kesen karoların ızgarası (bkz. vision_occluders.gd). Harita sahnede yoksa
 ## (ana menü, testler, ev içi) null kalır ve sis eskisi gibi sadece elipse bakar.
@@ -344,7 +345,7 @@ func _ensure_occluders() -> void:
 	## hücreden küçük kümeler (taş/mantar/çalı) eleniyordu, artık katmanın tüm
 	## hücreleri keser (çarpışmayla, bkz. GameManager.is_position_blocked_by_forest, aynı küme).
 	## Ağaç katmanları (taç dahil) da keser - kullanıcı isteği 2026-10-09, bkz. vision_occluders.gd AĞAÇLAR notu.
-	built.build(layer, GameManager.get_vision_tree_layers())
+	built.build(layer, GameManager.get_vision_tree_layers(), DungeonWorldScript.wall_cells()) ## + zindan duvarları (madde 373)
 	set_occluders(built)
 
 

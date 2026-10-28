@@ -55,7 +55,7 @@ func test_categories_build_all_current_settings() -> void:
 	assert(_row_ids(s) == ["volume", "music", "fullscreen", "resolution", "fps", "ui_opacity", "shake", "ui_anim", "auto_pick"], "GENEL: %s" % str(_row_ids(s)))
 	_push_key(KEY_E)
 	assert(int(s.get("_cat")) == 1, "E -> GRAFİK")
-	assert(_row_ids(s) == ["preset", "sun", "ground", "render_scale", "fps_limit"], "GRAFİK: %s" % str(_row_ids(s)))
+	assert(_row_ids(s) == ["preset", "sun", "ground", "wind_fx", "render_scale", "fps_limit"], "GRAFİK: %s" % str(_row_ids(s)))
 	_push_key(KEY_E)
 	assert(_row_ids(s).size() == GameManager.REBINDABLE_ACTIONS.size(), "TUŞLAR: her atanabilir eylem bir satır")
 	_push_key(KEY_E)
@@ -95,6 +95,39 @@ func test_music_slider_sets_music_bus_only() -> void:
 	assert(absf(db - linear_to_db(0.4)) < 0.01, "bus dB: %s" % str(db))
 	assert(is_equal_approx(master_now, original_master), "Oyun Sesi değişmemeli")
 	_cleanup()
+
+
+## Rüzgar Efekti (2026-10-21): kalite seviyesinden bağımsız; kapalıyken weather_wind.gd akıntı/yaprakları temizler ve gizlenir.
+func test_wind_fx_toggle_clears_the_wind_visual_and_keeps_the_preset() -> void:
+	var was_fx: bool = UISound.gfx_wind_fx
+	var wind := Node2D.new()
+	wind.set_script(preload("res://scripts/weather_wind.gd"))
+	add_child(wind)
+	wind.set_process(false) ## süre testte elle ilerletilir
+	UISound.set_gfx_option("wind_fx", true)
+	wind.call("set_wind", 1.0, 0.0, 1.0, 0.0)
+	for _i in 180:
+		wind.call("_process", 1.0 / 60.0)
+	var gusts_on: int = (wind.get("_gusts") as Array).size()
+	var leaves_on: int = (wind.get("_leaves") as Array).size()
+	var preset_on: int = UISound.gfx_preset
+	UISound.set_gfx_option("wind_fx", false)
+	wind.call("_process", 1.0 / 60.0)
+	var gusts_off: int = (wind.get("_gusts") as Array).size()
+	var leaves_off: int = (wind.get("_leaves") as Array).size()
+	var shown_off: bool = wind.visible
+	var preset_off: int = UISound.gfx_preset
+	## Tekrar açınca yeniden doğar.
+	UISound.set_gfx_option("wind_fx", true)
+	for _i in 180:
+		wind.call("_process", 1.0 / 60.0)
+	var gusts_back: int = (wind.get("_gusts") as Array).size()
+	wind.free()
+	UISound.set_gfx_option("wind_fx", was_fx)
+	assert(gusts_on > 0 and leaves_on > 0, "açıkken akıntı ve yaprak doğmalı: %d / %d" % [gusts_on, leaves_on])
+	assert(gusts_off == 0 and leaves_off == 0 and not shown_off, "kapalıyken hiçbiri kalmamalı ve gizlenmeli")
+	assert(preset_off == preset_on, "rüzgar efekti kalite seviyesini değiştirmemeli: %d -> %d" % [preset_on, preset_off])
+	assert(gusts_back > 0, "tekrar açılınca akıntı yeniden doğmalı")
 
 
 func test_keyboard_moves_focus_and_steps_slider() -> void:

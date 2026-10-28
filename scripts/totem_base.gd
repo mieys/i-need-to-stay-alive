@@ -338,7 +338,7 @@ func _draw_rune(pos: Vector2, ang: float, col: Color) -> void:
 			PixelDraw.px(self, pos - Vector2(0, t), 1, col)
 
 
-## ---------- ALAN HASARI (opsiyonel; Saldırı Totemi + Kalkan Totemi) ----------
+## ---------- ALAN HASARI (opsiyonel; 2026-10-21'den beri YALNIZ Kalkan Totemi - Saldırı Totemi'nden kaldırıldı) ----------
 ## Kullanıcı istekleri: 2026-09-29 eski Alan Saldırı Totemi'nin (R) alan hasarı yavaşlatmasız Saldırı Totemi'ne (Q) birleşti;
 ## 2026-09-30 "Q yeteneğinin alan hasarı özelliğini E yeteneğine eklemeni istiyorum" - Kalkan Totemi'ne (E) de. Tek kod burada:
 ## alt sınıf _init'te area_damage_enabled = true yapar. Alanda duran düşmanlar her saniye shaman'ın saldırı gücünün %20'si kadar
@@ -351,8 +351,8 @@ var area_damage_enabled: bool = false
 var area_radius: float = AREA_RADIUS
 ## Yetenek evrimi sayıları (kart metinleriyle birebir - skill_evolutions.gd DEFS[12]).
 const EVO_AREA_MULT := 1.3 ## Geniş Alan (shaman_e1)
-## false => alan hasarı aynen çalışır ama sabit mor çember (AreaAura) çizilmez. Saldırı Totemi (Q) kapatır (kullanıcı isteği 2026-10-04:
-## "Q'nun etrafındaki gereksiz mor sınır"); Kalkan Totemi (E) çemberi korur. Görsel her kopyada aynı _ready yolundan kurulduğu için
+## false => alan hasarı aynen çalışır ama sabit mor çember (AreaAura) çizilmez. Şu an kullanan yok (Saldırı Totemi'nin alan hasarı
+## 2026-10-21'de kaldırıldı); Kalkan Totemi (E) çemberi korur. Görsel her kopyada aynı _ready yolundan kurulduğu için
 ## ağ kopyaları da otomatik aynı kararı verir.
 var show_area_aura: bool = true
 const AREA_RADIUS := 180.0
