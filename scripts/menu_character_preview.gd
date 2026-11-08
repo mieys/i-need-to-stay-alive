@@ -73,19 +73,60 @@ func _frame_texture(i: int) -> Texture2D:
 
 
 ## İlk karenin dolu piksel kutusu: ayak satırı + yatay merkez (tüm kareler aynı hizada kabul edilir - idle nefes animasyonu).
-func _measure() -> void:
-	var t: Texture2D = _frame_texture(0)
+## Ölçüm sonucu (kaynak + klip) önbelleğe alınır: `Texture2D.get_image()` GPU'dan dokuyu geri okur (tüm atlas sayfası) ve
+## karakter kartına her tıklamada bir an donmaya yol açıyordu; kartlar yapılırken ölçüm bir kez yapılır, tıklama önbellekten okur.
+static var _measure_cache: Dictionary = {}
+
+
+## [kare boyutu, ayak satırı, yatay merkez] - önbellekli; boş dizi = ölçülemedi.
+static func _measure_frames(fr: SpriteFrames, anim: StringName) -> Array:
+	if fr == null or not fr.has_animation(anim) or fr.get_frame_count(anim) <= 0:
+		return []
+	var key: String = "%s|%s" % [fr.resource_path, anim]
+	if fr.resource_path != "" and _measure_cache.has(key):
+		return _measure_cache[key]
+	var t: Texture2D = fr.get_frame_texture(anim, 0)
 	if t == null:
-		return
-	_frame_size = t.get_size()
+		return []
 	var img: Image = t.get_image()
 	if img == null:
-		return
+		return []
 	var used: Rect2i = img.get_used_rect()
 	if used.size.x <= 0 or used.size.y <= 0:
+		return []
+	var m: Array = [t.get_size(), float(used.end.y), used.position.x + used.size.x * 0.5]
+	if fr.resource_path != "":
+		_measure_cache[key] = m
+	return m
+
+
+## Ekran açılırken çağrılır: karakterin SpriteFrames'ini yükler + ölçer, böylece karta ilk tıklamada takılma olmaz.
+static func warm(def: Dictionary) -> void:
+	var path: String = str(def.get("frames", ""))
+	if path == "" or not ResourceLoader.exists(path):
 		return
-	_feet_row = float(used.end.y)
-	_content_cx = used.position.x + used.size.x * 0.5
+	var fr := load(path) as SpriteFrames
+	if fr == null:
+		return
+	var anim: StringName = ANIM
+	if not fr.has_animation(anim):
+		var names: PackedStringArray = fr.get_animation_names()
+		if names.size() == 0:
+			return
+		anim = StringName(names[0])
+	_measure_frames(fr, anim)
+
+
+func _measure() -> void:
+	var m: Array = _measure_frames(frames, _anim)
+	if m.is_empty():
+		var t: Texture2D = _frame_texture(0)
+		if t != null:
+			_frame_size = t.get_size()
+		return
+	_frame_size = m[0]
+	_feet_row = m[1]
+	_content_cx = m[2]
 
 
 ## 48 px'lik kareler için pixel_scale aynen; farklı kare boyutunda (Oakley 64) karakter boyu diğerleriyle orantılı kalsın

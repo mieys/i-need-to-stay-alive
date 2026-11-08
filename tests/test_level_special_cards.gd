@@ -28,7 +28,7 @@ func test_values_scale_by_tier_and_text_matches() -> void:
 		assert(is_equal_approx(Special.cost_value("trade_glass", t), costs[t - 1]), "bedel kademe %d: %s" % [t, Special.cost_value("trade_glass", t)])
 	assert(Special.gain_text("trade_glass", 1) == "+10", "düz sayı metni: %s" % Special.gain_text("trade_glass", 1))
 	assert(Special.cost_text("trade_glass", 1) == "-20 Azami Can", "bedel metni: %s" % Special.cost_text("trade_glass", 1))
-	assert(Special.gain_text("trade_trigger", 1) == "+%12", "yüzde metni: %s" % Special.gain_text("trade_trigger", 1))
+	assert(Special.gain_text("trade_trigger", 1) == "+%9", "yüzde metni: %s" % Special.gain_text("trade_trigger", 1))
 	assert(Special.cost_text("trade_trigger", 1) == "-%8 Mana Kalkanı", "yüzde bedel metni: %s" % Special.cost_text("trade_trigger", 1))
 	assert(Special.restriction_text("class_melee") == "yalnız yakın dövüş", "silah türü kısıt metni")
 	assert(Special.verb_text("class_melee", 1) == "-%5 Hareket Hızı", "silah türü kartının alt satırı artık bedel: %s" % Special.verb_text("class_melee", 1))
@@ -69,6 +69,95 @@ func test_cost_never_goes_below_floor_and_card_is_withheld() -> void:
 	assert(player.max_health >= Special.MIN_MAX_HEALTH - 0.001, "azami can zeminin altına inmemeli: %s" % player.max_health)
 	player.speed_card_percent = Special.MIN_SPEED_CARD
 	assert(not Special.available_ids(player).has("trade_blood"), "hız kartı zeminde: Kan Anlaşması (bedel hız) çıkmamalı")
+	player.queue_free()
+
+
+## ---- Madde 401: 5 yeni takas kartı (Adrenalin / Sabit Nişan / Cellat / Hayalet Pelerin / Hafif Kuşanım) ----
+
+func test_new_trade_cards_apply_exactly_gain_and_cost() -> void:
+	var player: Node = PlayerScene.instantiate()
+	add_child(player)
+	player.max_health = 300.0
+	player.health = 300.0
+	## Adrenalin: +saldırı hızı, -can
+	var f1: float = player.fire_rate_mult
+	var hp1: float = player.max_health
+	player.apply_upgrade("trade_adrenaline", 1)
+	assert(is_equal_approx(player.fire_rate_mult, f1 * (1.0 - Special.gain_value("trade_adrenaline", 1))), "Adrenalin kazancı aralığı kısaltır: %s" % player.fire_rate_mult)
+	assert(is_equal_approx(player.max_health, hp1 - 20.0), "Adrenalin 20 can öder: %s" % player.max_health)
+	## Sabit Nişan: +kritik oran, -hız
+	var cc0: float = player.crit_chance_bonus
+	var sp0: float = player.speed_card_percent
+	player.apply_upgrade("trade_sight", 3)
+	assert(is_equal_approx(player.crit_chance_bonus - cc0, Special.gain_value("trade_sight", 3)), "Sabit Nişan kazancı: %s" % (player.crit_chance_bonus - cc0))
+	assert(is_equal_approx(sp0 - player.speed_card_percent, Special.cost_value("trade_sight", 3)), "Sabit Nişan hız öder: %s" % (sp0 - player.speed_card_percent))
+	## Cellat: +kritik hasar, -mana kalkanı
+	var cd0: float = player.crit_damage_bonus
+	var sh0: float = player.shield_max_percent
+	player.apply_upgrade("trade_executioner", 2)
+	assert(is_equal_approx(player.crit_damage_bonus - cd0, Special.gain_value("trade_executioner", 2)), "Cellat kazancı: %s" % (player.crit_damage_bonus - cd0))
+	assert(is_equal_approx(sh0 - player.shield_max_percent, Special.cost_value("trade_executioner", 2)), "Cellat kalkan öder: %s" % (sh0 - player.shield_max_percent))
+	## Hayalet Pelerin: +sıvışma, -can
+	var dg0: float = player.dodge_chance
+	var hp2: float = player.max_health
+	player.apply_upgrade("trade_cloak", 1)
+	assert(is_equal_approx(player.dodge_chance - dg0, 0.07), "Hayalet Pelerin kazancı: %s" % (player.dodge_chance - dg0))
+	assert(is_equal_approx(player.max_health, hp2 - 15.0), "Hayalet Pelerin 15 can öder: %s" % player.max_health)
+	## Hafif Kuşanım: +hız, -mana kalkanı
+	var sp1: float = player.speed_card_percent
+	var sh1: float = player.shield_max_percent
+	player.apply_upgrade("trade_light", 1)
+	assert(is_equal_approx(player.speed_card_percent - sp1, 0.10), "Hafif Kuşanım hızı: %s" % (player.speed_card_percent - sp1))
+	assert(is_equal_approx(sh1 - player.shield_max_percent, 0.10), "Hafif Kuşanım kalkan öder: %s" % (sh1 - player.shield_max_percent))
+	for id in ["trade_adrenaline", "trade_sight", "trade_executioner", "trade_cloak", "trade_light"]:
+		assert(player.get_upgrade_count(id) == 1, "%s: kart sayacı artmalı (geri katılım günlüğü)" % id)
+	player.queue_free()
+
+
+## Yeni kartların metinleri ve bedelli/bedelsiz kuralı: hepsi takas, hepsi bedelli, kazanç ve bedel farklı stat, ad/simge/etiket tanımlı.
+func test_new_trade_cards_texts() -> void:
+	assert(not Special.DEFS.has("trade_heavy"), "Ağır Darbe kaldırıldı (Cam Top zaten +SG veriyor)")
+	assert(Special.gain_text("trade_adrenaline", 1) == "+%9" and Special.cost_text("trade_adrenaline", 1) == "-20 Azami Can", "Adrenalin")
+	assert(Special.gain_text("trade_sight", 1) == "+%9" and Special.cost_text("trade_sight", 1) == "-%6 Hareket Hızı", "Sabit Nişan")
+	assert(Special.gain_text("trade_executioner", 1) == "+%18" and Special.cost_text("trade_executioner", 1) == "-%8 Mana Kalkanı", "Cellat")
+	assert(Special.gain_text("trade_cloak", 1) == "+%7" and Special.cost_text("trade_cloak", 1) == "-15 Azami Can", "Hayalet Pelerin")
+	assert(Special.gain_text("trade_light", 1) == "+%10" and Special.cost_text("trade_light", 1) == "-%10 Mana Kalkanı", "Hafif Kuşanım")
+	assert(Special.stat_label(Special.gain_stat("trade_sight")) == "Kritik Oran" and Special.stat_label(Special.gain_stat("trade_executioner")) == "Kritik Hasar", "yeni kazanç statı adları")
+	assert(Special.stat_label(Special.gain_stat("trade_cloak")) == "Sıvışma", "Sıvışma adı")
+	var trades: int = 0
+	for id: String in Special.ORDER:
+		if Special.is_trade(id):
+			trades += 1
+	assert(trades == 11, "11 takas kartı (6 eski + 5 yeni): %d" % trades)
+
+
+## Zemin / sınır koruması: bedel statı zemindeyken ya da kazanç statı sınırdayken kart çıkmaz.
+func test_new_trade_cards_are_withheld_at_floors_and_caps() -> void:
+	var player: Node = PlayerScene.instantiate()
+	add_child(player)
+	player.max_health = 50.0 ## 50 - 20 / 50 - 15 < 40 zemin
+	player.health = 50.0
+	var avail: Array = Special.available_ids(player)
+	assert(not avail.has("trade_adrenaline") and not avail.has("trade_cloak"), "azami can zeminde: bedeli can olan yeni kartlar çıkmamalı: %s" % [avail])
+	assert(avail.has("trade_executioner") and avail.has("trade_light"), "bedeli can olmayan yeni kartlar çıkabilmeli")
+	player.max_health = 300.0
+	player.health = 300.0
+	player.speed_card_percent = Special.MIN_SPEED_CARD
+	assert(not Special.available_ids(player).has("trade_sight"), "hız zeminde: Sabit Nişan (bedel hız) çıkmamalı")
+	player.speed_card_percent = 0.0
+	player.shield_max_percent = Special.MIN_SHIELD_PERCENT
+	avail = Special.available_ids(player)
+	assert(not avail.has("trade_executioner") and not avail.has("trade_light"), "kalkan zeminde: Cellat + Hafif Kuşanım çıkmamalı")
+	player.shield_max_percent = 0.0
+	player.dodge_chance = player.dodge_cap()
+	assert(not Special.available_ids(player).has("trade_cloak"), "sıvışma sınırında: Hayalet Pelerin çıkmamalı (kazanç boşa gider)")
+	player.dodge_chance = 0.0
+	player.crit_chance_bonus = 1.0
+	assert(not Special.available_ids(player).has("trade_sight"), "kritik oran %100: Sabit Nişan çıkmamalı")
+	player.crit_chance_bonus = 0.0
+	var all_ids: Array = Special.available_ids(player)
+	for id in ["trade_adrenaline", "trade_sight", "trade_executioner", "trade_cloak", "trade_light"]:
+		assert(all_ids.has(id), "%s: sınır/zemin yokken çıkabilmeli" % id)
 	player.queue_free()
 
 
@@ -137,10 +226,9 @@ func test_level_up_screen_offers_exactly_one_special_card() -> void:
 				var verb_lbl: Label = screen.cards[i].get_node("RowVerb") as Label
 				assert(verb_lbl.text == Special.verb_text(id, tier), "alt satır bedel/kısıt: %s" % verb_lbl.text)
 			else:
-				## Madde 379: düz kartın alt satırı da kartın bedeli ("artar" yok).
-				var plain_tier: int = int(screen._card_tiers[i])
+				## Madde 398: düz kart bedelsiz - alt satır eski "artar/azalır" (bedel yazısı yok).
 				var plain_verb: Label = screen.cards[i].get_node("RowVerb") as Label
-				assert(plain_verb.text == Special.cost_text(id, plain_tier) and plain_verb.text != "", "düz kartın alt satırı bedel olmalı: %s / %s" % [id, plain_verb.text])
+				assert(not Special.has_cost(id) and plain_verb.text == ("azalır" if id == "cooldown_reduction" else "artar"), "düz kartın alt satırı bedelsiz olmalı: %s / %s" % [id, plain_verb.text])
 		assert(specials == 1, "turda tam 1 özel kart olmalı, bulunan: %d (%s)" % [specials, screen._card_ids])
 		screen._populate_cards() ## reroll gibi yeniden çek
 	screen.free()
@@ -187,6 +275,9 @@ func test_trade_gain_always_beats_the_plain_card_of_the_same_stat() -> void:
 		"fire_rate": func(t: int) -> float: return 0.06 * (1.0 + (t - 1) * 0.3),
 		"lifesteal": func(t: int) -> float: return TierSystem.lifesteal_percent_for_tier(t),
 		"shield": func(t: int) -> float: return 0.05 * (1.0 + (t - 1) * 0.3), ## düz kartın metni +%5 (uygulanan ~%6,5)
+		"crit_chance": func(t: int) -> float: return 0.035 * (1.0 + (t - 1) * 0.3), ## düz kartın metni +%2,5 (uygulanan %3,5)
+		"crit_damage": func(t: int) -> float: return 0.06 * (1.0 + (t - 1) * 0.3),
+		"dodge": func(t: int) -> float: return 0.035 * (1.0 + (t - 1) * 0.3),
 	}
 	for id: String in Special.ORDER:
 		if not Special.is_trade(id):
@@ -195,7 +286,7 @@ func test_trade_gain_always_beats_the_plain_card_of_the_same_stat() -> void:
 		for t in range(1, 5):
 			var base: float = float((plain[stat] as Callable).call(t))
 			var gain: float = Special.gain_value(id, t)
-			assert(gain >= base * 1.5 - 0.0001, "%s kademe %d: kazanç %s düz karttan (%s) en az 1,5 kat olmalı" % [id, t, gain, base])
+			assert(gain >= base * 1.5 - 0.0026, "%s kademe %d (tolerans = kazanç yuvarlama adımı 0,005'in yarısı: Çılgın Tetik/Adrenalin %%9, madde 436, kademe 2'de 0,117 -> 0,115 olur): kazanç %s düz karttan (%s) en az 1,5 kat olmalı" % [id, t, gain, base])
 
 
 func test_blood_and_bulwark_follow_the_plain_card_tables() -> void:
@@ -207,64 +298,58 @@ func test_blood_and_bulwark_follow_the_plain_card_tables() -> void:
 	assert(Special.gain_text("trade_blood", 1) == "+%6", "kart metni: %s" % Special.gain_text("trade_blood", 1))
 
 
-## ---- Madde 379: düz stat kartlarının da bedeli var ----
+## ---- Madde 398: bedel yalnız büyük avantajlı kartlarda (takas + silah türü); düz stat kartları bedelsiz ----
 
 const LevelUpScript := preload("res://scripts/level_up_screen.gd")
 
 
-## Havuzdaki (UPGRADES) HER kartın bedeli tanımlı, bedel statı kazanç statından farklı ve zeminli bir stat; kademe 1-4 metni dolu.
-func test_every_plain_card_has_a_cost_on_a_floored_stat() -> void:
-	var floored: Array = ["max_health", "speed", "shield", "fire_rate"]
+## Havuzdaki (UPGRADES) HİÇBİR düz kartın bedeli yok; bedelli kartlar tam olarak özel kartlar (6 takas + 2 silah türü).
+func test_plain_cards_are_cost_free_and_only_special_cards_pay() -> void:
 	for u: Dictionary in LevelUpScript.UPGRADES:
 		var id: String = str(u["id"])
-		assert(Special.is_plain(id) and Special.has_cost(id), "%s: düz kartın bedeli tanımlı olmalı" % id)
-		var cs: String = Special.cost_stat(id)
-		assert(floored.has(cs), "%s: bedel statı zeminli olmalı (%s)" % [id, cs])
-		assert(cs != id and cs != Special.plain_gain_stat(id), "%s: kazanç ve bedel aynı stat olmamalı (%s)" % [id, cs])
-		var prev: float = 0.0
-		for t in range(1, 5):
-			var v: float = Special.cost_value(id, t)
-			assert(v > 0.0 and v >= prev, "%s kademe %d bedel artmalı/azalmamalı: %s" % [id, t, v])
-			assert(Special.cost_text(id, t).begins_with("-"), "%s kademe %d bedel metni '-' ile başlar: %s" % [id, t, Special.cost_text(id, t)])
-			prev = v
-	assert(Special.cost_text("max_health", 1) == "-%1.5 Hareket Hızı", "Can kartı bedeli: %s" % Special.cost_text("max_health", 1))
-	assert(Special.cost_text("fire_rate", 1) == "-6 Azami Can", "Saldırı Hızı kartı bedeli: %s" % Special.cost_text("fire_rate", 1))
+		assert(not Special.has_cost(id) and not Special.is_plain(id), "%s: düz kartın bedeli olmamalı (madde 398)" % id)
+		assert(Special.cost_stat(id) == "" and Special.cost_text(id, 1) == "" and Special.cost_value(id, 4) == 0.0, "%s: bedel metni/miktarı boş olmalı" % id)
+		assert(Special.can_pay(id, null), "%s: bedelsiz kart her zaman çıkabilir" % id)
+	for id: String in Special.ORDER:
+		assert(Special.has_cost(id), "%s: büyük avantajlı özel kart bedelli kalmalı" % id)
+	assert(Special.PLAIN_COSTS.is_empty(), "PLAIN_COSTS boş (bedel verilecek düz kart buraya eklenir)")
 
 
-## Kazanç eskisi gibi, bedel kartta yazan kadar düşer (iki-yer hatası olmasın).
-func test_plain_card_applies_its_gain_and_exactly_the_written_cost() -> void:
+## Düz kart yalnız kazancını uygular: başka hiçbir stattan düşmez.
+func test_plain_card_applies_only_its_gain() -> void:
 	var player: Node = PlayerScene.instantiate()
 	add_child(player)
 	player.max_health = 200.0
 	player.health = 200.0
 	var spd0: float = player.speed_card_percent
-	player.apply_upgrade("max_health", 2) ## +35 can, -%1.5 hız
-	assert(is_equal_approx(player.max_health, 200.0 + TierSystem.health_card_for_tier(2)), "Can kartı kazancı eskisi gibi: %s" % player.max_health)
-	assert(is_equal_approx(spd0 - player.speed_card_percent, Special.cost_value("max_health", 2)), "hız bedeli kartta yazan kadar: %s" % (spd0 - player.speed_card_percent))
-	var hp1: float = player.max_health
 	var f0: float = player.fire_rate_mult
-	player.apply_upgrade("fire_rate", 1) ## +%6 saldırı hızı, -6 can
-	assert(is_equal_approx(player.max_health, hp1 - 6.0), "Saldırı Hızı kartı 6 can öder: %s" % player.max_health)
+	player.apply_upgrade("max_health", 2) ## +35 can, bedel yok
+	assert(is_equal_approx(player.max_health, 200.0 + TierSystem.health_card_for_tier(2)), "Can kartı kazancı eskisi gibi: %s" % player.max_health)
+	assert(is_equal_approx(player.speed_card_percent, spd0), "Can kartı hızdan düşmemeli: %s" % player.speed_card_percent)
+	var hp1: float = player.max_health
+	player.apply_upgrade("fire_rate", 1) ## +%6 saldırı hızı, bedel yok
+	assert(is_equal_approx(player.max_health, hp1), "Saldırı Hızı kartı can ödememeli: %s" % player.max_health)
 	assert(player.fire_rate_mult < f0, "saldırı hızı kazancı (aralık kısalır): %s" % player.fire_rate_mult)
 	var f1: float = player.fire_rate_mult
-	player.apply_upgrade("damage", 1) ## +6 SG, -%2 saldırı hızı
-	assert(is_equal_approx(player.fire_rate_mult, f1 / (1.0 - 0.02)), "Saldırı Gücü kartı saldırı hızından öder: %s" % player.fire_rate_mult)
+	player.apply_upgrade("damage", 1) ## +6 SG, bedel yok
+	assert(is_equal_approx(player.fire_rate_mult, f1), "Saldırı Gücü kartı saldırı hızından düşmemeli: %s" % player.fire_rate_mult)
+	assert(is_equal_approx(player.max_health, hp1), "Saldırı Gücü kartı can ödememeli")
 	player.queue_free()
 
 
-## Bedeli ödenemeyen oyuncuya düz kart çıkmaz; yine de uygulanırsa zemin delinmez.
-func test_plain_card_is_withheld_at_the_floor() -> void:
+## Statlar zeminde olsa da bedelsiz düz kart çıkar (eskiden bedeli o stat olan kart elenirdi); bedelli özel kart yine elenir.
+func test_plain_cards_stay_available_at_the_floor() -> void:
 	var player: Node = PlayerScene.instantiate()
 	add_child(player)
 	player.speed_card_percent = Special.MIN_SPEED_CARD
-	assert(not Special.can_pay("max_health", player), "hız zeminde: bedeli hız olan Can kartı çıkmamalı")
-	assert(not Special.can_pay("exp_gain", player) and not Special.can_pay("lifesteal", player), "hız bedelli diğer düz kartlar da çıkmamalı")
-	assert(Special.can_pay("fire_rate", player), "bedeli can olan kart yine çıkabilmeli")
-	player.apply_upgrade("max_health", 4)
-	assert(player.speed_card_percent >= Special.MIN_SPEED_CARD - 0.0001, "hız bedeli zeminin altına inmemeli: %s" % player.speed_card_percent)
+	for id in ["max_health", "exp_gain", "lifesteal", "fire_rate", "shield_regen"]:
+		assert(Special.can_pay(id, player), "%s: hız zeminde bile düz kart çıkabilmeli" % id)
+	assert(not Special.can_pay("class_melee", player) and not Special.can_pay("trade_aegis", player), "hız zeminde: bedeli hız olan özel kartlar yine çıkmamalı")
 	player.max_health = 44.0
 	player.health = 44.0
-	assert(not Special.can_pay("luck", player) and not Special.can_pay("crit_chance", player), "azami can zemine yakın: can bedelli kartlar çıkmamalı")
+	for id in ["luck", "crit_chance"]:
+		assert(Special.can_pay(id, player), "%s: azami can zemine yakınken de düz kart çıkabilmeli" % id)
+	assert(not Special.can_pay("trade_glass", player) and not Special.can_pay("class_ranged", player), "azami can zemine yakın: can bedelli özel kartlar çıkmamalı")
 	player.queue_free()
 
 
@@ -282,7 +367,7 @@ func test_class_cards_pay_their_cost() -> void:
 	player.queue_free()
 
 
-## Düz kartların satırı da (alt satır = bedel) kutuya sığmalı - tüm düz kartlar x tüm kademeler.
+## Düz kartların satırı da (alt satır = "artar/azalır") kutuya sığmalı - tüm düz kartlar x tüm kademeler.
 func test_plain_card_texts_fit_the_row() -> void:
 	var fake := FakeLevelPlayer.new()
 	fake.add_to_group("player")
@@ -295,8 +380,8 @@ func test_plain_card_texts_fit_the_row() -> void:
 		for tier in range(1, 5):
 			screen._fill_row(card, u, tier, 3)
 			var verb: Label = card.get_node("RowVerb") as Label
-			assert(verb.text == Special.cost_text(str(u["id"]), tier), "%s k%d alt satır bedel olmalı: '%s'" % [u["id"], tier, verb.text])
-			assert(verb.get_minimum_size().x <= 300.0, "%s k%d bedel sığmıyor: '%s' %.0f px" % [u["id"], tier, verb.text, verb.get_minimum_size().x])
+			assert(verb.text == ("azalır" if str(u["id"]) == "cooldown_reduction" else "artar"), "%s k%d alt satır bedelsiz olmalı: '%s'" % [u["id"], tier, verb.text])
+			assert(verb.get_minimum_size().x <= 300.0, "%s k%d alt satır sığmıyor: '%s' %.0f px" % [u["id"], tier, verb.text, verb.get_minimum_size().x])
 			var val: Label = card.get_node("RowValue") as Label
 			assert(val.get_minimum_size().x <= 300.0, "%s k%d değer sığmıyor: '%s' %.0f px" % [u["id"], tier, val.text, val.get_minimum_size().x])
 			var nm: Label = card.get_node("RowName") as Label
@@ -307,39 +392,38 @@ func test_plain_card_texts_fit_the_row() -> void:
 	fake.free()
 
 
-## Otomatik seçim bedelli düz kartları da puanlar (özel kartlarla kıyaslanabilir).
-func test_auto_pick_scores_plain_cards_with_a_discount() -> void:
+## Otomatik seçim: bedelsiz düz kart tam puan alır (indirim yalnız PLAIN_COSTS'ta bedeli olan düz karta; tablo boş).
+func test_auto_pick_scores_cost_free_plain_cards_at_full_value() -> void:
 	var AutoPick := preload("res://scripts/auto_pick.gd")
 	var s: float = AutoPick.upgrade_score("damage", 2, null)
-	assert(is_equal_approx(s, AutoPick.BASE_VALUE["damage"] * AutoPick.PLAIN_COST_DISCOUNT * 2.0), "düz kart puanı: %s" % s)
+	assert(is_equal_approx(s, AutoPick.BASE_VALUE["damage"] * 2.0), "bedelsiz düz kart puanı indirimsiz olmalı: %s" % s)
 
 
-## ---- Madde 380: Kalkan Yenilenmesi + İyileştirme Gücü kartları ----
+## ---- Madde 380: Kalkan Yenilenmesi + İyileştirme Gücü kartları (madde 398'den beri bedelsiz) ----
 
-func test_new_stat_cards_are_in_the_pool_with_their_costs() -> void:
+func test_new_stat_cards_are_in_the_pool_without_costs() -> void:
 	var ids: Array = []
 	for u: Dictionary in LevelUpScript.UPGRADES:
 		ids.append(str(u["id"]))
 	assert(ids.has("shield_regen") and ids.has("heal_power"), "iki yeni kart havuzda olmalı: %s" % [ids])
-	assert(Special.cost_text("shield_regen", 1) == "-%1.5 Hareket Hızı", "Kalkan Yenilenmesi bedeli: %s" % Special.cost_text("shield_regen", 1))
-	assert(Special.cost_text("heal_power", 1) == "-%2 Saldırı Hızı", "İyileştirme Gücü bedeli: %s" % Special.cost_text("heal_power", 1))
+	assert(not Special.has_cost("shield_regen") and not Special.has_cost("heal_power"), "iki yeni kart da bedelsiz olmalı")
 
 
-## Kazanç eşya/Ruh Mağazası ile aynı birikime gider, kademe merdiveni TierSystem'de; bedel kartta yazan kadar.
-func test_new_stat_cards_apply_gain_and_written_cost() -> void:
+## Kazanç eşya/Ruh Mağazası ile aynı birikime gider, kademe merdiveni TierSystem'de; başka stattan düşmez.
+func test_new_stat_cards_apply_gain_without_a_cost() -> void:
 	var player: Node = PlayerScene.instantiate()
 	add_child(player)
 	var regen0: float = player.item_shield_regen_flat
 	var spd0: float = player.speed_card_percent
 	player.apply_upgrade("shield_regen", 3)
 	assert(is_equal_approx(player.item_shield_regen_flat - regen0, 1.6), "Kalkan Yenilenmesi kademe 3 = +1,6/sn: %s" % (player.item_shield_regen_flat - regen0))
-	assert(is_equal_approx(spd0 - player.speed_card_percent, Special.cost_value("shield_regen", 3)), "hız bedeli kartta yazan kadar: %s" % (spd0 - player.speed_card_percent))
+	assert(is_equal_approx(player.speed_card_percent, spd0), "Kalkan Yenilenmesi hızdan düşmemeli: %s" % player.speed_card_percent)
 	var heal0: float = player.get_heal_shield_power()
 	var f0: float = player.fire_rate_mult
 	player.apply_upgrade("heal_power", 2)
 	assert(is_equal_approx(player.get_heal_shield_power() - heal0, 0.03), "İyileştirme Gücü kademe 2 = +%%3: %s" % (player.get_heal_shield_power() - heal0))
 	assert(is_equal_approx(player.heal_power_mult(), 1.0 + player.get_heal_shield_power()), "iyileştirme çarpanı yeni gücü okur")
-	assert(is_equal_approx(player.fire_rate_mult, f0 / (1.0 - Special.cost_value("heal_power", 2))), "saldırı hızı bedeli: %s" % player.fire_rate_mult)
+	assert(is_equal_approx(player.fire_rate_mult, f0), "İyileştirme Gücü saldırı hızından düşmemeli: %s" % player.fire_rate_mult)
 	assert(player.get_upgrade_count("shield_regen") == 1 and player.get_upgrade_count("heal_power") == 1, "kart sayaçları (geri katılım günlüğü)")
 	player.queue_free()
 

@@ -1,0 +1,317 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
+
+BT START mode=wt char=2
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://shaders/cloud_shadows_material.tres:3 - ext_resource, invalid UID: uid://fcyufq7kts1o - using text path instead: res://shaders/cloud_shadows.gdshader
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/fx_oyku_heal.tscn:3 - ext_resource, invalid UID: uid://dh4h1d77x2n3p - using text path instead: res://scripts/fx_oyku_heal.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/fx_buyucu_fastfire.tscn:3 - ext_resource, invalid UID: uid://cd84h1d77x2n5 - using text path instead: res://scripts/fx_buyucu_fastfire.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/fx_shield_active.tscn:3 - ext_resource, invalid UID: uid://cd100h1d77x2n - using text path instead: res://scripts/fx_shield_active.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/fx_paladin_cast.tscn:3 - ext_resource, invalid UID: uid://cd99h1d77x2n2 - using text path instead: res://scripts/fx_paladin_cast.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/fx_assasin_stealth.tscn:3 - ext_resource, invalid UID: uid://cd94h1d77x2n6 - using text path instead: res://scripts/fx_assasin_stealth.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/fx_talha_rage.tscn:3 - ext_resource, invalid UID: uid://d74h1d77x2n4q - using text path instead: res://scripts/fx_talha_rage.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/fx_matthew_sacrifice.tscn:3 - ext_resource, invalid UID: uid://cd95h1d77x2n7 - using text path instead: res://scripts/fx_matthew_sacrifice.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: res://scenes/fx_matthew_explosion.tscn:3 - ext_resource, invalid UID: uid://cd96h1d77x2n8 - using text path instead: res://scripts/fx_matthew_explosion.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:103)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:472)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:255)
+WARNING: Camera2D overridden to physics process mode due to use of physics interpolation.
+   at: _update_process_callback (scene/2d/camera_2d.cpp:88)
+   GDScript backtrace (most recent call first):
+       [0] opt_in (res://scripts/physics_interp.gd:34)
+       [1] _ready (res://scripts/player.gd:1171)
+[Yaratık sistemi] C++ EnemyWorld
+BT >> wt dagger t1
+BT CFG wt w=dagger t=1 dmg=219 dps=27.4 glow=1 vis=true nodes_d=24 | mean=5.31 p50=5.18 p95=6.57 max=15.1
+BT >> wt dagger t2
+BT CFG wt w=dagger t=2 dmg=277 dps=34.6 glow=2 vis=true nodes_d=4 | mean=5.30 p50=5.11 p95=6.45 max=10.1
+BT >> wt dagger t3
+BT CFG wt w=dagger t=3 dmg=321 dps=40.1 glow=3 vis=true nodes_d=29 | mean=5.53 p50=5.30 p95=6.75 max=14.4
+BT >> wt dagger t4
+BT CFG wt w=dagger t=4 dmg=392 dps=49.0 glow=4 vis=true nodes_d=38 | mean=5.59 p50=5.41 p95=6.98 max=10.7
+BT >> wt dagger t5
+BT CFG wt w=dagger t=5 dmg=442 dps=55.3 glow=5 vis=true nodes_d=11 | mean=5.33 p50=5.13 p95=6.70 max=11.2
+BT >> wt dagger t6
+BT CFG wt w=dagger t=6 dmg=0 dps=0.0 glow=5 vis=true nodes_d=19 | mean=5.25 p50=5.04 p95=6.33 max=10.4
+BT >> wt fire_staff t1
+BT CFG wt w=fire_staff t=1 dmg=169 dps=21.1 glow=1 vis=true nodes_d=17 | mean=5.62 p50=5.31 p95=7.68 max=18.3
+BT >> wt fire_staff t2
+BT CFG wt w=fire_staff t=2 dmg=175 dps=21.9 glow=2 vis=true nodes_d=9 | mean=5.36 p50=5.19 p95=6.09 max=10.3
+BT >> wt fire_staff t3
+BT CFG wt w=fire_staff t=3 dmg=218 dps=27.3 glow=3 vis=true nodes_d=35 | mean=5.49 p50=5.36 p95=6.27 max=12.2
+BT >> wt fire_staff t4
+BT CFG wt w=fire_staff t=4 dmg=231 dps=28.8 glow=4 vis=true nodes_d=21 | mean=5.45 p50=5.26 p95=6.26 max=9.7
+BT >> wt fire_staff t5
+BT CFG wt w=fire_staff t=5 dmg=253 dps=31.6 glow=5 vis=true nodes_d=35 | mean=5.50 p50=5.37 p95=6.26 max=10.3
+BT >> wt fire_staff t6
+BT CFG wt w=fire_staff t=6 dmg=298 dps=37.3 glow=5 vis=true nodes_d=24 | mean=5.50 p50=5.31 p95=6.34 max=10.4
+BT >> wt lightning_staff t1
+BT CFG wt w=lightning_staff t=1 dmg=190 dps=23.8 glow=1 vis=true nodes_d=21 | mean=5.46 p50=5.32 p95=6.30 max=11.4
+BT >> wt lightning_staff t2
+BT CFG wt w=lightning_staff t=2 dmg=211 dps=26.4 glow=2 vis=true nodes_d=19 | mean=5.55 p50=5.37 p95=6.45 max=9.7
+BT >> wt lightning_staff t3
+BT CFG wt w=lightning_staff t=3 dmg=224 dps=27.9 glow=3 vis=true nodes_d=18 | mean=5.57 p50=5.38 p95=6.54 max=10.7
+BT >> wt lightning_staff t4
+BT CFG wt w=lightning_staff t=4 dmg=249 dps=31.1 glow=4 vis=true nodes_d=548 | mean=5.59 p50=5.37 p95=6.53 max=16.0
+BT >> wt lightning_staff t5
+BT CFG wt w=lightning_staff t=5 dmg=298 dps=37.2 glow=5 vis=true nodes_d=19 | mean=5.55 p50=5.38 p95=6.50 max=10.6
+BT >> wt lightning_staff t6
+BT CFG wt w=lightning_staff t=6 dmg=515 dps=64.4 glow=5 vis=true nodes_d=19 | mean=5.50 p50=5.33 p95=6.38 max=9.6
+BT >> wt tabanca t1
+BT CFG wt w=tabanca t=1 dmg=159 dps=19.8 glow=1 vis=true nodes_d=14 | mean=5.38 p50=5.22 p95=6.21 max=9.7
+BT >> wt tabanca t2
+BT CFG wt w=tabanca t=2 dmg=219 dps=27.4 glow=2 vis=true nodes_d=14 | mean=5.50 p50=5.31 p95=6.42 max=11.7
+BT >> wt tabanca t3
+BT CFG wt w=tabanca t=3 dmg=222 dps=27.8 glow=3 vis=true nodes_d=21 | mean=5.50 p50=5.30 p95=6.39 max=21.7
+BT >> wt tabanca t4
+BT CFG wt w=tabanca t=4 dmg=241 dps=30.1 glow=4 vis=true nodes_d=134 | mean=5.51 p50=5.32 p95=6.42 max=14.6
+BT >> wt tabanca t5
+BT CFG wt w=tabanca t=5 dmg=316 dps=39.5 glow=5 vis=true nodes_d=3 | mean=5.57 p50=5.38 p95=6.46 max=10.2
+BT >> wt tabanca t6
+BT CFG wt w=tabanca t=6 dmg=556 dps=69.5 glow=5 vis=true nodes_d=25 | mean=5.56 p50=5.37 p95=6.46 max=10.8
+BT >> wt tuftuf t1
+BT CFG wt w=tuftuf t=1 dmg=166 dps=20.8 glow=1 vis=true nodes_d=8 | mean=5.67 p50=5.46 p95=6.71 max=12.1
+BT >> wt tuftuf t2
+BT CFG wt w=tuftuf t=2 dmg=228 dps=28.6 glow=2 vis=true nodes_d=16 | mean=5.70 p50=5.53 p95=6.66 max=10.8
+BT >> wt tuftuf t3
+BT CFG wt w=tuftuf t=3 dmg=278 dps=34.8 glow=3 vis=true nodes_d=6 | mean=5.66 p50=5.46 p95=6.63 max=9.7
+BT >> wt tuftuf t4
+BT CFG wt w=tuftuf t=4 dmg=275 dps=34.4 glow=4 vis=true nodes_d=-7 | mean=5.57 p50=5.38 p95=6.49 max=11.1
+BT >> wt tuftuf t5
+BT CFG wt w=tuftuf t=5 dmg=296 dps=36.9 glow=5 vis=true nodes_d=10 | mean=5.41 p50=5.21 p95=6.27 max=9.6
+BT >> wt tuftuf t6
+BT CFG wt w=tuftuf t=6 dmg=466 dps=58.2 glow=5 vis=true nodes_d=14 | mean=5.52 p50=5.32 p95=6.46 max=9.3
+BT >> wt tufek t1
+BT CFG wt w=tufek t=1 dmg=204 dps=25.4 glow=1 vis=true nodes_d=8 | mean=5.33 p50=5.14 p95=6.19 max=11.2
+BT >> wt tufek t2
+BT CFG wt w=tufek t=2 dmg=224 dps=28.0 glow=2 vis=true nodes_d=538 | mean=5.41 p50=5.18 p95=6.31 max=17.8
+BT >> wt tufek t3
+BT CFG wt w=tufek t=3 dmg=221 dps=27.6 glow=3 vis=true nodes_d=9 | mean=5.32 p50=5.13 p95=6.12 max=10.8
+BT >> wt tufek t4
+BT CFG wt w=tufek t=4 dmg=239 dps=29.9 glow=4 vis=true nodes_d=31 | mean=5.50 p50=5.39 p95=6.42 max=10.6
+BT >> wt tufek t5
+BT CFG wt w=tufek t=5 dmg=309 dps=38.6 glow=5 vis=true nodes_d=12 | mean=5.42 p50=5.23 p95=6.23 max=10.9
+BT >> wt tufek t6
+BT CFG wt w=tufek t=6 dmg=559 dps=69.9 glow=5 vis=true nodes_d=24 | mean=5.50 p50=5.32 p95=6.39 max=10.6
+BT >> wt arcane t1
+BT CFG wt w=arcane t=1 dmg=135 dps=16.9 glow=1 vis=true nodes_d=6 | mean=5.49 p50=5.34 p95=6.32 max=10.3
+BT >> wt arcane t2
+BT CFG wt w=arcane t=2 dmg=127 dps=15.8 glow=2 vis=true nodes_d=17 | mean=5.51 p50=5.32 p95=6.43 max=9.3
+BT >> wt arcane t3
+BT CFG wt w=arcane t=3 dmg=253 dps=31.6 glow=3 vis=true nodes_d=20 | mean=5.53 p50=5.39 p95=6.36 max=11.0
+BT >> wt arcane t4
+BT CFG wt w=arcane t=4 dmg=187 dps=23.4 glow=4 vis=true nodes_d=261 | mean=5.91 p50=5.84 p95=7.00 max=19.7
+BT >> wt arcane t5
+BT CFG wt w=arcane t=5 dmg=256 dps=31.9 glow=5 vis=true nodes_d=12 | mean=6.03 p50=5.88 p95=6.89 max=12.1
+BT >> wt arcane t6
+BT CFG wt w=arcane t=6 dmg=656 dps=82.0 glow=5 vis=true nodes_d=29 | mean=6.10 p50=6.00 p95=7.05 max=11.1
+BT >> wt yay t1
+BT CFG wt w=yay t=1 dmg=176 dps=22.0 glow=1 vis=true nodes_d=8 | mean=6.17 p50=6.01 p95=7.77 max=12.8
+BT >> wt yay t2
+BT CFG wt w=yay t=2 dmg=194 dps=24.2 glow=2 vis=true nodes_d=131 | mean=6.30 p50=5.98 p95=8.76 max=19.7
+BT >> wt yay t3
+BT CFG wt w=yay t=3 dmg=211 dps=26.4 glow=3 vis=true nodes_d=11 | mean=6.00 p50=5.84 p95=6.94 max=10.4
+BT >> wt yay t4
+BT CFG wt w=yay t=4 dmg=242 dps=30.3 glow=4 vis=true nodes_d=11 | mean=5.99 p50=5.80 p95=6.93 max=10.1
+BT >> wt yay t5
+BT CFG wt w=yay t=5 dmg=328 dps=41.1 glow=5 vis=true nodes_d=50 | mean=6.23 p50=6.03 p95=7.55 max=38.3
+BT >> wt yay t6
+BT CFG wt w=yay t=6 dmg=557 dps=69.6 glow=5 vis=true nodes_d=546 | mean=6.52 p50=6.18 p95=8.76 max=23.0
+BT >> wt crossbow t1
+BT CFG wt w=crossbow t=1 dmg=149 dps=18.6 glow=1 vis=true nodes_d=8 | mean=6.05 p50=5.88 p95=7.10 max=12.8
+BT >> wt crossbow t2
+BT CFG wt w=crossbow t=2 dmg=175 dps=21.9 glow=2 vis=true nodes_d=15 | mean=6.16 p50=5.96 p95=7.82 max=12.0
+BT >> wt crossbow t3
+BT CFG wt w=crossbow t=3 dmg=191 dps=23.9 glow=3 vis=true nodes_d=0 | mean=5.83 p50=5.61 p95=6.76 max=11.1
+BT >> wt crossbow t4
+BT CFG wt w=crossbow t=4 dmg=207 dps=25.9 glow=4 vis=true nodes_d=13 | mean=5.80 p50=5.58 p95=6.78 max=10.2
+BT >> wt crossbow t5
+BT CFG wt w=crossbow t=5 dmg=255 dps=31.9 glow=5 vis=true nodes_d=21 | mean=6.07 p50=5.94 p95=7.27 max=18.9
+BT >> wt crossbow t6
+BT CFG wt w=crossbow t=6 dmg=478 dps=59.8 glow=5 vis=true nodes_d=19 | mean=6.13 p50=5.97 p95=7.42 max=19.2
+BT >> wt boomerang t1
+BT CFG wt w=boomerang t=1 dmg=112 dps=14.0 glow=1 vis=true nodes_d=14 | mean=5.94 p50=5.69 p95=7.17 max=17.0
+BT >> wt boomerang t2
+BT CFG wt w=boomerang t=2 dmg=123 dps=15.4 glow=2 vis=true nodes_d=-240 | mean=5.46 p50=5.26 p95=6.57 max=10.9
+BT >> wt boomerang t3
+BT CFG wt w=boomerang t=3 dmg=158 dps=19.7 glow=3 vis=true nodes_d=14 | mean=5.45 p50=5.21 p95=6.55 max=10.5
+BT >> wt boomerang t4
+BT CFG wt w=boomerang t=4 dmg=158 dps=19.8 glow=4 vis=true nodes_d=11 | mean=5.42 p50=5.19 p95=6.49 max=11.3
+BT >> wt boomerang t5
+BT CFG wt w=boomerang t=5 dmg=170 dps=21.3 glow=5 vis=true nodes_d=35 | mean=5.36 p50=5.10 p95=6.54 max=11.4
+BT >> wt boomerang t6
+BT CFG wt w=boomerang t=6 dmg=212 dps=26.5 glow=5 vis=true nodes_d=6 | mean=5.35 p50=5.11 p95=6.50 max=10.2
+BT >> wt buz_asasi t1
+BT CFG wt w=buz_asasi t=1 dmg=104 dps=12.9 glow=1 vis=true nodes_d=12 | mean=5.62 p50=5.46 p95=6.92 max=10.5
+BT >> wt buz_asasi t2
+BT CFG wt w=buz_asasi t=2 dmg=137 dps=17.1 glow=2 vis=true nodes_d=8 | mean=5.77 p50=5.54 p95=7.19 max=12.6
+BT >> wt buz_asasi t3
+BT CFG wt w=buz_asasi t=3 dmg=149 dps=18.6 glow=3 vis=true nodes_d=13 | mean=5.64 p50=5.45 p95=6.69 max=11.1
+BT >> wt buz_asasi t4
+BT CFG wt w=buz_asasi t=4 dmg=176 dps=22.0 glow=4 vis=true nodes_d=559 | mean=6.38 p50=5.86 p95=9.96 max=25.5
+BT >> wt buz_asasi t5
+BT CFG wt w=buz_asasi t=5 dmg=234 dps=29.2 glow=5 vis=true nodes_d=17 | mean=5.89 p50=5.65 p95=7.81 max=14.4
+BT >> wt buz_asasi t6
+BT CFG wt w=buz_asasi t=6 dmg=315 dps=39.3 glow=5 vis=true nodes_d=185 | mean=6.01 p50=5.83 p95=7.53 max=20.7
+BT >> wt fisek t1
+BT CFG wt w=fisek t=1 dmg=130 dps=16.3 glow=1 vis=true nodes_d=17 | mean=6.02 p50=5.87 p95=7.38 max=11.7
+BT >> wt fisek t2
+BT CFG wt w=fisek t=2 dmg=128 dps=16.0 glow=2 vis=true nodes_d=17 | mean=6.10 p50=5.92 p95=7.81 max=13.7
+BT >> wt fisek t3
+BT CFG wt w=fisek t=3 dmg=138 dps=17.2 glow=3 vis=true nodes_d=10 | mean=6.18 p50=5.99 p95=7.76 max=11.8
+BT >> wt fisek t4
+BT CFG wt w=fisek t=4 dmg=181 dps=22.7 glow=4 vis=true nodes_d=3 | mean=6.09 p50=5.91 p95=7.72 max=14.4
+BT >> wt fisek t5
+BT CFG wt w=fisek t=5 dmg=182 dps=22.8 glow=5 vis=true nodes_d=14 | mean=6.20 p50=5.88 p95=8.98 max=13.5
+BT >> wt fisek t6
+BT CFG wt w=fisek t=6 dmg=357 dps=44.6 glow=5 vis=true nodes_d=15 | mean=5.84 p50=5.69 p95=7.07 max=12.2
+BT >> wt pence t1
+BT CFG wt w=pence t=1 dmg=0 dps=0.0 glow=1 vis=true nodes_d=3 | mean=5.81 p50=5.62 p95=7.06 max=15.0
+BT >> wt pence t2
+BT CFG wt w=pence t=2 dmg=347 dps=43.4 glow=2 vis=true nodes_d=13 | mean=5.70 p50=5.53 p95=6.64 max=12.6
+BT >> wt pence t3
+BT CFG wt w=pence t=3 dmg=0 dps=0.0 glow=3 vis=true nodes_d=8 | mean=5.84 p50=5.68 p95=7.17 max=11.3
+BT >> wt pence t4
+BT CFG wt w=pence t=4 dmg=399 dps=49.9 glow=4 vis=true nodes_d=10 | mean=5.69 p50=5.53 p95=6.64 max=10.2
+BT >> wt pence t5
+BT CFG wt w=pence t=5 dmg=541 dps=67.6 glow=5 vis=true nodes_d=13 | mean=5.79 p50=5.65 p95=6.89 max=10.5
+BT >> wt pence t6
+BT CFG wt w=pence t=6 dmg=0 dps=0.0 glow=5 vis=true nodes_d=148 | mean=6.01 p50=5.65 p95=8.82 max=13.5
+BT >> wt topuz t1
+BT CFG wt w=topuz t=1 dmg=184 dps=23.0 glow=1 vis=true nodes_d=-131 | mean=5.75 p50=5.61 p95=6.96 max=12.7
+BT >> wt topuz t2
+BT CFG wt w=topuz t=2 dmg=267 dps=33.4 glow=2 vis=true nodes_d=543 | mean=5.83 p50=5.59 p95=7.05 max=24.0
+BT >> wt topuz t3
+BT CFG wt w=topuz t=3 dmg=267 dps=33.4 glow=3 vis=true nodes_d=19 | mean=5.77 p50=5.56 p95=7.08 max=11.7
+BT >> wt topuz t4
+BT CFG wt w=topuz t=4 dmg=299 dps=37.4 glow=4 vis=true nodes_d=10 | mean=5.85 p50=5.64 p95=7.19 max=19.1
+BT >> wt topuz t5
+BT CFG wt w=topuz t=5 dmg=422 dps=52.8 glow=5 vis=true nodes_d=8 | mean=6.05 p50=5.83 p95=8.04 max=11.6
+BT >> wt topuz t6
+BT CFG wt w=topuz t=6 dmg=752 dps=94.0 glow=5 vis=true nodes_d=12 | mean=5.83 p50=5.63 p95=6.89 max=12.5
+BT >> wt uzunkilic t1
+BT CFG wt w=uzunkilic t=1 dmg=190 dps=23.7 glow=1 vis=true nodes_d=-10 | mean=5.63 p50=5.48 p95=6.40 max=10.6
+BT >> wt uzunkilic t2
+BT CFG wt w=uzunkilic t=2 dmg=190 dps=23.8 glow=2 vis=true nodes_d=17 | mean=5.50 p50=5.35 p95=6.37 max=11.3
+BT >> wt uzunkilic t3
+BT CFG wt w=uzunkilic t=3 dmg=182 dps=22.8 glow=3 vis=true nodes_d=9 | mean=5.64 p50=5.44 p95=7.08 max=16.8
+BT >> wt uzunkilic t4
+BT CFG wt w=uzunkilic t=4 dmg=129 dps=16.2 glow=4 vis=true nodes_d=139 | mean=5.62 p50=5.39 p95=6.97 max=31.0
+BT >> wt uzunkilic t5
+BT CFG wt w=uzunkilic t=5 dmg=121 dps=15.1 glow=5 vis=true nodes_d=10 | mean=5.79 p50=5.57 p95=7.58 max=15.4
+BT >> wt uzunkilic t6
+BT CFG wt w=uzunkilic t=6 dmg=251 dps=31.3 glow=5 vis=true nodes_d=26 | mean=5.61 p50=5.46 p95=6.44 max=10.5
+BT >> wt gokkusagi t1
+BT CFG wt w=gokkusagi t=1 dmg=444 dps=55.4 glow=1 vis=true nodes_d=28 | mean=6.07 p50=5.78 p95=8.27 max=12.7
+BT >> wt gokkusagi t2
+BT CFG wt w=gokkusagi t=2 dmg=516 dps=64.5 glow=2 vis=true nodes_d=29 | mean=6.75 p50=6.34 p95=9.69 max=13.7
+BT >> wt gokkusagi t3
+BT CFG wt w=gokkusagi t=3 dmg=593 dps=74.1 glow=3 vis=true nodes_d=31 | mean=6.46 p50=6.02 p95=9.40 max=15.3
+BT >> wt gokkusagi t4
+BT CFG wt w=gokkusagi t=4 dmg=730 dps=91.3 glow=4 vis=true nodes_d=31 | mean=5.88 p50=5.72 p95=7.08 max=11.7
+BT >> wt gokkusagi t5
+BT CFG wt w=gokkusagi t=5 dmg=874 dps=109.2 glow=5 vis=true nodes_d=41 | mean=5.84 p50=5.67 p95=7.06 max=11.3
+BT >> wt gokkusagi t6
+BT CFG wt w=gokkusagi t=6 dmg=1425 dps=178.1 glow=5 vis=true nodes_d=580 | mean=5.94 p50=5.61 p95=7.04 max=26.2
+BT >> wt mizrak t1
+BT CFG wt w=mizrak t=1 dmg=159 dps=19.8 glow=1 vis=true nodes_d=7 | mean=5.71 p50=5.53 p95=6.61 max=9.8
+BT >> wt mizrak t2
+BT CFG wt w=mizrak t=2 dmg=224 dps=27.9 glow=2 vis=true nodes_d=-21 | mean=5.66 p50=5.54 p95=6.66 max=10.8
+BT >> wt mizrak t3
+BT CFG wt w=mizrak t=3 dmg=240 dps=30.0 glow=3 vis=true nodes_d=10 | mean=5.47 p50=5.29 p95=6.41 max=9.5
+BT >> wt mizrak t4
+BT CFG wt w=mizrak t=4 dmg=270 dps=33.8 glow=4 vis=true nodes_d=10 | mean=5.50 p50=5.29 p95=6.62 max=11.0
+BT >> wt mizrak t5
+BT CFG wt w=mizrak t=5 dmg=167 dps=20.8 glow=5 vis=true nodes_d=10 | mean=5.54 p50=5.33 p95=6.70 max=11.7
+BT >> wt mizrak t6
+BT CFG wt w=mizrak t=6 dmg=439 dps=54.9 glow=5 vis=true nodes_d=9 | mean=5.73 p50=5.48 p95=7.42 max=15.3
+BT >> wt kalkan t1
+BT CFG wt w=kalkan t=1 dmg=29 dps=3.6 glow=1 vis=true nodes_d=7 | mean=5.67 p50=5.41 p95=7.13 max=14.5
+BT >> wt kalkan t2
+BT CFG wt w=kalkan t=2 dmg=0 dps=0.0 glow=2 vis=true nodes_d=7 | mean=5.69 p50=5.53 p95=6.88 max=10.0
+BT >> wt kalkan t3
+BT CFG wt w=kalkan t=3 dmg=35 dps=4.3 glow=3 vis=true nodes_d=7 | mean=6.24 p50=6.00 p95=8.27 max=14.6
+BT >> wt kalkan t4
+BT CFG wt w=kalkan t=4 dmg=49 dps=6.1 glow=4 vis=true nodes_d=7 | mean=5.54 p50=5.34 p95=6.65 max=8.6
+BT >> wt kalkan t5
+BT CFG wt w=kalkan t=5 dmg=52 dps=6.5 glow=5 vis=true nodes_d=7 | mean=5.70 p50=5.51 p95=6.76 max=12.4
+BT >> wt kalkan t6
+BT CFG wt w=kalkan t=6 dmg=71 dps=8.9 glow=5 vis=true nodes_d=7 | mean=5.56 p50=5.40 p95=6.28 max=9.9
+BT >> wt yinyang t1
+BT CFG wt w=yinyang t=1 dmg=167 dps=20.8 glow=1 vis=true nodes_d=6 | mean=5.77 p50=5.56 p95=7.01 max=10.4
+BT >> wt yinyang t2
+BT CFG wt w=yinyang t=2 dmg=181 dps=22.6 glow=2 vis=true nodes_d=172 | mean=5.55 p50=5.37 p95=6.29 max=25.0
+BT >> wt yinyang t3
+BT CFG wt w=yinyang t=3 dmg=213 dps=26.6 glow=3 vis=true nodes_d=23 | mean=5.87 p50=5.64 p95=7.53 max=15.1
+BT >> wt yinyang t4
+BT CFG wt w=yinyang t=4 dmg=273 dps=34.1 glow=4 vis=true nodes_d=542 | mean=5.74 p50=5.46 p95=6.88 max=33.0
+BT >> wt yinyang t5
+BT CFG wt w=yinyang t=5 dmg=298 dps=37.2 glow=5 vis=true nodes_d=9 | mean=5.62 p50=5.47 p95=6.42 max=10.7
+BT >> wt yinyang t6
+BT CFG wt w=yinyang t=6 dmg=494 dps=61.8 glow=5 vis=true nodes_d=28 | mean=6.16 p50=6.03 p95=7.24 max=10.9
+BT DONE mode=wt

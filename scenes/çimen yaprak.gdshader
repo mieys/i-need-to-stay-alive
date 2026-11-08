@@ -1,6 +1,10 @@
 shader_type canvas_item;
 #include "res://shaders/harita_renk.gdshaderinc"
 #include "res://shaders/cimen_desen.gdshaderinc"
+#include "res://shaders/toprak_desen.gdshaderinc"
+// KIYI TOPRAĞI (madde 475): "Su ayrıntılar 2" bu malzemenin KOPYASINI alır (map_color_grade.gd _setup_coast_dirt, toprak_kiyi = true +
+// toprak değerleri Zemin Toprak malzemesinden): kıyı karolarının kumu toprakla aynı renkte (#967e5d) ama düz çiziliyordu.
+uniform bool toprak_kiyi = false;
 
 // ==================================================
 // ZEMİN ÇİMEN - "Canlı çayır" (Harita > Yer > "Zemin Çimen", "Su ayrıntılar 2" de aynı materyali paylaşır)
@@ -33,6 +37,10 @@ void fragment() {
 	vec4 tex = texture(TEXTURE, UV);
 	float maske = cimen_maske(tex.rgb);
 	vec3 c = cimen_desen(tex.rgb, floor(world_pos));
-	COLOR = vec4(mix(tex.rgb, c, maske * cim_efekt), tex.a);
+	vec3 rgb = mix(tex.rgb, c, maske * cim_efekt);
+	if (toprak_kiyi) {
+		rgb = mix(rgb, toprak_desen(tex.rgb, floor(world_pos)), toprak_maske(tex.rgb) * toprak_efekt);
+	}
+	COLOR = vec4(rgb, tex.a);
 	if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_d(COLOR.rgb, world_pos); } // harita + derin orman bölge renk ayarı (madde 181/359) - fragment()'in EN SONUNDA kalmalı
 }

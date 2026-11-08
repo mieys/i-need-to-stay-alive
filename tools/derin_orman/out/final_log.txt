@@ -1,6 +1,16 @@
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
 
+SCRIPT ERROR: Parse Error: Preload file "res://assets/fx/poison/zehir_damla_a.png" has no resource loaders (unrecognized file extension).
+   at: GDScript::reload (res://scripts/poison_drip_fx.gd:16)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "TEX" constant because the value doesn't have a set type.
+   at: GDScript::reload (res://scripts/poison_drip_fx.gd:16)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://scripts/staff_tip_fx.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://scripts/weapon.gd:0)
+ERROR: Failed to load script "res://scripts/weapon.gd" with error "Compilation failed".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
 SHOT genel 2x3 vis=(2560.0, 1440.0)
 WARNING: res://scenes/fx_oyku_heal.tscn:3 - ext_resource, invalid UID: uid://dh4h1d77x2n3p - using text path instead: res://scripts/fx_oyku_heal.gd
    at: load (scene/resources/resource_format_text.cpp:501)
@@ -40,19 +50,19 @@ WARNING: Camera2D overridden to physics process mode due to use of physics inter
        [0] opt_in (res://scripts/physics_interp.gd:34)
        [1] _ready (res://scripts/player.gd:1171)
        [2] _run (res://tools/derin_orman/final_capture.gd:106)
-SHOT kuzey_mahzen { "motes": 39, "zone_frac": 1.0, "by_kind": [39, 0, 0, 0], "gates_visible": 1 }
-SHOT kuzey_dev { "motes": 35, "zone_frac": 1.0, "by_kind": [35, 0, 0, 0], "gates_visible": 0 }
-SHOT kuzeybati_kuyu { "motes": 36, "zone_frac": 1.0, "by_kind": [14, 22, 0, 0], "gates_visible": 1 }
-SHOT kuzeybati_orman { "motes": 31, "zone_frac": 0.9375, "by_kind": [17, 14, 0, 0], "gates_visible": 1 }
+SHOT kuzey_mahzen { "motes": 12, "zone_frac": 0.0, "by_kind": [12, 0, 0, 0], "gates_visible": 1 }
+SHOT kuzey_dev { "motes": 0, "zone_frac": 0.0, "by_kind": [0, 0, 0, 0], "gates_visible": 0 }
+SHOT kuzeybati_kuyu { "motes": 31, "zone_frac": 0.0, "by_kind": [0, 31, 0, 0], "gates_visible": 1 }
+SHOT kuzeybati_orman { "motes": 24, "zone_frac": 0.0, "by_kind": [0, 24, 0, 0], "gates_visible": 1 }
 SHOT eski_bati { "motes": 0, "zone_frac": 0.0, "by_kind": [0, 0, 0, 0], "gates_visible": 0 }
-SHOT boynuzlu_kapi { "motes": 9, "zone_frac": 0.1875, "by_kind": [3, 0, 6, 0], "gates_visible": 1 }
+SHOT boynuzlu_kapi { "motes": 7, "zone_frac": 0.0, "by_kind": [0, 0, 7, 0], "gates_visible": 1 }
 SHOT eski_dogu { "motes": 0, "zone_frac": 0.0, "by_kind": [0, 0, 0, 0], "gates_visible": 0 }
 SHOT guney_agac { "motes": 18, "zone_frac": 0.5, "by_kind": [0, 0, 0, 18], "gates_visible": 0 }
 SHOT guney_kulube { "motes": 18, "zone_frac": 0.5, "by_kind": [0, 0, 0, 18], "gates_visible": 0 }
-SHOT guneybati_cayir { "motes": 16, "zone_frac": 0.4375, "by_kind": [0, 0, 0, 16], "gates_visible": 0 }
-SHOT guneybati_yol { "motes": 11, "zone_frac": 0.34375, "by_kind": [0, 0, 0, 11], "gates_visible": 0 }
-SHOT sinir_gb { "motes": 17, "zone_frac": 0.5, "by_kind": [0, 0, 0, 17], "gates_visible": 0 }
-SHOT sinir_maden { "motes": 9, "zone_frac": 0.25, "by_kind": [0, 0, 0, 9], "gates_visible": 0 }
-SHOT sinir_kb { "motes": 29, "zone_frac": 0.875, "by_kind": [29, 0, 0, 0], "gates_visible": 0 }
-SHOT sinir_kbg { "motes": 17, "zone_frac": 0.5, "by_kind": [17, 0, 0, 0], "gates_visible": 0 }
-SHOT sinir_kg { "motes": 18, "zone_frac": 0.5, "by_kind": [18, 0, 0, 0], "gates_visible": 0 }
+SHOT guneybati_cayir { "motes": 13, "zone_frac": 0.4375, "by_kind": [0, 0, 0, 13], "gates_visible": 0 }
+SHOT guneybati_yol { "motes": 12, "zone_frac": 0.34375, "by_kind": [0, 0, 0, 12], "gates_visible": 0 }
+SHOT sinir_gb { "motes": 18, "zone_frac": 0.5, "by_kind": [0, 0, 0, 18], "gates_visible": 0 }
+SHOT sinir_maden { "motes": 8, "zone_frac": 0.25, "by_kind": [0, 0, 0, 8], "gates_visible": 0 }
+SHOT sinir_kb { "motes": 0, "zone_frac": 0.0, "by_kind": [0, 0, 0, 0], "gates_visible": 0 }
+SHOT sinir_kbg { "motes": 0, "zone_frac": 0.0, "by_kind": [0, 0, 0, 0], "gates_visible": 0 }
+SHOT sinir_kg { "motes": 0, "zone_frac": 0.0, "by_kind": [0, 0, 0, 0], "gates_visible": 0 }

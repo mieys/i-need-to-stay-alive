@@ -1,0 +1,143 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
+
+MPC[viewer] basladi char=10 silahlar=["lightning_staff", "pence", "arcane"]
+WARNING: res://scenes/fx_oyku_heal.tscn:3 - ext_resource, invalid UID: uid://dh4h1d77x2n3p - using text path instead: res://scripts/fx_oyku_heal.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_buyucu_fastfire.tscn:3 - ext_resource, invalid UID: uid://cd84h1d77x2n5 - using text path instead: res://scripts/fx_buyucu_fastfire.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_shield_active.tscn:3 - ext_resource, invalid UID: uid://cd100h1d77x2n - using text path instead: res://scripts/fx_shield_active.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_paladin_cast.tscn:3 - ext_resource, invalid UID: uid://cd99h1d77x2n2 - using text path instead: res://scripts/fx_paladin_cast.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_assasin_stealth.tscn:3 - ext_resource, invalid UID: uid://cd94h1d77x2n6 - using text path instead: res://scripts/fx_assasin_stealth.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_talha_rage.tscn:3 - ext_resource, invalid UID: uid://d74h1d77x2n4q - using text path instead: res://scripts/fx_talha_rage.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_matthew_sacrifice.tscn:3 - ext_resource, invalid UID: uid://cd95h1d77x2n7 - using text path instead: res://scripts/fx_matthew_sacrifice.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_matthew_explosion.tscn:3 - ext_resource, invalid UID: uid://cd96h1d77x2n8 - using text path instead: res://scripts/fx_matthew_explosion.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://shaders/cloud_shadows_material.tres:3 - ext_resource, invalid UID: uid://fcyufq7kts1o - using text path instead: res://shaders/cloud_shadows.gdshader
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: Camera2D overridden to physics process mode due to use of physics interpolation.
+   at: _update_process_callback (scene/2d/camera_2d.cpp:88)
+   GDScript backtrace (most recent call first):
+       [0] opt_in (res://scripts/physics_interp.gd:34)
+       [1] _ready (res://scripts/player.gd:1171)
+[Yaratık sistemi] C++ EnemyWorld
+MPC[viewer] senaryo basliyor (oyuncu kuklasi: 2)
+MPC CNT t=0 players=3 enemy=27 enemy_fx=5 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=10 numbers=1 decal=3 drops=0 bars=5 pets=0 summons=0 draws=572 objs=11943 nodes=3323 fps=78
+MPC CNT t=1 players=3 enemy=37 enemy_fx=6 weapons_own=3 weapons_puppet=6 projectile=2 player_fx=17 numbers=1 decal=2 drops=3 bars=5 pets=0 summons=0 draws=587 objs=11187 nodes=3415 fps=96
+MPC CNT t=2 players=3 enemy=47 enemy_fx=5 weapons_own=3 weapons_puppet=6 projectile=0 player_fx=9 numbers=4 decal=3 drops=1 bars=3 pets=0 summons=0 draws=587 objs=10633 nodes=3415 fps=98
+MPC CNT t=3 players=3 enemy=44 enemy_fx=4 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=18 numbers=4 decal=5 drops=0 bars=3 pets=0 summons=0 draws=643 objs=12642 nodes=3445 fps=99
+MPC CNT t=4 players=3 enemy=47 enemy_fx=5 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=21 numbers=3 decal=8 drops=0 bars=3 pets=0 summons=0 draws=645 objs=12495 nodes=3467 fps=81
+MPC CNT t=5 players=3 enemy=56 enemy_fx=7 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=23 numbers=2 decal=6 drops=2 bars=3 pets=0 summons=0 draws=663 objs=12554 nodes=3484 fps=87
+MPC CNT t=6 players=3 enemy=70 enemy_fx=5 weapons_own=3 weapons_puppet=6 projectile=2 player_fx=18 numbers=3 decal=7 drops=0 bars=3 pets=0 summons=0 draws=616 objs=12077 nodes=3509 fps=86
+MPC CNT t=7 players=3 enemy=72 enemy_fx=7 weapons_own=3 weapons_puppet=6 projectile=2 player_fx=16 numbers=2 decal=9 drops=0 bars=3 pets=0 summons=0 draws=632 objs=10673 nodes=3561 fps=87
+MPC CNT t=8 players=3 enemy=74 enemy_fx=5 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=20 numbers=4 decal=13 drops=2 bars=3 pets=0 summons=0 draws=663 objs=13027 nodes=3627 fps=90
+MPC CNT t=9 players=3 enemy=73 enemy_fx=4 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=40 numbers=4 decal=14 drops=0 bars=3 pets=0 summons=0 draws=708 objs=14866 nodes=3669 fps=84
+MPC CNT t=10 players=3 enemy=71 enemy_fx=8 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=25 numbers=1 decal=12 drops=3 bars=3 pets=0 summons=0 draws=708 objs=14579 nodes=3637 fps=68
+MPC CNT t=11 players=3 enemy=72 enemy_fx=8 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=40 numbers=5 decal=16 drops=8 bars=3 pets=0 summons=0 draws=762 objs=17235 nodes=3735 fps=51
+MPC CNT t=12 players=3 enemy=68 enemy_fx=29 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=35 numbers=6 decal=12 drops=4 bars=3 pets=0 summons=0 draws=749 objs=16460 nodes=3753 fps=47
+MPC CNT t=13 players=3 enemy=66 enemy_fx=3 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=22 numbers=9 decal=13 drops=5 bars=3 pets=0 summons=0 draws=722 objs=17747 nodes=3669 fps=52
+MPC CNT t=14 players=3 enemy=63 enemy_fx=3 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=47 numbers=8 decal=7 drops=5 bars=3 pets=0 summons=0 draws=922 objs=18189 nodes=3885 fps=45
+MPC CNT t=15 players=3 enemy=62 enemy_fx=4 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=44 numbers=9 decal=8 drops=8 bars=3 pets=0 summons=0 draws=869 objs=18377 nodes=3856 fps=48
+MPC CNT t=16 players=3 enemy=63 enemy_fx=7 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=41 numbers=4 decal=6 drops=4 bars=3 pets=0 summons=0 draws=846 objs=17986 nodes=3821 fps=53
+MPC CNT t=17 players=3 enemy=66 enemy_fx=14 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=40 numbers=4 decal=5 drops=2 bars=3 pets=0 summons=0 draws=843 objs=18190 nodes=3813 fps=52
+MPC CNT t=18 players=3 enemy=65 enemy_fx=7 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=39 numbers=5 decal=4 drops=6 bars=3 pets=0 summons=0 draws=819 objs=17915 nodes=3800 fps=49
+MPC CNT t=19 players=3 enemy=65 enemy_fx=8 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=38 numbers=3 decal=3 drops=6 bars=3 pets=0 summons=0 draws=813 objs=17958 nodes=3819 fps=44
+MPC CNT t=20 players=3 enemy=61 enemy_fx=7 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=27 numbers=4 decal=1 drops=6 bars=3 pets=0 summons=0 draws=724 objs=17713 nodes=3672 fps=50
+MPC INV m0 enemy:enemy=52 enemy:worm_limb=8 player_fx:fx_enchant_sprite=8 hud:CanvasLayer=5 weapons_puppet:Sprite2D=5 enemy_fx:enemy_projectile=4 numbers:floating_text=4 player_fx:fx_buyucu_tornado=3 drops:gold_drop=3 drops:xp_orb=3 bars:overhead_bar=3 player_fx:mana_shield_fx=3 weapons_own:weapon=3 player_fx:fx_lich_flame_impact=2 players:remote_player=2 player_fx:fx_animation=2 player_fx:totem_attack=2 players:player=1 hud:sun_clouds=1 weapons_puppet:AnimatedSprite2D=1 hud:atmosphere_overlay=1 hud:vision_fog=1 hud:hud=1 decal:ground_blood=1 hud:downed_spectate=1 projectile:fx_lightning_beam=1 enemy:underground_boss=1 enemy_fx:creature_depth=1 enemy_fx:enemy_world_bridge=1 enemy_fx:enemy_bone=1 player_fx:water_fx=1 player_fx:fx_melek_ascend=1 player_fx:melek_halo_fx=1 player_fx:dome_weapon_ring=1 player_fx:totem_shield=1 player_fx:fx_buyucu_sheet=1 player_fx:fx_animation_sequence=1
+MPC ABL m0 ok
+MPC CNT t=21 players=3 enemy=62 enemy_fx=9 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=44 numbers=10 decal=1 drops=6 bars=3 pets=0 summons=0 draws=532 objs=12666 nodes=3812 fps=11
+MPC CNT t=22 players=3 enemy=51 enemy_fx=41 weapons_own=3 weapons_puppet=6 projectile=2 player_fx=26 numbers=8 decal=0 drops=6 bars=3 pets=0 summons=0 draws=722 objs=17498 nodes=3847 fps=11
+MPC CNT t=23 players=3 enemy=40 enemy_fx=38 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=20 numbers=0 decal=0 drops=6 bars=3 pets=0 summons=0 draws=673 objs=17033 nodes=3777 fps=29
+MPC CNT t=24 players=3 enemy=46 enemy_fx=35 weapons_own=3 weapons_puppet=5 projectile=1 player_fx=18 numbers=2 decal=0 drops=6 bars=3 pets=0 summons=0 draws=596 objs=15517 nodes=3720 fps=69
+MPC CNT t=25 players=3 enemy=54 enemy_fx=39 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=18 numbers=4 decal=0 drops=6 bars=3 pets=0 summons=0 draws=667 objs=17363 nodes=3745 fps=64
+MPC CNT t=26 players=3 enemy=58 enemy_fx=34 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=15 numbers=4 decal=0 drops=6 bars=3 pets=0 summons=0 draws=668 objs=17563 nodes=3703 fps=55
+MPC CNT t=27 players=2 enemy=51 enemy_fx=30 weapons_own=3 weapons_puppet=3 projectile=1 player_fx=21 numbers=1 decal=1 drops=6 bars=2 pets=0 summons=0 draws=684 objs=17279 nodes=3701 fps=64
+MPC CNT t=28 players=2 enemy=41 enemy_fx=22 weapons_own=3 weapons_puppet=3 projectile=1 player_fx=22 numbers=4 decal=0 drops=5 bars=2 pets=0 summons=0 draws=681 objs=17636 nodes=3637 fps=45
+MPC CNT t=29 players=3 enemy=40 enemy_fx=26 weapons_own=3 weapons_puppet=6 projectile=2 player_fx=17 numbers=0 decal=0 drops=4 bars=3 pets=0 summons=0 draws=651 objs=17421 nodes=3664 fps=50
+MPC CNT t=30 players=3 enemy=63 enemy_fx=32 weapons_own=3 weapons_puppet=5 projectile=1 player_fx=23 numbers=2 decal=1 drops=5 bars=3 pets=0 summons=0 draws=645 objs=15619 nodes=3717 fps=50
+MPC CNT t=31 players=3 enemy=70 enemy_fx=41 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=19 numbers=4 decal=0 drops=5 bars=3 pets=0 summons=0 draws=689 objs=17313 nodes=3766 fps=62
+MPC CNT t=32 players=3 enemy=68 enemy_fx=41 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=22 numbers=7 decal=0 drops=5 bars=3 pets=0 summons=0 draws=681 objs=15892 nodes=3803 fps=68
+MPC INV m1 enemy:enemy=59 enemy_fx:fx_enemy_ability=35 enemy:worm_limb=8 numbers:floating_text=7 weapons_puppet:Sprite2D=5 hud:CanvasLayer=5 player_fx:fx_enchant_sprite=4 drops:xp_orb=3 bars:overhead_bar=3 weapons_own:weapon=3 player_fx:mana_shield_fx=3 enemy_fx:enemy_bone=3 drops:gold_drop=2 players:remote_player=2 player_fx:fx_lich_flame_impact=2 player_fx:fx_lightning_chain=2 player_fx:totem_attack=2 player_fx:melek_halo_fx=2 player_fx:fx_korsan_explosion=1 weapons_puppet:AnimatedSprite2D=1 player_fx:totem_shield=1 player_fx:dome_weapon_ring=1 players:player=1 hud:sun_clouds=1 hud:atmosphere_overlay=1 hud:vision_fog=1 hud:hud=1 player_fx:fx_melek_heal_sparkle=1 hud:downed_spectate=1 projectile:fx_lightning_beam=1 enemy:underground_boss=1 player_fx:gun_reload_fx=1 enemy_fx:creature_depth=1 enemy_fx:enemy_world_bridge=1 enemy_fx:enemy_projectile=1 player_fx:fx_oneshot_sprite=1 player_fx:water_fx=1
+MPC ABL m1 ok
+MPC CNT t=33 players=3 enemy=68 enemy_fx=42 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=30 numbers=13 decal=0 drops=5 bars=4 pets=0 summons=0 draws=491 objs=10918 nodes=3777 fps=10
+MPC CNT t=34 players=3 enemy=67 enemy_fx=9 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=23 numbers=11 decal=1 drops=5 bars=3 pets=0 summons=0 draws=685 objs=15740 nodes=3644 fps=10
+MPC CNT t=35 players=3 enemy=68 enemy_fx=7 weapons_own=3 weapons_puppet=4 projectile=1 player_fx=27 numbers=3 decal=0 drops=5 bars=3 pets=0 summons=0 draws=632 objs=15298 nodes=3652 fps=23
+MPC CNT t=36 players=2 enemy=64 enemy_fx=7 weapons_own=3 weapons_puppet=3 projectile=1 player_fx=27 numbers=2 decal=0 drops=6 bars=2 pets=0 summons=0 draws=688 objs=19288 nodes=3664 fps=13
+MPC CNT t=37 players=3 enemy=66 enemy_fx=7 weapons_own=3 weapons_puppet=4 projectile=0 player_fx=29 numbers=0 decal=1 drops=5 bars=3 pets=0 summons=0 draws=731 objs=17419 nodes=3637 fps=17
+MPC CNT t=38 players=3 enemy=68 enemy_fx=9 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=33 numbers=5 decal=1 drops=5 bars=3 pets=0 summons=0 draws=741 objs=16503 nodes=3601 fps=15
+MPC CNT t=39 players=3 enemy=68 enemy_fx=5 weapons_own=3 weapons_puppet=6 projectile=2 player_fx=22 numbers=6 decal=0 drops=5 bars=3 pets=0 summons=0 draws=734 objs=17715 nodes=3611 fps=17
+MPC CNT t=40 players=3 enemy=65 enemy_fx=5 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=28 numbers=7 decal=1 drops=5 bars=3 pets=0 summons=0 draws=696 objs=17915 nodes=3628 fps=18
+MPC CNT t=41 players=3 enemy=65 enemy_fx=6 weapons_own=3 weapons_puppet=4 projectile=1 player_fx=26 numbers=2 decal=1 drops=4 bars=3 pets=0 summons=0 draws=622 objs=15773 nodes=3644 fps=17
+MPC CNT t=42 players=2 enemy=64 enemy_fx=6 weapons_own=3 weapons_puppet=3 projectile=1 player_fx=29 numbers=2 decal=1 drops=5 bars=2 pets=0 summons=0 draws=686 objs=19777 nodes=3670 fps=18
+MPC CNT t=43 players=3 enemy=69 enemy_fx=8 weapons_own=3 weapons_puppet=4 projectile=1 player_fx=31 numbers=7 decal=0 drops=5 bars=3 pets=0 summons=0 draws=733 objs=17856 nodes=3730 fps=20
+MPC CNT t=44 players=3 enemy=69 enemy_fx=43 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=33 numbers=2 decal=0 drops=5 bars=3 pets=0 summons=0 draws=728 objs=17679 nodes=3749 fps=19
+MPC CNT t=45 players=3 enemy=57 enemy_fx=6 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=29 numbers=3 decal=0 drops=5 bars=3 pets=0 summons=0 draws=712 objs=17276 nodes=3669 fps=18
+MPC CNT t=46 players=3 enemy=53 enemy_fx=3 weapons_own=3 weapons_puppet=6 projectile=0 player_fx=18 numbers=0 decal=0 drops=5 bars=3 pets=0 summons=0 draws=668 objs=15811 nodes=3610 fps=43
+MPC INV m2 enemy:enemy=46 enemy:worm_limb=6 weapons_puppet:Sprite2D=5 hud:CanvasLayer=5 player_fx:fx_enchant_sprite=5 drops:xp_orb=3 player_fx:mana_shield_fx=3 bars:overhead_bar=3 weapons_own:weapon=3 drops:gold_drop=2 player_fx:melek_halo_fx=2 players:remote_player=2 weapons_puppet:AnimatedSprite2D=1 players:player=1 hud:sun_clouds=1 hud:atmosphere_overlay=1 hud:vision_fog=1 hud:hud=1 player_fx:fx_animation_sequence=1 hud:downed_spectate=1 enemy:underground_boss=1 player_fx:totem_attack=1 player_fx:totem_shield=1 enemy_fx:creature_depth=1 enemy_fx:enemy_world_bridge=1 enemy_fx:enemy_projectile=1 player_fx:water_fx=1 player_fx:fx_mage_swap=1 player_fx:gun_reload_fx=1 player_fx:fx_melek_ascend=1 player_fx:dome_weapon_ring=1
+MPC ABL m2 ok
+MPC CNT t=47 players=3 enemy=48 enemy_fx=4 weapons_own=3 weapons_puppet=6 projectile=0 player_fx=21 numbers=3 decal=0 drops=4 bars=4 pets=0 summons=0 draws=673 objs=15963 nodes=3615 fps=61
+MPC CNT t=48 players=3 enemy=48 enemy_fx=4 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=17 numbers=1 decal=0 drops=5 bars=4 pets=0 summons=0 draws=683 objs=15757 nodes=3590 fps=16
+MPC CNT t=49 players=3 enemy=48 enemy_fx=3 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=18 numbers=1 decal=0 drops=5 bars=3 pets=0 summons=0 draws=617 objs=15855 nodes=3545 fps=61
+MPC CNT t=50 players=3 enemy=49 enemy_fx=4 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=18 numbers=1 decal=1 drops=5 bars=3 pets=0 summons=0 draws=604 objs=13551 nodes=3469 fps=69
+MPC CNT t=51 players=3 enemy=55 enemy_fx=8 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=27 numbers=6 decal=0 drops=5 bars=3 pets=0 summons=0 draws=629 objs=13776 nodes=3543 fps=79
+MPC CNT t=52 players=3 enemy=59 enemy_fx=7 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=19 numbers=3 decal=0 drops=5 bars=3 pets=0 summons=0 draws=661 objs=15617 nodes=3502 fps=76
+MPC CNT t=53 players=3 enemy=63 enemy_fx=8 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=18 numbers=4 decal=0 drops=5 bars=3 pets=0 summons=0 draws=694 objs=16117 nodes=3528 fps=71
+MPC CNT t=54 players=2 enemy=55 enemy_fx=7 weapons_own=3 weapons_puppet=3 projectile=1 player_fx=12 numbers=3 decal=0 drops=5 bars=2 pets=0 summons=0 draws=645 objs=15371 nodes=3530 fps=69
+MPC CNT t=55 players=3 enemy=62 enemy_fx=8 weapons_own=3 weapons_puppet=5 projectile=1 player_fx=16 numbers=4 decal=0 drops=5 bars=3 pets=0 summons=0 draws=683 objs=16116 nodes=3538 fps=80
+MPC CNT t=56 players=3 enemy=71 enemy_fx=11 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=20 numbers=4 decal=0 drops=5 bars=3 pets=0 summons=0 draws=741 objs=16313 nodes=3656 fps=69
+MPC CNT t=57 players=3 enemy=71 enemy_fx=6 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=19 numbers=3 decal=0 drops=5 bars=3 pets=0 summons=0 draws=749 objs=16537 nodes=3647 fps=68
+MPC CNT t=58 players=3 enemy=70 enemy_fx=4 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=18 numbers=3 decal=1 drops=5 bars=3 pets=0 summons=0 draws=747 objs=16195 nodes=3666 fps=65
+MPC INV m3 enemy:enemy=61 enemy:worm_limb=8 weapons_puppet:Sprite2D=5 hud:CanvasLayer=5 drops:xp_orb=3 bars:overhead_bar=3 weapons_own:weapon=3 numbers:floating_text=3 player_fx:mana_shield_fx=3 drops:gold_drop=2 players:remote_player=2 player_fx:fx_enchant_sprite=2 enemy_fx:enemy_projectile=2 player_fx:fx_melek_heal_sparkle=2 player_fx:fx_animation=2 player_fx:fx_animation_sequence=2 enemy_fx:enemy_world_bridge=1 weapons_puppet:AnimatedSprite2D=1 enemy_fx:creature_depth=1 player_fx:fx_korsan_explosion=1 players:player=1 hud:sun_clouds=1 hud:atmosphere_overlay=1 hud:vision_fog=1 hud:hud=1 player_fx:totem_attack=1 hud:downed_spectate=1 enemy:underground_boss=1 player_fx:totem_shield=1 player_fx:dome_weapon_ring=1 projectile:fx_lightning_beam=1 decal:fx_hit_blood=1 player_fx:water_fx=1 player_fx:melek_halo_fx=1 player_fx:melek_bond_fx=1
+MPC ABL m3 ok
+MPC CNT t=59 players=3 enemy=70 enemy_fx=10 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=22 numbers=15 decal=1 drops=5 bars=3 pets=0 summons=0 draws=540 objs=12764 nodes=3794 fps=67
+MPC CNT t=60 players=3 enemy=70 enemy_fx=9 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=17 numbers=19 decal=0 drops=5 bars=3 pets=0 summons=0 draws=750 objs=16807 nodes=3806 fps=13
+MPC CNT t=61 players=3 enemy=70 enemy_fx=7 weapons_own=3 weapons_puppet=6 projectile=2 player_fx=23 numbers=5 decal=0 drops=5 bars=3 pets=0 summons=0 draws=750 objs=16200 nodes=3694 fps=49
+MPC CNT t=62 players=3 enemy=72 enemy_fx=5 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=26 numbers=5 decal=1 drops=5 bars=3 pets=0 summons=0 draws=763 objs=16043 nodes=3678 fps=67
+MPC CNT t=63 players=3 enemy=70 enemy_fx=4 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=24 numbers=6 decal=1 drops=5 bars=3 pets=0 summons=0 draws=752 objs=16453 nodes=3643 fps=69
+MPC CNT t=64 players=3 enemy=70 enemy_fx=6 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=24 numbers=6 decal=0 drops=5 bars=3 pets=0 summons=0 draws=711 objs=16831 nodes=3699 fps=62
+MPC CNT t=65 players=3 enemy=67 enemy_fx=7 weapons_own=3 weapons_puppet=6 projectile=2 player_fx=26 numbers=2 decal=1 drops=3 bars=3 pets=0 summons=0 draws=708 objs=16241 nodes=3707 fps=64
+MPC CNT t=66 players=3 enemy=67 enemy_fx=5 weapons_own=3 weapons_puppet=4 projectile=1 player_fx=18 numbers=6 decal=5 drops=5 bars=3 pets=0 summons=0 draws=913 objs=17886 nodes=3868 fps=62
+MPC CNT t=67 players=3 enemy=68 enemy_fx=49 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=21 numbers=5 decal=1 drops=5 bars=3 pets=0 summons=0 draws=831 objs=19441 nodes=3913 fps=58
+MPC CNT t=68 players=3 enemy=70 enemy_fx=48 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=24 numbers=7 decal=0 drops=5 bars=3 pets=0 summons=0 draws=855 objs=19499 nodes=3940 fps=60
+MPC CNT t=69 players=3 enemy=69 enemy_fx=48 weapons_own=3 weapons_puppet=6 projectile=1 player_fx=22 numbers=4 decal=0 drops=5 bars=3 pets=0 summons=0 draws=842 objs=18661 nodes=3924 fps=54
+MPC FLICK n=172 lum_mean=109.3 lum_std=1.15 lum_jump_mean=0.78 lum_jump_p95=2.18 diff_mean=13.69 diff_hi_frac=0.1154 sat_frac=0.0401
+MPC[viewer] bitti

@@ -1,8 +1,9 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## REKORLAR + BAŞARIMLAR ekranı - "A - Ateş Işığı" (2026-10-17, madde 250; prototip tools/proto_20261017/rekor_proto.gd, madde 249).
 ## Ayarlar ekranının (settings_screen.gd, madde 234) dili: kutu yok, solda büyük başlık + kategori sütunu (EN İYİLER / BAŞARIMLAR /
-## [BALANS VERİSİ] / GERİ, seçilide yanan mum), sağda panelsiz satırlar (altın bölüm başlığı + ince ayraç), uzun liste kayar.
+## [BALANS VERİSİ] / GERİ, seçilide altın yazı), sağda panelsiz satırlar (altın bölüm başlığı + ince ayraç), uzun liste kayar.
 ## Ana menü açar (main_menu.gd _on_records_pressed, ayarlarla AYNI desen): menünün tabelası/öğeleri gizlenir, bu ekran tasarım boyutunda
 ## (1920x1080) sola-üste yaslı - telefonda RootFitter ana menüyü ölçekler (eskiden CanvasLayer'dı, mobile_ui FIT_LAYER_SCRIPTS'teydi).
 ## Veri tek yerde: run_records.gd (rekorlar, açılmış başarımlar + tarihleri, son koşuda kırılan rekorlar), katalog achievements.gd. Sadece okur.
@@ -11,6 +12,7 @@ extends Control
 
 signal closed
 
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
 const FM := preload("res://scripts/fire_menu_kit.gd")
 const DK := preload("res://scripts/menu_dark_kit.gd")
 const UiAnim := preload("res://scripts/ui_anim.gd")
@@ -87,10 +89,11 @@ class Pic extends Control:
 ## Yuvarlak başarım madalyası (3 px hücreli disk + desen); kilitli = koyu silüet + kilit rozeti.
 class Medal extends Control:
 	const CELL := 3.0
-	const OUTLINE := Color("#0d0906")
-	const DARK_FILL := Color("#1a140f")
-	const DARK_RIM := Color("#45372a")
-	const LOCK_COL := Color("#ad9b80")
+	const _HT := preload("res://scripts/hud_theme.gd")
+	const OUTLINE := _HT.DEEP
+	const DARK_FILL := _HT.WIN_INSET
+	const DARK_RIM := _HT.WIN_LINE
+	const LOCK_COL := _HT.DIM
 	var rows: Array = []
 	var metal: Array = []
 	var locked := false
@@ -210,7 +213,7 @@ func _ready() -> void:
 	band.col = Color(0.05, 0.035, 0.025, band_alpha)
 	add_child(band)
 	var runs: int = int(_data["runs"])
-	var sub: String = "Henüz koşu yok" if runs <= 0 else "%d koşu  ·  %s oyun" % [runs, _hours(float(_data["total_time"]))]
+	var sub: String = "Henüz koşu yok" if runs <= 0 else Loc.t("%d koşu  ·  %s oyun") % [runs, _hours(float(_data["total_time"]))]
 	var logo := FM.title_block("REKORLAR", FM.lbl(sub, DK.FS_BODY, FM.C_TAG))
 	add_child(logo)
 	logo.position = FM.TITLE_POS
@@ -219,7 +222,7 @@ func _ready() -> void:
 	var unlocked: int = (_data["achievements"] as Dictionary).size()
 	var specs: Array = [
 		["EN İYİLER", "Tek koşu rekorları ve toplamlar", FM.tex_icon(load("res://assets/items/kralin_kadehi.png"))],
-		["BAŞARIMLAR", "%d / %d açıldı" % [unlocked, AchievementsScript.DEFS.size()], FM.tex_icon(load("res://assets/items/lutuf_madalyonu.png"))],
+		["BAŞARIMLAR", Loc.t("%d / %d açıldı") % [unlocked, AchievementsScript.DEFS.size()], FM.tex_icon(load("res://assets/items/lutuf_madalyonu.png"))],
 	]
 	for i in specs.size():
 		var sp: Array = specs[i]
@@ -275,7 +278,7 @@ func _ready() -> void:
 	var hv := DK.v(10)
 	hv.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hv.add_child(FM.hint([["W/S", "kaydır"], ["Q/E", "bölüm"]]))
-	hv.add_child(FM.hint([["ESC", "geri"]]))
+	hv.add_child(FM.hint([["ESC", tr("geri")]]))
 	add_child(hv)
 	hv.position = Vector2(64, 952) ## sol altta iki satır (ayarlar ekranıyla aynı yer)
 	_set_category(Cat.REKOR, false)
@@ -311,7 +314,7 @@ static func _hours(sec: float) -> String:
 	var h: int = t / 3600
 	@warning_ignore("integer_division")
 	var m: int = (t % 3600) / 60
-	return "%d sa %02d dk" % [h, m] if h > 0 else "%d dk" % m
+	return Loc.t("%d sa %02d dk") % [h, m] if h > 0 else Loc.t("%d dk") % m
 
 
 static func _tier_txt(n: int) -> String:
@@ -359,7 +362,7 @@ func _ach_count(d: Dictionary) -> String:
 		"tier":
 			return "%s / %s" % [_tier_txt(int(cur)), _tier_txt(int(d["min"]))]
 		"time":
-			return "%d / %d dk" % [int(cur / 60.0), int(float(d["min"]) / 60.0)]
+			return Loc.t("%d / %d dk") % [int(cur / 60.0), int(float(d["min"]) / 60.0)]
 	return "%s / %s" % [_num(int(cur)), _num(int(d["min"]))]
 
 
@@ -478,14 +481,14 @@ func _value(t: String, gold: bool = false) -> Label:
 
 func _new_chip() -> Control:
 	var p := PanelContainer.new()
-	var s := DK.sb(FM.C_GOLD, Color("#6a4416"), 2, 4)
+	var s := DK.sb(FM.C_GOLD, HT.ACCENT_DK, 2, 4)
 	s.content_margin_left = 8
 	s.content_margin_right = 8
 	s.content_margin_top = 0
 	s.content_margin_bottom = 0
 	p.add_theme_stylebox_override("panel", s)
 	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	p.add_child(DK.lbl("YENİ", DK.FS_LABEL, Color("#24160a"), HORIZONTAL_ALIGNMENT_CENTER))
+	p.add_child(DK.lbl("YENİ", DK.FS_LABEL, HT.ACCENT_TEXT, HORIZONTAL_ALIGNMENT_CENTER))
 	return p
 
 
@@ -574,7 +577,7 @@ func _build_achievements() -> void:
 		var tb: int = int(unlocked[b["id"]])
 		return ta > tb if ta != tb else int(order[a["id"]]) < int(order[b["id"]]))
 	if not locked.is_empty():
-		_section("YAKINDA", "%d kilitli" % locked.size())
+		_section("YAKINDA", Loc.t("%d kilitli") % locked.size())
 		for d: Dictionary in locked:
 			_add_row(str(d["id"]), _medal(d), str(d["name"]), str(d["desc"]), _progress(d, 200))
 	if not done.is_empty():
@@ -757,7 +760,7 @@ func _ph_records_page() -> Control:
 		v.add_child(row)
 	v.add_child(DK.sp(0, 0, false, true))
 	var runs: int = int(_data["runs"])
-	var foot: String = "Henüz koşu yok" if runs <= 0 else "Toplam %d koşu, %d zafer, %s öldürme, %s oyun" % [runs, int(_data["victories"]),
+	var foot: String = "Henüz koşu yok" if runs <= 0 else Loc.t("Toplam %d koşu, %d zafer, %s öldürme, %s oyun") % [runs, int(_data["victories"]),
 			_num(int(_data["total_kills"])), _hours(float(_data["total_time"]))]
 	v.add_child(PK.lbl(foot, PK.FS_SMALL, DK.C_DIM))
 	return v
@@ -770,7 +773,7 @@ func _ph_achievements_page() -> Control:
 	var t := PK.lbl("BAŞARIMLAR", PK.FS_TITLE, DK.C_ACCENT)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
-	head.add_child(PK.lbl("%d / %d açıldı" % [unlocked.size(), AchievementsScript.DEFS.size()], PK.FS_SMALL, DK.C_DIM))
+	head.add_child(PK.lbl(Loc.t("%d / %d açıldı") % [unlocked.size(), AchievementsScript.DEFS.size()], PK.FS_SMALL, DK.C_DIM))
 	v.add_child(head)
 	var lst: Array = PK.scroll_list(12)
 	v.add_child(lst[0])

@@ -1,4 +1,5 @@
 extends Button
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 const GOLD_PER_TICK := {"mine": 5, "gold_collector": 1}
 const DISPLAY_NAME := {"mine": "MADEN", "gold_collector": "ALTIN TOPL."}
@@ -111,21 +112,21 @@ func refresh(level: int, max_level: int, cost: int, fill_progress: float, can_af
 		duration = fill_base / sqrt(float(level))
 	
 	duration = round(duration * 10.0) / 10.0
-	var income_str: String = "%s saniyede +%d Altın" % [str(duration), gold_per_tick]
+	var income_str: String = Loc.t("%s saniyede +%d Altın") % [str(duration), gold_per_tick]
 
 	if level >= max_level:
-		_level_label.text = "Seviye %d/%d" % [level, max_level]
+		_level_label.text = Loc.t("Seviye %d/%d") % [level, max_level]
 		_cost_label.text = "MAX"
 		_fill_bar.visible = false
 		disabled = true
-		tooltip_text = "%s\nSeviye: %d/%d (Son Seviye)\nGelir: %s" % [title_str, level, max_level, income_str]
+		tooltip_text = Loc.t("%s\nSeviye: %d/%d (Son Seviye)\nGelir: %s") % [title_str, level, max_level, income_str]
 	else:
-		_level_label.text = "Seviye %d/%d" % [level, max_level]
-		_cost_label.text = "%d Altın" % cost
+		_level_label.text = Loc.t("Seviye %d/%d") % [level, max_level]
+		_cost_label.text = Loc.t("%d Altın") % cost
 		_fill_bar.visible = level > 0
 		if _fill_bar.visible:
 			_fill_bar.progress = fill_progress
 			_fill_bar.queue_redraw()
 		disabled = not can_afford
-		var cost_str: String = "%d Altın" % cost
-		tooltip_text = "%s\nSeviye: %d/%d\nGelir: %s\nYükseltme Maliyeti: %s" % [title_str, level, max_level, income_str, cost_str]
+		var cost_str: String = Loc.t("%d Altın") % cost
+		tooltip_text = Loc.t("%s\nSeviye: %d/%d\nGelir: %s\nYükseltme Maliyeti: %s") % [title_str, level, max_level, income_str, cost_str]

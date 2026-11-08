@@ -30,6 +30,12 @@ const ANCHOR := Vector2(0.0, -3.5)
 const ART_SIZE := 48.0
 const GRIP_PX := Vector2(12.0, 35.0)
 const HEAD_REACH_PX := 31.851
+## Madde 402 (2026-11-06): topuz yine ESKİ ikonunda (250x250, yatay: sap solda, baş sağda, ileri açı ~-1,3). 48'lik oranla ölçeklemek
+## tutma noktasını sapın ~56 doku px altına koyuyordu -> dokuya özel tutma noktası + baş uzaklığı (doku px; ölçüm: sap y 117-138
+## x 18-150, baş merkezi ~(192, 126)). Burada olmayan doku ART_SIZE oranıyla ölçeklenir (Zanaatkâr düzeni).
+const TEX_GRIPS := {
+	"res://assets/weapons/topuz/icon.png": {"grip": Vector2(45.0, 128.0), "reach": 147.0},
+}
 
 ## [süre (sn), baş noktası (çerçeve) ya da null = önceki tutma noktası, baş açısı (derece), boy ölçeği, en ölçeği, geçiş]
 ## Boy/en topuzun KENDİ ekseninde (ezilme: boyu kısalır, eni genişler).
@@ -97,6 +103,16 @@ static func _apply(ctx: Dictionary, grip: Vector2, ang: float, sl: float, sw: fl
 	icon.global_transform = Transform2D(x_axis, y_axis, grip + x_axis * off.x + y_axis * off.y)
 
 
+## Dokunun tutma noktası: "off" = doku merkezi - tutma noktası, "reach" = tutma noktası -> baş merkezi (ikisi de doku px).
+static func grip_info(icon: Node2D) -> Dictionary:
+	var tex: Texture2D = (icon as Sprite2D).texture if icon is Sprite2D else null
+	if tex != null and TEX_GRIPS.has(tex.resource_path):
+		var tg: Dictionary = TEX_GRIPS[tex.resource_path]
+		return {"off": tex.get_size() * 0.5 - (tg["grip"] as Vector2), "reach": float(tg["reach"])}
+	var art: float = tex.get_width() / ART_SIZE if tex != null else 1.0 ## farklı boyutlu dokuda sanat px -> doku px
+	return {"off": (Vector2(ART_SIZE, ART_SIZE) * 0.5 - GRIP_PX) * art, "reach": HEAD_REACH_PX * art}
+
+
 ## İkonun şu anki tutma noktası (dünya) - önceki vuruş yarıda kesildiyse oradan devam eder.
 static func grip_of(icon: Node2D, off: Vector2) -> Vector2:
 	return icon.global_transform * (-off)
@@ -111,12 +127,9 @@ static func play(host: Node, icon: Node2D, plan: Dictionary, forward: float, res
 		base_scale: Vector2, speed: float, crit: bool, fx_parent: Node, hold: float = 0.0) -> Tween:
 	var sp: float = maxf(0.01, speed)
 	var parent_scale: float = absf((icon.get_parent() as Node2D).global_scale.x) if icon.get_parent() is Node2D else 1.0
-	var art: float = 1.0
-	if icon is Sprite2D and (icon as Sprite2D).texture:
-		art = (icon as Sprite2D).texture.get_width() / ART_SIZE ## eski/farklı boyutlu dokuda sanat px -> doku px
-	var ctx: Dictionary = {"icon": icon, "forward": forward, "texel": absf(base_scale.x) * parent_scale,
-		"off": (Vector2(ART_SIZE, ART_SIZE) * 0.5 - GRIP_PX) * art}
-	var reach: float = HEAD_REACH_PX * art * float(ctx["texel"])
+	var g: Dictionary = grip_info(icon)
+	var ctx: Dictionary = {"icon": icon, "forward": forward, "texel": absf(base_scale.x) * parent_scale, "off": g["off"]}
+	var reach: float = float(g["reach"]) * float(ctx["texel"])
 	var tw: Tween = host.create_tween()
 	var prev_g: Vector2 = grip_of(icon, ctx["off"])
 	var prev_a: float = icon.global_rotation + forward

@@ -29,6 +29,8 @@ var _panel: Control = null
 var _gold: int = 0
 var _t: float = 0.0
 var _released: bool = false
+var _compact: bool = false ## madde 404: küçük levha (Main'in sağ sütununda)
+const COMPACT_HOLD := 3.0
 
 
 ## Pencereyi açar. Başlıktan önce çağıran (main.gd) etiketi verir.
@@ -45,8 +47,23 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_open.append(self)
 	_gold = GoldRewardFx.held_amount(&"mission")
+	if _build_compact():
+		return
 	_build()
 	UiAnim.window_in(self)
+
+
+## Madde 404 (bildirimler "çok dikkat çekiyor"): küçük levhada pencere yok - tek satırlık levha (✓ <görev> TAMAMLANDI + altın +
+## parçacık) Main'in sağ sütun bildirimlerine katılır (yığma/solma orada, katman 40); bu düğüm yalnız altını zamanında bırakır.
+func _build_compact() -> bool:
+	var main: Node = get_parent()
+	if not GameNotice.compact or main == null or not main.has_method("_present_notice"):
+		return false
+	_compact = true
+	var shards: int = int((load("res://scripts/world_event_manager.gd") as GDScript).get_script_constant_map().get("MISSION_SHARD_REWARD", 5))
+	_panel = GameNotice.complete(mission_label, _gold, shards, COMPACT_HOLD)
+	main.call("_present_notice", _panel, COMPACT_HOLD, false, LAYER)
+	return true
 
 
 func _exit_tree() -> void:
@@ -88,6 +105,14 @@ func _build() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	if _compact:
+		if _t >= RELEASE_AT:
+			if not _released:
+				_released = true
+				if _gold > 0:
+					_release_gold()
+			queue_free() ## levhanın kendisi Main'in bildirim katmanında, onunla söner
+		return
 	var pop: float = clampf(_t / POP_TIME, 0.0, 1.0)
 	var back: float = 1.0 + 2.70158 * pow(pop - 1.0, 3.0) + 1.70158 * pow(pop - 1.0, 2.0) ## easeOutBack
 	_panel.scale = Vector2.ONE * lerpf(0.85, 1.0, back)

@@ -5,6 +5,7 @@ extends RefCounted
 ## lobby_menu.gd'nin içindeydi.
 
 const WeaponCatalog := preload("res://scripts/weapon_catalog.gd")
+const PetCatalog := preload("res://scripts/pet_catalog.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 const PreviewScript: GDScript = preload("res://scripts/menu_character_preview.gd")
 
@@ -107,6 +108,9 @@ static func make_player_row(pinfo: Dictionary, opts: Dictionary) -> Control:
 	var weapon_key: String = str(pinfo.get("weapon", ""))
 	if WeaponCatalog.is_valid(weapon_key):
 		bottom.add_child(_loadout_icon(WeaponCatalog.icon(weapon_key), icon_px, "Silah: " + WeaponCatalog.display_name(weapon_key)))
+	var pet_key: String = str(pinfo.get("pet", ""))
+	if PetCatalog.is_valid(pet_key):
+		bottom.add_child(_loadout_icon(PetCatalog.icon(pet_key), icon_px, "Evcil: " + PetCatalog.display_name(pet_key)))
 	var spirit_id: String = str(pinfo.get("spirit", ""))
 	if SpiritualSkillsScript.is_valid(spirit_id):
 		var sdef: Dictionary = SpiritualSkillsScript.get_def(spirit_id)

@@ -40,7 +40,8 @@ const RANGED_RECOIL := {
 	"fire_staff": {"kick": 1.5, "rot": 0.12},
 	"buz_asasi": {"kick": 1.4, "rot": 0.10},
 	"tufek": {"kick": 1.7, "rot": 0.18},
-	"tuftuf": {"kick": 1.5, "rot": 0.0},
+	"pompali": {"kick": 2.6, "rot": 0.26}, ## madde 448
+	"tuftuf": {"kick": 1.5, "rot": 0.12}, ## Zehir Asası (madde 410): üfleme borusu değil asa -> Ateş Asası gibi baş kalkar
 }
 const RECOIL_OUT := 0.045
 const RECOIL_BACK := 0.22

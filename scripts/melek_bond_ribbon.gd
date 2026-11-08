@@ -80,9 +80,12 @@ func _exit_tree() -> void:
 func compute() -> Dictionary:
 	if bond == null or not is_instance_valid(bond):
 		return {}
-	var caster: Node2D = bond.get("caster")
-	if caster == null or not is_instance_valid(caster):
+	## Madde 421 (MP ölçümü): Melek kuklası/oyuncusu silinince tipli Node2D değişkenine atama her karede "previously freed" hatası veriyordu
+	## (3 oyunculu partide eş başına 230-320). Önce tipsiz oku, geçerliyse ata.
+	var caster_v: Variant = bond.get("caster")
+	if caster_v == null or not is_instance_valid(caster_v):
 		return {}
+	var caster: Node2D = caster_v
 	var ring_c: Vector2 = bond.call("ring_world_center")
 	var hp: Array = BondMath.halo_point(caster, ring_c)
 	var p0: Vector2 = hp[0]

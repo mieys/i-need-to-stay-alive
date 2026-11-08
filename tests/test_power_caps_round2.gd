@@ -1,7 +1,7 @@
 extends Node
 
 ## Güç sınırları turu (2026-10-20, BALANCE_REV 95, madde 346): aynı parçadan en fazla 6 kopya, Canavarlaştırma Özütü tavanı elitlere de,
-## Zamanbükenin Eldiveni bekleme azaltması en çok 0,25 sn'de bir, saldırı hızı tavanı %450, kalkan delme etkin değeri (%40).
+## Zamanbükenin Eldiveni bekleme azaltması en çok 0,25 sn'de bir, saldırı hızı tavanı %600 (2026-11-07; önce %450), kalkan delme etkin değeri (%40).
 
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const StatsPanelScript: GDScript = preload("res://scripts/stats_panel.gd")
@@ -89,8 +89,8 @@ func test_zamanbuken_cooldown_refund_is_rate_limited() -> void:
 	_cleanup()
 
 
-func test_attack_speed_cap_is_450() -> void:
-	assert(is_equal_approx(GameManager.ATTACK_SPEED_CAP_PERCENT, 450.0), "saldırı hızı tavanı %450")
+func test_attack_speed_cap_is_600() -> void:
+	assert(is_equal_approx(GameManager.ATTACK_SPEED_CAP_PERCENT, 600.0), "saldırı hızı tavanı %600")
 
 
 func test_displayed_shield_pen_is_the_effective_cap() -> void:

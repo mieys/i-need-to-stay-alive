@@ -4,29 +4,21 @@ extends RefCounted
 ## demircide "A - Örs Vitrini" seçti (tools/proto_20261016/dukkan_proto.gd, madde 195). Bu dosya o prototipin çizim yardımcılarının
 ## oyun sürümü: merchant_shop_screen.gd + weapon_shop_screen.gd paylaşır. Palet örnek başına (satıcı kayrak+altın, demirci koyu ahşap).
 ## Kurallar/fiyatlar BURADA DEĞİL (items.gd, weapon_shop_logic.gd); bu kit sadece görünüş.
-## Yazı m5x7 (MenuKit.font), 24/32/40/48 boyutları; panel köşeleri 45° pah (corner_detail 1) = pikselli köşe.
+## Yazı m5x7 (MenuKit.font), 24/32/40/48 boyutları; panel köşeleri piksel basamak + kabartma (pixel_box.gd, madde 417).
 
-const PAL_SLATE := {
-	"panel": Color("#1b212e"), "panel2": Color("#242c3b"), "panel3": Color("#2f3a4f"), "inset": Color("#121722"),
-	"line": Color("#353f55"), "line_hi": Color("#56657f"), "text": Color("#ece6d7"), "dim": Color("#96a0b2"),
-	"accent": Color("#d9b46a"), "accent_dk": Color("#6e5426"), "accent_text": Color("#21180a"),
-	"good": Color("#94c97e"), "bad": Color("#dc8676"), "price": Color("#eccb7e"), "spot": Color("#6f8fc0"),
-}
+## STİL REHBERİ (madde 403, 2026-11-06): TEK palet. Eskiden satıcı "kayrak" (PAL_SLATE), demirci/envanter "koyu ahşap"
+## (PAL_WOOD), telefon "Gece Sıvası" (PAL_NIGHT) idi; üçü de artık hud_theme.gd'den gelen aynı ahşap. Eski adlar çağıranlar
+## bozulmasın diye takma ad olarak duruyor - yeni kodda PAL_WOOD kullan.
+const HT := preload("res://scripts/hud_theme.gd")
+const PixelBox := preload("res://scripts/pixel_box.gd")
 const PAL_WOOD := {
-	"panel": Color("#241c16"), "panel2": Color("#2e251d"), "panel3": Color("#3b2f24"), "inset": Color("#1a140f"),
-	"line": Color("#45372a"), "line_hi": Color("#6a5440"), "text": Color("#efe2c6"), "dim": Color("#ad9b80"),
-	"accent": Color("#e2a64e"), "accent_dk": Color("#6a4416"), "accent_text": Color("#24160a"),
-	"good": Color("#a9c96e"), "bad": Color("#dc7f60"), "price": Color("#f2c674"), "spot": Color("#c0803a"),
+	"panel": HT.WIN_PANEL, "panel2": HT.WIN_PANEL2, "panel3": HT.WIN_PANEL3, "inset": HT.WIN_INSET,
+	"line": HT.WIN_LINE, "line_hi": HT.WIN_LINE_HI, "text": HT.TEXT, "dim": HT.DIM,
+	"accent": HT.ACCENT, "accent_dk": HT.ACCENT_DK, "accent_text": HT.ACCENT_TEXT,
+	"good": HT.GOOD, "bad": HT.BAD, "price": HT.PRICE, "spot": HT.SPOT,
 }
-
-## Telefon (madde 276; kullanıcı onayı 2026-10-18, madde 253 "B - Gece Sıvası"): mavi-mor sıva paneller + altın/krem yazı
-## (prototip tools/proto_20261018/mobil_proto.gd SKINS["B"] ile aynı; menu_dark_kit.gd ailesi). Seyyar satıcı / demirci / envanter.
-const PAL_NIGHT := {
-	"panel": Color("#1a1a2c"), "panel2": Color("#23233a"), "panel3": Color("#302f4c"), "inset": Color("#12121f"),
-	"line": Color("#3b3a5a"), "line_hi": Color("#5f5c86"), "text": Color("#efe6d6"), "dim": Color("#a7a2c0"),
-	"accent": Color("#f4c56e"), "accent_dk": Color("#6a5226"), "accent_text": Color("#231a0a"),
-	"good": Color("#a8d69a"), "bad": Color("#e38c7c"), "price": Color("#f0da94"), "spot": Color("#7c78c8"),
-}
+const PAL_SLATE := PAL_WOOD
+const PAL_NIGHT := PAL_WOOD
 
 ## Eşya kademesi çerçeve renkleri (oyundaki kahve / mavi / mor) - koyu zeminde okunsun diye açılmış tonlar.
 const TIER_COL := [Color("#c39a64"), Color("#6f9df2"), Color("#b98af2")]
@@ -195,15 +187,13 @@ func c(k: String) -> Color:
 	return P[k]
 
 
-func sb(fill: Color, border: Color = Color(0, 0, 0, 0), bw: int = 3, r: int = 6, pad: float = -1.0) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+func sb(fill: Color, border: Color = Color(0, 0, 0, 0), bw: int = 3, r: int = 6, pad: float = -1.0) -> PixelBox:
+	var s := PixelBox.new() ## piksel kenar + kabartma (madde 417; StyleBoxFlat ile aynı özellikler)
 	s.bg_color = fill
 	if border.a > 0.0 and bw > 0:
 		s.border_color = border
 		s.set_border_width_all(bw)
 	s.set_corner_radius_all(r)
-	s.corner_detail = 1
-	s.anti_aliasing = false
 	if pad >= 0.0:
 		s.set_content_margin_all(pad)
 	return s

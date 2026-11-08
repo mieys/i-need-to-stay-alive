@@ -2,7 +2,7 @@ shader_type canvas_item;
 
 // Kendi shader'ı olmayan harita katmanları (orman, ev, köprü, maden, dış orman...) için SADECE harita renk ayarı
 // (bkz. harita_renk.gdshaderinc, scripts/map_color_grade.gd). Zemin ayrıntısı kapalıyken zemin katmanları da bunu alır. Derin orman bölge
-// zemini artık Harita.tmx'te GERÇEK KAROLAR ("Yer/Derin orman zemini", madde 363) - burada hesaplanmaz.
+// ayarı madde 463'de kalktı (harita_renk_d / do_agac_guc artık düz geçiş).
 
 #include "res://shaders/harita_renk.gdshaderinc"
 

@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## KADEME GÖSTERİMİ (kullanıcı isteği 2026-10-05): kademe numaraları ROMEN RAKAMIYLA yazılır ve kademe bildirimi sadece
 ## "KADEME <ROMEN>" + altında zorluğu temsil eden 6 KURU KAFA satırıdır; kademe arttıkça kafalar dolar (yarım yarım da).
@@ -46,12 +47,12 @@ static func to_roman(n: int) -> String:
 static func title(tier: int) -> String:
 	if tier >= FINAL_TIER:
 		return "FİNAL KADEMESİ"
-	return "KADEME %s" % to_roman(tier)
+	return Loc.t("KADEME %s") % to_roman(tier)
 
 
 ## "5'e ulaş" yerine ünlü uyumuna takılmadan okunan sıra biçimi: "V. Kademe" (Romen rakamı + nokta).
 static func ordinal(tier: int) -> String:
-	return "%s. Kademe" % to_roman(tier)
+	return Loc.t("%s. Kademe") % to_roman(tier)
 
 
 ## Zorluk kafa adımı (0..12 = yarım kafa adımı): kademe 1 yarım kafa, Final (16) altı tam kafa; arası doğrusal ve azalmayan.

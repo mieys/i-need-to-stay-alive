@@ -1,4 +1,5 @@
 class_name Characters
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 
@@ -339,7 +340,9 @@ const DEFS := {
 		## 2026-09-30 (yetenek evrimleri): "R artık saldırı hızına göre artmıyor çünkü geliştirmelere eklenecek" - tempo sabit
 		## (saniyede ~4,5 çarpış, eski kartsız tempoyla aynı); saldırı hızına bağlanması evrim "Hızlanan Hücum".
 		## Kullanıcı isteği (2026-10-16): bekleme 90 -> 10 sn, sadece KENDİ görüş alanındaki yaratıklar, en fazla 20 çarpış.
-		"skill3_desc": "ULTİ: Görüş alanındaki yaratıklara sırayla hızla çarpar, en fazla 20 kez; her çarpış saldırı gücünün %300'ü kadar hasar verir (saniyede yaklaşık 4,5 çarpış). Vurulmamış yaratık kalmazsa (tek yaratık olsa bile) aynı yaratıklara tekrar saldırır. Bitince kullandığı konuma geri döner. (10sn bekleme)",
+		## Kullanıcı isteği (2026-11-06): bekleme 18 sn, en fazla 15 çarpış, hasar %300 -> %450.
+		"skill3_desc": "ULTİ: Görüş alanındaki yaratıklara sırayla hızla çarpar, en fazla 15 kez; her çarpış saldırı gücünün %450'si kadar hasar verir (saniyede yaklaşık 4,5 çarpış). Vurulmamış yaratık kalmazsa (tek yaratık olsa bile) aynı yaratıklara tekrar saldırır. Bitince kullandığı konuma geri döner. (18sn bekleme)",
+		"skill3_icon": "res://assets/skills/assasin_golge_hucumu_icon.png", ## madde 421: anahtar eksikti (seçim ekranında boş kare, HUD'da yedek şekil)
 		"passive": "Bıçak Uzmanlığı: yetenek kullanımından sonraki 3 saniye boyunca garantili kritik vurur.",
 		"passive_icon": "res://assets/skills/assasin_passive_icon.png",
 		"frames": "res://assets/characters/assasin_frames.tres",
@@ -881,7 +884,12 @@ static func get_base_stats(char_id: int) -> Dictionary:
 	return BASE_STATS.get(char_id, BASE_STATS_DEFAULT)
 
 
+## Ekrana giden ad/yetenek metinleri seçili dilde (Localization.localized, madde 446). Kayıt/ağ için Türkçe: get_def_raw.
 static func get_def(char_id: int) -> Dictionary:
+	return Loc.localized("ch:%d" % char_id, DEFS.get(char_id, DEFS[1]))
+
+
+static func get_def_raw(char_id: int) -> Dictionary:
 	return DEFS.get(char_id, DEFS[1])
 
 

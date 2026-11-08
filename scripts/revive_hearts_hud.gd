@@ -61,7 +61,7 @@ const DOCK_CAP := 21.0 ## rakam yüksekliği (7 sanat pikseli x 3)
 const DOCK_PLATE_TOP := 28.0
 const DOCK_PLATE_H := 34.0
 const HudTheme := preload("res://scripts/hud_theme.gd")
-const DOCK_PLATE_FILL := HudTheme.INSET
+const DOCK_PLATE_FILL := HudTheme.DOCK_INSET ## madde 454
 const DOCK_TIMER_COLOR := Color(1.0, 0.78, 0.8)
 const DOCK_TIMER_BOOST := Color(0.62, 1.0, 0.6)
 const DOCK_TIMER_IDLE := HudTheme.DIM
@@ -100,7 +100,7 @@ func _draw_dock_plate() -> void:
 	PixelIcons.draw_plate(self, r, DOCK_PLATE_FILL)
 	var w: float = DOCK_FONT.get_string_size(_dock_text, HORIZONTAL_ALIGNMENT_LEFT, -1, DOCK_FONT_SIZE).x
 	var p := Vector2(roundf((size.x - w) * 0.5), roundf(r.position.y + (r.size.y + DOCK_CAP) * 0.5))
-	draw_string(DOCK_FONT, p, _dock_text, HORIZONTAL_ALIGNMENT_LEFT, -1, DOCK_FONT_SIZE, _dock_color)
+	draw_string(DOCK_FONT, p, _dock_text, HORIZONTAL_ALIGNMENT_LEFT, -1, DOCK_FONT_SIZE, _dock_color) ## dil:yok (sayı)
 
 
 ## Oyuncu paneli (hud.gd dock) kalpleri küçük bir sekmeye koyar - yenilenme sayacı kalplerin ALTINA değil yanına gelsin.

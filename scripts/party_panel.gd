@@ -41,12 +41,21 @@ const HP_BAR_HEIGHT := 22.0 ## 2026-10-13 (kullanıcı: "çok kalın ve kaba"): 
 const SHIELD_BAR_HEIGHT := 20.0 ## 27 -> 20 (içte 14 px)
 const BarValueLabelScript: GDScript = preload("res://scripts/bar_value_label.gd")
 const PartyPixelBarScript: GDScript = preload("res://scripts/party_pixel_bar.gd")
+## Madde 479 (kullanıcı: "grup panelindeki müttefiklerin can ve kalkan barı da tıpkı skill barındaki gibi görünmesini sağlar mısın ama
+## genişliklerini v.s mevcut genişliklerine göre hesapla ve can yenilenmeleri gözükmücek sadece mevcut canları kalkanları ve maksimum canları
+## ve kalkanları gözükecek"): MASAÜSTÜNDE müttefik çubukları oyuncu panelindeki çubukla AYNI çizim (hud_pixel_bar.gd: D Pirinç Kapaklı, LoL
+## hasar izi/iyileşme dolumu, ortada 9 punto "mevcut/azami"), boylar eskisi gibi (HP_BAR_HEIGHT / SHIELD_BAR_HEIGHT, genişlik satırı doldurur);
+## yenilenme yazısı YOK (set_regen hiç çağrılmaz). Sayı çubuğun kendi yazısı (bar.text) -> health_label / shield_label null.
+## Telefon eski çubuk + bar_value_label (ekran pikseli 9 punto telefonda okunmaz).
+const HudPixelBarScript: GDScript = preload("res://scripts/hud_pixel_bar.gd")
+const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const FS_ROW := 24 ## m5x7 3x - görev satırlarıyla aynı (16 1080p'de okunmuyor)
 ## Sağ üstteki minimap'in (hud.tscn MinimapControl: sağdan 36, alt kenar 186) hemen altı.
 const RIGHT_MARGIN := 36.0
 const TOP_Y := 198.0
 const GOLD_ICON_PATH := "res://assets/ui/newui/icon_gold_coin.png" ## oyun içi altın parayla aynı (animasyonsuz ilk kare)
 const AVATAR_BG := preload("res://assets/ui/kit/hud_avatar_bg.png")
+const PortraitFace := preload("res://scripts/portrait_face.gd") ## yüz kırpımı + karakter arka planı (madde 458/464)
 const PLAQUE_CLEAN := preload("res://assets/ui/game/hud_plaque_clean.png")
 const BarUnder := preload("res://assets/ui/kit/hud_bar_under.png")
 const BarFill := preload("res://assets/ui/kit/hud_bar_fill.png")
@@ -69,6 +78,7 @@ const REFRESH_INTERVAL := 0.5
 class PartyRow:
 	var container: Control
 	var avatar: TextureRect
+	var avatar_bg: TextureRect ## madde 464: karakter arka planı buraya (yoksa AVATAR_BG)
 	var name_label: Label
 	var health_bar: Control ## party_pixel_bar.gd (2026-10-10: karakter üstü çubuk stili)
 	var shield_bar: Control
@@ -441,6 +451,7 @@ func _create_row(peer_id: int) -> PartyRow:
 	avatar_bg.position = Vector2(AVATAR_BORDER, AVATAR_BORDER)
 	avatar_bg.size = Vector2(AVATAR_SIZE, AVATAR_SIZE)
 	avatar_box.add_child(avatar_bg)
+	row.avatar_bg = avatar_bg
 	var avatar := TextureRect.new()
 	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	avatar.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
@@ -488,13 +499,19 @@ func _create_row(peer_id: int) -> PartyRow:
 	bars.add_theme_constant_override("separation", 0)
 	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	well.add_child(bars)
-	row.health_bar = _make_pixel_bar(HP_BAR_HEIGHT, Color(0.12, 0.04, 0.04, 1.0))
-	bars.add_child(row.health_bar)
-	row.health_label = _add_bar_label(row.health_bar)
-	row.shield_bar = _make_pixel_bar(SHIELD_BAR_HEIGHT, Color(0.04, 0.08, 0.14, 1.0))
-	row.shield_bar.tint_progress = SHIELD_COLOR
-	bars.add_child(row.shield_bar)
-	row.shield_label = _add_bar_label(row.shield_bar)
+	if not MobileUIScript.enabled:
+		row.health_bar = _make_brass_bar(HP_BAR_HEIGHT, HudTheme.hp_color(1.0), BarKind.HP)
+		bars.add_child(row.health_bar)
+		row.shield_bar = _make_brass_bar(SHIELD_BAR_HEIGHT, HudTheme.SHIELD_BAR, BarKind.SHIELD)
+		bars.add_child(row.shield_bar)
+	else:
+		row.health_bar = _make_pixel_bar(HP_BAR_HEIGHT, Color(0.12, 0.04, 0.04, 1.0))
+		bars.add_child(row.health_bar)
+		row.health_label = _add_bar_label(row.health_bar)
+		row.shield_bar = _make_pixel_bar(SHIELD_BAR_HEIGHT, Color(0.04, 0.08, 0.14, 1.0))
+		row.shield_bar.tint_progress = SHIELD_COLOR
+		bars.add_child(row.shield_bar)
+		row.shield_label = _add_bar_label(row.shield_bar)
 
 	## Sağda küçük ahşap altın butonu (tıklanınca miktar seçip hediye).
 	var gold_button := _wood_button("", Vector2(GOLD_BTN_SIZE, GOLD_BTN_SIZE))
@@ -527,6 +544,29 @@ func _create_row(peer_id: int) -> PartyRow:
 	hbox.add_child(gold_button)
 	row.gold_button = gold_button
 	return row
+
+
+enum BarKind { HP, SHIELD }
+
+## Madde 479: masaüstü müttefik çubuğu = oyuncu panelinin çubuğu (hud_pixel_bar.gd, ikonsuz birleşik kip).
+func _make_brass_bar(height: float, fill: Color, kind: int) -> Control:
+	var bar: Control = HudPixelBarScript.new()
+	bar.set("merged", true)
+	bar.set("fill", fill)
+	if kind == BarKind.SHIELD:
+		bar.set("value_color", HudTheme.SHIELD_VALUE)
+	bar.custom_minimum_size = Vector2(0.0, height)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return bar
+
+
+## Satırdaki can / kalkan sayısı (masaüstünde çubuğun kendi yazısı, telefonda etiket) - testler de bunu okur.
+static func row_value_text(row: PartyRow, shield: bool) -> String:
+	var lbl: Control = row.shield_label if shield else row.health_label
+	if lbl != null:
+		return str(lbl.get("text"))
+	var bar: Control = row.shield_bar if shield else row.health_bar
+	return str(bar.get("text")) if bar != null else ""
 
 
 func _make_pixel_bar(height: float, bg: Color) -> Control:
@@ -594,14 +634,25 @@ func _update_row(row: PartyRow, ally: Node) -> void:
 	if portrait_path != "" and str(row.avatar.get_meta("portrait_path", "")) != portrait_path:
 		row.avatar.set_meta("portrait_path", portrait_path)
 		if ResourceLoader.exists(portrait_path):
-			row.avatar.texture = load(portrait_path)
+			## Madde 458 (kullanıcı: "karakterlerin yüzleri portrede olsun vücutları değil, grup paneli de dahil") + madde 464: yakın yüz
+			## (16x16, Büyücü çerçevesi) avatar kutusunda (48) tam 3 kat + karaktere özel bulanık arka plan aynı katla; yoksa eski 1:1 portre /
+			## eski zemin. Tek kaynak PortraitFace (panel portresiyle aynı).
+			var face: Texture2D = PortraitFace.face(char_id, PortraitFace.PARTY_N)
+			row.avatar.texture = face if face else load(portrait_path)
+			row.avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if face else TextureRect.STRETCH_KEEP_CENTERED
+			var theme_bg: Texture2D = PortraitFace.background(char_id, PortraitFace.PARTY_N)
+			if row.avatar_bg:
+				row.avatar_bg.texture = theme_bg if theme_bg else AVATAR_BG
 
 	var health: float = float(ally.get("health"))
 	var max_health: float = max(float(ally.get("max_health")), 0.001)
 	var pct: float = clampf(health / max_health, 0.0, 1.0)
 	## Karakter üstü çubukla aynı yeşil; azaldıkça kırmızıya kayar (hud.gd update_health ile aynı geçiş).
-	_set_bar(row.health_bar, pct, Color(0.84, 0.22, 0.22).lerp(Color(0.30, 0.82, 0.24), pct))
 	var tip: String = "%d/%d" % [int(round(maxf(health, 0.0))), int(round(max_health))]
+	if row.health_label == null: ## madde 479: masaüstü pirinç kapaklı çubuk (sayı çubuğun içinde, yenilenme yok)
+		row.health_bar.call("set_values", pct, HudTheme.hp_color(pct), tip)
+	else:
+		_set_bar(row.health_bar, pct, HudTheme.hp_color(pct)) ## madde 473: dock ile aynı
 	var well: Control = row.health_bar.get_parent().get_parent() as Control
 	if well != null and well.tooltip_text != tip:
 		well.tooltip_text = tip
@@ -612,9 +663,11 @@ func _update_row(row: PartyRow, ally: Node) -> void:
 	var shield_max: float = float(ally.get("item_shield_max"))
 	var shield_hp: float = float(ally.get("item_shield_hp"))
 	var sh_pct: float = clampf(shield_hp / max(shield_max, 0.001), 0.0, 1.0) if shield_max > 0.0 else 0.0
-	_set_bar(row.shield_bar, sh_pct, SHIELD_COLOR)
-	if row.shield_label != null:
-		var sh_tip: String = "%d/%d" % [int(round(maxf(shield_hp, 0.0))), int(round(shield_max))] if shield_max > 0.0 else ""
+	var sh_tip: String = "%d/%d" % [int(round(maxf(shield_hp, 0.0))), int(round(shield_max))] if shield_max > 0.0 else ""
+	if row.shield_label == null:
+		row.shield_bar.call("set_values", sh_pct, HudTheme.SHIELD_BAR, sh_tip)
+	else:
+		_set_bar(row.shield_bar, sh_pct, SHIELD_COLOR)
 		if row.shield_label.text != sh_tip:
 			row.shield_label.text = sh_tip
 
@@ -661,7 +714,7 @@ func _on_gold_button_pressed(peer_id: int) -> void:
 	_hide_stats_popup()
 	_gift_target_peer = peer_id
 	var target_name: String = str(ally.get("player_name"))
-	_gift_amount_label.text = "%s'e altın gönder\n(Senin altının: %d)" % [target_name, GameManager.gold]
+	_gift_amount_label.text = tr("%s'e altın gönder\n(Senin altının: %d)") % [target_name, GameManager.gold]
 
 	var row: PartyRow = _rows.get(peer_id)
 	_gift_popup.visible = true
@@ -716,7 +769,7 @@ func _gather_live_stats() -> Array:
 	if is_inside_tree():
 		var local_player: Node = get_tree().get_first_node_in_group("player")
 		if is_instance_valid(local_player) and "match_damage_dealt" in local_player:
-			var my_name: String = "Sen"
+			var my_name: String = tr("Sen")
 			if NetworkManager.is_multiplayer_active and NetworkManager.local_player_name != "":
 				my_name = NetworkManager.local_player_name
 			entries.append({"name": my_name, "dealt": float(local_player.get("match_damage_dealt")),

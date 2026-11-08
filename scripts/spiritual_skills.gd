@@ -1,4 +1,5 @@
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## RUHANİ YETENEKLER (kullanıcı isteği, 2026-09-21): oyun başında karakter seçim ekranında (tek oyunculu: character_select.gd,
 ## çok oyunculu: lobby_menu.gd) HER oyuncu, hangi karakteri seçmiş olursa olsun bu 6 yetenekten BİRİNİ seçer. F tuşuyla
@@ -155,7 +156,7 @@ const DEFS := {
 
 
 static func get_def(id: String) -> Dictionary:
-	return DEFS.get(id, {})
+	return Loc.localized("sp:" + id, DEFS.get(id, {})) ## madde 446
 
 
 static func is_valid(id: String) -> bool:

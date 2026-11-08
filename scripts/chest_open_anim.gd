@@ -15,7 +15,12 @@ signal finished ## animasyon (ya da atlama) bitti
 
 const ChestArt := preload("res://scripts/chest_art.gd")
 const FRAME := ChestArt.FRAME_PX ## doku px
-const DISPLAY_SCALE := 8 ## dünya px başına ekran px: 48'lik kare -> 384 px (sandık ~184-216 px) - heyecan anında ekranda iri dursun
+const DISPLAY_SCALE := 8 ## dünya px başına ekran px (yalnız ışık sütunu açıkken, madde 242)
+## Madde 409 (paket sandıkları): kutu eski boyda (384 px, yerleşim aynı), sandık 1 doku px = TEXEL_SCALE ekran px (tam kat) ile kutunun
+## içinde; tabanı eski sandığın tabanıyla aynı yükseklikte (kutunun %87,5'i).
+const BOX := 384.0
+const TEXEL_SCALE := 8
+const BASE_FRAC := 84.0 / 96.0
 const BURST_FRAME := 8
 const OPEN_LOOP := [16, 17, 18, 19]
 const OPEN_LOOP_STEP := 0.12
@@ -62,20 +67,26 @@ var skipped: bool = false
 var chime_on_burst: bool = true
 
 
-## elite=false: reward_tier (1-4) ışığın rengini seçer.
-func setup(elite: bool, reward_tier: int = 1) -> void:
+## elite=false: reward_tier (1-4) ekran flaşının rengini seçer; kademe_band (0-5, chest_menu _chest_tier) sandığın görünüşünü.
+func setup(elite: bool, reward_tier: int = 1, kademe_band: int = 0) -> void:
 	_elite = elite
 	_tier = clampi(reward_tier, 1, 4)
-	_sheet = ELITE_SHEET if elite else NORMAL_SHEETS[_tier - 1]
+	_sheet = ELITE_SHEET if elite else ChestArt.normal_sheet(kademe_band)
 	_beam_sheet = ChestArt.ELITE_BEAM_SHEET if elite else ChestArt.BEAM_TIER_SHEETS[_tier - 1]
 	_light = ELITE_LIGHT if elite else LIGHT_COLORS[_tier - 1]
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(ChestArt.FRAME_WU, ChestArt.FRAME_WU) * DISPLAY_SCALE
+	custom_minimum_size = Vector2(BOX, BOX)
 	if _sheet == null:
 		setup(false, 1)
+	if not ChestArt.BEAM_ENABLED:
+		_build_chest_rect(Vector2(FRAME, FRAME) * TEXEL_SCALE,
+				Vector2((BOX - FRAME * TEXEL_SCALE) * 0.5, BOX * BASE_FRAC - ChestArt.CHEST_ANCHOR_PX.y * TEXEL_SCALE))
+		_show_frame(0)
+		_advance(0)
+		return
 	## Işık sütunu: sandığın ARKASINDA (önce eklenir), kutunun dışına (yukarı) taşar; sandığın alt-ortasına hizalı.
 	var k: float = ChestArt.TEXEL * DISPLAY_SCALE
 	_beam_atlas = AtlasTexture.new()
@@ -90,6 +101,12 @@ func _ready() -> void:
 	_beam_rect.size = Vector2(ChestArt.BEAM_W, ChestArt.BEAM_H) * k
 	_beam_rect.position = (ChestArt.CHEST_ANCHOR_PX - ChestArt.BEAM_ANCHOR_PX) * k
 	add_child(_beam_rect)
+	_build_chest_rect(custom_minimum_size, Vector2.ZERO)
+	_show_frame(0)
+	_advance(0)
+
+
+func _build_chest_rect(sz: Vector2, pos: Vector2) -> void:
 	_atlas = AtlasTexture.new()
 	_atlas.atlas = _sheet
 	_rect = TextureRect.new()
@@ -98,11 +115,10 @@ func _ready() -> void:
 	_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_rect.stretch_mode = TextureRect.STRETCH_SCALE
 	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rect.size = custom_minimum_size
-	_rect.pivot_offset = custom_minimum_size * 0.5
+	_rect.size = sz
+	_rect.position = pos
+	_rect.pivot_offset = sz * 0.5
 	add_child(_rect)
-	_show_frame(0)
-	_advance(0)
 
 
 func _show_frame(i: int) -> void:

@@ -572,8 +572,10 @@ func _net_id() -> int:
 ## Uyarısı süren büyünün (lazer, diken) sahibi donmuş/sersemlemiş mi? Öyleyse büyü ateşlenmeden iptal olur ("donan düşman
 ## hiçbir şey yapamaz"). Host'ta source düğümünden; istemcide source yok - data.src (ağ kimliği) ile kukla bulunur, onun
 ## donma/sersemletme görseline bakılır (host ayrıca iptal yayınlamaz, iki taraf aynı kuralı kendi uygular).
-static func caster_disabled(source: Node2D, data: Dictionary) -> bool:
-	var c: Node = source
+## `source` TİPSİZ (madde 421, büyük test): uyarı sürerken sahibi ölüp silinmişse (Ağaç canavarı dikeni, lazer) Node2D tipli parametre her karede
+## "previously freed" betik hatası veriyordu (kademe 12'de koşu başına binlerce). Silinmiş sahip "yok" sayılır (host'ta büyü yine ateşlenir).
+static func caster_disabled(source, data: Dictionary) -> bool:
+	var c: Variant = source if is_instance_valid(source) else null
 	if c == null and NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		var id: int = int(data.get("src", 0))
 		if id > 0:

@@ -115,31 +115,44 @@ func _panel_with(allies: Array) -> Control:
 	return pp
 
 
+## Madde 479: masaüstünde müttefik çubukları oyuncu panelinin çubuğu (hud_pixel_bar.gd) - sayı çubuğun kendi yazısı (ortada "mevcut/azami"),
+## etiket düğümü yok, yenilenme yazısı hiç yok. Sayılar PartyScript.row_value_text ile okunur (telefonda eski etiket).
+func _hp(row) -> String:
+	return PartyScript.row_value_text(row, false)
+
+
+func _sh(row) -> String:
+	return PartyScript.row_value_text(row, true)
+
+
 func test_party_panel_rows_show_hp_and_shield_numbers_inside_the_bars() -> void:
 	_cleanup()
 	var a := FakeAlly.new()
 	var pp: Control = _panel_with([a])
 	var row = pp._rows[a.peer_id]
-	assert(row.health_label != null and row.shield_label != null, "satırda iki sayı etiketi var")
-	assert(row.health_label.get_parent() == row.health_bar and row.shield_label.get_parent() == row.shield_bar, "sayılar çubukların İÇİNDE")
-	assert(row.health_label.text == "640/800", "can sayısı HUD biçimiyle: %s" % row.health_label.text)
-	assert(row.shield_label.text == "150/400", "kalkan sayısı: %s" % row.shield_label.text)
-	assert(row.health_label.mouse_filter == Control.MOUSE_FILTER_IGNORE, "fareyi geçirir")
-	assert(row.health_bar.custom_minimum_size.y >= 22.0 and row.shield_bar.custom_minimum_size.y >= 18.0, "çubuklar 2x yazıyı alacak kadar yüksek")
+	var PixelBar: GDScript = load("res://scripts/hud_pixel_bar.gd")
+	assert(row.health_bar.get_script() == PixelBar and row.shield_bar.get_script() == PixelBar, "masaüstü: oyuncu paneliyle aynı çubuk")
+	assert(row.health_label == null and row.shield_label == null, "sayı çubuğun içinde çizilir, ayrı etiket yok")
+	assert(bool(row.health_bar.get("merged")) and str(row.health_bar.get("icon_kind")) == "", "ikonsuz birleşik kip")
+	assert(str(row.health_bar.get("regen_text")) == "" and str(row.shield_bar.get("regen_text")) == "", "müttefikte yenilenme yazısı yok")
+	assert(_hp(row) == "640/800", "can sayısı HUD biçimiyle: %s" % _hp(row))
+	assert(_sh(row) == "150/400", "kalkan sayısı: %s" % _sh(row))
+	assert(row.health_bar.mouse_filter == Control.MOUSE_FILTER_IGNORE, "fareyi geçirir (satır ipucu)")
+	assert(row.health_bar.custom_minimum_size.y >= 22.0 and row.shield_bar.custom_minimum_size.y >= 18.0, "çubuk boyları eskisi gibi")
 	## Güncelleme: can düşünce sayı da düşer; kalkan kalmayınca yazı boşalır (çubuk görünür kalır).
 	a.health = 12.4
 	a.item_shield_hp = 0.0
 	a.item_shield_max = 0.0
 	pp._update_rows()
-	assert(row.health_label.text == "12/800", "can güncellendi: %s" % row.health_label.text)
-	assert(row.shield_label.text == "" and row.shield_bar.visible, "kalkansız: yazı yok, çubuk yerinde (satır zıplamaz)")
+	assert(_hp(row) == "12/800", "can güncellendi: %s" % _hp(row))
+	assert(_sh(row) == "" and row.shield_bar.visible, "kalkansız: yazı yok, çubuk yerinde (satır zıplamaz)")
 	a.health = -5.0 ## ölü: negatif sayı yazılmaz
 	pp._update_rows()
-	assert(row.health_label.text == "0/800", "ölüde 0: %s" % row.health_label.text)
+	assert(_hp(row) == "0/800", "ölüde 0: %s" % _hp(row))
 	a.item_shield_max = 2000.0
 	a.item_shield_hp = 1999.6
 	pp._update_rows()
-	assert(row.shield_label.text == "2000/2000", "yuvarlama: %s" % row.shield_label.text)
+	assert(_sh(row) == "2000/2000", "yuvarlama: %s" % _sh(row))
 	_cleanup()
 
 
@@ -154,8 +167,8 @@ func test_two_allies_have_independent_numbers() -> void:
 	b.item_shield_hp = 5.0
 	b.item_shield_max = 10.0
 	var pp: Control = _panel_with([a, b])
-	assert(pp._rows[2].health_label.text == "640/800" and pp._rows[3].health_label.text == "50/100", "iki satır ayrı sayı gösterir")
-	assert(pp._rows[2].shield_label.text == "150/400" and pp._rows[3].shield_label.text == "5/10", "kalkanlar da ayrı")
+	assert(_hp(pp._rows[2]) == "640/800" and _hp(pp._rows[3]) == "50/100", "iki satır ayrı sayı gösterir")
+	assert(_sh(pp._rows[2]) == "150/400" and _sh(pp._rows[3]) == "5/10", "kalkanlar da ayrı")
 	_cleanup()
 
 

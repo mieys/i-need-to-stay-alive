@@ -30,13 +30,18 @@ def k_below(t, x, y, n=3):
 
 def paint_walls_34(lay, bank, tl, key, floor=(2, 8), top=((1, 1), (2, 1), (3, 1), (1, 2), (2, 2), (3, 2)),
                    face_rows=None, face_cols=(1, 2, 3), region=None, floor_variants=None, rng=None, floor_key=None, floor_pool=None,
-                   floor_fn=None, face_key=None, water_face=None, face_caps=None):
+                   floor_fn=None, face_key=None, water_face=None, face_caps=None, tuck=None):
     """top: (TL, T, TR, L, C, R). face_rows: {k: satır} (k=1 alt yüz, 2 üst yüz, 3 dudak); bir k yoksa o hücre üst (boşluk) olur
     (2 satırlık yüz paketleri). floor_key/floor_pool: zemin başka sayfadan, hücre konumuna göre (kararlı) havuzdan seçilir.
     floor_fn(x, y) -> (sayfa, (sütun, satır)): hücre başına zemin (oda/koridor/desen; havuzu ezer). face_key: yüz başka sayfadan.
     water_face = (sayfa, face_rows, face_cols): yüzün altındaki ilk hücre kanal (Z.W) ise bu yüz (su çizgili) kullanılır.
     face_caps = (sol sütun, sağ sütun): yüzün yuvarlak ucu komşu hücreye taşan paketlerde (kanalizasyon) uç, yüzün yanındaki ZEMİN
-    hücresine ikinci geçişte konur (aynı satır)."""
+    hücresine ikinci geçişte konur (aynı satır).
+    tuck (madde 442, varsayılan KAPALI - zindanların çıktısı değişmez): paketin örnek haritasındaki köşe kuralı. Yüzün yanı duvarsa uç kapağı
+    YOK, yüz önündeki duvarın tepesinin arkasında devam eder (uç karosunun saydam kenarından zemin sızıyordu: oda üst köşeleri, basamaklar).
+    Önde kalan duvarın tepesi yüzün yanında kenarlı iner: {'void_r3': yüzün dudağı sağda, 'void_r': yüzün alt satırları sağda, 'void_l3',
+    'void_l': solda, 'lip_r' / 'lip_l': öndeki yüzün dudağı yandaki arka yüzün altına girerken (alt satırları zemine bakarken)}; {} = yalnız
+    uç kapağı kuralı (Et: kenarsız duvar tepesi)."""
     face_rows = face_rows or {1: 5, 2: 4, 3: 3}
     fkey = floor_key or key
     fckey = face_key or key
@@ -47,6 +52,13 @@ def paint_walls_34(lay, bank, tl, key, floor=(2, 8), top=((1, 1), (2, 1), (3, 1)
 
     def isS(x, y):
         return not (0 <= x < Ww and 0 <= y < Hh) or t[y, x] == S
+
+    def keff(x, y):
+        """Komşu duvar hücresinin yüz satırı (1 alt, 2 orta, 3 dudak), yüz değilse 0."""
+        if not (0 <= x < Ww and 0 <= y < Hh) or t[y, x] != S:
+            return 0
+        kk = k_below(t, x, y)
+        return kk if kk in face_rows else 0
 
     caps = []
     for y in range(max(0, y0), min(Hh, y1)):
@@ -78,8 +90,11 @@ def paint_walls_34(lay, bank, tl, key, floor=(2, 8), top=((1, 1), (2, 1), (3, 1)
                 fr = dict(fr)
                 fr[k] = row_k
             if k:
-                lk = lf and k_below(t, x - 1, y) == k
-                rk = rt and k_below(t, x + 1, y) == k
+                if tuck is not None:
+                    lk, rk = lf, rt
+                else:
+                    lk = lf and k_below(t, x - 1, y) == k
+                    rk = rt and k_below(t, x + 1, y) == k
                 mid = fcols[1]
                 if lk and rk:
                     col = mid if not isinstance(mid, (list, tuple)) else mid[(x * 7 + (y + k) * 3) % len(mid)]
@@ -89,13 +104,29 @@ def paint_walls_34(lay, bank, tl, key, floor=(2, 8), top=((1, 1), (2, 1), (3, 1)
                     col = fcols[2]
                 else:
                     col = mid if not isinstance(mid, (list, tuple)) else mid[0]
-                tl.put('Duvar', x, y, bank.gid(fkk, col, fr[k]))
+                tile = (fkk, col, fr[k])
+                if tuck and k == 3 and fkk == fckey:
+                    if rt and 'lip_r' in tuck and not isS(x + 1, y + 2):
+                        tile = (fckey, tuck['lip_r'][0], tuck['lip_r'][1])
+                    elif lf and 'lip_l' in tuck and not isS(x - 1, y + 2):
+                        tile = (fckey, tuck['lip_l'][0], tuck['lip_l'][1])
+                tl.put('Duvar', x, y, bank.gid(*tile))
                 if face_caps is not None and fkk == fckey:
                     if not lk and x > 0 and t[y, x - 1] != S:
                         caps.append((x - 1, y, face_caps[0], fr[k]))
                     if not rk and x + 1 < Ww and t[y, x + 1] != S:
                         caps.append((x + 1, y, face_caps[1], fr[k]))
                 continue
+            if tuck and up and lf and rt:
+                kr, kl = keff(x + 1, y), keff(x - 1, y)
+                c = None
+                if kr and 'void_r' in tuck:
+                    c = tuck['void_r3'] if kr == 3 and 'void_r3' in tuck else tuck['void_r']
+                elif kl and 'void_l' in tuck:
+                    c = tuck['void_l3'] if kl == 3 and 'void_l3' in tuck else tuck['void_l']
+                if c is not None:
+                    tl.put('Duvar', x, y, bank.gid(key, c[0], c[1]))
+                    continue
             if not up:
                 c = top[0] if not lf else (top[2] if not rt else top[1])
             else:

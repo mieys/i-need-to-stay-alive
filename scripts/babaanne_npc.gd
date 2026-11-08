@@ -68,7 +68,7 @@ const SLOW_SPEED := 24.0 ## koltuğa/yatağa son birkaç piksellik kayış
 enum Act { COOK, WIPE, READ, FIRE_SIT, FIRE_READ, SLEEP, WORRY, WINDOW }
 ## Açılış geri sayımında: ilk WINDOW_AT sn deprem endişesi, sonra pencereye gidip bakar, WINDOW_END'de normal işine döner.
 const WINDOW_AT := 3.0
-const WINDOW_END := 16.0
+const WINDOW_END := 13.0 ## geri sayım 30 -> 15 sn oldu (2026-11-07), pencere sonu da 16 -> 13
 const WINDOW_SAY_1 := 2.0 ## pencereye varınca bu kadar bakıp "canavarlar" der
 const WINDOW_SAY_2 := 6.0 ## sonra dönüp oyunculara seslenir
 ## Kuşatmada iş başında kalır (kullanıcı: "genelde meşgul olmalı ev işleriyle ama çoğu zaman konuşup düşünüyor"): saldırı altındayken

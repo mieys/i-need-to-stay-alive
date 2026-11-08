@@ -2,8 +2,8 @@ extends Node
 
 ## Mermi sanatı (madde 201): Yay/Arbalet/Tüftüf/Fişek = A Zanaatkâr, Tabanca/Tüfek/Arcane/Buz = C Işık İzi (projectile_art.gd).
 ## Gövde yeni dokuda ve silah pikseli yoğunluğunda (yerel ölçek PUPPET_ICON_SCALE, kök sahip ölçeğiyle 0,5), yön belli olana dek gizli,
-## ilk fizik adımında silahın eski çapraz sprite ofseti olsa bile UÇUŞ YÖNÜNE döner; iz "launch" -> "fly". Parçacık stilleri + fişek
-## alevi (kademenin kuyruğunda, ikonun arkasında).
+## ilk fizik adımında silahın eski çapraz sprite ofseti olsa bile UÇUŞ YÖNÜNE döner; iz "launch" -> "fly". Parçacık stilleri; fişek
+## (madde 402) yine eski roket + parıltı.
 
 const ProjectileArt := preload("res://scripts/projectile_art.gd")
 const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
@@ -33,13 +33,17 @@ func test_every_art_projectile_gets_new_body_and_trail() -> void:
 		var p := _spawn(key)
 		var body: Node2D = p.get("_art_body")
 		var trail: AnimatedSprite2D = p.get("_trail")
-		assert(body != null and trail != null, "%s: gövde + iz" % key)
-		assert(not body.visible and not trail.visible, "%s: yön belli olana dek gizli" % key)
+		var has_trail: bool = int(cfg["tf"]) > 0 ## Zehir Asası damlası (madde 410): iz şeridi yok, damlalar poison_drip_fx.gd
+		assert(body != null and (trail != null) == has_trail, "%s: gövde + iz" % key)
+		assert(not body.visible and (trail == null or not trail.visible), "%s: yön belli olana dek gizli" % key)
 		assert(is_equal_approx(body.scale.x, WeaponTierArt.PUPPET_ICON_SCALE), "%s: gövde silah pikselinde" % key)
 		var tex: Texture2D = _body_tex(body)
 		assert(tex.resource_path == ProjectileArt.DIR + str(cfg["name"]) + "_govde.png", "%s: yeni gövde dokusu" % key)
 		assert(tex.get_width() % int(cfg["bf"]) == 0 and (tex.get_width() / int(cfg["bf"])) % 2 == 1 and tex.get_height() % 2 == 1,
 				"%s: kare TEK boyutlu (pivot pikseli tam ortada)" % key)
+		if not has_trail:
+			p.queue_free()
+			continue
 		assert(trail.sprite_frames.get_frame_count(&"launch") == ProjectileArt.LAUNCH_FRAMES, "%s: uzayan iz kareleri" % key)
 		assert(trail.sprite_frames.get_frame_count(&"fly") == int(cfg["tf"]), "%s: iz döngüsü" % key)
 		assert(not trail.sprite_frames.get_animation_loop(&"launch") and trail.sprite_frames.get_animation_loop(&"fly"), "%s: döngüler" % key)
@@ -59,18 +63,19 @@ func test_body_faces_flight_direction_despite_weapon_offset() -> void:
 		p.call("_physics_process", 0.0)
 		var body: Node2D = p.get("_art_body")
 		var trail: AnimatedSprite2D = p.get("_trail")
-		assert(body.visible and trail.visible, "%s: ilk adımda açılır" % key)
+		assert(body.visible and (trail == null or trail.visible), "%s: ilk adımda açılır" % key)
 		assert(absf(angle_difference(body.global_rotation, dir.angle())) < 0.001, "%s: gövde uçuş yönünde" % key)
-		assert(absf(angle_difference(trail.global_rotation, dir.angle())) < 0.001, "%s: iz uçuş yönünde" % key)
-		assert(is_equal_approx(trail.global_scale.x, ProjectileArt.WORLD_PX), "%s: iz silah pikselinde (global)" % key)
+		if trail != null: ## Zehir Asası damlasının (dart_projectile, madde 410) iz şeridi yok
+			assert(absf(angle_difference(trail.global_rotation, dir.angle())) < 0.001, "%s: iz uçuş yönünde" % key)
+			assert(is_equal_approx(trail.global_scale.x, ProjectileArt.WORLD_PX), "%s: iz silah pikselinde (global)" % key)
 		if is_instance_valid(p):
 			p.queue_free()
 
 
 func test_particle_styles_and_mapping() -> void:
 	var map: Dictionary = ProjectileScript.get_script_constant_map()["PARTICLE_TRAILS"]
-	assert(map["dart_projectile"] == "zehir_damla" and map["arcane_projectile"] == "arcane_c" and map["ice_bolt_projectile"] == "buz_c",
-			"yeni parçacık stilleri bağlı")
+	assert(not map.has("dart_projectile") and map["arcane_projectile"] == "arcane_c" and map["ice_bolt_projectile"] == "buz_c",
+			"yeni parçacık stilleri bağlı (Zehir Asası damlaları poison_drip_fx.gd, madde 410)")
 	for st in ["zehir_damla", "arcane_c", "buz_c", "fisek_kivilcim", "fisek_duman"]:
 		var cfg: Dictionary = ParticleTrail.STYLES[st]
 		var cell: int = int(cfg["cell"])
@@ -79,17 +84,14 @@ func test_particle_styles_and_mapping() -> void:
 		assert(is_equal_approx(float(cfg["texel"]), ProjectileArt.WORLD_PX), "%s silah pikselinde" % st)
 
 
-func test_firework_flame_sits_on_tier_tail_behind_icon() -> void:
+## Madde 402: fişek mermisi yine ESKİ roket ikonu + sahnedeki parıltı (Zanaatkâr çapraz roketi + egzoz alevi kalktı); kıvılcım/duman izi duruyor.
+func test_firework_flies_as_the_old_rocket_with_its_sparkle() -> void:
 	if get_tree().current_scene == null:
 		get_tree().current_scene = self
 	var f: Node2D = FireworkScene.instantiate()
 	get_tree().current_scene.add_child(f)
 	var icon: Sprite2D = f.get_node("Icon")
-	var flame: AnimatedSprite2D = f.get_node("Sparkle")
-	assert(flame.sprite_frames == ProjectileArt.fisek_flame_frames() and flame.is_playing(), "egzoz alevi oynuyor")
-	assert(flame.get_index() < icon.get_index(), "alev roketin arkasında")
-	assert(flame.position.is_equal_approx(ProjectileArt.fisek_tail(1) * WeaponTierArt.PUPPET_ICON_SCALE), "L1 kuyruğu")
-	assert(is_equal_approx(flame.rotation, -PI / 4.0) and is_equal_approx(flame.scale.x, WeaponTierArt.PUPPET_ICON_SCALE), "çapraz + ikon pikseli")
-	f.call("set_art_tier", 5)
-	assert(flame.position.is_equal_approx(ProjectileArt.fisek_tail(5) * WeaponTierArt.PUPPET_ICON_SCALE), "L5 kuyruğu")
+	var sparkle: AnimatedSprite2D = f.get_node("Sparkle")
+	assert(icon.texture.resource_path.ends_with("fisek/icon.png"), "eski roket ikonu")
+	assert(sparkle.sprite_frames != ProjectileArt.fisek_flame_frames() and sparkle.is_playing(), "sahnedeki eski parıltı oynuyor")
 	f.queue_free()

@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## RUH MAĞAZASI (kullanıcı isteği 2026-10-13, bkz. meta_progress.gd): koşularda kazanılan Ruh Kıymığı ile kilitli karakter / başlangıç silahı /
 ## evcil hayvan / ruhani yetenek açılır + kalıcı GELİŞTİRMELER (meta_upgrades.gd). Ana menüdeki "RUH MAĞAZASI" düğmesi açar.
@@ -6,7 +7,7 @@ extends CanvasLayer
 ##
 ## MASAÜSTÜ TASARIM "C - Ocak Başı Defteri" (2026-10-24, madde 383; prototip tools/proto_20261024/ruh_komple/, madde 382): ana menü / ayarlar /
 ## rekorlar ekranlarının "Ateş Işığı" dili (fire_menu_kit.gd) ana menünün Ocak Başı sahnesinin (menu_hearth_bg.gd) üstünde. ANA SAYFA YOK: açılınca
-## Karakterler. Solda bölümler (ana menü öğeleri gibi: mum + ikon + başlık + "x/y açık, N alınabilir"; en altta Geri), ortada sade yazı listesi
+## Karakterler. Solda bölümler (ana menü öğeleri gibi: ikon + başlık + "x/y açık, N alınabilir"; en altta Geri), ortada sade yazı listesi
 ## (ikon + ad + fiyat, fiyat sırasında - alınca yer değiştirmez), sağda seçilenin ayrıntısı (spot sahne + altın ad + yetenekler/açıklama + büyük AÇ).
 ## Geliştirmeler aynı kalıp: liste satırında seviye pipsi, ayrıntıda "Şu an -> Sonraki" + YÜKSELT + küçük "Hepsini sıfırla" (iki adımlı).
 ## Önceki tasarım F (madde 173: ana sayfa + kahraman seçimi sahnesi + kart dizisi) bu dosyanın git geçmişinde. Telefon (_ph_*, madde 279) AYRI, değişmedi.
@@ -17,6 +18,7 @@ extends CanvasLayer
 signal closed
 
 const UiAnim := preload("res://scripts/ui_anim.gd")
+const PixelBox := preload("res://scripts/pixel_box.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
@@ -39,20 +41,21 @@ const TAB_UPGRADES := "upgrades"
 
 ## "Ateş Işığı" paleti (fire_menu_kit.gd masaüstü değerleriyle aynı tonlar).
 const C_PANEL := Color(0.06, 0.04, 0.03, 0.82) ## ayrıntı zemini (sahne arkadan sezilir)
-const C_PANEL2 := Color("#2a1d12")
-const C_PANEL3 := Color("#3a2a1a")
-const C_INSET := Color("#140e09")
-const C_LINE := Color("#3b2a1a")
-const C_LINE_HI := Color("#5a4128")
-const C_TEXT := Color("#efe2c6")
-const C_DIM := Color("#b09878")
-const C_ACCENT := Color("#f4c56e")
-const C_ACCENT_DK := Color("#6a4416")
-const C_ACCENT_TEXT := Color("#24160a")
-const C_GOOD := Color("#a9c96e")
-const C_BAD := Color("#dc7f60")
-const C_PRICE := Color("#f2c674")
-const C_SPOT := Color("#c0803a")
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
+const C_PANEL2 := HT.WIN_PANEL2
+const C_PANEL3 := HT.WIN_PANEL3
+const C_INSET := HT.DEEP
+const C_LINE := HT.WIN_LINE
+const C_LINE_HI := HT.WIN_LINE_HI
+const C_TEXT := HT.TEXT
+const C_DIM := HT.DIM
+const C_ACCENT := HT.ACCENT
+const C_ACCENT_DK := HT.ACCENT_DK
+const C_ACCENT_TEXT := HT.ACCENT_TEXT
+const C_GOOD := HT.GOOD
+const C_BAD := HT.BAD
+const C_PRICE := HT.PRICE
+const C_SPOT := HT.SPOT
 const SHADE_COLOR := Color(0.05, 0.035, 0.025, 0.88) ## sol karartma (liste sütunlarının okunurluğu)
 const SHADE_X0 := 1220.0
 
@@ -626,15 +629,13 @@ func _stat_tex(key: String) -> Texture2D:
 
 
 ## ---------------------------------------------------------------- UI yardımcıları
-func _sb(fill: Color, border: Color = Color(0, 0, 0, 0), bw: int = 3, r: int = 6, pad: float = -1.0) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+func _sb(fill: Color, border: Color = Color(0, 0, 0, 0), bw: int = 3, r: int = 6, pad: float = -1.0) -> PixelBox:
+	var s := PixelBox.new() ## piksel kenar + kabartma (madde 417; StyleBoxFlat ile aynı özellikler)
 	s.bg_color = fill
 	if border.a > 0.0 and bw > 0:
 		s.border_color = border
 		s.set_border_width_all(bw)
 	s.set_corner_radius_all(r)
-	s.corner_detail = 1 ## 45 derece pah: pikselli köşe
-	s.anti_aliasing = false
 	if pad >= 0.0:
 		s.set_content_margin_all(pad)
 	return s
@@ -1001,7 +1002,7 @@ func _header() -> Control:
 	return hd
 
 
-## Sol sütun: bölümler ana menü öğeleri gibi (FM.item: mum + ikon + başlık + alt yazı), seçili = altın + yanan mum; en altta Geri.
+## Sol sütun: bölümler ana menü öğeleri gibi (FM.item: ikon + başlık + alt yazı), seçili = altın; en altta Geri.
 func _section_column(items: Array) -> Control:
 	var c := _v(0)
 	c.custom_minimum_size.x = FM.COL_W
@@ -1169,7 +1170,7 @@ func _upg_detail(d: Dictionary) -> Control:
 	v.add_child(_upgrade_btn(id, 40, 76))
 	var asking: bool = _confirm_id == "reset"
 	if asking:
-		v.add_child(_wrap("Harcanan %d kıymıktan %d ücret kesilir, %d geri gelir." % [
+		v.add_child(_wrap(Loc.t("Harcanan %d kıymıktan %d ücret kesilir, %d geri gelir.") % [
 				MetaUpgradesScript.total_spent(), MetaUpgradesScript.reset_fee(), MetaUpgradesScript.reset_refund()], 24, C_DIM, DETAIL_TEXT_W, 2))
 	var can_reset: bool = MetaUpgradesScript.can_reset()
 	var rb: Button = _btn("ONAYLA?" if asking else "Hepsini sıfırla", "danger" if asking else ("ghost" if can_reset else "off"), 24, 44)
@@ -1422,7 +1423,7 @@ func _ph_rebuild() -> void:
 
 func _ph_shard_chip() -> PanelContainer:
 	var chip := PK.inset(0.9, 0.0, DK.C_LINE)
-	var st: StyleBoxFlat = chip.get_theme_stylebox("panel")
+	var st = chip.get_theme_stylebox("panel") ## PixelBox (madde 417)
 	st.content_margin_left = 16
 	st.content_margin_right = 20
 	var h := DK.h(12)
@@ -1445,7 +1446,7 @@ func _ph_kind_page(items: Array, kind: String) -> Control:
 	var t := PK.lbl(str(KIND_NAMES.get(kind, kind)), PK.FS_TITLE, DK.C_ACCENT)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
-	head.add_child(PK.lbl("%d / %d açık" % [_open_count(list), list.size()], PK.FS_SMALL, DK.C_DIM))
+	head.add_child(PK.lbl(Loc.t("%d / %d açık") % [_open_count(list), list.size()], PK.FS_SMALL, DK.C_DIM))
 	head.add_child(_ph_shard_chip())
 	v.add_child(head)
 	var lst: Array = PK.scroll_list(0)
@@ -1552,11 +1553,11 @@ func _ph_kind_detail(det: VBoxContainer, it: Dictionary) -> void:
 			b.disabled = true
 		"can":
 			var asking: bool = _confirm_id == _id(it)
-			b = PK.big_button("ONAYLA?" if asking else "KİLİDİ AÇ  %d" % cost, "Kalan: %d" % (MetaProgressScript.shards() - cost),
+			b = PK.big_button("ONAYLA?" if asking else Loc.t("KİLİDİ AÇ  %d") % cost, Loc.t("Kalan: %d") % (MetaProgressScript.shards() - cost),
 					"danger" if asking else "primary", [], 0.0, 144.0)
 			b.pressed.connect(_on_buy_pressed.bind(kind, it["key"]))
 		_:
-			b = PK.big_button("KİLİDİ AÇ  %d" % cost, "%d kıymık eksik" % _need(it), "disabled", PK.G_LOCK, 0.0, 144.0)
+			b = PK.big_button(Loc.t("KİLİDİ AÇ  %d") % cost, Loc.t("%d kıymık eksik") % _need(it), "disabled", PK.G_LOCK, 0.0, 144.0)
 			b.disabled = true
 	b.name = "BuyButton"
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1575,7 +1576,7 @@ func _ph_upgrades_page() -> Control:
 	var t := PK.lbl("GELİŞTİRMELER", PK.FS_TITLE, DK.C_ACCENT)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
-	head.add_child(PK.lbl("%d / %d seviye" % [lv.x, lv.y], PK.FS_SMALL, DK.C_DIM))
+	head.add_child(PK.lbl(Loc.t("%d / %d seviye") % [lv.x, lv.y], PK.FS_SMALL, DK.C_DIM))
 	head.add_child(_ph_shard_chip())
 	v.add_child(head)
 	var lst: Array = PK.scroll_list(0)
@@ -1652,14 +1653,14 @@ func _ph_upgrades_detail(det: VBoxContainer) -> void:
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	det.add_child(info)
 	det.add_child(DK.sp(0, 24))
-	det.add_child(PK.lbl("Toplam seviye %d / %d" % [lv.x, lv.y], PK.FS_BODY, DK.C_TEXT))
+	det.add_child(PK.lbl(Loc.t("Toplam seviye %d / %d") % [lv.x, lv.y], PK.FS_BODY, DK.C_TEXT))
 	var bar := Bar.new(float(lv.x) / float(maxi(1, lv.y)), DK.C_ACCENT, DK.C_INSET, 24.0, 0.0)
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	det.add_child(bar)
 	det.add_child(DK.sp(0, 0, false, true))
 	var reset_info: String = "Sıfırlanacak geliştirme yok."
 	if MetaUpgradesScript.can_reset():
-		reset_info = "Sıfırlarsan harcanan %d kıymıktan %d ücret kesilir, %d geri gelir." % [
+		reset_info = Loc.t("Sıfırlarsan harcanan %d kıymıktan %d ücret kesilir, %d geri gelir.") % [
 				MetaUpgradesScript.total_spent(), MetaUpgradesScript.reset_fee(), MetaUpgradesScript.reset_refund()]
 	var ri := PK.lbl(reset_info, PK.FS_SMALL, DK.C_DIM)
 	ri.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

@@ -30,7 +30,9 @@ func _texts(n: Node, out: Array) -> void:
 
 func test_sync_channel_carries_damage_taken() -> void:
 	var main_src: String = FileAccess.get_file_as_string("res://scripts/main.gd")
-	assert(main_src.find("\"dmg_taken\": player.match_damage_taken") != -1, "durum kanalı alınan hasarı göndermeli")
+	## madde 419: grup paneli sayaçları saniyede bir yenilenen anlık değerden gider (_state_dmg_snap = [verilen, alınan])
+	assert(main_src.find("\"dmg_taken\": _state_dmg_snap[1]") != -1, "durum kanalı alınan hasarı göndermeli")
+	assert(main_src.find("_state_dmg_snap = [player.match_damage_dealt, player.match_damage_taken]") != -1, "anlık değer oyuncunun sayaçlarından")
 	var rp_src: String = FileAccess.get_file_as_string("res://scripts/remote_player.gd")
 	assert(rp_src.find("match_damage_taken = extra.get(\"dmg_taken\"") != -1, "kukla alınan hasarı durum kanalından okumalı")
 

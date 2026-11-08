@@ -34,13 +34,14 @@ func _run() -> void:
 	if steps > 0:
 		Engine.max_physics_steps_per_frame = steps
 	var gs := GDScript.new()
-	gs.source_code = FileAccess.get_file_as_string("res://tools/mp_audit/net_probe/probe_node.gd")
+	var cc_chan: int = int(root.get_node("NetworkManager").get_script().get_script_constant_map().get("CH_COMBAT", 0))
+	gs.source_code = FileAccess.get_file_as_string("res://tools/mp_audit/net_probe/probe_node.gd").replace("\"reliable\", 99)", "\"reliable\", %d)" % cc_chan)
 	var rl: Error = gs.reload()
 	_pn = Node.new()
 	_pn.set_script(gs)
 	_pn.name = "ProbeNode"
 	root.add_child(_pn)
-	_log("probe node: reload=%d has_rpc=%s" % [rl, str(_pn.has_method("send_pair"))])
+	_log("probe node: reload=%d has_rpc=%s kritik kanal=%d" % [rl, str(_pn.has_method("send_pair")), cc_chan])
 	_nm = root.get_node("NetworkManager")
 	_gm = root.get_node("GameManager")
 	if _role == "host":
@@ -108,6 +109,8 @@ func _run() -> void:
 			spawned += int(spawner.call("debug_spawn_creature", id, 3, 1, at))
 		_log("yaratık doğdu: %d" % spawned)
 	await _wait(5.0)
+	## madde 419 sayaçları (yoksa 0): durum paketi mesaj/bayt, yaratık kaydı / can-kalkansız kayıt
+	var c0 := _counters(spawner)
 	var samples: Array = []
 	var t0: int = Time.get_ticks_msec()
 	var next_s: int = 0
@@ -167,6 +170,7 @@ func _run() -> void:
 			var tick_c: int = int(spawner.get("_enemy_sync_last_tick")) if _role != "host" else -1
 			samples.append({"pf": Engine.get_physics_frames(), "gt": snappedf(float(_gm.get("game_time")), 0.01), "bs": bs, "bp": bp, "br": br, "bpr": bpr, "u": Time.get_unix_time_from_system(), "fr": frames, "mx": snappedf(max_dt, 0.1),
 				"n": en.size(), "th": tick_h, "tc": tick_c,
+				"tp": snappedf(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, 0.01), "tpr": snappedf(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, 0.01),
 				"own": [snappedf(player.global_position.x, 0.1), snappedf(player.global_position.y, 0.1)],
 				"pup": ([snappedf(rp.global_position.x, 0.1), snappedf(rp.global_position.y, 0.1)] if rp else []),
 				"en": en})
@@ -174,6 +178,10 @@ func _run() -> void:
 			max_dt = 0.0
 		await process_frame
 	var cost := {}
+	var c1 := _counters(spawner)
+	for k in c1.keys():
+		cost["d_" + k] = int(c1[k]) - int(c0.get(k, 0))
+	cost["window_s"] = _secs
 	var last_extra: Variant = current_scene.get("_last_sent_extra_state")
 	if last_extra is Dictionary:
 		cost["extra_state_bytes"] = var_to_bytes(last_extra).size()
@@ -196,13 +204,24 @@ func _run() -> void:
 				spawner.call("_sync_enemy_positions", tk, pk)
 		cost["client_apply_ms_per_tick"] = float(Time.get_ticks_usec() - us0) / 1000.0 / float(reps)
 		cost["client_apply_states"] = states.size()
-	var lat := {"sent_rel": int(_pn.get("sent_rel")), "sent_unr": int(_pn.get("sent_unr")), "rel": _pn.get("rel_lat"), "unr": _pn.get("unr_lat"), "sent_chan": int(_pn.get("sent_chan")), "chan": _pn.get("chan_lat")}
+	var lat := {"sent_rel": int(_pn.get("sent_rel")), "sent_unr": int(_pn.get("sent_unr")), "rel": _pn.get("rel_lat"), "unr": _pn.get("unr_lat"), "sent_chan": int(_pn.get("sent_chan")), "chan": _pn.get("chan_lat"), "sent_cc": int(_pn.get("sent_cc")), "cc": _pn.get("cc_lat"), "cc_chan": cc_chan}
 	var res := {"role": _role, "n": _n, "samples": samples, "cost": cost, "lat": lat}
 	var out := FileAccess.open(_dir.path_join(_role + ".json"), FileAccess.WRITE)
 	out.store_string(JSON.stringify(res)); out.close()
 	_log("bitti: %d örnek %s" % [samples.size(), str(cost)])
 	await _wait(3.0)
 	quit()
+
+
+func _counters(spawner: Node) -> Dictionary:
+	var out := {}
+	for k in ["net_state_msgs", "net_state_bytes", "net_state_full_msgs"]:
+		var v: Variant = current_scene.get(k)
+		out[k] = int(v) if v != null else 0
+	for k in ["net_enemy_records", "net_enemy_records_no_hp"]:
+		var v: Variant = spawner.get(k) if spawner else null
+		out[k] = int(v) if v != null else 0
+	return out
 
 
 func _wait(sec: float) -> void:

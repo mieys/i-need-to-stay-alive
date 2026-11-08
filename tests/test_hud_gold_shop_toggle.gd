@@ -42,6 +42,35 @@ func _assert_all_ignore(node: Node) -> void:
 		_assert_all_ignore(child)
 
 
+## Kullanıcı isteği (2026-11-06): FPS göstergesi sadece "FPS: N" yazsın (eski " | C++ yaratık" eki yok), sol sütundaki
+## ENVANTER düğmesinin yanında simetrik (aynı yükseklik, dikey ortalı) ve fazla dikkat çekmeyecek kadar küçük/sönük dursun.
+func test_fps_label_sits_beside_envanter_button_and_is_subtle() -> void:
+	var hud: Node = _make_hud()
+	if MobileUIScript_enabled():
+		hud.queue_free()
+		return
+	var fps: Label = hud.get_node("FpsLabel")
+	var env: Button = hud.get_node("EnvanterToggleButton")
+	assert(fps.offset_left >= env.offset_right, "FPS etiketi ENVANTER düğmesinin SAĞINDA olmalı (solu %.1f, düğme sağı %.1f)" % [fps.offset_left, env.offset_right])
+	assert(fps.offset_left - env.offset_right <= 24.0, "FPS etiketi düğmeye yakın durmalı")
+	assert(is_equal_approx(fps.offset_top, env.offset_top) and is_equal_approx(fps.offset_bottom, env.offset_bottom),
+		"FPS etiketi ENVANTER düğmesiyle aynı yükseklikte (dikey simetrik) olmalı")
+	assert(fps.vertical_alignment == VERTICAL_ALIGNMENT_CENTER, "Yazı dikey ortalı olmalı")
+	assert(fps.get_theme_font_size("font_size") <= 16, "FPS yazısı küçük (<=16) olmalı")
+	assert(fps.get_theme_color("font_color").a < 1.0, "FPS yazısı sönük (saydam) olmalı")
+	## Metin: sadece FPS (yaratık sistemi ekinin olmaması)
+	UISound.show_fps = true
+	hud._process(1.0)
+	assert(fps.text.begins_with("FPS: "), "FPS metni 'FPS: N' ile başlamalı: %s" % fps.text)
+	assert(fps.text.find("C++") == -1 and fps.text.find("|") == -1, "FPS metninde başka bilgi olmamalı: %s" % fps.text)
+	UISound.show_fps = false
+	hud.queue_free()
+
+
+func MobileUIScript_enabled() -> bool:
+	return load("res://scripts/mobile_ui.gd").enabled
+
+
 func test_shop_toggle_button_is_hidden() -> void:
 	var hud: Node = _make_hud()
 	var shop_btn: Button = hud.get_node("ShopToggleButton")

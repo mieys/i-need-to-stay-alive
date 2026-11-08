@@ -16,6 +16,9 @@ extends RefCounted
 ## tools/gen_ui_kit.py -> assets/ui/kit (HUD yerleşimi o dokuların geometrisine bağlı, sadece paleti yeni kite uyarlandı).
 
 const KIT := "res://assets/ui/kit/"      ## HUD çerçeveleri (tools/gen_ui_kit.py)
+## Oyuncu paneli "C Gömme Tepsi" (madde 454): tepsi kutuları içerikten bu kadar (yerel px; dock 0,92 ölçekli) dışa taşar - "ability_bar",
+## "dock_side_legend", "dock_side_stats". Tepsinin kenarı 12 doku pikseli, eski oval 6'ydı: 6 = içeriğin eski iç boşluğu geri gelir.
+const DOCK_TRAY_GROW := 6.0
 const GAME := MenuKit.GAME_DIR           ## paneller/butonlar/tier dokuları (tools/gen_menu_kit.py build_game)
 
 ## Yazı boyutları (m5x7: 16'nın/8'in katları keskin).
@@ -165,15 +168,43 @@ static func panel_style(kind: String = "window") -> StyleBox:
 			b.texture = tex("panel_status_badge.png")
 			_margins(b, 10.0, 4.0)
 			sb = b
+		"dock_side_legend", "dock_side_stats":
+			## Ana panele yapışık yan paneller (efsanevi yuvalar hud_legend_slots.gd + mini stat hud_stat_panel.gd), madde 454:
+			## "C Gömme Tepsi"nin küçük kutusu (ince ahşap kenar + koyu tepsi). Buff rozetleri status_badge'de kalır.
+			## Kullanıcı ("çerçeve biraz dar, bazı şeyler sınıra yaklaşmak üzere"): tepsinin kenarı 4 sanat pikseli (eski ovalin 2 katı) ->
+			## içerik YERİNDE kalır, kutu dışa DOCK_TRAY_GROW kadar taşar; ana panelin altına giren yan (efsanevide sol, statta sağ) ve
+			## stat sekmelerinin oturduğu üst kenar taşmaz.
+			var ds := StyleBoxTexture.new()
+			ds.texture = tex("hud_dock_tray_side.png")
+			ds.texture_margin_left = 18.0
+			ds.texture_margin_top = 18.0
+			ds.texture_margin_right = 18.0
+			ds.texture_margin_bottom = 18.0
+			ds.expand_margin_bottom = DOCK_TRAY_GROW
+			if kind == "dock_side_legend":
+				ds.expand_margin_top = DOCK_TRAY_GROW
+				ds.expand_margin_right = DOCK_TRAY_GROW
+			else:
+				ds.expand_margin_left = DOCK_TRAY_GROW
+			sb = ds
 		"ability_bar":
-			## Yetenek çubuğunun arkası (hud.gd _create_ability_bar_frame) - oval uçlu ince ahşap pervaz, HUD dokusu.
-			## Pay yarıçaptan küçük OLAMAZ yoksa eğri kesilip esnetilir (bkz. tools/gen_ui_kit.py ability_bar_panel).
+			## Yetenek çubuğunun arkası (hud.gd dock_frame + gizli _create_ability_bar_frame).
+			## 2026-11-08 (kullanıcı, madde 454): "C Gömme Tepsi" (madde 391 prototipi) - ince ahşap kenar + koyu çukur tepsi, oval uç yerine
+			## piksel basamaklı köşe. Doku TAM YÜKSEKLİKTE (152 = hud.gd DOCK_H): pay üst 76 / alt 75 -> dikeyde hiç esnemez, yalnız orta sütun
+			## yatay esner. Kaynak: tools/proto_20261031/dock_pencere/gen_dock_pencere.py C (out/tex_C/dock.png); eski oval doku
+			## panel_ability_bar.png duruyor (gen_ui_kit.py / gen_hud_tema.py onu yazar, bunu yazmaz).
 			var a := StyleBoxTexture.new()
-			a.texture = tex("panel_ability_bar.png")
-			a.texture_margin_left = 30.0
-			a.texture_margin_right = 30.0
-			a.texture_margin_top = 26.0
-			a.texture_margin_bottom = 26.0
+			a.texture = tex("hud_dock_tray.png")
+			a.texture_margin_left = 36.0
+			a.texture_margin_right = 36.0
+			a.texture_margin_top = 76.0
+			a.texture_margin_bottom = 75.0
+			## Kalın tepsi kenarı içeriği sıkıştırıyordu (portre/kalpler/çubuklar kenara 2-4 px) -> çerçeve her yandan dışa taşar,
+			## içerik yerinde (dikeyde yalnız düz tepsi satırı esner).
+			a.expand_margin_left = DOCK_TRAY_GROW
+			a.expand_margin_right = DOCK_TRAY_GROW
+			a.expand_margin_top = DOCK_TRAY_GROW
+			a.expand_margin_bottom = DOCK_TRAY_GROW
 			a.content_margin_left = 10.0
 			a.content_margin_right = 10.0
 			a.content_margin_top = 6.0

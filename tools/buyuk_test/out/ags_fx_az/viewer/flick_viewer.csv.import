@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c53oraainx4g"
+
+[deps]
+
+files=["res://tools/buyuk_test/out/ags_fx_az/viewer/flick_viewer.lum.translation", "res://tools/buyuk_test/out/ags_fx_az/viewer/flick_viewer.diff.translation", "res://tools/buyuk_test/out/ags_fx_az/viewer/flick_viewer.diff.translation", "res://tools/buyuk_test/out/ags_fx_az/viewer/flick_viewer.sat.translation"]
+
+source_file="res://tools/buyuk_test/out/ags_fx_az/viewer/flick_viewer.csv"
+dest_files=["res://tools/buyuk_test/out/ags_fx_az/viewer/flick_viewer.lum.translation", "res://tools/buyuk_test/out/ags_fx_az/viewer/flick_viewer.diff.translation", "res://tools/buyuk_test/out/ags_fx_az/viewer/flick_viewer.diff.translation", "res://tools/buyuk_test/out/ags_fx_az/viewer/flick_viewer.sat.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

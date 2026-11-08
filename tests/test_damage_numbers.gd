@@ -98,7 +98,7 @@ func test_staggered_expiry_keeps_list_consistent() -> void:
 	for i in range(5):
 		second.append(dn.spawn_fixed(null, Vector2(i, 10), "b%d" % i, Color.WHITE))
 	assert(_consistent(dn))
-	## ilk beşi aynı karede biter (0,5 + 0,5 >= 0,98), ikinci beşi yaşar
+	## ilk beşi aynı karede biter (0,5 + 0,5 >= TOTAL_TIME 0,78), ikinci beşi yaşar
 	dn.call("_process", 0.5)
 	for id in first:
 		assert(not dn.is_alive(id), "ilk grup bitmeli")
@@ -120,6 +120,38 @@ func test_alpha_timeline() -> void:
 	assert(is_equal_approx(DnScript._alpha_of(DnScript.FADE_IN_DURATION + DnScript.HOLD * 0.5, 0.0), 1.0), "tutma evresi tam opak")
 	assert(DnScript._alpha_of(DnScript.TOTAL_TIME - 0.001, 0.0) < 0.02, "sonda söner")
 	assert(is_equal_approx(DnScript._alpha_of(DnScript.TOTAL_TIME + 0.1, 0.0), 0.0))
+
+
+## Madde 416: sayı çıktığı hedefi takip eder (ofset korunur), hedef silinince son konumunda söner; bayrak kapalıyken eski sabit kip.
+func test_number_follows_its_target_and_stays_put_after_it_is_freed() -> void:
+	var was: bool = DnScript.follow_targets
+	DnScript.set_follow_targets(true)
+	var dn := _dn()
+	var target := Node2D.new()
+	add_child(target)
+	target.global_position = Vector2(100, 200)
+	var ids: Array[int] = []
+	dn.spawn_fixed_capped(target, Vector2(110, 170), "5", Color.WHITE, ids, 5)
+	var e = _entries(dn)[ids[0]]
+	assert(e.follow and e.offset.is_equal_approx(Vector2(10, -30)), "ofset hedefe göre saklanmalı: %s" % str(e.offset))
+	target.global_position = Vector2(400, 50)
+	dn.call("_process", 0.1)
+	assert(e.origin.is_equal_approx(Vector2(410, 20)), "sayı hedefle birlikte gitmeli: %s" % str(e.origin))
+	target.free()
+	dn.call("_process", 0.1)
+	assert(e.target == null and e.origin.is_equal_approx(Vector2(410, 20)), "hedef silinince son konumda kalmalı: %s" % str(e.origin))
+	## bayrak kapalı: doğduğu noktada sabit
+	DnScript.set_follow_targets(false)
+	var t2 := Node2D.new()
+	add_child(t2)
+	var id2: int = dn.spawn_fixed(t2, Vector2(5, 5), "6", Color.WHITE)
+	t2.global_position = Vector2(300, 300)
+	dn.call("_process", 0.1)
+	var e2 = _entries(dn)[id2]
+	assert(not e2.follow and e2.origin.is_equal_approx(Vector2(5, 5)), "kapalı kipte sayı sabit kalmalı")
+	t2.free()
+	DnScript.set_follow_targets(was)
+	_cleanup()
 
 
 func test_alpha_set_on_item_follows_the_same_timeline() -> void:

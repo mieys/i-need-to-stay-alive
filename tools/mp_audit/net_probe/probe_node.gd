@@ -10,6 +10,10 @@ var sent_rel: int = 0
 var sent_unr: int = 0
 var chan_lat: Array = []
 var sent_chan: int = 0
+## madde 419: oyunun KRİTİK olay kanalıyla (NetworkManager.CH_COMBAT; yoksa 0 = eski ortak akış) aynı kanalda ping -
+## net_probe.gd kaynağı yüklemeden önce "reliable", 99 yer tutucusunu kanal numarasıyla değiştirir (dosya tek başına da derlenir).
+var cc_lat: Array = []
+var sent_cc: int = 0
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -32,6 +36,12 @@ func c_ping(seq: int, t_send: float) -> void:
 	chan_lat.append([snappedf((now - t_send) * 1000.0, 0.1), seq, snappedf(now, 0.001)])
 
 
+@rpc("any_peer", "call_remote", "reliable", 99)
+func k_ping(seq: int, t_send: float) -> void:
+	var now: float = Time.get_unix_time_from_system()
+	cc_lat.append([snappedf((now - t_send) * 1000.0, 0.1), seq, snappedf(now, 0.001)])
+
+
 func send_pair(peer_id: int) -> void:
 	var t: float = Time.get_unix_time_from_system()
 	sent_rel += 1
@@ -40,3 +50,5 @@ func send_pair(peer_id: int) -> void:
 	u_ping.rpc_id(peer_id, sent_unr, t)
 	sent_chan += 1
 	c_ping.rpc_id(peer_id, sent_chan, t)
+	sent_cc += 1
+	k_ping.rpc_id(peer_id, sent_cc, t)

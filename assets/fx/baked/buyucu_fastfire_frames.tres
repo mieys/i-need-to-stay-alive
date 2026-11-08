@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" load_steps=34 format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://b3m3uk6vna0wi"]
 
-[ext_resource type="Texture2D" path="res://assets/fx/baked/buyucu_fastfire_sheet.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://b8f4mbpwxtc67" path="res://assets/fx/baked/buyucu_fastfire_sheet.png" id="1"]
 
 [sub_resource type="AtlasTexture" id="a0"]
 atlas = ExtResource("1")
@@ -164,8 +164,104 @@ margin = Rect2(43, 0, 43, 21)
 
 [resource]
 animations = [{
-"frames": [{"duration": 1.0, "texture": SubResource("a0")}, {"duration": 1.0, "texture": SubResource("a1")}, {"duration": 1.0, "texture": SubResource("a2")}, {"duration": 1.0, "texture": SubResource("a3")}, {"duration": 1.0, "texture": SubResource("a4")}, {"duration": 1.0, "texture": SubResource("a5")}, {"duration": 1.0, "texture": SubResource("a6")}, {"duration": 1.0, "texture": SubResource("a7")}, {"duration": 1.0, "texture": SubResource("a8")}, {"duration": 1.0, "texture": SubResource("a9")}, {"duration": 1.0, "texture": SubResource("a10")}, {"duration": 1.0, "texture": SubResource("a11")}, {"duration": 1.0, "texture": SubResource("a12")}, {"duration": 1.0, "texture": SubResource("a13")}, {"duration": 1.0, "texture": SubResource("a14")}, {"duration": 1.0, "texture": SubResource("a15")}, {"duration": 1.0, "texture": SubResource("a16")}, {"duration": 1.0, "texture": SubResource("a17")}, {"duration": 1.0, "texture": SubResource("a18")}, {"duration": 1.0, "texture": SubResource("a19")}, {"duration": 1.0, "texture": SubResource("a20")}, {"duration": 1.0, "texture": SubResource("a21")}, {"duration": 1.0, "texture": SubResource("a22")}, {"duration": 1.0, "texture": SubResource("a23")}, {"duration": 1.0, "texture": SubResource("a24")}, {"duration": 1.0, "texture": SubResource("a25")}, {"duration": 1.0, "texture": SubResource("a26")}, {"duration": 1.0, "texture": SubResource("a27")}, {"duration": 1.0, "texture": SubResource("a28")}, {"duration": 1.0, "texture": SubResource("a29")}, {"duration": 1.0, "texture": SubResource("a30")}, {"duration": 1.0, "texture": SubResource("a31")}],
-"loop": false,
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("a0")
+}, {
+"duration": 1.0,
+"texture": SubResource("a1")
+}, {
+"duration": 1.0,
+"texture": SubResource("a2")
+}, {
+"duration": 1.0,
+"texture": SubResource("a3")
+}, {
+"duration": 1.0,
+"texture": SubResource("a4")
+}, {
+"duration": 1.0,
+"texture": SubResource("a5")
+}, {
+"duration": 1.0,
+"texture": SubResource("a6")
+}, {
+"duration": 1.0,
+"texture": SubResource("a7")
+}, {
+"duration": 1.0,
+"texture": SubResource("a8")
+}, {
+"duration": 1.0,
+"texture": SubResource("a9")
+}, {
+"duration": 1.0,
+"texture": SubResource("a10")
+}, {
+"duration": 1.0,
+"texture": SubResource("a11")
+}, {
+"duration": 1.0,
+"texture": SubResource("a12")
+}, {
+"duration": 1.0,
+"texture": SubResource("a13")
+}, {
+"duration": 1.0,
+"texture": SubResource("a14")
+}, {
+"duration": 1.0,
+"texture": SubResource("a15")
+}, {
+"duration": 1.0,
+"texture": SubResource("a16")
+}, {
+"duration": 1.0,
+"texture": SubResource("a17")
+}, {
+"duration": 1.0,
+"texture": SubResource("a18")
+}, {
+"duration": 1.0,
+"texture": SubResource("a19")
+}, {
+"duration": 1.0,
+"texture": SubResource("a20")
+}, {
+"duration": 1.0,
+"texture": SubResource("a21")
+}, {
+"duration": 1.0,
+"texture": SubResource("a22")
+}, {
+"duration": 1.0,
+"texture": SubResource("a23")
+}, {
+"duration": 1.0,
+"texture": SubResource("a24")
+}, {
+"duration": 1.0,
+"texture": SubResource("a25")
+}, {
+"duration": 1.0,
+"texture": SubResource("a26")
+}, {
+"duration": 1.0,
+"texture": SubResource("a27")
+}, {
+"duration": 1.0,
+"texture": SubResource("a28")
+}, {
+"duration": 1.0,
+"texture": SubResource("a29")
+}, {
+"duration": 1.0,
+"texture": SubResource("a30")
+}, {
+"duration": 1.0,
+"texture": SubResource("a31")
+}],
+"loop": 0,
 "name": &"play",
 "speed": 20.0
 }]

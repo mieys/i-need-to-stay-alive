@@ -4,7 +4,19 @@ Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
 SAVED tree0.png
 SAVED tree1.png
 SAVED tree2.png
+WARNING: Katman yok: Shader Eklenecek/Ağaç ölü
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _capture (res://tools/bake_map_shadows.gd:104)
+       [1] _run (res://tools/bake_map_shadows.gd:90)
+       [2] _capture (res://tools/bake_map_shadows.gd:115)
 SAVED tree3.png
+WARNING: Katman yok: Shader Eklenecek/Derin orman süsleri
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _capture (res://tools/bake_map_shadows.gd:104)
+       [1] _run (res://tools/bake_map_shadows.gd:90)
+       [2] _capture (res://tools/bake_map_shadows.gd:115)
 SAVED bush.png
 WARNING: Katman yok: ev/Blacksmith
    at: push_warning (core/variant/variant_utility.cpp:1033)
@@ -38,8 +50,20 @@ WARNING: Katman yok: tarla/tarla 2
        [1] _run (res://tools/bake_map_shadows.gd:90)
        [2] _capture (res://tools/bake_map_shadows.gd:115)
 SAVED farm.png
+WARNING: Katman yok: Shader Eklenecek/Derin orman nesneleri
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _capture (res://tools/bake_map_shadows.gd:104)
+       [1] _run (res://tools/bake_map_shadows.gd:90)
+       [2] _capture (res://tools/bake_map_shadows.gd:115)
 SAVED rock.png
 SAVED cliff.png
+WARNING: Katman yok: Shader Eklenecek/Derin orman nesneleri
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _capture (res://tools/bake_map_shadows.gd:104)
+       [1] _run (res://tools/bake_map_shadows.gd:93)
+       [2] _capture (res://tools/bake_map_shadows.gd:115)
 SAVED rock_color.png
 SAVED cliff_color.png
 SHADOW_BAKE_DIR=C:/Users/perva/AppData/Roaming/Godot/app_userdata/Temiz Sürüm/shadow_bake

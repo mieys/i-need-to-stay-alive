@@ -1,9 +1,11 @@
 extends Node
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Vampir Çocuk FX yardımcısı (broadcast_player_vfx "vampir_fx" dalı).
 const VampirMathScript := preload("res://scripts/vampir_math.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
 const ParrotTreeLoot := preload("res://scripts/parrot_tree_loot.gd")
+const MapProfilesScript := preload("res://scripts/map_profiles.gd") ## harita seçimi (madde 444)
 const AudioBuses := preload("res://scripts/audio_buses.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
@@ -167,8 +169,20 @@ const MAX_PLAYERS := 8
 ## Host devri: kabul edilen herkes şifreyi bilir (room_password = girdiği şifre) - yeni host aynı ayarlarla kurar, diğerleri aynı
 ## şifreyle otomatik doğrulanır.
 const ROOM_MIN_PLAYERS := 2
-const LOBBY_PROTOCOL := "lobi-15" ## (2026-10-23: lobi-14 -> lobi-15, yaratık yeteneği "bone" (İskelet Kemik Atışı) dünya efekti - eski exe tanımaz, görünmez kemikten hasar alırdı, madde 368); (2026-10-21: lobi-13 -> lobi-14, Oakley yetenek evrimleri: "oakley_revive" oyuncu efekti + "oakley_tree" süre/alan verisi + bee_poison RPC param2 (Salgın Zehir) - eski exe tanımaz, madde 348); (2026-10-20: lobi-12 -> lobi-13, yeni silah Kalkan "kalkan" + "kalkan_*" darbe verisi - eski exe silahı tanımaz, madde 338); (2026-10-19: lobi-11 -> lobi-12, yeni silah Gökkuşağı Asası "gokkusagi" + "rbeam_*" oyuncu efektleri - eski exe silahı/ışını tanımaz, madde 306); (lobi-10 -> lobi-11, Yıldırım Asası vuruş sesi: "beam_hit" oyuncu efekti - eski exe tanımaz, tikleri sessiz duyar, madde 294); lobi-10: (2026-10-19: lobi-9 -> lobi-10, saklanma çalılığı: request_brush_reveal RPC'si + "brush_search_*"/"brush_alert" yaratık efektleri, madde 283); lobi-9: (2026-10-19: lobi-8 -> lobi-9, broadcast_enemy_projectile'a mermi stili argümanı - lich Ruh Alevi, madde 280); lobi-8: (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
+const LOBBY_PROTOCOL := "lobi-22" ## (2026-11-08: lobi-21 -> lobi-22, madde 463: ana haritada DungeonManager düğümü yok, derin orman / zindan kalktı) (2026-11-07: lobi-20 -> lobi-21, Taşkın Hisar KÖPRÜ KOLU: DungeonManager._rpc_req_lever (kol gruptaki parmaklıkları indirir) + Lağım Ağı GAZ FIÇISI: _rpc_req_barrel / _rpc_barrel, _rpc_full_state 4. argüman (fıçılar) - eski exe RPC listesi uyuşmaz, madde 449); (2026-11-07: lobi-19 -> lobi-20, yeni silah Pompalı Tüfek "pompali" + request_enemy_damage 5. argüman (sep: saçma hasar sayıları ayrı) + "damage_number" "sep" alanı - eski exe silahı tanımaz, madde 448); (2026-11-07: lobi-18 -> lobi-19, HARİTA SEÇİMİ: _rpc_start_game / _rpc_join_in_progress_game harita kimliği argümanı + LAN ilanına 9. alan (harita) - eski exe RPC imzası uyuşmaz, madde 444); (2026-11-06: lobi-17 -> lobi-18, level pazarı ayrı ekran: _rpc_extend_level_up_countdown (pazarın kendi süresi) - eski exe RPC listesi uyuşmaz, madde 432); (2026-11-06: lobi-16 -> lobi-17, lobi seçimlerine evcil hayvan: _rpc_sync_player_loadout üçüncü argüman "pet" - eski exe 2 argümanla çağırır, RPC reddedilir); (2026-11-06: lobi-15 -> lobi-16, ağ gecikmesi düzeltmesi: güvenilir RPC'ler ayrı aktarım kanallarında (CH_*), oyuncu durum paketi delta (main.gd _rpc_player_state), yaratık senkron kaydında değişmeyen can/kalkan atlanır (enemy_sync_codec FLAG_NO_HP), bağlantı kalitesi ping/pong RPC'leri - eski exe ile kanal/RPC listesi uyuşmaz, madde 419); (2026-10-23: lobi-14 -> lobi-15, yaratık yeteneği "bone" (İskelet Kemik Atışı) dünya efekti - eski exe tanımaz, görünmez kemikten hasar alırdı, madde 368); (2026-10-21: lobi-13 -> lobi-14, Oakley yetenek evrimleri: "oakley_revive" oyuncu efekti + "oakley_tree" süre/alan verisi + bee_poison RPC param2 (Salgın Zehir) - eski exe tanımaz, madde 348); (2026-10-20: lobi-12 -> lobi-13, yeni silah Kalkan "kalkan" + "kalkan_*" darbe verisi - eski exe silahı tanımaz, madde 338); (2026-10-19: lobi-11 -> lobi-12, yeni silah Gökkuşağı Asası "gokkusagi" + "rbeam_*" oyuncu efektleri - eski exe silahı/ışını tanımaz, madde 306); (lobi-10 -> lobi-11, Yıldırım Asası vuruş sesi: "beam_hit" oyuncu efekti - eski exe tanımaz, tikleri sessiz duyar, madde 294); lobi-10: (2026-10-19: lobi-9 -> lobi-10, saklanma çalılığı: request_brush_reveal RPC'si + "brush_search_*"/"brush_alert" yaratık efektleri, madde 283); lobi-9: (2026-10-19: lobi-8 -> lobi-9, broadcast_enemy_projectile'a mermi stili argümanı - lich Ruh Alevi, madde 280); lobi-8: (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
 const AUTH_TIMEOUT_MS := 10000 ## host: bu sürede doğrulanmayanı atar; istemci: bu sürede kabul gelmezse vazgeçer
+
+## AKTARIM KANALLARI (madde 419, ağ gecikmesi düzeltmesi; analiz madde 349): güvenilir (reliable) paketler kanal başına SIRALI gelir -
+## bir paket kaybolunca o kanalda arkasındaki HER ŞEY yeniden gönderimi bekler. Eskiden 144 güvenilir RPC'nin hepsi tek kanaldaydı:
+## RTT 120 ms + %5 kayıpta hasar/vuruş olayı tek yön p50 269 ms, p99 ~1 sn (istemci->host p99 2,1 sn). Artık sık giden, birbirinden
+## bağımsız aileler AYRI kanalda: biri kayıp beklerken diğerleri akar. Kural: birbirine SIRA bağımlılığı olan RPC'ler (aç/kapa çiftleri,
+## doğ/sil...) AYNI kanalda kalmalı - yeni bir RPC'yi buraya taşımadan önce eşini kontrol et. 0 = varsayılan (lobi, sandık, dükkan,
+## ödül, doğuş/silme, seyrek olaylar). Güvenilmez (unreliable) RPC'ler kanalsız kalır (ENet'te zaten ayrı sistem kanalı).
+## Epic (EOSG) kanal numarasını EOS P2P "Channel"a geçirir; EOS'ta sıralı güvenilir paketlerin kanal başına mı sıralandığı canlı
+## DOĞRULANMADI (madde 349) - ENet'te (LAN) ölçüldü. Kanallar 1-3 Epic'te de sorunsuz (EOS 0-255 kabul eder).
+const CH_COMBAT := 1 ## hasar/vuruş: istemci->host yaratık hasarı/etkisi, host->istemci oyuncuya hasar/savrulma/yansıyan hasar
+const CH_ENEMY_FX := 2 ## host->istemci yaratık görsel olayları (vuruş parlaması, hasar sayısı, saldırı/ölüm pozu, durum aç/kapa çiftleri)
+const CH_STATE := 3 ## oyuncu durum paketi (main.gd _rpc_player_state, delta)
 const PHASE_ROOM := "room"
 const PHASE_SELECT := "select"
 ## Reddetme sebepleri (istemci arayüzü şifre sorusunu buna göre açar).
@@ -202,14 +216,18 @@ var _rejected_message: String = "" ## istemci: host reddetti, bağlantı kopunca
 
 
 ## Oda listesinden "Oda kur" penceresi çağırır - host_lan/host_online ÖNCESİ.
-func configure_room(p_name: String, password: String, max_players: int) -> void:
+func configure_room(p_name: String, password: String, max_players: int, map_id: String = "") -> void:
 	room_name = p_name.strip_edges().replace("|", " ").left(32)
 	room_password = password
 	room_max_players = clampi(max_players, ROOM_MIN_PLAYERS, MAX_PLAYERS)
+	## HARİTA SEÇİMİ (madde 444): odanın haritası = host'un GameManager.selected_map'i (ilan + oyun başlatma + geç katılım bunu taşır;
+	## host devrinde yeni host da aynı haritada olduğu için doğru ilan eder). Boş = değiştirme.
+	if map_id != "":
+		GameManager.selected_map = map_id if MapProfilesScript.has_profile(map_id) else MapProfilesScript.DEFAULT_ID
 
 
 func _default_room_name() -> String:
-	return "%s odası" % local_player_name
+	return Loc.t("%s odası") % local_player_name
 
 
 ## Odada yer var mı (host, doğrulama sırasında). Oyun sürerken geri katılanlar da sayıya dahil.
@@ -279,7 +297,7 @@ func _rpc_auth_response(proof: String, protocol: String, uid: String) -> void:
 	## Eskiden _on_peer_connected'daydı: host'un kendi bilgisi ancak kabulden sonra gider.
 	var my_info: Dictionary = lobby_players.get(multiplayer.get_unique_id(), {"name": local_player_name, "char_id": local_char_id})
 	_rpc_sync_player_info.rpc_id(sender_id, my_info["name"], my_info["char_id"], true)
-	_rpc_sync_player_loadout.rpc_id(sender_id, GameManager.selected_start_weapon, GameManager.selected_spiritual)
+	_rpc_sync_player_loadout.rpc_id(sender_id, GameManager.selected_start_weapon, GameManager.selected_spiritual, _local_pet())
 
 
 static func reject_message(code: int) -> String:
@@ -517,6 +535,7 @@ func _process(delta: float) -> void:
 	_process_online_session()
 	_process_room_auth()
 	_process_host_heartbeat(delta)
+	_process_link_quality(delta) ## bağlantı kalitesi ping/özet (madde 419)
 	_process_migration()
 
 	## LAN OTOMATİK KEŞİF: host'ken periyodik "buradayım" yayını, herkeste (bağlı
@@ -548,7 +567,7 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 	var err: Error = peer.create_server(port, MAX_PLAYERS)
 	if err != OK:
 		is_multiplayer_active = false
-		connection_status_changed.emit("LAN Sunucu başlatılamadı: %s" % error_string(err))
+		connection_status_changed.emit(Loc.t("LAN Sunucu başlatılamadı: %s") % error_string(err))
 		return false
 
 	_peer = peer
@@ -561,10 +580,11 @@ func host_lan(port: int = 7777, player_name: String = "Oyuncu", char_id: int = 1
 		"is_host": true,
 		"weapon": GameManager.selected_start_weapon,
 		"spirit": GameManager.selected_spiritual,
+		"pet": _local_pet(),
 	}
 
 	_begin_hosted_room()
-	connection_status_changed.emit("LAN Sunucu Kuruldu! Port: %d" % port)
+	connection_status_changed.emit(Loc.t("LAN Sunucu Kuruldu! Port: %d") % port)
 	lobby_updated.emit()
 	## Artık kendisi de ağda bir "beacon" (duyuru) yayınlar - bkz. LAN OTOMATİK KEŞİF
 	## bloğu altındaki _start_lan_beacon notu. Katılan taraf IP'yi hiç YAZMADAN, lobi
@@ -588,12 +608,12 @@ func join_lan(ip: String = "127.0.0.1", port: int = 7777, player_name: String = 
 	var err: Error = peer.create_client(ip, port)
 	if err != OK:
 		is_multiplayer_active = false
-		connection_status_changed.emit("LAN Sunucuya bağlanılamadı: %s" % error_string(err))
+		connection_status_changed.emit(Loc.t("LAN Sunucuya bağlanılamadı: %s") % error_string(err))
 		return false
 
 	_peer = peer
 	multiplayer.multiplayer_peer = _peer
-	connection_status_changed.emit("LAN Sunucuya bağlanılıyor (%s:%d)..." % [ip, port])
+	connection_status_changed.emit(Loc.t("LAN Sunucuya bağlanılıyor (%s:%d)...") % [ip, port])
 	stop_lan_discovery_listen()
 	return true
 
@@ -641,7 +661,7 @@ func host_online(player_name: String = "Oyuncu", char_id: int = 1) -> void:
 	connection_status_changed.emit("İnternet odası ilan ediliyor...")
 	if room_name.is_empty():
 		room_name = _default_room_name()
-	var listed: bool = await EosOnline.host_lobby_async(local_player_name, room_max_players, room_name, not room_password.is_empty())
+	var listed: bool = await EosOnline.host_lobby_async(local_player_name, room_max_players, room_name, not room_password.is_empty(), GameManager.selected_map)
 	if attempt != _online_attempt:
 		eos_peer.close()
 		EosOnline.close_lobby_async()
@@ -655,8 +675,8 @@ func host_online(player_name: String = "Oyuncu", char_id: int = 1) -> void:
 	is_online_session = true
 	is_host = true
 	_host_peer = 1
-	room_code = "İnternet (Epic) - %s" % local_player_name
-	_peer = FragmentPeerScript.new(eos_peer)
+	room_code = Loc.t("İnternet (Epic) - %s") % local_player_name
+	_peer = _wrap_eos_peer(eos_peer)
 	multiplayer.multiplayer_peer = _peer
 	lobby_players[1] = {
 		"name": local_player_name,
@@ -665,6 +685,7 @@ func host_online(player_name: String = "Oyuncu", char_id: int = 1) -> void:
 		"is_host": true,
 		"weapon": GameManager.selected_start_weapon,
 		"spirit": GameManager.selected_spiritual,
+		"pet": _local_pet(),
 	}
 	stop_lan_discovery_listen()
 	_begin_hosted_room()
@@ -694,13 +715,13 @@ func join_online(host_id: String, host_name: String, player_name: String = "Oyun
 	is_online_session = true
 	is_host = false
 	_host_peer = 1
-	room_code = "İnternet (Epic) - %s" % host_name
+	room_code = Loc.t("İnternet (Epic) - %s") % host_name
 	_rejected_message = ""
-	_peer = FragmentPeerScript.new(eos_peer)
+	_peer = _wrap_eos_peer(eos_peer)
 	multiplayer.multiplayer_peer = _peer
 	_online_connect_deadline_msec = Time.get_ticks_msec() + ONLINE_CONNECT_TIMEOUT_MS
 	stop_lan_discovery_listen()
-	connection_status_changed.emit("%s odasına bağlanılıyor..." % host_name)
+	connection_status_changed.emit(Loc.t("%s odasına bağlanılıyor...") % host_name)
 
 
 ## host_lan/join_lan/host_online/join_online'ın ortak başlangıcı: oyuncu adı (kaydedilir) + karakter.
@@ -805,11 +826,13 @@ func _stop_lan_beacon() -> void:
 func _send_lan_beacon() -> void:
 	if _discovery_send_peer == null:
 		return
-	## "|" ile ayrılan 8 alan: sihirli önek (rastgele ağ trafiğine yanlış tepki vermemek için) + host adı ("|" isimde olamaz,
-	## değiştirilir) + gerçek oyun (ENet) portu + oda adı + oyuncu sayısı + oda sınırı + kilitli (1/0) + oyunda (1/0). Şifrenin kendisi GİTMEZ.
+	## "|" ile ayrılan 9 alan: sihirli önek (rastgele ağ trafiğine yanlış tepki vermemek için) + host adı ("|" isimde olamaz,
+	## değiştirilir) + gerçek oyun (ENet) portu + oda adı + oyuncu sayısı + oda sınırı + kilitli (1/0) + oyunda (1/0) + harita kimliği
+	## (madde 444). Şifrenin kendisi GİTMEZ.
 	var safe_name: String = local_player_name.replace("|", " ")
-	var payload: PackedByteArray = ("%s|%s|%d|%s|%d|%d|%d|%d" % [DISCOVERY_MAGIC, safe_name, _discovery_hosting_port, room_name.replace("|", " "),
-		maxi(1, lobby_players.size()), room_max_players, 1 if not room_password.is_empty() else 0, 1 if _is_game_in_progress else 0]).to_utf8_buffer()
+	var payload: PackedByteArray = ("%s|%s|%d|%s|%d|%d|%d|%d|%s" % [DISCOVERY_MAGIC, safe_name, _discovery_hosting_port, room_name.replace("|", " "),
+		maxi(1, lobby_players.size()), room_max_players, 1 if not room_password.is_empty() else 0, 1 if _is_game_in_progress else 0,
+		GameManager.selected_map]).to_utf8_buffer()
 	var peer: PacketPeerUDP = _discovery_send_peer
 	## DÜZELTME (gerçek makinede test edilip bulundu): genel yayın adresi
 	## (255.255.255.255) bu makinede bir VPN/sanal ağ bağdaştırıcısı (Radmin/Hamachi
@@ -869,12 +892,13 @@ func _poll_lan_discovery() -> void:
 	while peer.get_available_packet_count() > 0:
 		var buf: PackedByteArray = peer.get_packet()
 		var parts: PackedStringArray = buf.get_string_from_utf8().split("|")
-		if parts.size() == 8 and parts[0] == DISCOVERY_MAGIC and parts[2].is_valid_int():
+		if parts.size() >= 8 and parts[0] == DISCOVERY_MAGIC and parts[2].is_valid_int():
 			var ip: String = peer.get_packet_ip()
 			var g_port: int = int(parts[2])
 			var key: String = "%s:%d" % [ip, g_port]
 			_discovered_games[key] = {"ip": ip, "port": g_port, "name": parts[1], "room_name": parts[3], "players": int(parts[4]),
-				"max_players": int(parts[5]), "locked": parts[6] == "1", "in_game": parts[7] == "1", "last_seen_msec": Time.get_ticks_msec()}
+				"max_players": int(parts[5]), "locked": parts[6] == "1", "in_game": parts[7] == "1", "last_seen_msec": Time.get_ticks_msec(),
+				"map": parts[8] if parts.size() > 8 else MapProfilesScript.DEFAULT_ID}
 			changed = true
 	## Beacon'ı kesilen (host kapanmış/ayrılmış) oyunları listeden düşür.
 	var now: int = Time.get_ticks_msec()
@@ -894,6 +918,7 @@ func disconnect_from_room(show_status: bool = true) -> void:
 
 func _clear_peer_state() -> void:
 	_net_log("_clear_peer_state (oturum kapanıyor / tek oyunculuya dönüş) çağıran: %s" % str(get_stack().slice(1, 4)))
+	_link.reset()
 	if _peer:
 		_peer.close()
 		_peer = null
@@ -969,6 +994,7 @@ func _on_connected_to_server() -> void:
 	## Sunucu (host) her zaman peer id 1'dir; bu callback sadece client'ta tetiklenir.
 	is_host = false
 	_host_peer = 1
+	_tune_enet_peer(1) ## ENet kısıcısı güvenilmez paketleri atmasın (madde 419)
 	if not _migration.is_empty():
 		_migration["status"] = "joining"
 	## Odaya girmeden önce host'un doğrulaması (bkz. ODA AYARLARI bloğu) - kabul gelince _complete_admission.
@@ -986,9 +1012,10 @@ func _complete_admission() -> void:
 		"is_host": is_host,
 		"weapon": GameManager.selected_start_weapon,
 		"spirit": GameManager.selected_spiritual,
+		"pet": _local_pet(),
 	}
 
-	connection_status_changed.emit("Odaya girildi: %s" % room_name)
+	connection_status_changed.emit(Loc.t("Odaya girildi: %s") % room_name)
 	lobby_updated.emit()
 
 	## Host'a kalıcı kimliğimi bildir (oyun sürüyorsa geri katılma hakkımı buna göre verir/vermez).
@@ -996,7 +1023,7 @@ func _complete_admission() -> void:
 
 	# Broadcast our info to everyone in the room
 	_rpc_sync_player_info.rpc(local_player_name, local_char_id, is_host)
-	_rpc_sync_player_loadout.rpc(GameManager.selected_start_weapon, GameManager.selected_spiritual)
+	_rpc_sync_player_loadout.rpc(GameManager.selected_start_weapon, GameManager.selected_spiritual, _local_pet())
 
 
 ## Bağlı diğer peer'ler (Godot'nun multiplayer.get_peers() davranışı gereği KENDİMİZ hariç).
@@ -1504,6 +1531,7 @@ func _on_server_disconnected() -> void:
 
 func _on_peer_connected(peer_id: int) -> void:
 	_net_log("peer_connected: %d" % peer_id)
+	_tune_enet_peer(peer_id) ## ENet kısıcısı güvenilmez paketleri atmasın (madde 419)
 	if is_host and _peer is ENetMultiplayerPeer:
 		var enet_peer: ENetPacketPeer = (_peer as ENetMultiplayerPeer).get_peer(peer_id)
 		if enet_peer != null:
@@ -1523,12 +1551,13 @@ func _on_peer_connected(peer_id: int) -> void:
 		"is_host": is_host
 	})
 	_rpc_sync_player_info.rpc_id(peer_id, my_info["name"], my_info["char_id"], my_info.get("is_host", false))
-	_rpc_sync_player_loadout.rpc_id(peer_id, GameManager.selected_start_weapon, GameManager.selected_spiritual)
+	_rpc_sync_player_loadout.rpc_id(peer_id, GameManager.selected_start_weapon, GameManager.selected_spiritual, _local_pet())
 	## (Geri katılım bildirimi burada DEĞİL: host, peer'in kimliğini _rpc_register_uid ile öğrenince bildirir.)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	_net_log("peer_disconnected: %d (oyun peer'i: %s)" % [peer_id, str(_game_peers.has(peer_id))])
+	_link.forget(peer_id)
 	_admitted.erase(peer_id)
 	_auth_nonce.erase(peer_id)
 	var was_game_peer: bool = _game_peers.erase(peer_id)
@@ -1713,6 +1742,22 @@ func _rpc_start_level_up_countdown() -> void:
 	if level_up_timer_active and not level_up_busy_peers.is_empty():
 		return
 	_begin_shared_wait_clock()
+
+
+## Level pazarı (madde 432): pazar kart akışının SONUNDA açılır ve kendi süresini ister - ortak sayaç herkeste en az `sec`'e
+## uzar (kısalmaz). Sayaç kapalıysa (tek oyunculu / akış bitti) bir şey yapmaz. Gelen değer MAX_MARKET_EXTEND'e kırpılır.
+const MAX_MARKET_EXTEND := 30.0
+
+
+func extend_level_up_countdown(sec: float) -> void:
+	if is_multiplayer_active:
+		_rpc_extend_level_up_countdown.rpc(sec)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_extend_level_up_countdown(sec: float) -> void:
+	if level_up_timer_active:
+		level_up_countdown = maxf(level_up_countdown, clampf(sec, 0.0, MAX_MARKET_EXTEND))
 
 
 func stop_level_up_countdown() -> void:
@@ -2103,6 +2148,7 @@ func broadcast_weapon_attack(source_pos: Vector2, target_pos: Vector2, shop_key:
 		## efekti oyuncu kökünün ölçeğiyle (0.5, main.tscn) çarpıyor, bu kozmetik kopya çarpmıyordu - diğer oyuncular
 		## TÜM yakın dövüş savuruşlarını 2 kat büyük görüyordu. Uzak kukla da aynı 0.5 ölçekte (remote_player.tscn).
 		slash.scale *= (local_player as Node2D).scale
+		AllyFxDensity.soften(slash, null) ## başkasının yakın dövüş savuruşu = KİŞİSEL (kasteri bilinmez -> form kontrolü yok)
 
 
 
@@ -2134,6 +2180,8 @@ func broadcast_projectile(scene_path: String, spawn_pos: Vector2, direction: Vec
 	proj.set_meta("network_spawned", true)
 	if not look.is_empty():
 		EnchantFxScript.apply_projectile_look(proj, look)
+	## Başkasının mermisi KİŞİSEL (ama oyun bilgisi: yalnız hafifçe soluklaşır, AllyFxDensity PROJ_ALPHA); formdaki kasterinki tam.
+	AllyFxDensity.soften(proj, _find_remote_player(player_id) if player_id > 0 else null, "proj")
 	# For boomerang return: set player_node to the remote player so it returns properly
 	if player_id > 0 and "player_node" in proj:
 		var rp: RemotePlayer = _find_remote_player(player_id)
@@ -2656,7 +2704,7 @@ func broadcast_world_event_copy_state(mission_id: int, copy_index: int, pos: Vec
 ## Host olmayan istemcinin kozmetik kopyaya verdiği hasar -> host'taki gerçek kopya (bkz. mission_player_copy.gd take_damage).
 signal world_event_copy_damage_requested(mission_id: int, copy_index: int, amount: float)
 
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_world_event_copy_damage(mission_id: int, copy_index: int, amount: float) -> void:
 	if not is_host:
 		return
@@ -2880,8 +2928,11 @@ func find_enemy_by_net_id(network_id: int) -> Node:
 
 ## Host-authoritative enemy damage: non-host clients send damage requests here.
 ## The host validates, applies damage to the enemy, and state syncs back to all peers.
-@rpc("any_peer", "call_remote", "reliable")
-func request_enemy_damage(network_id: int, amount: float, is_crit: bool, shield_pen_percent: float) -> void:
+const DamageNumbersRef := preload("res://scripts/damage_numbers.gd")
+
+
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
+func request_enemy_damage(network_id: int, amount: float, is_crit: bool, shield_pen_percent: float, sep: bool = false) -> void:
 	if not is_host or get_tree().paused:
 		return
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
@@ -2892,7 +2943,9 @@ func request_enemy_damage(network_id: int, amount: float, is_crit: bool, shield_
 		## get_remote_sender_id() sadece BU RPC'nin işlendiği an geçerli
 		## olduğu için burada okunup parametre olarak taşınıyor.
 		var attacker_id: int = multiplayer.get_remote_sender_id()
+		DamageNumbersRef.separate_hits = sep ## Pompalı saçması: vurana giden sayı ayrı (madde 448)
 		target_enemy.take_damage_host(amount, is_crit, shield_pen_percent, attacker_id)
+		DamageNumbersRef.separate_hits = false
 
 
 ## İstemcinin silah/mermi itişi -> host'taki gerçek yaratık (bkz. enemy.gd apply_knockback_distance). Konum host'ta
@@ -2918,7 +2971,7 @@ func request_enemy_knockback_force(network_id: int, dir: Vector2, force: float) 
 
 
 ## İstemcinin yetenek itmesi (mesafe cinsinden, bkz. enemy.gd apply_skill_push) -> host'taki gerçek yaratık.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_enemy_skill_push(network_id: int, dir: Vector2, distance: float) -> void:
 	if not is_host or get_tree().paused:
 		return
@@ -2949,7 +3002,7 @@ func notify_kill_passive(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZERO) 
 ## ================================================================ EFSUN SİSTEMİ (2026-09-25)
 ## İstemcinin efsun elementi (zehir/yanma/şok/uyku/çatlak...) -> host'taki gerçek yaratık (bkz. enemy.gd apply_element).
 ## Tepkimeler host'ta çözülür ve hasarı bu isteği gönderen oyuncuya atfedilir.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_enemy_element(network_id: int, kind: String, params: Dictionary) -> void:
 	if not is_host or get_tree().paused:
 		return
@@ -2989,7 +3042,7 @@ func broadcast_enchant_area(kind: String, pos: Vector2, data: Dictionary) -> voi
 
 
 ## Host-authoritative enemy status effect: non-host clients send poison/bleed/chill here.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_enemy_effect(network_id: int, effect_type: String, param1: float, param2: float, param3: float) -> void:
 	if not is_host or get_tree().paused:
 		return
@@ -3092,7 +3145,7 @@ func request_enemy_effect(network_id: int, effect_type: String, param1: float, p
 ## duration - Büyücü Kız Don Nova'nın buz yavaşlatması: mavimsi ton + buz kristalleri, bkz. enemy.gd _spawn_frost_chill_fx),
 ## brush_search_start/brush_search_stop/brush_alert (saklanma çalılığında arayan yaratığın "?"si / halkada görenin "!"si, madde 283) - yeni
 ## bir dal eklersen buraya da yaz.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_ENEMY_FX)
 func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictionary = {}) -> void:
 	## SADECE host yayınlar (2026-10-09 denetimi: gönderen kontrolü yoktu - herhangi bir peer sahte "death_state"/"worm_pose"/"minotaur_pose" yollayıp başkasının yaratıklarını öldürebilir/bozabilirdi).
 	if not _from_host():
@@ -3226,7 +3279,9 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 			if target_enemy.has_method("_spawn_floating_text"):
 				var dmg_val: float = float(extra_data.get("amount", 0.0))
 				var dmg_crit: bool = extra_data.get("is_crit", false)
-				target_enemy._spawn_floating_text(dmg_val, dmg_crit)
+				DamageNumbersRef.separate_hits = bool(extra_data.get("sep", false)) ## madde 448: saçma sayıları birleşmez
+				target_enemy._spawn_floating_text(dmg_val, dmg_crit, String(extra_data.get("dot", ""))) ## "dot": süreli hasar kaynağı (madde 429, soluk renk); eski host göndermez -> normal vuruş
+				DamageNumbersRef.separate_hits = false
 		"attack_state":
 			## DÜZELTME (mimari sadeleştirme): süre artık ağdan gelmiyor -
 			## _enter_state_networked() bunu enemy.gd'nin KENDİ sabit
@@ -3424,6 +3479,9 @@ const RELIABLE_PLAYER_VFX := {
 ## "melek_sparkle" (2026-10-10): Melek pasifinin iyileştirme işareti - extra "peers" = işaretin çıkacağı oyuncular (Melek dahil); her istemci kendi
 ## yerel oyuncusu ya da ilgili kukla altında fx_melek_heal_sparkle.gd kurar. Güvenilmez (kaybolursa bir sonraki 3 sn'de yine gelir).
 const FxMelekSparkleScript := preload("res://scripts/fx_melek_heal_sparkle.gd")
+## Başkalarının KİŞİSEL efektlerini soluklaştırma (madde 425, scripts/ally_fx_density.gd): skill_scene/hitscan_impact/muzzle_flash/melee_hit/
+## chain_lightning/arcane_skull_bounce + uzak mermi/savuruş. TAKIM / ÇAĞRILAN / FORM efektleri o tabloda yok -> hep tam opak.
+const AllyFxDensity := preload("res://scripts/ally_fx_density.gd")
 const FxSovalyeEchoScript := preload("res://scripts/fx_sovalye_echo.gd")
 const MelekBondScript := preload("res://scripts/melek_bond_fx.gd")
 
@@ -3465,6 +3523,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			get_tree().current_scene.add_child(fx)
 			fx.global_position = pos
 			fx.rotation = float(extra_data.get("rotation", 0.0))
+			AllyFxDensity.soften(fx, rp) ## başkasının namlu parıltısı = KİŞİSEL
 		## DÜZELTME (kullanıcı bildirimi: "bazı karakterler ve yetenekleri
 		## multiplayerda çalışmıyor ve görünmüyor") - Matthew'in Vahşi Hız
 		## (TEMEL) yeteneğindeki hız çizgisi izi eskiden diğer istemcilere HİÇ
@@ -3507,6 +3566,8 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			rp.add_child(skill_fx)
 			if "position" in extra_data:
 				skill_fx.set("position", Vector2(extra_data["position"]))
+			if AllyFxDensity.is_personal_scene(scene_path): ## yalnız KİŞİSEL sahneler (tablo dışı = tam görünür; TAKIM/ÇAĞRILAN/FORM burada yok)
+				AllyFxDensity.soften(skill_fx, rp)
 		"yinyang_idle":
 			## Yin Yang Kitabı (madde 334): saldıracak düşman yokken yalnız ak küre (kalkan) - kaster YinYangBook.idle_shot; alıcı bu makinenin
 			## oyuncusu ya da bir kukla (kalkanın kendisi kasterden _apply_shield_heal_to_ally RPC'siyle gelir, burası salt görsel).
@@ -3541,6 +3602,8 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 					impact_fx.call("setup", pos)
 				elif extra_data.has("radius"):
 					impact_fx.call("setup", float(extra_data.get("radius", 80.0)), Color(extra_data.get("color", Color.WHITE)))
+			if AllyFxDensity.is_personal_scene(scene_path): ## golem darbesi/meteor/halka gibi tablo dışı etkiler tam kalır
+				AllyFxDensity.soften(impact_fx, rp)
 		## Oakley Arı Sürüsü (ikinci tasarım, fx_oakley_bee_guard.gd): kasterin arısı bu noktadaki yaratığa daldı -
 		## kuklanın üstündeki kozmetik sürüden bir arı aynı noktaya dalıp sokma efektini oynatır (hasar VERMEZ - zehir/itme sadece
 		## kasterin kopyasında; burada da uygulansa host-yetkili enemy.gd'de yük katlanırdı).
@@ -3560,6 +3623,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				return
 			var flower := Node2D.new()
 			flower.set_script(flower_scene)
+			flower.set_meta(&"limbo_peer", player_id) ## ruh hâli (madde 438): sahibi menüdeyken donsun (limbo.gd)
 			get_tree().current_scene.add_child(flower)
 			flower.global_position = pos
 			if flower.has_method("setup"):
@@ -3590,6 +3654,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			get_tree().current_scene.add_child(chain_fx)
 			if chain_fx.has_method("setup_positions"):
 				chain_fx.setup_positions(Vector2(extra_data.get("from_pos", pos)), pos)
+			AllyFxDensity.soften(chain_fx, rp)
 		## Necromancer ULTİ (Lanetli Kafatası, bkz. necro_skull.gd dosya başı): extra_data.phase = "start" (pos = doğuş), "hb" (kalp atışı:
 		## kopya yoksa kurar), "mode" (aktif/pasif + kalan süre), "leg" (pos = hedef, from/dur - "necro_skull_leg" güvenilmez kanaldan), "end".
 		## Her oyuncu için tek kozmetik kafatası (_necro_skull_visuals) - hasar/korku YOK, sadece yetkili kafatasının bacaklarını aynı sürede
@@ -3631,6 +3696,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			get_tree().current_scene.add_child(skull_fx)
 			if skull_fx.has_method("setup_positions"):
 				skull_fx.setup_positions(Vector2(extra_data.get("from_pos", pos)), pos)
+			AllyFxDensity.soften(skull_fx, rp)
 		"melee_hit":
 			var scene_path: String = str(extra_data.get("scene_path", ""))
 			if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
@@ -3652,6 +3718,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			var scale_mult: float = float(extra_data.get("scale_mult", 1.0))
 			if scale_mult != 1.0:
 				hit_fx.scale *= scale_mult
+			AllyFxDensity.soften(hit_fx, rp) ## başkasının vuruş izi = KİŞİSEL
 			## DÜZELTME (kullanıcı isteği: "her bir yaratığa vurduğunda vuruş
 			## ses efekti... çıksın" - Assasin Çocuk'un Gölge Hücumu ultisi,
 			## bkz. player.gd _spawn_assasin_dash_hit_fx): "melee_hit" eskiden
@@ -3699,34 +3766,24 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		"rbeam_stop":
 			rp._stop_rbeam_vfx()
 		"weapon_sound":
+			## Bıçak/Pençe/Mızrak kombo zinciri (madde 406, weapon.gd _broadcast_attack_chain): adımlar kendi gecikmeleriyle; en çok 4 adım.
+			var chain: Variant = extra_data.get("chain", null)
+			if chain is Array:
+				var rim_c: bool = bool(extra_data.get("rim", false))
+				for st: Variant in (chain as Array).slice(0, 4):
+					if not st is Dictionary:
+						continue
+					var sd: Dictionary = st
+					var args: Array = [rp, str(sd.get("sound_path", "")), float(sd.get("pitch", 1.0)), float(sd.get("volume_db", -10.0)), rim_c, pos]
+					var delay: float = clampf(float(sd.get("delay", 0.0)), 0.0, 1.5)
+					if delay <= 0.0:
+						callv("_play_remote_weapon_sound", args)
+					else:
+						get_tree().create_timer(delay).timeout.connect(Callable(self, "_play_remote_weapon_sound").bindv(args))
 			var snd_path: String = str(extra_data.get("sound_path", ""))
-			if not snd_path.is_empty() and ResourceLoader.exists(snd_path):
-				var snd_res: AudioStream = load(snd_path) as AudioStream
-				if snd_res:
-					var asp: AudioStreamPlayer2D = AudioStreamPlayer2D.new()
-					rp.add_child(asp)
-					asp.stream = snd_res
-					## DÜZELTME (kullanıcı bildirimi: "silahların sesleri çok yüksek
-					## ve kafa ağrıtıyor" + "oyuncular uzakken bile diğer oyuncuların
-					## silah seslerini duyabiliyor, uzaklığa göre azalıp artması
-					## gerek"): eskiden volume_db hiç taşınmıyordu, yani her uzak
-					## silah sesi kaynağındaki (-8/-9/-10dB) seviyeyi yok sayıp
-					## DAİMA 0dB (tam ses) çalıyordu - kalabalık bir maçta herkesin
-					## silahı en yüksek sesteydi. Artık gönderen tarafın gerçek
-					## volume_db'si taşınıyor (yoksa -10dB'ye düşülüyor). Ayrıca
-					## max_distance düşürüldü ve "attenuation" üsteli artırıldı ki
-					## ses mesafeyle daha belirgin ve daha erken azalsın.
-					asp.volume_db = float(extra_data.get("volume_db", -10.0)) + AudioBuses.remote_weapon_db() ## başkasının silahı %15 kısık (2026-10-19)
-					asp.max_distance = 900.0
-					asp.attenuation = 1.6
-					asp.pitch_scale = float(extra_data.get("pitch", 1.0))
-					## Şovalye kubbesinin dış halkasından ateşlenen silah (bkz. dome_weapon_ring.gd): ses silahın konumunda çalar ki
-					## kubbenin boğuk-ses halkasına (dome_sound_muffle.gd) düşsün; normalde kuklanın üstünde çalar.
-					if bool(extra_data.get("rim", false)):
-						asp.global_position = pos
-						AudioBuses.route_rim_sound(asp, true) ## yerel oyuncu kubbedeyse sert boğuk (halka silahı)
-					asp.finished.connect(asp.queue_free)
-					asp.play()
+			if not snd_path.is_empty():
+				_play_remote_weapon_sound(rp, snd_path, float(extra_data.get("pitch", 1.0)), float(extra_data.get("volume_db", -10.0)),
+						bool(extra_data.get("rim", false)), pos)
 		"weapon_recoil":
 			## recoil_distance artık ağdan gelmiyor - _animate_weapon_recoil
 			## bu silahın kendi sabit değerini yerel diziden okuyor.
@@ -3858,6 +3915,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 					Vector2(extra_data.get("to", pos)), Callable(), {
 				"duration": float(extra_data.get("duration", CadiMathScript.ZONE_DURATION)),
 				"size": float(extra_data.get("size", 1.0)),
+				"owner_peer": player_id, ## ruh hâli (madde 438): sahibi menüdeyken donsun (limbo.gd)
 			})
 		## Assasin ULTİ (Gölge Hücumu, bkz. assasin_ult_fx.gd - kaster player.gd _spawn_assasin_dash_*_fx / _spawn_assasin_ult_cut_fx
 		## ile AYNI fonksiyonları çağırır). Kozmetik: hasar sadece kasterde.
@@ -3992,7 +4050,7 @@ func spend_gold(_amount: int) -> void:
 ## RemotePlayer kuklasına değince (remote_player.gd take_special_damage) hasar TÜRÜYLE birlikte gerçek oyuncuya
 ## iletilir - forward_damage_to_peer ile aynı mimari, türe özel kurallar (yanma, kalkana x2) player.gd
 ## take_special_damage'da o oyuncunun kendi makinesinde uygulanır.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func forward_special_damage_to_peer(amount: float, enemy_net_id: int, kind: String) -> void:
 	if not _from_host(): ## SADECE host (yaratık/boss yetenek hasarı); sahte RPC başkasına hasar yazamasın (2026-10-09)
 		return
@@ -4009,7 +4067,7 @@ func forward_special_damage_to_peer(amount: float, enemy_net_id: int, kind: Stri
 ## Minotaur boynuz hücumu / boğa koşusu isabeti (bkz. minotaur_charge.gd _hit_player): host, vurulan GERÇEK uzak oyuncuya hasarın
 ## (forward_special_damage_to_peer, kind "minotaur") hemen ardından savrulmayı iletir. Savrulma o oyuncunun KENDİ makinesinde,
 ## kendi duvar haritasıyla kısaltılarak uygulanır (player.gd apply_boss_fling) - hasar gerçekten işlendiyse; kaçınan savrulmaz.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func forward_player_fling_to_peer(dir: Vector2, distance: float) -> void:
 	if not _from_host():
 		return
@@ -4021,7 +4079,7 @@ func forward_player_fling_to_peer(dir: Vector2, distance: float) -> void:
 ## Yaratık yeteneklerinin DÜNYADA duran etkileri (kind: "laser"/"thorns"/"acid"/"fireball", bkz. enemy_abilities.gd
 ## spawn_world_fx) - host yetkili (hasar veren) örneği kendisi doğurur, istemciler burada SADECE görsel kopyayı doğurur
 ## (authoritative=false: hasar vermez). Tek seferlik/seyrek olay olduğu için reliable (bkz. broadcast_enemy_vfx notu).
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_ENEMY_FX)
 func broadcast_enemy_ability_fx(kind: String, pos: Vector2, data: Dictionary) -> void:
 	if not _from_host():
 		return
@@ -4037,7 +4095,7 @@ func broadcast_enemy_ability_fx(kind: String, pos: Vector2, data: Dictionary) ->
 ## kendi hesaplamaz. Bu, "yaratıklar katılımcıya saldırıyor ama katılımcı
 ## hasar almıyor" bug'ının kök nedenini (RemotePlayer'da take_damage hiç
 ## yoktu) düzeltir.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func forward_damage_to_peer(amount: float, enemy_net_id: int, is_barrier_damage: bool) -> void:
 	if not _from_host(): ## SADECE host (yaratık temas/mermi hasarı); sahte RPC başkasına hasar yazamasın (2026-10-09)
 		return
@@ -4179,7 +4237,7 @@ func show_weapon_shard_text(amount: int) -> void:
 	get_tree().current_scene.add_child(ft)
 	ft.global_position = (local_p as Node2D).global_position + Vector2(14, -34)
 	if ft.has_method("setup"):
-		ft.call("setup", "+%d Silah Parçacığı" % amount, Color(0.72, 0.84, 1.0))
+		ft.call("setup", Loc.t("+%d Silah Parçacığı") % amount, Color(0.72, 0.84, 1.0))
 
 
 ## Elit sandık (kullanıcı isteği 2026-09-25: "normal sandıklar tek oyuncuya gider elit sandıklar ise paylaşılır"):
@@ -4227,7 +4285,7 @@ func _rpc_announce_elite_chest(picker_id: int) -> void:
 	if local_p == null or not (local_p is Node2D) or local_p.get("is_dead") == true:
 		return
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
-	var text: String = "+1 ELİT SANDIK" if picker_id == local_id or picker_id <= 0 else "+1 ELİT SANDIK (%s)" % get_player_names([picker_id])
+	var text: String = "+1 ELİT SANDIK" if picker_id == local_id or picker_id <= 0 else Loc.t("+1 ELİT SANDIK (%s)") % get_player_names([picker_id])
 	var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
 	if ft_scene == null or get_tree().current_scene == null:
 		return
@@ -4272,7 +4330,7 @@ func _rpc_announce_chest_winner(picker_id: int, winner_id: int) -> void:
 	if winner_id == local_id:
 		text = "SANDIK SENİN! (sıra sende)" if passed else "SANDIK SENİN!"
 	else:
-		text = "%s sandığı aldı (sıra onda)" % get_player_names([winner_id]) if passed else "%s sandığı aldı" % get_player_names([winner_id])
+		text = Loc.t("%s sandığı aldı (sıra onda)") % get_player_names([winner_id]) if passed else Loc.t("%s sandığı aldı") % get_player_names([winner_id])
 	var ft_scene: PackedScene = load("res://scenes/floating_text.tscn") as PackedScene
 	if ft_scene == null or get_tree().current_scene == null:
 		return
@@ -4556,7 +4614,7 @@ func grant_reward_gold(amount: int, from_pos: Vector2, kind: String) -> void:
 			get_tree().current_scene.add_child(ft)
 			ft.global_position = local_player.global_position + Vector2(14, -34)
 			if ft.has_method("setup"):
-				ft.setup("+%d altın" % amount, Color(1.0, 0.85, 0.25))
+				ft.setup(Loc.t("+%d altın") % amount, Color(1.0, 0.85, 0.25))
 
 
 ## Parti panelindeki altın ikonu (bkz. party_panel.gd _on_gift_amount_pressed)
@@ -4611,7 +4669,7 @@ func receive_gold_gift(from_name: String, amount: int) -> void:
 			get_tree().current_scene.add_child(ft)
 			ft.global_position = local_player.global_position + Vector2(14, -34)
 			if ft.has_method("setup"):
-				ft.setup("%s'ten +%d altın hediye!" % [from_name, amount], Color(1.0, 0.85, 0.25))
+				ft.setup(Loc.t("%s'ten +%d altın hediye!") % [from_name, amount], Color(1.0, 0.85, 0.25))
 
 
 ## Shared XP: the peer who picks up an orb awards the same amount to every from receiving the amount
@@ -4733,7 +4791,7 @@ func sync_oakley_bond_buff(target_peer_id: int, heal_per_hit: float, shield_per_
 ## geçirir - kullanıcı isteği: "yansıyan hasar şovalye adamın zırhından
 ## sonra hesaplanır" DEĞİL, Şovalye'nin zırhı BU noktada normal şekilde
 ## uygulanacak (bypass YOK).
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func sync_redirected_damage(target_peer_id: int, amount: float) -> void:
 	if amount <= 0.0:
 		return
@@ -5026,24 +5084,35 @@ func _rpc_update_character(char_id: int) -> void:
 ## başlangıç silahı + ruhani yetenek eskiden sadece yereldi (oyunda herkes kendi seçimini kendisi uygular - bu değişmedi);
 ## artık lobideki diğer oyuncular da GÖRSÜN diye lobby_players[peer]["weapon"/"spirit"]'e yazılıp yayınlanır. Sadece
 ## gösterim: oyun mantığı bu alanları okumaz. Odaya girerken/yeni gelen birine ve lobi seçicileri değişince gönderilir.
+## (2026-11-06: evcil hayvan da ["pet"] - eskiden hiç gönderilmiyordu, seçim ekranında başkasının evcili görünmüyordu.)
 func update_local_loadout() -> void:
 	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	if not lobby_players.has(my_id):
 		return
 	lobby_players[my_id]["weapon"] = GameManager.selected_start_weapon
 	lobby_players[my_id]["spirit"] = GameManager.selected_spiritual
+	lobby_players[my_id]["pet"] = _local_pet()
 	lobby_updated.emit()
-	_rpc_sync_player_loadout.rpc(GameManager.selected_start_weapon, GameManager.selected_spiritual)
+	_rpc_sync_player_loadout.rpc(GameManager.selected_start_weapon, GameManager.selected_spiritual, _local_pet())
+
+
+const PetCatalogScript := preload("res://scripts/pet_catalog.gd")
+
+
+## Yerel evcil seçimi (GameManager.selected_pet boş/bozuksa varsayılan).
+func _local_pet() -> String:
+	return PetCatalogScript.selected()
 
 
 @rpc("any_peer", "reliable")
-func _rpc_sync_player_loadout(weapon: String, spirit: String) -> void:
+func _rpc_sync_player_loadout(weapon: String, spirit: String, pet: String) -> void:
 	if _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	var info: Dictionary = lobby_players.get(sender_id, {})
 	info["weapon"] = weapon
 	info["spirit"] = spirit
+	info["pet"] = pet if PetCatalogScript.is_valid(pet) else PetCatalogScript.DEFAULT_KEY
 	lobby_players[sender_id] = info
 	lobby_updated.emit()
 
@@ -5051,11 +5120,12 @@ func _rpc_sync_player_loadout(weapon: String, spirit: String) -> void:
 func start_multiplayer_game() -> void:
 	if not is_host or not all_players_ready():
 		return
-	_rpc_start_game.rpc()
+	_rpc_start_game.rpc(GameManager.selected_map)
 
 
+## map_id (madde 444): host'un seçtiği harita - herkes yüklemeden önce kendi GameManager.selected_map'ine yazar (Main onu yükler).
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_start_game() -> void:
+func _rpc_start_game(map_id: String = "ana") -> void:
 	## Sadece host (bkz. _host_peer_id / _refresh_host) oyunu başlatabilir.
 	## sender_id == 0, çağrının call_local ile YEREL olarak tetiklendiği
 	## anlamına gelir (host kendi RPC'sini böyle alır).
@@ -5069,6 +5139,7 @@ func _rpc_start_game() -> void:
 	## başlangıçta da yanlışlıkla "diğerlerini bekleme" moduna düşerdi.
 	_is_rejoining_midgame = false
 	GameManager.reset()
+	GameManager.selected_map = map_id if MapProfilesScript.has_profile(map_id) else MapProfilesScript.DEFAULT_ID
 	# Set local player selected character from our lobby info
 	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	if lobby_players.has(my_id):
@@ -5129,7 +5200,7 @@ var _catchup_requested: bool = false
 ## peer'lerin yükleme barını beklemesi (bkz. _loading_done/all_players_
 ## loading_done) atlanır, çünkü diğer herkes zaten çoktan oyunda.
 @rpc("any_peer", "reliable")
-func _rpc_join_in_progress_game() -> void:
+func _rpc_join_in_progress_game(map_id: String = "ana") -> void:
 	if not _from_host():
 		return
 	if not _migration.is_empty():
@@ -5139,6 +5210,7 @@ func _rpc_join_in_progress_game() -> void:
 		host_migration_state.emit("", true)
 	_last_host_msg_msec = Time.get_ticks_msec()
 	GameManager.reset()
+	GameManager.selected_map = map_id if MapProfilesScript.has_profile(map_id) else MapProfilesScript.DEFAULT_ID ## harita seçimi (madde 444)
 	_apply_rejoin_game_state()
 	var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	if lobby_players.has(my_id):
@@ -5470,6 +5542,125 @@ func _apply_migration_resume_gm() -> void:
 	_migration_resume_gm = {}
 
 
+## ============================================================================
+## BAĞLANTI KALİTESİ (madde 419; madde 349 bulgu 1 "oyun bağlantı kalitesini hiç ölçmüyor"): saniyede bir host<->istemci güvenilmez
+## ping/pong (taşıma katmanından bağımsız: ENet + Epic), Epic bağlantı olayları (doğrudan/relay, kesinti, kapanış) ve 30 sn'de bir özet
+## user://net_log.txt'ye ("ağ:" satırları). "Bazı oyuncularda lag" şikayetinde önce o oyuncunun net_log'una bak: yüksek rtt/kayıp/jitter
+## = hat (ya da Epic relay), düşük rtt ama düşük fps = bilgisayar.
+## ============================================================================
+const LinkQualityScript := preload("res://scripts/net/link_quality.gd")
+const LINK_PING_INTERVAL := 1.0
+const LINK_LOG_INTERVAL := 30.0
+var _link = LinkQualityScript.new()
+var _link_ping_timer: float = 0.0
+var _link_log_timer: float = 0.0
+
+
+## Epic P2P peer'ini FragmentPeer'e sarar + bağlantı olaylarını günlüğe bağlar (dört kurulum yolu: host/katıl/devir host/devir katıl).
+func _wrap_eos_peer(eos_peer: MultiplayerPeer) -> MultiplayerPeer:
+	for sig in ["peer_connection_established", "peer_connection_interrupted", "peer_connection_closed"]:
+		if eos_peer.has_signal(sig):
+			eos_peer.connect(sig, _on_eos_connection_event.bind(sig))
+	return FragmentPeerScript.new(eos_peer)
+
+
+## Epic olay sözlüğü (EOSG): established -> connection_type / network_type (doğrudan mı RELAY mi), closed -> reason. Kimlikler kısaltılır.
+func _on_eos_connection_event(a: Variant = null, b: Variant = null) -> void:
+	var sig: String = str(b) if b is String else str(a)
+	var data: Variant = a if a is Dictionary else (b if b is Dictionary else {})
+	var parts: PackedStringArray = []
+	if data is Dictionary:
+		for k in (data as Dictionary).keys():
+			var v: String = str((data as Dictionary)[k])
+			if str(k).ends_with("user_id") or str(k).ends_with("_id"):
+				v = v.left(8)
+			parts.append("%s=%s" % [str(k), v])
+	_net_log("ağ: Epic %s %s" % [sig, ", ".join(parts)])
+
+
+## ENet (LAN / devirde ENet) paket kısıcısı: ENet gidiş-dönüş süresi oynayınca (jitter) GÜVENİLMEZ paketlerin bir kısmını bilerek atar
+## (packetThrottle). Ölçüldü (madde 419): %2 kayıplı hatta istemcinin konum paketlerinin %15'i, dar hatta %25'i bu yüzden düşüyordu.
+## Yavaşlatma 0 = kısıcı hiç kısmaz (konum/yaratık senkronu zaten eskiyince değersiz; tıkanıklığı oyun kendi seyrek gönderimiyle önlüyor).
+## ENet bu ayarı karşı tarafa da bildirir (her iki yönde geçerli).
+func _tune_enet_peer(pid: int) -> void:
+	if not (_peer is ENetMultiplayerPeer) or (not is_host and pid != 1): ## istemcinin tek ENet bağlantısı host'a (diğerleri relay)
+		return
+	var pp: ENetPacketPeer = (_peer as ENetMultiplayerPeer).get_peer(pid)
+	if pp != null:
+		pp.throttle_configure(5000, ENetPacketPeer.PACKET_THROTTLE_SCALE, 0)
+
+
+## Her karede (_process): ping gönderimi + periyodik özet.
+func _process_link_quality(delta: float) -> void:
+	if not is_multiplayer_active or _peer == null or not multiplayer.has_multiplayer_peer() \
+			or multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED or not _migration.is_empty():
+		return
+	_link_ping_timer += delta
+	if _link_ping_timer >= LINK_PING_INTERVAL:
+		_link_ping_timer = 0.0
+		var now: int = Time.get_ticks_msec()
+		var targets: Array = []
+		if is_host:
+			for pid in multiplayer.get_peers():
+				if lobby_players.has(int(pid)):
+					targets.append(int(pid))
+		elif lobby_players.has(multiplayer.get_unique_id()):
+			targets.append(_host_peer_id())
+		for pid in targets:
+			_rpc_net_ping.rpc_id(pid, _link.next_ping(pid, now), now)
+	if not _is_game_in_progress:
+		return
+	_link_log_timer += delta
+	if _link_log_timer >= LINK_LOG_INTERVAL:
+		_link_log_timer = 0.0
+		_log_link_summary()
+
+
+func _log_link_summary() -> void:
+	var now: int = Time.get_ticks_msec()
+	var parts: PackedStringArray = []
+	for pid in _link.peers():
+		var s: Dictionary = _link.stats(int(pid), now)
+		var line: String = "peer %d rtt=%.0f jitter=%.0f kayıp=%%%.0f" % [int(pid), float(s["rtt"]), float(s["jitter"]), float(s["loss"]) * 100.0]
+		if _peer is ENetMultiplayerPeer:
+			var pp: ENetPacketPeer = (_peer as ENetMultiplayerPeer).get_peer(int(pid))
+			if pp != null:
+				line += " (enet rtt=%d kayıp=%%%.1f)" % [int(pp.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME)),
+						pp.get_statistic(ENetPacketPeer.PEER_PACKET_LOSS) / float(ENetPacketPeer.PACKET_LOSS_SCALE) * 100.0]
+		parts.append(line)
+	_net_log("ağ: fps=%d fizik=%.1fms | %s" % [int(Engine.get_frames_per_second()), Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, " | ".join(parts)])
+
+
+## Bağlantı kalitesi: pid ile aramızdaki son ölçüm (bkz. scripts/net/link_quality.gd stats). İstemci için anlamlı peer = host.
+func link_stats(pid: int) -> Dictionary:
+	return _link.stats(pid, Time.get_ticks_msec())
+
+
+## İstemcinin host'a ping'i (ms, yuvarlanmış); host / tek oyunculu / henüz ölçüm yoksa -1. (Telefon şeridi, hud.gd _ph_ping_ms.)
+func host_rtt_ms() -> int:
+	if not is_multiplayer_active or is_host:
+		return -1
+	var r: float = float(link_stats(_host_peer_id())["rtt"])
+	return roundi(r) if r >= 0.0 else -1
+
+
+## İstemci yalnız host'un pingine, host herkesinkine cevap verir (aynı zaman damgasıyla geri; ölçümü gönderen yapar).
+@rpc("any_peer", "call_remote", "unreliable")
+func _rpc_net_ping(seq: int, t_sent: int) -> void:
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender == 0 or (not is_host and not _from_host()) or (is_host and not lobby_players.has(sender)):
+		return
+	_rpc_net_pong.rpc_id(sender, seq, t_sent)
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _rpc_net_pong(seq: int, t_sent: int) -> void:
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender == 0:
+		return
+	_link.on_pong(sender, seq, t_sent, Time.get_ticks_msec())
+
+
 ## Her karede (_process): devir durum makinesi.
 func _process_migration() -> void:
 	if _migration.is_empty():
@@ -5502,7 +5693,7 @@ func _process_migration() -> void:
 				_migration_host_start()
 			else:
 				_migration["status"] = "connecting"
-				host_migration_state.emit("Yeni host: %s - bağlanılıyor..." % str(cand.get("name", "Oyuncu")), false)
+				host_migration_state.emit(Loc.t("Yeni host: %s - bağlanılıyor...") % str(cand.get("name", "Oyuncu")), false)
 				_migration_try_connect(cand)
 		"connecting":
 			if window_over:
@@ -5546,7 +5737,7 @@ func _migration_try_connect(cand: Dictionary) -> void:
 		if eos_peer.create_client(EosOnline.SOCKET_ID, eos_id) != OK:
 			_migration["failed"] = true
 			return
-		_peer = FragmentPeerScript.new(eos_peer)
+		_peer = _wrap_eos_peer(eos_peer)
 		is_online_session = true
 	else:
 		var addr: String = HostMigrationScript.usable_addr(str(cand.get("addr", "")))
@@ -5576,7 +5767,7 @@ func _migration_host_start() -> void:
 			_migration["status"] = "idle"
 			_migration["idx"] = int(_migration["idx"]) + 1
 			return
-		new_peer = FragmentPeerScript.new(eos_peer)
+		new_peer = _wrap_eos_peer(eos_peer)
 	else:
 		var enet := ENetMultiplayerPeer.new()
 		var port: int = _migration_port if _migration_port > 0 else 7777
@@ -5596,9 +5787,9 @@ func _migration_host_start() -> void:
 		var ip: String = get_local_lan_ip()
 		room_code = "%s:%d" % [ip, _migration_port] if ip != "" else "LAN:%d" % _migration_port
 	else:
-		room_code = "İnternet (Epic) - %s" % local_player_name
+		room_code = Loc.t("İnternet (Epic) - %s") % local_player_name
 	lobby_players = {1: {"name": local_player_name, "char_id": local_char_id, "is_ready": true, "is_host": true,
-		"weapon": GameManager.selected_start_weapon, "spirit": GameManager.selected_spiritual}}
+		"weapon": GameManager.selected_start_weapon, "spirit": GameManager.selected_spiritual, "pet": _local_pet()}}
 	_peer_uid = {1: local_player_uid}
 	_peer_addr.clear()
 	_peer_eos.clear()
@@ -5625,7 +5816,7 @@ func _migration_host_start() -> void:
 	_admitted.clear()
 	_auth_nonce.clear()
 	if online:
-		EosOnline.host_lobby_async(local_player_name, room_max_players, room_name, not room_password.is_empty()) ## arkada: yeni oda ilanı (geri katılacaklar listede görsün)
+		EosOnline.host_lobby_async(local_player_name, room_max_players, room_name, not room_password.is_empty(), GameManager.selected_map) ## arkada: yeni oda ilanı (geri katılacaklar listede görsün)
 		_sync_online_lobby_state()
 	else:
 		_start_lan_beacon(_migration_port)
@@ -5651,7 +5842,7 @@ func _abort_migration(reason: String) -> void:
 	_migration_resume_gm = {}
 	get_tree().paused = false
 	_clear_peer_state()
-	connection_status_changed.emit("Host ayrıldı ve yeni host kurulamadı (%s)." % reason)
+	connection_status_changed.emit(Loc.t("Host ayrıldı ve yeni host kurulamadı (%s).") % reason)
 	host_migration_state.emit("", true)
 	host_left_game.emit()
 
@@ -5863,7 +6054,7 @@ func request_join_in_progress_game() -> void:
 	_publish_migration_roster()
 	_rpc_receive_rejoin_snapshot.rpc_id(sender_id, _rejoin_snapshots.get(uid, {}), GameManager.team_level, GameManager.team_xp,
 			GameManager.team_xp_needed)
-	_rpc_join_in_progress_game.rpc_id(sender_id)
+	_rpc_join_in_progress_game.rpc_id(sender_id, GameManager.selected_map)
 	## "Yakalama" gönderimi (hayattaki yaratıklar, atmosfer, satıcı) BURADA DEĞİL: istemci bu anda daha yükleme ekranına
 	## geçiyor, Main yok - paketler "Node not found: Main/EnemySpawner" ile boşa gidiyordu (2026-10-04, iki süreçli testte
 	## görüldü: host'ta 8 yaratık, geç katılanda 0). İstemci Main'i kurunca notify_main_ready_for_catchup ile ister.
@@ -6272,3 +6463,27 @@ func _find_player_by_peer_id(peer_id: int) -> Node:
 		if child is RemotePlayer and child.peer_id == peer_id:
 			return child
 	return null
+
+## Başkasının silah sesi (gelen "weapon_sound"; tek ses ya da madde 406 kombo zincirinin bir adımı). Tek yer: mesafe/kısma/kubbe kuralı.
+## DÜZELTME (kullanıcı bildirimi: "silahların sesleri çok yüksek ve kafa ağrıtıyor" + "oyuncular uzakken bile diğer oyuncuların silah
+## seslerini duyabiliyor"): gönderenin gerçek volume_db'si taşınır (yoksa -10 dB), max_distance düşük + attenuation üsteli yüksek.
+func _play_remote_weapon_sound(rp: Node, snd_path: String, pitch: float, volume_db: float, rim: bool, pos: Vector2) -> void:
+	if not is_instance_valid(rp) or snd_path.is_empty() or not ResourceLoader.exists(snd_path):
+		return
+	var snd_res: AudioStream = load(snd_path) as AudioStream
+	if snd_res == null:
+		return
+	var asp: AudioStreamPlayer2D = AudioStreamPlayer2D.new()
+	rp.add_child(asp)
+	asp.stream = snd_res
+	asp.volume_db = volume_db + AudioBuses.remote_weapon_db() ## başkasının silahı %15 kısık (2026-10-19)
+	asp.max_distance = 900.0
+	asp.attenuation = 1.6
+	asp.pitch_scale = clampf(pitch, 0.5, 2.0)
+	## Şovalye kubbesinin dış halkasından ateşlenen silah (bkz. dome_weapon_ring.gd): ses silahın konumunda çalar ki
+	## kubbenin boğuk-ses halkasına (dome_sound_muffle.gd) düşsün; normalde kuklanın üstünde çalar.
+	if rim:
+		asp.global_position = pos
+		AudioBuses.route_rim_sound(asp, true) ## yerel oyuncu kubbedeyse sert boğuk (halka silahı)
+	asp.finished.connect(asp.queue_free)
+	asp.play()

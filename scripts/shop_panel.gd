@@ -5,6 +5,7 @@ extends Control
 ## state'ine bağımsız/pure fonksiyonlardı) İKİNCİ bir kopya yazmadan doğrudan
 ## ShopPanel._upgrade_cost(...) gibi çağırabilsin diye.
 class_name ShopPanel
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Kullanıcı isteği: "Dükkanı açınca sağında stat penceresinin de açılmasını
 ## istiyorum" + "mini dükkan yerine direk dükkan açılsın" - hud.gd (eşleşen
@@ -48,7 +49,7 @@ const MAX_LEVELS := {
 const UPGRADE_NAMES := {
 	"spray": "İtici Sprey",
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
-	"tuftuf": "Tüftüf", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
+	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
 	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç",
 }
@@ -58,20 +59,20 @@ const UPGRADE_NAMES := {
 ## _refresh_upgrade_page).
 const WEAPON_ICON_TEXTURES := {
 	"dagger": "res://assets/weapons/base_knife/icon_v2.png",
-	"fire_staff": "res://assets/weapons/fire/firestaff_icon_v3.png",
+	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
 	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
 	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
-	"tuftuf": "res://assets/weapons/tuftuf/icon_v2.png",
+	"tuftuf": "res://assets/weapons/yeni/zehir_asasi.png",
 	"tufek": "res://assets/weapons/tufek/icon.png",
-	"arcane": "res://assets/weapons/arcane/icon_v3.png",
-	"yay": "res://assets/weapons/yay/draw1.png",
-	"crossbow": "res://assets/weapons/crossbow/icon.png",
+	"arcane": "res://assets/weapons/yeni/arcane.png",
+	"yay": "res://assets/weapons/yeni/yay.png",
+	"crossbow": "res://assets/weapons/yeni/arbalet.png",
 	"boomerang": "res://assets/weapons/boomerang/icon.png",
-	"buz_asasi": "res://assets/weapons/buz_asasi/icon_v3.png",
+	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
 	"fisek": "res://assets/weapons/fisek/icon.png",
 	"pence": "res://assets/weapons/pence/icon.png",
 	"topuz": "res://assets/weapons/topuz/icon.png",
-	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
+	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
 }
 const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic"]
 ## player.gd MAX_OWNED_WEAPONS ile birebir aynı olmalı - dükkandan satın
@@ -817,13 +818,13 @@ func _display_cost_text(key: String) -> String:
 		var max_level: int = MAX_LEVELS[key]
 		if level >= max_level:
 			return "MAX"
-		return "%d Altın" % _upgrade_cost(key, level + 1)
+		return Loc.t("%d Altın") % _upgrade_cost(key, level + 1)
 	elif kind == "item":
 		var owned_count: int = _item_count_owned(key)
 		var slot_max: int = _max_item_slots()
 		if GameManager.owned_items.size() >= slot_max:
 			return "DOLU"
-		return "%d Altın" % _item_cost(key, owned_count + 1)
+		return Loc.t("%d Altın") % _item_cost(key, owned_count + 1)
 	else:
 		## Sahip olunan bir silah türü de tekrar alınabilir (kullanıcı düzeltmesi: "envanterimizde
 		## sahip olduğumuz silahları bir daha alamıyoruz" - "aynı silah birden fazla alınmaz"
@@ -831,7 +832,7 @@ func _display_cost_text(key: String) -> String:
 		## merchant_shop_screen.gd _entry_sold; bu kalıcı dükkanda sadece slot sınırı geçerli).
 		if GameManager.owned_weapons.size() >= _max_owned_weapons():
 			return "DOLU"
-		return "%d Altın" % _copy_cost(key, GameManager.owned_weapons.size() + 1)
+		return Loc.t("%d Altın") % _copy_cost(key, GameManager.owned_weapons.size() + 1)
 
 
 ## Cost to go from the current level to next_level. Every item uses the same
@@ -1223,14 +1224,14 @@ func _refresh_preview() -> void:
 	if kind == "upgrade":
 		var level: int = GameManager.get(selected_key + "_level")
 		var max_level: int = MAX_LEVELS[selected_key]
-		preview_status_label.text = "Seviye: %d/%d" % [level, max_level]
+		preview_status_label.text = Loc.t("Seviye: %d/%d") % [level, max_level]
 
 		if level >= max_level:
 			preview_buy_button.text = "MAX"
 			preview_buy_button.disabled = true
 		else:
 			var cost: int = _upgrade_cost(selected_key, level + 1)
-			preview_buy_button.text = "Satın Al (%d)" % cost
+			preview_buy_button.text = Loc.t("Satın Al (%d)") % cost
 			preview_buy_button.disabled = GameManager.gold < cost
 	elif kind == "item":
 		var owned_count: int = _item_count_owned(selected_key)
@@ -1239,24 +1240,24 @@ func _refresh_preview() -> void:
 		## genişliğine güvenle sığması için (bkz. kullanıcı bildirimi: dükkanda
 		## eşya önizleme panelindeki yazılar taşıyordu, StatusLabel'e ayrıca
 		## autowrap_mode/clip_text de eklendi, bkz. shop_panel.tscn).
-		preview_status_label.text = "Sahip: %d  Slot: %d/%d" % [owned_count, GameManager.owned_items.size(), slot_max]
+		preview_status_label.text = Loc.t("Sahip: %d  Slot: %d/%d") % [owned_count, GameManager.owned_items.size(), slot_max]
 		if GameManager.owned_items.size() >= slot_max:
 			preview_buy_button.text = "DOLU"
 			preview_buy_button.disabled = true
 		else:
 			var cost: int = _item_cost(selected_key, owned_count + 1)
-			preview_buy_button.text = "Satın Al (%d)" % cost
+			preview_buy_button.text = Loc.t("Satın Al (%d)") % cost
 			preview_buy_button.disabled = GameManager.gold < cost
 	else:
 		var count: int = _count_owned(selected_key)
-		preview_status_label.text = "Sahip olunan: %d" % count
+		preview_status_label.text = Loc.t("Sahip olunan: %d") % count
 		## Sahip olunan silah da tekrar alınabilir (bkz. _display_cost_text notu) - sadece slot sınırı.
 		if GameManager.owned_weapons.size() >= _max_owned_weapons():
 			preview_buy_button.text = "DOLU"
 			preview_buy_button.disabled = true
 		else:
 			var cost: int = _copy_cost(selected_key, GameManager.owned_weapons.size() + 1)
-			preview_buy_button.text = "Satın Al (%d)" % cost
+			preview_buy_button.text = Loc.t("Satın Al (%d)") % cost
 			preview_buy_button.disabled = GameManager.gold < cost
 
 
@@ -1287,7 +1288,7 @@ func _refresh_upgrade_page() -> void:
 			icon.texture = tex_path
 
 		var name_label: Label = row.get_node("NameLabel")
-		name_label.text = "%s Lv%d/%d" % [UPGRADE_NAMES.get(key, key), level, max_level]
+		name_label.text = Loc.t("%s Lv%d/%d") % [UPGRADE_NAMES.get(key, key), level, max_level]
 
 		var upgrade_button: Button = row.get_node("UpgradeButton")
 		if level >= max_level:
@@ -1304,6 +1305,6 @@ func _refresh_upgrade_page() -> void:
 		var shard_refund: int = EnchantDefs.sell_refund_shards(entry)
 		## Son kalan silah da satılabilir (bkz. _on_sell_weapon üstündeki not).
 		sell_button.disabled = false
-		sell_button.text = "Sat (%d)" % refund
-		sell_button.tooltip_text = ("Satınca +%d Silah Parçacığı da geri gelir" % shard_refund) if shard_refund > 0 else ""
+		sell_button.text = Loc.t("Sat (%d)") % refund
+		sell_button.tooltip_text = (Loc.t("Satınca +%d Silah Parçacığı da geri gelir") % shard_refund) if shard_refund > 0 else ""
 		_apply_wood_button_style(sell_button)

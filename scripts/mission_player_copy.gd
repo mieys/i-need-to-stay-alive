@@ -269,6 +269,8 @@ func set_weapon_keys(keys: Array) -> void:
 			interval /= 0.85
 		interval /= GameManager.WEAPON_ATTACK_SPEED_MULT ## genel silah yavaşlatması (2026-10-17, -%30 saldırı hızı)
 		var ratio: float = float(root.get("card_damage_bonus_ratio")) if "card_damage_bonus_ratio" in root else 1.0
+		if key == "pompali":
+			ratio *= 3.0 ## madde 448: sahne oranı SAÇMA başına (0,25); kopya tek mermi atar -> orta mesafede isabet eden ~3 saçma kadar
 		var is_melee: bool = key in MELEE_KEYS
 		var reach: float = MELEE_REACH
 		if key == "uzunkilic":
@@ -296,8 +298,8 @@ func set_weapon_keys(keys: Array) -> void:
 		else:
 			icon.scale *= 0.9
 		icon.scale *= WeaponOrbitMath.ICON_SIZE_MULT ## 2026-09-25: silahlar %15 küçük (oyuncu/kukla ile aynı)
-		## Zanaatkâr seti (madde 196): remote_player.gd ile AYNI sanat/ölçek/duruş (weapon_tier_art.gd). Kopya kademeyi bilmez -> 1. seviye.
-		if WeaponTierArtScript.has_art(key) and WeaponTierArtScript.set_art(icon, key, 1):
+		## Sabit silah sanatı (madde 402): remote_player.gd ile AYNI sanat/ölçek/duruş (weapon_tier_art.gd); sanatı yoksa eski ikon.
+		if WeaponTierArtScript.has_art(key) and WeaponTierArtScript.set_art(icon, key):
 			icon.scale = Vector2.ONE * WeaponTierArtScript.PUPPET_ICON_SCALE
 			forward = deg_to_rad(float(WeaponTierArtScript.FORWARD[key]))
 		icon.position = slots[i]
@@ -819,26 +821,19 @@ func _credit_local_dealer(shown: float, is_crit: bool, is_area: bool, bl_src: St
 
 
 const DMG_SPAWN_OFFSET := Vector2(0, -36)
-const DMG_SCATTER := Vector2(22, 14)
 const DMG_MAX_LIVE := 5
 var _dmg_ids: Array[int] = []
 
 
-## Yaratıklarla aynı toplu sayı sistemi (damage_numbers.gd, enemy.gd _spawn_floating_text ile aynı görünüm).
+## Yaratıklarla aynı toplu sayı sistemi ve AYNI kurallar (damage_numbers.gd spawn_hit, madde 429: renk, birleştirme, saçılma, ekran bütçesi).
 func _spawn_damage_number(amount: float, is_crit: bool) -> void:
+	if not UISound.damage_number_allowed(is_crit): ## Ayarlar > Hasar Sayıları (madde 406)
+		return
 	var dn = DamageNumbersScript.get_instance(get_tree())
 	if dn == null:
 		return
-	var alive: Array[int] = []
-	for id in _dmg_ids:
-		if dn.is_alive(id):
-			alive.append(id)
-	while alive.size() >= DMG_MAX_LIVE:
-		dn.remove(alive.pop_front())
-	var jitter := Vector2(randf_range(-DMG_SCATTER.x, DMG_SCATTER.x), randf_range(-DMG_SCATTER.y, DMG_SCATTER.y))
-	var color: Color = Color(1.0, 0.25, 0.2) if is_crit else Color(1.0, 1.0, 1.0)
-	alive.append(dn.spawn_fixed(self, global_position + DMG_SPAWN_OFFSET + jitter, "%d" % maxi(1, int(round(amount))), color))
-	_dmg_ids = alive
+	var kind: int = DamageNumbersScript.KIND_CRIT if is_crit else DamageNumbersScript.KIND_HIT
+	dn.spawn_hit(self, global_position + DMG_SPAWN_OFFSET, int(round(amount)), kind, _dmg_ids, DMG_MAX_LIVE, max_health)
 
 
 ## ------------------------------------------------------------------ SİLAH ÖZELLİKLERİ (ELEMENT) GİRİŞİ

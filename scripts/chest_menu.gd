@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Sandıklar artık otomatik/sırayla açıldığı için (bkz. main.gd
 ## _try_open_next_pending_chest) bu menü kapandığında bir sonrakinin
@@ -105,38 +106,39 @@ func _mobile() -> bool:
 ## bir class_name TANIMLAMADIĞI için oradaki const'lara güvenli/açık bir
 ## şekilde erişmenin en basit yolu bu (diğer script'lerdeki paralel
 ## const kopyalama deseniyle tutarlı).
-const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "kalkan", "yinyang"]
+const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "kalkan", "yinyang", "pompali"]
 const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
-	"tuftuf": "Tüftüf", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
+	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı",
+	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
 }
 const WEAPON_ICON_TEXTURES := {
 	"dagger": "res://assets/weapons/base_knife/icon_v2.png",
-	"fire_staff": "res://assets/weapons/fire/firestaff_icon_v3.png",
+	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
 	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
 	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
-	"tuftuf": "res://assets/weapons/tuftuf/icon_v2.png",
+	"tuftuf": "res://assets/weapons/yeni/zehir_asasi.png",
 	"tufek": "res://assets/weapons/tufek/icon.png",
-	"arcane": "res://assets/weapons/arcane/icon_v3.png",
-	"yay": "res://assets/weapons/yay/draw1.png",
-	"crossbow": "res://assets/weapons/crossbow/icon.png",
+	"arcane": "res://assets/weapons/yeni/arcane.png",
+	"yay": "res://assets/weapons/yeni/yay.png",
+	"crossbow": "res://assets/weapons/yeni/arbalet.png",
 	"boomerang": "res://assets/weapons/boomerang/icon.png",
-	"buz_asasi": "res://assets/weapons/buz_asasi/icon_v3.png",
+	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
 	"fisek": "res://assets/weapons/fisek/icon.png",
 	"pence": "res://assets/weapons/pence/icon.png",
 	"topuz": "res://assets/weapons/topuz/icon.png",
-	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
-	"gokkusagi": "res://assets/weapons/zanaat/gokkusagi_L1.png",
+	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
+	"gokkusagi": "res://assets/weapons/yeni/gokkusagi.png",
 	"mizrak": "res://assets/weapons/zanaat/mizrak_L1.png",
 	"kalkan": "res://assets/weapons/zanaat/kalkan_L1.png",
 	"yinyang": "res://assets/weapons/zanaat/yinyang_L1.png",
+	"pompali": "res://assets/weapons/pompali/icon.png",
 }
 const WEAPON_COST_BASE := {
 	"dagger": 60, "fire_staff": 80, "lightning_staff": 120, "tabanca": 100, "tuftuf": 90, "tufek": 100, "arcane": 110, "yay": 100,
 	"crossbow": 100, "boomerang": 110, "buz_asasi": 95, "fisek": 120, "pence": 90, "topuz": 105, "uzunkilic": 100, "gokkusagi": 120, "mizrak": 100,
-	"kalkan": 100, "yinyang": 110,
+	"kalkan": 100, "yinyang": 110, "pompali": 105,
 }
 
 func _get_game_manager() -> Node:
@@ -281,7 +283,7 @@ func _play_chest_open_sequence(candidate: Dictionary) -> void:
 
 	## Işığın rengi çıkacak eşyanın nadirliği (_reward_tier, setup'ta çekildi) - kart görünmeden önce ipucu.
 	var anim: Control = ChestOpenAnim.new()
-	anim.setup(_is_elite, _reward_tier)
+	anim.setup(_is_elite, _reward_tier, _chest_tier)
 	## Kart paralardan SONRA çıkıyor: ödül çınlaması kapak patlayınca değil kart ekrana inip oturunca çalar (kullanıcı isteği 2026-10-08).
 	anim.chime_on_burst = false
 	_stage.add_child(anim)
@@ -477,7 +479,7 @@ func _build_gold_badge(parent: Control) -> Control:
 	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(coin)
 	var lbl := Label.new()
-	lbl.text = "+%d Altın" % _chest_gold
+	lbl.text = Loc.t("+%d Altın") % _chest_gold
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	UIKit.style_label(lbl, 40 if _mobile() else CARD_DESC_FONT_SIZE, UIKit.C_GOLD, 0)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -761,6 +763,7 @@ func _build_card(candidate: Dictionary) -> Control:
 
 	# Check slots limit (SİLAH ve EŞYA için AYRI limitler - bkz. is_weapon)
 	var has_slots: bool = true
+	var block_label: String = "SLOTLAR DOLU"
 	var gm = _get_game_manager()
 	if is_weapon:
 		if _player and gm and "owned_weapons" in gm:
@@ -772,7 +775,9 @@ func _build_card(candidate: Dictionary) -> Control:
 		var part_slots: int = 1
 		if _player.has_method("get_max_item_slots"):
 			part_slots = _player.get_max_item_slots()
-		has_slots = Items.purchase_block_reason(item_key, gm.owned_items, part_slots, {"consume": []}) == ""
+		var block_reason: String = Items.purchase_block_reason(item_key, gm.owned_items, part_slots, {"consume": []})
+		has_slots = block_reason == ""
+		block_label = _slot_block_label(block_reason)
 
 	## Kullanıcı isteği: "oyundaki bütün butonları bununla değiştirmeni
 	## istiyorum" - eski yeşil (Al)/kırmızı (Sat) renk ayrımı kaldırıldı,
@@ -798,11 +803,11 @@ func _build_card(candidate: Dictionary) -> Control:
 	if has_slots:
 		al_btn.text = "AL"
 	else:
-		al_btn.text = "SLOTLAR DOLU"
+		al_btn.text = block_label
 		al_btn.disabled = true
 	al_btn.pressed.connect(_on_al_pressed.bind(candidate, cost_base, power_mult))
 	if _mobile():
-		al_btn.text = "AL" if has_slots else "SLOTLAR\nDOLU"
+		al_btn.text = "AL" if has_slots else block_label.replace(" ", "\n")
 		_add_side_button(al_btn, false, 64)
 	else:
 		column.add_child(al_btn)
@@ -817,16 +822,47 @@ func _build_card(candidate: Dictionary) -> Control:
 	sat_btn.add_theme_font_size_override("font_size", CARD_BUTTON_FONT_SIZE)
 	## bkz. al_btn üstündeki ayni not - font_color override'i kaldirildi.
 	UIKit.style_button(sat_btn, "wood", false, CARD_BUTTON_FONT_SIZE)
-	sat_btn.text = "SAT (+%d Altın)" % refund_gold
+	sat_btn.text = Loc.t("SAT (+%d Altın)") % refund_gold
 	sat_btn.pressed.connect(_on_sat_pressed.bind(item_key, refund_gold))
 	if _mobile():
-		sat_btn.text = "SAT\n+%d Altın" % refund_gold
+		sat_btn.text = Loc.t("SAT\n+%d Altın") % refund_gold
 		_add_side_button(sat_btn, true, 40)
 	else:
 		column.add_child(sat_btn)
 	column.set_meta("sat_button", sat_btn) ## bkz. _unhandled_input (2 kısayolu)
 	
 	return column
+
+## AL kapalıyken düğme yazısı: eskiden her engel "SLOTLAR DOLU" yazıyordu ("Zaten sende var" / "en fazla 6 kopya" da dahil;
+## epik/efsanevi/parça havuzları AYRI olduğundan oyuncu "pazar sınırsız" sanıyordu, 2026-11-06 oyuncu bildirimi). reason = Items.purchase_block_reason.
+func _slot_block_label(reason: String) -> String:
+	if reason.begins_with("Zaten"):
+		return "ZATEN SENDE"
+	if reason.begins_with("Bu parçadan"):
+		return "KOPYA DOLU"
+	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_PARCA - 1]):
+		return "PARÇA DOLU"
+	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_EPIK - 1]):
+		return "EPİK DOLU"
+	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_EFSANEVI - 1]):
+		return "EFSANEVİ DOLU"
+	return "SLOTLAR DOLU"
+
+
+## Telefon düğmesinin alt satırı (büyük yazı "DOLU" kalır).
+func _slot_block_sub(reason: String) -> String:
+	if reason.begins_with("Zaten"):
+		return "zaten sende var"
+	if reason.begins_with("Bu parçadan"):
+		return Loc.t("en fazla %d tane") % Items.PART_MAX_COPIES
+	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_PARCA - 1]):
+		return "parça slotu dolu"
+	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_EPIK - 1]):
+		return "epik slotu dolu"
+	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_EFSANEVI - 1]):
+		return "efsanevi slotu dolu"
+	return "yer yok"
+
 
 ## Telefon: AL / SAT ekranın kenarında (karta değil ekrana bağlı - kart sandıktan uçarken düğmeler yerinde bekler).
 func _add_side_button(btn: Button, left: bool, fs: int) -> void:
@@ -975,15 +1011,16 @@ func _close() -> void:
 ## fırlar (Frame görünmez kalır, animasyon/ışık kodları aynı).
 const PH_CHEST_W := 880.0
 const PH_SIDE_BTN := Vector2(460, 280)
-const PH_PANEL := Color("#23233a")
-const PH_INSET := Color("#12121f")
-const PH_LINE := Color("#3b3a5a")
-const PH_LINE_HI := Color("#5f5c86")
-const PH_TEXT := Color("#efe6d6")
-const PH_DIM_TEXT := Color("#a7a2c0")
-const PH_ACCENT := Color("#f4c56e")
-const PH_ACCENT_TEXT := Color("#231a0a")
-const PH_GOOD := Color("#a8d69a")
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
+const PH_PANEL := HT.WIN_PANEL2
+const PH_INSET := HT.WIN_INSET
+const PH_LINE := HT.WIN_LINE
+const PH_LINE_HI := HT.WIN_LINE_HI
+const PH_TEXT := HT.TEXT
+const PH_DIM_TEXT := HT.DIM
+const PH_ACCENT := HT.ACCENT
+const PH_ACCENT_TEXT := HT.ACCENT_TEXT
+const PH_GOOD := HT.GOOD
 const PH_KADEME_COL := [Color("#c39a64"), Color("#6f9df2"), Color("#b98af2")] ## parça / epik / efsanevi
 const PH_KADEME_UPPER := ["PARÇA", "EPİK", "EFSANEVİ"]
 const PH_BAG_LABEL := ["Çantandaki parçalar", "Çantandaki epikler", "Çantandaki efsaneviler"]
@@ -994,7 +1031,7 @@ var _phone_chrome: Control = null
 static func top_fade(width: float, h: float = 190.0, alpha: float = 0.75) -> TextureRect:
 	var g := Gradient.new()
 	g.set_color(0, Color(0.03, 0.03, 0.06, alpha))
-	g.set_color(1, Color(0.03, 0.03, 0.06, 0.0))
+	g.set_color(1, Color(HT.DEEP, 0.0))
 	var gt := GradientTexture2D.new()
 	gt.gradient = g
 	gt.fill_from = Vector2(0, 0)
@@ -1042,7 +1079,7 @@ func _setup_phone_chrome() -> void:
 	var view: Vector2 = get_viewport().get_visible_rect().size
 	var safe: Rect2 = MobileUIScript.safe_margins(get_viewport())
 	if has_node("Dim"):
-		($Dim as ColorRect).color = Color(0.03, 0.03, 0.06, 0.62)
+		($Dim as ColorRect).color = Color(HT.DEEP, 0.62)
 	if title_label:
 		title_label.visible = false
 	_phone_chrome = Control.new()
@@ -1163,6 +1200,7 @@ func _build_phone_card(candidate: Dictionary) -> Control:
 		_gold_badge = _build_gold_badge(gold_holder)
 
 	var has_slots: bool = true
+	var block_sub: String = "yer yok"
 	var gm = _get_game_manager()
 	if is_weapon:
 		if _player and gm and "owned_weapons" in gm:
@@ -1174,17 +1212,19 @@ func _build_phone_card(candidate: Dictionary) -> Control:
 		var part_slots: int = 1
 		if _player.has_method("get_max_item_slots"):
 			part_slots = _player.get_max_item_slots()
-		has_slots = Items.purchase_block_reason(item_key, gm.owned_items, part_slots, {"consume": []}) == ""
+		var block_reason: String = Items.purchase_block_reason(item_key, gm.owned_items, part_slots, {"consume": []})
+		has_slots = block_reason == ""
+		block_sub = _slot_block_sub(block_reason)
 	var power_mult: float = 1.0
 	var refund_gold: int = int(round(cost_base * Items.SELL_REFUND_RATIO))
 	var al_btn := Button.new()
 	al_btn.disabled = not has_slots
 	al_btn.pressed.connect(_on_al_pressed.bind(candidate, cost_base, power_mult))
-	_ph_side_button(al_btn, false, "AL" if has_slots else "DOLU", "çantaya ekle" if has_slots else "yer yok", true)
+	_ph_side_button(al_btn, false, "AL" if has_slots else "DOLU", "çantaya ekle" if has_slots else block_sub, true)
 	column.set_meta("al_button", al_btn)
 	var sat_btn := Button.new()
 	sat_btn.pressed.connect(_on_sat_pressed.bind(item_key, refund_gold))
-	_ph_side_button(sat_btn, true, "SAT", "+%d altın" % refund_gold, false)
+	_ph_side_button(sat_btn, true, "SAT", Loc.t("+%d altın") % refund_gold, false)
 	column.set_meta("sat_button", sat_btn)
 	_ph_bag_row(kd, is_weapon, has_slots)
 	return column

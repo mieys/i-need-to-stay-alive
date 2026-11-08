@@ -120,6 +120,7 @@ func _run() -> void:
 	var house: Node = current_scene.get_node_or_null("HouseInterior")
 	if house and house.has_method("_do_exit_house"):
 		house.call("_do_exit_house")
+	_finish_house_intro()
 	await _wait(1.5)
 	var player: Node2D = current_scene.get_node_or_null("Player") as Node2D
 	if player == null:
@@ -217,3 +218,13 @@ func _find_by_method(n: Node, method: String) -> Node:
 		if r:
 			return r
 	return null
+
+
+## Açılış sahnesini (madde 313, HouseIntro) bitirir - madde 419 (madde 349 tuzağı): yoksa GameManager.invasion_pending true kalır,
+## enemy_spawner._process (yaratık senkronu dahil) HİÇ çalışmaz ve istemci yaratıkları donuk kalır (denetim sahte sonuç verir).
+func _finish_house_intro() -> void:
+	var scene: Node = current_scene
+	var intro: Node = scene.get_node_or_null("HouseInterior/HouseIntro") if scene else null
+	if intro and intro.has_method("_set_phase"):
+		intro.call("_set_phase", 3, 0.0) ## HouseIntro.Phase.DONE
+	root.get_node("GameManager").set("invasion_pending", false)

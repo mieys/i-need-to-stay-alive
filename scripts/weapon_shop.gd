@@ -1,4 +1,5 @@
 extends Node2D
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## SİLAH SATICISI (demirci) DÜKKANI - kullanıcı isteği (2026-10-07): "harita tmx'ine eklediğim yeni blacksmith yapısının
 ## kapısından içeri girince açılacak yeni bir dükkan. bu dükkanda örse yaklaşınca etkileşime girip artık silahları buradan satın
@@ -475,7 +476,7 @@ func _process(delta: float) -> void:
 		if is_instance_valid(_shop_screen):
 			_hide_prompt()
 		elif _near_anvil() and _player.get("is_dead") != true:
-			_show_prompt("Silah ve mana kalkanı almak için %s tuşuna bas" % key_label)
+			_show_prompt(Loc.t("Silah ve mana kalkanı almak için %s tuşuna bas") % key_label)
 			if interact:
 				_open_shop()
 		else:
@@ -483,7 +484,7 @@ func _process(delta: float) -> void:
 		return
 	## Dışarıda: kapının yanında giriş ipucu. Ev içindeyken (HouseInterior) buraya hiç gelinmez - o oyuncu is_indoors.
 	if _near_entrance and not bool(_player.get("is_indoors")) and _player.get("is_dead") != true and _player.get("is_downed") != true:
-		_show_prompt("Demirciye girmek için %s tuşuna bas" % key_label)
+		_show_prompt(Loc.t("Demirciye girmek için %s tuşuna bas") % key_label)
 		if interact:
 			_enter()
 	else:

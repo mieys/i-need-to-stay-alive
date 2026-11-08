@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" load_steps=6 format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://dnuc0701sla1r"]
 
-[ext_resource type="Texture2D" path="res://assets/fx/baked/totem_bolt_launch_sheet.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://cfc401n67nkbj" path="res://assets/fx/baked/totem_bolt_launch_sheet.png" id="1"]
 
 [sub_resource type="AtlasTexture" id="a0"]
 atlas = ExtResource("1")
@@ -24,8 +24,20 @@ margin = Rect2(0, 0, 1, 1)
 
 [resource]
 animations = [{
-"frames": [{"duration": 1.0, "texture": SubResource("a0")}, {"duration": 1.0, "texture": SubResource("a1")}, {"duration": 1.0, "texture": SubResource("a2")}, {"duration": 1.0, "texture": SubResource("a3")}],
-"loop": false,
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("a0")
+}, {
+"duration": 1.0,
+"texture": SubResource("a1")
+}, {
+"duration": 1.0,
+"texture": SubResource("a2")
+}, {
+"duration": 1.0,
+"texture": SubResource("a3")
+}],
+"loop": 0,
 "name": &"play",
 "speed": 30.0
 }]

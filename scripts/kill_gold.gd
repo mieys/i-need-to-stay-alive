@@ -1,4 +1,5 @@
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Yaratık öldürme altını (kullanıcı isteği 2026-10-15): "yaratıklar ölünce yere altın düşürmeyecek. onun yerine üstünde
 ## +'altın miktarı' yazacak ve altın sesi çıkacak. yaratıklar kademelerine göre altın verecek."
@@ -24,6 +25,10 @@ const MAX_ACTIVE_COINS := 60
 ## credit() ile alır (miktar hesabı amount_for aynı, gelir değişmez). false = eski doğrudan teslim (dönen para + asist/takım payı bölüşümü,
 ## enemy.gd _award_gold_directly): yerden toplamada altın toplayana gittiği için asist/takım payı yalnız bu modda çalışır.
 const GROUND_DROPS := true
+## 2026-11-06 (kullanıcı: "karakter altın toplayınca üstünde + altın görünmesin"): toplanan/teslim edilen altında karakterin üstünde "+N" yazısı ve
+## simgesi ÇIKMAZ; altın sesi ve balans kaydı aynen sürer. false = yazı yok. Asist/takım payı yazıları ("ASİST +N", "TAKIM +N", yalnız GROUND_DROPS = false
+## modunda) bu bayraktan etkilenmez.
+const SHOW_PICKUP_TEXT := false
 const COIN_FRAMES := preload("res://assets/pickups/gold/gold_coin_frames.tres")
 const ICON_SCALE := 0.8 ## 16 px para -> ~13 px (yazı 16 pt piksel fontu)
 const ICON_GAP := 3.0
@@ -67,10 +72,13 @@ static func show_at(tree: SceneTree, amount: int, world_pos: Vector2, assist: in
 	if tree == null or tree.current_scene == null:
 		return
 	world_pos = resolve_pos(tree, world_pos)
+	if assist == 0 and not SHOW_PICKUP_TEXT:
+		_play_sound(tree, world_pos)
+		return
 	var ft: Node = FloatingText.instantiate()
 	tree.current_scene.add_child(ft)
 	ft.global_position = world_pos + TEXT_OFFSET
-	var text: String = ("TAKIM +%d" if assist == TEAM_KIND else ("ASİST +%d" if assist > 0 else "+%d")) % amount
+	var text: String = Loc.t("TAKIM +%d" if assist == TEAM_KIND else ("ASİST +%d" if assist > 0 else "+%d")) % amount
 	if ft.has_method("setup"):
 		ft.setup(text, ASSIST_COLOR if assist > 0 else TEXT_COLOR)
 	_add_coin_icon(ft, text)

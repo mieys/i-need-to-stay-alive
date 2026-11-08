@@ -326,6 +326,12 @@ func _run() -> void:
 			await _prof_hit()
 		"draw_sweep":
 			await _draw_sweep()
+		"acilis":
+			await _acilis()
+		"main_kurulum":
+			await _main_kurulum()
+		"ev_shot":
+			await _ev_shot()
 	print("PG DONE")
 	quit()
 
@@ -2161,3 +2167,192 @@ func _draw_sweep() -> void:
 		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0, int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)), int(Performance.get_monitor(Performance.OBJECT_COUNT))])
 	var sweep = load("res://tools/fps_micro/draw_sweep.gd").new()
 	await sweep.run(self)
+
+
+## AÇILIŞ KARE SÜRELERİ (2026-11-07, kullanıcı: "oyun başladığında evde doğunca anlık drop, ilk saniyelerde FPS düşük"): Main hazır olduğu andan
+## itibaren PG_SEC (12) sn boyunca her karenin duvar saati süresi; 0,5 sn'lik kovalarda ortalama / en büyük / >25 ms kare sayısı + o anki ısınma ilerlemesi
+## (fx_warmup shader / kaynak sırası) + en yavaş 15 kare. A/B: FXW_COLLECT=1 arka plan ısınmasını kapatır.
+func _acilis() -> void:
+	var nm: Node = root.get_node("NetworkManager")
+	_gm = root.get_node("GameManager")
+	root.get_node("UISound").set("show_fps", false)
+	nm.call("disconnect_from_room")
+	_gm.call("reset")
+	_gm.set("selected_char_id", _char)
+	var chars: GDScript = load("res://scripts/characters.gd")
+	_gm.set("selected_character", chars.get_def(_char).get("skill", 1))
+	_gm.set("selected_start_weapon", _loadout[0])
+	_gm.set("debug_immortal", true)
+	_gm.set("debug_mode_unlocked", true)
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	Engine.max_fps = 0
+	OS.low_processor_usage_mode = false
+	var fw: GDScript = load("res://scripts/fx_warmup.gd")
+	var ts: PackedInt64Array = []
+	var prog: Array = []
+	var rec := func() -> void:
+		ts.append(Time.get_ticks_usec())
+		prog.append("%s%d/%d proc=%.1f fiz=%.1f rcpu=%.1f dugum=%d" % ["K " if get_node_count_in_group(&"loading_overlay") > 0 else "", int(fw.get("_next_shader")), int(fw.get("_next_path")), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+			Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, RenderingServer.get_frame_setup_time_cpu(), int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))])
+	## PG_VIA_LOADING=1: gerçek akış (yükleme ekranı -> Main, katman ısınmayı örter); satırlardaki "K " = yükleme katmanı ekranda (görünmeyen kare).
+	var via_loading: bool = OS.get_environment("PG_VIA_LOADING") == "1"
+	## PG_LOAD_TRACE=1 (madde 440): yükleme ekranı AŞAMASININ kare süreleri de kaydedilir ("PG YUKLEME ..." satırları: bar değeri + dt).
+	var trace_load: bool = via_loading and OS.get_environment("PG_LOAD_TRACE") == "1"
+	var ltime: PackedInt64Array = []
+	var lbar: PackedFloat32Array = []
+	var lmon: Array = [] ## [process ms, physics ms, render cpu ms] (bir önceki karenin değerleri)
+	var lrec := func() -> void:
+		ltime.append(Time.get_ticks_usec())
+		lmon.append([Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, RenderingServer.get_frame_setup_time_cpu()])
+		var ov: Node = get_first_node_in_group(&"loading_overlay")
+		var pb: Variant = ov.get("progress_bar") if ov else null
+		lbar.append(float((pb as ProgressBar).value) if pb is ProgressBar else -1.0)
+	if trace_load:
+		process_frame.connect(lrec)
+	change_scene_to_file("res://scenes/loading_screen.tscn" if via_loading else "res://scenes/main.tscn")
+	var t0: int = Time.get_ticks_msec()
+	while (current_scene == null or current_scene.name != "Main") and Time.get_ticks_msec() - t0 < 90000:
+		await process_frame
+	if trace_load:
+		var main_at: int = ltime.size()
+		await _wait(float(_env_int("PG_LOAD_AFTER", 8)))
+		process_frame.disconnect(lrec)
+		var sl: Array = []
+		for i in range(1, ltime.size()):
+			var d: float = float(ltime[i] - ltime[i - 1]) / 1000.0
+			sl.append([d, float(ltime[i] - ltime[0]) / 1.0e6, lbar[i], "MAIN+" if i >= main_at else "yukleme"])
+			if d > 33.0:
+				var m1: Array = lmon[mini(i + 1, lmon.size() - 1)]
+				print("PG YUKLEME_UZUN %.1f ms @%.2f sn bar=%.1f faz=%s (sonraki karede izlenen: process=%.0f fizik=%.0f cizim_cpu=%.0f ms)" % [d, sl[-1][1], lbar[i], sl[-1][3], m1[0], m1[1], m1[2]])
+		var lt: Array = sl.filter(func(a: Array) -> bool: return a[3] == "yukleme")
+		lt.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+		for k in mini(8, lt.size()):
+			print("PG YUKLEME_EN_YAVAS %.1f ms @%.2f sn bar=%.1f" % [lt[k][0], lt[k][1], lt[k][2]])
+		var n8: int = 0
+		var n16: int = 0
+		for a: Array in lt:
+			if a[0] > 8.0:
+				n8 += 1
+			if a[0] > 16.7:
+				n16 += 1
+		print("PG YUKLEME_ESIK >8ms=%d >16.7ms=%d / %d kare" % [n8, n16, lt.size()])
+		var tot: float = float(ltime[ltime.size() - 1] - ltime[0]) / 1.0e6
+		print("PG YUKLEME_OZET kare=%d sure=%.2f sn Main_karesi=%d" % [ltime.size(), tot, main_at])
+		return
+	if current_scene == null or current_scene.name != "Main":
+		print("PG BOOTFAIL")
+		return
+	print("PG BOOT ms=%d" % (Time.get_ticks_msec() - t0))
+	_main = current_scene
+	_main.set("_run_end_recorded", true)
+	_gm.set("run_record_suppressed", true)
+	process_frame.connect(rec)
+	await _wait(float(_env_int("PG_SEC", 12)))
+	process_frame.disconnect(rec)
+	var start: int = ts[0]
+	var slow: Array = []
+	var b_sum: float = 0.0
+	var b_n: int = 0
+	var b_max: float = 0.0
+	var b_slow: int = 0
+	var b_idx: int = 0
+	for i in range(1, ts.size()):
+		var dt: float = float(ts[i] - ts[i - 1]) / 1000.0
+		var at: float = float(ts[i] - start) / 1.0e6
+		var bi: int = int(at / 0.5)
+		if bi != b_idx:
+			if b_n > 0:
+				print("PG ACILIS t=%4.1f ort=%5.2f max=%6.1f yavas=%d kare=%d isinma=%s" % [b_idx * 0.5, b_sum / b_n, b_max, b_slow, b_n, prog[i - 1]])
+			b_idx = bi
+			b_sum = 0.0
+			b_n = 0
+			b_max = 0.0
+			b_slow = 0
+		b_sum += dt
+		b_n += 1
+		b_max = maxf(b_max, dt)
+		if dt > 25.0:
+			b_slow += 1
+		slow.append([dt, at, prog[i]])
+	if b_n > 0:
+		print("PG ACILIS t=%4.1f ort=%5.2f max=%6.1f yavas=%d kare=%d isinma=%s" % [b_idx * 0.5, b_sum / b_n, b_max, b_slow, b_n, prog[prog.size() - 1]])
+	var gone_at: float = -1.0
+	for k in range(1, ts.size()):
+		if not str(prog[k]).begins_with("K ") and str(prog[k - 1]).begins_with("K "):
+			gone_at = float(ts[k] - start) / 1.0e6
+	print("PG KATMAN_KALKTI %.2f sn" % gone_at)
+	if via_loading:
+		slow = slow.filter(func(a: Array) -> bool: return not str(a[2]).begins_with("K "))
+	slow.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	for k in mini(15, slow.size()):
+		print("PG YAVAS %.1f ms @%.2f sn isinma=%s" % [slow[k][0], slow[k][1], slow[k][2]])
+
+
+## Ev içi gündüz görüntüsü (2026-11-07, "evin içi çok karanlık dışarısı gündüz olmasına rağmen"): PG_INDOOR=1 ile evde kalır, saat PG_HOUR (oyun sn),
+## yarı boyut PNG -> PG_OUT.
+func _ev_shot() -> void:
+	if not await _boot(_char, _loadout[0]):
+		print("PG BOOTFAIL")
+		return
+	await _prepare(false, false)
+	await _wait(1.5)
+	var img: Image = await _cap()
+	img.resize(img.get_width() / 2, img.get_height() / 2, Image.INTERPOLATE_NEAREST)
+	img.save_png(OS.get_environment("PG_OUT"))
+	print("PG SHOT %s" % OS.get_environment("PG_OUT"))
+
+
+## Main sahnesi kurulum dökümü (madde 440): yükleme ekranındaki %97 donmasının parçaları - instantiate (iş parçacığına alınabilir) / add_child (_ready, ana iş parçacığı).
+func _main_kurulum() -> void:
+	var ps: PackedScene = load("res://scenes/main.tscn") as PackedScene
+	var t: int = Time.get_ticks_usec()
+	ps = load("res://scenes/main.tscn") as PackedScene
+	print("PG MK load_onbellek=%.0f ms" % (float(Time.get_ticks_usec() - t) / 1000.0))
+	t = Time.get_ticks_usec()
+	var inst: Node = ps.instantiate()
+	print("PG MK instantiate=%.0f ms (dugum=%d)" % [float(Time.get_ticks_usec() - t) / 1000.0, inst.find_children("*", "", true, false).size()])
+	if OS.get_environment("PG_MK_SPLIT") == "1":
+		## Doğrudan çocukları tek tek ağaca ekleyip süre ölç (Main'in kendi _ready'si çocuklar yokken çalışırsa hata verebilir - yalnız ölçüm).
+		var kids: Array = inst.get_children()
+		var holder := Node.new()
+		root.add_child(holder)
+		for c: Node in kids:
+			inst.remove_child(c)
+		for c: Node in kids:
+			var tc: int = Time.get_ticks_usec()
+			holder.add_child(c)
+			var ms: float = float(Time.get_ticks_usec() - tc) / 1000.0
+			if ms > 5.0:
+				print("PG MK cocuk %s (%s) _ready=%.0f ms" % [c.name, c.get_script().resource_path.get_file() if c.get_script() else c.get_class(), ms])
+		await process_frame
+		return
+	t = Time.get_ticks_usec()
+	root.add_child(inst)
+	print("PG MK add_child(_ready)=%.0f ms" % [float(Time.get_ticks_usec() - t) / 1000.0])
+	t = Time.get_ticks_usec()
+	if OS.get_environment("PG_MK_NOPROC") == "1":
+		## İlk karenin maliyeti: tüm _process / _physics_process kapalıyken motor + ertelenmiş çağrılar kalır.
+		var offs: Array = []
+		for n: Node in inst.find_children("*", "", true, false) + [inst]:
+			if n.is_processing() or n.is_physics_processing():
+				offs.append([n, n.is_processing(), n.is_physics_processing()])
+				n.set_process(false)
+				n.set_physics_process(false)
+		print("PG MK islemli_dugum=%d" % offs.size())
+		await process_frame
+		print("PG MK ilk_kare_islemsiz=%.0f ms" % [float(Time.get_ticks_usec() - t) / 1000.0])
+		return
+	await process_frame
+	print("PG MK ilk_kare=%.0f ms" % [float(Time.get_ticks_usec() - t) / 1000.0])
+	if OS.get_environment("PG_MK_AGAIN") == "1":
+		for rep in range(2):
+			inst.queue_free()
+			for _i in range(5):
+				await process_frame
+			t = Time.get_ticks_usec()
+			inst = ps.instantiate()
+			root.add_child(inst)
+			print("PG MK tekrar%d add_child(_ready)=%.0f ms" % [rep + 1, float(Time.get_ticks_usec() - t) / 1000.0])
+			t = Time.get_ticks_usec()
+			await process_frame
+			print("PG MK tekrar%d ilk_kare=%.0f ms" % [rep + 1, float(Time.get_ticks_usec() - t) / 1000.0])

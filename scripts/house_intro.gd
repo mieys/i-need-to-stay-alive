@@ -12,18 +12,19 @@ class_name HouseIntro
 ##    (bu düğüm: Main/HouseInterior/HouseIntro). İstemci aldığı evreyi kendi saatiyle de sürdürür (paket kaçsa da geri sayım biter);
 ##    sonradan katılana yakalama ile o anki evre + kalan süre gider.
 ##  - Görünenler her peer'de YEREL (ağ trafiği yok): oyuncu oturuş/duruş yerleri (kendi oyuncusunu dizinine göre yerleştirir - oturuş
-##    klibi ride_<yön> ağdan klip adıyla gider), deprem sesi + kamera sarsıntısı + tavandan toz (house_damage_fx.gd), korku balonları
+##    klibi ride_<yön> ağdan klip adıyla gider), kamera sarsıntısı (deprem SESİ yok, madde 418) + tavandan toz (house_damage_fx.gd), korku balonları
 ##    (fear_emote.gd), babaanne (babaanne_npc.gd evreyi okur: endişe -> pencereden bakar -> "canavarlar saldırıyor").
 
 signal phase_changed(phase: int)
 
 enum Phase { NONE, PEACE, COUNTDOWN, DONE }
 
-const PEACE_SECONDS := 9.0
-const COUNTDOWN_SECONDS := 30.0
+const PEACE_SECONDS := 4.5 ## 9 -> 4,5 (kullanıcı 2026-11-07: "saldırması çok uzun sürüyor, yarıya indir")
+const COUNTDOWN_SECONDS := 15.0 ## 30 -> 15 (aynı istek)
 const QUAKE_SECONDS := 5.5
 const READY_TIMEOUT := 20.0 ## çok oyunculu: yavaş yükleyen oyuncuyu bundan uzun beklemez
-const QUAKE_SOUND: AudioStream = preload("res://assets/audio/ev/deprem.wav")
+## DEPREM SESİ YOK (kullanıcı 2026-11-06, madde 418: "deprem seslerini iptal et"): eski deprem.wav dışarıda da aynı çalıyordu; iç/dış ayrı ses
+## denendi, sonra ikisi de kaldırıldı. Deprem = yalnız kamera sarsıntısı + tavandan toz + korku balonları + bildirim.
 const FearEmoteScript := preload("res://scripts/fear_emote.gd")
 const CameraShakeScript := preload("res://scripts/camera_shake.gd")
 
@@ -32,7 +33,6 @@ var _t: float = 0.0 ## evrenin içinde geçen süre
 var _wait_ready: float = 0.0
 var _quake_fx_done: bool = false
 var _house: Node = null
-var _quake_player: AudioStreamPlayer = null
 var _shake_acc: float = 0.0
 
 
@@ -70,6 +70,9 @@ func begin() -> void:
 
 
 func _process(delta: float) -> void:
+	## Yükleme katmanı hâlâ ekrandayken (açılış ısınması onun arkasında biter, loading_overlay.gd) huzur / geri sayım saati işlemez.
+	if phase != Phase.DONE and get_tree().get_node_count_in_group(&"loading_overlay") > 0:
+		return
 	match phase:
 		Phase.PEACE:
 			if is_authority() and NetworkManager.is_multiplayer_active and not _all_ready():
@@ -123,7 +126,6 @@ func _set_phase(p: int, elapsed: float) -> void:
 				_start_countdown(elapsed)
 		Phase.DONE:
 			GameManager.invasion_pending = false
-			_stop_quake()
 	if changed:
 		phase_changed.emit(p)
 
@@ -148,13 +150,6 @@ func _start_quake() -> void:
 		return
 	_quake_fx_done = true
 	_shake_acc = 0.0
-	if _quake_player == null:
-		_quake_player = AudioStreamPlayer.new()
-		_quake_player.name = "DepremSesi"
-		_quake_player.stream = QUAKE_SOUND
-		_quake_player.volume_db = -3.0
-		add_child(_quake_player)
-	_quake_player.play()
 	CameraShakeScript.add(0.55)
 	var fx: Node = _house.call("get_damage_fx") if _house != null and _house.has_method("get_damage_fx") else null
 	if fx != null:
@@ -172,13 +167,6 @@ func _tick_quake(delta: float) -> void:
 		var k: float = 1.0 - _t / QUAKE_SECONDS
 		if CameraShakeScript.trauma < 0.5 * k:
 			CameraShakeScript.add(0.18 * k + 0.04)
-
-
-func _stop_quake() -> void:
-	if _quake_player != null and _quake_player.playing:
-		var tw: Tween = _quake_player.create_tween()
-		tw.tween_property(_quake_player, "volume_db", -40.0, 0.8)
-		tw.tween_callback(_quake_player.stop)
 
 
 ## "bazılarının" üstünde korku balonu: oyuncu dizinine göre (her peer aynı seçer) - 3 oyuncudan 2'si; babaanne her zaman.

@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Buff/debuff durum satırındaki (hud.gd StatusBar) TEK bir rozet - kullanıcı isteği (2026-09-22): "buffların
 ## sağladığı etkiler, kalan süresi ve stackle alakalı herşey (skiller v.b)... tıpkı loldeki gibi." Kalan süre
@@ -163,9 +164,9 @@ func _refresh_tooltip_text() -> void:
 	var remaining: float = float(_def.get("remaining", -1.0))
 	var parts: Array = []
 	if stacks > 1:
-		parts.append("Yük: %d" % stacks)
+		parts.append(Loc.t("Yük: %d") % stacks)
 	if remaining >= 0.0:
-		parts.append("Kalan: %.0fs" % remaining)
+		parts.append(Loc.t("Kalan: %.0fs") % remaining)
 	extra.visible = not parts.is_empty()
 	extra.text = " | ".join(parts)
 

@@ -22,8 +22,8 @@ func test_health_regen_card_grants_two_per_card() -> void:
 	player.queue_free()
 
 
-## 5 saniyede bir, statın değeri kadar can - araya tik düşmez.
-func test_stat_regen_heals_value_every_five_seconds() -> void:
+## Madde 475: stat değeri "5 sn'de toplam can" ama HER SANİYE beşte biri işler (3 -> saniyede 0,6), toplu 5 sn tiki yok.
+func test_stat_regen_heals_every_second() -> void:
 	var player: Node = PlayerScene.instantiate()
 	add_child(player)
 	player.set_process(false)
@@ -32,15 +32,16 @@ func test_stat_regen_heals_value_every_five_seconds() -> void:
 	player.heal_regen_card_bonus = 3.0
 	player.max_health = 100.0
 	player.health = 50.0
-	player._stat_regen_timer = 0.0
 	player._health_regen_tick_timer = 0.0
 	player._health_regen_tick_pending = 0.0
-	for i in 45: ## 4.5 sn
+	var per_sec: float = 3.0 / 5.0 * player.heal_power_mult()
+	for i in 11: ## ilk saniyelik tik (0,1'lik adımlar toplamı 1,0'a 11. adımda ulaşır)
 		player._process_regen(0.1)
-	assert(is_equal_approx(player.health, 50.0), "5 sn dolmadan can artmamalı: %s" % player.health)
-	for i in 25: ## 7.0 sn (birikmiş can saniyelik tikte uygulanır; sonraki stat tiki 10. sn'de)
+	assert(player.health > 50.0 + per_sec * 0.95 and player.health < 50.0 + per_sec * 1.15, "1. saniyede ~+0,6 can olmalı: %s" % player.health)
+	for i in 44: ## toplam 5,5 sn, 5 tik
 		player._process_regen(0.1)
-	assert(is_equal_approx(player.health, 53.0), "5 sn'de +3 can olmalı: %s" % player.health)
+	assert(player.health > 50.0 + per_sec * 4.95 and player.health < 50.0 + per_sec * 5.55, "5,5 sn'de ~+3 can olmalı (toplam hız aynı): %s" % player.health)
+	assert(absf(float(player.call("get_health_regen_per_sec")) - per_sec) < 0.001, "HUD göstergesi saniyelik hızı okumalı")
 	player.queue_free()
 
 

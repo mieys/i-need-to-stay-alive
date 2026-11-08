@@ -1,7 +1,7 @@
 extends "res://scripts/enchant_behavior.gd"
 
-## Denge (Yin Yang Kitabı, kalıcı özellik, madde 334) - bkz. WeaponTraits "denge". Kitabın kendi kuralı (isabet başına %10 SG kalkan, menzilsiz
-## en boş oyuncuya) ve isabet çözümü scripts/yinyang_book.gd'de; bu script: atışta alıcıyı seçer (mermiye + ağa), Kara Mühür, FİNAL Tai Chi Mührü.
+## Denge (Yin Yang Kitabı, kalıcı özellik, madde 334) - bkz. WeaponTraits "denge". Kitabın kendi kuralı (isabet başına %10 SG kalkan, kitabın
+## menzilindeki en boş oyuncuya) ve isabet çözümü scripts/yinyang_book.gd'de; bu script: atışta alıcıyı seçer (mermiye + ağa), Kara Mühür, FİNAL Tai Chi Mührü.
 ## Temel Yin/Yang sayıları (yin_ap, yang_th, yang_mult, ys_shield) YinYangBook.resolve_hit stats'tan okur.
 
 const YinYang := preload("res://scripts/yinyang_book.gd")
@@ -17,7 +17,7 @@ var _clock: float = 0.0
 func projectile_extra(proj: Node2D, target: Node2D, _is_extra: bool) -> void:
 	if proj == null or not proj.has_method("yy_setup"):
 		return
-	proj.call("yy_setup", target, YinYang.pick_recipient(owner_player()))
+	proj.call("yy_setup", target, YinYang.pick_recipient(owner_player(), YinYang.recipient_range(weapon)))
 	if is_instance_valid(target):
 		proj.set_meta("home_net_id", int(target.get_meta("network_enemy_id", 0)))
 
@@ -62,7 +62,7 @@ func process_extra(delta: float) -> void:
 			continue
 		s[2] = float(s[2]) + 1.0
 		var pl: Node = owner_player()
-		var rcp: Node2D = YinYang.pick_recipient(pl)
+		var rcp: Node2D = YinYang.pick_recipient(pl, YinYang.recipient_range(weapon))
 		if rcp != null:
 			YinYang.give_shield(pl, rcp, ap() * f("tc_shield", 0.05))
 		else:

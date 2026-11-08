@@ -116,16 +116,7 @@ static func set_hover_glow(card: Control, tier: int, on: bool) -> void:
 static func celebrate(owner: Node, card: Control, frame: TextureRect, tier: int, fx_parent: Control) -> Tween:
 	var t: int = clampi(tier, 1, 4)
 	var col: Color = glow_color(card, t)
-	var player := AudioStreamPlayer.new()
-	player.stream = PICK_SOUND
-	player.volume_db = -3.0
-	player.pitch_scale = 1.0 + 0.03 * float(t - 1)
-	## Ses ekrandan BAĞIMSIZ çalar: eskiden owner'ın (level ekranı) çocuğuydu, ekran seçimden 1 sn sonra (PICK_DURATION) serbest
-	## kalınca ~2,6 sn'lik ses (sönümü 1,1 sn'de başlar) aniden kesiliyordu. Kökte, duraklatmadan etkilenmez, bitince kendini siler.
-	player.process_mode = Node.PROCESS_MODE_ALWAYS
-	owner.get_tree().root.add_child(player)
-	player.play()
-	player.finished.connect(player.queue_free)
+	## Kart seçme sesi KALDIRILDI (kullanıcı isteği 2026-11-06): seçimde ses çalmaz. PICK_SOUND sabiti durur (geri açmak için).
 
 	card.pivot_offset = card.size * 0.5
 	card.z_index = 5

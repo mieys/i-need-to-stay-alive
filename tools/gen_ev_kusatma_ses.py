@@ -5,7 +5,7 @@ Kullanim (repo kokunden):  python tools/gen_ev_kusatma_ses.py
 Yazar: assets/audio/ev/
   duvar_vurus_1..4.wav : evin icinden duyulan BOGUK duvar vuruslari (yaratiklar dis duvara vuruyor): alcak geciren (~380 Hz,
                          4. derece) + hafif tok oda yankisi, perde biraz asagi.
-  deprem.wav           : acilistaki deprem gurultusu (Earthquake Loop 0-7.5 sn, yumusak giris/cikis, tizler kisik).
+  (deprem.wav 2026-11-06 SILINDI, madde 418: kullanici "deprem seslerini iptal et" - acilis depremi sessiz.)
   ev_yikilis.wav       : ev yikilirken tahta kirilmasi + govde gurultusu.
 Not: tanh sinirlayici YOK (kullanici reddetti); yalniz tepe normalizasyonu + yumusak kenarlar.
 """
@@ -114,9 +114,6 @@ def main():
     save("duvar_vurus_2.wav", muffled(cut(load("Hollywood/Bust Door Open.wav"), 0.0, 0.9), 0.78, 340))
     save("duvar_vurus_3.wav", muffled(cut(load("Motions and Impacts/Impact Axe Fall.wav"), 0.0, 1.0), 0.86, 420))
     save("duvar_vurus_4.wav", muffled(cut(load("Hollywood/Deathpunch.wav"), 0.0, 0.5), 0.7, 300))
-    q = cut(load("Hollywood/Earthquake Loop.wav"), 0.0, 7.5)
-    q = highpass_dc(biquad_lp(q, 1400))
-    save("deprem.wav", norm(fade(q, 0.9, 2.2), 0.8))
     crash = cut(load("Hollywood/Wooden Crate Destruction.wav"), 0.0, 1.5)
     axe = cut(load("Motions and Impacts/Impact Axe Fall.wav"), 0.0, 2.6)
     rumble = biquad_lp(cut(load("Hollywood/Earthquake Loop.wav"), 2.0, 5.0), 600)

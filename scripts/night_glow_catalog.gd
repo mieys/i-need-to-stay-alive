@@ -110,6 +110,7 @@ const BY_SCENE := {
 	"res://scenes/ice_bolt_projectile.tscn": {"c": Color(0.5, 0.85, 1.0), "r": 40.0, "e": 0.85},
 	"res://scenes/tabanca_projectile.tscn": {"c": Color(1.0, 0.82, 0.5), "r": 22.0, "e": 0.8},
 	"res://scenes/tufek_projectile.tscn": {"c": Color(1.0, 0.82, 0.5), "r": 24.0, "e": 0.8},
+	"res://scenes/pompali_projectile.tscn": {"c": Color(1.0, 0.82, 0.5), "r": 12.0, "e": 0.45}, ## madde 448: saçma, küçük (salvo başına çok mermi)
 	## Havai fişek: fitil kıvılcımı (sahnedeki Sparkle düğümü (2,24)'te) - titrek sıcak ışık.
 	"res://scenes/firework_projectile.tscn": {"c": Color(1.0, 0.72, 0.35), "r": 40.0, "e": 0.9, "f": 0.45, "o": Vector2(2.0, 24.0)},
 	## Arcane: mor ışığın parlaklığı düşük kaldığı için (kullanıcı: "arcane asasına da diğerleri gibi karanlıkta parıldama
@@ -120,6 +121,7 @@ const BY_SCENE := {
 	## --- Namlu ateşi (kullanıcı: "tüfek ve tabanca ateşlenince ucunda parıltı olacak") - kısa flaş ---
 	"res://scenes/fx_revolver_muzzle.tscn": {"c": Color(1.0, 0.8, 0.45), "r": 60.0, "e": 1.0, "d": 0.14},
 	"res://scenes/fx_tufek_muzzle.tscn": {"c": Color(1.0, 0.78, 0.42), "r": 72.0, "e": 1.0, "d": 0.16},
+	"res://scenes/fx_pompali_muzzle.tscn": {"c": Color(1.0, 0.7, 0.36), "r": 84.0, "e": 1.0, "d": 0.18}, ## madde 448: namlu patlaması
 	## --- İsabet/patlama efektleri ---
 	## Kullanıcı bildirimi (2026-09-25): "ateş topunun patlama efekti parlamıyor" - flaş çok kısa/küçüktü (0.45 sn, r 62).
 	## İkinci bildirim (aynı gün): hâlâ parlamıyordu - (1) ışık patlama sprite'ı 0,5 sn'de gizlenince kesiliyordu (d hiç
@@ -154,7 +156,7 @@ const BY_SCENE := {
 	"res://scenes/fx_storm_strike.tscn": {"c": Color(0.75, 0.85, 1.0), "r": 120.0, "e": 1.0},
 	## --- Şimşek: nokta yerine ışın/zincir boyunca (sahibin get_glow_segment() kancası) ---
 	"res://scenes/fx_lightning_beam.tscn": {"c": Color(1.0, 0.9, 0.45), "r": 34.0, "e": 0.9, "f": 0.35},
-	"res://scenes/fx_rainbow_beam.tscn": {"c": Color(1.0, 0.96, 0.88), "r": 34.0, "e": 0.9, "f": 0.3}, ## Gökkuşağı Asası (madde 306)
+	"res://scenes/fx_rainbow_beam.tscn": {"c": Color(1.0, 0.96, 0.88), "r": 58.0, "e": 1.1, "f": 0.2, "cap": 0.55}, ## Gökkuşağı Asası (madde 306; 2026-11-07: ışık gökkuşağı renginde döner (get_night_glow_color), 34 -> 58 birim, tavan 0,4 -> 0,55)
 	"res://scenes/fx_lightning_chain.tscn": {"c": Color(1.0, 0.9, 0.45), "r": 30.0, "e": 0.85, "f": 0.35},
 	## --- Karakter yetenekleri ---
 	"res://scenes/fx_arcane_skull_bounce.tscn": {"c": Color(0.7, 0.35, 1.0), "r": 40.0, "e": 0.8},

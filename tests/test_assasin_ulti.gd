@@ -68,8 +68,8 @@ func test_r_is_the_shadow_strike_ultimate() -> void:
 
 ## R'ye basınca: yaratıklara GERÇEKTEN vurmalı, bitince R "cooldown"a geçmeli, karakter normale dönmeli,
 ## Q (Gölge Adımı) etkilenmemeli, karakter başladığı yere dönmeli.
-## 2026-10-16 (kullanıcı isteği): en fazla 20 çarpış, sadece KENDİ görüş elipsindeki yaratıklar (sis yokken yarıçap
-## VISION_RADIUS 250, yatay x1,4), bekleme 10 sn; yeni efektler (kesik/patlama + sıçrayış çizgisi) gerçekten doğmalı.
+## 2026-10-16 (kullanıcı isteği): en fazla 20 çarpış (2026-11-06: 15), sadece KENDİ görüş elipsindeki yaratıklar (sis yokken yarıçap
+## VISION_RADIUS 250, yatay x1,4), bekleme 10 sn (2026-11-06: 18 sn); yeni efektler (kesik/patlama + sıçrayış çizgisi) gerçekten doğmalı.
 func test_pressing_r_attacks_nearby_enemies_and_cleans_up_the_right_slot() -> void:
 	var previous_scene: Node = get_tree().current_scene
 	get_tree().current_scene = self ## vuruş efektleri current_scene'e ekleniyor
@@ -90,7 +90,7 @@ func test_pressing_r_attacks_nearby_enemies_and_cleans_up_the_right_slot() -> vo
 	p._activate_skill3()
 	assert(p.skill3_state == "active", "R basılınca skill3 aktif olmalı")
 
-	## Herkes vurulunca tur baştan başlar (aynı yaratıklara tekrar vurulur, ~4,5 vuruş/sn); 20 çarpışta (~4,4 sn) biter.
+	## Herkes vurulunca tur baştan başlar (aynı yaratıklara tekrar vurulur, ~4,5 vuruş/sn); 15 çarpışta (~3,3 sn) biter.
 	## 10 sn'lik pencere güvenlik tavanı - en fazla 13 sn bekle.
 	var waited: float = 0.0
 	var poses: Dictionary = {}
@@ -106,8 +106,8 @@ func test_pressing_r_attacks_nearby_enemies_and_cleans_up_the_right_slot() -> vo
 	child_entered_tree.disconnect(on_child)
 	assert(e1.hits >= 2 and e2.hits >= 2 and e3.hits >= 2,
 		"Görüşteki yaratıklara tekrar tekrar vurulmalı: %d/%d/%d" % [e1.hits, e2.hits, e3.hits])
-	assert(e1.hits + e2.hits + e3.hits == p.ASSASIN_DASH_MAX_HITS and p.ASSASIN_DASH_MAX_HITS == 20,
-		"Ulti en fazla 20 kez vurmalı, toplam: %d" % (e1.hits + e2.hits + e3.hits))
+	assert(e1.hits + e2.hits + e3.hits == p.ASSASIN_DASH_MAX_HITS and p.ASSASIN_DASH_MAX_HITS == 15,
+		"Ulti en fazla 15 kez vurmalı, toplam: %d" % (e1.hits + e2.hits + e3.hits))
 	## Kullanıcı isteği (2026-10-16): ulti sırasında ayakta durma yok - gidiş yönüne bakan atılma pozu (dash_<yön>).
 	## e1 sağda (dash_right), e3 aşağıda (dash_down), e2 solda (dash_left).
 	assert(poses.has("dash_right") and poses.has("dash_down") and poses.has("dash_left"),
@@ -116,12 +116,12 @@ func test_pressing_r_attacks_nearby_enemies_and_cleans_up_the_right_slot() -> vo
 	assert(out_of_sight.hits == 0, "Kendi görüş alanı dışındaki yaratığa (eski 600 yarıçap içinde olsa da) vurulmamalı")
 	assert(absi(e1.hits - e3.hits) <= 1, "Vurulmamış yaratık önceliği: vuruşlar yaratıklar arasında dengeli dağılmalı")
 	assert(e1.damage_taken / float(e1.hits) >= p.damage_bonus * p.ASSASIN_DASH_DAMAGE_RATIO - 0.001,
-		"Vuruş başı hasar en az saldırı gücü x ASSASIN_DASH_DAMAGE_RATIO (%300) olmalı (kritikle fazlası)")
+		"Vuruş başı hasar en az saldırı gücü x ASSASIN_DASH_DAMAGE_RATIO (%450) olmalı (kritikle fazlası)")
 	assert(far.hits == 0, "Yarıçap dışındaki yaratığa vurulmamalı")
 	assert(p.skill3_state == "cooldown", "Zincir bitince R bekleme süresine geçmeli, durum: %s" % p.skill3_state)
-	assert(p.skill3_timer > 1.0 and p.skill3_timer <= 10.0 + 0.001, "R bekleme sayacı 10 sn olmalı: %.2f" % p.skill3_timer)
-	assert(int(fx_seen.get(UltFlashScript, 0)) >= 20 + 1, "Her isabete kesik + cast patlaması doğmalı: %d" % int(fx_seen.get(UltFlashScript, 0)))
-	assert(int(fx_seen.get(UltStreakScript, 0)) >= 20, "Her sıçrayışın kendi çizgisi doğmalı: %d" % int(fx_seen.get(UltStreakScript, 0)))
+	assert(p.skill3_timer > 10.0 and p.skill3_timer <= 18.0 + 0.001, "R bekleme sayacı 18 sn olmalı: %.2f" % p.skill3_timer)
+	assert(int(fx_seen.get(UltFlashScript, 0)) >= p.ASSASIN_DASH_MAX_HITS + 1, "Her isabete kesik + cast patlaması doğmalı: %d" % int(fx_seen.get(UltFlashScript, 0)))
+	assert(int(fx_seen.get(UltStreakScript, 0)) >= p.ASSASIN_DASH_MAX_HITS, "Her sıçrayışın kendi çizgisi doğmalı: %d" % int(fx_seen.get(UltStreakScript, 0)))
 	assert(p.skill_state == "ready", "R kullanımı Q'yu (Gölge Adımı) bekleme süresine SOKMAMALI, Q durumu: %s" % p.skill_state)
 	assert(not p.is_assasin_dashing, "Zincir bitince hareket kilidi (is_assasin_dashing) kalkmalı")
 	assert(is_equal_approx(p.modulate.a, 1.0) and p.modulate.r > 0.9, "Karakter koyu/yarı saydam tonda takılı kalmamalı: %s" % str(p.modulate))
@@ -167,7 +167,7 @@ func test_hidden_enemies_are_not_targeted_but_visible_ones_are() -> void:
 	assert(visible_enemy.hits >= 2, "Tek görünen yaratığa birden fazla kez vurulmalı: %d" % visible_enemy.hits)
 	assert(hidden_enemy.hits == 0, "Kendi görüşü dışındaki yaratığa vurulmamalı")
 	assert(ghost.hits == 0, "Görünmez hayalete vurulmamalı")
-	assert(visible_enemy.hits == p.ASSASIN_DASH_MAX_HITS, "Tek yaratığa 20 çarpışın hepsi gitmeli: %d" % visible_enemy.hits)
+	assert(visible_enemy.hits == p.ASSASIN_DASH_MAX_HITS, "Tek yaratığa 15 çarpışın hepsi gitmeli: %d" % visible_enemy.hits)
 	get_tree().current_scene = previous_scene
 	_cleanup()
 

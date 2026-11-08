@@ -1,0 +1,65 @@
+{
+ "A": {
+  "dock_margins": [
+   36,
+   76,
+   36,
+   75
+  ],
+  "side_margins": [
+   18,
+   18,
+   18,
+   18
+  ],
+  "name": "Levha"
+ },
+ "B": {
+  "dock_margins": [
+   48,
+   76,
+   48,
+   75
+  ],
+  "dock_tile": true,
+  "side_margins": [
+   16,
+   16,
+   16,
+   16
+  ],
+  "name": "Oval Tahta"
+ },
+ "C": {
+  "dock_margins": [
+   36,
+   76,
+   36,
+   75
+  ],
+  "side_margins": [
+   18,
+   18,
+   18,
+   18
+  ],
+  "inset": "#1c120b",
+  "rim_lo": "#4b3320",
+  "name": "Gömme Tepsi"
+ },
+ "D": {
+  "dock_margins": [
+   36,
+   76,
+   36,
+   75
+  ],
+  "side_margins": [
+   18,
+   18,
+   18,
+   18
+  ],
+  "name": "Pirinç Köşe"
+ }
+}

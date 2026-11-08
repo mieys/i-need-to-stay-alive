@@ -22,9 +22,10 @@ const EXPECTED := {
 	"gokkusagi": "goz_kamastiran", ## madde 306 (Gökkuşağı Asası, öneri onaylandı)
 	"kalkan": "siper", ## madde 338 (Kalkan, öneri kişisel + sabit kalkanla onaylandı)
 	"yinyang": "denge", ## madde 334 (Yin Yang Kitabı, öneri menzilsiz kalkanla onaylandı)
+	"pompali": "dip_atis", ## madde 448 (Pompalı Tüfek, öneri onaylandı)
 }
 const NEW_IDS := ["kanayan_kesikler", "kanli_pence", "zincir_yildirim", "seri_parmak", "bulasici_salgi", "delici_mermi", "yankilanan_buyu",
-	"uclu_ok", "zincir_civata", "cifte_donus", "kirik_buz", "kivilcim_yagmuru", "cirit", "siper", "denge"]
+	"uclu_ok", "zincir_civata", "cifte_donus", "kirik_buz", "kivilcim_yagmuru", "cirit", "siper", "denge", "dip_atis"]
 const RUN_TIME := 4.0
 const ENEMY_HP := 60000.0
 
@@ -332,6 +333,10 @@ func _run_trait(key: String) -> Dictionary:
 			notes += " darbe=%d kalkan=%.0f" % [int(beh.get("bashes")), float(beh.get("gained"))]
 			if attacks >= 1 and int(beh.get("bashes")) < 1:
 				fails.append("kalkan darbesi Siper'e hiç ulaşmadı (%d saldırı)" % attacks)
+		"dip_atis":
+			notes += " salvo=%d saçma=%d" % [int(beh.get("volleys")), int(beh.get("last_count"))]
+			if attacks >= 1 and (int(beh.get("volleys")) < 1 or int(beh.get("last_count")) < 6):
+				fails.append("saçma salvosu atılmadı ya da 6 saçmadan az (%d saldırı)" % attacks)
 		"denge":
 			notes += " isabet=%d" % int(beh.get("_hits"))
 			if attacks >= 1 and int(beh.get("_hits")) < 1:

@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## EFSUN EKRANI (tasarım belgesi "Efsun ekranı akışı"). Kullanıcının efsun sistemi için sakladığı "A9 - İpucu Tarzı" koyu
 ## kart (hafıza: project-enchant-system-card-style) - doku tools/gen_enchant_card.py (360x540, 3 ekran px = 1 sanat px).
@@ -253,7 +254,7 @@ func _build() -> void:
 	_skip_button = Button.new()
 	_skip_button.custom_minimum_size = Vector2(300, 52)
 	UIKit.style_button(_skip_button, "dark", false, UIKit.FS_BODY)
-	_skip_button.text = "Geç (+%d altın)" % GameManager.LEVEL_UP_GOLD_REWARD
+	_skip_button.text = Loc.t("Geç (+%d altın)") % GameManager.LEVEL_UP_GOLD_REWARD
 	_skip_button.pressed.connect(_on_skip_pressed)
 	bar.add_child(_skip_button)
 	_countdown_label = Label.new()
@@ -291,7 +292,7 @@ func _layout_mobile_bar(bar: HBoxContainer) -> void:
 		b.add_theme_font_size_override("font_size", 40)
 		b.position = r.position
 		b.size = r.size
-	_skip_button.text = "Geç\n+%d altın" % GameManager.LEVEL_UP_GOLD_REWARD
+	_skip_button.text = Loc.t("Geç\n+%d altın") % GameManager.LEVEL_UP_GOLD_REWARD
 	_countdown_label.reparent(holder, false)
 	_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var skip_r: Rect2 = slots[1][1]
@@ -544,7 +545,7 @@ func _fill_card(i: int) -> void:
 	var ban: Button = _banish_buttons[i]
 	ban.visible = bool(d["banishable"])
 	ban.disabled = GameManager.enchant_banish_left <= 0
-	ban.text = "Yasakla (%d)" % GameManager.enchant_banish_left
+	ban.text = Loc.t("Yasakla (%d)") % GameManager.enchant_banish_left
 
 
 ## Kart metni: ad + tek metin (başlangıçta nasıl çalıştığı, geliştirmede ne değiştiği - bkz. EnchantPool.describe sade kart

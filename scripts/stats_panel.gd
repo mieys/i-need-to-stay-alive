@@ -1,5 +1,7 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
 const WeaponScript := preload("res://scripts/weapon.gd")
 
 @onready var speed_value: Label = $Frame/Margin/VBox/GridScroll/Grid/SpeedValue
@@ -22,7 +24,7 @@ const WeaponScript := preload("res://scripts/weapon.gd")
 @onready var knockback_value: Label = $Frame/Margin/VBox/GridScroll/Grid/KnockbackValue
 @onready var shield_amount_value: Label = $Frame/Margin/VBox/GridScroll/Grid/ShieldAmountValue
 ## 2026-10-02: sahnede olmayan iki satır kodla eklenir (bkz. _add_runtime_rows) - yeni eşya sistemi statı "İyileştirme ve
-## Kalkan Gücü" ve 5 saniyede bir işleyen Can Yenilenmesi.
+## Kalkan Gücü" ve 5 saniyedeki toplamı yazılan (her saniye beşte biri işleyen, madde 476) Can Yenilenmesi.
 var heal_power_value: Label = null
 var regen_value: Label = null
 ## 2026-10-11 (kullanıcı: "envanterdeki stat penceresinde bazı eksik statlar var, örneğin can çalma gözükmüyor"): kodla eklenen diğer satırlar.
@@ -155,7 +157,7 @@ func _apply_text_colors() -> void:
 static func row_tip(row: Array) -> String:
 	var heal: float = GameManager.LIFESTEAL_HEAL
 	var heal_text: String = str(int(heal)) if is_equal_approx(heal, round(heal)) else ("%.1f" % heal).replace(".", ",")
-	return str(row[2]).replace("{HEAL}", heal_text)
+	return Loc.t(str(row[2])).replace("{HEAL}", heal_text) ## önce çevrilir, sonra sayı yerleşir (madde 446)
 
 
 ## Sahnede olmayan, kodla eklenen satırlar: [id (ikon = stat_icon.gd), ad, ipucu].
@@ -163,7 +165,7 @@ const EXTRA_ROWS := [
 	["max_health", "Can", "Can: şimdiki / en fazla can."],
 	["shield_max", "Mana Kalkanı", "Mana Kalkanı: şimdiki / en fazla mana kalkanı (eşyalardan)."],
 	["lifesteal", "Can Çalma", "Can Çalma: her isabette bu ihtimalle {HEAL} can yenilersin (alan hasarında etkisi %33)."],
-	["health_regen", "Can Yenilenmesi", "Can Yenilenmesi: 5 saniyede bir yenilenen can (kartlar ve eşyalardan; İyileştirme Gücü ile büyür)."],
+	["health_regen", "Can Yenilenmesi", "Can Yenilenmesi: 5 saniyede toplam yenilenen can, her saniye beşte biri işler (kartlar ve eşyalardan; İyileştirme Gücü ile büyür)."],
 	["shield_regen", "Mana Kalkanı Yenilenmesi", "Mana Kalkanı Yenilenmesi: saniyede yenilenen mana kalkanı (eşyalardan)."],
 	["heal_power", "İyileştirme Gücü", "İyileştirme ve Mana Kalkanı Gücü: yaptığın bütün iyileştirmeleri, can yenilenmesini, can çalmayı ve mana kalkanı doldurmayı yüzde olarak arttırır."],
 	["cooldown_reduction", "Bekleme Azaltma", "Bekleme Süresi Azaltma: yeteneklerin bekleme süreleri bu oranda kısalır."],
@@ -294,8 +296,8 @@ func apply_mobile_layout(rect: Rect2) -> void:
 		hint.visible = false ## "ENVANTER'e tekrar bas" - telefonda kapatma rayın geri düğmesi
 	_ph_build_cards()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#1a1a2c")
-	sb.border_color = Color("#5f5c86")
+	sb.bg_color = HT.WIN_PANEL
+	sb.border_color = HT.WIN_LINE_HI
 	sb.set_border_width_all(3)
 	sb.set_corner_radius_all(10)
 	($Frame as Control).add_theme_stylebox_override("panel", sb)
@@ -343,8 +345,8 @@ func _ph_build_cards() -> void:
 		card.tooltip_text = name_lbl.tooltip_text
 		card.mouse_filter = Control.MOUSE_FILTER_PASS
 		var cs := StyleBoxFlat.new()
-		cs.bg_color = Color("#23233a")
-		cs.border_color = Color("#3b3a5a")
+		cs.bg_color = HT.WIN_PANEL2
+		cs.border_color = HT.WIN_LINE
 		cs.set_border_width_all(2)
 		cs.set_corner_radius_all(10)
 		cs.content_margin_left = 20
@@ -374,7 +376,7 @@ func _ph_build_cards() -> void:
 		val_lbl.clip_text = true
 		val_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_lbl.add_theme_font_size_override("font_size", 32)
-		name_lbl.add_theme_color_override("font_color", Color("#a7a2c0"))
+		name_lbl.add_theme_color_override("font_color", HT.DIM)
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_lbl.custom_minimum_size = Vector2.ZERO
 		name_lbl.clip_text = true
@@ -402,7 +404,7 @@ static func format_luck(points: float) -> String:
 const STAT_TIPS: Dictionary = {
 	"speed": "Hız: Karakterin hareket hızını arttırır.",
 	"damage": "Saldırı Gücü: Tüm silahların verdiği hasarı arttırır.",
-	"fire_rate": "Saldırı Hızı: Tüm silahların saldırı sıklığını arttırır. Seviye kartları, eşyalar ve pasiflerden gelen toplam bonus. En çok %450; aşan her %1, anlık olarak 0.5 saldırı gücü verir.",
+	"fire_rate": "Saldırı Hızı: Tüm silahların saldırı sıklığını arttırır. Seviye kartları, eşyalar ve pasiflerden gelen toplam bonus. En çok %600; aşan her %1, anlık olarak 0.5 saldırı gücü verir.",
 	"shield_protection": "Mana Kalkanı Soğurma: Mana kalkanının hasar emme oranını arttırır.",
 	"crit_chance": "Kritik Oran/Hasar: Kritik vuruş yapma şansını ve kritik hasar çarpanını arttırır.",
 	"shield_pen_percent": "Kalkan Delme: Düşmanların kalkan soğurmasını yüzde olarak yok sayar.",

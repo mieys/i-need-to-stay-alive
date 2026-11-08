@@ -5,11 +5,12 @@ extends Node
 ##   görevi aralıklı olarak sonsuza dek "devam ediyor" kalıyordu. Geçici çözüm betikleri ana iş parçacığında derlemekti -> donmalar.
 ## - 2026-10-17 "yüklenirken animasyonlar donmasın": 4.7.2'de WorkerThreadPool hâlâ kilitleniyor (12 denemenin 3'ü), KENDİ Thread'imizde
 ##   düz ResourceLoader.load 15/15 temiz ve yükleme boyunca uzun kare yok. Gerçek akış (loading_screen -> Main) burada değil, elle çoklu
-##   süreçle ölçüldü; bu dosya kuralları korur: tek özel Thread, WorkerThreadPool yok, plan sırası, durdurma, sahne parçaları.
+##   süreçle ölçüldü; bu dosya kuralları korur: tek özel Thread, WorkerThreadPool yok, plan sırası, durdurma, Sade görünüş (madde 411).
 
 const LoadingScene: PackedScene = preload("res://scenes/loading_screen.tscn")
 const LoadingScript: GDScript = preload("res://scripts/loading_screen.gd")
-const SceneParts := preload("res://scripts/loading_scene_parts.gd")
+const HudTheme := preload("res://scripts/hud_theme.gd")
+const ShopsFlag := preload("res://scripts/shops_flag.gd")
 ## Küçük bir sahne (betik + doku bağımlılığı): yükleyiciyi main.tscn yerine bununla koşarız.
 const SMALL_SCENE := "res://scenes/fx_shield_active.tscn"
 
@@ -85,49 +86,50 @@ func test_load_plan_puts_leaves_first_and_root_scripts_last() -> void:
 	assert(plan.size() == 4, "hiçbir bağımlılık düşmemeli")
 
 
-## Canlı sahne parçaları (üretici tools/gen_yukleme_bg.py yazar) dokularıyla uyumlu olmalı: şerit genişliği = kare x kare sayısı.
-func test_scene_parts_match_their_sheets() -> void:
-	var bg: Texture2D = load("res://assets/ui/yukleme/yukleme_bg.png")
-	assert(bg != null, "arka plan dokusu yok")
-	assert(Vector2(bg.get_size()) == SceneParts.CANVAS, "arka plan tuvali %s olmalı" % str(SceneParts.CANVAS))
-	assert(SceneParts.PARTS.size() > 0, "canlı parça yok")
-	for p: Array in SceneParts.PARTS:
-		var tex: Texture2D = load("res://assets/ui/yukleme/" + str(p[0]))
-		assert(tex != null, "parça dokusu yok: %s" % p[0])
-		var fs: Vector2 = p[2]
-		assert(tex.get_width() == int(fs.x) * int(p[3]) and tex.get_height() == int(fs.y), "şerit boyutu uyuşmuyor: %s" % p[0])
-
-
-## Yükleme ekranı kurulduğunda arka plan + canlı parçalar tek tuvalde, patika (çubuk) yolun üstünde.
-func test_backdrop_is_built_on_the_scene_canvas() -> void:
+## Görünüş "Sade" (madde 411): düz koyu zemin, resim/ışık yok; yazılar stil rehberi boylarında; ipucu havuzdan; yüzde çubuğu izler.
+func test_sade_screen_is_built() -> void:
 	var s: Control = _screen()
-	assert(is_instance_valid(s._scene), "sahne tuvali kurulmalı")
-	assert(s._scene.size == SceneParts.CANVAS, "tuval boyutu")
-	var sheets: int = 0
-	for c: Node in s._scene.get_children():
-		if c is TextureRect:
-			var path: String = (c as TextureRect).texture.resource_path
-			assert(path.ends_with("yukleme_bg.png") or path.ends_with(SceneParts.LIGHT), "arka plan / kapı ışığı olmalı: %s" % path)
-		elif c.get_class() == "Control" and c.get("frame_size") != null:
-			sheets += 1
-	assert(sheets == SceneParts.PARTS.size(), "her canlı parça bir LiveSheet: %d" % sheets)
+	var bg: ColorRect = s.find_child("Background", true, false) as ColorRect
+	assert(bg != null and bg.color == HudTheme.DEEP, "zemin düz DEEP olmalı")
+	for c: Node in s.find_children("*", "TextureRect", true, false):
+		assert(false, "arka plan resmi kalmamalı: %s" % c.name)
+	assert(s.status_label.get_theme_font_size("font_size") == 48, "durum yazısı m5x7 48")
+	var tip: Label = s.find_child("TipLabel", true, false) as Label
+	assert(tip != null and s.tip_pool().has(tip.text), "ipucu havuzdan: %s" % (tip.text if tip else "yok"))
+	assert(tip.get_theme_font_size("font_size") == 32, "ipucu m5x7 32")
+	s.progress_bar.value = 42.0
+	assert(s._pct_label.text == "%42", "yüzde çubuğu izler: %s" % s._pct_label.text)
+	assert(s._party.size() == 1 and s._party[0].animation == &"walk_right", "tek oyunculuda yerel karakter yürür")
 	s.free()
 
 
-## Mühürlü Kapı (madde 370): kapının ışığı ve halesi ilerlemeyle güçlenir; ışık toplamalı; başlık oyundaki kapı sezdirmesi.
-func test_gate_glow_follows_progress() -> void:
+## Parti sırası: yerel oyuncu önce (en önde), diğerleri peer kimliği sırasıyla; tek oyunculuda yalnız yerel.
+func test_party_order_puts_local_player_first() -> void:
+	var lobby := {5: {"char_id": 7}, 1: {"char_id": 3}, 3: {"char_id": 4}, 9: {"name": "kimliksiz"}}
+	var got: Array[int] = LoadingScript.party_chars(2, lobby, 5, true)
+	assert(got == [2, 3, 4], "yerel + lobi sırası: %s" % str(got))
+	assert(LoadingScript.party_chars(2, lobby, 5, false) == [2], "tek oyunculu: yalnız yerel")
+
+
+## Seyyar satıcı kapalıyken (madde 389) satıcı ipucu çıkmaz; açılınca geri gelir (demirci bayrağından bağımsız, madde 431).
+func test_shop_tip_follows_shops_flag() -> void:
+	var was: bool = ShopsFlag.merchant_enabled
+	ShopsFlag.set_merchant_enabled(false)
+	assert(not LoadingScript.tip_pool().has(LoadingScript.SHOP_TIP), "satıcı kapalıyken ipucu yok")
+	ShopsFlag.set_merchant_enabled(true)
+	assert(LoadingScript.tip_pool().has(LoadingScript.SHOP_TIP), "satıcı açıkken ipucu var")
+	ShopsFlag.set_merchant_enabled(was)
+
+
+## Varışta parti durur (idle_right) ve ayağı aynı satırda kalır (donma duran karede geçer).
+func test_arrive_stops_the_party_on_its_feet() -> void:
 	var s: Control = _screen()
-	assert(is_instance_valid(s._gate_light) and is_instance_valid(s._gate_fx), "kapı ışığı + halesi kurulmalı")
-	assert((s._gate_light.material as CanvasItemMaterial).blend_mode == CanvasItemMaterial.BLEND_MODE_ADD, "ışık toplamalı")
-	assert(s._gate_light.texture.get_size() == SceneParts.CANVAS, "ışık katmanı tuval boyunda")
-	s._update_gate_glow(0.0)
-	var a0: float = s._gate_light.self_modulate.a
-	assert(is_equal_approx(a0, s.LIGHT_MIN) and s._gate_fx.boost == 0.0, "başta sönük: %f" % a0)
-	s._update_gate_glow(1.0)
-	assert(is_equal_approx(s._gate_light.self_modulate.a, 1.0) and s._gate_fx.boost == 1.0, "sonda tam")
-	assert(Rect2(Vector2.ZERO, SceneParts.CANVAS).has_point(SceneParts.GATE_MOUTH), "kapı ağzı tuvalde")
-	var title: Label = s.find_child("GateTitle", true, false) as Label
-	assert(title != null and title.text == "KEMİK MAHZENİ", "başlık kapının adı")
+	var sp: AnimatedSprite2D = s._party[0]
+	var foot: Vector2 = sp.get_meta("foot")
+	s._stop_party()
+	assert(sp.animation == &"idle_right", "parti durmalı: %s" % sp.animation)
+	var bottom: float = sp.position.y + LoadingScript._foot_offset(sp.sprite_frames.get_frame_texture(&"idle_right", 0)) * sp.scale.y
+	assert(absf(bottom - foot.y) <= 1.0, "ayak yerinde: %f vs %f" % [bottom, foot.y])
 	s.free()
 
 

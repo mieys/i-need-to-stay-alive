@@ -6,6 +6,7 @@ extends Node
 
 const SettingsScreenScript := preload("res://scripts/settings_screen.gd")
 const PauseScene := preload("res://scenes/pause_menu.tscn")
+const SunCloudsScript := preload("res://scripts/sun_clouds.gd")
 
 var _made: Array[Node] = []
 
@@ -52,10 +53,13 @@ func _push_key(code: Key) -> void:
 
 func test_categories_build_all_current_settings() -> void:
 	var s := await _open()
-	assert(_row_ids(s) == ["volume", "music", "fullscreen", "resolution", "fps", "ui_opacity", "shake", "ui_anim", "auto_pick"], "GENEL: %s" % str(_row_ids(s)))
+	assert(_row_ids(s) == ["language", "volume", "music", "fullscreen", "resolution", "fps", "ui_opacity", "shake", "ui_anim", "auto_pick", "dmg_numbers", "ally_fx"], "GENEL: %s" % str(_row_ids(s)))
 	_push_key(KEY_E)
 	assert(int(s.get("_cat")) == 1, "E -> GRAFİK")
-	assert(_row_ids(s) == ["preset", "sun", "ground", "wind_fx", "render_scale", "fps_limit"], "GRAFİK: %s" % str(_row_ids(s)))
+	## "sun" satırı yalnız güneş huzmesi ya da bulut gölgesi açıkken (madde 469: ikisi de kapalı -> satır yok).
+	var gfx_rows: Array = ["preset", "sun", "ground", "wind_fx", "render_scale", "fps_limit"] if SunCloudsScript.any_enabled() \
+			else ["preset", "ground", "wind_fx", "render_scale", "fps_limit"]
+	assert(_row_ids(s) == gfx_rows, "GRAFİK: %s" % str(_row_ids(s)))
 	_push_key(KEY_E)
 	assert(_row_ids(s).size() == GameManager.REBINDABLE_ACTIONS.size(), "TUŞLAR: her atanabilir eylem bir satır")
 	_push_key(KEY_E)
@@ -143,6 +147,7 @@ func test_keyboard_moves_focus_and_steps_slider() -> void:
 	assert(int(s.get("_focus")) == 0, "en üstte kalır")
 	UISound.set_master_volume_percent(50.0)
 	(s.call("_sync_all"))
+	_push_action("ui_down") ## ilk satır Dil (madde 446): sesi değiştirmek için bir alta in - Dil'de sola basmak dili değiştirip ayar dosyasına yazar
 	_push_action("ui_left")
 	var after: float = UISound.master_volume_percent
 	UISound.set_master_volume_percent(original)

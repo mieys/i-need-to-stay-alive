@@ -8,10 +8,10 @@ class_name DungeonWorld
 ##  - EnemyPathing._build / sync_cells: duvarlar orman hücresi gibi (hareket + sis), nesne + kapalı kapı yalnız hareket -> C++ EnemyWorld.set_grid;
 ##  - vision_fog.gd (VisionOccluders.build extra_cells): oyuncunun görüş sisi zindan duvarında kesilir;
 ##  - hide_brush.gd contains: saklanma hücreleri (açık lahit, gölge nişi...) = saklanma çalılığı kuralları.
-## Kayıt tembel: ilk sorguda orman katmanı varsa üç zindanın verisi yüklenir (scenes/zindan/<id>_data.tres). Yeni koşuda GameManager.reset -> reset().
+## Kayıt tembel: ilk sorguda orman katmanı varsa zindan biçimli haritanın verisi kaydedilir (ana haritada zindan yok, madde 463). Yeni koşuda GameManager.reset -> reset().
 
-const DungeonDefsScript := preload("res://scripts/dungeon/dungeon_defs.gd")
 const DungeonDataScript := preload("res://scripts/dungeon/dungeon_data.gd")
+const MapProfilesScript := preload("res://scripts/map_profiles.gd")
 
 static var _registered: bool = false
 static var _layer_id: int = 0
@@ -24,8 +24,19 @@ static var _hide: Dictionary = {} ## Vector2i -> true
 static var _gate_of_cell: Dictionary = {} ## Vector2i -> kapı anahtarı ("<id>:<n>")
 static var _gate_cells: Dictionary = {} ## kapı anahtarı -> Array[Vector2i]
 static var _gate_closed: Dictionary = {} ## kapı anahtarı -> true
+## Zindan biçimli HARİTANIN girişi (madde 444; {id, def, data, origin, rect, "map": true}): `entry(id)` bulur, `dungeons()` / `dungeon_at` /
+## bölge dikdörtgenleri GÖRMEZ (oyuncu haritadayken "zindanda" sayılmaz; DungeonManager harita kipi bununla çalışır).
+static var _map_entry: Dictionary = {}
 ## Testler: harita olmadan kayıt (orman katmanı yoksa bu köken/hücre kullanılır).
 static var test_origin_px: Variant = null
+## AYAK KURALI (2026-11-08, kullanıcı: "duvarlarda collision sınırları tuhaf, arkasında durmamız gereken duvarların üstünde yürüyoruz, kutular
+## yolu kesiyor"): hareket engeli varlığın KÖKÜNDEN (gövde ortası) sorgulanıyordu, ayak kökün FEET_SHIFT px altında. Zindan hücreleri tam 16 px
+## karo olduğundan (ana haritanın terrain_collision ayak izleri bunu 15 px kaydırarak çözer) duvara güneyden gelen ~23 px önde duruyor, kuzeyden
+## gelen duvarın tepesine biniyordu. Zindanda / zindan biçimli haritada hareket AYAK noktasından sorgulanır (GameManager.is_position_blocked_by_walls),
+## yaratık yol ızgarasında hareket hücreleri bir satır yukarı kayar (EnemyPathing). Görüş / mermi / sis KAYMAZ (is_position_blocked_by_forest).
+const FEET_SHIFT := 15.0 * EntityScale.BODY_REL ## = depth_occluders.gd FEET_OFFSET (oyuncu kökünden ayağa)
+const MOVE_SHIFT := Vector2i(0, -1) ## yol ızgarasında hareket hücresi = zindan hücresi + MOVE_SHIFT (kök hücresi = ayak hücresinin bir üstü)
+static var feet_rule_disabled: bool = false ## yalnız ölçüm (tools/harita_secimi/hareket_yoklama.gd eski/yeni karşılaştırması)
 
 
 static func reset() -> void:
@@ -38,6 +49,7 @@ static func reset() -> void:
 	_gate_of_cell.clear()
 	_gate_cells.clear()
 	_gate_closed.clear()
+	_map_entry = {}
 
 
 ## Kayıt (gerekirse). Orman katmanı yoksa (menü/test) false.
@@ -63,53 +75,60 @@ static func _register(origin_px: Vector2, cell_px: float) -> void:
 	_registered = true
 	_origin_px = origin_px
 	_cell_px = cell_px
-	for i in range(DungeonDefsScript.DUNGEONS.size()):
-		var def: Dictionary = DungeonDefsScript.DUNGEONS[i]
-		var path: String = DungeonDefsScript.DATA_PATH % str(def["id"])
-		if not ResourceLoader.exists(path):
+	## Madde 463 (2026-11-08): ana haritanın üç zindanı (madde 373, girişleri derin ormanda) SİLİNDİ -> `_dungeons` hep boş (dungeon_at /
+	## bölge dikdörtgenleri / zindan içi sorguları boş döner). Zindan biçimli haritada (madde 444) haritanın KENDİ hücreleri (nesne / su /
+	## saklanma / kapı; duvarlar orman katmanında, bkz. map_profiles.gd) köken (0,0)'da kaydedilir; harita "zindanın içi" sayılmaz.
+	var prof: Dictionary = MapProfilesScript.current()
+	if str(prof.get("tur", "")) == MapProfilesScript.KIND_ZINDAN:
+		var map_data: Resource = MapProfilesScript.data()
+		if map_data != null:
+			var map_id: String = MapProfilesScript.current_id()
+			_add_cells(map_id, map_data, Vector2i.ZERO)
+			var def: Dictionary = (prof.get("zindan_tanimi", {}) as Dictionary).duplicate()
+			def["id"] = map_id
+			def["title"] = str(prof.get("ad", map_id))
+			_map_entry = {"id": map_id, "index": -1, "def": def, "data": map_data, "origin": Vector2i.ZERO,
+					"rect": Rect2(_origin_px, Vector2(map_data.size) * _cell_px), "map": true}
+
+
+static func _add_cells(id: String, data: Resource, org: Vector2i) -> void:
+	## Bir veri kümesinin hücre kodlarını + nesne anahtarlarını (kaynak/sandık/tuzak/sunak/kapı "<id>:...") kaydeder; org = orman ızgarasında köken.
+	var w: int = data.size.x
+	var cells: PackedByteArray = data.cells
+	var gate_n: int = 0
+	var counters: Dictionary = {}
+	for o: Dictionary in data.objects:
+		var typ: String = str(o.get("type", ""))
+		var field: String = {"kaynak": "node_key", "sandik": "chest_key", "tuzak": "trap_key", "sunak": "altar_key", "kol": "lever_key", "fici": "barrel_key"}.get(typ, "")
+		if field != "":
+			var n: int = int(counters.get(typ, 0))
+			counters[typ] = n + 1
+			o[field] = "%s:%s%d" % [id, "l" if typ == "kol" else typ.substr(0, 1), n] ## kol "l": kaynak da "k" ile başlıyor
+		if typ != "kapi":
 			continue
-		var data: Resource = load(path)
-		if data == null:
+		var key: String = "%s:%d" % [id, gate_n]
+		gate_n += 1
+		var r: Rect2 = o["rect"]
+		var list: Array[Vector2i] = []
+		for yy in range(int(r.position.y / 16.0), int(r.end.y / 16.0)):
+			for xx in range(int(r.position.x / 16.0), int(r.end.x / 16.0)):
+				var gc := Vector2i(xx, yy) + org
+				list.append(gc)
+				_gate_of_cell[gc] = key
+		_gate_cells[key] = list
+		o["gate_key"] = key
+	for idx in range(cells.size()):
+		var code: int = cells[idx]
+		if code == 0:
 			continue
-		var org: Vector2i = def["origin"]
-		var rect := Rect2(_origin_px + Vector2(org) * _cell_px, Vector2(data.size) * _cell_px)
-		_dungeons.append({"id": str(def["id"]), "index": i, "def": def, "data": data, "origin": org, "rect": rect})
-		var w: int = data.size.x
-		var cells: PackedByteArray = data.cells
-		var gate_n: int = 0
-		var counters: Dictionary = {}
-		for o: Dictionary in data.objects:
-			var typ: String = str(o.get("type", ""))
-			var field: String = {"kaynak": "node_key", "sandik": "chest_key", "tuzak": "trap_key", "sunak": "altar_key"}.get(typ, "")
-			if field != "":
-				var n: int = int(counters.get(typ, 0))
-				counters[typ] = n + 1
-				o[field] = "%s:%s%d" % [def["id"], typ.substr(0, 1), n]
-			if typ != "kapi":
-				continue
-			var key: String = "%s:%d" % [def["id"], gate_n]
-			gate_n += 1
-			var r: Rect2 = o["rect"]
-			var list: Array[Vector2i] = []
-			for yy in range(int(r.position.y / 16.0), int(r.end.y / 16.0)):
-				for xx in range(int(r.position.x / 16.0), int(r.end.x / 16.0)):
-					var gc := Vector2i(xx, yy) + org
-					list.append(gc)
-					_gate_of_cell[gc] = key
-			_gate_cells[key] = list
-			o["gate_key"] = key
-		for idx in range(cells.size()):
-			var code: int = cells[idx]
-			if code == 0:
-				continue
-			var c := Vector2i(idx % w, idx / w) + org
-			match code:
-				DungeonDataScript.CELL_WALL:
-					_walls[c] = true
-				DungeonDataScript.CELL_SOLID, DungeonDataScript.CELL_WATER:
-					_solid[c] = true
-				DungeonDataScript.CELL_HIDE:
-					_hide[c] = true
+		var c := Vector2i(idx % w, idx / w) + org
+		match code:
+			DungeonDataScript.CELL_WALL:
+				_walls[c] = true
+			DungeonDataScript.CELL_SOLID, DungeonDataScript.CELL_WATER:
+				_solid[c] = true
+			DungeonDataScript.CELL_HIDE:
+				_hide[c] = true
 
 
 static func cell_of(world: Vector2) -> Vector2i:
@@ -149,6 +168,27 @@ static func is_move_blocked_cell(c: Vector2i) -> bool:
 	return k != null and _gate_closed.has(k)
 
 
+## Zindan biçimli harita mı (haritanın tamamı zindan hücresi; görünmez orman katmanı = zindan duvarları).
+static func map_mode() -> bool:
+	if not _registered and not ensure():
+		return false
+	return not _map_entry.is_empty()
+
+
+## Bu dünya konumunda hareket AYAK kuralıyla mı sorgulanır: zindan biçimli haritada her yerde (ana haritada zindan yok, madde 463).
+static func feet_rule_at(_world: Vector2) -> bool:
+	if feet_rule_disabled or (not _registered and not ensure()):
+		return false
+	return not _map_entry.is_empty()
+
+
+## Kayıtlı saklanma hücresi var mı (zindan biçimli haritanın açık lahitleri / nişleri; hide_brush.gd active).
+static func has_hide_cells() -> bool:
+	if not _registered and not ensure():
+		return false
+	return not _hide.is_empty()
+
+
 static func is_hide_world(world: Vector2) -> bool:
 	if not ensure() or _hide.is_empty():
 		return false
@@ -182,7 +222,15 @@ static func entry(id: String) -> Dictionary:
 	for d: Dictionary in _dungeons:
 		if str(d["id"]) == id:
 			return d
+	if not _map_entry.is_empty() and str(_map_entry["id"]) == id:
+		return _map_entry
 	return {}
+
+
+## Zindan biçimli haritanın girişi (yoksa boş).
+static func map_entry() -> Dictionary:
+	ensure()
+	return _map_entry
 
 
 ## Dünya konumu hangi zindanda ("" = ana harita).

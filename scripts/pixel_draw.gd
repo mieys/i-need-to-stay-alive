@@ -9,6 +9,7 @@ extends RefCounted
 
 ## DEFAULT_ANIM_SCALE (1.27575) x EntityScale.SIZE (0.95) - karakter kareleri 64x64 sanat pikseli.
 const TEXEL := 1.212
+const ShadowsFlag := preload("res://scripts/shadows_flag.gd")
 
 
 static func snap(v: Vector2) -> Vector2:
@@ -97,6 +98,8 @@ static func art(ci: CanvasItem, center: Vector2, rows: Array, palette: Dictionar
 ## gölge her yerde AYNI görünsün (kullanıcı isteği 2026-09-22: "standart normal mini gölgelerden ekle" - Korsan
 ## bombasındaki dither/dama desenli "kare kare" gölge yerine). radius = (yatay, dikey) yarıçap, dünya birimi.
 static func ground_shadow(ci: CanvasItem, center: Vector2, radius: Vector2, edge_color: Color = Color(0.0, 0.0, 0.0, 0.28), core_color: Color = Color(0.0, 0.0, 0.0, 0.2)) -> void:
+	if not ShadowsFlag.entities: ## madde 469: gölgeler kapalı (karakter/evcil ayak gölgesi + efsun nesneleri)
+		return
 	if radius.x <= 0.0 or radius.y <= 0.0:
 		return
 	var rows: int = int(ceil(radius.y / TEXEL))

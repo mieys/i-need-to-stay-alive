@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Karakter panosu ve silah yuvası barı "BottomBar" sarmalayıcısının altında,
 ## yetenek ikonları ise AYRI bir "SkillBar" sarmalayıcısının altında (bkz.
@@ -174,6 +175,7 @@ func _ready() -> void:
 	_setup_revive_display()
 	_layout_shop_inventory_buttons()
 	_style_envanter_and_gold_buttons()
+	_create_gold_gain_popup()
 	## DÜZELTME (kullanıcı bildirimi: "grup paneli görünmüyor, dostların
 	## canları kalkanları avatarları görünmeliydi, oradan altın
 	## gönderebilmeliydik") - kök neden: party_panel.gd'nin TÜM mantığı
@@ -378,6 +380,21 @@ func _layout_shop_inventory_buttons() -> void:
 	envanter_toggle_button.offset_top = top_y
 	envanter_toggle_button.offset_bottom = top_y + btn_h
 
+	## FPS göstergesi (2026-11-06, kullanıcı: "sol taraftaki butonların yanında simetrik, fazla dikkat çekmesin"): ENVANTER
+	## düğmesinin hemen sağında, düğmeyle aynı yükseklikte dikey ortalı; küçük (16) ve sönük yazı. Telefon yukarıda döndü.
+	fps_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	fps_label.grow_horizontal = Control.GROW_DIRECTION_END
+	fps_label.offset_left = left_edge + btn_w + GAP
+	fps_label.offset_right = fps_label.offset_left + 120.0
+	fps_label.offset_top = top_y
+	fps_label.offset_bottom = top_y + btn_h
+	fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	fps_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	fps_label.add_theme_font_size_override("font_size", 16)
+	fps_label.add_theme_color_override("font_color", Color(HudTheme.DIM, 0.6))
+	fps_label.add_theme_color_override("font_outline_color", Color(HudTheme.OUTLINE, 0.6))
+	fps_label.add_theme_constant_override("outline_size", 2)
+
 	## DÜZELTME (kullanıcı isteği: "3 dakikada bir açılan dükkan sadece level
 	## atlama ekranından sonra çıkmalı ... oyundaki dükkan butonunu kaldır
 	## sadece buradan satın alınabilecek") - ShopToggleButton artık HİÇ
@@ -472,6 +489,19 @@ func _style_envanter_and_gold_buttons() -> void:
 		gold_indicator_label.add_theme_color_override("font_color", HudTheme.PRICE)
 		gold_indicator_label.add_theme_constant_override("outline_size", 0)
 	_set_mouse_ignore_recursive(gold_indicator)
+
+
+## Altın kazancı "+N" yazısı altın çerçevesinin YANINDA (kullanıcı 2026-11-06; karakterin üstünde artık çıkmaz) - bkz. gold_gain_popup.gd.
+## Yazı boyu çerçevedeki sayıyla aynı (telefonda 32, masaüstünde 40).
+func _create_gold_gain_popup() -> void:
+	if not is_instance_valid(gold_indicator) or get_node_or_null("GoldGainPopup") != null:
+		return
+	var popup := Label.new()
+	popup.set_script(GoldGainPopupScript)
+	popup.anchor = gold_indicator
+	var fs: int = gold_indicator_label.get_theme_font_size("font_size") if gold_indicator_label else 40
+	popup.add_theme_font_size_override("font_size", fs)
+	add_child(popup)
 
 
 func _set_mouse_ignore_recursive(node: Node) -> void:
@@ -852,7 +882,13 @@ const DOCK_PAD_RIGHT := 12.0
 const DOCK_BOTTOM_MARGIN := 30.0 ## kullanıcı: "bi 10px daha yukarı" (20 -> 30)
 const DOCK_PORTRAIT_POS := Vector2(14.0, 12.0)
 const DOCK_PORTRAIT := 84.0 ## hud_avatar_frame.png (96) x 0,875
-const DOCK_BADGE_RECT := Rect2(34.0, 74.0, 44.0, 44.0)
+## 2026-11-08 (madde 458, kullanıcı: "karakter avatarı çerçevesini pencereye benzer şekilde dikdörtgen yap, level sayısı da dahil"): yuvarlak altın
+## rozet (34,74,44,44) yerine Gömme Tepsi levhası hud_level_tray.png (54x39, tools/gen_dock_tray_parts.py), MERKEZ aynı (56, ~96).
+const DOCK_BADGE_RECT := Rect2(29.0, 77.0, 54.0, 39.0)
+## Masaüstü portresi = karakterin YÜZÜ (LobbyUI.face_texture 24x24 baş kırpımı, seçim ekranındaki yüz kartlarıyla aynı), ekranda tam bu kadar
+## px/sanat pikseli (klip 0,875 + dock 0,92 ölçeği geri alınır) -> 48 px = yetenek ikonlarıyla aynı boy.
+## Madde 464: 3x (Büyücü çerçevesi, 18x18 yüz kırpımı = 54 px; tepsi kutusunun içi ~55 px).
+const DOCK_FACE_SCREEN_K := 3.0
 const DOCK_CONTENT_X := 112.0 ## yetenek sırası ve çubukların sol kenarı
 ## 2026-10-17 (kullanıcı: "can ve kalkan barları çok büyük, skilleri büyüt"): 56 -> 64 px; çerçeve kenarı 8 px sabit -> ikon
 ## alanı tam 48 px = 144 px (48 sanat pikseli x3) yetenek ikonları 1/3 ölçekte BİREBİR keskin (eskiden ~41,7 px, piksel düşüyordu).
@@ -876,19 +912,21 @@ const DOCK_BAR_RIGHT := 16.0
 const DOCK_LEGEND_OVERLAP := 12.0 ## efsanevi paneli ana panelin altına bu kadar girer ("yapışık")
 const DOCK_LEGEND_TOP := 6.0
 const DOCK_DIVIDER_COLOR := HudTheme.DIVIDER
-const SHIELD_VALUE_COLOR := Color("#bfe0ff")
+const SHIELD_VALUE_COLOR := HudTheme.SHIELD_VALUE
 ## Telefon HUD'u eski ölçüleri korur (MOBILE_CLUSTER_H bunlara göre).
 const MOBILE_HP_H := 22.0
 const MOBILE_SHIELD_H := 16.0
 const DOCK_BAR_GAP := 2.0
 const PixelBarScript: GDScript = preload("res://scripts/hud_pixel_bar.gd")
+const LobbyUIScript := preload("res://scripts/menu_lobby_ui.gd") ## FACE_ART: yüz kırpımı boyu (madde 458)
+const PortraitFaceScript := preload("res://scripts/portrait_face.gd") ## yüz kırpımı + karakter arka planı (madde 464)
 const LegendSlotsScript: GDScript = preload("res://scripts/hud_legend_slots.gd")
 const PetSlotScript: GDScript = preload("res://scripts/hud_pet_slot.gd")
 ## Mini stat paneli (ana panelin SOLUNA yapışık, efsanevi panelin aynası) + portre altındaki aç/kapa düğmesi (2026-10-14).
 const StatPanelScript: GDScript = preload("res://scripts/hud_stat_panel.gd")
 const StatToggleScript: GDScript = preload("res://scripts/hud_stat_toggle.gd")
 const DOCK_STATS_TOGGLE_RECT := Rect2(24.0, 122.0, 64.0, 20.0) ## panel yereli: seviye rozetinin (DOCK_BADGE_RECT) altı
-const SHIELD_BAR_COLOR := Color(0.24, 0.59, 0.91)
+const SHIELD_BAR_COLOR := HudTheme.SHIELD_BAR
 
 var dock_frame: Panel = null
 var dock_legend: Control = null
@@ -946,6 +984,9 @@ func _create_player_dock() -> void:
 		dock_stats_toggle.set_script(StatToggleScript)
 		add_child(dock_stats_toggle)
 		dock_stats_toggle.call("bind_panel", dock_stats)
+		_apply_tray_portrait(cluster)
+		_apply_tray_slots()
+		_apply_tray_minimap()
 	if revive_hearts:
 		## Kalpler artık panelin İÇİNDE: çerçeveden sonra çizilmeli.
 		if revive_hearts.get_index() < dock_frame.get_index():
@@ -977,6 +1018,79 @@ func _create_player_dock() -> void:
 	var bar: Control = get_node_or_null("SkillBar")
 	if bar:
 		bar.pivot_offset = Vector2.ZERO ## dock konumu SkillBar'ın sol üst köşesinden hesaplanır
+
+
+## Masaüstü portre kutusu + seviye levhası "C Gömme Tepsi" dilinde (madde 458): eski yuvarlak çerçeve portrenin ÜSTÜNDE duran saydam halkaydı;
+## yeni kutu dolu tepsi (ince ahşap kenar + koyu iç) -> portrenin ARKASINA alınır, yüz üstünde durur. Konumlar/boylar aynı (DOCK_PORTRAIT*).
+## Madde 478 (kullanıcı, HUD prototipi A'yı gösterip: "A gibi yapar mısın minimapi ama çerçeve tıpkı diğer çerçeveler gibi olsun renk olarak"):
+## masaüstü minimap KARE (minimap.gd `square`, telefonla aynı çizim; halka dokusu ve "N" levhası çizilmez) + çerçeve paneldeki yan kutunun
+## Gömme Tepsi çerçevesi (hud_minimap_tray.png = dış hat + ahşap + koyu iç çizgi, içi saydam, 9 dilim MINIMAP_TRAY_EDGE). Haritanın üstünde
+## (çocuk = ebeveynin _draw'ından sonra), kenarı haritanın kenarına oturur; kapladığı alan eski halkayla aynı (160 + 2 x 12 = 184 px) ->
+## grup paneli (party_panel.gd TOP_Y) yeri değişmez.
+const MINIMAP_TRAY_EDGE := 12
+
+func _apply_tray_minimap() -> void:
+	var minimap: Control = get_node_or_null("MinimapControl")
+	if minimap == null or minimap.has_node("TrayFrame"):
+		return
+	minimap.set("square", true)
+	var map_side: float = minimap.custom_minimum_size.x - 4.0 ## minimap.gd: RADIUS x 2 + 4, harita (2,2)'den başlar
+	var fr := NinePatchRect.new()
+	fr.name = "TrayFrame"
+	fr.texture = UIKit.tex("hud_minimap_tray.png")
+	fr.patch_margin_left = MINIMAP_TRAY_EDGE
+	fr.patch_margin_top = MINIMAP_TRAY_EDGE
+	fr.patch_margin_right = MINIMAP_TRAY_EDGE
+	fr.patch_margin_bottom = MINIMAP_TRAY_EDGE
+	fr.draw_center = false
+	fr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fr.position = Vector2.ONE * (2.0 - MINIMAP_TRAY_EDGE)
+	fr.size = Vector2.ONE * (map_side + 2.0 * MINIMAP_TRAY_EDGE)
+	minimap.add_child(fr)
+	## Çerçeve düğümün 10 px dışına taşar; kare olunca bu fark görünür -> sağ kenarı alttaki grup panelinin sağ kenarına (RIGHT_MARGIN) hizala.
+	var spill: float = MINIMAP_TRAY_EDGE - 2.0
+	minimap.offset_left -= spill
+	minimap.offset_right -= spill
+	minimap.queue_redraw()
+
+
+func _apply_tray_portrait(cluster: Control) -> void:
+	if cluster == null:
+		return
+	var frame: TextureRect = cluster.get_node_or_null("PortraitFrame") as TextureRect
+	var clip: Control = cluster.get_node_or_null("PortraitClip") as Control
+	if frame:
+		frame.texture = UIKit.tex("hud_avatar_tray.png")
+		frame.z_index = 0
+		if clip and frame.get_index() > clip.get_index():
+			cluster.move_child(frame, clip.get_index())
+	var badge: TextureRect = cluster.get_node_or_null("LevelBadge") as TextureRect
+	if badge:
+		badge.texture = UIKit.tex("hud_level_tray.png")
+
+
+## Masaüstü paneldeki yuva çerçeveleri de Gömme Tepsi dilinde (madde 459, kullanıcı: "çerçeve değişikliğini skill butonları pasifler v.s diğer
+## tüm skill barındaki çerçeveler için de yap"): BG dokuları gizlenir, çerçeveyi yuvanın kendisi ekran pikselinde çizer (hud_tray_frame.gd).
+## Kalınlık eskisiyle aynı: Q/E/R/F 4 x 2 px (DOCK_SKILL_BORDER_PX), pasif/evcil/efsanevi 4 x 1 px. F'nin orta halkası ruhani mor (eski
+## mor-altın çerçevenin anlamı). Konum/boy değişmez; telefon yuvaları (yuvarlak çerçeve) bu işlevi görmez.
+const TRAY_SPIRIT_ACCENT := HudTheme.EVO_EDGE
+
+func _apply_tray_slots() -> void:
+	for icon in [skill_icon, skill2_icon, skill3_icon, spirit_icon, passive_icon]:
+		if icon == null or not is_instance_valid(icon):
+			continue
+		var bg: CanvasItem = icon.get_node_or_null("BG") as CanvasItem
+		if bg:
+			bg.visible = false
+		icon.set("tray_frame", true)
+		icon.set("tray_layer_px", 1.0 if icon == passive_icon else 2.0)
+		icon.set("tray_accent", TRAY_SPIRIT_ACCENT if icon == spirit_icon else Color(0, 0, 0, 0))
+		icon.queue_redraw()
+	for slot in [dock_pet, dock_legend]:
+		if is_instance_valid(slot):
+			slot.set("tray_frame", true)
+			slot.queue_redraw()
 
 
 func _dock_place(c: Control, r: Rect2) -> void:
@@ -1084,6 +1198,7 @@ const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 ## Telefon: envanter/özellikler açıkken arkadaki karartma (bkz. _fit_mobile_inventory_panels).
 var _mobile_inv_dim: ColorRect = null
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
+const GoldGainPopupScript := preload("res://scripts/gold_gain_popup.gd")
 const TouchControlsScript := preload("res://scripts/touch_controls.gd")
 const TouchScrollScript := preload("res://scripts/touch_scroll.gd")
 const ROUND_FRAME: Texture2D = preload("res://assets/ui/kit/hud_skill_frame_round.png")
@@ -1515,7 +1630,8 @@ func _ph_interact_kind_now() -> String:
 	return ""
 
 
-## Ping (ms): istemcide ENet sunucu bağlantısının gidiş-dönüş süresi; host / tek oyunculu / Epic soketinde -1 (yazı gizli).
+## Ping (ms): istemcide ENet sunucu bağlantısının gidiş-dönüş süresi; Epic'te oyunun kendi ping/pong ölçümü (madde 419,
+## NetworkManager.host_rtt_ms); host / tek oyunculu / henüz ölçüm yokken -1 (yazı gizli).
 func _ph_ping_ms() -> int:
 	if not NetworkManager.is_multiplayer_active or not multiplayer.has_multiplayer_peer() or multiplayer.is_server():
 		return -1
@@ -1524,7 +1640,7 @@ func _ph_ping_ms() -> int:
 		var peer: ENetPacketPeer = (mp as ENetMultiplayerPeer).get_peer(1)
 		if peer != null:
 			return int(peer.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME))
-	return -1
+	return NetworkManager.host_rtt_ms()
 
 
 ## Her kare (telefon): etkileşim levhası + ping.
@@ -1570,7 +1686,7 @@ func _ph_tick(delta: float) -> void:
 	if _ph_ping_timer <= 0.0 and is_instance_valid(_ph_ping):
 		_ph_ping_timer = 0.5
 		var ms: int = _ph_ping_ms()
-		_ph_ping.text = ("%d ms" % ms) if ms >= 0 else ""
+		_ph_ping.text = (Loc.t("%d ms") % ms) if ms >= 0 else ""
 
 
 ## Sağ üst: çanta, şerit (seviye rozeti, kalpler, altın, parçacık, ping) - sabit yuvalar (altın büyüdükçe şerit kaymasın).
@@ -1719,7 +1835,7 @@ func _fit_mobile_inventory_panels() -> void:
 	if _mobile_inv_dim == null:
 		_mobile_inv_dim = ColorRect.new()
 		_mobile_inv_dim.name = "MobileInventoryDim"
-		_mobile_inv_dim.color = Color(0.03, 0.03, 0.06, 0.6) ## Gece Sıvası lacivert karartma (madde 276)
+		_mobile_inv_dim.color = Color(HudTheme.DEEP, 0.6) ## tek palet karartma (madde 403; eskiden Gece Sıvası)
 		_mobile_inv_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 		_mobile_inv_dim.visible = false
 		_mobile_inv_dim.gui_input.connect(func(e: InputEvent) -> void:
@@ -2106,7 +2222,7 @@ func _mobile_perf_text() -> String:
 	var gpu_ms: float = RenderingServer.viewport_get_measured_render_time_gpu(vp_rid)
 	var draws: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var enemies: int = get_tree().get_nodes_in_group("enemies").size()
-	return "FPS %d | kare %.1f ms | GPU %.1f ms | çizim %d | yaratık %d" % [int(fps), frame_ms, gpu_ms, draws, enemies]
+	return Loc.t("FPS %d | kare %.1f ms | GPU %.1f ms | çizim %d | yaratık %d") % [int(fps), frame_ms, gpu_ms, draws, enemies]
 
 
 ## Durum (buff/debuff) satırı telefonda can kümesinin sağına, üst kenara taşınır (yetenek sütununun içinde yer yok).
@@ -2340,10 +2456,16 @@ func _setup_portrait() -> void:
 	var def: Dictionary = Characters.get_def(GameManager.selected_char_id)
 	if def.has("portrait"):
 		var tex: Texture2D = load(def["portrait"])
+		## Masaüstü: vücut yerine YÜZ (madde 458), yakın + Büyücü çerçevesi (madde 464, PortraitFace; grup paneli de aynı kaynak).
+		if not MobileUIScript.enabled:
+			var face: Texture2D = PortraitFaceScript.face(GameManager.selected_char_id, PortraitFaceScript.PANEL_N)
+			if face:
+				tex = face
 		if tex:
 			portrait.texture = tex
 			_fit_portrait_pixel_perfect(tex)
 	_add_portrait_backdrop()
+	_add_portrait_theme_bg()
 	## Seviye rozeti altın halka + koyu yüz (tools/gen_hud_tema.py) - rakam açık, kontursuz.
 	level_label.add_theme_color_override("font_color", HudTheme.TEXT)
 	level_label.add_theme_constant_override("outline_size", 0)
@@ -2354,6 +2476,9 @@ func _setup_portrait() -> void:
 func _add_portrait_backdrop() -> void:
 	var clip: Control = portrait.get_parent() as Control
 	if clip == null or clip.has_node("PortraitBG"):
+		return
+	## Masaüstünde yüz, Gömme Tepsi portre kutusunun koyu içinde durur (madde 458) - krem sahne + çimen tümseği yalnız telefonda.
+	if not MobileUIScript.enabled:
 		return
 	var bg := TextureRect.new()
 	bg.name = "PortraitBG"
@@ -2366,12 +2491,46 @@ func _add_portrait_backdrop() -> void:
 	clip.move_child(bg, 0)
 
 
+## Masaüstü: karaktere özel bulanık arka plan (madde 464, assets/ui/portrait_bg/<id>.png) yüzün ARKASINDA, yüzle aynı yer/boy/kat ->
+## piksel ızgarası aynı. Dokusu olmayan karakterde kurulmaz (tepsinin koyu içi kalır).
+func _add_portrait_theme_bg() -> void:
+	if MobileUIScript.enabled:
+		return
+	var clip: Control = portrait.get_parent() as Control
+	if clip == null:
+		return
+	var tex: Texture2D = PortraitFaceScript.background(GameManager.selected_char_id, PortraitFaceScript.PANEL_N)
+	var bg: TextureRect = clip.get_node_or_null("PortraitThemeBG") as TextureRect
+	if tex == null:
+		if bg:
+			bg.queue_free()
+		return
+	if bg == null:
+		bg = TextureRect.new()
+		bg.name = "PortraitThemeBG"
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg.stretch_mode = TextureRect.STRETCH_SCALE
+		bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		clip.add_child(bg)
+	clip.move_child(bg, portrait.get_index())
+	bg.texture = tex
+	bg.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	bg.offset_left = portrait.offset_left
+	bg.offset_top = portrait.offset_top
+	bg.offset_right = portrait.offset_right
+	bg.offset_bottom = portrait.offset_bottom
+
+
 ## Portre eskiden 72x72 kutuyu "cover" ile dolduruyordu - 48 px'lik portrede 1.5x (eşit olmayan pikseller). Artık TAM SAYI
 ## kat: 48x48 portreler 2x (96 px, kutu figürün 6..42 satırlarını gösterir - baş/gövde), 64x64 (Oakley) 1x.
 func _fit_portrait_pixel_perfect(tex: Texture2D) -> void:
 	var clip_size := Vector2(72, 72)
 	var k: float = 2.0 if tex.get_height() <= 48 else 1.0
 	var draw_size: Vector2 = tex.get_size() * k
+	## Masaüstü yüz kırpımı: ekranda tam DOCK_FACE_SCREEN_K px/sanat pikseli (klip ve dock ölçeği geri alınır, madde 458).
+	if not MobileUIScript.enabled and tex.get_height() <= LobbyUIScript.FACE_ART:
+		draw_size = tex.get_size() * DOCK_FACE_SCREEN_K / (DOCK_PORTRAIT / 96.0 * DOCK_UI_SCALE)
 	portrait.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait.stretch_mode = TextureRect.STRETCH_SCALE
@@ -2565,7 +2724,7 @@ func _ph_build_inv_rail(layer: Node, r: Rect2) -> void:
 	var bg := PanelContainer.new()
 	bg.name = "PhoneInventoryRail"
 	bg.theme = _ph_inv_kit.theme()
-	var sb: StyleBoxFlat = _ph_inv_kit.sb(_ph_inv_kit.c("panel"), _ph_inv_kit.c("line_hi"), 3, 10)
+	var sb = _ph_inv_kit.sb(_ph_inv_kit.c("panel"), _ph_inv_kit.c("line_hi"), 3, 10)
 	sb.content_margin_left = 14
 	sb.content_margin_right = 14
 	sb.content_margin_top = 14
@@ -2638,7 +2797,7 @@ func update_health(current: float, max_value: float) -> void:
 	# Şirin retro piksel renk geçişi (Emerald Green'den Crimson Red'e)
 	var pct: float = clamp(current / max(max_value, 1.0), 0.0, 1.0)
 	## 2026-09-24 bar yeniden tasarımı: parşömen levhada daha canlı piksel yeşili -> kırmızı (dolgu dokusu düz beyaz, ton burada).
-	var health_color: Color = Color(0.84, 0.22, 0.22).lerp(Color(0.36, 0.78, 0.29), pct)
+	var health_color: Color = HudTheme.hp_color(pct) ## madde 473: düz yeşil -> ton üstünden amber -> kırmızı
 	health_bar.tint_progress = health_color
 	_refresh_round_fill(health_bar)
 	if dock_hp_bar:
@@ -2947,6 +3106,7 @@ func append_chat_message(sender_name: String, text: String) -> void:
 		rl.add_theme_color_override("default_color", HudTheme.TEXT)
 		rl.add_theme_color_override("font_outline_color", HudTheme.OUTLINE)
 		rl.add_theme_constant_override("outline_size", 4)
+		rl.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## oyuncunun yazdığı metin çevrilmez ("Hepsi" -> "All" olmasın, madde 446)
 		rl.text = "[color=#%s]%s:[/color] %s" % [HudTheme.PRICE.to_html(false), sender_name.replace("[", "[lb]"), text.replace("[", "[lb]")]
 		line = rl
 		_ph_recent.append([sender_name, text])
@@ -2960,6 +3120,7 @@ func append_chat_message(sender_name: String, text: String) -> void:
 			_ph_update_badge()
 	else:
 		var lb := Label.new()
+		lb.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## oyuncu metni çevrilmez (madde 446)
 		lb.text = "%s: %s" % [sender_name, text]
 		lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lb.add_theme_font_size_override("font_size", 18)
@@ -2985,6 +3146,25 @@ func append_chat_message(sender_name: String, text: String) -> void:
 var _shop_refresh_timer: float = 0.0
 
 
+## "+2.5" / "+0" (saniyelik, 0,1'e yuvarlı, tam sayıda ondalıksız); kalkan yoksa (oran < 0) kalkan yazısı boş.
+static func regen_label(per_sec: float) -> String:
+	if per_sec < 0.0:
+		return ""
+	var v: float = snappedf(per_sec, 0.1)
+	return ("+%d" % int(round(v))) if is_equal_approx(v, round(v)) else ("+%.1f" % v)
+
+
+func _refresh_dock_regen() -> void:
+	if player == null or not is_instance_valid(player) or not player.has_method("get_health_regen_per_sec"):
+		return
+	## kullanıcı: "can ve kalkan doluyken ... yenilenmesi gözükmesin" -> dolu çubukta yazı yok
+	var hp_full: bool = float(player.get("health")) >= float(player.get("max_health")) - 0.001
+	dock_hp_bar.call("set_regen", "" if hp_full else regen_label(float(player.call("get_health_regen_per_sec"))))
+	if dock_shield_bar:
+		var sh_full: bool = float(player.get("item_shield_hp")) >= float(player.get("item_shield_max")) - 0.001
+		dock_shield_bar.call("set_regen", "" if sh_full else regen_label(float(player.call("get_shield_regen_per_sec"))))
+
+
 func _process(delta: float) -> void:
 	## Altın göstergesi artık HER ZAMAN görünür (bkz. kullanıcı isteği: sağ
 	## üstteki DÜKKAN/ENVANTER buton yığınının hemen altında, dükkan
@@ -2992,6 +3172,9 @@ func _process(delta: float) -> void:
 	## Ödül altınları (sandık/görev/boss payı) panele uçarken sayaç yoldakileri saymaz, paralar vardıkça tıkır tıkır
 	## yükselir (bkz. gold_reward_fx.gd).
 	gold_indicator_label.text = str(GoldRewardFx.display_gold())
+	## Madde 475: can/kalkan çubuğunun sağındaki solgun yenilenme yazısı (LoL gibi), 1/6 sn'de bir (yazı değişmedikçe yeniden çizmez).
+	if dock_hp_bar and Engine.get_process_frames() % 10 == 0:
+		_refresh_dock_regen()
 	## Telefon: grup panelinin boyu müttefik gelip gittikçe değişir - yeniden sığdır (bkz. _fit_mobile_party).
 	if MobileUIScript.enabled and Engine.get_process_frames() % 20 == 0:
 		var bg: Control = get_node_or_null("PartyPanelLayer/PartyPanel/Background") as Control
@@ -3017,10 +3200,7 @@ func _process(delta: float) -> void:
 		_fps_update_timer += delta
 		if _fps_update_timer >= 0.2:
 			_fps_update_timer = 0.0
-			fps_label.text = _mobile_perf_text() if MobileUIScript.enabled else "FPS: %d" % Engine.get_frames_per_second()
-			## Yaratık yeniden yazımı: yeni yol (C++ EnemyWorld) GERÇEKTEN çalışıyorsa belli olsun (anahtar kapalıyken metin aynı)
-			if get_tree().current_scene and get_tree().current_scene.get_node_or_null("EnemyWorldBridge") != null:
-				fps_label.text += " | C++ yaratık"
+			fps_label.text = _mobile_perf_text() if MobileUIScript.enabled else Loc.t("FPS: %d") % Engine.get_frames_per_second()
 	_update_status_bar()
 	_shop_refresh_timer += delta
 	if _shop_refresh_timer > 0.4:

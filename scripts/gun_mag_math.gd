@@ -19,6 +19,8 @@ const MAGS := {
 	## casing_row / mag_row: assets/fx/gun/casings.png satırı (tools/gen_gun_mag_fx.py).
 	"tabanca": {"size": 6, "burst": 0.8, "pitch": 1.0, "port": Vector2(-6, -6), "mag_out": Vector2(-10, 8), "casing_row": 0, "mag_row": 2},
 	"tufek": {"size": 5, "burst": 0.8, "pitch": 0.86, "port": Vector2(-7, -5), "mag_out": Vector2(-6, 5), "casing_row": 1, "mag_row": 3},
+	## Pompalı (madde 448): 5 fişek, kırmızı av fişeği kovanı (satır 4), şarjör DÜŞMEZ (mag_row -1: fişekler tek tek sürülür).
+	"pompali": {"size": 5, "burst": 0.8, "pitch": 0.78, "port": Vector2(-5, -4), "mag_out": Vector2(-5, 2), "casing_row": 4, "mag_row": -1},
 }
 
 ## Hedef yokken yarım şarjör bu kadar sn sonra kendiliğinden dolar (savaş arası; çatışmada sürekli hedef olduğu için DPS'e girmez).

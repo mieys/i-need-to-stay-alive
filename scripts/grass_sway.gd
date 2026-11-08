@@ -22,6 +22,12 @@ extends Node
 const SHADER_PATH := "res://scenes/sallanan ot.gdshader"
 const LAYER_PARENT := "Shader Eklenecek"
 const LAYER_NAMES: Array[String] = ["Çalılar", "Çalılar1", "Çiçekler 1"] ## Çiçekler 1: 2026-10-09 (kullanıcı: "çiçekler de çalılar gibi sallansın, y eksenine sahip olsun, dokununca sallansın")
+## SABİT GENİŞ ÇALILAR (2026-11-05, kullanıcı: geniş çalılar "kesik kesik görünüyor, hiç sallanmamalı"; listeden 1-16 seçildi):
+## Çalılar/Çalılar1'de en az iki sütunlu bitki grubu tamamen bu dokulardan geliyorsa hiç sallanmaz/eğilmez (veri A biti 128,
+## shader `sabit`). Seçilen 16 tür tam olarak bu iki dokunun geniş gruplarıydı; tek sütunlu otlar, exterior ot öbekleri,
+## bataklık süsleri ve çiçekler eskisi gibi sallanır. Liste: tools/proto_20261105/genis_calilar_liste.png
+const STATIC_WIDE_TEXTURES: Array[String] = ["Objects.png", "sade ağaç ve taş.png"]
+const STATIC_FLAG := 128
 const MAX_CHARACTERS := 8      ## shader'daki karakterler dizi boyu
 ## Karakter ayak noktası (dünya px, köke göre): oyuncu kökü ölçek 0.5'te, sprite'ın zemine değdiği yer ~+30 yerel.
 const FEET_OFFSET := 15.0 * EntityScale.BODY_REL ## 2026-10-09: karakterler %15 küçüldü (eski ölçü 15 / 11 / 34)
@@ -209,8 +215,13 @@ func _write_cell_data(mat: ShaderMaterial, layer: TileMapLayer, generic_links: b
 		g["min_x"] = mini(int(g["min_x"]), cell.x)
 		g["max_x"] = maxi(int(g["max_x"]), cell.x)
 	var wide_group: Dictionary = {} ## hücre -> grup kökü (sadece en az iki sütunlu gruplar)
+	var static_cells: Dictionary = {} ## hücre -> true: hiç sallanmayan geniş çalı (STATIC_WIDE_TEXTURES)
 	for r: Vector2i in groups:
 		var g: Dictionary = groups[r]
+		if not generic_links and int(g["max_x"]) > int(g["min_x"]) and _is_static_group(layer, g["cells"]):
+			for cell: Vector2i in g["cells"]:
+				static_cells[cell] = true
+			continue
 		if int(g["max_x"]) > int(g["min_x"]) or (generic_links and (g["cells"] as Array).size() > 1):
 			for cell: Vector2i in g["cells"]:
 				wide_group[cell] = r
@@ -225,7 +236,13 @@ func _write_cell_data(mat: ShaderMaterial, layer: TileMapLayer, generic_links: b
 		var top: int = int(inf["top"])
 		var phase: int = 0
 		var flags: int = 0
-		if wide_group.has(cell):
+		if static_cells.has(cell):
+			## Sabit çalı: kök/boy grubun tamamından (ön katman derinliği aynı kalsın), faz/komşu/temas yok, A biti 128.
+			var sg: Dictionary = groups[_find(parent, cell)]
+			root = int(sg["root"]) - cell.y * 16
+			top = int(sg["top"]) - cell.y * 16
+			flags = STATIC_FLAG
+		elif wide_group.has(cell):
 			var g: Dictionary = groups[wide_group[cell]]
 			root = int(g["root"]) - cell.y * 16
 			top = int(g["top"]) - cell.y * 16
@@ -267,6 +284,15 @@ func _write_cell_data(mat: ShaderMaterial, layer: TileMapLayer, generic_links: b
 		mat.set_shader_parameter("karo_hucre", float(src_for_padding.texture_region_size.x + (2 if src_for_padding.use_texture_padding else 0)))
 		mat.set_shader_parameter("karo_dolgu", 1.0 if src_for_padding.use_texture_padding else 0.0)
 	return {"rect": rect, "ofset": ofset, "data": data, "bend_img": bend_img, "bend_tex": bend_tex, "plants": {}, "touching": {}, "rep_of": rep_of, "members": members}
+
+
+func _is_static_group(layer: TileMapLayer, cells: Array) -> bool:
+	var ts: TileSet = layer.tile_set
+	for cell: Vector2i in cells:
+		var src := ts.get_source(layer.get_cell_source_id(cell)) as TileSetAtlasSource
+		if src == null or src.texture == null or not STATIC_WIDE_TEXTURES.has(src.texture.resource_path.get_file()):
+			return false
+	return true
 
 
 func _find(parent: Dictionary, c: Vector2i) -> Vector2i:
@@ -331,6 +357,9 @@ func _edge_touches(a: Dictionary, b: Dictionary, horizontal: bool) -> bool:
 	return false
 
 
+var _rows_cache: Dictionary = {} ## Image -> {Vector4i bölge -> Vector2i}
+
+
 func _image_of(tex: Texture2D) -> Image:
 	if not _image_cache.has(tex):
 		var img: Image = tex.get_image()
@@ -342,6 +371,16 @@ func _image_of(tex: Texture2D) -> Image:
 
 ## (ilk opak satır, son opak satır) - boşsa (-1, -1).
 func _opaque_rows(img: Image, r: Rect2i) -> Vector2i:
+	## Aynı karo haritada yüzlerce kez sorulur: sonuç görüntü + bölge başına önbellekte (yükleme donmasını kısaltır, madde 440).
+	var per_img: Dictionary
+	if _rows_cache.has(img):
+		per_img = _rows_cache[img]
+	else:
+		per_img = {}
+		_rows_cache[img] = per_img
+	var key := Vector4i(r.position.x, r.position.y, r.size.x, r.size.y)
+	if per_img.has(key):
+		return per_img[key]
 	var first: int = -1
 	var last: int = -1
 	for y in range(r.size.y):
@@ -351,6 +390,7 @@ func _opaque_rows(img: Image, r: Rect2i) -> Vector2i:
 					first = y
 				last = y
 				break
+	per_img[key] = Vector2i(first, last)
 	return Vector2i(first, last)
 
 
@@ -388,8 +428,8 @@ func _update_touch(state: Dictionary, touchers: Array, delta: float) -> void:
 					continue
 				var d: Color = data.get_pixel(p.x, p.y)
 				var root: int = roundi(d.r * 255.0)
-				if roundi(d.g * 255.0) <= 0 or root >= 16:
-					continue ## boş hücre ya da 2 karoluk otun üst yarısı (kök alttaki hücrede)
+				if roundi(d.g * 255.0) <= 0 or root >= 16 or roundi(d.a * 255.0) >= STATIC_FLAG:
+					continue ## boş hücre, 2 karoluk otun üst yarısı (kök alttaki hücrede) ya da sabit geniş çalı
 				var root_y: float = ofset.y + float(cy) * 16.0 + float(root) + 1.0
 				var center_x: float = ofset.x + float(cx) * 16.0 + 8.0
 				var dx: float = center_x - feet.x

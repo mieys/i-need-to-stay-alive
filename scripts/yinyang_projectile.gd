@@ -54,7 +54,7 @@ func _yy_init() -> void:
 		if player_node == null and is_instance_valid(source_weapon):
 			player_node = source_weapon.get_parent() as Node2D
 		if yy_rcp_peer == -1: ## özellik kurmadıysa (yedek yol) kasterde burada karar verilir
-			_yy_rcp = YinYang.pick_recipient(player_node)
+			_yy_rcp = YinYang.pick_recipient(player_node, YinYang.recipient_range(source_weapon))
 			yy_rcp_peer = YinYang.peer_of(_yy_rcp) if _yy_rcp != null else 0
 	if _dark:
 		_dark.scale = Vector2.ONE * YinYang.WORLD_PX * (1.25 if is_crit else 1.0) / maxf(0.01, absf(global_scale.x))

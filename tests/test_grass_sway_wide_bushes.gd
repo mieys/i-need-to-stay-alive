@@ -9,11 +9,13 @@ const GrassSwayScript: GDScript = preload("res://scripts/grass_sway.gd")
 var _spawned: Array[Node] = []
 
 
-func _layer(cells: Array, atlas: Array, flips: Array = []) -> TileMapLayer:
+func _layer(cells: Array, atlas: Array, flips: Array = [], tex_path: String = "") -> TileMapLayer:
 	var image := Image.create(16 * 6, 32, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0.2, 0.7, 0.2, 1.0))
 	var source := TileSetAtlasSource.new()
 	source.texture = ImageTexture.create_from_image(image)
+	if tex_path != "":
+		source.texture.resource_path = tex_path
 	source.texture_region_size = Vector2i(16, 16)
 	for x in 6:
 		for y in 2:
@@ -100,4 +102,24 @@ func test_generic_links_group_non_atlas_adjacent_tiles_and_touch_bends_whole_gro
 	var p1: Vector2i = Vector2i(6, 5) - rect.position
 	assert(bend.get_pixel(p0.x, p0.y).r != 128.0 / 255.0, "Dokunulan karo eğilmeli")
 	assert(is_equal_approx(bend.get_pixel(p0.x, p0.y).r, bend.get_pixel(p1.x, p1.y).r), "Grubun komşu karosu AYNI eğilmeyi almalı (bölünme olmasın)")
+	_cleanup()
+
+
+## 2026-11-05 (kullanıcı: geniş çalılar "kesik kesik", hiç sallanmasın): STATIC_WIDE_TEXTURES dokusundan gelen geniş grup sabit
+## (A = 128, faz 0, kök grubun alt satırı); aynı dokunun TEK sütunlu otu ve başka dokunun geniş grubu eskisi gibi sallanır.
+func test_static_wide_bush_textures_do_not_sway() -> void:
+	var layer: TileMapLayer = _layer([Vector2i(5, 4), Vector2i(6, 4), Vector2i(5, 5), Vector2i(6, 5), Vector2i(12, 5)],
+		[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(4, 0)], [], "res://__test_sabit__/Objects.png")
+	var d: Array = _data(layer)
+	var top_l: Array = _px(d, Vector2i(5, 4))
+	var bot_r: Array = _px(d, Vector2i(6, 5))
+	var single: Array = _px(d, Vector2i(12, 5))
+	assert(top_l[3] == 128 and bot_r[3] == 128 and top_l[2] == 0, "Sabit doku geniş çalısı A=128, faz 0 olmalı: %s %s" % [top_l, bot_r])
+	assert(top_l[0] == bot_r[0] + 16 and top_l[1] > 0, "Sabit çalı kök/boyu grubun alt satırından (ön katman derinliği): %s / %s" % [top_l, bot_r])
+	assert(single[3] == 0, "Aynı dokunun tek sütunlu otu sallanmaya devam etmeli: %s" % str(single))
+	_cleanup()
+	var other: TileMapLayer = _layer([Vector2i(5, 5), Vector2i(6, 5)], [Vector2i(0, 0), Vector2i(1, 0)], [], "res://__test_sabit__/exterior.png")
+	var d2: Array = _data(other)
+	var o: Array = _px(d2, Vector2i(5, 5))
+	assert(o[3] < 128 and o[2] > 0, "Başka dokunun geniş grubu eskisi gibi sallanmalı: %s" % str(o))
 	_cleanup()

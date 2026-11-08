@@ -26,6 +26,7 @@ const ATTR_MAX := "MAXPLAYERS"
 const ATTR_IN_GAME := "INGAME"
 const ATTR_ROOM_NAME := "ROOMNAME"
 const ATTR_LOCKED := "LOCKED"
+const ATTR_MAP := "MAP" ## harita seçimi (madde 444): odanın harita kimliği
 
 var _platform_ready: bool = false
 var _setup_running: bool = false
@@ -117,7 +118,7 @@ func ensure_ready_async(display_name: String) -> String:
 
 
 ## ------------------------------------------------------------------ oda ilanı (host)
-func host_lobby_async(host_name: String, max_players: int, room_name: String = "", locked: bool = false) -> bool:
+func host_lobby_async(host_name: String, max_players: int, room_name: String = "", locked: bool = false, map_id: String = "ana") -> bool:
 	await close_lobby_async()
 	var opts := EOS.Lobby.CreateLobbyOptions.new()
 	opts.bucket_id = BUCKET_ID
@@ -138,6 +139,7 @@ func host_lobby_async(host_name: String, max_players: int, room_name: String = "
 	_lobby.add_attribute(ATTR_IN_GAME, false)
 	_lobby.add_attribute(ATTR_ROOM_NAME, room_name if not room_name.is_empty() else host_name)
 	_lobby.add_attribute(ATTR_LOCKED, locked)
+	_lobby.add_attribute(ATTR_MAP, map_id)
 	await _lobby.update_async()
 	return true
 
@@ -204,6 +206,7 @@ func search_lobbies_async(display_name: String) -> Array:
 					"max_players": int(_attr(lobby, ATTR_MAX, lobby.max_members)),
 					"in_game": bool(_attr(lobby, ATTR_IN_GAME, false)),
 					"room_name": str(_attr(lobby, ATTR_ROOM_NAME, _attr(lobby, ATTR_HOST_NAME, "Oda"))),
+					"map": str(_attr(lobby, ATTR_MAP, "ana")),
 					"locked": bool(_attr(lobby, ATTR_LOCKED, false)),
 				})
 	_searching = false

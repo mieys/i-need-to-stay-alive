@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## OYUN BİTTİ ekranının gövdesi - tasarım "A - Ahşap Pano" (madde 224, 2026-10-17; kullanıcı 4 prototipten A'yı seçti, renkleri
 ## sonra "seyyar satıcıya benzesin" -> shop_dark_kit.gd PAL_SLATE; prototip tools/proto_20261017/oyun_bitti_proto.gd).
@@ -32,22 +33,23 @@ const OWN_HEAD_H := 44.0
 const OWN_GAP := 16.0 ## silah / yetenek kutuları arası
 const COMPACT_FROM := 5 ## bu kadar ve fazla oyuncuda satırlar alçalır (8 oyuncu ekrana sığsın)
 
-## Renkler Seyyar Satıcı "Klasik Pazar" kitiyle aynı (kullanıcı 2026-10-17: "renk olarak seyyar satıcıya benzesin", ilk sürümün
-## HUD kahvesini sevmedi): shop_dark_kit.gd PAL_SLATE değerleri + piksel simgelerin dış hattı. Pencere/düğmeler main.gd'de aynı kitle.
+## Renkler: 2026-10-17'de kayrak (PAL_SLATE) idi; STİL REHBERİ (madde 403, 2026-11-06, kullanıcı "renkleri kısık ahşap tarzı
+## olsun") ile tek palet hud_theme.gd pencere rolleri. Sınıf adı/alanları eski çağıranlar için aynı. Pencere/düğmeler main.gd'de aynı kitle.
 class HT:
-	const OUTLINE := Color("#0b0e15") ## piksel simge/çubuk dış hattı (kayrağın en koyusu)
-	const PANEL := Color("#1b212e") ## PAL_SLATE panel
-	const STRIPE := Color("#242c3b") ## panel2: satır şeridi
-	const RIM_LO := Color("#2f3a4f") ## panel3
-	const INSET := Color("#121722") ## inset: kuyu/çubuk içi
-	const RIM := Color("#353f55") ## line
-	const RIM_HI := Color("#56657f") ## line_hi
-	const TEXT := Color("#ece6d7")
-	const DIM := Color("#96a0b2")
-	const ACCENT := Color("#d9b46a") ## altın
-	const PRICE := Color("#eccb7e")
-	const GOOD := Color("#94c97e")
-	const BAD := Color("#dc8676")
+	const _HT := preload("res://scripts/hud_theme.gd")
+	const OUTLINE := _HT.DEEP ## piksel simge/çubuk dış hattı (kayrağın en koyusu)
+	const PANEL := _HT.WIN_PANEL ## PAL_SLATE panel
+	const STRIPE := _HT.WIN_PANEL2 ## panel2: satır şeridi
+	const RIM_LO := _HT.WIN_PANEL3 ## panel3
+	const INSET := _HT.WIN_INSET ## inset: kuyu/çubuk içi
+	const RIM := _HT.WIN_LINE ## line
+	const RIM_HI := _HT.WIN_LINE_HI ## line_hi
+	const TEXT := _HT.TEXT
+	const DIM := _HT.DIM
+	const ACCENT := _HT.ACCENT ## altın
+	const PRICE := _HT.PRICE
+	const GOOD := _HT.GOOD
+	const BAD := _HT.BAD
 
 const BONE := Color("#e9dcc0")
 const DMG := Color("#e8885a") ## verilen hasar
@@ -192,11 +194,11 @@ func _reward_lines() -> Array:
 	for key in _results.get("records", []):
 		var label: String = str(RunRecords.RECORD_LABELS.get(key, key))
 		var value: String = RunSummaryUI.record_value_text(str(key), _summary)
-		out.append(["star", "Yeni rekor · %s" % label + (": " + value if value != "" else ""), HT.PRICE])
+		out.append(["star", Loc.t("Yeni rekor · %s") % label + (": " + value if value != "" else ""), HT.PRICE])
 	for id in _results.get("achievements", []):
 		var d: Dictionary = Achievements.def_of(str(id))
 		var desc: String = str(d.get("desc", "")).trim_suffix(".")
-		out.append(["check", "Başarım · %s" % d.get("name", id) + (" (%s)" % desc if desc != "" else ""), HT.GOOD])
+		out.append(["check", Loc.t("Başarım · %s") % d.get("name", id) + (" (%s)" % desc if desc != "" else ""), HT.GOOD])
 	return out
 
 
@@ -367,15 +369,16 @@ func _glyph(key: String, c: Vector2, s: float) -> void:
 
 
 func _tw(s: String, size: int) -> float:
-	return FONT.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	return FONT.get_string_size(atr(s), HORIZONTAL_ALIGNMENT_LEFT, -1, size).x ## _txt ile aynı (çevrilmiş) genişlik
 
 
 ## pos = yazı kutusunun sol üstü; en fazla 3 px aşağı-sağ gölge.
 func _txt(s: String, pos: Vector2, size: int, c: Color, align: int = HORIZONTAL_ALIGNMENT_LEFT, width: float = -1.0) -> void:
+	s = atr(s) ## draw_string kendiliğinden çevrilmez (madde 446); sayılar/adlar katalogda yok, aynı kalır
 	var u: float = minf(size / 8.0, 3.0)
 	var base := Vector2(roundf(pos.x), roundf(pos.y + FONT.get_ascent(size)))
-	draw_string(FONT, base + Vector2(u, u), s, align, width, size, Color(HT.OUTLINE, 0.9))
-	draw_string(FONT, base, s, align, width, size, c)
+	draw_string(FONT, base + Vector2(u, u), s, align, width, size, Color(HT.OUTLINE, 0.9)) ## dil:yok
+	draw_string(FONT, base, s, align, width, size, c) ## dil:yok
 
 
 ## Yazının görünür orta çizgisi (simgeleri hizalamak için).
@@ -590,11 +593,11 @@ func _draw_own_col(rc: Rect2, title: String, rows: Array, weapons: bool) -> void
 		if has_gain:
 			var gx := tx + (bw + 12.0 if dmg > 0.0 else 0.0)
 			if heal > 0.0:
-				var hs := "+%s can" % DamageStats.fmt(heal)
+				var hs := Loc.t("+%s can") % DamageStats.fmt(heal)
 				_txt(hs, Vector2(gx, by - 8.0), 24, HT.GOOD)
 				gx += _tw(hs, 24) + 14.0
 			if shield > 0.0:
-				_txt("+%s kalkan" % DamageStats.fmt(shield), Vector2(gx, by - 8.0), 24, TANK)
+				_txt(Loc.t("+%s kalkan") % DamageStats.fmt(shield), Vector2(gx, by - 8.0), 24, TANK)
 		ry += rh
 
 

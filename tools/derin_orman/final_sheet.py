@@ -13,17 +13,18 @@ D = os.path.join(HERE, 'out', 'final')
 FONT_B = 'C:/Windows/Fonts/arialbd.ttf'
 FONT = 'C:/Windows/Fonts/arial.ttf'
 ZONES = [
-    ('kuzey', 'KUZEY - Kadim Kara Orman', 'gri kül zemin, ölü ağaçlar, taçlı dev, zindan: Kemik Mahzeni', (150, 22), ['kuzey_mahzen', 'kuzey_dev']),
+    ## madde 407: Kuzey (Kadim Kara Orman) + kuzeybatı da kaldırıldı -> biyom öncesi harita; zindan girişleri yerinde
+    ('kuzey', 'ESKİ HARİTA (Kuzey kaldırıldı)', 'zindan girişi yerinde: Kemik Mahzeni', (150, 22), ['kuzey_mahzen', 'kuzey_dev']),
     ## madde 385: Batı/Doğu kaldırıldı, Kuzey kuzeybatıya uzadı; zindan girişleri yerinde
-    ('kuzeybati', 'KUZEYBATI - Kadim Kara Orman', 'kuzeyle aynı derinlik, zindan: Et Kuyusu', (36, 22), ['kuzeybati_kuyu', 'kuzeybati_orman']),
+    ('kuzeybati', 'ESKİ HARİTA (Kuzeybatı kaldırıldı)', 'zindan girişi yerinde: Et Kuyusu', (36, 22), ['kuzeybati_kuyu', 'kuzeybati_orman']),
     ('eski', 'ESKİ HARİTA (Batı/Doğu kaldırıldı)', 'zindan girişi yerinde: Boynuzlu Kapı', (214, 110), ['eski_bati', 'boynuzlu_kapi']),
     ('guney', 'GÜNEY - Sisli Sazlık', 'yosunlu bataklık, yaşayan yaşlı ağaç, kulübe, ateş böcekleri', (145, 205), ['guney_agac', 'guney_kulube']),
     ## madde 387: Güney batısındaki çayıra uzadı; toprak yol/açıklık + maden toprağı olduğu gibi
     ('guneybati', 'GÜNEYBATI - Sisli Sazlık', 'batı çayırı; toprak yol ve açıklık olduğu gibi', (62, 215), ['guneybati_cayir', 'guneybati_yol']),
 ]
 SHOT_TITLES = {
-    'kuzey_mahzen': 'Zindan girişi: Kemik Mahzeni', 'kuzey_dev': 'Kemik taht açıklığı ve taçlı dev',
-    'kuzeybati_kuyu': 'Zindan girişi: Et Kuyusu (Kadim Kara Orman içinde)', 'kuzeybati_orman': 'Kuzeybatı ormanı',
+    'kuzey_mahzen': 'Zindan girişi: Kemik Mahzeni (eski harita üstünde)', 'kuzey_dev': 'Eski kemik taht açıklığı - eski harita',
+    'kuzeybati_kuyu': 'Zindan girişi: Et Kuyusu (eski harita üstünde)', 'kuzeybati_orman': 'Kuzeybatı - eski harita',
     'eski_bati': 'Eski Batı - eski harita', 'boynuzlu_kapi': 'Zindan girişi: Boynuzlu Kapı (eski harita üstünde)',
     'guney_agac': 'Yaşayan yüzlü ağaç', 'guney_kulube': 'Bataklık kulübesi',
     'guneybati_cayir': 'Batı çayırı (yeni sazlık)', 'guneybati_yol': 'Çayırın toprak yolu ve açıklığı (toprak kaldı)',

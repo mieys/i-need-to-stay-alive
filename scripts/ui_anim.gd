@@ -18,6 +18,7 @@ extends Node
 ##   const UiAnim := preload("res://scripts/ui_anim.gd")  ->  UiAnim.window_in(self) / UiAnim.cascade(box) / UiAnim.skip(card)
 
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const PixelBox := preload("res://scripts/pixel_box.gd") ## kit kutuları (madde 417)
 
 const META_SKIP := &"ui_anim_skip"
 const META_HOOKED := &"_ua_hooked"
@@ -253,6 +254,14 @@ func _shine_rect(b: Button) -> Rect2:
 		var side: float = maxf(float(f.border_width_left), float(f.corner_radius_top_left) * 0.6)
 		var side_r: float = maxf(float(f.border_width_right), float(f.corner_radius_top_right) * 0.6)
 		return r.grow_individual(-side - 1.0, -f.border_width_top - 1.0, -side_r - 1.0, -f.border_width_bottom - 1.0)
+	if sb is PixelBox:
+		var pb := sb as PixelBox
+		if not pb.draw_center or pb.bg_color.a < 0.3:
+			return Rect2()
+		## piksel kenar + kabartma halkası (1 sanat px = 3 ekran px) içeride kalsın
+		var pl: float = maxf(float(pb.border_width_left) + 3.0, float(pb.corner_radius_top_left) * 0.6)
+		var pr: float = maxf(float(pb.border_width_right) + 3.0, float(pb.corner_radius_top_right) * 0.6)
+		return r.grow_individual(-pl - 1.0, -pb.border_width_top - 4.0, -pr - 1.0, -pb.border_width_bottom - 4.0)
 	if sb is StyleBoxTexture:
 		var t := sb as StyleBoxTexture
 		return r.grow_individual(-t.texture_margin_left, -t.texture_margin_top, -t.texture_margin_right, -t.texture_margin_bottom)

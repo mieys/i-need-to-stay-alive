@@ -169,7 +169,7 @@ func test_player_stops_at_the_water_and_bridge_decks_stay_open() -> void:
 ## Yaratık spawnı, ışınlanma vb. is_position_blocked_by_terrain ile bu nesnelerin üstüne düşmez; mermi/görüş sorgusu (orman) bunlardan etkilenmez.
 func test_terrain_query_includes_objects_but_forest_query_does_not() -> void:
 	_load_map()
-	for cat in ["water", "houses", "trees", "mines", "enemy_base", "deep_forest", "props"]: ## props/deep_forest: madde 364
+	for cat in ["water", "houses", "trees", "mines", "enemy_base", "props"]: ## props: madde 364 (deep_forest madde 463'de kalktı)
 		var list: Array = TerrainCollisionScript.by_category.get(cat, [])
 		assert(not list.is_empty(), "%s boş" % cat)
 		var c: Vector2i = list[0]

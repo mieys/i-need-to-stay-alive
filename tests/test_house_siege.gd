@@ -272,13 +272,54 @@ func test_intro_phases_gate_invasion() -> void:
 	intro.set_process(false)
 	intro.begin()
 	assert(GameManager.invasion_pending and intro.phase == IntroScript.Phase.PEACE, "huzur: yaratık kapısı kapalı")
-	for i in 10:
+	for i in int(ceil(IntroScript.PEACE_SECONDS)):
 		intro._process(1.0)
 	assert(intro.phase == IntroScript.Phase.COUNTDOWN and GameManager.invasion_pending, "deprem + geri sayım başladı")
-	assert(intro.countdown_left() > 25.0, "30 sn geri sayım: %s" % intro.countdown_left())
-	for i in 31:
+	assert(is_equal_approx(IntroScript.COUNTDOWN_SECONDS, 15.0), "geri sayım 15 sn (2026-11-07, 30'dan yarıya)")
+	assert(intro.countdown_left() > IntroScript.COUNTDOWN_SECONDS - 1.0, "geri sayım tam başlar: %s" % intro.countdown_left())
+	for i in int(IntroScript.COUNTDOWN_SECONDS) + 1:
 		intro._process(1.0)
 	assert(intro.phase == IntroScript.Phase.DONE and not GameManager.invasion_pending, "geri sayım bitti: saldırı")
+	_cleanup()
+
+
+## 2026-11-07: yükleme katmanı (grup "loading_overlay") ekrandayken açılış saati işlemez - ısınma onun arkasında biter.
+func test_intro_clock_waits_for_loading_overlay() -> void:
+	var p: FakePlayerScript = _track(FakePlayerScript.new())
+	p.add_to_group("player")
+	add_child(p)
+	var house: Node2D = _track(HouseInteriorScript.new())
+	add_child(house)
+	var intro: HouseIntro = house.get_intro()
+	intro.set_process(false)
+	intro.begin()
+	var cover: Node = _track(Node.new())
+	cover.add_to_group(&"loading_overlay")
+	add_child(cover)
+	for i in 20:
+		intro._process(1.0)
+	assert(intro.phase == IntroScript.Phase.PEACE and intro._t == 0.0, "katman ekrandayken huzur saati durur")
+	cover.remove_from_group(&"loading_overlay")
+	for i in int(ceil(IntroScript.PEACE_SECONDS)):
+		intro._process(1.0)
+	assert(intro.phase == IntroScript.Phase.COUNTDOWN, "katman kalkınca saat işler")
+	_cleanup()
+
+
+## 2026-11-06 (madde 418, kullanıcı: "deprem seslerini iptal et"): açılış depremi sessiz - sarsıntı/toz/bildirim kalır, ses oynatıcısı kurulmaz.
+func test_intro_quake_has_no_sound() -> void:
+	var p: FakePlayerScript = _track(FakePlayerScript.new())
+	p.add_to_group("player")
+	add_child(p)
+	var house: Node2D = _track(HouseInteriorScript.new())
+	add_child(house)
+	var intro: HouseIntro = house.get_intro()
+	intro.set_process(false)
+	intro.begin()
+	intro._set_phase(IntroScript.Phase.COUNTDOWN, 0.0)
+	assert(intro._quake_fx_done, "deprem başladı (sarsıntı + toz)")
+	for c: Node in intro.get_children():
+		assert(not (c is AudioStreamPlayer or c is AudioStreamPlayer2D), "deprem sesi yok: %s" % c.name)
 	_cleanup()
 
 

@@ -24,6 +24,7 @@ const TINT := Color(0.28, 0.36, 0.42)
 ## halinin BİRLEŞİMİ çizilir. Sağ kenar nesnenin dibinde kalır (arada çim açılmaz), sol kenar 3 px uzar (güneş yönü aynı).
 const SUN_SHIFT_X := -3.0
 const NODE_NAME := "Gölgeler"
+const ShadowsFlag := preload("res://scripts/shadows_flag.gd")
 ## Bu katmanlardan SONRA (üstte) çizilir - zemin ve su; geri kalan her şey (orman parçaları, ev, tarla, ağaçlar...) üstte.
 const AFTER_NODES := ["Yer", "Su"]
 
@@ -51,6 +52,8 @@ void fragment() {
 
 ## main.gd _ready'de Harita düğümüyle çağrılır. Doku yoksa (henüz pişirilmemiş) sessizce hiçbir şey yapmaz.
 static func attach(harita: Node) -> Sprite2D:
+	if not ShadowsFlag.map: ## madde 469: gölgeler kapalı
+		return null
 	if harita == null or not ResourceLoader.exists(TEXTURE_PATH) or harita.get_node_or_null(NODE_NAME) != null:
 		return null
 	var spr := Sprite2D.new()

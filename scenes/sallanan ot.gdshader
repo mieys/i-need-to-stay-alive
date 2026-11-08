@@ -110,6 +110,7 @@ void fragment() {
 	float boy = 13.0;
 	float egilme = 0.0;
 	float grup_faz = 0.0;
+	bool sabit = false; // SABİT GENİŞ ÇALI (2026-11-05, grass_sway.gd STATIC_WIDE_TEXTURES): A biti 128 -> hiç sallanmaz/eğilmez, renk kayması yok
 	ivec2 hucre_i = ivec2(-1);
 	if (veri_var) {
 		vec2 hucre = floor((karo_dunya - hucre_ofset) / 16.0 + 0.5) - veri_baslangic;
@@ -121,8 +122,9 @@ void fragment() {
 				kok = v.x;
 				boy = v.y;
 				grup_faz = v4.b;
+				sabit = v4.a > 127.5;
 			}
-			egilme = (texelFetch(egilme_veri, ivec2(hucre), 0).r * 255.0 - 128.0) / 16.0;
+			egilme = sabit ? 0.0 : (texelFetch(egilme_veri, ivec2(hucre), 0).r * 255.0 - 128.0) / 16.0;
 		}
 	}
 	float kok_dunya_y = karo_dunya.y + kok + 1.0;
@@ -150,7 +152,7 @@ void fragment() {
 	float h = kok + 1.0 - ac.y;
 	float k = pow(clamp(h / max(boy, 1.0), 0.0, 1.0), egri_ussu);
 	float t = TIME * salinim_hizi + faz * 6.2832 + (grup ? 0.0 : karo_dunya.x * dalga_olcegi);
-	float sway = strength * (sin(t) * 0.8 + sin(t * 2.3 + faz * 3.1) * 0.2) + egilme;
+	float sway = sabit ? 0.0 : strength * (sin(t) * 0.8 + sin(t * 2.3 + faz * 3.1) * 0.2) + egilme;
 	float kaynak = ac.x - (ayna ? -sway * k : sway * k); // içerik ekranda sağa (sway > 0) kayar
 	float kaynak_x = floor(kaynak);
 	// Doku: karonun içindeyse kendi texel'i; taşan kısım grup içi EKRAN komşusunun GERÇEK pikselinden (komsu_veri; karolar atlasta karo_hucre aralıklı).
@@ -171,7 +173,8 @@ void fragment() {
 		discard;
 	}
 	// Renk: eski shader'ın birebir aynısı.
-	if (col.a > 0.3) {
+	// Sabit çalıda renk kayması yok: köşe başına hesaplanan renk kimliği karo içinde enterpolasyonla değişip geniş çalıyı karo karo farklı tona boyuyordu.
+	if (col.a > 0.3 && !sabit) {
 		vec3 hsv = rgb2hsv(col.rgb);
 		hsv.x += (v_plant_color_id - 0.5) * 2.0 * hue_shift_amount;
 		hsv.y += (fract(v_plant_color_id * 3.7) - 0.5) * 2.0 * sat_shift_amount;

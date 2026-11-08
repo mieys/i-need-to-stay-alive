@@ -120,7 +120,7 @@ func face_point(p: Vector2) -> void:
 ## Konuşma balonu (chat_bubble.gd: ~4 sn görünür).
 func say(text: String) -> void:
 	if _bubble != null and _bubble.has_method("show_message"):
-		_bubble.show_message(text)
+		_bubble.show_message(TranslationServer.translate(text)) ## konuşma seçili dilde (madde 446)
 
 
 func current_clip() -> String:

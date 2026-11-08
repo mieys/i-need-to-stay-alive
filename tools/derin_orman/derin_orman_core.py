@@ -39,7 +39,9 @@ OUTER_REACH = 40   ## dış çerçeve kalınlığı (32/20 hücre, madde 119) + 
 ## madde 385 (kullanıcı: "ışıyan kayalıklar ve kızıl bataklığı sil"): Batı ve Doğu bölgesi KALDIRILDI - hücresi yok, maske kanalı boş kalır
 ## (kanal SIRASI aynı: shader'lar, ışıklar, duyurular ve zindan kapısı renkleri kanal numarasıyla çalışır). Zindan girişleri yerinde
 ## (place_derin_orman.py KEPT_GATES). Geri getirmek için buradan çıkar.
-REMOVED = {'bati', 'dogu'}
+## madde 407 (dünyanın tonu karışıktı: sıcak ev/çayır yanında kasvetli bölge): KUZEY "Kadim Kara Orman" + kuzeybatı uzantısı da KALDIRILDI ->
+## R kanalı boş; Kemik Mahzeni kapısı + yanındaki süsler yerinde (KEPT_GATES). Güney "Sisli Sazlık" (+ güneybatı) kalır.
+REMOVED = {'bati', 'dogu', 'kuzey', 'kuzey_bati'}
 ## maske kanalı -> o kanalı dolduran bölgeler (varsayılan: kendisi)
 MASK_PARTS = {'kuzey': ['kuzey', 'kuzey_bati'], 'guney': ['guney', 'guney_bati']}
 ## 4. alan: kutu kenarının açık arazide düz kesik görünmemesi için gürültüyle dalgalanma genliği (hücre). Dalga KENARIN DEĞERİNE bağlı

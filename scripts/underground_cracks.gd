@@ -1,5 +1,6 @@
 extends Node2D
 
+## NOT (2026-11-08): görünen çatlaklar + uzuv çıkış yıldızları KAPALI (`CRACKS_VISIBLE` false); aşağıdaki çatlak anlatımı geri açılırsa geçerli. Gümbürtü tozu da kapalı (`PULSE_DUST`); hafif deprem tabanı + kısa gümbürtü sarsıntısı duruyor.
 ## YERALTI CANAVARI: ZEMİN ÇATLAKLARI + HAFİF DEPREM (2026-10-10, kullanıcı: "yeraltı canavarı aktifken zeminin çatlaklarla dolu olması ve hafif deprem oluyormuş gibi parçalanmasını
 ## istiyorum efekt olarak"). Boss (underground_boss.gd) yaşadıkça HER peer'de yerelde çalışan, tamamen görsel bir efekt düğümü:
 ##  - ZEMİN ÇATLAKLARI: görüntüdeki her CELL px'lik hücrede (tohuma bağlı, her peer'de AYNI) ~%85 olasılıkla 1-2 çatlak karesi; her küme kendi gecikmesiyle (boss doğduktan sonra ilk
@@ -21,6 +22,12 @@ const CameraShakeScript := preload("res://scripts/camera_shake.gd")
 const MinotaurDustScript := preload("res://scripts/minotaur_dust.gd")
 const CRACK_SHEET := preload("res://assets/fx/underground_cracks/cracks.png")
 const BURST_SHEET := preload("res://assets/fx/underground_cracks/bursts.png")
+
+## 2026-11-08 (kullanıcı: "yeraltı canavarı çıktığında yerler çatlamasın, o efekti kaldır"): görünen ZEMİN ÇATLAKLARI (hücre decal'ları) + UZUV ÇIKIŞ YILDIZLARI kapalı.
+## Hafif kamera depremi tabanı duruyor (çatlak değil, kullanıcı ona dokunmadı). Geri açmak: true.
+const CRACKS_VISIBLE := false
+## 2026-11-08 (kullanıcı: "toz kalksın"): yeraltı gümbürtüsünde (`_on_pulse`) yerden kalkan toz kapalı. Hafif deprem tabanı + kısa gümbürtü sarsıntısı duruyor. Geri açmak: true.
+const PULSE_DUST := false
 
 const GROUP := &"underground_cracks"
 const CELL := 112.0 ## çatlak hücresi (dünya px)
@@ -215,6 +222,9 @@ func _sync_cells(view: Rect2i) -> void:
 			if _shown.has(cell):
 				continue
 			var list: Array = []
+			if not CRACKS_VISIBLE:
+				_shown[cell] = list ## çatlak sprite'ı yok; hücre listesi (toz geri açılırsa konum kaynağı, _on_pulse) duruyor
+				continue
 			var cl: Dictionary = _cluster(cell)
 			for d: Dictionary in cl.get("decals", []):
 				var pos: Vector2 = d["pos"]
@@ -300,7 +310,7 @@ func _quake() -> void:
 
 func _on_pulse() -> void:
 	_pulse = 1.0
-	if get_tree() == null:
+	if not PULSE_DUST or get_tree() == null:
 		return
 	var cells: Array = _shown.keys()
 	if cells.is_empty():
@@ -315,6 +325,8 @@ func _on_pulse() -> void:
 
 
 func _add_burst(pos: Vector2) -> void:
+	if not CRACKS_VISIBLE:
+		return ## uzuv çıkış yıldızı (ışınsal çatlak) kapalı
 	if _bursts.size() >= MAX_BURSTS:
 		var old: Dictionary = _bursts.pop_front()
 		var osp: Sprite2D = old.get("node")

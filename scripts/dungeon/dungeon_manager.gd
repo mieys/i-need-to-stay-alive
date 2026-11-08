@@ -1,10 +1,11 @@
 extends Node2D
 class_name DungeonManager
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
-## ZİNDAN YÖNETİCİSİ (madde 373). main.gd her peer'e "DungeonManager" adıyla ekler (RPC yolu herkeste aynı: Main/DungeonManager).
-## - GİRİŞ: derin orman bölgelerindeki zindan kapısının (DeepForestPlaces.GATES, madde 361) ağzına yaklaşan yerel oyuncu etkileşim tuşuyla iner
-##   (kararma -> zindanın "Doğuş" noktası). ÇIKIŞ: zindandaki her çıkış (merdiven oyuğu / kapak) üstüne basınca KENDİLİĞİNDEN yüzeye (kapının önü):
-##   kovalanırken tuşa gerek yok. Zindan görselleri ilk girişte yüklenir (scenes/zindan/<id>_baked.tscn), kamera zindandayken görünür.
+## ZİNDAN YÖNETİCİSİ (madde 373; madde 463'den beri YALNIZ zindan biçimli haritalarda). main.gd her peer'e "DungeonManager" adıyla ekler
+## (RPC yolu herkeste aynı: Main/DungeonManager). Madde 463 (2026-11-08, kullanıcı: "ana haritada zindanla ilgili bir şey istemiyorum, kapılar
+## dahil kaldır"): ana haritadaki üç zindan (kapıdan iniş/çıkış, gizli ön kurulum, zindan minimapi, pişmiş sahneler) SİLİNDİ; üç zindanın
+## tanımları (dungeon_defs.gd) ve sayfa klasörleri harita kipinin TEMALARI olarak duruyor.
 ## - ETKİLEŞİMLER (host yetkili, durum herkese RPC): kapanan kapı (parmaklık / diken bariyeri: GATE_CLOSED_SEC kapalı, sonra açılır, bekleme),
 ##   kaynak düğümü (toplayana 1-2 kaynak, NODE_RESPAWN_SEC sonra yeniden), sandık (bir kez: oyunun normal sandık düşüşü), tuzak (eşitlenen saatle
 ##   zamanlanan dikenler: üstündeki oyuncu kendi istemcisinde hasar alır, yaratıklar host'ta). SUNAK: kişisel kaynak harcanır, kart statı verir
@@ -16,16 +17,20 @@ const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd")
 const DungeonDataScript := preload("res://scripts/dungeon/dungeon_data.gd")
 const DungeonLightScript := preload("res://scripts/dungeon/dungeon_light.gd")
 const DungeonPropsScript := preload("res://scripts/dungeon/dungeon_props.gd")
-const DeepForestFxScript := preload("res://scripts/deep_forest_fx.gd")
-const PlacesScript := preload("res://scripts/deep_forest_places.gd")
+const DungeonFloorScript := preload("res://scripts/dungeon/dungeon_floor.gd")
 const DepthOccludersScript := preload("res://scripts/depth_occluders.gd")
+const MapProfilesScript := preload("res://scripts/map_profiles.gd")
+## HARİTA KİPİ (madde 444): zindan biçimli haritada (Kadim Derinlikler) bu yönetici haritanın KENDİ nesnelerini (kapı / kaynak / sandık /
+## sunak / tuzak / simyacı) + ışığını sürer. Kök = sahnedeki "Harita" (yükleme yok), oyuncu "zindanda" sayılmaz (in_dungeon boş: yaratık
+## doğuşu / gün-gece / minimap etkilenmez), etkileşim ve tuzaklar in_dungeon boşken haritaya bakar. Nesnenin `tema` özelliği hangi
+## zindanın kaynağı / sunak teklifleri / görsel tablosu (DungeonProps STYLE + o zindanın sayfa klasörü) olduğunu seçer.
+const MAP_THEME_DUNGEON := {"kemik": "kemik_mahzeni", "et": "et_kuyusu", "boynuz": "boynuzlu_kapi"}
+const MAP_THEME_PREFIX := {"kemik_mahzeni": "kemik_", "et_kuyusu": "et_", "boynuzlu_kapi": "boynuz_"} ## birleşik paketteki sayfa adı öneki
 const EnemyPathingScript := preload("res://scripts/enemy_pathing.gd")
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const ChestDropScene := preload("res://scenes/chest_drop.tscn")
 
-const ENTER_RADIUS := 64.0 ## kapı ağzına bu kadar yakın (px) -> "inmek için tuşa bas"
 const INTERACT_RADIUS := 30.0 ## zindan içi etkileşim (nesne dikdörtgenine uzaklık)
-const FADE_DURATION := 0.28
 const GATE_CLOSED_SEC := 9.0
 const GATE_COOLDOWN_SEC := 14.0
 const NODE_RESPAWN_SEC := 210.0
@@ -33,20 +38,19 @@ const TRAP_CYCLE := 3.6 ## sn: dikenler bu aralıkla bir kez kalkar
 const TRAP_RISE := [2.2, 2.45, 3.05, 3.3] ## evre (sn): kalkmaya başlar, tam yukarı, inmeye başlar, içeride
 const TRAP_PLAYER_DAMAGE := 0.14 ## oyuncuya: azami canın oranı (yukarıdayken bir kez)
 const TRAP_CREATURE_DAMAGE := 0.35 ## yaratığa: azami canın oranı (bossa / avcıya x0,25)
+## GAZ FIÇISI (madde 449, Lağım Ağı): E ile ateşlenir, fitilden sonra patlar (hasar host'ta yaratığa, her istemcide kendi oyuncusuna), sonra dolar
+const BARREL_FUSE_SEC := 1.4
+const BARREL_RESPAWN_SEC := 75.0
+const BARREL_RADIUS := 84.0 ## px
+const BARREL_CREATURE_DAMAGE := 0.6 ## yaratığa azami canın oranı (boss / avcı x0,2)
+const BARREL_PLAYER_DAMAGE := 0.12
+const BarrelBlastScene := preload("res://scenes/fx_korsan_explosion.tscn")
 const EMISSIVE: Dictionary = {
 	"kemik_mahzeni": ["candles.png", "torches.png", "Statue_fire.png", "scull_bas-relief.png"],
 	"et_kuyusu": ["Fire_animation.png", "Flasks_monsters.png"],
 	"boynuzlu_kapi": ["fire_animation.png", "fire_animation2.png", "Shinies_animation.png", "Wisps.png", "Totem_animation.png", "Walls_shinies.png", "scull.png"],
 }
 const KanShader: Shader = preload("res://shaders/zindan_kan.gdshader")
-## Pişmiş sahneler main.gd'nin preload zinciriyle YÜKLEME EKRANINDA okunur (girişte 70-90 ms disk/ayrıştırma takılması vardı, madde 376).
-const BAKED_SCENES: Dictionary = {
-	"kemik_mahzeni": preload("res://scenes/zindan/kemik_mahzeni_baked.tscn"),
-	"et_kuyusu": preload("res://scenes/zindan/et_kuyusu_baked.tscn"),
-	"boynuzlu_kapi": preload("res://scenes/zindan/boynuzlu_kapi_baked.tscn"),
-}
-const WARM_START := 1.5 ## sn: oyun başladıktan sonra gizli kurulum başlar (açılış sahnesi sakin anı)
-const WARM_GAP := 0.7 ## sn: iki zindan kurulumu arası (her biri ~30 ms + ilk iç güncelleme)
 ## Sunak teklifleri (kaynak -> kart): sunak dikdörtgeninin sol yarısı A, sağ yarısı B. Her alımda bedel +2.
 const ALTAR_OFFERS: Dictionary = {
 	"kemik_mahzeni": [
@@ -67,25 +71,21 @@ var _player: Node2D = null
 var _roots: Dictionary = {} ## id -> Node2D (pişmiş sahne örneği)
 var _lights: Dictionary = {} ## id -> DungeonLight
 var _props: Dictionary = {} ## id -> DungeonProps
-var _shown: String = "" ## görünür zindan (kamera)
 var _prompt: Label = null
-var _fade_layer: CanvasLayer = null
-var _fade: ColorRect = null
-var _transitioning: bool = false
-var _lore_shown: Dictionary = {}
 var _altar_buys: Dictionary = {} ## "<id>:<teklif>" -> alım sayısı (kişisel)
-var _wind_layer: CanvasLayer = null
-var _ambient_player: AudioStreamPlayer = null
 ## host durumu (herkeste ayna)
 var gate_until: Dictionary = {} ## kapı anahtarı -> kapalı kalacağı game_time (yoksa açık)
 var gate_ready_at: Dictionary = {} ## kapı anahtarı -> yeniden kapatılabileceği game_time
 var node_until: Dictionary = {} ## kaynak anahtarı -> yeniden doğacağı game_time (yoksa hazır)
 var chest_opened: Dictionary = {} ## sandık anahtarı -> true
+var barrel_fuse: Dictionary = {} ## gaz fıçısı anahtarı -> patlayacağı game_time (fitil yanıyor)
+var barrel_until: Dictionary = {} ## gaz fıçısı anahtarı -> yeniden dolacağı game_time (patladı)
 var _trap_hit: Dictionary = {} ## tuzak anahtarı -> son vurduğu döngü (oyuncuya döngü başına bir kez)
 var _trap_creature_cycle: Dictionary = {}
 var _sync_requested: bool = false
 var _res_label: Label = null
-var _warm_clock: float = 0.0
+var _map_id: String = "" ## harita kipi: haritanın profil kimliği (boşsa normal zindan yöneticisi)
+var _map_props: Dictionary = {} ## harita kipi: nesne anahtarı -> o temanın DungeonProps örneği
 
 
 func _ready() -> void:
@@ -93,6 +93,7 @@ func _ready() -> void:
 	add_to_group(&"dungeon_manager")
 	DungeonWorldScript.ensure()
 	_create_prompt()
+	_setup_map()
 
 
 func _process(delta: float) -> void:
@@ -101,159 +102,29 @@ func _process(delta: float) -> void:
 	if not _sync_requested and NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		_sync_requested = true
 		_rpc_request_sync.rpc_id(1)
-	_warm_tick(delta)
-	_update_visible()
 	if NetworkManager.is_host or not NetworkManager.is_multiplayer_active:
 		_host_tick()
 	_tick_traps()
 	if not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player") as Node2D
-	if _player == null or _transitioning:
+	if _player == null:
 		_prompt.visible = false
 		return
-	_tick_minimap(delta)
 	_local_interactions()
 
 
-# ================================================================== görünürlük (kamera hangi zindandaysa o çizilir, CanvasModulate'ı dahil)
-func _update_visible() -> void:
-	var cam: Camera2D = get_viewport().get_camera_2d()
-	var want: String = ""
-	if cam != null:
-		want = DungeonWorldScript.dungeon_at(cam.get_screen_center_position())
-		if want == "":
-			want = DungeonWorldScript.dungeon_at(cam.global_position)
-	if want != "" and not _roots.has(want):
-		_load_dungeon(want)
-	if want == _shown:
-		return
-	for id: String in _roots.keys():
-		_set_root_shown(id, id == want)
-	_shown = want
-	_set_outdoor_atmosphere(want == "")
-
-
-func _load_dungeon(id: String) -> void:
-	var e: Dictionary = DungeonWorldScript.entry(id)
-	if e.is_empty():
-		return
-	var path: String = DungeonDefsScript.SCENE_PATH % id
-	if not ResourceLoader.exists(path):
-		push_warning("Zindan sahnesi yok: " + path)
-		return
-	var t_prof: int = Time.get_ticks_usec()
-	var scene: PackedScene = BAKED_SCENES.get(id) if BAKED_SCENES.has(id) else load(path)
-	var t_load: int = Time.get_ticks_usec()
-	var root := scene.instantiate() as Node2D
-	var t_inst: int = Time.get_ticks_usec()
-	root.position = (e["rect"] as Rect2).position
-	root.visible = false
-	add_child(root)
-	_roots[id] = root
-	## derinlik: eşya katmanları (lahit, heykel, sütun...) arkasındaki karakteri örter
-	DepthOccludersScript.new().setup_interior(root, ["Eşya", "Eşya alt"])
-	var t_depth: int = Time.get_ticks_usec()
-	var kan := root.get_node_or_null("Kan") as TileMapLayer
-	if kan != null:
-		var mat := ShaderMaterial.new()
-		mat.shader = KanShader
-		kan.material = mat
-	var props := DungeonPropsScript.new()
-	props.setup(id, e["data"])
-	root.add_child(props)
-	_props[id] = props
-	var light := DungeonLightScript.new()
-	root.add_child(light)
-	light.setup(root, e["def"], e["data"], e["rect"], EMISSIVE.get(id, []))
-	props.light = light
-	for o: Dictionary in (e["data"] as Resource).objects:
-		if str(o.get("type", "")) == "kaynak":
-			var res: String = str(e["def"].get("resource", ""))
-			var col: Color = DungeonDefsScript.RESOURCES.get(res, {}).get("color", Color.WHITE)
-			var r: Rect2 = o["rect"]
-			light.add_keyed_light(str(o.get("node_key", "")), r.position + Vector2(r.size.x * 0.5, r.size.y * 0.35), 84.0, col, 0.95)
-	_apply_all_state(id)
-	_set_root_shown(id, id == _shown)
-	if OS.get_environment("DUNGEON_PROF") == "1":
-		var t_end: int = Time.get_ticks_usec()
-		print("DUNGEON_PROF %s load=%.1f inst=%.1f depth=%.1f rest=%.1f ms" % [id, (t_load - t_prof) / 1000.0, (t_inst - t_load) / 1000.0,
-				(t_depth - t_inst) / 1000.0, (t_end - t_depth) / 1000.0])
-
-
-## Oyunun ilk sakin saniyelerinde (açılış sahnesi) zindanları GİZLİ kurar: girişte yalnız görünürlük değişir (madde 376).
-func _warm_tick(delta: float) -> void:
-	if _roots.size() >= BAKED_SCENES.size() or _transitioning:
-		return
-	_warm_clock += delta
-	if _warm_clock < WARM_START + WARM_GAP * _roots.size():
-		return
-	for id: String in BAKED_SCENES.keys():
-		if not _roots.has(id) and not DungeonWorldScript.entry(id).is_empty():
-			_load_dungeon(id)
-			return
-
-
-## Gizli zindan çizilmez ve işlemez (ışık ayıklama, kapı/tuzak görselleri durur).
-func _set_root_shown(id: String, on: bool) -> void:
-	var root: Node2D = _roots.get(id)
-	if root == null:
-		return
-	root.visible = on
-	root.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
-
-
-func _apply_all_state(id: String) -> void:
-	var props: Node = _props.get(id)
-	if props == null:
-		return
-	for k: String in gate_until.keys():
-		if k.begins_with(id + ":"):
-			props.set_gate_closed(k, true)
-	for k: String in node_until.keys():
-		if k.begins_with(id + ":"):
-			props.set_node_available(k, false)
-	for k: String in chest_opened.keys():
-		if k.begins_with(id + ":"):
-			props.set_chest_open(k, true)
-
-
-## Ev içiyle aynı: dış rüzgar katmanı + rüzgar ortam sesi zindanda kapalı (gün-gece/bulut/yağmur kendi betiklerinde is_underground_now).
-func _set_outdoor_atmosphere(enabled: bool) -> void:
-	var root: Node = get_tree().current_scene
-	if root == null:
-		return
-	if _wind_layer == null or not is_instance_valid(_wind_layer):
-		var map_node: Node = root.get_node_or_null("Harita")
-		if map_node:
-			_wind_layer = map_node.get_node_or_null("CanvasLayer") as CanvasLayer
-	if _ambient_player == null or not is_instance_valid(_ambient_player):
-		_ambient_player = root.get_node_or_null("WindBreezeAmbient") as AudioStreamPlayer
-	if _wind_layer:
-		_wind_layer.visible = enabled
-	if _ambient_player:
-		_ambient_player.stream_paused = not enabled
-
-
-# ================================================================== yerel oyuncu: istem + giriş/çıkış + etkileşim
+# ================================================================== yerel oyuncu: istem + etkileşim
 func _local_interactions() -> void:
 	var alive: bool = _player.get("is_dead") != true
 	var pressed: bool = Input.is_action_just_pressed("interact") and not bool(_player.get("is_chat_typing")) \
 			and not GameManager.is_skill_input_blocked() if GameManager.has_method("is_skill_input_blocked") else \
 			Input.is_action_just_pressed("interact") and not bool(_player.get("is_chat_typing"))
 	var id: String = str(_player.get("in_dungeon"))
-	var feet: Vector2 = _player.global_position
-	if id == "":
-		## dışarıda: kapı ağzı
-		var gi: int = _nearest_gate(feet)
-		if gi >= 0 and alive:
-			var d: Dictionary = DungeonDefsScript.DUNGEONS[gi]
-			_show_prompt("%s'na inmek için %s" % [d["title"], _key()] if not str(d["title"]).ends_with("Kapı") else "%s'dan girmek için %s" % [d["title"], _key()])
-			if pressed:
-				enter(str(d["id"]))
-			return
-		_prompt.visible = false
-		return
-	if not alive:
+	if id == "" and _map_id != "":
+		id = _map_id ## harita kipi: haritanın kendi nesneleri (dışarı / içeri yok)
+	## nesneye uzaklık AYAKTAN (hareketle aynı nokta, dungeon_world.gd AYAK KURALI)
+	var feet: Vector2 = _player.global_position + Vector2(0.0, DungeonWorldScript.FEET_SHIFT)
+	if id == "" or not alive:
 		_prompt.visible = false
 		return
 	var e: Dictionary = DungeonWorldScript.entry(id)
@@ -262,16 +133,11 @@ func _local_interactions() -> void:
 		return
 	var data: Resource = e["data"]
 	var local: Vector2 = feet - (e["rect"] as Rect2).position
-	## çıkış: üstüne basınca
-	for o: Dictionary in data.objects:
-		if str(o.get("type", "")) == "cikis" and (o["rect"] as Rect2).grow(2.0).has_point(local):
-			exit_dungeon()
-			return
 	var best: Dictionary = {}
 	var best_d: float = INTERACT_RADIUS
 	for o: Dictionary in data.objects:
 		var t: String = str(o.get("type", ""))
-		if not ["kapi", "kaynak", "sandik", "sunak"].has(t):
+		if not ["kapi", "kaynak", "sandik", "sunak", "kol", "fici"].has(t):
 			continue
 		var r: Rect2 = o["rect"]
 		var d2: float = _rect_dist(r, local)
@@ -284,22 +150,24 @@ func _local_interactions() -> void:
 	match str(best["type"]):
 		"kapi":
 			var key: String = str(best.get("gate_key", ""))
-			if gate_until.has(key):
-				_show_prompt("%s indi" % best["name"], false)
+			if str((best.get("props", {}) as Dictionary).get("grup", "")) != "":
+				_show_prompt(Loc.t("%s kolla iner") % best["name"], false) ## madde 449: gruplu parmaklık yalnız kolla
+			elif gate_until.has(key):
+				_show_prompt(Loc.t("%s indi") % best["name"], false)
 			elif float(gate_ready_at.get(key, 0.0)) > GameManager.game_time:
-				_show_prompt("%s hazırlanıyor (%d sn)" % [best["name"], int(ceil(float(gate_ready_at[key]) - GameManager.game_time))], false)
+				_show_prompt(Loc.t("%s hazırlanıyor (%d sn)") % [best["name"], int(ceil(float(gate_ready_at[key]) - GameManager.game_time))], false)
 			else:
-				_show_prompt("%s indirmek için %s" % [_accusative(str(best["name"])), _key()])
+				_show_prompt(Loc.t("%s indirmek için %s") % [_accusative(str(best["name"])), _key()])
 				if pressed:
 					request_gate(key)
 		"kaynak":
 			var key2: String = str(best.get("node_key", ""))
-			var res: String = str(e["def"].get("resource", ""))
+			var res: String = _resource_of(id, best)
 			var rname: String = str(DungeonDefsScript.RESOURCES.get(res, {}).get("name", res))
 			if node_until.has(key2):
-				_show_prompt("Tükendi - %s yeniden birikiyor" % rname, false)
+				_show_prompt(Loc.t("Tükendi - %s yeniden birikiyor") % rname, false)
 			else:
-				_show_prompt("%s toplamak için %s" % [rname, _key()])
+				_show_prompt(Loc.t("%s toplamak için %s") % [rname, _key()])
 				if pressed:
 					request_harvest(key2)
 		"sandik":
@@ -307,27 +175,54 @@ func _local_interactions() -> void:
 			if chest_opened.has(key3):
 				_show_prompt("Boş sandık", false)
 			else:
-				_show_prompt("Sandığı açmak için %s" % _key())
+				_show_prompt(Loc.t("Sandığı açmak için %s") % _key())
 				if pressed:
 					request_chest(key3)
 		"sunak":
 			_altar_prompt(id, e, best, local, pressed)
+		"fici":
+			var bk: String = str(best.get("barrel_key", ""))
+			if barrel_until.has(bk):
+				_show_prompt(Loc.t("Gaz Fıçısı yeniden doluyor (%d sn)") % int(ceil(float(barrel_until[bk]) - GameManager.game_time)), false)
+			elif barrel_fuse.has(bk):
+				_show_prompt(Loc.t("Fitil yanıyor!"), false)
+			else:
+				_show_prompt(Loc.t("Gaz Fıçısını ateşlemek için %s") % _key())
+				if pressed:
+					request_barrel(bk)
+		"kol":
+			var lk: String = str(best.get("lever_key", ""))
+			var gks: Array = _lever_gates(lk)
+			var down: bool = false
+			var wait: float = 0.0
+			for gk: String in gks:
+				down = down or gate_until.has(gk)
+				wait = maxf(wait, float(gate_ready_at.get(gk, 0.0)) - GameManager.game_time)
+			if down:
+				_show_prompt(Loc.t("Köprü parmaklıkları indi"), false)
+			elif wait > 0.0:
+				_show_prompt(Loc.t("%s hazırlanıyor (%d sn)") % [best["name"], int(ceil(wait))], false)
+			elif not gks.is_empty():
+				_show_prompt(Loc.t("%s çekmek için %s") % [_accusative(str(best["name"])), _key()])
+				if pressed:
+					request_lever(lk)
 
 
-func _altar_prompt(id: String, e: Dictionary, o: Dictionary, local: Vector2, pressed: bool) -> void:
+func _altar_prompt(map_or_id: String, _e: Dictionary, o: Dictionary, local: Vector2, pressed: bool) -> void:
+	var id: String = _offer_id(map_or_id, o) ## harita kipinde sunağın teması hangi zindansa onun teklifleri / kaynağı
 	var offers: Array = ALTAR_OFFERS.get(id, [])
 	if offers.is_empty():
 		return
 	var r: Rect2 = o["rect"]
 	var idx: int = 0 if local.x < r.position.x + r.size.x * 0.5 or offers.size() < 2 else 1
 	var off: Dictionary = offers[idx]
-	var res: String = str(e["def"].get("resource", ""))
+	var res: String = str(DungeonDefsScript.by_id(id).get("resource", ""))
 	var rname: String = str(DungeonDefsScript.RESOURCES.get(res, {}).get("name", res))
 	var cost: int = altar_cost(id, idx)
 	var have: int = GameManager.get_dungeon_resource(res)
 	var other: String = ""
 	if offers.size() > 1:
-		other = "  (%s: diğer yanda)" % (offers[1 - idx] as Dictionary)["name"]
+		other = Loc.t("  (%s: diğer yanda)") % (offers[1 - idx] as Dictionary)["name"]
 	_show_prompt("%s - %s +  [%d/%d %s]  %s%s" % [o["name"], off["name"], have, cost, rname, _key() if have >= cost else "", other], have >= cost)
 	if pressed and have >= cost:
 		buy_altar(id, idx)
@@ -369,27 +264,12 @@ func _rect_dist(r: Rect2, p: Vector2) -> float:
 
 
 const ACCUSATIVE: Dictionary = {"Parmaklık": "Parmaklığı", "Diken Bariyeri": "Diken Bariyerini", "Kafes Kapı": "Kafes Kapıyı",
-		"Tahta Barikat": "Tahta Barikatı", "Demir Kapı": "Demir Kapıyı", "Kristal Duvar": "Kristal Duvarı"}
+		"Tahta Barikat": "Tahta Barikatı", "Demir Kapı": "Demir Kapıyı", "Kristal Duvar": "Kristal Duvarı", "Demir Parmaklık": "Demir Parmaklığı",
+		"Köprü Kolu": "Köprü Kolunu"}
 
 
 func _accusative(name_s: String) -> String:
 	return str(ACCUSATIVE.get(name_s, name_s))
-
-
-func _nearest_gate(p: Vector2) -> int:
-	var best: int = -1
-	var best_d: float = ENTER_RADIUS
-	for i in range(DungeonDefsScript.DUNGEONS.size()):
-		var gi: int = int(DungeonDefsScript.DUNGEONS[i]["gate"])
-		if gi < 0 or gi >= PlacesScript.GATES.size():
-			continue
-		if DungeonWorldScript.entry(str(DungeonDefsScript.DUNGEONS[i]["id"])).is_empty():
-			continue
-		var d: float = p.distance_to(DeepForestFxScript.gate_mouth(gi))
-		if d < best_d:
-			best_d = d
-			best = i
-	return best
 
 
 func _key() -> String:
@@ -443,104 +323,6 @@ func _create_prompt() -> void:
 
 
 # ================================================================== giriş / çıkış
-func enter(id: String) -> void:
-	if _transitioning:
-		return
-	_transitioning = true
-	await _fade_transition(func() -> void: _do_enter(id))
-	_transitioning = false
-
-
-func exit_dungeon() -> void:
-	if _transitioning:
-		return
-	_transitioning = true
-	await _fade_transition(_do_exit)
-	_transitioning = false
-
-
-## Işınlama çekirdeği (fade yok; testler doğrudan çağırır).
-func _do_enter(id: String) -> void:
-	var e: Dictionary = DungeonWorldScript.entry(id)
-	if e.is_empty() or _player == null:
-		return
-	if not _roots.has(id):
-		_load_dungeon(id)
-	var spawn: Vector2 = spawn_point(id)
-	_player.set("in_dungeon", id)
-	_player.global_position = spawn
-	if _player.has_method("reset_physics_interpolation"):
-		_player.reset_physics_interpolation()
-	_update_visible()
-	if not _lore_shown.has(id):
-		_lore_shown[id] = true
-		_banner("tier", str(e["def"]["title"]).to_upper(), str(e["def"].get("lore", "")))
-	get_tree().call_group(&"guard_camps", "notify_dungeon_entered", id)
-
-
-func _do_exit() -> void:
-	if _player == null:
-		return
-	var id: String = str(_player.get("in_dungeon"))
-	_player.set("in_dungeon", "")
-	_player.global_position = surface_point(id)
-	if _player.has_method("reset_physics_interpolation"):
-		_player.reset_physics_interpolation()
-	_update_visible()
-
-
-## Zindanın doğuş noktası (TMX "dogus" nesnesinin ortası).
-func spawn_point(id: String) -> Vector2:
-	var e: Dictionary = DungeonWorldScript.entry(id)
-	if e.is_empty():
-		return Vector2.ZERO
-	for o: Dictionary in (e["data"] as Resource).objects:
-		if str(o.get("type", "")) == "dogus":
-			return (e["rect"] as Rect2).position + (o["rect"] as Rect2).get_center()
-	return (e["rect"] as Rect2).get_center()
-
-
-## Yüzeye çıkış: kapının ağzının güneyinde engelsiz ilk nokta.
-func surface_point(id: String) -> Vector2:
-	var def: Dictionary = DungeonDefsScript.by_id(id)
-	var gi: int = int(def.get("gate", -1))
-	if gi < 0 or gi >= PlacesScript.GATES.size():
-		return GameManager.get_map_world_rect().get_center()
-	var mouth: Vector2 = DeepForestFxScript.gate_mouth(gi)
-	for dist: float in [40.0, 56.0, 72.0, 90.0, 110.0]:
-		for ang: float in [PI * 0.5, PI * 0.35, PI * 0.65, 0.0, PI, PI * 0.2, PI * 0.8]:
-			var p: Vector2 = mouth + Vector2.from_angle(ang) * dist
-			if not GameManager.is_position_blocked_by_walls(p) and not GameManager.is_position_blocked_by_walls(p + Vector2(0, 10)):
-				return p
-	return mouth + Vector2(0, 48)
-
-
-func _fade_transition(apply_change: Callable) -> void:
-	if _fade_layer == null or not is_instance_valid(_fade_layer):
-		_fade_layer = CanvasLayer.new()
-		_fade_layer.layer = 95
-		_fade_layer.process_mode = Node.PROCESS_MODE_ALWAYS
-		add_child(_fade_layer)
-		_fade = ColorRect.new()
-		_fade.color = Color(0, 0, 0, 0)
-		_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_fade.set_anchors_preset(Control.PRESET_FULL_RECT)
-		_fade_layer.add_child(_fade)
-	var tw := create_tween()
-	tw.tween_property(_fade, "color:a", 1.0, FADE_DURATION)
-	await tw.finished
-	apply_change.call()
-	var tw2 := create_tween()
-	tw2.tween_property(_fade, "color:a", 0.0, FADE_DURATION)
-	await tw2.finished
-
-
-func _banner(kind: String, ribbon: String, body: String) -> void:
-	var main: Node = get_tree().current_scene
-	if main != null and main.has_method("_show_banner_notice"):
-		main.call("_show_banner_notice", kind, ribbon, body, 4.5)
-
-
 func _notice(kind: String, title: String, body: String) -> void:
 	var main: Node = get_tree().current_scene
 	if main != null and main.has_method("_show_notice"):
@@ -553,6 +335,138 @@ func request_gate(key: String) -> void:
 		_rpc_req_gate.rpc_id(1, key)
 	else:
 		host_close_gate(key)
+
+
+## KOL (madde 449, Taşkın Hisar): aynı "grup"taki tüm parmaklıkları birlikte indirir (her biri normal kapı gibi: süre, bekleme, RPC).
+func request_lever(key: String) -> void:
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		_rpc_req_lever.rpc_id(1, key)
+	else:
+		host_pull_lever(key)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_req_lever(key: String) -> void:
+	if NetworkManager.is_host:
+		host_pull_lever(key)
+
+
+func host_pull_lever(key: String) -> bool:
+	var any: bool = false
+	for gk: String in _lever_gates(key):
+		if host_close_gate(gk):
+			any = true
+	return any
+
+
+## Kolun grubundaki parmaklıkların anahtarları (nesnelerin "grup" özelliği aynı).
+func _lever_gates(lever_key: String) -> Array:
+	var out: Array = []
+	var lo: Dictionary = _object_by_key("lever_key", lever_key)
+	var grp: String = str((lo.get("props", {}) as Dictionary).get("grup", ""))
+	var e: Dictionary = DungeonWorldScript.entry(lever_key.get_slice(":", 0))
+	if grp == "" or e.is_empty():
+		return out
+	for o: Dictionary in (e["data"] as Resource).objects:
+		if str(o.get("type", "")) == "kapi" and str((o.get("props", {}) as Dictionary).get("grup", "")) == grp:
+			out.append(str(o.get("gate_key", "")))
+	return out
+
+
+## Kapı durumu değişince aynı gruptaki kolların görseli (inik parmaklık varsa kol çekili) - her eşte, ek RPC yok.
+func _refresh_levers(gate_key: String) -> void:
+	var go: Dictionary = _object_by_key("gate_key", gate_key)
+	var grp: String = str((go.get("props", {}) as Dictionary).get("grup", ""))
+	var e: Dictionary = DungeonWorldScript.entry(gate_key.get_slice(":", 0))
+	if grp == "" or e.is_empty():
+		return
+	for o: Dictionary in (e["data"] as Resource).objects:
+		if str(o.get("type", "")) != "kol" or str((o.get("props", {}) as Dictionary).get("grup", "")) != grp:
+			continue
+		var lk: String = str(o.get("lever_key", ""))
+		var pulled: bool = false
+		for gk: String in _lever_gates(lk):
+			pulled = pulled or gate_until.has(gk)
+		var lp: Node = _props_for(lk)
+		if lp != null and lp.has_method("set_lever"):
+			lp.set_lever(lk, pulled)
+
+
+func request_barrel(key: String) -> void:
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		_rpc_req_barrel.rpc_id(1, key)
+	else:
+		host_ignite_barrel(key)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_req_barrel(key: String) -> void:
+	if NetworkManager.is_host:
+		host_ignite_barrel(key)
+
+
+func host_ignite_barrel(key: String) -> bool:
+	if barrel_until.has(key) or barrel_fuse.has(key) or _object_by_key("barrel_key", key).is_empty():
+		return false
+	_apply_barrel(key, 1, GameManager.game_time + BARREL_FUSE_SEC)
+	if NetworkManager.is_multiplayer_active:
+		_rpc_barrel.rpc(key, 1, BARREL_FUSE_SEC)
+	return true
+
+
+## host: patlamanın yaratık hasarı (oyuncu hasarını her eş kendi oyuncusuna _apply_barrel'da verir)
+func _host_barrel_blast(key: String) -> void:
+	var pos: Vector2 = _barrel_center(key)
+	for c: Variant in EnemyQueryScript.candidates(get_tree(), pos, BARREL_RADIUS):
+		var en := c as Node2D
+		if en == null or not is_instance_valid(en) or en.get("is_dead") == true or en.global_position.distance_to(pos) > BARREL_RADIUS:
+			continue
+		var mult: float = 0.2 if (en.is_in_group("boss") or en.has_meta("dungeon_hunter")) else 1.0
+		if en.has_method("take_damage_host"):
+			en.take_damage_host(float(en.get("max_health")) * BARREL_CREATURE_DAMAGE * mult, false, 1.0, 0)
+
+
+func _barrel_center(key: String) -> Vector2:
+	var o: Dictionary = _object_by_key("barrel_key", key)
+	var e: Dictionary = DungeonWorldScript.entry(key.get_slice(":", 0))
+	if o.is_empty() or e.is_empty():
+		return Vector2.ZERO
+	return (e["rect"] as Rect2).position + (o["rect"] as Rect2).get_center()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_barrel(key: String, state: int, seconds: float) -> void:
+	if not NetworkManager._from_host():
+		return
+	_apply_barrel(key, state, GameManager.game_time + seconds)
+
+
+## state: 0 hazır, 1 fitil yanıyor (until = patlama), 2 patladı (until = yeniden dolma). Görsel + patlama efekti + yerel oyuncu hasarı.
+func _apply_barrel(key: String, state: int, until: float, fx: bool = true) -> void:
+	match state:
+		0:
+			barrel_fuse.erase(key)
+			barrel_until.erase(key)
+		1:
+			barrel_fuse[key] = until
+		2:
+			barrel_fuse.erase(key)
+			barrel_until[key] = until
+			if fx:
+				var pos: Vector2 = _barrel_center(key)
+				var ex: Node2D = BarrelBlastScene.instantiate() as Node2D
+				var sc: Node = get_tree().current_scene
+				if sc != null:
+					sc.add_child(ex)
+					ex.global_position = pos
+					if ex.has_method("setup"):
+						ex.setup(120.0, Color(0.72, 1.0, 0.36))
+				if _player != null and is_instance_valid(_player) and _player.get("is_dead") != true \
+						and _player.global_position.distance_to(pos) <= BARREL_RADIUS and _player.has_method("take_damage"):
+					_player.take_damage(float(_player.get("max_health")) * BARREL_PLAYER_DAMAGE)
+	var props: Node = _props_for(key)
+	if props != null and props.has_method("set_barrel"):
+		props.set_barrel(key, state)
 
 
 func request_harvest(key: String) -> void:
@@ -598,11 +512,14 @@ func _rpc_request_sync() -> void:
 	var nodes: Dictionary = {}
 	for k: String in node_until.keys():
 		nodes[k] = float(node_until[k]) - now
-	_rpc_full_state.rpc_id(multiplayer.get_remote_sender_id(), gates, nodes, chest_opened.keys())
+	var barrels: Dictionary = {}
+	for k: String in barrel_until.keys():
+		barrels[k] = float(barrel_until[k]) - now
+	_rpc_full_state.rpc_id(multiplayer.get_remote_sender_id(), gates, nodes, chest_opened.keys(), barrels)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_full_state(gates: Dictionary, nodes: Dictionary, chests: Array) -> void:
+func _rpc_full_state(gates: Dictionary, nodes: Dictionary, chests: Array, barrels: Dictionary = {}) -> void:
 	if not NetworkManager._from_host():
 		return
 	var now: float = GameManager.game_time
@@ -612,6 +529,8 @@ func _rpc_full_state(gates: Dictionary, nodes: Dictionary, chests: Array) -> voi
 		_apply_node(k, false, now + float(nodes[k]))
 	for k: Variant in chests:
 		_apply_chest(str(k))
+	for k: String in barrels.keys():
+		_apply_barrel(k, 2, now + float(barrels[k]), false)
 
 
 # ================================================================== host mantığı
@@ -633,8 +552,7 @@ func host_harvest(key: String, peer_id: int) -> bool:
 	var until: float = GameManager.game_time + NODE_RESPAWN_SEC
 	_apply_node(key, false, until)
 	var amount: int = 1 + (1 if randf() < 0.5 else 0)
-	var id: String = key.get_slice(":", 0)
-	var res: String = str(DungeonDefsScript.by_id(id).get("resource", ""))
+	var res: String = _resource_of(key.get_slice(":", 0), _object_by_key("node_key", key))
 	if NetworkManager.is_multiplayer_active:
 		_rpc_node.rpc(key, false, NODE_RESPAWN_SEC)
 		if peer_id != multiplayer.get_unique_id():
@@ -682,6 +600,17 @@ func _host_tick() -> void:
 			_apply_node(k, true, 0.0)
 			if NetworkManager.is_multiplayer_active:
 				_rpc_node.rpc(k, true, 0.0)
+	for k: String in barrel_fuse.keys():
+		if now >= float(barrel_fuse[k]):
+			_host_barrel_blast(k)
+			_apply_barrel(k, 2, now + BARREL_RESPAWN_SEC)
+			if NetworkManager.is_multiplayer_active:
+				_rpc_barrel.rpc(k, 2, BARREL_RESPAWN_SEC)
+	for k: String in barrel_until.keys():
+		if now >= float(barrel_until[k]):
+			_apply_barrel(k, 0, 0.0)
+			if NetworkManager.is_multiplayer_active:
+				_rpc_barrel.rpc(k, 0, 0.0)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -715,7 +644,7 @@ func _rpc_grant(res: String, amount: int) -> void:
 func _grant(res: String, amount: int) -> void:
 	GameManager.add_dungeon_resource(res, amount)
 	var info: Dictionary = DungeonDefsScript.RESOURCES.get(res, {})
-	_notice("info", "+%d %s" % [amount, info.get("name", res)], "Toplam %d" % GameManager.get_dungeon_resource(res))
+	_notice("info", "+%d %s" % [amount, info.get("name", res)], Loc.t("Toplam %d") % GameManager.get_dungeon_resource(res))
 
 
 ## Durum uygulama (herkes): yol ızgarası + görsel.
@@ -731,9 +660,10 @@ func _apply_gate(key: String, closed: bool, until: float) -> void:
 		var bridge: Node = get_tree().current_scene.get_node_or_null("EnemyWorldBridge") if get_tree().current_scene != null else null
 		if bridge != null and bridge.has_method("reload_grid"):
 			bridge.reload_grid()
-	var props: Node = _props.get(key.get_slice(":", 0))
+	var props: Node = _props_for(key)
 	if props != null:
 		props.set_gate_closed(key, closed)
+	_refresh_levers(key)
 
 
 func _apply_node(key: String, available: bool, until: float) -> void:
@@ -741,14 +671,14 @@ func _apply_node(key: String, available: bool, until: float) -> void:
 		node_until.erase(key)
 	else:
 		node_until[key] = until
-	var props: Node = _props.get(key.get_slice(":", 0))
+	var props: Node = _props_for(key)
 	if props != null:
 		props.set_node_available(key, available)
 
 
 func _apply_chest(key: String) -> void:
 	chest_opened[key] = true
-	var props: Node = _props.get(key.get_slice(":", 0))
+	var props: Node = _props_for(key)
 	if props != null:
 		props.set_chest_open(key)
 
@@ -765,6 +695,90 @@ func _object_by_key(field: String, key: String) -> Dictionary:
 		if str(o.get(field, "")) == key:
 			return o
 	return {}
+
+
+# ================================================================== harita kipi (madde 444)
+## Zindan biçimli harita seçiliyse kök = sahnedeki Harita; derinlik, kan shader'ı, ışık (tek ortam rengi + `isik` nesneleri + oyuncu feneri),
+## tema başına bir DungeonProps (o zindanın görsel tablosu ve sayfa klasörü, yalnız o temanın nesneleri).
+func _setup_map() -> void:
+	if str(MapProfilesScript.current().get("tur", "")) != MapProfilesScript.KIND_ZINDAN:
+		return
+	var e: Dictionary = DungeonWorldScript.map_entry()
+	var root := get_parent().get_node_or_null("Harita") as Node2D if get_parent() != null else null
+	if e.is_empty() or root == null:
+		return
+	_map_id = str(e["id"])
+	_roots[_map_id] = root
+	## örnekten kurulan haritalar (madde 446) birden çok derinlikli "Eşya*" ve "Kan*" katmanı taşır (örneğin çakışan eşya katmanları)
+	var depth_layers: Array = ["Eşya", "Eşya alt"]
+	var kan_layers: Array = []
+	for c: Node in root.get_children():
+		var nm: String = String(c.name)
+		if c is TileMapLayer and nm.begins_with("Eşya ") and nm != "Eşya alt" and nm != "Eşya üst":
+			depth_layers.append(nm)
+		elif c is TileMapLayer and (nm == "Kan" or nm.begins_with("Kan ")):
+			kan_layers.append(c)
+	DepthOccludersScript.new().setup_interior(root, depth_layers)
+	for kan: TileMapLayer in kan_layers:
+		var mat := ShaderMaterial.new()
+		mat.shader = KanShader
+		kan.material = mat
+	## zemin shader'ı (madde 449: döşeme taşı derzleri + duvar dibi gölgesi), profil bayrağıyla
+	if MapProfilesScript.feature("zemin_tasi"):
+		var floor_fx := DungeonFloorScript.new()
+		root.add_child(floor_fx)
+		floor_fx.setup(root, MapProfilesScript.data())
+	var emissive: Array = []
+	for did: String in EMISSIVE:
+		for f: String in EMISSIVE[did]:
+			emissive.append(str(MAP_THEME_PREFIX.get(did, "")) + f)
+	var light := DungeonLightScript.new()
+	root.add_child(light)
+	light.setup(root, e["def"], e["data"], e["rect"], emissive)
+	_lights[_map_id] = light
+	var by_theme: Dictionary = {}
+	for o: Dictionary in (e["data"] as Resource).objects:
+		var did2: String = _offer_id(_map_id, o)
+		if did2 == "":
+			continue
+		if not by_theme.has(did2):
+			by_theme[did2] = []
+		(by_theme[did2] as Array).append(o)
+	for did3: String in by_theme:
+		var sub: Resource = DungeonDataScript.new()
+		sub.objects = by_theme[did3]
+		var props := DungeonPropsScript.new()
+		props.setup(did3, sub)
+		root.add_child(props)
+		props.light = light
+		for o2: Dictionary in sub.objects:
+			for field: String in ["gate_key", "node_key", "chest_key", "trap_key", "lever_key", "barrel_key"]:
+				if str(o2.get(field, "")) != "":
+					_map_props[str(o2[field])] = props
+			if str(o2.get("type", "")) == "kaynak":
+				var res: String = str(DungeonDefsScript.by_id(did3).get("resource", ""))
+				var col: Color = DungeonDefsScript.RESOURCES.get(res, {}).get("color", Color.WHITE)
+				var r: Rect2 = o2["rect"]
+				light.add_keyed_light(str(o2.get("node_key", "")), r.position + Vector2(r.size.x * 0.5, r.size.y * 0.35), 84.0, col, 0.95)
+
+
+## Görsel örneği: harita kipinde nesne anahtarına göre (tema başına örnek), değilse zindanın kendi örneği.
+func _props_for(key: String) -> Node:
+	var p: Variant = _map_props.get(key)
+	if p != null:
+		return p
+	return _props.get(key.get_slice(":", 0))
+
+
+## Sunak teklifi / kaynak türü / görsel tablosu için zindan kimliği: haritada nesnenin teması, zindanda kendisi.
+func _offer_id(id: String, o: Dictionary) -> String:
+	if id != _map_id or _map_id == "":
+		return id
+	return str(MAP_THEME_DUNGEON.get(str((o.get("props", {}) as Dictionary).get("tema", "")), ""))
+
+
+func _resource_of(id: String, o: Dictionary) -> String:
+	return str(DungeonDefsScript.by_id(_offer_id(id, o)).get("resource", ""))
 
 
 # ================================================================== tuzaklar (eşitlenen game_time ile)
@@ -785,11 +799,14 @@ func _tick_traps() -> void:
 	var t: float = GameManager.game_time
 	var cycle: int = int(floor(t / TRAP_CYCLE))
 	var host: bool = NetworkManager.is_host or not NetworkManager.is_multiplayer_active
-	for e: Dictionary in DungeonWorldScript.dungeons():
+	var entries: Array[Dictionary] = DungeonWorldScript.dungeons().duplicate()
+	if _map_id != "":
+		entries.append(DungeonWorldScript.map_entry())
+	for e: Dictionary in entries:
 		var id: String = str(e["id"])
 		var props: Node = _props.get(id)
 		var rect: Rect2 = e["rect"]
-		var local_in: bool = _player != null and str(_player.get("in_dungeon")) == id
+		var local_in: bool = _player != null and (str(_player.get("in_dungeon")) == id or (id == _map_id and str(_player.get("in_dungeon")) == ""))
 		if not local_in and not host and props == null:
 			continue
 		for o: Dictionary in (e["data"] as Resource).objects:
@@ -797,12 +814,13 @@ func _tick_traps() -> void:
 				continue
 			var key: String = str(o.get("trap_key", ""))
 			var lv: float = trap_level(key, t)
-			if props != null and props.is_visible_in_tree():
-				props.set_trap_level(key, lv)
+			var tp: Node = _props_for(key) if id == _map_id else props
+			if tp != null and tp.is_visible_in_tree():
+				tp.set_trap_level(key, lv)
 			if lv < 0.99:
 				continue
 			var wr := Rect2(rect.position + (o["rect"] as Rect2).position, (o["rect"] as Rect2).size)
-			if local_in and int(_trap_hit.get(key, -1)) != cycle and _player.get("is_dead") != true and wr.has_point(_player.global_position + Vector2(0, 6)):
+			if local_in and int(_trap_hit.get(key, -1)) != cycle and _player.get("is_dead") != true and wr.has_point(_player.global_position + Vector2(0, DungeonWorldScript.FEET_SHIFT)):
 				_trap_hit[key] = cycle
 				if _player.has_method("take_damage"):
 					_player.take_damage(float(_player.get("max_health")) * TRAP_PLAYER_DAMAGE)
@@ -818,128 +836,6 @@ func _tick_traps() -> void:
 
 
 # ================================================================== minimap (keşif dokusu)
-const MINIMAP_REVEAL := 10 ## hücre: yerel oyuncunun çevresi açılır
-const MM_UNSEEN := Color(0.07, 0.065, 0.085)
-const MM_FLOOR := Color(0.62, 0.55, 0.43)
-const MM_WALL := Color(0.22, 0.18, 0.16)
-const MM_SOLID := Color(0.42, 0.35, 0.29)
-const MM_GATE := Color(0.78, 0.8, 0.86)
-const MM_HIDE := Color(0.38, 0.5, 0.34)
-const MM_WATER := Color(0.2, 0.42, 0.52)
-const MM_BLOOD := Color(0.45, 0.1, 0.1)
-const EXIT_MARKER_BASE := -9000
-var _mm: Dictionary = {} ## id -> {"image", "texture", "seen": PackedByteArray}
-var _mm_acc: float = 0.0
-var _mm_markers_for: String = ""
-
-
-## minimap.gd: {"texture", "origin" (dünya), "size" (dünya)} - doku zindanın hücre ızgarası (1 doku pikseli = 1 hücre).
-func minimap_info(id: String) -> Dictionary:
-	var e: Dictionary = DungeonWorldScript.entry(id)
-	if e.is_empty():
-		return {}
-	if not _mm.has(id):
-		var data: Resource = e["data"]
-		var img := Image.create(data.size.x, data.size.y, false, Image.FORMAT_RGBA8)
-		img.fill(MM_UNSEEN)
-		var seen := PackedByteArray()
-		seen.resize(data.size.x * data.size.y)
-		_mm[id] = {"image": img, "texture": ImageTexture.create_from_image(img), "seen": seen}
-		_reveal(id, true)
-	return {"texture": (_mm[id] as Dictionary)["texture"], "origin": (e["rect"] as Rect2).position, "size": (e["rect"] as Rect2).size}
-
-
-func _reveal(id: String, force: bool = false) -> void:
-	if not _mm.has(id) or _player == null:
-		return
-	var e: Dictionary = DungeonWorldScript.entry(id)
-	var data: Resource = e["data"]
-	var m: Dictionary = _mm[id]
-	var img: Image = m["image"]
-	var seen: PackedByteArray = m["seen"]
-	var w: int = data.size.x
-	var hgt: int = data.size.y
-	var c: Vector2i = Vector2i(((_player.global_position - (e["rect"] as Rect2).position) / 16.0).floor())
-	var changed: bool = force
-	for y in range(maxi(0, c.y - MINIMAP_REVEAL), mini(hgt, c.y + MINIMAP_REVEAL + 1)):
-		for x in range(maxi(0, c.x - MINIMAP_REVEAL), mini(w, c.x + MINIMAP_REVEAL + 1)):
-			var i: int = y * w + x
-			if seen[i] != 0 or Vector2(x - c.x, y - c.y).length() > float(MINIMAP_REVEAL):
-				continue
-			seen[i] = 1
-			changed = true
-			img.set_pixel(x, y, _mm_color(data, x, y))
-	m["seen"] = seen
-	if changed:
-		(m["texture"] as ImageTexture).update(img)
-
-
-static func _mm_color(data: Resource, x: int, y: int) -> Color:
-	var code: int = data.cell_at(Vector2i(x, y))
-	match code:
-		DungeonDataScript.CELL_WALL:
-			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-				var n: int = data.cell_at(Vector2i(x, y) + d)
-				if n != DungeonDataScript.CELL_WALL:
-					return MM_WALL
-			return MM_UNSEEN
-		DungeonDataScript.CELL_SOLID:
-			return MM_SOLID
-		DungeonDataScript.CELL_WATER:
-			return MM_BLOOD if str(data.get("id")) == "et_kuyusu" else MM_WATER
-		DungeonDataScript.CELL_GATE:
-			return MM_GATE
-		DungeonDataScript.CELL_HIDE:
-			return MM_HIDE
-	return MM_FLOOR
-
-
-func _tick_minimap(delta: float) -> void:
-	var id: String = str(_player.get("in_dungeon")) if _player != null else ""
-	if id != _mm_markers_for:
-		_set_exit_markers(_mm_markers_for, false)
-		_mm_markers_for = id
-		_set_exit_markers(id, true)
-	if _res_label != null:
-		_res_label.visible = id != ""
-	if id == "":
-		return
-	_mm_acc -= delta
-	if _mm_acc > 0.0:
-		return
-	_mm_acc = 0.25
-	if _mm.has(id):
-		_reveal(id)
-	var def: Dictionary = DungeonDefsScript.by_id(id)
-	var res: String = str(def.get("resource", ""))
-	var info: Dictionary = DungeonDefsScript.RESOURCES.get(res, {})
-	_res_label.text = "%s      %s: %d" % [def.get("title", id), info.get("name", res), GameManager.get_dungeon_resource(res)]
-	_res_label.add_theme_color_override("font_color", info.get("color", Color.WHITE))
-
-
-func _minimap_node() -> Node:
-	var hud: Node = get_tree().current_scene.get_node_or_null("HUD") if get_tree().current_scene != null else null
-	return hud.get_node_or_null("MinimapControl") if hud != null else null
-
-
-func _set_exit_markers(id: String, on: bool) -> void:
-	if id == "":
-		return
-	var mm: Node = _minimap_node()
-	if mm == null or not mm.has_method("set_mission_marker"):
-		return
-	var e: Dictionary = DungeonWorldScript.entry(id)
-	if e.is_empty():
-		return
-	var n: int = 0
-	for o: Dictionary in (e["data"] as Resource).objects:
-		if str(o.get("type", "")) != "cikis":
-			continue
-		if on:
-			mm.call("set_mission_marker", EXIT_MARKER_BASE - n, (e["rect"] as Rect2).position + (o["rect"] as Rect2).get_center(), Color(0.45, 1.0, 0.55), "Ç")
-		else:
-			mm.call("clear_mission_marker", EXIT_MARKER_BASE - n)
-		n += 1
 
 
 # ================================================================== avcı uyarısı + sakin silme (host -> istemci)
@@ -968,7 +864,7 @@ func _show_hunter_alert(title: String) -> void:
 	if now < _hunter_alert_until:
 		return
 	_hunter_alert_until = now + 12.0
-	_notice("fail", "%s SENİ GÖRDÜ!" % title.to_upper(), "Kaç! Kapıları indir, gölgelere saklan, çıkışa koş.")
+	_notice("fail", Loc.t("%s SENİ GÖRDÜ!") % title.to_upper(), "Kaç! Kapıları indir, gölgelere saklan, çıkışa koş.")
 	var cs: Script = load("res://scripts/camera_shake.gd")
 	if cs != null and cs.has_method("add_limited"):
 		cs.call("add_limited", "dungeon_hunter", 0.35, 1.0)
@@ -995,5 +891,5 @@ func _rpc_despawn(nid: int) -> void:
 
 ## Test / hata ayıklama.
 func debug_state() -> Dictionary:
-	return {"shown": _shown, "loaded": _roots.keys(), "gates_closed": gate_until.keys(), "nodes_down": node_until.keys(),
+	return {"loaded": _roots.keys(), "gates_closed": gate_until.keys(), "nodes_down": node_until.keys(),
 			"chests": chest_opened.keys(), "prompt": _prompt.text if _prompt.visible else ""}

@@ -1,5 +1,6 @@
 extends Node2D
 class_name TravelingMerchant
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Kullanıcı isteği: "Haritamın belli gölgelerinde tüccar gelir (seyyar
 ## satıcı.tmx harita dosyası seyyar satıcıyı içeriyor) (oyunda sadece çalı
@@ -50,8 +51,10 @@ const VISIT_DURATION := 180.0
 ## döndürüyor - sabit bir döngü.
 ## Kullanıcı isteği (2026-09-26): "seyyar satıcı daha sık çıksın" - ziyaretler arası 120 -> 60 sn (ziyaret 180 sn
 ## kaldığı için döngü 5 dk -> 4 dk; satıcı zamanın %75'inde haritada).
-const COOLDOWN_MIN := 60.0
-const COOLDOWN_MAX := 60.0
+## 2026-11-06 (satıcı geri açılırken "%50 daha yavaş spawnlansın"): spawn sıklığı yarıya indi = bekleme süreleri x2
+## (ziyaret arası 60 -> 120 sn, ilk ziyaret 30-90 -> 60-180 sn). Kalma süresi (VISIT_DURATION 180) DEĞİŞMEDİ; döngü 4 dk -> 5 dk.
+const COOLDOWN_MIN := 120.0
+const COOLDOWN_MAX := 120.0
 ## İlk ziyaret oyunun tam başında değil, biraz oynadıktan sonra gelsin diye.
 ## GEÇİCİ TEST DEĞERİ (kullanıcı isteği: "deneme açısından oyun ilk
 ## başladığında ... seyyar satıcı spawnlansın") - bildirim/ok/görsel
@@ -60,8 +63,8 @@ const COOLDOWN_MAX := 60.0
 ## DÜZELTME (kullanıcı bildirimi 2026-09-24: "seyyar satıcı oyun başlar başlamaz geliyor") - yukarıdaki geçici test
 ## değerleri (3-5sn) hiç geri alınmamıştı; nottaki eski değerlere döndürüldü.
 ## 2026-09-26 ("daha sık çıksın"): ilk ziyaret 60-150 -> 30-90 sn.
-const INITIAL_DELAY_MIN := 30.0
-const INITIAL_DELAY_MAX := 90.0
+const INITIAL_DELAY_MIN := 60.0
+const INITIAL_DELAY_MAX := 180.0
 ## Aynı bildirim: "başlangıca çok uzak noktalarda doğuyor". Sonraki ziyaretler de (ilk ziyaret zaten en yakın
 ## adaydan başlar) önce herhangi bir canlı oyuncuya bu mesafeden yakın çalı noktalarından seçilir; yoksa tüm harita.
 const VISIT_MAX_DISTANCE_FROM_PLAYERS := 1600.0
@@ -562,7 +565,7 @@ func _create_interaction(pos: Vector2) -> void:
 	_prompt_layer.name = "MerchantPromptLayer"
 	_prompt_layer.layer = 50
 	_prompt_label = Label.new()
-	_prompt_text = "Seyyar Satıcı ile konuşmak için %s tuşuna bas" % GameManager.get_action_key_label("interact")
+	_prompt_text = Loc.t("Seyyar Satıcı ile konuşmak için %s tuşuna bas") % GameManager.get_action_key_label("interact")
 	_prompt_label.text = _prompt_text
 	_prompt_label.add_to_group(&"interact_prompt") ## telefonda ETKİLEŞİM düğmesi bu uyarı görünürken çıkar (touch_controls.gd)
 	_prompt_label.add_theme_font_size_override("font_size", 24)
@@ -642,7 +645,7 @@ func _open_shop_screen(player: Node) -> void:
 	_shop_screen = MerchantShopScreenScript.new()
 	get_tree().current_scene.add_child(_shop_screen)
 	_shop_screen.setup(player, _current_stock, self)
-	HitchLogScript.mark("shop_setup %.0f ms" % (float(Time.get_ticks_usec() - t0) / 1000.0))
+	HitchLogScript.mark(Loc.t("shop_setup %.0f ms") % (float(Time.get_ticks_usec() - t0) / 1000.0))
 	_shop_screen.closed.connect(func():
 		HitchLogScript.mark("shop_close")
 		_shop_screen = null

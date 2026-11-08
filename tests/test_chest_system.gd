@@ -12,31 +12,35 @@ func test_items_defs_exist() -> void:
 		assert(def.has("cost") and int(def["cost"]) > 0, "Item %s has no cost!" % key)
 		assert(int(def.get("kademe", 0)) in [1, 2, 3], "Item %s has no kademe!" % key)
 
-## 2026-09-25: sandıklar yeniden çizildi (tools/gen_chest_sprites.py, 20 kare x 48 px) - kademe artık görseli
-## değiştirmiyor, normal/elit ayrımı değiştiriyor.
-func test_chest_drop_uses_normal_or_elite_sheet() -> void:
+## 2026-11-06 (madde 409): İLK sürümün paket sandıkları geri geldi - kademe bandı (chest_tier 0-5) sandığın görünüşünü seçer,
+## elit ayrı paket sandığı; 20 kare x 32 px, 0,8 ölçek; ışık sütunu ve ek gölge yok (ChestArt.BEAM_ENABLED / EXTRA_SHADOW).
+func test_chest_drop_uses_pack_sheet_by_kademe() -> void:
 	var drop = (load("res://scenes/chest_drop.tscn") as PackedScene).instantiate()
 	add_child(drop)
-	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_normal.png"), "normal sandık dünya sayfasını kullanmalı")
+	assert(drop.sprite.texture.resource_path.ends_with("chests/paket_k0.png"), "kademe I-II sandığı: %s" % drop.sprite.texture.resource_path)
 	assert(drop.sprite.hframes == 20 and drop.sprite.vframes == 1, "sayfa 20 yatay kare olmalı")
 	assert(drop.sprite.frame == 0, "kapalı sandık karesiyle başlamalı")
-	## 2026-10-17 (madde 242 "B Işık Sütunu"): 96 px kare x 0,5 = eski 48 dünya px; arkasında ayrı ışık sütunu sprite'ı.
-	assert(drop.sprite.texture.get_width() == 96 * 20 and is_equal_approx(drop.sprite.scale.x, 0.5), "96 px kare, 0,5 ölçek")
-	var beam: Sprite2D = drop.get_node_or_null("Beam")
-	assert(beam != null and beam.texture.resource_path.ends_with("chests/chest_beam.png"), "normal sandığın arkasında ışık sütunu olmalı")
-	assert(beam.get_index() < drop.sprite.get_index(), "ışık sütunu sandığın ARKASINDA çizilmeli")
-	assert(beam.hframes == 37 and beam.texture.get_height() == 192, "sütun sayfası 37 kare x 128x192")
-	## İki sprite'ta sandığın alt-ortası aynı dünya noktasına düşmeli (sütun sandıktan kaymasın).
-	var chest_bottom: Vector2 = drop.sprite.position + (Vector2(48, 84) - Vector2(48, 48)) * drop.sprite.scale
-	var beam_bottom: Vector2 = beam.position + (Vector2(64, 176) - Vector2(64, 96)) * beam.scale
-	assert(chest_bottom.distance_to(beam_bottom) < 0.01, "sütun sandığın altına hizalı olmalı: %s / %s" % [chest_bottom, beam_bottom])
-	assert(is_equal_approx(chest_bottom.y, 8.0), "sandık tabanı kökün 8 px altında (gölge ile aynı)")
+	assert(drop.sprite.texture.get_width() == 32 * 20 and is_equal_approx(drop.sprite.scale.x, 0.8), "32 px kare, 0,8 ölçek (ilk sürüm)")
+	assert(drop.get_node_or_null("Beam") == null, "ışık sütunu yok")
+	assert(drop.get_node_or_null("Shadow") == null, "üretilmiş ek gölge yok (paket sanatının kendi gölgesi var)")
+	var chest_bottom: Vector2 = drop.sprite.position + (Vector2(16, 31) - Vector2(16, 16)) * drop.sprite.scale
+	assert(is_equal_approx(chest_bottom.y, 8.0), "sandık tabanı kökün 8 px altında: %s" % chest_bottom)
 	drop.chest_tier = 3
-	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_normal.png"), "kademe görseli değiştirmemeli")
+	assert(drop.sprite.texture.resource_path.ends_with("chests/paket_k3.png"), "kademe bandı görseli değiştirir (ilk sürümdeki gibi)")
 	drop.is_elite = true
-	assert(drop.sprite.texture.resource_path.ends_with("chests/chest_elite.png"), "elit sandık elit sayfayı kullanmalı")
-	assert(beam.texture.resource_path.ends_with("chests/chest_beam_elite.png"), "elit sandığın sütunu elit sayfadan")
+	assert(drop.sprite.texture.resource_path.ends_with("chests/paket_elite.png"), "elit sandık elit sayfayı kullanmalı")
 	drop.free()
+
+
+## Paket sayfaları gerçekten ilk sürümün çizimleri: kapalı kare = chest_tier_*.png'nin ilk karesi (piksel piksel).
+func test_pack_sheets_are_original_art() -> void:
+	var names := ["chest_tier_1_2", "chest_tier_3_4", "chest_tier_5_6", "chest_tier_7_8", "chest_tier_9_10", "chest_tier_11_up"]
+	for k in names.size():
+		var src: Image = (load("res://assets/sprites/%s.png" % names[k]) as Texture2D).get_image()
+		var sheet: Image = (load("res://assets/sprites/chests/paket_k%d.png" % k) as Texture2D).get_image()
+		for y in 32:
+			for x in 32:
+				assert(src.get_pixel(x, y).is_equal_approx(sheet.get_pixel(x, y)), "%s kapalı kare birebir (%d,%d)" % [names[k], x, y])
 
 
 ## Gece ışığı (madde 243): sandık katalogda, rengi sütunla aynı (normal sıcak altın / elit mor), kalıcı (ışık bütçesine takılmaz).
@@ -63,20 +67,17 @@ func test_chest_beam_glows_at_night() -> void:
 	atmo.free()
 
 
-## Açılışta ışık sütunu sandıkla eş: sallanmada 24-27, patlamadan sonra çöker ve biter (dünyada çökme 2 kat hızlı).
-func test_chest_beam_frames_follow_open_sequence() -> void:
-	var ChestArt: GDScript = load("res://scripts/chest_art.gd")
-	assert(ChestArt.beam_frame_for_open(4) == 24 and ChestArt.beam_frame_for_open(7) == 27, "sallanma kareleri eş")
-	assert(ChestArt.beam_frame_for_open(8) == 28, "patlamada çökme başlar")
-	assert(ChestArt.beam_frame_for_open(12) == 36, "dünya açılışının son karesinde son çökme karesi")
-	assert(ChestArt.beam_frame_for_open(13) == -1, "çökmeden sonra sütun gizlenir")
+## Ödül ekranı: kutu yine 384 px (yerleşim aynı), sandık tam kat (8x) ve kademe bandının sandığı; sütun yok, atlama çalışır.
+func test_reward_screen_chest_matches_kademe() -> void:
 	var anim: Control = (load("res://scripts/chest_open_anim.gd") as GDScript).new()
-	anim.setup(false, 2)
+	anim.setup(false, 2, 4)
 	add_child(anim)
-	assert(anim.custom_minimum_size == Vector2(384, 384), "ödül ekranı sandığı yine 384 px")
-	assert(anim.get("_beam_sheet").resource_path.ends_with("chests/chest_beam_t2.png"), "ödül ekranında sütun rengi = nadirlik")
+	assert(anim.custom_minimum_size == Vector2(384, 384), "ödül ekranı kutusu yine 384 px")
+	var rect: TextureRect = anim.get("_rect")
+	assert(rect.size == Vector2(256, 256), "sandık 32 px x 8 tam kat: %s" % rect.size)
+	assert((rect.texture as AtlasTexture).atlas.resource_path.ends_with("chests/paket_k4.png"), "kademe bandı 4 sandığı")
+	assert(anim.get("_beam_rect") == null, "ışık sütunu yok")
 	anim.skip()
-	assert(not anim.get("_beam_rect").visible, "atlanınca sütun gizlenir")
 	anim.free()
 
 

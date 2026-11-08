@@ -114,9 +114,21 @@ func test_reset_charges_a_fee_and_refunds_the_rest() -> void:
 
 func test_reset_fee_never_exceeds_spent() -> void:
 	_begin(100)
-	assert(MetaUpgradesScript.buy("pickup")) ## 10 kıymık: asgari ücret (20) harcanandan büyük -> harcanana kırpılır
-	assert(MetaUpgradesScript.reset_fee() == MetaUpgradesScript.total_spent())
-	assert(MetaUpgradesScript.reset_refund() == 0)
+	assert(MetaUpgradesScript.buy("pickup")) ## 10 kıymık: %4,5 = 0 -> asgari ücret (6) uygulanır, harcananı aşmaz
+	assert(MetaUpgradesScript.reset_fee() == MetaUpgradesScript.RESET_FEE_MIN and MetaUpgradesScript.reset_fee() <= MetaUpgradesScript.total_spent())
+	assert(MetaUpgradesScript.reset_refund() == MetaUpgradesScript.total_spent() - MetaUpgradesScript.RESET_FEE_MIN)
+	_end()
+
+
+## Kullanıcı isteği 2026-11-08: sıfırlama ücreti %70 azaltıldı (%15 / en az 20 -> %4,5 / en az 6).
+func test_reset_fee_is_cut_by_seventy_percent() -> void:
+	assert(is_equal_approx(MetaUpgradesScript.RESET_FEE_PERCENT, 0.15 * 0.3) and MetaUpgradesScript.RESET_FEE_MIN == 6)
+	_begin(100000)
+	for id: String in ["attack", "health", "crit_chance", "luck"]:
+		for i in 6:
+			assert(MetaUpgradesScript.buy(id))
+	var spent: int = MetaUpgradesScript.total_spent()
+	assert(MetaUpgradesScript.reset_fee() == int(round(float(spent) * 0.045)), "ücret harcananın %%4,5'i: %d / %d" % [MetaUpgradesScript.reset_fee(), spent])
 	_end()
 
 
@@ -129,7 +141,7 @@ func test_inactive_in_plain_headless_gives_no_bonus() -> void:
 
 func test_format_value() -> void:
 	assert(MetaUpgradesScript.format_value("pickup", 0.08) == "+%8", MetaUpgradesScript.format_value("pickup", 0.08))
-	assert(MetaUpgradesScript.format_value("lifesteal", 0.002) == "+%0.2", MetaUpgradesScript.format_value("lifesteal", 0.002))
+	assert(MetaUpgradesScript.format_value("lifesteal", 0.015) == "+%1.5", MetaUpgradesScript.format_value("lifesteal", 0.015))
 	assert(MetaUpgradesScript.format_value("attack", 6.0) == "+6", MetaUpgradesScript.format_value("attack", 6.0))
 	assert(MetaUpgradesScript.format_value("revive", 1.0) == "+1")
 	assert(MetaUpgradesScript.format_value("regen", 1.5) == "+1.5")
@@ -233,9 +245,9 @@ func test_player_gets_every_stat_bonus() -> void:
 	assert(is_equal_approx(p.pickup_range_percent, float(b["pickup"]) + 0.8), "toplama: %s" % p.pickup_range_percent)
 	assert(is_equal_approx(p.damage_bonus, float(b["ap"]) + 30.0), "saldırı gücü +30: %s" % p.damage_bonus)
 	assert(absf(p.fire_rate_mult - float(b["fr"]) * 0.8) < 0.0001, "saldırı hızı: %s" % p.fire_rate_mult)
-	assert(is_equal_approx(p.heal_regen_card_bonus, float(b["regen"]) + 5.0), "can yenilenmesi: %s" % p.heal_regen_card_bonus)
-	assert(is_equal_approx(p.max_health, float(b["hp"]) + 75.0) and is_equal_approx(p.health, p.max_health), "can +75 ve dolu: %s/%s" % [p.health, p.max_health])
-	assert(absf(p.lifesteal_percent - (float(b["ls"]) + 0.02)) < 0.0001, "can çalma: %s" % p.lifesteal_percent)
+	assert(is_equal_approx(p.heal_regen_card_bonus, float(b["regen"]) + 12.0), "can yenilenmesi: %s" % p.heal_regen_card_bonus)
+	assert(is_equal_approx(p.max_health, float(b["hp"]) + 105.0) and is_equal_approx(p.health, p.max_health), "can +105 ve dolu: %s/%s" % [p.health, p.max_health])
+	assert(absf(p.lifesteal_percent - (float(b["ls"]) + 0.15)) < 0.0001, "can çalma: %s" % p.lifesteal_percent)
 	assert(absf(p.speed_card_percent - (float(b["spd"]) + 0.12)) < 0.0001, "hareket hızı: %s" % p.speed_card_percent)
 	assert(absf(p.shield_max_percent - (float(b["sh"]) + 0.32)) < 0.0001, "kalkan miktarı: %s" % p.shield_max_percent)
 	assert(absf(p.item_shield_regen_flat - (float(b["shr"]) + 4.0)) < 0.0001, "kalkan yenilenmesi: %s" % p.item_shield_regen_flat)

@@ -1,18 +1,15 @@
 extends RefCounted
 
-## ZİNDANLAR (madde 373) - tek kaynak tanımlar. Haritalar tools/zindan/gen_*.py ile üretilir (harita/zindan/<id>.tmx, Tiled'da düzenlenebilir),
-## tools/zindan/bake_zindan.gd ile pişirilir (scenes/zindan/<id>_baked.tscn + _data.tres).
-## Zindanlar ana haritanın DOĞUSUNDA, aynı dünya koordinatlarında durur (orman katmanının hücre ızgarasında `origin` sol üst hücre): böylece duvarlar
-## hareket/görüş/yaratık yol bulma ızgarasına aynen girer (scripts/dungeon/dungeon_world.gd). Kamera sınırı zindanın dikdörtgeni (camera_map_limits.gd).
-## gate = DeepForestPlaces.GATES dizini (derin orman bölgesindeki mühürlü kapı, madde 361).
+## ZİNDAN TEMALARI (madde 373; madde 463'den beri ana haritada zindan YOK). Eski üç zindanın (Kemik Mahzeni / Et Kuyusu / Boynuzlu Kapı) tanımları
+## zindan biçimli haritaların TEMALARI olarak duruyor: nesnenin `tema` özelliği (DungeonManager.MAP_THEME_DUNGEON) hangisinin yaratık profilleri,
+## avcısı, kaynağı, ortam ışığı ve sunak teklifleri olduğunu seçer; görselleri harita/zindan/<id>/ sayfa klasörlerinden (dungeon_props.gd).
 
 const DUNGEONS: Array[Dictionary] = [
 	{
-		"id": "kemik_mahzeni", "title": "Kemik Mahzeni", "gate": 0, "origin": Vector2i(296, -12),
+		"id": "kemik_mahzeni", "title": "Kemik Mahzeni",
 		"resource": "ruh_kozu",
 		"ambient_night": Color(0.30, 0.34, 0.40), "ambient_day": Color(0.36, 0.40, 0.46), ## ortam (CanvasModulate): soğuk mavi-gri, ruh alevi camgöbeği
 		"player_light": Color(0.78, 0.92, 1.0),
-		"lore": "Ölüler burada uyumaz, bekler. Ruh kandillerinin közünü topla - ama kandil sönünce karanlık gelir.",
 		## yaratık profilleri (TMX "sakin" nesnelerinin profil özelliği): kademeye göre seçilen türler
 		"profiles": {
 			"lahit": ["iskelet1", "iskelet2", "rontgen1", "iskelet3"],
@@ -24,11 +21,10 @@ const DUNGEONS: Array[Dictionary] = [
 		"hunter": {"id": "rontgen3", "name": "Mahzen Bekçisi"},
 	},
 	{
-		"id": "et_kuyusu", "title": "Et Kuyusu", "gate": 1, "origin": Vector2i(296, 94),
+		"id": "et_kuyusu", "title": "Et Kuyusu",
 		"resource": "kan_kehribari",
 		"ambient_night": Color(0.42, 0.28, 0.28), "ambient_day": Color(0.48, 0.33, 0.32),
 		"player_light": Color(1.0, 0.82, 0.70),
-		"lore": "Kuyunun dibinde bir simyacı hâlâ çalışıyor. Et keselerindeki kehribarı ona götür.",
 		"profiles": {
 			"kanal": ["slime1", "slime2", "zombie1", "zombie2"],
 			"hucre": ["zombie1", "zombie2", "zombie3", "iblis1"],
@@ -40,11 +36,10 @@ const DUNGEONS: Array[Dictionary] = [
 		"hunter": {"id": "zombie3", "name": "Kuyu Kasabı"},
 	},
 	{
-		"id": "boynuzlu_kapi", "title": "Boynuzlu Kapı", "gate": 2, "origin": Vector2i(296, 210),
+		"id": "boynuzlu_kapi", "title": "Boynuzlu Kapı",
 		"resource": "isik_kristali",
 		"ambient_night": Color(0.26, 0.30, 0.44), "ambient_day": Color(0.32, 0.36, 0.50),
 		"player_light": Color(0.80, 0.90, 1.0),
-		"lore": "Kristaller ışığı yutar, boynuzlu bekçi gölgeleri. Kristali kır, ışığı al, yolunu kaybetme.",
 		"profiles": {
 			"magara": ["mantar1", "mantar2", "golem1", "slime3"],
 			"kristal": ["golem1", "golem2", "hayalet2"],
@@ -63,9 +58,6 @@ const RESOURCES: Dictionary = {
 	"kan_kehribari": {"name": "Kan Kehribarı", "color": Color(1.0, 0.55, 0.3)},
 	"isik_kristali": {"name": "Işık Kristali", "color": Color(0.7, 0.75, 1.0)},
 }
-
-const DATA_PATH := "res://scenes/zindan/%s_data.tres"
-const SCENE_PATH := "res://scenes/zindan/%s_baked.tscn"
 
 
 static func by_id(id: String) -> Dictionary:

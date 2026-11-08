@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## ODA LOBİSİ (2026-10-11 lobi sistemi, onaylanan prototipin 3. adımı): sadece toplanma - karakter seçimi YOK. Solda oda
 ## adı + oyuncular (yüz, isim, [HOST]) + sınıra kadar boş yerler, host'ta her oyuncunun yanında "At"; sağda oda bilgisi +
@@ -167,15 +168,15 @@ func _refresh() -> void:
 			extra = kick
 		var info: Dictionary = (lp[pid] as Dictionary).duplicate()
 		if int(pid) == me:
-			info["name"] = "%s (sen)" % info.get("name", "Oyuncu")
+			info["name"] = Loc.t("%s (sen)") % info.get("name", "Oyuncu")
 		_players.add_child(LobbyUI.make_player_row(info, {"fs_body": int(_sz["fs_body"]), "fs_small": int(_sz["fs_small"]), "k": k,
 			"ready_badge": false, "extra": extra}))
 	for i in range(lp.size(), NetworkManager.room_max_players):
 		_players.add_child(LobbyUI.make_empty_row(int(_sz["fs_body"]), k))
 	UISound.connect_all_buttons(_players)
 
-	var kind: String = "İnternet (Epic)" if NetworkManager.is_online_session else "Aynı ağ (LAN) - %s" % NetworkManager.room_code
-	_info_label.text = "Bağlantı: %s\nŞifre: %s\nEn fazla oyuncu: %d" % [kind, "var" if not NetworkManager.room_password.is_empty() else "yok",
+	var kind: String = "İnternet (Epic)" if NetworkManager.is_online_session else Loc.t("Aynı ağ (LAN) - %s") % NetworkManager.room_code
+	_info_label.text = Loc.t("Bağlantı: %s\nŞifre: %s\nEn fazla oyuncu: %d") % [kind, "var" if not NetworkManager.room_password.is_empty() else "yok",
 		NetworkManager.room_max_players]
 
 	if NetworkManager.is_host:

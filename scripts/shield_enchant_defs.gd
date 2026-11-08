@@ -1,5 +1,6 @@
 class_name ShieldEnchantDefs
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## KALKAN TÜRLERİ + KALKAN EFSUNLARI - tek kaynak (kullanıcı isteği 2026-09-29).
 ## Herkes Standart Kalkanla başlar (bkz. main.gd _grant_starting_shield). Efsun ekranında (elit sandık) silah
@@ -73,7 +74,7 @@ static func owned_type() -> String:
 
 
 static func type_name(key: String) -> String:
-	return str(TYPES.get(key, {}).get("name", key))
+	return Loc.t(str(TYPES.get(key, {}).get("name", key))) ## ekrana gider (madde 446)
 
 
 static func upgrade_count(index: int) -> int:
@@ -141,26 +142,26 @@ static func apply(card: Dictionary) -> void:
 static func describe(card: Dictionary, out: Dictionary) -> void:
 	var kind: String = str(card.get("type", ""))
 	var now: Dictionary = stats()
-	var tier_name: String = str(TierSystem.NAMES[CARD_TIER - 1])
-	out["category"] = "Mana Kalkanı efsunu"
+	var tier_name: String = Loc.t(str(TierSystem.NAMES[CARD_TIER - 1]))
+	out["category"] = Loc.t("Mana Kalkanı efsunu")
 	out["banishable"] = false
 	if kind == "shield_pick":
 		var key: String = str(card.get("id", ""))
 		var def: Dictionary = TYPES.get(key, {})
-		out["title"] = str(def.get("name", key))
+		out["title"] = Loc.t(str(def.get("name", key)))
 		out["icon"] = str(ICONS.get(key, ""))
 		out["color"] = def.get("color", Color.WHITE)
-		out["tier_line"] = "%s · Mana Kalkanı" % tier_name
+		out["tier_line"] = Loc.t("%s · Mana Kalkanı") % tier_name
 		## Sade kart (2026-10-03, bkz. enchant_pool.gd describe notu): başlangıç kartı sadece kalkanın nasıl çalıştığını anlatır.
-		out["body"] = str(def.get("desc", ""))
+		out["body"] = Loc.pct(Loc.t(str(def.get("desc", ""))))
 		return
 	var i: int = int(card.get("index", 0))
 	var def2: Dictionary = TYPES.get(GameManager.shield_enchant, {})
 	var up: Dictionary = (def2.get("upgrades", []) as Array)[i]
-	out["title"] = "%s · Geliştirme %d" % [str(def2.get("name", "")), i + 1]
+	out["title"] = Loc.t("%s · Geliştirme %d") % [Loc.t(str(def2.get("name", ""))), i + 1]
 	out["icon"] = str(ICONS.get(GameManager.shield_enchant, ""))
 	out["color"] = def2.get("color", Color.WHITE)
-	out["tier_line"] = "%s · Mana Kalkanı geliştirmesi" % tier_name
+	out["tier_line"] = Loc.t("%s · Mana Kalkanı geliştirmesi") % tier_name
 	var after2: Dictionary = now.duplicate()
 	for stat in ["power", "absorption", "regen", "delay"]:
 		after2[stat] = float(now.get(stat, 0.0)) + float(up.get(stat, 0.0)) * (GameManager.SHIELD_REGEN_SPEED_MULT if stat == "regen" else 1.0)
@@ -174,19 +175,19 @@ static func _compare_lines(before: Dictionary, after: Dictionary, all_lines: boo
 	var b_pow: float = float(before.get("power", 0.0))
 	var a_pow: float = float(after.get("power", 0.0))
 	if all_lines or not is_equal_approx(b_pow, a_pow):
-		lines.append("Mana Kalkanı: %d → %d" % [int(round(b_pow)), int(round(a_pow))])
+		lines.append(Loc.t("Mana Kalkanı: %d → %d") % [int(round(b_pow)), int(round(a_pow))])
 	var b_abs: float = float(before.get("absorption", 0.0))
 	var a_abs: float = float(after.get("absorption", 0.0))
 	if all_lines or not is_equal_approx(b_abs, a_abs):
-		lines.append("Hasar soğurma: %%%d → %%%d" % [int(round(b_abs * 100.0)), int(round(a_abs * 100.0))])
+		lines.append(Loc.t("Hasar soğurma: %%%d → %%%d") % [int(round(b_abs * 100.0)), int(round(a_abs * 100.0))])
 	var b_reg: float = float(before.get("regen", 0.0))
 	var a_reg: float = float(after.get("regen", 0.0))
 	if all_lines or not is_equal_approx(b_reg, a_reg):
-		lines.append("Yenilenme: %s/sn → %s/sn" % [_num(b_reg), _num(a_reg)])
+		lines.append(Loc.t("Yenilenme: %s/sn → %s/sn") % [_num(b_reg), _num(a_reg)])
 	var b_del: float = float(before.get("delay", 0.0))
 	var a_del: float = float(after.get("delay", 0.0))
 	if all_lines or not is_equal_approx(b_del, a_del):
-		lines.append("Bekleme: %s → %s" % [_delay_text(before), _delay_text(after)])
+		lines.append(Loc.t("Bekleme: %s → %s") % [_delay_text(before), _delay_text(after)])
 	return "\n".join(lines)
 
 
@@ -194,8 +195,8 @@ static func _delay_text(s: Dictionary) -> String:
 	if s.is_empty():
 		return "-"
 	if bool(s.get("always_regen", false)):
-		return "yok (savaşta da dolar)"
-	return "%s sn" % _num(float(s.get("delay", 0.0)))
+		return Loc.t("yok (savaşta da dolar)")
+	return Loc.t("%s sn") % _num(float(s.get("delay", 0.0)))
 
 
 static func _num(v: float) -> String:
@@ -209,4 +210,4 @@ static func summary() -> String:
 	var total: int = 0
 	for n in GameManager.shield_enchant_ups:
 		total += int(n)
-	return "Mana Kalkanı: %s (%d geliştirme)" % [type_name(GameManager.shield_enchant), total]
+	return Loc.t("Mana Kalkanı: %s (%d geliştirme)") % [type_name(GameManager.shield_enchant), total]

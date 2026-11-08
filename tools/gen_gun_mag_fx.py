@@ -1,8 +1,8 @@
 """Tabanca + Tüfek şarjör efektleri (2026-10-19, madde 296): boş kovan, düşen şarjör.
 
 Çıktı: assets/fx/gun/
-  casings.png  - 8 sütun (45 derecelik dönüş kareleri) x 4 satır, 12x12 hücre:
-                 0 tabanca kovanı, 1 tüfek kovanı, 2 tabanca şarjörü, 3 tüfek şarjörü
+  casings.png  - 8 sütun (45 derecelik dönüş kareleri) x 5 satır, 12x12 hücre:
+                 0 tabanca kovanı, 1 tüfek kovanı, 2 tabanca şarjörü, 3 tüfek şarjörü, 4 pompalı av fişeği (madde 448)
 
 Doku pikseli silah sanatıyla aynı ızgarada çizilir (weapon_tier_art.gd WORLD_PX 0,575 dünya px) - oyunda bu ölçekle gösterilir.
 Palet zanaat silahlarından (assets/weapons/zanaat/*_L3.png): pirinç, demir, koyu kontur. Işık sol üstten, dönüşte de sabit.
@@ -108,6 +108,33 @@ def _casing_palette(key):
     return zone
 
 
+## Pompalı av fişeği (madde 448): kalın kırmızı plastik gövde + pirinç taban, ağız kıvrımlı (koyu kırmızı).
+RED_DK = (122, 26, 30, 255)
+RED = (176, 40, 40, 255)
+RED_LT = (214, 72, 60, 255)
+RED_HI = (240, 118, 96, 255)
+RED_OUT = (54, 14, 16, 255)
+
+
+def _zone_shell(s, u, length):
+    if s < 0 or s > length or abs(u) > 1.25:
+        return None
+    if s < 1.6:
+        return "brass"
+    if s > length - 0.8:
+        return RED_DK
+    return "body"
+
+
+def _shell_palette(key):
+    zone, side = key
+    if zone == "brass":
+        return BRASS_HI if side > 0 else (BRASS_DK if side < 0 else BRASS_LT)
+    if zone == "body":
+        return RED_HI if side > 0 else (RED_DK if side < 0 else (RED if side == 0 else RED_LT))
+    return zone
+
+
 def _mag_palette(key):
     zone, side = key
     if zone == "tip":
@@ -118,13 +145,14 @@ def _mag_palette(key):
 
 
 def build_casings():
-    img = Image.new("RGBA", (CELL * 8, CELL * 4), (0, 0, 0, 0))
     rows = [
         (lambda s, u: _zone_casing(s, u, 4.2, False), 4.2, _casing_palette, OUTLINE),
         (lambda s, u: _zone_casing(s, u, 5.8, True), 5.8, _casing_palette, OUTLINE),
         (lambda s, u: _zone_mag(s, u, 6.2, 3.0, False), 6.2, _mag_palette, IRON_OUT),
         (lambda s, u: _zone_mag(s, u, 7.4, 3.6, True), 7.4, _mag_palette, IRON_OUT),
+        (lambda s, u: _zone_shell(s, u, 6.0), 6.0, _shell_palette, RED_OUT),  # 4: pompalı av fişeği (madde 448)
     ]
+    img = Image.new("RGBA", (CELL * 8, CELL * len(rows)), (0, 0, 0, 0))
     for r, (fn, length, pal, outline) in enumerate(rows):
         for f in range(8):
             ang = f * math.pi / 4.0

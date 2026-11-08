@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## ÇOK OYUNCULU KARAKTER SEÇİMİ - masaüstü, "SEÇİM D" (2026-10-16, kullanıcının seçtiği prototip: tools/proto_20261016/menu_proto.gd
 ## _design_sec_d). Oda kurulunca DOĞRUDAN bu ekran açılır, oyuncular seçim sürerken bağlanır (oda lobisi aşaması kalktı, bkz.
@@ -17,6 +18,7 @@ signal start_pressed
 signal ready_pressed
 signal leave_pressed
 
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
 const DK := preload("res://scripts/menu_dark_kit.gd")
 const WC := preload("res://scripts/weapon_catalog.gd")
 const PC := preload("res://scripts/pet_catalog.gd")
@@ -67,6 +69,10 @@ var _detail_name: Label = null
 var _detail_cat: Label = null
 var _detail_desc: Label = null
 var _start_btn: Button = null
+## HARİTA (madde 444, tek oyunculu): oda kur formundaki seçimin aynısı; seçim GameManager.selected_map'e yazılır, Main onu yükler.
+const MapProfilesScript := preload("res://scripts/map_profiles.gd")
+var _map_buttons: Dictionary = {} ## harita kimliği -> Button
+var _map_desc: Label = null
 var _start_info: Label = null
 var _lock: ColorRect = null
 var _pending_shown: int = -1
@@ -87,6 +93,7 @@ func build() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = DK.theme()
 	_validate_loadout()
+	_warm_previews()
 	if MobileUIScript.enabled:
 		_build_phone()
 		return
@@ -102,6 +109,35 @@ func build() -> void:
 		return
 	_build_lock()
 	NetworkManager.chat_message_received.connect(_on_chat_message)
+
+
+## Karta tıklayınca önizleme takılıyordu: karakterin SpriteFrames'i ilk tıklamada yükleniyor (25-265 ms) ve ilk karenin
+## dolu piksel kutusu `get_image()` (GPU geri okuma) ile ölçülüyordu. Yükleme KENDİ iş parçacığında (WorkerThreadPool
+## değil - madde 233), ölçüm ana iş parçacığında kare başına bir karakter; sonuç `PreviewScript` önbelleğinde kalır.
+func _warm_previews() -> void:
+	var defs: Array = []
+	var paths: Array = []
+	for id in Characters.DEFS.keys():
+		var d: Dictionary = Characters.get_def(int(id))
+		var p: String = str(d.get("frames", ""))
+		if p != "":
+			defs.append(d)
+			paths.append(p)
+	var loop := Engine.get_main_loop() as SceneTree
+	if loop == null or paths.is_empty():
+		return
+	var th := Thread.new()
+	th.start(func() -> void:
+		for p: String in paths:
+			ResourceLoader.load(p))
+	while th.is_alive():
+		await loop.process_frame
+	th.wait_to_finish()
+	for d: Dictionary in defs:
+		if not is_instance_valid(self):
+			return
+		PreviewScript.warm(d)
+		await loop.process_frame
 
 
 func _exit_tree() -> void:
@@ -139,6 +175,8 @@ func _validate_loadout() -> void:
 	var p: String = PC.selected()
 	if not PC.is_valid(p) or not MP.is_unlocked(MP.PET, p):
 		p = PC.DEFAULT_KEY
+	if p != str(GameManager.selected_pet):
+		changed = true
 	GameManager.selected_pet = p
 	var s: String = GameManager.selected_spiritual
 	if not SS.is_valid(s) or not MP.is_unlocked(MP.SPIRIT, s):
@@ -218,7 +256,7 @@ func _build_left_solo() -> void:
 	_chips = DK.h(8)
 	_chips.add_child(DK.chip(DK.G_PERSON, "Tek oyuncu", DK.C_DIM))
 	var shard := DK.box(DK.C_INSET, DK.C_LINE, 6, 2, 4)
-	var sst: StyleBoxFlat = shard.get_theme_stylebox("panel")
+	var sst = shard.get_theme_stylebox("panel") ## PixelBox (madde 417)
 	sst.content_margin_left = 12
 	sst.content_margin_right = 14
 	var sh := DK.h(8)
@@ -237,7 +275,39 @@ func _build_left_solo() -> void:
 	_players = DK.v(10)
 	_put(_players, Rect2(LEFT.position.x, 184, LEFT.size.x, 0))
 	_refresh_players()
+	_put(_map_box(), Rect2(LEFT.position.x, 470, LEFT.size.x, 0))
 	_put(_records_box(), Rect2(LEFT.position.x, 716, LEFT.size.x, 332))
+
+
+func _map_box() -> PanelContainer:
+	var box := DK.box(DK.C_PANEL, DK.C_LINE, 14)
+	var v := DK.v(10)
+	v.add_child(DK.title_bar("HARİTA"))
+	var row: HBoxContainer = null
+	for mid: String in MapProfilesScript.selectable_ids():
+		if row == null or row.get_child_count() >= 2: ## 2 sütunlu ızgara
+			row = DK.h(6)
+			v.add_child(row)
+		var b := DK.btn(str(MapProfilesScript.get_profile(mid)["ad"]), "tile", DK.FS_BODY, 52, 0)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(_set_map.bind(mid))
+		row.add_child(b)
+		_map_buttons[mid] = b
+	_map_desc = DK.wrap("", DK.FS_LABEL, DK.C_DIM, LEFT.size.x - 28, 2)
+	v.add_child(_map_desc)
+	box.add_child(v)
+	_set_map(GameManager.selected_map)
+	return box
+
+
+func _set_map(id: String) -> void:
+	if not MapProfilesScript.is_selectable(id):
+		id = MapProfilesScript.DEFAULT_ID
+	GameManager.selected_map = id
+	for k in _map_buttons:
+		DK.style_button(_map_buttons[k], "tile_on" if str(k) == id else "tile", 4, 6.0)
+	if _map_desc != null:
+		_map_desc.text = str(MapProfilesScript.get_profile(id).get("aciklama", ""))
 
 
 ## Tek oyunculu kartın verisi (çok oyunculuda lobby_players'tan gelir).
@@ -252,14 +322,14 @@ func _records_box() -> PanelContainer:
 	var runs: int = int(data.get("runs", 0))
 	var box := DK.box(DK.C_PANEL, DK.C_LINE, 14)
 	var v := DK.v(10)
-	v.add_child(DK.title_bar("EN İYİ KOŞULARIN", DK.lbl("%d koşu" % runs if runs > 0 else "", DK.FS_LABEL, DK.C_DIM)))
+	v.add_child(DK.title_bar("EN İYİ KOŞULARIN", DK.lbl(Loc.t("%d koşu") % runs if runs > 0 else "", DK.FS_LABEL, DK.C_DIM)))
 	if runs <= 0:
 		v.add_child(DK.wrap("Henüz koşu yok. İlk koşunu başlat - en yüksek kademen, en uzun süren ve en çok öldürmen burada görünür.",
 			DK.FS_LABEL, DK.C_DIM, LEFT.size.x - 28))
 		box.add_child(v)
 		return box
 	var tiles := DK.h(10)
-	for t: Array in [["EN YÜKSEK KADEME", "Kademe %d" % int(data.get("best_tier", 0))],
+	for t: Array in [["EN YÜKSEK KADEME", Loc.t("Kademe %d") % int(data.get("best_tier", 0))],
 			["EN UZUN SÜRE", _time_or_dash(float(data.get("best_time", 0.0)))]]:
 		var tile := DK.box(DK.C_INSET, DK.C_LINE, 10, 2, 4)
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -311,7 +381,7 @@ func _refresh_room() -> void:
 	if NetworkManager.is_online_session:
 		_chips.add_child(DK.chip(DK.G_GLOBE, "İnternet", DK.C_DIM))
 	else:
-		_chips.add_child(DK.chip(DK.G_GLOBE, ("LAN %s" % NetworkManager.room_code) if NetworkManager.room_code != "" else "LAN", DK.C_DIM))
+		_chips.add_child(DK.chip(DK.G_GLOBE, (Loc.t("LAN %s") % NetworkManager.room_code) if NetworkManager.room_code != "" else "LAN", DK.C_DIM))
 	_chips.add_child(DK.chip(DK.G_PERSON, "%d/%d" % [NetworkManager.lobby_players.size(), NetworkManager.room_max_players], DK.C_TEXT))
 
 
@@ -379,8 +449,10 @@ func _player_card(pid: int, index: int) -> PanelContainer:
 	var wkey: String = str(info.get("weapon", ""))
 	if WC.is_valid(wkey):
 		bot.add_child(DK.slot(WC.icon(wkey), 48, "Silah: " + WC.display_name(wkey)))
-	if me:
-		bot.add_child(DK.slot(PC.icon(PC.selected()), 48, "Evcil: " + PC.display_name(PC.selected())))
+	## Evcil: kendi kartında yerel seçim, başkasınınkinde lobby_players["pet"] (eski exe göndermez -> boş).
+	var pkey: String = PC.selected() if me else str(info.get("pet", ""))
+	if PC.is_valid(pkey):
+		bot.add_child(DK.slot(PC.icon(pkey), 48, "Evcil: " + PC.display_name(pkey)))
 	var sid: String = str(info.get("spirit", ""))
 	if SS.is_valid(sid):
 		bot.add_child(DK.slot(load(str(SS.get_def(sid).get("icon", ""))) as Texture2D, 48, "Ruhani: " + SS.skill_name(sid)))
@@ -432,7 +504,7 @@ func _pending_card() -> PanelContainer:
 
 func _me_tag() -> PanelContainer:
 	var p := DK.box(DK.C_ACCENT, Color(0, 0, 0, 0), 2, 0, 3)
-	var st: StyleBoxFlat = p.get_theme_stylebox("panel")
+	var st = p.get_theme_stylebox("panel") ## PixelBox (madde 417)
 	st.content_margin_left = 8
 	st.content_margin_right = 8
 	var l := DK.lbl("SEN", DK.FS_LABEL, DK.C_ACCENT_TEXT)
@@ -518,7 +590,7 @@ func _build_mid() -> void:
 		grid.add_child(_char_card(int(id)))
 		if MP.is_unlocked(MP.CHAR, int(id)):
 			open_n += 1
-	_open_count.text = "%d/%d açık" % [open_n, ids.size()]
+	_open_count.text = Loc.t("%d/%d açık") % [open_n, ids.size()]
 	mv.add_child(grid)
 	mv.add_child(DK.hline())
 	var nh := DK.h(12)
@@ -698,7 +770,7 @@ func _tex(path: String) -> Texture2D:
 func _skill_row(tex: Texture2D, key: String, nm: String, desc: String, unlock_lvl: int) -> HBoxContainer:
 	var hb := DK.h(14)
 	hb.mouse_filter = Control.MOUSE_FILTER_PASS
-	hb.tooltip_text = "%s%s\n%s" % [nm, ("  (%d. seviyede açılır)" % unlock_lvl) if unlock_lvl > 1 else "", desc]
+	hb.tooltip_text = "%s%s\n%s" % [nm, (Loc.t("  (%d. seviyede açılır)") % unlock_lvl) if unlock_lvl > 1 else "", desc]
 	var holder := Control.new()
 	holder.custom_minimum_size = Vector2(56, 56)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -887,11 +959,12 @@ func _on_option_pressed(key: String) -> void:
 				NetworkManager.update_local_loadout()
 			"pet":
 				GameManager.selected_pet = key
+				NetworkManager.update_local_loadout()
 			_:
 				GameManager.selected_spiritual = key
 				NetworkManager.update_local_loadout()
-		## Kendi kartındaki ikonlar: evcil ağdan gitmez; tek oyunculuda lobby_updated yok.
-		if solo or _tab == "pet":
+		## Kendi kartındaki ikonlar: tek oyunculuda lobby_updated yok.
+		if solo:
 			_refresh_players()
 	_fill_tab()
 	_refresh_loadout_header()
@@ -912,7 +985,7 @@ func _fill_detail() -> void:
 			_detail_desc.text = PC.description(key)
 		_:
 			var def: Dictionary = SS.get_def(key)
-			_detail_cat.text = "Aktif (%s)" % GameManager.get_action_key_label("skill4") if bool(def.get("active", false)) else "Pasif"
+			_detail_cat.text = Loc.t("Aktif (%s)") % GameManager.get_action_key_label("skill4") if bool(def.get("active", false)) else "Pasif"
 			_detail_cat.add_theme_color_override("font_color", DK.C_DIM)
 			_detail_desc.text = str(def.get("desc", ""))
 	if lk:
@@ -951,7 +1024,7 @@ func _build_start() -> void:
 
 func _build_lock() -> void:
 	_lock = ColorRect.new()
-	_lock.color = Color(0.04, 0.04, 0.08, 0.45) ## Gece Sıvası (madde 248)
+	_lock.color = Color(HT.DEEP, 0.45) ## tek palet (madde 403)
 	_lock.mouse_filter = Control.MOUSE_FILTER_STOP
 	_lock.visible = false
 	_put(_lock, Rect2(MID.position, Vector2(RIGHT.end.x - MID.position.x, RIGHT.size.y)))
@@ -981,9 +1054,9 @@ func _refresh_start() -> void:
 		if info.get("is_ready", false):
 			ready_n += 1
 	var pending: int = NetworkManager.pending_join_count()
-	var info_text: String = "%d/%d hazır" % [ready_n, lp.size()]
+	var info_text: String = Loc.t("%d/%d hazır") % [ready_n, lp.size()]
 	if pending > 0:
-		info_text += "  ·  %d oyuncu bağlanıyor" % pending
+		info_text += Loc.t("  ·  %d oyuncu bağlanıyor") % pending
 	var kind: String = "primary"
 	if NetworkManager.is_host:
 		_start_btn.text = "OYUNU BAŞLAT"
@@ -1142,7 +1215,7 @@ func _ph_hero_page() -> Control:
 		grid.add_child(_char_card(int(id)))
 		if MP.is_unlocked(MP.CHAR, int(id)):
 			open_n += 1
-	_open_count.text = "%d / %d açık" % [open_n, ids.size()]
+	_open_count.text = Loc.t("%d / %d açık") % [open_n, ids.size()]
 	(lst[1] as VBoxContainer).add_child(grid)
 	return v
 
@@ -1317,7 +1390,7 @@ func _ph_fill_skills(id: int, d: Dictionary) -> void:
 	if not slots.is_empty():
 		var cur: Array = slots[_ph_skill_sel]
 		var lvl: int = 0 if str(cur[0]) == "passive" else Characters.skill_unlock_level(id, str(cur[0]))
-		_ph_skill_desc.text = "%s%s: %s" % [cur[1], (" (%d. sv.)" % lvl) if lvl > 1 else "", first_sentence(str(cur[2]), 110)]
+		_ph_skill_desc.text = "%s%s: %s" % [cur[1], (Loc.t(" (%d. sv.)") % lvl) if lvl > 1 else "", first_sentence(str(cur[2]), 110)]
 	_skills.add_child(_ph_skill_desc)
 
 
@@ -1340,7 +1413,7 @@ func _ph_refresh_loadout() -> void:
 ## Hazır olunca (istemci) seçim alanı kilitlenir; HAZIR DEĞİLİM sağ sütunda açık kalır.
 func _ph_build_lock(root: Control) -> void:
 	_lock = ColorRect.new()
-	_lock.color = Color(0.04, 0.04, 0.08, 0.5)
+	_lock.color = Color(HT.DEEP, 0.5)
 	_lock.mouse_filter = Control.MOUSE_FILTER_STOP
 	_lock.visible = false
 	_lock.set_anchors_preset(Control.PRESET_FULL_RECT)

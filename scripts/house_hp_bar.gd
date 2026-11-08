@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## EVİN CANI çubuğu (madde 313, kullanıcı: "evin canı gözükmeli hasar alırken"). İki kip, ikisi de boss_bar_art.gd'nin piksel parçalarıyla
 ## (ahşap plaket + parşömen ad tabelası + kırmızı bantlı dolgu, m5x7 yazı):
@@ -75,7 +76,7 @@ func _process(delta: float) -> void:
 	if siege.collapsed:
 		title = "EV YIKIK"
 		r = clampf(siege.hp / (HouseSiege.MAX_HP * HouseSiege.REOPEN_RATIO), 0.0, 1.0)
-		label = "ONARIM %%%d" % int(roundf(r * 100.0))
+		label = Loc.t("ONARIM %%%d") % int(roundf(r * 100.0))
 	if not is_equal_approx(r, _ratio) or title != _title or label != _label:
 		_ratio = r
 		_title = title

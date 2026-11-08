@@ -1,0 +1,97 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
+
+BT START mode=wt char=2
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://shaders/cloud_shadows_material.tres:3 - ext_resource, invalid UID: uid://fcyufq7kts1o - using text path instead: res://shaders/cloud_shadows.gdshader
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/fx_oyku_heal.tscn:3 - ext_resource, invalid UID: uid://dh4h1d77x2n3p - using text path instead: res://scripts/fx_oyku_heal.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/fx_buyucu_fastfire.tscn:3 - ext_resource, invalid UID: uid://cd84h1d77x2n5 - using text path instead: res://scripts/fx_buyucu_fastfire.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/fx_shield_active.tscn:3 - ext_resource, invalid UID: uid://cd100h1d77x2n - using text path instead: res://scripts/fx_shield_active.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/fx_paladin_cast.tscn:3 - ext_resource, invalid UID: uid://cd99h1d77x2n2 - using text path instead: res://scripts/fx_paladin_cast.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/fx_assasin_stealth.tscn:3 - ext_resource, invalid UID: uid://cd94h1d77x2n6 - using text path instead: res://scripts/fx_assasin_stealth.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/fx_talha_rage.tscn:3 - ext_resource, invalid UID: uid://d74h1d77x2n4q - using text path instead: res://scripts/fx_talha_rage.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/fx_matthew_sacrifice.tscn:3 - ext_resource, invalid UID: uid://cd95h1d77x2n7 - using text path instead: res://scripts/fx_matthew_sacrifice.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: res://scenes/fx_matthew_explosion.tscn:3 - ext_resource, invalid UID: uid://cd96h1d77x2n8 - using text path instead: res://scripts/fx_matthew_explosion.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _wt (res://tools/buyuk_test/buyuk_test.gd:441)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:236)
+WARNING: Camera2D overridden to physics process mode due to use of physics interpolation.
+   at: _update_process_callback (scene/2d/camera_2d.cpp:88)
+   GDScript backtrace (most recent call first):
+       [0] opt_in (res://scripts/physics_interp.gd:34)
+       [1] _ready (res://scripts/player.gd:1171)
+[Yaratık sistemi] C++ EnemyWorld
+BT >> wt dagger t1
+BT CFG wt w=dagger t=1 dmg=124 dps=30.9 glow=1 vis=true nodes_d=30 | mean=5.10 p50=5.03 p95=6.06 max=16.1
+BT >> wt dagger t5
+BT CFG wt w=dagger t=5 dmg=183 dps=45.6 glow=5 vis=true nodes_d=1 | mean=5.31 p50=5.16 p95=6.27 max=9.1
+BT >> wt fire_staff t1
+BT CFG wt w=fire_staff t=1 dmg=162 dps=40.6 glow=1 vis=true nodes_d=19 | mean=5.47 p50=5.33 p95=6.40 max=9.7
+BT >> wt fire_staff t5
+BT CFG wt w=fire_staff t=5 dmg=249 dps=62.3 glow=5 vis=true nodes_d=29 | mean=5.46 p50=5.26 p95=6.50 max=10.7
+BT DONE mode=wt

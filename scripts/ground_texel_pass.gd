@@ -28,8 +28,7 @@ const LAYER_BIT := 1 << 19
 const NODE_NAME := "ZeminDunyaPikseli"
 const PARENT_NAME := "Yer"
 ## "Yer" altındaki, ÇİZİM SIRASIYLA ardışık katmanlar. "Çimler" (sallanan mini çim) bilerek dışarıda: onların üstünde kalır.
-## "Derin orman zemini" (madde 363): bölge zemininin pişmiş karoları, Zemin Çimen'in hemen üstünde (Harita.tmx'te de bu sırada).
-const ZEMIN_KATMANLARI: Array[String] = ["Zemin Toprak", "Çimen gölge", "Zemin Çimen", "Derin orman zemini"]
+const ZEMIN_KATMANLARI: Array[String] = ["Zemin Toprak", "Çimen gölge", "Zemin Çimen"]
 ## Kamera bu karede kıpırdarsa kenarda boşluk kalmasın diye görünümün her yanına eklenen pay (dünya px).
 const MARGIN := 8
 ## Dünya görünümü (alt-piksel sayısı) ekran pikselinin bu oranından büyükse geçiş kapanır (kazanç yok).
@@ -79,6 +78,12 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	var m := CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
+	## IŞIKSIZ (madde 475, 2026-11-08; kullanıcı: "buralarda bozunmalar var", "sahilde shader eksikliği"): katmanların ışığı alt görünümün
+	## İÇİNDE zaten uygulanıyor (paylaşılan World2D); sprite gölgeli kalınca ışık ikinci kez çarpılıyor, zemin doğrudan çizilen her şeyden
+	## (plato tepesi çimeni, kıyı kumu, kenar süsleri) koyu çıkıyordu -> basamaklı açık dikdörtgenler / düz kum şeridi. Ölçüm (gizli masaüstü,
+	## harita_tur.gd CAP_ZEMIN_ISIKSIZ / CAP_ZEMIN_GECIS): gündüz plato (98,141,71) vs zemin (93,130,62) -> ışıksızda ikisi (98,141,71) = geçiş
+	## kapalı; gece fener çevresi dahil geçiş kapalıyla piksel piksel aynı (ort. fark 0,05).
+	m.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	material = m
 	_sub = SubViewport.new()
 	_sub.name = "ZeminGorunumu"

@@ -5,7 +5,7 @@ extends SceneTree
 ## (`Godot --headless --path . --import`), yoksa YATI dokuları sahneye GÖMER (madde 310 tuzağı).
 ## Çalıştır: Godot --headless --path . -s res://tools/zindan/bake_zindan.gd [-- kemik_mahzeni et_kuyusu ...]
 
-const IDS: Array[String] = ["kemik_mahzeni", "et_kuyusu", "boynuzlu_kapi"]
+const IDS: Array[String] = ["batik_nekropol", "taskin_hisar", "lagim_agi"] ## madde 463: ana haritanın eski üç zindanı silindi; varsayılan = seçilebilir üç harita
 const DungeonDataScript := preload("res://scripts/dungeon/dungeon_data.gd")
 const ENGEL_CODE := {0: 1, 1: 2, 2: 3, 3: 4, 4: 5} ## Engel karo sütunu -> DungeonData.CELL_* (4 su -> CELL_WATER, madde 375)
 

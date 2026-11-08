@@ -22,6 +22,8 @@ uniform float egri_ussu : hint_range(0.5, 4.0) = 1.3;
 // Atlas dolgusu (grass_sway.gd ile aynı): karolar karo_hucre aralıklı hücrelerde, hücrenin karo_dolgu px içinde.
 uniform float karo_hucre = 18.0;
 uniform float karo_dolgu = 1.0;
+// Madde 390: atlasın bu satırdan itibaren bölgeye özel çalılıkları (4-7 Güney Eğrelti Yatağı; 0-3 L1 Uzun Yaprak, bölgede bitki boyasıyla).
+const float BOLGE_SATIRI = 4.0;
 
 // Hücre verisi (hide_brush_visual.gd yazar): R = kökün karonun üstünden uzaklığı (px, KÜMENİN en alt satırı), G = kümenin boyu (kökten en üst piksele),
 // B = küme fazı (1..255). Komşu verisi: R,G = SOLdaki hücrenin atlas (sütun+1, satır+1), B,A = SAĞdaki (0 = komşu yok).
@@ -148,5 +150,9 @@ void fragment() {
 	if (col.a < 0.01) { discard; }
 	col.a *= opak;
 	COLOR = col;
-	if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_bitki_d(COLOR.rgb, world_pos); } // bölge bitki rengi (madde 361) + harita + derin orman bölge renk ayarı (madde 181/359) - fragment()'in EN SONUNDA kalmalı
+	// bölge bitki rengi (madde 361) + harita + derin orman bölge renk ayarı (madde 181/359) - fragment()'in EN SONUNDA kalmalı. Madde 390: atlasın
+	// BOLGE_SATIRI ve altındaki satırları bölgenin kendi çalılığı (Güney Eğrelti Yatağı), zaten bölge renginde -> bitki boyası yok, sadece renk ayarı.
+	if (COLOR.a > 0.0) {
+		COLOR.rgb = floor(a.y / karo_hucre) >= BOLGE_SATIRI ? harita_renk_d(COLOR.rgb, world_pos) : harita_renk_bitki_d(COLOR.rgb, world_pos);
+	}
 }

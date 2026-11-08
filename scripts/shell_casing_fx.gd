@@ -20,7 +20,7 @@ const SND_TINK := preload("res://assets/audio/gun/shell_tink.wav")
 
 const WORLD_PX := 0.575 ## weapon_tier_art.gd WORLD_PX ile aynı (silah dokusu pikseli)
 const FRAMES := 8
-const ROWS := 4
+const ROWS := 5 ## 4 = pompalı av fişeği (madde 448)
 const MAX_ALIVE := 48
 const GRAVITY := 560.0 ## dünya px/sn^2
 const REST_TIME := 1.6
@@ -78,6 +78,8 @@ static func drop_mag(icon: Node2D, key: String, owner_body: Node2D) -> void:
 	if not _icon_ok(icon) or not GunMagMath.has_mag(key):
 		return
 	var c: Dictionary = GunMagMath.cfg(key)
+	if int(c.get("mag_row", -1)) < 0:
+		return ## Pompalı: şarjörü yok
 	var from: Vector2 = icon_point(icon, c["mag_out"])
 	var side: float = 1.0 if randf() < 0.5 else -1.0
 	var vel := Vector2(side * randf_range(6.0, 16.0), randf_range(-5.0, 5.0))

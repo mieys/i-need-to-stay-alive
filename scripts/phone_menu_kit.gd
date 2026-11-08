@@ -7,6 +7,7 @@ extends RefCounted
 ## gövde yazısı 48, küçük yazı 32 (m5x7 8'in katlarında keskin). Hepsi statik: const PK := preload("res://scripts/phone_menu_kit.gd").
 
 const DK := preload("res://scripts/menu_dark_kit.gd")
+const PixelBox := preload("res://scripts/pixel_box.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 
 const SIDE := 96.0
@@ -20,9 +21,10 @@ const FS_HERO := 96
 const FS_TITLE := 64
 const FS_BODY := 48
 const FS_SMALL := 32
-const DIMBG := Color(0.03, 0.03, 0.06)
+const DIMBG := HT.DEEP
 ## Panel dolgusu prototipteki "panel" (#1a1a2c) - DK.C_PANEL hafif saydam (ana menü sahnesi seçilsin diye) olduğundan ayrı.
-const C_PANEL := Color("#1a1a2c")
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
+const C_PANEL := HT.WIN_PANEL
 const C_DANGER_FILL := Color("#4e2018")
 const C_DANGER_TEXT := Color("#ffd8c8")
 const C_SOUL := Color("#e6dcff") ## Ruh Kıymığı sayısı = mor kristalin açık tonu (madde 343)
@@ -144,7 +146,7 @@ static func view(n: Node) -> Vector2:
 	return n.get_viewport().get_visible_rect().size if n and n.is_inside_tree() else Vector2(2400, 1080)
 
 
-static func sb(fill: Color, border: Color = Color(0, 0, 0, 0), bw: int = 3, r: int = RAD, pad: float = -1.0) -> StyleBoxFlat:
+static func sb(fill: Color, border: Color = Color(0, 0, 0, 0), bw: int = 3, r: int = RAD, pad: float = -1.0) -> PixelBox: ## madde 417
 	return DK.sb(fill, border, bw, r, pad)
 
 

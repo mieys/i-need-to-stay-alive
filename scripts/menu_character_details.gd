@@ -66,7 +66,7 @@ func show_character(char_id: int) -> void:
 		_add_skill_row(def.get("skill3", 1), _icon_path(def, "skill3"), "skill3", str(def.get("skill3_name", "3. Yetenek")), str(def.get("skill3_desc", "")))
 	## Pasif satırı: hud.gd _setup_ability_icons() ile aynı mantık (gerçek ikon yoksa passive_vector_id vektör ikonu).
 	if def.has("passive") and not str(def["passive"]).is_empty():
-		_add_skill_row(def.get("passive_vector_id", -1), def.get("passive_icon", ""), "", "", "PASİF: " + str(def["passive"]))
+		_add_skill_row(def.get("passive_vector_id", -1), def.get("passive_icon", ""), "", "", TranslationServer.translate("PASİF") + ": " + str(def["passive"])) ## madde 446
 	_scroll.scroll_vertical = 0
 
 

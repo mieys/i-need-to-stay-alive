@@ -1,4 +1,5 @@
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## EFSUN KART HAVUZU. Yerel oyuncunun sahip olduğu silah kopyalarından 3 kart (2026-09-30 yeni efsun seti kuralları -
 ## bkz. enchant_defs.gd dosya başı):
@@ -14,24 +15,25 @@ extends RefCounted
 ## chest_menu.gd WEAPON_ICON_TEXTURES ile aynı yollar.
 const WEAPON_ICONS := {
 	"dagger": "res://assets/weapons/base_knife/icon_v2.png",
-	"fire_staff": "res://assets/weapons/fire/firestaff_icon_v3.png",
+	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
 	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
 	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
-	"tuftuf": "res://assets/weapons/tuftuf/icon_v2.png",
+	"tuftuf": "res://assets/weapons/yeni/zehir_asasi.png",
 	"tufek": "res://assets/weapons/tufek/icon.png",
-	"arcane": "res://assets/weapons/arcane/icon_v3.png",
-	"yay": "res://assets/weapons/yay/draw1.png",
-	"crossbow": "res://assets/weapons/crossbow/icon.png",
+	"arcane": "res://assets/weapons/yeni/arcane.png",
+	"yay": "res://assets/weapons/yeni/yay.png",
+	"crossbow": "res://assets/weapons/yeni/arbalet.png",
 	"boomerang": "res://assets/weapons/boomerang/icon.png",
-	"buz_asasi": "res://assets/weapons/buz_asasi/icon_v3.png",
+	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
 	"fisek": "res://assets/weapons/fisek/icon.png",
 	"pence": "res://assets/weapons/pence/icon.png",
 	"topuz": "res://assets/weapons/topuz/icon.png",
-	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
-	"gokkusagi": "res://assets/weapons/zanaat/gokkusagi_L1.png",
+	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
+	"gokkusagi": "res://assets/weapons/yeni/gokkusagi.png",
 	"mizrak": "res://assets/weapons/zanaat/mizrak_L1.png",
 	"kalkan": "res://assets/weapons/zanaat/kalkan_L1.png",
 	"yinyang": "res://assets/weapons/zanaat/yinyang_L1.png",
+	"pompali": "res://assets/weapons/pompali/icon.png",
 }
 const GOLD_CARD_AMOUNT := 15
 
@@ -134,7 +136,7 @@ static func describe(c: Dictionary) -> Dictionary:
 			var wkey: String = _slot_weapon(slot)
 			var wname: String = str(EnchantDefs.WEAPON_NAMES.get(wkey, wkey))
 			if _count_copies(wkey) > 1:
-				wname += " (%d. kopya)" % (slot + 1)
+				wname += Loc.t(" (%d. kopya)") % (slot + 1)
 			var element: String = EnchantDefs.element_of(id, wkey)
 			out["icon"] = str(WEAPON_ICONS.get(wkey, ""))
 			out["color"] = EnchantDefs.element_color(element)
@@ -144,12 +146,12 @@ static func describe(c: Dictionary) -> Dictionary:
 			var taken: int = _taken_count(slot)
 			match kind:
 				"temel":
-					out["tier_line"] = "Temel · %s" % EnchantDefs.element_name(element)
+					out["tier_line"] = Loc.t("Temel · %s") % EnchantDefs.element_name(element)
 					out["body"] = str((def.get("base", {}) as Dictionary).get("text", ""))
 				"step":
 					var u: int = int(c.get("up", 0))
 					var up: Dictionary = ups[u] if u >= 0 and u < ups.size() else {}
-					out["tier_line"] = "Geliştirme %d / %d" % [taken + 1, ups.size()]
+					out["tier_line"] = Loc.t("Geliştirme %d / %d") % [taken + 1, ups.size()]
 					out["body"] = str(up.get("text", ""))
 				"final":
 					var fin: Dictionary = def.get("final", {})
@@ -159,13 +161,13 @@ static func describe(c: Dictionary) -> Dictionary:
 			out["title"] = "Tepkime Gücü"
 			out["category"] = "Tüm silahlar"
 			out["tier_line"] = "Genel"
-			out["body"] = "Tetiklediğin tüm tepkimelerin hasarı %%%d artar." % int(round(EnchantDefs.GENERAL_REACTION_POWER * 100.0))
+			out["body"] = Loc.t("Tetiklediğin tüm tepkimelerin hasarı %%%d artar.") % int(round(EnchantDefs.GENERAL_REACTION_POWER * 100.0))
 			out["color"] = Color("#c98cff")
 		"general_dmg":
 			out["title"] = "Keskinlik"
 			out["category"] = "Tüm silahlar"
 			out["tier_line"] = "Genel"
-			out["body"] = "Tüm silahlarının hasarı %%%d artar." % int(round(EnchantDefs.GENERAL_DAMAGE_PERCENT * 100.0))
+			out["body"] = Loc.t("Tüm silahlarının hasarı %%%d artar.") % int(round(EnchantDefs.GENERAL_DAMAGE_PERCENT * 100.0))
 			out["color"] = Color("#ff8a5a")
 		"shield_pick", "shield_up":
 			ShieldEnchantDefs.describe(c, out)
@@ -174,7 +176,7 @@ static func describe(c: Dictionary) -> Dictionary:
 			out["category"] = "Efsun kalmadı"
 			out["tier_line"] = "Altın"
 			out["lead"] = "Şu an alınabilecek efsun kartı yok. Yeni bir silah ya da Final için gereken eşyayı edin."
-			out["body"] = "+%d altın." % int(c.get("gold", GOLD_CARD_AMOUNT))
+			out["body"] = Loc.t("+%d altın.") % int(c.get("gold", GOLD_CARD_AMOUNT))
 			out["color"] = Color("#ffd66e")
 	return out
 
@@ -202,7 +204,7 @@ static func owned_summary() -> String:
 		var wname: String = str(EnchantDefs.WEAPON_NAMES.get(key, key))
 		var ench: Dictionary = entry.get("enchant", {})
 		if ench.is_empty():
-			parts.append("%s: efsunsuz" % wname)
+			parts.append(Loc.t("%s: efsunsuz") % wname)
 			continue
 		var def: Dictionary = EnchantDefs.get_def(str(ench.get("id", "")))
 		var stage: String = "Final" if EnchantDefs.is_complete(ench) else "%d / %d" % [

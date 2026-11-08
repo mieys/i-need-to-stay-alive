@@ -5,6 +5,7 @@ extends Node
 
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_rat1.tscn")
 const DartScene: PackedScene = preload("res://scenes/dart_projectile.tscn")
+const PoisonDripFx := preload("res://scripts/poison_drip_fx.gd")
 
 var _made: Array[Node] = []
 
@@ -34,15 +35,22 @@ func test_poison_status_fx_is_capped_but_poison_logic_is_not() -> void:
 	_cleanup()
 
 
+## Madde 410: Zehir Asası isabeti artık fx_poison_hit değil taç sıçraması + gölcük (poison_drip_fx.gd) - bütçe yöneticinin tavanları.
 func test_dart_impact_fx_budget() -> void:
 	if get_tree().current_scene == null:
 		get_tree().current_scene = self
 	var dart: Node = DartScene.instantiate()
 	add_child(dart)
 	_made.append(dart)
-	assert(int(dart.get("impact_max_alive")) == 8 and is_equal_approx(float(dart.get("impact_scale")), 0.8), "dart ayarları")
-	for i in range(14):
+	for i in range(40):
 		dart.call("_spawn_impact")
-	var alive: int = get_tree().get_node_count_in_group("impact_fx_fx_poison_hit.tscn")
-	assert(alive == 8, "aynı anda en çok 8 isabet efekti: %d" % alive)
+	assert(get_tree().get_node_count_in_group("impact_fx_fx_poison_hit.tscn") == 0, "eski zehir patlaması çıkmaz")
+	var mgr: Node = get_tree().current_scene.get_node_or_null(PoisonDripFx.NODE_NAME)
+	assert(mgr != null, "sıçrama yöneticisi")
+	assert(int(mgr.call("drop_count")) <= PoisonDripFx.MAX_DROPS and int(mgr.call("puddle_count")) <= PoisonDripFx.MAX_PUDDLES, "tavan")
+	assert(mgr.get_child_count() == 0, "damla başına düğüm yok (tek _draw)")
+	mgr.free()
+	var g: Node = get_tree().current_scene.get_node_or_null("PoisonDripGround")
+	if g != null:
+		g.free()
 	_cleanup()

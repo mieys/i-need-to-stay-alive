@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Çok oyunculu ODA LİSTESİ (kullanıcı isteği 2026-10-11: "insanlar oda kurup odalarına şifre koyup oyuncu sayısı v.b limitleri
 ## koyup birbirlerinin odalarına girebilmeli"; onaylanan prototip: oda listesi + "Oda kur" penceresi + şifre sorusu).
@@ -18,6 +19,7 @@ const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const DK := preload("res://scripts/menu_dark_kit.gd")
 const HearthBg := preload("res://scripts/menu_hearth_bg.gd")
 const PK := preload("res://scripts/phone_menu_kit.gd")
+const MapProfilesScript := preload("res://scripts/map_profiles.gd") ## harita seçimi (madde 444)
 ## Masaüstü ızgarası (lobby_select_desktop.gd LEFT / MID+RIGHT / START_Y ile aynı sütunlar).
 const D_LEFT := Rect2(32, 24, 440, 1024)
 const D_LIST := Rect2(488, 24, 1400, 908)
@@ -26,8 +28,6 @@ const D_ROW_H := 68.0
 const D_INPUT_H := 52.0
 const ONLINE_REFRESH_SEC := 8.0
 const LAN_PORT := 7777
-const PLAYER_CHOICES := [2, 3, 4, 5, 6, 7, 8]
-const DEFAULT_MAX_PLAYERS := 4
 const PASSWORD_MAX_LEN := 32
 const PANEL_MAX := Vector2(1200, 800)
 const DIALOG_W := 600.0
@@ -62,8 +62,9 @@ const BUSY_MIN_MS := 1500
 var _dialog: Control = null
 var _room_name_input: LineEdit = null
 var _room_pw_input: LineEdit = null
-var _max_buttons: Dictionary = {} ## int -> Button
-var _max_players: int = DEFAULT_MAX_PLAYERS
+## HARİTA SEÇİMİ (madde 444): oda kur formunda seçilen harita (configure_room -> GameManager.selected_map) ve düğmeleri.
+var _room_map: String = MapProfilesScript.DEFAULT_ID
+var _map_buttons: Dictionary = {} ## harita kimliği -> Button
 var _online_choice_btn: Button = null
 var _lan_choice_btn: Button = null
 var _use_online: bool = false
@@ -143,8 +144,8 @@ func _build_desktop() -> void:
 	_d_put(col, D_LEFT)
 	_d_put(_d_list_box(), D_LIST)
 	_d_put(_d_ip_box(), D_IP)
-	_room_name_input.text = "%s odası" % _player_name()
-	_set_max_players(DEFAULT_MAX_PLAYERS)
+	_room_name_input.text = Loc.t("%s odası") % _player_name()
+	_set_room_map(GameManager.selected_map)
 	_set_connection(NetworkManager.is_online_available())
 
 
@@ -181,9 +182,9 @@ func _d_mode_box() -> PanelContainer:
 	v.add_child(head)
 	var chips := DK.h(8)
 	chips.add_child(DK.chip(DK.G_GLOBE, "İnternet + LAN" if NetworkManager.is_online_available() else "Sadece LAN", DK.C_DIM))
-	chips.add_child(DK.chip(DK.G_PERSON, "%d-%d kişi" % [NetworkManager.ROOM_MIN_PLAYERS, NetworkManager.MAX_PLAYERS], DK.C_DIM))
+	chips.add_child(DK.chip(DK.G_PERSON, Loc.t("%d-%d kişi") % [NetworkManager.ROOM_MIN_PLAYERS, NetworkManager.MAX_PLAYERS], DK.C_DIM))
 	v.add_child(chips)
-	_status_label = DK.wrap("Bir odaya katıl ya da kendi odanı kur.", DK.FS_LABEL, DK.C_DIM, D_LEFT.size.x - 28, 3)
+	_status_label = DK.wrap("", DK.FS_LABEL, DK.C_DIM, D_LEFT.size.x - 28, 3)
 	v.add_child(_status_label)
 	box.add_child(v)
 	return box
@@ -223,20 +224,23 @@ func _d_create_box() -> PanelContainer:
 	_room_name_input = _d_input("", "Odanın adı", 32)
 	_room_name_input.text_submitted.connect(func(_t: String) -> void: _on_create_pressed())
 	v.add_child(_room_name_input)
-	v.add_child(DK.lbl("Şifre  (boşsa herkes girebilir)", DK.FS_LABEL, DK.C_DIM))
+	v.add_child(DK.lbl("Şifre", DK.FS_LABEL, DK.C_DIM))
 	_room_pw_input = _d_input("", "Şifresiz", PASSWORD_MAX_LEN)
 	_room_pw_input.secret = true
 	_room_pw_input.text_submitted.connect(func(_t: String) -> void: _on_create_pressed())
 	v.add_child(_room_pw_input)
-	v.add_child(DK.lbl("En fazla oyuncu", DK.FS_LABEL, DK.C_DIM))
-	var max_row := DK.h(6)
-	for n in PLAYER_CHOICES:
-		var b := DK.btn(str(n), "tile", DK.FS_BODY, D_INPUT_H, 0)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.pressed.connect(_set_max_players.bind(int(n)))
-		max_row.add_child(b)
-		_max_buttons[int(n)] = b
-	v.add_child(max_row)
+	v.add_child(DK.lbl("Harita", DK.FS_LABEL, DK.C_DIM))
+	var map_row: HBoxContainer = null
+	for mid: String in MapProfilesScript.selectable_ids():
+		if map_row == null or map_row.get_child_count() >= 2: ## 2 sütunlu ızgara (uzun harita adları)
+			map_row = DK.h(6)
+			v.add_child(map_row)
+		var mb := DK.btn(str(MapProfilesScript.get_profile(mid)["ad"]), "tile", DK.FS_BODY, D_INPUT_H, 0)
+		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mb.tooltip_text = str(MapProfilesScript.get_profile(mid).get("aciklama", ""))
+		mb.pressed.connect(_set_room_map.bind(mid))
+		map_row.add_child(mb)
+		_map_buttons[mid] = mb
 	v.add_child(DK.lbl("Bağlantı", DK.FS_LABEL, DK.C_DIM))
 	var conn := DK.h(6)
 	_online_choice_btn = DK.btn("İnternet", "tile", DK.FS_BODY, D_INPUT_H, 0)
@@ -339,7 +343,7 @@ func _d_room_row(r: Dictionary) -> Button:
 	b.pressed.connect(_on_room_pressed.bind(r))
 	var muted: bool = full or in_game
 	var cols := DK.h(16)
-	var nm := DK.lbl(str(r["room_name"]), DK.FS_BODY, DK.C_ACCENT if open else (DK.C_DIM if muted else DK.C_TEXT))
+	var nm := DK.lbl(_room_title(r), DK.FS_BODY, DK.C_ACCENT if open else (DK.C_DIM if muted else DK.C_TEXT))
 	_d_col_size(nm, 0)
 	cols.add_child(nm)
 	cols.add_child(_d_cell(1, DK.G_CROWN, str(r["host_name"]), DK.C_DIM))
@@ -352,7 +356,7 @@ func _d_room_row(r: Dictionary) -> Button:
 	_d_col_size(st, 5)
 	cols.add_child(st)
 	DK.btn_row(b, cols, false)
-	b.tooltip_text = "%s - host: %s" % [r["room_name"], r["host_name"]]
+	b.tooltip_text = Loc.t("%s - host: %s") % [_room_title(r), r["host_name"]]
 	if in_game:
 		b.tooltip_text += " (oyunda: sadece bu oyundan düşenler geri girebilir)"
 	return b
@@ -588,7 +592,7 @@ func _ph_room_row(r: Dictionary) -> PanelContainer:
 	var row := PanelContainer.new()
 	row.name = "Room_" + str(r["key"]).replace(":", "_").replace(".", "_")
 	row.custom_minimum_size.y = PH_ROW_H
-	row.tooltip_text = "%s - host: %s" % [r["room_name"], r["host_name"]]
+	row.tooltip_text = Loc.t("%s - host: %s") % [_room_title(r), r["host_name"]]
 	row.add_theme_stylebox_override("panel", PK.sb(Color(DK.C_PANEL2, 0.6 if faded else 0.95), DK.C_LINE, 3, 18, 16.0))
 	var h := DK.h(24)
 	var ic := PK.inset(0.9, 0.0, DK.C_LINE_HI)
@@ -601,7 +605,7 @@ func _ph_room_row(r: Dictionary) -> PanelContainer:
 	tv.alignment = BoxContainer.ALIGNMENT_CENTER
 	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var nh := DK.h(16)
-	var nl_ := PK.lbl(str(r["room_name"]), PK.FS_BODY, DK.C_DIM if faded else DK.C_TEXT)
+	var nl_ := PK.lbl(_room_title(r), PK.FS_BODY, DK.C_DIM if faded else DK.C_TEXT)
 	nl_.clip_text = true
 	nl_.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	nl_.custom_minimum_size.x = 120
@@ -610,7 +614,7 @@ func _ph_room_row(r: Dictionary) -> PanelContainer:
 		nh.add_child(PK.glyph(PK.G_LOCK, DK.C_BAD, 5))
 	tv.add_child(nh)
 	var status: String = "Oyunda" if bool(r["in_game"]) else ("Dolu" if full else "Lobide")
-	var st := PK.lbl("%s, kuran %s" % [status, str(r["host_name"])], PK.FS_SMALL, DK.C_DIM)
+	var st := PK.lbl(Loc.t("%s, kuran %s") % [status, str(r["host_name"])], PK.FS_SMALL, DK.C_DIM)
 	st.clip_text = true
 	st.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	tv.add_child(st)
@@ -728,11 +732,12 @@ func _rooms() -> Array:
 		out.append({"key": "lan:%s:%d" % [g["ip"], g["port"]], "kind": "lan", "ip": g["ip"], "port": int(g["port"]),
 			"room_name": str(g.get("room_name", g["name"])), "host_name": str(g["name"]), "players": int(g.get("players", 1)),
 			"max_players": int(g.get("max_players", NetworkManager.MAX_PLAYERS)), "locked": bool(g.get("locked", false)),
-			"in_game": bool(g.get("in_game", false))})
+			"in_game": bool(g.get("in_game", false)), "map": str(g.get("map", MapProfilesScript.DEFAULT_ID))})
 	for r in _online_rooms:
 		out.append({"key": "eos:%s" % r["host_id"], "kind": "online", "host_id": str(r["host_id"]),
 			"room_name": str(r.get("room_name", r["host_name"])), "host_name": str(r["host_name"]), "players": int(r["players"]),
-			"max_players": int(r["max_players"]), "locked": bool(r.get("locked", false)), "in_game": bool(r["in_game"])})
+			"max_players": int(r["max_players"]), "locked": bool(r.get("locked", false)), "in_game": bool(r["in_game"]),
+			"map": str(r.get("map", MapProfilesScript.DEFAULT_ID))})
 	if not _ip_room.is_empty():
 		out.append(_ip_room)
 	out.sort_custom(func(a, b): return [a["in_game"], str(a["room_name"])] < [b["in_game"], str(b["room_name"])])
@@ -749,9 +754,9 @@ func _rebuild_list() -> void:
 	var rooms: Array = _ph_visible_rooms() if _mobile else _rooms()
 	if _count_label:
 		if _mobile:
-			_count_label.text = "%d ODA" % rooms.size()
+			_count_label.text = Loc.t("%d ODA") % rooms.size()
 		else:
-			_count_label.text = ("%d oda" % rooms.size()) if not rooms.is_empty() else ""
+			_count_label.text = (Loc.t("%d oda") % rooms.size()) if not rooms.is_empty() else ""
 	if rooms.is_empty():
 		var searching: bool = NetworkManager.is_online_available() and not _online_searched
 		if not _mobile:
@@ -800,7 +805,7 @@ func _join(r: Dictionary, password: String) -> void:
 	_pending = r
 	_set_busy(true)
 	NetworkManager.join_password = password
-	_status_label.text = "\"%s\" odasına bağlanılıyor..." % r["room_name"]
+	_status_label.text = Loc.t("\"%s\" odasına bağlanılıyor...") % r["room_name"]
 	if r["kind"] == "online":
 		NetworkManager.join_online(str(r["host_id"]), str(r["host_name"]), _player_name(), NetworkManager.local_char_id)
 	else:
@@ -890,10 +895,10 @@ func _commit_name() -> void:
 	var n: String = _name_input.text.strip_edges()
 	if not n.is_empty() and n != NetworkManager.local_player_name:
 		## Masaüstünde form hep açık: oda adı hâlâ "<eski ad> odası" ise yeni adla güncellenir (elle yazılmışsa dokunulmaz).
-		var was_default: bool = not _mobile and _room_name_input != null and _room_name_input.text == "%s odası" % NetworkManager.local_player_name
+		var was_default: bool = not _mobile and _room_name_input != null and _room_name_input.text == Loc.t("%s odası") % NetworkManager.local_player_name
 		NetworkManager.update_local_player_name(n)
 		if was_default:
-			_room_name_input.text = "%s odası" % NetworkManager.local_player_name
+			_room_name_input.text = Loc.t("%s odası") % NetworkManager.local_player_name
 
 
 func _on_room_entered() -> void:
@@ -941,7 +946,7 @@ func _build_dialog() -> void:
 	_room_name_input = PK.line_edit("", PK.FS_BODY, 96.0)
 	_room_name_input.max_length = 32
 	c1.add_child(_room_name_input)
-	c1.add_child(PK.lbl("Şifre (boşsa herkes girebilir)", PK.FS_SMALL, DK.C_DIM))
+	c1.add_child(PK.lbl("Şifre", PK.FS_SMALL, DK.C_DIM))
 	_room_pw_input = PK.line_edit("", PK.FS_BODY, 96.0)
 	_room_pw_input.secret = true
 	_room_pw_input.max_length = PASSWORD_MAX_LEN
@@ -949,15 +954,17 @@ func _build_dialog() -> void:
 	cols.add_child(c1)
 	var c2 := DK.v(10)
 	c2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	c2.add_child(PK.lbl("En fazla oyuncu", PK.FS_SMALL, DK.C_DIM))
-	var max_row := DK.h(8)
-	for n in PLAYER_CHOICES:
-		var b := PK.button(str(n), "secondary", PK.FS_BODY, [], 0.0, 96.0)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.pressed.connect(_set_max_players.bind(int(n)))
-		max_row.add_child(b)
-		_max_buttons[int(n)] = b
-	c2.add_child(max_row)
+	c2.add_child(PK.lbl("Harita", PK.FS_SMALL, DK.C_DIM))
+	var map_row: HBoxContainer = null
+	for mid: String in MapProfilesScript.selectable_ids():
+		if map_row == null or map_row.get_child_count() >= 2:
+			map_row = DK.h(8)
+			c2.add_child(map_row)
+		var mb := PK.button(str(MapProfilesScript.get_profile(mid)["ad"]), "secondary", PK.FS_BODY, [], 0.0, 96.0)
+		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mb.pressed.connect(_set_room_map.bind(mid))
+		map_row.add_child(mb)
+		_map_buttons[mid] = mb
 	c2.add_child(PK.lbl("Bağlantı", PK.FS_SMALL, DK.C_DIM))
 	var conn_row := DK.h(8)
 	_online_choice_btn = PK.button("İnternet", "secondary", PK.FS_BODY, [], 0.0, 96.0)
@@ -988,14 +995,22 @@ func _build_dialog() -> void:
 	create.pressed.connect(_on_create_pressed)
 	btn_row.add_child(create)
 	v.add_child(btn_row)
-	_set_max_players(DEFAULT_MAX_PLAYERS)
+	_set_room_map(GameManager.selected_map)
 	_set_connection(NetworkManager.is_online_available())
 
 
-func _set_max_players(n: int) -> void:
-	_max_players = n
-	for k in _max_buttons:
-		_style_choice(_max_buttons[k], int(k) == n)
+func _set_room_map(id: String) -> void:
+	_room_map = id if MapProfilesScript.is_selectable(id) else MapProfilesScript.DEFAULT_ID
+	for k in _map_buttons:
+		_style_choice(_map_buttons[k], str(k) == _room_map)
+
+
+## Oda satırı başlığı: ana harita dışındaki odalarda harita adı parantez içinde (madde 444).
+static func _room_title(r: Dictionary) -> String:
+	var mid: String = str(r.get("map", MapProfilesScript.DEFAULT_ID))
+	if mid == MapProfilesScript.DEFAULT_ID or not MapProfilesScript.has_profile(mid):
+		return str(r["room_name"])
+	return "%s (%s)" % [r["room_name"], MapProfilesScript.get_profile(mid)["ad"]]
 
 
 func _set_connection(online: bool) -> void:
@@ -1006,16 +1021,16 @@ func _set_connection(online: bool) -> void:
 		if not NetworkManager.is_online_available():
 			_conn_hint.text = "Epic ayarları eksik - şimdilik sadece aynı ağdakiler katılabilir."
 		elif _use_online:
-			_conn_hint.text = "PC + Android, port açmaya gerek yok."
+			_conn_hint.text = "" ## açıklamalar kaldırıldı (2026-11-07, kullanıcı); yalnız Epic eksik uyarısı kalır
 		else:
-			_conn_hint.text = "Aynı Wi-Fi / kablolu ağdakiler oda listesinde görür."
+			_conn_hint.text = ""
 
 
 func _open_dialog() -> void:
 	if _busy:
 		return
 	_commit_name()
-	_room_name_input.text = "%s odası" % _player_name()
+	_room_name_input.text = Loc.t("%s odası") % _player_name()
 	_room_pw_input.text = ""
 	_dialog_error.text = ""
 	_dialog.visible = true
@@ -1031,7 +1046,8 @@ func _on_create_pressed() -> void:
 		return
 	_commit_name()
 	_dialog_error.text = ""
-	NetworkManager.configure_room(rname, _room_pw_input.text, _max_players)
+	## Oyuncu sayısı seçimi kaldırıldı (2026-11-07, kullanıcı: "gerek yok"): her oda en fazla oyuncuya açık.
+	NetworkManager.configure_room(rname, _room_pw_input.text, NetworkManager.MAX_PLAYERS, _room_map)
 	if _dialog:
 		_dialog.visible = false
 	_set_busy(true)

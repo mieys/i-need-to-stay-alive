@@ -6,65 +6,65 @@
 [ext_resource type="Texture2D" uid="uid://cyxg25xeeouk" path="res://assets/pickups/xp_orb/xp_orb_yellow.png" id="4"]
 [ext_resource type="Texture2D" uid="uid://cckh0dpvi66ic" path="res://assets/pickups/xp_orb/xp_orb_red.png" id="5"]
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_green_0"]
-atlas = ExtResource("1")
-region = Rect2(0, 0, 32, 32)
-
 [sub_resource type="AtlasTexture" id="AtlasTexture_blue_0"]
 atlas = ExtResource("2")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_green_0"]
+atlas = ExtResource("1")
 region = Rect2(0, 0, 32, 32)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_purple_0"]
 atlas = ExtResource("3")
 region = Rect2(0, 0, 32, 32)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_yellow_0"]
-atlas = ExtResource("4")
-region = Rect2(0, 0, 32, 32)
-
 [sub_resource type="AtlasTexture" id="AtlasTexture_red_0"]
 atlas = ExtResource("5")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_yellow_0"]
+atlas = ExtResource("4")
 region = Rect2(0, 0, 32, 32)
 
 [resource]
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_green_0")
+"texture": SubResource("AtlasTexture_blue_0")
 }],
-"loop": true,
-"name": &"green",
+"loop": 1,
+"name": &"blue",
 "speed": 1.0
 }, {
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_blue_0")
+"texture": SubResource("AtlasTexture_green_0")
 }],
-"loop": true,
-"name": &"blue",
+"loop": 1,
+"name": &"green",
 "speed": 1.0
 }, {
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AtlasTexture_purple_0")
 }],
-"loop": true,
+"loop": 1,
 "name": &"purple",
-"speed": 1.0
-}, {
-"frames": [{
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_yellow_0")
-}],
-"loop": true,
-"name": &"yellow",
 "speed": 1.0
 }, {
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AtlasTexture_red_0")
 }],
-"loop": true,
+"loop": 1,
 "name": &"red",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_yellow_0")
+}],
+"loop": 1,
+"name": &"yellow",
 "speed": 1.0
 }]

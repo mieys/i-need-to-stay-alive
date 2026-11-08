@@ -405,7 +405,7 @@ func test_selected_weapon_card_shows_a_single_frame() -> void:
 	var rings: Array = []
 	_visible_rings(r["panel"], rings)
 	var sb: StyleBox = (r["panel"] as PanelContainer).get_theme_stylebox("panel")
-	var accent: bool = sb is StyleBoxFlat and (sb as StyleBoxFlat).border_color == screen._k.c("accent")
+	var accent: bool = sb != null and sb.get("border_color") == screen._k.c("accent") ## PixelBox (madde 417)
 	screen._on_close_pressed()
 	p.free()
 	_restore_state()

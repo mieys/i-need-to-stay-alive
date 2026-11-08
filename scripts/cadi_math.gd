@@ -47,9 +47,16 @@ const Q_COST_PERCENT_OF_MAX := 0.005
 const Q_COST_FLAT := 5.0
 const Q_COOLDOWN := 8.0
 const Q_DAMAGE_RATIO := 1.2
-## Aynı yaratık dumandan en fazla bu aralıkla hasar alır ("her saniye"); yaratıklar bu sıklıkla taranır.
-const Q_HIT_INTERVAL := 1.0
-const Q_SCAN_INTERVAL := 0.25
+## Aynı yaratık dumandan en fazla bu aralıkla hasar alır; yaratıklar bu sıklıkla taranır. 2026-11-06 (kullanıcı: "zamanla hasar veren
+## etkiler tick-tick görünsün, saniyede 3 kez, hasar sayıları bölünerek"): eskiden saniyede BİR büyük vuruştu, artık saniyede 3 küçük tik.
+## Saniyelik hasar aynı kalır: tik hasarı = saldırı gücü x Q_DAMAGE_RATIO x Q_HIT_INTERVAL (Q_DAMAGE_RATIO hâlâ "saniyede" oranı).
+const Q_HIT_INTERVAL := 1.0 / 3.0
+const Q_SCAN_INTERVAL := Q_HIT_INTERVAL
+## Aynı yaratığa iki tik arası alt sınır: kare süresi oynasa da her taramada tik gelsin (tarama aralığı ile aynı olunca %5 sapma tiki atlatırdı).
+const Q_HIT_MIN_GAP := Q_HIT_INTERVAL * 0.8
+## Yapışkan Duman yavaşlatması ve Kan Buharı "isabet başına" etkileri tikte DEĞİL saniyede bir yenilenir (istemciden host'a giden etki isteği
+## sayısı 3 katına çıkmasın); can emme şansları tik süresiyle ölçeklenir (saniyelik toplam aynı).
+const Q_SLOW_REFRESH := 1.0
 const SMOKE_LIFE := 6.0 ## 2026-10-13 kullanıcı: 3 -> 6 sn
 ## Yerinde dururken (son buluttan SMOKE_MIN_STEP'ten az uzaklaşmışken) bu aralıkla; yürürken SMOKE_V_DROP_INTERVAL.
 const SMOKE_IDLE_INTERVAL := 1.2
@@ -517,6 +524,8 @@ static func spawn_bottle(root: Node, potion: int, from: Vector2, to: Vector2, on
 	b.set("to", to)
 	b.set("on_land", on_land)
 	b.set("zone_opts", zone_opts)
+	if int(zone_opts.get("owner_peer", 0)) > 0: ## ruh hâli (madde 438): sahibi menüdeyken donsun (limbo.gd)
+		b.set_meta(&"limbo_peer", int(zone_opts["owner_peer"]))
 	root.add_child(b)
 	b.global_position = from
 	return b
@@ -533,6 +542,8 @@ static func spawn_zone(root: Node, potion: int, world_pos: Vector2, authoritativ
 	z.set("size_mult", float(opts.get("size", 1.0)))
 	z.set("authoritative", authoritative)
 	z.set("on_scan", on_scan)
+	if int(opts.get("owner_peer", 0)) > 0: ## ruh hâli (madde 438): sahibi menüdeyken donsun (limbo.gd)
+		z.set_meta(&"limbo_peer", int(opts["owner_peer"]))
 	root.add_child(z)
 	z.global_position = world_pos
 	return z

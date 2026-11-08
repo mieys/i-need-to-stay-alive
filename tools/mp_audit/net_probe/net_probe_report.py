@@ -62,7 +62,16 @@ def main(d):
         recv = sum(v["br"] for v in s)
         ps = sum(v["bp"] for v in s)
         pr = sum(v["bpr"] for v in s)
+        tp = [v.get("tp", 0) for v in s]
+        print(f"  {name}: fizik karesi ort={sum(tp)/len(tp):.2f}ms p95={pct(tp,.95):.2f}ms | işlem karesi ort={sum(v.get('tpr',0) for v in s)/len(s):.2f}ms")
         print(f"  {name}: FPS={fps:.0f} fizik adımı/sn={pf:.1f}/60 | en uzun kare p95={pct(mx,.95):.0f}ms maks={max(mx):.0f}ms | gönderilen {sent/dur/1024:.1f} KB/s {ps/dur:.0f} paket/s | alınan {recv/dur/1024:.1f} KB/s {pr/dur:.0f} paket/s")
+    for name, x in (("HOST", h), ("İSTEMCİ", c)):
+        co = x["cost"]
+        w = co.get("window_s") or dur
+        if co.get("d_net_state_msgs"):
+            print(f"  {name} durum paketi (madde 419 delta): {co['d_net_state_msgs']/w:.1f} mesaj/s (tam {co.get('d_net_state_full_msgs',0)/w:.2f}/s), {co['d_net_state_bytes']/w:.0f} B/s, ort {co['d_net_state_bytes']/max(1,co['d_net_state_msgs']):.0f} B/mesaj")
+        if co.get("d_net_enemy_records"):
+            print(f"  {name} yaratık kaydı: {co['d_net_enemy_records']/w:.0f}/s, can/kalkansız %{100*co.get('d_net_enemy_records_no_hp',0)/co['d_net_enemy_records']:.0f}")
     if c["cost"].get("client_apply_ms_per_tick") is not None:
         print(f"  istemci senkron uygulama maliyeti: {c['cost']['client_apply_ms_per_tick']:.2f} ms / tur ({c['cost'].get('client_apply_states')} yaratık)")
     ticks = hs[-1]["th"] - hs[0]["th"]
@@ -91,6 +100,10 @@ def main(d):
         if "chan" in lc:
             lat_stats("HOST→İSTEMCİ güvenilir AYRI KANAL (7)", lc["chan"], lh["sent_chan"])
             lat_stats("İSTEMCİ→HOST güvenilir AYRI KANAL (7)", lh["chan"], lc["sent_chan"])
+        if "cc" in lc:
+            print(f"  -- KRİTİK OLAY kanalı = {lc.get('cc_chan')} (0 = eski ortak akış; hasar/ölüm/ödül RPC'lerinin gerçekten gittiği kanal)")
+            lat_stats("HOST→İSTEMCİ kritik olay", lc["cc"], lh["sent_cc"])
+            lat_stats("İSTEMCİ→HOST kritik olay", lh["cc"], lc["sent_cc"])
 
 
 for d in sys.argv[1:]:

@@ -6,6 +6,7 @@ const AudioBuses := preload("res://scripts/audio_buses.gd")
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const EnchantFx := preload("res://scripts/enchant_fx.gd")
+const BackMountScript := preload("res://scripts/weapon_back_mount.gd") ## silahlar sırtta (madde 451; kukla remote_player.gd aynısı)
 
 signal fired(direction: Vector2)
 
@@ -580,8 +581,8 @@ func set_enchant(ench: Dictionary) -> void:
 	var stat_tier: int = enchant_glow_tier + EnchantDefs.plus_count(ench)
 	set_tier_damage_mult(tier_damage_mult(stat_tier))
 	set_shop_fire_rate_mult(tier_fire_rate_mult(stat_tier))
-	## Zanaatkâr seti (madde 196): kademe = silahın kendi sanatı (Paslı..Yadigâr); uzak kukla aynısını ench_tiers'tan yapar.
-	_apply_tier_art(enchant_glow_tier)
+	## Kademe göstergesi = kontür parıltısı (madde 35; madde 402'de Zanaatkâr kademe sanatının yerine geri açıldı) - görünüş
+	## (doku) kademeyle DEĞİŞMEZ. Uzak kukla aynı parıltıyı ench_tiers'tan takar (remote_player.gd _apply_enchant_glows).
 	if icon_sprite:
 		EnchantGlowScript.attach(icon_sprite, enchant_glow_tier)
 
@@ -611,28 +612,24 @@ const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
 const WeaponTipScript := preload("res://scripts/weapon_tip.gd")
 const StaffTipFxScript := preload("res://scripts/staff_tip_fx.gd") ## asa ucu partikülleri (madde 299)
 var _tier_art_key: String = ""
-var _tier_art_tier: int = 0
+var _fixed_art_applied: bool = false
 
 
-## Kademe sanatını ikona uygular (bkz. weapon_tier_art.gd). İlk uygulamada ölçek/duruş da yeni sanata geçer: ikon dünya pikseli
-## WORLD_PX (0,5 -> zoom 2'de 1:1), ileri açı + yakın dövüş dinlenme dönüşü yeni çizime göre; her uygulamada gölge boyu, namlu
-## noktası (Icon/Muzzle) ve namlu alevi mesafesi yeni ucun ölçüsüne göre yenilenir.
-func _apply_tier_art(tier: int) -> void:
-	if icon_sprite == null or _tier_art_key == "":
+## Sabit sanatı ikona uygular (bkz. weapon_tier_art.gd; sanatı olmayan silah eski sahne ikonunda kalır). Bir kez, _ready'de:
+## ölçek (doku pikseli WORLD_PX dünya px), ileri açı + yakın dövüş dinlenme dönüşü yeni çizime göre; gölge boyu, namlu noktası
+## (Icon/Muzzle) ve namlu alevi mesafesi yeni ucun ölçüsüne göre. Demirci kademesi görünüşü DEĞİŞTİRMEZ (kontür parıltısı gösterir).
+func _apply_fixed_art() -> void:
+	if icon_sprite == null or _tier_art_key == "" or _fixed_art_applied:
 		return
-	var t: int = WeaponTierArt.clamp_tier(tier)
-	if t == _tier_art_tier:
+	if not WeaponTierArt.set_art(icon_sprite, _tier_art_key):
 		return
-	if not WeaponTierArt.set_art(icon_sprite, _tier_art_key, t):
-		return
-	if _tier_art_tier == 0:
-		var parent_scale: float = absf((get_parent() as Node2D).scale.x) if get_parent() is Node2D else WeaponTierArt.OWNER_ROOT_SCALE
-		icon_sprite.scale = Vector2.ONE * WeaponTierArt.WORLD_PX / (maxf(0.01, parent_scale) * _wand_scale_mult())
-		_icon_base_scale = icon_sprite.scale
-		sprite_forward_angle_deg = WeaponTierArt.FORWARD[_tier_art_key]
-		if WeaponTierArt.REST.has(_tier_art_key):
-			melee_icon_rest_rotation_deg = WeaponTierArt.REST[_tier_art_key]
-	_tier_art_tier = t
+	_fixed_art_applied = true
+	var parent_scale: float = absf((get_parent() as Node2D).scale.x) if get_parent() is Node2D else WeaponTierArt.OWNER_ROOT_SCALE
+	icon_sprite.scale = Vector2.ONE * WeaponTierArt.WORLD_PX / (maxf(0.01, parent_scale) * _wand_scale_mult())
+	_icon_base_scale = icon_sprite.scale
+	sprite_forward_angle_deg = WeaponTierArt.FORWARD[_tier_art_key]
+	if WeaponTierArt.REST.has(_tier_art_key):
+		melee_icon_rest_rotation_deg = WeaponTierArt.REST[_tier_art_key]
 	_icon_pixel_size = _measure_icon_pixel_size()
 	if icon_sprite is Sprite2D:
 		var tip: Vector2 = WeaponTipScript.tip_in_icon(icon_sprite, sprite_forward_angle_deg)
@@ -678,6 +675,51 @@ func fire_enchant_shot(target: Node2D, delay: float, dmg_mult: float = 1.0, angl
 	_shot_angle_offset = 0.0
 
 
+## POMPALI SAÇMALARI (madde 448, özellik Dip Atış - scripts/weapon_traits/dip_atis.gd): asıl atış 1 saçmadır; bu fonksiyon
+## geri kalanları aynı hedefe doğru açılı atar. Hasar/kritik/kalkan delme ASIL atıştan alınır (_last_shot_*: tüm salvo tek vuruş
+## sayılır, kritik salvo başına bir kez atılır) - fire_enchant_shot gibi yeniden _fire_at çağırmaz: namlu ateşi, kovan, geri tepme,
+## ses ve ağ "weapon_fire" yayını salvo başına BİR kez (asıl atışta) kalır; her saçma yalnız mermi sahnesidir (uzak kopya için
+## broadcast_projectile). angles: asıl atış yönünden sapma (radyan).
+var _last_shot_damage: float = 0.0
+var _last_shot_crit: bool = false
+var _last_shot_shield_pen: float = 0.0
+
+
+func fire_pellets(target: Node2D, angles: Array, dmg_mult: float = 1.0) -> void:
+	if projectile_scene == null or not is_inside_tree() or get_tree().current_scene == null:
+		return
+	if not is_instance_valid(target) or _last_shot_damage <= 0.0:
+		return
+	var base_dir: Vector2 = (target.global_position - global_position).normalized()
+	var char_scale: Vector2 = Vector2.ONE
+	var owner_char: Node = get_parent()
+	if owner_char is Node2D:
+		char_scale = (owner_char as Node2D).scale
+	for a in angles:
+		var dir: Vector2 = base_dir.rotated(float(a))
+		var proj = projectile_scene.instantiate()
+		get_tree().current_scene.add_child(proj)
+		proj.global_position = global_position
+		proj.direction = dir
+		if "face_direction" in proj and proj.face_direction:
+			proj.rotation = dir.angle() + ranged_projectile_rotation_offset
+		if ranged_projectile_scale_mult != 1.0:
+			proj.scale *= ranged_projectile_scale_mult
+		proj.scale *= char_scale
+		proj.damage = _last_shot_damage * dmg_mult
+		proj.is_crit = _last_shot_crit
+		proj.shield_pen_percent = _last_shot_shield_pen
+		if "knockback_force" in proj:
+			proj.knockback_force = _player_stat("knockback_force")
+		if "source_weapon" in proj:
+			proj.source_weapon = self
+		if "slow_percent" in proj:
+			proj.slow_percent = _player_stat("item_enemy_slow_percent")
+		if NetworkManager.is_multiplayer_active:
+			NetworkManager.broadcast_projectile.rpc(projectile_scene.resource_path, global_position, dir,
+				float(proj.get("speed")) if "speed" in proj else 0.0, proj.scale, Vector2.ZERO, multiplayer.get_unique_id(), {})
+
+
 ## Efsunun bir noktadan doğurduğu mermi (Tam Çekiş'in bölünen okları) - mevcut mermi sahnesiyle, bu silahın isabet
 ## kancalarıyla ve uzak oyunculara yayınla. exclude: doğduğu noktadaki düşman(lar)a tekrar çarpmasın.
 ## Ertelenir: genelde bir merminin body_entered sinyali içinden çağrılıyor, fizik sorguları sırasında yeni Area2D
@@ -708,9 +750,6 @@ func _spawn_enchant_projectile_now(from_pos: Vector2, dir: Vector2, dmg: float, 
 				proj._hit_bodies.append(e)
 	for m in metas:
 		proj.set_meta(m, metas[m])
-	if _tier_art_tier > 1 and proj.has_method("set_art_tier"): ## kademe sanatı (madde 196), _fire_at ile aynı
-		look = look.duplicate()
-		look["art_tier"] = _tier_art_tier
 	if not look.is_empty():
 		EnchantFx.apply_projectile_look(proj, look)
 	if NetworkManager.is_multiplayer_active:
@@ -1054,19 +1093,25 @@ func _ready() -> void:
 	fire_timer.wait_time = fire_rate
 	fire_timer.timeout.connect(_on_fire_timer_timeout)
 	if icon_sprite:
+		_tier_art_key = WeaponTierArt.key_from_scene(_type_src)
+		var fixed_art: bool = WeaponTierArt.has_art(_tier_art_key) ## sabit sanatlı asanın v3 ikonu boşuna yüklenmesin (_apply_fixed_art ezer)
 		# Asalar için yeni piksel-art görsellerini dinamik yükleme (tscn kilitlerini aşmak için)
 		# Yeni 32x32 piksel görsellerin aşırı küçülmesini önlemek için ikon ölçeğini (0.99, 0.99) yapıyoruz.
 		if _type_src.containsn("arcane"):
-			icon_sprite.texture = load("res://assets/weapons/arcane/icon_v3.png")
+			if not fixed_art:
+				icon_sprite.texture = load("res://assets/weapons/arcane/icon_v3.png")
 			icon_sprite.scale = Vector2(0.99, 0.99)
 		elif _type_src.containsn("fire"):
-			icon_sprite.texture = load("res://assets/weapons/fire/firestaff_icon_v3.png")
+			if not fixed_art:
+				icon_sprite.texture = load("res://assets/weapons/fire/firestaff_icon_v3.png")
 			icon_sprite.scale = Vector2(0.99, 0.99)
 		elif _type_src.containsn("lightning"):
-			icon_sprite.texture = load("res://assets/weapons/lightning/icon_v3.png")
+			if not fixed_art:
+				icon_sprite.texture = load("res://assets/weapons/lightning/icon_v3.png")
 			icon_sprite.scale = Vector2(0.99, 0.99)
 		elif _type_src.containsn("buz"):
-			icon_sprite.texture = load("res://assets/weapons/buz_asasi/icon_v3.png")
+			if not fixed_art:
+				icon_sprite.texture = load("res://assets/weapons/buz_asasi/icon_v3.png")
 			icon_sprite.scale = Vector2(0.99, 0.99)
 		else:
 			# Diğer silahların boyutunu %10 küçült (çarpımsal)
@@ -1074,10 +1119,9 @@ func _ready() -> void:
 		## Kullanıcı isteği (2026-09-25): tüm silahlar %15 küçük - uzak kuklada AYNI çarpan (bkz. WeaponOrbitMath).
 		icon_sprite.scale *= WeaponOrbitMath.ICON_SIZE_MULT
 		_icon_base_scale = icon_sprite.scale ## ateş "punch"ının döndüğü SABİT taban (bkz. WeaponJuice)
-		## Zanaatkâr seti (madde 196): efsun gelmeden de 1. seviye sanatı (set_enchant kademeye göre değiştirir). shop_key meta'sı
-		## add_child'dan SONRA atandığı için anahtar sahne yolundan.
-		_tier_art_key = WeaponTierArt.key_from_scene(_type_src)
-		_apply_tier_art(1)
+		## Sabit silah sanatı (madde 402; sanatı yoksa yukarıdaki eski ikon kalır). shop_key meta'sı add_child'dan SONRA atandığı
+		## için anahtar sahne yolundan.
+		_apply_fixed_art()
 		## Asa ucu partikülleri (madde 299; asa değilse no-op). Kukla tarafı: remote_player.gd update_weapon_visuals (iki-yer kuralı).
 		if icon_sprite is Sprite2D:
 			StaffTipFxScript.attach(icon_sprite, _tier_art_key)
@@ -1613,6 +1657,7 @@ var _wf_glint_cd: float = 0.0
 var _wf_reveal_glinted: bool = false
 var _wf_shadow_y: float = 0.0 ## gölge boşluğu için o anki yerel yükseklik (çıkışta göğüsten)
 var _wf_has_target: bool = false ## _process'teki nişan bu karede hedef buldu mu (menzilde düşman -> gizliyse çıkar)
+var _wf_back: Sprite2D = null ## sırttaki görüntü (sahibin çocuğu, madde 451)
 
 
 func _wf_update(owner_node: Node2D, bob: float, delta: float) -> void:
@@ -1638,17 +1683,30 @@ func _wf_update(owner_node: Node2D, bob: float, delta: float) -> void:
 	## Sahibi ölünce/yere düşünce de AYNI çekilme, bekleme payı olmadan (kullanıcı: "direk karakterin içine girip kaybolsunlar").
 	var want: bool = (bool(sc["seen"]) or _wf_has_target) and not _owner_gone and not HideBrushScript.is_hidden(owner_node)
 	WeaponFollowMath.step_visibility(_wf_vis, want, force, now, kind, _owner_gone)
-	var p: Dictionary = WeaponFollowMath.pose(_wf_vis, now, kind, home)
+	## SIRT (madde 451): düşman yokken / çalıda silah göğse değil sırta girer; sahibi ölü/yerdeyse eski kural (göğüs, kaybolur).
+	var mount: Dictionary = {}
+	if not _owner_gone and not force and icon_sprite != null:
+		mount = BackMountScript.pose(kind, BackMountScript.face_of(owner_node), _wf_owner_vel, now, _tier_art_key)
+	var root_scale: Vector2 = scale ## pozdan önce (sahip x asa x form)
+	var p: Dictionary = WeaponFollowMath.pose(_wf_vis, now, kind, home, mount)
 	var st: int = int(_wf_vis["s"])
 	scale *= float(p["scale"])
 	rotation = float(p["spin"])
+	var fwd_rad: float = deg_to_rad(sprite_forward_angle_deg)
+	if float(p["blend"]) > 0.0:
+		rotation = lerp_angle(rotation, BackMountScript.root_rotation(mount, icon_sprite, fwd_rad), float(p["blend"]))
 	global_position = WeaponFollowMath.snap_half(op + (p["pos"] as Vector2) * owner_node.scale)
 	_wf_shadow_y = (p["pos"] as Vector2).y - b
 	var u: float = float(p["u"])
 	var flash: float = 0.0
 	if st == WeaponFollowMath.REVEAL and u >= WeaponFollowMath.GLINT_REVEAL_AT:
 		flash = 0.6 * clampf(1.0 - (u - WeaponFollowMath.GLINT_REVEAL_AT) / 0.12, 0.0, 1.0)
-	_wf_set_alpha(float(p["alpha"]), flash)
+	_wf_set_alpha(float(p["alpha"]), flash, float(p["shadow"]))
+	var on_back: bool = not mount.is_empty() and float(p["alpha"]) < 0.01 and is_visible_in_tree()
+	if on_back or _wf_back != null:
+		_wf_back = BackMountScript.ensure_sprite(owner_node, _wf_back)
+		var owner_s: Vector2 = owner_node.scale if owner_node.scale.x != 0.0 else Vector2.ONE
+		BackMountScript.place(_wf_back, owner_node, icon_sprite, mount, root_scale * _icon_base_scale / owner_s, fwd_rad, on_back)
 	## Uç parıltısı: SADECE en üst kademe (demirci 5) - çıkışın sonunda ve karakter durunca.
 	_wf_glint_cd = maxf(0.0, _wf_glint_cd - delta)
 	var speed: float = _wf_owner_vel.length()
@@ -1668,16 +1726,18 @@ func _wf_glint() -> void:
 	WeaponFollowFx.spawn_glint(self, icon_sprite, sprite_forward_angle_deg)
 
 
-func _wf_set_alpha(a: float, flash: float = 0.0) -> void:
+func _wf_set_alpha(a: float, flash: float = 0.0, shadow_a: float = -1.0) -> void:
 	_wf_alpha = a
 	modulate = Color(1.0 + flash, 1.0 + flash, 1.0 + flash, a)
 	if shadow_sprite and is_instance_valid(shadow_sprite):
-		shadow_sprite.modulate.a = 0.4 * a ## SHADOW_TRANSPARENCY 0,6 -> taban 0,4
+		shadow_sprite.modulate.a = 0.4 * (a if shadow_a < 0.0 else shadow_a) ## SHADOW_TRANSPARENCY 0,6 -> taban 0,4
 
 
 ## Kubbe halkası konumu kendisi yönetir: silah görünür, dönmez.
 func _wf_force_shown() -> void:
 	_wf_vis["s"] = WeaponFollowMath.SHOWN
+	if _wf_back != null and is_instance_valid(_wf_back):
+		_wf_back.visible = false
 	_wf_shadow_y = _target_local_offset.y
 	_wf_owner_prev = Vector2.INF
 	rotation = 0.0
@@ -2752,6 +2812,9 @@ func _attach_shadow_under_owner() -> void:
 func _exit_tree() -> void:
 	if continuous_beam:
 		_end_beam()
+	if _wf_back != null and is_instance_valid(_wf_back):
+		_wf_back.queue_free() ## sırttaki görüntü sahibin çocuğu - silahla birlikte gitsin
+	_wf_back = null
 	## Gölge artık sahibin çocuğu (bkz. shadow_sprite kurulumu) - silahla birlikte gitsin.
 	if shadow_sprite and is_instance_valid(shadow_sprite) and shadow_sprite.get_parent() != self:
 		if shadow_sprite.get_parent() == null:
@@ -3215,6 +3278,9 @@ func _fire_at(target: Node2D) -> void:
 	proj.damage = final_damage
 	proj.is_crit = is_crit
 	proj.shield_pen_percent = shield_pen
+	_last_shot_damage = final_damage ## saçma salvosu (fire_pellets, madde 448) aynı hasarı/kriti kullanır
+	_last_shot_crit = is_crit
+	_last_shot_shield_pen = shield_pen
 	if "knockback_force" in proj:
 		proj.knockback_force = _player_stat("knockback_force")
 	## Mermi kendisini fırlatan silahı taşır (projectile.gd _on_body_entered sonundaki kill bildirimi, silahta
@@ -3340,12 +3406,6 @@ func _fire_at(target: Node2D) -> void:
 	if is_crit and "spin_speed_deg" in proj:
 		proj.spin_speed_deg *= CRIT_SPIN_MULT
 		look["spin_mult"] = CRIT_SPIN_MULT
-	## Zanaatkâr seti (madde 196): bumerang/fişek mermisi silahın kademe sanatıyla uçar (1. seviye mermide varsayılan) - kasterde
-	## burada, uzak kopyada aynı "look" anahtarıyla (EnchantFx.apply_projectile_look).
-	if _tier_art_tier > 1 and proj.has_method("set_art_tier"):
-		look = look.duplicate()
-		look["art_tier"] = _tier_art_tier
-		proj.call("set_art_tier", _tier_art_tier)
 	## Multiplayer: broadcast projectile so other players see it.
 	if NetworkManager.is_multiplayer_active:
 		var scene_path: String = projectile_scene.resource_path
@@ -3821,8 +3881,9 @@ func _mizrak_hit_one(e_v: Variant, amount: float, is_crit: bool, shield_pen: flo
 var _kalkan_plan: Dictionary = {}
 
 
+## Kalkanın görünüş/hayalet sayfası: görünüş kademeyle değişmez (madde 402) -> hep 1. seviye.
 func _kalkan_tier() -> int:
-	return maxi(1, _tier_art_tier)
+	return 1
 
 
 ## Yüzü `dir`'e bakan görünüş (dönme yerine). Darbe oynarken dokunulmaz (plan kendi görünüşünü kurar).
@@ -4223,17 +4284,19 @@ func _play_attack_sound() -> void:
 	var on_rim: bool = is_on_dome_rim()
 	if s.has_method("play_swing"):
 		## Çok sesli çalıcılar: random_sfx_player.gd (Kılıç/Yay/Arbalet - rastgele biri, çalınanı döner -> yayınlanır) ya da kombo
-		## melee_swing_sound.gd (Bıçak/Pençe/Mızrak zinciri, döndürmez -> yayın yok).
+		## melee_swing_sound.gd (Bıçak/Pençe/Mızrak zinciri, adımlarını döner -> tek mesajda "chain" olarak yayınlanır, madde 406).
 		if s.has_method("set_rim_muffled"):
 			s.set_rim_muffled(on_rim)
 		var played: Variant = s.play_swing()
 		if played is AudioStreamPlayer2D:
 			_broadcast_attack_sound(played as AudioStreamPlayer2D, on_rim)
+		elif played is Array and not (played as Array).is_empty():
+			_broadcast_attack_chain(played as Array, on_rim)
 	elif s is AudioStreamPlayer2D:
 		AudioBuses.route_rim_sound(s, on_rim) ## kubbe halkasından ateş: içerideki dinleyiciye sert boğuk
 		## Geniş rastgele perde aralığı: art arda vuruşlar tekdüze/spam gibi
 		## hissettirmesin.
-		s.pitch_scale = randf_range(0.88, 1.12)
+		s.pitch_scale = randf_range(0.88, 1.12) * float(s.get_meta("pitch_base", 1.0)) ## pitch_base: derin sesli silah (Pompalı, madde 448)
 		s.play()
 		_broadcast_attack_sound(s, on_rim)
 
@@ -4252,6 +4315,20 @@ func _broadcast_attack_sound(s: AudioStreamPlayer2D, on_rim: bool) -> void:
 		## network_manager.gd "weapon_sound" case'indeki yorum).
 		"volume_db": s.volume_db,
 	})
+
+
+## Bıçak/Pençe/Mızrak kombo zinciri (melee_swing_sound.gd play_swing dönüşü): bütün adımlar tek "weapon_sound" mesajında, alıcı
+## network_manager.gd aynı gecikmelerle çalar (madde 406). Mesaj sayısı tek sesli silahlarla aynı (saldırı başına 1).
+func _broadcast_attack_chain(steps: Array, on_rim: bool) -> void:
+	if not NetworkManager.is_multiplayer_active:
+		return
+	var chain: Array = []
+	for st: Variant in steps:
+		if st is Dictionary and str((st as Dictionary).get("sound_path", "")) != "":
+			chain.append(st)
+	if chain.is_empty():
+		return
+	NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "weapon_sound", global_position, {"chain": chain, "rim": on_rim})
 
 
 ## Talon's rage: shoves whatever was just hit away from the shooter. 0 force

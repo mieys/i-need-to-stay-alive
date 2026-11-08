@@ -657,17 +657,21 @@ const WeaponShardDropScript := preload("res://scripts/weapon_shard_drop.gd")
 ## yeniden eklendi.
 const MagnetDrop := preload("res://scenes/magnet_drop.tscn")
 
-## Her vuruş KENDİ hasar sayısını açar (kullanıcı bildirimi 2026-10-01: "hasar
-## birikerek değil tek tek görünsün"). Kullanıcı isteği (aynı gün, son hal): "tek bi
-## doğrultuda... tamamen rastgele konumlarda çıksın" - her sayı yaratığın üstünde
-## DMG_SPAWN_OFFSET çevresinde DMG_SCATTER kutusu içinde RASTGELE bir noktada pop'la
-## doğar ve oradan süzülerek yükselir (bkz. damage_numbers.gd RISE notu). Sayılar
-## yaratığı takip etmez (itilip sallanan yaratıkla sallanmasın). Aynı anda en fazla
-## DMG_MAX_LIVE sayı; dolunca EN ESKİSİ silinir (alan hasarında kayıt sayısı sınırlı).
+## Hasar sayısı (2026-10-01'den beri her vuruş kendi sayısı, rastgele konumda): madde 429'dan (2026-11-06, kullanıcı: "hasar sayıları çok göz
+## yoruyor, karmaşık") beri görünüş + kurallar TEK yerde, damage_numbers.gd spawn_hit: aynı yaratığa 0,15 sn içinde gelen aynı türden hasar son
+## sayıya EKLENİR (kritik hep kendi sayısı), saçılma 22x14 -> 8x3 (HIT_SCATTER), palet renkleri, ekranda en çok 30 sayı. Sayılar yaratığı
+## TAKİP eder (madde 416). Aynı anda en fazla DMG_MAX_LIVE sayı; dolunca EN ESKİSİ silinir.
 const DMG_SPAWN_OFFSET := Vector2(0, -32)
-const DMG_SCATTER := Vector2(22, 14) ## yarı genişlik / yarı yükseklik (px)
 const DMG_MAX_LIVE := 5
 var _dmg_ids: Array[int] = [] ## eskiden yeniye
+## SÜRELİ HASAR SAYILARI (kullanıcı 2026-11-06: "zehir gibi zamanla hasar veren etkiler tick-tick görünsün, saniyede 3 kez, hasar sayıları bölünerek"):
+## zehir/yanma/kanama/arı zehri saniyede bir büyük tik vurur; hasar AYNI anda işlenir ama sayı, tik aralığına eşit yayılan DOT_NUMBERS_PER_SEC'lik
+## küçük sayılara bölünür (toplam korunur, ilk parça hemen, kalanı DamageNumbers.call_later ile). Yalnız GÖRSEL; can/kalkan hesabı değişmez.
+const DOT_NUMBERS_PER_SEC := 3.0
+## _take_dot_damage'in tik aralığı (sn): > 0 iken _show_hit_number sayıyı böler. Eşzamanlı çalışır (_apply_damage çağrısını sarar).
+var _dot_number_interval: float = 0.0
+## _take_dot_damage'in kaynağı ("dot:zehir"...) - sayı rengi/türü için (madde 429). Eşzamanlı, _apply_damage çağrısını sarar.
+var _dot_number_src: String = ""
 
 @onready var anim_sprite: AnimatedSprite2D = get_node_or_null("AnimatedSprite2D")
 @onready var frame_sprite: Sprite2D = get_node_or_null("Sprite2D")
@@ -893,7 +897,7 @@ func _schedule_melee_hit(delay: float, target_player: Node) -> void:
 	## hasarıyla ilgiliydi).
 	var target_is_invisible: bool = (target_player.has_method("is_invisible_now") and target_player.is_invisible_now()) \
 		or (target_player.has_method("is_indoors_now") and target_player.is_indoors_now()) \
-		or (target_player.has_method("is_in_merchant_zone_now") and target_player.is_in_merchant_zone_now())
+		or (target_player.has_method("is_in_merchant_zone_now") and target_player.is_in_merchant_zone_now()) 		or target_player.get("in_limbo") == true
 	if target_is_invisible:
 		return
 	var d: float = global_position.distance_to(target_player.global_position)
@@ -1408,7 +1412,7 @@ func _process_burn(delta: float) -> void:
 	if _burn_tick_timer <= 0.0:
 		_burn_tick_timer += BURN_TICK_INTERVAL
 		## Efsun yanma yığını (Alevli Ok V): 0/1 yük = eski tek tik.
-		_take_dot_damage(burn_tick_damage * float(maxi(1, _burn_stacks)), 0.0, "dot:yanma")
+		_take_dot_damage(burn_tick_damage * float(maxi(1, _burn_stacks)), 0.0, "dot:yanma", BURN_TICK_INTERVAL)
 	if burn_time_left <= 0.0:
 		burn_tick_damage = 0.0
 		_burn_stacks = 0
@@ -1461,7 +1465,7 @@ func _process_poison(delta: float) -> void:
 		var whole_damage: float = floorf(_poison_damage_accum)
 		if whole_damage >= 1.0:
 			_poison_damage_accum -= whole_damage
-			_take_dot_damage(whole_damage, 1.0 if _poison_true else 0.0, "dot:zehir")
+			_take_dot_damage(whole_damage, 1.0 if _poison_true else 0.0, "dot:zehir", POISON_TICK_INTERVAL)
 	if all_expired:
 		## Son kesir (<1): en yakın tam sayıya yuvarlanıp uygulanır (0.5+ ise 1).
 		var rest_damage: float = roundf(_poison_damage_accum)
@@ -2292,7 +2296,7 @@ func _process_bleed(delta: float) -> void:
 		_bleed_tick_timer += _bleed_interval
 		## Kristal Kan tepkimesi: donmuş kalan süre boyunca kanama tikleri x2 (bkz. element_reactions.gd).
 		var bleed_mult: float = 2.0 if Time.get_ticks_msec() < _bleed_double_until_msec else 1.0
-		_take_dot_damage(bleed_tick_damage_per_stack * bleed_stacks * bleed_mult, 0.0, "dot:kanama")
+		_take_dot_damage(bleed_tick_damage_per_stack * bleed_stacks * bleed_mult, 0.0, "dot:kanama", _bleed_interval)
 		_spawn_bleed_fx()
 		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
 			var net_id: int = int(get_meta("network_enemy_id", 0))
@@ -2705,7 +2709,7 @@ func _process_bee_poison(delta: float) -> void:
 	_bee_poison_tick_timer -= delta
 	if _bee_poison_tick_timer <= 0.0:
 		_bee_poison_tick_timer += BEE_POISON_TICK_INTERVAL
-		_take_dot_damage(_bee_poison_stacks.size() * _bee_poison_per_tick_damage, 0.0, "dot:ari_zehri")
+		_take_dot_damage(_bee_poison_stacks.size() * _bee_poison_per_tick_damage, 0.0, "dot:ari_zehri", BEE_POISON_TICK_INTERVAL)
 
 
 ## Soğuma yükü VARKEN hafif mavimsi bir modulate uygular (bkz. kullanıcı
@@ -3024,7 +3028,7 @@ func _find_closest_target_player() -> Node2D:
 		## Seyyar satıcının güvenli bölgesi (bkz. player.gd is_in_merchant_zone
 		## üstündeki yorum) - is_indoors ile BİREBİR AYNI muamele.
 		var is_in_merchant_zone: bool = local_p.has_method("is_in_merchant_zone_now") and local_p.is_in_merchant_zone_now()
-		var is_d: bool = local_p.get("is_dead") if "is_dead" in local_p else false
+		var is_d: bool = (local_p.get("is_dead") if "is_dead" in local_p else false) or local_p.get("in_limbo") == true
 		if not is_inv and not is_indoors and not is_in_merchant_zone and not is_d:
 			var d: float = global_position.distance_to(local_p.global_position)
 			if d < min_d:
@@ -3052,7 +3056,7 @@ func _find_closest_target_player() -> Node2D:
 			var rp_indoors: bool = rp.get("is_indoors") if "is_indoors" in rp else false
 			## Seyyar satıcının güvenli bölgesi - rp_indoors ile AYNI desen.
 			var rp_in_merchant_zone: bool = rp.get("is_in_merchant_zone") if "is_in_merchant_zone" in rp else false
-			if not is_inv and not is_d and not is_downed and not rp_indoors and not rp_in_merchant_zone:
+			if not is_inv and not is_d and not is_downed and not rp_indoors and not rp_in_merchant_zone and rp.get("in_limbo") != true:
 				var d: float = global_position.distance_to(rp.global_position)
 				if d < min_d:
 					min_d = d
@@ -4955,7 +4959,8 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		if net_id > 0:
 			var host_id: int = NetworkManager._host_peer_id()
-			NetworkManager.request_enemy_damage.rpc_id(host_id, net_id, amount, is_crit, shield_pen_percent)
+			NetworkManager.request_enemy_damage.rpc_id(host_id, net_id, amount, is_crit, shield_pen_percent,
+				DamageNumbersScript.separate_hits) ## ayrı sayı (Pompalı saçması, madde 448)
 		return
 
 	## DÜZELTME (Korsan/Necromancer öldürme pasifleri multiplayer'da sadece
@@ -4981,7 +4986,9 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 ## Tüftüf zehriyle ölen yaratıkta öldürme ödülü (şans, Korsan altını, Necromancer ruhu, Savaş Şevki) ve can emme host'a
 ## gidiyordu. Artık tik, son DOĞRUDAN vuranın kimliğini korur (etkiyi genelde o uygulamıştır); istatistik/can emme sadece
 ## o kişi bu makinenin oyuncusuysa (tek oyunculu ya da host'un kendi vuruşu) burada işlenir.
-func _take_dot_damage(amount: float, shield_pen: float = 0.0, bl_src: String = "dot") -> void:
+## tick_interval > 0: bu çağrı SÜRELİ hasarın bir tiki (zehir/yanma/kanama/arı zehri) - sayısı tik aralığına yayılan küçük sayılara bölünür
+## (bkz. DOT_NUMBERS_PER_SEC). 0 = tek seferlik hasar (patlama, öldürme...), sayı tek parça.
+func _take_dot_damage(amount: float, shield_pen: float = 0.0, bl_src: String = "dot", tick_interval: float = 0.0) -> void:
 	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır (anahtar kapalıyken boş)
 	if is_dead or is_ability_invisible or amount <= 0.0:
 		return
@@ -4994,7 +5001,11 @@ func _take_dot_damage(amount: float, shield_pen: float = 0.0, bl_src: String = "
 			BalanceLogScript.on_hit(bl_src, amount, false)
 		if dealer and dealer.has_method("on_dealer_hit"):
 			dealer.on_dealer_hit(amount, false)
+	_dot_number_interval = tick_interval
+	_dot_number_src = bl_src if bl_src.begins_with("dot:") else "" ## madde 429: süreli hasar sayısı kendi soluk renginde
 	_apply_damage(amount, false, shield_pen)
+	_dot_number_interval = 0.0
+	_dot_number_src = ""
 
 
 func take_damage_host(amount: float, is_crit: bool, shield_pen_percent: float, attacker_id: int = 0) -> void:
@@ -5018,16 +5029,46 @@ func _record_assist_damage(amount: float) -> void:
 	_assist_damage[last_attacker_peer_id] = e
 
 
+## Süreli hasar tikinin sayısı kaç parçaya bölünür: tik aralığı x DOT_NUMBERS_PER_SEC (aşağı yuvarlanır: 0,5 sn'lik kanama 1,5 -> 1 parça),
+## en az 1, en çok görünen tamsayı kadar (3 hasarlık tik 3 parçadan fazlasına bölünmez). Parçalar tamsayı, toplamı görünen sayıya eşit, büyükler başta.
+static func dot_number_parts(shown_amount: float, tick_interval: float) -> Array[int]:
+	var total: int = maxi(1, int(round(shown_amount)))
+	var n: int = clampi(int(tick_interval * DOT_NUMBERS_PER_SEC + 0.001), 1, total)
+	var parts: Array[int] = []
+	var base: int = floori(float(total) / float(n))
+	var extra: int = total - base * n
+	for i in range(n):
+		parts.append(base + (1 if i < extra else 0))
+	return parts
+
+
 ## Hasar sayısı: kalkanın emdiği kısım DAHİL tam vuruş (bkz. _apply_damage). Sadece sayıyı gösterir/yayınlar.
+## Süreli hasar tikiyse (_dot_number_interval > 0) sayı dot_number_parts kadar parçaya bölünür: ilk parça şimdi, kalanı tik aralığına eşit yayılarak.
 func _show_hit_number(shown_amount: float, is_crit: bool) -> void:
+	var dot_src: String = _dot_number_src
+	if _dot_number_interval > 0.0:
+		var parts: Array[int] = dot_number_parts(shown_amount, _dot_number_interval)
+		if parts.size() > 1:
+			var dn = DamageNumbersScript.get_instance(get_tree())
+			if dn != null:
+				for i in range(1, parts.size()):
+					dn.call_later(_dot_number_interval * float(i) / float(parts.size()), Callable(self, "_show_hit_number_now").bind(float(parts[i]), is_crit, dot_src))
+				shown_amount = float(parts[0])
+	_show_hit_number_now(shown_amount, is_crit, dot_src)
+
+
+## Sayıyı gerçekten gösterir/yayınlar (bölünmüş parçalar da buraya gelir - vuran kimliği ve yerel/uzak kararı gösterim anında verilir).
+## dot_src: süreli hasar kaynağı ("dot:zehir"...), boş = doğrudan vuruş (madde 429; ağda "dot" alanı - eski sürüm alanı yok sayar).
+func _show_hit_number_now(shown_amount: float, is_crit: bool, dot_src: String = "") -> void:
 	## Kullanıcı isteği (2026-09-25): "başka oyuncuların hasar sayısını görmemeliyiz" - sayı SADECE vuranın
 	## ekranında çıkar. Vuran = last_attacker_peer_id (take_damage/take_damage_host her isabette günceller, DOT tiki
 	## son doğrudan vuranınkini korur - bkz. _take_dot_damage). Bilinmiyorsa (0: tek oyunculu ya da oyuncu dışı
 	## bir kaynak) eskisi gibi herkese.
 	var dmg_owner: int = last_attacker_peer_id if NetworkManager.is_multiplayer_active else 0
 	var my_peer: int = multiplayer.get_unique_id() if (NetworkManager.is_multiplayer_active and multiplayer.has_multiplayer_peer()) else 0
+	var sep: bool = DamageNumbersScript.separate_hits ## Pompalı saçması (madde 448): her isabet kendi sayısı, kısıtlamasız
 	if dmg_owner <= 0 or dmg_owner == my_peer:
-		_spawn_floating_text(shown_amount, is_crit)
+		_spawn_floating_text(shown_amount, is_crit, dot_src)
 	if NetworkManager.is_multiplayer_active and NetworkManager.is_host and dmg_owner != my_peer:
 		var net_id: int = int(get_meta("network_enemy_id", 0))
 		## Relay'in saniyelik mesaj/byte bütçesini aşıp bağlantıyı KAPATMASINI
@@ -5036,10 +5077,16 @@ func _show_hit_number(shown_amount: float, is_crit: bool) -> void:
 		## yaratığa saniyede onlarca "damage_number" göndermeye çalışabilir,
 		## bu salt kozmetik olduğu için kayıp fark edilmez ama flood'u önler.
 		## Kısıtlama vuran başına: aynı yaratığa vuran iki oyuncu birbirinin sayısını yutmasın.
-		if net_id > 0 and not NetworkManager.should_throttle("dmgnum_%d_%d" % [net_id, dmg_owner], 0.1):
+		if net_id > 0 and (sep or not NetworkManager.should_throttle("dmgnum_%d_%d" % [net_id, dmg_owner], 0.1)):
 			var dmg_payload: Dictionary = {"amount": shown_amount, "is_crit": is_crit}
+			if sep:
+				dmg_payload["sep"] = true
+			if dot_src != "":
+				dmg_payload["dot"] = dot_src
 			if dmg_owner > 0:
-				NetworkManager.broadcast_enemy_vfx.rpc_id(dmg_owner, net_id, "damage_number", dmg_payload)
+				## Madde 421 (MP ölçümü): bağlı olmayan eşe rpc_id "unknown peer ID" hatası basıyordu (host günlüğünde dakikada 2-3) - sayı kozmetik, atlanır.
+				if multiplayer.get_peers().has(dmg_owner):
+					NetworkManager.broadcast_enemy_vfx.rpc_id(dmg_owner, net_id, "damage_number", dmg_payload)
 			else:
 				NetworkManager.broadcast_enemy_vfx.rpc(net_id, "damage_number", dmg_payload)
 
@@ -5948,13 +5995,13 @@ func _get_chest_tier_from_enemy_tier() -> int:
 		return 5
 
 
-## Hasar sayıları düz beyaz, kritik vuruşlar kolay okunabilen kırmızı - işaret
-## (-/+) hiç yazılmıyor (bkz. kullanıcı bildirimi).
-const DAMAGE_COLOR := Color(1.0, 1.0, 1.0)
-const CRIT_COLOR := Color(1.0, 0.25, 0.2)
-
-func _spawn_floating_text(amount: float, is_crit: bool) -> void:
-	var color: Color = CRIT_COLOR if is_crit else DAMAGE_COLOR
+## İşaret (-/+) hiç yazılmıyor (bkz. kullanıcı bildirimi). Renkler madde 429'dan beri HudTheme.DMG_* (damage_numbers.gd color_for):
+## normal sıcak krem, kritik turuncu-altın, süreli hasar kendi soluk tonu (eskiden düz beyaz + doygun kırmızı).
+## dot_src: süreli hasar kaynağı (boş = doğrudan vuruş); istemcide ağdan gelen "dot" alanı (network_manager.gd "damage_number").
+func _spawn_floating_text(amount: float, is_crit: bool, dot_src: String = "") -> void:
+	if not UISound.damage_number_allowed(is_crit): ## Ayarlar > Hasar Sayıları (madde 406)
+		return
+	var kind: int = DamageNumbersScript.KIND_CRIT if is_crit else (DamageNumbersScript.KIND_DOT if dot_src != "" else DamageNumbersScript.KIND_HIT)
 	var amt: int = int(round(amount))
 	var dn = DamageNumbersScript.get_instance(get_tree())
 	if dn == null:
@@ -5968,5 +6015,5 @@ func _spawn_floating_text(amount: float, is_crit: bool) -> void:
 	## tutulup tek _draw'da çiziliyor (görünüm floating_text ile aynı). Node
 	## oluşturmadığı için fizik sorgu taşması sırasında da güvenle çağrılabilir.
 	## FPS (2026-10-18): ölü kimlikleri atma + sınır + doğurma tek çağrıda (eskiden 5 is_alive çağrısı + yeni dizi).
-	var jitter := Vector2(randf_range(-DMG_SCATTER.x, DMG_SCATTER.x), randf_range(-DMG_SCATTER.y, DMG_SCATTER.y))
-	dn.spawn_fixed_capped(self, PhysicsInterp.visual_position(self) + DMG_SPAWN_OFFSET + jitter, "%d" % amt, color, _dmg_ids, DMG_MAX_LIVE)
+	## Madde 429: birleştirme + saçılma + renk + ekran bütçesi spawn_hit'te.
+	dn.spawn_hit(self, PhysicsInterp.visual_position(self) + DMG_SPAWN_OFFSET, amt, kind, _dmg_ids, DMG_MAX_LIVE, max_health, dot_src)

@@ -78,8 +78,72 @@ const SMOKE_ONLY_SCALE := 0.9
 @onready var _smoke: AnimatedSprite2D = $Smoke
 @onready var _fire: AnimatedSprite2D = $Fire
 
+## KALABALIK SINIRI (madde 426, kullanıcı: "savaşta aşırı göz yorucu ve karmaşık"; Ateş Asası kalabalıkta ~30 yanan yaratık = ~30 alev): ekranda AYNI ANDA
+## en çok AllyFxDensity.burn_flame_cap() alev gösterilir (Tam = sınırsız, Azaltılmış 12, Minimal 6); en yakın yanan yaratıklar kamera merkezine göre,
+## sınırı aşanda yalnız DUMAN kalır. Yalnız çizim: yanma hasarı/durumu aynen sürer; alev ve duman sanatı/opaklığı DEĞİŞMEDİ (kullanıcı onaylı).
+const AllyFxDensity := preload("res://scripts/ally_fx_density.gd")
+const BURN_GROUP := &"burn_status_fx"
+const BUDGET_EVERY := 0.25 ## her yaratık kendi kararını bu aralıkla verir (rastgele fazlı)
+const RANK_STALE_MSEC := 200 ## sıralama bu süreden eskiyse ilk soran yeniler (tüm yaratıklar tek sıralamayı paylaşır)
+const KEEP_BONUS := 0.85 ## alevi zaten açık olanın uzaklığı bununla çarpılır: sınırdaki iki yaratık arasında yanıp sönme olmasın
+static var _rank_msec: int = -1000000
+static var _flames_ok: Dictionary = {} ## instance_id -> true (alev gösterilecekler)
+var _timer: Timer = null
+var _flame_on: bool = true
+
+
+## Testler: paylaşılan sıralamayı sıfırla.
+static func reset_rank() -> void:
+	_rank_msec = -1000000
+	_flames_ok.clear()
+
+
+static func _rank(tree: SceneTree, cap: int) -> void:
+	var now: int = Time.get_ticks_msec()
+	if now - _rank_msec < RANK_STALE_MSEC:
+		return
+	_rank_msec = now
+	_flames_ok.clear()
+	var cam: Camera2D = tree.root.get_viewport().get_camera_2d()
+	var center: Vector2 = cam.get_screen_center_position() if cam != null else Vector2.ZERO
+	var arr: Array = []
+	for n: Node in tree.get_nodes_in_group(BURN_GROUP):
+		if not (n is Node2D) or not is_instance_valid(n):
+			continue
+		var d: float = (n as Node2D).global_position.distance_to(center)
+		if bool(n.get("_flame_on")):
+			d *= KEEP_BONUS
+		arr.append([d, n.get_instance_id()])
+	arr.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	for i in mini(cap, arr.size()):
+		_flames_ok[int(arr[i][1])] = true
+
+
+## Kare başı _process yerine Timer (FPS: yüzlerce yanan yaratıkta saniyede 60 yerine 4 çağrı).
+func _budget_tick() -> void:
+	if _timer != null:
+		_timer.wait_time = BUDGET_EVERY ## ilk (rastgele fazlı) turdan sonra düzenli aralık
+	var cap: int = AllyFxDensity.burn_flame_cap()
+	var on: bool = true
+	if cap > 0 and is_inside_tree():
+		_rank(get_tree(), cap)
+		on = _flames_ok.has(get_instance_id())
+	if on != _flame_on:
+		_flame_on = on
+		_fire.visible = on
+		if on:
+			_fire.play("burn")
+		else:
+			_fire.pause()
+
 
 func _ready() -> void:
+	add_to_group(BURN_GROUP)
+	_timer = Timer.new()
+	_timer.wait_time = BUDGET_EVERY
+	_timer.timeout.connect(_budget_tick)
+	add_child(_timer)
+	_timer.start(randf_range(0.02, BUDGET_EVERY)) ## yaratıklar aynı karede karar vermesin
 	position = Vector2(0.0, VERTICAL_OFFSET)
 	scale = Vector2(EFFECT_SCALE, EFFECT_SCALE)
 

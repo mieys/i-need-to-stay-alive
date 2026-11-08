@@ -347,13 +347,13 @@ func _build_targets() -> void:
 		var ok: bool = not (local_p.has_method("is_invisible_now") and local_p.is_invisible_now()) \
 				and not (local_p.has_method("is_indoors_now") and local_p.is_indoors_now()) \
 				and not (local_p.has_method("is_in_merchant_zone_now") and local_p.is_in_merchant_zone_now()) \
-				and not (local_p.get("is_dead") == true)
+				and not (local_p.get("is_dead") == true) 				and not (local_p.get("in_limbo") == true) ## ruh hâli (madde 438): dokunulmaz
 		_add_target(local_p, T_PLAYER, ok, pos, kind, targetable, ghost, body, zone, ids)
 	## HitArea eşleniği (C++ hit_radius): yerel oyuncunun FİZİK çemberi - Area2D (mask 2) sadece katman 2'deki "player"ı
 	## görüyordu; Hadime hayaleti gibi collision_layer 0 iken görmezdi.
 	var probe_r: float = -1.0
 	var probe_c: Vector2 = Vector2.ZERO
-	if local_p != null and is_instance_valid(local_p) and local_p is CollisionObject2D and ((local_p as CollisionObject2D).collision_layer & 2) != 0:
+	if local_p != null and is_instance_valid(local_p) and local_p is CollisionObject2D and ((local_p as CollisionObject2D).collision_layer & 2) != 0 			and not (local_p.get("in_limbo") == true):
 		var cs: CollisionShape2D = local_p.get_node_or_null("CollisionShape2D") as CollisionShape2D
 		if cs != null and not cs.disabled and cs.shape is CircleShape2D:
 			probe_r = (cs.shape as CircleShape2D).radius * absf(cs.global_scale.x)
@@ -366,13 +366,14 @@ func _build_targets() -> void:
 				continue
 			var ok2: bool = not (rp.get("is_invisible") == true) and not (rp.get("is_dead") == true) \
 					and not (rp.get("is_downed") == true) and not (rp.get("is_indoors") == true) \
-					and not (rp.get("is_in_merchant_zone") == true)
+					and not (rp.get("is_in_merchant_zone") == true) and not (rp.get("in_limbo") == true)
 			_add_target(rp, T_REMOTE, ok2, pos, kind, targetable, ghost, body, zone, ids)
 	## 3. Necromancer yaratıkları
 	for ally: Node in tree.get_nodes_in_group("player_allies"):
 		if not is_instance_valid(ally):
 			continue
-		_add_target(ally, T_ALLY, not (ally.get("is_dead") == true), pos, kind, targetable, ghost, body, zone, ids)
+		## Sahibi ruh hâlindeyken donan çağrılan (limbo.gd) dünyada değilmiş gibi: hedef alınmaz, içinden geçilir.
+		_add_target(ally, T_ALLY, not (ally.get("is_dead") == true) and not ally.has_meta(&"limbo_prev_pm"), pos, kind, targetable, ghost, body, zone, ids)
 	## 3b. Ev yıkılınca dışarı atılan BABAANNE (madde 313): oyuncu gibi kovalanır ve vurulur (take_damage; savaşamaz).
 	var granny: Node2D = GameManager.babaanne_target
 	if is_instance_valid(granny) and granny.is_inside_tree():
@@ -408,11 +409,12 @@ func _add_target(n: Node, k: int, ok: bool, pos: PackedVector2Array, kind: Packe
 	pos.append((n as Node2D).global_position)
 	kind.append(k)
 	targetable.append(1 if ok else 0)
-	ghost.append(1 if (k != T_TREE and n.has_method("is_ghost_now") and n.is_ghost_now()) else 0)
+	var limbo: bool = n.get("in_limbo") == true or n.has_meta(&"limbo_prev_pm") ## ruh hâli (madde 438): yaratıklar içinden geçer
+	ghost.append(1 if (k != T_TREE and (limbo or (n.has_method("is_ghost_now") and n.is_ghost_now()))) else 0)
 	body.append(PLAYER_BODY_RADIUS)
 	## Şovalye baloncuğu: enemy.gd _paladin_zone_owners (yerel + uzak oyuncular; ölü sahibin baloncuğu odak dışı)
 	var z: float = 0.0
-	if (k == T_PLAYER or k == T_REMOTE) and n.get("paladin_zone_active") == true and not (n.get("is_dead") == true):
+	if (k == T_PLAYER or k == T_REMOTE) and n.get("paladin_zone_active") == true and not (n.get("is_dead") == true) and not limbo:
 		z = float(n.get("paladin_zone_radius"))
 	zone.append(z)
 	ids.append(n.get_instance_id())

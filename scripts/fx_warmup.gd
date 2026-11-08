@@ -31,6 +31,8 @@ const EXTRA_SHADERS: Array[String] = [
 	"res://shaders/talon_form.gdshader",
 	"res://shaders/talon_form_weapon.gdshader",
 	"res://shaders/assasin_ghost.gdshader",
+	"res://shaders/ruh_hali.gdshader", ## ruh hâli (madde 438) - ilk level ekranında derleme takılmasın
+	"res://shaders/zindan_zemin.gdshader", ## zindan haritası zemin taşları (madde 449)
 	"res://shaders/assasin_passive_outline.gdshader",
 	"res://shaders/melek_bond.gdshader",
 	"res://shaders/melek_halo_tint.gdshader",
@@ -43,6 +45,13 @@ const EXTRA_SHADERS: Array[String] = [
 	"res://shaders/blood_tint.gdshader",
 	"res://shaders/gokkusagi_isin.gdshader", ## Gökkuşağı Asası ışını: shader ilk ÇİZİMDE derlenir (~20 ms), kaynak listesi bunu ısıtamaz (madde 312)
 ]
+## AÇILIŞ (2026-11-07, kullanıcı: "oyun başladığında evde doğunca anlık drop, ilk saniyelerde FPS düşük"; ölçüm fps_micro -Mode acilis: ilk 3 sn'de
+## 40-70 ms'lik ~25 kare = bu ısınma + zindan ön kurulumu): liste kaynakları artık YÜKLEME EKRANININ iş parçacığında okunur (loading_screen.gd
+## _load_worker -> adopt), yükleme katmanı (loading_overlay.gd, grup "loading_overlay") ekrandayken shader'lar COVERED_BUDGET_US bütçesiyle
+## kare başına birden çok ısıtılır; katman is_finished() + zindan warm_done()'u bekleyip öyle kalkar. Katmansız açılışta eski kare bütçesi.
+const COVERED_BUDGET_US := 30000
+## Shader derlemesi ÇİZİMDE olur (_warm_shader yalnız dörtgeni ekler, süresi bütçeye yansımaz): katman ekrandayken kare başına en çok bu kadar (~45 ms/shader).
+const COVERED_SHADERS_PER_FRAME := 3
 ## Kare başına kaynak yüklemeye ayrılan en çok süre (µs). Bir kaynak ~0,5-6 ms (ses örneği / doku sayfası / FX sahnesi): kare başına 1-2 kaynak, ~2 sn'de biter.
 const LOAD_BUDGET_US := 3000
 const WARM_LAYER := 100
@@ -124,14 +133,30 @@ static func _start_background_warmup(tree: SceneTree) -> void:
 	tree.process_frame.connect(_stepper)
 
 
+## Yükleme ekranının iş parçacığında okunmuş liste kaynakları (oturum boyunca tutulur; _step'te load() önbellekten gelir).
+static func adopt(resources: Array) -> void:
+	_held.append_array(resources)
+
+
+## Arka plan ısınması (shader + kaynak + kristal maskeleri) bitti mi / hiç başlamadı mı.
+static func is_finished() -> bool:
+	return not _stepper.is_valid()
+
+
 static func _step(tree: SceneTree) -> void:
 	var t0: int = Time.get_ticks_usec()
-	## Kare başına BİR shader: yeni materyal + 4x4'lük neredeyse görünmez dörtgen birkaç kare çizilir (boru hattı kurulur), sonra silinir.
-	if _next_shader < _shader_sources.size():
+	var covered: bool = tree.get_node_count_in_group(&"loading_overlay") > 0
+	var budget: int = COVERED_BUDGET_US if covered else LOAD_BUDGET_US
+	## Kare başına BİR shader (katman ekrandayken bütçe kadar): yeni materyal + 4x4'lük neredeyse görünmez dörtgen birkaç kare çizilir (boru hattı kurulur), sonra silinir.
+	var warmed: int = 0
+	while _next_shader < _shader_sources.size():
 		_warm_shader(tree, _shader_sources[_next_shader] as Shader)
 		_next_shader += 1
+		warmed += 1
+		if not covered or warmed >= COVERED_SHADERS_PER_FRAME:
+			break
 	var paths: Array[String] = WarmListScript.PATHS
-	while _next_path < paths.size() and Time.get_ticks_usec() - t0 < LOAD_BUDGET_US:
+	while _next_path < paths.size() and Time.get_ticks_usec() - t0 < budget:
 		var p: String = paths[_next_path]
 		_next_path += 1
 		if ResourceLoader.exists(p):

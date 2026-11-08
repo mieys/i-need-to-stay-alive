@@ -54,12 +54,19 @@ static func reset() -> void:
 
 ## `feet_world` (dünya) çalılığın dolu bir hücresinde mi?
 static func contains(tree: SceneTree, feet_world: Vector2) -> bool:
+	## zindan saklanma yerleri (açık lahit, gölge nişi...; madde 373) çalılıkla aynı kural. ÖNCE bakılır: zindan biçimli haritada çalılık
+	## katmanı yok - eskiden katman yoksa hemen false dönüyordu, Batık Nekropol'ün açık lahitleri hiç saklamıyordu (2026-11-08, madde 463).
+	if DungeonWorldScript.is_hide_world(feet_world):
+		return true
 	var l: TileMapLayer = layer(tree)
 	if l == null:
 		return false
-	if DungeonWorldScript.is_hide_world(feet_world):
-		return true ## zindan saklanma yerleri (açık lahit, gölge nişi...; madde 373) çalılıkla aynı kural
 	return l.get_cell_source_id(l.local_to_map(l.to_local(feet_world))) != -1
+
+
+## Saklanma kuralı bu haritada çalışır mı: çalılık katmanı ya da zindan saklanma hücresi var (hide_brush_manager.gd tick kapısı).
+static func active(tree: SceneTree) -> bool:
+	return layer(tree) != null or DungeonWorldScript.has_hide_cells()
 
 
 ## ALGI HALKASI (madde 283, 2026-10-19; kullanıcı: "karakterin etrafında yuvarlak bir sınır (LoL Twitch Q gibi); dışındaki yaratıklar onu görmeyecek, içine

@@ -867,10 +867,15 @@ func test_cracks_are_sprite_decals_without_per_frame_drawing() -> void:
 	var n: int = 0
 	for cell in fx._shown:
 		n += (fx._shown[cell] as Array).size()
-	assert(n >= 10, "4x4 hücrede çatlak sprite'ları: %d" % n)
 	var layer_children: int = fx._layer.get_child_count()
-	fx._sync_cells(Rect2i(Vector2i(10, 0), Vector2i(4, 4)))
-	assert(fx._layer.get_child_count() <= layer_children + 6, "kaydırınca eski sprite'lar yeniden kullanılır (havuz): %d -> %d" % [layer_children, fx._layer.get_child_count()])
+	if CracksScript.CRACKS_VISIBLE:
+		assert(n >= 10, "4x4 hücrede çatlak sprite'ları: %d" % n)
+		fx._sync_cells(Rect2i(Vector2i(10, 0), Vector2i(4, 4)))
+		assert(fx._layer.get_child_count() <= layer_children + 6, "kaydırınca eski sprite'lar yeniden kullanılır (havuz): %d -> %d" % [layer_children, fx._layer.get_child_count()])
+	else:
+		## 2026-11-08: zemin çatlakları kapalı - hücre listesi var (toz için) ama tek sprite yok
+		assert(n == 0 and layer_children == 0, "çatlaklar kapalıyken sprite yok: %d sprite, %d katman çocuğu" % [n, layer_children])
+		assert(fx._shown.size() == 16, "4x4 hücre izleniyor (gümbürtü tozu konumu): %d" % fx._shown.size())
 	fx._age = 100.0
 	assert(not fx._update_growth(), "tam boyda büyüme güncellemesi biter")
 	fx.queue_free()
@@ -890,7 +895,10 @@ func test_cracks_effect_appears_with_the_boss_adds_bursts_pulses_and_fades_away_
 	var limb: Node = _limb_at(boss, Vector2(1400, 1400), MathScript.KIND_LASHER, MathScript.FATE_BURST)
 	var before: int = fx._bursts.size()
 	limb._apply_worm_pose(MathScript.POSE_EMERGE)
-	assert(fx._bursts.size() == before + 1, "uzuv çıkınca çıkış yıldızı: %d -> %d" % [before, fx._bursts.size()])
+	if CracksScript.CRACKS_VISIBLE:
+		assert(fx._bursts.size() == before + 1, "uzuv çıkınca çıkış yıldızı: %d -> %d" % [before, fx._bursts.size()])
+	else:
+		assert(fx._bursts.size() == before and fx._layer.get_child_count() == 0, "çatlaklar kapalıyken uzuv çıkış yıldızı yok")
 	## gümbürtü: çatlaklar parlar
 	boss.on_ability_vfx("worm_rumble", {"v": 1})
 	assert(fx._pulse > 0.99, "gümbürtüde çatlak parlaması")

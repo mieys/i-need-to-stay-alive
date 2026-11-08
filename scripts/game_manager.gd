@@ -38,9 +38,9 @@ const LIFESTEAL_EFFECTIVENESS := 0.33
 ## Can çalma tetiklenince yenilenen can (isabet başına %X ihtimalle). 2026-10-11 (kullanıcı: "can çalma bundan sonra 1 can yerine 2 can
 ## versin"): 1 -> 2. player.gd on_damage_dealt (+ Kan Ağlayan'ın kalkana yazdığı) bunu okur.
 const LIFESTEAL_HEAL := 1.0 ## 2026-10-11 (sonra): 2 çok güçlü bulundu, 1'e döndü (kullanıcı: "1 can vermeye devam etsin"). 2026-10-23: yanlış anlaşılma yüzünden 1,5 denendi, kullanıcı istemedi -> 1'e geri alındı.
-## SALDIRI HIZI ÜST SINIRI + TAŞMA (kullanıcı isteği 2026-10-11): toplam saldırı hızı bonusu en çok %450 (2026-10-20 denge turu, BALANCE_REV 95: %600 -> %450; kayıtlarda Elara %498, Matthew %413; aralık çarpanı >= 1/5,5); sınırı aşan her 1
+## SALDIRI HIZI ÜST SINIRI + TAŞMA (kullanıcı isteği 2026-10-11): toplam saldırı hızı bonusu en çok %600 (aralık çarpanı >= 1/7). Tarihçe: 2026-10-20 BALANCE_REV 95: %600 -> %450 (kayıtlarda Elara %498, Matthew %413); 2026-11-07 BALANCE_REV 116 (kullanıcı): %450 -> %600, birlikte Çılgın Tetik / Adrenalin kartı %12 -> %9 (iki kart yığını ham hızı %779'a çıkarıyordu); sınırı aşan her 1
 ## puan canlı olarak 0.5 saldırı gücüne dönüşür (kalıcı değil - bkz. player.gd _sync_attack_speed_overflow_ap). player.gd + weapon.gd okur (TEK kaynak).
-const ATTACK_SPEED_CAP_PERCENT := 450.0
+const ATTACK_SPEED_CAP_PERCENT := 600.0
 const ATTACK_SPEED_OVERFLOW_AP_PER_PERCENT := 0.5
 ## TÜM SİLAHLARIN saldırı hızı çarpanı (kullanıcı isteği 2026-10-17: "tüm silahların saldırı hızını %30 azalt"): atış aralığı / 0.7 (= her silah %30 yavaş).
 ## weapon.gd _effective_fire_wait en SON adımda uygular (kart/eşya/pasif/üst sınır sonrası, yani gösterilen "Saldırı Hızı %" değişmez, silahlar o orana göre yavaş vurur).
@@ -142,6 +142,9 @@ var selected_spiritual: String = ""
 ## başlayınca main.gd _start_initial_loadout_selection verir. Boş/geçersizse WeaponCatalog.DEFAULT_KEY (bkz. weapon_catalog.gd).
 ## Ruhani yetenek gibi yerel tercih - ağdan gitmez (her oyuncu kendi silahını kendi istemcisinde alır).
 var selected_start_weapon: String = ""
+## HARİTA (madde 444, harita seçimi - bkz. map_profiles.gd): oyunun koşacağı haritanın profil kimliği ("ana" = Harita.tmx). Seçim oyundan ÖNCE
+## yapılır, reset() BİLEREK sıfırlamaz. Çok oyunculuda host'unki geçerli olacak (3. adım: oda bilgisi); şimdilik yalnız HARITA ortam değişkeni.
+var selected_map: String = "ana"
 ## Evcil hayvan (kullanıcı isteği 2026-10-12): karakter seçim ekranında / lobide seçilir (menu_pet_picker.gd, pet_catalog.gd), oyun başlayınca
 ## player.gd _setup_pet() kurar. Boş/geçersizse PetCatalog.DEFAULT_KEY (köpek). Silah gibi yerel tercih - ağdan gitmez.
 var selected_pet: String = ""
@@ -258,6 +261,10 @@ func owns_weapon(key: String) -> bool:
 ## eleman: {"key": String, "spent": int (satışta %70 iade için)}. En fazla
 ## player.gd get_max_item_slots() kadar (karakter başına seviye başı +1).
 var owned_items: Array = []
+## Level pazarı (madde 432, level_market.gd): KAYDET'lenen seçenekler (karıştırma ve sonraki seviyede kaybolmaz, alınınca
+## düşer) + YASAKLA'nan seçeneklerin kimlikleri (koşu boyu bir daha çıkmaz, en çok Market.BAN_LIMIT). Yerel oyuncunun, ağa gitmez.
+var market_saved: Array = []
+var market_banned: Array = []
 
 ## #48 DÜZELTME (kullanıcı isteği: "Level kartı reroll'u altınla olsun,
 ## level başına +1 altın"): eskiden sabit sayıda (2 tane) ücretsiz reroll
@@ -634,12 +641,12 @@ func _bind_joypad(action_name: String, defaults: Array) -> void:
 func get_action_key_label(action_name: String) -> String:
 	## Telefonda klavye yok: uyarılar ekrandaki düğmenin adını söyler (bkz. hud.gd _setup_mobile_hud).
 	if MobileUI.enabled and action_name == "interact":
-		return "ETKİLEŞİM"
+		return tr("ETKİLEŞİM") ## kalıba girer ("%s tuşuna bas"), Label çevirisi tutmaz (madde 446)
 	var code: int = get_keybind_keycode(action_name)
 	if code == KEY_NONE:
 		return "?"
 	if code == KEY_SPACE:
-		return "BOŞLUK"
+		return tr("BOŞLUK")
 	return OS.get_keycode_string(code as Key).to_upper()
 
 
@@ -1332,11 +1339,16 @@ func is_position_blocked_by_forest(world_pos: Vector2) -> bool:
 ## EnemyWorld'de aynı hücre kümesiyle). Mermi, görüş, duvara çarptırma ve yetenek menzili BİLEREK SADECE orman duvarı (is_position_blocked_by_forest):
 ## ağaç/ev/su ateşi ve görüşü kesmez.
 func is_position_blocked_by_walls(world_pos: Vector2) -> bool:
-	if is_position_blocked_by_forest(world_pos):
-		return true
 	var forest: TileMapLayer = get_forest_layer()
 	if forest == null:
 		return false
+	## ZİNDAN / zindan biçimli harita: hareket AYAK noktasından (dungeon_world.gd AYAK KURALI notu; 2026-11-08). Görüş/mermi kaymaz.
+	if DungeonWorldScript.feet_rule_at(world_pos):
+		var fc: Vector2i = forest.local_to_map(forest.to_local(world_pos + Vector2(0.0, DungeonWorldScript.FEET_SHIFT)))
+		return forest.get_cell_source_id(fc) != -1 or DungeonWorldScript.has_wall_cell(fc) or DungeonWorldScript.is_move_blocked_cell(fc) \
+				or TerrainCollisionScript.is_blocked(forest, world_pos)
+	if is_position_blocked_by_forest(world_pos):
+		return true
 	return TerrainCollisionScript.is_blocked(forest, world_pos) or DungeonWorldScript.is_move_blocked_cell(forest.local_to_map(forest.to_local(world_pos)))
 
 
@@ -1507,6 +1519,8 @@ func reset() -> void:
 	shield_enchant_ups = []
 	owned_weapons = []
 	owned_items = []
+	market_saved = []
+	market_banned = []
 	pending_chest_tiers = []
 	pending_elite_chests = 0
 	pending_chest_gold = {"normal": [], "elite": []}

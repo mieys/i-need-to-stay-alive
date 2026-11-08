@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## ENVANTER. İki ayrı görünüş, satış kuralları ortak (_do_sell_item / _do_sell_weapon_equip):
 ##  - MASAÜSTÜ "KAHRAMAN ÇANTASI" (madde 341, 2026-10-20; kullanıcı madde 336 prototiplerinden B'yi seçti): tek ekran - solda gruplu
@@ -10,30 +11,31 @@ extends Control
 
 const WEAPON_ICON_TEXTURES := {
 	"dagger": preload("res://assets/weapons/base_knife/icon_v2.png"),
-	"fire_staff": preload("res://assets/weapons/fire/firestaff_icon_v2.png"),
+	"fire_staff": preload("res://assets/weapons/yeni/fire_staff.png"),
 	"lightning_staff": preload("res://assets/weapons/lightning/icon_v2.png"),
 	"tabanca": preload("res://assets/weapons/tabanca/icon_v2.png"),
-	"tuftuf": preload("res://assets/weapons/tuftuf/icon_v2.png"),
+	"tuftuf": preload("res://assets/weapons/yeni/zehir_asasi.png"),
 	"tufek": preload("res://assets/weapons/tufek/icon.png"),
-	"arcane": preload("res://assets/weapons/arcane/icon_v2.png"),
-	"yay": preload("res://assets/weapons/yay/draw1.png"),
-	"crossbow": preload("res://assets/weapons/crossbow/icon.png"),
+	"arcane": preload("res://assets/weapons/yeni/arcane.png"),
+	"yay": preload("res://assets/weapons/yeni/yay.png"),
+	"crossbow": preload("res://assets/weapons/yeni/arbalet.png"),
 	"boomerang": preload("res://assets/weapons/boomerang/icon.png"),
-	"buz_asasi": preload("res://assets/weapons/buz_asasi/icon.png"),
+	"buz_asasi": preload("res://assets/weapons/yeni/buz_asasi.png"),
 	"fisek": preload("res://assets/weapons/fisek/icon.png"),
 	"pence": preload("res://assets/weapons/pence/icon.png"),
 	"topuz": preload("res://assets/weapons/topuz/icon.png"),
-	"uzunkilic": preload("res://assets/weapons/uzunkilic/icon.png"),
-	"gokkusagi": preload("res://assets/weapons/zanaat/gokkusagi_L1.png"),
+	"uzunkilic": preload("res://assets/weapons/yeni/uzunkilic.png"),
+	"gokkusagi": preload("res://assets/weapons/yeni/gokkusagi.png"),
 	"mizrak": preload("res://assets/weapons/zanaat/mizrak_L1.png"),
 	"kalkan": preload("res://assets/weapons/zanaat/kalkan_L1.png"),
 	"yinyang": preload("res://assets/weapons/zanaat/yinyang_L1.png"),
+	"pompali": preload("res://assets/weapons/pompali/icon.png"),
 }
 const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
-	"tuftuf": "Tüftüf", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
+	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı",
+	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
 }
 
 ## Eşyalar (bkz. scripts/items.gd) - dükkandaki ItemsPage satırlarıyla BİREBİR
@@ -180,7 +182,7 @@ var _last_equip_signature: String = ""
 func _request_sell_confirmation(item_label: String, refund: int, action: Callable, desc: String = "", shard_refund: int = 0) -> void:
 	## Telefon: alttaki bilgi şeridi (ad + açıklama + büyük SAT) - dokunmak önce bilgiyi gösterir.
 	if shard_refund > 0:
-		desc += "\n+%d Silah Parçacığı geri alırsın." % shard_refund
+		desc += Loc.t("\n+%d Silah Parçacığı geri alırsın.") % shard_refund
 	_show_detail(item_label, desc, refund, action)
 
 ## Kalkan adları shield_enchant_defs.gd'den (ShieldEnchantDefs.type_name) gelir.
@@ -426,9 +428,9 @@ func _refresh_weapons() -> void:
 			var trait_def: Dictionary = EnchantDefs.get_def(str(trait_rec.get("id", "")))
 			if not trait_def.is_empty():
 				var done: int = (EnchantDefs.upgrades_taken(trait_rec) as Array).size() + (1 if EnchantDefs.is_complete(trait_rec) else 0)
-				trait_line = "\nEfsun: %s (%d/%d)" % [str(trait_def["name"]), done, (trait_def["upgrades"] as Array).size() + 1]
-			btn.tooltip_text = "%s Lv%d%s\n\nSatmak için tıklayın (+%d Altın%s)" % [WEAPON_NAMES.get(key, key), level, trait_line, refund,
-					(", +%d Silah Parçacığı" % shard_refund) if shard_refund > 0 else ""]
+				trait_line = Loc.t("\nEfsun: %s (%d/%d)") % [str(trait_def["name"]), done, (trait_def["upgrades"] as Array).size() + 1]
+			btn.tooltip_text = Loc.t("%s Lv%d%s\n\nSatmak için tıklayın (+%d Altın%s)") % [WEAPON_NAMES.get(key, key), level, trait_line, refund,
+					(Loc.t(", +%d Silah Parçacığı") % shard_refund) if shard_refund > 0 else ""]
 			btn.pressed.connect(_on_sell_weapon_equip.bind(i))
 			
 			var icon_tex: Texture2D = WEAPON_ICON_TEXTURES.get(key)
@@ -481,13 +483,13 @@ func _on_sell_weapon_equip(index: int) -> void:
 	if GameManager.owned_weapons.size() <= 1:
 		if _mobile: ## telefonda bilgi yine görünür, son silah satılamaz (SAT yok)
 			var only: Dictionary = GameManager.owned_weapons[index]
-			_show_detail(WEAPON_NAMES.get(str(only.get("key", "")), "Silah"), "Silah  ·  Seviye %d\nSon silah satılamaz." % int(only.get("level", 1)), 0, Callable())
+			_show_detail(WEAPON_NAMES.get(str(only.get("key", "")), "Silah"), Loc.t("Silah  ·  Seviye %d\nSon silah satılamaz.") % int(only.get("level", 1)), 0, Callable())
 		return
 	var entry: Dictionary = GameManager.owned_weapons[index]
 	var key: String = entry.get("key", "")
 	var refund: int = EnchantDefs.sell_refund_gold(entry)
 	_request_sell_confirmation(WEAPON_NAMES.get(key, key), refund, _do_sell_weapon_equip.bind(index),
-			"Silah  ·  Seviye %d" % int(entry.get("level", 1)) + ("\nSon silah satılamaz." if GameManager.owned_weapons.size() <= 1 else ""),
+			Loc.t("Silah  ·  Seviye %d") % int(entry.get("level", 1)) + ("\nSon silah satılamaz." if GameManager.owned_weapons.size() <= 1 else ""),
 			EnchantDefs.sell_refund_shards(entry))
 
 
@@ -608,7 +610,7 @@ func _refresh_equipments() -> void:
 			var refund: int = int(round(total_spent * 0.7))
 
 			util_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			util_btn.tooltip_text = "%s Lv%d\n\nSatmak için tıklayın (+%d Altın)" % [EQUIP_NAMES.get(utility_key, utility_key), utility_level, refund]
+			util_btn.tooltip_text = Loc.t("%s Lv%d\n\nSatmak için tıklayın (+%d Altın)") % [EQUIP_NAMES.get(utility_key, utility_key), utility_level, refund]
 			util_btn.pressed.connect(_on_sell_utility_equip.bind(utility_key))
 
 			var icon: Control = Control.new()
@@ -661,7 +663,7 @@ func _on_sell_utility_equip(key: String) -> void:
 	for l: int in range(1, level + 1):
 		total_spent += _get_upgrade_cost(key, l)
 	var refund: int = int(round(total_spent * 0.7))
-	_request_sell_confirmation(EQUIP_NAMES.get(key, key), refund, _do_sell_utility_equip.bind(key), "İşlevsellik  ·  Seviye %d" % level)
+	_request_sell_confirmation(EQUIP_NAMES.get(key, key), refund, _do_sell_utility_equip.bind(key), Loc.t("İşlevsellik  ·  Seviye %d") % level)
 
 
 func _do_sell_utility_equip(key: String) -> void:
@@ -906,7 +908,7 @@ func _show_detail(item_label: String, desc: String, refund: int, action: Callabl
 	_detail_desc.text = desc
 	_detail_action = action
 	_detail_sell.visible = action.is_valid()
-	_detail_sell.text = "SAT  +%d" % refund
+	_detail_sell.text = Loc.t("SAT  +%d") % refund
 
 
 func _clear_detail() -> void:
@@ -928,13 +930,14 @@ func _on_detail_sell() -> void:
 ## ---------------------------------------------------------------- TELEFON: Gece Sıvası (madde 276; kullanıcı onayı 2026-10-18,
 ## madde 253 "B"): bej kit telefonda mavi-mor sıva paneline döner (çerçeve, başlık, boş yuvalar, kademe başlıkları, ayrıntı şeridi,
 ## SAT). Kapatma telefonda hud.gd'nin yan rayındaki geri düğmesi (X gizli). Masaüstü aynı.
-const PH_PANEL := Color("#1a1a2c")
-const PH_INSET := Color("#12121f")
-const PH_LINE := Color("#3b3a5a")
-const PH_LINE_HI := Color("#5f5c86")
-const PH_TEXT := Color("#efe6d6")
-const PH_DIM := Color("#a7a2c0")
-const PH_ACCENT := Color("#f4c56e")
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
+const PH_PANEL := HT.WIN_PANEL
+const PH_INSET := HT.WIN_INSET
+const PH_LINE := HT.WIN_LINE
+const PH_LINE_HI := HT.WIN_LINE_HI
+const PH_TEXT := HT.TEXT
+const PH_DIM := HT.DIM
+const PH_ACCENT := HT.ACCENT
 const PH_TIER := [Color("#c39a64"), Color("#6f9df2"), Color("#b98af2")]
 
 
@@ -983,7 +986,7 @@ func _apply_night_style() -> void:
 
 ## ================================================================ MASAÜSTÜ: "KAHRAMAN ÇANTASI" (madde 341)
 ## Prototip: tools/proto_20261020/envanter_proto.gd _build_b (madde 336). Görünüş ShopDarkKit PAL_WOOD (demirci "Örs Vitrini") + HUD Kısık Ahşap
-## kenarı; simgeler: silah = Zanaatkâr kademe sanatı + efsun kontürü (WeaponTierArt + DarkKit.wicon), stat = stat_mini_lol (HUD mini paneli),
+## kenarı; simgeler: silah = oyundaki sabit görünüş (madde 402, WeaponTierArt) + efsun kontürü (DarkKit.wicon), stat = stat_mini_lol (HUD mini paneli),
 ## eşya = kademe renkli yuva (satıcıdaki tile). Pencere dükkanlar gibi grup panelinin solundaki güvenli alanda ortalanır, sığmazsa küçülür.
 ## Oyunu durdurmaz; arkadaki karartmaya tıklamak kapatır. Kurallar (satış iadesi, son silah, kalkan satılmaz) bu dosyanın üst kısmıyla aynı.
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
@@ -1235,7 +1238,7 @@ func _ch_stats_column() -> Control:
 
 func _ch_stat_row(id: String, stripe: bool) -> Control:
 	var p: PanelContainer = _k.box(Color(_k.c("panel3"), 0.45) if stripe else Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0, 2)
-	var sb: StyleBoxFlat = p.get_theme_stylebox("panel") as StyleBoxFlat
+	var sb = p.get_theme_stylebox("panel") ## PixelBox (madde 417)
 	sb.content_margin_left = 8
 	sb.content_margin_right = 8
 	p.mouse_filter = Control.MOUSE_FILTER_STOP ## ipucu (stat açıklaması)
@@ -1281,11 +1284,11 @@ func _ch_refresh_stats() -> void:
 		if l.text != t:
 			l.text = t
 	if "level" in player and _ch_level:
-		_ch_level.text = " Sv %d " % int(player.get("level"))
+		_ch_level.text = Loc.t(" Sv %d ") % int(player.get("level"))
 		var need: float = maxf(1.0, float(player.get("xp_to_next_level")))
 		var have: float = float(player.get("xp"))
 		_ch_xp_bar.set_frac(have / need)
-		_ch_xp_text.text = "%d / %d XP" % [int(have), int(need)]
+		_ch_xp_text.text = Loc.t("%d / %d XP") % [int(have), int(need)]
 
 
 ## ---------------------------------------------------------------- orta: sahne (karakter + silah yayı + kalkan/evcil)
@@ -1578,7 +1581,7 @@ func _ch_build_bag() -> bool:
 	var total: int = 0
 	for kd in [Items.KADEME_EFSANEVI, Items.KADEME_EPIK, Items.KADEME_PARCA]:
 		total += Items.slot_limit(kd, part_slots)
-	_ch_bag_count.text = "%d / %d yuva" % [GameManager.owned_items.size(), total]
+	_ch_bag_count.text = Loc.t("%d / %d yuva") % [GameManager.owned_items.size(), total]
 	for kd in [Items.KADEME_EFSANEVI, Items.KADEME_EPIK, Items.KADEME_PARCA]:
 		var lim: int = Items.slot_limit(kd, part_slots)
 		var idx: Array = []
@@ -1671,7 +1674,7 @@ func _ch_build_detail() -> void:
 
 ## Kartın iskeleti: üst satır (ikon + ad + alt satır + sağ ek), kayan gövde, alt satır (not + SAT). Gövde VBox'ını döndürür.
 func _ch_card(icon: Control, title: String, sub: Control, border: Color, right: Control, note: String, sell_text: String, can_sell: bool) -> VBoxContainer:
-	(_ch_detail.get_theme_stylebox("panel") as StyleBoxFlat).border_color = border
+	_ch_detail.get_theme_stylebox("panel").set("border_color", border) ## PixelBox (madde 417)
 	var top: HBoxContainer = _k.h(14)
 	top.add_child(icon)
 	var tv: VBoxContainer = _k.v(2)
@@ -1775,7 +1778,7 @@ func _ch_detail_item(key: String) -> void:
 	sub.add_child(_k.amt(Items.cost(key), 24, _k.c("dim")))
 	var rec: Array = Items.recipe(key)
 	var refund: int = Items.sell_refund(key)
-	_ch_sell_note = "+%d altın geri alırsın." % refund
+	_ch_sell_note = Loc.t("+%d altın geri alırsın.") % refund
 	var body: VBoxContainer = _ch_card(_k.tile(Items.icon(key), 80, tc), Items.item_name(key), sub, tc.darkened(0.2),
 			_ch_mini_tiles("TARİF", rec) if not rec.is_empty() else null,
 			"Satış fiyatı tam fiyatın yarısı. " + _ch_sell_note, "SAT", true)
@@ -1813,12 +1816,12 @@ func _ch_detail_weapon(i: int) -> void:
 	pv.alignment = BoxContainer.ALIGNMENT_CENTER
 	var ench: Dictionary = entry.get("enchant", {})
 	var done: int = (ench.get("ups", []) as Array).size() + (1 if bool(ench.get("final", false)) else 0)
-	pv.add_child(_k.lbl("USTALIK %d/5" % done, 24, _k.c("dim")))
+	pv.add_child(_k.lbl(Loc.t("USTALIK %d/5") % done, 24, _k.c("dim")))
 	pv.add_child(_ch_pips(entry, 150, 10))
 	var last: bool = GameManager.owned_weapons.size() <= 1
 	var refund: int = EnchantDefs.sell_refund_gold(entry)
 	var shards: int = EnchantDefs.sell_refund_shards(entry)
-	_ch_sell_note = ("+%d altın ve +%d Silah Parçacığı geri alırsın." % [refund, shards]) if shards > 0 else ("+%d altın geri alırsın." % refund)
+	_ch_sell_note = (Loc.t("+%d altın ve +%d Silah Parçacığı geri alırsın.") % [refund, shards]) if shards > 0 else (Loc.t("+%d altın geri alırsın.") % refund)
 	var note: String = "Son silah satılamaz." if last else _ch_sell_note + " Geliştirmeler silahla gider."
 	var body: VBoxContainer = _ch_card(_ch_icon_box(_k.wicon(_ch_weapon_tex(key, tier), 72, tier), 80, tc), _ch_weapon_name(key), sub,
 			tc.darkened(0.15), pv, note, "SON SİLAH" if last else "SAT", not last)
@@ -1841,11 +1844,11 @@ func _ch_detail_shield() -> void:
 			ShieldEnchantDefs.type_name(key), sub, HudTheme.RIM_HI, null,
 			"Mana kalkanı satılmaz; türünü ve geliştirmelerini demirciden alırsın.", "", false)
 	if not st.is_empty():
-		body.add_child(_ch_line("shield_amount", "%d Güç" % int(st["power"]), _k.c("text")))
-		body.add_child(_ch_line("shield_protection", "%%%d Soğurma" % int(round(float(st["absorption"]) * 100.0)), _k.c("text")))
-		body.add_child(_ch_line("shield_regen", "%s / sn Yenilenme" % HudStatPanel._num(float(st["regen"])), _k.c("text")))
+		body.add_child(_ch_line("shield_amount", Loc.t("%d Güç") % int(st["power"]), _k.c("text")))
+		body.add_child(_ch_line("shield_protection", Loc.t("%%%d Soğurma") % int(round(float(st["absorption"]) * 100.0)), _k.c("text")))
+		body.add_child(_ch_line("shield_regen", Loc.t("%s / sn Yenilenme") % HudStatPanel._num(float(st["regen"])), _k.c("text")))
 		var delay: float = float(st["delay"])
-		body.add_child(_ch_line("cooldown_reduction", ("Hasardan sonra %s sn bekler" % HudStatPanel._num(delay)) if delay > 0.0 else "Hasar alınca beklemez",
+		body.add_child(_ch_line("cooldown_reduction", (Loc.t("Hasardan sonra %s sn bekler") % HudStatPanel._num(delay)) if delay > 0.0 else "Hasar alınca beklemez",
 				_k.c("text")))
 	var desc: String = str((ShieldEnchantDefs.TYPES.get(key, {}) as Dictionary).get("desc", ""))
 	if desc != "":

@@ -352,7 +352,8 @@ func test_tier_banner_has_the_roman_title_and_the_skull_row() -> void:
 	assert(str(banner.get("title")) == "KADEME VII", "başlık 'KADEME VII' olmalı: %s" % str(banner.get("title")))
 	assert(row != null and int(row.call("get_tier")) == 7, "altında kademe VII'nin kuru kafa satırı olmalı")
 	assert(str(banner.get("body")) == "", "başlıktan başka yazı olmamalı (eski 'BAŞLADI - güçlendi' yok): %s" % str(banner.get("body")))
-	assert(row.position.y >= 30.0 and row.get_rect().end.y <= banner.size.y, "kuru kafalar levhanın içinde")
+	## madde 403: küçük levhada kafalar başlığın sağında, tek satır
+	assert(Rect2(Vector2.ZERO, banner.size).encloses(Rect2(row.position, row.custom_minimum_size)), "kuru kafalar levhanın içinde")
 	banner.free()
 	m.free()
 

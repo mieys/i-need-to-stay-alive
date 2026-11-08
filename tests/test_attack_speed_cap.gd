@@ -1,6 +1,6 @@
 extends Node
 
-## Saldırı hızı üst sınırı (2026-10-20: %600 -> %450, GameManager.ATTACK_SPEED_CAP_PERCENT) + taşmanın CANLI saldırı gücüne dönüşmesi (kullanıcı isteği 2026-10-11; player.gd get_attack_speed_bonus_percent /
+## Saldırı hızı üst sınırı (2026-10-20: %600 -> %450, 2026-11-07: %450 -> %600, GameManager.ATTACK_SPEED_CAP_PERCENT) + taşmanın CANLI saldırı gücüne dönüşmesi (kullanıcı isteği 2026-10-11; player.gd get_attack_speed_bonus_percent /
 ## _sync_attack_speed_overflow_ap). Buff kaynaklı taşma kalıcı OLMAMALI.
 
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
@@ -41,13 +41,13 @@ func test_below_cap_untouched_and_no_overflow() -> void:
 	_cleanup()
 
 
-func test_cap_is_450_and_interval_floor() -> void:
+func test_cap_is_600_and_interval_floor() -> void:
 	var p: Node = _make_player()
 	var cap: float = GameManager.ATTACK_SPEED_CAP_PERCENT
-	assert(is_equal_approx(cap, 450.0), "tavan %450 (2026-10-20 denge turu)")
+	assert(is_equal_approx(cap, 600.0), "tavan %600 (2026-11-07, BALANCE_REV 116)")
 	_set_total_bonus(p, 900.0)
 	assert(absf(p.get_attack_speed_bonus_percent() - cap) < 0.01, "gösterilen bonus tavanda durmalı")
-	assert(absf(p.get_attack_interval_mult() - 1.0 / (1.0 + cap / 100.0)) < 0.0001, "aralık çarpanı 1/5,5'ten küçük olamaz")
+	assert(absf(p.get_attack_interval_mult() - 1.0 / (1.0 + cap / 100.0)) < 0.0001, "aralık çarpanı 1/7'den küçük olamaz")
 	_cleanup()
 
 

@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Oyuncu panelinin (hud.gd dock) sağına yapışık küçük panel: 5 efsanevi eşya yuvası (Items.LEGENDARY_SLOT_LIMIT) + sağ alt
 ## köşede KALKAN TÜRÜ yuvası (2 sütun, 2-2-2). Kullanıcı isteği (2026-10-14): "panelin tam sağında kendisiyle yapışık daha
@@ -15,9 +16,11 @@ const SLOT := 40.0
 const CELLS: Array[Vector2] = [Vector2(22, 8), Vector2(66, 8), Vector2(22, 50), Vector2(66, 50), Vector2(22, 92)]
 const SHIELD_CELL := Vector2(66, 92)
 const HudTheme := preload("res://scripts/hud_theme.gd")
-const SLOT_UNDER := HudTheme.INSET
+const HudTrayFrame := preload("res://scripts/hud_tray_frame.gd")
+var tray_frame: bool = false ## hud.gd _apply_tray_slots (masaüstü panel, madde 459)
+const SLOT_UNDER := HudTheme.DOCK_INSET ## madde 454
 const EMPTY_RING := HudTheme.RIM_LO
-const EMPTY_MARK := HudTheme.MARK
+const EMPTY_MARK := HudTheme.DOCK_MARK
 const EMPTY_TIP := "Efsanevi Eşya Yuvası (Boş)"
 const SHIELD_UNDER := Color(0.06, 0.1, 0.17)
 const SHIELD_RING := Color(0.36, 0.66, 0.95)
@@ -44,11 +47,11 @@ static var _shield_icon_cache: Dictionary = {}
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_panel_box = UIKit.panel_style("status_badge")
+	_panel_box = UIKit.panel_style("dock_side_legend") ## madde 454: Gömme Tepsi yan kutusu
 	_ring = (TierSystem.COLORS[Items.KADEME_EFSANEVI - 1] as Color).lightened(0.25)
 	## İpucu için yuva başına görünmez alan (çizim bu düğümün _draw'ında).
 	for i in CELLS.size():
-		_areas.append(_make_area("Slot%d" % i, CELLS[i], EMPTY_TIP))
+		_areas.append(_make_area("Slot%d" % i, CELLS[i], EMPTY_TIP)) ## dil:yok (düğüm adı)
 	_shield_area = _make_area("ShieldSlot", SHIELD_CELL, SHIELD_EMPTY_TIP)
 	_refresh()
 
@@ -85,7 +88,7 @@ func _refresh() -> void:
 		for k in keys:
 			_icons.append(Items.icon(k))
 		for i in _areas.size():
-			_areas[i].tooltip_text = ("%s\n%s" % [Items.item_name(_keys[i]), Items.describe(_keys[i])]) if i < _keys.size() else EMPTY_TIP
+			_areas[i].tooltip_text = ("%s\n%s" % [tr(Items.item_name(_keys[i])), Items.describe(_keys[i])]) if i < _keys.size() else EMPTY_TIP
 		dirty = true
 	## Kalkan: tür ya da geliştirme sayısı değişince ipucu (güncel değerler) + ikon yenilenir.
 	var shield_key: String = ShieldEnchantDefs.owned_type()
@@ -104,15 +107,15 @@ func _shield_tip() -> String:
 	var st: Dictionary = ShieldEnchantDefs.stats()
 	if st.is_empty():
 		return SHIELD_EMPTY_TIP
-	var lines: Array[String] = [str(st["name"])]
+	var lines: Array[String] = [tr(str(st["name"]))]
 	var desc: String = str((ShieldEnchantDefs.TYPES[_shield_key] as Dictionary).get("desc", ""))
 	if desc != "":
-		lines.append(desc)
+		lines.append(Loc.pct(tr(desc)))
 	lines.append("")
-	lines.append("Mana Kalkanı: %d" % int(round(float(st["power"]))))
-	lines.append("Hasar soğurma: %%%d" % int(round(float(st["absorption"]) * 100.0)))
-	lines.append("Yenilenme: %s/sn" % ShieldEnchantDefs._num(float(st["regen"])))
-	lines.append("Bekleme: %s" % ShieldEnchantDefs._delay_text(st))
+	lines.append(tr("Mana Kalkanı: %d") % int(round(float(st["power"]))))
+	lines.append(tr("Hasar soğurma: %%%d") % int(round(float(st["absorption"]) * 100.0)))
+	lines.append(tr("Yenilenme: %s/sn") % ShieldEnchantDefs._num(float(st["regen"])))
+	lines.append(tr("Bekleme: %s") % tr(ShieldEnchantDefs._delay_text(st)))
 	return "\n".join(lines)
 
 
@@ -136,6 +139,9 @@ static func _shield_icon(key: String) -> Texture2D:
 func _draw() -> void:
 	if _panel_box:
 		draw_style_box(_panel_box, Rect2(Vector2.ZERO, size))
+	if tray_frame:
+		_draw_tray_cells()
+		return
 	for i in CELLS.size():
 		var p: Vector2 = CELLS[i]
 		var tex: Texture2D = _icons[i] if i < _icons.size() else null
@@ -150,6 +156,28 @@ func _draw() -> void:
 		elif i >= _keys.size():
 			PixelIcons.draw_flat(self, PixelIcons.DIAMOND, p + Vector2(15, 15), 2.0, EMPTY_MARK)
 	_draw_shield_slot(SHIELD_CELL)
+
+
+## Masaüstü panel (madde 459): yuvalar Gömme Tepsi yuva çerçevesiyle (1 px katlar = 4 px kenar, eski plaka + halka ile aynı kalınlık).
+## Dolu yuvada orta halka eşyanın nadirlik rengi (_ring), boşta ahşap; mana kalkanı yuvası mavi (dolu) / sönük mavi (boş). Konumlar aynı.
+func _draw_tray_cells() -> void:
+	for i in CELLS.size():
+		var p: Vector2 = CELLS[i]
+		var tex: Texture2D = _icons[i] if i < _icons.size() else null
+		draw_rect(Rect2(p, Vector2(SLOT, SLOT)).grow(-4.0), SLOT_UNDER)
+		if tex:
+			draw_texture_rect(tex, Rect2(p + Vector2(4, 4), Vector2(32, 32)), false)
+		elif i >= _keys.size():
+			PixelIcons.draw_flat(self, PixelIcons.DIAMOND, p + Vector2(15, 15), 2.0, EMPTY_MARK)
+		HudTrayFrame.draw(self, Rect2(p, Vector2(SLOT, SLOT)), 1.0, _ring if i < _keys.size() else Color(0, 0, 0, 0))
+	var sp: Vector2 = SHIELD_CELL
+	var filled: bool = _shield_tex != null
+	draw_rect(Rect2(sp, Vector2(SLOT, SLOT)).grow(-4.0), SHIELD_UNDER)
+	if filled:
+		draw_texture_rect(_shield_tex, Rect2(sp + Vector2(4, 4), Vector2(ICON_PX, ICON_PX)), false)
+	else:
+		PixelIcons.draw_flat(self, PixelIcons.SHIELD, sp + Vector2(9, 10), 2.0, SHIELD_MARK)
+	HudTrayFrame.draw(self, Rect2(sp, Vector2(SLOT, SLOT)), 1.0, SHIELD_RING if filled else SHIELD_RING_EMPTY)
 
 
 ## Köşeleri iki basamak kesik (sekizgen) dolu biçim: inset kadar içeriden.

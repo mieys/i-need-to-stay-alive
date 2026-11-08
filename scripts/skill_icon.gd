@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 
@@ -105,7 +106,7 @@ func _on_mouse_entered() -> void:
 
 	if name == "PassiveIcon":
 		## Pasif adı çoğu karakterde açıklamanın başında ("Yıldırım Hızı: ..."); yoksa başlık karakterin adı.
-		desc = def.get("passive", "Pasif yetenek açıklaması bulunmuyor.") as String
+		desc = tr(def.get("passive", "Pasif yetenek açıklaması bulunmuyor.") as String) ## ad + gövde birlikte çevrilir, sonra ayrılır (madde 446)
 		var pn: Array = _split_passive_name(desc)
 		title = str(def.get("passive_name", pn[0] if pn[0] != "" else def.get("name", "Pasif Yetenek")))
 		desc = pn[1]
@@ -235,6 +236,9 @@ func _on_mouse_entered() -> void:
 
 	## Açıklamanın başındaki tür ("ULTİ: ...") etikete taşınır; sondaki gömülü "(20sn bekleme)" atılır - bekleme artık
 	## başlıktaki satırda CANLI (bekleme süresi azaltmasıyla) yazıyor (eskiden metindeki sayı da canlıya çevriliyordu).
+	## Dil desteği (madde 446): açıklama/ad BÜTÜN olarak çevrilir (characters.gd metni = msgid), sonra tür/bekleme ayrıştırılır.
+	desc = Loc.pct(tr(desc))
+	title = tr(title)
 	var parts: Array = _split_kind(desc)
 	var kind: String = str(parts[0]) if str(parts[0]) != "" else kind_fallback
 	desc = _strip_cooldown_note(str(parts[2]))
@@ -306,7 +310,7 @@ func _on_mouse_entered() -> void:
 		header.add_child(key)
 
 	if locked_level > 0:
-		vbox.add_child(HudTooltip.make_label("Seviye %d'de açılır" % locked_level, MenuKit.FS_SMALL, HudTheme.BAD))
+		vbox.add_child(HudTooltip.make_label(tr("Seviye %d'de açılır") % locked_level, MenuKit.FS_SMALL, HudTheme.BAD))
 
 	vbox.add_child(HudTooltip.make_divider())
 
@@ -333,11 +337,11 @@ func _on_mouse_entered() -> void:
 		var stats_well: PanelContainer = HudTooltip.make_well()
 		vbox.add_child(stats_well)
 		var lbl_detail: RichTextLabel = HudTooltip.make_rich(UIKit.FS_BODY, HudTheme.TEXT)
-		lbl_detail.text = "[color=#%s]BU OYUNDA[/color]\n%s" % [HudTheme.ACCENT.to_html(false), DamageStats.tooltip_bbcode(slot, ink)]
+		lbl_detail.text = "[color=#%s]%s[/color]\n%s" % [HudTheme.ACCENT.to_html(false), tr("BU OYUNDA"), DamageStats.tooltip_bbcode(slot, ink)]
 		stats_well.add_child(lbl_detail)
 	else:
 		var lbl_hint: RichTextLabel = HudTooltip.make_rich(MenuKit.FS_SMALL, HudTheme.DIM)
-		lbl_hint.text = "[color=#%s]Shift[/color] basılı tut: bu oyundaki etkisi" % HudTheme.TEXT.to_html(false)
+		lbl_hint.text = tr("%s basılı tut: bu oyundaki etkisi") % ("[color=#%s]Shift[/color]" % HudTheme.TEXT.to_html(false))
 		vbox.add_child(lbl_hint)
 
 	hud_layer.add_child(tooltip_panel)
@@ -359,7 +363,7 @@ func _update_tooltip_position() -> void:
 ## canlı değerle değiştiriliyordu (kullanıcı bildirimi: azaltma açıklamada görünmüyordu), şimdi tek yerde.
 func _strip_cooldown_note(desc: String) -> String:
 	var regex: RegEx = RegEx.new()
-	if regex.compile("\\s*\\(\\d+(?:\\.\\d+)?\\s*sn bekleme\\)") != OK:
+	if regex.compile("\\s*\\(\\d+(?:\\.\\d+)?\\s*(?:sn bekleme|s cooldown)\\)") != OK: ## İngilizce çeviride "(20s cooldown)" (sozluk.md, madde 446)
 		return desc
 	return regex.sub(desc, "", true).strip_edges()
 
@@ -397,10 +401,10 @@ static func _split_passive_name(desc: String) -> Array:
 ## Başlıktaki bekleme yazısı: "51 sn" (azalmışsa yanında üstü çizili taban "60 sn"), yoksa "Bekleme yok".
 func _cooldown_bbcode(now: float, base: float, note: String) -> String:
 	if now < 0.0:
-		return "[color=#%s]Bekleme yok[/color]" % HudTheme.DIM.to_html(false)
-	var out: String = "[color=%s]%s sn[/color]" % [HudTheme.INK["cooldown"], _format_cd_number(now)]
+		return "[color=#%s]%s[/color]" % [HudTheme.DIM.to_html(false), tr("Bekleme yok")]
+	var out: String = "[color=%s]%s[/color]" % [HudTheme.INK["cooldown"], tr("%s sn") % _format_cd_number(now)]
 	if base > 0.0 and absf(base - now) > 0.05:
-		out += " [color=#%s][s]%s sn[/s][/color]" % [HudTheme.DIM.to_html(false), _format_cd_number(base)]
+		out += " [color=#%s][s]%s[/s][/color]" % [HudTheme.DIM.to_html(false), tr("%s sn") % _format_cd_number(base)]
 	if note != "":
 		out += " [color=#%s]%s[/color]" % [HudTheme.DIM.to_html(false), note]
 	return out
@@ -422,24 +426,21 @@ func _format_cd_number(v: float) -> String:
 func _format_lol_style(text: String) -> String:
 	var ink: Dictionary = HudTheme.INK
 	# Replace keywords first
-	text = text.replace("ULTİ", "[color=%s][b]ULTİ[/b][/color]" % ink["damage"])
-	text = text.replace("TEMEL", "[color=%s][b]TEMEL[/b][/color]" % ink["shield"])
-	text = text.replace("PASİF", "[color=%s][b]PASİF[/b][/color]" % ink["passive"])
-	
-	# Highlight stats/mechanics
-	text = text.replace("hasar", "[color=%s]hasar[/color]" % ink["damage"])
-	text = text.replace("Hasar", "[color=%s]Hasar[/color]" % ink["damage"])
-	text = text.replace("can", "[color=%s]can[/color]" % ink["health"])
-	text = text.replace("Can", "[color=%s]Can[/color]" % ink["health"])
-	text = text.replace("kalkan", "[color=%s]kalkan[/color]" % ink["shield"])
-	text = text.replace("Kalkan", "[color=%s]Kalkan[/color]" % ink["shield"])
+	## Anahtar kelimeler çevrilir (madde 446): metin artık seçili dilde, boyanacak kelime de o dilde olmalı ("hasar" -> "damage").
+	for kw: Array in [[tr("ULTİ"), "damage"], [tr("TEMEL"), "shield"], [tr("PASİF"), "passive"]]:
+		var w: String = str(kw[0])
+		text = text.replace(w, "[color=%s][b]%s[/b][/color]" % [ink[kw[1]], w])
+	for kw: Array in [[tr("hasar"), "damage"], [tr("Hasar"), "damage"], [tr("can"), "health"], [tr("Can"), "health"], [tr("kalkan"), "shield"], [tr("Kalkan"), "shield"]]:
+		var w: String = str(kw[0])
+		text = text.replace(w, "[color=%s]%s[/color]" % [ink[kw[1]], w])
 	## "mana kalkanı" tek renk olsun (yukarıdaki "kalkan" boyaması "mana"yı dışarıda bırakıyordu).
-	text = text.replace("mana [color=%s]kalkan[/color]" % ink["shield"], "[color=%s]mana kalkan[/color]" % ink["shield"])
-	text = text.replace("Mana [color=%s]Kalkan[/color]" % ink["shield"], "[color=%s]Mana Kalkan[/color]" % ink["shield"])
-	text = text.replace("zırh", "[color=%s]zırh[/color]" % ink["shield_pen"])
-	text = text.replace("Zırh", "[color=%s]Zırh[/color]" % ink["shield_pen"])
-	text = text.replace("saldırı hızı", "[color=%s]saldırı hızı[/color]" % ink["attack_speed"])
-	text = text.replace("bekleme", "[color=%s]bekleme[/color]" % ink["cooldown"])
+	for pair: Array in [[tr("mana"), tr("kalkan")], [tr("Mana"), tr("Kalkan")]]:
+		var m: String = str(pair[0])
+		var k: String = str(pair[1])
+		text = text.replace("%s [color=%s]%s[/color]" % [m, ink["shield"], k], "[color=%s]%s %s[/color]" % [ink["shield"], m, k])
+	for kw: Array in [[tr("zırh"), "shield_pen"], [tr("Zırh"), "shield_pen"], [tr("saldırı hızı"), "attack_speed"], [tr("bekleme"), "cooldown"]]:
+		var w: String = str(kw[0])
+		text = text.replace(w, "[color=%s]%s[/color]" % [ink[kw[1]], w])
 
 	# Regex for numbers, percentages, durations (ignoring bbcode tags)
 	var regex: RegEx = RegEx.new()
@@ -639,8 +640,21 @@ func _update_cooldown_label() -> void:
 ## çerçeve kalınlığı artık ikon başına ayarlanabilir: normal 39 sanat pikseli çerçeve = 5 px sanat kenarı = 10 ekran px = 6.67 birim
 ## (SkillBar x1.5 ölçekli), küçük pasif çerçeve 3 sanat px = 4 birim, ruhani (F) 6 sanat px = 8 birim (hud.gd ayarlar).
 var frame_border: float = 6.667
+## Masaüstü oyuncu paneli (madde 459): BG çerçeve dokusu gizlenir, çerçeve "C Gömme Tepsi" dilinde ekran pikselinde çizilir (hud_tray_frame.gd).
+## hud.gd _apply_tray_slots ayarlar; tray_accent = orta halka rengi (F ruhani mor), alfa 0 = ahşap.
+var tray_frame: bool = false
+var tray_layer_px: float = 2.0
+var tray_accent: Color = Color(0, 0, 0, 0)
+const HudTrayFrame := preload("res://scripts/hud_tray_frame.gd")
+
 
 func _draw() -> void:
+	_draw_body()
+	if tray_frame:
+		HudTrayFrame.draw(self, Rect2(Vector2.ZERO, size), tray_layer_px, tray_accent)
+
+
+func _draw_body() -> void:
 	var outer := Rect2(Vector2.ZERO, size)
 	var inner := outer.grow(-frame_border)
 
@@ -687,15 +701,8 @@ func _draw() -> void:
 		if fill_w > 0.0:
 			draw_rect(Rect2(bar_rect.position, Vector2(fill_w, bar_h)), Color(1.0, 0.95, 0.5, 1.0), true)
 
-		## Kullanıcı isteği: "aktiflik çerçevesi skill barının çok dışında
-		## duruyor direk kenarlarında olması lazım skill butonlarının" -
-		## eskiden outer.grow(3.0) idi (butonun gerçek sınırının 3px
-		## dışında duruyordu), artık TAM olarak `outer` (butonun kendi
-		## kenarı) kullanılıyor - hiç büyütme yok.
-		## "kenarlarının süreye göre azalmasını istiyorum" - artık statik/
-		## tam bir kare değil, kalan aktif süre oranınca (active_fraction)
-		## üst-sol köşeden saat yönünde daralan bir çerçeve çiziliyor.
-		_draw_rect_perimeter_partial(outer, active_fraction, Color(1.0, 0.9, 0.4, 0.95), 3.0)
+		## Çerçeve kenarında süreyle azalan sarı çizgi KALDIRILDI (2026-11-08, kullanıcı: "skill çerçevesinin dışında
+		## bir bar kısalıp boşalıyor, kaldır; butonun içinde kendi dolma barı var") - aktif süreyi alttaki çubuk gösterir.
 
 	_draw_enchant_glow(inner)
 	_draw_charge_pips(inner)
@@ -978,10 +985,10 @@ func _evolution_tooltip_text(player: Node) -> String:
 	if owned_list.is_empty():
 		return ""
 	var total: int = SkillEvolutionsScript.slot_list(char_id, slot).size()
-	var out: String = "[color=#%s][b]EVRİMLER (%d/%d)[/b][/color]" % [EVO_PIP_COLOR.to_html(false), owned_list.size(), total]
+	var out: String = "[color=#%s][b]%s[/b][/color]" % [EVO_PIP_COLOR.to_html(false), tr("EVRİMLER (%d/%d)") % [owned_list.size(), total]]
 	for e in owned_list:
 		var col: Color = EVO_PIP_FINAL if bool(e.get("final", false)) else EVO_PIP_COLOR
-		out += "\n[color=#%s]%s:[/color] %s" % [col.to_html(false), str(e.get("name", "")), str(e.get("desc", ""))]
+		out += "\n[color=#%s]%s:[/color] %s" % [col.to_html(false), tr(str(e.get("name", ""))), Loc.pct(tr(str(e.get("desc", ""))))]
 	return out
 
 

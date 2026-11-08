@@ -19,9 +19,13 @@ const LAUNCH_FPS := 30.0
 ## pikseli gövde pivotunun gerisinde; gen_mermi_sprites.py sonunda yazdırılan tabloyla AYNI olmalı - kare boyu dokudan okunur).
 const ART := {
 	"arrow_projectile": {"name": "ok", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -21.5},
-	"dart_projectile": {"name": "dart", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -20.5},
+	## Zehir Asası (eski Tüftüf) "A - Zehir Damlası" (madde 410, tools/gen_zehir_damla_fx.py): iz şeridi YOK (tf 0) - iz kuyruktan kopup
+	## yere düşen damlalar (poison_drip_fx.gd). Eski bambu dart dokuları (dart_govde/dart_iz) duruyor, kullanılmıyor.
+	"dart_projectile": {"name": "zehir", "bf": 1, "bfps": 1.0, "tf": 0, "tfps": 1.0, "tox": 0.0},
 	"tabanca_projectile": {"name": "tabanca", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -16.5},
 	"tufek_projectile": {"name": "tufek", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -30.5},
+	## Pompalı saçması (madde 448): 4x4 yuvarlak, iz YOK (salvo başına 6+ mermi: iz şeritleri karmaşa yapardı).
+	"pompali_projectile": {"name": "pompali", "bf": 1, "bfps": 1.0, "tf": 0, "tfps": 1.0, "tox": 0.0},
 	"arcane_projectile": {"name": "arcane", "bf": 4, "bfps": 14.0, "tf": 4, "tfps": 14.0, "tox": -23.5},
 	"ice_bolt_projectile": {"name": "buz", "bf": 4, "bfps": 12.0, "tf": 2, "tfps": 12.0, "tox": -23.5},
 }
@@ -92,7 +96,7 @@ static func fisek_tail(tier: int) -> Vector2:
 
 
 ## Gövdeyi (sahnedeki "Anim" AnimatedSprite2D ya da "Bullet" Sprite2D) yeni sanata çevirir ve izi ekler. İkisi de GİZLİ döner:
-## projectile.gd ilk fizik adımında (yön belli olunca) çevirip açar. Dönüş: {"body": Node2D, "trail": AnimatedSprite2D}.
+## projectile.gd ilk fizik adımında (yön belli olunca) çevirip açar. Dönüş: {"body": Node2D, "trail": AnimatedSprite2D ya da null (tf 0)}.
 static func apply(proj: Node2D, scene_key: String, trail_tint: Color = Color.WHITE) -> Dictionary:
 	var cfg: Dictionary = ART[scene_key]
 	var body: Node2D = null
@@ -112,6 +116,8 @@ static func apply(proj: Node2D, scene_key: String, trail_tint: Color = Color.WHI
 		body.scale = Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE
 		body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		body.visible = false
+	if int(cfg["tf"]) <= 0:
+		return {"body": body, "trail": null}
 	var trail := AnimatedSprite2D.new()
 	trail.name = "ArtTrail"
 	trail.sprite_frames = trail_frames(scene_key)

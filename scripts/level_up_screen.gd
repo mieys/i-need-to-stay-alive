@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 signal upgrade_chosen(id: String, tier: int)
 
@@ -167,9 +168,9 @@ func _ready() -> void:
 	_apply_reroll_button_style()
 	_apply_kit_style()
 	_layout_rows()
-	## Pazar (madde 388) satır düğümlerini de kurar ama kartları kendi sütununa alır; satır yazıları (RowValue/RowVerb...)
-	## gizli kartta dolmaya devam eder (testler ve _fill_row ortak).
-	if not _evo_mode and not MobileUIScript.enabled:
+	## Kart sütunu (madde 388/396/432) satır düğümlerini de kurar ama kartları kendi sütununa alır; satır yazıları (RowValue/
+	## RowVerb...) gizli kartta dolmaya devam eder (testler ve _fill_row ortak). Pazar artık ayrı ekran (main.gd _try_open_level_market).
+	if COMPACT_CARD_COLUMN and not _evo_mode and not MobileUIScript.enabled:
 		_build_market()
 	_apply_mobile_layout()
 	if _evo_mode:
@@ -268,14 +269,6 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Karıştır butonuna basmakla BİREBİR aynı (altın bedeli/yetersiz altında kapalı buton kuralları aynen). GUI'den ÖNCE
 ## (_input) yakalanır: Space varsayılan "ui_accept" olduğu için yoksa klavye odağındaki KART seçilirdi.
 func _input(event: InputEvent) -> void:
-	## Pazar (madde 388): kart seçildiyse Enter = DEVAM ET (odaktaki düğmeye "ui_accept" gitmeden önce).
-	if _market_view and _has_chosen and event is InputEventKey and event.pressed and not event.echo \
-			and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
-		var p := get_tree().get_first_node_in_group("player")
-		if not (p and bool(p.get("is_chat_typing"))):
-			get_viewport().set_input_as_handled()
-			_market_continue()
-		return
 	if _has_chosen or not (event is InputEventKey) or not event.pressed or event.echo or event.keycode != KEY_SPACE:
 		return
 	var player := get_tree().get_first_node_in_group("player")
@@ -289,6 +282,12 @@ func _input(event: InputEvent) -> void:
 func _on_card_hover(card: Button, entered: bool) -> void:
 	if card.disabled or _has_chosen:
 		return ## bekleme/kutlama sırasında kartların üstü hover'la aydınlanmasın
+	if _evo_box:
+		_evo_grow(card, entered) ## madde 461: masaüstü evrim kartı büyür (altın kenar yok)
+		return
+	if _market_view:
+		_market_view.hover_card(card, entered) ## madde 456: kart sütununda üstünde = altın kenar (hale yok)
+		return
 	var frame: TextureRect = card.get_node_or_null("Frame")
 	if frame:
 		frame.modulate = Color(1.12, 1.12, 1.12, 1.0) if entered else Color(1, 1, 1, 1)
@@ -297,8 +296,8 @@ func _on_card_hover(card: Button, entered: bool) -> void:
 
 
 func _on_card_press(card: Button, is_down: bool) -> void:
-	if _has_chosen:
-		return ## seçim kutlaması kartın ölçeğini kendisi canlandırıyor
+	if _has_chosen or _evo_box:
+		return ## seçim kutlaması kartın ölçeğini kendisi canlandırıyor; piksel kutu ölçeklenmez (basılı = "pressed" kutusu)
 	card.pivot_offset = card.size * 0.5
 	card.scale = Vector2(0.97, 0.97) if is_down else Vector2.ONE
 
@@ -306,11 +305,9 @@ func _on_card_press(card: Button, is_down: bool) -> void:
 func _on_level_up_timer_tick(remaining: float) -> void:
 	if _market_view:
 		_market_view.set_countdown(remaining)
-		## Süre doldu: seçilmemişse kart otomatik seçilir, pazar beklemeden ekran kapanır.
-		if remaining <= 0.0:
-			if not _has_chosen:
-				_auto_pick_random_card()
-			_market_continue()
+		## Süre doldu: seçilmemişse kart otomatik seçilir (kutlama sonrası ekran kapanır, pazar açılmaz - main.gd sayaç 0).
+		if remaining <= 0.0 and not _has_chosen:
+			_auto_pick_random_card()
 		return
 	if countdown_panel:
 		countdown_panel.visible = true
@@ -373,7 +370,8 @@ func _animate_cards_in() -> void:
 	for card in cards:
 		if is_instance_valid(card):
 			card.modulate.a = 0.0
-			card.scale = Vector2(CARD_ANIM_START_SCALE, CARD_ANIM_START_SCALE)
+			## Masaüstü evrim kartı (piksel kutu) yalnız belirip yükselir, kesirli ölçek yok (stil rehberi).
+			card.scale = Vector2.ONE if _evo_box else Vector2(CARD_ANIM_START_SCALE, CARD_ANIM_START_SCALE)
 	await get_tree().process_frame
 	if not is_instance_valid(self) or not is_inside_tree():
 		return
@@ -448,7 +446,7 @@ func _populate_cards() -> void:
 	var player := get_tree().get_first_node_in_group("player")
 	var special_ids: Array = LevelSpecialCardsScript.available_ids(player)
 	var stat_need: int = 2 if not special_ids.is_empty() else 3
-	## Madde 379: düz kartların da bedeli var - bedel statı zeminde olan oyuncuya o kart çıkmaz (LevelSpecialCards.can_pay).
+	## Madde 379/398: bedeli olan kartlarda (şu an yalnız özel kartlar; düz kartlar bedelsiz) bedel statı zeminde olan oyuncuya o kart çıkmaz (LevelSpecialCards.can_pay).
 	var payable: Callable = func(u): return LevelSpecialCardsScript.can_pay(str(u["id"]), player)
 	var available: Array = UPGRADES.filter(func(u): return not _shown_upgrade_ids.has(u["id"]) and payable.call(u))
 	var special_avail: Array = special_ids.filter(func(id): return not _shown_upgrade_ids.has(id))
@@ -527,7 +525,7 @@ func _populate_cards() -> void:
 
 		var count_label: Label = _card_count(card)
 		count_label.add_theme_font_size_override("font_size", CARD_COUNT_FONT_SIZE)
-		count_label.text = ("%dx alındı" % count) if count > 0 else ""
+		count_label.text = (tr("%dx alındı") % count) if count > 0 else ""
 		_fill_row(card, upgrade, tier, count)
 		if _market_view:
 			_market_view.fill_card(card, _market_card_data(upgrade, tier, count))
@@ -636,7 +634,7 @@ func _layout_rows() -> void:
 		content.offset_top = ROW_ICON_RECT.position.y
 		content.offset_right = ROW_ICON_RECT.end.x
 		content.offset_bottom = ROW_ICON_RECT.end.y
-		for n in ["Category", "Title", "Desc", "CountLabel"]:
+		for n in ["Category", "Title", "Desc", "CountLabel"]: ## dil:yok (düğüm adı)
 			var node: CanvasItem = content.get_node_or_null(n) as CanvasItem
 			if node:
 				node.visible = false
@@ -659,6 +657,24 @@ func _layout_rows() -> void:
 		card.add_child(sub)
 		sub.position = Vector2(ROW_TEXT_X, 82)
 		sub.size = Vector2(ROW_SIZE.x - ROW_TEXT_X - ROW_RIGHT_PAD, 44)
+		## Tek cümle (madde 433 ek 6): yazı alanının dikey ortasında, gerekirse 2 satır.
+		var sbox := VBoxContainer.new()
+		sbox.name = "RowSentenceBox"
+		sbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		sbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(sbox)
+		sbox.position = Vector2(ROW_TEXT_X, 0)
+		sbox.size = Vector2(ROW_SIZE.x - ROW_TEXT_X - ROW_RIGHT_PAD, ROW_SIZE.y)
+		var sen := RichTextLabel.new()
+		sen.name = "RowSentence"
+		sen.bbcode_enabled = true
+		sen.fit_content = true
+		sen.scroll_active = false
+		sen.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		sen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_set_desc_font_size(sen, SENTENCE_FONT_SIZE)
+		sbox.add_child(sen)
 
 
 ## ---------------------------------------------------------------- TELEFON (kullanıcı seçimi 2026-10-03, prototip "A")
@@ -723,14 +739,15 @@ const PH_CARD := Vector2(640, 600)
 const PH_CARD_GAP := 64.0
 const PH_CARD_TOP := 226.0
 const PH_SIDE := 96.0 ## başlık / Karıştır sol kenar payı (prototip SX)
-const PH_DIM := Color(0.03, 0.03, 0.06, 0.66)
-const PH_PANEL := Color("#23233a")
-const PH_INSET := Color("#12121f")
-const PH_LINE := Color("#3b3a5a")
-const PH_TEXT := Color("#efe6d6")
-const PH_DIM_TEXT := Color("#a7a2c0")
-const PH_ACCENT := Color("#f4c56e")
-const PH_GOOD := Color("#a8d69a")
+const PH_DIM := Color(HT.DEEP, 0.66)
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
+const PH_PANEL := HT.WIN_PANEL2
+const PH_INSET := HT.WIN_INSET
+const PH_LINE := HT.WIN_LINE
+const PH_TEXT := HT.TEXT
+const PH_DIM_TEXT := HT.DIM
+const PH_ACCENT := HT.ACCENT
+const PH_GOOD := HT.GOOD
 const PH_TIER := [Color("#9ea4ad"), Color("#5f8fe0"), Color("#a070dc"), Color("#e0604c")]
 const PH_TIER_NAMES := ["SIRADAN", "NADİR", "EPİK", "EFSANEVİ"]
 var _phone_cards: bool = false
@@ -783,7 +800,7 @@ func _apply_phone_cards(vp: Viewport, view: Vector2) -> void:
 		title.position = Vector2(safe.position.x + PH_SIDE, 20.0)
 		title.size = Vector2(900, 104)
 		var player: Node = get_tree().get_first_node_in_group("player")
-		title.text = ("SEVİYE %d!" % int(player.get("level"))) if player and "level" in player else "SEVİYE ATLADIN!"
+		title.text = (tr("SEVİYE %d!") % int(player.get("level"))) if player and "level" in player else "SEVİYE ATLADIN!"
 	var rows: Control = get_node_or_null("Rows") as Control
 	var holder := Control.new()
 	holder.name = "PhoneCards"
@@ -910,7 +927,7 @@ func _fill_phone_card(card: Button, upgrade: Dictionary, tier: int, count: int) 
 	(card.get_node("PhNowBox") as CanvasItem).visible = has_now
 	var now_lbl: Label = card.get_node("PhNow") as Label
 	now_lbl.visible = has_now
-	now_lbl.text = now if shows_cost else "Şu an  " + now
+	now_lbl.text = now if shows_cost else tr("Şu an") + "  " + Loc.pct(now)
 
 
 ## PC'de level atlama satırları ve evrim kartları %15 küçük - kullanıcı isteği (2026-10-03): "pcde level atlama kartlarını
@@ -959,11 +976,11 @@ func _fill_row(card: Button, upgrade: Dictionary, tier: int, count: int) -> void
 	name_lbl.text = upgrade["title"]
 	var is_special: bool = bool(upgrade.get("special", false))
 	var sub_text: String = "[color=#%s]%s  ·  %s[/color]" % [ROW_TIER_TEXT[clampi(tier, 1, 4) - 1].to_html(false),
-		TierSystem.NAMES[tier - 1], upgrade["cat"]]
+		tr(TierSystem.NAMES[tier - 1]), tr(str(upgrade["cat"]))]
 	if is_special and str(upgrade.get("gain_label", "")) != "":
 		sub_text += "[color=#%s]  ·  %s[/color]" % [ROW_DIM_COLOR.to_html(false), upgrade.get("gain_label", "")]
 	if count > 0:
-		sub_text += "[color=#%s]  ·  %dx alındı[/color]" % [ROW_DIM_COLOR.to_html(false), count]
+		sub_text += "[color=#%s]  ·  %s[/color]" % [ROW_DIM_COLOR.to_html(false), tr("%dx alındı") % count]
 	(card.get_node("RowSub") as RichTextLabel).text = sub_text
 	var verb_lbl: Label = card.get_node("RowVerb") as Label
 	var vt: Array = _card_value_texts(upgrade, tier)
@@ -971,23 +988,104 @@ func _fill_row(card: Button, upgrade: Dictionary, tier: int, count: int) -> void
 	verb_lbl.text = vt[1]
 	## özel karttan kalan kırmızı reroll'da sıfırlanır
 	verb_lbl.add_theme_color_override("font_color", ROW_COST_COLOR if bool(vt[2]) else ROW_DIM_COLOR)
+	var sbox: Control = card.get_node_or_null("RowSentenceBox") as Control
+	if sbox:
+		var on: bool = not _phone_cards
+		## Madde 456: kart sütunu (COMPACT_CARD_COLUMN) kartı kendi yüzüyle çizer - satır cümlesi / satır yazıları görünmez kalmalı
+		## (eskiden bu satır sütunun gizlediği RowSentenceBox'ı yeniden açıp kart yüzünün üstüne yazdırıyordu).
+		var column: bool = _market_view != null
+		sbox.visible = on and not column
+		(sbox.get_node("RowSentence") as RichTextLabel).text = card_sentence(upgrade, tier)
+		for n: String in ["RowName", "RowSub", "RowValue", "RowVerb"]:
+			var lbl: CanvasItem = card.get_node_or_null(n) as CanvasItem
+			if lbl:
+				lbl.visible = not on and not column
 	if _phone_cards:
 		_fill_phone_card(card, upgrade, tier, count)
 
 
+## ---------------------------------------------------------------- KART CÜMLESİ (madde 433 ek 6)
+## Kullanıcı 2026-11-06: "level atlama kartlarında şöyle yazsın: 'Kritik hasarın %5 artar'; dezavantajlılarda 'Saldırı gücün 10 artar ancak canın
+## 20 azalır'; statlar renklendirmelerle uyumlu; başka bir şey yazmasın". Masaüstü satırında YALNIZ bu cümle (başlık / kademe / kategori / alınma
+## sayısı / büyük sayı gizli). Kazanç (stat + miktar) GOOD yeşil, bedel BAD kırmızı, "artar / ancak / azalır" krem.
+const SENTENCE_FONT_SIZE := 32
+## Statın "senin ..." hâli (küçük harf; cümle başında büyür). Anahtar: düz kart id'si YA DA level_special_cards.gd STATS anahtarı.
+const SENTENCE_STAT := {
+	"speed": "hareket hızın", "max_health": "canın", "damage": "saldırı gücün", "fire_rate": "saldırı hızın",
+	"health_regen": "can yenilenmen", "crit_chance": "kritik oranın", "crit_damage": "kritik hasarın", "exp_gain": "tecrübe kazanımın",
+	"luck": "şansın", "dodge": "sıvışma şansın", "shield_amount": "mana kalkanın", "cooldown_reduction": "yetenek bekleme sürelerin",
+	"lifesteal": "can çalman", "shield_regen": "kalkan yenilenmen", "heal_power": "iyileştirme gücün",
+	"shield": "mana kalkanın", "melee": "yakın dövüş hasarın", "ranged": "menzilli hasarın",
+}
+
+
+static func _tr_cap(t: String) -> String:
+	if t == "":
+		return t
+	var f: String = t.substr(0, 1)
+	var up: String = "İ" if f == "i" else ("I" if f == "ı" else f.to_upper())
+	return up + t.substr(1)
+
+
+## Dil desteği (madde 446): kelime sırası dile göre değişir -> kalıp çevrilir ("{stat} {amount} artar" -> "{stat} increases by {amount}").
+## Yer tutucular statın rengiyle, kalıbın geri kalanı kremle boyanır. Cümle başı büyük harf: kalıp {stat} ile başlıyorsa stat, yoksa kalıbın ilk harfi.
+static func _sentence_part(phrase: String, amount: String, col: Color, decrease: bool, first: bool) -> String:
+	var tpl: String = Loc.t("{stat} {amount} azalır") if decrease else Loc.t("{stat} {amount} artar")
+	if first:
+		if tpl.begins_with("{stat}"):
+			phrase = _tr_cap(phrase)
+		elif not tpl.begins_with("{"):
+			tpl = _tr_cap(tpl)
+	var cream: String = UIKit.C_CREAM.to_html(false)
+	var c: String = col.to_html(false)
+	var out: String = ""
+	var rest: String = tpl
+	while rest != "":
+		var i: int = rest.find("{")
+		var j: int = rest.find("}", i) if i >= 0 else -1
+		if i < 0 or j < 0:
+			out += "[color=#%s]%s[/color]" % [cream, rest]
+			break
+		if i > 0:
+			out += "[color=#%s]%s[/color]" % [cream, rest.substr(0, i)]
+		out += "[color=#%s]%s[/color]" % [c, phrase if rest.substr(i + 1, j - i - 1) == "stat" else amount]
+		rest = rest.substr(j + 1)
+	return out
+
+
+## Kartın tek cümlesi (BBCode). Miktarlar kartta uygulananla aynı kaynaktan (_card_value_texts / LevelSpecialCards).
+func card_sentence(upgrade: Dictionary, tier: int) -> String:
+	var id: String = str(upgrade["id"])
+	var special: bool = bool(upgrade.get("special", false))
+	var gain_key: String = LevelSpecialCardsScript.gain_stat(id) if special else id
+	var amount: String = ""
+	if special:
+		amount = LevelSpecialCardsScript.format_amount(gain_key, LevelSpecialCardsScript.gain_value(id, tier))
+	else:
+		amount = str(_card_value_texts(upgrade, tier)[0]).lstrip("+-")
+	var phrase: String = tr(str(SENTENCE_STAT.get(gain_key, ""))) if SENTENCE_STAT.has(gain_key) else tr(str(upgrade["title"])).to_lower()
+	var t: String = _sentence_part(phrase, amount, HT.GOOD, id == "cooldown_reduction", true)
+	var cs: String = LevelSpecialCardsScript.cost_stat(id)
+	if cs != "":
+		var camt: String = LevelSpecialCardsScript.format_amount(cs, LevelSpecialCardsScript.cost_value(id, tier))
+		t += " [color=#%s]%s[/color] " % [UIKit.C_CREAM.to_html(false), tr("ancak")]
+		t += _sentence_part(tr(str(SENTENCE_STAT[cs])) if SENTENCE_STAT.has(cs) else LevelSpecialCardsScript.stat_label(cs).to_lower(), camt, HT.BAD, true, false)
+	return t
+
+
 ## Kartın büyük sayısı + alt satırı: [değer, alt satır, alt satır bedel mi (kırmızımsı)]. Satır, telefon ve pazar yerleşimi ortak.
-## Madde 367: özel kartta büyük sayı = kazanç, alt satır = bedel (takas) ya da kısıt (silah türü). Madde 379: düz kartın alt satırı
-## da bedel; bedeli olmayan kart ("artar/azalır", havuzda yok) eski gibi.
+## Madde 367: özel kartta büyük sayı = kazanç, alt satır = bedel (takas) ya da kısıt (silah türü). Madde 398: düz stat kartları bedelsiz
+## ("artar/azalır", kırmızı değil); PLAIN_COSTS'a bedel eklenen düz kartın alt satırı bedel olur (madde 379).
 func _card_value_texts(upgrade: Dictionary, tier: int) -> Array:
 	var id: String = str(upgrade["id"])
 	if bool(upgrade.get("special", false)):
 		return [LevelSpecialCardsScript.gain_text(id, tier), LevelSpecialCardsScript.verb_text(id, tier), LevelSpecialCardsScript.has_cost(id)]
 	var is_cdr: bool = id == "cooldown_reduction"
 	var clean_val: String = _scaled_desc_value(upgrade["desc"] as String, tier, id).replace("+", "").replace("-", "")
-	var value: String = ("-" if is_cdr else "+") + clean_val
+	var value: String = Loc.pct(("-" if is_cdr else "+") + clean_val) ## İngilizcede "+4%" (madde 446)
 	if LevelSpecialCardsScript.has_cost(id):
 		return [value, LevelSpecialCardsScript.cost_text(id, tier), true]
-	return [value, "azalır" if is_cdr else "artar", false]
+	return [value, tr("azalır") if is_cdr else tr("artar"), false]
 
 
 func _card_desc(card: Node) -> RichTextLabel:
@@ -1117,18 +1215,18 @@ func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
 		var cost_line: String = LevelSpecialCardsScript.verb_text(sid, tier)
 		var cost_col: String = UIKit.INK["damage"] if LevelSpecialCardsScript.has_cost(sid) else UIKit.C_TEXT_DIM.to_html(false)
 		return "[color=%s][b]%s[/b][/color]\n[font_size=%d][color=%s]%s[/color][/font_size]\n[font_size=%d][color=%s]%s[/color]\n[color=%s]%s[/color][/font_size]" % [
-			UIKit.INK["text"], upgrade["title"], CARD_VALUE_FONT_SIZE, UIKit.INK["value"], LevelSpecialCardsScript.gain_text(sid, tier),
+			UIKit.INK["text"], tr(str(upgrade["title"])), CARD_VALUE_FONT_SIZE, UIKit.INK["value"], LevelSpecialCardsScript.gain_text(sid, tier),
 			CARD_COUNT_FONT_SIZE * 2, UIKit.C_TEXT_DIM.to_html(false), upgrade.get("gain_label", ""), cost_col, cost_line]
 	var value: String = _scaled_desc_value(upgrade["desc"] as String, tier, str(upgrade["id"]))
-	var clean_val: String = value.replace("+", "").replace("-", "")
-	var title_name: String = upgrade["title"] as String
+	var clean_val: String = Loc.pct(value.replace("+", "").replace("-", ""))
+	var title_name: String = tr(upgrade["title"] as String)
 	var title_color: String = STAT_TITLE_COLORS.get(upgrade["id"], UIKit.INK["text"])
 	var colored_title: String = "[color=%s][b]%s[/b][/color]" % [title_color, title_name]
 	## 2026-09-25 savaş kartı: kazanılan değer levhanın en büyük yazısı (m5x7'nin keskin durduğu 64 px) - kart bir bakışta
 	## "ne kadar güçlendim" desin; stat adı üstünde kendi renginde, fiil (artar/azalır) değerin altında küçük.
 	var colored_val: String = "[font_size=%d][color=%s]%s%s[/color][/font_size]" % [CARD_VALUE_FONT_SIZE, UIKit.INK["value"],
 		"-" if upgrade["id"] == "cooldown_reduction" else "+", clean_val]
-	var verb: String = "azalır" if upgrade["id"] == "cooldown_reduction" else "artar"
+	var verb: String = tr("azalır") if upgrade["id"] == "cooldown_reduction" else tr("artar")
 	var verb_color: String = UIKit.C_TEXT_DIM.to_html(false)
 	var plain_id: String = str(upgrade["id"])
 	if LevelSpecialCardsScript.has_cost(plain_id):
@@ -1274,15 +1372,13 @@ func _apply_kit_style() -> void:
 
 func _refresh_reroll_button() -> void:
 	## Kalıcı "Ücretsiz Karıştırma" geliştirmesi (Ruh Mağazası): her level atlama kartında bir kez bedava.
+	## Madde 456: kart sütununda da satırlarınki gibi "Yeniden Karıştır (...)" (eski "KARIŞTIR · ..." - "·" ayırıcı yapay zekâ tadı listesinde).
 	if _free_rerolls_left() > 0:
-		reroll_button.text = "KARIŞTIR · ÜCRETSİZ" if _market_view else ("Karıştır\nÜCRETSİZ" if MobileUIScript.enabled else "Yeniden Karıştır (ÜCRETSİZ)")
+		reroll_button.text = "Karıştır\nÜCRETSİZ" if MobileUIScript.enabled else "Yeniden Karıştır (ÜCRETSİZ)"
 		reroll_button.disabled = _has_chosen
 		return
 	var cost: int = _reroll_cost()
-	if _market_view:
-		reroll_button.text = "KARIŞTIR · %d altın" % cost
-	else:
-		reroll_button.text = ("Karıştır\n%d altın" if MobileUIScript.enabled else "Yeniden Karıştır (%d altın)") % cost
+	reroll_button.text = tr("Karıştır\n%d altın" if MobileUIScript.enabled else "Yeniden Karıştır (%d altın)") % cost
 	reroll_button.disabled = GameManager.gold < cost or _has_chosen
 
 
@@ -1298,8 +1394,6 @@ func _on_reroll_pressed() -> void:
 	_populate_cards()
 	_refresh_reroll_button()
 	_animate_cards_in()
-	if _market_view:
-		_market_view.refresh() ## harcanan altın pazarın fiyat/engel durumunu değiştirir
 
 
 ## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini beklemeden
@@ -1342,16 +1436,25 @@ func _on_card_pressed(id: String, tier: int, card: Button) -> void:
 			continue
 		## Seçilmeyen kartlar sönüp hafifçe geri çekilir - göz seçilen karta gitsin.
 		other.pivot_offset = other.size * 0.5
-		TierCardFx.set_hover_glow(other, int(_card_tiers[i]), false)
 		var fade := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 		fade.tween_property(other, "modulate", Color(0.55, 0.52, 0.5, 0.35), 0.3)
-		fade.tween_property(other, "scale", Vector2(0.94, 0.94), 0.3)
+		if not _evo_box: ## piksel kutu kesirli ölçeklenmez (stil rehberi) - masaüstü evrim kartı yalnız söner
+			TierCardFx.set_hover_glow(other, int(_card_tiers[i]), false)
+			fade.tween_property(other, "scale", Vector2(0.94, 0.94), 0.3)
 	## Açılış animasyonu yarıda kesildiyse (ekran açılır açılmaz 1/2/3'e basıldı) kart tam görünür olsun ve HBox onu asıl
 	## yerine geri koysun.
 	card.modulate = Color(1, 1, 1, 1)
 	var container: Container = card.get_parent() as Container
 	if container:
 		container.queue_sort()
+	## Masaüstü evrim kartı (madde 428 -> 461): hale / kıvılcım yok - seçilen kart büyümüş kalır (fareyle değil tuşla seçildiyse de büyür),
+	## diğerleri söner, kısa bekleyip kapanır.
+	if _evo_box:
+		_evo_grow(card, true)
+		var hold: Tween = create_tween()
+		hold.tween_interval(EVO_PICK_HOLD)
+		hold.tween_callback(_finish_pick.bind(id, tier))
+		return
 	var frame: TextureRect = card.get_node_or_null("Frame") as TextureRect
 	var tw: Tween = TierCardFx.celebrate(self, card, frame, tier, _ensure_fx_layer())
 	tw.chain().tween_callback(_finish_pick.bind(id, tier))
@@ -1363,25 +1466,23 @@ func _finish_pick(id: String, tier: int) -> void:
 	upgrade_chosen.emit(id, tier)
 
 
-## ================================================================ LEVEL ATLAMA PAZARI (2026-10-28, madde 388)
-## Kullanıcı: "her level atlandığında solda 3 level atlama kartı seçeneği ve sağında da 6 adet silah alma-silah geliştirme-kalkan
-## alma-kalkan geliştirme-dükkandaki tüm eşyaları kapsayacak şekilde rasgele 6 adet seçenek ... 1 level atlama kartı ücretsiz
-## seçilebilecek, diğer seçenekler tıpkı mevcut fiyatlarındaki bedellerindeki gibi ... level atlama kartının kendine özel rerollu
-## ... diğer 6 eşyanın da kendine özel rerollu" -> madde 386 prototipi "D - Gece Sıvası Yuvalar". Masaüstünde normal level
-## atlamada (evrim seviyeleri + telefon eski ekranında): kart seçimi ekranı KAPATMAZ (kutlama oynar, kart "SEÇİLDİ" kalır, kart
-## karıştırma kapanır); seçim DEVAM ET / Enter ile ya da çok oyunculu sayaç dolunca (seçilmemişse kart otomatik seçilir)
-## upgrade_chosen olarak gider - main.gd akışı aynı. Pazar kuralları level_market.gd, görünüş level_market_view.gd.
+## ================================================================ KART SÜTUNU (madde 388 -> 432)
+## Madde 388'de kartlar pazarla aynı ekrandaydı (solda kart, sağda 6 seçenek, DEVAM). Kullanıcı 2026-11-06: menü "karmaşık" ->
+## madde 432: bu ekran masaüstünde yalnız kart sütununu ortada gösterir (level_market_view.gd "cards" kipi, madde 396 yüzleri);
+## karta tıklamak seçer, kutlama oynar ve ekran kapanır (DEVAM yok). Pazar seviye kuyruğunun sonunda kendi ekranında
+## (main.gd _try_open_level_market). Evrim seviyeleri + telefon eski ekranında.
+## Kullanıcı 2026-11-06 (madde 433 ek 3): "level kartı seçme kartlarının görünüşünü eski hâline döndür, bunları bozmadan" -> false:
+## masaüstünde de pazar öncesi "Yüzen Kapsül" satırları (madde 81; telefon/evrim zaten bunda). Akış AYNI: karta tık -> kutlama ->
+## ekran kapanır -> kuyruk bitince pazar (main.gd _try_open_level_market). true = madde 396 "Artı / Eksi" küçük sütun (kod duruyor).
+## Kullanıcı 2026-11-08 (madde 456, prototip kart_yumusak "M"): madde 394 C "Artı / Eksi"yi seçti, "envanter gibi kahverengimsi" +
+## çerçevesiz simge + başlıksız + büyük çerçeve -> TRUE: masaüstünde kart sütunu (ahşap PAL_WOOD); false = Yüzen Kapsül satırları.
+const COMPACT_CARD_COLUMN := true
 const LevelMarketView := preload("res://scripts/level_market_view.gd")
 var _market_view: Control = null
-var _chosen_id: String = ""
-var _chosen_tier: int = 1
-var _market_closing: bool = false
 
 
 func _build_market() -> void:
-	var dim: ColorRect = get_node_or_null("Dim") as ColorRect
-	if dim:
-		dim.color = Color(0.02, 0.02, 0.04, 0.55)
+	## (madde 456: mavimsi karartma 0.02/0.02/0.04 kalktı - _apply_kit_style'ın sıcak karartması kalır, envanterle aynı ahşap ton)
 	var title_lbl: CanvasItem = get_node_or_null("Title") as CanvasItem
 	if title_lbl:
 		title_lbl.visible = false ## görünümün kendi "SEVİYE N" başlığı var
@@ -1392,11 +1493,9 @@ func _build_market() -> void:
 	_market_view.name = "LevelMarket"
 	add_child(_market_view)
 	var lvl: int = screen_level if screen_level > 0 else GameManager.team_level
-	_market_view.setup(get_tree().get_first_node_in_group("player"), lvl, cards, reroll_button)
+	_market_view.setup_cards(get_tree().get_first_node_in_group("player"), lvl, cards, reroll_button)
 	if old:
 		old.visible = false
-	_market_view.continue_pressed.connect(_market_continue)
-	_market_view.market_changed.connect(_refresh_reroll_button)
 
 
 ## Pazar sütunundaki kart yüzünün verisi (level_market_view.gd fill_card).
@@ -1407,10 +1506,9 @@ func _market_card_data(upgrade: Dictionary, tier: int, count: int) -> Dictionary
 		"icon": str(upgrade.get("icon", upgrade["id"]))}
 
 
+## Seçim: kart altın kenarda kalır, diğerleri söner, kutlama (ses + hale + kıvılcım) bitince upgrade_chosen -> ekran kapanır.
 func _market_pick(id: String, tier: int, card: Button) -> void:
 	_has_chosen = true
-	_chosen_id = id
-	_chosen_tier = tier
 	if is_instance_valid(reroll_button):
 		reroll_button.disabled = true
 	for i in range(cards.size()):
@@ -1430,14 +1528,7 @@ func _market_pick(id: String, tier: int, card: Button) -> void:
 		container.queue_sort()
 	_market_view.set_chosen(cards.find(card))
 	var tw: Tween = TierCardFx.celebrate(self, card, card.get_node_or_null("Frame") as TextureRect, tier, _ensure_fx_layer())
-	tw.chain().tween_property(card, "scale", Vector2.ONE, 0.2) ## kutlamanın büyütmesi sütunda kalıcı kalmasın
-
-
-func _market_continue() -> void:
-	if not _has_chosen or _market_closing:
-		return
-	_market_closing = true
-	_finish_pick(_chosen_id, _chosen_tier)
+	tw.chain().tween_callback(_finish_pick.bind(id, tier))
 
 
 ## ================================================================ YETENEK EVRİMİ (2026-09-28)
@@ -1489,6 +1580,9 @@ func _roll_evolution_offers() -> Array:
 ## Kartlar çalışma anında yatay bir kutuya taşınır (.tscn'ye dokunulmaz - açık editör eski hâli üstüne yazabilir); eski
 ## Content/SelectGlow gizlenir, efsun kartının yazı düğümleri burada kurulur.
 func _layout_evolution_cards() -> void:
+	if not MobileUIScript.enabled:
+		_layout_evolution_boxes()
+		return
 	var old: Control = get_node_or_null("CardsContainer") as Control
 	var n: int = clampi(_evo_offers.size(), 1, cards.size())
 	## Telefon: efsun ekranıyla aynı - kart k katı (5/3 -> 600x900), ekranın boyu kadar (bkz. enchant_screen.gd card_rect).
@@ -1531,7 +1625,7 @@ func _layout_evolution_cards() -> void:
 		if frame:
 			frame.offset_right = card_size.x
 			frame.offset_bottom = card_size.y
-		for n_name in ["Content", "SelectGlow"]:
+		for n_name in ["Content", "SelectGlow"]: ## dil:yok (düğüm adı)
 			var node: CanvasItem = card.get_node_or_null(n_name) as CanvasItem
 			if node:
 				node.visible = false
@@ -1588,12 +1682,18 @@ func _populate_evolution_rows() -> void:
 		var tier: int = EVO_TIER_FINAL if bool(evo.get("final", false)) else EVO_TIER_REGULAR
 		card.pressed.connect(_on_card_pressed.bind(SkillEvolutions.CHOICE_PREFIX + str(evo["id"]), tier, card))
 		_card_tiers[i] = tier
-		_apply_card_tier_frame(card, tier)
-		if _shine_tweens[i] and _shine_tweens[i].is_valid():
-			_shine_tweens[i].kill()
-		_shine_tweens[i] = TierCardFx.start_idle_shine(self, card.get_node_or_null("Frame") as TextureRect, tier, 0.5 + 0.35 * i)
+		if _evo_box:
+			_apply_evo_box_style(card, tier, false)
+		else:
+			_apply_card_tier_frame(card, tier)
+			if _shine_tweens[i] and _shine_tweens[i].is_valid():
+				_shine_tweens[i].kill()
+			_shine_tweens[i] = TierCardFx.start_idle_shine(self, card.get_node_or_null("Frame") as TextureRect, tier, 0.5 + 0.35 * i)
 		_fill_evolution_card(card, evo, tier, player)
-	_fit_evolution_desc.call_deferred()
+	if _evo_box:
+		_size_evolution_boxes.call_deferred()
+	else:
+		_fit_evolution_desc.call_deferred()
 
 
 ## Kart yazıları: "EVRİM n/N" ya da "FİNAL EVRİM" (tier renginde), "Q · Yetenek adı", evrim adı + açıklama (sayılar altın).
@@ -1605,24 +1705,27 @@ func _fill_evolution_card(card: Button, evo: Dictionary, tier: int, player: Node
 	var owned: Dictionary = player.skill_evolutions if player != null and "skill_evolutions" in player else {}
 	var total: int = SkillEvolutions.slot_list(char_id, slot).size()
 	var next_n: int = SkillEvolutions.owned_count(char_id, slot, owned) + 1
+	if _evo_box:
+		_fill_evolution_box(card, evo, tier, def, key, total, next_n - 1)
+		return
 	var tier_lbl: Label = card.get_node("EvoTier") as Label
-	tier_lbl.text = "FİNAL EVRİM" if tier == EVO_TIER_FINAL else "EVRİM %d/%d" % [next_n, total]
+	tier_lbl.text = "FİNAL EVRİM" if tier == EVO_TIER_FINAL else tr("EVRİM %d/%d") % [next_n, total]
 	tier_lbl.add_theme_color_override("font_color", EnchantScreenScript.TIER_TEXT[clampi(tier, 1, 4) - 1])
 	EnchantScreenScript._fit_header(tier_lbl, EnchantScreenScript.card_rect(EnchantScreenScript.TIER_RECT, _k).size.x, EnchantScreenScript.header_fonts(_k))
 	var skill_lbl: Label = card.get_node("EvoSkill") as Label
 	## "<yuva>_evo_name": iki varyasyonlu yuvalar (Büyücü Kız) evrim kartında ikisinin adını birden gösterir.
-	skill_lbl.text = "%s  ·  %s" % [key, str(def.get(slot + "_evo_name", def.get(slot + "_name", "")))]
+	skill_lbl.text = "%s  ·  %s" % [key, tr(str(def.get(slot + "_evo_name", def.get(slot + "_name", ""))))]
 	EnchantScreenScript._fit_header(skill_lbl, EnchantScreenScript.card_rect(EnchantScreenScript.CATEGORY_RECT, _k).size.x, EnchantScreenScript.header_fonts(_k))
 	(card.get_node("EvoKey") as Label).text = key
 	(card.get_node("EvoDesc") as RichTextLabel).text = "[color=#%s]%s[/color]\n\n%s" % [
-		EVO_TITLE_COLOR.to_html(false), str(evo.get("name", "")), _evo_desc_bbcode(str(evo.get("desc", "")))]
+		EVO_TITLE_COLOR.to_html(false), tr(str(evo.get("name", ""))), _evo_desc_bbcode(Loc.pct(tr(str(evo.get("desc", "")))))]
 	var icon_path: String = str(def.get(slot + "_icon", ""))
 	var icon: TextureRect = card.get_node("EvoIcon") as TextureRect
 	icon.texture = (load(icon_path) as Texture2D) if (icon_path != "" and ResourceLoader.exists(icon_path)) else null
 
 
 ## Açıklamadaki sayılar/yüzdeler altın renginde (level kartlarındaki değer rengi).
-func _evo_desc_bbcode(text: String) -> String:
+func _evo_desc_bbcode(text: String, num_col: Color = ROW_VALUE_COLOR) -> String:
 	var regex := RegEx.new()
 	if regex.compile("%?\\d+(?:[.,]\\d+)?(?:\\s*saniye)?") != OK:
 		return text
@@ -1630,7 +1733,7 @@ func _evo_desc_bbcode(text: String) -> String:
 	var last: int = 0
 	for m in regex.search_all(text):
 		out += text.substr(last, m.get_start() - last)
-		out += "[color=#%s]%s[/color]" % [ROW_VALUE_COLOR.to_html(false), m.get_string()]
+		out += "[color=#%s]%s[/color]" % [num_col.to_html(false), m.get_string()]
 		last = m.get_end()
 	return out + text.substr(last)
 
@@ -1658,3 +1761,325 @@ func _fit_evolution_desc() -> void:
 			await get_tree().process_frame
 			if not is_instance_valid(desc):
 				return
+
+
+## ---------------------------------------------------------------- MASAÜSTÜ EVRİM KARTI "A - Mühür Kartı" (madde 428, 2026-11-06)
+## Kullanıcı (madde 399 prototiplerinden): "A istiyorum fakat diğer pencereler gibi pixel değil bunlar pek ayrıca çok ufaklar".
+## Efsun dokulu dikey kart yerine pencerelerin PİKSEL KUTUSU (pixel_box.gd, madde 417): zemin WIN_PANEL2, kenar 1 sanat px kademe rengi
+## (diğer pencerelerle aynı kalınlık; normal MOR / FİNAL KIRMIZI = hud_theme EVO_EDGE / EVO_FINAL_EDGE; anlamlı renk, yalnız kenar + pip),
+## kabartmanın ışık bandı kenar renginin KENDİ koyusu (`bevel_hi`; otomatik mor+kahve karışımı çamurlu leylak veriyordu), üstünde / basılı /
+## seçili WIN_PANEL3 + ACCENT kenar, kumanda odağı ACCENT çerçeve. Ortada yetenek simgesi 144 (48 sanat px x3) ÇERÇEVESİZ (kullanıcı:
+## "skillerin dışında çerçeve olmasını istemiyorum" - simgenin kendi çerçevesi var; kuyu + mor kenar iç içe 5 bant yapıyordu) + HUD tuş
+## kapağı; altında "EVRİM n/N" (ACCENT 32), yetenek adı (DIM 32), ilerleme pipleri (alınan = kademe rengi, şimdiki = altın, kalan = kuyu,
+## son = final elması), evrim adı (TEXT 48), açıklama (DIM 32, sayılar PRICE).
+## 480 genişlik (eski 360x540 x0,85 = 306), boy = üç kartın en uzun içeriği (bütün evrimlerin en uzun açıklamasında bile ekrana sığar,
+## tests/test_evolution_cards.gd), ölçek yok. Hale / kıvılcım / ölçek animasyonu yok (stil rehberi): seçilen kart altın kenarda kalır,
+## diğerleri söner, EVO_PICK_HOLD sonra kapanır. Telefon (MobileUIScript.enabled) eski efsun kartında (_layout_evolution_cards).
+## MADDE 461 (kullanıcı 2026-11-08, prototip `tools/proto_20261107/kart_yumusak` "N" - "eski efsun kartını hafif oval kenarlı ve envanterdeki
+## pencereye benzer şekilde"): AHŞAP EFSUN KARTI. Eski efsun kartının iskeleti (dikey 390x480; üstte simge 96 + tuş kapağı | EVRİM n/N +
+## yetenek adı + pipler; altta koyu iç kutuda ad 48 + açıklama 32) + envanterin seçim kartının görünüşü (kit kutusu, köşe 15 = hafif oval,
+## iç kutu envanter kuyusu köşe 12). Gövde eski efsun kartının rengi (HudTheme.EVO_FILL / EVO_FINAL_FILL), kenar kısık mor / kırmızı.
+## Üstündeki kart altın kenar yerine ortasından %5 BÜYÜR (sinüs ease-in-out 0,22 sn, kumanda odağı da); seçilen kart büyük kalır, diğerleri söner.
+## (Yukarıdaki Mühür Kartı açıklaması madde 428 geçmişi.)
+const EvoPixelBox := preload("res://scripts/pixel_box.gd")
+const EVO_BOX_W := 390.0
+const EVO_BOX_MIN_H := 480.0 ## eski efsun kartının dikey oranı; uzun açıklamada kart uzar
+const EVO_BOX_GAP := 36
+const EVO_BOX_TOP := 150.0 ## ekranın üstünden (başlık y 22..118)
+const EVO_BOX_BORDER := 3 ## 1 sanat px (diğer pencereler gibi)
+const EVO_BOX_RADIUS := 15 ## hafif oval (envanter kartı 6)
+const EVO_BOX_EDGE_ALPHA := 0.8
+const EVO_BOX_PAD := 21.0
+const EVO_BOX_INNER := EVO_BOX_W - 2.0 * EVO_BOX_PAD
+const EVO_WELL_PAD := 18.0
+const EVO_WELL_RADIUS := 12
+const EVO_SLOT_ICON := 96.0 ## 48 sanat px x2
+const EVO_KEYCAP := 48.0
+const EVO_KEYCAP_OUT := 12.0 ## tuş kapağı simgenin sağ alt köşesinden taşar
+const EVO_HOVER_SCALE := 1.05
+const EVO_HOVER_TIME := 0.22
+const EVO_PICK_HOLD := 0.45
+const EVO_COUNTDOWN_GAP := 18.0
+var _evo_box: bool = false
+
+
+## Tuş kapağı: HUD mini düğme levhası (yetenek ipucundaki HudTooltip.make_keycap ile aynı kutu) + m5x7 32 harf. Elle çizilir:
+## PanelContainer kutunun doku paylarıyla şişiyor, Label'ın m5x7 satır kutusu da harfi aşağı itiyordu (prototip madde 399).
+class EvoKeyCap extends Control:
+	const HTK := preload("res://scripts/hud_theme.gd")
+	var key: String = "Q"
+	var box: StyleBox = null
+
+	func _draw() -> void:
+		if box:
+			draw_style_box(box, Rect2(Vector2.ZERO, size))
+		var font: Font = get_theme_default_font()
+		if font == null:
+			return
+		## m5x7 büyük harf 7 font pikseli = 32 boyda 28 px; taban çizgisi kutuda ortalanır.
+		var base: float = roundf((size.y + 28.0) * 0.5) - 7.0 ## levhanın alt gölge bandı: harf yüzün ortasına
+		draw_string(font, Vector2(0, base + 4.0), key, HORIZONTAL_ALIGNMENT_CENTER, size.x, 32, Color(HTK.DEEP, 0.6)) ## dil:yok (tuş harfi)
+		draw_string(font, Vector2(0, base), key, HORIZONTAL_ALIGNMENT_CENTER, size.x, 32, HTK.TEXT) ## dil:yok
+
+
+## İlerleme pipleri (3 px ızgara): alınan evrimler kademe rengi, şimdiki altın, kalanlar kuyu (WIN_LINE kenar); son pip final elması.
+class EvoPips extends Control:
+	const HTP := preload("res://scripts/hud_theme.gd")
+	const PX := 3.0
+	const CELL := 15.0
+	const DIAMOND := 21.0
+	const GAP := 9.0
+	var total: int = 1
+	var owned: int = 0
+	var edge: Color = Color.WHITE
+
+	func setup(t: int, o: int, e: Color) -> void:
+		total = maxi(1, t)
+		owned = clampi(o, 0, total - 1)
+		edge = e
+		custom_minimum_size = Vector2((total - 1) * (CELL + GAP) + DIAMOND, DIAMOND)
+		update_minimum_size()
+		queue_redraw()
+
+	func _draw() -> void:
+		var x: float = 0.0
+		for i in total:
+			var col: Color = edge if i < owned else HTP.ACCENT
+			var filled: bool = i <= owned
+			if i == total - 1:
+				var rows := [1, 3, 5, 7, 5, 3, 1]
+				for r in 7:
+					draw_rect(Rect2(x + (7 - rows[r]) * 0.5 * PX, r * PX, rows[r] * PX, PX), col if filled else HTP.WIN_LINE)
+				if not filled:
+					var inner := [1, 3, 5, 3, 1]
+					for r in 5:
+						draw_rect(Rect2(x + (7 - inner[r]) * 0.5 * PX, (r + 1) * PX, inner[r] * PX, PX), HTP.WIN_INSET)
+			else:
+				var y: float = (DIAMOND - CELL) * 0.5
+				if filled:
+					draw_rect(Rect2(x, y, CELL, CELL), col)
+				else:
+					draw_rect(Rect2(x, y, CELL, CELL), HTP.WIN_LINE)
+					draw_rect(Rect2(x + PX, y + PX, CELL - 2.0 * PX, CELL - 2.0 * PX), HTP.WIN_INSET)
+				x += CELL + GAP
+
+
+## Kit kutusu (shop_dark_kit sb ile aynı: piksel kutu, otomatik kabartma - envanter kartı gibi).
+func _evo_sb(fill: Color, edge: Color, bw: int, r: int, center: bool = true) -> StyleBox:
+	var s := EvoPixelBox.new()
+	s.bg_color = fill
+	if edge.a > 0.0 and bw > 0:
+		s.border_color = edge
+		s.set_border_width_all(bw)
+	s.set_corner_radius_all(r)
+	s.draw_center = center
+	s.set_content_margin_all(0)
+	return s
+
+
+func _evo_label(n: String, fs: int, col: Color) -> Label:
+	var l := Label.new()
+	l.name = n
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_size_override("font_size", fs)
+	l.add_theme_color_override("font_color", col)
+	return l
+
+
+func _evo_gap(h: float) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(0, h)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return c
+
+
+func _layout_evolution_boxes() -> void:
+	_evo_box = true
+	_k = 1.0
+	var old: Control = get_node_or_null("CardsContainer") as Control
+	var n: int = clampi(_evo_offers.size(), 1, cards.size())
+	var total_w: float = EVO_BOX_W * n + EVO_BOX_GAP * (n - 1)
+	var row := HBoxContainer.new()
+	row.name = "EvoCards"
+	row.theme = UIKit.theme()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", EVO_BOX_GAP)
+	row.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	row.offset_left = -roundf(total_w * 0.5)
+	row.offset_right = row.offset_left + total_w
+	row.offset_top = EVO_BOX_TOP
+	row.offset_bottom = EVO_BOX_TOP + 600.0 ## gerçek boy _size_evolution_boxes'ta (yazılar dolunca)
+	UiAnim.skip(row)
+	add_child(row)
+	if old:
+		move_child(row, old.get_index())
+		old.visible = false
+	for card: Button in cards:
+		if not is_instance_valid(card):
+			continue
+		card.reparent(row, false)
+		card.custom_minimum_size = Vector2(EVO_BOX_W, 0)
+		card.clip_contents = false
+		card.scale = Vector2.ONE
+		for n_name in ["Frame", "Content", "SelectGlow"]: ## dil:yok (düğüm adı)
+			var node: CanvasItem = card.get_node_or_null(n_name) as CanvasItem
+			if node:
+				node.visible = false
+		var body := VBoxContainer.new()
+		body.name = "EvoBody"
+		body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		body.add_theme_constant_override("separation", 15)
+		card.add_child(body)
+		body.set_anchors_preset(Control.PRESET_FULL_RECT)
+		body.offset_left = EVO_BOX_PAD
+		body.offset_top = EVO_BOX_PAD
+		body.offset_right = -EVO_BOX_PAD
+		body.offset_bottom = -EVO_BOX_PAD
+		## Üst satır: çerçevesiz simge + tuş kapağı (kapak simgenin sağ alt köşesinden taşar) | EVRİM n/N, yetenek adı, pipler.
+		var head := HBoxContainer.new()
+		head.name = "EvoHead"
+		head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		head.add_theme_constant_override("separation", 18)
+		body.add_child(head)
+		var slot := Control.new()
+		slot.name = "EvoSlot"
+		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.custom_minimum_size = Vector2.ONE * (EVO_SLOT_ICON + EVO_KEYCAP_OUT)
+		head.add_child(slot)
+		var icon := TextureRect.new()
+		icon.name = "EvoIcon"
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		slot.add_child(icon)
+		icon.position = Vector2.ZERO
+		icon.size = Vector2.ONE * EVO_SLOT_ICON
+		var cap := EvoKeyCap.new()
+		cap.name = "EvoKey"
+		cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cap.box = UIKit.button_style("hud", "normal", true)
+		slot.add_child(cap)
+		cap.position = Vector2.ONE * (EVO_SLOT_ICON - EVO_KEYCAP + EVO_KEYCAP_OUT)
+		cap.size = Vector2.ONE * EVO_KEYCAP
+		var info := VBoxContainer.new()
+		info.name = "EvoInfo"
+		info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		info.alignment = BoxContainer.ALIGNMENT_CENTER
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.add_theme_constant_override("separation", 3)
+		head.add_child(info)
+		var tier_lbl := _evo_label("EvoTier", 32, HT.ACCENT)
+		tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		info.add_child(tier_lbl)
+		## 24 = eski efsun kartının / envanter kartı gövdesinin boyu (prototipte onaylanan görünüş; stil rehberi 2'nin bilinen istisnası).
+		var skill_lbl := _evo_label("EvoSkill", 24, HT.DIM)
+		skill_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		info.add_child(skill_lbl)
+		info.add_child(_evo_gap(6))
+		var pips := EvoPips.new()
+		pips.name = "EvoPips"
+		pips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pips.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		info.add_child(pips)
+		## Alt: envanter kuyusu - evrimin adı (ACCENT 48) + açıklama (TEXT 32, sayılar PRICE); kartın kalan boyunu doldurur.
+		var well := PanelContainer.new()
+		well.name = "EvoWellBox"
+		well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		well.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		var wsb: StyleBox = _evo_sb(HT.WIN_INSET, Color(0, 0, 0, 0), 0, EVO_WELL_RADIUS)
+		wsb.set_content_margin_all(EVO_WELL_PAD)
+		well.add_theme_stylebox_override("panel", wsb)
+		body.add_child(well)
+		var wv := VBoxContainer.new()
+		wv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		wv.add_theme_constant_override("separation", 12)
+		well.add_child(wv)
+		var name_lbl := _evo_label("EvoName", 48, HT.ACCENT)
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_lbl.custom_minimum_size.x = EVO_BOX_INNER - 2.0 * EVO_WELL_PAD
+		wv.add_child(name_lbl)
+		var text := RichTextLabel.new()
+		text.name = "EvoDesc"
+		text.bbcode_enabled = true
+		text.fit_content = true
+		text.scroll_active = false
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		text.custom_minimum_size.x = EVO_BOX_INNER - 2.0 * EVO_WELL_PAD
+		text.add_theme_color_override("default_color", HT.TEXT)
+		text.add_theme_constant_override("line_separation", 8)
+		_set_desc_font_size(text, EVO_TEXT_FONT_SIZE)
+		wv.add_child(text)
+		## Kumanda / klavye odağı da fare gibi büyütür: _wire_card_hover_feedback odak sinyallerini zaten _on_card_hover'a bağlıyor.
+
+
+## Madde 461: her durumda aynı kutu (gövde eski efsun kartının rengi, kısık evrim kenarı); üstünde / odak / seçili = büyüme (_evo_grow), renk değişmez.
+func _apply_evo_box_style(card: Button, tier: int, _chosen: bool) -> void:
+	var is_final: bool = tier == EVO_TIER_FINAL
+	var edge: Color = Color(HT.EVO_FINAL_EDGE if is_final else HT.EVO_EDGE, EVO_BOX_EDGE_ALPHA)
+	var base: StyleBox = _evo_sb(HT.EVO_FINAL_FILL if is_final else HT.EVO_FILL, edge, EVO_BOX_BORDER, EVO_BOX_RADIUS)
+	for st: String in ["normal", "disabled", "hover", "pressed", "hover_pressed"]:
+		card.add_theme_stylebox_override(st, base)
+	card.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	card.modulate = Color(1, 1, 1, 1)
+
+
+## Üstündeki / odaktaki kart ortasından EVO_HOVER_SCALE'e büyür, ayrılınca geri; sinüs ease-in-out (madde 461, kullanıcı: "hafif büyüsün
+## ease ease şeklinde"). Tween kartın meta'sında - yeni geçiş eskisini keser.
+func _evo_grow(card: Button, on: bool) -> void:
+	if not is_instance_valid(card):
+		return
+	card.pivot_offset = (card.size * 0.5).round()
+	var old: Variant = card.get_meta("evo_grow_tw", null)
+	if old is Tween and (old as Tween).is_valid():
+		(old as Tween).kill()
+	var tw: Tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(card, "scale", Vector2.ONE * (EVO_HOVER_SCALE if on else 1.0), EVO_HOVER_TIME)
+	card.set_meta("evo_grow_tw", tw)
+
+
+func _fill_evolution_box(card: Button, evo: Dictionary, tier: int, def: Dictionary, key: String, total: int, have: int) -> void:
+	var slot: String = str(evo.get("slot", "skill"))
+	var is_final: bool = tier == EVO_TIER_FINAL
+	(card.find_child("EvoTier", true, false) as Label).text = "FİNAL EVRİM" if is_final else tr("EVRİM %d/%d") % [have + 1, total]
+	(card.find_child("EvoSkill", true, false) as Label).text = str(def.get(slot + "_evo_name", def.get(slot + "_name", "")))
+	(card.find_child("EvoName", true, false) as Label).text = str(evo.get("name", ""))
+	(card.find_child("EvoDesc", true, false) as RichTextLabel).text = _evo_desc_bbcode(Loc.pct(tr(str(evo.get("desc", "")))), HT.PRICE)
+	(card.find_child("EvoPips", true, false) as EvoPips).setup(total, total - 1 if is_final else have, HT.EVO_FINAL_EDGE if is_final else HT.EVO_EDGE)
+	var cap: EvoKeyCap = card.find_child("EvoKey", true, false) as EvoKeyCap
+	cap.key = key
+	cap.queue_redraw()
+	var icon_path: String = str(def.get(slot + "_icon", ""))
+	(card.find_child("EvoIcon", true, false) as TextureRect).texture = (load(icon_path) as Texture2D) if (icon_path != "" and ResourceLoader.exists(icon_path)) else null
+
+
+## Kart boyu = görünen kartların en uzun içeriği (açıklama RichTextLabel'ı bir kare sonra boyunu bilir); geri sayım kartların altına.
+func _size_evolution_boxes() -> void:
+	if not is_inside_tree():
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
+	var h: float = 0.0
+	for card: Button in cards:
+		if not is_instance_valid(card) or not card.visible:
+			continue
+		var body: Control = card.get_node_or_null("EvoBody") as Control
+		if body:
+			h = maxf(h, body.get_combined_minimum_size().y)
+	h = maxf(EVO_BOX_MIN_H, ceilf(h + 2.0 * EVO_BOX_PAD))
+	for card: Button in cards:
+		if is_instance_valid(card):
+			card.custom_minimum_size = Vector2(EVO_BOX_W, h)
+	var row: Control = get_node_or_null("EvoCards") as Control
+	if row:
+		row.offset_bottom = row.offset_top + h
+	if countdown_panel:
+		var mid: float = get_viewport().get_visible_rect().size.y * 0.5
+		countdown_panel.offset_top = EVO_BOX_TOP + h + EVO_COUNTDOWN_GAP - mid
+		countdown_panel.offset_bottom = countdown_panel.offset_top + 74.0

@@ -1,0 +1,1985 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+MPC[client] basladi char=12 silahlar=["yay", "buz_asasi", "topuz"]
+WARNING: res://scenes/fx_oyku_heal.tscn:3 - ext_resource, invalid UID: uid://dh4h1d77x2n3p - using text path instead: res://scripts/fx_oyku_heal.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_buyucu_fastfire.tscn:3 - ext_resource, invalid UID: uid://cd84h1d77x2n5 - using text path instead: res://scripts/fx_buyucu_fastfire.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_shield_active.tscn:3 - ext_resource, invalid UID: uid://cd100h1d77x2n - using text path instead: res://scripts/fx_shield_active.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_paladin_cast.tscn:3 - ext_resource, invalid UID: uid://cd99h1d77x2n2 - using text path instead: res://scripts/fx_paladin_cast.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_assasin_stealth.tscn:3 - ext_resource, invalid UID: uid://cd94h1d77x2n6 - using text path instead: res://scripts/fx_assasin_stealth.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_talha_rage.tscn:3 - ext_resource, invalid UID: uid://d74h1d77x2n4q - using text path instead: res://scripts/fx_talha_rage.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_matthew_sacrifice.tscn:3 - ext_resource, invalid UID: uid://cd95h1d77x2n7 - using text path instead: res://scripts/fx_matthew_sacrifice.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/fx_matthew_explosion.tscn:3 - ext_resource, invalid UID: uid://cd96h1d77x2n8 - using text path instead: res://scripts/fx_matthew_explosion.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: res://shaders/cloud_shadows_material.tres:3 - ext_resource, invalid UID: uid://fcyufq7kts1o - using text path instead: res://shaders/cloud_shadows.gdshader
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _load_worker (res://scripts/loading_screen.gd:416)
+WARNING: Camera2D overridden to physics process mode due to use of physics interpolation.
+   at: _update_process_callback (scene/2d/camera_2d.cpp:88)
+   GDScript backtrace (most recent call first):
+       [0] opt_in (res://scripts/physics_interp.gd:34)
+       [1] _ready (res://scripts/player.gd:1171)
+[Yaratık sistemi] C++ EnemyWorld
+ERROR: Condition "!actions.custom_samplers.has(function->arguments[j].tex_builtin)" is true. Continuing.
+   at: _dump_node_code (servers/rendering/shader_compiler.cpp:1329)
+   GDScript backtrace (most recent call first):
+       [0] _ready (res://scripts/enchant_weapon_glow.gd:131)
+       [1] attach (res://scripts/enchant_weapon_glow.gd:119)
+       [2] set_enchant (res://scripts/weapon.gd:586)
+       [3] _run (res://tools/buyuk_test/mp_clutter.gd:158)
+       [4] _wait (res://tools/buyuk_test/mp_clutter.gd:53)
+MPC[client] senaryo basliyor (oyuncu kuklasi: 2)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: compute (res://scripts/melek_bond_ribbon.gd:83)
+   GDScript backtrace (most recent call first):
+       [0] compute (res://scripts/melek_bond_ribbon.gd:83)
+       [1] _rebuild (res://scripts/melek_bond_ribbon.gd:109)
+       [2] _process (res://scripts/melek_bond_ribbon.gd:102)
+MPC[client] bitti

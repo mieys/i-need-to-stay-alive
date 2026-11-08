@@ -1,17 +1,37 @@
 extends RefCounted
 
-## Sandık sanatı TEK KAYNAK (2026-10-17, madde 242: "B Işık Sütunu" - Lost Ark / Diablo esinli, kasvetli gerçekçi). Sayfalar
-## tools/gen_chest_sprites.py ile üretilir (kare düzeni o dosyanın başında). Kullananlar: chest_drop.gd (dünya), chest_open_anim.gd
-## (ödül ekranı + efsun ekranı girişi), chest_pass_fx.gd (sıradakine uçan sandık), gold_reward_fx.gd (altın fışkıran sandık).
+## Sandık sanatı TEK KAYNAK. Kullananlar: chest_drop.gd (dünya), chest_open_anim.gd (ödül ekranı + efsun ekranı girişi),
+## chest_pass_fx.gd (sıradakine uçan sandık), gold_reward_fx.gd (altın fışkıran sandık).
 ##
-## 1 sanat pikseli = TEXEL dünya px (silahlarla aynı yoğunluk). Sandık karesi FRAME_PX doku px = FRAME_WU dünya px: eski 48 px
-## kareyle aynı yeri kaplar, 20 karelik düzen aynı (0-3 bekleme, 4-7 sallanma, 8 patlama, 9-15 ışın, 16-19 açık döngü).
-## Işık sütunu + yer halkası AYRI sayfa (sandığın arkasında ayrı sprite; sandık sayfası sütunsuz kalır -> küçük ikonlar etkilenmez).
+## 2026-11-06 (madde 409, kullanıcı: "sandığı eski haline döndür, senin yaptığını değil eski ai olmayan versiyonu"): oyunun İLK
+## sürümündeki PAKET sandıkları geri geldi (assets/sprites/chest_tier_*.png + chests.png, elle çizilmiş paket sanatı). Kademe bandı
+## (0-5 = KADEME I-II ... XI+, chest_drop.gd chest_tier) sandığın görünüşünü seçer - ilk sürümdeki gibi. Elit = aynı paketin koyu
+## gümüş-kristal sandığı. Sayfalar tools/gen_chest_from_pack.py ile 20 karelik düzene DİZİLİR (çizim değişmez): 0-3 kapalı,
+## 4-7 sallanma (+-1 px), 8 kapak aralık, 9-10 altın görünür, 11-19 tam açık. 32 px kare, ilk sürümdeki ölçek (0,8 dünya px).
+## Işık sütunu (madde 242 "B Işık Sütunu", üretilmiş sanat) KAPALI: BEAM_ENABLED. Eski sayfalar (chest_normal*.png, chest_beam*.png,
+## tools/gen_chest_sprites.py) duruyor - geri açmak: BEAM_ENABLED true + sabitleri eski değerlere (TEXEL 0,5, FRAME_PX 96).
 
-const TEXEL := 0.5
-const FRAME_PX := 96
-const FRAME_WU := 48.0
+const TEXEL := 0.8
+const FRAME_PX := 32
+const FRAME_WU := FRAME_PX * TEXEL
 const FRAME_COUNT := 20
+const BEAM_ENABLED := false
+## Paket sanatının kendi gölgesi var: üretilmiş chest_shadow.png + drop_shadow.gd ikinci gölgesi eklenmez.
+const EXTRA_SHADOW := false
+
+## Kademe bandına göre normal sandık (chest_drop.gd chest_tier / chest_menu.gd _chest_tier, 0-5).
+const KADEME_SHEETS := [
+	preload("res://assets/sprites/chests/paket_k0.png"),
+	preload("res://assets/sprites/chests/paket_k1.png"),
+	preload("res://assets/sprites/chests/paket_k2.png"),
+	preload("res://assets/sprites/chests/paket_k3.png"),
+	preload("res://assets/sprites/chests/paket_k4.png"),
+	preload("res://assets/sprites/chests/paket_k5.png"),
+]
+
+
+static func normal_sheet(kademe_band: int) -> Texture2D:
+	return KADEME_SHEETS[clampi(kademe_band, 0, KADEME_SHEETS.size() - 1)]
 
 const BEAM_W := 128
 const BEAM_H := 192
@@ -25,19 +45,15 @@ const BEAM_COLLAPSE_STEP := 0.05
 
 ## Sandığın alt-orta noktası (doku px): sandık karesinde ve ışık sütunu karesinde. Sprite'lar ortalı -> sütun sprite'ı sandık
 ## sprite'ına göre BEAM_OFFSET_PX (doku px, ölçekten önce) kadar kaydırılır.
-const CHEST_ANCHOR_PX := Vector2(48, 84)
+const CHEST_ANCHOR_PX := Vector2(16, 31) ## paket karesinde sandığın alt-ortası (gen_chest_from_pack.py yazdırır)
 const BEAM_ANCHOR_PX := Vector2(64, 176)
 const BEAM_OFFSET_PX := (CHEST_ANCHOR_PX - Vector2(FRAME_PX, FRAME_PX) * 0.5) - (BEAM_ANCHOR_PX - Vector2(BEAM_W, BEAM_H) * 0.5)
 
-## Dünya: sıcak altın ışık (çıkacak eşya henüz belli değil). Ödül ekranı: ışık = eşyanın nadirliği (1 gri-beyaz, 2 mavi, 3 mor, 4 altın).
-const NORMAL_SHEET := preload("res://assets/sprites/chests/chest_normal.png")
-const NORMAL_TIER_SHEETS := [
-	preload("res://assets/sprites/chests/chest_normal_t1.png"),
-	preload("res://assets/sprites/chests/chest_normal_t2.png"),
-	preload("res://assets/sprites/chests/chest_normal_t3.png"),
-	preload("res://assets/sprites/chests/chest_normal_t4.png"),
-]
-const ELITE_SHEET := preload("res://assets/sprites/chests/chest_elite.png")
+## Kademe bilinmeyen yerler (uçan sandık, altın fışkıran sandık) ilk bandın sandığını kullanır. Ödül ekranı nadirliğe göre sandık
+## DEĞİŞTİRMEZ (eskiden ışık rengi nadirlikti); NORMAL_TIER_SHEETS eski çağıranlar için aynı sandık.
+const NORMAL_SHEET := preload("res://assets/sprites/chests/paket_k0.png")
+const NORMAL_TIER_SHEETS := [NORMAL_SHEET, NORMAL_SHEET, NORMAL_SHEET, NORMAL_SHEET]
+const ELITE_SHEET := preload("res://assets/sprites/chests/paket_elite.png")
 const BEAM_SHEET := preload("res://assets/sprites/chests/chest_beam.png")
 const BEAM_TIER_SHEETS := [
 	preload("res://assets/sprites/chests/chest_beam_t1.png"),

@@ -10,6 +10,7 @@ const HaritaScene: PackedScene = preload("res://scenes/harita_baked.tscn")
 
 var _spawned: Array[Node] = []
 var _saved_enabled: bool = false
+var _saved_merchant_enabled: bool = true
 
 
 func _track(node: Node) -> Node:
@@ -24,12 +25,14 @@ func _cleanup() -> void:
 	_spawned.clear()
 	TerrainCollisionScript.reset()
 	ShopsFlag.set_enabled(_saved_enabled)
+	ShopsFlag.set_merchant_enabled(_saved_merchant_enabled)
 
 
 ## Main'in yerine geçen kök: iki dükkan düğümü + gerçek harita (main.tscn'deki gibi -2,21 kaymış).
 func _make_fake_main() -> Node2D:
 	if _spawned.is_empty():
 		_saved_enabled = ShopsFlag.enabled
+		_saved_merchant_enabled = ShopsFlag.merchant_enabled
 	var main := Node2D.new()
 	main.name = "FakeMain"
 	for node_name: String in ShopsFlag.SHOP_NODES:
@@ -55,11 +58,49 @@ func _cells_in_box(layer: TileMapLayer) -> int:
 func test_shop_nodes_are_removed_when_disabled() -> void:
 	var main: Node2D = _make_fake_main()
 	ShopsFlag.set_enabled(false)
+	ShopsFlag.set_merchant_enabled(false)
 	ShopsFlag.strip_shops(main)
 	for node_name: String in ShopsFlag.SHOP_NODES:
 		assert(main.get_node_or_null(node_name) == null, "%s silinmeli" % node_name)
 	assert(main.get_node_or_null("Harita") != null, "Harita kalmalı")
 	_cleanup()
+
+
+## Madde 431: bayrak ikiye ayrıldı - şu anki ayar (demirci + bina kapalı, seyyar satıcı açık): satıcı düğümü KALIR, demirci gider.
+func test_merchant_stays_while_smithy_and_building_are_off() -> void:
+	var main: Node2D = _make_fake_main()
+	var harita: Node = main.get_node("Harita")
+	ShopsFlag.set_enabled(false)
+	ShopsFlag.set_merchant_enabled(true)
+	ShopsFlag.strip_shops(main)
+	assert(main.get_node_or_null(ShopsFlag.MERCHANT_NODE) != null, "seyyar satıcı açıkken silinmemeli")
+	assert(main.get_node_or_null(ShopsFlag.SMITHY_NODE) == null, "demirci kapalıyken silinmeli")
+	for path: String in ShopsFlag.BUILDING_LAYERS:
+		assert(harita.get_node_or_null(path) == null, "%s (demirci binası) silinmeli" % path)
+	_cleanup()
+
+
+## Tersi: yalnız satıcı kapalı -> demirci düğümü ve binası yerinde kalır.
+func test_only_merchant_off_keeps_smithy_and_building() -> void:
+	var main: Node2D = _make_fake_main()
+	var harita: Node = main.get_node("Harita")
+	ShopsFlag.set_enabled(true)
+	ShopsFlag.set_merchant_enabled(false)
+	ShopsFlag.strip_shops(main)
+	assert(main.get_node_or_null(ShopsFlag.MERCHANT_NODE) == null, "satıcı kapalıyken silinmeli")
+	assert(main.get_node_or_null(ShopsFlag.SMITHY_NODE) != null, "demirci açıkken silinmemeli")
+	for path: String in ShopsFlag.BUILDING_LAYERS:
+		assert(harita.get_node_or_null(path) != null, "%s açıkken silinmemeli" % path)
+	_cleanup()
+
+
+## Varsayılanlar (kullanıcı kararı 2026-11-06): satıcı açık, demirci kapalı; satıcı bekleme süreleri bir önceki değerin iki katı.
+func test_defaults_and_merchant_spawn_pace() -> void:
+	assert(ShopsFlag.merchant_enabled and not ShopsFlag.enabled, "varsayılan: satıcı açık, demirci kapalı")
+	var m: GDScript = load("res://scripts/traveling_merchant.gd")
+	assert(m.COOLDOWN_MIN == 120.0 and m.COOLDOWN_MAX == 120.0, "ziyaret arası 60 -> 120 sn (spawn %50 yavaş)")
+	assert(m.INITIAL_DELAY_MIN == 60.0 and m.INITIAL_DELAY_MAX == 180.0, "ilk ziyaret 30-90 -> 60-180 sn")
+	assert(m.VISIT_DURATION == 180.0, "kalma süresi aynı")
 
 
 func test_building_layers_are_removed_and_shared_layers_lose_only_the_building_area() -> void:
@@ -94,6 +135,7 @@ func test_nothing_is_removed_when_enabled() -> void:
 	var harita: Node = main.get_node("Harita")
 	var cells_before: int = (harita.get_node("ev/Ev Çatı 1") as TileMapLayer).get_used_cells().size()
 	ShopsFlag.set_enabled(true)
+	ShopsFlag.set_merchant_enabled(true)
 	ShopsFlag.strip_shops(main)
 	for node_name: String in ShopsFlag.SHOP_NODES:
 		assert(main.get_node_or_null(node_name) != null, "%s açıkken silinmemeli" % node_name)

@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" load_steps=9 format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://c2a8jgck7f6n2"]
 
-[ext_resource type="Texture2D" path="res://assets/pickups/magnet/magnet_sheet.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://qc5hf0dhqrng" path="res://assets/pickups/magnet/magnet_sheet.png" id="1"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_1"]
 atlas = ExtResource("1")
@@ -54,7 +54,7 @@ animations = [{
 "duration": 3.0,
 "texture": SubResource("AtlasTexture_7")
 }],
-"loop": true,
+"loop": 1,
 "name": &"shine",
 "speed": 8.0
 }]

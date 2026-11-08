@@ -30,7 +30,7 @@ func build(cols: int = COLUMNS, k: float = 1.0, face: bool = false) -> void:
 		var card: Control = CardScript.new()
 		card.name = "Card%d" % char_id
 		add_child(card)
-		card.setup(char_id, Characters.DEFS[char_id], k, face)
+		card.setup(char_id, Characters.get_def(char_id), k, face) ## seçili dilde (madde 446)
 		card.pressed.connect(_on_card_pressed)
 		cards[char_id] = card
 		if not MetaProgressScript.is_unlocked(MetaProgressScript.CHAR, char_id):

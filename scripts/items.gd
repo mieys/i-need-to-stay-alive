@@ -1,4 +1,5 @@
 class_name Items
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## EŞYA SİSTEMİ (kullanıcının tasarımı, 2026-10-02 - "İtem sistemi yeni.zip": item.txt + iem fiyatlandırmaları.txt).
 ## Üç kademe: 1 = Parça (temel malzeme), 2 = Epik, 3 = Efsanevi. Epik/efsanevi eşyalar TARİFLE (alt kademe parçalarından)
@@ -15,7 +16,7 @@ class_name Items
 ## max_health / shield_pen_percent özel, gerisi genel set/get). Pasif metni "passive"; pasiflerin kodu player.gd
 ## ITEM PASİFLERİ bloğunda ve weapon.gd'de has_item(<anahtar>) ile.
 ## Yeni stat: heal_shield_power (İyileştirme ve Kalkan Gücü) - oyuncunun sağladığı tüm can/kalkanı güçlendirir.
-## item_shield_regen_flat = saniyede kalkan (Savaş Kalkanı yarısını alır), item_health_regen = 5 saniyede can.
+## item_shield_regen_flat = saniyede kalkan (Savaş Kalkanı yarısını alır), item_health_regen = 5 saniyede toplam can (her saniye beşte biri, madde 476).
 
 const KADEME_PARCA := 1
 const KADEME_EPIK := 2
@@ -36,13 +37,14 @@ const DEFS := {
 		"stats": {"max_health": 50.0, "damage_bonus": 5.0}},
 	"yasam_kristali": {"name": "Yaşam Kristali", "kademe": 1, "cost": 270, "recipe": [],
 		"stats": {"max_health": 80.0, "item_health_regen": 3.0}}, ## 2026-10-11: can yenilenmesi x3 (1 -> 3)
-	"ceviklik_yuzugu": {"name": "Çeviklik Yüzüğü", "kademe": 1, "cost": 300, "recipe": [],
+	"ceviklik_yuzugu": {"name": "Ok Tüyü", "kademe": 1, "cost": 300, "recipe": [],
 		"stats": {"item_fire_rate_percent": 0.10}},
 	"kutsal_tilsim": {"name": "Kutsal Tılsım", "kademe": 1, "cost": 250, "recipe": [],
 		"stats": {"heal_shield_power": 0.05}},
 	"bile_tasi": {"name": "Bile Taşı", "kademe": 1, "cost": 350, "recipe": [],
 		"stats": {"damage_bonus": 10.0}},
-	"isik_parcacigi": {"name": "Işık Parçacığı", "kademe": 1, "cost": 250, "recipe": [],
+	## görünen ad "Işık Parçacığı" -> "Işık Küresi" (madde 432): para birimi "parçacık" ve kademe adı "PARÇA" ile karışıyordu (anahtar aynı)
+	"isik_parcacigi": {"name": "Işık Küresi", "kademe": 1, "cost": 250, "recipe": [],
 		"stats": {"item_shield_power_flat": 40.0, "item_shield_regen_flat": 0.5}},
 	"kan_disi": {"name": "Kan Dişi", "kademe": 1, "cost": 280, "recipe": [],
 		"stats": {"damage_bonus": 3.0, "lifesteal_percent": 0.03}},
@@ -251,7 +253,7 @@ const PASSIVE_ONLY_STATS := ["item_flat_hit_damage", "item_damage_mult_bonus", "
 
 
 static func get_def(key: String) -> Dictionary:
-	return DEFS.get(key, {})
+	return Loc.localized("it:" + key, DEFS.get(key, {})) ## ad + pasif seçili dilde (madde 446)
 
 
 static func kademe(key: String) -> int:
@@ -335,15 +337,15 @@ static func describe(key: String) -> String:
 	for s in stats:
 		if not STAT_LABELS.has(s):
 			continue
-		var label: String = STAT_LABELS[s][0]
+		var label: String = Loc.t(STAT_LABELS[s][0])
 		var v: float = float(stats[s])
 		if bool(STAT_LABELS[s][1]):
-			lines.append("+%%%s %s" % [_num(v * 100.0), label])
+			lines.append(Loc.t("+%%%s %s") % [_num(v * 100.0), label])
 		else:
-			lines.append("+%s %s" % [_num(v), label])
+			lines.append(Loc.t("+%s %s") % [_num(v), label])
 	var text: String = "\n".join(lines)
 	if def.has("passive"):
-		text += ("\n\n" if text != "" else "") + "Pasif: " + str(def["passive"])
+		text += ("\n\n" if text != "" else "") + Loc.t("Pasif:") + " " + str(def["passive"]) ## def zaten seçili dilde (get_def)
 	return text
 
 
@@ -414,17 +416,17 @@ static func owns(owned: Array, key: String) -> bool:
 ## Satın alınabilir mi (altın hariç): "" = evet, değilse kullanıcıya gösterilecek sebep.
 static func purchase_block_reason(key: String, owned: Array, part_slots: int, plan: Dictionary = {}) -> String:
 	if not DEFS.has(key):
-		return "Bilinmeyen eşya"
+		return Loc.t("Bilinmeyen eşya")
 	if plan.is_empty():
 		plan = plan_purchase(key, owned)
 	var k: int = kademe(key)
 	if (k == KADEME_EFSANEVI or k == KADEME_EPIK) and owns(owned, key):
-		return "Zaten sende var"
+		return Loc.t("Zaten sende var")
 	if k == KADEME_PARCA and part_copies(key, owned) >= PART_MAX_COPIES:
-		return "Bu parçadan en fazla %d tane" % PART_MAX_COPIES
+		return Loc.t("Bu parçadan en fazla %d tane") % PART_MAX_COPIES
 	var have: int = count_kademe(owned, k, plan.get("consume", []))
 	if have >= slot_limit(k, part_slots):
-		return "%s slotları dolu" % KADEME_NAMES[k - 1]
+		return Loc.t("%s slotları dolu") % Loc.t(KADEME_NAMES[k - 1])
 	return ""
 
 

@@ -1,6 +1,6 @@
 extends Node
 
-## YİN YANG KİTABI (2026-10-20, madde 334): kayıtlar, kalkan alıcısı (menzilsiz, oransal en boş, eşitlikte sahibi, hepsi doluysa Yin),
+## YİN YANG KİTABI (2026-10-20, madde 334): kayıtlar, kalkan alıcısı (kitabın menzili içinde, oransal en boş, eşitlikte sahibi, hepsi doluysa Yin),
 ## isabette kendine / dosta kalkan + Yang çarpanı, Yin hasarı, Denge geliştirmeleri (Kalın Sayfa, Ağır Yin, Sıcak Yang, Kara Mühür),
 ## FİNAL Tai Chi Mührü, kara kürenin yükselirken çarpmaması, ak kürenin kitaptan yükselip alıcıya uçması, kitabın nişanla dönmemesi.
 ## Gerçek oyuncu + gerçek kitap (test_gokkusagi_asasi.gd düzeni).
@@ -69,7 +69,7 @@ func _ally(hp: float, mx: float = 100.0) -> FakeAlly:
 	_track(a)
 	a.item_shield_hp = hp
 	a.item_shield_max = mx
-	a.global_position = Vector2(700.0, 1100.0)
+	a.global_position = Vector2(1100.0, 1050.0) ## kitap menzili (170) içinde
 	return a
 
 
@@ -148,8 +148,12 @@ func test_recipient_is_emptiest_player_anywhere_owner_on_tie_null_when_all_full(
 	var p: Node = s[0]
 	p.item_shield_hp = 60.0
 	var far := _ally(30.0)
-	far.global_position = Vector2(9000.0, 9000.0) ## menzil yok
-	assert(YinYang.pick_recipient(p) == far, "oransal en boş dost, ne kadar uzak olursa olsun")
+	far.global_position = p.global_position + Vector2(160.0, 0.0)
+	assert(YinYang.pick_recipient(p, 170.0) == far, "oransal en boş dost (menzil içinde)")
+	far.global_position = p.global_position + Vector2(400.0, 0.0)
+	assert(YinYang.pick_recipient(p, 170.0) == p, "menzil dışındaki dost alamaz (kitabın kendi menzili)")
+	assert(YinYang.pick_recipient(p) == far, "menzil verilmezse sınırsız")
+	far.global_position = p.global_position + Vector2(160.0, 0.0)
 	far.is_dead = true
 	assert(YinYang.pick_recipient(p) == p, "ölü dost alamaz")
 	far.is_dead = false

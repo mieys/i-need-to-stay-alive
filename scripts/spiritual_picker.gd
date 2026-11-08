@@ -1,4 +1,5 @@
 extends PanelContainer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Ruhani Yetenek seçici (kullanıcı isteği, 2026-09-21): karakter seçim ekranında (character_select.gd) ve çok oyunculu lobide
 ## (lobby_menu.gd) HER oyuncu, karakterinden bağımsız olarak ruhani yeteneklerden birini seçer (bkz. spiritual_skills.gd).
@@ -57,7 +58,7 @@ func _build() -> void:
 	vbox.add_theme_constant_override("separation", 12)
 	add_child(vbox)
 
-	vbox.add_child(MenuKit.make_section_header("Ruhani Yetenek (%s)" % GameManager.get_action_key_label("skill4")))
+	vbox.add_child(MenuKit.make_section_header(Loc.t("Ruhani Yetenek (%s)") % GameManager.get_action_key_label("skill4")))
 
 	var grid := GridContainer.new()
 	grid.columns = _columns

@@ -2,7 +2,7 @@ extends RefCounted
 
 ## "ATEŞ IŞIĞI" menü dili - duraklatma (ESC) menüsü + ayarlar ekranının ortak parçaları (2026-10-17, madde 234; prototip B,
 ## madde 229). Kaynak dil ana menünün D sol menüsü (madde 192): kutu yok, sol taraf yumuşak kararır (sol_golge.png), büyük
-## altın başlık + kiriş süsü, öğeler = mum yuvası + ikon + başlık + alt yazı, seçilide yanan mum + altın yazı.
+## altın başlık + kiriş süsü, öğeler = boş yuva + ikon + başlık + alt yazı, seçilide altın yazı (yanan mum 2026-11-06'da kalktı).
 ## Renkler/ölçüler main_menu.gd ile AYNI değerler (orada kendi kopyası var; birini değiştirirsen ötekini de).
 
 const DK := preload("res://scripts/menu_dark_kit.gd")
@@ -16,29 +16,31 @@ const COL_POS := Vector2(40, 320) ## ana menü MenuPanel ile aynı yer
 
 ## Renkler static var: telefonda (2026-10-19, kullanıcı seçimi "A düzeni + B renkleri") use_phone_palette() Gece Sıvası'na çevirir;
 ## kaydırıcı / seçici / ipucu çizimleri hep buradan okur. Masaüstünde Ateş Işığı değerleri.
-static var C_GOLD := Color("#f4c56e")
-static var C_GOLD_DIM := Color("#e2c08a")
-static var C_CREAM := Color("#efe2c6")
-static var C_SUB := Color("#b09878")
-static var C_TAG := Color("#c8b28e")
-static var C_RED := Color("#dc7f60")
-static var C_DARK := Color("#140e09") ## kaydırıcı yuvası
-static var C_LINE := Color("#3b2a1a")
-static var C_KNOB_DK := Color("#1a110a")
+## STİL REHBERİ (madde 403, 2026-11-06): renkler tek paletten (hud_theme.gd); telefon da aynı ahşap (Gece Sıvası kalktı).
+const HT := preload("res://scripts/hud_theme.gd")
+static var C_GOLD := HT.ACCENT
+static var C_GOLD_DIM := HT.ACCENT_SOFT
+static var C_CREAM := HT.TEXT
+static var C_SUB := HT.DIM
+static var C_TAG := HT.DIM
+static var C_RED := HT.BAD
+static var C_DARK := HT.DEEP ## kaydırıcı yuvası
+static var C_LINE := HT.WIN_LINE
+static var C_KNOB_DK := HT.WIN_INSET
 
 
-## on: telefon (Gece Sıvası, MenuDarkKit renkleri); false: masaüstü Ateş Işığı. Ekranlar kurulurken çağırır (testler aynı süreçte
-## iki kipi de açtığı için tek seferlik değil).
-static func use_phone_palette(on: bool) -> void:
-	C_GOLD = Color("#f4c56e")
-	C_GOLD_DIM = Color("#e2c08a")
-	C_CREAM = Color("#efe6d6") if on else Color("#efe2c6")
-	C_SUB = Color("#a7a2c0") if on else Color("#b09878")
-	C_TAG = Color("#a7a2c0") if on else Color("#c8b28e")
-	C_RED = Color("#e38c7c") if on else Color("#dc7f60")
-	C_DARK = Color("#12121f") if on else Color("#140e09")
-	C_LINE = Color("#3b3a5a") if on else Color("#3b2a1a")
-	C_KNOB_DK = Color("#0a0a12") if on else Color("#1a110a")
+## Eskiden on = telefon Gece Sıvası renklerine geçerdi; tek palet olduğundan iki kipte de aynı değerler (çağıranlar + testler
+## için imza duruyor).
+static func use_phone_palette(_on: bool) -> void:
+	C_GOLD = HT.ACCENT
+	C_GOLD_DIM = HT.ACCENT_SOFT
+	C_CREAM = HT.TEXT
+	C_SUB = HT.DIM
+	C_TAG = HT.DIM
+	C_RED = HT.BAD
+	C_DARK = HT.DEEP
+	C_LINE = HT.WIN_LINE
+	C_KNOB_DK = HT.WIN_INSET
 
 const CANDLES_PATH := "res://harita/Ev içi/Candles.png"
 const SHADE_PATH := "res://assets/ui/ana_menu/sol_golge.png"
@@ -47,7 +49,8 @@ const TRIM_PATH := "res://assets/ui/ana_menu/kiris_suslu.png"
 const G_DIAMOND := ["..#..", ".###.", "#####", ".###.", "..#.."]
 
 
-## Ana menünün yanan mumu (Candles.png 3. sütun, iki alev karesi).
+## Eski seçili öğe mumu (Candles.png 3. sütun, iki alev karesi). 2026-11-06'dan beri menülerde KULLANILMIYOR (kullanıcı
+## kaldırttı); yalnız eski prototipler (tools/proto_20261027/level_pazar) çağırdığı için duruyor.
 class Candle extends Control:
 	const COL := 3
 	var tex: Texture2D = null
@@ -150,7 +153,7 @@ static func title_block(title: String, sub: Control) -> VBoxContainer:
 	return logo
 
 
-## Bir menü öğesi: görünmez düğme + mum yuvası, ikon, başlık, alt yazı. follow_focus: fare üstü = odak, odak = seçili görünüm
+## Bir menü öğesi: görünmez düğme + boş yuva, ikon, başlık, alt yazı. follow_focus: fare üstü = odak, odak = seçili görünüm
 ## (ESC menüsü). false ise seçili görünüm elle verilir (ayarlar kategorileri - klavye satırları gezer, kategori Q/E ile değişir).
 static func item(title: String, sub: String, icon: Control, danger: bool = false, follow_focus: bool = true) -> Button:
 	var b := Button.new()
@@ -162,13 +165,10 @@ static func item(title: String, sub: String, icon: Control, danger: bool = false
 	var row := DK.h(14)
 	row.set_anchors_preset(Control.PRESET_FULL_RECT)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var candle := Candle.new(load(CANDLES_PATH) as Texture2D)
-	candle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	candle.visible = false
-	var slot := CenterContainer.new()
+	## Eski mum yuvası (2026-11-06'da mum kaldırıldı): boş 64 px, yerleşim aynı kalsın.
+	var slot := Control.new()
 	slot.custom_minimum_size = Vector2(64, 64)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	slot.add_child(candle)
 	row.add_child(slot)
 	var ib := CenterContainer.new()
 	ib.custom_minimum_size = Vector2(ITEM_ICON * 1.6, ITEM_ICON)
@@ -186,7 +186,7 @@ static func item(title: String, sub: String, icon: Control, danger: bool = false
 	v.add_child(sl)
 	row.add_child(v)
 	b.add_child(row)
-	b.set_meta("fm_item", {"title": tl, "sub": sl, "candle": candle, "danger": danger, "row": row})
+	b.set_meta("fm_item", {"title": tl, "sub": sl, "danger": danger, "row": row})
 	if follow_focus:
 		b.mouse_entered.connect(func() -> void:
 			if b.focus_mode != Control.FOCUS_NONE and not b.disabled:
@@ -202,7 +202,6 @@ static func set_selected(b: Button, on: bool) -> void:
 	var it: Dictionary = b.get_meta("fm_item")
 	var tl: Label = it["title"]
 	var sl: Label = it["sub"]
-	(it["candle"] as Control).visible = on
 	UiAnim.slide_x(it["row"] as Control, 12.0 if on else 0.0) ## seçili öğe hafifçe öne (sağa) çıkar, madde 200
 	if on:
 		tl.add_theme_color_override("font_color", C_GOLD)

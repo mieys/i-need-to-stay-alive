@@ -1,4 +1,5 @@
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## SİLAH SATICISI (demirci dükkanı) - satın alma kuralları, TEK kaynak (ekran: weapon_shop_screen.gd, giriş/örs: weapon_shop.gd).
 ## Kullanıcı isteği (2026-10-07): "bundan sonra silahlar ve kalkanlar burada satılacak. seyyar satıcıda silah satılmayacak.
@@ -108,7 +109,7 @@ static func entry_shard_cost(kind: String) -> int:
 ## Parçacık yetmiyorsa gösterilecek sebep ("" = yeter). cost <= 0 ise hiç sormaz.
 static func shard_shortfall_reason(cost: int) -> String:
 	if cost > 0 and GameManager.weapon_shards < cost:
-		return "Silah parçacığı yetersiz (%d/%d)" % [GameManager.weapon_shards, cost]
+		return Loc.t("Silah parçacığı yetersiz (%d/%d)") % [GameManager.weapon_shards, cost]
 	return ""
 
 
@@ -122,7 +123,7 @@ static func weapon_block_reason(player: Node, key: String) -> String:
 		return "Bu silaha zaten sahipsin" ## her silahtan en fazla 1 (2026-10-14)
 	var max_w: int = max_weapons(player)
 	if GameManager.owned_weapons.size() >= max_w:
-		return "Silah slotları dolu (%d/%d)" % [GameManager.owned_weapons.size(), max_w]
+		return Loc.t("Silah slotları dolu (%d/%d)") % [GameManager.owned_weapons.size(), max_w]
 	return shard_shortfall_reason(weapon_shard_cost())
 
 
@@ -208,7 +209,7 @@ static func wupgrade_block_reason(slot: int, index: int) -> String:
 	if wupgrade_is_final(slot, index):
 		var need: int = rows.size() - 1
 		if wupgrade_taken_count(slot) < need:
-			return "Önce %d geliştirmenin hepsini al (%d/%d)" % [need, wupgrade_taken_count(slot), need]
+			return Loc.t("Önce %d geliştirmenin hepsini al (%d/%d)") % [need, wupgrade_taken_count(slot), need]
 	return shard_shortfall_reason(wupgrade_shard_cost(slot, index))
 
 
@@ -344,7 +345,7 @@ static func upgrade_block_reason(index: int) -> String:
 		return "Bilinmeyen geliştirme"
 	var limit: int = upgrade_limit(index)
 	if limit > 0 and upgrade_count(index) >= limit:
-		return "Sınıra ulaşıldı (%d/%d)" % [upgrade_count(index), limit]
+		return Loc.t("Sınıra ulaşıldı (%d/%d)") % [upgrade_count(index), limit]
 	return shard_shortfall_reason(SHARD_COST_UPGRADE)
 
 
@@ -369,13 +370,13 @@ static func upgrade_effect_text(index: int) -> String:
 	var up: Dictionary = lines[index]
 	var parts: Array = []
 	if float(up.get("power", 0.0)) != 0.0:
-		parts.append("%+d Mana Kalkanı" % int(round(float(up["power"]))))
+		parts.append(Loc.t("%+d Mana Kalkanı") % int(round(float(up["power"]))))
 	if float(up.get("regen", 0.0)) != 0.0:
-		parts.append("%s Yenilenme/sn" % _signed(float(up["regen"]) * GameManager.SHIELD_REGEN_SPEED_MULT))
+		parts.append(Loc.t("%s Yenilenme/sn") % _signed(float(up["regen"]) * GameManager.SHIELD_REGEN_SPEED_MULT))
 	if float(up.get("absorption", 0.0)) != 0.0:
-		parts.append("%+d%% Soğurma" % int(round(float(up["absorption"]) * 100.0)))
+		parts.append(Loc.t("%+d%% Soğurma") % int(round(float(up["absorption"]) * 100.0)))
 	if float(up.get("delay", 0.0)) != 0.0:
-		parts.append("%s sn Bekleme" % _signed(float(up["delay"])))
+		parts.append(Loc.t("%s sn Bekleme") % _signed(float(up["delay"])))
 	return "\n".join(parts)
 
 
@@ -384,7 +385,7 @@ static func shield_summary(key: String) -> String:
 	var d: Dictionary = ShieldEnchantDefs.TYPES.get(key, {})
 	if d.is_empty():
 		return ""
-	return "%d mana kalkanı · %%%d soğurma · %s/sn" % [int(round(float(d["power"]))), int(round(float(d["absorption"]) * 100.0)), type_regen_text(d)]
+	return Loc.t("%d mana kalkanı · %%%d soğurma · %s/sn") % [int(round(float(d["power"]))), int(round(float(d["absorption"]) * 100.0)), type_regen_text(d)]
 
 
 ## Kalkan türünün tabanındaki yenilenme, oyunda işleyen değerle (ShieldEnchantDefs.stats() x SHIELD_REGEN_SPEED_MULT) aynı sayı.

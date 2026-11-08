@@ -11,6 +11,7 @@ extends Node2D
 ## alınır (doku başına önbellek), sprite dokusu sonradan atanıyorsa ilk geçerli karede ölçülür.
 
 const MapShadows := preload("res://scripts/map_shadows.gd")
+const ShadowsFlag := preload("res://scripts/shadows_flag.gd")
 const INNER := 0.30
 const RIM := 0.21
 ## Kökü zıplayan objelerin bob genliği (gold_drop/food_drop/magnet_drop: sin(t*4)*3) - en alçak nokta = yer.
@@ -33,6 +34,8 @@ var _immediate: bool = false
 ## immediate: sprite zaten dinlenme konumunda ve dokusu atanmış (sandık - sonra sadece sprite zıplıyor) -> hemen ölç.
 static func attach(host: Node2D, sprite: Node2D, root_bob: bool = false, depth: int = 2, manual_rect: Rect2 = Rect2(),
 		immediate: bool = false) -> Node2D:
+	if not ShadowsFlag.entities: ## madde 469: gölgeler kapalı - düğüm hiç kurulmaz (çağıranlar dönüşü kullanmıyor, drop_attraction null'a bakar)
+		return null
 	var s: Node2D = (load("res://scripts/drop_shadow.gd") as GDScript).new()
 	s.name = "DropShadow"
 	s.set("_host", host)

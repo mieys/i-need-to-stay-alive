@@ -1,4 +1,5 @@
 extends PanelContainer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Evcil hayvan seçici (kullanıcı isteği 2026-10-12: "petler karakter seçim ekranında silah seçer gibi seçilecek"). Tek oyunculu karakter
 ## seçimi (character_select.gd) ve çok oyunculu lobi (lobby_menu.gd) ORTAK bileşeni - ruhani yetenek / başlangıç silahı seçicilerinin
@@ -112,6 +113,6 @@ func select(key: String, emit: bool = true) -> void:
 	if _desc_label:
 		_desc_label.text = PetCatalog.description(key)
 	if _icon_only and _header_label:
-		_header_label.text = "Evcil: %s" % PetCatalog.display_name(key)
+		_header_label.text = Loc.t("Evcil: %s") % PetCatalog.display_name(key)
 	if emit:
 		picked.emit(key)

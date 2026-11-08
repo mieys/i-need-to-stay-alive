@@ -2,8 +2,8 @@ extends RefCounted
 
 ## YİN YANG KİTABI (madde 334) - kitabın ortak kuralları TEK yerde: kara küre (yinyang_projectile.gd, kaster + uzak kopya), ak küre
 ## (yinyang_light.gd, kaster + uzak kopya) ve Denge özelliği (weapon_traits/denge.gd) buradan okur.
-## Mekanik: menzilli tek hedef; isabet başına saldırı gücünün %10'u (Denge "ys_shield") mana kalkanı. Alıcı MENZİLSİZ = kalkanı ORAN olarak
-## en boş canlı oyuncu (sahibi dahil, eşitlikte sahibi; tek kişilikte hep sahibi). Kimse alamıyorsa (hepsi dolu / kalkan türü yok) Denge'nin
+## Mekanik: menzilli tek hedef; isabet başına saldırı gücünün %10'u (Denge "ys_shield") mana kalkanı. Alıcı = kitabın KENDİ menzili (attack_range)
+## içinde kalkanı ORAN olarak en boş canlı oyuncu (sahibi dahil, eşitlikte sahibi; tek kişilikte hep sahibi). Kimse alamıyorsa (hepsi dolu / kalkan türü yok) Denge'nin
 ## Yin kuralı: kalkan hasara döner. Görsel (prototip yinyang_proto.py B v2, kullanıcı: "atıldığı anda ikiye bölünsün, kitaptan havaya
 ## yükselip ayrılsın"): iki küre kitaptan sarmal çizerek RISE sn yükselir, tepede ayrılır - kara hedefe, ak kalkanı alana (Yin'de o da düşmana).
 
@@ -16,7 +16,7 @@ const SPIN_R := 3.6 ## sarmal yarıçapı (dünya px, yere yatık elips y x0,6)
 const SPIN_TURNS := 1.6
 const DRIFT := 4.0 ## yükselirken hedef yönüne kayma (dünya px)
 const LIGHT_SPEED := 230.0
-const LIGHT_MIN := 0.22 ## ak kürenin uçuş süresi sınırları (menzilsiz: uzaktaki dosta da en geç LIGHT_MAX sn'de varır)
+const LIGHT_MIN := 0.22 ## ak kürenin uçuş süresi sınırları (menzil içindeki dosta en geç LIGHT_MAX sn'de varır)
 const LIGHT_MAX := 0.9
 const WORLD_PX := 0.575 ## küre dokusu pikseli (WeaponTierArt.WORLD_PX ile aynı yoğunluk)
 const WAIST := Vector2(0.0, 1.0) ## karakter kökü bel hizasında (fx_talon_chains.gd BELT_OFFSET)
@@ -59,8 +59,18 @@ static func shield_ratio(n: Node) -> float:
 	return clampf(float(n.get("item_shield_hp")) / mx, 0.0, 1.0) if mx > 0.0 else 1.0
 
 
-## Kalkanı oransal en boş canlı oyuncu (sahibi + kuklalar, menzil yok). null = kimse alamıyor (Yin).
-static func pick_recipient(owner: Node) -> Node2D:
+## Kitabın kalkan menzili = silahın kendi menzili (attack_range, menzil kartı/bonusları dahil); sahibi her zaman menzilde.
+## weapon verilmezse / menzil <= 0 ise sınırsız (eski davranış).
+static func recipient_range(weapon: Node) -> float:
+	if weapon == null or not is_instance_valid(weapon):
+		return 0.0
+	var r: Variant = weapon.get("attack_range")
+	return float(r) if r != null else 0.0
+
+
+## Kalkanı oransal en boş canlı oyuncu (sahibi + menzildeki kuklalar). null = kimse alamıyor (Yin).
+## range_px > 0: sahibinin konumundan bu mesafeden uzak dostlar alıcı olamaz.
+static func pick_recipient(owner: Node, range_px: float = 0.0) -> Node2D:
 	var best: Node2D = null
 	var best_r: float = FULL_RATIO
 	if can_receive(owner):
@@ -69,8 +79,11 @@ static func pick_recipient(owner: Node) -> Node2D:
 			best = owner as Node2D
 			best_r = r0
 	if owner != null and is_instance_valid(owner) and owner.is_inside_tree():
+		var origin: Vector2 = (owner as Node2D).global_position if owner is Node2D else Vector2.ZERO
 		for rp in owner.get_tree().get_nodes_in_group("remote_players"):
 			if not can_receive(rp):
+				continue
+			if range_px > 0.0 and (rp as Node2D).global_position.distance_to(origin) > range_px:
 				continue
 			var r: float = shield_ratio(rp)
 			if r < best_r - 0.0001: ## eşitlikte sahibi
@@ -140,7 +153,7 @@ static func resolve_hit(weapon: Node, body: Node, rcp: Node2D, decided_yin: bool
 	var beh: Variant = weapon.get("enchant_behavior")
 	var has_beh: bool = beh is Node and is_instance_valid(beh)
 	if not decided_yin and (not can_receive(rcp) or shield_ratio(rcp) >= FULL_RATIO):
-		rcp = pick_recipient(owner)
+		rcp = pick_recipient(owner, recipient_range(weapon))
 	if decided_yin or rcp == null:
 		var amt: float = ap * stat(weapon, "yin_ap", 0.2)
 		if has_beh:
@@ -165,7 +178,7 @@ static func idle_shot(weapon: Node2D) -> bool:
 	if weapon == null or not is_instance_valid(weapon) or not weapon.is_inside_tree():
 		return false
 	var owner: Node = weapon.get_parent()
-	var rcp: Node2D = pick_recipient(owner)
+	var rcp: Node2D = pick_recipient(owner, recipient_range(weapon))
 	if rcp == null:
 		return false
 	var ap: float = float(owner.get("damage_bonus")) if "damage_bonus" in owner else 10.0

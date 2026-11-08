@@ -10,11 +10,10 @@ const CONTACT_HEAD := Vector2(-4.0, 1.0)
 
 ## İkonun dönüşümünden başın dünya noktası (tutma noktası + erim x baş yönü; ezilmesiz anlarda).
 func _head_of(icon: Sprite2D, forward: float) -> Vector2:
-	var art: float = icon.texture.get_width() / TopuzSlamMath.ART_SIZE
-	var off: Vector2 = (Vector2(TopuzSlamMath.ART_SIZE, TopuzSlamMath.ART_SIZE) * 0.5 - TopuzSlamMath.GRIP_PX) * art
-	var grip: Vector2 = TopuzSlamMath.grip_of(icon, off)
+	var g: Dictionary = TopuzSlamMath.grip_info(icon) ## madde 402: eski topuz ikonunun kendi tutma noktası
+	var grip: Vector2 = TopuzSlamMath.grip_of(icon, g["off"])
 	var texel: float = icon.global_scale.x
-	return grip + Vector2.from_angle(icon.global_rotation + forward) * TopuzSlamMath.HEAD_REACH_PX * art * texel
+	return grip + Vector2.from_angle(icon.global_rotation + forward) * float(g["reach"]) * texel
 
 
 func test_only_the_mace_uses_the_slam() -> void:

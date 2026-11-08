@@ -6,10 +6,11 @@ extends RefCounted
 ## ekranlar da değişir). main_menu.gd bu dosyayı preload ETMESİN (döngü); ana menü kendi sahnesini sol menü gölgesiyle kurar.
 ## Kullanan: character_select.gd, room_browser.gd, lobby_menu.gd, soul_shop_screen.gd (masaüstü, load() ile - preload döngüsü olmasın). Hepsi statik: const HearthBg := preload("res://scripts/menu_hearth_bg.gd").
 
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
 const MM := preload("res://scripts/main_menu.gd")
 const PC := preload("res://scripts/pet_catalog.gd")
 ## Koyu kit panelleri (menu_dark_kit.gd) sahnenin üstünde okunur kalsın diye düz koyu örtü; şömine ışığı yine seçilir.
-const DIM_COLOR := Color(0.03, 0.03, 0.06) ## Gece Sıvası paneline uygun mor-lacivert (madde 248)
+const DIM_COLOR := HT.DEEP ## tek palet: sıcak koyu ahşap (madde 403; eskiden Gece Sıvası mor-laciverti)
 const DIM_DESKTOP := 0.3
 
 

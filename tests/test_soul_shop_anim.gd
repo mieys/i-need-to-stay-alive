@@ -65,7 +65,7 @@ func _row(shop: Node, id: String) -> PanelContainer:
 ## Seçili satırın zemini vurgulu.
 func _row_on(shop: Node, id: String) -> bool:
 	var r := _row(shop, id)
-	return r != null and (r.get_theme_stylebox("panel") as StyleBoxFlat).bg_color.a > 0.05
+	return r != null and (r.get_theme_stylebox("panel").get("bg_color") as Color).a > 0.05 ## PixelBox (madde 417)
 
 
 ## Sahne figürü: alttan + ortadan çapalı TextureRect.

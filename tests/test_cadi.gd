@@ -268,10 +268,14 @@ func test_q_toggles_drops_smoke_and_pays_per_second() -> void:
 	_cleanup()
 
 
-func test_smoke_damages_once_per_second_regardless_of_overlap() -> void:
+## 2026-11-06 (kullanıcı: "tick-tick görünsün, saniyede 3 kez"): duman saniyede 3 küçük tik vurur (her tik saniyelik %120'nin 1/3'ü = %40);
+## kaç bulutun içinde olursa olsun yaratık tik başına BİR hasar alır, saniyelik toplam eskisiyle (%120) aynı.
+func test_smoke_ticks_three_times_per_second_regardless_of_overlap() -> void:
 	var player: Node = _make_player()
 	var pos: Vector2 = player.global_position + Vector2(300, 0)
-	## Üst üste binen üç bulut (aynı noktadakiler tek buluta birleşir, o yüzden SMOKE_MIN_STEP'ten uzak): yaratık yine saniyede BİR hasar alır.
+	var tick: float = 120.0 * CM.Q_HIT_INTERVAL
+	assert(is_equal_approx(CM.Q_HIT_INTERVAL * 3.0, 1.0) and is_equal_approx(tick, 40.0), "saniyede 3 tik, tik %%40")
+	## Üst üste binen üç bulut (aynı noktadakiler tek buluta birleşir, o yüzden SMOKE_MIN_STEP'ten uzak): yaratık yine tik başına BİR hasar alır.
 	for i in range(3):
 		CM.spawn_smoke(self, pos + Vector2((i - 1) * (CM.SMOKE_MIN_STEP + 2.0), 0), true, {})
 	assert(_group_count("cadi_smokes") == 3, "üç ayrı bulut")
@@ -279,23 +283,43 @@ func test_smoke_damages_once_per_second_regardless_of_overlap() -> void:
 	var outside: Node2D = _enemy(pos + Vector2(0, 90))
 	player._cadi_smoke_scan = 0.0
 	player._process_cadi_smoke(0.01)
-	assert(is_equal_approx(_lost(inside), 120.0), "dumandaki yaratık %%120: %s" % _lost(inside))
+	assert(is_equal_approx(_lost(inside), tick), "dumandaki yaratık tik başına %%40: %s" % _lost(inside))
 	assert(is_zero_approx(_lost(outside)), "dumanın dışındaki hasar almaz")
 	player._cadi_smoke_scan = 0.0
 	player._process_cadi_smoke(0.01)
-	assert(is_equal_approx(_lost(inside), 120.0), "1 sn dolmadan ikinci hasar yok")
-	player._cadi_smoke_next_hit[inside.get_instance_id()] = 0
+	assert(is_equal_approx(_lost(inside), tick), "tik aralığı dolmadan ikinci hasar yok")
+	## Her tarama bir tik: 3 tik = saniyelik %120.
+	for i in range(2):
+		player._cadi_smoke_next_hit[inside.get_instance_id()] = 0
+		player._cadi_smoke_scan = 0.0
+		player._process_cadi_smoke(0.01)
+	assert(is_equal_approx(_lost(inside), 120.0), "3 tik = saniyede %%120: %s" % _lost(inside))
+	## Tarama sayacı artığı korur: aralık tam Q_SCAN_INTERVAL'e yakın kalır (eskiden `=` her taramaya yarım kare ekliyordu).
 	player._cadi_smoke_scan = 0.0
 	player._process_cadi_smoke(0.01)
-	assert(is_equal_approx(_lost(inside), 240.0), "1 sn sonra tekrar: %s" % _lost(inside))
+	assert(is_equal_approx(player._cadi_smoke_scan, CM.Q_SCAN_INTERVAL - 0.01), "tarama artığı korunur: %s" % player._cadi_smoke_scan)
 	## Yetkili olmayan (başka oyuncunun) bulut hasar vermez.
+	var lost_before: float = _lost(inside)
 	for n: Node in get_tree().get_nodes_in_group("cadi_smokes"):
 		n.free()
 	CM.spawn_smoke(self, pos, false, {})
 	player._cadi_smoke_next_hit.clear()
 	player._cadi_smoke_scan = 0.0
 	player._process_cadi_smoke(0.01)
-	assert(is_equal_approx(_lost(inside), 240.0), "kozmetik kopya hasar vermez")
+	assert(is_equal_approx(_lost(inside), lost_before), "kozmetik kopya hasar vermez")
+	_cleanup()
+
+
+## Genel can çalma şansı tik süresiyle ölçeklenir ve çağrıdan sonra normale döner (saniyelik beklenti değişmesin).
+func test_smoke_tick_scales_lifesteal_chance_and_restores_it() -> void:
+	var player: Node = _make_player()
+	assert(is_equal_approx(player.lifesteal_tick_mult, 1.0), "başlangıçta 1")
+	var pos: Vector2 = player.global_position + Vector2(300, 0)
+	CM.spawn_smoke(self, pos, true, {})
+	var inside: Node2D = _enemy(pos + Vector2(4, 2))
+	player._cadi_smoke_scan = 0.0
+	player._process_cadi_smoke(0.01)
+	assert(_lost(inside) > 0.0 and is_equal_approx(player.lifesteal_tick_mult, 1.0), "tik sonrası çarpan 1'e döner")
 	_cleanup()
 
 

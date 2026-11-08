@@ -13,7 +13,7 @@ extends RefCounted
 ## Türler:
 ##   recoil  sert geri tepme (kick x recoil_distance) + namlu kalkması (rot, radyan)
 ##   twirl   recoil + ardından ikonun kendi etrafında bir tur dönmesi (tabanca)
-##   puff    önce ileri üfleme hamlesi, sonra geri tepme (tüftüf)
+##   puff    önce ileri üfleme hamlesi, sonra geri tepme (eski Tüftüf; madde 410'dan beri kullanan yok)
 ##   freeze  anlık donma: büyüyüp kısa durur, sonra geri teper (buz asası)
 ##   surge   büyü yükselmesi: yukarı süzülüp şişer, sonra sert geri teper (arcane)
 ##   jitter  hızlı titreşim (yıldırım asası - sürekli ışının kritik tiki)
@@ -25,9 +25,10 @@ const STYLES := {
 	"yay": {"kind": "recoil", "kick": 2.0, "rot": 0.22, "back": 0.24},
 	"crossbow": {"kind": "recoil", "kick": 1.9, "rot": 0.35, "back": 0.26},
 	"tufek": {"kind": "recoil", "kick": 2.3, "rot": 0.4, "back": 0.32},
+	"pompali": {"kind": "recoil", "kick": 3.0, "rot": 0.5, "back": 0.36}, ## madde 448: pompa geri tepmesi
 	"fire_staff": {"kind": "recoil", "kick": 2.4, "rot": 0.3, "back": 0.3},
 	"tabanca": {"kind": "twirl", "kick": 1.6, "rot": 0.45, "back": 0.2},
-	"tuftuf": {"kind": "puff", "kick": 1.8, "rot": 0.0, "back": 0.22},
+	"tuftuf": {"kind": "recoil", "kick": 2.2, "rot": 0.28, "back": 0.28}, ## Zehir Asası (madde 410): eski "puff" (üfleme hamlesi) yerine asa geri tepmesi
 	"buz_asasi": {"kind": "freeze", "kick": 1.7, "rot": 0.15, "back": 0.26},
 	"arcane": {"kind": "surge", "kick": 1.6, "rot": 0.0, "back": 0.26},
 	"yinyang": {"kind": "surge", "kick": 1.4, "rot": 0.0, "back": 0.24}, ## Yin Yang Kitabı (madde 334): dönmeden kabarır

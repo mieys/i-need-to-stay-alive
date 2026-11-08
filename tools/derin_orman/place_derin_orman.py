@@ -6,6 +6,9 @@
 #        set parçaları: Yıkık Kule, Deniz Yılanı İskeleti, Kanatlı Heykel.
 #   MADDE 385: BATI ve DOĞU KALDIRILDI (zindan girişleri yerinde, KEPT_GATES); KUZEY kuzeybatıya uzadı (KUZEY_BATI, aynı derinlik).
 #   MADDE 387: GÜNEY batısındaki çayıra uzadı (GUNEY_BATI; toprak yol/açıklık bölgeye girmez, toprak pikselleri olduğu gibi kalır).
+#   MADDE 407: KUZEY (Kadim Kara Orman) + KUZEYBATI da KALDIRILDI (Kemik Mahzeni kapısı yerinde, KEPT_GATES); yalnız GÜNEY (+ güneybatı) kaldı.
+#   MADDE 390: GÜNEY'deki saklanma çalılıkları Eğrelti Yatağı (brush_rows; atlas harita/saklanma_calilik.png 8 satır, TSX tilecount 128 -> Derin orman
+#   tileset'inin firstgid'i 64 kayar, araç TSX'ten okur).
 # Katmanlar: ağaç benzeri parçalar -> "Ağaç ölü" (Ağaç önekli: sallanma + derinlik + gövde çarpışması), engel nesneler -> "Derin orman nesneleri"
 # (derinlik + çarpışma), düz süsler -> "Derin orman süsleri" (engel değil). Bölgedeki "Çiçekler 1" karoları silinir.
 # Karolar harita/derin_orman.png ("Derin orman.tsx", gen_atlas.py). Bölgeler derin_orman_core.ZONES (havza).
@@ -51,6 +54,8 @@ B_PICK = ['13,131', '138,52', '144,228', '164,227', '22,172', '230,65', '234,104
 ## kimliğini artık ZEMİN taşıyor (gen_zemin_dokusu.py + harita_renk.gdshaderinc do_zemin_uygula).
 KUZEY = {
     'seed': 20261021, 'mode': 'stamp', 'noise_thr': 0.44, 'dead_ratio': 0.2, 'clump': 0.52, 'erase_cim': True, 'fill_holes': True,
+    ## madde 393 (kullanıcı: "kuzeydeki biyomda çok gereksiz fazla ağaç ve engel var"): kümeler arası boş şerit + daha seçici gürültü
+    'stamp_gap': 2, 'convert_p': 0.5,
     ## madde 365: gri kül zeminde açık yeşil yapraklı / karnabahar taçlı ağaçlar ölü-solgun ağaca döner (sığmazsa silinir); iğne yapraklı +
     ## yosunlu kadim ağaçlar kalır (yaprakları shader'da bölgenin koyu paletine boyanır, harita_renk.gdshaderinc DOA_*)
     'agac_kalir': {'igne', 'olu', 'yosunlu'}, 'tree_fallback': ['olu_agac_k'],
@@ -75,7 +80,7 @@ KUZEY = {
     'scatter': [
         (['mavi_ot_1', 'isik_bitki_k', 'isik_bitki_o'], 12, 140.0, False, DECOR),
         (['mor_mantar_k', 'turuncu_mantar_k', 'mantar_k'], 10, 140.0, False, DECOR),
-        (['diken_b', 'diken_o', 'kutuk_b', 'kutuk_o', 'kaya_k', 'kemik_yigini_b'], 14, 150.0, False, DECOR),
+        (['diken_b', 'diken_o', 'kutuk_b', 'kutuk_o', 'kaya_k', 'kemik_yigini_b'], 7, 150.0, False, DECOR),   ## madde 393: 14 -> 7 (kütük/kaya/kemik yığını engel)
         (['kemik_1', 'kemik_2', 'kemik_4'], 8, 150.0, True, DECOR),
     ],
 }
@@ -152,6 +157,9 @@ GUNEY = {
         [('dev_bataklik_agaci', (0, 0), DEAD), ('geyik_totem', (5, 1), OBJ), ('yosun_kaya_k', (-5, 2), OBJ)],
     ],
     'gates': {},
+    ## madde 390 (kullanıcı: "saklanma çalıları bulundukları biyoma uygun görünmüyor" -> Güney = G-B Eğrelti Yatağı, Kuzey değişmedi): çoğunluğu bölgede
+    ## olan saklanma çalılığı öbeklerinin karoları atlasın bu satırına kayar (harita/saklanma_calilik.png satır 4-7; shader bitki boyası yapmaz)
+    'brush_rows': 4,
     'extra': [(['yosun_kaya_b', 'yosun_kaya_o', 'yosun_kaya_o2', 'yosun_kaya_k2', 'dikenli_kaya'], 12, 140.0, OBJ, 0.5),
               (['mantar_agac_beyaz_k', 'mantar_agac_mor_k', 'kivrik_bitki_k', 'kuru_dal_agac'], 8, 160.0, DEAD, 0.5)],
     'scatter': [
@@ -168,7 +176,7 @@ GUNEY = {
 KUZEY_BATI = dict(KUZEY, seed=20261027, fixed=[], reserved=[], auto=[], gates={}, templates_from='kuzey', convert_late=False, edge_clamp=True, scatter=[
     (['mavi_ot_1', 'isik_bitki_k', 'isik_bitki_o'], 7, 140.0, False, DECOR),
     (['mor_mantar_k', 'turuncu_mantar_k', 'mantar_k'], 6, 140.0, False, DECOR),
-    (['diken_b', 'diken_o', 'kutuk_b', 'kutuk_o', 'kaya_k', 'kemik_yigini_b'], 8, 150.0, False, DECOR),
+    (['diken_b', 'diken_o', 'kutuk_b', 'kutuk_o', 'kaya_k', 'kemik_yigini_b'], 4, 150.0, False, DECOR),   ## madde 393: 8 -> 4
     (['kemik_1', 'kemik_2', 'kemik_4'], 5, 150.0, True, DECOR),
 ])
 ## ---------------- GÜNEYBATI (madde 387): Sisli Sazlık'ın batısındaki çayır (uçurumlarla çevrili ayrı havza, toprak yol/açıklık hariç) ----------------
@@ -185,11 +193,14 @@ GUNEY_BATI = dict(GUNEY, seed=20261028, auto=[], edge_clamp=True,
 ZCFG = {'kuzey': KUZEY, 'kuzey_bati': KUZEY_BATI, 'guney': GUNEY, 'guney_bati': GUNEY_BATI}
 ## İşleme sırası: kuzey ÖNCE ve eskisi gibi (yerleşimi + Kemik Mahzeni birebir kalsın), sonra kaldırılan bölgelerin kapıları, sonra kuzeybatı
 ## (kapının çevresini boş bırakır), güney (diğerlerinden uzak, yerleşimi aynı), en son güneybatı (madde 387; güneyin rastgele sırası kaymasın).
-RUN_ORDER = ['kuzey', 'kapilar', 'kuzey_bati', 'guney', 'guney_bati']
+## Madde 407: KUZEY + KUZEYBATI da kaldırıldı (derin_orman_core.REMOVED) -> yalnız kapılar + güney + güneybatı işlenir. KUZEY/KUZEY_BATI ayarları
+## (geri getirme ihtimaline karşı) yukarıda duruyor; eski sıra: ['kuzey', 'kapilar', 'kuzey_bati', 'guney', 'guney_bati'].
+RUN_ORDER = ['kapilar', 'guney', 'guney_bati']
 ## Kaldırılan bölgelerin ZİNDAN GİRİŞLERİ (kullanıcı: "silinecek biyomların zindan girişlerine v.b. dokunma"): kapı + yanındaki süsler o
 ## bölgelerin otomatik yerleşiminin bulduğu eski çapada, aynı karolarla; deep_forest_places.gd'de aynı sıra ve bölge numarası (zindan eşlemesi,
 ## kapı halesinin rengi, kapıdan yükselen ışık türü aynı). Ayak izinin altındaki çiçek + Çimler lekesi silinir (bölge varken de silikti).
-KEPT_GATES = [('bati', (39, 32), BATI), ('dogu', (241, 53), DOGU)]
+## Madde 407: Kemik Mahzeni (Kuzey'in auto[0] grubu: kapı + iki çığlık atan kafatası taşı + iki kemik) ilk sırada -> GATES dizini 0 aynı.
+KEPT_GATES = [('kuzey', (207, 17), KUZEY), ('bati', (39, 32), BATI), ('dogu', (241, 53), DOGU)]
 ## 'fill_holes' (2. tur): bölgedeki küçük çimen DELİKLERİ (<= HOLE_MAX hücre; altındaki toprak bölgede yol rengine dönüp köşeli koyu blok ve
 ## gölcük kesiği yapıyordu) + onlara bakan çimen kenarı karoları tam çimen karosuyla (FULL_GRASS) doldurulur. Uzun yollar (büyük parçalar) kalır.
 HOLE_MAX = 20
@@ -236,6 +247,7 @@ class World:
         self.kept_clear = []         ## madde 385: korunan kapıların çevresi (x, y, w, h) - sonra işlenen bölgeler buraya basmaz
         self.templates = {}          ## bölge -> damga kalıpları ('templates_from' başka bölgeninkini kullanır)
         self.convert_late = set()    ## madde 385: tür dönüşümünde SONA alınan ağaç hücreleri (main: legacy_reach)
+        self.brush_shift = {}        ## madde 390: saklanma çalılığı hücresi -> atlas satır kayması (brush_remap)
         a = np.asarray(Image.open(C.ATLAS_PNG).convert('RGBA'))[..., 3]
         cols = atlas['cols']
         anims = atlas.get('anims', {})
@@ -506,6 +518,17 @@ class Zone:
                     if self.blocked(q) or self.reserved(q):
                         ok = False
                         break
+                ## madde 393: kümenin çevresinde 'stamp_gap' hücre ağaçsız/engelsiz şerit (kümeler birbirine yapışıp duvar olmasın)
+                gap = cfg.get('stamp_gap', 0)
+                if ok and gap:
+                    x0, y0 = c[0] - gap, c[1] - gap
+                    for x in range(x0, c[0] + sw + gap):
+                        for y in range(y0, c[1] + sh + gap):
+                            if W.tree_at((x, y)) or (x, y) in W.walls:
+                                ok = False
+                                break
+                        if not ok:
+                            break
                 if not ok:
                     continue
                 comp = sorted({(c[0] + d[0], c[1] + d[1]) for (d, _k, _g) in t['cells']})
@@ -606,6 +629,10 @@ class Zone:
                 else:
                     W.erased_at[k].add(c)
             kinds_by[tur] += 1
+            ## madde 393: 'convert_p' - uymayan ağacın yalnız bu oranı bölge ağacına döner, gerisi sadece silinir (Kuzey seyreltmesi)
+            if 'convert_p' in cfg and rng.random() >= cfg['convert_p']:
+                erased += 1
+                continue
             ## eski ağacın tabanı: çimen olmayabilir (Güney'in deniz kıyısı palmiyeleri kumda/bölgenin çamur yolunda) -> yol tabanına izin
             for kind in [self.pick_with(rng, cfg['tree_kinds'])] + cfg.get('tree_fallback', []):
                 if self.put(kind, foot, DEAD, allow_path=True):
@@ -658,6 +685,40 @@ def place_kept_gates(W):
         W.erase_cim.update(c for c in cells_all if c in W.L['Çimler'])
         W.kept_clear.append((anchor[0] - AUTO_CLEAR, anchor[1] - AUTO_CLEAR, AUTO_CLEAR * 2 + 1, AUTO_CLEAR * 2 + 1))
         print('korunan kapı: %s %s %s (%d hücre)' % (zname, cfg['gates'][group[0][0]], anchor, len(cells_all)))
+
+
+BRUSH_LAYER = 'Saklanma Çalılığı'
+BRUSH_TSX = 'saklanma_calilik.tsx'
+BRUSH_TILES = 64   ## L1 satırları (0-3); bölge satırları bunun ardında
+
+
+def brush_remap(W, zones):
+    """Madde 390: saklanma çalılığı ÖBEKLERİ (8 komşulu) - hücrelerinin en az yarısı 'brush_rows' ayarlı bir bölgedeyse öbeğin TAMAMI o bölgenin satırına
+    kayar (öbek içinde iki çeşit karışmaz: hışırtı komşu karonun pikselini okur)."""
+    cells = {c for c in W.L[BRUSH_LAYER] if 0 <= c[0] < C.N and 0 <= c[1] < C.N}
+    rowed = [z for z in zones if z.cfg.get('brush_rows')]
+    seen = set()
+    moved = 0
+    for c in sorted(cells):
+        if c in seen:
+            continue
+        comp, st = [], [c]
+        seen.add(c)
+        while st:
+            p = st.pop()
+            comp.append(p)
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    q = (p[0] + dx, p[1] + dy)
+                    if q in cells and q not in seen:
+                        seen.add(q)
+                        st.append(q)
+        best = max(rowed, key=lambda z: sum(1 for p in comp if p in z.zone), default=None)
+        if best is not None and 2 * sum(1 for p in comp if p in best.zone) >= len(comp):
+            for p in comp:
+                W.brush_shift[p] = best.cfg['brush_rows']
+            moved += 1
+    print('saklanma çalılığı: %d öbek / %d hücre bölge satırına' % (moved, len(W.brush_shift)))
 
 
 def legacy_reach(W):
@@ -741,6 +802,17 @@ def build(text, W, firstgid):
         ch = parse_chunks(m.group(1))
         set_cells(ch, {c: 0 for c in W.erased | W.erased_at[name] if c in W.L[name]}, erase=True)
         set_cells(ch, W.add_trees[name])
+        text = text[:m.start(1)] + write_chunks(ch) + text[m.end(1):]
+    if W.brush_shift:
+        fg = next(int(a) for a, b in C.tilesets(text) if b == BRUSH_TSX)
+        m = layer_span(text, BRUSH_LAYER)
+        ch = parse_chunks(m.group(1))
+        for (x, y), rows in W.brush_shift.items():
+            cx, cy = (x // 16) * 16, (y // 16) * 16
+            g = int(ch[(cx, cy)][y - cy, x - cx])
+            local = (g & 0x0FFFFFFF) - fg
+            assert 0 <= local < BRUSH_TILES, ('saklanma çalılığı karosu L1 satırlarında değil', x, y, g)
+            ch[(cx, cy)][y - cy, x - cx] = (g & ~0x0FFFFFFF) | (fg + local + rows * 16)
         text = text[:m.start(1)] + write_chunks(ch) + text[m.end(1):]
     m = layer_span(text, 'Zemin Çimen')
     ch = parse_chunks(m.group(1))
@@ -855,6 +927,11 @@ def write_places(W, path=PLACES_GD):
 
 
 def main():
+    ## Madde 463 (2026-11-08, kullanıcı: "ana haritada zindanla ilgili bir şey istemiyorum, kapılar dahil kaldır + güneydeki bataklık biyomunu kaldır"):
+    ## son bölge (Güney Sisli Sazlık + güneybatı) ve üç zindan kapısı da silindi, Harita.tmx = YEDEK (biyom öncesi + çayır süsleri). Bu araç artık
+    ## haritaya yazmaz (derin orman katmanlarını / tileset'lerini geri eklerdi); --out doğrulama kipi de kapalı.
+    print('DURDU: derin orman biyomu ana haritadan kaldırıldı (madde 463) - bu araç emekli.')
+    sys.exit(2)
     os.makedirs(OUT, exist_ok=True)
     live = open(C.TMX, encoding='utf-8', newline='').read()
     nl = '\r\n' if '\r\n' in live else '\n'   ## Tiled CRLF yazıyor; işlem LF ile, yazarken geri
@@ -889,6 +966,7 @@ def main():
         st = z.run()
         zones.append(z)
         print('%s: hücre %d | %s' % (name, len(z.zone), st))
+    brush_remap(W, zones)
     for z in zones:
         if 'agac_kalir' in z.cfg:
             z.convert_trees()

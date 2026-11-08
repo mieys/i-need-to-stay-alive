@@ -62,7 +62,6 @@ const BUILDING_GROUPS: Array = [
 ## Tek tek nesne katmanları (atlas komşuluğu = aynı nesne).
 const OBJECT_LAYERS: Array = [
 	"Etkileşimler/Maden", "Etkileşimler/Maden 1", "Shader Eklenecek/Animasyonsuz çalılar", "Düşman Üssü/Düşman üssü", "Düşman Üssü/Özel maden",
-	"Shader Eklenecek/Derin orman nesneleri", ## madde 359: kemik taht, dev iskelet, harabe... (ölü ağaçlar Ağaç önekiyle ağaç kuralında)
 ]
 
 ## KÖPRÜLER (2026-10-09, kullanıcı: "buranın altından geçen insanların üstünde köprü görünmeli"): alt + üst katman TEK yapı (bina gibi tek kök). Fark: kopya

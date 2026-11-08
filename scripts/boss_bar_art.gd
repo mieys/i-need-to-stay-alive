@@ -165,6 +165,7 @@ static func text_width(text: String, s: float) -> float:
 ## Büyük harf üstü sanat-y = cap_y olacak şekilde yazar (taban çizgisi = cap_y + 7). outline verilirse 1 px (s) anahatlı.
 static func text(ci: CanvasItem, o: Vector2, s: float, x: float, cap_y: float, str_: String, color: Color,
 		outline: Color = Color(0, 0, 0, 0)) -> void:
+	str_ = TranslationServer.translate(str_) ## boss adı seçili dilde (madde 446)
 	var pos: Vector2 = o + Vector2(x, cap_y + CAP_H) * s
 	var size: int = int(FONT_UNIT * s)
 	if outline.a > 0.0:

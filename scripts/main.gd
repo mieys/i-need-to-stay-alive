@@ -1,4 +1,5 @@
 extends Node2D
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 const LevelUpScreenScene = preload("res://scenes/level_up_screen.tscn")
 ## Yetenek evrimleri (2026-09-28): evrim kartı seçimi "evo:<id>" olarak gelir (bkz. _on_upgrade_chosen).
@@ -73,7 +74,6 @@ const ShopsFlag := preload("res://scripts/shops_flag.gd")
 const GroundTexelPassScript := preload("res://scripts/ground_texel_pass.gd")
 const MapColorGradeScript := preload("res://scripts/map_color_grade.gd")
 const WaterFxScript := preload("res://scripts/water_fx.gd")
-const DeepForestFxScript := preload("res://scripts/deep_forest_fx.gd")
 const FxWarmupScript := preload("res://scripts/fx_warmup.gd")
 const WorldRenderScaleScript := preload("res://scripts/world_render_scale.gd")
 const MobileUI := preload("res://scripts/mobile_ui.gd")
@@ -92,6 +92,7 @@ const CloudShadowMaterial := preload("res://shaders/cloud_shadows_material.tres"
 ## yapılan elle override'ları kaydederken düşürüyor). Bu yüzden materyal
 ## çalışma zamanında burada atanıyor.
 const MAP_ROOT_PATH := "Harita"
+const MapProfilesScript: GDScript = preload("res://scripts/map_profiles.gd") ## harita seçimi (madde 444)
 const CameraMapLimitsScript: GDScript = preload("res://scripts/camera_map_limits.gd")
 const DownedSpectateScript: GDScript = preload("res://scripts/downed_spectate.gd") ## yerdeki oyuncunun arkadaş izleme şeridi
 
@@ -187,17 +188,43 @@ var _last_sent_extra_state: Dictionary = {}
 ## durumu görür (güvenilir bir "keyframe" - salt delta'ya güvenmek, kaçırılan
 ## bir bağlantı anında kalıcı yanlış görünüme yol açabilirdi).
 var _extra_state_tick: int = 0
-const EXTRA_STATE_HEARTBEAT_TICKS := 40 ## 40 * 0.05sn = ~2 saniyede bir
+## DELTA (madde 419, ağ gecikmesi düzeltmesi): durum paketi eskiden HER değişimde TAMAMI (1,4-1,5 KB, ~39 anahtar) güvenilir akıştan
+## her hedefe ayrı gidiyordu (istemciden istemciye host üzerinden relay -> oyuncu sayısının karesiyle büyüyen yük; dmg_dealt her
+## vuruşta değiştiği için savaşta sürekli 5 Hz). Artık: hedefe İLK gönderim + STATE_KEYFRAME_MSEC'de bir TAM paket (anahtar kare),
+## arada sadece DEĞİŞEN anahtarlar (silinen anahtar = null). Kanal NetworkManager.CH_STATE (güvenilir + sıralı: alıcı tam pakete
+## deltaları sırayla ekler, sonucu eskisi gibi remote_player.update_extra_state_from_net'e verir - alıcıdaki mantık AYNI).
+## dmg_dealt/dmg_taken (sadece grup paneli) en çok STATE_DMG_INTERVAL_MSEC'de bir yenilenir.
+const StateDeltaScript := preload("res://scripts/net/state_delta.gd")
+const STATE_KEYFRAME_MSEC := 5000
+const STATE_DMG_INTERVAL_MSEC := 1000
+const STATE_CHANNEL := 3 ## = NetworkManager.CH_STATE (anotasyon autoload sabitini okuyamaz; test_net_channels eşitliği denetler)
+var _last_sent_state_flat: Dictionary = {} ## son gönderilen durumun düz hali (alt çizgili anahtarlar = üst alanlar, gerisi extra)
+var _state_full_sent: Dictionary = {} ## hedef peer -> true: bu bağlantıda tam paketi aldı (deltalar ona göre)
+var _state_peer_ref: int = 0 ## bağlantı nesnesi değişince (host devri) herkese yeniden tam paket
+var _state_next_keyframe_msec: int = 0
+var _state_dmg_next_msec: int = 0
+var _state_dmg_snap: Array = [0.0, 0.0]
+## Ölçüm (net_probe, madde 419): gönderilen durum mesajı sayısı / toplam baytı (tam + delta).
+var net_state_msgs: int = 0
+var net_state_bytes: int = 0
+var net_state_full_msgs: int = 0
+## Alıcı: gönderen peer -> son düz durum (tam paket + üstüne eklenen deltalar).
+var _remote_state_cache: Dictionary = {}
 
 
-## Seyyar satıcı + demirci (binası dahil) geçici kapalı (bkz. shops_flag.gd): hiçbir çocuğun _ready'si (oyuncu, yaratık, terrain collision
-## aramaları) o düğümleri/katmanları görmeden ÖNCE silinmeli, bu yüzden _ready değil _enter_tree.
+## Kapalı dükkanlar (bkz. shops_flag.gd; şu an demirci + binası kapalı, seyyar satıcı açık): hiçbir çocuğun _ready'si (oyuncu, yaratık,
+## terrain collision aramaları) o düğümleri/katmanları görmeden ÖNCE silinmeli, bu yüzden _ready değil _enter_tree.
+## HARİTA SEÇİMİ (madde 444): seçili harita ana harita değilse main.tscn'deki "Harita" onun sahnesiyle değiştirilir - aynı sebeple _enter_tree
+## (hiçbir çocuk eski haritayı görmeden). Dükkan ayıklaması ana haritanın düğümlerine bakar, değişimden sonra (zindan haritasında no-op).
 func _enter_tree() -> void:
+	MapProfilesScript.install(self)
 	ShopsFlag.strip_shops(self)
 
 
 func _ready() -> void:
 	FxWarmupScript.run(self) ## efekt shader'ları ilk kullanımda takılmasın (madde 215)
+	LimboScript.reset() ## ruh hâli kümesi önceki koşudan kalmasın (madde 438)
+	child_entered_tree.connect(LimboScript.on_child_added)
 	player.health_changed.connect(hud.update_health)
 	GameManager.team_xp_changed.connect(hud.update_xp)
 	GameManager.team_xp_changed.connect(_on_team_xp_changed_for_level_up_delay)
@@ -262,6 +289,7 @@ func _ready() -> void:
 	var world_event_banner_layer := CanvasLayer.new()
 	world_event_banner_layer.name = "WorldEventBannerLayer"
 	world_event_banner_layer.layer = 40
+	world_event_banner_layer.add_to_group(&"world_event_banner_layer") ## level pazarı açıkken gizlenir (level_market_view.gd)
 	add_child(world_event_banner_layer)
 	world_event_banner_layer.add_child(_world_event_banner)
 	## Arayüz opaklığı ayarı (kullanıcı isteği 2026-09-25, bkz. UISound.ui_opacity_percent) - görev penceresi ve satıcı
@@ -340,7 +368,13 @@ func _ready() -> void:
 	_update_stats_display()
 	hud.update_level(GameManager.team_level)
 	hud.update_xp(GameManager.team_xp, GameManager.team_xp_needed)
-	
+	## Ev açılışı olmayan harita (madde 444): oyuncu haritanın doğuş noktasında başlar (main.tscn'deki konum ana haritanın ev kapısı).
+	## Diğer oyuncular _setup_multiplayer_players'ta bunun çevresine konur.
+	var map_spawn: Vector2 = MapProfilesScript.spawn_position()
+	if map_spawn != Vector2.INF and is_instance_valid(player):
+		player.global_position = map_spawn
+		player.reset_physics_interpolation()
+
 	if NetworkManager.is_multiplayer_active:
 		_setup_multiplayer_players()
 
@@ -385,7 +419,8 @@ func _ready() -> void:
 	## Sallanan otlar (bkz. grass_sway.gd / scenes/sallanan ot.gdshader): karo kök tablosu, havaya göre salınım ve yukarı/aşağı
 	## önceliği (önünde kalan otlar oyuncunun üstüne çizilir).
 	var harita_node: Node = get_node_or_null("Harita")
-	if harita_node:
+	## Bu blok Harita.tmx'in katmanlarına göre kurulur (orman/su/ağaç/çimen); zindan biçimli haritada yok (madde 444).
+	if harita_node and MapProfilesScript.feature("orman_gorselleri"):
 		## Nehir akıntısı sesi (bkz. river_ambience.gd) - yerel oyuncuya en yakın su noktasında. Kullanıcı isteği
 		## (2026-09-27): üretilen ses iptal edildi, kullanıcı kendi sesini yükleyecek - ses dosyası (RiverAmbience SOUND_PATH)
 		## yoksa bileşen hiç kurulmaz.
@@ -411,8 +446,6 @@ func _ready() -> void:
 		## Su (madde 214): akıntılı dalgacık shader'ına kıyı uzaklığı + akış dokuları, çarpışmasız su da aynı materyal (bkz. water_fx.gd).
 		WaterFxScript.attach(harita_node)
 		GroundTexelPassScript.attach(harita_node)
-		## Derin orman (madde 359): tepe arkası bölgesinde havada süzülen ruh ışıkları - sadece görsel, yerel (bkz. deep_forest_fx.gd).
-		DeepForestFxScript.attach(harita_node)
 	## Yaratık-oyuncu derinliği: oyuncunun önünde duran yaratık oyuncunun üstüne çizilir (bkz. creature_depth.gd).
 	var creature_depth: Node = CreatureDepthScript.new()
 	creature_depth.name = "CreatureDepth"
@@ -421,19 +454,24 @@ func _ready() -> void:
 	var hide_brush: Node = HideBrushManagerScript.new()
 	hide_brush.name = "HideBrushManager"
 	add_child(hide_brush)
+	## Maden / kenar bekçisi / zindan girişleri Harita.tmx'e özgü (madde 444: profil bayrağıyla; ana haritada hepsi açık).
 	## Maden dayanıklılığı / kırılma / yeniden doğma (bkz. mine_world.gd): karar host'ta, görsel her peer'de.
-	var mine_world: Node = MineWorldScript.new()
-	mine_world.name = "MineWorld"
-	add_child(mine_world)
+	if MapProfilesScript.feature("madenler"):
+		var mine_world: Node = MineWorldScript.new()
+		mine_world.name = "MineWorld"
+		add_child(mine_world)
 	## Kenar bekçileri (haritanın kenarlarındaki yaratık kampları, bkz. guard_camps.gd): karar host'ta.
-	var guard_camps: Node = GuardCampsScript.new()
-	guard_camps.name = "GuardCamps"
-	add_child(guard_camps)
-	## ZİNDANLAR (madde 373): derin orman kapılarından inilen zindanlar (bkz. scripts/dungeon/dungeon_manager.gd) - giriş/çıkış yerel,
-	## etkileşim durumu host'ta. Yol adı herkeste aynı olmalı (RPC): Main/DungeonManager.
-	var dungeons: Node = preload("res://scripts/dungeon/dungeon_manager.gd").new()
-	dungeons.name = "DungeonManager"
-	add_child(dungeons)
+	## Zindan biçimli haritada kenar kampı yok ama oda sakinleri + avcılar aynı düğümde (guard_camps.gd harita kipi).
+	if MapProfilesScript.feature("kenar_bekcileri") or MapProfilesScript.feature("zindan_etkilesim"):
+		var guard_camps: Node = GuardCampsScript.new()
+		guard_camps.name = "GuardCamps"
+		add_child(guard_camps)
+	## ZİNDAN biçimli harita (harita kipi: haritanın kapı/kaynak/sandık/sunak/tuzak/ışığı, bkz. dungeon_manager.gd _setup_map). Etkileşim
+	## durumu host'ta; yol adı herkeste aynı olmalı (RPC): Main/DungeonManager. Ana haritada zindan YOK (madde 463).
+	if MapProfilesScript.feature("zindan_etkilesim"):
+		var dungeons: Node = preload("res://scripts/dungeon/dungeon_manager.gd").new()
+		dungeons.name = "DungeonManager"
+		add_child(dungeons)
 	_install_draw_order_guard()
 	## Grafik ayarı "Çözünürlük ölçeği" (bkz. world_render_scale.gd; %100'de hiçbir şey kurmaz).
 	WorldRenderScaleScript.attach(self)
@@ -442,6 +480,8 @@ func _ready() -> void:
 	var ambient: Node = preload("res://scripts/wind_breeze_ambient.gd").new()
 	ambient.name = "WindBreezeAmbient"
 	add_child(ambient)
+	if not MapProfilesScript.feature("hava"):
+		ambient.stream_paused = true ## yeraltı haritası (madde 444): orman rüzgârı yok
 	## Boss varken çalan müzik (bkz. boss_music.gd).
 	var boss_music: Node = preload("res://scripts/boss_music.gd").new()
 	boss_music.name = "BossMusic"
@@ -514,7 +554,7 @@ func _restore_rejoined_player() -> void:
 		player.global_position = Vector2(snap["pos"])
 		player.reset_physics_interpolation()
 	if missed > 0:
-		player._spawn_floating_text("%d SEVİYE KAÇIRDIN - RASTGELE KARTLAR VERİLDİ" % missed, Color(1.0, 0.85, 0.4), true, -58.0)
+		player._spawn_floating_text(Loc.t("%d SEVİYE KAÇIRDIN - RASTGELE KARTLAR VERİLDİ") % missed, Color(1.0, 0.85, 0.4), true, -58.0)
 
 
 ## Geri katılım için kendi durumumu host'a periyodik bildirir (main _process).
@@ -570,6 +610,7 @@ func _apply_cloud_shadows_recursive(node: Node) -> int:
 
 
 func _process(delta: float) -> void:
+	_process_limbo_pause(delta) ## ruh hâli: "kim oynuyor" değişince dünyayı durdur/aç (madde 438)
 	## DÜZELTME (kullanıcı isteği: "gamepad desteği ekle") - shop_panel.gd/
 	## merchant_shop_screen.gd gibi BİLEREK get_tree().paused kullanmayan
 	## ekranlar açıkken bu genel ui_cancel kontrolü hâlâ çalışıp pause
@@ -647,6 +688,8 @@ func _spawn_remote_player(pid: int, char_id: int, p_name: String) -> void:
 	## _rpc_update_player_transform), o yüzden gerçek gameplay'e etkisi yok.
 	rp.global_position = player.global_position + Vector2(randf_range(-150, 150), randf_range(-150, 150))
 	_remote_players[pid] = rp
+	if LimboScript.is_peer(pid): ## menüdeyken kurulan kukla da ruh olarak başlasın (madde 438)
+		rp.set_limbo(true)
 
 
 ## DÜZELTME (kullanıcı bildirimi: "bir karakter haritada üstteyken arkasında görünmek yerine önünde görünüyor" -
@@ -921,6 +964,10 @@ func _process_multiplayer_sync(delta: float) -> void:
 		# NADİREN değişen veriler artık burada toplanıp SADECE bir öncekinden
 		# farklıysa (ya da aşağıdaki heartbeat'te) gönderiliyor - bkz. yukarıki
 		# _last_sent_extra_state yorumu.
+		var now_state_ms: int = Time.get_ticks_msec()
+		if now_state_ms >= _state_dmg_next_msec: ## grup paneli sayaçları: her vuruşta değil, saniyede bir (bkz. STATE_DMG_INTERVAL_MSEC)
+			_state_dmg_next_msec = now_state_ms + STATE_DMG_INTERVAL_MSEC
+			_state_dmg_snap = [player.match_damage_dealt, player.match_damage_taken]
 		var extra: Dictionary = {
 			"is_invisible": player.is_invisible if "is_invisible" in player else false,
 			## Büyücü Kız "Yükseliş" (R1 evrimi): Meteor kanalında havada - kukla yükselir, host'ta hedef alınamaz (remote_player.gd).
@@ -1033,10 +1080,10 @@ func _process_multiplayer_sync(delta: float) -> void:
 			## should_throttle 5Hz sınırı, bkz. yukarısı) eklendi. player.gd
 			## match_damage_dealt zaten hasar verildikçe canlı biriken bir
 			## sayaç (bkz. player.gd on_damage_dealt/match_damage_dealt notu).
-			"dmg_dealt": player.match_damage_dealt,
+			"dmg_dealt": _state_dmg_snap[0],
 			## Alınan hasar (kullanıcı isteği 2026-10-18: "grup istatistiklerinde alınan hasar da olmalı hem pc hem mobilde") -
 			## aynı canlı panel (party_panel.gd _refresh_stats_popup) müttefiğin player.gd match_damage_taken'ını buradan okur.
-			"dmg_taken": player.match_damage_taken,
+			"dmg_taken": _state_dmg_snap[1],
 			## Yetenek evrimleri (2026-09-28, player.gd skill_evolutions) - diğer oyuncularda kuklanın görsel kararları ve
 			## host'taki simülasyon (Talon mermi kalkanı) bu listeden okur (remote_player.gd has_evo). Sıralı dizi: değişmedikçe
 			## aynı kalır, durum kanalını boşuna tetiklemez.
@@ -1106,7 +1153,6 @@ func _process_multiplayer_sync(delta: float) -> void:
 			"extra": extra,
 		}
 		_extra_state_tick += 1
-		var is_heartbeat: bool = (_extra_state_tick % EXTRA_STATE_HEARTBEAT_TICKS) == 0
 		## BUG DÜZELTMESİ (kullanıcı bildirimi: "multiplayerda bazen katılımcılar
 		## lag sorunu yaşıyor") - kök neden: downed iken (_downed_time/
 		## _revive_progress, bkz. yukarıdaki send_hp/downed_remaining) ve
@@ -1125,20 +1171,50 @@ func _process_multiplayer_sync(delta: float) -> void:
 		## kezle (0.2sn) sınırlandırıldı - ender/gerçek durum değişiklikleri için
 		## fark edilmeyecek kadar küçük bir gecikme, downed/drenaj gibi sürekli
 		## değişen alanlar için ise 20Hz'den 5Hz'e (4 kat) düşüyor.
-		if (is_heartbeat or state_snapshot != _last_sent_extra_state) and not NetworkManager.should_throttle("extra_state", 0.2):
-			_last_sent_extra_state = state_snapshot.duplicate(true)
-			for target_peer: int in NetworkManager.main_rpc_targets():
-				_rpc_update_player_extra_state.rpc_id(
-					target_peer,
-					send_hp,
-					send_max_hp,
-					player.item_shield_hp,
-					player.item_shield_max,
-					player.paladin_zone_active,
-					send_dead,
-					weapon_keys,
-					extra
-				)
+		## Madde 419: gönderim artık DELTA (bkz. STATE_KEYFRAME_MSEC notu) - _send_player_state.
+		_send_player_state(state_snapshot)
+
+
+## Durum paketini hedeflere yollar: yeni hedefe / anahtar karede TAM, diğerlerine sadece değişen anahtarlar (bkz. STATE_KEYFRAME_MSEC).
+## Tüm "tam paketi almış" hedefler HER gönderimde aynı deltayı alır - böylece hepsinin önbelleği _last_sent_state_flat ile aynı kalır.
+func _send_player_state(state_snapshot: Dictionary) -> void:
+	var targets: Array = NetworkManager.main_rpc_targets()
+	var peer_ref: int = multiplayer.multiplayer_peer.get_instance_id() if multiplayer.has_multiplayer_peer() else 0
+	if peer_ref != _state_peer_ref: ## yeni bağlantı (host devri / yeniden kurulum): eski deltaların kaybolmuş olabilir
+		_state_peer_ref = peer_ref
+		_state_full_sent.clear()
+	for pid in _state_full_sent.keys(): ## listeden çıkan (ayrılan / yüklemeye dönen) hedef geri gelince yeniden tam paket alsın
+		if not targets.has(pid):
+			_state_full_sent.erase(pid)
+	var now: int = Time.get_ticks_msec()
+	var keyframe: bool = now >= _state_next_keyframe_msec
+	var any_new: bool = false
+	for pid in targets:
+		if not _state_full_sent.has(pid):
+			any_new = true
+	if not (keyframe or any_new or state_snapshot != _last_sent_extra_state):
+		return
+	if NetworkManager.should_throttle("extra_state", 0.2):
+		return
+	_last_sent_extra_state = state_snapshot.duplicate(true)
+	var flat: Dictionary = StateDeltaScript.flatten(_last_sent_extra_state)
+	var delta: Dictionary = StateDeltaScript.diff(_last_sent_state_flat, flat)
+	_last_sent_state_flat = flat
+	if keyframe:
+		_state_next_keyframe_msec = now + STATE_KEYFRAME_MSEC
+	for target_peer: int in targets:
+		if keyframe or not _state_full_sent.has(target_peer):
+			_rpc_player_state.rpc_id(target_peer, true, flat)
+			_state_full_sent[target_peer] = true
+			net_state_full_msgs += 1
+			net_state_msgs += 1
+			net_state_bytes += var_to_bytes(flat).size()
+		elif not delta.is_empty():
+			_rpc_player_state.rpc_id(target_peer, false, delta)
+			net_state_msgs += 1
+			net_state_bytes += var_to_bytes(delta).size()
+
+
 
 
 ## BUG DÜZELTMESİ (kullanıcı isteği: "dükkandan diriltme satın alınabilmeli")
@@ -1231,11 +1307,30 @@ func _rpc_update_vampir_bats(positions: PackedVector2Array) -> void:
 		rp.update_vampir_bats_from_net(positions)
 
 
-@rpc("any_peer", "reliable")
-func _rpc_update_player_extra_state(hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary = {}) -> void:
+## Durum paketi (madde 419): full = tam düz durum (önbelleği değiştirir), değilse delta (önbelleğe eklenir; tam paket gelmeden gelen delta
+## yok sayılır - en geç STATE_KEYFRAME_MSEC içinde tam paket gelir). Birleşen tam durum eskisi gibi remote_player.update_extra_state_from_net...
+@rpc("any_peer", "call_remote", "reliable", STATE_CHANNEL)
+func _rpc_player_state(full: bool, data: Dictionary) -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		return
+	var cache: Dictionary
+	if full:
+		cache = data
+		_remote_state_cache[sender_id] = cache
+	else:
+		if not _remote_state_cache.has(sender_id):
+			return
+		cache = _remote_state_cache[sender_id]
+		StateDeltaScript.apply(cache, data)
+	var extra: Dictionary = StateDeltaScript.extra_of(cache)
+	var wk: Variant = cache.get("_weapon_keys", [])
+	_apply_player_extra_state(sender_id, float(cache.get("_hp", 0.0)), float(cache.get("_max_hp", 1.0)), float(cache.get("_s_hp", 0.0)),
+			float(cache.get("_s_max", 0.0)), bool(cache.get("_p_zone", false)), bool(cache.get("_dead", false)),
+			(wk as Array).duplicate() if wk is Array else [], extra)
+
+
+func _apply_player_extra_state(sender_id: int, hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary) -> void:
 	## bkz. _get_or_spawn_remote_player üstündeki DÜZELTME notu - dead=true
 	## iken (oyuncu GERÇEKTEN kalıcı ölüyken) kukla yoksa YENİDEN spawn
 	## edilmiyor, paket sessizce yok sayılıyor.
@@ -1453,6 +1548,11 @@ func _on_team_leveled_up(new_level: int) -> void:
 	if _mini_shop_pause_active:
 		_pending_level_ups += 1
 		return
+	## Ruh hâli (madde 438): dünya akarken (diğerleri oynuyor) bu oyuncu sandık menüsündeyken yeni seviye gelebilir - sandık kuyruğu
+	## bitince açılır (_try_open_next_pending_chest), menünün üstüne binmez.
+	if _local_chest_menu_open:
+		_pending_level_ups += 1
+		return
 	if _level_up_screen_launch_pending:
 		_pending_level_ups += 1
 		return
@@ -1484,7 +1584,7 @@ func _open_level_up_screen_after_xp_settles() -> void:
 	if _active_level_up_screen != null and is_instance_valid(_active_level_up_screen):
 		_pending_level_ups += 1
 		return
-	if _mini_shop_pause_active:
+	if _mini_shop_pause_active or _local_chest_menu_open:
 		_pending_level_ups += 1
 		return
 	_show_level_up_screen(GameManager.team_level)
@@ -1613,7 +1713,7 @@ func _refresh_mini_shop_revive_prompt() -> void:
 	panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 	_mini_shop_revive_button = Button.new()
 	_mini_shop_revive_button.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-	_mini_shop_revive_button.text = "Diriltmeyi Satın Al (%d Altın)" % MINI_SHOP_REVIVE_COST
+	_mini_shop_revive_button.text = Loc.t("Diriltmeyi Satın Al (%d Altın)") % MINI_SHOP_REVIVE_COST
 	_mini_shop_revive_button.disabled = GameManager.gold < MINI_SHOP_REVIVE_COST
 	_mini_shop_revive_button.pressed.connect(_on_mini_shop_revive_pressed)
 	panel.add_child(_mini_shop_revive_button)
@@ -1743,7 +1843,7 @@ func _show_level_up_screen(new_level: int) -> void:
 	if is_instance_valid(player) and player.has_method("clear_input_state"):
 		player.call("clear_input_state")
 	hud.update_level(new_level)
-	get_tree().paused = true
+	_enter_local_limbo() ## ruh hâli (madde 438): dünya bu oyuncuyu beklemez, oyuncu donar
 	## Kendi kartımızı seçip bir sonraki turu HEMEN (ağı beklemeden) açarken
 	## (bkz. _advance_level_up_queue) çok kısa bir pencerede başka bir eşin
 	## meşgul-durumu değişikliği (bkz. _on_level_up_busy_state_changed) bizi
@@ -1765,9 +1865,7 @@ func _show_level_up_screen(new_level: int) -> void:
 	add_child(screen)
 	screen.upgrade_chosen.connect(_on_upgrade_chosen)
 	_active_level_up_screen = screen
-	if NetworkManager.is_multiplayer_active:
-		NetworkManager.set_level_up_busy(true)
-		NetworkManager.start_level_up_countdown()
+	## Ortak 25 sn sayaç YOK (madde 438): kimse kimseyi beklemiyor; meşgul bayrağı _enter_local_limbo'da.
 
 
 ## DÜZELTME (kullanıcı isteği: "bir oyuncu diğerlerinin seçmesini beklemeden
@@ -1814,7 +1912,59 @@ func _advance_level_up_queue() -> void:
 		## bu, taze bir sandık kuyruğu turunun BAŞLANGICI (level atlama
 		## kart(lar)ı burada zaten bitti).
 		_chest_queue_batch_start_msec = Time.get_ticks_msec()
+		if _try_open_level_market():
+			return
 		_finish_level_up_phase(_try_open_next_pending_chest)
+
+
+## ================================================================ LEVEL PAZARI (madde 432)
+## Kullanıcı 2026-11-06: level menüsü "karmaşık" -> önce kart, sonra pazar. Kart ekranı kart seçince kapanır; pazar seviye
+## kuyruğunun SONUNDA (art arda atlanan seviyelerin hepsinin kartından sonra, evrim seviyesi dahil) BİR KEZ açılır. Kart etkisi
+## alışverişten ÖNCE uygulanmış olur. Altın yetmese de açılır (yalnız hiç teklif yoksa açılmaz). Yalnız masaüstü (telefonda
+## pazar yok, madde 388). Açıkken _active_level_up_screen = pazar: bu sırada gelen seviye kuyruğa girer, pazar kapanınca kartı açılır
+## (sonunda pazar yine gelir). Çok oyunculuda oyuncu pazar kapanana dek "meşgul" kalır; ortak sayaç en az MARKET_SECONDS'a uzar.
+const LevelMarketScreenScript := preload("res://scripts/level_market_screen.gd")
+const LevelMarketRules := preload("res://scripts/level_market.gd")
+const LimboScript := preload("res://scripts/limbo.gd")
+
+
+func _try_open_level_market() -> bool:
+	if MobileUI.enabled or not is_instance_valid(player):
+		return false
+	## Çok oyunculuda kart süresi dolduysa (kart otomatik seçildi = oyuncu ekranda yok) pazar herkesi 25 sn daha bekletmesin.
+	if NetworkManager.is_multiplayer_active and NetworkManager.level_up_timer_active and NetworkManager.level_up_countdown <= 0.0:
+		return false
+	## Altın yetmese de açılır (kullanıcı 2026-11-06: "kartı seçtikten sonra pazar gelmedi" - erken oyunda ~40 altınla en ucuz
+	## seçenek 80 olduğu için eski "alınabilecek yoksa açılmaz" kuralı pazarı hiç göstermiyordu); alınamayan seçenek "altın eksik"
+	## yazar ve KAYDET'lenebilir. Yalnız hiç teklif yoksa açılmaz.
+	var offers: Dictionary = LevelMarketRules.open_offers(player)
+	if LevelMarketRules.SECTIONS.all(func(s: String) -> bool: return (offers.get(s, []) as Array).is_empty()):
+		return false
+	_enter_local_limbo()
+	_hide_level_up_wait_overlay()
+	var screen: CanvasLayer = LevelMarketScreenScript.new()
+	screen.name = "LevelMarketScreen"
+	screen.player_ref = player
+	screen.level = GameManager.team_level
+	screen.offers = offers
+	_active_level_up_screen = screen
+	add_child(screen)
+	screen.closed.connect(_on_level_market_closed.bind(screen), CONNECT_ONE_SHOT)
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.extend_level_up_countdown(LevelMarketRules.MARKET_SECONDS)
+	return true
+
+
+func _on_level_market_closed(screen: Node) -> void:
+	if is_instance_valid(screen):
+		screen.queue_free()
+	if _active_level_up_screen == screen:
+		_active_level_up_screen = null
+	if _pending_level_ups > 0:
+		_advance_level_up_queue()
+		return
+	_chest_queue_batch_start_msec = Time.get_ticks_msec()
+	_finish_level_up_phase(_try_open_next_pending_chest)
 
 
 ## ================================================================ EFSUN EKRANI (2026-09-25)
@@ -1851,9 +2001,7 @@ func _show_enchant_screen(on_done: Callable, intro_chest: bool = false) -> void:
 ## (2026-09-25'te elit sandık efsun ekranı açıyordu; o ekran sadece debug menüsünden / EnchantDefs.enabled ile açılır.)
 ## Menü kapanınca on_done (kuyruğun sonraki adımı) çağrılır.
 func _show_elite_chest(on_done: Callable) -> void:
-	if is_instance_valid(player) and player.has_method("clear_input_state"):
-		player.call("clear_input_state")
-	get_tree().paused = true
+	_enter_local_limbo()
 	_hide_level_up_wait_overlay()
 	var menu: CanvasLayer = ChestMenuScene.instantiate() as CanvasLayer
 	add_child(menu)
@@ -1912,8 +2060,8 @@ func debug_open_enchant_screen() -> void:
 func debug_open_chest(elite: bool) -> void:
 	if not is_instance_valid(player) or _active_enchant_screen != null:
 		return
-	get_tree().paused = true
-	var resume := func() -> void: get_tree().paused = false
+	_enter_local_limbo()
+	var resume := func() -> void: _exit_local_limbo()
 	if elite:
 		_show_elite_chest(resume)
 		return
@@ -1929,18 +2077,11 @@ func debug_open_chest(elite: bool) -> void:
 ## "KART/SİLAH/KALKAN SEÇİM KUYRUĞU SENKRONİZASYONU" notu): EN SON biten
 ## oyuncu da bitirene kadar next_step çağrılmaz, o ana kadar bir bekleme
 ## overlay'i gösterilir (bkz. _on_level_up_busy_state_changed).
+## RUH HÂLİ (madde 438): artık diğerleri BEKLENMEZ - kart/pazar biter bitmez bu oyuncunun sandıklarına geçilir, akış bitince oyuncu
+## döner (_exit_local_limbo). Meşgul bayrağı akışın SONUNA kadar açık kalır (sandık dahil: ruh hâli kesintisiz).
 func _finish_level_up_phase(next_step: Callable) -> void:
-	if not NetworkManager.is_multiplayer_active:
-		next_step.call()
-		return
-	NetworkManager.set_level_up_busy(false)
-	if not NetworkManager.is_any_level_up_busy():
-		NetworkManager.stop_level_up_countdown()
-		_hide_level_up_wait_overlay()
-		next_step.call()
-	else:
-		_level_up_wait_resume_action = next_step
-		_show_level_up_wait_overlay()
+	_hide_level_up_wait_overlay()
+	next_step.call()
 
 
 ## Herhangi bir eşte (kendimiz DAHİL) kart/silah/kalkan kuyruğu meşgul/boş
@@ -1951,21 +2092,100 @@ func _finish_level_up_phase(next_step: Callable) -> void:
 func _on_level_up_busy_state_changed() -> void:
 	if not NetworkManager.is_multiplayer_active:
 		return
-	if NetworkManager.is_any_level_up_busy():
+	_refresh_limbo()
+
+
+## ================================================================ RUH HÂLİ (madde 438, 2026-11-07)
+## Kullanıcı: "level atlama aralarında oyuncuların birbirlerini beklemelerini istemiyorum" - level kartı + pazar + sandık akışındaki
+## oyuncu ruh hâlinde (mavi ruh + okuma klibi, kendisi ve dünyaya bıraktıkları donuk, dokunulmaz); diğerleri oynamaya devam eder.
+## Ayrıntı: scripts/limbo.gd. Küme = NetworkManager.level_up_busy_peers (akışın başında true, sonunda false; ek RPC yok).
+var _local_limbo: bool = false
+var _limbo_paused: bool = false ## dünyayı ruh hâli kuralı durdurdu (yalnız onu biz açarız)
+var _limbo_check_t: float = 0.0
+
+
+func is_local_limbo() -> bool:
+	return _local_limbo
+
+
+func _enter_local_limbo() -> void:
+	if not _local_limbo:
+		_local_limbo = true
+		if NetworkManager.is_multiplayer_active:
+			NetworkManager.set_level_up_busy(true) ## call_local: sinyal -> _refresh_limbo
+	_refresh_limbo()
+
+
+func _exit_local_limbo() -> void:
+	if _local_limbo:
+		_local_limbo = false
+		if NetworkManager.is_multiplayer_active:
+			NetworkManager.set_level_up_busy(false)
+	_refresh_limbo()
+
+
+func _limbo_peer_set() -> Dictionary:
+	var out: Dictionary = {}
+	var me: int = LimboScript.local_peer()
+	if _local_limbo:
+		out[me] = true
+	if NetworkManager.is_multiplayer_active:
+		for pid in NetworkManager.level_up_busy_peers.keys():
+			if int(pid) != me:
+				out[int(pid)] = true
+	return out
+
+
+func _refresh_limbo() -> void:
+	var peers: Dictionary = _limbo_peer_set()
+	LimboScript.apply(get_tree(), peers)
+	if is_instance_valid(player) and player.has_method("set_limbo"):
+		player.set_limbo(_local_limbo)
+	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+		if is_instance_valid(rp) and rp.has_method("set_limbo"):
+			rp.set_limbo(peers.has(int(rp.get("peer_id"))))
+	_apply_limbo_pause(peers)
+
+
+## Dünya yalnız OYNAYAN (canlı, yerde yatmayan) herkes ruh hâlindeyken durur; tek oyunculu = menü açıkken durur (eskisi gibi).
+func _limbo_world_should_pause(peers: Dictionary) -> bool:
+	if peers.is_empty():
+		return false
+	if not NetworkManager.is_multiplayer_active:
+		return _local_limbo
+	var any_active: bool = false
+	if is_instance_valid(player) and player.get("is_dead") != true and player.get("is_downed") != true:
+		any_active = true
+		if not _local_limbo:
+			return false
+	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+		if not is_instance_valid(rp) or rp.get("is_dead") == true or rp.get("is_downed") == true:
+			continue
+		any_active = true
+		if not peers.has(int(rp.get("peer_id"))):
+			return false
+	return any_active
+
+
+func _apply_limbo_pause(peers: Dictionary) -> void:
+	var want: bool = _limbo_world_should_pause(peers)
+	if want:
 		get_tree().paused = true
-		if _active_level_up_screen == null and _active_enchant_screen == null:
-			_show_level_up_wait_overlay()
-	else:
-		_hide_level_up_wait_overlay()
-		## Artık kimse meşgul değil - bu oyuncunun kendi kuyruğu daha önce
-		## bitip bekleyen bir devam adımı varsa (bkz. _finish_level_up_phase)
-		## şimdi tetiklenir. Kuyruğumuz henüz bitmediyse (bu sinyal başka bir
-		## eşin durumu yüzünden geldiyse) _level_up_wait_resume_action zaten
-		## boş, hiçbir şey olmaz.
-		if _level_up_wait_resume_action.is_valid():
-			var action: Callable = _level_up_wait_resume_action
-			_level_up_wait_resume_action = Callable()
-			action.call()
+		_limbo_paused = true
+	elif _limbo_paused:
+		_limbo_paused = false
+		get_tree().paused = false
+
+
+## Biri ölür/düşer/dirilirse "kim oynuyor" değişir: ruh hâli varken ara ara yeniden bakılır (dünya akarken; durunca açan sinyaldir).
+func _process_limbo_pause(delta: float) -> void:
+	if not LimboScript.any():
+		return
+	_limbo_check_t -= delta
+	if _limbo_check_t > 0.0:
+		return
+	_limbo_check_t = 0.25
+	_apply_limbo_pause(_limbo_peer_set())
 
 
 ## Bekleyen sandıklardan (bkz. GameManager.pending_chest_tiers -
@@ -1992,9 +2212,9 @@ func _on_level_up_busy_state_changed() -> void:
 ## dükkanı açar, değilse (ör. bağımsız bir sandık toplamasından geliniyorsa)
 ## eskisi gibi doğrudan oyunu açar.
 func _resume_gameplay_after_level_flow() -> void:
+	_exit_local_limbo() ## ruh hâli biter: oyuncu kaldığı yerden devam eder (madde 438)
 	if not (_mini_shop_pending_after_level_up and is_instance_valid(player)):
 		_mini_shop_pending_after_level_up = false
-		get_tree().paused = false
 		return
 	## Bir level atlama akışından geliniyor: periyodik dükkan açılacak mı?
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
@@ -2034,11 +2254,7 @@ func _apply_mini_shop_decision(open_shop: bool) -> void:
 		if not _mini_shop_pause_active:
 			_show_mini_shop_screen()
 		return
-	## "Açılmayacak" kararı geldi: dükkan açıkken gelirse mevcut duraklamayı
-	## (ve açık dükkanı) bozma, sadece oyun devam ederken değişiklik yapma.
-	if _mini_shop_pause_active:
-		return
-	get_tree().paused = false
+	## "Açılmayacak" kararı geldi: oyun zaten _exit_local_limbo ile açıldı (madde 438).
 
 
 func _on_mini_shop_decision_received(open_shop: bool) -> void:
@@ -2067,44 +2283,22 @@ func _try_open_next_pending_chest() -> void:
 		push_warning("[Main] Sandık kuyruğu %.0f sn'yi aştı, kalanlar sırada bırakılıp oyun devam ettiriliyor." % (CHEST_QUEUE_TOTAL_TIMEOUT_MSEC / 1000.0))
 		_chest_queue_batch_start_msec = -1
 		_local_chest_menu_open = false
-		if NetworkManager.is_multiplayer_active:
-			NetworkManager.set_chest_busy(false)
-			if not NetworkManager.is_any_chest_busy():
-				_resume_gameplay_after_level_flow()
-				NetworkManager.stop_chest_countdown()
-		else:
-			_resume_gameplay_after_level_flow()
+		_resume_gameplay_after_level_flow()
 		return
 	if not GameManager.has_pending_chests() or not is_instance_valid(player):
 		_chest_queue_batch_start_msec = -1
 		_local_chest_menu_open = false
-		if NetworkManager.is_multiplayer_active:
-			NetworkManager.set_chest_busy(false)
-			if not NetworkManager.is_any_chest_busy():
-				_resume_gameplay_after_level_flow()
-				## Kuyrukta hiçbir peer'de sandık kalmadı - bkz. NetworkManager
-				## "SANDIK SEÇİM GERİ SAYIMI" notu, geri sayımın da bitmesi gerekiyor.
-				NetworkManager.stop_chest_countdown()
-		else:
-			## Kuyruk gerçekten bitti (bkz. #18 yorumu yukarıda) - level atlama +
-			## sandık açılışı akışının TAMAMI şimdi bitti, oyun burada açılır (ya
-			## da bkz. _resume_gameplay_after_level_flow - bir level atlamasından
-			## geliniyorsa oyun yerine periyodik dükkan açılır).
-			_resume_gameplay_after_level_flow()
+		## Sandıklar açılırken (diğerleri oynadığı için) yeni seviye geldiyse ruh hâli sürer, onun kartı açılır (madde 438).
+		if _pending_level_ups > 0 and is_instance_valid(player):
+			_pending_level_ups -= 1
+			_show_level_up_screen(GameManager.team_level)
+			return
+		## Kuyruk bitti - level atlama + sandık akışının TAMAMI bitti: ruh hâli biter, oyuncu döner (madde 438; kimse beklenmez).
+		_resume_gameplay_after_level_flow()
 		return
-	## Güvenlik: bu noktaya her zaman zaten duraklamış (level atlama
-	## ekranından) gelinir, ama garanti olsun diye açıkça set ediliyor.
-	get_tree().paused = true
+	## Sandık da ruh hâlinde açılır (madde 438, kullanıcı kararı): bekleme/ortak sayaç yok, oyuncu zaten kart akışından ruh hâlinde.
+	_enter_local_limbo()
 	_local_chest_menu_open = true
-	if NetworkManager.is_multiplayer_active:
-		NetworkManager.set_chest_busy(true)
-		## Kullanıcı isteği: "sandık seçerken diğer oyuncularda ve sandık
-		## seçen kişide 25 saniyelik bekleme süresi olmuyor, onun da bekleme
-		## süresi olması gerekiyor, tıpkı level kartı seçme ekranı gibi" -
-		## sandık akışının ilk menüsünde kart akışından kalan ORTAK süre devralınır,
-		## sonraki sandıklar sayacı sıfırlamaz (bkz. NetworkManager.
-		## _begin_shared_wait_clock, chest_menu.gd _on_countdown_tick).
-		NetworkManager.start_chest_countdown()
 	_hide_chest_wait_overlay()
 	## Önce normal sandıklar (parça kartı), sonra elit sandıklar (elit açılış animasyonu + epik eşya kartı, bkz.
 	## _show_elite_chest) - 2026-10-07: elit sandıktan efsun değil epik eşya çıkar.
@@ -2127,16 +2321,8 @@ func _try_open_next_pending_chest() -> void:
 ## _local_chest_menu_open) burada ekstra bir şey yapmaya gerek yok - onun
 ## akışı zaten paused/overlay durumunu kendi başına yönetiyor.
 func _on_chest_busy_state_changed() -> void:
-	if not NetworkManager.is_multiplayer_active:
-		return
-	if NetworkManager.is_any_chest_busy():
-		get_tree().paused = true
-		if not _local_chest_menu_open:
-			_show_chest_wait_overlay()
-	else:
-		if not _local_chest_menu_open:
-			get_tree().paused = false
-		_hide_chest_wait_overlay()
+	## Ruh hâlinden beri (madde 438) sandık meşgul kümesi kullanılmıyor (set_chest_busy çağrılmaz) - eski eşten gelirse de bekletme yok.
+	_hide_chest_wait_overlay()
 
 
 func _show_chest_wait_overlay() -> void:
@@ -2249,7 +2435,7 @@ func _on_restart_vote_result(approved: bool, rejecter_name: String) -> void:
 		return
 	get_tree().paused = false
 	if rejecter_name != "":
-		_show_network_toast("%s yeniden başlatmayı reddetti." % rejecter_name)
+		_show_network_toast(Loc.t("%s yeniden başlatmayı reddetti.") % rejecter_name)
 	else:
 		_show_network_toast("Yeniden başlatma onaylanmadı (süre doldu).")
 
@@ -2313,7 +2499,7 @@ func _on_player_left_game(p_name: String, peer_id: int = 0) -> void:
 			var path: String = str(Characters.get_def(int(rp.get("char_id"))).get("portrait", ""))
 			if path != "" and ResourceLoader.exists(path):
 				face = load(path) as Texture2D
-		_show_notice("left", "%s oyundan ayrıldı" % p_name, "", 2.4, -1.0, face)
+		_show_notice("left", Loc.t("%s oyundan ayrıldı") % p_name, "", 2.4, -1.0, face)
 	_despawn_remote_player(peer_id)
 
 
@@ -2376,6 +2562,7 @@ func _show_network_toast(text: String, hold_seconds: float = 2.4, top_center: bo
 ## geri sayan "N sn" (görev uyarısı). portrait: "left" bildiriminde ayrılanın soluk portresi.
 func _show_notice(kind: String, title: String, body: String = "", hold_seconds: float = 2.4, countdown: float = -1.0,
 		portrait: Texture2D = null) -> Control:
+	hold_seconds = _notice_hold(kind, hold_seconds, countdown)
 	var n: Control = GameNoticeScript.toast(kind, title, body, hold_seconds, MobileUI.enabled)
 	if countdown >= 0.0:
 		n.call("set_countdown", countdown)
@@ -2386,8 +2573,20 @@ func _show_notice(kind: String, title: String, body: String = "", hold_seconds: 
 
 
 ## Üst orta duyuru (kurdele + gövde; tier > 0 ise kuru kafa satırı). kind "tier"/"fail" kırmızı kurdele, diğerleri altın.
+## Madde 404: küçük levhada (GameNotice.compact) üst orta duyuru da sağ sütundaki tek satırlık levhaya döner, süresi kısalır.
 func _show_banner_notice(kind: String, ribbon_text: String, body: String = "", hold_seconds: float = 4.0, tier: int = 0) -> void:
-	_present_notice(GameNoticeScript.banner(kind, ribbon_text, body, hold_seconds, tier), hold_seconds, true)
+	hold_seconds = _notice_hold(kind, hold_seconds)
+	_present_notice(GameNoticeScript.banner(kind, ribbon_text, body, hold_seconds, tier), hold_seconds, not GameNoticeScript.compact)
+
+
+## Madde 404 (kullanıcı: bildirimler "çok dikkat çekiyor ve ekranı kaplıyor"): küçük levhada bildirimler en çok NOTICE_COMPACT_HOLD
+## sn kalır. Hariç: sistem/ağ bildirimi ("info": host devri donuk dünyada bağlanma bitene kadar kalmalı) ve sonuna kadar geri sayan
+## bildirim (hold >= countdown: evin açılış sayacı). Görev uyarısının 60 sn'lik sayacı görev satırında sürer, levha kısa kalır.
+const NOTICE_COMPACT_HOLD := 3.0
+func _notice_hold(kind: String, hold_seconds: float, countdown: float = -1.0) -> float:
+	if not GameNoticeScript.compact or kind == "info" or (countdown >= 0.0 and hold_seconds >= countdown - 0.05):
+		return hold_seconds
+	return minf(hold_seconds, NOTICE_COMPACT_HOLD)
 
 
 ## Kademe duyurusu: kırmızı kurdelede başlık (KADEME VII / FİNAL KADEME) + altında zorluğu gösteren 6 kuru kafa (tier_display.gd).
@@ -2418,9 +2617,15 @@ func _notice_column() -> Vector2:
 	return Vector2(right_edge, top_y)
 
 
-func _present_notice(panel: Control, hold_seconds: float, top_center: bool) -> void:
+## layer_index: Görev Tamamlandı levhası 40 verir (altın uçuş katmanı 41 - paralar levhanın üstünden çıkar).
+## Aynı sütunda (sağ sütun / üst orta) aynı anda en çok bu kadar bildirim; yenisi gelince en eskisi 0,2 sn'de söner ve yığında
+## yer tutmaz (madde 406, cila: ekrandaki yazı kalabalığı). Katmanı kendi süresi dolunca silinir (ilk tween).
+const NOTICE_MAX_VISIBLE := 2
+
+
+func _present_notice(panel: Control, hold_seconds: float, top_center: bool, layer_index: int = 100) -> void:
 	var layer := CanvasLayer.new()
-	layer.layer = 100
+	layer.layer = layer_index
 	add_child(layer)
 	var phone: bool = MobileUI.enabled
 	var centered: bool = top_center or phone
@@ -2434,6 +2639,7 @@ func _present_notice(panel: Control, hold_seconds: float, top_center: bool) -> v
 	panel.set_meta("top_center", top_center and not phone)
 	layer.add_child(panel)
 	_active_toast_panels.append(panel)
+	_trim_notice_column(bool(panel.get_meta("top_center", false)))
 	var follow := func() -> void:
 		if not is_instance_valid(panel):
 			return
@@ -2451,7 +2657,7 @@ func _present_notice(panel: Control, hold_seconds: float, top_center: bool) -> v
 		for other in _active_toast_panels:
 			if other == panel:
 				break
-			if is_instance_valid(other) and bool((other as Control).get_meta("top_center", false)) == is_top:
+			if is_instance_valid(other) and not (other as Control).has_meta("notice_trimmed") 					and bool((other as Control).get_meta("top_center", false)) == is_top:
 				y += (other as Control).size.y + 8.0
 		if centered:
 			panel.offset_top = y
@@ -2468,6 +2674,19 @@ func _present_notice(panel: Control, hold_seconds: float, top_center: bool) -> v
 	tw.tween_interval(maxf(0.5, hold_seconds))
 	tw.tween_property(panel, "modulate:a", 0.0, 0.6)
 	tw.tween_callback(layer.queue_free)
+
+
+## NOTICE_MAX_VISIBLE'ı aşan en eski bildirimleri söndürür (yığında yer tutmazlar; katmanları kendi süreleri dolunca silinir).
+func _trim_notice_column(is_top: bool) -> void:
+	var same: Array[Control] = []
+	for p in _active_toast_panels:
+		if is_instance_valid(p) and not (p as Control).has_meta("notice_trimmed") and bool((p as Control).get_meta("top_center", false)) == is_top:
+			same.append(p as Control)
+	while same.size() > NOTICE_MAX_VISIBLE:
+		var old: Control = same.pop_front()
+		old.set_meta("notice_trimmed", true)
+		old.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		old.create_tween().tween_property(old, "modulate:a", 0.0, 0.2)
 
 
 ## Seyyar satıcı (bkz. traveling_merchant.gd/network_manager.gd merchant_
@@ -2651,12 +2870,13 @@ func _note_run_progress() -> void:
 
 func _announce_achievements(result: Dictionary) -> void:
 	for id in result.get("achievements", []):
-		_show_notice("ach", "Başarım: %s" % AchievementsScript.name_of(str(id)), String(AchievementsScript.def_of(str(id)).get("desc", "")), 4.0)
+		_show_notice("ach", Loc.t("Başarım: %s") % AchievementsScript.name_of(str(id)), String(AchievementsScript.def_of(str(id)).get("desc", "")), 4.0)
 		EventSfx.play(get_tree(), &"mission_success")
 
 
 ## Koşu ölüm ekranından geçmeden de bitebilir (menüye çıkış, yeniden başlatma) - toplamlar yine işlensin. 30 sn'den kısa koşu sayılmaz.
 func _exit_tree() -> void:
+	LimboScript.reset()
 	if RenderingServer.frame_pre_draw.is_connected(_on_frame_pre_draw):
 		RenderingServer.frame_pre_draw.disconnect(_on_frame_pre_draw)
 	_record_run_end_once()
@@ -2721,9 +2941,12 @@ func _on_endless_started() -> void:
 
 func _on_endless_layer_reached(layer: int) -> void:
 	var text: String = "Yaratıklar güçlendi."
+	var head: String = Loc.t("SONSUZ KAT %d") % layer
 	if GameManager.endless_has_boss_waves() and EndlessMathScript.is_boss_wave_layer(layer):
 		text += " Bu katta BOSS DALGASI var!"
-	_show_banner_notice("tier", "SONSUZ KAT %d" % layer, text, 4.0)
+		if GameNoticeScript.compact:
+			head += " - BOSS DALGASI" ## küçük levha gövdeyi göstermez: boss dalgası başlıkta
+	_show_banner_notice("tier", head, text, 4.0)
 	_update_endless_label()
 	BalanceLogScript.note_layer(layer, player) ## balans kaydı: kat başlangıç anlık görüntüsü (madde 269)
 	_note_run_progress()
@@ -2749,7 +2972,7 @@ func _update_endless_label() -> void:
 		_endless_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		UIKit.style_label(_endless_label, 32 if MobileUI.enabled else 28, UIKit.C_CREAM, 6)
 		layer.add_child(_endless_label)
-	var text: String = "SONSUZ MOD - KAT %d" % GameManager.endless_layer
+	var text: String = Loc.t("SONSUZ MOD - KAT %d") % GameManager.endless_layer
 	if GameManager.endless_has_boss_waves() and EndlessMathScript.is_boss_wave_layer(GameManager.endless_layer):
 		text += " - BOSS DALGASI"
 	_endless_label.text = text
@@ -2815,7 +3038,7 @@ func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radiu
 	var label: String = String(_world_event_label_by_id.get(mission_id, kind))
 	if not quiet:
 		EventSfx.play(get_tree(), &"mission_start")
-		_show_notice("start", "%s BAŞLADI" % label, String(MISSION_DESCRIPTIONS.get(kind, "")), MISSION_TOAST_SECONDS)
+		_show_notice("start", Loc.t("%s BAŞLADI") % label, String(MISSION_DESCRIPTIONS.get(kind, "")), MISSION_TOAST_SECONDS)
 	if not NO_SINGLE_LOCATION_KINDS.has(kind):
 		var minimap: Node = hud.get_node_or_null("MinimapControl")
 		if minimap and minimap.has_method("set_mission_marker"):
@@ -2944,10 +3167,10 @@ func _on_world_event_completed(mission_id: int, kind: String, success: bool) -> 
 	## hedefi" olacak şekilde TERSİNE çevrilmiş (bkz. o dosyadaki not), yani bu görev türünde
 	## success=false SADECE ağaç öldüğünde olur, süre dolması asla değil - o yüzden burada AYRI,
 	## doğru bir mesaj gösterilebilir (ağ üzerinden yeni bir "sebep" alanı eklemeye gerek yok).
-	var fail_title: String = "%s süresi doldu" % label
+	var fail_title: String = Loc.t("%s süresi doldu") % label
 	var fail_body: String = "Görev iptal edildi."
 	if kind == "defend_tree" and not success:
-		fail_title = "%s BAŞARISIZ" % label
+		fail_title = Loc.t("%s BAŞARISIZ") % label
 		fail_body = "Ağaç yok edildi."
 	## Başarı: "Görev Tamamlandı" penceresi (kullanıcı isteği 2026-10-02) - görev altını onun içinden altın paneline uçar
 	## (bkz. mission_complete_window.gd). Başarısızlık eskisi gibi sağ üstte bildirim.
@@ -3084,7 +3307,7 @@ func _on_chat_message_received(peer_id: int, player_name: String, text: String) 
 ## Birinin debug modunda yaptığı eylem (bkz. network_manager.gd debug_action_announced notu): üst ortada uyarı + sohbet kaydına satır
 ## (toast kaybolsa bile ne yapıldığı kalır). Gönderen KENDİMİZ de olsak gelir ("call_local") - ne yaptığını görmek zararsız.
 func _on_debug_action_announced(player_name: String, text: String) -> void:
-	var line: String = "[DEBUG] %s: %s" % [player_name, text]
+	var line: String = Loc.t("[DEBUG] %s: %s") % [player_name, text]
 	_show_banner_notice("fail", "DEBUG MODU UYARISI", line, 4.0)
 	EventSfx.play(get_tree(), &"chat")
 	if hud and hud.has_method("append_chat_message"):
@@ -3215,7 +3438,7 @@ func _show_death_overlay(is_final: bool) -> void:
 		var window := PanelContainer.new()
 		window.name = "Window"
 		window.theme = kit.theme()
-		var win_style: StyleBoxFlat = kit.sb(kit.c("panel"), kit.c("line_hi"), 3, 8)
+		var win_style = kit.sb(kit.c("panel"), kit.c("line_hi"), 3, 8) ## PixelBox (madde 417)
 		win_style.shadow_color = Color(0, 0, 0, 0.45)
 		win_style.shadow_size = 14
 		win_style.shadow_offset = Vector2(0, 8)
@@ -3379,8 +3602,8 @@ func _show_death_overlay(is_final: bool) -> void:
 		if sub_lbl:
 			sub_lbl.text = "Tüm takım elendi." if NetworkManager.is_multiplayer_active else "Öldün."
 			if GameManager.endless_active:
-				sub_lbl.text += " Sonsuz Kat %d'e kadar dayandınız." % GameManager.endless_layer if NetworkManager.is_multiplayer_active \
-						else " Sonsuz Kat %d'e kadar dayandın." % GameManager.endless_layer
+				sub_lbl.text += Loc.t(" Sonsuz Kat %d'e kadar dayandınız.") % GameManager.endless_layer if NetworkManager.is_multiplayer_active \
+						else Loc.t(" Sonsuz Kat %d'e kadar dayandın.") % GameManager.endless_layer
 		if spectate_row_node:
 			spectate_row_node.visible = false
 		_end_spectate_mode()
@@ -3493,7 +3716,7 @@ func _advance_spectate_target(direction: int) -> void:
 	_spectate_target = targets[_spectate_index]
 	if label:
 		var display_name: String = str(_spectate_target.get("player_name")) if "player_name" in _spectate_target else "Müttefik"
-		label.text = "İzleniyor: %s" % display_name
+		label.text = Loc.t("İzleniyor: %s") % display_name
 
 
 func _on_spectate_prev_pressed() -> void:

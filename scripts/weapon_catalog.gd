@@ -1,4 +1,5 @@
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## BAŞLANGIÇ SİLAHI kataloğu (kullanıcı isteği 2026-10-03: "bundan sonra başlangıç silahı karakter seçim ekranından seçilsin
 ## oradan isteyen oyuncu istediği silahı seçebilsin başlangıç için. bu sayede başlangıçtaki silah seçme kartını
@@ -8,34 +9,35 @@ extends RefCounted
 ## onu verir. Ad/ikon listeleri chest_menu.gd / merchant_shop_screen.gd / inventory_panel.gd'deki kopyalarla AYNI (projenin
 ## bilinçli kopya deseni - bkz. o dosyalardaki notlar); yeni silah eklenirse oralara da eklenmeli.
 
-const KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "kalkan", "yinyang"]
+const KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "kalkan", "yinyang", "pompali"]
 const DEFAULT_KEY := "dagger"
 const NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
-	"tuftuf": "Tüftüf", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
+	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı",
+	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
 }
 const ICONS := {
 	"dagger": "res://assets/weapons/base_knife/icon_v2.png",
-	"fire_staff": "res://assets/weapons/fire/firestaff_icon_v3.png",
+	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
 	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
 	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
-	"tuftuf": "res://assets/weapons/tuftuf/icon_v2.png",
+	"tuftuf": "res://assets/weapons/yeni/zehir_asasi.png",
 	"tufek": "res://assets/weapons/tufek/icon.png",
-	"arcane": "res://assets/weapons/arcane/icon_v3.png",
-	"yay": "res://assets/weapons/yay/draw1.png",
-	"crossbow": "res://assets/weapons/crossbow/icon.png",
+	"arcane": "res://assets/weapons/yeni/arcane.png",
+	"yay": "res://assets/weapons/yeni/yay.png",
+	"crossbow": "res://assets/weapons/yeni/arbalet.png",
 	"boomerang": "res://assets/weapons/boomerang/icon.png",
-	"buz_asasi": "res://assets/weapons/buz_asasi/icon_v3.png",
+	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
 	"fisek": "res://assets/weapons/fisek/icon.png",
 	"pence": "res://assets/weapons/pence/icon.png",
 	"topuz": "res://assets/weapons/topuz/icon.png",
-	"uzunkilic": "res://assets/weapons/uzunkilic/icon.png",
-	"gokkusagi": "res://assets/weapons/zanaat/gokkusagi_L1.png",
+	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
+	"gokkusagi": "res://assets/weapons/yeni/gokkusagi.png",
 	"mizrak": "res://assets/weapons/zanaat/mizrak_L1.png",
 	"kalkan": "res://assets/weapons/zanaat/kalkan_L1.png",
 	"yinyang": "res://assets/weapons/zanaat/yinyang_L1.png",
+	"pompali": "res://assets/weapons/pompali/icon.png",
 }
 ## bkz. player.gd buy_weapon_copy() - _configure_*_melee() yalnız bu 6 anahtar için; diğerleri menzilli.
 const MELEE_KEYS := ["dagger", "pence", "topuz", "uzunkilic", "mizrak", "kalkan"]
@@ -66,7 +68,8 @@ const DESCRIPTIONS := {
 	"uzunkilic": "HASAR: %120 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş (çevredekilere %70)",
 	"mizrak": "HASAR: %120 saldırı gücü · Yakın dövüş (menzil 150) · Düz hatta delip geçer: hedefin arkasındakiler de tam hasar alır", ## madde 305 (sahne oranı 1,2)
 	"kalkan": "HASAR: %125 saldırı gücü · Yakın dövüş (menzil 110) · Geniş darbe: önündeki herkes tam hasar alır ve 45 birim geri itilir (bosslar itilmez)", ## madde 338/342 (sahne oranı 1,0; madde 340 yavaşlatması geri alındı)
-	"yinyang": "HASAR: %125 saldırı gücü · Ateş hızı 1.7sn · Menzil 170 · Tek hedef; her isabette kalkanı en boş oyuncuya (sen dahil, menzil yok) saldırı gücünün %10'u kadar mana kalkanı · Saldıracak düşman yokken de aynı aralıkla kalkan taşır", ## madde 334 (sahne fire_rate 1,2 / 0,7)
+	"yinyang": "HASAR: %125 saldırı gücü · Ateş hızı 1.7sn · Menzil 170 · Tek hedef; her isabette kalkanı en boş oyuncuya (sen dahil, kitabın menzili içinde) saldırı gücünün %10'u kadar mana kalkanı · Saldıracak düşman yokken de aynı aralıkla kalkan taşır", ## madde 334 (sahne fire_rate 1,2 / 0,7)
+	"pompali": "HASAR: 6 saçma x %34 saldırı gücü (yakında hepsi isabet eder: %204) · Ateş hızı 1.3sn · Menzil 330 · Ortaya yoğun dar koni, uzakta daha az saçma isabet eder · 5 fişeklik pompa (saldırı hızı doldurmayı da hızlandırır)", ## madde 448 (sahne oranı SAÇMA başına 0,34)
 	"gokkusagi": "HASAR: saniyede %220 saldırı gücü (0,5 sn'de bir %110) · Menzil 185 · Kesintisiz ışın, ilk düşmanda durur", ## madde 306: sahne 1,1 oran x tik oranı 1,0 (2026-10-19 buff: 0,75 -> 1,1, menzil 168 -> 185), tik 0,35 / 0,7 = 0,5 sn
 }
 
@@ -77,7 +80,7 @@ static func trait_text(key: String) -> String:
 	var id: String = EnchantDefs.trait_of(key)
 	var d: Dictionary = EnchantDefs.get_def(id) if id != "" else {}
 	if d.is_empty():
-		return str(DESCRIPTIONS.get(key, ""))
+		return Loc.pct(Loc.t(str(DESCRIPTIONS.get(key, ""))))
 	return "%s: %s" % [str(d.get("name", id)), str(d.get("desc", ""))]
 
 
@@ -96,10 +99,8 @@ static func display_name(key: String) -> String:
 
 
 static func icon(key: String) -> Texture2D:
-	## Zanaatkâr seti (madde 196): arayüzde (silah seçici, lobi, Ruh Mağazası) 1. seviye sanatı; dosya yoksa eski ikon.
-	var z: String = "res://assets/weapons/zanaat/%s_L1.png" % key
-	if ResourceLoader.exists(z):
-		return load(z) as Texture2D
+	## Madde 402: Zanaatkâr kademe sanatı kalktı - ICONS = oyundaki silahla aynı görünüş (kullanıcı çizimi / eski ikon / yeni silahın
+	## 1. seviyesi; sabit sanat tablosu scripts/weapon_tier_art.gd ART ile aynı dosyalar).
 	var p: String = str(ICONS.get(key, ""))
 	return load(p) as Texture2D if p != "" and ResourceLoader.exists(p) else null
 

@@ -1,0 +1,139 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
+
+BT START mode=data char=2
+WARNING: res://scenes/fx_oyku_heal.tscn:3 - ext_resource, invalid UID: uid://dh4h1d77x2n3p - using text path instead: res://scripts/fx_oyku_heal.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _data (res://tools/buyuk_test/buyuk_test.gd:254)
+       [1] _run (res://tools/buyuk_test/buyuk_test.gd:234)
+WARNING: res://scenes/fx_buyucu_fastfire.tscn:3 - ext_resource, invalid UID: uid://cd84h1d77x2n5 - using text path instead: res://scripts/fx_buyucu_fastfire.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _data (res://tools/buyuk_test/buyuk_test.gd:254)
+       [1] _run (res://tools/buyuk_test/buyuk_test.gd:234)
+WARNING: res://scenes/fx_shield_active.tscn:3 - ext_resource, invalid UID: uid://cd100h1d77x2n - using text path instead: res://scripts/fx_shield_active.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _data (res://tools/buyuk_test/buyuk_test.gd:254)
+       [1] _run (res://tools/buyuk_test/buyuk_test.gd:234)
+WARNING: res://scenes/fx_paladin_cast.tscn:3 - ext_resource, invalid UID: uid://cd99h1d77x2n2 - using text path instead: res://scripts/fx_paladin_cast.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _data (res://tools/buyuk_test/buyuk_test.gd:254)
+       [1] _run (res://tools/buyuk_test/buyuk_test.gd:234)
+WARNING: res://scenes/fx_assasin_stealth.tscn:3 - ext_resource, invalid UID: uid://cd94h1d77x2n6 - using text path instead: res://scripts/fx_assasin_stealth.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _data (res://tools/buyuk_test/buyuk_test.gd:254)
+       [1] _run (res://tools/buyuk_test/buyuk_test.gd:234)
+WARNING: res://scenes/fx_talha_rage.tscn:3 - ext_resource, invalid UID: uid://d74h1d77x2n4q - using text path instead: res://scripts/fx_talha_rage.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _data (res://tools/buyuk_test/buyuk_test.gd:254)
+       [1] _run (res://tools/buyuk_test/buyuk_test.gd:234)
+WARNING: res://scenes/fx_matthew_sacrifice.tscn:3 - ext_resource, invalid UID: uid://cd95h1d77x2n7 - using text path instead: res://scripts/fx_matthew_sacrifice.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _data (res://tools/buyuk_test/buyuk_test.gd:254)
+       [1] _run (res://tools/buyuk_test/buyuk_test.gd:234)
+WARNING: res://scenes/fx_matthew_explosion.tscn:3 - ext_resource, invalid UID: uid://cd96h1d77x2n8 - using text path instead: res://scripts/fx_matthew_explosion.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _data (res://tools/buyuk_test/buyuk_test.gd:254)
+       [1] _run (res://tools/buyuk_test/buyuk_test.gd:234)
+BT DATAINFO char=1 Talon klip_sayisi=60
+BT DATA char=2 Oakley eksik klip: sit_down,sit_left,sit_right,sit_up
+BT DATAINFO char=2 Oakley klip_sayisi=48
+BT DATA char=2 Oakley skill2 metin '16 sn bekleme' <-> kod cooldown=15.0 (id 10)
+BT DATAINFO char=3 Matthew klip_sayisi=56
+BT DATAINFO char=4 Büyücü Kız klip_sayisi=56
+BT DATA char=4 Büyücü Kız skill3 id=24 zamanlama tablosunda YOK (SKILL3_TIMING)
+BT DATAINFO char=5 Assasin Çocuk klip_sayisi=60
+BT DATA char=5 Assasin Çocuk skill id=5 zamanlama tablosunda YOK (SKILL_TIMING)
+BT DATA char=5 Assasin Çocuk eksik: skill3_icon
+BT DATAINFO char=7 Şovalye Adam klip_sayisi=60
+BT DATAINFO char=8 Elara klip_sayisi=56
+BT DATAINFO char=9 Korsan klip_sayisi=56
+BT DATAINFO char=9 Korsan skill metinde '(N sn bekleme)' yok (cooldown kod=0.0)
+BT DATA char=9 Korsan skill2 id=17 zamanlama tablosunda YOK (SKILL2_TIMING)
+BT DATAINFO char=10 Melek klip_sayisi=56
+BT DATAINFO char=11 Necromancer klip_sayisi=56
+BT DATA char=11 Necromancer skill id=19 zamanlama tablosunda YOK (SKILL_TIMING)
+BT DATAINFO char=12 Shaman klip_sayisi=76
+BT DATAINFO char=12 Shaman skill metinde '(N sn bekleme)' yok (cooldown kod=20.0)
+BT DATAINFO char=13 Vampir Çocuk klip_sayisi=60
+BT DATAINFO char=13 Vampir Çocuk skill3 metinde '(N sn bekleme)' yok (cooldown kod=0.0)
+BT DATAINFO char=14 Hadime klip_sayisi=60
+BT DATAINFO char=14 Hadime skill metinde '(N sn bekleme)' yok (cooldown kod=8.0)
+BT DATAINFO char=15 Cadı klip_sayisi=52
+BT DATAINFO char=15 Cadı skill metinde '(N sn bekleme)' yok (cooldown kod=8.0)
+BT DATAINFO char=15 Cadı skill3 metinde '(N sn bekleme)' yok (cooldown kod=8.0)
+BT DATAINFO silah=dagger weapon_tier_art.ART içinde yok (eski sahne ikonunda kalır)
+BT DATAINFO silah=lightning_staff weapon_tier_art.ART içinde yok (eski sahne ikonunda kalır)
+BT DATAINFO silah=tabanca weapon_tier_art.ART içinde yok (eski sahne ikonunda kalır)
+BT DATAINFO silah=tufek weapon_tier_art.ART içinde yok (eski sahne ikonunda kalır)
+BT DATAINFO silah=tufek özellik=delici_mermi özel davranış betiği yok (ortak taban sınıf)
+BT DATAINFO silah=boomerang weapon_tier_art.ART içinde yok (eski sahne ikonunda kalır)
+BT DATAINFO silah=fisek weapon_tier_art.ART içinde yok (eski sahne ikonunda kalır)
+BT DATAINFO silah=pence weapon_tier_art.ART içinde yok (eski sahne ikonunda kalır)
+BT DATAINFO silah=topuz weapon_tier_art.ART içinde yok (eski sahne ikonunda kalır)
+BT DATAINFO yaratık enemy_agac1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_agac2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_agac3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_balkabagi1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_banshee1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_bitki1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_bitki2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_bitki3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_demon1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_demon2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_demon3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_golem1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_golem2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_golem3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_hayalet1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_hayalet2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_hayalet3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_iblis1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_iblis2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_iblis3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_iskelet1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_iskelet2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_iskelet3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_kabak1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_lich1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_lich2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_lich3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_mantar1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_mantar2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_mantar3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_minotaur1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_ork1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_ork2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_ork3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_rat1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_rat2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_rat3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_rontgen1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_rontgen2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_rontgen3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_sandworm1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_slime1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_slime2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_slime3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_slime4.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_slime5.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_slime6.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_slime7.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_ucansetan1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_underground1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_vampire1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_vampire2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_vampire3.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_wendigo1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_yarasa1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_zombie1.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_zombie2.tscn: AnimatedSprite2D yok
+BT DATAINFO yaratık enemy_zombie3.tscn: AnimatedSprite2D yok
+BT DONE mode=data

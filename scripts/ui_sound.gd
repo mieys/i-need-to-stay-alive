@@ -20,6 +20,7 @@ const SETTINGS_PATH := "user://audio_settings.cfg"
 const MASTER_BUS_NAME := "Master"
 
 const AudioBuses := preload("res://scripts/audio_buses.gd")
+const LocalizationScript := preload("res://scripts/localization.gd") ## dil desteği (madde 446)
 
 var _player: AudioStreamPlayer
 var master_volume_percent: float = 100.0
@@ -257,6 +258,43 @@ func set_auto_pick_cards(enabled: bool) -> void:
 	_save_display_settings()
 
 
+## HASAR SAYILARI (2026-11-06, madde 406, cila: ekrandaki yazı kalabalığı): yaratıklara verdiğin hasarın sayıları.
+## 0 = hepsi, 1 = yalnız kritik, 2 = kapalı. Kapı: enemy.gd _spawn_floating_text + mission_player_copy.gd (sayı hiç oluşmaz).
+const DAMAGE_NUMBER_MODES: Array = ["Hepsi", "Yalnız Kritik", "Kapalı"]
+var damage_numbers_mode: int = 0
+
+
+func set_damage_numbers_mode(mode: int) -> void:
+	damage_numbers_mode = clampi(mode, 0, DAMAGE_NUMBER_MODES.size() - 1)
+	_save_display_settings()
+
+
+func damage_number_allowed(is_crit: bool) -> bool:
+	return damage_numbers_mode == 0 or (damage_numbers_mode == 1 and is_crit)
+
+
+## EFEKT YOĞUNLUĞU (2026-11-06, madde 425/426; ayar adı "Efekt Yoğunluğu"): başka oyuncuların KİŞİSEL efektleri (namlu, vuruş izi, kast süsü, asa ucu partikülü, uzak mermi, uzak Ateş Nefesi alevi)
+## soluklaşır + ekranda aynı anda gösterilen yaratık yanma alevi sayısı sınırlanır (fx_burn_status.gd).
+## 0 = Tam, 1 = Azaltılmış (varsayılan), 2 = Minimal. Takım destek / çağrılan / dönüşüm efektleri HİÇBİR modda soluklaşmaz (scripts/ally_fx_density.gd).
+const ALLY_FX_MODES: Array = ["Tam", "Azaltılmış", "Minimal"]
+var ally_fx_mode: int = 1
+
+
+func set_ally_fx_mode(mode: int) -> void:
+	ally_fx_mode = clampi(mode, 0, ALLY_FX_MODES.size() - 1)
+	_save_display_settings()
+
+
+## DİL (2026-11-07, madde 446): "tr" / "en" ... (Localization.LANGUAGES). Kayıtta yoksa işletim sisteminin diline göre (Localization.os_default).
+var language: String = "tr"
+
+
+func set_language(code: String) -> void:
+	LocalizationScript.apply(code)
+	language = LocalizationScript.current()
+	_save_display_settings()
+
+
 ## bkz. camera_shake_percent notu. 0 = kapalı.
 func set_camera_shake_percent(percent: float) -> void:
 	camera_shake_percent = clampf(percent, 0.0, 100.0)
@@ -383,6 +421,9 @@ func _save_display_settings() -> void:
 	config.set_value("display", "touch_button_scale_percent", touch_button_scale_percent)
 	config.set_value("display", "touch_vibration", touch_vibration)
 	config.set_value("display", "auto_pick_cards", auto_pick_cards)
+	config.set_value("display", "damage_numbers_mode", damage_numbers_mode)
+	config.set_value("display", "ally_fx_mode", ally_fx_mode)
+	config.set_value("display", "language", language)
 	config.save(DISPLAY_SETTINGS_PATH)
 
 
@@ -404,8 +445,17 @@ func _load_display_settings() -> void:
 		touch_button_scale_percent = clampf(float(config.get_value("display", "touch_button_scale_percent", 100.0)), TOUCH_BUTTON_SCALE_MIN, TOUCH_BUTTON_SCALE_MAX)
 		touch_vibration = bool(config.get_value("display", "touch_vibration", true))
 		auto_pick_cards = bool(config.get_value("display", "auto_pick_cards", false))
+		damage_numbers_mode = clampi(int(config.get_value("display", "damage_numbers_mode", 0)), 0, DAMAGE_NUMBER_MODES.size() - 1)
+		ally_fx_mode = clampi(int(config.get_value("display", "ally_fx_mode", 1)), 0, ALLY_FX_MODES.size() - 1)
+		language = str(config.get_value("display", "language", LocalizationScript.os_default()))
 	else:
 		fps_limit = _default_fps_limit()
+		language = LocalizationScript.os_default()
+	## Geliştirme/yakalama: DIL=en ortam değişkeni dili ZORLAR, kayda yazılmaz (tools/buyuk_test -Mode dil; madde 446)
+	var dev_lang: String = OS.get_environment("DIL")
+	LocalizationScript.apply(dev_lang if dev_lang != "" else language)
+	if dev_lang == "":
+		language = LocalizationScript.current()
 	if not FPS_LIMITS.has(fps_limit):
 		fps_limit = _default_fps_limit()
 	gfx_preset = _matching_preset()

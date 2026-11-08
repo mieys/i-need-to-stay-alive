@@ -106,6 +106,10 @@ static var _oneshots: int = 0
 var _counted: bool = false
 const ROT_SMOOTH := 14.0 ## 1/sn - anahtarlı efektin yeni yöne dönüş hızı
 var key: String = ""
+## Başkasının silahına yapışık (KİŞİSEL) sürekli efekt - Ateş Nefesi alevi gibi: AllyFxDensity çarpanı (1.0 = tam). Sürekli efekt kök modulate.a'yı her
+## karede kendisi yazdığı için çarpan dışarıdan modulate'a değil buraya konur (madde 425/426).
+var ally_alpha: float = 1.0
+const AllyFxDensity := preload("res://scripts/ally_fx_density.gd")
 var _target_rot: float = 0.0
 
 
@@ -182,6 +186,11 @@ static func spawn(tree: SceneTree, pos: Vector2, data: Dictionary) -> Node2D:
 			n._world_rot = n.rotation
 			n.follow_aim = bool(data.get("follow_aim", false))
 			n.aim_rot_offset = float(data.get("rot_offset", 0.0))
+			## Başkasının silahına yapışık efekt (uzak kopya) = KİŞİSEL: Ateş Nefesi alevi vb. soluklaşır (formdaki kasterde ve Tam modda tam).
+			var fpeer: int = int(data.get("follow_peer", 0))
+			if fpeer > 0 and NetworkManager.is_multiplayer_active and tree.root.multiplayer.has_multiplayer_peer() \
+					and fpeer != tree.root.multiplayer.get_unique_id():
+				n.ally_alpha = AllyFxDensity.mult_for(n, NetworkManager._find_remote_player(fpeer))
 			(info[0] as Node).get_parent().add_child(n)
 			n._follow_update()
 			return n
@@ -346,7 +355,7 @@ func _process(delta: float) -> void:
 	if follow_icon != null:
 		_follow_update()
 	if loop_time > 0.0:
-		modulate.a = clampf(minf(_t / 0.12, (loop_time - _t) / FADE), 0.0, 1.0)
+		modulate.a = clampf(minf(_t / 0.12, (loop_time - _t) / FADE), 0.0, 1.0) * ally_alpha
 		if _sfx != null:
 			var a: float = clampf(minf(_t / LOOP_SFX_FADE_IN, (loop_time - _t) / FADE), 0.0, 1.0)
 			_sfx.volume_db = sfx_db + linear_to_db(maxf(a, 0.001))

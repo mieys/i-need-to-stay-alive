@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Çok oyunculu KARAKTER SEÇİMİ. 2026-10-16 (kullanıcı: "oda kurulduktan sonra direk karakter seçim ekranına geçilsin ve o esnada
 ## oyuncular bağlansın"): oda kurulunca/katılınca DOĞRUDAN burası açılır (oda lobisi aşaması yok). MASAÜSTÜ yerleşimi artık
@@ -338,7 +339,7 @@ func _update_lobby_ui() -> void:
 	for info: Dictionary in lp.values():
 		if info.get("is_ready", false):
 			ready_count += 1
-	room_info_label.text = "%s   (%d / %d hazır)" % [NetworkManager.room_name, ready_count, lp.size()]
+	room_info_label.text = Loc.t("%s   (%d / %d hazır)") % [NetworkManager.room_name, ready_count, lp.size()]
 	var host: bool = NetworkManager.is_host
 	start_game_btn.visible = host
 	start_game_btn.disabled = not NetworkManager.all_players_ready() or _viewing_locked

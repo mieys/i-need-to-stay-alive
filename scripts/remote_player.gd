@@ -4,6 +4,8 @@ class_name RemotePlayer
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye R: havada süzülme (klip adından)
 const HideBrushScript := preload("res://scripts/hide_brush.gd")
+const BackMountScript := preload("res://scripts/weapon_back_mount.gd") ## silahlar sırtta (madde 451; yerel weapon.gd aynısı)
+const LimboFxScript := preload("res://scripts/limbo_fx.gd") ## madde 438: ruh hâli görseli
 const DeathBlood := preload("res://scripts/death_blood.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
 const KorsanParrotScript := preload("res://scripts/korsan_parrot.gd")
@@ -360,6 +362,7 @@ const WEAPON_SCENES := {
 	"mizrak": preload("res://scenes/weapon_mizrak.tscn"),
 	"kalkan": preload("res://scenes/weapon_kalkan.tscn"),
 	"yinyang": preload("res://scenes/weapon_yinyang.tscn"), ## madde 334
+	"pompali": preload("res://scenes/weapon_pompali.tscn"), ## madde 448
 	"gokkusagi": preload("res://scenes/weapon_gokkusagi.tscn"),
 }
 
@@ -514,7 +517,47 @@ var _interp_prev_frame: int = -1
 ## Bu oyuncu güvenli alanda mı (player.gd is_safe_zone_frozen ile AYNI tanım: satıcı koruma bölgesi - anlık görüntüde gelir - VEYA demirci iç mekanı - konumdan).
 ## Kuklaya bağlı evcil hayvan / Necro kafatası / totem bunu sorar; bar üstü kum saati de buna göre (madde 327).
 func is_safe_zone_frozen() -> bool:
-	return is_in_merchant_zone or HouseSiege.in_smithy(self)
+	return in_limbo or is_in_merchant_zone or HouseSiege.in_smithy(self)
+
+
+## RUH HÂLİ (madde 438): bu eş level/pazar/sandık menüsünde (NetworkManager.level_up_busy_peers, main.gd _refresh_limbo). Kukla da donar
+## (kaster tarafıyla aynı: form/yarasa/süpürge görselleri, silah ikonları kaldığı yerde; fizikten çıkar), silah ikonları gizlenir, sprite
+## ALWAYS kalır (ağdan gelen "read_<yön>" klibi oynar) + mavi ruh (limbo_fx.gd). Yaratık hedeflemesi enemy_world_bridge.gd'de elenir.
+var in_limbo: bool = false
+var _limbo_prev_pm: int = Node.PROCESS_MODE_INHERIT
+var _limbo_prev_anim_pm: int = Node.PROCESS_MODE_INHERIT
+var _limbo_icon_vis: Dictionary = {} ## ikon instance_id -> önceki visible (içe çekilmiş silah dönüşte de gizli kalsın)
+
+
+func set_limbo(on: bool) -> void:
+	if on == in_limbo:
+		return
+	in_limbo = on
+	if on:
+		_limbo_prev_pm = int(process_mode)
+		process_mode = Node.PROCESS_MODE_DISABLED
+		_limbo_icon_vis.clear()
+		for icon in _weapon_icons:
+			if is_instance_valid(icon):
+				_limbo_icon_vis[icon.get_instance_id()] = icon.visible
+				icon.visible = false
+		if _beam_fx and is_instance_valid(_beam_fx):
+			_stop_beam_vfx()
+		if _rbeam_fx and is_instance_valid(_rbeam_fx):
+			_stop_rbeam_vfx()
+		if is_instance_valid(anim):
+			_limbo_prev_anim_pm = int(anim.process_mode)
+			anim.process_mode = Node.PROCESS_MODE_ALWAYS
+			LimboFxScript.attach(self, anim)
+		return
+	process_mode = _limbo_prev_pm as Node.ProcessMode
+	LimboFxScript.detach(self)
+	for icon in _weapon_icons:
+		if is_instance_valid(icon):
+			icon.visible = bool(_limbo_icon_vis.get(icon.get_instance_id(), true))
+	_limbo_icon_vis.clear()
+	if is_instance_valid(anim):
+		anim.process_mode = _limbo_prev_anim_pm as Node.ProcessMode
 
 
 var _safe_zone_icon_on: bool = false
@@ -716,9 +759,10 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 				var tier_tex: Texture2D = tier_textures[tier - 1]
 				if tier_tex and icon is Sprite2D:
 					icon.texture = tier_tex
-		## Zanaatkâr seti (madde 196): yerel weapon.gd _apply_tier_art ile AYNI sanat + dünya pikseli (weapon_tier_art.gd); kukla kökü
-		## (0,5) altında doğrudan çocuk -> PUPPET_ICON_SCALE. Kademe değişimi _apply_enchant_glows'ta (ench_tiers).
-		if WeaponTierArt.has_art(key) and WeaponTierArt.set_art(icon, key, 1):
+		## Sabit silah sanatı (madde 402): yerel weapon.gd _apply_fixed_art ile AYNI sanat + dünya pikseli (weapon_tier_art.gd); kukla
+		## kökü (0,5) altında doğrudan çocuk -> PUPPET_ICON_SCALE. Sanatı yoksa yukarıdaki eski ikon. Kademe dokuyu değiştirmez
+		## ("tier_art" = görünüş sayfası, hep 1 - kalkan; demirci kademesi "ench_tier" meta'sında, _apply_enchant_glows).
+		if WeaponTierArt.has_art(key) and WeaponTierArt.set_art(icon, key):
 			icon.scale = Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE
 			icon.set_meta("tier_art", 1)
 		if key == "kalkan":
@@ -758,7 +802,11 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 		_weapon_base_scales.append(icon.scale)
 		## Asa ucu partikülleri (madde 299): yerel weapon.gd ile aynı yayıcı, kuklanın kendi ikonunun ucundan (ağ verisi yok).
 		if icon is Sprite2D:
-			StaffTipFxScript.attach(icon as Sprite2D, String(key))
+			var tip_a: float = AllyFxDensity.tip_alpha(self) ## başkasının asa ucu partikülü = KİŞİSEL (Minimal'de kurulmaz, Azaltılmış'ta yarı alfa)
+			if tip_a > 0.0:
+				var tip_fx: Node2D = StaffTipFxScript.attach(icon as Sprite2D, String(key))
+				if tip_fx != null and tip_a < 1.0:
+					tip_fx.modulate.a *= tip_a
 		_talon_form_scale_applied = 1.0 ## ikonlar yeniden yaratıldı: taban ölçek sıfırlandı, _apply_talon_form_scale yeniden uygular
 		_weapon_fire_tweens.append(null)
 		## weapon_root silinmeden ÖNCE kendi nişan açısı ayarlarını yakala -
@@ -922,6 +970,8 @@ var _wf_reveal_glinted: Array = []
 var _wf_glint_cd: Array = []
 var _wf_shadow_base: Array = [] ## gölgenin taban ölçeği (çıkışta küçülür)
 var _wf_bob_phase: Array = []
+var _wf_backs: Array = [] ## Sprite2D sırttaki görüntü (madde 451), ikon başına
+var _wf_icon_base: Array = [] ## Vector2 ikonun taban ölçeği (ateş punch'ından bağımsız)
 var _wf_prev_pos: Vector2 = Vector2.INF
 var _wf_vel: Vector2 = Vector2.ZERO
 var _wf_prev_speed: float = 0.0
@@ -937,6 +987,8 @@ func _wf_add_icon(icon: Node2D, shadow: Node2D) -> void:
 	_wf_glint_cd.append(0.0)
 	_wf_shadow_base.append(shadow.scale if is_instance_valid(shadow) else Vector2.ONE)
 	_wf_bob_phase.append(randf_range(0.0, TAU))
+	_wf_backs.append(null)
+	_wf_icon_base.append(icon.scale)
 
 
 func _wf_clear() -> void:
@@ -951,6 +1003,11 @@ func _wf_clear() -> void:
 	_wf_glint_cd.clear()
 	_wf_shadow_base.clear()
 	_wf_bob_phase.clear()
+	for b in _wf_backs:
+		if b != null and is_instance_valid(b):
+			(b as Node).queue_free()
+	_wf_backs.clear()
+	_wf_icon_base.clear()
 
 
 ## Pivotu kimliğe döndürür, silahı görünür yapar (başka bir sistem ikon konumunu yönetirken).
@@ -965,6 +1022,8 @@ func _wf_identity(i: int) -> void:
 			_weapon_shadows[i].scale = _wf_shadow_base[i]
 	if i < _wf_vis.size():
 		(_wf_vis[i] as Dictionary)["s"] = WeaponFollowMath.SHOWN
+	if i < _wf_backs.size() and _wf_backs[i] != null and is_instance_valid(_wf_backs[i]):
+		(_wf_backs[i] as Sprite2D).visible = false
 
 
 func _wf_fire_tween_running(i: int) -> bool:
@@ -1024,6 +1083,7 @@ func _wf_update_all(delta: float) -> void:
 			any_target = true
 			break
 	var want: bool = (bool(sc["seen"]) or any_target) and not gone and brush_state != HideBrushScript.STATE_HIDDEN ## saklıyken içe çekili (madde 283)
+	var face_dir: String = BackMountScript.face_of(self)
 	for i in mini(_weapon_icons.size(), _wf_pivots.size()):
 		var icon: Node2D = _weapon_icons[i]
 		var pv: Node2D = _wf_pivots[i] as Node2D
@@ -1044,11 +1104,19 @@ func _wf_update_all(delta: float) -> void:
 		var home: Vector2 = slot + WeaponFollowMath.charge_offset(kind, w) + Vector2(0.0, bob)
 		var vis: Dictionary = _wf_vis[i]
 		WeaponFollowMath.step_visibility(vis, want, false, now, kind, gone)
-		var p: Dictionary = WeaponFollowMath.pose(vis, now, kind, home)
+		## SIRT (madde 451): weapon.gd _wf_update ile aynı kural (ölü/yerdeyse eski göğüs kuralı).
+		var key: String = str(_weapon_keys[i]) if i < _weapon_keys.size() else ""
+		var fwd_rad: float = deg_to_rad(_weapon_forward_angle_deg[i] if i < _weapon_forward_angle_deg.size() else 0.0)
+		var mount: Dictionary = {}
+		if not gone:
+			mount = BackMountScript.pose(kind, face_dir, _wf_vel, now, key)
+		var p: Dictionary = WeaponFollowMath.pose(vis, now, kind, home, mount)
 		var st: int = int(vis["s"])
 		var u: float = float(p["u"])
 		var sc_pose: float = float(p["scale"])
 		var spin: float = float(p["spin"])
+		if float(p["blend"]) > 0.0:
+			spin = lerp_angle(spin, BackMountScript.root_rotation(mount, icon, fwd_rad), float(p["blend"]))
 		## Yakın dövüş savuruşu sürerken pivot dondurulur (savuruş yolu kaymaz; bitince yay kaldığı yerden sürer).
 		var melee_busy: bool = i < _weapon_melee.size() and _weapon_melee[i] and _wf_fire_tween_running(i)
 		if not melee_busy:
@@ -1064,12 +1132,17 @@ func _wf_update_all(delta: float) -> void:
 			var sh: Node2D = _weapon_shadows[i]
 			var icon_local: Vector2 = pv.transform * icon.position
 			sh.position = icon_local + Vector2(0.0, WeaponOrbitMath.hover_shadow_gap((p["pos"] as Vector2).y - bob))
-			sh.modulate.a = 0.4 * alpha
+			sh.modulate.a = 0.4 * float(p["shadow"])
 			if i < _wf_shadow_base.size():
 				sh.scale = (_wf_shadow_base[i] as Vector2) * sc_pose
+		var on_back: bool = not mount.is_empty() and alpha < 0.01 and icon.visible
+		if i < _wf_backs.size() and (on_back or _wf_backs[i] != null):
+			_wf_backs[i] = BackMountScript.ensure_sprite(self, _wf_backs[i])
+			var base: Vector2 = _wf_icon_base[i] if i < _wf_icon_base.size() else icon.scale
+			BackMountScript.place(_wf_backs[i], self, icon, mount, base, fwd_rad, on_back)
 		## En üst kademe uç parıltısı - weapon.gd _wf_update ile aynı.
 		_wf_glint_cd[i] = maxf(0.0, float(_wf_glint_cd[i]) - delta)
-		if WeaponFollowMath.has_glint(int(icon.get_meta("tier_art", 1))):
+		if WeaponFollowMath.has_glint(int(icon.get_meta("ench_tier", 1))):
 			var fwd: float = _weapon_forward_angle_deg[i] if i < _weapon_forward_angle_deg.size() else 0.0
 			if st == WeaponFollowMath.REVEAL and not _wf_reveal_glinted[i] and u >= WeaponFollowMath.GLINT_REVEAL_AT:
 				_wf_reveal_glinted[i] = true
@@ -1455,7 +1528,7 @@ func update_position_and_anim_from_net(pos: Vector2, cur_anim: String) -> void:
 			anim.play(cur_anim)
 
 
-## DURUM kanalı (bkz. main.gd _rpc_update_player_extra_state, reliable):
+## DURUM kanalı (bkz. main.gd _rpc_player_state - madde 419 delta, alıcı tam durumu birleştirip buraya verir; reliable):
 ## can, kalkan, silah envanteri, durum efektleri gibi nadiren değişen her şey.
 ## Gönderen taraf (main.gd) bunu SADECE bir önceki gönderilenden farklıysa
 ## (ya da birkaç saniyede bir "heartbeat" olarak) yolluyor - burada özel bir
@@ -1615,6 +1688,14 @@ func get_effective_move_speed() -> float:
 const EnchantGlowScript := preload("res://scripts/enchant_weapon_glow.gd")
 const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
 const StaffTipFxScript := preload("res://scripts/staff_tip_fx.gd") ## asa ucu partikülleri (madde 299)
+const AllyFxDensity := preload("res://scripts/ally_fx_density.gd") ## başkasının KİŞİSEL efektlerini soluklaştırma (madde 425)
+
+
+## Bu kukla şu an bir DÖNÜŞÜMDE mi (golem / Elektrik Topu / yarasa / Talon formu / Cadı süpürgesi / Hadime Q / Elara Sıvışma / Ninja)?
+## Formdaki kasterin efektleri AllyFxDensity tarafından hiç azaltılmaz ve yoğunluk sayacına girmez (kullanıcı kuralı, madde 425).
+func is_in_form() -> bool:
+	return _shaman_golem_form or _matthew_ball > 0 or _vampir_bat_form or _talon_form_active or _cadi_broom \
+		or _hadime_q or _elara_evasion or _item_ninja
 
 
 func _apply_enchant_glows(tiers: Array) -> void:
@@ -1623,12 +1704,8 @@ func _apply_enchant_glows(tiers: Array) -> void:
 			continue
 		var idx: int = int(str(icon.name).get_slice("_", 1))
 		var t: int = int(tiers[idx]) if idx >= 0 and idx < tiers.size() else 0
-		## Kademe sanatı (madde 196): kaster weapon.gd set_enchant -> _apply_tier_art; burada aynı kademe ench_tiers'tan.
-		if idx >= 0 and idx < _weapon_keys.size():
-			var art_key: String = str(_weapon_keys[idx])
-			var art_t: int = WeaponTierArt.clamp_tier(t)
-			if WeaponTierArt.has_art(art_key) and int(icon.get_meta("tier_art", 0)) != art_t and WeaponTierArt.set_art(icon, art_key, art_t):
-				icon.set_meta("tier_art", art_t)
+		## Madde 402: kademe görünüşü (dokuyu) değiştirmez, sadece kontür parıltısı (aşağıda) + kademe 5 uç parıltısı (_wf_* "ench_tier").
+		icon.set_meta("ench_tier", WeaponTierArt.clamp_tier(t))
 		var cur: Node = icon.get_node_or_null("EnchantGlow")
 		if t <= 0 and cur == null:
 			continue
@@ -2341,6 +2418,7 @@ func _spawn_vine_visual(instance_id: String) -> void:
 	vine.position = global_position + preload("res://scripts/oakley_vine.gd").CASTER_FEET_OFFSET
 	if vine.has_method("mark_as_network_visual"):
 		vine.mark_as_network_visual()
+	vine.set_meta(&"limbo_peer", peer_id) ## ruh hâli (madde 438): sahibi menüdeyken donsun (limbo.gd)
 	get_tree().current_scene.add_child(vine)
 	_vine_visuals[instance_id] = vine
 	vine.tree_exiting.connect(func() -> void:
@@ -2713,8 +2791,8 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		tw.tween_property(icon, "position", base_pos, 0.26).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		tw.parallel().tween_property(icon, "rotation", rest_rot, 0.26).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	else:
-		if GunMagMath.has_mag(wkey):
-			ShellCasingFx.eject(icon, wkey, dir, self) ## boş kovan (madde 296) - kasterde weapon.gd _fire_at
+		if GunMagMath.has_mag(wkey) and AllyFxDensity.casing_allowed(self):
+			ShellCasingFx.eject(icon, wkey, dir, self) ## boş kovan (madde 296) - kasterde weapon.gd _fire_at; azaltılmış/minimalde başkasınınki yok
 		var recoil_dist: float = _weapon_recoil_distance[slot_index] if slot_index < _weapon_recoil_distance.size() else 8.0
 		var kick: Vector2 = -dir * recoil_dist
 		## SABİT taban ölçek (bkz. _weapon_base_scales üzerindeki yorum) -
@@ -2854,7 +2932,10 @@ func _spawn_floating_text(text: String, color: Color, is_heal: bool = false, y_o
 	if scene:
 		var ft = scene.instantiate()
 		get_tree().current_scene.add_child(ft)
-		ft.global_position = global_position + Vector2(randf_range(-15, 15), y_offset)
+		var off := Vector2(randf_range(-15, 15), y_offset)
+		ft.follow_target = self ## madde 416: sayı çıktığı oyuncunun üstünde kalır (yerel player.gd gibi)
+		ft.follow_offset = off
+		ft.global_position = global_position + off
 		if ft.has_method("setup"):
 			ft.setup(text, color, is_heal)
 

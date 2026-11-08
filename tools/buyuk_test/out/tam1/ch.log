@@ -1,0 +1,201 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
+
+BT START mode=ch char=2
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://shaders/cloud_shadows_material.tres:3 - ext_resource, invalid UID: uid://fcyufq7kts1o - using text path instead: res://shaders/cloud_shadows.gdshader
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/fx_oyku_heal.tscn:3 - ext_resource, invalid UID: uid://dh4h1d77x2n3p - using text path instead: res://scripts/fx_oyku_heal.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/fx_buyucu_fastfire.tscn:3 - ext_resource, invalid UID: uid://cd84h1d77x2n5 - using text path instead: res://scripts/fx_buyucu_fastfire.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/fx_shield_active.tscn:3 - ext_resource, invalid UID: uid://cd100h1d77x2n - using text path instead: res://scripts/fx_shield_active.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/fx_paladin_cast.tscn:3 - ext_resource, invalid UID: uid://cd99h1d77x2n2 - using text path instead: res://scripts/fx_paladin_cast.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/fx_assasin_stealth.tscn:3 - ext_resource, invalid UID: uid://cd94h1d77x2n6 - using text path instead: res://scripts/fx_assasin_stealth.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/fx_talha_rage.tscn:3 - ext_resource, invalid UID: uid://d74h1d77x2n4q - using text path instead: res://scripts/fx_talha_rage.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/fx_matthew_sacrifice.tscn:3 - ext_resource, invalid UID: uid://cd95h1d77x2n7 - using text path instead: res://scripts/fx_matthew_sacrifice.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: res://scenes/fx_matthew_explosion.tscn:3 - ext_resource, invalid UID: uid://cd96h1d77x2n8 - using text path instead: res://scripts/fx_matthew_explosion.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _boot (res://tools/buyuk_test/buyuk_test.gd:101)
+       [1] _ch (res://tools/buyuk_test/buyuk_test.gd:488)
+       [2] _run (res://tools/buyuk_test/buyuk_test.gd:238)
+WARNING: Camera2D overridden to physics process mode due to use of physics interpolation.
+   at: _update_process_callback (scene/2d/camera_2d.cpp:88)
+   GDScript backtrace (most recent call first):
+       [0] opt_in (res://scripts/physics_interp.gd:34)
+       [1] _ready (res://scripts/player.gd:1171)
+[Yaratık sistemi] C++ EnemyWorld
+BT >> ch c1 idle
+BT CHIDLE c=1 base_dps=63.0 unlocked=[true, true, true] | mean=5.23 p50=4.96 p95=6.53 max=10.8
+BT >> ch c1 skill
+BT CAST c=1 slot=skill st=ready>active>cooldown timer=0.3 dps=195.1 base_dps=63.0 | mean=5.99 p50=5.63 p95=8.38 max=19.5
+BT >> ch c1 skill2
+BT CAST c=1 slot=skill2 st=ready>active>cooldown timer=3.0 dps=77.9 base_dps=63.0 | mean=6.48 p50=5.90 p95=10.02 max=19.7
+BT >> ch c1 skill3
+BT CAST c=1 slot=skill3 st=ready>active>active timer=15.0 dps=119.1 base_dps=63.0 | mean=6.04 p50=5.72 p95=7.92 max=19.6
+BT >> ch c2 idle
+BT CHIDLE c=2 base_dps=55.4 unlocked=[true, true, true] | mean=5.22 p50=4.90 p95=6.34 max=21.5
+BT >> ch c2 skill
+BT CAST c=2 slot=skill st=ready>active>active timer=10.0 dps=30.8 base_dps=55.4 | mean=6.39 p50=5.76 p95=11.65 max=18.5
+BT >> ch c2 skill2
+BT CAST c=2 slot=skill2 st=ready>active>active timer=6.0 dps=64.7 base_dps=55.4 | mean=6.51 p50=5.82 p95=10.63 max=27.5
+BT >> ch c2 skill3
+BT CAST c=2 slot=skill3 st=ready>active>active timer=11.9 dps=43.7 base_dps=55.4 | mean=6.37 p50=5.84 p95=8.02 max=114.0
+BT >> ch c3 idle
+BT CHIDLE c=3 base_dps=55.0 unlocked=[true, true, true] | mean=5.50 p50=4.96 p95=8.19 max=18.5
+BT >> ch c3 skill
+BT CAST c=3 slot=skill st=ready>active>cooldown timer=0.3 dps=82.8 base_dps=55.0 | mean=5.95 p50=5.58 p95=7.73 max=18.5
+BT >> ch c3 skill2
+BT CAST c=3 slot=skill2 st=ready>active>cooldown timer=3.0 dps=6.3 base_dps=55.0 | mean=5.71 p50=5.27 p95=8.05 max=20.5
+BT >> ch c3 skill3
+BT CAST c=3 slot=skill3 st=ready>active>active timer=15.0 dps=28.9 base_dps=55.0 | mean=6.34 p50=5.75 p95=10.73 max=21.8
+BT >> ch c4 idle
+BT CHIDLE c=4 base_dps=58.9 unlocked=[true, true, true] | mean=5.41 p50=4.92 p95=6.75 max=24.4
+BT >> ch c4 skill
+BT CAST c=4 slot=skill st=ready>active>ready timer=0.2 dps=48.0 base_dps=58.9 | mean=6.41 p50=5.68 p95=11.06 max=22.9
+BT >> ch c4 skill2
+BT CAST c=4 slot=skill2 st=ready>ready>ready timer=0.0 dps=118.5 base_dps=58.9 | mean=5.98 p50=5.47 p95=8.32 max=24.7
+BT >> ch c4 skill3
+BT CAST c=4 slot=skill3 st=ready>ready>ready timer=0.0 dps=166.4 base_dps=58.9 | mean=6.26 p50=5.90 p95=7.79 max=23.5
+BT >> ch c5 idle
+BT CHIDLE c=5 base_dps=71.5 unlocked=[true, true, true] | mean=5.43 p50=5.17 p95=6.64 max=15.9
+BT >> ch c5 skill
+BT CAST c=5 slot=skill st=ready>ready>ready timer=0.0 dps=128.2 base_dps=71.5 | mean=6.26 p50=5.72 p95=10.09 max=20.0
+BT >> ch c5 skill2
+BT CAST c=5 slot=skill2 st=ready>active>active timer=6.0 dps=92.6 base_dps=71.5 | mean=6.02 p50=5.41 p95=9.56 max=17.9
+BT >> ch c5 skill3
+BT CAST c=5 slot=skill3 st=ready>active>active timer=10.0 dps=583.4 base_dps=71.5 | mean=6.79 p50=6.17 p95=11.09 max=24.1
+BT >> ch c7 idle
+BT CHIDLE c=7 base_dps=33.1 unlocked=[true, true, true] | mean=5.29 p50=5.04 p95=6.41 max=8.9
+BT >> ch c7 skill
+BT CAST c=7 slot=skill st=ready>active>active timer=6.0 dps=20.5 base_dps=33.1 | mean=5.65 p50=5.43 p95=6.78 max=11.2
+BT >> ch c7 skill2
+BT CAST c=7 slot=skill2 st=ready>active>active timer=15.0 dps=26.3 base_dps=33.1 | mean=6.49 p50=5.87 p95=10.46 max=22.7
+BT >> ch c7 skill3
+BT CAST c=7 slot=skill3 st=ready>active>active timer=60.0 dps=57.5 base_dps=33.1 | mean=6.23 p50=5.63 p95=8.49 max=24.3
+BT >> ch c8 idle
+BT CHIDLE c=8 base_dps=54.0 unlocked=[true, true, true] | mean=5.29 p50=5.00 p95=6.62 max=9.9
+BT >> ch c8 skill
+BT CAST c=8 slot=skill st=ready>active>cooldown timer=3.0 dps=63.7 base_dps=54.0 | mean=5.97 p50=5.47 p95=7.63 max=24.6
+BT >> ch c8 skill2
+BT CAST c=8 slot=skill2 st=ready>active>active timer=6.0 dps=71.7 base_dps=54.0 | mean=6.05 p50=5.66 p95=8.25 max=19.5
+BT >> ch c8 skill3
+BT CAST c=8 slot=skill3 st=ready>active>active timer=15.0 dps=84.9 base_dps=54.0 | mean=6.21 p50=5.65 p95=8.93 max=24.0
+BT >> ch c9 idle
+BT CHIDLE c=9 base_dps=54.0 unlocked=[true, true, true] | mean=5.49 p50=5.07 p95=6.93 max=21.5
+BT >> ch c9 skill
+BT CAST c=9 slot=skill st=ready>ready>ready timer=0.0 dps=58.9 base_dps=54.0 | mean=6.07 p50=5.59 p95=8.32 max=19.7
+BT >> ch c9 skill2
+BT CAST c=9 slot=skill2 st=ready>ready>ready timer=0.0 dps=50.4 base_dps=54.0 | mean=6.18 p50=5.64 p95=9.00 max=22.5
+BT >> ch c9 skill3
+BT CAST c=9 slot=skill3 st=ready>active>active timer=8.0 dps=207.9 base_dps=54.0 | mean=6.12 p50=5.68 p95=8.00 max=19.2
+BT >> ch c10 idle
+BT CHIDLE c=10 base_dps=60.0 unlocked=[true, true, true] | mean=5.26 p50=5.06 p95=6.41 max=9.3
+BT >> ch c10 skill
+BT CAST c=10 slot=skill st=ready>active>active timer=6.0 dps=62.7 base_dps=60.0 | mean=6.44 p50=5.77 p95=10.73 max=20.2
+BT >> ch c10 skill2
+BT CAST c=10 slot=skill2 st=ready>active>active timer=6.0 dps=31.5 base_dps=60.0 | mean=6.12 p50=5.52 p95=9.62 max=26.5
+BT >> ch c10 skill3
+BT CAST c=10 slot=skill3 st=ready>active>cooldown timer=2.0 dps=5.4 base_dps=60.0 | mean=6.02 p50=5.53 p95=9.28 max=18.5
+BT >> ch c11 idle
+BT CHIDLE c=11 base_dps=54.0 unlocked=[true, true, true] | mean=5.70 p50=5.28 p95=7.80 max=19.5
+BT >> ch c11 skill
+BT CAST c=11 slot=skill st=ready>ready>ready timer=0.0 dps=62.1 base_dps=54.0 | mean=6.26 p50=5.80 p95=9.55 max=18.4
+BT >> ch c11 skill2
+BT CAST c=11 slot=skill2 st=ready>ready>ready timer=0.0 dps=46.4 base_dps=54.0 | mean=6.30 p50=5.87 p95=8.47 max=21.0
+BT >> ch c11 skill3
+BT CAST c=11 slot=skill3 st=ready>active>active timer=10.0 dps=56.5 base_dps=54.0 | mean=6.44 p50=5.84 p95=10.29 max=24.8
+BT >> ch c12 idle
+BT CHIDLE c=12 base_dps=62.2 unlocked=[true, true, true] | mean=5.37 p50=5.14 p95=6.56 max=10.3
+BT >> ch c12 skill
+BT CAST c=12 slot=skill st=ready>ready>ready timer=0.0 dps=112.4 base_dps=62.2 | mean=6.66 p50=6.15 p95=10.11 max=20.6
+BT >> ch c12 skill2
+BT CAST c=12 slot=skill2 st=ready>cooldown>cooldown timer=43.6 dps=155.0 base_dps=62.2 | mean=7.34 p50=6.45 p95=11.20 max=22.0
+BT >> ch c12 skill3
+BT CAST c=12 slot=skill3 st=ready>active>active timer=20.0 dps=97.5 base_dps=62.2 | mean=7.22 p50=6.19 p95=13.73 max=23.1
+BT >> ch c13 idle
+BT CHIDLE c=13 base_dps=70.9 unlocked=[true, true, true] | mean=5.28 p50=5.02 p95=6.57 max=9.2
+BT >> ch c13 skill
+BT CAST c=13 slot=skill st=ready>active>cooldown timer=0.4 dps=59.5 base_dps=70.9 | mean=6.29 p50=5.63 p95=10.28 max=21.1
+BT >> ch c13 skill2
+BT CAST c=13 slot=skill2 st=ready>active>active timer=5.0 dps=0.0 base_dps=70.9 | mean=5.74 p50=5.41 p95=7.58 max=19.9
+BT >> ch c13 skill3
+BT CAST c=13 slot=skill3 st=ready>ready>ready timer=0.0 dps=49.8 base_dps=70.9 | mean=6.00 p50=5.54 p95=8.08 max=21.1
+BT >> ch c14 idle
+BT CHIDLE c=14 base_dps=66.0 unlocked=[true, true, true] | mean=5.79 p50=5.32 p95=8.67 max=23.8
+BT >> ch c14 skill
+BT CAST c=14 slot=skill st=ready>active>active timer=9999.0 dps=126.2 base_dps=66.0 | mean=6.20 p50=5.70 p95=9.11 max=31.9
+BT >> ch c14 skill2
+BT CAST c=14 slot=skill2 st=ready>active>active timer=6.0 dps=216.2 base_dps=66.0 | mean=6.02 p50=5.48 p95=8.29 max=19.4
+BT >> ch c14 skill3
+BT CAST c=14 slot=skill3 st=ready>active>active timer=12.0 dps=246.5 base_dps=66.0 | mean=6.40 p50=5.83 p95=10.06 max=21.5
+BT >> ch c15 idle
+BT CHIDLE c=15 base_dps=60.5 unlocked=[true, true, true] | mean=5.77 p50=5.25 p95=8.76 max=20.8
+BT >> ch c15 skill
+BT CAST c=15 slot=skill st=ready>active>active timer=9999.0 dps=22.5 base_dps=60.5 | mean=6.46 p50=5.88 p95=10.62 max=23.2
+BT >> ch c15 skill2
+BT CAST c=15 slot=skill2 st=ready>active>active timer=8.0 dps=28.9 base_dps=60.5 | mean=6.05 p50=5.62 p95=8.66 max=20.3
+BT >> ch c15 skill3
+BT CAST c=15 slot=skill3 st=ready>ready>ready timer=0.0 dps=28.9 base_dps=60.5 | mean=6.32 p50=5.85 p95=9.24 max=20.5
+BT DONE mode=ch

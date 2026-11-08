@@ -18,6 +18,9 @@ extends Node
 ## oradan ölçülen 168'lik menzil kubbenin güneyine yetişmezdi - menzil/hedef kuralı eskisiyle AYNI kaldı (denge değişmesin),
 ## mermi/savuruş taçtaki silahtan çıkar.
 ##
+## 2026-11-08: SİSTEM KAPALI (`PaladinDome.WEAPONS_ON_RIM` false, kullanıcı: "silahlar kalkandan bağımsız, şovalye adamınki dahil") - `_ready`
+## fizik işlemeyi durdurur, hiçbir silah halkaya girmez (kubbe girdabı dahil). Aşağıdaki her şey geri açmak için duruyor.
+##
 ## Uzak kuklaların kubbe üyeliği kukla konumlarından (ağ interpolasyonu) çıkar, ekrandan ekrana birkaç px oynayabilir:
 ## kenarda titremesin diye girme/çıkma eşikleri farklı (ENTER_MARGIN/LEAVE_MARGIN). Hasarı atış yapanın KENDİ silah konumu
 ## belirler (kendi ekranında); diğer ekranlarda sadece görünüm.
@@ -44,6 +47,11 @@ var _assigned: Dictionary = {}
 var _spin_angle: Dictionary = {}
 ## Bu karede halka konumu almış üyeler (kubbeden çıkınca/engellenince temizlenir)
 var _rimmed: Array = []
+
+
+func _ready() -> void:
+	if not PaladinDome.WEAPONS_ON_RIM:
+		set_physics_process(false)
 
 
 static func _slot_angle(index: int, count: int, angle_offset: float) -> float:

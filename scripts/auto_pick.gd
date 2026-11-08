@@ -36,7 +36,7 @@ static func upgrade_score(id: String, tier: int, player: Node) -> float:
 	if LevelSpecialCardsScript.is_special(id):
 		v = LevelSpecialCardsScript.auto_value(id) ## takas / silah türü kartları (madde 367)
 	elif LevelSpecialCardsScript.is_plain(id):
-		v *= PLAIN_COST_DISCOUNT ## düz kartlar da bedel öder (madde 379): bedelli özel kartlarla adil kıyas için taban düşer
+		v *= PLAIN_COST_DISCOUNT ## yalnız PLAIN_COSTS'ta bedeli olan düz kart (madde 379; madde 398'den beri tablo boş, bedelsiz düz kart tam puan alır)
 	if player != null and is_instance_valid(player):
 		if CAPPED_STAT.has(id) and player.has_method("is_stat_capped") and bool(player.call("is_stat_capped", CAPPED_STAT[id])):
 			v *= 0.05

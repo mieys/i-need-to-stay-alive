@@ -2,7 +2,7 @@ extends Control
 
 ## AYARLAR ekranı - "B - Ateş Işığı" (2026-10-17, madde 234; prototip tools/proto_20261017/esc_ayar_proto.gd, madde 229).
 ## Duraklatma (ESC) menüsü VE ana menü aynı ekranı açar (eskiden iki ayrı kopya panel + ayrı Grafik / Tuş Atamaları pencereleri
-## vardı). Kutu yok: solda büyük başlık + kategori sütunu (GENEL / GRAFİK / TUŞLAR / GERİ, seçilide yanan mum), sağda panelsiz
+## vardı). Kutu yok: solda büyük başlık + kategori sütunu (GENEL / GRAFİK / TUŞLAR / GERİ, seçilide altın yazı), sağda panelsiz
 ## satırlar (altın bölüm başlığı + ince ayraç), çoklu seçimler konsol tarzı "< değer >" döngüsü. Sağ kenarda arka plan görünür.
 ## Değerler ve kaydetme TEK yerde: UISound (her set_* anında dosyaya yazar); bu ekran sadece o API'yi çağırır.
 ## Gezinme: W/S (ok/D-pad) satır, A/D değiştir, Enter/A etkinleştir, Q/E (LB/RB, Tab) bölüm, ESC/B geri. Fare: satır üstü =
@@ -10,11 +10,14 @@ extends Control
 
 signal closed
 
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
 const FM := preload("res://scripts/fire_menu_kit.gd")
 const DK := preload("res://scripts/menu_dark_kit.gd")
 const UiAnim := preload("res://scripts/ui_anim.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const PK := preload("res://scripts/phone_menu_kit.gd")
+const LocalizationScript := preload("res://scripts/localization.gd")
+const SunCloudsScript := preload("res://scripts/sun_clouds.gd")
 
 const COL_X := 660.0
 const COL_Y := 150.0
@@ -186,7 +189,8 @@ class Carousel extends Control:
 		var fs: int = PH_FS if well else DK.FS_BODY
 		var mx: float = 88.0 if well else 22.0
 		var by: float = roundf((h - (f.get_ascent(fs) + f.get_descent(fs))) * 0.5 + f.get_ascent(fs))
-		draw_string(f, Vector2(mx, by), t, HORIZONTAL_ALIGNMENT_CENTER, w - 2.0 * mx, fs, tc)
+		draw_string(f, Vector2(mx, by), atr(t), ## atr: draw_string kendiliğinden çevrilmez (madde 446)
+				 HORIZONTAL_ALIGNMENT_CENTER, w - 2.0 * mx, fs, tc)
 
 
 ## Tuş satırının iki hücresi (klavye / kumanda). Tıklanan hücre dinlemeye geçer.
@@ -218,11 +222,11 @@ class KeyCells extends Control:
 			var x: float = c * (CELL_W + GAP)
 			var on: bool = focused and sel == c
 			var lis: bool = listening == c
-			var bd: Color = FM.C_GOLD if (on or lis) else Color("#6a5440")
+			var bd: Color = FM.C_GOLD if (on or lis) else HT.WIN_LINE_HI
 			var fill: Color = Color(FM.C_GOLD, 0.16) if lis else Color(0.08, 0.05, 0.03, 0.85)
 			draw_rect(Rect2(x, 0, CELL_W, size.y), bd)
 			draw_rect(Rect2(x + 2, 2, CELL_W - 4, size.y - 4), fill)
-			var t: String = ("Bir tuşa bas..." if c == 0 else "Kumandaya bas...") if lis else str(texts[c])
+			var t: String = atr(("Bir tuşa bas..." if c == 0 else "Kumandaya bas...") if lis else str(texts[c])) ## madde 446
 			var tc: Color = FM.C_GOLD if (on or lis) else (FM.C_CREAM if c == 0 else FM.C_TAG)
 			var by: float = roundf((size.y - (f.get_ascent(fs) + f.get_descent(fs))) * 0.5 + f.get_ascent(fs))
 			draw_string(f, Vector2(x + 6, by), t, HORIZONTAL_ALIGNMENT_CENTER, CELL_W - 12, fs, tc)
@@ -341,10 +345,10 @@ func _set_category(c: int, with_sound: bool) -> void:
 		var hv := DK.v(10)
 		hv.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if _cat == Cat.TUSLAR:
-			hv.add_child(FM.hint([["W/S", "seç"], ["A/D", "klavye / kumanda"], ["Enter", "ata"]]))
+			hv.add_child(FM.hint([["W/S", "seç"], ["A/D", "klavye / kumanda"], ["Enter", tr("ata")]]))
 		else:
 			hv.add_child(FM.hint([["W/S", "seç"], ["A/D", "değiştir"]]))
-		hv.add_child(FM.hint([["Q/E", "bölüm"], ["ESC", "geri"]]))
+		hv.add_child(FM.hint([["Q/E", "bölüm"], ["ESC", tr("geri")]]))
 		_hint_holder.add_child(hv)
 	UiAnim.cascade(_col, 0.025)
 	if with_sound:
@@ -578,11 +582,12 @@ func _toggle_row(id: String, label: String, getter: Callable, setter: Callable) 
 
 
 func _pct(v: float) -> String:
-	return "%%%d" % roundi(v)
+	return tr("%%%d") % roundi(v) ## İngilizcede "50%" (madde 446)
 
 
 func _build_genel() -> void:
 	if _phone: ## telefonda pencere/çözünürlük yok, ses kendi sekmesinde, opaklık DOKUNMATİK'te
+		_language_row()
 		_slider_row("shake", "Ekran Sarsıntısı", 0.0, 100.0, 10.0, func() -> float: return UISound.camera_shake_percent,
 				func(v: float) -> void: UISound.set_camera_shake_percent(v),
 				func(v: float) -> String: return "Kapalı" if roundi(v) == 0 else _pct(v))
@@ -591,7 +596,13 @@ func _build_genel() -> void:
 		_toggle_row("fps", "FPS Göstergesi", func() -> bool: return UISound.show_fps, func(on: bool) -> void: UISound.set_show_fps(on))
 		_toggle_row("auto_pick", "Otomatik Kart Seçimi", func() -> bool: return UISound.auto_pick_cards,
 				func(on: bool) -> void: UISound.set_auto_pick_cards(on))
+		_choice_row("dmg_numbers", "Hasar Sayıları", UISound.DAMAGE_NUMBER_MODES, func() -> int: return UISound.damage_numbers_mode,
+				func(i: int) -> void: UISound.set_damage_numbers_mode(i))
+		_choice_row("ally_fx", "Efekt Yoğunluğu", UISound.ALLY_FX_MODES, func() -> int: return UISound.ally_fx_mode,
+				func(i: int) -> void: UISound.set_ally_fx_mode(i))
 		return
+	_section("DİL")
+	_language_row()
 	_section("SES")
 	_slider_row("volume", "Oyun Sesi", 0.0, 100.0, 5.0, func() -> float: return UISound.master_volume_percent,
 			func(v: float) -> void: UISound.set_master_volume_percent(v), _pct, 1.0)
@@ -615,6 +626,20 @@ func _build_genel() -> void:
 	_section("OYUN")
 	_toggle_row("auto_pick", "Otomatik Kart Seçimi", func() -> bool: return UISound.auto_pick_cards,
 			func(on: bool) -> void: UISound.set_auto_pick_cards(on))
+	_choice_row("dmg_numbers", "Hasar Sayıları", UISound.DAMAGE_NUMBER_MODES, func() -> int: return UISound.damage_numbers_mode,
+			func(i: int) -> void: UISound.set_damage_numbers_mode(i))
+	## Başkalarının KİŞİSEL efektlerini (namlu, vuruş izi, kast süsü, asa ucu, mermi) soluklaştırır; takım destek/çağrılan/dönüşüm efektleri hep tam.
+	_choice_row("ally_fx", "Efekt Yoğunluğu", UISound.ALLY_FX_MODES, func() -> int: return UISound.ally_fx_mode,
+			func(i: int) -> void: UISound.set_ally_fx_mode(i))
+
+
+## Dil satırı (madde 446): seçenekler her dilin KENDİ adı (çevrilmez). Düz metinli etiketler dil değişince kendiliğinden yenilenir;
+## tr() ile kurulanlar (biçimli değerler) için kategori bir kare sonra baştan kurulur (basılan düğme kendi sinyali içinde silinmesin).
+func _language_row() -> void:
+	_choice_row("language", "Dil", LocalizationScript.names(), func() -> int: return LocalizationScript.index_of(LocalizationScript.current()),
+			func(i: int) -> void:
+				UISound.set_language(str(LocalizationScript.codes()[i]))
+				_set_category.call_deferred(_cat, false))
 
 
 func _build_grafik() -> void:
@@ -625,8 +650,10 @@ func _build_grafik() -> void:
 	_choice_row("preset", "Kalite", names, func() -> int: return mini(UISound.gfx_preset, 2),
 			func(i: int) -> void: UISound.set_gfx_preset(i), Callable(),
 			func() -> String: return UISound.GFX_PRESET_NAMES[UISound.GfxPreset.CUSTOM] if UISound.gfx_preset == UISound.GfxPreset.CUSTOM else "")
-	_toggle_row("sun", "Güneş Işığı / Bulut Gölgesi", func() -> bool: return UISound.gfx_sun_clouds,
-			func(on: bool) -> void: UISound.set_gfx_option("sun_clouds", on))
+	## Güneş huzmesi (madde 282) + bulut gölgesi (madde 469) kapalıyken düğme hiçbir şey değiştirmez -> satır gizli.
+	if SunCloudsScript.any_enabled():
+		_toggle_row("sun", "Güneş Işığı / Bulut Gölgesi", func() -> bool: return UISound.gfx_sun_clouds,
+				func(on: bool) -> void: UISound.set_gfx_option("sun_clouds", on))
 	_toggle_row("ground", "Zemin Ayrıntısı", func() -> bool: return UISound.gfx_ground_detail,
 			func(on: bool) -> void: UISound.set_gfx_option("ground_detail", on))
 	_toggle_row("wind_fx", "Rüzgar Efekti", func() -> bool: return UISound.gfx_wind_fx,
@@ -713,8 +740,9 @@ static func joypad_label(d: Dictionary) -> String:
 	if d.is_empty():
 		return "Atanmamış"
 	if int(d.get("kind", -1)) == GameManager.JoypadKind.BUTTON:
-		return JOY_BUTTON_LABELS.get(int(d.get("button", -1)), "Buton %d" % int(d.get("button", -1)))
-	var axis_name: String = JOY_AXIS_LABELS.get(int(d.get("axis", -1)), "Eksen %d" % int(d.get("axis", -1)))
+		return JOY_BUTTON_LABELS.get(int(d.get("button", -1)), TranslationServer.translate("Buton %d") % int(d.get("button", -1)))
+	## eksen adı "+"/"-" ile birleşir -> Label'ın kendi çevirisi tutmaz, burada çevrilir (madde 446)
+	var axis_name: String = TranslationServer.translate(JOY_AXIS_LABELS.get(int(d.get("axis", -1)), TranslationServer.translate("Eksen %d") % int(d.get("axis", -1))))
 	return "%s %s" % [axis_name, "+" if float(d.get("sign", 1.0)) > 0.0 else "-"]
 
 

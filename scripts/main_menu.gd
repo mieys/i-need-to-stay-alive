@@ -6,7 +6,7 @@ extends Control
 ##   dizilmiş oda, ışık sadece şömine + ayaklı lambada), üstünde CANLI şömine ateşi (ocak_ates.png 6 kare) + şömineye dönük oturan parti
 ##   (gerçek sprite'lar, sit_ klipleri) + lambanın yanında uyuyan köpek; hepsi x4 tam kat.
 ##   sol: "D - Panelsiz Ateş Işığı" (2026-10-16, ilk düz koyu panel "ruhsuz ve sıradan" bulundu; 4 prototipten D seçildi): kutu yok,
-##   sol taraf yumuşak kararır (sol_golge.png), büyük başlık + kiriş süsü, öğeler ikon + başlık + alt yazı, seçilide yanan mum.
+##   sol taraf yumuşak kararır (sol_golge.png), büyük başlık + kiriş süsü, öğeler ikon + başlık + alt yazı, seçilide altın yazı (mum 2026-11-06 kalktı).
 ## AYARLAR: ortak settings_screen.gd (duraklatma menüsüyle aynı "Ateş Işığı" ekranı, madde 234) - açıkken tabela + menü gizlenir. Davranış (sahne geçişleri, ayarlar, debug modu) eskisiyle AYNI.
 ## Telefon: mobile_menu_fit.gd "TitleSign" + "MenuPanel" adlı düğümleri ekrana sığdırır (adlar korunur).
 
@@ -25,8 +25,8 @@ const PK := preload("res://scripts/phone_menu_kit.gd")
 const FM := preload("res://scripts/fire_menu_kit.gd")
 const LastLoadout := preload("res://scripts/last_loadout.gd")
 
-## Oyun adı (2026-10-04): "Lil'Slayers" (birleşik). Eski ad: "I NEED TO STAY ALIVE" (72 punto).
-const TITLE := "LIL'SLAYERS"
+## Oyun adı (2026-11-07): "Potpourri". Eski adlar: "Lil'Slayers", "I NEED TO STAY ALIVE".
+const TITLE := "POTPOURRI"
 const SCREEN := Vector2(1920, 1080)
 const COL_W := 560.0
 ## Sahne: 480x270 tuval, x4 = 1920x1080. Konumlar tuval pikselinde (gen_ana_menu_bg.py bg_c ile aynı yerler).
@@ -136,7 +136,7 @@ class SceneSprite extends Control:
 
 
 func _ready() -> void:
-	DisplayServer.window_set_title("Lil'Slayers")
+	DisplayServer.window_set_title("Potpourri")
 	theme = MenuKit.theme()
 	_build_scene()
 	if MobileUIScript.enabled:
@@ -225,40 +225,18 @@ func _fit_stage(layer: Control) -> void:
 
 ## ------------------------------------------------------------------ sol menü: "D - Panelsiz Ateş Işığı" (2026-10-16, kullanıcı seçti)
 ## Kutu yok: sahnenin sol tarafı yumuşak kararır (sol_golge.png, sahne katmanında), üstte büyük başlık + kiriş süsü ayracı, öğeler
-## ikon + 48 punto başlık + alt yazı. Seçili öğe (fare üstünde = odak; kumanda/klavye de odakla gezer) altın yazı + yanında YANAN MUM.
+## ikon + 48 punto başlık + alt yazı. Seçili öğe (fare üstünde = odak; kumanda/klavye de odakla gezer) altın yazı (yanındaki mum 2026-11-06 kalktı).
 const ITEM_ICON := 48.0
 const ITEM_H := 92.0
-const C_GOLD := Color("#f4c56e")
-const C_GOLD_DIM := Color("#e2c08a")
-const C_CREAM := Color("#efe2c6")
-const C_SUB := Color("#b09878")
-const C_TAG := Color("#c8b28e")
-const C_RED := Color("#dc7f60")
+const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
+const C_GOLD := HT.ACCENT
+const C_GOLD_DIM := HT.ACCENT_SOFT
+const C_CREAM := HT.TEXT
+const C_SUB := HT.DIM
+const C_TAG := HT.DIM
+const C_RED := HT.BAD
 
-var _items: Array = [] ## [{btn, title, sub, candle, danger}]
-
-
-## İki karelik mum alevi (seçili öğenin yanında).
-class Candle extends Control:
-	const COL := 3 ## Candles.png sütunu (32x32); satır 0/1 = iki alev karesi
-	var tex: Texture2D = null
-	var _t: float = 0.0
-
-	func _init(t: Texture2D) -> void:
-		tex = t
-		custom_minimum_size = Vector2(64, 64)
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-
-	func _process(delta: float) -> void:
-		_t += delta
-		queue_redraw()
-
-	func _draw() -> void:
-		if tex == null:
-			return
-		var row: int = int(_t * 4.0) % 2
-		draw_texture_rect_region(tex, Rect2(Vector2.ZERO, Vector2(64, 64)), Rect2(Vector2(COL * 32, row * 32), Vector2(32, 32)))
+var _items: Array = [] ## [{btn, title, sub, danger, row}]
 
 
 func _lbl(t: String, fs: int, c: Color) -> Label:
@@ -301,10 +279,11 @@ func _record_text() -> String:
 	if int(data.get("runs", 0)) <= 0:
 		return "Henüz koşu yok"
 	var t: int = int(float(data.get("best_time", 0.0)))
-	return "En iyi: Kademe %d · %d:%02d" % [int(data.get("best_tier", 0)), t / 60, t % 60]
+	return tr("En iyi: Kademe %d · %d:%02d") % [int(data.get("best_tier", 0)), t / 60, t % 60]
 
 
-## Bir menü öğesi: görünmez düğme (tıklama/odak) + içinde mum yuvası, ikon, başlık, alt yazı.
+## Bir menü öğesi: görünmez düğme (tıklama/odak) + içinde boş yuva, ikon, başlık, alt yazı. Yuvadaki seçili öğe mumu
+## 2026-11-06'da kullanıcı isteğiyle kalktı; yuva boş 64 px olarak duruyor (yerleşim değişmesin).
 func _menu_item(title: String, sub: String, icon_spec: String, danger: bool = false) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(COL_W, ITEM_H)
@@ -313,13 +292,9 @@ func _menu_item(title: String, sub: String, icon_spec: String, danger: bool = fa
 		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
 	var row := DK.h(14)
 	row.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var candle := Candle.new(load("res://harita/Ev içi/Candles.png") as Texture2D)
-	candle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	candle.visible = false
-	var slot := CenterContainer.new()
+	var slot := Control.new()
 	slot.custom_minimum_size = Vector2(64, 64)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	slot.add_child(candle)
 	row.add_child(slot)
 	row.add_child(_item_icon(icon_spec))
 	var v := DK.v(-2)
@@ -330,7 +305,7 @@ func _menu_item(title: String, sub: String, icon_spec: String, danger: bool = fa
 	v.add_child(sl)
 	row.add_child(v)
 	b.add_child(row)
-	var it := {"btn": b, "title": tl, "sub": sl, "candle": candle, "danger": danger, "row": row}
+	var it := {"btn": b, "title": tl, "sub": sl, "danger": danger, "row": row}
 	_items.append(it)
 	## Fare üstüne gelmek = odak: tek bir "seçili" görünümü (kumanda/klavyeyle aynı).
 	b.mouse_entered.connect(func() -> void: b.grab_focus())
@@ -341,7 +316,6 @@ func _menu_item(title: String, sub: String, icon_spec: String, danger: bool = fa
 
 func _set_item_selected(it: Dictionary, on: bool) -> void:
 	var tl: Label = it["title"]
-	(it["candle"] as Control).visible = on
 	UiAnim.slide_x(it["row"] as Control, 12.0 if on else 0.0) ## seçili öğe hafifçe öne (sağa) çıkar, madde 200
 	if on:
 		tl.add_theme_color_override("font_color", C_GOLD)
@@ -420,14 +394,14 @@ func _build_left_panel() -> void:
 
 func _refresh_shards() -> void:
 	if is_instance_valid(_shard_label):
-		_shard_label.text = "Kilit aç, kalıcı geliştir" if MobileUIScript.enabled else "%d kıymık · kilit aç" % MetaProgressScript.shards()
+		_shard_label.text = "Kilit aç, kalıcı geliştir" if MobileUIScript.enabled else tr("%d kıymık · kilit aç") % MetaProgressScript.shards()
 	if is_instance_valid(_ph_shard_value):
 		_ph_shard_value.text = str(MetaProgressScript.shards())
 
 
 ## ------------------------------------------------------------------ telefon
 ## TELEFON (2026-10-19; kullanıcı seçimi prototip S: ana menü = A düzeni + B "Gece Sıvası" renkleri, mobil_proto.gd A_ana_menu): sahne
-## (şömine, parti, köpek) aynı; solda yumuşak lacivert gölge + başlık + 5 iri öğe (seçili = altın zemin + sol şerit + yanan mum,
+## (şömine, parti, köpek) aynı; solda yumuşak lacivert gölge + başlık + 5 iri öğe (seçili = altın zemin + sol şerit,
 ## diğerleri soluk elmas), sağ üstte Ruh Kıymığı, sağ altta "Son seçim" kartı + HIZLI BAŞLA (son tek oyunculu seçimle doğrudan
 ## oyuna, last_loadout.gd). ÇIKIŞ telefonda yok (sistem geri / ana ekran). MenuFitter bu sahneyi artık büyütmez (PK.fit).
 const PH_ITEM_W := 900.0
@@ -460,7 +434,7 @@ func _build_phone_menu() -> void:
 		(left_ic.get_child(0) as TextureRect).flip_h = true
 	lh.add_child(left_ic)
 	var title := DK.lbl(TITLE, 96, DK.C_ACCENT)
-	title.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1))
+	title.add_theme_color_override("font_outline_color", HT.DEEP)
 	title.add_theme_constant_override("outline_size", 16)
 	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
 	title.add_theme_constant_override("shadow_offset_y", 8)
@@ -501,8 +475,8 @@ func _build_phone_menu() -> void:
 	## Sağ üst: Ruh Kıymığı.
 	var chip := PK.inset(0.85, 0.0, DK.C_LINE)
 	chip.name = "ShardChip"
-	(chip.get_theme_stylebox("panel") as StyleBoxFlat).content_margin_left = 20
-	(chip.get_theme_stylebox("panel") as StyleBoxFlat).content_margin_right = 24
+	chip.get_theme_stylebox("panel").content_margin_left = 20 ## PixelBox (madde 417)
+	chip.get_theme_stylebox("panel").content_margin_right = 24
 	var ch := DK.h(14)
 	ch.add_child(DK.ShardIcon.new(40.0))
 	_ph_shard_value = PK.lbl(str(MetaProgressScript.shards()), PK.FS_BODY, PK.C_SOUL)
@@ -553,7 +527,7 @@ func _build_phone_menu() -> void:
 		dbg.position = Vector2(PK.SIDE, 1080.0 - 64.0)
 
 
-## Öğe: görünmez düğme + seçili zemini (altın %14 + 8 px sol şerit) + mum (seçili) / elmas (diğerleri) + 64 px simge + başlık / alt yazı.
+## Öğe: görünmez düğme + seçili zemini (altın %14 + 8 px sol şerit) + elmas (hep; seçili mumu 2026-11-06'da kalktı) + 64 px simge + başlık / alt yazı.
 func _ph_item(title: String, sub: String, icon: Control) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(PH_ITEM_W, PH_ITEM_H)
@@ -571,11 +545,6 @@ func _ph_item(title: String, sub: String, icon: Control) -> Button:
 	sel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sel.visible = false
 	b.add_child(sel)
-	var candle := Candle.new(load("res://harita/Ev içi/Candles.png") as Texture2D)
-	candle.scale = Vector2(1.5, 1.5)
-	candle.position = Vector2(24, 18)
-	candle.visible = false
-	b.add_child(candle)
 	var dia := PK.glyph(PK.G_DIAMOND, Color(DK.C_DIM, 0.6), 5)
 	dia.position = (Vector2(72, PH_ITEM_H * 0.5) - dia.custom_minimum_size * 0.5).floor()
 	dia.size = dia.custom_minimum_size
@@ -596,7 +565,7 @@ func _ph_item(title: String, sub: String, icon: Control) -> Button:
 	b.add_child(sl)
 	if title == "RUH MAĞAZASI":
 		_shard_label = sl
-	b.set_meta("ph", {"sel": sel, "candle": candle, "dia": dia, "icon": icon, "title": tl})
+	b.set_meta("ph", {"sel": sel, "dia": dia, "icon": icon, "title": tl})
 	b.mouse_entered.connect(func() -> void: b.grab_focus())
 	b.focus_entered.connect(_ph_item_selected.bind(b, true))
 	b.focus_exited.connect(_ph_item_selected.bind(b, false))
@@ -607,8 +576,6 @@ func _ph_item(title: String, sub: String, icon: Control) -> Button:
 func _ph_item_selected(b: Button, on: bool) -> void:
 	var it: Dictionary = b.get_meta("ph")
 	(it["sel"] as Control).visible = on
-	(it["candle"] as Control).visible = on
-	(it["dia"] as Control).visible = not on
 	(it["title"] as Label).add_theme_color_override("font_color", DK.C_ACCENT if on else DK.C_TEXT)
 	var ic: Control = it["icon"]
 	if ic is PK.PGlyph:
@@ -635,7 +602,7 @@ func _create_debug_mode_button() -> void:
 	btn.add_theme_font_override("font", DK.font())
 	btn.add_theme_font_size_override("font_size", DK.FS_LABEL)
 	btn.custom_minimum_size = Vector2(168, 40)
-	DK.style_button_colors(btn, Color(0.1, 0.07, 0.05, 0.7), Color("#45372a"), C_SUB, C_GOLD, 2, 4, 6.0)
+	DK.style_button_colors(btn, Color(HT.WIN_INSET, 0.7), HT.WIN_LINE, C_SUB, C_GOLD, 2, 4, 6.0)
 	btn.pressed.connect(_on_debug_mode_pressed)
 	add_child(btn)
 	MenuKit.place(btn, Vector2(40, SCREEN.y - 64.0), btn.custom_minimum_size)

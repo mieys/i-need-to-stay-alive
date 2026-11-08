@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## OYUN İÇİ BİLDİRİM LEVHALARI - "A Ahşap Levha" (kullanıcı seçimi 2026-10-18, madde 264; prototip
 ## tools/proto_20261018/bildirim_proto.gd, madde 260). Eski bej kit levhaları (UIKit "window_tight") yerine HUD'un Kısık Ahşap
@@ -11,6 +12,16 @@ extends Control
 ##    kuyuları; altın kuyusunun merkezi coin_center() (paralar oradan altın paneline uçar).
 ## Yerleşim/yığma/solma çağıranda (main.gd _present_notice); bu düğüm yalnız kendi boyunu (size = custom_minimum_size) bilir,
 ## çizer ve girişte sağdan kayar. Tıklamayı yutmaz. Yazı m5x7 24 (telefonda 32) - 8'in katları keskin.
+## Madde 404 (2026-11-06, kullanıcı: "çok dikkat çekiyor ve ekranı kaplıyor" -> "Küçük levha"): compact = true iken ÜÇ türün de
+## görünüşü TEK SATIRLIK KÜÇÜK LEVHA (_layout_compact / _draw_compact): aynı HUD levhası, solda kuyusuz küçük simge (yazı pikseliyle
+## aynı hücre), başlık tür renginde (sığmazsa "..." ile kısalır), sağda varsa sayaç / kuru kafa satırı / ödüller; gövde metni,
+## simge kuyusu, kurdele, fitil ve sağdan kayma YOK (kısa saydamlık girişi). Eski büyük görünüş: compact = false (tek satır).
+static var compact: bool = true
+
+
+## Testler eski / yeni görünüşü aynı koşuda dener (const preload üzerinden doğrudan atama ayrıştırma hatası verir).
+static func set_compact(on: bool) -> void:
+	compact = on
 
 const HT := preload("res://scripts/hud_theme.gd")
 const PartyPanelScript := preload("res://scripts/party_panel.gd")
@@ -44,6 +55,13 @@ const RIBBON_H := 54.0
 const PLAQUE_TOP := 30.0 ## kurdele levhanın üst kenarına biner
 const SLIDE_PX := 40.0
 const SLIDE_TIME := 0.22
+## küçük levha (compact)
+const C_PAD_X := 12.0
+const C_PAD_Y := 8.0
+const C_GAP := 9.0
+const C_MAX_W := 520.0
+const C_MAX_W_PHONE := 760.0
+const C_FADE_IN := 0.15
 
 ## Piksel simgeler (3 px hücre; büyük pencerede 6 px).
 const CHECK := [
@@ -124,8 +142,14 @@ const DOOR := [
 
 var variant: String = "toast" ## toast / banner / complete
 var kind: String = "info"
-var title: String = ""
-var body: String = ""
+## Yazı _draw içinde draw_string ile çizilir (kendiliğinden çevrilmez): atanırken çevrilir (madde 446). Çağıranın biçimlediği metin
+## ("KADEME III BAŞLADI") burada bulunamaz -> çağıran tr("KADEME %s BAŞLADI") ile biçimlemeli.
+var title: String = "":
+	set(v):
+		title = Loc.pct(tr(v))
+var body: String = "":
+	set(v):
+		body = Loc.pct(tr(v))
 var hold: float = 2.4
 var countdown: float = -1.0
 var portrait: Texture2D = null
@@ -142,6 +166,11 @@ var _plaque: StyleBox = null
 var _coin_center: Vector2 = Vector2(-1, -1)
 var _merchant_tex: AtlasTexture = null
 var _slide_done: bool = false
+## küçük levha: gösterilen (kısalmış) başlık, simge genişliği, yazının x'i, ödüller [{tex, sz, text, col, gold, x}]
+var _c_title: String = ""
+var _c_icon_w: float = 0.0
+var _c_text_x: float = 0.0
+var _c_rewards: Array = []
 
 
 ## Sağ sütun bildirimi. kind: KIND_COLOR anahtarı. phone = telefon yerleşimi (geniş + 32 px yazı).
@@ -189,7 +218,7 @@ func set_countdown(seconds: float) -> void:
 	var first: bool = countdown < 0.0
 	countdown = seconds
 	_cd_t0 = _t
-	if first and variant == "toast":
+	if first and (variant == "toast" or compact):
 		_layout() ## başlığın ilk satırında sayaca yer aç
 	queue_redraw()
 
@@ -207,7 +236,7 @@ func _init() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	if not _slide_done:
-		var k: float = clampf(_t / SLIDE_TIME, 0.0, 1.0)
+		var k: float = clampf(_t / (C_FADE_IN if compact else SLIDE_TIME), 0.0, 1.0)
 		modulate.a = k
 		if k >= 1.0:
 			_slide_done = true
@@ -215,6 +244,9 @@ func _process(delta: float) -> void:
 
 
 func _layout() -> void:
+	if compact:
+		_layout_compact()
+		return
 	_plaque = PartyPanelScript._plaque_style(14.0, 8.0)
 	## "complete" kendi penceresinin (mission_complete_window.gd) zıplama/solmasıyla gelir - burada ayrıca solmaz.
 	_slide_done = variant == "complete"
@@ -222,7 +254,7 @@ func _layout() -> void:
 		"toast":
 			var w: float = TOAST_W_PHONE if fs > 24 else TOAST_W
 			var tx: float = PAD + WELL + 14.0
-			var cd_w: float = (_tw("99 sn", fs) + 12.0) if countdown >= 0.0 else 0.0
+			var cd_w: float = (_tw(tr("%d sn") % 99, fs) + 12.0) if countdown >= 0.0 else 0.0
 			_title_lines = _wrap(title, fs, w - 16.0 - tx - cd_w)
 			_lines = _wrap(body, fs, w - 16.0 - tx)
 			var text_h: float = maxf(1.0, _title_lines.size()) * fs + (3.0 + _lines.size() * fs if _lines.size() > 0 else 0.0)
@@ -259,6 +291,9 @@ func _layout() -> void:
 
 # ------------------------------------------------------------ çizim
 func _draw() -> void:
+	if compact:
+		_draw_compact()
+		return
 	var slide: float = 0.0
 	if variant == "toast" and not _slide_done:
 		var k: float = clampf(_t / SLIDE_TIME, 0.0, 1.0)
@@ -301,7 +336,7 @@ func _draw_toast() -> void:
 	var ty: float = roundf(maxf(13.0, (h - 6.0 - text_h) * 0.5 - fs * 0.12))
 	if countdown >= 0.0:
 		var left: float = maxf(0.0, countdown - (_t - _cd_t0))
-		_txt_r("%d sn" % int(ceil(left)), w - 16.0, ty, fs, HT.PRICE)
+		_txt_r(tr("%d sn") % int(ceil(left)), w - 16.0, ty, fs, HT.PRICE)
 	for i in _title_lines.size():
 		_txt(_title_lines[i], Vector2(tx, ty + i * fs), fs, col)
 	var by: float = ty + _title_lines.size() * fs + 3.0
@@ -356,9 +391,9 @@ func _draw_complete() -> void:
 func _rewards() -> Array:
 	var parts: Array = []
 	if gold > 0:
-		parts.append([COIN_TEX, 32.0, "+%d" % gold, HT.PRICE, "altın", true])
+		parts.append([COIN_TEX, 32.0, "+%d" % gold, HT.PRICE, tr("altın"), true])
 	if shards > 0:
-		parts.append([SHARD_TEX, 44.0, "+%d" % shards, HT.SHARD, "Silah Parçacığı", false])
+		parts.append([SHARD_TEX, 44.0, "+%d" % shards, HT.SHARD, tr("Silah Parçacığı"), false])
 	var widths: Array = []
 	var total: float = 0.0
 	for p in parts:
@@ -374,18 +409,145 @@ func _rewards() -> Array:
 	return parts
 
 
+# ------------------------------------------------------------ küçük levha (madde 404)
+## Yazı pikseli: m5x7 24 = 3 px, 32 (telefon) = 4 px. Simgeler aynı hücreyle çizilir (piksel yoğunluğu tek).
+func _cell() -> float:
+	return roundf(fs / 8.0)
+
+
+func _layout_compact() -> void:
+	_plaque = PartyPanelScript._plaque_style(C_PAD_X, C_PAD_Y)
+	_slide_done = false
+	for ch in get_children(): ## set_countdown yeniden yerleştirir: eski kafa satırı kalmasın
+		remove_child(ch)
+		ch.free()
+	var u: float = _cell()
+	var h: float = 12.0 * u + 2.0 * C_PAD_Y ## en uzun simge (bayrak / kum saati / kapı) 12 hücre
+	var max_w: float = C_MAX_W_PHONE if fs > 24 else C_MAX_W
+	var src: String = title
+	if variant == "complete" and body != "":
+		src = tr("%s TAMAMLANDI") % body
+	var skulls: Control = null
+	if variant == "banner" and tier > 0:
+		skulls = Control.new()
+		skulls.set_script(TierDisplayScript)
+		add_child(skulls)
+		skulls.call("set_tier", tier, int(u))
+	_c_icon_w = 0.0 if skulls != null else _compact_icon_w(u)
+	_c_text_x = C_PAD_X + (_c_icon_w + C_GAP if _c_icon_w > 0.0 else 0.0)
+	## sağ ek: sayaç / kafa satırı / ödüller
+	var tail: float = 0.0
+	if countdown >= 0.0:
+		tail = 2.0 * C_GAP + _tw(tr("%d sn") % 99, fs)
+	if skulls != null:
+		tail = 2.0 * C_GAP + skulls.custom_minimum_size.x
+	_c_rewards = []
+	if variant == "complete":
+		if gold > 0:
+			_c_rewards.append({"tex": COIN_TEX, "sz": 32.0, "text": "+%d" % gold, "col": HT.PRICE, "gold": true})
+		if shards > 0:
+			_c_rewards.append({"tex": SHARD_TEX, "sz": 44.0, "text": "+%d" % shards, "col": HT.SHARD, "gold": false})
+		for r: Dictionary in _c_rewards:
+			r["w"] = float(r["sz"]) + 6.0 + _tw(r["text"], fs)
+			tail += (2.0 * C_GAP if tail == 0.0 else C_GAP) + float(r["w"])
+	_c_title = _fit(src, fs, max_w - _c_text_x - tail - C_PAD_X)
+	var w: float = roundf(_c_text_x + _tw(_c_title, fs) + tail + C_PAD_X)
+	size = Vector2(w, h)
+	custom_minimum_size = size
+	pivot_offset = size * 0.5
+	_coin_center = Vector2(-1, -1)
+	var x: float = roundf(_c_text_x + _tw(_c_title, fs) + 2.0 * C_GAP)
+	for r: Dictionary in _c_rewards:
+		r["x"] = x
+		if r["gold"]:
+			_coin_center = Vector2(x + float(r["sz"]) * 0.5, roundf(h * 0.5))
+		x += float(r["w"]) + C_GAP
+	if skulls != null:
+		var ss: Vector2 = skulls.custom_minimum_size
+		skulls.position = Vector2(w - C_PAD_X - ss.x, roundf((h - ss.y) * 0.5))
+
+
+func _draw_compact() -> void:
+	var col: Color = KIND_COLOR.get(kind, KIND_COLOR["info"])
+	_plaque.draw(get_canvas_item(), Rect2(Vector2.ZERO, size))
+	var cy: float = roundf(size.y * 0.5)
+	if _c_icon_w > 0.0:
+		_compact_icon(Vector2(C_PAD_X + _c_icon_w * 0.5, cy))
+	var ty: float = roundf((size.y - fs) * 0.5 - fs * 0.12)
+	_txt(_c_title, Vector2(_c_text_x, ty), fs, col)
+	if countdown >= 0.0:
+		var left: float = maxf(0.0, countdown - (_t - _cd_t0))
+		_txt_r(tr("%d sn") % int(ceil(left)), size.x - C_PAD_X, ty, fs, HT.PRICE)
+	for r: Dictionary in _c_rewards:
+		var x: float = float(r["x"])
+		var sz: float = float(r["sz"])
+		_tex_c(r["tex"], Vector2(x + sz * 0.5, cy), sz)
+		_txt(r["text"], Vector2(x + sz + 6.0, ty), fs, r["col"])
+
+
+func _compact_icon_w(u: float) -> float:
+	match kind:
+		"ach":
+			return 32.0 ## madalyon 32 px sanat, 1x
+		"merchant":
+			return 48.0 ## satıcı yüzü 2x
+	var spec: Array = _grid_spec(kind)
+	var gw: int = 0
+	for row: String in spec[0]:
+		gw = maxi(gw, row.length())
+	return gw * u
+
+
+func _compact_icon(c: Vector2) -> void:
+	match kind:
+		"ach":
+			_tex_c(MEDAL_TEX, c, 32.0)
+		"merchant":
+			if _merchant_tex == null:
+				_merchant_tex = AtlasTexture.new()
+				_merchant_tex.atlas = MERCHANT_SHEET
+			_merchant_tex.region = Rect2(12, 6, 24, 18) ## baş + omuz (levha yüksekliğine sığar)
+			draw_texture_rect(_merchant_tex, Rect2(roundf(c.x - 24.0), roundf(c.y - 18.0), 48.0, 36.0), false)
+		_:
+			var spec: Array = _grid_spec(kind)
+			_grid(spec[0], c, _cell(), spec[1])
+
+
+## Uzun başlık tek satıra sığmazsa sondan kısalır ("...").
+func _fit(s: String, size_: int, width: float) -> String:
+	if _tw(s, size_) <= width:
+		return s
+	var t: String = s
+	while t.length() > 1 and _tw(t + "...", size_) > width:
+		t = t.substr(0, t.length() - 1)
+	return t.strip_edges() + "..."
+
+
 # ------------------------------------------------------------ simgeler
+## Piksel simge türleri: [satırlar, renkler]. "tier" (kademe / sonsuz kat) kırmızı bayrak, bilinmeyen tür "i".
+func _grid_spec(k: String) -> Array:
+	match k:
+		"ok":
+			return [CHECK, {"O": HT.OUTLINE, "G": Color("#5f9a3c"), "W": Color("#f3f0d8")}]
+		"warn":
+			return [HOURGLASS, {"O": HT.OUTLINE, "W": HT.RIM_HI, "S": Color("#e8b860"), "g": Color(0.55, 0.7, 0.8, 0.3)}]
+		"start":
+			return [FLAG, {"O": HT.OUTLINE, "W": HT.RIM_HI, "R": KIND_COLOR["start"]}]
+		"tier":
+			return [FLAG, {"O": HT.OUTLINE, "W": HT.RIM_HI, "R": KIND_COLOR["tier"]}]
+		"fail":
+			return [XMARK, {"O": HT.OUTLINE, "R": KIND_COLOR["fail"]}]
+		"left":
+			return [DOOR, {"O": HT.OUTLINE, "B": HT.RIM_HI, "W": KIND_COLOR["left"]}]
+	return [INFO, {"O": HT.OUTLINE, "I": Color("#c9963e"), "W": Color("#f6ecd2")}]
+
+
 func _icon(k: String, c: Vector2, big: bool) -> void:
 	var s: float = 6.0 if big else 3.0
 	match k:
-		"ok":
-			_grid(CHECK, c, s, {"O": HT.OUTLINE, "G": Color("#5f9a3c"), "W": Color("#f3f0d8")})
-		"warn":
-			_grid(HOURGLASS, c, s, {"O": HT.OUTLINE, "W": HT.RIM_HI, "S": Color("#e8b860"), "g": Color(0.55, 0.7, 0.8, 0.3)})
-		"start":
-			_grid(FLAG, c, s, {"O": HT.OUTLINE, "W": HT.RIM_HI, "R": KIND_COLOR["start"]})
-		"fail":
-			_grid(XMARK, c, s, {"O": HT.OUTLINE, "R": KIND_COLOR["fail"]})
+		"ok", "warn", "start", "fail":
+			var spec: Array = _grid_spec(k)
+			_grid(spec[0], c, s, spec[1])
 		"merchant":
 			if _merchant_tex == null:
 				## idle karesinin baş-gövde kısmı (figür 48 px karenin ortasında ~14x33) - 2x
@@ -479,8 +641,8 @@ func _txt(s: String, pos: Vector2, size_: int, c: Color, shadow: bool = true) ->
 	var u: float = minf(size_ / 8.0, 3.0)
 	var base := Vector2(roundf(pos.x), roundf(pos.y + FONT.get_ascent(size_)))
 	if shadow:
-		draw_string(FONT, base + Vector2(u, u), s, HORIZONTAL_ALIGNMENT_LEFT, -1, size_, Color(HT.OUTLINE, 0.9))
-	draw_string(FONT, base, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size_, c)
+		draw_string(FONT, base + Vector2(u, u), s, HORIZONTAL_ALIGNMENT_LEFT, -1, size_, Color(HT.OUTLINE, 0.9)) ## dil:yok (metin atanırken çevrildi)
+	draw_string(FONT, base, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size_, c) ## dil:yok
 
 
 func _txt_c(s: String, cx: float, y: float, size_: int, c: Color, shadow: bool = true) -> void:

@@ -25,6 +25,11 @@ const TREMBLE := [Vector2(0, 0), Vector2(1, 0), Vector2(-1, 0), Vector2(0, 0), V
 ## Kubbenin ÖN kabuğunun (fx_paladin_barrier.gd kökü) mutlak z'si: içerideki/arkadaki her şeyin üstünde. Kubbenin ÖNÜNDEKİ yaratık/oyuncu
 ## bunun üstüne çıkarılır (creature_depth.gd, in_front_of_shell) - yoksa kabuğun altında, camın içindeymiş gibi görünürdü.
 const SHELL_Z := 20
+## Kubbedekilerin silahları kubbenin kenar halkasına dizilsin mi (dome_weapon_ring.gd, madde 154/161/218)? KAPALI (2026-11-08, kullanıcı: "oyuncular
+## şovalye adamın ultisinin içindeyken silahlar kalkanın dışında olmasın, oyuncularda olduğu gibi çalışsın. bundan sonra silahlar kalkandan bağımsız,
+## şovalye adamınki dahil"): silahlar kubbede de kendi slotunda durur, sahibinin konumundan ateş eder. Kapalıyken Talon E'nin "kubbe girdabı" da yok
+## (halkaya bağlıydı; Talon kubbede de kendi çemberini kurar). Geri açmak: true (halka sınıfı, weapon.gd/remote_player.gd kancaları ve testler duruyor).
+const WEAPONS_ON_RIM := false
 
 
 ## Aktif Şovalye kubbeleri (yerel oyuncu + uzak kuklalar; ölü sahibinki sayılmaz): Vector3(merkez x, merkez y, yarıçap).

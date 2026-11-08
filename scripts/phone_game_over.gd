@@ -60,7 +60,7 @@ class Bar extends Control:
 
 	func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), DK.C_INSET)
-		draw_rect(Rect2(Vector2(3, 3), size - Vector2(6, 6)), Color(0.04, 0.04, 0.08))
+		draw_rect(Rect2(Vector2(3, 3), size - Vector2(6, 6)), DK.HT.DEEP)
 		var w: float = roundf((size.x - 6.0) * frac)
 		if w > 0.0:
 			draw_rect(Rect2(3, 3, w, size.y - 6.0), fill)

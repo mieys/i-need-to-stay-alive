@@ -2,27 +2,30 @@ extends RefCounted
 
 ## KOYU MENÜ KİTİ (2026-10-16): kullanıcının seçtiği "SEÇİM D" prototipinin (tools/proto_20261016/menu_proto.gd) görünümü oyunda.
 ## "GECE SIVASI" paleti (2026-10-17, madde 248 prototip C; önceki yeşil-camgöbeği + nane vurgu): ana menü odasının mavi-mor sıva duvarı
-## paneller, ana menünün altın + krem yazısı vurgu. m5x7 yazı, 45° pahlı piksel köşe (corner_detail = 1), metin gölgesi.
+## paneller, ana menünün altın + krem yazısı vurgu. m5x7 yazı, piksel basamak köşe + kabartma (pixel_box.gd, madde 417), metin gölgesi.
 ## Bej MenuKit'in (menu_kit.gd) yerine geçmez; tek oyunculu / çok oyunculu seçim (lobby_select_desktop.gd), oda listesi (room_browser.gd) panelleri
 ## bu renklerle; ana menü, ESC ve ayarlar sadece yardımcılarını + theme()'i (kaydırma çubuğu, ipucu kutusu) kullanır.
 ## Hepsi statik: const DarkKit := preload("res://scripts/menu_dark_kit.gd").
 
 ## Dış paneller hafif saydam (2026-10-16): arkadaki ana menü sahnesi ("Ocak Başı", menu_hearth_bg.gd) seçilsin. İç kutular/karolar opak.
-const C_PANEL := Color("#1a1a2ce0")
-const C_PANEL2 := Color("#23233a")
-const C_PANEL3 := Color("#302f4c")
-const C_INSET := Color("#12121f")
-const C_LINE := Color("#3b3a5a")
-const C_LINE_HI := Color("#5f5c86")
-const C_TEXT := Color("#efe6d6")
-const C_DIM := Color("#a7a2c0")
-const C_ACCENT := Color("#f4c56e")
-const C_ACCENT_DK := Color("#6a5226")
-const C_ACCENT_TEXT := Color("#231a0a")
-const C_GOOD := Color("#a8d69a")
-const C_BAD := Color("#e38c7c")
-const C_PRICE := Color("#f0da94")
-const C_SPOT := Color("#b98a4a")
+## STİL REHBERİ (madde 403, 2026-11-06): "Gece Sıvası" mavi-moru kalktı, renkler tek paletten (hud_theme.gd) - burada hex yok.
+const HT := preload("res://scripts/hud_theme.gd")
+const PixelBox := preload("res://scripts/pixel_box.gd")
+const C_PANEL := Color(HT.WIN_PANEL, 0.88)
+const C_PANEL2 := HT.WIN_PANEL2
+const C_PANEL3 := HT.WIN_PANEL3
+const C_INSET := HT.WIN_INSET
+const C_LINE := HT.WIN_LINE
+const C_LINE_HI := HT.WIN_LINE_HI
+const C_TEXT := HT.TEXT
+const C_DIM := HT.DIM
+const C_ACCENT := HT.ACCENT
+const C_ACCENT_DK := HT.ACCENT_DK
+const C_ACCENT_TEXT := HT.ACCENT_TEXT
+const C_GOOD := HT.GOOD
+const C_BAD := HT.BAD
+const C_PRICE := HT.PRICE
+const C_SPOT := HT.SPOT
 ## Oyuncu renkleri (kart şeridi, karakter kartı köşe işareti, sohbet adı); sıra = peer kimliği sırası.
 const PLAYER_COLORS := [Color("#e8c26a"), Color("#7fd0d8"), Color("#e58f9e"), Color("#a99be6"),
 		Color("#9fd38a"), Color("#f0a46a"), Color("#d9a0e0"), Color("#8fb4f0")]
@@ -148,15 +151,13 @@ static func font() -> Font:
 	return MenuKit.font()
 
 
-static func sb(fill: Color, border: Color = Color(0, 0, 0, 0), bw: int = 3, r: int = 6, pad: float = -1.0) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+static func sb(fill: Color, border: Color = Color(0, 0, 0, 0), bw: int = 3, r: int = 6, pad: float = -1.0) -> PixelBox:
+	var s := PixelBox.new() ## piksel kenar + kabartma (madde 417; StyleBoxFlat ile aynı özellikler)
 	s.bg_color = fill
 	if border.a > 0.0 and bw > 0:
 		s.border_color = border
 		s.set_border_width_all(bw)
 	s.set_corner_radius_all(r)
-	s.corner_detail = 1 ## 45 derece pah: pikselli köşe
-	s.anti_aliasing = false
 	if pad >= 0.0:
 		s.set_content_margin_all(pad)
 	return s
@@ -364,7 +365,7 @@ static func btn_row(b: Button, row: HBoxContainer, center: bool = true) -> Butto
 
 static func chip(pat: Array, t: String, col: Color, fs: int = FS_LABEL) -> PanelContainer:
 	var p := box(C_INSET, C_LINE, 6, 2, 4)
-	var st: StyleBoxFlat = p.get_theme_stylebox("panel")
+	var st = p.get_theme_stylebox("panel") ## PixelBox (madde 417)
 	st.content_margin_left = 12
 	st.content_margin_right = 14
 	var hb := h(10)

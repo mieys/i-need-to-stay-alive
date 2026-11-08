@@ -6,6 +6,7 @@ class_name Minimap
 
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
 const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
+const MapProfilesScript := preload("res://scripts/map_profiles.gd") ## harita seçimi (madde 444)
 
 const RADIUS: float = 80.0
 ## Kullanıcı isteği (2026-09-21): minimap çerçevesi yeniden tasarlandı - 92 sanat pikseli (184 px) ahşap halka + altın perçinler
@@ -138,6 +139,13 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(RADIUS * 2.0 + 4.0, RADIUS * 2.0 + 4.0)
 	mouse_filter = MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	## Zindan biçimli harita (harita seçimi, madde 444): doku haritanın hücre kodlarından, 1 doku pikseli = 1 hücre (16 px), köken (0,0).
+	var map_tex: Texture2D = MapProfilesScript.minimap_texture()
+	if map_tex != null:
+		_map_texture = map_tex
+		_map_origin = Vector2.ZERO
+		_map_world_size = Vector2(map_tex.get_size()) * 16.0
+		return
 	if ResourceLoader.exists(MAP_TEXTURE_PATH):
 		_map_texture = load(MAP_TEXTURE_PATH) as Texture2D
 

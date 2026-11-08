@@ -61,7 +61,8 @@ func _icon(key: String, pos: Vector2) -> Sprite2D:
 	_track(holder)
 	var s := Sprite2D.new()
 	holder.add_child(s)
-	WeaponTierArt.set_art(s, key, 1)
+	if not WeaponTierArt.set_art(s, key): ## madde 402: sabit sanatı olmayan (Yıldırım, Tabanca) eski ikonunda
+		s.texture = (load("res://scripts/weapon_catalog.gd") as GDScript).call("icon", key)
 	s.global_position = pos
 	return s
 

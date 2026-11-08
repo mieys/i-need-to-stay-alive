@@ -1,4 +1,5 @@
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## KOŞU ÖZETİ arayüz parçaları (kullanıcı isteği 2026-10-05: koşu sonu süre/kademe/öldürme + rekor + başarım). Ölüm ekranı
 ## (main.gd _show_death_overlay) ve zafer penceresi (victory_overlay.gd) AYNI parçaları kullanır - ikinci bir kopya yok.
@@ -92,11 +93,11 @@ static func record_value_text(key: String, summary: Dictionary) -> String:
 		"time", "victory_time":
 			return format_time(float(summary.get("time", 0.0)))
 		"tier":
-			return "Kademe %s" % TierDisplayScript.to_roman(int(summary.get("tier", 1)))
+			return Loc.t("Kademe %s") % TierDisplayScript.to_roman(int(summary.get("tier", 1)))
 		"kills":
 			return "%d" % int(summary.get("kills", 0))
 		"layer":
-			return "Kat %d" % int(summary.get("layer", 0))
+			return Loc.t("Kat %d") % int(summary.get("layer", 0))
 	return ""
 
 
@@ -111,16 +112,16 @@ static func extras_box(results: Dictionary, summary: Dictionary) -> VBoxContaine
 	box.name = "ExtrasBox"
 	box.add_theme_constant_override("separation", 4)
 	if shards > 0:
-		_add_line(box, "+%d %s (Ruh Mağazası'nda kullan)" % [shards, MetaProgressScript.CURRENCY_NAME], UIKit.C_GOLD)
+		_add_line(box, Loc.t("+%d %s (Ruh Mağazası'nda kullan)") % [shards, MetaProgressScript.CURRENCY_NAME], UIKit.C_GOLD)
 	for key in records:
-		var text: String = "YENİ REKOR: %s" % RunRecordsScript.RECORD_LABELS.get(key, key)
+		var text: String = Loc.t("YENİ REKOR: %s") % RunRecordsScript.RECORD_LABELS.get(key, key)
 		var value: String = record_value_text(str(key), summary)
 		if value != "":
 			text += " - " + value
 		_add_line(box, text, UIKit.C_GOLD)
 	for id in achievements:
 		var d: Dictionary = AchievementsScript.def_of(str(id))
-		_add_line(box, "BAŞARIM: %s - %s" % [d.get("name", id), d.get("desc", "")], UIKit.C_GOOD)
+		_add_line(box, Loc.t("BAŞARIM: %s - %s") % [d.get("name", id), d.get("desc", "")], UIKit.C_GOOD)
 	return box
 
 

@@ -9,6 +9,7 @@ class_name DungeonProps
 ##  - kapı "slide": tek görsel kapalıyken görünür, açılırken aşağı kayıp söner (barikat, kristal).
 ##  - kaynak / sandık / tuzak / npc: "frames" sayısı, "step" [sütun, satır] kare adımı, "fps"; kaynak "spent": "base" (yalnız taban satırı) | "hide".
 
+const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd") ## AYAK KURALI (FEET_SHIFT)
 const TILE := 16.0
 const GATE_FRAME_SEC := 0.11
 
@@ -19,6 +20,10 @@ const STYLE: Dictionary = {
 		"kaynak": {"sheet": "runtime/torches.png", "x": 1, "y": 0, "w": 2, "h": 3, "step": [0, 3], "frames": 6, "fps": 7.0, "spent": "base"},
 		"sandik": {"sheet": "runtime/chest_lever.png", "x": 0, "y": 0, "w": 2, "h": 2, "step": [2, 0], "frames": 6},
 		"tuzak": {"mode": "tiles", "sheet": "runtime/Spikes.png", "frames_x": [0, 3, 6, 9], "y": 1},
+		## EJDER BAŞI (madde 449, Batık Nekropol): yüzün alt 2 satırında baş, aşağıya ruh ateşi; kare 0 = sakin baş ... 5 = tam alev.
+		## Hasar alanı nesne dikdörtgeni (başın altındaki 2 x 3 zemin), görsel 2 satır yukarıdan başlar.
+		"tuzak_ejder": {"mode": "sheet1", "sheet": "runtime/dragon_trap.png", "w": 2, "h": 5, "step": [2, 0], "frames": 6, "off": [0, -2],
+				"unlit": true},
 	},
 	"et_kuyusu": {
 		"kafes": {"mode": "sheet", "sheet": "runtime/Door_darker-lattice.png", "w": 5, "h": 5, "off": [-1, -2], "frames": [[0, 0], [5, 0], [10, 0], [15, 0]]},
@@ -27,6 +32,8 @@ const STYLE: Dictionary = {
 		"sandik": {"sheet": "Downstairs_objects.png", "x": 10, "y": 4, "w": 2, "h": 3, "off": [0, -1], "frames": 1, "opened_mod": 0.45},
 		"tuzak": {"mode": "sheet1", "sheet": "runtime/Guillotine.png", "w": 3, "h": 3, "step": [3, 0], "frames": 12},
 		"npc": {"sheet": "runtime/Alchemist_Idle.png", "fw": 32, "fh": 32, "row": 0, "frames": 6, "fps": 6.0, "off": [-8, -24]},
+		## GAZ FIÇISI (madde 449, Lağım Ağı): yeşile boyanmış fıçı; fitilde kırmızı-sarı yanıp söner, patlayınca gizli, dolunca geri
+		"fici": {"sheet": "Downstairs_objects.png", "x": 18, "y": 0, "w": 2, "h": 2, "tint": Color(0.72, 1.0, 0.62)},
 	},
 	"boynuzlu_kapi": {
 		"demir": {"mode": "sheet", "sheet": "runtime/doors_lever_chest_animation.png", "w": 2, "h": 3, "off": [0, 0],
@@ -35,6 +42,8 @@ const STYLE: Dictionary = {
 		"kaynak": {"sheet": "magara_nesneleri.png", "x": 1, "y": 5, "w": 3, "h": 3, "off": [-0.5, 0], "frames": 1, "spent": "hide", "pulse": true},
 		"sandik": {"sheet": "runtime/doors_lever_chest_animation.png", "x": 8, "y": 1, "w": 2, "h": 2, "step": [0, 3], "frames": 5},
 		"tuzak": {"mode": "sheet1", "sheet": "runtime/trap_animation.png", "w": 3, "h": 3, "off": [0, 0], "step": [0, 6], "frames": 5, "origin": [1, 2]},
+		## KOL (madde 449, Taşkın Hisar köprü kolları): duvar yüzünün alt satırında, 5 kare (0 yukarı ... 4 çekili)
+		"kol": {"sheet": "runtime/doors_lever_chest_animation.png", "x": 0, "y": 0, "w": 1, "h": 1, "step": [0, 3], "frames": 5, "off": [0, -1]},
 	},
 }
 
@@ -44,6 +53,8 @@ var _sheets: Dictionary = {}
 var _gates: Dictionary = {} ## anahtar -> {"sprites", "style", "frame", "target", "acc", "kind", "base_pos"}
 var _nodes: Dictionary = {} ## anahtar -> {"sprite", "style", "on", "t", "y0"}
 var _chests: Dictionary = {}
+var _levers: Dictionary = {} ## anahtar -> {"sprite", "style", "frame", "target", "acc"}
+var _barrels: Dictionary = {} ## anahtar -> {"sprite", "state"}
 var _traps: Array[Dictionary] = []
 var _npcs: Array[Dictionary] = []
 var _t: float = 0.0
@@ -66,6 +77,10 @@ func setup(id: String, data: Resource) -> void:
 				_add_trap(o)
 			"npc":
 				_add_npc(o)
+			"kol":
+				_add_lever(o)
+			"fici":
+				_add_barrel(o)
 
 
 func _sheet(rel: String) -> Texture2D:
@@ -127,6 +142,67 @@ static func _gate_open_frame(st: Dictionary) -> int:
 		"slide":
 			return 3
 	return (st.get("frames", [[0, 0]]) as Array).size() - 1
+
+
+func _add_lever(o: Dictionary) -> void:
+	var st: Dictionary = _style.get("kol", {})
+	var tex: Texture2D = _sheet(str(st.get("sheet", "")))
+	if tex == null:
+		return
+	var r: Rect2 = o["rect"]
+	var s: Sprite2D = _region_sprite(tex, Rect2(float(st["x"]) * TILE, float(st["y"]) * TILE, float(st["w"]) * TILE, float(st["h"]) * TILE),
+			r.position + _off(st))
+	_levers[str(o.get("lever_key", ""))] = {"sprite": s, "style": st, "frame": 0, "target": 0, "acc": 0.0}
+
+
+func set_lever(key: String, pulled: bool) -> void:
+	var lv: Variant = _levers.get(key)
+	if lv == null:
+		return
+	(lv as Dictionary)["target"] = int(((lv as Dictionary)["style"] as Dictionary).get("frames", 1)) - 1 if pulled else 0
+
+
+func _step_levers(delta: float) -> void:
+	for lv: Dictionary in _levers.values():
+		if int(lv["frame"]) == int(lv["target"]):
+			continue
+		lv["acc"] = float(lv["acc"]) + delta
+		if float(lv["acc"]) < GATE_FRAME_SEC:
+			continue
+		lv["acc"] = 0.0
+		lv["frame"] = int(lv["frame"]) + (1 if int(lv["target"]) > int(lv["frame"]) else -1)
+		var st: Dictionary = lv["style"]
+		var step: Array = st.get("step", [0, 0])
+		(lv["sprite"] as Sprite2D).region_rect.position = Vector2(float(st["x"]) + float(step[0]) * float(lv["frame"]),
+				float(st["y"]) + float(step[1]) * float(lv["frame"])) * TILE
+
+
+func _add_barrel(o: Dictionary) -> void:
+	var st: Dictionary = _style.get("fici", {})
+	var tex: Texture2D = _sheet(str(st.get("sheet", "")))
+	if tex == null:
+		return
+	var r: Rect2 = o["rect"]
+	var s: Sprite2D = _region_sprite(tex, Rect2(float(st["x"]) * TILE, float(st["y"]) * TILE, float(st["w"]) * TILE, float(st["h"]) * TILE),
+			r.position + _off(st))
+	s.modulate = st.get("tint", Color.WHITE)
+	_barrels[str(o.get("barrel_key", ""))] = {"sprite": s, "state": 0, "tint": s.modulate}
+
+
+func set_barrel(key: String, state: int) -> void:
+	var b: Variant = _barrels.get(key)
+	if b == null:
+		return
+	(b as Dictionary)["state"] = state
+	var s: Sprite2D = (b as Dictionary)["sprite"]
+	s.visible = state != 2
+	s.modulate = (b as Dictionary)["tint"]
+
+
+func _step_barrels() -> void:
+	for b: Dictionary in _barrels.values():
+		if int(b["state"]) == 1:
+			(b["sprite"] as Sprite2D).modulate = Color(1.6, 0.5, 0.3) if int(_t * 12.0) % 2 == 0 else Color(1.5, 1.3, 0.4)
 
 
 func set_gate_closed(key: String, closed: bool) -> void:
@@ -257,7 +333,9 @@ func _apply_chest(c: Dictionary) -> void:
 
 # ------------------------------------------------------------------ tuzaklar (zamanlama DungeonManager.trap_level)
 func _add_trap(o: Dictionary) -> void:
-	var st: Dictionary = _style.get("tuzak", {})
+	## tuzak türüne özgü görsel varsa "tuzak_<tur>" (madde 449: Batık Nekropol ejder başı), yoksa zindanın "tuzak" görseli
+	var tur: String = str((o.get("props", {}) as Dictionary).get("tur", ""))
+	var st: Dictionary = _style.get("tuzak_" + tur, _style.get("tuzak", {}))
 	var tex: Texture2D = _sheet(str(st.get("sheet", "")))
 	if tex == null:
 		return
@@ -268,7 +346,8 @@ func _add_trap(o: Dictionary) -> void:
 			for i in range(int(r.size.x / TILE)):
 				sprites.append(_region_sprite(tex, Rect2(0, float(st.get("y", 1)) * TILE, TILE, TILE), r.position + Vector2(i, j) * TILE))
 	else:
-		sprites.append(_region_sprite(tex, Rect2(0, 0, float(st["w"]) * TILE, float(st["h"]) * TILE), r.position + _off(st)))
+		sprites.append(_region_sprite(tex, Rect2(0, 0, float(st["w"]) * TILE, float(st["h"]) * TILE), r.position + _off(st),
+				bool(st.get("unlit", false))))
 	_traps.append({"sprites": sprites, "rect": r, "style": st, "key": str(o.get("trap_key", ""))})
 
 
@@ -302,8 +381,10 @@ func _add_npc(o: Dictionary) -> void:
 	var r: Rect2 = o["rect"]
 	var o2: Array = st.get("off", [0, 0])
 	var s := _region_sprite(tex, Rect2(0, float(st.get("row", 0)) * float(st["fh"]), float(st["fw"]), float(st["fh"])), r.position + Vector2(float(o2[0]), float(o2[1])))
+	## DERİNLİK (2026-11-08, kullanıcı "y ekseni sorunları"): z 1 sabitti -> simyacı önünden geçen oyuncunun da ÜSTÜNE çiziliyordu. Kök = durduğu
+	## hücrenin altı (hücre engel, gen_lagim_agi.py); yerel oyuncunun ayağı kökün altındaysa (önündeyse) z 0, değilse z 1 (_process).
 	s.z_index = 1
-	_npcs.append({"sprite": s, "style": st})
+	_npcs.append({"sprite": s, "style": st, "root_y": r.end.y})
 
 
 func _process(delta: float) -> void:
@@ -311,6 +392,8 @@ func _process(delta: float) -> void:
 		return
 	_t += delta
 	_step_gates(delta)
+	_step_levers(delta)
+	_step_barrels()
 	for n: Dictionary in _nodes.values():
 		if bool(n["on"]):
 			n["t"] = float(n["t"]) + delta
@@ -323,7 +406,12 @@ func _process(delta: float) -> void:
 				c["acc"] = 0.0
 				c["frame"] = int(c["frame"]) + 1
 				_apply_chest(c)
+	var pl: Node2D = get_tree().get_first_node_in_group("player") as Node2D if not _npcs.is_empty() else null
 	for npc: Dictionary in _npcs:
 		var st2: Dictionary = npc["style"]
 		var f: int = int(_t * float(st2.get("fps", 6.0))) % int(st2.get("frames", 1))
-		(npc["sprite"] as Sprite2D).region_rect.position.x = float(f) * float(st2["fw"])
+		var spr: Sprite2D = npc["sprite"]
+		spr.region_rect.position.x = float(f) * float(st2["fw"])
+		if pl != null:
+			var feet_y: float = to_local(pl.global_position).y + DungeonWorldScript.FEET_SHIFT
+			spr.z_index = 0 if feet_y > float(npc["root_y"]) else 1

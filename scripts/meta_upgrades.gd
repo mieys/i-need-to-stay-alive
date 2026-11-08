@@ -16,8 +16,8 @@ extends RefCounted
 
 const MetaProgress: GDScript = preload("res://scripts/meta_progress.gd")
 
-const RESET_FEE_PERCENT := 0.15 ## harcananın bu kadarı sıfırlama ücreti
-const RESET_FEE_MIN := 20 ## ... ama en az bu kadar (harcanandan fazla olamaz)
+const RESET_FEE_PERCENT := 0.045 ## harcananın bu kadarı sıfırlama ücreti (2026-11-08: %70 azaltıldı, eskiden 0,15)
+const RESET_FEE_MIN := 6 ## ... ama en az bu kadar (harcanandan fazla olamaz; eskiden 20)
 
 ## Etki birimi: PCT = kesir (0.08 -> "%8"), FLAT = düz sayı, COUNT = adet.
 const PCT := "pct"
@@ -33,12 +33,20 @@ const LIST: Array = [
 		"max": 15, "per": 2.0, "unit": FLAT, "first": 15, "step": 8},
 	{"id": "atk_speed", "name": "Saldırı Hızı", "desc": "Silahların daha sık vurur.", "icon": "fire_rate",
 		"max": 10, "per": 0.02, "unit": PCT, "first": 20, "step": 10},
-	{"id": "regen", "name": "Can Yenilenmesi", "desc": "5 saniyede bir yenilenen can artar.", "icon": "health_regen",
-		"max": 10, "per": 0.5, "unit": FLAT, "first": 15, "step": 8},
+	## 2026-11-08 (kullanıcı: "can yenilenmesi çok zayıf, diğerleriyle eşit güçte olmalı"): seviye başı 0,5 -> 1,2 (10 seviyede 5 -> 12 / 5 sn).
+	## Ölçüt = level kartı eşdeğeri: diğer geliştirmeler azami seviyede 1. kademe kartın ~3-5 katı, 4. kademe kartın ~1-2,6 katı (Kalkan Yenilenmesi 5x / 2x);
+	## 12 = kart T1 (2) x6, kart T4 (8) x1,5; ayrıca ~30 sn'lik bir savaşta ~72 can ~ eski azami "Can" geliştirmesi (+75; şimdi +105).
+	{"id": "regen", "name": "Can Yenilenmesi", "desc": "5 saniyede yenilenen can artar.", "icon": "health_regen",
+		"max": 10, "per": 1.2, "unit": FLAT, "first": 15, "step": 8},
+	## 2026-11-08 (kullanıcı: "biraz arttır"): seviye başı +5 -> +7 (15 seviyede +75 -> +105 azami can; fiyat 810 aynı). Eski +75 = kart T1 (20) x3,75 / T4 (70) x1,07,
+	## fiyata göre en düşük değerli stat satırlarındandı; +105 = T1 x5,25 / T4 x1,5 (Can Yenilenmesi ile aynı hizada).
 	{"id": "health", "name": "Can", "desc": "Azami canın artar.", "icon": "max_health",
-		"max": 15, "per": 5.0, "unit": FLAT, "first": 12, "step": 6},
+		"max": 15, "per": 7.0, "unit": FLAT, "first": 12, "step": 6},
+	## 2026-11-08 (kullanıcı: "can çalma da aynı şekilde çok zayıf"): seviye başı %0,2 -> %1,5 (10 seviyede %2 -> %15 isabet başına +1 can şansı).
+	## Eski toplam = tek bir 1. kademe kart (%2), yani diğer geliştirmelerin 1/3-1/5'i; yeni = kart T1 x7,5 / T4 x1,9 (Saldırı Gücü 5x / 2,6x, Kalkan Yenilenmesi 5x / 2x),
+	## fiyat (740) Can Yenilenmesi'nden (510) pahalı olduğu için biraz daha yüksek. Genel can çalma kuralı (LIFESTEAL_HEAL 1, alan %33) DEĞİŞMEDİ.
 	{"id": "lifesteal", "name": "Can Çalma", "desc": "Verdiğin hasarın bir kısmı sana can olarak döner.", "icon": "lifesteal",
-		"max": 10, "per": 0.002, "unit": PCT, "first": 20, "step": 12},
+		"max": 10, "per": 0.015, "unit": PCT, "first": 20, "step": 12},
 	{"id": "speed", "name": "Hareket Hızı", "desc": "Daha hızlı koşarsın.", "icon": "speed",
 		"max": 8, "per": 0.015, "unit": PCT, "first": 20, "step": 12},
 	{"id": "shield_amount", "name": "Kalkan Miktarı", "desc": "Azami mana kalkanın artar.", "icon": "shield_amount",

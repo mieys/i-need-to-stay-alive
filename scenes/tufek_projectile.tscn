@@ -23,7 +23,7 @@ face_direction = true
 impact_scene = ExtResource("3")
 impact_face_direction = true
 impact_sounds = Array[AudioStream]([ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10")])
-impact_sound_volume_db = -20.79
+impact_sound_volume_db = -12.79
 
 [node name="Bullet" type="Sprite2D" parent="."]
 texture_filter = 1

@@ -1,8 +1,9 @@
 extends CanvasLayer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## DURAKLATMA (ESC) MENÜSÜ - "B - Ateş Işığı" (2026-10-17, madde 234; prototip madde 229, kullanıcı "B" seçti).
 ## Ana menünün D dili (madde 192): kutu yok, oyun dünyası hafif kararır + sol yumuşak gölge, büyük altın başlık + koşu satırı
-## (kademe / süre / takım seviyesi) + kiriş süsü, öğeler mum + ikon + başlık + alt yazı. "Ayarlar" aynı katmanda ortak
+## (kademe / süre / takım seviyesi) + kiriş süsü, öğeler ikon + başlık + alt yazı. "Ayarlar" aynı katmanda ortak
 ## settings_screen.gd'yi açar (sol sütun kategorilere döner) - eski bej pencere + ayrı Grafik / Tuş Atamaları pencereleri kalktı.
 ## Sahne (pause_menu.tscn) sadece kök + betik; arayüz kodla kurulur. Yeniden başlatma / ana menü / çok oyunculu davranışı aynı.
 
@@ -188,7 +189,7 @@ func _build_desktop(mp: bool) -> void:
 	_main_view.add_child(v)
 	v.position = FM.COL_POS
 	v.custom_minimum_size.x = FM.COL_W
-	var hint := FM.hint([["ESC", "devam et"], ["W/S", "seç"], ["Enter", "onayla"]])
+	var hint := FM.hint([["ESC", "devam et"], ["W/S", "seç"], ["Enter", tr("onayla")]])
 	_main_view.add_child(hint)
 	hint.position = Vector2(64, 1000)
 
@@ -347,7 +348,7 @@ func _run_line() -> HBoxContainer:
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var t: int = int(GameManager.run_elapsed())
 	var parts: Array[String] = ["KADEME " + TierDisplayScript.to_roman(maxi(GameManager.run_max_tier, 1)),
-			"%d:%02d" % [t / 60, t % 60], "SEVİYE %d" % GameManager.team_level]
+			"%d:%02d" % [t / 60, t % 60], Loc.t("SEVİYE %d") % GameManager.team_level]
 	for i in parts.size():
 		if i > 0:
 			h.add_child(DK.glyph(FM.G_DIAMOND, FM.C_GOLD_DIM, 2))

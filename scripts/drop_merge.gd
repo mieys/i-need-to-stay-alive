@@ -17,7 +17,6 @@ extends RefCounted
 ## düşme çekilmeye başlayınca hareket eder - bu yüzden adayın CANLI konumu ayrıca denetlenir, çekilen/toplanan düşme aday sayılmaz.
 
 const DropAttraction := preload("res://scripts/drop_attraction.gd")
-const FloatingText := preload("res://scenes/floating_text.tscn")
 
 const KIND_XP := "xp"
 const KIND_GOLD := "gold"
@@ -153,13 +152,7 @@ static func credit_gold(tree: SceneTree, pos: Vector2, amount: int) -> bool:
 	if p == null:
 		return false
 	if p.is_in_group("player"):
-		GameManager.gold += amount
-		var scene: Node = tree.current_scene
-		if scene != null:
-			var ft = FloatingText.instantiate()
-			scene.add_child(ft)
-			ft.global_position = p.global_position + Vector2(14, -34)
-			ft.setup("+%d altın" % amount, Color(1.0, 0.85, 0.25))
+		GameManager.gold += amount ## 2026-11-06: karakterin üstünde "+N altın" yazısı çıkmaz (kullanıcı isteği, bkz. KillGold.SHOW_PICKUP_TEXT)
 	elif p.has_method("collect_gold"):
 		p.collect_gold(amount)
 	else:

@@ -7,8 +7,8 @@ extends Node
 ## Dokular haritadan PİŞİRİLİR: Su / Su collisionsuz / Su ayrıntılar katmanları değişince (harita yeniden bake edilince)
 ##   Godot --path . --windowed --resolution 320x180 -s tools/gen_su_dokusu.gd   (Python + numpy'yi kendisi çağırır)
 ## Dalgacıklar "Zemin ayrıntısı" grafik ayarına bağlı (UISound.gfx_ground_detail, Düşük'te kapalı): su ekran çözünürlüğünde çizilir,
-## telefonda kamera ~3,25x yakın -> dalgacık döngüsü piksel başına pahalı. Kapalıyken derinlik tonu + kabarma + kıyı çizgisi kalır.
-## attach çağrılmazsa shader dokusuz çalışır: her yer "derin" ton, kıyı çizgisi ve dalgacık yok (hint_default_white/black).
+## telefonda kamera ~3,25x yakın -> dalgacık döngüsü piksel başına pahalı. Kapalıyken düz su kalır (madde 424: derinlik tonu / kabarma / kıyı çizgisi artık yok).
+## attach çağrılmazsa shader dokusuz çalışır: düz su, dalgacık yok (hint_default_white/black).
 
 const NODE_NAME := "SuEfekti"
 const WATER_PATH := "Su/Su"

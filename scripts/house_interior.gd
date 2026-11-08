@@ -1,5 +1,6 @@
 extends Node2D
 class_name HouseInterior
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Başlangıç evine "F" ile girip çıkma sistemi (kullanıcı isteği: "haritamda
 ## başlangıç kısmında bir ev var, çok yaklaşınca F'ye basarak içeri
@@ -134,6 +135,7 @@ var _interior_instance: Node2D = null
 var _entrance_area: Area2D = null
 var _exit_area: Area2D = null
 var _prompt_label: Label = null
+var _prompt_layer: CanvasLayer = null
 
 var _near_entrance: bool = false
 
@@ -854,6 +856,11 @@ func _create_prompt_ui() -> void:
 	layer.name = "HouseInteriorPromptLayer"
 	layer.layer = 50
 	add_child(layer)
+	_prompt_layer = layer
+	## Madde 421: ipucu katmanı (50) seviye/kart/pazar ekranının (katman 1) ÜSTÜNDE çiziliyordu ("Eve girmek için BOŞLUK tuşuna bas" pazar
+	## düğmesine biniyordu). Ağaç duraklıyken (seviye ekranı, sandık, ESC) ya da engelleyici panel açıkken katman gizlenir; SceneTree
+	## sinyali duraklamada da çalışır (bu düğümün _process'i durur).
+	get_tree().process_frame.connect(_sync_prompt_cover)
 	_prompt_label = Label.new()
 	_prompt_label.name = "InteractPrompt"
 	_prompt_label.add_theme_font_size_override("font_size", 24)
@@ -868,6 +875,12 @@ func _create_prompt_ui() -> void:
 	_prompt_label.offset_bottom = -222.0
 	_prompt_label.visible = false
 	layer.add_child(_prompt_label)
+
+
+func _sync_prompt_cover() -> void:
+	if not is_instance_valid(_prompt_layer) or not is_inside_tree(): ## sahne değişirken sinyal ağaç dışındayken gelebiliyor
+		return
+	_prompt_layer.visible = not (get_tree().paused or GameManager.is_any_blocking_panel_open())
 
 
 func _on_entrance_body_entered(body: Node) -> void:
@@ -918,18 +931,18 @@ func _process(_delta: float) -> void:
 	_process_seat_release()
 	if not indoors and _near_entrance and _player.get("is_dead") != true and _siege != null and _siege.collapsed:
 		## Ev yıkık (madde 313): kapı kapalı, dışarıda savaştıkça onarılır.
-		_prompt_label.text = "Ev yıkıldı - onarılıyor %%%d (savaştıkça)" % int(round(_siege.ratio() / HouseSiege.REOPEN_RATIO * 100.0))
+		_prompt_label.text = Loc.t("Ev yıkıldı - onarılıyor %%%d (savaştıkça)") % int(round(_siege.ratio() / HouseSiege.REOPEN_RATIO * 100.0))
 		_prompt_label.remove_from_group(&"interact_prompt")
 		_prompt_label.visible = true
 	elif not indoors and _near_entrance and _player.get("is_dead") != true:
-		_prompt_label.text = "Eve girmek için %s tuşuna bas" % GameManager.get_action_key_label("interact")
+		_prompt_label.text = Loc.t("Eve girmek için %s tuşuna bas") % GameManager.get_action_key_label("interact")
 		_prompt_label.add_to_group(&"interact_prompt") ## telefonda ETKİLEŞİM düğmesi bu uyarı görünürken çıkar (touch_controls.gd)
 		_prompt_label.visible = true
 		if f_just_pressed:
 			_enter_house()
 	elif indoors and _player.get("is_dead") != true and is_instance_valid(_babaanne) and _babaanne.can_talk(_player):
 		## Babaanne (madde 310): yakındaki oyuncuya konuşma ipucu, etkileşim tuşu bir cümle söyletir.
-		_prompt_label.text = "Babaanneyle konuşmak için %s" % GameManager.get_action_key_label("interact")
+		_prompt_label.text = Loc.t("Babaanneyle konuşmak için %s") % GameManager.get_action_key_label("interact")
 		_prompt_label.add_to_group(&"interact_prompt")
 		_prompt_label.visible = true
 		if f_just_pressed:

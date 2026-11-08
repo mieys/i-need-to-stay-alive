@@ -10,7 +10,7 @@ extends Control
 const ChestArt := preload("res://scripts/chest_art.gd")
 const SHEET := ChestArt.NORMAL_SHEET
 const SFX_LAND := preload("res://Sound FX Starter Pack Vol. 1/Motions and Impacts/Impact Redwood.wav")
-const FRAME := ChestArt.FRAME_WU ## ekranda 48 px kare (doku karesi ChestArt.FRAME_PX, 0,5 ölçekli sanat)
+const FRAME := ChestArt.FRAME_PX * 2.0 ## ekranda 64 px kare: paket sandığı (32 px) x2 tam kat (madde 409; eskisi 48 px)
 const LAYER_NAME := "ChestPassLayer"
 const LAYER_INDEX := 100 ## menülerin (bekleme katmanı 90, grup paneli 96) üstünde
 const POP_TIME := 0.18

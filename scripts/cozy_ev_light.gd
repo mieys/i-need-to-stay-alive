@@ -3,12 +3,12 @@ class_name CozyEvLight
 
 ## COZY EV İÇ IŞIĞI (madde 311, kullanıcı önizlemeyi seçti: "ışıklandırma olarak bunu seçiyorum, en doğalı bu oldu").
 ## Tek kaynak tools/proto_20261019/cozy_ev/gen_cozy_ev.py (IŞIK_KIPLERI, EMIT, light_map, _huzme); buradaki sayılar oradan.
-##  - ORTAM: CanvasModulate (gece 0,42/0,37/0,48, gündüz 0,72/0,68/0,66), atmosferin EŞİTLENEN saatinden AtmosphereMath.darkness
+##  - ORTAM: CanvasModulate (gece 0,42/0,37/0,48, gündüz 0,95/0,92/0,87 - 2026-11-07 aydınlatıldı, eski 0,72/0,68/0,66), atmosferin EŞİTLENEN saatinden AtmosphereMath.darkness
 ##    ile aradaki geçiş. Bu düğüm iç mekanın çocuğu: iç mekan gizlenince (oyuncu dışarı çıkınca) CanvasModulate ve ışıklar kendiliğinden
 ##    kapanır, dış dünya hiç etkilenmez (dışarıda CanvasModulate / Light2D yok - gün-gece orada atmosphere_overlay shader'ı).
 ##  - KAYNAKLAR: PointLight2D + yumuşak (1-d)^2.2 hale dokusu (basamaksız; "ışıkların piksel piksel olmasını istemiyorum"), elips =
 ##    düğümün dikey ölçeği (basıklık). Yerler pişmiş sahnenin karolarından (babaanne_npc.gd _find_spots yöntemi: doku adı + bloğun
-##    kesin dolu bir karosu): şömine + kazan ocağı (farklı evrede titrer), mumlar, duvar fenerleri, ayaklı lambalar. Gündüz şiddet x0,6.
+##    kesin dolu bir karosu): şömine + kazan ocağı (farklı evrede titrer), mumlar, duvar fenerleri, ayaklı lambalar. Gündüz şiddet x0,4 (eski x0,6).
 ##  - PENCERELER: gündüz kuzey pencerelerinden düz öne yumuşak YELPAZE + camın çevresinde küçük ılık aydınlık, alt duvardaki görünmeyen
 ##    pencerelerden yukarı geniş yelpaze (dokular tools/gen_cozy_ev_isik.py); gece yelpazeler kapalı, pencerelerde soğuk ay halesi.
 ##  - IŞIKSIZ EŞYALAR: ışık veren eşyaların karoları (ve gündüz pencere camı karesi) LIGHT_MODE_UNSHADED malzemeyle çizilir - önizlemedeki
@@ -27,8 +27,8 @@ const TILE := 16.0
 
 ## IŞIK_KIPLERI["gece" / "gunduz"]["ortam"] ve ["kaynak"]
 const AMBIENT_NIGHT := Color(0.42, 0.37, 0.48)
-const AMBIENT_DAY := Color(0.72, 0.68, 0.66)
-const SOURCE_DAY_MULT := 0.6
+const AMBIENT_DAY := Color(0.95, 0.92, 0.87) ## 0,72/0,68/0,66 -> (kullanıcı 2026-11-07: "evin içi çok karanlık dışarısı gündüz olmasına rağmen")
+const SOURCE_DAY_MULT := 0.4 ## 0,6 -> 0,4: ortam aydınlanınca gündüz lamba haleleri yanmasın (2026-11-07)
 
 ## EMIT: eşya -> doku + bloğun kesin dolu karosu (atlas) + o karonun bloktaki yeri (rel) + ışıksız çizilecek blok karoları +
 ## blok sol üstüne göre ışık noktası (at), yarıçap, renk, şiddet, basıklık (dikey/yatay), titreme evresi (yoksa NAN).

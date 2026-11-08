@@ -28,6 +28,13 @@ const SUN_STRENGTH := 0.1615
 ## Kullanıcı isteği (2026-10-19, madde 282 prototiplerinden sonra): "şimdilik gün ışığını kapatalım" - huzme geçişi hiç çizilmez
 ## (pişirmede de hesaplanmaz); bulut gölgeleri aynen kalır. Geri açmak için true.
 const SUN_RAYS_ENABLED := false
+## Bulut gölgesi: madde 469 ("gölgeleri kapat") ile kapalı - tek anahtar shadows_flag.gd `clouds`. İkisi de kapalıyken iki geçiş + pişirme
+## hiç çizilmez (maliyet yok) ve Ayarlar > Grafik "Güneş Işığı / Bulut Gölgesi" satırı gizlenir (`any_enabled`).
+const ShadowsFlag := preload("res://scripts/shadows_flag.gd")
+
+
+static func any_enabled() -> bool:
+	return SUN_RAYS_ENABLED or ShadowsFlag.clouds
 ## Bulut gölgesi gücü / kaplaması: açık hava -> yağmur.
 ## Kullanıcı isteği (2026-09-26): "bulutların yarattığı karanlığın gücünü %50 azalt" - 0.19/0.1 -> yarısı.
 const CLOUD_STRENGTH_CLEAR := 0.095
@@ -124,7 +131,7 @@ func _process(delta: float) -> void:
 	var wet: float = clampf(maxf(rain, storm), 0.0, 1.0)
 	var day: float = 1.0 - darkness
 	var sun_target: float = 0.0 if indoors or not SUN_RAYS_ENABLED else day * day * (1.0 - wet)
-	var cloud_target: float = 0.0 if indoors else day * lerpf(CLOUD_STRENGTH_CLEAR, CLOUD_STRENGTH_RAIN, wet) / CLOUD_STRENGTH_CLEAR
+	var cloud_target: float = 0.0 if indoors or not ShadowsFlag.clouds else day * lerpf(CLOUD_STRENGTH_CLEAR, CLOUD_STRENGTH_RAIN, wet) / CLOUD_STRENGTH_CLEAR
 	var cover_target: float = lerpf(lerpf(CLOUD_COVER_CLEAR, CLOUD_COVER_WINDY, wind), CLOUD_COVER_RAIN, wet)
 	var step: float = FADE_RATE * delta
 	_sun_k = move_toward(_sun_k, sun_target, step)

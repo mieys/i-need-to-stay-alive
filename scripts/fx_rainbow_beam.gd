@@ -17,6 +17,15 @@ const IMPACT_TEX: Texture2D = preload("res://assets/fx/gokkusagi/impact.png")
 ## yakalar, 3 sn'lik tutmayı değil).
 const DAZZLE_FRAMES: SpriteFrames = preload("res://assets/fx/enchant/rainbow_dazzle_frames.tres")
 const AudioBusesScript := preload("res://scripts/audio_buses.gd")
+## Işın sesi (madde 451, masaüstü "gökkuşağı asası.mp3" -> tools/gen_gokkusagi_ses.py): ışın açılınca giriş + döngü gövdesi (tek dosya,
+## loop_offset = SFX_LOOP_START: giriş bir kez, sonra gövde dikişsiz döner), ışın kapanınca kapanış patlaması.
+const SFX_START_LOOP: AudioStreamOggVorbis = preload("res://assets/audio/gokkusagi/beam_start_loop.ogg")
+const SFX_END: AudioStream = preload("res://assets/audio/gokkusagi/beam_end.ogg")
+const SFX_LOOP_START := 1.0 ## giriş uzunluğu (sn); gen_gokkusagi_ses.py LOOP_A ile aynı
+const SFX_DB := -6.0
+const SFX_END_DB := -6.0
+const SFX_FADE_OUT := 0.08 ## döngü gövdesinin kapanış patlamasına yer açarak sönme süresi
+const SFX_MIN_LIFE := 0.3 ## bundan kısa yaşayan ışın (hedef hemen öldü) kapanış patlaması çalmaz, sadece söner
 const BASE_W := 6.0 ## ışın YARI genişliği (dünya px); madde 331: 3,0 -> 6,0 ("çok ince vuruyor")
 const FINAL_W := 8.0 ## finalde 3,8 -> 8,0; weapon.gd BEAM_PIERCE_RADIUS bununla birlikte değişir (yarı genişlik x1,15 + gövde)
 const SPARK_RATE := 24.0
@@ -28,7 +37,7 @@ const FLICKER_FROM := 0.8 ## tutma oranı bunu geçince ışın kamaşmaya yakı
 ## Vuruş sesi: şimdilik mevcut arcane atış sesi yüksek perdede ve kısık (özel ses için kullanıcıdan referans beklenir - hafıza "blind SFX";
 ## 2026-10-20 sentez sesler reddedildi, madde 344).
 const TICK_SFX: AudioStream = preload("res://assets/audio/arcane_attack.mp3")
-const TICK_DB := -16.0
+const TICK_DB := -13.0 ## 2026-11-07 (madde 441, "isabet sesi az"): -16 -> -13 (oyunda -28,6 -> -25,6; Yıldırım tikinin altında kalır)
 
 var pierce: bool = false
 var glow: float = 0.0
@@ -50,6 +59,8 @@ var _sparks: Array = [] ## [Sprite2D, hız, yaş, ömür, satır]
 var _spark_acc: float = 0.0
 var _impacts: Array = [] ## [Sprite2D, yaş]
 var _rng := RandomNumberGenerator.new()
+var _hum: AudioStreamPlayer2D = null ## ışından bağımsız oyuncu (ışın silinince kapanış için söner); _process konumu namluya taşır
+var _hum_gone: bool = false
 static var _white: Texture2D = null
 
 
@@ -76,6 +87,65 @@ func _ready() -> void:
 	_tip = _make_sheet_sprite(SPARKLE_TEX, 3, 6)
 	_tip.z_index = 1
 	add_child(_tip)
+	_add_hum.call_deferred() ## kök sahnenin çocuğu olarak eklenir (kasterde kök sahne bu düğümü eklerken meşgul)
+
+
+## Giriş + döngü sesi. Kaster: kendi ışını (1500 doğrusal); uzak oyuncu: network_manager "weapon_sound" ile aynı mesafe kuralı + kısık.
+func _add_hum() -> void:
+	if _hum_gone or not is_inside_tree():
+		return
+	var tree: SceneTree = get_tree()
+	var parent: Node = tree.current_scene if tree.current_scene else tree.root
+	var st: AudioStreamOggVorbis = SFX_START_LOOP.duplicate()
+	st.loop = true
+	st.loop_offset = SFX_LOOP_START
+	_hum = AudioStreamPlayer2D.new()
+	_hum.stream = st
+	parent.add_child(_hum)
+	_hum.global_position = global_position
+	_style_hum()
+	_hum.play()
+
+
+func _style_hum() -> void:
+	_hum.volume_db = SFX_DB + _remote_db
+	_hum.max_distance = 900.0 if _use_net else 1500.0
+	_hum.attenuation = 1.6 if _use_net else 1.0
+
+
+## Işın kapandı: gövde hızla söner, aynı anda kapanış patlaması çalar (ışın bittiği anda biter).
+func _finish_hum() -> void:
+	_hum_gone = true
+	var tree: SceneTree = get_tree()
+	if _hum == null or not is_instance_valid(_hum) or tree == null:
+		return
+	var hum: AudioStreamPlayer2D = _hum
+	_hum = null
+	var tw: Tween = hum.create_tween()
+	tw.tween_property(hum, "volume_db", -60.0, SFX_FADE_OUT)
+	tw.tween_callback(hum.queue_free)
+	if _t < SFX_MIN_LIFE:
+		return
+	## Işın silinirken ebeveyni "meşgul": ekleme ertelenir (kapanış patlaması bir kare sonra başlar).
+	_spawn_end.bind(hum.get_parent(), hum.global_position, SFX_END_DB + _remote_db, hum.max_distance, hum.attenuation).call_deferred()
+
+
+static func _spawn_end(parent: Node, pos: Vector2, db: float, max_dist: float, atten: float) -> void:
+	if not is_instance_valid(parent) or not parent.is_inside_tree():
+		return
+	var end := AudioStreamPlayer2D.new()
+	end.stream = SFX_END
+	end.volume_db = db
+	end.max_distance = max_dist
+	end.attenuation = atten
+	parent.add_child(end)
+	end.global_position = pos
+	end.finished.connect(end.queue_free)
+	end.play()
+
+
+func _exit_tree() -> void:
+	_finish_hum()
 
 
 func _make_sheet_sprite(tex: Texture2D, hf: int, vf: int) -> Sprite2D:
@@ -103,6 +173,8 @@ func setup_network(target_pos: Vector2, extra: Dictionary) -> void:
 	var fallback: Vector2 = get_parent().global_position if get_parent() is Node2D else target_pos
 	_net_from = Vector2(extra.get("from_pos", fallback))
 	_apply_extra(extra)
+	if _hum != null:
+		_style_hum()
 
 
 func update_target(target_pos: Vector2, origin_pos: Vector2 = Vector2.ZERO, extra: Dictionary = {}) -> void:
@@ -150,6 +222,8 @@ func _process(delta: float) -> void:
 		elif _target != null and is_instance_valid(_target):
 			_to = _target.global_position
 	global_position = _from
+	if _hum != null and is_instance_valid(_hum):
+		_hum.global_position = _from
 	var v: Vector2 = _to - _from
 	var L: float = maxf(1.0, v.length())
 	var w: float = beam_width()
@@ -263,3 +337,9 @@ func _update_impacts(delta: float) -> void:
 ## Gece ışığı (night_glow_catalog.gd): namludan ışının ucuna.
 func get_glow_segment() -> Array:
 	return [_from, _to]
+
+
+## Gece ışığının rengi: beyaz ışık renkli ışının yanında seçilmiyordu (kullanıcı 2026-11-07, "parıltısız normal nesne gibi") ->
+## ışık gökkuşağı renklerinde döner (doygunluk düşük tutulur: karanlıkta pastel, kirli değil).
+func get_night_glow_color() -> Color:
+	return Color.from_hsv(fposmod(_t * 0.45, 1.0), 0.6, 1.0)

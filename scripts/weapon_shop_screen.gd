@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## DEMİRCİ ekranı - "ÖRS VİTRİNİ" (RPG gelişim ekranı). Kullanıcı 2026-10-16'da 4 prototipten A'yı seçti
 ## (tools/proto_20261016/dukkan_proto.gd, madde 195, 197). Üç sekme de aynı iskelet:
@@ -147,7 +148,7 @@ func _build_ui() -> void:
 	if _phone:
 		_k = DarkKit.new(DarkKit.PAL_NIGHT) ## telefon: Gece Sıvası (madde 276)
 	var window := PanelContainer.new()
-	var wst: StyleBoxFlat = _k.sb(_k.c("panel"), _k.c("line_hi"), 3, 8)
+	var wst = _k.sb(_k.c("panel"), _k.c("line_hi"), 3, 8)
 	wst.content_margin_left = 24
 	wst.content_margin_right = 24
 	wst.content_margin_top = 18
@@ -425,7 +426,7 @@ func _weapon_dmg_text(key: String) -> String:
 	var d: Dictionary = DamageStats.weapon_damage(key)
 	if float(d["dmg"]) <= 0.0:
 		return "Hasar -"
-	return "Hasar %s · %%%d" % [DamageStats.fmt(float(d["dmg"])), int(round(float(d["share"]) * 100.0))]
+	return Loc.t("Hasar %s · %%%d") % [DamageStats.fmt(float(d["dmg"])), int(round(float(d["share"]) * 100.0))]
 
 
 func _refresh_weapon_damage() -> void:
@@ -456,7 +457,7 @@ func _shield_card() -> PanelContainer:
 	hh.add_child(_k.tile(DarkKit.tex(str(ShieldEnchantDefs.ICONS.get(str(stats["key"]), ""))), 56.0, _k.c("line_hi")))
 	hh.add_child(_k.expand(_k.wrap(str(stats["name"]), 32, _k.c("text"), 10.0)))
 	v.add_child(hh)
-	var delay_text: String = "yok" if bool(stats["always_regen"]) else "%s sn" % Logic._num(float(stats["delay"]))
+	var delay_text: String = "yok" if bool(stats["always_regen"]) else Loc.t("%s sn") % Logic._num(float(stats["delay"]))
 	var g := GridContainer.new()
 	g.columns = 2
 	g.add_theme_constant_override("h_separation", 16)
@@ -547,14 +548,14 @@ func _refresh_center() -> void:
 			_details_trait.text = str(def.get("name", ""))
 			var desc: String = str(WeaponCatalogScript.DESCRIPTIONS.get(key, "")).replace(" · ", "\n")
 			if not def.is_empty():
-				desc += "\n\nÖZELLİĞİ - %s: %s" % [str(def.get("name", "")), str((def.get("base", {}) as Dictionary).get("text", ""))]
+				desc += Loc.t("\n\nÖZELLİĞİ - %s: %s") % [str(def.get("name", "")), str((def.get("base", {}) as Dictionary).get("text", ""))]
 			_details_desc.text = desc
 		"wupgrade", "wplus":
 			var slot: int = int(_selected.get("slot", 0))
 			var t: int = _slot_tier(slot)
 			_show_icon.add_child(_k.wicon(WeaponCatalogScript.icon(key), big, t))
 			_show_badge.visible = true
-			badge_lbl.text = "KADEME %s" % _tier_text(slot)
+			badge_lbl.text = Loc.t("KADEME %s") % _tier_text(slot)
 			badge_lbl.add_theme_color_override("font_color", _tier_color(t))
 			_show_badge.add_theme_stylebox_override("panel", _k.sb(Color(_tier_color(t), 0.18), _tier_color(t), 2, 3, 6.0))
 			var def2: Dictionary = EnchantDefs.get_def(Logic.slot_trait_id(slot))
@@ -562,7 +563,7 @@ func _refresh_center() -> void:
 			_details_trait.text = str(def2.get("name", ""))
 			if str(_selected.get("type", "")) == "wplus":
 				_details_kind.text = "GÜÇLENDİRME (SINIRSIZ)"
-				_details_desc.text = "Özel geliştirmeler 5. kademede biter. Bundan sonra her güçlendirme silaha yalnız stat verir (+%%%d hasar, +%%%d saldırı hızı). Sınır yok; fiyat her alımda artar." % [
+				_details_desc.text = Loc.t("Özel geliştirmeler 5. kademede biter. Bundan sonra her güçlendirme silaha yalnız stat verir (+%%%d hasar, +%%%d saldırı hızı). Sınır yok; fiyat her alımda artar.") % [
 						roundi(WeaponScript.TIER_DAMAGE_PER_STEP * 100.0), roundi(WeaponScript.TIER_FIRE_RATE_PER_STEP * 100.0)]
 			else:
 				_details_kind.text = "TEMEL ÖZELLİK"
@@ -574,7 +575,7 @@ func _refresh_center() -> void:
 			var d: Dictionary = ShieldEnchantDefs.TYPES.get(sk, {})
 			_details_name.text = ShieldEnchantDefs.type_name(sk).to_upper()
 			_details_kind.text = "Mana Kalkanı türü" if str(_selected.get("type")) == "shield" else "Mana Kalkanı geliştirmesi"
-			_details_desc.text = "%s\n\n%s\nBir tür seçildi mi değiştirilemez; diğer türler kilitlenir." % [str(d.get("desc", "")), _shield_stat_lines(sk)]
+			_details_desc.text = Loc.t("%s\n\n%s\nBir tür seçildi mi değiştirilemez; diğer türler kilitlenir.") % [str(d.get("desc", "")), _shield_stat_lines(sk)]
 
 
 ## "Kalkan: 160\nHasar soğurma: %60\nYenilenme: 4/sn\nBekleme: yok" (o türün tabanı).
@@ -582,8 +583,8 @@ func _shield_stat_lines(key: String) -> String:
 	var d: Dictionary = ShieldEnchantDefs.TYPES.get(key, {})
 	if d.is_empty():
 		return ""
-	var delay_text: String = "yok (savaşta da dolar)" if bool(d.get("always_regen", false)) else "%s sn" % Logic._num(float(d["delay"]))
-	return "Mana Kalkanı: %d\nHasar soğurma: %%%d\nYenilenme: %s/sn\nBekleme: %s" % [
+	var delay_text: String = "yok (savaşta da dolar)" if bool(d.get("always_regen", false)) else Loc.t("%s sn") % Logic._num(float(d["delay"]))
+	return Loc.t("Mana Kalkanı: %d\nHasar soğurma: %%%d\nYenilenme: %s/sn\nBekleme: %s") % [
 		int(round(float(d["power"]))), int(round(float(d["absorption"]) * 100.0)), Logic.type_regen_text(d), delay_text]
 
 
@@ -925,13 +926,13 @@ func _entry_name(entry: Dictionary) -> String:
 		"shield":
 			return ShieldEnchantDefs.type_name(key)
 		"upgrade":
-			return "Geliştirme %d" % (int(entry.get("index", 0)) + 1)
+			return Loc.t("Geliştirme %d") % (int(entry.get("index", 0)) + 1)
 		"wupgrade":
 			var rows: Array = Logic.slot_upgrade_rows(int(entry.get("slot", 0)))
 			var i: int = int(entry.get("index", 0))
 			return str((rows[i] as Dictionary)["name"]) if i >= 0 and i < rows.size() else "?"
 		"wplus":
-			return "Güçlendirme +%d" % (Logic.wplus_count(int(entry.get("slot", 0))) + 1)
+			return Loc.t("Güçlendirme +%d") % (Logic.wplus_count(int(entry.get("slot", 0))) + 1)
 	return key
 
 
@@ -1148,7 +1149,7 @@ func _refresh_row(r: Dictionary) -> void:
 			var p_open: bool = EnchantDefs.is_complete(Logic.slot_enchant(p_slot))
 			(r["name"] as Label).text = _entry_name(entry) ## sayı her alımda artar (satır yeniden kurulmaz)
 			(r["name"] as Label).add_theme_color_override("font_color", _k.c("text") if p_open else _k.c("dim"))
-			sub.text = "Yalnız stat: +%%%d hasar, +%%%d saldırı hızı · sınırsız" % [roundi(WeaponScript.TIER_DAMAGE_PER_STEP * 100.0),
+			sub.text = Loc.t("Yalnız stat: +%%%d hasar, +%%%d saldırı hızı · sınırsız") % [roundi(WeaponScript.TIER_DAMAGE_PER_STEP * 100.0),
 					roundi(WeaponScript.TIER_FIRE_RATE_PER_STEP * 100.0)] if p_open else "5. kademeden (final) sonra açılır · sınırsız"
 			_set_lead(r, "p%s%d" % [p_open, Logic.wplus_count(p_slot)], func() -> Control: return _plus_badge(p_slot, 44.0, false))
 	if kind != "wupgrade":
@@ -1188,16 +1189,16 @@ func _refresh_status() -> void:
 	if _list_sub:
 		_list_sub.text = ""
 	if _tab == Tab.WEAPONS or _tab == Tab.ENCHANTS:
-		_status_label.text = "Silah yuvası %d/%d" % [GameManager.owned_weapons.size(), Logic.max_weapons(_player) if is_instance_valid(_player) else 3]
+		_status_label.text = Loc.t("Silah yuvası %d/%d") % [GameManager.owned_weapons.size(), Logic.max_weapons(_player) if is_instance_valid(_player) else 3]
 		if _list_sub and _tab == Tab.ENCHANTS and not GameManager.owned_weapons.is_empty():
 			if EnchantDefs.is_complete(Logic.slot_enchant(_trait_slot)):
-				_list_sub.text = "TAMAM · güçlendirme +%d" % Logic.wplus_count(_trait_slot)
+				_list_sub.text = Loc.t("TAMAM · güçlendirme +%d") % Logic.wplus_count(_trait_slot)
 			else:
-				_list_sub.text = "%d/4 · sıra serbest" % Logic.wupgrade_taken_count(_trait_slot)
+				_list_sub.text = Loc.t("%d/4 · sıra serbest") % Logic.wupgrade_taken_count(_trait_slot)
 	elif GameManager.shield_enchant == "":
 		_status_label.text = "Şu an: Standart"
 	else:
-		_status_label.text = "Şu an: %s" % ShieldEnchantDefs.type_name(GameManager.shield_enchant)
+		_status_label.text = Loc.t("Şu an: %s") % ShieldEnchantDefs.type_name(GameManager.shield_enchant)
 
 
 ## GEREKENLER (gereken / sende), kademe değişimi, sebep ve eylem düğmesi.
@@ -1250,7 +1251,7 @@ func _refresh_details() -> void:
 				_tier_row.add_child(b)
 				if t == t0:
 					_tier_row.add_child(_k.glyph(DarkKit.G_ARROW, _k.c("dim"), 3))
-			_tier_row.add_child(_k.lbl("kontür %s" % ["", "", "yeşil", "mavi", "mor", "kırmızı"][t1], 24, _k.c("dim")))
+			_tier_row.add_child(_k.lbl(Loc.t("kontür %s") % ["", "", "yeşil", "mavi", "mor", "kırmızı"][t1], 24, _k.c("dim")))
 	if kind == "wupgrade" and not closed_row:
 		var s_slot: int = int(_selected.get("slot", 0))
 		var s_t0: int = _slot_tier(s_slot)
@@ -1259,13 +1260,13 @@ func _refresh_details() -> void:
 			## Kademe başına stat (weapon.gd TIER_*): geliştirme silahı güçlendirir.
 			var d_dmg: int = roundi((WeaponScript.tier_damage_mult(s_t1) / WeaponScript.tier_damage_mult(s_t0) - 1.0) * 100.0)
 			var d_spd: int = roundi((WeaponScript.tier_fire_rate_mult(s_t0) / WeaponScript.tier_fire_rate_mult(s_t1) - 1.0) * 100.0)
-			_tier_row.add_child(_k.lbl("+%%%d hasar, +%%%d saldırı hızı" % [d_dmg, d_spd], 24, _k.c("good")))
+			_tier_row.add_child(_k.lbl(Loc.t("+%%%d hasar, +%%%d saldırı hızı") % [d_dmg, d_spd], 24, _k.c("good")))
 	if kind == "wplus" and EnchantDefs.is_complete(Logic.slot_enchant(int(_selected.get("slot", 0)))):
 		## Güçlendirme: stat kademesi 5 + alınan -> bir fazlası (weapon.gd set_enchant ile aynı hesap).
 		var p_t0: int = 5 + Logic.wplus_count(int(_selected.get("slot", 0)))
 		var p_dmg: int = roundi((WeaponScript.tier_damage_mult(p_t0 + 1) / WeaponScript.tier_damage_mult(p_t0) - 1.0) * 100.0)
 		var p_spd: int = roundi((WeaponScript.tier_fire_rate_mult(p_t0) / WeaponScript.tier_fire_rate_mult(p_t0 + 1) - 1.0) * 100.0)
-		_tier_row.add_child(_k.lbl("+%%%d hasar, +%%%d saldırı hızı" % [p_dmg, p_spd], 24, _k.c("good")))
+		_tier_row.add_child(_k.lbl(Loc.t("+%%%d hasar, +%%%d saldırı hızı") % [p_dmg, p_spd], 24, _k.c("good")))
 	var label: String = "SATIN AL"
 	match kind:
 		"wupgrade", "upgrade", "wplus":

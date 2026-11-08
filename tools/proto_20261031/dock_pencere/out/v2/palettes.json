@@ -1,0 +1,90 @@
+{
+ "A": {
+  "name": "Bölmeli Konsol",
+  "dock_margins": [
+   116,
+   76,
+   116,
+   75
+  ],
+  "dock_expand": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "dock_tile": false,
+  "side_margins": [
+   16,
+   16,
+   16,
+   16
+  ]
+ },
+ "B": {
+  "name": "Kemerli Portre",
+  "dock_margins": [
+   116,
+   100,
+   24,
+   75
+  ],
+  "dock_expand": [
+   0,
+   24,
+   0,
+   0
+  ],
+  "dock_tile": false,
+  "side_margins": [
+   16,
+   16,
+   16,
+   16
+  ]
+ },
+ "C": {
+  "name": "Tomar Uçlu",
+  "dock_margins": [
+   24,
+   88,
+   24,
+   87
+  ],
+  "dock_expand": [
+   0,
+   12,
+   0,
+   12
+  ],
+  "dock_tile": false,
+  "side_margins": [
+   16,
+   16,
+   16,
+   16
+  ]
+ },
+ "D": {
+  "name": "Kütük Kiriş",
+  "dock_margins": [
+   56,
+   88,
+   56,
+   83
+  ],
+  "dock_expand": [
+   16,
+   12,
+   16,
+   8
+  ],
+  "dock_tile": true,
+  "side_margins": [
+   16,
+   16,
+   16,
+   16
+  ]
+ }
+}

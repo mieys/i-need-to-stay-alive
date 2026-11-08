@@ -24,7 +24,6 @@ const ENABLE_HOUSES := true
 const ENABLE_TREES := true
 const ENABLE_MINES := true
 const ENABLE_ENEMY_BASE := true
-const ENABLE_DEEP_FOREST := true
 const ENABLE_PROPS := true
 
 const FEET_SHIFT := 15.0
@@ -33,11 +32,6 @@ const TREE_BAND := 9.0
 const HOUSE_BAND := 28.0
 const MINE_BAND := 14.0
 const BASE_BAND := 12.0
-## Derin orman set parçaları (kemik taht, dev iskelet, harabe, kafa yığını, kök tümseği...; madde 359/364): bant nesnenin boyuyla orantılı
-## (boy x DEEP_FOREST_BAND_RATIO, en az / en çok) - eskiden sabit 12 px'ti, büyük kayaların/heykelin gövdesine yürünüyordu.
-const DEEP_FOREST_BAND := 12.0
-const DEEP_FOREST_BAND_RATIO := 0.4
-const DEEP_FOREST_BAND_MAX := 36.0
 
 const WATER_LAYER := "Su/Su"
 ## 2026-10-11 (collision analizi, madde 85): Su katmanı düz mavi + hücre bazlı; kıyıyı bu "ayrıntı" katmanları çimenle örtüyor ve Su katmanına
@@ -52,13 +46,7 @@ const TREE_PARENT := "Shader Eklenecek"
 const TREE_PREFIX := "Ağaç"
 const MINE_LAYERS: Array = ["Etkileşimler/Maden", "Etkileşimler/Maden 1"]
 const BASE_LAYERS: Array = ["Düşman Üssü/Düşman üssü", "Düşman Üssü/Özel maden"]
-## Derin orman: ölü ağaçlar "Ağaç ölü" (Ağaç önekli -> ağaç gövdesi kuralı), set parçaları burada; düz süsler ("Derin orman süsleri") sahne
-## nesnesi kuralıyla (PROP_LAYERS, madde 364): katı görünenler engel, ot/kemik kırıntısı/kristal sapı değil.
-const DEEP_FOREST_LAYERS: Array = ["Shader Eklenecek/Derin orman nesneleri"]
-## Zemine gömülü derin orman parçaları (madde 361: Batı zindan girişi "Et Kuyusu", dişli çukur) - karakterin altında çizilir, ayak izinin TAMAMI
-## engel (çukurun üstünden yürünmesin): bant parçanın boyundan uzun.
-const DEEP_FOREST_PIT_LAYERS: Array = ["Shader Eklenecek/Derin orman çukurları"]
-const DEEP_FOREST_PIT_BAND := 96.0
+## Madde 463 (2026-11-08): derin orman katmanları (nesneler / süsler / çukurlar / ölü ağaç) haritadan kalktı -> kategorisi de silindi.
 ## SAHNE NESNELERİ (madde 364, kullanıcı: "engeller var kaya obje v.b ama engel oluşturmuyorlar üstlerine gidebiliyoruz"): bu katmanlardaki kaya,
 ## kütük, devrik ağaç, kemik yığını gibi KATI görünen nesneler engel olur; mantar, ot, çiçek, sarmaşık, çakıl, çalı (yeşil) olmaz. Sınıflama
 ## nesne başına (atlasta komşu karolar = bir nesne, depth_occluders kuralı), karolardan oyun başında: opak alanın sınırı en az PROP_MIN_W x
@@ -67,8 +55,8 @@ const DEEP_FOREST_PIT_BAND := 96.0
 ## Ayak izi: y-sıralı katmanda (depth_occluders OBJECT_LAYERS - karakter nesnenin arkasına geçebilir) boyun PROP_DEPTH_RATIO'su, diğerlerinde
 ## (nesne hep karakterin altında çizilir) nesnenin TAMAMI (en çok PROP_FULL_MAX) - yoksa karakter kayanın üstünde duruyormuş gibi görünür.
 const PROP_LAYERS: Array = ["Shader Eklenecek/Animasyonsuz çalılar", "Orman parçaları/Orman parçaları 3", "Orman parçaları/Orman parçaları 4",
-	"Orman parçaları/orman parçaları -1", "Shader Eklenecek/Derin orman süsleri"]
-const PROP_SKIP_TEXTURES: Array[String] = ["Ground_grass", "derin_orman_zemin", "spots_lianas", "Flowers", "Yol par", "Water"]
+	"Orman parçaları/orman parçaları -1"]
+const PROP_SKIP_TEXTURES: Array[String] = ["Ground_grass", "spots_lianas", "Flowers", "Yol par", "Water"]
 const PROP_MIN_W := 18
 const PROP_MIN_H := 14
 const PROP_MIN_PIXELS := 220
@@ -172,19 +160,6 @@ static func _build(forest: TileMapLayer) -> void:
 		_add_object_layers(helper, harita, MINE_LAYERS, MINE_BAND, g0, "mines")
 	if ENABLE_ENEMY_BASE:
 		_add_object_layers(helper, harita, BASE_LAYERS, BASE_BAND, g0, "enemy_base")
-	if ENABLE_DEEP_FOREST:
-		var counts_d: Dictionary = {}
-		for path: String in DEEP_FOREST_LAYERS:
-			var l := harita.get_node_or_null(path) as TileMapLayer
-			if l != null and l.tile_set != null:
-				for grp: Dictionary in object_groups(helper, l, false):
-					var band: float = clampf(float(grp["h"]) * DEEP_FOREST_BAND_RATIO, DEEP_FOREST_BAND, DEEP_FOREST_BAND_MAX)
-					_add_band(helper, l, grp["bases"], band, g0, counts_d)
-		for path: String in DEEP_FOREST_PIT_LAYERS:
-			var l := harita.get_node_or_null(path) as TileMapLayer
-			if l != null and l.tile_set != null and not l.get_used_cells().is_empty():
-				_add_band(helper, l, helper.object_bases(l), DEEP_FOREST_PIT_BAND, g0, counts_d)
-		_commit("deep_forest", counts_d)
 	if ENABLE_PROPS:
 		var counts_p: Dictionary = {}
 		var solid: int = 0

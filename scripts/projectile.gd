@@ -132,8 +132,16 @@ const PARTICLE_TRAILS := {
 	## kıvılcım, Tüftüf A düşen zehir damlası. Eski Buz "ice" stili artık kullanılmıyor.
 	"ice_bolt_projectile": "buz_c",
 	"arcane_projectile": "arcane_c",
-	"dart_projectile": "zehir_damla",
+	## Zehir Asası (eski Tüftüf) madde 410: GPU "zehir_damla" izi yerine poison_drip_fx.gd damlaları (POISON_DRIP_SCENES).
 }
+## Madde 410 (Zehir Asası "A - Zehir Damlası"): kuyruktan kopup yere düşen damlalar + isabette taç sıçraması (eski fx_poison_hit yerine).
+## Kaster ve uzak kopya aynı betik -> iki tarafta da (kozmetik, ek RPC yok).
+const PoisonDripFx := preload("res://scripts/poison_drip_fx.gd")
+const POISON_DRIP_SCENES := ["dart_projectile"]
+var _poison_drip: bool = false
+var _drip_acc: float = 0.0
+var _drip_dist: float = 0.0
+var _hit_feet: Vector2 = Vector2.INF ## vurulanın ayak hizası (uzak kopya mermiyi yaratığa ışınlamaz)
 const TRAIL_SCALE := 1.212 ## 1 sanat pikseli = PixelDraw.TEXEL dünya birimi
 var _trail: AnimatedSprite2D = null
 var _trail_oriented: bool = false
@@ -181,6 +189,7 @@ func _ready() -> void:
 		scale *= 1.4
 
 	_setup_trail()
+	_poison_drip = scene_file_path.get_file().get_basename() in POISON_DRIP_SCENES
 	var particle_style: String = str(PARTICLE_TRAILS.get(scene_file_path.get_file().get_basename(), ""))
 	if particle_style != "":
 		ParticleTrail.attach(self, particle_style)
@@ -235,7 +244,8 @@ func _physics_process(delta: float) -> void:
 		## Madde 201 sanatı +x = uçuş yönü çizildi: silahın eski çapraz sprite ofseti (ranged_projectile_rotation_offset, Tüftüf/Arcane
 		## ~-2,3 rad) ve uzak kopyanın ofsetsiz güdüm dönüşü (_net_homing) ne olursa olsun gövde + iz her adımda uçuş yönüne bakar.
 		_art_body.global_rotation = direction.angle()
-		_trail.global_rotation = _art_body.global_rotation
+		if _trail:
+			_trail.global_rotation = _art_body.global_rotation
 		if not _art_body.visible:
 			_art_body.visible = true
 	if not ProjectileRangeScript.within(self): ## menzil = görüş elipsi (bkz. projectile_range.gd)
@@ -243,6 +253,17 @@ func _physics_process(delta: float) -> void:
 		return
 	_net_homing(delta)
 	position += direction * speed * delta
+	if max_travel > 0.0:
+		_travelled += speed * delta
+		if _travelled >= max_travel:
+			queue_free()
+			return
+	if _poison_drip:
+		_drip_dist += speed * delta
+		_drip_acc += PoisonDripFx.TRAIL_RATE * delta
+		while _drip_acc >= 1.0:
+			_drip_acc -= 1.0
+			PoisonDripFx.trail_drop(get_tree(), global_position - direction * PoisonDripFx.TRAIL_BACK, direction, _drip_dist)
 	_ew_poll_hits()
 
 
@@ -296,6 +317,8 @@ func _on_body_entered(body: Node) -> void:
 	## Network-spawned projectiles are visual-only — the host's own projectile
 	## handles the actual damage authoritatively.
 	if get_meta("network_spawned", false):
+		if body is Node2D and is_instance_valid(body):
+			_hit_feet = (body as Node2D).global_position
 		_spawn_impact()
 		_play_impact_sound()
 		## Efsunlu delici mermi (bkz. EnchantFx.apply_projectile_look "pierce"): uzak kopya da kasterdeki gibi o kadar
@@ -330,7 +353,9 @@ func _on_body_entered(body: Node) -> void:
 	if mark_max_stacks > 0 and body.has_method("get_mark_damage_mult"):
 		hit_damage *= body.get_mark_damage_mult()
 	BalanceLogScript.tag_weapon(source_weapon)
+	DamageNumbersScript.separate_hits = separate_damage_numbers
 	body.take_damage(hit_damage, is_crit, shield_pen_percent)
+	DamageNumbersScript.separate_hits = false
 	if mark_max_stacks > 0 and body.has_method("apply_mark_stack"):
 		body.apply_mark_stack(mark_max_stacks)
 	if chill_stacks > 0 and body.has_method("apply_chill"):
@@ -414,6 +439,13 @@ func _apply_splash_damage(direct_hit: Node) -> void:
 ## Aynı anda ekranda en fazla bu kadar isabet efekti (0 = sınırsız) ve efekt ölçeği - Tüftüf zehir isabeti (2026-10-12, "efekti çok fazla"): yüksek atış hızında
 ## 64 px'lik zehir patlamaları üst üste yığılıyordu. Hasar/ses etkilenmez, yalnız görsel.
 @export var impact_max_alive: int = 0
+## Merminin gidebileceği en uzun yol (dünya px, 0 = sınırsız; görüş elipsi/2 sn ömür yine geçerli). Pompalı saçması (madde 448):
+## menzilin ~1,3 katında söner - ekranı boydan boya geçen saçma tuhaf duruyordu. Uzak kopya aynı sahneyle aynı kuralı uygular.
+@export var max_travel: float = 0.0
+## Her isabet KENDİ hasar sayısını gösterir (aynı hedefe aynı anda gelen saçmalar birleşmez) - bkz. damage_numbers.gd separate_hits.
+@export var separate_damage_numbers: bool = false
+const DamageNumbersScript := preload("res://scripts/damage_numbers.gd")
+var _travelled: float = 0.0
 @export var impact_scale: float = 1.0
 
 
@@ -421,6 +453,11 @@ func _spawn_impact() -> void:
 	## Büyücü pasifi güçlendirilmiş mermi: ilk isabette mor patlama (madde 188; kaster + uzak kopya, impact_scene'den bağımsız).
 	if has_meta("buyucu_surge"):
 		preload("res://scripts/buyucu_fx.gd").surge_impact(self)
+	if _poison_drip:
+		## Zehir Asası (madde 410): taç sıçraması + büyük gölcük; kaster mermiyi yaratığın konumuna (ayak) ışınlamıştır.
+		var feet: Vector2 = _hit_feet if _hit_feet != Vector2.INF else global_position
+		PoisonDripFx.splash(get_tree(), global_position, feet.y)
+		return
 	if not impact_scene:
 		return
 	var budget_group: StringName = &""

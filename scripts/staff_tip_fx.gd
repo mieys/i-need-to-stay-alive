@@ -48,9 +48,15 @@ const STYLES := {
 	## merkezli parıltı); rastgele satır = tanecik başına rastgele renk. Hafifçe dağılıp çöken ışık tozu (ateş yükselir, buz düşer).
 	"rainbow": {"sheet": preload("res://assets/fx/staff_tip/prism_sheet.png"), "cell": 5, "rows": 18, "life": 0.5,
 		"base": 10.0, "per_px": 0.33, "vx": Vector2(-6.0, 6.0), "vy": Vector2(-4.0, 8.0)},
+	## Zehir Asası (madde 410, "A - Zehir Damlası"): asanın başından SEYREK damla belirip sahibin ayak hizasına düşer, orada küçük
+	## gölcük olur - parçacık MultiMesh'i kurulmaz, damlayı poison_drip_fx.gd çizer ("drip"). Hızla biraz artar.
+	"poison": {"drip": true, "life": 0.0, "base": 1.6, "per_px": 0.012},
 }
 ## weapon_tier_art.gd anahtarı -> stil
-const KEY_STYLE := {"fire_staff": "fire", "buz_asasi": "ice", "arcane": "arc", "lightning_staff": "elec", "gokkusagi": "rainbow"}
+const KEY_STYLE := {"fire_staff": "fire", "buz_asasi": "ice", "arcane": "arc", "lightning_staff": "elec", "gokkusagi": "rainbow",
+	"tuftuf": "poison"}
+const PoisonDripFx := preload("res://scripts/poison_drip_fx.gd")
+const ShellCasingFx := preload("res://scripts/shell_casing_fx.gd") ## ground_y: sahibin ayak hizası (kovanla aynı)
 const RAINBOW_ROWS_PER_COLOR := 3 ## prism_sheet satır 3k..3k+2 = RB[k] (tools/gen_staff_tip_fx.py)
 const CRACKLE_SHEET := preload("res://assets/fx/staff_tip/crackle_sheet.png")
 const CRACKLE_CELL := 17
@@ -136,6 +142,8 @@ func _ready() -> void:
 	global_position = Vector2.ZERO
 	z_index = Z
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	if bool(_cfg.get("drip", false)):
+		return ## damlaları poison_drip_fx.gd çizer
 	var life: float = float(_cfg["life"])
 	var peak: float = float(_cfg["base"]) + float(_cfg["per_px"]) * MAX_TIP_SPEED
 	if style == "elec_hit":
@@ -210,7 +218,8 @@ func _rand_vel() -> Vector2:
 
 func _process(delta: float) -> void:
 	_clock += delta
-	_mat.set_shader_parameter("clock", _clock)
+	if _mat != null:
+		_mat.set_shader_parameter("clock", _clock)
 	if not _owned_source:
 		if _hit_acc < 0.0 and _clock - _last_emit_clock > float(_cfg["life"]) + 0.1:
 			queue_free() ## release() sonrası kalanlar söndü
@@ -231,6 +240,13 @@ func _process(delta: float) -> void:
 		speed = minf(MAX_TIP_SPEED, tip.distance_to(_last_tip) / delta)
 	_acc += (float(_cfg["base"]) + float(_cfg["per_px"]) * speed) * delta
 	var n: int = mini(int(_acc), MAX_PER_FRAME)
+	if n > 0 and _mm == null: ## "drip" (Zehir Asası): damla uçtan sahibin ayak hizasına düşer
+		_acc -= float(int(_acc))
+		var gy: float = ShellCasingFx.ground_y(_owner_body())
+		for k in range(n):
+			PoisonDripFx.tip_drop(get_tree(), tip + Vector2(randf_range(-0.6, 0.6), 1.0), gy if gy != 0.0 else tip.y + 60.0)
+		_last_emit_clock = _clock
+		n = 0
 	if n > 0:
 		_acc -= float(int(_acc))
 		var rows: int = int(_cfg["rows"])
@@ -250,6 +266,22 @@ func _process(delta: float) -> void:
 			_crackle.frame = randi() % CRACKLE_FRAMES
 			_crackle.flip_h = randf() < 0.5
 			_crackle.flip_v = randf() < 0.5
+
+
+var _owner_cache: Node2D = null
+
+
+## Asanın sahibi (yerel oyuncu: ikon -> silah -> Player; kukla: ikon -> pivot -> RemotePlayer) - damla onun ayak hizasına düşer.
+func _owner_body() -> Node2D:
+	if is_instance_valid(_owner_cache):
+		return _owner_cache
+	var n: Node = source
+	while n != null:
+		if n is CharacterBody2D:
+			_owner_cache = n as Node2D
+			return _owner_cache
+		n = n.get_parent()
+	return null
 
 
 func _set_crackle(on: bool) -> void:

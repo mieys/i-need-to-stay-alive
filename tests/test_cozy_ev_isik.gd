@@ -85,8 +85,8 @@ func test_ambient_and_window_light_follow_day_and_night() -> void:
 	light.clock_override = DAY_TIME
 	light._process(0.016)
 	assert(light.darkness < 0.001, "gündüz karanlık 0")
-	assert(_close(light.ambient.color, Color(0.72, 0.68, 0.66)), "gündüz ortam rengi: %s" % str(light.ambient.color))
-	assert(is_equal_approx(mum.energy, 0.85 * 0.6), "gündüz kaynak şiddeti x0,6: %f" % mum.energy)
+	assert(_close(light.ambient.color, LightScript.AMBIENT_DAY), "gündüz ortam rengi: %s" % str(light.ambient.color))
+	assert(is_equal_approx(mum.energy, 0.85 * LightScript.SOURCE_DAY_MULT), "gündüz kaynak şiddeti: %f" % mum.energy)
 	for d: Dictionary in light.window_day_lights():
 		assert((d["light"] as PointLight2D).enabled and (d["light"] as PointLight2D).energy > 0.4, "gündüz pencere ışığı açık")
 	for d: Dictionary in light.window_night_lights():

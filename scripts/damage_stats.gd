@@ -1,4 +1,5 @@
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## SİLAH VE YETENEK HASAR İSTATİSTİĞİ (kullanıcı isteği 2026-10-17: "demircide ve oyun sonunda hangi silahın ne kadar hasar
 ## verdiğini görebilelim; yetenekler için de aynı - sadece oyun sonunda veya Shift'e basılı tutarak yeteneğe basınca,
@@ -269,7 +270,7 @@ static func skill_rows(char_id: int, dealt: Dictionary = {}, gain: Dictionary = 
 static func fmt(v: float) -> String:
 	var n: int = int(round(v))
 	if n >= 10_000_000:
-		return "%.1f Mn" % (n / 1_000_000.0)
+		return Loc.t("%.1f Mn") % (n / 1_000_000.0)
 	var s: String = str(absi(n))
 	var out: String = ""
 	while s.length() > 3:
@@ -293,14 +294,14 @@ static func tooltip_bbcode(slot: String, ink: Dictionary) -> String:
 	if float(t["dmg"]) > 0.0:
 		var crit: String = ""
 		if int(t["hits"]) > 0:
-			crit = "  [color=%s](%d isabet, kritik %%%d)[/color]" % [c_dim, int(t["hits"]), int(round(100.0 * float(t["crit"]) / float(int(t["hits"]))))]
-		lines.append("• Hasar: [color=%s][b]%s[/b][/color]%s" % [c_dmg, fmt(float(t["dmg"])), crit])
+			crit = Loc.t("  [color=%s](%d isabet, kritik %%%d)[/color]") % [c_dim, int(t["hits"]), int(round(100.0 * float(t["crit"]) / float(int(t["hits"]))))]
+		lines.append(Loc.t("• Hasar: [color=%s][b]%s[/b][/color]%s") % [c_dmg, fmt(float(t["dmg"])), crit])
 	if float(t["heal"]) > 0.0:
-		lines.append("• Can: [color=%s][b]%s[/b][/color]" % [c_hp, fmt(float(t["heal"]))])
+		lines.append(Loc.t("• Can: [color=%s][b]%s[/b][/color]") % [c_hp, fmt(float(t["heal"]))])
 	if float(t["shield"]) > 0.0:
-		lines.append("• Kalkan: [color=%s][b]%s[/b][/color]" % [c_sh, fmt(float(t["shield"]))])
+		lines.append(Loc.t("• Kalkan: [color=%s][b]%s[/b][/color]") % [c_sh, fmt(float(t["shield"]))])
 	if float(t.get("prevented", 0.0)) > 0.0:
-		lines.append("• Engellenen hasar: [color=%s][b]%s[/b][/color]" % [c_sh, fmt(float(t["prevented"]))])
+		lines.append(Loc.t("• Engellenen hasar: [color=%s][b]%s[/b][/color]") % [c_sh, fmt(float(t["prevented"]))])
 	var util: Dictionary = t.get("util", {})
 	var metrics: Array = UTIL_LABELS.keys()
 	for m in util.keys():
@@ -308,25 +309,25 @@ static func tooltip_bbcode(slot: String, ink: Dictionary) -> String:
 			metrics.append(m)
 	for m in metrics:
 		if float(util.get(m, 0.0)) > 0.0:
-			lines.append("• %s: [color=%s][b]%s[/b][/color]" % [str(UTIL_LABELS.get(m, m)), c_dmg if UTIL_DAMAGE.has(m) else c_sh, fmt(float(util[m]))])
+			lines.append("• %s: [color=%s][b]%s[/b][/color]" % [Loc.t(str(UTIL_LABELS.get(m, m))), c_dmg if UTIL_DAMAGE.has(m) else c_sh, fmt(float(util[m]))])
 	var live: PackedStringArray = live_lines(slot, ink)
 	if lines.is_empty():
 		if not live.is_empty():
 			return "\n".join(live)
-		return "[color=%s]Bu oyunda henüz bir etkisi olmadı.[/color]" % c_dim
+		return Loc.t("[color=%s]Bu oyunda henüz bir etkisi olmadı.[/color]") % c_dim
 	## Birden çok kaynak varsa (ör. Büyücü Hortum + Arcane) hangisi ne kadar.
 	var parts: Array = t["parts"]
 	if parts.size() > 1:
 		for p in parts:
 			var bits: PackedStringArray = []
 			if float(p["dmg"]) > 0.0:
-				bits.append("%s hasar" % fmt(float(p["dmg"])))
+				bits.append(Loc.t("%s hasar") % fmt(float(p["dmg"])))
 			if float(p["heal"]) > 0.0:
-				bits.append("%s can" % fmt(float(p["heal"])))
+				bits.append(Loc.t("%s can") % fmt(float(p["heal"])))
 			if float(p["shield"]) > 0.0:
-				bits.append("%s kalkan" % fmt(float(p["shield"])))
+				bits.append(Loc.t("%s kalkan") % fmt(float(p["shield"])))
 			if not bits.is_empty():
-				lines.append("[color=%s]   %s: %s[/color]" % [c_dim, str(p["name"]), ", ".join(bits)])
+				lines.append("[color=%s]   %s: %s[/color]" % [c_dim, Loc.t(str(p["name"])), ", ".join(bits)])
 	lines.append_array(live)
 	return "\n".join(lines)
 
@@ -343,13 +344,13 @@ static func live_lines(slot: String, ink: Dictionary) -> PackedStringArray:
 		return out
 	var c_val: String = str(ink.get("value", "#9a6a10"))
 	var lbl := func(label: String, value: String) -> String:
-		return "• Şu an: [color=%s][b]%s[/b][/color] %s" % [c_val, value, label]
+		return Loc.t("• Şu an: [color=%s][b]%s[/b][/color] %s") % [c_val, Loc.pct(value), Loc.t(label)]
 	match int(Characters.get_def(GameManager.selected_char_id).get("skill", -1)):
 		12: ## Elara: seviye başına %1 saldırı hızı (en fazla %30; player.gd ELARA_PASSIVE_*)
 			out.append(lbl.call("saldırı hızı", "+%%%d" % int(round(100.0 * minf(float(p.get("level")) * 0.01, 0.3)))))
 		43: ## Matthew: toplam hareket hızı bonusu, her %1'i = %0,5 saldırı hızı
 			var mv: int = int(p.get("_matthew_move_percent"))
-			out.append(lbl.call("hareket hızı (+%%%s saldırı hızı)" % str(snappedf(mv * 0.5, 0.5)), "+%%%d" % mv))
+			out.append(lbl.call(Loc.t("hareket hızı (+%%%s saldırı hızı)") % str(snappedf(mv * 0.5, 0.5)), "+%%%d" % mv))
 		38: ## Talon: güç yükleri
 			out.append(lbl.call("güç yükü", str(int(p.get("_talon_passive_stacks")))))
 		18: ## Korsan: cüzdandaki her 30 altın = +1 saldırı gücü
@@ -408,16 +409,16 @@ static func pet_tooltip_bbcode(key: String, ink: Dictionary) -> String:
 	if float(t["dmg"]) > 0.0:
 		var extra: String = ""
 		if int(t["hits"]) > 0:
-			extra = "  [color=%s](%d isabet)[/color]" % [c_dim, int(t["hits"])]
-		lines.append("• Hasar: [color=%s][b]%s[/b][/color]%s" % [c_dmg, fmt(float(t["dmg"])), extra])
+			extra = Loc.t("  [color=%s](%d isabet)[/color]") % [c_dim, int(t["hits"])]
+		lines.append(Loc.t("• Hasar: [color=%s][b]%s[/b][/color]%s") % [c_dmg, fmt(float(t["dmg"])), extra])
 	if float(t["prevented"]) > 0.0:
-		lines.append("• Engellenen hasar: [color=%s][b]%s[/b][/color]" % [c_sh, fmt(float(t["prevented"]))])
+		lines.append(Loc.t("• Engellenen hasar: [color=%s][b]%s[/b][/color]") % [c_sh, fmt(float(t["prevented"]))])
 	if float(t["heal"]) > 0.0:
-		lines.append("• İyileştirme: [color=%s][b]%s[/b][/color]" % [c_hp, fmt(float(t["heal"]))])
+		lines.append(Loc.t("• İyileştirme: [color=%s][b]%s[/b][/color]") % [c_hp, fmt(float(t["heal"]))])
 	if float(t["shield"]) > 0.0:
-		lines.append("• Kalkan: [color=%s][b]%s[/b][/color]" % [c_sh, fmt(float(t["shield"]))])
+		lines.append(Loc.t("• Kalkan: [color=%s][b]%s[/b][/color]") % [c_sh, fmt(float(t["shield"]))])
 	if int(t["drops"]) > 0:
-		lines.append("• Ağaçtan düşürülen eşya: [color=%s][b]%d[/b][/color]" % [c_gold, int(t["drops"])])
+		lines.append(Loc.t("• Ağaçtan düşürülen eşya: [color=%s][b]%d[/b][/color]") % [c_gold, int(t["drops"])])
 	if lines.is_empty():
-		return "[color=%s]Bu oyunda henüz bir şey yapmadı.[/color]" % c_dim
+		return Loc.t("[color=%s]Bu oyunda henüz bir şey yapmadı.[/color]") % c_dim
 	return "\n".join(lines)

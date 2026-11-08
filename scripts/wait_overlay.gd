@@ -19,11 +19,11 @@ const MODES := {
 	"shop": {"title": "ALIŞVERİŞ BEKLENİYOR", "busy": "dükkanda", "total": 30.0},
 }
 ## fire_menu_kit.gd (Ateş Işığı) renkleri
-const C_GOLD := Color("#f4c56e")
-const C_GOLD_DIM := Color("#e2c08a")
-const C_CREAM := Color("#efe2c6")
-const C_SUB := Color("#b09878")
-const C_DARK := Color("#140e09")
+const C_GOLD := HT.ACCENT
+const C_GOLD_DIM := HT.ACCENT_SOFT
+const C_CREAM := HT.TEXT
+const C_SUB := HT.DIM
+const C_DARK := HT.DEEP
 const BAND_W := 1440.0
 const BAND_H := 348.0
 const BAND_CY := 330.0
@@ -141,7 +141,7 @@ func _poll() -> void:
 			_:
 				busy = NetworkManager.level_up_busy_peers.has(pid)
 		_rows.append({
-			"name": "Sen" if int(pid) == me else str(info.get("name", "Oyuncu")),
+			"name": tr("Sen") if int(pid) == me else str(info.get("name", tr("Oyuncu"))),
 			"tex": _portrait(int(info.get("char_id", -1))),
 			"ready": not busy,
 		})
@@ -165,7 +165,7 @@ func _draw_board() -> void:
 	var cx: float = roundf(vp.x * 0.5)
 	var cy: float = BAND_CY
 	_board.draw_texture_rect(_band(), Rect2(roundf(cx - BAND_W * 0.5), roundf(cy - BAND_H * 0.5), BAND_W, BAND_H), false)
-	var title: String = def["title"]
+	var title: String = tr(String(def["title"])) ## _board.draw_string kendiliğinden çevrilmez (madde 446); oyuncu adları çevrilmez
 	var tl: float = _tw(title, 48)
 	_txt(title, Vector2(roundf(cx - tl * 0.5), cy - 150.0), 48, C_GOLD)
 	_orn(cx - tl * 0.5 - 28.0, cx - tl * 0.5 - 250.0, cy - 125.0, C_GOLD_DIM)
@@ -192,13 +192,14 @@ func _draw_board() -> void:
 		_r(px - 45.0, py + 98.0, 90.0, 3.0, Color(HT.GOOD if ready else C_GOLD, 0.7))
 		var name_fit: String = _fit(p["name"], 24, step - 12.0)
 		_txt_c(name_fit, px, py + 106.0, 24, C_CREAM if ready else C_GOLD)
-		_txt_c("hazır" if ready else String(def["busy"]), px, py + 130.0, 24, HT.GOOD if ready else C_SUB)
+		_txt_c(tr("hazır") if ready else tr(String(def["busy"])), px, py + 130.0, 24, HT.GOOD if ready else C_SUB)
 	if _remaining >= 0.0:
 		var num := "%d" % int(ceil(_remaining))
-		var total_w: float = _tw(num, 48) + _tw(" sn", 48)
+		var unit: String = " " + tr("sn")
+		var total_w: float = _tw(num, 48) + _tw(unit, 48)
 		var tx: float = roundf(cx - total_w * 0.5)
 		_txt(num, Vector2(tx, cy + 70.0), 48, HT.PRICE)
-		_txt(" sn", Vector2(tx + _tw(num, 48), cy + 70.0), 48, C_SUB)
+		_txt(unit, Vector2(tx + _tw(num, 48), cy + 70.0), 48, C_SUB)
 		var lw: float = roundf(700.0 * clampf(_remaining / float(def["total"]), 0.0, 1.0) / 3.0) * 3.0
 		_r(cx - lw * 0.5, cy + 132.0, lw, 3.0, C_GOLD_DIM)
 		_diamond(Vector2(cx - lw * 0.5 - 6.0, cy + 133.5), 3.0, C_GOLD_DIM)
@@ -262,8 +263,8 @@ func _tw(s: String, size: int) -> float:
 func _txt(s: String, pos: Vector2, size: int, c: Color) -> void:
 	var u: float = minf(size / 8.0, 3.0)
 	var base := Vector2(roundf(pos.x), roundf(pos.y + FONT.get_ascent(size)))
-	_board.draw_string(FONT, base + Vector2(u, u), s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(HT.OUTLINE, 0.9))
-	_board.draw_string(FONT, base, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, c)
+	_board.draw_string(FONT, base + Vector2(u, u), s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(HT.OUTLINE, 0.9)) ## dil:yok (çağıran çevirir)
+	_board.draw_string(FONT, base, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, c) ## dil:yok
 
 
 func _txt_c(s: String, cx: float, y: float, size: int, c: Color) -> void:

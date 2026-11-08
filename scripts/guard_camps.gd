@@ -14,6 +14,11 @@ extends Node
 
 const EnemyWorldBridgeScript := preload("res://scripts/enemy_world/enemy_world_bridge.gd")
 const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd")
+const MapProfilesScript := preload("res://scripts/map_profiles.gd")
+const DungeonDefsScript := preload("res://scripts/dungeon/dungeon_defs.gd")
+## HARİTA KİPİ (madde 444): zindan biçimli haritada kenar kampları (CAMPS: ana haritanın hücreleri) YOK; haritanın kendi "sakin" / "avci"
+## nesneleri zindan kampı gibi kurulur (yaratık listesi + avcı nesnenin `tema`sının zindanından), oyuncu haritadayken (in_dungeon boş) dolu.
+const MAP_THEME_DUNGEON := {"kemik": "kemik_mahzeni", "et": "et_kuyusu", "boynuz": "boynuzlu_kapi"}
 
 ## ZİNDAN KAMPLARI (madde 373): zindan haritasındaki her "sakin" nesnesi (oda dikdörtgeni + profil + adet) bir kamp, her zindanın "avci" nesnesi
 ## bir AVCI (rotası büyük odaları dolaşan elit). Aynı durum makinesi (uykuda dolaşır -> görünce kovalar -> kaybedince arar -> döner); farklar:
@@ -133,7 +138,7 @@ func _init_camps() -> bool:
 	var spawner: Node = _spawner()
 	if layer == null or spawner == null:
 		return false
-	for def: Dictionary in CAMPS:
+	for def: Dictionary in (CAMPS if MapProfilesScript.feature("kenar_bekcileri") else []):
 		var center: Vector2 = layer.to_global(layer.map_to_local(def["cell"]))
 		_camps.append({"def": def, "center": center, "guards": [], "empty_since": -1.0, "queue": int(def["count"])})
 	_inited = true
@@ -378,6 +383,7 @@ func _patrol(e: Node2D, g: Dictionary, slot: int, world: Object, dt: float, cent
 ## ---------------------------------------------------------------- zindan kampları (madde 373)
 
 var _dungeon_ready: bool = false
+var _map_id: String = "" ## harita kipi: zindan biçimli haritanın kimliği (sakin/avcı kampları haritanın nesnelerinden)
 var _dungeon_seen: Dictionary = {} ## zindan id -> içinde oyuncu olan son _clock
 var _dungeon_budget: int = 0 ## bu tikte kalan zindan doğuş hakkı
 
@@ -386,7 +392,11 @@ var _dungeon_budget: int = 0 ## bu tikte kalan zindan doğuş hakkı
 func _ensure_dungeon_camps() -> void:
 	if _dungeon_ready:
 		return
-	var ds: Array[Dictionary] = DungeonWorldScript.dungeons()
+	var ds: Array[Dictionary] = DungeonWorldScript.dungeons().duplicate()
+	var me: Dictionary = DungeonWorldScript.map_entry()
+	if not me.is_empty():
+		ds.append(me)
+		_map_id = str(me["id"])
 	if ds.is_empty():
 		return
 	_dungeon_ready = true
@@ -398,6 +408,9 @@ func _ensure_dungeon_camps() -> void:
 		for o: Dictionary in (e["data"] as Resource).objects:
 			var t: String = str(o.get("type", ""))
 			var props: Dictionary = o.get("props", {})
+			if id == _map_id:
+				def = DungeonDefsScript.by_id(str(MAP_THEME_DUNGEON.get(str(props.get("tema", "")), "")))
+				profiles = def.get("profiles", {})
 			var wr := Rect2(DungeonWorldScript.local_to_world(id, (o["rect"] as Rect2).position), (o["rect"] as Rect2).size)
 			if t == "sakin":
 				var prof: String = str(props.get("profil", "oda"))
@@ -419,6 +432,14 @@ func _ensure_dungeon_camps() -> void:
 				_camps.append({"def": cd2, "center": wr.get_center(), "guards": [], "empty_since": -1.0, "queue": 0, "active": false, "remember": 1})
 
 
+## Oyuncunun bulunduğu zindan; harita kipinde zindanda değilse haritanın kendisi.
+func _dungeon_of(p: Node) -> String:
+	var d: String = str(p.get("in_dungeon") if p.get("in_dungeon") != null else "")
+	if d == "" and _map_id != "":
+		return _map_id
+	return d
+
+
 ## DungeonManager girişte çağırır (host'ta hemen dolsun; istemcide etkisiz).
 func notify_dungeon_entered(id: String) -> void:
 	_dungeon_seen[id] = _clock
@@ -428,7 +449,7 @@ func _update_dungeon_activity(players: Array, _dt: float) -> void:
 	if not _dungeon_ready:
 		return
 	for p: Node2D in players:
-		var d: String = str(p.get("in_dungeon") if p.get("in_dungeon") != null else "")
+		var d: String = _dungeon_of(p)
 		if d != "":
 			_dungeon_seen[d] = _clock
 	_dungeon_budget = DUNGEON_SPAWN_BUDGET
@@ -442,7 +463,7 @@ func _update_dungeon_activity(players: Array, _dt: float) -> void:
 			## oda kampı: yakınlık kuralı (avcı zindan doluyken hep açık)
 			var near_d: float = 1.0e9
 			for p: Node2D in players:
-				if str(p.get("in_dungeon") if p.get("in_dungeon") != null else "") == id:
+				if _dungeon_of(p) == id:
 					near_d = minf(near_d, p.global_position.distance_to(camp["center"]))
 			if near_d < DUNGEON_WAKE_DIST:
 				camp["far_since"] = -1.0

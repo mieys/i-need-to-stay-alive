@@ -188,11 +188,16 @@ static func _build(layer: TileMapLayer) -> void:
 		_size = Vector2i.ONE ## "boş katman" işareti (bkz. _ensure_grid)
 		return
 	## ZİNDAN duvarları (madde 373): orman duvarı gibi hareket + görüş (sis) keser; zindanlar ana haritanın doğusunda aynı ızgarada.
-	forest_cells.append_array(DungeonWorldScript.wall_cells())
+	## AYAK KURALI (dungeon_world.gd, 2026-11-08): zindan hücreleri HAREKET için bir satır yukarı kayar (yaratığın kökü ayağının bir hücre
+	## üstünde); sis (görüş) kaymaz. Zindan biçimli haritada görünmez orman katmanı = zindan duvarları -> o da kayar.
+	var dungeon_walls: Array[Vector2i] = DungeonWorldScript.wall_cells()
+	var map_mode: bool = DungeonWorldScript.map_mode()
+	var used: Array[Vector2i] = _shift_cells(forest_cells) if map_mode else forest_cells.duplicate()
+	used.append_array(_shift_cells(dungeon_walls))
+	forest_cells.append_array(dungeon_walls)
 	## Orman duvarı + haritadaki nesnelerin engel hücreleri (su, bina tabanı, ağaç gövdesi, maden...) - bkz. terrain_collision.gd.
-	var used: Array[Vector2i] = forest_cells.duplicate()
 	used.append_array(TerrainCollisionScript.ensure(layer).keys())
-	used.append_array(DungeonWorldScript.solid_cells()) ## zindan nesneleri + kapalı kapılar: yalnız hareket
+	used.append_array(_shift_cells(DungeonWorldScript.solid_cells())) ## zindan nesneleri + kapalı kapılar: yalnız hareket
 	## Ağaç katmanlarının hücreleri SADECE görüşü (sis) keser, hareketi/yol bulmayı etkilemez (gövde çarpışması terrain_collision.gd'den) - vision_occluders.gd AĞAÇLAR notu.
 	var tree_cells: Array[Vector2i] = []
 	for tree_layer: TileMapLayer in GameManager.get_vision_tree_layers():
@@ -250,12 +255,30 @@ static func _build(layer: TileMapLayer) -> void:
 static func sync_cells(cells: Array) -> void:
 	if _astar == null or _layer == null or not is_instance_valid(_layer):
 		return
+	## Zindan hücresi değişince (kapı) hareket ızgarasında onun bir üstü değişir (AYAK KURALI): ikisi de yeniden hesaplanır.
+	var todo: Dictionary = {}
 	for cell: Vector2i in cells:
+		todo[cell] = true
+		todo[cell + DungeonWorldScript.MOVE_SHIFT] = true
+	var map_mode: bool = DungeonWorldScript.map_mode()
+	for cell: Vector2i in todo:
 		if not _in_bounds(cell):
 			continue
-		var solid: bool = TerrainCollisionScript._cells.has(cell) or _layer.get_cell_source_id(cell) != -1 				or DungeonWorldScript.is_move_blocked_cell(cell)
+		var below: Vector2i = cell - DungeonWorldScript.MOVE_SHIFT
+		var solid: bool = TerrainCollisionScript._cells.has(cell) \
+				or (_layer.get_cell_source_id(below) != -1 if map_mode else _layer.get_cell_source_id(cell) != -1) \
+				or DungeonWorldScript.is_move_blocked_cell(below)
 		_astar.set_point_solid(cell, solid)
 		_blocked[(cell.y - _origin.y) * _size.x + (cell.x - _origin.x)] = 1 if solid else 0
+
+
+## AYAK KURALI: zindan hücrelerinin hareket ızgarasındaki karşılığı (bkz. DungeonWorld.MOVE_SHIFT).
+static func _shift_cells(cells: Array[Vector2i]) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	out.resize(cells.size())
+	for i in range(cells.size()):
+		out[i] = cells[i] + DungeonWorldScript.MOVE_SHIFT
+	return out
 
 
 static func _in_bounds(cell: Vector2i) -> bool:

@@ -92,7 +92,7 @@ func _draw() -> void:
 	draw_colored_polygon(tri, ARROW_FILL)
 	draw_polyline(PackedVector2Array([tip, base_l, base_r, tip]), ARROW_OUTLINE, 2.5)
 	var font: Font = ThemeDB.fallback_font
-	var label: String = "Seyyar Satıcı"
+	var label: String = tr("Seyyar Satıcı")
 	var label_pos: Vector2 = anchor + Vector2(0.0, ARROW_WIDTH * 0.5 + 18.0)
 	var text_size: Vector2 = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15)
 	draw_string(font, label_pos - Vector2(text_size.x * 0.5, 0.0), label,

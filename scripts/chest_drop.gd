@@ -9,9 +9,9 @@ extends Area2D
 ## elit sandık (NetworkManager.host_award_elite_chest), açılınca epik eşya kartı (main.gd _show_elite_chest, chest_menu.gd
 ## elit mod). Düşme kuralları enemy.gd _drop_chest'te.
 ##
-## Görsel (2026-10-17, madde 242 "B Işık Sütunu"): sandık sayfası + arkasında ayrı ışık sütunu sayfası, ikisi de chest_art.gd'den
-## (0,5 dünya px/piksel). Sandık 0-3 bekleme, toplanınca 4-12 (sallanma + kapak patlaması); sütun 0-23 döngü, açılışta sallanır
-## ve sandığa çöker. Lost Ark/Diablo ganimeti gibi sandık YERDE DURUR (eski süzülme kalktı); gölgesi yerde.
+## Görsel (2026-11-06, madde 409): İLK sürümün paket sandıkları geri geldi - kademe bandına (chest_tier) göre 6 sandık + elit, 0,8 dünya
+## px/piksel (chest_art.gd). Sandık 0-3 kapalı, toplanınca 4-12 (sallanma + kapak açılır, altın görünür). Madde 242'nin ışık sütunu ve
+## ek gölgeleri kapalı (ChestArt.BEAM_ENABLED / EXTRA_SHADOW). Sandık YERDE DURUR.
 
 const ChestArt := preload("res://scripts/chest_art.gd")
 const NORMAL_SHEET := ChestArt.NORMAL_SHEET
@@ -19,17 +19,21 @@ const DropShadowScript := preload("res://scripts/drop_shadow.gd")
 const ELITE_SHEET := ChestArt.ELITE_SHEET
 const SHADOW_TEX := preload("res://assets/sprites/chests/chest_shadow.png")
 const FRAME_COUNT := ChestArt.FRAME_COUNT
-## Karede sandığın alt kenarı y=42 dünya px (48'lik kare, ortalı sprite'ta +18): sprite -10'a kayınca taban kökün 8 px altında.
-const SPRITE_Y := -10.0
+## Sandığın tabanı kökün SHADOW_Y altında: ortalı sprite'ta taban (CHEST_ANCHOR_PX.y - kare/2) x TEXEL aşağıda.
 const SHADOW_Y := 8.0
+const SPRITE_Y := SHADOW_Y - (ChestArt.CHEST_ANCHOR_PX.y - ChestArt.FRAME_PX * 0.5) * ChestArt.TEXEL
 const OPEN_FRAMES := [4, 5, 6, 7, 8, 9, 10, 11, 12]
 const OPEN_FRAME_TIME := 0.05
 ## Normal sandık çoğu zaman durur, arada bir asma kilidinde parıltı çakar; elit sandığın mor taşı nabız atar.
 const NORMAL_GLINT_EVERY := 2.4
 const ELITE_IDLE_STEP := 0.3
 
-## "KADEME" - hangi dünya evresinden düştü (sandık menüsünün başlığı, bkz. chest_menu.gd CHEST_TITLES). Görsele etkisi yok.
-@export var chest_tier: int = 0
+## "KADEME" bandı (0-5) - hangi dünya evresinden düştü (sandık menüsünün başlığı, bkz. chest_menu.gd CHEST_TITLES) + sandığın görünüşü.
+@export var chest_tier: int = 0:
+	set(val):
+		chest_tier = val
+		if is_inside_tree():
+			_update_visual()
 ## Elit sandık (epik eşya, herkese). Ağ kopyası için broadcast_drop "elite_chest" türü bunu add_child'dan önce kurar.
 @export var is_elite: bool = false:
 	set(val):
@@ -57,21 +61,22 @@ func _ready() -> void:
 	_update_visual()
 	## Gölge (2026-10-02, harita gölgeleriyle aynı "B" dili - bkz. drop_shadow.gd): sprite dinlenme konumundayken ölçülür,
 	## sonra sadece sprite zıpladığı için gölge yerde kalır.
-	DropShadowScript.attach(self, sprite, false, 3, Rect2(), true)
+	if ChestArt.EXTRA_SHADOW:
+		DropShadowScript.attach(self, sprite, false, 3, Rect2(), true)
 
 
 func _update_visual() -> void:
 	var s: Sprite2D = sprite if sprite else get_node_or_null("Sprite2D") as Sprite2D
 	if s == null:
 		return
-	s.texture = ELITE_SHEET if is_elite else NORMAL_SHEET
+	s.texture = ELITE_SHEET if is_elite else ChestArt.normal_sheet(chest_tier)
 	s.hframes = FRAME_COUNT
 	s.vframes = 1
 	s.frame = 0
 	s.scale = Vector2.ONE * ChestArt.TEXEL
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	s.position = Vector2(0.0, SPRITE_Y)
-	if _shadow == null:
+	if _shadow == null and ChestArt.EXTRA_SHADOW:
 		_shadow = Sprite2D.new()
 		_shadow.name = "Shadow"
 		_shadow.texture = SHADOW_TEX
@@ -79,6 +84,8 @@ func _update_visual() -> void:
 		_shadow.position = Vector2(0.0, SHADOW_Y)
 		add_child(_shadow)
 		move_child(_shadow, 0)
+	if not ChestArt.BEAM_ENABLED:
+		return
 	if _beam == null:
 		_beam = Sprite2D.new()
 		_beam.name = "Beam"

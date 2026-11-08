@@ -78,7 +78,7 @@ func test_dead_enemy_leaves_gold_that_is_collected_by_proximity() -> void:
 	for n in get_children():
 		if "label" in n and n.get("label") is Label:
 			texts.append((n.get("label") as Label).text)
-	assert(texts.has("+3"), "karakterin üstünde +N yazısı: %s" % [texts])
+	assert(not texts.has("+3") and texts.is_empty(), "2026-11-06: toplayınca karakterin üstünde +N yazısı çıkmaz: %s" % [texts])
 	GameManager.gold = before
 	NetworkManager.is_multiplayer_active = was_active
 	p.remove_from_group("player")
@@ -191,10 +191,22 @@ func _peer_node(peer: int) -> Node2D:
 	return n
 
 
+## Düz toplama yazısı kapalı (SHOW_PICKUP_TEXT): yazı da simge de çıkmaz, ses/balans kaydı sürer.
+func test_pickup_text_is_hidden() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	assert(not KillGold.SHOW_PICKUP_TEXT, "kullanıcı isteği: toplayınca +altın yazısı yok")
+	KillGold.show_at(get_tree(), 4, Vector2(0, 0))
+	for n in get_children():
+		assert(not ("label" in n and n.get("label") is Label), "düz toplama için yazı sahnesi eklenmemeli")
+	get_tree().current_scene = prev_scene
+
+
+## Simge (yazıya bitişik sabit altın) yalnız yazı açıkken - asist/takım payı yazılarında hâlâ çıkar.
 func test_icon_is_static_and_beside_text() -> void:
 	if get_tree().current_scene == null:
 		return
-	KillGold.show_at(get_tree(), 4, Vector2(0, 0))
+	KillGold.show_at(get_tree(), 4, Vector2(0, 0), 1)
 	var icon: Sprite2D = null
 	for n in get_tree().current_scene.get_children():
 		for c in n.get_children():
@@ -218,7 +230,7 @@ func test_team_share_text_is_labelled() -> void:
 	for n in get_children():
 		if "label" in n and n.get("label") is Label:
 			texts.append((n.get("label") as Label).text)
-	assert(texts.has("TAKIM +3") and texts.has("ASİST +5") and texts.has("+7"), "yazı türleri: %s" % [texts])
+	assert(texts.has("TAKIM +3") and texts.has("ASİST +5") and not texts.has("+7"), "asist/takım yazıları sürer, düz toplama yazısı yok: %s" % [texts])
 	get_tree().current_scene = prev_scene
 
 

@@ -18,15 +18,13 @@ const MIN_SWAY_ROWS := 2
 const DRY_TREE_GREEN_RATIO := 0.4 ## yeşil piksel oranı bunun altındaysa kuru ağaç
 const DRY_TREE_AMPLITUDE := 0.5
 const WAVE_SCALE := 0.004 ## ortak esinti dalgası: kökün dünya x'i x bu = faz (radyan)
-## Derin orman bölgelerinde yaprak boyası (sallanan ağaç.gdshader bolge_boya, madde 365) KAPALI katmanlar: paketten gelen bölge ağaçları zaten
-## bölgenin kendi sanatı (haritanın yeşil ağaçları Ağaç 0/1/2'de boyanır). Derinlik ön kopyası materyali uniform uniform kopyalar.
-const ZONE_TINT_OFF: Array[String] = ["Ağaç ölü"]
 
 var _materials: Array[ShaderMaterial] = []
 var _base_strength: float = 1.4
 var _last_mult: float = -1.0
 var _atmosphere: Node = null
 var _image_cache: Dictionary = {}
+var _tile_stat_cache: Dictionary = {}
 
 
 ## main.gd çağırır. Katmanlar yoksa (test sahnesi, başka harita) sessizce hiçbir şey yapmaz.
@@ -51,7 +49,7 @@ func setup(harita: Node) -> void:
 				var v: Variant = cur.get_shader_parameter(u["name"])
 				if v != null:
 					mat.set_shader_parameter(u["name"], v)
-		mat.set_shader_parameter("bolge_boya", 0.0 if String(layer.name) in ZONE_TINT_OFF else 1.0)
+		mat.set_shader_parameter("bolge_boya", 1.0)
 		layer.material = mat
 		layer.use_parent_material = false
 		if _materials.is_empty():
@@ -134,22 +132,16 @@ func _write_cell_data(mat: ShaderMaterial, layer: TileMapLayer) -> void:
 			var src := ts.get_source(a[0]) as TileSetAtlasSource
 			if src.texture == null or not src.has_tile(a[1]):
 				continue
-			var img: Image = _image_of(src.texture)
-			if img == null:
+			## Aynı atlas karosunun piksel taraması bir kez yapılır (aynı ağaç türü haritada yüzlerce kez geçer; yükleme donmasının büyük kısmıydı, madde 440).
+			var st: Array = _tile_stats(src, a[0], a[1])
+			if st.is_empty():
 				continue
-			var region: Rect2i = src.get_tile_texture_region(a[1])
-			for y in range(region.size.y):
-				for x in range(region.size.x):
-					var px: Color = img.get_pixel(region.position.x + x, region.position.y + y)
-					if px.a < 0.4:
-						continue
-					opaque += 1
-					if px.h > 0.17 and px.h < 0.48 and px.s > 0.25:
-						green += 1
-					if cell.y == max_y:
-						last_row = maxi(last_row, y)
-					if cell.y == min_y:
-						first_row = mini(first_row, y)
+			opaque += int(st[0])
+			green += int(st[1])
+			if cell.y == max_y:
+				last_row = maxi(last_row, int(st[2]))
+			if cell.y == min_y:
+				first_row = mini(first_row, int(st[3]))
 		if last_row >= 0:
 			root_px = (max_y - min_y) * 16 + last_row + 1
 		if first_row < 16:
@@ -173,6 +165,34 @@ func _write_cell_data(mat: ShaderMaterial, layer: TileMapLayer) -> void:
 	if padding_src:
 		mat.set_shader_parameter("karo_hucre", float(padding_src.texture_region_size.x + (2 if padding_src.use_texture_padding else 0)))
 		mat.set_shader_parameter("karo_dolgu", 1.0 if padding_src.use_texture_padding else 0.0)
+
+
+## Karonun [opak piksel sayısı, yeşil piksel sayısı, en alt opak satır (-1 yok), en üst opak satır (16 yok)]; doku okunamıyorsa boş dizi.
+func _tile_stats(src: TileSetAtlasSource, sid: int, coords: Vector2i) -> Array:
+	var key := Vector3i(sid, coords.x, coords.y)
+	if _tile_stat_cache.has(key):
+		return _tile_stat_cache[key]
+	var res: Array = []
+	var img: Image = _image_of(src.texture)
+	if img != null:
+		var region: Rect2i = src.get_tile_texture_region(coords)
+		var opaque: int = 0
+		var green: int = 0
+		var last_row: int = -1
+		var first_row: int = 16
+		for y in range(region.size.y):
+			for x in range(region.size.x):
+				var px: Color = img.get_pixel(region.position.x + x, region.position.y + y)
+				if px.a < 0.4:
+					continue
+				opaque += 1
+				if px.h > 0.17 and px.h < 0.48 and px.s > 0.25:
+					green += 1
+				last_row = maxi(last_row, y)
+				first_row = mini(first_row, y)
+		res = [opaque, green, last_row, first_row]
+	_tile_stat_cache[key] = res
+	return res
 
 
 func _find(parent: Dictionary, c: Vector2i) -> Vector2i:

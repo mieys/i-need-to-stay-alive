@@ -238,6 +238,23 @@ func test_talon_salvo_in_the_dome_spins_every_rim_weapon_with_half_advantage() -
 	_cleanup()
 
 
+## 2026-11-08 (kullanıcı: "silahlar kalkandan bağımsız, şovalye adamınki dahil"): halka kapalı - kubbedeki Şovalye'nin ve içindekilerin silahları
+## halkaya girmez, kendi slotunda kalır.
+func test_ring_is_off_so_weapons_stay_independent_of_the_dome() -> void:
+	assert(not DomeScript.WEAPONS_ON_RIM, "halka bayrağı kapalı")
+	var p: FakeLocal = _make_local(Vector2.ZERO)
+	var w: Node2D = p.owned_weapon_nodes[0]
+	var ring: Node = _track(RingScript.new())
+	add_child(ring)
+	assert(not ring.is_physics_processing(), "halka yöneticisi fizik işlemiyor")
+	for i in range(5):
+		await get_tree().physics_frame
+	assert(p.paladin_zone_active and not bool(w.get("_rim_active")) and not w.call("is_on_dome_rim"), "kubbedeki Şovalye'nin silahı halkaya girmez")
+	var expected: Vector2 = load("res://scripts/weapon_target_priority.gd").range_center(p.global_position, w.global_position)
+	assert((w.call("_attack_origin") as Vector2).is_equal_approx(expected), "menzil/hedef normal oyuncudaki gibi (kubbe kenar noktası değil)")
+	_cleanup()
+
+
 func test_outward_angle_points_away_from_the_dome_center() -> void:
 	assert(is_equal_approx(RingScript.rim_outward_angle(126.0, 0, 4), -PI * 0.5), "tepe: yukarı")
 	assert(is_equal_approx(RingScript.rim_outward_angle(126.0, 1, 4), 0.0), "sağ: sağa")

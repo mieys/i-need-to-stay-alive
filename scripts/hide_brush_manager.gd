@@ -106,7 +106,7 @@ func request_reveal_local() -> void:
 func tick(dt: float = TICK) -> void:
 	_clock += dt
 	var tree: SceneTree = get_tree()
-	if HideBrushScript.layer(tree) == null:
+	if not HideBrushScript.active(tree): ## çalılık katmanı yok VE zindan saklanma hücresi yok (madde 463: zindan haritalarında da çalışır)
 		if not _entries.is_empty() or _stealth_active:
 			_clear_all()
 		return

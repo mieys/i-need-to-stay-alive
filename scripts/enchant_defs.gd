@@ -1,5 +1,6 @@
 class_name EnchantDefs
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## EFSUN SİSTEMİ - TEK VERİ KAYNAĞI. Kart ekranı (enchant_screen.gd), havuz (enchant_pool.gd), silah davranışları
 ## (scripts/enchants/<id>.gd) ve durum çözümü (resolve) hep buradan okur - bir efsunun adı/sayısı TEK yerde değişir
@@ -55,9 +56,9 @@ const ELEMENTS := {
 
 const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
-	"tuftuf": "Tüftüf", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay", "crossbow": "Arbalet",
+	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay", "crossbow": "Arbalet",
 	"boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek", "pence": "Pençe", "topuz": "Topuz",
-	"uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı",
+	"uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
 }
 
 const DEFS := {
@@ -476,7 +477,7 @@ static func upgrade_rows(id: String) -> Array:
 
 static func get_def(id: String) -> Dictionary:
 	var t: Dictionary = WeaponTraits.DEFS.get(id, {})
-	return t if not t.is_empty() else DEFS.get(id, {})
+	return Loc.localized("en:" + id, t if not t.is_empty() else DEFS.get(id, {})) ## ad/açıklama/geliştirme satırları seçili dilde (madde 446)
 
 
 static func has_weapon(weapon_key: String) -> bool:

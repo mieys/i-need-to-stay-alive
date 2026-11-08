@@ -380,3 +380,45 @@ func test_record_with_new_fields_stays_under_the_host_size_limit() -> void:
 	assert(json.length() < BalanceLogScript.MAX_RECORD_CHARS - 6000, "40 katlı kayıt (eşyasız) host sınırına yakın olmamalı: %d" % json.length())
 	p.free()
 	_end()
+
+
+## Madde 422: yaratık YETENEK hasarı (diken, lazer...) temas hasarından ayrı anahtarla sayılır; ölüm sebebi (killer) yalın aile adı kalır.
+func test_special_damage_kind_splits_the_taken_key() -> void:
+	_begin()
+	var e := Node2D.new()
+	e.name = "Agac"
+	add_child(e)
+	BalanceLogScript.set_taken_kind("thorns")
+	BalanceLogScript.on_taken(12.0, e)
+	BalanceLogScript.set_taken_kind("")
+	BalanceLogScript.on_taken(5.0, e)
+	var rec: Dictionary = BalanceLogScript.build_record(null, _summary(), "end")
+	var taken: Dictionary = rec["taken_by"]
+	assert(is_equal_approx(float(taken["Agac:thorns"]), 12.0), "diken hasarı ayrı anahtarda: %s" % str(taken))
+	assert(is_equal_approx(float(taken["Agac"]), 5.0), "temas hasarı yalın aile anahtarında: %s" % str(taken))
+	assert(rec["killer"] == "Agac", "killer yalın aile adı kalmalı: %s" % rec["killer"])
+	BalanceLogScript.reset()
+	BalanceLogScript.on_taken(1.0, e)
+	assert(BalanceLogScript.build_record(null, _summary(), "end")["taken_by"].has("Agac"), "reset() hasar türü etiketini temizlemeli")
+	e.queue_free()
+	_end()
+
+
+## Madde 422: kayıtta bitiş nedeni + duvar saati. Tek oyunculu: çıkış "left", herkes elenince "lost", zafer "victory".
+func test_record_has_end_reason_and_wall_clock() -> void:
+	_begin()
+	var prev_over: bool = GameManager.is_game_over
+	var prev_mp: bool = NetworkManager.is_multiplayer_active
+	NetworkManager.is_multiplayer_active = false
+	GameManager.is_game_over = false
+	var rec: Dictionary = BalanceLogScript.build_record(null, _summary(), "end")
+	assert(rec["end_reason"] == "left", "oyun bitmeden çıkış 'left': %s" % rec["end_reason"])
+	assert(rec.has("wall") and float(rec["wall"]) >= 0.0, "duvar saati reset()'ten beri yazılmalı: %s" % str(rec.get("wall")))
+	GameManager.is_game_over = true
+	assert(BalanceLogScript.build_record(null, _summary(), "end")["end_reason"] == "lost")
+	var win: Dictionary = _summary()
+	win["victory"] = true
+	assert(BalanceLogScript.build_record(null, win, "victory")["end_reason"] == "victory")
+	GameManager.is_game_over = prev_over
+	NetworkManager.is_multiplayer_active = prev_mp
+	_end()

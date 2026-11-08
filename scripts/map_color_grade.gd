@@ -41,7 +41,7 @@ const CALM_PARAMS := {
 ## HEPSİ uçuruma bağlı plato tepesi - GİZLENMEZ (altında toprak/kenar olan ~200 karo ve kenar karoları da var); zemin desenini o katmanın
 ## kendi shader'ı çizer (madde 186, orman_parcalari_doku.gdshader).
 const GROUND_LAYER := "Yer/Zemin Çimen"
-const STRAY_SKIP_LAYERS: Array[String] = ["Yer/Zemin Toprak", "Yer/Çimen gölge", "Yer/Zemin Çimen", "Yer/Derin orman zemini", "Orman parçaları/Orman parçaları 2"]
+const STRAY_SKIP_LAYERS: Array[String] = ["Yer/Zemin Toprak", "Yer/Çimen gölge", "Yer/Zemin Çimen", "Orman parçaları/Orman parçaları 2"]
 ## Düz çimen karosu ADAYLARI (kaynak, atlas x, atlas y) - 2026-10-16 harita_baked.tscn analizinden. Kullanılmadan önce PİKSELLERİ doğrulanır
 ## (_is_flat_grass): yeniden bake'te kaynak numaraları kayarsa yanlış karo gizlenmez, sadece o karo atlanır (dikdörtgen geri gelir).
 const FLAT_GRASS_CANDIDATES: Array[Vector3i] = [Vector3i(0, 1, 7), Vector3i(2, 1, 6), Vector3i(0, 1, 1), Vector3i(16, 1, 5)]
@@ -60,8 +60,8 @@ const STRAY_UNDER_Z := -50
 
 static var _plain: ShaderMaterial = null
 static var _outer_forest: ShaderMaterial = null
-## Dış çerçeve ormanı katmanları (Dış orman 1-4): outer_forest_material (Batı'da kızıl yaprak, madde 362). Derin orman bölge ZEMİNİ shader'da
-## değil, Harita.tmx'te gerçek karolar (madde 363: "Yer/Derin orman zemini" + yerinde değişen kıyı/plato/uçurum karoları).
+## Dış çerçeve ormanı katmanları (Dış orman 1-4): outer_forest_material. Madde 463: derin orman bölgeleri kalktı -> bölge yaprak boyası
+## (harita_renk_duz.gdshader do_dis_orman -> do_agac_guc) artık etkisiz geçiş; materyal yalnız renk ayarı.
 const OUTER_FOREST_PREFIX := "Dış orman"
 
 
@@ -72,7 +72,7 @@ static func plain_material() -> ShaderMaterial:
 	return _plain
 
 
-## Dış çerçeve ormanının düz materyali: renk ayarı + Batı'da kızıl yaprak (harita_renk_duz.gdshader do_dis_orman).
+## Dış çerçeve ormanının düz materyali: renk ayarı (do_dis_orman bölge boyası madde 463'den beri etkisiz).
 static func outer_forest_material() -> ShaderMaterial:
 	if _outer_forest == null:
 		_outer_forest = ShaderMaterial.new()
@@ -118,9 +118,42 @@ static func attach(harita: Node, calm: bool = true, hide_strays: bool = true) ->
 			_copy_grass_params(ground_grass, sm)
 		if calm:
 			apply_calm(layer.material)
+	_setup_coast_dirt(harita)
 	if not hide_strays:
 		return 0
 	return _hide_plants_under_bridges(harita) + _hide_stray_grass(harita)
+
+
+## KIYI TOPRAĞI (madde 475, 2026-11-08; kullanıcı: "sahilde shader eksikliği var"): "Su ayrıntılar 2"nin kıyı karolarının kumu toprak karosuyla
+## AYNI renkte (#967e5d) ama çimen malzemesiyle (Zemin Çimen'le PAYLAŞILAN) çizildiği için toprak deseni (leke / çakıl / çatlak) yoktu - suyun
+## üstünde düz kum şeridi. Katman kendi malzeme KOPYASINI alır: toprak_kiyi açık + toprak tekdüzeleri Zemin Toprak malzemesinden (sakin doku
+## dahil) -> kum zeminle aynı desende, dikişsiz. ground_texel_pass.gd bu kopyayı "Zemin ayrıntısı" için saklar (main.gd sırası: bu attach ÖNCE).
+const COAST_LAYER := "Su/Su ayrıntılar 2"
+const DIRT_LAYER := "Yer/Zemin Toprak"
+const DIRT_PARAM_PREFIXES: Array[String] = ["toprak_", "catlak_", "cakil_", "ince_cakil_", "iri_"]
+
+
+static func _setup_coast_dirt(harita: Node) -> void:
+	var coast := harita.get_node_or_null(COAST_LAYER) as TileMapLayer
+	var dirt := harita.get_node_or_null(DIRT_LAYER) as TileMapLayer
+	if coast == null or not (coast.material is ShaderMaterial):
+		return
+	var src: ShaderMaterial = coast.material
+	if src.shader == null or src.shader.resource_path != GROUND_GRASS_SHADER_PATH:
+		return
+	var sm := src.duplicate() as ShaderMaterial
+	sm.set_shader_parameter("toprak_kiyi", true)
+	var dm: ShaderMaterial = dirt.material as ShaderMaterial if dirt else null
+	if dm and dm.shader:
+		for u: Dictionary in dm.shader.get_shader_uniform_list():
+			var nm: String = u["name"]
+			for pre: String in DIRT_PARAM_PREFIXES:
+				if nm.begins_with(pre):
+					var v: Variant = dm.get_shader_parameter(nm)
+					if v != null:
+						sm.set_shader_parameter(nm, v)
+					break
+	coast.material = sm
 
 
 ## Batı halat köprüsünün altındaki çayıra Tiled'da konmuş bitkiler (Çalılar (58,121) ve iki karoluk (60,119)+(60,120)) "Shader Eklenecek"

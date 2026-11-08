@@ -12,7 +12,9 @@ const HudTooltip := preload("res://scripts/hud_tooltip.gd")
 const UiAnim := preload("res://scripts/ui_anim.gd")
 const FRAME: Texture2D = preload("res://assets/ui/kit/hud_skill_frame_small.png")
 const HudTheme := preload("res://scripts/hud_theme.gd")
-const UNDER := HudTheme.INSET
+const HudTrayFrame := preload("res://scripts/hud_tray_frame.gd")
+var tray_frame: bool = false ## hud.gd _apply_tray_slots (masaüstü panel, madde 459)
+const UNDER := HudTheme.DOCK_INSET ## madde 454
 const FIT := 32.0 ## hayvan en çok bu kareye sığar (çerçevenin iç kenarına 2 px taşabilir; çerçeve üstte çizilir)
 const TOOLTIP_WIDTH := 470.0
 const TOOLTIP_ICON := 48.0
@@ -62,7 +64,7 @@ func _process(delta: float) -> void:
 func _stats_bbcode() -> String:
 	var ink: Dictionary = HudTheme.INK.duplicate()
 	ink["cooldown"] = "#" + HudTheme.DIM.to_html(false) ## soluk ikincil yazı (skill_icon.gd ile aynı)
-	return "[color=#%s]BU OYUNDA[/color]\n%s" % [HudTheme.ACCENT.to_html(false), DamageStats.pet_tooltip_bbcode(_key, ink)]
+	return "[color=#%s]%s[/color]\n%s" % [HudTheme.ACCENT.to_html(false), tr("BU OYUNDA"), DamageStats.pet_tooltip_bbcode(_key, ink)]
 
 
 func _open_tooltip() -> void:
@@ -137,4 +139,8 @@ func _draw() -> void:
 		var ts: Vector2 = _tex.get_size()
 		var s: float = maxf(1.0, floorf(FIT / maxf(ts.x, ts.y)))
 		draw_texture_rect(_tex, Rect2((size * 0.5 - ts * s * 0.5).round(), ts * s), false)
-	draw_texture_rect(FRAME, Rect2(Vector2.ZERO, size), false)
+	## Masaüstü panel (madde 459): çerçeve dokusu yerine Gömme Tepsi yuva çerçevesi (1 px katlar = 4 px kenar, eskisiyle aynı kalınlık).
+	if tray_frame:
+		HudTrayFrame.draw(self, Rect2(Vector2.ZERO, size), 1.0)
+	else:
+		draw_texture_rect(FRAME, Rect2(Vector2.ZERO, size), false)

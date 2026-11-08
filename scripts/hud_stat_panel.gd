@@ -1,4 +1,5 @@
 extends Control
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## Oyuncu panelinin (hud.gd dock) SOLUNA yapışık mini stat paneli (LoL tarzı), kullanıcı isteği (2026-10-14): "skill ve can mana barı
 ## penceresinin sol tarafına minik bir stat paneli ... 2 sütun 4 satır 8 stat, portrenin altındaki butonla açılsın, üstünde 1-2
@@ -8,22 +9,24 @@ extends Control
 ## altı efsanevi panelin altıyla hizalı. Sayfa sekmeleri panelin üst kenarına biner. Sadece masaüstü (telefon HUD'u kurmaz).
 ## 2026-10-18 (kullanıcı: "yazılar ve ikonlar çok çirkin, LoL gibi olsun, okunurluk"; 3 prototipten "B - Düz Glif" seçildi):
 ## panel ÖLÇEKSİZ (hud.gd DOCK_UI_SCALE 0,92 piksel yazıyı/simgeyi düzensiz çiziyordu), LoL HUD'u gibi düz tek renk pürüzsüz simgeler
-## (tools/proto_20261018/gen_stat_icons_lol2.py el "b", 48 px -> 24 px doğrusal süzgeç), kalın koyu hatlı Nunito yazı. Simge + yazı
-## ayrı LINEAR çocukta (_content; Nunito içe aktarımı 2x örnekli -> NEAREST'te pürüzlü olurdu), ahşap çerçeve bu düğümde (NEAREST).
+## (tools/proto_20261018/gen_stat_icons_lol2.py el "b", 48 px -> 24 px doğrusal süzgeç), kalın koyu hatlı piksel yazı (madde 403: PixeloidSans Bold, eskiden Nunito). Simge + yazı
+## ayrı LINEAR çocukta (_content; Nunito zamanından kalma), ahşap çerçeve bu düğümde (NEAREST).
 
 const PixelIcons := preload("res://scripts/hud_pixel_icons.gd")
 const StatsPanelScript := preload("res://scripts/stats_panel.gd")
-const BASE_FONT: Font = preload("res://assets/fonts/Nunito-SemiBold.ttf")
+## STİL REHBERİ (madde 403, 2026-11-06): pürüzsüz Nunito kalktı -> can/kalkan çubuğunun sayı fontu PixeloidSans Bold,
+## yerel boyutunun (9) tam katlarında (18 / 9) - oyunda ikinci ve son font ailesi bu (yazı m5x7, sayı Pixeloid).
+const BASE_FONT: Font = preload("res://assets/fonts/PixeloidSans-Bold.ttf")
 const ICON_DIR := "res://assets/ui/stat_mini_lol/" ## <id>.png, 48x48, 24 px çizilir
-const FONT_PX := 16
-const TAB_FONT_PX := 12
-const EMBOLDEN := 0.35 ## SemiBold'u kalınlaştırır (Bold dosyası yok)
+const FONT_PX := 18
+const TAB_FONT_PX := 9
+const EMBOLDEN := 0.0 ## Pixeloid zaten kalın (Nunito SemiBold için 0,35'ti)
 const TEXT_OUTLINE := 4
 static var _font: FontVariation = null
 const HudTheme := preload("res://scripts/hud_theme.gd")
 const OUTLINE := HudTheme.OUTLINE
-const PLATE := HudTheme.INSET
-const STRIPE := HudTheme.STRIPE
+const PLATE := HudTheme.DOCK_INSET ## madde 454
+const STRIPE := HudTheme.DOCK_STRIPE
 const VALUE := Color(0.97, 0.93, 0.84)
 const TAB_ON := HudTheme.RIM_HI
 const TAB_OFF := HudTheme.RIM_LO
@@ -117,7 +120,7 @@ static func node_size() -> Vector2:
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_panel_box = UIKit.panel_style("status_badge")
+	_panel_box = UIKit.panel_style("dock_side_stats") ## madde 454: Gömme Tepsi yan kutusu
 	page = clampi(remembered_page, 0, 1)
 	_build_tips()
 	for s in STATS:
@@ -153,7 +156,7 @@ func _ready() -> void:
 		t.size = TAB_SIZE
 		t.mouse_filter = Control.MOUSE_FILTER_STOP
 		t.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		t.tooltip_text = "Sayfa %d" % (i + 1)
+		t.tooltip_text = tr("Sayfa %d") % (i + 1)
 		t.gui_input.connect(_on_tab_input.bind(i))
 		t.mouse_entered.connect(func() -> void:
 			_tab_hover = i
@@ -301,9 +304,10 @@ static func values_for(p: Node) -> Dictionary:
 
 ## Yazı _content üstüne (LINEAR), kalın koyu hatlı.
 func _text(pos: Vector2, s: String, col: Color, px: int = FONT_PX) -> void:
+	s = Loc.pct(s) ## yalnız sayı yazılır: İngilizcede "45%" (madde 446) - dil:yok
 	var f: Font = font()
 	_content.draw_string_outline(f, pos, s, HORIZONTAL_ALIGNMENT_LEFT, -1, px, TEXT_OUTLINE, OUTLINE)
-	_content.draw_string(f, pos, s, HORIZONTAL_ALIGNMENT_LEFT, -1, px, col)
+	_content.draw_string(f, pos, s, HORIZONTAL_ALIGNMENT_LEFT, -1, px, col) ## dil:yok (sayı)
 
 
 func _tab_rect(i: int) -> Rect2:

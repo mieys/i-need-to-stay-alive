@@ -22,7 +22,9 @@ extends Sprite2D
 ## (kademe 5): dışında ikinci, koyu bir halka daha. Canlılık: yavaş nefes alan parlaklık (shader), tüm kademelerde aynı.
 
 ## Kontürü olan ilk kademe: Temel (1) göstergesiz; geliştirme aldıkça 2 yeşil, 3 mavi, 4 mor, 5 (final) kırmızı.
-const GLOW_ENABLED := false
+## 2026-10-17 Zanaatkâr kademe sanatı (madde 198) gelince kapatılmıştı; 2026-11-06 (madde 402, kullanıcı: "silahların geliştirilince
+## görünüşünün değişmesi yerine parıldadığı sisteme geri döndür") yeniden AÇIK - kademe artık yalnız bu kontürle gösterilir.
+const GLOW_ENABLED := true
 const MIN_TIER := 2
 const TIER_COLORS: Array[Color] = [
 	Color8(120, 232, 90), ## 2 - yeşil (çimen üstünde de okunsun diye açık/canlı limon yeşili)
@@ -102,7 +104,7 @@ static func attach(icon: Node2D, new_tier: int) -> Node:
 	if icon == null:
 		return null
 	var existing: Node = icon.get_node_or_null("EnchantGlow")
-	## Kademe parıltısı/kontürü oyundan kaldırıldı (2026-10-17, kullanıcı isteği); yeniden açmak için false yap.
+	## GLOW_ENABLED false = kontür kapalı (2026-10-17 - 2026-11-06 arası kapalıydı).
 	if not GLOW_ENABLED or new_tier < MIN_TIER:
 		if existing:
 			existing.queue_free()

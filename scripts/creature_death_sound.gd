@@ -16,8 +16,10 @@ const DIR := "res://assets/audio/creature_death/"
 const VARIANTS := 2
 const MAX_VOICES := 5
 const FAMILY_GAP := 0.07
-const VOLUME_DB := -13.0
-const BOSS_VOLUME_DB := -8.0
+## 2026-11-07 (madde 441, kullanıcı: "yaratıkların hasar alınca çıkardıkları sesler çok zayıf"): -13 -> -10, boss -8 -> -5
+## (oyunda ortalama -27,1 -> -24,1; atış sesleri -14..-24).
+const VOLUME_DB := -10.0
+const BOSS_VOLUME_DB := -5.0
 const MAX_DISTANCE := 1000.0
 
 ## Kendi ses dosyası olmayan aile -> ses ödünç aldığı aile (Minotaur 2026-10-08: ork homurtusu, boss perdesiyle derinleşir).

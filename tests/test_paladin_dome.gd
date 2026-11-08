@@ -183,9 +183,11 @@ func test_talon_in_a_dome_spins_the_rim_and_mirrors_only_own_weapons() -> void:
 	knight.global_position = (talon as Node2D).global_position + Vector2(20.0, 0.0)
 	talon.call("_skill_talon_weapon_salvo")
 	assert(talon.call("is_talon_salvo"), "E açıldı")
-	assert(bool(talon.get("talon_dome_spin")), "kubbenin içinde basılan E girdaba döner")
+	## 2026-11-08: silahlar kubbeden bağımsız (PaladinDome.WEAPONS_ON_RIM false) - kubbede basılan E girdaba DÖNMEZ, normal salvo (kendi çemberi).
+	assert(not DomeScript.WEAPONS_ON_RIM, "silah halkası kapalı")
+	assert(not bool(talon.get("talon_dome_spin")), "kubbenin içinde basılan E artık girdaba dönmez")
 	assert(not talon.call("dome_rim_blocked"), "E silahları halkadan çekmez")
-	assert(is_equal_approx(float(talon.call("_talon_salvo_fire_mult")), 1.0 / 3.0), "girdapta Talon'un kendi silahları da yarı bonus")
+	assert(is_equal_approx(float(talon.call("_talon_salvo_fire_mult")), 1.0 / 5.0), "kubbede de normal salvo bonusu")
 	talon.call("_end_talon_weapon_salvo")
 	assert(not bool(talon.get("talon_dome_spin")) and is_equal_approx(float(talon.call("_talon_salvo_fire_mult")), 1.0 / 5.0), "E bitince normal")
 	var own: int = (talon.get("owned_weapon_nodes") as Array).size()

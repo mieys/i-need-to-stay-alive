@@ -16,7 +16,7 @@ const TRAITS := {
 	"fire_staff": "ates_nefesi", "lightning_staff": "zincir_yildirim", "tabanca": "seri_parmak", "tuftuf": "bulasici_salgi",
 	"tufek": "delici_mermi", "arcane": "yankilanan_buyu", "yay": "uclu_ok", "crossbow": "zincir_civata",
 	"boomerang": "cifte_donus", "buz_asasi": "kirik_buz", "fisek": "kivilcim_yagmuru", "gokkusagi": "goz_kamastiran",
-	"mizrak": "cirit", "kalkan": "siper", "yinyang": "denge",
+	"mizrak": "cirit", "kalkan": "siper", "yinyang": "denge", "pompali": "dip_atis",
 }
 
 ## Davranış scriptlerinin klasörü (delici_mermi scriptsizdir: sadece ortak anahtarlar).
@@ -151,8 +151,8 @@ const DEFS := {
 	},
 	"bulasici_salgi": {
 		"weapons": ["tuftuf"], "name": "Bulaşıcı Salgı", "element": "zehir",
-		"desc": "Dartlar zehirler; zehirli düşman ölünce zehir çevresindeki düşmanlara bulaşır.",
-		"base": {"text": "Her dart 4 saniyelik zehir yükü bırakır (yük başına saniyede saldırı gücünün %7'si), yükler 5'e kadar üst üste biner. Zehirli bir düşman ölünce zehri olduğu gibi 50 birim içindeki en çok 6 düşmana bulaşır.",
+		"desc": "Atışları zehirler; zehirli düşman ölünce zehir çevresindeki düşmanlara bulaşır.",
+		"base": {"text": "Her atış 4 saniyelik zehir yükü bırakır (yük başına saniyede saldırı gücünün %7'si), yükler 5'e kadar üst üste biner. Zehirli bir düşman ölünce zehri olduğu gibi 50 birim içindeki en çok 6 düşmana bulaşır.",
 			"set": {"poison_stacks": 1, "poison_dps": 0.07, "poison_dur": 4.0, "poison_cap": 5.0, "plague_radius": 50.0, "plague_ratio": 1.0}},
 		"upgrades": [
 			{"name": "Yoğun Zehir", "text": "Zehir hasarı: yük başına saniyede saldırı gücünün %7'si → %9'u.", "add": {"poison_dps": 0.02}},
@@ -176,6 +176,22 @@ const DEFS := {
 		],
 		"final": {"name": "Zırh Delen Salvo", "text": "Mermi 3 düşman daha deler ve düşmanların kalkan korumasını %30 yok sayar.",
 			"add": {"pierce": 3}, "set": {"shield_pen": 0.3}},
+	},
+	## Pompalı Tüfek (madde 448): saçmalar ortaya yoğun dar koni şeklinde saçılır, her biri saldırı gücünün %34'ünü vurur -> hasar mesafeyle
+	## kendiliğinden değişir (yakında 6 x %34 = %204, orta mesafede 4, uzakta 2 saçma). Davranış scripts/weapon_traits/dip_atis.gd, koni scripts/pompali_math.gd.
+	"dip_atis": {
+		"weapons": ["pompali"], "name": "Dip Atış", "element": "fiziksel",
+		"desc": "Her atış koni şeklinde saçılan saçmalar atar; hedef ne kadar yakınsa o kadar çok saçma isabet eder.",
+		"base": {"text": "Her atış 6 saçma atar (14°'lik, ortaya yoğun koni); her saçma saldırı gücünün %34'ünü vurur. Yakındaki hedefe hepsi isabet eder (toplam %204), orta mesafede 4, uzakta 2 saçma.",
+			"set": {"pellets": 6, "cone_mult": 1.0, "push": 0.0, "full_every": 0}},
+		"upgrades": [
+			{"name": "Çift Dolum", "text": "Saçma sayısı 2 artar (6 → 8).", "add": {"pellets": 2}},
+			{"name": "Sıkı Demet", "text": "Koni %35 daralır (14° → 9,1°); orta ve uzak mesafede daha çok saçma isabet eder.", "set": {"cone_mult": 0.65}},
+			{"name": "Kırıcı Darbe", "text": "100 birim içinde vurduğun sıradan yaratıklar geri itilir (bosslar ve elitler itilmez).", "set": {"push": 28.0}},
+			{"name": "Tam Yük", "text": "Her 4. atış çift yüktür: saçma sayısı iki katına çıkar ve koni %30 genişler.", "set": {"full_every": 4}},
+		],
+		"final": {"name": "Kasırga Yükü", "text": "Saçma sayısı 4 artar ve Tam Yük her 3. atışta çıkar.",
+			"add": {"pellets": 4}, "set": {"full_every": 3}},
 	},
 	"yankilanan_buyu": {
 		"weapons": ["arcane"], "name": "Yankılanan Büyü", "element": "kaos",

@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## SEYYAR SATICI ekranı - "KLASİK PAZAR" (League of Legends dükkan düzeni). Kullanıcı 2026-10-16'da 4 prototipten A'yı seçti
 ## (tools/proto_20261016/dukkan_proto.gd, madde 195, 197): solda (KALDIRILDI) stat filtre sütunu, ortada stok kademe kademe (PARÇALAR / EPİK /
@@ -36,6 +37,7 @@ const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const ReadingUiWatcher := preload("res://scripts/reading_ui_watcher.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const DarkKit := preload("res://scripts/shop_dark_kit.gd")
+const RecipeTree := preload("res://scripts/recipe_tree.gd")
 
 const NPC_FRAMES := "res://assets/npc/seyyar_satici/seyyar_satici_frames.tres"
 const WINDOW_SCALE := 1.0
@@ -229,7 +231,7 @@ func _build_ui() -> void:
 	if _phone:
 		_k = DarkKit.new(DarkKit.PAL_NIGHT) ## telefon: Gece Sıvası (madde 276)
 	var window := PanelContainer.new()
-	var wst: StyleBoxFlat = _k.sb(_k.c("panel"), _k.c("line_hi"), 3, 8)
+	var wst = _k.sb(_k.c("panel"), _k.c("line_hi"), 3, 8)
 	wst.content_margin_left = 24
 	wst.content_margin_right = 24
 	wst.content_margin_top = 18
@@ -779,7 +781,7 @@ func _refresh_details() -> void:
 	var block: String = ""
 	var note: String = ""
 	if from_bag:
-		note = "Satış iadesi tam fiyatın %%%d'i." % int(round(Items.SELL_REFUND_RATIO * 100.0))
+		note = Loc.t("Satış iadesi tam fiyatın %%%d'i.") % int(round(Items.SELL_REFUND_RATIO * 100.0))
 		_set_action_button("SAT", "+%d" % Items.sell_refund(key), "ghost", true)
 	else:
 		var sold: bool = _entry_sold(entry)
@@ -788,7 +790,7 @@ func _refresh_details() -> void:
 		else:
 			block = Items.purchase_block_reason(key, GameManager.owned_items, _part_slots())
 			if block == "" and GameManager.gold < cost:
-				block = "Yetersiz altın (%d eksik)" % (cost - GameManager.gold)
+				block = Loc.t("Yetersiz altın (%d eksik)") % (cost - GameManager.gold)
 		var consumed: Array = []
 		for idx in Items.plan_purchase(key, GameManager.owned_items).get("consume", []):
 			if int(idx) >= 0 and int(idx) < GameManager.owned_items.size():
@@ -797,7 +799,7 @@ func _refresh_details() -> void:
 		## Aynı parçanın her kopyası fiyatı artırır (Items.repeat_mult): sebebini söyle ki fiyat sıçraması şaşırtmasın.
 		var copies: int = Items.part_copies(key, GameManager.owned_items)
 		if copies > 0 and consumed.is_empty():
-			note = "Çantanda %d tane var: fiyat +%%%d. " % [copies, int(round((Items.repeat_mult(key, GameManager.owned_items) - 1.0) * 100.0))] + note
+			note = Loc.t("Çantanda %d tane var: fiyat +%%%d. ") % [copies, int(round((Items.repeat_mult(key, GameManager.owned_items) - 1.0) * 100.0))] + note
 		_set_action_button("SATILDI" if sold else "SATIN AL", "" if sold else str(cost), "primary", _entry_can_buy(entry, _selected_index))
 	## Alınamıyorsa sebep (kırmızı) not yerine yazılır.
 	_details_note.text = block if block != "" else note
@@ -873,7 +875,7 @@ func _rebuild_tree(key: String, from_bag: bool) -> void:
 		for u: String in ups:
 			var t: Control = _k.tile(Items.icon(u), 48.0, DarkKit.TIER_COL[clampi(Items.kademe(u), 1, 3) - 1], {"stock": _in_stock(u)})
 			t.mouse_filter = Control.MOUSE_FILTER_PASS
-			t.tooltip_text = "%s (%d altın)" % [Items.item_name(u), Items.cost(u)]
+			t.tooltip_text = Loc.t("%s (%d altın)") % [Items.item_name(u), Items.cost(u)]
 			flow.add_child(t)
 		content.add_child(flow)
 	if not has_recipe and ups.is_empty():
@@ -893,99 +895,25 @@ func _in_stock(key: String) -> bool:
 	return false
 
 
-## Ağaç düğümü: owned = sendeki parça (tüketilecek, Items._obtain ile AYNI sıra), covered = sendeki bir parçanın alt parçası (soluk).
+## Tarif ağacı ortak scripts/recipe_tree.gd'de (madde 433 ek 5: level pazarı da kullanır); buradakiler ince devreler, davranış aynı.
 func _tree_data(key: String, pool: Array, covered: bool, is_root: bool) -> Dictionary:
-	var st: String = "need"
-	if covered:
-		st = "covered"
-	elif not is_root and pool.has(key):
-		pool.erase(key)
-		st = "owned"
-	var n: Dictionary = {"key": key, "state": st, "kids": []}
-	for comp in Items.recipe(key):
-		(n["kids"] as Array).append(_tree_data(str(comp), pool, st == "owned" or st == "covered", false))
-	return n
+	return RecipeTree.data(key, pool, covered, is_root)
 
 
-## Düğüm genişliği = yuva ya da altındaki fiyat/SENDE yazısı (hangisi genişse).
 func _tree_w(n: Dictionary, s: float, gx: float, fs: int) -> float:
-	var own: float = s
-	match str(n["state"]):
-		"owned":
-			own = maxf(s, _k.tw("SENDE", fs))
-		"need":
-			own = maxf(s, _k.amt_w(Items.cost(str(n["key"])), fs))
-	var kids: Array = n["kids"]
-	if kids.is_empty():
-		return own
-	var w: float = 0.0
-	for k: Dictionary in kids:
-		w += _tree_w(k, s, gx, fs)
-	w += gx * (kids.size() - 1)
-	return maxf(own, w)
+	return RecipeTree.width(_k, n, s, gx, fs)
 
 
 func _tree_depth(n: Dictionary) -> int:
-	var d: int = 0
-	for k: Dictionary in n["kids"]:
-		d = maxi(d, _tree_depth(k))
-	return d + 1
+	return RecipeTree.depth(n)
 
 
 func _tree_h(n: Dictionary, s: float, fs: int) -> float:
-	var depth: int = _tree_depth(n)
-	return depth * (s + fs + 8.0) + (depth - 1) * 8.0 + 6.0
+	return RecipeTree.height(n, s, fs)
 
 
 func _tree_view(data: Dictionary, s: float, gx: float, fs: int) -> Control:
-	var lh: float = fs + 8.0
-	var host := Control.new()
-	host.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ln := DarkKit.Lines.new()
-	host.add_child(ln)
-	var w: float = _tree_w(data, s, gx, fs)
-	host.custom_minimum_size = Vector2(w + 12.0, _tree_h(data, s, fs))
-	ln.size = host.custom_minimum_size
-	_tree_place(data, 6.0, 0, host, ln, Vector2.INF, s, gx, lh, fs)
-	return host
-
-
-func _tree_place(n: Dictionary, x0: float, d: int, host: Control, ln: DarkKit.Lines, anchor: Vector2, s: float, gx: float, lh: float, fs: int) -> void:
-	var w: float = _tree_w(n, s, gx, fs)
-	var cx: float = floorf(x0 + w * 0.5)
-	var y: float = 6.0 + d * (s + lh + 8.0)
-	var key: String = n["key"]
-	var st: String = n["state"]
-	var t: Control = _k.tile(Items.icon(key), s, DarkKit.TIER_COL[clampi(Items.kademe(key), 1, 3) - 1],
-			{"dim": st == "covered", "owned": st == "owned", "stock": d > 0 and st == "need" and _in_stock(key)})
-	t.position = Vector2(cx - s * 0.5, y)
-	t.mouse_filter = Control.MOUSE_FILTER_PASS
-	t.tooltip_text = "%s (%d altın)%s" % [Items.item_name(key), Items.cost(key), "  - sende var" if st == "owned" else ""]
-	host.add_child(t)
-	if st != "covered":
-		var pl: Control
-		var pw: float
-		if st == "owned":
-			pl = _k.lbl("SENDE", fs, _k.c("good"))
-			pw = _k.tw("SENDE", fs)
-		else:
-			pl = _k.amt(Items.cost(key), fs, _k.c("price"))
-			pw = _k.amt_w(Items.cost(key), fs)
-		pl.position = Vector2(floorf(cx - pw * 0.5), y + s + 2.0)
-		host.add_child(pl)
-	if anchor != Vector2.INF:
-		var midy: float = floorf((anchor.y + y) * 0.5)
-		var col: Color = _k.c("good") if st == "owned" else (_k.c("line") if st == "covered" else _k.c("line_hi"))
-		ln.segs.append([PackedVector2Array([anchor, Vector2(anchor.x, midy), Vector2(cx, midy), Vector2(cx, y)]), col, 3.0])
-	var kids: Array = n["kids"]
-	var kw: float = 0.0
-	for k: Dictionary in kids:
-		kw += _tree_w(k, s, gx, fs)
-	kw += gx * maxi(0, kids.size() - 1)
-	var xs: float = x0 + (w - kw) * 0.5
-	for k: Dictionary in kids:
-		_tree_place(k, xs, d + 1, host, ln, Vector2(cx, y + s + lh - 2.0), s, gx, lh, fs)
-		xs += _tree_w(k, s, gx, fs) + gx
+	return RecipeTree.view(_k, data, s, gx, fs, _in_stock)
 
 
 # ------------------------------------------------------------------ alt: çanta (sahip olunan eşyalar + SAT)
@@ -1011,7 +939,7 @@ func _build_bag() -> PanelContainer:
 	_sell_btn = _k.row_btn(sr, "ghost", 56, 180)
 	_sell_btn.pressed.connect(_on_sell_pressed)
 	sv.add_child(_sell_btn)
-	sv.add_child(_k.lbl("tam fiyatın %%%d'i" % int(round(Items.SELL_REFUND_RATIO * 100.0)), 24, _k.c("dim"), HORIZONTAL_ALIGNMENT_CENTER))
+	sv.add_child(_k.lbl(Loc.t("tam fiyatın %%%d'i") % int(round(Items.SELL_REFUND_RATIO * 100.0)), 24, _k.c("dim"), HORIZONTAL_ALIGNMENT_CENTER))
 	row.add_child(sv)
 	return p
 
@@ -1022,7 +950,7 @@ func _refresh_bag() -> void:
 	if _phone_tabs.size() > 1:
 		var cap: Label = (_phone_tabs[1] as Node).get_node_or_null("Box/Caption") as Label
 		if cap:
-			cap.text = "ÇANTA %d" % GameManager.owned_items.size()
+			cap.text = Loc.t("ÇANTA %d") % GameManager.owned_items.size()
 	for c in _bag_body.get_children():
 		_bag_body.remove_child(c)
 		c.queue_free()

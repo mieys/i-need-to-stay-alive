@@ -1,4 +1,5 @@
 extends RefCounted
+const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / Loc.pct (madde 446)
 
 ## KALICI İLERLEME: RUH KIYMIĞI + KİLİTLER (kullanıcı isteği 2026-10-13: "bağımlılık yapıcı mekanikler" -> 1 meta para birimi, 2 kilitli içerik).
 ## user://meta.cfg (ConfigFile; run_records.gd ile AYNI desen, ayrı dosya - rekorlar sıfırlansa kilitler kalır). Her oyuncu KENDİ makinesinde.
@@ -58,7 +59,7 @@ const STARTERS := {
 const COSTS := {
 	CHAR: {3: 250, 5: 250, 8: 300, 9: 300, 10: 350, 11: 350, 12: 350, 13: 400, 14: 400, 15: 450},
 	WEAPON: {"fire_staff": 120, "lightning_staff": 120, "tuftuf": 140, "tufek": 140, "arcane": 160, "crossbow": 160,
-		"boomerang": 120, "buz_asasi": 180, "fisek": 180, "pence": 100, "topuz": 140, "gokkusagi": 180, "mizrak": 160, "kalkan": 160, "yinyang": 180},
+		"boomerang": 120, "buz_asasi": 180, "fisek": 180, "pence": 100, "topuz": 140, "gokkusagi": 180, "mizrak": 160, "kalkan": 160, "yinyang": 180, "pompali": 160},
 	PET: {"papagan": 120, "kelebek": 150, "peri": 180, "kirpi": 150},
 	SPIRIT: {"taktik": 150, "dukkan": 150, "savas_sevki": 200, "kalkan_bagi": 200},
 }
@@ -207,7 +208,7 @@ static func buy(kind: String, key: Variant) -> bool:
 
 ## Kilitliyse kısa açıklama (kart/ipucu): "Kilitli - 250 Ruh Kıymığı (Ruh Mağazası)".
 static func lock_text(kind: String, key: Variant) -> String:
-	return "Kilitli - %d %s (Ruh Mağazası)" % [cost(kind, key), CURRENCY_NAME]
+	return Loc.t("Kilitli - %d %s (Ruh Mağazası)") % [cost(kind, key), CURRENCY_NAME]
 
 
 ## Kilitli öğeleri ucuzdan pahalıya: [{"kind", "key", "cost"}] (mağaza listesi için; tür sırası KINDS).

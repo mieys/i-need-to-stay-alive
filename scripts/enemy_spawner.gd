@@ -316,7 +316,8 @@ const FINAL_CREATURES := [
 ## "maksimum yaratık sayısı 5 oyuncu varken olsun; 4 oyuncuda 180, 3'te 160, 2'de 140, tek oyunculuda 120" -
 ## max_concurrent_enemies (200) artık 5 oyuncunun tavanı, her eksik oyuncu için ENEMY_CAP_STEP_PER_MISSING_PLAYER düşer.
 ## 2026-09-27: yeni kural - tek oyuncu max_concurrent_enemies (100), her ek oyuncu +20 (2 -> 120, 3 -> 140, 4 -> 160...).
-const ENEMY_CAP_PER_EXTRA_PLAYER := 50 ## 2026-10-19: 21 -> 50 (kullanıcı: "oyuncu başına yaratık artışını 50ye yükselt"); 2026-10-10: 50 -> 20 -> 30; 2026-10-17: 30 -> 21 (-%30)
+## 2026-11-07 (savaş görsel karmaşası, madde 425/435): ek oyuncu başı +50 -> +30 (1/2/3/4/5 oyuncu: 105/135/165/195/225). Tek oyuncu 105 aynı.
+const ENEMY_CAP_PER_EXTRA_PLAYER := 30 ## 2026-11-07: 50 -> 30; 2026-10-19: 21 -> 50 (kullanıcı: "oyuncu başına yaratık artışını 50ye yükselt"); 2026-10-10: 50 -> 20 -> 30; 2026-10-17: 30 -> 21 (-%30)
 ## Kullanıcı isteği (2026-09-24 denge turu: "her kademe için oyuncu başına %30 spawn ve %50 can") - 0.25 -> 0.30.
 const EXTRA_PLAYER_SPAWN_RATE := 0.30
 @export var min_spawn_distance: float = 480.0
@@ -349,6 +350,7 @@ const AMBUSH_PACK_SPREAD := 70.0 ## paket üyelerinin pusu noktasına en fazla u
 const AMBUSH_ARC_DEG := 80.0 ## pusu noktası, oyuncunun gittiği yönün etrafında bu yelpazede aranır
 const AMBUSH_EXTRA_DISTANCE := 200.0 ## max_spawn_distance'ın ÖTESİNDE de aranır (duvarın arkası daha uzakta olabilir)
 const AMBUSH_ATTEMPTS := 14 ## duvar-arkası nokta için rastgele deneme sayısı
+
 
 ## Kullanıcı isteği: "karakter çok güçlüyse normalden daha fazla
 ## spawnlansın" - takım seviyesi o anki Kademe için "beklenenden" epey
@@ -684,6 +686,16 @@ var _enemy_sync_last_tick: int = -1 ## istemci: son uygulanan tur
 var _handover_timer: float = 0.0 ## host: devir paketi yayın sayacı (bkz. export_handover)
 var _far_tier_tick: int = 0
 var _last_dead_sent: Dictionary = {} ## network_enemy_id -> bool
+## Madde 419 (ağ gecikmesi; host yükleme hattı): değişmeyen can/kalkan her turda yollanmaz (kayıt 22 -> 14 bayt, bkz. enemy_sync_codec
+## FLAG_NO_HP). Peer başına son gönderilen değer: değişince bu tur + HP_REPEAT_TICKS tur daha (güvenilmez kanal: 4 paketin hepsinin
+## kaybolma olasılığı %5 kayıpta ~1/160000), değişmese de HP_REFRESH_TICKS turda bir (geri katılan / tutarlılık). İstemcide can/kalkan
+## yalnız ağdan geldiği için sonuç aynı; yalnız değişmeyen veri tekrar gönderilmez.
+const HP_REPEAT_TICKS := 3
+const HP_REFRESH_TICKS := 16 ## ~2,4 sn (yakın yaratık turu 0,15 sn)
+var _hp_sent: Dictionary = {} ## host: peer -> {net_id: [can, kalkan, kalan tekrar, yenilemeden beri tur]}
+## Ölçüm (net_probe): gönderilen yaratık kaydı / can-kalkansız kayıt sayısı.
+var net_enemy_records: int = 0
+var net_enemy_records_no_hp: int = 0
 
 
 func _ready() -> void:
@@ -948,6 +960,8 @@ func _broadcast_enemy_states_with_interest_management() -> void:
 				has_target_pos = true
 
 		var states: Array = []
+		var hp_sent: Dictionary = _hp_sent.get(peer_id, {})
+		_hp_sent[peer_id] = hp_sent
 		for enemy in all_enemies:
 			var net_id: int = int(enemy.get_meta("network_enemy_id"))
 			var is_dead_now: bool = enemy.get("is_dead") == true
@@ -959,23 +973,31 @@ func _broadcast_enemy_states_with_interest_management() -> void:
 				var is_near: bool = dist_sq <= ENEMY_SYNC_NEAR_RADIUS_SQ
 				if not is_near and not is_far_tick:
 					continue
+			var hp_now: float = float(enemy.get("health"))
+			var shield_now: float = float(enemy.shield_now() if enemy.has_method("shield_now") else enemy.get("item_shield_hp")) ## uyuyan (bkz. enemy.gd UYKU) yaratığın kalkan yenilenmesi işlenmiş değer
 			states.append([
 				net_id,
 				enemy.global_position,
 				is_dead_now,
-				enemy.get("health"),
-				enemy.shield_now() if enemy.has_method("shield_now") else enemy.get("item_shield_hp"), ## uyuyan (bkz. enemy.gd UYKU) yaratığın kalkan yenilenmesi işlenmiş değer
+				hp_now,
+				shield_now,
 				enemy.get("is_raging") == true,
 				int(enemy.get("chill_stacks") if "chill_stacks" in enemy else 0),
 				## Korsan'ın öldürme-özel altın pasifi (bkz. enemy.gd
 				## last_attacker_peer_id) host olmayan istemcilere de ulaşsın diye.
-				int(enemy.get("last_attacker_peer_id") if "last_attacker_peer_id" in enemy else 0)
+				int(enemy.get("last_attacker_peer_id") if "last_attacker_peer_id" in enemy else 0),
+				not hp_must_send(hp_sent, net_id, hp_now, shield_now), ## madde 419: değişmeyen can/kalkan atlanır
 			])
 		## Küçük paketler halinde gönder (2026-10-02, Epic internet odası): 100+ yaratık tek pakette ~10 KB ediyordu; Epic
 		## P2P bunu ~10 parçaya bölmek zorunda ve "güvenilmez" pakette TEK parça kaybı tüm turu düşürüyordu. Her paket kendi
-		## başına işlenir (kayıp sadece o grubu etkiler); LAN'da da aynı şekilde daha dayanıklı.
-		for i in range(0, states.size(), ENEMY_SYNC_BATCH):
-			_sync_enemy_positions.rpc_id(peer_id, _enemy_sync_tick, EnemySyncCodecScript.encode(_enemy_sync_tick, states.slice(i, i + ENEMY_SYNC_BATCH)))
+		## başına işlenir (kayıp sadece o grubu etkiler); LAN'da da aynı şekilde daha dayanıklı. Madde 419: bayta göre bölünür
+		## (can/kalkansız kayıtlar küçük - pakete daha çok sığar, paket başı ek yük azalır).
+		for chunk: Array in EnemySyncCodecScript.split_by_bytes(states):
+			_sync_enemy_positions.rpc_id(peer_id, _enemy_sync_tick, EnemySyncCodecScript.encode(_enemy_sync_tick, chunk))
+		net_enemy_records += states.size()
+		for st: Array in states:
+			if st[8] == true:
+				net_enemy_records_no_hp += 1
 
 	## BAKIM (kullanıcı bildirimi: "oyun ~4-5 dakikada bir donuyor" araştırması
 	## sırasında fark edildi - kesin donma nedeni DEĞİL, ama bir sızıntıydı):
@@ -990,6 +1012,41 @@ func _broadcast_enemy_states_with_interest_management() -> void:
 		var net_id: int = int(enemy.get_meta("network_enemy_id"))
 		_next_last_dead_sent[net_id] = enemy.get("is_dead") == true
 	_last_dead_sent = _next_last_dead_sent
+	## Can/kalkan önbelleği (madde 419): ayrılan peer'ler ve sahneden kalkan yaratıklar düşer (her 16 turda bir yeter).
+	if (_enemy_sync_tick % HP_REFRESH_TICKS) == 0:
+		var ready_peers: Array = NetworkManager.game_ready_peers()
+		for pid in _hp_sent.keys():
+			if not ready_peers.has(pid):
+				_hp_sent.erase(pid)
+				continue
+			var d: Dictionary = _hp_sent[pid]
+			for nid in d.keys():
+				if not _last_dead_sent.has(nid):
+					d.erase(nid)
+
+
+## Madde 419: bu peer'e bu turda can/kalkan yazılmalı mı? (bkz. HP_REPEAT_TICKS notu) - kayıt sadece yaratık pakete girdiğinde çağrılır;
+## sayaçlar "bu peer'e gönderilen tur" sayar (uzak yaratık 4 turda bir girer - yenilemesi de ona göre seyrek).
+static func hp_must_send(sent: Dictionary, net_id: int, hp: float, shield: float) -> bool:
+	var r: Array = sent.get(net_id, [])
+	if r.is_empty():
+		sent[net_id] = [hp, shield, HP_REPEAT_TICKS, 0]
+		return true
+	if float(r[0]) != hp or float(r[1]) != shield:
+		r[0] = hp
+		r[1] = shield
+		r[2] = HP_REPEAT_TICKS
+		r[3] = 0
+		return true
+	if int(r[2]) > 0:
+		r[2] = int(r[2]) - 1
+		r[3] = 0
+		return true
+	if int(r[3]) + 1 >= HP_REFRESH_TICKS:
+		r[3] = 0
+		return true
+	r[3] = int(r[3]) + 1
+	return false
 
 
 ## Which Kademe (1-15) the run is currently in, based on elapsed game_time.
@@ -1127,7 +1184,7 @@ func _scaled_enemy_cap() -> int:
 	return cap
 
 
-## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->105, 2->126, 3->147, 4->168, 5->189 (2026-10-17; 2026-10-10'da 150 + 30/oyuncu, ondan önce 250 + 50/oyuncu, bkz.
+## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->105, 2->135, 3->165, 4->195, 5->225 (2026-11-07; 2026-10-17'de 105 + 21/oyuncu, 2026-10-19'da +50/oyuncu, 2026-10-10'da 150 + 30/oyuncu, ondan önce 250 + 50/oyuncu, bkz.
 ## max_concurrent_enemies notu). Erken kademelerde bu tavan _tier_crowding_scale ile ayrıca kısılır (değişmedi).
 ## Yaratık canı/kalkanı oyuncu sayısından BAĞIMSIZ olarak ayrı ölçeklenir - burası sadece sayı.
 func player_enemy_cap(players: int) -> int:
@@ -1534,6 +1591,8 @@ func _outdoor_living_players() -> Array[Node]:
 
 ## ZİNDAN (madde 373): zindandaki oyuncu ana haritanın doğuş çapası olmaz (zindanın kendi sakinleri var, guard_camps.gd zindan kampları).
 static func _underground(n: Node) -> bool:
+	if n.get("in_limbo") == true: ## ruh hâlindeki oyuncu (madde 438) da doğuş çapası olmaz - dünyada değil
+		return true
 	var v: Variant = n.get("in_dungeon")
 	return v != null and str(v) != ""
 
@@ -1574,6 +1633,7 @@ func _ambush_pack_member_position(base: Vector2, index: int) -> Vector2:
 	return base
 
 
+## Madde 463 (2026-11-08): derin orman biyomu ana haritadan kalktı -> ek derin orman hattı ve "1-2 kademe ileriden" kuralı (madde 395) silindi.
 func _spawn_regular_enemy() -> void:
 	var anchor: Node = _pick_spawn_anchor()
 	if not anchor:
@@ -1590,6 +1650,7 @@ func _spawn_regular_enemy() -> void:
 		return
 	## Sonsuz modda roster 15'te kalır ama istatistik kademesi katla büyür (bkz. ZAFER + SONSUZ MOD bloğu); normalde scale_tier == tier.
 	var scale_tier: int = _scale_tier_for(tier)
+	var cap: int = _scaled_enemy_cap()
 	## kullanıcı isteği: "karakter çok güçlüyse normalden daha fazla
 	## spawnlansın" - bkz. _power_extra_spawn_count üstündeki not.
 	var spawn_count: int = 1 + _power_extra_spawn_count()
@@ -1601,7 +1662,7 @@ func _spawn_regular_enemy() -> void:
 		if ambush_pos != null:
 			spawn_count += randi_range(AMBUSH_PACK_MIN, AMBUSH_PACK_MAX) - 1
 	for i in range(spawn_count):
-		if _regular_enemy_count() >= _scaled_enemy_cap():
+		if _regular_enemy_count() >= cap:
 			return
 		## ELİT önce atılır: elitse yaratık kimliği ELİT HAVUZUNDAN (eski bosslar) seçilir, değilse roster'dan.
 		var elite: bool = _roll_elite_for(tier)
@@ -2338,6 +2399,10 @@ func _random_spawn_position(center: Vector2, is_boss: bool = false, bias_dir: Ve
 ## scaling/apply_boss_stats sonrası max_health üzerinden hesaplandığından
 ## onu da (savunma çarpanıyla) güncelliyoruz.
 const EXTRA_PLAYER_DEFENSE_MULT := 0.50
+## 2026-11-07 (kullanıcı: "yaratıkların canını ve kalkanını %10 arttır oyuncu başına", tavanın ek oyuncu başı +50 -> +30'a inmesini dengelemek için, madde 435):
+## SIRADAN yaratıklar (elitler ve minyonlar dahil, BOSS DEĞİL) ek oyuncu başına can/kalkan çarpanına +0,10 daha alır -> toplam +%60 (2/3/4/5 oyuncu: x1,6/2,2/2,8/3,4).
+## Bosslar (is_boss + FIXED_BOSS_STATS) yalnız EXTRA_PLAYER_DEFENSE_MULT (+%50) almaya devam eder; tavan değişikliği onları ilgilendirmiyor.
+const EXTRA_PLAYER_CREATURE_DEFENSE_BONUS := 0.10
 
 ## Yaratık yetenekleri (kullanıcı isteği 2026-09-24) - statla çözülen aile özellikleri (bosslar dahil, çünkü tüm spawn
 ## yolları _apply_global_buff'tan geçer):
@@ -2358,7 +2423,9 @@ func _apply_global_buff(enemy: Node, player_count: int = 0) -> void:
 	enemy.set_meta("mp_player_count", counted_players)
 	var extra_players: int = max(0, counted_players - 1)
 	## Kullanıcı isteği (2026-09-24 denge turu): ekstra oyuncu başına can/kalkan +%30 -> +%50 (her kademede).
-	var multiplayer_defense_mult: float = 1.0 + float(extra_players) * EXTRA_PLAYER_DEFENSE_MULT
+	## 2026-11-07: sıradan yaratıklar ek oyuncu başına +%10 daha dayanıklı (bkz. EXTRA_PLAYER_CREATURE_DEFENSE_BONUS); boss aynı +%50.
+	var per_player_defense: float = EXTRA_PLAYER_DEFENSE_MULT + (0.0 if enemy.is_boss else EXTRA_PLAYER_CREATURE_DEFENSE_BONUS)
+	var multiplayer_defense_mult: float = 1.0 + float(extra_players) * per_player_defense
 	var health_shield_mult: float = BOSS_HEALTH_SHIELD_MULT if enemy.is_boss else HEALTH_SHIELD_MULT
 	var boss_cut: float = BOSS_CUT_2026_09_25B if enemy.is_boss else 1.0
 	var enemy_tier: int = int(enemy.get("_current_tier")) if "_current_tier" in enemy else 0

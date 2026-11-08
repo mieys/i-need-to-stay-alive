@@ -1,0 +1,14 @@
+{
+  "dogrulandi": "Bildirdiğin sorun doğrulandı: {konu}. Düzeltme hazırlanıyor; geliştirici onayı ve yeni sürümle oyuna girecek. Bildirdiğin için teşekkürler!",
+  "bilgi_gerekli": "Bildirdiğin sorunu inceledik ama yeniden üretemedik. Yardımcı olur musun? Şunları yazar mısın: {bilgi}. Teşekkürler!",
+  "durum": "Bildirdiğin konu kayıtlı ve inceleniyor; şu an için yayınlanmış bir düzeltme bildiremiyoruz. Ek bilgin varsa yazabilirsin. Teşekkürler!",
+  "bilgi_etiketleri": {
+    "esya_turu": "eşyanın türü (parça, epik, efsanevi)",
+    "slot": "kaç slotun dolu olduğu",
+    "seviye": "seviyen / kademen",
+    "mod": "tek mi çok oyunculu mu oynadığın, host olup olmadığın",
+    "uyari_metni": "ekranda çıkan uyarının tam metni",
+    "karakter": "oynadığın karakter",
+    "zaman": "sorunun ne zaman ve nasıl başladığı"
+  }
+}

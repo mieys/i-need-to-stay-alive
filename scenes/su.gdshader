@@ -3,18 +3,17 @@ shader_type canvas_item;
 
 // "Su" katmanının suyu (harita_baked.tscn -> Su/Su, ayrıca Su/Su collisionsuz aynı materyali paylaşır; dokular + ayar scripts/water_fx.gd).
 //
-// 2026-10-17 (madde 214): prototip C3 "AKINTILI DALGACIK" (madde 209, tools/proto_20261017/su_shader/su_C3_akintili_dalgacik.gdshader)
-// oyunda. Kullanıcı: "suların shader'ı neredeyse yok gibi" (eski sürüm: +/-%4,5 ışık bandı + seyrek 2-4 px pırıltı, karede piksellerin
-// ~%0,7'si değişiyordu) -> 4+4 prototip; seçilen: ilk C ("dalgacık") + "nehir akıntılı olmalı, dalgacıklar akıntının yönüne doğru".
-//   - Derinlik: kıyıya uzaklık dokusu (su_mesafe, haritadan pişirilir: görünen su = Su karosunun mavi pikselleri - kıyı ayrıntı
-//     katmanlarının mavi olmayan opak pikselleri; köprü altı su sayılır) ile 2 ton, sınırı noktalı.
-//   - Geniş ışık kabarmaları (yavaş kayan gradyan gürültü, 3 kademe, +/-%7).
-//   - Dalgacıklar: 7-11 px "︵" sırt (2 px yüksek yuvarlak tepe, uçlar kıvrık, altında 1 px gölge), belirip uzar, kısalıp söner;
-//     her biri DOĞDUĞU noktadaki akış vektörüyle (su_akis: kıyıya paralel, batı -> kuzeydoğu, kanal ortasında hızlı / kıyıda
-//     durgun) ömrü boyunca sürüklenir. Merkez ileri hesaplanır (piksel geri kaydırılsa kıvrımlarda akış farkı şekli yırtardı), bu
-//     yüzden piksel çevresindeki 3x5 hücre denenir. Her döngüde doğum yeri yeniden rastgele; kıyıya < 5 px'te doğmaz.
-//     `dalgacik_acik` = "Zemin ayrıntısı" grafik ayarı (telefonda pahalı döngü).
-//   - Kıyı: 1 px açık çizgi + ıslak koyu bant + kıyıya 1,5..4,5 px arasında gelip giden 1 px "yalama" çizgisi.
+// 2026-11-06 (madde 424): sade su prototipi B "SEYREK DALGACIK" (madde 423, tools/proto_20261106/su_sade/su_B_seyrek_dalgacik.gdshader)
+// oyunda. Kullanıcı: "sudaki shaderlar için daha sade 4 prototip" -> "derinlik renk değişimini istemiyorum, onları kendim yapıyorum" -> B.
+//   - Renk = karonun KENDİ rengi (kullanıcı derinliği Tiled'da karolarla boyuyor), her yerde tek saydamlık `su_alfa`. Kıyıya uzaklığa göre
+//     ton değişimi, noktalı (Bayer) geçiş, ışık kabarması YOK. (Önceki C3 mavi pikselleri su_renk/derin_renk ile eziyordu.)
+//   - Dalgacıklar: C3'ün (madde 214) 7-11 px "︵" sırtı aynı şekil (2 px yuvarlak tepe, uçlar kıvrık), GÖLGE SATIRI YOK, sönük (sirt_guc),
+//     seyrek (yogunluk 0,22; C3 0,55); belirip uzar, kısalıp söner, her biri DOĞDUĞU noktadaki akış vektörüyle (su_akis: kıyıya paralel,
+//     batı -> kuzeydoğu, kanal ortasında hızlı / kıyıda durgun) ömrü boyunca sürüklenir. Merkez ileri hesaplanır (piksel geri kaydırılsa
+//     kıvrımlarda akış farkı şekli yırtardı), bu yüzden piksel çevresindeki 3x5 hücre denenir. Her döngüde doğum yeri yeniden rastgele;
+//     kıyıya < 5 px'te doğmaz. `dalgacik_acik` = "Zemin ayrıntısı" grafik ayarı (telefonda pahalı döngü; kapalıyken düz su).
+//   - Kıyı: shader kıyıya HİÇBİR ŞEY çizmez (kullanıcı: "su kenarlarındaki izleri kaldır"; 1 px açık çizgi madde 424'te vardı,
+//     kaldırıldı). Kıyıyı yalnız kullanıcının kıyı sanatı karoları çizer. `kiyi()` sadece dalgacığın kıyıya yakın doğmaması için.
 // Dünya koordinatında, harita karolarının piksel ızgarasında (1 dünya birimi = 1 karo pikseli) çalışır; harita renk ayarı en sonda.
 
 uniform sampler2D su_mesafe : hint_default_white, filter_linear, repeat_disable; // R = kıyıya uzaklık / 64 dünya px (2 px/teksel)
@@ -23,13 +22,11 @@ uniform vec2 doku_origin = vec2(-576.0, -384.0);
 uniform vec2 doku_size = vec2(5248.0, 4864.0);
 uniform bool dalgacik_acik = true;
 
-uniform vec4 su_renk : source_color = vec4(0.235, 0.43, 0.6, 1.0);
-uniform vec4 derin_renk : source_color = vec4(0.19, 0.35, 0.53, 1.0);
-uniform float su_alfa = 0.76;
-uniform float derin_alfa = 0.84;
+uniform float su_alfa = 0.8; // tek saydamlık (karonun kendi alfasıyla çarpılır)
 uniform vec4 sirt_renk : source_color = vec4(0.6, 0.79, 0.9, 1.0);
+uniform float sirt_guc = 0.6;
 uniform vec2 hucre = vec2(26.0, 14.0);
-uniform float yogunluk = 0.55;
+uniform float yogunluk = 0.22;
 uniform float omur_hiz = 0.2; // döngü/sn; döngünün %55'i görünür (~2,75 sn)
 uniform float akis_hiz = 6.0; // kanal ortasında px/sn (piksel arama alanı 3x5 hücre: akis_hiz x ömür <= ~16 px)
 
@@ -64,62 +61,13 @@ vec2 hash22(vec2 p) {
 	return vec2(hash21(p), hash21(p + vec2(19.19, 7.73)));
 }
 
-// Gradyan gürültü 0..1 (değer gürültüsü sert kademeyle ızgaraya hizalı dikdörtgen lekeler veriyordu).
-vec2 grad2(vec2 p) {
-	float a = hash21(p) * 6.2831853;
-	return vec2(cos(a), sin(a));
+// dx = sırt boyunca uzaklık (mutlak), dy = -1 tepe, 0 gövde, +1 kıvrık uç; gölge satırı yok.
+bool sekil(float dx, float dy, float hw) {
+	return (dy == -1.0 && dx <= hw - 3.0) || (dy == 0.0 && dx <= hw - 1.0) || (dy == 1.0 && dx == hw);
 }
 
-float gnoise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-	float a = dot(grad2(i), f);
-	float b = dot(grad2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));
-	float c = dot(grad2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));
-	float d = dot(grad2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));
-	return clamp(0.5 + mix(mix(a, b, u.x), mix(c, d, u.x), u.y), 0.0, 1.0);
-}
-
-float fbm2(vec2 p) {
-	vec2 q = mat2(vec2(0.8, 0.6), vec2(-0.6, 0.8)) * p * 2.1 + vec2(3.1, 1.7);
-	return gnoise(p) * 0.62 + gnoise(q) * 0.38;
-}
-
-// 4x4 Bayer eşiği (0..1)
-float bayer4(vec2 px) {
-	vec2 p = mod(px, 4.0);
-	vec2 a = mod(p, 2.0);
-	vec2 b = floor(p / 2.0);
-	float v = 4.0 * mod(2.0 * a.x + 3.0 * a.y, 4.0) + mod(2.0 * b.x + 3.0 * b.y, 4.0);
-	return (v + 0.5) / 16.0;
-}
-
-// 0..1 -> n kademe; kademe sınırında `genislik` kadar noktalı geçiş.
-float kademe(float v, float n, float esik, float genislik) {
-	return clamp(floor(v * n + 0.5 + (esik - 0.5) * genislik), 0.0, n) / n;
-}
-
-// dx = sırt boyunca uzaklık (mutlak), dy = -1 tepe, +1 arka (gölge). 1 = sırt, -1 = gölge, 0 = yok
-float sekil(float dx, float dy, float hw) {
-	if (dy == -1.0 && dx <= hw - 3.0) {
-		return 1.0; // yuvarlak tepe
-	}
-	if (dy == 0.0 && dx <= hw - 1.0) {
-		return 1.0;
-	}
-	if (dy == 1.0 && dx == hw) {
-		return 1.0; // uçlar bir piksel geri kıvrılır
-	}
-	if (dy == 1.0 && dx <= hw - 2.0) {
-		return -1.0;
-	}
-	return 0.0;
-}
-
-float dalgacik(vec2 px, float t) {
+bool dalgacik(vec2 px, float t) {
 	vec2 base = floor(px / hucre);
-	float sonuc = 0.0;
 	for (int j = -2; j <= 2; j++) {
 		for (int i = -1; i <= 1; i++) {
 			vec2 cell = base + vec2(float(i), float(j));
@@ -127,7 +75,7 @@ float dalgacik(vec2 px, float t) {
 			if (r >= yogunluk) {
 				continue;
 			}
-			float dongu = t * omur_hiz + r * 7.0;
+			float dongu = t * omur_hiz + r / yogunluk * 7.0;
 			float phase = fract(dongu);
 			if (phase >= 0.55) {
 				continue;
@@ -148,16 +96,12 @@ float dalgacik(vec2 px, float t) {
 				continue;
 			}
 			vec2 dp = px - c;
-			float s = sekil(abs(dp.x), dp.y, hw);
-			if (s > 0.5) {
-				return 1.0;
-			}
-			if (s < -0.5) {
-				sonuc = -1.0;
+			if (sekil(abs(dp.x), dp.y, hw)) {
+				return true;
 			}
 		}
 	}
-	return sonuc;
+	return false;
 }
 
 void fragment() {
@@ -168,38 +112,11 @@ void fragment() {
 		if (COLOR.a > 0.0) { COLOR.rgb = harita_renk_d(COLOR.rgb, world_pos); }
 	} else {
 		vec2 px = floor(world_pos);
-		float t = TIME;
 		float d = kiyi(px);
-		float th = bayer4(px);
-
-		float lv = kademe(clamp(d / 30.0, 0.0, 1.0), 1.0, th, 0.35);
-		vec3 col = mix(su_renk.rgb, derin_renk.rgb, lv);
-		float a = mix(su_alfa, derin_alfa, lv);
-
-		// geniş kabarmalar
-		vec2 wp = px * vec2(0.022, 0.045) + vec2(t * 0.07, t * 0.03);
-		col *= 1.0 + (kademe(fbm2(wp), 2.0, th, 0.5) - 0.5) * 0.14;
-
-		if (dalgacik_acik && d > 3.5) {
-			float dg = dalgacik(px, t);
-			if (dg > 0.5) {
-				col = mix(col, sirt_renk.rgb, 0.85);
-				a = max(a, 0.92);
-			} else if (dg < -0.5) {
-				col *= 0.84;
-			}
-		}
-
-		// kıyı: yalama çizgisi kıyıya 1,5..4,5 px arasında gelip gider (kıyı boyunca farklı fazda)
-		float lap = 2.0 + 1.6 * sin(t * 1.5 + gnoise(px * 0.04) * 9.0);
-		if (d < 1.2) {
-			col = mix(col, sirt_renk.rgb, 0.55);
-			a = 0.82;
-		} else if (d < lap) {
-			col *= 0.86;
-			a = max(a, 0.8);
-		} else if (d < lap + 1.0) {
-			col = mix(col, sirt_renk.rgb, 0.6);
+		vec3 col = tex.rgb;
+		float a = su_alfa;
+		if (dalgacik_acik && d > 3.5 && dalgacik(px, TIME)) {
+			col = mix(col, sirt_renk.rgb, sirt_guc);
 			a = max(a, 0.88);
 		}
 		COLOR = vec4(col, tex.a * a);
