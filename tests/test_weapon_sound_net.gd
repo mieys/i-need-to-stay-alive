@@ -55,3 +55,28 @@ func test_remote_chain_plays_on_puppet() -> void:
 			n += 1
 	assert(n == 1, "uzak ses çalıcısı kuklaya eklendi (%d)" % n)
 	rp.free()
+
+
+## Madde 505: Kalkan / Mızrak / Tırpan isabet sesleri kullanıcının dosyalarından ayrılan varyantlar; Kalkan'da AttackSound (temasta çalar),
+## Mızrak + Tırpan'da HitSound (weapon.gd _play_hit_sound, temasta). Çalınan çalıcı dosya yoluyla döner -> ağa "weapon_sound".
+func test_hit_sound_variants() -> void:
+	var want := {"res://scenes/weapon_kalkan.tscn": ["AttackSound", "kalkan_isabet_", 2],
+		"res://scenes/weapon_mizrak.tscn": ["HitSound", "mizrak_isabet_", 3],
+		"res://scenes/weapon_pence.tscn": ["HitSound", "tirpan_isabet_", 3]}
+	for path: String in want:
+		var spec: Array = want[path]
+		var w: Node = (load(path) as PackedScene).instantiate()
+		add_child(w)
+		var snd: Node = w.get_node_or_null(str(spec[0]))
+		assert(snd != null and snd.has_method("play_swing"), "%s: %s çok sesli çalıcı" % [path, spec[0]])
+		var streams: Array = snd.get("streams")
+		assert(streams.size() == int(spec[2]), "%s: %d varyant (bulunan %d)" % [path, int(spec[2]), streams.size()])
+		for st: AudioStream in streams:
+			assert(st != null and st.resource_path.get_file().begins_with(str(spec[1])) and st.get_length() > 0.3 and st.get_length() < 1.2,
+				"%s: varyant %s" % [path, st.resource_path if st else "?"])
+		var played: Variant = snd.play_swing()
+		assert(played is AudioStreamPlayer2D and (played as AudioStreamPlayer2D).stream.resource_path.get_file().begins_with(str(spec[1])),
+			"%s: çalınan çalıcı döner" % path)
+		w.free()
+	var src: String = FileAccess.get_file_as_string("res://scripts/weapon.gd")
+	assert(src.contains("_play_hit_sound() ## tırpan") and src.contains("_play_hit_sound() ## mızrak"), "temas anlarında isabet sesi çağrılır")

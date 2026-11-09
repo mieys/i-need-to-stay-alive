@@ -28,7 +28,6 @@ const GRASS_PARAM_PREFIXES: Array[String] = ["cim_", "yaprak_", "cicek_", "kume_
 ## Çimen deseni (zemin + plato tepeleri aynı değerler).
 const GRASS_CALM := {"cicek_yogunlugu": 0.08, "yonca_yogunlugu": 0.1, "kume_seyrek": 0.06, "kume_sik": 0.3} ## (0,16 / 0,2 / 0,1 / 0,45)
 const CALM_PARAMS := {
-	"res://scenes/mini çim renk.gdshader": {"hue_shift_amount": 0.03, "sat_shift_amount": 0.05}, ## (0,092 / 0,12)
 	"res://scenes/sallanan ot.gdshader": {"hue_shift_amount": 0.03, "sat_shift_amount": 0.06}, ## çalı + çiçek (0,064 / 0,15)
 	"res://scenes/çimen yaprak.gdshader": GRASS_CALM,
 	"res://scenes/orman_parcalari_doku.gdshader": GRASS_CALM,
@@ -210,7 +209,7 @@ static func _collect_sprite(layer: TileMapLayer, start: Vector2i, out: Dictionar
 			stack.append(n)
 
 
-## Tiled'da üst katmanlara (Su ~139, Çimler ~87, Su ayrıntılar 3 ~24, Dış orman 1 ~10 ...) DÜZ çimen karosu boyanmış: kendi shader'larıyla
+## Tiled'da üst katmanlara (Su ~139, Su ayrıntılar 3 ~24, Dış orman 1 ~10 ...) DÜZ çimen karosu boyanmış: kendi shader'larıyla
 ## (su tonu + dalga / bitki başına renk kayması) ya da desensiz çizilip zemindeki lekeli çimeni karo şeklinde DİKDÖRTGENLERLE bölüyordu.
 ## Altında da düz çimen zemini olan bu hücreler, aynı karonun z'si STRAY_UNDER_Z olan bir ALTERNATİFİNE çevrilir: zeminin altında çizilir
 ## (görünmez, yerinde lekeli zemin görünür). Hücre/kaynak/atlas/çevirme AYNI kalır -> su/orman çarpışması (piksel tabanlı), su sorguları,

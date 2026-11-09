@@ -14,6 +14,10 @@ const MapShadows := preload("res://scripts/map_shadows.gd")
 const ShadowsFlag := preload("res://scripts/shadows_flag.gd")
 const INNER := 0.30
 const RIM := 0.21
+## TEK TON (2026-11-08, madde 487 ek; kullanıcı ayak gölgesinden sonra: "buna benzer 2 gölgeli bişey var mı?"): koyu iç bant + açık alt satır /
+## uç pikseller iki ayrı çizgi gibi okunuyordu -> her satır aynı ton (ikisinin ortası). Eski iki ton = true.
+const TWO_TONE := false
+const FLAT := (INNER + RIM) * 0.5
 ## Kökü zıplayan objelerin bob genliği (gold_drop/food_drop/magnet_drop: sin(t*4)*3) - en alçak nokta = yer.
 const ROOT_BOB_AMP := 3.0
 
@@ -34,7 +38,7 @@ var _immediate: bool = false
 ## immediate: sprite zaten dinlenme konumunda ve dokusu atanmış (sandık - sonra sadece sprite zıplıyor) -> hemen ölç.
 static func attach(host: Node2D, sprite: Node2D, root_bob: bool = false, depth: int = 2, manual_rect: Rect2 = Rect2(),
 		immediate: bool = false) -> Node2D:
-	if not ShadowsFlag.entities: ## madde 469: gölgeler kapalı - düğüm hiç kurulmaz (çağıranlar dönüşü kullanmıyor, drop_attraction null'a bakar)
+	if not ShadowsFlag.entities: ## ShadowsFlag.entities kapalıysa düğüm hiç kurulmaz (madde 484: açık) (çağıranlar dönüşü kullanmıyor, drop_attraction null'a bakar)
 		return null
 	var s: Node2D = (load("res://scripts/drop_shadow.gd") as GDScript).new()
 	s.name = "DropShadow"
@@ -154,6 +158,9 @@ func _draw() -> void:
 		var last: bool = k == _depth - 1
 		var x0: float = -half + (1.0 if last and _depth > 1 else 0.0)
 		var x1: float = half - (1.0 if last and _depth > 1 else 0.0)
+		if not TWO_TONE: ## madde 487 ek: tek ton, şekil (son satır kısa = yuvarlak uç) aynı
+			draw_rect(Rect2(x0, k, x1 - x0, 1.0), _shade(FLAT))
+			continue
 		if last:
 			draw_rect(Rect2(x0, k, x1 - x0, 1.0), _shade(RIM))
 		else:

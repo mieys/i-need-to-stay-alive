@@ -5,6 +5,7 @@ extends Node
 ## "buyucu_crater", buyucu_levitate.gd). GERÇEK Player / silah / yaratık sahneleri + sahte yaratıklarla sayıları doğrular.
 ## Temel değişiklik: Don Nova artık dondurmuyor, 6 sn %80 yavaşlatıyor (R finali ilk 3 sn dondurur).
 
+const FxFrostNovaScript: GDScript = preload("res://scripts/fx_frost_nova_burst.gd")
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const RemotePlayerScene: PackedScene = preload("res://scenes/remote_player.tscn")
 const WeaponScene: PackedScene = preload("res://scenes/weapon_arcane.tscn")
@@ -244,6 +245,7 @@ func test_qf_enchant_every_five_uses_and_empowered_cast() -> void:
 	var e: FakeEnemy = _make_enemy(Vector2(1360.0, 1000.0))
 	await get_tree().physics_frame
 	p._buyucu_try_activate_variation_r()
+	_finish_nova(p) ## madde 533: odak + dalga (efsun çarpanı odak başında saklanır)
 	assert(e.hits.size() == 1 and is_equal_approx(float(e.hits[0]), 250.0), "efsunlu Don Nova 400 px, x1,25 hasar (2026-10-10 taban %%200): %s" % str(e.hits))
 	assert(not p._buyucu_enchanted.has(1), "efsun tüketildi")
 	assert(p._buyucu_cast_power == 1.0, "döküm sonrası çarpan sıfırlandı")
@@ -291,6 +293,42 @@ func test_e1_e4_arcane_blast_push_and_tornado_touch() -> void:
 
 
 # ------------------------------------------------------------------ R evrimleri
+## Madde 533: Don Nova önce 1 sn odak, sonra dalga - ikisini de bitirir (yaratık cephe ona ulaşınca vurulur).
+func _finish_nova(p: Node) -> void:
+	p._process_buyucu_nova(float(p.BUYUCU_NOVA_FOCUS_TIME) + 0.01)
+	p._process_buyucu_nova(float(p.BUYUCU_NOVA_WAVE_TIME))
+
+
+## Madde 533: Don Nova = 1 sn hareket kilitli odak (cast klibi), sonra BUYUCU_NOVA_WAVE_TIME sn'de yayılan dalga; yaratık cephe
+## ona ulaşınca (fx_frost_nova_burst.front_ratio) BİR kez vurulur. Odakta hiçbir şey vurulmaz, ses odak başında çalar.
+func test_nova_focus_then_slow_wave() -> void:
+	var p: Node = _make_player()
+	var near: FakeEnemy = _make_enemy(Vector2(1060.0, 1000.0))
+	var far: FakeEnemy = _make_enemy(Vector2(1280.0, 1000.0))
+	await get_tree().physics_frame
+	p._buyucu_try_activate_variation_r()
+	assert(p.is_buyucu_nova_focusing(), "R: önce odak")
+	p._process_buyucu_nova(0.5)
+	assert(p.is_buyucu_nova_focusing() and near.frost_slows.is_empty() and far.frost_slows.is_empty(), "odakta vuruş yok")
+	p._process_buyucu_nova(0.51) ## odak biter + dalga 0,51 sn: cephe 320 x front_ratio(0,22) ~ 126 px
+	assert(not p.is_buyucu_nova_focusing(), "odak bitti")
+	assert(near.frost_slows.size() == 1 and far.frost_slows.is_empty(), "cephe yakındakine ulaştı, uzaktakine henüz değil: %d / %d" % [near.frost_slows.size(), far.frost_slows.size()])
+	p._process_buyucu_nova(float(p.BUYUCU_NOVA_WAVE_TIME))
+	assert(near.frost_slows.size() == 1 and far.frost_slows.size() == 1, "dalga sonunda uzaktaki de, ikisi de bir kez: %d / %d" % [near.frost_slows.size(), far.frost_slows.size()])
+	assert(p._buyucu_nova_wave.is_empty(), "dalga bitti")
+	assert(is_equal_approx(p.BUYUCU_NOVA_WAVE_TIME, FxFrostNovaScript.DEFAULT_DURATION), "isabet ve görsel aynı süre")
+	var snd: AudioStream = load(p.BUYUCU_NOVA_SOUND) as AudioStream
+	assert(snd != null and snd.get_length() >= float(p.BUYUCU_NOVA_FOCUS_TIME) + float(p.BUYUCU_NOVA_WAVE_TIME), "ses odak + dalga boyunca sürer: %s" % (snd.get_length() if snd else -1.0))
+	## Odakta ölen Büyücü'nün novası iptal.
+	p._buyucu_variation_cooldowns[1] = 0.0
+	p._buyucu_try_activate_variation_r()
+	p.is_downed = true
+	p._process_buyucu_nova(1.1)
+	assert(p._buyucu_nova_wave.is_empty() and not p.is_buyucu_nova_focusing(), "yere düşünce odak iptal")
+	p.is_downed = false
+	_cleanup()
+
+
 func test_r1_airborne_untargetable_and_nova_push() -> void:
 	var p: Node = _make_player()
 	p._skill_buyucu_switch_variation() ## Set 2: Meteor
@@ -314,6 +352,7 @@ func test_r1_airborne_untargetable_and_nova_push() -> void:
 	var e: FakeEnemy = _make_enemy(Vector2(1100.0, 1000.0))
 	await get_tree().physics_frame
 	p._buyucu_try_activate_variation_r()
+	_finish_nova(p)
 	assert(e.pushes.size() == 1 and is_equal_approx(float(e.pushes[0][1]), 244.0) and (e.pushes[0][0] as Vector2).x > 0.0,
 		"Don Nova dışarı iter: %s" % str(e.pushes))
 	_cleanup()
@@ -341,6 +380,7 @@ func test_rf_nova_freeze_and_meteor_crater() -> void:
 	var e: FakeEnemy = _make_enemy(Vector2(1100.0, 1000.0))
 	await get_tree().physics_frame
 	p._buyucu_try_activate_variation_r()
+	_finish_nova(p)
 	assert(e.freezes == [p.EVO_BUYUCU_NOVA_FREEZE_TIME] and e.frost_slows.size() == 1, "itmesiz: hemen 3 sn donma + yavaşlatma: %s" % str(e.freezes))
 	## Krater: meteor düşünce (0,5 sn telegraph) yerinde evo_area "buyucu_crater"; içindeki yaratık yanar (3 sn, AP x0,3).
 	p._buyucu_meteor_origin = p.global_position

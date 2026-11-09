@@ -201,13 +201,15 @@ static func _ease_out_back(x: float, s: float = 1.9) -> float:
 ## GİZLİ silah yerinde durur (görünmez) - hedef/atış merkezi değişmesin; çekilme bitince oraya ışınlanır.
 ## mount (madde 451, weapon_back_mount.gd pose): boş değilse silah GÖĞSE değil SIRTA girer / sırttan çıkar - çıkış sırttaki konum +
 ## ölçekten başlar, çekilme orada biter; alpha 0 olduğu her an silah sırtta (çağıran sırt sprite'ını gösterir), hareket boyunca 1; "blend" = kökün sırttaki açıya
-## karışma oranı (0..1), "shadow" = yer gölgesinin saydamlığı (göğüs kuralında = alpha).
+## karışma oranı (0..1), "shadow" = yer gölgesinin saydamlığı (göğüs kuralında = alpha), "dim" = sırttaki karartmaya yakınlık (0..1, madde 514:
+## çekilmenin sonunda kararır, çıkışın başında aydınlanır; göğüs kuralında 0; çağıran WeaponBackMount.dim_mult ile modulate'e katar).
 static func pose(st: Dictionary, now: float, kind: int, home: Vector2, mount: Dictionary = {}) -> Dictionary:
 	if not mount.is_empty():
 		return _pose_mount(st, now, kind, home, mount)
 	var p: Dictionary = _pose_chest(st, now, kind, home)
 	p["blend"] = 0.0
 	p["shadow"] = p["alpha"]
+	p["dim"] = 0.0
 	return p
 
 
@@ -227,7 +229,7 @@ static func _pose_mount(st: Dictionary, now: float, kind: int, home: Vector2, mo
 		var sc: float = msc + (1.0 - msc) * _ease_out_back(u) if u > 0.0 else msc
 		## u = 0 (kademe beklemesi): hâlâ sırtta -> silah görünmez, sırt sprite'ı görünür (çağıran: alpha 0 = sırtta göster)
 		return {"pos": p, "scale": sc, "spin": sgn * REVEAL_SPIN * pow(1.0 - u, 4.0), "alpha": 1.0 if u > 0.0 else 0.0, "u": u,
-				"blend": 1.0 - smoothstep(0.0, 0.35, u), "shadow": u}
+				"blend": 1.0 - smoothstep(0.0, 0.35, u), "shadow": u, "dim": 1.0 - smoothstep(0.0, 0.35, u)}
 	if s == RETRACT:
 		var u2: float = clampf((el - retract_stagger(kind)) / RETRACT_T, 0.0, 1.0)
 		var e2: float = u2 * u2
@@ -235,10 +237,10 @@ static func _pose_mount(st: Dictionary, now: float, kind: int, home: Vector2, mo
 		var q2: float = 1.0 - e2
 		var p2: Vector2 = home * (q2 * q2) + ctrl2 * (2.0 * q2 * e2) + mpos * (e2 * e2)
 		return {"pos": p2, "scale": 1.0 + (msc - 1.0) * e2, "spin": 0.0, "alpha": 1.0, "u": u2,
-				"blend": smoothstep(0.25, 0.9, u2), "shadow": 1.0 - u2}
+				"blend": smoothstep(0.25, 0.9, u2), "shadow": 1.0 - u2, "dim": smoothstep(0.45, 1.0, u2)}
 	if s == HIDDEN:
-		return {"pos": home, "scale": 1.0, "spin": 0.0, "alpha": 0.0, "u": 0.0, "blend": 0.0, "shadow": 0.0}
-	return {"pos": home, "scale": 1.0, "spin": 0.0, "alpha": 1.0, "u": 1.0, "blend": 0.0, "shadow": 1.0}
+		return {"pos": home, "scale": 1.0, "spin": 0.0, "alpha": 0.0, "u": 0.0, "blend": 0.0, "shadow": 0.0, "dim": 1.0}
+	return {"pos": home, "scale": 1.0, "spin": 0.0, "alpha": 1.0, "u": 1.0, "blend": 0.0, "shadow": 1.0, "dim": 0.0}
 
 
 static func _pose_chest(st: Dictionary, now: float, kind: int, home: Vector2) -> Dictionary:

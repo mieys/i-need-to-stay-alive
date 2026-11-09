@@ -387,6 +387,9 @@ func test_market_layout_fits_every_offer() -> void:
 	var tallest_id: String = ""
 	var n: int = 0
 	var upg_checked: int = 0
+	var desc_small: int = 0
+	var ups_big: int = 0
+	var ups_total: int = 0
 	var items_with_tree: int = 0
 	var kinds: Dictionary = {"weapon": "SİLAH", "shield": "MANA KALKANI", "item": "EŞYA"}
 	var name_w: float = 0.0
@@ -418,6 +421,14 @@ func test_market_layout_fits_every_offer() -> void:
 				var has_ups: bool = detail.find_child("BuildsInto", true, false) != null
 				assert(has_tree != (Items.recipe(ik) as Array).is_empty(), "%s: tarif ağacı" % ik)
 				assert(has_ups != (Items.builds_into(ik) as Array).is_empty(), "%s: şuna dönüşür" % ik)
+				if has_ups: ## kullanıcı: "çok ufak" - simgeler 104 (sanatın 2 katı) ya da en az 56; hepsi aynı boy
+					var uchips: Array = detail.find_children("Chip_*", "Button", true, false)
+					var us: float = (uchips[0] as Control).size.x
+					for uc: Node in uchips:
+						assert((uc as Control).size.is_equal_approx(Vector2(us, us)), "%s: ŞUNA DÖNÜŞÜR simgeleri aynı boyda" % ik)
+					assert(us == 104.0 or us == 56.0, "%s: ŞUNA DÖNÜŞÜR simge boyu 104 ya da 56: %.0f" % [ik, us])
+					ups_big += 1 if us == 104.0 else 0
+					ups_total += 1
 				items_with_tree += 1 if not (Items.recipe(ik) as Array).is_empty() else 0
 				if has_tree: ## madde 433 ek 7: yalnız doğrudan alt eşyalar, okunur boyda (yuva >= 56 px)
 					var tv: Control = detail.find_child("RecipeTree", true, false)
@@ -425,12 +436,32 @@ func test_market_layout_fits_every_offer() -> void:
 					assert(tile.size.x >= 56.0, "%s: tarif simgesi okunur boyda olmalı: %.0f" % [ik, tile.size.x])
 					assert(tv.custom_minimum_size.y <= view.RECIPE_AREA.y and tv.custom_minimum_size.x <= view.RECIPE_AREA.x,
 						"%s: ağaç alanına sığar %s" % [ik, tv.custom_minimum_size])
+			## madde 494: açıklama kuyusu yazıya göre sıkı, üstten hizalı; madde 518 (kullanıcı: "açıklama yazıları çok büyük"): yazı hep 32
+			var dwell: Control = detail.find_child("DescWell", true, false)
+			if dwell != null:
+				var dls: Control = detail.find_child("DescLines", true, false)
+				var fss: Array = []
+				for dl: Node in dls.get_children():
+					fss.append((dl as Label).get_theme_font_size("font_size"))
+				assert(not fss.is_empty() and fss.all(func(f: int) -> bool: return f == fss[0]) and fss[0] == 32,
+					"%s: açıklama satırları 32 punto: %s" % [Market.offer_id(e), fss])
+				desc_small += 1 if fss[0] == 32 else 0
+				assert(dls.get_combined_minimum_size().y + 2.0 * view.DESC_PAD <= dwell.size.y + 0.5, "%s: açıklama kuyuya sığar" % Market.offer_id(e))
+				## kullanıcı: ortalanmış hâl beğenilmedi, "üstten hizalı" - kuyu başlığın hemen altında, ilk satır kuyunun iç payından başlar
+				var head_r: Rect2 = _local_rect(view, dwell.get_parent().get_child(0))
+				var well_r: Rect2 = _local_rect(view, dwell)
+				var line0_r: Rect2 = _local_rect(view, dls.get_child(0))
+				assert(absf(well_r.position.y - head_r.end.y - 14.0) <= 1.0, "%s: açıklama başlığın hemen altında: %s / %s" % [Market.offer_id(e), head_r, well_r])
+				assert(absf(line0_r.position.y - (well_r.position.y + view.DESC_PAD)) <= 1.0, "%s: açıklama satırları üstten hizalı: %s / %s" % [Market.offer_id(e), line0_r, well_r])
 			Market.set_saved(e, false)
 			n += 1
 			if h > tallest:
 				tallest = h
 				tallest_id = Market.offer_id(e)
 	print("en uzun önizleme: %s %.0f / %.0f (%d seçenek, %d geliştirme)" % [tallest_id, tallest, room, n, upg_checked])
+	print("açıklama (32) = %d; şuna dönüşür 104'lük = %d / %d" % [desc_small, ups_big, ups_total])
+	assert(ups_big * 2 >= ups_total and ups_total >= 10, "ŞUNA DÖNÜŞÜR simgelerinin çoğu 104: %d / %d" % [ups_big, ups_total])
+	assert(desc_small >= 20, "açıklamalar denetlendi: %d" % desc_small)
 	assert(upg_checked >= 3, "geliştirmeler de denetlendi: %d" % upg_checked)
 	assert(items_with_tree >= 5, "tarifli eşyalar denetlendi: %d" % items_with_tree)
 	## havuzda olmayanlar dahil BÜTÜN silah geliştirme adları önizlemenin ad alanında (48) en çok 2 satır
@@ -662,6 +693,134 @@ func test_preview_save_and_ban_buttons() -> void:
 	_restore_state()
 
 
+## Madde 494 (kullanıcı 2026-11-08): ŞUNA DÖNÜŞÜR simgesine TIKLAYINCA o eşyanın ne olduğu ayrı pencerede açılır (yetenek ipucu gibi,
+## pazarın ahşap çerçevesinde): ad / fiyat / açıklama / tarif; simgenin üstüne (yer yoksa altına) oturur, ekrandan taşmaz; aynı simgeye
+## tekrar tık, pencerenin dışına tık, Esc ve önizlemenin yenilenmesi kapatır; penceredeki tık kapatmaz.
+func _click_at(view: Control, pos: Vector2) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = pos
+	ev.global_position = pos
+	view.call("_input", ev)
+
+
+func _grect_t(c: Control) -> Rect2:
+	return c.get_global_transform() * Rect2(Vector2.ZERO, c.size)
+
+
+func _local_rect(view: Control, c: Control) -> Rect2:
+	return view.get_global_transform().affine_inverse() * _grect_t(c)
+
+
+func test_builds_into_icon_opens_item_popup() -> void:
+	_save_state()
+	var p := FakePlayer.new()
+	p.add_to_group("player")
+	add_child(p)
+	var screen: CanvasLayer = _open_market(p)
+	var view: Control = screen.get("view")
+	for k in 3:
+		await get_tree().process_frame
+	var pool: Dictionary = Market.candidates(p)
+	var shown: int = 0
+	var tallest: float = 0.0
+	var first_e: Dictionary = {}
+	var checked: Dictionary = {}
+	var sides: Dictionary = {}
+	for k: String in pool:
+		for e: Dictionary in pool[k]:
+			if str(e["type"]) != "item" or (Items.builds_into(str(e["key"])) as Array).is_empty():
+				continue
+			if first_e.is_empty() and (Items.builds_into(str(e["key"])) as Array).size() >= 2:
+				first_e = e
+			view.offers = {"items": [e], "upgrades": []}
+			view.set("_focus", ["items", 0])
+			view.call("_refresh_detail")
+			await get_tree().process_frame
+			var chips: Array = view.find_children("Chip_*", "Button", true, false)
+			var ups: Array = Items.builds_into(str(e["key"]))
+			assert(chips.size() == ups.size(), "%s: her ŞUNA DÖNÜŞÜR simgesi tıklanabilir düğme: %d / %d" % [e["key"], chips.size(), ups.size()])
+			for ci in chips.size():
+				var chip: Button = chips[ci]
+				var uk: String = ups[ci]
+				if checked.has(uk):
+					continue ## aynı hedef eşyanın penceresi bir kez denetlenir
+				checked[uk] = true
+				chip.pressed.emit()
+				await get_tree().process_frame
+				var pop: Control = view.get_node_or_null("ItemPopup")
+				assert(pop != null, "%s: tıklayınca pencere açılır" % uk)
+				var pr: Rect2 = Rect2(pop.position, pop.size)
+				var cr: Rect2 = _local_rect(view, chip)
+				assert(pr.position.x >= view.POP_SCREEN_PAD - 0.5 and pr.end.x <= 1920.0 - view.POP_SCREEN_PAD + 0.5
+					and pr.position.y >= view.POP_SCREEN_PAD - 0.5 and pr.end.y <= 1080.0 - view.POP_SCREEN_PAD + 0.5,
+					"%s: pencere ekrandan taşmıyor: %s" % [uk, pr])
+				assert(not pr.intersects(cr), "%s: pencere simgenin üstüne binmez: %s / %s" % [uk, pr, cr])
+				## üstte / altta ise yatayda, yanda ise dikeyde simgenin hizasında (ekrana sığmıyorsa kayar)
+				var side: String = str((pop.get_meta("notch") as Array)[1])
+				sides[side] = int(sides.get(side, 0)) + 1
+				var lo: float = view.POP_SCREEN_PAD
+				if side == "above" or side == "below":
+					assert(absf((pr.position.x + pr.size.x * 0.5) - (cr.position.x + cr.size.x * 0.5)) < 1.0 or pr.position.x <= lo + 0.5
+						or pr.end.x >= 1920.0 - lo - 0.5, "%s: pencere simgenin hizasında (ekrana sığmıyorsa kayar)" % uk)
+				else:
+					assert(absf((pr.position.y + pr.size.y * 0.5) - (cr.position.y + cr.size.y * 0.5)) < 1.0 or pr.position.y <= lo + 0.5
+						or pr.end.y >= 1080.0 - lo - 0.5, "%s: yandaki pencere simgenin hizasında (ekrana sığmıyorsa kayar)" % uk)
+				var nm: Label = pop.find_child("PopupName", true, false)
+				assert(nm != null and nm.text == Items.item_name(uk), "%s: pencerede eşyanın adı: %s" % [uk, nm.text if nm else "yok"])
+				assert(pop.find_child("PopupDesc", true, false) != null or (Market.describe({"type": "item", "key": uk}, p)["lines"] as Array).is_empty(),
+					"%s: pencerede açıklama" % uk)
+				assert((pop.find_child("PopupRecipe", true, false) != null) == not (Items.recipe(uk) as Array).is_empty(), "%s: tarifli eşyada tarif" % uk)
+				assert(pop.mouse_filter == Control.MOUSE_FILTER_STOP, "pencereye tık altındaki pencereye geçmez")
+				tallest = maxf(tallest, pop.size.y)
+				shown += 1
+				chip.pressed.emit() ## aynı simgeye tekrar tık kapatır
+				assert(view.get_node_or_null("ItemPopup") == null, "%s: aynı simgeye tekrar tık kapatır" % uk)
+				assert(chip.tooltip_text != "", "%s: kapanınca ad/fiyat ipucu geri gelir" % uk)
+	print("eşya penceresi: %d eşya, en uzun %.0f px, yerleşim %s" % [shown, tallest, sides])
+	assert(shown >= 20, "çok sayıda eşyanın penceresi denetlendi: %d" % shown)
+	## kapanma kuralları (ilk çok hedefli eşya)
+	assert(not first_e.is_empty(), "iki hedefli bir eşya olmalı")
+	view.offers = {"items": [first_e], "upgrades": []}
+	view.set("_focus", ["items", 0])
+	view.call("_refresh_detail")
+	await get_tree().process_frame
+	var chips2: Array = view.find_children("Chip_*", "Button", true, false)
+	var ups2: Array = Items.builds_into(str(first_e["key"]))
+	(chips2[0] as Button).pressed.emit()
+	await get_tree().process_frame
+	assert(view.get_node_or_null("ItemPopup") != null and str(view.get("_pop_key")) == ups2[0], "ilk simge açıldı")
+	## başka simgeye tık: yenisi açılır, eskisi gider (tek pencere)
+	(chips2[1] as Button).pressed.emit()
+	await get_tree().process_frame
+	assert(view.find_children("ItemPopup", "", true, false).size() == 1 and str(view.get("_pop_key")) == ups2[1], "başka simge: tek pencere, yeni eşya")
+	## penceredeki tık ve açan simgenin kendi tıkı kapatmaz; başka yere tık kapatır
+	var pop2: Control = view.get_node_or_null("ItemPopup")
+	_click_at(view, _grect_t(pop2).get_center())
+	assert(view.get_node_or_null("ItemPopup") != null, "pencerenin içine tık kapatmaz")
+	_click_at(view, _grect_t(chips2[1]).get_center())
+	assert(view.get_node_or_null("ItemPopup") != null, "açan simgenin tıkı _input'ta kapatmaz (aç/kapa simgenin kendi basışında)")
+	_click_at(view, Vector2(4, 4))
+	assert(view.get_node_or_null("ItemPopup") == null, "dışına tık kapatır")
+	## Esc kapatır
+	(chips2[0] as Button).pressed.emit()
+	await get_tree().process_frame
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	view.call("_input", esc)
+	assert(view.get_node_or_null("ItemPopup") == null, "Esc kapatır")
+	## önizleme yenilenince (seçim / satın alma / kaydet) kapanır
+	(chips2[0] as Button).pressed.emit()
+	await get_tree().process_frame
+	view.call("_refresh_detail")
+	assert(view.get_node_or_null("ItemPopup") == null, "önizleme yenilenince kapanır")
+	screen.free()
+	p.free()
+	_restore_state()
+
+
 func test_market_screen_buy_save_ban_and_close() -> void:
 	_save_state()
 	var p := FakePlayer.new()
@@ -683,7 +842,13 @@ func test_market_screen_buy_save_ban_and_close() -> void:
 			assert(GameManager.gold == gold and not bool(e.get("sold", false)), "yuvaya tıklamak satın ALMAZ")
 			assert(view.get("_focus") == ["items", i], "tıklanan yuva seçilir")
 			var bb: Button = view.find_child("BuyButton", true, false)
-			assert(bb != null and not bb.disabled and bb.text == "SATIN AL", "ayrıntıda açık SATIN AL düğmesi")
+			var verb: Label = bb.find_child("Verb", true, false) as Label if bb else null
+			assert(bb != null and not bb.disabled and verb != null and verb.text == "SATIN AL", "ayrıntıda açık SATIN AL düğmesi")
+			## madde 532: DEVAM ET ile karışmasın - SATIN AL altın kutu, DEVAM ET ahşap yol tabelası (doku), ikisi aynı kutu değil
+			var go_b: Button = view.get("go_button")
+			assert(go_b.get_theme_stylebox("normal") is StyleBoxTexture and not (bb.get_theme_stylebox("normal") is StyleBoxTexture),
+				"DEVAM ET tabela, SATIN AL altın kutu")
+			assert((go_b.find_child("Text", true, false) as Label).text == "DEVAM ET", "tabela yazısı")
 			bb.pressed.emit()
 			assert(GameManager.gold == gold - cost and bool(e["sold"]), "SATIN AL seçili seçeneği alır")
 			bought = true

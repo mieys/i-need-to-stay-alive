@@ -17,7 +17,6 @@ const DropAttractionScript := preload("res://scripts/drop_attraction.gd")
 const EXPIRE_SECONDS := 300.0
 const BOB_AMPLITUDE := 3.0
 const BOB_SPEED := 4.0
-const TEXT_COLOR := Color(0.72, 0.84, 1.0)
 
 ## Bu drop'un herkese vereceği parçacık sayısı (broadcast_drop "amount" alanı da bunu taşır, bkz. NetworkManager.broadcast_drop).
 var amount: int = 1

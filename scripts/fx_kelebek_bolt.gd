@@ -22,7 +22,8 @@ const C_GLOW := Color(1.0, 0.3, 0.65)
 const AXES: Array[Vector2] = [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]
 const DIAGS: Array[Vector2] = [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]
 
-static var _add_mat: CanvasItemMaterial = null
+const SoftGlowScript := preload("res://scripts/soft_glow_blend.gd")
+static var _add_mat: Material = null
 
 var _target: Node2D = null
 var _dest: Vector2 = Vector2.ZERO
@@ -40,8 +41,7 @@ func _ready() -> void:
 	top_level = true
 	z_index = 60 ## fx_matthew_bolt.gd ile aynı katman (yaratıkların üstünde)
 	if _add_mat == null:
-		_add_mat = CanvasItemMaterial.new()
-		_add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		_add_mat = SoftGlowScript.material() ## toplamalı yerine yumuşak parıltı (2026-11-08, soft_glow_blend.gd)
 	_glow = Node2D.new()
 	_glow.material = _add_mat
 	_glow.show_behind_parent = true

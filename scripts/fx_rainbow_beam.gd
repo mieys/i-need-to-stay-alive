@@ -17,13 +17,13 @@ const IMPACT_TEX: Texture2D = preload("res://assets/fx/gokkusagi/impact.png")
 ## yakalar, 3 sn'lik tutmayı değil).
 const DAZZLE_FRAMES: SpriteFrames = preload("res://assets/fx/enchant/rainbow_dazzle_frames.tres")
 const AudioBusesScript := preload("res://scripts/audio_buses.gd")
-## Işın sesi (madde 451, masaüstü "gökkuşağı asası.mp3" -> tools/gen_gokkusagi_ses.py): ışın açılınca giriş + döngü gövdesi (tek dosya,
+## Işın sesi (madde 451, masaüstü "Laser beam Heat Vision" mp3'ü -> tools/gen_gokkusagi_ses.py): ışın açılınca giriş + döngü gövdesi (tek dosya,
 ## loop_offset = SFX_LOOP_START: giriş bir kez, sonra gövde dikişsiz döner), ışın kapanınca kapanış patlaması.
 const SFX_START_LOOP: AudioStreamOggVorbis = preload("res://assets/audio/gokkusagi/beam_start_loop.ogg")
 const SFX_END: AudioStream = preload("res://assets/audio/gokkusagi/beam_end.ogg")
-const SFX_LOOP_START := 1.0 ## giriş uzunluğu (sn); gen_gokkusagi_ses.py LOOP_A ile aynı
-const SFX_DB := -6.0
-const SFX_END_DB := -6.0
+const SFX_LOOP_START := 1.16 ## giriş uzunluğu (sn); gen_gokkusagi_ses.py LOOP_A - START_A ile aynı
+const SFX_DB := -3.0 ## yeni kaynakta gövde sessiz (tepe 0,17), vuruş/kapanış yüksek: gövde 0 dB'ye yakın, kapanış kısık
+const SFX_END_DB := -9.0
 const SFX_FADE_OUT := 0.08 ## döngü gövdesinin kapanış patlamasına yer açarak sönme süresi
 const SFX_MIN_LIFE := 0.3 ## bundan kısa yaşayan ışın (hedef hemen öldü) kapanış patlaması çalmaz, sadece söner
 const BASE_W := 6.0 ## ışın YARI genişliği (dünya px); madde 331: 3,0 -> 6,0 ("çok ince vuruyor")

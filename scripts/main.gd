@@ -10,6 +10,7 @@ const GameNoticeScript := preload("res://scripts/game_notice.gd") ## bildirim le
 const WaitOverlayScript := preload("res://scripts/wait_overlay.gd") ## oyuncular bekleniyor ekranı (madde 264)
 const EVO_CHOICE_PREFIX := SkillEvolutionsScript.CHOICE_PREFIX
 const PauseMenuScene = preload("res://scenes/pause_menu.tscn")
+const SurrenderVotePanelScript := preload("res://scripts/surrender_vote_panel.gd") ## teslim oylaması paneli (madde 540)
 const RemotePlayerScene = preload("res://scenes/remote_player.tscn")
 const ChestMenuScene = preload("res://scenes/chest_menu.tscn")
 const EnchantScreenScript = preload("res://scripts/enchant_screen.gd")
@@ -38,6 +39,15 @@ const MissionTreeScript := preload("res://scripts/mission_tree.gd")
 const MissionCollectItemScript := preload("res://scripts/mission_collect_item.gd")
 const MissionPlayerCopyScript := preload("res://scripts/mission_player_copy.gd")
 const MissionZoneScript := preload("res://scripts/mission_zone.gd")
+## Madde 496 yeni görevler: vurulabilen hedefler (host'ta gerçek, istemcide kozmetik - mission_target.gd), ritüel heykeli + gezici ışık (her makinede).
+const MissionNestScript := preload("res://scripts/mission_nest.gd")
+const MissionRitualCrystalScript := preload("res://scripts/mission_ritual_crystal.gd")
+const MissionTreasureRunnerScript := preload("res://scripts/mission_treasure_runner.gd")
+const MissionRitualAltarScript := preload("res://scripts/mission_ritual_altar.gd")
+const MissionLightScript := preload("res://scripts/mission_light.gd")
+const MISSION_TARGET_SCRIPTS := {"close_nests": MissionNestScript, "break_ritual": MissionRitualCrystalScript, "treasure_runner": MissionTreasureRunnerScript}
+const MISSION_FOLLOW_INTERVAL := 0.2
+var _mission_follow_acc: float = 0.0
 ## Kullanıcı bildirimi (2026-09-24): "görev açıklaması yanda yazarken yazı çok çabuk kayboluyor" - görev bildirimleri
 ## (duyuru/başladı/bitti) artık genel 2.4sn yerine bu kadar ekranda kalıyor ve "BAŞLADI" bildirimi görevin ne
 ## istediğini de yazıyor (bkz. MISSION_DESCRIPTIONS).
@@ -52,6 +62,16 @@ const MISSION_DESCRIPTIONS := {
 	"escort_van": "Konvoyun çevresindeki dairede kalarak onu hedefe kadar it. Uzaklaşırsan geri kayar.",
 	"defend_tree": "Ağacı yaratıklardan koru - büyümesini tamamlayana kadar yok olmasın.",
 	"kill_your_copy": "Haritada bir yerde beliren mor tonlu kopyanı bul ve öldür.",
+	"close_nests": "Yaratık yuvalarını yık. Yakınındayken yuvalardan yaratık çıkar.",
+	"break_ritual": "Heykelin çevresindeki kristalleri kır. Ritüel tamamlanırsa elit bir yaratık çağrılır.",
+	"treasure_runner": "Altın slime kaçıyor! Vurdukça altın saçar, süre bitmeden yakala.",
+	"wandering_light": "Ruh fenerinin ışığında kal. İçinde biri varken ilerler, karanlıkta kalan hasar alır.",
+}
+## Başarısızlık bildirimi (görev türüne özgü sebep; süre dolması dışındakiler).
+const MISSION_FAIL_TEXTS := {
+	"defend_tree": ["%s BAŞARISIZ", "Ağaç yok edildi."],
+	"break_ritual": ["%s BAŞARISIZ", "Ritüel tamamlandı, elit bir yaratık çağrıldı!"],
+	"treasure_runner": ["%s kaçtı", "Hazine kaçtı. Saçtığı altınlar yerde."],
 }
 
 ## Kullanıcı isteği: LoL tarzı görüş alanı / savaş sisi - bkz. vision_fog.gd.
@@ -59,6 +79,7 @@ const MISSION_DESCRIPTIONS := {
 ## açık tutarken dışarıdan yapılan .tscn düzenlemeleri editörün "Kaydet"i ile
 ## sessizce ezilebiliyor (bkz. CLAUDE.md).
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
+const StealthVisionScript := preload("res://scripts/stealth_vision.gd") ## görünmezken kendi ekranı kararır (madde 533)
 ## Gün-gece döngüsü + hava durumu (kullanıcı isteği 2026-09-25) - sis gibi kodla kuruluyor (aynı gerekçe).
 const AtmosphereScript := preload("res://scripts/atmosphere.gd")
 const GrassSwayScript := preload("res://scripts/grass_sway.gd")
@@ -328,6 +349,9 @@ func _ready() -> void:
 	var banner_anchors: Array = []
 	for path: String in ["MinimapControl", "PartyPanelLayer/PartyPanel/Background"]:
 		var anchor_node: Node = hud.get_node_or_null(path)
+		## madde 483: masaüstü kare minimapin çerçevesi düğümün 10 px dışına taşar - sütun çerçeveye (= grup tepsisinin sağına) hizalansın
+		if path == "MinimapControl" and hud.get_node_or_null("MinimapControl/TrayFrame") != null:
+			anchor_node = hud.get_node("MinimapControl/TrayFrame")
 		if anchor_node != null:
 			banner_anchors.append(anchor_node)
 	_world_event_banner.set("hud_anchor_controls", banner_anchors)
@@ -355,6 +379,13 @@ func _ready() -> void:
 	## "izleyicisin" yazısını görmeye başlamış olabilir, son kişi de ölünce
 	## bu sinyal onlara "OYUN BİTTİ"ye geçmeleri gerektiğini bildirir.
 	NetworkManager.game_over_synced.connect(_on_game_over_synced)
+	## Teslim oylaması (madde 540): ESC'den başlar, oybirliğiyle geçerse herkes "TESLİM OLUNDU" oyun bitti ekranına geçer.
+	NetworkManager.reset_surrender_vote()
+	NetworkManager.surrender_passed.connect(_on_surrender_passed)
+	NetworkManager.surrender_vote_started.connect(_on_surrender_vote_started)
+	NetworkManager.surrender_vote_ended.connect(_on_surrender_vote_ended)
+	if NetworkManager.is_multiplayer_active:
+		add_child(SurrenderVotePanelScript.new())
 	## Kullanıcı isteği: "birini diriltince ... dirilten kişide de" 3sn
 	## dokunulmazlık - bkz. network_manager.gd grant_revive_invulnerability.
 	NetworkManager.local_player_granted_revive_invulnerability.connect(_on_revive_invulnerability_granted)
@@ -365,6 +396,7 @@ func _ready() -> void:
 	## üstünde mini balonu tetikler.
 	NetworkManager.chat_message_received.connect(_on_chat_message_received)
 	NetworkManager.debug_action_announced.connect(_on_debug_action_announced)
+	NetworkManager.gold_gift_announced.connect(_on_gold_gift_announced)
 	_update_stats_display()
 	hud.update_level(GameManager.team_level)
 	hud.update_xp(GameManager.team_xp, GameManager.team_xp_needed)
@@ -415,6 +447,11 @@ func _ready() -> void:
 	## Güneş huzmesi: sisin HEMEN arkasına (HUD'dan önce) - gökyüzünden gelen ışık, sis onu karartmasın.
 	add_child(sun_clouds.light_layer)
 	move_child(sun_clouds.light_layer, vision_fog.get_index() + 1)
+	## Görünmezken karartma (madde 533): sis + güneş huzmesinden SONRA, HUD'dan HEMEN önce (aynı layer=1) - arayüz kararmaz.
+	var stealth_vision: CanvasLayer = StealthVisionScript.new()
+	stealth_vision.name = "StealthVision"
+	add_child(stealth_vision)
+	move_child(stealth_vision, hud.get_index())
 
 	## Sallanan otlar (bkz. grass_sway.gd / scenes/sallanan ot.gdshader): karo kök tablosu, havaya göre salınım ve yukarı/aşağı
 	## önceliği (önünde kalan otlar oyuncunun üstüne çizilir).
@@ -442,10 +479,28 @@ func _ready() -> void:
 		## (bkz. ground_texel_pass.gd, görüntü birebir aynı).
 		## Harita görünümü (madde 181/184/186): renk ayarı, sakin doku, başıboş çimen karoları, plato deseni. Ön kopyalardan SONRA (onların
 		## materyalleri de ayarlansın), zemin geçişinden ÖNCE (ground_texel_pass.gd ayrıntı ayarını değiştirilmiş orman shader'ına uygulasın).
-		MapColorGradeScript.attach(harita_node)
+		## Başıboş çimen / köprü altı bitki ayıklaması Harita.tmx'in belirli karolarına göre - Kara Bataklık'ta yok ("harita_ayiklama").
+		MapColorGradeScript.attach(harita_node, true, MapProfilesScript.feature("harita_ayiklama"))
 		## Su (madde 214): akıntılı dalgacık shader'ına kıyı uzaklığı + akış dokuları, çarpışmasız su da aynı materyal (bkz. water_fx.gd).
-		WaterFxScript.attach(harita_node)
-		GroundTexelPassScript.attach(harita_node)
+		## Kara Bataklık suyu kendi shader'ı (scenes/bataklik_su.gdshader), zemini tek materyal: ikisi de ana haritanın dokularına bağlı değil.
+		if MapProfilesScript.feature("su_efekti"):
+			WaterFxScript.attach(harita_node)
+		if MapProfilesScript.feature("zemin_gecisi"):
+			GroundTexelPassScript.attach(harita_node)
+		## Kara Bataklık: ateş böcekleri + meşale / cadı kulübesi gece ışıkları (bkz. bataklik_fx.gd).
+		if MapProfilesScript.feature("bataklik_fx"):
+			var swamp_fx: Node2D = preload("res://scripts/bataklik_fx.gd").new()
+			swamp_fx.name = "BataklikFx"
+			harita_node.add_child(swamp_fx)
+		## Altın Kumlar: küre tapınağının gece ışığı (bkz. col_fx.gd).
+		if MapProfilesScript.feature("col_fx"):
+			var desert_fx: Node2D = preload("res://scripts/col_fx.gd").new()
+			desert_fx.name = "ColFx"
+			harita_node.add_child(desert_fx)
+		## Kara Bataklık suyu yürünür (madde 525): suya giren yürüyen karakter / yaratık / evcilin ayağı suyun altında (bkz. wade_fx.gd).
+		if MapProfilesScript.water_walkable():
+			var wade: Node = preload("res://scripts/wade_fx.gd").new()
+			add_child(wade)
 	## Yaratık-oyuncu derinliği: oyuncunun önünde duran yaratık oyuncunun üstüne çizilir (bkz. creature_depth.gd).
 	var creature_depth: Node = CreatureDepthScript.new()
 	creature_depth.name = "CreatureDepth"
@@ -617,11 +672,14 @@ func _process(delta: float) -> void:
 	## menüsünü ÜSTLERİNE açardı (o ekranlar artık kendi ui_cancel'larını
 	## kendileri işliyor, bkz. GameManager "ENGELLEYİCİ PANEL KAYDI" notu).
 	## 2026-10-04: duraklatma "pause_game" (Esc + kumanda Start) - eskiden ui_cancel'dı, kumanda B'si de oyunu duraklatıyordu.
-	if Input.is_action_just_pressed("pause_game") and not GameManager.is_game_over \
+	## 2026-11-09 (kullanıcı: "karakter ölünce escye basılmıyor"): oyun bitince (`is_game_over`) ESC artık kapalı DEĞİL - duraklatma menüsü
+	## ölüm/oyun bitti ekranının ÜSTÜNDE açılır (`_raise_pause_menu_over_end_screens`), ayarlar/ana menü/yeniden başla oradan da erişilir.
+	if Input.is_action_just_pressed("pause_game") \
 			and not GameManager.is_any_blocking_panel_open() and not GameManager.was_ui_cancel_consumed():
 		_toggle_pause()
 	
 	_process_rejoin_report(delta)
+	_update_mission_followers(delta) ## madde 496: hareket eden görevin harita işareti
 	if NetworkManager.is_multiplayer_active and is_instance_valid(player):
 		_process_multiplayer_sync(delta)
 		_sweep_ghost_remote_players(delta)
@@ -969,7 +1027,10 @@ func _process_multiplayer_sync(delta: float) -> void:
 			_state_dmg_next_msec = now_state_ms + STATE_DMG_INTERVAL_MSEC
 			_state_dmg_snap = [player.match_damage_dealt, player.match_damage_taken]
 		var extra: Dictionary = {
-			"is_invisible": player.is_invisible if "is_invisible" in player else false,
+			## Evcil Hayalet örtüsü de görünmezlik (madde 509): host'un yaratıkları hedef almaz (köprü/enemy.gd is_invisible okur).
+			"is_invisible": (player.is_invisible if "is_invisible" in player else false) or (player.has_method("ghost_cover_active") and player.ghost_cover_active()),
+			## Evcil Minik Cadı büyüsü: karakter boyu çarpanı (remote_player.gd _apply_pet_size).
+			"psz": player.get_pet_size_mult() if player.has_method("get_pet_size_mult") else 1.0,
 			## Büyücü Kız "Yükseliş" (R1 evrimi): Meteor kanalında havada - kukla yükselir, host'ta hedef alınamaz (remote_player.gd).
 			"byc_fly": player.is_buyucu_airborne() if player.has_method("is_buyucu_airborne") else false,
 			"is_shielded": player.is_shielded if "is_shielded" in player else false,
@@ -1377,10 +1438,26 @@ func _toggle_pause() -> void:
 	else:
 		pause_menu_instance = PauseMenuScene.instantiate()
 		add_child(pause_menu_instance)
+		_raise_pause_menu_over_end_screens()
 		if use_real_pause:
 			get_tree().paused = true
 		elif local_player and local_player.has_method("set_menu_input_locked"):
 			local_player.call("set_menu_input_locked", true)
+
+
+## Duraklatma menüsü normalde katman 91'de (HUD/sohbet üstü); ölüm/izleyici/oyun bitti ekranı (95) ve zafer ekranı (96) varken menü
+## onların ALTINDA kalıp soluk/örtülü görünüyordu ("ESC çalışmıyor" - kullanıcı 2026-11-09). Bu ekranlardan biri varsa menü üstüne çıkar;
+## yeniden başlatma onayı (diyalog) menünün de üstünde kalsın diye 98'e alındı (`_on_restart_request_received`).
+const PAUSE_LAYER_OVER_END_SCREENS := 97
+
+
+func _raise_pause_menu_over_end_screens() -> void:
+	if not (pause_menu_instance is CanvasLayer) or not is_instance_valid(pause_menu_instance):
+		return
+	var end_screen: bool = (_death_overlay_layer != null and is_instance_valid(_death_overlay_layer)) \
+			or (_victory_overlay != null and is_instance_valid(_victory_overlay))
+	if end_screen:
+		(pause_menu_instance as CanvasLayer).layer = PAUSE_LAYER_OVER_END_SCREENS
 
 
 func _update_stats_display() -> void:
@@ -2356,7 +2433,7 @@ func _on_restart_request_received() -> void:
 	get_tree().paused = true
 	_restart_confirm_dialog = CanvasLayer.new()
 	_restart_confirm_dialog.process_mode = Node.PROCESS_MODE_ALWAYS
-	_restart_confirm_dialog.layer = 95
+	_restart_confirm_dialog.layer = 98 ## duraklatma menüsünün (91 / ölüm ekranı varken 97) üstünde
 	var dim := ColorRect.new()
 	dim.color = Color(0.12, 0.07, 0.03, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -2577,6 +2654,16 @@ func _show_notice(kind: String, title: String, body: String = "", hold_seconds: 
 func _show_banner_notice(kind: String, ribbon_text: String, body: String = "", hold_seconds: float = 4.0, tier: int = 0) -> void:
 	hold_seconds = _notice_hold(kind, hold_seconds)
 	_present_notice(GameNoticeScript.banner(kind, ribbon_text, body, hold_seconds, tier), hold_seconds, not GameNoticeScript.compact)
+
+
+## Madde 493: altın hediyesi ALICIDA üst ortada dikkat çeken levha (scripts/gift_notice.gd; küçük levha kuralı - madde 404 - bunu kısaltmaz).
+## network_manager.gd receive_gold_gift çağırır. char_id = gönderenin karakteri (portre; 0 = bilinmiyor, boş kuyu).
+const GiftNoticeScript := preload("res://scripts/gift_notice.gd")
+const GIFT_NOTICE_HOLD := 4.5
+func show_gift_notice(from_name: String, amount: int, char_id: int) -> Control:
+	var n: Control = GiftNoticeScript.make(from_name, amount, char_id)
+	_present_notice(n, GIFT_NOTICE_HOLD, true)
+	return n
 
 
 ## Madde 404 (kullanıcı: bildirimler "çok dikkat çekiyor ve ekranı kaplıyor"): küçük levhada bildirimler en çok NOTICE_COMPACT_HOLD
@@ -3114,7 +3201,75 @@ func _on_world_event_started(mission_id: int, kind: String, pos: Vector2, _radiu
 					copy.set_weapon_keys(m.get("weapons", []))
 					copies.append(copy)
 				visuals["copies"] = copies
+		"wandering_light":
+			var light: Node2D = MissionLightScript.new()
+			get_tree().current_scene.add_child(light)
+			## Fener ışıltısı + rota noktaları zemin katmanında (z 0): haritanın hemen arkasına - yaratıklar / oyuncu hep üstünde çizilir.
+			## Karanlık halka ayrı: düğümün kendi CanvasLayer'ı, ekran düzeyinde, halkadaki HER ŞEYİ karartır (madde 534).
+			var harita: Node = get_tree().current_scene.get_node_or_null("Harita")
+			if harita:
+				get_tree().current_scene.move_child(light, harita.get_index() + 1)
+			light.call("setup", mission_id, extra.get("route", PackedVector2Array([pos, pos])),
+					float(extra.get("light_radius", 150.0)), float(extra.get("dark_outer", 620.0)))
+			visuals["light"] = light
+			visuals["follow"] = light
+	## Madde 496 vurulabilen hedefler: host/tekli GERÇEK düğümleri görev kimliğiyle bulur, istemci kozmetiklerini extra'dan kurar.
+	if MISSION_TARGET_SCRIPTS.has(kind):
+		var targets: Array = _mission_targets_for(mission_id, kind, extra)
+		visuals["targets"] = targets
+		if kind == "treasure_runner" and not targets.is_empty():
+			visuals["follow"] = targets[0]
+	if kind == "break_ritual":
+		var altar: Node2D = MissionRitualAltarScript.new()
+		get_tree().current_scene.add_child(altar)
+		altar.global_position = pos
+		altar.call("setup", mission_id, duration)
+		visuals["altar"] = altar
 	_world_event_visuals[mission_id] = visuals
+
+
+## Görev hedefleri: host/tekli oyunda world_event_manager.gd'nin kurduğu gerçek düğümler ("mission_targets" grubu, görev kimliği); host olmayan
+## istemcide extra["targets"] metasından kozmetik kopyalar (ölmüşler kurulmaz - geri katılan, bkz. _refresh_targets_extra).
+func _mission_targets_for(mission_id: int, kind: String, extra: Dictionary) -> Array:
+	var out: Array = []
+	if not (NetworkManager.is_multiplayer_active and not NetworkManager.is_host):
+		for n: Node in get_tree().get_nodes_in_group("mission_targets"):
+			if is_instance_valid(n) and int(n.get("mission_id")) == mission_id:
+				out.append(n)
+		return out
+	var script: GDScript = MISSION_TARGET_SCRIPTS[kind]
+	var metas: Array = extra.get("targets", [])
+	for i in range(metas.size()):
+		var m: Dictionary = metas[i]
+		if bool(m.get("dead", false)):
+			continue
+		var t: Node2D = script.new()
+		get_tree().current_scene.add_child(t)
+		t.global_position = m.get("pos", Vector2.ZERO)
+		t.call("setup", mission_id, i, float(m.get("hp", 100.0)), float(m.get("sh", 0.0)), false)
+		if m.has("hp_ratio"): ## geri katılan: hasar almış hedefin çubuğu da güncel
+			t.set("health", float(t.get("max_health")) * clampf(float(m["hp_ratio"]), 0.0, 1.0))
+			t.call("_refresh_bar")
+		out.append(t)
+	return out
+
+
+## Hareket eden görev (Kaçan Hazine, Gezici Işık): minimap işareti ve görev penceresinin oku hedefi izler (her karede değil).
+func _update_mission_followers(delta: float) -> void:
+	_mission_follow_acc += delta
+	if _mission_follow_acc < MISSION_FOLLOW_INTERVAL or _world_event_visuals.is_empty():
+		return
+	_mission_follow_acc = 0.0
+	var minimap: Node = hud.get_node_or_null("MinimapControl") if hud else null
+	for mid: int in _world_event_visuals.keys():
+		var f: Variant = (_world_event_visuals[mid] as Dictionary).get("follow")
+		if f == null or not is_instance_valid(f) or (f as Node).get("is_dead") == true:
+			continue
+		var p: Vector2 = (f as Node2D).global_position
+		if minimap and minimap.has_method("set_mission_marker"):
+			minimap.set_mission_marker(mid, p, Color(1.0, 0.4, 0.3), "!")
+		if _world_event_banner and is_instance_valid(_world_event_banner):
+			_world_event_banner.set_target(mid, p, 120.0)
 
 
 func _on_world_event_progress(mission_id: int, value: float, target: float) -> void:
@@ -3146,6 +3301,10 @@ func _on_world_event_progress(mission_id: int, value: float, target: float) -> v
 			## sadece GERÇEKTEN aktif bir çok oyunculu oturumda, host OLMAYAN bir istemci.
 			if tree and is_instance_valid(tree) and NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 				tree.call("apply_synced_health", value, target)
+		"wandering_light":
+			var light: Node = visuals.get("light")
+			if light and is_instance_valid(light):
+				light.call("set_progress", value, target)
 
 
 func _on_world_event_item_collected(mission_id: int, item_index: int) -> void:
@@ -3169,9 +3328,9 @@ func _on_world_event_completed(mission_id: int, kind: String, success: bool) -> 
 	## doğru bir mesaj gösterilebilir (ağ üzerinden yeni bir "sebep" alanı eklemeye gerek yok).
 	var fail_title: String = Loc.t("%s süresi doldu") % label
 	var fail_body: String = "Görev iptal edildi."
-	if kind == "defend_tree" and not success:
-		fail_title = Loc.t("%s BAŞARISIZ") % label
-		fail_body = "Ağaç yok edildi."
+	if not success and MISSION_FAIL_TEXTS.has(kind):
+		fail_title = Loc.t(str(MISSION_FAIL_TEXTS[kind][0])) % label
+		fail_body = str(MISSION_FAIL_TEXTS[kind][1])
 	## Başarı: "Görev Tamamlandı" penceresi (kullanıcı isteği 2026-10-02) - görev altını onun içinden altın paneline uçar
 	## (bkz. mission_complete_window.gd). Başarısızlık eskisi gibi sağ üstte bildirim.
 	if success:
@@ -3210,6 +3369,16 @@ func _on_world_event_completed(mission_id: int, kind: String, success: bool) -> 
 	for copy in visuals.get("copies", []):
 		if is_instance_valid(copy) and NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 			copy.queue_free()
+	## Madde 496: kalan kozmetik hedefler söner (host'unkileri manager söndürdü; sönme yayını kaybolduysa diye burada da), heykel / ışık biter.
+	for t in visuals.get("targets", []):
+		if is_instance_valid(t) and t.get("is_dead") != true and NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+			t.call("vanish")
+	var altar: Node = visuals.get("altar")
+	if altar and is_instance_valid(altar):
+		altar.call("finish", success)
+	var light: Node = visuals.get("light")
+	if light and is_instance_valid(light):
+		light.queue_free()
 	_world_event_visuals.erase(mission_id)
 
 
@@ -3292,7 +3461,8 @@ func _on_match_stats_received(peer_id: int, player_name: String, damage_dealt: f
 ## multiplayer hiç aktif değilse) yerel player, değilse eşleşen RemotePlayer.
 func _on_chat_message_received(peer_id: int, player_name: String, text: String) -> void:
 	if hud and hud.has_method("append_chat_message"):
-		hud.append_chat_message(player_name, text)
+		var st: Array = chat_sender_style(peer_id)
+		hud.append_chat_message(player_name, text, int(st[0]), st[1])
 	var my_id: int = multiplayer.get_unique_id() if NetworkManager.is_multiplayer_active else 0
 	if not NetworkManager.is_multiplayer_active or peer_id == my_id:
 		if is_instance_valid(player) and player.has_method("show_chat_bubble"):
@@ -3304,14 +3474,62 @@ func _on_chat_message_received(peer_id: int, player_name: String, text: String) 
 			rp.show_chat_bubble(text)
 
 
+const ChatMenuKit := preload("res://scripts/menu_dark_kit.gd") ## oyuncu renkleri (madde 499)
+const ChatHudTheme := preload("res://scripts/hud_theme.gd")
+
+
+## Madde 499: sohbet penceresinde gönderenin yüzü + oyuncu rengi -> [char_id, Color]. Renk sırası seçim ekranıyla aynı (lobby_players
+## anahtarları sıralı, menu_dark_kit.player_color); tek oyunculu / kendimiz = seçili karakter. Bilinmeyen eş: char_id -1, altın ad.
+func chat_sender_style(peer_id: int) -> Array:
+	var mp: bool = NetworkManager.is_multiplayer_active
+	var my_id: int = multiplayer.get_unique_id() if mp else 0
+	if not mp or peer_id == my_id or peer_id == 0:
+		var ids0: Array = NetworkManager.lobby_players.keys()
+		ids0.sort()
+		var i0: int = ids0.find(my_id) if mp else 0
+		return [GameManager.selected_char_id, ChatMenuKit.player_color(maxi(i0, 0))]
+	var cid: int = -1
+	var rp: RemotePlayer = _get_remote_player(peer_id)
+	if rp and is_instance_valid(rp):
+		cid = rp.char_id
+	elif NetworkManager.lobby_players.has(peer_id):
+		cid = int(NetworkManager.lobby_players[peer_id].get("char_id", -1))
+	var ids: Array = NetworkManager.lobby_players.keys()
+	ids.sort()
+	var idx: int = ids.find(peer_id)
+	return [cid, ChatMenuKit.player_color(idx) if idx >= 0 else ChatHudTheme.ACCENT]
+
+
+## Madde 499: altın hediyesi herkesin sohbetinde (NetworkManager.gold_gift_announced; gönderen kendi tarafında yerel yayar).
+func _on_gold_gift_announced(from_peer: int, to_peer: int, amount: int) -> void:
+	if not hud or not hud.has_method("append_chat_gift"):
+		return
+	var fs: Array = chat_sender_style(from_peer)
+	var ts: Array = chat_sender_style(to_peer)
+	hud.append_chat_gift(_chat_peer_name(from_peer), fs[1], _chat_peer_name(to_peer), ts[1], amount)
+
+
+func _chat_peer_name(peer_id: int) -> String:
+	if NetworkManager.lobby_players.has(peer_id):
+		var n: String = str(NetworkManager.lobby_players[peer_id].get("name", ""))
+		if n != "":
+			return n
+	var rp: RemotePlayer = _get_remote_player(peer_id)
+	if rp and is_instance_valid(rp):
+		return rp.player_name
+	if NetworkManager.is_multiplayer_active and peer_id == multiplayer.get_unique_id():
+		return NetworkManager.local_player_name
+	return "?"
+
+
 ## Birinin debug modunda yaptığı eylem (bkz. network_manager.gd debug_action_announced notu): üst ortada uyarı + sohbet kaydına satır
 ## (toast kaybolsa bile ne yapıldığı kalır). Gönderen KENDİMİZ de olsak gelir ("call_local") - ne yaptığını görmek zararsız.
 func _on_debug_action_announced(player_name: String, text: String) -> void:
 	var line: String = Loc.t("[DEBUG] %s: %s") % [player_name, text]
 	_show_banner_notice("fail", "DEBUG MODU UYARISI", line, 4.0)
 	EventSfx.play(get_tree(), &"chat")
-	if hud and hud.has_method("append_chat_message"):
-		hud.append_chat_message("DEBUG", "%s: %s" % [player_name, text])
+	if hud and hud.has_method("append_chat_system"):
+		hud.append_chat_system("DEBUG", "%s: %s" % [player_name, text])
 
 
 ## Oyun sonu istatistik ekranındaki tabloyu (isim | verdiği hasar | tankladığı
@@ -3398,6 +3616,40 @@ func _on_game_over_synced() -> void:
 	## - yoksa tablo sadece son ölen kişiyi gösterirdi.
 	_broadcast_local_match_stats()
 	_show_death_overlay(true)
+
+
+## Teslim (madde 540): tek oyunculuda ESC onayından, çok oyunculuda oybirliğiyle geçen oylamadan (NetworkManager._apply_surrender) - her
+## eş kendi ekranında. Canlı karakter hareketsiz + dokunulmaz kalır (player.gd run_surrendered kapıları), açık ESC menüsü kapanır,
+## tek oyunculuda menünün duraklatması kalkar (yoksa oyun bitti ekranının düğmeleri çalışmaz).
+func _on_surrender_passed() -> void:
+	if pause_menu_instance and is_instance_valid(pause_menu_instance):
+		pause_menu_instance.queue_free()
+		pause_menu_instance = null
+	if not NetworkManager.is_multiplayer_active:
+		get_tree().paused = false
+	if is_instance_valid(player):
+		if player.has_method("clear_input_state"):
+			player.call("clear_input_state")
+		player.set_menu_input_locked(true)
+	if NetworkManager.is_multiplayer_active:
+		_broadcast_local_match_stats()
+	else:
+		_record_local_match_stats()
+	_show_death_overlay(true)
+
+
+func _on_surrender_vote_started(initiator: int) -> void:
+	if hud and hud.has_method("append_chat_system"):
+		var keys: String = "" if MobileUI.enabled else Loc.t(" (F1 evet / F2 hayır)")
+		hud.append_chat_system("TESLİM", Loc.t("%s teslim oylaması başlattı.") % _chat_peer_name(initiator) + keys)
+	EventSfx.play(get_tree(), &"chat")
+
+
+func _on_surrender_vote_ended(passed: bool, yes_count: int, total: int) -> void:
+	if passed or total <= 0:
+		return
+	if hud and hud.has_method("append_chat_system"):
+		hud.append_chat_system("TESLİM", Loc.t("Teslim oylaması geçmedi (%d/%d evet).") % [yes_count, total])
 
 
 ## DÜZELTME (kullanıcı bildirimi: "ölüm ekranı yok ölünce hiçbir gösterge
@@ -3598,9 +3850,11 @@ func _show_death_overlay(is_final: bool) -> void:
 		_refresh_death_summary()
 		_refresh_match_stats_ui()
 		if title_lbl:
-			title_lbl.text = "OYUN BİTTİ"
+			title_lbl.text = "TESLİM OLUNDU" if GameManager.run_surrendered else "OYUN BİTTİ"
 		if sub_lbl:
 			sub_lbl.text = "Tüm takım elendi." if NetworkManager.is_multiplayer_active else "Öldün."
+			if GameManager.run_surrendered: ## madde 540
+				sub_lbl.text = "Takım oybirliğiyle teslim oldu." if NetworkManager.is_multiplayer_active else "Teslim oldun."
 			if GameManager.endless_active:
 				sub_lbl.text += Loc.t(" Sonsuz Kat %d'e kadar dayandınız.") % GameManager.endless_layer if NetworkManager.is_multiplayer_active \
 						else Loc.t(" Sonsuz Kat %d'e kadar dayandın.") % GameManager.endless_layer

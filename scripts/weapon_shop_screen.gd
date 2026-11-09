@@ -464,7 +464,7 @@ func _shield_card() -> PanelContainer:
 	g.add_theme_constant_override("v_separation", 0)
 	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for pair: Array in [["Kalkan", str(int(round(float(stats["power"]))))], ["Soğurma", "%%%d" % int(round(float(stats["absorption"]) * 100.0))],
-			["Yenilenme", "%s/sn" % Logic._num(float(stats["regen"]))], ["Bekleme", delay_text]]:
+			["Yenilenme", tr("%s/sn") % Logic._num(float(stats["regen"]))], ["Bekleme", delay_text]]:
 		var cell: HBoxContainer = _k.h(6)
 		cell.add_child(_k.lbl(str(pair[0]), 24, _k.c("dim")))
 		cell.add_child(_k.lbl(str(pair[1]), 24, DarkKit.SHARD_TEXT))

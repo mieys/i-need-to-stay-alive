@@ -21,7 +21,11 @@ class_name WorldEventManager
 ## sonuç NetworkManager.broadcast_world_event_* RPC'leriyle (call_local, TÜM peer'lere)
 ## yayılır. İstemciler kendi başlarına görev seçmez/zamanlamaz/tamamlamaz.
 
-enum MissionKind { CAPTURE_POINT, SECURE_AREA, COLLECT, ESCORT_VAN, DEFEND_TREE, KILL_YOUR_COPY }
+## Madde 496 (2026-11-08): + YUVALARI KAPAT / RİTÜELİ BOZ / KAÇAN HAZİNE / GEZİCİ IŞIK (ana haritada da zindan haritalarında da; tek
+## oyuncuda da yapılabilir ayarlı). Zindan biçimli haritada görev konumları ulaşılabilir zeminden seçilir (mission_spots.gd), Konvoy ve
+## Ağacı Koru orada seçilmez (bkz. _available_kinds).
+enum MissionKind { CAPTURE_POINT, SECURE_AREA, COLLECT, ESCORT_VAN, DEFEND_TREE, KILL_YOUR_COPY,
+	CLOSE_NESTS, BREAK_RITUAL, TREASURE_RUNNER, WANDERING_LIGHT }
 
 const MISSION_LABELS := {
 	MissionKind.CAPTURE_POINT: "Bayrağı Ele Geçir",
@@ -30,6 +34,10 @@ const MISSION_LABELS := {
 	MissionKind.ESCORT_VAN: "Konvoyu Koru",
 	MissionKind.DEFEND_TREE: "Ağacı Koru",
 	MissionKind.KILL_YOUR_COPY: "Kopyanı Öldür",
+	MissionKind.CLOSE_NESTS: "Yuvaları Kapat",
+	MissionKind.BREAK_RITUAL: "Ritüeli Boz",
+	MissionKind.TREASURE_RUNNER: "Kaçan Hazine",
+	MissionKind.WANDERING_LIGHT: "Gezici Işık",
 }
 const MISSION_KIND_NAMES := {
 	MissionKind.CAPTURE_POINT: "capture_point",
@@ -38,7 +46,13 @@ const MISSION_KIND_NAMES := {
 	MissionKind.ESCORT_VAN: "escort_van",
 	MissionKind.DEFEND_TREE: "defend_tree",
 	MissionKind.KILL_YOUR_COPY: "kill_your_copy",
+	MissionKind.CLOSE_NESTS: "close_nests",
+	MissionKind.BREAK_RITUAL: "break_ritual",
+	MissionKind.TREASURE_RUNNER: "treasure_runner",
+	MissionKind.WANDERING_LIGHT: "wandering_light",
 }
+## Zindan biçimli haritada seçilmeyen türler: konvoy (araba + 5 hücrelik koridorlar), ağaç (zindanda dev ağaç).
+const OPEN_MAP_ONLY_KINDS := [MissionKind.ESCORT_VAN, MissionKind.DEFEND_TREE]
 ## Bkz. main.gd _on_world_event_announced/_started - "toplama görevinde toplanması gereken
 ## objeler ve kopyaların konumu gösterilmeyecek" (kullanıcı isteği): bu iki tür için harita/
 ## pusula işareti HİÇ gösterilmez (sadece bildirim metni).
@@ -92,7 +106,15 @@ const SPAWN_CLEARANCE := {
 	MissionKind.ESCORT_VAN: 48.0,
 	MissionKind.DEFEND_TREE: 96.0,
 	MissionKind.KILL_YOUR_COPY: 32.0,
+	MissionKind.CLOSE_NESTS: 64.0,
+	MissionKind.BREAK_RITUAL: 80.0,
+	MissionKind.TREASURE_RUNNER: 48.0,
+	MissionKind.WANDERING_LIGHT: 48.0,
 }
+## Zindan biçimli haritada bayrak/alan görevi salonlarda çıksın (koridor 5 hücre): önce bu kadar geniş açık zemin aranır, bulunmazsa
+## türün normal payı (bkz. _random_map_position).
+const DUNGEON_ROOMY_CLEARANCE := 112.0
+const DUNGEON_ROOMY_KINDS := [MissionKind.CAPTURE_POINT, MissionKind.SECURE_AREA, MissionKind.BREAK_RITUAL, MissionKind.CLOSE_NESTS]
 const COLLECT_ITEM_CLEARANCE := 16.0
 
 ## Capture the Point ayarları. "Ekranın en fazla yarısını kaplamalı" (kullanıcı isteği) -
@@ -176,6 +198,74 @@ const CopyScript := preload("res://scripts/mission_player_copy.gd")
 ## Tek kaynak: kopyanın kendi ömrü (mission_player_copy.gd LIFETIME) - görev süresi ile kopyanın kaybolma anı ayrışmasın.
 const COPY_LIFETIME: float = CopyScript.LIFETIME
 
+## ---- YENİ GÖREVLER (madde 496). Hedef canları KADEMEYE UYUMLU: görev başında yaşayan sıradan yaratıkların ortalama azami canı x oran
+## (Ağacı Koru'nun ölçümüyle aynı fikir, MissionTargetScript.calibrate_hp). Ortalama can çok oyunculu dayanıklılığı (+%60/ek oyuncu) zaten
+## içerdiği için hedefler oyuncu sayısıyla kendiliğinden büyür; tek oyuncuda ~10-20 sn'lik iş.
+const MissionSpotsScript := preload("res://scripts/mission_spots.gd")
+const MissionTargetScript := preload("res://scripts/mission_target.gd")
+const NestScript := preload("res://scripts/mission_nest.gd")
+const RitualCrystalScript := preload("res://scripts/mission_ritual_crystal.gd")
+const TreasureRunnerScript := preload("res://scripts/mission_treasure_runner.gd")
+const HideBrushScript := preload("res://scripts/hide_brush.gd")
+
+## YUVALARI KAPAT: merkezin çevresine (NEST_RING_MIN..MAX) 3 yuva; yakınında oyuncu varken her biri NEST_WAVE_INTERVAL'da bir NEST_WAVE_COUNT
+## yaratık çıkarır (yaratık tavanına uyar). Üçü de yıkılınca başarı.
+const NEST_COUNT := 3
+const NEST_MIN_COUNT := 2 ## dar yerde (zindan) bu kadar yuva sığarsa yeter
+const NEST_RING_MIN := 140.0
+const NEST_RING_MAX := 260.0
+const NEST_CLEARANCE := 24.0
+const NEST_MIN_SPACING := 150.0
+const NEST_HP_RATIO := 16.0
+const NEST_SHIELD_RATIO := 0.25
+const NEST_FALLBACK_HP := 600.0
+const NEST_WAKE_RADIUS := 560.0
+const NEST_WAVE_INTERVAL := 3.5
+const NEST_WAVE_COUNT := 2
+const NEST_WAVE_RING := 34.0
+const NEST_DURATION := 150.0
+const NEST_REWARD_GOLD := 200
+
+## RİTÜELİ BOZ: ortada ruh ateşli heykel (görsel, mission_ritual_altar.gd), çevresinde 3 kristal (RITUAL_RING). Süre dolmadan kristallerin
+## hepsi kırılırsa başarı; dolarsa ritüel tamamlanır: heykelin dibinden bir ELİT + RITUAL_FAIL_WAVE yaratık doğar. Ritüel sürerken yakında
+## oyuncu varsa heykel bekçi çağırır.
+const RITUAL_CRYSTALS := 3
+const RITUAL_RING := 96.0
+const RITUAL_CRYSTAL_CLEARANCE := 14.0
+const RITUAL_HP_RATIO := 10.0
+const RITUAL_SHIELD_RATIO := 0.3
+const RITUAL_FALLBACK_HP := 400.0
+const RITUAL_DURATION := 75.0
+const RITUAL_WAKE_RADIUS := 600.0
+const RITUAL_WAVE_INTERVAL := 5.0
+const RITUAL_WAVE_COUNT := 2
+const RITUAL_WAVE_RING := 70.0
+const RITUAL_FAIL_WAVE := 8
+const RITUAL_REWARD_GOLD := 220
+
+## KAÇAN HAZİNE: altın slime (mission_treasure_runner.gd: kaçar, soluklanır, vuruldukça altın saçar). RUNNER_LIFETIME içinde öldürülürse
+## başarı (+ görev altını), yoksa kaçar (saçılan altın yerde kalır).
+const RUNNER_HP_RATIO := 14.0
+const RUNNER_SHIELD_RATIO := 0.0
+const RUNNER_FALLBACK_HP := 500.0
+const RUNNER_LIFETIME := 50.0
+const RUNNER_REWARD_GOLD := 150
+
+## GEZİCİ IŞIK: ruh feneri rota boyunca (konvoy rota bulucusu, daha kısa) LIGHT_SPEED ile süzülür - yalnız ışığın içinde (LIGHT_RADIUS) canlı
+## oyuncu varken; çevresindeki karanlık halkada kalan oyuncu hasar alır (mission_light.gd, her makine kendi oyuncusuna). Işık yürürken
+## karanlığın kenarından yaratık gelir. Bitişe varınca başarı.
+const LIGHT_RADIUS := 150.0
+const LIGHT_DARK_OUTER := 620.0
+const LIGHT_SPEED := 36.0
+const LIGHT_MIN_DISTANCE := 1300.0
+const LIGHT_MAX_DISTANCE := 2100.0
+const LIGHT_TIMEOUT_MULT := 2.0
+const LIGHT_TIMEOUT_EXTRA := 30.0
+const LIGHT_WAVE_INTERVAL := 4.0
+const LIGHT_WAVE_COUNT := 2
+const LIGHT_WAVE_RING := 400.0
+const LIGHT_REWARD_GOLD := 200
+
 var _next_mission_id: int = 1
 ## Her biri null ya da bir Dictionary.
 var _slots: Array = [null, null]
@@ -212,6 +302,7 @@ func _on_peer_needs_game_catchup(peer_id: int) -> void:
 			NetworkManager.broadcast_world_event_announced.rpc_id(peer_id, int(slot["id"]), MISSION_KIND_NAMES[kind], pos, radius,
 					maxf(1.0, float(slot.get("timer", 1.0))), MISSION_LABELS[kind])
 		else:
+			_refresh_targets_extra(slot) ## yıkılan yuva / kırılan kristal geri katılanda yeniden kurulmasın, kaçan hazine son konumunda
 			var collected: Array = (slot.get("collected_set", {}) as Dictionary).keys()
 			NetworkManager.broadcast_world_event_catchup.rpc_id(peer_id, int(slot["id"]), MISSION_KIND_NAMES[kind], MISSION_LABELS[kind],
 					(slot.get("pos", Vector2.ZERO) as Vector2), float(slot.get("radius", 0.0)), maxf(0.0, float(slot.get("timer", 0.0))),
@@ -244,8 +335,36 @@ func _process_slot(slot_i: int, delta: float) -> void:
 
 
 func _available_kinds() -> Array:
-	return [MissionKind.CAPTURE_POINT, MissionKind.SECURE_AREA, MissionKind.COLLECT,
-		MissionKind.ESCORT_VAN, MissionKind.DEFEND_TREE, MissionKind.KILL_YOUR_COPY]
+	var out: Array = [MissionKind.CAPTURE_POINT, MissionKind.SECURE_AREA, MissionKind.COLLECT,
+		MissionKind.ESCORT_VAN, MissionKind.DEFEND_TREE, MissionKind.KILL_YOUR_COPY,
+		MissionKind.CLOSE_NESTS, MissionKind.BREAK_RITUAL, MissionKind.TREASURE_RUNNER, MissionKind.WANDERING_LIGHT]
+	if MissionSpotsScript.active():
+		out = out.filter(func(k) -> bool: return not OPEN_MAP_ONLY_KINDS.has(k))
+	return out
+
+
+## Görev türünün gösterilen yarıçapı (bölge çemberi / ok "vardın" mesafesi / ödül alanı). Uyarı ve debug başlatma AYNI tabloyu okur.
+func _radius_for(kind: int) -> float:
+	match kind:
+		MissionKind.SECURE_AREA:
+			return SECURE_RADIUS
+		MissionKind.COLLECT:
+			return COLLECT_SPREAD_RADIUS
+		MissionKind.ESCORT_VAN:
+			return ESCORT_PUSH_RADIUS
+		MissionKind.DEFEND_TREE:
+			return 260.0
+		MissionKind.KILL_YOUR_COPY:
+			return 0.0
+		MissionKind.CLOSE_NESTS:
+			return NEST_RING_MAX + 40.0
+		MissionKind.BREAK_RITUAL:
+			return RITUAL_RING + 70.0
+		MissionKind.TREASURE_RUNNER:
+			return 120.0
+		MissionKind.WANDERING_LIGHT:
+			return LIGHT_RADIUS
+	return CAPTURE_RADIUS
 
 
 ## Debug menüsü (bkz. debug_menu.gd) - "istediğimiz görevi başlattırma" isteği. _begin_warning'in
@@ -264,21 +383,12 @@ func debug_force_start_mission(kind_name: String, pos_override: Vector2 = Vector
 			break
 	if kind == null:
 		return false
-	var pos: Vector2 = pos_override if pos_override != Vector2.ZERO else _random_map_position(float(SPAWN_CLEARANCE.get(kind, 48.0)))
+	if MissionSpotsScript.active() and OPEN_MAP_ONLY_KINDS.has(kind):
+		return false ## zindanda konvoy / ağaç yok (bkz. _available_kinds)
+	var pos: Vector2 = pos_override if pos_override != Vector2.ZERO else _pick_mission_position(kind)
 	if pos == Vector2.ZERO:
 		return false
-	var radius: float = CAPTURE_RADIUS
-	match kind:
-		MissionKind.SECURE_AREA:
-			radius = SECURE_RADIUS
-		MissionKind.COLLECT:
-			radius = COLLECT_SPREAD_RADIUS
-		MissionKind.ESCORT_VAN:
-			radius = ESCORT_PUSH_RADIUS
-		MissionKind.DEFEND_TREE:
-			radius = 260.0
-		MissionKind.KILL_YOUR_COPY:
-			radius = 0.0
+	var radius: float = _radius_for(kind)
 	var slot_i := 0
 	for i in range(SLOT_COUNT):
 		if _slots[i].get("state") == "cooldown":
@@ -311,22 +421,11 @@ func _begin_warning(slot_i: int) -> void:
 		_slots[slot_i] = {"state": "cooldown", "timer": _rng.randf_range(COOLDOWN_MIN, COOLDOWN_MAX)}
 		return
 	var kind: MissionKind = kinds[_rng.randi() % kinds.size()]
-	var pos: Vector2 = _random_map_position(float(SPAWN_CLEARANCE.get(kind, 48.0)))
+	var pos: Vector2 = _pick_mission_position(kind)
 	if pos == Vector2.ZERO:
 		_slots[slot_i] = {"state": "cooldown", "timer": 5.0}
 		return
-	var radius: float = CAPTURE_RADIUS
-	match kind:
-		MissionKind.SECURE_AREA:
-			radius = SECURE_RADIUS
-		MissionKind.COLLECT:
-			radius = COLLECT_SPREAD_RADIUS
-		MissionKind.ESCORT_VAN:
-			radius = ESCORT_PUSH_RADIUS
-		MissionKind.DEFEND_TREE:
-			radius = 260.0
-		MissionKind.KILL_YOUR_COPY:
-			radius = 0.0
+	var radius: float = _radius_for(kind)
 	var id: int = _next_mission_id
 	_next_mission_id += 1
 	_slots[slot_i] = {
@@ -400,6 +499,52 @@ func _activate_mission(slot_i: int) -> void:
 			## kozmetik kopyalarını kurabilmesi için world_event_started ile (bkz. main.gd)
 			## AYNI yayına biniyor - "gösterilmeme" sadece UI/harita işareti anlamına geliyor.
 			extra["copies"] = spawned["meta"]
+		MissionKind.CLOSE_NESTS:
+			slot["timer"] = NEST_DURATION
+			var spots: PackedVector2Array = _place_ring(slot["pos"], NEST_COUNT, NEST_RING_MIN, NEST_RING_MAX, NEST_CLEARANCE, NEST_MIN_SPACING)
+			if spots.size() < NEST_MIN_COUNT:
+				spots = PackedVector2Array([slot["pos"]]) ## çok dar yer: tek yuva merkezde (görev yine yapılabilir)
+			var cal: float = MissionTargetScript.calibrate_hp(get_tree())
+			var hp: float = cal * NEST_HP_RATIO if cal > 0.0 else NEST_FALLBACK_HP
+			_spawn_targets(slot, NestScript, spots, hp, hp * NEST_SHIELD_RATIO)
+			slot["target"] = float(spots.size())
+			slot["wave_acc"] = 0.0
+			extra["targets"] = slot["targets_meta"]
+		MissionKind.BREAK_RITUAL:
+			slot["timer"] = RITUAL_DURATION
+			var cspots: PackedVector2Array = _place_ring(slot["pos"], RITUAL_CRYSTALS, RITUAL_RING * 0.85, RITUAL_RING * 1.15, RITUAL_CRYSTAL_CLEARANCE, RITUAL_RING * 0.9)
+			if cspots.is_empty():
+				cspots = PackedVector2Array([(slot["pos"] as Vector2) + Vector2(0, 40)])
+			var cal2: float = MissionTargetScript.calibrate_hp(get_tree())
+			var chp: float = cal2 * RITUAL_HP_RATIO if cal2 > 0.0 else RITUAL_FALLBACK_HP
+			_spawn_targets(slot, RitualCrystalScript, cspots, chp, chp * RITUAL_SHIELD_RATIO)
+			slot["target"] = float(cspots.size())
+			slot["wave_acc"] = 0.0
+			extra["targets"] = slot["targets_meta"]
+			extra["duration"] = RITUAL_DURATION
+		MissionKind.TREASURE_RUNNER:
+			slot["timer"] = RUNNER_LIFETIME
+			var cal3: float = MissionTargetScript.calibrate_hp(get_tree())
+			var rhp: float = cal3 * RUNNER_HP_RATIO if cal3 > 0.0 else RUNNER_FALLBACK_HP
+			_spawn_targets(slot, TreasureRunnerScript, PackedVector2Array([slot["pos"]]), rhp, rhp * RUNNER_SHIELD_RATIO)
+			for r: Node in slot["targets"]:
+				r.set("base_speed", _average_base_speed())
+				r.set("home", slot["pos"])
+			slot["target"] = 1.0
+			extra["targets"] = slot["targets_meta"]
+		MissionKind.WANDERING_LIGHT:
+			var lroute: PackedVector2Array = _escort_route(slot["pos"], LIGHT_MIN_DISTANCE, LIGHT_MAX_DISTANCE)
+			var ldist: float = VanScript.path_length(lroute)
+			slot["route"] = lroute
+			slot["distance"] = ldist
+			slot["end_pos"] = lroute[lroute.size() - 1]
+			slot["timer"] = (ldist / LIGHT_SPEED) * LIGHT_TIMEOUT_MULT + LIGHT_TIMEOUT_EXTRA
+			slot["target"] = ldist
+			slot["progress"] = 0.0
+			slot["wave_acc"] = 0.0
+			extra["route"] = lroute
+			extra["light_radius"] = LIGHT_RADIUS
+			extra["dark_outer"] = LIGHT_DARK_OUTER
 	slot["extra"] = extra ## geri katılana yakalama için (bkz. _on_peer_needs_game_catchup)
 	_slots[slot_i] = slot
 	NetworkManager.broadcast_world_event_started.rpc(slot["id"], MISSION_KIND_NAMES[slot["kind"]], slot.get("pos", Vector2.ZERO), slot["radius"], slot["timer"], extra)
@@ -474,6 +619,50 @@ func _tick_mission(slot_i: int, delta: float) -> void:
 			if alive == 0:
 				done = true
 				success = true
+		MissionKind.CLOSE_NESTS:
+			var living: Array = _living_targets(slot)
+			_sync_progress(slot, float(int(slot["target"]) - living.size()), float(slot["target"]))
+			if living.is_empty():
+				done = true
+				success = true
+			else:
+				slot["wave_acc"] = float(slot.get("wave_acc", 0.0)) + delta
+				if slot["wave_acc"] >= NEST_WAVE_INTERVAL:
+					slot["wave_acc"] = 0.0
+					for n: Node2D in living:
+						if _players_in_radius(n.global_position, NEST_WAKE_RADIUS) > 0 and _spawn_wave(n.global_position, NEST_WAVE_RING, NEST_WAVE_COUNT) > 0:
+							n.call("on_spawned_wave")
+		MissionKind.BREAK_RITUAL:
+			var crystals: Array = _living_targets(slot)
+			_sync_progress(slot, float(int(slot["target"]) - crystals.size()), float(slot["target"]))
+			if crystals.is_empty():
+				done = true
+				success = true
+			elif _players_in_radius(slot["pos"], RITUAL_WAKE_RADIUS) > 0:
+				slot["wave_acc"] = float(slot.get("wave_acc", 0.0)) + delta
+				if slot["wave_acc"] >= RITUAL_WAVE_INTERVAL:
+					slot["wave_acc"] = 0.0
+					_spawn_wave(slot["pos"], RITUAL_WAVE_RING, RITUAL_WAVE_COUNT)
+		MissionKind.TREASURE_RUNNER:
+			var runners: Array = _living_targets(slot)
+			if runners.is_empty():
+				done = true
+				success = true
+			else:
+				var r: Node = runners[0]
+				_sync_progress(slot, 1.0 - float(r.get("health")) / maxf(float(r.get("max_health")), 1.0), 1.0)
+		MissionKind.WANDERING_LIGHT:
+			var lpos: Vector2 = VanScript.point_on_path(slot["route"], float(slot["progress"]))
+			if _players_in_radius(lpos, LIGHT_RADIUS) > 0:
+				slot["progress"] = minf(float(slot["distance"]), float(slot["progress"]) + LIGHT_SPEED * delta)
+				slot["wave_acc"] = float(slot.get("wave_acc", 0.0)) + delta
+				if slot["wave_acc"] >= LIGHT_WAVE_INTERVAL:
+					slot["wave_acc"] = 0.0
+					_spawn_wave(lpos, LIGHT_WAVE_RING, LIGHT_WAVE_COUNT)
+			_sync_progress(slot, float(slot["progress"]), float(slot["distance"]))
+			if float(slot["progress"]) >= float(slot["distance"]):
+				done = true
+				success = true
 	## DEFEND_TREE kendi başarı/başarısızlık kuralını yukarıda zaten uyguladı (süre = hedef,
 	## tersine çevrilmiş) - normal "süre dolunca başarısız" kuralı SADECE diğer türlerde geçerli.
 	if not done and slot["timer"] <= 0.0 and slot["kind"] != MissionKind.DEFEND_TREE:
@@ -514,6 +703,19 @@ func _end_mission(slot_i: int, success: bool) -> void:
 			MissionKind.KILL_YOUR_COPY:
 				reward = COPY_REWARD_GOLD
 				reward_radius = 999999.0 ## kopyalar dağınık yerlerde - takım hep birlikte ödüllenir
+			MissionKind.CLOSE_NESTS:
+				reward = NEST_REWARD_GOLD
+				reward_radius = NEST_RING_MAX + NEST_WAKE_RADIUS
+			MissionKind.BREAK_RITUAL:
+				reward = RITUAL_REWARD_GOLD
+				reward_radius = RITUAL_WAKE_RADIUS
+			MissionKind.TREASURE_RUNNER:
+				reward = RUNNER_REWARD_GOLD
+				reward_radius = 999999.0 ## hazine kaçarken takım dağılır - hep birlikte ödüllenir
+			MissionKind.WANDERING_LIGHT:
+				reward = LIGHT_REWARD_GOLD
+				reward_pos = slot.get("end_pos", reward_pos)
+				reward_radius = LIGHT_DARK_OUTER
 		_grant_reward_to_zone_players(reward_pos, reward_radius, reward)
 		_grant_shards_to_all_players()
 	## Temizlik (bkz. ilgili mission_*.gd notları).
@@ -528,6 +730,17 @@ func _end_mission(slot_i: int, success: bool) -> void:
 			for c in slot.get("copies", []):
 				if is_instance_valid(c):
 					c.queue_free()
+		MissionKind.BREAK_RITUAL:
+			if not success:
+				## Ritüel tamamlandı: heykelin dibinden elit + bekçi dalgası (yaratık tavanına uyar).
+				var spawner: Node = get_tree().current_scene.get_node_or_null("EnemySpawner")
+				if spawner and spawner.has_method("spawn_mission_elite"):
+					spawner.call("spawn_mission_elite", slot["pos"])
+				_spawn_wave(slot["pos"], RITUAL_WAVE_RING, RITUAL_FAIL_WAVE)
+	## Kalan görev hedefleri (yıkılmamış yuva, kırılmamış kristal, kaçan hazine): ölüm sayılmadan söner (host + istemci aynı görsel).
+	for t: Variant in slot.get("targets", []): ## tipsiz: yıkılan hedef serbest bırakılmış olabilir
+		if is_instance_valid(t) and (t as Node).get("is_dead") != true:
+			(t as Node).call("vanish")
 	NetworkManager.broadcast_world_event_completed.rpc(slot["id"], MISSION_KIND_NAMES[slot["kind"]], success)
 	_slots[slot_i] = {"state": "cooldown", "timer": _rng.randf_range(COOLDOWN_MIN, COOLDOWN_MAX)}
 
@@ -566,11 +779,14 @@ func _on_item_collected(mission_id: int, item_index: int) -> void:
 		return
 
 
+## Ruh hâlindeki (level/pazar/sandık menüsündeki, madde 438) oyuncu sayılmaz: "menüdeki oyuncu beklenmez" - donuk dururken bayrağı
+## doldurmaz, ışığı yürütmez, yuvayı uyandırmaz (madde 496 incelemesi).
 func _players_in_radius(pos: Vector2, radius: float) -> int:
 	var n := 0
 	for group_name in ["player", "remote_players"]:
 		for p: Node in get_tree().get_nodes_in_group(group_name):
-			if is_instance_valid(p) and p.get("is_dead") != true and not _is_hadime_ghost(p) 					and (p as Node2D).global_position.distance_to(pos) <= radius:
+			if is_instance_valid(p) and p.get("is_dead") != true and p.get("in_limbo") != true and not _is_hadime_ghost(p) \
+					and (p as Node2D).global_position.distance_to(pos) <= radius:
 				n += 1
 	return n
 
@@ -635,7 +851,20 @@ func _player_count() -> int:
 	return 1 + get_tree().get_nodes_in_group("remote_players").size()
 
 
+## Görev noktası: zindan biçimli haritada salon gerektiren türler önce geniş açık zemin arar (bkz. DUNGEON_ROOMY_*).
+func _pick_mission_position(kind: int) -> Vector2:
+	var c: float = float(SPAWN_CLEARANCE.get(kind, 48.0))
+	if MissionSpotsScript.active() and DUNGEON_ROOMY_KINDS.has(kind):
+		var p: Vector2 = _random_map_position(maxf(c, DUNGEON_ROOMY_CLEARANCE))
+		if p != Vector2.ZERO:
+			return p
+	return _random_map_position(c)
+
+
 func _random_map_position(clearance: float = 48.0) -> Vector2:
+	## Zindan biçimli harita (madde 496): doğuştan yürüyerek ulaşılabilir, çevresi açık zemin (mission_spots.gd).
+	if MissionSpotsScript.active():
+		return MissionSpotsScript.pick(_rng, clearance)
 	var rect: Rect2 = GameManager.get_map_world_rect()
 	if rect.size == Vector2.ZERO:
 		return Vector2.ZERO
@@ -646,6 +875,9 @@ func _random_map_position(clearance: float = 48.0) -> Vector2:
 			_rng.randf_range(rect.position.y + margin, rect.position.y + rect.size.y - margin))
 		## İlk 10 dakika haritanın köşelerinden uzak (bkz. GameManager.is_spawn_blocked_by_early_corner).
 		if GameManager.is_spawn_blocked_by_early_corner(pos):
+			continue
+		## Seyyar satıcının güvenli alanında (yaratık giremez, zaman donar) görev çıkmasın (madde 496 incelemesi).
+		if GameManager.merchant_zone_active and GameManager.is_position_in_merchant_zone(pos):
 			continue
 		if not _is_area_clear(pos, clearance):
 			continue
@@ -658,6 +890,8 @@ func _random_map_position(clearance: float = 48.0) -> Vector2:
 ## aralıklı bir ızgarayla, (2) fizik dünyasındaki gerçek StaticBody2D çarpışma şekilleri (ör. ev içi duvarlar,
 ## ileride haritaya eklenecek engeller) tek bir daire sorgusuyla. Yaratıklar/oyuncular/Area2D'ler SAYILMAZ.
 func _is_area_clear(pos: Vector2, clearance: float) -> bool:
+	if MissionSpotsScript.active():
+		return MissionSpotsScript.is_area_open(pos, clearance) ## zindan: nesne/su da engel, kapalı ceplere düşmez
 	if GameManager.is_position_blocked_by_terrain(pos):
 		return false
 	var steps: int = int(ceil(clearance / CLEARANCE_SAMPLE_STEP))
@@ -696,9 +930,15 @@ func _is_path_clear(a: Vector2, b: Vector2, clearance: float) -> bool:
 	for i in range(n + 1):
 		var p: Vector2 = a.lerp(b, float(i) / float(n))
 		for k in [-1.0, -0.5, 0.0, 0.5, 1.0]:
-			if GameManager.is_position_blocked_by_terrain(p + side * clearance * k):
+			if _point_blocked(p + side * clearance * k):
 				return false
 	return _is_area_clear(b, clearance)
+
+
+func _point_blocked(p: Vector2) -> bool:
+	if MissionSpotsScript.active():
+		return not MissionSpotsScript.is_reachable_world(p)
+	return GameManager.is_position_blocked_by_terrain(p)
 
 
 ## Topla: haritanın tamamına dağılmış 'count' adet engelsiz nokta (bkz. COLLECT_ITEM_RATIO üstündeki not). Birbirine
@@ -753,16 +993,23 @@ func _scatter_positions(center: Vector2, radius: float, count: int) -> PackedVec
 const ESCORT_ROUTE_ATTEMPTS := 20
 const ESCORT_ROUTE_WIDE_CLEARANCE := 12.0
 
-func _escort_route(start_pos: Vector2) -> PackedVector2Array:
+## min_dist / max_dist: Gezici Işık daha kısa rota ister (madde 496). Zindan biçimli haritada rota ulaşılabilir zeminin "geniş" (duvardan bir
+## hücre uzak) hücrelerinde BFS ile (mission_spots.gd route_from - A* ızgarası koridorlarda / ayak kaymasında güvenilmez).
+func _escort_route(start_pos: Vector2, min_dist: float = ESCORT_MIN_DISTANCE, max_dist: float = ESCORT_MAX_DISTANCE) -> PackedVector2Array:
+	if MissionSpotsScript.active():
+		for k: float in [1.0, 0.7, 0.45, 0.15]: ## en son kısa rota: aşağıdaki düz çizgi yedeği zindanda duvarın içine düşebilir
+			var droute: PackedVector2Array = MissionSpotsScript.route_from(_rng, start_pos, min_dist * k, max_dist)
+			if droute.size() >= 2:
+				return droute
 	var clearance: float = float(SPAWN_CLEARANCE[MissionKind.ESCORT_VAN])
-	for min_len: float in [ESCORT_MIN_DISTANCE, ESCORT_MIN_DISTANCE * 0.7, ESCORT_MIN_DISTANCE * 0.45]:
+	for min_len: float in [min_dist, min_dist * 0.7, min_dist * 0.45]:
 		var narrow_route := PackedVector2Array()
 		for _attempt in range(ESCORT_ROUTE_ATTEMPTS):
 			var end_pos: Vector2 = _random_map_position(clearance)
 			if end_pos == Vector2.ZERO:
 				continue
 			var straight: float = start_pos.distance_to(end_pos)
-			if straight < min_len * 0.85 or straight > ESCORT_MAX_DISTANCE:
+			if straight < min_len * 0.85 or straight > max_dist:
 				continue
 			var route := PackedVector2Array([start_pos])
 			if EnemyPathingScript.line_blocked(start_pos, end_pos):
@@ -773,7 +1020,7 @@ func _escort_route(start_pos: Vector2) -> PackedVector2Array:
 			else:
 				route.append(end_pos)
 			var length: float = VanScript.path_length(route)
-			if length < min_len or length > ESCORT_MAX_DISTANCE * 1.2:
+			if length < min_len or length > max_dist * 1.2:
 				continue
 			if length > start_pos.distance_to(route[route.size() - 1]) * ESCORT_MAX_DETOUR:
 				continue
@@ -882,3 +1129,102 @@ func _spawn_copies(mission_id: int) -> Dictionary:
 		meta.append({"char_id": char_id, "pos": pos, "weapons": weapon_keys, "max_hp": maxhp, "max_shield": maxsh})
 		idx += 1
 	return {"nodes": copies, "meta": meta}
+
+
+## ------------------------------------------------------------------ YENİ GÖREV YARDIMCILARI (madde 496)
+## Merkez çevresine `count` nokta: eşit açılı halka (rastgele dönük), her biri r_min..r_max uzakta, çevresi `clearance` açık, birbirinden en az
+## min_spacing. Sığmayan yerde açı/uzaklık gevşer; yine sığmayan nokta atlanır (çağıran en az sayıya bakar).
+func _place_ring(center: Vector2, count: int, r_min: float, r_max: float, clearance: float, min_spacing: float) -> PackedVector2Array:
+	## Zindan biçimli harita: düz çizgi halkası dar tünellerde sığmıyor (Lağım Ağı'nda tek yuvaya düşüyordu) -> merkezden YÜRÜME mesafesiyle
+	## (mission_spots.gd spots_around); saklanma hücresine (açık lahit / niş) konmaz.
+	if MissionSpotsScript.active():
+		var reject := func(p: Vector2) -> bool: return HideBrushScript.contains(get_tree(), p)
+		var ds: PackedVector2Array = MissionSpotsScript.spots_around(_rng, center, count, r_min, r_max, clearance, min_spacing, reject)
+		if ds.size() < count:
+			ds = MissionSpotsScript.spots_around(_rng, center, count, r_min * 0.5, r_max, clearance, min_spacing * 0.6, reject)
+		return ds
+	var out := PackedVector2Array()
+	var base_ang: float = _rng.randf() * TAU
+	for i in range(count):
+		for attempt in range(28):
+			var loose: bool = attempt >= 14
+			var ang: float = base_ang + TAU * float(i) / float(count) + _rng.randf_range(-0.45, 0.45) * (2.6 if loose else 1.0)
+			var dist: float = _rng.randf_range(r_min, r_max) * (_rng.randf_range(0.55, 1.0) if loose else 1.0)
+			var p: Vector2 = center + Vector2.RIGHT.rotated(ang) * dist
+			if not _is_area_clear(p, clearance):
+				continue
+			if GameManager.merchant_zone_active and GameManager.is_position_in_merchant_zone(p):
+				continue
+			if HideBrushScript.contains(get_tree(), p): ## saklanma çalılığının uzun otları yuvayı/kristali örtmesin
+				continue
+			if not _is_path_clear(center, p, 0.0): ## merkezden yürüyerek düz gidilebilsin: duvarın / nehrin öbür yanındaki odaya düşmesin
+				continue
+			var spaced := true
+			for q: Vector2 in out:
+				if q.distance_to(p) < min_spacing * (0.6 if loose else 1.0):
+					spaced = false
+					break
+			if spaced:
+				out.append(p)
+				break
+	return out
+
+
+## Host'ta gerçek görev hedeflerini kurar; istemcilerin kozmetik kopyaları için meta (konum + can/kalkan) slot'a yazılır.
+func _spawn_targets(slot: Dictionary, script: GDScript, spots: PackedVector2Array, hp: float, sh: float) -> void:
+	var nodes: Array = []
+	var meta: Array = []
+	for i in range(spots.size()):
+		var t: Node2D = script.new()
+		get_tree().current_scene.add_child(t)
+		t.global_position = spots[i]
+		t.call("setup", int(slot["id"]), i, hp, sh, true)
+		nodes.append(t)
+		meta.append({"pos": spots[i], "hp": hp, "sh": sh})
+	slot["targets"] = nodes
+	slot["targets_meta"] = meta
+
+
+func _living_targets(slot: Dictionary) -> Array:
+	var out: Array = []
+	for t: Variant in slot.get("targets", []):
+		if is_instance_valid(t) and (t as Node).get("is_dead") != true:
+			out.append(t)
+	return out
+
+
+## Geri katılana gidecek extra["targets"]: ölenler "dead", yaşayanların güncel konumu / can oranı.
+func _refresh_targets_extra(slot: Dictionary) -> void:
+	if not slot.has("targets"):
+		return
+	var meta: Array = (slot.get("targets_meta", []) as Array).duplicate(true)
+	var nodes: Array = slot["targets"]
+	for i in range(mini(meta.size(), nodes.size())):
+		var t: Variant = nodes[i]
+		var alive: bool = is_instance_valid(t) and (t as Node).get("is_dead") != true
+		meta[i]["dead"] = not alive
+		if alive:
+			meta[i]["pos"] = (t as Node2D).global_position
+			meta[i]["hp_ratio"] = float((t as Node).get("health")) / maxf(float((t as Node).get("max_health")), 1.0)
+	var extra: Dictionary = slot.get("extra", {})
+	extra["targets"] = meta
+	slot["extra"] = extra
+
+
+## Kaçan Hazine'nin koşu hızı ölçüsü: yaşayan oyuncuların taban yürüme hızı ortalaması (bkz. mission_player_copy hız notu).
+func _average_base_speed() -> float:
+	var sum: float = 0.0
+	var n: int = 0
+	for group_name in ["player", "remote_players"]:
+		for p: Node in get_tree().get_nodes_in_group(group_name):
+			if is_instance_valid(p) and p.get("is_dead") != true and p.has_method("get_base_move_speed"):
+				sum += float(p.call("get_base_move_speed"))
+				n += 1
+	return sum / float(n) if n > 0 else Characters.BASE_MOVE_SPEED
+
+
+func _spawn_wave(center: Vector2, ring: float, count: int) -> int:
+	var spawner: Node = get_tree().current_scene.get_node_or_null("EnemySpawner")
+	if spawner and spawner.has_method("spawn_mission_wave"):
+		return int(spawner.call("spawn_mission_wave", center, ring, count))
+	return 0

@@ -114,7 +114,7 @@ func test_fx_scenes() -> void:
 
 func test_sounds_exist_and_are_registered() -> void:
 	var sfx: Dictionary = (load(PLAYER_PATH) as GDScript).get_script_constant_map()["SKILL_SFX"]
-	for key in ["shaman_golem_form", "shaman_golem_slam", "shaman_golem_quake", "shaman_golem_leap"]:
+	for key in ["shaman_golem_form", "shaman_golem_oto", "shaman_golem_q", "shaman_golem_e"]: ## madde 533: kullanıcının sesleri
 		assert(sfx.has(key), "SKILL_SFX[%s]" % key)
 		assert(load("res://assets/audio/skills/%s.wav" % key) is AudioStream, "%s.wav" % key)
 

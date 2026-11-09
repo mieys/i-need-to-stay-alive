@@ -52,18 +52,27 @@ const G_DOWN := ["..#..", "..#..", "#.#.#", ".###.", "..#.."]
 ## EŞYALAR satırları: kademe şeridi + simge 48 + ad 32 + fiyat 32), sağda GENİŞ ÖNİZLEME (simge 144 | tür + ad 48 + fiyat 48 | yazılı
 ## KAYDET / YASAKLA; açıklama kuyusu; TARİF + ŞUNA DÖNÜŞÜR yan yana; ELİNDE + SATIN AL - alınamıyorsa düğme nedeni yazar). Karıştır +
 ## yasak hakkı pencerenin altında solda, DEVAM sağda (oyuncu panelinin iki yanı). Pencere envanterin çift ahşap çerçevesi (madde 462).
-const MARKET_W := 1420.0
-const PANEL_H := 792.0
-const MARKET_RECT := Rect2((1920.0 - MARKET_W) * 0.5, 60.0, MARKET_W, PANEL_H)
-const GO_H := 56.0
+## Madde 518 (kullanıcı 2026-11-09: "pazarı azıcık küçült"): 1420x792 -> 1300x720, liste 520 -> 480, satır 64 -> 58; pencerenin ALT
+## kenarı yerinde (852) - karıştır / DEVAM satırı oyuncu panelinin yanında kalır, pencere yukarıdan kısalır.
+const MARKET_W := 1300.0
+const PANEL_H := 720.0
+const MARKET_BOTTOM := 852.0
+const MARKET_RECT := Rect2((1920.0 - MARKET_W) * 0.5, MARKET_BOTTOM - PANEL_H, MARKET_W, PANEL_H)
+## 56 -> 57 (madde 532): DEVAM ET yol tabelası 19 sanat satırı (sivri uç tek pikselde ortalanır); karıştır da aynı boyda kalsın.
+const GO_H := 57.0
 const BOTTOM_Y := MARKET_RECT.end.y + 14.0
-const GO_RECT := Rect2(MARKET_RECT.end.x - 400.0, BOTTOM_Y, 400.0, GO_H)
-const LIST_W := 520.0
+## DEVAM + KARIŞTIR 400 / 340 -> 300 (madde 518): pencere daralınca oyuncu paneline biniyorlardı. Panel en geniş hâlinde (F yuvası açık,
+## 1920 ekranda yaklaşık x 629-1291, üstü y 910) iki düğmenin de ~19 px dışında kalır.
+const GO_W := 300.0
+const GO_RECT := Rect2(MARKET_RECT.end.x - GO_W, BOTTOM_Y, GO_W, GO_H)
+const LIST_W := 480.0
 const BODY_GAP := 18.0
 const SEC_PAD := 12
-## Liste satırı: [kademe şeridi 6 | simge 48 | ad 32 | (kilit) | fiyat 32]; satır içi pay 8.
-const ROW_H := 64.0
-const ROW_GAP := 6
+## Liste satırı: [kademe şeridi 6 | simge 48 | ad 32 | (kilit) | fiyat 32]; satır iç payı yanlarda 8, üst/altta ROW_PAD_Y (58 = 48 + 2x5).
+## (Madde 497: ikonu kademe kenarlı 60 px yuvaya almak denendi, kullanıcı "çerçevesiz daha iyiymiş" dedi, geri alındı.)
+const ROW_H := 58.0
+const ROW_PAD_Y := 5.0
+const ROW_GAP := 5
 const ROW_PRICE_W := 130.0
 ## Silah çizimi bu kareye sığan en büyük tam katla çizilir (kullanıcı 2026-11-06: "silahlar çok büyük görünüyor"); kademe kontürü /
 ## parıltı pazarda çizilmez.
@@ -81,14 +90,20 @@ const BUY_H := 64.0
 ## Eşya önizlemesi (madde 433 ek 5): TARİF (yalnız doğrudan alt eşyalar) + ŞUNA DÖNÜŞÜR; ikisi de varsa yan yana (tarif RECIPE_SIDE_W).
 ## Ağaç alana sığan en büyük yuva boyuyla çizilir (104 = 48 px sanatın 2 katı; yükseklik yuva + fiyat yazısı + 14 ister).
 const RecipeTree := preload("res://scripts/recipe_tree.gd")
-const RECIPE_AREA := Vector2(760.0, 144.0)
+const RECIPE_AREA := Vector2(720.0, 144.0) ## en çok DETAIL_TEXT_W (728)
 const RECIPE_SIDE_W := 470.0
 const RECIPE_SIZES := [104.0, 64.0, 56.0]
 const RECIPE_FS := 24
 const RECIPE_LEVELS := 1
-const UPS_ICON := 56.0
+## ŞUNA DÖNÜŞÜR simgeleri (madde 494, kullanıcı: "çok ufak"): 104 = 48 px sanatın 2 katı (TARİF yuvalarıyla aynı), sığmazsa 56 (1 kat).
+## Ara boylar sanatı büyütmez, yalnız boş kenar ekler (icon_tr tam kat çizer). Yükseklik bütçesi: tarifli eşyada TARİF ağacının boyu
+## (sıra büyümesin), tarifsizde UPS_AREA_H (104'lük iki sıra).
+const UPS_SIZES := [104.0, 56.0]
+const UPS_GAP := 6.0
+const UPS_AREA_H := 220.0
 ## Kayıtlı seçeneğin renkleri hud_theme.gd SAVED_* (madde 433 "B - Yosun Kuyu" + kilit simgesi).
 const HudTheme := preload("res://scripts/hud_theme.gd")
+const Signpost := preload("res://scripts/pixel_signpost.gd")
 
 var mode: String = ""
 var _k = null
@@ -103,6 +118,10 @@ var _hover: Array = []
 var _ban_armed: String = ""
 var _ban_armed_at: int = 0
 var _chosen: int = -1
+## Eşya penceresi (madde 494): açık pencere, onu açan simge, eşya anahtarı; açıklama yüksekliği ölçen gizli etiket
+var _pop: Control = null
+var _pop_owner: Control = null
+var _pop_key: String = ""
 
 var _cards: Array = []
 var _cards_box: VBoxContainer = null
@@ -161,7 +180,7 @@ func setup_market(player: Node, _level: int, given: Dictionary = {}) -> void:
 	_base(player)
 	## Başlık satırı ve pencereye yapışık bakiye sekmesi yok: bakiye önizlemenin altında ("ELİNDE", madde 472).
 	_build_market()
-	go_button = _k.btn("DEVAM ET", "primary", 40, GO_RECT.size.y, GO_RECT.size.x)
+	go_button = _go_signpost()
 	go_button.name = "MarketContinue"
 	go_button.pressed.connect(func() -> void: continue_pressed.emit())
 	_place(self, go_button, GO_RECT.position, GO_RECT.size)
@@ -173,6 +192,43 @@ func setup_market(player: Node, _level: int, given: Dictionary = {}) -> void:
 	_rebuild_slots()
 	UISound.connect_all_buttons(self)
 	_fit_safe_area()
+
+
+## SATIN AL ile DEVAM ET aynı altın düğmeydi, oyuncular karıştırıyordu (madde 532, kullanıcı seçimi prototip madde 530 "B - Ok Tabela"):
+## DEVAM ET = sağı sivri AHŞAP YOL TABELASI (pixel_signpost.gd; kenar rengi zemin, krem yazı), SATIN AL altın kalır + heybe / çekiç glifi.
+## Tabela yazısı Label'da: kitin Label gölgesi (Button yazısı gölgesiz), ucun genişliği kadar soldan ortalanır (kutunun içerik payı).
+func _go_signpost() -> Button:
+	var w: int = int(GO_W) / Signpost.PX
+	var h: int = int(GO_H) / Signpost.PX
+	var b := Button.new()
+	b.custom_minimum_size = GO_RECT.size
+	b.add_theme_stylebox_override("normal", Signpost.box(w, h, HudTheme.RIM, HudTheme.OUTLINE))
+	b.add_theme_stylebox_override("hover", Signpost.box(w, h, HudTheme.RIM_HI, HudTheme.OUTLINE))
+	for st: String in ["pressed", "hover_pressed"]:
+		b.add_theme_stylebox_override(st, Signpost.box(w, h, HudTheme.RIM_LO, HudTheme.OUTLINE))
+	b.add_theme_stylebox_override("disabled", Signpost.box(w, h, HudTheme.STRIPE, HudTheme.OUTLINE))
+	b.add_theme_stylebox_override("focus", Signpost.box(w, h, HudTheme.RIM, HudTheme.ACCENT, true))
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cc.offset_right = -float(Signpost.tip_px(h))
+	cc.offset_bottom = -float(Signpost.PX)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var l: Label = _k.lbl("DEVAM ET", 40, HudTheme.TEXT)
+	l.name = "Text"
+	cc.add_child(l)
+	b.add_child(cc)
+	return b
+
+
+## Alınabilir seçenekte SATIN AL / GELİŞTİR: altın düğme + heybe (eşya) / çekiç (geliştirme) glifi. Alınamıyorsa düğme nedeni yazar (eski).
+func _buy_button(upgrade: bool) -> Button:
+	var r: HBoxContainer = _k.h(16)
+	r.add_child(_k.glyph(DarkKit.G_HAMMER if upgrade else DarkKit.G_BAG, _k.c("accent_text"), 3))
+	var l: Label = _k.lbl("GELİŞTİR" if upgrade else "SATIN AL", 32, _k.c("accent_text"))
+	l.name = "Verb"
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0)) ## altın zeminde gölge yazıyı kalın gösterir
+	r.add_child(l)
+	return _k.row_btn(r, "primary", BUY_H, BUY_W)
 
 
 ## Grup paneli (HUD, katman 96, çok oyunculuda sağ şerit) bu ekranlar açıkken görünmez: düzen o şeridin soluna ortalanınca sola
@@ -442,7 +498,26 @@ func _refresh_free_badge() -> void:
 ## nadirlik rengiydi); kademe rengi simge kuyusunun kenarında ve satırın şeridinde.
 const FRAME_RIM_PAD := 8.0
 const FRAME_WIN_PAD := PANEL_PAD - FRAME_RIM_PAD
-const DESC_FS := 32 ## önizlemedeki açıklama / durum satırları (eskiden 24, "çok ufak")
+## Önizlemedeki durum satırları + AÇIKLAMA (eskiden 24, "çok ufak"). Açıklama başlığın altında, üstten hizalı (madde 494; ortalanmış
+## deneme beğenilmedi). Madde 494'te sığdıkça 48'e çıkıyordu; madde 518'de (kullanıcı 2026-11-09: "item açıklamasındaki yazılar çok
+## büyük") hep 32 - m5x7'de 16/32/48 dışı boy yok (stil rehberi), 48 -> 32 tek basamak.
+const DESC_FS := 32
+const DESC_PAD := 18.0 ## açıklama kuyusunun iç payı
+const DESC_GAP := 4 ## açıklama satırları arası
+
+## ŞUNA DÖNÜŞÜR simgesine tıklayınca açılan eşya penceresi (madde 494): envanterin çift ahşap çerçevesi + yetenek ipucu gibi simgeye
+## basamaklı uçla bağlı; üstte yer yoksa altta açılır. Dışına tık / Esc / aynı simgeye tekrar tık kapatır.
+const POP_W := 640.0
+const POP_ICON := 96.0
+const POP_WIN_PAD := 14.0 ## iç panelin iç payı
+const POP_RECIPE_H := 130.0 ## tarif sırasına ayrılan yükseklik (yuva 64 + fiyat + pay = 102)
+const POP_FS := 32
+const POP_NAME_FS := 48
+const POP_GAP := 6.0 ## pencere kenarı ile simge arası: simgenin üstündeki "ŞUNA DÖNÜŞÜR" başlığı tam örtülür (yarım kesilmesin), uç simgeye değer
+const POP_SCREEN_PAD := 8.0
+const POP_RECIPE_SIZES := [64.0, 56.0]
+const NOTCH_PX := 3.0
+const NOTCH_ROWS := 4
 
 
 func _build_market() -> void:
@@ -486,7 +561,7 @@ func _build_market() -> void:
 	## pencerenin altında solda: tek karıştırma + yasak hakkı (DEVAM sağda, setup_market)
 	var bottom: HBoxContainer = _k.h(20)
 	bottom.name = "MarketBottom"
-	_shop_reroll = _k.row_btn(_die_row(0), "ghost", GO_H, 340)
+	_shop_reroll = _k.row_btn(_die_row(0), "ghost", GO_H, GO_W)
 	_shop_reroll.name = "MarketReroll"
 	_shop_reroll.tooltip_text = "Kaydettiklerin yerinde kalır, gerisi yenilenir"
 	_shop_reroll.pressed.connect(reroll)
@@ -600,10 +675,14 @@ func _check_hover_left(section: String, i: int) -> void:
 ## Üstüne gelmek yalnız satırı vurgular; önizleme SEÇİLİ olanı gösterir (madde 433 ek 3: fareyi SATIN AL'a götürürken aradaki satırlar
 ## önizlemeyi değiştirmesin).
 func _set_hover(section: String, i: int, on: bool) -> void:
+	var prev: Array = _hover
 	if on:
 		_hover = [section, i]
 	elif _hover == [section, i]:
 		_hover = []
+	## Hover bir satırdan ötekine geçince eski satır yeniden çizilmezse vurgulu kalır (mouse_exited kontrolü _hover değiştiği için erken döner).
+	if prev.size() == 2 and prev != _hover and prev != [section, i]:
+		_fill(str(prev[0]), int(prev[1]))
 	_fill(section, i)
 
 
@@ -765,6 +844,9 @@ func _fill(section: String, i: int) -> void:
 	if _ban_armed == _key(section, i):
 		rim = _k.c("bad")
 	var face: PanelContainer = _k.box(fill, rim, 8, 3, 6)
+	var fsb: StyleBox = face.get_theme_stylebox("panel") ## _k.sb her çağrıda yeni kutu: payı değiştirmek başka satırı etkilemez
+	fsb.content_margin_top = ROW_PAD_Y
+	fsb.content_margin_bottom = ROW_PAD_Y
 	face.name = "Face"
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	face.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -885,6 +967,7 @@ func _price_row(e: Dictionary, fs: int, center: bool) -> HBoxContainer:
 func _refresh_detail() -> void:
 	if _detail == null:
 		return
+	_close_item_popup() ## önizleme yeniden kurulurken simgeler gider; açık pencere de kapanır
 	for c in _detail.get_children():
 		_detail.remove_child(c)
 		c.queue_free()
@@ -930,20 +1013,25 @@ func _refresh_detail() -> void:
 	tools.add_child(_ban_button(section, i, sold))
 	head.add_child(tools)
 	_detail.add_child(head)
-	## açıklama kuyusu
-	var dw: PanelContainer = _k.box(HudTheme.WIN_INSET, Color(0, 0, 0, 0), 18, 0, 12)
-	dw.name = "DescWell"
-	var dv: VBoxContainer = _k.v(4)
-	for ln in d["lines"]:
-		dv.add_child(_k.wrap(_txt(str(ln)), DESC_FS, _k.c("text"), DETAIL_TEXT_W - 36.0))
-	dw.add_child(dv)
-	_detail.add_child(dw)
+	## açıklama kuyusu: başlığın hemen altında, yazıya göre sıkı, satırlar ÜSTTEN hizalı (madde 494; kullanıcı 2026-11-08: ortalanmış hâli
+	## beğenilmedi, "üstten hizalı daha iyi"); boşluk kuyunun altında kalır. Yazı hep DESC_FS (32; madde 518).
+	var lines: Array = d["lines"]
+	if not lines.is_empty():
+		var dw: PanelContainer = _k.box(HudTheme.WIN_INSET, Color(0, 0, 0, 0), DESC_PAD, 0, 12)
+		dw.name = "DescWell"
+		var dv: VBoxContainer = _k.v(DESC_GAP)
+		dv.name = "DescLines"
+		for ln in lines:
+			var dl: Label = _k.wrap(_txt(str(ln)), DESC_FS, _k.c("text"), DETAIL_TEXT_W - 2.0 * DESC_PAD)
+			dv.add_child(dl)
+		dw.add_child(dv)
+		_detail.add_child(dw)
 	if _ban_armed == _key(section, i):
 		_detail.add_child(_status_line(DarkKit.G_X, _k.c("bad"),
 			tr("Yasaklamak için tekrar bas: bu oyun boyunca bir daha çıkmaz (kalan hak %d)") % Market.bans_left()))
 	if str(e["type"]) == "item":
 		_add_recipe(str(e["key"]))
-	_detail.add_child(_k.sp(0, 0, false, true))
+	_detail.add_child(_k.sp(0, 0, false, true)) ## kalan boşluk altta: ELİNDE / SATIN AL satırını aşağıda tutar
 	## alt: ELİNDE (bakiye) + SATIN AL / GELİŞTİR (alınamıyorsa düğme nedeni yazar ve kapalı; madde 433 ek 3: alma YALNIZ bu düğmeyle)
 	var foot: HBoxContainer = _k.h(18)
 	foot.name = "DetailFoot"
@@ -964,8 +1052,7 @@ func _refresh_detail() -> void:
 		foot.add_child(br)
 	else:
 		var reason: String = Market.block_reason(_player, e)
-		var verb: String = "GELİŞTİR" if _is_upgrade(e) else "SATIN AL"
-		var bb: Button = _k.btn(verb if reason == "" else reason, "primary", 32, BUY_H, BUY_W)
+		var bb: Button = _k.btn(reason, "primary", 32, BUY_H, BUY_W) if reason != "" else _buy_button(_is_upgrade(e))
 		bb.name = "BuyButton"
 		bb.disabled = reason != ""
 		bb.pressed.connect(_on_buy_pressed)
@@ -1047,6 +1134,8 @@ func _add_recipe(key: String) -> void:
 		return
 	var row: HBoxContainer = _k.h(24)
 	row.name = "RecipeRow"
+	var recipe_w: float = 0.0 ## TARİF sütununun genişliği / ağaç boyu: ŞUNA DÖNÜŞÜR kalan yere ve aynı yüksekliğe sığar
+	var recipe_h: float = UPS_AREA_H
 	if has_recipe:
 		var rv: VBoxContainer = _k.v(6)
 		rv.add_child(_k.lbl("TARİF", 32, HudTheme.ACCENT_SOFT))
@@ -1058,6 +1147,8 @@ func _add_recipe(key: String) -> void:
 		tv.name = "RecipeTree"
 		rv.add_child(tv)
 		row.add_child(rv)
+		recipe_w = maxf(tv.custom_minimum_size.x, _k.tw("TARİF", 32))
+		recipe_h = tv.custom_minimum_size.y
 	if not ups.is_empty():
 		var uv: VBoxContainer = _k.v(6)
 		uv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1066,16 +1157,235 @@ func _add_recipe(key: String) -> void:
 		flow.name = "BuildsInto"
 		flow.add_theme_constant_override("h_separation", 6)
 		flow.add_theme_constant_override("v_separation", 6)
-		flow.custom_minimum_size.x = DETAIL_TEXT_W - RECIPE_SIDE_W - 24.0 if has_recipe else DETAIL_TEXT_W
+		var ups_w: float = DETAIL_TEXT_W - recipe_w - 24.0 if has_recipe else DETAIL_TEXT_W
+		flow.custom_minimum_size.x = ups_w
 		flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var chip_s: float = _ups_size(ups.size(), ups_w, recipe_h)
 		for u: String in ups:
-			var t: Control = _k.tile(Items.icon(u), UPS_ICON, DarkKit.TIER_COL[clampi(Items.kademe(u), 1, 3) - 1])
-			t.mouse_filter = Control.MOUSE_FILTER_PASS
-			t.tooltip_text = tr("%s (%d altın)") % [tr(Items.item_name(u)), Items.cost(u)]
-			flow.add_child(t)
+			flow.add_child(_item_chip(u, chip_s))
 		uv.add_child(flow)
 		row.add_child(uv)
 	_detail.add_child(row)
+
+
+## ---------------------------------------------------------------- eşya penceresi (madde 494)
+## ŞUNA DÖNÜŞÜR simgesi: tıklanınca eşyanın ne olduğunu ayrı pencerede gösterir (yetenek ipucu gibi, ama pazarın ahşap çerçevesinde).
+## Görünmez düz Button (el imleci + tık sesi + klavye/kumanda) + üstünde yuva; üstüne gelince / pencere açıkken seçim halkası yanar.
+func _item_chip(key: String, s: float) -> Button:
+	var b := Button.new()
+	b.name = "Chip_%s" % key
+	b.flat = true
+	b.custom_minimum_size = Vector2(s, s)
+	for st: String in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	UiAnim.skip(b)
+	b.add_child(_k.tile(Items.icon(key), s, DarkKit.TIER_COL[clampi(Items.kademe(key), 1, 3) - 1]))
+	b.tooltip_text = tr("%s (%d altın)") % [tr(Items.item_name(key)), Items.cost(key)]
+	b.mouse_entered.connect(_chip_ring.bind(b))
+	b.mouse_exited.connect(_chip_ring.bind(b))
+	b.focus_entered.connect(_chip_ring.bind(b))
+	b.focus_exited.connect(_chip_ring.bind(b))
+	b.pressed.connect(_toggle_item_popup.bind(key, b))
+	return b
+
+
+## Seçim halkası: fare üstünde / odakta / penceresi açıkken yanık.
+func _chip_ring(b: Button) -> void:
+	if not is_instance_valid(b) or b.get_child_count() == 0:
+		return
+	var ring: Node = b.get_child(0).get_node_or_null("SelRing")
+	if ring:
+		(ring as CanvasItem).visible = b.is_hovered() or b.has_focus() or _pop_owner == b
+
+
+func _toggle_item_popup(key: String, chip: Button) -> void:
+	if _pop != null and _pop_owner == chip:
+		_close_item_popup()
+	else:
+		_open_item_popup(key, chip)
+
+
+## Pencere: dış çerçeve pazarla aynı ahşap (RIM + OUTLINE), iç panel RIM_LO; [simge | tür + ad 48 + fiyat] + açıklama kuyusu + TARİF.
+## Boyu içerikten çıkar; yerleşince (resized) simgenin üstüne (yer yoksa altına) basamaklı uçla oturtulur.
+func _open_item_popup(key: String, chip: Button) -> void:
+	_close_item_popup()
+	var e: Dictionary = {"type": "item", "key": key}
+	var d: Dictionary = Market.describe(e, _player)
+	var inner_w: float = POP_W - 2.0 * FRAME_RIM_PAD - 2.0 * POP_WIN_PAD
+	var rb: PanelContainer = _k.box(HudTheme.RIM, HudTheme.OUTLINE, FRAME_RIM_PAD, 4, 6)
+	rb.name = "ItemPopup"
+	rb.mouse_filter = Control.MOUSE_FILTER_STOP ## içine tık altındaki pencereye geçmesin
+	rb.custom_minimum_size.x = POP_W
+	var win: PanelContainer = _k.box(_k.c("panel"), HudTheme.RIM_LO, POP_WIN_PAD, 3, 4)
+	rb.add_child(win)
+	var col: VBoxContainer = _k.v(12)
+	win.add_child(col)
+	## baş: kademe kenarlı simge kuyusu | tür + ad + fiyat
+	var head: HBoxContainer = _k.h(16)
+	var well: PanelContainer = _k.box(_k.c("inset"), Color(Color(d["tag_col"]), 0.75), 10, 3, 6)
+	well.name = "PopupWell"
+	well.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	well.add_child(_k.center(_icon(d, POP_ICON)))
+	head.add_child(well)
+	var tv: VBoxContainer = _k.v(4)
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tv.add_child(_kind_row(e, d))
+	var nm: Label = _k.wrap(_title(e, d, true), POP_NAME_FS, _k.c("text"), inner_w - (POP_ICON + 20.0) - 16.0)
+	nm.name = "PopupName"
+	tv.add_child(nm)
+	tv.add_child(_price_row(e, POP_FS, false))
+	head.add_child(tv)
+	col.add_child(head)
+	## açıklama: stat satırları + pasif
+	var lines: Array = d["lines"]
+	if not lines.is_empty():
+		var dw: PanelContainer = _k.box(HudTheme.WIN_INSET, Color(0, 0, 0, 0), 14, 0, 10)
+		dw.name = "PopupDesc"
+		var dv: VBoxContainer = _k.v(DESC_GAP)
+		for ln in lines:
+			dv.add_child(_k.wrap(_txt(str(ln)), POP_FS, _k.c("text"), inner_w - 28.0))
+		dw.add_child(dv)
+		col.add_child(dw)
+	## tarif: neden yapıldığı (doğrudan alt eşyalar, pazardaki TARİF ile aynı ağaç)
+	if not (Items.recipe(key) as Array).is_empty():
+		col.add_child(_k.lbl("TARİF", POP_FS, HudTheme.ACCENT_SOFT))
+		var rt: Control = RecipeTree.fit_row(_k, RecipeTree.data(key, RecipeTree.owned_pool(), false, true, RECIPE_LEVELS),
+				Vector2(inner_w, POP_RECIPE_H), POP_RECIPE_SIZES, RECIPE_FS)
+		rt.name = "PopupRecipe"
+		col.add_child(rt)
+	rb.draw.connect(_draw_popup_notch.bind(rb))
+	## Çerçeve ağaca girerken etiketler henüz genişliğini bilmez, asgari boy şişkin çıkar ve boy ona yapışır -> asgari boy değişince
+	## boy asgariye çekilir; sonra yerleşim.
+	rb.minimum_size_changed.connect(rb.reset_size)
+	rb.resized.connect(_place_item_popup)
+	_pop = rb
+	_pop_owner = chip
+	_pop_key = key
+	chip.set_meta("tip", chip.tooltip_text)
+	chip.tooltip_text = "" ## pencere açıkken ad/fiyat ipucu üstüne binmesin
+	add_child(rb) ## en son çocuk = en üstte
+	_chip_ring(chip)
+	UiAnim.reveal(rb, 0.2, 0.12)
+
+
+func _close_item_popup() -> void:
+	var owner_chip: Button = _pop_owner as Button if is_instance_valid(_pop_owner) else null
+	var pop: Control = _pop if is_instance_valid(_pop) else null
+	_pop = null
+	_pop_owner = null
+	_pop_key = ""
+	if pop != null:
+		if pop.get_parent() == self:
+			remove_child(pop)
+		pop.queue_free()
+	if owner_chip != null:
+		owner_chip.tooltip_text = str(owner_chip.get_meta("tip", owner_chip.tooltip_text))
+		_chip_ring(owner_chip)
+
+
+## Pencereyi simgenin ÜSTÜNE ortalar; yer yoksa ALTINA, o da yoksa SOLUNA, sonra SAĞINA (simgeler artık 104 px ve satır önizlemenin
+## ortalarında - 525 px'lik pencere ne üstte ne altta sığabiliyordu); ekrana sığdırır, uç simgeye bakar. Konumlar görünümün 1920x1080 yerelinde.
+## meta "notch" = [uç kenarı boyunca simge ortası, pencerenin simgeye göre yeri ("above" | "below" | "left" | "right")].
+func _place_item_popup() -> void:
+	if not is_instance_valid(_pop) or not is_instance_valid(_pop_owner) or _pop.size.x < 1.0:
+		return
+	var sz: Vector2 = _pop.size
+	var chip_r: Rect2 = get_global_transform().affine_inverse() * _grect(_pop_owner)
+	var cx: float = chip_r.position.x + chip_r.size.x * 0.5
+	var cy: float = chip_r.position.y + chip_r.size.y * 0.5
+	var lo: float = POP_SCREEN_PAD
+	var pos := Vector2.ZERO
+	var side: String = "above"
+	if chip_r.position.y - POP_GAP - sz.y >= lo:
+		pos = Vector2(cx - sz.x * 0.5, chip_r.position.y - POP_GAP - sz.y)
+	elif chip_r.end.y + POP_GAP + sz.y <= 1080.0 - lo:
+		side = "below"
+		pos = Vector2(cx - sz.x * 0.5, chip_r.end.y + POP_GAP)
+	elif chip_r.position.x - POP_GAP - sz.x >= lo:
+		side = "left"
+		pos = Vector2(chip_r.position.x - POP_GAP - sz.x, cy - sz.y * 0.5)
+	elif chip_r.end.x + POP_GAP + sz.x <= 1920.0 - lo:
+		side = "right"
+		pos = Vector2(chip_r.end.x + POP_GAP, cy - sz.y * 0.5)
+	else:
+		pos = Vector2(cx - sz.x * 0.5, lo) ## hiçbiri sığmıyor (olmamalı): tepeye yaslan
+	pos.x = clampf(pos.x, lo, maxf(lo, 1920.0 - sz.x - lo))
+	pos.y = clampf(pos.y, lo, maxf(lo, 1080.0 - sz.y - lo))
+	pos = pos.round()
+	_pop.position = pos
+	var vertical: bool = side == "above" or side == "below"
+	_pop.set_meta("notch", [roundf((cx - pos.x) if vertical else (cy - pos.y)), side])
+	_pop.queue_redraw()
+
+
+## Basamaklı uç (yetenek ipucuyla aynı 3 px piksel dili): dolgu çerçevenin ahşabı (RIM), 1 piksellik OUTLINE kenar. d = çerçeve kenarından
+## dışa uzaklık; satır 0 çerçevenin 4 px'lik dış hattını açar (ağız), sonraki satırlar daralıp tek pikselde biter. Uç, pencerenin simgeye
+## bakan kenarında: üstteki pencerenin alt kenarında aşağı, soldaki pencerenin sağ kenarında sağa...
+func _draw_popup_notch(pop: Control) -> void:
+	if not pop.has_meta("notch"):
+		return
+	var nm: Array = pop.get_meta("notch")
+	var side: String = str(nm[1])
+	var vertical: bool = side == "above" or side == "below"
+	var edge_len: float = pop.size.x if vertical else pop.size.y
+	var c: float = clampf(float(nm[0]), NOTCH_PX * 8.0, edge_len - NOTCH_PX * 8.0)
+	var outward: float = 1.0 if (side == "above" or side == "left") else -1.0 ## d artarken eksende yön (alt / sağ kenar +, üst / sol -)
+	var base: float = pop.size.y if side == "above" else (pop.size.x if side == "left" else 0.0)
+	var a0: float = roundf(c - NOTCH_PX * 0.5)
+	## satır: [d başı, d sonu, dolgu yarı genişliği (hücre), dış hat hücresi (-1 yok)]
+	var rows: Array = [[-4.0, 0.0, 3, -1], [0.0, 3.0, 2, 3], [3.0, 6.0, 1, 2], [6.0, 9.0, 0, 1], [9.0, 12.0, -1, 0]]
+	for r: Array in rows:
+		var d0: float = float(r[0])
+		var d1: float = float(r[1])
+		var o0: float = base + d0 if outward > 0.0 else base - d1 ## kenara dik eksendeki başlangıç
+		var ext: float = d1 - d0
+		var half: int = int(r[2])
+		if half >= 0:
+			_notch_rect(pop, vertical, a0 - half * NOTCH_PX, (2 * half + 1) * NOTCH_PX, o0, ext, HudTheme.RIM)
+		var o: int = int(r[3])
+		if o >= 0:
+			_notch_rect(pop, vertical, a0 - o * NOTCH_PX, NOTCH_PX, o0, ext, HudTheme.OUTLINE)
+			if o > 0:
+				_notch_rect(pop, vertical, a0 + o * NOTCH_PX, NOTCH_PX, o0, ext, HudTheme.OUTLINE)
+
+
+## a = kenar boyunca başlangıç/uzunluk, o = kenara dik başlangıç/kalınlık; dikey uçta (üst/alt kenar) x = a, yatay uçta x = o.
+func _notch_rect(pop: Control, vertical: bool, a: float, a_len: float, o: float, o_len: float, col: Color) -> void:
+	pop.draw_rect(Rect2(a, o, a_len, o_len) if vertical else Rect2(o, a, o_len, a_len), col)
+
+
+## Pencerenin dışına tık / Esc kapatır. Penceredeki tık ve açan simgenin kendi tıkı (aç/kapa) burada kapatmaz.
+func _input(event: InputEvent) -> void:
+	if _pop == null:
+		return
+	var mb := event as InputEventMouseButton
+	if mb != null:
+		if not mb.pressed:
+			return
+		if _grect(_pop).has_point(mb.position) or (is_instance_valid(_pop_owner) and _grect(_pop_owner).has_point(mb.position)):
+			return
+		_close_item_popup()
+		return
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+		_close_item_popup()
+		get_viewport().set_input_as_handled()
+		GameManager.mark_ui_cancel_consumed()
+
+
+## Denetimin ekran koordinatındaki dikdörtgeni (görünüm ölçeklense bile boyut dahil).
+static func _grect(c: Control) -> Rect2:
+	return c.get_global_transform() * Rect2(Vector2.ZERO, c.size)
+
+
+## ŞUNA DÖNÜŞÜR yuva boyu: n simge w genişliğe sarılırken toplam yüksekliği h'yi aşmayan EN BÜYÜK boy; hiçbiri sığmazsa en küçük.
+func _ups_size(n: int, w: float, h: float) -> float:
+	for s: float in UPS_SIZES:
+		var per_row: int = maxi(1, int(floorf((w + UPS_GAP) / (s + UPS_GAP))))
+		var rows: int = ceili(float(n) / float(per_row))
+		if rows * s + (rows - 1) * UPS_GAP <= h:
+			return s
+	return float(UPS_SIZES[UPS_SIZES.size() - 1])
 
 
 func _status_line(pat: Array, col: Color, t: String) -> HBoxContainer:

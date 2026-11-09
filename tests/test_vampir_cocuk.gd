@@ -558,11 +558,27 @@ func test_vfx_nodes_spawn_and_free_themselves() -> void:
 	var pts := PackedVector2Array([Vector2(300, 100), Vector2(300, 200)])
 	var fx_list: Array = [
 		VampirMath.spawn_fx(host, "hit", Vector2(50, 50)),
-		VampirMath.spawn_fx(host, "puff", Vector2(60, 60)),
+		VampirMath.spawn_fx(host, "bat_in", Vector2(60, 60), {"follow": sink}),
+		VampirMath.spawn_fx(host, "bat_out", Vector2(60, 60)),
 		VampirMath.spawn_fx(host, "drain", Vector2(70, 70), {"points": pts, "sink": sink}),
 	]
 	for fx in fx_list:
 		assert(fx != null and fx.global_position.is_equal_approx(fx.global_position), "fx doğdu")
+	## Yarasa Formu geçişi (madde 516): iki katman - front bu düğümün z'sinde (20), ground MUTLAK z 0 (oyuncuların (z 1) altı).
+	var bat_in: Node2D = fx_list[1]
+	var layers: Array = bat_in.get("_sheet")
+	assert(layers.size() == 2, "bat_in iki katmanlı (front + ground)")
+	var ground: Sprite2D = layers[1]
+	assert(not ground.z_as_relative and ground.z_index == 0, "girdabın arka yarısı oyuncunun altında")
+	assert((layers[0] as Sprite2D).z_as_relative and bat_in.z_index == 20, "front karakterin üstünde")
+	## Sahibini izler: sink kayınca efekt de kayar (gövde ortası = sahip + BODY_CENTER).
+	sink.global_position = Vector2(140, 90)
+	bat_in._process(0.016)
+	assert(bat_in.global_position.is_equal_approx(Vector2(140, 90) + VampirMath.BODY_CENTER), "bat_in sahibini izler")
+	## Kare zamanla ilerler, son karede durur.
+	bat_in._process(0.3)
+	assert((layers[0] as Sprite2D).frame == int(0.316 * 24.0), "kare 24 fps ilerler")
+	assert(fx_list[2].global_position.is_equal_approx(Vector2(60, 60)), "izlenecek sahip yoksa doğduğu yerde kalır")
 	for i in range(80): ## ~1.3sn
 		for fx in fx_list:
 			if is_instance_valid(fx):

@@ -208,7 +208,9 @@ def cell(g, w, h, shadow, flip=False):
     im = Image.new('RGBA', (CELL, CELL), (0, 0, 0, 0))
     px = im.load()
     hw, core = shadow
-    for row, half, alpha in ((FOOT_ROW, hw - 1, 71), (FOOT_ROW + 1, hw, 71), (FOOT_ROW + 2, hw - 2, 71), (FOOT_ROW + 1, core, 108)):
+    # Tek ton (madde 487 ek): eskiden açık dış 71 + koyu çekirdek 108 = "iki gölge" gibi; şimdi hepsi 96 (iki katın alan ortalaması,
+    # pixel_draw.gd ground_shadow tek tonuyla aynı). Çekirdek satırı da 96 yazar (şekil aynı).
+    for row, half, alpha in ((FOOT_ROW, hw - 1, 96), (FOOT_ROW + 1, hw, 96), (FOOT_ROW + 2, hw - 2, 96), (FOOT_ROW + 1, core, 96)):
         for x in range(CELL // 2 - half, CELL // 2 + half):
             px[x, row] = (0, 0, 0, alpha)
     ox, oy = CELL // 2 - w // 2, FOOT_ROW - (h - 1)

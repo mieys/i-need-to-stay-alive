@@ -9,6 +9,8 @@ extends Node2D
 ## _draw_health_segments) - örn. 200 canlı bir yaratıkta çubuk 5 eşit dilime
 ## bölünmüş görünür. Shield strip only shows up while there's shield to show.
 
+const HudTheme := preload("res://scripts/hud_theme.gd")
+
 const WIDTH := 44.0
 const HEIGHT := 7.0
 const GAP := 2.0
@@ -25,7 +27,13 @@ const OUTLINE := 2.0 ## kalın, piksel-sanatı tarzı siyah çerçeve
 ## sayısı 20'yi geçmemeli" - SEGMENT_HP tekrar 40'a döndü, aşırı yüksek canlı
 ## yaratıklarda (bkz. boss) çizgi patlamasını/simsiyah görünümü önleyen üst
 ## sınır (MAX_SEGMENT_LINES) 20'ye çekildi. (2026-09-21: 800 canı aşan yaratıklarda çizgiler artık ilk 800 canda yığılmıyor - 20 çizgi
-## de tüm çubuğa EŞİT aralıkla yayılıyor, bkz. _draw_health_segments.)
+## de tüm çubuğa EŞİT aralıkla yayılıyor, bkz. _segment_line_offsets.)
+##
+## GÖRÜNÜŞ "D - KABARTMA BÖLME" (madde 502, 2026-11-08; prototip tools/proto_20261108/ust_bar/): ölçüler/konum/bölme kuralı aynı, çizim
+## _draw_carved_bar: sıcak koyu 2 birimlik çerçeve (köşe pikseli yok), her bölme çizgisi = 1 birim derz, aradaki her dilim kabartma karo (sol/üst
+## açık, sağ/alt koyu), boşlar oyuk yuva, kırık karonun ucu açık kesit; kalkan tek kabartma plaka. Renkler hud_theme.gd: can
+## HudTheme.hp_color (oyuncu panelindeki çubukla aynı: %50 altı amber, %20 altı kırmızı), kalkan SHIELD_BAR. Hepsi draw_rect tam birimde
+## (oyuncu kökü 0,5 x kamera 2 = 1 birim 1080p'de 1 ekran px). Eski siyah çerçeveli çizim (draw_pixel_bar) telefon grup sütunu için duruyor.
 const SEGMENT_HP := 40.0
 const MAX_SEGMENT_LINES := 20
 
@@ -134,10 +142,6 @@ func set_shield(current: float, max_value: float) -> void:
 ## parlama şeridi) korunuyor - sadece köşeler artık keskin değil.
 const CORNER_RATIO := 0.28
 
-func _draw_pixel_bar(rect: Rect2, ratio: float, fill_color: Color, bg_color: Color) -> void:
-	draw_pixel_bar(self, rect, ratio, fill_color, bg_color)
-
-
 ## Çizimin kendisi STATIC: grup panelindeki müttefik çubukları da (ui_mini_bar.gd, kullanıcı isteği 2026-09-25: "can kalkan
 ## barları tıpkı karakterin üstündeki can kalkan barına benzer olmalı") AYNI fonksiyonu çağırır - iki görünüm ayrışmasın.
 static func draw_pixel_bar(ci: CanvasItem, rect: Rect2, ratio: float, fill_color: Color, bg_color: Color) -> void:
@@ -209,23 +213,71 @@ static func _segment_line_offsets(width: float, lines: int) -> Array[float]:
 	return out
 
 
-func _draw_health_segments(rect: Rect2) -> void:
-	var lines: int = _segment_line_count(health_max)
-	if lines <= 0:
-		return
-	var r := Rect2(rect.position.round(), rect.size.round())
-	for off: float in _segment_line_offsets(r.size.x, lines):
-		var x: float = r.position.x + off
-		## draw_rect (tam 1 piksel) - 1 px'lik draw_line tam piksel koordinatında iki piksele yarıya bölünüp aralıkları eşitsiz gösterebilir
-		draw_rect(Rect2(x, r.position.y, 1.0, r.size.y), Color(0, 0, 0, 0.7))
+## Can dolgusunun rengi: varsayılan yeşilde oyuncu panelindeki çubuğun rengi (HudTheme.hp_color, can oranına göre), başka renk verildiyse o.
+func _health_fill_color() -> Color:
+	if health_color.is_equal_approx(HEALTH_COLOR_DEFAULT):
+		return HudTheme.hp_color(health_ratio)
+	return health_color
+
+
+func _px(x: int, y: int, w: int, h: int, c: Color) -> void:
+	if w > 0 and h > 0:
+		draw_rect(Rect2(x, y, w, h), c)
+
+
+## "D - Kabartma Bölme" (madde 502). r = çubuğun iç dikdörtgeni (tam birim); çerçeve 2 birim dışarıda (eski OUTLINE kadar).
+## segmented: can çubuğu (40 canda bir derz); kalkan tek plaka.
+func _draw_carved_bar(r: Rect2i, ratio: float, col: Color, segmented: bool) -> void:
+	var x0: int = r.position.x
+	var y0: int = r.position.y
+	var w: int = r.size.x
+	var h: int = r.size.y
+	_px(x0 - 1, y0 + h + 2, w + 2, 1, Color(0, 0, 0, 0.35)) ## gölge
+	## çerçeve: dış kontur köşe pikselsiz (iki dikdörtgen), iç koyu
+	_px(x0 - 1, y0 - 2, w + 2, h + 4, HudTheme.OUTLINE)
+	_px(x0 - 2, y0 - 1, w + 4, h + 2, HudTheme.OUTLINE)
+	_px(x0, y0, w, h, HudTheme.DEEP)
+	## karolar: [başlangıç, bitiş) çubuk içi koordinatta; her bölme çizgisinin pikseli derz olarak boş kalır
+	var cuts: Array[int] = [0]
+	if segmented:
+		for off: float in _segment_line_offsets(float(w), _segment_line_count(health_max)):
+			cuts.append(int(off))
+	cuts.append(w)
+	var fw: int = 0
+	if ratio > 0.0:
+		fw = clampi(int(round(float(w) * ratio)), 1, w)
+	var hi: Color = col.lightened(0.35)
+	var lo: Color = col.darkened(0.35)
+	for i in range(cuts.size() - 1):
+		var a: int = cuts[i] + (1 if i > 0 else 0)
+		var b: int = cuts[i + 1]
+		var tw: int = b - a
+		if tw <= 0:
+			continue
+		var tx: int = x0 + a
+		## boş yuva (oyuk): üst satır en koyu, alt satır hafif ışık
+		_px(tx, y0, tw, h, HudTheme.INSET)
+		_px(tx, y0, tw, 1, HudTheme.DEEP)
+		_px(tx, y0 + h - 1, tw, 1, HudTheme.PLATE_ON)
+		var fill_end: int = mini(b, fw)
+		var fl: int = fill_end - a
+		if fl <= 0:
+			continue
+		_px(tx, y0, fl, h, col)
+		_px(tx, y0, fl, 1, hi)
+		_px(tx, y0 + h - 1, fl, 1, lo)
+		if tw >= 4: ## çok dar karoda (20 çizgide 1 birim) yan kabartma gürültü olur -> yalnız üst/alt
+			_px(tx, y0 + 1, 1, h - 2, hi)
+			if fill_end == b:
+				_px(tx + tw - 1, y0 + 1, 1, h - 1, lo)
+		if fill_end < b and fl >= 2:
+			_px(tx + fl - 1, y0 + 1, 1, h - 2, col.lightened(0.5)) ## kırık karonun ucu: açık kesit
 
 
 func _draw() -> void:
-	var half_w: float = WIDTH * 0.5
-	var health_rect := Rect2(Vector2(-half_w, y_offset), Vector2(WIDTH, HEIGHT))
-	_draw_pixel_bar(health_rect, health_ratio, health_color, Color(0.12, 0.04, 0.04, 1.0))
-	_draw_health_segments(health_rect)
-
+	var x0: int = int(round(-WIDTH * 0.5))
+	var y0: int = int(round(y_offset))
+	_draw_carved_bar(Rect2i(x0, y0, int(WIDTH), int(HEIGHT)), health_ratio, _health_fill_color(), true)
 	if show_shield:
-		var shield_rect := Rect2(Vector2(-half_w, y_offset + HEIGHT + GAP), Vector2(WIDTH, HEIGHT * 0.72))
-		_draw_pixel_bar(shield_rect, shield_ratio, Color(0.35, 0.72, 1.0, 1.0), Color(0.04, 0.08, 0.14, 1.0))
+		var sh_rect := Rect2i(x0, y0 + int(HEIGHT + GAP), int(WIDTH), int(round(HEIGHT * 0.72)))
+		_draw_carved_bar(sh_rect, shield_ratio, HudTheme.SHIELD_BAR, false)

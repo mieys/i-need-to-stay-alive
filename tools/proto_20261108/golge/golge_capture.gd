@@ -117,6 +117,8 @@ func _boot() -> bool:
 	var chars: GDScript = load("res://scripts/characters.gd")
 	_gm.set("selected_character", chars.get_def(char_id).get("skill", 1))
 	_gm.set("selected_start_weapon", "uzunkilic")
+	if OS.get_environment("GOLGE_PET") != "":
+		_gm.set("selected_pet", OS.get_environment("GOLGE_PET"))
 	_gm.set("debug_immortal", true)
 	_gm.set("debug_mode_unlocked", true) ## kayıt (Ruh Kıymığı/rekor) yazılmasın
 	change_scene_to_file("res://scenes/main.tscn")
@@ -158,6 +160,26 @@ func _run() -> void:
 		return
 	var clouds: Node = _main.get_node_or_null("SunClouds")
 	var ev_pos: Vector2 = _player.global_position
+	## GOLGE_ITEMS=1 (madde 485 ek): kirpi evcil + yerde altın/yemek/mıknatıs/kalkan orbu, karakterin çevresi -> esya_<GOLGE_LABEL>.png
+	if OS.get_environment("GOLGE_ITEMS") == "1":
+		_player.global_position = SPOTS["kuzey_agaclar"] + Vector2(-60.0, 40.0)
+		_player.set("pickup_range", 0.0) ## yere bırakılanlar toplanmasın
+		await _wait(1.0)
+		var pp: Vector2 = _player.global_position
+		var offs := {"gold_drop": Vector2(-90, 10), "food_drop": Vector2(-50, 55), "magnet_drop": Vector2(55, 55), "shield_orb_drop": Vector2(95, 5)}
+		for sc: String in offs:
+			var d: Node2D = (load("res://scenes/%s.tscn" % sc) as PackedScene).instantiate()
+			_main.add_child(d)
+			d.global_position = pp + offs[sc]
+		var pet: Node = null
+		for n in get_nodes_in_group("pets"):
+			pet = n
+		await _wait(2.5)
+		var img: Image = await _grab()
+		img.save_png(ProjectSettings.globalize_path(OUT + "esya_%s.png" % OS.get_environment("GOLGE_LABEL")))
+		print("GOLGE esya yazildi evcil=", _gm.get("selected_pet"), " pets_grubu=", pet != null)
+		quit()
+		return
 	## GOLGE_VERIFY=1 (madde 469 doğrulaması): hiçbir şeye dokunmadan oyunun bugünkü hâli -> <nokta>_5_simdi.png
 	if OS.get_environment("GOLGE_VERIFY") == "1":
 		for spot: String in SPOTS:

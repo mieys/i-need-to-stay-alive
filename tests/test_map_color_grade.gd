@@ -87,8 +87,10 @@ func test_every_map_layer_draws_with_the_color_grade() -> void:
 func test_calm_params_override_the_scene_values() -> void:
 	var h: Node = _load()
 	MapColorGradeScript.attach(h)
-	var tufts := (h.get_node("Yer/Çimler") as TileMapLayer).material as ShaderMaterial
-	assert(is_equal_approx(float(tufts.get_shader_parameter("hue_shift_amount")), 0.03))
+	## (mini çim katmanı "Yer/Çimler" 2026-11-08'de haritadan silindi; sallanan ot shader'ının sakin değeri çalı katmanında denenir)
+	assert(h.get_node_or_null("Yer/Çimler") == null, "silinen Çimler katmanı geri gelmiş")
+	var bushes := (h.get_node("Shader Eklenecek/Çalılar") as TileMapLayer).material as ShaderMaterial
+	assert(is_equal_approx(float(bushes.get_shader_parameter("hue_shift_amount")), 0.03))
 	var grass := (h.get_node("Yer/Zemin Çimen") as TileMapLayer).material as ShaderMaterial
 	assert(is_equal_approx(float(grass.get_shader_parameter("cicek_yogunlugu")), 0.08))
 	var dirt := (h.get_node("Yer/Zemin Toprak") as TileMapLayer).material as ShaderMaterial

@@ -71,7 +71,8 @@ const CREAM := Color8(255, 250, 228)
 const WHITE := Color8(255, 255, 255)
 const BOLT_HOT := Color8(255, 150, 60) ## cana geçen kısmın kıvılcımı (soğurma kısmi: %55-75)
 const BOLT_DIM := Color8(200, 60, 24)
-## [kontur, koyu, orta, açık, parlak] - gen_mana_shield_fx.py PALS ile aynı. Kale mor, Enerji sarı (kullanıcı 2026-10-14).
+## [kontur, koyu, orta, açık, parlak] - gen_mana_shield_fx.py PALS ile aynı. Anahtar = GÖRSEL anahtarı: oyunda hangi türün hangi paleti
+## gösterdiği ShieldEnchantDefs.EFFECT_OF'ta (2026-11-09: Standart sarı, Enerji mor, Kale mavi); paletin kendisi Kale mor, Enerji sarı (2026-10-14).
 const PALETTES := {
 	"shield_standart": [Color8(14, 22, 70), Color8(36, 70, 164), Color8(74, 136, 232), Color8(150, 204, 255), Color8(228, 244, 255)],
 	"shield_savas": [Color8(64, 8, 20), Color8(146, 28, 40), Color8(222, 68, 64), Color8(255, 146, 124), Color8(255, 230, 222)],
@@ -195,7 +196,7 @@ func set_shield_type(key: String) -> void:
 	if key == _type:
 		return
 	_type = key
-	_pal = PALETTES.get(key, PALETTES[STANDART])
+	_pal = PALETTES.get(ShieldEnchantDefs.effect_key(key), PALETTES[STANDART]) ## efekt eşlemesi: shield_enchant_defs.gd EFFECT_OF
 	for m: ShaderMaterial in [_mat, _ground_mat]:
 		if m == null:
 			continue

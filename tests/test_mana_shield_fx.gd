@@ -55,18 +55,51 @@ func test_layers_and_palettes() -> void:
 	assert(fx != null and back != null, "oyuncuya mana kalkanı katmanları eklenmeli")
 	assert(back.show_behind_parent, "arka katman karakterin ardında çizilir")
 	assert(fx.get_index() > p.get_node("AnimatedSprite2D").get_index(), "ön katman karakter sprite'ından sonra")
-	fx.set_shield_type("shield_kale")
-	var kale: Color = fx._mat.get_shader_parameter("c2")
-	assert(kale.is_equal_approx(FxScript.PALETTES["shield_kale"][2]))
-	assert(kale.b > kale.g and kale.r > kale.g, "Kale mor olmalı")
+	## Efekt eşlemesi (2026-11-09, ShieldEnchantDefs.EFFECT_OF): Standart sarı (eski Enerji), Enerji mor (eski Kale), Kale mavi (eski Standart).
+	fx.set_shield_type("shield_standart")
+	var st: Color = fx._mat.get_shader_parameter("c2")
+	assert(st.is_equal_approx(FxScript.PALETTES["shield_enerji"][2]))
+	assert(st.r > st.b and st.g > st.b, "Standart (başlangıç) kalkan sarı mühür göstermeli")
 	fx.set_shield_type("shield_enerji")
 	var en: Color = fx._ground_mat.get_shader_parameter("c2")
-	assert(en.r > en.b and en.g > en.b, "Enerji sarı olmalı")
+	assert(en.is_equal_approx(FxScript.PALETTES["shield_kale"][2]))
+	assert(en.b > en.g and en.r > en.g, "Enerji artık mor mühür göstermeli")
+	fx.set_shield_type("shield_kale")
+	var kale: Color = fx._mat.get_shader_parameter("c2")
+	assert(kale.is_equal_approx(FxScript.PALETTES["shield_standart"][2]))
+	assert(kale.b > kale.r and kale.b > kale.g, "Kale artık mavi (eski Standart) mühür göstermeli")
+	fx.set_shield_type("shield_savas")
+	assert((fx._mat.get_shader_parameter("c2") as Color).is_equal_approx(FxScript.PALETTES["shield_savas"][2]), "Savaş eşleşmez, kendi kırmızısı")
+	## Kart/ikon renkleri türün kimliği: eşlemeden etkilenmez (Kale mor, Enerji sarı).
 	var kc: Color = ShieldEnchantDefs.TYPES["shield_kale"]["color"]
 	var ec: Color = ShieldEnchantDefs.TYPES["shield_enerji"]["color"]
-	assert(kc.b > kc.g and ec.r > ec.b and ec.g > ec.b, "kart renkleri de mor / sarı")
+	assert(kc.b > kc.g and ec.r > ec.b and ec.g > ec.b, "kart renkleri değişmez: mor / sarı")
+	assert(ShieldEnchantDefs.effect_key("shield_standart") == "shield_enerji" and ShieldEnchantDefs.effect_key("shield_enerji") == "shield_kale" \
+			and ShieldEnchantDefs.effect_key("shield_kale") == "shield_standart" and ShieldEnchantDefs.effect_key("shield_savas") == "shield_savas" \
+			and ShieldEnchantDefs.effect_key("") == "", "üçlü döngü")
 	fx.set_shield_type("")
 	assert((fx._mat.get_shader_parameter("c2") as Color).is_equal_approx(FxScript.PALETTES["shield_standart"][2]), "bilinmeyen tür = Standart")
+	_cleanup()
+
+
+## Baloncuk sprite'ı da aynı eşlemeyi izler (shield_visual.gd + ShieldEnchantDefs.EFFECT_OF, 2026-11-09).
+func test_bubble_sprite_follows_effect_mapping() -> void:
+	var p: Node = _make_player()
+	var sv: Node2D = p.shield_visual
+	var def_frames: SpriteFrames = sv._default_frames
+	assert(def_frames != null)
+	var en_frames: SpriteFrames = sv.TYPE_FRAMES["shield_enerji"]
+	var kale_frames: SpriteFrames = sv.TYPE_FRAMES["shield_kale"]
+	sv.set_shield_type("shield_standart")
+	assert(sv.bubble.sprite_frames == en_frames, "Standart (başlangıç) kalkan Enerji baloncuğunu göstermeli")
+	assert(sv.get_night_glow_color().is_equal_approx(sv.TYPE_GLOW_COLORS["shield_enerji"]), "gece ışığı da Enerji'nin")
+	sv.set_shield_type("shield_enerji")
+	assert(sv.bubble.sprite_frames == kale_frames, "Enerji, Kale baloncuğunu göstermeli")
+	sv.set_shield_type("shield_kale")
+	assert(sv.bubble.sprite_frames == def_frames, "Kale, eski Standart (sahne varsayılanı) baloncuğunu göstermeli")
+	assert(sv.get_night_glow_color().is_equal_approx(sv.DEFAULT_GLOW_COLOR), "gece ışığı da eski Standart'ın")
+	sv.set_shield_type("shield_savas")
+	assert(sv.bubble.sprite_frames == sv.TYPE_FRAMES["shield_savas"], "Savaş eşleşmez")
 	_cleanup()
 
 

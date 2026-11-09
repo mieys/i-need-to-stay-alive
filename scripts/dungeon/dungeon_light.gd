@@ -19,6 +19,11 @@ const LANTERN_ENERGY := 0.62
 const LANTERN_OFFSET := Vector2(0.0, -6.0)
 const LANTERN_GROUPS: Array[StringName] = [&"player", &"remote_players"]
 const LANTERN_CHECK := 0.4
+## ÜST ÜSTE BİNEN FENERLER (kullanıcı bildirimi 2026-11-08: "parlaklığı olan şeyler üst üste binince çok parlak"): fenerler
+## toplamalı ve ortam ~0,4 + tek fener 0,62 zaten ~1; 4 oyuncu bir aradayken merkez ~2,9 -> beyaz. Her fenerin gücü
+## 1 / (1 + yakın fenerlerin örtüşme payı) ile paylaştırılır: tam üst üste n fener = TEK fener kadar, uzaktakiler tam güç.
+const LANTERN_SHARE_RANGE := LANTERN_RADIUS * 1.5
+const LANTERN_FADE_RATE := 3.0 ## güç / sn (paylaşım değişince yumuşak geçiş)
 const OVERLAY_CHECK := 0.5
 
 var ambient: CanvasModulate = null
@@ -28,6 +33,7 @@ var _ambient_night: Color = Color(0.32, 0.32, 0.38)
 var _lantern_color: Color = Color(0.9, 0.95, 1.0)
 var _sources: Array[Dictionary] = [] ## {"light", "energy", "phase", "pos"}
 var _lanterns: Dictionary = {} ## sahip instance_id -> PointLight2D
+var _lantern_target: Dictionary = {} ## sahip instance_id -> paylaşılmış hedef güç
 var _t: float = 0.0
 var _cull_acc: float = 0.0
 var _lantern_acc: float = 0.0
@@ -113,6 +119,7 @@ func _process(delta: float) -> void:
 	if _lantern_acc <= 0.0:
 		_lantern_acc = LANTERN_CHECK
 		_update_lanterns()
+	_fade_lanterns(delta)
 	_overlay_acc -= delta
 	if _overlay_acc <= 0.0:
 		_overlay_acc = OVERLAY_CHECK
@@ -166,7 +173,7 @@ func _update_lanterns() -> void:
 				l.name = "ZindanFeneri"
 				l.texture = HALO_TEX
 				l.color = _lantern_color
-				l.energy = LANTERN_ENERGY
+				l.energy = 0.0 ## _fade_lanterns paylaşılmış hedefe yumuşakça çıkarır
 				l.blend_mode = Light2D.BLEND_MODE_ADD
 				b.add_child(l)
 				## oyuncu kökü 0,5 ölçekli: yarıçap dünya px'inde kalsın
@@ -180,6 +187,44 @@ func _update_lanterns() -> void:
 			if l != null and is_instance_valid(l):
 				(l as Node).queue_free()
 			_lanterns.erase(id)
+	_retarget_lanterns()
+
+
+## Fenerlerin paylaşılmış hedef gücü (LANTERN_SHARE_RANGE notu).
+func _retarget_lanterns() -> void:
+	_lantern_target.clear()
+	var ids: Array[int] = []
+	var pos: Array[Vector2] = []
+	for id: int in _lanterns.keys():
+		var l: Variant = _lanterns[id]
+		if l != null and is_instance_valid(l):
+			ids.append(id)
+			pos.append((l as Node2D).global_position)
+	var share: PackedFloat32Array = lantern_share(pos)
+	for i in range(ids.size()):
+		_lantern_target[ids[i]] = LANTERN_ENERGY * share[i]
+
+
+## i. fenerin güç payı: 1 / (1 + Σ max(0, 1 - mesafe / LANTERN_SHARE_RANGE)). Tek fener / uzaktakiler 1.
+static func lantern_share(positions: Array[Vector2]) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(positions.size())
+	for i in range(positions.size()):
+		var s: float = 1.0
+		for j in range(positions.size()):
+			if i != j:
+				s += clampf(1.0 - positions[i].distance_to(positions[j]) / LANTERN_SHARE_RANGE, 0.0, 1.0)
+		out[i] = 1.0 / s
+	return out
+
+
+func _fade_lanterns(delta: float) -> void:
+	for id: int in _lanterns.keys():
+		var l: Variant = _lanterns[id]
+		if l == null or not is_instance_valid(l):
+			continue
+		var pl := l as PointLight2D
+		pl.energy = move_toward(pl.energy, float(_lantern_target.get(id, LANTERN_ENERGY)), LANTERN_FADE_RATE * delta)
 
 
 func _clear_lanterns() -> void:
@@ -190,6 +235,7 @@ func _clear_lanterns() -> void:
 		if l != null and is_instance_valid(l):
 			(l as Node).queue_free()
 	_lanterns.clear()
+	_lantern_target.clear()
 
 
 func _exit_tree() -> void:

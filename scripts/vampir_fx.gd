@@ -3,21 +3,36 @@ extends Node2D
 ## Vampir Çocuk'un pixel-art efektleri (bkz. vampir_math.gd TEXEL): hepsi karakter dokusunun
 ## piksel boyutunda (1 sanat pikseli = TEXEL dünya birimi) kareler olarak çizilir, konumlar
 ## ızgaraya oturtulur - yumuşak/bulanık parçacık yok.
-##   "hit"   : yarasa/temas vuruşunda küçük kan pikseli patlaması
-##   "puff"  : Yarasa Formu'na girerken/çıkarken koyu mor-kırmızı duman patlaması
-##   "drain" : Kan Emme - hedeflerden karaktere akan kan damlaları (sink'i takip eder)
+##   "hit"     : yarasa/temas vuruşunda küçük kan pikseli patlaması
+##   "bat_in"  : Yarasa Formu'na GİRİŞ (insan -> yarasa) - "Kızıl Girdap", pişmiş sayfa (aşağıda)
+##   "bat_out" : Yarasa Formu'ndan DÖNÜŞ (yarasa -> insan) - aynı dil, hilaller yere iner + kızıl halka
+##   "drain"   : Kan Emme - hedeflerden karaktere akan kan damlaları (sink'i takip eder)
 ## Hepsi kendi kendini siler. Spawn için VampirMath.spawn_fx().
 
 const VampirMath := preload("res://scripts/vampir_math.gd")
+const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+
+## Yarasa Formu geçişi (madde 516, kullanıcı: "şuanki kalitesiz" -> 4 prototipten "C - Kızıl Girdap"). Eski "puff" 30 rastgele
+## iri kare pikseldi (karakter pikselinin 3-6 katı), giriş/dönüş aynıydı. Sprite dönüşümü E basıldığı karede ANINDA olduğu için
+## sayfanın ilk karesi gövdeyi koyu sisle örter. Sayfalar tools/gen_vampir_donusum_fx.py (çizim prototiple birebir:
+## tools/proto_20261109/vampir_donusum_proto.py c_in/c_out). İki katman: [0] front = karakterin üstü (bu düğümün z 20'si),
+## [1] ground = girdabın ARKA yarısı + yer halkası, MUTLAK z 0 (sahne kökünde haritanın üstü, oyuncuların (z 1) altı) -
+## hilaller karakterin arkasından dolanıp önünden geçer. Efekt sahibini (follow) çizilen konumundan izler: girdap gövdeyi
+## sarar, yarasa hızla uçarken geride kalmamalı.
+const BAT_SHEETS := {
+	"bat_in": [preload("res://assets/fx/vampir_donusum/in_front.png"), preload("res://assets/fx/vampir_donusum/in_ground.png"), 16],
+	"bat_out": [preload("res://assets/fx/vampir_donusum/out_front.png"), preload("res://assets/fx/vampir_donusum/out_ground.png"), 14],
+}
+const BAT_FPS := 24.0
+## Sayfada doğum noktası (sahip + VampirMath.BODY_CENTER) - kare 136x136.
+const BAT_ANCHOR := Vector2(68, 60)
+## 1 sayfa pikseli = Vampir karakter pikseli (DEFS[13] scale 2.09797 x EntityScale.SIZE 0.8075 x Player kökü 0.5).
+const BAT_WORLD_PX := 0.847
 
 const BLOOD := Color(0.77, 0.09, 0.16)
 const BLOOD_D := Color(0.47, 0.05, 0.11)
 const BLOOD_L := Color(1.0, 0.38, 0.38)
 const FANG := Color(0.96, 0.93, 0.89)
-const MEM := Color(0.39, 0.09, 0.19)
-const FUR_D := Color(0.17, 0.08, 0.15)
-const FUR_M := Color(0.28, 0.13, 0.24)
-const MEM_L := Color(0.62, 0.2, 0.4)
 
 const DRAIN_DROPS := 9
 const DRAIN_TRAVEL := 0.42
@@ -26,11 +41,15 @@ const DRAIN_STAGGER := 0.045
 var kind: String = "hit"
 var points: PackedVector2Array = PackedVector2Array()
 var sink: Node2D = null
+## bat_in / bat_out: izlenen sahip (oyuncu ya da kukla); null/silinmişse efekt doğduğu yerde kalır.
+var follow: Node2D = null
 
 var _t: float = 0.0
 var _life: float = 0.4
 var _particles: Array = [] ## [pos, vel, color, size(texel), delay]
 var _sink_pos: Vector2 = Vector2.ZERO
+var _sheet: Array[Sprite2D] = [] ## bat_in / bat_out katmanları: [front, ground]
+var _sheet_frames: int = 0
 
 
 func _ready() -> void:
@@ -41,13 +60,37 @@ func _ready() -> void:
 		"hit":
 			_life = 0.34
 			_make_burst(9, 40.0, 110.0, [BLOOD, BLOOD_L, BLOOD_D, FANG], 1, 2)
-		"puff":
-			_life = 0.6
-			_make_burst(30, 110.0, 300.0, [FUR_M, MEM, MEM_L, BLOOD_D, BLOOD, BLOOD_L], 2, 4)
+		"bat_in", "bat_out":
+			_setup_bat_sheet(BAT_SHEETS[kind])
 		"drain":
 			_life = DRAIN_TRAVEL + DRAIN_STAGGER * float(DRAIN_DROPS) + 0.2
 			_sink_pos = _resolve_sink()
 	queue_redraw()
+
+
+func _setup_bat_sheet(d: Array) -> void:
+	_sheet_frames = int(d[2])
+	_life = float(_sheet_frames) / BAT_FPS
+	for li in range(2):
+		var spr := Sprite2D.new()
+		spr.texture = d[li]
+		spr.hframes = _sheet_frames
+		spr.frame = 0
+		spr.centered = false
+		spr.offset = -BAT_ANCHOR
+		spr.scale = Vector2(BAT_WORLD_PX, BAT_WORLD_PX)
+		if li == 1:
+			## Girdabın arka yarısı: mutlak z 0 = haritanın üstü, oyuncu ve kuklaların (z 1) altı.
+			spr.z_as_relative = false
+			spr.z_index = 0
+		add_child(spr)
+		_sheet.append(spr)
+	_follow_owner()
+
+
+func _follow_owner() -> void:
+	if follow != null and is_instance_valid(follow):
+		global_position = PhysicsInterp.visual_position(follow) + VampirMath.BODY_CENTER
 
 
 func _make_burst(count: int, v_min: float, v_max: float, colors: Array, size_min: int, size_max: int) -> void:
@@ -67,6 +110,12 @@ func _process(delta: float) -> void:
 	_t += delta
 	if _t >= _life:
 		queue_free()
+		return
+	if _sheet_frames > 0:
+		_follow_owner()
+		var f: int = mini(int(_t * BAT_FPS), _sheet_frames - 1)
+		for spr in _sheet:
+			spr.frame = f
 		return
 	if kind == "drain":
 		_sink_pos = _resolve_sink()

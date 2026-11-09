@@ -111,10 +111,10 @@ const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
+	"pence": "Tırpan", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
 }
 const WEAPON_ICON_TEXTURES := {
-	"dagger": "res://assets/weapons/base_knife/icon_v2.png",
+	"dagger": "res://assets/weapons/yeni/bicak.png",
 	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
 	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
 	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
@@ -126,7 +126,7 @@ const WEAPON_ICON_TEXTURES := {
 	"boomerang": "res://assets/weapons/boomerang/icon.png",
 	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
 	"fisek": "res://assets/weapons/fisek/icon.png",
-	"pence": "res://assets/weapons/pence/icon.png",
+	"pence": "res://assets/weapons/yeni/tirpan.png",
 	"topuz": "res://assets/weapons/topuz/icon.png",
 	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
 	"gokkusagi": "res://assets/weapons/yeni/gokkusagi.png",
@@ -168,7 +168,7 @@ const ELITE_CARD_TIER := 3
 static func item_pool(elite: bool, char_id: int = -1, player: Node = null) -> Array:
 	var kademe: int = Items.KADEME_EPIK if elite else Items.KADEME_PARCA
 	var pool: Array = Items.KEYS.filter(func(k) -> bool:
-		return Items.kademe(str(k)) == kademe and (not Items.is_support_only(str(k)) or Items.is_ally_support_char(char_id)))
+		return Items.kademe(str(k)) == kademe and Items.is_available(str(k), char_id))
 	if elite:
 		var fresh: Array = pool.filter(func(k) -> bool: return not Items.owns(GameManager.owned_items, str(k)))
 		if not fresh.is_empty():

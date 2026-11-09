@@ -98,6 +98,7 @@ var _is_lich: bool = false
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 const BossBarArtScript: GDScript = preload("res://scripts/boss_bar_art.gd")
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
+const DamageStatsScript: GDScript = preload("res://scripts/damage_stats.gd")
 const EndlessMathScript: GDScript = preload("res://scripts/endless_math.gd") ## apply_tier_scaling: sonsuz kat bileşik çarpanı
 
 ## Only used for enemies whose visual is a plain Sprite2D with hframes/vframes
@@ -1363,14 +1364,16 @@ func try_shaman_weapon_burn() -> bool:
 		if totem_r <= 0.0:
 			continue
 		if (totem as Node2D).global_position.distance_to((dealer as Node2D).global_position) <= totem_r:
-			apply_burn(float(dealer.damage_bonus) * 0.10, 3.0)
+			apply_burn(float(dealer.damage_bonus) * 0.10, 3.0, "dot:shaman_pasif")
 			return true
 	return false
 
 
 ## Shaman pasifi - bkz. burn_tick_damage üstündeki yorum. apply_poison()'un
 ## host-forward guard'ıyla BİREBİR AYNI desen.
-func apply_burn(tick_damage: float, duration: float) -> void:
+## bl_tag: balans/ipucu kaynağı ("dot:shaman_pasif" = Shaman pasifi, madde 531); boş = genel "dot:yanma". Yalnız bu makinede uygulanan yanma
+## etiketlenir (istemcinin host'a ilettiği yanma etiketsizdir - dot hasarı zaten host'un kaydında sayılır).
+func apply_burn(tick_damage: float, duration: float, bl_tag: String = "") -> void:
 	_ew_wake() ## EnemyWorld yolu: uyuyan yaratığı uyandır (anahtar kapalıyken boş)
 	if is_dead or tick_damage <= 0.0:
 		return
@@ -1382,6 +1385,8 @@ func apply_burn(tick_damage: float, duration: float) -> void:
 	var had_elements: Dictionary = {} if _in_element_apply else _element_snapshot()
 	## Yeni bir isabet süreyi YENİLER ama tik hasarı en güçlüsünde kalır -
 	## poison'un "üst üste binmez, yenilenir" davranışıyla tutarlı.
+	if tick_damage >= burn_tick_damage:
+		_burn_bl_tag = bl_tag ## en güçlü tikin kaynağı yazılır (tik hasarı da en güçlüsünde kalır)
 	burn_tick_damage = max(burn_tick_damage, tick_damage)
 	burn_time_left = max(burn_time_left, duration)
 	if _burn_tick_timer <= 0.0:
@@ -1412,10 +1417,11 @@ func _process_burn(delta: float) -> void:
 	if _burn_tick_timer <= 0.0:
 		_burn_tick_timer += BURN_TICK_INTERVAL
 		## Efsun yanma yığını (Alevli Ok V): 0/1 yük = eski tek tik.
-		_take_dot_damage(burn_tick_damage * float(maxi(1, _burn_stacks)), 0.0, "dot:yanma", BURN_TICK_INTERVAL)
+		_take_dot_damage(burn_tick_damage * float(maxi(1, _burn_stacks)), 0.0, _burn_bl_tag if _burn_bl_tag != "" else "dot:yanma", BURN_TICK_INTERVAL)
 	if burn_time_left <= 0.0:
 		burn_tick_damage = 0.0
 		_burn_stacks = 0
+		_burn_bl_tag = ""
 		## GÖRSEL: yakma bitti - alev sprite'ı kaldırılır (poison'ın
 		## _process_poison'daki AYNI temizlik deseni) ve ağa haber verilir.
 		if _burn_status_fx and is_instance_valid(_burn_status_fx):
@@ -1557,6 +1563,7 @@ var _sleep_wake_slow: float = 0.0
 var crack_stacks: int = 0
 ## Yanma yığını (Alevli Ok V): 0/1 = eski davranış, >1 tik hasarı katlanır.
 var _burn_stacks: int = 0
+var _burn_bl_tag: String = "" ## tik kaynağı etiketi (apply_burn bl_tag; boş = "dot:yanma")
 ## Tepkime bayrakları (bkz. element_reactions.gd).
 var _infected: bool = false
 var _conductive: bool = false
@@ -4942,6 +4949,10 @@ func take_damage(amount: float, is_crit: bool = false, shield_pen_percent: float
 	## aksine, o SADECE host'ta çalışır ve istemci vuruşlarını host'a yanlış
 	## atfederdi - can çalma pasifinin ZATEN düştüğü aynı tuzak).
 	var _dealer: Node = get_tree().get_first_node_in_group("player")
+	## Kraliçe Andrea'nın Kitabı: Q/E/R/F yetenek hasarı +%30 (kaynak etiketi "s:" + slot; pasif/evcil/eşya/dot hariç). Vuran makinede, istatistik + ağ öncesi.
+	if amount > 0.0 and _bl_src.begins_with("s:") and _dealer and _dealer.has_method("has_item") and _dealer.has_item("kralice_andrea_kitabi") \
+			and (DamageStatsScript.slot_of(_bl_src) in ["q", "e", "r", "f"]):
+		amount *= 1.3
 	if amount > 0.0 and _dealer and "match_damage_dealt" in _dealer:
 		_dealer.match_damage_dealt += amount
 		BalanceLogScript.on_hit(_bl_src, amount, is_crit)
@@ -5155,6 +5166,9 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 	if health > 0.0 and max_health > 0.0 and _attacker_has_savas_sevki():
 		var execute_percent: float = SpiritualSkillsScript.SAVAS_SEVKI_EXECUTE_PERCENT_BOSS if is_boss else SpiritualSkillsScript.SAVAS_SEVKI_EXECUTE_PERCENT
 		if (health / max_health) < execute_percent:
+			## Shift ipucu "BU OYUNDA" (madde 531): infaz sayısı, yalnız vuran BU makinenin oyuncusuysa (istemci vuruşu host'ta işlenir, ağ olayı yok).
+			if last_attacker_peer_id <= 0 or not NetworkManager.is_multiplayer_active or last_attacker_peer_id == multiplayer.get_unique_id():
+				BalanceLogScript.on_util("s:ruhani_savas_sevki", "execute")
 			health = 0.0
 	if health <= 0:
 		die()
@@ -5904,7 +5918,9 @@ func _drop_chest() -> void:
 		_spawn_chest_drop(true)
 		return
 	## Elit yaratık (bkz. make_elite): garanti elit sandık; normal sandık zarı da aşağıda her yaratıktaki gibi atılır.
-	if is_elite:
+	## Ritüeli Boz CEZASI olarak doğan elit (madde 496, enemy_spawner.gd spawn_mission_elite) garanti sandık VERMEZ - yoksa ritüeli bilerek
+	## kaybedip elit sandık kasılırdı.
+	if is_elite and not has_meta(&"mission_elite"):
 		_spawn_chest_drop(true)
 	var base_chance: float = 0.005
 	if _current_tier <= 2:
@@ -5950,7 +5966,7 @@ static func weapon_shard_count(boss: bool, elite: bool, roll: float, luck_mult: 
 func _drop_weapon_shards() -> void:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		return
-	var count: int = weapon_shard_count(is_boss, is_elite, randf(), _luck_mult(LUCK_DROP_MULT_PER_POINT))
+	var count: int = weapon_shard_count(is_boss, is_elite and not has_meta(&"mission_elite"), randf(), _luck_mult(LUCK_DROP_MULT_PER_POINT)) ## ritüel cezası eliti sıradan sayılır (madde 496)
 	if count <= 0:
 		return
 	var tree: SceneTree = get_tree()

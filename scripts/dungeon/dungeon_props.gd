@@ -22,8 +22,10 @@ const STYLE: Dictionary = {
 		"tuzak": {"mode": "tiles", "sheet": "runtime/Spikes.png", "frames_x": [0, 3, 6, 9], "y": 1},
 		## EJDER BAŞI (madde 449, Batık Nekropol): yüzün alt 2 satırında baş, aşağıya ruh ateşi; kare 0 = sakin baş ... 5 = tam alev.
 		## Hasar alanı nesne dikdörtgeni (başın altındaki 2 x 3 zemin), görsel 2 satır yukarıdan başlar.
-		"tuzak_ejder": {"mode": "sheet1", "sheet": "runtime/dragon_trap.png", "w": 2, "h": 5, "step": [2, 0], "frames": 6, "off": [0, -2],
-				"unlit": true},
+		## madde 492 (kullanıcı: "ateş daha uzun bir çizgide"): uzun alev sayfası (tools/zindan/gen_ejder_alev.py): baş 2 + alev 8 hücre, 8 kare;
+		## 0-4 büyüme (rise), 5-7 tam boy dalgalanma döngüsü (hold). "flame": alev duvara/nesneye gelince kırpılır (DungeonWorld.flame_rows).
+		"tuzak_ejder": {"mode": "sheet1", "sheet": "runtime/dragon_trap_long.png", "w": 2, "h": 10, "step": [2, 0], "frames": 8, "rise": 5,
+				"hold": [5, 6, 7], "off": [0, -2], "unlit": true, "flame": true},
 	},
 	"et_kuyusu": {
 		"kafes": {"mode": "sheet", "sheet": "runtime/Door_darker-lattice.png", "w": 5, "h": 5, "off": [-1, -2], "frames": [[0, 0], [5, 0], [10, 0], [15, 0]]},
@@ -346,8 +348,13 @@ func _add_trap(o: Dictionary) -> void:
 			for i in range(int(r.size.x / TILE)):
 				sprites.append(_region_sprite(tex, Rect2(0, float(st.get("y", 1)) * TILE, TILE, TILE), r.position + Vector2(i, j) * TILE))
 	else:
-		sprites.append(_region_sprite(tex, Rect2(0, 0, float(st["w"]) * TILE, float(st["h"]) * TILE), r.position + _off(st),
-				bool(st.get("unlit", false))))
+		var spr: Sprite2D = _region_sprite(tex, Rect2(0, 0, float(st["w"]) * TILE, float(st["h"]) * TILE), r.position + _off(st),
+				bool(st.get("unlit", false)))
+		if bool(st.get("flame", false)):
+			## alev boyu: ilk duvar/nesne hücresine kadar (hasar alanıyla aynı sayı); baş 2 satır + alev satırları
+			var rows: int = DungeonWorldScript.flame_rows(to_global(r.position), int(r.size.y / TILE))
+			spr.region_rect.size.y = float(2 + rows) * TILE
+		sprites.append(spr)
 	_traps.append({"sprites": sprites, "rect": r, "style": st, "key": str(o.get("trap_key", ""))})
 
 
@@ -367,6 +374,14 @@ func set_trap_level(key: String, up01: float) -> void:
 		else:
 			var frames: int = int(st.get("frames", 1))
 			var fi: int = clampi(int(round(up01 * float(frames - 1))), 0, frames - 1)
+			if st.has("hold"):
+				## büyüme kareleri 0..rise-1, tam boyda dalgalanma karelerinde döngü (alev durağan kalmasın)
+				var rise: int = int(st.get("rise", 5))
+				if up01 >= 0.999:
+					var hold: Array = st["hold"]
+					fi = int(hold[int(_t * 12.0) % hold.size()])
+				else:
+					fi = clampi(int(round(up01 * float(rise - 1))), 0, rise - 1)
 			var step: Array = st.get("step", [3, 0])
 			var org: Array = st.get("origin", [0, 0])
 			(tr["sprites"][0] as Sprite2D).region_rect.position = Vector2(float(org[0]) + float(step[0]) * fi, float(org[1]) + float(step[1]) * fi) * TILE

@@ -24,6 +24,18 @@ const SIDE_LEAN := 0.30 ## yandan bakışta uçlar sırta doğru yatar
 const SIDE_BACK_X := 3.5 ## dünya px: yandan bakışta sırtın yüzün tersindeki kayması
 const SPRITE_NAME := &"AnimatedSprite2D"
 
+## SIRTTA GÖLGE (madde 514; kullanıcı 2026-11-09: "silahlar kapanıp karakterin sırtına yerleşince hafif gölgelenmiş ... görünmesi
+## gerekiyor uçuyor gibi görünmemesi için"; ilk sürümdeki doygunluk kısma "çürümüş eskimiş gibi" bulundu -> "gölge düşmüş, düşen ışık
+## azalmış gibi"): sırttaki görüntü karakter sprite'ının modulate'i x SHADE_TINT - yalnız ÇARPIM (renk/doygunluk oranı korunur, ışık azalır),
+## hafif serin (gölgede gökyüzü ışığı). Geçiş sıçramasız: uçan silah çekilmenin sonunda aynı tona kararır, çıkışın başında ondan aydınlanır
+## (WeaponFollowMath pozunun "dim" alanı -> dim_color, çağıranlar modulate'e katar). Shader yok; ikonun kendi materyali (Talon boyası) aynen kopyalanır.
+const SHADE_TINT := Color(0.66, 0.67, 0.74, 1.0)
+
+
+## Uçan silahın renk katı (dim 0 = tam ışık, 1 = sırttaki gölge).
+static func dim_color(dim: float) -> Color:
+	return Color.WHITE.lerp(SHADE_TINT, clampf(dim, 0.0, 1.0))
+
 
 ## Yukarı taşan uçtan silahın UCUNA açı farkı (derece): kılıç/bıçakta kabza yukarı (uç aşağı), yayda üst kol yukarı (ok yönü kollara dik).
 static func up_to_tip_deg(key: String) -> float:
@@ -122,8 +134,8 @@ static func place(back: Sprite2D, owner: Node2D, icon: Node2D, mp: Dictionary, b
 	var art_angle: float = flipped_forward(icon, fwd_rad).angle() ## flip'li sanatın ucu (ikonun dönüşü hariç)
 	back.rotation = 0.0 if bool(mp.get("upright", false)) else float(mp["tip"]) - art_angle
 	back.scale = base_scale.abs() * float(mp["scale"])
+	back.modulate = (spr.modulate if spr != null else Color.WHITE) * SHADE_TINT ## sırtta gölge (madde 514)
 	if spr != null:
-		back.modulate = spr.modulate
 		var si: int = spr.get_index()
 		var bi: int = back.get_index()
 		if bool(mp["front"]) and bi < si:

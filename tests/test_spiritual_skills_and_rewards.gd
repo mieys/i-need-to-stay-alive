@@ -83,7 +83,7 @@ func test_spiritual_definitions_match_the_spec() -> void:
 		assert(S.ORDER.has(id), "ruhani yetenek eksik: %s" % id)
 	assert(S.PARA_INTERVAL == 10.0 and S.PARA_GOLD == 5 and is_equal_approx(S.PARA_SHOP_DISCOUNT, 0.10), "Para: 10sn / 5 altın / %10")
 	assert(is_equal_approx(S.CAN_HEAL_PERCENT, 0.08) and is_equal_approx(S.CAN_SHIELD_PERCENT, 0.15) and S.CAN_INVULN_TIME == 3.0 and S.CAN_COOLDOWN == 90.0, "Can")
-	assert(S.ADC_DURATION == 10.0 and is_equal_approx(S.ADC_ATTACK_SPEED, 0.30) and is_equal_approx(S.ADC_SHIELD_PEN, 0.15) and is_equal_approx(S.ADC_LIFESTEAL, 0.01) and S.ADC_COOLDOWN == 120.0, "Adc")
+	assert(S.ADC_DURATION == 10.0 and is_equal_approx(S.ADC_ATTACK_SPEED, 0.30) and is_equal_approx(S.ADC_SHIELD_PEN, 0.15) and is_equal_approx(S.ADC_LIFESTEAL, 0.02) and S.ADC_COOLDOWN == 120.0, "Adc")
 	assert(S.TANK_DURATION == 10.0 and is_equal_approx(S.TANK_REFLECT, 2.0) and is_equal_approx(S.TANK_SHIELD_REGEN, 0.03) and S.TANK_COOLDOWN == 100.0, "Tank")
 	assert(is_equal_approx(S.TAKTIK_SPEED_BONUS, 0.30) and S.TAKTIK_SPEED_TIME == 3.0 and S.TAKTIK_COOLDOWN == 30.0, "Taktiksel")
 	assert(S.DUKKAN_CHANNEL == 3.0 and S.DUKKAN_COOLDOWN == 120.0, "Dükkan")
@@ -167,7 +167,7 @@ func test_adc_gives_attack_speed_shield_pen_and_lifesteal_then_removes_them() ->
 	var base_mult: float = weapon.fire_rate_multiplier if "fire_rate_multiplier" in weapon else 1.0
 	var base_fire_rate: float = float(weapon.get("fire_rate_mult")) if "fire_rate_mult" in weapon else -1.0
 	player._try_spirit_skill()
-	assert(is_equal_approx(player.spirit_shield_pen, 0.15) and is_equal_approx(player.spirit_lifesteal, 0.01) and is_equal_approx(player.spirit_attack_speed, 0.30), "buff alanları")
+	assert(is_equal_approx(player.spirit_shield_pen, 0.15) and is_equal_approx(player.spirit_lifesteal, 0.02) and is_equal_approx(player.spirit_attack_speed, 0.30), "buff alanları")
 	assert(is_equal_approx(weapon._player_stat("spirit_shield_pen"), 0.15), "silah kalkan delmeyi okuyor")
 	if "fire_rate_mult" in weapon:
 		assert(float(weapon.get("fire_rate_mult")) < base_fire_rate, "saldırı hızı artmalı (çarpan düşmeli)")
@@ -419,8 +419,71 @@ func test_facing_target_uses_flipped_mirror_and_hits_a_real_melee_enemy() -> voi
 	_spawned.append(enemy)
 	enemy.global_position = knife.global_position + Vector2(60.0, 4.0)
 	var picked: Node2D = knife._make_facing_direction_target()
-	if knife.attack_range >= 60.0:
-		assert(picked == enemy, "ışın üstündeki gerçek yaratık hedef seçilmeli")
+	assert(picked == enemy, "zincir ucunun önündeki gerçek yaratık hedef seçilmeli")
+	_cleanup()
+
+
+func _salvo_knife(player: Node) -> Node:
+	player.buy_weapon_copy("dagger", 1)
+	var knife: Node = null
+	for w in player.owned_weapon_nodes:
+		if w.get_meta("shop_key", "") == "dagger":
+			knife = w
+	assert(knife != null, "bıçak alınmalı")
+	knife.fire_in_facing_direction = true ## Talon E dizilimi
+	knife.icon_sprite.rotation = -deg_to_rad(float(knife.sprite_forward_angle_deg)) ## yön = sağ
+	return knife
+
+
+func _fake_enemy_at(pos: Vector2) -> FakeEnemy:
+	var e := FakeEnemy.new()
+	e.add_to_group("enemies")
+	add_child(e)
+	_spawned.append(e)
+	e.global_position = pos
+	return e
+
+
+## 2026-11-09 (kullanıcı: "E aktifken silahların vuruşları zincirden bağımsız ... daha uzakta ve alakasız konumlarda"): salvoda yakın
+## dövüş vuruşu zincirin ucunda - uzaktaki yaratık seçilmez, ikon yuvasında kalır, önündeki yaratık hemen vurulur.
+func test_talon_salvo_melee_strikes_at_the_chain_end_not_at_range() -> void:
+	var player: Node = _make_player(1, S.PARA)
+	var knife: Node = _salvo_knife(player)
+	var reach: float = knife._salvo_melee_reach()
+	var far: FakeEnemy = _fake_enemy_at(knife.global_position + Vector2(reach + 60.0, 0.0))
+	var ghost: Node2D = knife._make_facing_direction_target()
+	assert(ghost != far and not ghost.has_method("take_damage"), "zincir ucundan uzaktaki yaratık hedef olmamalı")
+	assert(ghost.global_position.distance_to(knife.global_position) <= reach + 0.5, "hayalet ikonun hemen önünde: %s" % ghost.global_position)
+	var near: FakeEnemy = _fake_enemy_at(knife.global_position + Vector2(reach * 0.6, 3.0))
+	var picked: Node2D = knife._make_facing_direction_target()
+	assert(picked == near, "ikonun önündeki yaratık seçilmeli")
+	knife._fire_at(picked)
+	assert(near.hits.size() >= 1, "zincir ucundaki yaratık beklemeden vurulmalı")
+	assert(far.hits.is_empty(), "uzaktaki yaratık vurulmamalı")
+	assert(knife.icon_sprite.global_position.distance_to(knife.global_position) <= 8.0, "ikon zincirin ucunda kalmalı (savrulmaz)")
+	assert(knife._melee_swing_tween == null, "salvoda silaha özel savuruş oynamaz")
+	_cleanup()
+
+
+## 2026-11-09 (kullanıcı: "Q attığında sonraki 3 saldırısı yakınında bir hedef yoksa gerçekleşmiyor boşa gidiyor"): hak saklanır.
+func test_talon_q_burst_waits_for_a_target_instead_of_wasting_shots() -> void:
+	var player: Node = _make_player(1, S.PARA)
+	var knife: Node = _salvo_knife(player)
+	var shots: Array = []
+	knife.fired.connect(func(_d: Vector2) -> void: shots.append(1))
+	knife.fire_burst(3, 0.07)
+	knife._process_burst(0.016)
+	knife._process_burst(0.5)
+	assert(shots.is_empty() and knife._burst_left == 3, "hedef yokken atış harcanmamalı: %d / %d" % [shots.size(), knife._burst_left])
+	_fake_enemy_at(knife.global_position + Vector2(knife._salvo_melee_reach() * 0.6, 0.0))
+	knife._process_burst(0.016)
+	assert(shots.size() == 1 and knife._burst_left == 2, "hedef gelince ilk atış")
+	knife._process_burst(0.1)
+	knife._process_burst(0.1)
+	assert(shots.size() == 3 and knife._burst_left == 0, "kalanlar aralıkla: %d" % shots.size())
+	knife.fire_burst(3, 0.07)
+	knife.fire_burst(3, 0.07)
+	assert(knife._burst_left == 3, "yeni Q hakkı tazeler, üst üste binmez")
 	_cleanup()
 
 

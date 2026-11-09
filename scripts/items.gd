@@ -18,6 +18,7 @@ const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / L
 ## Yeni stat: heal_shield_power (İyileştirme ve Kalkan Gücü) - oyuncunun sağladığı tüm can/kalkanı güçlendirir.
 ## item_shield_regen_flat = saniyede kalkan (Savaş Kalkanı yarısını alır), item_health_regen = 5 saniyede toplam can (her saniye beşte biri, madde 476).
 
+const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
 const KADEME_PARCA := 1
 const KADEME_EPIK := 2
 const KADEME_EFSANEVI := 3
@@ -60,7 +61,8 @@ const DEFS := {
 	## ------------------------------------------------------------------ 2. kademe: Epik eşyalar
 	"kemik_kolye": {"name": "Kemik Kolye", "kademe": 2, "cost": 600,
 		"recipe": ["kanli_yakut", "yasam_kristali"],
-		"stats": {"max_health": 80.0, "damage_bonus": 5.0}},
+		"stats": {"max_health": 80.0, "damage_bonus": 5.0},
+		"passive": "Yetenek kullandıktan sonraki ilk 6 saldırı (bütün silahlar) %5 saldırı gücü + 10 fazladan hasar verir. (10 sn bekleme süresi)"},
 	"suikastci_kamasi": {"name": "Suikastçı Kaması", "kademe": 2, "cost": 630,
 		"recipe": ["bile_tasi", "kol_saati"],
 		"stats": {"damage_bonus": 10.0, "cooldown_reduction_percent": 0.06}},
@@ -116,6 +118,30 @@ const DEFS := {
 		"stats": {"damage_bonus": 15.0, "item_ap_percent": 0.05},
 		"passive": "Saldırı gücünü %5 arttırır."},
 
+	## ------------------------------------------------------------------ 2026-11-08 "Yeni_Esyalar.zip": 7 epik + 4 efsanevi (madde 486). Epikler TARİFSİZ düz fiyat (Savaşçı Bileyi gibi; fiyatları kullanıcı vermedi - güce göre benim seçimim),
+	## efsaneviler çiftinin epiğini içeren tarifle (fiyat = bileşen toplamı). "weapon_class": eşya yalnız sahip olunan 3 silahın HEPSİ o türdeyken çıkar/alınır (Items.weapon_gate_ok).
+	"vampir_disleri": {"name": "Vampir Dişleri", "kademe": 2, "cost": 700, "recipe": [],
+		"stats": {"crit_chance_bonus": 0.06, "item_crit_damage_bonus": 0.10},
+		"passive": "Kritik vuruşlar %10 ihtimalle 5 can yeniler."},
+	"urkek_yurek": {"name": "Ürkek Yürek", "kademe": 2, "cost": 700, "recipe": [],
+		"stats": {"max_health": 120.0},
+		"passive": "Canın %25 altına düştüğünde 50 hareket hızı kazanırsın, hareket hızı yavaşça kaybolur. (60 sn bekleme süresi)"},
+	"kan_damlasi_kolyesi": {"name": "Kan Damlası Kolyesi", "kademe": 2, "cost": 720, "recipe": [],
+		"stats": {"lifesteal_percent": 0.06, "damage_bonus": 5.0},
+		"passive": "Canın %50 altındayken %0,2 can emme kazanırsın."},
+	"kackinin_cizmeleri": {"name": "Kaçkının Çizmeleri", "kademe": 2, "cost": 650, "recipe": [],
+		"stats": {"item_speed_percent": 0.05, "dodge_chance": 0.03},
+		"passive": "Bir boss yaşarken %5 hareket hızı ve %3 sıvışma daha kazanırsın."},
+	"haydut_kesesi": {"name": "Haydut Kesesi", "kademe": 2, "cost": 700, "recipe": [],
+		"stats": {"luck": 3.0, "damage_bonus": 10.0},
+		"passive": "Öldürdüğün her 10 düşman başına 5 altın kazanırsın."},
+	"gladyator_eldivenleri": {"name": "Gladyatör Eldivenleri", "kademe": 2, "cost": 700, "recipe": [], "weapon_class": "melee",
+		"stats": {"damage_bonus": 8.0, "item_fire_rate_percent": 0.05, "item_melee_mult_bonus": 0.10},
+		"passive": "Yakın dövüş hasarını %10 arttırır. (Sahip olduğun 3 silahın hepsi yakın dövüşse ortaya çıkar.)"},
+	"avci_oklugu": {"name": "Avcı Okluğu", "kademe": 2, "cost": 700, "recipe": [], "weapon_class": "ranged",
+		"stats": {"damage_bonus": 8.0, "item_fire_rate_percent": 0.05, "item_ranged_mult_bonus": 0.10},
+		"passive": "Menzilli silah hasarını %10 arttırır. (Sahip olduğun 3 silahın hepsi menzilliyse ortaya çıkar.)"},
+
 	## ------------------------------------------------------------------ 3. kademe: Efsanevi eşyalar
 	## 2026-10-18 (kullanıcı: "toplanan exp başına hız veren iteme: %1 -> %0.5, efsaneviye dönüştür, temel statlarını biraz yükselt"): Ruhların Maskesi eskiden EPİKTİ
 	## (Tecrübe Kitabı + Deri Çizmeler + Çeviklik Yüzüğü, +%10 EXP, orb başına %1 hız). Şimdi efsanevi: eski tarif + Rüzgar Eldiveni + 2. Tecrübe Kitabı (fiyat = bileşen toplamı),
@@ -141,7 +167,7 @@ const DEFS := {
 	"son_felaket_pencesi": {"name": "Son Felaket Pençesi", "kademe": 3, "cost": 2000,
 		"recipe": ["keskin_goz_hanceri", "keskin_goz_hanceri", "savascinin_kilici"],
 		"stats": {"damage_bonus": 35.0, "crit_chance_bonus": 0.20, "item_crit_damage_bonus": 0.5},
-		"passive": "Kritik hasarını %50 arttırır (kritik hasar sınırını aşabilir)."},
+		"passive": "Kritik hasar sınırını aşabilir."},
 	"kabuk_delen": {"name": "Kabuk Delen", "kademe": 3, "cost": 2010,
 		"recipe": ["zirh_soken_hancer", "savascinin_kilici", "tornavida", "tornavida"],
 		"stats": {"damage_bonus": 25.0, "shield_pen_percent": 0.20},
@@ -221,6 +247,26 @@ const DEFS := {
 		"recipe": ["sarsilmaz_kabuk", "olum_esigi", "aura_kristali"],
 		"stats": {"item_shield_power_flat": 250.0, "item_shield_regen_flat": 1.5},
 		"passive": "Mana kalkanın %40'ın altına düştüğünde (savaştayken de) her saniye maksimum mana kalkanının %1'ini kazanırsın."},
+	"kan_kapani": {"name": "Kan Kapanı", "kademe": 3, "cost": 2050,
+		"recipe": ["vampir_disleri", "keskin_goz_hanceri", "savascinin_kilici"], ## kritik oran/hasar + saldırı gücü
+		"stats": {"damage_bonus": 15.0, "crit_chance_bonus": 0.10, "item_crit_damage_bonus": 0.20},
+		"passive": "Bir düşmana kritik vuruş yaptığında %20 ihtimalle o kritik vuruşla verdiğin hasarın %5'i kadar can yenilersin."},
+	"haydut_kralinin_taci": {"name": "Haydut Kralının Tacı", "kademe": 3, "cost": 2080,
+		"recipe": ["haydut_kesesi", "tecrube_kitabi", "tecrube_kitabi", "savasci_bileyi"], ## şans + saldırı gücü
+		"stats": {"luck": 10.0, "damage_bonus": 20.0},
+		"passive": "Öldürdüğün her düşman için 1 altın kazanırsın."},
+	"barbar_kralin_migferi": {"name": "Barbar Kralın Miğferi", "kademe": 3, "cost": 2050, "weapon_class": "melee",
+		"recipe": ["gladyator_eldivenleri", "savascinin_kilici", "ruzgar_eldiveni"],
+		"stats": {"damage_bonus": 20.0, "item_fire_rate_percent": 0.12, "item_melee_mult_bonus": 0.18},
+		"passive": "Yakın silah hasarını %18 arttırır. (Sahip olduğun 3 silahın hepsi yakın dövüşse ortaya çıkar.)"},
+	"kralice_andrea_kitabi": {"name": "Kraliçe Andrea'nın Kitabı", "kademe": 3, "cost": 1710,
+		"recipe": ["savasci_bileyi", "kol_saati", "kol_saati", "bile_tasi"], ## saldırı gücü + bekleme azaltma (fiyat = bileşen toplamı)
+		"stats": {"damage_bonus": 40.0, "cooldown_reduction_percent": 0.20},
+		"passive": "Yeteneklerin (Q, E, R) verdiği hasar %30 artar."},
+	"gok_kartalin_kanatlari": {"name": "Gök Kartalın Kanatları", "kademe": 3, "cost": 2050, "weapon_class": "ranged",
+		"recipe": ["avci_oklugu", "savascinin_kilici", "ruzgar_eldiveni"],
+		"stats": {"damage_bonus": 20.0, "item_fire_rate_percent": 0.12, "item_ranged_mult_bonus": 0.18},
+		"passive": "Menzilli silah hasarını %18 arttırır. (Sahip olduğun 3 silahın hepsi menzilliyse ortaya çıkar.)"},
 }
 
 ## Dükkanda/envanterde sabit sıra: kademe, sonra fiyat.
@@ -230,10 +276,13 @@ const KEYS: Array = [
 	"kemik_kolye", "suikastci_kamasi", "ruh_emici", "keskin_goz_hanceri", "ruzgar_eldiveni", "zirh_soken_hancer",
 	"savascinin_kilici", "sarsilmaz_kabuk", "kirilmaz_irade", "aura_kristali", "lutuf_madalyonu", "yenilenme_ozutu",
 	"olum_esigi", "savasci_bileyi", "kizil_hasat",
+	"vampir_disleri", "urkek_yurek", "kan_damlasi_kolyesi", "kackinin_cizmeleri", "haydut_kesesi", "gladyator_eldivenleri", "avci_oklugu",
 	"ruhlarin_akisi", "anka_kusunun_kalbi", "ilidaricin_kilici", "canavarlastirma_ozutu", "son_felaket_pencesi", "kabuk_delen",
 	"kralin_kadehi", "ninjanin_el_kitabi", "zamanbukenin_eldiveni", "isigin_muhafizi", "zaman_kiran", "astral_zirh_ozu",
 	"kan_aglayan", "gunesin_iradesi", "son_sans", "bilgenin_pusulasi", "sifa_feneri", "azrailin_gozu", "aegisin_muhafizi",
 	"ruzgar_yuruyen_cizmeleri", "kanli_bicer", "ahenk_bastiyonu", "anka_muhru", "kiyamet_bicagi",
+	"kan_kapani", "haydut_kralinin_taci", "barbar_kralin_migferi", "gok_kartalin_kanatlari",
+	"kralice_andrea_kitabi",
 ]
 
 ## Stat etiketleri (açıklama metni + ipuçları). percent=true: değer kesir, "%X" yazılır.
@@ -245,10 +294,10 @@ const STAT_LABELS := {
 	"lifesteal_percent": ["Can Çalma", true], "luck": ["Şans", false], "exp_gain_percent": ["EXP Kazanımı", true],
 	"item_speed_percent": ["Hareket Hızı", true], "dodge_chance": ["Sıvışma", true],
 	"cooldown_reduction_percent": ["Bekleme Süresinde Azalma", true], "shield_pen_percent": ["Kalkan Delme", true],
-	"crit_chance_bonus": ["Kritik Şansı", true], "shield_protection_bonus": ["Mana Kalkanı Soğurma", true],
+	"crit_chance_bonus": ["Kritik Şansı", true], "item_crit_damage_bonus": ["Kritik Hasarı", true], "shield_protection_bonus": ["Mana Kalkanı Soğurma", true],
 }
 ## Pasifin kendisi olan (açıklamada stat satırı olarak tekrar yazılmayan) statlar.
-const PASSIVE_ONLY_STATS := ["item_flat_hit_damage", "item_damage_mult_bonus", "item_crit_damage_bonus",
+const PASSIVE_ONLY_STATS := ["item_flat_hit_damage", "item_damage_mult_bonus", "item_melee_mult_bonus", "item_ranged_mult_bonus",
 	"item_vitamin_regen_bonus", "item_shield_delay_reduction", "item_ap_percent", "item_extra_lifesteal", "item_pickup_range_percent"]
 
 
@@ -314,6 +363,30 @@ static func icon(key: String) -> Texture2D:
 
 static func is_support_only(key: String) -> bool:
 	return bool(get_def(key).get("support_only", false))
+
+
+## Silah türü koşulu (madde 486): "weapon_class" "melee" / "ranged" olan eşya yalnız sahip olunan WEAPON_GATE_COUNT (3 = oyuncunun silah sınırı) silahın
+## HEPSİ o türdeyken çıkar/alınır. Yakın dövüş = WeaponCatalogScript.MELEE_KEYS, gerisi menzilli. Eşya alındıktan sonra silah değişse de elde kalır.
+const WEAPON_GATE_COUNT := 3
+static func weapon_gate_ok(key: String) -> bool:
+	var cls: String = str(DEFS.get(key, {}).get("weapon_class", ""))
+	if cls == "":
+		return true
+	var ws: Array = GameManager.owned_weapons
+	if ws.size() < WEAPON_GATE_COUNT:
+		return false
+	for w in ws:
+		var is_melee: bool = WeaponCatalogScript.MELEE_KEYS.has(str((w as Dictionary).get("key", "")))
+		if is_melee != (cls == "melee"):
+			return false
+	return true
+
+
+## Bu karakterin/silah dizilimiyle bu eşya havuza girebilir mi (destekçi eşyası + silah türü koşulu).
+static func is_available(key: String, char_id: int) -> bool:
+	if is_support_only(key) and not is_ally_support_char(char_id):
+		return false
+	return weapon_gate_ok(key)
 
 
 static func is_ally_support_char(char_id: int) -> bool:
@@ -420,6 +493,8 @@ static func purchase_block_reason(key: String, owned: Array, part_slots: int, pl
 	if plan.is_empty():
 		plan = plan_purchase(key, owned)
 	var k: int = kademe(key)
+	if not weapon_gate_ok(key):
+		return Loc.t("Silah türü uymuyor")
 	if (k == KADEME_EFSANEVI or k == KADEME_EPIK) and owns(owned, key):
 		return Loc.t("Zaten sende var")
 	if k == KADEME_PARCA and part_copies(key, owned) >= PART_MAX_COPIES:

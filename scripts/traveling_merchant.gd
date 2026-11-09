@@ -311,7 +311,7 @@ func _generate_stock() -> Array:
 	for k in Items.KEYS:
 		if Items.kademe(k) >= Items.KADEME_EPIK and Items.owns(GameManager.owned_items, k):
 			continue ## epikler ve efsaneviler tekil (items.gd): sahip olunan satıcıda çıkmaz
-		if Items.is_support_only(k) and not Items.is_ally_support_char(GameManager.selected_char_id):
+		if not Items.is_available(k, GameManager.selected_char_id):
 			continue
 		candidates.append(k)
 	## 2026-10-10: kademe başına bir satır (ROW_ITEMS), kademe içinde eşit olasılık; sıra parça -> epik -> efsanevi (bkz. ROW_ITEMS notu).

@@ -61,7 +61,7 @@ func test_chest_pool_skips_items_with_capped_stats() -> void:
 
 # ------------------------------------------------------------------ veri
 func test_defs_are_consistent() -> void:
-	assert(Items.KEYS.size() == 50, "11 parça + 15 epik + 24 efsanevi = 50 (2026-10-10: +1 epik, +7 efsanevi tarifsiz; 2026-10-18: Ruhların Maskesi efsanevi), bulunan %d" % Items.KEYS.size())
+	assert(Items.KEYS.size() == 62, "11 parça + 22 epik + 29 efsanevi = 62 (2026-11-09: +Kraliçe Andrea'nın Kitabı; 2026-10-10: +1 epik, +7 efsanevi tarifsiz; 2026-10-18: Ruhların Maskesi efsanevi; 2026-11-08: +7 epik +4 efsanevi), bulunan %d" % Items.KEYS.size())
 	assert(Items.KEYS.size() == Items.DEFS.size(), "KEYS ile DEFS aynı eşyalar")
 	var counts: Array = [0, 0, 0]
 	var player: Node = _make_player()
@@ -83,7 +83,7 @@ func test_defs_are_consistent() -> void:
 		assert(ResourceLoader.exists(Items.icon_path(k)), "%s: ikon yok" % k)
 		for stat in Items.get_def(k).get("stats", {}):
 			assert(stat in player, "%s: player.gd'de '%s' statı yok" % [k, stat])
-	assert(counts == [11, 15, 24], "kademe sayıları: %s (2026-10-18: Ruhların Maskesi epikten efsaneviye geçti)" % str(counts))
+	assert(counts == [11, 22, 29], "kademe sayıları: %s (2026-10-18: Ruhların Maskesi epikten efsaneviye geçti; 2026-11-08: +7 epik +4 efsanevi)" % str(counts))
 	_cleanup()
 
 

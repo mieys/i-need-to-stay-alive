@@ -14,6 +14,8 @@ const KelebekRuhuScript := preload("res://scripts/kelebek_ruhu.gd")
 const LightningBeamFxScript := preload("res://scripts/fx_lightning_beam.gd") ## Yıldırım Asası vuruş sesi (_beam_hit_sfx)
 const PeriPetScript := preload("res://scripts/peri_pet.gd")
 const KirpiPetScript := preload("res://scripts/kirpi_pet.gd")
+const SlimePetScript := preload("res://scripts/slime_pet.gd")
+const HayaletPetScript := preload("res://scripts/hayalet_pet.gd")
 const KORSAN_CHAR_ID := 9 ## Characters.DEFS roster id'si (player.gd ile aynı)
 const WeaponTargetPriorityScript := preload("res://scripts/weapon_target_priority.gd")
 ## Aday sorgusu (host'ta yeni yolda C++ ızgarası, aksi halde tüm grup) - nişan seçicilerinin süzgeçleri aynen kalır.
@@ -305,7 +307,7 @@ var _weapon_is_sword: Array = []
 const SwordSwingMath := preload("res://scripts/sword_swing_math.gd")
 const DaggerStabMath := preload("res://scripts/dagger_stab_math.gd")
 const TopuzSlamMath := preload("res://scripts/topuz_slam_math.gd")
-const PenceHookMath := preload("res://scripts/pence_hook_math.gd")
+const TirpanReapMath := preload("res://scripts/tirpan_reap_math.gd")
 const MizrakThrustMath := preload("res://scripts/mizrak_thrust_math.gd") ## madde 305
 const KalkanBashMath := preload("res://scripts/kalkan_bash_math.gd") ## madde 338
 ## Tabanca/Tüfek şarjörü (madde 296): kasterle AYNI doldurma sürücüsü + kovan (weapon.gd _start_reload / _fire_at).
@@ -428,6 +430,10 @@ func setup(p_peer_id: int, p_char_id: int, p_name: String) -> void:
 	name = "remote_player_%d" % peer_id
 	if name_label:
 		name_label.text = player_name
+		name_label.visible = UISound.show_player_names
+		UISound.player_names_changed.connect(func() -> void:
+			if is_instance_valid(name_label):
+				name_label.visible = UISound.show_player_names)
 	_load_character_frames()
 
 
@@ -439,8 +445,8 @@ func _load_character_frames() -> void:
 	## oyuncuyla (player.gd _load_character_frames) AYNI çarpan - yoksa çok
 	## oyunculuda uzak oyuncular bir %5 daha iri görünürdü. _base_anim_scale de
 	## bu değerden atandığı için Talon'un Devleşme ultisi (2x) tutarlı kalır.
-	anim.scale = def.get("scale", Vector2(1.27575, 1.27575)) * EntityScale.SIZE
-	_base_anim_scale = anim.scale
+	_base_anim_scale = def.get("scale", Vector2(1.27575, 1.27575)) * EntityScale.SIZE
+	anim.scale = _base_anim_scale * _pet_size_mult ## evcil Minik Cadı boyu (madde 509)
 	anim.offset = def.get("offset", Vector2(0, -5))
 	_hadime_base_offset = anim.offset
 	cadi_base_offset = anim.offset ## Cadı'nın süpürgesine binince yükselme bu tabana eklenir
@@ -505,6 +511,46 @@ func kirpi_event(open: bool) -> void:
 		kirpi = puppet
 	if kirpi and kirpi.has_method("apply_remote_state"):
 		kirpi.apply_remote_state(open)
+
+
+## Minik Cadı (evcil iyi slime, madde 509) - KUKLA: sahibinin ekranından "buradayım" / "büyü yaptım" (bkz. slime_pet.gd,
+## NetworkManager.broadcast_slime). Kukla ilk olayda kurulur; büyü sadece görsel (buff sahibinin ekranında; boy extra "psz" ile gelir).
+func slime_event(cast: bool) -> void:
+	var slime: Node = get_node_or_null("Slime")
+	if slime == null and anim != null:
+		var puppet: Node2D = SlimePetScript.new()
+		add_child(puppet)
+		puppet.setup(self, anim, true)
+		slime = puppet
+	if cast and slime and slime.has_method("play_cast_visual"):
+		slime.play_cast_visual()
+
+
+## Hayalet (evcil, madde 509) - KUKLA: sahibinin kaplama durumu (bkz. hayalet_pet.gd, NetworkManager.broadcast_hayalet). Kukla ilk olayda
+## kurulur; kaplama sadece görsel (görünmezlik/dokunulmazlık sahibinde, ağda extra "is_invisible").
+func hayalet_event(cover: bool) -> void:
+	var ghost: Node = get_node_or_null("Hayalet")
+	if ghost == null and anim != null:
+		var puppet: Node2D = HayaletPetScript.new()
+		add_child(puppet)
+		puppet.setup(self, anim, true)
+		ghost = puppet
+	if ghost and ghost.has_method("apply_remote_state"):
+		ghost.apply_remote_state(cover)
+
+
+## Minik Cadı büyüsü boy çarpanı (player.gd _set_pet_size_mult ile aynı kural): o anki anim.scale oranla değişir; diğer ölçek yazımları
+## (_apply_talon_form_scale / _apply_shaman_golem_scale / _apply_vampir_bat_scale, Devleşme) zaten bu çarpanla çarpar.
+var _pet_size_mult: float = 1.0
+
+
+func _apply_pet_size(m: float) -> void:
+	m = clampf(m, 0.5, 2.0)
+	if is_equal_approx(m, _pet_size_mult):
+		return
+	if anim and is_instance_valid(anim):
+		anim.scale = anim.scale * (m / _pet_size_mult)
+	_pet_size_mult = m
 
 
 
@@ -763,7 +809,7 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 		## kökü (0,5) altında doğrudan çocuk -> PUPPET_ICON_SCALE. Sanatı yoksa yukarıdaki eski ikon. Kademe dokuyu değiştirmez
 		## ("tier_art" = görünüş sayfası, hep 1 - kalkan; demirci kademesi "ench_tier" meta'sında, _apply_enchant_glows).
 		if WeaponTierArt.has_art(key) and WeaponTierArt.set_art(icon, key):
-			icon.scale = Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE
+			icon.scale = Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE * WeaponTierArt.size_mult(key)
 			icon.set_meta("tier_art", 1)
 		if key == "kalkan":
 			icon.set_meta("kalkan", true) ## dönmez, yönlü görünüş (KalkanBashMath.face) - bkz. _wf_face
@@ -1054,8 +1100,17 @@ func _wf_melee_facing(i: int, icon: Node2D, delta: float) -> void:
 			if icon.has_meta("kalkan"):
 				_wf_face(i, icon, (sc["focus"] as Vector2) - icon.global_position, t) ## kalkan yüzünü düşmana çevirir
 				return
-			var rest: float = deg_to_rad(_weapon_rest_rotation_deg[i] if i < _weapon_rest_rotation_deg.size() else 0.0)
-			icon.rotation = lerp_angle(icon.rotation, rest, t)
+			## Aynalanan yakın dövüş ikonu (Tırpan, madde 512): hedefin tarafına aynalanır, sap yine dik - weapon.gd ile aynı kural.
+			var mirror: bool = _weapon_mirror_aim[i] if i < _weapon_mirror_aim.size() else false
+			var rp: Array = TirpanReapMath.rest_pose(deg_to_rad(_weapon_rest_rotation_deg[i] if i < _weapon_rest_rotation_deg.size() else 0.0),
+				mirror, (sc["focus"] as Vector2).x < icon.global_position.x)
+			var was: bool = _weapon_icon_flipped[i] if i < _weapon_icon_flipped.size() else false
+			if bool(rp[1]) != was:
+				icon.set("flip_h", bool(rp[1]))
+				if i < _weapon_icon_flipped.size():
+					_weapon_icon_flipped[i] = bool(rp[1])
+				icon.rotation = float(rp[0])
+			icon.rotation = lerp_angle(icon.rotation, float(rp[0]), t)
 			return
 	var dir: Vector2 = _wf_idle_dir(icon)
 	if dir != Vector2.ZERO:
@@ -1127,7 +1182,8 @@ func _wf_update_all(delta: float) -> void:
 		if st == WeaponFollowMath.REVEAL and u >= WeaponFollowMath.GLINT_REVEAL_AT:
 			flash = 0.6 * clampf(1.0 - (u - WeaponFollowMath.GLINT_REVEAL_AT) / 0.12, 0.0, 1.0)
 		var alpha: float = float(p["alpha"])
-		pv.modulate = Color(1.0 + flash, 1.0 + flash, 1.0 + flash, alpha)
+		var lc: Color = BackMountScript.dim_color(float(p.get("dim", 0.0))) * (1.0 + flash) ## sırta girerken gölgeye girer (madde 514, weapon.gd aynı)
+		pv.modulate = Color(lc.r, lc.g, lc.b, alpha)
 		if i < _weapon_shadows.size() and is_instance_valid(_weapon_shadows[i]):
 			var sh: Node2D = _weapon_shadows[i]
 			var icon_local: Vector2 = pv.transform * icon.position
@@ -1581,7 +1637,7 @@ func _apply_talon_form_scale() -> void:
 	var ratio: float = want / _talon_form_scale_applied
 	_talon_form_scale_applied = want
 	if anim and is_instance_valid(anim):
-		anim.scale = _base_anim_scale * want
+		anim.scale = _base_anim_scale * want * _pet_size_mult
 	for i in range(_weapon_icons.size()):
 		var icon: Node2D = _weapon_icons[i]
 		if is_instance_valid(icon):
@@ -1595,7 +1651,7 @@ func _apply_talon_form_scale() -> void:
 func _apply_shaman_golem_scale() -> void:
 	if char_id != ShamanGolemMath.CHAR_ID or not (anim and is_instance_valid(anim)):
 		return
-	anim.scale = _base_anim_scale * (ShamanGolemMath.EVO_BIG_SCALE_MULT if (_shaman_golem_form and has_evo("shaman_rf")) else 1.0)
+	anim.scale = _base_anim_scale * (ShamanGolemMath.EVO_BIG_SCALE_MULT if (_shaman_golem_form and has_evo("shaman_rf")) else 1.0) * _pet_size_mult
 
 
 ## Vampir Çocuk Yarasa Formu (E) boyutu: yarasa kareleri (96x112) insan karelerinden büyük olduğu
@@ -1608,7 +1664,7 @@ func _apply_vampir_bat_scale() -> void:
 		return
 	if not (anim and is_instance_valid(anim)):
 		return
-	anim.scale = _base_anim_scale * (VampirMath.BAT_FORM_SCALE_MULT if _vampir_bat_form else 1.0)
+	anim.scale = _base_anim_scale * (VampirMath.BAT_FORM_SCALE_MULT if _vampir_bat_form else 1.0) * _pet_size_mult
 
 
 ## ---------- Yetenek evrimleri (2026-09-28) ----------
@@ -1645,10 +1701,28 @@ var brush_state: int = 0
 
 func set_brush_state(state: int) -> void:
 	brush_state = state
-	if anim != null:
-		anim.self_modulate.a = HideBrushScript.alpha_for(state)
+	_apply_body_alpha() ## çalı saydamlığı x evcil Hayalet örtüsü solukluğu (madde 515)
 	if overhead_bar != null:
 		overhead_bar.set_brush_state(state) ## can barının üstünde saklı/görüldü simgesi (madde 275)
+
+
+## Evcil Hayalet örtüsü (madde 515): karakter sprite'ı da soluklaşır. Çalı saydamlığıyla (brush_state) ÇARPILIR - ikisi aynı alana
+## (anim.self_modulate.a) tek yerden yazılır, biri diğerini sıfırlamaz. Değeri hayalet sürer (hayalet_pet.gd kuklası; player.gd ile aynı kural); Assasin görünmezliği kök modulate'te, vuruş/zehir anim.modulate'te - dokunulmaz.
+var _pet_cover_fade: float = 1.0
+
+
+func set_pet_cover_fade(f: float) -> void:
+	_pet_cover_fade = clampf(f, 0.0, 1.0)
+	_apply_body_alpha()
+
+
+func get_pet_cover_fade() -> float:
+	return _pet_cover_fade
+
+
+func _apply_body_alpha() -> void:
+	if anim != null:
+		anim.self_modulate.a = HideBrushScript.alpha_for(brush_state) * _pet_cover_fade
 
 
 ## Vampir Çocuk yarasa formundayken (anim adı bat_*) yaratıklar bu kuklanın içinden geçilebilir sayar - player.gd is_ghost_now ile aynı
@@ -1843,11 +1917,11 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 		if not _talon_giant_active:
 			_talon_giant_active = true
 			if anim and is_instance_valid(anim):
-				anim.scale = _base_anim_scale * 2.0
+				anim.scale = _base_anim_scale * 2.0 * _pet_size_mult
 	elif _talon_giant_active:
 		_talon_giant_active = false
 		if anim and is_instance_valid(anim):
-			anim.scale = _base_anim_scale
+			anim.scale = _base_anim_scale * _pet_size_mult
 
 	## Talon Silah Salvosu/Ayna Formu (bkz. main.gd extra["talon_formation"] /
 	## _update_talon_formation) - HERHANGİ bir TAZE geçişte dönüş açısını
@@ -1874,6 +1948,7 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	_talon_formation = new_talon_formation
 	_talon_form_active = bool(extra.get("talon_form", false))
 	_apply_talon_form_scale()
+	_apply_pet_size(float(extra.get("psz", 1.0))) ## evcil Minik Cadı büyüsü: boy (madde 509)
 	_oakley_bond_on = bool(extra.get("oakley_bond", false))
 	if _oakley_bond_on and not is_instance_valid(_oakley_bond_fx):
 		_oakley_bond_fx = OakleyLeafBarrierScene.instantiate()
@@ -2643,7 +2718,8 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 			WeaponJuice.spawn_surge_spark(self, icon) ## menzilli silahta kıvılcım WeaponJuice.arcane_surge içinde
 
 	if is_melee and formation_owns_position:
-		_kick_formation_icon(slot_index, dir, float(_weapon_recoil_distance[slot_index]) if slot_index < _weapon_recoil_distance.size() else 8.0)
+		## Yakın dövüş: zincir ucunda DIŞA dürtme (kaster weapon.gd _salvo_melee_jab ile aynı boy/süre; -dir = geri tepmenin tersi).
+		_kick_formation_icon(slot_index, -dir, TalonFormationMath.SALVO_MELEE_JAB)
 	elif is_melee and slot_index < _weapon_is_sword.size() and _weapon_is_sword[slot_index] and data.has("sword_side"):
 		## Uzunkılıç: kasterle AYNI savuruş (bkz. weapon.gd _start_sword_swing) - plan kuklanın kendi kök ölçeğiyle kurulur.
 		var s_target := Vector2(float(data.get("target_pos_x", 0.0)), float(data.get("target_pos_y", 0.0)))
@@ -2690,17 +2766,18 @@ func _animate_weapon_fire_full(data: Dictionary) -> void:
 		if slot_index < _weapon_fire_tweens.size():
 			_weapon_fire_tweens[slot_index] = t_tw
 	elif is_melee and wkey == "pence" and data.has("pence_speed"):
-		## Pençe "Kanca Çekiş" (madde 237): kasterle AYNI atıl-saplan-yırt planı + efektler (bkz. weapon.gd _start_pence_hook) -
-		## plan kuklanın kendi kök ölçeğiyle kurulur; efektleri burada PenceHookMath.play çıkarır (broadcast_weapon_attack gelmez).
+		## Tırpan "Kara Hasat" (madde 512): kasterle AYNI biçme planı + efektler (bkz. weapon.gd _start_tirpan_reap) - plan kuklanın
+		## kendi kök ölçeğiyle kurulur; efektleri burada TirpanReapMath.play çıkarır (broadcast_weapon_attack gelmez).
 		var p_target := Vector2(float(data.get("target_pos_x", 0.0)), float(data.get("target_pos_y", 0.0)))
 		var p_forward: float = deg_to_rad(_weapon_forward_angle_deg[slot_index] if slot_index < _weapon_forward_angle_deg.size() else 0.0)
 		var p_rest_rot: float = deg_to_rad(_weapon_rest_rotation_deg[slot_index] if slot_index < _weapon_rest_rotation_deg.size() else 0.0)
 		if slot_index < _weapon_fire_tweens.size() and _weapon_fire_tweens[slot_index] and (_weapon_fire_tweens[slot_index] as Tween).is_valid():
 			(_weapon_fire_tweens[slot_index] as Tween).kill()
-		var p_plan: Dictionary = PenceHookMath.make_plan(dir, p_target, float(data.get("pence_size", 1.0)), scale.x,
-			float(data.get("pence_tilt", 0.0))) ## kasterin seçtiği geliş açısı (eski sürüm göndermez -> düz)
-		var p_tw: Tween = PenceHookMath.play(self, icon, p_plan, p_forward, base_pos, p_rest_rot, base_scale_all,
+		var p_plan: Dictionary = TirpanReapMath.make_plan(dir, p_target, float(data.get("pence_size", 1.0)), scale.x)
+		var p_tw: Tween = TirpanReapMath.play(self, icon, p_plan, p_forward, base_pos, p_rest_rot, base_scale_all,
 			float(data.get("pence_speed", 1.0)), is_crit, get_tree().current_scene, float(data.get("chain_hold", 0.0)))
+		if slot_index < _weapon_icon_flipped.size():
+			_weapon_icon_flipped[slot_index] = float(p_plan["side"]) < 0.0 ## play sola saldırıda ikonu aynalar (bıçak önde)
 		if slot_index < _weapon_fire_tweens.size():
 			_weapon_fire_tweens[slot_index] = p_tw
 	elif is_melee and wkey == "mizrak" and data.has("mizrak_speed"):

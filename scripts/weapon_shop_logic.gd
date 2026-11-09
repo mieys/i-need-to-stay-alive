@@ -138,7 +138,7 @@ static func buy_weapon(player: Node, key: String) -> bool:
 		return false
 	var cost: int = weapon_price(GameManager.owned_weapons.size())
 	var shards: int = weapon_shard_cost()
-	GameManager.gold -= cost
+	GameManager.spend_shop_gold(cost)
 	GameManager.add_weapon_shards(-shards)
 	GameManager.owned_weapons.append(EnchantDefs.new_weapon_entry(key, 1, cost, shards))
 	if player != null and is_instance_valid(player) and player.has_method("buy_weapon_copy"):
@@ -224,7 +224,7 @@ static func buy_wupgrade(player: Node, slot: int, index: int) -> bool:
 		return false
 	var final_up: bool = wupgrade_is_final(slot, index)
 	var shards: int = wupgrade_shard_cost(slot, index)
-	GameManager.gold -= wupgrade_price(slot, index)
+	GameManager.spend_shop_gold(wupgrade_price(slot, index))
 	GameManager.add_weapon_shards(-shards)
 	if slot >= 0 and slot < GameManager.owned_weapons.size():
 		EnchantDefs.record_shards_spent(GameManager.owned_weapons[slot], shards) ## satışta %70'i geri gelir
@@ -270,7 +270,7 @@ static func can_buy_wplus(slot: int) -> bool:
 static func buy_wplus(player: Node, slot: int) -> bool:
 	if not can_buy_wplus(slot):
 		return false
-	GameManager.gold -= wplus_price(slot)
+	GameManager.spend_shop_gold(wplus_price(slot))
 	GameManager.add_weapon_shards(-SHARD_COST_WPLUS)
 	EnchantDefs.record_shards_spent(GameManager.owned_weapons[slot], SHARD_COST_WPLUS) ## satışta iade defteri
 	if player != null and is_instance_valid(player) and player.has_method("apply_enchant_choice"):
@@ -308,7 +308,7 @@ static func can_buy_shield(key: String) -> bool:
 static func buy_shield(player: Node, key: String) -> bool:
 	if not can_buy_shield(key):
 		return false
-	GameManager.gold -= shield_price()
+	GameManager.spend_shop_gold(shield_price())
 	GameManager.add_weapon_shards(-SHARD_COST_SHIELD)
 	_apply_card(player, {"type": "shield_pick", "slot": -1, "id": key})
 	return true
@@ -356,7 +356,7 @@ static func can_buy_upgrade(index: int) -> bool:
 static func buy_upgrade(player: Node, index: int) -> bool:
 	if not can_buy_upgrade(index):
 		return false
-	GameManager.gold -= upgrade_price(index)
+	GameManager.spend_shop_gold(upgrade_price(index))
 	GameManager.add_weapon_shards(-SHARD_COST_UPGRADE)
 	_apply_card(player, {"type": "shield_up", "slot": -1, "index": index})
 	return true

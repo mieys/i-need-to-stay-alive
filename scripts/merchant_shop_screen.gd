@@ -66,7 +66,7 @@ const BAG_TILE := 48.0
 ## Stat satırlarının simgeleri (Items.STAT_LABELS anahtarı -> doku).
 const STAT_ICONS := {
 	"damage_bonus": "res://assets/ui/stat_mini/damage.png", "item_fire_rate_percent": "res://assets/ui/stat_mini/fire_rate.png",
-	"crit_chance_bonus": "res://assets/ui/stat_mini/crit_chance.png", "max_health": "res://assets/ui/level_up_icons/stat_max_health.png",
+	"crit_chance_bonus": "res://assets/ui/stat_mini/crit_chance.png", "item_crit_damage_bonus": "res://assets/ui/stat_mini/crit_damage.png", "max_health": "res://assets/ui/level_up_icons/stat_max_health.png",
 	"item_health_regen": "res://assets/ui/stat_mini/health_regen.png", "lifesteal_percent": "res://assets/ui/stat_mini/lifesteal.png",
 	"item_shield_power_flat": "res://assets/ui/stat_mini/shield_amount.png", "item_shield_regen_flat": "res://assets/ui/stat_mini/shield_regen.png",
 	"item_shield_regen_percent": "res://assets/ui/stat_mini/shield_regen.png", "shield_pen_percent": "res://assets/ui/stat_mini/shield_pen_percent.png",
@@ -1126,7 +1126,7 @@ func _on_buy_pressed(index: int) -> void:
 			## Tarifli satın alma: sahip olunan bileşenler tüketilir (player.acquire_item kaydı da yazar).
 			var plan: Dictionary = Items.plan_purchase(key, GameManager.owned_items)
 			if _player and _player.has_method("acquire_item") and _player.acquire_item(key, plan, cost):
-				GameManager.gold -= cost
+				GameManager.spend_shop_gold(cost) ## Para ruhanisi indirim sayacı (madde 531)
 				entry["sold"] = true
 	_refresh_all_buy_states()
 	if _entry_sold(entry):

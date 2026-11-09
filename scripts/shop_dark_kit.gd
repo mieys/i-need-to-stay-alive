@@ -26,7 +26,7 @@ const TIER_NAME := ["PARÇA", "EPİK", "EFSANEVİ"]
 ## Efsun kontür renkleri (enchant_weapon_glow.gd TIER_COLORS ile aynı), dizin = kademe (1 kontürsüz).
 const ENCH_COL := [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.47, 0.91, 0.35), Color(0.31, 0.63, 1.0), Color(0.73, 0.49, 1.0), Color(1.0, 0.33, 0.28)]
 const ROMAN := ["I", "II", "III", "IV", "V"]
-const SHARD_TEXT := Color("#a8d8f0")
+const SHARD_TEXT := HT.SHARD ## silah parçacığı yazısı = simgenin açık zümrüt tonu (tek palet, madde 519)
 
 const COIN_PATH := "res://assets/ui/newui/icon_gold_coin.png"
 const SHARD_PATH := "res://assets/pickups/weapon_shard/shard_icon.png"

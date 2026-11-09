@@ -69,8 +69,9 @@ static func snap(v: Vector2) -> Vector2:
 	return (v / TEXEL).round() * TEXEL
 
 
-## Vampir FX'i doğar: kind = "hit" | "puff" | "drain". opts: drain için "points" (PackedVector2Array,
-## kaynak dünya konumları) ve "sink" (Node2D - damlaların aktığı karakter/kukla).
+## Vampir FX'i doğar: kind = "hit" | "bat_in" | "bat_out" | "drain". opts: drain için "points" (PackedVector2Array,
+## kaynak dünya konumları) ve "sink" (Node2D - damlaların aktığı karakter/kukla); bat_in/bat_out için "follow"
+## (Node2D - Yarasa Formu geçişini yapan oyuncu/kukla, efekt onu izler; bkz. vampir_fx.gd BAT_SHEETS).
 static func spawn_fx(host: Node, kind: String, world_pos: Vector2, opts: Dictionary = {}) -> Node2D:
 	if host == null or not is_instance_valid(host):
 		return null
@@ -81,6 +82,12 @@ static func spawn_fx(host: Node, kind: String, world_pos: Vector2, opts: Diction
 		fx.set("points", opts["points"])
 	if opts.has("sink"):
 		fx.set("sink", opts["sink"])
+	if opts.has("follow"):
+		fx.set("follow", opts["follow"])
 	host.add_child(fx)
 	fx.global_position = world_pos
+	## İzleyen efekt ilk karesinden sahibinin çizilen konumunda: kuklada gönderilen konum (kasterin o anki yeri) kuklanın
+	## gecikmeli konumundan birkaç birim farklı olabiliyor (denetim: 4,8 birim, bkz. tools/mp_audit/vampir_audit.gd).
+	if opts.has("follow"):
+		fx.call("_follow_owner")
 	return fx

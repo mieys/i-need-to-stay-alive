@@ -119,8 +119,8 @@ func test_envanter_button_matches_gold_indicator_palette() -> void:
 
 	assert(envanter_style != null, "ENVANTER butonu icin normal stil (StyleBoxTexture) bekleniyordu")
 	assert(gold_style != null, "Altin gostergesi icin panel stili (StyleBoxTexture) bekleniyordu")
-	assert(envanter_style.texture.resource_path.begins_with("res://assets/ui/game/"),
-		"ENVANTER butonu kit dokusunu kullanmiyor: %s" % envanter_style.texture.resource_path)
-	assert(gold_style.texture.resource_path.begins_with("res://assets/ui/game/"),
-		"Altin gostergesi kit dokusunu kullanmiyor: %s" % gold_style.texture.resource_path)
+	## madde 483: masaüstünde ikisi de sol üst konsolun Gömme Tepsi kit dokuları (assets/ui/kit: kabarık levha + koyu kuyu)
+	for st: StyleBoxTexture in [envanter_style, gold_style]:
+		var path: String = st.texture.resource_path
+		assert(path.begins_with("res://assets/ui/game/") or path.begins_with("res://assets/ui/kit/"), "kit dokusu degil: %s" % path)
 	hud.queue_free()

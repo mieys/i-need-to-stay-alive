@@ -68,5 +68,10 @@ func test_party_panel_gift_buttons_and_dynamic_gold_button() -> void:
 	var row: RefCounted = pp.call("_create_row", 12345)
 	var gold_btn: Button = row.gold_button
 	assert(gold_btn != null, "gold_button olusmamis")
-	assert(gold_btn.get_theme_stylebox("normal") is StyleBoxTexture, "gold_button ahsap (kit dokulu) stilde olmali")
+	## madde 483: masaüstünde altın düğmesi paneldeki yuva dilinde (koyu kuyu + yuva çerçevesi), telefonda ahşap kit dokusu
+	if load("res://scripts/mobile_ui.gd").enabled:
+		assert(gold_btn.get_theme_stylebox("normal") is StyleBoxTexture, "gold_button ahsap (kit dokulu) stilde olmali")
+	else:
+		var gs: StyleBoxFlat = gold_btn.get_theme_stylebox("normal") as StyleBoxFlat
+		assert(gs != null and gs.bg_color == load("res://scripts/hud_theme.gd").DOCK_INSET, "gold_button koyu yuva olmali")
 	pp.queue_free()

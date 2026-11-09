@@ -14,7 +14,7 @@ const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / L
 
 ## chest_menu.gd WEAPON_ICON_TEXTURES ile aynı yollar.
 const WEAPON_ICONS := {
-	"dagger": "res://assets/weapons/base_knife/icon_v2.png",
+	"dagger": "res://assets/weapons/yeni/bicak.png",
 	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
 	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
 	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
@@ -26,7 +26,7 @@ const WEAPON_ICONS := {
 	"boomerang": "res://assets/weapons/boomerang/icon.png",
 	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
 	"fisek": "res://assets/weapons/fisek/icon.png",
-	"pence": "res://assets/weapons/pence/icon.png",
+	"pence": "res://assets/weapons/yeni/tirpan.png",
 	"topuz": "res://assets/weapons/topuz/icon.png",
 	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
 	"gokkusagi": "res://assets/weapons/yeni/gokkusagi.png",

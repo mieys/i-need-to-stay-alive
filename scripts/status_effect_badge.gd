@@ -34,16 +34,18 @@ static func _icon_for(kind: String) -> Texture2D:
 	return tex
 ## Tooltip başlığı/açıklaması - kind -> [başlık, açıklama]. GLYPHS'e yeni bir satır eklerken buraya da ekle.
 const INFO := {
-	"talon_stack": ["Güç (Talon Pasifi)", "Yetenek kullandıkça yığılan güç: her yük +%6 saldırı gücü, +%4 hasar azaltma verir (en fazla 5 yük). Yeni bir kullanım olmazsa yükler zamanla azalır."],
+	"talon_stack": ["Güç (Talon Pasifi)", "Yetenek kullandıkça yığılan güç: her yük +%5 saldırı gücü, +%4 hasar azaltma verir (en fazla 5 yük). Yeni bir kullanım olmazsa yükler zamanla azalır."],
 	"speed": ["Hız Artışı", "Geçici hareket hızı bonusu."],
 	"invuln": ["Yenilmezlik", "Ruhani Yetenek \"Kalkan\" aktif - bu süre boyunca hiç hasar almazsın."],
 	"bat": ["Yarasa Formu", "Vampir Çocuk'un yarasa formu aktif: daha hızlısın ama sürekli can harcarsın."],
-	"shield_slow": ["Mana Kalkanı Yenilemesi Yavaş", "Bir yetenek kullandın - mana kalkanı yenilenme hızın kısa süreliğine %50 düştü."],
+	"shield_slow": ["Mana Kalkanı Yenilemesi Yavaş", "Bir yetenek kullandın - mana kalkanı yenilenme hızın 5 saniyeliğine %20 düştü."],
 	"burn": ["Yanma", "Bir İblis'in ateş topu seni tutuşturdu - 3 saniye boyunca yanarak hasar alırsın."],
 	"bleed": ["Kanama", "Bir yarasa seni ısırdı - 4 saniye boyunca saniyede 5 hasar alırsın."],
 	"savas_sevki": ["Savaş Şevki", "Öldürdükçe yığılan savaş şevki - 50'de kalıcı +1 saldırı gücüne dönüşür."],
 	"golem": ["Elemental Golem", "Golem formundasın: aldığın hasar %40 azalır ve yeteneklerin mana kalkanı harcamaz."],
 	"time_frozen": ["Zaman Durdu", "Güvenli alandasın (demirci veya seyyar satıcının koruması): can ve mana kalkanı yenilenmez; yetenek, ruhani yetenek ve eşya bekleme süreleri ilerlemez; pasif yetenekler, evcil hayvanın ve totemler çalışmaz. Alandan çıkınca her şey kaldığı yerden devam eder."],
+	"slime_buyu": ["Minik Cadı Büyüsü", "Evcil hayvanının büyüsü: canın, hasarın, boyun ve menzilin %15 arttı. Menzilin ince pembe çizgiyle görünür."],
+	"hayalet_ortu": ["Hayalet Örtüsü", "Hayaletin bedeniyle üstünü kapladı: görünmez ve dokunulmazsın, yaratıkların içinden geçebilirsin."],
 	"kalkan_bagi": ["Kalkan Bağı", "Arkadaşınla mana kalkanınız birbirine bağlı - hasar/bedel/artış %50-%50 paylaşılıyor, ikinizin de mana kalkanı daha hızlı yenileniyor."],
 }
 

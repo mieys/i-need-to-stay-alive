@@ -37,7 +37,7 @@ func _wait(sec: float) -> void:
 func _shot(name: String) -> void:
 	await RenderingServer.frame_post_draw
 	var img: Image = root.get_texture().get_image()
-	if img.get_width() != 1920:
+	if img.get_width() != 1920 and OS.get_environment("HUDY_NATIVE") != "1":
 		img.resize(1920, 1080, Image.INTERPOLATE_NEAREST)
 	img.save_png(_dir.path_join(name))
 	print("SHOT %s" % name)
@@ -223,8 +223,97 @@ func _solg_data(hud: Node, main: Node) -> Dictionary:
 	return sgd
 
 
+## SOHBET (2026-11-08): aynı 5 mesaj, aynı yazılan metin, oyuncunun + solundaki müttefik sprite'ının (Mira, isim etiketiyle) başında balon.
+## simdi = gerçek ChatLayer + gerçek chat_bubble.gd; A-D = gerçek ChatLayer gizli, tools/proto_20261108/sohbet/sohbet_proto.gd.
+func _sohbet(st: String, hud: Node, main: Node, player: Node2D) -> void:
+	const TYPED := "geliyorum, 30 saniye"
+	const B_PLAYER := "geliyorum, bekleyin!"
+	var nm: Node = root.get_node("NetworkManager")
+	nm.set("local_player_name", "Deniz")
+	var DK: GDScript = load("res://scripts/menu_dark_kit.gd") as GDScript
+	var PF: GDScript = load("res://scripts/portrait_face.gd") as GDScript
+	var raw: Array = [["Mira", 1, 10, "kuzeydoğuda elit var, bekleyin"], ["Kerem", 2, 5, "tamam geliyorum"],
+		["Deniz", 0, CHAR_ID, "satıcı geldi, iksir alıp dönüyorum"], ["Mira", 1, 10, "Ağacı Koru başlıyor, herkes ağacın yanına gelsin"],
+		["Kerem", 2, 5, "kalkan totemini ben koyarım"]]
+	var msgs: Array = []
+	for r in raw:
+		msgs.append({"name": r[0], "col": DK.call("player_color", int(r[1])), "text": r[3],
+			"face": PF.call("face", int(r[2]), 16), "bg": PF.call("background", int(r[2]), 16)})
+	var b_ally: String = str(raw[3][3])
+	## Müttefik: oyuncu sahnesiyle aynı düzen (kök 0,5, sprite 1,27575 + ofset), isim etiketi remote_player_name.gd.
+	var ally := Node2D.new()
+	ally.scale = Vector2(0.5, 0.5)
+	main.add_child(ally)
+	ally.global_position = player.global_position + Vector2(-210, 6)
+	var spr := AnimatedSprite2D.new()
+	var cdef: Dictionary = (load("res://scripts/characters.gd") as GDScript).call("get_def", 10)
+	var fr: SpriteFrames = load(str(cdef.get("frames", ""))) as SpriteFrames
+	spr.sprite_frames = fr
+	spr.scale = Vector2(1.27575, 1.27575)
+	spr.offset = Vector2(0, -5)
+	var anim: StringName = &"idle_down" if fr.has_animation(&"idle_down") else fr.get_animation_names()[0]
+	spr.play(anim)
+	ally.add_child(spr)
+	var nl := Label.new()
+	nl.set_script(load("res://scripts/remote_player_name.gd"))
+	nl.text = "Mira"
+	ally.add_child(nl)
+	if st == "simdi":
+		## Madde 499'den sonra "simdi" = OYUNDAKİ C (chat_window.gd + yeni chat_bubble.gd); 3. mesajdan sonra bir altın hediyesi satırı.
+		var emo: Dictionary = {1: " :begen:", 4: " :kalp:"} ## emoji jetonları (chat_emoji.gd)
+		for i in msgs.size():
+			var m: Dictionary = msgs[i]
+			hud.call("append_chat_message", m["name"], str(m["text"]) + str(emo.get(i, "")), int(raw[i][2]), m["col"])
+			if i == 2 and OS.get_environment("SOHBET_GIFT") != "0":
+				hud.call("append_chat_gift", "Kerem", msgs[1]["col"], "Deniz", msgs[2]["col"], 50)
+		player.call("show_chat_bubble", B_PLAYER + " :ates:")
+		var rb := Node2D.new()
+		rb.set_script(load("res://scripts/chat_bubble.gd"))
+		ally.add_child(rb)
+		rb.call("show_message", b_ally)
+		await _wait(0.6)
+		await _shot("sohbet_simdi_oku.png")
+		hud.call("_open_chat_input")
+		var le: LineEdit = hud.get("_chat_input") as LineEdit
+		le.text = TYPED
+		le.caret_column = TYPED.length()
+		le.caret_blink = false
+		var cv: Node = hud.get("_chat_view")
+		if cv and OS.get_environment("SOHBET_PICKER") != "0":
+			cv.call("_set_picker", true)
+		await _wait(0.4)
+		await _shot("sohbet_simdi_yaz.png")
+		return
+	var cl: CanvasLayer = hud.get("_chat_layer") as CanvasLayer
+	if cl:
+		cl.visible = false
+	var layer := CanvasLayer.new()
+	layer.layer = 40
+	main.add_child(layer)
+	var ui: Control = (load("res://tools/proto_20261108/sohbet/sohbet_proto.gd") as GDScript).new()
+	layer.add_child(ui)
+	ui.call("setup_chat", st, {"msgs": msgs, "typing": false, "typed": TYPED})
+	player.add_child(ui.call("make_bubble", B_PLAYER))
+	ally.add_child(ui.call("make_bubble", b_ally))
+	await _wait(0.6)
+	await _shot("sohbet_%s_oku.png" % st)
+	ui.call("set_typing", true)
+	await _wait(0.4)
+	await _shot("sohbet_%s_yaz.png" % st)
+
+
 func _run() -> void:
 	await process_frame
+	## madde 508: HUDY_STRETCH=viewport -> oyun 1920x1080'de çizilir, bitmiş kare pencereye büyütülür (yazı 1080p şeklini korur)
+	if OS.get_environment("HUDY_STRETCH") == "viewport":
+		root.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+	## madde 508: HUDY_NO_OVERSAMPLING=1 -> font yeniden çizimi kapalı (fontlar taban boyda rasterlanır, sonra doku gibi büyür)
+	print("OVS root.oversampling=", root.get("oversampling"), " setting=", ProjectSettings.get_setting("gui/fonts/dynamic_fonts/use_oversampling", "yok"))
+	if OS.get_environment("HUDY_NO_OVERSAMPLING") == "1":
+		if "oversampling" in root:
+			root.set("oversampling", false)
+		ProjectSettings.set_setting("gui/fonts/dynamic_fonts/use_oversampling", false)
+		print("OVS kapandı -> root.oversampling=", root.get("oversampling"))
 	_dir = OS.get_environment("HUDY_DIR")
 	if _dir == "":
 		_dir = ProjectSettings.globalize_path("res://tools/proto_20261108/hud_yeni/out")
@@ -292,6 +381,19 @@ func _run() -> void:
 	if hud:
 		hud.call("update_level", 12)
 		hud.call("update_xp", 62.0, 100.0)
+		## Çubuk yazısı biçimi (madde 511): BAR_TEXT=outline -> eski piksel yazı (karşılaştırma için; varsayılan yumuşak)
+		var btxt: String = OS.get_environment("BAR_TEXT")
+		if btxt != "":
+			var tbars: Array = [hud.get("dock_hp_bar"), hud.get("dock_shield_bar")]
+			var ppn: Node = hud.get_node_or_null("PartyPanelLayer/PartyPanel")
+			if ppn:
+				for prow in (ppn.get("_rows") as Dictionary).values():
+					tbars.append(prow.get("health_bar"))
+					tbars.append(prow.get("shield_bar"))
+			for tb in tbars:
+				if tb is Control and "value_style" in tb:
+					tb.set("value_style", btxt)
+					(tb as Control).queue_redraw()
 		## Can/kalkan çubuğu görünüş prototipi (2026-11-08): BAR_PROTO=<A..D> -> dock çubuklarına bar_proto.gd takılır, değerler korunur.
 		var bproto: String = OS.get_environment("BAR_PROTO")
 		if bproto != "":
@@ -422,6 +524,12 @@ func _run() -> void:
 			sl.add_child(sui)
 			sui.call("setup_sg", solg, sgd)
 			await _wait(0.4)
+	## Sohbet penceresi + balon prototipleri (2026-11-08): SOHBET=<simdi|A..D> -> sohbet_<X>_oku.png (yazı kutusu kapalı) + sohbet_<X>_yaz.png.
+	var sohbet: String = OS.get_environment("SOHBET")
+	if hud and player and sohbet != "":
+		await _sohbet(sohbet, hud, main, player)
+		quit()
+		return
 	## Can yeşili adayları (madde 473): HP_CANDS="simdi,3cb043,..." -> her aday x HP_PCTS oranı için gerçek dock can çubuğu yakalanır
 	## (out/hpsw/<i>_<j>.png). "simdi" = eski RGB karışımı, diğerleri HudTheme.hp_color(pct, aday). Sayfayı hp_swatch.py kurar.
 	if hud and player and OS.get_environment("HP_CANDS") != "":

@@ -8,7 +8,7 @@ extends RefCounted
 ##   çapraz: sap sol-alt, uç sağ-üst); Mızrak / Kalkan / Yin Yang Kitabı (Zanaatkâr'dan sonra yapılan, eski görünüşü olmayan silahlar)
 ##   Zanaatkâr 1. seviye çizimlerinde kalır. Yay + Arbalet (madde 413) = kullanıcının çizimi; Yay'ın 5 "draw" karesi çizimden
 ##   türetilir (tools/gen_yay_cekis.py: yalnız ip geri çekilir, ok karenin içinde - sahnedeki ayrı HeldArrow kullanılmaz).
-## - Tabloda OLMAYAN silahlar (Bıçak, Topuz, Pençe, Yıldırım Asası, Tabanca, Tüfek, Bumerang, Fişek) Zanaatkâr
+## - Tabloda OLMAYAN silahlar (Topuz, Yıldırım Asası, Tabanca, Tüfek, Bumerang, Fişek) Zanaatkâr
 ##   öncesi ESKİ ikonlarını kullanır: sahne dokusu/ölçeği/duruşu (weapon_*.tscn) + asalarda weapon.gd'nin v3 ikonu - bu dosya onlara
 ##   dokunmaz. Zanaatkâr dokuları (assets/weapons/zanaat/) silinmedi.
 ## Tek kaynak: yerel weapon.gd (_ready -> _apply_fixed_art), uzak kukla remote_player.gd (update_weapon_visuals) ve görev kopyası
@@ -20,9 +20,18 @@ const WORLD_PX := 0.575
 ## Oyuncu / uzak kukla / görev kopyası kök ölçeği (main.tscn Player, remote_player.tscn): ikon doğrudan bu kökün çocuğuysa yerel ölçek.
 const OWNER_ROOT_SCALE := 0.5
 const PUPPET_ICON_SCALE := WORLD_PX / OWNER_ROOT_SCALE
+## Anahtar başına ek boyut çarpanı: çizimi diğerlerinden uzun olan silah (pompalı 62 px, öbürleri ~32) sırıtmasın.
+## Tırpan x1,57 (2026-11-09, kullanıcı: "tırpan biraz daha büyük görünmeli böyle balta gibi olmuş"): 40 px çizim 0,575 ile ~23 dünya px
+## kalıyordu; x1,57 = 0,903 dünya px/piksel = KARAKTER pikseliyle aynı ızgara, boyu ~36 dünya px (karakter boyu kadar).
+const SIZE_MULT := {"pompali": 0.65, "pence": 1.57}
+
+
+static func size_mult(key: String) -> float:
+	return float(SIZE_MULT.get(key, 1.0))
 
 const ART := {
 	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
+	"dagger": "res://assets/weapons/yeni/bicak.png", ## 2026-11-09 (madde 522): Bıçak = kullanıcının 32x32 eğri hançer çizimi (sap sol-alt, uç sağ-üst)
 	"arcane": "res://assets/weapons/yeni/arcane.png",
 	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
 	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
@@ -30,6 +39,7 @@ const ART := {
 	"tuftuf": "res://assets/weapons/yeni/zehir_asasi.png", ## 2026-11-06: Tüftüf artık ZEHİR ASASI (anahtar aynı: kayıt/ağ uyumu)
 	"yay": "res://assets/weapons/yeni/yay.png", ## arayüz ikonu (ip düz, oksuz); oyundaki silah BOW_FRAMES karelerini oynatır
 	"crossbow": "res://assets/weapons/yeni/arbalet.png",
+	"pence": "res://assets/weapons/yeni/tirpan.png", ## 2026-11-09 (madde 505): Pençe artık TIRPAN (kullanıcının 40x40 çizimi; anahtar `pence` aynı: kayıt/ağ uyumu)
 	"mizrak": "res://assets/weapons/zanaat/mizrak_L1.png",
 	"kalkan": "res://assets/weapons/zanaat/kalkan_L1.png", ## yönlü görünüşü scripts/kalkan_bash_math.gd seçer (1. seviye sayfası)
 	"yinyang": "res://assets/weapons/zanaat/yinyang_L1.png",
@@ -40,13 +50,13 @@ const ART := {
 ## sağ-üst), Yay +45 (ip sol-üst köşegende, kabza sağ-altta -> ok sağ-alta uçar), kalkan önden dik (0; dönmez,
 ## yönlü görünüşü scripts/kalkan_bash_math.gd seçer), Yin Yang açık kitap önden dik (0; dönmez - weapon.gd _face_dir).
 const FORWARD := {
-	"uzunkilic": -45.0, "mizrak": -45.0, "kalkan": 0.0,
+	"uzunkilic": -45.0, "dagger": -45.0, "mizrak": -45.0, "kalkan": 0.0,
 	"fire_staff": -45.0, "arcane": -45.0, "buz_asasi": -45.0, "gokkusagi": -45.0, "tuftuf": -45.0,
-	"crossbow": -45.0, "yay": 45.0,
+	"crossbow": -45.0, "yay": 45.0, "pence": -45.0, ## tırpan: sap sol-alt, baş sağ-üst (bıçak başta, aşağı kıvrık)
 	"yinyang": 0.0, "pompali": 0.0,
 }
 ## Dinlenme pozunda ucu yukarı baksın (melee_icon_rest_rotation_deg): çapraz sanat -45 döner.
-const REST := {"uzunkilic": -45.0, "mizrak": -45.0}
+const REST := {"uzunkilic": -45.0, "mizrak": -45.0, "pence": -45.0} ## tırpan dinlenmede dik: baş üstte, bıçak sağa kıvrık
 
 ## Yay "draw" kareleri (weapon_yay.tscn'deki eski draw_frames.tres ile aynı ad/hız/döngü; kare 1 = çizim + ipte ok).
 const BOW_FRAMES := "res://assets/weapons/yeni/yay_d%d.png"

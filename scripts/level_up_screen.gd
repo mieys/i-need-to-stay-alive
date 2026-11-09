@@ -112,7 +112,35 @@ const UPGRADES = [
 
 @onready var cards: Array = [$CardsContainer/Card1, $CardsContainer/Card2, $CardsContainer/Card3]
 @onready var reroll_button: Button = $RerollButton
-@onready var level_up_sound: AudioStreamPlayer = $LevelUpSound
+@onready var level_up_sound: AudioStreamPlayer = $LevelUpSound ## (artık çalınmıyor - madde 533: LEVEL_UP_STREAM kökte, _play_root_sfx)
+
+## Kullanıcının sesleri (masaüstü "hazır ses", madde 533; hazırlayan tools/hazir_ses/gen_hazir_ses.py - seviyeler eski seslerin
+## oyun içi gürlüğüne eşitlendi: level -24,7 dB, seçim -22, evrim -21; 400 ms RMS + volume_db).
+const LEVEL_UP_STREAM: AudioStream = preload("res://assets/audio/level_atlama.wav")
+const LEVEL_UP_DB := -12.2
+const CARD_PICK_STREAM: AudioStream = preload("res://assets/audio/level_kart_secme.wav")
+const CARD_PICK_DB := -4.3
+const EVO_PICK_STREAM: AudioStream = preload("res://assets/audio/evrim_kart_secme.wav")
+const EVO_PICK_DB := -3.3
+## anahtar -> kökteki AudioStreamPlayer (ekranlar arasında yaşar; ağaç duraklıyken de çalsın diye PROCESS_MODE_ALWAYS).
+static var _root_sfx: Dictionary = {}
+
+
+func _play_root_sfx(key: String, stream: AudioStream, db: float, pitch: float = 1.0) -> void:
+	if stream == null or not is_inside_tree():
+		return
+	var v: Variant = _root_sfx.get(key)
+	var p: AudioStreamPlayer = v as AudioStreamPlayer if is_instance_valid(v) else null
+	if p == null:
+		p = AudioStreamPlayer.new()
+		p.name = "LevelScreenSfx_" + key
+		p.process_mode = Node.PROCESS_MODE_ALWAYS
+		get_tree().root.add_child(p)
+		_root_sfx[key] = p
+	p.stream = stream
+	p.volume_db = db
+	p.pitch_scale = pitch
+	p.play()
 ## Küçük, diğer panellerle (kart stilleriyle) uyumlu tasarımlı geri sayım
 ## paneli - bkz. level_up_screen.tscn CountdownPanelStyle. Panelin kendisi
 ## ("Diğer oyuncular bekleniyor" + sayı) görünürlüğü toggle edilir,
@@ -192,8 +220,9 @@ func _ready() -> void:
 	## Artık autoplay değil (bkz. level_up_screen.tscn) - "hepsinde random
 	## pitch olucak" isteğiyle her seviye atlamada hafif farklı bir perde
 	## kullanılsın diye elle çalınıyor.
-	level_up_sound.pitch_scale = randf_range(0.94, 1.06)
-	level_up_sound.play()
+	## 2026-11-09 (madde 533, kullanıcının "level atlama" sesi): sahnedeki LevelUpSound (eski levelup.wav) yerine kökte çalar - kart
+	## seçilip ekran kapanınca ses kesilmez; sonraki level ekranı açılınca aynı oynatıcı baştan başlar (üst üste binmez).
+	_play_root_sfx("level", LEVEL_UP_STREAM, LEVEL_UP_DB, randf_range(0.94, 1.06))
 	_animate_cards_in()
 	## Ayarlar > Otomatik Kart Seçimi: kartlar belirdikten sonra en uygununu kendisi seçer (elle seçim önce gelirse iş yapmaz).
 	if AutoPick.enabled():
@@ -1205,7 +1234,7 @@ func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 		formatted = str(int(round(scaled)))
 	else:
 		formatted = "%.1f" % scaled
-	return "%s%s%s%s" % [sign_str, ("%" if is_percent else ""), formatted, "/sn" if id == "shield_regen" else ""]
+	return "%s%s%s%s" % [sign_str, ("%" if is_percent else ""), formatted, ("/" + TranslationServer.translate("sn")) if id == "shield_regen" else ""] ## birim dile göre (madde 446)
 
 
 func _get_friendly_desc(upgrade: Dictionary, tier: int) -> String:
@@ -1421,6 +1450,12 @@ func _on_card_pressed(id: String, tier: int, card: Button) -> void:
 		_market_pick(id, tier, card)
 		return
 	_has_chosen = true
+	## Seçme sesi (madde 533, kullanıcının sesleri; 2026-11-06'da kaldırılan card_pick.wav'ın yerine): level kartı / evrim kartı ayrı.
+	## Kökte çalar - ekran seçimden kısa süre sonra kapanır, ses kesilmesin.
+	if _evo_mode:
+		_play_root_sfx("pick", EVO_PICK_STREAM, EVO_PICK_DB)
+	else:
+		_play_root_sfx("pick", CARD_PICK_STREAM, CARD_PICK_DB)
 	if is_instance_valid(reroll_button):
 		reroll_button.disabled = true
 	for i in range(cards.size()):

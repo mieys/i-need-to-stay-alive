@@ -144,7 +144,7 @@ func test_shared_formulas() -> void:
 	var land_r: Vector2 = CM.smoke_land_offset("right") - feet
 	var land_l: Vector2 = CM.smoke_land_offset("left") - feet
 	assert(land_r.x < 0.0 and is_equal_approx(land_r.x, -land_l.x) and is_equal_approx(land_r.y, land_l.y), "dumanın indiği nokta iki yanda simetrik")
-	assert(absf(land_r.x) < CM.SMOKE_RX and absf(land_r.y) < 2.0, "yanda duman topuğun hemen arkasına iner (cadı bulutun izinde): %s" % land_r)
+	assert(absf(land_r.x) < CM.SMOKE_RX and absf(land_r.y) < CM.SMOKE_SIDE_LIFT + 2.0, "yanda duman topuğun hemen arkasına iner (cadı bulutun izinde): %s" % land_r)
 	var land_u: Vector2 = CM.smoke_land_offset("up") - feet
 	var land_d: Vector2 = CM.smoke_land_offset("down") - feet
 	assert(is_zero_approx(land_u.x) and land_u.y > 0.0 and is_zero_approx(land_d.x) and land_d.y < 0.0, "yukarı bakarken altına, aşağı bakarken üstüne iner: %s %s" % [land_u, land_d])

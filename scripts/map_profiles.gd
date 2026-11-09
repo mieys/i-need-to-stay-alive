@@ -12,12 +12,16 @@ const KIND_ORMAN := "orman"
 const KIND_ZINDAN := "zindan"
 const MAP_NODE_NAME := "Harita"
 const DungeonDataScript := preload("res://scripts/dungeon/dungeon_data.gd")
+const BataklikMeta := preload("res://scripts/bataklik_meta.gd")
+const ColMeta := preload("res://scripts/col_meta.gd")
 ## Zindan haritasında oyun sistemlerinin "orman katmanı" (GameManager.get_forest_layer: çarpışma, mermi, görüş sisi, yaratık yol ızgarası,
 ## yaratık doğuş denetimi) - görünmez, haritanın DUVAR hücreleriyle dolu (2. adım, madde 444). Yol GameManager._find_terrain_layers ile aynı.
 const WALL_LAYER_PARENT := "Orman parçaları"
 const WALL_LAYER_NAME := "Orman parçaları"
 ## Bayrağı kapalıyken Main'den (ağaca girmeden) kaldırılan main.tscn düğümleri.
 const FEATURE_NODES := {"ev_acilisi": "HouseInterior", "seyyar_satici": "TravelingMerchant", "gorevler": "WorldEventManager"}
+## Madde 496 (2026-11-08): zindan haritalarında da görevler AÇIK ("gorevler": true) - konum ulaşılabilir zeminden (mission_spots.gd), zindana uymayan
+## Konvoy ve Ağacı Koru orada seçilmez (world_event_manager.gd _available_kinds).
 
 static var _data_cache: Dictionary = {}
 
@@ -46,6 +50,45 @@ const PROFILES := {
 		"secilebilir": true,
 		"ozellik": MAIN_FEATURES,
 	},
+	## KARA BATAKLIK (2026-11-09, açık hava; tools/bataklik/gen_bataklik.py + bake_bataklik.gd, oyun alanı 214x214 = ana haritanın %70'i):
+	## katmanları Harita.tmx ADLARINDA -> ana haritanın collision / derinlik / ağaç-ot sallanması / saklanma çalılığı / gün-gece / hava
+	## sistemleri değişmeden çalışır. Ana haritaya özgü adımlar kapalı: renk ayarının başıboş çimen / köprü altı ayıklaması
+	## ("harita_ayiklama"), su dokuları (water_fx.gd, "su_efekti" - bataklık suyu kendi shader'ı), zemin geçişi ("zemin_gecisi").
+	## "bataklik_fx": ateş böcekleri + meşale / cadı kulübesi gece ışıkları (bataklik_fx.gd). Doğuş / ışıklar scripts/bataklik_meta.gd'de.
+	"bataklik": {
+		"ad": "Kara Bataklık",
+		"aciklama": "Sisli göl, sazlıklar ve yosunlu kadim ağaçlar: cadı oyuğu, kemik tarlası, mantar korusu, yıkık tapınak, yüzlü ağaç.",
+		"tur": KIND_ORMAN,
+		"sahne": "res://scenes/bataklik_baked.tscn",
+		"veri": "",
+		"secilebilir": true,
+		"oyun_alani": BataklikMeta.PLAY_CELLS,
+		"dogus": BataklikMeta.SPAWN,
+		"minimap": "res://assets/ui/minimap_bataklik.png",
+		## madde 525 (kullanıcı: "bataklık sularından geçilebilmeli"): su collision'a girmez (terrain_collision.gd), suya giren yürüyen
+		## karakter / yaratık / evcilin ayağı suyun altında görünür (wade_fx.gd, maske assets/map/bataklik_su_derinlik.png).
+		"su_yurunur": true,
+		"su_maskesi": "res://assets/map/bataklik_su_derinlik.png",
+		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "bataklik_fx": true},
+	},
+	## ALTIN KUMLAR (2026-11-09, çöl, açık hava; tools/col/gen_col.py + bake_col.gd, oyun alanı 243x243 = ana haritanın yüzde 90'ı): Kara
+	## Bataklık gibi Harita.tmx katman adlarında (collision / derinlik / sallanma / saklanma / gün-gece sistemleri değişmeden çalışır) + üst üste
+	## binen kaya yığınları için "Shader Eklenecek/Kayalar 1..3" (depth_occluders OBJECT_LAYERS, terrain_collision PROP_LAYERS). Vaha suyu
+	## yürünmez. "hava_donusum": çölde yağmur yağmaz - hava seçimi Yağmurlu -> Rüzgarlı, Sağanak -> Açık (atmosphere.gd map_weather).
+	## "col_fx": küre tapınağının gece ışığı (col_fx.gd). Doğuş / ışıklar scripts/col_meta.gd'de (üretilir).
+	"col": {
+		"ad": "Altın Kumlar",
+		"aciklama": "Vahalar, palmiyeler ve rüzgârın oyduğu kaya sütunları: Büyük Vaha, Firavun Vadisi, Küre Tapınağı, Yılan Mezarlığı, Ölü Ağaçlar Ovası, Kaktüs Bahçesi.",
+		"tur": KIND_ORMAN,
+		"sahne": "res://scenes/col_baked.tscn",
+		"veri": "",
+		"secilebilir": true,
+		"oyun_alani": ColMeta.PLAY_CELLS,
+		"dogus": ColMeta.SPAWN,
+		"minimap": "res://assets/ui/minimap_col.png",
+		"hava_donusum": {2: 1, 3: 0},
+		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "col_fx": true},
+	},
 	"kadim_derinlikler": {
 		"ad": "Kadim Derinlikler",
 		"aciklama": "Yeraltı: beş dev salon, geniş yollar ve koridorlu oda kümeleri (Kemik, Et, Boynuz bölgeleri).",
@@ -53,7 +96,7 @@ const PROFILES := {
 		"sahne": "res://scenes/zindan/kadim_derinlikler_baked.tscn",
 		"veri": "res://scenes/zindan/kadim_derinlikler_data.tres",
 		"secilebilir": false, ## madde 445: üç setin karışımı beğenilmedi, yerine tek temalı üç harita (dosyalar duruyor, mekanik testleri kullanıyor)
-		"ozellik": {"zindan_etkilesim": true},
+		"ozellik": {"zindan_etkilesim": true, "gorevler": true},
 		## DungeonManager harita kipi (dungeon_light.gd): ortam = üç zindanın renklerinin ortası (tek CanvasModulate), oyuncu feneri nötr.
 		## Nesnelerin `tema` özelliği hangi zindanın kaynağı / sunak teklifleri / kapı-tuzak görseli olduğunu seçer (DungeonManager.MAP_THEME_DUNGEON).
 		"zindan_tanimi": {
@@ -74,7 +117,7 @@ const PROFILES := {
 		"sahne": "res://scenes/zindan/batik_nekropol_baked.tscn",
 		"veri": "res://scenes/zindan/batik_nekropol_data.tres",
 		"secilebilir": true,
-		"ozellik": {"zindan_etkilesim": true, "zemin_tasi": true}, ## zemin_tasi: dungeon_floor.gd zemin shader'ı (madde 449)
+		"ozellik": {"zindan_etkilesim": true, "gorevler": true, "zemin_tasi": true}, ## zemin_tasi: dungeon_floor.gd zemin shader'ı (madde 449)
 		## ince ayar (kullanıcı: "ışık / karanlık"): ortam Kemik Mahzeni'nden ~%25 açık
 		"zindan_tanimi": {"ambient_day": Color(0.46, 0.50, 0.56), "ambient_night": Color(0.40, 0.44, 0.50), "player_light": Color(0.78, 0.92, 1.0)},
 	},
@@ -89,7 +132,7 @@ const PROFILES := {
 		"sahne": "res://scenes/zindan/taskin_hisar_baked.tscn",
 		"veri": "res://scenes/zindan/taskin_hisar_data.tres",
 		"secilebilir": true,
-		"ozellik": {"zindan_etkilesim": true, "zemin_tasi": true},
+		"ozellik": {"zindan_etkilesim": true, "gorevler": true, "zemin_tasi": true},
 		"zemin_rengi": Color8(128, 138, 163),
 		"zindan_tanimi": {"ambient_day": Color(0.44, 0.47, 0.56), "ambient_night": Color(0.38, 0.41, 0.50), "player_light": Color(1.0, 0.90, 0.76)},
 	},
@@ -103,7 +146,7 @@ const PROFILES := {
 		"sahne": "res://scenes/zindan/lagim_agi_baked.tscn",
 		"veri": "res://scenes/zindan/lagim_agi_data.tres",
 		"secilebilir": true,
-		"ozellik": {"zindan_etkilesim": true, "zemin_tasi": true},
+		"ozellik": {"zindan_etkilesim": true, "gorevler": true, "zemin_tasi": true},
 		"zemin_rengi": Color8(147, 124, 98),
 		"zindan_tanimi": {"ambient_day": Color(0.42, 0.47, 0.40), "ambient_night": Color(0.36, 0.41, 0.35), "player_light": Color(1.0, 0.88, 0.72)},
 	},
@@ -114,7 +157,7 @@ const PROFILES := {
 		"sahne": "res://scenes/zindan/kemik_katakombu_baked.tscn",
 		"veri": "res://scenes/zindan/kemik_katakombu_data.tres",
 		"secilebilir": false,
-		"ozellik": {"zindan_etkilesim": true},
+		"ozellik": {"zindan_etkilesim": true, "gorevler": true},
 		"zindan_tanimi": {"ambient_day": Color(0.36, 0.40, 0.46), "ambient_night": Color(0.30, 0.34, 0.40), "player_light": Color(0.78, 0.92, 1.0)},
 	},
 	"kizil_lagim": {
@@ -124,7 +167,7 @@ const PROFILES := {
 		"sahne": "res://scenes/zindan/kizil_lagim_baked.tscn",
 		"veri": "res://scenes/zindan/kizil_lagim_data.tres",
 		"secilebilir": false, ## madde 449: yerine Lağım Ağı
-		"ozellik": {"zindan_etkilesim": true},
+		"ozellik": {"zindan_etkilesim": true, "gorevler": true},
 		"zindan_tanimi": {"ambient_day": Color(0.48, 0.33, 0.32), "ambient_night": Color(0.42, 0.28, 0.28), "player_light": Color(1.0, 0.82, 0.70)},
 	},
 	"boynuz_magaralari": {
@@ -134,7 +177,7 @@ const PROFILES := {
 		"sahne": "res://scenes/zindan/boynuz_magaralari_baked.tscn",
 		"veri": "res://scenes/zindan/boynuz_magaralari_data.tres",
 		"secilebilir": false, ## madde 449: yerine Taşkın Hisar
-		"ozellik": {"zindan_etkilesim": true},
+		"ozellik": {"zindan_etkilesim": true, "gorevler": true},
 		"zindan_tanimi": {"ambient_day": Color(0.32, 0.36, 0.50), "ambient_night": Color(0.26, 0.30, 0.44), "player_light": Color(0.80, 0.90, 1.0)},
 	},
 }
@@ -146,6 +189,17 @@ static func ids() -> Array:
 
 static func has_profile(id: String) -> bool:
 	return PROFILES.has(id)
+
+
+## Seçili haritada su yürünebilir mi (madde 525, Kara Bataklık): terrain_collision.gd su hücrelerini engel saymaz, wade_fx.gd kurulur.
+static func water_walkable() -> bool:
+	return bool(current().get("su_yurunur", false))
+
+
+## Seçili haritanın hava dönüşümü (Altın Kumlar: yağmur yok). w = AtmosphereMath.Weather; profilde "hava_donusum" {kaynak: hedef}.
+static func map_weather(w: int) -> int:
+	var conv: Dictionary = current().get("hava_donusum", {})
+	return int(conv.get(w, w))
 
 
 ## Oda kur / tek oyunculu ekranında gösterilen haritalar (profil sırasıyla).
@@ -183,16 +237,17 @@ static func current() -> Dictionary:
 
 
 static func is_main_map() -> bool:
-	return str(current().get("tur", KIND_ORMAN)) == KIND_ORMAN
+	return current_id() == DEFAULT_ID
 
 
-## Haritaya özgü sistem bu haritada açık mı (tanımsız bayrak: ana haritada açık, diğerlerinde kapalı).
+## Haritaya özgü sistem bu haritada açık mı (tanımsız bayrak: ana haritada açık, diğerlerinde kapalı). Kara Bataklık da açık hava
+## ("orman" türü) ama ana haritanın ev / satıcı / maden / bekçi sistemleri orada yok: varsayılan TÜRE değil ana harita kimliğine bakar.
 static func feature(name: String) -> bool:
-	var p: Dictionary = current()
-	var f: Dictionary = p.get("ozellik", {})
+	var id: String = current_id()
+	var f: Dictionary = (PROFILES.get(id, PROFILES[DEFAULT_ID]) as Dictionary).get("ozellik", {})
 	if f.has(name):
 		return bool(f[name])
-	return str(p.get("tur", KIND_ORMAN)) == KIND_ORMAN
+	return id == DEFAULT_ID
 
 
 ## Yükleme ekranının iş parçacığında önceden yükleyeceği kaynaklar (seçili haritanın sahnesi + verisi).
@@ -251,6 +306,9 @@ static func data() -> Resource:
 
 ## Doğuş noktası (harita düğümünün yerel px'i = dünya; Harita (0,0)'da): zindan haritasında `dogus` nesnesinin ortası, yoksa Vector2.INF.
 static func spawn_position() -> Vector2:
+	var p: Dictionary = current()
+	if p.has("dogus"):
+		return p["dogus"]
 	var d: Resource = data()
 	if d == null:
 		return Vector2.INF
@@ -272,6 +330,10 @@ static var _mm_cache: Dictionary = {}
 
 
 static func minimap_texture() -> Texture2D:
+	## Açık hava haritası (Kara Bataklık): üretecin pişirdiği resim, 1 doku pikseli = 1 hücre, köken (0,0) (çerçeve dahil tüm harita).
+	var mm_path: String = str(current().get("minimap", ""))
+	if mm_path != "":
+		return load(mm_path) as Texture2D if ResourceLoader.exists(mm_path) else null
 	var d: Resource = data()
 	if d == null:
 		return null

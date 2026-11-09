@@ -29,7 +29,9 @@ try {
 	foreach ($p in $Only.Split(",")) {
 		$env:HUD_PROTO = if ($p -eq "simdi") { "" } else { $p }
 		if (Test-Path $log) { Remove-Item $log -Force }
-		$argLine = "--path `"$proj`" --windowed --resolution 1920x1080 --audio-driver Dummy --log-file `"$log`" -s res://tools/proto_20261108/hud_yeni/hud_capture.gd"
+		## madde 508: HUDY_RES=2560x1440 -> oyunu o çözünürlükte aç (HUDY_NATIVE=1 ile ekran görüntüsü 1920e küçültülmez)
+		$res = if ($env:HUDY_RES) { $env:HUDY_RES } else { "1920x1080" }
+		$argLine = "--path `"$proj`" --windowed --resolution $res --audio-driver Dummy --log-file `"$log`" -s res://tools/proto_20261108/hud_yeni/hud_capture.gd"
 		$code = Invoke-GodotHidden -Exe $godot -ArgLine $argLine -WorkDir $proj -TimeoutSec $TimeoutSec
 		Write-Host "$p kod=$code"
 		Get-Content $log | Select-String "SHOT|SCRIPT ERROR|Parse Error|hud_proto|hud_capture" | Select-Object -First 25

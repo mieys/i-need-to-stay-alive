@@ -76,6 +76,7 @@ const SPIRIT_ICON_GAP := ABILITY_ICON_GAP
 const SPIRIT_FRAME_TINT := Color(1, 1, 1, 1) ## artık tint yok: mor-altın çerçeve kendi dokusu (hud_skill_frame_spirit.png)
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 const HudTheme := preload("res://scripts/hud_theme.gd") ## HUD teması "Kısık Ahşap" renkleri (madde 207)
+const HudTrayKit := preload("res://scripts/hud_tray_kit.gd") ## madde 483: Gömme Tepsi kiti (sol üst konsol, grup paneli, görev/bildirim)
 ## Kullanıcı isteği (2026-09-22): "skill kutucuklarının olduğu yere arkasını kaplayacak bir çerçeve" - SkillBar'ın
 ## İLK çocuğu olarak eklenen, o anki GÖRÜNÜR ikonların (P/Q/E/R/F) etrafını saran tek bir "çukur" panel (bkz.
 ## _create_ability_bar_frame/_update_ability_bar_frame). Ayrı bir sahne/asset değil, UIKit.panel_style("inset")
@@ -268,6 +269,8 @@ func _register_ui_opacity() -> void:
 			UISound.register_ui_opacity(n)
 	if _chat_scroll:
 		UISound.register_ui_opacity(_chat_scroll)
+	if _chat_view:
+		UISound.register_ui_opacity(_chat_view)
 
 
 ## SİLAH PARÇACIĞI sayacı (kullanıcı isteği 2026-10-08, demirci dükkanında silah almak için): altın göstergesinin HEMEN altında aynı
@@ -296,7 +299,7 @@ func _ensure_shard_indicator() -> void:
 	margin.add_child(box)
 	var icon := TextureRect.new()
 	icon.texture = load(SHARD_ICON_PATH) as Texture2D
-	icon.custom_minimum_size = Vector2(44, 44) ## 22 px sanat x2 (tam sayı ölçek, bulanıklaşmaz)
+	icon.custom_minimum_size = Vector2(32, 32) ## 32 px sanat x1 (tam sayı ölçek, bulanıklaşmaz; altın simgesiyle aynı boy)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -304,7 +307,7 @@ func _ensure_shard_indicator() -> void:
 	box.add_child(icon)
 	_shard_label = Label.new()
 	_shard_label.add_theme_font_size_override("font_size", 40)
-	_shard_label.add_theme_color_override("font_color", HudTheme.SHARD) ## koyu levhada açık buz mavisi
+	_shard_label.add_theme_color_override("font_color", HudTheme.SHARD) ## koyu levhada açık zümrüt yeşili
 	_shard_label.text = "0"
 	box.add_child(_shard_label)
 	add_child(_shard_indicator)
@@ -325,6 +328,8 @@ func _on_weapon_shards_changed(total: int) -> void:
 
 ## Sol sütunun (ENVANTER + altın + parçacık) alt kenarı: grup paneli ve DEBUG düğmesi bunun altına yerleşir.
 func _left_stack_bottom() -> float:
+	if is_instance_valid(_left_console) and _left_console.visible:
+		return _left_console.get_global_rect().end.y
 	var y: float = gold_indicator.get_global_rect().end.y
 	if is_instance_valid(_shard_indicator) and _shard_indicator.visible:
 		y = maxf(y, _shard_indicator.get_global_rect().end.y)
@@ -370,6 +375,10 @@ func _layout_shop_inventory_buttons() -> void:
 		## Kullanıcı isteği (2026-10-04): ENVANTER + altın, altlarındaki grup + sohbet düğmeleriyle AYNI genişlikte (üst üste
 		## simetrik dursunlar) - iki kare düğme + aralık (bkz. _fit_mobile_party üst sıra).
 		btn_w = MOBILE_TOGGLE_SIZE.x * 2.0 + 10.0
+	else:
+		_layout_left_console(left_edge, top_y)
+		shop_toggle_button.visible = false
+		return
 
 	# Envanter butonu üstte, altın göstergesi altında.
 	envanter_toggle_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -437,6 +446,120 @@ func _layout_shop_inventory_buttons() -> void:
 	## geçerliliğini koruyor.
 
 
+## ---------- SOL ÜST KONSOL (madde 483, masaüstü; kullanıcı madde 480 prototiplerinden "B yi beğendim") ----------
+## Tek Gömme Tepsi (paneldeki yan kutu): üstte kabarık ahşap ENVANTER düğmesi (renkli çanta + "Envanter"), ayraç, altta yan yana iki koyu
+## kuyu = GERÇEK altın göstergesi (GoldIndicator) ve parçacık sayacı (ShardIndicator) - altın uçuşu/nabzı (gold_reward_fx.gd) ve sayaçlar
+## eskisi gibi o düğümleri kullanır; "+N" yazısı konsolun sağında (gold_gain_popup anchor). Yerleşim prototipteki gibi 3 px ızgarada
+## (tools/proto_20261108/sol_grup/sol_grup_proto.gd _front_b_console). Oyunda envanter kısayolu olmadığı için prototipteki "I" tuşu YOK.
+## Telefon eski sağ üst şeridinde (madde 273).
+const CONSOLE_SIZE := Vector2(228.0, 126.0) ## 76 x 42 sanat pikseli
+const CONSOLE_PLATE := Rect2(15.0, 15.0, 198.0, 45.0)
+const CONSOLE_DIVIDER := Rect2(15.0, 63.0, 198.0, 6.0)
+const CONSOLE_GOLD := Rect2(15.0, 72.0, 120.0, 39.0)
+const CONSOLE_SHARD := Rect2(138.0, 72.0, 75.0, 39.0)
+const CONSOLE_GOLD_ICON := 32.0 ## altın 16 px x2
+const CONSOLE_SHARD_ICON := 32.0 ## parçacık 32 px x1 (altınla aynı boy, madde 519)
+const PixeloidBold: Font = preload("res://assets/fonts/PixeloidSans-Bold.ttf")
+var _left_console: Panel = null
+
+
+class _ConsoleDivider extends Control:
+	func _draw() -> void:
+		HudTrayKit.draw_divider(self, 0.0, size.x, 0.0)
+
+
+func _place_abs(c: Control, r: Rect2) -> void:
+	c.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	c.pivot_offset = Vector2.ZERO
+	c.scale = Vector2.ONE
+	c.offset_left = r.position.x
+	c.offset_top = r.position.y
+	c.offset_right = r.end.x
+	c.offset_bottom = r.end.y
+
+
+func _layout_left_console(left: float, top: float) -> void:
+	if not is_instance_valid(_left_console):
+		_left_console = Panel.new()
+		_left_console.name = "LeftConsole"
+		_left_console.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_left_console.add_theme_stylebox_override("panel", HudTrayKit.tray(15.0, 15.0))
+		add_child(_left_console)
+		move_child(_left_console, envanter_toggle_button.get_index()) ## düğme ve kuyuların ARKASINDA
+		var dv := _ConsoleDivider.new()
+		dv.name = "Divider"
+		dv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		dv.position = CONSOLE_DIVIDER.position
+		dv.size = CONSOLE_DIVIDER.size
+		_left_console.add_child(dv)
+		UISound.register_ui_opacity(_left_console)
+	var o := Vector2(left, top)
+	_place_abs(_left_console, Rect2(o, CONSOLE_SIZE))
+	_place_abs(envanter_toggle_button, Rect2(o + CONSOLE_PLATE.position, CONSOLE_PLATE.size))
+	_place_abs(gold_indicator, Rect2(o + CONSOLE_GOLD.position, CONSOLE_GOLD.size))
+	gold_indicator.visible = true
+	if is_instance_valid(_shard_indicator):
+		_place_abs(_shard_indicator, Rect2(o + CONSOLE_SHARD.position, CONSOLE_SHARD.size))
+		_shard_indicator.visible = true
+	## FPS göstergesi: konsolun sağında, düğme hizasında (madde 415 kuralı aynı: küçük, sönük)
+	fps_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	fps_label.grow_horizontal = Control.GROW_DIRECTION_END
+	fps_label.offset_left = left + CONSOLE_SIZE.x + 9.0
+	fps_label.offset_right = fps_label.offset_left + 120.0
+	fps_label.offset_top = top + CONSOLE_PLATE.position.y
+	fps_label.offset_bottom = top + CONSOLE_PLATE.end.y
+	fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	fps_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	fps_label.add_theme_font_size_override("font_size", 16)
+	fps_label.add_theme_color_override("font_color", Color(HudTheme.DIM, 0.6))
+	fps_label.add_theme_color_override("font_outline_color", Color(HudTheme.OUTLINE, 0.6))
+	fps_label.add_theme_constant_override("outline_size", 2)
+	var gp: Node = get_node_or_null("GoldGainPopup")
+	if gp:
+		gp.set("anchor", _left_console)
+
+
+## _style_envanter_and_gold_buttons'tan SONRA (o, düğmeye eski "hud" stilini basar): konsolun parçalarını Gömme Tepsi diline çevirir.
+func _style_left_console() -> void:
+	HudTrayKit.style_plate_button(envanter_toggle_button)
+	envanter_toggle_button.text = tr("Envanter")
+	envanter_toggle_button.icon = HudTrayKit.BAG_ICON
+	envanter_toggle_button.expand_icon = false
+	envanter_toggle_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	envanter_toggle_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	envanter_toggle_button.add_theme_constant_override("h_separation", 6)
+	envanter_toggle_button.add_theme_font_size_override("font_size", 32)
+	envanter_toggle_button.clip_text = false
+	envanter_toggle_button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_gold_indicator_normal_style = HudTrayKit.well()
+	for pair in [[gold_indicator, gold_indicator_label, CONSOLE_GOLD_ICON, HudTheme.PRICE], [_shard_indicator, _shard_label, CONSOLE_SHARD_ICON, HudTheme.SHARD]]:
+		var box: PanelContainer = pair[0]
+		if not is_instance_valid(box):
+			continue
+		box.add_theme_stylebox_override("panel", HudTrayKit.well())
+		var m: MarginContainer = box.get_child(0) as MarginContainer
+		if m:
+			for side: String in ["left", "right"]:
+				m.add_theme_constant_override("margin_" + side, 6)
+			for side2: String in ["top", "bottom"]:
+				m.add_theme_constant_override("margin_" + side2, 0)
+			var hb: HBoxContainer = m.get_child(0) as HBoxContainer
+			if hb:
+				hb.alignment = BoxContainer.ALIGNMENT_BEGIN
+				hb.add_theme_constant_override("separation", 6)
+				for c in hb.get_children():
+					if c is TextureRect:
+						(c as TextureRect).custom_minimum_size = Vector2.ONE * float(pair[2])
+						(c as TextureRect).texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var lb: Label = pair[1]
+		if lb:
+			lb.add_theme_font_override("font", PixeloidBold)
+			lb.add_theme_font_size_override("font_size", 18)
+			lb.add_theme_color_override("font_color", pair[3])
+			lb.add_theme_color_override("font_outline_color", HudTheme.OUTLINE)
+			lb.add_theme_constant_override("outline_size", 0)
+
+
 ## Kullanıcı isteği: "envanter ve dükkanın (artık altın göstergesi) aynı
 ## renkte olması" - ENVANTER butonu ve altın göstergesi (dükkan) artık
 ## BİREBİR aynı kahverengi/ahşap paleti paylaşıyor (envanter/dükkan
@@ -489,6 +612,8 @@ func _style_envanter_and_gold_buttons() -> void:
 		gold_indicator_label.add_theme_color_override("font_color", HudTheme.PRICE)
 		gold_indicator_label.add_theme_constant_override("outline_size", 0)
 	_set_mouse_ignore_recursive(gold_indicator)
+	if is_instance_valid(_left_console):
+		_style_left_console()
 
 
 ## Altın kazancı "+N" yazısı altın çerçevesinin YANINDA (kullanıcı 2026-11-06; karakterin üstünde artık çıkmaz) - bkz. gold_gain_popup.gd.
@@ -500,6 +625,9 @@ func _create_gold_gain_popup() -> void:
 	popup.set_script(GoldGainPopupScript)
 	popup.anchor = gold_indicator
 	var fs: int = gold_indicator_label.get_theme_font_size("font_size") if gold_indicator_label else 40
+	if is_instance_valid(_left_console): ## madde 483: "+N" konsolun sağında (altın kuyusunun sağı parçacık kuyusu), m5x7 32
+		popup.anchor = _left_console
+		fs = 32
 	popup.add_theme_font_size_override("font_size", fs)
 	add_child(popup)
 
@@ -873,6 +1001,9 @@ func _update_ability_bar_frame() -> void:
 ## Üst sıra: Q E R  F | pasif (küçük) + evcil hayvan (küçük) + sağ uçta kalpler ve HER ZAMAN görünen sayaç levhası.
 ## Alt: solunda kalp/kalkan ikonu olan iki çubuk, sayılar çubuğun sağ ucunda (hud_pixel_bar.gd "merged").
 ## Sağa yapışık küçük panel: 5 efsanevi eşya yuvası (hud_legend_slots.gd). Panel + efsanevi paneli birlikte ortalanır.
+## Madde 489 (kalın çubuklar 30/30 + 13 punto, panel 160) madde 506'da GERİ ALINDI (kullanıcı: "resimdeki kalınlıkta olan versiyonu daha
+## iyiydi ama okunmuyor diye kalınlaştırmıştık kalınlaştırınca da çirkin görünmeye başladı"): ince çubuklar 24/22 + panel 152, okunurluk yazı
+## biçimiyle (hud_pixel_bar.gd value_style; 13 punto PixeloidSans'ın tam katı değil -> çizgiler 1-2 px karışık = "çirkin").
 const DOCK_H := 152.0
 ## 2026-10-17 (kullanıcı: "skill barı arayüz panelini %8 küçült"): tüm panel (çerçeve, yetenekler, çubuklar, kalpler, efsanevi, stat) bu çarpanla
 ## alt-orta çapasına göre küçülür; ölçüler 1920x1080 tasarım pikselinde yazılı, çarpan sadece _dock_place/_layout_player_dock'ta.
@@ -908,11 +1039,11 @@ const DOCK_HP_Y := 86.0
 const DOCK_HP_H := 24.0
 const DOCK_SHIELD_Y := 114.0
 const DOCK_SHIELD_H := 22.0
+const DOCK_VALUE_FS := 9 ## çubuk yazısı (PixeloidSans 1:1, rakam 7 px)
 const DOCK_BAR_RIGHT := 16.0
 const DOCK_LEGEND_OVERLAP := 12.0 ## efsanevi paneli ana panelin altına bu kadar girer ("yapışık")
 const DOCK_LEGEND_TOP := 6.0
 const DOCK_DIVIDER_COLOR := HudTheme.DIVIDER
-const SHIELD_VALUE_COLOR := HudTheme.SHIELD_VALUE
 ## Telefon HUD'u eski ölçüleri korur (MOBILE_CLUSTER_H bunlara göre).
 const MOBILE_HP_H := 22.0
 const MOBILE_SHIELD_H := 16.0
@@ -1148,14 +1279,15 @@ func _layout_player_dock() -> void:
 	if dock_hp_bar:
 		dock_hp_bar.position = Vector2(DOCK_CONTENT_X, DOCK_HP_Y)
 		dock_hp_bar.size = Vector2(bar_w, DOCK_HP_H)
+		dock_hp_bar.set("value_fs", DOCK_VALUE_FS)
 		dock_hp_bar.set("icon_kind", "heart")
 		dock_hp_bar.set("merged", true)
 		dock_hp_bar.queue_redraw()
 	if dock_shield_bar:
 		dock_shield_bar.position = Vector2(DOCK_CONTENT_X, DOCK_SHIELD_Y)
 		dock_shield_bar.size = Vector2(bar_w, DOCK_SHIELD_H)
+		dock_shield_bar.set("value_fs", DOCK_VALUE_FS)
 		dock_shield_bar.set("icon_kind", "shield")
-		dock_shield_bar.set("value_color", SHIELD_VALUE_COLOR)
 		dock_shield_bar.set("merged", true)
 		dock_shield_bar.queue_redraw()
 
@@ -2907,10 +3039,14 @@ func _input(event: InputEvent) -> void:
 ## doğru karakterin balonunu güncelliyor) yapılıyor, bkz. o dosyalardaki
 ## notlar.
 const CHAT_MAX_LOG_ENTRIES := 50
+## Madde 499: masaüstü sohbet penceresi "C - Portreli Mesajlar" (yüz yuvası + kuyruklu kutu, altın hediyesi satırı). Telefon eski yolda
+## (_chat_scroll/_chat_log harita üstü yazı + hızlı sohbet); masaüstünde _chat_scroll/_chat_log null, _chat_view dolu.
+const ChatWindowScript := preload("res://scripts/chat_window.gd")
 
 var _chat_layer: CanvasLayer = null
 var _chat_log: VBoxContainer = null
 var _chat_scroll: ScrollContainer = null
+var _chat_view: Control = null
 var _chat_input: LineEdit = null
 
 
@@ -2930,6 +3066,9 @@ func _create_chat_ui() -> void:
 	panel.offset_bottom = -20.0
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_chat_layer.add_child(panel)
+	if not MobileUIScript.enabled:
+		_create_desktop_chat(panel)
+		return
 
 	_chat_scroll = ScrollContainer.new()
 	_chat_scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -2986,9 +3125,68 @@ func _create_chat_ui() -> void:
 		_fit_mobile_party.call_deferred() ## telefonda sohbet sol sütunda (bkz. _fit_mobile_party)
 
 
+## Masaüstü (madde 499): sol altta 18 px payla chat_window.gd (mesaj kutuları) + altında yazı kutusu = Gömme Tepsi gömme kuyusu, sağında
+## kabarık "Enter" levhası (Envanter düğmesinin dokusu), yazı m5x7 32 krem, imleç altın.
+func _create_desktop_chat(panel: Control) -> void:
+	panel.offset_left = 18.0
+	panel.offset_right = 18.0 + ChatWindowScript.W
+	panel.offset_bottom = -18.0
+	panel.offset_top = -18.0 - ChatWindowScript.HEIGHT
+	_chat_view = ChatWindowScript.new()
+	_chat_view.name = "ChatWindow"
+	_chat_view.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(_chat_view)
+	_chat_input = LineEdit.new()
+	_chat_input.name = "ChatInput"
+	_chat_input.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_chat_input.offset_top = -ChatWindowScript.INPUT_H
+	_chat_input.placeholder_text = "Mesaj yazmak için Enter'a bas..."
+	_chat_input.max_length = 200
+	_chat_input.visible = false
+	_chat_input.theme = UIKit.theme()
+	var key_w: float = ceilf((ChatWindowScript.text_w("Enter") + 24.0) / 3.0) * 3.0
+	var sb: StyleBoxTexture = HudTrayKit.well(15.0, 0.0)
+	sb.content_margin_right = key_w + 18.0
+	_chat_input.add_theme_stylebox_override("normal", sb)
+	_chat_input.add_theme_stylebox_override("read_only", sb)
+	_chat_input.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_chat_input.add_theme_font_override("font", ChatWindowScript.F)
+	_chat_input.add_theme_font_size_override("font_size", ChatWindowScript.FS)
+	_chat_input.add_theme_color_override("font_color", HudTheme.TEXT)
+	_chat_input.add_theme_color_override("font_placeholder_color", HudTheme.DIM)
+	_chat_input.add_theme_color_override("caret_color", HudTheme.ACCENT)
+	_chat_input.add_theme_color_override("selection_color", Color(HudTheme.ACCENT, 0.35))
+	_chat_input.add_theme_color_override("font_selected_color", HudTheme.TEXT)
+	_chat_input.add_theme_constant_override("caret_width", 3)
+	_chat_input.text_submitted.connect(_on_chat_input_submitted)
+	_chat_input.focus_exited.connect(_close_chat_input)
+	_chat_input.offset_right = -(ChatWindowScript.SLOT + 6.0) ## sağında emoji yuvası (chat_window.gd attach_input)
+	panel.add_child(_chat_input)
+	_chat_view.call("attach_input", _chat_input)
+	var key := Label.new()
+	key.name = "EnterKey"
+	key.text = "Enter"
+	key.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## tuş adı
+	key.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	key.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	key.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	key.add_theme_stylebox_override("normal", HudTrayKit.plate("normal", 0.0, 0.0))
+	key.add_theme_font_override("font", ChatWindowScript.F)
+	key.add_theme_font_size_override("font_size", ChatWindowScript.FS)
+	key.add_theme_color_override("font_color", HudTheme.TEXT)
+	key.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	key.offset_left = -6.0 - key_w
+	key.offset_right = -6.0
+	key.offset_top = 6.0
+	key.offset_bottom = -9.0
+	_chat_input.add_child(key)
+
+
 func _open_chat_input() -> void:
 	if not _chat_input:
 		return
+	if _chat_view:
+		_chat_view.call("set_typing", true)
 	_chat_input.visible = true
 	_chat_input.text = ""
 	_chat_input.grab_focus()
@@ -3022,6 +3220,8 @@ func _close_chat_input() -> void:
 		_chat_input.release_focus()
 	_chat_input.visible = false
 	_chat_input.text = ""
+	if _chat_view:
+		_chat_view.call("set_typing", false)
 	if is_instance_valid(_ph_send_btn):
 		_ph_send_btn.visible = false
 	if is_instance_valid(player) and "is_chat_typing" in player:
@@ -3089,9 +3289,30 @@ func _unlock_debug_mode() -> void:
 		NetworkManager.announce_debug_action("DEBUG MODUNU AÇTI (her şey açık)")
 
 
+## Sistem satırı (main.gd DEBUG uyarısı): masaüstünde kırmızı "!" yuvalı kutu, telefonda düz satır.
+func append_chat_system(title: String, text: String) -> void:
+	if _chat_view:
+		_chat_view.call("add_system", title, text)
+	else:
+		append_chat_message(title, text)
+
+
+## Altın hediyesi (madde 499, kullanıcı: "biri birine altın gönderince chatte gözüksün kimin kime altın gönderdiği"): herkesin sohbetinde
+## "Gönderen » Alan / N altın gönderdi" (main.gd _on_gold_gift_announced <- NetworkManager.gold_gift_announced).
+func append_chat_gift(from_name: String, from_col: Color, to_name: String, to_col: Color, amount: int) -> void:
+	if _chat_view:
+		_chat_view.call("add_gift", from_name, from_col, to_name, to_col, amount)
+	else:
+		append_chat_message("%s » %s" % [from_name, to_name], Loc.t("%d altın gönderdi") % amount)
+
+
 ## main.gd _on_chat_message_received tarafından (hem yerel yankı hem uzak
-## oyunculardan gelen mesajlar için) çağrılır.
-func append_chat_message(sender_name: String, text: String) -> void:
+## oyunculardan gelen mesajlar için) çağrılır. char_id / color (madde 499, masaüstü penceresi): gönderenin yüzü + oyuncu rengi
+## (main.gd chat_sender_style); verilmezse boş yuva + altın ad.
+func append_chat_message(sender_name: String, text: String, char_id: int = -1, color: Color = Color(0, 0, 0, 0)) -> void:
+	if _chat_view:
+		_chat_view.call("add_message", sender_name, text, char_id, color if color.a > 0.0 else HudTheme.ACCENT)
+		return
 	if not _chat_log:
 		return
 	var line: Control
@@ -3107,7 +3328,9 @@ func append_chat_message(sender_name: String, text: String) -> void:
 		rl.add_theme_color_override("font_outline_color", HudTheme.OUTLINE)
 		rl.add_theme_constant_override("outline_size", 4)
 		rl.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## oyuncunun yazdığı metin çevrilmez ("Hepsi" -> "All" olmasın, madde 446)
-		rl.text = "[color=#%s]%s:[/color] %s" % [HudTheme.PRICE.to_html(false), sender_name.replace("[", "[lb]"), text.replace("[", "[lb]")]
+		rl.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST ## emoji resimleri (madde 499) keskin
+		rl.text = "[color=#%s]%s:[/color] %s" % [HudTheme.PRICE.to_html(false), sender_name.replace("[", "[lb]"),
+			ChatWindowScript.ChatEmoji.to_bbcode(text.replace("[", "[lb]"), 18)]
 		line = rl
 		_ph_recent.append([sender_name, text])
 		while _ph_recent.size() > 2:

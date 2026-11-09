@@ -10,7 +10,7 @@ const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / L
 ##    rayın ÖZELLİK sekmesinde. Bu yol eski kurulumu (_build_legacy) kullanır.
 
 const WEAPON_ICON_TEXTURES := {
-	"dagger": preload("res://assets/weapons/base_knife/icon_v2.png"),
+	"dagger": preload("res://assets/weapons/yeni/bicak.png"),
 	"fire_staff": preload("res://assets/weapons/yeni/fire_staff.png"),
 	"lightning_staff": preload("res://assets/weapons/lightning/icon_v2.png"),
 	"tabanca": preload("res://assets/weapons/tabanca/icon_v2.png"),
@@ -22,7 +22,7 @@ const WEAPON_ICON_TEXTURES := {
 	"boomerang": preload("res://assets/weapons/boomerang/icon.png"),
 	"buz_asasi": preload("res://assets/weapons/yeni/buz_asasi.png"),
 	"fisek": preload("res://assets/weapons/fisek/icon.png"),
-	"pence": preload("res://assets/weapons/pence/icon.png"),
+	"pence": preload("res://assets/weapons/yeni/tirpan.png"),
 	"topuz": preload("res://assets/weapons/topuz/icon.png"),
 	"uzunkilic": preload("res://assets/weapons/yeni/uzunkilic.png"),
 	"gokkusagi": preload("res://assets/weapons/yeni/gokkusagi.png"),
@@ -35,7 +35,7 @@ const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
+	"pence": "Tırpan", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
 }
 
 ## Eşyalar (bkz. scripts/items.gd) - dükkandaki ItemsPage satırlarıyla BİREBİR

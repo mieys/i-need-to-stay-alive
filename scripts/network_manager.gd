@@ -169,7 +169,7 @@ const MAX_PLAYERS := 8
 ## Host devri: kabul edilen herkes şifreyi bilir (room_password = girdiği şifre) - yeni host aynı ayarlarla kurar, diğerleri aynı
 ## şifreyle otomatik doğrulanır.
 const ROOM_MIN_PLAYERS := 2
-const LOBBY_PROTOCOL := "lobi-22" ## (2026-11-08: lobi-21 -> lobi-22, madde 463: ana haritada DungeonManager düğümü yok, derin orman / zindan kalktı) (2026-11-07: lobi-20 -> lobi-21, Taşkın Hisar KÖPRÜ KOLU: DungeonManager._rpc_req_lever (kol gruptaki parmaklıkları indirir) + Lağım Ağı GAZ FIÇISI: _rpc_req_barrel / _rpc_barrel, _rpc_full_state 4. argüman (fıçılar) - eski exe RPC listesi uyuşmaz, madde 449); (2026-11-07: lobi-19 -> lobi-20, yeni silah Pompalı Tüfek "pompali" + request_enemy_damage 5. argüman (sep: saçma hasar sayıları ayrı) + "damage_number" "sep" alanı - eski exe silahı tanımaz, madde 448); (2026-11-07: lobi-18 -> lobi-19, HARİTA SEÇİMİ: _rpc_start_game / _rpc_join_in_progress_game harita kimliği argümanı + LAN ilanına 9. alan (harita) - eski exe RPC imzası uyuşmaz, madde 444); (2026-11-06: lobi-17 -> lobi-18, level pazarı ayrı ekran: _rpc_extend_level_up_countdown (pazarın kendi süresi) - eski exe RPC listesi uyuşmaz, madde 432); (2026-11-06: lobi-16 -> lobi-17, lobi seçimlerine evcil hayvan: _rpc_sync_player_loadout üçüncü argüman "pet" - eski exe 2 argümanla çağırır, RPC reddedilir); (2026-11-06: lobi-15 -> lobi-16, ağ gecikmesi düzeltmesi: güvenilir RPC'ler ayrı aktarım kanallarında (CH_*), oyuncu durum paketi delta (main.gd _rpc_player_state), yaratık senkron kaydında değişmeyen can/kalkan atlanır (enemy_sync_codec FLAG_NO_HP), bağlantı kalitesi ping/pong RPC'leri - eski exe ile kanal/RPC listesi uyuşmaz, madde 419); (2026-10-23: lobi-14 -> lobi-15, yaratık yeteneği "bone" (İskelet Kemik Atışı) dünya efekti - eski exe tanımaz, görünmez kemikten hasar alırdı, madde 368); (2026-10-21: lobi-13 -> lobi-14, Oakley yetenek evrimleri: "oakley_revive" oyuncu efekti + "oakley_tree" süre/alan verisi + bee_poison RPC param2 (Salgın Zehir) - eski exe tanımaz, madde 348); (2026-10-20: lobi-12 -> lobi-13, yeni silah Kalkan "kalkan" + "kalkan_*" darbe verisi - eski exe silahı tanımaz, madde 338); (2026-10-19: lobi-11 -> lobi-12, yeni silah Gökkuşağı Asası "gokkusagi" + "rbeam_*" oyuncu efektleri - eski exe silahı/ışını tanımaz, madde 306); (lobi-10 -> lobi-11, Yıldırım Asası vuruş sesi: "beam_hit" oyuncu efekti - eski exe tanımaz, tikleri sessiz duyar, madde 294); lobi-10: (2026-10-19: lobi-9 -> lobi-10, saklanma çalılığı: request_brush_reveal RPC'si + "brush_search_*"/"brush_alert" yaratık efektleri, madde 283); lobi-9: (2026-10-19: lobi-8 -> lobi-9, broadcast_enemy_projectile'a mermi stili argümanı - lich Ruh Alevi, madde 280); lobi-8: (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
+const LOBBY_PROTOCOL := "lobi-27" ## (2026-11-09: lobi-26 -> lobi-27, madde 540: teslim oylaması RPC'leri `_rpc_*surrender*` - eski exe bilmez.) (2026-11-09: lobi-25 -> lobi-26, madde 516: Vampir Yarasa Formu geçişi "vampir_fx" kind "bat_in"/"bat_out" (eski "puff" kalktı) - eski exe yeni türü tanımaz, geçiş efektini hiç göstermez) (2026-11-09: lobi-24 -> lobi-25, madde 509: yeni evciller Minik Cadı + Hayalet - broadcast_slime / broadcast_hayalet RPCleri, durum anlık görüntüsünde "psz" - eski exe RPC listesi uyuşmaz) (2026-11-08: lobi-23 -> lobi-24, madde 499: altın hediyesi duyurusu _rpc_announce_gold_gift (herkesin sohbetinde satır) - eski exe RPC listesi uyuşmaz) (2026-11-08: lobi-22 -> lobi-23, madde 496: 4 yeni görev + vurulabilen görev hedefi RPC'leri broadcast_world_event_target_state / _dead / request_world_event_target_damage, zindan haritalarında görevler - eski exe RPC listesi uyuşmaz) (2026-11-08: lobi-21 -> lobi-22, madde 463: ana haritada DungeonManager düğümü yok, derin orman / zindan kalktı) (2026-11-07: lobi-20 -> lobi-21, Taşkın Hisar KÖPRÜ KOLU: DungeonManager._rpc_req_lever (kol gruptaki parmaklıkları indirir) + Lağım Ağı GAZ FIÇISI: _rpc_req_barrel / _rpc_barrel, _rpc_full_state 4. argüman (fıçılar) - eski exe RPC listesi uyuşmaz, madde 449); (2026-11-07: lobi-19 -> lobi-20, yeni silah Pompalı Tüfek "pompali" + request_enemy_damage 5. argüman (sep: saçma hasar sayıları ayrı) + "damage_number" "sep" alanı - eski exe silahı tanımaz, madde 448); (2026-11-07: lobi-18 -> lobi-19, HARİTA SEÇİMİ: _rpc_start_game / _rpc_join_in_progress_game harita kimliği argümanı + LAN ilanına 9. alan (harita) - eski exe RPC imzası uyuşmaz, madde 444); (2026-11-06: lobi-17 -> lobi-18, level pazarı ayrı ekran: _rpc_extend_level_up_countdown (pazarın kendi süresi) - eski exe RPC listesi uyuşmaz, madde 432); (2026-11-06: lobi-16 -> lobi-17, lobi seçimlerine evcil hayvan: _rpc_sync_player_loadout üçüncü argüman "pet" - eski exe 2 argümanla çağırır, RPC reddedilir); (2026-11-06: lobi-15 -> lobi-16, ağ gecikmesi düzeltmesi: güvenilir RPC'ler ayrı aktarım kanallarında (CH_*), oyuncu durum paketi delta (main.gd _rpc_player_state), yaratık senkron kaydında değişmeyen can/kalkan atlanır (enemy_sync_codec FLAG_NO_HP), bağlantı kalitesi ping/pong RPC'leri - eski exe ile kanal/RPC listesi uyuşmaz, madde 419); (2026-10-23: lobi-14 -> lobi-15, yaratık yeteneği "bone" (İskelet Kemik Atışı) dünya efekti - eski exe tanımaz, görünmez kemikten hasar alırdı, madde 368); (2026-10-21: lobi-13 -> lobi-14, Oakley yetenek evrimleri: "oakley_revive" oyuncu efekti + "oakley_tree" süre/alan verisi + bee_poison RPC param2 (Salgın Zehir) - eski exe tanımaz, madde 348); (2026-10-20: lobi-12 -> lobi-13, yeni silah Kalkan "kalkan" + "kalkan_*" darbe verisi - eski exe silahı tanımaz, madde 338); (2026-10-19: lobi-11 -> lobi-12, yeni silah Gökkuşağı Asası "gokkusagi" + "rbeam_*" oyuncu efektleri - eski exe silahı/ışını tanımaz, madde 306); (lobi-10 -> lobi-11, Yıldırım Asası vuruş sesi: "beam_hit" oyuncu efekti - eski exe tanımaz, tikleri sessiz duyar, madde 294); lobi-10: (2026-10-19: lobi-9 -> lobi-10, saklanma çalılığı: request_brush_reveal RPC'si + "brush_search_*"/"brush_alert" yaratık efektleri, madde 283); lobi-9: (2026-10-19: lobi-8 -> lobi-9, broadcast_enemy_projectile'a mermi stili argümanı - lich Ruh Alevi, madde 280); lobi-8: (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
 const AUTH_TIMEOUT_MS := 10000 ## host: bu sürede doğrulanmayanı atar; istemci: bu sürede kabul gelmezse vazgeçer
 
 ## AKTARIM KANALLARI (madde 419, ağ gecikmesi düzeltmesi; analiz madde 349): güvenilir (reliable) paketler kanal başına SIRALI gelir -
@@ -518,6 +518,7 @@ func _process(delta: float) -> void:
 	## Yeniden başlatma onay oylaması (bkz. "YENİDEN BAŞLATMA ONAYI" bloğu) -
 	## sadece host'ta ve bir oylama sürerken bir şey yapar.
 	update_restart_vote_timer(delta)
+	update_surrender_vote_timer(delta) ## teslim oylaması (madde 540)
 
 	## bkz. _sweep_stale_throttle_keys üstündeki not - FPS'in zamanla düşmesi
 	## bugu için düzeltme.
@@ -1298,6 +1299,7 @@ func _reset_for_restart_lobby() -> void:
 	restart_vote_pending = false
 	restart_vote_responses.clear()
 	_restart_vote_timer = 0.0
+	reset_surrender_vote()
 	_loading_done.clear()
 	_is_game_in_progress = false
 	_is_rejoining_midgame = false
@@ -1347,6 +1349,250 @@ func update_restart_vote_timer(delta: float) -> void:
 			if not restart_vote_responses.has(pid):
 				restart_vote_responses[pid] = false
 		_finish_restart_vote(0)
+
+
+## ==============================================================================
+## TESLİM OYLAMASI (madde 540, 2026-11-09; kullanıcı: "oyuna esc de teslim olma seçeneği ekle oylama ile loldeki gibi"; kurallar
+## kullanıcının seçimi: OYBİRLİĞİ, oyunun her anında açık). Herkes ESC'den başlatabilir, başlatan "evet" sayılır; bağlı TÜM oyuncular
+## (ölüler/yerde yatanlar dahil = lobby_players) oy verir. Host yetkilidir: oyları o toplar; biri "hayır" derse ya da
+## SURRENDER_VOTE_TIMEOUT dolarsa oylama düşer ve takım SURRENDER_VOTE_COOLDOWN boyunca yeni oylama açamaz. Geçerse HER eş kendi
+## ekranında koşuyu bitirir (_rpc_surrender_vote_result -> _apply_surrender -> surrender_passed -> main.gd _on_surrender_passed).
+## Tek oyunculuda oylama yok: pause_menu.gd'deki onay basışından sonra request_surrender_vote doğrudan _apply_surrender.
+## İstemci oylamayı kendi saatiyle de kapatır (host oylama sırasında koparsa panel asılı kalmasın). Panel: surrender_vote_panel.gd.
+## ==============================================================================
+const SURRENDER_VOTE_TIMEOUT := 30.0
+const SURRENDER_VOTE_COOLDOWN := 120.0
+const _SURRENDER_CLIENT_GRACE := 3.0 ## istemcinin yerel kapanışı host'un zaman aşımından bu kadar sonra
+var surrender_vote_active: bool = false
+var surrender_vote_initiator: int = 0
+var surrender_votes: Dictionary = {} ## peer_id -> bool; host'ta yetkili kayıt, istemcide son yayının kopyası
+var surrender_voters: PackedInt32Array = PackedInt32Array() ## son yayındaki oy verenler (artan peer id)
+var _surrender_time_left: float = 0.0
+var _surrender_cooldown_until_msec: int = 0
+var _surrender_my_vote: int = -1 ## istemci: -1 yok, 0 hayır, 1 evet (host yayını gecikirken düğmeler tekrar açılmasın)
+var _surrender_announced: bool = false ## bu oylama için surrender_vote_started yayıldı mı (host'ta da bir kez)
+
+signal surrender_vote_started(initiator: int) ## yeni oylama açıldı (sohbet satırı)
+signal surrender_vote_changed ## oylama açıldı / oy geldi (panel yeniden çizer)
+signal surrender_vote_ended(passed: bool, yes_count: int, total: int) ## total 0 = sessiz kapanış (oyun bitti / host koptu)
+signal surrender_passed ## koşu teslimle bitti (tek oyunculu dahil)
+
+
+func surrender_time_left() -> float:
+	return maxf(_surrender_time_left, 0.0)
+
+
+func surrender_cooldown_left() -> float:
+	return maxf(0.0, float(_surrender_cooldown_until_msec - Time.get_ticks_msec()) / 1000.0)
+
+
+## Bu eşin oyu: -1 vermedi, 0 hayır, 1 evet.
+func my_surrender_vote() -> int:
+	var me: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	if surrender_votes.has(me):
+		return 1 if bool(surrender_votes[me]) else 0
+	return _surrender_my_vote
+
+
+## TESLİM OL düğmesi neden basılamaz ("" = basılabilir). Oylama sürüyorsa düğme oy verir (bkz. pause_menu.gd).
+func surrender_block_reason() -> String:
+	if GameManager.is_game_over:
+		return "Oyun bitti"
+	if surrender_vote_active:
+		return "" if my_surrender_vote() < 0 else "Oy verdin"
+	var cd: float = surrender_cooldown_left()
+	if cd > 0.0:
+		return Loc.t("Yeni oylama %d sn sonra") % ceili(cd)
+	return ""
+
+
+## Herkes çağırabilir (pause_menu.gd). Tek oyunculuda doğrudan teslim (onayı menü aldı).
+func request_surrender_vote() -> void:
+	if GameManager.is_game_over:
+		return
+	if not is_multiplayer_active:
+		_apply_surrender()
+		return
+	if surrender_vote_active:
+		submit_surrender_vote(true) ## sürmekte olan oylamada TESLİM OL = evet
+		return
+	if is_host:
+		_host_start_surrender_vote(multiplayer.get_unique_id())
+	else:
+		_rpc_request_surrender_vote.rpc_id(_host_peer_id())
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_surrender_vote() -> void:
+	if not is_host:
+		return
+	_host_start_surrender_vote(multiplayer.get_remote_sender_id())
+
+
+func _host_start_surrender_vote(initiator: int) -> void:
+	if not is_host or GameManager.is_game_over or surrender_vote_active or initiator <= 0:
+		return
+	if not lobby_players.has(initiator) or surrender_cooldown_left() > 0.0:
+		return
+	surrender_vote_active = true
+	surrender_vote_initiator = initiator
+	surrender_votes.clear()
+	surrender_votes[initiator] = true
+	_surrender_time_left = SURRENDER_VOTE_TIMEOUT
+	if not _check_surrender_vote_complete(): ## odada tek kişi kaldıysa anında geçer
+		_broadcast_surrender_vote()
+
+
+func submit_surrender_vote(yes: bool) -> void:
+	if not is_multiplayer_active or not surrender_vote_active or my_surrender_vote() >= 0:
+		return
+	if is_host:
+		_host_record_surrender_vote(multiplayer.get_unique_id(), yes)
+		return
+	_surrender_my_vote = 1 if yes else 0
+	surrender_vote_changed.emit()
+	_rpc_submit_surrender_vote.rpc_id(_host_peer_id(), yes)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_submit_surrender_vote(yes: bool) -> void:
+	if not is_host:
+		return
+	_host_record_surrender_vote(multiplayer.get_remote_sender_id(), yes)
+
+
+func _host_record_surrender_vote(pid: int, yes: bool) -> void:
+	if not is_host or not surrender_vote_active or not lobby_players.has(pid) or surrender_votes.has(pid):
+		return
+	surrender_votes[pid] = yes
+	if not yes:
+		_finish_surrender_vote(false) ## oybirliği: tek "hayır" yeter
+		return
+	if not _check_surrender_vote_complete():
+		_broadcast_surrender_vote()
+
+
+## Oybirliği: lobideki herkes "evet" dediyse oylamayı bitirir. true = bitti.
+func _check_surrender_vote_complete() -> bool:
+	if not surrender_vote_active:
+		return false
+	for pid in lobby_players.keys():
+		if not bool(surrender_votes.get(pid, false)):
+			return false
+	_finish_surrender_vote(true)
+	return true
+
+
+func _broadcast_surrender_vote() -> void:
+	var ids: Array = lobby_players.keys()
+	ids.sort()
+	var voters := PackedInt32Array()
+	var yes := PackedInt32Array()
+	var no := PackedInt32Array()
+	for pid in ids:
+		voters.append(int(pid))
+		if surrender_votes.has(pid):
+			if bool(surrender_votes[pid]):
+				yes.append(int(pid))
+			else:
+				no.append(int(pid))
+	_rpc_surrender_vote_state.rpc(surrender_vote_initiator, voters, yes, no, _surrender_time_left)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_surrender_vote_state(initiator: int, voters: PackedInt32Array, yes: PackedInt32Array, no: PackedInt32Array, time_left: float) -> void:
+	if not _from_host() or GameManager.is_game_over:
+		return
+	## Host durumu yayından ÖNCE kurar (_host_start_surrender_vote) - "yeni oylama mı" etkin bayraktan değil duyuru bayrağından anlaşılır.
+	var fresh: bool = not _surrender_announced
+	_surrender_announced = true
+	surrender_vote_active = true
+	surrender_vote_initiator = initiator
+	surrender_voters = voters
+	if not is_host:
+		if fresh:
+			_surrender_my_vote = -1
+		surrender_votes.clear()
+		for p in yes:
+			surrender_votes[p] = true
+		for p in no:
+			surrender_votes[p] = false
+		_surrender_time_left = time_left
+	if fresh:
+		surrender_vote_started.emit(initiator)
+	surrender_vote_changed.emit()
+
+
+func _finish_surrender_vote(passed: bool) -> void:
+	if not is_host or not surrender_vote_active:
+		return
+	var yes_n: int = 0
+	for pid in lobby_players.keys(): ## yalnız hâlâ odada olanların oyu sayılır
+		if bool(surrender_votes.get(pid, false)):
+			yes_n += 1
+	_rpc_surrender_vote_result.rpc(passed, yes_n, lobby_players.size())
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_surrender_vote_result(passed: bool, yes_n: int, total: int) -> void:
+	if not _from_host():
+		return
+	_clear_surrender_vote_state()
+	if not passed:
+		_surrender_cooldown_until_msec = Time.get_ticks_msec() + int(SURRENDER_VOTE_COOLDOWN * 1000.0)
+	surrender_vote_ended.emit(passed, yes_n, total)
+	if passed:
+		_apply_surrender()
+
+
+## Koşuyu teslimle bitirir (her eş kendi tarafında; tek oyunculuda doğrudan). Oyun bitti ekranını main.gd kurar.
+func _apply_surrender() -> void:
+	if GameManager.is_game_over:
+		return
+	GameManager.run_surrendered = true
+	GameManager.is_game_over = true
+	surrender_passed.emit()
+
+
+func _clear_surrender_vote_state() -> void:
+	surrender_vote_active = false
+	surrender_vote_initiator = 0
+	surrender_votes.clear()
+	surrender_voters = PackedInt32Array()
+	_surrender_time_left = 0.0
+	_surrender_my_vote = -1
+	_surrender_announced = false
+
+
+## Yeni koşu / odaya dönüş: oylama + bekleme sıfırlanır (main.gd _ready, _reset_for_restart_lobby).
+func reset_surrender_vote() -> void:
+	_clear_surrender_vote_state()
+	_surrender_cooldown_until_msec = 0
+
+
+## _process'ten her karede (ALWAYS). Host zaman aşımını işler; istemci host'un sonucu hiç gelmezse kendisi kapatır.
+func update_surrender_vote_timer(delta: float) -> void:
+	if not surrender_vote_active:
+		return
+	if GameManager.is_game_over or not is_multiplayer_active:
+		_clear_surrender_vote_state()
+		surrender_vote_ended.emit(false, 0, 0)
+		return
+	_surrender_time_left -= delta
+	if is_host:
+		if _surrender_time_left <= 0.0:
+			_finish_surrender_vote(false)
+	elif _surrender_time_left <= -_SURRENDER_CLIENT_GRACE:
+		_clear_surrender_vote_state()
+		surrender_vote_ended.emit(false, 0, 0)
+
+
+## Bir eş koptu (host): oybirliği artık sağlanmış olabilir; değilse güncel oy veren listesini yay.
+func _on_surrender_voter_left() -> void:
+	if not is_host or not surrender_vote_active:
+		return
+	if not _check_surrender_vote_complete():
+		_broadcast_surrender_vote()
 
 
 func close_room() -> void:
@@ -1575,6 +1821,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		## oyuncu ölmek yerine bağlantısı koparsa, geride kalan (zaten kalıcı
 		## ölü) takım sonsuza dek "izleyicisin" ekranında takılı kalmasın.
 		_check_all_players_dead()
+		_on_surrender_voter_left() ## teslim oylaması: ayrılanın oyu gerekmez (madde 540)
 	## DÜZELTME: ayrılan peer kart/silah/kalkan seçerken kopmuşsa (level_up_
 	## busy_peers'ta kalmış olabilir) TEMİZLENMEZSE geri kalan herkes
 	## SONSUZA KADAR "bir oyuncu seçim yapıyor" bekleme durumunda donup
@@ -2741,6 +2988,32 @@ func broadcast_world_event_copy_bolt(from_pos: Vector2, to_pos: Vector2, weapon_
 	load("res://scripts/mission_player_copy.gd").spawn_bolt(from_pos, to_pos, 0.0, null, true, weapon_key)
 
 
+## VURULABİLEN GÖREV HEDEFLERİ (madde 496: yuva / ritüel kristali / kaçan hazine; bkz. mission_target.gd). Kopyayla aynı desen: host gerçek
+## hedefi simüle eder, istemcideki kozmetik hedef konum/can/kalkanı bu yayınlardan alır, istemcinin vuruşu host'a iletilir.
+signal world_event_target_state(mission_id: int, target_index: int, pos: Vector2, health_ratio: float, shield_ratio: float)
+signal world_event_target_dead(mission_id: int, target_index: int, vanished: bool)
+signal world_event_target_damage_requested(mission_id: int, target_index: int, amount: float)
+
+@rpc("any_peer", "call_remote", "unreliable")
+func broadcast_world_event_target_state(mission_id: int, target_index: int, pos: Vector2, health_ratio: float, shield_ratio: float) -> void:
+	if not _from_host():
+		return
+	world_event_target_state.emit(mission_id, target_index, pos, health_ratio, shield_ratio)
+
+## vanished: öldürülmedi, görev bitince kayboldu (Kaçan Hazine kaçtı) - istemci ölüm patlaması yerine sönme görselini oynatır.
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_world_event_target_dead(mission_id: int, target_index: int, vanished: bool = false) -> void:
+	if not _from_host():
+		return
+	world_event_target_dead.emit(mission_id, target_index, vanished)
+
+@rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
+func request_world_event_target_damage(mission_id: int, target_index: int, amount: float) -> void:
+	if not is_host:
+		return
+	world_event_target_damage_requested.emit(mission_id, target_index, amount)
+
+
 ## Remove a visual drop on all clients when it's collected on the host.
 ##
 ## NOT (kritik çökme düzeltmesi): "as Node2D" statik cast'i BİLEREK
@@ -3849,7 +4122,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			elif rp.shield_visual and rp.shield_visual.has_method("flash"):
 				rp.shield_visual.flash(flash_angle)
 		## Vampir Çocuk pixel FX'i (bkz. vampir_math.gd spawn_fx / vampir_fx.gd): kind = "hit" (vuruş
-		## patlaması), "puff" (Yarasa Formu geçişi), "drain" (Kan Emme - "points" kaynak konumları,
+		## patlaması), "bat_in"/"bat_out" (Yarasa Formu girişi/dönüşü, madde 516 - efekt kuklayı izler), "drain" (Kan Emme - "points" kaynak konumları,
 		## damlalar bu kukla'ya akar; "text" varsa "+1 Maks. Can" gibi kukla üstünde yazı).
 		## Yarasa formunun kendisi/silahların çekilmesi bu kanaldan DEĞİL, animasyon adından gelir.
 		## Genel pixel parçacık patlaması (pixel_draw.gd spawn_burst) - Korsan bomba tozu/duman/kıvılcımı vb.
@@ -3879,6 +4152,8 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			if vampir_kind == "drain":
 				vampir_opts["points"] = extra_data.get("points", PackedVector2Array())
 				vampir_opts["sink"] = rp
+			elif vampir_kind == "bat_in" or vampir_kind == "bat_out":
+				vampir_opts["follow"] = rp
 			VampirMathScript.spawn_fx(get_tree().current_scene, vampir_kind, pos, vampir_opts)
 		## Cadı (bkz. cadi_math.gd - yerel oyuncu AYNI yardımcıları çağırır). Kozmetik kopyalar: hasar/etki sadece kasterde.
 		##  "cadi_fx"   kind "smoke" (Q bulutu; life/size = evrimli ömür/boyut, vert = dikey bulut) | "poof" (biniş/iniş dumanı)
@@ -4237,7 +4512,7 @@ func show_weapon_shard_text(amount: int) -> void:
 	get_tree().current_scene.add_child(ft)
 	ft.global_position = (local_p as Node2D).global_position + Vector2(14, -34)
 	if ft.has_method("setup"):
-		ft.call("setup", Loc.t("+%d Silah Parçacığı") % amount, Color(0.72, 0.84, 1.0))
+		ft.call("setup", Loc.t("+%d Silah Parçacığı") % amount, preload("res://scripts/hud_theme.gd").SHARD)
 
 
 ## Elit sandık (kullanıcı isteği 2026-09-25: "normal sandıklar tek oyuncuya gider elit sandıklar ise paylaşılır"):
@@ -4524,6 +4799,24 @@ func broadcast_kirpi(player_id: int, open: bool) -> void:
 		rp.kirpi_event(open)
 
 
+## Minik Cadı (evcil iyi slime, scripts/slime_pet.gd, madde 509): sahibinin ekranı "buradayım" (cast=false, 8 sn'de bir) ya da "ulti büyüsü
+## yaptım" (cast=true, en sık 90 sn'de bir) der; kukla ilk olayda kurulur, büyüyü sadece görsel oynatır. Seyrek: güvenilir kanal.
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_slime(player_id: int, cast: bool) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if rp and rp.has_method("slime_event"):
+		rp.slime_event(cast)
+
+
+## Hayalet (evcil, scripts/hayalet_pet.gd, madde 509): sahibinin ekranı kaplama başlayınca/bitince + 8 sn'de bir durumu bildirir; kukla ilk
+## olayda kurulur, kaplamayı sadece görsel oynatır (görünmezlik durum anlık görüntüsünde). Seyrek + durum: güvenilir kanal.
+@rpc("any_peer", "call_remote", "reliable")
+func broadcast_hayalet(player_id: int, cover: bool) -> void:
+	var rp: RemotePlayer = _find_remote_player(player_id)
+	if rp and rp.has_method("hayalet_event"):
+		rp.hayalet_event(cover)
+
+
 ## Şans faktörüyle her oyuncunun kişisel altınına doğrudan ekleme yapar -
 ## bkz. remote_player.gd collect_gold. Kullanıcı isteği: "oyundaki para
 ## ortak olmamalı herkesin parası kişisel olmalı" - eskiden share_gold TÜM
@@ -4635,7 +4928,22 @@ func request_give_gold(to_player_id: int, amount: int) -> bool:
 		return false
 	GameManager.gold -= amount
 	receive_gold_gift.rpc_id(to_player_id, local_player_name, amount)
+	## Madde 499 (kullanıcı: "biri birine altın gönderince chatte gözüksün kimin kime altın gönderdiği"): herkese duyuru (sohbet satırı).
+	_rpc_announce_gold_gift.rpc(to_player_id, amount)
+	gold_gift_announced.emit(my_id, to_player_id, amount)
 	return true
+
+
+## Madde 499: altın hediyesi duyurusu -> herkesin sohbetinde "Gönderen » Alan / N altın gönderdi" (main.gd _on_gold_gift_announced).
+## Gönderen parametre DEĞİL, RPC'yi atan eş (başkası adına duyuru yapılamaz); altına dokunmaz, yalnız sohbet satırı.
+signal gold_gift_announced(from_peer: int, to_peer: int, amount: int)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_announce_gold_gift(to_peer: int, amount: int) -> void:
+	var from_peer: int = multiplayer.get_remote_sender_id()
+	if from_peer <= 0 or to_peer <= 0 or from_peer == to_peer or amount <= 0 or amount > 100000000:
+		return
+	gold_gift_announced.emit(from_peer, to_peer, amount)
 
 
 ## request_give_gold()'un karşı ucu - SADECE hedeflenen client'ta çalışır
@@ -4660,6 +4968,12 @@ func receive_gold_gift(from_name: String, amount: int) -> void:
 		GoldRewardFx.give_from_screen(get_tree(), amount, sp)
 	else:
 		GoldRewardFx.give(get_tree(), amount, (local_player as Node2D).global_position if local_player is Node2D else Vector2.ZERO)
+	## Madde 493 (kullanıcı: "altın hediye edilen kişiye daha görünür ve daha dikkat çekici bir bildirim gitsin"): üst ortada gönderenin
+	## portreli hediye levhası (main.gd show_gift_notice -> gift_notice.gd).
+	var main_node: Node = get_tree().current_scene
+	if main_node and main_node.has_method("show_gift_notice"):
+		var sender_char: int = int(sender.get("char_id")) if sender != null and is_instance_valid(sender) and "char_id" in sender else 0
+		main_node.call("show_gift_notice", from_name, amount, sender_char)
 	if local_player and is_instance_valid(local_player):
 		if local_player.has_method("play_heart_fx"):
 			local_player.play_heart_fx() ## kullanıcı isteği (2026-10-13): hediyeyi alanın üstünde diriltmedeki gibi kalp

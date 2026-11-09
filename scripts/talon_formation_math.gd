@@ -85,7 +85,21 @@ const EVO_SALVO_FIRE_BONUS: float = 5.0
 ## cezası aynen. Halka büyük olduğu için dönüş Talon'un kendi salvosunun yarı açısal hızında (silahlar bulanık uçmasın).
 const DOME_SPIN_ADVANTAGE: float = 0.5
 const DOME_SPIN_SPEED_MULT: float = 0.5
-const SALVO_DAMAGE_PENALTY: float = 0.0 ## 2026-10-17: kullanıcı isteğiyle -%40 hasar cezası kaldırıldı
+## Salvo sürerken silah hasarı -%25 (2026-11-09, BALANCE_REV 133: 4 kişilik K13 oyununda Talon hasarın %71'ini verdi; E'nin +%400/+%500 saldırı hızı
+## tam hasarla 7 kat tavana çıkıyordu. 2026-10-17'de -%40 ceza kullanıcı isteğiyle kaldırılmıştı; bu kez daha hafif geri geldi).
+const SALVO_DAMAGE_PENALTY: float = 0.25
+
+## Salvoda YAKIN DÖVÜŞ vuruşu zincirin UCUNDA (2026-11-09, kullanıcı: "E aktifken silahların vuruşları zincirden bağımsız
+## gerçekleşiyor daha uzakta ve alakasız konumlarda"): silah düğümü çemberde ~545 px/sn dönerken dünya koordinatında
+## sabitlenen savuruş planları ikonu zincirden koparıp menzil kadar öteye atıyordu. Salvoda ikon yuvasında kalır, dışa kısa
+## bir dürtme yapar (kaster weapon.gd _salvo_melee_jab + kukla remote_player.gd _kick_formation_icon AYNI boy/süre); vuruş
+## ikonun önündeki kısa hatta (geride BACK, önde REACH, hattan MARGIN + gövde yarıçapı). Dünya px'i, menzil kartları ve Talon
+## Devleşme alanıyla büyür (weapon.gd _salvo_melee_reach).
+const SALVO_MELEE_REACH: float = 40.0
+const SALVO_MELEE_BACK: float = 12.0
+const SALVO_MELEE_MARGIN: float = 14.0
+const SALVO_MELEE_JAB: float = 6.0 ## ikon yerel px (kuklanın FORMATION_KICK_MAX'ıyla aynı)
+const SALVO_MELEE_JAB_TIME: float = 0.12 ## kuklanın FORMATION_KICK_TIME'ıyla aynı
 
 
 ## Salvo atış aralığı çarpanı (fire_rate_multiplier). advantage: bonusun ne kadarı geçerli (kubbe girdabında DOME_SPIN_ADVANTAGE).

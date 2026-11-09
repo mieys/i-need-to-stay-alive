@@ -2,7 +2,7 @@
 // Kullanıcı isteği: "haritayı daha az göz yoracak fakat yine de güzel gösterecek" renk ayarı; 4 prototipten A seçildi.
 //
 // Haritanın TÜM shader'ları fragment()'in EN SONUNDA `COLOR.rgb = harita_renk(COLOR.rgb);` çağırır: zemin (toprak kir, çimen yaprak),
-// çimen kümeleri (mini çim renk), su, sallanan ot, sallanan ağaç, saklanma çalılığı, ön katman kopyaları (derinlik_on_katman) ve orman
+// su, sallanan ot, sallanan ağaç, saklanma çalılığı, ön katman kopyaları (derinlik_on_katman) ve orman
 // dokusu (orman_parcalari_doku). Materyalsiz katmanlar (orman, ev, köprü, maden, dış orman...) harita_renk_duz.gdshader'ı alır
 // (bkz. scripts/map_color_grade.gd). Yeni bir harita shader'ı eklersen aynı satırı ekle, yoksa o katman eski parlak renkte kalır.
 // Karakter/yaratık/efekt/HUD bundan ETKİLENMEZ - zemin geri çekilir, oynanış öne çıkar. Gece/yağmur rengi (atmosphere_grade) bunun

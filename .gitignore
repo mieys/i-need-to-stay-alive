@@ -32,3 +32,4 @@ eos_credentials.cfg
 # Discord hata-tespit ham mesajlari (kisisel veri, bkz. docs/hata_tespit/KURALLAR.md)
 docs/hata_tespit/ham/
 docs/hata_tespit/defter.md.bak
+tools/gorev_goruntu/out/

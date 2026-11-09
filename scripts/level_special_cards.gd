@@ -41,26 +41,33 @@ const GAIN_CAP_KEY := {"crit_chance": "crit_chance_bonus", "dodge": "dodge_chanc
 ## id -> kart. "icon": stat_icon.gd ICON_PATHS anahtarı. "gain"/"cost": [stat, kademe-1 miktarı]. "needs": silah türü şartı.
 ## "table_k": düz kartın kademe tablosu ×1,3 eğrisinden DİK (Can 20/35/50/70, Can Çalma %2/4/6/8) - bu statları kazandıran takasın kazancı o TABLONUN k katıdır
 ## (yoksa üst kademede bedel ödeyip bedelsiz düz karttan DAHA AZ kazanılırdı: Kan Anlaşması %2/2,5/3/4 vs düz %2/4/6/8 - madde 370). "gain" tabanı yalnız kademe 1'in belgesi.
+## Madde 498 (BALANCE_REV 127, kullanıcı: "hem avantaj hem dezavantaj veren level kartları çok güçlü, çok avantaj ve dezavantaj sağlıyorlar, nerflenmeleri gerek"):
+## TÜM takas + silah türü kartlarının hem kazancı hem bedeli küçüldü (kazanç ~-%30..-%50, bedel ~-%20..-%35; eskiden kazanç aynı statın düz kartının 1,5-3 katıydı,
+## şimdi 1,15-2 katı -> test_trade_gain_stays_between_a_little_and_twice_the_plain_card hem alt hem ÜST sınırı korur). Eski kademe-1 sayıları (kazanç / bedel):
+## Cam Top +10 SG / -20 can, Demir Kabuk +40 can (x2 tablo) / -%8 saldırı hızı, Rüzgâr +%10 hız / -15 can, Çılgın Tetik +%9 / -%8 kalkan, Kan Anlaşması %6 (x3 tablo) / -%6 hız,
+## Dev Kalkan +%18 / -%8 hız, Adrenalin +%9 / -20 can, Sabit Nişan +%9 kritik oran / -%6 hız, Cellat +%18 kritik hasar / -%8 kalkan, Hayalet Pelerin +%7 / -15 can,
+## Hafif Kuşanım +%10 hız / -%10 kalkan, Yakın Dövüş +%15 / -%5 hız, Nişancılık +%15 / -12 can. En büyük çıkış Kan Anlaşması (kademe 4'te %24 can çalma = düz kartın 3 katı) ve Demir Kabuk (x2).
 const DEFS := {
-	"trade_glass": {"title": "Cam Top", "kind": "trade", "icon": "damage", "gain": ["damage", 10.0], "cost": ["max_health", 20.0]},
-	"trade_bulwark": {"title": "Demir Kabuk", "kind": "trade", "icon": "max_health", "gain": ["max_health", 40.0], "table_k": 2.0, "cost": ["fire_rate", 0.08]},
-	"trade_boots": {"title": "Rüzgâr Ayakları", "kind": "trade", "icon": "speed", "gain": ["speed", 0.10], "cost": ["max_health", 15.0]},
+	"trade_glass": {"title": "Cam Top", "kind": "trade", "icon": "damage", "gain": ["damage", 8.0], "cost": ["max_health", 15.0]},
+	"trade_bulwark": {"title": "Demir Kabuk", "kind": "trade", "icon": "max_health", "gain": ["max_health", 30.0], "table_k": 1.5, "cost": ["fire_rate", 0.06]},
+	"trade_boots": {"title": "Rüzgâr Ayakları", "kind": "trade", "icon": "speed", "gain": ["speed", 0.07], "cost": ["max_health", 11.0]},
 	## Madde 436 (BALANCE_REV 116, kullanıcı: "bazı kartlar 1 efsanevi eşya kadar saldırı hızı veriyor"): Çılgın Tetik + Adrenalin kazancı %12 -> %9 (kademe 1-4: %9/11,5/14,5/17 aralık kısalması (0,005'e yuvarlı)
 	## = +%9,9/13/17/20,5 hız; eskiden %12/15,6/19,2/22,8 = +%13,6/18,5/23,8/29,5 - kademe 4 Ninja'nın El Kitabı'nın %30'una eşitti). Aralık çarpanı olarak BİRİKİR (eşya havuzu toplanır, kart çarpılır): 8 kart ham hızı %779'a taşıyordu.
-	## Alt sınır: test_level_special_cards düz kartın (%6) en az 1,5 katı kuralı -> 0,09'un altına inilmez.
-	"trade_trigger": {"title": "Çılgın Tetik", "kind": "trade", "icon": "fire_rate", "gain": ["fire_rate", 0.09], "cost": ["shield", 0.08]},
-	"trade_blood": {"title": "Kan Anlaşması", "kind": "trade", "icon": "lifesteal", "gain": ["lifesteal", 0.06], "table_k": 3.0, "cost": ["speed", 0.06]},
-	"trade_aegis": {"title": "Dev Kalkan", "kind": "trade", "icon": "shield_amount", "gain": ["shield", 0.18], "cost": ["speed", 0.08]},
+	## (madde 498: alt sınır kuralı 1,5 kat -> 1,1 kat'a indi, kazanç 0,09 -> 0,07; bkz. aşağıdaki not.)
+	## Madde 498: Çılgın Tetik + Adrenalin kazancı %9 -> %7 (kademe 1-4 aralık kısalması %7/9/11/13,5 = hız +%7,5/9,9/12,4/15,6; madde 436'daki %9 tabanı artık geçerli değil).
+	"trade_trigger": {"title": "Çılgın Tetik", "kind": "trade", "icon": "fire_rate", "gain": ["fire_rate", 0.07], "cost": ["shield", 0.06]},
+	"trade_blood": {"title": "Kan Anlaşması", "kind": "trade", "icon": "lifesteal", "gain": ["lifesteal", 0.03], "table_k": 1.5, "cost": ["speed", 0.04]},
+	"trade_aegis": {"title": "Dev Kalkan", "kind": "trade", "icon": "shield_amount", "gain": ["shield", 0.09], "cost": ["speed", 0.06]},
 	## Madde 401 (kullanıcı: "cam topa benzer iyi özellik veren ama dezavantaj veren başka şeyler de ekle"): 5 yeni takas (Ağır Darbe "Cam Top varken gereksiz" diye çıkarıldı). Her kazanç düz kartın ~2-3 katı,
 	## bedel aynı zeminli dört stattan biri (can / hız / kalkan / saldırı hızı). Yeni kazanç statları: kritik oran, kritik hasar, sıvışma.
-	"trade_adrenaline": {"title": "Adrenalin", "kind": "trade", "icon": "fire_rate", "gain": ["fire_rate", 0.09], "cost": ["max_health", 20.0]}, ## kazanç %12 -> %9: bkz. trade_trigger notu (madde 436)
-	"trade_sight": {"title": "Sabit Nişan", "kind": "trade", "icon": "crit_chance", "gain": ["crit_chance", 0.09], "cost": ["speed", 0.06]},
-	"trade_executioner": {"title": "Cellat", "kind": "trade", "icon": "crit_damage", "gain": ["crit_damage", 0.18], "cost": ["shield", 0.08]},
-	"trade_cloak": {"title": "Hayalet Pelerin", "kind": "trade", "icon": "dodge", "gain": ["dodge", 0.07], "cost": ["max_health", 15.0]},
-	"trade_light": {"title": "Hafif Kuşanım", "kind": "trade", "icon": "speed", "gain": ["speed", 0.10], "cost": ["shield", 0.10]},
+	"trade_adrenaline": {"title": "Adrenalin", "kind": "trade", "icon": "fire_rate", "gain": ["fire_rate", 0.07], "cost": ["max_health", 15.0]}, ## kazanç %12 -> %9 (madde 436) -> %7 (madde 498)
+	"trade_sight": {"title": "Sabit Nişan", "kind": "trade", "icon": "crit_chance", "gain": ["crit_chance", 0.06], "cost": ["speed", 0.04]},
+	"trade_executioner": {"title": "Cellat", "kind": "trade", "icon": "crit_damage", "gain": ["crit_damage", 0.10], "cost": ["shield", 0.06]},
+	"trade_cloak": {"title": "Hayalet Pelerin", "kind": "trade", "icon": "dodge", "gain": ["dodge", 0.05], "cost": ["max_health", 11.0]},
+	"trade_light": {"title": "Hafif Kuşanım", "kind": "trade", "icon": "speed", "gain": ["speed", 0.07], "cost": ["shield", 0.08]},
 	## Silah türü kartlarının da bedeli var (madde 379): ağır zırh yavaşlatır, nişancı camdan yapılmadır.
-	"class_melee": {"title": "Yakın Dövüş Ustalığı", "kind": "class", "icon": "damage", "gain": ["melee", 0.15], "cost": ["speed", 0.05], "needs": "melee"},
-	"class_ranged": {"title": "Nişancılık", "kind": "class", "icon": "range", "gain": ["ranged", 0.15], "cost": ["max_health", 12.0], "needs": "ranged"},
+	"class_melee": {"title": "Yakın Dövüş Ustalığı", "kind": "class", "icon": "damage", "gain": ["melee", 0.10], "cost": ["speed", 0.04], "needs": "melee"},
+	"class_ranged": {"title": "Nişancılık", "kind": "class", "icon": "range", "gain": ["ranged", 0.10], "cost": ["max_health", 9.0], "needs": "ranged"},
 }
 const ORDER := ["trade_glass", "trade_bulwark", "trade_boots", "trade_trigger", "trade_blood", "trade_aegis",
 	"trade_adrenaline", "trade_sight", "trade_executioner", "trade_cloak", "trade_light", "class_melee", "class_ranged"]

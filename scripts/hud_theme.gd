@@ -25,9 +25,8 @@ const DIVIDER := Color("#20150d99") ## Q-E-R / küçük yuvalar ayracı
 const HP_GREEN := Color("#3f9a3c") ## D "Orman" (kullanıcı seçimi)
 const HP_RED := Color("#d63838")
 const HP_GREEN_UNTIL := 0.5
-## Kalkan çubuğu dolgusu + değer yazısı (oyuncu paneli ve madde 479'dan beri grup paneli masaüstü çubukları ortak).
+## Kalkan çubuğu dolgusu (oyuncu paneli + grup paneli). Değer yazısı madde 511 den beri can yazısıyla aynı krem.
 const SHIELD_BAR := Color(0.24, 0.59, 0.91)
-const SHIELD_VALUE := Color("#bfe0ff")
 const HP_RED_BELOW := 0.2 ## bunun altında düz kırmızı (düşük can uyarısı turuncuya kaymasın)
 
 
@@ -50,7 +49,7 @@ const PRICE := Color("#f6d27e") ## altın/sayı
 const ACCENT := Color("#f0c070") ## başlık / birinci sıra
 const GOOD := Color("#b5d98a")
 const BAD := Color("#f09a80") ## uyarı / yere düştü (kahve zeminde okunur kırmızı)
-const SHARD := Color("#b8e0f4") ## silah parçacığı sayısı
+const SHARD := Color("#a8f0b8") ## silah parçacığı sayısı (simgenin açık zümrüt tonu; madde 519)
 const ACCENT_SOFT := Color("#e2c08a") ## sönük altın (seçili olmayan başlık, ikincil vurgu)
 const ACCENT_DK := Color("#6a4416") ## altın düğmenin kenarı / koyu altın
 const ACCENT_TEXT := Color("#24160a") ## altın zemin üstündeki yazı
@@ -66,6 +65,8 @@ const EVO_FINAL_FILL := Color("#332123")
 ## Level pazarında KAYDET'lenen seçenek (madde 433, kullanıcı 2026-11-06 "B - Yosun Kuyu" + kilit simgesi): ANLAMLI renk - pazarda yeşil
 ## kenar yalnız "kayıtlı" demek (silah geliştirme satırının tür kenarı bu yüzden turuncu). Okuyan: level_market_view.gd.
 const SAVED := GOOD ## "KAYITLI" yazısı, kilit simgesi, ayrıntıdaki kayıt satırı
+## Seçim kartı KÖŞEBENTLERİ (madde 538, karakter seçimi): seçili = ACCENT, üstünde / odakta = ahşapla altın arası (RIM -> ACCENT %50)
+const PICK_HOVER := Color("#ad8550")
 const SAVED_EDGE := Color("#8fb466") ## kayıtlı yuva / satır / ayrıntı kuyusu kenarı (GOOD'un bir ton koyusu)
 const SAVED_FILL := Color("#2d2b17") ## kayıtlı yuvanın içi (INSET -> yosun #3a4c22 %34)
 const SAVED_FILL_HOVER := Color("#2f2f18") ## üstündeyken (%42)
@@ -94,6 +95,11 @@ const DMG_DOT_POISON := Color("#b5d98a") ## zehir / arı zehri (= GOOD)
 const DMG_DOT_BURN := Color("#eba873") ## yanma
 const DMG_DOT_BLEED := Color("#e5917c") ## kanama
 const DMG_DOT := Color("#d9c09a") ## diğer süreli hasar
+
+## İSTATİSTİK hasar renkleri (anlamlı renk, stil rehberi 1): verilen hasar turuncu / alınan (tanklanan) hasar kalkan mavisi. Oyun sonu tablosu
+## (game_over_board.gd DMG/TANK, phone_game_over.gd, weapon_shop_screen.gd aynı hex'i kendi sabitinde tutuyor) + grup paneli Hasar Sıralaması.
+const STAT_DEALT := Color("#e8885a")
+const STAT_TAKEN := Color("#8cc0e6")
 
 ## Koyu levhada okunan "mürekkep" renkleri (BBCode hex) - UIKit.INK'in (bej zemin) koyu HUD karşılığı, anahtarlar AYNI.
 ## Yetenek ipucu (skill_icon.gd _format_lol_style, hud_tooltip.gd) buradan okur.

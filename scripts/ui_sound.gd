@@ -244,6 +244,17 @@ func set_resolution(index: int) -> void:
 	_save_display_settings()
 
 
+## Karakterlerin üstündeki oyuncu isimleri (Ayarlar > Genel); varsayılan KAPALI. player.gd / remote_player.gd sinyali dinler.
+signal player_names_changed
+var show_player_names: bool = false
+
+
+func set_show_player_names(enabled: bool) -> void:
+	show_player_names = enabled
+	_save_display_settings()
+	player_names_changed.emit()
+
+
 func set_show_fps(enabled: bool) -> void:
 	show_fps = enabled
 	_save_display_settings()
@@ -409,6 +420,7 @@ func _save_display_settings() -> void:
 	config.set_value("display", "is_fullscreen", is_fullscreen)
 	config.set_value("display", "resolution_index", resolution_index)
 	config.set_value("display", "show_fps", show_fps)
+	config.set_value("display", "show_player_names", show_player_names)
 	config.set_value("display", "ui_opacity_percent", ui_opacity_percent)
 	config.set_value("display", "camera_shake_percent", camera_shake_percent)
 	config.set_value("display", "ui_anim_enabled", ui_anim_enabled)
@@ -433,6 +445,7 @@ func _load_display_settings() -> void:
 		is_fullscreen = bool(config.get_value("display", "is_fullscreen", true))
 		resolution_index = clamp(int(config.get_value("display", "resolution_index", DEFAULT_RESOLUTION_INDEX)), 0, RESOLUTIONS.size() - 1)
 		show_fps = bool(config.get_value("display", "show_fps", false))
+		show_player_names = bool(config.get_value("display", "show_player_names", false))
 		ui_opacity_percent = clampf(float(config.get_value("display", "ui_opacity_percent", 100.0)), UI_OPACITY_MIN_PERCENT, 100.0)
 		camera_shake_percent = clampf(float(config.get_value("display", "camera_shake_percent", 100.0)), 0.0, 100.0)
 		ui_anim_enabled = bool(config.get_value("display", "ui_anim_enabled", true))

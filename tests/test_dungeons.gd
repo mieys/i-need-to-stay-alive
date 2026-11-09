@@ -357,3 +357,24 @@ func test_cpp_region_rects() -> void:
 	assert(int(w.call("get_region_of", Vector2(305, 5))) == 2, "bölge 2")
 	assert(int(w.call("get_region_of", Vector2(10, 10))) == 0, "ana harita")
 	w.free()
+
+
+## TUZAKLAR (madde 492): eskiden 3,6 sn'de bir, %14 can. Artık her tür en çok 2,6 sn'de bir, en az %25 can; ejder alevi 8 hücre.
+func test_trap_timing_is_frequent_and_dangerous() -> void:
+	var mgr: Node = DungeonManagerScript.new()
+	for tur: String in ["diken", "ejder", "giyotin"]:
+		var tm: Dictionary = DungeonManagerScript.trap_timing(tur)
+		assert(float(tm["cycle"]) <= 2.6)
+		assert(float(tm["player"]) >= 0.25)
+		assert(float(tm["creature"]) >= 0.5)
+		var rise: Array = tm["rise"]
+		assert(float(rise[0]) < float(rise[1]) and float(rise[1]) < float(rise[2]) and float(rise[2]) < float(rise[3]) and float(rise[3]) <= float(tm["cycle"]))
+		var full: float = 0.0
+		var off: float = DungeonManagerScript.trap_offset("k", tm)
+		for i in range(int(float(tm["cycle"]) * 100.0)):
+			var t: float = float(i) * 0.01 - off
+			if mgr.trap_level("k", t, tur) >= DungeonManagerScript.TRAP_HIT_LEVEL:
+				full += 0.01
+		assert(full >= 0.4) ## vurma penceresi en az 0,4 sn
+	assert(DungeonWorldScript.EJDER_ROWS >= 8)
+	mgr.free()

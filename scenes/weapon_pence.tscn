@@ -1,8 +1,12 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/weapon.gd" id="1"]
 [ext_resource type="Texture2D" path="res://assets/weapons/pence/icon.png" id="2"]
 [ext_resource type="PackedScene" path="res://scenes/fx_hit_blood_3.tscn" id="3"]
+[ext_resource type="Script" path="res://scripts/random_sfx_player.gd" id="4"]
+[ext_resource type="AudioStream" path="res://assets/audio/tirpan_isabet_1.wav" id="5"]
+[ext_resource type="AudioStream" path="res://assets/audio/tirpan_isabet_2.wav" id="6"]
+[ext_resource type="AudioStream" path="res://assets/audio/tirpan_isabet_3.wav" id="7"]
 
 [node name="WeaponPence" type="Node2D"]
 script = ExtResource("1")
@@ -14,6 +18,7 @@ card_damage_bonus_ratio = 1.35
 sprite_forward_angle_deg = -52.23354980816518
 hit_impact_scene = ExtResource("3")
 hit_impact_rotation_offset = 0.3588
+mirror_icon_when_aiming_left = true
 
 [node name="FireTimer" type="Timer" parent="."]
 autostart = true
@@ -22,3 +27,8 @@ autostart = true
 texture_filter = 1
 scale = Vector2(0.2941125, 0.2941125)
 texture = ExtResource("2")
+
+[node name="HitSound" type="Node2D" parent="."]
+script = ExtResource("4")
+streams = Array[AudioStream]([ExtResource("5"), ExtResource("6"), ExtResource("7")])
+volume_db = -5.5

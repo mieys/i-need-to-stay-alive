@@ -17,6 +17,7 @@ const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / L
 const BalanceLogScript := preload("res://scripts/balance_log.gd")
 const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
 const SpiritualSkillsScript := preload("res://scripts/spiritual_skills.gd")
+const PetCatalogScript := preload("res://scripts/pet_catalog.gd")
 
 ## Slotlar: q / e / r = yetenek tuşları, p = pasif, f = ruhani yetenek (4. yuva), diger = evcil/eşya/evrim/süregelen/etiketsiz.
 const SLOT_Q := "q"
@@ -63,6 +64,9 @@ const SLOT := {
 	"s:cadi_iksir": "r", "s:cadi_kalkan": "r",
 	## Ruhani yetenekler (4. yuva)
 	"s:ruhani_tank": "f", "s:ruhani_can": "f", "s:ruhani_kalkan_bagi": "f",
+	"s:ruhani_para": "f", "s:ruhani_adc": "f", "s:ruhani_taktik": "f", "s:ruhani_dukkan": "f", "s:ruhani_savas_sevki": "f", ## madde 531: sayaçlar (util)
+	## Shaman pasifi (totem yakınında yakma) + Hadime pasifi (Ruh Göçü hayaleti) - madde 531
+	"dot:shaman_pasif": "p", "s:hadime_pasif": "p",
 }
 
 ## Ayrıntı satırlarında görünen kısa ad (slotun kendi adı zaten başlıkta; birden çok kaynak varsa hangisi ne kadar).
@@ -71,7 +75,7 @@ const NAMES := {
 	"dot:ari_zehri": "Arı zehri", "s:oakley_sarmasik": "Sarmaşık",
 	"s:matthew_tilki_hucumu": "Tilki hücumu", "s:matthew_simsek_hucumu": "Şimşek", "s:matthew_elektrik_topu": "Elektrik topu",
 	"s:matthew_kubbe": "Kalkan patlaması", "s:matthew_kopek": "Köpek", "s:matthew_yildirim_izi": "Yıldırım izi",
-	"s:kelebek_ruhu": "Kelebek lazeri", "s:evcil_kirpi": "Kirpi dikenleri", "s:evcil_peri": "Peri",
+	"s:kelebek_ruhu": "Kelebek lazeri", "s:evcil_kirpi": "Kirpi dikenleri", "s:evcil_peri": "Peri", "s:evcil_hayalet": "Hayalet örtüsü",
 	"s:buyucu_sekme": "Sekme", "s:buyucu_arcane_patlama": "Arcane patlama", "s:buyucu_kasirga": "Hortum", "s:buyucu_buz_nova": "Don Nova",
 	"s:buyucu_meteor": "Meteor", "s:buyucu_degisim": "Set değişimi",
 	"s:assasin_dash2": "Şahin hamlesi", "s:assasin_gorunmez": "Gölge adımı", "s:assasin_dash": "Gölge hücumu", "s:assasin_pasif": "Bıçak uzmanlığı",
@@ -87,6 +91,8 @@ const NAMES := {
 	"s:cadi_duman": "Zehirli duman", "s:cadi_supurge_temas": "Süpürge teması", "s:cadi_supurge": "Süpürge", "s:cadi_patlama": "İksir patlaması",
 	"s:cadi_don": "Don iksiri", "s:cadi_korku": "Korku iksiri", "s:cadi_iksir": "İksir", "s:cadi_kalkan": "Kalkan iksiri",
 	"s:ruhani_tank": "Tank", "s:ruhani_can": "Can", "s:ruhani_kalkan_bagi": "Kalkan bağı",
+	"s:ruhani_para": "Para", "s:ruhani_adc": "Güçlenme", "s:ruhani_taktik": "Taktiksel", "s:ruhani_dukkan": "Dükkan", "s:ruhani_savas_sevki": "Savaş şevki",
+	"dot:shaman_pasif": "Totem aurası yanması", "s:hadime_pasif": "Ruh göçü", "s:evcil_slime": "Minik Cadı büyüsü",
 }
 
 
@@ -234,9 +240,32 @@ const UTIL_LABELS := {
 	"stun": "Sersemletilen yaratık", "mad": "Çıldırtılan yaratık",
 	"surge": "Güçlendirilmiş atış", "bombs": "Patlatılan bomba", "gold": "Kazanılan altın", "souls": "Toplanan ruh",
 	"summon": "Çağrılan", "passenger": "Süpürgeye binen arkadaş", "flower": "Alınan çiçek",
+	## madde 531: ruhani yetenek / pasif / evcil sayaçları (Para, Savaş Şevki, kullanım sayıları)
+	"uses": "Kullanım", "discount": "Dükkan indirimiyle tasarruf (altın)", "profit": "Toplam kâr (altın)",
+	"ap": "Kazanılan kalıcı saldırı gücü", "execute": "İnfaz edilen düşman",
 }
 ## Hasar türü ölçüler (hasar renginde yazılır); gerisi sayı/fayda (kalkan renginde).
 const UTIL_DAMAGE := ["during_w", "during"]
+## Altın türü ölçüler (altın renginde: ink["value"]) - madde 531.
+const UTIL_GOLD := ["gold", "discount", "profit"]
+
+
+## Ölçü sözlüğünü (BalanceLog._util satırı) ipucu satırlarına çevirir (UTIL_LABELS sırasıyla; tanımsız ölçü sona, ham adıyla).
+## Yetenek ipucu ve evcil ipucu ORTAK kullanır.
+static func util_lines(util: Dictionary, ink: Dictionary) -> PackedStringArray:
+	var c_dmg: String = str(ink.get("damage", "#a82a1e"))
+	var c_sh: String = str(ink.get("shield", "#2a58a8"))
+	var c_gold: String = str(ink.get("value", "#9a6a10"))
+	var out: PackedStringArray = []
+	var metrics: Array = UTIL_LABELS.keys()
+	for m in util.keys():
+		if not metrics.has(m):
+			metrics.append(m)
+	for m in metrics:
+		if float(util.get(m, 0.0)) > 0.0:
+			var col: String = c_dmg if UTIL_DAMAGE.has(m) else (c_gold if UTIL_GOLD.has(m) else c_sh)
+			out.append("• %s: [color=%s][b]%s[/b][/color]" % [Loc.t(str(UTIL_LABELS.get(m, m))), col, fmt(float(util[m]))])
+	return out
 
 
 ## Oyun sonu tablosu için yetenek satırları: Q/E/R/pasif/ruhani + "Diğer"; yalnız bir şey yapmış olanlar.
@@ -302,14 +331,7 @@ static func tooltip_bbcode(slot: String, ink: Dictionary) -> String:
 		lines.append(Loc.t("• Kalkan: [color=%s][b]%s[/b][/color]") % [c_sh, fmt(float(t["shield"]))])
 	if float(t.get("prevented", 0.0)) > 0.0:
 		lines.append(Loc.t("• Engellenen hasar: [color=%s][b]%s[/b][/color]") % [c_sh, fmt(float(t["prevented"]))])
-	var util: Dictionary = t.get("util", {})
-	var metrics: Array = UTIL_LABELS.keys()
-	for m in util.keys():
-		if not metrics.has(m):
-			metrics.append(m)
-	for m in metrics:
-		if float(util.get(m, 0.0)) > 0.0:
-			lines.append("• %s: [color=%s][b]%s[/b][/color]" % [Loc.t(str(UTIL_LABELS.get(m, m))), c_dmg if UTIL_DAMAGE.has(m) else c_sh, fmt(float(util[m]))])
+	lines.append_array(util_lines(t.get("util", {}), ink))
 	var live: PackedStringArray = live_lines(slot, ink)
 	if lines.is_empty():
 		if not live.is_empty():
@@ -336,6 +358,8 @@ static func tooltip_bbcode(slot: String, ink: Dictionary) -> String:
 ## Cadı şans. Karakter "skill" id'siyle seçilir (characters.gd: Talon 38, Matthew 43, Elara 12, Korsan 18, Cadı 51).
 static func live_lines(slot: String, ink: Dictionary) -> PackedStringArray:
 	var out: PackedStringArray = []
+	if slot == SLOT_F:
+		return spirit_live_lines(ink)
 	if slot != SLOT_P:
 		return out
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
@@ -360,6 +384,22 @@ static func live_lines(slot: String, ink: Dictionary) -> PackedStringArray:
 	return out
 
 
+## Ruhani yetenek ipucunun "Şu an" satırları (madde 531): Para'nın dükkan indirimi, Savaş Şevki'nin şevk yığını. Diğerleri sayaç (UTIL_LABELS).
+static func spirit_live_lines(ink: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = []
+	var c_val: String = str(ink.get("value", "#9a6a10"))
+	var fmt_line := "• Şu an: [color=%s][b]%s[/b][/color] %s"
+	match str(GameManager.selected_spiritual):
+		SpiritualSkillsScript.PARA:
+			out.append(Loc.t(fmt_line) % [c_val, Loc.pct("%%%d" % int(round(GameManager.shop_discount_fraction() * 100.0))), Loc.t("dükkan indirimi")])
+		SpiritualSkillsScript.SAVAS_SEVKI:
+			var tree: SceneTree = Engine.get_main_loop() as SceneTree
+			var p: Node = tree.get_first_node_in_group("player") if tree != null else null
+			if p != null:
+				out.append(Loc.t(fmt_line) % [c_val, "%d/%d" % [int(p.get("_savas_sevki_stacks")), SpiritualSkillsScript.SAVAS_SEVKI_STACKS_FOR_AP], Loc.t("savaş şevki")])
+	return out
+
+
 ## ---------------------------------------------------------------- EVCİL HAYVAN (kullanıcı isteği 2026-10-18: "skill barında sahip
 ## olduğumuz pete mouse'u götürünce ne kadar hasar verdiği, hasar azalttığı, iyileştirdiği v.b gözüksün") - hud_pet_slot.gd ipucu.
 ## Hasar/can BalanceLog._dealt/_gain'den (kaynak etiketleri aşağıda), engellenen hasar BalanceLog._prevented, Papağan eşyası
@@ -371,6 +411,8 @@ const PET_SOURCES := {
 	"kelebek": ["s:kelebek_ruhu"],
 	"peri": ["s:evcil_peri"],
 	"kirpi": ["s:evcil_kirpi"],
+	"slime": ["s:evcil_slime"], ## Minik Cadı: büyü sayısı (uses) + büyü sürerken verilen hasar (during), madde 531
+	"hayalet": ["s:evcil_hayalet"], ## örtü altında engellenen hasar (player.gd take_damage) + örtü sayısı (uses)
 }
 
 
@@ -382,8 +424,12 @@ static func pet_totals(key: String, dealt: Dictionary = {}, gain: Dictionary = {
 		gain = BalanceLogScript.gain_snapshot()
 	if prevented.is_empty():
 		prevented = BalanceLogScript.prevented_snapshot()
-	var out: Dictionary = {"dmg": 0.0, "hits": 0, "crit": 0, "heal": 0.0, "shield": 0.0, "prevented": 0.0, "drops": 0}
+	var out: Dictionary = {"dmg": 0.0, "hits": 0, "crit": 0, "heal": 0.0, "shield": 0.0, "prevented": 0.0, "drops": 0, "util": {}}
+	var util_all: Dictionary = BalanceLogScript.util_snapshot()
 	for src in PET_SOURCES.get(key, []):
+		var urow: Dictionary = util_all.get(src, {})
+		for m in urow.keys():
+			(out["util"] as Dictionary)[m] = float((out["util"] as Dictionary).get(m, 0.0)) + float(urow[m])
 		var r: Array = dealt.get(src, [0.0, 0, 0])
 		out["dmg"] += float(r[0])
 		out["hits"] += int(r[1])
@@ -419,6 +465,38 @@ static func pet_tooltip_bbcode(key: String, ink: Dictionary) -> String:
 		lines.append(Loc.t("• Kalkan: [color=%s][b]%s[/b][/color]") % [c_sh, fmt(float(t["shield"]))])
 	if int(t["drops"]) > 0:
 		lines.append(Loc.t("• Ağaçtan düşürülen eşya: [color=%s][b]%d[/b][/color]") % [c_gold, int(t["drops"])])
+	lines.append_array(util_lines(t.get("util", {}), ink)) ## Minik Cadı / Hayalet: kullanım + etki sürerken verilen hasar (madde 531)
+	var live: PackedStringArray = pet_live_lines(key, ink)
 	if lines.is_empty():
+		if not live.is_empty():
+			return "\n".join(live) + "\n" + Loc.t("[color=%s]Bu oyunda henüz bir şey yapmadı.[/color]") % c_dim
 		return Loc.t("[color=%s]Bu oyunda henüz bir şey yapmadı.[/color]") % c_dim
+	lines.append_array(live)
 	return "\n".join(lines)
+
+
+## Evcil hayvanın SABİT / anlık etkisi (sayaç değil): Kelebek saldırı hızı, Papağan şansı, Minik Cadı saldırı gücü + büyü süresi, Hayalet sıvışması
+## + örtü süresi. Değerler PetCatalog sabitlerinden / sahibin canlı alanlarından (madde 531: "verdiği güçlendirme görünmüyor").
+static func pet_live_lines(key: String, ink: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = []
+	var c_val: String = str(ink.get("value", "#9a6a10"))
+	var fmt_line := "• Şu an: [color=%s][b]%s[/b][/color] %s"
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	var p: Node = tree.get_first_node_in_group("player") if tree != null else null
+	match key:
+		"kelebek":
+			out.append(Loc.t(fmt_line) % [c_val, Loc.pct("+%%%d" % int(round(PetCatalogScript.KELEBEK_ATTACK_SPEED * 100.0))), Loc.t("saldırı hızı")])
+		"papagan":
+			out.append(Loc.t(fmt_line) % [c_val, "+%d" % int(PetCatalogScript.LUCK_BONUS), Loc.t("şans")])
+		"slime":
+			var ap: float = PetCatalogScript.SLIME_AP_PERCENT
+			if p != null and p.get("pet_ap_percent") != null:
+				ap = float(p.get("pet_ap_percent"))
+			out.append(Loc.t(fmt_line) % [c_val, Loc.pct("+%%%d" % int(round(ap * 100.0))), Loc.t("saldırı gücü")])
+			if p != null and p.has_method("slime_buff_active") and p.call("slime_buff_active") == true:
+				out.append(Loc.t("• Büyü açık, kalan: [color=%s][b]%s[/b][/color]") % [c_val, Loc.t("%.1f sn") % float(p.get("_slime_buff_timer"))])
+		"hayalet":
+			out.append(Loc.t(fmt_line) % [c_val, Loc.pct("+%%%d" % int(round(PetCatalogScript.HAYALET_DODGE * 100.0))), Loc.t("sıvışma")])
+			if p != null and p.get("_ghost_cover_timer") != null and float(p.get("_ghost_cover_timer")) > 0.0:
+				out.append(Loc.t("• Örtü açık, kalan: [color=%s][b]%s[/b][/color]") % [c_val, Loc.t("%.1f sn") % float(p.get("_ghost_cover_timer"))])
+	return out

@@ -99,8 +99,8 @@ const DEFS := {
 			"set": {"kb_spread": true, "kb_combo": 2}},
 	},
 	"kanli_pence": {
-		"weapons": ["pence"], "name": "Kanlı Pençe", "element": "kanama",
-		"desc": "Pençe darbeleri kanama bırakır; her pençe darbesinde can kazanırsın.",
+		"weapons": ["pence"], "name": "Kanlı Tırpan", "element": "kanama",
+		"desc": "Tırpan darbeleri kanama bırakır; her tırpan darbesinde can kazanırsın.",
 		## 2026-10-17 (kullanıcı: "pençe çok güçsüz ve az can basıyor" -> "kanama %20 sg olsun kanama birikmesin"): kanama %7 -> %20 (tek
 		## yük, birikmez), can emme %4 -> %6 ve artık İLK vuruşta da (eskiden sadece zaten kanayan hedefte: yeni hedefe ilk vuruş 0 can).
 		## 2026-10-19 (kullanıcı: "pençe aşırı güçlü olmuş hem çok can çalıyor hem de çok vuruyor" -> "kanama her hedefe uygulansın ama can emmesi %3'e düşsün
@@ -110,10 +110,10 @@ const DEFS := {
 		## %0,5 azami can; saniyelik üst sınır YOK (ara sürümdeki kp_leech_cap ve "saniyede en fazla bir kez" kalktı). Kanama tikleri genel can çalma zarı atmaz.
 		## 2026-10-19 (kullanıcı: "pençe çok az vuruyor buffla"): doğrudan hasar sahne oranı 1,035 -> 1,35 (+%30, %145 -> %189) ve kanama %20 -> %30 SG/sn (can emme aynı). BALANCE_REV 80.
 		## Neden düşük oran: can emme hasarın yüzdesi ve saldırı gücü can sayısından çok hızlı büyür (kayıt rev 63: saldırı gücü 416 / can 655). BALANCE_REV 72 (madde 304).
-		"base": {"text": "Her pençe 3 saniyelik kanama bırakır (ana hedefte saniyede saldırı gücünün %30'u, alandaki diğer yaratıklarda %20'si; birikmez, her vuruş süreyi yeniler). Ana hedefe her pençe darbesinde verdiğin hasarın %1'i kadar can kazanırsın (alandaki diğer yaratıklardan ve kanama hasarından can gelmez).",
+		"base": {"text": "Her tırpan darbesi 3 saniyelik kanama bırakır (ana hedefte saniyede saldırı gücünün %30'u, alandaki diğer yaratıklarda %20'si; birikmez, her vuruş süreyi yeniler). Ana hedefe her tırpan darbesinde verdiğin hasarın %1'i kadar can kazanırsın (alandaki diğer yaratıklardan ve kanama hasarından can gelmez).",
 			"set": {"kp_ap": 0.30, "kp_area": 0.6667, "kp_dur": 3.0, "kp_leech": 0.01, "bleeding_bonus": 0.0, "kp_kill_haste": 0.0, "kp_kill_heal": 0.0}},
 		"upgrades": [
-			{"name": "Derin Pençe", "text": "Kanama hasarı: saniyede saldırı gücünün %30'u → %35'i (alandaki diğerlerinde %20 → %23).", "add": {"kp_ap": 0.05}},
+			{"name": "Derin Biçiş", "text": "Kanama hasarı: saniyede saldırı gücünün %30'u → %35'i (alandaki diğerlerinde %20 → %23).", "add": {"kp_ap": 0.05}},
 			{"name": "Uzun Kanama", "text": "Kanama 1,5 saniye daha uzun sürer (3 → 4,5 sn).", "add": {"kp_dur": 1.5}},
 			{"name": "Kan Emici", "text": "Can emme oranı: %1 → %2.", "add": {"kp_leech": 0.01}},
 			{"name": "Yırtıcı Darbe", "text": "Kanayan düşmana verdiğin hasar %15 artar.", "set": {"bleeding_bonus": 0.15}},

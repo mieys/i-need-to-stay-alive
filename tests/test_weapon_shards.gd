@@ -131,14 +131,14 @@ func test_drop_scene_has_pixel_art_and_animation() -> void:
 	add_child(d)
 	assert(d.is_in_group("weapon_shard_drops"))
 	var spr: AnimatedSprite2D = d.get_node("AnimatedSprite2D")
-	assert(spr.sprite_frames.has_animation(&"shine") and spr.sprite_frames.get_frame_count(&"shine") == 6, "6 karelik parıltı animasyonu")
-	assert(spr.sprite_frames.get_animation_loop(&"shine"), "döngüde")
-	for i in range(6):
-		var tex: Texture2D = spr.sprite_frames.get_frame_texture(&"shine", i)
-		assert(tex != null and tex.get_size() == Vector2(22, 22), "kare %d 22x22 olmalı" % i)
+	assert(spr.sprite_frames.has_animation(&"shine") and spr.sprite_frames.get_frame_count(&"shine") == 1, "tek karelik zümrüt kümesi (madde 519)")
+	var tex: Texture2D = spr.sprite_frames.get_frame_texture(&"shine", 0)
+	assert(tex != null and tex.get_size() == Vector2(32, 32), "kare 32x32 olmalı")
 	assert(spr.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "piksel sanatı: bulanıklaşmaz")
 	var icon: Texture2D = load("res://assets/pickups/weapon_shard/shard_icon.png")
-	assert(icon != null and icon.get_size() == Vector2(22, 22), "HUD/dükkan simgesi")
+	assert(icon != null and icon.get_size() == Vector2(32, 32), "HUD/dükkan simgesi")
+	assert(tex == icon, "drop ile HUD simgesi aynı doku (tek kaynak)")
+	assert(not FileAccess.file_exists("res://assets/pickups/weapon_shard/shard_sheet.png"), "eski sayfa silindi")
 	_end()
 
 
@@ -215,8 +215,13 @@ func test_hud_shows_a_shard_counter_below_gold_and_tracks_changes() -> void:
 	var ind: Control = hud.get_node_or_null("ShardIndicator") as Control
 	assert(ind != null and ind.visible, "parçacık göstergesi kurulmalı")
 	var gold: Control = hud.get_node("GoldIndicator")
-	assert(ind.get_global_rect().position.y >= gold.get_global_rect().end.y - 1.0, "altın göstergesinin ALTINDA")
-	assert(is_equal_approx(ind.get_global_rect().position.x, gold.get_global_rect().position.x), "sol kenarları hizalı")
+	## madde 483: masaüstünde sol üst konsolda altının SAĞINDA aynı satırda; telefonda/eski düzende altının altında
+	if hud.get_node_or_null("LeftConsole") != null:
+		assert(ind.get_global_rect().position.x >= gold.get_global_rect().end.x - 1.0 and
+			is_equal_approx(ind.get_global_rect().position.y, gold.get_global_rect().position.y), "altın kuyusunun SAĞINDA")
+	else:
+		assert(ind.get_global_rect().position.y >= gold.get_global_rect().end.y - 1.0, "altın göstergesinin ALTINDA")
+		assert(is_equal_approx(ind.get_global_rect().position.x, gold.get_global_rect().position.x), "sol kenarları hizalı")
 	var label: Label = hud._shard_label
 	assert(label.text == "0")
 	GameManager.add_weapon_shards(12)

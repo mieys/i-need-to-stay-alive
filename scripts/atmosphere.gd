@@ -29,6 +29,7 @@ const StormScript := preload("res://scripts/weather_storm.gd")
 const AudioBuses := preload("res://scripts/audio_buses.gd")
 const NightGlowScript := preload("res://scripts/night_glow.gd")
 const GlowCatalog := preload("res://scripts/night_glow_catalog.gd")
+const MapProfilesScript := preload("res://scripts/map_profiles.gd")
 
 const GROUP := &"atmosphere"
 const SYNC_INTERVAL := 4.0
@@ -237,7 +238,8 @@ func _process(delta: float) -> void:
 func _process_weather_authority(delta: float) -> void:
 	_weather_remaining -= delta
 	if _weather_remaining <= 0.0:
-		weather = AtmosphereMath.pick_weather(randf())
+		## Altın Kumlar (çöl): yağmur / sağanak yok (map_profiles "hava_donusum"); diğer haritalarda aynı
+		weather = MapProfilesScript.map_weather(AtmosphereMath.pick_weather(randf()))
 		_weather_remaining = randf_range(AtmosphereMath.WEATHER_MIN_DURATION, AtmosphereMath.WEATHER_MAX_DURATION)
 		if weather != AtmosphereMath.Weather.CLEAR:
 			wind_angle = _random_wind_angle()

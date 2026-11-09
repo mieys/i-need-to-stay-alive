@@ -27,6 +27,8 @@ func build(cols: int = COLUMNS, k: float = 1.0, face: bool = false) -> void:
 		child.queue_free()
 	cards.clear()
 	for char_id in Characters.DEFS:
+		if not MetaProgressScript.is_unlocked(MetaProgressScript.CHAR, char_id):
+			continue ## sahip olunmayan karakter seçimde gizli
 		var card: Control = CardScript.new()
 		card.name = "Card%d" % char_id
 		add_child(card)

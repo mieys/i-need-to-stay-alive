@@ -302,7 +302,8 @@ const FINAL_CREATURES := [
 ## 250 -> 100 ve ek oyuncu başı +50 -> +20 (ENEMY_CAP_PER_EXTRA_PLAYER). Kademe kısması (_tier_crowding_scale) aynı kaldı. Hasar/can/kalkan +%50: CREATURE_STAT_BOOST.
 ## 2026-10-10 (2. tur, kullanıcı: "maksimum yaratık sayısını 150 yapıp oyuncu başına 30 artması ile değiştir"): 100 -> 150, ek oyuncu başı +20 -> +30.
 ## 2026-10-17 (kullanıcı: "yaratıkların sayısını ve oyuncu başına artan yaratık sayısını %30 azalt"): 150 -> 105, ek oyuncu başı +30 -> +21 (1/2/3/4/5 oyuncu: 105/126/147/168/189).
-@export var max_concurrent_enemies: int = 105
+## 2026-11-09 (kullanıcı: "yaratık sayısını 120'ye yükselt, oyuncu başına fazladan 45"): 105 -> 120.
+@export var max_concurrent_enemies: int = 120
 ## Multiplayer enemy scaling: solo keeps the original cap; each additional
 ## player adds room for more creatures and slightly increases spawn frequency.
 ## Kullanıcı isteği: "oyuncu başına yaratık sayısı %50 [artsın]" - eskiden 18, ×1.5 (27).
@@ -317,7 +318,7 @@ const FINAL_CREATURES := [
 ## max_concurrent_enemies (200) artık 5 oyuncunun tavanı, her eksik oyuncu için ENEMY_CAP_STEP_PER_MISSING_PLAYER düşer.
 ## 2026-09-27: yeni kural - tek oyuncu max_concurrent_enemies (100), her ek oyuncu +20 (2 -> 120, 3 -> 140, 4 -> 160...).
 ## 2026-11-07 (savaş görsel karmaşası, madde 425/435): ek oyuncu başı +50 -> +30 (1/2/3/4/5 oyuncu: 105/135/165/195/225). Tek oyuncu 105 aynı.
-const ENEMY_CAP_PER_EXTRA_PLAYER := 30 ## 2026-11-07: 50 -> 30; 2026-10-19: 21 -> 50 (kullanıcı: "oyuncu başına yaratık artışını 50ye yükselt"); 2026-10-10: 50 -> 20 -> 30; 2026-10-17: 30 -> 21 (-%30)
+const ENEMY_CAP_PER_EXTRA_PLAYER := 45 ## 2026-11-09: 30 -> 45 (1/2/3/4/5 oyuncu: 120/165/210/255/300); 2026-11-07: 50 -> 30; 2026-10-19: 21 -> 50 (kullanıcı: "oyuncu başına yaratık artışını 50ye yükselt"); 2026-10-10: 50 -> 20 -> 30; 2026-10-17: 30 -> 21 (-%30)
 ## Kullanıcı isteği (2026-09-24 denge turu: "her kademe için oyuncu başına %30 spawn ve %50 can") - 0.25 -> 0.30.
 const EXTRA_PLAYER_SPAWN_RATE := 0.30
 @export var min_spawn_distance: float = 480.0
@@ -1167,7 +1168,9 @@ func _tier_crowding_scale() -> float:
 
 ## Tavan sayımı: kenar bekçileri (guard_camps.gd, "guards" grubu) ve boss minyonları ("summons") sayılmaz - 60+ bekçi sıradan doğuşu tavanda kilitlerdi.
 func _regular_enemy_count() -> int:
-	return get_tree().get_nodes_in_group("enemies").size() - get_tree().get_nodes_in_group("guards").size() - get_tree().get_nodes_in_group("summons").size()
+	## "mission_copies": görev kopyaları + görev hedefleri (yuva, kristal, kaçan hazine; madde 496) "enemies" grubunda ama yaratık değil - tavanı yemesin.
+	return get_tree().get_nodes_in_group("enemies").size() - get_tree().get_nodes_in_group("guards").size() - get_tree().get_nodes_in_group("summons").size() \
+			- get_tree().get_nodes_in_group("mission_copies").size()
 
 
 func _scaled_enemy_cap() -> int:
@@ -1184,7 +1187,7 @@ func _scaled_enemy_cap() -> int:
 	return cap
 
 
-## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->105, 2->135, 3->165, 4->195, 5->225 (2026-11-07; 2026-10-17'de 105 + 21/oyuncu, 2026-10-19'da +50/oyuncu, 2026-10-10'da 150 + 30/oyuncu, ondan önce 250 + 50/oyuncu, bkz.
+## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->120, 2->165, 3->210, 4->255, 5->300 (2026-11-09; eski 105/135/165/195/225 2026-11-07; 2026-10-17'de 105 + 21/oyuncu, 2026-10-19'da +50/oyuncu, 2026-10-10'da 150 + 30/oyuncu, ondan önce 250 + 50/oyuncu, bkz.
 ## max_concurrent_enemies notu). Erken kademelerde bu tavan _tier_crowding_scale ile ayrıca kısılır (değişmedi).
 ## Yaratık canı/kalkanı oyuncu sayısından BAĞIMSIZ olarak ayrı ölçeklenir - burası sadece sayı.
 func player_enemy_cap(players: int) -> int:
@@ -2291,9 +2294,8 @@ func spawn_mission_wave(center: Vector2, ring_radius: float, count: int) -> int:
 		if _regular_enemy_count() >= _scaled_enemy_cap():
 			break
 		var id: String = roster[randi() % roster.size()]
-		var angle: float = randf() * TAU
-		var spawn_pos: Vector2 = center + Vector2(cos(angle), sin(angle)) * ring_radius
-		if GameManager.is_position_blocked_by_terrain(spawn_pos):
+		var spawn_pos: Vector2 = _mission_wave_spot(center, ring_radius)
+		if spawn_pos == Vector2.INF:
 			continue
 		var network_id: int = _next_network_enemy_id
 		_next_network_enemy_id += 1
@@ -2309,6 +2311,57 @@ func spawn_mission_wave(center: Vector2, ring_radius: float, count: int) -> int:
 			_announce_spawn(enemy, id, spawn_pos, scale_tier, false, network_id, false, false)
 		spawned += 1
 	return spawned
+
+
+## Görev dalgası doğuş noktası (madde 496): halka üzerinde birkaç açı dener; engelde (duvar / su / nesne - ayak kuralıyla) ya da zindan
+## haritasında doğuştan ulaşılamayan (duvar arkası cep) noktada doğurmaz. Bulunamazsa Vector2.INF.
+const MissionSpotsScript := preload("res://scripts/mission_spots.gd")
+
+func _mission_wave_spot(center: Vector2, ring_radius: float) -> Vector2:
+	var dungeon: bool = MissionSpotsScript.active()
+	for _try in range(5):
+		var angle: float = randf() * TAU
+		var r: float = ring_radius * (1.0 if _try < 3 else 0.6)
+		var p: Vector2 = center + Vector2(cos(angle), sin(angle)) * r
+		if GameManager.is_position_blocked_by_terrain(p) or GameManager.is_position_blocked_by_walls(p):
+			continue
+		if dungeon and not MissionSpotsScript.is_reachable_world(p):
+			continue
+		return p
+	return Vector2.INF
+
+
+## RİTÜELİ BOZ cezası (madde 496, world_event_manager.gd): ritüel tamamlanınca heykelin dibinde o anki kademenin elit adaylarından biri
+## (normal elitle aynı kurulum: kademe ölçeği, kalkan, oyuncu çarpanı, make_elite; kademenin "tek elit" hakkını YEMEZ). Host/tekli.
+func spawn_mission_elite(pos: Vector2) -> Node:
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		return null
+	if _run_phase == RunPhase.VICTORY:
+		return null
+	var tier: int = maxi(1, _current_tier())
+	var pool: Array = elite_candidates(tier).filter(func(cid: String) -> bool: return SCENES.has(cid))
+	if pool.is_empty():
+		return null
+	var spot: Vector2 = _mission_wave_spot(pos, 40.0)
+	if spot == Vector2.INF:
+		spot = pos
+	var id: String = pool[randi() % pool.size()]
+	var scale_tier: int = _scale_tier_for(tier)
+	var network_id: int = _next_network_enemy_id
+	_next_network_enemy_id += 1
+	var enemy = _spawn_creature(id, spot, network_id)
+	if not enemy:
+		return null
+	enemy.set_meta("spawn_tier", tier)
+	if enemy.has_method("apply_tier_scaling"):
+		enemy.apply_tier_scaling(scale_tier)
+	_enable_regular_shield(enemy, tier)
+	_apply_global_buff(enemy)
+	_apply_elite(enemy)
+	enemy.set_meta(&"mission_elite", true) ## enemy.gd _drop_chest / _drop_weapon_shards: garanti elit sandık + elit parçacığı yok (ceza, ödül değil)
+	if NetworkManager.is_multiplayer_active:
+		_announce_spawn(enemy, id, spot, scale_tier, false, network_id, false, true)
+	return enemy
 
 
 ## Debug menüsündeki yaratık seçici listesi için - SCENES'in kendisi (const preload'lu Dictionary)
@@ -2402,7 +2455,8 @@ const EXTRA_PLAYER_DEFENSE_MULT := 0.50
 ## 2026-11-07 (kullanıcı: "yaratıkların canını ve kalkanını %10 arttır oyuncu başına", tavanın ek oyuncu başı +50 -> +30'a inmesini dengelemek için, madde 435):
 ## SIRADAN yaratıklar (elitler ve minyonlar dahil, BOSS DEĞİL) ek oyuncu başına can/kalkan çarpanına +0,10 daha alır -> toplam +%60 (2/3/4/5 oyuncu: x1,6/2,2/2,8/3,4).
 ## Bosslar (is_boss + FIXED_BOSS_STATS) yalnız EXTRA_PLAYER_DEFENSE_MULT (+%50) almaya devam eder; tavan değişikliği onları ilgilendirmiyor.
-const EXTRA_PLAYER_CREATURE_DEFENSE_BONUS := 0.10
+## 2026-11-09 (kullanıcı: tavan 120 / +45 oyuncu başı olunca "can ve kalkan oranını %5 düşür"): 0,10 -> 0,05 (toplam ek oyuncu başı +%55: 2/3/4/5 oyuncu x1,55/2,1/2,65/3,2).
+const EXTRA_PLAYER_CREATURE_DEFENSE_BONUS := 0.05
 
 ## Yaratık yetenekleri (kullanıcı isteği 2026-09-24) - statla çözülen aile özellikleri (bosslar dahil, çünkü tüm spawn
 ## yolları _apply_global_buff'tan geçer):

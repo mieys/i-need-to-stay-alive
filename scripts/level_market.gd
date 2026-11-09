@@ -191,7 +191,7 @@ static func candidates(player: Node) -> Dictionary:
 	## eşya: satıcının havuz kuralı (traveling_merchant.gd _generate_stock) + slot/tekil/kopya sınırı
 	var slots: int = int(player.call("get_max_item_slots")) if player and player.has_method("get_max_item_slots") else 1
 	for key: String in Items.KEYS:
-		if Items.is_support_only(key) and not Items.is_ally_support_char(GameManager.selected_char_id):
+		if not Items.is_available(key, GameManager.selected_char_id):
 			continue
 		if Items.purchase_block_reason(key, GameManager.owned_items, slots) != "":
 			continue
@@ -417,7 +417,7 @@ static func buy(player: Node, e: Dictionary) -> bool:
 			var cost: int = price(e)
 			var plan: Dictionary = Items.plan_purchase(key, GameManager.owned_items)
 			if player and player.has_method("acquire_item") and player.acquire_item(key, plan, cost):
-				GameManager.gold -= cost
+				GameManager.spend_shop_gold(cost) ## Para ruhanisi indirim sayacı (madde 531)
 				ok = true
 	if ok:
 		set_saved(e, false) ## alınan kayıt düşer (önce: "sold" kopyayı kaydetmeyi engeller)

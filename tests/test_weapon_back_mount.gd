@@ -89,6 +89,24 @@ func test_pose_depth_mirror_and_tip_by_view() -> void:
 	assert(bool(BackMount.pose(2, "down", Vector2.ZERO, 0.0, "kalkan")["upright"]), "kalkan dik durur")
 
 
+## madde 514: uçan silah sırta girerken sırttaki gölgeye kararır, çıkarken koyudan aydınlanır (devir anında sıçrama yok).
+func test_flying_weapon_dims_toward_back_shade() -> void:
+	var mount: Dictionary = BackMount.pose(0, "down", Vector2.ZERO, 0.0, "tabanca")
+	var t0: float = 100.0
+	var ret_end: float = t0 + WeaponFollowMath.retract_stagger(0) + WeaponFollowMath.RETRACT_T
+	var ret_mid: float = t0 + WeaponFollowMath.retract_stagger(0) + WeaponFollowMath.RETRACT_T * 0.2
+	assert(float(WeaponFollowMath.pose({"s": WeaponFollowMath.RETRACT, "t": t0}, ret_mid, 0, Vector2.ZERO, mount)["dim"]) < 0.01, "çekilmenin başında tam renk")
+	assert(float(WeaponFollowMath.pose({"s": WeaponFollowMath.RETRACT, "t": t0}, ret_end, 0, Vector2.ZERO, mount)["dim"]) > 0.99, "çekilmenin sonunda sırt karartması")
+	var rev0: float = t0 + WeaponFollowMath.reveal_stagger(0) + 0.001
+	var rev1: float = t0 + WeaponFollowMath.reveal_stagger(0) + WeaponFollowMath.REVEAL_T * 0.5
+	assert(float(WeaponFollowMath.pose({"s": WeaponFollowMath.REVEAL, "t": t0}, rev0, 0, Vector2.ZERO, mount)["dim"]) > 0.95, "çıkış koyu başlar")
+	assert(float(WeaponFollowMath.pose({"s": WeaponFollowMath.REVEAL, "t": t0}, rev1, 0, Vector2.ZERO, mount)["dim"]) < 0.01, "çıkış yarısında tam renk")
+	assert(float(WeaponFollowMath.pose({"s": WeaponFollowMath.SHOWN, "t": t0}, rev1, 0, Vector2.ZERO, {})["dim"]) == 0.0, "göğüs kuralında karartma yok")
+	assert(BackMount.dim_color(1.0).is_equal_approx(BackMount.SHADE_TINT) and BackMount.dim_color(0.0) == Color.WHITE, "gölge katı")
+	var t: Color = BackMount.SHADE_TINT
+	assert(t.r < 0.8 and t.b >= t.r and t.b - t.r < 0.15, "ışık azalır, hafif serin, renk dengesi bozulmaz")
+
+
 func test_local_weapon_rests_on_back_and_draws_out_on_sight() -> void:
 	var o: FakeOwner = _make_owner(Vector2(7000.0, 7000.0))
 	var w: Node2D = TabancaScene.instantiate()
@@ -102,9 +120,13 @@ func test_local_weapon_rests_on_back_and_draws_out_on_sight() -> void:
 	(spr as AnimatedSprite2D).animation = &"idle_up"
 	await _frames(2)
 	assert(back.get_index() > spr.get_index(), "arkadan bakışta karakterin önünde")
+	## madde 514: sırtta gölge düşmüş gibi (yalnız ışık azalır, doygunluk kısılmaz; uçuyor gibi durmasın)
+	assert(back.modulate.is_equal_approx(BackMount.SHADE_TINT), "sırtta gölgede, opak")
+	assert(back.material == null, "doygunluğu kısan shader yok (ikonun kendi materyali yoksa)")
 	_make_enemy(o.global_position + Vector2(300.0, 0.0))
 	await _wait(0.8)
 	assert(not back.visible and w.modulate.a > 0.99, "düşman görününce sırttan çıktı")
+	assert(w.modulate.r > 0.99, "çıktıktan sonra tam renk")
 	o.is_dead = true
 	await _wait(0.6)
 	assert(not back.visible and w.modulate.a < 0.01, "ölüyken sırtta da görünmez (eski göğüs kuralı)")

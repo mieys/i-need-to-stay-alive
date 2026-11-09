@@ -50,6 +50,17 @@ const TOOLTIP_ICON := 48.0
 const READY_FLASH_TIME := 0.35
 var _ready_flash: float = 0.0
 var _tooltip_shift: bool = false
+## "BU OYUNDA" gövdesi (Shift ya da pasif/ruhani yuva): canlı yenileme için etiket + yuva + mürekkep.
+const DETAIL_REFRESH := 0.5
+var _detail_label: RichTextLabel = null
+var _detail_slot: String = ""
+var _detail_ink: Dictionary = {}
+var _detail_t: float = 0.0
+
+
+func _detail_bbcode() -> String:
+	return "[color=#%s]%s[/color]\n%s" % [HudTheme.ACCENT.to_html(false), tr("BU OYUNDA"), DamageStats.tooltip_bbcode(_detail_slot, _detail_ink)]
+
 
 func _ready() -> void:
 	mouse_entered.connect(_on_mouse_entered)
@@ -62,6 +73,11 @@ func _process(delta: float) -> void:
 		if Input.is_key_pressed(KEY_SHIFT) != _tooltip_shift:
 			_on_mouse_entered()
 			return
+		if _detail_label != null and is_instance_valid(_detail_label):
+			_detail_t -= delta
+			if _detail_t <= 0.0:
+				_detail_t = DETAIL_REFRESH
+				_detail_label.text = _detail_bbcode()
 		_update_tooltip_position()
 	if is_active:
 		_pulse_time += delta
@@ -330,15 +346,22 @@ func _on_mouse_entered() -> void:
 
 	## Shift: bu oyunda bu yeteneğin GERÇEKTEN verdiği hasar / can / kalkan (kullanıcı isteği 2026-10-17; ölçüm kaynağı
 	## DamageStats = balans telemetrisinin kaynak başına sayaçları). Basılı değilken altta tek satır ipucu.
-	if _tooltip_shift:
-		var slot: String = str(DamageStats.ICON_SLOT.get(String(name), "e"))
+	## Pasif (P) ve ruhani yetenek (F) yuvasında Shift GEREKMEZ (kullanıcı isteği 2026-11-09: "pasiflerin/ruhanilerin ne kadar fayda sağladığı gösterilmiyor");
+	## Q/E/R'de eskisi gibi Shift. Açıkken 0,5 sn'de bir canlı yenilenir (_process).
+	var slot: String = str(DamageStats.ICON_SLOT.get(String(name), "e"))
+	_detail_label = null
+	if _tooltip_shift or slot == DamageStats.SLOT_P or slot == DamageStats.SLOT_F:
 		var ink: Dictionary = HudTheme.INK.duplicate()
 		ink["cooldown"] = "#" + HudTheme.DIM.to_html(false) ## tooltip_bbcode "cooldown"u soluk ikincil yazı olarak kullanır
 		var stats_well: PanelContainer = HudTooltip.make_well()
 		vbox.add_child(stats_well)
 		var lbl_detail: RichTextLabel = HudTooltip.make_rich(UIKit.FS_BODY, HudTheme.TEXT)
-		lbl_detail.text = "[color=#%s]%s[/color]\n%s" % [HudTheme.ACCENT.to_html(false), tr("BU OYUNDA"), DamageStats.tooltip_bbcode(slot, ink)]
+		_detail_slot = slot
+		_detail_ink = ink
+		lbl_detail.text = _detail_bbcode()
 		stats_well.add_child(lbl_detail)
+		_detail_label = lbl_detail
+		_detail_t = DETAIL_REFRESH
 	else:
 		var lbl_hint: RichTextLabel = HudTooltip.make_rich(MenuKit.FS_SMALL, HudTheme.DIM)
 		lbl_hint.text = tr("%s basılı tut: bu oyundaki etkisi") % ("[color=#%s]Shift[/color]" % HudTheme.TEXT.to_html(false))
@@ -350,6 +373,7 @@ func _on_mouse_entered() -> void:
 		UiAnim.reveal(tooltip_panel, 0.0, 0.12)
 
 func _on_mouse_exited() -> void:
+	_detail_label = null
 	if tooltip_panel and is_instance_valid(tooltip_panel):
 		tooltip_panel.queue_free()
 		tooltip_panel = null
@@ -363,7 +387,7 @@ func _update_tooltip_position() -> void:
 ## canlı değerle değiştiriliyordu (kullanıcı bildirimi: azaltma açıklamada görünmüyordu), şimdi tek yerde.
 func _strip_cooldown_note(desc: String) -> String:
 	var regex: RegEx = RegEx.new()
-	if regex.compile("\\s*\\(\\d+(?:\\.\\d+)?\\s*(?:sn bekleme|s cooldown)\\)") != OK: ## İngilizce çeviride "(20s cooldown)" (sozluk.md, madde 446)
+	if regex.compile("\\s*\\(\\d+(?:[.,]\\d+)?\\s*(?:sn bekleme|s cooldown|s Abklingzeit|s de enfriamiento|s de recharge|s di ricarica|s de recarga|s odnowienia|с перезарядки|秒冷却)\\)") != OK: ## İngilizce "(20s cooldown)", Almanca "(20 s Abklingzeit)", diğerleri sozluk.md (madde 446)
 		return desc
 	return regex.sub(desc, "", true).strip_edges()
 
@@ -372,7 +396,7 @@ func _strip_cooldown_note(desc: String) -> String:
 ## menu_character_details.gd _split_kind ile aynı kural (karakter seçimindeki yetenek satırları).
 static func _split_kind(desc: String) -> Array:
 	var re := RegEx.new()
-	re.compile("^\\s*((?:\\d+\\.\\s*)?[A-ZÇĞİÖŞÜ]+)\\s*(?:\\(([^)]*)\\))?\\s*:\\s*")
+	re.compile("^\\s*((?:\\d+\\.\\s*)?(?:\\p{Lu}+|技能|基础|终极|被动|伤害|附魔|进化|特性|成就))\\s*(?:\\(([^)]*)\\))?\\s*:\\s*")
 	var m: RegExMatch = re.search(desc)
 	if m == null or m.get_string(1).length() <= 1:
 		return ["", "", desc]

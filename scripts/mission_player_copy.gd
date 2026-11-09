@@ -300,7 +300,7 @@ func set_weapon_keys(keys: Array) -> void:
 		icon.scale *= WeaponOrbitMath.ICON_SIZE_MULT ## 2026-09-25: silahlar %15 küçük (oyuncu/kukla ile aynı)
 		## Sabit silah sanatı (madde 402): remote_player.gd ile AYNI sanat/ölçek/duruş (weapon_tier_art.gd); sanatı yoksa eski ikon.
 		if WeaponTierArtScript.has_art(key) and WeaponTierArtScript.set_art(icon, key):
-			icon.scale = Vector2.ONE * WeaponTierArtScript.PUPPET_ICON_SCALE
+			icon.scale = Vector2.ONE * WeaponTierArtScript.PUPPET_ICON_SCALE * WeaponTierArtScript.size_mult(key)
 			forward = deg_to_rad(float(WeaponTierArtScript.FORWARD[key]))
 		icon.position = slots[i]
 		icon.material = _tint_material

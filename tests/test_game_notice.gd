@@ -85,14 +85,30 @@ func _row_of(n: Control) -> Control:
 	return null
 
 
+## madde 483 (kullanıcı: "bildirimler eşit en-boylara sahip olsun bazıları kısa bazıları uzun falan olmasın"): masaüstünde kısa / uzun /
+## sayaçlı küçük levhalar AYNI boyda (C_TRAY_W x 66); sığmayan başlık "…" ile kısalır, sayaç sağ kenarda kalır.
+func test_compact_toasts_share_one_size() -> void:
+	var a: Control = GameNotice.toast("merchant", "Seyyar Satıcı geldi", "Konumu haritada işaretlendi.")
+	var b: Control = GameNotice.toast("ach", "Başarım: Çok uzun bir başarım adı burada bitmiyor hâlâ", "")
+	var c: Control = GameNotice.toast("warn", "Ağacı Koru", "Görev yakında başlıyor.", 30.0)
+	c.call("set_countdown", 30.0)
+	for n: Control in [a, b, c]:
+		assert(n.size == Vector2(GameNotice.C_TRAY_W, 12.0 * 3.0 + 2.0 * GameNotice.C_TRAY_PAD_Y), "aynı boy: %s" % str(n.size))
+	assert(str(b.get("_c_title")).ends_with("…") or str(b.get("_c_title")).ends_with("..."), "uzun başlık kısaldı: %s" % str(b.get("_c_title")))
+	assert(str(a.get("_c_title")) == "Seyyar Satıcı geldi", "kısa başlık aynen")
+	for n2: Control in [a, b, c]:
+		n2.free()
+
+
 func test_compact_toast_is_one_short_line() -> void:
 	assert(GameNotice.compact, "oyunda küçük levha açık")
 	var n: Control = GameNotice.toast("start", "Topla BAŞLADI", "Haritanın dört bir yanına saçılmış kristallerden yeterince topla.")
 	GameNotice.set_compact(false)
 	var old: Control = GameNotice.toast("start", "Topla BAŞLADI", "Haritanın dört bir yanına saçılmış kristallerden yeterince topla.")
 	GameNotice.set_compact(true)
-	assert(n.size.y == 12.0 * 3.0 + 2.0 * GameNotice.C_PAD_Y, "tek satır (simge 12 hücre x 3 px): %s" % str(n.size))
-	assert(n.size.y <= old.size.y * 0.6 and n.size.x < old.size.x, "eskisinin yarısı kadar: %s / %s" % [str(n.size), str(old.size)])
+	## madde 483: masaüstünde dışı Gömme Tepsi -> dikey pay C_TRAY_PAD_Y (çerçeve 12 px + 3)
+	assert(n.size.y == 12.0 * 3.0 + 2.0 * GameNotice.C_TRAY_PAD_Y, "tek satır (simge 12 hücre x 3 px): %s" % str(n.size))
+	assert(n.size.y <= old.size.y * 0.8 and n.size.x < old.size.x, "eskisinden kısa: %s / %s" % [str(n.size), str(old.size)])
 	assert(str(n.get("_c_title")) == "Topla BAŞLADI", "başlık aynen")
 	assert(n.custom_minimum_size == n.size)
 	n.free()
@@ -127,7 +143,7 @@ func test_compact_tier_banner_skulls_after_title() -> void:
 	assert(float(b.get("_c_icon_w")) == 0.0, "kafalı satırda ayrıca simge yok")
 	var font: Font = GameNotice.FONT
 	assert(row.position.x >= float(b.get("_c_text_x")) + font.get_string_size("KADEME VII", HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x, "kafalar başlığın sağında")
-	assert(b.size.y == 12.0 * 3.0 + 2.0 * GameNotice.C_PAD_Y, "tek satır")
+	assert(b.size.y == 12.0 * 3.0 + 2.0 * GameNotice.C_TRAY_PAD_Y, "tek satır")
 	b.call("set_countdown", 5.0) ## yeniden yerleşim kafa satırını çoğaltmaz
 	var rows: int = 0
 	for c in b.get_children():
@@ -143,7 +159,7 @@ func test_compact_mission_complete_line() -> void:
 	assert(Rect2(Vector2.ZERO, n.size).has_point(c), "altın simgesi levhanın içinde: %s" % str(c))
 	var rewards: Array = n.get("_c_rewards")
 	assert(rewards.size() == 2 and bool(rewards[0]["gold"]) and float(rewards[0]["x"]) < float(rewards[1]["x"]), "önce altın sonra parçacık")
-	assert(n.size.y == 12.0 * 3.0 + 2.0 * GameNotice.C_PAD_Y and n.size.x <= GameNotice.C_MAX_W, str(n.size))
+	assert(n.size.y == 12.0 * 3.0 + 2.0 * GameNotice.C_TRAY_PAD_Y and n.size.x <= GameNotice.C_MAX_W, str(n.size))
 	var no_gold: Control = GameNotice.complete("Bayrağı Ele Geçir", 0, 5, 3.0)
 	assert(no_gold.call("coin_center").x < 0.0, "bölgede değilse altın yok")
 	n.free()

@@ -28,7 +28,7 @@ const SUN_STRENGTH := 0.1615
 ## Kullanıcı isteği (2026-10-19, madde 282 prototiplerinden sonra): "şimdilik gün ışığını kapatalım" - huzme geçişi hiç çizilmez
 ## (pişirmede de hesaplanmaz); bulut gölgeleri aynen kalır. Geri açmak için true.
 const SUN_RAYS_ENABLED := false
-## Bulut gölgesi: madde 469 ("gölgeleri kapat") ile kapalı - tek anahtar shadows_flag.gd `clouds`. İkisi de kapalıyken iki geçiş + pişirme
+## Bulut gölgesi: madde 484 ("gölgeleri kapat") ile kapalı - tek anahtar shadows_flag.gd `clouds`. İkisi de kapalıyken iki geçiş + pişirme
 ## hiç çizilmez (maliyet yok) ve Ayarlar > Grafik "Güneş Işığı / Bulut Gölgesi" satırı gizlenir (`any_enabled`).
 const ShadowsFlag := preload("res://scripts/shadows_flag.gd")
 

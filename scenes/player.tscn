@@ -78,7 +78,7 @@ max_distance = 1500.0
 
 [node name="XPPickupSound" type="AudioStreamPlayer2D" parent="." unique_id=522973309]
 stream = ExtResource("8")
-volume_db = -8.0
+volume_db = -5.0
 max_distance = 1500.0
 
 [node name="ShieldHitSound" type="AudioStreamPlayer2D" parent="." unique_id=179380933]

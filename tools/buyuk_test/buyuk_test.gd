@@ -123,7 +123,7 @@ func _boot(char_id: int, start_weapon: String) -> bool:
 	OS.low_processor_usage_mode = false
 	await _wait(2.5)
 	var house: Node = _main.get_node_or_null("HouseInterior")
-	if house and house.has_method("_do_exit_house"):
+	if house and house.has_method("_do_exit_house") and OS.get_environment("BT_NO_EXIT_HOUSE") == "":
 		house.call("_do_exit_house")
 	await _wait(2.0)
 	_player = _main.get_node_or_null("Player") as Node2D
@@ -278,10 +278,130 @@ func _run() -> void:
 			await _prompt()
 		"dil":
 			await _dil()
+		"gizlenme":
+			await _gizlenme()
+		"esc":
+			await _esc()
 		_:
 			print("BT BADMODE %s" % _mode)
 	print("BT DONE mode=%s" % _mode)
 	quit(0)
+
+
+# ───────────────────────────── esc ─────────────────────────────
+## ESC duraklatma menüsü (kullanıcı 2026-11-09: "karakter ölünce esc'ye basılmıyor, çoğu zaman esc menüsü açılamıyor").
+## Gerçek Main + gerçek tuş olayı (Input.parse_input_event): canlıyken tekrarlı aç/kapa, çok kısa dokunuş, izleyici (ölü, takım hayatta) ve oyun bitti.
+
+func _esc_event(pressed: bool) -> void:
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_ESCAPE
+	ev.keycode = KEY_ESCAPE
+	ev.pressed = pressed
+	Input.parse_input_event(ev)
+	Input.flush_buffered_events()
+
+
+func _press_esc(hold_frames: int = 6) -> void:
+	_esc_event(true)
+	for i in hold_frames:
+		await process_frame
+	_esc_event(false)
+	await process_frame
+
+
+func _pause_open() -> bool:
+	var inst: Variant = _main.get("pause_menu_instance")
+	return inst != null and is_instance_valid(inst) and not (inst as Node).is_queued_for_deletion()
+
+
+func _esc_state(tag: String) -> void:
+	print("BT ESC %s acik=%s paused=%s engelleyici=%s tuketildi=%s oyun_bitti=%s" % [tag, _pause_open(), paused,
+			_gm.call("is_any_blocking_panel_open"), _gm.call("was_ui_cancel_consumed"), _gm.get("is_game_over")])
+
+
+func _esc() -> void:
+	if not await _boot(_char, LOADOUT[0]):
+		print("BT BOOTFAIL")
+		return
+	_keep_pause = true
+	_gm.set("debug_immortal", true)
+	_esc_state("basla")
+	var esc_case: String = OS.get_environment("BT_ESC_CASE")
+	if esc_case == "intro":
+		# açılış sahnesi (evde, deprem + geri sayım): ESC her an açılmalı
+		for i in 8:
+			await _press_esc()
+			await _wait(0.5)
+			var open_a: bool = _pause_open()
+			if open_a:
+				await _press_esc()
+				await _wait(0.5)
+			print("BT ESC intro t=%d acti=%s kapandi=%s kuşatma_bekliyor=%s" % [i, open_a, not _pause_open(), _gm.get("invasion_pending")])
+			await _wait(1.5)
+		return
+	if esc_case == "c_only" or esc_case == "b_plain":
+		if esc_case == "c_only":
+			_main.call("_show_death_overlay", false)
+			await _wait(0.5)
+		else:
+			_esc_event(true)
+			_esc_event(false)
+			await _wait(0.5)
+			_esc_state("b_dokunus")
+			await _press_esc()
+			await _wait(0.5)
+			_esc_state("b_kapatma")
+		for i in 4:
+			await _press_esc()
+			await _wait(0.5)
+			_esc_state("%s i=%d" % [esc_case, i])
+			if i == 0:
+				await _shot("esc_%s_acik" % esc_case, Vector2i(0, 0), 0.5)
+				await _wait(0.3)
+		return
+	# A: canlıyken 6 kez aç/kapa (çift sıra = açık beklenir)
+	for i in 6:
+		await _press_esc()
+		await _wait(0.5)
+		_esc_state("canli i=%d beklenen=%s" % [i, "acik" if i % 2 == 0 else "kapali"])
+	if _pause_open():
+		await _press_esc()
+		await _wait(0.5)
+	# B: aynı karede basış + bırakış (çok kısa dokunuş)
+	_esc_event(true)
+	_esc_event(false)
+	await _wait(0.5)
+	_esc_state("ayni_kare_dokunus")
+	if _pause_open():
+		await _press_esc()
+		await _wait(0.5)
+	# C: ölü izleyici (takım hayatta, oyun bitmedi): ölüm ekranı açık -> menü AÇILMALI ve ölüm ekranının ÜSTÜNDE olmalı
+	_main.call("_show_death_overlay", false)
+	await _wait(0.5)
+	await _press_esc()
+	await _wait(0.6)
+	_esc_state("izleyici")
+	print("BT ESC izleyici menu_katman=%s" % [str((_main.get("pause_menu_instance") as CanvasLayer).layer) if _pause_open() else "yok"])
+	await _shot("esc_izleyici_acik", Vector2i(0, 0), 0.5)
+	await _wait(0.3)
+	if _pause_open():
+		await _press_esc()
+		await _wait(0.5)
+	_esc_state("izleyici_kapandi")
+	# D: oyun bitti -> menü AÇILMALI
+	_gm.set("is_game_over", true)
+	_main.call("_show_death_overlay", true)
+	await _wait(0.5)
+	await _press_esc()
+	await _wait(0.6)
+	_esc_state("oyun_bitti")
+	print("BT ESC oyun_bitti menu_katman=%s" % [str((_main.get("pause_menu_instance") as CanvasLayer).layer) if _pause_open() else "yok"])
+	await _shot("esc_oyun_bitti_acik", Vector2i(0, 0), 0.5)
+	await _wait(0.3)
+	if _pause_open():
+		await _press_esc()
+		await _wait(0.5)
+	_esc_state("oyun_bitti_kapandi")
 
 
 # ───────────────────────────── data ─────────────────────────────
@@ -680,6 +800,41 @@ func _dock() -> void:
 		await _shot("dock_c%s_full" % str(cid), Vector2i(0, 0), 0.5)
 		await _shot_rect("dock_c%s_ui" % str(cid), Rect2i(0, 700, 1100, 380)) ## sol alt: yetenek paneli + mini stat paneli, tam çözünürlük
 		print("BT DOCK c=%s ok" % str(cid))
+
+
+# ───────────────────────────── gizlenme: Assasin E odağı + görünmezken karartma, Don Nova dalgası (madde 533) ─────────────────────────────
+
+func _gizlenme() -> void:
+	if await _boot(5, LOADOUT[0]):
+		_player.set("level", 10)
+		_player.set("item_shield_max", 2000.0) ## yetenek bedeli (mana kalkanı)
+		_player.set("item_shield_hp", 2000.0)
+		_fix_sky()
+		await _spawn_dummies(4, 120.0, 260.0)
+		await _wait(2.0)
+		await _shot("gizlenme_once", Vector2i(0, 0), 0.5)
+		_player.call("_activate_skill2")
+		await _wait(1.0)
+		print("BT GIZ odak alfa=%.2f karartma=%.2f" % [float(_player.modulate.a), float(_player.call("stealth_vision_amount"))])
+		await _shot("gizlenme_odak", Vector2i(0, 0), 0.5)
+		await _wait(1.6)
+		print("BT GIZ gorunmez=%s alfa=%.2f" % [str(_player.get("is_invisible")), float(_player.modulate.a)])
+		await _shot("gizlenme_gorunmez", Vector2i(0, 0), 0.5)
+	if await _boot(4, LOADOUT[0]):
+		_player.set("level", 10)
+		_player.set("item_shield_max", 2000.0) ## yetenek bedeli (mana kalkanı)
+		_player.set("item_shield_hp", 2000.0)
+		_fix_sky()
+		await _spawn_dummies(6, 80.0, 300.0)
+		await _wait(2.0)
+		_player.call("_buyucu_try_activate_variation_r")
+		await _wait(0.5)
+		print("BT NOVA odak=%s" % str(_player.call("is_buyucu_nova_focusing")))
+		await _shot("nova_odak", Vector2i(0, 0), 0.5)
+		await _wait(1.3)
+		await _shot("nova_dalga_08", Vector2i(0, 0), 0.5)
+		await _wait(1.0)
+		await _shot("nova_dalga_18", Vector2i(0, 0), 0.5)
 
 
 # ───────────────────────────── select: karakter seçim ekranı ─────────────────────────────

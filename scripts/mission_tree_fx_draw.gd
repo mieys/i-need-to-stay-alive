@@ -3,15 +3,16 @@ extends RefCounted
 ## Görev ağacı atışlarının ortak piksel çizim yardımcıları + renkleri (mission_tree_bolt.gd / mission_tree_blast.gd; 2026-10-19, madde 317).
 ## Yuvarlak hatlar dünya pikseli ızgarasında satır satır dikdörtgen (yumuşak daire değil - oyunun piksel efekt dili).
 
+const SoftGlowScript := preload("res://scripts/soft_glow_blend.gd")
+
 const CORE := Color(0.88, 0.99, 1.0)
 const MID := Color(0.45, 0.85, 1.0)
 const EDGE := Color(0.18, 0.48, 0.88)
 
 
-static func add_material() -> CanvasItemMaterial:
-	var m := CanvasItemMaterial.new()
-	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	return m
+## Toplamalı yerine yumuşak parıltı (2026-11-08, soft_glow_blend.gd): üst üste binen atış izleri beyaza patlamaz.
+static func add_material() -> Material:
+	return SoftGlowScript.material()
 
 
 ## Toplamsal hale/iz çizimi için çocuk düğüm (parent'ın ARKASINDA, aynı dönüşüm). draw_fn(ci) her yeniden çizimde çağrılır.

@@ -62,3 +62,100 @@ static func background(char_id: int, n: int) -> Texture2D:
 			out = at
 	_cache[key] = out
 	return out
+
+
+## Seçim ekranı / oyuncu kartı için: 24x24 TAM yüz kırpımı (LobbyUI.face_texture, kırpım değişmez) + arkasında aynı katla karakterin bulanık
+## arka planı (28'liğin ortası, 24x24). DK.icon gibi bw kutusunda tam katla ortalanır; dim = kilitli kart. Arka planı yoksa sadece yüz.
+static func face_icon(char_id: int, bw: float, dim: bool = false) -> CenterContainer:
+	var cc := CenterContainer.new()
+	cc.custom_minimum_size = Vector2(bw, bw)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ftex: Texture2D = LobbyUI.face_texture(str(Characters.get_def(char_id).get("portrait", "")))
+	if ftex == null:
+		return cc
+	var ts: Vector2 = ftex.get_size()
+	var k: float = floorf(bw / maxf(ts.x, ts.y))
+	if k < 1.0:
+		k = bw / maxf(ts.x, ts.y)
+	var box := Control.new()
+	box.custom_minimum_size = (ts * k).floor()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.clip_contents = true
+	var bg: Texture2D = background(char_id, int(ts.x))
+	for tex: Texture2D in ([bg, ftex] if bg else [ftex]):
+		var tr := TextureRect.new()
+		tr.texture = tex
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_SCALE
+		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		tr.set_anchors_preset(Control.PRESET_FULL_RECT)
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(tr)
+	if dim:
+		box.modulate = Color(0.45, 0.45, 0.5, 1.0)
+	cc.add_child(box)
+	return cc
+
+
+## ÇERÇEVELİ portre (madde 535, 2026-11-09; kullanıcı: seçim ekranında "portrelerin kenarları anında kesiliyor ... çerçeveleri v.s yok tuhaf
+## duruyor kartların içinde"): face_icon'un yüz + arka plan kutusu, oyuncu panelinin portresiyle aynı "Gömme Tepsi" çerçevesinin
+## (HudTrayFrame kalıbı: basamaklı köşe, dış hat - açık kenar - ahşap - iç koyu çizgi) içinde. Çerçeve 4 * frame_px kalınlığında, yüzün
+## DIŞINDA (yüzden piksel yemez); YEREL koordinatta çizilir (`draw_local`) -> düğme nefesi / basma yaylanması / kaydırma ile birlikte hareket eder.
+## Çerçeve katmanı yüzün ÜSTÜNDE: yarım piksele düşen konumda bile kenarda boşluk / taşma görünmez. accent = orta halka rengi (seçili kart).
+static func framed_icon(char_id: int, face_bw: float, frame_px: float = 2.0, dim: bool = false) -> CenterContainer:
+	var t: float = maxf(1.0, roundf(frame_px))
+	var border: float = 4.0 * t
+	var inner: CenterContainer = face_icon(char_id, face_bw)
+	var face_size := Vector2(face_bw, face_bw).floor()
+	var box: Control = null
+	if inner.get_child_count() > 0:
+		box = inner.get_child(0) as Control
+		face_size = box.custom_minimum_size
+		inner.remove_child(box)
+	inner.free()
+	var holder := FramedPortrait.new()
+	holder.custom_minimum_size = face_size + Vector2(border, border) * 2.0
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if box:
+		box.position = Vector2(border, border)
+		box.size = face_size
+		holder.add_child(box)
+	holder.frame = FrameLayer.new()
+	holder.frame.t = t
+	holder.frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	holder.frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(holder.frame)
+	if dim:
+		holder.modulate = Color(0.45, 0.45, 0.5, 1.0)
+	var cc := CenterContainer.new()
+	cc.custom_minimum_size = holder.custom_minimum_size
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cc.add_child(holder)
+	return cc
+
+
+## framed_icon'un kutusu: yüzün arkasında iç koyu çizgi renginde zemin (yüz yarım piksel kayarsa açık çizgi kalmasın) + çerçeve katmanı.
+class FramedPortrait extends Control:
+	const HudTheme := preload("res://scripts/hud_theme.gd")
+	var frame: FrameLayer = null
+
+	func set_accent(c: Color) -> void:
+		if frame and frame.accent != c:
+			frame.accent = c
+			frame.queue_redraw()
+
+	func _draw() -> void:
+		var b: float = 3.0 * (frame.t if frame else 2.0)
+		draw_rect(Rect2(Vector2(b, b), size - Vector2(b, b) * 2.0), HudTheme.OUTLINE)
+
+
+class FrameLayer extends Control:
+	const HudTrayFrame := preload("res://scripts/hud_tray_frame.gd")
+	var t: float = 2.0
+	var accent: Color = Color(0, 0, 0, 0)
+
+	func _ready() -> void:
+		resized.connect(queue_redraw)
+
+	func _draw() -> void:
+		HudTrayFrame.draw_local(self, Rect2(Vector2.ZERO, size), t, accent)

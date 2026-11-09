@@ -1,0 +1,5 @@
+
+Yeni pet, iyi slime: Minik cadı %5 saldırı gücü kazandırır ve ultini kullandığında pembe kulakları parıldayarak sana büyü yapar ve canın, hasarın, boyutun, menzilin 8 saniye boyunca %15 artar (karakterin menzili ince bir çizgi olarak görünecektir).(120 saniye bekleme süresi)
+
+yeni pet, hayalet: %5 sıvışma verir. Ayrıca canın %25'in altına düştüğünde kendi bedeniyle senin üstünü kaplayarak seni 5 saniye boyunca görünmez ve dokunulmaz yapar. (90 saniye bekleme süresi)
+

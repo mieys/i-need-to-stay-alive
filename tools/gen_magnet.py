@@ -1,7 +1,7 @@
 """Mıknatıs (yere düşen MagnetDrop) piksel sanatı - kullanıcı isteği 2026-10-16: "oyunumdaki mıknatısın görünüşü çok eski yeni bir pixel art
 mıknatıs yapar mısın, yere düşen mıknatısı kastediyorum".
 
-Eskisi magnet_drop.gd _draw() ile çizilen düz kırmızı yay + iki gri dikdörtgendi. Yenisi silah parçacığıyla (gen_weapon_shard.py) AYNI dil:
+Eskisi magnet_drop.gd _draw() ile çizilen düz kırmızı yay + iki gri dikdörtgendi. Yenisi eski silah parçacığı üreticisiyle (gen_weapon_shard.py, madde 519'da silindi) AYNI dil:
 1 piksel koyu dış çizgi, ışık soldan-yukarıdan, 5 tonlu rampa, kenar yumuşatma YOK, rastgelelik YOK. Klasik nal mıknatıs (kavis üstte, bacaklar
 aşağıda), kırmızı gövde + çelik uçlar. Gövde bir TÜP gibi gölgelenir: kalınlık boyunca t in [-1,1] -> yüzey normali (radyal * t, z * sqrt(1-t^2)),
 ışıkla nokta çarpımı tona çevrilir; uç ile gövde arasında 1 piksellik koyu ek yeri.

@@ -199,9 +199,7 @@ func _d_name_card() -> PanelContainer:
 	stripe.custom_minimum_size = Vector2(6, 0)
 	stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hb.add_child(stripe)
-	var fb := DK.box(DK.C_INSET, DK.C_LINE, 2, 2, 3)
-	fb.add_child(DK.icon(LobbyUI.face_texture(str(Characters.get_def(NetworkManager.local_char_id).get("portrait", ""))), 72))
-	hb.add_child(fb)
+	hb.add_child(preload("res://scripts/portrait_face.gd").framed_icon(NetworkManager.local_char_id, 72, 2.0))
 	var v := DK.v(4)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.alignment = BoxContainer.ALIGNMENT_CENTER

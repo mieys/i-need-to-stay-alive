@@ -50,7 +50,7 @@ func _player(pet: String) -> Node:
 
 func test_catalog() -> void:
 	_begin()
-	assert(PetCatalog.KEYS == ["kopek", "papagan", "kelebek", "peri", "kirpi"] and PetCatalog.DEFAULT_KEY == "kopek", "beş hayvan, varsayılan köpek")
+	assert(PetCatalog.KEYS == ["kopek", "papagan", "kelebek", "peri", "kirpi", "slime", "hayalet"] and PetCatalog.DEFAULT_KEY == "kopek", "yedi hayvan (madde 509: Minik Cadı + Hayalet), varsayılan köpek")
 	assert(PetCatalog.LUCK_BONUS == 10.0, "papağan 10 şans")
 	GameManager.selected_pet = "bozuk"
 	assert(PetCatalog.selected() == "kopek", "geçersiz seçim varsayılana düşmeli")

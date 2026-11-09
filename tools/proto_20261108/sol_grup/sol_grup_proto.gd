@@ -17,6 +17,12 @@ const HudTrayFrame := preload("res://scripts/hud_tray_frame.gd")
 const HudTheme := preload("res://scripts/hud_theme.gd")
 const PixelBarScript: GDScript = preload("res://scripts/hud_pixel_bar.gd")
 const TRAY_TEX: Texture2D = preload("res://assets/ui/kit/hud_dock_tray_side.png")
+## Kullanıcı: "altın simgelerinde oyundaki altın olmalı (animasyonsuz) parçacık simgesinde de item parçacığı simgesi olmalı" -> oyunun kendi dokuları:
+## altın = grup panelinin altın düğmesindeki ilk kare (16 px, 2 kat = 32), parçacık = HUD sayacının simgesi (22 px, oyundaki gibi 33 px).
+const GOLD_TEX: Texture2D = preload("res://assets/ui/newui/icon_gold_coin.png")
+const SHARD_TEX: Texture2D = preload("res://assets/pickups/weapon_shard/shard_icon.png")
+const GOLD_H := 32.0
+const SHARD_H := 33.0
 
 const DIAMOND := ["..o..", ".o1o.", "o121o", ".o1o.", "..o.."]
 const HOURGLASS := ["ooooo", "o111o", ".o1o.", "..o..", ".o1o.", "o111o", "ooooo"]
@@ -174,10 +180,26 @@ func t_mid(ci: CanvasItem, x: float, r: Rect2, s: String, size: int = 32, col: C
 	t(ci, Vector2(x, round(r.position.y + (r.size.y - cap_h(size, font)) * 0.5)), s, size, col, font)
 
 
-func icon_mid(ci: CanvasItem, rows: Array, pal: Dictionary, x: float, r: Rect2) -> float:
+## Dikeyde ortalı simge: piksel haritası (rows + palet) ya da oyunun dokusu (rows = Texture2D, pal = hedef yükseklik px).
+func icon_mid(ci: CanvasItem, rows: Variant, pal: Variant, x: float, r: Rect2) -> float:
+	if rows is Texture2D:
+		return icon_tex(ci, rows, x, r, float(pal))
 	var s: Vector2 = pix_size(rows)
 	pix(ci, rows, Vector2(x, r.position.y + floorf((r.size.y - s.y) * 0.5 / P) * P), pal)
 	return s.x
+
+
+func icon_tex(ci: CanvasItem, tx: Texture2D, x: float, r: Rect2, h: float) -> float:
+	var ts: Vector2 = tx.get_size()
+	var sz: Vector2 = (ts * (h / ts.y)).round()
+	ci.draw_texture_rect(tx, Rect2(Vector2(round(x), round(r.position.y + (r.size.y - sz.y) * 0.5)), sz), false)
+	return sz.x
+
+
+func icon_tex_c(ci: CanvasItem, tx: Texture2D, r: Rect2, h: float) -> void:
+	var ts: Vector2 = tx.get_size()
+	var sz: Vector2 = (ts * (h / ts.y)).round()
+	ci.draw_texture_rect(tx, Rect2((r.position + (r.size - sz) * 0.5).round(), sz), false)
 
 
 func kind_pal(kind: String) -> Dictionary:
@@ -201,7 +223,7 @@ func _layout() -> void:
 			L["gold"] = Rect2(o + Vector2(0, 21 * P), Vector2(66 * P, 19 * P))
 			L["shard"] = Rect2(o + Vector2(0, 42 * P), Vector2(66 * P, 19 * P))
 		"B":
-			L["console"] = Rect2(o, Vector2(76 * P, 39 * P))
+			L["console"] = Rect2(o, Vector2(76 * P, 42 * P))
 		"C":
 			L["env"] = Rect2(o, Vector2(26 * P, 26 * P))
 			L["gold"] = Rect2(o + Vector2(28 * P, 0), Vector2(44 * P, 12 * P))
@@ -238,7 +260,7 @@ func _layout() -> void:
 	L["notices"] = nl
 	for row: Dictionary in rows:
 		var bar_k: Array = [["hp", row.get("hp_ratio", 1.0), row.get("hp_fill", HudTheme.HP_GREEN), row.get("hp_text", ""), HudTheme.TEXT],
-			["sh", row.get("sh_ratio", 0.0), HudTheme.SHIELD_BAR, row.get("sh_text", ""), HudTheme.SHIELD_VALUE]]
+			["sh", row.get("sh_ratio", 0.0), HudTheme.SHIELD_BAR, row.get("sh_text", ""), HudTheme.TEXT]]
 		for bk in bar_k:
 			var br: Rect2 = row.get(bk[0], Rect2())
 			if br.size.x <= 0.0:
@@ -381,7 +403,7 @@ func _front_sg(ci: CanvasItem) -> void:
 				brass_key(ci, kr, KEY_I)
 			else:
 				dark_key(ci, kr, KEY_I)
-			for pair in [["gold", COIN, COIN_PAL, gold_s, HudTheme.PRICE], ["shard", SHARD, SHARD_PAL, shard_s, HudTheme.SHARD]]:
+			for pair in [["gold", GOLD_TEX, GOLD_H, gold_s, HudTheme.PRICE], ["shard", SHARD_TEX, SHARD_H, shard_s, HudTheme.SHARD]]:
 				var r: Rect2 = L[pair[0]].grow(-12.0)
 				if brass:
 					var bw := Rect2(r.position.x + 13 * P, r.position.y + 2 * P, r.size.x - 13 * P, r.size.y - 4 * P)
@@ -399,7 +421,7 @@ func _front_sg(ci: CanvasItem) -> void:
 			pix_c(ci, BAG, Rect2(s.position + Vector2(2 * P, 2 * P), s.size - Vector2(6 * P, 6 * P)), BAG_PAL)
 			## Q/E/R gibi: köşede krem harf, koyu konturlu
 			t(ci, Vector2(s.end.x - 7 * P, s.end.y - 9 * P), "I")
-			for pair in [["gold", COIN, COIN_PAL, gold_s, HudTheme.PRICE], ["shard", SHARD, SHARD_PAL, shard_s, HudTheme.SHARD]]:
+			for pair in [["gold", GOLD_TEX, GOLD_H, gold_s, HudTheme.PRICE], ["shard", SHARD_TEX, SHARD_H, shard_s, HudTheme.SHARD]]:
 				var r: Rect2 = L[pair[0]]
 				var ix: float = r.position.x + 3 * P
 				ix += icon_mid(ci, pair[1], pair[2], ix, r) + 3 * P
@@ -423,7 +445,7 @@ func _front_b_console(ci: CanvasItem, gold_s: String, shard_s: String) -> void:
 	var wh: float = c.end.y - wy - P
 	var gw := Rect2(c.position.x + P, wy, floorf((c.size.x - 3 * P) * 0.62 / P) * P, wh)
 	var sw := Rect2(gw.end.x + P, wy, c.end.x - P - gw.end.x - P, wh)
-	for pair in [[gw, COIN, COIN_PAL, gold_s, HudTheme.PRICE], [sw, SHARD, SHARD_PAL, shard_s, HudTheme.SHARD]]:
+	for pair in [[gw, GOLD_TEX, GOLD_H, gold_s, HudTheme.PRICE], [sw, SHARD_TEX, SHARD_H, shard_s, HudTheme.SHARD]]:
 		var r: Rect2 = pair[0]
 		well(ci, r)
 		var ix: float = r.position.x + 2 * P
@@ -458,13 +480,13 @@ func _front_party(ci: CanvasItem) -> void:
 		var gb: Rect2 = _gold_btn(row)
 		match style:
 			"D":
-				pix_c(ci, COIN, gb, COIN_PAL)
+				icon_tex_c(ci, GOLD_TEX, gb, GOLD_H)
 			"C":
 				HudTrayFrame.draw(ci, gb, 1.0)
-				pix_c(ci, COIN, gb, COIN_PAL)
+				icon_tex_c(ci, GOLD_TEX, gb, GOLD_H)
 			_:
 				HudTrayFrame.draw(ci, gb, 1.0)
-				pix_c(ci, COIN, gb, COIN_PAL)
+				icon_tex_c(ci, GOLD_TEX, gb, GOLD_H)
 	var db: Rect2 = _dmg_box()
 	if db.size.x > 0.0:
 		match style:

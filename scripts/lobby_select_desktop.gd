@@ -25,6 +25,8 @@ const PC := preload("res://scripts/pet_catalog.gd")
 const SS := preload("res://scripts/spiritual_skills.gd")
 const MP := preload("res://scripts/meta_progress.gd")
 const LU := preload("res://scripts/menu_lobby_ui.gd")
+const PortraitFace := preload("res://scripts/portrait_face.gd") ## yüz + karaktere özel bulanık arka plan (madde 464/485)
+const CornerBrackets := preload("res://scripts/corner_brackets.gd") ## seçili / üstündeki kartın köşebentleri (madde 538)
 const SI := preload("res://scripts/stat_icon.gd")
 const PreviewScript := preload("res://scripts/menu_character_preview.gd")
 const RR := preload("res://scripts/run_records.gd")
@@ -417,9 +419,7 @@ func _player_card(pid: int, index: int) -> PanelContainer:
 	stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hb.add_child(stripe)
 	var cid: int = int(info.get("char_id", 1))
-	var fb := DK.box(DK.C_INSET, DK.C_LINE, 2, 2, 3)
-	fb.add_child(DK.icon(LU.face_texture(str(Characters.get_def(cid).get("portrait", ""))), 72))
-	hb.add_child(fb)
+	hb.add_child(PortraitFace.framed_icon(cid, 72, 2.0))
 	var v := DK.v(6)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -587,10 +587,12 @@ func _build_mid() -> void:
 	ids.sort()
 	var open_n: int = 0
 	for id in ids:
+		## Yalnız sahip olunan karakterler listelenir; kilitliler Ruh Mağazası'nda görünür.
+		if not MP.is_unlocked(MP.CHAR, int(id)):
+			continue
 		grid.add_child(_char_card(int(id)))
-		if MP.is_unlocked(MP.CHAR, int(id)):
-			open_n += 1
-	_open_count.text = Loc.t("%d/%d açık") % [open_n, ids.size()]
+		open_n += 1
+	_open_count.text = ""
 	mv.add_child(grid)
 	mv.add_child(DK.hline())
 	var nh := DK.h(12)
@@ -619,7 +621,9 @@ func _char_card(id: int) -> Button:
 	var v := DK.v(2)
 	v.set_anchors_preset(Control.PRESET_FULL_RECT)
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(DK.icon(LU.face_texture(str(def.get("portrait", ""))), _card_face, lk))
+	## Portre Gömme Tepsi çerçevesinde (madde 535): çerçevesiz kare kartın içinde "kesik" duruyordu.
+	var face: CenterContainer = PortraitFace.framed_icon(id, _card_face, 3.0 if _phone else 2.0, lk)
+	v.add_child(face)
 	var nl: Label = null
 	if lk:
 		var ph := DK.h(6)
@@ -633,6 +637,14 @@ func _char_card(id: int) -> Button:
 		nl = DK.lbl(t, fs, DK.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
 		v.add_child(nl)
 	b.add_child(v)
+	## Seçim vurgusu altın dış kart çerçevesi değil KÖŞEBENT (madde 538): seçili altın, üstünde / odakta PICK_HOVER.
+	var brk := CornerBrackets.new()
+	brk.t = 4.0 if _phone else 3.0
+	b.add_child(brk)
+	b.mouse_entered.connect(_set_card_hover.bind(id, "hov", true))
+	b.mouse_exited.connect(_set_card_hover.bind(id, "hov", false))
+	b.focus_entered.connect(_set_card_hover.bind(id, "foc", true))
+	b.focus_exited.connect(_set_card_hover.bind(id, "foc", false))
 	if lk:
 		var lg := DK.glyph(DK.G_LOCK, DK.C_DIM, 3 if _card.x <= CARD.x else 4)
 		lg.position = Vector2(_card.x - (30 if _card.x <= CARD.x else 40), 8)
@@ -640,7 +652,7 @@ func _char_card(id: int) -> Button:
 	var marks := DK.h(4)
 	marks.position = Vector2(6, 6)
 	b.add_child(marks)
-	_cards[id] = {"btn": b, "marks": marks, "name": nl, "locked": lk}
+	_cards[id] = {"btn": b, "marks": marks, "name": nl, "locked": lk, "face": face.get_child(0), "brk": brk, "hov": false, "foc": false}
 	_style_card(id)
 	return b
 
@@ -648,9 +660,40 @@ func _char_card(id: int) -> Button:
 func _style_card(id: int) -> void:
 	var c: Dictionary = _cards[id]
 	var sel: bool = id == _sel_char
-	DK.style_button(c["btn"], "tile_on" if sel else ("tile_locked" if c["locked"] else "tile"), 4, 6.0)
+	## Kart kenarı her durumda nötr (madde 538: altın "tile_on" kenarı + altın odak halkası kalktı); seçili yalnız bir ton açık dolgu,
+	## üstündeyken dolgu biraz açılır, vurgu köşebentlerde (_refresh_brackets).
+	var b: Button = c["btn"]
+	var lk: bool = c["locked"]
+	var fill: Color = DK.C_INSET if lk else (DK.C_PANEL3 if sel else DK.C_PANEL2)
+	DK.style_button_colors(b, fill, DK.C_LINE, DK.C_DIM if lk else DK.C_TEXT, Color(0, 0, 0, 0), 2, 4, 6.0)
+	b.add_theme_stylebox_override("hover", DK.sb(fill.lightened(0.06), DK.C_LINE, 2, 4, 6.0))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_refresh_brackets(id)
 	if c["name"] != null:
 		(c["name"] as Label).add_theme_color_override("font_color", DK.C_ACCENT if sel else DK.C_TEXT)
+	var fp: Object = c.get("face")
+	if fp != null and fp.has_method("set_accent"):
+		fp.call("set_accent", DK.C_ACCENT if sel else Color(0, 0, 0, 0))
+
+
+func _set_card_hover(id: int, key: String, on: bool) -> void:
+	if not _cards.has(id):
+		return
+	_cards[id][key] = on
+	_refresh_brackets(id)
+
+
+func _refresh_brackets(id: int) -> void:
+	var c: Dictionary = _cards[id]
+	var brk: Object = c.get("brk")
+	if brk == null or not is_instance_valid(brk):
+		return
+	var col := Color(0, 0, 0, 0)
+	if id == _sel_char:
+		col = DK.C_ACCENT
+	elif c.get("hov", false) or c.get("foc", false):
+		col = HT.PICK_HOVER
+	brk.call("set_color", col)
 
 
 ## Kimin hangi karakteri seçtiği: kartın sol üstünde oyuncu renginde baş harf.
@@ -924,6 +967,8 @@ func _fill_tab() -> void:
 	var cur: String = _current(_tab)
 	for key: String in _options(_tab):
 		var lk: bool = not MP.is_unlocked(_meta_kind(_tab), key)
+		if lk:
+			continue ## sahip olunmayanlar burada gizli (Ruh Mağazası'nda görünür)
 		var on: bool = key == cur
 		var b := Button.new()
 		b.custom_minimum_size = _tile
@@ -1212,10 +1257,11 @@ func _ph_hero_page() -> Control:
 	ids.sort()
 	var open_n: int = 0
 	for id in ids:
+		if not MP.is_unlocked(MP.CHAR, int(id)):
+			continue
 		grid.add_child(_char_card(int(id)))
-		if MP.is_unlocked(MP.CHAR, int(id)):
-			open_n += 1
-	_open_count.text = Loc.t("%d / %d açık") % [open_n, ids.size()]
+		open_n += 1
+	_open_count.text = ""
 	(lst[1] as VBoxContainer).add_child(grid)
 	return v
 

@@ -1,7 +1,7 @@
 extends RefCounted
 
 ## Yakın dövüş ZİNCİRİ - TEK kaynak (madde 347; weapon.gd = gerçek/yetkili silah, remote_player.gd = kukla; altı vuruş modülü
-## sword_swing / dagger_stab / topuz_slam / pence_hook / mizrak_thrust / kalkan_bash play()'in sonunda kullanır).
+## sword_swing / dagger_stab / topuz_slam / tirpan_reap / mizrak_thrust / kalkan_bash play()'in sonunda kullanır).
 ## Kullanıcı isteği 2026-10-20: "saldırıp illa tam konumuna döndükten sonra saldırma zorunluluğu olmasın ... üst üste saldırması
 ## gerektiği anlarda konumuna geri dönme zorunluluğu olmasına gerek yok".
 ##

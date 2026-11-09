@@ -254,7 +254,7 @@ func test_tier_duration_curves_player_cap_and_stat_boost_stay_in_sync() -> void:
 	assert(absf(float(Enemy.DIFFICULTY_HEALTH_RAMP) * td - 0.00017 * 100.0) < 0.0001, "can zorluk eğrisi kademe başına aynı: %s" % (float(Enemy.DIFFICULTY_HEALTH_RAMP) * td))
 	assert(absf(float(Enemy.DIFFICULTY_DAMAGE_RAMP) * td - 0.00012 * 100.0) < 0.0001, "hasar zorluk eğrisi kademe başına aynı: %s" % (float(Enemy.DIFFICULTY_DAMAGE_RAMP) * td))
 	## Yaratık tavanı: 1 oyuncu 105, her ek oyuncu +30 (2026-11-07: +50 -> +30; 2026-10-19 +50, 2026-10-17 +21).
-	assert(int(sp.max_concurrent_enemies) == 105 and int(SpawnerScript.ENEMY_CAP_PER_EXTRA_PLAYER) == 30, "tavan 105, ek oyuncu başına +30 (2026-11-07)")
-	assert(int(sp.player_enemy_cap(1)) == 105 and int(sp.player_enemy_cap(2)) == 135 and int(sp.player_enemy_cap(4)) == 195 and int(sp.player_enemy_cap(5)) == 225, "1/2/4/5 oyuncu: 105/135/195/225 (2026-11-07: ek oyuncu +30)")
+	assert(int(sp.max_concurrent_enemies) == 120 and int(SpawnerScript.ENEMY_CAP_PER_EXTRA_PLAYER) == 45, "tavan 120, ek oyuncu başına +45 (2026-11-09)")
+	assert(int(sp.player_enemy_cap(1)) == 120 and int(sp.player_enemy_cap(2)) == 165 and int(sp.player_enemy_cap(4)) == 255 and int(sp.player_enemy_cap(5)) == 300, "1/2/4/5 oyuncu: 120/165/255/300 (2026-11-09: ek oyuncu +45)")
 	assert(is_equal_approx(SpawnerScript.CREATURE_STAT_BOOST, 1.5), "sıradan yaratık can/kalkan/hasar x1,5")
 	_cleanup()

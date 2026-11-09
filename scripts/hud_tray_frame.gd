@@ -45,6 +45,24 @@ static func draw(ci: CanvasItem, r: Rect2, layer_px: float, accent: Color = Colo
 	## Sanat pikseli katına yuvarlanırken artan 1 px iki yana bölünmez: dikdörtgen ortalanır.
 	var o := Vector2(a.x + floorf(((b.x - a.x) - aw * t) * 0.5), a.y + floorf(((b.y - a.y) - ah * t) * 0.5))
 	ci.draw_set_transform_matrix(xf.affine_inverse())
+	_draw_px(ci, o, aw, ah, t, accent)
+	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## Aynı çerçeve YEREL koordinatta (dönüşüm geri alınmaz): ölçeklenen / kayan / animasyonlu düğmelerin içinde (seçim ekranı portre kartları,
+## madde 535) - draw() çizim anındaki global dönüşümü komutlara gömdüğü için düğme sonradan kayınca/büyüyünce çerçeve yerinde kalırdı.
+## r.size, t'nin katı verilmeli (değilse artan kısım ortalanır).
+static func draw_local(ci: CanvasItem, r: Rect2, t: float, accent: Color = Color(0, 0, 0, 0)) -> void:
+	t = maxf(1.0, t)
+	var aw: int = int(floorf(r.size.x / t))
+	var ah: int = int(floorf(r.size.y / t))
+	if aw < 12 or ah < 12:
+		return
+	var o := r.position + ((r.size - Vector2(aw, ah) * t) * 0.5).floor()
+	_draw_px(ci, o, aw, ah, t, accent)
+
+
+static func _draw_px(ci: CanvasItem, o: Vector2, aw: int, ah: int, t: float, accent: Color) -> void:
 	## Köşeler (piksel piksel)
 	_tile(ci, TL, o, t, accent)
 	_tile(ci, TR, o + Vector2((aw - 6) * t, 0.0), t, accent)
@@ -62,7 +80,6 @@ static func draw(ci: CanvasItem, r: Rect2, layer_px: float, accent: Color = Colo
 		if run_h > 0.0:
 			ci.draw_rect(Rect2(o.x + k * t, o.y + 6.0 * t, t, run_h), c_tl) ## sol
 			ci.draw_rect(Rect2(o.x + (aw - 1 - k) * t, o.y + 6.0 * t, t, run_h), c_br) ## sağ
-	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
 static func _tile(ci: CanvasItem, rows: Array[String], p: Vector2, t: float, accent: Color) -> void:

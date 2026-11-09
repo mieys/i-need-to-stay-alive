@@ -56,7 +56,7 @@ func test_categories_build_all_current_settings() -> void:
 	assert(_row_ids(s) == ["language", "volume", "music", "fullscreen", "resolution", "fps", "ui_opacity", "shake", "ui_anim", "auto_pick", "dmg_numbers", "ally_fx"], "GENEL: %s" % str(_row_ids(s)))
 	_push_key(KEY_E)
 	assert(int(s.get("_cat")) == 1, "E -> GRAFİK")
-	## "sun" satırı yalnız güneş huzmesi ya da bulut gölgesi açıkken (madde 469: ikisi de kapalı -> satır yok).
+	## "sun" satırı yalnız güneş huzmesi ya da bulut gölgesi açıkken (madde 484: ikisi de kapalı -> satır yok).
 	var gfx_rows: Array = ["preset", "sun", "ground", "wind_fx", "render_scale", "fps_limit"] if SunCloudsScript.any_enabled() \
 			else ["preset", "ground", "wind_fx", "render_scale", "fps_limit"]
 	assert(_row_ids(s) == gfx_rows, "GRAFİK: %s" % str(_row_ids(s)))

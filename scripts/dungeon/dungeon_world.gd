@@ -135,6 +135,21 @@ static func cell_of(world: Vector2) -> Vector2i:
 	return Vector2i(floori((world.x - _origin_px.x) / _cell_px), floori((world.y - _origin_px.y) / _cell_px))
 
 
+## EJDER BAŞI alevi (madde 492): 2 sütunluk şerit, hasar alanının üst satırından aşağı en çok EJDER_ROWS satır, ilk duvar/nesne hücresinde kesilir
+## (alev duvara işlemez). Görsel (dungeon_props.gd) ve hasar (dungeon_manager.gd) AYNI sayıyı kullanır. min_rows: TMX'teki alan satırı (en az bu kadar).
+const EJDER_ROWS := 8
+
+
+static func flame_rows(world_top_left: Vector2, min_rows: int) -> int:
+	var c0: Vector2i = cell_of(world_top_left + Vector2(2.0, 2.0))
+	var n: int = 0
+	for j in range(EJDER_ROWS):
+		if is_move_blocked_cell(c0 + Vector2i(0, j)) or is_move_blocked_cell(c0 + Vector2i(1, j)):
+			break
+		n += 1
+	return maxi(n, min_rows)
+
+
 static func cell_center(c: Vector2i) -> Vector2:
 	return _origin_px + (Vector2(c) + Vector2(0.5, 0.5)) * _cell_px
 

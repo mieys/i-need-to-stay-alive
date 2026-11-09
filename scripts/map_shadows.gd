@@ -52,7 +52,7 @@ void fragment() {
 
 ## main.gd _ready'de Harita düğümüyle çağrılır. Doku yoksa (henüz pişirilmemiş) sessizce hiçbir şey yapmaz.
 static func attach(harita: Node) -> Sprite2D:
-	if not ShadowsFlag.map: ## madde 469: gölgeler kapalı
+	if not ShadowsFlag.map: ## madde 484: harita gölgeleri kapalı
 		return null
 	if harita == null or not ResourceLoader.exists(TEXTURE_PATH) or harita.get_node_or_null(NODE_NAME) != null:
 		return null

@@ -33,7 +33,7 @@ ZE = EK.ZE
 SAMPLE = EK.SAMPLE
 FLOOR_RGB = (147, 124, 98)        # çatlak kumtaşı zeminin baskın rengi (%85): zemin shader'ı taş derzini buna çizer
 
-ORDER = ['Su', 'Su ayrıntı', 'Su ayrıntı 2', 'Zemin', 'Kıyı 2', 'Zemin ayrıntı', 'Zemin süsü', 'Yer süsü', 'Duvar', 'Duvar süsü',
+ORDER = ['Su', 'Su ayrıntı', 'Su ayrıntı 2', 'Zemin', 'Kıyı 2', 'Zemin ayrıntı', 'Zemin süsü', 'Yer süsü', 'Duvar', 'Duvar kenarı', 'Duvar kenarı 2', 'Duvar süsü',
          'Su kapısı', 'Su kapısı 2', 'Eşya alt', 'Eşya', 'Eşya üst', 'Engel']
 WATER = [(6, 7), (7, 7), (8, 7), (9, 7), (10, 7)]   # floor_walls_under_water: yeşil lağım suyu yüzeyi (örneğin 'Bottom' katmanı)
 TUBE = ('sw', (12, 9, 2, 4))                         # duvardan kanala akan boru (Walls_water_downstairs, animasyonlu)
@@ -199,12 +199,17 @@ def build_layout():
 # ================================================================================================ boyama
 def paint_base(pl, bank, tl, region=None):
     lay = pl.lay
-    EK.paint_walls(lay, bank, tl, region=region)
+    EK.paint_walls(lay, bank, tl, region=region, caps_by_key={'sw': (0, 6)})   # madde 492: 2./3. yüz satırının ve su yüzünün paket uç parçaları
+    P.paint_wall_edges(lay, bank, tl, 'wd', region=region)   # madde 492: duvar kütlesinin kenar + köşeleri paketin kendi karolarıyla
     t = lay.t
     x0, y0, x1, y1 = region or (0, 0, W, H)
     for y in range(max(0, y0), min(H, y1)):
         for x in range(max(0, x0), min(W, x1)):
             if t[y, x] == Z.W:
+                tl.put('Su', x, y, bank.gid('uw', *WATER[BN._h(x, y) % len(WATER)]))
+                tl.put('Zemin', x, y, 0)
+            elif t[y, x] == Z.S and y + 1 < H and t[y + 1, x] == Z.W:
+                # suya bakan yüzün alt karosu (su çizgisi) altı saydam: paketin örneğinde altında SU var; zemin görünüyordu (madde 492)
                 tl.put('Su', x, y, bank.gid('uw', *WATER[BN._h(x, y) % len(WATER)]))
                 tl.put('Zemin', x, y, 0)
 

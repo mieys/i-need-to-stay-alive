@@ -421,7 +421,7 @@ static func base_stat_text(char_id: int, key: String) -> String:
 	var b: Dictionary = Characters.get_base_stats(char_id)
 	if key == "atk":
 		## Saldırı Hızı bonusu puanı -> saniyedeki atış (taban 1/sn).
-		return ("%.1f/sn" % (1.0 + float(b["atk"]) / 100.0)).replace(".", ",")
+		return (TranslationServer.translate("%.1f/sn") % (1.0 + float(b["atk"]) / 100.0)).replace(".", ",")
 	return str(int(round(float(b[key]))))
 
 

@@ -76,6 +76,11 @@ func _expire_e(p: Node) -> void:
 	p._process_skill2(0.01)
 
 
+## Madde 533: E önce ASSASIN_INVIS_FOCUS_TIME sn odak (yavaş solma), görünmezlik ondan sonra - odağı bitirir.
+func _finish_focus(p: Node) -> void:
+	p._process_assasin_invis_focus(float(p.ASSASIN_INVIS_FOCUS_TIME) + 0.01)
+
+
 ## Gerçek tuş basışı: aksiyonu bas, bir fizik karesi bekle (oyuncunun _physics_process'i is_action_just_pressed görür), bırak.
 func _press(action: String) -> void:
 	Input.action_press(action)
@@ -103,13 +108,22 @@ func test_slots_swapped_and_base_nerfs() -> void:
 	assert(not p.get_assasin_dash_charge_state().is_empty(), "HUD'un Q ikonu hamle yüklerini göstermeli")
 	var ap0: float = p.damage_bonus
 	p._activate_skill2()
+	## Madde 533: önce 2 sn odak - henüz görünmez değil, yavaşça soluyor, ekran kararmaya başlıyor.
+	assert(p.skill2_state == "active" and not p.is_invisible, "E önce odaklanır (henüz görünmez değil)")
+	assert(is_equal_approx(p.skill2_timer, 6.0 + p.ASSASIN_INVIS_FOCUS_TIME), "aktif süre = odak + 6 sn: %s" % p.skill2_timer)
+	p._process_assasin_invis_focus(1.0)
+	assert(p.modulate.a < 0.9 and p.modulate.a > p.SKILL_INVIS_ALPHA, "odak ortasında yarı solmuş: %s" % p.modulate.a)
+	assert(not p.is_invisible and is_equal_approx(p.stealth_vision_amount(), 0.5), "odak ortası: görünmez değil, karartma yarı")
+	_finish_focus(p)
 	assert(p.skill2_state == "active" and p.is_invisible, "E görünmezlik açmalı")
+	assert(is_equal_approx(p.modulate.a, p.SKILL_INVIS_ALPHA) and is_equal_approx(p.stealth_vision_amount(), 1.0), "görünmez: tam soluk + tam karartma")
 	assert(p.skill_state == "ready", "E, Q yuvasını etkilememeli")
 	assert(is_equal_approx(p.damage_bonus, ap0), "Gölge Adımı temelde saldırı gücü vermemeli (%s -> %s)" % [ap0, p.damage_bonus])
 	assert(is_equal_approx(float(p._skill2_timing_for(30)["duration"]), 6.0), "görünmezlik temel 6 sn")
 	assert(is_equal_approx(float(p._skill2_timing_for(30)["cooldown"]), 60.0), "görünmezlik bekleme 60 sn")
 	_expire_e(p)
 	assert(not p.is_invisible and p.skill2_state == "cooldown", "E süresi dolunca görünmezlik kapanmalı, bekleme başlamalı")
+	assert(is_equal_approx(p.modulate.a, 1.0) and p.stealth_vision_amount() == 0.0, "bitince tam görünür, karartma kapalı")
 	## BUG DÜZELTMESİ: bitişteki eski "collision_mask |= 4" oyuncuyu yaratıklarla kalıcı çarpıştırıyordu.
 	assert(p.collision_mask == 0, "Gölge Adımı yaratık fizik katmanını açmamalı: mask=%d" % p.collision_mask)
 	## R temposu saldırı hızından bağımsız (kartsız ~0.22 sn), "Hızlanan Hücum" ile bağlanır.
@@ -138,6 +152,7 @@ func test_real_key_presses() -> void:
 	var after_dash: Vector2 = p.global_position
 	assert(after_dash.x > start.x + 60.0, "hamle sağa ilerletmeli: %s" % str(after_dash))
 	await _press("skill2")
+	_finish_focus(p)
 	assert(p.skill2_state == "active" and p.is_invisible, "E görünmezlik açmalı")
 	assert(p._assasin_clone_ready(), "E finali: kopya bırakılmalı")
 	await _press("skill2")
@@ -163,6 +178,7 @@ func test_e_evolutions_duration_ap_shield_speed() -> void:
 	var ap0: float = p.damage_bonus
 	var speed0: float = p.get_effective_move_speed()
 	p._activate_skill2()
+	_finish_focus(p)
 	assert(is_equal_approx(p.damage_bonus, ap0 * 1.25), "Pusu: +%%25 saldırı gücü (%s -> %s)" % [ap0, p.damage_bonus])
 	assert(p.item_shield_regen_delay <= 0.0 and p.item_shield_ability_slow_timer <= 0.0,
 		"Gölge Nefesi: kalkan bekleme / yavaşlama sıfırlanmalı (%s / %s)" % [p.item_shield_regen_delay, p.item_shield_ability_slow_timer])
@@ -179,6 +195,8 @@ func test_e_final_clone_teleport() -> void:
 	p.apply_skill_evolution("assasin_ef", true)
 	var start: Vector2 = p.global_position
 	p._activate_skill2()
+	assert(not p._assasin_clone_ready(), "odakta henüz kopya yok")
+	_finish_focus(p)
 	assert(p._assasin_clone_ready(), "Gölge Kopyası bırakılmalı")
 	assert(_evo_areas("assasin_clone").size() == 1, "dünyada tek kopya olmalı")
 	assert((p._assasin_clone as Node2D).global_position.distance_to(start) < 0.5, "kopya başlangıç noktasında")
@@ -192,6 +210,7 @@ func test_e_final_clone_teleport() -> void:
 	_expire_e(p)
 	p.skill2_state = "ready"
 	p._activate_skill2()
+	_finish_focus(p)
 	assert(p._assasin_clone_ready(), "ikinci kullanımda yeni kopya")
 	var clone: Node = p._assasin_clone
 	_expire_e(p)

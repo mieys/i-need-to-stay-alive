@@ -360,7 +360,7 @@ static func fmt(n: int) -> String:
 ## ÖZET: büyük başlık + alt yazı (masaüstüyle aynı metin) + 2 sütun stat karosu.
 func _page_summary(summary: Dictionary, b: Control) -> Control:
 	var v := DK.v(0)
-	v.add_child(PK.lbl("OYUN BİTTİ", PK.FS_HERO, DK.C_BAD))
+	v.add_child(PK.lbl("TESLİM OLUNDU" if GameManager.run_surrendered else "OYUN BİTTİ", PK.FS_HERO, DK.C_BAD)) ## madde 540
 	var sub := _pc("VBox/Subtitle") as Label
 	var st := PK.lbl(sub.text if sub else "", PK.FS_BODY, DK.C_DIM)
 	st.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

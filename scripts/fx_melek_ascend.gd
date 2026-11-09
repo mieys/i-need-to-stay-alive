@@ -13,6 +13,7 @@ extends Node2D
 ## `tools/fx_bake.ps1`; özgün çizim `tools/fx_bake_src/fx_melek_ascend.gd`) - sayfa omuz hizasıyla pişti, burada sadece yükselmeyle
 ## birlikte kaldırılır. Kendi karesinin ADD kopyası (parıltı) ve sprite yükselmesi eskisi gibi kodla.
 const BakedFx := preload("res://scripts/baked_fx.gd")
+const SoftGlowScript := preload("res://scripts/soft_glow_blend.gd")
 const WINGS := preload("res://assets/fx/baked/melek_ascend_wings_frames.tres")
 const TEXEL := 1.212 ## PixelDraw.TEXEL - 1 sanat pikseli
 
@@ -49,9 +50,7 @@ func _ready() -> void:
 		_base_offset = _anim.offset
 		_glow = Sprite2D.new()
 		_glow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		var mat := CanvasItemMaterial.new()
-		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-		_glow.material = mat
+		_glow.material = SoftGlowScript.material() ## toplamalı yerine yumuşak parıltı (2026-11-08, soft_glow_blend.gd)
 		_glow.modulate = Color(1, 1, 1, 0)
 		_host.add_child.call_deferred(_glow) ## ön katman ebeveynin KARDEŞİ (bkz. fx_melek_holy.gd aynı gerekçe)
 

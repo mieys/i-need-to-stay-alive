@@ -185,6 +185,17 @@ func test_hadime_timings_and_costs() -> void:
 	_cleanup()
 
 
+## BALANCE_REV 133 (4 kişilik K13 oyununda hasarın %71'i Talon'dandı): E sırasında -%25 hasar, E bekleme 20 sn, pasif yük başı %5 (en fazla +%25).
+func test_talon_e_penalty_cooldown_and_passive_per_stack() -> void:
+	const TalonMath := preload("res://scripts/talon_formation_math.gd")
+	var talon := _make_player(1)
+	assert(is_equal_approx(TalonMath.SALVO_DAMAGE_PENALTY, 0.25), "E sırasında silah hasarı -%25")
+	assert(is_equal_approx(float(talon._skill2_timing_for(36)["cooldown"]), 20.0), "Talon E temel bekleme 20 sn")
+	assert(is_equal_approx(float(talon.TALON_PASSIVE_ATK_PER_STACK), 0.05), "pasif yük başına +%5 saldırı gücü")
+	assert(is_equal_approx(talon.TALON_PASSIVE_ATK_PER_STACK * talon.TALON_PASSIVE_MAX_STACKS, 0.25), "pasif en fazla +%25")
+	_cleanup()
+
+
 func test_talon_matthew_base_nerfs_and_cooldowns() -> void:
 	var talon := _make_player(1)
 	assert(is_equal_approx(float(talon._skill_timing_for(38)["cooldown"]), 10.0), "Talon Q temel bekleme 10 sn")

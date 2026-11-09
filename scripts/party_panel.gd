@@ -49,6 +49,147 @@ const PartyPixelBarScript: GDScript = preload("res://scripts/party_pixel_bar.gd"
 ## Telefon eski çubuk + bar_value_label (ekran pikseli 9 punto telefonda okunmaz).
 const HudPixelBarScript: GDScript = preload("res://scripts/hud_pixel_bar.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+## Madde 483 (kullanıcı madde 480 prototiplerinden "B yi beğendim"): MASAÜSTÜNDE grup paneli "B - Tek Konsol": bütün satırların ARKASINDA tek
+## Gömme Tepsi (paneldeki yan kutu, _ListTray), satır levhaları kalkar (aynı içerik payıyla boş kutu), satırlar arası paneldeki ayraç; portre
+## yuva çerçeveli (hud_tray_frame.gd) koyu kuyuda, altın düğmesi 42 px koyu yuva + çerçeve + oyundaki altın 2x, ad m5x7 32; "Hasar" tepsinin
+## altına asılı kabarık ahşap sekme (HudTrayKit.plate). Telefon eski levhalarında.
+const HudTrayKit := preload("res://scripts/hud_tray_kit.gd")
+const HudTrayFrame := preload("res://scripts/hud_tray_frame.gd")
+const TRAY_GOLD_BTN := 42.0
+## Kullanıcı: "minimaple grup yapışık olmasın ve hasar butonunu da bunlara uygun yap": tepsi minimap çerçevesinin (alt kenarı y 196) 9 px
+## altında başlar (TOP_Y 198 -> liste 208, tepsi 205), sağ kenarı listenin sağı = minimap çerçevesi / görev satırı / bildirimlerle aynı hizada.
+const TRAY_TOP_Y := 208.0
+## Hasar (kullanıcı: "hasar butonunu grup paneliyle bir yapma şansın var mı illa hasar yazmasına da gerek yok skill bardaki stat gösterme
+## butonu gibi bişey yapabilirsin"): tepsinin İÇİNDE sağ alt köşede, paneldeki stat düğmesiyle (hud_stat_toggle.gd) aynı çizim - koyu levha +
+## çubuk grafik + yön oku (kapalı "<": pencere sola açılır, açık ">"), yazısız. Kullanıcı (ekran görüntüsünde minimapin solunu işaretleyip):
+## "grup istatistikleri butonu kırmızı kareye aldığım kısımda ayrı bir mini buton olarak gözüksün orası yerine" -> tepsinin İÇİNDE değil,
+## minimap çerçevesinin SOLUNDA ayrı mini düğme (altı çerçevenin altıyla hizalı, 9 px boşluk; _place_stats_tab). Grup paneliyle görünür/gizlenir.
+const PixelIcons := preload("res://scripts/hud_pixel_icons.gd")
+const TRAY_TAB_SIZE := Vector2(64.0, 20.0)
+
+
+class _StatsTab extends Button:
+	const ARROW_CLOSED: Array[String] = ["..X", ".XX", "XXX", ".XX", "..X"]
+	const ARROW_OPEN: Array[String] = ["X..", "XX.", "XXX", "XX.", "X.."]
+	const BARS: Array[int] = [4, 8, 6, 11]
+	const GOLD := Color(0.98, 0.82, 0.30)
+	const VALUE := Color(0.97, 0.93, 0.84)
+	var popup: Control = null
+	func _ready() -> void:
+		flat = true
+		for st: String in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+			add_theme_stylebox_override(st, StyleBoxEmpty.new())
+		mouse_entered.connect(queue_redraw)
+		mouse_exited.connect(queue_redraw)
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	func _draw() -> void:
+		var on: bool = is_instance_valid(popup) and popup.visible
+		var hov: bool = is_hovered()
+		var d := Vector2(0, 1) if on else Vector2.ZERO
+		var plate: Color = HudTheme.DOCK_PLATE_ON if on else (HudTheme.DOCK_STRIPE if hov else HudTheme.DOCK_INSET)
+		PixelIcons.draw_plate(self, Rect2(Vector2.ZERO, size), plate)
+		draw_rect(Rect2(Vector2(2, 2), Vector2(size.x - 4, 1)), Color(GOLD, 0.55) if on else HudTheme.RIM_LO)
+		var lit: bool = on or hov
+		for i in BARS.size():
+			var h: int = BARS[i]
+			draw_rect(Rect2(Vector2(25 + i * 5, 15 - h) + d, Vector2(4, h)), HudTheme.OUTLINE)
+			draw_rect(Rect2(Vector2(26 + i * 5, 16 - h) + d, Vector2(2, h - 2)), GOLD if lit else VALUE)
+		PixelIcons.draw_flat(self, ARROW_OPEN if on else ARROW_CLOSED, Vector2(9, 5) + d, 2.0, GOLD)
+const FS_ROW_TRAY := 32
+var _list_tray: Panel = null
+
+## Madde 491 (kullanıcı: "grup istatistik hasar arayüzünü oyunun arayüzüyle uyumlu görünmesini sağla çerçevenin vb"): MASAÜSTÜNDE Hasar
+## Sıralaması penceresi eski bej levha (perçinsiz plaque, 24 punto, görev çubuğu dokusu, ahşap "x") yerine yanındaki grup paneliyle AYNI
+## Gömme Tepsi (HudTrayKit.tray): başlık m5x7 32 + sol üst konsoldaki kabarık ahşap kapat düğmesi (piksel X), başlık/satır arası paneldeki
+## ayraç, satırda sıra + grup satırıyla aynı yuva çerçeveli yakın yüz portresi + ad (kendin altın) + oyun sonu tablosu gibi iki sütun: sayı
+## PixeloidSans 18 + altında 12 px piksel çubuk (verilen turuncu / alınan mavi, her sütun kendi en büyüğüne göre). Telefon eski levhada.
+const DamageStats := preload("res://scripts/damage_stats.gd")
+const STATS_PAD_X := 21.0 ## tepsi çerçevesi 12 px + 9 px pay
+const STATS_PAD_Y := 18.0
+const STATS_NUM_FONT: Font = preload("res://assets/fonts/PixeloidSans-Bold.ttf")
+const STATS_NUM_FS := 18
+const STATS_RANK_W := 27.0
+const STATS_NAME_W := 108.0
+const STATS_DEALT_W := 102.0 ## 3 px ızgara katı ("123.456" PixeloidSans 18 sığar)
+const STATS_TAKEN_W := 90.0
+const STATS_BAR_H := 12.0
+const STATS_GAP := 9.0
+## Pencere minimap çerçevesinin ÜST hizasında, sağ sütunun (minimap + Hasar sekmesi + grup tepsisi) hemen solunda açılır: bir satırı fazla
+## (kendin) olsa da grup tepsisinin altına sarkmaz -> altındaki görev satırları / bildirimlerle (katman 100) çakışmaz (ilk denemede 4 kişide
+## pencerenin alt sağ köşesi "ADAYA CANAVARLAR SALDIRIYOR" levhasının altında kalıyordu).
+
+
+## Sol üst konsoldaki ENVANTER gibi kabarık ahşap düğme + 5x5 piksel X (1 sanat px = 3 ekran px).
+class _StatsClose extends Button:
+	const X_ROWS: Array[String] = ["X...X", ".X.X.", "..X..", ".X.X.", "X...X"] ## dil:yok (piksel deseni)
+	func _ready() -> void:
+		text = ""
+		focus_mode = Control.FOCUS_NONE
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		HudTrayKit.style_plate_button(self, 0.0)
+	func _draw() -> void:
+		var px: float = HudTrayKit.P
+		var pos: Vector2 = ((size - Vector2(5.0, 5.0) * px) * 0.5).floor()
+		var col: Color = HudTheme.DIM if get_draw_mode() == DRAW_PRESSED else HudTheme.TEXT
+		PixelIcons.draw_flat(self, X_ROWS, pos, px, col)
+
+
+## Paneldeki ayraç (grup satırları arasındakiyle aynı), kendi genişliği boyunca.
+class _StatsDivider extends Control:
+	func _init() -> void:
+		custom_minimum_size = Vector2(0.0, 2.0 * HudTrayKit.P)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		HudTrayKit.draw_divider(self, 0.0, size.x, 0.0)
+
+
+## Oyun sonu tablosunun çubuğu (game_over_board.gd _bar) Gömme Tepsi kuyusunda: 3 px dış hat + koyu kuyu + dolgu (üst 3 px açık).
+class _StatsBar extends Control:
+	var ratio: float = 0.0
+	var fill: Color = Color.WHITE
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var p: float = HudTrayKit.P
+		var r := Rect2(Vector2.ZERO, size)
+		draw_rect(r, HudTheme.OUTLINE)
+		var inner: Rect2 = r.grow(-p)
+		draw_rect(inner, HudTheme.DOCK_INSET)
+		var w: float = roundf(inner.size.x * clampf(ratio, 0.0, 1.0) / p) * p
+		if ratio > 0.0:
+			w = maxf(w, p)
+		if w > 0.0:
+			draw_rect(Rect2(inner.position, Vector2(w, inner.size.y)), fill)
+			draw_rect(Rect2(inner.position, Vector2(w, p)), fill.lightened(0.35))
+
+
+class _ListTray extends Panel:
+	var list: Control = null
+	func _draw() -> void:
+		if list == null or not is_instance_valid(list):
+			return
+		var inv: Transform2D = get_global_transform().affine_inverse()
+		var kids: Array = list.get_children()
+		var first: bool = true
+		for k in kids:
+			var c: Control = k as Control
+			if c == null or not c.visible:
+				continue
+			if not first:
+				var y: float = (inv * c.global_position).y - 6.0 ## satır arası boşluk (List separation 6) tam ayraç
+				HudTrayKit.draw_divider(self, 18.0, size.x - 18.0, y)
+			first = false
+
+
+## Yuva çerçevesi (paneldeki yetenek yuvaları gibi) - ebeveyninin üstünde, kendi dikdörtgenine çizer.
+class _TrayOverlay extends Control:
+	var layer_px: float = 1.0
+	func _draw() -> void:
+		HudTrayFrame.draw(self, Rect2(Vector2.ZERO, size), layer_px)
+
+
+static func _tray_ui() -> bool:
+	return not MobileUIScript.enabled
 const FS_ROW := 24 ## m5x7 3x - görev satırlarıyla aynı (16 1080p'de okunmuyor)
 ## Sağ üstteki minimap'in (hud.tscn MinimapControl: sağdan 36, alt kenar 186) hemen altı.
 const RIGHT_MARGIN := 36.0
@@ -114,8 +255,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	offset_left = -RIGHT_MARGIN
 	offset_right = -RIGHT_MARGIN
-	offset_top = TOP_Y
-	offset_bottom = TOP_Y
+	offset_top = TRAY_TOP_Y if _tray_ui() else TOP_Y
+	offset_bottom = offset_top
 	visible = false
 	_build_static_ui()
 	_rebuild_rows()
@@ -143,10 +284,17 @@ func _build_static_ui() -> void:
 	theme = UIKit.theme()
 	## "Background": levhaların + Hasar butonunun toplam alanı (main.gd görev satırlarını bunun ALTINA hizalar, açılır
 	## pencereler bunun SOLUNA açılır). Kendisi çizim yapmaz.
+	if _tray_ui():
+		_list_tray = _ListTray.new()
+		_list_tray.name = "ListTray"
+		_list_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_list_tray.add_theme_stylebox_override("panel", HudTrayKit.tray(0.0, 0.0))
+		_list_tray.visible = false
+		add_child(_list_tray) ## Background'dan ÖNCE = satırların arkasında
 	var bg := VBoxContainer.new()
 	bg.name = "Background"
 	bg.custom_minimum_size = Vector2(ROW_WIDTH, 0)
-	bg.add_theme_constant_override("separation", 6)
+	bg.add_theme_constant_override("separation", 0 if _tray_ui() else 6)
 	bg.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	bg.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -163,19 +311,58 @@ func _build_static_ui() -> void:
 	_list_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	bg.add_child(_list_scroll)
 	_list_scroll.add_child(_list)
+	if _list_tray:
+		_list_tray.list = _list
+		_list.resized.connect(_fit_list_tray)
+		_list.sort_children.connect(_fit_list_tray)
 
-	## Levhaların altında, sağa yaslı küçük ahşap "Hasar" butonu (hasar sıralaması).
+	## Levhaların altında, sağa yaslı küçük ahşap "Hasar" butonu (hasar sıralaması). Masaüstü: tepsinin içinde stat düğmesi gibi sekme.
 	var footer := HBoxContainer.new()
 	footer.alignment = BoxContainer.ALIGNMENT_END
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bg.add_child(footer)
-	_stats_button = _wood_button("Hasar", Vector2(0, 32))
+	if not _tray_ui():
+		bg.add_child(footer)
+	else:
+		footer.free()
+		## kullanıcı: "alt sınırla çok bitişik aşağıdaki oyuncunun barları arada mesafe olmalı azcık" -> tepsinin altına 9 px pay
+		## (çerçevenin iç kenarı listenin altında; son satırın çubukları 8 px yukarıda kalır)
+		var bottom_pad := Control.new()
+		bottom_pad.name = "TrayBottomPad"
+		bottom_pad.custom_minimum_size = Vector2(0.0, 9.0)
+		bottom_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.add_child(bottom_pad)
+	_stats_button = _StatsTab.new() if _tray_ui() else _wood_button("Hasar", Vector2(0, 32))
 	_stats_button.tooltip_text = "Kimin ne kadar hasar verdiğini göster"
 	_stats_button.pressed.connect(_on_stats_button_pressed)
-	footer.add_child(_stats_button)
+	if _tray_ui():
+		add_child(_stats_button) ## kökün çocuğu: konumu _place_stats_tab (minimapin solu)
+	else:
+		footer.add_child(_stats_button)
+	if _tray_ui():
+		_stats_button.custom_minimum_size = TRAY_TAB_SIZE
+		_stats_button.tooltip_text = "Hasar sıralaması"
+		_stats_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	_build_gift_popup()
 	_build_stats_popup()
+	if _stats_button is _StatsTab:
+		(_stats_button as _StatsTab).popup = _stats_popup
+		_stats_popup.visibility_changed.connect(_stats_button.queue_redraw)
+
+
+## Altın hediye penceresinin düğmesi: masaüstünde kabarık ahşap levha (HudTrayKit.plate) + m5x7 32, telefonda eski küçük ahşap düğme.
+static func _gift_button(text: String, min_size: Vector2, tray: bool) -> Button:
+	if not tray:
+		return _wood_button(text, min_size)
+	var btn := Button.new()
+	btn.text = text
+	btn.custom_minimum_size = min_size
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	HudTrayKit.style_plate_button(btn, 12.0)
+	btn.add_theme_font_size_override("font_size", FS_ROW_TRAY)
+	return btn
 
 
 func _build_gift_popup() -> void:
@@ -183,29 +370,34 @@ func _build_gift_popup() -> void:
 	_gift_popup.name = "GiftPopup"
 	_gift_popup.visible = false
 	_gift_popup.z_index = 100
-	_gift_popup.add_theme_stylebox_override("panel", _plaque_style(14.0, 10.0))
+	## Madde 491 ek (kullanıcı: "Evet, onu da"): masaüstünde Hasar Sıralaması gibi Gömme Tepsi + 32 punto yazı + ayraç + kabarık ahşap düğmeler
+	## (sol üst konsolun Envanter düğmesi); telefon eski bej levha + küçük ahşap düğmeler.
+	var tray: bool = _tray_ui()
+	_gift_popup.add_theme_stylebox_override("panel", HudTrayKit.tray(STATS_PAD_X, STATS_PAD_Y) if tray else _plaque_style(14.0, 10.0))
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_theme_constant_override("separation", 9 if tray else 6)
 	_gift_popup.add_child(vbox)
 
 	_gift_amount_label = Label.new()
-	UIKit.style_label(_gift_amount_label, FS_ROW, HudTheme.TEXT, 0)
+	UIKit.style_label(_gift_amount_label, FS_ROW_TRAY if tray else FS_ROW, HudTheme.TEXT, 0)
 	_gift_amount_label.text = "Altın gönder"
 	vbox.add_child(_gift_amount_label)
+	if tray:
+		vbox.add_child(_StatsDivider.new())
 
 	var presets_box := HBoxContainer.new()
-	presets_box.add_theme_constant_override("separation", 4)
+	presets_box.add_theme_constant_override("separation", int(STATS_GAP) if tray else 4)
 	vbox.add_child(presets_box)
 	for amount in [10, 50, 100]:
-		var btn := _wood_button(str(amount), Vector2(52, 32))
+		var btn := _gift_button(str(amount), Vector2(60, 42) if tray else Vector2(52, 32), tray)
 		btn.pressed.connect(_on_gift_amount_pressed.bind(amount))
 		presets_box.add_child(btn)
-	var all_btn := _wood_button("Hepsi", Vector2(64, 32))
+	var all_btn := _gift_button("Hepsi", Vector2(84, 42) if tray else Vector2(64, 32), tray)
 	all_btn.pressed.connect(_on_gift_amount_pressed.bind(-1))
 	presets_box.add_child(all_btn)
 
-	var cancel_btn := _wood_button("İptal", Vector2(0, 32))
+	var cancel_btn := _gift_button("İptal", Vector2(0, 42) if tray else Vector2(0, 32), tray)
 	cancel_btn.pressed.connect(_hide_gift_popup)
 	vbox.add_child(cancel_btn)
 
@@ -221,10 +413,11 @@ func _build_stats_popup() -> void:
 	_stats_popup.name = "StatsPopup"
 	_stats_popup.visible = false
 	_stats_popup.z_index = 100
-	_stats_popup.add_theme_stylebox_override("panel", _plaque_style(14.0, 10.0))
+	var tray: bool = _tray_ui() ## madde 491: masaüstü Gömme Tepsi
+	_stats_popup.add_theme_stylebox_override("panel", HudTrayKit.tray(STATS_PAD_X, STATS_PAD_Y) if tray else _plaque_style(14.0, 10.0))
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_theme_constant_override("separation", 9 if tray else 6)
 	_stats_popup.add_child(vbox)
 
 	var header := HBoxContainer.new()
@@ -234,17 +427,23 @@ func _build_stats_popup() -> void:
 	title.text = "Hasar Sıralaması"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	UIKit.style_label(title, FS_ROW, HudTheme.ACCENT, 0)
+	UIKit.style_label(title, FS_ROW_TRAY if tray else FS_ROW, HudTheme.ACCENT, 0)
 	header.add_child(title)
 	## Kullanıcı bildirimi (eski): sadece kendi kapat butonuyla kapanmalı (dışına tıklayınca değil).
-	var close_btn := _wood_button("x", Vector2(32, 32))
+	var close_btn: Button = _StatsClose.new() if tray else _wood_button("x", Vector2(32, 32))
+	if tray:
+		close_btn.custom_minimum_size = Vector2(36.0, 36.0)
+		close_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		close_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	close_btn.tooltip_text = "Kapat"
 	close_btn.pressed.connect(_hide_stats_popup)
 	header.add_child(close_btn)
+	if tray:
+		vbox.add_child(_StatsDivider.new())
 
 	_stats_list = VBoxContainer.new()
 	_stats_list.add_theme_constant_override("separation", 6)
-	_stats_list.custom_minimum_size = Vector2(330, 0)
+	_stats_list.custom_minimum_size = Vector2(0 if tray else 330, 0)
 	vbox.add_child(_stats_list)
 
 	# _gift_popup ile AYNI sebep: liste akışının DIŞINDA, kök seviyesinde.
@@ -405,7 +604,7 @@ func toggle_stats_popup(anchor: Control) -> void:
 	_hide_gift_popup()
 	_refresh_stats_popup()
 	_stats_popup.visible = true
-	_place_popup_left_of(_stats_popup, anchor)
+	_place_stats_popup(anchor)
 
 
 ## Telefon: panelin ve açık pencerelerinin dokunuşu joystick başlatmasın (bkz. touch_controls.gd joy_exclude).
@@ -419,7 +618,15 @@ func _create_row(peer_id: int) -> PartyRow:
 
 	var plaque := PanelContainer.new()
 	plaque.custom_minimum_size = Vector2(ROW_WIDTH, 0.0)
-	plaque.add_theme_stylebox_override("panel", _plaque_style(14.0, 8.0))
+	if _tray_ui(): ## madde 483: levha yok (ortak tepsi arkada), içerik payı aynı
+		var empty := StyleBoxEmpty.new()
+		empty.content_margin_left = 14.0
+		empty.content_margin_right = 17.0 ## tepsi sağa taşmaz: altın düğmesi çerçeveden 5 px içeride
+		empty.content_margin_top = 8.0
+		empty.content_margin_bottom = 8.0
+		plaque.add_theme_stylebox_override("panel", empty)
+	else:
+		plaque.add_theme_stylebox_override("panel", _plaque_style(14.0, 8.0))
 	plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_list.add_child(plaque)
 	row.container = plaque
@@ -462,6 +669,14 @@ func _create_row(peer_id: int) -> PartyRow:
 	avatar.size = Vector2(AVATAR_SIZE, AVATAR_SIZE)
 	avatar_box.add_child(avatar)
 	row.avatar = avatar
+	if _tray_ui(): ## madde 483: koyu kuyu + paneldeki yuva çerçevesi (portrenin 4 px dışı)
+		avatar_border.bg_color = HudTheme.DOCK_INSET
+		avatar_border.set_border_width_all(0)
+		var av_frame := _TrayOverlay.new()
+		av_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		av_frame.position = Vector2(AVATAR_BORDER - 4.0, AVATAR_BORDER - 4.0)
+		av_frame.size = Vector2(AVATAR_SIZE + 8.0, AVATAR_SIZE + 8.0)
+		avatar_box.add_child(av_frame)
 
 	var info_vbox := VBoxContainer.new()
 	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -476,7 +691,7 @@ func _create_row(peer_id: int) -> PartyRow:
 	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info_vbox.add_child(name_row)
 	var name_label := Label.new()
-	UIKit.style_label(name_label, FS_ROW, HudTheme.TEXT, 0)
+	UIKit.style_label(name_label, FS_ROW_TRAY if _tray_ui() else FS_ROW, HudTheme.TEXT, 0)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -484,7 +699,7 @@ func _create_row(peer_id: int) -> PartyRow:
 	row.name_label = name_label
 	var downed_label := Label.new()
 	downed_label.text = "YERDE"
-	UIKit.style_label(downed_label, FS_ROW, HudTheme.BAD, 0)
+	UIKit.style_label(downed_label, FS_ROW_TRAY if _tray_ui() else FS_ROW, HudTheme.BAD, 0)
 	downed_label.visible = false
 	name_row.add_child(downed_label)
 	row.downed_label = downed_label
@@ -537,6 +752,24 @@ func _create_row(peer_id: int) -> PartyRow:
 			gold_icon_applied = true
 	if not gold_icon_applied:
 		gold_button.text = "$"
+	if _tray_ui(): ## madde 483: 42 px koyu yuva + yuva çerçevesi, altın 16 px x2
+		gold_button.custom_minimum_size = Vector2(TRAY_GOLD_BTN, TRAY_GOLD_BTN)
+		for st: Array in [["normal", HudTheme.DOCK_INSET], ["hover", HudTheme.DOCK_PLATE_ON], ["pressed", HudTheme.DEEP],
+				["hover_pressed", HudTheme.DEEP], ["disabled", HudTheme.DOCK_INSET]]:
+			var f := StyleBoxFlat.new()
+			f.bg_color = st[1]
+			gold_button.add_theme_stylebox_override(st[0], f)
+		gold_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		for c in gold_button.get_children():
+			if c is TextureRect:
+				for side: String in ["offset_left", "offset_top"]:
+					c.set(side, 5.0)
+				for side2: String in ["offset_right", "offset_bottom"]:
+					c.set(side2, -5.0)
+		var gb_frame := _TrayOverlay.new()
+		gb_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		gb_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+		gold_button.add_child(gb_frame)
 	gold_button.pressed.connect(_on_gold_button_pressed.bind(peer_id))
 	## Bu buton _ready()'deki tek seferlik UISound taramasından SONRA yaratıldığı için tık sesi burada elle bağlanır.
 	if not gold_button.pressed.is_connected(UISound.play_click):
@@ -553,8 +786,6 @@ func _make_brass_bar(height: float, fill: Color, kind: int) -> Control:
 	var bar: Control = HudPixelBarScript.new()
 	bar.set("merged", true)
 	bar.set("fill", fill)
-	if kind == BarKind.SHIELD:
-		bar.set("value_color", HudTheme.SHIELD_VALUE)
 	bar.custom_minimum_size = Vector2(0.0, height)
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return bar
@@ -605,7 +836,49 @@ func _make_bar(height: float) -> TextureProgressBar:
 	return bar
 
 
+## Ortak tepsi: Background (satırlar) + solda 6 / üstte, altta 3 px (sağ kenar listeyle aynı), satır yoksa gizli.
+func _fit_list_tray() -> void:
+	if _list_tray == null or not is_instance_valid(_list):
+		return
+	var any: bool = false
+	for c in _list.get_children():
+		if c is Control and (c as Control).visible:
+			any = true
+			break
+	_list_tray.visible = any
+	if not any:
+		return
+	var inv: Transform2D = get_global_transform().affine_inverse()
+	var bgc: Control = get_node_or_null("Background") as Control
+	var r: Rect2 = bgc.get_global_rect() if bgc else _list.get_global_rect()
+	var p0: Vector2 = (inv * r.position).round()
+	var p1: Vector2 = (inv * r.end).round()
+	_list_tray.position = p0 + Vector2(-6.0, -3.0)
+	_list_tray.size = (p1 - p0) + Vector2(6.0, 6.0) ## sağ kenar = listenin sağı (minimap çerçevesiyle hizalı)
+	_list_tray.queue_redraw()
+	_place_stats_tab()
+
+
+## İstatistik mini düğmesi: minimap çerçevesinin (HUD/MinimapControl/TrayFrame) solunda, alt kenarı çerçevenin altıyla hizalı, 9 px boşluk.
+## Çerçeve yoksa tepsinin sol üstünün üstünde. Konum ekran pikselinde (iki katman da ölçeksiz).
+func _place_stats_tab() -> void:
+	if not (_stats_button is _StatsTab) or not is_instance_valid(_stats_button):
+		return
+	var hud: Node = get_parent().get_parent() if get_parent() != null else null
+	var fr: Control = hud.get_node_or_null("MinimapControl/TrayFrame") as Control if hud != null else null
+	var gp: Vector2
+	if fr != null and fr.is_visible_in_tree():
+		var r: Rect2 = fr.get_global_rect()
+		gp = Vector2(r.position.x - 9.0 - TRAY_TAB_SIZE.x, r.end.y - TRAY_TAB_SIZE.y)
+	else:
+		var tr: Rect2 = _list_tray.get_global_rect()
+		gp = Vector2(tr.position.x, tr.position.y - 9.0 - TRAY_TAB_SIZE.y)
+	_stats_button.size = TRAY_TAB_SIZE
+	_stats_button.global_position = gp.round()
+
+
 func _update_rows() -> void:
+	_fit_list_tray()
 	for pid in _rows.keys():
 		var row: PartyRow = _rows[pid]
 		var ally: Node = _find_ally_node(pid)
@@ -699,10 +972,40 @@ func _place_popup_left_of(popup: Control, anchor_btn: Control) -> void:
 	var bg: Control = get_node_or_null("Background") as Control
 	var left_x: float = bg.global_position.x if bg != null else anchor_btn.global_position.x
 	var x: float = left_x - w - 8.0
+	var y: float = anchor_btn.global_position.y - 6.0
+	## Madde 491 ek: masaüstünde ortak tepsinin 9 px solu (Hasar Sıralaması gibi) ve altı tepsinin altını geçmez - alt satırdaki dosta açılan
+	## altın penceresi aşağıdaki görev satırları / bildirimlerin (katman 100) üstüne sarkmasın.
+	if _tray_ui() and _list_tray != null and _list_tray.visible:
+		var tr: Rect2 = _list_tray.get_global_rect()
+		x = minf(left_x, tr.position.x) - w - 9.0
+		y = minf(y, tr.end.y - popup.get_combined_minimum_size().y)
 	## Telefonda panel SOL kenarda (bkz. hud.gd _fit_mobile_party) - solda yer yoksa panelin SAĞINA aç.
 	if x < 8.0 and bg != null:
 		x = bg.get_global_rect().end.x + 8.0
-	popup.global_position = Vector2(x, anchor_btn.global_position.y - 6.0)
+	popup.global_position = Vector2(x, y).round()
+
+
+## Madde 491: masaüstünde minimap çerçevesinin üst hizası + sağ sütunun (grup tepsisi / Hasar sekmesi) solu; telefon eski yerleşim.
+func _place_stats_popup(anchor_btn: Control) -> void:
+	if not _tray_ui():
+		_place_popup_left_of(_stats_popup, anchor_btn)
+		return
+	_stats_popup.reset_size()
+	var w: float = _stats_popup.get_combined_minimum_size().x
+	var right_x: float = INF
+	var top_y: float = anchor_btn.global_position.y - 6.0
+	for c: Control in [_list_tray, _stats_button]:
+		if c != null and is_instance_valid(c) and c.is_visible_in_tree():
+			right_x = minf(right_x, c.get_global_rect().position.x)
+	var hud: Node = get_parent().get_parent() if get_parent() != null else null
+	var fr: Control = hud.get_node_or_null("MinimapControl/TrayFrame") as Control if hud != null else null
+	if fr != null and fr.is_visible_in_tree():
+		var r: Rect2 = fr.get_global_rect()
+		right_x = minf(right_x, r.position.x)
+		top_y = r.position.y
+	if right_x == INF:
+		right_x = anchor_btn.global_position.x
+	_stats_popup.global_position = Vector2(right_x - 9.0 - w, top_y).round()
 
 
 func _on_gold_button_pressed(peer_id: int) -> void:
@@ -747,7 +1050,7 @@ func _on_stats_button_pressed() -> void:
 	_hide_gift_popup()
 	_refresh_stats_popup()
 	_stats_popup.visible = true
-	_place_popup_left_of(_stats_popup, _stats_button)
+	_place_stats_popup(_stats_button)
 
 
 func _hide_stats_popup() -> void:
@@ -773,10 +1076,12 @@ func _gather_live_stats() -> Array:
 			if NetworkManager.is_multiplayer_active and NetworkManager.local_player_name != "":
 				my_name = NetworkManager.local_player_name
 			entries.append({"name": my_name, "dealt": float(local_player.get("match_damage_dealt")),
-					"taken": float(local_player.get("match_damage_taken")) if "match_damage_taken" in local_player else 0.0})
+					"taken": float(local_player.get("match_damage_taken")) if "match_damage_taken" in local_player else 0.0,
+					"char": GameManager.selected_char_id, "me": true})
 		for ally in _current_allies():
 			entries.append({"name": str(ally.get("player_name")), "dealt": float(ally.get("match_damage_dealt")),
-					"taken": float(ally.get("match_damage_taken")) if "match_damage_taken" in ally else 0.0})
+					"taken": float(ally.get("match_damage_taken")) if "match_damage_taken" in ally else 0.0,
+					"char": int(ally.get("char_id")) if "char_id" in ally else 0, "me": false})
 	entries.sort_custom(func(a, b): return float(a["dealt"]) > float(b["dealt"]))
 	return entries
 
@@ -785,8 +1090,13 @@ func _refresh_stats_popup() -> void:
 	if not _stats_list:
 		return
 	for child in _stats_list.get_children():
+		_stats_list.remove_child(child) ## hemen çıkar: kuyruktaki eski satırlar bir kare pencereyi büyütmesin
 		child.queue_free()
 	var entries: Array = _gather_live_stats()
+	if _tray_ui():
+		_refresh_stats_tray(entries)
+		_stats_popup.reset_size() ## oyuncu ayrılınca pencere küçülsün (sol üst sabit)
+		return
 	if entries.is_empty():
 		var empty_lbl := Label.new()
 		empty_lbl.text = "Veri yok"
@@ -855,3 +1165,123 @@ func _refresh_stats_popup() -> void:
 		var bar: TextureProgressBar = _make_bar(8.0)
 		_set_bar(bar, clampf(dealt / top, 0.0, 1.0), DAMAGE_BAR_COLOR)
 		well.add_child(bar)
+
+
+## Madde 491: masaüstü Hasar Sıralaması satırları (Gömme Tepsi dili; düzen için bkz. _StatsClose üstündeki not).
+func _refresh_stats_tray(entries: Array) -> void:
+	if entries.is_empty():
+		var empty_lbl := Label.new()
+		empty_lbl.text = "Veri yok"
+		UIKit.style_label(empty_lbl, FS_ROW_TRAY, HudTheme.DIM, 0)
+		_stats_list.add_child(empty_lbl)
+		return
+	var top_dealt: float = 1.0
+	var top_taken: float = 1.0
+	for e: Dictionary in entries:
+		top_dealt = maxf(top_dealt, float(e.get("dealt", 0.0)))
+		top_taken = maxf(top_taken, float(e.get("taken", 0.0)))
+	## Sütun başlıkları (kullanıcı isteği 2026-10-18: "grup istatistiklerinde alınan hasar da olmalı").
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", int(STATS_GAP))
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stats_list.add_child(head)
+	var head_pad := Control.new()
+	head_pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(head_pad)
+	for col: Array in [["Verilen", STATS_DEALT_W], ["Alınan", STATS_TAKEN_W]]:
+		var head_lbl := Label.new()
+		head_lbl.text = str(col[0])
+		head_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		head_lbl.custom_minimum_size = Vector2(float(col[1]), 0.0)
+		UIKit.style_label(head_lbl, FS_ROW_TRAY, HudTheme.DIM, 0)
+		head.add_child(head_lbl)
+	for i in entries.size():
+		if i > 0:
+			_stats_list.add_child(_StatsDivider.new())
+		var entry: Dictionary = entries[i]
+		var me: bool = bool(entry.get("me", false))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", int(STATS_GAP))
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_stats_list.add_child(row)
+
+		var rank_lbl := Label.new()
+		rank_lbl.text = "%d." % (i + 1)
+		rank_lbl.custom_minimum_size = Vector2(STATS_RANK_W, 0.0)
+		rank_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		UIKit.style_label(rank_lbl, FS_ROW_TRAY, HudTheme.ACCENT if i == 0 else HudTheme.DIM, 0)
+		row.add_child(rank_lbl)
+
+		var portrait: Control = _stats_portrait(int(entry.get("char", 0)))
+		portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(portrait)
+
+		var name_lbl := Label.new()
+		name_lbl.text = str(entry.get("name", "?"))
+		name_lbl.clip_text = true
+		name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		name_lbl.custom_minimum_size = Vector2(STATS_NAME_W, 0.0)
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		UIKit.style_label(name_lbl, FS_ROW_TRAY, HudTheme.ACCENT if me else HudTheme.TEXT, 0)
+		row.add_child(name_lbl)
+
+		var dealt: float = float(entry.get("dealt", 0.0))
+		var taken: float = float(entry.get("taken", 0.0))
+		row.add_child(_stats_cell(dealt, dealt / top_dealt, HudTheme.STAT_DEALT, STATS_DEALT_W))
+		row.add_child(_stats_cell(taken, taken / top_taken, HudTheme.STAT_TAKEN, STATS_TAKEN_W))
+
+
+## Oyun sonu tablosunun hücresi (game_over_board.gd _stat_cell): sağa yaslı sayı (PixeloidSans 18, sütunun renginde) + altında çubuk.
+func _stats_cell(v: float, ratio: float, col: Color, w: float) -> Control:
+	var cell := VBoxContainer.new()
+	cell.custom_minimum_size = Vector2(w, 0.0)
+	cell.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cell.add_theme_constant_override("separation", 6)
+	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var lbl := Label.new()
+	lbl.text = DamageStats.fmt(v)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl.add_theme_font_override("font", STATS_NUM_FONT)
+	UIKit.style_label(lbl, STATS_NUM_FS, col, 0)
+	cell.add_child(lbl)
+	var bar := _StatsBar.new()
+	bar.ratio = clampf(ratio, 0.0, 1.0)
+	bar.fill = col
+	bar.custom_minimum_size = Vector2(0.0, STATS_BAR_H)
+	cell.add_child(bar)
+	return cell
+
+
+## Grup satırının portresiyle aynı: koyu kuyuda karaktere özel bulanık arka plan + yakın yüz (16x16, 3x = 48) + yuva çerçevesi (4 px dışı).
+func _stats_portrait(char_id: int) -> Control:
+	var box := Control.new()
+	box.custom_minimum_size = Vector2(AVATAR_SIZE + 8.0, AVATAR_SIZE + 8.0)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var well := ColorRect.new()
+	well.color = HudTheme.DOCK_INSET
+	well.position = Vector2(4.0, 4.0)
+	well.size = Vector2(AVATAR_SIZE, AVATAR_SIZE)
+	well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(well)
+	var face: Texture2D = PortraitFace.face(char_id, PortraitFace.PARTY_N) if char_id > 0 else null
+	var bg_tex: Texture2D = PortraitFace.background(char_id, PortraitFace.PARTY_N) if char_id > 0 else null
+	for tex: Texture2D in [bg_tex if bg_tex else AVATAR_BG, face]:
+		if tex == null:
+			continue
+		var tr := TextureRect.new()
+		tr.texture = tex
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tr.clip_contents = true
+		tr.position = Vector2(4.0, 4.0)
+		tr.size = Vector2(AVATAR_SIZE, AVATAR_SIZE)
+		box.add_child(tr)
+	var frame := _TrayOverlay.new()
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.size = box.custom_minimum_size
+	box.add_child(frame)
+	return box

@@ -596,6 +596,8 @@ func _build_genel() -> void:
 		_toggle_row("fps", "FPS Göstergesi", func() -> bool: return UISound.show_fps, func(on: bool) -> void: UISound.set_show_fps(on))
 		_toggle_row("auto_pick", "Otomatik Kart Seçimi", func() -> bool: return UISound.auto_pick_cards,
 				func(on: bool) -> void: UISound.set_auto_pick_cards(on))
+		_toggle_row("player_names", "Oyuncu İsimleri", func() -> bool: return UISound.show_player_names,
+				func(on: bool) -> void: UISound.set_show_player_names(on))
 		_choice_row("dmg_numbers", "Hasar Sayıları", UISound.DAMAGE_NUMBER_MODES, func() -> int: return UISound.damage_numbers_mode,
 				func(i: int) -> void: UISound.set_damage_numbers_mode(i))
 		_choice_row("ally_fx", "Efekt Yoğunluğu", UISound.ALLY_FX_MODES, func() -> int: return UISound.ally_fx_mode,
@@ -626,6 +628,8 @@ func _build_genel() -> void:
 	_section("OYUN")
 	_toggle_row("auto_pick", "Otomatik Kart Seçimi", func() -> bool: return UISound.auto_pick_cards,
 			func(on: bool) -> void: UISound.set_auto_pick_cards(on))
+	_toggle_row("player_names", "Oyuncu İsimleri", func() -> bool: return UISound.show_player_names,
+			func(on: bool) -> void: UISound.set_show_player_names(on))
 	_choice_row("dmg_numbers", "Hasar Sayıları", UISound.DAMAGE_NUMBER_MODES, func() -> int: return UISound.damage_numbers_mode,
 			func(i: int) -> void: UISound.set_damage_numbers_mode(i))
 	## Başkalarının KİŞİSEL efektlerini (namlu, vuruş izi, kast süsü, asa ucu, mermi) soluklaştırır; takım destek/çağrılan/dönüşüm efektleri hep tam.
@@ -650,7 +654,7 @@ func _build_grafik() -> void:
 	_choice_row("preset", "Kalite", names, func() -> int: return mini(UISound.gfx_preset, 2),
 			func(i: int) -> void: UISound.set_gfx_preset(i), Callable(),
 			func() -> String: return UISound.GFX_PRESET_NAMES[UISound.GfxPreset.CUSTOM] if UISound.gfx_preset == UISound.GfxPreset.CUSTOM else "")
-	## Güneş huzmesi (madde 282) + bulut gölgesi (madde 469) kapalıyken düğme hiçbir şey değiştirmez -> satır gizli.
+	## Güneş huzmesi (madde 282) + bulut gölgesi (madde 484) kapalıyken düğme hiçbir şey değiştirmez -> satır gizli.
 	if SunCloudsScript.any_enabled():
 		_toggle_row("sun", "Güneş Işığı / Bulut Gölgesi", func() -> bool: return UISound.gfx_sun_clouds,
 				func(on: bool) -> void: UISound.set_gfx_option("sun_clouds", on))

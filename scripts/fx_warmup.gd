@@ -27,6 +27,9 @@ const TreeCrystalGlowScript := preload("res://scripts/mission_tree_crystal_glow.
 
 ## Yeteneklerin ilk kullanımında yeni canvas shader'ı olarak derlenen shader dosyaları (yoksa atlanır).
 const EXTRA_SHADERS: Array[String] = [
+	"res://shaders/yumusak_parilti.gdshader", ## toplamalı parıltıların yerine yumuşak parıltı (2026-11-08, soft_glow_blend.gd)
+	"res://shaders/gorev_altin_ton.gdshader", ## Kaçan Hazine (madde 496)
+	"res://shaders/gorev_karanlik_halka.gdshader", ## Gezici Işık (madde 496)
 	"res://shaders/oakley_yaprak_halkasi.gdshader", ## Oakley çiçeği Yaprak Halkası (madde 316) - ilk çiçekte derleme takılmasın
 	"res://shaders/talon_form.gdshader",
 	"res://shaders/talon_form_weapon.gdshader",
@@ -34,6 +37,7 @@ const EXTRA_SHADERS: Array[String] = [
 	"res://shaders/ruh_hali.gdshader", ## ruh hâli (madde 438) - ilk level ekranında derleme takılmasın
 	"res://shaders/zindan_zemin.gdshader", ## zindan haritası zemin taşları (madde 449)
 	"res://shaders/assasin_passive_outline.gdshader",
+	"res://shaders/slime_buff_outline.gdshader", ## Minik Cadı büyüsü dış hattı (madde 523) - ilk büyüde derleme takılmasın
 	"res://shaders/melek_bond.gdshader",
 	"res://shaders/melek_halo_tint.gdshader",
 	"res://shaders/matthew_glow.gdshader",

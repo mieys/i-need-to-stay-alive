@@ -55,6 +55,29 @@ func test_tooltip_creation_and_destruction() -> void:
 	
 	hud.queue_free()
 
+## Madde 531: pasif (P) ve ruhani (F) yuvasında "BU OYUNDA" Shift'siz görünür ve açıkken canlı yenilenir; Q/E/R'de Shift gerekir.
+func test_passive_tooltip_shows_stats_without_shift() -> void:
+	var bl: GDScript = load("res://scripts/balance_log.gd")
+	bl.reset()
+	var hud: Node = _make_hud()
+	var skill_bar: Control = hud.get_node("SkillBar") as Control
+	var passive_icon: TextureRect = skill_bar.get_node("PassiveIcon") as TextureRect
+	var skill_icon: TextureRect = skill_bar.get_node("SkillIcon") as TextureRect
+	passive_icon._on_mouse_entered()
+	assert(passive_icon._detail_label != null and passive_icon._detail_label.text.contains("BU OYUNDA"), "pasif ipucu Shift'siz BU OYUNDA göstermeli")
+	bl.on_hit("dot:shaman_pasif", 123.0, false) ## P slotu (Shaman pasif yakması)
+	passive_icon._detail_t = 0.0
+	passive_icon._process(0.1)
+	assert(passive_icon._detail_label.text.contains("123"), "açıkken canlı yenilenmeli: " + passive_icon._detail_label.text)
+	passive_icon._on_mouse_exited()
+	assert(passive_icon._detail_label == null, "kapanınca etiket bırakılır")
+	skill_icon._on_mouse_entered()
+	assert(skill_icon._detail_label == null, "Q/E/R'de Shift olmadan BU OYUNDA yok (eski kural)")
+	skill_icon._on_mouse_exited()
+	bl.reset()
+	hud.queue_free()
+
+
 func test_lol_style_bbcode_formatting() -> void:
 	var hud: Node = _make_hud()
 	var skill_bar: Control = hud.get_node("SkillBar") as Control

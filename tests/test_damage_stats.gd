@@ -224,6 +224,60 @@ func test_buff_window_counts_weapon_damage_only_while_open() -> void:
 	_end()
 
 
+## Madde 531 (kullanıcı: "petlerin/pasiflerin/ruhanilerin ne kadar fayda sağladığı gösterilmiyor"): ruhani sayaçları (Para altın + indirim + kâr,
+## Savaş Şevki saldırı gücü + infaz, kullanım sayıları), Shaman/Hadime pasifleri, Minik Cadı / Hayalet / Kelebek / Papağan ipucu satırları.
+func test_spiritual_pet_and_passive_counters_madde_531() -> void:
+	_begin()
+	var ink: Dictionary = UIKit.INK
+	BalanceLogScript.on_util("s:ruhani_para", "gold", 15.0)
+	BalanceLogScript.on_util("s:ruhani_para", "discount", 40.0)
+	BalanceLogScript.on_util("s:ruhani_para", "profit", 55.0)
+	var f: String = DamageStats.tooltip_bbcode("f", ink)
+	assert(f.contains("Kazanılan altın") and f.contains("Dükkan indirimiyle tasarruf") and f.contains("40") and f.contains("Toplam kâr") and f.contains("55"), f)
+	assert(f.contains(str(ink.get("value", "#9a6a10"))), "altın ölçüleri altın renginde: " + f)
+	BalanceLogScript.on_util("s:ruhani_savas_sevki", "ap", 2.0)
+	BalanceLogScript.on_util("s:ruhani_savas_sevki", "execute", 7.0)
+	BalanceLogScript.on_hit("s:ruhani_tank", 600.0, false)
+	BalanceLogScript.on_util("s:ruhani_tank", "uses")
+	f = DamageStats.tooltip_bbcode("f", ink)
+	assert(f.contains("Kazanılan kalıcı saldırı gücü") and f.contains("İnfaz edilen düşman") and f.contains("Hasar") and f.contains("600") and f.contains("Kullanım"), f)
+	## Shaman pasifi (totem yakması) + Hadime pasifi (Ruh Göçü) artık P slotunda
+	BalanceLogScript.on_hit("dot:shaman_pasif", 80.0, false)
+	BalanceLogScript.on_util("s:hadime_pasif", "uses")
+	assert(is_equal_approx(float(DamageStats.slot_totals("p")["dmg"]), 80.0), "Shaman pasif yakması P'de")
+	var p_txt: String = DamageStats.tooltip_bbcode("p", ink)
+	assert(p_txt.contains("80") and p_txt.contains("Kullanım"), p_txt)
+	## Minik Cadı: büyü sayısı + büyü sürerken verilen hasar; Hayalet: örtü sayısı; Kelebek/Papağan sabit etki satırı
+	BalanceLogScript.on_util("s:evcil_slime", "uses")
+	BalanceLogScript.set_window("s:evcil_slime", true, false)
+	BalanceLogScript.on_hit("w:yay", 321.0, false)
+	BalanceLogScript.set_window("s:evcil_slime", false, false)
+	var sl: String = DamageStats.pet_tooltip_bbcode("slime", ink)
+	assert(sl.contains("Kullanım") and sl.contains("Etki sürerken verilen hasar") and sl.contains("321") and sl.contains("saldırı gücü"), sl)
+	BalanceLogScript.on_util("s:evcil_hayalet", "uses")
+	assert(DamageStats.pet_tooltip_bbcode("hayalet", ink).contains("Kullanım"), "Hayalet örtü sayısı")
+	assert(DamageStats.pet_tooltip_bbcode("kelebek", ink).contains("saldırı hızı"), "Kelebek verdiği saldırı hızı")
+	assert(DamageStats.pet_tooltip_bbcode("papagan", ink).contains("şans"), "Papağan verdiği şans")
+	## Dükkan indirimi: yalnız Para seçiliyken, ödenen tutardan geri hesaplanır; spend_shop_gold altını da düşer
+	var old_gold: int = GameManager.gold
+	var old_spirit: String = str(GameManager.selected_spiritual)
+	GameManager.selected_spiritual = "adc"
+	assert(GameManager.para_discount_saved(90) == 0.0, "Para seçili değilken indirim sayılmaz")
+	GameManager.selected_spiritual = "para"
+	var saved: float = GameManager.para_discount_saved(90)
+	assert(saved > 0.0 and saved <= 12.0, "90 altına alınan şeyde ~10 altın tasarruf: %s" % saved)
+	BalanceLogScript.reset()
+	GameManager.gold = 500
+	GameManager.spend_shop_gold(90)
+	assert(GameManager.gold == 410, "spend_shop_gold altını düşer")
+	var u: Dictionary = DamageStats.slot_totals("f")["util"]
+	assert(float(u.get("discount", 0.0)) > 0.0 and is_equal_approx(float(u.get("discount", 0.0)), float(u.get("profit", 0.0))), str(u))
+	assert(DamageStats.tooltip_bbcode("f", ink).contains("dükkan indirimi"), "Para canlı satırı: şu anki indirim")
+	GameManager.gold = old_gold
+	GameManager.selected_spiritual = old_spirit
+	_end()
+
+
 func test_assasin_slots_match_keys() -> void:
 	## Q = Şahin Hamlesi (dash2), E = Gölge Adımı (görünmezlik), R = Gölge Hücumu (dash) - eskiden R hasarı Q'ya yazılıyordu.
 	assert(DamageStats.slot_of("s:assasin_dash2") == "q")

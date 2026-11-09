@@ -62,6 +62,18 @@ const C_GAP := 9.0
 const C_MAX_W := 520.0
 const C_MAX_W_PHONE := 760.0
 const C_FADE_IN := 0.15
+## Madde 483 (kullanıcı: "bildirimlerin eskisine benzemesini istiyorum iç tasarım olarak dış tasarımı B iyi"): MASAÜSTÜNDE küçük levhanın DIŞI
+## oyuncu panelinin Gömme Tepsisi (HudTrayKit.tray, çerçeve 12 px) - içerik payı çerçeveye göre büyür; İÇİ (simge, tür renkli başlık, 24 punto,
+## sayaç, ödüller) eskisi gibi. Telefon (fs > 24) eski levha + eski paylar.
+const C_TRAY_PAD_X := 18.0
+const C_TRAY_PAD_Y := 15.0
+## Kullanıcı: "bildirimler eşit en-boylara sahip olsun bazıları kısa bazıları uzun falan olmasın" -> masaüstünde HER küçük levha aynı boyda:
+## 360 x 66 (oyundaki başlıkların çoğu simge + sayaç + paylarla 300-345 px); sığmayan başlık "…" ile kısalır. Ödüllü "TAMAMLANDI" satırı
+## ödülleri kesmemek için gerekirse genişler (C_MAX_W'ye kadar).
+const C_TRAY_W := 360.0
+const HudTrayKit := preload("res://scripts/hud_tray_kit.gd")
+var _pad_x: float = C_PAD_X
+var _pad_y: float = C_PAD_Y
 
 ## Piksel simgeler (3 px hücre; büyük pencerede 6 px).
 const CHECK := [
@@ -393,7 +405,7 @@ func _rewards() -> Array:
 	if gold > 0:
 		parts.append([COIN_TEX, 32.0, "+%d" % gold, HT.PRICE, tr("altın"), true])
 	if shards > 0:
-		parts.append([SHARD_TEX, 44.0, "+%d" % shards, HT.SHARD, tr("Silah Parçacığı"), false])
+		parts.append([SHARD_TEX, 32.0, "+%d" % shards, HT.SHARD, tr("Silah Parçacığı"), false])
 	var widths: Array = []
 	var total: float = 0.0
 	for p in parts:
@@ -416,13 +428,16 @@ func _cell() -> float:
 
 
 func _layout_compact() -> void:
-	_plaque = PartyPanelScript._plaque_style(C_PAD_X, C_PAD_Y)
+	var tray_ui: bool = fs <= 24
+	_pad_x = C_TRAY_PAD_X if tray_ui else C_PAD_X
+	_pad_y = C_TRAY_PAD_Y if tray_ui else C_PAD_Y
+	_plaque = HudTrayKit.tray(_pad_x, _pad_y) if tray_ui else PartyPanelScript._plaque_style(C_PAD_X, C_PAD_Y)
 	_slide_done = false
 	for ch in get_children(): ## set_countdown yeniden yerleştirir: eski kafa satırı kalmasın
 		remove_child(ch)
 		ch.free()
 	var u: float = _cell()
-	var h: float = 12.0 * u + 2.0 * C_PAD_Y ## en uzun simge (bayrak / kum saati / kapı) 12 hücre
+	var h: float = 12.0 * u + 2.0 * _pad_y ## en uzun simge (bayrak / kum saati / kapı) 12 hücre
 	var max_w: float = C_MAX_W_PHONE if fs > 24 else C_MAX_W
 	var src: String = title
 	if variant == "complete" and body != "":
@@ -434,7 +449,7 @@ func _layout_compact() -> void:
 		add_child(skulls)
 		skulls.call("set_tier", tier, int(u))
 	_c_icon_w = 0.0 if skulls != null else _compact_icon_w(u)
-	_c_text_x = C_PAD_X + (_c_icon_w + C_GAP if _c_icon_w > 0.0 else 0.0)
+	_c_text_x = _pad_x + (_c_icon_w + C_GAP if _c_icon_w > 0.0 else 0.0)
 	## sağ ek: sayaç / kafa satırı / ödüller
 	var tail: float = 0.0
 	if countdown >= 0.0:
@@ -446,12 +461,19 @@ func _layout_compact() -> void:
 		if gold > 0:
 			_c_rewards.append({"tex": COIN_TEX, "sz": 32.0, "text": "+%d" % gold, "col": HT.PRICE, "gold": true})
 		if shards > 0:
-			_c_rewards.append({"tex": SHARD_TEX, "sz": 44.0, "text": "+%d" % shards, "col": HT.SHARD, "gold": false})
+			_c_rewards.append({"tex": SHARD_TEX, "sz": 32.0, "text": "+%d" % shards, "col": HT.SHARD, "gold": false})
 		for r: Dictionary in _c_rewards:
 			r["w"] = float(r["sz"]) + 6.0 + _tw(r["text"], fs)
 			tail += (2.0 * C_GAP if tail == 0.0 else C_GAP) + float(r["w"])
-	_c_title = _fit(src, fs, max_w - _c_text_x - tail - C_PAD_X)
-	var w: float = roundf(_c_text_x + _tw(_c_title, fs) + tail + C_PAD_X)
+	var fixed_w: bool = tray_ui and _c_rewards.is_empty()
+	if fixed_w:
+		max_w = C_TRAY_W
+	_c_title = _fit(src, fs, max_w - _c_text_x - tail - _pad_x)
+	var w: float = roundf(_c_text_x + _tw(_c_title, fs) + tail + _pad_x)
+	if fixed_w:
+		w = C_TRAY_W
+	elif tray_ui:
+		w = maxf(w, C_TRAY_W)
 	size = Vector2(w, h)
 	custom_minimum_size = size
 	pivot_offset = size * 0.5
@@ -464,7 +486,7 @@ func _layout_compact() -> void:
 		x += float(r["w"]) + C_GAP
 	if skulls != null:
 		var ss: Vector2 = skulls.custom_minimum_size
-		skulls.position = Vector2(w - C_PAD_X - ss.x, roundf((h - ss.y) * 0.5))
+		skulls.position = Vector2(w - _pad_x - ss.x, roundf((h - ss.y) * 0.5))
 
 
 func _draw_compact() -> void:
@@ -472,12 +494,12 @@ func _draw_compact() -> void:
 	_plaque.draw(get_canvas_item(), Rect2(Vector2.ZERO, size))
 	var cy: float = roundf(size.y * 0.5)
 	if _c_icon_w > 0.0:
-		_compact_icon(Vector2(C_PAD_X + _c_icon_w * 0.5, cy))
+		_compact_icon(Vector2(_pad_x + _c_icon_w * 0.5, cy))
 	var ty: float = roundf((size.y - fs) * 0.5 - fs * 0.12)
 	_txt(_c_title, Vector2(_c_text_x, ty), fs, col)
 	if countdown >= 0.0:
 		var left: float = maxf(0.0, countdown - (_t - _cd_t0))
-		_txt_r(tr("%d sn") % int(ceil(left)), size.x - C_PAD_X, ty, fs, HT.PRICE)
+		_txt_r(tr("%d sn") % int(ceil(left)), size.x - _pad_x, ty, fs, HT.PRICE)
 	for r: Dictionary in _c_rewards:
 		var x: float = float(r["x"])
 		var sz: float = float(r["sz"])

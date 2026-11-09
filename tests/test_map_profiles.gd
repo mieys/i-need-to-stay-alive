@@ -53,7 +53,7 @@ func test_alternative_profile_flags_and_files() -> void:
 	for p: String in paths:
 		assert(ResourceLoader.exists(p))
 	assert(not MapProfiles.is_selectable(ALT) and MapProfiles.is_selectable("ana")) ## madde 445: karışık harita seçimden kalktı
-	assert(MapProfiles.selectable_ids() == ["ana", "batik_nekropol", "taskin_hisar", "lagim_agi"]) ## madde 449: Batık Nekropol, Kemik Katakombu'nun yerine
+	assert(MapProfiles.selectable_ids() == ["ana", "bataklik", "col", "batik_nekropol", "taskin_hisar", "lagim_agi"]) ## madde 449: Batık Nekropol, Kemik Katakombu'nun yerine; madde 524: Kara Bataklık; Altın Kumlar (çöl)
 	_set_map("ana")
 
 
@@ -109,9 +109,10 @@ func test_dungeon_map_wall_layer_spawn_and_stripped_nodes() -> void:
 	assert(d.cell_at(cell) == DD.CELL_EMPTY) ## doğuş yürünür zeminde
 	assert(layer.get_cell_source_id(cell) == -1)
 	assert(layer.get_cell_source_id(Vector2i(0, 0)) != -1) ## harita kenarı kaya
-	for nm: String in ["HouseInterior", "TravelingMerchant", "WorldEventManager"]:
+	for nm: String in ["HouseInterior", "TravelingMerchant"]:
 		assert(main.get_node_or_null(nm) == null)
 	assert(main.get_node_or_null("EnemySpawner") != null)
+	assert(main.get_node_or_null("WorldEventManager") != null) ## madde 496: zindan haritalarında da görevler ("gorevler": true)
 	main.free()
 	_set_map("ana")
 
@@ -143,3 +144,109 @@ func test_dungeon_world_registers_map_cells() -> void:
 	assert(not MapProfiles.feature("zindan_etkilesim"))
 	DW.call("reset")
 	DW.set("test_origin_px", null)
+
+
+## Madde 524: KARA BATAKLIK - açık hava ("orman" türü) ama ana haritanın ev / satıcı / maden / bekçi sistemleri kapalı (tanımsız bayrak
+## ana harita KİMLİĞİNE bakar, türe değil); oyun alanı / doğuş / minimap profilden; sahne ana haritanın katman adlarıyla kurulur.
+func test_swamp_profile_flags_spawn_and_layers() -> void:
+	if OS.get_environment("HARITA") != "":
+		return
+	var Meta: GDScript = load("res://scripts/bataklik_meta.gd")
+	var MapFrame: GDScript = load("res://scripts/map_frame.gd")
+	_set_map("ana")
+	assert(MapFrame.play_cells() == MapFrame.PLAY_CELLS)
+	assert(not MapProfiles.water_walkable())
+	_set_map("bataklik")
+	assert(MapProfiles.current_id() == "bataklik")
+	assert(not MapProfiles.is_main_map())
+	for f: String in ["orman_gorselleri", "hava", "gorevler", "bataklik_fx"]:
+		assert(MapProfiles.feature(f))
+	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama", "su_efekti",
+			"zemin_gecisi", "tanimsiz_bayrak"]:
+		assert(not MapProfiles.feature(f))
+	assert(MapFrame.play_cells() == Meta.PLAY_CELLS)
+	assert(MapFrame.play_cells().size == Vector2i(214, 214)) ## ana haritanın 256x256 alanının %70'i
+	assert(MapProfiles.spawn_position() == Meta.SPAWN)
+	assert(MapProfiles.minimap_texture() != null)
+	assert(MapProfiles.water_walkable()) ## madde 525: bataklık suyu yürünür
+	assert(ResourceLoader.exists(str(MapProfiles.current()["su_maskesi"])))
+	var main: Node = _fake_main()
+	for nm: String in ["HouseInterior", "TravelingMerchant", "WorldEventManager"]:
+		var n := Node2D.new()
+		n.name = nm
+		main.add_child(n)
+	assert(MapProfiles.install(main))
+	var h: Node = main.get_node("Harita")
+	assert(h.get_index() == 1)
+	for path: String in ["Su/Su", "Su/Su ayrıntılar 2", "Orman parçaları/Orman parçaları", "Orman parçaları/Saklanma Çalılığı",
+			"Shader Eklenecek/Ağaç 0", "Shader Eklenecek/Animasyonsuz çalılar", "Shader Eklenecek/Çalılar", "Yer/Zemin Çimen"]:
+		var l := h.get_node_or_null(path) as TileMapLayer
+		assert(l != null and not l.get_used_cells().is_empty())
+	var wall: TileMapLayer = h.get_node("Orman parçaları/Orman parçaları")
+	assert(not wall.visible) ## görünmez engel katmanı (saydam karolar)
+	assert(wall.get_cell_source_id(Vector2i(0, 0)) != -1) ## dış çerçeve geçilmez
+	var sc := Vector2i(int(Meta.SPAWN.x / 16.0), int(Meta.SPAWN.y / 16.0))
+	assert(wall.get_cell_source_id(sc) == -1) ## doğuş açık
+	assert((h.get_node("Su/Su") as TileMapLayer).get_cell_source_id(sc) == -1) ## doğuş suda değil
+	assert(main.get_node_or_null("HouseInterior") == null and main.get_node_or_null("TravelingMerchant") == null)
+	assert(main.get_node_or_null("WorldEventManager") != null)
+	main.free()
+	_set_map("ana")
+
+
+## ALTIN KUMLAR (çöl, 2026-11-09): profil bayrakları, oyun alanı (ana haritanın %90'ı), doğuş, katmanlar (Kayalar 1..3 dahil), vaha suyu
+## yürünmez, yağmur yok (hava dönüşümü), kaktüs dokusu katı listede.
+func test_desert_profile_flags_spawn_layers_and_weather() -> void:
+	if OS.get_environment("HARITA") != "":
+		return
+	var Meta: GDScript = load("res://scripts/col_meta.gd")
+	var MapFrame: GDScript = load("res://scripts/map_frame.gd")
+	var TC: GDScript = load("res://scripts/terrain_collision.gd")
+	var DO: GDScript = load("res://scripts/depth_occluders.gd")
+	_set_map("ana")
+	assert(MapProfiles.map_weather(2) == 2 and MapProfiles.map_weather(3) == 3) ## ana harita: yağmur / sağanak aynen
+	_set_map("col")
+	assert(MapProfiles.current_id() == "col")
+	assert(MapProfiles.is_selectable("col"))
+	for f: String in ["orman_gorselleri", "hava", "gorevler", "calilik", "col_fx"]:
+		assert(MapProfiles.feature(f))
+	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama", "su_efekti",
+			"zemin_gecisi", "bataklik_fx", "tanimsiz_bayrak"]:
+		assert(not MapProfiles.feature(f))
+	assert(MapFrame.play_cells() == Meta.PLAY_CELLS)
+	assert(MapFrame.play_cells().size == Vector2i(243, 243)) ## ana haritanın 256x256 alanının %90'ı
+	assert(MapProfiles.spawn_position() == Meta.SPAWN)
+	assert(MapProfiles.minimap_texture() != null)
+	assert(not MapProfiles.water_walkable()) ## vaha suyu yürünmez
+	assert(MapProfiles.map_weather(0) == 0 and MapProfiles.map_weather(1) == 1)
+	assert(MapProfiles.map_weather(2) == 1 and MapProfiles.map_weather(3) == 0) ## çölde yağmur yok
+	for i in range(Meta.LIGHTS.size()):
+		assert(str(Meta.LIGHTS[i][0]) == "kure")
+	for k: String in ["Shader Eklenecek/Kayalar 1", "Shader Eklenecek/Kayalar 2", "Shader Eklenecek/Kayalar 3"]:
+		assert(DO.OBJECT_LAYERS.has(k) and TC.PROP_LAYERS.has(k))
+	assert(TC.SOLID_EVEN_IF_GREEN_TEXTURES.has("c_kaktus.png"))
+	var main: Node = _fake_main()
+	for nm: String in ["HouseInterior", "TravelingMerchant", "WorldEventManager"]:
+		var n := Node2D.new()
+		n.name = nm
+		main.add_child(n)
+	assert(MapProfiles.install(main))
+	var h: Node = main.get_node("Harita")
+	for path: String in ["Su/Su", "Su/Su ayrıntılar 2", "Su/Su süsleri", "Orman parçaları/Orman parçaları", "Orman parçaları/Saklanma Çalılığı",
+			"Shader Eklenecek/Ağaç 0", "Shader Eklenecek/Animasyonsuz çalılar", "Shader Eklenecek/Kayalar 1", "Shader Eklenecek/Çalılar",
+			"Yer/Zemin Toprak", "Yer/Zemin Çimen", "Yer/Kum süsleri", "Yer/Filiz", "Yer/Leke"]:
+		var l := h.get_node_or_null(path) as TileMapLayer
+		assert(l != null and not l.get_used_cells().is_empty())
+	var wall: TileMapLayer = h.get_node("Orman parçaları/Orman parçaları")
+	assert(not wall.visible)
+	assert(wall.get_cell_source_id(Vector2i(0, 0)) != -1) ## dış çerçeve geçilmez
+	var sc := Vector2i(int(Meta.SPAWN.x / 16.0), int(Meta.SPAWN.y / 16.0))
+	assert(wall.get_cell_source_id(sc) == -1) ## doğuş açık
+	assert((h.get_node("Su/Su") as TileMapLayer).get_cell_source_id(sc) == -1) ## doğuş suda değil
+	## zemin ve su malzemeleri bake'te kuruldu
+	assert(((h.get_node("Yer/Zemin Toprak") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/col_zemin.gdshader")
+	assert(((h.get_node("Su/Su") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/col_su.gdshader")
+	assert(main.get_node_or_null("HouseInterior") == null and main.get_node_or_null("TravelingMerchant") == null)
+	assert(main.get_node_or_null("WorldEventManager") != null)
+	main.free()
+	_set_map("ana")

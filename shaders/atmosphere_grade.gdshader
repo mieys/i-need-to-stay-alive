@@ -34,6 +34,19 @@ uniform float glow_gain = 0.0;
 // renkli bir hale/leke oluşturup "sırıtmaz" (kullanıcı geri bildirimi 2026-09-25).
 uniform float bloom_threshold = 0.2;
 
+// ÜST ÜSTE BİNEN IŞIKLAR (kullanıcı bildirimi 2026-11-08: "parlaklığı olan şeyler üst üste binince çok parlak oluyor"):
+// ışık haritası lekeleri TOPLAR, tek ışık tavanı (atmosphere_overlay.gd GLOW_ENERGY_CAP) toplamı sınırlamaz; parıltı da
+// toplamın karesiyle büyüdüğü için 3 ışık tek ışığın ~16 katı hale yapıyordu. Toplam ışık (en güçlü kanal, ton korunur)
+// light_knee'ye kadar AYNEN kalır (tek ışık + karakter ışığı bugünkü gibi), üstü yumuşakça light_ceiling'e yaklaşır
+// (eğim dizde 1, kırık yok) - kaç ışık binerse binsin daha parlak olmaz. Değerler light_gain çarpılmış ışık biriminde
+// (gece light_gain 0,8: sıradan tek ışık en çok 0,32, Gökkuşağı ışını 0,44 - ikisi de dizin altında/üstünde ~aynı;
+// bugünkü en kötü hal (harita 1'de kırpılı) parıltısı 0,56 -> en çok 0,20).
+uniform float light_knee = 0.4;
+uniform float light_ceiling = 0.56;
+// Işık haritası 8 bit: kanal 1'de kırpılınca turuncu ışıklar üst üste binip sarı-beyaza dönüyordu. Harita
+// atmosphere_overlay.gd LIGHT_MAP_HEADROOM ile kısık çizilir, burada geri çarpılır (= 1 / LIGHT_MAP_HEADROOM).
+uniform float light_map_scale = 2.0;
+
 // PİKSEL IŞIK (kullanıcı bildirimi 2026-09-27: "parıltıların pixel parıltı olması gerekiyor, normal parıltı olduğu için
 // sırıtıyor"): ışık haritası hâlâ yumuşak lekeler olarak çizilir, ama burada (1) DÜNYA piksel ızgarasına oturtulur -
 // her light_pixel_size'lık dünya karesi tek bir renk alır (harita karolarıyla aynı piksel, kamera kayınca ızgara zemine
@@ -59,15 +72,29 @@ const float BAYER4[16] = {
 	3.0 / 16.0, 11.0 / 16.0, 1.0 / 16.0, 9.0 / 16.0,
 	15.0 / 16.0, 7.0 / 16.0, 13.0 / 16.0, 5.0 / 16.0};
 
+// Yumuşak tavan: m <= light_knee aynen; üstü light_ceiling'e üstel yaklaşır.
+float soft_cap(float m) {
+	if (m <= light_knee) {
+		return m;
+	}
+	float room = light_ceiling - light_knee;
+	if (room <= 0.0001) {
+		return light_knee;
+	}
+	return light_knee + room * (1.0 - exp(-(m - light_knee) / room));
+}
+
 vec3 pixel_light(vec2 uv) {
 	vec2 world = (uv * view_size - view_origin) / view_zoom;
 	vec2 cell = floor(world / light_pixel_size);
 	vec2 center = (cell + 0.5) * light_pixel_size;
-	vec3 raw = texture(light_map, (center * map_zoom + map_origin) * map_uv_scale).rgb * light_gain;
-	float m = max(raw.r, max(raw.g, raw.b));
-	if (m <= 0.0001) {
+	vec3 raw = texture(light_map, (center * map_zoom + map_origin) * map_uv_scale).rgb * (light_map_scale * light_gain);
+	float m0 = max(raw.r, max(raw.g, raw.b));
+	if (m0 <= 0.0001) {
 		return vec3(0.0);
 	}
+	raw *= soft_cap(m0) / m0;
+	float m = max(raw.r, max(raw.g, raw.b));
 	float x = m / light_step;
 	float f = fract(x);
 	// Bantların ortası düz, sadece light_dither genişliğindeki sınır bölgesi dither'lı.

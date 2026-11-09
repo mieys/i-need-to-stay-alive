@@ -52,6 +52,17 @@ const HEAL_PER_SEC := 0.01         ## azami canın %1'i / sn
 const PHASE2_AT := 0.5
 const CD_MULT_P2 := 0.65
 
+## SESLER (madde 533, kullanıcının "final boss kendi sesi" + "yetenek kullanınca çıkardığı kendi sesi"; tools/hazir_ses/gen_hazir_ses.py).
+## Host karar verir (boss_event "voice", v 0 = kendi sesi, 1 = yetenek sesi), HER peer on_boss_event'te yerelde çalar (bossun
+## üstünde, konumlu). Kendi sesi: ortaya çıkınca + bekleme hâlinde VOICE_IDLE_MIN..MAX sn'de bir. Yetenek sesi: ateş topu / ışın /
+## uçarak saldırı / iyileşme başlarken. İkisi üst üste binmesin: son sesten VOICE_MIN_GAP (yetenek sesi 4,0 sn) geçmeden yenisi çalmaz.
+const VOICE_STREAMS: Array[AudioStream] = [preload("res://assets/audio/boss/seytan_ses.wav"), preload("res://assets/audio/boss/seytan_yetenek.wav")]
+const VOICE_DB: Array[float] = [-6.2, -3.8] ## oyun içi ~-20 / -19 dB (400 ms RMS + volume_db)
+const VOICE_MAX_DISTANCE := 2200.0
+const VOICE_MIN_GAP := 4.3
+const VOICE_IDLE_MIN := 14.0
+const VOICE_IDLE_MAX := 22.0
+
 var e: Node2D = null
 var _state: int = S.HOVER
 var _t: float = 0.0
@@ -68,6 +79,8 @@ var _fire_clock: float = 0.0
 var _struck: bool = false
 var _hover_sign: float = 1.0
 var _glow: Node2D = null
+var _voice_since: float = 999.0 ## son sesten beri geçen süre (host)
+var _voice_idle_cd: float = 0.0 ## 0 = ilk karede (ortaya çıkış) kendi sesi
 
 
 func setup(owner_enemy: Node2D) -> void:
@@ -89,6 +102,31 @@ func on_boss_event(data: Dictionary) -> void:
 		"heal":
 			if _glow != null and is_instance_valid(_glow):
 				_glow.call("set_glow_color", Color(0.4, 1.0, 0.5) if bool(data.get("on", true)) else (Color(1.0, 0.3, 0.3) if _phase2 else Color(0.5, 0.4, 1.0)))
+		"voice":
+			_play_voice(clampi(int(data.get("v", 0)), 0, VOICE_STREAMS.size() - 1))
+
+
+## Bossun üstünde konumlu ses (bossla birlikte gider). Başsız çalışmada sessiz.
+func _play_voice(kind: int) -> void:
+	if e == null or not is_instance_valid(e) or not e.is_inside_tree() or DisplayServer.get_name() == "headless":
+		return
+	var p := AudioStreamPlayer2D.new()
+	p.stream = VOICE_STREAMS[kind]
+	p.volume_db = VOICE_DB[kind]
+	p.max_distance = VOICE_MAX_DISTANCE
+	p.pitch_scale = randf_range(0.96, 1.04)
+	p.finished.connect(p.queue_free)
+	e.add_child(p)
+	p.play()
+
+
+## Host: ses kararı (yetenek sesi ability=true). Aralık dolmadıysa susar.
+func _voice(ability: bool) -> void:
+	if _voice_since < VOICE_MIN_GAP:
+		return
+	_voice_since = 0.0
+	_voice_idle_cd = randf_range(VOICE_IDLE_MIN, VOICE_IDLE_MAX)
+	e.call("emit_ability_vfx", "boss_event", {"k": "voice", "v": 1 if ability else 0})
 
 
 func _set_look(p2: bool) -> void:
@@ -106,6 +144,10 @@ func process(delta: float, _player: Node2D, _dist: float) -> void:
 		return
 	_t += delta
 	_check_phase()
+	_voice_since += delta
+	_voice_idle_cd -= delta
+	if _voice_idle_cd <= 0.0 and _state == S.HOVER:
+		_voice(false)
 	var target: Node2D = _nearest_target()
 	_fire_cd -= delta
 	_beam_cd -= delta
@@ -228,6 +270,7 @@ func _process_hover(delta: float, target: Node2D) -> void:
 	elif _beam_cd <= 0.0:
 		_begin_beam(target)
 	elif _melee_cd <= 0.0:
+		_voice(true)
 		_go(S.DASH_IN)
 	elif _fire_cd <= 0.0:
 		_begin_fire()
@@ -240,6 +283,7 @@ func _begin_fire() -> void:
 	_fired = 0
 	_fire_clock = 0.0
 	_anim("cast", 0.75)
+	_voice(true)
 	_go(S.FIRE)
 
 
@@ -279,6 +323,7 @@ func _begin_beam(target: Node2D) -> void:
 	AbilitiesScript.spawn_world_fx(e.get_tree(), "cosmic_beam", origin, data, true, e, BEAM_DAMAGE)
 	AbilitiesScript._broadcast_world_fx("cosmic_beam", origin, data)
 	_anim("cast", 0.75)
+	_voice(true)
 	_go(S.BEAM)
 
 
@@ -327,6 +372,7 @@ func _process_dash_out(delta: float, target: Node2D) -> void:
 func _begin_heal() -> void:
 	_heal_cd = randf_range(HEAL_CD_MIN, HEAL_CD_MAX)
 	_anim("cast", 0.75)
+	_voice(true)
 	e.call("emit_ability_vfx", "boss_event", {"k": "heal", "on": true})
 	_go(S.HEAL)
 

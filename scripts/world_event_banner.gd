@@ -18,6 +18,7 @@ const BAR_TICK_COUNT := 10
 const BarUnder := preload("res://assets/ui/kit/hud_bar_under.png")
 const BarFill := preload("res://assets/ui/kit/hud_bar_fill.png")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const HudTrayKit := preload("res://scripts/hud_tray_kit.gd")
 const HudTheme := preload("res://scripts/hud_theme.gd") ## madde 207: görev satırları koyu HUD temasında
 const ARROW_BOX := 40.0
 const FS_ROW := 24 ## m5x7 3x (keskin; 16 1080p'de okunmuyor)
@@ -232,7 +233,8 @@ func _small_label(align: HorizontalAlignment) -> Label:
 func _build_row(id: int) -> void:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(ROW_WIDTH, 0.0)
-	panel.add_theme_stylebox_override("panel", UIKit.panel_style("hud_plaque"))
+	## madde 483: masaüstünde dışı oyuncu panelinin Gömme Tepsisi (iç düzen aynı; pay çerçeveye göre), telefonda eski levha
+	panel.add_theme_stylebox_override("panel", HudTrayKit.tray(22.0, 15.0) if not MobileUIScript.enabled else UIKit.panel_style("hud_plaque"))
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var margin := MarginContainer.new()
 	for side in ["left", "right"]:

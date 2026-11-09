@@ -58,6 +58,18 @@ const TYPES := {
 	},
 }
 
+## EFEKT EŞLEMESİ (kullanıcı 2026-11-09): kalkanın GÖRSELİ (mana mührü paleti, baloncuk sprite'ı, gece ışığı) türün kendi
+## anahtarıyla değil buradan seçilir - üçlü döngü: Standart (başlangıç) Enerji'nin (sarı mühür + limon yeşili baloncuk) efektini,
+## Enerji Kale'nin (mor) efektini, Kale eski Standart'ın (mavi) efektini gösterir. Eşlemede olmayan anahtar (Savaş, "") kendisine
+## döner. Değerler/ikonlar/kart renkleri DEĞİŞMEZ. (Arada Standart'ı efektsiz yapmak denendi, kullanıcı Enerji efektini boşta
+## bırakmak istemedi -> madde 520 ek 4.) Okuyan yerler: mana_shield_fx.gd set_shield_type, shield_visual.gd
+## set_shield_type/get_night_glow_color.
+const EFFECT_OF := {
+	"shield_standart": "shield_enerji",
+	"shield_enerji": "shield_kale",
+	"shield_kale": "shield_standart",
+}
+
 const ICONS := {
 	"shield_standart": "res://assets/ui/shields/type_standart.png",
 	"shield_savas": "res://assets/ui/shields/type_savas.png",
@@ -71,6 +83,11 @@ static func owned_type() -> String:
 	if GameManager.shield_enchant != "":
 		return GameManager.shield_enchant
 	return STANDART if GameManager.shield_standart_level > 0 else ""
+
+
+## Türün GÖRSEL anahtarı (EFFECT_OF): tanınmayan / boş anahtar olduğu gibi döner.
+static func effect_key(key: String) -> String:
+	return str(EFFECT_OF.get(key, key))
 
 
 static func type_name(key: String) -> String:

@@ -50,9 +50,9 @@ const NO_GLOW_SCENES := [
 	"res://scenes/fx_topuz_slam_ground.tscn", ## topuz Yer Sarsıntısı (madde 235) - toz/çatlak/taş, ışık değil
 	"res://scenes/fx_topuz_slam_top.tscn",
 	"res://scenes/fx_topuz_slam_smear.tscn",
-	"res://scenes/fx_pence_hook_top.tscn", ## pençe Kanca Çekiş (madde 237) - krem yırtık/kıvılcım küçük, toz ışık değil
-	"res://scenes/fx_pence_hook_ground.tscn",
-	"res://scenes/fx_pence_hook_smear.tscn",
+	"res://scenes/fx_tirpan_top.tscn", ## tırpan Kara Hasat (madde 512) - koyu hilal/duman ışık değil, kor küçük
+	"res://scenes/fx_tirpan_ground.tscn",
+	"res://scenes/fx_tirpan_trail.tscn",
 	"res://scenes/fx_mizrak_line.tscn", ## mızrak Işık Hattı (madde 305) - ince krem çizgi, ışık saçmaz
 	"res://scenes/fx_mizrak_hit.tscn",
 	"res://scenes/fx_mizrak_end.tscn",
@@ -150,7 +150,7 @@ const BY_SCENE := {
 	"res://scenes/fx_meteor_strike.tscn": {"c": Color(1.0, 0.5, 0.2), "r": 130.0, "e": 1.0, "f": 0.25},
 	## Büyücü meteor kanalı: ayak altındaki ateş yayı + şapka korları (madde 188) - hafif turuncu.
 	"res://scenes/fx_buyucu_meteor_channel.tscn": {"c": Color(1.0, 0.55, 0.25), "r": 45.0, "e": 0.45},
-	"res://scenes/fx_frost_nova_burst.tscn": {"c": Color(0.5, 0.85, 1.0), "r": 110.0, "e": 0.9, "d": 0.7},
+	"res://scenes/fx_frost_nova_burst.tscn": {"c": Color(0.5, 0.85, 1.0), "r": 110.0, "e": 0.9, "d": 2.1}, ## madde 533: dalga 2,3 sn
 	## Sağanak yıldırımı (2026-09-25): uyarıda hafif, çarpmada güçlü, sonra söner - güç fx_storm_strike.gd
 	## get_night_glow_energy() kancasından.
 	"res://scenes/fx_storm_strike.tscn": {"c": Color(0.75, 0.85, 1.0), "r": 120.0, "e": 1.0},
@@ -341,6 +341,12 @@ const BY_SCRIPT := {
 	## uzun kalır -> perm (bütçe doluyken de takılır). Görüş dışında sandık gizli -> ışık da söner; açılınca sandıkla birlikte solar.
 	"res://scripts/chest_drop.gd": {"cp": "night_glow_color", "c": Color(1.0, 0.8, 0.45), "r": 56.0, "e": 0.7, "f": 0.08,
 		"o": Vector2(0.0, -26.0), "perm": true},
+	## Kara Bataklık haritası (2026-11-09): meşale alevi / cadı kulübesi feneri / kazan (renk + yarıçap düğümden) ve ateş böceği sürüleri
+	## (kısık, titrek). Haritada hep duran ışıklar -> perm.
+	"res://scripts/bataklik_isik.gd": {"cp": "glow_color", "rp": "glow_radius", "rs": 1.0, "c": Color(0.5, 1.0, 0.85), "r": 48.0, "e": 0.7,
+		"f": 0.25, "perm": true},
+	"res://scripts/bataklik_bocek_isik.gd": {"cp": "glow_color", "rp": "glow_radius", "rs": 1.0, "c": Color(0.75, 1.0, 0.45), "r": 40.0,
+		"e": 0.28, "f": 0.45, "perm": true},
 	## --- Görev objeleri (soru-cevap seçimi) ---
 	"res://scripts/mission_collect_item.gd": {"c": Color(0.45, 1.0, 0.9), "r": 38.0, "e": 0.6, "o": Vector2(0.0, -10.0), "perm": true}, ## perm: ışık bütçesine (atmosphere.gd MAX_GLOWS) takılmaz
 	"res://scripts/mission_zone.gd": {"c": Color(0.55, 0.85, 1.0), "r": 70.0, "e": 0.5},

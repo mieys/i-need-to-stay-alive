@@ -64,3 +64,38 @@ func test_live_stats_include_damage_taken() -> void:
 	assert(stats_list != null, "istatistik listesi kurulmalı")
 	assert(texts.has("Alınan") and texts.has("Verilen"), "sütun başlıkları: %s" % str(texts))
 	assert(texts.has("910") and texts.has("340"), "alınan hasar sayıları satırlarda görünmeli: %s" % str(texts))
+
+
+## Madde 491: masaüstünde pencere grup paneliyle aynı Gömme Tepsi (bej levha değil), kişi başına portre + verilen/alınan çubuğu.
+func test_desktop_popup_uses_tray_kit() -> void:
+	var me := _fake(1200.0, 340.0, "")
+	me.add_to_group("player")
+	add_child(me)
+	var ally := _fake(800.0, 910.0, "Mira")
+	ally.add_to_group("remote_players")
+	add_child(ally)
+	var panel: Control = PartyPanelScript.new()
+	add_child(panel)
+	panel.call("_refresh_stats_popup")
+	var n_entries: int = (panel.call("_gather_live_stats") as Array).size() ## önceki testin kuyruktaki kuklası da sayılabilir
+	var pop: Control = panel.get("_stats_popup")
+	var sb: StyleBox = pop.get_theme_stylebox("panel") if pop else null
+	var tray_ok: bool = sb is StyleBoxTexture and (sb as StyleBoxTexture).texture == preload("res://assets/ui/kit/hud_dock_tray_side.png")
+	var bars: Array = []
+	var stats_list: Node = panel.get("_stats_list")
+	for n in stats_list.find_children("*", "Control", true, false):
+		if n.get_class() == "Control" and "ratio" in n and "fill" in n:
+			bars.append(n)
+	var dealt_cols: int = 0
+	var taken_cols: int = 0
+	for b in bars:
+		if (b.get("fill") as Color).is_equal_approx(preload("res://scripts/hud_theme.gd").STAT_DEALT):
+			dealt_cols += 1
+		elif (b.get("fill") as Color).is_equal_approx(preload("res://scripts/hud_theme.gd").STAT_TAKEN):
+			taken_cols += 1
+	panel.queue_free()
+	me.queue_free()
+	ally.queue_free()
+	assert(tray_ok, "masaüstü Hasar Sıralaması Gömme Tepsi kutusunda olmalı: %s" % str(sb))
+	assert(n_entries >= 2 and dealt_cols == n_entries and taken_cols == n_entries,
+			"kişi başına bir verilen (turuncu) + bir alınan (mavi) çubuğu: %d / %d (%d kişi)" % [dealt_cols, taken_cols, n_entries])

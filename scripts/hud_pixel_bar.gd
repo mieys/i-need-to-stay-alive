@@ -124,7 +124,47 @@ const GLEAM_TIME := 1.1
 ## 10-12 punto denendi: piksel font ~9 px'e yuvarlanıyor, pay açılmıyor.
 const VALUE_SCREEN_SIZE := 9
 const VALUE_SCREEN_CAP := 7.0 ## rakam yüksekliği (dikey ortalama)
-var value_fs: int = VALUE_SCREEN_SIZE ## yakalama aracı boy denemesi için (madde 474)
+## Yazı boyu (ekran pikseli punto) - yalnız "outline" biçiminde (madde 474 Pixeloid 9).
+var value_fs: int = VALUE_SCREEN_SIZE
+## Yazı biçimi. Madde 511 (kullanıcı: "her ekranda yumuşak olsun"): varsayılan "smooth" = sayılar yumuşak kenarlı, kalınlaştırılmış Nunito + yumuşak
+## koyu kontur (Terraria yolu; 2560x1440 gibi tam kat olmayan ölçekte piksel fontun eşitsiz pikselleri okunmuyordu, madde 508). "outline" =
+## eski piksel yazı (Pixeloid 9 + 8 yönlü 1 px kontur) duruyor. Madde 506'nın A-D biçimleri reddedildi, silindi.
+var value_style: String = "smooth"
+const NUNITO: Font = preload("res://assets/fonts/Nunito-SemiBold.ttf")
+const SMOOTH_FS := 13
+const SMOOTH_OUTLINE := 4
+## Kalınlaştırma: Nunito SemiBold 12-13 px'te ince ve gri kalıyordu (1080p'de soluk); 0,8 = Bold'a yakın, rakam içleri açık kalır.
+const SMOOTH_EMBOLDEN := 0.8
+static var _smooth_font: Font = null
+
+
+## Çubuk sayıları için kalınlaştırılmış Nunito (içe aktarma ayarları aynı: 2x yeniden çizim + gri kenar yumuşatma). Denenen: 0 / 12 / 3
+## soluk, kopyada oversampling 0 + hafif ipucu daha da soluk; 0,8 / 13 / 4 iki çözünürlükte en okunur (madde 511).
+static func smooth_font() -> Font:
+	if _smooth_font == null:
+		var v := FontVariation.new()
+		v.base_font = NUNITO
+		v.variation_embolden = SMOOTH_EMBOLDEN
+		_smooth_font = v
+	return _smooth_font
+
+
+func _style_font() -> Font:
+	return smooth_font() if value_style == "smooth" else VALUE_FONT
+
+
+func _style_fs(fs: int) -> int:
+	return SMOOTH_FS if value_style == "smooth" else fs
+
+
+func _text_w(s: String, fs: int) -> float:
+	return _style_font().get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, _style_fs(fs)).x
+
+
+func _text_cap(fs: int) -> float:
+	if value_style == "smooth":
+		return roundf(float(SMOOTH_FS) * 0.7) ## Nunito büyük harf/rakam yüksekliği ~0,7 em
+	return VALUE_SCREEN_CAP * float(fs) / float(VALUE_SCREEN_SIZE)
 var _bar_px: Rect2 = Rect2() ## son çizilen çubuğun yazı dikdörtgeni (tam piksel, sağ kapak hariç); boşsa yazı eski yoldan
 var _shown: float = -1.0 ## çizilen dolgu oranı (iyileşmede ratio'ya yumuşak yetişir); -1 = henüz değer yok
 var _trail: float = 0.0 ## hasar parçasının ucu (>= _shown)
@@ -274,22 +314,45 @@ class _ValueLayer extends Control:
 	var w_cur: float = 0.0
 	var regen: String = ""
 	var cap: float = 7.0 ## rakam yüksekliği (artının dikey ortası)
+	var plus_px: float = PLUS_PX ## artı boyu yazı boyuyla büyür (tek sayı: ortası tam piksel)
 	var regen_base := Vector2.ZERO
 	var regen_color := Color.WHITE
+	var style: String = "outline"
+	var contour_px: int = 3
+	## yumuşak biçim: önce bütün konturlar, sonra dolgular (bir parçanın konturu yanındaki harfin üstüne binmesin)
+	func _pass(s: String, p: Vector2, col: Color, contour: bool) -> void:
+		if contour:
+			draw_string_outline(font, p, s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, contour_px, col)
+		else:
+			draw_string(font, p, s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+	func _draw_styled() -> void:
+		var segs: Array = []
+		if regen != "":
+			segs.append([regen, regen_base, regen_color])
+		segs.append([cur, base, cur_color])
+		if rest != "":
+			segs.append([rest, base + Vector2(w_cur, 0.0), rest_color])
+		for sg: Array in segs:
+			_pass(sg[0], sg[1], Color(outline, (sg[2] as Color).a), true)
+		for sg2: Array in segs:
+			_pass(sg2[0], sg2[1], sg2[2], false)
 	func _draw() -> void:
 		if font == null or cur == "":
+			return
+		if style != "outline":
+			_draw_styled()
 			return
 		if regen != "":
 			## "+" 9 puntoda 3 px'lik noktaya dönüyor -> PLUS_PX'lik artı elle (1 px çizgi, konturlu), rakamların dikey ortasında
 			var oc := Color(outline, regen_color.a)
 			var num: String = regen.substr(1) if regen.begins_with("+") else regen
-			var nb: Vector2 = regen_base + (Vector2(PLUS_PX + 1.0, 0.0) if regen.begins_with("+") else Vector2.ZERO)
+			var nb: Vector2 = regen_base + (Vector2(plus_px + 1.0, 0.0) if regen.begins_with("+") else Vector2.ZERO)
 			for o: Vector2 in [Vector2(-1, -1), Vector2(0, -1), Vector2(1, -1), Vector2(-1, 0), Vector2(1, 0), Vector2(-1, 1), Vector2(0, 1), Vector2(1, 1)]:
 				draw_string(font, nb + o, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, oc)
 			if regen.begins_with("+"):
-				var c := Vector2(regen_base.x + floorf(PLUS_PX * 0.5), regen_base.y - ceilf(cap * 0.5))
-				var h := Rect2(regen_base.x, c.y, PLUS_PX, 1.0)
-				var v := Rect2(c.x, c.y - floorf(PLUS_PX * 0.5), 1.0, PLUS_PX)
+				var c := Vector2(regen_base.x + floorf(plus_px * 0.5), regen_base.y - ceilf(cap * 0.5))
+				var h := Rect2(regen_base.x, c.y, plus_px, 1.0)
+				var v := Rect2(c.x, c.y - floorf(plus_px * 0.5), 1.0, plus_px)
 				draw_rect(h.grow(1.0), oc)
 				draw_rect(v.grow(1.0), oc)
 				draw_rect(h, regen_color)
@@ -303,6 +366,12 @@ class _ValueLayer extends Control:
 			draw_string(font, base + Vector2(w_cur, 0.0), rest, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, rest_color)
 
 var _value_layer: _ValueLayer = null
+
+
+## 9 puntoda 5 px; büyük yazıda oranla, tek sayıya yuvarlı (13 -> 7).
+static func _plus_px(fs: int) -> float:
+	var v: int = int(round(PLUS_PX * float(fs) / float(VALUE_SCREEN_SIZE)))
+	return float(v if v % 2 == 1 else v + 1)
 
 
 func _clear_value_layer() -> void:
@@ -319,10 +388,10 @@ func _notification(what: int) -> void:
 
 func _draw_value_screen(cur: String, rest: String) -> void:
 	var fs: int = value_fs
-	var w_cur: float = VALUE_FONT.get_string_size(cur, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	var w_rest: float = VALUE_FONT.get_string_size(rest, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var w_cur: float = _text_w(cur, fs) if value_style != "outline" else VALUE_FONT.get_string_size(cur, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var w_rest: float = _text_w(rest, fs) if value_style != "outline" else VALUE_FONT.get_string_size(rest, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	var b: Rect2 = _bar_px
-	var base := Vector2(roundf(b.position.x + (b.size.x - w_cur - w_rest) * 0.5), roundf(b.position.y + (b.size.y + VALUE_SCREEN_CAP * float(fs) / float(VALUE_SCREEN_SIZE)) * 0.5))
+	var base := Vector2(roundf(b.position.x + (b.size.x - w_cur - w_rest) * 0.5), roundf(b.position.y + (b.size.y + _text_cap(fs)) * 0.5))
 	if _value_layer == null or not is_instance_valid(_value_layer):
 		_value_layer = _ValueLayer.new()
 		_value_layer.name = "ValueLayer"
@@ -340,18 +409,28 @@ func _draw_value_screen(cur: String, rest: String) -> void:
 	lay.cur_color = value_color
 	lay.rest_color = VALUE_DIM
 	lay.outline = OUTLINE
-	lay.font = VALUE_FONT
-	lay.fs = fs
+	lay.font = _style_font()
+	lay.fs = _style_fs(fs)
 	lay.w_cur = w_cur
+	lay.style = value_style
+	lay.contour_px = SMOOTH_OUTLINE
+	## yumuşak font: proje varsayılanı en yakın piksel süzgeci kenarlarını tırtıklıyor -> bu katmanda pürüzsüz süzgeç
+	lay.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if value_style == "smooth" else CanvasItem.TEXTURE_FILTER_PARENT_NODE
+	if value_style != "outline":
+		lay.rest_color = VALUE_DIM.lerp(HudTheme.TEXT, 0.5) ## "/azami" bir ton açık (yumuşak yazıda soluk DIM fazla kayboluyordu)
 	## yenilenme: sağ kapağın (CAP_ART) 2 sanat px soluna sağa yaslı; ortadaki değere binecekse çizilmez
 	lay.regen = ""
 	if regen_text != "":
 		var num: String = regen_text.substr(1) if regen_text.begins_with("+") else regen_text
-		var w_reg: float = VALUE_FONT.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + (PLUS_PX + 1.0 if regen_text.begins_with("+") else 0.0)
+		var pp: float = _plus_px(fs)
+		var w_reg: float = VALUE_FONT.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + (pp + 1.0 if regen_text.begins_with("+") else 0.0)
+		if value_style != "outline": ## yumuşak: artı fontun kendi glifi
+			w_reg = _text_w(regen_text, fs)
 		var rx: float = roundf(b.end.x - (CAP_ART + 2) * BAR_PX - w_reg)
 		if rx > base.x + w_cur + w_rest + 4.0 * BAR_PX:
 			lay.regen = regen_text
 			lay.regen_base = Vector2(rx, base.y) - b.position
 			lay.regen_color = Color(VALUE_DIM, REGEN_ALPHA)
 			lay.cap = VALUE_SCREEN_CAP * float(fs) / float(VALUE_SCREEN_SIZE)
+			lay.plus_px = pp
 	lay.queue_redraw()

@@ -56,6 +56,10 @@ const SEGMENT_SPACING := 0.6
 const SEGMENT_MAX_DOTS := 48
 ## Işık kazancı bunun altındaysa ışık haritası hiç güncellenmez.
 const MIN_LIGHT_GAIN := 0.01
+## ÜST ÜSTE BİNME (2026-11-08): harita 8 bit, toplanan ışık 1'de kırpılıyor ve ton beyaza kayıyordu -> lekeler bu
+## çarpanla kısık çizilir, shader `light_map_scale` (= 1 / bu) ile geri açar; 2'ye kadar toplam kırpılmadan taşınır.
+## Toplamın tavanı shader'da (atmosphere_grade.gdshader light_knee / light_ceiling).
+const LIGHT_MAP_HEADROOM := 0.5
 
 var _rect: ColorRect = null
 var _copy: BackBufferCopy = null
@@ -104,6 +108,7 @@ func _ready() -> void:
 	_material = ShaderMaterial.new()
 	_material.shader = GradeShader
 	_material.set_shader_parameter("light_map", _light_viewport.get_texture())
+	_material.set_shader_parameter("light_map_scale", 1.0 / LIGHT_MAP_HEADROOM)
 
 	## Ekranı okuyan (hint_screen_texture) iki geçiş (bu + sis) art arda çizildiğinde Godot ekranı sadece İLK okuyan için
 	## kopyalayabilir; bu kopya garantisi dünya çizimi bittikten SONRAKİ hâli okumamızı sağlar (sis de kendi kopyasını
@@ -246,8 +251,7 @@ func _push(out: Array, center: Vector2, r: float, col: Color, map_size: Vector2)
 		return
 	if center.x < -r or center.y < -r or center.x > map_size.x + r or center.y > map_size.y + r:
 		return
-	col.a = 1.0
-	out.append([center, r, col])
+	out.append([center, r, Color(col.r * LIGHT_MAP_HEADROOM, col.g * LIGHT_MAP_HEADROOM, col.b * LIGHT_MAP_HEADROOM, 1.0)])
 
 
 ## Çizgi ışık: çizgi boyunca eşit aralıklı lekeler. Lekeler üst üste bindiği için her birinin gücü, çizginin ortası tek

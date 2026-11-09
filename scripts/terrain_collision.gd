@@ -55,7 +55,10 @@ const BASE_LAYERS: Array = ["Düşman Üssü/Düşman üssü", "Düşman Üssü/
 ## Ayak izi: y-sıralı katmanda (depth_occluders OBJECT_LAYERS - karakter nesnenin arkasına geçebilir) boyun PROP_DEPTH_RATIO'su, diğerlerinde
 ## (nesne hep karakterin altında çizilir) nesnenin TAMAMI (en çok PROP_FULL_MAX) - yoksa karakter kayanın üstünde duruyormuş gibi görünür.
 const PROP_LAYERS: Array = ["Shader Eklenecek/Animasyonsuz çalılar", "Orman parçaları/Orman parçaları 3", "Orman parçaları/Orman parçaları 4",
-	"Orman parçaları/orman parçaları -1"]
+	"Orman parçaları/orman parçaları -1", "Shader Eklenecek/Kayalar 1", "Shader Eklenecek/Kayalar 2", "Shader Eklenecek/Kayalar 3"]
+## Yeşil olduğu hâlde KATI sayılan nesne dokuları (yeşil payı / küçük yumuşak nesne denetimi atlanır, boyut eşikleri yine geçerli):
+## Altın Kumlar kaktüsleri (harita/col/c_kaktus.png, tools/col/col_atlas.py) - çalı gibi içinden geçilmesin.
+const SOLID_EVEN_IF_GREEN_TEXTURES: Array[String] = ["c_kaktus.png"]
 const PROP_SKIP_TEXTURES: Array[String] = ["Ground_grass", "spots_lianas", "Flowers", "Yol par", "Water"]
 const PROP_MIN_W := 18
 const PROP_MIN_H := 14
@@ -133,7 +136,8 @@ static func _build(forest: TileMapLayer) -> void:
 		return
 	var helper: Node = DepthScript.new() ## sahneye eklenmez: sadece saf hesap işlevleri (object_bases / building_bases / opaque_pixels)
 	var g0: Vector2 = helper.cell_origin(forest)
-	if ENABLE_WATER:
+	## Madde 525: Kara Bataklık'ta su yürünür (bataklık sığ) - su hücresi engel değil (ayak suyun altında görünür, wade_fx.gd).
+	if ENABLE_WATER and not MapFrameScript.MapProfilesScript.water_walkable():
 		_add_water(helper, harita, g0)
 	if ENABLE_HOUSES:
 		var layers: Array[TileMapLayer] = []
@@ -202,6 +206,7 @@ static func object_groups(helper: Node, layer: TileMapLayer, with_colors: bool =
 	var ofs: Vector2 = helper.cell_origin(layer)
 	var color_cache: Dictionary = {}
 	var skip_by_sid: Dictionary = {} ## kaynak -> "zemin/leke dokusu mu" (karo başına altı metin aramasından kurtarır)
+	var force_by_sid: Dictionary = {} ## kaynak -> SOLID_EVEN_IF_GREEN_TEXTURES dokusu mu
 	var out: Array = []
 	for r: Vector2i in by_base:
 		var cells: Array = by_base[r]
@@ -212,6 +217,7 @@ static func object_groups(helper: Node, layer: TileMapLayer, with_colors: bool =
 		var y1: float = -1.0e9
 		var px: int = 0
 		var skip: bool = false
+		var force: bool = false
 		for c: Vector2i in cells:
 			sub[c] = bases[c]
 			var sid: int = layer.get_cell_source_id(c)
@@ -225,8 +231,11 @@ static func object_groups(helper: Node, layer: TileMapLayer, with_colors: bool =
 					if tex_path.contains(k):
 						sk = true
 				skip_by_sid[sid] = sk
+				force_by_sid[sid] = SOLID_EVEN_IF_GREEN_TEXTURES.has(tex_path.get_file())
 			if skip_by_sid[sid]:
 				skip = true
+			if force_by_sid[sid]:
+				force = true
 			## karo başına opak sınır (çevirme dahil) önbellekte: (sayı, min x, min y, max x, max y)
 			var tb: Array = helper.opaque_bounds(layer, c) ## karo başına (sayı, min x, min y, max x, max y), helper'da önbellekli
 			if int(tb[0]) > 0:
@@ -239,7 +248,7 @@ static func object_groups(helper: Node, layer: TileMapLayer, with_colors: bool =
 				px += int(tb[0])
 		var w: float = x1 - x0 + 1.0 if px > 0 else 0.0
 		var h: float = y1 - y0 + 1.0 if px > 0 else 0.0
-		var grp := {"bases": sub, "w": w, "h": h, "px": px, "green": 0.0, "red": 0.0, "skip": skip}
+		var grp := {"bases": sub, "w": w, "h": h, "px": px, "green": 0.0, "red": 0.0, "skip": skip, "force_solid": force}
 		## renk payı yalnız boyut eşiklerini geçen nesnede (yükleme süresi; çoğu ot/çakıl burada elenir)
 		if with_colors and _passes_size(grp):
 			var green: int = 0
@@ -292,6 +301,8 @@ static func _passes_size(grp: Dictionary) -> bool:
 static func is_solid_prop(grp: Dictionary) -> bool:
 	if not _passes_size(grp):
 		return false
+	if bool(grp.get("force_solid", false)):
+		return true
 	var w: float = float(grp["w"])
 	var h: float = float(grp["h"])
 	if w * h <= PROP_SMALL_AREA and float(grp["green"]) + float(grp.get("red", 0.0)) >= PROP_SMALL_MAX_SOFT:
@@ -326,8 +337,9 @@ static func _add_water(helper: Node, harita: Node, g0: Vector2) -> void:
 			var dofs: Vector2 = helper.cell_origin(dl)
 			details.append({"layer": dl, "shift": Vector2i(roundi((dofs.x - wofs.x) / 16.0), roundi((dofs.y - wofs.y) / 16.0))})
 	var mask_cache: Dictionary = {}
+	var play: Rect2i = MapFrameScript.play_cells()
 	for cell in water.get_used_cells():
-		if not MapFrameScript.PLAY_CELLS.has_point(cell):
+		if not play.has_point(cell):
 			continue ## dış çerçevedeki su (madde 119): hücre zaten orman katmanında dolu = engel; yüzlerce hücreyi taramak yükleme süresini uzatırdı
 		if _visible_water_pixels(helper, water, cell, details, mask_cache) >= WATER_MIN_PIXELS:
 			found[cell + shift] = true

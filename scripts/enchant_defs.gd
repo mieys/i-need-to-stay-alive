@@ -57,7 +57,7 @@ const ELEMENTS := {
 const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay", "crossbow": "Arbalet",
-	"boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek", "pence": "Pençe", "topuz": "Topuz",
+	"boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek", "pence": "Tırpan", "topuz": "Topuz",
 	"uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
 }
 
@@ -362,7 +362,7 @@ const DEFS := {
 	"golge_yankisi": {
 		"weapons": ["dagger", "pence"], "name": "Gölge Yankısı", "element": "golge",
 		"desc": "Tamamladığın vuruş serileri arkanda, komboyu gecikmeli tekrarlayan bir gölge bırakır.",
-		"base": {"text": "Tamamladığın her kombo (Bıçak: 3 vuruş, Pençe: 2 vuruş) hedefin yerinde bir gölge bırakır; gölge 1,5 saniye sonra komboyu aynı yerde silah hasarının %35'iyle tekrarlar.",
+		"base": {"text": "Tamamladığın her kombo (Bıçak: 3 vuruş, Tırpan: 2 vuruş) hedefin yerinde bir gölge bırakır; gölge 1,5 saniye sonra komboyu aynı yerde silah hasarının %35'iyle tekrarlar.",
 			"set": {"shade_dmg": 0.35, "shade_bleed": 0.0, "shade_swap": false, "shade_max": 1, "shade_life": 4.0}},
 		"upgrades": [
 			{"name": "Seviye 2", "text": "Gölgenin hasarı %55'e çıkar; kestiği düşmanlara 3 saniyelik Derin Kanama bulaşır (saniyede silah hasarının %20'si).",

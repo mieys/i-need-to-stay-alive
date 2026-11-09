@@ -261,7 +261,7 @@ func _refresh_extra_rows() -> void:
 		"max_health": "%d/%d" % [int(player.health), int(player.max_health)],
 		"shield_max": "%d/%d" % [int(player.get("item_shield_hp")), int(player.get("item_shield_max"))] if "item_shield_max" in player else "-",
 		"lifesteal": format_percent(float(player.call("get_total_lifesteal"))) if player.has_method("get_total_lifesteal") else "-",
-		"shield_regen": ("%s/sn" % format_luck(snappedf(float(player.get("item_shield_regen_flat")), 0.1))) if "item_shield_regen_flat" in player else "-",
+		"shield_regen": (tr("%s/sn") % format_luck(snappedf(float(player.get("item_shield_regen_flat")), 0.1))) if "item_shield_regen_flat" in player else "-",
 		"cooldown_reduction": format_percent(float(player.call("get_cooldown_reduction")) if player.has_method("get_cooldown_reduction") else float(player.get("cooldown_reduction_percent"))) if "cooldown_reduction_percent" in player else "-",
 		"pickup_range": str(int(round(float(player.call("get_pickup_range"))))) if player.has_method("get_pickup_range") else "-",
 	}

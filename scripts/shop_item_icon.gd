@@ -124,10 +124,12 @@ func _guess_shield_type() -> String:
 func _draw_shield(c: Vector2, s: float) -> void:
 	var key: String = shield_type if shield_type != "" else _guess_shield_type()
 	var tex: Texture2D = SHIELD_TEXTURES.get(key, SHIELD_TEXTURES["shield_standart"])
-	## Kare, ortalı; boyut tam sayı katına yuvarlanır (48 -> x1/x2/x3) ki pikseller net kalsın (küçük ikonlarda >= 1x).
+	## Kare, ortalı; boyut dokunun KENDİ boyunun tam sayı katına yuvarlanır (32 -> x1/x2/x3; 2026-11-09 kuşak ikonları 32x32,
+	## eskiden 48 sabitti) ki pikseller net kalsın (küçük ikonlarda >= 1x).
+	var base: float = float(maxi(1, tex.get_width()))
 	var side: float = s * 2.0
-	var scale_i: float = maxf(1.0, floorf(side / 48.0))
-	var draw_side: float = 48.0 * scale_i if side >= 48.0 else side
+	var scale_i: float = maxf(1.0, floorf(side / base))
+	var draw_side: float = base * scale_i if side >= base else side
 	draw_texture_rect(tex, Rect2((c - Vector2(draw_side, draw_side) * 0.5).round(), Vector2(draw_side, draw_side)), false)
 
 

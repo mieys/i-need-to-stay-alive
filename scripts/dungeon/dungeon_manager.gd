@@ -34,10 +34,15 @@ const INTERACT_RADIUS := 30.0 ## zindan içi etkileşim (nesne dikdörtgenine uz
 const GATE_CLOSED_SEC := 9.0
 const GATE_COOLDOWN_SEC := 14.0
 const NODE_RESPAWN_SEC := 210.0
-const TRAP_CYCLE := 3.6 ## sn: dikenler bu aralıkla bir kez kalkar
-const TRAP_RISE := [2.2, 2.45, 3.05, 3.3] ## evre (sn): kalkmaya başlar, tam yukarı, inmeye başlar, içeride
-const TRAP_PLAYER_DAMAGE := 0.14 ## oyuncuya: azami canın oranı (yukarıdayken bir kez)
-const TRAP_CREATURE_DAMAGE := 0.35 ## yaratığa: azami canın oranı (bossa / avcıya x0,25)
+## TUZAKLAR (madde 492, kullanıcı: "daha tehlikeli, daha sık aktifleşmeli"): eskiden 3,6 sn'de bir, 0,6 sn tetikte, azami canın %14'ü.
+## Tür başına zamanlama: cycle = sn'de bir kez; rise = [kalkmaya başlar, tam yukarı, inmeye başlar, içeride]; player / creature = azami canın oranı
+## (yaratığa bossta / avcıda x0,25). Oyuncu ve yaratık tam kalkmaya yakınken (TRAP_HIT_LEVEL) vurulur, döngüde bir kez.
+const TRAP_TIMING := {
+	"diken": {"cycle": 2.0, "rise": [1.0, 1.18, 1.7, 1.9], "player": 0.25, "creature": 0.5},
+	"ejder": {"cycle": 2.6, "rise": [0.85, 1.1, 2.0, 2.3], "player": 0.3, "creature": 0.6},
+	"giyotin": {"cycle": 2.2, "rise": [1.0, 1.2, 1.75, 2.0], "player": 0.3, "creature": 0.6},
+}
+const TRAP_HIT_LEVEL := 0.9
 ## GAZ FIÇISI (madde 449, Lağım Ağı): E ile ateşlenir, fitilden sonra patlar (hasar host'ta yaratığa, her istemcide kendi oyuncusuna), sonra dolar
 const BARREL_FUSE_SEC := 1.4
 const BARREL_RESPAWN_SEC := 75.0
@@ -82,6 +87,7 @@ var barrel_fuse: Dictionary = {} ## gaz fıçısı anahtarı -> patlayacağı ga
 var barrel_until: Dictionary = {} ## gaz fıçısı anahtarı -> yeniden dolacağı game_time (patladı)
 var _trap_hit: Dictionary = {} ## tuzak anahtarı -> son vurduğu döngü (oyuncuya döngü başına bir kez)
 var _trap_creature_cycle: Dictionary = {}
+var _flame_rows: Dictionary = {} ## ejder tuzağı anahtarı -> alev satırı (bir kez hesaplanır)
 var _sync_requested: bool = false
 var _res_label: Label = null
 var _map_id: String = "" ## harita kipi: haritanın profil kimliği (boşsa normal zindan yöneticisi)
@@ -718,7 +724,7 @@ func _setup_map() -> void:
 			depth_layers.append(nm)
 		elif c is TileMapLayer and (nm == "Kan" or nm.begins_with("Kan ")):
 			kan_layers.append(c)
-	DepthOccludersScript.new().setup_interior(root, depth_layers)
+	DepthOccludersScript.new().setup_interior(root, depth_layers, {}, true) ## yaratıklar da nesne arkasında örtülür (madde 492)
 	for kan: TileMapLayer in kan_layers:
 		var mat := ShaderMaterial.new()
 		mat.shader = KanShader
@@ -782,22 +788,32 @@ func _resource_of(id: String, o: Dictionary) -> String:
 
 
 # ================================================================== tuzaklar (eşitlenen game_time ile)
-func trap_level(key: String, t: float) -> float:
-	var ph: float = fposmod(t + float(hash(key) % 1000) * 0.0036, TRAP_CYCLE)
-	if ph < TRAP_RISE[0]:
+static func trap_timing(tur: String) -> Dictionary:
+	return TRAP_TIMING.get(tur, TRAP_TIMING["diken"])
+
+
+## Tuzağın döngü içindeki konumu: anahtara göre sabit kayma (aynı türdekiler aynı anda vurmasın).
+static func trap_offset(key: String, tm: Dictionary) -> float:
+	return float(hash(key) % 1000) * 0.001 * float(tm["cycle"])
+
+
+func trap_level(key: String, t: float, tur: String = "") -> float:
+	var tm: Dictionary = trap_timing(tur)
+	var rise: Array = tm["rise"]
+	var ph: float = fposmod(t + trap_offset(key, tm), float(tm["cycle"]))
+	if ph < float(rise[0]):
 		return 0.0
-	if ph < TRAP_RISE[1]:
-		return (ph - TRAP_RISE[0]) / (TRAP_RISE[1] - TRAP_RISE[0])
-	if ph < TRAP_RISE[2]:
+	if ph < float(rise[1]):
+		return (ph - float(rise[0])) / (float(rise[1]) - float(rise[0]))
+	if ph < float(rise[2]):
 		return 1.0
-	if ph < TRAP_RISE[3]:
-		return 1.0 - (ph - TRAP_RISE[2]) / (TRAP_RISE[3] - TRAP_RISE[2])
+	if ph < float(rise[3]):
+		return 1.0 - (ph - float(rise[2])) / (float(rise[3]) - float(rise[2]))
 	return 0.0
 
 
 func _tick_traps() -> void:
 	var t: float = GameManager.game_time
-	var cycle: int = int(floor(t / TRAP_CYCLE))
 	var host: bool = NetworkManager.is_host or not NetworkManager.is_multiplayer_active
 	var entries: Array[Dictionary] = DungeonWorldScript.dungeons().duplicate()
 	if _map_id != "":
@@ -813,17 +829,28 @@ func _tick_traps() -> void:
 			if str(o.get("type", "")) != "tuzak":
 				continue
 			var key: String = str(o.get("trap_key", ""))
-			var lv: float = trap_level(key, t)
+			var tur: String = str((o.get("props", {}) as Dictionary).get("tur", ""))
+			var tm: Dictionary = trap_timing(tur)
+			var cyc: float = float(tm["cycle"])
+			var cycle: int = int(floor((t + trap_offset(key, tm)) / cyc))
+			var lv: float = trap_level(key, t, tur)
 			var tp: Node = _props_for(key) if id == _map_id else props
 			if tp != null and tp.is_visible_in_tree():
 				tp.set_trap_level(key, lv)
-			if lv < 0.99:
+			if lv < TRAP_HIT_LEVEL:
 				continue
 			var wr := Rect2(rect.position + (o["rect"] as Rect2).position, (o["rect"] as Rect2).size)
+			if tur == "ejder":
+				## alev uzun: hasar alanı görselle aynı (ilk duvar/nesneye kadar, DungeonWorld.flame_rows)
+				var rows: int = int(_flame_rows.get(key, -1))
+				if rows < 0:
+					rows = DungeonWorldScript.flame_rows(wr.position, int(wr.size.y / 16.0))
+					_flame_rows[key] = rows
+				wr.size.y = float(rows) * 16.0
 			if local_in and int(_trap_hit.get(key, -1)) != cycle and _player.get("is_dead") != true and wr.has_point(_player.global_position + Vector2(0, DungeonWorldScript.FEET_SHIFT)):
 				_trap_hit[key] = cycle
 				if _player.has_method("take_damage"):
-					_player.take_damage(float(_player.get("max_health")) * TRAP_PLAYER_DAMAGE)
+					_player.take_damage(float(_player.get("max_health")) * float(tm["player"]))
 			if host and int(_trap_creature_cycle.get(key, -1)) != cycle:
 				_trap_creature_cycle[key] = cycle
 				for c: Variant in EnemyQueryScript.candidates(get_tree(), wr.get_center(), wr.size.length() * 0.5 + 6.0):
@@ -832,7 +859,7 @@ func _tick_traps() -> void:
 						continue
 					var mult: float = 0.25 if (en.is_in_group("boss") or en.has_meta("dungeon_hunter")) else 1.0
 					if en.has_method("take_damage_host"):
-						en.take_damage_host(float(en.get("max_health")) * TRAP_CREATURE_DAMAGE * mult, false, 1.0, 0)
+						en.take_damage_host(float(en.get("max_health")) * float(tm["creature"]) * mult, false, 1.0, 0)
 
 
 # ================================================================== minimap (keşif dokusu)

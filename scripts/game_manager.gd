@@ -4,6 +4,7 @@ const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 const MobileUI := preload("res://scripts/mobile_ui.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 const MetaUpgradesScript: GDScript = preload("res://scripts/meta_upgrades.gd")
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd") ## spend_shop_gold: Para indirimi sayacı
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 
 ## "Body block" sınırının (bkz. enemy.gd PLAYER_BODY_RADIUS/_body_radius ve
@@ -57,6 +58,9 @@ var is_game_over: bool = false
 ## açıldığındaki game_time (karakter seçimi sırasında da aktığı için "Süre" oradan başlamasın; çok oyunculuda game_time zaten
 ## _rpc_start_game'de sıfırlanıyor, origin 0 kalır).
 var victory_reached: bool = false
+## Koşu teslimle bitti (madde 540; NetworkManager._apply_surrender): oyun bitti ekranı "TESLİM OLUNDU", balans kaydı end_reason "surrender",
+## canlı karakter dokunulmaz + hareketsiz (player.gd take_damage / set_menu_input_locked).
+var run_surrendered: bool = false
 ## BOSS SİSTEMİ ANAHTARI (kullanıcı 2026-10-08: "tüm bosslar elit yaratıkların yerine geçsin... yeni bossları sana sonradan atacağım"):
 ## false = Kademe bossları, Final (13'lü dalga), zafer penceresi ve sonsuzdaki boss dalgaları KAPALI; eski bosslar elit olarak çıkar
 ## (enemy_spawner.gd ELITE_POOL) ve Kademe XV bitince oyun doğrudan sonsuz modda devam eder. Yeni bosslar TEK TEK gelir: her biri
@@ -667,6 +671,30 @@ func apply_shop_discount(cost: int) -> int:
 	return maxi(1, int(round(float(cost) * (1.0 - d))))
 
 
+## Dükkan alımı (kullanıcı isteği 2026-11-09: "para kazandıran ruhani yeteneğin kaç altın indirim sağlayıp kar sağladığı görünmüyor"):
+## altını düşer + Para ruhani yeteneğinin indirimden sağladığı tasarrufu Shift ipucu sayacına yazar (`para_discount_saved`).
+## ÖDENEN tutardan geri hesaplanır (alım yolları indirimli fiyatı zaten `apply_shop_discount` ile alıyor). Yeni bir dükkan alım yolu eklersen
+## `gold -= cost` yerine bunu çağır; yoksa indirim sayacı o alımı görmez.
+func spend_shop_gold(cost: int) -> void:
+	gold -= cost
+	var saved: float = para_discount_saved(cost)
+	if saved > 0.0:
+		BalanceLogScript.on_util("s:ruhani_para", "discount", saved)
+		BalanceLogScript.on_util("s:ruhani_para", "profit", saved)
+
+
+## `paid` altına alınan bir şeyde Para ruhanisinin indirimi (altın, kesirli): indirimin kalıcı geliştirmeyle ortak toplamından Para'nın payı.
+func para_discount_saved(paid: int) -> float:
+	if selected_spiritual != SpiritualSkillsScript.PARA or paid <= 1:
+		return 0.0
+	var raw_sum: float = MetaUpgradesScript.bonus("discount") + SpiritualSkillsScript.PARA_SHOP_DISCOUNT
+	var d: float = minf(raw_sum, MetaUpgradesScript.DISCOUNT_CAP)
+	if d <= 0.0 or d >= 1.0:
+		return 0.0
+	var full: float = float(paid) / (1.0 - d)
+	return (full - float(paid)) * SpiritualSkillsScript.PARA_SHOP_DISCOUNT / raw_sum
+
+
 ## ---------- Seyyar Satıcı güvenli bölgesi ----------
 ## Kullanıcı isteği: "Dükkanın olduğu alanda ... 3 kat daha geniş[tir] ...
 ## Dışardaki yaratıklar oyuncular bariyerin içindeyken geçirilen zamanla
@@ -1252,7 +1280,7 @@ func _compute_map_rects() -> void:
 		var r: Rect2 = _cells_world_rect(layer, used, half)
 		total = r if not found else total.merge(r)
 		found = true
-		var used_play: Rect2i = used.intersection(MAP_PLAY_CELLS)
+		var used_play: Rect2i = used.intersection(MapFrameScript.play_cells())
 		if used_play.size != Vector2i.ZERO:
 			var rp: Rect2 = _cells_world_rect(layer, used_play, half)
 			total_play = rp if not found_play else total_play.merge(rp)
@@ -1479,6 +1507,7 @@ func reset() -> void:
 	babaanne_target = null
 	babaanne_dead = false
 	is_game_over = false
+	run_surrendered = false
 	victory_reached = false
 	endless_active = false
 	endless_layer = 0

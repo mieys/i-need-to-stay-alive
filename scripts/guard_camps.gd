@@ -182,8 +182,8 @@ func _seen_player(pos: Vector2, players: Array, world: Object, sight: float = SI
 	for p: Node2D in players:
 		if int(p.get("brush_state") if p.get("brush_state") != null else 0) == 1:
 			continue ## çalıda saklı (kimse görmedi) - bekçi de göremez
-		if str(p.get("in_dungeon") if p.get("in_dungeon") != null else "") != dungeon:
-			continue ## zindan bekçisi yalnız kendi zindanındakini, kenar bekçisi yalnız ana haritadakini görür (madde 373)
+		if _dungeon_of(p) != dungeon:
+			continue ## (madde 492: harita kipinde in_dungeon boş, bekçinin zindanı haritanın kimliği - eskiden hiç eşleşmiyor, sakinler oyuncuyu GÖRMÜYORDU) zindan bekçisi yalnız kendi zindanındakini, kenar bekçisi yalnız ana haritadakini görür (madde 373)
 		var d: float = pos.distance_to(p.global_position)
 		if d < best_d and world.is_los_clear(pos, p.global_position):
 			best_d = d
@@ -412,6 +412,9 @@ func _ensure_dungeon_camps() -> void:
 				def = DungeonDefsScript.by_id(str(MAP_THEME_DUNGEON.get(str(props.get("tema", "")), "")))
 				profiles = def.get("profiles", {})
 			var wr := Rect2(DungeonWorldScript.local_to_world(id, (o["rect"] as Rect2).position), (o["rect"] as Rect2).size)
+			## madde 492: profilde "zindan_sakinleri" kapalıysa (Batık Nekropol / Taşkın Hisar / Lağım Ağı) sakin + avcı kampı kurulmaz.
+			if id == _map_id and (t == "sakin" or t == "avci") and not bool((MapProfilesScript.current().get("ozellik", {}) as Dictionary).get("zindan_sakinleri", true)):
+				continue
 			if t == "sakin":
 				var prof: String = str(props.get("profil", "oda"))
 				var cd := {"name": "%s:%d" % [id, n], "dungeon": id, "rect": wr, "count": int(props.get("adet", 3)), "radius": wr.size.length() * 0.5,

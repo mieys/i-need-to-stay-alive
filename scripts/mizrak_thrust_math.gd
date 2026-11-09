@@ -24,7 +24,7 @@ const MeleeChainMath := preload("res://scripts/melee_chain_math.gd") ## vuruş s
 
 const REF_OWNER_SCALE := 0.5
 const FX_WORLD_PX := 0.575 ## pişmiş efektin 1 sanat pikseli (dünya px, k = 1) = Zanaatkâr silahlarıyla aynı yoğunluk
-const ANCHOR := Vector2(0.0, -3.5) ## çerçeve orijini hedefin bu kadar üstünde (pence_hook_math.gd ile aynı neden)
+const ANCHOR := Vector2(0.0, -3.5) ## çerçeve orijini hedefin bu kadar üstünde (topuz_slam_math.gd ile aynı neden)
 const TIP := 14.94 ## ikon merkezinden uca (dünya px, k = 1): mizrak_L3 sanatında uç a = 27,2 x 0,955 x 0,575
 
 ## [süre (sn), ikon merkezi (çerçeve) ya da null = önceki nokta, uç açısı (derece), boy ölçeği, en ölçeği, geçiş]
@@ -184,7 +184,7 @@ static func line_victims(tree: SceneTree, plan: Dictionary, primary: Node2D = nu
 	return out
 
 
-## İkonun dünya dönüşümü (pence_hook_math.gd _apply ile aynı): doku ekseni -> dünya = R(açı) . diag(boy, en) . R(-forward) x doku ölçeği.
+## İkonun dünya dönüşümü (topuz_slam_math.gd _apply ile aynı): doku ekseni -> dünya = R(açı) . diag(boy, en) . R(-forward) x doku ölçeği.
 static func _apply(ctx: Dictionary, center: Vector2, ang: float, sl: float, sw: float) -> void:
 	var icon: Node2D = ctx["icon"]
 	if not is_instance_valid(icon):

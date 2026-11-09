@@ -7,7 +7,7 @@ const MeleeChainMath := preload("res://scripts/melee_chain_math.gd")
 const SwordSwingMath := preload("res://scripts/sword_swing_math.gd")
 const DaggerStabMath := preload("res://scripts/dagger_stab_math.gd")
 const TopuzSlamMath := preload("res://scripts/topuz_slam_math.gd")
-const PenceHookMath := preload("res://scripts/pence_hook_math.gd")
+const TirpanReapMath := preload("res://scripts/tirpan_reap_math.gd")
 const MizrakThrustMath := preload("res://scripts/mizrak_thrust_math.gd")
 const KalkanBashMath := preload("res://scripts/kalkan_bash_math.gd")
 
@@ -15,7 +15,7 @@ const BASE_WAIT := 1.1111 / 0.7 ## yakın dövüş taban aralığı (fire_rate /
 
 
 func _modules() -> Array:
-	return [SwordSwingMath, DaggerStabMath, TopuzSlamMath, PenceHookMath, MizrakThrustMath, KalkanBashMath]
+	return [SwordSwingMath, DaggerStabMath, TopuzSlamMath, TirpanReapMath, MizrakThrustMath, KalkanBashMath]
 
 
 ## Taban ve x2 saldırı hızında vuruşlar hız 1'de (eskiden x2'de iki kat hızlı oynuyordu); x4'te bile hareket aralığa sığar.
@@ -30,11 +30,9 @@ func test_speed_only_fits_the_strike() -> void:
 			var wait: float = BASE_WAIT / rate
 			var sp: float = MeleeChainMath.fit_speed(busy_fn, wait)
 			assert(sp >= 1.0 and sp <= MeleeChainMath.SPEED_MAX)
-			## Pençe ana pozları kareden kısa kalmaz (madde 304 MIN_POSE) - FILL'i biraz aşabilir; şart: sonraki vuruştan önce biter.
 			assert(m.busy_duration(sp) < wait or is_equal_approx(sp, MeleeChainMath.SPEED_MAX),
 				"x%s: hareket sonraki vuruştan önce biter (%s: %s / %s)" % [rate, m.resource_path, m.busy_duration(sp), wait])
-			if m != PenceHookMath:
-				assert(m.busy_duration(sp) <= wait * MeleeChainMath.FILL + 0.002, "x%s: hareket aralığın FILL'ine sığar" % rate)
+			assert(m.busy_duration(sp) <= wait * MeleeChainMath.FILL + 0.002, "x%s: hareket aralığın FILL'ine sığar" % rate)
 
 
 ## Hızlı vuruşta bekleme bir sonraki vuruşun anını aşar (dönmeden zincirlenir); yavaşta silah eskisi gibi dinlenme yerine döner.

@@ -28,9 +28,47 @@ def k_below(t, x, y, n=3):
     return 0
 
 
+# ------------------------------------------------------------------------------------------------ duvar kenarı (madde 492)
+# Kalın duvar kütlesinin üst/yan kenarı + köşeleri PAKETİN KENDİ karolarıyla (kullanıcı: "kendin çizme"). Paketin duvar bloğu (3 x 3 karo: TL T TR / L C R)
+# karo içinde İNCE: L opak sütun 10-15, R 0-5, T/TL/TR opak satır 7-15 (paketin kendi örnek haritasında bloklar böyle dizilir). Kenar parçaları duvar
+# hücresine değil BİTİŞİK ZEMİN hücresine, kenar katmanında konur (saydam kısım zemini gösterir): kenar çizgisi duvar sınırına yaslanır, görsel ile çarpışma
+# kaymaz (duvar görselde 4-9 px zemine taşar). T, duvar tepesinin ÜSTÜNDEKİ zemin hücresine, ayrı (üst) katmanda konur: iç köşede yan parça da kalır.
+def paint_wall_edges(lay, bank, tl, key, region=None, layer='Duvar kenarı', top_layer='Duvar kenarı 2', face_depth=3, pieces=None):
+    pcs = pieces or {'TL': (0, 0), 'T': (1, 0), 'TR': (2, 0), 'L': (0, 1), 'R': (2, 1)}
+    t = lay.t
+    Hh, Ww = t.shape
+    x0, y0, x1, y1 = region or (0, 0, Ww, Hh)
+
+    def is_floor(x, y):
+        return 0 <= x < Ww and 0 <= y < Hh and t[y, x] == Z.F
+
+    put, top = {}, {}
+    for y in range(max(0, y0 - 1), min(Hh, y1 + 1)):
+        for x in range(max(0, x0 - 1), min(Ww, x1 + 1)):
+            if t[y, x] != Z.S or k_below(t, x, y, face_depth):
+                continue            # yalnız duvar TEPESİ (yüz hücresinin kenarı paketin kendi uç kapaklarında)
+            n, w, e = is_floor(x, y - 1), is_floor(x - 1, y), is_floor(x + 1, y)
+            if w:
+                put.setdefault((x - 1, y), 'L')
+            if e:
+                put.setdefault((x + 1, y), 'R')
+            if n:
+                top[(x, y - 1)] = 'T'                      # üst katmanda: iç köşede yan parçanın alt yarısını örter, yan çizgi üst kenara bağlanır
+                if w:
+                    put.setdefault((x - 1, y - 1), 'TL')
+                if e:
+                    put.setdefault((x + 1, y - 1), 'TR')
+    for lname, d in ((layer, put), (top_layer, top)):
+        for (x, y), name in d.items():
+            if x0 <= x < x1 and y0 <= y < y1:
+                c = pcs[name]
+                tl.put(lname, x, y, bank.gid(key, c[0], c[1]))
+    return len(put) + len(top)
+
+
 def paint_walls_34(lay, bank, tl, key, floor=(2, 8), top=((1, 1), (2, 1), (3, 1), (1, 2), (2, 2), (3, 2)),
                    face_rows=None, face_cols=(1, 2, 3), region=None, floor_variants=None, rng=None, floor_key=None, floor_pool=None,
-                   floor_fn=None, face_key=None, water_face=None, face_caps=None, tuck=None):
+                   floor_fn=None, face_key=None, water_face=None, face_caps=None, tuck=None, caps_by_key=None):
     """top: (TL, T, TR, L, C, R). face_rows: {k: satır} (k=1 alt yüz, 2 üst yüz, 3 dudak); bir k yoksa o hücre üst (boşluk) olur
     (2 satırlık yüz paketleri). floor_key/floor_pool: zemin başka sayfadan, hücre konumuna göre (kararlı) havuzdan seçilir.
     floor_fn(x, y) -> (sayfa, (sütun, satır)): hücre başına zemin (oda/koridor/desen; havuzu ezer). face_key: yüz başka sayfadan.
@@ -111,11 +149,14 @@ def paint_walls_34(lay, bank, tl, key, floor=(2, 8), top=((1, 1), (2, 1), (3, 1)
                     elif lf and 'lip_l' in tuck and not isS(x - 1, y + 2):
                         tile = (fckey, tuck['lip_l'][0], tuck['lip_l'][1])
                 tl.put('Duvar', x, y, bank.gid(*tile))
-                if face_caps is not None and fkk == fckey:
+                # uç kapağı: yüz sayfasının (face_key) ya da başka sayfadan gelen satırın kendi uç parçası (caps_by_key: madde 492 - Lağım'da
+                # 2./3. yüz satırı 'sw' sayfasından geliyordu ve uç kapağı hiç konmuyordu: yüzün yanı basamak gibi içeri kaçıyordu)
+                ccols = face_caps if (face_caps is not None and fkk == fckey) else (caps_by_key or {}).get(fkk)
+                if ccols is not None:
                     if not lk and x > 0 and t[y, x - 1] != S:
-                        caps.append((x - 1, y, face_caps[0], fr[k]))
+                        caps.append((x - 1, y, fkk, ccols[0], fr[k]))
                     if not rk and x + 1 < Ww and t[y, x + 1] != S:
-                        caps.append((x + 1, y, face_caps[1], fr[k]))
+                        caps.append((x + 1, y, fkk, ccols[1], fr[k]))
                 continue
             if tuck and up and lf and rt:
                 kr, kl = keff(x + 1, y), keff(x - 1, y)
@@ -132,8 +173,8 @@ def paint_walls_34(lay, bank, tl, key, floor=(2, 8), top=((1, 1), (2, 1), (3, 1)
             else:
                 c = top[3] if not lf else (top[5] if not rt else top[4])
             tl.put('Duvar', x, y, bank.gid(key, c[0], c[1]))
-    for (x, y, col, row) in caps:
-        tl.put('Duvar', x, y, bank.gid(fckey, col, row))
+    for (x, y, ck, col, row) in caps:
+        tl.put('Duvar', x, y, bank.gid(ck, col, row))
 
 
 # ------------------------------------------------------------------------------------------------ zemin çeşitliliği

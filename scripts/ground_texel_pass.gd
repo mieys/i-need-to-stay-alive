@@ -13,7 +13,7 @@ extends Sprite2D
 ## World2D paylaşılır, katmanlar sadece visibility_layer biti ile ana ekrandan bu görünüme taşınır - düğümler yerinde kalır,
 ## çarpışma/yol bulma/sis engelleri/harita pişirme araçları hiçbir şey fark etmez), sonra bu Sprite2D o dokuyu dünyada aynı
 ## yere "nearest" süzgeçle koyar. Shader'lar artık ekran pikseli başına değil dünya pikseli başına çalışır (~zoom² kat ucuz).
-##  - Sprite, "Yer"in İLK çocuğu: katmanların eski çizim sırası (Yer > Çimler, Su, gölgeler, objeler) aynen korunur.
+##  - Sprite, "Yer"in İLK çocuğu: katmanların eski çizim sırası (Yer > Su, gölgeler, objeler) aynen korunur.
 ##  - Katmanlar şeffaf zemine "mix" ile çizilince doku premultiplied olur -> sprite PREMULT_ALPHA karışımıyla çizilir (yarı
 ##    saydam karo kenarları kararmaz).
 ##  - Doku ızgarası haritanın texel ızgarasına hizalı (Yer'in global konumunun kesirli kısmı korunur).
@@ -27,7 +27,7 @@ extends Sprite2D
 const LAYER_BIT := 1 << 19
 const NODE_NAME := "ZeminDunyaPikseli"
 const PARENT_NAME := "Yer"
-## "Yer" altındaki, ÇİZİM SIRASIYLA ardışık katmanlar. "Çimler" (sallanan mini çim) bilerek dışarıda: onların üstünde kalır.
+## "Yer" altındaki, ÇİZİM SIRASIYLA ardışık katmanlar (Yer'in tüm katmanları; "Çimler" mini çim katmanı 2026-11-08'de haritadan silindi).
 const ZEMIN_KATMANLARI: Array[String] = ["Zemin Toprak", "Çimen gölge", "Zemin Çimen"]
 ## Kamera bu karede kıpırdarsa kenarda boşluk kalmasın diye görünümün her yanına eklenen pay (dünya px).
 const MARGIN := 8

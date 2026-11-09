@@ -20,19 +20,19 @@ func test_defs_are_well_formed() -> void:
 
 
 func test_values_scale_by_tier_and_text_matches() -> void:
-	## Cam Top: kazanç x1 / x1,3 / x1,6 / x1,9 (düz kartlarla aynı eğri), bedel x1 / x1,15 / x1,3 / x1,45.
-	var gains: Array = [10.0, 13.0, 16.0, 19.0]
-	var costs: Array = [20.0, 23.0, 26.0, 29.0]
+	## Cam Top (madde 498: 10/20 -> 8/15): kazanç x1 / x1,3 / x1,6 / x1,9 (düz kartlarla aynı eğri), bedel x1 / x1,15 / x1,3 / x1,45.
+	var gains: Array = [8.0, 10.0, 13.0, 15.0]
+	var costs: Array = [15.0, 17.0, 20.0, 22.0]
 	for t in range(1, 5):
 		assert(is_equal_approx(Special.gain_value("trade_glass", t), gains[t - 1]), "kazanç kademe %d: %s" % [t, Special.gain_value("trade_glass", t)])
 		assert(is_equal_approx(Special.cost_value("trade_glass", t), costs[t - 1]), "bedel kademe %d: %s" % [t, Special.cost_value("trade_glass", t)])
-	assert(Special.gain_text("trade_glass", 1) == "+10", "düz sayı metni: %s" % Special.gain_text("trade_glass", 1))
-	assert(Special.cost_text("trade_glass", 1) == "-20 Azami Can", "bedel metni: %s" % Special.cost_text("trade_glass", 1))
-	assert(Special.gain_text("trade_trigger", 1) == "+%9", "yüzde metni: %s" % Special.gain_text("trade_trigger", 1))
-	assert(Special.cost_text("trade_trigger", 1) == "-%8 Mana Kalkanı", "yüzde bedel metni: %s" % Special.cost_text("trade_trigger", 1))
+	assert(Special.gain_text("trade_glass", 1) == "+8", "düz sayı metni: %s" % Special.gain_text("trade_glass", 1))
+	assert(Special.cost_text("trade_glass", 1) == "-15 Azami Can", "bedel metni: %s" % Special.cost_text("trade_glass", 1))
+	assert(Special.gain_text("trade_trigger", 1) == "+%7", "yüzde metni: %s" % Special.gain_text("trade_trigger", 1))
+	assert(Special.cost_text("trade_trigger", 1) == "-%6 Mana Kalkanı", "yüzde bedel metni: %s" % Special.cost_text("trade_trigger", 1))
 	assert(Special.restriction_text("class_melee") == "yalnız yakın dövüş", "silah türü kısıt metni")
-	assert(Special.verb_text("class_melee", 1) == "-%5 Hareket Hızı", "silah türü kartının alt satırı artık bedel: %s" % Special.verb_text("class_melee", 1))
-	assert(Special.verb_text("class_ranged", 1) == "-12 Azami Can", "Nişancılık bedeli: %s" % Special.verb_text("class_ranged", 1))
+	assert(Special.verb_text("class_melee", 1) == "-%4 Hareket Hızı", "silah türü kartının alt satırı artık bedel: %s" % Special.verb_text("class_melee", 1))
+	assert(Special.verb_text("class_ranged", 1) == "-9 Azami Can", "Nişancılık bedeli: %s" % Special.verb_text("class_ranged", 1))
 
 
 func test_trade_applies_exactly_what_the_card_says() -> void:
@@ -47,20 +47,20 @@ func test_trade_applies_exactly_what_the_card_says() -> void:
 	assert(player.health <= player.max_health, "can yeni tavanı aşmamalı")
 	assert(player.get_upgrade_count("trade_glass") == 1, "kart sayacı artmalı (geri katılım günlüğü)")
 	var f0: float = player.fire_rate_mult
-	player.apply_upgrade("trade_bulwark", 1) ## +40 can, -%8 saldırı hızı
-	assert(is_equal_approx(player.max_health, 200.0 - 23.0 + 40.0), "Demir Kabuk kazancı: %s" % player.max_health)
-	assert(is_equal_approx(player.fire_rate_mult, f0 / (1.0 - 0.08)), "saldırı hızı bedeli aralığı 1/(1-x) uzatır: %s" % player.fire_rate_mult)
+	player.apply_upgrade("trade_bulwark", 1) ## +30 can, -%6 saldırı hızı
+	assert(is_equal_approx(player.max_health, 200.0 - 17.0 + 30.0), "Demir Kabuk kazancı: %s" % player.max_health)
+	assert(is_equal_approx(player.fire_rate_mult, f0 / (1.0 - 0.06)), "saldırı hızı bedeli aralığı 1/(1-x) uzatır: %s" % player.fire_rate_mult)
 	var spd0: float = player.speed_card_percent
-	player.apply_upgrade("trade_boots", 1) ## +%10 hız, -15 can
-	assert(is_equal_approx(player.speed_card_percent - spd0, 0.10), "Rüzgâr Ayakları hız kazancı")
+	player.apply_upgrade("trade_boots", 1) ## +%7 hız, -11 can
+	assert(is_equal_approx(player.speed_card_percent - spd0, 0.07), "Rüzgâr Ayakları hız kazancı")
 	player.queue_free()
 
 
 func test_cost_never_goes_below_floor_and_card_is_withheld() -> void:
 	var player: Node = PlayerScene.instantiate()
 	add_child(player)
-	player.max_health = 50.0 ## 50 - 20 = 30 < 40 zemin: Cam Top çıkmamalı
-	player.health = 50.0
+	player.max_health = 45.0 ## 45 - 15 = 30 < 40 zemin: Cam Top çıkmamalı (Rüzgâr 45 - 11 = 34 de)
+	player.health = 45.0
 	assert(not Special.available_ids(player).has("trade_glass"), "azami can zemine yakınken Cam Top teklif edilmemeli")
 	assert(not Special.available_ids(player).has("trade_boots"), "Rüzgâr Ayakları (bedel can) da teklif edilmemeli")
 	assert(Special.available_ids(player).has("trade_trigger"), "bedeli can olmayan takas yine çıkabilmeli")
@@ -84,7 +84,7 @@ func test_new_trade_cards_apply_exactly_gain_and_cost() -> void:
 	var hp1: float = player.max_health
 	player.apply_upgrade("trade_adrenaline", 1)
 	assert(is_equal_approx(player.fire_rate_mult, f1 * (1.0 - Special.gain_value("trade_adrenaline", 1))), "Adrenalin kazancı aralığı kısaltır: %s" % player.fire_rate_mult)
-	assert(is_equal_approx(player.max_health, hp1 - 20.0), "Adrenalin 20 can öder: %s" % player.max_health)
+	assert(is_equal_approx(player.max_health, hp1 - 15.0), "Adrenalin 15 can öder: %s" % player.max_health)
 	## Sabit Nişan: +kritik oran, -hız
 	var cc0: float = player.crit_chance_bonus
 	var sp0: float = player.speed_card_percent
@@ -101,14 +101,14 @@ func test_new_trade_cards_apply_exactly_gain_and_cost() -> void:
 	var dg0: float = player.dodge_chance
 	var hp2: float = player.max_health
 	player.apply_upgrade("trade_cloak", 1)
-	assert(is_equal_approx(player.dodge_chance - dg0, 0.07), "Hayalet Pelerin kazancı: %s" % (player.dodge_chance - dg0))
-	assert(is_equal_approx(player.max_health, hp2 - 15.0), "Hayalet Pelerin 15 can öder: %s" % player.max_health)
+	assert(is_equal_approx(player.dodge_chance - dg0, 0.05), "Hayalet Pelerin kazancı: %s" % (player.dodge_chance - dg0))
+	assert(is_equal_approx(player.max_health, hp2 - 11.0), "Hayalet Pelerin 11 can öder: %s" % player.max_health)
 	## Hafif Kuşanım: +hız, -mana kalkanı
 	var sp1: float = player.speed_card_percent
 	var sh1: float = player.shield_max_percent
 	player.apply_upgrade("trade_light", 1)
-	assert(is_equal_approx(player.speed_card_percent - sp1, 0.10), "Hafif Kuşanım hızı: %s" % (player.speed_card_percent - sp1))
-	assert(is_equal_approx(sh1 - player.shield_max_percent, 0.10), "Hafif Kuşanım kalkan öder: %s" % (sh1 - player.shield_max_percent))
+	assert(is_equal_approx(player.speed_card_percent - sp1, 0.07), "Hafif Kuşanım hızı: %s" % (player.speed_card_percent - sp1))
+	assert(is_equal_approx(sh1 - player.shield_max_percent, 0.08), "Hafif Kuşanım kalkan öder: %s" % (sh1 - player.shield_max_percent))
 	for id in ["trade_adrenaline", "trade_sight", "trade_executioner", "trade_cloak", "trade_light"]:
 		assert(player.get_upgrade_count(id) == 1, "%s: kart sayacı artmalı (geri katılım günlüğü)" % id)
 	player.queue_free()
@@ -117,11 +117,11 @@ func test_new_trade_cards_apply_exactly_gain_and_cost() -> void:
 ## Yeni kartların metinleri ve bedelli/bedelsiz kuralı: hepsi takas, hepsi bedelli, kazanç ve bedel farklı stat, ad/simge/etiket tanımlı.
 func test_new_trade_cards_texts() -> void:
 	assert(not Special.DEFS.has("trade_heavy"), "Ağır Darbe kaldırıldı (Cam Top zaten +SG veriyor)")
-	assert(Special.gain_text("trade_adrenaline", 1) == "+%9" and Special.cost_text("trade_adrenaline", 1) == "-20 Azami Can", "Adrenalin")
-	assert(Special.gain_text("trade_sight", 1) == "+%9" and Special.cost_text("trade_sight", 1) == "-%6 Hareket Hızı", "Sabit Nişan")
-	assert(Special.gain_text("trade_executioner", 1) == "+%18" and Special.cost_text("trade_executioner", 1) == "-%8 Mana Kalkanı", "Cellat")
-	assert(Special.gain_text("trade_cloak", 1) == "+%7" and Special.cost_text("trade_cloak", 1) == "-15 Azami Can", "Hayalet Pelerin")
-	assert(Special.gain_text("trade_light", 1) == "+%10" and Special.cost_text("trade_light", 1) == "-%10 Mana Kalkanı", "Hafif Kuşanım")
+	assert(Special.gain_text("trade_adrenaline", 1) == "+%7" and Special.cost_text("trade_adrenaline", 1) == "-15 Azami Can", "Adrenalin")
+	assert(Special.gain_text("trade_sight", 1) == "+%6" and Special.cost_text("trade_sight", 1) == "-%4 Hareket Hızı", "Sabit Nişan")
+	assert(Special.gain_text("trade_executioner", 1) == "+%10" and Special.cost_text("trade_executioner", 1) == "-%6 Mana Kalkanı", "Cellat")
+	assert(Special.gain_text("trade_cloak", 1) == "+%5" and Special.cost_text("trade_cloak", 1) == "-11 Azami Can", "Hayalet Pelerin")
+	assert(Special.gain_text("trade_light", 1) == "+%7" and Special.cost_text("trade_light", 1) == "-%8 Mana Kalkanı", "Hafif Kuşanım")
 	assert(Special.stat_label(Special.gain_stat("trade_sight")) == "Kritik Oran" and Special.stat_label(Special.gain_stat("trade_executioner")) == "Kritik Hasar", "yeni kazanç statı adları")
 	assert(Special.stat_label(Special.gain_stat("trade_cloak")) == "Sıvışma", "Sıvışma adı")
 	var trades: int = 0
@@ -135,8 +135,8 @@ func test_new_trade_cards_texts() -> void:
 func test_new_trade_cards_are_withheld_at_floors_and_caps() -> void:
 	var player: Node = PlayerScene.instantiate()
 	add_child(player)
-	player.max_health = 50.0 ## 50 - 20 / 50 - 15 < 40 zemin
-	player.health = 50.0
+	player.max_health = 45.0 ## 45 - 15 / 45 - 11 < 40 zemin
+	player.health = 45.0
 	var avail: Array = Special.available_ids(player)
 	assert(not avail.has("trade_adrenaline") and not avail.has("trade_cloak"), "azami can zeminde: bedeli can olan yeni kartlar çıkmamalı: %s" % [avail])
 	assert(avail.has("trade_executioner") and avail.has("trade_light"), "bedeli can olmayan yeni kartlar çıkabilmeli")
@@ -175,10 +175,10 @@ func test_class_cards_need_a_weapon_of_that_class() -> void:
 	var before: float = melee_w.damage
 	assert(before > 0.0, "taban hasar hesaplanmalı: %s" % before)
 	player.apply_upgrade("class_melee", 1)
-	assert(is_equal_approx(player.melee_card_percent, 0.15), "melee_card_percent: %s" % player.melee_card_percent)
-	assert(is_equal_approx(melee_w.damage, before * 1.15), "yakın dövüş silahının hasarı x1,15: %s -> %s" % [before, melee_w.damage])
+	assert(is_equal_approx(player.melee_card_percent, 0.10), "melee_card_percent: %s" % player.melee_card_percent)
+	assert(is_equal_approx(melee_w.damage, before * 1.10), "yakın dövüş silahının hasarı x1,10: %s -> %s" % [before, melee_w.damage])
 	player.apply_upgrade("class_ranged", 1)
-	assert(is_equal_approx(melee_w.damage, before * 1.15), "menzilli kartı yakın dövüş silahını etkilememeli")
+	assert(is_equal_approx(melee_w.damage, before * 1.10), "menzilli kartı yakın dövüş silahını etkilememeli")
 	player.queue_free()
 
 
@@ -265,9 +265,10 @@ func test_special_card_texts_fit_the_row() -> void:
 	fake.free()
 
 
-## Takas kartı, düz kartın AYNI kademedeki değerinden belirgin büyük kazanç vermeli (bedel ödüyorsun): Kan Anlaşması %2/2,5/3/4 iken düz Can Çalma
-## kartı %2/4/6/8 veriyordu (madde 370). Düz kart değerleri apply_upgrade ile aynı formüller.
-func test_trade_gain_always_beats_the_plain_card_of_the_same_stat() -> void:
+## Takas kartı, düz kartın AYNI kademedeki değerinden biraz büyük kazanç vermeli (bedel ödüyorsun): Kan Anlaşması %2/2,5/3/4 iken düz Can Çalma
+## kartı %2/4/6/8 veriyordu (madde 370). madde 498 (nerf): alt sınır 1,5 kat -> 1,1 kat, ÜST sınır 2 kat (eskiden 1,5-3 kat; Kan Anlaşması 3 kat, Demir Kabuk 2 kat,
+## Cellat/Dev Kalkan ~2,8-3 kat "çok güçlü" bulundu). Üst sınır nerfin geri kaçmasını engeller. Düz kart değerleri apply_upgrade ile aynı formüller.
+func test_trade_gain_stays_between_a_little_and_twice_the_plain_card() -> void:
 	var plain: Dictionary = {
 		"damage": func(t: int) -> float: return 6.0 * (1.0 + (t - 1) * 0.3),
 		"max_health": func(t: int) -> float: return TierSystem.health_card_for_tier(t),
@@ -286,16 +287,17 @@ func test_trade_gain_always_beats_the_plain_card_of_the_same_stat() -> void:
 		for t in range(1, 5):
 			var base: float = float((plain[stat] as Callable).call(t))
 			var gain: float = Special.gain_value(id, t)
-			assert(gain >= base * 1.5 - 0.0026, "%s kademe %d (tolerans = kazanç yuvarlama adımı 0,005'in yarısı: Çılgın Tetik/Adrenalin %%9, madde 436, kademe 2'de 0,117 -> 0,115 olur): kazanç %s düz karttan (%s) en az 1,5 kat olmalı" % [id, t, gain, base])
+			assert(gain >= base * 1.1 - 0.0026, "%s kademe %d (tolerans = kazanç yuvarlama adımı 0,005'in yarısı): kazanç %s düz karttan (%s) en az 1,1 kat olmalı" % [id, t, gain, base])
+			assert(gain <= base * 2.0 + 0.0026, "%s kademe %d: kazanç %s düz karttan (%s) en çok 2 kat olmalı (madde 498 nerfi)" % [id, t, gain, base])
 
 
 func test_blood_and_bulwark_follow_the_plain_card_tables() -> void:
-	var want_blood: Array = [0.06, 0.12, 0.18, 0.24] ## Can Çalma tablosu %2/4/6/8 x 3
-	var want_hp: Array = [40.0, 70.0, 100.0, 140.0] ## Can tablosu 20/35/50/70 x 2
+	var want_blood: Array = [0.03, 0.06, 0.09, 0.12] ## Can Çalma tablosu %2/4/6/8 x 1,5 (madde 498; eskiden x3)
+	var want_hp: Array = [30.0, 53.0, 75.0, 105.0] ## Can tablosu 20/35/50/70 x 1,5 (eskiden x2; 52,5 -> 53 yuvarlanır)
 	for t in range(1, 5):
 		assert(is_equal_approx(Special.gain_value("trade_blood", t), want_blood[t - 1]), "Kan Anlaşması kademe %d: %s" % [t, Special.gain_value("trade_blood", t)])
 		assert(is_equal_approx(Special.gain_value("trade_bulwark", t), want_hp[t - 1]), "Demir Kabuk kademe %d: %s" % [t, Special.gain_value("trade_bulwark", t)])
-	assert(Special.gain_text("trade_blood", 1) == "+%6", "kart metni: %s" % Special.gain_text("trade_blood", 1))
+	assert(Special.gain_text("trade_blood", 1) == "+%3", "kart metni: %s" % Special.gain_text("trade_blood", 1))
 
 
 ## ---- Madde 398: bedel yalnız büyük avantajlı kartlarda (takas + silah türü); düz stat kartları bedelsiz ----
@@ -353,7 +355,7 @@ func test_plain_cards_stay_available_at_the_floor() -> void:
 	player.queue_free()
 
 
-## Silah türü kartları da bedel öder: Yakın Dövüş -%5 hız, Nişancılık -12 can.
+## Silah türü kartları da bedel öder: Yakın Dövüş -%4 hız, Nişancılık -9 can (madde 498).
 func test_class_cards_pay_their_cost() -> void:
 	var player: Node = PlayerScene.instantiate()
 	add_child(player)
@@ -361,7 +363,7 @@ func test_class_cards_pay_their_cost() -> void:
 	player.health = 100.0
 	var spd0: float = player.speed_card_percent
 	player.apply_upgrade("class_melee", 1)
-	assert(is_equal_approx(spd0 - player.speed_card_percent, 0.05), "Yakın Dövüş Ustalığı hız öder: %s" % (spd0 - player.speed_card_percent))
+	assert(is_equal_approx(spd0 - player.speed_card_percent, 0.04), "Yakın Dövüş Ustalığı hız öder: %s" % (spd0 - player.speed_card_percent))
 	player.apply_upgrade("class_ranged", 2)
 	assert(is_equal_approx(player.max_health, 100.0 - Special.cost_value("class_ranged", 2)), "Nişancılık can öder: %s" % player.max_health)
 	player.queue_free()

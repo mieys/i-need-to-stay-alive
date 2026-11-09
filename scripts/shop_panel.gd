@@ -51,14 +51,14 @@ const UPGRADE_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
 	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Pençe", "topuz": "Topuz", "uzunkilic": "Uzunkılıç",
+	"pence": "Tırpan", "topuz": "Topuz", "uzunkilic": "Uzunkılıç",
 }
 
 ## Biriktirilebilir silahların ikonları - Geliştirmeler sekmesindeki her slot
 ## hangi silahı gösteriyorsa o silahın ikon dokusu burada aranır (bkz.
 ## _refresh_upgrade_page).
 const WEAPON_ICON_TEXTURES := {
-	"dagger": "res://assets/weapons/base_knife/icon_v2.png",
+	"dagger": "res://assets/weapons/yeni/bicak.png",
 	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
 	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
 	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
@@ -70,7 +70,7 @@ const WEAPON_ICON_TEXTURES := {
 	"boomerang": "res://assets/weapons/boomerang/icon.png",
 	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
 	"fisek": "res://assets/weapons/fisek/icon.png",
-	"pence": "res://assets/weapons/pence/icon.png",
+	"pence": "res://assets/weapons/yeni/tirpan.png",
 	"topuz": "res://assets/weapons/topuz/icon.png",
 	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
 }
@@ -1023,7 +1023,7 @@ func _on_buy_item(item: String) -> void:
 	## olmalı" - harcama artık başka hiçbir peer'e senkron edilmiyor (bkz.
 	## spend_gold.rpc kaldırıldı), her oyuncunun altını kendi GameManager
 	## kopyasında tamamen bağımsız yönetiliyor.
-	GameManager.gold -= cost ## kayıt player.buy_item -> acquire_item içinde yazıldı (2026-10-02)
+	GameManager.spend_shop_gold(cost) ## kayıt player.buy_item -> acquire_item içinde yazıldı (2026-10-02)
 
 	_refresh()
 
@@ -1043,7 +1043,7 @@ func _on_buy_upgrade(item: String) -> void:
 	var cost: int = _upgrade_cost(item, next_level)
 	if GameManager.gold < cost:
 		return
-	GameManager.gold -= cost
+	GameManager.spend_shop_gold(cost)
 	GameManager.set(level_prop, next_level)
 
 	_refresh()
@@ -1079,7 +1079,7 @@ func _on_buy_copy(item: String) -> void:
 	var cost: int = _copy_cost(item, GameManager.owned_weapons.size() + 1)
 	if GameManager.gold < cost:
 		return
-	GameManager.gold -= cost
+	GameManager.spend_shop_gold(cost)
 	GameManager.owned_weapons.append(EnchantDefs.new_weapon_entry(item, 1, cost))
 
 	var player = get_tree().get_first_node_in_group("player")
@@ -1104,7 +1104,7 @@ func _on_upgrade_weapon(index: int) -> void:
 	var cost: int = _upgrade_cost(key, next_level)
 	if GameManager.gold < cost:
 		return
-	GameManager.gold -= cost
+	GameManager.spend_shop_gold(cost)
 	entry["level"] = next_level
 	entry["spent"] = int(entry.get("spent", 0)) + cost
 	GameManager.owned_weapons[index] = entry

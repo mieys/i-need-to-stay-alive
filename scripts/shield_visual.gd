@@ -82,7 +82,7 @@ func _ready() -> void:
 
 
 func get_night_glow_color() -> Color:
-	return TYPE_GLOW_COLORS.get(_current_shield_type, DEFAULT_GLOW_COLOR)
+	return TYPE_GLOW_COLORS.get(ShieldEnchantDefs.effect_key(_current_shield_type), DEFAULT_GLOW_COLOR)
 
 
 ## Aktif kalkan TÜRÜNE göre baloncuk görselini değiştirir (bkz. TYPE_FRAMES).
@@ -97,7 +97,9 @@ func set_shield_type(type_key: String) -> void:
 	_current_shield_type = type_key
 	if not bubble:
 		return
-	var frames: SpriteFrames = TYPE_FRAMES.get(type_key, _default_frames)
+	## Görsel anahtarı türün kendisi değil EFFECT_OF eşlemesi: Standart -> Enerji sprite'ı, Enerji -> Kale sprite'ı, Kale ->
+	## sahnedeki varsayılan (eski Standart) sprite (kullanıcı 2026-11-09).
+	var frames: SpriteFrames = TYPE_FRAMES.get(ShieldEnchantDefs.effect_key(type_key), _default_frames)
 	if frames == null or frames == bubble.sprite_frames:
 		return
 	var was_playing: bool = bubble.is_playing()

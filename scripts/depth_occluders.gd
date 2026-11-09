@@ -60,8 +60,11 @@ const BUILDING_GROUPS: Array = [
 	["ev/Blacksmith", "ev/blacksmith kapı", "ev/Ev ayrıntı", "ev/Ev", "ev/ev kapı", "ev/Ev Çatı 1"],
 ]
 ## Tek tek nesne katmanları (atlas komşuluğu = aynı nesne).
+## "Kayalar 1..3" (2026-11-09): Altın Kumlar (çöl) haritasında üst üste binen kaya / kaya sütunu / kaktüs yığınları için ek y-sıralı nesne
+## katmanları ("Animasyonsuz çalılar"ın devamı: güneydeki nesne üstteki katmanda). Ana haritada yok (bulunamayan katman atlanır).
 const OBJECT_LAYERS: Array = [
 	"Etkileşimler/Maden", "Etkileşimler/Maden 1", "Shader Eklenecek/Animasyonsuz çalılar", "Düşman Üssü/Düşman üssü", "Düşman Üssü/Özel maden",
+	"Shader Eklenecek/Kayalar 1", "Shader Eklenecek/Kayalar 2", "Shader Eklenecek/Kayalar 3",
 ]
 
 ## KÖPRÜLER (2026-10-09, kullanıcı: "buranın altından geçen insanların üstünde köprü görünmeli"): alt + üst katman TEK yapı (bina gibi tek kök). Fark: kopya
@@ -144,7 +147,8 @@ func setup(harita: Node) -> void:
 ## masked_tile_sets (katman adı -> TileSet): o katmanın ön kopyası asıl karolarla DEĞİL bu TileSet'le çizilir (aynı kaynak/atlas koordinatları, yalnız
 ## bazı pikseller saydam). Kökler asıl katmandan hesaplanır. Madde 327: açılıp kapanan kapının SABİT çerçevesi (üst kiriş + yan sütunlar) karakteri örter,
 ## açılan aralık (kanat + arkasındaki zemin pikseli) örtmez - kapı karesi tamamen opak olduğundan karolarıyla öne alınsa aralıktaki karakter de gizlenirdi.
-func setup_interior(interior_root: Node, layer_names: Array, masked_tile_sets: Dictionary = {}) -> void:
+## creatures: yaratıklar da nesnenin arkasında örtülsün (madde 492: zindan haritaları; ev içi / demirci eskisi gibi kapalı - orada yaratık yok).
+func setup_interior(interior_root: Node, layer_names: Array, masked_tile_sets: Dictionary = {}, creatures: bool = false) -> void:
 	if interior_root == null:
 		return
 	_begin(interior_root)
@@ -160,6 +164,10 @@ func setup_interior(interior_root: Node, layer_names: Array, masked_tile_sets: D
 			_setup_object_layer(layer)
 			if not fronts.is_empty() and fronts[-1]["layer"] == layer:
 				(fronts[-1]["front"] as TileMapLayer).tile_set = masked_tile_sets[layer_name]
+	if creatures:
+		_main = interior_root.get_parent()
+		_build_coarse()
+		_creatures_on = not _coarse.is_empty()
 
 
 ## Karo malzemesi (TileData.material) katmanın malzemesini EZER: cozy_ev_light.gd'nin ışıksız eşyaları (kazan, mum, fener, lamba, şömine,

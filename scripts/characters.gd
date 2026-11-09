@@ -59,7 +59,7 @@ const DEFS := {
 		"skill_icon": "res://assets/skills/talon_devlesme_icon.png",
 		"skill2": 36,
 		"skill2_name": "Silah Salvosu",
-		"skill2_desc": "TEMEL: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %400 saldırı hızı kazanırlar. (15sn bekleme)",
+		"skill2_desc": "TEMEL: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %400 saldırı hızı kazanırlar ancak hasarları %25 azalır. (20sn bekleme)",
 		"skill2_icon": "res://assets/skills/talon_yer_sarsintisi_icon.png",
 		"skill3": 37,
 		"skill3_name": "Ayna Formu",
@@ -68,7 +68,7 @@ const DEFS := {
 		## Q ile AYNI geçici "talon_devlesme_icon.png" dosyasını paylaşıyordu,
 		## artık kendi özel ikonu var.
 		"skill3_icon": "res://assets/skills/talon_ayna_formu_icon.png",
-		"passive": "Yetenek kullandıkça yığılan güç: her kullanımda 6sn süren bir yük kazanır (en fazla 5, +%6 saldırı gücü / +%4 hasar azaltma her yük) - yetenek kullanılmazsa yükler 2sn'de bir azalır.",
+		"passive": "Yetenek kullandıkça yığılan güç: her kullanımda 6sn süren bir yük kazanır (en fazla 5, +%5 saldırı gücü / +%4 hasar azaltma her yük) - yetenek kullanılmazsa yükler 2sn'de bir azalır.",
 		"passive_icon": "res://assets/skills/talon_passive_icon.png",
 		"frames": "res://assets/characters/talha_frames.tres",
 		"portrait": "res://assets/characters/talha_portrait.png",
@@ -259,7 +259,7 @@ const DEFS := {
 		"skill3": 24,
 		"skill3_name": "Don Nova (Set 1/2)",
 		## 2026-10-04: Don Nova artık dondurmuyor, 6 sn %80 yavaşlatıyor ("donma olayı geliştirmelere eklenecek" - R finali).
-		"skill3_desc": "ULTİ (2 setli - Q ile değiştirilir):\n1) Don Nova: etraftaki tüm yaratıkları 6sn boyunca %80 yavaşlatır ve saldırı gücünün %200'ü kadar hasar verir. (35sn bekleme)\n2) Meteor Patlaması: 3sn odaklanıp (yürüyebilirsin) çevrendeki yaratıkların üstüne saldırı gücünün %120'si kadar hasar veren meteorlar yağdırır. (75sn bekleme)",
+		"skill3_desc": "ULTİ (2 setli - Q ile değiştirilir):\n1) Don Nova: 1sn durup odaklanır, sonra yavaşça yayılan buz dalgası değdiği yaratıkları 6sn boyunca %80 yavaşlatır ve saldırı gücünün %200'ü kadar hasar verir. (35sn bekleme)\n2) Meteor Patlaması: 3sn odaklanıp (yürüyebilirsin) çevrendeki yaratıkların üstüne saldırı gücünün %120'si kadar hasar veren meteorlar yağdırır. (75sn bekleme)",
 		"skill3_variation_icons": [
 			"res://assets/skills/buyucu_skill_don_nova_icon.png",
 			"res://assets/skills/buyucu_skill_meteor_icon.png",
@@ -327,7 +327,7 @@ const DEFS := {
 		"skill2_name": "Gölge Adımı",
 		## Kullanıcı isteği (2026-09-30, yetenek evrimleri): "görünmezlik artık saldırı gücünü arttırmıyor çünkü geliştirmelere
 		## eklenecek" - eski "+%30 saldırı gücü" temelden çıktı (evrim "Pusu": +%25, bkz. skill_evolutions.gd DEFS[5]).
-		"skill2_desc": "TEMEL: 6 saniye boyunca görünmez olur ve yaratıkların içinden geçebilir. (60sn bekleme)",
+		"skill2_desc": "TEMEL: 2 saniye odaklanıp yavaşça kaybolur, sonra 6 saniye boyunca görünmez olur ve yaratıkların içinden geçebilir. (60sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## E ile AYNI geçici "assasin_gorunmezlik_icon.png" dosyasını
 		## paylaşıyordu, artık kendi özel ikonu var.

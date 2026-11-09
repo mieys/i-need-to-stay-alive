@@ -242,7 +242,7 @@ static func color_for(kind: int, dot_src: String = "") -> Color:
 		var s: String = dot_src.trim_prefix("dot:")
 		if s == "zehir" or s == "ari_zehri":
 			return HudTheme.DMG_DOT_POISON
-		if s == "yanma":
+		if s == "yanma" or s == "shaman_pasif": ## Shaman pasifi de yanma (madde 531: ayrı ipucu kaynağı)
 			return HudTheme.DMG_DOT_BURN
 		if s == "kanama":
 			return HudTheme.DMG_DOT_BLEED

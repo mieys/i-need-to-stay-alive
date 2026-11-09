@@ -190,17 +190,23 @@ func test_local_weapon_hides_without_enemies_and_bursts_out_when_one_is_seen() -
 	assert(w.modulate.a < 0.01, "görüşte düşman yok -> görünmez: %f" % w.modulate.a)
 	var sh: CanvasItem = w.get("shadow_sprite")
 	assert(sh == null or sh.modulate.a < 0.01, "gölgesi de")
-	_make_enemy(o.global_position + Vector2(300.0, 0.0)) ## görüşte ama Tabanca menzili (210) dışında
+	var foe: FakeEnemy = _make_enemy(o.global_position + Vector2(300.0, 0.0)) ## görüşte ama Tabanca menzili (210) dışında
 	await _wait(0.2)
 	assert(int((w.get("_wf_vis") as Dictionary)["s"]) == WeaponFollowMath.REVEAL, "görünce çıkış başladı")
 	await _wait(0.6)
 	assert(w.modulate.a > 0.99 and is_equal_approx(w.rotation, 0.0), "çıkış bitti: görünür, kök dönmüyor")
 	var home: Vector2 = o.global_position + (w.get("_target_local_offset") as Vector2) * 0.5
 	assert(w.global_position.distance_to(home) < 3.0, "dururken slotunda: %s / %s" % [w.global_position, home])
-	## hazır: dururken ucu görüşteki düşmana (Tabanca sağa -> aynasız, ~0 rad)
+	## hazır: dururken ucu görüşteki düşmana (Tabanca sağa -> aynasız). Beklenen açı sanatın duruşuna (sprite_forward_angle_deg) ve
+	## silahın yüksekliğine bağlı: eski "~0 rad" yalnız Zanaatkâr sanatının duruşu 0 iken doğruydu; madde 402'den beri Tabanca eski
+	## ikonunda (-13,5 derece) ve silah karakterin ~73 px üstünde -> doğru nişan ~0,48 rad (madde 486). Ucu düşmana çeviren açı buradan hesaplanır.
 	await _wait(0.4)
 	var icon: Sprite2D = w.get("icon_sprite")
-	assert(not icon.flip_h and absf(wrapf(icon.rotation, -PI, PI)) < 0.3, "hazır: düşmana bakar (%f)" % icon.rotation)
+	var aim: Array = WeaponFollowMath.face_rotation(foe.global_position - w.global_position, deg_to_rad(float(w.get("sprite_forward_angle_deg"))),
+			bool(w.get("mirror_icon_when_aiming_left")))
+	assert(not aim[1], "test kurulumu: düşman sağda, aynasız açı beklenir")
+	assert(not icon.flip_h and absf(angle_difference(icon.rotation, float(aim[0]))) < 0.1,
+			"hazır: ucu düşmana bakar (%f / beklenen %f)" % [icon.rotation, float(aim[0])])
 	## sola yürü: menzilde hedef yok -> uç gidiş yönüne (aynalı), silah öne (sola) çıkar
 	for i in 50:
 		o.global_position += Vector2(-82.0 / 60.0, 0.0)

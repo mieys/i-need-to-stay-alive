@@ -103,13 +103,18 @@ var _resume_btn: Button = null
 var _settings_btn: Button = null
 var _restart_btn: Button = null
 var _menu_btn: Button = null
+var _surrender_btn: Button = null ## TESLİM OL (madde 540): tek oyunculuda iki basışla biter, çok oyunculuda oylama başlatır / evet oyu verir
+var _surrender_confirm: bool = false ## ilk basış alındı, ikinci basış teslim eder
+var _surrender_refresh_t: float = 0.0
 var _settings: Control = null
+## Telefon TESLİM OL simgesi: beyaz bayrak (direk + bez).
+const G_FLAG := ["##......", "######..", "########", "########", "######..", "#.......", "#.......", "#.......", "#......."]
 
 
 func _ready() -> void:
 	add_to_group(&"gamepad_modal") ## kumandayla menü gezinmesi: açılınca ilk düğmeye odak (bkz. gamepad_ui.gd)
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	layer = 91 ## modal ekranlar 90+: HUD + sohbet (40) üstünde, yeniden başlatma onayı / ölüm ekranı (95) altında
+	layer = 91 ## modal ekranlar 90+: HUD + sohbet (40) üstünde, yeniden başlatma onayı (98) altında; ölüm/zafer ekranı varken main.gd katmanı 97'ye çıkarır (_raise_pause_menu_over_end_screens)
 	var mp: bool = NetworkManager.is_multiplayer_active
 	_root = Control.new()
 	_root.name = "Root"
@@ -128,6 +133,15 @@ func _ready() -> void:
 	_restart_btn.pressed.connect(_on_restart)
 	_menu_btn.pressed.connect(_on_menu)
 	_settings_btn.pressed.connect(_on_settings_pressed)
+	_surrender_btn.pressed.connect(_on_surrender)
+	_surrender_btn.focus_exited.connect(func() -> void: ## onay yalnız art arda iki basışta
+		if _surrender_confirm:
+			_surrender_confirm = false
+			_refresh_surrender_item())
+	_surrender_btn.visible = not GameManager.is_game_over ## oyun bittiyse teslim anlamsız (madde 536: ESC bitiş ekranında da açılır)
+	NetworkManager.surrender_vote_changed.connect(_refresh_surrender_item)
+	NetworkManager.surrender_vote_ended.connect(func(_p: bool, _y: int, _t: int) -> void: _refresh_surrender_item())
+	_refresh_surrender_item()
 	## Çok oyunculuda yeniden başlatmayı SADECE host görür ve basması bir onay oylaması başlatır (bkz. _on_restart,
 	## NetworkManager.request_restart_vote); client'lar sadece gelen onay isteğine cevap verir (main.gd _on_restart_request_received).
 	if mp and not NetworkManager.is_host:
@@ -183,7 +197,9 @@ func _build_desktop(mp: bool) -> void:
 		menu_sub = "Oda kapanır, herkes çıkar" if NetworkManager.is_host else "Odadan ayrılırsın"
 	_menu_btn = FM.item("ANA MENÜ", menu_sub, FM.tex_icon(load("res://assets/items/ruzgar_yuruyen_cizmeleri.png")), true)
 	_menu_btn.name = "MenuButton"
-	for b: Button in [_resume_btn, _settings_btn, _restart_btn, _menu_btn]:
+	_surrender_btn = FM.item("TESLİM OL", _surrender_texts()[1], FM.tex_icon(load("res://assets/items/urkek_yurek.png")), true)
+	_surrender_btn.name = "SurrenderButton"
+	for b: Button in [_resume_btn, _settings_btn, _restart_btn, _surrender_btn, _menu_btn]:
 		v.add_child(b)
 		_items.append(b)
 	_main_view.add_child(v)
@@ -220,7 +236,7 @@ func _build_phone(mp: bool) -> void:
 		sub.position = Vector2(PK.SIDE, 152)
 		sub.size = Vector2(1100, 56)
 		_main_view.add_child(sub)
-	var v := DK.v(20)
+	var v := DK.v(8) ## 5 öğe (TESLİM OL, madde 540) 1080'e sığsın: 280 + 5 x 148 + 4 x 8 = 1052
 	v.name = "MenuPanel"
 	v.position = Vector2(PK.SIDE, PH_ITEMS_TOP)
 	_resume_btn = _ph_item("DEVAM ET", PK.G_PLAY, false)
@@ -231,7 +247,9 @@ func _build_phone(mp: bool) -> void:
 	_restart_btn.name = "RestartButton"
 	_menu_btn = _ph_item("ANA MENÜ", PK.G_HOME, true)
 	_menu_btn.name = "MenuButton"
-	for b: Button in [_resume_btn, _settings_btn, _restart_btn, _menu_btn]:
+	_surrender_btn = _ph_item("TESLİM OL", G_FLAG, true)
+	_surrender_btn.name = "SurrenderButton"
+	for b: Button in [_resume_btn, _settings_btn, _restart_btn, _surrender_btn, _menu_btn]:
 		v.add_child(b)
 		_items.append(b)
 	_main_view.add_child(v)
@@ -342,6 +360,54 @@ func _restart_sub() -> String:
 	return "Herkesin onayıyla baştan" if NetworkManager.is_multiplayer_active else "Aynı karakterle baştan"
 
 
+## TESLİM OL öğesi -> [başlık, alt yazı, basılabilir mi] (madde 540; durum NetworkManager teslim bloğunda).
+func _surrender_texts() -> Array:
+	if _surrender_confirm:
+		return ["EMİN MİSİN?", "Tekrar bas: koşu burada biter", true]
+	if not NetworkManager.is_multiplayer_active:
+		return ["TESLİM OL", "Koşu burada biter", true]
+	if NetworkManager.surrender_vote_active:
+		if NetworkManager.my_surrender_vote() < 0:
+			return ["EVET OYU VER", "Teslim oylaması sürüyor", true]
+		return ["TESLİM OL", "Oy verdin, sonuç bekleniyor", false]
+	var why: String = NetworkManager.surrender_block_reason()
+	if why != "":
+		return ["TESLİM OL", why, false]
+	return ["TESLİM OL", "Herkes evet derse koşu biter", true]
+
+
+func _refresh_surrender_item() -> void:
+	if not is_instance_valid(_surrender_btn) or not _surrender_btn.visible:
+		return
+	var t: Array = _surrender_texts()
+	var key: String = "%s|%s|%s" % t
+	if key == str(_surrender_btn.get_meta("surrender_key", "")):
+		return ## 0,5 sn'lik yoklamada değişiklik yoksa dokunma (seçili kayma animasyonu yeniden başlamasın)
+	_surrender_btn.set_meta("surrender_key", key)
+	var can: bool = bool(t[2])
+	_surrender_btn.disabled = not can
+	if not can and _surrender_btn.has_focus():
+		_resume_btn.grab_focus()
+	_set_item_texts(_surrender_btn, str(t[0]), str(t[1]))
+	_set_item_selected(_surrender_btn, _surrender_btn.has_focus())
+
+
+## Tek oyunculu (ya da odada yalnız kalınmış): ilk basış onay ister, ikincisi koşuyu bitirir (main.gd _on_surrender_passed menüyü kapatır).
+## Çok oyunculu: oylama başlatır (başlatan "evet" sayılır) ya da sürmekte olana evet oyu verir; menü kapanır ki panel görünsün.
+func _on_surrender() -> void:
+	if GameManager.is_game_over or _surrender_btn.disabled:
+		return
+	var solo: bool = not NetworkManager.is_multiplayer_active or NetworkManager.lobby_players.size() <= 1
+	if solo and not _surrender_confirm:
+		_surrender_confirm = true
+		_refresh_surrender_item()
+		return
+	_surrender_confirm = false
+	NetworkManager.request_surrender_vote()
+	if is_instance_valid(self) and not is_queued_for_deletion() and NetworkManager.is_multiplayer_active and not GameManager.is_game_over:
+		_on_resume()
+
+
 ## "KADEME IV  ◆  12:34  ◆  SEVİYE 18" (GameManager.run_max_tier / run_elapsed / team_level)
 func _run_line() -> HBoxContainer:
 	var h := DK.h(14)
@@ -375,7 +441,12 @@ func _on_resume() -> void:
 ## Tek oyunculuda menü açılınca get_tree().paused=true olur ve main.gd'nin _process'i durur - ikinci ESC'yi bu menü (ALWAYS)
 ## yakalar. Çok oyunculuda ağaç durmaz, ESC'yi main.gd'nin "pause_game" denetimi işler (burada no-op). Ayarlar açıkken ESC
 ## ayarlar ekranınındır (settings_screen.gd kapanırken mark_ui_cancel_consumed - aynı basış menüyü de kapatmasın).
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	## Teslim bekleme süresi (çok oyunculu) saniye saniye yazılsın.
+	_surrender_refresh_t -= delta
+	if _surrender_refresh_t <= 0.0:
+		_surrender_refresh_t = 0.5
+		_refresh_surrender_item()
 	if not get_tree().paused:
 		return
 	## Host "yeniden başlatma onayı" beklerken de (çok oyunculuda BİLEREK) paused=true - oylama sonucu main.gd'de yönetilir.

@@ -38,7 +38,7 @@ const CAN_COOLDOWN := 90.0
 const ADC_DURATION := 10.0
 const ADC_ATTACK_SPEED := 0.30 ## +%30 saldırı hızı
 const ADC_SHIELD_PEN := 0.15 ## +%15 kalkan delme
-const ADC_LIFESTEAL := 0.01 ## +%1 can emme
+const ADC_LIFESTEAL := 0.02 ## +%2 can emme (2026-11-09: %1 -> %2, kullanıcı isteği)
 const ADC_COOLDOWN := 120.0
 
 const TANK_DURATION := 10.0
@@ -108,7 +108,7 @@ const DEFS := {
 		"duration": ADC_DURATION,
 		"icon": "res://assets/skills/spirit_adc_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_adc.wav",
-		"desc": "10 saniyeliğine %30 saldırı hızı ve %15 kalkan delme kazanırsın, ayrıca %1 can emme kazanırsın. (120sn bekleme)",
+		"desc": "10 saniyeliğine %30 saldırı hızı ve %15 kalkan delme kazanırsın, ayrıca %2 can emme kazanırsın. (120sn bekleme)",
 	},
 	TANK: {
 		"name": "Tank",

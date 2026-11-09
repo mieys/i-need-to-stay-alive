@@ -16,6 +16,7 @@ extends Area2D
 const RADIUS := 14.0
 const PICKUP_RADIUS := 30.0
 const EventSfx := preload("res://scripts/event_sfx.gd")
+const SoftGlowScript := preload("res://scripts/soft_glow_blend.gd")
 ## Kullanıcı bildirimi (2026-09-24): obje görünmüyordu / pixel art + spritesheet olmalı - eskiden her karede
 ## draw_colored_polygon ile yumuşak kenarlı bir elmas çiziliyordu. Artık tools/gen_collect_item_sprite.py'nin pişirdiği
 ## 6 karelik kristal döngüsü (1 sanat pikseli = PixelDraw.TEXEL, karakterlerle aynı yoğunluk).
@@ -121,9 +122,7 @@ func _make_day_glow() -> Sprite2D:
 	var sp := Sprite2D.new()
 	sp.texture = _make_day_glow_texture()
 	sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	sp.material = mat
+	sp.material = SoftGlowScript.material() ## toplamalı yerine yumuşak parıltı: yan yana eşyalar beyaza patlamaz (2026-11-08)
 	sp.scale = Vector2.ONE * TEXEL
 	sp.position = Vector2(0.0, -10.0) ## gece ışığının ofsetiyle aynı (katalog "o")
 	return sp

@@ -133,6 +133,61 @@ func test_percent_pattern() -> void:
 	_end()
 
 
+func test_german_catalog_and_kind_parsing() -> void:
+	_begin()
+	L.apply("de")
+	assert(TranslationServer.translate("Tam Ekran") == "Vollbild", "de: çeviri gelmeli")
+	L.apply("en")
+	assert(TranslationServer.translate("Tam Ekran") == "Fullscreen", "de -> en: yalnız en kataloğu")
+	L.apply("tr")
+	## Almanca tür öneki (Ä) ipucunda ayrılmalı
+	var SI = preload("res://scripts/skill_icon.gd")
+	var parts: Array = SI._split_kind("FÄHIGKEIT (an/aus): Text")
+	assert(parts[0] == "FÄHIGKEIT" and parts[1] == "an/aus", "FÄHIGKEIT öneki ayrılmalı: %s" % str(parts))
+	_end()
+
+
+## 2026-11-09 yeni diller: her dilde, Türkçesinde tür öneki ("YETENEK:") olan her yetenek açıklamasının çevirisinde de öneki
+## ipucu ayrıştırıcısı bulmalı; Türkçesinde "(N sn bekleme)" notu atılan her açıklamanın çevirisinde de not atılmalı.
+func test_tooltip_parsing_every_language() -> void:
+	_begin()
+	var SI = preload("res://scripts/skill_icon.gd")
+	var si = SI.new()
+	var bad: Array = []
+	for code in L.codes():
+		L.apply(code)
+		for id in Characters.DEFS:
+			var raw: Dictionary = Characters.get_def_raw(id)
+			var loc: Dictionary = Characters.get_def(id)
+			for key in ["skill_desc", "skill2_desc", "skill3_desc"]:
+				var tr_text: String = str(raw.get(key, ""))
+				if tr_text == "":
+					continue
+				var shown: String = str(loc.get(key, ""))
+				if SI._split_kind(tr_text)[0] != "" and SI._split_kind(shown)[0] == "":
+					bad.append("%s %s.%s: tür öneki yok: %s" % [code, id, key, shown.left(40)])
+				if si._strip_cooldown_note(tr_text) != tr_text and si._strip_cooldown_note(shown) == shown:
+					bad.append("%s %s.%s: bekleme notu kalmış: %s" % [code, id, key, shown.right(40)])
+	si.free()
+	L.apply("tr")
+	assert(bad.is_empty(), "ipucu ayrıştırma: %s" % str(bad))
+	_end()
+
+
+## m5x7 Kiril çizmez, hiçbir arayüz fontu Çince çizmez -> yedek fontlar (Localization.setup_font_fallbacks).
+func test_font_fallbacks_cover_new_scripts() -> void:
+	L.setup_font_fallbacks()
+	var m5: FontFile = load("res://assets/fonts/m5x7.ttf")
+	var ok_ru: bool = false
+	var ok_zh: bool = false
+	for f in m5.fallbacks:
+		if (f as FontFile).has_char("Ж".unicode_at(0)):
+			ok_ru = true
+		if (f as FontFile).has_char("技".unicode_at(0)):
+			ok_zh = true
+	assert(ok_ru and ok_zh, "m5x7 yedekleri Kiril + Çince çizmeli")
+
+
 func test_language_list_has_catalogs() -> void:
 	for code in L.codes():
 		if code == L.SOURCE:
@@ -150,19 +205,34 @@ static func _placeholders(s: String) -> Array:
 	return out
 
 
+static func _named_tokens(s: String) -> Array:
+	var re := RegEx.new()
+	re.compile("\\{[a-zA-Z_]+\\}")
+	var out: Array = []
+	for m in re.search_all(s):
+		out.append(m.get_string())
+	out.sort()
+	return out
+
+
+## Her çeviri dili (tr hariç): % yer tutucuları AYNI SIRADA, {stat}/{HEAL} gibi adlı olanlar aynı kümede.
 func test_po_placeholders_match() -> void:
-	var t: Translation = load(EN_PO) as Translation
-	assert(t != null, "en.po yüklenmeli")
+	var L = preload("res://scripts/localization.gd")
 	var bad: Array = []
-	for id in t.get_message_list():
-		var tr_: String = t.get_message(id)
-		if tr_ == "":
+	for code in L.codes():
+		if code == "tr":
 			continue
-		## Sıra ÖNEMLİ (Godot % biçimi konumlu argüman "%2$d" bilmez); yalnız "%%" (düz yüzde işareti) yer değiştirebilir.
-		var a: Array = _placeholders(String(id)).filter(func(x: String) -> bool: return x != "%%")
-		var b: Array = _placeholders(tr_).filter(func(x: String) -> bool: return x != "%%")
-		if a != b or tr_.contains("$"):
-			bad.append("%s -> %s" % [id, tr_])
+		var t: Translation = load(L.PO_DIR + code + ".po") as Translation
+		assert(t != null, "%s.po yüklenmeli" % code)
+		for id in t.get_message_list():
+			var tr_: String = t.get_message(id)
+			if tr_ == "":
+				continue
+			## Sıra ÖNEMLİ (Godot % biçimi konumlu argüman "%2$d" bilmez); yalnız "%%" (düz yüzde işareti) yer değiştirebilir.
+			var a: Array = _placeholders(String(id)).filter(func(x: String) -> bool: return x != "%%")
+			var b: Array = _placeholders(tr_).filter(func(x: String) -> bool: return x != "%%")
+			if a != b or tr_.contains("$") or _named_tokens(String(id)) != _named_tokens(tr_):
+				bad.append("%s: %s -> %s" % [code, id, tr_])
 	assert(bad.is_empty(), "yer tutucu uyuşmuyor: %s" % str(bad))
 
 

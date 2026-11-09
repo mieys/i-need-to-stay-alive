@@ -2,6 +2,7 @@ extends Area2D
 
 const DropAttractionScript := preload("res://scripts/drop_attraction.gd")
 const DropShadowScript := preload("res://scripts/drop_shadow.gd")
+const SoftGlowScript := preload("res://scripts/soft_glow_blend.gd")
 
 ## KALKAN ORBU (kullanıcı isteği 2026-10-14: "tıpkı yiyecek gibi kalkan veren 2 adet yere düşen toplanabilir": 1. orb %15,
 ## 2. orb %30 kalkan yeniler). food_drop.gd ile AYNI desen (kök zıplar, gölge yerde, 300 sn sonra kaybolur, istemcideki
@@ -67,9 +68,7 @@ func _ready() -> void:
 	_fx = Sprite2D.new()
 	_fx.name = "Sparkle"
 	_fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	var fx_mat := CanvasItemMaterial.new()
-	fx_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_fx.material = fx_mat
+	_fx.material = SoftGlowScript.material() ## toplamalı yerine yumuşak parıltı: yan yana orblar beyaza patlamaz (2026-11-08)
 	_fx.hframes = SPARKLE_FRAMES
 	_fx.texture = _sparkle_sheet(tier)
 	add_child(_fx)

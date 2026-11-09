@@ -1,6 +1,6 @@
 extends Node2D
 
-## Silah gölgesi (weapon.gd shadow_sprite + remote_player.gd kukla silah gölgesi). madde 469: gölgeler kapalıyken hiçbir şey çizmez
+## Silah gölgesi (weapon.gd shadow_sprite + remote_player.gd kukla silah gölgesi). ShadowsFlag.entities kapalıyken hiçbir şey çizmez (madde 484: açık)
 ## (görünürlük/saydamlık kodlarına dokunulmadı; geri açmak shadows_flag.gd `entities`).
 const ShadowsFlag := preload("res://scripts/shadows_flag.gd")
 

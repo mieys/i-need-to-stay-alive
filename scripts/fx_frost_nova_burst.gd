@@ -2,10 +2,23 @@ extends Node2D
 class_name FxFrostNovaBurst
 
 ## Büyücü Kız'ın Don Nova yeteneği için radial buz patlaması ve donuk piksel rüzgar efekti.
+## 2026-11-09 (madde 533): dalga 0,75 sn yerine DEFAULT_DURATION'da yayılır (kullanıcının sesinin sonuna kadar - player.gd
+## BUYUCU_NOVA_WAVE_TIME bunu okur ve yaratıkları front_ratio ile AYNI cephede vurur). Merkez patlama ve rüzgâr zerreleri de aynı
+## oranda yavaşlar (_k). Uzak oyuncuların kopyası sahneyi düz kurar - varsayılan süre zaten bu.
+
+const BASE_DURATION := 0.75 ## eski (tasarlandığı) süre: zerre hızları/ömürleri buna göre
+const DEFAULT_DURATION := 2.3
 
 var elapsed: float = 0.0
 var max_radius: float = 320.0
-var duration: float = 0.75
+var duration: float = DEFAULT_DURATION
+var _k: float = 1.0 ## BASE_DURATION / duration
+
+
+## Dalga cephesinin alan yarıçapına oranı (ilerleme p 0..1): hızlı açılıp kenarda yavaşlar. Çizim + player.gd isabeti TEK kaynak.
+static func front_ratio(p: float) -> float:
+	var q: float = clampf(p, 0.0, 1.0)
+	return 1.0 - pow(1.0 - q, 2.0)
 var anim_sprite: AnimatedSprite2D = null
 
 var wind_particles: Array[Dictionary] = []
@@ -21,17 +34,19 @@ func _ready() -> void:
 	# Saydamlık: karakteri gizlemeyecek tatlı yarı saydam bir buz patlaması
 	anim_sprite.modulate = Color(1.0, 1.0, 1.0, 0.75)
 	add_child(anim_sprite)
+	_k = BASE_DURATION / maxf(0.05, duration)
+	anim_sprite.speed_scale = _k
 	anim_sprite.play("default")
 	
 	# Donuk rüzgar parçacıkları oluştur
 	for i in range(45):
 		var angle: float = randf() * TAU
-		var spd: float = randf_range(300.0, 500.0)
+		var spd: float = randf_range(300.0, 500.0) * _k
 		wind_particles.append({
 			"pos": Vector2.ZERO,
 			"vel": Vector2(cos(angle), sin(angle)) * spd,
 			"size": randf_range(4.0, 8.0),
-			"life": randf_range(0.4, 0.8),
+			"life": randf_range(0.4, 0.8) / _k,
 			"age": 0.0,
 			"angle": angle
 		})
@@ -49,13 +64,13 @@ func _process(delta: float) -> void:
 	for wp in wind_particles:
 		wp["age"] += delta
 		wp["pos"] += wp["vel"] * delta
-		wp["vel"] = wp["vel"].rotated(delta * 1.5)
+		wp["vel"] = wp["vel"].rotated(delta * 1.5 * _k)
 
 	queue_redraw()
 
 func _draw() -> void:
 	var progress: float = elapsed / duration
-	var current_r: float = max_radius * (1.0 - pow(1.0 - progress, 2.0))
+	var current_r: float = max_radius * front_ratio(progress)
 	var alpha: float = clamp(1.0 - progress, 0.0, 1.0)
 
 	# 1. Genişleyen yarı saydam buz şoku halkası

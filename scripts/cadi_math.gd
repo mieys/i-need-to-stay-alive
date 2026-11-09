@@ -80,6 +80,10 @@ const SMOKE_V_DROP_INTERVAL := 0.3
 ## Çok hızlı koşuda bulut sıklığı SMOKE_MIN_DROP_TIME ile sınırlı (ağ mesajı + ekstra düğüm yağmuru olmasın).
 const SMOKE_MAX_GAP := 26.0
 const SMOKE_MIN_DROP_TIME := 0.1
+## Yana bakarken bulut şişenin ağzından başlar ama karakterle AYNI hizada (yerde değil gövde hizasında) durur: doğuş noktası bu kadar (dünya birimi) yukarı alınır.
+const SMOKE_SIDE_LIFT := 12.0
+## Ayrıca bakılan yöne bu kadar (dünya birimi) ileri: bulut şişenin ağzına biraz daha yakın başlasın.
+const SMOKE_SIDE_FWD := 6.0
 ## Dikey bulutların her biri bu kadar sağa/sola kayık çizilir (sadece görsel; sütun ip gibi dizilmesin).
 const SMOKE_V_JITTER_ART := 4.0
 ## 2026-10-13 kullanıcı: duman yaratıkların (ve oyuncuların) ÜSTÜNDE, her bulut ayrı %50 saydam (eskiden zeminde, %80).
@@ -350,7 +354,12 @@ static func potion_body_offset(facing: String, riders: int = -1) -> Vector2:
 ## duman YERE iner (yükselme geri eklenir).
 static func smoke_land_offset(facing: String, riders: int = -1) -> Vector2:
 	var lift_back := Vector2(0.0, RIDE_LIFT_ART if riders >= 0 else 0.0)
-	return _feet_world() + (potion_body_art(facing, riders) + lift_back + potion_drop_art(facing)) * WORLD_TEXEL
+	var extra := Vector2.ZERO
+	## Yanlara bakarken bulut ayak hizasında (karakterin altında) doğuyordu: gövde hizasına çıkar, x şişede kalır.
+	if facing == "right" or facing == "left":
+		extra.y = -SMOKE_SIDE_LIFT
+		extra.x = SMOKE_SIDE_FWD if facing == "right" else -SMOKE_SIDE_FWD
+	return _feet_world() + (potion_body_art(facing, riders) + lift_back + potion_drop_art(facing)) * WORLD_TEXEL + extra
 
 
 ## Cadı süpürgedeyse yolcu sayısı, değilse -1 (şişe/duman konumu için). host: Player ya da RemotePlayer.

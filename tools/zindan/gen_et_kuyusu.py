@@ -249,12 +249,12 @@ BRICK_BITS = [(0, 11), (1, 11), (2, 11), (3, 11), (0, 12), (1, 12), (2, 12), (3,
 SPOTS = [(0, 0), (2, 0), (4, 0), (7, 0), (8, 0), (1, 2), (5, 2), (13, 2), (11, 3), (2, 4), (2, 5), (10, 5), (2, 7), (7, 7), (7, 8), (13, 8), (4, 9)]
 
 
-def paint_walls(lay, bank, tl, region=None):
+def paint_walls(lay, bank, tl, region=None, caps_by_key=None):
     P.paint_walls_34(lay, bank, tl, 'sw', floor=(4, 4), region=region, top=((1, 1),) * 6,
                      face_key='wd', face_rows={1: 5, 2: ('sw', 6, (1, [2, 3, 4], 5)), 3: ('sw', 5, (1, [2, 3, 4], 5))},
                      face_cols=(14, [15, 16, 17], 18), face_caps=(13, 19),
                      water_face=('sw', {1: 7, 2: 6, 3: 5}, (1, [2, 3, 4], 5)),
-                     floor_fn=lambda x, y: ('fc', P.hpick(FLOOR_POOL, x, y)))
+                     floor_fn=lambda x, y: ('fc', P.hpick(FLOOR_POOL, x, y)), caps_by_key=caps_by_key)
 
 
 def paint_base(lay, bank, tl, rng=None, bridges=()):

@@ -25,6 +25,11 @@ var _tex: Texture2D = null
 var tooltip_panel: PanelContainer = null
 var _stats_label: RichTextLabel = null
 var _refresh_t: float = 0.0
+## Bekleme süreli evciller (Minik Cadı / Hayalet, madde 509): hayvan düğümü cooldown_fraction() verir -> yuvada yukarıdan silinen koyu örtü.
+const CD_SHADE := Color(0.0, 0.0, 0.0, 0.58)
+var _cd_frac: float = 0.0
+var _pet_node: Node = null
+var _pet_lookup_t: float = 0.0
 
 
 func _ready() -> void:
@@ -49,6 +54,7 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
+	_update_cooldown(delta)
 	if tooltip_panel == null or not is_instance_valid(tooltip_panel):
 		return
 	if not is_visible_in_tree():
@@ -59,6 +65,28 @@ func _process(delta: float) -> void:
 		_refresh_t = REFRESH_INTERVAL
 		_stats_label.text = _stats_bbcode()
 	HudTooltip.place_above(tooltip_panel, self)
+
+
+## Yerel oyuncunun evcil düğümü (cooldown_fraction veren) - 0,5 sn'de bir aranır.
+func _update_cooldown(delta: float) -> void:
+	_pet_lookup_t -= delta
+	if (_pet_node == null or not is_instance_valid(_pet_node)) and _pet_lookup_t <= 0.0:
+		_pet_lookup_t = 0.5
+		_pet_node = null
+		var p: Node = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
+		if p != null:
+			for c in p.get_children():
+				if c.has_method("cooldown_fraction"):
+					_pet_node = c
+					break
+	var f: float = float(_pet_node.call("cooldown_fraction")) if _pet_node != null and is_instance_valid(_pet_node) else 0.0
+	if not is_equal_approx(f, _cd_frac):
+		_cd_frac = f
+		queue_redraw()
+
+
+func cooldown_shown() -> float:
+	return _cd_frac
 
 
 func _stats_bbcode() -> String:
@@ -139,6 +167,9 @@ func _draw() -> void:
 		var ts: Vector2 = _tex.get_size()
 		var s: float = maxf(1.0, floorf(FIT / maxf(ts.x, ts.y)))
 		draw_texture_rect(_tex, Rect2((size * 0.5 - ts * s * 0.5).round(), ts * s), false)
+	if _cd_frac > 0.0:
+		var inner: Rect2 = Rect2(Vector2.ZERO, size).grow(-4.0)
+		draw_rect(Rect2(inner.position, Vector2(inner.size.x, roundf(inner.size.y * _cd_frac))), CD_SHADE)
 	## Masaüstü panel (madde 459): çerçeve dokusu yerine Gömme Tepsi yuva çerçevesi (1 px katlar = 4 px kenar, eskisiyle aynı kalınlık).
 	if tray_frame:
 		HudTrayFrame.draw(self, Rect2(Vector2.ZERO, size), 1.0)

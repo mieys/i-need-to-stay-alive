@@ -84,7 +84,7 @@ static func _icon_path(def: Dictionary, key: String) -> String:
 ## tuş rozeti zaten gösterdiği için etiket olmaz, yalnızca ön ek atılır). Ön ek yoksa tür/not boş döner.
 static func _split_kind(desc: String) -> Array:
 	var re := RegEx.new()
-	re.compile("^\\s*((?:\\d+\\.\\s*)?[A-ZÇĞİÖŞÜ]+)\\s*(?:\\(([^)]*)\\))?\\s*:\\s*")
+	re.compile("^\\s*((?:\\d+\\.\\s*)?(?:\\p{Lu}+|技能|基础|终极|被动|伤害|附魔|进化|特性|成就))\\s*(?:\\(([^)]*)\\))?\\s*:\\s*")
 	var m: RegExMatch = re.search(desc)
 	if m == null:
 		return ["", "", desc]

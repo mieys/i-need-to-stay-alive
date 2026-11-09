@@ -145,7 +145,7 @@ const DEFS := {
 	## ---------------------------------------------------------------- Talon
 	1: {
 		"skill": [
-			{"id": "talon_q1", "name": "Kalkan Hamlesi", "desc": "Hamleyle hasar verdiğin her yaratık için eksik mana kalkanının %3'ü yenilenir."},
+			{"id": "talon_q1", "name": "Kalkan Hamlesi", "desc": "Hamleyle hasar verdiğin her yaratık için eksik mana kalkanının %5'i yenilenir."},
 			{"id": "talon_q2", "name": "Çevik Hamle", "desc": "Hamle Vuruşu'nun bekleme süresi %30 azalır."},
 			{"id": "talon_q3", "name": "Sert Duruş", "desc": "Hamleden sonra 3 saniye boyunca %15 mana kalkanı soğurma kazanırsın."},
 			{"id": "talon_q4", "name": "Sarsıcı Hamle", "desc": "Hamle isabet ettiği yaratıkları 2 saniye sersemletir ve vuruş alanı %30 artar."},

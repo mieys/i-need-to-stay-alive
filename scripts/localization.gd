@@ -17,7 +17,8 @@ extends RefCounted
 ## çeviri yolundan geçmiyor demektir.
 
 ## [kod, kendi dilindeki adı]. Ad çevrilmez (her dil kendi adıyla görünür). Yeni dil = buraya satır + localization/<kod>.po.
-const LANGUAGES: Array = [["tr", "Türkçe"], ["en", "English"]]
+const LANGUAGES: Array = [["tr", "Türkçe"], ["en", "English"], ["de", "Deutsch"], ["es", "Español"], ["fr", "Français"], ["it", "Italiano"], ## dil:yok
+	["pt", "Português (BR)"], ["pl", "Polski"], ["ru", "Русский"], ["zh", "简体中文"]] ## dil:yok (her dil kendi adıyla)
 const SOURCE := "tr"
 const PO_DIR := "res://localization/"
 const PSEUDO_EXPANSION := 0.35
@@ -60,6 +61,7 @@ static func os_default() -> String:
 
 ## Dili uygular. Önceki katalog her zaman çıkarılır (yedek dil tuzağı, üst not). Kaynak dil (tr) = katalog yok.
 static func apply(code: String) -> void:
+	setup_font_fallbacks()
 	if not codes().has(code):
 		code = SOURCE
 	if _loaded != null:
@@ -78,6 +80,35 @@ static func apply(code: String) -> void:
 	_current = code
 	TranslationServer.set_locale(code)
 	_apply_pseudo()
+
+
+## YEDEK FONTLAR (2026-11-09): m5x7 Kiril çizmez -> monogram-extended (aynı piksel dili); hiçbir arayüz fontu Çince çizmez -> VonwaonBitmap
+## (16 px piksel CJK). Fallback FontFile örneğine yazılır: önbellekteki aynı kaynak her yerde (tema, preload, FontVariation tabanı) kullanılır.
+## Yoksa Godot işletim sisteminin düz fontuna düşer (piksel görünüm bozulur). Dil adları her dilde görünür -> dilden bağımsız, bir kez.
+const FONT_DIR := "res://assets/fonts/"
+const FONT_CJK := "VonwaonBitmap-16px.ttf"
+const FONT_FALLBACKS := {
+	"m5x7.ttf": ["monogram-extended.ttf", FONT_CJK],
+	"PixeloidSans.ttf": [FONT_CJK], "PixeloidSans-Bold.ttf": [FONT_CJK], "Nunito-SemiBold.ttf": [FONT_CJK],
+	"monogram-extended.ttf": [FONT_CJK], "PixelifySans-Regular.ttf": [FONT_CJK], "PixelifySans-Medium.ttf": [FONT_CJK],
+	"PixelifySans-SemiBold.ttf": [FONT_CJK], "PixelifySans-Bold.ttf": [FONT_CJK]}
+static var _fonts_ready: bool = false
+
+
+static func setup_font_fallbacks() -> void:
+	if _fonts_ready:
+		return
+	_fonts_ready = true
+	for base in FONT_FALLBACKS:
+		if not ResourceLoader.exists(FONT_DIR + base):
+			continue
+		var f: Font = load(FONT_DIR + base) as Font
+		var fb: Array[Font] = []
+		for name in FONT_FALLBACKS[base]:
+			if ResourceLoader.exists(FONT_DIR + name):
+				fb.append(load(FONT_DIR + name) as Font)
+		if f != null and not fb.is_empty():
+			f.fallbacks = fb
 
 
 ## static fonksiyonlarda tr() yok: kısa yol. Ekrana giden BİRLEŞİK metnin parçaları kaynakta bununla çevrilir; veri (kimlik, kayıt) Türkçe kalır.

@@ -97,11 +97,18 @@ static func art(ci: CanvasItem, center: Vector2, rows: Array, palette: Dictionar
 ## GroundShadow.apply_to ile bunu kullanır). Dünya nesneleri (bomba vb.) _draw() içinden DOĞRUDAN çağırabilir ki
 ## gölge her yerde AYNI görünsün (kullanıcı isteği 2026-09-22: "standart normal mini gölgelerden ekle" - Korsan
 ## bombasındaki dither/dama desenli "kare kare" gölge yerine). radius = (yatay, dikey) yarıçap, dünya birimi.
+## TEK TON (2026-11-08, madde 487; kullanıcı: "karakterlerin neden 2 gölgesi var gibi görünüyor?"): açık dış elips + %68 genişlikte koyu
+## iç elips yakın çekimde iki ayrı gölge gibi okunuyordu -> tek düz elips, koyuluk iki katın alan ortalaması. Eski iki ton = true.
+const GROUND_SHADOW_TWO_TONE := false
+const GROUND_SHADOW_CORE_W := 0.68
 static func ground_shadow(ci: CanvasItem, center: Vector2, radius: Vector2, edge_color: Color = Color(0.0, 0.0, 0.0, 0.28), core_color: Color = Color(0.0, 0.0, 0.0, 0.2)) -> void:
-	if not ShadowsFlag.entities: ## madde 469: gölgeler kapalı (karakter/evcil ayak gölgesi + efsun nesneleri)
+	if not ShadowsFlag.entities: ## ShadowsFlag.entities kapalıysa (karakter/evcil ayak gölgesi + efsun nesneleri; madde 484: açık)
 		return
 	if radius.x <= 0.0 or radius.y <= 0.0:
 		return
+	## Tek ton: iki katın elips alanına göre ortalama koyuluğu (toplam gölge aynı, iç elips çizilmez).
+	var flat := Color(edge_color.r, edge_color.g, edge_color.b,
+			edge_color.a + (1.0 - edge_color.a) * core_color.a * GROUND_SHADOW_CORE_W)
 	var rows: int = int(ceil(radius.y / TEXEL))
 	for iy in range(-rows, rows + 1):
 		var f: float = (float(iy) * TEXEL) / radius.y
@@ -112,8 +119,11 @@ static func ground_shadow(ci: CanvasItem, center: Vector2, radius: Vector2, edge
 		if w <= 0.0:
 			continue
 		var y: float = center.y + float(iy) * TEXEL - TEXEL * 0.5
+		if not GROUND_SHADOW_TWO_TONE:
+			ci.draw_rect(Rect2(center.x - w, y, w * 2.0, TEXEL), flat)
+			continue
 		ci.draw_rect(Rect2(center.x - w, y, w * 2.0, TEXEL), edge_color)
-		var wc: float = roundf(w * 0.68 / TEXEL) * TEXEL
+		var wc: float = roundf(w * GROUND_SHADOW_CORE_W / TEXEL) * TEXEL
 		if wc > 0.0:
 			ci.draw_rect(Rect2(center.x - wc, y, wc * 2.0, TEXEL), core_color)
 
@@ -143,7 +153,7 @@ static func hash01(seed_value: int) -> float:
 	return float(x & 0xFFFF) / 65535.0
 
 
-## Dünya konumunda kısa ömürlü pixel parçacık patlaması doğurur (vampir_fx.gd'nin "puff"ının genel hali).
+## Dünya konumunda kısa ömürlü pixel parçacık patlaması doğurur (vampir_fx.gd'nin eski "puff"ının genel hali; Vampir artık pişmiş "bat_in"/"bat_out" kullanır, madde 516).
 ## palette: "fire" | "smoke" | "spark" | "dust". Ağ senkronu için network_manager.gd "pixel_burst" dalı da bunu çağırır.
 static func spawn_burst(host: Node, world_pos: Vector2, palette: String = "fire", count: int = 18, speed: float = 160.0, life: float = 0.5) -> Node2D:
 	if host == null or not is_instance_valid(host):
